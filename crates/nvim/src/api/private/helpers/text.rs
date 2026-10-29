@@ -10,14 +10,12 @@
 
 use super::{CAR, NL};
 use crate::api::private::validate::err_out_of_range;
-use crate::cstr;
 
 use crate::memory::XString;
 use crate::memory::{memchrsub, xfree, xmemdupz};
 use crate::pos::MAXLNUM;
 use crate::types::{Array, Error, LineNr, NUL, Object, String_0, int64_t, size_t};
 use crate::winlayer::Buf;
-use ::libc::strnlen;
 use core::ffi::{CStr, c_char};
 use core::slice;
 
@@ -191,32 +189,6 @@ impl PartialEq for String_0 {
 }
 
 impl Eq for String_0 {}
-
-/// A copy of the C string `str`, owned by the caller.
-///
-/// # Safety
-///
-/// `str` must be null or point at a NUL-terminated string.
-pub(crate) unsafe fn cstr_to_string(str: *const c_char) -> String_0 {
-    if str.is_null() {
-        return String_0::NULL;
-    }
-    // SAFETY: `str` is NUL-terminated.
-    String_0::from_bytes(unsafe { cstr::bytes_at(str) })
-}
-
-/// A copy of `str`'s bytes, stopping at a terminator within `maxsize` bytes
-/// or at `maxsize`, whichever comes first.
-///
-/// # Safety
-///
-/// `str` must point at `maxsize` readable bytes.
-pub(crate) unsafe fn cstrn_to_string(str: *const c_char, maxsize: size_t) -> String_0 {
-    // SAFETY: the caller's promise.
-    let len = unsafe { strnlen(str, maxsize) };
-    // SAFETY: as above; `len` is at most `maxsize`.
-    unsafe { String_0::from_raw_bytes(str, len) }
-}
 
 /// Split `input` into one array item per line, each line its own string.
 ///

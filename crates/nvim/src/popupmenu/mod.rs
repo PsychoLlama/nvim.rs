@@ -11,7 +11,7 @@ use core::ffi::{CStr, c_int, c_uint};
 use std::rc::Rc;
 
 use crate::api::buffer::nvim_buf_set_lines;
-use crate::api::win_config::{BORDER_NONE, BORDER_SHADOW, parse_winborder_in};
+use crate::api::win_config::{BORDER_NONE, BORDER_SHADOW, parse_winborder};
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::buffer::{buf_clear, buf_is_nofile, current_buf};
 use crate::charset::{ptr2cells_at, strsize, transstr_owned};

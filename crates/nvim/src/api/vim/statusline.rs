@@ -12,12 +12,9 @@
 //! index is `kOptInvalid`, which makes `use_sandbox` unconditionally false
 //! here.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
-use crate::snprintf;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use core::ptr;
 use std::ffi::CString;
 
@@ -55,9 +52,7 @@ pub fn nvim_eval_statusline(
     let empty = ApiDict::EMPTY;
     // `%!` is an expression producing the real format, so there is nothing
     // to check until it has been evaluated.
-    // SAFETY: `str` holds `size` readable bytes.
-    let named_expr = str.len() >= 2
-        && unsafe { *str.data() == b'%' as c_char && *str.data().add(1) == b'!' as c_char };
+    let named_expr = str.as_bytes().starts_with(b"%!");
     if !named_expr {
         // The format is checked as the C string it is: to its first NUL.
         let format = str.as_bytes();
@@ -165,12 +160,8 @@ impl Context {
         if let Some(lnum) = opts.use_statuscol_lnum {
             statuscol_lnum = lnum as c_int;
             if !(statuscol_lnum > 0 && statuscol_lnum as LineNr <= win.buffer().line_count()) {
-                let key = c"use_statuscol_lnum".as_ptr();
-                let why = c"out of range".as_ptr();
-                // SAFETY: the names and values are NUL-terminated strings.
-                // SAFETY: both are the caller's NUL-terminated strings.
-                let (key, why) = unsafe { (cstr::at(key), cstr::at(why)) };
-                return Err(err_invalid(key, Bad::Bare(why)));
+                let why = Bad::Bare(c"out of range");
+                return Err(err_invalid(c"use_statuscol_lnum", why));
             }
             use_bools += 1;
         }
@@ -258,7 +249,7 @@ fn statuscol_state(
         HLF_N
     };
     set_vim_var_nr(Vv::Lnum, lnum as VarNumber);
-    let rel = unsafe { labs(get_cursor_rel_lnum(win, lnum) as ::core::ffi::c_long) };
+    let rel = i64::from(get_cursor_rel_lnum(win, lnum)).abs();
     set_vim_var_nr(Vv::Relnum, rel as VarNumber);
     set_vim_var_nr(Vv::Virtnum, 0 as VarNumber);
     (stc_hl_id, if on_cursorline { HLF_CLS } else { HLF_SC })
@@ -282,49 +273,35 @@ fn highlight_dicts(
     if runs.first().is_none_or(|run| run.start != 0) {
         let mut info = ApiDict::with_capacity(3);
         put(&mut info, c"start", Object::integer(0));
-        // SAFETY: a static group name.
         put(
             &mut info,
             c"group",
-            Object::string(unsafe { cstr_to_string(dfltname) }),
+            Object::string(String_0::from_cstr(dfltname)),
         );
         let mut groups = Array::with_capacity(1);
-        // SAFETY: as above.
-        push(
-            &mut groups,
-            Object::string(unsafe { cstr_to_string(dfltname) }),
-        );
+        push(&mut groups, Object::string(String_0::from_cstr(dfltname)));
         put(&mut info, c"groups", Object::array(groups));
         push(&mut values, Object::dict(info));
     }
 
-    let mut user_group = [0 as c_char; 15]; // "User" + "2147483647" + NUL
-    // The `User%d` names, each kept for the rest of the walk: a group is
-    // compared by address below, so each needs one of its own.
-    let mut user_names: Vec<CString> = Vec::new();
     for run in runs {
-        let grpname = if run.userhl == 0 {
+        // A `User%d` name is its own allocation: a group is compared by
+        // address below, so it must not be mistaken for another one.
+        let user_name: CString;
+        let grpname: &CStr = if run.userhl == 0 {
             get_default_stl_hl(ctxwin, opts.use_winbar.unwrap_or(false), ctx.stc_hl_id)
         } else if run.userhl < 0 {
-            syn_id2name(-run.userhl).as_ptr().cast_mut()
+            syn_id2name(-run.userhl)
         } else {
-            let (out, room, fmt) = (
-                user_group.as_mut_ptr(),
-                user_group.len(),
-                c"User%d".as_ptr(),
-            );
-            // SAFETY: a local buffer with room for the widest `%d`.
-            unsafe { snprintf!(out, room, fmt, run.userhl) };
-            // SAFETY: `snprintf` NUL-terminated it.
-            user_names.push(unsafe { CStr::from_ptr(out) }.to_owned());
-            user_names.last().expect("just pushed").as_ptr().cast_mut()
+            user_name = CString::new(format!("User{}", run.userhl)).expect("digits hold no NUL");
+            &user_name
         };
         // The sign column's own group combines with the sign's highlight,
         // the fold column's with nothing, everything else with the default.
         // These are POINTER comparisons upstream, and the group names are
         // interned, so a name equal by value is still a second entry.
-        let combine = if run.item == Some(StlOpt::SignCol) {
-            syn_id2name(ctx.scl_hl_id).as_ptr().cast_mut()
+        let combine: &CStr = if run.item == Some(StlOpt::SignCol) {
+            syn_id2name(ctx.scl_hl_id)
         } else if run.item == Some(StlOpt::FoldCol) {
             grpname
         } else {
@@ -333,8 +310,7 @@ fn highlight_dicts(
 
         let mut info = ApiDict::with_capacity(3);
         put(&mut info, c"start", Object::integer(run.start as Integer));
-        // SAFETY: both are NUL-terminated group names outliving the reply.
-        let (grp, comb) = unsafe { (cstr_to_string(grpname), cstr_to_string(combine)) };
+        let (grp, comb) = (String_0::from_cstr(grpname), String_0::from_cstr(combine));
         put(&mut info, c"group", Object::string(grp.clone()));
         let mut groups = Array::with_capacity(1 + size_t::from(!ptr::eq(combine, grpname)));
         if !ptr::eq(combine, grpname) {

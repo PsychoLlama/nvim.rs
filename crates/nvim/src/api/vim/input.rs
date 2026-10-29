@@ -7,13 +7,11 @@
 //! accessors sit here because they answer for the same table `nvim_input`
 //! is resolved against.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::api::private::helpers::Reported;
 use crate::api_error;
-use crate::cstr;
 use crate::getchar::typeahead;
 use crate::guard::Depth;
 use crate::keycodes::ModMask;
@@ -32,7 +30,7 @@ pub fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean) {
     let mut lowlevel: bool = false;
     let mut i: size_t = 0 as size_t;
     while i < mode.len() {
-        match unsafe { *mode.data().add(i) } as ::core::ffi::c_int {
+        match ::core::ffi::c_int::from(mode.as_bytes()[i]) {
             110 => {
                 remap = false;
             }
@@ -99,7 +97,7 @@ pub fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean) {
 
 pub fn nvim_input(channel_id: uint64_t, keys: String_0) -> Integer {
     may_trigger_vim_suspend_resume(false);
-    unsafe { input_enqueue(channel_id, keys) as Integer }
+    input_enqueue(channel_id, keys) as Integer
 }
 
 pub fn nvim_input_mouse(
@@ -158,7 +156,7 @@ pub fn nvim_input_mouse(
             modmask = ModMask::NONE;
             let mut i: size_t = 0 as size_t;
             while i < modifier.len() {
-                let byte: ::core::ffi::c_char = unsafe { *modifier.data().add(i) };
+                let byte = ::core::ffi::c_char::from_ne_bytes([modifier.as_bytes()[i]]);
                 if byte as ::core::ffi::c_int != '-' as ::core::ffi::c_int {
                     let mod_0 = name_to_mod_mask(byte as ::core::ffi::c_int);
                     if mod_0.is_empty() {
@@ -206,8 +204,7 @@ pub fn nvim_replace_termcodes(
     if !special {
         flags |= REPTERM_NO_SPECIAL as ::core::ffi::c_int;
     }
-    // SAFETY: `str` is the caller's, `len` bytes long.
-    let text = unsafe { cstr::slice_at(str.data(), str.len()) };
+    let text = str.as_bytes();
     let replaced = p_cpo(|cpo| replace_termcodes(text, 0 as ScriptId, flags, None, cpo, None));
     let replaced = replaced.unwrap_or_default();
     // What a C reader of the answer saw: up to its first NUL.

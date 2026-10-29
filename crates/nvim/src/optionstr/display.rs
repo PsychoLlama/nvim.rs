@@ -17,7 +17,7 @@ use crate::memory::XString;
 use crate::strings::has_char;
 use core::ffi::{CStr, c_int, c_uint};
 
-use crate::api::win_config::parse_winborder_in;
+use crate::api::win_config::parse_winborder;
 use crate::ascii::ascii_isdigit;
 use crate::charset::{getdigits_int_at, init_chartab, ptr2cells_at};
 use crate::cursor::coladvance;
@@ -402,7 +402,7 @@ pub(crate) fn parse_border_opt(border_opt: &CStr) -> bool {
         _cmdline_offset: INT_MAX,
     };
     // Whatever the call refused with is dropped rather than reported.
-    parse_winborder_in(&mut fconfig, border_opt).unwrap_or(false)
+    parse_winborder(&mut fconfig, border_opt).unwrap_or(false)
 }
 
 pub fn did_set_winborder(_args: &mut OptSet) -> Result<(), OptError> {

@@ -4,8 +4,7 @@
 //! loading the buffer's mark list from ShaDa if the buffer is not
 //! currently loaded, and `nvim_del_mark` removes one.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -17,7 +16,6 @@
 use super::*;
 use crate::api::private::validate::err_bad_value;
 use crate::ascii::ascii_isdigit;
-use crate::cstr;
 use crate::memory::XString;
 use core::ffi::{CStr, c_char, c_int};
 
@@ -29,8 +27,8 @@ fn global_mark_name(name: &String_0) -> Result<c_char, Error> {
     if name.len() != 1 {
         return Err(reject(c"mark name (must be a single char)", name.clone()));
     }
-    // SAFETY: the caller's promise -- `name` has the one byte read here.
-    let mark = unsafe { *name.data() };
+    // As C read it: a `char`.
+    let mark = c_char::from_ne_bytes([name.as_bytes()[0]]);
     if !(mark.cast_unsigned().is_ascii_uppercase() || ascii_isdigit(c_int::from(mark))) {
         return Err(reject(c"mark name (must be file/uppercase)", name.clone()));
     }
@@ -39,9 +37,7 @@ fn global_mark_name(name: &String_0) -> Result<c_char, Error> {
 
 /// "Invalid `what`: '`name`'".
 fn reject(what: &CStr, name: String_0) -> Error {
-    let (what, got) = (what.as_ptr(), name.data());
-    // SAFETY: the names and values are NUL-terminated strings.
-    err_bad_value(unsafe { cstr::at(what) }, unsafe { cstr::at(got) })
+    err_bad_value(what, name.as_cstr())
 }
 
 /// Remove the global mark `name`.

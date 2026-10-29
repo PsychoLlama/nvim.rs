@@ -98,7 +98,7 @@ use core::ops::{Deref, DerefMut};
 use scrollback::{fetch_cell, refresh_scrollback, term_may_alloc_scrollback};
 
 use crate::state::MODE_TERMINAL;
-pub(crate) use input::{terminal_paste, terminal_set_streamed_paste};
+pub(crate) use input::{buf_terminal_set_streamed_paste, terminal_paste};
 pub(crate) use mode::{TerminalState, terminal_check, terminal_enter, terminal_execute};
 pub(crate) use refresh::{
     on_scrollback_changed_in, terminal_check_refresh, terminal_init, terminal_teardown,

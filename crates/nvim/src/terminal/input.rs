@@ -37,7 +37,7 @@ use crate::options::{
     kOptTpfFlagBS, kOptTpfFlagC0, kOptTpfFlagC1, kOptTpfFlagDEL, kOptTpfFlagESC, kOptTpfFlagFF,
     kOptTpfFlagHT,
 };
-use crate::types::{Terminal, VTermKey, VTermModifier};
+use crate::types::{VTermKey, VTermModifier};
 use crate::vterm::keyboard::{
     vterm_keyboard_end_paste, vterm_keyboard_key, vterm_keyboard_start_paste,
     vterm_keyboard_unichar,
@@ -256,21 +256,16 @@ fn is_filter_char(c: c_int) -> bool {
 }
 
 /// Open or close a bracketed paste that spans more than one `nvim_paste`
-/// call, so the child sees one paste rather than several.
-///
-/// # Safety
-///
-/// `term` must point at a live `Terminal`, unaliased for the call.
-pub(crate) unsafe fn terminal_set_streamed_paste(term: *mut Terminal, streamed: bool) {
-    // SAFETY: the caller hands over a live terminal.
-    let mut term = unsafe { Term::new(term) };
+/// call, so the child of `buffer`'s terminal, if it has one, sees one paste
+/// rather than several.
+pub(crate) fn buf_terminal_set_streamed_paste(buffer: Buf, streamed: bool) {
+    if buffer.terminal.is_null() {
+        return;
+    }
+    // SAFETY: a live buffer's own terminal.
+    let mut term = unsafe { Term::new(buffer.terminal) };
     if term.streamed_paste != streamed {
-        // The current buffer's terminal, not `term`, exactly as the C had
-        // it; both callers pass one for the other.
-        //
-        // SAFETY: `curbuf` is set from startup to exit, and the paste
-        // machinery only reaches this while it has a terminal.
-        let vt = unsafe { Term::new(Buf::current().terminal) }.vt;
+        let vt = term.vt;
         if streamed {
             // SAFETY: a live emulator.
             unsafe { vterm_keyboard_start_paste(vt) };

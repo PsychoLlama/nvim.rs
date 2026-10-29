@@ -5,13 +5,11 @@
 //! also takes the ordering flags.  `nvim_exec_lua` is here rather than with
 //! the Lua bridge because it is the runtime's entry point from the API.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::api::private::helpers::{Reported, api_try};
 use crate::api::private::validate::err_bad_value;
-use crate::winlayer::Live;
 use core::ffi::CStr;
 
 /// Run `code` as a Lua chunk with `args` as its `...`.
@@ -79,8 +77,6 @@ pub fn nvim__get_runtime(
     opts: &mut KeyDict_runtime,
 ) -> Result<Array, Error> {
     let mut error = Error::none();
-    // SAFETY: the caller's keyset, live for the whole call.
-    let opts = unsafe { Live::new(opts) };
     let should_source = opts.do_source.unwrap_or(false);
     let is_lua = opts.is_lua.unwrap_or(false);
     let deferred_safe = nlua_is_deferred_safe();
@@ -112,11 +108,8 @@ pub fn nvim_set_current_dir(dir: String_0) -> Result<(), Error> {
     if dir.len() >= 4096 as size_t {
         return Err(too_long(c"directory name"));
     }
-    // SAFETY: `dir` names `len` readable bytes, copied here.
-    let bytes = unsafe { core::slice::from_raw_parts(dir.data().cast::<u8>(), dir.len()) };
     // Cut at an interior NUL, as upstream's `char *` copy is.
-    let bytes = &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())];
-    let dir = crate::cstr::owned(bytes);
+    let dir = crate::cstr::owned(dir.as_cstr().to_bytes());
     api_try(|| {
         change_dir(&dir, kCdScopeGlobal);
     })?;

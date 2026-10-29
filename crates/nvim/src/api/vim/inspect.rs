@@ -6,19 +6,16 @@
 //! `nvim_get_proc`/`nvim_get_proc_children` are the process-tree queries
 //! the job-control tests use.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::api::private::helpers::Reported;
 use crate::api::private::validate::err_bad_number;
 use crate::api_error;
-use crate::cstr;
 use crate::grid::default_grid_ref;
 use crate::log::logmsg;
 use crate::popupmenu::pum_grid_ref;
-use crate::winlayer::Win;
-use core::ptr;
+use crate::ui_compositor::win_grid;
 
 // `nvim__id` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
@@ -79,9 +76,7 @@ pub fn nvim_get_proc_children(pid: Integer) -> Result<Array, Error> {
     let mut rvobj: Array = Array::EMPTY;
     let mut children: Vec<::core::ffi::c_int> = Vec::new();
     if !(pid > 0 as Integer && pid <= 2147483647 as Integer) {
-        let name = c"pid".as_ptr();
-        // SAFETY: `error` is this frame's own slot and `name` a literal.
-        error = err_bad_number(unsafe { cstr::at(name) }, pid);
+        error = err_bad_number(c"pid", pid);
     } else {
         match os_proc_children(pid as ::core::ffi::c_int) {
             Some(pids) => children = pids,
@@ -128,9 +123,7 @@ pub fn nvim_get_proc(pid: Integer) -> Result<Object, Error> {
     let mut error = Error::none();
     let mut rvobj: Object = Object::Nil;
     if !(pid > 0 as Integer && pid <= 2147483647 as Integer) {
-        let name = c"pid".as_ptr();
-        // SAFETY: `error` is this frame's own slot and `name` a literal.
-        error = err_bad_number(unsafe { cstr::at(name) }, pid);
+        error = err_bad_number(c"pid", pid);
         return Object::Nil.reported(error);
     }
     let mut a: Array = Array::with_capacity(1);
@@ -162,15 +155,12 @@ pub fn nvim__inspect_cell(grid: Integer, row: Integer, col: Integer) -> Result<A
     if grid == pum_grid_ref().handle as Integer {
         g = pum_grid_ref();
     } else if grid > 1 as Integer {
-        let wp: *mut Window =
-            get_win_by_grid_handle(grid as Handle).map_or(ptr::null_mut(), Win::raw);
-        if !(!wp.is_null() && unsafe { (*wp).w_grid_alloc.is_allocated() }) {
-            let name = c"grid handle".as_ptr();
-            // SAFETY: `error` is this frame's own slot and `name` a literal.
-            error = err_bad_number(unsafe { cstr::at(name) }, grid);
+        let wp = get_win_by_grid_handle(grid as Handle).filter(|wp| wp.w_grid_alloc.is_allocated());
+        let Some(wp) = wp else {
+            error = err_bad_number(c"grid handle", grid);
             return ret.reported(error);
-        }
-        g = unsafe { GridRef::new(&raw mut (*wp).w_grid_alloc) };
+        };
+        g = win_grid(wp);
     }
     if row < 0 as Integer
         || row >= g.rows as Integer

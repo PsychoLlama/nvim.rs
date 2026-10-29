@@ -6,8 +6,7 @@
 //! `nvim_get_api_info` is what a client calls first: its own channel id
 //! plus the packed api metadata.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,

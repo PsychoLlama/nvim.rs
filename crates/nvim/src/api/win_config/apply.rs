@@ -6,8 +6,7 @@
 //! `apply_float` applies a float config, including the tabpage move a
 //! `relative` window may need.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -107,8 +106,8 @@ impl Relayout {
     /// allowed at all. `None` for a handle that named no window.
     fn open(
         win: Win,
-        config: CfgKeys,
-        fconfig: WinCfg,
+        config: &KeyDict_win_config,
+        fconfig: &WinConfig,
         was_split: bool,
     ) -> Result<Option<Self>, Error> {
         let parent_handle = config.win.unwrap_or(0);
@@ -350,7 +349,11 @@ impl Relayout {
 ///
 /// Safe: every argument is a handle whose construction already carries the
 /// promise that what it names outlives the call.
-fn apply_split(mut win: Win, config: CfgKeys, mut fconfig: WinCfg) -> Result<Applied, Error> {
+fn apply_split(
+    mut win: Win,
+    config: &KeyDict_win_config,
+    fconfig: &mut WinConfig,
+) -> Result<Applied, Error> {
     let was_split = !win.w_floating;
     let has_split = config.split.is_some();
     let has_vertical = config.vertical.is_some();
@@ -388,7 +391,7 @@ fn apply_split(mut win: Win, config: CfgKeys, mut fconfig: WinCfg) -> Result<App
         win_setheight_win(fconfig.height, win);
     }
     if !was_split {
-        clear_float_config(&mut fconfig, false);
+        clear_float_config(fconfig, false);
     }
     let merged = (*fconfig).clone();
     merge_win_config(&mut win.w_config, merged);
@@ -399,7 +402,11 @@ fn apply_split(mut win: Win, config: CfgKeys, mut fconfig: WinCfg) -> Result<App
 /// tab page a `win` key may ask for.
 ///
 /// Safe: as [`apply_split`].
-fn apply_float(win: Win, config: CfgKeys, fconfig: WinCfg) -> Result<Applied, Error> {
+fn apply_float(
+    win: Win,
+    config: &KeyDict_win_config,
+    fconfig: &WinConfig,
+) -> Result<Applied, Error> {
     let mut float = Refloat {
         win,
         win_tp: win_find_tabpage(win.id()),
@@ -453,7 +460,7 @@ struct Refloat {
 impl Refloat {
     /// Move the window to the tab page its parent is on, making it a float
     /// first if it was not one. `false` refuses without a reason.
-    fn move_to_parent_tab(&mut self, fconfig: WinCfg) -> Result<bool, Refusal> {
+    fn move_to_parent_tab(&mut self, fconfig: &WinConfig) -> Result<bool, Refusal> {
         if self.win_tp != self.parent_tp {
             self.leave_tab()?;
         }
@@ -509,7 +516,7 @@ impl Refloat {
     /// `false` is the answer a handle that resolved to no window gives, and
     /// is not a failure: upstream leaves the window as it was and reports
     /// nothing.
-    fn unfloat_to_float(&mut self, fconfig: WinCfg) -> Result<bool, Refusal> {
+    fn unfloat_to_float(&mut self, fconfig: &WinConfig) -> Result<bool, Refusal> {
         let config = (*fconfig).clone();
         let made = win_new_float(Some(self.win), false, config).map_err(Refusal::Restore)?;
         if made.is_none() {
@@ -539,8 +546,7 @@ pub fn nvim_win_set_config(
     win: WindowHandle,
     config: &mut KeyDict_win_config,
 ) -> Result<(), Error> {
-    // SAFETY: `config` is the caller's keyset, live for the whole call.
-    let keys = unsafe { CfgKeys::new(config) };
+    let keys = &*config;
     // The lookup answers a live window or a null.
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(());
@@ -553,11 +559,9 @@ pub fn nvim_win_set_config(
     let external = keys.external.unwrap_or(false);
     let relative_named = keys.relative.as_ref().is_some_and(|r| !r.is_empty());
     let to_split = !relative_named && !external && (has_split || has_vertical || was_split);
-    // SAFETY: `fconfig` is this frame's own, live for the whole call.
-    let fc = unsafe { WinCfg::new(&raw mut fconfig) };
     let reconf = !was_split || to_split;
     if matches!(
-        parse_win_config(Some(w), keys, fc, reconf)?,
+        parse_win_config(Some(w), keys, &mut fconfig, reconf)?,
         Parsed::Refused
     ) {
         // The config named a window that is not there. Upstream changes
@@ -565,9 +569,9 @@ pub fn nvim_win_set_config(
         return Ok(());
     }
     let applied = if to_split {
-        apply_split(w, keys, fc)
+        apply_split(w, keys, &mut fconfig)
     } else {
-        apply_float(w, keys, fc)
+        apply_float(w, keys, &fconfig)
     }?;
     // An autocommand that threw while the window was reconfigured does not
     // undo it: the rest of the config is applied, and the exception is the

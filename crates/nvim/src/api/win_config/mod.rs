@@ -1,11 +1,11 @@
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::api::extmark::{parse_virt_text, virt_text_to_array};
 use crate::api::private::helpers::{
-    api_typename, cstr_to_string, cstrn_to_string, find_buffer_by_handle, find_window_by_handle,
-    object_to_hl_id, try_enter, try_leave,
+    api_typename, find_buffer_by_handle, find_window_by_handle, object_to_hl_id, try_enter,
+    try_leave,
 };
 use crate::autocmd::{block_autocmds, is_aucmd_win, unblock_autocmds};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_later, set_must_redraw};
@@ -16,9 +16,8 @@ use crate::highlight_group::{syn_check_group, syn_id2name};
 use crate::mbyte::{c_string_cells, c_string_cells_len};
 use crate::message::{e_cmdwin, e_textlock};
 use crate::r#move::changed_window_setting;
+use crate::option::didset_window_options;
 use crate::option::vars::{p_sb, p_spr, p_winborder};
-use crate::option::{copy_option_part, didset_window_options};
-use crate::strings::striequal;
 use crate::types::AutoEvent;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
@@ -27,7 +26,7 @@ use crate::types::{
     TryState, VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle, WindowHandle,
     kErrorTypeException, kErrorTypeValidation, kFloatAnchorEast, kFloatAnchorSouth,
     kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus, kFloatRelativeMouse,
-    kFloatRelativeTabline, kFloatRelativeWindow, size_t,
+    kFloatRelativeTabline, kFloatRelativeWindow,
 };
 use crate::ui::ui_has;
 use crate::ui_compositor::ui_comp_remove_grid;

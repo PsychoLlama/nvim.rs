@@ -1,13 +1,12 @@
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::api::buffer::{api_buf_ensure_loaded, nvim_buf_del_keymap};
 use crate::api::deprecated::{buffer_del_line, buffer_get_line, buffer_set_line};
 use crate::api::private::helpers::{
-    api_metadata, api_set_sctx, api_typename, cstr_to_string, dict_get_value, dict_set_var,
-    find_buffer_by_handle, find_window_by_handle, get_default_stl_hl, parse_hl_msg, set_mark,
-    string_to_array,
+    api_metadata, api_set_sctx, api_typename, dict_get_value, dict_set_var, find_buffer_by_handle,
+    find_window_by_handle, get_default_stl_hl, parse_hl_msg, set_mark, string_to_array,
 };
 use crate::autocmd::{
     apply_autocmds, block_autocmds, may_trigger_vim_suspend_resume, unblock_autocmds,
@@ -62,7 +61,6 @@ use crate::mark::mark_get_global;
 use crate::mbyte::{c_cluster_len, c_cluster_schar, c_string_cells};
 use crate::memline::ml_open;
 use crate::memory::arena_alloc_count;
-use crate::memory::strequal;
 use crate::message::state::{
     did_emsg, lines_left, msg_didany, msg_no_more, msg_scroll, need_wait_return,
 };
@@ -90,8 +88,8 @@ use crate::search::{BACKWARD, FORWARD};
 use crate::state::get_mode;
 use crate::statusline::{draw_tabline, win_redr_status, win_redr_winbar};
 use crate::terminal::{
-    buf_terminal_running, terminal_alloc, terminal_buf, terminal_check_size, terminal_destroy,
-    terminal_open, terminal_set_streamed_paste,
+    buf_terminal_running, buf_terminal_set_streamed_paste, terminal_alloc, terminal_buf,
+    terminal_check_size, terminal_destroy, terminal_open,
 };
 use crate::types::AutoEvent;
 use crate::types::{
@@ -101,15 +99,14 @@ use crate::types::{
     KeyDict_get_ns, KeyDict_highlight, KeyDict_keymap, KeyDict_open_term, KeyDict_redraw,
     KeyDict_runtime, LineNr, LuaRef, LuaRetMode, MessageData, MessageType, MotionType, NS, Object,
     OptScope, OptVal, RemapValues, ScreenChar, ScriptId, SignTextAttrs, StatusCol, String_0,
-    TabpageHandle, TerminalOptions, VarNumber, Vv, Window, WindowHandle, YankReg, int64_t,
-    kCdScopeGlobal, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeString,
+    TabpageHandle, TerminalOptions, VarNumber, Vv, WindowHandle, YankReg, int64_t, kCdScopeGlobal,
+    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeString,
     mpack_token_type_t, size_t, uint8_t, uint16_t, uint64_t,
 };
 use crate::ui::state::Columns;
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};
 use crate::window::{goto_tabpage_tp, goto_tabpage_win, win_find_tabpage};
 use crate::winlayer::graph::cmdwin_buf;
-use ::libc::labs;
 
 // The carve of the transpiled module; see each child's docs.
 mod client;

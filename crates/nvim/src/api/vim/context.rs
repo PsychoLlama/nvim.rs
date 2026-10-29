@@ -6,13 +6,11 @@
 //! one back.  `nvim_get_mode` is the small sibling that reports only the
 //! current mode and whether input is blocked.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::api::private::helpers::Reported;
 use crate::api::private::validate::err_bad_value;
-use crate::cstr;
 
 /// The `types` key's spellings, and the `kCtx*` bit each one names.
 const NAMES: [&::core::ffi::CStr; 6] = [c"regs", c"jumps", c"bufs", c"gvars", c"sfuncs", c"funcs"];
@@ -39,15 +37,12 @@ pub fn nvim_get_context(opts: &mut KeyDict_context) -> Result<ApiDict, Error> {
         let mut i: size_t = 0 as size_t;
         while i < types.len() {
             let item = &types[i];
-            let named = item.as_string().map(|s| s.data());
-            if let Some(s) = named {
-                // SAFETY: the keyset's strings are NUL-terminated.
-                let which = unsafe { NAMES.iter().position(|n| strequal(s, n.as_ptr())) };
+            if let Some(s) = item.as_string().map(String_0::as_cstr) {
+                let which = NAMES.iter().position(|n| s == *n);
                 if let Some(which) = which {
                     int_types |= FLAGS[which];
                 } else {
-                    // SAFETY: the keyset's strings are NUL-terminated.
-                    error = err_bad_value(c"type", unsafe { cstr::at(s) });
+                    error = err_bad_value(c"type", s);
                     return ApiDict::EMPTY.reported(error);
                 }
             }

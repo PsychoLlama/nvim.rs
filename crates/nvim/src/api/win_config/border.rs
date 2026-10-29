@@ -11,8 +11,7 @@
 //! four entries can be doubled into eight, and why the "corner char between
 //! edge chars" check compares the odd slots against the even ones.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -21,7 +20,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::cstr;
+use crate::option::split_option_part;
 use crate::strings::has_char;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int};
@@ -147,12 +146,7 @@ static STYLES: [BorderStyle; 6] = [
 ];
 
 /// The style `name` spells, if it spells one.
-///
-/// # Safety
-/// `name` must be a NUL-terminated string.
-unsafe fn find_style(name: *const c_char) -> Option<&'static BorderStyle> {
-    // SAFETY: the caller's name.
-    let name = unsafe { CStr::from_ptr(name) };
+fn find_style(name: &CStr) -> Option<&'static BorderStyle> {
     STYLES.iter().find(|style| style.name == name)
 }
 
@@ -206,11 +200,10 @@ fn parse_border_item(item: &Object) -> Result<(String_0, c_int), Error> {
 /// A `String_0` as one border cell, truncated to what a slot holds.
 fn cell_of(string: String_0) -> BorderChar {
     let mut out = BLANK_CHAR;
-    let len = string.len().min(MAX_SCHAR_SIZE as usize - 1);
-    if len != 0 {
-        // SAFETY: a live API string of at least `len` bytes, and `out` has
-        // room for `MAX_SCHAR_SIZE - 1` of them plus the NUL already there.
-        unsafe { ::core::ptr::copy_nonoverlapping(string.data(), out.as_mut_ptr(), len) };
+    // The last byte stays the NUL already there.
+    let room = MAX_SCHAR_SIZE as usize - 1;
+    for (cell, &byte) in out[..room].iter_mut().zip(string.as_bytes()) {
+        *cell = byte.cast_signed();
     }
     out
 }
@@ -265,17 +258,8 @@ fn parse_border_array(arr: &Array) -> Result<Slots, Error> {
 }
 
 /// Parse the `border` key of `nvim_open_win`/`nvim_win_set_config` into
-/// `fconfig`'s eight border slots.
-///
-/// # Safety
-/// `fconfig` must be writable and `style` a live API object.
-pub unsafe fn parse_border_style(style: &Object, fconfig: *mut WinConfig) -> Result<(), Error> {
-    // The config is written a field at a time rather than through one
-    // long-lived `&mut`: everything below can re-enter the editor, which owns
-    // it. That is what `WinCfg` is -- a `Live<WinConfig>` reborrowing per
-    // access.
-    // SAFETY: the caller's config, live for the whole call.
-    let mut cfg = unsafe { WinCfg::new(fconfig) };
+/// `cfg`'s eight border slots.
+pub fn parse_border_style(style: &Object, cfg: &mut WinConfig) -> Result<(), Error> {
     cfg.border = true;
 
     let slots = if let Some(array) = style.as_array() {
@@ -288,8 +272,7 @@ pub unsafe fn parse_border_style(style: &Object, fconfig: *mut WinConfig) -> Res
             cfg.footer = false;
             return Ok(());
         }
-        // SAFETY: as above.
-        let Some(style) = (unsafe { find_style(str.data()) }) else {
+        let Some(style) = find_style(str.as_cstr()) else {
             return Err(err_bad_value(c"border", str.as_cstr()));
         };
         Some(style_slots(style))
@@ -324,81 +307,43 @@ pub(crate) fn generate_api_error(window: Option<Win>, attribute: &CStr) -> Error
 ///
 /// A value holding a comma is eight cells spelled out; anything else is a
 /// style name, which [`parse_border_style`] resolves.
-///
-/// # Safety
-/// `fconfig` must be null or writable and `border_opt` NUL-terminated.
-pub unsafe fn parse_winborder(
-    fconfig: *mut WinConfig,
-    border_opt: *mut ::core::ffi::c_char,
-) -> Result<bool, Error> {
-    if fconfig.is_null() {
-        return Ok(false);
-    }
-    // SAFETY: the caller's option value.
-    let listed = has_char(unsafe { cstr::at(border_opt) }, ',' as c_int);
+pub(crate) fn parse_winborder(fconfig: &mut WinConfig, border_opt: &CStr) -> Result<bool, Error> {
+    let listed = has_char(border_opt, ',' as c_int);
     let style = if listed {
-        // SAFETY: as above.
-        match unsafe { border_cell_list(border_opt) } {
+        match border_cell_list(border_opt.to_bytes()) {
             Some(array) => Object::array(array),
             None => return Ok(false),
         }
     } else {
-        // SAFETY: as above.
-        Object::string(unsafe { cstr_to_string(border_opt) })
+        Object::string(String_0::from_cstr(border_opt))
     };
-    // SAFETY: the caller's config, and the object just built.
-    unsafe { parse_border_style(&style, fconfig) }.map(|()| true)
-}
-
-/// [`parse_winborder`] into a configuration the caller holds, over a value
-/// the parse only reads.
-pub(crate) fn parse_winborder_in(
-    fconfig: &mut WinConfig,
-    border_opt: &CStr,
-) -> Result<bool, Error> {
-    // SAFETY: a live configuration, unaliased by its `&mut`, and a
-    // NUL-terminated value nothing below writes.
-    unsafe { parse_winborder(fconfig, border_opt.as_ptr().cast_mut()) }
+    parse_border_style(&style, fconfig).map(|()| true)
 }
 
 /// The eight comma-separated cells of a `'winborder'` value, or `None` when
 /// it does not hold exactly eight non-empty ones.
 ///
-/// # Safety
-/// `border_opt` must be a NUL-terminated string.
-unsafe fn border_cell_list(border_opt: *mut c_char) -> Option<Array> {
+/// Each part is read as `copy_option_part` read it into a cell-sized buffer:
+/// leading blanks and commas skipped, a backslash before a comma kept out,
+/// and cut to what the buffer holds.
+fn border_cell_list(border_opt: &[u8]) -> Option<Array> {
     // Room for the eight it must have: nine parts is already a failure, so
     // the transpile's doubling growth step never got past this size either.
     let mut cells = Array::with_capacity(8);
-    let mut p = border_opt;
-    let mut part: BorderChar = BLANK_CHAR;
-    // SAFETY: the caller's option value, NUL-terminated; `copy_option_part`
-    // advances `p` and writes at most `part.len()` bytes into `part`.
-    while unsafe { *p } != 0 {
-        let full = cells.len() == 8;
-        let (next, into, room) = (&raw mut p, part.as_mut_ptr(), part.len());
-        let comma = c",".as_ptr().cast_mut();
-        // The copy is still short-circuited by `full`: a ninth part is
-        // already a failure and must not advance `p`.
-        //
-        let empty =
-            full || unsafe { copy_option_part(next, into, room, comma) } == 0 || part[0] == 0;
-        if empty {
-            drop(cells);
+    let mut rest = border_opt;
+    while !rest.is_empty() {
+        // A ninth part is already a failure, and an empty one is too.
+        if cells.len() == 8 {
             return None;
         }
-        // SAFETY: `part` is NUL-terminated by `copy_option_part`, and
-        // `cells` is this function's own array.
-        unsafe {
-            let cell = Object::string(cstr_to_string(part.as_mut_ptr()));
-            cells.push(cell);
-        };
+        let (part, after) = split_option_part(rest, MAX_SCHAR_SIZE as usize, b",");
+        if part.is_empty() {
+            return None;
+        }
+        rest = after;
+        cells.push(Object::string(String_0::from_bytes(&part)));
     }
-    if cells.len() != 8 {
-        drop(cells);
-        return None;
-    }
-    Some(cells)
+    (cells.len() == 8).then_some(cells)
 }
 
 #[cfg(test)]

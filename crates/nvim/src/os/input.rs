@@ -453,13 +453,11 @@ const MAX_TRANS_SPECIAL: usize = 19;
 ///
 /// Returns how many bytes of `keys` were consumed; an incomplete trailing
 /// `<...>` is left for the next call.
-///
-/// # Safety
-/// `keys` must describe a live, readable byte run.
-pub unsafe fn input_enqueue(chan_id: uint64_t, keys: String_0) -> size_t {
+pub fn input_enqueue(chan_id: uint64_t, keys: String_0) -> size_t {
     current_ui.set(chan_id);
 
-    // SAFETY: the caller's contract. Every pointer below is derived from
+    // SAFETY: a `String` owns `len()` bytes and the NUL after them. Every
+    // pointer below is derived from
     // `keys.data` and the loop never lets `ptr` past `end`, except for the
     // one-past-the-end read of the `'<'` skip — which lands on the NUL that
     // terminates every `String` nvim builds, exactly as upstream's does.

@@ -6,8 +6,7 @@
 //! `_fast` spelling being the one a fast callback may call -- and the two
 //! colour functions are the built-in name table.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::api::private::helpers::Reported;
@@ -78,7 +77,7 @@ pub fn nvim_set_hl_ns_fast(ns_id: Integer) {
 
 pub fn nvim_get_color_by_name(name: String_0) -> Integer {
     // An API string is NUL-terminated.
-    name_to_color(unsafe { ::core::ffi::CStr::from_ptr(name.data()) }).0 as Integer
+    name_to_color(name.as_cstr()).0 as Integer
 }
 
 pub fn nvim_get_color_map() -> ApiDict {

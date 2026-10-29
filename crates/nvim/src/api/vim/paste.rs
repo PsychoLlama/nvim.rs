@@ -5,8 +5,7 @@
 //! the `vim.paste()` Lua handler.  `nvim_put` is the register-style
 //! insertion instead, taking a whole array of lines and a motion type.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -17,18 +16,12 @@
 use super::*;
 use crate::api::private::helpers::{Reported, api_try};
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_expected};
-use crate::cstr;
 use crate::getchar::PastePhase;
 use crate::guard::Suppress;
 use crate::memory::XString;
 use crate::normal::{set_visual_active, visual_active};
-use crate::types::{PUT_CURSEND, RegLines, Terminal};
+use crate::types::{PUT_CURSEND, RegLines};
 use crate::winlayer::Buf;
-
-/// The terminal the current buffer shows, if it shows one.
-fn cur_buf_terminal() -> *mut Terminal {
-    Buf::current().terminal
-}
 
 /// Hand `data` to the `vim.paste()` Lua handler as one chunk of a paste.
 ///
@@ -47,20 +40,14 @@ pub fn nvim_paste(
     /// starts, and what makes a later chunk a no-op.
     static CANCELLED: GlobalCell<bool> = GlobalCell::new(false);
     if !(-1..=3).contains(&phase) {
-        let name = c"phase".as_ptr();
-        // SAFETY: `error` is this frame's own slot and `name` a literal.
-        error = err_bad_number(unsafe { cstr::at(name) }, phase);
+        error = err_bad_number(c"phase", phase);
         return false.reported(error);
     }
     let whole = phase == -1;
     let starting = whole || phase == 1;
     if starting {
         CANCELLED.set(false);
-        let terminal = cur_buf_terminal();
-        if !terminal.is_null() {
-            // SAFETY: the current buffer's own terminal.
-            unsafe { terminal_set_streamed_paste(terminal, true) };
-        }
+        buf_terminal_set_streamed_paste(Buf::current(), true);
     }
     if !CANCELLED.get() {
         let lines = string_to_array(&data, crlf);
@@ -79,10 +66,8 @@ pub fn nvim_paste(
         if error.is_set() || refused {
             CANCELLED.set(true);
         }
-        let terminal = cur_buf_terminal();
-        if (whole || phase == 3 || CANCELLED.get()) && !terminal.is_null() {
-            // SAFETY: the current buffer's own terminal.
-            unsafe { terminal_set_streamed_paste(terminal, false) };
+        if whole || phase == 3 || CANCELLED.get() {
+            buf_terminal_set_streamed_paste(Buf::current(), false);
         }
         // The paste is recorded for `.` even when the handler declined it,
         // so that the redo carries the same text.

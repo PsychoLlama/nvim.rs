@@ -40,7 +40,6 @@ use super::{
 };
 
 use crate::state::MODE_TERMINAL;
-pub(crate) use crate::strings::copy_option_part;
 use crate::winlayer::Win;
 
 /// 'equalprg', local where set.
@@ -308,7 +307,7 @@ pub(crate) fn set_fileformat(eol_style: c_int, opt_flags: OptionSetFlags) {
 }
 
 /// One part of a separated option value and the rest after it: what
-/// [`copy_option_part`] copies and where it leaves its cursor, over a slice
+/// `copy_option_part` copies and where it leaves its cursor, over a slice
 /// whose end reads as the terminator.
 ///
 /// The part is cut to `maxlen - 1` bytes. A leading `'.'` is taken without
@@ -420,7 +419,7 @@ pub(crate) fn option_part(option: &CStr, maxlen: usize, sep_chars: &CStr) -> (Ve
 /// One part of a comma-separated option, appended to `part`, with the rest of
 /// the option answered back.
 ///
-/// [`copy_option_part`] over slices, with `,` the separator and no length
+/// `copy_option_part` over slices, with `,` the separator and no length
 /// limit: a backslash before a comma makes it a literal, a leading `.` is taken
 /// whatever it is, and the separator and the blanks behind it are dropped.
 /// One `part` buffer serves a whole walk.

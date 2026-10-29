@@ -272,7 +272,7 @@ fn resolve_border(config: &mut WinConfig) -> Option<PumBorder> {
         });
     }
 
-    match p_pumborder(|value| parse_winborder_in(config, value)) {
+    match p_pumborder(|value| parse_winborder(config, value)) {
         Ok(true) => {}
         Ok(false) => return None,
         Err(e) => {

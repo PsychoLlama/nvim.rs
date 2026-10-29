@@ -5,8 +5,7 @@
 //! `nvim_set_current_*` moves it -- plus `nvim_create_buf`, which is the
 //! only one that builds something.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::api::private::helpers::{

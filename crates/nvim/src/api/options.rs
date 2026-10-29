@@ -6,8 +6,7 @@
 //! and on which buffer or window. That is [`OptionRequest`], and
 //! [`option_target`] is the one place the dictionary's rules are enforced.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -28,13 +27,13 @@ use crate::buffer::{BufFlags, BufRef, buflist_new, wipe_buffer};
 use crate::options::{kOptBufhidden, kOptBuftype, kOptInvalid};
 use crate::types::AutoEvent;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use crate::api::private::validate::{err_bad_value, err_expected};
 use crate::api_error;
 use crate::memline::ml_open;
 use crate::memory::XString;
-use crate::message_fmt::{c_str, msg_cstr};
+use crate::message_fmt::msg_cstr;
 use crate::option::{
     OptionTarget, find_option, get_all_vimoptions, get_option_value_for, get_vimoption,
     object_as_optval, option_has_scope, optval_as_object, set_option_direct, set_option_value_for,
@@ -45,7 +44,6 @@ use crate::types::{
 };
 use crate::window::close_windows;
 use crate::winlayer::Buf;
-use core::ptr;
 
 const kOptScopeBuf: OptScope = 2;
 const kOptScopeWin: OptScope = 1;
@@ -60,7 +58,7 @@ const SID_NONE: c_int = -6;
 
 /// What an `opts` dictionary resolved to: the option itself, the scope to
 /// read or write it at, and the buffer or window that scope names.
-struct OptionRequest {
+struct OptionRequest<'a> {
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
     scope: OptScope,
@@ -69,21 +67,14 @@ struct OptionRequest {
     win: Option<Win>,
     buf: Option<Buf>,
     /// `filetype`, when the caller asked for the option as a buffer of that
-    /// type would see it. Null otherwise.
-    filetype: *mut c_char,
+    /// type would see it. Borrowed from the caller's keyset.
+    filetype: Option<&'a CStr>,
 }
 
 /// Resolve `opts` against the option named `name`, or report why it cannot
 /// be: an unknown option, a scope the option does not have, or a combination
 /// of keys that contradict each other.
-///
-/// # Safety
-/// `opts` must point at a filled-in `KeyDict_option`, `name` must be a C
-/// string.
-unsafe fn option_target(
-    opts: &mut KeyDict_option,
-    name: *mut c_char,
-) -> Result<OptionRequest, Error> {
+fn option_target<'a>(opts: &'a KeyDict_option, name: &CStr) -> Result<OptionRequest<'a>, Error> {
     let (given_scope, given_win, given_buf, given_filetype) = (
         opts.scope.as_ref(),
         opts.win,
@@ -92,9 +83,7 @@ unsafe fn option_target(
     );
     let mut opt_flags = OptionSetFlags::NONE;
     if let Some(given) = given_scope {
-        // SAFETY: as above; `scope` is a NUL-terminated key of `opts`.
-        let scope = unsafe { CStr::from_ptr(given.data()) };
-        opt_flags = match scope.to_bytes() {
+        opt_flags = match given.as_cstr().to_bytes() {
             b"local" => OptionSetFlags::LOCAL,
             b"global" => OptionSetFlags::GLOBAL,
             _ => return Err(err_expected(c"scope", c"'local' or 'global'", None)),
@@ -126,11 +115,9 @@ unsafe fn option_target(
         return Err(Error::validation(c"cannot use both 'buf' and 'win'"));
     }
 
-    // SAFETY: `name` is the caller's C string.
-    let opt_idx = find_option(unsafe { CStr::from_ptr(name) });
+    let opt_idx = find_option(name);
     if opt_idx == kOptInvalid {
-        // SAFETY: `name` is the caller's C string.
-        let name = unsafe { c_str(name) };
+        let name = msg_cstr(name);
         return Err(api_error!(kErrorTypeValidation, "Unknown option '{name}'"));
     } else if (scope == kOptScopeBuf || scope == kOptScopeWin) && !option_has_scope(opt_idx, scope)
     {
@@ -152,8 +139,7 @@ unsafe fn option_target(
             c""
         };
         let (tgt, global, req) = (msg_cstr(tgt), msg_cstr(global), msg_cstr(req));
-        // SAFETY: `name` is the caller's C string.
-        let name = unsafe { c_str(name) };
+        let name = msg_cstr(name);
         return Err(api_error!(
             kErrorTypeValidation,
             "'{tgt}' cannot be passed for {global}{req}option '{name}'"
@@ -161,7 +147,9 @@ unsafe fn option_target(
     }
 
     // The key borrows `opts`' own bytes.
-    let filetype = given_filetype.map_or(ptr::null_mut(), |ft| ft.data());
+    let filetype = given_filetype
+        .filter(|ft| !ft.is_null())
+        .map(String_0::as_cstr);
     Ok(OptionRequest {
         opt_idx,
         opt_flags,
@@ -172,7 +160,7 @@ unsafe fn option_target(
     })
 }
 
-impl OptionRequest {
+impl OptionRequest<'_> {
     /// The window or buffer the scope names, `None` for the global scope.
     fn target(&self) -> Option<OptionTarget> {
         match (self.win, self.buf) {
@@ -189,18 +177,15 @@ impl OptionRequest {
 /// The caller gets the buffer back even when this fails part way, because it
 /// still has to be wiped; `aco` says whether the autocommand window was
 /// entered and so has to be left again.
-///
-/// # Safety
-/// `filetype` must be null or a C string.
-unsafe fn do_ft_buf(
-    filetype: *const c_char,
+fn do_ft_buf(
+    filetype: Option<&CStr>,
     aco: &mut AcoSave,
     aco_used: &mut bool,
 ) -> (Option<Buf>, Result<(), Error>) {
     *aco_used = false;
-    if filetype.is_null() {
+    let Some(filetype) = filetype else {
         return (None, Ok(()));
-    }
+    };
     // A dummy buffer of no name, which owns everything it holds.
     let made = buflist_new(None, None, 1 as LineNr, BLN_DUMMY);
     let Some(mut ftbuf) = made else {
@@ -231,8 +216,7 @@ unsafe fn do_ft_buf(
     debug_assert!(ftbuf.swap_file_closed(), "ftbuf->b_ml.ml_mfp->mf_fd < 0");
     ftbuf.b_p_swf = 0;
     ftbuf.b_p_ml = 0;
-    // SAFETY: the caller's NUL-terminated filetype name.
-    ftbuf.b_p_ft = Some(XString::from_cstr(unsafe { crate::cstr::at(filetype) }));
+    ftbuf.b_p_ft = Some(XString::from_cstr(filetype));
     // SAFETY: the autocommand tables are the editor's own.
     if !has_event(AutoEvent::FileType) {
         return (Some(ftbuf), Ok(()));
@@ -277,16 +261,13 @@ fn wipe_ft_buf(mut buffer: Buf) {
 
 /// The value of option `name`, at whatever scope `opts` names.
 pub fn nvim_get_option_value(name: String_0, opts: &mut KeyDict_option) -> Result<Object, Error> {
-    // SAFETY: `name` and `opts` are the caller's, per this function's
-    // contract.
-    let target = unsafe { option_target(opts, name.data()) }?;
+    let target = option_target(opts, name.as_cstr())?;
 
     let mut aco: AcoSave = AcoSave::default();
     let mut aco_used: bool = false;
-    // SAFETY: `target.filetype` borrows `opts`, which outlives the call. The
-    // buffer comes back even when the call refused, because it still has to
-    // be wiped.
-    let (ftbuf, made) = unsafe { do_ft_buf(target.filetype, &mut aco, &mut aco_used) };
+    // The buffer comes back even when the call refused, because it still
+    // has to be wiped.
+    let (ftbuf, made) = do_ft_buf(target.filetype, &mut aco, &mut aco_used);
     let mut leave_ft_buf = |ftbuf: Option<Buf>| {
         if aco_used {
             aucmd_restbuf(&mut aco);
@@ -317,7 +298,6 @@ pub fn nvim_get_option_value(name: String_0, opts: &mut KeyDict_option) -> Resul
     if !value.is_nil() {
         return Ok(optval_as_object(value));
     }
-    // SAFETY: the caller's option name is NUL-terminated.
     Err(err_bad_value(c"option", name.as_cstr()))
 }
 
@@ -328,8 +308,7 @@ pub fn nvim_set_option_value(
     value: Object,
     opts: &mut KeyDict_option,
 ) -> Result<(), Error> {
-    // SAFETY: as `nvim_get_option_value`.
-    let target = unsafe { option_target(opts, name.data()) }?;
+    let target = option_target(opts, name.as_cstr())?;
     // Setting a window-local option without saying local or global writes the
     // local value, where *reading* one falls back to the global.
     let mut opt_flags = target.opt_flags;
@@ -357,8 +336,7 @@ pub fn nvim_get_all_options_info() -> ApiDict {
 
 /// Option `name`'s metadata, as seen at whatever scope `opts` names.
 pub fn nvim_get_option_info2(name: String_0, opts: &mut KeyDict_option) -> Result<ApiDict, Error> {
-    // SAFETY: as `nvim_get_option_value`.
-    let target = unsafe { option_target(opts, name.data()) }?;
+    let target = option_target(opts, name.as_cstr())?;
     // The metadata is read off a buffer and a window whatever the scope, so
     // the two the caller did not name default to the current ones.
     let buf = target.buf.unwrap_or_else(Buf::current);

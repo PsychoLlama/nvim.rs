@@ -5,8 +5,7 @@
 //! and `verbose` options, with the message state saved and restored around
 //! it.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -22,12 +21,7 @@ use crate::api_error;
 use crate::guard::Suppress;
 use crate::message_fmt::msg_cstr_opt;
 use crate::types::HlMessage;
-use crate::winlayer::Live;
 use core::ffi::CStr;
-
-/// The decoded `nvim_echo` keyset, whose caller has promised it outlives the
-/// value.
-type EchoOpts = Live<KeyDict_echo_opts>;
 
 /// The `status` key's four spellings, which only a `kind='progress'` message
 /// may carry.
@@ -40,8 +34,6 @@ pub fn nvim_echo(
     opts: &mut KeyDict_echo_opts,
 ) -> Result<Object, Error> {
     let mut error = Error::none();
-    // SAFETY: the caller's keyset, live for the whole call.
-    let opts = unsafe { EchoOpts::new(opts) };
     // The keys, with every one the caller left out reading as its default:
     // no text, no percentage, no dictionary.
     let no_string = String_0::NULL;
@@ -88,9 +80,7 @@ pub fn nvim_echo(
         || !data.is_empty()
         || !source.is_empty();
     let echo_id = given_id.as_integer();
-    // SAFETY: the keyset's strings are NUL-terminated, and `error` is this
-    // frame's own slot.
-    let rejected = unsafe {
+    let rejected = {
         if !is_progress && has_progress_keys {
             let kind = msg_cstr_opt(kind);
             error = api_error!(
@@ -100,7 +90,7 @@ pub fn nvim_echo(
             true
         } else if is_progress && !status_named(status.clone()) {
             let names = c"success|failed|running|cancel";
-            let got = crate::cstr::at_opt(status.data());
+            let got = (!status.is_null()).then(|| status.as_cstr());
             error = err_expected(c"status", names, got);
             true
         } else if is_progress && !(0..=100).contains(&percent) {

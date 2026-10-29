@@ -19,7 +19,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 
 use crate::ex_eval::state::{
     current_exception, did_throw, force_abort, msg_lists, need_rethrow, trylevel,
@@ -318,22 +318,22 @@ pub(crate) fn get_default_stl_hl(
     window: Option<Win>,
     use_winbar: bool,
     stc_hl_id: c_int,
-) -> *const c_char {
+) -> &'static CStr {
     // `window` is only compared, never followed.
     if window.is_none() {
-        c"TabLineFill".as_ptr()
+        c"TabLineFill"
     } else if use_winbar {
         if window == Win::current_or_none() {
-            c"WinBar".as_ptr()
+            c"WinBar"
         } else {
-            c"WinBarNC".as_ptr()
+            c"WinBarNC"
         }
     } else if stc_hl_id > 0 {
-        syn_id2name(stc_hl_id).as_ptr()
+        syn_id2name(stc_hl_id)
     } else if window == Win::current_or_none() {
-        c"StatusLine".as_ptr()
+        c"StatusLine"
     } else {
-        c"StatusLineNC".as_ptr()
+        c"StatusLineNC"
     }
 }
 

@@ -5,8 +5,7 @@
 //! windows marking each of them, then optionally flushes.  `redraw_status`
 //! is the per-window half.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -16,19 +15,19 @@
 )]
 
 use super::*;
+use crate::grid::grid_of_view;
 use crate::guard::Allow;
 use crate::optionstr::OptString;
 use crate::types::NUL;
 use crate::winlayer::Buf;
-use crate::winlayer::{Live, Win, first_window, windows};
+use crate::winlayer::{Win, first_window, windows};
 use core::ffi::CStr;
 
-/// The decoded keyset, whose caller has promised it outlives the value.
-type Redraw = Live<KeyDict_redraw>;
+type Redraw = KeyDict_redraw;
 
 /// One window's share of the redraw -- its status column, winbar and status
 /// line -- answering what `flush` becomes.
-fn redraw_status(mut window: Win, opts: Redraw, flush: bool) -> bool {
+fn redraw_status(mut window: Win, opts: &Redraw, flush: bool) -> bool {
     let (statuscolumn, statusline, winbar) = (
         opts.statuscolumn.unwrap_or(false),
         opts.statusline.unwrap_or(false),
@@ -62,8 +61,6 @@ fn redraw_status(mut window: Win, opts: Redraw, flush: bool) -> bool {
 // `nvim__redraw` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub fn nvim__redraw(opts: &mut KeyDict_redraw) -> Result<(), Error> {
-    // SAFETY: the caller's keyset, live for the whole call.
-    let opts = unsafe { Redraw::new(opts) };
     let mut win: Option<Win> = None;
     let mut buf: Option<Buf> = None;
     if let Some(handle) = opts.win {
@@ -159,11 +156,8 @@ pub fn nvim__redraw(opts: &mut KeyDict_redraw) -> Result<(), Error> {
         flush_ui = true;
     }
     let cwin = win.unwrap_or_else(Win::current);
-    // SAFETY: the grid's target is a live grid or null.
-    let stale_grid = unsafe {
-        let target = cwin.w_grid.target;
-        target.is_null() || !(*target).valid
-    };
+    let grid = grid_of_view(cwin.w_grid);
+    let stale_grid = grid.is_unresolved() || !grid.valid;
     let cursor = opts.cursor.unwrap_or(false);
     if cursor && stale_grid {
         flush = true;

@@ -10,29 +10,14 @@
 //! The two pointers the family passes around get their names here as well
 //! ([`CfgKeys`] and [`WinCfg`]).
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::api::private::validate::{Bad, err_conflict, err_expected, err_invalid, err_required};
+use crate::os::cshim::cstr_ncasecmp;
 use crate::winfloat::WIN_CONFIG_INIT;
-use crate::winlayer::{Live, Win};
+use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
-
-// ---------------------------------------------------------------------------
-// The two pointers the family passes around
-//
-// Each is a [`Live<T>`](crate::winlayer::Live): a record that whoever built it
-// promised the pointee outlives the value. Construction is the unsafe step,
-// once per entry point; every field access after it is ordinary checked code,
-// and the borrow `Deref` hands out lasts only as long as the access that
-// asked for it.
-
-/// The decoded `config` dictionary an entry point was handed.
-pub(crate) type CfgKeys = Live<KeyDict_win_config>;
-
-/// The window configuration being filled in from it.
-pub(crate) type WinCfg = Live<WinConfig>;
 
 /// What a parse that found nothing wrong with the keyset came to.
 ///
@@ -78,12 +63,11 @@ fn err_invalid_str(name: &CStr, value: &String_0) -> Error {
 
 /// The index of the first of `names` that `spelling` spells, ignoring case.
 fn imatch(spelling: &CStr, names: &[&CStr]) -> Option<usize> {
-    // SAFETY: both sides are `CStr`s, which is the NUL-terminated string
-    // `striequal` reads. It is the locale's case fold, not ASCII's, which is
-    // why this is not `eq_ignore_ascii_case`.
+    // The locale's case fold, not ASCII's, which is why this is not
+    // `eq_ignore_ascii_case`.
     names
         .iter()
-        .position(|name| unsafe { striequal(spelling.as_ptr(), name.as_ptr()) })
+        .position(|name| cstr_ncasecmp(spelling, name, usize::MAX) == 0)
 }
 
 /// The `anchor` key: which corner of the float `row`/`col` place.
@@ -199,7 +183,11 @@ impl BorderText {
 
 /// The `title`/`footer` key: either one plain string or [`parse_virt_text`]'s
 /// chunks.
-fn set_border_text(mut config: WinCfg, which: BorderTextType, text: &Object) -> Result<(), Error> {
+fn set_border_text(
+    config: &mut WinConfig,
+    which: BorderTextType,
+    text: &Object,
+) -> Result<(), Error> {
     if text.as_array().is_some_and(|array| array.is_empty()) {
         return Err(err_expected(c"title/footer", c"non-empty Array", None));
     }
@@ -234,7 +222,7 @@ fn set_border_text(mut config: WinCfg, which: BorderTextType, text: &Object) -> 
             ));
         }
     };
-    decoded.apply(&mut config, which);
+    decoded.apply(config, which);
     Ok(())
 }
 
@@ -248,7 +236,7 @@ fn one_chunk(string: &String_0) -> VirtText {
 }
 
 /// Write the `title_pos`/`footer_pos` field `which` names.
-fn set_align(mut config: WinCfg, which: BorderTextType, align: AlignTextPos) {
+fn set_align(config: &mut WinConfig, which: BorderTextType, align: AlignTextPos) {
     if which == kBorderTextFooter {
         config.footer_pos = align;
     } else {
@@ -270,8 +258,8 @@ fn set_align(mut config: WinCfg, which: BorderTextType, align: AlignTextPos) {
 /// a rejected call leaves a usable config behind.
 pub(crate) fn parse_win_config(
     window: Option<Win>,
-    config: CfgKeys,
-    fconfig: WinCfg,
+    config: &KeyDict_win_config,
+    fconfig: &mut WinConfig,
     reconf: bool,
 ) -> Result<Parsed, Error> {
     let mut decode = Decode {
@@ -295,13 +283,13 @@ pub(crate) fn parse_win_config(
 /// The three flags are what the `goto fail` this replaces shared between its
 /// sections: each is settled by an earlier key and read by a later one, and
 /// naming them together is what lets each section be a method of its own.
-struct Decode {
+struct Decode<'a> {
     /// The window being reconfigured, `None` when one is being created.
     window: Option<Win>,
     /// The keyset the caller handed in.
-    config: CfgKeys,
+    config: &'a KeyDict_win_config,
     /// The configuration being filled in from it.
-    fconfig: WinCfg,
+    fconfig: &'a mut WinConfig,
     /// Whether a key the caller left out keeps what the window had rather
     /// than being required.
     reconf: bool,
@@ -313,7 +301,7 @@ struct Decode {
     is_split: bool,
 }
 
-impl Decode {
+impl Decode<'_> {
     /// Every group of keys in the order upstream reads them, which is also
     /// the order their messages are reported in.
     fn run(&mut self) -> Result<Parsed, Error> {
@@ -336,10 +324,9 @@ impl Decode {
 
     /// Merge the window's own config -- or the defaults, for a window that
     /// does not exist yet -- back over whatever was filled in.
-    fn restore(&self) {
+    fn restore(&mut self) {
         let base = self.window.map_or(WIN_CONFIG_INIT, |w| w.w_config.clone());
-        let mut fconfig = self.fconfig;
-        merge_win_config(&mut fconfig, base);
+        merge_win_config(self.fconfig, base);
     }
 
     /// Whether `window` is a float, which several keys read differently.
@@ -597,9 +584,7 @@ impl Decode {
             return Err(err_conflict(c"border", c"non-float window"));
         }
         if !style.is_nil() {
-            // SAFETY: `self.fconfig` names the live config its builder
-            // promised.
-            unsafe { parse_border_style(style, self.fconfig.raw()) }?;
+            parse_border_style(style, self.fconfig)?;
         }
         Ok(Parsed::Done)
     }
@@ -607,18 +592,14 @@ impl Decode {
     /// No `border` key on a new float: `'winborder'` decides, and a value
     /// that does not spell a border refuses the whole config without a
     /// message -- which is what upstream's `goto fail` does here too.
-    fn winborder(&self) -> Result<Parsed, Error> {
+    fn winborder(&mut self) -> Result<Parsed, Error> {
         if self.on_a_float() {
             return Ok(Parsed::Done);
         }
-        // SAFETY: the option's value is a live NUL-terminated string.
         if p_winborder(CStr::is_empty) {
             return Ok(Parsed::Done);
         }
-        // SAFETY: as above, and `self.fconfig` names the live config.
-        let parsed = p_winborder(|value| unsafe {
-            parse_winborder(self.fconfig.raw(), value.as_ptr().cast_mut())
-        })?;
+        let parsed = p_winborder(|value| parse_winborder(self.fconfig, value))?;
         Ok(if parsed {
             Parsed::Done
         } else {

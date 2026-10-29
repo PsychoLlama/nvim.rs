@@ -5,8 +5,7 @@
 //! title/footer -- which `config_put_bordertext` renders back as the
 //! `[[text, hl], ..]` chunk arrays they were given as.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -17,8 +16,7 @@
 
 use super::*;
 use crate::api::private::helpers::find_window_by_handle;
-use crate::winlayer::Live;
-use core::ffi::{CStr, c_char};
+use core::ffi::CStr;
 
 // The enumerated keys' spellings, each indexed by the value it names. They
 // are the same literals `parse.rs` matches on the way in; upstream keeps
@@ -51,7 +49,7 @@ const ALIGN_TEXT_STR: [&CStr; 3] = [c"left", c"center", c"right"];
 /// `config`, as the keys `nvim_win_set_config` would take back.
 fn config_put_bordertext(
     config: &mut KeyDict_win_config,
-    fconfig: WinCfg,
+    fconfig: &WinConfig,
     bordertext_type: BorderTextType,
 ) {
     let footer = bordertext_type == kBorderTextFooter;
@@ -73,19 +71,16 @@ fn config_put_bordertext(
 
 /// The eight border cells as the `border` key takes them: a bare string per
 /// cell, or a `[char, highlight]` pair for a cell that carries one.
-fn border_array(fconfig: WinCfg) -> Array {
+fn border_array(fconfig: &WinConfig) -> Array {
     let mut border = Array::with_capacity(8);
-    for i in 0..8 {
-        // SAFETY: the cell is one of the config's own eight, and holds at
-        // most `MAX_SCHAR_SIZE` bytes; taking its address off the raw pointer
-        // rather than off a `Deref` is what keeps `fconfig` usable after.
-        let cell = unsafe {
-            let chars = (&raw mut (*fconfig.raw()).border_chars).cast::<c_char>();
-            cstrn_to_string(
-                chars.add(i * MAX_SCHAR_SIZE as usize),
-                MAX_SCHAR_SIZE as size_t,
-            )
-        };
+    for (i, chars) in fconfig.border_chars.iter().enumerate() {
+        // Up to the cell's NUL, or all of it.
+        let text: Vec<u8> = chars
+            .iter()
+            .take_while(|&&c| c != 0)
+            .map(|&c| c.cast_unsigned())
+            .collect();
+        let cell = String_0::from_bytes(&text);
         let name = syn_id2name(fconfig.border_hl_ids[i]);
         let highlighted = !name.is_empty();
         if highlighted {
@@ -106,10 +101,7 @@ pub fn nvim_win_get_config(win: WindowHandle) -> Result<KeyDict_win_config, Erro
     let Some(wp) = find_window_by_handle(win)? else {
         return Ok(rv);
     };
-    // SAFETY: `wp` names a live window, so its own config field is live with
-    // it. The address comes off the raw pointer rather than off a `Deref`,
-    // which is what lets both stay usable.
-    let config: WinCfg = unsafe { Live::new(&raw mut (*wp.raw()).w_config) };
+    let config = &wp.w_config;
 
     rv.focusable = Some(config.focusable);
     rv.external = Some(config.external);

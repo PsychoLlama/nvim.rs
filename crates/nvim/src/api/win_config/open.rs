@@ -7,8 +7,7 @@
 //! `win_find_altwin` are the checks a window has to pass before it can be
 //! moved to another tabpage.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::autocmd::fire_autocmds;
@@ -57,7 +56,7 @@ impl Opening {
     fn run(
         &mut self,
         enter: bool,
-        keys: CfgKeys,
+        keys: &KeyDict_win_config,
         raised: &mut Option<Error>,
     ) -> Result<WindowHandle, Error> {
         if !self.resolve_parent(keys)? {
@@ -105,7 +104,7 @@ impl Opening {
     ///
     /// `false` says a handle resolved to no window at all, which upstream
     /// answers by making none and reporting nothing.
-    fn resolve_parent(&mut self, keys: CfgKeys) -> Result<bool, Error> {
+    fn resolve_parent(&mut self, keys: &KeyDict_win_config) -> Result<bool, Error> {
         if keys.win.unwrap_or(0) <= 0 {
             return Ok(true);
         }
@@ -121,7 +120,11 @@ impl Opening {
     }
 
     /// The window itself: a split of its parent, or a float.
-    fn make(&mut self, keys: CfgKeys, raised: &mut Option<Error>) -> Result<Option<Win>, Error> {
+    fn make(
+        &mut self,
+        keys: &KeyDict_win_config,
+        raised: &mut Option<Error>,
+    ) -> Result<Option<Win>, Error> {
         if !self.is_split {
             let locked = Win::current().buffer().b_locked_split != 0;
             if locked {
@@ -232,8 +235,7 @@ pub fn nvim_open_win(
     enter: Boolean,
     config: &mut KeyDict_win_config,
 ) -> Result<WindowHandle, Error> {
-    // SAFETY: `config` is the caller's keyset, live for the whole call.
-    let keys = unsafe { CfgKeys::new(config) };
+    let keys = &*config;
     // The lookup answers a live buffer or a null.
     let Some(buffer) = find_buffer_by_handle(buf)? else {
         return Ok(0 as WindowHandle);
@@ -242,9 +244,10 @@ pub fn nvim_open_win(
         return Err(Error::exception(e_cmdwin));
     }
     let mut fconfig = WIN_CONFIG_INIT;
-    // SAFETY: `fconfig` is this frame's own, live for the whole call.
-    let cfg = unsafe { WinCfg::new(&raw mut fconfig) };
-    if matches!(parse_win_config(None, keys, cfg, false)?, Parsed::Refused) {
+    if matches!(
+        parse_win_config(None, keys, &mut fconfig, false)?,
+        Parsed::Refused
+    ) {
         // The config named a window that is not there. Upstream makes no
         // window for it and reports nothing.
         return Ok(0 as WindowHandle);

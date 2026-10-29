@@ -1,10 +1,9 @@
 //! The pointer fronts: `vim_snprintf` and friends as the rest of the tree
 //! still calls them, into a raw buffer, with a raw format and raw `%s`
 //! pointers, and the `vim_snprintf!` macros that build their argument
-//! arrays; and the four string helpers whose callers (in the buffer, regexp,
+//! arrays; and the string helpers whose callers (in the buffer, regexp,
 //! spell, edit and Lua modules) still hold raw strings -- `vim_strchr`,
-//! `xstrnsave`, `striequal`, `sort_strings`, and the option-value cursor
-//! `copy_option_part`/`skip_to_option_part` -- each a shim over a slice form
+//! `xstrnsave`, `striequal`, `sort_strings` -- each a shim over a slice form
 //! or libc. They go as their callers convert.
 //!
 //! This is the one file of `strings` that reads through a pointer. The
@@ -50,7 +49,7 @@ use super::{FmtArg, find_char};
 use crate::cstr;
 use crate::memory::xmallocz;
 use crate::os::cshim::strchr;
-use crate::types::{String_0, size_t};
+use crate::types::String_0;
 
 /// The value arguments of one call, and whether the caller vouched for the
 /// raw pointers among them.
@@ -314,45 +313,6 @@ pub unsafe fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char {
         Some(at) => unsafe { string.add(at) }.cast_mut(),
         None => ptr::null_mut(),
     }
-}
-
-/// Copy one part of a separated option value into `buf` and advance
-/// `*option` past it, answering how many bytes it wrote: the part's length,
-/// or `maxlen - 1` when the part is longer than that. The pointer form of
-/// [`split_option_part`](crate::option::split_option_part), for the callers
-/// that still walk an option value by cursor.
-///
-/// A leading `'.'` is written without a bound test, so a `maxlen` below 2
-/// is not usable here. No caller passes one.
-///
-/// # Safety
-///
-/// `*option` must point at a NUL-terminated string; `buf` must have room for
-/// `maxlen` bytes; `sep_chars` must be NUL-terminated.
-pub(crate) unsafe fn copy_option_part(
-    option: *mut *mut c_char,
-    buf: *mut c_char,
-    maxlen: size_t,
-    sep_chars: *mut c_char,
-) -> size_t {
-    // SAFETY: the caller's cursor and separators, both terminated.
-    let (text, seps) = unsafe { (cstr::bytes_at(*option), cstr::bytes_at(sep_chars)) };
-    // The part goes straight into `buf`: at most `maxlen - 1` bytes (a
-    // leading `.` aside), which leaves room for the terminator.
-    let mut len = 0;
-    let rest = crate::option::split_option_part_with(text, maxlen, seps, |run| {
-        // SAFETY: the runs add up to at most `maxlen - 1` bytes (a leading
-        // `.` aside), and the caller promised `buf` that much room.
-        unsafe { ptr::copy_nonoverlapping(run.as_ptr(), buf.cast::<u8>().add(len), run.len()) };
-        len += run.len();
-    });
-    // SAFETY: as above, `len < maxlen`; the rest is a tail of the string
-    // the cursor points into.
-    unsafe {
-        *buf.add(len) = 0;
-        *option = (*option).add(text.len() - rest.len());
-    }
-    len
 }
 
 /// Copy at most `len` bytes of `string` into a fresh NUL-terminated block of
