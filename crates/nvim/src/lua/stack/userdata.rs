@@ -53,19 +53,24 @@ static CLAIMS: GlobalCell<Vec<(&'static CStr, TypeId)>> = GlobalCell::new(Vec::n
 /// # Panics
 /// With `stake`, when another type holds the name.
 fn claimed<T: Userdata>(stake: bool) -> bool {
-    let ours = TypeId::of::<T>();
+    claim(T::METATABLE, TypeId::of::<T>(), stake)
+}
+
+/// [`claimed`] for one name and type, kept out of line so the generic
+/// callers do not carry `CLAIMS` into another crate's code.
+#[inline(never)]
+fn claim(name: &'static CStr, ours: TypeId, stake: bool) -> bool {
     CLAIMS.with_mut(
-        |claims| match claims.iter().find(|(name, _)| *name == T::METATABLE) {
+        |claims| match claims.iter().find(|(claimed, _)| *claimed == name) {
             Some(&(_, owner)) => {
                 assert!(
                     !stake || owner == ours,
-                    "two Rust types share the userdata metatable {:?}",
-                    T::METATABLE
+                    "two Rust types share the userdata metatable {name:?}"
                 );
                 owner == ours
             }
             None if stake => {
-                claims.push((T::METATABLE, ours));
+                claims.push((name, ours));
                 true
             }
             None => false,

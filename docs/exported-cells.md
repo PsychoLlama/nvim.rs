@@ -91,10 +91,7 @@ binary as well as the default one.
 
 ## `lua`
 
-- `neovim::lua::executor::active_lstate`
-- `neovim::lua::executor::global_lstate`
 - `neovim::lua::executor::in_fast_callback`
-- `neovim::lua::state::nlua_global_refs`
 
 ## `message`
 

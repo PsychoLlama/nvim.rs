@@ -25,7 +25,7 @@ use crate::types::LuaRef;
 
 /// How many references the main state is holding — what the functional tests
 /// assert against to catch a leak.
-pub fn nlua_get_global_ref_count() -> c_int {
+pub(crate) fn nlua_get_global_ref_count() -> c_int {
     MAIN_REFS.get_field(|refs| &refs.ref_count)
 }
 

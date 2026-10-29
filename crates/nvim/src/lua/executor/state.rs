@@ -100,13 +100,13 @@ pub(crate) fn active_stack() -> Option<Stack> {
 /// Marks `stack`'s state as the one the running API call came in on, until
 /// dropped.
 #[must_use = "the state is only active while the guard lives"]
-pub struct ActiveState {
+pub(crate) struct ActiveState {
     _restore: Restore<Option<NonNull<lua_State>>>,
 }
 
 impl ActiveState {
     /// Make `stack`'s state the active one.
-    pub fn enter(stack: &Stack) -> ActiveState {
+    pub(crate) fn enter(stack: &Stack) -> ActiveState {
         ActiveState {
             _restore: Restore::of(&ACTIVE_STATE, NonNull::new(stack.lua_state())),
         }
