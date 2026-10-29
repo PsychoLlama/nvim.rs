@@ -337,12 +337,10 @@ fn call_error(result: &Object) -> Error {
     Error::exception(c"unknown error")
 }
 
-/// Hands an already-encoded message to channel `id`; whether it took it.
+/// Hands an already-encoded message to channel `id`, if it is a live RPC
+/// channel; whether it took it.
 pub(crate) fn rpc_write_raw(id: uint64_t, buffer: SharedBuffer) -> bool {
-    if with_channel(id, |chan| is_live_rpc(chan)) != Some(true) {
-        return false;
-    }
-    channel_write(id, buffer)
+    write_to(id, buffer, true)
 }
 
 /// Sends `name` to every RPC channel at once.
@@ -374,8 +372,14 @@ enum Written {
 /// An internal channel has no transport: the bytes go straight back into its
 /// decoder, through the channel's queue.
 fn channel_write(id: uint64_t, buffer: SharedBuffer) -> bool {
+    write_to(id, buffer, false)
+}
+
+/// [`channel_write`], refusing a channel that is not RPC when `rpc_only`:
+/// the check and the write are one table step.
+fn write_to(id: uint64_t, buffer: SharedBuffer, rpc_only: bool) -> bool {
     let written = with_channel(id, |chan| {
-        if chan.rpc.closed {
+        if chan.rpc.closed || (rpc_only && !chan.is_rpc) {
             return Written::Refused;
         }
         if chan.streamtype() == kChannelStreamInternal {
