@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Rewrote the API, the RPC transport, channels, remote UIs and the Lua seam in safe Rust over a typed Lua stack: the generated `vim.api` bindings, the Lua executor and standard library, `vim.mpack`, `vim.json` and the tree-sitter bindings all reach the `lua_State` through one module, and channels, jobs, timers and attached UIs are owned records found by id.
+
 ## [2026.10.28-6da68164b8]
 
 ### Changed
