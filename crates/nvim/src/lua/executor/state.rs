@@ -82,10 +82,21 @@ static main_thread: SharedCell<uv_thread_t> = SharedCell::new(0);
 /// # Panics
 /// Before [`nlua_init`] has made the state.
 pub fn with_main_stack<R>(body: impl FnOnce(&mut Stack) -> R) -> R {
-    let state = MAIN_STATE.get().expect("the Lua runtime is up");
+    let state = main_state();
     // SAFETY: the main state lives from `nlua_init` to the process's end,
     // and is used on the main thread only; the closure is the nesting.
     body(&mut unsafe { Stack::above_top(state.as_ptr()) })
+}
+
+/// The main state. Its own non-generic body, so that the cell is not named
+/// by [`with_main_stack`]'s, which is instantiated in every crate that calls
+/// it and would export the cell to them (`just state-exports`).
+///
+/// # Panics
+/// Before [`nlua_init`] has made the state.
+#[inline(never)]
+fn main_state() -> NonNull<lua_State> {
+    MAIN_STATE.get().expect("the Lua runtime is up")
 }
 
 /// [`with_main_stack`] over the state the running API call came in on;
