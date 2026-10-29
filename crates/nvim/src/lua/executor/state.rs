@@ -128,6 +128,7 @@ fn new_state() -> Option<NonNull<lua_State>> {
     unsafe {
         let lstate = NonNull::new(luaL_newstate())?;
         luaL_openlibs(lstate.as_ptr());
+        Stack::from_raw(lstate.as_ptr()).check_state_layout();
         Some(lstate)
     }
 }

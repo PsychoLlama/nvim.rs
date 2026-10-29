@@ -362,10 +362,36 @@ impl Stack {
     // -- index and balance ------------------------------------------------
 
     /// The top slot, as an absolute index; `At(0)` when the frame is empty.
+    ///
+    /// `lua_gettop` read in place: every balance check asks it, and the
+    /// call around two loads cost the converters 1 % (see [`StateHead`]).
+    #[inline]
     pub fn top(&self) -> At {
+        let head = self.l().cast::<StateHead>();
         // SAFETY: a live state (the constructor's contract), as everywhere
-        // below.
-        At(unsafe { lua_gettop(self.l()) })
+        // below, whose head is `StateHead` (checked when the state is
+        // made); both pointers are into its one stack, `base <= top`.
+        let depth = unsafe { (*head).top.offset_from((*head).base) };
+        // A frame holds at most `LJ_STACK_MAX` (65,500) slots.
+        #[allow(clippy::cast_possible_truncation)]
+        At(depth as c_int)
+    }
+
+    /// Abort unless [`Stack::top`]'s reading of the state's head agrees
+    /// with LuaJIT's own `lua_gettop`: a LuaJIT built with another
+    /// `lua_State` layout (32-bit references, say) fails here, when the
+    /// state is made, rather than misreading every balance check after.
+    pub fn check_state_layout(&mut self) {
+        self.push_nil();
+        self.push_nil();
+        // SAFETY: a live state.
+        let theirs = unsafe { lua_gettop(self.l()) };
+        let ours = self.top().0;
+        // SAFETY: a live state, with the two nils on top.
+        unsafe { lua_settop(self.l(), -3) };
+        if ours != theirs {
+            std::process::abort();
+        }
     }
 
     /// The absolute form of `at` (a pseudo-index stays as it is).
@@ -388,11 +414,20 @@ impl Stack {
     }
 
     /// Drop the top `n` values, all of them this view's own.
+    ///
+    /// `lua_settop(L, -n - 1)`'s one step, `L->top += idx + 1`, done in
+    /// place: the check before it reads the same head, and the call around
+    /// the store cost as much again.
+    #[inline]
     pub fn pop(&mut self, n: c_int) {
-        if self.depth() < n {
+        if n < 0 || self.depth() < n {
             below_base();
         }
-        unsafe { lua_settop(self.l(), -n - 1) };
+        let head = self.l().cast::<StateHead>();
+        // SAFETY: a live state whose head is `StateHead`; the `n` slots
+        // below its top are this view's own, so the new top stays in the
+        // frame, at or above the base.
+        unsafe { (*head).top = (*head).top.sub(n.unsigned_abs() as usize) };
     }
 
     /// Move the top value down to `at`, shifting what was there up.
@@ -847,6 +882,24 @@ impl Stack {
         }
         Ok(())
     }
+}
+
+/// The head of LuaJIT's `struct lua_State` (`lj_obj.h`, 64-bit GC
+/// references: x86-64 and arm64 builds), as far as `top`: [`Stack::top`]
+/// reads the depth of the running frame from it, as `lua_gettop` does.
+#[repr(C)]
+struct StateHead {
+    _nextgc: u64,
+    _marked: u8,
+    _gct: u8,
+    _dummy_ffid: u8,
+    _status: u8,
+    _glref: u64,
+    _gclist: u64,
+    /// The running function's first slot.
+    base: *const u64,
+    /// The first free slot.
+    top: *const u64,
 }
 
 /// A view over the slots above one of another view's own, lent by

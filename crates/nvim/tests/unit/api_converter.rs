@@ -405,6 +405,57 @@ mod lua {
         stack.pop(1);
     }
 
+    /// A view above a slot converts and pops above it while the string the
+    /// slot holds stays lent; its base is that slot, and the lender's view
+    /// is whole again once it is gone.
+    #[test]
+    fn a_view_above_a_slot_keeps_what_it_lends() {
+        let editor = editor_lock();
+        let mut stack = lua(&editor);
+        let top = stack.top();
+        assert_eq!(stack.base(), top);
+        stack.push_bytes(b"name\0tail");
+        let name_slot = stack.top();
+        stack.push_integer(3);
+        {
+            let mut view = stack.above(name_slot);
+            assert_eq!(view.base(), name_slot);
+            let (name, len) = view.check_c_string_below(name_slot).expect("a string");
+            for _ in 0..3 {
+                eval(&mut view, "return { 1, 'two', { x = 3 } }");
+                let object = pop_object(&mut view, false).expect("it converts");
+                push_object(&mut view, &object, false);
+                view.pop(1);
+            }
+            let base = view.base();
+            view.set_top(base);
+            // Lent from the slot below the view: the conversions above it
+            // could not drop it.
+            assert_eq!(name, c"name");
+            assert_eq!(len, 9);
+            assert_eq!(view.top(), name_slot);
+        }
+        assert_eq!(stack.string(name_slot), Some(&b"name\0tail"[..]));
+        // A slot that is not a string is `luaL_checklstring`'s refusal; a
+        // number converts in place, as it does.
+        stack.push_nil();
+        let nil_slot = stack.top();
+        assert!(
+            stack
+                .above(nil_slot)
+                .check_c_string_below(nil_slot)
+                .is_err()
+        );
+        stack.push_integer(42);
+        let number_slot = stack.top();
+        let (text, _) = stack
+            .above(number_slot)
+            .check_c_string_below(number_slot)
+            .expect("a number converts");
+        assert_eq!(text, c"42");
+        stack.set_top(top);
+    }
+
     /// A C function raising through `Stack::entry`.
     unsafe extern "C-unwind" fn raises(state: *mut lua_State) -> c_int {
         // SAFETY: the state Lua called this function on.
