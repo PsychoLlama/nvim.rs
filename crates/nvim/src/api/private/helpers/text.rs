@@ -1,194 +1,16 @@
-//! Strings and buffer text.
-//!
-//! An API `String` owns its bytes, so there is nothing to get wrong about
-//! who frees them: this file holds the half of [`String_0`] that has to
-//! touch the pointer -- the allocating constructors, `Clone`, `Drop` and
-//! the two readers -- because `types/` forbids `unsafe`.
+//! Strings and buffer text: splitting an API string into lines, and the
+//! line-index arithmetic the buffer API shares.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::{CAR, NL};
 use crate::api::private::validate::err_out_of_range;
 
-use crate::memory::XString;
-use crate::memory::{memchrsub, xfree, xmemdupz};
 use crate::pos::MAXLNUM;
-use crate::types::{Array, Error, LineNr, NUL, Object, String_0, int64_t, size_t};
+use crate::types::{Array, Error, LineNr, NUL, Object, String_0, int64_t};
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_char};
-use core::slice;
 
 // -- Strings ---------------------------------------------------------------
-
-/// The half of [`String_0`] that touches the pointer, which cannot live
-/// with the type: `types/` forbids `unsafe`.
-///
-/// The string owns an `xmalloc`ed block of `len() + 1` bytes with a NUL at
-/// `len()`, or is [`String_0::NULL`] and owns nothing. That invariant is
-/// what makes the two readers *safe*: there is no second answer to "whose
-/// bytes are these and how many".
-impl String_0 {
-    /// The bytes, not counting the terminator.
-    ///
-    /// [`String_0::NULL`] answers the empty slice: `slice::from_raw_parts`
-    /// may not be handed a null pointer even for a zero length, and the
-    /// empty answer is what every caller wants there.
-    pub fn as_bytes(&self) -> &[u8] {
-        if self.is_null() {
-            return &[];
-        }
-        // SAFETY: the type's invariant -- a non-null string owns `len()`
-        // readable bytes, and the borrow is this string's.
-        unsafe { slice::from_raw_parts(self.data().cast::<u8>(), self.len()) }
-    }
-
-    /// The string as a C string, stopping at the terminator this type
-    /// always writes.
-    ///
-    /// [`String_0::NULL`] answers `c""`, as [`as_bytes`](String_0::as_bytes)
-    /// answers the empty slice. The bytes are *not* re-measured: a string
-    /// holding an interior NUL comes back truncated at it, which is what
-    /// every C consumer of `data()` sees anyway.
-    pub fn as_cstr(&self) -> &CStr {
-        if self.is_null() {
-            return c"";
-        }
-        // SAFETY: the type's invariant -- a non-null string is
-        // NUL-terminated, and the borrow is this string's.
-        unsafe { CStr::from_ptr(self.data()) }
-    }
-
-    /// Take ownership of `size` bytes at `data`.
-    ///
-    /// # Safety
-    ///
-    /// `data` must be null -- and then `size` zero -- or an `xmalloc`ed
-    /// block of at least `size + 1` bytes with a NUL at `data[size]`, which
-    /// nothing else frees or writes.
-    pub unsafe fn from_owned_parts(data: *mut c_char, size: size_t) -> Self {
-        let mut str = String_0::NULL;
-        let (into_data, into_size) = str.parts_mut();
-        // SAFETY: the two addresses are `str`'s own fields, and what the
-        // caller promised about `data` is exactly the type's invariant.
-        unsafe {
-            *into_data = data;
-            *into_size = size;
-        }
-        str
-    }
-
-    /// Shorten the string to `size` bytes, writing a terminator there.
-    ///
-    /// Only shortens: the block is not reallocated, so the bytes past `size`
-    /// are still the string's and are released with it.
-    ///
-    /// # Safety
-    ///
-    /// `size` must not be past the string's current length.
-    pub unsafe fn truncate(&mut self, size: size_t) {
-        debug_assert!(size <= self.len());
-        let (data, len) = self.parts_mut();
-        // SAFETY: `size` is inside the block, which has room for a
-        // terminator at its own end and therefore at any earlier offset.
-        unsafe {
-            if !(*data).is_null() {
-                *(*data).add(size) = 0;
-            }
-            *len = size;
-        }
-    }
-
-    /// A copy of `bytes`, NUL-terminated, owned by the answer.
-    pub fn from_bytes(bytes: &[u8]) -> Self {
-        // SAFETY: `bytes` is a live slice, and `xmemdupz` answers a block of
-        // `len + 1` bytes with the terminator already written.
-        let data = unsafe { xmemdupz(bytes.as_ptr().cast(), bytes.len()) };
-        // SAFETY: that block is the answer's own.
-        unsafe { String_0::from_owned_parts(data.cast(), bytes.len()) }
-    }
-
-    /// A copy of `size` bytes at `data`, NUL-terminated, owned by the
-    /// answer. A null `data` -- which is how the editor spells "no value"
-    /// wherever it carries a pointer and a length -- answers the null
-    /// string, since no slice may be built over one.
-    ///
-    /// # Safety
-    ///
-    /// `data` must be null, or point at `size` readable bytes.
-    pub unsafe fn from_raw_bytes(data: *const c_char, size: size_t) -> Self {
-        if data.is_null() {
-            return String_0::NULL;
-        }
-        // SAFETY: the caller's promise, and `data` is not null.
-        Self::from_bytes(unsafe { slice::from_raw_parts(data.cast::<u8>(), size) })
-    }
-
-    /// A copy of `str`'s bytes, stopping at its terminator.
-    pub fn from_cstr(str: &CStr) -> Self {
-        Self::from_bytes(str.to_bytes())
-    }
-
-    /// Take over an [`XString`]'s block.
-    ///
-    /// The two types hold the same invariant -- an `xmalloc`ed block of
-    /// `size + 1` bytes with a NUL at `size` -- so this handover is the one
-    /// that needs no promise from its caller, and it is how a string built
-    /// in Rust reaches the API layer without a second copy.
-    pub fn from_xstring(string: XString) -> Self {
-        let size = string.len();
-        // SAFETY: `XString`'s invariant is exactly this type's.
-        unsafe { String_0::from_owned_parts(string.into_raw(), size) }
-    }
-}
-
-impl Clone for String_0 {
-    /// A copy with its own allocation. [`String_0::NULL`] stays null rather
-    /// than becoming the empty string.
-    fn clone(&self) -> Self {
-        if self.is_null() {
-            return String_0::NULL;
-        }
-        Self::from_bytes(self.as_bytes())
-    }
-}
-
-impl Drop for String_0 {
-    fn drop(&mut self) {
-        // SAFETY: the type's invariant -- the block is the string's own, and
-        // `xfree` accepts a null pointer.
-        unsafe { xfree(self.data().cast()) };
-    }
-}
-
-impl From<&CStr> for String_0 {
-    /// [`from_cstr`](String_0::from_cstr): a copy of `s`'s bytes.
-    fn from(s: &CStr) -> Self {
-        Self::from_cstr(s)
-    }
-}
-
-impl From<&[u8]> for String_0 {
-    fn from(bytes: &[u8]) -> Self {
-        Self::from_bytes(bytes)
-    }
-}
-
-impl From<&str> for String_0 {
-    fn from(text: &str) -> Self {
-        Self::from_bytes(text.as_bytes())
-    }
-}
-
-impl PartialEq for String_0 {
-    /// Byte equality. The null string equals only itself: it is a value of
-    /// its own, not the empty string.
-    fn eq(&self, other: &Self) -> bool {
-        self.is_null() == other.is_null() && self.as_bytes() == other.as_bytes()
-    }
-}
-
-impl Eq for String_0 {}
 
 /// Split `input` into one array item per line, each line its own string.
 ///
@@ -206,10 +28,12 @@ pub(crate) fn string_to_array(input: &String_0, crlf: bool) -> Array {
             .iter()
             .position(|&byte| is_break(byte))
             .unwrap_or(bytes.len() - at);
-        let line = String_0::from_bytes(&bytes[at..at + line_len]);
-        // SAFETY: `line` names its own `line_len` bytes.
-        unsafe { memchrsub(line.data().cast(), NUL as c_char, NL, line_len) };
-        items.push(Object::string(line));
+        // A NUL in the line stands for the newline it was read as.
+        let line = bytes[at..at + line_len].iter();
+        let line: Vec<u8> = line
+            .map(|&b| if b == NUL as u8 { NL as u8 } else { b })
+            .collect();
+        items.push(Object::string(String_0::from_vec(line)));
 
         at += line_len;
         let ends_line = at < bytes.len();

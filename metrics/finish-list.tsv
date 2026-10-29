@@ -1,6 +1,4 @@
 module	file	files	unsafe_stmts	unsafe_fns	wrappers	regions	raw_params	raw_returns	outside_callees
-api/	*	1	12	3	8	compound:1 deref:1	str:2	-	from_raw_parts:2 CStr::from_ptr:1 memchrsub:1 xfree:1 xmemdupz:1
-api/	api/private/helpers/text.rs	1	12	3	8	compound:1 deref:1	str:2	-	from_raw_parts:2 CStr::from_ptr:1 memchrsub:1 xfree:1 xmemdupz:1
 buffer_updates.rs	*	1	7	0	5	deref:1 expr:1	-	-	arena_mem_free:2 from_raw_parts:1 xfree:1 xrealloc:1
 buffer_updates.rs	buffer_updates.rs	1	7	0	5	deref:1 expr:1	-	-	arena_mem_free:2 from_raw_parts:1 xfree:1 xrealloc:1
 charset/	*	1	47	24	29	deref:9 expr:2 compound:1	str:23 other:6 pp_str:4	str:10	bytes_at:5 from_raw_parts_mut:3 prefix_at:3 from_raw_parts:2 slice_at:2
@@ -20,8 +18,8 @@ getchar/	*	1	0	0	0	-	-	-	-
 getchar/	getchar/state.rs	1	0	0	0	-	-	-	-
 grid/	*	1	3	1	1	ref:2	other:1	other:1	-
 grid/	grid/mod.rs	1	3	1	1	ref:2	other:1	other:1	-
-harness.rs	*	1	1	1	1	-	str:1	-	copy_nonoverlapping:1
-harness.rs	harness.rs	1	1	1	1	-	str:1	-	copy_nonoverlapping:1
+harness.rs	*	1	2	1	2	-	str:1	-	copy_nonoverlapping:1 from_raw_parts:1
+harness.rs	harness.rs	1	2	1	2	-	str:1	-	copy_nonoverlapping:1 from_raw_parts:1
 hashtab.rs	*	1	23	15	15	ref:6	value:10 str:5	str:2	CStr::from_ptr:2 from_raw_parts:2 .write:1 c_str:1 xfree:1
 hashtab.rs	hashtab.rs	1	23	15	15	ref:6	value:10 str:5	str:2	CStr::from_ptr:2 from_raw_parts:2 .write:1 c_str:1 xfree:1
 input.rs	*	1	6	0	1	compound:2	-	-	at:1
@@ -33,10 +31,10 @@ map/	map/mod.rs	1	12	9	7	ref:5	other:13 pp:2	other:5	-
 map/	map/table.rs	1	28	8	17	compound:4 deref:1 expr:1	other:8 pp:1	other:1	xrealloc:2 CStr::from_ptr:1 from_raw_parts:1 from_raw_parts_mut:1 strequal:1
 map_glyph_cache.rs	*	1	7	0	7	-	-	-	from_raw_parts:2 from_raw_parts_mut:2 mh_clear:1 mh_realloc:1 xrealloc:1
 map_glyph_cache.rs	map_glyph_cache.rs	1	7	0	7	-	-	-	from_raw_parts:2 from_raw_parts_mut:2 mh_clear:1 mh_realloc:1 xrealloc:1
-marktree/	*	10	104	15	76	deref:14 expr:10 ref:4	other:14	other:8 void:1	xfree:8 copy_nonoverlapping:3 String_0::from_owned_parts:1 from_raw_parts:1 from_raw_parts_mut:1 xmalloc:1 xmemdup:1 xmemdupz:1
+marktree/	*	10	102	15	74	deref:14 expr:10 ref:4	other:14	other:8 void:1	xfree:8 copy_nonoverlapping:3 from_raw_parts:1 from_raw_parts_mut:1 xmalloc:1 xmemdup:1 xrealloc:1
 marktree/	marktree/check.rs	1	6	0	5	deref:1	-	-	xfree:1 xmemdup:1
 marktree/	marktree/cursor.rs	1	5	1	4	ref:1	other:2	other:1	-
-marktree/	marktree/inspect.rs	1	3	0	3	-	-	-	String_0::from_owned_parts:1 xmemdupz:1
+marktree/	marktree/inspect.rs	1	1	0	1	-	-	-	-
 marktree/	marktree/intersect.rs	1	15	1	9	deref:3 expr:3	other:2	other:3 void:1	copy_nonoverlapping:3 from_raw_parts:1 from_raw_parts_mut:1 xfree:1 xmalloc:1 xrealloc:1
 marktree/	marktree/iter.rs	1	16	4	14	expr:1 ref:1	-	-	-
 marktree/	marktree/mod.rs	1	17	2	17	-	-	-	-

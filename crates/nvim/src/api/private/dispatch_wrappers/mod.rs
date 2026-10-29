@@ -15,7 +15,7 @@
 //! so callers see one flat namespace. A source file whose wrappers would
 //! overflow the tree's 1,000-line file cap is split into numbered parts.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 
 mod autocmd;
 mod buffer;

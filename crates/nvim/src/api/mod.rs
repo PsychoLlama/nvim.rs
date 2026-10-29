@@ -1,6 +1,6 @@
 //! The `nvim_*` API: the functions msgpack-RPC and Lua both call into.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 
 pub mod autocmd;
 pub mod buffer;

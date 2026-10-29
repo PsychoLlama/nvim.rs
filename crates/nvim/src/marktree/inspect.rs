@@ -24,7 +24,6 @@ use core::fmt::Write as _;
 
 use crate::marktree::key::{mt_end, mt_paired, mt_start, unrelative};
 use crate::marktree::node::Node;
-use crate::memory::xmemdupz;
 use crate::types::{MTPos, MarkTree, String_0, uint64_t};
 
 /// Nested to keep the name out of the flat cdef namespace `ffigen` builds,
@@ -57,11 +56,7 @@ pub(crate) fn mt_inspect(b: &mut MarkTree, keys: bool, dot: bool) -> String_0 {
     } else {
         inspect_node(&mut out, keys, root, MTPos::default());
     }
-    // SAFETY: `out` names `len` initialised bytes, which is what `xmemdupz`
-    // copies into the fresh block it answers.
-    let data = unsafe { xmemdupz(out.as_ptr().cast(), out.len()) };
-    // SAFETY: that block is the answer's own, NUL-terminated by `xmemdupz`.
-    unsafe { String_0::from_owned_parts(data.cast(), out.len()) }
+    String_0::from_vec(out.into_bytes())
 }
 
 /// The id a paired mark is known by in the dump: the `(ns, id)` handle with

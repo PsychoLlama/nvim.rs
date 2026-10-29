@@ -288,9 +288,10 @@ pub(crate) fn ins_compl_build_pum() -> c_int {
     //
     // Upstream writes `XFREE_CLEAR(compl_leader)` — the *struct*, not
     // `.data` — which frees and NULLs the first member and leaves `.size`
-    // stale. Reproduced deliberately; every reader guards on `.data`.
+    // stale. Every reader of the length asks `is_unset` first, so the stale
+    // count was never read, and the null string is the same thing.
     if ins_compl_need_restart() {
-        compl_leader().free_bytes_keep_len();
+        compl_leader().clear();
     }
 
     let has_preinsert = ins_compl_has_preinsert();

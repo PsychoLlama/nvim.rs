@@ -1771,6 +1771,20 @@ use known::*;
     ));
     out.push_str(&support);
 
+    // `forbid` reaches every child, so the parent forbids unsafe code only
+    // when every child came out without any (and so does the support code).
+    let all_clean = files
+        .iter()
+        .all(|file| file.text.contains("#![forbid(unsafe_code)]"))
+        && !UNSAFE_CONSTRUCTS.iter().any(|c| out.contains(c));
+    if all_clean {
+        out = out.replacen(
+            "#![deny(unsafe_op_in_unsafe_fn)]",
+            "#![forbid(unsafe_code)]",
+            1,
+        );
+    }
+
     files.insert(
         0,
         Emitted {

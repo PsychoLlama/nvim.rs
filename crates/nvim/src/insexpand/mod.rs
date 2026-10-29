@@ -470,15 +470,6 @@ impl ComplStr {
         let shorter = self.0.with(|s| String_0::from_bytes(&s.as_bytes()[..len]));
         self.0.set(shorter);
     }
-
-    /// C's `XFREE_CLEAR(compl_leader)` written on the *struct* rather than on
-    /// its `.data`: the bytes go and the pointer nulls, but the length is
-    /// left stale. Reproduced deliberately for `ins_compl_build_pum`; every
-    /// reader guards on the pointer.
-    pub(crate) fn free_bytes_keep_len(self) {
-        let stale = self.len();
-        self.0.set(String_0::null_with_stale_len(stale));
-    }
 }
 
 /// What the current completion searches for.

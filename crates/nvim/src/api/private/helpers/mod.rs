@@ -17,7 +17,7 @@
 //! They are re-exported here, so callers name `helpers::` as they always
 //! did.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 
 use core::ffi::{CStr, c_char, c_int};
 

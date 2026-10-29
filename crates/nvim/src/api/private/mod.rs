@@ -1,7 +1,7 @@
 //! Plumbing behind the API: argument conversion, validation, and the
 //! generated dispatch tables that route a method name to its handler.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 
 pub mod converter;
 pub mod dispatch;

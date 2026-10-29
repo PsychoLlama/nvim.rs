@@ -15,6 +15,7 @@ typedef struct MultiQueue MultiQueue;
 typedef struct OptSet OptSet;
 typedef struct Partial Partial;
 typedef struct Scrollback Scrollback;
+typedef struct String String;
 typedef struct TerminalOptions TerminalOptions;
 typedef struct Window Window;
 typedef struct key_value_pair key_value_pair;
@@ -38,9 +39,9 @@ typedef struct ExtmarkMove ExtmarkMove;
 typedef struct ExtmarkSavePos ExtmarkSavePos;
 typedef struct ExtmarkSplice ExtmarkSplice;
 typedef struct GArray GArray;
+typedef struct HarnessString HarnessString;
 typedef struct InternalState InternalState;
 typedef struct Intersection Intersection;
-typedef struct String String;
 typedef struct KeyDict__shada_buflist_item KeyDict__shada_buflist_item;
 typedef struct KeyDict__shada_mark KeyDict__shada_mark;
 typedef struct KeyDict__shada_register KeyDict__shada_register;
@@ -550,6 +551,10 @@ struct GArray {
   int ga_growsize;
   void *ga_data;
 };
+struct HarnessString {
+  const char *data;
+  size_t size;
+};
 struct InternalState {
   LuaRef cb;
   bool closed;
@@ -559,10 +564,6 @@ struct Intersection {
   size_t capacity;
   uint64_t *items;
   uint64_t init_array[4];
-};
-struct String {
-  char *data;
-  size_t size;
 };
 struct KeyDict_empty {
 
@@ -5482,8 +5483,8 @@ void early_init(bool);
 void event_init(void);
 ScreenCell *getcell(const VTermScreen *, int, int);
 size_t schar_get(char *, ScreenChar);
-void ui_call_chdir(String);
-void ui_call_set_title(String);
+void ui_call_chdir(HarnessString);
+void ui_call_set_title(HarnessString);
 void unblock_autocmds(void);
 int utf_ptr2char(const char *);
 int32_t utf_ptr2char_info_impl(const uint8_t *, uintptr_t);

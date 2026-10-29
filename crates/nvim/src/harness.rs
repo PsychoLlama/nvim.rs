@@ -29,7 +29,7 @@ use crate::grid::{SCHAR_BUF_SIZE, SCharBuf, schar_copy};
 use crate::types::String_0;
 use crate::types::{DispTick, ScreenChar, size_t};
 use core::ffi::c_char;
-use core::mem::ManuallyDrop;
+use core::slice;
 
 /// The redraw pass counter a decoration provider compares against to know it
 /// has already been asked about this pass (`drawscreen::state` re-exports
@@ -47,26 +47,41 @@ pub extern "C" fn block_autocmds() {
     crate::autocmd::block_autocmds();
 }
 
-/// [`crate::ui::ui_call_set_title`], by name: `tui_spec.lua` sends a
-/// 65,536-byte title, which `maketitle()` never produces.
+/// A string as the spec builds one with LuaJIT's FFI: C's `{ char *data;
+/// size_t size; }`, over a buffer the spec owns.
 ///
-/// **The argument is borrowed, not taken.** What reaches this is a `String`
-/// the spec built over a LuaJIT array; releasing it would free memory this
-/// allocator never handed out, so it is parked in a `ManuallyDrop` and the
-/// UIs are sent a copy.
-#[unsafe(no_mangle)]
-pub extern "C" fn ui_call_set_title(title: String_0) {
-    let title = ManuallyDrop::new(title);
-    crate::ui::ui_call_set_title(String_0::clone(&title));
+/// The fields are private, so only the C side ever makes one; the two fronts
+/// below copy the bytes out and keep nothing.
+#[repr(C)]
+pub struct HarnessString {
+    data: *const c_char,
+    size: size_t,
 }
 
-/// [`crate::ui::ui_call_chdir`], by name and borrowed as above: the same
-/// spec checks that a relative path the server sends is resolved against
-/// the server's cwd.
+impl HarnessString {
+    /// A copy of the bytes, as an API string.
+    fn to_api(&self) -> String_0 {
+        if self.data.is_null() {
+            return String_0::NULL;
+        }
+        // SAFETY: only the spec builds one, over `size` bytes it owns for
+        // the length of the call.
+        String_0::from_bytes(unsafe { slice::from_raw_parts(self.data.cast::<u8>(), self.size) })
+    }
+}
+
+/// [`crate::ui::ui_call_set_title`], by name: `tui_spec.lua` sends a
+/// 65,536-byte title, which `maketitle()` never produces.
 #[unsafe(no_mangle)]
-pub extern "C" fn ui_call_chdir(path: String_0) {
-    let path = ManuallyDrop::new(path);
-    crate::ui::ui_call_chdir(String_0::clone(&path));
+pub extern "C" fn ui_call_set_title(title: HarnessString) {
+    crate::ui::ui_call_set_title(title.to_api());
+}
+
+/// [`crate::ui::ui_call_chdir`], by name: the same spec checks that a
+/// relative path the server sends is resolved against the server's cwd.
+#[unsafe(no_mangle)]
+pub extern "C" fn ui_call_chdir(path: HarnessString) {
+    crate::ui::ui_call_chdir(path.to_api());
 }
 
 /// [`crate::autocmd::unblock_autocmds`], by name, for the same spec.
