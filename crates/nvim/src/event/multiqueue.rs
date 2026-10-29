@@ -272,16 +272,23 @@ pub unsafe fn multiqueue_put_event(queue: *mut MultiQueue, event: Event) {
 ///
 /// # Panics
 /// If the cell holds no queue yet.
-pub(crate) fn put_job_in(cell: &GlobalCell<Option<ChildQueue>>, job: Box<dyn FnOnce()>) {
+pub(crate) fn put_job_in(cell: &GlobalCell<Option<ChildQueue>>, job: impl FnOnce() + 'static) {
+    put_event_in(cell, job_event(job));
+}
+
+/// [`put_job_in`]'s queue step, kept apart from the generic front so the
+/// cell is read in one place.
+#[inline(never)]
+fn put_event_in(cell: &GlobalCell<Option<ChildQueue>>, event: Event) {
     let queue = queue_in(cell);
     assert!(!queue.is_null(), "a job is queued after its queue is made");
-    // SAFETY: the cell's own live queue; `run_job` takes back the job packed
-    // here, once.
-    unsafe { multiqueue_put_event(queue, job_event(job)) };
+    // SAFETY: the cell's own live queue; the event's handler takes back the
+    // job packed into it, once.
+    unsafe { multiqueue_put_event(queue, event) };
 }
 
 /// [`put_job_in`] the main loop's own queue.
-pub(crate) fn put_job_on_main_loop(job: Box<dyn FnOnce()>) {
+pub(crate) fn put_job_on_main_loop(job: impl FnOnce() + 'static) {
     // SAFETY: the main loop's queue, live from startup to exit; `run_job`
     // takes back the job packed here, once.
     unsafe {
@@ -294,7 +301,7 @@ pub(crate) fn put_job_on_main_loop(job: Box<dyn FnOnce()>) {
 
 /// [`put_job_in`] the main loop's *fast* queue, which the loop drains while
 /// it polls.
-pub(crate) fn put_job_on_fast_events(job: Box<dyn FnOnce()>) {
+pub(crate) fn put_job_on_fast_events(job: impl FnOnce() + 'static) {
     // SAFETY: the main loop's fast queue, live from startup to exit;
     // `run_job` takes back the job packed here, once.
     unsafe {
@@ -307,7 +314,7 @@ pub(crate) fn put_job_on_fast_events(job: Box<dyn FnOnce()>) {
 
 /// Queue `job` on `queue`, to run once when that queue is processed: the
 /// spelling [`put_job_in`] has for a queue the caller holds (a channel's).
-pub(crate) fn put_job(queue: &ChildQueue, job: Box<dyn FnOnce()>) {
+pub(crate) fn put_job(queue: &ChildQueue, job: impl FnOnce() + 'static) {
     // SAFETY: the caller's live queue; `run_job` takes back the job packed
     // here, once.
     unsafe { multiqueue_put_event(queue.as_ptr(), job_event(job)) };
@@ -321,11 +328,17 @@ pub(crate) fn put_job(queue: &ChildQueue, job: Box<dyn FnOnce()>) {
 pub(crate) fn put_job_on_either(
     first: &ChildQueue,
     second: &GlobalCell<Option<ChildQueue>>,
-    job: Box<dyn FnOnce()>,
+    job: impl FnOnce() + 'static,
 ) {
+    put_event_on_either(first, second, job_event(job));
+}
+
+/// [`put_job_on_either`]'s queue step, kept apart from the generic front.
+#[inline(never)]
+fn put_event_on_either(first: &ChildQueue, second: &GlobalCell<Option<ChildQueue>>, event: Event) {
     let other = queue_in(second);
     assert!(!other.is_null(), "a job is queued after its queue is made");
-    let event = event_create_oneshot(job_event(job), 2);
+    let event = event_create_oneshot(event, 2);
     // SAFETY: both live queues; the one-shot wrapper runs the job once and
     // is released once both queues have reached it.
     unsafe {
@@ -396,19 +409,20 @@ unsafe extern "C" fn run_id_event(argv: *mut *mut c_void) {
     handler(a, b);
 }
 
-/// The event that runs `job`.
-fn job_event(job: Box<dyn FnOnce()>) -> Event {
+/// The event that runs `job`: one allocation, the job itself, behind a
+/// thin pointer that the handler instantiated for its type takes back.
+fn job_event<F: FnOnce() + 'static>(job: F) -> Event {
     let job = Box::into_raw(Box::new(job)).cast::<c_void>();
-    Event::new(Some(run_job), [job])
+    Event::new(Some(run_job::<F>), [job])
 }
 
 /// A queue reached a [`put_job_in`] event: run it.
 ///
 /// # Safety
-/// `argv[0]` is the boxed job [`job_event`] packed, taken back once here.
-unsafe extern "C" fn run_job(argv: *mut *mut c_void) {
+/// `argv[0]` is the boxed `F` [`job_event`] packed, taken back once here.
+unsafe extern "C" fn run_job<F: FnOnce()>(argv: *mut *mut c_void) {
     // SAFETY: the caller's promise.
-    let job = unsafe { Box::from_raw((*argv).cast::<Box<dyn FnOnce()>>()) };
+    let job = unsafe { Box::from_raw((*argv).cast::<F>()) };
     job();
 }
 

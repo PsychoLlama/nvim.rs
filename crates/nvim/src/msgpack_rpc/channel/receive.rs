@@ -270,8 +270,8 @@ fn schedule(chan: &mut Channel, request: Request, method_name_len: usize) -> Ste
 }
 
 /// The queued form of a request.
-fn job(request: Request) -> Box<dyn FnOnce()> {
-    Box::new(move || request_event(request))
+fn job(request: Request) -> impl FnOnce() + 'static {
+    move || request_event(request)
 }
 
 /// Applies a `redraw` event from the server this UI client is attached to.
