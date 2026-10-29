@@ -12,7 +12,7 @@
 //! `lua_State`, and opening the library onto a state.
 
 #![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `lua/` row in docs/perimeter.md (`lua/executor/luv.rs`).
+// Unsafe perimeter: the `lua/ffi.rs`, `lua/executor/{luv,state}.rs` row in docs/perimeter.md.
 #![allow(unsafe_code)]
 // luv's C API: `luv_CFpcall` and its neighbours are that library's exported
 // names.

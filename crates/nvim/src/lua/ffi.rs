@@ -5,7 +5,7 @@
 //! against the static LuaJIT/luv/lpeg libraries at link time.
 
 #![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
+// Unsafe perimeter: the `lua/ffi.rs`, `lua/executor/{luv,state}.rs` row in docs/perimeter.md.
 #![allow(unsafe_code)]
 // LuaJIT's own symbol names: `L` for the state and the `luaL_*` functions.
 // Renaming them would hide which C function each one is. The header's

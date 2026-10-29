@@ -1083,12 +1083,13 @@ PERIMETER = {
     "crates/nvim/src/lua/ffi.rs": "LuaJIT's C API, declared: the functions, "
     "`lua_Debug` and the `luaL_Reg` tables C reads",
     "crates/nvim/src/lua/stack/": "the typed `Stack`: the one module that "
-    "pushes, pops and reads the `lua_State` stack",
+    "pushes, pops and reads the `lua_State` stack, and reads LuaJIT's "
+    "`lua_State` head directly (LuaJIT pinned by nix/deps.json; "
+    "`check_state_layout` aborts on drift)",
     "crates/nvim/src/lua/executor/luv.rs": "luv: the C hooks that run a libuv "
     "callback against the right `lua_State`, and opening the library",
     "crates/nvim/src/lua/executor/state.rs": "making and closing `lua_State`s "
-    "and opening the vendored C libraries (lpeg, libmpack, cjson, tree-sitter) "
-    "onto them",
+    "and opening the C libraries (LuaJIT's own, lpeg, luv) onto them",
     "crates/nvim/src/lua/treesitter/": "the tree-sitter C library: parsers, "
     "trees, queries and cursors are opaque C objects with C lifetimes",
     "crates/nvim/src/event/": "libuv: the loop, streams, timers, signals and "

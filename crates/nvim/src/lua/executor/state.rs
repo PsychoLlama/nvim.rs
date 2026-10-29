@@ -12,7 +12,7 @@
 //! lpeg, libmpack, cjson, tree-sitter) onto a state.
 
 #![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `lua/` row in docs/perimeter.md (`lua/executor/state.rs`).
+// Unsafe perimeter: the `lua/ffi.rs`, `lua/executor/{luv,state}.rs` row in docs/perimeter.md.
 #![allow(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
