@@ -54,23 +54,37 @@ pub(crate) fn dict_check_writable(
     key: &String_0,
     del: bool,
 ) -> Result<bool, Error> {
-    if let Some(item) = dict.find(key.as_bytes()) {
-        let flags = c_int::from(item.di_flags);
-        let refused = if flags & DI_FLAGS_RO != 0 {
-            Some("read-only")
-        } else if flags & DI_FLAGS_LOCK != 0 {
-            Some("locked")
-        } else if del && flags & DI_FLAGS_FIX != 0 {
-            Some("fixed")
-        } else {
-            None
-        };
-        if let Some(why) = refused {
-            let key = key.as_cstr().to_string_lossy();
-            return Err(api_error!(kErrorTypeException, "Key is {why}: {key}"));
-        }
-        return Ok(true);
+    match dict.find(key.as_bytes()) {
+        Some(item) => item_writable(item, key, del).map(|()| true),
+        None => absent_writable(dict, key).map(|()| false),
     }
+}
+
+/// Why the existing `item` under `key` could not be assigned to (or, with
+/// `del`, removed), if anything stops it.
+fn item_writable(item: &DictItem, key: &String_0, del: bool) -> Result<(), Error> {
+    let flags = c_int::from(item.di_flags);
+    let refused = if flags & DI_FLAGS_RO != 0 {
+        Some("read-only")
+    } else if flags & DI_FLAGS_LOCK != 0 {
+        Some("locked")
+    } else if del && flags & DI_FLAGS_FIX != 0 {
+        Some("fixed")
+    } else {
+        None
+    };
+    match refused {
+        Some(why) => {
+            let key = key.as_cstr().to_string_lossy();
+            Err(api_error!(kErrorTypeException, "Key is {why}: {key}"))
+        }
+        None => Ok(()),
+    }
+}
+
+/// Why `key`, absent from `dict`, could not be added to it, if anything
+/// stops it.
+fn absent_writable(dict: &DictRef, key: &String_0) -> Result<(), Error> {
     let refused = if dict.dv_lock.is_locked() {
         Some((kErrorTypeException, c"Dict is locked"))
     } else if key.is_empty() {
@@ -82,7 +96,7 @@ pub(crate) fn dict_check_writable(
     };
     match refused {
         Some((kind, msg)) => Err(Error::from_message(kind, msg)),
-        None => Ok(false),
+        None => Ok(()),
     }
 }
 
@@ -91,6 +105,9 @@ pub(crate) fn dict_check_writable(
 ///
 /// The item is found again by key after every step that can run user code
 /// (a watcher is Vimscript or Lua): nothing holds it across one.
+///
+/// An assignment to anything but `v:` is [`dict_assign`]; what is left here
+/// is removal and `v:`, whose typed keys and hooks need the item re-found.
 pub(crate) fn dict_set_var(
     dict: &DictRef,
     key: &String_0,
@@ -98,6 +115,9 @@ pub(crate) fn dict_set_var(
     del: bool,
     retval: bool,
 ) -> Result<Object, Error> {
+    if !del && !dict.ptr_eq(&vimvar_dict()) {
+        return dict_assign(dict, key, value, retval);
+    }
     let mut rv = Object::Nil;
     let exists = dict_check_writable(dict, key, del)?;
     let watched = dict_is_watched(Some(dict));
@@ -138,12 +158,9 @@ pub(crate) fn dict_set_var(
         if retval {
             rv = current(dict).unwrap_or(Object::Nil);
         }
-        // `v:` keys are typed, and some of them run a hook on assignment.
-        let verdict = if dict.ptr_eq(&vimvar_dict()) {
-            before_set_vvar(key.as_bytes(), &mut tv, true, watched)
-        } else {
-            VvarStore::Store
-        };
+        // Past here the dictionary is `v:`: its keys are typed, and some of
+        // them run a hook on assignment.
+        let verdict = before_set_vvar(key.as_bytes(), &mut tv, true, watched);
         if verdict != VvarStore::Store {
             tv_clear(&mut tv);
             if verdict == VvarStore::TypeError {
@@ -171,6 +188,55 @@ pub(crate) fn dict_set_var(
             if let Some(item) = dict.edit().find_mut(key.as_bytes()) {
                 tv_copy(&tv, &mut item.di_tv);
             }
+        }
+    }
+    if watched {
+        dict_watcher_notify(dict, key.as_cstr(), Some(&tv), Some(&oldtv));
+        tv_clear(&mut oldtv);
+    }
+    tv_clear(&mut tv);
+    Ok(rv)
+}
+
+/// [`dict_set_var`]'s assignment to anything but `v:`, which no hook
+/// stands between: the item is found once and written in place. Nothing
+/// between the lookup and the write runs user code; the watchers run after,
+/// with no item held. With `retval` the previous value comes back.
+fn dict_assign(
+    dict: &DictRef,
+    key: &String_0,
+    value: Object,
+    retval: bool,
+) -> Result<Object, Error> {
+    let watched = dict_is_watched(Some(dict));
+    let mut tv = TypVal::from(value);
+    // Only filled in for a key that already existed; the watchers see an
+    // unset value for a key that did not.
+    let mut oldtv = TV_INITIAL_VALUE;
+    let mut rv = Object::Nil;
+    if let Some(item) = dict.edit().find_mut(key.as_bytes()) {
+        if let Err(err) = item_writable(item, key, false) {
+            tv_clear(&mut tv);
+            return Err(err);
+        }
+        if retval {
+            rv = Object::from(&item.di_tv);
+        }
+        if watched {
+            tv_copy(&item.di_tv, &mut oldtv);
+        }
+        tv_clear(&mut item.di_tv);
+        tv_copy(&tv, &mut item.di_tv);
+    } else {
+        if let Err(err) = absent_writable(dict, key) {
+            tv_clear(&mut tv);
+            return Err(err);
+        }
+        // Added empty and then filled, as upstream does: adding a Funcref
+        // under a lower-case name would be refused (E704).
+        let _ = dict.edit().add_item(DictItem::boxed(key.as_bytes()));
+        if let Some(item) = dict.edit().find_mut(key.as_bytes()) {
+            tv_copy(&tv, &mut item.di_tv);
         }
     }
     if watched {
