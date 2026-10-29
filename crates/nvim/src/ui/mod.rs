@@ -143,7 +143,9 @@ pub enum Reach {
     Uncomposed,
 }
 
-/// The number of attached UIs.
+/// The number of attached UIs. Never inlined: the `pub` callers are small
+/// enough to ship across crates, and would take the table's cell with them.
+#[inline(never)]
 fn ui_count() -> usize {
     uis.with(Vec::len)
 }
@@ -152,25 +154,50 @@ fn ui_count() -> usize {
 ///
 /// A leaf: see [`uis`].
 pub(crate) fn with_ui<R>(channel_id: u64, f: impl FnOnce(&mut RemoteUI) -> R) -> Option<R> {
+    let (mut f, mut answer) = (Some(f), None);
+    lend_ui(channel_id, &mut |ui| {
+        let f = f.take().expect("lent once");
+        answer = Some(f(ui));
+    });
+    answer
+}
+
+/// [`with_ui`]'s table step. Not generic and never inlined, so the table's
+/// cell is named in this crate only (`just state-exports`).
+#[inline(never)]
+fn lend_ui(channel_id: u64, f: &mut dyn FnMut(&mut RemoteUI)) {
     uis.with_mut(|table| {
-        let ui = table.iter_mut().find(|ui| ui.channel_id == channel_id)?;
-        Some(f(ui))
-    })
+        if let Some(ui) = table.iter_mut().find(|ui| ui.channel_id == channel_id) {
+            f(ui);
+        }
+    });
 }
 
 /// Whether a UI is attached to `channel_id`.
 pub(crate) fn ui_is_attached(channel_id: u64) -> bool {
-    uis.with(|table| table.iter().any(|ui| ui.channel_id == channel_id))
+    any_ui(|ui| ui.channel_id == channel_id)
 }
 
 /// Whether any attached UI satisfies `test`.
-fn any_ui(test: impl FnMut(&RemoteUI) -> bool) -> bool {
+fn any_ui(mut test: impl FnMut(&RemoteUI) -> bool) -> bool {
+    any_ui_dyn(&mut test)
+}
+
+/// [`any_ui`]'s table step; not generic, as [`lend_ui`].
+#[inline(never)]
+fn any_ui_dyn(test: &mut dyn FnMut(&RemoteUI) -> bool) -> bool {
     uis.with(|table| table.iter().any(test))
 }
 
 /// Runs `send` on every attached UI that `reach` selects, in attach order,
 /// answering whether there was one. A leaf, as [`with_ui`].
 pub(crate) fn each_ui_reached(reach: Reach, mut send: impl FnMut(&mut RemoteUI)) -> bool {
+    each_ui_reached_dyn(reach, &mut send)
+}
+
+/// [`each_ui_reached`]'s table step; not generic, as [`lend_ui`].
+#[inline(never)]
+fn each_ui_reached_dyn(reach: Reach, send: &mut dyn FnMut(&mut RemoteUI)) -> bool {
     uis.with_mut(|table| {
         let mut any = false;
         for ui in table.iter_mut().filter(|ui| reaches(ui, reach)) {

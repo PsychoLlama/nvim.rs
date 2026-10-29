@@ -185,7 +185,6 @@ binary as well as the default one.
 
 ## `ui`
 
-- `neovim::ui::attached`
 - `neovim::ui::callbacks::ui_cb_ext`
 - `neovim::ui::cursor_col`
 - `neovim::ui::cursor_grid_handle`
