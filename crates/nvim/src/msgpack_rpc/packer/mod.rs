@@ -130,20 +130,6 @@ impl PackerBuffer {
     pub fn patch_be16(&mut self, at: usize, value: uint32_t) {
         self.block[at..at + 2].copy_from_slice(&value.to_be_bytes()[2..]);
     }
-
-    /// Overwrite the byte at `at`.
-    pub fn patch_byte(&mut self, at: usize, byte: u8) {
-        self.block[at] = byte;
-    }
-
-    /// Append `room` bytes for a caller to fill in, then shorten them to
-    /// what [`fill`] answers it wrote.
-    pub fn fill_with(&mut self, room: usize, fill: impl FnOnce(&mut [u8]) -> usize) {
-        let start = self.block.len();
-        self.block.resize(start + room, 0);
-        let written = fill(&mut self.block[start..]);
-        self.block.truncate(start + written.min(room));
-    }
 }
 
 /// Who an RPC message goes to: almost always one channel, which needs no
