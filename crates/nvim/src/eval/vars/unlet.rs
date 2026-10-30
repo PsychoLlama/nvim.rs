@@ -19,8 +19,8 @@ use crate::charset::getdigits_int_at;
 use crate::cstr::{self, byte_at};
 use crate::eval::lval::{LValue, Slot, Span, Target};
 use crate::eval::typval::{
-    dict_is_watched, dict_watcher_notify, list_locked, tv_copy, tv_item_lock,
-    value_check_lock_named,
+    dict_is_watched, dict_watcher_notify, list_locked, tv_copy, tv_item_lock_slot,
+    tv_list_item_lock, value_check_lock_named,
 };
 use crate::eval::{FNE_CHECK_START, env_name_len, get_lval};
 use crate::ex_docmd::ends_excmd;
@@ -247,16 +247,22 @@ fn do_lock_var(mut lval: LValue<'_>, lock: bool, deep: c_int) -> Result<(), Fail
                 }
                 Some(false) => {}
             }
-            with_var(name, true, |item| {
+            // The descent runs once the variable is no longer lent: it can
+            // reach the scope that holds the variable.
+            let descent = with_var(name, true, |item| {
                 if lock {
                     item.di_flags |= DI_FLAGS_LOCK;
                 } else {
                     item.di_flags &= !DI_FLAGS_LOCK;
                 }
-                if deep != 0 {
-                    tv_item_lock(&mut item.di_lock, &item.di_tv, deep, lock, false);
+                if deep == 0 {
+                    return None;
                 }
+                tv_item_lock_slot(&mut item.di_lock, &item.di_tv, deep, lock, false)
             });
+            if let Some(descent) = descent.flatten() {
+                descent.run();
+            }
         }
         Target::Slot {
             slot: Slot::Item { list, index },
@@ -275,15 +281,18 @@ fn do_lock_var(mut lval: LValue<'_>, lock: bool, deep: c_int) -> Result<(), Fail
             let (list, index) = (list.clone(), *index);
             let end = index.saturating_add(count).min(list.len());
             for at in index..end {
-                let item = &mut list.edit().items_mut()[at];
-                tv_item_lock(&mut item.li_lock, &item.li_tv, deep, lock, false);
+                tv_list_item_lock(&list, at, deep, lock, false);
             }
         }
         Target::Slot {
             slot: Slot::Key { .. },
             ..
         } if deep != 0 => {
-            lval.with_slot(|tv, slot_lock| tv_item_lock(slot_lock, tv, deep, lock, false));
+            let descent =
+                lval.with_slot(|tv, slot_lock| tv_item_lock_slot(slot_lock, tv, deep, lock, false));
+            if let Some(descent) = descent.flatten() {
+                descent.run();
+            }
         }
         Target::Slot { .. } | Target::NewKey { .. } => {}
     }

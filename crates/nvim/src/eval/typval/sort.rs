@@ -301,7 +301,7 @@ pub(crate) fn do_sort(list: &ListRef, info: &mut SortInfo<'_>) {
         for (dest, &from) in order.iter().enumerate() {
             moved[from] = index_of(dest);
         }
-        watch_permute(list.edit(), &moved);
+        watch_permute(&mut list.edit(), &moved);
     }
     // Anything the comparator appended goes once the borrow has ended.
     let appended = ::core::mem::replace(&mut list.edit().lv_items, sorted);

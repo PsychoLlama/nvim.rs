@@ -326,8 +326,8 @@ pub(crate) fn add_llist_tags(tag: &[u8], matches: &[TagMatch]) {
             0
         };
 
-        let dict = tv_dict_alloc();
-        let entry = dict.edit();
+        let mut dict = tv_dict_alloc();
+        let entry = &mut *dict;
         let _ = entry.add_str(b"text", Some(&name));
         let _ = entry.add_str(b"filename", Some(&fname));
         let _ = entry.add_number(b"lnum", VarNumber::from(lnum));

@@ -36,6 +36,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::eval::typval::CallFrame;
+use crate::eval::typval::Edit;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::strings::reversed_text;
 use core::ffi::{CStr, c_int};
@@ -140,7 +141,7 @@ impl<'a> ListArg<'a> {
 
     /// The list, writable, for the one statement that asked.
     #[inline(always)]
-    fn get(self) -> Option<&'a mut List> {
+    fn get(self) -> Option<Edit<'a, List>> {
         self.0.map(ListRef::edit)
     }
 
@@ -158,7 +159,7 @@ impl<'a> ListArg<'a> {
     /// Set the lock status.  A NULL list already reads as `VarLock::Fixed`.
     #[inline(always)]
     pub(crate) fn set_lock(self, lock: VarLock) {
-        if let Some(list) = self.get() {
+        if let Some(mut list) = self.get() {
             list.lv_lock = lock;
         }
     }
@@ -196,7 +197,7 @@ impl<'a> ListArg<'a> {
     /// Reverse the items. A NULL list is empty, so there is nothing to do.
     #[inline(always)]
     pub(crate) fn reverse(self) {
-        if let Some(list) = self.get() {
+        if let Some(mut list) = self.get() {
             list.reverse();
         }
     }
@@ -296,9 +297,9 @@ pub(crate) struct Item<'a> {
 impl<'a> Item<'a> {
     /// The item itself, for the one statement that asked.
     #[inline(always)]
-    fn get(self) -> &'a mut ListItem {
+    fn get(self) -> Edit<'a, ListItem> {
         let list = self.list.get().expect("an item of a live list");
-        &mut list.items_mut()[self.at]
+        list.map(|list| &mut list.items_mut()[self.at])
     }
 
     /// Copy the item's value into `v:val`, before a callback that may
@@ -327,7 +328,7 @@ impl<'a> Item<'a> {
         // Taken out first, and released once the borrow has ended: a value
         // can name the list it was in.
         let old = {
-            let item = self.get();
+            let mut item = self.get();
             // Upstream unlocks the value it is about to store; with the
             // lock on the slot, what it unlocks is this item.
             item.li_lock = VarLock::Unlocked;
@@ -464,11 +465,11 @@ pub(crate) struct DictItemRef<'a>(&'a DictRef, usize);
 impl<'a> DictItemRef<'a> {
     /// The entry itself, for the one statement that asked.
     #[inline(always)]
-    fn get(self) -> &'a mut DictItem {
-        self.0
-            .edit()
-            .item_at_mut(self.1)
-            .expect("an entry of the walk's dict")
+    fn get(self) -> Edit<'a, DictItem> {
+        self.0.edit().map(|dict| {
+            dict.item_at_mut(self.1)
+                .expect("an entry of the walk's dict")
+        })
     }
 
     /// The entry, read-only.
@@ -507,7 +508,7 @@ impl<'a> DictItemRef<'a> {
         // As `Item::set_tv`: the old value goes once the borrow has ended,
         // and the lock unlocked here is the slot's.
         let old = {
-            let item = self.get();
+            let mut item = self.get();
             item.di_lock = VarLock::Unlocked;
             ::core::mem::replace(&mut item.di_tv, newtv)
         };
@@ -537,7 +538,7 @@ pub(crate) struct BlobArg<'a>(Option<&'a BlobRef>);
 impl<'a> BlobArg<'a> {
     /// The blob, writable, for the one statement that asked.
     #[inline(always)]
-    fn get(self) -> Option<&'a mut Blob> {
+    fn get(self) -> Option<Edit<'a, Blob>> {
         self.0.map(BlobRef::edit)
     }
 
@@ -553,7 +554,7 @@ impl<'a> BlobArg<'a> {
 
     #[inline(always)]
     pub(crate) fn set_lock(self, lock: VarLock) {
-        if let Some(b) = self.get() {
+        if let Some(mut b) = self.get() {
             b.bv_lock = lock;
         }
     }
@@ -584,7 +585,7 @@ impl<'a> BlobArg<'a> {
     /// Insert `byte` before `idx`, which may be the blob's length.
     #[inline(always)]
     pub(crate) fn insert_byte(self, idx: c_int, byte: uint8_t) {
-        let blob = self.get().expect("a live blob");
+        let mut blob = self.get().expect("a live blob");
         let idx = usize::try_from(idx).expect("a byte of the blob");
         let len = blob.len();
         // `claim` grows the array *and* declares the byte live, so the
@@ -856,8 +857,8 @@ pub fn f_remove(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // call.
     match Container::of(&args[0]) {
         Container::Dict(_) => tv_dict_remove(args, result, arg_errmsg),
-        Container::Blob(b) => blob_remove(b.get(), args, result, arg_errmsg),
-        Container::List(l) => list_remove(l.get(), args, result, arg_errmsg),
+        Container::Blob(b) => blob_remove(b.get().as_deref_mut(), args, result, arg_errmsg),
+        Container::List(l) => list_remove(l.get().as_deref_mut(), args, result, arg_errmsg),
         _ => err_str(e_listdictblobarg, c"remove()"),
     }
 }

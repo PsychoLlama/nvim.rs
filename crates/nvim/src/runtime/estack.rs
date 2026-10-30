@@ -290,7 +290,7 @@ fn stacktrace_push_item(
 ) {
     let d_held = tv_dict_alloc_lock(VarLock::Fixed);
     {
-        let d = d_held.edit();
+        let mut d = d_held.edit();
         if let Some(func) = func {
             let _ = d.add_func(b"funcref", func.name().as_cstr());
         }

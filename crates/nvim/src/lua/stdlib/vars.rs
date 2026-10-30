@@ -127,21 +127,20 @@ pub(crate) fn setvar(stack: &mut Stack) -> Result<c_int, Raise> {
             return Ok(0);
         }
     }
-    match dict.edit().find_mut(key.as_bytes()) {
-        Some(item) => {
-            if watched {
-                tv_copy(&item.di_tv, &mut oldtv);
-            }
-            tv_clear(&mut item.di_tv);
-            tv_copy(&tv, &mut item.di_tv);
+    // An `if let`, not a `match`: the edit ends before the `else` edits
+    // the same dictionary again.
+    if let Some(item) = dict.edit().find_mut(key.as_bytes()) {
+        if watched {
+            tv_copy(&item.di_tv, &mut oldtv);
         }
-        None => {
-            // Added empty and then filled, as upstream does: adding a
-            // Funcref under a lower-case name would be refused (E704).
-            let _ = dict.edit().add_item(DictItem::boxed(key.as_bytes()));
-            if let Some(item) = dict.edit().find_mut(key.as_bytes()) {
-                tv_copy(&tv, &mut item.di_tv);
-            }
+        tv_clear(&mut item.di_tv);
+        tv_copy(&tv, &mut item.di_tv);
+    } else {
+        // Added empty and then filled, as upstream does: adding a
+        // Funcref under a lower-case name would be refused (E704).
+        let _ = dict.edit().add_item(DictItem::boxed(key.as_bytes()));
+        if let Some(item) = dict.edit().find_mut(key.as_bytes()) {
+            tv_copy(&tv, &mut item.di_tv);
         }
     }
 

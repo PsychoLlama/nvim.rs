@@ -2011,7 +2011,7 @@ PLACE_WRITE = re.compile(
 )
 # A newtype whose `.field` reaches through to something it points at.
 DEREF_MUT = re.compile(
-    r"\bimpl(?:<[^>]*>)?\s+(?:[A-Za-z0-9_]+::)*DerefMut\s+for\s+([A-Za-z_][A-Za-z0-9_]*)"
+    r"\bimpl(?:<[^>]*>)?\s+(?:::)?(?:[A-Za-z0-9_]+::)*DerefMut\s+for\s+([A-Za-z_][A-Za-z0-9_]*)"
 )
 # `type Op = Live<OpArg>;` — a family's name for a shared generic wrapper.
 # The scan is keyed on names, so an alias of a `DerefMut` type is one too.
@@ -2250,7 +2250,8 @@ def is_place(ty, deref_mut):
         # not in reach of a name-keyed scan, and every one of these in the tree
         # is a handle.
         or ty == "Self"
-        or ty in deref_mut
+        # A generic guard (`Edit<'_, List>`) is its type constructor's name.
+        or ty.split("<", 1)[0].strip() in deref_mut
     )
 
 

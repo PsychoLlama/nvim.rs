@@ -157,7 +157,7 @@ fn menu_get_recursive(menu: &VimMenu, modes: c_int) -> Option<DictRef> {
     }
 
     let dict_held = dict_alloc();
-    let dict = dict_held.edit();
+    let mut dict = dict_held.edit();
     let _ = dict.add_str(b"name", Some(&menu.dname));
     let _ = dict.add_number(b"priority", VarNumber::from(menu.priority));
     let _ = dict.add_number(b"hidden", VarNumber::from(is_hidden(menu.dname.as_bytes())));
@@ -176,13 +176,13 @@ fn menu_get_recursive(menu: &VimMenu, modes: c_int) -> Option<DictRef> {
     if menu.children.is_empty() {
         let commands_held = dict_alloc();
         let _ = dict.add_dict(b"mappings", Some(commands_held.clone()));
-        let commands = commands_held.edit();
+        let mut commands = commands_held.edit();
         for (bit, mode) in MODE_CHARS.iter().enumerate() {
             if menu.modes & modes & (1 << bit) == 0 {
                 continue;
             }
             let mapping_held = dict_alloc();
-            let mapping = mapping_held.edit();
+            let mut mapping = mapping_held.edit();
             let rhs = menu.strings[bit].as_deref().map(special_text);
             let _ = mapping.add_allocated_str(b"rhs", rhs);
             let _ = mapping.add_number(b"silent", VarNumber::from(menu.silent[bit]));

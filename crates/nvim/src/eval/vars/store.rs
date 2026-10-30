@@ -136,7 +136,7 @@ pub(crate) fn set_var_const(name: &[u8], tv: &mut TypVal, copy: bool, is_const: 
         // the slot unlocked -- upstream leaves the stored value
         // `VAR_UNLOCKED`, and the lock is the item's.
         let new = store_value(tv, copy);
-        let Some(item) = dict.edit().item_at_mut(slot) else {
+        let Some(mut item) = dict.edit().filter_map(|d| d.item_at_mut(slot)) else {
             return;
         };
         item.di_lock = VarLock::Unlocked;

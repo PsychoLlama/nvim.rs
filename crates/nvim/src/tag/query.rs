@@ -120,8 +120,8 @@ fn describe_match(list: &mut List, found: &TagMatch) -> bool {
         return true;
     }
 
-    let held = tv_dict_alloc();
-    let dict = held.edit();
+    let mut held = tv_dict_alloc();
+    let dict = &mut *held;
 
     // Short-circuiting is upstream's: once one field fails, the rest
     // of these are not tried.

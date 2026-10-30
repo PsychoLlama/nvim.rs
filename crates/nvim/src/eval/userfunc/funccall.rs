@@ -74,9 +74,9 @@ const LIST_HOLDERS: c_int = 1;
 
 /// A scope dictionary and the entry that names it.
 fn scope_dict(scope: ScopeType) -> (DictRef, RefCell<ScopeDictItem>) {
-    let dict = tv_dict_alloc();
+    let mut dict = tv_dict_alloc();
     {
-        let d = dict.edit();
+        let d = &mut *dict;
         // Out of the collector's registry: the funccall marks it.
         unroot_dict(d.dv_root);
         d.dv_root = RootId::NONE;
@@ -96,9 +96,9 @@ impl FrameScopes {
     fn new() -> FrameScopes {
         let (l_vars, l_vars_var) = scope_dict(VAR_DEF_SCOPE);
         let (a_vars, a_vars_var) = scope_dict(VAR_SCOPE);
-        let a_list = tv_list_alloc(-1);
+        let mut a_list = tv_list_alloc(-1);
         {
-            let l = a_list.edit();
+            let l = &mut *a_list;
             unroot_list(l.lv_root);
             l.lv_root = RootId::NONE;
         }
@@ -117,12 +117,12 @@ impl FrameScopes {
     /// other than `DO_NOT_FREE_CNT` means something else holds the scope.
     fn activate(&self) {
         for dict in [&self.l_vars, &self.a_vars] {
-            let d = dict.edit();
+            let mut d = dict.edit();
             d.dv_refcount = Refcount::new(DO_NOT_FREE_CNT);
             d.dv_lock = VarLock::Unlocked;
             d.dv_copy_id = 0;
         }
-        let l = self.a_list.edit();
+        let mut l = self.a_list.edit();
         l.lv_refcount = Refcount::new(DO_NOT_FREE_CNT);
         l.lv_lock = VarLock::Fixed;
         l.lv_copy_id = 0;
@@ -311,7 +311,7 @@ pub(crate) fn cleanup_function_call(frame: Rc<FuncCall>) {
     } else {
         free_fc = false;
         // Make a copy of the a: variables, since that was not done above.
-        let d = scopes.a_vars.edit();
+        let mut d = scopes.a_vars.edit();
         for item in d.items_mut() {
             let owned = item.di_tv.clone();
             item.di_tv.overwrite(owned);

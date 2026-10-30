@@ -137,3 +137,47 @@ impl BorrowTable {
         })
     }
 }
+
+/// The value objects (lists, dictionaries, blobs, partials) lent out
+/// writable through a shared handle on this thread, by address.
+///
+/// Apart from [`BorrowTable`] because the two answer different questions
+/// and grow differently: a cell is borrowed a handful of times at once,
+/// while an edit can be held at every level of a walk over a nested value,
+/// so this set has no fixed capacity. Like the cells' table it is
+/// thread-local, and empty whenever no edit is live.
+pub struct EditTable;
+
+thread_local! {
+    static EDITS: std::cell::RefCell<Vec<usize>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+impl EditTable {
+    /// Record that the object at `addr` is lent out writable. Answers
+    /// `false`, recording nothing, when it already is.
+    pub fn lend(addr: usize) -> bool {
+        EDITS.with_borrow_mut(|lent| {
+            if lent.contains(&addr) {
+                return false;
+            }
+            lent.push(addr);
+            true
+        })
+    }
+
+    /// Give back the loan [`EditTable::lend`] recorded for `addr`.
+    pub fn give_back(addr: usize) {
+        EDITS.with_borrow_mut(|lent| {
+            let at = lent
+                .iter()
+                .rposition(|&a| a == addr)
+                .expect("an edit loan given back twice");
+            lent.swap_remove(at);
+        });
+    }
+
+    /// Whether the object at `addr` is lent out writable.
+    pub fn is_lent(addr: usize) -> bool {
+        EDITS.with_borrow(|lent| lent.contains(&addr))
+    }
+}

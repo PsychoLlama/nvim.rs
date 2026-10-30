@@ -94,12 +94,12 @@ fn release_slot(tv: &mut TypVal) -> Option<Owned> {
 fn next_value(owned: &mut Owned) -> Option<TypVal> {
     match owned {
         Owned::List { list, at } => {
-            let item = list.edit().lv_items.get_mut(*at)?;
+            let tv = list.edit().lv_items.get_mut(*at)?.li_tv.take();
             *at += 1;
-            Some(item.li_tv.take())
+            Some(tv)
         }
         Owned::Dict { dict, slot } => {
-            let dict = dict.edit();
+            let mut dict = dict.edit();
             // The table is not resized: only values leave it.
             while *slot < dict.dv_hashtab.slots().len() {
                 let at = *slot;
@@ -112,7 +112,7 @@ fn next_value(owned: &mut Owned) -> Option<TypVal> {
         }
         // The arguments, then the self dictionary.
         Owned::Partial { partial, arg } => {
-            let partial = partial.edit();
+            let mut partial = partial.edit();
             if let Some(tv) = partial.pt_argv.get_mut(*arg) {
                 *arg += 1;
                 return Some(tv.take());

@@ -320,9 +320,9 @@ fn report_scripts(list: &ListRef, query: &mut ScriptQuery) {
             continue;
         }
 
-        let d = tv_dict_alloc();
+        let mut d = tv_dict_alloc();
         {
-            let dict = d.edit();
+            let dict = &mut *d;
             let _ = dict.add_str(b"name", Some(name.as_cstr()));
             let _ = dict.add_number(b"sid", VarNumber::from(sid));
             let _ = dict.add_number(b"version", 1);

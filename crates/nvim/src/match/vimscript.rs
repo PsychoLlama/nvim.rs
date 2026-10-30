@@ -55,8 +55,8 @@ pub(crate) fn f_clearmatches(args: &[TypVal], _result: &mut TypVal, _fptr: EvalF
 
 /// One match as `getmatches()` describes it.
 fn match_dict(item: &MatchItem) -> DictRef {
-    let dict_held = tv_dict_alloc();
-    let dict = dict_held.edit();
+    let mut dict_held = tv_dict_alloc();
+    let dict = &mut *dict_held;
     if item.mit_match.regprog.is_none() {
         // Added with matchaddpos(): one `posN` key per position.
         for (i, llpos) in item.mit_pos_array.iter().enumerate() {
@@ -65,8 +65,8 @@ fn match_dict(item: &MatchItem) -> DictRef {
             }
             // A column of zero means the whole line, and is reported
             // as a one-element list.
-            let held = tv_list_alloc(1 + if llpos.col > 0 { 2 } else { 0 });
-            let sub = held.edit();
+            let mut held = tv_list_alloc(1 + if llpos.col > 0 { 2 } else { 0 });
+            let sub = &mut *held;
             sub.push_number(VarNumber::from(llpos.lnum));
             if llpos.col > 0 {
                 sub.push_number(VarNumber::from(llpos.col));

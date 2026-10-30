@@ -33,6 +33,8 @@ mod access;
 pub use self::access::*;
 mod handle;
 pub use self::handle::*;
+mod edit;
+pub use self::edit::Edit;
 mod frame;
 pub(crate) use self::frame::CallFrame;
 mod list;

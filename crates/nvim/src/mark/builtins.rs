@@ -39,7 +39,7 @@ fn add_mark(
     if pos.lnum <= 0 {
         return Ok(());
     }
-    let d_held = tv_dict_alloc();
+    let mut d_held = tv_dict_alloc();
     l.push_dict(Some(d_held.clone()));
     let lpos = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
     lpos.edit().push_number(VarNumber::from(bufnr));
@@ -54,7 +54,7 @@ fn add_mark(
             MAXCOL
         }));
     lpos.edit().push_number(VarNumber::from(pos.coladd));
-    let d = d_held.edit();
+    let d = &mut *d_held;
     if d.add_str(b"mark", Some(mname)).is_err()
         || d.add_list(b"pos", Some(lpos)).is_err()
         || fname.is_some_and(|fname| d.add_str(b"file", Some(fname)).is_err())

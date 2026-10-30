@@ -50,6 +50,8 @@
 
 use ::core::ptr::NonNull;
 
+#[cfg(debug_assertions)]
+use super::edit::{Loan, assert_not_lent};
 use super::*;
 use crate::hashtab::{hash_bytes, hash_bytes_len};
 use crate::types::{DictKey, HashValue, Refcount, SlotEntry};
@@ -144,14 +146,18 @@ impl ListRef {
     /// The `Live` promise, spelled out: the borrow lasts for the
     /// statement that asked for it and **never spans a call that can
     /// run user code**, because every other holder of this object can
-    /// reach it from there. Nothing checks it; this is the one place
-    /// the container model says so.
+    /// reach it from there. Debug builds check the half of it that two
+    /// writers break: see [`Edit`].
     #[inline(always)]
-    #[allow(clippy::mut_from_ref)]
-    pub fn edit(&self) -> &mut List {
-        // SAFETY: the handle holds a reference, so the object is
-        // live; exclusivity is the caller's promise above.
-        unsafe { &mut *self.0.as_ptr() }
+    pub fn edit(&self) -> Edit<'_, List> {
+        // SAFETY: the handle holds a reference, so the object is live;
+        // exclusivity is the caller's promise above, checked in debug
+        // builds by the loan.
+        Edit {
+            #[cfg(debug_assertions)]
+            loan: Loan::new(self.0),
+            target: unsafe { &mut *self.0.as_ptr() },
+        }
     }
 
     /// The reference count, through its own bytes only: a clone or
@@ -215,6 +221,8 @@ impl ::core::ops::Deref for ListRef {
 impl ::core::ops::DerefMut for ListRef {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut List {
+        #[cfg(debug_assertions)]
+        assert_not_lent(self.0);
         // SAFETY: as `deref`.
         unsafe { self.0.as_mut() }
     }
@@ -364,11 +372,15 @@ impl DictRef {
     }
 
     #[inline(always)]
-    #[allow(clippy::mut_from_ref)]
-    pub fn edit(&self) -> &mut Dict {
-        // SAFETY: the handle holds a reference, so the object is
-        // live; exclusivity is the caller's promise above.
-        unsafe { &mut *self.0.as_ptr() }
+    pub fn edit(&self) -> Edit<'_, Dict> {
+        // SAFETY: the handle holds a reference, so the object is live;
+        // exclusivity is the caller's promise above, checked in debug
+        // builds by the loan.
+        Edit {
+            #[cfg(debug_assertions)]
+            loan: Loan::new(self.0),
+            target: unsafe { &mut *self.0.as_ptr() },
+        }
     }
 
     /// As [`ListRef::count`].
@@ -421,6 +433,8 @@ impl ::core::ops::Deref for DictRef {
 impl ::core::ops::DerefMut for DictRef {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Dict {
+        #[cfg(debug_assertions)]
+        assert_not_lent(self.0);
         // SAFETY: as `ListRef`'s.
         unsafe { self.0.as_mut() }
     }
@@ -537,11 +551,15 @@ impl BlobRef {
     }
 
     #[inline(always)]
-    #[allow(clippy::mut_from_ref)]
-    pub fn edit(&self) -> &mut Blob {
-        // SAFETY: the handle holds a reference, so the object is
-        // live; exclusivity is the caller's promise above.
-        unsafe { &mut *self.0.as_ptr() }
+    pub fn edit(&self) -> Edit<'_, Blob> {
+        // SAFETY: the handle holds a reference, so the object is live;
+        // exclusivity is the caller's promise above, checked in debug
+        // builds by the loan.
+        Edit {
+            #[cfg(debug_assertions)]
+            loan: Loan::new(self.0),
+            target: unsafe { &mut *self.0.as_ptr() },
+        }
     }
 
     /// As [`ListRef::count`].
@@ -585,6 +603,8 @@ impl ::core::ops::Deref for BlobRef {
 impl ::core::ops::DerefMut for BlobRef {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Blob {
+        #[cfg(debug_assertions)]
+        assert_not_lent(self.0);
         // SAFETY: as `ListRef`'s.
         unsafe { self.0.as_mut() }
     }
@@ -632,11 +652,15 @@ impl PartialRef {
     }
 
     #[inline(always)]
-    #[allow(clippy::mut_from_ref)]
-    pub fn edit(&self) -> &mut Partial {
-        // SAFETY: the handle holds a reference, so the object is
-        // live; exclusivity is the caller's promise above.
-        unsafe { &mut *self.0.as_ptr() }
+    pub fn edit(&self) -> Edit<'_, Partial> {
+        // SAFETY: the handle holds a reference, so the object is live;
+        // exclusivity is the caller's promise above, checked in debug
+        // builds by the loan.
+        Edit {
+            #[cfg(debug_assertions)]
+            loan: Loan::new(self.0),
+            target: unsafe { &mut *self.0.as_ptr() },
+        }
     }
 
     /// As [`ListRef::count`].
@@ -679,6 +703,8 @@ impl ::core::ops::Deref for PartialRef {
 impl ::core::ops::DerefMut for PartialRef {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Partial {
+        #[cfg(debug_assertions)]
+        assert_not_lent(self.0);
         // SAFETY: as `ListRef`'s.
         unsafe { self.0.as_mut() }
     }
@@ -923,7 +949,7 @@ impl<const N: usize> CallFrame<N> {
 impl ListRef {
     /// Mark this list as copied to `copy` under `copy_id`.
     pub(crate) fn remember_copy(&self, copy_id: ::core::ffi::c_int, copy: &ListRef) {
-        let this = self.edit();
+        let mut this = self.edit();
         this.lv_copy_id = copy_id;
         this.lv_copylist = copy.as_ptr();
     }
@@ -945,7 +971,7 @@ impl List {
 impl DictRef {
     /// Mark this dictionary as copied to `copy` under `copy_id`.
     pub(crate) fn remember_copy(&self, copy_id: ::core::ffi::c_int, copy: &DictRef) {
-        let this = self.edit();
+        let mut this = self.edit();
         this.dv_copy_id = copy_id;
         this.dv_copydict = copy.as_ptr();
     }

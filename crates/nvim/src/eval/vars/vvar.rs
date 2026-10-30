@@ -103,7 +103,8 @@ fn vimvar_at_hint<R, F: FnOnce(&mut DictItem) -> R>(idx: Vv, f: &mut Option<F>) 
     scope_vim.with(|vim| {
         let (hint, addr) = vim.slots[idx as usize];
         let dict = vim.entry.di_tv.dict_shared()?;
-        let item = dict.edit().item_at_mut(hint)?;
+        let mut edit = dict.edit();
+        let item = edit.item_at_mut(hint)?;
         if ::core::ptr::from_ref(item).addr() != addr {
             return None;
         }

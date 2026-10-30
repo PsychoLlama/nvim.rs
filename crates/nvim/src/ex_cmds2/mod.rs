@@ -181,8 +181,8 @@ fn script_host_execute(name: &CStr, excmd: &mut ExArg) {
     let Some(script) = script_get(excmd) else {
         return;
     };
-    let argv = tv_list_alloc(3 as ptrdiff_t);
-    let into = argv.edit();
+    let mut argv = tv_list_alloc(3 as ptrdiff_t);
+    let into = &mut *argv;
     into.push_str(Some(script.as_cstr()));
     into.push_number(excmd.line1 as c_int as VarNumber);
     into.push_number(excmd.line2 as c_int as VarNumber);
@@ -202,8 +202,8 @@ fn script_host_execute_file(name: &CStr, excmd: &mut ExArg) {
     .unwrap_or_else(|name| name);
     let full = std::ffi::CString::new(full).expect("a name stops at its NUL");
 
-    let argv = tv_list_alloc(3 as ptrdiff_t);
-    let into = argv.edit();
+    let mut argv = tv_list_alloc(3 as ptrdiff_t);
+    let into = &mut *argv;
     into.push_str(Some(&full));
     into.push_number(excmd.line1 as c_int as VarNumber);
     into.push_number(excmd.line2 as c_int as VarNumber);
@@ -215,8 +215,8 @@ fn script_host_do_range(name: &CStr, excmd: &mut ExArg) {
     if excmd.skip {
         return;
     }
-    let argv = tv_list_alloc(3 as ptrdiff_t);
-    let into = argv.edit();
+    let mut argv = tv_list_alloc(3 as ptrdiff_t);
+    let into = &mut *argv;
     into.push_number(excmd.line1 as c_int as VarNumber);
     into.push_number(excmd.line2 as c_int as VarNumber);
     into.push_str(Some(excmd.line.cstr_from(excmd.line.arg)));

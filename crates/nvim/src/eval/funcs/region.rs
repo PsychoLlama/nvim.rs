@@ -454,8 +454,8 @@ fn clamp_corners(p1: &mut Pos, p2: &mut Pos, line_len: ColNr, allow_eol: bool) {
 fn add_regionpos_range(result: &mut TypVal, p1: Pos, p2: Pos) {
     let pair = tv_list_alloc(2);
     for p in [p1, p2] {
-        let pos = tv_list_alloc(4);
-        let l = pos.edit();
+        let mut pos = tv_list_alloc(4);
+        let l = &mut *pos;
         l.push_number(Buf::current().handle as VarNumber);
         l.push_number(p.lnum as VarNumber);
         l.push_number(p.col as VarNumber);

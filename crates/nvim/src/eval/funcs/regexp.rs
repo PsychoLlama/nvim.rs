@@ -260,8 +260,8 @@ fn get_matches_in_str(
     let bytes = text.to_bytes();
     let mut startidx = 0;
     while let Some(hit) = prog.exec_nl(text, startidx, ignore_case) {
-        let held = tv_dict_alloc();
-        let found = held.edit();
+        let mut held = tv_dict_alloc();
+        let found = &mut *held;
         // A buffer's matches are keyed by line number, a List's by the
         // index of the item they came from.
         let key: &[u8] = if matchbuf { b"lnum" } else { b"idx" };

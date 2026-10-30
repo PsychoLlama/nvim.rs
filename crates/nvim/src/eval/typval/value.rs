@@ -151,11 +151,47 @@ pub fn tv_item_lock(
     lock: bool,
     check_refcount: bool,
 ) {
-    let Some(_depth) = item_lock_depth(deep) else {
-        return;
-    };
-    if let Some(held) = lock_slot(slot_lock, tv, lock, check_refcount) {
-        held.lock(deep, lock, check_refcount);
+    if let Some(descent) = tv_item_lock_slot(slot_lock, tv, deep, lock, check_refcount) {
+        descent.run();
+    }
+}
+
+/// [`tv_item_lock`] in two steps, for a slot an edit of its container
+/// lends: this locks the slot, and the answer descends into the value --
+/// once the caller has ended that edit, because the descent can reach the
+/// same container again (a list that holds itself).
+pub(crate) fn tv_item_lock_slot(
+    slot_lock: &mut VarLock,
+    tv: &TypVal,
+    deep: ::core::ffi::c_int,
+    lock: bool,
+    check_refcount: bool,
+) -> Option<Descent> {
+    let depth = item_lock_depth(deep)?;
+    let held = lock_slot(slot_lock, tv, lock, check_refcount)?;
+    Some(Descent {
+        _depth: depth,
+        held,
+        deep,
+        lock,
+        check_refcount,
+    })
+}
+
+/// The rest of a [`tv_item_lock`]: the container a slot held, still to be
+/// locked (and its items below it), at one level of the recursion counter.
+pub(crate) struct Descent {
+    _depth: crate::guard::Bump,
+    held: Held,
+    deep: ::core::ffi::c_int,
+    lock: bool,
+    check_refcount: bool,
+}
+
+impl Descent {
+    /// Lock the container, and its items below `deep`.
+    pub(crate) fn run(self) {
+        self.held.lock(self.deep, self.lock, self.check_refcount);
     }
 }
 
@@ -173,6 +209,26 @@ fn item_lock_depth(deep: ::core::ffi::c_int) -> Option<crate::guard::Bump> {
         return None;
     }
     Some(Depth::of(&recurse))
+}
+
+/// [`tv_item_lock`] over the item `at` of `list`, with the list edited for
+/// the slot's own lock only: the descent runs once that edit has ended,
+/// since it can reach the same list again.
+pub(crate) fn tv_list_item_lock(
+    list: &ListRef,
+    at: usize,
+    deep: ::core::ffi::c_int,
+    lock: bool,
+    check_refcount: bool,
+) {
+    let descent = {
+        let mut items = list.edit();
+        let item = &mut items.items_mut()[at];
+        tv_item_lock_slot(&mut item.li_lock, &item.li_tv, deep, lock, check_refcount)
+    };
+    if let Some(descent) = descent {
+        descent.run();
+    }
 }
 
 /// A container [`tv_item_lock`] descends into, held for the descent.
@@ -220,40 +276,36 @@ impl Held {
         let descend = !(0..=1).contains(&deep);
         match self {
             Held::Blob(blob) => {
-                let blob = blob.edit();
-                blob.bv_lock = blob.bv_lock.changed(lock);
+                let changed = blob.bv_lock.changed(lock);
+                blob.edit().bv_lock = changed;
             }
             Held::List(list) => {
-                let this = list.edit();
-                this.lv_lock = this.lv_lock.changed(lock);
+                let changed = list.lv_lock.changed(lock);
+                list.edit().lv_lock = changed;
                 // Recursive: lock/unlock the items the List contains.
                 for at in 0..if descend { list.len() } else { 0 } {
-                    let Some(_depth) = item_lock_depth(deep - 1) else {
-                        continue;
-                    };
-                    let item = &mut list.edit().items_mut()[at];
-                    let held = lock_slot(&mut item.li_lock, &item.li_tv, lock, check_refcount);
-                    if let Some(held) = held {
-                        held.lock(deep - 1, lock, check_refcount);
-                    }
+                    tv_list_item_lock(&list, at, deep - 1, lock, check_refcount);
                 }
             }
             Held::Dict(dict) => {
-                let this = dict.edit();
-                this.dv_lock = this.dv_lock.changed(lock);
+                let changed = dict.dv_lock.changed(lock);
+                dict.edit().dv_lock = changed;
                 if !descend {
                     return;
                 }
                 // Recursive: lock/unlock the items the Dict contains.
                 let mut cursor = DictCursor::new(&dict);
                 while let Some(slot) = cursor.next(&dict) {
-                    let Some(_depth) = item_lock_depth(deep - 1) else {
-                        continue;
+                    // The edit ends before the descent, which can reach this
+                    // dictionary again.
+                    let descent = {
+                        let mut this = dict.edit();
+                        let item = this.item_at_mut(slot).expect("a kept slot");
+                        let lock_of = &mut item.di_lock;
+                        tv_item_lock_slot(lock_of, &item.di_tv, deep - 1, lock, check_refcount)
                     };
-                    let item = dict.edit().item_at_mut(slot).expect("a kept slot");
-                    let held = lock_slot(&mut item.di_lock, &item.di_tv, lock, check_refcount);
-                    if let Some(held) = held {
-                        held.lock(deep - 1, lock, check_refcount);
+                    if let Some(descent) = descent {
+                        descent.run();
                     }
                 }
             }

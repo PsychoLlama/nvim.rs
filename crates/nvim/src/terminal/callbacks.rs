@@ -260,8 +260,8 @@ unsafe extern "C" fn term_clipboard_set(argv: *mut *mut c_void) {
     for line in payload.split(|&byte| byte == b'\n') {
         lines.edit().push_bytes(Some(line));
     }
-    let held = tv_list_alloc(3 as ptrdiff_t);
-    let args = held.edit();
+    let mut held = tv_list_alloc(3 as ptrdiff_t);
+    let args = &mut *held;
     args.push_list(Some(lines));
     args.push_bytes(Some(b"v"));
     args.push_bytes(Some(&[regname.cast_unsigned()]));

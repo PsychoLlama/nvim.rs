@@ -286,7 +286,7 @@ pub fn get_tagstack(window: Win, retdict: &mut Dict) {
     for entry in stack.entries() {
         let d = tv_dict_alloc();
         items.edit().push_dict(Some(d.clone()));
-        tag_details(entry, d.edit());
+        tag_details(entry, &mut d.edit());
     }
 }
 

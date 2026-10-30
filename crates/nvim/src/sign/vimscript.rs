@@ -95,8 +95,8 @@ fn each_dict_arg(args: &[TypVal], result: &mut TypVal, one: impl FnMut(Option<&D
 
 /// `sign_getdefined()`'s dictionary for one defined sign.
 pub(crate) fn sign_get_info_dict(sign: &Sign) -> DictRef {
-    let held = tv_dict_alloc();
-    let d = held.edit();
+    let mut held = tv_dict_alloc();
+    let d = &mut *held;
     put_str(d, "name", sign.name.as_bytes());
     if let Some(icon) = &sign.icon {
         put_str(d, "icon", icon);
@@ -118,8 +118,8 @@ pub(crate) fn sign_get_info_dict(sign: &Sign) -> DictRef {
 
 /// `sign_getplaced()`'s dictionary for one placed sign.
 pub(crate) fn sign_get_placed_info_dict(mark: MTKey) -> DictRef {
-    let held = tv_dict_alloc();
-    let d = held.edit();
+    let mut held = tv_dict_alloc();
+    let d = &mut *held;
     let sh = sign_of(mark);
     put_str(d, "name", placed_sign_name(&sh));
     put_nr(d, "id", VarNumber::from(mark.id.cast_signed()));
@@ -154,7 +154,7 @@ fn sign_get_placed_in_buf(
     let d = tv_dict_alloc();
     let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
     retlist.push_dict(Some(d.clone()));
-    put_nr(d.edit(), "bufnr", VarNumber::from(buffer.handle));
+    put_nr(&mut d.edit(), "bufnr", VarNumber::from(buffer.handle));
     let _ = d.edit().add_list(b"signs", Some(l.clone()));
 
     let ns = group_get_ns(group);

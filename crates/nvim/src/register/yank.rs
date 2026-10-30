@@ -263,7 +263,7 @@ pub fn do_autocmd_textyankpost(op: &OpArg, reg: Reg) {
         for line in reg.lines.iter() {
             list.edit().push_bytes(Some(line));
         }
-        list_set_lock(Some(list.edit()), VarLock::Fixed);
+        list_set_lock(Some(&mut list.edit()), VarLock::Fixed);
         (list, format_reg_type(reg.kind, reg.width))
     });
     let _ = dict.edit().add_list(b"regcontents", Some(list));

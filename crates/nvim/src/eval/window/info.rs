@@ -153,7 +153,7 @@ fn get_framelayout(fr: FrameRef, into: &mut List) {
     let children = tv_list_alloc(kListLenUnknown as ptrdiff_t);
     for child in fr.children() {
         let nested = tv_list_alloc(2);
-        get_framelayout(child, nested.edit());
+        get_framelayout(child, &mut nested.edit());
         children.edit().push_list(Some(nested));
     }
     into.push_list(Some(children));

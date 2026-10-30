@@ -43,7 +43,7 @@ pub fn evalvars_init() {
     let msgpack_types_dict = tv_dict_alloc();
     for (i, name) in msgpack_type_names.iter().enumerate() {
         let type_list = tv_list_alloc(0);
-        list_set_lock(Some(type_list.edit()), VarLock::Fixed);
+        list_set_lock(Some(&mut type_list.edit()), VarLock::Fixed);
         // The encoder and decoder compare these by *identity*, so the
         // record keeps a reference of its own -- never given back, since
         // `v:msgpack_types` lives as long as the process.
@@ -266,7 +266,7 @@ pub(crate) fn script_scope_dict(sid: ScriptId) -> Option<DictRef> {
 /// that nothing frees it until [`release_var_scope`].
 fn scope_entry(dict: DictRef, scope: ScopeType) -> ScopeDictItem {
     {
-        let d = dict.edit();
+        let mut d = dict.edit();
         d.dv_scope = scope;
         d.dv_refcount = Refcount::new(DO_NOT_FREE_CNT);
     }
@@ -288,9 +288,9 @@ pub fn new_var_scope(scope: ScopeType) -> ScopeDictItem {
 /// A fresh `g:`, `v:` or `s:` scope: its dictionary is out of the
 /// collector's registry, which only marks its items.
 pub(crate) fn new_unrooted_var_scope(scope: ScopeType) -> ScopeDictItem {
-    let dict = tv_dict_alloc();
+    let mut dict = tv_dict_alloc();
     {
-        let d = dict.edit();
+        let d = &mut *dict;
         unroot_dict(d.dv_root);
         d.dv_root = RootId::NONE;
     }

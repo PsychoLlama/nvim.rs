@@ -223,8 +223,8 @@ pub fn f_getcellwidths(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
     let rows = CELL_WIDTHS.with(|t| t.clone());
     let list = tv_list_alloc_ret(result, rows.len() as ptrdiff_t);
     for row in &rows {
-        let entry = tv_list_alloc(3);
-        let into = entry.edit();
+        let mut entry = tv_list_alloc(3);
+        let into = &mut *entry;
         into.push_number(row.first);
         into.push_number(row.last);
         into.push_number(row.width as VarNumber);
