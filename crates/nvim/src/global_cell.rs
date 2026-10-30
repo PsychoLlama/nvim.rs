@@ -103,6 +103,7 @@ impl<T> GlobalCell<T> {
     pub fn set(&self, value: T) {
         check_main_thread();
         check_no_borrow(self.0.get() as usize);
+        #[cfg(debug_assertions)]
         check_no_field_loan(self.0.get() as usize);
         // SAFETY: main-thread invariant + no outstanding borrow.
         unsafe { *self.0.get() = value }
@@ -246,13 +247,15 @@ impl<T> GlobalCell<T> {
     #[inline(always)]
     pub fn with_field<F, R>(&self, project: impl FnOnce(&T) -> &F, f: impl FnOnce(&F) -> R) -> R {
         check_main_thread();
-        let record = self.0.get();
-        check_no_exclusive_borrow(record as usize);
+        check_no_exclusive_borrow(self.0.get() as usize);
         // SAFETY: main-thread invariant + no outstanding exclusive borrow;
         // the loan below makes a write to the field (or the record) while
         // `f` holds it a debug-build panic.
-        let field = project(unsafe { &*record });
-        let _loan = FieldLoan::new(record as usize, core::ptr::from_ref(field).addr());
+        let field = project(unsafe { &*self.0.get() });
+        // A statement under `cfg`, not a call that compiles to nothing: an
+        // empty call still weighs in the inliner's view of every caller.
+        #[cfg(debug_assertions)]
+        let _loan = FieldLoan::new(self.0.get() as usize, core::ptr::from_ref(field).addr());
         f(field)
     }
 
@@ -266,6 +269,7 @@ impl<T> GlobalCell<T> {
         check_main_thread();
         check_no_borrow(self.0.get() as usize);
         let field = self.field_ptr(project);
+        #[cfg(debug_assertions)]
         check_field_not_lent(field.addr());
         // SAFETY: main-thread invariant + no outstanding borrow; `field` is
         // an aligned, initialised `F` inside the cell carrying the cell's
@@ -288,6 +292,7 @@ impl<T> GlobalCell<T> {
     /// loud failure instead of silent UB.
     pub fn with_mut<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
         check_main_thread();
+        #[cfg(debug_assertions)]
         check_no_field_loan(self.0.get() as usize);
         let _guard = BorrowGuard::exclusive(self.0.get() as usize);
         // SAFETY: main-thread invariant + borrow tracking (debug).
@@ -754,10 +759,6 @@ fn check_field_not_lent(field: usize) {
     }
 }
 
-#[cfg(not(debug_assertions))]
-#[inline(always)]
-fn check_field_not_lent(_field: usize) {}
-
 #[cfg(debug_assertions)]
 #[inline(always)]
 fn check_no_field_loan(addr: usize) {
@@ -771,33 +772,20 @@ fn check_no_field_loan(addr: usize) {
     }
 }
 
-#[cfg(not(debug_assertions))]
-#[inline(always)]
-fn check_no_field_loan(_addr: usize) {}
-
 /// The two shared borrows [`GlobalCell::with_field`] holds while `f` runs:
-/// one of the field, one of the record. Nothing at all in a release build.
+/// one of the field, one of the record. Debug builds only.
+#[cfg(debug_assertions)]
 struct FieldLoan {
-    #[cfg(debug_assertions)]
     _field: BorrowGuard,
-    #[cfg(debug_assertions)]
     _record: BorrowGuard,
 }
 
+#[cfg(debug_assertions)]
 impl FieldLoan {
-    #[inline(always)]
     fn new(record: usize, field: usize) -> Self {
-        #[cfg(debug_assertions)]
-        {
-            FieldLoan {
-                _field: BorrowGuard::shared(field | LENT_FIELD),
-                _record: BorrowGuard::shared(record | LENT_RECORD),
-            }
-        }
-        #[cfg(not(debug_assertions))]
-        {
-            let _ = (record, field);
-            FieldLoan {}
+        FieldLoan {
+            _field: BorrowGuard::shared(field | LENT_FIELD),
+            _record: BorrowGuard::shared(record | LENT_RECORD),
         }
     }
 }
