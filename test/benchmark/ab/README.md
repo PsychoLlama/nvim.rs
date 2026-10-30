@@ -1,22 +1,23 @@
 # A/B benches
 
-Eleven whole-binary timing canaries, each driving one family hard enough that a
+Twelve whole-binary timing canaries, each driving one family hard enough that a
 few percent of its work is visible in a total. They are not part of any gate:
 nothing runs them but a person asking whether a change cost something.
 
-| bench          | what it drives                                                                         |
-| -------------- | -------------------------------------------------------------------------------------- |
-| `edbench`      | the editing core: operators, registers, text objects, folds, diff, autocommands, marks |
-| `evalbench`    | the eval substrate: typval allocation, copy, encode/decode, calls, the parser          |
-| `inbench`      | input and the command line: typeahead, mappings, termcodes, completion, messages       |
-| `mkspellbench` | `:mkspell` with no `.sug`: reading .aff/.dic, the word tree, compression, the writer   |
-| `mlbench`      | the memline hot path: `ml_get`, `ml_append`, `ml_delete`, byte/line offsets            |
-| `readbench`    | reading a file: `:edit` of 100 MB plain, Latin-1 and `'fileencodings'` input           |
-| `rebench`      | the regexp engines (`re=0/1/2`), `search()`, `:s` that writes, `matchlist()`           |
-| `rpcbench`     | msgpack-RPC to an `--embed` child, a job channel's reader, a remote UI, a Lua UI sink  |
-| `scrbench`     | the screen pipeline: grid diffing, `win_line`, syntax, statusline, the popup menu      |
-| `spellbench`   | spell checking and suggestion: the word tries, `z=`, the SAL engine                    |
-| `undobench`    | undo: recording steps, `:undo` walks, `:wundo`/`:rundo`, `undotree()`                  |
+| bench          | what it drives                                                                              |
+| -------------- | ------------------------------------------------------------------------------------------- |
+| `edbench`      | the editing core: operators, registers, text objects, folds, diff, autocommands, marks      |
+| `evalbench`    | the eval substrate: typval allocation, copy, encode/decode, calls, the parser               |
+| `inbench`      | input and the command line: typeahead, mappings, termcodes, completion, messages            |
+| `mkspellbench` | `:mkspell` with no `.sug`: reading .aff/.dic, the word tree, compression, the writer        |
+| `markbench`    | extmarks and the marktree: set, lookup, iteration, overlap, splice, undo, decoration redraw |
+| `mlbench`      | the memline hot path: `ml_get`, `ml_append`, `ml_delete`, byte/line offsets                 |
+| `readbench`    | reading a file: `:edit` of 100 MB plain, Latin-1 and `'fileencodings'` input                |
+| `rebench`      | the regexp engines (`re=0/1/2`), `search()`, `:s` that writes, `matchlist()`                |
+| `rpcbench`     | msgpack-RPC to an `--embed` child, a job channel's reader, a remote UI, a Lua UI sink       |
+| `scrbench`     | the screen pipeline: grid diffing, `win_line`, syntax, statusline, the popup menu           |
+| `spellbench`   | spell checking and suggestion: the word tries, `z=`, the SAL engine                         |
+| `undobench`    | undo: recording steps, `:undo` walks, `:wundo`/`:rundo`, `undotree()`                       |
 
 Each is a `.lua` canary plus a `.sh` driver; the driver's two modes share
 `common.sh`. The `.lua` files carry the phase map — which code each phase is
