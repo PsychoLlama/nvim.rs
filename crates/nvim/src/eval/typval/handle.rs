@@ -14,11 +14,12 @@
 //!    retains, `Drop` releases and frees with the last one, and
 //!    `Deref`/`DerefMut` (and `edit`, the same thing from a shared handle)
 //!    hand out a borrow **that must not span a call that can run user code**.
-//!    That promise is [`Live`](crate::winlayer::Live)'s, and it is the one
-//!    this file cannot check: a second holder can always reach the same
-//!    object. The raw bridges (`owning`, `retained`) stay
-//!    `unsafe fn`s for the callers outside the container model that still
-//!    hold a pointer.
+//!    That promise is [`Live`](crate::winlayer::Live)'s, and the type system
+//!    cannot hold it: a second holder can always reach the same object.
+//!    Debug builds check the half two writers break ([`Edit`]); the count
+//!    is a `Cell`, so cloning and dropping need no writer at all. The raw
+//!    bridges (`owning`, `retained`) stay `unsafe fn`s for the callers
+//!    outside the container model that still hold a pointer.
 //! 2. **Allocation and release**: the four objects' allocations, the
 //!    reference-count release that frees them, and the collector's
 //!    `tv_in_free_unref_items` gate that makes a release free nothing while
@@ -34,11 +35,12 @@
 //!    for the length of a call.
 //!
 //! Every other file of `eval/typval/` reaches these objects through this
-//! API. Whether these stay a perimeter row under the raw-memory-primitive
-//! rule or get a safe form is a decision taken once, over this file.
+//! API, and this file is a perimeter row under the raw-memory-primitive
+//! rule (docs/perimeter.md): the handles are to the value graph what
+//! `winlayer`'s are to the window graph.
 
 #![deny(unsafe_op_in_unsafe_fn)]
-// The value-handle core (see the module docs): left allowing unsafe on purpose.
+// Unsafe perimeter: the `eval/typval/handle.rs` row in docs/perimeter.md.
 #![allow(unsafe_code)]
 #![deny(
     clippy::cast_lossless,

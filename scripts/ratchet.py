@@ -1128,6 +1128,9 @@ PERIMETER = {
     "crates/nvim/src/winlayer.rs": "the window/buffer/position handles: "
     "constructing one is the unsafe step, dereferencing it is not",
     "crates/nvim/src/winlayer/": "the same, split out by family",
+    "crates/nvim/src/eval/typval/handle.rs": "the value handles (`ListRef`, "
+    "`DictRef`, `BlobRef`, `PartialRef`) and a dictionary's item store: "
+    "constructing a handle is the unsafe step, dereferencing it is not",
     "crates/nvim/src/memfile/": "the swap file's page store — the only thing "
     "that hands out the address of a `.swp` page",
 }
