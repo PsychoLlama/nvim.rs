@@ -23,13 +23,12 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::garray::{ga_grow, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::memory::{xstrdup, xstrlcpy};
 use crate::os::env::{env_buf, os_getenv_into};
 use crate::types::Candidate;
-use crate::types::{Expand, Failed, GArray, size_t, uv_uid_t};
-use core::ffi::{CStr, c_char, c_int};
+use crate::types::{Expand, Failed, size_t, uv_uid_t};
+use core::ffi::{CStr, c_char};
 use core::ptr;
 use std::ffi::CString;
 
@@ -89,7 +88,7 @@ fn all_usernames() -> Vec<CString> {
 
 /// The `~user` completion list. Filled on first use and never cleared:
 /// [`get_users`] hands out pointers borrowed from it, exactly as the C
-/// handed out pointers into a `static GArray`.
+/// handed out pointers into a `static` array.
 static COMPLETION_USERS: GlobalCell<Vec<CString>> = GlobalCell::new(Vec::new());
 static COMPLETION_USERS_READY: GlobalCell<bool> = GlobalCell::new(false);
 
@@ -141,36 +140,13 @@ fn best_match(users: &[CString], name: &[u8]) -> UserMatch {
     result
 }
 
-/// Initialize `users` and fill it with every user name on the system.
-/// `Err` only when `users` is NULL.
-///
-/// The names are `xstrdup`ed rather than moved out of the `CString`s: the
-/// garray is a C array of `char *` that callers release with
-/// `ga_clear_strings`, and the unit suite's allocator seam expects to see
-/// those allocations.
-///
-/// # Safety
-///
-/// `users` is null or points to writable `GArray` storage, which this call
-/// initializes (anything it already held is leaked, as upstream's is).
-pub unsafe fn os_get_usernames(users: *mut GArray) -> Result<(), Failed> {
-    if users.is_null() {
-        return Err(Failed);
-    }
-    let item_size = c_int::try_from(size_of::<*mut c_char>()).expect("a pointer is small");
-    // SAFETY: the caller's array, grown by one before each write, and one
-    // fresh `xstrdup` per slot.
-    unsafe {
-        ga_init(users, item_size, 20);
-        for name in all_usernames() {
-            ga_grow(users, 1);
-            let ga = &mut *users;
-            let idx = usize::try_from(ga.ga_len).expect("a garray length is never negative");
-            *ga.ga_data.cast::<*mut c_char>().add(idx) = xstrdup(name.as_ptr());
-            ga.ga_len += 1;
-        }
-    }
-    Ok(())
+/// Every user name on the system, in the order the password database lists
+/// them (with `$USER` last when the enumeration missed it).
+pub fn os_get_usernames() -> Vec<Vec<u8>> {
+    all_usernames()
+        .into_iter()
+        .map(CString::into_bytes)
+        .collect()
 }
 
 /// Write the name of the user running this process into `s` (`len` bytes,

@@ -645,7 +645,6 @@ pub(crate) unsafe fn dict_watchers(d: *const Dict) -> Vec<Watcher> {
         .collect()
 }
 
-/// The spec's `ga_alloc`: a `GArray` on the caller's stack, initialised.
 /// A list value over `handle`, which the value takes over.
 ///
 /// The crate's own `TypVal::list`, which is `pub(crate)`. The variant holds

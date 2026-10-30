@@ -38,7 +38,6 @@ typedef struct DictKey DictKey;
 typedef struct ExtmarkMove ExtmarkMove;
 typedef struct ExtmarkSavePos ExtmarkSavePos;
 typedef struct ExtmarkSplice ExtmarkSplice;
-typedef struct GArray GArray;
 typedef struct HarnessString HarnessString;
 typedef struct InternalState InternalState;
 typedef struct Intersection Intersection;
@@ -541,13 +540,6 @@ struct ExtmarkSplice {
   BCount start_byte;
   BCount old_byte;
   BCount new_byte;
-};
-struct GArray {
-  int ga_len;
-  int ga_maxlen;
-  int ga_itemsize;
-  int ga_growsize;
-  void *ga_data;
 };
 struct HarnessString {
   const char *data;

@@ -52,7 +52,6 @@ pub mod fileio;
 pub(crate) mod flags;
 pub mod fold;
 pub mod fuzzy;
-pub mod garray;
 pub mod getchar;
 pub mod global_cell;
 pub mod grid;

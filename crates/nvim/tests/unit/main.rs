@@ -43,7 +43,6 @@ mod fold;
 mod fpconv;
 mod fs;
 mod fuzzy;
-mod garray;
 mod getchar_oracle;
 mod grid;
 mod hashtab;

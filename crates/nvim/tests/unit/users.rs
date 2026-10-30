@@ -15,52 +15,13 @@
 
 #![cfg(not(miri))]
 
-use std::ffi::{CStr, CString, c_char};
+use std::ffi::{CString, c_char};
 use std::ptr;
 
-use neovim::garray::ga_clear_strings;
 use neovim::os::users::{os_get_uname, os_get_userdir, os_get_username, os_get_usernames};
-use neovim::types::{Failed, GArray};
+use neovim::types::Failed;
 
 use crate::support::{cstr, editor_lock, take_bytes};
-
-/// A zeroed `GArray` for a call that initializes it, released with its
-/// strings at the end of the case.
-struct Names(GArray);
-
-impl Names {
-    fn new() -> Self {
-        // SAFETY: `GArray` is plain data and `os_get_usernames` calls
-        // `ga_init` on it before the first write.
-        Names(unsafe { std::mem::zeroed() })
-    }
-
-    fn fill(&mut self) -> Result<(), Failed> {
-        // SAFETY: the array is this frame's and writable.
-        unsafe { os_get_usernames(&raw mut self.0) }
-    }
-
-    fn to_strings(&self) -> Vec<String> {
-        let len = usize::try_from(self.0.ga_len).expect("a garray length is never negative");
-        (0..len)
-            .map(|i| {
-                // SAFETY: `ga_data` holds `ga_len` `char *`, each an
-                // `xstrdup`ed NUL-terminated name.
-                let name = unsafe { *self.0.ga_data.cast::<*mut c_char>().add(i) };
-                unsafe { CStr::from_ptr(name) }
-                    .to_string_lossy()
-                    .into_owned()
-            })
-            .collect()
-    }
-}
-
-impl Drop for Names {
-    fn drop(&mut self) {
-        // SAFETY: every item is an owned `xstrdup`ed string.
-        unsafe { ga_clear_strings(&raw mut self.0) };
-    }
-}
 
 /// The name the test process is running under, which every case below is
 /// written against. `$USER` is what the Lua spec used.
@@ -83,19 +44,12 @@ fn into_buffer(
 }
 
 #[test]
-fn asking_for_every_username_without_somewhere_to_put_them_fails() {
-    let _editor = editor_lock();
-    // SAFETY: NULL is the case under test.
-    assert_eq!(unsafe { os_get_usernames(ptr::null_mut()) }, Err(Failed));
-}
-
-#[test]
 fn every_username_includes_the_one_running_the_tests() {
     let _editor = editor_lock();
-    let mut names = Names::new();
-    assert_eq!(names.fill(), Ok(()));
-
-    let names = names.to_strings();
+    let names: Vec<String> = os_get_usernames()
+        .into_iter()
+        .map(|name| String::from_utf8_lossy(&name).into_owned())
+        .collect();
     assert!(!names.is_empty(), "the password database is not empty");
     assert!(
         names.contains(&current_username()),
