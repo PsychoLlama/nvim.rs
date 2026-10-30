@@ -21,6 +21,16 @@
 #
 # The runtime is not a positional argument in either mode; set VIMRUNTIME to
 # measure against a tree other than the one this file lives in.
+#
+# AB_CHILDREN=1 (cachegrind mode only) follows the processes the bench
+# spawns as well (`--trace-children=yes`, one log per pid), for a bench whose
+# work happens partly in a child -- rpcbench's `--embed` instances. It prints
+# two rows from the one run: `<name>`, the measuring process alone (the pid
+# whose parent was not traced), and `<name>+children`, every traced pid's
+# I refs summed (the parent, `--embed` children, and any `sh`/`cat`). The
+# parent row reads ~1.4 % above a plain `--cachegrind` run of the same
+# binary (rpcbench, codegen-units = 1), so compare it only with another
+# AB_CHILDREN run.
 
 RUNNER=""
 MODE=wall
@@ -69,6 +79,41 @@ ab_run() {
   # One untimed, uninstrumented warm-up, so the measured run pays neither for
   # faulting the binary in nor for building a fixture it then reuses.
   run "$A" >/dev/null
+
+  if [ "$MODE" = cachegrind ] && [ -n "${AB_CHILDREN:-}" ]; then
+    RUNNER="valgrind --tool=cachegrind --cache-sim=no --branch-sim=no
+      --trace-children=yes
+      --cachegrind-out-file=$out/cachegrind.out.%p --log-file=$out/log.%p"
+    run "$A" >/dev/null
+    python3 - "$name" "$out" <<'PY'
+import glob
+import re
+import sys
+
+name, out = sys.argv[1:]
+refs, parents = {}, {}
+logs = glob.glob(f"{out}/log.*")
+traced = {path.rsplit(".", 1)[1] for path in logs}
+for path in logs:
+    pid = path.rsplit(".", 1)[1]
+    text = open(path).read()
+    found = re.search(r"I\s+refs:\s+([\d,]+)", text)
+    if found is None:
+        # A process that never reached its exit under valgrind (killed)
+        # prints no total. An exec keeps the pid, so `sh -c '..; exec cat'`
+        # is one log, the last image's.
+        continue
+    refs[pid] = int(found.group(1).replace(",", ""))
+    parent = re.search(r"Parent PID: (\d+)", text)
+    parents[pid] = parent.group(1) if parent else None
+roots = [pid for pid in refs if parents[pid] not in traced]
+if len(roots) != 1:
+    sys.exit(f"{name}: expected one untraced parent, found {len(roots)} in {out}")
+print(f"{name}\tIr\t{refs[roots[0]]}")
+print(f"{name}+children\tIr\t{sum(refs.values())}")
+PY
+    return
+  fi
 
   if [ "$MODE" = cachegrind ]; then
     RUNNER="valgrind --tool=cachegrind --cache-sim=no --branch-sim=no

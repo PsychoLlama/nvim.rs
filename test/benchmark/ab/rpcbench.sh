@@ -9,6 +9,9 @@
 # binary (`v:progpath`) or `cat` -- and only this process is measured; see
 # the header of rpcbench.lua for the phase map.
 #
+# The children are not counted by `--cachegrind`; AB_CHILDREN=1 adds a
+# `rpcbench+children` row that sums every traced pid (see common.sh).
+#
 # RPCBENCH_SCALE multiplies every phase's round count; RPCBENCH_ONLY runs a
 # comma-separated subset of the phases after the setup.
 #

@@ -71,6 +71,16 @@ phase alone spread at most **1,250 ppm** (`textobj`), `put` 313, `ctl` 416,
 `fold` 294, `marks` 160, `diff`/`au` ~50 and the rest under 10 ppm. The first
 draft built its buffers as Lua tables and moved 2 % on `yank` between two runs.
 
+`rpcbench` does part of its work in `--embed` children, which a plain
+`--cachegrind` run does not count. `AB_CHILDREN=1` follows them
+(`--trace-children=yes`, one log per pid) and prints two rows from the one
+run: `rpcbench`, the measuring process alone, and `rpcbench+children`, every
+traced pid summed. The parent row reads ~1.4 % above a plain run's (traced
+runs cost the parent a little), so compare it only with another
+`AB_CHILDREN` run. Measured on one codegen-units = 1 binary against a
+hand-rolled per-pid script: 4,290.8 M / 5,747.9 M against 4,292.8 M /
+5,749.6 M (−0.05 % / −0.03 %), and the same to 0.1 % per phase.
+
 Every bench takes `<NAME>_ONLY=phase[,phase]` (`INBENCH_ONLY`,
 `SCRBENCH_ONLY`, …), which runs only those phases after the setup, so
 cachegrind can count one phase at a time; subtract a run with a phase name
