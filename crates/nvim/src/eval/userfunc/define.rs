@@ -30,7 +30,7 @@ use super::*;
 use crate::eval::typval::value_check_lock_named;
 use crate::eval::vars::with_var;
 use crate::memory::XString;
-use crate::types::{Failed, FuncBody, Refcount};
+use crate::types::{Failed, FuncBody};
 
 /// Whether the function table changed under a listing, which means the
 /// function the caller is walking to may be gone.  Reports E454 when it did.
@@ -392,7 +392,7 @@ impl Definition<'_, '_> {
             emsg_funcname(c"E127: Cannot redefine function %s: It is in use", name);
             return Err(Refusal::Keep);
         }
-        if func.refcount.get().is_shared() {
+        if func.refcount.is_shared() {
             // Referenced somewhere: don't redefine it, create a new one
             // beside it.
             func.release();
@@ -466,7 +466,7 @@ impl Definition<'_, '_> {
         } else if add_func(func.clone()).is_err() {
             return Err(Refusal::Unwind);
         }
-        func.refcount.set(Refcount::ONE);
+        func.refcount.reset(1);
         self.func = Some(func);
         Ok(())
     }

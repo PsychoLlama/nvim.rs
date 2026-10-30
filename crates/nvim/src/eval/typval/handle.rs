@@ -156,13 +156,14 @@ impl ListRef {
 
     /// The reference count, through its own bytes only: a clone or
     /// release must not claim the whole object, which a walk over it
-    /// (a dictionary's inline slots) may be borrowing at the time.
+    /// (a dictionary's inline slots) may be borrowing at the time. Shared,
+    /// because the count is a `Cell`: a holder reading the object meanwhile
+    /// stays valid.
     #[inline(always)]
-    #[allow(clippy::mut_from_ref)]
-    fn count(&self) -> &mut Refcount {
+    fn count(&self) -> &Refcount {
         // SAFETY: the handle holds a reference, so the object is live;
-        // the borrow covers the count alone and ends with the statement.
-        unsafe { &mut (*self.0.as_ptr()).lv_refcount }
+        // the borrow covers the count alone.
+        unsafe { &(*self.0.as_ptr()).lv_refcount }
     }
 }
 
@@ -241,7 +242,7 @@ pub fn tv_list_alloc(len: ptrdiff_t) -> ListRef {
     // SAFETY: the allocation just made and written.
     let mut live = unsafe { Ls::new(list) };
     live.lv_root = root;
-    live.lv_refcount = Refcount::ONE;
+    live.lv_refcount = Refcount::one();
     // SAFETY: the reference just seeded is the one this handle owns.
     unsafe { ListRef::from_owned(at) }
 }
@@ -372,11 +373,10 @@ impl DictRef {
 
     /// As [`ListRef::count`].
     #[inline(always)]
-    #[allow(clippy::mut_from_ref)]
-    fn count(&self) -> &mut Refcount {
+    fn count(&self) -> &Refcount {
         // SAFETY: the handle holds a reference, so the object is live;
-        // the borrow covers the count alone and ends with the statement.
-        unsafe { &mut (*self.0.as_ptr()).dv_refcount }
+        // the borrow covers the count alone.
+        unsafe { &(*self.0.as_ptr()).dv_refcount }
     }
 }
 
@@ -442,7 +442,7 @@ pub fn tv_dict_alloc() -> DictRef {
     let mut dict = unsafe { Dt::new(d) };
     dict.dv_lock = VarLock::Unlocked;
     dict.dv_scope = VAR_NO_SCOPE;
-    dict.dv_refcount = Refcount::ONE;
+    dict.dv_refcount = Refcount::one();
     dict.dv_copy_id = 0;
     dict.dv_root = root;
     // Written, not assigned: zeroed storage is not a valid `Vec`.
@@ -546,11 +546,10 @@ impl BlobRef {
 
     /// As [`ListRef::count`].
     #[inline(always)]
-    #[allow(clippy::mut_from_ref)]
-    fn count(&self) -> &mut Refcount {
+    fn count(&self) -> &Refcount {
         // SAFETY: the handle holds a reference, so the object is live;
-        // the borrow covers the count alone and ends with the statement.
-        unsafe { &mut (*self.0.as_ptr()).bv_refcount }
+        // the borrow covers the count alone.
+        unsafe { &(*self.0.as_ptr()).bv_refcount }
     }
 }
 
@@ -598,9 +597,9 @@ impl ::core::ops::DerefMut for BlobRef {
 /// zero: a caller that stores it nowhere drops the handle, and that is the
 /// free.
 pub fn tv_blob_alloc() -> BlobRef {
-    let mut blob = Box::new(Blob {
+    let blob = Box::new(Blob {
         bv_data: Vec::new(),
-        bv_refcount: Refcount::ZERO,
+        bv_refcount: Refcount::zero(),
         bv_lock: VarLock::Unlocked,
     });
     // The count starts at the handle's one.
@@ -618,7 +617,7 @@ pub struct PartialRef(NonNull<Partial>);
 impl PartialRef {
     /// A partial built in place, owned by the handle (a count of one).
     pub fn new(mut partial: Partial) -> PartialRef {
-        partial.pt_refcount = Refcount::ONE;
+        partial.pt_refcount = Refcount::one();
         PartialRef(NonNull::from(Box::leak(Box::new(partial))))
     }
 
@@ -642,11 +641,10 @@ impl PartialRef {
 
     /// As [`ListRef::count`].
     #[inline(always)]
-    #[allow(clippy::mut_from_ref)]
-    fn count(&self) -> &mut Refcount {
+    fn count(&self) -> &Refcount {
         // SAFETY: the handle holds a reference, so the object is live;
-        // the borrow covers the count alone and ends with the statement.
-        unsafe { &mut (*self.0.as_ptr()).pt_refcount }
+        // the borrow covers the count alone.
+        unsafe { &(*self.0.as_ptr()).pt_refcount }
     }
 }
 

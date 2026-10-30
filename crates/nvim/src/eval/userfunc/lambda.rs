@@ -68,7 +68,7 @@ pub(crate) fn alloc_ufunc(name: &[u8]) -> UserFunc {
         flags: Cell::new(FuncFlags::NONE),
         calls: Cell::new(0),
         cleared: Cell::new(false),
-        refcount: Cell::new(Refcount::ZERO),
+        refcount: Refcount::zero(),
         body: RefCell::new(Rc::new(FuncBody::default())),
         luaref: Cell::new(LUA_NOREF),
         script_ctx: Cell::new(ScriptCtx::default()),
@@ -161,7 +161,8 @@ pub(crate) fn get_lambda_tv(
                 flags |= FuncFlags::NOARGS;
             }
 
-            func.refcount.set(Refcount::ONE);
+            // Fresh from `alloc_ufunc`, at zero: the one holder is the partial.
+            func.retain();
             // A lambda's name is new, so the table cannot refuse it; were it
             // to, the partial still holds the function.
             let _ = add_func(func.clone());
@@ -193,7 +194,7 @@ pub(crate) fn get_lambda_tv(
 
             let part = Partial {
                 pt_func: Some(func),
-                ..Partial::EMPTY
+                ..Partial::empty()
             };
             result.write_partial(Some(PartialRef::new(part)));
         }
@@ -257,7 +258,7 @@ pub fn make_partial(selfdict: &DictRef, result: &mut TypVal) {
     let mut part = Partial {
         pt_dict: Some(selfdict.clone()),
         pt_auto: true,
-        ..Partial::EMPTY
+        ..Partial::empty()
     };
     if result.v_type() == VAR_FUNC || result.v_type() == VAR_STRING {
         // Just a function: take over the function name and use selfdict.
@@ -292,7 +293,8 @@ pub fn make_partial(selfdict: &DictRef, result: &mut TypVal) {
 /// The new function takes `luaref` over.
 pub fn register_luafunc(luaref: LuaRef) -> ThinCString {
     let func = Rc::new(alloc_ufunc(&get_lambda_name()));
-    func.refcount.set(Refcount::ONE);
+    // Fresh from `alloc_ufunc`, at zero: the one holder is the partial.
+    func.retain();
     *func.body.borrow_mut() = Rc::new(FuncBody {
         varargs: true,
         ..FuncBody::default()

@@ -670,7 +670,7 @@ mod tests {
             pt_name: Some(ThinCString::from_bytes(name.as_bytes())),
             pt_argv: args,
             pt_dict: dict,
-            ..Partial::EMPTY
+            ..Partial::empty()
         })
     }
 

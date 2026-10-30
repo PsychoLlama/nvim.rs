@@ -413,7 +413,7 @@ pub unsafe fn proc_wait(proc: *mut Proc, ms: c_int, mut events: *mut MultiQueue)
     // SAFETY: the caller's promise.
     let mut child = unsafe { Child::new(proc) };
 
-    if child.refcount == Refcount::ZERO {
+    if child.refcount == Refcount::zero() {
         // Read the status before draining: an event may free the child.
         let status = child.status;
         // SAFETY: the child's loop and its own queue.
@@ -428,7 +428,7 @@ pub unsafe fn proc_wait(proc: *mut Proc, ms: c_int, mut events: *mut MultiQueue)
     // Hold a reference of our own so the exit callback cannot free the child
     // before its status has been read.
     child.refcount.retain();
-    let interrupted_or_last = move || got_int.get() || child.refcount == Refcount::ONE;
+    let interrupted_or_last = move || got_int.get() || child.refcount == Refcount::one();
     // SAFETY: the child's loop, and the caller's queue.
     unsafe { process_events_until(child.loop_0, events, i64::from(ms), interrupted_or_last) };
 
@@ -439,7 +439,7 @@ pub unsafe fn proc_wait(proc: *mut Proc, ms: c_int, mut events: *mut MultiQueue)
         unsafe { proc_stop(child.as_ptr()) };
         if ms == -1 {
             // Returning is only safe once every handle is closed too.
-            let last = move || child.refcount == Refcount::ONE;
+            let last = move || child.refcount == Refcount::one();
             // SAFETY: the child's loop, and the caller's queue.
             unsafe { process_events_until(child.loop_0, events, -1, last) };
         } else {
@@ -449,7 +449,7 @@ pub unsafe fn proc_wait(proc: *mut Proc, ms: c_int, mut events: *mut MultiQueue)
         child.status = -2;
     }
 
-    if child.refcount == Refcount::ONE {
+    if child.refcount == Refcount::one() {
         // SAFETY: a live child holding the reference taken above.
         unsafe { decref(child.as_ptr()) };
         if !child.events.is_null() {
@@ -639,7 +639,7 @@ unsafe extern "C" fn proc_close_event(argv: *mut *mut c_void) {
 /// `proc` is a live child holding at least one reference.
 unsafe fn decref(proc: *mut Proc) {
     // SAFETY: the caller's promise.
-    let mut child = unsafe { Child::new(proc) };
+    let child = unsafe { Child::new(proc) };
     if child.refcount.release() != 0 {
         return;
     }

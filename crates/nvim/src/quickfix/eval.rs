@@ -95,7 +95,7 @@ pub fn set_ref_in_quickfix(copy_id: c_int) -> bool {
             && let Some(shown) = win.w_llist_ref
         {
             let shown = shown.stack();
-            if shown.refcount == Refcount::ONE {
+            if shown.refcount == Refcount::one() {
                 return mark_stack(&shown, copy_id);
             }
         }

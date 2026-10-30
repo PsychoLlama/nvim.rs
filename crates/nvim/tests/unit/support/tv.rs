@@ -210,7 +210,7 @@ impl Pt {
                 other => panic!("a partial's dict is a dict, not {}", other.v_type()),
             });
         PartialRef::new(Partial {
-            pt_refcount: Refcount::ZERO,
+            pt_refcount: Refcount::zero(),
             pt_copy_id: 0,
             pt_name: Some(ThinCString::from_bytes(&self.value)),
             pt_func: None,

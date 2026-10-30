@@ -46,9 +46,7 @@ use crate::startup::exiting;
 use crate::state::MAP_ALL_MODES;
 use crate::syntax::syntax_clear;
 use crate::terminal::close_buf_terminal;
-use crate::types::{
-    Callback, ColNr, FileMark, FileMarkView, Handle, LineNr, Pos, Refcount, Timestamp,
-};
+use crate::types::{Callback, ColNr, FileMark, FileMarkView, Handle, LineNr, Pos, Timestamp};
 use crate::undo::u_clearallandblockfree;
 use crate::usercmd::{Table, uc_clear};
 use crate::window::{free_wininfo, goto_tabpage_win, one_window};
@@ -739,7 +737,7 @@ fn free_buffer(mut buffer: Buf) {
         .b_bufvar
         .di_tv
         .dict_ref()
-        .is_some_and(|dict| dict.dv_refcount > Refcount::new(DO_NOT_FREE_CNT as c_int));
+        .is_some_and(|dict| dict.dv_refcount.get() > DO_NOT_FREE_CNT as c_int);
     if shared {
         rescue_changedtick(buffer);
     }

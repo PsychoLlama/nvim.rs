@@ -162,8 +162,16 @@ pub const VAR_SHORT_LEN: ::core::ffi::c_uint = 20;
 /// Every refcounted object in the tree -- lists, dictionaries, blobs,
 /// partials, user functions, funccalls, argument lists, location-list
 /// stacks -- counts its owners in one of these. On the wire it is still
-/// the `int` C declared: `#[repr(transparent)]`, so no struct's layout
-/// moves and the FFI edge sees an integer.
+/// the `int` C declared: `#[repr(transparent)]` over a `Cell<c_int>`, which
+/// is itself transparent, so no struct's layout moves and the FFI edge sees
+/// an integer.
+///
+/// A `Cell`, because taking or giving back a reference is not an edit of
+/// the object: a value handle clones and drops through a *shared* view of
+/// its object, and a holder may be reading the same object at that moment
+/// (a walk over a dictionary that copies one of its values out). Counting
+/// through `&self` is what makes that sound; a `&mut` count lent from a
+/// shared handle was not.
 ///
 /// What it does **not** have is arithmetic operators. `+= 1` scattered
 /// across eighty-two call sites is how a port leaks and double-frees;
@@ -175,54 +183,68 @@ pub const VAR_SHORT_LEN: ::core::ffi::c_uint = 20;
 /// [`release`](Self::release) answers what is left, because *every*
 /// caller of it asks: the point of decrementing is to find out whether
 /// this was the last owner.
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
 #[repr(transparent)]
-pub struct Refcount(::core::ffi::c_int);
+pub struct Refcount(::core::cell::Cell<::core::ffi::c_int>);
 
 impl Refcount {
     /// Nobody owns this yet. What `xcalloc` leaves behind, and what a
     /// dictionary allocated for a scope that is about to adopt it holds
     /// until the adoption.
-    pub const ZERO: Refcount = Refcount(0);
+    pub const fn zero() -> Refcount {
+        Refcount::new(0)
+    }
+
     /// Exactly one owner: what an allocator hands back.
-    pub const ONE: Refcount = Refcount(1);
+    pub const fn one() -> Refcount {
+        Refcount::new(1)
+    }
 
     /// A count of `n` owners, for the handful of places that seed one
     /// with something other than 0 or 1 (`DO_NOT_FREE_CNT`).
     pub const fn new(n: ::core::ffi::c_int) -> Self {
-        Refcount(n)
+        Refcount(::core::cell::Cell::new(n))
     }
 
     /// The count as an integer, for messages and assertions. Not for
     /// arithmetic -- there is no way to write the result back.
-    pub const fn get(self) -> ::core::ffi::c_int {
-        self.0
+    pub fn get(&self) -> ::core::ffi::c_int {
+        self.0.get()
     }
 
     /// One more owner.
-    pub fn retain(&mut self) {
-        self.0 += 1;
+    pub fn retain(&self) {
+        self.0.set(self.0.get() + 1);
     }
 
     /// One fewer owner; answers how many are left. Zero means the caller
     /// released the last reference and now owes the object its teardown.
-    pub fn release(&mut self) -> ::core::ffi::c_int {
-        self.0 -= 1;
-        self.0
+    pub fn release(&self) -> ::core::ffi::c_int {
+        let left = self.0.get() - 1;
+        self.0.set(left);
+        left
     }
 
     /// Release `n` owners at once. Only `unref_var_dict` needs it: a
     /// scope dictionary is seeded with `DO_NOT_FREE_CNT` so nothing can
     /// free it mid-scope, and giving it up is one bulk release.
-    pub fn release_many(&mut self, n: ::core::ffi::c_int) -> ::core::ffi::c_int {
-        self.0 -= n;
-        self.0
+    pub fn release_many(&self, n: ::core::ffi::c_int) -> ::core::ffi::c_int {
+        let left = self.0.get() - n;
+        self.0.set(left);
+        left
+    }
+
+    /// Overwrite the count. Only for an object whose holders are being
+    /// re-established wholesale: a function defined over an old one's
+    /// record takes the table's one reference, whatever it counted before.
+    pub fn reset(&self, n: ::core::ffi::c_int) {
+        self.0.set(n);
     }
 
     /// Whether somebody other than the caller holds a reference, so
     /// dropping the caller's cannot free the object.
-    pub const fn is_shared(self) -> bool {
-        self.0 > 1
+    pub fn is_shared(&self) -> bool {
+        self.0.get() > 1
     }
 }
 
@@ -302,10 +324,10 @@ mod refcount_tests {
     /// allocated dictionary starts life locked or already referenced.
     #[test]
     fn zeroed_memory_reads_as_the_at_rest_value() {
-        assert_eq!(Refcount::default(), Refcount::ZERO);
+        assert_eq!(Refcount::default(), Refcount::zero());
         assert_eq!(RefcountSize::default(), RefcountSize::ZERO);
         assert_eq!(VarLock::default(), VarLock::Unlocked);
-        assert_eq!(Refcount::ZERO.get(), 0);
+        assert_eq!(Refcount::zero().get(), 0);
         assert_eq!(VarLock::Unlocked as u32, 0);
         assert_eq!(VarLock::Locked as u32, 1);
         assert_eq!(VarLock::Fixed as u32, 2);
@@ -316,14 +338,14 @@ mod refcount_tests {
     /// them asks is "was that the last owner".
     #[test]
     fn release_answers_what_is_left() {
-        let mut count = Refcount::ONE;
+        let count = Refcount::one();
         count.retain();
         assert_eq!(count.get(), 2);
         assert!(count.is_shared());
         assert_eq!(count.release(), 1);
         assert!(!count.is_shared());
         assert_eq!(count.release(), 0);
-        assert_eq!(count, Refcount::ZERO);
+        assert_eq!(count, Refcount::zero());
 
         let mut sized = RefcountSize::ONE;
         sized.retain();
@@ -337,9 +359,9 @@ mod refcount_tests {
     /// `DO_NOT_FREE_CNT` and gives all but one of them up at once.
     #[test]
     fn release_many_gives_up_a_run_of_references() {
-        let mut count = Refcount::new(1_073_741_823);
+        let count = Refcount::new(1_073_741_823);
         assert_eq!(count.release_many(1_073_741_822), 1);
-        assert_eq!(count, Refcount::ONE);
+        assert_eq!(count, Refcount::one());
     }
 
     /// `CHANGE_LOCK`: `:unlockvar` cannot reach a `VAR_FIXED` slot, which
@@ -492,7 +514,7 @@ impl List {
             lv_watch: Vec::new(),
             lv_copylist: ::core::ptr::null_mut(),
             lv_root: RootId::NONE,
-            lv_refcount: Refcount::ZERO,
+            lv_refcount: Refcount::zero(),
             lv_copy_id: 0,
             lv_lock: VarLock::Unlocked,
             // `LUA_NOREF`: no Lua table mirrors this list.
@@ -667,7 +689,7 @@ pub struct UserFunc {
     /// How many calls of it are running.
     pub(crate) calls: ::core::cell::Cell<::core::ffi::c_int>,
     pub(crate) cleared: ::core::cell::Cell<bool>,
-    pub(crate) refcount: ::core::cell::Cell<Refcount>,
+    pub(crate) refcount: Refcount,
     /// The arguments, their defaults and the body, replaced as a whole when
     /// the function is redefined in place.
     pub(crate) body: ::core::cell::RefCell<::std::rc::Rc<FuncBody>>,
@@ -736,17 +758,12 @@ impl UserFunc {
 
     /// One more counted holder.
     pub fn retain(&self) {
-        let mut count = self.refcount.get();
-        count.retain();
-        self.refcount.set(count);
+        self.refcount.retain();
     }
 
     /// One counted holder fewer; answers how many are left.
     pub fn release(&self) -> ::core::ffi::c_int {
-        let mut count = self.refcount.get();
-        let left = count.release();
-        self.refcount.set(count);
-        left
+        self.refcount.release()
     }
 }
 

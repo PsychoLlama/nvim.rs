@@ -233,7 +233,32 @@ fn transparent_newtype(item: &syn::ItemStruct) -> Option<syn::Type> {
     };
     let mut it = fields.unnamed.iter();
     let first = it.next()?;
-    it.next().is_none().then(|| first.ty.clone())
+    it.next().is_none().then(|| cell_payload(&first.ty))
+}
+
+/// `Cell<T>` (however the path is spelled) is `T` in memory -- the std
+/// type is itself `#[repr(transparent)]` -- so a newtype over one is the
+/// integer it counts. [`Refcount`] is one: a `Cell<c_int>`, so the value
+/// handles can count through a shared reference.
+///
+/// [`Refcount`]: ../../../crates/nvim/src/types/typval.rs
+fn cell_payload(ty: &syn::Type) -> syn::Type {
+    let syn::Type::Path(path) = ty else {
+        return ty.clone();
+    };
+    let Some(last) = path.path.segments.last() else {
+        return ty.clone();
+    };
+    if last.ident != "Cell" {
+        return ty.clone();
+    }
+    let syn::PathArguments::AngleBracketed(args) = &last.arguments else {
+        return ty.clone();
+    };
+    match args.args.first() {
+        Some(syn::GenericArgument::Type(inner)) => inner.clone(),
+        _ => ty.clone(),
+    }
 }
 
 fn repr_of(attrs: &[syn::Attribute]) -> (bool, Option<u64>) {

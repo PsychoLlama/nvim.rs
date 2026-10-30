@@ -98,7 +98,7 @@ pub fn evalvars_init() {
     // The name should never be printed, but do not crash if it is.
     let lua = Partial {
         pt_name: Some(ThinCString::empty()),
-        ..Partial::EMPTY
+        ..Partial::empty()
     };
     set_vim_var_partial(Vv::Lua, PartialRef::new(lua));
 

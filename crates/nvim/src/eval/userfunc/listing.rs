@@ -294,7 +294,7 @@ pub fn ex_delfunction(excmd: &mut ExArg) {
     // one that returned `a:000`, or that a closure captured -- holds one
     // of its own until the garbage collector frees it, which is why this
     // arm is reachable at all (see the docket's O-B14-13).
-    if func.refcount.get().get() > 2 {
+    if func.refcount.get() > 2 {
         let arg = msg_bytes(excmd.line.arg());
         semsg!("Cannot delete function {arg}: It is being used internally");
         return;
@@ -317,7 +317,7 @@ pub fn ex_delfunction(excmd: &mut ExArg) {
     } else {
         1
     };
-    if func.refcount.get().get() > held {
+    if func.refcount.get() > held {
         if remove_func(func.name().as_bytes()) {
             func.release();
         }

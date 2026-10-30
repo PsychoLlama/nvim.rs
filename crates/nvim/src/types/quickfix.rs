@@ -45,7 +45,7 @@ impl QfStack {
     /// An empty stack of `kind` with room for no list.
     pub const fn new(kind: QfListType) -> Self {
         QfStack {
-            refcount: Refcount::ZERO,
+            refcount: Refcount::zero(),
             list_count: 0,
             current: 0,
             lists: Vec::new(),

@@ -297,7 +297,7 @@ impl Win {
     }
 
     /// Give the window `qi` as its location list, taking a reference.
-    pub(crate) fn set_location_list(mut self, mut qi: Qi) {
+    pub(crate) fn set_location_list(mut self, qi: Qi) {
         debug_assert!(self.w_llist.is_none(), "the window already holds a list");
         self.w_llist = Some(qi.id());
         qi.refcount.retain();
@@ -440,7 +440,7 @@ fn new_slots(n: OptInt) -> Vec<QfList> {
 pub(crate) fn new_location_stack(kind: QfListType, n: OptInt) -> QfId {
     debug_assert_ne!(kind, QFLT_QUICKFIX);
     let mut stack = QfStack::new(kind);
-    stack.refcount = Refcount::ONE;
+    stack.refcount = Refcount::one();
     stack.bufnr = INVALID_QFBUFNR;
     stack.lists = new_slots(n);
     QF_STACKS.with_mut(|stacks| stacks.table.insert((), stack).0)
@@ -549,7 +549,7 @@ pub(crate) fn drop_stack_ref(id: Option<QfId>) {
 
 /// Drop one reference, freeing the stack at the last.
 fn release(id: QfId) {
-    let mut qi = id.stack();
+    let qi = id.stack();
     if qi.refcount.release() < 1 {
         wipe_qf_buffer(qi);
         free_stack(id);
@@ -658,7 +658,7 @@ mod tests {
         let _held = editor_state_lock();
         let id = new_location_stack(QFLT_LOCATION, 3);
         let qi = id.stack();
-        assert_eq!(qi.refcount, Refcount::ONE);
+        assert_eq!(qi.refcount, Refcount::one());
         assert_eq!(qi.kind, QFLT_LOCATION);
         assert_eq!(qi.bufnr, INVALID_QFBUFNR);
         assert_eq!(qi.list_count, 0);

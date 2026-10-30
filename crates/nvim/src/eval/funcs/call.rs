@@ -403,7 +403,7 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
         return;
     }
 
-    let mut pt = Partial::EMPTY;
+    let mut pt = Partial::empty();
     if arg_idx > 0 || arg_pt.is_some_and(|bound| !bound.pt_argv.is_empty()) {
         // The bound arguments of the partial being extended come
         // first, then this call's.

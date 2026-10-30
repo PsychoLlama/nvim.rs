@@ -428,7 +428,7 @@ pub(crate) fn call_user_func(
 
     func.calls.set(func.calls.get() - 1);
     // Free the function when it was deleted while it was running.
-    if func.calls.get() <= 0 && func.refcount.get() <= Refcount::ZERO {
+    if func.calls.get() <= 0 && func.refcount.get() <= 0 {
         func_clear_free(func, false);
     }
 

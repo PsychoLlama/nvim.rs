@@ -540,7 +540,7 @@ mod tests {
             pt_name: Some(ThinCString::from_bytes(b"tr")),
             pt_argv: vec![TypVal::list(Some(arg.clone())), string_tv(b"s")],
             pt_dict: Some(d.clone()),
-            ..Partial::EMPTY
+            ..Partial::empty()
         });
         let mut held = TypVal::partial(Some(pt));
         assert_eq!((arg.lv_refcount.get(), d.dv_refcount.get()), (2, 2));
@@ -550,7 +550,7 @@ mod tests {
         let pt = PartialRef::new(Partial {
             pt_name: Some(ThinCString::from_bytes(b"tr")),
             pt_dict: Some(d.clone()),
-            ..Partial::EMPTY
+            ..Partial::empty()
         });
         d.add_value(b"p", TypVal::partial(Some(pt.clone())))
             .expect("fresh key");

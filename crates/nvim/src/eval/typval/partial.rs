@@ -88,15 +88,17 @@ impl TypVal {
 impl Partial {
     /// A partial binding nothing and calling nothing yet, for
     /// [`PartialRef::new`] to build on.
-    pub(crate) const EMPTY: Partial = Partial {
-        pt_refcount: Refcount::ZERO,
-        pt_copy_id: 0,
-        pt_name: None,
-        pt_func: None,
-        pt_auto: false,
-        pt_argv: Vec::new(),
-        pt_dict: None,
-    };
+    pub(crate) const fn empty() -> Partial {
+        Partial {
+            pt_refcount: Refcount::zero(),
+            pt_copy_id: 0,
+            pt_name: None,
+            pt_func: None,
+            pt_auto: false,
+            pt_argv: Vec::new(),
+            pt_dict: None,
+        }
+    }
 }
 
 /// The function name a partial stands for: its own, its `UserFunc`'s, or the
@@ -288,7 +290,7 @@ mod tests {
         let (dict, args) = pt.partial_binding();
         assert!(dict.is_none());
         assert!(args.is_empty());
-        assert_eq!(partial_name(&Partial::EMPTY).to_bytes(), b"");
+        assert_eq!(partial_name(&Partial::empty()).to_bytes(), b"");
     }
 
     /// The partial's own size, which every bound callable pays.

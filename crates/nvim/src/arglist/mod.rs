@@ -269,7 +269,7 @@ fn alist_new() {
     let id = ArgListId(MAX_ALIST_ID.get());
     let list = ArgList {
         entries: Vec::new(),
-        refcount: Refcount::ONE,
+        refcount: Refcount::one(),
     };
     ARG_LISTS.with_mut(|lists| lists.insert(id, list));
     Win::current().w_alist = id;

@@ -50,7 +50,7 @@ impl ArgLists {
 pub(crate) static ARG_LISTS: GlobalCell<ArgLists> = GlobalCell::new(ArgLists {
     global: ArgList {
         entries: Vec::new(),
-        refcount: Refcount::ZERO,
+        refcount: Refcount::zero(),
     },
     local: BTreeMap::new(),
 });

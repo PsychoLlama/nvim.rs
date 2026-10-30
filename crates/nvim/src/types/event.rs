@@ -72,7 +72,6 @@ pub struct loop_0 {
     pub recursive: ::core::ffi::c_int,
     pub closing: bool,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct proc {
     pub type_0: ProcType,
