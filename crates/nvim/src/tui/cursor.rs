@@ -7,9 +7,7 @@
 //! numbering they take is DECSCUSR's, which is not the numbering the editor
 //! uses, and [`decscusr_code`] is where the two meet.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `tui/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
