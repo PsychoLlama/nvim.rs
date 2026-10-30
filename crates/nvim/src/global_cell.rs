@@ -103,6 +103,7 @@ impl<T> GlobalCell<T> {
     pub fn set(&self, value: T) {
         check_main_thread();
         check_no_borrow(self.0.get() as usize);
+        check_no_field_loan(self.0.get() as usize);
         // SAFETY: main-thread invariant + no outstanding borrow.
         unsafe { *self.0.get() = value }
     }
@@ -230,19 +231,29 @@ impl<T> GlobalCell<T> {
     /// a value that has to outlive the call is cloned inside `f`, never
     /// handed out by reference.
     ///
-    /// The borrow rules are [`get_field`](Self::get_field)'s for the same
-    /// reason — an option read must not enter the borrow table — so `f` must
-    /// not write the same field. Nothing in `f` may reach back into the cell
-    /// and replace what it is looking at.
+    /// The borrow is tracked per *field*, not per cell: debug builds record
+    /// a shared loan of the field for as long as `f` runs, so a write to
+    /// that field from inside `f` ([`set_field`](Self::set_field),
+    /// [`replace_field`](Self::replace_field)) panics, as does anything that
+    /// would write the whole record ([`set`](Self::set),
+    /// [`with_mut`](Self::with_mut)). Reads of any field, and writes to the
+    /// record's *other* fields, stay free -- a whole-cell borrow would turn
+    /// an option set inside a `did_set_*` callback under a `'cpoptions'`
+    /// loan into a panic.
     ///
     /// The projection is shared, as [`get_field`](Self::get_field)'s is and
     /// for the same reason: `f` may read other fields of the record.
     #[inline(always)]
     pub fn with_field<F, R>(&self, project: impl FnOnce(&T) -> &F, f: impl FnOnce(&F) -> R) -> R {
         check_main_thread();
-        check_no_exclusive_borrow(self.0.get() as usize);
-        // SAFETY: main-thread invariant + no outstanding exclusive borrow.
-        f(project(unsafe { &*self.0.get() }))
+        let record = self.0.get();
+        check_no_exclusive_borrow(record as usize);
+        // SAFETY: main-thread invariant + no outstanding exclusive borrow;
+        // the loan below makes a write to the field (or the record) while
+        // `f` holds it a debug-build panic.
+        let field = project(unsafe { &*record });
+        let _loan = FieldLoan::new(record as usize, core::ptr::from_ref(field).addr());
+        f(field)
     }
 
     /// Overwrite one field and answer what it held. The move out and the
@@ -255,6 +266,7 @@ impl<T> GlobalCell<T> {
         check_main_thread();
         check_no_borrow(self.0.get() as usize);
         let field = self.field_ptr(project);
+        check_field_not_lent(field.addr());
         // SAFETY: main-thread invariant + no outstanding borrow; `field` is
         // an aligned, initialised `F` inside the cell carrying the cell's
         // provenance (`field_ptr`), and nothing holds a reference to it.
@@ -276,6 +288,7 @@ impl<T> GlobalCell<T> {
     /// loud failure instead of silent UB.
     pub fn with_mut<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
         check_main_thread();
+        check_no_field_loan(self.0.get() as usize);
         let _guard = BorrowGuard::exclusive(self.0.get() as usize);
         // SAFETY: main-thread invariant + borrow tracking (debug).
         f(unsafe { &mut *self.0.get() })
@@ -476,9 +489,9 @@ macro_rules! state_record {
                 $cell.replace_at(self, T::default())
             }
 
-            /// Look at the field. `f` must not reach back into the editor:
-            /// it is for a test or a clone, never for a call that could
-            /// write the field.
+            /// Look at the field, for a test or a clone. The loan is
+            /// [`GlobalCell::with_field`]'s: a write to this field (or the
+            /// whole record) from inside `f` panics in a debug build.
             #[inline(always)]
             $rvis fn with<R>(self, f: impl FnOnce(&T) -> R) -> R {
                 $cell.with_at(self, f)
@@ -718,6 +731,76 @@ fn check_no_borrow(addr: usize) {
 #[cfg(not(debug_assertions))]
 #[inline(always)]
 fn check_no_borrow(_addr: usize) {}
+
+// `with_field`'s loans share the table with the cells' own borrows under
+// tagged keys, since a field at offset 0 has its record's address. One key
+// per lent field (the field's address with the top bit set), so a write to
+// that field can find it, and one per record that has any field out (the
+// record's address with the next bit set), so a write to the whole record
+// can. Neither tag can collide with a user-space address.
+#[cfg(debug_assertions)]
+const LENT_FIELD: usize = 1 << (usize::BITS - 1);
+#[cfg(debug_assertions)]
+const LENT_RECORD: usize = 1 << (usize::BITS - 2);
+
+#[cfg(debug_assertions)]
+#[inline(always)]
+fn check_field_not_lent(field: usize) {
+    if ACTIVE_BORROWS.load(Ordering::Relaxed) == 0 {
+        return;
+    }
+    if nvim_mainthread::BorrowTable::state(field | LENT_FIELD) != 0 {
+        panic!("GlobalCell field written while with_field lends it (field @ {field:#x})");
+    }
+}
+
+#[cfg(not(debug_assertions))]
+#[inline(always)]
+fn check_field_not_lent(_field: usize) {}
+
+#[cfg(debug_assertions)]
+#[inline(always)]
+fn check_no_field_loan(addr: usize) {
+    if ACTIVE_BORROWS.load(Ordering::Relaxed) == 0 {
+        return;
+    }
+    if nvim_mainthread::BorrowTable::state(addr | LENT_RECORD) != 0 {
+        panic!(
+            "GlobalCell written whole while with_field lends one of its fields (cell @ {addr:#x})"
+        );
+    }
+}
+
+#[cfg(not(debug_assertions))]
+#[inline(always)]
+fn check_no_field_loan(_addr: usize) {}
+
+/// The two shared borrows [`GlobalCell::with_field`] holds while `f` runs:
+/// one of the field, one of the record. Nothing at all in a release build.
+struct FieldLoan {
+    #[cfg(debug_assertions)]
+    _field: BorrowGuard,
+    #[cfg(debug_assertions)]
+    _record: BorrowGuard,
+}
+
+impl FieldLoan {
+    #[inline(always)]
+    fn new(record: usize, field: usize) -> Self {
+        #[cfg(debug_assertions)]
+        {
+            FieldLoan {
+                _field: BorrowGuard::shared(field | LENT_FIELD),
+                _record: BorrowGuard::shared(record | LENT_RECORD),
+            }
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            let _ = (record, field);
+            FieldLoan {}
+        }
+    }
+}
 
 struct BorrowGuard {
     #[cfg(debug_assertions)]
@@ -994,6 +1077,51 @@ mod tests {
             },
         );
         assert_eq!((count, cell.get_at(COUNT)), (Some(3), 4));
+    }
+
+    struct Lent {
+        count: i32,
+        name: Option<Vec<u8>>,
+    }
+    const LENT_COUNT: Field<Lent, i32> = field!(Lent, count);
+    const LENT_NAME: Field<Lent, Option<Vec<u8>>> = field!(Lent, name);
+
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic(expected = "while with_field lends it")]
+    fn a_write_to_the_lent_field_panics_in_debug() {
+        let cell = GlobalCell::new(Lent {
+            count: 1,
+            name: Some(b"abc".to_vec()),
+        });
+        cell.with_at(LENT_NAME, |_| cell.set_at(LENT_NAME, None));
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic(expected = "while with_field lends one of its fields")]
+    fn a_whole_record_write_under_a_field_loan_panics_in_debug() {
+        let cell = GlobalCell::new(Lent {
+            count: 1,
+            name: None,
+        });
+        cell.with_at(LENT_COUNT, |_| cell.with_mut(|record| record.count = 2));
+    }
+
+    #[test]
+    fn a_field_loan_ends_with_its_closure() {
+        let cell = GlobalCell::new(Lent {
+            count: 1,
+            name: None,
+        });
+        // Reads nest under a loan, the same field's included.
+        let both = cell.with_at(LENT_COUNT, |a| cell.with_at(LENT_COUNT, |b| *a + *b));
+        assert_eq!(both, 2);
+        assert_eq!(cell.with_at(LENT_COUNT, |_| cell.get_at(LENT_COUNT)), 1);
+        // Released: the field and the record can be written again.
+        cell.set_at(LENT_COUNT, 3);
+        cell.with_mut(|record| record.name = Some(b"x".to_vec()));
+        assert_eq!(cell.get_at(LENT_COUNT), 3);
     }
 
     #[test]
