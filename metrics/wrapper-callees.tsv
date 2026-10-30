@@ -1,17 +1,17 @@
 count	callee	no_raw	defs	def
-44	CStr::from_ptr	0	1	crates/nvim/src/marktree/node.rs
-44	from_raw_parts	0	0	
+42	CStr::from_ptr	0	1	crates/nvim/src/marktree/node.rs
+42	from_raw_parts	0	0	
 28	f	0	0	
 26	Node::new	0	1	crates/nvim/src/marktree/node.rs
 26	Term::new	0	1	crates/nvim/src/terminal/mod.rs
-26	xfree	0	1	crates/nvim/src/memory/mod.rs
+25	xfree	0	1	crates/nvim/src/memory/mod.rs
 22	from_raw_parts_mut	0	0	
 20	multiqueue_put_event	0	1	crates/nvim/src/event/multiqueue.rs
-19	Box::from_raw	0	7	
+18	Box::from_raw	0	7	
 17	.add	0	0	
 17	Reader::new	0	1	crates/nvim/src/event/rstream.rs
-14	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
 14	zeroed	0	0	
+13	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
 13	vterm_dealloc	0	1	crates/nvim/src/vterm/vterm.rs
 11	Child::new	0	1	crates/nvim/src/event/proc.rs
 11	EventLoop::new	0	1	crates/nvim/src/event/loop.rs
@@ -50,7 +50,6 @@ count	callee	no_raw	defs	def
 5	send	0	2	
 5	vim_snprintf	0	1	crates/nvim/src/strings/raw.rs
 5	vterm_scroll_rect	0	1	crates/nvim/src/vterm/vterm.rs
-4	.write	0	0	
 4	ThinCString::from_raw	0	1	crates/nvim/src/memory/thin_cstring.rs
 4	Uv::new	0	1	crates/nvim/src/event/libuv_proc.rs
 4	abort	0	0	
@@ -64,6 +63,7 @@ count	callee	no_raw	defs	def
 4	xmemdupz	0	1	crates/nvim/src/memory/mod.rs
 4	xstrlcpy	0	1	crates/nvim/src/memory/mod.rs
 3	.next_arg::<::core::ffi::c_int>	0	0	
+3	.write	0	0	
 3	GridRef::new	0	1	crates/nvim/src/grid/mod.rs
 3	IdSet::new	0	1	crates/nvim/src/marktree/intersect.rs
 3	Live::new	0	1	crates/nvim/src/winlayer/live.rs
@@ -75,8 +75,6 @@ count	callee	no_raw	defs	def
 3	create_event	0	1	crates/nvim/src/event/proc.rs
 3	fragment_bytes	1	2	
 3	free_block	0	1	crates/nvim/src/memory/arena.rs
-3	hash_add	0	1	crates/nvim/src/hashtab.rs
-3	hash_lookup	0	1	crates/nvim/src/hashtab.rs
 3	lseek	0	0	
 3	marktree_free_node	0	1	crates/nvim/src/marktree/node.rs
 3	multiqueue_free	0	1	crates/nvim/src/event/multiqueue.rs
@@ -138,7 +136,6 @@ count	callee	no_raw	defs	def
 2	getcell	0	1	crates/nvim/src/vterm/screen/mod.rs
 2	gettext_raw	0	1	crates/nvim/src/os/cshim.rs
 2	getuid	0	0	
-2	hash_remove	0	1	crates/nvim/src/hashtab.rs
 2	iconv	0	0	
 2	id2node	0	1	crates/nvim/src/marktree/node.rs
 2	init	0	0	
@@ -208,7 +205,6 @@ count	callee	no_raw	defs	def
 2	xcalloc	0	1	crates/nvim/src/memory/mod.rs
 2	xmemdup	0	1	crates/nvim/src/memory/mod.rs
 2	xrealloc	0	1	crates/nvim/src/memory/mod.rs
-1	.key	0	3	
 1	.next_arg::<*const ::core::ffi::c_char>	0	0	
 1	.next_arg::<*mut ::core::ffi::c_void>	0	0	
 1	.next_arg::<::core::ffi::c_double>	0	0	
@@ -249,11 +245,6 @@ count	callee	no_raw	defs	def
 1	getdigits_int	0	1	crates/nvim/src/charset/walk.rs
 1	getgid	0	0	
 1	getxattr	0	0	
-1	hash_add_item	0	1	crates/nvim/src/hashtab.rs
-1	hash_find_len	0	1	crates/nvim/src/hashtab.rs
-1	hash_hash	0	1	crates/nvim/src/hashtab.rs
-1	hash_init	0	1	crates/nvim/src/hashtab.rs
-1	hash_unlock	0	1	crates/nvim/src/hashtab.rs
 1	home_replace	0	1	crates/nvim/src/os/env/dirs.rs
 1	hook	0	0	
 1	iconv_close	0	0	
@@ -264,7 +255,6 @@ count	callee	no_raw	defs	def
 1	libuv_proc_close	0	1	crates/nvim/src/event/libuv_proc.rs
 1	libuv_proc_spawn	0	1	crates/nvim/src/event/libuv_proc.rs
 1	log_uv_handles	0	1	crates/nvim/src/event/loop.rs
-1	lookup_slot	1	1	crates/nvim/src/hashtab.rs
 1	loop_init	0	1	crates/nvim/src/event/loop.rs
 1	loop_schedule_deferred	0	1	crates/nvim/src/event/loop.rs
 1	loop_schedule_fast	0	1	crates/nvim/src/event/loop.rs

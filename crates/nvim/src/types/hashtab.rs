@@ -16,10 +16,11 @@ pub type HashValue = size_t;
 
 /// One slot of a [`HashTab`].
 ///
-/// `Copy`: the entry names something the table does not own -- a key string,
-/// or a dictionary item -- and copying the slot copies only that name.
+/// `Copy`: the entry names something the table does not own -- a dictionary
+/// item, or an index into storage beside the table -- and copying the slot
+/// copies only that name.
 #[derive(Copy, Clone)]
-pub struct HashItem<E: SlotEntry = *mut ::core::ffi::c_char> {
+pub struct HashItem<E: SlotEntry> {
     pub hi_hash: HashValue,
     pub hi_key: E,
 }
@@ -79,7 +80,7 @@ impl<E: SlotEntry> Slots<E> {
 /// Vim's open-addressed hash table.
 ///
 /// The table **owns** its slots, in a run whose length is a power of two (or
-/// zero, before [`crate::hashtab::hash_init`] gives it one). That is the one
+/// zero, before [`HashTab::init`] gives it one). That is the one
 /// structural difference from the C, where `ht_array` pointed at the inline
 /// `ht_smallarray` while the table was small -- a self-reference that made a
 /// `HashTab` valid only at the address it was initialised at, and
@@ -91,8 +92,8 @@ impl<E: SlotEntry> Slots<E> {
 /// is [iteration order](Self::slots) and is Vim-visible through `keys()`,
 /// `items()` and every listing that walks a Dictionary.
 ///
-/// Keys are borrowed: the table compares them and frees them only on the
-/// caller's behalf ([`crate::hashtab::hash_clear_all`]).
+/// Entries are the caller's: the table compares keys through the test the
+/// caller hands [`crate::hashtab::HashTab::probe`] and frees nothing they name.
 ///
 /// # Slots are named by index, never by pointer
 ///
@@ -102,8 +103,8 @@ impl<E: SlotEntry> Slots<E> {
 /// answers a [`crate::hashtab::Slot`], an index plus a copy of what the slot
 /// held, and every write goes back through the table. An index survives a
 /// mutation; what it does not survive is a *resize*, which is what
-/// [`crate::hashtab::hash_lock`] exists to prevent.
-pub struct HashTab<E: SlotEntry = *mut ::core::ffi::c_char> {
+/// [`HashTab::lock`] exists to prevent.
+pub struct HashTab<E: SlotEntry> {
     /// Live entries.
     pub ht_used: size_t,
     /// Entries plus tombstones: what the load factor is measured against.
@@ -112,7 +113,7 @@ pub struct HashTab<E: SlotEntry = *mut ::core::ffi::c_char> {
     /// callback rearranged the table under it.
     pub ht_changed: ::core::ffi::c_int,
     /// Non-zero while a caller holds slot indexes across mutations; see
-    /// [`crate::hashtab::hash_lock`].
+    /// [`HashTab::lock`].
     pub ht_locked: ::core::ffi::c_int,
     /// The slots themselves.
     slots: Slots<E>,
@@ -140,7 +141,7 @@ impl<E: SlotEntry> Default for HashTab<E> {
 
 impl<E: SlotEntry> HashTab<E> {
     /// A table with no slots at all: the state a `HashTab` field has
-    /// before [`crate::hashtab::hash_init`] gives it its first array, and
+    /// before [`HashTab::init`] gives it its first array, and
     /// the one it is left in by [`crate::hashtab::hash_clear`].
     ///
     /// `const`, so a table can be a `static` or a `const` field initialiser.
@@ -156,7 +157,7 @@ impl<E: SlotEntry> HashTab<E> {
     }
 
     /// A table with its first slot array, which for the initial size is the
-    /// inline run: what [`crate::hashtab::hash_init`] writes.
+    /// inline run: what [`HashTab::init`] answers.
     pub(crate) fn with_slots() -> Self {
         Self {
             slots: Slots::with_size(crate::hashtab::HT_INIT_SIZE),
@@ -173,7 +174,7 @@ impl<E: SlotEntry> HashTab<E> {
     ///
     /// Panics on a table that has no slots yet, which is the right answer:
     /// the only thing that asks for a mask is a probe, and probing a table
-    /// [`crate::hashtab::hash_init`] has not reached is a bug.
+    /// [`HashTab::init`] has not built is a bug.
     pub fn mask(&self) -> HashValue {
         self.slots.as_slice().len() - 1
     }

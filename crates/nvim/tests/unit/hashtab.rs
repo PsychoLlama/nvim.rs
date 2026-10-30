@@ -1,27 +1,93 @@
 //! `HashTab` end to end: the probe sequence, the tombstone bookkeeping and
-//! the rehash, driven through the same entry points the editor uses.
+//! the rehash, driven through the same probe/insert/remove the editor's
+//! tables use.
 //!
 //! The slot numbers here are hand-computed from the C's hash fold, so they
 //! fail if the placement ever drifts — callers walk the slots directly and
 //! Vim shows the result, so placement is observable behaviour and not an
 //! implementation detail.
 
-use std::ffi::{CStr, CString, c_char, c_uint, c_void};
-
-use neovim::hashtab::{
-    HT_INIT_SIZE, hash_add, hash_clear_all, hash_find, hash_lock, hash_remove, hash_unlock,
-};
-use neovim::memory::{xcalloc, xfree};
+use neovim::hashtab::{HT_INIT_SIZE, SlotEntry, hash_bytes};
 use neovim::types::HashTab;
 
-/// A key the table can own: `hash_clear_all` frees keys with `xfree`, and
-/// the crate's allocator is libc's.
-fn owned_key(text: &str) -> *mut c_char {
-    CString::new(text).unwrap().into_raw()
+/// A table entry: a 1-based index into [`Table::keys`], with `0` empty and
+/// `u32::MAX` the tombstone -- the shape the syntax keyword tables use.
+#[derive(Copy, Clone, PartialEq, Debug)]
+struct Key(u32);
+
+impl SlotEntry for Key {
+    const EMPTY: Self = Key(0);
+
+    fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+
+    fn is_removed(self) -> bool {
+        self.0 == u32::MAX
+    }
+
+    fn removed() -> Self {
+        Key(u32::MAX)
+    }
 }
 
-fn slot_of(ht: &HashTab, key: &CStr) -> usize {
-    unsafe { hash_find(ht, key.as_ptr()) }.index()
+/// A table of strings over the editor's `HashTab`, driven through the same
+/// probe/insert/remove the dictionaries use.
+struct Table {
+    ht: HashTab<Key>,
+    keys: Vec<Vec<u8>>,
+}
+
+impl Table {
+    fn new() -> Self {
+        Table {
+            ht: HashTab::init(),
+            keys: Vec::new(),
+        }
+    }
+
+    fn key(&self, entry: Key) -> &[u8] {
+        &self.keys[entry.0 as usize - 1]
+    }
+
+    /// The slot `key` holds, or the one it belongs in.
+    fn find(&self, key: &str) -> neovim::hashtab::Slot<Key> {
+        self.ht.probe(hash_bytes(key.as_bytes()), |entry| {
+            self.key(entry) == key.as_bytes()
+        })
+    }
+
+    fn slot_of(&self, key: &str) -> usize {
+        self.find(key).index()
+    }
+
+    /// Add `key`, refusing a duplicate.
+    fn add(&mut self, key: &str) -> Result<(), ()> {
+        let hi = self.find(key);
+        if hi.is_kept() {
+            return Err(());
+        }
+        self.keys.push(key.as_bytes().to_vec());
+        let entry = Key(u32::try_from(self.keys.len()).unwrap());
+        self.ht.insert_at(hi, entry, hash_bytes(key.as_bytes()));
+        Ok(())
+    }
+
+    fn remove(&mut self, key: &str) {
+        let hi = self.find(key);
+        assert!(hi.is_kept(), "{key} is in the table");
+        self.ht.remove_at(hi);
+    }
+
+    /// Every live key, in slot order: what `TV_DICT_ITER` -- and so
+    /// `keys()`, `values()`, `items()` and every `:echo` of a Dictionary --
+    /// hands out.
+    fn keys_in_slot_order(&self) -> Vec<String> {
+        self.ht
+            .items()
+            .map(|hi| String::from_utf8(self.key(hi.hi_key).to_vec()).unwrap())
+            .collect()
+    }
 }
 
 /// Hand-computed against the C: `hash_hash("a")` is 97, so on a 16-slot
@@ -30,17 +96,15 @@ fn slot_of(ht: &HashTab, key: &CStr) -> usize {
 /// masked to 7.
 #[test]
 fn a_collision_lands_on_the_second_probe() {
-    let mut ht = HashTab::init();
-    unsafe {
-        assert_eq!(ht.size(), HT_INIT_SIZE);
-        assert_eq!(hash_add(&raw mut ht, owned_key("a")), Ok(()));
-        assert_eq!(hash_add(&raw mut ht, owned_key("q")), Ok(()));
-        assert_eq!(slot_of(&ht, c"a"), 1);
-        assert_eq!(slot_of(&ht, c"q"), 7);
-        assert_eq!(ht.ht_used, 2);
-        assert_eq!(ht.ht_filled, 2);
-        hash_clear_all(&raw mut ht, 0);
-    }
+    let mut t = Table::new();
+    assert_eq!(t.ht.size(), HT_INIT_SIZE);
+    assert_eq!(t.add("a"), Ok(()));
+    assert_eq!(t.add("q"), Ok(()));
+    assert_eq!(t.add("q"), Err(()), "a duplicate is refused");
+    assert_eq!(t.slot_of("a"), 1);
+    assert_eq!(t.slot_of("q"), 7);
+    assert_eq!(t.ht.ht_used, 2);
+    assert_eq!(t.ht.ht_filled, 2);
 }
 
 /// Removing an item leaves a tombstone that a later lookup walks through
@@ -48,35 +112,31 @@ fn a_collision_lands_on_the_second_probe() {
 /// two counters apart.
 #[test]
 fn a_removed_key_leaves_a_reusable_tombstone() {
-    let mut ht = HashTab::init();
-    unsafe {
-        let _ = hash_add(&raw mut ht, owned_key("a"));
-        let _ = hash_add(&raw mut ht, owned_key("q"));
-        // Lock the table: removing would otherwise be free to compact the
-        // tombstone away immediately.
-        hash_lock(&raw mut ht);
+    let mut t = Table::new();
+    let _ = t.add("a");
+    let _ = t.add("q");
+    // Lock the table: removing would otherwise be free to compact the
+    // tombstone away immediately.
+    t.ht.lock();
 
-        let a = hash_find(&ht, c"a".as_ptr());
-        xfree(a.hi_key as *mut c_void);
-        hash_remove(&raw mut ht, a);
-        assert!(ht.slot(a.index()).is_removed());
-        assert_eq!(ht.ht_used, 1);
-        assert_eq!(ht.ht_filled, 2, "a tombstone still occupies its slot");
+    let a = t.slot_of("a");
+    t.remove("a");
+    assert!(t.ht.slot(a).is_removed());
+    assert_eq!(t.ht.ht_used, 1);
+    assert_eq!(t.ht.ht_filled, 2, "a tombstone still occupies its slot");
 
-        // `q` is still reachable: the walk crosses the tombstone.
-        assert_eq!(slot_of(&ht, c"q"), 7);
-        // A miss whose walk crossed the tombstone reports the tombstone,
-        // not the empty slot that ended the walk.
-        assert_eq!(slot_of(&ht, c"A"), 1);
+    // `q` is still reachable: the walk crosses the tombstone.
+    assert_eq!(t.slot_of("q"), 7);
+    // A miss whose walk crossed the tombstone reports the tombstone,
+    // not the empty slot that ended the walk.
+    assert_eq!(t.slot_of("A"), 1);
 
-        let _ = hash_add(&raw mut ht, owned_key("A"));
-        assert_eq!(slot_of(&ht, c"A"), 1);
-        assert_eq!(ht.ht_used, 2);
-        assert_eq!(ht.ht_filled, 2, "reusing a tombstone fills nothing new");
+    let _ = t.add("A");
+    assert_eq!(t.slot_of("A"), 1);
+    assert_eq!(t.ht.ht_used, 2);
+    assert_eq!(t.ht.ht_filled, 2, "reusing a tombstone fills nothing new");
 
-        hash_unlock(&raw mut ht);
-        hash_clear_all(&raw mut ht, 0);
-    }
+    t.ht.unlock();
 }
 
 /// Past the small array's load factor the table moves to the heap, keeps
@@ -84,57 +144,34 @@ fn a_removed_key_leaves_a_reusable_tombstone() {
 /// rehash drops the tombstones.
 #[test]
 fn growing_off_the_small_array_keeps_every_key() {
-    let mut ht = HashTab::init();
-    let keys: Vec<CString> = (0..64)
-        .map(|i| CString::new(format!("key{i}")).unwrap())
-        .collect();
-    unsafe {
-        for key in &keys {
-            assert_eq!(
-                hash_add(&raw mut ht, owned_key(key.to_str().unwrap())),
-                Ok(())
-            );
-        }
-        assert_eq!(ht.ht_used, 64);
-        assert_eq!(ht.ht_filled, 64);
-        assert!(ht.size() >= 256, "size {}", ht.size());
-        for key in &keys {
-            let hi = hash_find(&ht, key.as_ptr());
-            assert!(hi.is_kept());
-            assert_eq!(CStr::from_ptr(hi.hi_key), key.as_c_str());
-        }
-
-        // Every slot is either empty, a tombstone, or a key we put there;
-        // exactly `ht_used` of them are live.
-        assert_eq!(ht.items().count(), 64);
-
-        for key in keys.iter().take(50) {
-            let hi = hash_find(&ht, key.as_ptr());
-            xfree(hi.hi_key as *mut c_void);
-            hash_remove(&raw mut ht, hi);
-        }
-        assert_eq!(ht.ht_used, 14);
-        for key in keys.iter().take(50) {
-            assert!(!hash_find(&ht, key.as_ptr()).is_kept());
-        }
-        for key in keys.iter().skip(50) {
-            assert!(hash_find(&ht, key.as_ptr()).is_kept());
-        }
-        hash_clear_all(&raw mut ht, 0);
+    let mut t = Table::new();
+    let keys: Vec<String> = (0..64).map(|i| format!("key{i}")).collect();
+    for key in &keys {
+        assert_eq!(t.add(key), Ok(()));
     }
-}
+    assert_eq!(t.ht.ht_used, 64);
+    assert_eq!(t.ht.ht_filled, 64);
+    assert!(t.ht.size() >= 256, "size {}", t.ht.size());
+    for key in &keys {
+        let hi = t.find(key);
+        assert!(hi.is_kept());
+        assert_eq!(t.key(hi.hi_key), key.as_bytes());
+    }
 
-/// Every live key, in slot order: what `TV_DICT_ITER` -- and so `keys()`,
-/// `values()`, `items()` and every `:echo` of a Dictionary -- hands out.
-unsafe fn keys_in_slot_order(ht: &HashTab) -> Vec<String> {
-    ht.items()
-        .map(|hi| {
-            unsafe { CStr::from_ptr(hi.hi_key) }
-                .to_str()
-                .unwrap()
-                .to_owned()
-        })
-        .collect()
+    // Every slot is either empty, a tombstone, or a key we put there;
+    // exactly `ht_used` of them are live.
+    assert_eq!(t.ht.items().count(), 64);
+
+    for key in keys.iter().take(50) {
+        t.remove(key);
+    }
+    assert_eq!(t.ht.ht_used, 14);
+    for key in keys.iter().take(50) {
+        assert!(!t.find(key).is_kept());
+    }
+    for key in keys.iter().skip(50) {
+        assert!(t.find(key).is_kept());
+    }
 }
 
 /// The iteration order is Vim-visible, so it is pinned here as a literal
@@ -145,14 +182,11 @@ unsafe fn keys_in_slot_order(ht: &HashTab) -> Vec<String> {
 /// and `r` walks on to 13.
 #[test]
 fn iteration_visits_slots_in_index_order() {
-    let mut ht = HashTab::init();
-    unsafe {
-        for key in ["a", "q", "A", "Q", "b", "r"] {
-            assert_eq!(hash_add(&raw mut ht, owned_key(key)), Ok(()));
-        }
-        assert_eq!(keys_in_slot_order(&ht), ["a", "b", "A", "q", "r", "Q"]);
-        hash_clear_all(&raw mut ht, 0);
+    let mut t = Table::new();
+    for key in ["a", "q", "A", "Q", "b", "r"] {
+        assert_eq!(t.add(key), Ok(()));
     }
+    assert_eq!(t.keys_in_slot_order(), ["a", "b", "A", "q", "r", "Q"]);
 }
 
 /// A tombstone is reused by the first insertion whose probe sequence crosses
@@ -160,19 +194,14 @@ fn iteration_visits_slots_in_index_order() {
 /// ended the walk.
 #[test]
 fn a_reused_tombstone_keeps_its_slot_in_the_order() {
-    let mut ht = HashTab::init();
-    unsafe {
-        for key in ["a", "q", "A"] {
-            assert_eq!(hash_add(&raw mut ht, owned_key(key)), Ok(()));
-        }
-        let q = hash_find(&ht, c"q".as_ptr());
-        xfree(q.hi_key as *mut c_void);
-        hash_remove(&raw mut ht, q);
-        // `Q` probes 1, 7, 6, 15 and stops at the tombstone in 7.
-        assert_eq!(hash_add(&raw mut ht, owned_key("Q")), Ok(()));
-        assert_eq!(keys_in_slot_order(&ht), ["a", "A", "Q"]);
-        hash_clear_all(&raw mut ht, 0);
+    let mut t = Table::new();
+    for key in ["a", "q", "A"] {
+        assert_eq!(t.add(key), Ok(()));
     }
+    t.remove("q");
+    // `Q` probes 1, 7, 6, 15 and stops at the tombstone in 7.
+    assert_eq!(t.add("Q"), Ok(()));
+    assert_eq!(t.keys_in_slot_order(), ["a", "A", "Q"]);
 }
 
 /// Growing off the initial array rehashes by the stored hash, which reorders
@@ -180,17 +209,14 @@ fn a_reused_tombstone_keeps_its_slot_in_the_order() {
 /// the behaviour, so the new order is pinned too.
 #[test]
 fn growth_reorders_the_walk_by_the_bigger_mask() {
-    let mut ht = HashTab::init();
-    unsafe {
-        for i in 0..20 {
-            assert_eq!(hash_add(&raw mut ht, owned_key(&format!("k{i}"))), Ok(()));
-        }
-        assert_eq!(ht.size(), 64);
-        let mut expected = vec!["k18".to_owned(), "k19".to_owned()];
-        expected.extend((0..18).map(|i| format!("k{i}")));
-        assert_eq!(keys_in_slot_order(&ht), expected);
-        hash_clear_all(&raw mut ht, 0);
+    let mut t = Table::new();
+    for i in 0..20 {
+        assert_eq!(t.add(&format!("k{i}")), Ok(()));
     }
+    assert_eq!(t.ht.size(), 64);
+    let mut expected = vec!["k18".to_owned(), "k19".to_owned()];
+    expected.extend((0..18).map(|i| format!("k{i}")));
+    assert_eq!(t.keys_in_slot_order(), expected);
 }
 
 /// Emptying a grown table takes it back to the initial size. The order it
@@ -200,54 +226,18 @@ fn growth_reorders_the_walk_by_the_bigger_mask() {
 /// That is behaviour a caller can see, so it is pinned rather than described.
 #[test]
 fn shrinking_back_reprobes_in_the_grown_table_order() {
-    let mut ht = HashTab::init();
-    unsafe {
-        for key in ["a", "q", "A"] {
-            assert_eq!(hash_add(&raw mut ht, owned_key(key)), Ok(()));
-        }
-        let filler: Vec<CString> = (0..40)
-            .map(|i| CString::new(format!("f{i}")).unwrap())
-            .collect();
-        for key in &filler {
-            assert_eq!(
-                hash_add(&raw mut ht, owned_key(key.to_str().unwrap())),
-                Ok(())
-            );
-        }
-        assert!(ht.size() > HT_INIT_SIZE);
-        for key in &filler {
-            let hi = hash_find(&ht, key.as_ptr());
-            xfree(hi.hi_key as *mut c_void);
-            hash_remove(&raw mut ht, hi);
-        }
-        assert_eq!(ht.size(), HT_INIT_SIZE, "back to the initial size");
-        assert_eq!(keys_in_slot_order(&ht), ["A", "q", "a"]);
-        hash_clear_all(&raw mut ht, 0);
+    let mut t = Table::new();
+    for key in ["a", "q", "A"] {
+        assert_eq!(t.add(key), Ok(()));
     }
-}
-
-/// `hash_clear_all` takes the offset of the key inside its allocation, for
-/// tables whose keys are a trailing member of a larger struct.
-#[test]
-fn clear_all_frees_the_allocation_the_key_sits_in() {
-    #[repr(C)]
-    struct Entry {
-        payload: u64,
-        key: [c_char; 4],
+    let filler: Vec<String> = (0..40).map(|i| format!("f{i}")).collect();
+    for key in &filler {
+        assert_eq!(t.add(key), Ok(()));
     }
-    let mut ht = HashTab::init();
-    unsafe {
-        for (i, text) in ["ab", "cd"].iter().enumerate() {
-            let entry = xcalloc(1, size_of::<Entry>()) as *mut Entry;
-            (*entry).payload = i as u64;
-            (*entry).key[0] = text.as_bytes()[0] as c_char;
-            (*entry).key[1] = text.as_bytes()[1] as c_char;
-            assert_eq!(
-                hash_add(&raw mut ht, (&raw mut (*entry).key) as *mut c_char),
-                Ok(())
-            );
-        }
-        assert_eq!(ht.ht_used, 2);
-        hash_clear_all(&raw mut ht, core::mem::offset_of!(Entry, key) as c_uint);
+    assert!(t.ht.size() > HT_INIT_SIZE);
+    for key in &filler {
+        t.remove(key);
     }
+    assert_eq!(t.ht.size(), HT_INIT_SIZE, "back to the initial size");
+    assert_eq!(t.keys_in_slot_order(), ["A", "q", "a"]);
 }

@@ -4,11 +4,10 @@
 //! The table's slots name the items ([`DictEntry`]), where upstream's named
 //! the item's *key* -- an item was over-allocated so its key sat in a
 //! flexible tail, and the item was the key pointer minus a constant. That is
-//! why an item could not own its key. Reading the key out of the entry costs
-//! the probe nothing -- [`DictEntry::key`] answers the same NUL-terminated
-//! bytes the slot used to hold -- and so leaves the hash, the probe
-//! sequence, the resize thresholds and the slot every key lands in exactly
-//! as they were. That matters: slot order is what `keys()`, `values()` and
+//! why an item could not own its key. Reading the key out of the item costs
+//! the probe nothing -- the probe compares the same bytes the slot used to
+//! hold -- and so leaves the hash, the probe sequence, the resize thresholds
+//! and the slot every key lands in exactly as they were. That matters: slot order is what `keys()`, `values()` and
 //! `items()` show.
 //!
 //! The table does not free its items. Which of them it owns is

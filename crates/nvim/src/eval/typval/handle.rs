@@ -51,9 +51,8 @@
 use ::core::ptr::NonNull;
 
 use super::*;
-use crate::hashtab::KeyedEntry;
-use crate::hashtab::removed_sentinel;
-use crate::types::{Refcount, SlotEntry};
+use crate::hashtab::{hash_bytes, hash_bytes_len};
+use crate::types::{DictKey, HashValue, Refcount, SlotEntry};
 
 /// An owning reference to a heap-allocated [`List`].
 ///
@@ -436,7 +435,9 @@ pub fn tv_dict_alloc() -> DictRef {
     // The collector reaches every live dictionary through its registry.
     let root = root_dict(at);
 
-    unsafe { hash_init(&raw mut (*d).dv_hashtab) };
+    // Written, not assigned: zeroed storage holds no table to drop.
+    // SAFETY: the allocation just made.
+    unsafe { (&raw mut (*d).dv_hashtab).write(DictTab::init()) };
     // SAFETY: freshly allocated just above.
     let mut dict = unsafe { Dt::new(d) };
     dict.dv_lock = VarLock::Unlocked;
@@ -694,17 +695,14 @@ impl ::core::ops::DerefMut for PartialRef {
 pub struct DictEntry(*mut DictItem);
 
 impl DictEntry {
-    /// The entry for `item`.
-    pub fn new(item: *mut DictItem) -> Self {
-        DictEntry(item)
-    }
-
     /// The item this entry names. Meaningless for an empty or removed slot.
     pub fn item(self) -> *mut DictItem {
         self.0
     }
 }
 
+/// The tombstone: `NonNull::dangling()`'s address, the item type's
+/// alignment, which no allocation can be at and nothing dereferences.
 impl SlotEntry for DictEntry {
     const EMPTY: Self = DictEntry(::core::ptr::null_mut());
 
@@ -713,26 +711,11 @@ impl SlotEntry for DictEntry {
     }
 
     fn is_removed(self) -> bool {
-        self.0 == removed_sentinel().cast::<DictItem>()
+        self.0 == NonNull::<DictItem>::dangling().as_ptr()
     }
 
     fn removed() -> Self {
-        DictEntry(removed_sentinel().cast::<DictItem>())
-    }
-}
-
-// SAFETY: `EMPTY` is the null pointer and `is_empty` is the null test; the
-// tombstone is the hash table's own private sentinel address, which no item
-// can be allocated at and which is never dereferenced; `key` reads the key
-// of an item the caller has promised is live, and a `DictItem` owns its key
-// for as long as it is alive.
-unsafe impl KeyedEntry for DictEntry {
-    /// # Safety
-    ///
-    /// As the trait's: a live entry, whose item is still alive.
-    unsafe fn key(self) -> *const ::core::ffi::c_char {
-        // SAFETY: the caller's promise -- a live item, which owns its key.
-        unsafe { (*self.0).di_key.as_ptr() }
+        DictEntry(NonNull::dangling().as_ptr())
     }
 }
 
@@ -774,31 +757,45 @@ impl Dict {
         hi.is_kept().then(|| unsafe { &mut *hi.hi_key.item() })
     }
 
+    /// The slot `key` (hashing to `hash`) occupies, or the one it belongs in.
+    #[inline]
+    fn probe_key(&self, key: &[u8], hash: HashValue) -> ItemSlot {
+        // SAFETY: the probe hands the test only this dictionary's kept
+        // entries, each naming a live item -- which owns its key -- that the
+        // borrow of the dictionary keeps alive for the walk.
+        self.dv_hashtab
+            .probe(hash, |entry| unsafe { (*entry.0).di_key.bytes() } == key)
+    }
+
     /// The slot holding `key`, if any.
     #[inline]
     pub(crate) fn slot_of(&self, key: &[u8]) -> Option<usize> {
-        // SAFETY: this dictionary's own table, and a slice key.
-        let hi = unsafe {
-            hash_find_len(
-                &raw const self.dv_hashtab,
-                key.as_ptr().cast::<::core::ffi::c_char>(),
-                key.len(),
-            )
-        };
+        let hi = self.probe_key(key, hash_bytes_len(key));
         hi.is_kept().then(|| hi.index())
     }
 
     /// Put `item` in the table, which takes it over. When its key is
     /// already there the item comes back, untouched.
     pub(crate) fn insert(&mut self, item: Box<DictItem>) -> Result<(), Box<DictItem>> {
-        let at = Box::into_raw(item);
-        // SAFETY: this dictionary's own table, and an item in no table whose
-        // key lives as long as it does.
-        match unsafe { hash_add(&raw mut self.dv_hashtab, DictEntry::new(at)) } {
-            Ok(()) => Ok(()),
-            // SAFETY: the table refused it, so the `Box` is the caller's again.
-            Err(_) => Err(unsafe { Box::from_raw(at) }),
+        let Some((hi, hash)) = self.vacant_slot(&item.di_key) else {
+            return Err(item);
+        };
+        self.dv_hashtab
+            .insert_at(hi, DictEntry(Box::into_raw(item)), hash);
+        Ok(())
+    }
+
+    /// Where an item keyed `key` goes, with the key's hash; `None`, and an
+    /// internal error (E685), when the key is already there.
+    fn vacant_slot(&self, key: &DictKey) -> Option<(ItemSlot, HashValue)> {
+        let hash = hash_bytes(key.bytes());
+        let hi = self.probe_key(key.bytes(), hash);
+        if hi.is_kept() {
+            let key = crate::message_fmt::msg_bytes(key.bytes());
+            crate::siemsg!("E685: Internal error: hash_add(): duplicate key \"{key}\"");
+            return None;
         }
+        Some((hi, hash))
     }
 
     /// Take the item in slot `slot` out of the table.
@@ -811,8 +808,7 @@ impl Dict {
         let hi = self.dv_hashtab.slot(slot);
         debug_assert!(hi.is_kept());
         let item = hi.hi_key.item();
-        // SAFETY: a kept slot of this dictionary's own table.
-        unsafe { hash_remove(&raw mut self.dv_hashtab, hi) };
+        self.dv_hashtab.remove_at(hi);
         // SAFETY: the item the slot named, out of the table now. An allocated
         // one is the `Box` `insert` (or `DictItem::boxed`) made; an embedded
         // one belongs to the structure it lives in, which keeps it.
@@ -828,14 +824,13 @@ impl Dict {
     /// Stop the table resizing while a walk removes as it goes.
     #[inline]
     pub(crate) fn lock_table(&mut self) {
-        self.dv_hashtab.ht_locked += 1;
+        self.dv_hashtab.lock();
     }
 
     /// Undo one [`Dict::lock_table`], resizing now if the table wanted to.
     #[inline]
     pub(crate) fn unlock_table(&mut self) {
-        // SAFETY: this dictionary's own table, locked by the caller.
-        unsafe { hash_unlock(&raw mut self.dv_hashtab) };
+        self.dv_hashtab.unlock();
     }
 }
 
@@ -847,12 +842,14 @@ impl Dict {
 /// is neither scope the function-name check guards.
 pub(crate) fn link_buf_changedtick(mut buffer: crate::winlayer::Buf) {
     let item = &raw mut buffer.changedtick_di;
+    let key = DictKey::new(b"changedtick");
     let Some(dict) = buffer.b_bufvar.di_tv.dict_mut() else {
         return;
     };
-    // SAFETY: the buffer's own dictionary, and its own item, which outlives
-    // its stay in the table as above.
-    let _ = unsafe { hash_add(&raw mut dict.dv_hashtab, DictEntry::new(item)) };
+    // The buffer's own item, which outlives its stay in the table as above.
+    if let Some((hi, hash)) = dict.vacant_slot(&key) {
+        dict.dv_hashtab.insert_at(hi, DictEntry(item), hash);
+    }
 }
 
 /// Take `b:changedtick` out of `buffer`'s `b:` table, leaving the item --
@@ -864,10 +861,9 @@ pub(crate) fn unlink_buf_changedtick(mut buffer: crate::winlayer::Buf) {
     let slot = dict.slot_of(b"changedtick");
     debug_assert!(slot.is_some(), "changedtick is in the table");
     if let Some(slot) = slot {
+        // The item the slot names is the buffer's, which this does not touch.
         let hi = dict.dv_hashtab.slot(slot);
-        // SAFETY: a kept slot of the dictionary's own table; the item it
-        // names is the buffer's, which this does not touch.
-        unsafe { hash_remove(&raw mut dict.dv_hashtab, hi) };
+        dict.dv_hashtab.remove_at(hi);
     }
 }
 
