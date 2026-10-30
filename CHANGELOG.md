@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2026.10.30-9049d0284d]
+
 ### Changed
 
 - Rewrote the API, the RPC transport, channels, remote UIs and the Lua seam in safe Rust over a typed Lua stack: the generated `vim.api` bindings, the Lua executor and standard library, `vim.mpack`, `vim.json` and the tree-sitter bindings all reach the `lua_State` through one module, and channels, jobs, timers and attached UIs are owned records found by id.
@@ -460,7 +462,8 @@ Safety foundation: make undefined behavior observable, then structurally shrink 
 
 First tagged release (unstable). The c2rust transpile of Neovim from C to Rust, made to build and pass the functional, old, and unit suites, with the CalVer release pipeline in place. The starting point: ~1.21M lines of mostly `unsafe` Rust with no user-visible change from upstream.
 
-[Unreleased]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.28-6da68164b8...HEAD
+[Unreleased]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.30-9049d0284d...HEAD
+[2026.10.30-9049d0284d]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.28-6da68164b8...2026.10.30-9049d0284d
 [2026.10.28-6da68164b8]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.20-391bd79481...2026.10.28-6da68164b8
 [2026.10.20-391bd79481]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.19-d6234e9235...2026.10.20-391bd79481
 [2026.10.19-d6234e9235]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.19-b2125c18d1...2026.10.19-d6234e9235
