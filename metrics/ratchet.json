@@ -63,7 +63,7 @@
   "files_allowing_non_camel_case_types": 19,
   "files_allowing_non_snake_case": 3,
   "files_allowing_non_upper_case_globals": 255,
-  "files_allowing_unsafe_code": 125,
+  "files_allowing_unsafe_code": 124,
   "files": {
     "crates/mainthread/lib.rs": {"pub_items": 3},
     "crates/nvim/src/allocator.rs": {"unsafe_stmts": 20},
