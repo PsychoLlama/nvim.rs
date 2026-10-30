@@ -39,12 +39,12 @@ count	callee	no_raw	defs	def
 7	lua_tolstring	0	0	
 7	uv_close	0	0	
 6	Stack::from_raw	0	1	crates/nvim/src/lua/stack/mod.rs
-6	at	0	2	
 6	multiqueue_process_events	0	1	crates/nvim/src/event/multiqueue.rs
 5	.next_arg::<::core::ffi::c_ulong>	0	0	
 5	Handle::new	0	1	crates/nvim/src/event/time.rs
 5	Self::new	0	21	
 5	Signal::new	0	1	crates/nvim/src/event/signal.rs
+5	at	0	2	
 5	close	0	0	
 5	handler	0	0	
 5	send	0	2	
@@ -360,7 +360,6 @@ count	callee	no_raw	defs	def
 1	pty_proc_spawn	0	1	crates/nvim/src/os/pty_proc_unix/mod.rs
 1	pty_proc_teardown	0	1	crates/nvim/src/os/pty_proc_unix/mod.rs
 1	pty_proc_tty_name	0	1	crates/nvim/src/os/pty_proc_unix/mod.rs
-1	qsort	0	0	
 1	raise	0	1	crates/nvim/src/lua/stack/dispatch.rs
 1	read_event	0	1	crates/nvim/src/event/rstream.rs
 1	readv	0	0	

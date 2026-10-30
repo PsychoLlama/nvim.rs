@@ -19,15 +19,13 @@
 //!
 //! Original: `src/nvim/winfloat.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::cstr;
 use crate::winlayer::cmdwin_window;
 use crate::winlayer::prev_window;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int};
 
 use crate::api::private::helpers::{find_buffer_by_handle, find_window_by_handle};
 use crate::api::vim::nvim_create_buf;
@@ -62,7 +60,6 @@ use crate::winlayer::{
     Buf, TabPage, Win, WinId, first_window, free_frame, last_window, windows, windows_back,
     windows_in_tab,
 };
-use ::libc::qsort;
 
 /// Above this `zindex` a float is not capped by 'cmdheight'.
 const kZIndexMessages: c_int = 200;
@@ -239,12 +236,6 @@ fn make_error(msg: &'static CStr) -> Error {
     Error::from_message(kErrorTypeException, msg)
 }
 
-/// An error from a message that is not a literal, as upstream's `"%s"` does.
-fn make_error_str(s: *const c_char) -> Error {
-    // SAFETY: the message the caller handed over, live for this call.
-    let s = unsafe { cstr::at(s) };
-    Error::from_message(kErrorTypeException, s)
-}
 fn report_error(err: &Error) {
     // SAFETY: a set error's message is a string the API allocated.
     emsg(err.message_or_empty());
@@ -365,7 +356,7 @@ fn unfloat_to_float(win: Win) -> Result<Win, Error> {
             }
         }
         if !other_nonfloat {
-            return Err(make_error_str(e_cmdwin.as_ptr()));
+            return Err(make_error(e_cmdwin));
         }
     }
     let tp = win_tp.into_other();
@@ -594,36 +585,15 @@ fn anchored_position(win: Win) -> (c_int, c_int) {
 // ---------------------------------------------------------------------------
 // Closing floats
 
-/// `qsort` comparator: sort floats by `zindex` DESCENDING, which is what makes
-/// `:fclose` close the topmost one first. Comparing `b` against `a` is
-/// upstream's `za == zb ? 0 : za < zb ? 1 : -1`.
-///
-/// # Safety
-///
-/// As `qsort`'s comparator: `a` and `b` must each point at an element of the
-/// array being sorted, and the elements must be of the type this reads them
-/// at.
-unsafe extern "C" fn float_zindex_cmp(a: *const c_void, b: *const c_void) -> c_int {
-    // SAFETY: `qsort` passes pointers into the array below, whose elements are
-    // live windows.
-    let z = |p: *const c_void| unsafe { p.cast::<Win>().read() }.w_config.zindex;
-    z(b).cmp(&z(a)) as c_int
-}
-
 pub(crate) fn win_float_remove(bang: bool, mut count: c_int) {
     // The whole list is collected before anything is closed: `win_close`
     // fires autocommands that can close further floats, which is what the
     // `win_valid` re-check below is for.
-    // `qsort` rather than a Rust sort, for upstream's order among floats of
-    // equal z-index.
+    // Highest `zindex` first, which is what makes `:fclose` close the
+    // topmost float first. Stable, as glibc's `qsort` is for an array this
+    // size (a merge sort), so floats of equal z-index keep the list's order.
     let mut floats: Vec<Win> = floats().collect();
-    if !floats.is_empty() {
-        let items = floats.as_mut_ptr().cast::<c_void>();
-        let (len, size) = (floats.len(), size_of::<Win>());
-        // SAFETY: `len` elements of `Win` at `items`, and a comparator that
-        // reads exactly that.
-        unsafe { qsort(items, len, size, Some(float_zindex_cmp)) };
-    }
+    floats.sort_by_key(|win| core::cmp::Reverse(win.w_config.zindex));
     // Identities, held across the closes: `win_close` may free a later one.
     let ids: Vec<WinId> = floats.iter().map(|win| win.id()).collect();
     for id in ids {
