@@ -5,8 +5,8 @@ cstr.rs	*	1	16	8	10	deref:4 expr:2	str:10	-	CStr::from_ptr:3 from_raw_parts:3 CS
 cstr.rs	cstr.rs	1	16	8	10	deref:4 expr:2	str:10	-	CStr::from_ptr:3 from_raw_parts:3 CStr::from_bytes_with_nul_unchecked:1
 cursor_shape.rs	*	1	5	2	2	compound:1	str:2	-	-
 cursor_shape.rs	cursor_shape.rs	1	5	2	2	compound:1	str:2	-	-
-eval/	*	1	63	9	24	expr:17 ref:9 deref:6 compound:2	value:6	value:7	Box::from_raw:2 xcalloc:2 xfree:2
-eval/	eval/typval/handle.rs	1	63	9	24	expr:17 ref:9 deref:6 compound:2	value:6	value:7	Box::from_raw:2 xcalloc:2 xfree:2
+eval/	*	1	50	8	21	expr:14 ref:7 deref:4 compound:1	value:7	value:7	Box::from_raw:2 xcalloc:2 xfree:2
+eval/	eval/typval/handle.rs	1	50	8	21	expr:14 ref:7 deref:4 compound:1	value:7	value:7	Box::from_raw:2 xcalloc:2 xfree:2
 extmark/	*	1	2	0	1	expr:1	-	-	marktree_clear:1
 extmark/	extmark/mod.rs	1	2	0	1	expr:1	-	-	marktree_clear:1
 getchar/	*	1	0	0	0	-	-	-	-

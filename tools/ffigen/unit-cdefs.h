@@ -2648,6 +2648,7 @@ static const int LINE_INSERTED = -2;
 static const int LINE_MAXLEN = 4096;
 static const int LIST_HL = 5;
 static const int LIST_HOLDERS = 1;
+static const int LIST_RESERVE_MAX = 65536;
 static const int LN_DECISION_MAX = 255;
 static const int LN_MAX_BUFS = 8;
 static const int LOGLVL_DBG = 1;

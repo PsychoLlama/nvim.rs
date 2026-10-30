@@ -16,7 +16,7 @@
 //!    hand out a borrow **that must not span a call that can run user code**.
 //!    That promise is [`Live`](crate::winlayer::Live)'s, and it is the one
 //!    this file cannot check: a second holder can always reach the same
-//!    object. The raw bridges (`owning`, `retained`, `from_owned`) stay
+//!    object. The raw bridges (`owning`, `retained`) stay
 //!    `unsafe fn`s for the callers outside the container model that still
 //!    hold a pointer.
 //! 2. **Allocation and release**: the four objects' allocations, the
@@ -82,24 +82,13 @@ use crate::types::{DictKey, HashValue, Refcount, SlotEntry};
 pub struct ListRef(NonNull<List>);
 
 impl ListRef {
-    /// Take over a reference the caller already holds and will not
-    /// release.
-    ///
-    /// # Safety
-    ///
-    /// `at` must point at a live object, and the caller must hold a
-    /// reference to it -- one this handle now owns and eventually
-    /// gives back.
-    #[inline(always)]
-    pub unsafe fn from_owned(at: NonNull<List>) -> ListRef {
-        ListRef(at)
-    }
-
     /// Take over the caller's reference, or answer `None` for NULL.
     ///
     /// # Safety
     ///
-    /// As `from_owned`, for a pointer that may be null.
+    /// `at` is null or points at a live object, and the caller holds a
+    /// reference to it -- one this handle now owns and eventually gives
+    /// back.
     #[inline(always)]
     pub unsafe fn owning(at: *mut List) -> Option<ListRef> {
         NonNull::new(at).map(ListRef)
@@ -228,31 +217,39 @@ impl ::core::ops::DerefMut for ListRef {
     }
 }
 
+/// The most [`tv_list_alloc`] reserves up front.
+///
+/// A caller's length is a hint, and not every caller can prove it: a
+/// decoder's container header or a Lua table's largest index is only a
+/// claim. Past this the list grows as items really arrive, as the msgpack
+/// unpacker's own cap has it.
+const LIST_RESERVE_MAX: usize = 1 << 16;
+
 /// Allocate an empty list, **owned by the handle it answers** (a count of
-/// one, where upstream answered zero). `len` is a capacity hint; a negative
-/// one (`kListLenUnknown`) reserves nothing.
+/// one, where upstream answered zero). `len` is a capacity hint, capped at
+/// [`LIST_RESERVE_MAX`]; a negative one (`kListLenUnknown`) reserves
+/// nothing.
 pub fn tv_list_alloc(len: ptrdiff_t) -> ListRef {
+    let reserve = usize::try_from(len).map_or(0, |len| len.min(LIST_RESERVE_MAX));
     // The `xmalloc` family, not a `Box`: the unit cases' allocation log sees
     // only that family.
-    let list = unsafe { xcalloc(1, ::core::mem::size_of::<List>()) }.cast::<List>();
+    let raw = unsafe { xcalloc(1, ::core::mem::size_of::<List>()) }.cast::<List>();
+    let at = NonNull::new(raw).expect("xcalloc never answers null");
     // Written, not assigned: a zeroed `List` is not a valid one (`Vec` never
     // holds a null pointer), so there is nothing there to drop.
     // SAFETY: the allocation just made, of exactly this size.
-    unsafe { list.write(List::empty()) };
-    if let Ok(len) = usize::try_from(len) {
-        // SAFETY: the allocation just written.
-        unsafe { &mut *list }.lv_items.reserve_exact(len);
+    unsafe {
+        raw.write(List {
+            lv_items: Vec::with_capacity(reserve),
+            lv_refcount: Refcount::one(),
+            ..List::empty()
+        });
     }
-
-    let at = NonNull::new(list).expect("xcalloc never answers null");
+    // The reference just seeded is the one this handle owns.
+    let mut list = ListRef(at);
     // The collector reaches every live list through its registry.
-    let root = root_list(at);
-    // SAFETY: the allocation just made and written.
-    let mut live = unsafe { Ls::new(list) };
-    live.lv_root = root;
-    live.lv_refcount = Refcount::one();
-    // SAFETY: the reference just seeded is the one this handle owns.
-    unsafe { ListRef::from_owned(at) }
+    list.lv_root = root_list(at);
+    list
 }
 
 /// Take `l` out of the garbage collector's registry and free the `List`,
@@ -260,26 +257,24 @@ pub fn tv_list_alloc(len: ptrdiff_t) -> ListRef {
 ///
 /// # Safety
 ///
-/// `l` must point at a live list, unaliased for the call.  Anything still
-/// in it is **released**, so no caller may hold a reference to an item.
+/// `l` must point at a live list [`tv_list_alloc`] made, unaliased for the
+/// call and named by nothing afterwards.  Anything still in it is
+/// **released**, so no caller may hold a reference to an item.
 pub unsafe fn list_free_list(l: *mut List) {
-    // Out of the collector's registry. A list the allocator never handed
-    // out -- `a:000`, a submatch list -- carries `RootId::NONE` and is not
-    // in it; the removal is a no-op for those.
-    // SAFETY: the caller's promise: a live list.
-    let mut list = unsafe { Ls::new(l) };
+    // SAFETY: the caller's promise: a live list, which this moves out of
+    // its allocation; nothing reads the allocation again but the free.
+    let list = unsafe { l.read() };
+    // Out of the collector's registry. A list the registry never held
+    // carries `RootId::NONE`; the removal is a no-op for it.
     unroot_list(list.lv_root);
-    list.lv_root = RootId::NONE;
-
     // NLUA_CLEAR_REF
     if list.lua_table_ref != LUA_NOREF {
-        release_luaref(unsafe { (*l).lua_table_ref });
-        list.lua_table_ref = LUA_NOREF as LuaRef;
+        release_luaref(list.lua_table_ref);
     }
-    // The item array and the cursor array: `xfree` is the C's and runs no
-    // destructor, so the fields go first.
-    // SAFETY: as above.
-    unsafe { ::core::ptr::drop_in_place(l) };
+    // The item array and the cursor array first, then the header: the
+    // order the allocation log pins.
+    drop(list);
+    // SAFETY: the `xcalloc` `tv_list_alloc` made, its contents moved out.
     unsafe { xfree(l.cast()) };
 }
 
@@ -290,11 +285,7 @@ impl Dict {
     /// it while the walk is live. A body that edits the table wants
     /// [`DictCursor`](super::DictCursor), which is a slot index.
     pub fn items(&self) -> impl Iterator<Item = &DictItem> {
-        // SAFETY: a kept slot of a live dictionary names a live item, and
-        // the borrow of the dictionary keeps it alive for the walk.
-        self.dv_hashtab
-            .items()
-            .map(|hi| unsafe { &*hi.hi_key.item() })
+        (0..self.dv_hashtab.size()).filter_map(|slot| self.item_at(slot))
     }
 
     /// Every entry, writable, in slot order.
@@ -330,13 +321,6 @@ pub struct DictRef(NonNull<Dict>);
 
 /// The same API as [`ListRef`]'s, method for method.
 impl DictRef {
-    /// # Safety
-    /// As [`ListRef::from_owned`].
-    #[inline(always)]
-    pub unsafe fn from_owned(at: NonNull<Dict>) -> DictRef {
-        DictRef(at)
-    }
-
     /// # Safety
     /// As [`ListRef::owning`].
     #[inline(always)]
@@ -443,50 +427,50 @@ impl ::core::ops::DerefMut for DictRef {
 /// Allocate an empty dictionary, **owned by the handle it answers**; see
 /// [`tv_list_alloc`].
 pub fn tv_dict_alloc() -> DictRef {
-    let d = unsafe { xcalloc(1, ::core::mem::size_of::<Dict>()) }.cast::<Dict>();
-
-    let at = NonNull::new(d).expect("xcalloc never answers null");
+    // The `xmalloc` family, for the allocation log, as a list's.
+    let raw = unsafe { xcalloc(1, ::core::mem::size_of::<Dict>()) }.cast::<Dict>();
+    let at = NonNull::new(raw).expect("xcalloc never answers null");
+    // Written, not assigned: zeroed storage is not a valid `Dict`.
+    // SAFETY: the allocation just made, of exactly this size.
+    unsafe {
+        raw.write(Dict {
+            dv_lock: VarLock::Unlocked,
+            dv_scope: VAR_NO_SCOPE,
+            dv_refcount: Refcount::one(),
+            dv_copy_id: 0,
+            dv_hashtab: DictTab::init(),
+            dv_copydict: ::core::ptr::null_mut(),
+            dv_root: RootId::NONE,
+            watchers: Vec::new(),
+            lua_table_ref: LUA_NOREF as LuaRef,
+        });
+    }
+    // The reference just seeded is the one this handle owns.
+    let mut dict = DictRef(at);
     // The collector reaches every live dictionary through its registry.
-    let root = root_dict(at);
-
-    // Written, not assigned: zeroed storage holds no table to drop.
-    // SAFETY: the allocation just made.
-    unsafe { (&raw mut (*d).dv_hashtab).write(DictTab::init()) };
-    // SAFETY: freshly allocated just above.
-    let mut dict = unsafe { Dt::new(d) };
-    dict.dv_lock = VarLock::Unlocked;
-    dict.dv_scope = VAR_NO_SCOPE;
-    dict.dv_refcount = Refcount::one();
-    dict.dv_copy_id = 0;
-    dict.dv_root = root;
-    // Written, not assigned: zeroed storage is not a valid `Vec`.
-    // SAFETY: the allocation just made.
-    unsafe { (&raw mut (*d).watchers).write(Vec::new()) };
-    dict.lua_table_ref = LUA_NOREF as LuaRef;
-    // SAFETY: the reference just seeded is the one this handle owns.
-    unsafe { DictRef::from_owned(at) }
+    dict.dv_root = root_dict(at);
+    dict
 }
 
 /// Unlink `d` from the garbage collector's chain and free the `Dict` itself.
 ///
 /// # Safety
-/// `d` must point at a live dictionary whose contents have already been
-/// freed ([`tv_dict_free_contents`]), and the caller must own the
-/// collector's registry, which this takes it out of. `d` is dangling
-/// afterwards.
+/// `d` must point at a live dictionary [`tv_dict_alloc`] made, whose
+/// contents have already been freed ([`tv_dict_free_contents`]), and the
+/// caller must own the collector's registry, which this takes it out of.
+/// `d` is dangling afterwards.
 pub unsafe fn tv_dict_free_dict(d: *mut Dict) {
-    // Out of the collector's registry. A scope dictionary initialised in
-    // place was never in it, and carries `RootId::NONE`.
-    // SAFETY: the caller's promise: a live dictionary.
-    let mut dict = unsafe { Dt::new(d) };
+    // SAFETY: the caller's promise: a live dictionary, which this moves out
+    // of its allocation; nothing reads the allocation again but the free.
+    let dict = unsafe { d.read() };
+    // Out of the collector's registry.
     unroot_dict(dict.dv_root);
-    dict.dv_root = RootId::NONE;
-
     // NLUA_CLEAR_REF
     if dict.lua_table_ref != LUA_NOREF {
-        release_luaref(unsafe { (*d).lua_table_ref });
-        dict.lua_table_ref = LUA_NOREF as LuaRef;
+        release_luaref(dict.lua_table_ref);
     }
+    drop(dict);
+    // SAFETY: the `xcalloc` `tv_dict_alloc` made, its contents moved out.
     unsafe { xfree(d.cast()) };
 }
 
@@ -502,20 +486,16 @@ pub unsafe fn tv_dict_free_dict(d: *mut Dict) {
 /// no reference: `None` for a hole or a slot past the end.
 pub(crate) fn registered_dict(idx: usize) -> Option<::core::mem::ManuallyDrop<DictRef>> {
     let at = crate::eval::gc::dict_at(idx)?;
-    // SAFETY: a registered dictionary is live until it leaves the registry,
-    // and the view takes no reference, so dropping it changes nothing.
-    Some(::core::mem::ManuallyDrop::new(unsafe {
-        DictRef::from_owned(at)
-    }))
+    // A registered dictionary is live until it leaves the registry, and the
+    // view takes no reference, so dropping it changes nothing.
+    Some(::core::mem::ManuallyDrop::new(DictRef(at)))
 }
 
 /// [`registered_dict`] for the list registry.
 pub(crate) fn registered_list(idx: usize) -> Option<::core::mem::ManuallyDrop<ListRef>> {
     let at = crate::eval::gc::list_at(idx)?;
-    // SAFETY: as above.
-    Some(::core::mem::ManuallyDrop::new(unsafe {
-        ListRef::from_owned(at)
-    }))
+    // As above.
+    Some(::core::mem::ManuallyDrop::new(ListRef(at)))
 }
 
 /// Free the structure of a dictionary the pass has already emptied, taking
@@ -748,16 +728,28 @@ impl SlotEntry for DictEntry {
 /// embedded item (not `DI_FLAGS_ALLOC`) is only emptied.
 pub(crate) fn release_table(table: DictTab) {
     for hi in table.items() {
-        let item = hi.hi_key.item();
         // SAFETY: a kept slot of a table nothing else can reach any more
-        // names a live item, released once here; `DictItem::boxed` made it
-        // when it carries `DI_FLAGS_ALLOC`.
-        unsafe {
-            if ::core::ffi::c_uint::from((*item).di_flags) & DI_FLAGS_ALLOC != 0 {
-                drop(Box::from_raw(item));
-            } else {
-                tv_clear(&mut (*item).di_tv);
-            }
+        // names a live item, released once here.
+        drop(unsafe { take_item(hi.hi_key.item()) });
+    }
+}
+
+/// What `item` holds comes out: an allocated item whole, an embedded one's
+/// value.
+///
+/// # Safety
+///
+/// `item` is a live item that no table holds any more, and nothing else
+/// takes it. An allocated one (`DI_FLAGS_ALLOC`) is the `Box`
+/// `DictItem::boxed` made; an embedded one belongs to the structure it
+/// lives in, which keeps it.
+unsafe fn take_item(item: *mut DictItem) -> RemovedItem {
+    // SAFETY: the caller's promise above.
+    unsafe {
+        if ::core::ffi::c_uint::from((*item).di_flags) & DI_FLAGS_ALLOC != 0 {
+            RemovedItem::Allocated(Box::from_raw(item))
+        } else {
+            RemovedItem::Embedded((*item).di_tv.take())
         }
     }
 }
@@ -831,18 +823,9 @@ impl Dict {
     pub(crate) fn remove_at(&mut self, slot: usize) -> RemovedItem {
         let hi = self.dv_hashtab.slot(slot);
         debug_assert!(hi.is_kept());
-        let item = hi.hi_key.item();
         self.dv_hashtab.remove_at(hi);
-        // SAFETY: the item the slot named, out of the table now. An allocated
-        // one is the `Box` `insert` (or `DictItem::boxed`) made; an embedded
-        // one belongs to the structure it lives in, which keeps it.
-        unsafe {
-            if ::core::ffi::c_uint::from((*item).di_flags) & DI_FLAGS_ALLOC != 0 {
-                RemovedItem::Allocated(Box::from_raw(item))
-            } else {
-                RemovedItem::Embedded((*item).di_tv.take())
-            }
-        }
+        // SAFETY: the item the slot named, out of the table now.
+        unsafe { take_item(hi.hi_key.item()) }
     }
 
     /// Stop the table resizing while a walk removes as it goes.

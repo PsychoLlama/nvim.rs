@@ -21,22 +21,6 @@
 )]
 
 use super::*;
-use crate::winlayer::Live;
-
-/// The `Copy` handles over the four objects this module manipulates through
-/// raw pointers, plus the two it reaches through them.
-///
-/// See [`Live`](crate::winlayer::Live): construction is the one `unsafe` step
-/// and records the caller's promise that the pointee stays live; every
-/// `(*p).field` after it is ordinary checked code, which is why the
-/// `tv_*_set`/`_alloc` families lose almost all of their regions to these.
-///
-/// A handle is never built from a pointer the code has not already committed
-/// to dereferencing: the null-tolerant entry points (`list_len`,
-/// `list_find`, …) keep their `as_ref()` guard and take no handle.
-pub(crate) type Ls = Live<List>;
-/// A live `Dict`; see [`Ls`].
-pub(crate) type Dt = Live<Dict>;
 
 /// The tag-checked readers, generated ten times over the one shape they all
 /// have.
