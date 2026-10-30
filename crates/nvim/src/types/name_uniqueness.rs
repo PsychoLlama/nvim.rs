@@ -177,10 +177,10 @@ fn types_reexports_no_duplicate_names() {
         duplicates.join("\n")
     );
     // A floor, not a target: it is here to catch the parser silently
-    // recognising nothing. It fell from 1,000 when the 560 `CMD_*`
-    // constants became the one `CmdIdx` enum.
+    // recognising nothing. 1,000 → 900 for `CmdIdx`, → 850 when the khash
+    // and garray types were deleted (889 then).
     assert!(
-        owners.len() > 900,
+        owners.len() > 850,
         "only {} exported names found across {} modules -- the parser stopped \
          recognising declarations",
         owners.len(),
