@@ -93,7 +93,7 @@ impl<E: SlotEntry> Slots<E> {
 /// `items()` and every listing that walks a Dictionary.
 ///
 /// Entries are the caller's: the table compares keys through the test the
-/// caller hands [`crate::hashtab::HashTab::probe`] and frees nothing they name.
+/// caller hands [`HashTab::probe`] and frees nothing they name.
 ///
 /// # Slots are named by index, never by pointer
 ///

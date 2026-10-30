@@ -17,7 +17,7 @@
 use ::core::ptr::NonNull;
 
 /// A writable borrow of a value object, taken through a shared handle: what
-/// [`ListRef::edit`] and its siblings answer.
+/// [`ListRef::edit`](super::ListRef::edit) and its siblings answer.
 ///
 /// Release builds compile it to the `&mut T` it holds and nothing else.
 /// Debug builds record the object as lent for as long as the borrow lives,
