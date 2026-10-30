@@ -21,8 +21,6 @@ hashtab.rs	*	1	23	15	15	ref:6	value:10 str:5	str:2	CStr::from_ptr:2 from_raw_par
 hashtab.rs	hashtab.rs	1	23	15	15	ref:6	value:10 str:5	str:2	CStr::from_ptr:2 from_raw_parts:2 .write:1 c_str:1 xfree:1
 input.rs	*	1	6	0	1	compound:2	-	-	at:1
 input.rs	input.rs	1	6	0	1	compound:2	-	-	at:1
-kvec.rs	*	1	7	2	0	compound:2	other:1	-	-
-kvec.rs	kvec.rs	1	7	2	0	compound:2	other:1	-	-
 map/	*	2	40	17	24	ref:5 compound:4 deref:1 expr:1	other:21 pp:3	other:6	xrealloc:2 CStr::from_ptr:1 from_raw_parts:1 from_raw_parts_mut:1 strequal:1
 map/	map/mod.rs	1	12	9	7	ref:5	other:13 pp:2	other:5	-
 map/	map/table.rs	1	28	8	17	compound:4 deref:1 expr:1	other:8 pp:1	other:1	xrealloc:2 CStr::from_ptr:1 from_raw_parts:1 from_raw_parts_mut:1 strequal:1

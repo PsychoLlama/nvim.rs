@@ -1,9 +1,10 @@
-Klib (https://github.com/attractivechaos/klib) supplies two of Neovim's
-data structures. `kvec.h` was vendored verbatim as src/klib/kvec.h and is
-ported to Rust as crates/nvim/src/kvec.rs; `khash.h` was never vendored as
-a file — upstream's src/nvim/map.c says "parts of the implementation
+Klib (https://github.com/attractivechaos/klib) supplied two of Neovim's
+data structures. `kvec.h` was vendored verbatim as src/klib/kvec.h; its
+Rust port is gone (every user holds a `Vec`). `khash.h` was never vendored
+as a file — upstream's src/nvim/map.c says "parts of the implementation
 derived from khash.h as part of klib (MIT license)" — and that derivation
-is ported to Rust as crates/nvim/src/map/. Both carry the notice below,
+is ported to Rust as crates/nvim/src/map/ and
+crates/nvim/src/map_glyph_cache.rs, which carry the notice below,
 reproduced from kvec.h; khash.h's own copyright line reads "Copyright (c)
 2008, 2009, 2011 by Attractive Chaos <attractor@live.co.uk>".
 

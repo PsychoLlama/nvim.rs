@@ -6,7 +6,7 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-// khash/kvec instantiations named by the macro that built them, plus
+// khash instantiations named by the macro that built them, plus
 // libtermkey's getstr hook.
 #![allow(non_camel_case_types)]
 
@@ -137,12 +137,6 @@ impl<'a> IntoIterator for &'a StringArray {
     fn into_iter(self) -> Self::IntoIter {
         self.0.iter()
     }
-}
-#[derive(Copy, Clone)]
-pub struct StringBuilder {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut ::core::ffi::c_char,
 }
 pub type TermKey_Terminfo_Getstr_Hook = unsafe extern "C" fn(
     *const ::core::ffi::c_char,

@@ -400,10 +400,11 @@
 {"path":"neovim::os::fs::os_rmdir","kind":"fn","file":"crates/nvim/src/os/fs/dir.rs","tests":["crates/nvim/tests/unit/fs.rs"]}
 {"path":"neovim::os::fs::os_setperm","kind":"fn","file":"crates/nvim/src/os/fs/meta.rs","tests":["crates/nvim/tests/unit/fs.rs"]}
 {"path":"neovim::os::fs::os_write","kind":"fn","file":"crates/nvim/src/os/fs/mod.rs","tests":["crates/nvim/tests/unit/fs.rs"]}
+{"path":"neovim::os::shell::Argv","kind":"struct","file":"crates/nvim/src/os/shell/mod.rs","tests":["crates/nvim/tests/unit/shell.rs"]}
 {"path":"neovim::os::shell::shell_argv_to_str","kind":"fn","file":"crates/nvim/src/os/shell/mod.rs","tests":["crates/nvim/tests/unit/shell.rs"]}
 {"path":"neovim::os::shell::shell_build_argv","kind":"fn","file":"crates/nvim/src/os/shell/mod.rs","tests":["crates/nvim/tests/unit/shell.rs"]}
 {"path":"neovim::os::shell::shell_free_argv","kind":"fn","file":"crates/nvim/src/os/shell/mod.rs","tests":["crates/nvim/tests/unit/shell.rs"]}
-{"path":"neovim::os::shell::system::os_system","kind":"fn","file":"crates/nvim/src/os/shell/system.rs","tests":["crates/nvim/tests/unit/shell.rs"]}
+{"path":"neovim::os::shell::system::os_system_capture","kind":"fn","file":"crates/nvim/src/os/shell/system.rs","tests":["crates/nvim/tests/unit/shell.rs"]}
 {"path":"neovim::os::users::os_get_uname","kind":"fn","file":"crates/nvim/src/os/users.rs","tests":["crates/nvim/tests/unit/users.rs"]}
 {"path":"neovim::os::users::os_get_userdir","kind":"fn","file":"crates/nvim/src/os/users.rs","tests":["crates/nvim/tests/unit/users.rs"]}
 {"path":"neovim::os::users::os_get_username","kind":"fn","file":"crates/nvim/src/os/users.rs","tests":["crates/nvim/tests/unit/users.rs"]}

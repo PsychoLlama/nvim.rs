@@ -6,7 +6,7 @@
 //! and puts back what it found — the LuaJIT harness set them in a
 //! `before_each` and threw the whole child away afterwards.
 //!
-//! `os_system` additionally needs the event loop, not just `early_init`:
+//! `os_system_capture` additionally needs the event loop, not just `early_init`:
 //! it spawns through libuv and pumps `main_loop` until the child exits. That
 //! is why `support::init_editor` runs `event_init` first, exactly as
 //! `test/unit/testutil.lua` did.
@@ -18,8 +18,8 @@ use std::ptr;
 
 use neovim::memory::{XString, xfree};
 use neovim::option::vars::{P_SH, P_SHCF, P_SXE, P_SXQ};
-use neovim::os::shell::system::os_system;
-use neovim::os::shell::{shell_argv_to_str, shell_build_argv};
+use neovim::os::shell::system::os_system_capture;
+use neovim::os::shell::{Argv, shell_argv_to_str, shell_build_argv};
 
 use crate::support::{Editor, cstr, editor_lock, internalize};
 
@@ -34,7 +34,7 @@ struct ShellOptions {
 
 impl ShellOptions {
     /// `/bin/sh -c` with no extra quoting — the spec's `before_each`, and the
-    /// only setting under which `os_system` can run at all.
+    /// only setting under which `os_system_capture` can run at all.
     fn plain() -> Self {
         let options = ShellOptions {
             saved: [P_SH.clear(), P_SHCF.clear(), P_SXQ.clear(), P_SXE.clear()],
@@ -97,28 +97,11 @@ fn argv_to_str(words: &[&str]) -> String {
 /// Run `cmd` through the shell and hand back (exit code, what it wrote).
 fn system(cmd: &str, input: Option<&str>) -> (c_int, String) {
     let cmd = cstr(cmd);
-    let mut output: *mut c_char = ptr::null_mut();
-    let mut nread: usize = 0;
-    // SAFETY: `shell_build_argv`'s vector is what `os_system` consumes;
-    // `input` outlives the call and `output`/`nread` are this frame's.
-    unsafe {
-        let argv = shell_build_argv(cmd.as_ptr(), ptr::null());
-        let status = os_system(
-            argv,
-            input.map_or(ptr::null(), |s| s.as_ptr().cast::<c_char>()),
-            input.map_or(0, str::len),
-            &raw mut output,
-            &raw mut nread,
-        );
-        let text = if output.is_null() {
-            String::new()
-        } else {
-            let bytes = std::slice::from_raw_parts(output.cast::<u8>(), nread).to_vec();
-            xfree(output.cast());
-            String::from_utf8(bytes).expect("the fixtures write text")
-        };
-        (status, text)
-    }
+    let (status, output) = os_system_capture(Argv::shell(&cmd), input.unwrap_or("").as_bytes());
+    let text = output.map_or_else(String::new, |bytes| {
+        String::from_utf8(bytes).expect("the fixtures write text")
+    });
+    (status, text)
 }
 
 #[test]

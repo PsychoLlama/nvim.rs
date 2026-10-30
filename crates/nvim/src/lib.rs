@@ -67,7 +67,6 @@ pub mod indent_c;
 pub(crate) mod input;
 pub mod insexpand;
 pub mod keycodes;
-pub(crate) mod kvec;
 pub mod linematch;
 pub mod log;
 pub mod lua;

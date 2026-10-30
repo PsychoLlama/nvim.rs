@@ -1,6 +1,6 @@
 //! Running a child process to completion and collecting what it wrote.
 //!
-//! [`os_system`] is the public entry point; everything `:!`, `system()` and
+//! [`os_system_capture`] is the public entry point; everything `:!`, `system()` and
 //! wildcard expansion do goes through [`do_os_system`], which spawns through
 //! libuv, pumps the loop until the child exits, and then either hands the
 //! output back to the caller or leaves it on the screen.
@@ -35,7 +35,7 @@ use crate::event::wstream::{
 };
 use crate::getchar::state::got_int;
 use crate::guard::Suppress;
-use crate::memory::{xfree, xrealloc, xstrlcpy};
+use crate::memory::xstrlcpy;
 use crate::message::state::{lines_left, msg_no_more};
 use crate::message::{msg_display, msg_end, msg_putchar, msg_sb_eol, msg_start};
 use crate::message_fmt::c_str;
@@ -44,99 +44,53 @@ use crate::os::cshim::gettext;
 use crate::types::{LibuvProc, MAXPATHL, MultiQueue, Proc, RStream, Stream, WBuffer};
 use crate::ui::{ui_busy_start, ui_busy_stop};
 
-/// Synchronously run a command, in the shell only if `argv` says so.
-///
-/// ```c
-/// char *output = NULL;
-/// size_t nread = 0;
-/// char *argv[] = { "ls", "-la", NULL };
-/// int exitcode = os_system(argv, NULL, 0, &output, &nread);
-/// ```
-///
-/// `argv` is consumed. `input` is fed to the child's stdin (NULL for none) and
-/// `len` is its length. `output` is where the collected output is stored — it
-/// is set to NULL when the child wrote nothing, and passing NULL for it
-/// discards the output entirely; `nread` then holds the length.
-///
-/// Answers the child's exit code, or -1 if it could not be started.
-///
-/// # Safety
-/// `argv` must be a NULL-terminated, owned argument vector; `input` readable
-/// for `len` bytes or NULL; `output` and `nread` writable or NULL.
-pub unsafe fn os_system(
-    argv: *mut *mut c_char,
-    input: *const c_char,
-    len: size_t,
-    output: *mut *mut c_char,
-    nread: *mut size_t,
-) -> c_int {
-    // SAFETY: the caller's contract.
-    unsafe { do_os_system(argv, input, len, output, nread, true, false) }
+/// Synchronously run `argv` (in the shell only if it says so) with `input`
+/// on standard input, answering the exit code (-1 if the child could not be
+/// started) and everything it wrote, or `None` when it wrote nothing.
+pub fn os_system_capture(argv: Argv, input: &[u8]) -> (c_int, Option<Vec<u8>>) {
+    // SAFETY: the vector is handed over; the child releases it.
+    unsafe { do_os_system(argv.into_raw(), input, true, true, false) }
 }
 
-/// [`os_system`] for a vector held as an [`Argv`]: run it with `input` on
-/// standard input, answering the exit code and everything the child wrote,
-/// or `None` when it wrote nothing.
-pub(crate) fn os_system_capture(argv: Argv, input: &[u8]) -> (c_int, Option<Vec<u8>>) {
-    let (mut output, mut nread) = (ptr::null_mut::<c_char>(), 0);
-    // SAFETY: the vector is handed over (the child releases it), `input` is
-    // readable for its length, and both out-parameters are locals. A
-    // non-null answer is an `xmalloc` block of `nread` bytes and a NUL, and
-    // a `Vec` may adopt it (the global allocator is `malloc`).
-    unsafe {
-        let status = os_system(
-            argv.into_raw(),
-            input.as_ptr().cast(),
-            input.len(),
-            &raw mut output,
-            &raw mut nread,
-        );
-        let captured =
-            (!output.is_null()).then(|| Vec::from_raw_parts(output.cast::<u8>(), nread, nread + 1));
-        (status, captured)
-    }
-}
-
-/// The one implementation behind [`os_system`] and [`os_call_shell`].
+/// The one implementation behind [`os_system_capture`] and
+/// [`os_call_shell`]: run `argv`, feeding it `input`, and answer its exit
+/// code (-1 when it could not be started or fed) and, with `capture`, what
+/// it wrote — `None` when that was nothing.
 ///
 /// `silent` suppresses the "shell failed to start" report and
 /// `forward_output` sends the child's output to the screen rather than to
-/// `output`.
+/// the answer.
 ///
 /// # Safety
-/// As [`os_system`].
+/// `argv` must be a NULL-terminated, owned argument vector, which the child
+/// releases.
 pub(crate) unsafe fn do_os_system(
     argv: *mut *mut c_char,
-    input: *const c_char,
-    len: size_t,
-    output: *mut *mut c_char,
-    nread: *mut size_t,
+    input: &[u8],
+    capture: bool,
     silent: bool,
     forward_output: bool,
-) -> c_int {
+) -> (c_int, Option<Vec<u8>>) {
     let mut exitcode = -1;
 
     out_data_decide_throttle(0); // Initialise the throttle decider.
     out_data_ring(Ring::Reset); // Initialise the output ring buffer.
-    let has_input = !input.is_null() && len > 0;
+    let has_input = !input.is_empty();
 
     // Where the output accumulates, and what libuv calls with each chunk.
-    let mut buf = STRINGBUILDER_INIT;
+    let mut buf: Vec<u8> = Vec::new();
     let data_cb: stream_read_cb = if forward_output {
         Some(out_data_cb)
-    } else if output.is_null() {
+    } else if !capture {
         None
     } else {
         Some(system_data_cb)
     };
 
     // SAFETY: the caller's contract; `main_loop` is the process's event loop,
-    // and `proc` points into `uvproc`, which outlives every use of it.
+    // and `proc` points into `uvproc`, which outlives every use of it, as
+    // `buf` outlives every callback that is handed its address.
     unsafe {
-        if !nread.is_null() {
-            *nread = 0;
-        }
-
         // Copy the program name in case it has to be reported.
         let mut prog: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
         xstrlcpy(prog.as_mut_ptr(), *argv, MAXPATHL as usize);
@@ -159,7 +113,7 @@ pub(crate) unsafe fn do_os_system(
                 msg_putchar('\n' as c_int);
             }
             multiqueue_free(events);
-            return exitcode;
+            return (exitcode, None);
         }
 
         // Unlike process events, stream events are not queued: they are dealt
@@ -174,12 +128,15 @@ pub(crate) unsafe fn do_os_system(
         rstream_start(&raw mut (*proc).err, data_cb, (&raw mut buf).cast());
 
         if has_input {
-            let input_buffer: *mut WBuffer = wstream_new_buffer(input.cast_mut(), len, 1, None);
+            // Borrowed, not released (no free callback): the write is done
+            // with it before `proc_wait` returns.
+            let data = input.as_ptr().cast::<c_char>().cast_mut();
+            let input_buffer: *mut WBuffer = wstream_new_buffer(data, input.len(), 1, None);
             if wstream_write(&raw mut (*proc).in_0, input_buffer) != 0 {
                 // Could not write: stop the child and tell the user.
                 proc_stop(proc);
                 multiqueue_free(events);
-                return exitcode;
+                return (exitcode, None);
             }
             // Close stdin once everything has been written.
             wstream_set_write_cb(&raw mut (*proc).in_0, Some(shell_write_cb), ptr::null_mut());
@@ -209,32 +166,17 @@ pub(crate) unsafe fn do_os_system(
         }
         ui_busy_stop();
 
-        if !output.is_null() {
-            debug_assert!(!nread.is_null());
-            if buf.size == 0 {
-                // Nothing came back.
-                *output = ptr::null_mut();
-                *nread = 0;
-                xfree(buf.items.cast());
-            } else {
-                *nread = buf.size;
-                // NUL-terminate so the output is usable as a C string.
-                Kvec::new(&mut buf.size, &mut buf.capacity, &mut buf.items).push(0);
-                *output = buf.items;
-            }
-        }
-
         debug_assert!(multiqueue_empty(events));
         multiqueue_free(events);
     }
-    exitcode
+    (exitcode, (capture && !buf.is_empty()).then_some(buf))
 }
 
 /// The `stream_read_cb` that accumulates output into the caller's buffer.
 ///
 /// # Safety
 /// An `stream_read_cb`: `buf` readable for `count` bytes, `data` a live
-/// [`StringBuilder`].
+/// `Vec<u8>`.
 unsafe fn system_data_cb(
     _stream: *mut RStream,
     buf: *const c_char,
@@ -245,24 +187,11 @@ unsafe fn system_data_cb(
     if count == 0 {
         return count;
     }
-    // SAFETY: the caller's contract. `kv_concat_len` rounds the capacity up
-    // to the next power of two, which the unit suite's `alloc_log` asserts on
-    // — do not tighten it to an exact fit.
+    // SAFETY: the caller's contract: `data` is `do_os_system`'s buffer, and
+    // `buf` is the stream's own, so the two do not overlap.
     unsafe {
-        let dbuf = &mut *data.cast::<StringBuilder>();
-        if dbuf.capacity < dbuf.size + count {
-            let mut capacity = dbuf.size + count - 1;
-            capacity |= capacity >> 1;
-            capacity |= capacity >> 2;
-            capacity |= capacity >> 4;
-            capacity |= capacity >> 8;
-            capacity |= capacity >> 16;
-            dbuf.capacity = capacity + 1;
-            dbuf.items = xrealloc(dbuf.items.cast(), dbuf.capacity).cast::<c_char>();
-        }
-        debug_assert!(!dbuf.items.is_null());
-        ptr::copy_nonoverlapping(buf, dbuf.items.add(dbuf.size), count);
-        dbuf.size += count;
+        let output = &mut *data.cast::<Vec<u8>>();
+        output.extend_from_slice(slice::from_raw_parts(buf.cast::<u8>(), count));
     }
     count
 }

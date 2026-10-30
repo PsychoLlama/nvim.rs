@@ -31,7 +31,7 @@ use crate::semsg;
 use crate::smsg;
 use crate::winlayer::Win;
 pub use expand::os_expand_wildcards;
-pub use system::os_system;
+pub use system::os_system_capture;
 
 use crate::buffer::read_buffer_into;
 use crate::charset::skipwhite;
@@ -40,7 +40,6 @@ use crate::event::multiqueue::multiqueue_put_event;
 use crate::ex_cmds::{check_secure, make_filter_cmd};
 use crate::fileio::temp_name;
 use crate::global_cell::GlobalCell;
-use crate::kvec::Kvec;
 use crate::memline::{ml_append_cstr, ml_append_terminated};
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::state::emsg_silent;
@@ -61,9 +60,7 @@ use crate::state::mode::State;
 use crate::strings::{escaped_with, unquoted};
 use crate::tag::tag_freematch;
 use crate::types::ui::kUIMessages;
-use crate::types::{
-    LineNr, NUL, ProfTime, READBIN, StringBuilder, VarNumber, Vv, size_t, stream_read_cb,
-};
+use crate::types::{LineNr, NUL, ProfTime, READBIN, VarNumber, Vv, size_t, stream_read_cb};
 use crate::ui::{ui_flush, ui_has};
 use crate::winlayer::Buf;
 use ::libc::{fclose, fopen, fread, fseek, ftell};
@@ -106,13 +103,6 @@ const CAR: c_int = '\r' as c_int;
 /// Characters a shell would act on, so they get a backslash when a pattern is
 /// pasted into a command line.
 const SHELL_SPECIAL: &[u8] = b"\t \"&'$;<>()\\|\n";
-
-/// An empty `StringBuilder` — klib's `KV_INITIAL_VALUE`.
-const STRINGBUILDER_INIT: StringBuilder = StringBuilder {
-    size: 0,
-    capacity: 0,
-    items: ptr::null_mut(),
-};
 
 /// The argument vector for running `'shell'` with an optional command
 /// prefixed by `'shellcmdflag'`, e.g.
@@ -300,24 +290,15 @@ pub unsafe fn shell_argv_to_str(argv: *mut *mut c_char) -> XString {
 /// `cmd` and `extra_args` must be NUL-terminated strings or NULL.
 pub unsafe fn os_call_shell(cmd: *mut c_char, opts: ShellOpts, extra_args: *mut c_char) -> c_int {
     let mut input: Vec<u8> = Vec::new();
-    // The child's input, null when there is none.
-    let input_at = |input: &Vec<u8>| {
-        if input.is_empty() {
-            ::core::ptr::null()
-        } else {
-            input.as_ptr().cast::<c_char>()
-        }
-    };
-    let mut output: *mut c_char = ptr::null_mut();
-    let mut output_ptr: *mut *mut c_char = ptr::null_mut();
+    let mut capture = false;
     let current_state = State.get();
     let mut forward_output = true;
 
     // Terminating signals are ignored while the child runs.
     signal_reject_deadly();
 
-    // SAFETY: the caller's contract; `input`, `output` and `nread` are locals
-    // whose addresses outlive the call.
+    // SAFETY: the caller's contract; `shell_build_argv`'s vector is what
+    // `do_os_system` consumes, and the output is a buffer of our own.
     let exitcode = unsafe {
         if opts.has(ShellOpts::HIDE_MESS | ShellOpts::EXPAND) {
             forward_output = false;
@@ -327,7 +308,7 @@ pub unsafe fn os_call_shell(cmd: *mut c_char, opts: ShellOpts, extra_args: *mut 
                 read_input(&mut input);
             }
             if opts.has(ShellOpts::READ) {
-                output_ptr = &raw mut output;
+                capture = true;
                 forward_output = false;
             } else if opts.has(ShellOpts::DO_OUT) {
                 // The caller has already redirected the output.
@@ -335,21 +316,21 @@ pub unsafe fn os_call_shell(cmd: *mut c_char, opts: ShellOpts, extra_args: *mut 
             }
         }
 
-        let mut nread: size_t = 0;
-        let exitcode = system::do_os_system(
+        let (exitcode, output) = system::do_os_system(
             shell_build_argv(cmd, extra_args),
-            input_at(&input),
-            input.len(),
-            output_ptr,
-            &raw mut nread,
+            &input,
+            capture,
             emsg_silent.get() != 0,
             forward_output,
         );
         drop(input);
 
-        if !output.is_null() {
-            write_output(output, nread, true);
-            xfree(output.cast());
+        if let Some(mut output) = output {
+            let len = output.len();
+            // Terminated, for the unfinished last line `write_output` reads
+            // as a C string.
+            output.push(0);
+            write_output(output.as_mut_ptr().cast::<c_char>(), len, true);
         }
 
         if emsg_silent.get() == 0 && exitcode != 0 && !opts.has(ShellOpts::SILENT) {
