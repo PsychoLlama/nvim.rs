@@ -201,8 +201,9 @@ impl ProbeTable {
         self.upper_bound = policy::upper_bound(n_buckets);
     }
 
-    /// Re-point a bucket at dense index `dense` after [`make_room`]
-    /// (Self::make_room) emptied the table: the next key of the rehash walk.
+    /// Re-point a bucket at dense index `dense` after
+    /// [`make_room`](Self::make_room) emptied the table: the next key of the
+    /// rehash walk.
     pub fn rehash(&mut self, hash: u32, dense: u32, is_stored: impl Fn(u32) -> bool) {
         let idx = self.find(hash, true, is_stored) as usize;
         assert!(
