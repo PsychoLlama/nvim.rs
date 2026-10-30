@@ -39,7 +39,7 @@
 use core::ffi::c_int;
 use core::ptr;
 
-use crate::map::map_put_ref_uint64_t_mt_damage_pair;
+use crate::map::DenseMap;
 use crate::marktree::iter::{
     MT_MAX_DEPTH, marktree_itr_current, marktree_itr_get_ext, marktree_itr_next,
     marktree_itr_next_skip, marktree_itr_pos, marktree_itr_prev, marktree_itr_set_node,
@@ -51,20 +51,23 @@ use crate::marktree::key::{
 use crate::marktree::meta::{meta_apply_delta, meta_describe_key};
 use crate::marktree::node::{Node, refkey};
 use crate::marktree::pair::{marktree_intersect_pair, marktree_restore_pair};
-use crate::memory::xfree;
 use crate::types::{
-    ColNr, MTDamage, MTKey, MTNode, MTPos, MarkTree, MarkTreeIter, Set_uint64_t, int32_t, uint64_t,
+    ColNr, MTDamage, MTDamagePair, MTKey, MTNode, MTPos, MarkTree, MarkTreeIter, int32_t, uint64_t,
 };
 
-use super::{MAPHASH_INIT, MTDamageMap, marktree_del_itr, marktree_lookup, marktree_put_key};
+use super::{marktree_del_itr, marktree_lookup, marktree_put_key};
 
-/// An empty damage map, owning nothing — klib's `MAP_INIT`.
-const DAMAGE_INIT: MTDamageMap = MTDamageMap {
-    set: Set_uint64_t {
-        h: MAPHASH_INIT,
-        keys: ptr::null_mut(),
-    },
-    values: ptr::null_mut(),
+/// What a splice recorded about pairs whose halves crossed while it ran: per
+/// start id, where each half was and where it went. Walked in insertion
+/// order, as upstream's `map_foreach` walks it.
+type DamageMap = DenseMap<uint64_t, MTDamagePair>;
+
+/// Neither half has moved.
+const NO_DAMAGE: MTDamage = MTDamage {
+    old: ptr::null_mut(),
+    new: ptr::null_mut(),
+    old_i: 0,
+    new_i: 0,
 };
 
 // -- the iterator, which iter.rs still addresses by raw pointer --------------
@@ -143,13 +146,13 @@ fn intersect_pair(
 /// Record that the key `itr1` is on has swapped places with the one `itr2` is
 /// on, so that the pair it belongs to can be re-intersected once the walk is
 /// done. `key` is the key `itr1` is parked on.
-fn check_damage(damage: &mut MTDamageMap, key: MTKey, itr1: &MarkTreeIter, itr2: &MarkTreeIter) {
+fn check_damage(damage: &mut DamageMap, key: MTKey, itr1: &MarkTreeIter, itr2: &MarkTreeIter) {
     let start_id = mt_lookup_key_side(key, false);
-    let (init, fresh) = (ptr::null_mut(), ptr::null_mut());
-    // SAFETY: `damage` is a live map; the two nulls decline its optional
-    // "initial value" and "was it new" out-parameters, and `map_put_ref`
-    // answers a live slot of the map it was handed.
-    let p = unsafe { &mut *map_put_ref_uint64_t_mt_damage_pair(damage, start_id, init, fresh) };
+    let untouched = MTDamagePair {
+        start: NO_DAMAGE,
+        end: NO_DAMAGE,
+    };
+    let p = damage.get_or_insert(start_id, untouched);
     let me = if mt_end(key) {
         &mut p.end
     } else {
@@ -164,26 +167,13 @@ fn check_damage(damage: &mut MTDamageMap, key: MTKey, itr1: &MarkTreeIter, itr2:
     };
 }
 
-/// `map_destroy`: give back the map's three buffers and leave it empty.
-fn destroy_damage(damage: &mut MTDamageMap) {
-    let (keys, hash) = (damage.set.keys.cast(), damage.set.h.hash.cast());
-    let values = damage.values.cast();
-    // SAFETY: the key array is this map's own, and is `xfree`-able once.
-    unsafe { xfree(keys) };
-    // SAFETY: as above, for the hash table behind it.
-    unsafe { xfree(hash) };
-    // SAFETY: as above, for the values.
-    unsafe { xfree(values) };
-    *damage = DAMAGE_INIT;
-}
-
 // -- the splice itself -------------------------------------------------------
 
 /// Swap the keys two iterators are parked on, each keeping its own position.
 ///
 /// The meta counts move with the keys, up to the two nodes' common ancestor,
 /// and any pair whose halves crossed is recorded in `damage`.
-fn swap_keys(b: &mut MarkTree, itr1: &MarkTreeIter, itr2: &MarkTreeIter, damage: &mut MTDamageMap) {
+fn swap_keys(b: &mut MarkTree, itr1: &MarkTreeIter, itr2: &MarkTreeIter, damage: &mut DamageMap) {
     // SAFETY: both iterators are positioned in `b`.
     let (x1, x2) = unsafe { (Node::new(itr1.x), Node::new(itr2.x)) };
     let (i1, i2) = (itr1.i as usize, itr2.i as usize);
@@ -299,7 +289,7 @@ pub fn marktree_splice(
 
     let mut past_right = false;
     let mut moved = false;
-    let mut damage = DAMAGE_INIT;
+    let mut damage = DamageMap::new();
 
     // Follow the general strategy of messing things up and fixing them later.
     // `oldbase` carries what is needed to work out a child's old position.
@@ -426,12 +416,7 @@ pub fn marktree_splice(
         itr_next_skip(b, &mut itr, true, None);
     }
 
-    let (keys, values) = (damage.set.keys, damage.values);
-    for idx in 0..damage.set.h.n_keys as usize {
-        // SAFETY: klib's `map_foreach` — the map's `n_keys` leading entries of
-        // `keys` and `values` are live and parallel, and nothing in the body
-        // touches the map.
-        let (start_id, d) = unsafe { (*keys.add(idx), *values.add(idx)) };
+    for (&start_id, &d) in damage.iter() {
         if !d.start.old.is_null() && !d.end.old.is_null() {
             // Both ends of the pair moved.
             itr_set_node(b, &mut itr, d.start.old, d.start.old_i);
@@ -466,7 +451,6 @@ pub fn marktree_splice(
             }
         }
     }
-    destroy_damage(&mut damage);
 
     moved
 }

@@ -8,40 +8,25 @@
 )]
 
 //! The sizing arithmetic of the khash-derived index: how many buckets a
-//! request rounds up to, when the table has to grow rather than just shed its
-//! tombstones, and how the dense keys array grows. All of it is upstream's,
-//! bit for bit — the numbers decide where keys land, and callers walk the
-//! arrays directly.
+//! request rounds up to, and how full they may get. Both are upstream's, bit
+//! for bit — the numbers decide where keys land.
 //!
 //! Derived, via upstream's `map.c`, from klib's `khash.h`, Copyright (c)
 //! 2008, 2009, 2011 Attractive Chaos, under the MIT license; the notice is
 //! reproduced in licenses/klib-LICENSE.txt.
 
 use crate::narrow::float_as_i64;
-use crate::types::uint32_t;
 
 mod limits {
-    use crate::types::uint32_t;
-
     /// Smallest bucket table. Below this the probe sequence is not worth it.
-    pub(super) const MIN_BUCKETS: uint32_t = 16;
+    pub(super) const MIN_BUCKETS: u32 = 16;
 
-    /// Occupancy at which the table is considered full. `n_occupied` counts
-    /// tombstones as well as live entries.
+    /// Occupancy at which the table is considered full.
     pub(super) const UPPER_FILL: f64 = 0.77;
-
-    /// A table whose live entries are at least this fraction of the upper
-    /// bound has genuinely outgrown it; below it, the pressure is tombstones.
-    pub(super) const GROW_AT: f64 = 0.9;
-
-    /// The dense keys array's first heap size.
-    pub(crate) const MIN_KEYS: uint32_t = 8;
 }
 
-pub(super) use limits::MIN_KEYS;
-
 /// Round a request up to a power of two, never below `MIN_BUCKETS`.
-pub(super) fn bucket_count(n_min_buckets: uint32_t) -> uint32_t {
+pub(super) fn bucket_count(n_min_buckets: u32) -> u32 {
     let n = n_min_buckets.max(limits::MIN_BUCKETS);
     // `next_power_of_two` of an exact power of two is itself, which is what
     // the C's decrement-smear-increment produces.
@@ -49,21 +34,9 @@ pub(super) fn bucket_count(n_min_buckets: uint32_t) -> uint32_t {
 }
 
 /// How many buckets may be occupied before the table is resized.
-pub(super) fn upper_bound(n_buckets: uint32_t) -> uint32_t {
+pub(super) fn upper_bound(n_buckets: u32) -> u32 {
     let bound = float_as_i64(f64::from(n_buckets) * limits::UPPER_FILL + 0.5);
-    uint32_t::try_from(bound).expect("the fill fraction keeps the bound inside a u32")
-}
-
-/// At the upper bound: grow the table, or just drop the tombstones and rehash
-/// in place?
-pub(super) fn should_grow(size: uint32_t, upper_bound: uint32_t) -> bool {
-    f64::from(size) >= f64::from(upper_bound) * limits::GROW_AT
-}
-
-/// The next capacity of a dense array that has just run out. `floor` is the
-/// first heap size — 8 for a keys array of fixed-size entries.
-pub fn grown_keys_capacity(capacity: uint32_t, floor: uint32_t) -> uint32_t {
-    capacity.wrapping_mul(2).max(floor)
+    u32::try_from(bound).expect("the fill fraction keeps the bound inside a u32")
 }
 
 #[cfg(test)]
@@ -99,27 +72,5 @@ mod tests {
         assert_eq!(upper_bound(32), 25); // 24.64
         assert_eq!(upper_bound(64), 49); // 49.28
         assert_eq!(upper_bound(1024), 788); // 788.48 + 0.5 truncates to 788
-    }
-
-    /// The distinction that keeps a delete-heavy table from growing without
-    /// bound: at the occupancy limit, a table that is mostly tombstones is
-    /// rehashed in place instead.
-    #[test]
-    fn a_tombstone_heavy_table_is_rehashed_rather_than_grown() {
-        let bound = upper_bound(64); // 49
-        assert!(should_grow(49, bound));
-        assert!(should_grow(45, bound)); // 45 >= 44.1
-        assert!(!should_grow(44, bound));
-        assert!(!should_grow(0, bound));
-    }
-
-    #[test]
-    fn keys_capacity_doubles_from_a_floor() {
-        assert_eq!(grown_keys_capacity(0, MIN_KEYS), 8);
-        assert_eq!(grown_keys_capacity(8, MIN_KEYS), 16);
-        assert_eq!(grown_keys_capacity(16, MIN_KEYS), 32);
-        // The glyph cache uses a byte array with a larger floor.
-        assert_eq!(grown_keys_capacity(0, 64), 64);
-        assert_eq!(grown_keys_capacity(64, 64), 128);
     }
 }

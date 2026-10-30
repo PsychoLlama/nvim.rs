@@ -12,6 +12,7 @@
 //! puts the tag in the high byte instead, and the transpile dropped it.
 
 use super::*;
+use crate::map_glyph_cache::GlyphCache;
 use crate::mbyte::{c_cells_at, char_at, char_len, cp_bounds, encode_char};
 use crate::types::NUL;
 use core::ffi::CStr;
@@ -35,27 +36,13 @@ pub(crate) type SCharBuf = [u8; SCHAR_BUF_SIZE];
 ///
 /// Interning can grow the key arena, so it is reached a call at a time and
 /// a glyph read out of it is copied or measured inside the borrow.
-static GLYPH_CACHE: GlobalCell<Set_glyph> = GlobalCell::new(SET_INIT);
+static GLYPH_CACHE: GlobalCell<GlyphCache> = GlobalCell::new(GlyphCache::new());
 
 /// `f` over the interned glyph at byte offset `idx`.
 #[inline]
 fn with_glyph<R>(idx: uint32_t, f: impl FnOnce(&[u8]) -> R) -> R {
     GLYPH_CACHE.with(|cache| f(cache.glyph(idx)))
 }
-
-const MAPHASH_INIT: MapHash = MapHash {
-    n_buckets: 0,
-    size: 0,
-    n_occupied: 0,
-    upper_bound: 0,
-    n_keys: 0,
-    keys_capacity: 0,
-    hash: ::core::ptr::null_mut(),
-};
-const SET_INIT: Set_glyph = Set_glyph {
-    h: MAPHASH_INIT,
-    keys: ::core::ptr::null_mut(),
-};
 
 /// Whether `sc` is an index into the glyph cache rather than inline bytes.
 #[inline(always)]

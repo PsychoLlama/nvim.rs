@@ -221,13 +221,8 @@
 {"path":"neovim::lua::stack::Kind","kind":"enum","file":"crates/nvim/src/lua/stack/mod.rs","tests":["crates/nvim/tests/unit/api_converter.rs"]}
 {"path":"neovim::lua::stack::Raise","kind":"struct","file":"crates/nvim/src/lua/stack/dispatch.rs","tests":["crates/nvim/tests/unit/api_converter.rs"]}
 {"path":"neovim::lua::stack::Stack","kind":"struct","file":"crates/nvim/src/lua/stack/mod.rs","tests":["crates/nvim/tests/unit/api_converter.rs"]}
-{"path":"neovim::map::MH_TOMBSTONE","kind":"const","file":"crates/nvim/src/map/table.rs","tests":["crates/nvim/tests/unit/map.rs"]}
-{"path":"neovim::map::kMHExisting","kind":"const","file":"crates/nvim/src/map/table.rs","tests":["crates/nvim/tests/unit/map.rs"]}
-{"path":"neovim::map::map_put_ref_uint64_t_mt_damage_pair","kind":"fn","file":"crates/nvim/src/map/mod.rs","tests":["crates/nvim/tests/unit/map.rs"]}
-{"path":"neovim::map::mh_clear","kind":"fn","file":"crates/nvim/src/map/mod.rs","tests":["crates/nvim/tests/unit/map.rs"]}
-{"path":"neovim::map::mh_get_cstr_t","kind":"fn","file":"crates/nvim/src/map/mod.rs","tests":["crates/nvim/tests/unit/map.rs"]}
-{"path":"neovim::map::mh_get_uint64_t","kind":"fn","file":"crates/nvim/src/map/mod.rs","tests":["crates/nvim/tests/unit/map.rs"]}
-{"path":"neovim::map::mh_put_cstr_t","kind":"fn","file":"crates/nvim/src/map/mod.rs","tests":["crates/nvim/tests/unit/map.rs"]}
+{"path":"neovim::map::DenseMap","kind":"struct","file":"crates/nvim/src/map/mod.rs","tests":["crates/nvim/tests/unit/map.rs"]}
+{"path":"neovim::map::DenseSet","kind":"struct","file":"crates/nvim/src/map/mod.rs","tests":["crates/nvim/tests/unit/map.rs"]}
 {"path":"neovim::marktree::marktree_clear","kind":"fn","file":"crates/nvim/src/marktree/mod.rs","tests":["crates/nvim/tests/unit/marktree.rs"]}
 {"path":"neovim::marktree::marktree_del_itr","kind":"fn","file":"crates/nvim/src/marktree/mod.rs","tests":["crates/nvim/tests/unit/marktree.rs"]}
 {"path":"neovim::marktree::marktree_lookup_ns","kind":"fn","file":"crates/nvim/src/marktree/mod.rs","tests":["crates/nvim/tests/unit/marktree.rs"]}
@@ -305,7 +300,7 @@
 {"path":"neovim::memory::ThinCString","kind":"struct","file":"crates/nvim/src/memory/thin_cstring.rs","tests":["crates/nvim/tests/unit/support/tv.rs","crates/nvim/tests/unit/typval_dict.rs"]}
 {"path":"neovim::memory::XString","kind":"struct","file":"crates/nvim/src/memory/xstring.rs","tests":["crates/nvim/tests/unit/mbyte_oracle.rs","crates/nvim/tests/unit/memline.rs","crates/nvim/tests/unit/search.rs","crates/nvim/tests/unit/shell.rs","crates/nvim/tests/unit/typval_list.rs","crates/nvim/tests/unit/undo.rs"]}
 {"path":"neovim::memory::xcalloc","kind":"fn","file":"crates/nvim/src/memory/mod.rs","tests":["crates/nvim/tests/unit/hashtab.rs"]}
-{"path":"neovim::memory::xfree","kind":"fn","file":"crates/nvim/src/memory/mod.rs","tests":["crates/nvim/tests/unit/arena.rs","crates/nvim/tests/unit/eval_decode.rs","crates/nvim/tests/unit/hashtab.rs","crates/nvim/tests/unit/map.rs","crates/nvim/tests/unit/shell.rs","crates/nvim/tests/unit/support.rs","crates/nvim/tests/unit/typval_dict.rs","crates/nvim/tests/unit/typval_value.rs"]}
+{"path":"neovim::memory::xfree","kind":"fn","file":"crates/nvim/src/memory/mod.rs","tests":["crates/nvim/tests/unit/arena.rs","crates/nvim/tests/unit/eval_decode.rs","crates/nvim/tests/unit/hashtab.rs","crates/nvim/tests/unit/shell.rs","crates/nvim/tests/unit/support.rs","crates/nvim/tests/unit/typval_dict.rs","crates/nvim/tests/unit/typval_value.rs"]}
 {"path":"neovim::memory::xmalloc","kind":"fn","file":"crates/nvim/src/memory/mod.rs","tests":["crates/nvim/tests/unit/typval_dict.rs","crates/nvim/tests/unit/typval_value.rs"]}
 {"path":"neovim::memory::xmemdup","kind":"fn","file":"crates/nvim/src/memory/mod.rs","tests":["crates/nvim/tests/unit/eval_decode.rs"]}
 {"path":"neovim::memory::xstrdup","kind":"fn","file":"crates/nvim/src/memory/mod.rs","tests":["crates/nvim/tests/unit/typval.rs","crates/nvim/tests/unit/typval_dict.rs","crates/nvim/tests/unit/typval_list.rs"]}
@@ -608,13 +603,10 @@
 {"path":"neovim::types::List","kind":"struct","file":"crates/nvim/src/types/multiqueue_list.rs","tests":["crates/nvim/tests/unit/eval_encode.rs","crates/nvim/tests/unit/support.rs","crates/nvim/tests/unit/support/tv.rs","crates/nvim/tests/unit/typval.rs","crates/nvim/tests/unit/typval_list.rs"]}
 {"path":"neovim::types::ListItem","kind":"struct","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/support/tv.rs"]}
 {"path":"neovim::types::MAXPATHL","kind":"const","file":"crates/nvim/src/types/os.rs","tests":["crates/nvim/tests/unit/env.rs"]}
-{"path":"neovim::types::MTDamagePair","kind":"struct","file":"crates/nvim/src/types/types.rs","tests":["crates/nvim/tests/unit/map.rs"]}
 {"path":"neovim::types::MTKey","kind":"struct","file":"crates/nvim/src/types/marktree.rs","tests":["crates/nvim/tests/unit/marktree.rs"]}
 {"path":"neovim::types::MTNode","kind":"type","file":"crates/nvim/src/types/types.rs","tests":["crates/nvim/tests/unit/marktree.rs"]}
 {"path":"neovim::types::MTPair","kind":"struct","file":"crates/nvim/src/types/marktree.rs","tests":["crates/nvim/tests/unit/marktree.rs"]}
 {"path":"neovim::types::MTPos","kind":"struct","file":"crates/nvim/src/types/marktree.rs","tests":["crates/nvim/tests/unit/marktree.rs"]}
-{"path":"neovim::types::MapHash","kind":"struct","file":"crates/nvim/src/types/map.rs","tests":["crates/nvim/tests/unit/map.rs"]}
-{"path":"neovim::types::Map_uint64_t_MTDamagePair","kind":"struct","file":"crates/nvim/src/types/misc.rs","tests":["crates/nvim/tests/unit/map.rs"]}
 {"path":"neovim::types::MarkTree","kind":"struct","file":"crates/nvim/src/types/marktree.rs","tests":["crates/nvim/tests/unit/marktree.rs"]}
 {"path":"neovim::types::MarkTreeIter","kind":"struct","file":"crates/nvim/src/types/marktree.rs","tests":["crates/nvim/tests/unit/marktree.rs"]}
 {"path":"neovim::types::MarkTreeIterLevel","kind":"struct","file":"crates/nvim/src/types/marktree.rs","tests":["crates/nvim/tests/unit/marktree.rs"]}
@@ -631,8 +623,6 @@
 {"path":"neovim::types::RegMMatch","kind":"struct","file":"crates/nvim/src/types/regexp.rs","tests":["crates/nvim/tests/unit/regexp.rs","crates/nvim/tests/unit/search.rs"]}
 {"path":"neovim::types::RegMatch","kind":"struct","file":"crates/nvim/src/types/regexp.rs","tests":["crates/nvim/tests/unit/regexp.rs"]}
 {"path":"neovim::types::ScreenChar","kind":"type","file":"crates/nvim/src/types/types.rs","tests":["crates/nvim/tests/unit/grid.rs","crates/nvim/tests/unit/optionstr_oracle.rs","crates/nvim/tests/unit/statusline.rs"]}
-{"path":"neovim::types::Set_cstr_t","kind":"struct","file":"crates/nvim/src/types/misc.rs","tests":["crates/nvim/tests/unit/map.rs"]}
-{"path":"neovim::types::Set_uint64_t","kind":"struct","file":"crates/nvim/src/types/misc.rs","tests":["crates/nvim/tests/unit/map.rs"]}
 {"path":"neovim::types::SpellLang","kind":"struct","file":"crates/nvim/src/types/spell.rs","tests":["crates/nvim/tests/unit/spellfile.rs"]}
 {"path":"neovim::types::String_0","kind":"struct","file":"crates/nvim/src/types/api_string.rs","tests":["crates/nvim/tests/unit/namespace.rs","crates/nvim/tests/unit/options.rs","crates/nvim/tests/unit/packer.rs"]}
 {"path":"neovim::types::TermKey","kind":"struct","file":"crates/nvim/src/types/termkey.rs","tests":["crates/nvim/tests/unit/termkey.rs"]}
@@ -667,7 +657,6 @@
 {"path":"neovim::types::kSpecialVarNull","kind":"const","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/support/tv.rs","crates/nvim/tests/unit/typval_value.rs"]}
 {"path":"neovim::types::lua_State","kind":"struct","file":"crates/nvim/src/types/lua.rs","tests":["crates/nvim/tests/unit/api_converter.rs"]}
 {"path":"neovim::types::ptrdiff_t","kind":"type","file":"crates/nvim/src/types/libc.rs","tests":["crates/nvim/tests/unit/typval.rs"]}
-{"path":"neovim::types::uint32_t","kind":"type","file":"crates/nvim/src/types/libc.rs","tests":["crates/nvim/tests/unit/map.rs"]}
 {"path":"neovim::types::typval::UVarNumber","kind":"type","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/charset.rs","crates/nvim/tests/unit/charset_oracle.rs","crates/nvim/tests/unit/strings.rs"]}
 {"path":"neovim::types::typval::VarNumber","kind":"type","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/charset.rs","crates/nvim/tests/unit/charset_oracle.rs"]}
 {"path":"neovim::undo::UNDO_HASH_SIZE","kind":"const","file":"crates/nvim/src/undo/mod.rs","tests":["crates/nvim/tests/unit/undo.rs"]}

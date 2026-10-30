@@ -1,11 +1,11 @@
 count	callee	no_raw	defs	def
-48	from_raw_parts	0	0	
-46	CStr::from_ptr	0	1	crates/nvim/src/marktree/node.rs
-30	xfree	0	1	crates/nvim/src/memory/mod.rs
+45	from_raw_parts	0	0	
+44	CStr::from_ptr	0	1	crates/nvim/src/marktree/node.rs
 28	f	0	0	
+27	xfree	0	1	crates/nvim/src/memory/mod.rs
 26	Node::new	0	1	crates/nvim/src/marktree/node.rs
 26	Term::new	0	1	crates/nvim/src/terminal/mod.rs
-25	from_raw_parts_mut	0	0	
+22	from_raw_parts_mut	0	0	
 20	multiqueue_put_event	0	1	crates/nvim/src/event/multiqueue.rs
 19	Box::from_raw	0	7	
 17	.add	0	0	
@@ -41,7 +41,6 @@ count	callee	no_raw	defs	def
 6	Stack::from_raw	0	1	crates/nvim/src/lua/stack/mod.rs
 6	at	0	2	
 6	multiqueue_process_events	0	1	crates/nvim/src/event/multiqueue.rs
-6	xrealloc	0	1	crates/nvim/src/memory/mod.rs
 5	.next_arg::<::core::ffi::c_ulong>	0	0	
 5	Handle::new	0	1	crates/nvim/src/event/time.rs
 5	Self::new	0	21	
@@ -72,7 +71,6 @@ count	callee	no_raw	defs	def
 3	Stack::above_top	0	1	crates/nvim/src/lua/stack/mod.rs
 3	accumulate	1	1	crates/nvim/src/terminal/termrequest.rs
 3	as_filter	0	1	crates/nvim/src/marktree/iter.rs
-3	buckets_mut	1	1	crates/nvim/src/map/table.rs
 3	call_shell	0	1	crates/nvim/src/os/shell/mod.rs
 3	create_event	0	1	crates/nvim/src/event/proc.rs
 3	fragment_bytes	1	2	
@@ -100,6 +98,7 @@ count	callee	no_raw	defs	def
 3	vterm_get_size	0	1	crates/nvim/src/vterm/vterm.rs
 3	vterm_push_output_bytes	0	1	crates/nvim/src/vterm/vterm.rs
 3	wstream_release_wbuffer	0	1	crates/nvim/src/event/wstream.rs
+3	xrealloc	0	1	crates/nvim/src/memory/mod.rs
 2	.as_mut	0	0	
 2	.assume_init	0	0	
 2	.bit_copy	1	1	crates/nvim/src/eval/typval/handle.rs
@@ -125,7 +124,6 @@ count	callee	no_raw	defs	def
 2	arena_dup	0	1	crates/nvim/src/tui/quirks.rs
 2	arena_mem_free	0	1	crates/nvim/src/memory/arena.rs
 2	arena_memdupz	0	1	crates/nvim/src/memory/arena.rs
-2	buckets	1	1	crates/nvim/src/map/table.rs
 2	cells_mut	0	1	crates/nvim/src/vterm/screen/mod.rs
 2	copy_bytes	0	1	crates/nvim/src/memory/mod.rs
 2	decref	0	1	crates/nvim/src/event/proc.rs
@@ -136,7 +134,6 @@ count	callee	no_raw	defs	def
 2	file_close	0	1	crates/nvim/src/os/fileio.rs
 2	file_flush	0	1	crates/nvim/src/os/fileio.rs
 2	file_open	0	1	crates/nvim/src/os/fileio.rs
-2	find_bucket	0	1	crates/nvim/src/map/table.rs
 2	fopen	0	0	
 2	fprintf	0	0	
 2	free	0	0	
@@ -148,7 +145,6 @@ count	callee	no_raw	defs	def
 2	id2node	0	1	crates/nvim/src/marktree/node.rs
 2	init	0	0	
 2	install_luv	0	1	crates/nvim/src/lua/executor/luv.rs
-2	key_at	0	1	crates/nvim/src/map/table.rs
 2	list_free_list	0	1	crates/nvim/src/eval/typval/handle.rs
 2	listxattr	0	0	
 2	loop_poll_events	0	1	crates/nvim/src/event/loop.rs
@@ -157,7 +153,6 @@ count	callee	no_raw	defs	def
 2	lua_newuserdata	0	0	
 2	lua_settop	0	0	
 2	luv_set_thread_cb	0	0	
-2	map_put_ref	0	2	
 2	marktree_free_subtree	1	1	crates/nvim/src/marktree/mod.rs
 2	multiqueue_empty	0	1	crates/nvim/src/event/multiqueue.rs
 2	multiqueue_move_events	0	1	crates/nvim/src/event/multiqueue.rs
@@ -179,7 +174,6 @@ count	callee	no_raw	defs	def
 2	push_c_string	0	1	crates/nvim/src/lua/treesitter/mod.rs
 2	push_owned_ranges	0	1	crates/nvim/src/lua/treesitter/ranges.rs
 2	push_paste_marker	0	1	crates/nvim/src/vterm/keyboard.rs
-2	put	0	1	crates/nvim/src/map/table.rs
 2	query_string	0	1	crates/nvim/src/lua/treesitter/query.rs
 2	read	0	0	
 2	resize	0	1	crates/nvim/src/vterm/screen/resize.rs
@@ -189,7 +183,6 @@ count	callee	no_raw	defs	def
 2	seam_calloc	0	1	crates/nvim/src/memory/mod.rs
 2	seam_malloc	0	1	crates/nvim/src/memory/mod.rs
 2	seam_realloc	0	1	crates/nvim/src/memory/mod.rs
-2	set_get	0	1	crates/nvim/src/map/mod.rs
 2	shell_build_argv	0	1	crates/nvim/src/os/shell/mod.rs
 2	shell_free_argv	0	1	crates/nvim/src/os/shell/mod.rs
 2	slice_at	0	1	crates/nvim/src/cstr.rs
@@ -253,7 +246,6 @@ count	callee	no_raw	defs	def
 1	file_skip	0	1	crates/nvim/src/os/fileio.rs
 1	file_write	0	1	crates/nvim/src/os/fileio.rs
 1	forkpty	0	0	
-1	get	0	1	crates/nvim/src/map/table.rs
 1	get_config_string	0	1	crates/nvim/src/terminal/mod.rs
 1	getdigits_int	0	1	crates/nvim/src/charset/walk.rs
 1	getgid	0	0	
@@ -320,8 +312,6 @@ count	callee	no_raw	defs	def
 1	marktree_itr_set_node	0	0	
 1	marktree_itr_step_out_filter	0	1	crates/nvim/src/marktree/iter.rs
 1	marktree_lookup_ns	0	0	
-1	mh_clear	0	1	crates/nvim/src/map/mod.rs
-1	mh_realloc	0	1	crates/nvim/src/map/mod.rs
 1	movecursor	0	1	crates/nvim/src/vterm/screen/callbacks.rs
 1	moverect	0	0	
 1	multiqueue_get	0	1	crates/nvim/src/event/multiqueue.rs
@@ -376,7 +366,6 @@ count	callee	no_raw	defs	def
 1	read_event	0	1	crates/nvim/src/event/rstream.rs
 1	readv	0	0	
 1	realloc	0	1	crates/nvim/src/allocator.rs
-1	rehash	0	1	crates/nvim/src/map/table.rs
 1	replace	0	0	
 1	report	0	0	
 1	rstream_init_fd	0	1	crates/nvim/src/event/rstream.rs
@@ -386,7 +375,6 @@ count	callee	no_raw	defs	def
 1	screen_new	0	1	crates/nvim/src/vterm/screen/mod.rs
 1	seam_free	0	1	crates/nvim/src/memory/mod.rs
 1	set_pen_attr	1	1	crates/nvim/src/vterm/pen.rs
-1	set_put	0	1	crates/nvim/src/map/mod.rs
 1	setlocale	0	0	
 1	setpenattr	0	1	crates/nvim/src/vterm/screen/callbacks.rs
 1	settermprop	0	1	crates/nvim/src/vterm/screen/callbacks.rs
@@ -401,7 +389,6 @@ count	callee	no_raw	defs	def
 1	stdpaths_user_state_subpath	0	1	crates/nvim/src/os/stdpaths.rs
 1	step	0	0	
 1	strchr	0	1	crates/nvim/src/os/cshim.rs
-1	strequal	0	1	crates/nvim/src/memory/mod.rs
 1	strftime	0	0	
 1	strncasecmp	0	1	crates/nvim/src/os/cshim.rs
 1	strptime	0	0	

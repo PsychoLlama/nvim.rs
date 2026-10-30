@@ -52,8 +52,8 @@ use crate::startup::full_screen;
 use crate::state::mode::exmode_active;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    AlignTextPos, ColNr, GridCells, GridView, Handle, Integer, MapHash, ScreenChar, ScreenGrid,
-    Set_glyph, VirtText, WLine, WinConfig, size_t, uint32_t,
+    AlignTextPos, ColNr, GridCells, GridView, Handle, Integer, ScreenChar, ScreenGrid, VirtText,
+    WLine, WinConfig, size_t, uint32_t,
 };
 use crate::ui::{
     ui_call_grid_resize, ui_call_grid_scroll, ui_check_cursor_grid, ui_grid_cursor_goto, ui_has,

@@ -6,7 +6,6 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-// khash instantiations named by the macro that built them, plus
 // libtermkey's getstr hook.
 #![allow(non_camel_case_types)]
 
@@ -16,18 +15,6 @@ use core::mem::ManuallyDrop;
 
 use super::*;
 
-/// The khash-derived maps and sets still in the tree: the URL set the TUI
-/// writes OSC 8 ids from, the glyph cache's variable-stride index, and the
-/// marktree's splice damage. Everything else the editor keeps is an
-/// `IdMap`/`IdSet`/`SlotTable` now (see [`crate::registry`]).
-///
-/// None of them is `Copy`. Each owns its [`MapHash`]'s bucket table and the
-/// `keys` (and, for a map, `values`) array beside it, all of which
-/// `map_destroy`/`set_destroy` free exactly once.
-pub struct Map_uint64_t_MTDamagePair {
-    pub set: Set_uint64_t,
-    pub values: *mut MTDamagePair,
-}
 pub type OptIndex = ::core::ffi::c_int;
 /// The [`DictItem`] a scope dictionary is reached through, whose key is the
 /// empty string and whose value is the scope dictionary itself.
@@ -81,21 +68,6 @@ impl ::core::ops::DerefMut for ScopeDictItem {
     fn deref_mut(&mut self) -> &mut DictItem {
         &mut self.0
     }
-}
-#[derive(Clone)]
-#[repr(C)]
-pub struct Set_cstr_t {
-    pub h: MapHash,
-    pub keys: *mut cstr_t,
-}
-#[derive(Clone)]
-pub struct Set_glyph {
-    pub h: MapHash,
-    pub keys: *mut ::core::ffi::c_char,
-}
-pub struct Set_uint64_t {
-    pub h: MapHash,
-    pub keys: *mut uint64_t,
 }
 /// A vector of owned API strings: ShaDa's register contents, the one keyset
 /// field whose value is a list of binaries rather than an [`Object`] tree.

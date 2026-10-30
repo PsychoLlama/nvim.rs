@@ -1,5 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -7,60 +6,38 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
-//! The open-addressing index behind every `Set_*`/`Map_*` instantiation.
+//! The open-addressing index behind [`DenseSet`](super::DenseSet),
+//! [`DenseMap`](super::DenseMap) and the glyph cache.
 //!
-//! Upstream generates this per key type from a macro; c2rust turned that into
-//! nine near-identical copies. It is one generic implementation here, with the
-//! monomorphic entry points in the parent module.
-//!
-//! The layout is fixed and shared by all of them: `MapHash::hash` is a table
-//! of `n_buckets` slots holding *one-based* indices into a dense `keys` array
-//! (`0` means empty, `MH_TOMBSTONE` means deleted), and the values array of a
-//! `Map` is indexed the same way. So iteration over a set or map is iteration
-//! over `keys[..n_keys]` in insertion order — with the caveat that deleting an
-//! entry moves the last key into the hole, which callers that iterate while
-//! deleting depend on.
-//!
-//! The probe sequence, the load factors and the placement are bit-exact with
-//! the C: `mh_delete`'s swap and the one-based encoding are observable through
-//! the raw arrays, which callers walk directly.
+//! [`ProbeTable`] is a table of `n_buckets` slots holding *one-based*
+//! indices into a dense keys array its owner keeps (`0` means empty,
+//! [`MH_TOMBSTONE`] means deleted). The dense index of a key is its position
+//! in that array — insertion order — so it does not depend on where the key
+//! landed here; the probe sequence, the load factors and the placement are
+//! still upstream's bit for bit, which the tests below and in the parent
+//! pin.
 //!
 //! Derived, via upstream's `map.c`, from klib's `khash.h`, Copyright (c)
 //! 2008, 2009, 2011 Attractive Chaos, under the MIT license; the notice is
 //! reproduced in licenses/klib-LICENSE.txt.
 
-use core::ffi::c_void;
-use core::slice;
-
 use super::policy;
-use crate::memory::{strequal, xcalloc, xfree, xrealloc};
-use crate::types::{MHPutStatus, MapHash, cstr_t, uint32_t, uint64_t};
 
-/// The bucket slot of a key that is not in the table.
-pub const MH_TOMBSTONE: uint32_t = uint32_t::MAX;
+/// A bucket slot that held a key that was deleted; also what a lookup that
+/// misses answers from [`probe`].
+pub const MH_TOMBSTONE: u32 = u32::MAX;
 
-pub const kMHExisting: MHPutStatus = 0;
-pub const kMHNewKeyDidFit: MHPutStatus = 1;
-pub const kMHNewKeyRealloc: MHPutStatus = 2;
-
-/// What a key type owes the index: a 32-bit hash and an equality test.
-///
-/// Taken by reference so that a raw-pointer key (`cstr_t`, `ptr_t`) does not
-/// make these raw-pointer *parameters* — the implementations for those do read
-/// through the pointer, and carry the same obligation the C did: a key handed
-/// to the table must stay valid and unchanged while it is in it.
-pub trait MapKey: Copy {
-    fn map_hash(&self) -> uint32_t;
-    fn map_eq(&self, other: &Self) -> bool;
+/// What a key type owes the index: upstream's 32-bit hash. Equality is the
+/// type's own `Eq`.
+pub trait MapKey {
+    fn map_hash(&self) -> u32;
 }
 
 /// `h * 31 + byte`, spelled `(h << 5) - h + byte` as upstream does.
-fn fold_bytes(bytes: &[u8]) -> uint32_t {
+fn fold_bytes(bytes: &[u8]) -> u32 {
     bytes.iter().fold(0, |h, &b| {
-        (h << 5).wrapping_sub(h).wrapping_add(uint32_t::from(b))
+        (h << 5).wrapping_sub(h).wrapping_add(u32::from(b))
     })
 }
 
@@ -68,102 +45,35 @@ fn fold_bytes(bytes: &[u8]) -> uint32_t {
 ///
 /// The result is upstream's `(uint32_t)` truncation of the mixed word, taken
 /// as its low four bytes so that no narrowing cast is spelled.
-fn mix64(k: uint64_t) -> uint32_t {
+fn mix64(k: u64) -> u32 {
     let [a, b, c, d, ..] = (k >> 33 ^ k ^ k << 11).to_le_bytes();
-    uint32_t::from_le_bytes([a, b, c, d])
+    u32::from_le_bytes([a, b, c, d])
 }
 
-impl MapKey for uint32_t {
-    fn map_hash(&self) -> uint32_t {
+impl MapKey for u32 {
+    fn map_hash(&self) -> u32 {
         *self
     }
-    fn map_eq(&self, other: &Self) -> bool {
-        self == other
-    }
 }
 
-impl MapKey for uint64_t {
-    fn map_hash(&self) -> uint32_t {
+impl MapKey for u64 {
+    fn map_hash(&self) -> u32 {
         mix64(*self)
     }
-    fn map_eq(&self, other: &Self) -> bool {
-        self == other
-    }
 }
 
-impl MapKey for cstr_t {
-    fn map_hash(&self) -> uint32_t {
-        if self.is_null() {
-            // Upstream dereferenced unconditionally; `strequal` (which backs
-            // `map_eq`) does treat null as a value, so answer for it.
-            return 0;
-        }
-        fold_bytes(unsafe { core::ffi::CStr::from_ptr(*self) }.to_bytes())
-    }
-    fn map_eq(&self, other: &Self) -> bool {
-        unsafe { strequal(*self, *other) }
-    }
-}
-
-impl MapKey for &[u8] {
-    fn map_hash(&self) -> uint32_t {
-        // The empty key folds to zero: the C ran no iteration for it, so it
-        // never noticed that its pointer might be null.
-        if self.is_empty() {
-            return 0;
-        }
+/// A string key: upstream's `cstr_t` and `String` hash the same bytes the
+/// same way, and the empty key folds to zero.
+impl MapKey for [u8] {
+    fn map_hash(&self) -> u32 {
         fold_bytes(self)
     }
-    fn map_eq(&self, other: &Self) -> bool {
-        self == other
+}
+
+impl MapKey for Vec<u8> {
+    fn map_hash(&self) -> u32 {
+        fold_bytes(self)
     }
-}
-
-/// Discard the bucket table and start again with room for `n_min_buckets`.
-/// The keys are untouched: the caller rehashes them.
-pub(super) fn realloc(h: &mut MapHash, n_min_buckets: uint32_t) {
-    let n_buckets = policy::bucket_count(n_min_buckets);
-    // SAFETY: `h.hash` is this module's own allocation, or null.
-    let table = unsafe {
-        xfree(h.hash.cast::<c_void>());
-        xcalloc(n_buckets as usize, size_of::<uint32_t>())
-    };
-    h.hash = table.cast::<uint32_t>();
-    h.size = 0;
-    h.n_occupied = 0;
-    h.n_buckets = n_buckets;
-    h.upper_bound = policy::upper_bound(n_buckets);
-}
-
-/// Forget every entry, keeping the bucket table's allocation.
-pub(super) fn clear(h: &mut MapHash) {
-    if h.hash.is_null() {
-        return;
-    }
-    unsafe { buckets_mut(h) }.fill(0);
-    h.size = 0;
-    h.n_occupied = 0;
-    h.n_keys = 0;
-}
-
-/// # Safety
-/// `h.hash` must point at `h.n_buckets` slots.
-unsafe fn buckets(h: &MapHash) -> &[uint32_t] {
-    unsafe { slice::from_raw_parts(h.hash, h.n_buckets as usize) }
-}
-
-/// # Safety
-/// As [`buckets`], and no other reference to the table may be live.
-unsafe fn buckets_mut(h: &mut MapHash) -> &mut [uint32_t] {
-    unsafe { slice::from_raw_parts_mut(h.hash, h.n_buckets as usize) }
-}
-
-/// The `i`th key of a dense keys array.
-///
-/// # Safety
-/// `keys` must point at more than `i` live keys.
-unsafe fn key_at<K: MapKey>(keys: *const K, i: uint32_t) -> K {
-    unsafe { *keys.add(i as usize) }
 }
 
 /// The probe sequence: quadratic, `i += ++step`, masked to the table.
@@ -176,15 +86,14 @@ unsafe fn key_at<K: MapKey>(keys: *const K, i: uint32_t) -> K {
 /// minus one — and answers whether that is the key being looked for. Pulling
 /// the comparison out is what lets the glyph cache, whose keys array is a
 /// packed run of NUL-terminated strings rather than fixed-size entries, share
-/// this walk instead of copying it: the placement is observable through the
-/// arrays, so the two must not be able to drift.
+/// this walk instead of copying it.
 pub fn probe(
-    buckets: &[uint32_t],
-    mask: uint32_t,
-    hash: uint32_t,
+    buckets: &[u32],
+    mask: u32,
+    hash: u32,
     put: bool,
-    is_stored: impl Fn(uint32_t) -> bool,
-) -> uint32_t {
+    is_stored: impl Fn(u32) -> bool,
+) -> u32 {
     let mut i = hash & mask;
     let last = i;
     let mut site = if put { last } else { MH_TOMBSTONE };
@@ -207,168 +116,121 @@ pub fn probe(
     site
 }
 
-/// The bucket `key` belongs in. See [`probe`].
-///
-/// # Safety
-/// `keys` must point at `h.n_keys` live keys and `h.hash` at `h.n_buckets`
-/// slots.
-pub(super) unsafe fn find_bucket<K: MapKey>(
-    h: &MapHash,
-    keys: *const K,
-    key: &K,
-    put: bool,
-) -> uint32_t {
-    // SAFETY: the caller promises the table and the keys array.
-    let buckets = unsafe { buckets(h) };
-    probe(buckets, h.n_buckets - 1, key.map_hash(), put, |k| {
-        // SAFETY: a live bucket holds a one-based index into `keys`.
-        unsafe { key_at(keys, k) }.map_eq(key)
-    })
+/// The bucket half of a khash table: the slots and the counts that decide
+/// when it grows. The keys array is the owner's.
+#[derive(Clone, Debug, Default)]
+pub struct ProbeTable {
+    /// `n_buckets` slots, a power of two, or none before the first insert.
+    buckets: Vec<u32>,
+    /// Live entries.
+    size: u32,
+    /// Live entries plus tombstones.
+    n_occupied: u32,
+    /// How many slots may be occupied before the table is resized.
+    upper_bound: u32,
 }
 
-/// The dense index of `key`, or `MH_TOMBSTONE` if it is not present.
-///
-/// # Safety
-/// As [`find_bucket`].
-pub(super) unsafe fn get<K: MapKey>(h: &MapHash, keys: *const K, key: &K) -> uint32_t {
-    if h.n_buckets == 0 {
-        return MH_TOMBSTONE;
+impl ProbeTable {
+    /// No slots: the first insert sizes the table.
+    pub const fn new() -> Self {
+        ProbeTable {
+            buckets: Vec::new(),
+            size: 0,
+            n_occupied: 0,
+            upper_bound: 0,
+        }
     }
-    // SAFETY: the caller promises the table and the keys array.
-    let idx = unsafe { find_bucket(h, keys, key, false) };
-    if idx == MH_TOMBSTONE {
-        return MH_TOMBSTONE;
-    }
-    // SAFETY: as above.
-    let buckets = unsafe { buckets(h) };
-    buckets[idx as usize] - 1
-}
 
-/// Re-point every bucket at its key after the table was resized or cleared.
-///
-/// # Safety
-/// As [`find_bucket`], with an all-zero bucket table.
-unsafe fn rehash<K: MapKey>(h: &mut MapHash, keys: *const K) {
-    for k in 0..h.n_keys {
-        // SAFETY: the caller promises `h.n_keys` live keys and the table.
-        let idx = unsafe { find_bucket(h, keys, &key_at(keys, k), true) } as usize;
-        // SAFETY: as above; no other reference to the table is live here.
-        let buckets = unsafe { buckets_mut(h) };
+    /// The slots, each 0, a tombstone, or a dense index plus one.
+    pub fn buckets(&self) -> &[u32] {
+        &self.buckets
+    }
+
+    /// Live entries.
+    pub fn size(&self) -> u32 {
+        self.size
+    }
+
+    fn n_buckets(&self) -> u32 {
+        u32::try_from(self.buckets.len()).expect("a bucket count fits a u32")
+    }
+
+    /// The bucket a key hashing to `hash` is in (or, with `put`, belongs
+    /// in). See [`probe`]. The table must have been sized.
+    pub fn find(&self, hash: u32, put: bool, is_stored: impl Fn(u32) -> bool) -> u32 {
+        probe(&self.buckets, self.n_buckets() - 1, hash, put, is_stored)
+    }
+
+    /// The dense index a lookup for `hash` finds, if any.
+    pub fn get(&self, hash: u32, is_stored: impl Fn(u32) -> bool) -> Option<u32> {
+        if self.buckets.is_empty() {
+            return None;
+        }
+        let idx = self.find(hash, false, is_stored);
+        (idx != MH_TOMBSTONE).then(|| self.buckets[idx as usize] - 1)
+    }
+
+    /// The entry in bucket `idx`: `Some(dense index)` when it is live.
+    pub fn entry(&self, idx: u32) -> Option<u32> {
+        let slot = self.buckets[idx as usize];
+        (slot != 0 && slot != MH_TOMBSTONE).then(|| slot - 1)
+    }
+
+    /// Before an insert: when the table is at its bound, grow it. `true` when
+    /// the owner must now [`rehash`](Self::rehash) every key into the
+    /// all-zero table.
+    ///
+    /// Nothing deletes from these tables, so there are no tombstones and the
+    /// occupied count is the live count: upstream's "shed the tombstones
+    /// instead of growing" branch (`should_grow`) can never be taken.
+    pub fn make_room(&mut self) -> bool {
+        if self.n_occupied < self.upper_bound {
+            return false;
+        }
+        self.resize(self.n_buckets() + 1);
+        true
+    }
+
+    /// Discard the slots and start again with room for `n_min_buckets`.
+    fn resize(&mut self, n_min_buckets: u32) {
+        let n_buckets = policy::bucket_count(n_min_buckets);
+        self.buckets.clear();
+        self.buckets.resize(n_buckets as usize, 0);
+        self.size = 0;
+        self.n_occupied = 0;
+        self.upper_bound = policy::upper_bound(n_buckets);
+    }
+
+    /// Re-point a bucket at dense index `dense` after [`make_room`]
+    /// (Self::make_room) emptied the table: the next key of the rehash walk.
+    pub fn rehash(&mut self, hash: u32, dense: u32, is_stored: impl Fn(u32) -> bool) {
+        let idx = self.find(hash, true, is_stored) as usize;
         assert!(
-            buckets[idx] == 0,
+            self.buckets[idx] == 0,
             "map: rehash landed on an occupied bucket"
         );
-        buckets[idx] = k + 1;
-    }
-    h.size = h.n_keys;
-    h.n_occupied = h.size;
-}
-
-/// Insert `key`, or find it. Answers its dense index and reports through
-/// `status` whether it is new and whether the keys array moved — the caller
-/// grows its parallel values array on `kMHNewKeyRealloc`.
-///
-/// # Safety
-/// As [`find_bucket`]; `keys` must be the `keys` field itself, since this may
-/// reallocate it.
-pub(super) unsafe fn put<K: MapKey>(
-    h: &mut MapHash,
-    keys: &mut *mut K,
-    key: K,
-    status: &mut MHPutStatus,
-) -> uint32_t {
-    if h.n_occupied >= h.upper_bound {
-        if policy::should_grow(h.size, h.upper_bound) {
-            realloc(h, h.n_buckets + 1);
-        } else {
-            // Enough of the occupied buckets are tombstones that dropping
-            // them alone gets back under the bound.
-            // SAFETY: `realloc` and the caller both leave `h.hash` sized.
-            unsafe { buckets_mut(h) }.fill(0);
-            h.size = 0;
-            h.n_occupied = 0;
-        }
-        // SAFETY: the bucket table is all-zero and the keys are untouched.
-        unsafe { rehash(h, *keys) };
-    }
-    // SAFETY: the caller promises the table and the keys array.
-    let (idx, slot) = unsafe {
-        let idx = find_bucket(h, *keys, &key, true) as usize;
-        (idx, buckets(h)[idx])
-    };
-    if slot != 0 && slot != MH_TOMBSTONE {
-        *status = kMHExisting;
-        let pos = slot - 1;
-        // SAFETY: a live bucket holds a one-based index into `keys`.
-        assert!(
-            unsafe { key_at(*keys, pos) }.map_eq(&key),
-            "map: bucket points at the wrong key"
-        );
-        return pos;
+        self.buckets[idx] = dense + 1;
+        self.size += 1;
+        self.n_occupied += 1;
     }
 
-    h.size += 1;
-    if slot == 0 {
-        h.n_occupied += 1;
+    /// Point bucket `idx` — a miss [`find`](Self::find) answered with `put`
+    /// — at the new dense index `dense`.
+    pub fn occupy(&mut self, idx: u32, dense: u32) {
+        let slot = &mut self.buckets[idx as usize];
+        debug_assert!(*slot == 0 || *slot == MH_TOMBSTONE, "bucket is free");
+        if *slot == 0 {
+            self.n_occupied += 1;
+        }
+        self.size += 1;
+        *slot = dense + 1;
     }
-    let pos = h.n_keys;
-    h.n_keys += 1;
-    if pos >= h.keys_capacity {
-        h.keys_capacity = policy::grown_keys_capacity(h.keys_capacity, policy::MIN_KEYS);
-        let capacity = h.keys_capacity as usize * size_of::<K>();
-        // SAFETY: `*keys` is this module's own allocation, or null.
-        *keys = unsafe { xrealloc(keys.cast::<c_void>(), capacity) }.cast::<K>();
-        *status = kMHNewKeyRealloc;
-    } else {
-        *status = kMHNewKeyDidFit;
-    }
-    // SAFETY: `pos` is inside the capacity just checked or grown to, and no
-    // other reference to the bucket table is live.
-    let buckets = unsafe {
-        keys.add(pos as usize).write(key);
-        buckets_mut(h)
-    };
-    buckets[idx] = pos + 1;
-    pos
-}
 
-/// A `Map`'s slot for `key`, inserting it (with `init` as the value) if it is
-/// absent. `new_item`, when given, reports whether it was.
-///
-/// # Safety
-/// As [`put`]; `values` must be the `values` field itself.
-pub(super) unsafe fn map_put_ref<K: MapKey, V: Copy>(
-    h: &mut MapHash,
-    keys: &mut *mut K,
-    values: &mut *mut V,
-    key: K,
-    init: V,
-    key_alloc: *mut *mut K,
-    new_item: *mut bool,
-) -> *mut V {
-    let mut status = kMHExisting;
-    // SAFETY: the caller promises the table and both arrays.
-    let k = unsafe { put(h, keys, key, &mut status) };
-    if status != kMHExisting {
-        if status == kMHNewKeyRealloc {
-            let capacity = h.keys_capacity as usize * size_of::<V>();
-            // SAFETY: `*values` is this module's own allocation, or null,
-            // and `put` has just grown `keys_capacity` to match.
-            *values = unsafe { xrealloc(values.cast::<c_void>(), capacity) }.cast::<V>();
-        }
-        // SAFETY: `k` is the slot `put` just claimed.
-        unsafe { values.add(k as usize).write(init) };
-    }
-    // SAFETY: the two out-parameters are the caller's, and `k` indexes a
-    // live key, so it indexes a value too.
-    unsafe {
-        if !new_item.is_null() {
-            *new_item = status != kMHExisting;
-        }
-        if !key_alloc.is_null() {
-            *key_alloc = keys.add(k as usize);
-        }
-        values.add(k as usize)
+    /// Forget every entry, keeping the slots' allocation.
+    pub fn clear(&mut self) {
+        self.buckets.fill(0);
+        self.size = 0;
+        self.n_occupied = 0;
     }
 }
 
@@ -378,13 +240,13 @@ mod tests {
 
     /// A bucket table plus the one-based entries a set with `keys` in it
     /// would hold, built by walking `probe` exactly as `put` does.
-    fn build(n_buckets: uint32_t, keys: &[uint32_t]) -> Vec<uint32_t> {
+    fn build(n_buckets: u32, keys: &[u32]) -> Vec<u32> {
         let mut buckets = vec![0; n_buckets as usize];
         for (k, &key) in keys.iter().enumerate() {
             let idx = probe(&buckets, n_buckets - 1, key.map_hash(), true, |slot| {
                 keys[slot as usize] == key
             });
-            buckets[idx as usize] = uint32_t::try_from(k).expect("fits") + 1;
+            buckets[idx as usize] = u32::try_from(k).expect("fits") + 1;
         }
         buckets
     }
@@ -412,14 +274,14 @@ mod tests {
     /// Every key finds itself again, and nothing else does.
     #[test]
     fn every_key_is_found_where_it_was_put() {
-        let keys: Vec<uint32_t> = (0..12).map(|i| i * 7 + 3).collect();
+        let keys: Vec<u32> = (0..12).map(|i| i * 7 + 3).collect();
         let buckets = build(16, &keys);
         for (k, &key) in keys.iter().enumerate() {
             let idx = probe(&buckets, 15, key.map_hash(), false, |slot| {
                 keys[slot as usize] == key
             });
             assert_ne!(idx, MH_TOMBSTONE);
-            assert_eq!(buckets[idx as usize], uint32_t::try_from(k).unwrap() + 1);
+            assert_eq!(buckets[idx as usize], u32::try_from(k).unwrap() + 1);
         }
         let absent = 1000;
         let idx = probe(&buckets, 15, absent.map_hash(), false, |slot| {
@@ -470,7 +332,7 @@ mod tests {
     fn the_integer_mix_is_upstreams() {
         for k in [0u64, 1, 0xffff_ffff, 0x1234_5678_9abc_def0, u64::MAX] {
             let expected = (k >> 33 ^ k ^ k << 11) & 0xffff_ffff;
-            assert_eq!(uint64_t::from(mix64(k)), expected);
+            assert_eq!(u64::from(mix64(k)), expected);
         }
     }
 

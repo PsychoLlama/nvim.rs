@@ -58,24 +58,9 @@ use crate::marktree::node::*;
 pub use crate::marktree::pair::*;
 pub use crate::marktree::rebalance::*;
 pub use crate::marktree::splice::*;
-use crate::types::{
-    MTKey, MTPos, Map_uint64_t_MTDamagePair, MapHash, MarkTree, MarkTreeIter, uint32_t, uint64_t,
-};
+use crate::types::{MTKey, MTPos, MarkTree, MarkTreeIter, uint32_t, uint64_t};
 
-/// What a splice recorded about pairs whose halves crossed while it ran.
-pub type MTDamageMap = Map_uint64_t_MTDamagePair;
-pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const MAPHASH_INIT: MapHash = MapHash {
-    n_buckets: 0 as uint32_t,
-    size: 0 as uint32_t,
-    n_occupied: 0 as uint32_t,
-    upper_bound: 0 as uint32_t,
-    n_keys: 0 as uint32_t,
-    keys_capacity: 0 as uint32_t,
-    hash: ::core::ptr::null_mut::<uint32_t>(),
-};
-pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 
 /// Insert `key`, and — where `end_row` is non-negative — the end key that makes
 /// it a range.

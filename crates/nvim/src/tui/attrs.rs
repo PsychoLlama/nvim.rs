@@ -17,8 +17,7 @@
 
 use crate::global_cell::GlobalCell;
 use crate::highlight::HlAttrFlags;
-use crate::map::mh_put_cstr_t;
-use crate::memory::xstrdup;
+use crate::map::DenseSet;
 use crate::tui::output::{out, out_cstr, out_fmt, terminfo_out, terminfo_print_nums};
 use crate::tui::paint::invalidate;
 use crate::tui::terminfo::caps::{
@@ -29,14 +28,8 @@ use crate::tui::terminfo::caps::{
     kTerm_set_rgb_foreground, kTerm_set_underline_style,
 };
 use crate::tui::tui::DEFAULT_ATTRS;
-use crate::types::{Array, HlAttrs, Integer, MHPutStatus, Set_cstr_t, TUIData, cstr_t, int32_t};
+use crate::types::{Array, HlAttrs, Integer, TUIData, int32_t};
 use core::ffi::{CStr, c_int};
-
-/// The interned OSC 8 targets, by address: `mh_put_cstr_t` takes one, and the
-/// key it answers is an index into the set's own `keys` array.
-fn url_set() -> *mut Set_cstr_t {
-    URLS.ptr()
-}
 
 /// The underline style parameter each `UNDER*` bit asks the terminal for,
 /// in the order the sequences are emitted.
@@ -55,30 +48,17 @@ const URL_ID_BASE: u32 = 0xe1ea_0000;
 const OSC8_TERMINATOR: &[u8] = b"\x1b\\";
 
 /// Every URL the editor has attached to a highlight, interned so an
-/// attribute can name one by index. The copies are never freed: an
-/// attribute may name one at any time until the TUI exits.
-static URLS: GlobalCell<Set_cstr_t> = GlobalCell::new(Set_cstr_t::EMPTY);
-
-/// `mh_put`'s "the key was already there" status.
-const KEY_EXISTING: MHPutStatus = 0;
+/// attribute can name one by its dense index, which is also the OSC 8 id.
+/// Never emptied: an attribute may name one at any time until the TUI exits.
+static URLS: GlobalCell<DenseSet<Vec<u8>>> = GlobalCell::new(DenseSet::new());
 
 /// Intern `url` and return the index highlights name it by, or -1 for none.
 pub fn tui_add_url(_tui: &mut TUIData, url: Option<&CStr>) -> int32_t {
     let Some(url) = url else {
         return -1;
     };
-    let url = url.as_ptr();
-    // SAFETY: `url` is NUL-terminated, and the set is only ever touched from
-    // the TUI's thread.
-    unsafe {
-        let mut status: MHPutStatus = KEY_EXISTING;
-        let key = mh_put_cstr_t(url_set(), url as cstr_t, &raw mut status);
-        // A new key borrows the caller's string; give the set its own copy.
-        if status != KEY_EXISTING {
-            *(*url_set()).keys.add(key as usize) = xstrdup(url) as cstr_t;
-        }
-        key as int32_t
-    }
+    let (key, _) = URLS.with_mut(|urls| urls.insert_with(url.to_bytes(), <[u8]>::to_vec));
+    key as int32_t
 }
 
 /// Record highlight `id`'s definition.
@@ -372,13 +352,12 @@ fn set_url(tui: &mut TUIData, url: int32_t) {
         // between them — which wraps what it writes in synchronised-output
         // or cursor sequences, inside the OSC.
         let id = URL_ID_BASE.wrapping_add(url as u32);
-        // SAFETY: the interned key is a NUL-terminated copy this module owns
-        // and never frees.
-        let target = unsafe { CStr::from_ptr(*(*url_set()).keys.add(url as usize)) };
         let mut seq = format!("\x1b]8;id={id};").into_bytes();
-        let target = target.to_bytes();
-        seq.reserve(target.len() + OSC8_TERMINATOR.len());
-        seq.extend_from_slice(target);
+        URLS.with(|urls| {
+            let target = &urls.keys()[url as usize];
+            seq.reserve(target.len() + OSC8_TERMINATOR.len());
+            seq.extend_from_slice(target);
+        });
         seq.extend_from_slice(OSC8_TERMINATOR);
         out(tui, &seq);
     } else {

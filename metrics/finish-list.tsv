@@ -21,12 +21,7 @@ hashtab.rs	*	1	23	15	15	ref:6	value:10 str:5	str:2	CStr::from_ptr:2 from_raw_par
 hashtab.rs	hashtab.rs	1	23	15	15	ref:6	value:10 str:5	str:2	CStr::from_ptr:2 from_raw_parts:2 .write:1 c_str:1 xfree:1
 input.rs	*	1	6	0	1	compound:2	-	-	at:1
 input.rs	input.rs	1	6	0	1	compound:2	-	-	at:1
-map/	*	2	40	17	24	ref:5 compound:4 deref:1 expr:1	other:21 pp:3	other:6	xrealloc:2 CStr::from_ptr:1 from_raw_parts:1 from_raw_parts_mut:1 strequal:1
-map/	map/mod.rs	1	12	9	7	ref:5	other:13 pp:2	other:5	-
-map/	map/table.rs	1	28	8	17	compound:4 deref:1 expr:1	other:8 pp:1	other:1	xrealloc:2 CStr::from_ptr:1 from_raw_parts:1 from_raw_parts_mut:1 strequal:1
-map_glyph_cache.rs	*	1	7	0	7	-	-	-	from_raw_parts:2 from_raw_parts_mut:2 mh_clear:1 mh_realloc:1 xrealloc:1
-map_glyph_cache.rs	map_glyph_cache.rs	1	7	0	7	-	-	-	from_raw_parts:2 from_raw_parts_mut:2 mh_clear:1 mh_realloc:1 xrealloc:1
-marktree/	*	10	102	15	74	deref:14 expr:10 ref:4	other:14	other:8 void:1	xfree:8 copy_nonoverlapping:3 from_raw_parts:1 from_raw_parts_mut:1 xmalloc:1 xmemdup:1 xrealloc:1
+marktree/	*	10	97	15	71	deref:13 expr:10 ref:3	other:14	other:8 void:1	xfree:5 copy_nonoverlapping:3 from_raw_parts:1 from_raw_parts_mut:1 xmalloc:1 xmemdup:1 xrealloc:1
 marktree/	marktree/check.rs	1	6	0	5	deref:1	-	-	xfree:1 xmemdup:1
 marktree/	marktree/cursor.rs	1	5	1	4	ref:1	other:2	other:1	-
 marktree/	marktree/inspect.rs	1	1	0	1	-	-	-	-
@@ -36,7 +31,7 @@ marktree/	marktree/mod.rs	1	17	2	17	-	-	-	-
 marktree/	marktree/node.rs	1	21	7	7	deref:9 expr:4 ref:1	other:9	other:4	xfree:2
 marktree/	marktree/pair.rs	1	3	0	2	expr:1	-	-	-
 marktree/	marktree/rebalance.rs	1	5	0	5	-	-	-	xfree:1
-marktree/	marktree/splice.rs	1	13	0	10	deref:1 expr:1 ref:1	other:1	-	xfree:3
+marktree/	marktree/splice.rs	1	8	0	7	expr:1	other:1	-	-
 mbyte/	*	3	11	4	5	deref:3 compound:1	str:4	-	-
 mbyte/	mbyte/utf8/mod.rs	1	10	3	5	deref:2 compound:1	str:3	-	-
 mbyte/	mbyte/utf8/tables.rs	1	0	0	0	-	-	-	-
