@@ -667,8 +667,8 @@ pub struct Buffer {
     /// counted up; never walked.
     pub(crate) b_extmark_ns: ExtmarkNs,
     pub b_prev_line_count: ::core::ffi::c_int,
-    pub update_channels: file_buffer_update_channels,
-    pub update_callbacks: file_buffer_update_callbacks,
+    /// What `nvim_buf_attach` attached: `None` until something did.
+    pub(crate) update_subscribers: Option<Box<crate::buffer_updates::Subscribers>>,
     pub update_need_codepoints: bool,
     pub deleted_bytes: size_t,
     pub deleted_bytes2: size_t,
@@ -681,16 +681,6 @@ pub struct file_buffer_b_signcols {
     pub last_max: ::core::ffi::c_int,
     pub count: [::core::ffi::c_int; 9],
     pub autom: bool,
-}
-pub struct file_buffer_update_callbacks {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut BufUpdateCallbacks,
-}
-pub struct file_buffer_update_channels {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut uint64_t,
 }
 pub type GetFileRet = ::core::ffi::c_int;
 pub type GetFileFlags = ::core::ffi::c_uint;

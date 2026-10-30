@@ -6,27 +6,20 @@
 //! `nvim_buf_{lines,changedtick,detach}_event` over RPC, the callbacks get
 //! `on_lines` / `on_bytes` / `on_changedtick` / `on_reload` / `on_detach`.
 //!
-//! [`KVec`] is the lever. Both arrays are fields of `Buffer`, so borrowing
-//! their three parts is a safe operation once the buffer pointer is wrapped
-//! as a [`Buf`], and everything above it — the loops, the compaction, the
-//! argument building — is ordinary checked code.
-//!
-//! Every view is **momentary**, and that is load-bearing rather than tidy.
-//! `nlua_call_ref` re-enters the editor: a callback may attach (which
-//! reallocates the array being walked), detach, or edit the buffer and come
-//! back through [`buf_updates_send_changes`] recursively (which truncates
-//! it). That is why upstream re-reads `kv_size`/`kv_A` on every iteration
-//! instead of caching a pointer, why the loops here are `while i < len()`
-//! rather than `for i in 0..len`, and why [`KVec::at`] indexes the
-//! allocation rather than the live prefix — see its comment.
+//! Every access is **momentary**, and that is load-bearing rather than tidy.
+//! `nlua_call_ref` re-enters the editor: a callback may attach (which grows
+//! the list being walked), detach, or edit the buffer and come back through
+//! [`buf_updates_send_changes`] recursively (which truncates it). That is why
+//! upstream re-reads `kv_size`/`kv_A` on every iteration instead of caching a
+//! pointer, why the loops here are `while i < len()` rather than
+//! `for i in 0..len`, and why [`SubscriberList::at`] indexes every slot ever
+//! written rather than the live prefix — see its comment.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use core::ffi::{CStr, c_int};
-use core::{ptr, slice};
 
 use crate::api::buffer::{LineSink, buf_collect_lines};
 use crate::buffer::buf_get_changedtick;
@@ -35,7 +28,6 @@ use crate::guard::Lock;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::lua::executor::{nlua_call_ref_quiet, release_luaref};
 use crate::memline::ml_flush_deleted_bytes;
-use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree, xrealloc};
 use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
@@ -52,129 +44,124 @@ const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
 const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL + 1;
 
 // ---------------------------------------------------------------------------
-// The two `kvec_t`s
+// The two subscriber lists
 
-/// One of `Buffer`'s two subscriber arrays — `klib/kvec.h`'s growable vector
-/// — borrowed field by field, so that only the element access below is
-/// unchecked.
-///
-/// Short-lived by construction: the borrow of the buffer ends with the
-/// expression that took it, which is what keeps a re-entrant callback from
-/// running while a `&mut` into the array is outstanding.
-struct KVec<'a, T> {
-    size: &'a mut size_t,
-    capacity: &'a mut size_t,
-    items: &'a mut *mut T,
+/// One of a buffer's two subscriber lists — upstream's `kvec_t` — with the
+/// one property of that layout the loops below lean on: shrinking the live
+/// length forgets nothing. `slots` is every element ever written (the
+/// allocation, as far as anything reads it); `len` is the live prefix.
+pub(crate) struct SubscriberList<T> {
+    slots: Vec<T>,
+    len: usize,
 }
 
-impl<T: Clone> KVec<'_, T> {
+impl<T> Default for SubscriberList<T> {
+    fn default() -> Self {
+        SubscriberList {
+            slots: Vec::new(),
+            len: 0,
+        }
+    }
+}
+
+impl<T: Clone> SubscriberList<T> {
     /// `kv_size`.
-    fn len(&self) -> size_t {
-        *self.size
+    fn len(&self) -> usize {
+        self.len
     }
 
     /// `kv_size(v) = n`, which upstream writes as a plain assignment when a
     /// compaction pass has finished.
-    fn set_len(&mut self, len: size_t) {
-        *self.size = len;
+    fn set_len(&mut self, len: usize) {
+        assert!(
+            len <= self.slots.len(),
+            "subscriber list grown past its slots"
+        );
+        self.len = len;
     }
 
-    /// The live prefix. Only for whole-array questions asked between
+    /// The live prefix. Only for whole-list questions asked between
     /// callbacks — an element read that a callback could race wants
-    /// [`KVec::at`].
+    /// [`SubscriberList::at`].
     fn as_slice(&self) -> &[T] {
-        if *self.size == 0 {
-            return &[];
-        }
-        // SAFETY: a kvec's first `size` elements are initialised, and
-        // `items` is non-null once anything has been pushed.
-        unsafe { slice::from_raw_parts(*self.items, *self.size) }
+        &self.slots[..self.len]
     }
 
-    /// `kv_A`: element `i` of the *allocation*, not of the live prefix.
+    /// `kv_A`: element `i` of every slot written, not of the live prefix.
     ///
     /// Upstream bounds `kv_A` by nothing at all, and the difference is
     /// reachable: the compaction loops re-read `kv_size` each iteration, so
     /// a callback that detaches during `nlua_call_ref` shrinks it under
     /// them and leaves `i` and `j` past the new end but still inside the
-    /// array — and still pointing at slots this buffer has written. Bound
-    /// by `capacity` to keep that case behaving as upstream does.
-    fn at(&self, i: size_t) -> T {
-        assert!(i < *self.capacity, "kvec index past the allocation");
-        // SAFETY: `i` is inside the allocation, and every index these loops
-        // reach was written by a `push` before `size` ever passed it.
-        unsafe { (*self.items.add(i)).clone() }
+    /// array — and still pointing at slots this buffer has written. Indexing
+    /// the written slots keeps that case behaving as upstream does.
+    fn at(&self, i: usize) -> T {
+        self.slots[i].clone()
     }
 
-    /// `kv_A(v, i) = x`. [`KVec::at`]'s bound, for the same reason.
-    fn set_at(&mut self, i: size_t, value: T) {
-        assert!(i < *self.capacity, "kvec index past the allocation");
-        // SAFETY: as [`KVec::at`], and `push` also reaches the first
-        // uninitialised slot past the live prefix. `write` is what covers
-        // both: it never reads what is already there. The element types are
-        // plain records whose owned handles are released by
-        // `free_update_callbacks`, not by dropping the array, so overwriting
-        // a live slot releases nothing either way.
-        unsafe { self.items.add(i).write(value) };
+    /// `kv_A(v, i) = x`. [`SubscriberList::at`]'s bound, for the same reason.
+    /// The element types are plain records whose owned handles are released
+    /// by `free_update_callbacks`, not by dropping, so overwriting a live
+    /// slot releases nothing.
+    fn set_at(&mut self, i: usize, value: T) {
+        self.slots[i] = value;
     }
 
-    /// `kv_push`.
+    /// `kv_push`: into the first slot past the live prefix.
     fn push(&mut self, value: T) {
-        if *self.size == *self.capacity {
-            *self.capacity = if *self.capacity != 0 {
-                *self.capacity << 1
-            } else {
-                8
-            };
-            let bytes = size_of::<T>() * *self.capacity;
-            let old = self.items.cast::<::core::ffi::c_void>();
-            // SAFETY: `items` is null or this array's own allocation, and
-            // the new size counts the same element type.
-            *self.items = unsafe { xrealloc(old, bytes) }.cast::<T>();
+        if self.len == self.slots.len() {
+            self.slots.push(value);
+        } else {
+            self.slots[self.len] = value;
         }
-        let end = *self.size;
-        *self.size = end + 1;
-        self.set_at(end, value);
+        self.len += 1;
     }
 
     /// `kv_destroy`, which in this klib also re-inits the vector.
     fn destroy(&mut self) {
-        // SAFETY: `items` is null or this array's own allocation, and the
-        // three fields are reset before anything can read them again.
-        unsafe { xfree(self.items.cast::<::core::ffi::c_void>()) };
-        *self.size = 0;
-        *self.capacity = 0;
-        *self.items = ptr::null_mut();
+        *self = SubscriberList::default();
     }
 }
 
+/// What is watching a buffer: the RPC channels and the Lua callback tables.
+/// A buffer holds one only once something attached (`Buffer` is allocated
+/// zeroed, and a `None` box is what zeroed bytes are).
+#[derive(Default)]
+pub(crate) struct Subscribers {
+    channels: SubscriberList<uint64_t>,
+    callbacks: SubscriberList<BufUpdateCallbacks>,
+}
+
 impl Buf {
+    /// This buffer's subscribers, created empty on first use.
+    fn subscribers(&mut self) -> &mut Subscribers {
+        self.update_subscribers.get_or_insert_with(Box::default)
+    }
+
     /// The RPC channels watching this buffer.
-    fn channels(&mut self) -> KVec<'_, uint64_t> {
-        let kv = &mut self.update_channels;
-        KVec {
-            size: &mut kv.size,
-            capacity: &mut kv.capacity,
-            items: &mut kv.items,
-        }
+    fn channels(&mut self) -> &mut SubscriberList<uint64_t> {
+        &mut self.subscribers().channels
     }
 
     /// The Lua callback tables watching this buffer.
-    fn callbacks(&mut self) -> KVec<'_, BufUpdateCallbacks> {
-        let kv = &mut self.update_callbacks;
-        KVec {
-            size: &mut kv.size,
-            capacity: &mut kv.capacity,
-            items: &mut kv.items,
-        }
+    fn callbacks(&mut self) -> &mut SubscriberList<BufUpdateCallbacks> {
+        &mut self.subscribers().callbacks
     }
 }
 
 /// Drop every subscriber `buffer` has, as a buffer reused for another file
-/// must: `kv_destroy` + `kv_init` of both arrays.
+/// must: `kv_destroy` + `kv_init` of both lists.
 pub(crate) fn reset_subscribers(mut buffer: Buf) {
-    buffer.channels().destroy();
-    buffer.callbacks().destroy();
+    buffer.update_subscribers = None;
+}
+
+/// Whether a Lua callback is watching `buffer` — the only subscribers that
+/// are told how many bytes an edit deleted.
+pub(crate) fn has_callbacks(buffer: Buf) -> bool {
+    buffer
+        .update_subscribers
+        .as_ref()
+        .is_some_and(|subscribers| subscribers.callbacks.len() != 0)
 }
 
 // ---------------------------------------------------------------------------
@@ -336,7 +323,6 @@ fn register(
 /// the whole buffer as one replacement of the range `0 .. -1`.
 fn send_whole_buffer(buffer: Buf, channel_id: uint64_t) {
     let line_count = buffer.line_count() as size_t;
-    let mut arena = ARENA_EMPTY;
     let mut linedata = Array::EMPTY;
     if line_count > 0 {
         linedata = collect_lines(buffer, line_count, 1);
@@ -351,9 +337,6 @@ fn send_whole_buffer(buffer: Buf, channel_id: uint64_t) {
     args.push(Object::array(linedata));
     args.push(Object::boolean(false));
     send_event(channel_id, c"nvim_buf_lines_event", args.array());
-
-    // SAFETY: the arena is this frame's, and `linedata` is not read again.
-    unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
 }
 
 /// Whether anything is watching `buffer`.
@@ -361,8 +344,13 @@ pub fn buf_updates_active(buffer: Buf) -> bool {
     active(buffer)
 }
 
-fn active(mut buffer: Buf) -> bool {
-    buffer.channels().len() != 0 || buffer.callbacks().len() != 0
+fn active(buffer: Buf) -> bool {
+    buffer
+        .update_subscribers
+        .as_ref()
+        .is_some_and(|subscribers| {
+            subscribers.channels.len() != 0 || subscribers.callbacks.len() != 0
+        })
 }
 
 /// Tell one channel it is no longer attached.
@@ -382,6 +370,9 @@ pub fn buf_updates_unregister(buffer: Buf, channelid: uint64_t) {
 }
 
 fn unregister(mut buffer: Buf, channelid: uint64_t) {
+    if buffer.update_subscribers.is_none() {
+        return;
+    }
     let size = buffer.channels().len();
     if size == 0 {
         return;
@@ -390,7 +381,7 @@ fn unregister(mut buffer: Buf, channelid: uint64_t) {
     // Compact the id out of the list — it should never appear more than
     // once, but upstream counts rather than assuming.
     let (mut j, mut found) = (0, 0);
-    let mut channels = buffer.channels();
+    let channels = buffer.channels();
     for i in 0..size {
         if channels.at(i) == channelid {
             found += 1;
@@ -421,13 +412,12 @@ pub fn buf_free_callbacks(buffer: Buf) {
 }
 
 fn free_callbacks(mut buffer: Buf) {
-    buffer.channels().destroy();
-    let mut i = 0;
-    while i < buffer.callbacks().len() {
-        callbacks_free(buffer.callbacks().at(i));
-        i += 1;
+    let Some(subscribers) = buffer.update_subscribers.take() else {
+        return;
+    };
+    for cb in subscribers.callbacks.as_slice() {
+        callbacks_free(cb.clone());
     }
-    buffer.callbacks().destroy();
 }
 
 /// The buffer's contents are gone: detach every channel, and give every
@@ -438,6 +428,9 @@ pub fn buf_updates_unload(buffer: Buf, can_reload: bool) {
 }
 
 fn unload(mut buffer: Buf, can_reload: bool) {
+    if buffer.update_subscribers.is_none() {
+        return;
+    }
     let size = buffer.channels().len();
     if size != 0 {
         for i in 0..size {
@@ -513,7 +506,6 @@ fn send_changes(mut buffer: Buf, firstline: LineNr, num_added: int64_t, num_remo
     // it later.
     let mut badchannelid = 0;
 
-    let mut arena = ARENA_EMPTY;
     let mut linedata = Array::EMPTY;
     if num_added > 0 && buffer.channels().len() != 0 {
         let n = num_added as size_t;
@@ -548,10 +540,6 @@ fn send_changes(mut buffer: Buf, firstline: LineNr, num_added: int64_t, num_remo
         elog_dead_channel(badchannelid);
         unregister(buffer, badchannelid);
     }
-
-    // The callbacks don't use linedata.
-    // SAFETY: the arena is this frame's, and `linedata` is not read again.
-    unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
 
     // Notify each of the active callbacks.
     let mut j = 0;

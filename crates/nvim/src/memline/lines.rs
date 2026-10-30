@@ -388,7 +388,7 @@ fn begin_replace(buffer: Buf, lnum: LineNr) -> Result<(), Failed> {
     if buffer.b_ml.cached_lnum() != lnum {
         ml_flush_line(buffer); // another line is buffered, flush it
     }
-    if buffer.update_callbacks.size != 0 {
+    if crate::buffer_updates::has_callbacks(buffer) {
         fetch_line(buffer, lnum, false);
         let text = buffer.b_ml.cached_bytes();
         ml_add_deleted_len_buf(buffer, text, text.len());
