@@ -78,7 +78,7 @@ the contract.
 ## How the ratchet enforces it
 
 `PERIMETER` in `scripts/ratchet.py` is the list, one entry per row above, each
-carrying its reason. Four things follow from it:
+carrying its reason. Six things follow from it:
 
 - **`unsafe_stmts_outside_perimeter`** — the tree's unchecked statements minus
   the perimeter's — is recorded in `metrics/ratchet.json` and may only shrink.
@@ -96,6 +96,16 @@ carrying its reason. Four things follow from it:
   a violation exactly as it is outside — and moving an unsafe file into a
   perimeter module shows up as a new path at full size.
 - **A file on the list says so in its own source.** See below.
+- **Placement is checked, not assumed.** `unsafe_placement` counts every
+  `crates/nvim/src` file whose attributes are in the wrong place: an
+  `allow(unsafe_code)` off the list (a generated file holding unsafe
+  excepted), a file with neither attribute that is not a module file over an
+  allowing descendant (the "neither" list below, computed rather than
+  listed), and an allow file without `deny(unsafe_op_in_unsafe_fn)` or, on
+  the list, without its row named above the attribute. It is shrink-only and
+  report-only until it reads zero, when it becomes a hard failure;
+  `--dimension unsafe_placement` names each offender and its two exits —
+  finish the file, or give its module a row here with a reason.
 - **The "Today" line above is written, not typed.** `sync_perimeter_doc`
   rewrites its five numbers from the same measurement, and the `--check` form
   fails when they are stale. Hand-maintained, all five drifted — the line

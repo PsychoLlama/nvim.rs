@@ -818,6 +818,20 @@ plus these whole-tree metrics, which are not per-file:
                         field an FFI struct needs for its layout stays; the
                         rest retire as their functions stop handing text
                         around by pointer.
+                      unsafe_placement  where the unsafe-code attributes
+                        sit, over crates/nvim/src: a file allowing unsafe code
+                        off PERIMETER (a generated file holding unsafe
+                        excepted), a file carrying neither the allow nor
+                        `forbid(unsafe_code)` that is not a module file over
+                        an allowing descendant (the "neither" list, computed),
+                        and an allow file without the unsafe-op deny or --
+                        on the perimeter -- without its row named in the `//`
+                        comment directly above the attribute. One per broken
+                        rule. Report-only while the outside files finish: it
+                        is ratcheted like the rest, and `--dimension
+                        unsafe_placement` lists each offender with the two
+                        ways out (finish it, or a PERIMETER row with a
+                        reason). At zero it becomes a hard check.
 
 A `warnings` metric used to sit alongside it; phase 5 drove the count to
 zero and the dev shell (flake.nix) now sets `RUSTFLAGS="-D warnings"` for
@@ -1952,6 +1966,7 @@ INSTRUMENT_KEYS = (
     "types_files",
     "untested_dirs",
     "cchar_scratch",
+    "unsafe_placement",
 )
 
 FORBID = "#![forbid(unsafe_code)]"
@@ -3413,6 +3428,123 @@ def sync_perimeter_doc(stats, check):
         PERIMETER_DOC.write_text(fresh)
 
 
+# The comment block naming a perimeter row: "Unsafe perimeter: the `os/` row
+# in docs/perimeter.md." Every backticked path in it is a row's spelling,
+# brace groups included (`lua/executor/{luv,state}.rs`).
+PERIMETER_ROW_COMMENT = re.compile(r"\bUnsafe perimeter:")
+BACKTICKED = re.compile(r"`([^`]+)`")
+BRACE_GROUP = re.compile(r"\{([^{}]*)\}")
+# How each placement finding reads, and the two ways out of it.
+PLACEMENT_EXITS = (
+    "finish it (drop the allow for `#![forbid(unsafe_code)]`), or give it a "
+    "PERIMETER row with a reason (scripts/ratchet.py and docs/perimeter.md)"
+)
+
+
+def expand_braces(path):
+    """`a/{b,c}.rs` -> [`a/b.rs`, `a/c.rs`]; nested groups expand in turn."""
+    match = BRACE_GROUP.search(path)
+    if match is None:
+        return [path]
+    return [
+        expanded
+        for part in match.group(1).split(",")
+        for expanded in expand_braces(
+            path[: match.start()] + part.strip() + path[match.end() :]
+        )
+    ]
+
+
+def comment_above(source, needle):
+    """The `//` comment lines directly above the line holding `needle`."""
+    lines = source.splitlines()
+    at = next(i for i, line in enumerate(lines) if line.strip() == needle)
+    block = []
+    for line in reversed(lines[:at]):
+        stripped = line.strip()
+        if not stripped.startswith("//") or stripped.startswith(("///", "//!")):
+            break
+        block.append(stripped[2:].strip())
+    return " ".join(reversed(block))
+
+
+def names_its_row(file, comment):
+    """Whether a comment names the PERIMETER entry that claims `file`."""
+    if not PERIMETER_ROW_COMMENT.search(comment):
+        return False
+    return any(
+        in_perimeter_entry(file, CRATE_SRC + path)
+        for spelled in BACKTICKED.findall(comment)
+        for path in expand_braces(spelled.strip())
+        if CRATE_SRC + path in PERIMETER
+    )
+
+
+def module_dir(file):
+    """The directory whose files a module file's lint attributes reach, or
+    None for a leaf: `x/mod.rs` and `lib.rs` reach their own directory, and
+    `x.rs` reaches `x/` (whether that directory exists is the caller's
+    question)."""
+    head, _, name = file.rpartition("/")
+    if name in ("mod.rs", "lib.rs", "main.rs"):
+        return head + "/"
+    return file.removesuffix(".rs") + "/"
+
+
+def placement_findings(tree, sources):
+    """repo-relative file -> the placement rules it breaks. See the doc block.
+
+    Three rules, over `crates/nvim/src` only:
+
+    1. a file carrying `#![allow(unsafe_code)]` is on PERIMETER (or is a
+       generated file that holds unsafe, which takes the attribute from
+       tools/apigen);
+    2. every other file carries `#![forbid(unsafe_code)]`, unless it is a
+       module file with a descendant that carries the allow -- `allow` under
+       a `forbid` is E0453, so that file cannot say either (the "neither"
+       list, computed here rather than listed);
+    3. an allow file carries `#![deny(unsafe_op_in_unsafe_fn)]`, and a
+       perimeter one names its row in the `//` comment directly above the
+       attribute ("Unsafe perimeter: the `os/` row in docs/perimeter.md.").
+
+    A finding is one broken rule, so a file can hold more than one.
+    """
+    allow = FILE_ALLOWS["unsafe_code"]
+    files = {f: m for f, m in tree.items() if f.startswith(CRATE_SRC)}
+    allowing = {f for f, m in files.items() if allow in m}
+    found = {}
+    for file, masked in files.items():
+        source = sources[file]
+        broken = []
+        generated = GENERATED_MARKER.search(source[:GENERATED_HEAD]) is not None
+        if file in allowing:
+            if not in_perimeter(file) and not (
+                generated and UNSAFE_WORD.search(masked.replace(allow, ""))
+            ):
+                broken.append("allows unsafe code off the perimeter")
+            if DENY_UNSAFE_OP not in masked:
+                broken.append(f"allows unsafe code without {DENY_UNSAFE_OP}")
+            if (
+                in_perimeter(file)
+                and not generated
+                and not names_its_row(file, comment_above(source, allow))
+            ):
+                broken.append(
+                    "allows unsafe code without naming its perimeter row in "
+                    "the comment above the attribute"
+                )
+        elif FORBID not in masked:
+            under = module_dir(file)
+            if not any(other.startswith(under) for other in allowing):
+                broken.append(
+                    f"carries neither {FORBID} nor the allow, and has no "
+                    "descendant that allows"
+                )
+        if broken:
+            found[file] = broken
+    return found
+
+
 def vocabulary(tree):
     """The C-vocabulary counts. See "the C vocabulary" in the doc block."""
     counts = dict.fromkeys(
@@ -3583,6 +3715,8 @@ def instrument_sites(tree, sources, wrappers=None):
                 tops.add(top)
             if "#[test]" in masked:
                 tested.add(top)
+    for file, broken in placement_findings(tree, sources).items():
+        sites["unsafe_placement"][file] = len(broken)
     for (name, _), files in consts.items():
         if len(files) > 1:
             sites["dup_consts"][name] += len(files) - 1
@@ -3819,6 +3953,7 @@ WHOLE_TREE_LABEL = {
     "types_files": "files under types/",
     "untested_dirs": "top-level modules with no test of any kind",
     "cchar_scratch": "fixed-size `[c_char; N]` buffers",
+    "unsafe_placement": "unsafe-code attributes in the wrong place (report-only)",
 }
 # The C-vocabulary subset of the above, for the run's summary line.
 VOCABULARY_KEYS = (
@@ -5005,6 +5140,68 @@ SELF_TEST_INSTRUMENTS = [
 ]
 
 
+# Placement, case by case: ({repo-relative path: source}, {path: number of
+# broken rules}). Files absent from the expectation break none.
+_ROW = "#![deny(unsafe_op_in_unsafe_fn)]\n// Unsafe perimeter: the `os/` row in docs/perimeter.md.\n#![allow(unsafe_code)]\n"
+SELF_TEST_PLACEMENT = [
+    # A perimeter file naming its row, and a finished file beside it.
+    (
+        {
+            "crates/nvim/src/os/a.rs": _ROW,
+            "crates/nvim/src/b.rs": "#![forbid(unsafe_code)]\n",
+        },
+        {},
+    ),
+    # A perimeter file may forbid; an allow off the perimeter may not stay.
+    (
+        {
+            "crates/nvim/src/os/a.rs": "#![forbid(unsafe_code)]\n",
+            "crates/nvim/src/b.rs": "#![deny(unsafe_op_in_unsafe_fn)]\n#![allow(unsafe_code)]\n",
+        },
+        {"crates/nvim/src/b.rs": 1},
+    ),
+    # A perimeter allow without the deny and without its row: two rules. A
+    # row comment naming another entry does not count, and neither does a
+    # doc comment.
+    (
+        {
+            "crates/nvim/src/os/a.rs": "#![allow(unsafe_code)]\n",
+            "crates/nvim/src/os/b.rs": _ROW.replace("`os/`", "`tui/`"),
+            "crates/nvim/src/os/c.rs": "#![deny(unsafe_op_in_unsafe_fn)]\n//! Unsafe perimeter: the `os/` row.\n#![allow(unsafe_code)]\n",
+        },
+        {
+            "crates/nvim/src/os/a.rs": 2,
+            "crates/nvim/src/os/b.rs": 1,
+            "crates/nvim/src/os/c.rs": 1,
+        },
+    ),
+    # A brace group in the row's spelling expands, and the comment may wrap.
+    (
+        {
+            "crates/nvim/src/lua/executor/luv.rs": "#![deny(unsafe_op_in_unsafe_fn)]\n// Unsafe perimeter: the `lua/ffi.rs`,\n// `lua/executor/{luv,state}.rs` row in docs/perimeter.md.\n#![allow(unsafe_code)]\n",
+        },
+        {},
+    ),
+    # A module file over an allowing descendant may say neither (`mod.rs`,
+    # `lib.rs`, `x.rs` beside `x/`); without one it has to forbid.
+    (
+        {
+            "crates/nvim/src/lib.rs": "",
+            "crates/nvim/src/os/mod.rs": "",
+            "crates/nvim/src/os/a.rs": _ROW,
+            "crates/nvim/src/winlayer.rs": "",
+            "crates/nvim/src/winlayer/a.rs": _ROW.replace("`os/`", "`winlayer/`"),
+            "crates/nvim/src/x/mod.rs": "",
+            "crates/nvim/src/x/y.rs": "#![forbid(unsafe_code)]\n",
+            "crates/nvim/src/z.rs": "",
+        },
+        {"crates/nvim/src/x/mod.rs": 1, "crates/nvim/src/z.rs": 1},
+    ),
+    # Outside the crate's source nothing is asked.
+    ({"crates/other/src/lib.rs": "#![allow(unsafe_code)]\n"}, {}),
+]
+
+
 def self_test():
     for source, expected in SELF_TEST:
         got = unsafe_stmts(mask(source), False)
@@ -5174,6 +5371,14 @@ def self_test():
             for other in PERIMETER
         )
     )
+    for files, expected in SELF_TEST_PLACEMENT:
+        tree = {file: mask(source) for file, source in files.items()}
+        got = {
+            file: len(broken)
+            for file, broken in placement_findings(tree, files).items()
+        }
+        assert got == expected, f"placement={got}, want {expected}, for {files}"
+    assert expand_braces("a/{b,c}.rs") == ["a/b.rs", "a/c.rs"]
     for case, expected in SELF_TEST_PERIMETER_CHECK:
         stats = {
             (entry + "x.rs" if entry.endswith("/") else entry): {
@@ -5217,6 +5422,20 @@ def breakdown(sites, name):
             print(f"  {count:6}  {directory}")
 
 
+def placement_report(tree, sources):
+    """`--dimension unsafe_placement`: each offender, what it breaks, and the
+    two ways out. The count is the number of broken rules, so it matches the
+    ratcheted total."""
+    found = placement_findings(tree, sources)
+    total = sum(len(broken) for broken in found.values())
+    print(f"unsafe_placement: {total} across {len(found)} files")
+    for file, broken in sorted(found.items()):
+        for rule in broken:
+            print(f"  {file}: {rule}")
+    if found:
+        print(f"Each: {PLACEMENT_EXITS}.")
+
+
 def main():
     argv = sys.argv[1:]
     dimension = None
@@ -5234,6 +5453,9 @@ def main():
     stats, without_deny, without_casts, allowing, tree, sources = measure()
     wrappers, by_callee = wrapper_scan(tree)
     sites = instrument_sites(tree, sources, wrappers)
+    if dimension == "unsafe_placement":
+        placement_report(tree, sources)
+        return
     if dimension is not None:
         breakdown(sites, dimension)
         return
