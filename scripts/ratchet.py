@@ -1109,7 +1109,7 @@ PERIMETER = {
     "crates/nvim/src/event/": "libuv: the loop, streams, timers, signals and "
     "processes are C objects registered by address",
     "crates/nvim/src/os/": "the operating system: syscalls through libc and "
-    "libuv, the PTY, the shell, the environment",
+    "libuv, the PTY, spawning a child, the environment",
     "crates/nvim/src/vterm/": "libvterm, ported with its C ABI intact — the "
     "callbacks it takes and the symbols it exports are that library's",
     "crates/nvim/src/terminal/": "the terminal emulator's glue: a PTY on one "
