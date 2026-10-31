@@ -38,8 +38,8 @@ use crate::message_fmt::msg_cstr;
 use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::os::env::{ENV_TEST_LOG, env_exists, os_get_pid};
 use crate::os::proc::os_dup2;
-use crate::os::shell::Argv;
 use crate::profile::{time_finish, time_msg_at};
+use crate::shell::Argv;
 use crate::startup::{
     os_exit, stderr_isatty, stdin_isatty, stdout_isatty, ui_client_attached, ui_client_channel_id,
     ui_client_error_exit, ui_client_exit_status, ui_client_forward_stdin,

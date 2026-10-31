@@ -5,31 +5,35 @@
 //! reads the file back. Which command, and how the names come back separated,
 //! depends on which shell it is — see [`ShellStyle`].
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `os/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use super::*;
+use super::{SHELL_SPECIAL, ShellOpts, call_shell};
 use crate::ascii::ascii_iswhite;
 use crate::charset::backslash_halved;
 use crate::cstr;
 use crate::drawscreen::state::cmdline_row;
+use crate::ex_cmds::check_secure;
 use crate::fileio::temp_name;
+use crate::global_cell::GlobalCell;
 use crate::guard::{sandbox, secure};
 use crate::memory::XString;
 use crate::message::{e_notmp, e_wildexpand};
 use crate::message::{emsg, msg, msg_putchar, msg_start};
 use crate::message_fmt::msg_cstr;
+use crate::option::vars::p_sh;
 use crate::os::cshim::gettext;
 use crate::os::fs::{can_execute, dir_exists, os_remove, path_exists};
 use crate::os::time::os_delay;
 use crate::path::{ExpandFlags, add_pathsep, has_wildcard, invocation_path_tail, path_tail};
 use crate::semsg;
-use crate::types::{Failed, READBIN};
+use crate::types::Failed;
 use crate::ui::state::Rows;
+use core::ffi::{CStr, c_int};
 use core::ops::Range;
+use std::ffi::{CString, OsStr};
+use std::os::unix::ffi::OsStrExt;
 
 /// The `vimglob()` shell function, for a POSIX shell.
 const SH_VIMGLOB_FUNC: &str =
@@ -306,7 +310,7 @@ static did_find_nul: GlobalCell<bool> = GlobalCell::new(false);
 /// `flags` is the set `expand_wildcards()` takes — when matching fails but
 /// [`ExpandFlags::NOTFOUND`] is set, or there was nothing to expand, the
 /// patterns themselves are answered instead.
-pub fn os_expand_wildcards(
+pub(crate) fn shell_expand_wildcards(
     patterns: &[XString],
     flags: ExpandFlags,
 ) -> Result<Vec<XString>, Failed> {
@@ -345,15 +349,12 @@ pub fn os_expand_wildcards(
     // With csh -f the shell variables from .cshrc are not expanded, so it
     // is only usable when no pattern holds a `$`.
     let extra_shell_arg = match style {
-        ShellStyle::Print => c"-G".as_ptr().cast_mut(),
-        ShellStyle::Glob if !have_dollars(patterns) => c"-f".as_ptr().cast_mut(),
-        _ => ptr::null_mut(),
+        ShellStyle::Print => Some(c"-G"),
+        ShellStyle::Glob if !have_dollars(patterns) => Some(c"-f"),
+        _ => None,
     };
 
-    // SAFETY: a NUL-terminated command this frame owns, and a static extra
-    // argument or none.
-    let failed =
-        unsafe { call_shell(command.as_ptr().cast_mut(), shellopts, extra_shell_arg) } != 0;
+    let failed = call_shell(Some(&command), shellopts, extra_shell_arg) != 0;
     // A backgrounded command needs a moment to create the temp file, but
     // is not waited for.
     if ampersand {
@@ -466,40 +467,30 @@ enum Read {
 
 /// Read the temp file the shell wrote into, reporting whatever went wrong.
 fn read_temp_file(tempname: &CStr, flags: ExpandFlags) -> Read {
-    // SAFETY: a NUL-terminated name; `fd` is closed on every path out.
-    unsafe {
-        let fd = fopen(tempname.as_ptr(), READBIN.as_ptr());
-        if fd.is_null() {
-            // Something went wrong — perhaps a file name with a special
-            // character in it.
-            if !flags.has(ExpandFlags::SILENT) {
-                msg(gettext(e_wildexpand), 0);
-                msg_start(); // do not overwrite this message
-            }
-            return Read::NotFound;
+    use std::io::{Read as _, Seek, SeekFrom};
+    let Ok(mut file) = std::fs::File::open(OsStr::from_bytes(tempname.to_bytes())) else {
+        // Something went wrong -- perhaps a file name with a special
+        // character in it.
+        if !flags.has(ExpandFlags::SILENT) {
+            msg(gettext(e_wildexpand), 0);
+            msg_start(); // do not overwrite this message
         }
-        if fseek(fd, 0, SEEK_END) < 0 {
-            fclose(fd);
-            return Read::Failed;
-        }
-        let templen = ftell(fd);
-        if templen < 0 {
-            fclose(fd);
-            return Read::Failed;
-        }
-        let len = templen as usize;
-        fseek(fd, 0, SEEK_SET);
-
-        let mut buffer: Vec<u8> = vec![0; len];
-        let readlen = fread(buffer.as_mut_ptr().cast(), 1, len, fd);
-        fclose(fd);
-        os_remove(tempname);
-        if readlen as usize != len {
-            semsg!("E485: Can't read file {}", msg_cstr(tempname));
-            return Read::Failed;
-        }
-        Read::Content(buffer)
+        return Read::NotFound;
+    };
+    let Ok(len) = file.seek(SeekFrom::End(0)) else {
+        return Read::Failed;
+    };
+    // Upstream does not check this seek.
+    let _ = file.rewind();
+    let mut buffer = Vec::new();
+    let read = file.by_ref().take(len).read_to_end(&mut buffer);
+    drop(file);
+    os_remove(tempname);
+    if read.ok() != usize::try_from(len).ok() {
+        semsg!("E485: Can't read file {}", msg_cstr(tempname));
+        return Read::Failed;
     }
+    Read::Content(buffer)
 }
 
 /// Upstream's `notfound:` label: under `ExpandFlags::NOTFOUND` the patterns

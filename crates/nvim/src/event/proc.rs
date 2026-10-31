@@ -15,7 +15,7 @@
 //! stream's close callback and the child's exit callback both land in
 //! [`decref`] — and the last drop unlinks the child from `loop->children`
 //! and queues the caller's exit callback. Nothing here frees a `Proc`; the
-//! owner (a `Channel`, or a stack frame in `os/shell/`) does that.
+//! owner (a `Channel`, or a stack frame in `os/system.rs`) does that.
 //!
 //! # Aliasing
 //!
@@ -63,8 +63,8 @@ use crate::os::proc::os_proc_tree_kill;
 use crate::os::pty_proc_unix::{
     pty_proc_close, pty_proc_close_master, pty_proc_flush_master, pty_proc_spawn, pty_proc_teardown,
 };
-use crate::os::shell::shell_free_argv;
 use crate::os::signal::{SIGHUP, SIGKILL, SIGTERM};
+use crate::os::system::free_raw_argv;
 use crate::os::time::os_hrtime;
 use crate::startup::{
     exiting, main_loop, os_exit, preserve_exit, ui_client_channel_id, ui_client_exit_status,
@@ -499,7 +499,7 @@ pub unsafe fn proc_free(proc: *mut Proc) {
     let mut child = unsafe { Child::new(proc) };
     if !child.argv.is_null() {
         // SAFETY: the argv the child was spawned with, which it owns.
-        unsafe { shell_free_argv(child.argv) };
+        unsafe { free_raw_argv(child.argv) };
         child.argv = ptr::null_mut();
     }
 }
@@ -551,7 +551,7 @@ fn remove_child(children: &mut Vec<*mut Proc>, proc: *mut Proc) {
 /// Queue `handler` on `queue`, or run it immediately if there is no queue.
 ///
 /// Upstream's `CREATE_EVENT`. A `Loop` without an event queue is one that is
-/// driven synchronously (`os/shell/` builds one), so the handler simply
+/// driven synchronously (`os/system.rs` builds one), so the handler simply
 /// runs on the spot.
 ///
 /// # Safety

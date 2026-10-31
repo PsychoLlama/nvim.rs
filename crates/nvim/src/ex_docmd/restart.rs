@@ -14,7 +14,7 @@ use crate::message::emsg;
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::msgpack_rpc::channel::rpc_call_with;
 use crate::os::env::ENV_STARTREASON;
-use crate::os::shell::Argv;
+use crate::shell::Argv;
 use core::ffi::CStr;
 
 use crate::semsg;

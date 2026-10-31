@@ -3,7 +3,11 @@
 //! [`os_system_capture`] is the public entry point; everything `:!`, `system()` and
 //! wildcard expansion do goes through [`do_os_system`], which spawns through
 //! libuv, pumps the loop until the child exits, and then either hands the
-//! output back to the caller or leaves it on the screen.
+//! output back to the caller or leaves it on the screen. What the command
+//! is, and what becomes of its output on screen, is `crate::shell`'s.
+//!
+//! [`argv_into_raw`] and [`free_raw_argv`] are the one place an [`Argv`]
+//! becomes the NULL-terminated `char **` a spawned child owns, and back.
 //!
 //! Only the POSIX build was transpiled: upstream also forces the Windows
 //! console code page to UTF-8 around the spawn and clears
@@ -20,8 +24,6 @@
     clippy::ptr_as_ptr
 )]
 
-use super::throttle::{Ring, out_data_cb, out_data_decide_throttle, out_data_ring};
-use super::*;
 use crate::cstr;
 use crate::event::libuv::{uv_err_name, uv_strerror};
 use crate::event::libuv_proc::libuv_proc_init;
@@ -35,37 +37,72 @@ use crate::event::wstream::{
 };
 use crate::getchar::state::got_int;
 use crate::guard::Suppress;
-use crate::memory::xstrlcpy;
+use crate::memory::ThinCString;
+use crate::message::msg_str;
 use crate::message::state::{lines_left, msg_no_more};
 use crate::message::{msg_display, msg_end, msg_putchar, msg_sb_eol, msg_start};
 use crate::message_fmt::c_str;
 use crate::msg_schedule_semsg;
 use crate::os::cshim::gettext;
+use crate::shell::Argv;
+use crate::shell::throttle::{Ring, out_data, out_data_decide_throttle, out_data_ring};
+use crate::startup::main_loop;
 use crate::types::{LibuvProc, MAXPATHL, MultiQueue, Proc, RStream, Stream, WBuffer};
+use crate::types::{size_t, stream_read_cb};
+use crate::ui::ui_flush;
 use crate::ui::{ui_busy_start, ui_busy_stop};
+use core::ffi::{c_char, c_int, c_void};
+use core::{ptr, slice};
 
 /// Synchronously run `argv` (in the shell only if it says so) with `input`
 /// on standard input, answering the exit code (-1 if the child could not be
 /// started) and everything it wrote, or `None` when it wrote nothing.
 pub fn os_system_capture(argv: Argv, input: &[u8]) -> (c_int, Option<Vec<u8>>) {
-    // SAFETY: the vector is handed over; the child releases it.
-    unsafe { do_os_system(argv.into_raw(), input, true, true, false) }
+    do_os_system(argv, input, true, true, false)
+}
+
+/// Lay `argv` out as the NULL-terminated vector of NUL-terminated words a
+/// child is spawned with; the child owns it until [`free_raw_argv`].
+pub(crate) fn argv_into_raw(argv: Argv) -> *mut *mut c_char {
+    let slots: Box<[*mut c_char]> = argv
+        .into_words()
+        .into_iter()
+        .map(ThinCString::into_raw)
+        .chain([ptr::null_mut()])
+        .collect();
+    Box::into_raw(slots).cast::<*mut c_char>()
+}
+
+/// Release a vector [`argv_into_raw`] laid out.
+///
+/// # Safety
+/// `argv` is null or an answer of [`argv_into_raw`], released once.
+pub(crate) unsafe fn free_raw_argv(argv: *mut *mut c_char) {
+    if argv.is_null() {
+        return;
+    }
+    // SAFETY: the caller's contract -- a boxed slice of words ending in the
+    // null, each word a `ThinCString` taken over once.
+    unsafe {
+        let mut len = 0;
+        while !(*argv.add(len)).is_null() {
+            drop(ThinCString::from_raw(*argv.add(len)));
+            len += 1;
+        }
+        drop(Box::from_raw(ptr::slice_from_raw_parts_mut(argv, len + 1)));
+    }
 }
 
 /// The one implementation behind [`os_system_capture`] and
-/// [`os_call_shell`]: run `argv`, feeding it `input`, and answer its exit
+/// `crate::shell::run_shell`: run `argv`, feeding it `input`, and answer its exit
 /// code (-1 when it could not be started or fed) and, with `capture`, what
 /// it wrote — `None` when that was nothing.
 ///
 /// `silent` suppresses the "shell failed to start" report and
 /// `forward_output` sends the child's output to the screen rather than to
 /// the answer.
-///
-/// # Safety
-/// `argv` must be a NULL-terminated, owned argument vector, which the child
-/// releases.
-pub(crate) unsafe fn do_os_system(
-    argv: *mut *mut c_char,
+pub(crate) fn do_os_system(
+    argv: Argv,
     input: &[u8],
     capture: bool,
     silent: bool,
@@ -80,21 +117,23 @@ pub(crate) unsafe fn do_os_system(
     // Where the output accumulates, and what libuv calls with each chunk.
     let mut buf: Vec<u8> = Vec::new();
     let data_cb: stream_read_cb = if forward_output {
-        Some(out_data_cb)
+        Some(screen_data_cb)
     } else if !capture {
         None
     } else {
         Some(system_data_cb)
     };
 
-    // SAFETY: the caller's contract; `main_loop` is the process's event loop,
-    // and `proc` points into `uvproc`, which outlives every use of it, as
-    // `buf` outlives every callback that is handed its address.
-    unsafe {
-        // Copy the program name in case it has to be reported.
-        let mut prog: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
-        xstrlcpy(prog.as_mut_ptr(), *argv, MAXPATHL as usize);
+    // Copy the program name in case it has to be reported, cut where
+    // upstream's `MAXPATHL` buffer cuts it.
+    let prog = argv.program().to_bytes();
+    let prog = cstr::owned(&prog[..prog.len().min(MAXPATHL as usize - 1)]);
+    let argv = argv_into_raw(argv);
 
+    // SAFETY: `main_loop` is the process's event loop, and `proc` points
+    // into `uvproc`, which outlives every use of it, as `buf` outlives every
+    // callback that is handed its address; the child owns `argv`.
+    unsafe {
         let mut uvproc: LibuvProc = libuv_proc_init(main_loop.ptr(), (&raw mut buf).cast());
         let proc: *mut Proc = &raw mut uvproc.proc;
         let events: *mut MultiQueue = multiqueue_new_child((*main_loop.ptr()).events);
@@ -109,7 +148,7 @@ pub(crate) unsafe fn do_os_system(
                 msg_str(gettext(c"\nshell failed to start: "));
                 msg_display(cstr::at(uv_strerror(status)), 0, false);
                 msg_str(c": ");
-                msg_display(cstr::in_chars(&prog), 0, false);
+                msg_display(&prog, 0, false);
                 msg_putchar('\n' as c_int);
             }
             multiqueue_free(events);
@@ -194,6 +233,32 @@ unsafe fn system_data_cb(
         output.extend_from_slice(slice::from_raw_parts(buf.cast::<u8>(), count));
     }
     count
+}
+
+/// The `stream_read_cb` `do_os_system` uses when the output goes to the
+/// screen rather than to the caller.
+///
+/// # Safety
+/// A `stream_read_cb`: `data` must be readable for `count` bytes and `stream`
+/// live.
+unsafe fn screen_data_cb(
+    stream: *mut RStream,
+    data: *const c_char,
+    count: size_t,
+    _cookie: *mut c_void,
+    eof: bool,
+) -> size_t {
+    if count == 0 {
+        return count;
+    }
+    // SAFETY: the caller's contract.
+    let (data, fd) = unsafe {
+        (
+            slice::from_raw_parts(data.cast::<u8>(), count),
+            (*stream).s.fd,
+        )
+    };
+    out_data(data, fd, eof)
 }
 
 /// Report a failed write to the child's stdin, then close it.

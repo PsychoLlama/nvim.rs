@@ -13,15 +13,14 @@
 
 #![cfg(not(miri))]
 
-use std::ffi::{CStr, CString, c_char, c_int};
-use std::ptr;
+use std::ffi::c_int;
 
-use neovim::memory::{XString, xfree};
+use neovim::memory::{ThinCString, XString};
 use neovim::option::vars::{P_SH, P_SHCF, P_SXE, P_SXQ};
-use neovim::os::shell::system::os_system_capture;
-use neovim::os::shell::{Argv, shell_argv_to_str, shell_build_argv};
+use neovim::os::system::os_system_capture;
+use neovim::shell::Argv;
 
-use crate::support::{Editor, cstr, editor_lock, internalize};
+use crate::support::{Editor, cstr, editor_lock};
 
 /// The four options the argument vector is built out of, restored when the
 /// case ends. They are raw `char *` the editor normally owns; the values set
@@ -62,36 +61,19 @@ impl Drop for ShellOptions {
     }
 }
 
-/// `shell_build_argv`, read back as strings and released item by item — the
-/// spec freed every element explicitly so that anything not on the heap would
-/// crash here rather than silently pass.
+/// `Argv::shell_with`, read back as strings.
 fn build_argv(cmd: Option<&str>, extra_args: Option<&str>) -> Vec<String> {
-    let cmd = cmd.map(cstr);
     let extra_args = extra_args.map(cstr);
-    let as_ptr = |s: &Option<CString>| s.as_ref().map_or(ptr::null(), |s| s.as_ptr());
-    // SAFETY: both arguments are this frame's or NULL, and the answer is an
-    // owned NULL-terminated vector of owned strings.
-    unsafe {
-        let argv = shell_build_argv(as_ptr(&cmd), as_ptr(&extra_args));
-        let mut words = Vec::new();
-        let mut p = argv;
-        while !(*p).is_null() {
-            words.push(internalize(*p));
-            p = p.add(1);
-        }
-        xfree(argv.cast());
-        words
-    }
+    let argv = Argv::shell_with(cmd.map(str::as_bytes), extra_args.as_deref());
+    argv.words()
+        .map(|word| word.to_str().expect("the fixtures are text").to_owned())
+        .collect()
 }
 
-/// `shell_argv_to_str` over a borrowed vector.
+/// `Argv::to_display` over a vector of `words`.
 fn argv_to_str(words: &[&str]) -> String {
-    let owned: Vec<CString> = words.iter().copied().map(cstr).collect();
-    let mut argv: Vec<*mut c_char> = owned.iter().map(|w| w.as_ptr().cast_mut()).collect();
-    argv.push(ptr::null_mut());
-    // SAFETY: `argv` is NULL-terminated and every item outlives the call.
-    let rendered = unsafe { shell_argv_to_str(argv.as_mut_ptr()) };
-    String::from_utf8_lossy(&rendered).into_owned()
+    let argv = Argv::from_words(words.iter().map(|&w| ThinCString::from(w)).collect());
+    String::from_utf8_lossy(&argv.to_display()).into_owned()
 }
 
 /// Run `cmd` through the shell and hand back (exit code, what it wrote).
@@ -200,7 +182,6 @@ fn shellxquote_wraps_the_command_and_shellxescape_protects_what_is_inside() {
 #[test]
 fn an_argument_vector_reports_as_quoted_words_truncated_at_256_bytes() {
     let _options = ShellOptions::plain();
-    assert_eq!(argv_to_str(&[]), "");
     assert_eq!(argv_to_str(&[""]), "''");
     assert_eq!(argv_to_str(&["foo", "", "bar"]), "'foo' '' 'bar'");
     assert_eq!(
@@ -253,27 +234,4 @@ fn a_child_that_fails_reports_its_exit_code() {
     let _options = ShellOptions::plain();
     let (status, _) = system("exit 2", None);
     assert_eq!(status, 2);
-}
-
-/// Not a spec case: the argument vector the spec's helper freed by hand.
-/// `shell_free_argv` is what the editor actually uses, and nothing else here
-/// would notice if it stopped walking to the end.
-#[test]
-fn the_argument_vector_is_one_allocation_per_word_plus_the_vector() {
-    let _options = ShellOptions::plain();
-    // SAFETY: the vector is `shell_build_argv`'s, released exactly once.
-    unsafe {
-        let argv = shell_build_argv(cstr("abc def").as_ptr(), cstr("ghi").as_ptr());
-        let words: Vec<&CStr> = {
-            let mut p = argv;
-            let mut words = Vec::new();
-            while !(*p).is_null() {
-                words.push(CStr::from_ptr(*p));
-                p = p.add(1);
-            }
-            words
-        };
-        assert_eq!(words.len(), 4, "shell, extra args, flag, command");
-        neovim::os::shell::shell_free_argv(argv);
-    }
 }

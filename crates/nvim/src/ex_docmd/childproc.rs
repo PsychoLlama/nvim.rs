@@ -10,7 +10,7 @@
 
 use crate::ex_docmd::DoCmdOpts;
 use crate::ex_docmd::do_cmdline;
-use crate::os::shell::Argv;
+use crate::shell::Argv;
 use crate::strings::escaped_bytes;
 use crate::usercmd::win_cmd_modifiers;
 use core::ffi::CStr;

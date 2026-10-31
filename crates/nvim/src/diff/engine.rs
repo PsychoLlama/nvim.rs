@@ -20,7 +20,7 @@ use crate::cstr;
 use crate::fileio::Fgets;
 use crate::option::vars::P_DEX;
 use crate::os::env::{env_exists, env_unset};
-use crate::os::shell::call_shell_text;
+use crate::shell::call_shell_text;
 use crate::types::Failed;
 use crate::xdiff::ffi::diff_hunks;
 use crate::xdiff::xtypes::Aborted;

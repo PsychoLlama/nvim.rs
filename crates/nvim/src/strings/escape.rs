@@ -5,7 +5,7 @@
 //! backslashes `rem_backslash()` would eat -- and [`shellescape`] the
 //! specialised one, which wraps a string in single quotes for `system()` and
 //! knows what csh and fish need escaped on top of that. [`unquoted`] is the
-//! inverse used by `shell_build_argv`: it resolves shell double-quoting,
+//! inverse used by `Argv::shell_with`: it resolves shell double-quoting,
 //! [`unquote`] being the byte walk it shares with its tests.
 //!
 //! Every input is the bytes of a C string: each walk reads up to the end of

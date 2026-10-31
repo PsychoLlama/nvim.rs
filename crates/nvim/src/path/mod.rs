@@ -42,8 +42,8 @@ use crate::os::fs::{
     os_file_is_readable, os_scandir, os_scandir_next, realpath,
 };
 use crate::os::input::os_breakcheck;
-use crate::os::shell::{get_cmd_output, os_expand_wildcards};
 use crate::regexp::vim_regexec;
+use crate::shell::{get_cmd_output, shell_expand_wildcards};
 use crate::types::{Directory, Failed, FileComparison, MAXPATHL, PATHSEPSTR};
 
 // The carve of the transpiled module; see each child's docs.

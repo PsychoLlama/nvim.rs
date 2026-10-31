@@ -78,9 +78,9 @@ use crate::option::{OptionTarget, set_option_direct_for, set_option_value_give_e
 use crate::options::{kOptBoFlagOperator, kOptDiff, kOptFoldmethod};
 use crate::os::cshim::gettext;
 use crate::os::fs::{os_chdir, os_remove};
-use crate::os::shell::ShellOpts;
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::search::{BACKWARD, FORWARD};
+use crate::shell::ShellOpts;
 use crate::strings::shellescape;
 use crate::types::AutoEvent;
 use crate::types::NL;

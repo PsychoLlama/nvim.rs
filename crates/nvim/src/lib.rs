@@ -109,6 +109,7 @@ pub mod runtime;
 pub mod search;
 pub mod sha256;
 pub mod shada;
+pub mod shell;
 pub(crate) mod sign;
 pub mod spell;
 pub mod spellfile;

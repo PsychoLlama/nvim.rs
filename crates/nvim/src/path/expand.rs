@@ -34,7 +34,7 @@ use std::ffi::CStr;
 
 use super::*;
 use crate::guard::Suppress;
-use crate::os::shell::ShellOpts;
+use crate::shell::ShellOpts;
 use crate::types::{Failed, MAXPATHL};
 
 /// Whether a `gen_expand_wildcards` is already running. The pieces it calls
@@ -322,10 +322,10 @@ pub fn gen_expand_wildcards(
     }
 }
 
-/// [`os_expand_wildcards`] of the caller's patterns.
+/// [`shell_expand_wildcards`] of the caller's patterns.
 fn expand_by_shell(patterns: &[&CStr], flags: ExpandFlags) -> Result<Vec<XString>, Failed> {
     let patterns: Vec<XString> = patterns.iter().copied().map(XString::from_cstr).collect();
-    os_expand_wildcards(&patterns, flags)
+    shell_expand_wildcards(&patterns, flags)
 }
 
 /// Is `p` a whole backticked command, `` `cmd` ``?

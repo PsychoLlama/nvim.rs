@@ -13,23 +13,21 @@
 //! so CTRL-C is caught by the terminal and the child can page itself. Nvim
 //! uses pipes.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `os/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use super::*;
-use crate::cstr;
+use crate::event::multiqueue::put_job_on_fast_events;
+use crate::global_cell::GlobalCell;
 use crate::highlight_group::{HLF_SE, HLF_SO};
 use crate::mbyte::{cluster_len, utf8len_tab_zero};
-use crate::memory::{xfree, xmemdupz};
-use crate::message::{msg_ext_set_append, msg_ext_set_kind, msg_multiline, msg_putchar};
+use crate::message::{msg_ext_set_append, msg_ext_set_kind, msg_multiline, msg_putchar, msg_str};
 use crate::os::time::os_hrtime;
 use crate::types::libc::{STDERR_FILENO, STDOUT_FILENO};
 use crate::types::ui::kUIMessages;
-use crate::types::{Event, RStream, intptr_t, uint64_t};
+use crate::types::uint64_t;
 use crate::ui::{ui_flush, ui_has};
+use core::ffi::c_int;
 
 /// One second, in nanoseconds.
 const NS_1_SECOND: uint64_t = 1_000_000_000;
@@ -151,38 +149,19 @@ pub(crate) fn out_data_ring(what: Ring) {
     }
 }
 
-/// Draw one chunk, on the fast-events queue when a UI is handling messages.
-///
-/// # Safety
-/// An `argv_callback`: `argv[0]` must be an owned allocation of `argv[1]`
-/// bytes, which this takes over and frees, and `argv[2]` a file descriptor.
-unsafe extern "C" fn out_data_event(argv: *mut *mut c_void) {
-    // SAFETY: the caller's contract.
-    unsafe {
-        let text = *argv.add(0) as *mut c_char;
-        let count = (*argv.add(1)).addr();
-        let fd = (*argv.add(2)).addr() as c_int;
-
-        let is_stderr = fd == STDERR_FILENO;
-        let hl = if is_stderr { HLF_SE } else { HLF_SO } as c_int;
-        msg_ext_set_kind(if is_stderr {
-            c"shell_err"
-        } else {
-            c"shell_out"
-        });
-        msg_ext_set_append(true);
-        let mut need_clear = true;
-        // SAFETY: the caller's buffer holds `count` readable bytes.
-        msg_multiline(
-            cstr::slice_at(text, count),
-            hl,
-            false,
-            false,
-            &mut need_clear,
-        );
-        xfree(text.cast());
-        ui_flush();
-    }
+/// Draw one chunk of output that came on `fd`.
+fn draw_chunk(text: &[u8], fd: c_int) {
+    let is_stderr = fd == STDERR_FILENO;
+    let hl = if is_stderr { HLF_SE } else { HLF_SO } as c_int;
+    msg_ext_set_kind(if is_stderr {
+        c"shell_err"
+    } else {
+        c"shell_out"
+    });
+    msg_ext_set_append(true);
+    let mut need_clear = true;
+    msg_multiline(text, hl, false, false, &mut need_clear);
+    ui_flush();
 }
 
 /// Append `output` to the last screen line, holding back a trailing
@@ -209,51 +188,28 @@ pub(crate) fn out_data_append_to_screen(output: &[u8], count: &mut usize, fd: c_
 
     // Done after `uv_run` to avoid recursing into a `vim.ui_attach()`
     // msg_show callback. #38664
-    // SAFETY: `output[..*count]` is in bounds; `str` is an owned allocation
-    // that `out_data_event` takes over, whichever way it is reached.
-    unsafe {
-        let text = xmemdupz(output.as_ptr().cast(), *count) as *mut c_char;
-        let mut argv: [*mut c_void; 3] = [
-            text.cast(),
-            ptr::with_exposed_provenance_mut(*count),
-            ptr::with_exposed_provenance_mut(fd as intptr_t as usize),
-        ];
-        if ui_has(kUIMessages) {
-            multiqueue_put_event(
-                (*main_loop.ptr()).fast_events,
-                Event::new(Some(out_data_event), [argv[0], argv[1], argv[2]]),
-            );
-        } else {
-            out_data_event(argv.as_mut_ptr());
-        }
+    let text = output[..*count].to_vec();
+    if ui_has(kUIMessages) {
+        put_job_on_fast_events(move || draw_chunk(&text, fd));
+    } else {
+        draw_chunk(&text, fd);
     }
 }
 
-/// The `stream_read_cb` `do_os_system` uses when the output goes to the
-/// screen rather than to the caller.
-///
-/// # Safety
-/// An `stream_read_cb`: `data` must be readable for `count` bytes and `stream`
-/// live.
-pub(crate) unsafe fn out_data_cb(
-    stream: *mut RStream,
-    data: *const c_char,
-    mut count: size_t,
-    _cookie: *mut c_void,
-    eof: bool,
-) -> size_t {
+/// What `do_os_system` does with a chunk of output when it goes to the
+/// screen rather than to the caller: draw it, or -- above the threshold --
+/// save it, to show later if it turns out to have been the last chunk.
+/// Answers how many bytes were consumed; an incomplete UTF-8 sequence at the
+/// end is left for the next chunk unless `eof`.
+pub(crate) fn out_data(data: &[u8], fd: c_int, eof: bool) -> usize {
+    let mut count = data.len();
     if count == 0 {
         return count;
     }
-    // SAFETY: the caller's contract.
-    let data = unsafe { slice::from_raw_parts(data.cast::<u8>(), count) };
     if out_data_decide_throttle(count) {
-        // Above the threshold: save it, and show it later if it turns out to
-        // have been the last chunk.
         out_data_ring(Ring::Save(data));
     } else {
-        // SAFETY: `stream` is live.
-        out_data_append_to_screen(data, &mut count, unsafe { (*stream).s.fd }, eof);
+        out_data_append_to_screen(data, &mut count, fd, eof);
     }
     count
 }

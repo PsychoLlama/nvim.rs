@@ -54,7 +54,8 @@ use crate::memory::{xfree, xmemdup};
 use crate::os::pty_proc_unix::{
     pty_proc_close_master, pty_proc_resize, pty_proc_resume, pty_proc_tty_name,
 };
-use crate::os::shell::Argv;
+use crate::os::system::argv_into_raw;
+use crate::shell::Argv;
 use crate::types::{Channel, ChannelStream, JobProc, Proc, RStream, StdioPair, Stream, size_t};
 
 /// The `data` word a channel's handles carry: its id, not its address.
@@ -285,7 +286,7 @@ pub(crate) fn spawn_job(id: u64, spec: JobSpawn<'_>) -> Result<(), c_int> {
             unreachable!("channel {id} is not a job")
         };
         let proc = job.proc_mut();
-        proc.argv = spec.argv.into_raw();
+        proc.argv = argv_into_raw(spec.argv);
         proc.exepath = spec.exepath.map_or(ptr::null(), CStr::as_ptr);
         proc.cwd = spec.cwd.map_or(ptr::null(), CStr::as_ptr);
         proc.env = spec.env.map_or(ptr::null_mut(), DictRef::into_raw);

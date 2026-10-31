@@ -27,7 +27,7 @@ use crate::option::vars::P_SP;
 use crate::option::vars::{P_EFM, P_MEF};
 use crate::optionstr::{OptString, local_or_global};
 use crate::os::fs::link_exists;
-use crate::os::shell::ShellOpts;
+use crate::shell::ShellOpts;
 use crate::types::CmdIdx;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
