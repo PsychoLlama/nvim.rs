@@ -7,10 +7,25 @@
 //! `tv_nr`/`tv_str`/`tv_ptr`/`tv_float` exist: they read one argument out of
 //! that array with the type checking a value array has no need for.
 //!
-//! [`format_into`] is the safe spelling over a slice. The pointer spellings
-//! the rest of the tree still calls -- a raw destination, a raw format, raw
-//! `%s` pointers -- are in `strings/raw.rs`, the one file of `strings` that
-//! reads through a pointer.
+//! [`format_into`] is the spelling over a slice, and [`formatted`] the one
+//! that answers an owned buffer. Neither reads through a pointer: a `%s`
+//! argument is bytes, and a raw pointer handed to one prints as `[NULL]`.
+//!
+//! The macros are the type gate the C variadic never had. Each argument
+//! goes through `FmtArg::from`, and an owner has no conversion, so it is a
+//! compile error at the call site rather than two words of garbage in the
+//! argument area (`spell_load_lang` once handed `vim_snprintf` an
+//! `XString`):
+//!
+//! ```compile_fail,E0277
+//! use neovim::{format_into, memory::XString};
+//! fn spell_file(buf: &mut [u8], lang: &[u8], enc: &XString) {
+//!     format_into!(buf, b"spell/%s.%s.spl", lang, enc);
+//! }
+//! ```
+//!
+//! The array is built where the macro is written, on the stack: a call
+//! allocates nothing for its arguments.
 
 #![forbid(unsafe_code)]
 
@@ -29,11 +44,10 @@ mod float;
 mod spec;
 
 pub(in crate::strings) use self::emit::{Source, format};
-use super::raw::Values;
 
 /// One argument of a `vim_snprintf`, at the type the caller holds it.
 ///
-/// The `vim_snprintf!` macros build an array of these from their arguments,
+/// The [`formatted!`](crate::formatted!) and [`format_into!`](crate::format_into!) macros build an array of these from their arguments,
 /// on the stack, through the `From` conversions below -- which are the type
 /// gate the C variadic never had: an owner (`XString`, `Vec<u8>`) has none
 /// and is a compile error at the call site. A conversion reads the value it
@@ -50,9 +64,8 @@ pub enum FmtArg<'a> {
     Float(f64),
     /// Text for `%s`/`%S`, exactly these bytes.
     Str(&'a [u8]),
-    /// A raw pointer: `%p` prints its address. `%s` reads it as a C string
-    /// only through the pointer fronts in `strings/raw.rs`, whose callers vouch for it;
-    /// anywhere else it prints as `[NULL]`.
+    /// A raw pointer: `%p` prints its address, and `%s` prints it as
+    /// `[NULL]` -- it is never read.
     Ptr(*const c_void),
 }
 
@@ -133,11 +146,19 @@ impl<'a> From<&'a [u8]> for FmtArg<'a> {
 /// NUL, so an answer at or past `out.len()` means it was cut short.
 ///
 /// `fmt` ends at its first NUL, as the C string it stands for did. A
-/// [`FmtArg::Ptr`] handed to `%s` prints as `[NULL]` here: only the pointer
-/// fronts may read through one.
+/// [`FmtArg::Ptr`] handed to `%s` prints as `[NULL]`.
 pub fn format_into(out: &mut [u8], fmt: &[u8], args: &[FmtArg<'_>]) -> usize {
     let fmt = fmt.split(|&b| b == 0).next().unwrap_or_default();
-    format(out, fmt, Source::Values(Values::new(args)))
+    format(out, fmt, Source::Values(args))
+}
+
+/// [`format_into`] with its arguments spelled inline, gathered through
+/// `FmtArg::from` on the caller's stack.
+#[macro_export]
+macro_rules! format_into {
+    ($out:expr, $fmt:expr $(, $arg:expr)* $(,)?) => {
+        $crate::strings::format_into($out, $fmt, &[$($crate::strings::FmtArg::from($arg)),*])
+    };
 }
 
 /// `fmt` formatted with `args`, as a `room`-byte buffer would hold it: the
@@ -155,7 +176,7 @@ pub(crate) fn formatted(room: usize, fmt: &[u8], args: &[FmtArg<'_>]) -> Vec<u8>
 }
 
 /// [`formatted`] with its arguments spelled inline, gathered through
-/// `FmtArg::from` as [`vim_snprintf!`](crate::vim_snprintf!) gathers them.
+/// `FmtArg::from` as [`format_into!`](crate::format_into!) gathers them.
 #[macro_export]
 macro_rules! formatted {
     ($room:expr, $fmt:expr $(, $arg:expr)* $(,)?) => {
@@ -190,11 +211,7 @@ fn next_arg<'a>(tvs: &'a [TypVal], idxp: &mut c_int) -> Option<&'a TypVal> {
 /// the terminator excluded. The buffer is `NUMBUFLEN` bytes, which `%g`
 /// never fills.
 pub(crate) fn format_float_g(value: Float, buffer: &mut [u8; NUMBUFLEN as usize]) -> usize {
-    let len = format(
-        buffer,
-        b"%g",
-        Source::Values(Values::new(&[FmtArg::Float(value)])),
-    );
+    let len = format(buffer, b"%g", Source::Values(&[FmtArg::Float(value)]));
     len.min(buffer.len() - 1)
 }
 
@@ -303,4 +320,79 @@ pub(crate) fn infinity_str(
         idx += 4;
     }
     TABLE[idx]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{FmtArg, format_into};
+    use core::ffi::{c_int, c_long};
+
+    /// `format_into!` into a buffer of exactly `size` bytes, so a write past
+    /// it panics; answers the length and the bytes up to the NUL.
+    fn into_exact(size: usize, f: impl Fn(&mut [u8]) -> usize) -> (usize, Vec<u8>) {
+        let mut buf = vec![0xa5u8; size];
+        let len = f(&mut buf);
+        let text = buf.iter().take_while(|&&b| b != 0).copied().collect();
+        (len, text)
+    }
+
+    #[test]
+    fn formats_and_truncates_at_every_size() {
+        let name = c"na\u{ef}ve";
+        let want = "[na\u{ef}ve|   42|ff  |2.72|x|%|0x10|-1.0e21]";
+        for size in 0..=want.len() + 1 {
+            let (len, text) = into_exact(size, |b| {
+                crate::format_into!(
+                    b,
+                    b"[%s|%5d|%-4x|%.2f|%c|%%|%p|%g]",
+                    name,
+                    42 as c_int,
+                    255 as c_int,
+                    2.71875,
+                    c_int::from(b'x'),
+                    core::ptr::without_provenance::<u8>(16),
+                    -1e21,
+                )
+            });
+            assert_eq!(len, want.len());
+            let keep = want.len().min(size.saturating_sub(1));
+            assert_eq!(text, &want.as_bytes()[..keep], "size {size}");
+        }
+    }
+
+    #[test]
+    fn a_precision_bounds_how_much_text_is_taken() {
+        // Three bytes and no terminator: the precision decides how many go
+        // out, and a precision past the end stops at it.
+        let bytes: &[u8] = b"abc";
+        for (fmt, want) in [
+            (&b"<%.3s>"[..], "<abc>"),
+            (b"<%.2s>", "<ab>"),
+            (b"<%.0s>", "<>"),
+        ] {
+            let (_, text) = into_exact(16, |b| crate::format_into!(b, fmt, bytes));
+            assert_eq!(text, want.as_bytes());
+        }
+        let (_, text) = into_exact(16, |b| {
+            crate::format_into!(b, b"<%.40s|%.*S>", c"hi", 9 as c_int, c"hi")
+        });
+        assert_eq!(text, b"<hi|hi>");
+    }
+
+    #[test]
+    fn a_raw_pointer_is_never_read() {
+        let mut out = [0u8; 32];
+        let n = format_into(
+            &mut out,
+            b"%s %s %d %ld",
+            &[
+                FmtArg::from(c"x".as_ptr()),
+                FmtArg::Str(b"bytes"),
+                FmtArg::from(-3 as c_int),
+                FmtArg::from(7 as c_long),
+            ],
+        );
+        assert_eq!(&out[..n], b"[NULL] bytes -3 7");
+        assert_eq!(out[n], 0);
+    }
 }

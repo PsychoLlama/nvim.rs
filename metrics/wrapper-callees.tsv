@@ -1,13 +1,13 @@
 count	callee	no_raw	defs	def
-40	CStr::from_ptr	0	0	
-32	from_raw_parts	0	0	
+39	CStr::from_ptr	0	0	
+31	from_raw_parts	0	0	
 28	f	0	0	
 26	Term::new	0	1	crates/nvim/src/terminal/mod.rs
 21	multiqueue_put_event	0	1	crates/nvim/src/event/multiqueue.rs
 18	Box::from_raw	0	6	
 17	Reader::new	0	1	crates/nvim/src/event/rstream.rs
-15	from_raw_parts_mut	0	0	
 15	xfree	0	1	crates/nvim/src/memory/mod.rs
+13	from_raw_parts_mut	0	0	
 13	vterm_dealloc	0	1	crates/nvim/src/vterm/vterm.rs
 13	zeroed	0	0	
 11	Child::new	0	1	crates/nvim/src/event/proc.rs
@@ -20,10 +20,10 @@ count	callee	no_raw	defs	def
 10	notify	0	0	
 10	process_events_until	0	1	crates/nvim/src/event/loop.rs
 10	state_of	0	1	crates/nvim/src/vterm/state/entry.rs
-8	.add	0	0	
 8	.as_ref	0	0	
 8	Conn::new	0	1	crates/nvim/src/event/stream.rs
 8	cbytes	0	1	crates/nvim/src/memory/mod.rs
+7	.add	0	0	
 7	.offset	0	0	
 7	Watcher::new	0	1	crates/nvim/src/event/socket/mod.rs
 7	c_bytes	0	1	crates/nvim/src/lua/treesitter/mod.rs
@@ -39,7 +39,6 @@ count	callee	no_raw	defs	def
 5	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
 5	handler	0	0	
 5	send	0	2	
-5	vim_snprintf	0	1	crates/nvim/src/strings/raw.rs
 5	vterm_scroll_rect	0	1	crates/nvim/src/vterm/vterm.rs
 4	.write	0	0	
 4	Uv::new	0	1	crates/nvim/src/event/libuv_proc.rs
@@ -99,7 +98,6 @@ count	callee	no_raw	defs	def
 2	arena_alloc_block	0	1	crates/nvim/src/memory/arena.rs
 2	arena_dup	0	1	crates/nvim/src/tui/quirks.rs
 2	arena_memdupz	0	1	crates/nvim/src/memory/arena.rs
-2	bytes_at	0	1	crates/nvim/src/cstr.rs
 2	cells_mut	0	1	crates/nvim/src/vterm/screen/mod.rs
 2	copy_bytes	0	1	crates/nvim/src/memory/mod.rs
 2	copy_nonoverlapping	0	0	
@@ -145,7 +143,6 @@ count	callee	no_raw	defs	def
 2	seam_realloc	0	1	crates/nvim/src/memory/mod.rs
 2	socket_connect	0	1	crates/nvim/src/event/socket/mod.rs
 2	stream_init	0	1	crates/nvim/src/event/stream.rs
-2	strnlen	0	2	
 2	take_item	0	1	crates/nvim/src/eval/typval/handle.rs
 2	ts_node_child_with_descendant	0	0	
 2	ts_node_is_null	0	0	
@@ -407,9 +404,6 @@ count	callee	no_raw	defs	def
 1	uv_tty_set_mode	0	0	
 1	uv_unref	0	0	
 1	uv_uptime	0	0	
-1	vim_snprintf_add	0	1	crates/nvim/src/strings/raw.rs
-1	vim_snprintf_safelen	0	1	crates/nvim/src/strings/raw.rs
-1	vim_strchr	0	1	crates/nvim/src/strings/raw.rs
 1	vterm_free	0	1	crates/nvim/src/vterm/vterm.rs
 1	vterm_input_write	0	1	crates/nvim/src/vterm/parser.rs
 1	vterm_keyboard_key	0	1	crates/nvim/src/vterm/keyboard.rs

@@ -2,10 +2,8 @@
 
 use std::ffi::{c_char, c_int, c_long, c_longlong, c_uint, c_ulong, c_ulonglong};
 
-use neovim::strings::{escaped_bytes, reversed_text, strcase_copy, vim_strchr};
+use neovim::strings::{escaped_bytes, find_char, reversed_text, strcase_copy};
 use neovim::types::typval::UVarNumber;
-
-use crate::support::cstr;
 
 fn escaped(s: &str, chars: &str) -> String {
     String::from_utf8(escaped_bytes(s.as_bytes(), chars.as_bytes()).to_vec()).unwrap()
@@ -109,14 +107,8 @@ fn vim_strnsave_unquoted_does_not_unescape_backslash_n() {
     assert_eq!(r"/Program\nFiles/sh", unquoted("/Program\"\\n\"Files/sh"));
 }
 
-fn strchr(s: &[u8], c: c_int) -> Option<isize> {
-    let s = cstr(s);
-    let found = unsafe { vim_strchr(s.as_ptr(), c) };
-    if found.is_null() {
-        None
-    } else {
-        Some(unsafe { found.cast_const().offset_from(s.as_ptr()) })
-    }
+fn strchr(s: &[u8], c: c_int) -> Option<usize> {
+    find_char(s, c)
 }
 
 #[test]
@@ -154,20 +146,19 @@ fn vim_strchr_works() {
     );
 }
 
-/// Mirror of the spec's `a()` helper: assert `vim_snprintf` into a
+/// Mirror of the spec's `a()` helper: assert `format_into` into a
 /// `bsize`-byte buffer returns the untruncated length and writes
 /// `expected` truncated to `bsize - 1` bytes plus NUL.
 macro_rules! snp {
     ($expected:expr, $buf:expr, $bsize:expr, $fmt:expr $(, $arg:expr)* $(,)?) => {{
         let expected: &str = $expected;
         let bsize: usize = $bsize;
-        let fmt = cstr($fmt);
-        let n = unsafe { neovim::vim_snprintf!($buf, bsize, fmt.as_ptr() $(, $arg)*) };
+        let n = neovim::format_into!(&mut $buf[..bsize], $fmt.as_bytes() $(, $arg)*);
         let ctx = format!("snprintf(buf, {}, {:?})", bsize, $fmt);
-        assert_eq!(expected.len() as c_int, n, "{ctx}");
+        assert_eq!(expected.len(), n, "{ctx}");
         if bsize > 0 {
             let take = std::cmp::min(expected.len() + 1, bsize);
-            let actual = unsafe { std::slice::from_raw_parts($buf as *const u8, take) };
+            let actual = &$buf[..take];
             let mut want = expected.as_bytes()[..take - 1].to_vec();
             want.push(0);
             assert_eq!(want, actual, "{ctx}");
@@ -183,11 +174,11 @@ fn uv(n: u64) -> UVarNumber {
 fn vim_snprintf_truncation() {
     for bsize in 0..=14usize {
         let mut storage = vec![0u8; bsize.max(1)];
-        let buf = storage.as_mut_ptr() as *mut c_char;
-        let one = cstr("one");
-        let two = cstr("two");
-        let hanyu = cstr("漢語");
-        let foo = cstr("foo");
+        let buf = &mut storage;
+        let one = c"one";
+        let two = c"two";
+        let hanyu = c"漢語";
+        let foo = c"foo";
         snp!("1.00000001e7", buf, bsize, "%.8g", 10000000.1f64);
         snp!("1234567", buf, bsize, "%d", 1234567 as c_int);
         snp!("1234567", buf, bsize, "%ld", 1234567 as c_long);
@@ -195,18 +186,18 @@ fn vim_snprintf_truncation() {
         snp!("1234567  ", buf, bsize, "%-9ld", 1234567 as c_long);
         snp!("deadbeef", buf, bsize, "%x", 0xdeadbeef_u32 as c_uint);
         snp!("001100", buf, bsize, "%06b", uv(12));
-        snp!("one two", buf, bsize, "%s %s", one.as_ptr(), two.as_ptr());
+        snp!("one two", buf, bsize, "%s %s", one, two);
         snp!("1.234000", buf, bsize, "%f", 1.234f64);
         snp!("1.234000e+00", buf, bsize, "%e", 1.234f64);
         snp!("nan", buf, bsize, "%f", f64::NAN);
         snp!("inf", buf, bsize, "%f", f64::INFINITY);
         snp!("-inf", buf, bsize, "%f", f64::NEG_INFINITY);
         snp!("-0.000000", buf, bsize, "%f", -0.0f64);
-        snp!("漢語", buf, bsize, "%s", hanyu.as_ptr());
-        snp!("  漢語", buf, bsize, "%8s", hanyu.as_ptr());
-        snp!("漢語  ", buf, bsize, "%-8s", hanyu.as_ptr());
-        snp!("漢", buf, bsize, "%.3s", hanyu.as_ptr());
-        snp!("  foo", buf, bsize, "%5S", foo.as_ptr());
+        snp!("漢語", buf, bsize, "%s", hanyu);
+        snp!("  漢語", buf, bsize, "%8s", hanyu);
+        snp!("漢語  ", buf, bsize, "%-8s", hanyu);
+        snp!("漢", buf, bsize, "%.3s", hanyu);
+        snp!("  foo", buf, bsize, "%5S", foo);
         snp!("%%%", buf, bsize, "%%%%%%");
         // without_provenance: %p only reads the address, and Miri would
         // flag a plain integer-to-pointer cast.
@@ -220,11 +211,11 @@ fn vim_snprintf_truncation() {
 fn vim_snprintf_positional_arguments() {
     for bsize in 0..=24usize {
         let mut storage = vec![0u8; bsize.max(1)];
-        let buf = storage.as_mut_ptr() as *mut c_char;
-        let one = cstr("one");
-        let two = cstr("two");
-        let three = cstr("three");
-        let hi = cstr("hi");
+        let buf = &mut storage;
+        let one = c"one";
+        let two = c"two";
+        let three = c"three";
+        let hi = c"hi";
         #[rustfmt::skip]
         snp!("1234567  ", buf, bsize, "%1$*2$ld", 1234567 as c_long, -9 as c_int);
         #[rustfmt::skip]
@@ -253,34 +244,20 @@ fn vim_snprintf_positional_arguments() {
         #[rustfmt::skip]
         snp!("9 c 7654321", buf, bsize, "%2$ld %1$c %3$lu", 'c' as c_int, 9 as c_long, 7654321 as c_ulong);
         #[rustfmt::skip]
-        snp!("9 hi 7654321", buf, bsize, "%2$ld %1$s %3$lu", hi.as_ptr(), 9 as c_long, 7654321 as c_ulong);
+        snp!("9 hi 7654321", buf, bsize, "%2$ld %1$s %3$lu", hi, 9 as c_long, 7654321 as c_ulong);
         #[rustfmt::skip]
         snp!("9 0.000000e+00 7654321", buf, bsize, "%2$ld %1$e %3$lu", 0.0f64, 9 as c_long, 7654321 as c_ulong);
         #[rustfmt::skip]
-        snp!("two one two", buf, bsize, "%2$s %1$s %2$s", one.as_ptr(), two.as_ptr(), three.as_ptr());
+        snp!("two one two", buf, bsize, "%2$s %1$s %2$s", one, two, three);
         #[rustfmt::skip]
-        snp!("three one two", buf, bsize, "%3$s %1$s %2$s", one.as_ptr(), two.as_ptr(), three.as_ptr());
+        snp!("three one two", buf, bsize, "%3$s %1$s %2$s", one, two, three);
         snp!("1234567", buf, bsize, "%1$d", 1234567 as c_int);
         snp!("deadbeef", buf, bsize, "%1$x", 0xdeadbeef_u32 as c_uint);
         snp!("001100", buf, bsize, "%2$0*1$b", 6 as c_int, uv(12));
         snp!("001100", buf, bsize, "%1$0.*2$b", uv(12), 6 as c_int);
-        snp!(
-            "one two",
-            buf,
-            bsize,
-            "%1$s %2$s",
-            one.as_ptr(),
-            two.as_ptr()
-        );
+        snp!("one two", buf, bsize, "%1$s %2$s", one, two);
         snp!("001100", buf, bsize, "%06b", uv(12));
-        snp!(
-            "two one",
-            buf,
-            bsize,
-            "%2$s %1$s",
-            one.as_ptr(),
-            two.as_ptr()
-        );
+        snp!("two one", buf, bsize, "%2$s %1$s", one, two);
         snp!("1.234000", buf, bsize, "%1$f", 1.234f64);
         snp!("1.234000e+00", buf, bsize, "%1$e", 1.234f64);
         snp!("nan", buf, bsize, "%1$f", f64::NAN);
@@ -294,7 +271,7 @@ fn vim_snprintf_positional_arguments() {
 fn vim_snprintf_zd_and_zu() {
     let bsize = 20usize;
     let mut storage = vec![0u8; bsize];
-    let buf = storage.as_mut_ptr() as *mut c_char;
+    let buf = &mut storage;
     #[rustfmt::skip]
     snp!("-1234567 -7654321", buf, bsize, "%zd %zd", -1234567_isize, -7654321_isize);
     #[rustfmt::skip]

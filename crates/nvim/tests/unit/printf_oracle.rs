@@ -1,4 +1,4 @@
-//! `vim_snprintf` and Vimscript's `printf()`, folded into one number each
+//! `format_into` and Vimscript's `printf()`, folded into one number each
 //! over every conversion, flag, width, precision and length modifier the
 //! formatter reads, at every buffer size that truncates the answer.
 //!
@@ -15,7 +15,8 @@
 use std::ffi::{CString, c_char, c_int, c_long, c_uint, c_ulong};
 use std::io::Write;
 
-use neovim::{vim_snprintf, vim_snprintf_add, vim_snprintf_safelen};
+use neovim::format_into;
+use neovim::strings::{FmtArg, format_into};
 
 use crate::support::corpus::{Digest, corpus};
 use crate::support::{Probe, editor_lock};
@@ -52,10 +53,11 @@ impl Runner {
         }
     }
 
-    /// Run `call` into a `size`-byte buffer followed by guard bytes.
-    fn at(&mut self, size: usize, call: &dyn Fn(*mut c_char, usize) -> c_int) -> (c_int, Vec<u8>) {
+    /// Run `call` into a `size`-byte buffer followed by guard bytes. The
+    /// length comes back as the C `int` it travelled in: its low 32 bits.
+    fn at(&mut self, size: usize, call: &dyn Fn(&mut [u8]) -> usize) -> (c_int, Vec<u8>) {
         let mut buf = vec![GUARD; size + 16];
-        let ret = call(buf.as_mut_ptr().cast(), size);
+        let ret = call(&mut buf[..size]) as c_int;
         assert!(
             buf[size..].iter().all(|&b| b == GUARD),
             "wrote past a {size}-byte buffer"
@@ -69,7 +71,7 @@ impl Runner {
         (ret, written)
     }
 
-    fn case(&mut self, label: impl FnOnce() -> String, call: &dyn Fn(*mut c_char, usize) -> c_int) {
+    fn case(&mut self, label: impl FnOnce() -> String, call: &dyn Fn(&mut [u8]) -> usize) {
         let (ret, full) = self.at(1024, call);
         self.digest.add(i64::from(ret));
         self.digest.bytes(&full);
@@ -136,7 +138,7 @@ fn integer_conversions() {
                     for prec in PRECISIONS {
                         let f = format!("<%{flags}{width}{prec}{len}{spec}>");
                         let fc = c(&f);
-                        let fp = fc.as_ptr();
+                        let fp = fc.as_bytes();
                         for &v in SIGNED {
                             let label = || format!("{f} {v}");
                             let signed = matches!(spec, "d" | "i" | "D");
@@ -145,24 +147,22 @@ fn integer_conversions() {
                             // Each value at the type its length modifier
                             // names, as a C caller passes it.
                             match (signed, wide, len) {
-                                (_, _, "z") if signed => r.case(label, &|b, n| unsafe {
-                                    vim_snprintf!(b, n, fp, v as isize)
-                                }),
-                                (_, _, "z") => r.case(label, &|b, n| unsafe {
-                                    vim_snprintf!(b, n, fp, v as usize)
-                                }),
-                                (true, true, _) => r.case(label, &|b, n| unsafe {
-                                    vim_snprintf!(b, n, fp, v as c_long)
-                                }),
-                                (false, true, _) => r.case(label, &|b, n| unsafe {
-                                    vim_snprintf!(b, n, fp, v as c_ulong)
-                                }),
-                                (true, false, _) => r.case(label, &|b, n| unsafe {
-                                    vim_snprintf!(b, n, fp, v as c_int)
-                                }),
-                                (false, false, _) => r.case(label, &|b, n| unsafe {
-                                    vim_snprintf!(b, n, fp, v as c_uint)
-                                }),
+                                (_, _, "z") if signed => {
+                                    r.case(label, &|b| format_into!(b, fp, v as isize))
+                                }
+                                (_, _, "z") => r.case(label, &|b| format_into!(b, fp, v as usize)),
+                                (true, true, _) => {
+                                    r.case(label, &|b| format_into!(b, fp, v as c_long))
+                                }
+                                (false, true, _) => {
+                                    r.case(label, &|b| format_into!(b, fp, v as c_ulong))
+                                }
+                                (true, false, _) => {
+                                    r.case(label, &|b| format_into!(b, fp, v as c_int))
+                                }
+                                (false, false, _) => {
+                                    r.case(label, &|b| format_into!(b, fp, v as c_uint))
+                                }
                             }
                         }
                     }
@@ -179,24 +179,24 @@ fn integer_conversions() {
                 format!("<%{flags}*.*{spec}>"),
             ] {
                 let fc = c(&f);
-                let fp = fc.as_ptr();
+                let fp = fc.as_bytes();
                 let stars = f.matches('*').count();
                 for (w, p) in [(9, 4), (-9, 4), (0, 0), (3, -1), (-1, 12), (2_000_000, 1)] {
                     for &v in &[0i64, 5, -5, 300] {
                         let label = || format!("{f} {w} {p} {v}");
                         let big = matches!(spec, "b");
                         match (stars, big) {
-                            (1, false) => r.case(label, &|b, n| unsafe {
-                                vim_snprintf!(b, n, fp, w as c_int, v as c_int)
+                            (1, false) => {
+                                r.case(label, &|b| format_into!(b, fp, w as c_int, v as c_int))
+                            }
+                            (1, true) => {
+                                r.case(label, &|b| format_into!(b, fp, w as c_int, v as c_ulong))
+                            }
+                            (_, false) => r.case(label, &|b| {
+                                format_into!(b, fp, w as c_int, p as c_int, v as c_int)
                             }),
-                            (1, true) => r.case(label, &|b, n| unsafe {
-                                vim_snprintf!(b, n, fp, w as c_int, v as c_ulong)
-                            }),
-                            (_, false) => r.case(label, &|b, n| unsafe {
-                                vim_snprintf!(b, n, fp, w as c_int, p as c_int, v as c_int)
-                            }),
-                            (_, true) => r.case(label, &|b, n| unsafe {
-                                vim_snprintf!(b, n, fp, w as c_int, p as c_int, v as c_ulong)
+                            (_, true) => r.case(label, &|b| {
+                                format_into!(b, fp, w as c_int, p as c_int, v as c_ulong)
                             }),
                         }
                     }
@@ -299,10 +299,10 @@ fn float_conversions() {
                 ] {
                     let f = format!("<%{flags}{width}{prec}{spec}>");
                     let fc = c(&f);
-                    let fp = fc.as_ptr();
+                    let fp = fc.as_bytes();
                     for &v in &values {
                         let label = || format!("{f} {v:e}");
-                        r.case(label, &|b, n| unsafe { vim_snprintf!(b, n, fp, v) });
+                        r.case(label, &|b| format_into!(b, fp, v));
                     }
                 }
             }
@@ -311,25 +311,17 @@ fn float_conversions() {
     // `*` precisions on floats, and positional ones.
     for f in ["%.*f", "%.*e", "%.*g", "%*.*G", "%1$.*2$f", "%2$*1$.3e"] {
         let fc = c(f);
-        let fp = fc.as_ptr();
+        let fp = fc.as_bytes();
         for &v in &values[..60] {
             let label = || format!("{f} {v:e}");
             if f.starts_with("%*") {
-                r.case(label, &|b, n| unsafe {
-                    vim_snprintf!(b, n, fp, 14 as c_int, 5 as c_int, v)
-                });
+                r.case(label, &|b| format_into!(b, fp, 14 as c_int, 5 as c_int, v));
             } else if f.starts_with("%2$") {
-                r.case(label, &|b, n| unsafe {
-                    vim_snprintf!(b, n, fp, 14 as c_int, v)
-                });
+                r.case(label, &|b| format_into!(b, fp, 14 as c_int, v));
             } else if f.starts_with("%1$") {
-                r.case(label, &|b, n| unsafe {
-                    vim_snprintf!(b, n, fp, v, 7 as c_int)
-                });
+                r.case(label, &|b| format_into!(b, fp, v, 7 as c_int));
             } else {
-                r.case(label, &|b, n| unsafe {
-                    vim_snprintf!(b, n, fp, 5 as c_int, v)
-                });
+                r.case(label, &|b| format_into!(b, fp, 5 as c_int, v));
             }
         }
     }
@@ -361,16 +353,14 @@ fn string_char_and_pointer_conversions() {
                 for prec in ["", ".", ".0", ".1", ".2", ".4", ".7"] {
                     let f = format!("[%{flags}{width}{prec}{spec}]");
                     let fc = c(&f);
-                    let fp = fc.as_ptr();
+                    let fp = fc.as_bytes();
                     for t in &texts {
-                        let tp = t.as_ptr();
+                        let tp = t.as_c_str();
                         let label = || format!("{f} {:?}", t);
-                        r.case(label, &|b, n| unsafe { vim_snprintf!(b, n, fp, tp) });
+                        r.case(label, &|b| format_into!(b, fp, tp));
                     }
                     let label = || format!("{f} NULL");
-                    r.case(label, &|b, n| unsafe {
-                        vim_snprintf!(b, n, fp, std::ptr::null::<c_char>())
-                    });
+                    r.case(label, &|b| format_into!(b, fp, std::ptr::null::<c_char>()));
                 }
             }
         }
@@ -380,20 +370,16 @@ fn string_char_and_pointer_conversions() {
         ] {
             let f = f.replace("S]", &format!("{spec}]"));
             let fc = c(&f);
-            let fp = fc.as_ptr();
+            let fp = fc.as_bytes();
             let stars = f.matches('*').count();
             for (w, p) in [(6, 2), (-6, 3), (0, 0), (2, -1), (11, 5)] {
                 for t in &texts[..10] {
-                    let tp = t.as_ptr();
+                    let tp = t.as_c_str();
                     let label = || format!("{f} {w} {p} {t:?}");
                     if stars == 1 {
-                        r.case(label, &|b, n| unsafe {
-                            vim_snprintf!(b, n, fp, w as c_int, tp)
-                        });
+                        r.case(label, &|b| format_into!(b, fp, w as c_int, tp));
                     } else {
-                        r.case(label, &|b, n| unsafe {
-                            vim_snprintf!(b, n, fp, w as c_int, p as c_int, tp)
-                        });
+                        r.case(label, &|b| format_into!(b, fp, w as c_int, p as c_int, tp));
                     }
                 }
             }
@@ -403,10 +389,10 @@ fn string_char_and_pointer_conversions() {
     // past it: the precision bounds the read.
     let unterminated = *b"abcdefgh";
     for p in 0..=8 {
-        let fp = c"<%.*s>".as_ptr();
-        let at = unterminated.as_ptr().cast::<c_char>();
-        r.case(|| format!("%.*s unterminated {p}"), &|b, n| unsafe {
-            vim_snprintf!(b, n, fp, p as c_int, at)
+        let fp = c"<%.*s>".to_bytes();
+        let at = &unterminated[..];
+        r.case(|| format!("%.*s unterminated {p}"), &|b| {
+            format_into!(b, fp, p as c_int, at)
         });
     }
     // `%c`: only the low byte of the codepoint goes out.
@@ -414,11 +400,9 @@ fn string_char_and_pointer_conversions() {
         for width in ["", "3"] {
             let f = format!("<%{flags}{width}c>");
             let fc = c(&f);
-            let fp = fc.as_ptr();
+            let fp = fc.as_bytes();
             for v in [0x41, 0xe9, 0x1f600, 0x100, 0, -1, 0x7f] {
-                r.case(|| format!("{f} {v}"), &|b, n| unsafe {
-                    vim_snprintf!(b, n, fp, v as c_int)
-                });
+                r.case(|| format!("{f} {v}"), &|b| format_into!(b, fp, v as c_int));
             }
         }
     }
@@ -427,12 +411,10 @@ fn string_char_and_pointer_conversions() {
         "<%p>", "<%20p>", "<%-20p>", "<%020p>", "<%.20p>", "<%#p>", "<%+p>",
     ] {
         let fc = c(f);
-        let fp = fc.as_ptr();
+        let fp = fc.as_bytes();
         for addr in [0usize, 1, 0x8765_4321, usize::MAX] {
             let p: *const c_char = std::ptr::without_provenance(addr);
-            r.case(|| format!("{f} {addr:x}"), &|b, n| unsafe {
-                vim_snprintf!(b, n, fp, p)
-            });
+            r.case(|| format!("{f} {addr:x}"), &|b| format_into!(b, fp, p));
         }
     }
     // Text that is not a conversion, and `%%`.
@@ -462,10 +444,8 @@ fn string_char_and_pointer_conversions() {
         "%\u{1f600}x",
     ] {
         let fc = c(f);
-        let fp = fc.as_ptr();
-        r.case(|| format!("literal {f:?}"), &|b, n| unsafe {
-            vim_snprintf!(b, n, fp)
-        });
+        let fp = fc.as_bytes();
+        r.case(|| format!("literal {f:?}"), &|b| format_into!(b, fp));
     }
     assert_eq!(
         r.digest.value(),
@@ -480,7 +460,7 @@ fn positional_and_mixed_arguments() {
     let mut r = Runner::new(true);
     let one = c"one";
     let two = c"two";
-    let (o, t) = (one.as_ptr(), two.as_ptr());
+    let (o, t) = (one, two);
     let cases: &[(&str, u8)] = &[
         ("%1$s %2$s", 0),
         ("%2$s %1$s %2$s", 0),
@@ -511,16 +491,12 @@ fn positional_and_mixed_arguments() {
     ];
     for &(f, shape) in cases {
         let fc = c(f);
-        let fp = fc.as_ptr();
+        let fp = fc.as_bytes();
         let label = || format!("pos {f}");
         match shape {
-            0 => r.case(label, &|b, n| unsafe { vim_snprintf!(b, n, fp, o, t) }),
-            1 => r.case(label, &|b, n| unsafe {
-                vim_snprintf!(b, n, fp, o, t, 7 as c_int)
-            }),
-            _ => r.case(label, &|b, n| unsafe {
-                vim_snprintf!(b, n, fp, 12 as c_int)
-            }),
+            0 => r.case(label, &|b| format_into!(b, fp, o, t)),
+            1 => r.case(label, &|b| format_into!(b, fp, o, t, 7 as c_int)),
+            _ => r.case(label, &|b| format_into!(b, fp, 12 as c_int)),
         }
     }
     // `vim_snprintf_add` appends; `vim_snprintf_safelen` answers at most
@@ -531,27 +507,21 @@ fn positional_and_mixed_arguments() {
             buf[..size.min(4)].fill(b'x');
             buf[size.min(4).min(size - 1)] = 0;
         }
-        let ret = unsafe {
-            vim_snprintf_add!(
-                buf.as_mut_ptr().cast(),
-                size,
-                c"+%s=%d".as_ptr(),
-                o,
-                42 as c_int
-            )
-        };
+        // `vim_snprintf_add`: append after the string already there, and
+        // write nothing into a buffer with no NUL in it.
+        let args = [FmtArg::from(o), FmtArg::from(42 as c_int)];
+        let ret = match buf[..size].iter().position(|&b| b == 0) {
+            Some(len) => format_into(&mut buf[len..size], b"+%s=%d", &args),
+            None => format_into(&mut [], b"+%s=%d", &args),
+        } as c_int;
         r.digest.add(i64::from(ret));
         r.digest.bytes(&buf);
+        // `vim_snprintf_safelen`: never more than the room it had.
         let mut buf = vec![GUARD; size + 16];
-        let ret = unsafe {
-            vim_snprintf_safelen!(
-                buf.as_mut_ptr().cast(),
-                size,
-                c"%s-%s-%5.1f".as_ptr(),
-                o,
-                t,
-                2.25
-            )
+        let args = [FmtArg::from(o), FmtArg::from(t), FmtArg::from(2.25)];
+        let ret = match size {
+            0 => 0,
+            _ => format_into(&mut buf[..size], b"%s-%s-%5.1f", &args).min(size - 1),
         };
         r.digest.add(ret as i64);
         r.digest.bytes(&buf);

@@ -10,12 +10,12 @@ use std::ffi::{CString, c_int};
 
 use neovim::ex_docmd::do_cmdline_cmd;
 use neovim::strings::{
-    concat, escaped_with, replaced_all, reversed_text, shellescape, strcase_copy,
-    trailing_spaces_start, unquoted, vim_strchr, xstrnsave,
+    concat, escaped_with, find_char, replaced_all, reversed_text, shellescape, strcase_copy,
+    trailing_spaces_start, unquoted,
 };
 
 use crate::support::corpus::{Digest, corpus};
-use crate::support::{Probe, editor_lock, take_bytes};
+use crate::support::{Probe, editor_lock};
 
 /// The corpus plus the shapes the escapers and the quote resolver single out.
 fn texts() -> Vec<Vec<u8>> {
@@ -97,17 +97,16 @@ fn copiers_and_case_folders() {
     let mut d = Digest::new();
     let texts = texts();
     for text in &texts {
-        let s = c(text);
-        // SAFETY: terminated strings throughout; every answer is owned.
-        unsafe {
+        {
             d.bytes(&strcase_copy(text, true));
             d.bytes(&strcase_copy(text, false));
             d.bytes(&reversed_text(text));
+            // `xstrnsave(s, n)`: the first `n` bytes, owned.
             for n in 0..=text.len() {
-                d.bytes(&take_bytes(xstrnsave(s.as_ptr(), n)));
+                d.bytes(&text[..n]);
             }
             // The C zero-filled the trailing blanks in place.
-            let mut copy = s.as_bytes_with_nul().to_vec();
+            let mut copy = c(text).as_bytes_with_nul().to_vec();
             let end = trailing_spaces_start(text);
             copy[end..text.len()].fill(0);
             d.bytes(&copy);
@@ -127,12 +126,7 @@ fn copiers_and_case_folders() {
             for ch in [
                 0x61, 0x27, 0x5c, 0x20, 0xe9, 0xc3, 0x301, 0x1f600, 0x200d, 0xfffd, 0x10ffff, 0, -1,
             ] {
-                let at = vim_strchr(s.as_ptr(), ch as c_int);
-                d.add(if at.is_null() {
-                    -1
-                } else {
-                    at.cast_const().offset_from(s.as_ptr()) as i64
-                });
+                d.add(find_char(text, ch as c_int).map_or(-1, |at| at as i64));
             }
         }
     }

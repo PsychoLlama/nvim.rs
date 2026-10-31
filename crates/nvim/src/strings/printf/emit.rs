@@ -35,7 +35,6 @@ use crate::eval::typval::NumBuf;
 use crate::mbyte::{cells_at, cluster_len};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
-use crate::strings::raw::Values;
 use crate::types::TypVal;
 
 const E_TOO_MANY_ARGS: &CStr = c"E767: Too many arguments to printf()";
@@ -116,8 +115,9 @@ impl<'o> Sink<'o> {
 
 /// Where a conversion's arguments come from.
 pub(in crate::strings) enum Source<'a> {
-    /// Values a Rust caller passed (the `vim_snprintf!` macros).
-    Values(Values<'a>),
+    /// Values a Rust caller passed (the `formatted!` and `format_into!`
+    /// macros).
+    Values(&'a [FmtArg<'a>]),
     /// Vimscript's `printf()` arguments, read with its type checks and its
     /// errors.
     Typvals(&'a [TypVal]),
@@ -144,7 +144,7 @@ impl<'a> Args<'a> {
         };
         let at = usize::try_from(self.arg_idx - 1).ok();
         self.arg_idx += 1;
-        values.get(at?)
+        values.get(at?).copied()
     }
 
     /// The next argument's 64 bits, as an integer conversion reads them;
@@ -189,25 +189,19 @@ impl<'a> Args<'a> {
         }
     }
 
-    /// The next argument's text, `None` for a null one. `max` bounds how far
-    /// a C string may be read (the precision of `%.Ns`); the answer may run
-    /// past it otherwise. A Number is rendered into `numbuf`.
-    fn next_string<'b>(
-        &mut self,
-        numbuf: &'b mut NumBuf,
-        max: Option<usize>,
-    ) -> Option<Cow<'b, [u8]>>
+    /// The next argument's text, `None` for a null one. A pointer is never
+    /// read: it prints as a null one. A Number is rendered into `numbuf`.
+    fn next_string<'b>(&mut self, numbuf: &'b mut NumBuf) -> Option<Cow<'b, [u8]>>
     where
         'a: 'b,
     {
         if let Some(tvs) = self.typvals() {
             return tv_str(tvs, &mut self.arg_idx, numbuf);
         }
-        let arg = self.next_value()?;
-        let Source::Values(values) = &self.src else {
-            return None;
-        };
-        values.text(arg, max).map(Cow::Borrowed)
+        match self.next_value()? {
+            FmtArg::Str(text) => Some(Cow::Borrowed(text)),
+            _ => None,
+        }
     }
 }
 
@@ -428,14 +422,12 @@ fn render_string<'b, 'a: 'b>(
         }
         // b's' | b'S'
         _ => {
-            // Never look past the precision -- except that `%S` walks the
-            // whole string for its cells. (The 2^31 clamp is upstream's,
-            // for a `memchr` that disliked more.)
-            let cap = c.precision.min(0x7fffffff);
-            let max = (c.precision_specified && c.fmt_spec == b's').then_some(cap);
-            let Some(text) = args.next_string(numbuf, max) else {
+            let Some(text) = args.next_string(numbuf) else {
                 return Body::At(b"[NULL]");
             };
+            // (The 2^31 clamp on the precision is upstream's, for a
+            // `memchr` that disliked more.)
+            let cap = c.precision.min(0x7fffffff);
             let mut str_arg_l = if !c.precision_specified {
                 text.len()
             } else if c.precision == 0 {

@@ -187,11 +187,16 @@ pub(crate) fn strchr_in(hay: &[u8], needle: u8) -> Option<usize> {
     if needle == 0 {
         return None;
     }
+    if needle >= 0x80 {
+        // A codepoint past ASCII is searched for as its UTF-8 sequence, as
+        // upstream's `vim_strchr` did; only the ASCII search is libc's.
+        let text = &hay[..strlen_in(hay)];
+        return crate::strings::find_char(text, ::core::ffi::c_int::from(needle));
+    }
     // SAFETY: `hay` holds a NUL, which the search stops at; the answer is
     // null or a pointer into `hay` before it.
-    let found = unsafe {
-        crate::strings::vim_strchr(hay.as_ptr().cast(), ::core::ffi::c_int::from(needle))
-    };
+    let found =
+        unsafe { crate::os::cshim::strchr(hay.as_ptr().cast(), ::core::ffi::c_int::from(needle)) };
     (!found.is_null()).then(|| found.addr() - hay.as_ptr().addr())
 }
 

@@ -1,12 +1,9 @@
 //! The string helpers, over slices.
 //!
 //! Every function here takes the bytes of a string and answers an owned one
-//! or an offset. The pointer spellings the rest of the tree still calls are
-//! one-line shims in `raw.rs`, the one file of `strings` that reads through a
-//! pointer; a family whose shim file must allow `unsafe` keeps this `mod.rs`
-//! at `deny(unsafe_op_in_unsafe_fn)` (a `forbid` here would reach it).
+//! or an offset.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 
 use crate::eval::typval::tv_get_bool_chk;
 use crate::keycodes::Ctrl_V;
@@ -22,14 +19,12 @@ mod charindex;
 mod escape;
 mod eval;
 mod printf;
-mod raw;
 
 pub use self::case::*;
 pub use self::charindex::*;
 pub use self::escape::*;
 pub use self::eval::*;
 pub use self::printf::*;
-pub use self::raw::*;
 
 /// Read an optional boolean argument that must be spelled `0` or `1`.
 ///
@@ -73,7 +68,7 @@ pub fn trailing_spaces_start(s: &[u8]) -> usize {
 /// that whole sequence starts. A non-positive `c` is never found — upstream
 /// spells `strchr(s, 0)` when it wants the terminator, and that offset is
 /// `haystack.len()`, which this deliberately does not answer.
-pub(crate) fn find_char(haystack: &[u8], c: c_int) -> Option<usize> {
+pub fn find_char(haystack: &[u8], c: c_int) -> Option<usize> {
     if c <= 0 {
         return None;
     }
