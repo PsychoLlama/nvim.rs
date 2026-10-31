@@ -25,7 +25,6 @@
 )]
 
 use crate::cstr;
-use crate::event::libuv::{uv_err_name, uv_strerror};
 use crate::event::libuv_proc::libuv_proc_init;
 use crate::event::r#loop::loop_poll_events;
 use crate::event::multiqueue::{multiqueue_empty, multiqueue_free, multiqueue_new_child};
@@ -41,9 +40,10 @@ use crate::memory::ThinCString;
 use crate::message::msg_str;
 use crate::message::state::{lines_left, msg_no_more};
 use crate::message::{msg_display, msg_end, msg_putchar, msg_sb_eol, msg_start};
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
 use crate::msg_schedule_semsg;
 use crate::os::cshim::gettext;
+use crate::os::fs::{os_err_name, os_strerror};
 use crate::shell::Argv;
 use crate::shell::throttle::{Ring, out_data, out_data_decide_throttle, out_data_ring};
 use crate::startup::main_loop;
@@ -146,7 +146,7 @@ pub(crate) fn do_os_system(
             // Probably 'shell' is not executable.
             if !silent {
                 msg_str(gettext(c"\nshell failed to start: "));
-                msg_display(cstr::at(uv_strerror(status)), 0, false);
+                msg_display(os_strerror(status), 0, false);
                 msg_str(c": ");
                 msg_display(&prog, 0, false);
                 msg_putchar('\n' as c_int);
@@ -274,7 +274,7 @@ unsafe fn shell_write_cb(stream: *mut Stream, _data: *mut c_void, status: c_int)
             // `:call system("cat - &", "foo")`. #3529 #5241
             msg_schedule_semsg!(
                 "E5677: Error writing input to shell-command: {}",
-                c_str(uv_err_name(status))
+                msg_cstr(os_err_name(status))
             );
         }
         stream_may_close(stream);

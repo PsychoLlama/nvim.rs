@@ -25,7 +25,7 @@ use crate::ex_cmds2::autowrite_all;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, logmsg};
 use crate::memline::ml_sync_all;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
 use crate::option::vars::p_awa;
 use crate::os::cshim::snprintf;
 use crate::startup::{main_loop, preserve_exit, v_dying};
@@ -199,7 +199,7 @@ fn signal_name(signum: c_int) -> &'static CStr {
 /// Handle a deadly signal: preserve any swap files and exit properly (partly
 /// from Elvis). Reached from the event loop, not from a signal handler.
 fn deadly_signal(signum: c_int) -> ! {
-    let name = signal_name(signum).as_ptr();
+    let name = signal_name(signum);
     let mut dying = [0 as c_char; IOSIZE as usize];
     // SAFETY: main-thread editor state; both log/format calls' arguments
     // match their format strings, and `dying` is IOSIZE chars.
@@ -213,13 +213,13 @@ fn deadly_signal(signum: c_int) -> ! {
             196,
             "got signal {} ({})",
             signum,
-            c_str(name)
+            msg_cstr(name)
         );
         snprintf(
             dying.as_mut_ptr(),
             IOSIZE as usize,
             c"Nvim: Caught deadly signal '%s'\n".as_ptr(),
-            name,
+            name.as_ptr(),
         );
         if p_awa() && signum != SIGTERM && signum != SIGINT {
             autowrite_all();

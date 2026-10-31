@@ -46,7 +46,7 @@ use crate::global_cell::GlobalCell;
 use crate::insexpand::{ctrl_x_mode_not_defined_yet, ins_compl_active};
 use crate::log::{LOG_DEBUG, LOGLVL_DBG, logmsg};
 use crate::message::state::need_wait_return;
-use crate::message_fmt::{c_str, msg_cstr};
+use crate::message_fmt::msg_cstr;
 use crate::normal::{
     NormalState, normal_check, normal_execute, visual_active, visual_mode, visual_select,
 };
@@ -196,13 +196,12 @@ pub(crate) fn state_enter(mut s: ModeState<'_>) {
             if LOG_DEBUG {
                 let keyname_buf;
                 let keyname = if key == Key::Event.code() {
-                    c"K_EVENT".as_ptr()
+                    c"K_EVENT"
                 } else {
                     keyname_buf = get_special_key_name(key, mod_mask.get());
-                    keyname_buf.as_ptr()
+                    cstr::in_chars(&keyname_buf)
                 };
-                // SAFETY: the name just rendered into this frame's buffer.
-                let keyname = unsafe { c_str(keyname) };
+                let keyname = msg_cstr(keyname);
                 logmsg!(LOGLVL_DBG, c"state_enter", 97, "input: {keyname}");
             }
             let execute_result = s.execute(key);

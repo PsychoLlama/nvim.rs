@@ -2,7 +2,7 @@
 //! entry points.
 //!
 //! One formatter (`emit`) serves two argument sources: an array of typed
-//! [`FmtArg`] values, which the `vim_snprintf!` macros build on the caller's
+//! [`FmtArg`] values, which the `formatted!`/`format_into!` macros build on the caller's
 //! stack, and the `TypVal` array Vimscript's `printf()` passes -- the reason
 //! `tv_nr`/`tv_str`/`tv_ptr`/`tv_float` exist: they read one argument out of
 //! that array with the type checking a value array has no need for.

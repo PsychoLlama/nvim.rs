@@ -429,7 +429,7 @@ pub fn logmsg_line(
 /// compiler checks the two against each other — which is the whole point of
 /// retiring the `fprintf` this replaced, where a `&CStr` handed to a `%s`
 /// passed its *length word* off as string bytes. A pointer argument goes
-/// through `message_fmt`'s adaptors (`c_str`, `msg_bytes`, `msg_addr`) the
+/// through `message_fmt`'s adaptors (`msg_cstr`, `msg_bytes`, `msg_addr`) the
 /// same way a message's does; bytes that are not UTF-8 survive.
 ///
 /// `who` is a `CStr` literal — the upstream function name, which the log

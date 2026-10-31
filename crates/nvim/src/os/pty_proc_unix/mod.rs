@@ -30,13 +30,12 @@ mod wait_status;
 use crate::eval::typval::dict_to_env;
 use crate::event::libuv::{
     uv_chdir, uv_disable_stdio_inheritance, uv_pipe_open, uv_signal_start, uv_signal_stop,
-    uv_strerror,
 };
 use crate::event::r#loop::loop_children;
 use crate::event::proc::{kProcTypePty, proc_get_exepath, proc_init};
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, logmsg};
-use crate::message_fmt::{c_str, msg_cstr};
+use crate::message_fmt::{msg_cstr, msg_cstr_opt};
 use crate::os::cshim::environ;
 use crate::os::fs::{errno_text, os_strerror, set_cloexec};
 use crate::os::signal::{SIGALRM, SIGCHLD, SIGCONT, SIGHUP, SIGINT, SIGKILL, SIGQUIT, SIGTERM};
@@ -394,7 +393,10 @@ unsafe fn init_child(ptyproc: *mut PtyProc) -> ! {
         if !(*proc).cwd.is_null() {
             let err = uv_chdir((*proc).cwd);
             if err != 0 {
-                let (cwd, why) = (c_str((*proc).cwd), c_str(uv_strerror(err)));
+                let (cwd, why) = (
+                    msg_cstr(CStr::from_ptr((*proc).cwd)),
+                    msg_cstr(os_strerror(err)),
+                );
                 logmsg!(LOGLVL_ERR, c"init_child", 318, "chdir({cwd}) failed: {why}");
                 _exit(EXEC_FAILED);
             }
@@ -404,8 +406,11 @@ unsafe fn init_child(ptyproc: *mut PtyProc) -> ! {
         debug_assert!(!(*proc).env.is_null());
         environ = dict_to_env(&*((*proc).env));
         execvp(prog, (*proc).argv.cast::<*const c_char>());
-        let (at, prog, why) = (c"init_child", c_str(prog), why());
-        let why = msg_cstr(&why);
+        let (at, why) = (c"init_child", why());
+        let (prog, why) = (
+            msg_cstr_opt((!prog.is_null()).then(|| CStr::from_ptr(prog))),
+            msg_cstr(&why),
+        );
         logmsg!(LOGLVL_ERR, at, 327, "execvp({prog}) failed: {why}");
         _exit(EXEC_FAILED);
     }

@@ -19,10 +19,11 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::event::libuv::{uv_chdir, uv_run, uv_sleep, uv_strerror, uv_tty_set_mode, uv_write};
+use crate::event::libuv::{uv_chdir, uv_run, uv_sleep, uv_tty_set_mode, uv_write};
 use crate::log::{LOGLVL_ERR, logmsg};
-use crate::message_fmt::{c_str, msg_cstr};
+use crate::message_fmt::msg_cstr;
 use crate::msgpack_rpc::channel::rpc_send_event;
+use crate::os::fs::os_strerror;
 use crate::startup::{stdin_isatty, ui_client_channel_id};
 use crate::tui::cursor::{
     cursor_style_enabled, decode_cursor_entry, reset_style as cursor_reset_style,
@@ -125,7 +126,7 @@ pub fn tui_mode_change(tui: &mut TUIData, _mode: String_0, mode_idx: Integer) {
                     c"tui_mode_change",
                     0,
                     "uv_tty_set_mode failed: {}",
-                    unsafe { c_str(uv_strerror(ret)) }
+                    msg_cstr(os_strerror(ret))
                 );
             }
         }
@@ -192,7 +193,7 @@ pub fn tui_ui_send(tui: &mut TUIData, content: String_0) {
                 c"tui_ui_send",
                 0,
                 "uv_write failed: {}",
-                c_str(uv_strerror(ret))
+                msg_cstr(os_strerror(ret))
             );
         }
         uv_run(&raw mut tui.write_loop, UV_RUN_DEFAULT);
@@ -309,7 +310,7 @@ pub fn tui_chdir(_tui: &mut TUIData, path: String_0) {
                 0,
                 "Failed to chdir to {}: {}",
                 msg_cstr(path.as_cstr()),
-                c_str(uv_strerror(err))
+                msg_cstr(os_strerror(err))
             );
         }
     }

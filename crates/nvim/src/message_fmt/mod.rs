@@ -33,12 +33,11 @@
 //!
 //! # What is left of the C dialect
 //!
-//! [`vim_snprintf`](crate::strings::vim_snprintf) stays: `printf()`,
-//! `:echo`'s formatting and the `'statusline'` evaluator hand it format
-//! strings that are *data*, not literals, and those are its floor. The `_c`
-//! message macros that used to sit on top of it are gone.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+//! The `vim_snprintf` formatter ([`format_into`](crate::strings::format_into))
+//! stays: `printf()`, `:echo`'s formatting and the `'statusline'` evaluator
+//! hand it format strings that are *data*, not literals, and those are its
+//! floor. The `_c` message macros that used to sit on top of it are gone.
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -52,7 +51,7 @@ use crate::message::{
     emsg_not_now, msg, msg_keep_text, msg_schedule_semsg_text, msg_str, swmsg_text,
 };
 use crate::os::cshim::{gettext, gettext_template};
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use core::fmt;
 use core::fmt::Write as _;
 use std::ffi::CString;
@@ -86,10 +85,9 @@ impl fmt::Display for TrArg<'_> {
     }
 }
 
-/// A `%s` argument still held as a raw pointer: the C string at `p`, or
-/// `[NULL]` for a null one -- which is exactly what
-/// [`vim_snprintf`](crate::strings::vim_snprintf) writes for a null `%s`, so
-/// a converted call site keeps its bytes.
+/// A C string as a message argument, or `[NULL]` for none -- which is
+/// exactly what the `vim_snprintf` formatter writes for a null `%s`, so a
+/// call site converted from a pointer keeps its bytes.
 ///
 /// Bytes that are not UTF-8 render as U+FFFD, as everywhere else the tree
 /// puts a C string into a Rust message.
@@ -140,45 +138,16 @@ fn write_bytes(f: &mut fmt::Formatter<'_>, bytes: &[u8]) -> fmt::Result {
 /// The private-use block [`write_bytes`] escapes a raw byte into.
 const ESCAPE_BASE: u32 = 0xf700;
 
-/// A `&CStr` as a message argument, keeping bytes that are not UTF-8 --
-/// [`c_str`] for a caller that already has the borrow.
+/// A `&CStr` as a message argument, keeping bytes that are not UTF-8.
 pub(crate) fn msg_cstr(text: &CStr) -> CDisplay<'_> {
     CDisplay(Some(text))
 }
 
 /// An optional `&CStr` as a message argument: `None` renders `[NULL]`, which
-/// is what [`c_str`] writes for a null pointer -- so a call site that has
+/// is what vim's printf writes for a null pointer -- so a call site that has
 /// replaced its pointer with an `Option<&CStr>` keeps its bytes.
 pub(crate) fn msg_cstr_opt(text: Option<&CStr>) -> CDisplay<'_> {
     CDisplay(text)
-}
-
-/// A pointer [`c_str`] takes: the two spellings of a C string the tree holds.
-pub(crate) trait CPtr {
-    /// The pointer, read-only.
-    fn c_ptr(self) -> *const c_char;
-}
-
-impl CPtr for *const c_char {
-    fn c_ptr(self) -> *const c_char {
-        self
-    }
-}
-
-impl CPtr for *mut c_char {
-    fn c_ptr(self) -> *const c_char {
-        self.cast_const()
-    }
-}
-
-/// The C string at `p` as a message argument. See [`CDisplay`].
-///
-/// # Safety
-/// `p` is null, or points at a NUL-terminated string that stays live and
-/// unwritten for as long as the answer is used.
-pub(crate) unsafe fn c_str<'a>(p: impl CPtr) -> CDisplay<'a> {
-    // SAFETY: the caller's contract, minus the null case.
-    CDisplay(unsafe { crate::cstr::at_opt(p.c_ptr()) })
 }
 
 /// Bytes as a message argument, rendered like [`CDisplay`]. `None` is a null
@@ -211,7 +180,7 @@ impl fmt::Display for AddrDisplay {
     }
 }
 
-/// `bytes` as a message argument. The safe sibling of [`c_str_len`].
+/// `bytes` as a message argument.
 pub(crate) fn msg_bytes(bytes: &[u8]) -> BytesDisplay<'_> {
     BytesDisplay(Some(bytes))
 }

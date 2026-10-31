@@ -33,7 +33,7 @@
 
 use crate::event::libuv::{
     uv_close, uv_is_closing, uv_loop_close, uv_loop_init, uv_pipe_init, uv_pipe_open, uv_run,
-    uv_strerror, uv_timer_init, uv_timer_start, uv_tty_get_winsize, uv_tty_init, uv_tty_reset_mode,
+    uv_timer_init, uv_timer_start, uv_tty_get_winsize, uv_tty_init, uv_tty_reset_mode,
     uv_tty_set_mode,
 };
 use crate::event::r#loop::{loop_poll_events, process_events_until};
@@ -44,8 +44,9 @@ use crate::event::stream::stream_set_blocking;
 use crate::highlight::HlAttrFlags;
 use crate::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
 use crate::memory::{ARENA_EMPTY, XString, arena_finish, arena_mem_free, arena_strdup};
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
 use crate::os::env::{env_get_within, getenv_owned};
+use crate::os::fs::os_strerror;
 use crate::os::input::os_isatty;
 use crate::os::uv_error::UV_EINTR;
 use crate::startup::{main_loop, ui_client_error_exit, ui_client_exit_status};
@@ -464,8 +465,7 @@ fn log_uv_error(ret: c_int, call: &str) {
     if ret == 0 {
         return;
     }
-    // SAFETY: libuv's error strings are static.
-    let why = unsafe { c_str(uv_strerror(ret)) };
+    let why = msg_cstr(os_strerror(ret));
     logmsg!(LOGLVL_ERR, c"tui", 0, "{call} failed: {why}");
 }
 

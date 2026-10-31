@@ -58,7 +58,7 @@ use crate::event::{pack_int, unpack_int};
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_DBG, LOGLVL_INF, logmsg};
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr_opt;
 use crate::os::proc::os_proc_tree_kill;
 use crate::os::pty_proc_unix::{
     pty_proc_close, pty_proc_close_master, pty_proc_flush_master, pty_proc_spawn, pty_proc_teardown,
@@ -72,7 +72,7 @@ use crate::startup::{
 use crate::types::{
     LibuvProc, Loop, MultiQueue, Proc, ProcType, PtyProc, Refcount, Stream, uv_loop_t, uv_timer_t,
 };
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};
 use core::ptr;
 
@@ -345,7 +345,8 @@ pub unsafe fn proc_spawn(proc: *mut Proc, has_in: bool, has_out: bool, has_err: 
         127,
         "new: pid={} exepath=[{}]",
         pid,
-        unsafe { c_str(exepath) }
+        // SAFETY: the child's own program name, when it has one.
+        msg_cstr_opt((!exepath.is_null()).then(|| unsafe { CStr::from_ptr(exepath) }))
     );
     0
 }

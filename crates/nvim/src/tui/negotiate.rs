@@ -24,13 +24,15 @@
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_DBG, LOGLVL_WRN, logmsg};
 use crate::memory::strequal;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{msg_cstr, msg_cstr_opt};
 use crate::startup::nvim_testing;
 use crate::tui::output::{flush, out, out_fmt};
 use crate::tui::terminfo::caps::kTerm_set_underline_style;
 use crate::types::{KeyEncoding, TUIData, TermInput, TermMode, TermModeState, termios};
 use ::libc::tcgetattr;
-use core::ffi::{c_char, c_void};
+use core::ffi::{CStr, c_char, c_void};
+
+use crate::cstr;
 
 /// DEC private modes the TUI asks about or sets. The numbers are the
 /// terminal's own.
@@ -262,7 +264,7 @@ unsafe fn tui_get_stty_erase(input: *mut TermInput) -> u8 {
                 c"tui_get_stty_erase",
                 0,
                 "stty/termios:erase={}",
-                c_str(ONE_CHAR_STRINGS[usize::from(erase)].as_ptr())
+                msg_cstr(cstr::in_chars(&ONE_CHAR_STRINGS[usize::from(erase)]))
             );
         }
     }
@@ -331,8 +333,11 @@ const CTRL_H_STR: [c_char; 2] = [CTRL_H, 0];
 
 /// Log a capability libtermkey asked for.
 fn log_termkey(capability: &str, value: *const c_char) {
-    // SAFETY: libtermkey's own NUL-terminated capability string.
-    let value = unsafe { c_str(value) };
+    // A capability of -1 is terminfo's "absent", not a string, and prints
+    // as a null one.
+    let absent = value.is_null() || value == core::ptr::with_exposed_provenance(usize::MAX);
+    // SAFETY: otherwise libtermkey's own NUL-terminated capability string.
+    let value = msg_cstr_opt((!absent).then(|| unsafe { CStr::from_ptr(value) }));
     logmsg!(
         LOGLVL_DBG,
         c"tui_tk_ti_getstr",

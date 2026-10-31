@@ -30,15 +30,15 @@
 )]
 
 use crate::event::libuv::{
-    uv_err_name, uv_fs_read, uv_fs_req_cleanup, uv_idle_start, uv_idle_stop, uv_read_start,
-    uv_read_stop, uv_strerror,
+    uv_fs_read, uv_fs_req_cleanup, uv_idle_start, uv_idle_stop, uv_read_start, uv_read_stop,
 };
 use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::event::stream::{Conn, close_handle, may_close, stream_init};
 use crate::log::{LOGLVL_DBG, logmsg};
 use crate::memory::{alloc_block, free_block};
-use crate::message_fmt::{c_str, msg_addr};
+use crate::message_fmt::{msg_addr, msg_cstr};
+use crate::os::fs::{os_err_name, os_strerror};
 use crate::os::uv_error::{UV_ENOBUFS, UV_EOF};
 use crate::types::{
     Loop, RStream, Stream, size_t, ssize_t, stream_read_cb, uv_buf_t, uv_fs_t, uv_handle_t,
@@ -269,8 +269,8 @@ unsafe extern "C" fn read_cb(uvstream: *mut uv_stream_t, cnt: ssize_t, _buf: *co
             122,
             "closing Stream ({}): {} ({})",
             msg_addr(stream.as_ptr().cast::<c_void>()),
-            c_str(uv_err_name(status)),
-            c_str(uv_strerror(status))
+            msg_cstr(os_err_name(status)),
+            msg_cstr(os_strerror(status))
         );
         uv_read_stop(uvstream);
     }

@@ -5,10 +5,8 @@ grid/	*	1	3	1	1	ref:2	other:1	other:1	-
 grid/	grid/mod.rs	1	3	1	1	ref:2	other:1	other:1	-
 input.rs	*	1	6	0	1	compound:2	-	-	at:1
 input.rs	input.rs	1	6	0	1	compound:2	-	-	at:1
-message_fmt/	*	1	1	1	1	-	other:1	str:3	at_opt:1
-message_fmt/	message_fmt/mod.rs	1	1	1	1	-	other:1	str:3	at_opt:1
-state.rs	*	1	6	1	6	-	other:1	-	c_str:1 handler:1 multiqueue_empty:1 multiqueue_get:1 terminal_check:1 terminal_execute:1
-state.rs	state.rs	1	6	1	6	-	other:1	-	c_str:1 handler:1 multiqueue_empty:1 multiqueue_get:1 terminal_check:1 terminal_execute:1
+state.rs	*	1	5	1	5	-	other:1	-	handler:1 multiqueue_empty:1 multiqueue_get:1 terminal_check:1 terminal_execute:1
+state.rs	state.rs	1	5	1	5	-	other:1	-	handler:1 multiqueue_empty:1 multiqueue_get:1 terminal_check:1 terminal_execute:1
 ui_compositor/	*	1	2	1	2	-	other:1	-	GridRef::new:2
 ui_compositor/	ui_compositor/mod.rs	1	2	1	2	-	other:1	-	GridRef::new:2
 version/	*	1	1	0	1	-	-	-	at:1

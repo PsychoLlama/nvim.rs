@@ -27,9 +27,10 @@
 // what trusts something the *caller* supplies instead -- a pointer and a
 // length, or a scratch buffer.
 
-use crate::event::libuv::{uv_run, uv_strerror, uv_write};
+use crate::event::libuv::{uv_run, uv_write};
 use crate::log::{LOGLVL_ERR, logmsg};
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
+use crate::os::fs::os_strerror;
 use crate::tui::terminfo::caps::{
     TerminfoDef, kTerm_cursor_invisible, kTerm_cursor_normal, kTermCount,
 };
@@ -369,7 +370,7 @@ fn write_out(tui: &mut TUIData, oversized: Option<&[u8]>) {
                     c"flush_buf",
                     0,
                     "uv_write failed: {}",
-                    c_str(uv_strerror(ret))
+                    msg_cstr(os_strerror(ret))
                 );
             }
             // The write loop is private to the TUI and runs to completion
