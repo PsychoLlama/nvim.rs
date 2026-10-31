@@ -25,6 +25,8 @@ pub(crate) fn cstr(s: impl Into<Vec<u8>>) -> CString {
 ///
 /// # Safety
 /// `ptr` must be a valid NUL-terminated string from the `xmalloc` family.
+// Every caller is in a module Miri skips (they reach the OS or the C allocator).
+#[cfg_attr(miri, allow(dead_code))]
 pub(crate) unsafe fn take_bytes(ptr: *mut c_char) -> Vec<u8> {
     let owned = CStr::from_ptr(ptr).to_bytes().to_vec();
     xfree(ptr.cast());
@@ -35,6 +37,7 @@ pub(crate) unsafe fn take_bytes(ptr: *mut c_char) -> Vec<u8> {
 ///
 /// # Safety
 /// `ptr` must be a valid NUL-terminated string from the `xmalloc` family.
+#[cfg_attr(miri, allow(dead_code))]
 pub(crate) unsafe fn internalize(ptr: *mut c_char) -> String {
     String::from_utf8(take_bytes(ptr)).unwrap()
 }
