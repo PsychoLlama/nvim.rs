@@ -20,7 +20,7 @@ use crate::fileio::buffered::WriteFile;
 use crate::mark::{set_last_cursor, shada_buffer_marks, shada_changes, shada_global_marks};
 use crate::memory::{XString, qsort_by};
 use crate::option::vars::{p_enc, p_hi};
-use crate::os::env::os_get_pid;
+use crate::os::env::process_id;
 use crate::os::time::os_time;
 use crate::search::{search_was_last_used, state::no_hlsearch};
 use crate::types::builders::DictBuf;
@@ -268,7 +268,7 @@ impl Writing<'_> {
                 c"max_kbyte",
                 Object::integer(self.limits.max_kbyte as Integer),
             )
-            .insert(c"pid", Object::integer(os_get_pid()))
+            .insert(c"pid", Object::integer(process_id()))
             .insert(
                 c"encoding",
                 Object::string(p_enc(|value| String_0::from_bytes(value.to_bytes()))),

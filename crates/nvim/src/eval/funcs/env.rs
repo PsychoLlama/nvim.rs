@@ -18,7 +18,7 @@ use crate::memory::ThinCString;
 use crate::message::emsg;
 use crate::message_fmt::msg_cstr;
 use crate::option::vars::{p_verbose, p_wic};
-use crate::os::env::{os_copy_fullenv, vim_setenv_named, vim_unsetenv_named};
+use crate::os::env::{copy_environment, vim_setenv_named, vim_unsetenv_named};
 use crate::os::fs::os_setperm;
 use crate::path::concat_fnames;
 use crate::semsg;
@@ -34,7 +34,7 @@ use core::ffi::c_int;
 /// `environ()` — the process environment as a Dictionary.
 pub fn f_environ(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     dict_alloc_ret(result);
-    let env = os_copy_fullenv();
+    let env = copy_environment();
     // Walked backwards, so that when a name appears twice the *first*
     // entry is the one that survives the duplicate check below.
     for entry in env.iter().rev() {

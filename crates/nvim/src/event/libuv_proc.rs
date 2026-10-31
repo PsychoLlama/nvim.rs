@@ -25,9 +25,9 @@ use crate::eval::typval::dict_to_env;
 use crate::event::libuv::{uv_close, uv_pipe, uv_pipe_open, uv_spawn, uv_strerror};
 use crate::event::proc::{kProcTypeUv, proc_get_exepath, proc_init};
 use crate::log::{LOGLVL_INF, logmsg};
+use crate::memory::xfree;
 use crate::message_fmt::c_str;
 use crate::narrow::number_as_int;
-use crate::os::env::os_free_fullenv;
 use crate::startup::ui_client_forward_stdin;
 use crate::types::libc::STDERR_FILENO;
 use crate::types::{
@@ -35,7 +35,7 @@ use crate::types::{
     uv_process_t, uv_stdio_container_t, uv_stdio_flags,
 };
 use ::libc::close;
-use core::ffi::{c_int, c_void};
+use core::ffi::{c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};
 use core::ptr;
 
@@ -248,7 +248,7 @@ pub unsafe fn libuv_proc_spawn(uvproc: *mut LibuvProc) -> c_int {
         if !uvproc.uvopts.env.is_null() {
             let env = uvproc.uvopts.env;
             // SAFETY: the environment `dict_to_env` built above.
-            unsafe { os_free_fullenv(env) };
+            unsafe { free_child_env(env) };
         }
     } else {
         uvproc.proc.pid = uvproc.uv.pid;
@@ -293,7 +293,7 @@ unsafe extern "C" fn close_cb(handle: *mut uv_handle_t) {
     if !uvproc.uvopts.env.is_null() {
         let env = uvproc.uvopts.env;
         // SAFETY: the environment `libuv_proc_spawn` built for the child.
-        unsafe { os_free_fullenv(env) };
+        unsafe { free_child_env(env) };
     }
 }
 
@@ -321,6 +321,24 @@ fn exit_status(status: i64, term_signal: c_int) -> c_int {
         128 + term_signal
     } else {
         number_as_int(status)
+    }
+}
+
+/// Free the environment [`dict_to_env`](crate::eval::typval::dict_to_env)
+/// built for a child: every string, and the array.
+///
+/// # Safety
+/// `env` must be a NULL-terminated vector of owned strings, all allocated as
+/// `dict_to_env` allocates them, that nothing else frees or still reads.
+unsafe fn free_child_env(env: *mut *mut c_char) {
+    // SAFETY: the caller's contract.
+    unsafe {
+        let mut it = env;
+        while !(*it).is_null() {
+            xfree((*it).cast());
+            it = it.add(1);
+        }
+        xfree(env.cast());
     }
 }
 

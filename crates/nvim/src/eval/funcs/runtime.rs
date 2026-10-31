@@ -25,7 +25,7 @@ use crate::message::state::msg_scrolled;
 use crate::normal::op_pending;
 use crate::ops::cursor_pos_info;
 use crate::os::cshim::cstr_ncasecmp;
-use crate::os::env::{os_get_pid, os_hostname_into};
+use crate::os::env::{hostname_into, process_id};
 use crate::os::state::windowsVersion;
 use crate::popupmenu::{pum_set_event_info, pum_visible};
 use crate::startup::{starting, stdin_isatty, stdout_isatty};
@@ -302,13 +302,13 @@ pub fn f_getfontname(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
 
 /// `getpid()`
 pub fn f_getpid(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_number(os_get_pid() as VarNumber);
+    result.write_number(process_id() as VarNumber);
 }
 
 /// `hostname()`
 pub fn f_hostname(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut hostname = [0u8; 256];
-    os_hostname_into(&mut hostname);
+    hostname_into(&mut hostname);
     let name = CStr::from_bytes_until_nul(&hostname).unwrap_or(c"");
     result.write_string(Some(ThinCString::from_cstr(name)));
 }

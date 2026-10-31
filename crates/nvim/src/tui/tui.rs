@@ -43,9 +43,9 @@ use crate::event::signal::{
 use crate::event::stream::stream_set_blocking;
 use crate::highlight::HlAttrFlags;
 use crate::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
-use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, arena_strdup, xfree};
+use crate::memory::{ARENA_EMPTY, XString, arena_finish, arena_mem_free, arena_strdup};
 use crate::message_fmt::c_str;
-use crate::os::env::{env_buf, os_getenv, os_getenv_into};
+use crate::os::env::{env_get_within, getenv_owned};
 use crate::os::input::os_isatty;
 use crate::os::uv_error::UV_EINTR;
 use crate::startup::{main_loop, ui_client_error_exit, ui_client_exit_status};
@@ -343,14 +343,14 @@ unsafe fn terminfo_start(tui: *mut TUIData) {
         (*tui).ti_arena = ARENA_EMPTY;
         assert!((*tui).term.is_null(), "terminfo already resolved");
 
-        let term = os_getenv(c"TERM".as_ptr());
-        let term_name = (!term.is_null()).then(|| CStr::from_ptr(term));
+        let term = getenv_owned(c"TERM");
+        let term_name = term.as_ref().map(XString::as_cstr);
         (*tui).terminfo_found_in_db = false;
         if let Some(name) = term_name
             && let Some(entry) = terminfo_from_database(name, &raw mut (*tui).ti_arena)
         {
             (*tui).ti = entry;
-            (*tui).term = arena_strdup(&raw mut (*tui).ti_arena, term);
+            (*tui).term = arena_strdup(&raw mut (*tui).ti_arena, name.as_ptr());
             (*tui).terminfo_found_in_db = true;
         }
         if !(*tui).terminfo_found_in_db {
@@ -416,7 +416,6 @@ unsafe fn terminfo_start(tui: *mut TUIData) {
 
         open_output(tui);
         flush(&mut *tui);
-        xfree(term.cast());
     }
 }
 
@@ -762,16 +761,15 @@ unsafe fn tui_guess_size(tui: *mut TUIData) {
 /// # Safety
 /// `out` must be valid for writes.
 unsafe fn env_size(name: &CStr, out: *mut c_int) -> bool {
-    let mut env = env_buf();
-    // SAFETY: `os_getenv_into` answers null or a NUL-terminated string in
-    // `env`, and `%d%n` writes one int and one int.
+    let Some(value) = env_get_within(name, crate::types::MAXPATHL as usize) else {
+        return false;
+    };
+    let value = crate::cstr::owned(&value);
+    let mut consumed: c_int = 0;
+    // SAFETY: `value` is NUL-terminated, and `%d%n` writes one int to the
+    // caller's `out` and one to `consumed`.
     unsafe {
-        let value = os_getenv_into(name.as_ptr(), &mut env);
-        if value.is_null() {
-            return false;
-        }
-        let mut consumed: c_int = 0;
-        sscanf(value, c"%d%n".as_ptr(), out, &raw mut consumed) != EOF && consumed != 0
+        sscanf(value.as_ptr(), c"%d%n".as_ptr(), out, &raw mut consumed) != EOF && consumed != 0
     }
 }
 

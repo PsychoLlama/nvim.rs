@@ -22,7 +22,7 @@ use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
 use crate::memory::XString;
 use crate::message_fmt::{msg_bytes, msg_cstr};
-use crate::os::env::{ENV_TEST_LOG, env_exists, env_unset, getenv_owned, os_get_pid};
+use crate::os::env::{ENV_TEST_LOG, env_exists, env_unset, getenv_owned, process_id};
 use crate::os::fs::os_strerror;
 use crate::path::fix_fname;
 use crate::types::{IOSIZE, SocketWatcher, Vv, uint32_t};
@@ -155,7 +155,7 @@ pub fn server_address_new(name: Option<&CStr>) -> XString {
     let appname = get_appname(true);
     let dir = xdg_var(XDG_RUNTIME_DIR);
     let base = name.unwrap_or(&appname);
-    let pid = os_get_pid();
+    let pid = process_id();
     let mut address = Vec::with_capacity(SOCKET_ADDR_LEN);
     address.extend_from_slice(dir.as_ref().map_or(&b"(null)"[..], |dir| dir.to_bytes()));
     address.push(b'/');

@@ -25,7 +25,7 @@
 
 use crate::global_cell::GlobalCell;
 use crate::memory::xstrlcpy;
-use crate::os::env::{env_buf, os_getenv_into};
+use crate::os::env::env_get_bounded;
 use crate::types::Candidate;
 use crate::types::{Expand, Failed, size_t, uv_uid_t};
 use core::ffi::{CStr, c_char};
@@ -65,9 +65,8 @@ unsafe fn owned_name(s: *const c_char) -> Option<CString> {
 /// enumeration never mentions.
 fn all_usernames() -> Vec<CString> {
     let mut names = Vec::new();
-    let mut env = env_buf();
-    // SAFETY: the pwd walk is libc's own iterator, and `$USER` lands in
-    // `env`, which outlives the copy taken out of it.
+    let user_env = crate::cstr::owned(&env_get_bounded(c"USER"));
+    // SAFETY: the pwd walk is libc's own iterator.
     unsafe {
         libc::setpwent();
         while let Some(pw) = libc::getpwent().as_ref() {
@@ -75,7 +74,7 @@ fn all_usernames() -> Vec<CString> {
         }
         libc::endpwent();
 
-        if let Some(user_env) = owned_name(os_getenv_into(c"USER".as_ptr(), &mut env))
+        if let Some(user_env) = owned_name(user_env.as_ptr())
             && !names.contains(&user_env)
             && let Some(pw) = libc::getpwnam(user_env.as_ptr()).as_ref()
         {

@@ -198,7 +198,7 @@ fn get_mef_name() -> Option<XString> {
         if START.get() == -1 {
             // Upstream's `(int)` narrowing of the process id.
             #[allow(clippy::cast_possible_truncation)]
-            START.set(os_get_pid() as c_int);
+            START.set(process_id() as c_int);
         } else {
             OFF.set(OFF.get() + 19);
         }

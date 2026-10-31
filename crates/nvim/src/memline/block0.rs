@@ -24,7 +24,7 @@ use std::io::Read;
 use super::*;
 use crate::optionstr::OptStringRef;
 use crate::os::cshim::gettext;
-use crate::os::env::os_hostname_into;
+use crate::os::env::hostname_into;
 use crate::os::fs::file_info;
 use crate::os::time::{ctime_text, uptime};
 use crate::os::users::{uname_within, username_named_within};
@@ -363,7 +363,7 @@ pub(crate) fn swapfile_unchanged(fname: &CStr) -> bool {
         ret = false;
     } else {
         let mut hostname = [0u8; B0_HNAME_SIZE as usize];
-        os_hostname_into(&mut hostname);
+        hostname_into(&mut hostname);
         // The last byte is a terminator either way, in case of corruption.
         let stored = cstr::until_nul(&b0.hname()[..B0_HNAME_SIZE as usize - 1]);
         let here = cstr::until_nul(&hostname[..B0_HNAME_SIZE as usize - 1]);

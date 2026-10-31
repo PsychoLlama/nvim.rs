@@ -81,7 +81,7 @@ use crate::options::{
     kOptSwapfile, kOptSwbFlagUselast, kOptSwbFlagUsetab,
 };
 use crate::os::cshim::gettext;
-use crate::os::env::os_get_pid;
+use crate::os::env::process_id;
 use crate::os::fs::os_remove;
 use crate::os::input::{line_breakcheck, os_breakcheck};
 use crate::path::{PATHSEP, path_fnamecmp, path_is_absolute, vim_is_abs_name};

@@ -26,7 +26,7 @@ use crate::log::{LOGLVL_DBG, LOGLVL_ERR, logmsg};
 use crate::memory::{xstrlcat, xstrlcpy};
 use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, tzset};
-use crate::os::env::{env_buf, os_getenv_into};
+use crate::os::env::env_get_bounded;
 use crate::os::input::os_input_ready;
 use crate::startup::main_loop;
 use crate::types::{Timestamp, UV_CLOCK_REALTIME, time_t, tm, uv_timespec64_t};
@@ -172,20 +172,10 @@ const TZ_LEN: usize = 64;
 /// Thread-safe local-time conversion. Returns false if `clock` could not be
 /// converted, leaving `result` untouched.
 pub fn os_localtime_r(clock: time_t, result: &mut tm) -> bool {
-    let mut env = env_buf();
-    // SAFETY: `$TZ` is NUL-terminated where it is not NULL, and it lands in
-    // `env`, which outlives the borrow.
-    let tz = unsafe {
-        let value = os_getenv_into(c"TZ".as_ptr(), &mut env);
-        if value.is_null() {
-            c""
-        } else {
-            CStr::from_ptr(value)
-        }
-    };
+    let tz = env_get_bounded(c"TZ");
     // Upstream compares only what the cache can hold, so a `$TZ` longer than
     // that does not re-`tzset` on every conversion.
-    let head = &tz.to_bytes()[..tz.to_bytes().len().min(TZ_LEN - 1)];
+    let head = &tz[..tz.len().min(TZ_LEN - 1)];
     if TZ_CACHE.with(|cache| cstr::in_chars(cache).to_bytes() != head) {
         let mut cache = [0 as c_char; TZ_LEN];
         for (slot, &b) in cache.iter_mut().zip(head) {

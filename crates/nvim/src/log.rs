@@ -53,7 +53,7 @@ use crate::global_cell::GlobalCell;
 use crate::message_fmt::{msg_cstr, to_bytes};
 use crate::msg_schedule_semsg;
 use crate::os::env::{
-    ENV_LOGFILE, ENV_LOGFILE_WANT, ENV_NVIM, env_get_bounded, env_set, os_get_pid,
+    ENV_LOGFILE, ENV_LOGFILE_WANT, ENV_NVIM, env_get_bounded, env_set, process_id,
 };
 use crate::os::fs::{MkdirFailure, dir_exists, mkdir_recurse};
 use crate::os::time::{os_localtime, tm_zeroed};
@@ -520,7 +520,7 @@ fn regen_name(ui: bool) {
     } else {
         // `%-5ld`: the pid left-justified in five columns.
         let who = if ui { "ui" } else { "?" };
-        format!("{who}.{:<5}", os_get_pid()).into_bytes()
+        format!("{who}.{:<5}", process_id()).into_bytes()
     };
     name.truncate(INSTANCE_NAME_SIZE);
     NAME.set(name);

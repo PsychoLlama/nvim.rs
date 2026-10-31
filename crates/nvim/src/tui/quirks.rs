@@ -28,8 +28,8 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::memory::{arena_memdupz, xfree};
-use crate::os::env::{os_env_exists, os_getenv};
+use crate::memory::arena_memdupz;
+use crate::os::env::{env_exists, getenv_owned};
 use crate::tui::terminfo::caps::{
     TerminfoDef, kTerm_carriage_return, kTerm_cursor_invisible, kTerm_cursor_normal,
     kTerm_enter_ca_mode, kTerm_enter_italics_mode, kTerm_exit_ca_mode, kTerm_from_status_line,
@@ -116,26 +116,14 @@ unsafe fn arena_dup(arena: *mut Arena, bytes: &[u8]) -> *const c_char {
     unsafe { arena_memdupz(arena, bytes.as_ptr().cast(), bytes.len()) }
 }
 
-/// The value of `$name`, or `None` when it is unset.
+/// The value of `$name`, or `None` when it is unset or empty.
 fn env(name: &CStr) -> Option<Vec<u8>> {
-    // SAFETY: `os_getenv` takes a NUL-terminated name and returns either
-    // null or a freshly allocated NUL-terminated string that becomes ours to
-    // free -- which is why the value is copied out before the free.
-    unsafe {
-        let p = os_getenv(name.as_ptr());
-        if p.is_null() {
-            return None;
-        }
-        let owned = CStr::from_ptr(p).to_bytes().to_vec();
-        xfree(p.cast());
-        Some(owned)
-    }
+    getenv_owned(name).map(|value| value.to_vec())
 }
 
 /// Is `$name` set to something non-empty?
 fn env_is_set(name: &CStr) -> bool {
-    // SAFETY: the name is NUL-terminated; `true` asks it to ignore "".
-    unsafe { os_env_exists(name.as_ptr(), true) }
+    env_exists(name, true)
 }
 
 /// The leading decimal digits of a self-reported version, 0 if there are

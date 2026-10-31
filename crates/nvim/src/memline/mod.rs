@@ -51,7 +51,7 @@ use crate::option::vars::{P_DIR, P_SHM, p_uc, p_verbose};
 use crate::option::{get_fileformat, set_fileformat, set_option_value_give_err};
 use crate::options::kOptFileencoding;
 use crate::os::cshim::gettext;
-use crate::os::env::os_get_pid;
+use crate::os::env::process_id;
 use crate::os::fs::{os_remove, path_exists};
 use crate::os::input::{line_breakcheck, os_char_avail};
 use crate::os::proc::os_proc_running;
@@ -254,7 +254,7 @@ fn ml_open_blocks(mut buffer: Buf) -> Result<(), Failed> {
         set_b0_fname(buffer, id);
         let user = crate::os::users::username_within(B0_UNAME_SIZE as usize);
         let mut host = [0u8; B0_HNAME_SIZE as usize];
-        crate::os::env::os_hostname_into(&mut host);
+        crate::os::env::hostname_into(&mut host);
         let mut b0 = ZeroBlock(buffer.b_ml.page_mut(id));
         let uname = b0.uname_mut();
         uname[..user.len()].copy_from_slice(&user);
@@ -265,7 +265,7 @@ fn ml_open_blocks(mut buffer: Buf) -> Result<(), Failed> {
         hname[..host.len()].copy_from_slice(host);
         hname[host.len()] = 0;
         hname[B0_HNAME_SIZE as usize - 1] = 0;
-        b0.set_pid(os_get_pid());
+        b0.set_pid(process_id());
     }
 
     // Always sync block zero, so that findswapname can read the file name

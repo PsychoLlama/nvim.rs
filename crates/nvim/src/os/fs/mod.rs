@@ -47,7 +47,7 @@ use crate::log::{LOGLVL_ERR, logmsg};
 use crate::message::{verbose_enter, verbose_leave};
 use crate::message_fmt::msg_cstr;
 use crate::option::vars::p_verbose;
-use crate::os::env::getenv_owned;
+use crate::os::env::{ENV_SEPCHAR, getenv_owned};
 use crate::path::{append_path, gettail_dir, save_abs_path};
 use crate::smsg;
 use crate::startup::stdin_fd;
@@ -103,8 +103,6 @@ const S_IFDIR: u64 = 0o40000;
 const S_IFBLK: u64 = 0o60000;
 
 const PATHSEP: c_char = b'/' as c_char;
-/// `$PATH`'s entry separator.
-const ENV_SEPCHAR: u8 = b':';
 /// The buffer [`os_mkdtemp`] fills, sized by its callers.
 pub const TEMP_FILE_PATH_MAXLEN: c_int = 256;
 

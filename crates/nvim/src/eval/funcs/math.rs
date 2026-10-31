@@ -9,7 +9,7 @@ use crate::charset::string2float_in;
 use crate::eval::typval::{ListRef, NumBuf, tv_list_alloc_ret};
 use crate::global_cell::GlobalCell;
 use crate::message_fmt::msg_cstr;
-use crate::os::env::{os_get_pid, os_random};
+use crate::os::env::{os_random, process_id};
 use crate::os::time::os_hrtime;
 use crate::semsg;
 use crate::types::{EvalFuncData, Float, TypVal, VAR_FLOAT, VarNumber};
@@ -195,7 +195,7 @@ fn init_srand() -> u32 {
     if os_random(&mut bytes) {
         return u32::from_ne_bytes(bytes);
     }
-    (os_hrtime() as u32) ^ (os_get_pid() as u32)
+    (os_hrtime() as u32) ^ (process_id() as u32)
 }
 
 /// The seed expander: one step of splitmix32, which turns a single 32-bit

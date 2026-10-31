@@ -289,26 +289,26 @@ impl Sandbox {
     }
 
     /// Set a variable for the rest of the case, through the crate's own
-    /// `os_setenv` — the block the editor reads is the process's, and the
-    /// spec set it this way because "Lua doesn't have setenv".
-    pub(crate) fn set_env(&mut self, name: &str, value: &str) -> std::ffi::c_int {
+    /// `env_set` — the block the editor reads is the process's, and the
+    /// spec set it this way because "Lua doesn't have setenv". Answers
+    /// whether it was set.
+    pub(crate) fn set_env(&mut self, name: &str, value: &str) -> bool {
         self.remember_env(name);
-        // SAFETY: both strings are this frame's and NUL-terminated.
-        unsafe { neovim::os::env::os_setenv(cstr(name).as_ptr(), cstr(value).as_ptr(), 1) }
+        neovim::os::env::env_set(&cstr(name), &cstr(value))
     }
 
-    /// `os_setenv` with `overwrite` off: an existing value wins.
-    pub(crate) fn set_env_if_unset(&mut self, name: &str, value: &str) -> std::ffi::c_int {
+    /// [`set_env`](Self::set_env) unless the variable is set already, in
+    /// which case the existing value wins (and that is success too).
+    pub(crate) fn set_env_if_unset(&mut self, name: &str, value: &str) -> bool {
         self.remember_env(name);
-        // SAFETY: as above.
-        unsafe { neovim::os::env::os_setenv(cstr(name).as_ptr(), cstr(value).as_ptr(), 0) }
+        neovim::os::env::env_exists(&cstr(name), false)
+            || neovim::os::env::env_set(&cstr(name), &cstr(value))
     }
 
-    /// Remove a variable for the rest of the case.
-    pub(crate) fn unset_env(&mut self, name: &str) -> std::ffi::c_int {
+    /// Remove a variable for the rest of the case: whether it is gone.
+    pub(crate) fn unset_env(&mut self, name: &str) -> bool {
         self.remember_env(name);
-        // SAFETY: the name is this frame's and NUL-terminated.
-        unsafe { neovim::os::env::os_unsetenv(cstr(name).as_ptr()) }
+        neovim::os::env::env_unset(&cstr(name))
     }
 }
 
@@ -331,17 +331,14 @@ impl Drop for Sandbox {
         }
         for (name, value) in &self.saved_env {
             let name = cstr(name.as_str());
-            // SAFETY: both strings are this frame's and NUL-terminated.
-            unsafe {
-                match value {
-                    Some(value) => {
-                        let value =
-                            CString::new(value.as_encoded_bytes()).expect("it came from the block");
-                        neovim::os::env::os_setenv(name.as_ptr(), value.as_ptr(), 1);
-                    }
-                    None => {
-                        neovim::os::env::os_unsetenv(name.as_ptr());
-                    }
+            match value {
+                Some(value) => {
+                    let value =
+                        CString::new(value.as_encoded_bytes()).expect("it came from the block");
+                    neovim::os::env::env_set(&name, &value);
+                }
+                None => {
+                    neovim::os::env::env_unset(&name);
                 }
             }
         }

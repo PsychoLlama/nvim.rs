@@ -36,7 +36,7 @@ use crate::highlight::{HLATTRS_INIT, dict2hlattrs};
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, logmsg};
 use crate::message_fmt::msg_cstr;
 use crate::msgpack_rpc::channel::rpc_send_event;
-use crate::os::env::{ENV_TEST_LOG, env_exists, os_get_pid};
+use crate::os::env::{ENV_TEST_LOG, env_exists, process_id};
 use crate::os::proc::os_dup2;
 use crate::profile::{time_finish, time_msg_at};
 use crate::shell::Argv;
@@ -204,7 +204,7 @@ pub(crate) fn ui_client_reattach() {
         Object::string(String_0::from_cstr(c"https://neovim.io")),
     );
     info.insert(c"license", Object::string(String_0::from_cstr(c"Apache 2")));
-    info.insert(c"pid", Object::integer(os_get_pid()));
+    info.insert(c"pid", Object::integer(process_id()));
 
     let mut client = ArrayBuf::<5>::new();
     client.push(Object::string(String_0::from_cstr(c"nvim-tui")));

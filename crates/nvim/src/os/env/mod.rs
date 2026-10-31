@@ -2,10 +2,12 @@
 //!
 //! # Boundary
 //!
-//! Every read and write of the process environment goes through libuv
-//! (`uv_os_getenv`/`uv_os_setenv`/`uv_os_unsetenv`), which is what makes it
-//! work the same on Windows; enumerating it does not, so that reads `environ`
-//! directly. `uname` supplies the hostname.
+//! Reading the process environment is `std::env` (`getenv(3)` and `environ`
+//! under std's lock); writing it goes through libuv
+//! (`uv_os_setenv`/`uv_os_unsetenv`), whose failures are logged by libuv's
+//! name for them. libuv also answers the home directory when `$HOME` is
+//! unset and supplies the random bytes, and `uname` the hostname. Those
+//! five calls are this file's only foreign ones.
 //!
 //! Getting, setting and enumerating variables, plus the resolved home
 //! directory. What the editor makes of them -- `$VAR` and `~` inside a path,
@@ -18,27 +20,21 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
-use crate::event::libuv::{
-    uv_err_name, uv_os_getenv, uv_os_homedir, uv_os_setenv, uv_os_unsetenv, uv_strerror,
-};
+use crate::event::libuv::{uv_os_homedir, uv_os_setenv, uv_os_unsetenv};
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::memory::XString;
-use crate::memory::{xfree, xmalloc, xmemcpyz, xmemdupz, xstrlcat, xstrlcpy};
 use crate::message::internal_error;
-use crate::message_fmt::c_str;
-use crate::os::cshim::{environ, strchr};
-use crate::os::fs::{dirname_within, realpath};
+use crate::message_fmt::msg_cstr;
+use crate::os::fs::{dirname_within, os_err_name, os_strerror, realpath};
 use crate::os::state::{didset_vim, didset_vimruntime};
-use crate::os::uv_error::{UV_EINVAL, UV_ENOBUFS, UV_ENOENT, UV_UNKNOWN};
-use crate::path::{path_is_absolute, path_tail, tail_with_sep_index};
+use crate::path::{path_is_absolute, tail_with_sep_index};
 use crate::startup::nvim_testing;
-use crate::strings::striequal;
 use crate::types::{Candidate, Expand, IOSIZE, MAXPATHL, int64_t, size_t};
-use ::libc::{getpid, strcasecmp, uname, utsname};
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
-use std::ffi::CString;
+use ::libc::{uname, utsname};
+use core::ffi::{CStr, c_int};
+use std::ffi::{CString, OsStr};
+use std::os::unix::ffi::{OsStrExt as _, OsStringExt as _};
 
 /// The log file the user asked for.
 pub(crate) const ENV_LOGFILE: &CStr = c"NVIM_LOG_FILE";
@@ -54,14 +50,10 @@ pub(crate) const ENV_STARTREASON: &CStr = c"__NVIM_STARTREASON";
 /// so a test can wait for it.
 pub(crate) const ENV_TEST_LOG: &CStr = c"__NVIM_TEST_LOG";
 
-// The libuv error codes this file distinguishes, retyped from the `c_int`
-// anonymous enum c2rust emitted.
-
 /// How much of a name `get_env_name` copies into `xp_buf`.
 const EXPAND_BUF_LEN: size_t = 256;
-/// `$PATH`'s separator, and it as a string.
-const ENV_SEPCHAR: c_char = b':' as c_char;
-const ENV_SEPSTR: &CStr = c":";
+/// `$PATH`'s separator.
+pub(crate) const ENV_SEPCHAR: u8 = b':';
 /// No prescribed maximum for `$PATH` on Unix.
 const MAX_ENVPATHLEN: usize = c_int::MAX as usize;
 
@@ -74,267 +66,102 @@ pub(crate) const DEFAULT_LIB_DIR: &CStr =
     };
 
 pub fn env_init() {
-    // SAFETY: a static name.
-    nvim_testing.set(unsafe { os_env_exists(c"NVIM_TEST".as_ptr(), false) });
+    nvim_testing.set(env_exists(c"NVIM_TEST", false));
 }
 
-/// `ELOG("uv_os_*(%s) failed: %d %s")`. Which failures are worth reporting
-/// differs per caller — `os_getenv` ignores "no such variable" and "no idea",
-/// `os_env_exists` ignores "your buffer is too small" because that is its
-/// success — so the guard stays at the call site and only the message is
-/// shared.
-///
-/// # Safety
-/// `name` must be a NUL-terminated string.
-unsafe fn log_uv_failure(func: &'static CStr, call: &str, name: *const c_char, r: c_int) {
-    // SAFETY: the caller's contract -- `name` is NUL-terminated; libuv's
-    // error names are static.
-    let (name, why) = unsafe { (c_str(name), c_str(uv_err_name(r))) };
+/// `ELOG("uv_os_*(%s) failed: %d %s")`, for a write of the environment that
+/// libuv refused.
+fn log_uv_failure(func: &'static CStr, call: &str, name: &CStr, code: c_int) {
+    let (name, why) = (msg_cstr(name), msg_cstr(os_err_name(code)));
     logmsg!(
         LOGLVL_ERR,
         func,
         0,
-        "uv_os_{call}({name}) failed: {r} {why}"
+        "uv_os_{call}({name}) failed: {code} {why}"
     );
 }
 
-/// The three messages, spelled as upstream spells them.
-/// Which libuv call failed, for [`log_uv_failure`]'s line.
-const GETENV_FAILED: &str = "getenv";
-const SETENV_FAILED: &str = "setenv";
-const UNSETENV_FAILED: &str = "unsetenv";
-
-/// `getenv()`, but NULL for an empty value. The result is newly allocated.
-///
-/// # Safety
-/// `name` must be a NUL-terminated string.
-pub unsafe fn os_getenv(name: *const c_char) -> *mut c_char {
-    /// Big enough that most variables never need the second call.
-    const INIT_SIZE: usize = 64;
-    // SAFETY: the caller's contract; `size` is `buf`'s length going in and
-    // the value's length coming out, which is what the retry is sized from.
-    unsafe {
-        if *name == 0 {
-            return ptr::null_mut();
-        }
-        let mut e: *mut c_char;
-        let mut size: size_t = INIT_SIZE;
-        let mut buf: [c_char; INIT_SIZE] = [0; INIT_SIZE];
-        let mut r = uv_os_getenv(name, buf.as_mut_ptr(), &raw mut size);
-        if r == UV_ENOBUFS {
-            e = xmalloc(size) as *mut c_char;
-            r = uv_os_getenv(name, e, &raw mut size);
-            if r != 0 || size == 0 || *e == 0 {
-                xfree(e.cast());
-                e = ptr::null_mut();
-            }
-        } else if r != 0 || size == 0 || buf[0] == 0 {
-            e = ptr::null_mut();
-        } else {
-            // NB: `size` includes the NUL terminator, except when it does not.
-            e = xmemdupz(buf.as_ptr().cast(), size) as *mut c_char;
-        }
-        if r != 0 && r != UV_ENOENT && r != UV_UNKNOWN {
-            log_uv_failure(c"os_getenv", GETENV_FAILED, name, r);
-        }
-        e
+/// The value of `name` in the process environment, empty or not, or `None`
+/// when it is not set. An empty name is never set.
+fn env_value(name: &CStr) -> Option<Vec<u8>> {
+    if name.is_empty() {
+        return None;
     }
+    std::env::var_os(OsStr::from_bytes(name.to_bytes())).map(std::ffi::OsString::into_vec)
 }
 
-/// [`os_getenv`] of a name the caller holds as a string: the value, or `None`
-/// when the variable is unset or empty.
-pub(crate) fn getenv_owned(name: &CStr) -> Option<XString> {
-    // SAFETY: a NUL-terminated name; the answer is a fresh `xmalloc` block
-    // or NULL.
-    let value = unsafe { os_getenv(name.as_ptr()) };
-    // SAFETY: a fresh block, owned by nobody else.
-    (!value.is_null()).then(|| unsafe { XString::from_raw(value) })
+/// `getenv()`, but `None` for an empty value as well as an unset one:
+/// upstream's `os_getenv`.
+pub fn getenv_owned(name: &CStr) -> Option<XString> {
+    env_value(name)
+        .filter(|value| !value.is_empty())
+        .map(XString::from_vec)
 }
 
-/// `getenv()` into `buf` rather than allocating; truncated if it does not fit.
-///
-/// Answers `buf`, or NULL when the variable is unset or empty.
-///
-/// # Safety
-/// `name` must be NUL-terminated and `buf` writable for `bufsize` bytes.
-pub unsafe fn os_getenv_buf(name: *const c_char, buf: *mut c_char, bufsize: size_t) -> *mut c_char {
-    // SAFETY: the caller's contract; the retry buffer is sized from what
-    // libuv reported and the copy back into `buf` is bounded by `bufsize`.
-    unsafe {
-        if *name == 0 {
-            return ptr::null_mut();
-        }
-        let mut size = bufsize;
-        let mut r = uv_os_getenv(name, buf, &raw mut size);
-        if r == UV_ENOBUFS {
-            let e = xmalloc(size) as *mut c_char;
-            r = uv_os_getenv(name, e, &raw mut size);
-            if r == 0 && size != 0 && *e != 0 {
-                xmemcpyz(buf.cast(), e.cast(), bufsize.min(size) - 1);
-            }
-            xfree(e.cast());
-        }
-        if r != 0 || size == 0 || *buf == 0 {
-            if r != 0 && r != UV_ENOENT && r != UV_UNKNOWN {
-                log_uv_failure(c"os_getenv_buf", GETENV_FAILED, name, r);
-            }
-            return ptr::null_mut();
-        }
-        buf
+/// [`getenv_owned`] cut to what a `room`-byte buffer holds with its NUL:
+/// upstream's `os_getenv_buf`, whose truncation callers rely on.
+pub fn env_get_within(name: &CStr, room: usize) -> Option<Vec<u8>> {
+    let mut value = env_value(name).filter(|value| !value.is_empty())?;
+    value.truncate(room.saturating_sub(1));
+    (!value.is_empty()).then_some(value)
+}
+
+/// [`env_get_within`] a `MAXPATHL` buffer, which upstream's `NameBuff` was:
+/// the value, cut to fit, and empty when the variable is unset or empty.
+pub fn env_get_bounded(name: &CStr) -> Vec<u8> {
+    env_get_within(name, MAXPATHL as usize).unwrap_or_default()
+}
+
+/// Whether environment variable `name` is defined. `nonempty` treats an
+/// empty value as "does not exist".
+pub fn env_exists(name: &CStr, nonempty: bool) -> bool {
+    env_value(name).is_some_and(|value| !nonempty || !value.is_empty())
+}
+
+/// Set an environment variable, overwriting it. Answers whether it was set.
+pub fn env_set(name: &CStr, value: &CStr) -> bool {
+    if name.is_empty() {
+        return false;
     }
-}
-
-/// A buffer big enough for any environment value [`os_getenv_into`] will
-/// answer: what the shared `NameBuff` used to lend out.
-pub(crate) type EnvBuf = [c_char; MAXPATHL as usize];
-
-/// An empty [`EnvBuf`], for a caller about to fill one.
-pub(crate) const fn env_buf() -> EnvBuf {
-    [0; MAXPATHL as usize]
-}
-
-/// [`os_getenv_buf`] into the caller's own [`EnvBuf`], answering a pointer
-/// into it or NULL.
-///
-/// Upstream lends out `NameBuff` here, so the answer stayed valid only until
-/// the next path was formatted into it -- and several callers hold it across
-/// exactly such a call. The buffer is the caller's instead.
-///
-/// # Safety
-/// `name` must be a NUL-terminated string.
-pub unsafe fn os_getenv_into(
-    name: *const c_char,
-    buf: &mut [c_char; MAXPATHL as usize],
-) -> *mut c_char {
-    // SAFETY: the caller's contract; an `EnvBuf` is `MAXPATHL` bytes.
-    unsafe { os_getenv_buf(name, buf.as_mut_ptr(), MAXPATHL as usize) }
-}
-
-/// [`os_env_exists`] of a name the caller holds as a string.
-pub(crate) fn env_exists(name: &CStr, nonempty: bool) -> bool {
-    // SAFETY: a terminated name.
-    unsafe { os_env_exists(name.as_ptr(), nonempty) }
-}
-
-/// Whether environment variable `name` is defined, empty or not.
-///
-/// `nonempty` treats an empty value as "does not exist".
-///
-/// # Safety
-/// `name` must be a NUL-terminated string.
-pub unsafe fn os_env_exists(name: *const c_char, nonempty: bool) -> bool {
-    // SAFETY: the caller's contract. A two-byte buffer is deliberate: the
-    // value does not matter, and `UV_ENOBUFS` already means "found".
-    unsafe {
-        if *name == 0 {
-            return false;
-        }
-        let mut buf: [c_char; 2] = [0; 2];
-        let mut size: size_t = buf.len();
-        let r = uv_os_getenv(name, buf.as_mut_ptr(), &raw mut size);
-        debug_assert!(r != UV_EINVAL);
-        if r != 0 && r != UV_ENOENT && r != UV_ENOBUFS {
-            log_uv_failure(c"os_env_exists", GETENV_FAILED, name, r);
-        }
-        (r == 0 && (!nonempty || size > 0)) || r == UV_ENOBUFS
+    // SAFETY: two NUL-terminated strings, which `setenv` copies.
+    let code = unsafe { uv_os_setenv(name.as_ptr(), value.as_ptr()) };
+    if code != 0 {
+        log_uv_failure(c"os_setenv", "setenv", name, code);
     }
+    code == 0
 }
 
-/// Set an environment variable. `overwrite` of 0 leaves an existing one
-/// alone. Answers 0 or -1.
-///
-/// # Safety
-/// `name` and `value` must be NUL-terminated strings.
-pub unsafe fn os_setenv(name: *const c_char, value: *const c_char, overwrite: c_int) -> c_int {
-    // SAFETY: the caller's contract.
-    unsafe {
-        if *name == 0 {
-            return -1;
-        }
-        if overwrite == 0 && os_env_exists(name, false) {
-            return 0;
-        }
-        let r = uv_os_setenv(name, value);
-        debug_assert!(r != UV_EINVAL);
-        if r != 0 {
-            log_uv_failure(c"os_setenv", SETENV_FAILED, name, r);
-        }
-        if r == 0 { 0 } else { -1 }
+/// Unset an environment variable. Answers whether it is gone.
+pub fn env_unset(name: &CStr) -> bool {
+    if name.is_empty() {
+        return false;
     }
-}
-
-/// Unset an environment variable. Answers 0 or -1.
-///
-/// # Safety
-/// `name` must be a NUL-terminated string.
-pub unsafe fn os_unsetenv(name: *const c_char) -> c_int {
-    // SAFETY: the caller's contract.
-    unsafe {
-        if *name == 0 {
-            return -1;
-        }
-        let r = uv_os_unsetenv(name);
-        if r != 0 {
-            log_uv_failure(c"os_unsetenv", UNSETENV_FAILED, name, r);
-        }
-        if r == 0 { 0 } else { -1 }
+    // SAFETY: a NUL-terminated name.
+    let code = unsafe { uv_os_unsetenv(name.as_ptr()) };
+    if code != 0 {
+        log_uv_failure(c"os_unsetenv", "unsetenv", name, code);
     }
-}
-
-/// Free what [`os_copy_fullenv`] allocated.
-///
-/// # Safety
-/// `env` must be NULL or a NULL-terminated vector of owned strings.
-pub unsafe fn os_free_fullenv(env: *mut *mut c_char) {
-    if env.is_null() {
-        return;
-    }
-    // SAFETY: the caller's contract.
-    unsafe {
-        let mut it = env;
-        while !(*it).is_null() {
-            xfree((*it).cast());
-            *it = ptr::null_mut();
-            it = it.add(1);
-        }
-        xfree(env.cast());
-    }
+    code == 0
 }
 
 /// A copy of the environment, as `"NAME=VALUE"` strings in its order.
-pub fn os_copy_fullenv() -> Vec<Vec<u8>> {
-    let mut env = Vec::new();
-    // SAFETY: `environ` is libc's own NULL-terminated block of NUL-terminated
-    // strings, copied out before anything can change it.
-    unsafe {
-        let mut entry = environ;
-        while !(*entry).is_null() {
-            env.push(CStr::from_ptr(*entry).to_bytes().to_vec());
-            entry = entry.add(1);
-        }
-    }
-    env
+pub fn copy_environment() -> Vec<Vec<u8>> {
+    std::env::vars_os()
+        .map(|(name, value)| {
+            let mut entry = name.into_vec();
+            entry.push(b'=');
+            entry.extend_from_slice(value.as_bytes());
+            entry
+        })
+        .collect()
 }
 
-/// The *name* of the environment variable at `index`, newly allocated, or
-/// NULL when there is none.
-pub fn os_getenvname_at_index(index: size_t) -> *mut c_char {
-    // SAFETY: `environ` is libc's own NULL-terminated block; the bound check
-    // walks it rather than trusting `index`.
-    unsafe {
-        for i in 0..=index {
-            if (*environ.add(i)).is_null() {
-                return ptr::null_mut();
-            }
-        }
-        let str = *environ.add(index);
-        debug_assert!(!str.is_null());
-        let end = strchr(str, b'=' as c_int);
-        debug_assert!(!end.is_null());
-        let len = end.offset_from(str);
-        debug_assert!(len > 0);
-        xmemdupz(str.cast(), len as size_t) as *mut c_char
-    }
+/// The *name* of the environment variable at `index`, or `None` past the
+/// end.
+pub fn env_name_at(index: usize) -> Option<Vec<u8>> {
+    std::env::vars_os()
+        .nth(index)
+        .map(|(name, _)| name.into_vec())
 }
 
 /// Fill `out` from the operating system's entropy source. `false` when
@@ -344,8 +171,8 @@ pub(crate) fn os_random(out: &mut [u8]) -> bool {
     // fills `out`, whose length it is told.
     let rc = unsafe {
         crate::event::libuv::uv_random(
-            ptr::null_mut(),
-            ptr::null_mut(),
+            core::ptr::null_mut(),
+            core::ptr::null_mut(),
             out.as_mut_ptr().cast(),
             out.len(),
             0,
@@ -356,40 +183,40 @@ pub(crate) fn os_random(out: &mut [u8]) -> bool {
 }
 
 /// This process's id.
-pub fn os_get_pid() -> int64_t {
-    // SAFETY: `getpid` takes no arguments.
-    unsafe { getpid() as int64_t }
+pub fn process_id() -> int64_t {
+    int64_t::from(std::process::id())
 }
 
 /// Tell the OS that nvim is an interactive application, so it is scheduled
 /// like a GUI app. macOS only; nothing to do here.
 pub fn os_hint_priority() {}
 
-/// The machine's hostname, into `hostname`, truncated to `size`.
-///
-/// # Safety
-/// `hostname` must be writable for `size` bytes.
-pub unsafe fn os_get_hostname(hostname: *mut c_char, size: size_t) {
-    // SAFETY: the caller's contract; `vutsname` is a local `uname` fills in,
-    // and `nodename` is NUL-terminated when it succeeds.
-    unsafe {
-        let mut vutsname: utsname = core::mem::zeroed();
-        if uname(&raw mut vutsname) < 0 {
-            *hostname = 0;
-        } else {
-            xstrlcpy(hostname, vutsname.nodename.as_ptr(), size);
-        }
-    }
-}
-
-/// [`os_get_hostname`] into `hostname`, NUL-terminated and truncated to fit.
+/// The machine's hostname into `hostname`, NUL-terminated and truncated to
+/// fit; empty when the system will not say.
 ///
 /// # Panics
 /// When `hostname` is empty: there is no room for the terminator.
-pub(crate) fn os_hostname_into(hostname: &mut [u8]) {
+pub fn hostname_into(hostname: &mut [u8]) {
     assert!(!hostname.is_empty(), "no room for the terminator");
-    // SAFETY: a slice is writable for its whole length.
-    unsafe { os_get_hostname(hostname.as_mut_ptr().cast::<c_char>(), hostname.len()) };
+    let mut names = utsname {
+        sysname: [0; 65],
+        nodename: [0; 65],
+        release: [0; 65],
+        version: [0; 65],
+        machine: [0; 65],
+        domainname: [0; 65],
+    };
+    // SAFETY: `uname` fills in the record it is handed, which is this
+    // frame's.
+    let failed = unsafe { uname(&raw mut names) } < 0;
+    let name = if failed {
+        &[][..]
+    } else {
+        cstr::in_chars(&names.nodename).to_bytes()
+    };
+    let kept = name.len().min(hostname.len() - 1);
+    hostname[..kept].copy_from_slice(&name[..kept]);
+    hostname[kept] = 0;
 }
 
 /// The "real", resolved user home directory, as [`init_homedir`] worked it
@@ -412,12 +239,9 @@ pub fn init_homedir() {
     // In case this is a second call.
     homedir.set(None);
 
-    let mut uv_home = env_buf();
-    let home = getenv_owned(c"HOME").map(|home| home.to_vec()).or_else(|| {
-        let home = os_uv_homedir(&mut uv_home);
-        // SAFETY: null, or the NUL-terminated name libuv left in `uv_home`.
-        unsafe { cstr::at_opt(home) }.map(|home| home.to_bytes().to_vec())
-    });
+    let home = getenv_owned(c"HOME")
+        .map(|home| home.to_vec())
+        .or_else(uv_home_dir);
     // Resolve links, so the answer is the "real" directory -- cut to fit, as
     // upstream's `IOSIZE` buffer cuts it.
     let home = home.map(|home| match realpath(&cstr::owned(&home)) {
@@ -437,186 +261,104 @@ pub fn init_homedir() {
     }
 }
 
-/// libuv's answer for the home directory, in `buf`, or NULL.
-fn os_uv_homedir(buf: &mut EnvBuf) -> *mut c_char {
-    // SAFETY: libuv writes at most `homedir_size` bytes into `buf`, which is
-    // that long, and the answer borrows the caller's buffer.
-    unsafe {
-        let buf = buf.as_mut_ptr();
-        *buf = 0;
-        let mut homedir_size: size_t = MAXPATHL as usize;
-        // http://docs.libuv.org/en/v1.x/misc.html#c.uv_os_homedir
-        let ret_value = uv_os_homedir(buf, &raw mut homedir_size);
-        if ret_value == 0 && homedir_size < MAXPATHL as usize {
-            return buf;
-        }
-        logmsg!(
-            LOGLVL_ERR,
-            c"os_uv_homedir",
-            0,
-            "uv_os_homedir() failed {}: {}",
-            ret_value,
-            c_str(uv_strerror(ret_value))
-        );
-        *buf = 0;
-        ptr::null_mut()
+/// libuv's answer for the home directory (`$HOME`, else the password
+/// database), when it fits a `MAXPATHL` buffer.
+fn uv_home_dir() -> Option<Vec<u8>> {
+    let mut buf = vec![0u8; MAXPATHL as usize];
+    let mut size: size_t = buf.len();
+    // http://docs.libuv.org/en/v1.x/misc.html#c.uv_os_homedir
+    // SAFETY: libuv writes at most `size` bytes into `buf`, which is that
+    // long, and the answer's length back into `size`.
+    let code = unsafe { uv_os_homedir(buf.as_mut_ptr().cast(), &raw mut size) };
+    if code == 0 && size < buf.len() {
+        buf.truncate(size);
+        return Some(buf);
     }
+    let why = msg_cstr(os_strerror(code));
+    logmsg!(
+        LOGLVL_ERR,
+        c"os_uv_homedir",
+        0,
+        "uv_os_homedir() failed {code}: {why}"
+    );
+    None
 }
 
 /// The `idx`th environment variable's name, for completion, cut to the
 /// length upstream's scratch buffer held.
 pub fn get_env_name(_expand: &Expand, idx: usize) -> Option<Candidate> {
-    let envname = os_getenvname_at_index(idx as size_t);
-    if envname.is_null() {
-        return None;
-    }
-    // SAFETY: `os_getenvname_at_index` answers an owned, NUL-terminated
-    // name, copied and then given back.
-    let name = unsafe { CStr::from_ptr(envname) }.to_bytes();
-    let kept = name.len().min(EXPAND_BUF_LEN as usize - 1);
-    let name = CString::new(&name[..kept]).expect("a variable name holds no NUL");
-    // SAFETY: as above.
-    unsafe { xfree(envname.cast()) };
+    let mut name = env_name_at(idx)?;
+    name.truncate(EXPAND_BUF_LEN as usize - 1);
+    let name = CString::new(name).expect("a variable name holds no NUL");
     Some(Candidate::Owned(name))
 }
 
 /// Append the directory holding `fname` to `$PATH`. Answers whether it was.
-///
-/// # Safety
-/// `fname` must be an absolute, NUL-terminated path.
-pub unsafe fn os_setenv_append_path(fname: *const c_char) -> bool {
-    let mut dir = env_buf();
-    // SAFETY: the caller's contract; `dir` is `MAXPATHL` bytes and the
-    // assertion below is what keeps the directory inside it.
-    unsafe {
-        if !path_is_absolute(cstr::at(fname)) {
-            internal_error(c"os_setenv_append_path()");
-            return false;
-        }
-        let dirlen = tail_with_sep_index(cstr::bytes_at(fname));
-        debug_assert!(dirlen + 1 < MAXPATHL as usize);
-        xmemcpyz(dir.as_mut_ptr().cast(), fname.cast(), dirlen);
+pub fn setenv_append_path(fname: &CStr) -> bool {
+    if !path_is_absolute(fname) {
+        internal_error(c"os_setenv_append_path()");
+        return false;
+    }
+    let dir = &fname.to_bytes()[..tail_with_sep_index(fname.to_bytes())];
+    debug_assert!(dir.len() + 1 < MAXPATHL as usize);
+    let path = getenv_owned(c"PATH")
+        .map(|path| path.to_vec())
+        .unwrap_or_default();
+    if path.len() + dir.len() + 2 >= MAX_ENVPATHLEN {
+        return false;
+    }
+    let mut joined = path;
+    if joined.last().is_some_and(|&last| last != ENV_SEPCHAR) {
+        joined.push(ENV_SEPCHAR);
+    }
+    joined.extend_from_slice(dir);
+    env_set(c"PATH", &cstr::owned(&joined));
+    true
+}
 
-        let path = os_getenv(c"PATH".as_ptr());
-        let pathlen = if path.is_null() {
-            0
-        } else {
-            cstr::bytes_at(path).len()
-        };
-        let newlen = pathlen + dirlen + 2;
-        let mut retval = false;
-        if newlen < MAX_ENVPATHLEN {
-            let temp = xmalloc(newlen) as *mut c_char;
-            if pathlen == 0 {
-                *temp = 0;
-            } else {
-                xstrlcpy(temp, path, newlen);
-                if ENV_SEPCHAR != *path.add(pathlen - 1) {
-                    xstrlcat(temp, ENV_SEPSTR.as_ptr(), newlen);
-                }
-            }
-            xstrlcat(temp, dir.as_ptr(), newlen);
-            os_setenv(c"PATH".as_ptr(), temp, 1);
-            xfree(temp.cast());
-            retval = true;
-        }
-        xfree(path.cast());
-        retval
+/// Whether the shell `sh` looks like it resolves to `cmd.exe`: `cmd` or
+/// `cmd.exe` in any case, or a path ending in `cmd.exe`, or `$COMSPEC`
+/// naming one.
+pub fn shell_is_cmdexe(sh: &[u8]) -> bool {
+    let tail_is_cmdexe = |path: &[u8]| path[tail_index(path)..].eq_ignore_ascii_case(b"cmd.exe");
+    if sh.is_empty() {
+        return false;
+    }
+    if sh.eq_ignore_ascii_case(b"$COMSPEC") {
+        return tail_is_cmdexe(&env_get_bounded(c"COMSPEC"));
+    }
+    sh.eq_ignore_ascii_case(b"cmd.exe") || sh.eq_ignore_ascii_case(b"cmd") || tail_is_cmdexe(sh)
+}
+
+/// Where `path_tail` would say the last component of `path` starts.
+fn tail_index(path: &[u8]) -> usize {
+    let tail = crate::path::path_tail(&cstr::owned(path)).to_bytes().len();
+    path.len() - tail
+}
+
+/// [`env_set`] plus the side effects: `$HOME` is resolved again and
+/// `$VIM`/`$VIMRUNTIME` looked up again.
+pub(crate) fn vim_setenv_named(name: &CStr, value: &CStr) {
+    env_set(name, value);
+    let name = name.to_bytes();
+    if name.eq_ignore_ascii_case(b"HOME") {
+        init_homedir();
+    } else if didset_vim.get() && name.eq_ignore_ascii_case(b"VIM") {
+        didset_vim.set(false);
+    } else if didset_vimruntime.get() && name.eq_ignore_ascii_case(b"VIMRUNTIME") {
+        didset_vimruntime.set(false);
     }
 }
 
-/// Whether `sh` looks like it resolves to `cmd.exe`.
-///
-/// # Safety
-/// `sh` must be a NUL-terminated string.
-pub unsafe fn os_shell_is_cmdexe(sh: *const c_char) -> bool {
-    let mut comspec_buf = env_buf();
-    // SAFETY: the caller's contract; `path_tail` answers a pointer inside its
-    // argument, and `$COMSPEC` lands in `comspec_buf`.
-    unsafe {
-        if *sh == 0 {
-            return false;
-        }
-        if striequal(sh, c"$COMSPEC".as_ptr()) {
-            let comspec = os_getenv_into(c"COMSPEC".as_ptr(), &mut comspec_buf);
-            return striequal(c"cmd.exe".as_ptr(), path_tail(cstr::at(comspec)).as_ptr());
-        }
-        if striequal(sh, c"cmd.exe".as_ptr()) || striequal(sh, c"cmd".as_ptr()) {
-            return true;
-        }
-        striequal(c"cmd.exe".as_ptr(), path_tail(cstr::at(sh)).as_ptr())
-    }
-}
-
-/// [`os_unsetenv`] plus the side effects: `$VIM`/`$VIMRUNTIME` have to be
+/// [`env_unset`] plus the side effects: `$VIM`/`$VIMRUNTIME` have to be
 /// looked up again. `homedir` deliberately keeps its old value until `$HOME`
 /// is set again.
-///
-/// # Safety
-/// `var` must be a NUL-terminated string.
-pub unsafe fn vim_unsetenv_ext(var: *const c_char) {
-    // SAFETY: the caller's contract.
-    unsafe {
-        os_unsetenv(var);
-        if strcasecmp(var, c"VIM".as_ptr()) == 0 {
-            didset_vim.set(false);
-        } else if strcasecmp(var, c"VIMRUNTIME".as_ptr()) == 0 {
-            didset_vimruntime.set(false);
-        }
-    }
-}
-
-/// [`os_setenv`] plus the side effects.
-///
-/// # Safety
-/// `name` and `val` must be NUL-terminated strings.
-pub unsafe fn vim_setenv_ext(name: *const c_char, val: *const c_char) {
-    // SAFETY: the caller's contract.
-    unsafe {
-        os_setenv(name, val, 1);
-        if strcasecmp(name, c"HOME".as_ptr()) == 0 {
-            init_homedir();
-        } else if didset_vim.get() && strcasecmp(name, c"VIM".as_ptr()) == 0 {
-            didset_vim.set(false);
-        } else if didset_vimruntime.get() && strcasecmp(name, c"VIMRUNTIME".as_ptr()) == 0 {
-            didset_vimruntime.set(false);
-        }
-    }
-}
-
-/// [`vim_setenv_ext`] for a caller that has both name and value as strings.
-pub(crate) fn vim_setenv_named(name: &CStr, value: &CStr) {
-    // SAFETY: two NUL-terminated strings.
-    unsafe { vim_setenv_ext(name.as_ptr(), value.as_ptr()) }
-}
-
-/// [`vim_unsetenv_ext`] for a caller that has the name as a string.
 pub(crate) fn vim_unsetenv_named(name: &CStr) {
-    // SAFETY: a NUL-terminated string.
-    unsafe { vim_unsetenv_ext(name.as_ptr()) }
-}
-
-/// [`os_setenv`] for a caller that has both name and value as strings.
-/// Answers whether the variable was set.
-pub fn env_set(name: &CStr, value: &CStr) -> bool {
-    // SAFETY: two NUL-terminated strings; `os_setenv` copies both.
-    unsafe { os_setenv(name.as_ptr(), value.as_ptr(), 1) == 0 }
-}
-
-/// [`os_unsetenv`] of a name the caller holds as a string. Answers whether
-/// the variable is gone.
-pub(crate) fn env_unset(name: &CStr) -> bool {
-    // SAFETY: a NUL-terminated name.
-    unsafe { os_unsetenv(name.as_ptr()) == 0 }
-}
-
-/// [`os_getenv_buf`] into a buffer this call owns: the value, cut to
-/// [`EnvBuf`]'s length, and empty when the variable is unset or empty.
-pub fn env_get_bounded(name: &CStr) -> Vec<u8> {
-    let mut buf = env_buf();
-    // SAFETY: `name` is NUL-terminated and `buf` is what `EnvBuf` says.
-    // The answer points into `buf`, which outlives the borrow.
-    let value = unsafe { os_getenv_into(name.as_ptr(), &mut buf) };
-    // SAFETY: null for an unset variable, `buf` itself otherwise.
-    unsafe { cstr::at_opt(value) }.map_or_else(Vec::new, |v| v.to_bytes().to_vec())
+    env_unset(name);
+    let name = name.to_bytes();
+    if name.eq_ignore_ascii_case(b"VIM") {
+        didset_vim.set(false);
+    } else if name.eq_ignore_ascii_case(b"VIMRUNTIME") {
+        didset_vimruntime.set(false);
+    }
 }
