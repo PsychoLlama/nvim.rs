@@ -128,7 +128,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(miri, ignore = "'fileignorecase' is read through the option table")]
     fn the_home_directory_becomes_a_tilde_only_up_to_a_separator() {
         assert_eq!(tilde("/home/piet/bla", "/home/piet", 100, true), "~/bla");
         assert_eq!(
@@ -143,7 +142,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(miri, ignore = "'fileignorecase' is read through the option table")]
     fn running_out_of_room_truncates() {
         assert_eq!(tilde("/home/piet/bla", "/home/piet", 4, true), "~/b");
         assert_eq!(tilde("abcdef", "/home/piet", 3, true), "ab");

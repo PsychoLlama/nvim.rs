@@ -177,7 +177,6 @@ mod tests {
     use super::*;
 
     #[test]
-    #[cfg_attr(miri, ignore = "'fileignorecase' is read through the option table")]
     fn remove_tail_steps_back_over_a_named_directory_only() {
         let path = b"/usr/local/share/nvim/runtime/doc/help.txt";
         let tail = tail_index(path);
