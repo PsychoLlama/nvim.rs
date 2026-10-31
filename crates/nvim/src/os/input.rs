@@ -24,7 +24,6 @@
 use crate::autocmd::fire_autocmds;
 use crate::autocmd::state::did_cursorhold;
 use crate::autocmd::trigger_cursorhold;
-use crate::cstr;
 use crate::event::libuv::uv_guess_handle;
 use crate::event::r#loop::{loop_poll_events, process_events_until};
 use crate::event::multiqueue::{ChildQueue, queue_in};
@@ -40,7 +39,6 @@ use crate::keycodes::{
 };
 use crate::keycodes::{ModMask, special_key_at, special_key_bytes};
 use crate::log::{LOGLVL_DBG, logmsg};
-use crate::message_fmt::c_str;
 use crate::mouse::state::{mouse_col, mouse_grid, mouse_row};
 use crate::msgpack_rpc::channel::ch_before_blocking_events;
 use crate::option::vars::{p_mouset, p_ut};
@@ -106,14 +104,14 @@ static cursorhold_tb_change_cnt: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// Start reading stdin.
 pub fn input_start() {
-    // SAFETY: `read_stream` is this module's own static and libuv only ever
-    // touches it from the main thread; `input_read_cb` has the signature
-    // `rstream_start` demands and takes no data pointer.
+    if !stdin_closed() {
+        return;
+    }
+    used_stdin.set(true);
+    // SAFETY: `read_stream` is this module's own static, at a fixed address,
+    // and libuv only ever touches it from the main thread; `input_read_cb`
+    // has the signature `rstream_start` demands and takes no data pointer.
     unsafe {
-        if !(*read_stream.ptr()).s.closed {
-            return;
-        }
-        used_stdin.set(true);
         rstream_init_fd(main_loop.ptr(), read_stream.ptr(), STDIN_FILENO);
         rstream_start(read_stream.ptr(), Some(input_read_cb), ptr::null_mut());
     }
@@ -121,39 +119,40 @@ pub fn input_start() {
 
 /// Stop reading stdin.
 pub fn input_stop() {
+    if stdin_closed() {
+        return;
+    }
     // SAFETY: as `input_start`.
     unsafe {
-        if (*read_stream.ptr()).s.closed {
-            return;
-        }
         rstream_stop(read_stream.ptr());
         rstream_may_close(read_stream.ptr());
     }
 }
 
-/// The queued CursorHold, fired once the event loop gets to it.
-///
-/// # Safety
-/// An `argv_callback`; reads no argument.
-unsafe extern "C" fn cursorhold_event(_argv: *mut *mut c_void) {
+/// Whether stdin is not being read.
+fn stdin_closed() -> bool {
+    read_stream.with(|stream| stream.s.closed)
+}
+
+/// The queued CursorHold, fired once the event loop gets to it. An
+/// `argv_callback` that reads no argument, so there is nothing for a caller
+/// to promise.
+extern "C" fn cursorhold_event(_argv: *mut *mut c_void) {
     let event = if State.get() & MODE_INSERT != 0 {
         AutoEvent::CursorHoldI
     } else {
         AutoEvent::CursorHold
     } as AutoEvent;
-    let __hoisted_0 = Buf::current_or_none();
-    fire_autocmds(event, false, __hoisted_0);
+    fire_autocmds(event, false, Buf::current_or_none());
     did_cursorhold.set(true);
 }
 
 fn create_cursorhold_event(events_enabled: bool) {
+    // If events are enabled and the queue has any items, this should not
+    // have been reached — `inbuf_poll` would have answered `Ready`.
+    debug_assert!(!events_enabled || !main_loop_has_events());
     // SAFETY: `main_loop.events` is the process's event queue.
-    unsafe {
-        // If events are enabled and the queue has any items, this should not
-        // have been reached — `inbuf_poll` would have answered `Ready`.
-        debug_assert!(!events_enabled || multiqueue_empty(main_events()));
-        multiqueue_put_event(main_events(), Event::new(Some(cursorhold_event), []));
-    }
+    unsafe { multiqueue_put_event(main_events(), Event::new(Some(cursorhold_event), [])) };
 }
 
 fn reset_cursorhold_wait(tb_change_cnt: c_int) {
@@ -161,26 +160,18 @@ fn reset_cursorhold_wait(tb_change_cnt: c_int) {
     cursorhold_tb_change_cnt.set(tb_change_cnt);
 }
 
-/// Move up to `maxlen` buffered bytes into `buf`, or 0 if there are none.
-///
-/// # Safety
-/// `buf` must be writable for `maxlen` bytes.
-unsafe fn try_read(buf: *mut uint8_t, maxlen: c_int, tb_change_cnt: c_int) -> Option<c_int> {
-    if maxlen == 0 || input_available() == 0 {
+/// Move as many buffered bytes into `buf` as fit, or `None` if there are
+/// none (or `buf` is empty).
+fn try_read(buf: &mut [u8], tb_change_cnt: c_int) -> Option<usize> {
+    if buf.is_empty() || input_available() == 0 {
         return None;
     }
     reset_cursorhold_wait(tb_change_cnt);
-    debug_assert!(maxlen >= 0);
-    let to_read = (maxlen as usize).min(input_available() as usize);
+    let to_read = buf.len().min(input_available());
     let from = input_read_pos.get();
-    input_buffer.with(|input| {
-        // SAFETY: the caller's contract, and `to_read` is bounded by both
-        // `maxlen` and the unread run, so the source range is in bounds.
-        unsafe { ptr::copy_nonoverlapping(input[from..].as_ptr(), buf, to_read) };
-    });
+    input_buffer.with(|input| buf[..to_read].copy_from_slice(&input[from..from + to_read]));
     input_read_pos.set(from + to_read);
-    // Safe because INPUT_BUFFER_SIZE fits in an int.
-    Some(to_read as c_int)
+    Some(to_read)
 }
 
 /// Which event queue [`input_get`] processes while it waits.
@@ -199,10 +190,21 @@ impl InputEvents {
     fn queue(self) -> *mut MultiQueue {
         match self {
             InputEvents::None => ptr::null_mut(),
-            // SAFETY: `main_loop` is the process's event loop, always live.
             InputEvents::MainLoop => main_events(),
             InputEvents::Queue(cell) => queue_in(cell),
         }
+    }
+
+    /// Whether the queue holds events to process: never when there is none.
+    fn pending(self) -> bool {
+        let queue = self.queue();
+        // SAFETY: the main loop's queue, or one its cell keeps alive.
+        !queue.is_null() && unsafe { !multiqueue_empty(queue) }
+    }
+
+    /// Whether this is the main loop's own queue.
+    fn is_main_loop(self) -> bool {
+        matches!(self, InputEvents::MainLoop)
     }
 }
 
@@ -234,99 +236,74 @@ pub(crate) fn input_get(
     tb_change_cnt: c_int,
     events: InputEvents,
 ) -> usize {
-    let maxlen = c_int::try_from(buf.len()).unwrap_or(c_int::MAX);
-    let (buf, events) = (buf.as_mut_ptr(), events.queue());
-    // SAFETY: `buf` is the slice's own `maxlen` writable bytes, and `events`
-    // null or a live queue.
-    let got = unsafe { input_get_raw(buf, maxlen, ms, tb_change_cnt, events) };
-    usize::try_from(got).unwrap_or(0)
-}
-
-/// [`input_get`] over the pointer and the length.
-///
-/// # Safety
-/// `buf` must be writable for `maxlen` bytes, and `events` NULL or a live
-/// queue.
-unsafe fn input_get_raw(
-    buf: *mut uint8_t,
-    maxlen: c_int,
-    ms: c_int,
-    tb_change_cnt: c_int,
-    events: *mut MultiQueue,
-) -> c_int {
     // Needed so that feeding typeahead over RPC can prevent CursorHold.
     if tb_change_cnt != cursorhold_tb_change_cnt.get() {
         reset_cursorhold_wait(tb_change_cnt);
     }
 
-    // SAFETY: the caller's contract on `buf` and `events`; `curbuf`,
-    // `read_stream` and `main_loop` are always-live globals, and the
-    // getchar/autocmd entry points below take no pointer of ours.
-    unsafe {
-        if let Some(n) = try_read(buf, maxlen, tb_change_cnt) {
-            return n;
-        }
+    if let Some(n) = try_read(buf, tb_change_cnt) {
+        return n;
+    }
 
-        // No risk of a UI flood, so disable CTRL-C "interrupt" behaviour if
-        // it is mapped.
-        if (mapped_ctrl_c.get() | Buf::current().b_mapped_ctrl_c) & get_real_state() != 0 {
-            ctrl_c_interrupts.set(false);
-        }
+    // No risk of a UI flood, so disable CTRL-C "interrupt" behaviour if
+    // it is mapped.
+    if (mapped_ctrl_c.get() | Buf::current().b_mapped_ctrl_c) & get_real_state() != 0 {
+        ctrl_c_interrupts.set(false);
+    }
 
-        let mut result;
-        if ms >= 0 {
-            result = inbuf_poll(ms, events);
-            if result == InputAvail::Empty {
-                return 0;
-            }
-        } else {
-            let wait_start = os_hrtime();
-            cursorhold_time.set(cursorhold_time.get().min(p_ut() as c_int));
-            result = inbuf_poll(p_ut() as c_int - cursorhold_time.get(), events);
-            if result == InputAvail::Empty {
-                if (*read_stream.ptr()).s.closed && silent_mode.get() {
-                    // Drained event loop and initial input; exit `-es`/`-Es`.
-                    read_error_exit();
-                }
-                reset_cursorhold_wait(tb_change_cnt);
-                if trigger_cursorhold() && !typebuf_changed(tb_change_cnt) {
-                    create_cursorhold_event(events == main_events());
-                } else {
-                    before_blocking();
-                    result = inbuf_poll(-1, events);
-                }
-            } else {
-                let waited = os_hrtime().wrapping_sub(wait_start) / 1_000_000;
-                cursorhold_time.set(cursorhold_time.get().wrapping_add(waited as c_int));
-            }
-        }
-
-        ctrl_c_interrupts.set(true);
-
-        // If input went straight into the typeahead buffer, bail out here.
-        if typebuf_changed(tb_change_cnt) {
+    let mut result;
+    if ms >= 0 {
+        result = inbuf_poll(ms, events);
+        if result == InputAvail::Empty {
             return 0;
         }
-
-        if let Some(n) = try_read(buf, maxlen, tb_change_cnt) {
-            return n;
+    } else {
+        let wait_start = os_hrtime();
+        cursorhold_time.set(cursorhold_time.get().min(p_ut() as c_int));
+        result = inbuf_poll(p_ut() as c_int - cursorhold_time.get(), events);
+        if result == InputAvail::Empty {
+            if stdin_closed() && silent_mode.get() {
+                // Drained event loop and initial input; exit `-es`/`-Es`.
+                read_error_exit();
+            }
+            reset_cursorhold_wait(tb_change_cnt);
+            if trigger_cursorhold() && !typebuf_changed(tb_change_cnt) {
+                create_cursorhold_event(events.is_main_loop());
+            } else {
+                before_blocking();
+                result = inbuf_poll(-1, events);
+            }
+        } else {
+            let waited = os_hrtime().wrapping_sub(wait_start) / 1_000_000;
+            cursorhold_time.set(cursorhold_time.get().wrapping_add(waited as c_int));
         }
+    }
 
-        // With events pending, hand back the keys directly.
-        if maxlen != 0 && pending_events(events) {
-            return push_event_key(buf, maxlen);
-        }
+    ctrl_c_interrupts.set(true);
 
-        if result == InputAvail::Eof && ms != 0 {
-            read_error_exit();
-        }
+    // If input went straight into the typeahead buffer, bail out here.
+    if typebuf_changed(tb_change_cnt) {
+        return 0;
+    }
+
+    if let Some(n) = try_read(buf, tb_change_cnt) {
+        return n;
+    }
+
+    // With events pending, hand back the keys directly.
+    if !buf.is_empty() && events.pending() {
+        return push_event_key(buf);
+    }
+
+    if result == InputAvail::Eof && ms != 0 {
+        read_error_exit();
     }
     0
 }
 
 /// Whether a character is available for reading.
 pub fn os_char_avail() -> bool {
-    inbuf_poll(0, ptr::null_mut()) == InputAvail::Ready
+    inbuf_poll(0, InputEvents::None) == InputAvail::Ready
 }
 
 /// Poll for fast events; sets `got_int` if CTRL-C was typed.
@@ -417,8 +394,8 @@ pub(crate) fn tty_drain(fd: c_int) {
 }
 
 /// How many bytes are buffered and unread.
-pub fn input_available() -> size_t {
-    (input_write_pos.get() - input_read_pos.get()) as size_t
+pub fn input_available() -> usize {
+    input_write_pos.get() - input_read_pos.get()
 }
 
 /// How much room is left at the end of the buffer.
@@ -456,64 +433,51 @@ const MAX_TRANS_SPECIAL: usize = 19;
 pub fn input_enqueue(chan_id: uint64_t, keys: String_0) -> size_t {
     current_ui.set(chan_id);
 
-    // SAFETY: a `String` owns `len()` bytes and the NUL after them. Every
-    // pointer below is derived from
-    // `keys.data` and the loop never lets `ptr` past `end`, except for the
-    // one-past-the-end read of the `'<'` skip — which lands on the NUL that
-    // terminates every `String` nvim builds, exactly as upstream's does.
-    // `buf` is sized for the longest sequence `trans_special` can produce,
-    // and no `did_simplify` answer is wanted: simplification happens later,
-    // in the typeahead.
-    unsafe {
-        let mut ptr = keys.data() as *const c_char;
-        let end = ptr.add(keys.len());
+    let keys = keys.as_bytes();
+    let mut at = 0;
+    while input_space() >= MAX_TRANS_SPECIAL && at < keys.len() {
+        // Sized for the longest sequence `trans_special` can produce, and no
+        // `did_simplify` answer is wanted: simplification happens later, in
+        // the typeahead.
+        let mut buf = [0u8; MAX_TRANS_SPECIAL];
+        let (used, new_size) = trans_key(&keys[at..], &mut buf);
+        at += used;
 
-        while input_space() >= MAX_TRANS_SPECIAL && ptr < end {
-            let mut buf = [0u8; MAX_TRANS_SPECIAL];
-            let text = cstr::slice_at(ptr, end.offset_from(ptr) as size_t);
-            let (used, new_size) = trans_key(text, &mut buf);
-            ptr = ptr.add(used);
-
+        if new_size > 0 {
+            let (new_size, advance) = handle_mouse_event(&keys[at..], &mut buf, new_size);
+            at += advance;
             if new_size > 0 {
-                let new_size = handle_mouse_event(&mut ptr, end, &mut buf, new_size);
-                if new_size > 0 {
-                    input_enqueue_raw(&buf[..new_size as usize]);
-                }
-                continue;
+                input_enqueue_raw(&buf[..new_size as usize]);
             }
-
-            let byte = *ptr as u8;
-            if byte == b'<' {
-                // An invalid or incomplete key sequence: skip to the next '>'.
-                let old_ptr = ptr;
-                loop {
-                    ptr = ptr.add(1);
-                    if ptr >= end || *ptr == b'>' as c_char {
-                        break;
-                    }
-                }
-                if *ptr != b'>' as c_char {
-                    // Incomplete: hand it back unconsumed.
-                    ptr = old_ptr;
-                    break;
-                }
-                ptr = ptr.add(1);
-                continue;
-            }
-
-            // Copy the character across, escaping K_SPECIAL.
-            if byte as c_int == K_SPECIAL {
-                input_enqueue_raw(&[K_SPECIAL as u8, KS_SPECIAL as u8, KE_FILLER as u8]);
-            } else {
-                input_enqueue_raw(&[byte]);
-            }
-            ptr = ptr.add(1);
+            continue;
         }
 
-        let consumed = ptr.offset_from(keys.data() as *const c_char) as size_t;
-        process_ctrl_c();
-        consumed
+        let Some(&byte) = keys.get(at) else {
+            break;
+        };
+        if byte == b'<' {
+            // An invalid or incomplete key sequence: skip past the next '>',
+            // or, with none, hand it back unconsumed.
+            match keys[at + 1..].iter().position(|&b| b == b'>') {
+                Some(close) => {
+                    at += close + 2;
+                    continue;
+                }
+                None => break,
+            }
+        }
+
+        // Copy the character across, escaping K_SPECIAL.
+        if c_int::from(byte) == K_SPECIAL {
+            input_enqueue_raw(&[K_SPECIAL as u8, KS_SPECIAL as u8, KE_FILLER as u8]);
+        } else {
+            input_enqueue_raw(&[byte]);
+        }
+        at += 1;
     }
+
+    process_ctrl_c();
+    at
 }
 
 /// How many clicks in a row, and where the last one was.
@@ -635,19 +599,16 @@ fn scan_mouse_pos(s: &[u8]) -> Option<(c_int, c_int, usize)> {
     Some((col, row, s.len() - rest.len()))
 }
 
-/// Extract a mouse event's row and column, and detect multiple clicks.
+/// Extract a mouse event's row and column from the `<col,row>` suffix that
+/// may start `rest`, and detect multiple clicks.
 ///
 /// Answers the new length of `buf`, which is zero when the event is to be
-/// dropped.
-///
-/// # Safety
-/// `*ptr` must be inside a run ending at `end`.
-unsafe fn handle_mouse_event(
-    cursor: &mut *const c_char,
-    end: *const c_char,
+/// dropped, and how many bytes of `rest` the suffix took.
+fn handle_mouse_event(
+    rest: &[u8],
     buf: &mut [u8; MAX_TRANS_SPECIAL],
     bufsize: c_uint,
-) -> c_uint {
+) -> (c_uint, usize) {
     // A modifier prefix, if there is one, pushes the event three bytes along.
     let (mouse_code, kind) = match bufsize {
         3 => (buf[2] as c_int, buf[1] as c_int),
@@ -660,26 +621,21 @@ unsafe fn handle_mouse_event(
         || (KE_MOUSEDOWN as c_int..=KE_MOUSERIGHT as c_int).contains(&mouse_code)
         || mouse_code == KE_MOUSEMOVE as c_int;
     if kind != KS_EXTRA || !is_mouse {
-        return bufsize;
+        return (bufsize, 0);
     }
 
     // A `<col,row>` sequence can follow, and sets the mouse_row/mouse_col
     // globals. That is ugly, but it is how the rest of the code expects to
     // find mouse coordinates.
-    // SAFETY: the caller's contract puts `*ptr` inside the run ending at
-    // `end`.
-    let rest = unsafe {
-        core::slice::from_raw_parts(cursor.cast::<u8>(), end.offset_from(*cursor) as usize)
-    };
-    if let Some((col, row, advance)) = scan_mouse_pos(rest) {
+    let mut advance = 0;
+    if let Some((col, row, used)) = scan_mouse_pos(rest) {
         if col >= 0 && row >= 0 {
             // Some terminals report positions off the screen.
             mouse_grid.set(0);
             mouse_row.set(row.min(Rows.get() - 1));
             mouse_col.set(col.min(Columns.get() - 1));
         }
-        // SAFETY: `advance` counts bytes of `rest`, so it stays within `end`.
-        *cursor = unsafe { cursor.add(advance) };
+        advance = used;
     }
 
     let Some(modifiers) = check_multiclick(
@@ -688,15 +644,15 @@ unsafe fn handle_mouse_event(
         mouse_row.get(),
         mouse_col.get(),
     ) else {
-        return 0;
+        return (0, advance);
     };
 
     if modifiers == 0 {
-        return bufsize;
+        return (bufsize, advance);
     }
     if buf[1] as c_int == KS_MODIFIER {
         buf[2] |= modifiers;
-        return bufsize;
+        return (bufsize, advance);
     }
     // No modifiers in the buffer yet: shift the event three bytes along and
     // write the modifier sequence in front of it.
@@ -704,7 +660,7 @@ unsafe fn handle_mouse_event(
     buf[0] = K_SPECIAL as u8;
     buf[1] = KS_MODIFIER as u8;
     buf[2] = modifiers;
-    bufsize + 3
+    (bufsize + 3, advance)
 }
 
 /// Feed a mouse event that arrived already decoded — over RPC, rather than as
@@ -755,54 +711,54 @@ pub fn input_blocking() -> bool {
 ///
 /// `ms` is a timeout in milliseconds; -1 waits indefinitely and 0 does not
 /// wait. `events` is an optional queue to check for pending events.
-fn inbuf_poll(ms: c_int, events: *mut MultiQueue) -> InputAvail {
-    // SAFETY: `events` is NULL or a live queue, and `main_loop` is the
-    // process's event loop.
+fn inbuf_poll(ms: c_int, events: InputEvents) -> InputAvail {
+    if input_ready(events) {
+        return InputAvail::Ready;
+    }
+
+    if do_profiling.get() == PROF_YES && ms != 0 {
+        prof_input_start();
+    }
+
+    if (ms == -1 || ms > 0) && !events.is_main_loop() && !input_eof.get() {
+        // The pending input provoked a blocking wait. Do special events
+        // now. #6247
+        blocking.set(true);
+        // SAFETY: the queue the channel layer made at startup and keeps.
+        unsafe { multiqueue_process_events(queue_in(&ch_before_blocking_events)) };
+    }
+    let has_events = if events.queue().is_null() {
+        "false"
+    } else {
+        "true"
+    };
+    logmsg!(
+        LOGLVL_DBG,
+        c"inbuf_poll",
+        514,
+        "blocking... events={has_events}"
+    );
+    // Upstream polls with a NULL queue here, so the macro's "drain this
+    // queue instead" branch is dead: `events` is only read by
+    // `input_ready`.
+    // SAFETY: the process's event loop, always live, and no queue.
     unsafe {
-        if os_input_ready(events) {
-            return InputAvail::Ready;
-        }
-
-        if do_profiling.get() == PROF_YES && ms != 0 {
-            prof_input_start();
-        }
-
-        if (ms == -1 || ms > 0) && events != main_events() && !input_eof.get() {
-            // The pending input provoked a blocking wait. Do special events
-            // now. #6247
-            blocking.set(true);
-            multiqueue_process_events(queue_in(&ch_before_blocking_events));
-        }
-        logmsg!(
-            LOGLVL_DBG,
-            c"inbuf_poll",
-            514,
-            "blocking... events={}",
-            c_str(if events.is_null() {
-                c"false".as_ptr()
-            } else {
-                c"true".as_ptr()
-            })
-        );
-        // Upstream polls with a NULL queue here, so the macro's "drain this
-        // queue instead" branch is dead: `events` is only read by
-        // `os_input_ready`.
-        process_events_until(main_loop.ptr(), ptr::null_mut(), ms as i64, || {
-            os_input_ready(events) || input_eof.get()
+        process_events_until(main_loop.ptr(), ptr::null_mut(), i64::from(ms), || {
+            input_ready(events) || input_eof.get()
         });
-        blocking.set(false);
+    }
+    blocking.set(false);
 
-        if do_profiling.get() == PROF_YES && ms != 0 {
-            prof_input_end();
-        }
+    if do_profiling.get() == PROF_YES && ms != 0 {
+        prof_input_end();
+    }
 
-        if os_input_ready(events) {
-            InputAvail::Ready
-        } else if input_eof.get() {
-            InputAvail::Eof
-        } else {
-            InputAvail::Empty
-        }
+    if input_ready(events) {
+        InputAvail::Ready
+    } else if input_eof.get() {
+        InputAvail::Eof
+    } else {
+        InputAvail::Empty
     }
 }
 
@@ -858,11 +814,8 @@ fn process_ctrl_c() {
 }
 
 /// Push bytes of the `KE_EVENT` key sequence, a partial one at a time when
-/// `maxlen < 3`.
-///
-/// # Safety
-/// `buf` must be writable for `maxlen` bytes, which must be at least one.
-unsafe fn push_event_key(buf: *mut uint8_t, maxlen: c_int) -> c_int {
+/// `buf` holds fewer than three. `buf` must not be empty.
+fn push_event_key(buf: &mut [u8]) -> usize {
     const KEY: [uint8_t; 3] = [
         K_SPECIAL as uint8_t,
         KS_EXTRA as uint8_t,
@@ -872,25 +825,22 @@ unsafe fn push_event_key(buf: *mut uint8_t, maxlen: c_int) -> c_int {
 
     let mut buf_idx = 0;
     loop {
-        // SAFETY: the caller's contract, and `buf_idx < maxlen` below.
-        unsafe { *buf.add(buf_idx) = KEY[key_idx.get()] };
+        buf[buf_idx] = KEY[key_idx.get()];
         key_idx.set((key_idx.get() + 1) % KEY.len());
         buf_idx += 1;
-        if key_idx.get() == 0 || buf_idx >= maxlen as usize {
+        if key_idx.get() == 0 || buf_idx >= buf.len() {
             break;
         }
     }
-    buf_idx as c_int
+    buf_idx
 }
 
-/// Whether there is input waiting, in the typeahead, the buffer or `events`.
-///
-/// # Safety
-/// `events` must be NULL or a live queue.
-pub unsafe fn os_input_ready(events: *mut MultiQueue) -> bool {
-    typebuf_was_filled.get()          // an API call filled the typeahead
-        || input_available() != 0     // the input buffer holds something
-        || unsafe { pending_events(events) } // events must be processed
+/// Whether there is input waiting, in the typeahead, the buffer or
+/// `events`.
+pub(crate) fn input_ready(events: InputEvents) -> bool {
+    typebuf_was_filled.get()      // an API call filled the typeahead
+        || input_available() != 0 // the input buffer holds something
+        || events.pending() // events must be processed
 }
 
 /// Exit because of an input read error.
@@ -900,13 +850,6 @@ fn read_error_exit() -> ! {
         getout(0);
     }
     preserve_exit(Some(gettext(c"Nvim: Error reading input, exiting...\n")))
-}
-
-/// # Safety
-/// `events` must be NULL or a live queue.
-unsafe fn pending_events(events: *mut MultiQueue) -> bool {
-    // SAFETY: the caller's contract.
-    !events.is_null() && unsafe { !multiqueue_empty(events) }
 }
 
 /// The `<>` key name `text` starts with, encoded into `buf`: how many bytes

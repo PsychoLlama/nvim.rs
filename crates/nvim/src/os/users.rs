@@ -9,8 +9,8 @@
 //! anything else. None of those calls is reentrant or thread-safe; the
 //! editor is single-threaded, which is the assumption upstream made too.
 //!
-//! The `os_get_*` entry points are driven from outside the crate by
-//! `crates/nvim/tests/unit/users.rs`, which is why they are `pub`.
+//! The name and home-directory entry points are driven from outside the
+//! crate by `crates/nvim/tests/unit/users.rs`, which is why they are `pub`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `os/` row in docs/perimeter.md.
@@ -23,12 +23,12 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cstr;
 use crate::global_cell::GlobalCell;
-use crate::memory::xstrlcpy;
 use crate::os::env::env_get_bounded;
 use crate::types::Candidate;
-use crate::types::{Expand, Failed, size_t, uv_uid_t};
-use core::ffi::{CStr, c_char};
+use crate::types::{Expand, uv_uid_t};
+use core::ffi::CStr;
 use std::ffi::CString;
 
 /// How well a name matches the known user names.
@@ -42,20 +42,44 @@ pub enum UserMatch {
     Exact,
 }
 
-/// A `passwd` name field copied out of libc's static entry. NULL and empty
-/// names are dropped, as the C's `add_user` did.
+/// What the password database says about one user, copied out of libc's
+/// static entry. NULL fields, and an empty name, are `None`, as the C's
+/// `add_user` dropped them.
+struct Passwd {
+    name: Option<CString>,
+    dir: Option<Vec<u8>>,
+}
+
+/// Copy what a `getpw*` call answered.
 ///
 /// # Safety
 ///
-/// `s` must be NULL or a NUL-terminated string that stays valid for the
-/// call.
-unsafe fn owned_name(s: *const c_char) -> Option<CString> {
-    if s.is_null() {
-        return None;
+/// `entry` is null, or the entry a `getpw*` call just answered, read before
+/// any other such call can overwrite it.
+unsafe fn copy_entry(entry: *const libc::passwd) -> Option<Passwd> {
+    // SAFETY: the caller's contract; a non-null entry's `pw_name` and
+    // `pw_dir` are null or NUL-terminated, and both are copied here.
+    unsafe {
+        entry.as_ref().map(|pw| Passwd {
+            name: cstr::at_opt(pw.pw_name)
+                .filter(|name| !name.is_empty())
+                .map(CStr::to_owned),
+            dir: cstr::at_opt(pw.pw_dir).map(|dir| dir.to_bytes().to_vec()),
+        })
     }
-    // SAFETY: the caller's promise; the copy is taken before returning.
-    let name = unsafe { CStr::from_ptr(s) };
-    (!name.is_empty()).then(|| name.to_owned())
+}
+
+/// The password database's entry for `uid`.
+fn entry_by_uid(uid: uv_uid_t) -> Option<Passwd> {
+    // SAFETY: `getpwuid` answers null or its static entry, copied at once.
+    unsafe { copy_entry(libc::getpwuid(uid)) }
+}
+
+/// The password database's entry for the user called `name`.
+fn entry_by_name(name: &CStr) -> Option<Passwd> {
+    // SAFETY: a NUL-terminated name; `getpwnam` answers null or its static
+    // entry, copied at once.
+    unsafe { copy_entry(libc::getpwnam(name.as_ptr())) }
 }
 
 /// Every user name the system knows.
@@ -65,21 +89,22 @@ unsafe fn owned_name(s: *const c_char) -> Option<CString> {
 /// enumeration never mentions.
 fn all_usernames() -> Vec<CString> {
     let mut names = Vec::new();
-    let user_env = crate::cstr::owned(&env_get_bounded(c"USER"));
-    // SAFETY: the pwd walk is libc's own iterator.
-    unsafe {
-        libc::setpwent();
-        while let Some(pw) = libc::getpwent().as_ref() {
-            names.extend(owned_name(pw.pw_name));
-        }
-        libc::endpwent();
+    // SAFETY: rewinds libc's own iterator.
+    unsafe { libc::setpwent() };
+    // SAFETY: `getpwent` answers null at the end, or its static entry,
+    // copied before the next step.
+    while let Some(entry) = unsafe { copy_entry(libc::getpwent()) } {
+        names.extend(entry.name);
+    }
+    // SAFETY: closes the iterator `setpwent` opened.
+    unsafe { libc::endpwent() };
 
-        if let Some(user_env) = owned_name(user_env.as_ptr())
-            && !names.contains(&user_env)
-            && let Some(pw) = libc::getpwnam(user_env.as_ptr()).as_ref()
-        {
-            names.extend(owned_name(pw.pw_name));
-        }
+    let user_env = cstr::owned(&env_get_bounded(c"USER"));
+    if !user_env.is_empty()
+        && !names.contains(&user_env)
+        && let Some(entry) = entry_by_name(&user_env)
+    {
+        names.extend(entry.name);
     }
     names
 }
@@ -147,69 +172,34 @@ pub fn os_get_usernames() -> Vec<Vec<u8>> {
         .collect()
 }
 
-/// Write the name of the user running this process into `s` (`len` bytes,
-/// always NUL-terminated). `Ok` when a name was found.
-///
-/// # Safety
-///
-/// `s` is writable for `len` bytes.
-pub unsafe fn os_get_username(s: *mut c_char, len: size_t) -> Result<(), Failed> {
-    // SAFETY: `getuid` cannot fail and touches nothing; `s` is the
-    // caller's buffer.
-    unsafe { os_get_uname(libc::getuid(), s, len) }
-}
-
-/// [`os_get_username`] into a buffer of `room` bytes, owned: the name, or
-/// the decimal uid when the user database has none, cut to fit.
+/// The name of the user running this process, cut to `room - 1` bytes as a
+/// buffer of `room` would cut it: the decimal uid when the user database has
+/// no name for it.
 pub(crate) fn username_within(room: usize) -> Vec<u8> {
-    let mut buf = vec![0 as c_char; room.max(1)];
-    // SAFETY: the buffer holds exactly the length passed.
-    let _ = unsafe { os_get_username(buf.as_mut_ptr(), buf.len()) };
-    crate::cstr::in_chars(&buf).to_bytes().to_vec()
+    username_named_within(room).unwrap_or_else(|uid| uid)
 }
 
-/// [`os_get_uname`] answered owned, cut to `room - 1` bytes as a buffer of
-/// `room` would cut it: `Ok` with the user's name, `Err` with the decimal
-/// uid when the password database has none for it.
-pub(crate) fn uname_within(uid: uv_uid_t, room: usize) -> Result<Vec<u8>, Vec<u8>> {
-    let mut buf: Vec<c_char> = vec![0; room.max(1)];
-    // SAFETY: the buffer holds exactly the length passed.
-    let named = unsafe { os_get_uname(uid, buf.as_mut_ptr(), buf.len()) };
-    let name = crate::cstr::in_chars(&buf).to_bytes().to_vec();
-    named.map(|()| name.clone()).map_err(|_| name)
+/// The name of the user owning `uid`, cut to `room - 1` bytes as a buffer
+/// of `room` would cut it: `Ok` with the user's name, `Err` with the decimal
+/// uid when the password database has none for it -- a number is not a
+/// name.
+pub fn uname_within(uid: uv_uid_t, room: usize) -> Result<Vec<u8>, Vec<u8>> {
+    let keep = room.max(1) - 1;
+    let cut = |mut text: Vec<u8>| {
+        text.truncate(keep);
+        text
+    };
+    match entry_by_uid(uid).and_then(|entry| entry.name) {
+        Some(name) => Ok(cut(name.into_bytes())),
+        // `%d`, as upstream: a uid past `INT_MAX` prints signed. No password
+        // database issues one, but the digits have to match either way.
+        None => Err(cut(uid.cast_signed().to_string().into_bytes())),
+    }
 }
 
 /// [`uname_within`] for the user running this process.
-pub(crate) fn username_named_within(room: usize) -> Result<Vec<u8>, Vec<u8>> {
-    // SAFETY: `getuid` cannot fail and touches nothing.
-    uname_within(unsafe { libc::getuid() }, room)
-}
-
-/// Write the name of the user owning `uid` into `s` (`len` bytes, always
-/// NUL-terminated). When the database has no name for it, the decimal uid
-/// is written instead and the result is `Err` — a number is not a name.
-///
-/// # Safety
-///
-/// `s` is writable for `len` bytes.
-pub unsafe fn os_get_uname(uid: uv_uid_t, s: *mut c_char, len: size_t) -> Result<(), Failed> {
-    // SAFETY: `getpwuid` answers null or a pointer into libc's static
-    // entry, whose `pw_name` is null or NUL-terminated and which
-    // `owned_name` copies out of before anything else runs.
-    let name =
-        unsafe { libc::getpwuid(uid).as_ref() }.and_then(|pw| unsafe { owned_name(pw.pw_name) });
-    if let Some(name) = name {
-        // SAFETY: `s` is the caller's `len`-byte buffer and `name` is a
-        // NUL-terminated string owned here.
-        unsafe { xstrlcpy(s, name.as_ptr(), len) };
-        return Ok(());
-    }
-    // `%d`, as upstream: a uid past `INT_MAX` prints signed. No password
-    // database issues one, but the digits have to match either way.
-    let digits = CString::new(uid.cast_signed().to_string()).expect("decimal digits hold no NUL");
-    // SAFETY: as above.
-    unsafe { xstrlcpy(s, digits.as_ptr(), len) };
-    Err(Failed)
+pub fn username_named_within(room: usize) -> Result<Vec<u8>, Vec<u8>> {
+    uname_within(os_getuid(), room)
 }
 
 /// The home directory of user `name`, or `None` when there is no such
@@ -218,14 +208,9 @@ pub fn user_home_dir(name: &CStr) -> Option<Vec<u8>> {
     if name.is_empty() {
         return None;
     }
-    // SAFETY: a NUL-terminated name; libc's static `passwd` entry is read
-    // and its `pw_dir` copied out before anything else can invalidate it.
-    unsafe {
-        let pw = libc::getpwnam(name.as_ptr()).as_ref()?;
-        // No password database answers a NULL `pw_dir`, but `None` is the
-        // honest answer to one.
-        (!pw.pw_dir.is_null()).then(|| CStr::from_ptr(pw.pw_dir).to_bytes().to_vec())
-    }
+    // No password database answers a NULL `pw_dir`, but `None` is the
+    // honest answer to one.
+    entry_by_name(name)?.dir
 }
 
 #[cfg(test)]

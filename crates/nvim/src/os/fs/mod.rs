@@ -28,7 +28,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
-use crate::os::uv_error::{UV_EAGAIN, UV_EINTR, UV_UNKNOWN, uv_code};
+use crate::os::uv_error::{UV_EAGAIN, UV_EINTR, UV_ENOBUFS, UV_UNKNOWN, uv_code};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use core::ptr::NonNull;
@@ -36,12 +36,11 @@ use std::ffi::{CString, OsStr};
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::os::fd::{AsFd as _, AsRawFd as _, BorrowedFd, FromRawFd as _, IntoRawFd as _};
-use std::os::unix::ffi::OsStrExt as _;
+use std::os::unix::ffi::{OsStrExt as _, OsStringExt as _};
 use std::os::unix::fs::OpenOptionsExt as _;
 
 use crate::event::libuv::{
-    uv_chdir, uv_cwd, uv_err_name, uv_exepath, uv_fs_access, uv_fs_copyfile, uv_fs_lstat,
-    uv_fs_realpath, uv_fs_req_cleanup, uv_strerror,
+    uv_err_name, uv_fs_access, uv_fs_copyfile, uv_fs_lstat, uv_fs_req_cleanup, uv_strerror,
 };
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::message::{verbose_enter, verbose_leave};
@@ -253,31 +252,34 @@ pub fn os_chdir(path: &CStr) -> c_int {
         smsg!(0, "chdir({})", msg_cstr(path));
         verbose_leave();
     }
-    // SAFETY: `path` is NUL-terminated and outlives the call.
-    let err = unsafe { uv_chdir(path.as_ptr()) };
-    if err == 0 {
-        // SAFETY: same; `cstr_to_string` borrows it for the length only.
-        ui_call_chdir(String_0::from_cstr(path));
+    // `uv_chdir` is `chdir(2)`, which is what std calls.
+    match std::env::set_current_dir(OsStr::from_bytes(path.to_bytes())) {
+        Ok(()) => {
+            ui_call_chdir(String_0::from_cstr(path));
+            0
+        }
+        Err(error) => uv_code(&error),
     }
-    err
 }
 
 /// The name of the current directory, when it fits a buffer of `room`
 /// bytes with its NUL. `Err` holds what upstream's buffer was left with
 /// instead: libuv's error message, cut to the same room.
+///
+/// `uv_cwd` is `getcwd(3)` into the caller's buffer, answering `UV_ENOBUFS`
+/// when the name does not fit; `std::env::current_dir` is `getcwd` into a
+/// buffer that grows, so the fit is tested here. Either way libuv's message
+/// is cut to `room - 1` bytes: on `UV_ENOBUFS` the length libuv reports is
+/// the one needed, which is more than `room`.
 pub fn dirname_within(room: usize) -> Result<Vec<u8>, Vec<u8>> {
-    let mut buf = vec![0 as c_char; room.max(1)];
-    let mut len: size_t = buf.len();
-    // SAFETY: the buffer holds exactly the length passed, and libuv reports
-    // the answer's length back through `len`.
-    let error_number = unsafe { uv_cwd(buf.as_mut_ptr(), &raw mut len) };
-    if error_number != LIBUV_SUCCESS {
-        let message = os_strerror(error_number).to_bytes();
-        // `xstrlcpy` into the room libuv left in `len`.
-        let room = len.min(buf.len()).saturating_sub(1);
-        return Err(message[..message.len().min(room)].to_vec());
-    }
-    Ok(cstr::in_chars(&buf).to_bytes().to_vec())
+    let room = room.max(1);
+    let code = match std::env::current_dir() {
+        Ok(dir) if dir.as_os_str().len() < room => return Ok(dir.into_os_string().into_vec()),
+        Ok(_) => UV_ENOBUFS,
+        Err(error) => uv_code(&error),
+    };
+    let message = os_strerror(code).to_bytes();
+    Err(message[..message.len().min(room - 1)].to_vec())
 }
 
 /// The name of the current directory, or `None` when the system will not
@@ -353,18 +355,14 @@ pub fn os_nodetype(name: &CStr) -> c_int {
     }
 }
 
-/// The absolute path of the running executable, at most `MAXPATHL` bytes,
-/// or `None` when libuv cannot say -- procfs missing, say (#6734).
+/// The absolute path of the running executable, cut to what a `MAXPATHL`
+/// buffer holds, or `None` when the system cannot say -- procfs missing, say
+/// (#6734). libuv's `uv_exepath` and std's `current_exe` are both
+/// `readlink("/proc/self/exe")`.
 pub(crate) fn os_exepath() -> Option<Vec<u8>> {
-    let mut buffer = vec![0u8; crate::types::MAXPATHL as usize];
-    let mut size: size_t = buffer.len();
-    // SAFETY: `buffer` is `size` writable bytes, and libuv writes back how
-    // many it used, NUL not counted.
-    if unsafe { uv_exepath(buffer.as_mut_ptr().cast(), &raw mut size) } != 0 {
-        return None;
-    }
-    buffer.truncate(size);
-    Some(buffer)
+    let mut path = std::env::current_exe().ok()?.into_os_string().into_vec();
+    path.truncate(crate::types::MAXPATHL as usize - 1);
+    Some(path)
 }
 
 /// Whether `name` is an executable file — found in `$PATH` when `use_path`
@@ -644,20 +642,11 @@ pub fn os_copy(path: &CStr, new_path: &CStr, flags: c_int) -> c_int {
     fs_result(|req| unsafe { uv_fs_copyfile(NO_LOOP, req, from, to, flags, None) })
 }
 
-/// `name` resolved to a real path, or `None` when it cannot be.
+/// `name` resolved to a real path, or `None` when it cannot be:
+/// `realpath(3)`, which both `uv_fs_realpath` and `fs::canonicalize` call.
 pub(crate) fn realpath(name: &CStr) -> Option<Vec<u8>> {
-    // `request.ptr` is the resolved path and `uv_fs_req_cleanup` frees
-    // it, so the copy has to happen inside the read.
-    fs_request(
-        // SAFETY: `name` is NUL-terminated and outlives the call.
-        |request| unsafe { uv_fs_realpath(NO_LOOP, request, name.as_ptr(), None) },
-        |result, request| {
-            // SAFETY: `request.ptr` is libuv's NUL-terminated answer, alive
-            // until cleanup.
-            (result == LIBUV_SUCCESS)
-                .then(|| unsafe { cstr::bytes_at(request.ptr.cast()) }.to_vec())
-        },
-    )
+    let real = std::fs::canonicalize(OsStr::from_bytes(name.to_bytes())).ok()?;
+    Some(real.into_os_string().into_vec())
 }
 
 /// Whether `path` exists and is a directory, a symlink to one included.

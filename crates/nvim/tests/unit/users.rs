@@ -9,16 +9,14 @@
 //! Two reasons every case takes the editor lock. The `getpw*` family is not
 //! reentrant — each call hands back a pointer into one static `passwd` entry
 //! that the next call invalidates — and `os_get_usernames` reads `$USER`
-//! through `os_getenv_noalloc`, which stages the answer in the shared
-//! `NameBuff`. `cargo test` runs cases on threads; the LuaJIT harness forked
+//! from the process environment. `cargo test` runs cases on threads; the LuaJIT harness forked
 //! a child per case and never had to think about either.
 
 #![cfg(not(miri))]
 
-use std::ffi::{CString, c_char};
+use std::ffi::CString;
 
-use neovim::os::users::{os_get_uname, os_get_username, os_get_usernames, user_home_dir};
-use neovim::types::Failed;
+use neovim::os::users::{os_get_usernames, uname_within, user_home_dir, username_named_within};
 
 use crate::support::{cstr, editor_lock};
 
@@ -28,18 +26,13 @@ fn current_username() -> String {
     std::env::var("USER").expect("$USER names the user running the tests")
 }
 
-/// Write into a 100-byte buffer and read back what landed, the way the spec's
-/// `ffi.new('char[100]')` cases did.
-fn into_buffer(
-    write: impl FnOnce(*mut c_char, usize) -> Result<(), Failed>,
-) -> (Result<(), Failed>, String) {
-    let mut buffer = [0_u8; 100];
-    let result = write(buffer.as_mut_ptr().cast::<c_char>(), buffer.len());
-    let end = buffer.iter().position(|&b| b == 0).expect("terminated");
-    (
-        result,
-        String::from_utf8(buffer[..end].to_vec()).expect("a user name is text"),
-    )
+/// The spec's `ffi.new('char[100]')` buffers, as the room the answers are
+/// cut to.
+const ROOM: usize = 100;
+
+/// Bytes the database answered, as text.
+fn text(bytes: Vec<u8>) -> String {
+    String::from_utf8(bytes).expect("a user name is text")
 }
 
 #[test]
@@ -60,32 +53,31 @@ fn every_username_includes_the_one_running_the_tests() {
 #[test]
 fn the_process_owner_is_named_by_its_own_uid() {
     let _editor = editor_lock();
-    // SAFETY: the buffer is `into_buffer`'s, and `len` is its true length.
-    let (result, name) = into_buffer(|s, len| unsafe { os_get_username(s, len) });
-    assert_eq!(result, Ok(()));
-    assert_eq!(name, current_username());
+    let name = username_named_within(ROOM).map(text);
+    assert_eq!(name, Ok(current_username()));
 
-    // The same answer by hand, which is what `os_get_username` is: `getuid`
-    // then `os_get_uname`.
-    // SAFETY: `getuid` cannot fail; the buffer is `into_buffer`'s.
+    // The same answer by hand, which is what `username_named_within` is:
+    // `getuid` then `uname_within`.
+    // SAFETY: `getuid` cannot fail.
     let uid = unsafe { libc::getuid() };
-    let (result, by_uid) = into_buffer(|s, len| unsafe { os_get_uname(uid, s, len) });
-    assert_eq!(result, Ok(()));
-    assert_eq!(by_uid, name);
+    assert_eq!(uname_within(uid, ROOM).map(text), name);
+    // And cut to the room, terminator counted.
+    let short = uname_within(uid, 3).map(text);
+    assert_eq!(short, Ok(current_username().chars().take(2).collect()));
 }
 
-/// A uid the database has no name for still leaves something in the buffer —
-/// the decimal number — and says FAIL, because a number is not a name. Both
+/// A uid the database has no name for still answers something -- the
+/// decimal number -- and says `Err`, because a number is not a name. Both
 /// halves matter: callers print what they were handed either way.
 #[test]
 fn an_unknown_uid_fails_and_leaves_its_number_behind() {
     let _editor = editor_lock();
     // The spec's "hoping nobody has this uid".
     const NOBODY: u32 = 2342;
-    // SAFETY: the buffer is `into_buffer`'s.
-    let (result, name) = into_buffer(|s, len| unsafe { os_get_uname(NOBODY, s, len) });
-    assert_eq!(result, Err(Failed));
-    assert_eq!(name, NOBODY.to_string());
+    assert_eq!(
+        uname_within(NOBODY, ROOM).map_err(text),
+        Err(NOBODY.to_string())
+    );
 }
 
 #[test]

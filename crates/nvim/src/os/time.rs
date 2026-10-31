@@ -15,24 +15,22 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::cstr;
 #[cfg(not(miri))]
 use crate::event::libuv::uv_hrtime;
-use crate::event::libuv::{uv_clock_gettime, uv_err_name, uv_now, uv_sleep};
+use crate::event::libuv::{uv_now, uv_sleep};
 use crate::event::r#loop::process_events_until;
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
-use crate::log::{LOGLVL_DBG, LOGLVL_ERR, logmsg};
-use crate::memory::{xstrlcat, xstrlcpy};
-use crate::message_fmt::c_str;
+use crate::log::{LOGLVL_DBG, logmsg};
 use crate::os::cshim::{gettext, tzset};
 use crate::os::env::env_get_bounded;
-use crate::os::input::os_input_ready;
+use crate::os::input::{InputEvents, input_ready};
 use crate::startup::main_loop;
-use crate::types::{Timestamp, UV_CLOCK_REALTIME, time_t, tm, uv_timespec64_t};
+use crate::types::{Timestamp, time_t, tm};
 use ::libc::{localtime_r, strftime, strptime};
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use core::ptr;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// A `struct tm` with every field zeroed, for callers about to fill it in.
 ///
@@ -81,30 +79,14 @@ pub fn os_hrtime() -> u64 {
 ///
 /// The real-time clock is subject to time adjustments and can jump backwards.
 pub fn os_realtime() -> i64 {
-    let mut ts = uv_timespec64_t {
-        tv_sec: 0,
-        tv_nsec: 0,
-    };
-    // SAFETY: `ts` is a live, correctly typed out-parameter; the log call's
-    // format string matches its two arguments.
-    let error_number = unsafe {
-        let error_number = uv_clock_gettime(UV_CLOCK_REALTIME, &raw mut ts);
-        if error_number != 0 {
-            logmsg!(
-                LOGLVL_ERR,
-                c"os_realtime",
-                48,
-                "uv_clock_gettime failed: {} {}",
-                error_number,
-                c_str(uv_err_name(error_number))
-            );
-        }
-        error_number
-    };
-    if error_number != 0 {
-        return 0;
+    // `uv_clock_gettime(UV_CLOCK_REALTIME)` is `clock_gettime(CLOCK_REALTIME)`,
+    // which is what `SystemTime::now` reads; the error libuv could log is a
+    // clock that does not exist.
+    let nanos = |d: Duration| i64::try_from(d.as_nanos()).unwrap_or(i64::MAX);
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(after) => nanos(after),
+        Err(before) => -nanos(before.duration()),
     }
-    ts.tv_sec * 1_000_000_000 + i64::from(ts.tv_nsec)
 }
 
 /// A millisecond-resolution, monotonically-increasing time relative to an
@@ -124,20 +106,17 @@ pub fn os_delay(ms: u64, ignoreinput: bool) {
     // Upstream reaches this through LOOP_PROCESS_EVENTS_UNTIL with a NULL
     // queue, so the macro's "drain this queue instead of polling" branch is
     // dead here and is not reproduced.
-    //
-    // SAFETY: the main loop is live; the log call's format matches its one
-    // argument; os_input_ready accepts a null queue.
-    unsafe {
-        logmsg!(LOGLVL_DBG, c"os_delay", 76, "{} ms", ms);
-        let ms = ms.min(u64::from(c_int::MAX.cast_unsigned())).cast_signed();
-        process_events_until(main_loop.ptr(), ptr::null_mut(), ms, || {
-            if ignoreinput {
-                got_int.get()
-            } else {
-                os_input_ready(ptr::null_mut())
-            }
-        });
-    }
+    logmsg!(LOGLVL_DBG, c"os_delay", 76, "{} ms", ms);
+    let ms = ms.min(u64::from(c_int::MAX.cast_unsigned())).cast_signed();
+    let done = || {
+        if ignoreinput {
+            got_int.get()
+        } else {
+            input_ready(InputEvents::None)
+        }
+    };
+    // SAFETY: the process's event loop, always live, and no queue.
+    unsafe { process_events_until(main_loop.ptr(), ptr::null_mut(), ms, done) };
 }
 
 /// Sleep for `ms` milliseconds serving the main loop's own queue, until an
@@ -164,7 +143,7 @@ pub fn os_sleep(ms: u64) {
 /// `localtime_r` to re-read the zone the way `localtime` does, and calling
 /// `tzset` on every conversion is too expensive, so the value is cached and
 /// the zone is only refreshed when it changes. 63 octets plus terminator.
-static TZ_CACHE: GlobalCell<[c_char; TZ_LEN]> = GlobalCell::new([0; TZ_LEN]);
+static TZ_CACHE: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
 
 /// What fits in [`TZ_CACHE`], terminator included.
 const TZ_LEN: usize = 64;
@@ -176,14 +155,10 @@ pub fn os_localtime_r(clock: time_t, result: &mut tm) -> bool {
     // Upstream compares only what the cache can hold, so a `$TZ` longer than
     // that does not re-`tzset` on every conversion.
     let head = &tz[..tz.len().min(TZ_LEN - 1)];
-    if TZ_CACHE.with(|cache| cstr::in_chars(cache).to_bytes() != head) {
-        let mut cache = [0 as c_char; TZ_LEN];
-        for (slot, &b) in cache.iter_mut().zip(head) {
-            *slot = b.cast_signed();
-        }
-        // SAFETY: re-reads the zone for the value just cached.
+    if TZ_CACHE.with(|cache| cache.as_slice() != head) {
+        // SAFETY: re-reads the zone for the value about to be cached.
         unsafe { tzset() };
-        TZ_CACHE.set(cache);
+        TZ_CACHE.set(head.to_vec());
     }
     // SAFETY: `localtime_r` fills `result`, which is live for the call.
     unsafe { !localtime_r(&raw const clock, result).is_null() }
@@ -194,41 +169,27 @@ pub fn os_localtime(result: &mut tm) -> bool {
     os_localtime_r(os_time_raw(), result)
 }
 
-/// Render `clock` as local time into `result`, as `ctime_r` would, optionally
-/// with a trailing newline. Yields "(Invalid)" when the time cannot be
-/// rendered. Returns `result`'s base pointer for the C-shaped callers.
-pub fn os_ctime_r(clock: time_t, result: &mut [c_char], add_newline: bool) -> *mut c_char {
-    let mut local = tm_zeroed();
-    let filled = os_localtime_r(clock, &mut local);
-    let len = result.len();
-    let out = result.as_mut_ptr();
-    // SAFETY: `out` addresses `len` writable chars; strftime and the xstrlc*
-    // pair are each given a bound within that. `local` is live and filled
-    // whenever it is read.
-    unsafe {
-        if !filled
-            || strftime(
-                out,
-                len - 1,
-                gettext(c"%a %b %d %H:%M:%S %Y").as_ptr(),
-                &raw mut local,
-            ) == 0
-        {
-            xstrlcpy(out, gettext(c"(Invalid)").as_ptr(), len - 1);
-        }
-        if add_newline {
-            xstrlcat(out, c"\n".as_ptr(), len);
-        }
-    }
-    out
-}
-
-/// [`os_ctime_r`] answered owned: `clock` as local time, as a buffer of
-/// `room` bytes would have held it.
+/// `clock` as local time, as `ctime_r` would render it into a buffer of
+/// `room` bytes (at least two), optionally with a trailing newline: "(Invalid)"
+/// when the time cannot be rendered.
 pub(crate) fn ctime_text(clock: time_t, room: usize, add_newline: bool) -> Vec<u8> {
-    let mut buf: Vec<c_char> = vec![0; room.max(2)];
-    os_ctime_r(clock, &mut buf, add_newline);
-    cstr::in_chars(&buf).to_bytes().to_vec()
+    let room = room.max(2);
+    let mut local = tm_zeroed();
+    // Upstream gives `strftime` `room - 1` bytes and `xstrlcpy` the same, so
+    // the text is at most `room - 2` long and a newline always fits after.
+    let mut text = if os_localtime_r(clock, &mut local) {
+        strftime_within(gettext(c"%a %b %d %H:%M:%S %Y"), &local, room - 1)
+    } else {
+        Vec::new()
+    };
+    if text.is_empty() {
+        text = gettext(c"(Invalid)").to_bytes().to_vec();
+        text.truncate(room - 2);
+    }
+    if add_newline {
+        text.push(b'\n');
+    }
+    text
 }
 
 /// How long the machine has been up, in seconds, or `None` when the system
@@ -239,22 +200,29 @@ pub(crate) fn uptime() -> Option<f64> {
     (unsafe { crate::event::libuv::uv_uptime(&raw mut uptime) } == 0).then_some(uptime)
 }
 
-/// Parse `str` according to `format` into `tm`. Returns a pointer into `str`
-/// just past the parsed text, or null if the input did not match.
-pub fn os_strptime(str: &CStr, format: &CStr, tm: &mut tm) -> *mut c_char {
-    // SAFETY: both strings are NUL-terminated by construction and `tm` is
-    // live for the call.
-    unsafe { strptime(str.as_ptr(), format.as_ptr(), tm) }
+/// Parse `text` according to `format` into `tm`: whether the format
+/// matched.
+pub fn os_strptime(text: &CStr, format: &CStr, tm: &mut tm) -> bool {
+    // SAFETY: both strings are NUL-terminated and `tm` is live for the call;
+    // the answer (where the parse stopped) is only tested for NULL.
+    !unsafe { strptime(text.as_ptr(), format.as_ptr(), tm) }.is_null()
 }
 
 /// `time` formatted by `strftime`'s `format`, at most 255 bytes of it.
 /// Empty when the formatted text would not fit, as `strftime` answers it.
 pub(crate) fn os_strftime(format: &CStr, time: &tm) -> Vec<u8> {
-    let mut out = [0 as c_char; 256];
-    // SAFETY: a terminated format, a filled-in time, and `out.len()` bytes
-    // of this call's own to write into.
-    let len = unsafe { strftime(out.as_mut_ptr(), out.len(), format.as_ptr(), time) };
-    out[..len].iter().map(|&c| c.cast_unsigned()).collect()
+    strftime_within(format, time, 256)
+}
+
+/// `strftime` into a buffer of `room` bytes: the text, or empty when it
+/// (and its NUL) would not fit.
+fn strftime_within(format: &CStr, time: &tm, room: usize) -> Vec<u8> {
+    let mut out = vec![0u8; room];
+    // SAFETY: a terminated format, a filled-in time, and `room` bytes of
+    // this call's own to write into.
+    let len = unsafe { strftime(out.as_mut_ptr().cast(), room, format.as_ptr(), time) };
+    out.truncate(len);
+    out
 }
 
 /// `mktime` of `time`, which it normalises in place: seconds since the

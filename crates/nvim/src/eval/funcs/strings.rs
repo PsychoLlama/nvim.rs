@@ -468,7 +468,7 @@ pub fn f_strptime(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     };
     // `mktime` reporting -1 is indistinguishable from a genuine
     // timestamp of -1, and upstream treats both as failure.
-    let parsed = format.is_some_and(|format| !os_strptime(text, format, &mut tmval).is_null());
+    let parsed = format.is_some_and(|format| os_strptime(text, format, &mut tmval));
     let seconds = if parsed {
         os_mktime(&mut tmval) as VarNumber
     } else {
