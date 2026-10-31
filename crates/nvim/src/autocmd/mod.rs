@@ -81,7 +81,7 @@ use crate::window::{
 };
 use crate::winfloat::win_config_float;
 use crate::winlayer::graph::prevwin;
-use crate::winlayer::{forget_window, free_deferred, register_window};
+use crate::winlayer::{free_deferred, hide_window, register_window};
 
 // The carve of the transpiled module; see each child's docs.
 mod aucmdwin;

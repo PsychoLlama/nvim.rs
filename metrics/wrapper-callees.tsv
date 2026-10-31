@@ -4,9 +4,9 @@ count	callee	no_raw	defs	def
 28	f	0	0	
 26	Term::new	0	1	crates/nvim/src/terminal/mod.rs
 21	multiqueue_put_event	0	1	crates/nvim/src/event/multiqueue.rs
-18	Box::from_raw	0	6	
+19	Box::from_raw	0	6	
 17	Reader::new	0	1	crates/nvim/src/event/rstream.rs
-15	xfree	0	1	crates/nvim/src/memory/mod.rs
+14	xfree	0	1	crates/nvim/src/memory/mod.rs
 13	from_raw_parts_mut	0	0	
 13	vterm_dealloc	0	1	crates/nvim/src/vterm/vterm.rs
 13	zeroed	0	0	

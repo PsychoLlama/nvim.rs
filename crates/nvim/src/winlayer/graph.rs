@@ -39,12 +39,12 @@ use super::{Buf, BufId, FrameId, TabId, TabPage, Win, WinId};
 use crate::allocator::Owned;
 use crate::global_cell::GlobalCell;
 use crate::memory::XString;
-use crate::memory::xfree;
 use crate::optionstr::BUF_STRING_OPTIONS;
 use crate::registry::id_map;
 use crate::types::MemLine;
-use crate::types::{BufName, Buffer, MarkTree, Tabpage, Window};
+use crate::types::{BufName, Buffer, Handle, MarkTree, Tabpage, Window};
 use core::ffi::c_int;
+use core::mem::MaybeUninit;
 
 pub(crate) static firstwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
 pub(crate) static lastwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
@@ -348,20 +348,49 @@ impl Saved {
     }
 }
 
-/// Give back the block [`Win::alloc`] took over for a window the
-/// deferred-free list parked: the window's fields were released when it was
-/// given up, so this is the `xfree` alone.
-pub(crate) fn free_window_block(raw: *mut Window) {
-    // SAFETY: a window's block, which the global allocator (`malloc`) gave
-    // the `Box` that `Win::alloc` took, nothing reaches any more; freed once.
-    unsafe { xfree(raw.cast()) };
+/// The block of a window the editor has given up, owned until it goes back.
+///
+/// By the time a window is freed its fields have been released one by one
+/// (`win_free`), its handle has left the registry and it is off every list,
+/// so what is left is the memory [`Win::alloc`] took over -- a `Box` of a
+/// `Window` whose contents no longer count. That is what this owns, as
+/// `MaybeUninit`: dropping it gives the block back and runs no destructor.
+/// The free path either drops it at once or parks it in the deferred-free
+/// set while an autocommand runs ([`super::defer_free_window`]).
+///
+/// The one way to get one is [`forget_window`], so the only blocks freed
+/// this way are the ones the window registry held.
+pub(crate) struct ParkedWindow {
+    /// Held for its drop alone, which is the free.
+    _block: Box<MaybeUninit<Window>>,
+}
+
+/// Take the window `handle` names out of the registry for good, answering
+/// its block: dropping the answer frees it. `None` when nothing is
+/// registered under `handle`.
+///
+/// The caller must have released the window's fields and unlinked it from
+/// every list first, and must not use any `Win` of it afterwards -- the
+/// re-entry rule's "it did not survive", made by the free path itself. A
+/// window that stays alive out of the registry (the idle autocommand
+/// window) goes through [`super::hide_window`] instead.
+#[must_use = "dropping the answer is the free; ignoring it frees the window at once"]
+pub(crate) fn forget_window(handle: Handle) -> Option<ParkedWindow> {
+    let raw = super::handles::unregister_window(handle)?;
+    // SAFETY: the registry holds only the addresses `register_window` was
+    // given, each a window's block that `Win::alloc` took from a `Box`
+    // (a `Box<MaybeUninit<Window>>` has the same layout); the entry is gone,
+    // so the block is handed out once.
+    Some(ParkedWindow {
+        _block: unsafe { Box::from_raw(raw.cast::<MaybeUninit<Window>>()) },
+    })
 }
 
 impl Win {
     /// The handle of a freshly built window, before the allocator has given
     /// it a handle -- so nothing is read and the handle is zero until
     /// [`Win::set_handle`]. The block is the window list's from here on:
-    /// [`free_window_block`] gives it back, without running its destructor.
+    /// [`forget_window`] gives it back, without running its destructor.
     pub(crate) fn alloc(window: Box<Window>) -> Self {
         Self::at(Box::into_raw(window), 0)
     }

@@ -149,9 +149,10 @@ pub(crate) use grid::grid_of_view;
 
 pub use handles::BufId;
 
+pub(crate) use graph::forget_window;
 pub(crate) use handles::{
     FrameId, TabId, WinId, buffer, defer_free_buffer, defer_free_window, forget_buffer,
-    forget_frame, forget_tabpage, forget_window, free_deferred, register_buffer, register_frame,
+    forget_frame, forget_tabpage, free_deferred, hide_window, register_buffer, register_frame,
     register_tabpage, register_window, tabpage, window,
 };
 

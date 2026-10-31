@@ -40,6 +40,7 @@ use crate::allocator::Owned;
 use crate::global_cell::GlobalCell;
 use crate::registry::{HandleRegistry, OwnedRegistry, PendingFree};
 use crate::types::{Buffer, Frame, Handle, Tabpage, Window};
+use crate::winlayer::graph::ParkedWindow;
 use crate::winlayer::{Buf, FrameRef, TabPage, Win};
 
 /// Every live window, by handle.
@@ -108,10 +109,16 @@ pub(crate) fn register_window(win: Win) {
     WINDOWS.with_mut(|reg| reg.register(handle, raw));
 }
 
-/// Forget the window `handle` names, before its memory goes back — or, for
-/// the autocommand window, while it is idle and must not be findable.
-pub(crate) fn forget_window(handle: Handle) {
-    WINDOWS.with_mut(|reg| reg.forget(handle));
+/// Take the window `handle` names out of the registry while it stays alive:
+/// the autocommand window, idle between uses and not to be findable.
+pub(crate) fn hide_window(handle: Handle) {
+    let _ = WINDOWS.with_mut(|reg| reg.forget(handle));
+}
+
+/// Take the window `handle` names out of the registry, answering the address
+/// it held: the free path's half of [`super::graph::forget_window`].
+pub(super) fn unregister_window(handle: Handle) -> Option<*mut Window> {
+    WINDOWS.with_mut(|reg| reg.forget(handle))
 }
 
 /// Hand `buffer` to the buffer registry, which owns it from here on, and answer
@@ -183,9 +190,9 @@ pub(crate) fn forget_frame(handle: Handle) -> Option<Owned<Frame>> {
 static PENDING_FREE_BUFFERS: GlobalCell<PendingFree<Owned<Buffer>>> =
     GlobalCell::new(PendingFree::new());
 
-/// Windows whose allocation is waiting for the outermost autocommand. A bare
-/// address, as the window registry still holds — see [`OwnedRegistry`].
-static PENDING_FREE_WINDOWS: GlobalCell<PendingFree<*mut Window>> =
+/// Windows whose block is waiting for the outermost autocommand. The set
+/// owns them: it took the [`ParkedWindow`] the free path was given.
+static PENDING_FREE_WINDOWS: GlobalCell<PendingFree<ParkedWindow>> =
     GlobalCell::new(PendingFree::new());
 
 /// Park `buffer`'s allocation until the outermost autocommand returns.
@@ -197,10 +204,9 @@ pub(crate) fn defer_free_buffer(buffer: Owned<Buffer>) {
     PENDING_FREE_BUFFERS.with_mut(|pending| pending.park(buffer));
 }
 
-/// [`defer_free_buffer`] for a window.
-pub(crate) fn defer_free_window(win: Win) {
-    let raw = win.raw();
-    PENDING_FREE_WINDOWS.with_mut(|pending| pending.park(raw));
+/// [`defer_free_buffer`] for a window's block.
+pub(crate) fn defer_free_window(block: ParkedWindow) {
+    PENDING_FREE_WINDOWS.with_mut(|pending| pending.park(block));
 }
 
 /// Give back everything the handlers deferred: the C's two `while` loops at
@@ -214,12 +220,13 @@ pub(crate) fn free_deferred() {
     // Each allocation was given up by its owner and nothing has reached it
     // since: the handle left the registry before it was parked. Dropping the
     // buffer's `Owned` runs `Buffer`'s destructor and gives the memory back,
-    // outside the `with_mut` so that nothing is borrowed while it runs.
+    // and dropping a `ParkedWindow` gives its block back; both outside the
+    // `with_mut`, so that nothing is borrowed while they run.
     while let Some(buf) = PENDING_FREE_BUFFERS.with_mut(PendingFree::take_next) {
         drop(buf);
     }
-    while let Some(win) = PENDING_FREE_WINDOWS.with_mut(PendingFree::take_next) {
-        super::graph::free_window_block(win);
+    while let Some(block) = PENDING_FREE_WINDOWS.with_mut(PendingFree::take_next) {
+        drop(block);
     }
 }
 

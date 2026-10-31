@@ -390,9 +390,9 @@ impl<T> HandleRegistry<T> {
 
     /// Drop `handle`, whether or not it was registered — `map_del` on an
     /// absent key is a no-op upstream too, and the reused autocommand
-    /// window relies on that.
-    pub(crate) fn forget(&mut self, handle: Handle) {
-        self.live.remove(handle);
+    /// window relies on that — answering the address it named.
+    pub(crate) fn forget(&mut self, handle: Handle) -> Option<*mut T> {
+        self.live.remove(handle)
     }
 }
 

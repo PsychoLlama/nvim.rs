@@ -48,9 +48,7 @@ use crate::types::{
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_grid_destroy, ui_has};
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
-use crate::winlayer::graph::{
-    firstwin, free_window_block, lastwin, leave_curbuf, prevwin, topframe,
-};
+use crate::winlayer::graph::{firstwin, lastwin, leave_curbuf, prevwin, topframe};
 use crate::winlayer::{
     Buf, FrameRef, TabPage, Win, WinId, buffers, defer_free_window, forget_window, register_window,
     tabs,
@@ -339,8 +337,7 @@ pub(crate) fn bare_window() -> Win {
 pub(crate) fn free_bare_window(mut win: Win) {
     clear_winopt(&mut win.w_onebuf_opt);
     clear_winopt(&mut win.w_allbuf_opt);
-    forget_window(win.handle());
-    free_window_block(win.raw());
+    drop(forget_window(win.handle()).expect("a bare window is registered"));
 }
 
 // ---------------------------------------------------------------------------
@@ -558,11 +555,16 @@ pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
     // function, where a pointer link could not care. Nothing between the two
     // points can look a window up -- `block_autocmds` covers all but the two
     // calls above it, and neither reaches the registry.
-    forget_window(window.handle());
-    if autocmd_busy.get() {
-        defer_free_window(window);
-    } else {
-        free_window_block(window.raw());
+    // The block comes back with the handle; dropping it is the free. Every
+    // window on a list is registered, so `None` is a window freed twice.
+    let block = forget_window(window.handle());
+    debug_assert!(block.is_some(), "a window being freed is registered");
+    if let Some(block) = block {
+        if autocmd_busy.get() {
+            defer_free_window(block);
+        } else {
+            drop(block);
+        }
     }
     unblock_autocmds();
 }
