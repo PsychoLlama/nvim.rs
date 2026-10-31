@@ -2,12 +2,12 @@
 //!
 //! # Boundary
 //!
-//! Reading the process environment is `std::env` (`getenv(3)` and `environ`
-//! under std's lock); writing it goes through libuv
+//! Reading one variable is `std::env` (`getenv(3)` under std's lock);
+//! enumerating them walks `environ`; writing goes through libuv
 //! (`uv_os_setenv`/`uv_os_unsetenv`), whose failures are logged by libuv's
 //! name for them. libuv also answers the home directory when `$HOME` is
 //! unset and supplies the random bytes, and `uname` the hostname. Those
-//! five calls are this file's only foreign ones.
+//! calls and the `environ` walk are this file's only foreign ones.
 //!
 //! Getting, setting and enumerating variables, plus the resolved home
 //! directory. What the editor makes of them -- `$VAR` and `~` inside a path,
@@ -26,6 +26,7 @@ use crate::log::{LOGLVL_ERR, logmsg};
 use crate::memory::XString;
 use crate::message::internal_error;
 use crate::message_fmt::msg_cstr;
+use crate::os::cshim::environ;
 use crate::os::fs::{dirname_within, os_err_name, os_strerror, realpath};
 use crate::os::state::{didset_vim, didset_vimruntime};
 use crate::path::{path_is_absolute, tail_with_sep_index};
@@ -145,23 +146,42 @@ pub fn env_unset(name: &CStr) -> bool {
 }
 
 /// A copy of the environment, as `"NAME=VALUE"` strings in its order.
+///
+/// A walk over `environ` rather than `std::env::vars_os`: that splits each
+/// entry into two allocations, which `environ()` would then join and split
+/// again, and `jobstart()` copies the whole environment for every job.
 pub fn copy_environment() -> Vec<Vec<u8>> {
-    std::env::vars_os()
-        .map(|(name, value)| {
-            let mut entry = name.into_vec();
-            entry.push(b'=');
-            entry.extend_from_slice(value.as_bytes());
-            entry
-        })
-        .collect()
+    let mut env = Vec::new();
+    // SAFETY: `environ` is libc's NULL-terminated block of NUL-terminated
+    // strings, and each entry is copied before anything can change it.
+    unsafe {
+        let mut entry = environ;
+        while !(*entry).is_null() {
+            env.push(CStr::from_ptr(*entry).to_bytes().to_vec());
+            entry = entry.add(1);
+        }
+    }
+    env
 }
 
-/// The *name* of the environment variable at `index`, or `None` past the
-/// end.
+/// The *name* of the environment variable at `index` (what precedes its
+/// first `=`), or `None` past the end.
 pub fn env_name_at(index: usize) -> Option<Vec<u8>> {
-    std::env::vars_os()
-        .nth(index)
-        .map(|(name, _)| name.into_vec())
+    // SAFETY: as [`copy_environment`]; the walk stops at the NULL that ends
+    // the block, however large `index` is.
+    let entry = unsafe {
+        let mut entry = environ;
+        for _ in 0..index {
+            if (*entry).is_null() {
+                return None;
+            }
+            entry = entry.add(1);
+        }
+        cstr::at_opt(*entry)
+    }?;
+    let entry = entry.to_bytes();
+    let end = entry.iter().position(|&b| b == b'=').unwrap_or(entry.len());
+    Some(entry[..end].to_vec())
 }
 
 /// Fill `out` from the operating system's entropy source. `false` when
