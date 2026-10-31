@@ -25,7 +25,6 @@
 use super::*;
 use crate::drawscreen::state::screen_search_hl;
 use crate::mbyte::c_cluster_len;
-use crate::memline::held_line;
 use crate::option::cpo_has;
 use crate::pos::MAXCOL;
 use crate::search::SEARCH_HL_PRIORITY;
@@ -328,8 +327,8 @@ fn next_search_hl(window: Win, which: Which, lnum: LineNr, mincol: ColNr) {
             // Not Vi-compatible, or an empty match: continue at the next
             // character, and stop if that is past the end of the line.
             let at = usize::try_from(start.col).unwrap_or(0);
-            let buffer = window.buffer();
-            let line = held_line(&buffer, lnum);
+            let mut lines = window.buffer().lines();
+            let line = lines.line(lnum);
             if cstr::byte_at(line, at) == 0 {
                 set_lnum(0);
                 break;
@@ -472,8 +471,8 @@ fn col_len(n: usize) -> ColNr {
 /// the line.
 #[inline(always)]
 fn char_len_at(window: Win, lnum: LineNr, col: ColNr) -> ColNr {
-    let buffer = window.buffer();
-    let line = held_line(&buffer, lnum);
+    let mut lines = window.buffer().lines();
+    let line = lines.line(lnum);
     let at = usize::try_from(col).unwrap_or(usize::MAX);
     col_len(c_cluster_len(line.get(at..).unwrap_or_default()))
 }

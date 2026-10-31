@@ -36,7 +36,7 @@ use crate::keycodes::{Ctrl_H, K_SPECIAL};
 use crate::mbyte::{
     c_cluster_len, char_at, char_len, encode_char, mb_tolower, mb_toupper, utf_char2len,
 };
-use crate::memline::held_line;
+use crate::memline::Lines;
 use crate::memory::XString;
 use crate::message::{e_null, e_re_damg, e_resulting_text_too_long};
 use crate::message::{emsg, iemsg};
@@ -390,19 +390,15 @@ impl Expanding<'_> {
     }
 }
 
-/// Line `lnum` of a buffer match, its terminator not included: `None`
-/// above line 1, empty past the end.
-///
-/// The slice is the memline's cached line, good until another line of the
-/// buffer is read.
-fn getline(buffer: &Buf, firstlnum: LineNr, maxline: LineNr, lnum: LineNr) -> Option<&[u8]> {
+/// Line `lnum` of a buffer match, counted from `firstlnum`, its terminator
+/// not included: `None` above line 1, empty past the end.
+fn getline(lines: &mut Lines, firstlnum: LineNr, maxline: LineNr, lnum: LineNr) -> Option<&[u8]> {
     if firstlnum + lnum < 1 {
         None
     } else if lnum > maxline {
         Some(b"")
     } else {
-        let line = held_line(buffer, firstlnum + lnum);
-        Some(&line[..line.len() - 1])
+        Some(lines.line(firstlnum + lnum))
     }
 }
 
@@ -688,9 +684,12 @@ fn copy_capture(
                 return Outcome::Done;
             }
             let mut col = matches.startpos[no].col;
+            // One line at a time: nothing below reads another line while
+            // the slice is held.
+            let mut lines = buf.lines();
             loop {
                 // How much of the capture is on line `clnum`.
-                let Some(line) = getline(&buf, firstlnum, maxline, clnum) else {
+                let Some(line) = getline(&mut lines, firstlnum, maxline, clnum) else {
                     return Outcome::Done;
                 };
                 let line_len = ColNr::try_from(line.len()).unwrap_or(ColNr::MAX);

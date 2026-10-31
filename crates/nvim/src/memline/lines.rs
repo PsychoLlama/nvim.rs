@@ -198,6 +198,12 @@ impl Lines {
 ///
 /// The NUL is part of the slice because the matcher reads it as a position:
 /// `$` matches there and a character step stops there.
+///
+/// The matcher is the only caller left, and the borrow stays a convention
+/// there because the sound forms cost the matcher's hot path: copying each
+/// line a match reads (into a store that lives exactly as long as the
+/// match) is sound but needs a context per line rather than one re-seated
+/// per walk, and measured ~0.6 % of the regexp benchmark's instructions.
 pub(crate) fn held_line(buffer: &Buf, lnum: LineNr) -> &[u8] {
     fetch_line(*buffer, lnum, false);
     buffer.b_ml.cached_bytes_with_nul()
