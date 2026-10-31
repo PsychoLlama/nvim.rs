@@ -18,8 +18,8 @@
 
 use super::*;
 use crate::env::expand_env_within;
+use crate::fileio::buffered::ReadFile;
 use crate::message_fmt::msg_cstr;
-use crate::os::fileio::ReadFile;
 use crate::os::fs::os_strerror;
 use crate::semsg;
 use crate::types::MAXPATHL;

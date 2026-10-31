@@ -26,13 +26,13 @@ use super::{
 use crate::eval::typval::{NumBuf, blob_bytes, list_items, tv_check_str_or_nr};
 use crate::eval::userfunc::{add_defer, can_add_defer};
 use crate::ex_cmds::check_secure;
+use crate::fileio::buffered::WriteFile;
 use crate::memory::ThinCString;
 use crate::message::e_invarg2;
 use crate::message::emsg;
 use crate::message_fmt::{emsg_text, msg_cstr};
 use crate::option::vars::p_fs;
 use crate::os::cshim::gettext;
-use crate::os::fileio::WriteFile;
 use crate::os::fs::os_strerror;
 use crate::path::full_name_save;
 use crate::runtime::script_is_lua;

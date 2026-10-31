@@ -1,30 +1,27 @@
-//! Buffered file I/O over libuv: `os/fileio.rs`.
+//! Buffered file I/O: `fileio/buffered.rs`.
 //!
 //! A port of `test/unit/os/fileio_spec.lua`. Every case works on real files
 //! in a real directory, which is the point — the buffering is only
 //! interesting against a file system that can say `EEXIST`, `EISDIR` and
 //! `ELOOP` for itself.
 //!
-//! Two isolation obligations the LuaJIT harness did not have. A
-//! `FileDescriptor` buffers through `alloc_block`, whose reuse list is a
-//! process-wide global, so every case takes the editor lock; and the spec's
+//! Two isolation obligations the LuaJIT harness did not have. Opening can
+//! reach the editor's message layer (`kFileMkDir` reports E739), which is
+//! process-wide state, so every case takes the editor lock; and the spec's
 //! fixture directory had a fixed name, which two cases running at once would
 //! have fought over, so each case here gets its own.
 
 #![cfg(not(miri))]
 
-use std::ffi::{CString, c_char, c_int};
+use std::ffi::{CString, c_int};
 use std::os::unix::fs::PermissionsExt;
-use std::os::unix::io::IntoRawFd;
 use std::path::{Path, PathBuf};
 
-use neovim::os::fileio::{
-    FileOpenFlags, file_close, file_flush, file_fsync, file_open, file_open_fd, file_read,
-    file_skip, file_write, kFileCreate, kFileCreateOnly, kFileNoSymlink, kFileReadOnly,
+use neovim::fileio::buffered::{
+    BufferedFile, FileOpenFlags, kFileCreate, kFileCreateOnly, kFileNoSymlink, kFileReadOnly,
     kFileTruncate, kFileWriteOnly,
 };
 use neovim::os::uv_error::{UV_EEXIST, UV_EISDIR, UV_ELOOP, UV_EMLINK, UV_ENOENT};
-use neovim::types::FileDescriptor;
 
 use crate::support::{Editor, editor_lock};
 
@@ -92,84 +89,63 @@ impl Drop for Fixture {
     }
 }
 
-/// A `FileDescriptor` and the calls that drive it, so the cases read as the
-/// protocol rather than as pointer work.
-struct Handle(FileDescriptor);
+/// A `BufferedFile` and the calls that drive it, shaped as the spec's
+/// protocol: an open that answers an error code, and a close that spends it.
+struct Handle(Option<BufferedFile>);
 
 impl Handle {
-    /// `file_open`: (the error, the descriptor).
+    /// `BufferedFile::open`: (the error, the file).
     fn open(path: &Path, flags: FileOpenFlags, mode: c_int) -> (c_int, Handle) {
-        let mut handle = Handle(zeroed_descriptor());
-        let name = cpath(path);
-        // SAFETY: the descriptor is this frame's and `name` outlives the call.
-        let err = unsafe { file_open(&raw mut handle.0, name.as_ptr(), flags as c_int, mode) };
-        (err, handle)
+        match BufferedFile::open(&cpath(path), flags, mode) {
+            Ok(file) => (0, Handle(Some(file))),
+            Err(err) => (err, Handle(None)),
+        }
     }
 
-    /// `file_open_fd` over a descriptor the standard library opened, which is
-    /// what the spec did through `os_open`.
-    fn adopt(fd: c_int, flags: FileOpenFlags) -> (c_int, Handle) {
-        let mut handle = Handle(zeroed_descriptor());
-        // SAFETY: `fd` is open and the descriptor is this frame's.
-        let err = unsafe { file_open_fd(&raw mut handle.0, fd, flags as c_int) };
-        (err, handle)
+    /// `BufferedFile::from_file` over a file the standard library opened,
+    /// which is what the spec did through `os_open`.
+    fn adopt(file: std::fs::File, flags: FileOpenFlags) -> (c_int, Handle) {
+        (0, Handle(Some(BufferedFile::from_file(file, flags))))
     }
 
-    /// Whether this side is the write side — the spec's `fp.wr`.
-    fn writing(&self) -> bool {
-        self.0.wr
+    fn file(&mut self) -> &mut BufferedFile {
+        self.0.as_mut().expect("an open file")
     }
 
-    /// `file_read` of `size` bytes: (the count, the `size`-byte buffer). The
+    /// Whether this side is the write side -- the spec's `fp.wr`.
+    fn writing(&mut self) -> bool {
+        self.file().writing()
+    }
+
+    /// A read of `size` bytes: (the count, the `size`-byte buffer). The
     /// buffer is returned whole, zero-padded, because the spec asserted on
     /// what a short read leaves behind as well as on the count.
     fn read(&mut self, size: usize) -> (isize, Vec<u8>) {
         let mut buf = vec![0_u8; size];
-        // SAFETY: the descriptor is live and `buf` is writable for `size`.
-        let count = unsafe { file_read(&raw mut self.0, buf.as_mut_ptr().cast::<c_char>(), size) };
+        let count = self.file().read(&mut buf);
         (count, buf)
     }
 
     fn write(&mut self, bytes: &[u8]) -> isize {
-        // SAFETY: the descriptor is live and `bytes` is this frame's.
-        unsafe {
-            file_write(
-                &raw mut self.0,
-                bytes.as_ptr().cast::<c_char>(),
-                bytes.len(),
-            )
-        }
+        self.file().write(bytes)
     }
 
     fn skip(&mut self, size: usize) -> isize {
-        // SAFETY: the descriptor is live.
-        unsafe { file_skip(&raw mut self.0, size) }
+        self.file().skip(size)
     }
 
     fn flush(&mut self) -> c_int {
-        // SAFETY: the descriptor is live.
-        unsafe { file_flush(&raw mut self.0) }
+        self.file().flush()
     }
 
     fn fsync(&mut self) -> c_int {
-        // SAFETY: the descriptor is live.
-        unsafe { file_fsync(&raw mut self.0) }
+        self.file().fsync()
     }
 
-    /// `file_close` spends the descriptor: it releases the buffer block and
-    /// leaves the fd behind unchanged, so nothing may close it twice.
+    /// Closing spends the file, so nothing may close it twice.
     fn close(&mut self, do_fsync: bool) -> c_int {
-        // SAFETY: the descriptor is live and this is its only close.
-        unsafe { file_close(&raw mut self.0, do_fsync) }
+        self.0.take().expect("an open file").close(do_fsync)
     }
-}
-
-/// The `ffi.new('FileDescriptor')` the spec handed to `file_open`: zeroed,
-/// and filled in entirely by the call.
-fn zeroed_descriptor() -> FileDescriptor {
-    // SAFETY: `FileDescriptor` is plain data, and every field is written by
-    // `file_open`/`file_open_fd` before anything reads one.
-    unsafe { std::mem::zeroed() }
 }
 
 fn cpath(path: &Path) -> CString {
@@ -189,20 +165,16 @@ fn size_of(path: &Path) -> Option<u64> {
 fn a_descriptor_can_be_adopted_for_reading_and_for_writing() {
     let fixture = Fixture::new("adopt");
 
-    let fd = std::fs::File::open(fixture.file1())
-        .expect("file1")
-        .into_raw_fd();
-    let (err, mut fp) = Handle::adopt(fd, kFileReadOnly);
+    let file = std::fs::File::open(fixture.file1()).expect("file1");
+    let (err, mut fp) = Handle::adopt(file, kFileReadOnly);
     assert_eq!(err, 0);
     let want = contents();
     assert_eq!(fp.read(want.len()), (want.len() as isize, want.clone()));
     assert_eq!(fp.close(false), 0);
 
     assert_eq!(size_of(&fixture.fresh()), None);
-    let fd = std::fs::File::create(fixture.fresh())
-        .expect("a new file")
-        .into_raw_fd();
-    let (err, mut fp) = Handle::adopt(fd, kFileWriteOnly);
+    let file = std::fs::File::create(fixture.fresh()).expect("a new file");
+    let (err, mut fp) = Handle::adopt(file, kFileWriteOnly);
     assert_eq!(err, 0);
     assert_eq!(fp.write(b"test"), 4);
     assert_eq!(fp.close(false), 0);

@@ -14,10 +14,10 @@
 
 use crate::api::private::keyset::{KeySet, Slot};
 use crate::eval::decode::unpack_typval;
+use crate::fileio::buffered::ReadFile;
 use crate::message_fmt::{emsg_text, msg_cstr};
 use crate::mpack::token::{self, Kind, Read, Tok};
 use crate::os::cshim::gettext;
-use crate::os::fileio::ReadFile;
 use crate::os::fs::os_strerror;
 use crate::types::{Integer, String_0, StringArray, TypVal};
 use crate::{semsg, tr_c};

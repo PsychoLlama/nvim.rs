@@ -11,7 +11,6 @@
 pub mod cshim;
 pub mod dl;
 pub mod env;
-pub mod fileio;
 pub mod fs;
 pub mod iconv;
 pub mod input;

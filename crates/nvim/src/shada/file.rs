@@ -15,6 +15,10 @@
 
 use crate::ascii::ascii_isdigit;
 use crate::env::{expand_env_within, home_to_tilde, state_subpath};
+use crate::fileio::buffered::{
+    FileOpenFlags, ReadFile, WriteFile, kFileCreate, kFileCreateOnly, kFileNoSymlink,
+    kFileReadOnly, kFileTruncate,
+};
 use crate::fileio::{modname, rename_file};
 use crate::global_cell::GlobalCell;
 use crate::mbyte::strnicmp_in;
@@ -23,10 +27,6 @@ use crate::message_fmt::{emsg_text, msg_cstr};
 use crate::option::split_option_part;
 use crate::option::vars::{P_SHADA, P_SHADAFILE, p_fs, p_shada, p_shadafile, p_verbose};
 use crate::os::cshim::gettext;
-use crate::os::fileio::{
-    FileOpenFlags, ReadFile, WriteFile, kFileCreate, kFileCreateOnly, kFileNoSymlink,
-    kFileReadOnly, kFileTruncate,
-};
 use crate::os::fs::{dir_exists, file_info, getperm, mkdir_recurse, os_remove, os_strerror};
 use crate::os::users::{os_getgid, os_getuid};
 use crate::os::uv_error::{UV_EEXIST, UV_ELOOP, UV_ENOENT};

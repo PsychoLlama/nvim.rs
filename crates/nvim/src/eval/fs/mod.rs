@@ -34,11 +34,11 @@
 use crate::eval::typval::{
     NumBuf, tv_check_for_nonempty_string_arg, tv_check_for_string_arg, tv_get_number_chk,
 };
+use crate::fileio::buffered::FileOpenFlags;
 use crate::mbyte::head_off;
 use crate::memory::ThinCString;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
-use crate::os::fileio::FileOpenFlags;
 use crate::os::fs::{
     can_execute, dir_exists, executable_path, file_info, link_info, os_file_is_readable,
     os_file_is_writable,

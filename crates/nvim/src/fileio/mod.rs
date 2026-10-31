@@ -8,6 +8,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod buffered;
 pub(crate) mod state;
 use crate::autocmd::state::autocmd_busy;
 use crate::autocmd::{

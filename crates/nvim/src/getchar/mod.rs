@@ -20,6 +20,7 @@ use crate::ex_docmd::state::ex_normal_busy;
 use crate::ex_docmd::update_topline_cursor;
 use crate::ex_getln::state::cmdline_star;
 use crate::ex_getln::{cmdline_in_use, putcmdline, redrawcmd, redrawcmdline, unputcmdline};
+use crate::fileio::buffered::FileOpenFlags;
 use crate::getchar::state::{
     KeyNoremap, KeyStuffed, KeyTyped, UngotKey, allow_keys, block_redo, ctrl_c_interrupts,
     curscript, got_int, gotchars_pending, ignore_script, langmap_mapchar, last_recorded_len,
@@ -54,7 +55,6 @@ use crate::option::vars::{
 };
 use crate::options::kOptBoFlagError;
 use crate::os::cshim::gettext;
-use crate::os::fileio::FileOpenFlags;
 use crate::os::input::{input_available, input_get, line_breakcheck, os_breakcheck};
 use crate::state::mode::{
     State, VIsual_reselect, arrow_used, did_ai, exmode_active, finish_op, pending_exmode_active,
