@@ -217,7 +217,7 @@ pub unsafe fn tui_wait_ready(tui: *mut TUIData) -> TuiStart {
         TuiStart {
             width: (*tui).width,
             height: (*tui).height,
-            term: crate::cstr::at_opt((*tui).term).map(std::ffi::CString::from),
+            term: (!(*tui).term.is_null()).then(|| CStr::from_ptr((*tui).term).to_owned()),
             rgb: (*tui).rgb,
         }
     }
@@ -687,7 +687,7 @@ unsafe fn tui_suspend_cb(tui: *mut TUIData) {
             tui_mouse_on(&mut *tui);
         }
         stream_set_blocking((*tui).input.in_fd, false);
-        let term = crate::cstr::at_opt((*tui).term);
+        let term = (!(*tui).term.is_null()).then(|| CStr::from_ptr((*tui).term));
         ui_client_attach((*tui).width, (*tui).height, term, (*tui).rgb);
     }
 }

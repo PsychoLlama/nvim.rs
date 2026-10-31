@@ -61,10 +61,11 @@ unsafe fn copy_entry(entry: *const libc::passwd) -> Option<Passwd> {
     // `pw_dir` are null or NUL-terminated, and both are copied here.
     unsafe {
         entry.as_ref().map(|pw| Passwd {
-            name: cstr::at_opt(pw.pw_name)
+            name: (!pw.pw_name.is_null())
+                .then(|| CStr::from_ptr(pw.pw_name))
                 .filter(|name| !name.is_empty())
                 .map(CStr::to_owned),
-            dir: cstr::at_opt(pw.pw_dir).map(|dir| dir.to_bytes().to_vec()),
+            dir: (!pw.pw_dir.is_null()).then(|| CStr::from_ptr(pw.pw_dir).to_bytes().to_vec()),
         })
     }
 }

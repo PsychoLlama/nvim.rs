@@ -109,37 +109,6 @@ pub(crate) const fn c_bytes<const N: usize>(bytes: &[u8; N]) -> [c_char; N] {
     out
 }
 
-/// [`CStr::from_ptr`], under this module's lifetime convention.
-///
-/// # Safety
-/// `p` points at a NUL-terminated string that stays live and unwritten for
-/// `'a`.
-pub(crate) unsafe fn at<'a>(p: *const c_char) -> &'a CStr {
-    // SAFETY: caller's contract.
-    unsafe { CStr::from_ptr(p) }
-}
-
-/// [`CStr::from_ptr`], answering `None` for a null pointer.
-///
-/// # Safety
-/// A non-null `p` points at a NUL-terminated string that stays live and
-/// unwritten for `'a`.
-pub(crate) unsafe fn at_opt<'a>(p: *const c_char) -> Option<&'a CStr> {
-    // SAFETY: caller's contract, minus the null case.
-    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
-}
-
-/// The bytes of the string at `p`, without its terminator.
-///
-/// This is `strlen`'s scan: it walks to the NUL.
-///
-/// # Safety
-/// [`at_opt`]'s contract, minus the null case.
-pub(crate) unsafe fn bytes_at<'a>(p: *const c_char) -> &'a [u8] {
-    // SAFETY: caller's contract.
-    unsafe { CStr::from_ptr(p) }.to_bytes()
-}
-
 /// The string `s` from byte `at` on.
 ///
 /// Safe, and free: a terminated string stays terminated however much of its

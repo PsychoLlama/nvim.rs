@@ -491,6 +491,26 @@ describe('confirm()', function()
     end
   end)
 
+  it('takes a multibyte hotkey', function()
+    api.nvim_set_option_value('more', false, {}) -- Avoid hit-enter prompt
+    api.nvim_set_option_value('laststatus', 2, {})
+    screen:expect({ any = '%[No Name%]' })
+
+    -- Upstream reads the first byte of the reply through a signed char, so a
+    -- multibyte hotkey is never taken; this port decodes the character.
+    async_meths.nvim_command([[let a = confirm('Season?', "&été\n&Hiver")]])
+    screen:expect({ any = '{CONFIRM:.+: }' })
+    feed('é')
+    screen:expect({ any = '%[No Name%]' })
+    eq(1, api.nvim_get_var('a'))
+
+    async_meths.nvim_command([[let a = confirm('Season?', "&été\n&Hiver")]])
+    screen:expect({ any = '{CONFIRM:.+: }' })
+    feed('h')
+    screen:expect({ any = '%[No Name%]' })
+    eq(2, api.nvim_get_var('a'))
+  end)
+
   it('shows dialog even if :silent #8788', function()
     command("autocmd BufNewFile * call confirm('test')")
 

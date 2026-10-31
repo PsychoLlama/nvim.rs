@@ -47,7 +47,6 @@ use crate::autocmd::{
     is_aucmd_win, is_autocmd_blocked, unblock_autocmds,
 };
 use crate::change::deleted_lines_buf;
-use crate::cstr;
 use crate::cursor_shape::{SHAPE_IDX_TERM, shape_entry};
 use crate::drawscreen::redraw_buf_line_later;
 use crate::eval::typval::DictRef;
@@ -365,13 +364,9 @@ pub(crate) fn terminal_open(mut term: Term, mut buffer: Buf, attached: &dyn Fn()
     );
     buffer.b_locked -= 1;
 
-    let ffname = buffer.name.full_ptr();
-    if !ffname.is_null() {
-        // SAFETY: a non-null `b_ffname` is a NUL-terminated file name, read
-        // before anything here can free it.
-        let title =
-            unsafe { ::core::slice::from_raw_parts(ffname.cast(), cstr::bytes_at(ffname).len()) };
-        callbacks::buf_set_term_title(Some(buffer), title);
+    // A copy: the title is set on the buffer whose name it is.
+    if let Some(title) = buffer.name.full().map(|name| name.to_bytes().to_vec()) {
+        callbacks::buf_set_term_title(Some(buffer), &title);
     }
     // Both would tie the terminal window's scroll position to another
     // window's, which fights the emulator for the topline.

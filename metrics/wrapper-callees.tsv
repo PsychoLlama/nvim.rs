@@ -1,5 +1,5 @@
 count	callee	no_raw	defs	def
-42	CStr::from_ptr	0	0	
+41	CStr::from_ptr	0	0	
 33	from_raw_parts	0	0	
 28	f	0	0	
 26	Term::new	0	1	crates/nvim/src/terminal/mod.rs
@@ -41,7 +41,6 @@ count	callee	no_raw	defs	def
 5	vterm_scroll_rect	0	1	crates/nvim/src/vterm/vterm.rs
 4	.write	0	0	
 4	Uv::new	0	1	crates/nvim/src/event/libuv_proc.rs
-4	at	0	2	
 4	stream_may_close	0	1	crates/nvim/src/event/stream.rs
 4	try_to_free_memory	1	1	crates/nvim/src/memory/mod.rs
 4	ts_node_child	0	0	
@@ -95,7 +94,6 @@ count	callee	no_raw	defs	def
 2	arena_alloc_block	0	1	crates/nvim/src/memory/arena.rs
 2	arena_dup	0	1	crates/nvim/src/tui/quirks.rs
 2	arena_memdupz	0	1	crates/nvim/src/memory/arena.rs
-2	at_opt	0	1	crates/nvim/src/cstr.rs
 2	cells_mut	0	1	crates/nvim/src/vterm/screen/mod.rs
 2	character_bytes	0	1	crates/nvim/src/harness.rs
 2	copy_bytes	0	1	crates/nvim/src/memory/mod.rs

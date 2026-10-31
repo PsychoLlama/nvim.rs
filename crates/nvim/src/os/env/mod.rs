@@ -177,7 +177,7 @@ pub fn env_name_at(index: usize) -> Option<Vec<u8>> {
             }
             entry = entry.add(1);
         }
-        cstr::at_opt(*entry)
+        (!(*entry).is_null()).then(|| CStr::from_ptr(*entry))
     }?;
     let entry = entry.to_bytes();
     let end = entry.iter().position(|&b| b == b'=').unwrap_or(entry.len());

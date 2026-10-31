@@ -58,7 +58,11 @@ fn locale(what: c_int) -> Option<CString> {
     // SAFETY: a NULL locale name queries rather than sets; the answer is
     // libc's NUL-terminated static storage (or NULL), copied before the next
     // `setlocale` can replace it.
-    unsafe { cstr::at_opt(setlocale(what, ptr::null())) }.map(CStr::to_owned)
+    unsafe {
+        setlocale(what, ptr::null())
+            .as_ref()
+            .map(|name| CStr::from_ptr(name).to_owned())
+    }
 }
 
 /// Set the locale for `what` to `name`: whether libc accepted it.
@@ -72,7 +76,11 @@ fn set_locale(what: c_int, name: &CStr) -> bool {
 pub(crate) fn locale_codeset() -> Option<Vec<u8>> {
     // SAFETY: `nl_langinfo` answers a NUL-terminated string in static
     // storage (or NULL), copied here before anything can replace it.
-    let name = unsafe { cstr::at_opt(::libc::nl_langinfo(::libc::CODESET)) }?;
+    let name = unsafe {
+        ::libc::nl_langinfo(::libc::CODESET)
+            .as_ref()
+            .map(|name| CStr::from_ptr(name))
+    }?;
     (!name.is_empty()).then(|| name.to_bytes().to_vec())
 }
 

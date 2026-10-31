@@ -5,12 +5,10 @@
 //! Nvim was forked from Vim 7.4.160. Vim originated from Stevie version 3.6
 //! (Fish disk 217) by GRWalter (Fred).
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 mod vim_patches;
 
-use crate::cstr;
 use crate::env::{DEFAULT_VIM_DIR, DEFAULT_VIMRUNTIME_DIR};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
@@ -284,7 +282,7 @@ pub(crate) fn list_lua_version() {
     let ret = nlua_exec(CODE.to_bytes(), None, Array::EMPTY, kRetObject)
         .expect("a literal chunk cannot fail");
     let version = ret.as_string().expect("_VERSION is a string");
-    msg_str(unsafe { cstr::at(version.data()) });
+    msg_str(version.as_cstr());
     drop(ret);
 }
 

@@ -6,8 +6,7 @@
 //! None of these goes through `vgetc()`, which would sync undo and consume
 //! mapped characters; the price is that typeahead is ignored.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::drawscreen::state::cmdline_row;
 use crate::event::multiqueue::ChildQueue;
@@ -20,18 +19,17 @@ use crate::highlight_group::HLF_R;
 use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_C, K_SPECIAL, KS_MODIFIER, Key, key_unescape};
 use crate::mbyte::{char_at, utf8len_tab};
-use crate::memory::{xfree, xstrdup};
 use crate::message::state::{keep_msg, keep_msg_hl_id, msg_row, msg_scrolled, need_wait_return};
 use crate::message::{msg_putchar, set_keep_msg};
 use crate::mouse::{is_mouse_key, setmouse};
 use crate::os::cshim::gettext;
 use crate::os::input::{InputEvents, input_get};
-use crate::snprintf;
 use crate::state::mode::State;
 use crate::types::ui::kUIMessages;
 use crate::types::{Callback, ExpandContext, IOSIZE};
 use crate::ui::{ui_flush, ui_has};
-use core::ffi::{CStr, c_char, c_int, c_void};
+use crate::{cstr, formatted};
+use core::ffi::{CStr, c_int};
 
 const ESC: c_int = 0x1b;
 /// The unset callback, as `CALLBACK_NONE`.
@@ -42,26 +40,19 @@ const CALLBACK_NONE: Callback = Callback::None;
 /// or `CTRL-C`, which answers `n` — is typed.
 ///
 pub(crate) fn ask_yesno(question: &CStr) -> c_int {
-    let str = question.as_ptr();
     let save_state = State.get();
     let no_prompt = Suppress::wait_return();
 
-    // The question, in this frame's own buffer: upstream builds it in the
-    // shared `IObuff`, which `prompt_for_input` writes again.
-    let mut buf = [0 as c_char; IOSIZE as usize];
-    // SAFETY: `buf` is `IOSIZE` chars long, and the question is the one
-    // `%s` the format takes.
-    let prompt = unsafe {
-        let fmt = gettext(c"%s (y/n)?");
-        snprintf!(buf.as_mut_ptr(), IOSIZE as usize, fmt.as_ptr(), str);
-        xstrdup(buf.as_ptr())
-    };
+    // The question, owned by this frame: upstream builds it in the shared
+    // `IObuff`, which `prompt_for_input` writes again. The room is that
+    // buffer's.
+    let fmt = gettext(c"%s (y/n)?");
+    let prompt = cstr::owned(&formatted!(IOSIZE as usize, fmt.to_bytes(), question));
 
     let mut r = ' ' as c_int;
     while r != 'y' as c_int && r != 'n' as c_int {
         // Same highlighting as for wait_return().
-        // SAFETY: `prompt` is the owned NUL-terminated question.
-        r = prompt_for_input(Some(unsafe { crate::cstr::at(prompt) }), HLF_R, true, None);
+        r = prompt_for_input(Some(&prompt), HLF_R, true, None);
         if r == Ctrl_C || r == ESC {
             r = 'n' as c_int;
             if !ui_has(kUIMessages) {
@@ -73,12 +64,7 @@ pub(crate) fn ask_yesno(question: &CStr) -> c_int {
     need_wait_return.set(msg_scrolled.get() != 0);
     drop(no_prompt);
     State.set(save_state);
-    // SAFETY: main-thread editor call; `prompt` is the string `xstrdup`
-    // handed over, and nothing else holds it.
-    unsafe {
-        setmouse();
-        xfree(prompt as *mut c_void);
-    }
+    setmouse();
     r
 }
 
@@ -228,8 +214,11 @@ pub(crate) fn prompt_for_input(
 
     if let Some(resp) = resp {
         let text = resp.as_cstr().to_bytes();
+        // One key is one character, multibyte or not: upstream answers the
+        // first *byte* through a signed `char`, which `do_dialog` drops as
+        // a special key whenever the hotkey is not ASCII.
         ret = if one_key {
-            c_int::from(text.first().copied().unwrap_or(0) as c_char)
+            char_at(text)
         } else {
             crate::charset::atoi(text)
         };
