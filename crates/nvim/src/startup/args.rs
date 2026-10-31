@@ -54,6 +54,7 @@ use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::types::{
     Failed, LineNr, MAXPATHL, OptIndex, OptInt, OptVal, OptionSetFlags, ScriptId, Vv,
 };
+use std::os::fd::AsFd as _;
 
 /// A bare `-V` is "a little bit verbose".
 const DEFAULT_VERBOSE: c_int = 10;
@@ -230,7 +231,7 @@ impl<'a> Scan<'a> {
             os_exit(0);
         } else if self.tail_is(c"api-info") {
             let data = api_metadata_raw();
-            let written = write_bytes(STDOUT_FILENO, data.as_bytes(), false);
+            let written = write_bytes(std::io::stdout().as_fd(), data.as_bytes(), false);
             if written < 0 {
                 let why = msg_cstr(os_strerror(written as c_int));
                 semsg!("E5420: Failed to write to file: {why}");

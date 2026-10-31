@@ -31,12 +31,14 @@
 
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::os::fs::{close_file, file_mkdir, fsync_file, os_strerror, stdin_file};
-use crate::os::uv_error::{UV_EAGAIN, UV_EBADF, UV_EINTR, UV_EINVAL, UV_EIO, UV_ENOTSUP, UV_EROFS};
+use crate::os::uv_error::{
+    UV_EAGAIN, UV_EBADF, UV_EINTR, UV_EINVAL, UV_EIO, UV_ENOTSUP, UV_EROFS, uv_code,
+};
 use crate::types::{ptrdiff_t, uv_gid_t, uv_uid_t};
 use core::ffi::{CStr, c_int, c_uint};
 use std::ffi::OsStr;
 use std::fs::{File, OpenOptions};
-use std::io::{self, IoSliceMut, Read, Write};
+use std::io::{IoSliceMut, Read, Write};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::OpenOptionsExt;
 
@@ -82,12 +84,6 @@ fn as_signed(n: usize) -> ptrdiff_t {
 /// A byte count as the running total the file keeps.
 fn as_u64(n: usize) -> u64 {
     u64::try_from(n).expect("a byte count fits 64 bits")
-}
-
-/// The libuv code for `error`: its OS code negated, as libuv translates
-/// `errno` on Unix.
-fn uv_code(error: &io::Error) -> c_int {
-    error.raw_os_error().map_or(UV_EIO, |errno| -errno)
 }
 
 /// A libuv code as the `ssize_t` the read and write entry points answer.

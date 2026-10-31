@@ -30,6 +30,7 @@
 )]
 
 use core::ffi::c_int;
+use std::io;
 
 pub const UV_EACCES: c_int = -13;
 pub const UV_EADDRINUSE: c_int = -98;
@@ -56,6 +57,13 @@ pub const UV_ESRCH: c_int = -3;
 pub const UV_EOF: c_int = -4095;
 /// "Something failed and libuv could not say what." Also libuv's own.
 pub const UV_UNKNOWN: c_int = -4094;
+
+/// The libuv code for a failed `std::io` call: its OS code negated, which is
+/// what libuv's `uv_translate_sys_error` answers on Unix, or [`UV_EIO`] for
+/// an error that carries no OS code.
+pub(crate) fn uv_code(error: &io::Error) -> c_int {
+    error.raw_os_error().map_or(UV_EIO, |errno| -errno)
+}
 
 /// Every code above is the negation of the `errno` it is named for. The
 /// literals are what `uv.h` spells; this is the proof they still agree with

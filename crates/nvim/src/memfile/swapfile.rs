@@ -5,17 +5,14 @@
 //! name it was given and the full one, freeing both, and the `open` that
 //! [`MemFile::open`] and a rename go through.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `memfile/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
-use crate::message_fmt::c_str;
-use crate::os::fs::{link_exists, open_fd, os_fchown, os_set_cloexec};
+use crate::message_fmt::msg_cstr;
+use crate::os::fs::{last_errno_text, link_exists, open_file};
 use crate::path::full_name_save;
 use crate::semsg;
 use crate::types::uv_gid_t;
-use ::libc::{__errno_location, strerror};
 
 impl MemFile {
     /// The swap file's name as it was given, or `None` when the memfile is
@@ -61,48 +58,38 @@ impl MemFile {
 
         // A swap file being created really should not exist yet. If it does
         // and it is a symlink, this is most likely an attack.
+        // The file is opened close-on-exec, which upstream's
+        // `os_set_cloexec` after the open made sure of a second time.
         if flags & O_CREAT != 0 && link_exists(name) {
-            self.mf_fd = -1;
+            self.file = None;
             emsg(gettext(c"E300: Swap file already exists (symlink attack?)"));
         } else {
             flags |= O_NOFOLLOW;
-            self.mf_flags = flags;
-            self.mf_fd = open_fd(name, flags, SWAPFILE_MODE);
+            self.open_flags = flags;
+            self.file = open_file(name, flags, SWAPFILE_MODE).ok();
         }
 
-        if self.mf_fd < 0 {
+        if self.file.is_none() {
             self.free_fnames();
             return false;
         }
-
-        // SAFETY: the descriptor just opened.
-        unsafe { os_set_cloexec(self.mf_fd) };
         true
     }
 
-    /// Close the swap file's descriptor and forget it, keeping the blocks:
-    /// what renaming the swap file does first.
-    pub(crate) fn close_fd(&mut self) {
-        if self.mf_fd >= 0 {
-            // SAFETY: the memfile's own descriptor, closed once.
-            unsafe { close(self.mf_fd) };
-            self.mf_fd = -1;
-        }
+    /// Close the swap file and forget it, keeping the blocks: what renaming
+    /// the swap file does first. How the close went does not matter.
+    pub(crate) fn close_file(&mut self) {
+        self.file = None;
     }
 
     /// Reopen the swap file read-write under the name it has, after a
-    /// rename (or a failed one). Whether there is a descriptor now.
+    /// rename (or a failed one). Whether it is open now.
     pub(crate) fn reopen(&mut self) -> bool {
-        self.mf_fd = self
+        self.file = self
             .fname
             .as_deref()
-            .map_or(-1, |name| open_fd(name, O_RDWR, 0));
-        if self.mf_fd < 0 {
-            return false;
-        }
-        // SAFETY: the descriptor just opened.
-        unsafe { os_set_cloexec(self.mf_fd) };
-        true
+            .and_then(|name| open_file(name, O_RDWR, 0).ok());
+        self.file.is_some()
     }
 }
 
@@ -111,17 +98,11 @@ pub(crate) fn buf_swap_name(buffer: Buf) -> Option<CString> {
     buffer.b_ml.ml_mfp.as_ref()?.fname().map(CStr::to_owned)
 }
 
-/// `PERROR`: an error message with the failing call's `strerror` after it.
+/// `PERROR`: an error message with the failing call's `strerror(errno)`
+/// after it.
 pub(super) fn perror_msg(message: &'static CStr) {
-    // SAFETY: `strerror` answers a NUL-terminated message for any number,
-    // read before anything can overwrite it.
-    unsafe {
-        semsg!(
-            "{}: {}",
-            c_str(gettext(message).as_ptr()),
-            c_str(strerror(*__errno_location()))
-        );
-    }
+    let why = last_errno_text();
+    semsg!("{}: {}", msg_cstr(gettext(message)), msg_cstr(&why));
 }
 
 impl Buf {
@@ -155,22 +136,32 @@ impl Buf {
     }
 
     /// Whether the buffer has no swap file open: no memfile, or one with no
-    /// descriptor.
+    /// file.
     pub(crate) fn swap_file_closed(self) -> bool {
         self.b_ml
             .ml_mfp
             .as_ref()
-            .is_none_or(|memfile| memfile.mf_fd < 0)
+            .is_none_or(|memfile| !memfile.has_file())
     }
 
-    /// Give the buffer's swap file the group `gid`: whether that worked.
-    /// False too when there is no swap file open.
+    /// Give the buffer's swap file the group `gid`. False when there is no
+    /// memfile, or when the change was refused for want of permission.
+    ///
+    /// Upstream compares `os_fchown`'s libuv code against -1, which is
+    /// `UV_EPERM`, so `EPERM` is the one failure it sees: any other (`EBADF`
+    /// for a memfile with no file open included) reads as success, and still
+    /// does.
     pub(crate) fn set_swap_file_group(self, gid: uv_gid_t) -> bool {
-        // SAFETY: the memfile's own descriptor.
-        self.b_ml
-            .ml_mfp
-            .as_ref()
-            .is_some_and(|memfile| unsafe { os_fchown(memfile.mf_fd, u32::MAX, gid) } != -1)
+        let Some(memfile) = self.b_ml.ml_mfp.as_ref() else {
+            return false;
+        };
+        let Some(file) = memfile.file.as_ref() else {
+            return true;
+        };
+        std::os::unix::fs::fchown(file, None, Some(gid)).map_or_else(
+            |error| error.raw_os_error() != Some(::libc::EPERM),
+            |()| true,
+        )
     }
 
     /// The name of the buffer's swap file, if it has a memfile with one.

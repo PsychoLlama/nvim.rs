@@ -56,7 +56,7 @@ fn directory_entries(dir: &[u8]) -> impl Iterator<Item = (Vec<u8>, bool)> + '_ {
 /// has to follow the file. Failing that, the swap file is at least reopened
 /// under its old name — losing it entirely is worse than a stale name.
 pub fn ml_setname(mut buffer: Buf) {
-    if buffer.b_ml.memfile().mf_fd < 0 {
+    if !buffer.b_ml.memfile().has_file() {
         // There is no swap file yet: with `'updatecount'` zero and
         // `'noswapfile'` there never was one. Help files get one now.
         if p_uc() != 0 && !cmdmod_has(CmdModFlags::NOSWAPFILE) {
@@ -93,7 +93,7 @@ pub fn ml_setname(mut buffer: Buf) {
             break;
         }
         // The swap file has to be closed before it can be renamed.
-        buffer.b_ml.memfile().close_fd();
+        buffer.b_ml.memfile().close_file();
         if rename_file(&old, fname.as_cstr()) {
             success = true;
             let memfile = buffer.b_ml.memfile();
@@ -105,7 +105,7 @@ pub fn ml_setname(mut buffer: Buf) {
         // This name did not work, try another.
     }
 
-    if buffer.b_ml.memfile().mf_fd == -1 && !buffer.b_ml.memfile().reopen() {
+    if !buffer.b_ml.memfile().has_file() && !buffer.b_ml.memfile().reopen() {
         // Could not reopen the swap file. Nothing can be done.
         complain(c"E301: Oops, lost the swap file!!!");
         return;

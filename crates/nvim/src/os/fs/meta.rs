@@ -16,20 +16,22 @@
 use core::ffi::{CStr, c_double, c_int, c_void};
 use core::ptr;
 
-use super::{
-    LIBUV_SUCCESS, NO_LOOP, R_OK, UV_STAT_T_INIT, W_OK, dir_exists, fs_ok, fs_request, fs_result,
-};
+use std::fs::File;
+use std::io;
+use std::os::fd::IntoRawFd as _;
+
+use super::{LIBUV_SUCCESS, NO_LOOP, R_OK, W_OK, dir_exists, fs_ok, fs_request, fs_result};
 use crate::event::libuv::{
-    uv_fs_access, uv_fs_chmod, uv_fs_chown, uv_fs_fchown, uv_fs_fstat, uv_fs_lstat, uv_fs_stat,
-    uv_fs_utime,
+    uv_fs_access, uv_fs_chmod, uv_fs_chown, uv_fs_close, uv_fs_lstat, uv_fs_stat, uv_fs_utime,
 };
+use crate::log::g_stats;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
+use crate::os::uv_error::uv_code;
 use crate::types::{
-    FileID, FileInfo, VimAcl, int32_t, size_t, ssize_t, uint64_t, uv_file, uv_gid_t, uv_stat_t,
-    uv_uid_t,
+    FileID, FileInfo, VimAcl, int32_t, size_t, ssize_t, uint64_t, uv_gid_t, uv_stat_t, uv_uid_t,
 };
-use ::libc::{__errno_location, E2BIG, getxattr, listxattr, setxattr};
+use ::libc::{E2BIG, getxattr, listxattr, setxattr};
 
 /// The `errno` values [`copy_xattr`] treats as "this filesystem simply
 /// does not do that", plus the three it reports.
@@ -109,12 +111,13 @@ pub fn copy_xattr(from: &CStr, to: &CStr) {
     let mut keys = vec![0u8; size as size_t];
     // SAFETY: `keys` holds exactly the `size` bytes just asked for.
     let used = unsafe { listxattr(from_file, keys.as_mut_ptr().cast(), keys.len()) };
-    // `errno` is read below rather than each call's return value, and it is
-    // sticky, so it starts clear. It is not cleared again inside the loop:
-    // upstream reports the first failure that set it.
-    // SAFETY: `__errno_location` answers this thread's own slot.
-    unsafe { *__errno_location() = 0 };
     let keys = &keys[..used.max(0) as size_t];
+    // Upstream clears `errno` here and then tests it after every call rather
+    // than each call's own answer, so a failure stays reported until another
+    // one replaces it. `error` is that `errno`: zero to start with, and set
+    // by each call that fails.
+    let mut error: c_int = 0;
+    let failed = || io::Error::last_os_error().raw_os_error().unwrap_or(0);
 
     let mut max_vallen: ssize_t = 0;
     let mut val: Vec<u8> = Vec::new();
@@ -132,12 +135,17 @@ pub fn copy_xattr(from: &CStr, to: &CStr) {
             // SAFETY: `key` is NUL-terminated, and `val_ptr` addresses
             // `val_len` writable bytes (or is null with `val_len` zero).
             let vallen = unsafe { getxattr(from_file, key.as_ptr(), val_ptr, val_len) };
+            if vallen < 0 {
+                error = failed();
+            }
             let copied = vallen >= 0
                 && copying
                 // SAFETY: `val`'s first `vallen` bytes were just written.
-                && unsafe { setxattr(to_file, key.as_ptr(), val_ptr, vallen as size_t, 0) } == 0;
-            // SAFETY: this thread's own `errno`.
-            let error = unsafe { *__errno_location() };
+                && (unsafe { setxattr(to_file, key.as_ptr(), val_ptr, vallen as size_t, 0) } == 0
+                    || {
+                        error = failed();
+                        false
+                    });
             if !copied && error != 0 {
                 match error {
                     E2BIG => {
@@ -198,32 +206,20 @@ pub fn os_chown(path: &CStr, owner: uv_uid_t, group: uv_gid_t) -> c_int {
     fs_result(|req| unsafe { uv_fs_chown(NO_LOOP, req, path.as_ptr(), owner, group, None) })
 }
 
-/// `fchown(2)`. An owner or group of -1 leaves that ID alone.
-///
-/// # Safety
-/// `fd` must be a descriptor this process owns.
-pub unsafe fn os_fchown(fd: c_int, owner: uv_uid_t, group: uv_gid_t) -> c_int {
-    // SAFETY: the caller's descriptor.
-    fs_result(|req| unsafe { uv_fs_fchown(NO_LOOP, req, fd as uv_file, owner, group, None) })
+/// `fsync(2)` of a file the caller holds, counted in `nvim__stats()`: `Err`
+/// is the libuv error code.
+pub(crate) fn fsync_file(file: &File) -> Result<(), c_int> {
+    let synced = file.sync_all().map_err(|error| uv_code(&error));
+    g_stats.with_mut(|stats| stats.fsync += 1);
+    synced
 }
 
-/// [`os_fsync`](super::os_fsync) of a file the caller holds: `Err` is the
-/// libuv error code.
-pub(crate) fn fsync_file(file: &std::fs::File) -> Result<(), c_int> {
-    use std::os::fd::AsRawFd as _;
-    // SAFETY: the file's own descriptor, open for as long as the borrow.
-    match unsafe { super::os_fsync(file.as_raw_fd()) } {
-        0 => Ok(()),
-        error => Err(error),
-    }
-}
-
-/// Close `file` through libuv: `Err` is the libuv error code the close
-/// failed with, which dropping a `File` would swallow.
-pub(crate) fn close_file(file: std::fs::File) -> Result<(), c_int> {
-    use std::os::fd::IntoRawFd as _;
+/// Close `file`, answering the libuv error code the close failed with,
+/// which dropping a `File` would swallow.
+pub(crate) fn close_file(file: File) -> Result<(), c_int> {
+    let fd = file.into_raw_fd();
     // SAFETY: the descriptor the file owned, handed over and closed once.
-    match unsafe { super::os_close(file.into_raw_fd()) } {
+    match fs_result(|req| unsafe { uv_fs_close(NO_LOOP, req, fd, None) }) {
         0 => Ok(()),
         error => Err(error),
     }
@@ -273,32 +269,6 @@ pub fn link_info(path: &CStr) -> Option<FileInfo> {
             (result == LIBUV_SUCCESS).then_some(FileInfo {
                 stat: request.statbuf,
             })
-        },
-    )
-}
-
-/// [`file_info`] for an already-open descriptor.
-///
-/// # Safety
-/// `file_descriptor` must be a descriptor this process owns, and
-/// `file_info` writable.
-pub unsafe fn os_fileinfo_fd(file_descriptor: c_int, file_info: *mut FileInfo) -> bool {
-    // SAFETY: the caller's out-parameter.
-    unsafe {
-        *file_info = FileInfo {
-            stat: UV_STAT_T_INIT,
-        }
-    };
-    fs_request(
-        // SAFETY: the caller's descriptor.
-        |request| unsafe { uv_fs_fstat(NO_LOOP, request, file_descriptor as uv_file, None) },
-        |result, request| {
-            let ok = result == LIBUV_SUCCESS;
-            if ok {
-                // SAFETY: the caller's out-parameter.
-                unsafe { (*file_info).stat = request.statbuf };
-            }
-            ok
         },
     )
 }

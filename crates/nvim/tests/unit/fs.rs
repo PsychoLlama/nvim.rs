@@ -15,26 +15,21 @@
 
 #![cfg(not(miri))]
 
-use std::ffi::{CString, c_char, c_int, c_void};
+use std::ffi::{CString, c_int};
+use std::io::{Read as _, Seek as _, Write as _};
+use std::os::fd::AsRawFd as _;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
-use std::ptr;
 
 use neovim::os::fs::{
     NODE_NORMAL, NODE_WRITABLE, dir_exists, dirname_within, file_info, link_info, mkdir_recurse,
-    open_fd, os_can_exe, os_chdir, os_close, os_dup, os_fchown, os_file_is_readable,
-    os_file_is_writable, os_fileinfo_fd, os_mkdir, os_nodetype, os_read, os_readv, os_remove,
-    os_rename, os_rmdir, os_setperm, os_write, path_exists,
+    open_file, os_can_exe, os_chdir, os_file_is_readable, os_file_is_writable, os_mkdir,
+    os_nodetype, os_remove, os_rename, os_rmdir, os_setperm, path_exists,
 };
-use neovim::os::uv_error::{UV_EBADF, UV_EEXIST, UV_ENOENT};
-use neovim::types::{FAIL, Failed, FileInfo, OK, iovec};
+use neovim::os::uv_error::{UV_EEXIST, UV_ENOENT};
+use neovim::types::{FAIL, Failed, FileInfo, OK};
 
 use crate::support::Sandbox;
-
-/// The spec's fixture contents: every byte value once, sixteen times over.
-fn contents() -> Vec<u8> {
-    (0..=255_u8).cycle().take(256 * 16).collect()
-}
 
 /// `rwx------`, which is what every `mkdir` case here asks for.
 const RWX: c_int = 0o700;
@@ -77,11 +72,6 @@ impl Fixture {
     fn link(&self) -> PathBuf {
         self.path("unit-test-directory/test_link.file")
     }
-
-    /// A file holding [`contents`].
-    fn filled(&self, name: &str) -> PathBuf {
-        self.0.write(name, &contents())
-    }
 }
 
 fn cpath(path: &Path) -> CString {
@@ -105,12 +95,6 @@ fn getperm(name: &str) -> c_int {
 fn setperm(name: &str, perm: c_int) -> c_int {
     let name = cname(name);
     os_setperm(&name, perm)
-}
-
-/// A zeroed `FileInfo`, which every accessor fills in completely.
-fn blank_info() -> FileInfo {
-    // SAFETY: `FileInfo` wraps a `uv_stat_t`, which is plain data.
-    unsafe { std::mem::zeroed() }
 }
 
 /// Whether an accessor actually wrote something: the spec's `has_fileinfo`.
@@ -264,48 +248,6 @@ fn permission_bits_are_read_back_set_and_answered_about() {
     assert_eq!(writable(file), 0);
 }
 
-/// `os_fchown` with -1 for both ids changes nothing, which is how callers
-/// ask to set only one of them.
-#[test]
-fn changing_the_owner_of_a_file_to_nobody_in_particular_changes_nothing() {
-    let fixture = Fixture::new("fchown");
-    let file = fixture.file();
-    let before = std::fs::metadata(&file).expect("the fixture");
-
-    let name = cpath(&file);
-    // SAFETY: `name` is this frame's; the fd is closed below.
-    let fd = unsafe { libc::open(name.as_ptr(), 0) };
-    assert!(fd >= 0);
-    // SAFETY: `fd` is open.
-    let result = unsafe { os_fchown(fd, u32::MAX, u32::MAX) };
-    // SAFETY: `fd` is open and closed exactly once.
-    unsafe { libc::close(fd) };
-    assert_eq!(result, 0);
-
-    let after = std::fs::metadata(&file).expect("the fixture");
-    assert_eq!((after.uid(), after.gid()), (before.uid(), before.gid()));
-}
-
-/// Giving a file away to root is refused for anyone who is not root. Skipped
-/// when the tests run as root, which the spec skipped too.
-#[test]
-fn giving_a_file_to_root_is_refused() {
-    // SAFETY: `geteuid` takes no arguments.
-    if unsafe { libc::geteuid() } == 0 {
-        return;
-    }
-    let fixture = Fixture::new("fchown-root");
-    let name = cpath(&fixture.file());
-    // SAFETY: `name` is this frame's; the fd is closed below.
-    let fd = unsafe { libc::open(name.as_ptr(), 0) };
-    assert!(fd >= 0);
-    // SAFETY: `fd` is open.
-    let result = unsafe { os_fchown(fd, 0, 0) };
-    // SAFETY: `fd` is open and closed exactly once.
-    unsafe { libc::close(fd) };
-    assert_ne!(result, 0);
-}
-
 /// Existence, which follows links — so a link to nothing does not exist.
 #[test]
 fn a_broken_link_does_not_exist() {
@@ -355,47 +297,30 @@ fn removing_a_file_needs_it_to_be_there() {
     assert!(!fixture.path(doomed).exists());
 }
 
-#[test]
-fn duplicating_a_descriptor_answers_one_nothing_else_holds() {
-    let _fixture = Fixture::new("dup");
-    // SAFETY: 0, 1 and 2 are open in any process that runs a test.
-    let dups: Vec<c_int> = (0..3).map(|fd| unsafe { os_dup(fd) }).collect();
-    let mut all: Vec<c_int> = vec![0, 1, 2];
-    all.extend(&dups);
-    all.sort_unstable();
-    all.dedup();
-    assert_eq!(all.len(), 6, "all six descriptors are distinct");
-    for fd in dups {
-        // SAFETY: each is a descriptor `os_dup` just handed out.
-        assert_eq!(unsafe { os_close(fd) }, 0);
-    }
-}
-
-/// Opening, with the flags and the mode that the caller asked for, and
-/// closing — including the two spellings of a descriptor that was never one.
+/// Opening, with the flags and the mode that the caller asked for.
 #[test]
 fn opening_honours_the_flags_and_the_mode() {
     let fixture = Fixture::new("open");
-    let open = |name: &str, flags: c_int, mode: c_int| open_fd(&cname(name), flags, mode);
-    // SAFETY: every descriptor closed here came from `open_fd`.
-    let close = |fd: c_int| unsafe { os_close(fd) };
+    let open = |name: &str, flags: c_int, mode: c_int| open_file(&cname(name), flags, mode);
 
     let existing = "unit-test-directory/test_existing.file";
     std::fs::write(fixture.path(existing), b"").expect("an existing file");
     let fresh = "test_new_file";
 
-    assert_eq!(open("non-existing-file", libc::O_RDWR, 0), UV_ENOENT);
     assert_eq!(
-        open(existing, libc::O_CREAT | libc::O_EXCL, 0),
-        UV_EEXIST,
+        open("non-existing-file", libc::O_RDWR, 0).err(),
+        Some(UV_ENOENT)
+    );
+    assert_eq!(
+        open(existing, libc::O_CREAT | libc::O_EXCL, 0).err(),
+        Some(UV_EEXIST),
         "O_EXCL insists the file is new"
     );
 
     for (name, expected_mode) in [(fresh, 0o700), ("test_new_file_2", 0o600)] {
         assert!(!fixture.path(name).exists());
-        let fd = open(name, libc::O_CREAT, expected_mode);
-        assert!(fd >= 0, "{name}");
-        assert_eq!(close(fd), 0);
+        let file = open(name, libc::O_CREAT, expected_mode);
+        assert!(file.is_ok(), "{name}");
         assert_eq!(
             std::fs::metadata(fixture.path(name))
                 .expect(name)
@@ -407,182 +332,18 @@ fn opening_honours_the_flags_and_the_mode() {
     }
 
     // O_CREAT on something that is already there just opens it, and so does
-    // O_RDWR.
-    for flags in [libc::O_CREAT, libc::O_RDWR] {
-        let fd = open(existing, flags, 0);
-        assert!(fd >= 0, "{flags:#o}");
-        assert_eq!(close(fd), 0);
-    }
-
-    assert_eq!(close(-1), UV_EBADF);
-    assert_eq!(close(-1000), UV_EBADF);
-}
-
-/// Reading, which loops over short reads and reports end of file separately
-/// from the count — a zero-byte read at end of file is not the same answer
-/// as a zero-byte read before it.
-#[test]
-fn reading_reports_the_count_and_the_end_of_file_apart() {
-    let fixture = Fixture::new("read");
-    let file = fixture.filled("read.dat");
-    let want = contents();
-    let name = cpath(&file);
-    let fd = open_fd(&name, libc::O_RDONLY, 0);
-    assert!(fd >= 0);
-
-    let read = |size: Option<usize>| {
-        let mut buf = size.map(|size| vec![0_u8; size]);
-        let mut eof = true;
-        let ptr = buf
-            .as_mut()
-            .map_or(ptr::null_mut(), |b| b.as_mut_ptr().cast::<c_char>());
-        // SAFETY: `eof` is this frame's, and `ptr` addresses `size` writable
-        // bytes or is null with a size of zero.
-        let count = unsafe { os_read(fd, &raw mut eof, ptr, size.unwrap_or(0), false) };
-        (eof, count, buf.unwrap_or_default())
-    };
-
-    assert_eq!(read(None), (false, 0, Vec::new()), "nowhere to read into");
-    assert_eq!(read(Some(0)), (false, 0, Vec::new()), "nothing to read");
-    assert_eq!(read(Some(2)), (false, 2, vec![0, 1]));
-    assert_eq!(read(Some(2)), (false, 2, vec![2, 3]));
-
-    // Three quarters, then the rest — the second call hits the end and says
-    // so, and leaves the tail of the buffer alone.
-    let three_quarters = want.len() * 3 / 4;
-    // Start over.
-    // SAFETY: `fd` is open.
-    assert_eq!(unsafe { os_close(fd) }, 0);
-    let fd = open_fd(&name, libc::O_RDONLY, 0);
-    assert!(fd >= 0);
-    let read = |size: usize| {
-        let mut buf = vec![0_u8; size];
-        let mut eof = true;
-        // SAFETY: `eof` and `buf` are this frame's.
-        let count = unsafe {
-            os_read(
-                fd,
-                &raw mut eof,
-                buf.as_mut_ptr().cast::<c_char>(),
-                size,
-                false,
-            )
-        };
-        (eof, count, buf)
-    };
-    let (eof, count, got) = read(three_quarters);
-    assert_eq!((eof, count), (false, three_quarters as isize));
-    assert_eq!(got, want[..three_quarters]);
-    let (eof, count, got) = read(three_quarters);
-    let rest = want.len() - three_quarters;
-    assert_eq!((eof, count), (true, rest as isize));
-    assert_eq!(&got[..rest], &want[three_quarters..]);
-    assert!(got[rest..].iter().all(|&b| b == 0), "the tail is untouched");
-    // SAFETY: `fd` is open and closed exactly once.
-    assert_eq!(unsafe { os_close(fd) }, 0);
-}
-
-/// `os_readv` fills a list of buffers in order, and reports the total. Its
-/// interesting case is a list whose entries are different sizes, because it
-/// has to advance through them as short reads land.
-#[test]
-fn a_scatter_read_fills_its_buffers_in_order() {
-    let fixture = Fixture::new("readv");
-    let file = fixture.filled("readv.dat");
-    let want = contents();
-    let name = cpath(&file);
-    let fd = open_fd(&name, libc::O_RDONLY, 0);
-    assert!(fd >= 0);
-
-    let readv = |sizes: &[usize]| {
-        let mut buffers: Vec<Vec<u8>> = sizes.iter().map(|&n| vec![0_u8; n]).collect();
-        let mut iov: Vec<iovec> = buffers
-            .iter_mut()
-            .map(|b| iovec {
-                iov_base: b.as_mut_ptr().cast::<c_void>(),
-                iov_len: b.len(),
-            })
-            .collect();
-        let mut eof = true;
-        // SAFETY: `eof` is this frame's and `iov` addresses `sizes.len()`
-        // live entries whose buffers are writable for their stated lengths.
-        let count = unsafe { os_readv(fd, &raw mut eof, iov.as_mut_ptr(), iov.len(), false) };
-        (eof, count, buffers)
-    };
-
-    assert_eq!(readv(&[]), (false, 0, Vec::new()));
-    assert_eq!(
-        readv(&[0, 0, 0]),
-        (false, 0, vec![Vec::new(), Vec::new(), Vec::new()])
-    );
-    assert_eq!(readv(&[2]), (false, 2, vec![vec![0, 1]]));
-    assert_eq!(
-        readv(&[2, 3]),
-        (false, 5, vec![vec![2, 3], vec![4, 5, 6]]),
-        "the second buffer is a different size from the first"
-    );
-
-    // Start over and take the whole file in four unequal pieces.
-    // SAFETY: `fd` is open.
-    assert_eq!(unsafe { os_close(fd) }, 0);
-    let fd = open_fd(&name, libc::O_RDONLY, 0);
-    assert!(fd >= 0);
-    let readv = |sizes: &[usize]| {
-        let mut buffers: Vec<Vec<u8>> = sizes.iter().map(|&n| vec![0_u8; n]).collect();
-        let mut iov: Vec<iovec> = buffers
-            .iter_mut()
-            .map(|b| iovec {
-                iov_base: b.as_mut_ptr().cast::<c_void>(),
-                iov_len: b.len(),
-            })
-            .collect();
-        let mut eof = true;
-        // SAFETY: as above.
-        let count = unsafe { os_readv(fd, &raw mut eof, iov.as_mut_ptr(), iov.len(), false) };
-        (eof, count, buffers)
-    };
-    let n = want.len();
-    let sizes = [n / 4, n / 2, n * 3 / 16, n / 16];
-    let (eof, count, got) = readv(&sizes);
-    assert_eq!((eof, count), (false, n as isize));
-    let mut at = 0;
-    for (piece, size) in got.iter().zip(sizes) {
-        assert_eq!(piece, &want[at..at + size]);
-        at += size;
-    }
-    assert_eq!(readv(&[1]), (true, 0, vec![vec![0]]), "and now the end");
-    // SAFETY: `fd` is open and closed exactly once.
-    assert_eq!(unsafe { os_close(fd) }, 0);
-}
-
-#[test]
-fn writing_puts_bytes_where_the_descriptor_is_pointing() {
-    let fixture = Fixture::new("write");
-    let file = fixture.filled("write.dat");
-    let want = contents();
-    let name = cpath(&file);
-    let fd = open_fd(&name, libc::O_WRONLY, 0);
-    assert!(fd >= 0);
-
-    let write = |bytes: Option<&[u8]>| {
-        let ptr = bytes.map_or(ptr::null(), |b| b.as_ptr().cast::<c_char>());
-        // SAFETY: `ptr` addresses `len` readable bytes, or is null with a
-        // length of zero.
-        unsafe { os_write(fd, ptr, bytes.map_or(0, <[u8]>::len), false) }
-    };
-
-    assert_eq!(write(Some(b"")), 0);
-    assert_eq!(write(None), 0, "nothing to write from");
-    assert_eq!(std::fs::read(&file).unwrap(), want, "and nothing written");
-
-    assert_eq!(write(Some(b"abc")), 3);
-    assert_eq!(write(Some(b" def")), 4);
-    // SAFETY: `fd` is open and closed exactly once.
-    assert_eq!(unsafe { os_close(fd) }, 0);
-
-    let mut expected = b"abc def".to_vec();
-    expected.extend_from_slice(&want[7..]);
-    assert_eq!(std::fs::read(&file).unwrap(), expected);
+    // O_RDWR -- which opens it for both reading and writing, and, as every
+    // open here, close-on-exec.
+    assert!(open(existing, libc::O_CREAT, 0).is_ok());
+    let mut file = open(existing, libc::O_RDWR, 0).expect("an existing file");
+    file.write_all(b"both ways").expect("open for writing");
+    file.rewind().expect("a file seeks");
+    let mut back = String::new();
+    file.read_to_string(&mut back).expect("open for reading");
+    assert_eq!(back, "both ways");
+    // SAFETY: `F_GETFD` on a descriptor `file` keeps open.
+    let flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFD) };
+    assert_eq!(flags & libc::FD_CLOEXEC, libc::FD_CLOEXEC);
 }
 
 #[test]
@@ -694,9 +455,8 @@ fn making_a_directory_tree_names_the_first_one_it_made() {
     }
 }
 
-/// `file_info` follows links, `link_info` does not, and
-/// `os_fileinfo_fd` asks about an already-open descriptor. All three fail
-/// rather than half-fill their answer.
+/// `file_info` follows links and `link_info` does not. Both fail rather
+/// than half-fill their answer.
 #[test]
 fn the_three_ways_of_asking_about_a_file() {
     let fixture = Fixture::new("fileinfo");
@@ -722,21 +482,6 @@ fn the_three_ways_of_asking_about_a_file() {
         link.stat.st_mode as libc::mode_t & libc::S_IFMT,
         libc::S_IFLNK
     );
-
-    // And by descriptor, which has no name to fail on but does have a
-    // descriptor that was never one.
-    let mut by_fd = blank_info();
-    // SAFETY: -1 is never an open descriptor.
-    assert!(!unsafe { os_fileinfo_fd(-1, &raw mut by_fd) });
-    let name = cpath(&fixture.file());
-    // SAFETY: `name` is this frame's; the fd is closed below.
-    let fd = unsafe { libc::open(name.as_ptr(), 0) };
-    assert!(fd >= 0);
-    // SAFETY: `fd` is open and `by_fd` is writable.
-    assert!(unsafe { os_fileinfo_fd(fd, &raw mut by_fd) });
-    // SAFETY: `fd` is open and closed exactly once.
-    unsafe { libc::close(fd) };
-    assert!(filled_in(&by_fd));
 }
 
 /// The fields of a `FileInfo`, each against what the standard library says

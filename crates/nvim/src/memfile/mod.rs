@@ -48,9 +48,7 @@
 //! hands out to the end, and [`mf_release_all`] walks the table by index
 //! while removing from it.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `memfile/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -67,6 +65,9 @@ use core::ffi::{CStr, c_int, c_uint};
 use core::hash::{BuildHasherDefault, Hasher};
 use std::collections::HashMap;
 use std::ffi::CString;
+use std::fs::File;
+use std::io::{ErrorKind, Read as _, Seek as _, SeekFrom, Write as _};
+use std::os::unix::fs::MetadataExt as _;
 
 use crate::event::r#loop::main_loop_is_recursing;
 use crate::getchar::state::got_int;
@@ -75,12 +76,10 @@ use crate::memline::ml_open_file;
 use crate::message::e_swapclose;
 use crate::message::{emsg, iemsg};
 use crate::os::cshim::gettext;
-use crate::os::fs::{open_fd, os_fileinfo_fd, os_fsync, os_remove};
-use crate::os::fs::{read_eintr, write_eintr};
+use crate::os::fs::{close_file, fsync_file, open_file, os_remove};
 use crate::os::input::{os_breakcheck, os_char_avail};
-use crate::types::{BlockNr, FileInfo, FileOffset};
+use crate::types::{BlockNr, FileOffset};
 use crate::winlayer::buffers;
-use ::libc::{close, lseek};
 
 pub(crate) static did_swapwrite_msg: GlobalCell<bool> = GlobalCell::new(false);
 
@@ -134,8 +133,6 @@ const O_CREAT: c_int = 0o100;
 const O_EXCL: c_int = 0o200;
 const O_TRUNC: c_int = 0o1000;
 const O_NOFOLLOW: c_int = 0o400000;
-const SEEK_SET: c_int = 0;
-const SEEK_END: c_int = 2;
 /// `S_IREAD | S_IWRITE`: the mode a swap file is created with.
 const SWAPFILE_MODE: c_int = 0o400 | 0o200;
 
@@ -184,12 +181,12 @@ pub struct MemFile {
     /// The same name, as a full path. Only [`MemFile::make_name_full`]
     /// ever reads it.
     ffname: Option<CString>,
-    /// Descriptor of the open swap file, or −1 for memory only.
-    pub mf_fd: c_int,
-    /// The flags `mf_fd` was opened with, for reopening it.
-    pub mf_flags: c_int,
-    /// `mf_fd` was lost and should be reopened on the next write.
-    pub mf_reopen: bool,
+    /// The open swap file, or `None` for memory only.
+    file: Option<File>,
+    /// The flags `file` was opened with, for reopening it.
+    open_flags: c_int,
+    /// `file` was lost and should be reopened on the next write.
+    reopen_on_write: bool,
     /// Blocks in memory. See the module docs.
     used: BlockTable,
     /// Unused page runs in the file, most recently freed last.
@@ -215,9 +212,9 @@ impl MemFile {
         Box::new(MemFile {
             fname: None,
             ffname: None,
-            mf_fd: -1,
-            mf_flags: 0,
-            mf_reopen: false,
+            file: None,
+            open_flags: 0,
+            reopen_on_write: false,
             used: BlockTable::default(),
             free: Vec::new(),
             trans: HashMap::default(),
@@ -240,20 +237,17 @@ impl MemFile {
 
         // Match the page size to the device's block size when we can: it
         // makes every read and write a whole number of device blocks.
-        // SAFETY: a plain-old-data out-parameter of this frame, and the
-        // memfile's own descriptor.
-        let mut file_info: FileInfo = unsafe { core::mem::zeroed() };
-        if memfile.mf_fd >= 0 && unsafe { os_fileinfo_fd(memfile.mf_fd, &raw mut file_info) } {
-            let blocksize = file_info.stat.st_blksize;
-            if (MIN_SWAP_PAGE_SIZE..=MAX_SWAP_PAGE_SIZE).contains(&blocksize) {
-                memfile.mf_page_size = blocksize as c_uint;
-            }
+        let blocksize = memfile.file.as_ref().and_then(|file| file.metadata().ok());
+        if let Some(blocksize) = blocksize.map(|metadata| metadata.blksize())
+            && (MIN_SWAP_PAGE_SIZE..=MAX_SWAP_PAGE_SIZE).contains(&blocksize)
+        {
+            memfile.mf_page_size = blocksize as c_uint;
         }
 
         // When recovering, the real page size comes out of block zero later
         // (`ml_recover` calls `set_page_size`), so the size used here may
         // be too small and the block count is rounded up.
-        let size = if memfile.mf_fd < 0 || flags & (O_TRUNC | O_EXCL) != 0 {
+        let size = if memfile.file.is_none() || flags & (O_TRUNC | O_EXCL) != 0 {
             0
         } else {
             memfile.file_size()
@@ -263,10 +257,20 @@ impl MemFile {
         Some(memfile)
     }
 
-    /// How long the swap file is, or −1 when it cannot be told.
+    /// Whether the swap file is open.
+    pub(crate) fn has_file(&self) -> bool {
+        self.file.is_some()
+    }
+
+    /// How long the swap file is, or −1 when it cannot be told. Leaves the
+    /// file positioned at its end, as upstream's `lseek` did.
     pub(crate) fn file_size(&self) -> FileOffset {
-        // SAFETY: the memfile's own descriptor; `lseek` reads nothing.
-        unsafe { lseek(self.mf_fd, 0, SEEK_END) }
+        let end = self
+            .file
+            .as_ref()
+            .and_then(|mut file| file.seek(SeekFrom::End(0)).ok());
+        end.and_then(|end| FileOffset::try_from(end).ok())
+            .unwrap_or(-1)
     }
 
     /// Give a memory-only memfile a swap file, as `'updatecount'` going from
@@ -283,12 +287,11 @@ impl MemFile {
     /// Close the memfile, releasing every block, and delete the swap file if
     /// `del_file`.
     pub(crate) fn close(mut self: Box<Self>, del_file: bool) {
-        // SAFETY: the memfile's own descriptor, closed once: it is
-        // forgotten here, so the drop below does not close it again.
-        if self.mf_fd >= 0 && unsafe { close(self.mf_fd) } < 0 {
+        if let Some(file) = self.file.take()
+            && close_file(file).is_err()
+        {
             emsg(gettext(e_swapclose));
         }
-        self.mf_fd = -1;
         if del_file && let Some(fname) = self.fname() {
             os_remove(fname);
         }
@@ -475,7 +478,7 @@ impl MemFile {
     pub(crate) fn sync(&mut self, flags: c_int) -> Result<(), SwapFailed> {
         let got_int_save = got_int.get();
 
-        if self.mf_fd < 0 {
+        if self.file.is_none() {
             self.mf_dirty = MfDirty::No;
             return Err(SwapFailed);
         }
@@ -528,8 +531,12 @@ impl MemFile {
             self.mf_dirty = MfDirty::No;
         }
 
-        // SAFETY: the memfile's own descriptor.
-        if flags & MFS_FLUSH != 0 && unsafe { os_fsync(self.mf_fd) } != 0 {
+        if flags & MFS_FLUSH != 0
+            && self
+                .file
+                .as_ref()
+                .is_some_and(|file| fsync_file(file).is_err())
+        {
             status = Err(SwapFailed);
         }
 
@@ -555,7 +562,7 @@ impl MemFile {
     /// is holding — stays, and so does its handle.
     pub(crate) fn release_unlocked(&mut self) -> bool {
         let mut released = false;
-        if self.mf_fd < 0 {
+        if self.file.is_none() {
             return released; // nowhere to put them
         }
         let mut i = 0;
@@ -577,19 +584,18 @@ impl MemFile {
 
     /// Read a block's pages from the file.
     fn read(&mut self, block: &mut BlockHdr) -> Result<(), SwapFailed> {
-        if self.mf_fd < 0 {
+        let Some(file) = self.file.as_ref() else {
             return Err(SwapFailed); // there is no file to read
-        }
+        };
 
         let page_size = self.mf_page_size;
         let offset = (page_size as BlockNr * block.bnum) as FileOffset;
-        // SAFETY: the memfile's own descriptor.
-        if unsafe { lseek(self.mf_fd, offset, SEEK_SET) } != offset {
+        if !seek_to(file, offset) {
             perror_msg(c"E294: Seek error in swap file read");
             return Err(SwapFailed);
         }
         let size = block.data.len();
-        if read_eintr(self.mf_fd, &mut block.data) as usize != size {
+        if read_once(file, &mut block.data) != Some(size) {
             perror_msg(c"E295: Read error in swap file");
             return Err(SwapFailed);
         }
@@ -603,7 +609,7 @@ impl MemFile {
     /// or, where one of those has been freed, with a copy of this block's
     /// bytes as filler.
     fn write(&mut self, id: BlockId) -> Result<(), SwapFailed> {
-        if self.mf_fd < 0 && !self.mf_reopen {
+        if self.file.is_none() && !self.reopen_on_write {
             return Err(SwapFailed); // there is no file and there never was
         }
 
@@ -633,35 +639,31 @@ impl MemFile {
             let size = page_size.wrapping_mul(page_count) as usize;
 
             for attempt in 1..=2 {
-                if self.mf_fd >= 0 {
-                    // SAFETY: the memfile's own descriptor.
-                    if unsafe { lseek(self.mf_fd, offset, SEEK_SET) } != offset {
+                if let Some(mut file) = self.file.as_ref() {
+                    if !seek_to(file, offset) {
                         perror_msg(c"E296: Seek error in swap file write");
                         return Err(SwapFailed);
                     }
                     let data = &self.used.block(at.unwrap_or(id)).data;
-                    if write_eintr(self.mf_fd, &data[..size.min(data.len())]) as usize == size {
+                    // `write_all` retries a write a signal interrupted, as
+                    // upstream's `write_eintr` loop does.
+                    if file.write_all(&data[..size.min(data.len())]).is_ok() && size <= data.len() {
                         break;
                     }
                 }
 
                 if attempt == 1 {
                     // A swap file on a network drive survives the
-                    // connection dropping if we reopen it.
-                    // SAFETY: the memfile's own descriptor, and its name,
-                    // NUL-terminated.
-                    unsafe {
-                        if self.mf_fd >= 0 {
-                            close(self.mf_fd);
-                        }
-                        self.mf_fd = self
-                            .fname
-                            .as_deref()
-                            .map_or(-1, |name| open_fd(name, self.mf_flags, SWAPFILE_MODE));
-                    }
-                    self.mf_reopen = self.mf_fd < 0;
+                    // connection dropping if we reopen it. The old one is
+                    // closed first, and how that went does not matter.
+                    self.file = None;
+                    self.file = self
+                        .fname
+                        .as_deref()
+                        .and_then(|name| open_file(name, self.open_flags, SWAPFILE_MODE).ok());
+                    self.reopen_on_write = self.file.is_none();
                 }
-                if attempt == 2 || self.mf_fd < 0 {
+                if attempt == 2 || self.file.is_none() {
                     // Usually a full disk. Keep trying in case space turns
                     // up, but say so only once, until a write succeeds or
                     // the user hits a key.
@@ -740,15 +742,20 @@ impl MemFile {
     }
 }
 
-impl Drop for MemFile {
-    /// A memfile that goes without [`MemFile::close`] — the buffer holding
-    /// it freed with its memline still open — still gives its descriptor
-    /// back. The swap file itself stays, as it would after a crash.
-    fn drop(&mut self) {
-        if self.mf_fd >= 0 {
-            // SAFETY: the memfile's own descriptor, which nothing else
-            // closes once the memfile is gone.
-            unsafe { close(self.mf_fd) };
+/// Move `file` to `offset`: whether it is there now. `lseek(fd, offset,
+/// SEEK_SET) != offset`, which a negative offset fails as well.
+fn seek_to(mut file: &File, offset: FileOffset) -> bool {
+    u64::try_from(offset).is_ok_and(|to| file.seek(SeekFrom::Start(to)).is_ok_and(|at| at == to))
+}
+
+/// One `read(2)` of `file` into `buf`, retried when a signal interrupts it
+/// (which `SIGWINCH` makes routine): how many bytes came, or `None` when the
+/// read failed. A short count is the caller's to judge.
+fn read_once(mut file: &File, buf: &mut [u8]) -> Option<usize> {
+    loop {
+        match file.read(buf) {
+            Err(error) if error.kind() == ErrorKind::Interrupted => {}
+            answer => return answer.ok(),
         }
     }
 }
@@ -777,7 +784,7 @@ pub(crate) fn mf_close_file(mut buffer: Buf, getlines: bool) {
         .b_ml
         .ml_mfp
         .as_ref()
-        .is_none_or(|memfile| memfile.mf_fd < 0)
+        .is_none_or(|memfile| !memfile.has_file())
     {
         return;
     }
@@ -794,11 +801,11 @@ pub(crate) fn mf_close_file(mut buffer: Buf, getlines: bool) {
     let Some(memfile) = buffer.b_ml.ml_mfp.as_deref_mut() else {
         return;
     };
-    // SAFETY: the memfile's own descriptor, closed once and forgotten.
-    if unsafe { close(memfile.mf_fd) } < 0 {
+    if let Some(file) = memfile.file.take()
+        && close_file(file).is_err()
+    {
         emsg(gettext(e_swapclose));
     }
-    memfile.mf_fd = -1;
 
     if let Some(fname) = memfile.fname() {
         os_remove(fname);
@@ -815,7 +822,7 @@ pub(crate) fn mf_release_all() -> bool {
             continue;
         };
         // Nothing can be released without somewhere to put it.
-        if memfile.mf_fd < 0 && buf.b_may_swap {
+        if !memfile.has_file() && buf.b_may_swap {
             ml_open_file(buf);
         }
         if let Some(memfile) = buf.b_ml.ml_mfp.as_deref_mut() {
@@ -842,7 +849,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(miri, ignore = "a real swap file: lseek and fcntl")]
+    #[cfg_attr(miri, ignore = "a real swap file: open, lseek and read")]
     fn releasing_memory_keeps_the_locked_block_and_reads_the_rest_back() {
         let dir = std::env::temp_dir().join(format!("nvim-memfile-release-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);

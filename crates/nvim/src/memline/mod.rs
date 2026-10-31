@@ -327,7 +327,7 @@ pub fn ml_open_file(mut buffer: Buf) {
         .b_ml
         .ml_mfp
         .as_ref()
-        .is_none_or(|memfile| memfile.mf_fd >= 0)
+        .is_none_or(|memfile| memfile.has_file())
         || buffer.b_p_swf == 0
         || cmdmod_has(CmdModFlags::NOSWAPFILE)
         || !buffer.terminal.is_null()

@@ -58,11 +58,11 @@ use crate::types::channel::{
     kChannelStreamInternal, kChannelStreamProc, kChannelStreamSocket, kChannelStreamStderr,
     kChannelStreamStdio,
 };
-use crate::types::libc::STDERR_FILENO;
 use crate::types::{
     ApiDict, Callback, CallbackReader, Channel, ChannelPart, ChannelStream, LuaRef, RefcountSize,
     RpcState, StderrState, uint64_t,
 };
+use std::os::fd::AsFd as _;
 
 /// Values these belong to other modules; nested so they stay out of the flat
 /// namespace the unit-test header generator collects constants into.
@@ -513,7 +513,7 @@ pub fn channel_send(id: uint64_t, data: Vec<u8>) -> Result<usize, &'static CStr>
         // stderr is not on the event loop; it is written synchronously and
         // a short write is reported as such.
         Some(Ok(Route::Stderr)) => {
-            Ok(usize::try_from(write_bytes(STDERR_FILENO, &data, false)).unwrap_or(0))
+            Ok(usize::try_from(write_bytes(std::io::stderr().as_fd(), &data, false)).unwrap_or(0))
         }
         Some(Ok(Route::Terminal(term))) => {
             terminal_receive(term, &data);

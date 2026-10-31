@@ -36,17 +36,20 @@ use crate::event::r#loop::loop_children;
 use crate::event::proc::{kProcTypePty, proc_get_exepath, proc_init};
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, logmsg};
-use crate::message_fmt::{CDisplay, c_str};
+use crate::message_fmt::{c_str, msg_cstr};
 use crate::os::cshim::environ;
-use crate::os::fs::os_set_cloexec;
+use crate::os::fs::{errno_text, os_strerror, set_cloexec};
 use crate::os::signal::{SIGALRM, SIGCHLD, SIGCONT, SIGHUP, SIGINT, SIGKILL, SIGQUIT, SIGTERM};
+use crate::os::uv_error::uv_code;
 use crate::types::{Loop, Proc, PtyProc, speed_t, uv_pipe_t, uv_signal_t};
 use ::libc::{
-    __errno_location, _exit, SIG_DFL, cfsetispeed, cfsetospeed, close, dup, execvp, fcntl, forkpty,
-    ioctl, kill, killpg, poll, pollfd, ptsname, setsid, signal, strerror, waitpid,
+    __errno_location, _exit, SIG_DFL, cfsetispeed, cfsetospeed, close, execvp, fcntl, forkpty,
+    ioctl, kill, killpg, poll, pollfd, ptsname, setsid, signal, waitpid,
 };
 use core::ffi::{CStr, c_char, c_int, c_short, c_ulong, c_void};
 use core::ptr;
+use std::ffi::CString;
+use std::os::fd::{AsFd as _, AsRawFd as _, BorrowedFd, FromRawFd as _, IntoRawFd as _, OwnedFd};
 use wait_status::ChildState;
 
 const POLLIN: c_short = 0x1;
@@ -83,11 +86,9 @@ pub fn pty_proc_init(uv_loop: *mut Loop, data: *mut c_void) -> PtyProc {
     rv
 }
 
-/// `strerror(errno)` as something a log line can print. Safe: `strerror`
-/// answers a static string for any errno.
-fn why() -> CDisplay<'static> {
-    // SAFETY: a static, NUL-terminated string for any errno.
-    unsafe { c_str(strerror(errno())) }
+/// `strerror(errno)`, for a log line.
+fn why() -> CString {
+    errno_text(errno())
 }
 
 /// One `LOGLVL_ERR` line about a failed syscall, with `strerror(errno)` for
@@ -97,7 +98,7 @@ fn why() -> CDisplay<'static> {
 /// inside a body-wide `unsafe` block, where the seven lines rustfmt wraps
 /// the call over are seven *unchecked* lines. One call, one line.
 fn warn_errno(who: &'static CStr, line: c_int, what: &str) {
-    logmsg!(LOGLVL_ERR, who, line, "{what}: {}", why());
+    logmsg!(LOGLVL_ERR, who, line, "{what}: {}", msg_cstr(&why()));
 }
 
 /// [`warn_errno`] for a failure that carries no errno.
@@ -185,12 +186,15 @@ pub unsafe fn pty_proc_spawn(ptyproc: *mut PtyProc) -> c_int {
         unsafe { init_child(ptyproc) };
     }
 
+    // SAFETY: the descriptor `forkpty` just handed back, which this process
+    // owns and nothing else holds.
+    let master = unsafe { OwnedFd::from_raw_fd(master) };
     let status = 'configure: {
-        // SAFETY: `master` is the descriptor `forkpty` just handed back, and
+        // SAFETY: `master` is open for as long as it is borrowed here, and
         // the two pipes are this process's own.
         unsafe {
             // The master must be non-blocking: libuv polls it.
-            let flags = fcntl(master, F_GETFL);
+            let flags = fcntl(master.as_raw_fd(), F_GETFL);
             if flags == -1 {
                 // Captured before the logging, which does I/O of its own.
                 let status = -errno();
@@ -198,7 +202,7 @@ pub unsafe fn pty_proc_spawn(ptyproc: *mut PtyProc) -> c_int {
                 warn_errno(c"pty_proc_spawn", 200, what);
                 break 'configure status;
             }
-            if fcntl(master, F_SETFL, flags | O_NONBLOCK) == -1 {
+            if fcntl(master.as_raw_fd(), F_SETFL, flags | O_NONBLOCK) == -1 {
                 let status = -errno();
                 let what = "Failed to make master descriptor non-blocking";
                 warn_errno(c"pty_proc_spawn", 205, what);
@@ -206,8 +210,7 @@ pub unsafe fn pty_proc_spawn(ptyproc: *mut PtyProc) -> c_int {
             }
             // Other jobs and providers must not get a copy of this
             // descriptor.
-            if os_set_cloexec(master) == -1 {
-                let status = -errno();
+            if let Err(status) = set_cloexec(master.as_fd()) {
                 let what = "Failed to set CLOEXEC on ptmx file descriptor";
                 warn(c"pty_proc_spawn", 212, what);
                 break 'configure status;
@@ -219,7 +222,7 @@ pub unsafe fn pty_proc_spawn(ptyproc: *mut PtyProc) -> c_int {
                 ((*proc).out.s.closed, &raw mut (*proc).out.s.uv.pipe),
             ] {
                 if !closed {
-                    let status = open_duplicate(master, pipe);
+                    let status = open_duplicate(master.as_fd(), pipe);
                     if status != 0 {
                         break 'configure status;
                     }
@@ -229,15 +232,20 @@ pub unsafe fn pty_proc_spawn(ptyproc: *mut PtyProc) -> c_int {
         0
     };
 
-    // SAFETY: `master` and `pid` are this call's own descriptor and child.
-    unsafe {
-        if status != 0 {
-            close(master);
+    if status != 0 {
+        drop(master);
+        // SAFETY: `pid` is this call's own child, and the status word is
+        // not asked for.
+        unsafe {
             kill(pid, SIGKILL);
             waitpid(pid, ptr::null_mut(), 0);
-            return status;
         }
-        (*ptyproc).tty_fd = master;
+        return status;
+    }
+    // SAFETY: the caller's process. The master is handed to it as the raw
+    // descriptor its C layout keeps, closed by `pty_proc_close_master`.
+    unsafe {
+        (*ptyproc).tty_fd = master.into_raw_fd();
         (*proc).pid = pid;
     }
     0
@@ -396,7 +404,8 @@ unsafe fn init_child(ptyproc: *mut PtyProc) -> ! {
         debug_assert!(!(*proc).env.is_null());
         environ = dict_to_env(&*((*proc).env));
         execvp(prog, (*proc).argv.cast::<*const c_char>());
-        let (at, prog, why) = (c"init_child", c_str(prog), c_str(strerror(errno())));
+        let (at, prog, why) = (c"init_child", c_str(prog), why());
+        let why = msg_cstr(&why);
         logmsg!(LOGLVL_ERR, at, 327, "execvp({prog}) failed: {why}");
         _exit(EXEC_FAILED);
     }
@@ -404,46 +413,39 @@ unsafe fn init_child(ptyproc: *mut PtyProc) -> ! {
 
 /// Give `pipe` its own copy of `fd`. Returns zero, or a negative error code.
 ///
+/// The copy is made close-on-exec in the same call (`F_DUPFD_CLOEXEC`),
+/// which upstream did as a `dup` and an `os_set_cloexec` with a log line for
+/// each failure.
+///
 /// # Safety
 ///
-/// `fd` is a descriptor this process owns and `pipe` points to a live,
-/// unopened `uv_pipe_t`.
-unsafe fn open_duplicate(fd: c_int, pipe: *mut uv_pipe_t) -> c_int {
-    // SAFETY: the caller's descriptor and pipe. `fd_dup` is this call's own
-    // until `uv_pipe_open` takes it, and is closed on every path that does
-    // not hand it over.
-    unsafe {
-        let fd_dup = dup(fd);
-        if fd_dup < 0 {
-            let status = -errno();
-            let what = format!("Failed to dup descriptor {fd}");
+/// `pipe` points to a live, unopened `uv_pipe_t`.
+unsafe fn open_duplicate(fd: BorrowedFd<'_>, pipe: *mut uv_pipe_t) -> c_int {
+    let fd_dup = match fd.try_clone_to_owned() {
+        Ok(fd_dup) => fd_dup,
+        Err(error) => {
+            let what = format!("Failed to dup descriptor {}", fd.as_raw_fd());
             warn_errno(c"open_duplicate", 398, &what);
-            return status;
+            return uv_code(&error);
         }
-
-        let status = if os_set_cloexec(fd_dup) == -1 {
-            let status = -errno();
-            let what = "Failed to set CLOEXEC on duplicate fd";
-            warn(c"open_duplicate", 404, what);
-            status
-        } else {
-            let status = uv_pipe_open(pipe, fd_dup);
-            if status == 0 {
-                return 0;
-            }
-            let why = c_str(uv_strerror(status));
-            let at = c"open_duplicate";
-            logmsg!(
-                LOGLVL_ERR,
-                at,
-                411,
-                "Failed to set pipe to descriptor {fd_dup}: {why}"
-            );
-            status
-        };
-        close(fd_dup);
-        status
+    };
+    let raw = fd_dup.as_raw_fd();
+    // SAFETY: the caller's pipe; libuv takes `raw` over only on success.
+    let status = unsafe { uv_pipe_open(pipe, raw) };
+    if status == 0 {
+        // The pipe owns the descriptor now.
+        let _ = fd_dup.into_raw_fd();
+        return 0;
     }
+    let why = os_strerror(status);
+    let why = msg_cstr(why);
+    logmsg!(
+        LOGLVL_ERR,
+        c"open_duplicate",
+        411,
+        "Failed to set pipe to descriptor {raw}: {why}"
+    );
+    status
 }
 
 /// SIGCHLD: reap whichever of the loop's children have news.

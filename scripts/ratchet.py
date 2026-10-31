@@ -1131,8 +1131,6 @@ PERIMETER = {
     "crates/nvim/src/eval/typval/handle.rs": "the value handles (`ListRef`, "
     "`DictRef`, `BlobRef`, `PartialRef`) and a dictionary's item store: "
     "constructing a handle is the unsafe step, dereferencing it is not",
-    "crates/nvim/src/memfile/": "the swap file's page store — the only thing "
-    "that hands out the address of a `.swp` page",
 }
 
 # The foreign ABIs whose *type definitions* live under `types/` instead of in
@@ -4618,11 +4616,11 @@ SELF_TEST_PERIMETER = [
     ("crates/nvim/src/lua/executor/state.rs", True),
     ("crates/nvim/src/lua/stack/mod.rs", True),
     ("crates/nvim/src/os/fs/mod.rs", True),
-    ("crates/nvim/src/memfile/mod.rs", True),
-    ("crates/nvim/src/memfile/swapfile.rs", True),
+    ("crates/nvim/src/memory/arena.rs", True),
     ("crates/nvim/src/winlayer/live.rs", True),
     # The editor proper, including modules that merely look raw.
     ("crates/nvim/src/memline/block0.rs", False),
+    ("crates/nvim/src/memfile/swapfile.rs", False),
     ("crates/nvim/src/marktree/node.rs", False),
     ("crates/nvim/src/eval/typval.rs", False),
     # The Lua runtime's editor logic, beside the exact paths that stay.
@@ -4640,7 +4638,7 @@ SELF_TEST_PERIMETER_SPLIT = [
     (
         {
             "crates/nvim/src/lua/ffi.rs": {"unsafe_stmts": 150},
-            "crates/nvim/src/memfile/mod.rs": {"unsafe_stmts": 400},
+            "crates/nvim/src/memory/arena.rs": {"unsafe_stmts": 400},
             "crates/nvim/src/memline/mod.rs": {"unsafe_stmts": 183},
             "crates/nvim/src/types/memline.rs": {"unsafe_stmts": 0},
         },

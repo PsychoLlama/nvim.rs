@@ -28,33 +28,36 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
-use crate::os::uv_error::{UV_EAGAIN, UV_EINTR, UV_UNKNOWN};
+use crate::os::uv_error::{UV_EAGAIN, UV_EINTR, UV_UNKNOWN, uv_code};
 use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ptr;
 use core::ptr::NonNull;
-use core::{ptr, slice};
+use std::ffi::{CString, OsStr};
+use std::fs::{File, OpenOptions};
+use std::io;
+use std::os::fd::{AsFd as _, AsRawFd as _, BorrowedFd, FromRawFd as _, IntoRawFd as _};
+use std::os::unix::ffi::OsStrExt as _;
+use std::os::unix::fs::OpenOptionsExt as _;
 
 use crate::event::libuv::{
-    uv_chdir, uv_cwd, uv_err_name, uv_exepath, uv_fs_access, uv_fs_close, uv_fs_copyfile,
-    uv_fs_fsync, uv_fs_lstat, uv_fs_open, uv_fs_realpath, uv_fs_req_cleanup, uv_strerror,
-    uv_translate_sys_error,
+    uv_chdir, uv_cwd, uv_err_name, uv_exepath, uv_fs_access, uv_fs_copyfile, uv_fs_lstat,
+    uv_fs_realpath, uv_fs_req_cleanup, uv_strerror,
 };
-use crate::log::g_stats;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::message::{verbose_enter, verbose_leave};
-use crate::message_fmt::{c_str, msg_cstr};
+use crate::message_fmt::msg_cstr;
 use crate::option::vars::p_verbose;
 use crate::os::env::getenv_owned;
 use crate::path::{append_path, gettail_dir, save_abs_path};
 use crate::smsg;
 use crate::startup::stdin_fd;
 use crate::types::String_0;
-use crate::types::libc::STDIN_FILENO;
 use crate::types::{
-    FAIL, FILE, OK, OptInt, iovec, ptrdiff_t, size_t, uv__queue, uv__work, uv_buf_t, uv_file,
-    uv_fs_t, uv_fs_type, uv_loop_s, uv_loop_t, uv_req_type, uv_stat_t, uv_timespec_t,
+    FAIL, FILE, OK, OptInt, ptrdiff_t, size_t, uv__queue, uv__work, uv_buf_t, uv_fs_t, uv_fs_type,
+    uv_loop_s, uv_loop_t, uv_req_type, uv_stat_t, uv_timespec_t,
 };
 use crate::ui::ui_call_chdir;
-use ::libc::{__errno_location, dup, fcntl, fdopen, read, readv, strerror, write};
+use ::libc::{fcntl, fdopen, write};
 
 pub mod dir;
 pub mod meta;
@@ -227,16 +230,18 @@ fn fs_ok(start: impl FnOnce(*mut uv_fs_t) -> c_int) -> c_int {
     }
 }
 
-/// The libuv code for the failure `errno` is reporting, clearing `errno`
-/// afterwards the way the read/write loops below expect.
-fn take_errno() -> c_int {
-    // SAFETY: `__errno_location` answers this thread's own `errno` slot,
-    // which is always readable and writable.
-    unsafe {
-        let error = uv_translate_sys_error(*__errno_location());
-        *__errno_location() = 0;
-        error
-    }
+/// The C library's text for the `errno` value `error` -- `strerror(3)`,
+/// copied out before another call can overwrite it.
+pub(crate) fn errno_text(error: c_int) -> CString {
+    // SAFETY: `strerror` answers a NUL-terminated message for any number,
+    // good until the next call on this thread; it is copied at once.
+    unsafe { CStr::from_ptr(::libc::strerror(error)) }.to_owned()
+}
+
+/// [`errno_text`] for what `errno` says now: upstream's `strerror(errno)`
+/// after a failed call.
+pub(crate) fn last_errno_text() -> CString {
+    errno_text(io::Error::last_os_error().raw_os_error().unwrap_or(0))
 }
 
 /// Changes the current directory to `path`.
@@ -424,12 +429,21 @@ fn is_executable_in_path(
     false
 }
 
-/// Opens or creates `path`, answering the new descriptor or a negative
-/// libuv error code. `mode` is the permission set a newly created file
-/// gets, subject to the umask.
-pub fn open_fd(path: &CStr, flags: c_int, mode: c_int) -> c_int {
-    // SAFETY: `path` is NUL-terminated and outlives the call.
-    fs_result(|req| unsafe { uv_fs_open(NO_LOOP, req, path.as_ptr(), flags, mode, None) })
+/// Opens or creates `path` with `open(2)`'s `flags`, answering the file or
+/// a negative libuv error code. `mode` is the permission set a newly created
+/// file gets, subject to the umask. The file is close-on-exec, as libuv's
+/// `uv_fs_open` made it.
+pub fn open_file(path: &CStr, flags: c_int, mode: c_int) -> Result<File, c_int> {
+    // The access mode is the `read`/`write` pair (std masks it out of the
+    // custom flags); every other flag goes through as it is.
+    let access = flags & ::libc::O_ACCMODE;
+    OpenOptions::new()
+        .read(access != O_WRONLY)
+        .write(access != O_RDONLY)
+        .custom_flags(flags & !::libc::O_ACCMODE)
+        .mode(mode.cast_unsigned())
+        .open(OsStr::from_bytes(path.to_bytes()))
+        .map_err(|error| uv_code(&error))
 }
 
 /// `fopen(3)`'s mode string as `open(2)` flags, per the table in its
@@ -462,10 +476,7 @@ fn fopen_stream(path: &CStr, flags: &CStr) -> Option<NonNull<FILE>> {
         // the user did -- upstream aborts, and so does this.
         std::process::abort()
     };
-    let fd = open_fd(path, iflags, 0o666);
-    if fd < 0 {
-        return None;
-    }
+    let fd = open_file(path, iflags, 0o666).ok()?.into_raw_fd();
     // SAFETY: `fd` is this frame's until `fdopen` adopts it, and `flags` is
     // the NUL-terminated mode string it was just parsed from.
     NonNull::new(unsafe { fdopen(fd, flags.as_ptr()) })
@@ -559,226 +570,51 @@ impl Drop for CFile {
     }
 }
 
-/// Marks `fd` close-on-exec. Answers 0, or -1 with `errno` set.
-///
-/// # Safety
-/// `fd` must be a descriptor this process owns.
-pub unsafe fn os_set_cloexec(fd: c_int) -> c_int {
-    // SAFETY: `fcntl` on the caller's descriptor, and `errno` is this
-    // thread's. The line numbers are the sites in `v0.12.4:os/fs.c`.
-    unsafe {
-        let fdflags = fcntl(fd, F_GETFD);
-        if fdflags < 0 {
-            let e = *__errno_location();
-            logmsg!(
-                LOGLVL_ERR,
-                c"os_set_cloexec",
-                497,
-                "Failed to get flags on descriptor {}: {}",
-                fd,
-                c_str(strerror(e))
-            );
-            *__errno_location() = e;
-            return -1;
-        }
-        if fdflags & FD_CLOEXEC == 0 && fcntl(fd, F_SETFD, fdflags | FD_CLOEXEC) == -1 {
-            let e = *__errno_location();
-            logmsg!(
-                LOGLVL_ERR,
-                c"os_set_cloexec",
-                504,
-                "Failed to set CLOEXEC on descriptor {}: {}",
-                fd,
-                c_str(strerror(e))
-            );
-            *__errno_location() = e;
-            return -1;
-        }
-        0
+/// Marks `fd` close-on-exec, logging a failure. `Err` is the libuv code.
+pub fn set_cloexec(fd: BorrowedFd<'_>) -> Result<(), c_int> {
+    let raw = fd.as_raw_fd();
+    // SAFETY: `F_GETFD` reads the flags of a descriptor the borrow keeps
+    // open.
+    let flags = unsafe { fcntl(raw, F_GETFD) };
+    if flags < 0 {
+        return Err(cloexec_failure(
+            497,
+            "Failed to get flags on descriptor",
+            raw,
+        ));
     }
+    // SAFETY: `F_SETFD` on the same descriptor, adding one flag.
+    if flags & FD_CLOEXEC == 0 && unsafe { fcntl(raw, F_SETFD, flags | FD_CLOEXEC) } == -1 {
+        return Err(cloexec_failure(
+            504,
+            "Failed to set CLOEXEC on descriptor",
+            raw,
+        ));
+    }
+    Ok(())
 }
 
-/// Closes `fd`. Answers 0 or a libuv error code.
-///
-/// # Safety
-/// `fd` must be a descriptor this process owns.
-pub unsafe fn os_close(fd: c_int) -> c_int {
-    // SAFETY: the caller's descriptor.
-    fs_result(|req| unsafe { uv_fs_close(NO_LOOP, req, fd as uv_file, None) })
+/// Log why [`set_cloexec`] failed and answer the libuv code. The line
+/// numbers are the sites in `v0.12.4:os/fs.c`.
+fn cloexec_failure(line: c_int, what: &str, fd: c_int) -> c_int {
+    let error = io::Error::last_os_error();
+    let why = errno_text(error.raw_os_error().unwrap_or(0));
+    logmsg!(
+        LOGLVL_ERR,
+        c"os_set_cloexec",
+        line,
+        "{what} {fd}: {}",
+        msg_cstr(&why)
+    );
+    uv_code(&error)
 }
 
-/// Duplicates `fd`, retrying through `EINTR`. Answers the new descriptor or
-/// a negative libuv error code.
-///
-/// # Safety
-/// `fd` must be a descriptor this process owns.
-pub unsafe fn os_dup(fd: c_int) -> c_int {
-    loop {
-        // SAFETY: `dup` on the caller's descriptor.
-        let ret = unsafe { dup(fd) };
-        if ret >= 0 {
-            return ret;
-        }
-        let error = take_errno();
-        if error != UV_EINTR {
-            return error;
-        }
-    }
-}
-
-/// The descriptor to read stdin from: the one `--` handed us if there is
-/// one, and otherwise a duplicate of the real stdin.
-pub fn os_open_stdin_fd() -> c_int {
-    if stdin_fd.get() > 0 {
-        stdin_fd.get()
-    } else {
-        // SAFETY: `STDIN_FILENO` is always a descriptor of this process.
-        unsafe { os_dup(STDIN_FILENO) }
-    }
-}
-
-/// Reads up to `size` bytes from `fd` into `ret_buf`, handling short reads
-/// and `EINTR` but no other error. `ret_eof` is set to whether the read
-/// stopped at end of file.
-///
-/// Answers the number of bytes read, or a libuv error code (< 0).
-///
-/// # Safety
-/// `ret_eof` must be writable, and `ret_buf` must address `size` writable
-/// bytes or be null with `size` zero.
-pub unsafe fn os_read(
-    fd: c_int,
-    ret_eof: *mut bool,
-    ret_buf: *mut c_char,
-    size: size_t,
-    non_blocking: bool,
-) -> ptrdiff_t {
-    // SAFETY: the caller's out-parameter.
-    unsafe { *ret_eof = false };
-    if ret_buf.is_null() {
-        debug_assert!(size == 0);
-        return 0;
-    }
-    // SAFETY: the caller promises `size` writable bytes at `ret_buf`, and
-    // nothing below aliases them.
-    let buf = unsafe { slice::from_raw_parts_mut(ret_buf.cast::<u8>(), size) };
-    let mut read_bytes: size_t = 0;
-    while read_bytes != size {
-        let rest = &mut buf[read_bytes..];
-        // SAFETY: `rest` is a live writable slice of exactly its own length.
-        let cur = unsafe { read(fd, rest.as_mut_ptr().cast::<c_void>(), rest.len()) };
-        if cur > 0 {
-            read_bytes += cur as size_t;
-        } else if cur == 0 {
-            // SAFETY: the caller's out-parameter.
-            unsafe { *ret_eof = true };
-            break;
-        } else {
-            let error = take_errno();
-            if non_blocking && error == UV_EAGAIN {
-                break;
-            }
-            if error != UV_EINTR && error != UV_EAGAIN {
-                return error as ptrdiff_t;
-            }
-        }
-    }
-    read_bytes as ptrdiff_t
-}
-
-/// [`os_read`] over a scatter list: reads into `iov`'s buffers in order,
-/// advancing the entries it fills as it goes.
-///
-/// Answers the number of bytes read, or a libuv error code (< 0).
-///
-/// # Safety
-/// `ret_eof` must be writable and `iov` must address `iov_size` live
-/// `iovec`s whose buffers are writable for their stated lengths.
-pub unsafe fn os_readv(
-    fd: c_int,
-    ret_eof: *mut bool,
-    iov: *mut iovec,
-    iov_size: size_t,
-    non_blocking: bool,
-) -> ptrdiff_t {
-    // SAFETY: the caller's out-parameter.
-    unsafe { *ret_eof = false };
-    // SAFETY: the caller promises `iov_size` live entries at `iov`.
-    let vecs = unsafe { slice::from_raw_parts_mut(iov, iov_size) };
-    let mut toread: size_t = 0;
-    for v in vecs.iter() {
-        debug_assert!(toread <= size_t::MAX - v.iov_len);
-        toread += v.iov_len;
-    }
-    // Index of the first entry not yet filled; the ones before it are done.
-    let mut first = 0;
-    let mut read_bytes: size_t = 0;
-    let mut eof = false;
-    while read_bytes < toread && first < vecs.len() && !eof {
-        let pending = &mut vecs[first..];
-        // SAFETY: `pending` is the caller's array, still live, and `readv`
-        // only writes into the buffers its entries name.
-        let cur = unsafe { readv(fd, pending.as_ptr(), pending.len() as c_int) };
-        if cur == 0 {
-            eof = true;
-            // SAFETY: the caller's out-parameter.
-            unsafe { *ret_eof = true };
-        }
-        if cur > 0 {
-            read_bytes += cur as size_t;
-            // Retire the entries `readv` filled and shorten the one it
-            // stopped inside.
-            let mut left = cur as size_t;
-            while first < vecs.len() && left != 0 {
-                let head = &mut vecs[first];
-                if left < head.iov_len {
-                    head.iov_len -= left;
-                    // SAFETY: `left` bytes of this entry's buffer were just
-                    // written, so the offset is inside it.
-                    head.iov_base = unsafe { head.iov_base.cast::<u8>().add(left) }.cast();
-                    left = 0;
-                } else {
-                    left -= head.iov_len;
-                    first += 1;
-                }
-            }
-        } else if cur < 0 {
-            let error = take_errno();
-            if non_blocking && error == UV_EAGAIN {
-                break;
-            }
-            if error != UV_EINTR && error != UV_EAGAIN {
-                return error as ptrdiff_t;
-            }
-        }
-    }
-    read_bytes as ptrdiff_t
-}
-
-/// Writes `size` bytes from `buf` to `fd`, handling short writes and
-/// `EINTR` but no other error.
+/// Writes all of `bytes` to `fd`, handling short writes and `EINTR` but no
+/// other error.
 ///
 /// Answers the number of bytes written, or a libuv error code (< 0).
-///
-/// # Safety
-/// `buf` must address `size` readable bytes, or be null with `size` zero.
-pub unsafe fn os_write(
-    fd: c_int,
-    buf: *const c_char,
-    size: size_t,
-    non_blocking: bool,
-) -> ptrdiff_t {
-    if buf.is_null() {
-        debug_assert!(size == 0);
-        return 0;
-    }
-    // SAFETY: the caller promises `size` readable bytes at `buf`.
-    let bytes = unsafe { slice::from_raw_parts(buf.cast::<u8>(), size) };
-    write_bytes(fd, bytes, non_blocking)
-}
-
-/// [`os_write`] of a slice the caller holds.
-pub(crate) fn write_bytes(fd: c_int, bytes: &[u8], non_blocking: bool) -> ptrdiff_t {
+pub(crate) fn write_bytes(fd: BorrowedFd<'_>, bytes: &[u8], non_blocking: bool) -> ptrdiff_t {
+    let fd = fd.as_raw_fd();
     let size = bytes.len();
     let mut written_bytes: size_t = 0;
     while written_bytes != size {
@@ -791,7 +627,7 @@ pub(crate) fn write_bytes(fd: c_int, bytes: &[u8], non_blocking: bool) -> ptrdif
             // A zero-length write of a non-empty buffer has no explanation.
             return UV_UNKNOWN as ptrdiff_t;
         } else {
-            let error = take_errno();
+            let error = uv_code(&io::Error::last_os_error());
             if non_blocking && error == UV_EAGAIN {
                 break;
             }
@@ -808,17 +644,6 @@ pub fn os_copy(path: &CStr, new_path: &CStr, flags: c_int) -> c_int {
     let (from, to) = (path.as_ptr(), new_path.as_ptr());
     // SAFETY: both are NUL-terminated and outlive the call.
     fs_result(|req| unsafe { uv_fs_copyfile(NO_LOOP, req, from, to, flags, None) })
-}
-
-/// Flushes `fd` to disk, counting the call in `nvim__stats()`.
-///
-/// # Safety
-/// `fd` must be a descriptor this process owns.
-pub unsafe fn os_fsync(fd: c_int) -> c_int {
-    // SAFETY: the caller's descriptor.
-    let r = fs_result(|req| unsafe { uv_fs_fsync(NO_LOOP, req, fd as uv_file, None) });
-    g_stats.with_mut(|stats| stats.fsync += 1);
-    r
 }
 
 /// `name` resolved to a real path, or `None` when it cannot be.
@@ -844,22 +669,28 @@ pub fn dir_exists(path: &CStr) -> bool {
 }
 
 /// The editor's standard input as a file of the caller's own, for a reader
-/// that names it `-`: [`os_open_stdin_fd`]'s descriptor, which the file
-/// closes when dropped — the saved `--` descriptor included, as upstream's
-/// `fdopen` and `fclose` close it.
-pub(crate) fn stdin_file() -> Option<std::fs::File> {
-    use std::os::fd::FromRawFd;
-    let fd = os_open_stdin_fd();
-    if fd < 0 {
-        return None;
+/// that names it `-`: the descriptor `--` saved, which the file closes when
+/// dropped (as upstream's `fdopen` and `fclose` close it), or else a
+/// duplicate of the real stdin.
+///
+/// The duplicate is close-on-exec, which upstream's `dup` was not: no child
+/// needs a second copy of the editor's stdin.
+pub(crate) fn stdin_file() -> Option<File> {
+    let saved = stdin_fd.get();
+    if saved > 0 {
+        // SAFETY: the descriptor `--` saved, which this process owns and
+        // hands over to the one reader that closes it.
+        return Some(unsafe { File::from_raw_fd(saved) });
     }
-    // SAFETY: a descriptor of this process that `os_open_stdin_fd` hands
-    // over to its reader, exactly as upstream's `fdopen` takes it.
-    Some(unsafe { std::fs::File::from_raw_fd(fd) })
+    io::stdin()
+        .as_fd()
+        .try_clone_to_owned()
+        .ok()
+        .map(File::from)
 }
 
 /// The descriptor `readfile` reads standard input from: the one `--` saved,
-/// or 0. Unlike [`os_open_stdin_fd`] it is not a duplicate: closing it is
+/// or 0. Unlike [`stdin_file`]'s it is not a duplicate: closing it is
 /// what lets [`reopen_stdin_on_stderr`] put stderr in its place.
 fn stdin_read_fd() -> c_int {
     stdin_fd.get().max(0)
@@ -868,65 +699,29 @@ fn stdin_read_fd() -> c_int {
 /// Standard input as the file `readfile` reads it from, owned: dropping it
 /// closes the descriptor itself, as upstream's `close(fd)` after the read
 /// does.
-pub(crate) fn take_stdin_for_read() -> std::fs::File {
-    use std::os::fd::FromRawFd;
+pub(crate) fn take_stdin_for_read() -> File {
     // SAFETY: a descriptor of this process, which `readfile` is the one
     // reader of and closes once.
-    unsafe { std::fs::File::from_raw_fd(stdin_read_fd()) }
+    unsafe { File::from_raw_fd(stdin_read_fd()) }
 }
 
 /// After standard input was read and closed, open stderr in its place --
 /// which, the lowest descriptor being free, lands on 0 -- so that shell
-/// commands have something to read. Answers the new descriptor.
+/// commands have something to read. Answers the new descriptor, which
+/// nothing closes. Not `try_clone_to_owned`: that one starts at 3.
 pub(crate) fn reopen_stdin_on_stderr() -> c_int {
-    // SAFETY: `dup` of this process's stderr.
+    // SAFETY: `dup` of this process's stderr; the copy is left open on
+    // purpose.
     unsafe { ::libc::dup(2) }
 }
 
 /// Mark the descriptor standard input is read from close-on-exec, once a
 /// read converted what was read from it.
 pub(crate) fn mark_stdin_cloexec() {
-    // SAFETY: the descriptor `--` saved, or 0, both this process's.
-    unsafe { os_set_cloexec(stdin_read_fd()) };
-}
-
-/// Whether the call that just failed was interrupted by a signal. `errno`
-/// is left as it is, for the caller's message.
-fn interrupted() -> bool {
-    std::io::Error::last_os_error().raw_os_error() == Some(::libc::EINTR)
-}
-
-/// One `read()` of `fd` into `buf`, retried when a signal interrupts it
-/// (which `SIGWINCH` makes routine): the count, 0 at the end of the file,
-/// or -1 with `errno` set.
-pub(crate) fn read_eintr(fd: c_int, buf: &mut [u8]) -> isize {
-    loop {
-        // SAFETY: `buf` is writable for its length.
-        let ret = unsafe { ::libc::read(fd, buf.as_mut_ptr().cast(), buf.len()) };
-        if ret >= 0 || !interrupted() {
-            return ret;
-        }
-    }
-}
-
-/// `write()` of all of `buf` to `fd`, repeated for as long as it does not
-/// fail for a reason other than being interrupted. Answers how much went
-/// out, which the caller compares against `buf.len()`.
-pub(crate) fn write_eintr(fd: c_int, buf: &[u8]) -> isize {
-    let mut written = 0;
-    while written < buf.len() {
-        let rest = &buf[written..];
-        // SAFETY: `rest` is readable for its length.
-        let wlen = unsafe { ::libc::write(fd, rest.as_ptr().cast(), rest.len()) };
-        if wlen < 0 {
-            if !interrupted() {
-                break;
-            }
-        } else {
-            written += wlen.unsigned_abs();
-        }
-    }
-    written.cast_signed()
+    // SAFETY: the descriptor `--` saved, or 0: both open, and neither closed
+    // while the borrow lasts.
+    let fd = unsafe { BorrowedFd::borrow_raw(stdin_read_fd()) };
+    let _ = set_cloexec(fd);
 }
 
 /// Set the process's file mode creation mask, answering the old one.

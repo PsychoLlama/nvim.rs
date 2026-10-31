@@ -12,7 +12,7 @@ the migration's debt, counted by the ratchet as
 `unsafe_stmts_outside_perimeter` and shrink-only like every other metric. That
 number is the one to drive to zero.
 
-Today: **2,939** unchecked statements inside the perimeter (88 files),
+Today: **2,870** unchecked statements inside the perimeter (86 files),
 **141** outside it (13 files, of 1,387 measured). It was 138,877 when this
 file was written, at the end of phase 23's slice 15 — in _lines_, which is what
 this metric counted until phase 31 changed the unit to statements.
@@ -45,8 +45,9 @@ column the ordinary way. `memline/`, `undo/`, `shada/`, `spellfile/`,
 with `cjson/` (`vim.json`), have: each forbids unsafe code (the `:mkspell` word tree is an index slab that
 charges the arena's old byte counts, so compression runs where it did). `memline/` reads its pages through bounds-checked block views
 over the `Box<[u8]>` pages `memfile/` owns, and holds a block by a
-generation-checked id, so the page store kept its row while its unchecked
-code fell from 206 statements to 19.
+generation-checked id; `memfile/` itself keeps its swap file as a
+`std::fs::File` and forbids unsafe code too, so the page store, which had a
+row here at 206 unchecked statements, has none.
 
 **Membership is by module, not by line or by file.** An entry is a directory
 prefix or one exact path, because a module is the unit that owns a boundary. A
@@ -71,7 +72,6 @@ should move out of the module rather than be carved out of the list.
 | `global_cell.rs`                            |     1 |        13 | The checked wrapper over c2rust's mutable statics; the raw static is touched here so it is nowhere else.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `winlayer.rs`, `winlayer/`                  |     3 |        44 | The window/buffer/position handles, and the window's syntax block (`w_s`): constructing one is the unsafe step, dereferencing it is not.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `eval/typval/handle.rs`                     |     1 |        50 | The value handles (`ListRef`, `DictRef`, `BlobRef`, `PartialRef`) and a dictionary's item store: constructing a handle is the unsafe step, dereferencing it is not. A value is reached from many holders at once and the evaluator re-enters at every call, so `edit()` lends `&mut` from a shared handle on the `Live` promise (checked in debug builds by `typval/edit.rs`); the reference count, the `xcalloc`/`Box` that holds each object, the item slots that name a boxed or an embedded `DictItem`, and `TypVal::bit_copy` (an argument frame naming its caller's values) are the rest. Retires only with a different value model. |
-| `memfile/`                                  |     2 |        19 | The swap file's page store — the only thing that hands out the address of a `.swp` page.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 Paths are relative to `crates/nvim/src/`. Counts are `unsafe_stmts` from
 `metrics/ratchet.json` and drift as work lands; the list, not the table, is
