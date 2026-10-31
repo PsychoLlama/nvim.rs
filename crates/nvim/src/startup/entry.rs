@@ -11,6 +11,7 @@
 // `#[unsafe(no_mangle)]` is itself an unsafe attribute.
 #![allow(unsafe_code)]
 
+use crate::env::appname_is_valid;
 use crate::event::multiqueue::ChildQueue;
 use crate::memory::ThinCString;
 use crate::types::ArgListId;
@@ -64,7 +65,6 @@ use crate::os::fs::CFile;
 use crate::os::input::{input_start, input_stop};
 use crate::os::lang::{init_locale, set_lang_var};
 use crate::os::signal::{signal_init, signal_teardown};
-use crate::os::stdpaths::appname_is_valid;
 use crate::os::time::os_realtime;
 use crate::profile::time_msg_at;
 use crate::quickfix::{qf_init_stack, qf_jump_to_current};

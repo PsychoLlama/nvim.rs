@@ -29,6 +29,7 @@ use crate::autocmd::{aucmd_defer, has_event};
 use crate::buffer::{buf_is_prompt, buflist_new, find_buf};
 use crate::charset::{ptr2cells_at, vim_isprintc};
 use crate::cstr;
+use crate::env::expand_env_escaped;
 use crate::ex_docmd::ex_msg;
 use crate::fold::has_folding;
 use crate::mbyte::{char_at, head_off};
@@ -36,7 +37,6 @@ use crate::memory::XString;
 use crate::message::{e_markinval, e_marknotset, e_umark};
 use crate::r#move::set_topline;
 use crate::options::kOptJopFlagStack;
-use crate::os::env::expand_env_esc_of;
 use crate::os::fs::dirname_within;
 use crate::path::{path_fnamecmp, path_shorten_fname, vim_ispathsep_nocolon};
 use crate::plines::linetabsize_eol;
@@ -355,7 +355,7 @@ pub(super) fn fname2fnum(fname: &CStr) {
     let mut name = if bytes.first() == Some(&b'~')
         && vim_ispathsep_nocolon(c_int::from(bytes.get(1).copied().unwrap_or(0)))
     {
-        let mut home = expand_env_esc_of(c"~/", false, false, None)
+        let mut home = expand_env_escaped(c"~/", false, false, None)
             .as_cstr()
             .to_bytes()
             .to_vec();

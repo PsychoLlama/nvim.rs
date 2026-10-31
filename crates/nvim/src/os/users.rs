@@ -24,12 +24,11 @@
 )]
 
 use crate::global_cell::GlobalCell;
-use crate::memory::{xstrdup, xstrlcpy};
+use crate::memory::xstrlcpy;
 use crate::os::env::{env_buf, os_getenv_into};
 use crate::types::Candidate;
 use crate::types::{Expand, Failed, size_t, uv_uid_t};
 use core::ffi::{CStr, c_char};
-use core::ptr;
 use std::ffi::CString;
 
 /// How well a name matches the known user names.
@@ -214,28 +213,19 @@ pub unsafe fn os_get_uname(uid: uv_uid_t, s: *mut c_char, len: size_t) -> Result
     Err(Failed)
 }
 
-/// The home directory of user `name`, or NULL when there is no such user.
-/// The caller owns the result.
-///
-/// # Safety
-///
-/// `name` is null or NUL-terminated.
-pub unsafe fn os_get_userdir(name: *const c_char) -> *mut c_char {
-    // SAFETY: the caller's name, then libc's static `passwd` entry, whose
-    // `pw_dir` is copied before anything else can invalidate it.
+/// The home directory of user `name`, or `None` when there is no such
+/// user.
+pub fn user_home_dir(name: &CStr) -> Option<Vec<u8>> {
+    if name.is_empty() {
+        return None;
+    }
+    // SAFETY: a NUL-terminated name; libc's static `passwd` entry is read
+    // and its `pw_dir` copied out before anything else can invalidate it.
     unsafe {
-        if name.is_null() || *name == 0 {
-            return ptr::null_mut();
-        }
-        let Some(pw) = libc::getpwnam(name).as_ref() else {
-            return ptr::null_mut();
-        };
-        if pw.pw_dir.is_null() {
-            // The C handed a NULL `pw_dir` straight to `xstrdup`; no
-            // password database produces one, but NULL is the honest answer.
-            return ptr::null_mut();
-        }
-        xstrdup(pw.pw_dir)
+        let pw = libc::getpwnam(name.as_ptr()).as_ref()?;
+        // No password database answers a NULL `pw_dir`, but `None` is the
+        // honest answer to one.
+        (!pw.pw_dir.is_null()).then(|| CStr::from_ptr(pw.pw_dir).to_bytes().to_vec())
     }
 }
 

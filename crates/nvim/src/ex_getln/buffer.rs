@@ -509,6 +509,6 @@ pub(crate) fn tilde_replace_matches(orig_pat: &[u8], files: &mut [XString]) {
     for file in files {
         // A name is at most as long as its expansion, plus the `~/`.
         let room = file.len() + 3;
-        *file = crate::os::env::home_replace_in(None, file.as_cstr(), room, true);
+        *file = crate::env::home_to_tilde(None, file.as_cstr(), room, true);
     }
 }

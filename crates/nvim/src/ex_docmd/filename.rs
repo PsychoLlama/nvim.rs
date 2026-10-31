@@ -7,6 +7,7 @@
 #![forbid(unsafe_code)]
 use crate::cmdexpand::{WildMode, WildOpts, expand_one};
 use crate::cstr;
+use crate::env::{expand_env, expand_env_escaped};
 use crate::ex_cmds::newlnum;
 use crate::optionstr::{OptString, local_or_global};
 use crate::types::{CmdIdx, EcmdCmd};
@@ -36,7 +37,6 @@ use crate::message::{e_usingsid, emsg, msg_make};
 use crate::normal::ident_under_cursor;
 use crate::option::vars::{P_GP, P_MP, p_wic};
 use crate::os::cshim::gettext;
-use crate::os::env::{expand_env_esc_of, expand_env_save_opt_of};
 use crate::path::{full_name_save, has_wildcard, path_try_shorten_fname, tail_index};
 use crate::quickfix::grep_internal;
 use crate::runtime::estack_sfile;
@@ -157,7 +157,7 @@ pub(crate) fn expand_filename(
         };
 
         if repl.contains(&b'$') || repl.contains(&b'~') {
-            repl = expand_env_save_opt_of(&cstr::owned(&repl), false).to_vec();
+            repl = expand_env(&cstr::owned(&repl), false).to_vec();
         }
 
         // A name that will be handed to a *file* argument gets the
@@ -204,7 +204,7 @@ pub(crate) fn expand_filename(
         // may be all that looked like one.
         let arg = excmd.line.rest_of(start);
         if arg.contains(&b'$') || arg.contains(&b'~') {
-            let out = expand_env_esc_of(excmd.line.cstr_from(start), true, true, None);
+            let out = expand_env_escaped(excmd.line.cstr_from(start), true, true, None);
             has_wildcards = has_wildcard(&out);
             repl_cmdline(excmd, start, len, &out);
         }

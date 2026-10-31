@@ -26,6 +26,7 @@ use crate::diff::diff_invalidate;
 use crate::drawscreen::state::{redraw_cmdline, redraw_tabline};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later, status_redraw_all};
 use crate::edit::beginline;
+use crate::env::home_to_tilde;
 use crate::eval::vars::{eval_charconvert, set_vim_var_string, vim_var_bytes};
 use crate::ex_docmd::state::{ex_no_reprint, global_busy};
 use crate::ex_eval::aborting;
@@ -58,7 +59,6 @@ use crate::option::{
 use crate::options::kOptFileencoding;
 use crate::optionstr::OptString;
 use crate::os::cshim::{gettext, ngettext};
-use crate::os::env::home_replace_in;
 use crate::os::fs::{
     dir_exists, mark_stdin_cloexec, os_closedir, os_copy, os_file_is_writable, os_file_owned,
     os_free_acl, os_get_acl, os_isrealdir, os_mkdir, os_remove, os_rename, os_rmdir, os_scandir,

@@ -38,6 +38,7 @@ pub mod digraph;
 pub mod drawline;
 pub mod drawscreen;
 pub(crate) mod edit;
+pub mod env;
 pub mod eval;
 pub mod event;
 pub mod ex_cmds;

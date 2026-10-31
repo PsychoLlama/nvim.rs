@@ -35,12 +35,12 @@ pub(crate) use startuptime::{time_msg_at, time_pop};
 
 use crate::charset::skip;
 use crate::debugger::ex_breakadd;
+use crate::env::expand_env;
 use crate::eval::userfunc::{all_funcs, current_fc};
 use crate::eval::vars::set_vim_var_nr;
 use crate::global_cell::GlobalCell;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
-use crate::os::env::expand_env_save_opt_of;
 use crate::os::fs::CFile;
 use crate::os::time::os_hrtime;
 use crate::runtime::state::current_sctx;
@@ -214,7 +214,7 @@ pub fn ex_profile(excmd: &mut ExArg) {
     let e = excmd.line.skip_white(end);
 
     if subcmd == b"start" && excmd.line.byte_at(e) != 0 {
-        let fname = expand_env_save_opt_of(excmd.line.cstr_from(e), true);
+        let fname = expand_env(excmd.line.cstr_from(e), true);
         PROFILE_FNAME.set(Some(fname.as_cstr().to_owned()));
         do_profiling.set(PROF_YES);
         PROF_WAIT_TIME.set(profile_zero());

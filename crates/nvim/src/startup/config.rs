@@ -8,6 +8,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::env::{get_appname, user_config_path, xdg_var};
 use crate::memory::XString;
 use crate::message_fmt::msg_cstr;
 use crate::semsg;
@@ -22,7 +23,6 @@ use crate::option::vars::p_exrc;
 use crate::os::cshim::{gettext, write_c_stderr};
 use crate::os::fs::path_exists;
 use crate::os::state::{kEqualFiles, kXDGConfigDirs};
-use crate::os::stdpaths::{get_appname, stdpaths_user_conf_subpath, xdg_var};
 use crate::path::PATHSEP;
 use crate::path::path_full_compare;
 use crate::profile::time_msg_at;
@@ -191,8 +191,8 @@ pub(crate) fn do_user_initialization() -> bool {
         return p_exrc();
     }
 
-    let init_lua: XString = stdpaths_user_conf_subpath(b"init.lua");
-    let init_vim: XString = stdpaths_user_conf_subpath(b"init.vim");
+    let init_lua: XString = user_config_path(b"init.lua");
+    let init_vim: XString = user_config_path(b"init.vim");
     if let Some(do_exrc) = source_init_pair(init_lua.as_cstr(), init_vim.as_cstr(), true) {
         return do_exrc;
     }

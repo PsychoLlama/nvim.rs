@@ -18,6 +18,7 @@
 #![forbid(unsafe_code)]
 
 use crate::cstr;
+use crate::env::home_to_tilde;
 use crate::fileio::Report;
 use crate::formatted;
 use crate::memline::MlFlags;
@@ -41,7 +42,6 @@ use crate::option::shortmess;
 use crate::option::vars::{P_ICONSTRING, P_TITLESTRING, p_icon, p_ru, p_title, p_titlelen};
 use crate::options::{kOptIconstring, kOptTitlestring};
 use crate::os::cshim::{gettext, ngettext};
-use crate::os::env::home_replace_in;
 use crate::os::input::line_breakcheck;
 use crate::path::path_tail;
 use crate::plines::win_get_fill;
@@ -184,7 +184,7 @@ fn fill_name(buffer: Buf) -> XString {
         return XString::from_bytes(&special[..special.len().min(MAXPATHL as usize - 1)]);
     }
     let fname = buffer.name.shown().unwrap_or(c"");
-    home_replace_in(Some(buffer), fname, MAXPATHL as usize, true)
+    home_to_tilde(Some(buffer), fname, MAXPATHL as usize, true)
 }
 
 /// Print one buffer's line: the number, the flag column, the name padded to
@@ -291,7 +291,7 @@ pub fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
         // Only a help buffer's name is shortened against the buffer's own
         // directory; every other name is shortened against `$HOME` alone.
         let helpbuf = (shorthelp != 0).then_some(buf);
-        let shown = home_replace_in(helpbuf, name.unwrap_or(c""), out.room(), true);
+        let shown = home_to_tilde(helpbuf, name.unwrap_or(c""), out.room(), true);
         out.push(shown.as_cstr().to_bytes());
     }
 

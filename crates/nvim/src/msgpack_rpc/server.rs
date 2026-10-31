@@ -14,6 +14,7 @@
 use core::ffi::{CStr, c_int};
 
 use crate::channel::channel_from_connection;
+use crate::env::{get_appname, xdg_var};
 use crate::eval::vars::{set_vim_var_string, with_vim_var_str};
 use crate::event::socket::Listener;
 use crate::event::socket::address::is_bare_server_name;
@@ -23,7 +24,6 @@ use crate::memory::XString;
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::os::env::{ENV_TEST_LOG, env_exists, env_unset, getenv_owned, os_get_pid};
 use crate::os::fs::os_strerror;
-use crate::os::stdpaths::{get_appname, xdg_var};
 use crate::path::fix_fname;
 use crate::types::{IOSIZE, SocketWatcher, Vv, uint32_t};
 use std::ffi::CString;

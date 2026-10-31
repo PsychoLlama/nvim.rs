@@ -13,13 +13,13 @@
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::env::getenv_resolved;
 use crate::eval::list::string_tv;
 use crate::eval::typval::list_iter;
 use crate::eval::{call_func_retlist, call_func_retstr};
 use crate::fuzzy::{FUZZY_SCORE_NONE, fuzzy_match_str};
 use crate::lua::executor::nlua_call_user_expand_func;
 use crate::option::next_option_part;
-use crate::os::env::vim_getenv_owned;
 use crate::path::{ExpandFlags, expand_wildcards, path_is_absolute, vim_ispathsep};
 use crate::regexp::vim_regexec;
 use crate::runtime::state::current_sctx;
@@ -92,7 +92,7 @@ pub(crate) fn expand_shellcmd(filepat: &CStr, flagsarg: ExpandFlags) -> Vec<XStr
         // For an absolute name we don't use $PATH.
         Vec::new()
     } else {
-        vim_getenv_owned(c"PATH")
+        getenv_resolved(c"PATH")
             .map(|path| path.to_vec())
             .unwrap_or_default()
     };

@@ -32,6 +32,7 @@
 use crate::autocmd::fire_autocmds;
 use crate::charset::{skip, vim_is_ident_char};
 use crate::cstr;
+use crate::env::expand_env;
 use crate::eval::typval::{NumBuf, list_find_str, list_iter, list_len};
 use crate::eval::vars::get_vim_var_list_handle;
 use crate::ex_docmd::state::cmdmod;
@@ -48,7 +49,6 @@ use crate::message::{
 use crate::option::set_option_direct;
 use crate::options::kOptFoldcolumn;
 use crate::os::cshim::gettext;
-use crate::os::env::expand_env_save_opt_of;
 use crate::os::input::os_breakcheck;
 use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, skip_regexp_at};
@@ -342,7 +342,7 @@ pub fn ex_oldfiles(excmd: &mut ExArg) {
     let Some(picked) = list_find_str(Some(&list), nr - 1, &mut numbuf) else {
         return;
     };
-    let expanded = expand_env_save_opt_of(picked, false);
+    let expanded = expand_env(picked, false);
     excmd.set_arg_text(&expanded);
     excmd.cmdidx = CmdIdx::edit;
     cmdmod.with_mut(|m| m.cmod_flags.clear(CmdModFlags::BROWSE));

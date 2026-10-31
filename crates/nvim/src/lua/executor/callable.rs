@@ -20,6 +20,7 @@ use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use super::{kRetNilBool, nlua_error, nlua_exec, with_main_stack};
+use crate::env::home_to_tilde;
 use crate::eval::userfunc::register_luafunc;
 use crate::getchar::state::{got_int, mod_mask};
 use crate::global_cell::GlobalCell;
@@ -27,7 +28,6 @@ use crate::keycodes::{special_key_bytes, unescape_ks_in};
 use crate::lua::ffi::LUA_NOREF;
 use crate::lua::stack::{At, Kind};
 use crate::memory::ThinCString;
-use crate::os::env::home_replace_in;
 use crate::types::{Array, LuaRef, Object, String_0, TypVal, VAR_DICT, VAR_LIST};
 
 /// The Lua table `arg` came from, if it came from one at all.
@@ -150,7 +150,7 @@ pub(crate) fn funcref_description(reference: LuaRef) -> Option<ThinCString> {
             {
                 // `>S` consumed the function; a source name is a C string.
                 let path = CString::new(path).expect("a chunk name holds no NUL");
-                let path = home_replace_in(None, &path, path.as_bytes().len() + 3, true);
+                let path = home_to_tilde(None, &path, path.as_bytes().len() + 3, true);
                 let text = [
                     format!("<Lua {reference}: ").as_bytes(),
                     &path[..],

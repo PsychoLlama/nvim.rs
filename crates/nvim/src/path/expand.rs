@@ -21,12 +21,12 @@
 use crate::charset::backslash_halved;
 use crate::cmdexpand::WildOpts;
 use crate::cstr;
+use crate::env::expand_env;
 use crate::ex_docmd::Expansion;
 use crate::memory::XString;
 use crate::option::split_option_part;
 use crate::option::vars::{P_CDPATH, P_PATH, P_WIG};
 use crate::optionstr::{OptString, local_or_global};
-use crate::os::env::expand_env_save_opt_of;
 use crate::os::fs::dirname_text;
 use crate::winlayer::Buf;
 use core::ffi::c_int;
@@ -261,7 +261,7 @@ pub fn gen_expand_wildcards(
             let bytes = pattern.to_bytes();
             if has_env_var(bytes) && !flags.has(ExpandFlags::NOTENV) || bytes.first() == Some(&b'~')
             {
-                let env = expand_env_save_opt_of(pattern, true);
+                let env = expand_env(pattern, true);
                 if has_env_var(&env) || env.first() == Some(&b'~') {
                     // What `expand_env` could not expand, the shell can.
                     // Throw away what has been found so far and start over.

@@ -14,6 +14,7 @@
 #![forbid(unsafe_code)]
 
 use crate::ascii::ascii_isdigit;
+use crate::env::{expand_env_within, home_to_tilde, state_subpath};
 use crate::fileio::{modname, rename_file};
 use crate::global_cell::GlobalCell;
 use crate::mbyte::strnicmp_in;
@@ -22,13 +23,11 @@ use crate::message_fmt::{emsg_text, msg_cstr};
 use crate::option::split_option_part;
 use crate::option::vars::{P_SHADA, P_SHADAFILE, p_fs, p_shada, p_shadafile, p_verbose};
 use crate::os::cshim::gettext;
-use crate::os::env::{expand_env_into, home_replace_in};
 use crate::os::fileio::{
     FileOpenFlags, ReadFile, WriteFile, kFileCreate, kFileCreateOnly, kFileNoSymlink,
     kFileReadOnly, kFileTruncate,
 };
 use crate::os::fs::{dir_exists, file_info, getperm, mkdir_recurse, os_remove, os_strerror};
-use crate::os::stdpaths::stdpaths_user_state_subpath_of;
 use crate::os::users::{os_getgid, os_getuid};
 use crate::os::uv_error::{UV_EEXIST, UV_ELOOP, UV_ENOENT};
 use crate::path::{concat_fnames, tail_with_sep_index};
@@ -77,7 +76,7 @@ fn shada_get_default_file() -> CString {
     if let Some(file) = DEFAULT_SHADA_FILE.with(Clone::clone) {
         return file;
     }
-    let shada_dir = stdpaths_user_state_subpath_of(c"shada", 0, false);
+    let shada_dir = state_subpath(c"shada", 0, false);
     let full = concat_fnames(&shada_dir, b"main.shada", true);
     let file = full.as_cstr().to_owned();
     DEFAULT_SHADA_FILE.set(Some(file.clone()));
@@ -110,7 +109,7 @@ fn shada_filename(file: Option<&CStr>) -> Option<CString> {
         Some(rest) => CString::new(rest).expect("an option value holds no NUL"),
         None => shada_get_default_file(),
     };
-    let expanded = expand_env_into(&named, MAXPATHL as usize + 1);
+    let expanded = expand_env_within(&named, MAXPATHL as usize + 1);
     Some(CString::new(expanded).expect("shada: expanded file name holds a NUL"))
 }
 
@@ -440,7 +439,7 @@ fn writable_by_us(info: &FileInfo) -> bool {
 /// marks are then not remembered at all.
 pub(crate) fn shada_removable(name: &CStr) -> bool {
     let room = 3 + name.to_bytes().len();
-    let new_name = home_replace_in(None, name, room, true);
+    let new_name = home_to_tilde(None, name, room, true);
     // A copy: the option may change under a long walk.
     let shada = P_SHADA.get();
     let mut rest: &[u8] = &shada;
@@ -451,7 +450,7 @@ pub(crate) fn shada_removable(name: &CStr) -> bool {
             continue;
         };
         let prefix = CString::new(prefix).expect("an option part holds no NUL");
-        let folded = home_replace_in(None, &prefix, MAXPATHL as usize, true);
+        let folded = home_to_tilde(None, &prefix, MAXPATHL as usize, true);
         let n = folded.len();
         let named = &new_name[..n.min(new_name.len())];
         if strnicmp_in(&folded, named) == 0 {

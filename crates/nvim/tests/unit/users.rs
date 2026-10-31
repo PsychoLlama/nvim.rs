@@ -16,12 +16,11 @@
 #![cfg(not(miri))]
 
 use std::ffi::{CString, c_char};
-use std::ptr;
 
-use neovim::os::users::{os_get_uname, os_get_userdir, os_get_username, os_get_usernames};
+use neovim::os::users::{os_get_uname, os_get_username, os_get_usernames, user_home_dir};
 use neovim::types::Failed;
 
-use crate::support::{cstr, editor_lock, take_bytes};
+use crate::support::{cstr, editor_lock};
 
 /// The name the test process is running under, which every case below is
 /// written against. `$USER` is what the Lua spec used.
@@ -92,25 +91,15 @@ fn an_unknown_uid_fails_and_leaves_its_number_behind() {
 #[test]
 fn a_home_directory_is_found_by_name_and_nothing_else_is() {
     let _editor = editor_lock();
-    // SAFETY: NULL is one of the cases under test; the others are live
-    // NUL-terminated names, and each answer is an owned string.
-    unsafe {
-        assert!(os_get_userdir(ptr::null()).is_null(), "no name, no home");
-        // The entry point rejects the empty name itself; glibc's `getpwnam`
-        // also answers NULL for it, so this holds either way.
-        assert!(
-            os_get_userdir(c"".as_ptr()).is_null(),
-            "the empty name is no name either"
-        );
+    // The entry point rejects the empty name itself; glibc's `getpwnam`
+    // also answers NULL for it, so this holds either way.
+    assert!(user_home_dir(c"").is_none(), "the empty name is no name");
+    assert!(user_home_dir(&cstr("neovim_user_not_found_test")).is_none());
 
-        let unknown = cstr("neovim_user_not_found_test");
-        assert!(os_get_userdir(unknown.as_ptr()).is_null());
-
-        let me = CString::new(current_username()).expect("a user name holds no NUL");
-        let home = take_bytes(os_get_userdir(me.as_ptr()));
-        assert_eq!(
-            String::from_utf8(home).expect("a path is text"),
-            std::env::var("HOME").expect("$HOME is set")
-        );
-    }
+    let me = CString::new(current_username()).expect("a user name holds no NUL");
+    let home = user_home_dir(&me).expect("the current user has a home");
+    assert_eq!(
+        String::from_utf8(home).expect("a path is text"),
+        std::env::var("HOME").expect("$HOME is set")
+    );
 }

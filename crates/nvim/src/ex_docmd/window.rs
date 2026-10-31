@@ -10,12 +10,12 @@
 
 use crate::autocmd::fire_autocmds;
 use crate::charset::{getdigits_at, getdigits_int_at};
+use crate::env::home_to_tilde;
 use crate::file_search::find_nth_file_in_path;
 use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::message::msg_display_bytes;
 use crate::message_fmt::msg_bytes;
-use crate::os::env::home_replace_in;
 use crate::semsg;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
@@ -393,7 +393,7 @@ fn fill_name(buffer: Buf) -> XString {
     match buf_spname_owned(buffer) {
         None => {
             let fname = buffer.name.shown().unwrap_or(c"");
-            home_replace_in(Some(buffer), fname, IOSIZE as usize, true)
+            home_to_tilde(Some(buffer), fname, IOSIZE as usize, true)
         }
         Some(special) => {
             let special = special.as_cstr().to_bytes();

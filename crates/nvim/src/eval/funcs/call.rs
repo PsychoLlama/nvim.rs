@@ -6,6 +6,7 @@ use super::wrappers::arg_number;
 use super::{AUTOLOAD_CHAR, MAX_FUNC_ARGS, TFN_INT, TFN_NO_AUTOLOAD, TFN_NO_DEREF, TFN_QUIET};
 use crate::ascii::ascii_isdigit;
 use crate::autocmd::{au_exists, autocmd_supported};
+use crate::env::expand_env;
 use crate::eval::gc::{garbage_collect_at_exit, want_garbage_collect};
 use crate::eval::typval::{
     ListRef, NumBuf, PartialRef, list_iter, list_len, tv_check_for_dict_arg, tv_check_for_list_arg,
@@ -32,7 +33,6 @@ use crate::message_fmt::{msg_bytes, msg_cstr, msg_cstr_opt};
 use crate::os::cshim::gettext;
 use crate::os::dl::{LibcallArg, LibcallResult, LibcallReturn, os_libcall};
 use crate::os::env::env_exists;
-use crate::os::env::expand::expand_env_save_opt_of;
 use crate::semsg;
 use crate::strings::has_char;
 use crate::types::{
@@ -237,11 +237,7 @@ pub fn f_exists(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             // other than itself.
             c_int::from(
                 env_exists(&p[1..], false)
-                    || expand_env_save_opt_of(p, false)
-                        .as_cstr()
-                        .to_bytes()
-                        .first()
-                        != Some(&b'$'),
+                    || expand_env(p, false).as_cstr().to_bytes().first() != Some(&b'$'),
             )
         }
         b'&' | b'+' => {

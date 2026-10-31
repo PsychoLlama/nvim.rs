@@ -40,6 +40,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::env::home_to_tilde;
 use crate::normal::{set_visual_active, showcmd_buf, visual_active};
 use core::cell::Cell;
 use core::ffi::{CStr, c_int};
@@ -67,7 +68,6 @@ use crate::option::{
 };
 use crate::options::kOptInvalid;
 use crate::os::cshim::{byte_toupper, gettext};
-use crate::os::env::home_replace_in;
 use crate::path::tail_index;
 use crate::quickfix::{msg_loclist, msg_qflist};
 use crate::sign::push_sign_text;
@@ -203,7 +203,7 @@ impl Env<'_> {
                     self.buf.name.shown()
                 };
                 path.map_or_else(Vec::new, |path| {
-                    home_replace_in(Some(self.buf), path, room, true).to_vec()
+                    home_to_tilde(Some(self.buf), path, room, true).to_vec()
                 })
             }
         };

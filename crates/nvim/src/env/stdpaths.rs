@@ -1,14 +1,9 @@
 //! The XDG base directories, and the per-application subpaths nvim keeps
 //! under them (`stdpath()`, `$NVIM_APPNAME`).
 //!
-//! # Boundary
-//!
-//! [`get_appname`] answers an owned string. Everything else here returns
-//! freshly allocated C strings that the caller releases with `xfree`.
+//! Every answer is an owned string.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `os/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -20,20 +15,20 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
+use crate::env::expand_env;
 use crate::fileio::vim_gettempdir;
-use crate::memory::{ThinCString, XString, xfree, xmemdupz, xstrdup};
-use crate::os::env::{env_buf, expand_env_save, os_env_exists, os_getenv, os_getenv_into};
+use crate::memory::{ThinCString, XString};
+use crate::os::env::{env_exists, env_get_bounded, getenv_owned};
 use crate::path::{concat_fnames, path_fnamecmp, path_is_absolute};
-use crate::types::{IOSIZE, XDGVarType, size_t};
-use core::ffi::{CStr, c_char};
-use core::ptr;
+use crate::types::{IOSIZE, XDGVarType};
+use core::ffi::CStr;
 use std::ffi::CString;
 
-pub const kXDGConfigHome: XDGVarType = 0;
-pub const kXDGStateHome: XDGVarType = 3;
-pub const kXDGRuntimeDir: XDGVarType = 4;
-pub const kXDGConfigDirs: XDGVarType = 5;
-pub const kXDGDataDirs: XDGVarType = 6;
+pub(crate) const kXDGConfigHome: XDGVarType = 0;
+pub(crate) const kXDGStateHome: XDGVarType = 3;
+pub(crate) const kXDGRuntimeDir: XDGVarType = 4;
+pub(crate) const kXDGConfigDirs: XDGVarType = 5;
+pub(crate) const kXDGDataDirs: XDGVarType = 6;
 
 const PATHSEP: u8 = b'/';
 /// Separator between entries of `$XDG_*_DIRS`.
@@ -73,16 +68,11 @@ const XDG_DEFAULTS: [Option<&CStr>; 7] = [
 ///
 /// `namelike` additionally flattens path separators to `-`, for callers
 /// that need a single name rather than a relative path.
-pub fn get_appname(namelike: bool) -> CString {
-    let mut buf = env_buf();
-    // SAFETY: the value lands in `buf`, which is as long as the call is
-    // told it is, and is copied out before `buf` goes away.
-    let value = unsafe { os_getenv_into(c"NVIM_APPNAME".as_ptr(), &mut buf) };
-    let mut name = if value.is_null() {
-        b"nvim".to_vec()
-    } else {
-        cstr::in_chars(&buf).to_bytes().to_vec()
-    };
+pub(crate) fn get_appname(namelike: bool) -> CString {
+    let mut name = env_get_bounded(c"NVIM_APPNAME");
+    if name.is_empty() {
+        name = b"nvim".to_vec();
+    }
     if namelike {
         for byte in &mut name {
             if *byte == b'/' || *byte == b'\\' {
@@ -95,7 +85,7 @@ pub fn get_appname(namelike: bool) -> CString {
 
 /// Whether `$NVIM_APPNAME` is usable: a name or a relative path, with no
 /// way to escape the directory it names.
-pub fn appname_is_valid() -> bool {
+pub(crate) fn appname_is_valid() -> bool {
     let appname = get_appname(false);
     if path_is_absolute(&appname) {
         return false;
@@ -151,48 +141,35 @@ fn dedup_dirs(list: &CStr, sep: u8, same: impl Fn(&CStr, &CStr) -> bool) -> Opti
     Some(CString::new(joined).expect("the parts hold no NUL"))
 }
 
-/// The value of an XDG base directory variable, or NULL when there is
-/// none. The caller owns the result.
-pub fn stdpaths_get_xdg_var(idx: XDGVarType) -> *mut c_char {
+/// The value of an XDG base directory variable, or `None` when there is
+/// none.
+pub(crate) fn xdg_var(idx: XDGVarType) -> Option<ThinCString> {
     let slot = usize::try_from(idx).expect("an XDGVarType is one of the seven");
     let env = XDG_ENV_VARS[slot];
-    // SAFETY: every pointer handed out below is NUL-terminated and either
-    // static or freshly allocated; `ret` is owned from here on.
-    unsafe {
-        let mut ret = os_getenv(env.as_ptr());
-        if ret.is_null() {
-            if os_env_exists(env.as_ptr(), false) {
-                // Set but empty: `os_getenv` reports that as unset.
-                ret = xstrdup(c"".as_ptr());
-            } else if let Some(fallback) = XDG_DEFAULTS[slot] {
-                ret = expand_env_save(fallback.as_ptr().cast_mut());
-            } else if idx == kXDGRuntimeDir {
-                // stdpath('run') is whatever vim_mktempdir() decided at
-                // startup, minus its trailing slash.
+    let value = match getenv_owned(env) {
+        Some(value) => value.to_vec(),
+        // Set but empty: `getenv_owned` reports that as unset.
+        None if env_exists(env, false) => Vec::new(),
+        None => match XDG_DEFAULTS[slot] {
+            Some(fallback) => expand_env(fallback, false).to_vec(),
+            // stdpath('run') is whatever vim_mktempdir() decided at
+            // startup, minus its trailing slash.
+            None if idx == kXDGRuntimeDir => {
                 let tmpdir = vim_gettempdir();
                 let tmpdir = tmpdir.as_deref().unwrap_or(c"/tmp/").to_bytes();
-                let len = tmpdir.len().saturating_sub(1);
-                ret = xmemdupz(tmpdir.as_ptr().cast(), len).cast::<c_char>();
+                tmpdir[..tmpdir.len().saturating_sub(1)].to_vec()
             }
-        }
-        if ret.is_null() || (idx != kXDGDataDirs && idx != kXDGConfigDirs) {
-            return ret;
-        }
-        let deduped = remove_duplicate_dirs(CStr::from_ptr(ret), ENV_SEP);
-        xfree(ret.cast());
-        deduped.map_or(ptr::null_mut(), CString::into_raw)
+            None => return None,
+        },
+    };
+    if idx != kXDGDataDirs && idx != kXDGConfigDirs {
+        return Some(ThinCString::from_vec(value));
     }
-}
-
-/// [`stdpaths_get_xdg_var`] as an owned string.
-pub(crate) fn xdg_var(idx: XDGVarType) -> Option<ThinCString> {
-    // SAFETY: `stdpaths_get_xdg_var` answers a fresh NUL-terminated block
-    // or null, taken over once here.
-    unsafe { ThinCString::from_raw(stdpaths_get_xdg_var(idx)) }
+    remove_duplicate_dirs(&cstr::owned(&value), ENV_SEP).map(ThinCString::from)
 }
 
 /// `{xdg_directory}/$NVIM_APPNAME`, or `None` when the directory is unset.
-pub fn xdg_home(idx: XDGVarType) -> Option<XString> {
+pub(crate) fn xdg_home(idx: XDGVarType) -> Option<XString> {
     let dir = xdg_var(idx);
     let appname = get_appname(false);
     // Windows appends "-data" to the data/state homes; the headroom upstream
@@ -206,86 +183,33 @@ pub fn xdg_home(idx: XDGVarType) -> Option<XString> {
     ))
 }
 
-/// [`xdg_home`], or NULL when the directory is unset. The caller owns the
-/// result.
-pub fn get_xdg_home(idx: XDGVarType) -> *mut c_char {
-    xdg_home(idx).map_or(ptr::null_mut(), XString::into_raw)
-}
-
 /// `$XDG_CONFIG_HOME/$NVIM_APPNAME/{fname}`.
-pub(crate) fn stdpaths_user_conf_subpath(fname: &[u8]) -> XString {
+pub(crate) fn user_config_path(fname: &[u8]) -> XString {
     let home = xdg_home(kXDGConfigHome).expect("the config home has a default");
     concat_fnames(&home, fname, true)
 }
 
-/// [`stdpaths_user_state_subpath`] of a name the caller holds, owned.
-pub(crate) fn stdpaths_user_state_subpath_of(
+/// `$XDG_STATE_HOME/$NVIM_APPNAME/{fname}`, with `trailing_pathseps` path
+/// separators appended and -- when `escape_commas` -- every comma
+/// backslash-escaped, for the options that take comma-separated lists.
+pub(crate) fn state_subpath(
     fname: &CStr,
-    trailing_pathseps: size_t,
+    trailing_pathseps: usize,
     escape_commas: bool,
 ) -> XString {
-    // SAFETY: a NUL-terminated name; the answer is an allocation of its
-    // own, taken over once.
-    unsafe {
-        XString::from_raw(stdpaths_user_state_subpath(
-            fname.as_ptr(),
-            trailing_pathseps,
-            escape_commas,
-        ))
-    }
-}
-
-/// `$XDG_STATE_HOME/$NVIM_APPNAME/{fname}`, with `trailing_pathseps` path
-/// separators appended and — when `escape_commas` — every comma
-/// backslash-escaped, for the options that take comma-separated lists.
-/// The caller owns the result.
-///
-/// # Safety
-///
-/// `fname` is NUL-terminated.
-pub unsafe fn stdpaths_user_state_subpath(
-    fname: *const c_char,
-    trailing_pathseps: size_t,
-    escape_commas: bool,
-) -> *mut c_char {
-    // SAFETY: the caller's name; `ret` is owned here and NUL-terminated,
-    // and the borrow of it ends before it is freed.
     let home = xdg_home(kXDGStateHome).expect("the state home has a default");
-    let ret = concat_fnames(&home, unsafe { cstr::bytes_at(fname) }, true).into_raw();
-    let path = unsafe { CStr::from_ptr(ret) }.to_bytes();
-    let commas = if escape_commas {
-        path.iter().filter(|&&b| b == b',').count()
-    } else {
-        0
-    };
-    if commas == 0 && trailing_pathseps == 0 {
-        return ret;
-    }
-    let mut out = Vec::with_capacity(path.len() + commas + trailing_pathseps + 1);
-    for &byte in path {
+    let path = concat_fnames(&home, fname.to_bytes(), true);
+    let mut out = XString::with_capacity(path.len() + trailing_pathseps);
+    for &byte in path.iter() {
         if escape_commas && byte == b',' {
-            out.push(b'\\');
+            out.push_byte(b'\\');
         }
-        out.push(byte);
+        out.push_byte(byte);
     }
-    out.resize(out.len() + trailing_pathseps, PATHSEP);
-    // SAFETY: `ret` is owned here and `path`'s borrow of it is over.
-    unsafe { xfree(ret.cast()) };
-    CString::new(out)
-        .expect("a CStr's bytes hold no NUL")
-        .into_raw()
-}
-
-/// [`stdpaths_user_state_subpath`] as an owned string, with neither trailing
-/// separators nor comma escaping: `$XDG_STATE_HOME/$NVIM_APPNAME/{fname}`.
-pub fn user_state_subpath(fname: &CStr) -> CString {
-    // SAFETY: a NUL-terminated name in, one owned NUL-terminated path out.
-    let path = unsafe { stdpaths_user_state_subpath(fname.as_ptr(), 0, true) };
-    // SAFETY: the owned path just answered.
-    let owned = unsafe { cstr::at(path) }.to_owned();
-    // SAFETY: as above.
-    unsafe { xfree(path.cast()) };
-    owned
+    for _ in 0..trailing_pathseps {
+        out.push_byte(PATHSEP);
+    }
+    out
 }
 
 #[cfg(test)]

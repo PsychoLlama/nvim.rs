@@ -33,6 +33,7 @@ use crate::autocmd::has_autocmd;
 use crate::cmdexpand::globpath;
 use crate::debugger::state::{debug_break_level, debug_tick};
 use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint_named, profiling_forced};
+use crate::env::{get_appname, install_prefix};
 use crate::eval::typval::{
     dict_copy, dict_find, dict_get_string_alloc, tv_check_for_opt_dict_arg, tv_dict_alloc,
     tv_dict_alloc_lock, tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret,
@@ -62,10 +63,8 @@ use crate::option::vars::{p_enc, p_ic, p_lpl, p_verbose};
 use crate::option::{set_option_value_give_err, vimrc_found};
 use crate::options::kOptRuntimepath;
 use crate::os::cshim::gettext;
-use crate::os::env::vim_get_prefix_from_exepath;
 use crate::os::fs::os_file_is_readable;
 use crate::os::input::line_breakcheck;
-use crate::os::stdpaths::get_appname;
 use crate::path::{
     append_path, concat_fnames, fix_fname, gen_expand_wildcards, past_head_index, path_fnamecmp,
     path_fnamencmp, path_with_extension, tail_index, vim_ispathsep, vim_ispathsep_nocolon,

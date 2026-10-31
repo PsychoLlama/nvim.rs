@@ -16,6 +16,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::env::{expand_env, home_to_tilde};
 use crate::eval::typval::NumBuf;
 use crate::ex_docmd::SourceKind;
 use crate::ex_eval::CsFlags;
@@ -23,8 +24,6 @@ use crate::formatted;
 use crate::mbyte::canonize;
 use crate::memory::ThinCString;
 use crate::message_fmt::msg_cstr;
-use crate::os::env::expand_env_save_opt_of;
-use crate::os::env::home_replace_in;
 use crate::regexp::OwnedProg;
 use crate::semsg;
 use crate::types::{IOSIZE, ListRef, MAXPATHL};
@@ -102,7 +101,7 @@ pub(crate) fn new_script_item(name: Option<XString>) -> ScriptId {
 /// bytes; `None` for an id with no script or a script with no name.
 pub(crate) fn script_display_name(sid: ScriptId, room: usize) -> Option<XString> {
     let name = script_name(sid)?;
-    Some(home_replace_in(None, name.as_cstr(), room, true))
+    Some(home_to_tilde(None, name.as_cstr(), room, true))
 }
 
 /// Was script `sid` written in Lua?
@@ -156,7 +155,7 @@ pub fn ex_scriptnames(excmd: &mut ExArg) {
         let Some(name) = script_name(listed) else {
             continue;
         };
-        let shortname = home_replace_in(None, name.as_cstr(), MAXPATHL as usize, true);
+        let shortname = home_to_tilde(None, name.as_cstr(), MAXPATHL as usize, true);
         let row = formatted!(IOSIZE as usize, b"%3d: %s", listed, shortname.as_cstr());
         let row = cstr::owned(&row);
         if !message_filtered(&row) {
@@ -179,7 +178,7 @@ fn edit_script(excmd: &mut ExArg, by_number: bool) {
         };
         excmd.set_arg_text(&name);
     } else {
-        let expanded = expand_env_save_opt_of(excmd.line.cstr_from(excmd.line.arg), false);
+        let expanded = expand_env(excmd.line.cstr_from(excmd.line.arg), false);
         excmd.set_arg_text(&expanded);
     }
     do_exedit(excmd, None);
@@ -220,7 +219,7 @@ pub(crate) fn get_scriptname(script_ctx: ScriptCtx, fold_home: bool) -> CString 
                 return CString::from(sname.as_cstr());
             }
             let room = sname.len() + 3;
-            return CString::from(home_replace_in(None, sname.as_cstr(), room, true).as_cstr());
+            return CString::from(home_to_tilde(None, sname.as_cstr(), room, true).as_cstr());
         }
     };
     gettext(fixed).to_owned()

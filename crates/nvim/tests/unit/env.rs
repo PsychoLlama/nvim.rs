@@ -17,9 +17,8 @@
 #![cfg(not(miri))]
 
 use std::ffi::{c_char, c_int};
-use std::ptr;
 
-use neovim::os::env::expand::expand_env_esc;
+use neovim::env::expand::expand_env_bounded;
 use neovim::os::env::{
     os_env_exists, os_get_hostname, os_get_pid, os_getenv, os_getenv_buf, os_getenv_into,
     os_getenvname_at_index, os_setenv_append_path, os_shell_is_cmdexe,
@@ -119,24 +118,11 @@ fn read_c_string(buf: &[u8]) -> String {
     String::from_utf8(buf[..end].to_vec()).expect("the fixtures are text")
 }
 
-/// `expand_env_esc` into a `size`-byte buffer, told `dstlen` about it.
+/// `expand_env_bounded`, told `dstlen` about its destination.
 fn expand(src: &str, dstlen: c_int, one: bool) -> String {
-    let mut buf = vec![0_u8; 512];
-    let src = cstr(src);
-    // SAFETY: `src` is this frame's and NUL-terminated; `buf` is far larger
-    // than the `dstlen` the call is told about, so a case that means to
-    // measure truncation still has room to show what actually landed.
-    unsafe {
-        expand_env_esc(
-            src.as_ptr(),
-            buf.as_mut_ptr().cast(),
-            dstlen,
-            false,
-            one,
-            ptr::null_mut(),
-        );
-    }
-    read_c_string(&buf)
+    let dstlen = usize::try_from(dstlen).expect("a positive bound");
+    let out = expand_env_bounded(src.as_bytes(), dstlen, false, one, None);
+    String::from_utf8(out).expect("the fixtures are text")
 }
 
 /// A name no environment has. Every case that asserts "not found" uses one.

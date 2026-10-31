@@ -8,6 +8,7 @@ use super::{
     kXDGRuntimeDir, kXDGStateHome, tv_get_buf,
 };
 use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_one};
+use crate::env::{get_appname, getenv_resolved, xdg_home, xdg_var};
 use crate::eval::typval::{NumBuf, dict_get_bool, dict_has_key, tv_list_alloc_ret};
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::{Expansion, eval_vars, expand_filename};
@@ -17,9 +18,8 @@ use crate::memory::ThinCString;
 use crate::message::emsg;
 use crate::message_fmt::msg_cstr;
 use crate::option::vars::{p_verbose, p_wic};
-use crate::os::env::{os_copy_fullenv, vim_getenv_owned, vim_setenv_named, vim_unsetenv_named};
+use crate::os::env::{os_copy_fullenv, vim_setenv_named, vim_unsetenv_named};
 use crate::os::fs::os_setperm;
-use crate::os::stdpaths::{get_appname, xdg_home, xdg_var};
 use crate::path::concat_fnames;
 use crate::semsg;
 use crate::types::CmdIdx;
@@ -58,7 +58,7 @@ pub fn f_environ(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `getenv({name})` — the variable's value, or `v:null` when it is unset.
 pub fn f_getenv(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    match vim_getenv_owned(numbuf.string(&args[0])) {
+    match getenv_resolved(numbuf.string(&args[0])) {
         None => result.write_special(kSpecialVarNull),
         Some(value) => result.write_string(Some(ThinCString::from(value))),
     }

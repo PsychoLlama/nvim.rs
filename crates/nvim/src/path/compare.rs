@@ -19,11 +19,11 @@
 )]
 
 use crate::cstr;
+use crate::env::expand_env_within;
 use core::ffi::c_int;
 use std::ffi::CStr;
 
 use super::*;
-use crate::os::env::expand_env_into;
 use crate::os::fs::{file_id, link_info};
 use crate::types::{MAXPATHL, NUL};
 
@@ -37,7 +37,7 @@ use crate::types::{MAXPATHL, NUL};
 pub fn path_full_compare(s1: &CStr, s2: &CStr, checkname: bool, expandenv: bool) -> FileComparison {
     let expanded1 = if expandenv {
         // Upstream's buffer is `MAXPATHL` bytes and so is its bound.
-        expand_env_into(s1, MAXPATHL as usize + 1)
+        expand_env_within(s1, MAXPATHL as usize + 1)
     } else {
         let s1 = s1.to_bytes();
         s1[..s1.len().min(MAXPATHL as usize - 1)].to_vec()

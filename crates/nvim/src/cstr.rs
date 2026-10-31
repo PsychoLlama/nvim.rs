@@ -57,8 +57,8 @@
 //! | C | slice |
 //! | --- | --- |
 //! | `strlen(p)` | [`bytes_at(p)`](bytes_at)`.len()` |
-//! | `strcmp(a, b) == 0` | [`eq_bytes(a, b)`](eq_bytes) against a literal, else slices compared |
-//! | `strncmp(a, b, n)` | [`prefix_eq(a, b, n)`](prefix_eq), or [`prefix_cmp`] |
+//! | `strcmp(a, b) == 0` | slices compared |
+//! | `strncmp(a, b, n)` | [`prefix_at`]s compared |
 //! | `strchr(s, c)` | `bytes_at(s).iter().position(…)` |
 //! | `strstr(h, n)` | `bytes_at(h).windows(n.len()).position(…)` |
 //! | `memcmp(a, b, n)` | [`slice_at(a, n)`](slice_at)` == slice_at(b, n)` |
@@ -91,9 +91,9 @@
 //!    call stops at the first difference. Where the caller is a filter
 //!    rejecting candidates — completion's duplicate scan, a maphash bucket
 //!    walk — that turns an O(match) test into O(length) and doubles the
-//!    loop. Use [`eq_bytes`]/[`prefix_eq`]/[`prefix_cmp`],
-//!    which walk the two together. [`prefix_at`] is for the sites that want
-//!    the *span* itself, not a comparison.
+//!    loop. Walk the two together where that matters (`Iterator::eq` over
+//!    the bytes stops at the first difference). [`prefix_at`] is for the
+//!    sites that want the *span* itself, not a comparison.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
@@ -105,7 +105,6 @@
     clippy::ptr_as_ptr
 )]
 
-use core::cmp::Ordering;
 use core::ffi::{CStr, c_char};
 use core::slice;
 use std::ffi::CString;
@@ -177,72 +176,6 @@ pub(crate) unsafe fn prefix_at<'a>(p: *const c_char, n: usize) -> &'a [u8] {
     }
     // SAFETY: `len` bytes were just read one at a time.
     unsafe { slice::from_raw_parts(p.cast::<u8>(), len) }
-}
-
-/// Whether the string at `p` is exactly `want` -- `strcmp` against a
-/// literal, without spelling the literal as a pointer.
-///
-/// **Walks `p` against `want` and stops at the first difference**, for the
-/// reason written on [`prefix_cmp`]: the obvious
-/// `bytes_at(p) == want` reads every byte of `p` first, so a test that a
-/// one-byte mismatch settles costs the length of whatever `p` happens to
-/// hold.
-///
-/// # Safety
-/// [`bytes_at`]'s contract. `want` must hold no NUL, which is what makes
-/// the walk stop at or before `p`'s terminator.
-pub(crate) unsafe fn eq_bytes(p: *const c_char, want: &[u8]) -> bool {
-    debug_assert!(!want.contains(&0), "a NUL in the literal outruns the walk");
-    for (i, &byte) in want.iter().enumerate() {
-        // SAFETY: caller's contract -- `p`'s terminator is readable, and a
-        // NUL there cannot equal a byte of `want`, so the walk stops on it.
-        if unsafe { *p.cast::<u8>().add(i) } != byte {
-            return false;
-        }
-    }
-    // SAFETY: `want.len()` bytes of `p` just matched, so `p` is at least
-    // that long and the byte after them is readable.
-    unsafe { *p.cast::<u8>().add(want.len()) == 0 }
-}
-
-/// Whether two NUL-terminated strings agree over their first `n` bytes --
-/// `strncmp(a, b, n) == 0`.
-///
-/// # Safety
-/// [`prefix_at`]'s contract, for both.
-pub(crate) unsafe fn prefix_eq(a: *const c_char, b: *const c_char, n: usize) -> bool {
-    // SAFETY: caller's contract.
-    unsafe { prefix_cmp(a, b, n) }.is_eq()
-}
-
-/// How two NUL-terminated strings order over their first `n` bytes --
-/// `strncmp(a, b, n)`, as an [`Ordering`](Ordering) rather than a
-/// sign. `as c_int` recovers the -1/0/1 a `qsort` comparator wants.
-///
-/// **Walks the two together and stops at the first difference**, the way
-/// `strncmp` does, rather than measuring each operand and comparing the two
-/// spans. Measuring first is what the obvious `prefix_at(a, n) ==
-/// prefix_at(b, n)` does, and it reads every byte of both operands even when
-/// the first pair already differs -- which is the whole cost when the caller
-/// is a filter rejecting thousands of candidates. `ins_compl_add`'s
-/// duplicate scan and `mapping/table.rs`'s bucket walk are both that shape,
-/// and both roughly doubled on the measured-first form (p24-9).
-///
-/// # Safety
-/// [`prefix_at`]'s contract, for both.
-pub(crate) unsafe fn prefix_cmp(a: *const c_char, b: *const c_char, n: usize) -> Ordering {
-    for i in 0..n {
-        // SAFETY: caller's contract -- every byte up to and including each
-        // terminator is readable, and the loop stops at the first one.
-        let (x, y) = unsafe { (*a.cast::<u8>().add(i), *b.cast::<u8>().add(i)) };
-        let ord = x.cmp(&y);
-        // A terminator on both sides ends the comparison: C says the bytes
-        // after a NUL are not compared.
-        if ord != Ordering::Equal || x == 0 {
-            return ord;
-        }
-    }
-    Ordering::Equal
 }
 
 /// Exactly `n` bytes at `p`, terminator or not.
@@ -476,39 +409,16 @@ mod tests {
         assert_eq!(long, b"abcdef", "the terminator bounds it, not `n`");
     }
 
-    #[test]
-    fn eq_bytes_answers_strcmp_against_a_literal() {
-        // SAFETY: both are literals, live for the test.
-        let is = |s: &CStr, want: &[u8]| unsafe { eq_bytes(s.as_ptr(), want) };
-        assert!(is(c"abc", b"abc"));
-        assert!(!is(c"abc", b"abd"), "a differing byte");
-        assert!(!is(c"abc", b"ab"), "the string is longer");
-        assert!(!is(c"abc", b"abcd"), "the literal is longer");
-        assert!(is(c"", b""), "both empty");
-        assert!(!is(c"abc", b""), "only the literal is empty");
-    }
-
-    /// A mismatch at byte 0 must not read byte 1 -- the whole point of the
-    /// helper. The string here is not terminated, so measuring it first is
-    /// undefined and only the short-circuit keeps the read in bounds.
-    #[test]
-    fn eq_bytes_stops_at_the_first_difference() {
-        let unterminated = *b"xyz";
-        // SAFETY: `b"a"` differs from `x` at byte 0, so the walk reads
-        // exactly one byte of an array that has three.
-        assert!(!unsafe { eq_bytes(unterminated.as_ptr().cast(), b"a") });
-    }
-
     /// `strncmp(a, b, n)`'s three answers, as slice comparisons.
     #[test]
     fn prefix_reproduces_strncmp() {
-        let cases: &[(&CStr, &CStr, usize, Ordering)] = &[
-            (c"ab", c"abc", 5, Ordering::Less),
-            (c"ab", c"ab", 5, Ordering::Equal),
-            (c"abc", c"abd", 2, Ordering::Equal),
-            (c"abc", c"abd", 3, Ordering::Less),
-            (c"", c"a", 1, Ordering::Less),
-            (c"a", c"", 4, Ordering::Greater),
+        let cases: &[(&CStr, &CStr, usize, core::cmp::Ordering)] = &[
+            (c"ab", c"abc", 5, core::cmp::Ordering::Less),
+            (c"ab", c"ab", 5, core::cmp::Ordering::Equal),
+            (c"abc", c"abd", 2, core::cmp::Ordering::Equal),
+            (c"abc", c"abd", 3, core::cmp::Ordering::Less),
+            (c"", c"a", 1, core::cmp::Ordering::Less),
+            (c"a", c"", 4, core::cmp::Ordering::Greater),
         ];
         for &(a, b, n, want) in cases {
             // SAFETY: both are literals, live for the test.

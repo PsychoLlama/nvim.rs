@@ -8,6 +8,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::env::getenv_resolved;
 use crate::optionstr::{OptString, local_or_global};
 use crate::strings::find_bytes;
 use crate::winlayer::Buf;
@@ -24,7 +25,7 @@ use crate::option::vars::{
 };
 use crate::options::*;
 use crate::optionstr::OptStringRef;
-use crate::os::env::{env_set, vim_getenv_owned};
+use crate::os::env::env_set;
 use crate::path::{full_name_save, tail_index};
 use crate::regexp::state::{OPTION_MAGIC_OFF, OPTION_MAGIC_ON};
 use crate::search::state::magic_overruled;
@@ -68,7 +69,7 @@ pub(crate) fn cpo_has(flag: CpoFlag) -> bool {
 /// Record where a vimrc was found in `$MYVIMRC`/`$MYVIMDIR`, unless the
 /// environment variable is already set.
 pub(crate) fn vimrc_found(fname: &CStr, envname: &CStr) {
-    if vim_getenv_owned(envname).is_some() {
+    if getenv_resolved(envname).is_some() {
         return;
     }
     let _ = env_set(envname, full_name_save(fname, false).as_cstr());

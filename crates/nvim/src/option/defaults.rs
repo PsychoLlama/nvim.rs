@@ -18,6 +18,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::env::{getenv_resolved, state_subpath};
 use crate::memory::XString;
 use crate::optionstr::OptString;
 use crate::winlayer::Win;
@@ -42,9 +43,8 @@ use crate::options::{
 };
 use crate::optionstr::check_buf_options;
 use crate::os::cshim::{bind_textdomain_codeset_of, gettext_owned};
-use crate::os::env::{env_exists, getenv_owned, vim_getenv_owned};
+use crate::os::env::{env_exists, getenv_owned};
 use crate::os::lang::{lang_init, mess_lang_of};
-use crate::os::stdpaths::stdpaths_user_state_subpath_of;
 use crate::os::users::os_getuid;
 use crate::path::{invocation_path_tail, path_fnamecmp, vim_ispathlistsep};
 use crate::runtime::runtimepath_default;
@@ -115,7 +115,7 @@ fn set_init_default_backupskip() {
         let dir = if name.is_empty() {
             Some(XString::from_cstr(c"/tmp"))
         } else {
-            vim_getenv_owned(name)
+            getenv_resolved(name)
         };
         let Some(dir) = dir.filter(|dir| !dir.is_empty()) else {
             continue;
@@ -151,7 +151,7 @@ fn set_init_default_backupskip() {
 /// and a leading comma so that `:cd` still tries the current directory
 /// first. A space or comma in a component is escaped.
 fn set_init_default_cdpath() {
-    let Some(cdpath) = vim_getenv_owned(c"CDPATH") else {
+    let Some(cdpath) = getenv_resolved(c"CDPATH") else {
         return;
     };
     let mut value = Vec::with_capacity(2 * cdpath.len() + 1);
@@ -221,7 +221,7 @@ pub(crate) fn set_init_1(clean_arg: bool) {
 
     // 'backupdir' is the state directory's backup subdirectory, with
     // "." in front of it so a backup lands next to the file when it can.
-    let subpath = stdpaths_user_state_subpath_of(c"backup", 2, true);
+    let subpath = state_subpath(c"backup", 2, true);
     let backupdir = XString::from_vec([&b".,"[..], &subpath[..]].concat());
     change_option_default(kOptBackupdir, OptVal::from_xstring(backupdir));
 
@@ -230,7 +230,7 @@ pub(crate) fn set_init_1(clean_arg: bool) {
         (kOptDirectory, c"swap"),
         (kOptUndodir, c"undo"),
     ] {
-        let dir = stdpaths_user_state_subpath_of(name, 2, true);
+        let dir = state_subpath(name, 2, true);
         change_option_default(opt_idx, OptVal::from_xstring(dir));
     }
 

@@ -20,6 +20,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
+use crate::env::home_to_tilde;
 use crate::global_cell::field;
 use crate::keycodes::{Ctrl_V, ModMask};
 use crate::mbyte::unescape_at;
@@ -45,7 +46,6 @@ use crate::options::{
     kOptRuntimepath, kOptSyntax, kOptWildchar, kOptWildcharm,
 };
 use crate::os::cshim::gettext;
-use crate::os::env::home_replace_in;
 use crate::os::input::os_breakcheck;
 use crate::startup::silent_mode;
 use crate::types::{
@@ -474,7 +474,7 @@ fn put_string_value(
     }
 
     let size = value.len() + 1;
-    let replaced = home_replace_in(None, cstr::in_bytes(&[value, b"\0"].concat()), size, false);
+    let replaced = home_to_tilde(None, cstr::in_bytes(&[value, b"\0"].concat()), size, false);
 
     if !needs_splitting(value, flags) {
         put(out, &escaped_set_value(&replaced))?;
@@ -556,7 +556,7 @@ pub(crate) fn option_value_text(opt_idx: OptIndex, opt_flags: OptionSetFlags) ->
 
     let value = varp.string_var().get();
     if get_option(opt_idx).flags & kOptFlagExpand as uint32_t != 0 {
-        home_replace_in(None, value.as_cstr(), room, false)
+        home_to_tilde(None, value.as_cstr(), room, false)
     } else {
         XString::from_bytes(&value[..value.len().min(room - 1)])
     }

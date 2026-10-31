@@ -15,6 +15,7 @@
 #![forbid(unsafe_code)]
 
 use crate::cstr;
+use crate::env::{expand_env_within, home_to_tilde};
 use crate::memfile::BlockId;
 use crate::path::tail_index;
 use core::ffi::{CStr, c_int, c_long};
@@ -23,7 +24,7 @@ use std::io::Read;
 use super::*;
 use crate::optionstr::OptStringRef;
 use crate::os::cshim::gettext;
-use crate::os::env::{expand_env_into, home_replace_in, os_hostname_into};
+use crate::os::env::os_hostname_into;
 use crate::os::fs::file_info;
 use crate::os::time::{ctime_text, uptime};
 use crate::os::users::{uname_within, username_named_within};
@@ -101,7 +102,7 @@ fn b0_name(full: &CStr) -> Vec<u8> {
     let room = B0_FNAME_SIZE_CRYPT as usize;
     // `home_replace` writes "~/", and the user name is spliced in after
     // the tilde.
-    let name = home_replace_in(None, full, room, true).to_vec();
+    let name = home_to_tilde(None, full, room, true).to_vec();
     if name.first() != Some(&b'~') {
         return name;
     }
@@ -410,7 +411,7 @@ pub(crate) fn swapfile_is_for_other_file(buffer: Buf, fname: &CStr) -> bool {
     // The name in the swap file may be "~user/path/file". Symlinks can
     // point at the same file under two names, so the inode has the last
     // word.
-    let expanded = expand_env_into(&cstr::owned(stored), MAXPATHL as usize);
+    let expanded = expand_env_within(&cstr::owned(stored), MAXPATHL as usize);
     files_differ(full, Some(&cstr::owned(&expanded)), b0.ino())
 }
 

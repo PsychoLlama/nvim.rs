@@ -266,7 +266,7 @@ fn file_changed_shell(buffer: Buf, bufref: BufRef, reason: Reason) -> Fcs {
 /// Safe: [`Buf`] carries the whole of the promise this needs.
 fn warn_changed(buffer: Buf, mesg: &CStr, mesg2: &CStr, can_reload: bool) -> (Reload, bool) {
     let shown = buffer.name.shown().unwrap_or_default();
-    let path = home_replace_in(Some(buffer), shown, shown.count_bytes() + 3, true);
+    let path = home_to_tilde(Some(buffer), shown, shown.count_bytes() + 3, true);
     // +2 for either '\n' or "; " and +1 for NUL.
     let size = path.len() + mesg.count_bytes() + mesg2.count_bytes() + 3;
     let mut tbuf = formatted(size, mesg.to_bytes(), &[FmtArg::from(path.as_cstr())]);

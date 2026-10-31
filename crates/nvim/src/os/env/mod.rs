@@ -7,10 +7,9 @@
 //! work the same on Windows; enumerating it does not, so that reads `environ`
 //! directly. `uname` supplies the hostname.
 //!
-//! - This file: getting, setting and enumerating variables, plus the resolved
-//!   home directory.
-//! - [`expand`]: `$VAR` and `~` inside a path.
-//! - [`dirs`]: `$VIM`/`$VIMRUNTIME` and the `~` shorthand going back out.
+//! Getting, setting and enumerating variables, plus the resolved home
+//! directory. What the editor makes of them -- `$VAR` and `~` inside a path,
+//! `$VIM`/`$VIMRUNTIME`, the XDG directories -- is `crate::env`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `os/` row in docs/perimeter.md.
@@ -18,20 +17,6 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-pub mod dirs;
-pub mod expand;
-
-pub use dirs::{
-    home_replace, home_replace_save, vim_env_iter, vim_env_iter_rev, vim_get_prefix_from_exepath,
-    vim_getenv,
-};
-pub(crate) use dirs::{home_replace_in, vim_getenv_owned};
-pub use expand::{
-    expand_env, expand_env_esc, expand_env_into, expand_env_save, expand_env_save_opt,
-};
-pub(crate) use expand::{expand_env_esc_of, expand_env_save_opt_of};
-
-use crate::charset::skipwhite;
 use crate::cstr;
 use crate::event::libuv::{
     uv_err_name, uv_os_getenv, uv_os_homedir, uv_os_setenv, uv_os_unsetenv, uv_strerror,
@@ -39,19 +24,19 @@ use crate::event::libuv::{
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::memory::XString;
-use crate::memory::{xfree, xmalloc, xmemcpyz, xmemdupz, xstrdup, xstrlcat, xstrlcpy};
+use crate::memory::{xfree, xmalloc, xmemcpyz, xmemdupz, xstrlcat, xstrlcpy};
 use crate::message::internal_error;
 use crate::message_fmt::c_str;
 use crate::os::cshim::{environ, strchr};
 use crate::os::fs::{dirname_within, realpath};
 use crate::os::state::{didset_vim, didset_vimruntime};
 use crate::os::uv_error::{UV_EINVAL, UV_ENOBUFS, UV_ENOENT, UV_UNKNOWN};
-use crate::path::{path_is_absolute, path_tail, tail_with_sep_index, vim_ispathsep};
+use crate::path::{path_is_absolute, path_tail, tail_with_sep_index};
 use crate::startup::nvim_testing;
 use crate::strings::striequal;
 use crate::types::{Candidate, Expand, IOSIZE, MAXPATHL, int64_t, size_t};
-use ::libc::{getpid, strcasecmp, strcpy, strpbrk, uname, utsname};
-use core::ffi::{CStr, c_char, c_int, c_void};
+use ::libc::{getpid, strcasecmp, uname, utsname};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use std::ffi::CString;
 
@@ -80,11 +65,6 @@ const ENV_SEPSTR: &CStr = c":";
 /// No prescribed maximum for `$PATH` on Unix.
 const MAX_ENVPATHLEN: usize = c_int::MAX as usize;
 
-pub static default_vim_dir: GlobalCell<*mut c_char> =
-    GlobalCell::new(c"/usr/local/share/nvim".as_ptr().cast_mut());
-pub static default_vimruntime_dir: GlobalCell<*mut c_char> = GlobalCell::new(
-    concat!(env!("NVIM_DEFAULT_VIMRUNTIME_DIR"), "\0").as_ptr() as *const c_char as *mut c_char,
-);
 /// Where the build installed nvim's Lua runtime files; empty when it did not
 /// say.
 pub(crate) const DEFAULT_LIB_DIR: &CStr =
@@ -414,7 +394,13 @@ pub(crate) fn os_hostname_into(hostname: &mut [u8]) {
 
 /// The "real", resolved user home directory, as [`init_homedir`] worked it
 /// out.
-pub(crate) static homedir: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
+static homedir: GlobalCell<Option<XString>> = GlobalCell::new(None);
+
+/// `f` of the resolved home directory, or of `None` before
+/// [`init_homedir`] found one.
+pub(crate) fn with_home_dir<R>(f: impl FnOnce(Option<&[u8]>) -> R) -> R {
+    homedir.with(|home| f(home.as_deref()))
+}
 
 /// Resolve the user's home directory into [`homedir`]:
 ///
@@ -424,9 +410,7 @@ pub(crate) static homedir: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_m
 /// 4. and, failing all of that, the current working directory.
 pub fn init_homedir() {
     // In case this is a second call.
-    // SAFETY: the cell holds null or the allocation the last call made.
-    unsafe { xfree(homedir.get().cast()) };
-    homedir.set(ptr::null_mut());
+    homedir.set(None);
 
     let mut uv_home = env_buf();
     let home = getenv_owned(c"HOME").map(|home| home.to_vec()).or_else(|| {
@@ -449,7 +433,7 @@ pub fn init_homedir() {
         other => dirname_within(MAXPATHL as usize).ok().or(other),
     };
     if let Some(home) = home {
-        homedir.set(XString::from_vec(home).into_raw());
+        homedir.set(Some(XString::from_vec(home)));
     }
 }
 

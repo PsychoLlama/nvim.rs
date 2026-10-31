@@ -9,10 +9,10 @@
 use super::*;
 use crate::charset::{CharDisplay, skip};
 use crate::cstr;
+use crate::env::home_to_tilde;
 use crate::keycodes::ModMask;
 use crate::keycodes::{Key, termcap_key, termcap_name};
 use crate::mbyte::{cells_at, char_at, cluster_len, encode_char, unescape_at};
-use crate::os::env::home_replace_in;
 use crate::types::MB_MAXCHAR;
 use core::ffi::{CStr, c_int};
 
@@ -76,7 +76,7 @@ pub fn msg_home_replace(fname: &CStr) {
 /// [`msg_home_replace`] with a highlight id.
 pub(crate) fn msg_home_replace_hl(fname: &CStr, hl_id: c_int) {
     // Room for the name, a `~/` and the terminator, as upstream sized it.
-    let name = home_replace_in(None, fname, fname.count_bytes() + 3, true);
+    let name = home_to_tilde(None, fname, fname.count_bytes() + 3, true);
     msg_display(name.as_cstr(), hl_id, false);
 }
 

@@ -16,11 +16,11 @@ use crate::allocator::Owned;
 use crate::autocmd::fire_autocmds_for;
 use crate::buffer::{BufFlags, alloc_unregistered_buffer};
 use crate::cstr;
+use crate::env::{expand_env_within, home_to_tilde};
 use crate::fileio::{Loaded, ReadFlags};
 use crate::guard::Suppress;
 use crate::memfile::{BlockId, MemFile};
 use crate::message_fmt::msg_cstr;
-use crate::os::env::{expand_env_into, home_replace_in};
 use crate::os::fs::file_info;
 use crate::semsg;
 use crate::smsg;
@@ -139,7 +139,7 @@ pub fn ml_recover(checkext: bool) {
         // from what the swap file says it belongs to.
         if directly {
             let name = cstr::owned(&recorded.fname);
-            let path = expand_env_into(&name, MAXPATHL as usize);
+            let path = expand_env_within(&name, MAXPATHL as usize);
             if setfname(Buf::current(), Some(&cstr::owned(&path)), None, true).is_err() {
                 break 'theend;
             }
@@ -148,13 +148,13 @@ pub fn ml_recover(checkext: bool) {
         msg_ext_set_kind(c"wmsg");
         msg_ext_skip_flush.set(true);
         let swap_name = buf.b_ml.memfile().fname().unwrap_or(c"").to_owned();
-        let path = home_replace_in(None, &swap_name, MAXPATHL as usize, true);
+        let path = home_to_tilde(None, &swap_name, MAXPATHL as usize, true);
         smsg!(0, "Using swap file \"{}\"", shown(path.as_cstr()));
         let path = match buf_spname(&Buf::current()) {
             Some(special) => XString::from_cstr(special),
             None => {
                 let full = Buf::current().name.full().unwrap_or(c"").to_owned();
-                home_replace_in(None, &full, MAXPATHL as usize, true)
+                home_to_tilde(None, &full, MAXPATHL as usize, true)
             }
         };
         msg_putchar('\n' as c_int);

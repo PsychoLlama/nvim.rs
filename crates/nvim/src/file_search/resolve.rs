@@ -17,12 +17,12 @@
 )]
 
 use super::*;
+use crate::env::expand_env_escaped;
 use crate::memory::XString;
 use crate::message_fmt::{emsg_text, msg_cstr};
 use crate::option::vars::P_CDPATH;
 use crate::option::{option_parts, split_option_part};
 use crate::optionstr::OptString;
-use crate::os::env::expand_env_esc_of;
 use crate::os::fs::path_exists;
 use crate::path::buffer_path;
 use crate::tr_c;
@@ -98,7 +98,7 @@ pub(crate) fn find_directory_in_path(
 /// space, so that a name escaped for the command line reaches the file
 /// system whole.
 fn prepare_name(name: &[u8], options: FileNameOpts) -> XString {
-    let expanded = cstr::with_terminated(name, |name| expand_env_esc_of(name, false, true, None));
+    let expanded = cstr::with_terminated(name, |name| expand_env_escaped(name, false, true, None));
     if !options.has(FileNameOpts::UNESC) {
         return expanded;
     }

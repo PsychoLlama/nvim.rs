@@ -120,8 +120,6 @@ binary as well as the default one.
 
 ## `os`
 
-- `neovim::os::env::default_vim_dir`
-- `neovim::os::env::default_vimruntime_dir`
 - `neovim::os::input::blocking`
 - `neovim::os::input::input_read_pos`
 - `neovim::os::input::input_write_pos`

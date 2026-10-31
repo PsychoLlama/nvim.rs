@@ -31,11 +31,11 @@
 #![forbid(unsafe_code)]
 
 use super::{VALID_HEAD, VALID_PATH, at, is_sep, str_arg_chk};
+use crate::env::{expand_env, home_to_tilde};
 use crate::eval::do_string_sub;
 use crate::eval::typval::NumBuf;
 use crate::mbyte::{cluster_len, head_off};
 use crate::memory::XString;
-use crate::os::env::{expand_env_save_opt_of, home_replace_in};
 use crate::os::fs::{dir_exists, dirname_text};
 use crate::path::{full_name_save, path_fnamencmp, tail_index, vim_is_abs_name};
 use crate::strings::find_char;
@@ -158,7 +158,7 @@ fn full_path_stage(f: &mut Fname<'_>, tilde_file: bool) {
     // says that is a file rather than $HOME.
     let b = f.cstr().to_bytes();
     if at(b, 0) == b'~' && !(tilde_file && at(b, 1) == 0) {
-        let expanded = expand_env_save_opt_of(f.cstr(), false);
+        let expanded = expand_env(f.cstr(), false);
         f.adopt(expanded);
     }
 
@@ -214,7 +214,7 @@ fn home_stages(
         // compare; `expand_env_save` is what removes a leading "~".
         let made = if !*has_fullname && !*has_homerelative {
             Some(if f.byte(0) == b'~' {
-                expand_env_save_opt_of(f.cstr(), false)
+                expand_env(f.cstr(), false)
             } else {
                 full_name_save(f.cstr(), false)
             })
@@ -227,7 +227,7 @@ fn home_stages(
         if which == b'.' {
             let mut dirname = dirname_text();
             if *has_homerelative {
-                dirname = home_replace_in(None, dirname.as_cstr(), MAXPATHL as usize, true);
+                dirname = home_to_tilde(None, dirname.as_cstr(), MAXPATHL as usize, true);
             }
             let namelen = dirname.len();
             // Not `shorten_fname`: that removes the prefix even when the path
@@ -243,7 +243,7 @@ fn home_stages(
                 }
             }
         } else {
-            let home = home_replace_in(None, p, MAXPATHL as usize, true);
+            let home = home_to_tilde(None, p, MAXPATHL as usize, true);
             // Only replace it when it did start with the home directory.
             if home.first() == Some(&b'~') {
                 f.adopt(home);

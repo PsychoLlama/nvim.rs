@@ -49,6 +49,7 @@ use crate::debugger::state::{
 };
 use crate::drawscreen::state::cmdline_row;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
+use crate::env::{expand_env, home_to_tilde};
 use crate::eval::{eval_expr, typval_compare, typval_tostring};
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_docmd::state::{ex_nesting_level, ex_normal_busy};
@@ -65,7 +66,6 @@ use crate::message::state::{
     cmd_silent, did_emsg, emsg_silent, lines_left, msg_row, msg_scroll, need_wait_return, redir_off,
 };
 use crate::message_fmt::msg_bytes;
-use crate::os::env::{expand_env_save_opt_of, home_replace_in};
 use crate::path::fix_fname;
 use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRING};
 use crate::runtime::{estack_sfile, sourcing_lnum};
@@ -370,8 +370,8 @@ fn dbg_parsearg(arg: &[u8], list: BreakList) -> Result<Breakpoint, Failed> {
         // Expand the file name the way `do_source` does -- twice, so that
         // `$DIR/file` expands when `$DIR` is itself `~/dir`.
         let pattern = CString::new(rest).expect("a command line holds no NUL");
-        let once = expand_env_save_opt_of(&pattern, false);
-        let twice = expand_env_save_opt_of(once.as_cstr(), false);
+        let once = expand_env(&pattern, false);
+        let twice = expand_env(once.as_cstr(), false);
         if twice.first() == Some(&b'*') {
             twice
         } else {
@@ -528,7 +528,7 @@ pub fn ex_breaklist(_excmd: &mut ExArg) {
             // Where upstream shortens it in `NameBuff`.
             (
                 "file",
-                home_replace_in(None, name.as_cstr(), MAXPATHL as usize, true),
+                home_to_tilde(None, name.as_cstr(), MAXPATHL as usize, true),
             )
         };
         let shown = msg_bytes(&shown);

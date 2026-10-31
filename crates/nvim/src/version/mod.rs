@@ -11,6 +11,7 @@
 mod vim_patches;
 
 use crate::cstr;
+use crate::env::{DEFAULT_VIM_DIR, DEFAULT_VIMRUNTIME_DIR};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
@@ -30,7 +31,6 @@ use crate::message::state::msg_col;
 use crate::message::{msg_ext_set_kind, msg_putchar, msg_str};
 use crate::option::vars::{P_SHM, p_ls, p_verbose};
 use crate::os::cshim::gettext;
-use crate::os::env::{default_vim_dir, default_vimruntime_dir};
 use crate::startup::starting;
 use crate::types::ui::{kUIMessages, kUIMultigrid};
 use crate::types::{Array, ExArg, OptInt, ShmFlag};
@@ -321,14 +321,14 @@ pub(crate) fn list_version() {
         version_msg(SYS_VIMRC_FILE);
         version_msg(c"\"\n");
         for (label, dir) in [
-            (c"  fall-back for $VIM: \"", default_vim_dir.get()),
-            (c" f-b for $VIMRUNTIME: \"", default_vimruntime_dir.get()),
+            (c"  fall-back for $VIM: \"", DEFAULT_VIM_DIR),
+            (c" f-b for $VIMRUNTIME: \"", DEFAULT_VIMRUNTIME_DIR),
         ] {
-            if unsafe { *dir } == 0 {
+            if dir.is_empty() {
                 continue;
             }
             version_msg(translate(label));
-            unsafe { version_msg(CStr::from_ptr(dir)) };
+            version_msg(dir);
             version_msg(c"\"\n");
         }
     }

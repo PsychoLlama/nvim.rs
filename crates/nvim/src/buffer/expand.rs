@@ -20,6 +20,7 @@
 
 use crate::cmdexpand::{BUF_DIFF_FILTER, WildOpts};
 use crate::cstr;
+use crate::env::home_to_tilde;
 use crate::memory::XString;
 use core::ffi::c_int;
 
@@ -28,7 +29,6 @@ use crate::cmdexpand::cmdline_fuzzy_complete;
 use crate::diff::diff_mode_buf;
 use crate::fuzzy::fuzzy_match_str;
 use crate::option::vars::{p_fic, p_wic};
-use crate::os::env::home_replace_in;
 use crate::regexp::{RE_MAGIC, vim_regexec};
 use crate::types::{Failed, RegMatch};
 use crate::winlayer::{self, Buf, Win, buffers};
@@ -40,7 +40,7 @@ fn current_win() -> Win {
 /// `home_replace_save`: `name` with `$HOME` written as `~`, freshly made.
 /// `buffer` decides whether a help file keeps only its tail.
 fn home_replaced(buffer: Option<Buf>, name: &CStr) -> XString {
-    home_replace_in(buffer, name, name.to_bytes().len() + 3, true)
+    home_to_tilde(buffer, name, name.to_bytes().len() + 3, true)
 }
 
 // ---------------------------------------------------------------------------

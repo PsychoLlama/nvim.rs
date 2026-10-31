@@ -14,6 +14,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::env::expand_env_escaped;
 use crate::optionstr::OptString;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_uint};
@@ -30,7 +31,6 @@ use crate::options::{
     kOptKeymap, kOptPackpath, kOptPath, kOptRuntimepath, kOptSpellsuggest, kOptSyntax, kOptTags,
     kOptViewdir,
 };
-use crate::os::env::expand_env_esc_of;
 use crate::regexp::vim_regexec;
 use crate::strings::escaped_bytes;
 use crate::types::{
@@ -85,7 +85,7 @@ pub(crate) fn option_expand(opt_idx: OptIndex, val: Option<&CStr>) -> Option<XSt
     // 'spellsuggest' items are `file:<name>`; only that prefix's tail
     // is a path.
     let one_prefix = (opt_idx == kOptSpellsuggest).then_some(c"file:");
-    let expanded = expand_env_esc_of(val, esc, false, one_prefix);
+    let expanded = expand_env_escaped(val, esc, false, one_prefix);
     (expanded.as_cstr() != val).then_some(expanded)
 }
 

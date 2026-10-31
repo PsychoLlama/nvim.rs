@@ -15,6 +15,7 @@
 use super::*;
 use crate::autocmd::fire_autocmds_for;
 use crate::cstr;
+use crate::env::expand_env;
 use crate::formatted;
 use crate::lua::executor::nlua_exec_cstr;
 use crate::memory::XString;
@@ -31,7 +32,6 @@ use crate::guard::Script;
 use crate::memline::Lines;
 use crate::optionstr::OptStringRef;
 use crate::os::cshim::gettext;
-use crate::os::env::expand_env_save_opt_of;
 use crate::os::fs::dir_exists;
 use crate::types::{FAIL, IOSIZE, OK};
 use core::ffi::{CStr, c_int};
@@ -243,7 +243,7 @@ fn source_name(req: &SourceRequest) -> Result<(SourceCookie, XString), c_int> {
         }
         Origin::File => {
             let fname = req.fname.unwrap_or(c"");
-            let expanded = expand_env_save_opt_of(fname, false);
+            let expanded = expand_env(fname, false);
             let name = fix_fname(expanded.as_cstr());
             if !dir_exists(name.as_cstr()) {
                 return Ok((SourceCookie::new(), name));

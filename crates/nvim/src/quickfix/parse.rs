@@ -16,8 +16,8 @@
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::env::expand_env_within;
 use crate::memory::XString;
-use crate::os::env::expand_env_into;
 use crate::os::fs::path_exists;
 use core::ffi::{CStr, c_char, c_int};
 
@@ -280,7 +280,7 @@ impl Fields {
             return Status::Fail;
         };
         let name = XString::from_bytes(until_nul(&line[span.start..span.end]));
-        self.namebuf = XString::from_bytes(&expand_env_into(name.as_cstr(), FIELD_MAX + 1));
+        self.namebuf = XString::from_bytes(&expand_env_within(name.as_cstr(), FIELD_MAX + 1));
         // A separate file-name format (%O, %P, %Q) only claims a line
         // when the file it names really exists.
         if b"OPQ".contains(&prefix) && !path_exists(self.namebuf.as_cstr()) {

@@ -24,10 +24,10 @@
 )]
 
 use super::*;
+use crate::env::{getenv_resolved, xdg_var};
 use crate::memory::ThinCString;
-use crate::os::env::{DEFAULT_LIB_DIR, vim_getenv_owned};
+use crate::os::env::DEFAULT_LIB_DIR;
 use crate::os::fs::dir_exists;
-use crate::os::stdpaths::xdg_var;
 
 use crate::types::MAXPATHL;
 
@@ -182,7 +182,7 @@ pub fn get_lib_dir() -> Option<XString> {
     if !DEFAULT_LIB_DIR.is_empty() && dir_exists(DEFAULT_LIB_DIR) {
         return Some(XString::from_cstr(DEFAULT_LIB_DIR));
     }
-    let mut exe_name = vim_get_prefix_from_exepath();
+    let mut exe_name = install_prefix();
     append_path(&mut exe_name, b"lib/nvim", MAXPATHL as usize).ok()?;
     Some(XString::from_vec(exe_name))
 }
@@ -211,7 +211,7 @@ pub(crate) fn runtimepath_default(clean_arg: bool) -> Option<XString> {
     } else {
         xdg_var(kXDGConfigHome)
     };
-    let vimruntime = vim_getenv_owned(c"VIMRUNTIME");
+    let vimruntime = getenv_resolved(c"VIMRUNTIME");
     let libdir = get_lib_dir();
     let data_dirs = xdg_var(kXDGDataDirs);
     let config_dirs = xdg_var(kXDGConfigDirs);

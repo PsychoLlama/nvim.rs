@@ -65,6 +65,7 @@
 {"path":"neovim::digraph::default_digraphs","kind":"fn","file":"crates/nvim/src/digraph/mod.rs","tests":["crates/nvim/tests/unit/digraph.rs"]}
 {"path":"neovim::digraph::lookup_default","kind":"fn","file":"crates/nvim/src/digraph/mod.rs","tests":["crates/nvim/tests/unit/digraph.rs"]}
 {"path":"neovim::drawscreen::default_grid_alloc","kind":"fn","file":"crates/nvim/src/drawscreen/resize.rs","tests":["crates/nvim/tests/unit/support.rs"]}
+{"path":"neovim::env::expand::expand_env_bounded","kind":"fn","file":"crates/nvim/src/env/expand.rs","tests":["crates/nvim/tests/unit/env.rs"]}
 {"path":"neovim::eval::eval0","kind":"fn","file":"crates/nvim/src/eval/expr/level.rs","tests":["crates/nvim/tests/unit/support/tv.rs"]}
 {"path":"neovim::eval::eval_to_number","kind":"fn","file":"crates/nvim/src/eval/entry.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs","crates/nvim/tests/unit/normal.rs"]}
 {"path":"neovim::eval::eval_to_string","kind":"fn","file":"crates/nvim/src/eval/entry.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs","crates/nvim/tests/unit/fold.rs","crates/nvim/tests/unit/normal.rs","crates/nvim/tests/unit/regexp.rs","crates/nvim/tests/unit/support.rs"]}
@@ -343,7 +344,6 @@
 {"path":"neovim::os::env::os_setenv_append_path","kind":"fn","file":"crates/nvim/src/os/env/mod.rs","tests":["crates/nvim/tests/unit/env.rs"]}
 {"path":"neovim::os::env::os_shell_is_cmdexe","kind":"fn","file":"crates/nvim/src/os/env/mod.rs","tests":["crates/nvim/tests/unit/env.rs"]}
 {"path":"neovim::os::env::os_unsetenv","kind":"fn","file":"crates/nvim/src/os/env/mod.rs","tests":["crates/nvim/tests/unit/support.rs"]}
-{"path":"neovim::os::env::expand::expand_env_esc","kind":"fn","file":"crates/nvim/src/os/env/expand.rs","tests":["crates/nvim/tests/unit/env.rs"]}
 {"path":"neovim::os::fileio::FileOpenFlags","kind":"type","file":"crates/nvim/src/os/fileio.rs","tests":["crates/nvim/tests/unit/fileio.rs"]}
 {"path":"neovim::os::fileio::file_close","kind":"fn","file":"crates/nvim/src/os/fileio.rs","tests":["crates/nvim/tests/unit/fileio.rs"]}
 {"path":"neovim::os::fileio::file_flush","kind":"fn","file":"crates/nvim/src/os/fileio.rs","tests":["crates/nvim/tests/unit/fileio.rs"]}
@@ -392,9 +392,9 @@
 {"path":"neovim::os::shell::shell_free_argv","kind":"fn","file":"crates/nvim/src/os/shell/mod.rs","tests":["crates/nvim/tests/unit/shell.rs"]}
 {"path":"neovim::os::shell::system::os_system_capture","kind":"fn","file":"crates/nvim/src/os/shell/system.rs","tests":["crates/nvim/tests/unit/shell.rs"]}
 {"path":"neovim::os::users::os_get_uname","kind":"fn","file":"crates/nvim/src/os/users.rs","tests":["crates/nvim/tests/unit/users.rs"]}
-{"path":"neovim::os::users::os_get_userdir","kind":"fn","file":"crates/nvim/src/os/users.rs","tests":["crates/nvim/tests/unit/users.rs"]}
 {"path":"neovim::os::users::os_get_username","kind":"fn","file":"crates/nvim/src/os/users.rs","tests":["crates/nvim/tests/unit/users.rs"]}
 {"path":"neovim::os::users::os_get_usernames","kind":"fn","file":"crates/nvim/src/os/users.rs","tests":["crates/nvim/tests/unit/users.rs"]}
+{"path":"neovim::os::users::user_home_dir","kind":"fn","file":"crates/nvim/src/os/users.rs","tests":["crates/nvim/tests/unit/users.rs"]}
 {"path":"neovim::os::uv_error::UV_EBADF","kind":"const","file":"crates/nvim/src/os/uv_error.rs","tests":["crates/nvim/tests/unit/fs.rs"]}
 {"path":"neovim::os::uv_error::UV_EEXIST","kind":"const","file":"crates/nvim/src/os/uv_error.rs","tests":["crates/nvim/tests/unit/fileio.rs","crates/nvim/tests/unit/fs.rs"]}
 {"path":"neovim::os::uv_error::UV_EISDIR","kind":"const","file":"crates/nvim/src/os/uv_error.rs","tests":["crates/nvim/tests/unit/fileio.rs"]}

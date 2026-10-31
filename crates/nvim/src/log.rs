@@ -47,15 +47,15 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::env::{expand_env_within, state_subpath, xdg_home};
 use crate::eval::vars::vim_var_bytes;
 use crate::global_cell::GlobalCell;
 use crate::message_fmt::{msg_cstr, to_bytes};
 use crate::msg_schedule_semsg;
 use crate::os::env::{
-    ENV_LOGFILE, ENV_LOGFILE_WANT, ENV_NVIM, env_get_bounded, env_set, expand_env_into, os_get_pid,
+    ENV_LOGFILE, ENV_LOGFILE_WANT, ENV_NVIM, env_get_bounded, env_set, os_get_pid,
 };
 use crate::os::fs::{MkdirFailure, dir_exists, mkdir_recurse};
-use crate::os::stdpaths::{user_state_subpath, xdg_home};
 use crate::os::time::{os_localtime, tm_zeroed};
 use crate::path::tail_index;
 use crate::startup::ui_client_channel_id;
@@ -204,7 +204,7 @@ fn path_is_dir(path: &[u8]) -> bool {
 /// actually set the variable (`expand_env` leaves the reference verbatim
 /// when it is unset).
 fn expand_log_file_var() -> (Vec<u8>, bool) {
-    let expanded = expand_env_into(ENV_LOGFILE_REF, LOG_PATH_SIZE);
+    let expanded = expand_env_within(ENV_LOGFILE_REF, LOG_PATH_SIZE);
     let user_set = expanded != ENV_LOGFILE_REF.to_bytes();
     (expanded, user_set)
 }
@@ -224,7 +224,7 @@ fn ensure_state_home() -> Option<MkdirFailure> {
 
 /// The default log path, `$XDG_STATE_HOME/nvim/nvim.log`.
 fn default_log_path() -> Vec<u8> {
-    user_state_subpath(c"nvim.log").into_bytes()
+    state_subpath(c"nvim.log", 0, true).to_vec()
 }
 
 /// Decide the log file path and publish it as `$NVIM_LOG_FILE`.

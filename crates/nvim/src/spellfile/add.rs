@@ -28,6 +28,7 @@
 #![forbid(unsafe_code)]
 
 use crate::cstr;
+use crate::env::{home_to_tilde, xdg_home};
 use crate::semsg;
 use crate::smsg;
 use crate::strings::has_bytes;
@@ -53,9 +54,7 @@ use crate::option::set_option_value_give_err;
 use crate::option::split_option_part;
 use crate::options::kOptSpellfile;
 use crate::os::cshim::gettext;
-use crate::os::env::home_replace_in;
 use crate::os::fs::{mkdir_recurse, os_mkdir};
-use crate::os::stdpaths::xdg_home;
 use crate::path::{dir_of_file_exists, path_tail, tail_with_sep_index, vim_ispathsep};
 use crate::spell::{int_wordlist, spell_enc, with_lang};
 use crate::types::{MAXPATHL, OptVal, OptionSetFlags, SpellAddType};
@@ -178,7 +177,7 @@ pub fn spell_add_word(word: &[u8], what: SpellAddType, idx: c_int, undo: bool) {
                 let _ = fd.write_all(&entry);
                 drop(fd);
 
-                let shown = home_replace_in(None, fname.as_cstr(), MAXPATHL as usize, true);
+                let shown = home_to_tilde(None, fname.as_cstr(), MAXPATHL as usize, true);
                 let (word, shown) = (msg_bytes(word), msg_bytes(&shown));
                 smsg!(0, "Word '{word}' added to {shown}");
             }
@@ -234,7 +233,7 @@ fn comment_out_word(fname: &CStr, word: &[u8], undo: bool) -> bool {
         if fd.seek(SeekFrom::Start(fpos)).is_ok() {
             let _ = fd.write_all(b"#");
             if undo {
-                let shown = home_replace_in(None, fname, MAXPATHL as usize, true);
+                let shown = home_to_tilde(None, fname, MAXPATHL as usize, true);
                 let (word, shown) = (msg_bytes(word), msg_bytes(&shown));
                 smsg!(0, "Word '{word}' removed from {shown}");
             }

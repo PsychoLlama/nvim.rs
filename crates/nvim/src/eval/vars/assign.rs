@@ -19,6 +19,7 @@
 )]
 
 use crate::cstr::{self, byte_at};
+use crate::env::getenv_resolved;
 use crate::guard::Suppress;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
@@ -45,7 +46,7 @@ use crate::option::{
     optval_concat, set_option_value_handle_tty,
 };
 use crate::os::cshim::gettext_owned;
-use crate::os::env::{vim_getenv_owned, vim_setenv_named};
+use crate::os::env::vim_setenv_named;
 use crate::register::{get_reg_contents_owned, write_reg_contents};
 use crate::types::{ExArg, Failed, OptInt, OptVal, TypVal, VAR_LIST, VarNumber};
 
@@ -376,7 +377,7 @@ fn ex_let_env(
         let joined;
         let mut value: &CStr = value;
         if op == Some(b'.')
-            && let Some(old) = cstr::with_terminated(name, vim_getenv_owned)
+            && let Some(old) = cstr::with_terminated(name, getenv_resolved)
         {
             joined = join(&old, value.to_bytes());
             value = &joined;

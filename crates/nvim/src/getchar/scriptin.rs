@@ -17,8 +17,8 @@
 )]
 
 use super::*;
+use crate::env::expand_env_within;
 use crate::message_fmt::msg_cstr;
-use crate::os::env::expand_env_into;
 use crate::os::fileio::ReadFile;
 use crate::os::fs::os_strerror;
 use crate::semsg;
@@ -63,7 +63,7 @@ pub fn openscript(name: &CStr, directly: bool) {
     curscript.set(curscript.get() + 1);
     // The expanded name; upstream expands into `NameBuff`, cut to
     // `MAXPATHL`.
-    let expanded = CString::new(expand_env_into(name, MAXPATHL as usize + 1))
+    let expanded = CString::new(expand_env_within(name, MAXPATHL as usize + 1))
         .expect("an expansion up to its NUL");
     match ReadFile::open(&expanded, kFileReadOnly) {
         Ok(file) => scriptin.with_mut(|stack| stack[slot(curscript.get())] = Some(file)),

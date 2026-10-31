@@ -42,6 +42,7 @@ mod view;
 
 use crate::autocmd::fire_autocmds;
 use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_terminal};
+use crate::env::home_to_tilde;
 use crate::eval::vars::set_vim_var_string;
 use crate::ex_docmd::{create_exfile, vim_mkdir_emsg};
 use crate::ex_getln::fnameescape;
@@ -61,7 +62,6 @@ use crate::options::{
     kOptSsopFlagSesdir, kOptSsopFlagSkiprtp, kOptSsopFlagTerminal,
 };
 use crate::os::cshim::gettext;
-use crate::os::env::home_replace_in;
 use crate::os::fs::{dir_exists, dirname_within, os_chdir};
 use crate::path::{after_pathsep, vim_full_name, vim_ispathsep};
 use crate::runtime::do_source;
@@ -242,7 +242,7 @@ fn ses_fname(out: &mut SessionFile, buffer: Buf, opts: SessionOpts, add_eol: boo
 /// command line would eat escaped.
 fn ses_escape_fname(name: &CStr) -> XString {
     // Room for the name and "~/", as `home_replace_save` sized it.
-    let sname = home_replace_in(None, name, name.count_bytes() + 3, true);
+    let sname = home_to_tilde(None, name, name.count_bytes() + 3, true);
     let mut text = sname.to_vec();
     // A character at a time, so the scan never lands inside one.
     let mut at = 0;
@@ -336,7 +336,7 @@ fn get_view_file(c: u8) -> Option<XString> {
         emsg(gettext(e_noname));
         return None;
     };
-    let sname = home_replace_in(None, full.as_cstr(), full.len() + 3, true);
+    let sname = home_to_tilde(None, full.as_cstr(), full.len() + 3, true);
 
     let mut view = XString::from_bytes(&P_VDIR.get());
     // `add_pathsep`, over the buffer just built.

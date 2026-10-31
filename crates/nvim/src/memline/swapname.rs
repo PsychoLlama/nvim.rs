@@ -15,6 +15,7 @@
 use crate::autocmd::fire_autocmds_for;
 use crate::buffer::BufFlags;
 use crate::cstr;
+use crate::env::home_to_tilde;
 use crate::ex_docmd::cmdmod_has;
 use crate::guard::{Lock, Suppress};
 use crate::mbyte::cluster_len;
@@ -23,7 +24,6 @@ use crate::memory::XString;
 use crate::message_fmt::msg_cstr;
 use crate::option::split_option_part;
 use crate::option::vars::P_DIR;
-use crate::os::env::home_replace_in;
 use crate::os::fs::{dir_exists, file_info, link_exists, mkdir_recurse};
 use crate::path::ExpandFlags;
 use crate::semsg;
@@ -432,7 +432,7 @@ fn ask_about_swapfile(buffer: Buf, fname: &CStr) -> SwapExistsChoice {
 
     // Room for the name, a `~/` and the terminator, as `home_replace_save`
     // sized it.
-    let fhname = home_replace_in(None, fname, fname.count_bytes() + 3, true);
+    let fhname = home_to_tilde(None, fname, fname.count_bytes() + 3, true);
     let shown = buffer.name.shown().unwrap_or(c"").to_owned();
     attention_message(fname, &fhname, &shown, &mut msg);
 

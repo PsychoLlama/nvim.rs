@@ -32,6 +32,7 @@ use super::{
 };
 use crate::buffer::first_wininfo_lnum;
 use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_terminal};
+use crate::env::home_to_tilde;
 use crate::eval::typval::NumBuf;
 use crate::eval::var_flavour;
 use crate::eval::vars::globvar_dict;
@@ -42,7 +43,6 @@ use crate::options::{
     kOptSsopFlagOptions, kOptSsopFlagResize, kOptSsopFlagSesdir, kOptSsopFlagTabpages,
     kOptSsopFlagTerminal, kOptSsopFlagWinsize,
 };
-use crate::os::env::home_replace_in;
 use crate::strings::escaped_bytes;
 use crate::types::ArgListId;
 use crate::types::{
@@ -204,7 +204,7 @@ fn put_cd(out: &mut SessionFile, dirnow: &XString) -> bool {
     }
     let globaldir = own_dir(DirOwner::Global);
     let dir: &CStr = globaldir.as_ref().unwrap_or(dirnow).as_cstr();
-    let sname = home_replace_in(None, dir, dir.count_bytes() + 3, true);
+    let sname = home_to_tilde(None, dir, dir.count_bytes() + 3, true);
     let fname_esc = ses_escape_fname(sname.as_cstr());
     out.puts(c"cd ") && out.put_bytes(&fname_esc) && out.eol()
 }

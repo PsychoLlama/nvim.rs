@@ -13,6 +13,7 @@
 use crate::ascii::ascii_isxdigit;
 use crate::charset::{Str2NrBases, hex2nr, str2nr_in};
 use crate::cstr::byte_at;
+use crate::env::{expand_env, getenv_resolved};
 use crate::eval::typval::{tv_blob_alloc, tv_blob_set_ret};
 use crate::eval::vars::eval_one_expr_in_text;
 use crate::eval::{Cursor, char_len_at, env_name_len, option_var_end};
@@ -28,7 +29,6 @@ use crate::option::optval_as_tv;
 use crate::option::{get_option_value, get_tty_option, is_option_hidden, is_tty_option};
 use crate::options::kOptInvalid;
 use crate::os::cshim::gettext;
-use crate::os::env::{expand_env_save_opt_of, vim_getenv_owned};
 use crate::semsg;
 use crate::types::{Failed, Float, MB_MAXCHAR, NUL, OptVal, TypVal};
 use core::ffi::c_int;
@@ -584,7 +584,7 @@ pub(crate) fn eval_env_var(
         return Err(Failed);
     }
 
-    let value = vim_getenv_owned(XString::from_bytes(name).as_cstr());
+    let value = getenv_resolved(XString::from_bytes(name).as_cstr());
     let value = value.filter(|value| !value.is_empty());
     let value = value.or_else(|| {
         // Not in the environment: let `expand_env` have it, which knows
@@ -593,7 +593,7 @@ pub(crate) fn eval_env_var(
         let mut spelled = XString::with_capacity(name.len() + 1);
         spelled.push_byte(b'$');
         spelled.push_bytes(name);
-        let expanded = expand_env_save_opt_of(spelled.as_cstr(), false);
+        let expanded = expand_env(spelled.as_cstr(), false);
         (expanded.first() != Some(&b'$')).then_some(expanded)
     });
     result.write_string(value.map(ThinCString::from));

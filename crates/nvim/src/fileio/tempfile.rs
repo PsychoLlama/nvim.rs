@@ -13,10 +13,11 @@
 
 #![forbid(unsafe_code)]
 
+use crate::env::expand_env_within;
 use crate::memory::XString;
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::msg_schedule_semsg;
-use crate::os::env::{env_exists, expand_env_into};
+use crate::os::env::env_exists;
 use crate::os::fs::{dir_exists, getperm, os_mkdtemp, os_strerror, set_umask};
 use crate::os::users::username_within;
 use crate::smsg;
@@ -105,7 +106,7 @@ fn vim_mktempdir() {
     for root in TEMP_DIR_NAMES {
         // Leave room for "/tmp/nvim.<user>/XXXXXX/999999999".
         let room = TEMP_FILE_PATH_MAXLEN as usize - 63;
-        let mut tmp = Template::new(&expand_env_into(root, room));
+        let mut tmp = Template::new(&expand_env_within(root, room));
 
         if !dir_exists(&tmp.as_cstr()) {
             if root == c"$TMPDIR" {

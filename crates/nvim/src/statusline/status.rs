@@ -113,7 +113,7 @@ pub(crate) fn trans_bufname(buffer: Buf) -> Vec<u8> {
         Some(special) => special.to_bytes().to_vec(),
         None => {
             let shown = buffer.name.shown().unwrap_or(c"");
-            crate::os::env::home_replace_in(Some(buffer), shown, room, true).to_vec()
+            crate::env::home_to_tilde(Some(buffer), shown, room, true).to_vec()
         }
     };
     name.truncate(room - 1);

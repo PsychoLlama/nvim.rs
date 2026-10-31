@@ -11,6 +11,7 @@ use crate::channel::{
     channel_job_start, channel_process_events, channel_terminal_alloc, with_channel,
 };
 use crate::cstr;
+use crate::env::home_to_tilde;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
     DictRef, NumBuf, dict_extend, dict_find, dict_get_number, list_iter, tv_dict_alloc,
@@ -30,7 +31,7 @@ use crate::message::{e_channotpty, e_invarg};
 use crate::message_fmt::msg_cstr;
 use crate::option::vars::p_tgc;
 use crate::os::cshim::gettext;
-use crate::os::env::{ENV_NVIM, getenv_owned, home_replace_in};
+use crate::os::env::{ENV_NVIM, getenv_owned};
 use crate::os::fs::dir_exists;
 use crate::os::time::os_hrtime;
 use crate::path::vim_full_name;
@@ -566,7 +567,7 @@ fn attach_terminal(id: uint64_t, cwd: &CStr, cmd: &CStr) {
         // Name the buffer `term://{cwd}//{pid}:{cmd}`.
         let full = vim_full_name(cwd, MAXPATHL as usize, false).unwrap_or_else(|name| name);
         let full = cstr::owned(&full);
-        let mut dir = home_replace_in(None, &full, IOSIZE as usize, true)
+        let mut dir = home_to_tilde(None, &full, IOSIZE as usize, true)
             .as_cstr()
             .to_bytes()
             .to_vec();

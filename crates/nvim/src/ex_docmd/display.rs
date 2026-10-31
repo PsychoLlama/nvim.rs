@@ -2,6 +2,7 @@
 //! redrawing, `:redir`, highlighting and the digraph table.
 #![forbid(unsafe_code)]
 
+use crate::env::expand_env;
 use crate::guard::{Allow, Saved, Suppress};
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
@@ -35,7 +36,6 @@ use crate::os::cshim::gettext;
 use crate::r#move::{update_topline, validate_cursor};
 use crate::normal::visual_active;
 
-use crate::os::env::expand_env_save_opt_of;
 use crate::register::{valid_yank_reg, write_reg_contents};
 use crate::state::MODE_CMDLINE;
 use crate::statusline::draw_tabline;
@@ -94,7 +94,7 @@ pub(crate) fn ex_redir(excmd: &mut ExArg) {
         };
         at = excmd.line.skip_white(at);
         close_redir();
-        let fname = expand_env_save_opt_of(excmd.line.cstr_from(at), false);
+        let fname = expand_env(excmd.line.cstr_from(at), false);
         redir_fd.set(open_exfile(
             fname.as_cstr(),
             c_int::from(excmd.forceit),

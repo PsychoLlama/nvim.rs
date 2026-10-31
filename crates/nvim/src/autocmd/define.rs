@@ -20,10 +20,10 @@
 use super::*;
 use crate::charset::skip;
 use crate::cstr;
+use crate::env::expand_env;
 use crate::lua::executor::nlua_set_sctx;
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
-use crate::os::env::expand::expand_env_save_opt_of;
 use crate::semsg;
 use crate::types::{AutoHandler, Failed};
 use crate::winlayer::TabPage;
@@ -79,7 +79,7 @@ pub fn do_autocmd(excmd: &mut ExArg, forceit: ::core::ffi::c_int) {
         let mut cmd_at = if at(end) != 0 { end + 1 } else { end };
 
         pattern = if raw.contains(&b'$') || raw.contains(&b'~') {
-            expand_env_save_opt_of(XString::from_bytes(raw).as_cstr(), false)
+            expand_env(XString::from_bytes(raw).as_cstr(), false)
         } else {
             XString::from_bytes(raw)
         };

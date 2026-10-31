@@ -7,8 +7,8 @@
 
 #![forbid(unsafe_code)]
 
+use crate::env::home_to_tilde;
 use crate::memory::XString;
-use crate::os::env::home_replace_in;
 use crate::strings::{FmtArg, format_into};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
@@ -39,7 +39,7 @@ impl Report {
     pub(crate) fn quoted_fname(buffer: Buf, fname: Option<&CStr>, room: usize) -> Report {
         let name = fname.unwrap_or(c"-stdin-");
         let mut text = XString::from_bytes(b"\"");
-        text.push_bytes(&home_replace_in(Some(buffer), name, room - 4, true));
+        text.push_bytes(&home_to_tilde(Some(buffer), name, room - 4, true));
         let mut report = Report(text);
         report.push_within(b"\" ", room);
         report

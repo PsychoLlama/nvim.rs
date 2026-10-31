@@ -7,6 +7,7 @@
 #![forbid(unsafe_code)]
 
 use crate::cstr;
+use crate::env::expand_env;
 use crate::eval::callback_copy;
 use crate::file_search::do_autocmd_dirchanged;
 use crate::guard::Lock;
@@ -16,7 +17,6 @@ use crate::message::emsg;
 use crate::option::callback_from_option;
 use crate::optionstr::did_set_optexpr;
 use crate::os::cshim::gettext;
-use crate::os::env::expand_env_save_opt_of;
 use crate::os::fs::current_dir;
 use crate::path::pathcmp;
 use crate::semsg;
@@ -286,7 +286,7 @@ pub(crate) fn change_dir(new_dir: &CStr, scope: CdScope) -> bool {
 
     // `:cd` with no argument means home, when 'cdhome' is set.
     if new_dir.is_empty() && p_cdh() {
-        new_dir = expand_env_save_opt_of(c"$HOME", false);
+        new_dir = expand_env(c"$HOME", false);
     }
 
     let dir_differs = pdir

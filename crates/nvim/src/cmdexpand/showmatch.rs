@@ -12,6 +12,7 @@ use super::*;
 use crate::charset::vim_strsize_cstr;
 use crate::cstr;
 use crate::drawscreen::state::cmdline_row;
+use crate::env::{expand_env, home_to_tilde};
 use crate::getchar::state::got_int;
 use crate::highlight_group::{HLF_D, HLF_T};
 use crate::lua::executor::nlua_expand_pat;
@@ -21,7 +22,6 @@ use crate::message::{
     msg_start, msg_str, msg_str_hl,
 };
 use crate::os::cshim::gettext;
-use crate::os::env::{expand_env_save_opt_of, home_replace_in};
 use crate::os::fs::dir_exists;
 use crate::path::{tail_index, vim_ispathsep};
 use crate::popupmenu::pum_clear;
@@ -105,7 +105,7 @@ pub(crate) fn showmatches_oneline(
                 // Expansion was done before and special characters were
                 // escaped, need to halve backslashes.  Also $HOME has been
                 // replaced with ~/.
-                let path = expand_env_save_opt_of(m.as_cstr(), true);
+                let path = expand_env(m.as_cstr(), true);
                 dir_exists(backslash_halved(&path).as_cstr())
             } else {
                 // Expansion was done here, file names are literal.
@@ -114,7 +114,7 @@ pub(crate) fn showmatches_oneline(
             let shown = if showtail {
                 show_match(m)
             } else {
-                home_replace_in(None, m.as_cstr(), MAXPATHL as usize, true)
+                home_to_tilde(None, m.as_cstr(), MAXPATHL as usize, true)
             };
             (isdir, shown)
         } else {
@@ -204,7 +204,7 @@ pub fn showmatches(
         let mut maxlen = 0;
         for m in matches {
             let len = if !showtail && lists_paths(expand) {
-                let shown = home_replace_in(None, m.as_cstr(), MAXPATHL as usize, true);
+                let shown = home_to_tilde(None, m.as_cstr(), MAXPATHL as usize, true);
                 vim_strsize_cstr(shown.as_cstr())
             } else {
                 vim_strsize_cstr(show_match(m).as_cstr())
