@@ -1,7 +1,7 @@
-//! The scan behind [`vim_str2nr`](super::vim_str2nr): which base a literal
+//! The scan behind upstream's `vim_str2nr`: which base a literal
 //! is in, where its digits end, and what they add up to.
 //!
-//! All of it is safe code. The cursor it walks ([`Scan`](super::Scan)) is a
+//! All of it is safe code. The cursor it walks (upstream's `Scan`) is a
 //! raw pointer, but its reads are checked once, where the cursor is built,
 //! so the algorithm itself never touches one — which is why this file can
 //! forbid unsafe outright while carrying the whole of `vim_str2nr` bar its

@@ -28,21 +28,21 @@ use crate::keycodes::Ctrl_V;
 
 /// How many leading bytes of `s` are spaces or tabs.
 ///
-/// The slice form of [`skipwhite`](super::skipwhite).
+/// The slice form of upstream's `skipwhite`.
 pub fn white(s: &[u8]) -> usize {
     count(s, is_white)
 }
 
 /// How many bytes of `s` come before the first space or tab.
 ///
-/// The slice form of [`skiptowhite`](super::skiptowhite).
+/// The slice form of upstream's `skiptowhite`.
 pub fn to_white(s: &[u8]) -> usize {
     count(s, |byte| !is_white(byte))
 }
 
 /// [`to_white`], but a backslash or CTRL-V hides the byte after it.
 ///
-/// The slice form of [`skiptowhite_esc`](super::skiptowhite_esc). The escape
+/// The slice form of upstream's `skiptowhite_esc`. The escape
 /// only hides a byte that is actually there: a trailing backslash is the last
 /// byte skipped, never a step past the end.
 pub fn to_white_esc(s: &[u8]) -> usize {
@@ -107,21 +107,21 @@ pub fn decimal_int(s: &[u8]) -> (i32, usize) {
 
 /// How many leading bytes of `s` are decimal digits.
 ///
-/// The slice form of [`skipdigits`](super::skipdigits).
+/// The slice form of upstream's `skipdigits`.
 pub fn digits(s: &[u8]) -> usize {
     count(s, is_digit)
 }
 
 /// How many leading bytes of `s` are hexadecimal digits.
 ///
-/// The slice form of [`skiphex`](super::skiphex).
+/// The slice form of upstream's `skiphex`.
 pub fn hex(s: &[u8]) -> usize {
     count(s, is_xdigit)
 }
 
 /// How many leading bytes of `s` are binary digits.
 ///
-/// The slice form of [`skipbin`](super::skipbin).
+/// The slice form of upstream's `skipbin`.
 pub fn bin(s: &[u8]) -> usize {
     count(s, is_bdigit)
 }

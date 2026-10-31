@@ -32,7 +32,7 @@ use crate::types::CharInfo;
 /// How many bytes the character at the start of `bytes` occupies, or 0 if
 /// there is no character there because `bytes` is empty.
 ///
-/// The slice form of [`utf_ptr2len`](super::utf_ptr2len). Answers 1 for
+/// The slice form of [`utf_ptr2len`](crate::harness::utf_ptr2len). Answers 1 for
 /// anything that is not a complete sequence *within the slice*, so a walk
 /// always makes progress and never steps past the end: unlike
 /// upstream's `utf_ptr2len_len`, which reports a truncated
@@ -86,7 +86,7 @@ pub fn promised_char_len(bytes: &[u8]) -> usize {
 /// is no character there -- an incomplete sequence, a bad continuation byte,
 /// or a byte that leads nothing at all.
 ///
-/// The slice form of [`utf_ptr2char_info_impl`](super::utf_ptr2char_info_impl),
+/// The slice form of [`utf_ptr2char_info_impl`](crate::harness::utf_ptr2char_info_impl),
 /// and the strict half of the pair this module's parent documents: where
 /// [`char_at`] answers the lead byte's own value for anything it cannot
 /// decode, this says "not a character" and lets the caller draw the byte.
@@ -139,7 +139,7 @@ pub fn char_info_at(bytes: &[u8]) -> CharInfo {
 /// The codepoint at the start of `bytes`, or the first byte's own value if
 /// there is no complete sequence there. An empty slice answers 0.
 ///
-/// The slice form of [`utf_ptr2char`](super::utf_ptr2char). Forgiving in the
+/// The slice form of [`utf_ptr2char`](crate::harness::utf_ptr2char). Forgiving in the
 /// same way: nothing is ever an error, so a walk over arbitrary bytes always
 /// gets something back.
 #[inline]
