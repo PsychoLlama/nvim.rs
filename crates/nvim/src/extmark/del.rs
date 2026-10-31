@@ -38,26 +38,26 @@ pub fn extmark_del_id(buffer: Buf, ns_id: uint32_t, id: uint32_t) -> bool {
 
 /// [`extmark_del_id`] for the callers that already hold a [`Buf`].
 pub(crate) fn del_id(mut buffer: Buf, ns_id: uint32_t, id: uint32_t) -> bool {
-    let mut itr = MarkTreeIter::default();
-    let key = tree_lookup_ns(buffer.marktree(), ns_id, id, false, Some(&mut itr));
+    let mut iter = MarkTreeIter::default();
+    let key = tree_lookup_ns(buffer.marktree(), ns_id, id, false, Some(&mut iter));
     if key.id != 0 {
-        del(buffer, &mut itr, key, false);
+        del(buffer, &mut iter, key, false);
     }
     key.id > 0
 }
 
 /// Remove the (possibly paired) extmark `key` that `itr` is on.
-pub(crate) fn del(mut buffer: Buf, itr: &mut MarkTreeIter, mut key: MTKey, restore: bool) {
+pub(crate) fn del(mut buffer: Buf, iter: &mut MarkTreeIter, mut key: MTKey, restore: bool) {
     debug_assert!(key.pos.row >= 0, "key.pos.row >= 0");
 
     let mut key2 = key;
-    let other = tree_del_itr(buffer.marktree(), itr, false);
+    let other = tree_del_itr(buffer.marktree(), iter, false);
     if other != 0 {
-        key2 = tree_lookup(buffer.marktree(), other, Some(itr));
+        key2 = tree_lookup(buffer.marktree(), other, Some(iter));
         debug_assert!(key2.pos.row >= 0, "key2.pos.row >= 0");
-        tree_del_itr(buffer.marktree(), itr, false);
+        tree_del_itr(buffer.marktree(), iter, false);
         if restore {
-            itr_get(buffer.marktree(), key.pos.row, key.pos.col, itr);
+            itr_get(buffer.marktree(), key.pos.row, key.pos.col, iter);
         }
     }
 
@@ -107,10 +107,10 @@ pub fn extmark_clear(
     let mut marks_cleared_any = false;
     let mut marks_cleared_all = l_row == 0 && l_col == 0;
 
-    let mut itr = MarkTreeIter::default();
-    itr_get(buffer.marktree(), l_row, l_col, &mut itr);
+    let mut iter = MarkTreeIter::default();
+    itr_get(buffer.marktree(), l_row, l_col, &mut iter);
     loop {
-        let mark = itr_current(&mut itr);
+        let mark = itr_current(buffer.marktree(), &iter);
         if mark.pos.row < 0
             || mark.pos.row > u_row
             || (mark.pos.row == u_row && mark.pos.col > u_col)
@@ -122,9 +122,9 @@ pub fn extmark_clear(
         }
         if mark.ns == ns_id || all_ns {
             marks_cleared_any = true;
-            del(buffer, &mut itr, mark, true);
+            del(buffer, &mut iter, mark, true);
         } else {
-            itr_next(buffer.marktree(), &mut itr);
+            itr_next(buffer.marktree(), &mut iter);
         }
     }
 

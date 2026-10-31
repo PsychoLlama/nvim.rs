@@ -1,5 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -21,213 +20,131 @@
 //! intersection, and the three-way shuffle when a child changes parent — is a
 //! linear merge.
 //!
-//! Every set is an `Intersection`, klib's `kvec_withinit_t`: four ids inline in
-//! the node itself, moving to the heap beyond that. [`IdSet`] holds the raw
-//! pointer to one rather than a `&mut Intersection`, because while the set is
-//! inline the `items` field points at the very bytes such a reference would
-//! cover, and reborrowing them invalidates it.
+//! Every set is an [`IdSet`]: up to four ids inline in the node, a `Vec`
+//! beyond that — klib's `kvec_withinit_t`, minus its pointer into itself.
 
-use core::ffi::c_void;
-use core::{ptr, slice};
+use crate::types::uint64_t;
 
-use crate::memory::{xmalloc, xrealloc};
-use crate::types::{Intersection, uint64_t};
+/// Nested to keep the name out of the flat cdef namespace `ffigen` builds.
+mod sizes {
+    /// How many ids a set holds before it goes to the heap.
+    pub(super) const INTERSECT_INLINE: usize = 4;
+}
+use sizes::INTERSECT_INLINE;
 
-use super::node::INTERSECT_INLINE;
+/// One node's set of covering mark ids.
+#[derive(Clone, Debug)]
+pub enum IdSet {
+    /// Short sets, which is nearly all of them.
+    Inline {
+        len: u8,
+        ids: [uint64_t; INTERSECT_INLINE],
+    },
+    /// A set that once outgrew the inline array. It stays on the heap when it
+    /// shrinks again, as the kvec did.
+    Heap(Vec<uint64_t>),
+}
 
-/// A borrowed view of one node's set of covering mark ids.
-pub struct IdSet {
-    set: *mut Intersection,
+impl Default for IdSet {
+    fn default() -> Self {
+        IdSet::EMPTY
+    }
 }
 
 impl IdSet {
-    /// # Safety
-    /// `set` must name a live `Intersection` that outlives the view, and no
-    /// other view of the same set may be used while this one is.
-    #[inline]
-    pub unsafe fn new(set: *mut Intersection) -> Self {
-        IdSet { set }
+    /// An empty inline set.
+    pub const EMPTY: IdSet = IdSet::Inline {
+        len: 0,
+        ids: [0; INTERSECT_INLINE],
+    };
+
+    /// A set holding `ids`, in the order given.
+    #[cfg(test)]
+    fn from_slice(ids: &[uint64_t]) -> IdSet {
+        let mut set = IdSet::EMPTY;
+        set.extend_from_slice(ids);
+        set
     }
 
-    /// `size`, `capacity` and `items` in one read.
-    fn parts(&self) -> (usize, usize, *mut uint64_t) {
-        // SAFETY: `self.set` names a live `Intersection` per `IdSet::new`, so
-        // its three header fields are initialised.
-        unsafe { ((*self.set).size, (*self.set).capacity, (*self.set).items) }
-    }
-
-    /// The struct's own inline array, freshly derived.
-    fn inline_array(&self) -> *mut uint64_t {
-        // SAFETY: `self.set` is live, so `init_array` is a field of it; this
-        // only takes its address.
-        unsafe { (&raw mut (*self.set).init_array).cast() }
-    }
-
-    /// Where the ids actually live.
-    ///
-    /// While the set is inline, `items` names the containing struct's own
-    /// `init_array`; re-derive that address rather than trusting the stored
-    /// pointer, which is what keeps this sound however the node was reached.
-    fn base(&self) -> *mut uint64_t {
-        let (_, _, items) = self.parts();
-        let inline = self.inline_array();
-        if items == inline { inline } else { items }
-    }
-
-    fn set_len(&self, len: usize) {
-        // SAFETY: `self.set` is live and no other view of it is in use.
-        unsafe { (*self.set).size = len };
-    }
-
-    /// Point the set at `items`, which holds room for `capacity` ids.
-    fn set_storage(&self, items: *mut uint64_t, capacity: usize) {
-        // SAFETY: `self.set` is live and no other view of it is in use.
-        unsafe { (*self.set).items = items };
-        // SAFETY: as above.
-        unsafe { (*self.set).capacity = capacity };
-    }
-
-    /// `kvi_init`: empty the set and point it at its own inline array. Only
-    /// valid where the containing struct will stay put.
-    pub fn init(&self) {
-        self.set_storage(self.inline_array(), INTERSECT_INLINE);
-        self.set_len(0);
-    }
-
-    /// Still living in the containing struct's own array, not on the heap.
+    /// Still living in the node's own array, not on the heap.
     pub fn is_inline(&self) -> bool {
-        let (_, _, items) = self.parts();
-        items == self.inline_array()
+        matches!(self, IdSet::Inline { .. })
     }
 
+    #[inline]
     pub fn len(&self) -> usize {
-        self.parts().0
+        match self {
+            IdSet::Inline { len, .. } => usize::from(*len),
+            IdSet::Heap(ids) => ids.len(),
+        }
     }
 
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    #[inline]
     pub fn as_slice(&self) -> &[uint64_t] {
-        let len = self.len();
-        if len == 0 {
-            return &[];
+        match self {
+            IdSet::Inline { len, ids } => &ids[..usize::from(*len)],
+            IdSet::Heap(ids) => ids,
         }
-        // SAFETY: `base` names `len` initialised, contiguous ids — either the
-        // live struct's own inline array or the heap buffer `reserve` grew.
-        unsafe { slice::from_raw_parts(self.base(), len) }
     }
 
-    #[allow(clippy::mut_from_ref)]
-    fn as_mut_slice(&self) -> &mut [uint64_t] {
-        let len = self.len();
-        if len == 0 {
-            return &mut [];
+    #[inline]
+    fn as_mut_slice(&mut self) -> &mut [uint64_t] {
+        match self {
+            IdSet::Inline { len, ids } => &mut ids[..usize::from(*len)],
+            IdSet::Heap(ids) => ids,
         }
-        // SAFETY: as `as_slice`, and `IdSet::new` promises no other view of the
-        // same set is in use, so this is the only slice over those ids.
-        unsafe { slice::from_raw_parts_mut(self.base(), len) }
-    }
-
-    /// Make room for `extra` more ids, doubling onto the heap if the inline
-    /// array or the current buffer is too small.
-    fn reserve(&self, extra: usize) {
-        let (len, capacity, items) = self.parts();
-        let needed = len + extra;
-        if needed <= capacity {
-            return;
-        }
-        let mut grown = capacity.max(INTERSECT_INLINE);
-        while grown < needed {
-            grown <<= 1;
-        }
-        let bytes = grown * size_of::<uint64_t>();
-        let base = self.base();
-        let moved: *mut uint64_t = if items == self.inline_array() {
-            // SAFETY: `xmalloc` hands back `bytes` of suitably aligned storage
-            // and never returns null.
-            let heap = unsafe { xmalloc(bytes) }.cast::<uint64_t>();
-            // SAFETY: `base` holds `len` ids and the fresh buffer is at least
-            // `needed >= len` ids wide; the two cannot overlap.
-            unsafe { ptr::copy_nonoverlapping(base, heap, len) };
-            heap
-        } else {
-            // SAFETY: `base` is this set's own heap buffer, so `xrealloc` may
-            // grow it in place or move it, and it never returns null.
-            unsafe { xrealloc(base.cast(), bytes) }.cast()
-        };
-        self.set_storage(moved, grown);
     }
 
     /// Append, without regard for the ordering.
-    pub fn push(&self, id: uint64_t) {
-        self.reserve(1);
-        let len = self.len();
-        // SAFETY: `reserve` left room for one more id past the `len` in use.
-        unsafe { self.base().add(len).write(id) };
-        self.set_len(len + 1);
+    pub fn push(&mut self, id: uint64_t) {
+        match self {
+            IdSet::Inline { len, ids } if usize::from(*len) < INTERSECT_INLINE => {
+                ids[usize::from(*len)] = id;
+                *len += 1;
+            }
+            IdSet::Inline { ids, .. } => {
+                let mut heap = Vec::with_capacity(2 * INTERSECT_INLINE);
+                heap.extend_from_slice(ids);
+                heap.push(id);
+                *self = IdSet::Heap(heap);
+            }
+            IdSet::Heap(ids) => ids.push(id),
+        }
     }
 
-    pub fn extend_from_slice(&self, ids: &[uint64_t]) {
-        if ids.is_empty() {
-            return;
+    pub fn extend_from_slice(&mut self, ids: &[uint64_t]) {
+        for &id in ids {
+            self.push(id);
         }
-        self.reserve(ids.len());
-        let end = self.base().wrapping_add(self.len());
-        // SAFETY: `reserve` left room for `ids.len()` more ids at `end`; `ids`
-        // is a live slice and every caller passes another set's ids, so the
-        // two ranges do not overlap.
-        unsafe { ptr::copy_nonoverlapping(ids.as_ptr(), end, ids.len()) };
-        self.set_len(self.len() + ids.len());
     }
 
     /// Insert at `at`, shifting the tail up.
-    pub fn insert(&self, at: usize, id: uint64_t) {
-        self.push(id);
-        let items = self.as_mut_slice();
-        items[at..].rotate_right(1);
-    }
-
-    pub fn truncate(&self, len: usize) {
-        debug_assert!(len <= self.len());
-        self.set_len(len);
-    }
-
-    pub fn clear(&self) {
-        self.set_len(0);
-    }
-
-    /// Hand back the heap buffer, if the set ever left its inline array, and
-    /// leave the set empty and inline. The caller frees it.
-    #[must_use = "the returned buffer must be freed"]
-    pub fn take_heap(&self) -> *mut c_void {
-        let (_, _, items) = self.parts();
-        let heap = if items == self.inline_array() || items.is_null() {
-            ptr::null_mut()
+    pub fn insert(&mut self, at: usize, id: uint64_t) {
+        if let IdSet::Heap(ids) = self {
+            ids.insert(at, id);
         } else {
-            items.cast()
-        };
-        self.init();
-        heap
+            self.push(id);
+            self.as_mut_slice()[at..].rotate_right(1);
+        }
     }
 
-    /// Take `src`'s contents over, leaving `src` alone. The inline case has to
-    /// copy: `src`'s `items` names `src`'s own bytes, which the caller is about
-    /// to stop using.
-    pub fn move_from(&self, src: &IdSet) {
-        let (len, capacity, items) = src.parts();
-        let dest = self.inline_array();
-        let items = if items == src.inline_array() {
-            // SAFETY: `src`'s ids live in its own inline array, which holds at
-            // most `INTERSECT_INLINE` of them — so does this set's, and the two
-            // structs are distinct, so the ranges do not overlap.
-            unsafe { ptr::copy_nonoverlapping(src.base(), dest, len) };
-            dest
-        } else {
-            items
-        };
-        self.set_storage(items, capacity);
-        self.set_len(len);
+    pub fn truncate(&mut self, new_len: usize) {
+        debug_assert!(new_len <= self.len());
+        match self {
+            IdSet::Inline { len, .. } => {
+                *len = u8::try_from(new_len).expect("an inline set holds a handful of ids");
+            }
+            IdSet::Heap(ids) => ids.truncate(new_len),
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.truncate(0);
     }
 
     /// Is `id` in the set? Bails at the first larger id, as the C did — the
@@ -243,25 +160,17 @@ impl IdSet {
         false
     }
 
-    /// Add `id`, keeping the set sorted. Optimised for the common case of the
-    /// new id being the largest.
-    pub fn insert_sorted(&self, id: uint64_t) {
-        self.push(id);
-        let items = self.as_mut_slice();
-        let mut i = items.len() - 1;
-        loop {
-            if i > 0 && items[i - 1] > id {
-                items[i] = items[i - 1];
-                i -= 1;
-            } else {
-                items[i] = id;
-                return;
-            }
-        }
+    /// Add `id`, keeping the set sorted: after every id not greater than it,
+    /// as upstream's shift from the end placed it. A set covering a long
+    /// stretch of a big buffer holds hundreds of ids, so the place is found by
+    /// bisection and the tail moves in one copy.
+    pub fn insert_sorted(&mut self, id: uint64_t) {
+        let at = self.as_slice().partition_point(|&have| have <= id);
+        self.insert(at, id);
     }
 
     /// Remove `id` if present. `strict` asserts that it was.
-    pub fn remove(&self, id: uint64_t, strict: bool) {
+    pub fn remove(&mut self, id: uint64_t, strict: bool) {
         let items = self.as_mut_slice();
         let mut at = items.len();
         let mut seen = false;
@@ -277,15 +186,16 @@ impl IdSet {
             debug_assert!(seen, "seen");
         }
         if seen {
+            let len = items.len();
             items.copy_within(at + 1.., at);
-            self.set_len(items.len() - 1);
+            self.truncate(len - 1);
         }
     }
 }
 
 /// Move what `x` and `y` have in common into `m`, leaving each of them with
 /// only what the other lacked. All three stay sorted.
-pub fn intersect_merge(m: &IdSet, x: &IdSet, y: &IdSet) {
+pub fn intersect_merge(m: &mut IdSet, x: &mut IdSet, y: &mut IdSet) {
     let (mut xi, mut yi, mut xn, mut yn) = (0, 0, 0, 0);
     while xi < x.len() && yi < y.len() {
         let (a, b) = (x.as_slice()[xi], y.as_slice()[yi]);
@@ -310,7 +220,7 @@ pub fn intersect_merge(m: &IdSet, x: &IdSet, y: &IdSet) {
 }
 
 /// Shift `set[from..]` down to `to` and answer how many were moved.
-fn compact_tail(set: &IdSet, to: usize, from: usize) -> usize {
+fn compact_tail(set: &mut IdSet, to: usize, from: usize) -> usize {
     let items = set.as_mut_slice();
     if from >= items.len() {
         return 0;
@@ -326,7 +236,7 @@ fn compact_tail(set: &IdSet, to: usize, from: usize) -> usize {
 ///
 /// `d` collects the ids that `y`'s *other* children have to take on, because
 /// `y` can only keep an id that every one of its children now shares.
-pub fn intersect_mov(x: &IdSet, y: &IdSet, w: &IdSet, d: &IdSet) {
+pub fn intersect_mov(x: &IdSet, y: &mut IdSet, w: &mut IdSet, d: &mut IdSet) {
     let (mut wi, mut yi, mut wn, mut yn, mut xi) = (0, 0, 0, 0, 0);
     while wi < w.len() || xi < x.len() {
         let take_w = wi < w.len() && (xi >= x.len() || x.as_slice()[xi] >= w.as_slice()[wi]);
@@ -384,7 +294,7 @@ pub fn intersect_mov(x: &IdSet, y: &IdSet, w: &IdSet, d: &IdSet) {
 }
 
 /// `i = x & y`, appended to whatever `i` already holds.
-pub fn intersect_common(i: &IdSet, x: &IdSet, y: &IdSet) {
+pub fn intersect_common(i: &mut IdSet, x: &IdSet, y: &IdSet) {
     let (mut xi, mut yi) = (0, 0);
     while xi < x.len() && yi < y.len() {
         let (a, b) = (x.as_slice()[xi], y.as_slice()[yi]);
@@ -401,7 +311,7 @@ pub fn intersect_common(i: &IdSet, x: &IdSet, y: &IdSet) {
 }
 
 /// `x |= y`, in place and in order.
-pub fn intersect_add(x: &IdSet, y: &IdSet) {
+pub fn intersect_add(x: &mut IdSet, y: &IdSet) {
     let (mut xi, mut yi) = (0, 0);
     while xi < x.len() && yi < y.len() {
         let (a, b) = (x.as_slice()[xi], y.as_slice()[yi]);
@@ -422,7 +332,7 @@ pub fn intersect_add(x: &IdSet, y: &IdSet) {
 }
 
 /// `x &= ~y`, in place.
-pub fn intersect_sub(x: &IdSet, y: &IdSet) {
+pub fn intersect_sub(x: &mut IdSet, y: &IdSet) {
     let (mut xi, mut yi, mut xn) = (0, 0, 0);
     while xi < x.len() && yi < y.len() {
         let (a, b) = (x.as_slice()[xi], y.as_slice()[yi]);
@@ -444,44 +354,18 @@ pub fn intersect_sub(x: &IdSet, y: &IdSet) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::memory::xfree;
 
-    /// An `Intersection` that stays put for the length of a test. `init` points
-    /// `items` at the struct's own array, so it must not be moved afterwards.
-    struct Fixture(Box<Intersection>);
-
-    impl Fixture {
-        fn new(ids: &[uint64_t]) -> Self {
-            let f = Fixture(Box::new(Intersection {
-                size: 0,
-                capacity: 0,
-                items: ptr::null_mut(),
-                init_array: [0; INTERSECT_INLINE],
-            }));
-            let set = f.set();
-            set.init();
-            set.extend_from_slice(ids);
-            f
-        }
-
-        fn set(&self) -> IdSet {
-            unsafe { IdSet::new(&raw const *self.0 as *mut Intersection) }
-        }
-    }
-
-    impl Drop for Fixture {
-        fn drop(&mut self) {
-            unsafe { xfree(self.set().take_heap()) };
-        }
+    fn set(ids: &[uint64_t]) -> IdSet {
+        IdSet::from_slice(ids)
     }
 
     #[test]
     fn grows_off_the_inline_array_and_keeps_the_order() {
-        let f = Fixture::new(&[]);
-        let set = f.set();
+        let mut set = set(&[]);
         for id in (0..20).rev() {
             set.insert_sorted(id * 2);
         }
+        assert!(!set.is_inline());
         assert_eq!(set.len(), 20);
         assert_eq!(
             set.as_slice(),
@@ -492,67 +376,76 @@ mod tests {
     }
 
     #[test]
+    fn an_insert_in_the_middle_of_a_full_inline_set_spills_in_order() {
+        let mut set = set(&[1, 2, 4, 5]);
+        assert!(set.is_inline());
+        set.insert(2, 3);
+        assert!(!set.is_inline());
+        assert_eq!(set.as_slice(), &[1, 2, 3, 4, 5]);
+    }
+
+    #[test]
     fn removing_the_only_id_empties_the_set() {
-        let f = Fixture::new(&[4]);
-        f.set().remove(4, true);
-        assert!(f.set().is_empty());
+        let mut f = set(&[4]);
+        f.remove(4, true);
+        assert!(f.is_empty());
         // Removing an absent id is a no-op when not strict.
-        f.set().remove(4, false);
-        assert!(f.set().is_empty());
+        f.remove(4, false);
+        assert!(f.is_empty());
     }
 
     #[test]
     fn removing_from_the_middle_closes_the_gap() {
-        let f = Fixture::new(&[2, 4, 6, 8]);
-        f.set().remove(4, true);
-        assert_eq!(f.set().as_slice(), &[2, 6, 8]);
+        let mut f = set(&[2, 4, 6, 8]);
+        f.remove(4, true);
+        assert_eq!(f.as_slice(), &[2, 6, 8]);
     }
 
     #[test]
     #[should_panic(expected = "seen")]
     fn a_strict_removal_of_an_absent_id_is_a_bug() {
-        let f = Fixture::new(&[2, 6]);
-        f.set().remove(4, true);
+        let mut f = set(&[2, 6]);
+        f.remove(4, true);
     }
 
     #[test]
     fn merge_moves_the_shared_ids_out_of_both() {
-        let m = Fixture::new(&[]);
-        let x = Fixture::new(&[1, 2, 3, 5]);
-        let y = Fixture::new(&[2, 3, 4]);
-        intersect_merge(&m.set(), &x.set(), &y.set());
-        assert_eq!(m.set().as_slice(), &[2, 3]);
-        assert_eq!(x.set().as_slice(), &[1, 5]);
-        assert_eq!(y.set().as_slice(), &[4]);
+        let mut m = set(&[]);
+        let mut x = set(&[1, 2, 3, 5]);
+        let mut y = set(&[2, 3, 4]);
+        intersect_merge(&mut m, &mut x, &mut y);
+        assert_eq!(m.as_slice(), &[2, 3]);
+        assert_eq!(x.as_slice(), &[1, 5]);
+        assert_eq!(y.as_slice(), &[4]);
     }
 
     #[test]
     fn common_leaves_both_inputs_alone() {
-        let i = Fixture::new(&[]);
-        let x = Fixture::new(&[1, 2, 3]);
-        let y = Fixture::new(&[2, 3, 9]);
-        intersect_common(&i.set(), &x.set(), &y.set());
-        assert_eq!(i.set().as_slice(), &[2, 3]);
-        assert_eq!(x.set().as_slice(), &[1, 2, 3]);
-        assert_eq!(y.set().as_slice(), &[2, 3, 9]);
+        let mut i = set(&[]);
+        let x = set(&[1, 2, 3]);
+        let y = set(&[2, 3, 9]);
+        intersect_common(&mut i, &x, &y);
+        assert_eq!(i.as_slice(), &[2, 3]);
+        assert_eq!(x.as_slice(), &[1, 2, 3]);
+        assert_eq!(y.as_slice(), &[2, 3, 9]);
     }
 
     #[test]
     fn union_and_difference_keep_the_set_sorted() {
-        let x = Fixture::new(&[2, 6]);
-        let y = Fixture::new(&[1, 2, 4, 8, 9, 10, 11]);
-        intersect_add(&x.set(), &y.set());
-        assert_eq!(x.set().as_slice(), &[1, 2, 4, 6, 8, 9, 10, 11]);
-        intersect_sub(&x.set(), &y.set());
-        assert_eq!(x.set().as_slice(), &[6]);
+        let mut x = set(&[2, 6]);
+        let y = set(&[1, 2, 4, 8, 9, 10, 11]);
+        intersect_add(&mut x, &y);
+        assert_eq!(x.as_slice(), &[1, 2, 4, 6, 8, 9, 10, 11]);
+        intersect_sub(&mut x, &y);
+        assert_eq!(x.as_slice(), &[6]);
     }
 
     #[test]
     fn difference_with_nothing_in_common_keeps_everything() {
-        let x = Fixture::new(&[1, 3, 5]);
-        let y = Fixture::new(&[2, 4]);
-        intersect_sub(&x.set(), &y.set());
-        assert_eq!(x.set().as_slice(), &[1, 3, 5]);
+        let mut x = set(&[1, 3, 5]);
+        let y = set(&[2, 4]);
+        intersect_sub(&mut x, &y);
+        assert_eq!(x.as_slice(), &[1, 3, 5]);
     }
 
     #[test]
@@ -561,14 +454,14 @@ mod tests {
         // 5. The child `w` must end up covering everything the old parent did
         // that the new one does not, and `d` collects what `y`'s other children
         // now have to carry themselves.
-        let x = Fixture::new(&[1, 3]);
-        let y = Fixture::new(&[3, 5]);
-        let w = Fixture::new(&[7]);
-        let d = Fixture::new(&[]);
-        intersect_mov(&x.set(), &y.set(), &w.set(), &d.set());
-        assert_eq!(w.set().as_slice(), &[1, 7]);
-        assert_eq!(y.set().as_slice(), &[3]);
-        assert_eq!(d.set().as_slice(), &[5]);
+        let x = set(&[1, 3]);
+        let mut y = set(&[3, 5]);
+        let mut w = set(&[7]);
+        let mut d = set(&[]);
+        intersect_mov(&x, &mut y, &mut w, &mut d);
+        assert_eq!(w.as_slice(), &[1, 7]);
+        assert_eq!(y.as_slice(), &[3]);
+        assert_eq!(d.as_slice(), &[5]);
     }
 
     /// The table `marktree_spec.lua` drove through an `intersect_mov_test`
@@ -580,14 +473,9 @@ mod tests {
     fn a_move_redistributes_what_each_side_no_longer_covers() {
         #[track_caller]
         fn mov(x: &[uint64_t], y: &[uint64_t], w: &[uint64_t]) -> (Vec<uint64_t>, Vec<uint64_t>) {
-            let (x, y, w, d) = (
-                Fixture::new(x),
-                Fixture::new(y),
-                Fixture::new(w),
-                Fixture::new(&[]),
-            );
-            intersect_mov(&x.set(), &y.set(), &w.set(), &d.set());
-            (w.set().as_slice().to_vec(), d.set().as_slice().to_vec())
+            let (x, mut y, mut w, mut d) = (set(x), set(y), set(w), set(&[]));
+            intersect_mov(&x, &mut y, &mut w, &mut d);
+            (w.as_slice().to_vec(), d.as_slice().to_vec())
         }
         let none: Vec<uint64_t> = Vec::new();
 
@@ -624,16 +512,5 @@ mod tests {
             mov(&x, &y, &[0, 2, 5, 8, 10]),
             (vec![0, 1, 4, 7, 10], none.clone())
         );
-    }
-
-    #[test]
-    fn moving_a_set_off_the_inline_array_copies_it() {
-        let src = Fixture::new(&[1, 2, 3]);
-        let dest = Fixture::new(&[]);
-        dest.set().move_from(&src.set());
-        assert_eq!(dest.set().as_slice(), &[1, 2, 3]);
-        // The copy is dest's own; src's bytes are no longer referenced.
-        src.set().clear();
-        assert_eq!(dest.set().as_slice(), &[1, 2, 3]);
     }
 }

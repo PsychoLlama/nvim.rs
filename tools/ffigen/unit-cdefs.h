@@ -40,7 +40,6 @@ typedef struct ExtmarkSavePos ExtmarkSavePos;
 typedef struct ExtmarkSplice ExtmarkSplice;
 typedef struct HarnessString HarnessString;
 typedef struct InternalState InternalState;
-typedef struct Intersection Intersection;
 typedef struct KeyDict__shada_buflist_item KeyDict__shada_buflist_item;
 typedef struct KeyDict__shada_mark KeyDict__shada_mark;
 typedef struct KeyDict__shada_register KeyDict__shada_register;
@@ -105,8 +104,6 @@ typedef struct uv_stdio_container_s uv_stdio_container_s;
 typedef struct LibuvProc LibuvProc;
 typedef struct MTPos MTPos;
 typedef struct MTKey MTKey;
-typedef struct mtnode_inner_s mtnode_inner_s;
-typedef struct mtnode_s mtnode_s;
 typedef struct Pos Pos;
 typedef struct PtyProc PtyProc;
 typedef struct VTermColor_indexed VTermColor_indexed;
@@ -291,7 +288,6 @@ typedef List *ListRef;
 typedef loop Loop;
 typedef int LuaRef;
 typedef unsigned int LuaRetMode;
-typedef struct mtnode_s MTNode;
 typedef unsigned int Magic;
 typedef unsigned int MarkAdjustMode;
 typedef unsigned int MarkGet;
@@ -299,7 +295,6 @@ typedef unsigned int MarkMove;
 typedef unsigned int MarkMoveRes;
 typedef unsigned int MessagePackType;
 typedef int MessageType;
-typedef const uint32_t *MetaFilter;
 typedef unsigned int MetaIndex;
 typedef int MotionType;
 typedef uint16_t MtFlags;
@@ -544,12 +539,6 @@ struct InternalState {
   LuaRef cb;
   bool closed;
 };
-struct Intersection {
-  size_t size;
-  size_t capacity;
-  uint64_t *items;
-  uint64_t init_array[4];
-};
 struct KeyDict_empty {
 
 };
@@ -756,19 +745,6 @@ struct MTKey {
   uint32_t id;
   MtFlags flags;
   DecorInline decor_data;
-};
-struct mtnode_inner_s {
-  MTNode *i_ptr[20];
-  uint32_t i_meta[20][5];
-};
-struct mtnode_s {
-  int32_t n;
-  int16_t level;
-  int16_t p_idx;
-  Intersection intersect;
-  MTNode *parent;
-  MTKey key[19];
-  mtnode_inner_s s[0];
 };
 struct Pos {
   LineNr lnum;

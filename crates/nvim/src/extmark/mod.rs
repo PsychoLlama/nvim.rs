@@ -16,15 +16,9 @@
 //! family calls out to**.
 //!
 //! That last block is the whole shape of the rewrite. Every mark this module
-//! places lives in a `MarkTree`, and `marktree.c` is not ported: its entry
-//! points are still `unsafe extern "C"` over `*mut MarkTree` and
-//! `*mut MarkTreeIter`, so an obligation has to be discharged somewhere. It
-//! is discharged **once per entry point** here rather than once per call
-//! site (there were 117 raw casts before), and the wrappers are *safe*
-//! functions, because everything any of them needs is a live buffer, its own
-//! marktree and an iterator -- which [`Buf`], `&mut MarkTree` and
-//! `&mut MarkTreeIter` already carry. With those in hand the five children
-//! are ordinary checked code, and [`splice`] has no `unsafe` at all.
+//! places lives in a `MarkTree`, reached through the buffer's field; the
+//! wrappers name the calls the five children make and fix the arguments they
+//! never vary.
 //!
 //! `buf->b_marktree` and `buf->b_extmark_ns` are *fields of `Buffer`*, so
 //! taking `&mut` to either is safe once the pointer is a [`Buf`] -- the same
@@ -35,8 +29,7 @@
 //!
 //! Original: `src/nvim/extmark.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 #![deny(
@@ -125,23 +118,20 @@ fn current_buf() -> Buf {
 ///
 /// Only valid while the iterator is positioned on a key, which every caller
 /// here has just established with a lookup or a `marktree_itr_current`.
-fn itr_rawkey(itr: &mut MarkTreeIter) -> &mut MTKey {
-    let slot = usize::try_from(itr.i).expect("an iterator's slot is never negative");
-    // SAFETY: a positioned iterator points at a live node, and `i` is the
-    // slot within it the tree itself put there.
-    unsafe { &mut (*itr.x).key[slot] }
+fn itr_rawkey<'t>(tree: &'t mut MarkTree, iter: &MarkTreeIter) -> &'t mut MTKey {
+    tree.key_mut(iter)
 }
 
 fn tree_put(tree: &mut MarkTree, key: MTKey, end_row: c_int, end_col: c_int, end_right: bool) {
     marktree_put(tree, key, end_row, end_col, end_right)
 }
 
-fn tree_del_itr(tree: &mut MarkTree, itr: &mut MarkTreeIter, rev: bool) -> uint64_t {
-    marktree_del_itr(tree, itr, rev)
+fn tree_del_itr(tree: &mut MarkTree, iter: &mut MarkTreeIter, rev: bool) -> uint64_t {
+    marktree_del_itr(tree, iter, rev)
 }
 
-fn tree_lookup(tree: &mut MarkTree, id: uint64_t, itr: Option<&mut MarkTreeIter>) -> MTKey {
-    marktree_lookup(tree, id, itr)
+fn tree_lookup(tree: &mut MarkTree, id: uint64_t, iter: Option<&mut MarkTreeIter>) -> MTKey {
+    marktree_lookup(tree, id, iter)
 }
 
 fn tree_lookup_ns(
@@ -149,30 +139,29 @@ fn tree_lookup_ns(
     ns: uint32_t,
     id: uint32_t,
     end: bool,
-    itr: Option<&mut MarkTreeIter>,
+    iter: Option<&mut MarkTreeIter>,
 ) -> MTKey {
-    marktree_lookup_ns(tree, ns, id, end, itr)
+    marktree_lookup_ns(tree, ns, id, end, iter)
 }
 
-fn tree_get_alt(tree: &mut MarkTree, mark: MTKey, itr: Option<&mut MarkTreeIter>) -> MTKey {
-    marktree_get_alt(tree, mark, itr)
+fn tree_get_alt(tree: &mut MarkTree, mark: MTKey, iter: Option<&mut MarkTreeIter>) -> MTKey {
+    marktree_get_alt(tree, mark, iter)
 }
 
-fn tree_get_altpos(tree: &mut MarkTree, mark: MTKey, itr: Option<&mut MarkTreeIter>) -> MTPos {
-    marktree_get_altpos(tree, mark, itr)
+fn tree_get_altpos(tree: &mut MarkTree, mark: MTKey, iter: Option<&mut MarkTreeIter>) -> MTPos {
+    marktree_get_altpos(tree, mark, iter)
 }
 
-fn tree_move(tree: &mut MarkTree, itr: &mut MarkTreeIter, row: c_int, col: c_int) {
-    marktree_move(tree, itr, row, col)
+fn tree_move(tree: &mut MarkTree, iter: &mut MarkTreeIter, row: c_int, col: c_int) {
+    marktree_move(tree, iter, row, col)
 }
 
-fn tree_revise_meta(tree: &mut MarkTree, itr: &mut MarkTreeIter, old_key: MTKey) {
-    marktree_revise_meta(tree, itr, old_key)
+fn tree_revise_meta(tree: &mut MarkTree, iter: &mut MarkTreeIter, old_key: MTKey) {
+    marktree_revise_meta(tree, iter, old_key)
 }
 
 fn tree_clear(tree: &mut MarkTree) {
-    // SAFETY: a live tree, whose nodes this frees and whose root it resets.
-    unsafe { marktree_clear(tree) }
+    marktree_clear(tree)
 }
 
 fn tree_splice(
@@ -201,31 +190,31 @@ fn tree_move_region(
     )
 }
 
-fn itr_get(tree: &mut MarkTree, row: int32_t, col: c_int, itr: &mut MarkTreeIter) -> bool {
-    marktree_itr_get(tree, row, col, itr)
+fn itr_get(tree: &mut MarkTree, row: int32_t, col: c_int, iter: &mut MarkTreeIter) -> bool {
+    marktree_itr_get(tree, row, col, iter)
 }
 
 /// `marktree_itr_get_ext` with the two arguments this family never varies:
 /// no `oldbase` out-parameter and no metadata filter.
-fn itr_get_ext(tree: &mut MarkTree, p: MTPos, itr: &mut MarkTreeIter) -> bool {
-    marktree_itr_get_ext(tree, p, itr, false, false, None, None)
+fn itr_get_ext(tree: &mut MarkTree, p: MTPos, iter: &mut MarkTreeIter) -> bool {
+    marktree_itr_get_ext(tree, p, iter, false, false, None, None)
 }
 
-fn itr_get_overlap(tree: &mut MarkTree, row: c_int, col: c_int, itr: &mut MarkTreeIter) -> bool {
-    marktree_itr_get_overlap(tree, row, col, itr)
+fn itr_get_overlap(tree: &mut MarkTree, row: c_int, col: c_int, iter: &mut MarkTreeIter) -> bool {
+    marktree_itr_get_overlap(tree, row, col, iter)
 }
 
-fn itr_step_overlap(tree: &mut MarkTree, itr: &mut MarkTreeIter, pair: &mut MTPair) -> bool {
-    marktree_itr_step_overlap(tree, itr, pair)
+fn itr_step_overlap(tree: &mut MarkTree, iter: &mut MarkTreeIter, pair: &mut MTPair) -> bool {
+    marktree_itr_step_overlap(tree, iter, pair)
 }
 
 /// The key the iterator is on, or `MT_INVALID_KEY` (row -1) past the end.
-fn itr_current(itr: &mut MarkTreeIter) -> MTKey {
-    marktree_itr_current(itr)
+fn itr_current(tree: &MarkTree, iter: &MarkTreeIter) -> MTKey {
+    marktree_itr_current(tree, iter)
 }
 
-fn itr_next(tree: &mut MarkTree, itr: &mut MarkTreeIter) -> bool {
-    marktree_itr_next(tree, itr)
+fn itr_next(tree: &mut MarkTree, iter: &mut MarkTreeIter) -> bool {
+    marktree_itr_next(tree, iter)
 }
 
 // ---------------------------------------------------------------------------

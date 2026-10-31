@@ -1,5 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -23,7 +22,7 @@
 use core::fmt::Write as _;
 
 use crate::marktree::key::{mt_end, mt_paired, mt_start, unrelative};
-use crate::marktree::node::Node;
+use crate::marktree::node::NodeId;
 use crate::types::{MTPos, MarkTree, String_0, uint64_t};
 
 /// Nested to keep the name out of the flat cdef namespace `ffigen` builds,
@@ -40,10 +39,8 @@ use sizes::DOT_NAME_MAX;
 /// Dump the whole tree, as text or as a Graphviz digraph.
 ///
 /// The result is an `xmalloc`'d block the caller owns.
-pub(crate) fn mt_inspect(b: &mut MarkTree, keys: bool, dot: bool) -> String_0 {
-    // SAFETY: `b` is a live tree per the caller, so its root is null or one of
-    // its live nodes.
-    let Some(root) = (unsafe { Node::from_ptr(b.root) }) else {
+pub(crate) fn mt_inspect(tree: &MarkTree, keys: bool, dot: bool) -> String_0 {
+    let Some(root) = tree.root else {
         // An empty tree renders as nothing at all: the C handed back its
         // untouched growarray, which is a null string.
         return String_0::NULL;
@@ -51,10 +48,10 @@ pub(crate) fn mt_inspect(b: &mut MarkTree, keys: bool, dot: bool) -> String_0 {
     let mut out = String::new();
     if dot {
         out.push_str("digraph D {\n\n");
-        dotfile_node(&mut out, root, MTPos::default(), None);
+        dotfile_node(&mut out, tree, root, MTPos::default(), None);
         out.push_str("\n}");
     } else {
-        inspect_node(&mut out, keys, root, MTPos::default());
+        inspect_node(&mut out, tree, keys, root, MTPos::default());
     }
     String_0::from_vec(out.into_bytes())
 }
@@ -69,7 +66,8 @@ fn mt_dbg_id(id: uint64_t) -> uint64_t {
 ///
 /// A node is `[`, its intersection set in braces where it has one, and then
 /// its keys' absolute positions interleaved with the subtrees between them.
-fn inspect_node(out: &mut String, keys: bool, n: Node, off: MTPos) {
+fn inspect_node(out: &mut String, tree: &MarkTree, keys: bool, n: NodeId, off: MTPos) {
+    let n = &tree[n];
     out.push('[');
     let set = n.intersection();
     if keys && !set.is_empty() {
@@ -80,7 +78,7 @@ fn inspect_node(out: &mut String, keys: bool, n: Node, off: MTPos) {
         out.push_str("},");
     }
     if !n.is_leaf() {
-        inspect_node(out, keys, n.child(0), off);
+        inspect_node(out, tree, keys, n.child(0), off);
     }
     for i in 0..n.key_count() {
         let key = n.key(i);
@@ -98,7 +96,7 @@ fn inspect_node(out: &mut String, keys: bool, n: Node, off: MTPos) {
             }
         }
         if !n.is_leaf() {
-            inspect_node(out, keys, n.child(i + 1), p);
+            inspect_node(out, tree, keys, n.child(i + 1), p);
         } else {
             out.push(',');
         }
@@ -108,7 +106,8 @@ fn inspect_node(out: &mut String, keys: bool, n: Node, off: MTPos) {
 
 /// One node as a Graphviz record — its intersection set on one row and its
 /// keys on the next — plus an edge from its parent, and then its children.
-fn dotfile_node(out: &mut String, n: Node, off: MTPos, parent: Option<&str>) {
+fn dotfile_node(out: &mut String, tree: &MarkTree, n: NodeId, off: MTPos, parent: Option<&str>) {
+    let n = &tree[n];
     let name = dot_name(parent, n.level(), n.parent_index());
     let _ = writeln!(out, "  {name}[shape=plaintext, label=<");
     out.push_str("    <table border='0' cellborder='1' cellspacing='0'>\n");
@@ -143,11 +142,11 @@ fn dotfile_node(out: &mut String, n: Node, off: MTPos, parent: Option<&str>) {
         let _ = writeln!(out, "  {parent} -> {name}");
     }
     if !n.is_leaf() {
-        dotfile_node(out, n.child(0), off, Some(&name));
+        dotfile_node(out, tree, n.child(0), off, Some(&name));
         for i in 0..n.key_count() {
             let mut p = n.key(i).pos;
             unrelative(off, &mut p);
-            dotfile_node(out, n.child(i + 1), p, Some(&name));
+            dotfile_node(out, tree, n.child(i + 1), p, Some(&name));
         }
     }
 }

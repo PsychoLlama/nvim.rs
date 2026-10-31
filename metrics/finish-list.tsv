@@ -5,8 +5,6 @@ cstr.rs	*	1	16	8	10	deref:4 expr:2	str:10	-	CStr::from_ptr:3 from_raw_parts:3 CS
 cstr.rs	cstr.rs	1	16	8	10	deref:4 expr:2	str:10	-	CStr::from_ptr:3 from_raw_parts:3 CStr::from_bytes_with_nul_unchecked:1
 cursor_shape.rs	*	1	5	2	2	compound:1	str:2	-	-
 cursor_shape.rs	cursor_shape.rs	1	5	2	2	compound:1	str:2	-	-
-extmark/	*	1	2	0	1	expr:1	-	-	marktree_clear:1
-extmark/	extmark/mod.rs	1	2	0	1	expr:1	-	-	marktree_clear:1
 getchar/	*	1	0	0	0	-	-	-	-
 getchar/	getchar/state.rs	1	0	0	0	-	-	-	-
 grid/	*	1	3	1	1	ref:2	other:1	other:1	-
@@ -15,17 +13,6 @@ harness.rs	*	1	2	1	2	-	str:1	-	copy_nonoverlapping:1 from_raw_parts:1
 harness.rs	harness.rs	1	2	1	2	-	str:1	-	copy_nonoverlapping:1 from_raw_parts:1
 input.rs	*	1	6	0	1	compound:2	-	-	at:1
 input.rs	input.rs	1	6	0	1	compound:2	-	-	at:1
-marktree/	*	10	97	15	71	deref:13 expr:10 ref:3	other:14	other:8 void:1	xfree:5 copy_nonoverlapping:3 from_raw_parts:1 from_raw_parts_mut:1 xmalloc:1 xmemdup:1 xrealloc:1
-marktree/	marktree/check.rs	1	6	0	5	deref:1	-	-	xfree:1 xmemdup:1
-marktree/	marktree/cursor.rs	1	5	1	4	ref:1	other:2	other:1	-
-marktree/	marktree/inspect.rs	1	1	0	1	-	-	-	-
-marktree/	marktree/intersect.rs	1	15	1	9	deref:3 expr:3	other:2	other:3 void:1	copy_nonoverlapping:3 from_raw_parts:1 from_raw_parts_mut:1 xfree:1 xmalloc:1 xrealloc:1
-marktree/	marktree/iter.rs	1	16	4	14	expr:1 ref:1	-	-	-
-marktree/	marktree/mod.rs	1	17	2	17	-	-	-	-
-marktree/	marktree/node.rs	1	21	7	7	deref:9 expr:4 ref:1	other:9	other:4	xfree:2
-marktree/	marktree/pair.rs	1	3	0	2	expr:1	-	-	-
-marktree/	marktree/rebalance.rs	1	5	0	5	-	-	-	xfree:1
-marktree/	marktree/splice.rs	1	8	0	7	expr:1	other:1	-	-
 mbyte/	*	3	11	4	5	deref:3 compound:1	str:4	-	-
 mbyte/	mbyte/utf8/mod.rs	1	10	3	5	deref:2 compound:1	str:3	-	-
 mbyte/	mbyte/utf8/tables.rs	1	0	0	0	-	-	-	-

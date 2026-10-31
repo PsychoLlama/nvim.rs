@@ -67,12 +67,11 @@ use crate::highlight::{hl_add_url, hl_combine_attr};
 use crate::highlight_group::syn_id2attr;
 use crate::marktree::cursor::Cursor;
 use crate::marktree::key::{mt_decor, mt_decor_any, mt_end, mt_invalid};
-use crate::marktree::marktree_itr_current;
 use crate::pos::MAXCOL;
 use crate::types::{
     DecorHighlightInline, DecorInline, DecorPriority, DecorPriorityInternal, DecorRange,
-    DecorRange_data, DecorRange_data_ui, DecorRangeSlot, DecorState, MTKey, MTNode, MTPos,
-    MarkTreeIter, MarkTreeIterLevel, RangeHighlight, ScreenChar, VirtTextPos, uint16_t, uint32_t,
+    DecorRange_data, DecorRange_data_ui, DecorRangeSlot, DecorState, MTKey, MTPos, MarkTreeIter,
+    RangeHighlight, ScreenChar, VirtTextPos, uint16_t, uint32_t,
 };
 use crate::winlayer::WinId;
 use crate::winlayer::{Buf, Win};
@@ -81,16 +80,7 @@ use core::ffi::c_int;
 /// The decoration state the redraw walks. See the module docs for why it is
 /// borrowed per step.
 static DECOR_STATE: GlobalCell<DecorState> = GlobalCell::new(DecorState {
-    itr: [MarkTreeIter {
-        pos: MTPos { row: 0, col: 0 },
-        lvl: 0,
-        x: ::core::ptr::null_mut::<MTNode>(),
-        i: 0,
-        s: [MarkTreeIterLevel { oldcol: 0, i: 0 }; 20],
-        intersect_idx: 0,
-        intersect_pos: MTPos { row: 0, col: 0 },
-        intersect_pos_x: MTPos { row: 0, col: 0 },
-    }],
+    itr: [MarkTreeIter::EMPTY],
     slots: Vec::new(),
     ranges_i: Vec::new(),
     current_end: 0,
@@ -142,10 +132,10 @@ impl DecorState {
         Cursor::in_buffer(buffer, &mut self.itr[0])
     }
 
-    /// The mark the state's walk is on — an invalid key once it has run off
-    /// the end. Reads only the iterator.
-    fn mark(&mut self) -> MTKey {
-        marktree_itr_current(&mut self.itr[0])
+    /// The mark the state's walk over `buffer` is on — an invalid key once it
+    /// has run off the end.
+    fn mark(&mut self, buffer: Buf) -> MTKey {
+        self.walk(buffer).current()
     }
 
     /// The range `ranges_i[i]` names.
@@ -379,12 +369,12 @@ pub fn decor_redraw_line(window: Win, row: c_int) {
 }
 
 /// Whether there are (likely) more decorations on `row`.
-pub fn decor_has_more_decorations(row: c_int) -> bool {
+pub fn decor_has_more_decorations(window: Win, row: c_int) -> bool {
     with_state(|state| {
         if state.current_end != 0 || state.future_begin != state.ranges_i.len() {
             return true;
         }
-        let k = state.mark();
+        let k = state.mark(window.buffer());
         k.pos.row >= 0 && k.pos.row <= row
     })
 }
@@ -701,7 +691,7 @@ pub fn decor_redraw_col_impl(
 
     loop {
         // TODO(bfredl): check duplicate entry in "intersection" branch
-        let mark = with_state(DecorState::mark);
+        let mark = with_state(|state| state.mark(buf));
         if mark.pos.row < 0 || mark.pos.row > row {
             break;
         } else if mark.pos.row == row && mark.pos.col > col {

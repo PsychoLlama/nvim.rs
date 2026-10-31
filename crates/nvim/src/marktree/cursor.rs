@@ -1,18 +1,14 @@
 //! [`Cursor`]: a marktree iterator, positioned in the tree it walks.
 //!
-//! The twin of [`Node`](super::node::Node). `Node` made a *node* reachable
-//! without a promise per dereference; this does the same for a *walk*. The
-//! iterator functions all want two things at once — the tree and an iterator
-//! already positioned in it — which a signature cannot say, so every consumer
-//! outside this family paid a promise per step. A `Cursor` states the pair
-//! once, at construction, and every step after that is ordinary checked code.
+//! The iterator functions all want two things at once — the tree and an
+//! iterator already positioned in it. A `Cursor` pairs a buffer with an
+//! iterator once, at construction, and every step after that borrows the
+//! buffer's tree for that one call.
 //!
-//! # Why two raw pointers and not two references
+//! # Why a buffer handle and not a `&mut MarkTree`
 //!
-//! Both halves are re-derived for the duration of one call, in
-//! [`Cursor::parts`], and
-//! never held across one. That is deliberate, and it is the same trade
-//! `Rex` makes in `regexp/rex.rs`:
+//! The tree is re-borrowed through the [`Buf`] for the duration of one call,
+//! and never held across one. That is deliberate:
 //!
 //! * an iterator outlives the calls it is stepped by — `DecorState` keeps one
 //!   between rows of a redraw — so a `&mut MarkTreeIter` would have to live
@@ -21,16 +17,13 @@
 //!   and delete marks. Upstream keeps walking afterwards (and
 //!   `Buf::invalidate_decor_state` is the machinery that copes), so a `&mut
 //!   MarkTree` spanning the callback would be a borrow the editor really does
-//!   invalidate underneath itself, not a theoretical one.
-//!
-//! The `PhantomData` still books the *iterator* as uniquely borrowed for the
-//! cursor's life, so a caller cannot step the same walk two ways at once.
+//!   invalidate underneath itself, not a theoretical one. An iterator names
+//!   its node by id, so one a callback left stale reads a wrong key at worst.
 //!
 //! Copyright Neovim contributors. Licensed under the Apache License, Version
 //! 2.0; see LICENSE.txt in the project root.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -40,7 +33,6 @@
 )]
 
 use core::ffi::c_int;
-use core::marker::PhantomData;
 
 use crate::marktree::iter::{
     marktree_itr_current, marktree_itr_get, marktree_itr_get_filter, marktree_itr_get_overlap,
@@ -54,76 +46,44 @@ use crate::marktree::pair::marktree_get_altpos;
 use crate::types::{MTKey, MTPair, MTPos, MarkTree, MarkTreeIter, int32_t, uint32_t};
 use crate::winlayer::Buf;
 
-/// A walk over one marktree.
+/// A walk over one buffer's marktree.
 ///
-/// Built from a tree and an iterator that belongs to it; from then on every
-/// step is a safe call. See the module documentation for why it holds
-/// pointers rather than references.
+/// Built from a buffer and an iterator that belongs to its tree; from then on
+/// every step is a safe call. See the module documentation for why it holds
+/// the buffer handle rather than a reference to the tree.
 pub struct Cursor<'a> {
-    tree: *mut MarkTree,
-    itr: *mut MarkTreeIter,
-    /// Books `itr` as uniquely borrowed: two cursors cannot step one walk.
-    walk: PhantomData<&'a mut MarkTreeIter>,
-}
-
-/// `buffer`'s marktree.
-///
-/// Safe: [`Buf`] has already promised a live buffer, and `b_marktree` is one
-/// of its own fields. Dereferencing the answer is what needs a promise.
-pub fn tree_of(mut buffer: Buf) -> *mut MarkTree {
-    &raw mut buffer.b_marktree
+    buffer: Buf,
+    iter: &'a mut MarkTreeIter,
 }
 
 /// The mark `ns`/`id` names in `buffer` — the `end` half when asked for it —
 /// without moving any walk.
-pub fn lookup_ns(buffer: Buf, ns: uint32_t, id: uint32_t, end: bool) -> MTKey {
-    // SAFETY: a live buffer's marktree, and the lookup writes no iterator.
-    unsafe { marktree_lookup_ns(&mut *tree_of(buffer), ns, id, end, None) }
+pub fn lookup_ns(mut buffer: Buf, ns: uint32_t, id: uint32_t, end: bool) -> MTKey {
+    marktree_lookup_ns(&mut buffer.b_marktree, ns, id, end, None)
 }
 
 impl<'a> Cursor<'a> {
-    /// A walk over `buffer`'s marks, stepped with `itr`.
-    ///
-    /// Safe: [`Buf`] has already promised a live buffer, whose `b_marktree`
-    /// is therefore a live tree, and the borrow is a live iterator — either
-    /// fresh (all-zero, which is where a walk starts) or one this same
+    /// A walk over `buffer`'s marks, stepped with `iter` — either fresh
+    /// (positioned nowhere, which is where a walk starts) or one this same
     /// buffer positioned earlier.
-    pub fn in_buffer(buffer: Buf, itr: &'a mut MarkTreeIter) -> Self {
-        Self {
-            tree: tree_of(buffer),
-            itr,
-            walk: PhantomData,
-        }
-    }
-
-    /// # Safety
-    /// `tree` must be a live marktree and `itr` a live iterator that is
-    /// either fresh or already positioned in *that* tree, both for `'a`.
-    pub const unsafe fn from_raw(tree: *mut MarkTree, itr: *mut MarkTreeIter) -> Self {
-        Self {
-            tree,
-            itr,
-            walk: PhantomData,
-        }
+    pub fn in_buffer(buffer: Buf, iter: &'a mut MarkTreeIter) -> Self {
+        Self { buffer, iter }
     }
 
     /// The tree and the iterator, for the length of one call.
     fn parts(&mut self) -> (&mut MarkTree, &mut MarkTreeIter) {
-        // SAFETY: the constructor's promise — a live tree and a live iterator
-        // in it. `&mut self` makes the pair unique for the call, and it is
-        // never held past the statement that asked for it.
-        unsafe { (&mut *self.tree, &mut *self.itr) }
+        (&mut self.buffer.b_marktree, &mut *self.iter)
     }
 
     /// Whether the walk has run off the end of the tree.
     pub fn is_empty(&mut self) -> bool {
-        self.parts().1.x.is_null()
+        !self.iter.is_positioned()
     }
 
     /// Position the walk at the first mark at or after (`row`, `col`).
     pub fn seek(&mut self, row: int32_t, col: c_int) -> bool {
-        let (tree, itr) = self.parts();
-        marktree_itr_get(tree, row, col, itr)
+        let (tree, iter) = self.parts();
+        marktree_itr_get(tree, row, col, iter)
     }
 
     /// [`Cursor::seek`], descending only into subtrees `filter` wants and
@@ -134,11 +94,10 @@ impl<'a> Cursor<'a> {
         col: c_int,
         stop_row: c_int,
         stop_col: c_int,
-        filter: &'static MetaCount,
+        filter: &MetaCount,
     ) -> bool {
-        let (tree, itr) = self.parts();
-        // SAFETY: a live tree, and `filter` is a `'static` count array.
-        unsafe { marktree_itr_get_filter(tree, row, col, stop_row, stop_col, filter.as_ptr(), itr) }
+        let (tree, iter) = self.parts();
+        marktree_itr_get_filter(tree, row, col, stop_row, stop_col, filter, iter)
     }
 
     /// Position the walk to enumerate the ranges *covering* (`row`, `col`) —
@@ -146,8 +105,8 @@ impl<'a> Cursor<'a> {
     /// [`Cursor::step_overlap`] until it answers `None`, which leaves the
     /// walk an ordinary one positioned at (`row`, `col`).
     pub fn seek_overlap(&mut self, row: c_int, col: c_int) -> bool {
-        let (tree, itr) = self.parts();
-        marktree_itr_get_overlap(tree, row, col, itr)
+        let (tree, iter) = self.parts();
+        marktree_itr_get_overlap(tree, row, col, iter)
     }
 
     /// One more range covering the position [`Cursor::seek_overlap`] was
@@ -160,46 +119,37 @@ impl<'a> Cursor<'a> {
             end_pos: MTPos::default(),
             end_right_gravity: false,
         };
-        let (tree, itr) = self.parts();
-        let more = marktree_itr_step_overlap(tree, itr, &mut pair);
+        let (tree, iter) = self.parts();
+        let more = marktree_itr_step_overlap(tree, iter, &mut pair);
         more.then_some(pair)
     }
 
     /// Leave the subtrees `filter` has nothing in, and answer whether the
     /// walk still names a node.
-    pub fn step_out_filter(&mut self, filter: &'static MetaCount) -> bool {
-        let (tree, itr) = self.parts();
-        // SAFETY: a live tree with the iterator positioned in it, and
-        // `filter` is a `'static` count array.
-        unsafe { marktree_itr_step_out_filter(tree, itr, filter.as_ptr()) }
+    pub fn step_out_filter(&mut self, filter: &MetaCount) -> bool {
+        let (tree, iter) = self.parts();
+        marktree_itr_step_out_filter(tree, iter, filter)
     }
 
     /// The mark the walk is on, or [`MT_INVALID_KEY`](super::key::MT_INVALID_KEY)
     /// once it has run off the end.
     pub fn current(&mut self) -> MTKey {
-        let itr = self.parts().1;
-        marktree_itr_current(itr)
+        let (tree, iter) = self.parts();
+        marktree_itr_current(tree, iter)
     }
 
     /// Step to the next mark. Not `Iterator::next` — a cursor answers
     /// "is there one" and leaves the mark itself to [`current`](Self::current).
     pub fn step(&mut self) -> bool {
-        let (tree, itr) = self.parts();
-        marktree_itr_next(tree, itr)
+        let (tree, iter) = self.parts();
+        marktree_itr_next(tree, iter)
     }
 
     /// Step to the next mark `filter` wants, giving up at (`stop_row`,
     /// `stop_col`).
-    pub fn step_filter(
-        &mut self,
-        stop_row: c_int,
-        stop_col: c_int,
-        filter: &'static MetaCount,
-    ) -> bool {
-        let (tree, itr) = self.parts();
-        // SAFETY: a live tree with the iterator positioned in it, and
-        // `filter` is a `'static` count array.
-        unsafe { marktree_itr_next_filter(tree, itr, stop_row, stop_col, filter.as_ptr()) }
+    pub fn step_filter(&mut self, stop_row: c_int, stop_col: c_int, filter: &MetaCount) -> bool {
+        let (tree, iter) = self.parts();
+        marktree_itr_next_filter(tree, iter, stop_row, stop_col, filter)
     }
 
     /// Where the other half of `mark`'s pair sits — `mark`'s own position

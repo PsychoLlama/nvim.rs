@@ -10,15 +10,9 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::marktree::node::{NodeId, NodeSlab};
 use crate::registry::{IdMap, id_map};
 
-#[repr(C)]
-pub struct Intersection {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut uint64_t,
-    pub init_array: [uint64_t; 4],
-}
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct MTKey {
@@ -40,24 +34,30 @@ pub struct MTPos {
     pub row: int32_t,
     pub col: int32_t,
 }
+/// The extmark B-tree of one buffer.
+///
+/// Its nodes live in [`NodeSlab`], addressed by [`NodeId`]: a node names its
+/// parent and children by id, and so does an iterator, so nothing outside the
+/// slab holds a node's address.
 pub struct MarkTree {
-    pub root: *mut MTNode,
+    /// The top node, or `None` for a tree that has never held a key or has
+    /// been emptied by `marktree_clear`.
+    pub(crate) root: Option<NodeId>,
     pub meta_root: [uint32_t; 5],
     pub n_keys: size_t,
-    pub n_nodes: size_t,
+    pub(crate) nodes: NodeSlab,
     /// Every key's lookup handle to the node it lives in, so a mark can be
     /// found without a walk. Asked, never iterated.
-    pub(crate) id2node: IdMap<uint64_t, *mut MTNode>,
+    pub(crate) id2node: IdMap<uint64_t, NodeId>,
 }
 
 impl MarkTree {
-    /// A tree with nothing in it. Upstream started one from all-zero bytes;
-    /// the table is the one field that is not a value of its type there.
+    /// A tree with nothing in it.
     pub const EMPTY: MarkTree = MarkTree {
-        root: ::core::ptr::null_mut(),
+        root: None,
         meta_root: [0; 5],
         n_keys: 0,
-        n_nodes: 0,
+        nodes: NodeSlab::new(),
         id2node: id_map(),
     };
 }
@@ -69,38 +69,55 @@ impl Default for MarkTree {
 }
 /// A cursor into a [`MarkTree`].
 ///
-/// `Copy`, and deliberately: `x` is a borrow of a node the tree owns, and
-/// forking an iterator to look ahead is what the marktree code does with it.
+/// `Copy`, and deliberately: forking an iterator to look ahead is what the
+/// marktree code does with it. It names its node by [`NodeId`] and the path
+/// down to it by child index, so it holds nothing a tree change can leave
+/// dangling: a stale iterator reads a wrong key, never freed memory.
 #[derive(Copy, Clone, Default)]
 pub struct MarkTreeIter {
+    /// The absolute position the keys of `node` are relative to.
     pub pos: MTPos,
-    pub lvl: ::core::ffi::c_int,
-    pub x: *mut MTNode,
-    pub i: ::core::ffi::c_int,
-    pub s: [MarkTreeIterLevel; 20],
+    /// How far below the root `node` is.
+    pub depth: ::core::ffi::c_int,
+    /// The node the iterator stands in, or `None` once a walk has run off the
+    /// end (or before one has started).
+    pub node: Option<NodeId>,
+    /// The key within `node`.
+    pub index: ::core::ffi::c_int,
+    /// The child index taken at each level above `node`.
+    pub path: [PathStep; 20],
     pub intersect_idx: size_t,
     pub intersect_pos: MTPos,
     pub intersect_pos_x: MTPos,
 }
+
+impl MarkTreeIter {
+    /// An iterator positioned nowhere — what a walk starts from.
+    pub const EMPTY: MarkTreeIter = MarkTreeIter {
+        pos: MTPos { row: 0, col: 0 },
+        depth: 0,
+        node: None,
+        index: 0,
+        path: [PathStep {
+            old_col: 0,
+            index: 0,
+        }; 20],
+        intersect_idx: 0,
+        intersect_pos: MTPos { row: 0, col: 0 },
+        intersect_pos_x: MTPos { row: 0, col: 0 },
+    };
+
+    /// Whether the iterator names a key at all.
+    pub fn is_positioned(&self) -> bool {
+        self.node.is_some()
+    }
+}
+
+/// One level of a [`MarkTreeIter`]'s path: which child it descended into, and
+/// the column its position had before it did.
 #[derive(Copy, Clone, Default)]
-pub struct MarkTreeIterLevel {
-    pub oldcol: ::core::ffi::c_int,
-    pub i: ::core::ffi::c_int,
+pub struct PathStep {
+    pub old_col: ::core::ffi::c_int,
+    pub index: ::core::ffi::c_int,
 }
-pub type MetaFilter = *const uint32_t;
 pub type MetaIndex = ::core::ffi::c_uint;
-#[repr(C)]
-pub struct mtnode_inner_s {
-    pub i_ptr: [*mut MTNode; 20],
-    pub i_meta: [[uint32_t; 5]; 20],
-}
-#[repr(C)]
-pub struct mtnode_s {
-    pub n: int32_t,
-    pub level: int16_t,
-    pub p_idx: int16_t,
-    pub intersect: Intersection,
-    pub parent: *mut MTNode,
-    pub key: [MTKey; 19],
-    pub s: [mtnode_inner_s; 0],
-}

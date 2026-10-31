@@ -252,8 +252,8 @@ pub fn nvim__buf_debug_extmarks(
     keys: Boolean,
     dot: Boolean,
 ) -> Result<String_0, Error> {
-    let Some(mut b) = find_buffer_by_handle(buf)? else {
+    let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(String_0::NULL);
     };
-    Ok(mt_inspect(&mut b.b_marktree, keys, dot))
+    Ok(mt_inspect(&b.b_marktree, keys, dot))
 }

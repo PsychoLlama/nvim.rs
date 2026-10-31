@@ -56,7 +56,6 @@ use crate::global_cell::GlobalCell;
 use crate::highlight_group::{HLF_D, get_highlight_name_ext, syn_check_group};
 use crate::marktree::cursor::{Cursor, lookup_ns};
 use crate::marktree::key::{MtFlags, mt_decor, mt_decor_sign, mt_end};
-use crate::marktree::marktree_itr_current;
 use crate::message::{e_argreq, e_dictreq, e_invarg, e_listreq};
 use crate::message::{emsg, msg_putchar, msg_str, msg_title};
 use crate::os::cshim::gettext;

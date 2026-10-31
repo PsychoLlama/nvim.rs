@@ -574,7 +574,7 @@ impl Cells {
         let at = self.byte_col();
         self.decor_provider_end_col = invoke_range_next(window, lnum, at, 100);
         self.recopy_line(window, lnum);
-        if !self.has_decor && decor_has_more_decorations(lnum - 1) {
+        if !self.has_decor && decor_has_more_decorations(window, lnum - 1) {
             self.has_decor = true;
             self.extra_check = true;
         }

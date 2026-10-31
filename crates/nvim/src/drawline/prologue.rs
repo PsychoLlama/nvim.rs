@@ -123,7 +123,7 @@ pub(crate) fn prepare_line(
     }
 
     decor_redraw_line(window, lnum - 1);
-    if !s.has_decor && decor_has_more_decorations(lnum - 1) {
+    if !s.has_decor && decor_has_more_decorations(window, lnum - 1) {
         s.has_decor = true;
         s.extra_check = true;
     }

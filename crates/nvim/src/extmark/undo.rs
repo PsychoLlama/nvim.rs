@@ -68,11 +68,11 @@ pub(crate) fn splice_delete(
     only_copy: bool,
     op: ExtmarkOp,
 ) {
-    let mut itr = MarkTreeIter::default();
+    let mut iter = MarkTreeIter::default();
 
-    itr_get(buffer.marktree(), lo.row, lo.col, &mut itr);
+    itr_get(buffer.marktree(), lo.row, lo.col, &mut iter);
     loop {
-        let mark = itr_current(&mut itr);
+        let mark = itr_current(buffer.marktree(), &iter);
         if mark.pos.row < 0 || mark.pos.row > hi.row {
             break;
         }
@@ -93,8 +93,8 @@ pub(crate) fn splice_delete(
 
         let mut invalidated = false;
         if !only_copy && !mt_invalid(mark) && mt_invalidate(mark) && !mt_end(mark) {
-            let mut enditr = itr;
-            let endpos = tree_get_altpos(buffer.marktree(), mark, Some(&mut enditr));
+            let mut end_iter = iter;
+            let endpos = tree_get_altpos(buffer.marktree(), mark, Some(&mut end_iter));
             // Invalidate unpaired marks in deleted lines, and paired marks
             // whose entire range has been deleted.
             let unpaired_gone = !mt_paired(mark) && mark.pos.row < hi.row;
@@ -103,14 +103,14 @@ pub(crate) fn splice_delete(
                 && (endpos.row < hi.row || (endpos.row == hi.row && endpos.col <= hi.col));
             if unpaired_gone || pair_gone {
                 if mt_no_undo(mark) {
-                    del(buffer, &mut itr, mark, true);
+                    del(buffer, &mut iter, mark, true);
                     continue;
                 }
                 copy = true;
                 invalidated = true;
-                itr_rawkey(&mut itr).flags |= MtFlags::INVALID;
-                itr_rawkey(&mut enditr).flags |= MtFlags::INVALID;
-                tree_revise_meta(buffer.marktree(), &mut itr, mark);
+                itr_rawkey(buffer.marktree(), &iter).flags |= MtFlags::INVALID;
+                itr_rawkey(buffer.marktree(), &end_iter).flags |= MtFlags::INVALID;
+                tree_revise_meta(buffer.marktree(), &mut iter, mark);
                 decor_remove(
                     buffer,
                     mark.pos.row,
@@ -139,7 +139,7 @@ pub(crate) fn splice_delete(
             saved.push(ExtmarkUndoObject::SavePos(pos));
         }
 
-        itr_next(buffer.marktree(), &mut itr);
+        itr_next(buffer.marktree(), &mut iter);
     }
 }
 

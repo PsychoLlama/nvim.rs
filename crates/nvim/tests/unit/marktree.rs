@@ -9,13 +9,12 @@
 //!
 //! The Lua spec does thousands of random operations. This one runs a small
 //! deterministic set under Miri and a larger one otherwise: the point of
-//! having it here at all is that Miri gets to watch the pointer work, which
-//! nothing else in the tree does. Deletion order is shuffled by a fixed LCG so
+//! having it here at all is that Miri gets to watch the node slab's
+//! bookkeeping, which nothing else in the tree does. Deletion order is shuffled by a fixed LCG so
 //! the rebalancing paths (borrow from a sibling, merge with one, shrink the
 //! root) are all reached without depending on the platform's hasher.
 
 use std::ffi::{c_int, c_uint};
-use std::ptr;
 
 use neovim::marktree::check::{
     MarkEnd, marktree_check, marktree_check_intersections, marktree_del_pair_test,
@@ -26,11 +25,12 @@ use neovim::marktree::iter::{
     marktree_itr_get_overlap, marktree_itr_next, marktree_itr_next_filter,
     marktree_itr_step_overlap,
 };
+use neovim::marktree::key::MT_INVALID_KEY;
 use neovim::marktree::key::mt_end;
 use neovim::marktree::meta::META_COUNT;
 use neovim::marktree::splice::marktree_splice;
 use neovim::marktree::{marktree_clear, marktree_del_itr, marktree_lookup_ns, marktree_move};
-use neovim::types::{MTKey, MTNode, MTPair, MTPos, MarkTree, MarkTreeIter, MarkTreeIterLevel};
+use neovim::types::{MTKey, MTPair, MTPos, MarkTree, MarkTreeIter};
 
 /// The namespace every mark in this file lives in.
 const NS: u32 = 10;
@@ -64,16 +64,7 @@ fn zeroed_tree() -> MarkTree {
 }
 
 fn zeroed_iter() -> MarkTreeIter {
-    MarkTreeIter {
-        pos: MTPos { row: 0, col: 0 },
-        lvl: 0,
-        x: ptr::null_mut::<MTNode>(),
-        i: 0,
-        s: [MarkTreeIterLevel { oldcol: 0, i: 0 }; 20],
-        intersect_idx: 0,
-        intersect_pos: MTPos { row: 0, col: 0 },
-        intersect_pos_x: MTPos { row: 0, col: 0 },
-    }
+    MarkTreeIter::EMPTY
 }
 
 /// Where one mark is expected to be.
@@ -180,7 +171,7 @@ impl Tree {
     fn move_half(&mut self, id: u32, end: bool, row: i32, col: i32) {
         let mut itr = zeroed_iter();
         marktree_lookup_ns(&mut self.tree, NS, id, end, Some(&mut itr));
-        assert!(!itr.x.is_null(), "id {id} not found");
+        assert!(itr.is_positioned(), "id {id} not found");
         marktree_move(&mut self.tree, &mut itr, row, col);
         let half = self
             .shadow
@@ -202,7 +193,11 @@ impl Tree {
     /// Every range covering (row, col), by id, sorted.
     fn overlapping(&mut self, row: i32, col: i32) -> Vec<u32> {
         let mut itr = zeroed_iter();
-        let mut pair: MTPair = unsafe { std::mem::zeroed() };
+        let mut pair = MTPair {
+            start: MT_INVALID_KEY,
+            end_pos: MTPos { row: -1, col: -1 },
+            end_right_gravity: false,
+        };
         let mut ids = Vec::new();
         if marktree_itr_get_overlap(&mut self.tree, row, col, &mut itr) {
             while marktree_itr_step_overlap(&mut self.tree, &mut itr, &mut pair) {
@@ -219,25 +214,13 @@ impl Tree {
         let mut itr = zeroed_iter();
         let mut seen = Vec::new();
         let stop = (i32::MAX, 0);
-        if !unsafe {
-            marktree_itr_get_filter(
-                &mut self.tree,
-                0,
-                0,
-                stop.0,
-                stop.1,
-                filter.as_ptr(),
-                &mut itr,
-            )
-        } {
+        if !marktree_itr_get_filter(&mut self.tree, 0, 0, stop.0, stop.1, filter, &mut itr) {
             return seen;
         }
         loop {
-            let k: MTKey = marktree_itr_current(&mut itr);
+            let k: MTKey = marktree_itr_current(&self.tree, &itr);
             seen.push((k.id, k.pos.row, k.pos.col));
-            if !unsafe {
-                marktree_itr_next_filter(&mut self.tree, &mut itr, stop.0, stop.1, filter.as_ptr())
-            } {
+            if !marktree_itr_next_filter(&mut self.tree, &mut itr, stop.0, stop.1, filter) {
                 break;
             }
         }
@@ -279,7 +262,7 @@ impl Tree {
         let mut order: Vec<u32> = Vec::new();
         if marktree_itr_first(&mut self.tree, &mut itr) {
             loop {
-                let k: MTKey = marktree_itr_current(&mut itr);
+                let k: MTKey = marktree_itr_current(&self.tree, &itr);
                 seen.push(Shadow {
                     id: k.id,
                     row: k.pos.row,
@@ -328,7 +311,7 @@ impl Tree {
 
 impl Drop for Tree {
     fn drop(&mut self) {
-        unsafe { marktree_clear(&mut self.tree) };
+        marktree_clear(&mut self.tree);
     }
 }
 
@@ -394,7 +377,7 @@ fn keys_come_back_in_order_from_a_multi_level_tree() {
             t.put(row, col, col % 2 == 0);
         }
     }
-    assert!(unsafe { (*t.tree.root).level } >= 1);
+    assert!(t.tree.root_level().unwrap() >= 1);
     let order = t.check();
     // In-order iteration visits (1,1), (1,2), ... which is insertion order here.
     assert_eq!(order.len(), rows * cols);
@@ -507,17 +490,17 @@ fn an_iterator_positioned_by_coordinates_lands_on_the_first_mark_at_or_after_it(
 
     let mut itr = zeroed_iter();
     marktree_itr_get(&mut t.tree, 0, 0, &mut itr);
-    let k = marktree_itr_current(&mut itr);
+    let k = marktree_itr_current(&t.tree, &itr);
     assert_eq!((k.pos.row, k.pos.col), (0, 5));
 
     // Between two marks: lands on the later one.
     marktree_itr_get(&mut t.tree, 1, 0, &mut itr);
-    let k = marktree_itr_current(&mut itr);
+    let k = marktree_itr_current(&t.tree, &itr);
     assert_eq!((k.pos.row, k.pos.col), (2, 5));
 
     // Past the end: the iterator is exhausted.
     marktree_itr_get(&mut t.tree, 1 << 20, 0, &mut itr);
-    assert!(itr.x.is_null());
+    assert!(!itr.is_positioned());
 }
 
 #[test]
@@ -536,11 +519,11 @@ fn clearing_a_tree_leaves_it_reusable() {
     for i in 0..scale(30, 300) as i32 {
         t.put(i, i, false);
     }
-    unsafe { marktree_clear(&mut t.tree) };
+    marktree_clear(&mut t.tree);
     t.shadow.clear();
     assert_eq!(t.tree.n_keys, 0);
-    assert_eq!(t.tree.n_nodes, 0);
-    assert!(t.tree.root.is_null());
+    assert_eq!(t.tree.node_count(), 0);
+    assert_eq!(t.tree.root_level(), None);
 
     t.put(1, 1, false);
     t.check();
@@ -658,7 +641,7 @@ fn the_overlap_iterator_finds_every_range_covering_a_row() {
         }
     }
     assert_eq!(t.tree.n_keys, 2 * size);
-    assert!(unsafe { (*t.tree.root).level } >= scale(1, 2) as i16);
+    assert!(t.tree.root_level().unwrap() >= scale(1, 2));
     t.check_tree();
 
     for row in 1..=10 {
@@ -710,7 +693,7 @@ fn splicing_inside_a_deep_tree_of_ranges_keeps_the_covering_records() {
         }
     }
     assert_eq!(t.tree.n_keys, 2 * size);
-    assert!(unsafe { (*t.tree.root).level } >= scale(1, 2) as i16);
+    assert!(t.tree.root_level().unwrap() >= scale(1, 2));
     t.check_tree();
 
     for _ in 0..scale(1, 4) {
@@ -755,12 +738,10 @@ fn a_filtered_walk_visits_only_the_marked_keys() {
     for row in 0..=first_row {
         let mut itr = zeroed_iter();
         assert!(
-            unsafe {
-                marktree_itr_get_filter(&mut t.tree, row, 0, rows, 0, filter.as_ptr(), &mut itr)
-            },
+            marktree_itr_get_filter(&mut t.tree, row, 0, rows, 0, &filter, &mut itr),
             "no filtered mark at or after row {row}"
         );
-        let k = marktree_itr_current(&mut itr);
+        let k = marktree_itr_current(&t.tree, &itr);
         assert_eq!((k.pos.row, k.pos.col), (first_row, first_col), "from {row}");
     }
 

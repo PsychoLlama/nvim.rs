@@ -1,5 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 //! The extmark store: a wide B-tree keyed by (row, col).
 //!
@@ -28,9 +27,10 @@
 //!   [`intersect`]. That is what makes "which ranges cover this position" a
 //!   walk down the tree.
 //!
-//! A tree is reached as `&mut MarkTree` and a node as [`Node`](node::Node), so
-//! the entry points below are unsafe only in what a *reference* cannot say:
-//! that an iterator handed alongside a tree is positioned in that tree.
+//! A tree is reached as `&mut MarkTree`, and its nodes live in the tree's own
+//! slab, named by [`NodeId`](node::NodeId) — see [`node`]. An iterator names
+//! its node by id too, so one handed alongside the wrong tree, or one a change
+//! left stale, reads a wrong key or panics; it never reaches freed memory.
 //!
 //! Derived from kbtree in klib, and from the marker tree of the Atom editor.
 
@@ -47,7 +47,6 @@ pub mod rebalance;
 pub mod splice;
 
 use core::ffi::c_int;
-use core::ptr;
 
 pub use crate::marktree::check::*;
 pub(crate) use crate::marktree::inspect::*;
@@ -60,12 +59,10 @@ pub use crate::marktree::rebalance::*;
 pub use crate::marktree::splice::*;
 use crate::types::{MTKey, MTPos, MarkTree, MarkTreeIter, uint32_t, uint64_t};
 
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-
 /// Insert `key`, and — where `end_row` is non-negative — the end key that makes
 /// it a range.
 pub fn marktree_put(
-    b: &mut MarkTree,
+    tree: &mut MarkTree,
     mut key: MTKey,
     end_row: c_int,
     end_col: c_int,
@@ -80,7 +77,7 @@ pub fn marktree_put(
     if end_row >= 0 {
         key.flags |= MtFlags::PAIRED;
     }
-    marktree_put_key(b, key);
+    marktree_put_key(tree, key);
     if end_row < 0 {
         return;
     }
@@ -93,49 +90,50 @@ pub fn marktree_put(
         row: end_row,
         col: end_col,
     };
-    marktree_put_key(b, end_key);
+    marktree_put_key(tree, end_key);
 
-    let mut itr = MarkTreeIter::default();
-    let mut end_itr = MarkTreeIter::default();
-    marktree_lookup(b, mt_lookup_key(key), Some(&mut itr));
-    marktree_lookup(b, mt_lookup_key(end_key), Some(&mut end_itr));
-    marktree_intersect_pair(b, mt_lookup_key(key), &mut itr, &end_itr, false);
+    let mut iter = MarkTreeIter::default();
+    let mut end_iter = MarkTreeIter::default();
+    marktree_lookup(tree, mt_lookup_key(key), Some(&mut iter));
+    marktree_lookup(tree, mt_lookup_key(end_key), Some(&mut end_iter));
+    marktree_intersect_pair(tree, mt_lookup_key(key), &mut iter, &end_iter, false);
 }
 
 /// Insert one already-built key, splitting a full node on the way down.
 ///
-/// The first root is allocated at the internal node's size even though it
-/// starts at level zero, so the tail it never uses is wasted for a tree that
-/// stays under one node. Upstream does the same; nothing depends on it beyond
-/// `marktree_free_node` not caring which size a node was.
-pub fn marktree_put_key(b: &mut MarkTree, mut k: MTKey) {
+/// Upstream allocated the first root at the internal node's size even though it
+/// starts at level zero; here a level-zero node is a leaf, and the tree's
+/// first internal node is the root a split creates above it.
+pub fn marktree_put_key(tree: &mut MarkTree, mut k: MTKey) {
     k.flags |= MtFlags::REAL; // let's be real.
-    if b.root.is_null() {
-        // SAFETY: `b` is a live tree, which is all `marktree_alloc_node` wants.
-        b.root = unsafe { marktree_alloc_node(b, true) };
-    }
-    // SAFETY: a non-null root is a live node of `b`.
-    let mut r = unsafe { Node::new(b.root) };
-    if r.key_count() == MAX_KEYS {
+    let mut r = match tree.root {
+        Some(root) => root,
+        None => {
+            let root = tree.alloc_node(0);
+            tree.root = Some(root);
+            root
+        }
+    };
+    if tree[r].key_count() == MAX_KEYS {
         // The root is full: grow the tree by one level and split into the new
         // root, which is where every level the tree ever gains comes from.
-        // SAFETY: `b` is a live tree.
-        let s = unsafe { Node::new(marktree_alloc_node(b, true)) };
-        b.root = s.as_ptr();
-        s.set_level(r.level() + 1);
-        s.set_key_count(0);
-        s.set_child(0, r);
-        s.set_child_meta(0, b.meta_root);
-        r.set_parent(Some(s));
-        r.set_parent_index(0);
-        split_node(b, s, 0, k);
+        let s = tree.alloc_node(tree[r].level() + 1);
+        tree.root = Some(s);
+        let meta_root = tree.meta_root;
+        let top = &mut tree[s];
+        top.set_key_count(0);
+        top.set_child(0, r);
+        *top.child_meta_mut(0) = meta_root;
+        tree[r].set_parent(Some(s));
+        tree[r].set_parent_index(0);
+        split_node(tree, s, 0, k);
         r = s;
     }
 
     let meta_inc = meta_describe_key(k);
-    marktree_putp_aux(b, r, k, &meta_inc);
-    meta_add(&mut b.meta_root, &meta_inc);
-    b.n_keys = b.n_keys.wrapping_add(1);
+    marktree_putp_aux(tree, r, k, &meta_inc);
+    meta_add(&mut tree.meta_root, &meta_inc);
+    tree.n_keys = tree.n_keys.wrapping_add(1);
 }
 
 /// Which iterator index the repair walk is currently adjusting.
@@ -153,10 +151,10 @@ enum Lasti {
 }
 
 impl Lasti {
-    fn bump(self, itr: &mut MarkTreeIter, by: c_int) {
+    fn bump(self, iter: &mut MarkTreeIter, by: c_int) {
         match self {
-            Lasti::Cur => itr.i += by,
-            Lasti::Level(lvl) => itr.s[lvl].i += by,
+            Lasti::Cur => iter.index += by,
+            Lasti::Level(depth) => iter.path[depth].index += by,
         }
     }
 }
@@ -183,62 +181,59 @@ impl Lasti {
 /// `rev` says the caller intends to keep iterating backwards and deleting keys
 /// before this one. Iterating forward is the recommended strategy and passes
 /// false.
-pub fn marktree_del_itr(b: &mut MarkTree, itr: &mut MarkTreeIter, rev: bool) -> uint64_t {
+pub fn marktree_del_itr(tree: &mut MarkTree, iter: &mut MarkTreeIter, rev: bool) -> uint64_t {
     let mut adjustment = 0;
-    // SAFETY: a positioned iterator names a live node of `b`.
-    let cur = unsafe { Node::new(itr.x) };
-    let curi = itr.i as usize;
-    let id = mt_lookup_key(cur.key(curi));
+    let cur = iter.node.expect("a positioned iterator");
+    let curi = iter.index as usize;
+    let raw = tree[cur].key(curi);
+    let id = mt_lookup_key(raw);
 
     // 1. Orphan the other half of the pair, and retract the records of what
     //    the range covered. NB: the retraction must name exactly the pair the
     //    records were made for.
-    let raw = cur.key(curi);
     let mut other = 0;
     if mt_paired(raw) && !raw.flags.has(MtFlags::ORPHANED) {
         other = mt_lookup_key_side(raw, !mt_end(raw));
-        let mut other_itr = MarkTreeIter::default();
-        marktree_lookup(b, other, Some(&mut other_itr));
-        // SAFETY: the lookup left `other_itr` on a live node of `b`.
-        let onode = unsafe { Node::new(other_itr.x) };
-        onode.update_key(other_itr.i as usize, |k| k.flags |= MtFlags::ORPHANED);
+        let mut other_iter = MarkTreeIter::default();
+        marktree_lookup(tree, other, Some(&mut other_iter));
+        tree.key_mut(&other_iter).flags |= MtFlags::ORPHANED;
         if mt_start(raw) {
-            let mut this_itr = *itr; // a copy, because this one is mutated
-            marktree_intersect_pair(b, id, &mut this_itr, &other_itr, true);
+            let mut this_iter = *iter; // a copy, because this one is mutated
+            marktree_intersect_pair(tree, id, &mut this_iter, &other_iter, true);
         } else {
-            marktree_intersect_pair(b, other, &mut other_itr, itr, true);
+            marktree_intersect_pair(tree, other, &mut other_iter, iter, true);
         }
     }
 
     // 2. An internal key cannot be removed in place; steal the previous key,
     //    which is in a leaf, and put it here instead.
-    if !cur.is_leaf() {
+    if !tree[cur].is_leaf() {
         if rev {
             ::std::process::abort();
         }
-        marktree_itr_prev(b, itr);
+        marktree_itr_prev(tree, iter);
         adjustment = -1;
     }
 
     // 3. Delete the leaf key.
-    // SAFETY: `itr` still names a live node of `b` after the step above.
-    let mut x = unsafe { Node::new(itr.x) };
-    debug_assert!(x.is_leaf(), "x->level == 0");
-    let mut intkey = x.key(itr.i as usize);
+    let mut x = iter.node.expect("a leaf key before an internal one");
+    debug_assert!(tree[x].is_leaf(), "x->level == 0");
+    let mut intkey = tree[x].key(iter.index as usize);
     let mut meta_inc = meta_describe_key(intkey);
-    let hole = itr.i as usize;
-    if x.key_count() > hole + 1 {
-        x.copy_keys_within(hole + 1..x.key_count(), hole);
+    let hole = iter.index as usize;
+    let leaf = &mut tree[x];
+    if leaf.key_count() > hole + 1 {
+        leaf.copy_keys_within(hole + 1..leaf.key_count(), hole);
     }
-    x.set_key_count(x.key_count() - 1);
-    b.n_keys = b.n_keys.wrapping_sub(1);
-    b.id2node.remove(&id);
+    leaf.set_key_count(leaf.key_count() - 1);
+    tree.n_keys = tree.n_keys.wrapping_sub(1);
+    tree.id2node.remove(&id);
 
     // 4. Write the stolen key over the one the caller wanted gone, rebasing it
     //    onto every node between the two, and repair the covering records the
     //    move disturbed.
     if adjustment == -1 {
-        let mut ilvl = itr.lvl - 1;
+        let mut depth = iter.depth - 1;
         let mut lnode = x;
         let mut start_id = 0;
         let mut did_bubble = false;
@@ -246,47 +241,50 @@ pub fn marktree_del_itr(b: &mut MarkTree, itr: &mut MarkTreeIter, rev: bool) -> 
             start_id = mt_lookup_key_side(intkey, false);
         }
         loop {
-            if ilvl < 0 {
+            if depth < 0 {
                 ::std::process::abort();
             }
-            let p = lnode.parent().expect("a node below `cur` has a parent");
-            let i = itr.s[ilvl as usize].i as usize;
-            debug_assert!(p.child(i) == lnode, "p->ptr[i] == lnode");
+            let p = tree[lnode]
+                .parent()
+                .expect("a node below `cur` has a parent");
+            let i = iter.path[depth as usize].index as usize;
+            debug_assert!(tree[p].child(i) == lnode, "p->ptr[i] == lnode");
             if i > 0 {
-                unrelative(p.key(i - 1).pos, &mut intkey.pos);
+                unrelative(tree[p].key(i - 1).pos, &mut intkey.pos);
             }
-            if p != cur && start_id != 0 && p.child(0).intersection().contains(start_id) {
+            if p != cur && start_id != 0 && tree[tree[p].child(0)].intersection().contains(start_id)
+            {
                 // After the first time round, this also undoes the addition the
                 // previous round made just below.
                 let last = usize::from(lnode != x);
                 // One less than the children, because `ptr[n]` is the last.
-                for k in 0..p.key_count() + last {
-                    unintersect_node(p.child(k), start_id, true);
+                for k in 0..tree[p].key_count() + last {
+                    let child = tree[p].child(k);
+                    unintersect_node(tree, child, start_id, true);
                 }
-                intersect_node(p, start_id);
+                intersect_node(tree, p, start_id);
                 did_bubble = true;
             }
-            p.update_child_meta(lnode.parent_index(), |m| meta_sub(m, &meta_inc));
+            let at = tree[lnode].parent_index();
+            meta_sub(tree[p].child_meta_mut(at), &meta_inc);
             lnode = p;
-            ilvl -= 1;
+            depth -= 1;
             if lnode == cur {
                 break;
             }
         }
 
-        let mut deleted = cur.key(curi);
+        let mut deleted = tree[cur].key(curi);
         meta_inc = meta_describe_key(deleted);
-        cur.set_key(curi, intkey);
-        // SAFETY: `b` is live and `cur` one of its nodes, holding a key at
-        // `curi` — the one just written.
-        unsafe { refkey(b, cur.as_ptr(), curi as c_int) };
+        tree[cur].set_key(curi, intkey);
+        tree.refkey(cur, curi);
         // Where we bubbled `start_id` up to a parent, its record is already
         // there; otherwise the leaf may need one of its own.
-        if mt_end(cur.key(curi)) && !did_bubble {
-            let pi = x.pseudo_index(0); // note: sloppy pseudo-index
-            let pi_start = pseudo_index_for_id(b, start_id, true);
+        if mt_end(tree[cur].key(curi)) && !did_bubble {
+            let pi = tree.pseudo_index(x, 0); // note: sloppy pseudo-index
+            let pi_start = pseudo_index_for_id(tree, start_id, true);
             if pi_start > 0 && pi_start < pi {
-                intersect_node(x, start_id);
+                intersect_node(tree, x, start_id);
             }
         }
 
@@ -294,10 +292,11 @@ pub fn marktree_del_itr(b: &mut MarkTree, itr: &mut MarkTreeIter, rev: bool) -> 
         // different key, so rebase its leftmost spine onto the difference.
         relative(intkey.pos, &mut deleted.pos);
         if deleted.pos.row != 0 || deleted.pos.col != 0 {
-            let mut y = Some(cur.child(curi + 1));
+            let mut y = Some(tree[cur].child(curi + 1));
             while let Some(node) = y {
+                let node = &mut tree[node];
                 for k in 0..node.key_count() {
-                    node.update_key(k, |key| unrelative(deleted.pos, &mut key.pos));
+                    unrelative(deleted.pos, &mut node.key_mut(k).pos);
                 }
                 y = if node.is_leaf() {
                     None
@@ -306,121 +305,126 @@ pub fn marktree_del_itr(b: &mut MarkTree, itr: &mut MarkTreeIter, rev: bool) -> 
                 };
             }
         }
-        itr.i -= 1;
+        iter.index -= 1;
     }
 
     let mut lnode = cur;
-    while let Some(p) = lnode.parent() {
-        p.update_child_meta(lnode.parent_index(), |m| meta_sub(m, &meta_inc));
+    while let Some(p) = tree[lnode].parent() {
+        let at = tree[lnode].parent_index();
+        meta_sub(tree[p].child_meta_mut(at), &meta_inc);
         lnode = p;
     }
     for (m, &inc) in meta_inc.iter().enumerate() {
-        debug_assert!(b.meta_root[m] >= inc, "b->meta_root[m] >= meta_inc[m]");
+        debug_assert!(tree.meta_root[m] >= inc, "b->meta_root[m] >= meta_inc[m]");
     }
-    meta_sub(&mut b.meta_root, &meta_inc);
+    meta_sub(&mut tree.meta_root, &meta_inc);
 
     // 5. Repair upward from the leaf.
-    let mut itr_dirty = false;
-    let mut rlvl = itr.lvl - 1;
+    let mut iter_dirty = false;
+    let mut rdepth = iter.depth - 1;
     let mut lasti = Lasti::Cur;
-    let mut ppos = itr.pos;
+    let mut ppos = iter.pos;
     let min_keys = MT_BRANCH_FACTOR as usize - 1;
-    while x.as_ptr() != b.root {
-        debug_assert!(rlvl >= 0, "rlvl >= 0");
-        let p = x.parent().expect("a node below the root has a parent");
-        if x.key_count() >= min_keys {
+    while Some(x) != tree.root {
+        debug_assert!(rdepth >= 0, "rlvl >= 0");
+        let p = tree[x]
+            .parent()
+            .expect("a node below the root has a parent");
+        if tree[x].key_count() >= min_keys {
             // This node is fine, so the rest of the tree is.
             break;
         }
-        let pi = itr.s[rlvl as usize].i;
-        debug_assert!(p.child(pi as usize) == x, "p->ptr[pi] == x");
+        let pi = iter.path[rdepth as usize].index;
+        debug_assert!(tree[p].child(pi as usize) == x, "p->ptr[pi] == x");
         if pi > 0 {
-            ppos.row -= p.key(pi as usize - 1).pos.row;
-            ppos.col = itr.s[rlvl as usize].oldcol;
+            ppos.row -= tree[p].key(pi as usize - 1).pos.row;
+            ppos.col = iter.path[rdepth as usize].old_col;
         }
         // `ppos` is now the position of `p`.
 
-        if pi > 0 && p.child(pi as usize - 1).key_count() > min_keys {
-            lasti.bump(itr, 1);
-            itr_dirty = true;
+        if pi > 0 && tree[tree[p].child(pi as usize - 1)].key_count() > min_keys {
+            lasti.bump(iter, 1);
+            iter_dirty = true;
             // Steal one key from the left neighbour.
-            pivot_right(b, ppos, p, pi as usize - 1);
+            pivot_right(tree, ppos, p, pi as usize - 1);
             break;
-        } else if pi < p.key_count() as c_int && p.child(pi as usize + 1).key_count() > min_keys {
+        } else if pi < tree[p].key_count() as c_int
+            && tree[tree[p].child(pi as usize + 1)].key_count() > min_keys
+        {
             // Steal one key from the right neighbour.
-            pivot_left(b, ppos, p, pi as usize);
+            pivot_left(tree, ppos, p, pi as usize);
             break;
         } else if pi > 0 {
             assert!(
-                p.child(pi as usize - 1).key_count() == min_keys,
+                tree[tree[p].child(pi as usize - 1)].key_count() == min_keys,
                 "p->ptr[pi - 1]->n == T - 1"
             );
             // Merge with the left neighbour.
-            lasti.bump(itr, MT_BRANCH_FACTOR as c_int);
-            x = merge_node(b, p, pi as usize - 1);
+            lasti.bump(iter, MT_BRANCH_FACTOR as c_int);
+            x = merge_node(tree, p, pi as usize - 1);
             if lasti == Lasti::Cur {
                 // TRICKY: we merged the node the iterator was on.
-                itr.x = x.as_ptr();
+                iter.node = Some(x);
             }
-            itr.s[rlvl as usize].i -= 1;
-            itr_dirty = true;
+            iter.path[rdepth as usize].index -= 1;
+            iter_dirty = true;
         } else {
             assert!(
-                pi < p.key_count() as c_int && p.child(pi as usize + 1).key_count() == min_keys,
+                pi < tree[p].key_count() as c_int
+                    && tree[tree[p].child(pi as usize + 1)].key_count() == min_keys,
                 "pi < p->n && p->ptr[pi + 1]->n == T - 1"
             );
             // No iterator adjustment is needed.
-            merge_node(b, p, pi as usize);
+            merge_node(tree, p, pi as usize);
         }
-        lasti = Lasti::Level(rlvl as usize);
-        rlvl -= 1;
+        lasti = Lasti::Level(rdepth as usize);
+        rdepth -= 1;
         x = p;
     }
 
     // 6. The root may have run out of keys; drop it and promote its child.
-    // SAFETY: `b` is live, so its root is one of its live nodes.
-    let root = unsafe { Node::new(b.root) };
-    if root.key_count() == 0 {
-        if itr.lvl > 0 {
-            itr.s.copy_within(1..itr.lvl as usize, 0);
-            itr.lvl -= 1;
+    let root = tree
+        .root
+        .expect("a tree that held the deleted key has a root");
+    if tree[root].key_count() == 0 {
+        if iter.depth > 0 {
+            iter.path.copy_within(1..iter.depth as usize, 0);
+            iter.depth -= 1;
         }
-        if !root.is_leaf() {
-            let promoted = root.child(0);
+        if !tree[root].is_leaf() {
+            let promoted = tree[root].child(0);
             debug_assert!(
-                b.meta_root == root.child_meta(0),
+                tree.meta_root == *tree[root].child_meta(0),
                 "b->meta_root[m] == oldroot->meta[0][m]"
             );
-            b.root = promoted.as_ptr();
-            promoted.set_parent(None);
-            // SAFETY: `b` is live and `root` is now detached from it.
-            unsafe { marktree_free_node(b, root.as_ptr()) };
+            tree.root = Some(promoted);
+            tree[promoted].set_parent(None);
+            // The old root is detached from the tree now.
+            tree.free_node(root);
         } else {
             // No items left; nothing for the iterator to point at. Not strictly
             // needed — deleting the right-most mark would be handled anyway.
-            itr.x = ptr::null_mut();
+            iter.node = None;
         }
     }
 
-    if !itr.x.is_null() && itr_dirty {
-        marktree_itr_fix_pos(b, itr);
+    if iter.is_positioned() && iter_dirty {
+        marktree_itr_fix_pos(tree, iter);
     }
 
     // BONUS STEP: leave the iterator on the key after the deleted one.
     if adjustment == -1 {
         // Tricky: we stand at the hole in the previous leaf, and the internal
         // key is now the one we stole, so skip that one as well.
-        marktree_itr_next(b, itr);
-        marktree_itr_next(b, itr);
-    } else if !itr.x.is_null() {
-        // SAFETY: a non-null `itr.x` names a live node of `b`.
-        let node = unsafe { Node::new(itr.x) };
-        if itr.i as usize >= node.key_count() {
-            // We deleted the last key of a leaf node; go to the internal key
-            // after it.
-            debug_assert!(node.is_leaf(), "itr->x->level == 0");
-            marktree_itr_next(b, itr);
-        }
+        marktree_itr_next(tree, iter);
+        marktree_itr_next(tree, iter);
+    } else if let Some(node) = iter.node
+        && iter.index as usize >= tree[node].key_count()
+    {
+        // We deleted the last key of a leaf node; go to the internal key
+        // after it.
+        debug_assert!(tree[node].is_leaf(), "itr->x->level == 0");
+        marktree_itr_next(tree, iter);
     }
 
     other
@@ -428,63 +432,39 @@ pub fn marktree_del_itr(b: &mut MarkTree, itr: &mut MarkTreeIter, rev: bool) -> 
 
 /// Re-count the meta kinds of the key under the iterator, up to the root, after
 /// a consumer edited its flags in place.
-pub fn marktree_revise_meta(b: &mut MarkTree, itr: &mut MarkTreeIter, old_key: MTKey) {
-    // SAFETY: a positioned iterator names a live node of `b`.
-    let x = unsafe { Node::new(itr.x) };
+pub fn marktree_revise_meta(tree: &mut MarkTree, iter: &mut MarkTreeIter, old_key: MTKey) {
+    let x = iter.node.expect("a positioned iterator");
     let meta_old = meta_describe_key(old_key);
-    let meta_new = meta_describe_key(x.key(itr.i as usize));
+    let meta_new = meta_describe_key(tree[x].key(iter.index as usize));
     if meta_new == meta_old {
         return;
     }
 
     let mut lnode = x;
-    while let Some(p) = lnode.parent() {
-        p.update_child_meta(lnode.parent_index(), |m| {
-            meta_apply_delta(m, &meta_new, &meta_old)
-        });
+    while let Some(p) = tree[lnode].parent() {
+        let at = tree[lnode].parent_index();
+        meta_apply_delta(tree[p].child_meta_mut(at), &meta_new, &meta_old);
         lnode = p;
     }
-    meta_apply_delta(&mut b.meta_root, &meta_new, &meta_old);
+    meta_apply_delta(&mut tree.meta_root, &meta_new, &meta_old);
 }
 
 /// Drop every mark and every node, leaving the tree as it was born.
 ///
-/// # Safety
-/// Every node of the tree is freed: no [`Node`] or [`MarkTreeIter`] taken
-/// out of it may be used afterwards.
-pub unsafe fn marktree_clear(b: &mut MarkTree) {
-    if !b.root.is_null() {
-        // SAFETY: a non-null root is a live node of `b`.
-        let root = unsafe { Node::new(b.root) };
-        // SAFETY: `b` is live and `root` is the whole of its tree.
-        unsafe { marktree_free_subtree(b, root) };
-        b.root = ptr::null_mut();
-    }
+/// An iterator taken out of the tree before is stale afterwards: stepping it
+/// panics on its node id.
+pub fn marktree_clear(tree: &mut MarkTree) {
+    tree.root = None;
+    tree.free_all_nodes();
 
     // Upstream's `map_destroy(uint64_t, b->id2node)`. The table keeps its
     // allocation, which is what a cleared tree wants: it is about to be
     // filled again, or it is a buffer's field on its way out.
-    b.id2node.clear();
+    tree.id2node.clear();
 
-    b.n_keys = 0;
-    b.meta_root = [0; META_COUNT];
-    debug_assert!(b.n_nodes == 0, "b->n_nodes == 0");
-}
-
-/// Free `x` and everything below it.
-///
-/// # Safety
-/// `x` and everything under it are freed, so `x` must already be detached
-/// from the tree and no [`Node`] or [`MarkTreeIter`] may still name it.
-pub unsafe fn marktree_free_subtree(b: &mut MarkTree, x: Node) {
-    if !x.is_leaf() {
-        for i in 0..=x.key_count() {
-            // SAFETY: a child of a live internal node is a live node of `b`.
-            unsafe { marktree_free_subtree(b, x.child(i)) };
-        }
-    }
-    // SAFETY: `x`'s children are gone and nothing else names it.
-    unsafe { marktree_free_node(b, x.as_ptr()) };
+    tree.n_keys = 0;
+    tree.meta_root = [0; META_COUNT];
+    debug_assert!(tree.node_count() == 0, "b->n_nodes == 0");
 }
 
 /// Try to move `key` to `newpos` without it leaving the leaf `x` it sits in.
@@ -492,41 +472,48 @@ pub unsafe fn marktree_free_subtree(b: &mut MarkTree, x: Node) {
 /// Answers false when the new position is outside the span `x` covers, which is
 /// when the caller has to delete and re-insert the mark instead. Nothing is
 /// written in that case.
-fn move_within_leaf(x: Node, itr: &MarkTreeIter, mut key: MTKey, mut newpos: MTPos) -> bool {
-    if x.parent().is_some() {
+fn move_within_leaf(
+    tree: &mut MarkTree,
+    x: NodeId,
+    iter: &MarkTreeIter,
+    mut key: MTKey,
+    mut newpos: MTPos,
+) -> bool {
+    let leaf = &mut tree[x];
+    if leaf.parent().is_some() {
         // Strictly *after* the key before `x` — not optimal when `x` is the
         // very first leaf of the entire tree, but that is fine.
-        if !pos_less(itr.pos, newpos) {
+        if !pos_less(iter.pos, newpos) {
             return false;
         }
-        relative(itr.pos, &mut newpos);
+        relative(iter.pos, &mut newpos);
         // Strictly before the end of `x`. (This could be made sharper by
         // finding the internal key just after `x`, but meh.)
-        if !pos_less(newpos, x.key(x.key_count() - 1).pos) {
+        if !pos_less(newpos, leaf.key(leaf.key_count() - 1).pos) {
             return false;
         }
     }
     // Otherwise the tree is one node, so `newpos` is already relative to
-    // `itr.pos`.
+    // `iter.pos`.
     if key.pos.row == newpos.row && key.pos.col == newpos.col {
         return true;
     }
     key.pos = newpos;
 
     // Tricky: movement could be minimised better in either direction.
-    let (mut new_i, matched) = find_key(x.keys(), key);
+    let (mut new_i, matched) = find_key(leaf.keys(), key);
     if !matched {
         new_i += 1;
     }
-    let (i, new_i) = (itr.i as usize, new_i as usize);
+    let (i, new_i) = (iter.index as usize, new_i as usize);
     if new_i == i {
-        x.update_key(i, |k| k.pos = newpos);
+        leaf.key_mut(i).pos = newpos;
     } else if new_i < i {
-        x.copy_keys_within(new_i..i, new_i + 1);
-        x.set_key(new_i, key);
+        leaf.copy_keys_within(new_i..i, new_i + 1);
+        leaf.set_key(new_i, key);
     } else {
-        x.copy_keys_within(i + 1..new_i, i);
-        x.set_key(new_i - 1, key);
+        leaf.copy_keys_within(i + 1..new_i, i);
+        leaf.set_key(new_i - 1, key);
     }
     true
 }
@@ -535,51 +522,51 @@ fn move_within_leaf(x: Node, itr: &MarkTreeIter, mut key: MTKey, mut newpos: MTP
 ///
 /// The iterator is invalid after the call unless the mark stayed put within its
 /// own leaf.
-pub fn marktree_move(b: &mut MarkTree, itr: &mut MarkTreeIter, row: c_int, col: c_int) {
-    // SAFETY: a positioned iterator names a live node of `b`.
-    let x = unsafe { Node::new(itr.x) };
-    let mut key = x.key(itr.i as usize);
+pub fn marktree_move(tree: &mut MarkTree, iter: &mut MarkTreeIter, row: c_int, col: c_int) {
+    let x = iter.node.expect("a positioned iterator");
+    let mut key = tree[x].key(iter.index as usize);
     let newpos = MTPos { row, col };
-    if x.is_leaf() && move_within_leaf(x, itr, key, newpos) {
+    if tree[x].is_leaf() && move_within_leaf(tree, x, iter, key, newpos) {
         return;
     }
 
-    let other = marktree_del_itr(b, itr, false);
+    let other = marktree_del_itr(tree, iter, false);
     key.pos = newpos;
-    marktree_put_key(b, key);
+    marktree_put_key(tree, key);
     if other != 0 {
-        marktree_restore_pair(b, key);
+        marktree_restore_pair(tree, key);
     }
-    itr.x = ptr::null_mut(); // the put may have invalidated it
+    iter.node = None; // the put may have invalidated it
 }
 
 /// The key with this `(ns, id, end)`, or `MT_INVALID_KEY`.
 pub fn marktree_lookup_ns(
-    b: &mut MarkTree,
+    tree: &mut MarkTree,
     ns: uint32_t,
     id: uint32_t,
     end: bool,
-    itr: Option<&mut MarkTreeIter>,
+    iter: Option<&mut MarkTreeIter>,
 ) -> MTKey {
-    marktree_lookup(b, mt_lookup_id(ns, id, end), itr)
+    marktree_lookup(tree, mt_lookup_id(ns, id, end), iter)
 }
 
-/// The key with this lookup handle, or `MT_INVALID_KEY`. `itr`, where given, is
-/// left on the key — or emptied when there is none.
-pub fn marktree_lookup(b: &mut MarkTree, id: uint64_t, itr: Option<&mut MarkTreeIter>) -> MTKey {
-    // SAFETY: `b` is live, so `id2node` answers null or one of its live nodes.
-    let Some(n) = (unsafe { Node::from_ptr(id2node(b, id)) }) else {
-        if let Some(itr) = itr {
-            itr.x = ptr::null_mut();
+/// The key with this lookup handle, or `MT_INVALID_KEY`. `iter`, where given,
+/// is left on the key — or emptied when there is none.
+pub fn marktree_lookup(
+    tree: &mut MarkTree,
+    id: uint64_t,
+    iter: Option<&mut MarkTreeIter>,
+) -> MTKey {
+    let Some(n) = tree.id2node(id) else {
+        if let Some(iter) = iter {
+            iter.node = None;
         }
         return MT_INVALID_KEY;
     };
-    for i in 0..n.key_count() {
-        if mt_lookup_key(n.key(i)) == id {
-            return marktree_itr_set_node(b, itr, n, i as c_int);
-        }
-    }
-    // The id map named a node that does not hold the key, so the tree is
-    // corrupt and there is nothing sensible to answer.
-    ::std::process::abort()
+    let Some(i) = tree[n].keys().iter().position(|&k| mt_lookup_key(k) == id) else {
+        // The id map named a node that does not hold the key, so the tree is
+        // corrupt and there is nothing sensible to answer.
+        ::std::process::abort()
+    };
+    marktree_itr_set_node(tree, iter, n, i as c_int)
 }

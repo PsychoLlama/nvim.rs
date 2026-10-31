@@ -64,25 +64,27 @@ pub fn extmark_set(
         id = ns_counter(buffer.extmark_ns(), ns_id) + 1;
         ns_set_counter(buffer.extmark_ns(), ns_id, id);
     } else {
-        let mut itr = MarkTreeIter::default();
-        let old_mark = tree_lookup_ns(buffer.marktree(), ns_id, id, false, Some(&mut itr));
+        let mut iter = MarkTreeIter::default();
+        let old_mark = tree_lookup_ns(buffer.marktree(), ns_id, id, false, Some(&mut iter));
         if old_mark.id != 0 {
             if mt_paired(old_mark) || end_row > -1 {
                 del_id(buffer, ns_id, id);
             } else {
-                debug_assert!(!itr.x.is_null(), "marktree_itr_valid(itr)");
+                debug_assert!(iter.is_positioned(), "marktree_itr_valid(iter)");
                 if old_mark.pos.row == row && old_mark.pos.col == col {
                     // Not paired: the key can be revised where it lies.
                     if !mt_invalid(old_mark) && mt_decor_any(old_mark) {
-                        itr_rawkey(&mut itr).flags.clear(MtFlags::EXTERNAL_MASK);
+                        itr_rawkey(buffer.marktree(), &iter)
+                            .flags
+                            .clear(MtFlags::EXTERNAL_MASK);
                         decor_remove(buffer, row, row, col, mt_decor(old_mark), true);
                     }
-                    itr_rawkey(&mut itr).flags |= flags;
-                    itr_rawkey(&mut itr).decor_data = decor;
-                    tree_revise_meta(buffer.marktree(), &mut itr, old_mark);
+                    itr_rawkey(buffer.marktree(), &iter).flags |= flags;
+                    itr_rawkey(buffer.marktree(), &iter).decor_data = decor;
+                    tree_revise_meta(buffer.marktree(), &mut iter, old_mark);
                     revised = true;
                 } else {
-                    tree_del_itr(buffer.marktree(), &mut itr, false);
+                    tree_del_itr(buffer.marktree(), &mut iter, false);
                     if !mt_invalid(old_mark) {
                         decor_remove(
                             buffer,
@@ -135,8 +137,8 @@ pub(crate) fn extmark_setraw(
     col: ColNr,
     invalid: bool,
 ) {
-    let mut itr = MarkTreeIter::default();
-    let key = tree_lookup(buffer.marktree(), mark, Some(&mut itr));
+    let mut iter = MarkTreeIter::default();
+    let key = tree_lookup(buffer.marktree(), mark, Some(&mut iter));
     let move_0 = key.pos.row != row || key.pos.col != col;
     if key.pos.row < 0 || (!move_0 && !invalid) {
         // The mark was deleted, or nothing has to change.
@@ -151,16 +153,20 @@ pub(crate) fn extmark_setraw(
 
     let mut row1 = 0;
     let mut row2 = 0;
-    let mut altitr = itr;
-    let alt = tree_get_alt(buffer.marktree(), key, Some(&mut altitr));
+    let mut alt_iter = iter;
+    let alt = tree_get_alt(buffer.marktree(), key, Some(&mut alt_iter));
 
     if invalid {
-        itr_rawkey(&mut itr).flags.clear(MtFlags::INVALID);
-        itr_rawkey(&mut altitr).flags.clear(MtFlags::INVALID);
+        itr_rawkey(buffer.marktree(), &iter)
+            .flags
+            .clear(MtFlags::INVALID);
+        itr_rawkey(buffer.marktree(), &alt_iter)
+            .flags
+            .clear(MtFlags::INVALID);
         let (revised, old) = if mt_end(key) {
-            (&mut altitr, alt)
+            (&mut alt_iter, alt)
         } else {
-            (&mut itr, key)
+            (&mut iter, key)
         };
         tree_revise_meta(buffer.marktree(), revised, old);
     } else if !mt_invalid(key) && key.flags.has(MtFlags::DECOR_SIGNTEXT) && buffer.b_signcols.autom
@@ -177,7 +183,7 @@ pub(crate) fn extmark_setraw(
     }
 
     if move_0 {
-        tree_move(buffer.marktree(), &mut itr, row, col);
+        tree_move(buffer.marktree(), &mut iter, row, col);
     }
 
     if invalid {

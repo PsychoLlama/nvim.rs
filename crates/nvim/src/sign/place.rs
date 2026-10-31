@@ -225,8 +225,8 @@ fn buf_delete_signs(buffer: Buf, group: Option<&[u8]>, id: c_int, atlnum: LineNr
 
     // The walk goes on with a cursor per step: `extmark::del` steps the
     // iterator itself, which one cursor held across the loop cannot let it.
-    while !itr.x.is_null() {
-        let mark = marktree_itr_current(&mut itr);
+    while itr.is_positioned() {
+        let mark = Cursor::in_buffer(buffer, &mut itr).current();
         if row != 0 && mark.pos.row > row {
             break;
         }

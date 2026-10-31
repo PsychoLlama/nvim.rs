@@ -1,13 +1,13 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 //! Walking the tree.
 //!
 //! `MarkTreeIter` is a cursor: the node and index it currently names, plus the
-//! path it took to get there (`s[lvl]`, one entry per level) and the absolute
-//! position of that node, since positions in the tree are stored relative to
-//! the enclosing key. Callers all over the editor hold one across an edit, so
-//! the layout is fixed and the entry points keep their C signatures.
+//! path it took to get there (`path[depth]`, one entry per level) and the
+//! absolute position of that node, since positions in the tree are stored
+//! relative to the enclosing key. Callers all over the editor hold one across
+//! an edit; it names nodes by [`NodeId`], so a stale one reads a wrong key at
+//! worst.
 //!
 //! Three walks share the machinery:
 //!
@@ -16,30 +16,17 @@
 //!   that holds none of the decoration kinds the caller asked for;
 //! * the overlap walk, which answers "which ranges cover this position" by
 //!   reading the intersection set on each node of the path down.
-//!
-//! # How this file reaches the tree
-//!
-//! Every walk keeps the node it is on in a [`Node`] local *alongside* `itr.x`,
-//! and moves it with [`Node::parent`] / [`Node::child`]. So a descent of any
-//! depth costs exactly one promise — the one that turns the tree's root, or
-//! the node an iterator arrives holding, into a `Node` — and the body of the
-//! walk is ordinary checked code. That is why the entry points are still
-//! `unsafe` although they take `&mut MarkTree`: a reference cannot say that an
-//! iterator handed alongside a tree is positioned in *that* tree, nor that a
-//! tree's `root` names a live node.
 
 use core::ffi::c_int;
-use core::ptr;
 
 use crate::marktree::key::{
     MARKTREE_END_FLAG, MT_INVALID_KEY, MtFlags, compose, mt_end, mt_lookup_id, mt_start,
     mtpair_from, pos_leq, pos_less, relative, unrelative,
 };
 use crate::marktree::meta::{MetaCount, filtered_key_flags, meta_has};
-use crate::marktree::node::{Node, find_key, id2node};
+use crate::marktree::node::{NodeId, find_key};
 use crate::types::{
-    DecorHighlightInline, DecorInline, MTKey, MTPair, MTPos, MarkTree, MarkTreeIter, MetaFilter,
-    int32_t,
+    DecorHighlightInline, DecorInline, MTKey, MTPair, MTPos, MarkTree, MarkTreeIter, int32_t,
 };
 
 use super::marktree_lookup;
@@ -48,7 +35,7 @@ use super::marktree_lookup;
 /// the same reason node.rs nests its own sizes.
 mod sizes {
     /// The deepest the tree can get: the C's `MT_MAX_DEPTH`, which is also the
-    /// length of `MarkTreeIter::s` and so the range `MarkTreeIter::lvl`
+    /// length of `MarkTreeIter::path` and so the range `MarkTreeIter::depth`
     /// indexes. It bounds an `oldbase` array for the same reason.
     pub const MT_MAX_DEPTH: usize = 20;
 }
@@ -74,118 +61,115 @@ fn search_key(pos: MTPos, flags: MtFlags) -> MTKey {
     }
 }
 
-/// The filter a C caller handed in, which every one of them supplies.
-///
-/// # Safety
-/// [`MetaFilter`] is a `*const uint32_t` behind an alias: `filter` must
-/// point at a live [`MetaCount`], and the answer borrows it for as long as
-/// the caller cares to.
-unsafe fn as_filter<'a>(filter: MetaFilter) -> &'a MetaCount {
-    // SAFETY: the caller promises a live `MetaCount`. The C dereferences it
-    // unconditionally too — there is no "no filter" case on this path.
-    unsafe { &*filter.cast() }
+/// The iterator's path entry at its own depth.
+#[inline(always)]
+fn here(iter: &mut MarkTreeIter) -> &mut crate::types::PathStep {
+    &mut iter.path[iter.depth as usize]
 }
 
-/// Position `itr` at the first key at or after (row, col).
+/// Position `iter` at the first key at or after (row, col).
 pub fn marktree_itr_get(
-    b: &mut MarkTree,
+    tree: &mut MarkTree,
     row: int32_t,
     col: c_int,
-    itr: &mut MarkTreeIter,
+    iter: &mut MarkTreeIter,
 ) -> bool {
     let p = MTPos { row, col };
-    marktree_itr_get_ext(b, p, itr, false, false, None, None)
+    marktree_itr_get_ext(tree, p, iter, false, false, None, None)
 }
 
-/// Position `itr` at `p`, with every knob the family has.
+/// Position `iter` at `p`, with every knob the family has.
 ///
 /// `last` asks for the key *before* `p` instead of the one at or after it,
 /// `gravity` breaks a tie at `p` on the right-gravity side, `oldbase` records
 /// the absolute position of every node on the way down, and `filter` stops the
 /// descent at the first subtree holding none of the wanted decoration kinds.
 pub fn marktree_itr_get_ext(
-    b: &mut MarkTree,
+    tree: &mut MarkTree,
     p: MTPos,
-    itr: &mut MarkTreeIter,
+    iter: &mut MarkTreeIter,
     last: bool,
     gravity: bool,
     mut oldbase: Option<&mut [MTPos; MT_MAX_DEPTH]>,
     filter: Option<&MetaCount>,
 ) -> bool {
-    if b.n_keys == 0 {
-        itr.x = ptr::null_mut();
+    let Some(root) = tree.root.filter(|_| tree.n_keys != 0) else {
+        iter.node = None;
         return false;
-    }
+    };
     let mut k = search_key(p, MtFlags::RIGHT_GRAVITY.when(gravity));
     if last && !gravity {
         k.flags = MtFlags::LAST;
     }
-    itr.pos = MTPos::default();
-    // SAFETY: `b` is live and holds keys, so its root is one of its live nodes.
-    let mut x = unsafe { Node::new(b.root) };
-    itr.x = x.as_ptr();
-    itr.lvl = 0;
+    iter.pos = MTPos::default();
+    let mut x = root;
+    iter.node = Some(x);
+    iter.depth = 0;
     if let Some(oldbase) = oldbase.as_deref_mut() {
-        oldbase[itr.lvl as usize] = itr.pos;
+        oldbase[iter.depth as usize] = iter.pos;
     }
     loop {
-        itr.i = find_key(x.keys(), k).0 + 1;
-        if x.is_leaf() {
+        let node = &tree[x];
+        iter.index = find_key(node.keys(), k).0 + 1;
+        if node.is_leaf() {
             break;
         }
         if let Some(filter) = filter
-            && !meta_has(&x.child_meta(itr.i as usize), filter)
+            && !meta_has(node.child_meta(iter.index as usize), filter)
         {
             break;
         }
-        itr.s[itr.lvl as usize].i = itr.i;
-        itr.s[itr.lvl as usize].oldcol = itr.pos.col;
-        if itr.i > 0 {
-            let sep = x.key(itr.i as usize - 1).pos;
-            compose(&mut itr.pos, sep);
+        let old_col = iter.pos.col;
+        let index = iter.index;
+        let step = here(iter);
+        step.index = index;
+        step.old_col = old_col;
+        if iter.index > 0 {
+            let sep = node.key(iter.index as usize - 1).pos;
+            compose(&mut iter.pos, sep);
             relative(sep, &mut k.pos);
         }
-        x = x.child(itr.i as usize);
-        itr.x = x.as_ptr();
-        itr.lvl += 1;
+        x = node.child(iter.index as usize);
+        iter.node = Some(x);
+        iter.depth += 1;
         if let Some(oldbase) = oldbase.as_deref_mut() {
-            oldbase[itr.lvl as usize] = itr.pos;
+            oldbase[iter.depth as usize] = iter.pos;
         }
     }
     if last {
-        marktree_itr_prev(b, itr)
-    } else if itr.i >= x.key_count() as c_int {
-        marktree_itr_next_skip(b, itr, true, false, None, None)
+        marktree_itr_prev(tree, iter)
+    } else if iter.index >= tree[x].key_count() as c_int {
+        marktree_itr_next_skip(tree, iter, true, false, None, None)
     } else {
         true
     }
 }
 
-/// Position `itr` at the tree's first key.
-pub fn marktree_itr_first(b: &mut MarkTree, itr: &mut MarkTreeIter) -> bool {
-    if b.n_keys == 0 {
-        itr.x = ptr::null_mut();
+/// Position `iter` at the tree's first key.
+pub fn marktree_itr_first(tree: &mut MarkTree, iter: &mut MarkTreeIter) -> bool {
+    let Some(root) = tree.root.filter(|_| tree.n_keys != 0) else {
+        iter.node = None;
         return false;
-    }
-    // SAFETY: `b` is live and holds keys, so its root is one of its live nodes.
-    let mut x = unsafe { Node::new(b.root) };
-    itr.x = x.as_ptr();
-    itr.i = 0;
-    itr.lvl = 0;
-    itr.pos = MTPos::default();
-    while !x.is_leaf() {
-        itr.s[itr.lvl as usize].i = 0;
-        itr.s[itr.lvl as usize].oldcol = 0;
-        itr.lvl += 1;
-        x = x.child(0);
-        itr.x = x.as_ptr();
+    };
+    let mut x = root;
+    iter.node = Some(x);
+    iter.index = 0;
+    iter.depth = 0;
+    iter.pos = MTPos::default();
+    while !tree[x].is_leaf() {
+        let step = here(iter);
+        step.index = 0;
+        step.old_col = 0;
+        iter.depth += 1;
+        x = tree[x].child(0);
+        iter.node = Some(x);
     }
     true
 }
 
 /// Step to the next key.
-pub fn marktree_itr_next(b: &mut MarkTree, itr: &mut MarkTreeIter) -> bool {
-    marktree_itr_next_skip(b, itr, false, false, None, None)
+pub fn marktree_itr_next(tree: &mut MarkTree, iter: &mut MarkTreeIter) -> bool {
+    marktree_itr_next_skip(tree, iter, false, false, None, None)
 }
 
 /// Step to the next key, optionally skipping the rest of the current subtree.
@@ -193,80 +177,84 @@ pub fn marktree_itr_next(b: &mut MarkTree, itr: &mut MarkTreeIter) -> bool {
 /// `skip` leaves the node the iterator is on instead of descending into it,
 /// and `filter` sets `skip` by itself for a subtree holding none of the wanted
 /// decoration kinds. `preload` stops one level short of a leaf, leaving
-/// `itr.i` at -1, which is what the pair walk wants. `oldbase` records where
-/// each level started.
+/// `iter.index` at -1, which is what the pair walk wants. `oldbase` records
+/// where each level started.
+#[inline]
 pub fn marktree_itr_next_skip(
-    _b: &mut MarkTree,
-    itr: &mut MarkTreeIter,
+    tree: &MarkTree,
+    iter: &mut MarkTreeIter,
     mut skip: bool,
     preload: bool,
     mut oldbase: Option<&mut [MTPos; MT_MAX_DEPTH]>,
     filter: Option<&MetaCount>,
 ) -> bool {
-    // SAFETY: `itr` is positioned in a live tree, or empty, per the caller.
-    let Some(mut x) = (unsafe { Node::from_ptr(itr.x) }) else {
+    let Some(mut x) = iter.node else {
         return false;
     };
-    itr.i += 1;
+    let mut node = &tree[x];
+    iter.index += 1;
     if let Some(filter) = filter
-        && !x.is_leaf()
-        && !meta_has(&x.child_meta(itr.i as usize), filter)
+        && !node.is_leaf()
+        && !meta_has(node.child_meta(iter.index as usize), filter)
     {
         skip = true;
     }
-    if x.is_leaf() || skip {
-        if preload && x.is_leaf() && skip {
-            itr.i = x.key_count() as c_int;
-        } else if itr.i < x.key_count() as c_int {
+    if node.is_leaf() || skip {
+        if preload && node.is_leaf() && skip {
+            iter.index = node.key_count() as c_int;
+        } else if iter.index < node.key_count() as c_int {
             return true;
         }
         // Walk up until a node still has a key left after the one we came out
         // of, undoing that level's contribution to the absolute position.
-        while itr.i >= x.key_count() as c_int {
-            let Some(parent) = x.parent() else {
-                itr.x = ptr::null_mut();
+        while iter.index >= node.key_count() as c_int {
+            let Some(parent) = node.parent() else {
+                iter.node = None;
                 return false;
             };
             x = parent;
-            itr.x = x.as_ptr();
-            itr.lvl -= 1;
-            itr.i = itr.s[itr.lvl as usize].i;
-            if itr.i > 0 {
-                itr.pos.row -= x.key(itr.i as usize - 1).pos.row;
-                itr.pos.col = itr.s[itr.lvl as usize].oldcol;
+            node = &tree[x];
+            iter.node = Some(x);
+            iter.depth -= 1;
+            let step = *here(iter);
+            iter.index = step.index;
+            if iter.index > 0 {
+                iter.pos.row -= node.key(iter.index as usize - 1).pos.row;
+                iter.pos.col = step.old_col;
             }
         }
     } else {
         // The key we stepped onto is an internal one, so the next key in order
         // is the leftmost of the subtree between it and the previous key.
-        while !x.is_leaf() {
-            if itr.i > 0 {
-                itr.s[itr.lvl as usize].oldcol = itr.pos.col;
-                let sep = x.key(itr.i as usize - 1).pos;
-                compose(&mut itr.pos, sep);
+        while !node.is_leaf() {
+            if iter.index > 0 {
+                here(iter).old_col = iter.pos.col;
+                let sep = node.key(iter.index as usize - 1).pos;
+                compose(&mut iter.pos, sep);
             }
-            if itr.i == 0
+            if iter.index == 0
                 && let Some(oldbase) = oldbase.as_deref_mut()
             {
-                oldbase[itr.lvl as usize + 1] = oldbase[itr.lvl as usize];
+                oldbase[iter.depth as usize + 1] = oldbase[iter.depth as usize];
             }
-            itr.s[itr.lvl as usize].i = itr.i;
-            let child = x.child(itr.i as usize);
+            here(iter).index = iter.index;
+            let child = node.child(iter.index as usize);
             debug_assert!(
-                child.parent() == Some(x),
+                tree[child].parent() == Some(x),
                 "itr->x->ptr[itr->i]->parent == itr->x"
             );
-            itr.lvl += 1;
+            iter.depth += 1;
             x = child;
-            itr.x = x.as_ptr();
-            if preload && !x.is_leaf() {
-                itr.i = -1;
+            node = &tree[x];
+            iter.node = Some(x);
+            if preload && !node.is_leaf() {
+                iter.index = -1;
                 break;
             }
-            itr.i = 0;
+            iter.index = 0;
             if let Some(filter) = filter
-                && !x.is_leaf()
-                && !meta_has(&x.child_meta(0), filter)
+                && !node.is_leaf()
+                && !meta_has(node.child_meta(0), filter)
             {
                 break;
             }
@@ -275,90 +263,71 @@ pub fn marktree_itr_next_skip(
     true
 }
 
-/// Position `itr` at the first key at or after (row, col) that the filter
+/// Position `iter` at the first key at or after (row, col) that the filter
 /// wants, giving up at (stop_row, stop_col).
-///
-/// # Safety
-/// `meta_filter` is a `*const uint32_t` behind the [`MetaFilter`] alias and
-/// must point at a live [`MetaCount`].
-pub unsafe fn marktree_itr_get_filter(
-    b: &mut MarkTree,
+pub fn marktree_itr_get_filter(
+    tree: &mut MarkTree,
     row: int32_t,
     col: c_int,
     stop_row: c_int,
     stop_col: c_int,
-    meta_filter: MetaFilter,
-    itr: &mut MarkTreeIter,
+    filter: &MetaCount,
+    iter: &mut MarkTreeIter,
 ) -> bool {
-    // SAFETY: `meta_filter` is live per the caller.
-    let filter = unsafe { as_filter(meta_filter) };
-    if !meta_has(&b.meta_root, filter) {
+    if !meta_has(&tree.meta_root, filter) {
         return false;
     }
     let p = MTPos { row, col };
-    if !marktree_itr_get_ext(b, p, itr, false, false, None, Some(filter)) {
+    if !marktree_itr_get_ext(tree, p, iter, false, false, None, Some(filter)) {
         return false;
     }
-    marktree_itr_check_filter(b, itr, stop_row, stop_col, filter)
+    marktree_itr_check_filter(tree, iter, stop_row, stop_col, filter)
 }
 
 /// Leave the subtrees the filter has nothing in, stepping out of each one
 /// whose parent says so, and answer whether the iterator still names a node.
-///
-/// # Safety
-/// `meta_filter` is a `*const uint32_t` behind the [`MetaFilter`] alias and
-/// must point at a live [`MetaCount`].
-pub unsafe fn marktree_itr_step_out_filter(
-    b: &mut MarkTree,
-    itr: &mut MarkTreeIter,
-    meta_filter: MetaFilter,
+pub fn marktree_itr_step_out_filter(
+    tree: &mut MarkTree,
+    iter: &mut MarkTreeIter,
+    filter: &MetaCount,
 ) -> bool {
-    // SAFETY: `meta_filter` is live per the caller.
-    let filter = unsafe { as_filter(meta_filter) };
-    if !meta_has(&b.meta_root, filter) {
-        itr.x = ptr::null_mut();
+    if !meta_has(&tree.meta_root, filter) {
+        iter.node = None;
         return false;
     }
-    // SAFETY: `itr` is positioned in `b`, or empty, per the caller.
-    while let Some(x) = unsafe { Node::from_ptr(itr.x) } {
-        let Some(parent) = x.parent() else {
+    while let Some(x) = iter.node {
+        let Some(parent) = tree[x].parent() else {
             break;
         };
-        if meta_has(&parent.child_meta(x.parent_index()), filter) {
+        if meta_has(tree[parent].child_meta(tree[x].parent_index()), filter) {
             return true;
         }
-        itr.i = x.key_count() as c_int;
-        marktree_itr_next_skip(b, itr, true, false, None, None);
+        iter.index = tree[x].key_count() as c_int;
+        marktree_itr_next_skip(tree, iter, true, false, None, None);
     }
-    !itr.x.is_null()
+    iter.is_positioned()
 }
 
 /// Step to the next key the filter wants, giving up at (stop_row, stop_col).
-///
-/// # Safety
-/// `meta_filter` is a `*const uint32_t` behind the [`MetaFilter`] alias and
-/// must point at a live [`MetaCount`].
-pub unsafe fn marktree_itr_next_filter(
-    b: &mut MarkTree,
-    itr: &mut MarkTreeIter,
+pub fn marktree_itr_next_filter(
+    tree: &mut MarkTree,
+    iter: &mut MarkTreeIter,
     stop_row: c_int,
     stop_col: c_int,
-    meta_filter: MetaFilter,
+    filter: &MetaCount,
 ) -> bool {
-    // SAFETY: `meta_filter` is live per the caller.
-    let filter = unsafe { as_filter(meta_filter) };
-    if !marktree_itr_next_skip(b, itr, false, false, None, Some(filter)) {
+    if !marktree_itr_next_skip(tree, iter, false, false, None, Some(filter)) {
         return false;
     }
-    marktree_itr_check_filter(b, itr, stop_row, stop_col, filter)
+    marktree_itr_check_filter(tree, iter, stop_row, stop_col, filter)
 }
 
 /// Advance until the iterator is on a key the filter actually wants — the meta
 /// counts only promise that the *subtree* holds one — or past the stop
 /// position, which empties the iterator.
 fn marktree_itr_check_filter(
-    b: &mut MarkTree,
-    itr: &mut MarkTreeIter,
+    tree: &mut MarkTree,
+    iter: &mut MarkTreeIter,
     stop_row: c_int,
     stop_col: c_int,
     filter: &MetaCount,
@@ -369,90 +338,99 @@ fn marktree_itr_check_filter(
     };
     let key_filter = filtered_key_flags(filter);
     loop {
-        let pos = marktree_itr_pos(itr);
+        let pos = marktree_itr_pos(tree, iter);
         if pos_leq(stop_pos, pos) {
-            itr.x = ptr::null_mut();
+            iter.node = None;
             return false;
         }
-        // SAFETY: as above.
-        let k = unsafe { Node::new(itr.x) }.key(itr.i as usize);
+        let k = raw_key(tree, iter);
         if !mt_end(k) && k.flags.has(key_filter) {
             return true;
         }
-        if !marktree_itr_next_skip(b, itr, false, false, None, Some(filter)) {
+        if !marktree_itr_next_skip(tree, iter, false, false, None, Some(filter)) {
             return false;
         }
     }
 }
 
 /// Step to the previous key.
-pub fn marktree_itr_prev(_b: &mut MarkTree, itr: &mut MarkTreeIter) -> bool {
-    // SAFETY: `itr` is positioned in a live tree, or empty, per the caller.
-    let Some(mut x) = (unsafe { Node::from_ptr(itr.x) }) else {
+pub fn marktree_itr_prev(tree: &MarkTree, iter: &mut MarkTreeIter) -> bool {
+    let Some(mut x) = iter.node else {
         return false;
     };
-    if x.is_leaf() {
-        itr.i -= 1;
-        if itr.i >= 0 {
+    let mut node = &tree[x];
+    if node.is_leaf() {
+        iter.index -= 1;
+        if iter.index >= 0 {
             return true;
         }
         // Walk up until a node still has a key before the one we came out of.
-        while itr.i < 0 {
-            let Some(parent) = x.parent() else {
-                itr.x = ptr::null_mut();
+        while iter.index < 0 {
+            let Some(parent) = node.parent() else {
+                iter.node = None;
                 return false;
             };
             x = parent;
-            itr.x = x.as_ptr();
-            itr.lvl -= 1;
-            itr.i = itr.s[itr.lvl as usize].i - 1;
-            if itr.i >= 0 {
-                itr.pos.row -= x.key(itr.i as usize).pos.row;
-                itr.pos.col = itr.s[itr.lvl as usize].oldcol;
+            node = &tree[x];
+            iter.node = Some(x);
+            iter.depth -= 1;
+            let step = *here(iter);
+            iter.index = step.index - 1;
+            if iter.index >= 0 {
+                iter.pos.row -= node.key(iter.index as usize).pos.row;
+                iter.pos.col = step.old_col;
             }
         }
     } else {
         // The previous key is the rightmost of the subtree before this one.
-        while !x.is_leaf() {
-            if itr.i > 0 {
-                itr.s[itr.lvl as usize].oldcol = itr.pos.col;
-                let sep = x.key(itr.i as usize - 1).pos;
-                compose(&mut itr.pos, sep);
+        while !node.is_leaf() {
+            if iter.index > 0 {
+                here(iter).old_col = iter.pos.col;
+                let sep = node.key(iter.index as usize - 1).pos;
+                compose(&mut iter.pos, sep);
             }
-            itr.s[itr.lvl as usize].i = itr.i;
-            let child = x.child(itr.i as usize);
+            here(iter).index = iter.index;
+            let child = node.child(iter.index as usize);
             debug_assert!(
-                child.parent() == Some(x),
+                tree[child].parent() == Some(x),
                 "itr->x->ptr[itr->i]->parent == itr->x"
             );
             x = child;
-            itr.x = x.as_ptr();
-            itr.i = x.key_count() as c_int;
-            itr.lvl += 1;
+            node = &tree[x];
+            iter.node = Some(x);
+            iter.index = node.key_count() as c_int;
+            iter.depth += 1;
         }
-        itr.i -= 1;
+        iter.index -= 1;
     }
     true
 }
 
-/// The absolute position of the key `itr` is on.
-pub fn marktree_itr_pos(itr: &MarkTreeIter) -> MTPos {
-    // SAFETY: `itr` is positioned in a live tree per the caller.
-    let mut pos = unsafe { Node::new(itr.x) }.key(itr.i as usize).pos;
-    unrelative(itr.pos, &mut pos);
+/// The key a positioned `iter` stands on, still relative to its node.
+///
+/// # Panics
+/// If the iterator is not positioned.
+#[inline]
+pub(crate) fn raw_key(tree: &MarkTree, iter: &MarkTreeIter) -> MTKey {
+    let node = iter.node.expect("a positioned iterator");
+    tree[node].key(iter.index as usize)
+}
+
+/// The absolute position of the key `iter` is on.
+pub fn marktree_itr_pos(tree: &MarkTree, iter: &MarkTreeIter) -> MTPos {
+    let mut pos = raw_key(tree, iter).pos;
+    unrelative(iter.pos, &mut pos);
     pos
 }
 
-/// The key `itr` is on, at its absolute position, or [`MT_INVALID_KEY`] once
+/// The key `iter` is on, at its absolute position, or [`MT_INVALID_KEY`] once
 /// the walk has run off the end.
-pub fn marktree_itr_current(itr: &mut MarkTreeIter) -> MTKey {
-    if itr.x.is_null() {
+pub fn marktree_itr_current(tree: &MarkTree, iter: &MarkTreeIter) -> MTKey {
+    if !iter.is_positioned() {
         return MT_INVALID_KEY;
     }
-    // SAFETY: `itr` is positioned in a live tree per the caller.
-    let (x, pos) = unsafe { (Node::new(itr.x), marktree_itr_pos(itr)) };
-    let mut key = x.key(itr.i as usize);
-    key.pos = pos;
+    let mut key = raw_key(tree, iter);
+    unrelative(iter.pos, &mut key.pos);
     key
 }
 
@@ -468,22 +446,22 @@ pub fn marktree_itr_current(itr: &mut MarkTreeIter) -> MTKey {
 /// Answers false when no mark can possibly be found. True is not a promise:
 /// the first `step_overlap` may still answer false.
 pub fn marktree_itr_get_overlap(
-    b: &mut MarkTree,
+    tree: &mut MarkTree,
     row: c_int,
     col: c_int,
-    itr: &mut MarkTreeIter,
+    iter: &mut MarkTreeIter,
 ) -> bool {
-    if b.n_keys == 0 {
-        itr.x = ptr::null_mut();
+    if tree.n_keys == 0 {
+        iter.node = None;
         return false;
     }
-    itr.x = b.root;
-    itr.i = -1;
-    itr.lvl = 0;
-    itr.pos = MTPos::default();
-    itr.intersect_pos = MTPos { row, col };
-    itr.intersect_pos_x = MTPos { row, col };
-    itr.intersect_idx = 0;
+    iter.node = tree.root;
+    iter.index = -1;
+    iter.depth = 0;
+    iter.pos = MTPos::default();
+    iter.intersect_pos = MTPos { row, col };
+    iter.intersect_pos_x = MTPos { row, col };
+    iter.intersect_idx = 0;
     true
 }
 
@@ -501,147 +479,151 @@ pub fn marktree_itr_get_overlap(
 /// Answers false once every overlapping pair has been handed back, at which
 /// point the iterator is an ordinary one positioned at (row, col).
 pub fn marktree_itr_step_overlap(
-    b: &mut MarkTree,
-    itr: &mut MarkTreeIter,
+    tree: &mut MarkTree,
+    iter: &mut MarkTreeIter,
     pair: &mut MTPair,
 ) -> bool {
-    // SAFETY: `itr` was positioned in `b` per the caller, so it names one of
-    // `b`'s live nodes — the walk below never leaves the tree.
-    let mut x = unsafe { Node::new(itr.x) };
+    let Some(mut x) = iter.node else {
+        return false;
+    };
     // Phase one: down the path, handing back each node's covering ranges.
-    while itr.i == -1 {
-        let set = x.intersection();
-        if itr.intersect_idx < set.len() {
-            let id = set.as_slice()[itr.intersect_idx];
-            itr.intersect_idx += 1;
+    while iter.index == -1 {
+        let set = tree[x].intersection();
+        if iter.intersect_idx < set.len() {
+            let id = set.as_slice()[iter.intersect_idx];
+            iter.intersect_idx += 1;
             let halves = (
-                marktree_lookup(b, id, None),
-                marktree_lookup(b, id | MARKTREE_END_FLAG, None),
+                marktree_lookup(tree, id, None),
+                marktree_lookup(tree, id | MARKTREE_END_FLAG, None),
             );
             *pair = mtpair_from(halves.0, halves.1);
             return true;
         }
-        if x.is_leaf() {
-            itr.i = 0;
-            itr.s[itr.lvl as usize].i = itr.i;
+        if tree[x].is_leaf() {
+            iter.index = 0;
+            here(iter).index = iter.index;
             break;
         }
-        let k = search_key(itr.intersect_pos_x, MtFlags::NONE);
-        itr.i = find_key(x.keys(), k).0 + 1;
-        itr.s[itr.lvl as usize].i = itr.i;
-        itr.s[itr.lvl as usize].oldcol = itr.pos.col;
-        if itr.i > 0 {
-            let sep = x.key(itr.i as usize - 1).pos;
-            compose(&mut itr.pos, sep);
-            relative(sep, &mut itr.intersect_pos_x);
+        let k = search_key(iter.intersect_pos_x, MtFlags::NONE);
+        iter.index = find_key(tree[x].keys(), k).0 + 1;
+        let (index, old_col) = (iter.index, iter.pos.col);
+        let step = here(iter);
+        step.index = index;
+        step.old_col = old_col;
+        if iter.index > 0 {
+            let sep = tree[x].key(iter.index as usize - 1).pos;
+            compose(&mut iter.pos, sep);
+            relative(sep, &mut iter.intersect_pos_x);
         }
-        x = x.child(itr.i as usize);
-        itr.x = x.as_ptr();
-        itr.lvl += 1;
-        itr.i = -1;
-        itr.intersect_idx = 0;
+        x = tree[x].child(iter.index as usize);
+        iter.node = Some(x);
+        iter.depth += 1;
+        iter.index = -1;
+        iter.intersect_idx = 0;
     }
     // Phase two, first half: starts in this leaf that are before the sought
     // position and whose end is not.
-    while itr.i < x.key_count() as c_int && pos_less(x.key(itr.i as usize).pos, itr.intersect_pos_x)
+    while iter.index < tree[x].key_count() as c_int
+        && pos_less(tree[x].key(iter.index as usize).pos, iter.intersect_pos_x)
     {
-        let mut k = x.key(itr.i as usize);
-        itr.i += 1;
-        itr.s[itr.lvl as usize].i = itr.i;
+        let mut k = tree[x].key(iter.index as usize);
+        iter.index += 1;
+        here(iter).index = iter.index;
         if !mt_start(k) {
             continue;
         }
-        let end = marktree_lookup(b, mt_lookup_id(k.ns, k.id, true), None);
-        if pos_less(end.pos, itr.intersect_pos) {
+        let end = marktree_lookup(tree, mt_lookup_id(k.ns, k.id, true), None);
+        if pos_less(end.pos, iter.intersect_pos) {
             continue;
         }
-        unrelative(itr.pos, &mut k.pos);
+        unrelative(iter.pos, &mut k.pos);
         *pair = mtpair_from(k, end);
         return true;
     }
     // Second half: ends in this leaf whose start is in another node, which is
     // the case the intersection sets cannot record.
-    while itr.i < x.key_count() as c_int {
-        let mut k = x.key(itr.i as usize);
-        itr.i += 1;
+    while iter.index < tree[x].key_count() as c_int {
+        let mut k = tree[x].key(iter.index as usize);
+        iter.index += 1;
         if !mt_end(k) {
             continue;
         }
         let id = mt_lookup_id(k.ns, k.id, false);
-        // SAFETY: `b` is a live tree.
-        if unsafe { id2node(b, id) } == x.as_ptr() {
+        if tree.id2node(id) == Some(x) {
             continue;
         }
-        unrelative(itr.pos, &mut k.pos);
-        let start = marktree_lookup(b, id, None);
-        if pos_leq(itr.intersect_pos, start.pos) {
+        unrelative(iter.pos, &mut k.pos);
+        let start = marktree_lookup(tree, id, None);
+        if pos_leq(iter.intersect_pos, start.pos) {
             continue;
         }
         *pair = mtpair_from(start, k);
         return true;
     }
-    itr.i = itr.s[itr.lvl as usize].i;
-    debug_assert!(itr.i >= 0, "itr->i >= 0");
-    if itr.i >= x.key_count() as c_int {
-        marktree_itr_next(b, itr);
+    iter.index = here(iter).index;
+    debug_assert!(iter.index >= 0, "itr->i >= 0");
+    if iter.index >= tree[x].key_count() as c_int {
+        marktree_itr_next(tree, iter);
     }
     false
 }
 
-/// Park `itr`, where given, on key `i` of node `n`, and answer that key at its
+/// Park `iter`, where given, on key `i` of node `n`, and answer that key at its
 /// absolute position.
 ///
 /// The position comes from walking `n`'s ancestors, which is also where the
 /// iterator's path is rebuilt, so this works for a node reached any way at all
 /// — an id-map lookup, or a node a splice recorded earlier.
 pub fn marktree_itr_set_node(
-    b: &mut MarkTree,
-    itr: Option<&mut MarkTreeIter>,
-    n: Node,
+    tree: &MarkTree,
+    iter: Option<&mut MarkTreeIter>,
+    mut n: NodeId,
     i: c_int,
 ) -> MTKey {
-    let mut key = n.key(i as usize);
-    // SAFETY: `b` is a live tree, so its root is one of its live nodes.
-    let root_level = unsafe { Node::new(b.root) }.level();
-    let mut itr = itr;
-    if let Some(itr) = itr.as_deref_mut() {
-        itr.i = i;
-        itr.x = n.as_ptr();
-        itr.lvl = (root_level - n.level()) as c_int;
+    let mut key = tree[n].key(i as usize);
+    let root_level = tree.root_level().expect("a tree holding `n` has a root");
+    let mut iter = iter;
+    if let Some(iter) = iter.as_deref_mut() {
+        iter.index = i;
+        iter.node = Some(n);
+        iter.depth = (root_level - tree[n].level()) as c_int;
     }
-    let mut n = n;
-    while let Some(p) = n.parent() {
-        let i = n.parent_index();
-        debug_assert!(p.child(i) == n, "p->ptr[i] == n");
-        if let Some(itr) = itr.as_deref_mut() {
-            itr.s[root_level - p.level()].i = i as c_int;
+    let mut node = &tree[n];
+    while let Some(p) = node.parent() {
+        let i = node.parent_index();
+        let parent = &tree[p];
+        debug_assert!(parent.child(i) == n, "p->ptr[i] == n");
+        if let Some(iter) = iter.as_deref_mut() {
+            iter.path[root_level - parent.level()].index = i as c_int;
         }
         if i > 0 {
-            unrelative(p.key(i - 1).pos, &mut key.pos);
+            unrelative(parent.key(i - 1).pos, &mut key.pos);
         }
-        n = p;
+        (n, node) = (p, parent);
     }
-    if let Some(itr) = itr {
-        marktree_itr_fix_pos(b, itr);
+    if let Some(iter) = iter {
+        marktree_itr_fix_pos(tree, iter);
     }
     key
 }
 
-/// Recompute `itr.pos` — and the `oldcol` of every level — by walking the path
-/// the iterator recorded, after something moved the keys it was rebased on.
-pub fn marktree_itr_fix_pos(b: &mut MarkTree, itr: &mut MarkTreeIter) {
-    itr.pos = MTPos::default();
-    // SAFETY: `b` is a live tree, so its root is one of its live nodes.
-    let mut x = unsafe { Node::new(b.root) };
-    for lvl in 0..itr.lvl as usize {
-        itr.s[lvl].oldcol = itr.pos.col;
-        let i = itr.s[lvl].i;
+/// Recompute `iter.pos` — and the `old_col` of every level — by walking the
+/// path the iterator recorded, after something moved the keys it was rebased
+/// on.
+#[inline]
+pub fn marktree_itr_fix_pos(tree: &MarkTree, iter: &mut MarkTreeIter) {
+    let mut pos = MTPos::default();
+    let mut x = tree.root.expect("a positioned iterator's tree has a root");
+    for step in &mut iter.path[..iter.depth as usize] {
+        step.old_col = pos.col;
+        let node = &tree[x];
+        let i = step.index as usize;
         if i > 0 {
-            let sep = x.key(i as usize - 1).pos;
-            compose(&mut itr.pos, sep);
+            compose(&mut pos, node.key(i - 1).pos);
         }
-        debug_assert!(!x.is_leaf(), "x->level");
-        x = x.child(i as usize);
+        debug_assert!(!node.is_leaf(), "x->level");
+        x = node.child(i);
     }
-    debug_assert!(x.as_ptr() == itr.x, "x == itr->x");
+    iter.pos = pos;
+    debug_assert!(Some(x) == iter.node, "x == itr->x");
 }

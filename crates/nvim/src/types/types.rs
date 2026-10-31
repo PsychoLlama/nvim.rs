@@ -28,10 +28,11 @@ pub enum EvalFuncData {
     Api(usize),
 }
 pub type Loop = loop_0;
+/// Where one half of a pair was, and where a splice moved it to.
 #[derive(Copy, Clone)]
 pub struct MTDamage {
-    pub old: *mut MTNode,
-    pub new: *mut MTNode,
+    pub old: Option<crate::marktree::node::NodeId>,
+    pub new: Option<crate::marktree::node::NodeId>,
     pub old_i: ::core::ffi::c_int,
     pub new_i: ::core::ffi::c_int,
 }
@@ -40,7 +41,6 @@ pub struct MTDamagePair {
     pub start: MTDamage,
     pub end: MTDamage,
 }
-pub type MTNode = mtnode_s;
 /// One row of the API dispatch table.
 ///
 /// `Copy`: a static name and a function pointer.

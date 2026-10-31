@@ -45,14 +45,14 @@ pub fn extmark_get(
     overlap: bool,
 ) -> Vec<MTPair> {
     let mut array: Vec<MTPair> = Vec::new();
-    let mut itr = MarkTreeIter::default();
+    let mut iter = MarkTreeIter::default();
     let under_limit = |array: &Vec<MTPair>| {
         int64_t::try_from(array.len()).expect("a mark answer never outgrows an i64") < amount
     };
 
     if overlap {
         // Every mark overlapping the start position.
-        if !itr_get_overlap(buffer.marktree(), l_row, l_col, &mut itr) {
+        if !itr_get_overlap(buffer.marktree(), l_row, l_col, &mut iter) {
             return array;
         }
 
@@ -60,7 +60,7 @@ pub fn extmark_get(
             // Invalid until `itr_step_overlap` writes it, which it does
             // whenever it answers true (upstream leaves it uninitialised).
             let mut pair = mtpair_from(MT_INVALID_KEY, MT_INVALID_KEY);
-            if !itr_step_overlap(buffer.marktree(), &mut itr, &mut pair) {
+            if !itr_step_overlap(buffer.marktree(), &mut iter, &mut pair) {
                 break;
             }
             push_mark(&mut array, ns_id, type_filter, pair);
@@ -71,11 +71,11 @@ pub fn extmark_get(
             row: l_row,
             col: l_col,
         };
-        itr_get_ext(buffer.marktree(), start, &mut itr);
+        itr_get_ext(buffer.marktree(), start, &mut iter);
     }
 
     while under_limit(&array) {
-        let mark = itr_current(&mut itr);
+        let mark = itr_current(buffer.marktree(), &iter);
         if mark.pos.row < 0
             || mark.pos.row > u_row
             || (mark.pos.row == u_row && mark.pos.col > u_col)
@@ -86,7 +86,7 @@ pub fn extmark_get(
             let end = tree_get_alt(buffer.marktree(), mark, None);
             push_mark(&mut array, ns_id, type_filter, mtpair_from(mark, end));
         }
-        itr_next(buffer.marktree(), &mut itr);
+        itr_next(buffer.marktree(), &mut iter);
     }
     array
 }
@@ -124,10 +124,10 @@ pub fn extmark_from_id(mut buffer: Buf, ns_id: uint32_t, id: uint32_t) -> MTPair
 
 /// Release every mark of a buffer, as it is freed.
 pub fn extmark_free_all(mut buffer: Buf) {
-    let mut itr = MarkTreeIter::default();
-    itr_get(buffer.marktree(), 0, 0, &mut itr);
+    let mut iter = MarkTreeIter::default();
+    itr_get(buffer.marktree(), 0, 0, &mut iter);
     loop {
-        let mark = itr_current(&mut itr);
+        let mark = itr_current(buffer.marktree(), &iter);
         if mark.pos.row < 0 {
             break;
         }
@@ -137,7 +137,7 @@ pub fn extmark_free_all(mut buffer: Buf) {
             free_decor(mt_decor(mark));
         }
 
-        itr_next(buffer.marktree(), &mut itr);
+        itr_next(buffer.marktree(), &mut iter);
     }
 
     tree_clear(buffer.marktree());

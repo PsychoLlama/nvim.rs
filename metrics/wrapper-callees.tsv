@@ -1,13 +1,12 @@
 count	callee	no_raw	defs	def
-42	CStr::from_ptr	0	1	crates/nvim/src/marktree/node.rs
-42	from_raw_parts	0	0	
+42	CStr::from_ptr	0	0	
+41	from_raw_parts	0	0	
 28	f	0	0	
-26	Node::new	0	1	crates/nvim/src/marktree/node.rs
 26	Term::new	0	1	crates/nvim/src/terminal/mod.rs
-25	xfree	0	1	crates/nvim/src/memory/mod.rs
-22	from_raw_parts_mut	0	0	
+21	from_raw_parts_mut	0	0	
 20	multiqueue_put_event	0	1	crates/nvim/src/event/multiqueue.rs
-18	Box::from_raw	0	7	
+20	xfree	0	1	crates/nvim/src/memory/mod.rs
+18	Box::from_raw	0	6	
 17	.add	0	0	
 17	Reader::new	0	1	crates/nvim/src/event/rstream.rs
 14	zeroed	0	0	
@@ -23,26 +22,24 @@ count	callee	no_raw	defs	def
 10	bytes_at	0	1	crates/nvim/src/cstr.rs
 10	notify	0	0	
 10	state_of	0	1	crates/nvim/src/vterm/state/entry.rs
-9	Node::from_ptr	0	1	crates/nvim/src/marktree/node.rs
 8	.as_ref	0	0	
 8	Bytes::new	0	1	crates/nvim/src/charset/walk.rs
 8	Conn::new	0	1	crates/nvim/src/event/stream.rs
 8	at_opt	0	1	crates/nvim/src/cstr.rs
 8	cbytes	0	1	crates/nvim/src/memory/mod.rs
 8	process_events_until	0	1	crates/nvim/src/event/loop.rs
-8	xmalloc	0	1	crates/nvim/src/memory/mod.rs
 7	.offset	0	0	
 7	Watcher::new	0	1	crates/nvim/src/event/socket/mod.rs
 7	XString::from_raw	0	1	crates/nvim/src/memory/xstring.rs
 7	c_bytes	0	1	crates/nvim/src/lua/treesitter/mod.rs
-7	copy_nonoverlapping	0	0	
 7	lua_tolstring	0	0	
 7	uv_close	0	0	
+7	xmalloc	0	1	crates/nvim/src/memory/mod.rs
 6	Stack::from_raw	0	1	crates/nvim/src/lua/stack/mod.rs
 6	multiqueue_process_events	0	1	crates/nvim/src/event/multiqueue.rs
 5	.next_arg::<::core::ffi::c_ulong>	0	0	
 5	Handle::new	0	1	crates/nvim/src/event/time.rs
-5	Self::new	0	21	
+5	Self::new	0	19	
 5	Signal::new	0	1	crates/nvim/src/event/signal.rs
 5	at	0	2	
 5	close	0	0	
@@ -54,7 +51,7 @@ count	callee	no_raw	defs	def
 4	ThinCString::from_raw	0	1	crates/nvim/src/memory/thin_cstring.rs
 4	Uv::new	0	1	crates/nvim/src/event/libuv_proc.rs
 4	abort	0	0	
-4	refkey	0	1	crates/nvim/src/marktree/node.rs
+4	copy_nonoverlapping	0	0	
 4	stream_may_close	0	1	crates/nvim/src/event/stream.rs
 4	try_to_free_memory	1	1	crates/nvim/src/memory/mod.rs
 4	ts_node_child	0	0	
@@ -65,18 +62,15 @@ count	callee	no_raw	defs	def
 4	xstrlcpy	0	1	crates/nvim/src/memory/mod.rs
 3	.next_arg::<::core::ffi::c_int>	0	0	
 3	GridRef::new	0	1	crates/nvim/src/grid/mod.rs
-3	IdSet::new	0	1	crates/nvim/src/marktree/intersect.rs
 3	Live::new	0	1	crates/nvim/src/winlayer/live.rs
 3	Session::new	0	1	crates/nvim/src/terminal/mode.rs
 3	Stack::above_top	0	1	crates/nvim/src/lua/stack/mod.rs
 3	accumulate	1	1	crates/nvim/src/terminal/termrequest.rs
-3	as_filter	0	1	crates/nvim/src/marktree/iter.rs
 3	call_shell	0	1	crates/nvim/src/os/shell/mod.rs
 3	create_event	0	1	crates/nvim/src/event/proc.rs
 3	fragment_bytes	1	2	
 3	free_block	0	1	crates/nvim/src/memory/arena.rs
 3	lseek	0	0	
-3	marktree_free_node	0	1	crates/nvim/src/marktree/node.rs
 3	multiqueue_free	0	1	crates/nvim/src/event/multiqueue.rs
 3	number_span	0	1	crates/nvim/src/charset/walk.rs
 3	os_env_exists	0	1	crates/nvim/src/os/env/mod.rs
@@ -103,7 +97,7 @@ count	callee	no_raw	defs	def
 2	.copy_from_nonoverlapping	0	0	
 2	.next_arg::<::core::ffi::c_long>	0	0	
 2	.read	0	0	
-2	Cc::new	0	21	
+2	Cc::new	0	19	
 2	DictRef::owning	0	1	crates/nvim/src/eval/typval/handle.rs
 2	File::from_raw_fd	0	0	
 2	KeyModes::read	0	0	
@@ -134,7 +128,6 @@ count	callee	no_raw	defs	def
 2	gettext_raw	0	1	crates/nvim/src/os/cshim.rs
 2	getuid	0	0	
 2	iconv	0	0	
-2	id2node	0	1	crates/nvim/src/marktree/node.rs
 2	init	0	0	
 2	install_luv	0	1	crates/nvim/src/lua/executor/luv.rs
 2	list_free_list	0	1	crates/nvim/src/eval/typval/handle.rs
@@ -145,7 +138,6 @@ count	callee	no_raw	defs	def
 2	lua_newuserdata	0	0	
 2	lua_settop	0	0	
 2	luv_set_thread_cb	0	0	
-2	marktree_free_subtree	1	1	crates/nvim/src/marktree/mod.rs
 2	multiqueue_empty	0	1	crates/nvim/src/event/multiqueue.rs
 2	multiqueue_move_events	0	1	crates/nvim/src/event/multiqueue.rs
 2	multiqueue_new	0	1	crates/nvim/src/event/multiqueue.rs
@@ -201,14 +193,12 @@ count	callee	no_raw	defs	def
 2	write	0	0	
 2	wstream_init	0	1	crates/nvim/src/event/wstream.rs
 2	xcalloc	0	1	crates/nvim/src/memory/mod.rs
-2	xmemdup	0	1	crates/nvim/src/memory/mod.rs
-2	xrealloc	0	1	crates/nvim/src/memory/mod.rs
 1	.next_arg::<*const ::core::ffi::c_char>	0	0	
 1	.next_arg::<*mut ::core::ffi::c_void>	0	0	
 1	.next_arg::<::core::ffi::c_double>	0	0	
 1	.next_arg::<::core::ffi::c_uint>	0	0	
 1	.offset_from_unsigned	0	0	
-1	Box::new	0	21	
+1	Box::new	0	19	
 1	CStr::from_bytes_with_nul_unchecked	0	0	
 1	DictRef::retained	0	1	crates/nvim/src/eval/typval/handle.rs
 1	ListRef::retained	0	1	crates/nvim/src/eval/typval/handle.rs
@@ -292,13 +282,6 @@ count	callee	no_raw	defs	def
 1	lua_type	0	0	
 1	luaopen_lpeg	0	0	
 1	malloc	0	0	
-1	marktree_alloc_node	0	1	crates/nvim/src/marktree/node.rs
-1	marktree_clear	1	1	crates/nvim/src/marktree/mod.rs
-1	marktree_itr_get_filter	0	1	crates/nvim/src/marktree/iter.rs
-1	marktree_itr_next_filter	0	1	crates/nvim/src/marktree/iter.rs
-1	marktree_itr_set_node	0	0	
-1	marktree_itr_step_out_filter	0	1	crates/nvim/src/marktree/iter.rs
-1	marktree_lookup_ns	0	0	
 1	movecursor	0	1	crates/nvim/src/vterm/screen/callbacks.rs
 1	moverect	0	0	
 1	multiqueue_get	0	1	crates/nvim/src/event/multiqueue.rs
@@ -511,4 +494,6 @@ count	callee	no_raw	defs	def
 1	wstream_init_fd	0	1	crates/nvim/src/event/wstream.rs
 1	wstream_write	0	1	crates/nvim/src/event/wstream.rs
 1	xcalloc_retry	0	1	crates/nvim/src/memory/mod.rs
+1	xmemdup	0	1	crates/nvim/src/memory/mod.rs
+1	xrealloc	0	1	crates/nvim/src/memory/mod.rs
 1	xstrdup	0	1	crates/nvim/src/memory/mod.rs
