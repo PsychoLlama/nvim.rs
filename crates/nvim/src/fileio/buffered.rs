@@ -11,7 +11,7 @@
 //! from the block next time.
 //!
 //! Errors are libuv codes -- `-errno` on every platform nvim builds for,
-//! which is what an [`io::Error`]'s OS code turns into here -- so the
+//! which is what an [`io::Error`](std::io::Error)'s OS code turns into here -- so the
 //! messages callers build from them read as they did when the calls went
 //! through libuv.
 //!
