@@ -13,8 +13,7 @@
 // Unsafe perimeter: the `os/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
 
-use crate::os::uv_error::UV_EINVAL;
-use core::ffi::{CStr, c_char, c_double, c_int, c_void};
+use core::ffi::{CStr, c_double, c_int, c_void};
 use core::ptr;
 
 use super::{
@@ -30,7 +29,7 @@ use crate::types::{
     FileID, FileInfo, VimAcl, int32_t, size_t, ssize_t, uint64_t, uv_file, uv_gid_t, uv_stat_t,
     uv_uid_t,
 };
-use ::libc::{__errno_location, E2BIG, getuid, getxattr, listxattr, setxattr};
+use ::libc::{__errno_location, E2BIG, getxattr, listxattr, setxattr};
 
 /// The `errno` values [`copy_xattr`] treats as "this filesystem simply
 /// does not do that", plus the three it reports.
@@ -47,49 +46,28 @@ const E_XATTR_E2BIG: &CStr =
     c"E1508: Size of the extended attribute value is larger than the maximum size allowed";
 const E_XATTR_OTHER: &CStr = c"E1509: Error occurred when reading or writing extended attribute";
 
-/// `stat(2)` on `name` into `statbuf`. Answers 0 or a libuv error code, and
-/// leaves `statbuf` untouched on failure.
-///
-/// # Safety
-/// `name` must be null or a NUL-terminated string, and `statbuf` writable.
-pub(crate) unsafe fn os_stat(name: *const c_char, statbuf: *mut uv_stat_t) -> c_int {
-    if name.is_null() {
-        return UV_EINVAL;
-    }
+/// `stat(2)` on `name`: its stat buffer, or a libuv error code.
+pub(crate) fn stat(name: &CStr) -> Result<uv_stat_t, c_int> {
     fs_request(
-        // SAFETY: the caller's NUL-terminated path.
-        |request| unsafe { uv_fs_stat(NO_LOOP, request, name, None) },
+        // SAFETY: `name` is NUL-terminated and outlives the call.
+        |request| unsafe { uv_fs_stat(NO_LOOP, request, name.as_ptr(), None) },
         |result, request| {
             if result == LIBUV_SUCCESS {
-                // SAFETY: the caller's out-parameter.
-                unsafe { *statbuf = request.statbuf };
+                Ok(request.statbuf)
+            } else {
+                Err(result)
             }
-            result
         },
     )
 }
 
-/// `name`'s permission bits — the whole `st_mode`, in fact — or a negative
+/// `name`'s permission bits -- the whole `st_mode`, in fact -- or a negative
 /// libuv error code.
-///
-/// # Safety
-/// `name` must be null or a NUL-terminated string.
-pub unsafe fn os_getperm(name: *const c_char) -> int32_t {
-    let mut statbuf = UV_STAT_T_INIT;
-    // SAFETY: the caller's path; `statbuf` is this frame's.
-    let stat_result = unsafe { os_stat(name, &raw mut statbuf) };
-    if stat_result == LIBUV_SUCCESS {
-        statbuf.st_mode as int32_t
-    } else {
-        stat_result
+pub fn getperm(name: &CStr) -> int32_t {
+    match stat(name) {
+        Ok(statbuf) => statbuf.st_mode as int32_t,
+        Err(error) => error,
     }
-}
-
-/// [`os_getperm`] of a name the caller holds: the whole `st_mode`, or a
-/// negative libuv error code.
-pub(crate) fn getperm(name: &CStr) -> int32_t {
-    // SAFETY: a NUL-terminated path.
-    unsafe { os_getperm(name.as_ptr()) }
 }
 
 /// Sets `name`'s permission bits. Answers `OK` or `FAIL`.
@@ -209,18 +187,9 @@ pub fn os_free_acl(_aclent: VimAcl) {}
 /// Asks through both `stat` and `lstat` — the answer has to hold for the
 /// link as well as its target, which is what makes it worth trusting.
 pub fn os_file_owned(fname: &CStr) -> bool {
-    // SAFETY: `getuid` cannot fail; `fname` is NUL-terminated and `finfo`
-    // is this frame's.
-    unsafe {
-        let uid = getuid() as uint64_t;
-        let mut finfo = FileInfo {
-            stat: UV_STAT_T_INIT,
-        };
-        let file_owned = os_fileinfo(fname.as_ptr(), &raw mut finfo) && finfo.stat.st_uid == uid;
-        let link_owned =
-            os_fileinfo_link(fname.as_ptr(), &raw mut finfo) && finfo.stat.st_uid == uid;
-        file_owned && link_owned
-    }
+    let uid = uint64_t::from(crate::os::users::os_getuid());
+    let owned = |info: Option<FileInfo>| info.is_some_and(|info| info.stat.st_uid == uid);
+    owned(file_info(fname)) && owned(link_info(fname))
 }
 
 /// `chown(2)`. An owner or group of -1 leaves that ID alone.
@@ -282,73 +251,33 @@ pub fn os_file_is_writable(name: &CStr) -> c_int {
     if dir_exists(name) { 2 } else { 1 }
 }
 
-/// Fills `file_info` from `path`, answering whether it could.
-///
-/// # Safety
-/// `path` must be null or a NUL-terminated string, and `file_info` writable.
-pub unsafe fn os_fileinfo(path: *const c_char, file_info: *mut FileInfo) -> bool {
-    // SAFETY: the caller's out-parameter; upstream zeroes it first so that a
-    // failed call leaves a defined value behind.
-    unsafe {
-        *file_info = FileInfo {
-            stat: UV_STAT_T_INIT,
-        }
-    };
-    // SAFETY: the caller's path, and the stat buffer inside their `FileInfo`.
-    unsafe { os_stat(path, &raw mut (*file_info).stat) == LIBUV_SUCCESS }
-}
-
 /// Whether `path` names anything, a symbolic link included:
-/// [`os_fileinfo_link`] answering only that.
+/// [`link_info`] answering only that.
 pub(crate) fn link_exists(path: &CStr) -> bool {
     link_info(path).is_some()
 }
 
-/// [`os_fileinfo`] of a name the caller holds, or `None` when it cannot be
+/// `path`'s metadata, following a symlink, or `None` when it cannot be
 /// taken.
-pub(crate) fn file_info(path: &CStr) -> Option<FileInfo> {
-    let mut info = FileInfo::default();
-    // SAFETY: a NUL-terminated path and a local to fill in.
-    unsafe { os_fileinfo(path.as_ptr(), &mut info) }.then_some(info)
+pub fn file_info(path: &CStr) -> Option<FileInfo> {
+    stat(path).ok().map(|stat| FileInfo { stat })
 }
 
-/// [`os_fileinfo_link`] of a name the caller holds: the link's own
-/// metadata, or `None` when it cannot be taken.
-pub(crate) fn link_info(path: &CStr) -> Option<FileInfo> {
-    let mut info = FileInfo::default();
-    // SAFETY: a NUL-terminated path and a local to fill in.
-    unsafe { os_fileinfo_link(path.as_ptr(), &mut info) }.then_some(info)
-}
-
-/// [`os_fileinfo`] without following a symlink — the link's own metadata.
-///
-/// # Safety
-/// `path` must be null or a NUL-terminated string, and `file_info` writable.
-pub unsafe fn os_fileinfo_link(path: *const c_char, file_info: *mut FileInfo) -> bool {
-    // SAFETY: the caller's out-parameter.
-    unsafe {
-        *file_info = FileInfo {
-            stat: UV_STAT_T_INIT,
-        }
-    };
-    if path.is_null() {
-        return false;
-    }
+/// [`file_info`] without following a symlink: the link's own metadata, or
+/// `None` when it cannot be taken.
+pub fn link_info(path: &CStr) -> Option<FileInfo> {
     fs_request(
-        // SAFETY: the caller's NUL-terminated path.
-        |request| unsafe { uv_fs_lstat(NO_LOOP, request, path, None) },
+        // SAFETY: `path` is NUL-terminated and outlives the call.
+        |request| unsafe { uv_fs_lstat(NO_LOOP, request, path.as_ptr(), None) },
         |result, request| {
-            let ok = result == LIBUV_SUCCESS;
-            if ok {
-                // SAFETY: the caller's out-parameter.
-                unsafe { (*file_info).stat = request.statbuf };
-            }
-            ok
+            (result == LIBUV_SUCCESS).then_some(FileInfo {
+                stat: request.statbuf,
+            })
         },
     )
 }
 
-/// [`os_fileinfo`] for an already-open descriptor.
+/// [`file_info`] for an already-open descriptor.
 ///
 /// # Safety
 /// `file_descriptor` must be a descriptor this process owns, and
@@ -372,62 +301,6 @@ pub unsafe fn os_fileinfo_fd(file_descriptor: c_int, file_info: *mut FileInfo) -
             ok
         },
     )
-}
-
-/// Whether two `FileInfo`s name the same file — the (device, inode) pair,
-/// not the path.
-///
-/// # Safety
-/// Both must be readable.
-pub unsafe fn os_fileinfo_id_equal(
-    file_info_1: *const FileInfo,
-    file_info_2: *const FileInfo,
-) -> bool {
-    // SAFETY: the caller's readable `FileInfo`s.
-    unsafe {
-        (*file_info_1).stat.st_ino == (*file_info_2).stat.st_ino
-            && (*file_info_1).stat.st_dev == (*file_info_2).stat.st_dev
-    }
-}
-
-/// The (device, inode) pair out of a `FileInfo`.
-///
-/// # Safety
-/// `file_info` must be readable and `file_id` writable.
-pub unsafe fn os_fileinfo_id(file_info: *const FileInfo, file_id: *mut FileID) {
-    // SAFETY: the caller's in- and out-parameters.
-    unsafe {
-        (*file_id).inode = (*file_info).stat.st_ino;
-        (*file_id).device_id = (*file_info).stat.st_dev;
-    }
-}
-
-/// # Safety
-/// `file_info` must be readable.
-pub unsafe fn os_fileinfo_inode(file_info: *const FileInfo) -> uint64_t {
-    // SAFETY: the caller's readable `FileInfo`.
-    unsafe { (*file_info).stat.st_ino }
-}
-
-/// # Safety
-/// `file_info` must be readable.
-pub unsafe fn os_fileinfo_size(file_info: *const FileInfo) -> uint64_t {
-    // SAFETY: the caller's readable `FileInfo`.
-    unsafe { (*file_info).stat.st_size }
-}
-
-/// # Safety
-/// `file_info` must be readable.
-pub unsafe fn os_fileinfo_hardlinks(file_info: *const FileInfo) -> uint64_t {
-    // SAFETY: the caller's readable `FileInfo`.
-    unsafe { (*file_info).stat.st_nlink }
-}
-
-/// # Safety
-/// `file_info` must be readable.
-pub unsafe fn os_fileinfo_blocksize(file_info: *const FileInfo) -> uint64_t {
-    // SAFETY: the caller's readable `FileInfo`.
-    unsafe { (*file_info).stat.st_blksize }
 }
 
 /// The (device, inode) pair for `path`, or `None` when it cannot be read.

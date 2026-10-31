@@ -11,7 +11,7 @@
 
 use super::*;
 use crate::message_fmt::c_str;
-use crate::os::fs::{link_exists, os_fchown, os_set_cloexec};
+use crate::os::fs::{link_exists, open_fd, os_fchown, os_set_cloexec};
 use crate::path::full_name_save;
 use crate::semsg;
 use crate::types::uv_gid_t;
@@ -67,8 +67,7 @@ impl MemFile {
         } else {
             flags |= O_NOFOLLOW;
             self.mf_flags = flags;
-            // SAFETY: a NUL-terminated name the memfile owns.
-            self.mf_fd = unsafe { os_open(name.as_ptr(), flags, SWAPFILE_MODE) };
+            self.mf_fd = open_fd(name, flags, SWAPFILE_MODE);
         }
 
         if self.mf_fd < 0 {
@@ -94,13 +93,10 @@ impl MemFile {
     /// Reopen the swap file read-write under the name it has, after a
     /// rename (or a failed one). Whether there is a descriptor now.
     pub(crate) fn reopen(&mut self) -> bool {
-        let name = self
+        self.mf_fd = self
             .fname
             .as_deref()
-            .map_or(core::ptr::null(), CStr::as_ptr);
-        // SAFETY: the memfile's NUL-terminated name, or null, which
-        // `os_open` refuses.
-        self.mf_fd = unsafe { os_open(name, O_RDWR, 0) };
+            .map_or(-1, |name| open_fd(name, O_RDWR, 0));
         if self.mf_fd < 0 {
             return false;
         }

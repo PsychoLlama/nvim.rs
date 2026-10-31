@@ -17,14 +17,6 @@
 //! nothing else, so that is the parameter type, and the call is then safe
 //! from the caller's side however the body reaches libuv.
 //!
-//! The exceptions are the calls whose contract *includes* null — `os_stat`,
-//! `os_getperm`, `os_isdir`, `os_path_exists`, `os_open`, `os_fopen`,
-//! `os_fileinfo`, `os_fileinfo_link`, `os_fileid` and `copy_xattr` each
-//! answer "no" for a null name rather than crashing, and their callers pass
-//! buffer names that really can be null. A slice cannot carry that, so they
-//! keep the pointer until their callers stop holding one; [`dir_exists`] is
-//! the string front door for the commonest of them.
-//!
 //! Every surviving `unsafe` unit is a libuv or libc call that has no Rust
 //! equivalent, so the deny buys no narrower obligation on those. What it
 //! does buy is the *rest* of each body — the mode arithmetic, the `$PATH`
@@ -36,7 +28,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
-use crate::os::uv_error::{UV_EAGAIN, UV_EINTR, UV_EINVAL, UV_UNKNOWN};
+use crate::os::uv_error::{UV_EAGAIN, UV_EINTR, UV_UNKNOWN};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr::NonNull;
 use core::{ptr, slice};
@@ -48,7 +40,6 @@ use crate::event::libuv::{
 };
 use crate::log::g_stats;
 use crate::log::{LOGLVL_ERR, logmsg};
-use crate::memory::xstrlcpy;
 use crate::message::{verbose_enter, verbose_leave};
 use crate::message_fmt::{c_str, msg_cstr};
 use crate::option::vars::p_verbose;
@@ -59,11 +50,11 @@ use crate::startup::stdin_fd;
 use crate::types::String_0;
 use crate::types::libc::STDIN_FILENO;
 use crate::types::{
-    FAIL, FILE, Failed, OK, OptInt, iovec, ptrdiff_t, size_t, uv__queue, uv__work, uv_buf_t,
-    uv_file, uv_fs_t, uv_fs_type, uv_loop_s, uv_loop_t, uv_req_type, uv_stat_t, uv_timespec_t,
+    FAIL, FILE, OK, OptInt, iovec, ptrdiff_t, size_t, uv__queue, uv__work, uv_buf_t, uv_file,
+    uv_fs_t, uv_fs_type, uv_loop_s, uv_loop_t, uv_req_type, uv_stat_t, uv_timespec_t,
 };
 use crate::ui::ui_call_chdir;
-use ::libc::{__errno_location, abort, dup, fcntl, fdopen, read, readv, strerror, write};
+use ::libc::{__errno_location, dup, fcntl, fdopen, read, readv, strerror, write};
 
 pub mod dir;
 pub mod meta;
@@ -119,7 +110,7 @@ fn is_dir(mode: u64) -> bool {
     mode & S_IFMT == S_IFDIR
 }
 
-/// `uv_stat_t statbuf` — the buffer [`os_stat`] fills. c2rust wrote all
+/// `uv_stat_t statbuf` — the buffer [`stat`] fills. c2rust wrote all
 /// eighteen fields out at each of the five sites that declare one.
 const UV_STAT_T_INIT: uv_stat_t = uv_stat_t {
     st_dev: 0,
@@ -268,35 +259,22 @@ pub fn os_chdir(path: &CStr) -> c_int {
     err
 }
 
-/// Reads the name of the current directory into `buf`, which holds `len`
-/// bytes. On failure the *error message* is left there instead.
-///
-/// Answers `Err` on failure.
-///
-/// # Safety
-/// `buf` must address `len` writable bytes.
-pub unsafe fn os_dirname(buf: *mut c_char, mut len: size_t) -> Result<(), Failed> {
-    // SAFETY: the caller's buffer. libuv reports the answer's length back
-    // through `len`, which is what bounds the error message copy.
-    unsafe {
-        let error_number = uv_cwd(buf, &raw mut len);
-        if error_number != LIBUV_SUCCESS {
-            xstrlcpy(buf, uv_strerror(error_number), len);
-            return Err(Failed);
-        }
-        Ok(())
-    }
-}
-
 /// The name of the current directory, when it fits a buffer of `room`
-/// bytes with its NUL: [`os_dirname`] into a buffer of its own. `Err`
-/// holds what that buffer is left with instead, libuv's error message.
-pub(crate) fn dirname_within(room: usize) -> Result<Vec<u8>, Vec<u8>> {
+/// bytes with its NUL. `Err` holds what upstream's buffer was left with
+/// instead: libuv's error message, cut to the same room.
+pub fn dirname_within(room: usize) -> Result<Vec<u8>, Vec<u8>> {
     let mut buf = vec![0 as c_char; room.max(1)];
-    // SAFETY: the buffer holds exactly the length passed.
-    let ok = unsafe { os_dirname(buf.as_mut_ptr(), buf.len()) }.is_ok();
-    let text = cstr::in_chars(&buf).to_bytes().to_vec();
-    if ok { Ok(text) } else { Err(text) }
+    let mut len: size_t = buf.len();
+    // SAFETY: the buffer holds exactly the length passed, and libuv reports
+    // the answer's length back through `len`.
+    let error_number = unsafe { uv_cwd(buf.as_mut_ptr(), &raw mut len) };
+    if error_number != LIBUV_SUCCESS {
+        let message = os_strerror(error_number).to_bytes();
+        // `xstrlcpy` into the room libuv left in `len`.
+        let room = len.min(buf.len()).saturating_sub(1);
+        return Err(message[..message.len().min(room)].to_vec());
+    }
+    Ok(cstr::in_chars(&buf).to_bytes().to_vec())
 }
 
 /// The name of the current directory, or `None` when the system will not
@@ -307,7 +285,7 @@ pub(crate) fn current_dir() -> Option<crate::memory::XString> {
         .map(crate::memory::XString::from_vec)
 }
 
-/// What [`os_dirname`] leaves in a `MAXPATHL` buffer: the name of the
+/// What upstream's `os_dirname` leaves in a `MAXPATHL` buffer: the name of the
 /// current directory or, when the system will not say, the error message.
 /// The reader that ignores the failure and goes on with the buffer.
 pub(crate) fn dirname_text() -> crate::memory::XString {
@@ -347,7 +325,7 @@ pub(crate) fn executable_path(name: &CStr, use_path: bool) -> Option<crate::memo
 /// Whether `name` is a directory and *not* a symlink to one.
 pub fn os_isrealdir(name: &CStr) -> bool {
     // `lstat`, not `stat`: a symlink to a directory is not one, though
-    // `os_isdir` says it is.
+    // `dir_exists` says it is.
     fs_request(
         // SAFETY: `name` is NUL-terminated and outlives the call.
         |request| unsafe { uv_fs_lstat(NO_LOOP, request, name.as_ptr(), None) },
@@ -355,24 +333,12 @@ pub fn os_isrealdir(name: &CStr) -> bool {
     )
 }
 
-/// Whether `name` exists and is a directory.
-///
-/// # Safety
-/// `name` must be a NUL-terminated string.
-pub unsafe fn os_isdir(name: *const c_char) -> bool {
-    // SAFETY: the caller's NUL-terminated path.
-    let mode = unsafe { os_getperm(name) };
-    mode >= 0 && is_dir(mode as u64)
-}
-
 /// What `name` is: an ordinary file or directory (or nothing at all), a
 /// writable device, or something else.
 pub fn os_nodetype(name: &CStr) -> c_int {
-    let mut statbuf = UV_STAT_T_INIT;
-    // SAFETY: `name` is NUL-terminated; `statbuf` is this frame's.
-    if unsafe { os_stat(name.as_ptr(), &raw mut statbuf) } != 0 {
+    let Ok(statbuf) = stat(name) else {
         return NODE_NORMAL; // The file does not exist.
-    }
+    };
     // Read the mode rather than asking `uv_guess_handle`, which does not
     // distinguish a block device from a directory.
     match statbuf.st_mode & S_IFMT {
@@ -418,8 +384,7 @@ pub fn os_can_exe(
 /// Whether `name` is a regular file the process may execute, storing its
 /// resolved absolute path in `abspath`.
 fn is_executable(name: &CStr, abspath: Option<&mut Option<crate::memory::XString>>) -> bool {
-    // SAFETY: `name` is NUL-terminated and outlives the call.
-    let mode = unsafe { os_getperm(name.as_ptr()) };
+    let mode = getperm(name);
     if mode < 0 {
         return false;
     }
@@ -462,15 +427,9 @@ fn is_executable_in_path(
 /// Opens or creates `path`, answering the new descriptor or a negative
 /// libuv error code. `mode` is the permission set a newly created file
 /// gets, subject to the umask.
-///
-/// # Safety
-/// `path` must be null or a NUL-terminated string.
-pub unsafe fn os_open(path: *const c_char, flags: c_int, mode: c_int) -> c_int {
-    if path.is_null() {
-        return UV_EINVAL; // `uv_fs_open` asserts on NULL. #7561
-    }
-    // SAFETY: the caller's NUL-terminated path.
-    fs_result(|req| unsafe { uv_fs_open(NO_LOOP, req, path, flags, mode, None) })
+pub fn open_fd(path: &CStr, flags: c_int, mode: c_int) -> c_int {
+    // SAFETY: `path` is NUL-terminated and outlives the call.
+    fs_result(|req| unsafe { uv_fs_open(NO_LOOP, req, path.as_ptr(), flags, mode, None) })
 }
 
 /// `fopen(3)`'s mode string as `open(2)` flags, per the table in its
@@ -492,33 +451,24 @@ fn fopen_flags(mode: &[u8]) -> Option<c_int> {
         _ => return None,
     })
 }
-/// `fopen(3)` over [`os_open`], so that every open in the tree goes through
-/// one place. Answers null when the file cannot be opened.
-///
-/// # Safety
-/// `path` must be null or NUL-terminated, and `flags` a NUL-terminated
-/// `fopen` mode string.
-pub unsafe fn os_fopen(path: *const c_char, flags: *const c_char) -> *mut FILE {
-    debug_assert!(!flags.is_null());
-    // SAFETY: the caller's NUL-terminated mode string.
-    let mode = unsafe { CStr::from_ptr(flags) }.to_bytes();
+/// `fopen(3)` over [`open_fd`], so that every open in the tree goes through
+/// one place. Answers `None` when the file cannot be opened.
+fn fopen_stream(path: &CStr, flags: &CStr) -> Option<NonNull<FILE>> {
+    let mode = flags.to_bytes();
     debug_assert!(!mode.is_empty() && mode.len() <= 2);
     let Some(iflags) = fopen_flags(mode) else {
         // Every call site in the tree passes a literal mode, so a mode with
         // no `open(2)` spelling is a bug in the caller rather than anything
-        // the user did — upstream aborts, and so does this.
-        // SAFETY: `abort` is libc's, and does not return.
-        unsafe { abort() }
+        // the user did -- upstream aborts, and so does this.
+        std::process::abort()
     };
-    // SAFETY: the caller's path; `fd` is this frame's until `fdopen` adopts
-    // it, and `flags` is the mode string it was just parsed from.
-    unsafe {
-        let fd = os_open(path, iflags, 0o666);
-        if fd < 0 {
-            return ptr::null_mut();
-        }
-        fdopen(fd, flags)
+    let fd = open_fd(path, iflags, 0o666);
+    if fd < 0 {
+        return None;
     }
+    // SAFETY: `fd` is this frame's until `fdopen` adopts it, and `flags` is
+    // the NUL-terminated mode string it was just parsed from.
+    NonNull::new(unsafe { fdopen(fd, flags.as_ptr()) })
 }
 
 /// An open C stream, closed when dropped: the owner `fopen` hands back.
@@ -536,11 +486,9 @@ pub struct CFile {
 }
 
 impl CFile {
-    /// [`os_fopen`] `path` with `mode`, or `None` when it cannot be opened.
+    /// `fopen` `path` with `mode`, or `None` when it cannot be opened.
     pub fn open(path: &CStr, mode: &CStr) -> Option<Self> {
-        // SAFETY: two NUL-terminated strings; a stream `os_fopen` opened is
-        // this value's alone.
-        let stream = NonNull::new(unsafe { os_fopen(path.as_ptr(), mode.as_ptr()) })?;
+        let stream = fopen_stream(path, mode)?;
         Some(CFile {
             stream,
             buffer: None,
@@ -889,10 +837,10 @@ pub(crate) fn realpath(name: &CStr) -> Option<Vec<u8>> {
     )
 }
 
-/// [`os_isdir`] for a caller that has the path as a string.
+/// Whether `path` exists and is a directory, a symlink to one included.
 pub fn dir_exists(path: &CStr) -> bool {
-    // SAFETY: a NUL-terminated path.
-    unsafe { os_isdir(path.as_ptr()) }
+    let mode = getperm(path);
+    mode >= 0 && is_dir(mode as u64)
 }
 
 /// The editor's standard input as a file of the caller's own, for a reader

@@ -34,7 +34,7 @@ use crate::log::{LOGLVL_ERR, logmsg};
 use crate::memory::{alloc_block, free_block};
 use crate::message_fmt::c_str;
 use crate::os::fs::{
-    os_close, os_file_mkdir, os_fsync, os_open, os_open_stdin_fd, os_read, os_readv, os_write,
+    file_mkdir, open_fd, os_close, os_fsync, os_open_stdin_fd, os_read, os_readv, os_write,
 };
 use crate::os::uv_error::{UV_EINVAL, UV_EIO, UV_ENOTSUP, UV_EROFS};
 use crate::types::{FileDescriptor, iovec, ptrdiff_t, size_t};
@@ -153,12 +153,12 @@ pub unsafe fn file_open(
     // SAFETY: the caller's path and storage.
     unsafe {
         if has(flags, kFileMkDir) {
-            let mkdir_ret = os_file_mkdir(fname.cast_mut(), 0o755);
+            let mkdir_ret = file_mkdir(CStr::from_ptr(fname), 0o755);
             if mkdir_ret < 0 {
                 return mkdir_ret;
             }
         }
-        let fd = os_open(fname, open_flags(flags), mode);
+        let fd = open_fd(CStr::from_ptr(fname), open_flags(flags), mode);
         if fd < 0 {
             return fd;
         }

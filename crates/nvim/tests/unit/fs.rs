@@ -21,17 +21,15 @@ use std::path::{Path, PathBuf};
 use std::ptr;
 
 use neovim::os::fs::{
-    NODE_NORMAL, NODE_WRITABLE, os_can_exe, os_chdir, os_close, os_dirname, os_dup, os_fchown,
-    os_file_is_readable, os_file_is_writable, os_fileinfo, os_fileinfo_blocksize, os_fileinfo_fd,
-    os_fileinfo_hardlinks, os_fileinfo_id, os_fileinfo_id_equal, os_fileinfo_inode,
-    os_fileinfo_link, os_fileinfo_size, os_getperm, os_isdir, os_mkdir, os_mkdir_recurse,
-    os_nodetype, os_open, os_path_exists, os_read, os_readv, os_remove, os_rename, os_rmdir,
-    os_setperm, os_write,
+    NODE_NORMAL, NODE_WRITABLE, dir_exists, dirname_within, file_info, link_info, mkdir_recurse,
+    open_fd, os_can_exe, os_chdir, os_close, os_dup, os_fchown, os_file_is_readable,
+    os_file_is_writable, os_fileinfo_fd, os_mkdir, os_nodetype, os_read, os_readv, os_remove,
+    os_rename, os_rmdir, os_setperm, os_write, path_exists,
 };
 use neovim::os::uv_error::{UV_EBADF, UV_EEXIST, UV_ENOENT};
-use neovim::types::{FAIL, Failed, FileID, FileInfo, OK, iovec};
+use neovim::types::{FAIL, Failed, FileInfo, OK, iovec};
 
-use crate::support::{Sandbox, internalize};
+use crate::support::Sandbox;
 
 /// The spec's fixture contents: every byte value once, sixteen times over.
 fn contents() -> Vec<u8> {
@@ -94,18 +92,14 @@ fn cname(name: &str) -> CString {
     CString::new(name).expect("a fixture name holds no NUL")
 }
 
-/// `os_isdir` over a name.
+/// `dir_exists` over a name.
 fn isdir(name: &str) -> bool {
-    let name = cname(name);
-    // SAFETY: `name` is this frame's and NUL-terminated.
-    unsafe { os_isdir(name.as_ptr()) }
+    dir_exists(&cname(name))
 }
 
-/// `os_getperm`, which answers the raw mode bits or a libuv error.
+/// `getperm`, which answers the raw mode bits or a libuv error.
 fn getperm(name: &str) -> c_int {
-    let name = cname(name);
-    // SAFETY: as above.
-    unsafe { os_getperm(name.as_ptr()) }
+    neovim::os::fs::getperm(&cname(name))
 }
 
 fn setperm(name: &str, perm: c_int) -> c_int {
@@ -119,24 +113,14 @@ fn blank_info() -> FileInfo {
     unsafe { std::mem::zeroed() }
 }
 
-fn blank_id() -> FileID {
-    FileID {
-        inode: 0,
-        device_id: 0,
-    }
-}
-
 /// Whether an accessor actually wrote something: the spec's `has_fileinfo`.
 fn filled_in(info: &FileInfo) -> bool {
     info.stat.st_ino > 0 && info.stat.st_dev > 0
 }
 
-/// `os_fileinfo` of a name, or `None` when it answers false.
+/// `file_info` of a name.
 fn info_of(path: &Path) -> Option<FileInfo> {
-    let mut info = blank_info();
-    let name = cpath(path);
-    // SAFETY: `name` is this frame's and `info` is writable.
-    unsafe { os_fileinfo(name.as_ptr(), &raw mut info) }.then_some(info)
+    file_info(&cpath(path))
 }
 
 #[test]
@@ -145,12 +129,11 @@ fn the_working_directory_is_reported_and_cannot_be_set_to_a_tilde() {
     let here = fixture.root().to_str().expect("text").to_string();
 
     let dirname = |len: usize| {
-        let mut buf = vec![0 as c_char; len];
-        // SAFETY: `buf` is `len` bytes and writable.
-        let result = unsafe { os_dirname(buf.as_mut_ptr(), len) };
-        let end = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
-        let text = String::from_utf8(buf[..end].iter().map(|&b| b as u8).collect()).expect("text");
-        (result, text)
+        let (result, text) = match dirname_within(len) {
+            Ok(text) => (Ok(()), text),
+            Err(text) => (Err(Failed), text),
+        };
+        (result, String::from_utf8(text).expect("text"))
     };
     assert_eq!(dirname(here.len() + 1), (Ok(()), here.clone()));
     assert_eq!(
@@ -327,11 +310,7 @@ fn giving_a_file_to_root_is_refused() {
 #[test]
 fn a_broken_link_does_not_exist() {
     let _fixture = Fixture::new("exists");
-    let exists = |name: &str| {
-        let name = cname(name);
-        // SAFETY: `name` is this frame's and NUL-terminated.
-        unsafe { os_path_exists(name.as_ptr()) }
-    };
+    let exists = |name: &str| path_exists(&cname(name));
     assert!(!exists("non-existing-file"));
     assert!(exists("unit-test-directory/test.file"));
     assert!(exists("unit-test-directory"));
@@ -397,12 +376,8 @@ fn duplicating_a_descriptor_answers_one_nothing_else_holds() {
 #[test]
 fn opening_honours_the_flags_and_the_mode() {
     let fixture = Fixture::new("open");
-    let open = |name: &str, flags: c_int, mode: c_int| {
-        let name = cname(name);
-        // SAFETY: `name` is this frame's and NUL-terminated.
-        unsafe { os_open(name.as_ptr(), flags, mode) }
-    };
-    // SAFETY: every descriptor closed here came from `os_open`.
+    let open = |name: &str, flags: c_int, mode: c_int| open_fd(&cname(name), flags, mode);
+    // SAFETY: every descriptor closed here came from `open_fd`.
     let close = |fd: c_int| unsafe { os_close(fd) };
 
     let existing = "unit-test-directory/test_existing.file";
@@ -452,8 +427,7 @@ fn reading_reports_the_count_and_the_end_of_file_apart() {
     let file = fixture.filled("read.dat");
     let want = contents();
     let name = cpath(&file);
-    // SAFETY: `name` is this frame's.
-    let fd = unsafe { os_open(name.as_ptr(), libc::O_RDONLY, 0) };
+    let fd = open_fd(&name, libc::O_RDONLY, 0);
     assert!(fd >= 0);
 
     let read = |size: Option<usize>| {
@@ -479,8 +453,7 @@ fn reading_reports_the_count_and_the_end_of_file_apart() {
     // Start over.
     // SAFETY: `fd` is open.
     assert_eq!(unsafe { os_close(fd) }, 0);
-    // SAFETY: `name` is still this frame's.
-    let fd = unsafe { os_open(name.as_ptr(), libc::O_RDONLY, 0) };
+    let fd = open_fd(&name, libc::O_RDONLY, 0);
     assert!(fd >= 0);
     let read = |size: usize| {
         let mut buf = vec![0_u8; size];
@@ -518,8 +491,7 @@ fn a_scatter_read_fills_its_buffers_in_order() {
     let file = fixture.filled("readv.dat");
     let want = contents();
     let name = cpath(&file);
-    // SAFETY: `name` is this frame's.
-    let fd = unsafe { os_open(name.as_ptr(), libc::O_RDONLY, 0) };
+    let fd = open_fd(&name, libc::O_RDONLY, 0);
     assert!(fd >= 0);
 
     let readv = |sizes: &[usize]| {
@@ -553,8 +525,7 @@ fn a_scatter_read_fills_its_buffers_in_order() {
     // Start over and take the whole file in four unequal pieces.
     // SAFETY: `fd` is open.
     assert_eq!(unsafe { os_close(fd) }, 0);
-    // SAFETY: `name` is still this frame's.
-    let fd = unsafe { os_open(name.as_ptr(), libc::O_RDONLY, 0) };
+    let fd = open_fd(&name, libc::O_RDONLY, 0);
     assert!(fd >= 0);
     let readv = |sizes: &[usize]| {
         let mut buffers: Vec<Vec<u8>> = sizes.iter().map(|&n| vec![0_u8; n]).collect();
@@ -590,8 +561,7 @@ fn writing_puts_bytes_where_the_descriptor_is_pointing() {
     let file = fixture.filled("write.dat");
     let want = contents();
     let name = cpath(&file);
-    // SAFETY: `name` is this frame's.
-    let fd = unsafe { os_open(name.as_ptr(), libc::O_WRONLY, 0) };
+    let fd = open_fd(&name, libc::O_WRONLY, 0);
     assert!(fd >= 0);
 
     let write = |bytes: Option<&[u8]>| {
@@ -655,23 +625,16 @@ fn making_and_removing_a_directory() {
     assert!(!isdir("unit-test-directory/new-dir"));
 }
 
-/// `os_mkdir_recurse` reports two things besides success: which directory it
+/// `mkdir_recurse` reports two things besides success: which directory it
 /// could not make, and the *first* one it did — the one a caller has to
 /// remove to undo the whole tree.
 #[test]
 fn making_a_directory_tree_names_the_first_one_it_made() {
     let fixture = Fixture::new("mkdir-recurse");
-    let recurse = |name: &str| {
-        let name = cname(name);
-        let mut failed: *mut c_char = ptr::null_mut();
-        let mut created: *mut c_char = ptr::null_mut();
-        // SAFETY: `name` is this frame's; both out-parameters start null and
-        // receive owned strings.
-        unsafe {
-            let result = os_mkdir_recurse(name.as_ptr(), RWX, &raw mut failed, &raw mut created);
-            let owned = |p: *mut c_char| (!p.is_null()).then(|| internalize(p));
-            (result, owned(failed), owned(created))
-        }
+    let text = |name: CString| name.into_string().expect("text");
+    let recurse = |name: &str| match mkdir_recurse(&cname(name), RWX) {
+        Ok(created) => (0, None, created.map(text)),
+        Err(failure) => (failure.code, failure.dir.map(text), None),
     };
 
     assert_eq!(
@@ -731,27 +694,20 @@ fn making_a_directory_tree_names_the_first_one_it_made() {
     }
 }
 
-/// `os_fileinfo` follows links, `os_fileinfo_link` does not, and
+/// `file_info` follows links, `link_info` does not, and
 /// `os_fileinfo_fd` asks about an already-open descriptor. All three fail
 /// rather than half-fill their answer.
 #[test]
 fn the_three_ways_of_asking_about_a_file() {
     let fixture = Fixture::new("fileinfo");
-    let mut info = blank_info();
-
-    // SAFETY: `info` is this frame's and writable; a null name is one of the
-    // cases under test.
-    assert!(!unsafe { os_fileinfo(ptr::null(), &raw mut info) });
     let missing = cname("/non-existent");
-    // SAFETY: `missing` is this frame's.
-    assert!(!unsafe { os_fileinfo(missing.as_ptr(), &raw mut info) });
-    // SAFETY: as above.
-    assert!(!unsafe { os_fileinfo_link(missing.as_ptr(), &raw mut info) });
+    assert!(file_info(&missing).is_none());
+    assert!(link_info(&missing).is_none());
 
     let file = info_of(&fixture.file()).expect("the fixture exists");
     assert!(filled_in(&file));
 
-    // Through the link, `os_fileinfo` describes a regular file...
+    // Through the link, `file_info` describes a regular file...
     let through = info_of(&fixture.link()).expect("the link resolves");
     assert!(filled_in(&through));
     assert_eq!(
@@ -759,11 +715,8 @@ fn the_three_ways_of_asking_about_a_file() {
         libc::S_IFREG
     );
 
-    // ...and `os_fileinfo_link` describes the link itself.
-    let link_name = cpath(&fixture.link());
-    let mut link = blank_info();
-    // SAFETY: `link_name` is this frame's and `link` is writable.
-    assert!(unsafe { os_fileinfo_link(link_name.as_ptr(), &raw mut link) });
+    // ...and `link_info` describes the link itself.
+    let link = link_info(&cpath(&fixture.link())).expect("the link is there");
     assert!(filled_in(&link));
     assert_eq!(
         link.stat.st_mode as libc::mode_t & libc::S_IFMT,
@@ -786,8 +739,8 @@ fn the_three_ways_of_asking_about_a_file() {
     assert!(filled_in(&by_fd));
 }
 
-/// The four accessors that read one field out of a `FileInfo`, each against
-/// what the standard library says about the same file.
+/// The fields of a `FileInfo`, each against what the standard library says
+/// about the same file.
 #[test]
 fn a_file_info_answers_the_same_numbers_the_system_does() {
     let fixture = Fixture::new("fileinfo-fields");
@@ -796,25 +749,21 @@ fn a_file_info_answers_the_same_numbers_the_system_does() {
     let meta = std::fs::metadata(&path).expect("the fixture");
     let info = info_of(&path).expect("the fixture exists");
 
-    // SAFETY: `info` is this frame's and every accessor only reads it.
-    unsafe {
-        assert_eq!(os_fileinfo_inode(&raw const info), meta.ino());
-        assert_eq!(os_fileinfo_size(&raw const info), meta.len());
-        assert_eq!(os_fileinfo_blocksize(&raw const info), meta.blksize());
-        assert_eq!(os_fileinfo_hardlinks(&raw const info), 1);
+    assert_eq!(info.stat.st_ino, meta.ino());
+    assert_eq!(info.stat.st_size, meta.len());
+    assert_eq!(info.stat.st_blksize, meta.blksize());
+    assert_eq!(info.stat.st_nlink, 1);
 
-        // A hard link is a second name for the same inode, and the count
-        // follows it — but only once the info is read again.
-        let hard = fixture.path("unit-test-directory/test_hlink.file");
-        std::fs::hard_link(&path, &hard).expect("a hard link");
-        let relinked = info_of(&path).expect("still there");
-        assert_eq!(os_fileinfo_hardlinks(&raw const relinked), 2);
+    // A hard link is a second name for the same inode, and the count
+    // follows it — but only once the info is read again.
+    let hard = fixture.path("unit-test-directory/test_hlink.file");
+    std::fs::hard_link(&path, &hard).expect("a hard link");
+    let relinked = info_of(&path).expect("still there");
+    assert_eq!(relinked.stat.st_nlink, 2);
 
-        // `os_fileinfo_id` copies the identifying pair out.
-        let mut id = blank_id();
-        os_fileinfo_id(&raw const info, &raw mut id);
-        assert_eq!((id.inode, id.device_id), (meta.ino(), meta.dev()));
-    }
+    // `id` copies the identifying pair out.
+    let id = info.id();
+    assert_eq!((id.inode, id.device_id), (meta.ino(), meta.dev()));
 }
 
 /// Identity, asked three ways: info against info, id against id, and id
@@ -830,36 +779,20 @@ fn two_names_are_the_same_file_when_their_ids_agree() {
     let info_two = info_of(&two).expect("two");
     let info_link = info_of(&link).expect("the link resolves");
 
-    // SAFETY: every argument below is a live `FileInfo` or `FileID` this
-    // frame owns, and none of the accessors writes through them.
-    unsafe {
-        assert!(os_fileinfo_id_equal(
-            &raw const info_one,
-            &raw const info_one
-        ));
-        assert!(os_fileinfo_id_equal(
-            &raw const info_one,
-            &raw const info_link
-        ));
-        assert!(!os_fileinfo_id_equal(
-            &raw const info_one,
-            &raw const info_two
-        ));
+    assert!(info_one.same_file_as(&info_one));
+    assert!(info_one.same_file_as(&info_link));
+    assert!(!info_one.same_file_as(&info_two));
 
-        // The id of a name: the stat's (inode, device) pair, as the buffer
-        // list compares names by.
-        let id_of = |name: &std::ffi::CStr| {
-            let mut info = FileInfo::default();
-            os_fileinfo(name.as_ptr(), &raw mut info).then(|| info.id())
-        };
-        assert!(id_of(&cname("/non-existent")).is_none());
-        let id_one = id_of(&cpath(&one)).expect("one exists");
-        assert!(id_one.inode > 0 && id_one.device_id > 0);
-        let id_two = id_of(&cpath(&two)).expect("two exists");
+    // The id of a name: the stat's (inode, device) pair, as the buffer
+    // list compares names by.
+    let id_of = |name: &std::ffi::CStr| file_info(name).map(|info| info.id());
+    assert!(id_of(&cname("/non-existent")).is_none());
+    let id_one = id_of(&cpath(&one)).expect("one exists");
+    assert!(id_one.inode > 0 && id_one.device_id > 0);
+    let id_two = id_of(&cpath(&two)).expect("two exists");
 
-        assert_eq!(id_one, id_one);
-        assert_ne!(id_one, id_two);
-        assert_eq!(id_one, info_one.id());
-        assert_ne!(id_one, info_two.id());
-    }
+    assert_eq!(id_one, id_one);
+    assert_ne!(id_one, id_two);
+    assert_eq!(id_one, info_one.id());
+    assert_ne!(id_one, info_two.id());
 }

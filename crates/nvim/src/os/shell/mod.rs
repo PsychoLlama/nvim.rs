@@ -50,7 +50,7 @@ use crate::message::{
 use crate::message_fmt::{c_str, msg_cstr};
 use crate::option::vars::{P_SH, P_SHCF, P_SXE, P_SXQ, p_sh, p_verbose};
 use crate::os::cshim::gettext;
-use crate::os::fs::{os_fopen, os_remove};
+use crate::os::fs::os_remove;
 use crate::os::signal::{signal_accept_deadly, signal_reject_deadly};
 use crate::profile::do_profiling;
 use crate::profile::{prof_child_enter, prof_child_exit};
@@ -60,13 +60,14 @@ use crate::state::mode::State;
 use crate::strings::{escaped_with, unquoted};
 use crate::tag::tag_freematch;
 use crate::types::ui::kUIMessages;
-use crate::types::{LineNr, NUL, ProfTime, READBIN, VarNumber, Vv, size_t, stream_read_cb};
+use crate::types::{LineNr, NUL, ProfTime, VarNumber, Vv, size_t, stream_read_cb};
 use crate::ui::{ui_flush, ui_has};
 use crate::winlayer::Buf;
 use ::libc::{fclose, fopen, fread, fseek, ftell};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 use std::ffi::CString;
+use std::os::unix::ffi::OsStrExt;
 
 crate::flag_set! {
     /// How a shell command's input and output are wired up — upstream's
@@ -438,35 +439,26 @@ pub(crate) fn get_cmd_output(cmd: &CStr, flags: ShellOpts) -> Option<XString> {
 
 /// Read back what [`get_cmd_output`]'s command redirected into `tempname`.
 fn read_output(tempname: &CStr) -> Option<Vec<u8>> {
-    // SAFETY: a NUL-terminated name; `fd` is closed on every path out.
-    unsafe {
-        // Not being able to seek means the file cannot be read.
-        let fd = os_fopen(tempname.as_ptr(), READBIN.as_ptr());
-        if fd.is_null() || fseek(fd, 0, SEEK_END) == -1 {
-            semsg!("E282: Cannot read from \"{}\"", msg_cstr(tempname));
-            if !fd.is_null() {
-                fclose(fd);
-            }
-            return None;
-        }
-        let len_l = ftell(fd);
-        if len_l == -1 || fseek(fd, 0, SEEK_SET) == -1 {
-            semsg!("E282: Cannot read from \"{}\"", msg_cstr(tempname));
-            fclose(fd);
-            return None;
-        }
-
-        let len = len_l as usize;
-        let mut buffer = vec![0u8; len];
-        let read = fread(buffer.as_mut_ptr().cast(), 1, len, fd);
-        fclose(fd);
-        os_remove(tempname);
-        if read as usize != len {
-            semsg!("E485: Can't read file {}", msg_cstr(tempname));
-            return None;
-        }
-        Some(buffer)
+    use std::io::{Read, Seek, SeekFrom};
+    // Not being able to seek means the file cannot be read.
+    let opened = std::fs::File::open(std::ffi::OsStr::from_bytes(tempname.to_bytes()))
+        .and_then(|mut file| Ok((file.seek(SeekFrom::End(0))?, file)));
+    let Ok((len, mut file)) = opened.and_then(|(len, mut file)| {
+        file.rewind()?;
+        Ok((len, file))
+    }) else {
+        semsg!("E282: Cannot read from \"{}\"", msg_cstr(tempname));
+        return None;
+    };
+    let mut buffer = Vec::new();
+    let read = file.by_ref().take(len).read_to_end(&mut buffer);
+    drop(file);
+    os_remove(tempname);
+    if read.ok() != usize::try_from(len).ok() {
+        semsg!("E485: Can't read file {}", msg_cstr(tempname));
+        return None;
     }
+    Some(buffer)
 }
 
 /// Split a command string into words, respecting double quotes. `argv` may be

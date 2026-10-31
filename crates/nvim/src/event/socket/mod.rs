@@ -49,7 +49,7 @@ use crate::event::{pack_int, unpack_int};
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, LOGLVL_WRN, logmsg};
 use crate::memory::{xfree, xstrdup, xstrlcpy};
 use crate::os::cshim::gettext;
-use crate::os::fs::{os_path_exists, os_remove};
+use crate::os::fs::{os_remove, path_exists};
 use crate::path::tail_index;
 use crate::startup::main_loop;
 use crate::types::{
@@ -348,7 +348,7 @@ pub unsafe fn socket_watcher_start(
         // SAFETY: the watcher's own NUL-terminated address buffer.
         unsafe { *addr.add(tail_index(cstr::bytes_at(addr))) = 0 };
         // SAFETY: as above.
-        if !unsafe { os_path_exists(addr) } {
+        if !path_exists(unsafe { CStr::from_ptr(addr) }) {
             result = UV_ENOENT;
         }
     }

@@ -75,7 +75,7 @@ use crate::memline::ml_open_file;
 use crate::message::e_swapclose;
 use crate::message::{emsg, iemsg};
 use crate::os::cshim::gettext;
-use crate::os::fs::{os_fileinfo_fd, os_fsync, os_open, os_remove};
+use crate::os::fs::{open_fd, os_fileinfo_fd, os_fsync, os_remove};
 use crate::os::fs::{read_eintr, write_eintr};
 use crate::os::input::{os_breakcheck, os_char_avail};
 use crate::types::{BlockNr, FileInfo, FileOffset};
@@ -654,11 +654,10 @@ impl MemFile {
                         if self.mf_fd >= 0 {
                             close(self.mf_fd);
                         }
-                        let name = self
+                        self.mf_fd = self
                             .fname
                             .as_deref()
-                            .map_or(core::ptr::null(), CStr::as_ptr);
-                        self.mf_fd = os_open(name, self.mf_flags, SWAPFILE_MODE);
+                            .map_or(-1, |name| open_fd(name, self.mf_flags, SWAPFILE_MODE));
                     }
                     self.mf_reopen = self.mf_fd < 0;
                 }

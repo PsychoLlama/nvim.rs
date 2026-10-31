@@ -3,7 +3,7 @@
 //!
 //! Same shape as the rest of `os/fs`: one [`fs_request`] per call, with
 //! `req.result` read back and the request cleaned up on the way out. The
-//! two exceptions are [`os_mkdir_recurse`] and [`os_file_mkdir`], which walk
+//! two exceptions are [`mkdir_recurse`] and [`file_mkdir`], which walk
 //! a path apart and put it back together and are the only string work here.
 
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -18,23 +18,18 @@
 )]
 
 use crate::os::uv_error::UV_EOF;
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
-use super::{
-    LIBUV_SUCCESS, NO_LOOP, PATHSEP, UV_STAT_T_INIT, dir_exists, fs_ok, fs_request, fs_result,
-    os_stat,
-};
+use super::{LIBUV_SUCCESS, NO_LOOP, PATHSEP, dir_exists, fs_ok, fs_request, fs_result};
 use crate::cstr;
 use crate::event::libuv::{
     uv_fs_mkdir, uv_fs_mkdtemp, uv_fs_rename, uv_fs_req_cleanup, uv_fs_rmdir, uv_fs_scandir,
-    uv_fs_scandir_next, uv_fs_unlink, uv_strerror,
+    uv_fs_scandir_next, uv_fs_unlink,
 };
-use crate::memory::{xfree, xmemdupz};
 use crate::message::e_noname;
 use crate::message::emsg;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext;
 use crate::path::{
     dir_of_file_exists, full_name_save, past_head_index, tail_with_sep_index, vim_ispathsep,
@@ -43,20 +38,8 @@ use crate::semsg;
 use crate::types::{Directory, int32_t};
 
 /// Whether `path` names anything at all.
-///
-/// # Safety
-/// `path` must be null or a NUL-terminated string.
-pub unsafe fn os_path_exists(path: *const c_char) -> bool {
-    let mut statbuf = UV_STAT_T_INIT;
-    // SAFETY: the caller's path; `statbuf` is this frame's.
-    unsafe { os_stat(path, &raw mut statbuf) == LIBUV_SUCCESS }
-}
-
-/// Whether `path` names anything at all: [`os_path_exists`] for a name the
-/// caller holds.
-pub(crate) fn path_exists(path: &CStr) -> bool {
-    // SAFETY: a NUL-terminated path.
-    unsafe { os_path_exists(path.as_ptr()) }
+pub fn path_exists(path: &CStr) -> bool {
+    super::stat(path).is_ok()
 }
 
 /// Renames `path` to `new_path`. Answers `OK` or `FAIL`.
@@ -71,26 +54,25 @@ pub fn os_mkdir(path: &CStr, mode: int32_t) -> c_int {
     fs_result(|req| unsafe { uv_fs_mkdir(NO_LOOP, req, path.as_ptr(), mode as c_int, None) })
 }
 
-/// Makes `dir` and every missing directory above it. Answers 0, or the
-/// libuv error code of the first `mkdir` that failed.
+/// Why [`mkdir_recurse`] gave up: libuv's code, the directory that could not
+/// be made, and libuv's own word for the code -- which is here rather than at
+/// the caller because `uv_strerror` is a C call and this is the side of the
+/// boundary that makes those.
+pub struct MkdirFailure {
+    pub code: c_int,
+    pub dir: Option<CString>,
+    pub why: &'static CStr,
+}
+
+/// Makes `dir` and every missing directory above it. Success answers the
+/// full name of the *first* directory it had to make, or `None` when they
+/// all existed already.
 ///
 /// Two walks over one buffer: the first truncates `dir` at each separator
 /// until what is left is a directory that exists, and the second puts the
-/// components back one at a time, creating each. `failed_dir` receives an
-/// allocated copy of the path that could not be made; a non-null `created`
-/// receives the full name of the *first* directory that was.
-///
-/// # Safety
-/// `dir` must be a NUL-terminated string and `failed_dir` writable;
-/// `created` must be null or point at a pointer that is null or owned.
-pub unsafe fn os_mkdir_recurse(
-    dir: *const c_char,
-    mode: int32_t,
-    failed_dir: *mut *mut c_char,
-    created: *mut *mut c_char,
-) -> c_int {
-    // SAFETY: the caller's NUL-terminated directory name.
-    let mut curdir: Vec<u8> = unsafe { CStr::from_ptr(dir) }.to_bytes_with_nul().to_vec();
+/// components back one at a time, creating each.
+pub fn mkdir_recurse(dir: &CStr, mode: int32_t) -> Result<Option<CString>, MkdirFailure> {
+    let mut curdir: Vec<u8> = dir.to_bytes_with_nul().to_vec();
     let real_end = curdir.len() - 1;
     // Where the walk back has to stop: "/" on Unix, "c:/" on Windows.
     let past_head = past_head_index(cstr::until_nul(&curdir));
@@ -107,6 +89,7 @@ pub unsafe fn os_mkdir_recurse(
         curdir[e] = 0;
     }
 
+    let mut created = None;
     while e != real_end {
         if e > past_head {
             curdir[e] = PATHSEP as u8;
@@ -130,66 +113,51 @@ pub unsafe fn os_mkdir_recurse(
         // `curdir` is NUL-terminated at `e`, and the whole of it at
         // `real_end`, so the walk always finds a terminator.
         let so_far = CStr::from_bytes_until_nul(&curdir).unwrap_or(c"");
-        let ret = os_mkdir(so_far, mode);
-        if ret != 0 {
-            // SAFETY: the caller's out-parameter, which takes the copy over.
-            unsafe { *failed_dir = xmemdupz(curdir.as_ptr().cast(), e).cast() };
-            return ret;
+        let code = os_mkdir(so_far, mode);
+        if code != 0 {
+            return Err(MkdirFailure {
+                code,
+                dir: Some(cstr::owned(&curdir[..e])),
+                why: super::os_strerror(code),
+            });
         }
-        // SAFETY: the caller's out-parameter, checked non-null.
-        if !created.is_null() && unsafe { (*created).is_null() } {
-            // SAFETY: same; it takes the allocation over.
-            unsafe { *created = full_name_save(cstr::in_bytes(&curdir), false).into_raw() };
+        if created.is_none() {
+            created = Some(cstr::owned(&full_name_save(cstr::in_bytes(&curdir), false)));
         }
     }
-    0
+    Ok(created)
 }
 
 /// Makes the directory `fname` would live in, if it is missing.
 ///
-/// Answers 0, or the libuv error code — having reported it — when the
-/// directories could not be made. `fname` is left as it was found.
-///
-/// # Safety
-/// `fname` must be a writable NUL-terminated string.
-pub unsafe fn os_file_mkdir(fname: *mut c_char, mode: int32_t) -> c_int {
-    // SAFETY: the caller's writable NUL-terminated file name. The tail is
-    // cut off with a NUL for the duration and put back before returning.
-    unsafe {
-        if dir_of_file_exists(cstr::bytes_at(fname)) {
-            return 0;
-        }
-        let tail = fname.add(tail_with_sep_index(cstr::bytes_at(fname)));
-        // `tail` is past `fname`'s start here (`dir_of_file_exists`
-        // answers true when they are equal), so the byte before it exists
-        // even when the tail itself is empty — which is the case upstream's
-        // `tail + strlen(tail) - 1` is written for.
-        let last_char = *tail.add(CStr::from_ptr(tail).to_bytes().len()).sub(1);
-        if vim_ispathsep(c_int::from(last_char)) {
-            emsg(gettext(e_noname));
-            return -1;
-        }
-        let c = *tail;
-        *tail = 0;
-        let mut failed_dir: *mut c_char = ptr::null_mut();
-        let r = os_mkdir_recurse(fname, mode, &raw mut failed_dir, ptr::null_mut());
-        if r < 0 {
-            let (dir, why) = (c_str(failed_dir), c_str(uv_strerror(r)));
-            semsg!("E739: Cannot create directory {dir}: {why}");
-            xfree(failed_dir.cast());
-        }
-        *tail = c;
-        r
+/// Answers 0, or the libuv error code -- having reported it -- when the
+/// directories could not be made (-1 for a name that is all directory).
+pub(crate) fn file_mkdir(fname: &CStr, mode: int32_t) -> c_int {
+    let name = fname.to_bytes();
+    if dir_of_file_exists(name) {
+        return 0;
     }
-}
-
-/// [`os_file_mkdir`] for a name the caller holds: make the directories
-/// `fname`'s head names, and answer whether they exist now (a failure has
-/// been reported). The cut the callee makes in the name is made in a copy.
-pub(crate) fn file_mkdir(fname: &CStr, mode: int32_t) -> bool {
-    let mut copy = fname.to_bytes_with_nul().to_vec();
-    // SAFETY: a writable NUL-terminated copy of our own.
-    unsafe { os_file_mkdir(copy.as_mut_ptr().cast(), mode) >= 0 }
+    let tail = tail_with_sep_index(name);
+    // `tail` is past the start here (`dir_of_file_exists` answers true when
+    // it is not), so the byte before the end exists even when the tail
+    // itself is empty -- the case upstream's `tail + strlen(tail) - 1` is
+    // written for.
+    if vim_ispathsep(c_int::from(name[name.len() - 1])) {
+        emsg(gettext(e_noname));
+        return -1;
+    }
+    match mkdir_recurse(&cstr::owned(&name[..tail]), mode) {
+        Ok(_) => 0,
+        Err(failure) => {
+            let dir = failure.dir.as_deref().unwrap_or(c"");
+            semsg!(
+                "E739: Cannot create directory {}: {}",
+                msg_cstr(dir),
+                msg_cstr(failure.why)
+            );
+            failure.code
+        }
+    }
 }
 
 /// Makes a uniquely named temporary directory from `templ`, whose trailing
@@ -255,45 +223,4 @@ pub fn os_closedir(dir: &mut Directory) {
 pub fn os_remove(path: &CStr) -> c_int {
     // SAFETY: `path` is NUL-terminated and outlives the call.
     fs_result(|req| unsafe { uv_fs_unlink(NO_LOOP, req, path.as_ptr(), None) })
-}
-
-/// Why [`mkdir_recurse`] gave up: libuv's code, the directory that could not
-/// be made, and libuv's own word for the code — which is here rather than at
-/// the caller because `uv_strerror` is a C call and this is the side of the
-/// boundary that makes those.
-pub struct MkdirFailure {
-    pub code: c_int,
-    pub dir: Option<CString>,
-    pub why: &'static CStr,
-}
-
-/// [`os_mkdir_recurse`] for a caller that has the name as a string and wants
-/// the failure as a value rather than through an out-parameter.
-///
-/// Success answers the full name of the *first* directory it had to make,
-/// or `None` when they all existed already.
-pub fn mkdir_recurse(dir: &CStr, mode: int32_t) -> Result<Option<CString>, MkdirFailure> {
-    let mut failed_dir: *mut c_char = ptr::null_mut();
-    let mut created: *mut c_char = ptr::null_mut();
-    // SAFETY: a NUL-terminated directory name, and both out-parameters are
-    // this frame's -- each receives at most one owned string, read back and
-    // freed here.
-    let code =
-        unsafe { os_mkdir_recurse(dir.as_ptr(), mode, &raw mut failed_dir, &raw mut created) };
-    let adopt = |p: *mut c_char| {
-        // SAFETY: null, or one owned NUL-terminated path, copied and then
-        // freed once.
-        let owned = unsafe { cstr::at_opt(p) }.map(CStr::to_owned);
-        unsafe { xfree(p.cast()) };
-        owned
-    };
-    let (failed_dir, created) = (adopt(failed_dir), adopt(created));
-    if code == 0 {
-        return Ok(created);
-    }
-    Err(MkdirFailure {
-        code,
-        dir: failed_dir,
-        why: super::os_strerror(code),
-    })
 }
