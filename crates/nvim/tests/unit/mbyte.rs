@@ -15,7 +15,7 @@
 
 use std::ffi::{c_char, c_int};
 
-use neovim::charset::{vim_iswordc, vim_iswordp};
+use neovim::charset::{is_word_at, vim_iswordc};
 use neovim::grid::MAX_SCHAR_SIZE;
 use neovim::harness::schar_get;
 use neovim::mbyte::{
@@ -25,6 +25,7 @@ use neovim::mbyte::{
     strict_char_at, string_cells, utf_fold, utf_ptr2char, utf_ptr2len,
 };
 use neovim::option::vars::P_ARSHAPE;
+use neovim::winlayer::Buf;
 
 use crate::support::editor_lock;
 
@@ -98,16 +99,17 @@ fn every_codepoint_round_trips_and_both_word_tests_agree() {
     for c in 0..0x10000_i32 {
         // Eight bytes, and the encoder writes at most four here.
         encode_char(c, &mut buf);
+        let encoded = buf;
         let buf: [c_char; 8] = buf.map(|b| b as c_char);
         // SAFETY: the read back stops at the sequence just written.
         unsafe {
             assert_eq!(utf_ptr2char(buf.as_ptr()), c, "round trip of {c:#x}");
-            assert_eq!(
-                vim_iswordc(c),
-                vim_iswordp(buf.as_ptr()),
-                "word test disagrees at {c:#x}"
-            );
         }
+        assert_eq!(
+            vim_iswordc(c),
+            is_word_at(&encoded, Buf::current()),
+            "word test disagrees at {c:#x}"
+        );
     }
 }
 

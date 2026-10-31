@@ -1,16 +1,10 @@
-//! Port of `test/unit/charset/vim_str2nr_spec.lua`, plus the `skip` family's
-//! agreement with the pointer skippers it replaces.
+//! Port of `test/unit/charset/vim_str2nr_spec.lua`, over the slice form
+//! `str2nr_scan`, plus the digit readers' range answers.
 
-use std::ffi::{c_char, c_int};
-use std::ptr;
+use std::ffi::c_int;
 
-use neovim::charset::{
-    Str2NrBases, skip, skipbin, skipdigits, skiphex, skiptowhite, skiptowhite_esc, skipwhite,
-    vim_str2nr,
-};
+use neovim::charset::{Str2NrBases, str2nr_scan};
 use neovim::types::typval::{UVarNumber, VarNumber};
-
-use crate::support::cstr;
 
 // The cases below add these together the way the Lua spec did, so they stay
 // bare integers here and the call wraps them back up.
@@ -81,7 +75,6 @@ fn t_all_masks(s: &str, what: c_int, exp: Exp, maxlen: c_int, strict: bool) {
 }
 
 fn run(s: &str, what: c_int, exp: Exp, maxlen: c_int, strict: bool, masks: std::ops::Range<u32>) {
-    let cs = cstr(s);
     // Field indices: 0 = len, 1 = num, 2 = unum, 3 = pre.
     let present: Vec<usize> = [
         exp.len.is_some(),
@@ -95,43 +88,37 @@ fn run(s: &str, what: c_int, exp: Exp, maxlen: c_int, strict: bool, masks: std::
     .collect();
 
     for mask in masks.take(1 << present.len()) {
-        // Sentinels prove vim_str2nr wrote the slot.
-        let mut len: c_int = -42;
+        // Sentinels prove the parse answered the slot.
         let mut num: VarNumber = -42;
         let mut unum: UVarNumber = 4242;
         let mut pre: c_int = -42;
-
-        let mut p_len: *mut c_int = ptr::null_mut();
-        let mut p_num: *mut VarNumber = ptr::null_mut();
-        let mut p_unum: *mut UVarNumber = ptr::null_mut();
-        let mut p_pre: *mut c_int = ptr::null_mut();
 
         let passed: Vec<usize> = present
             .iter()
             .enumerate()
             .filter_map(|(b, &f)| (mask & (1 << b) == 0).then_some(f))
             .collect();
-        for &field in &passed {
-            match field {
-                0 => p_len = &mut len,
-                1 => p_num = &mut num,
-                2 => p_unum = &mut unum,
-                _ => p_pre = &mut pre,
-            }
-        }
-
-        unsafe {
-            vim_str2nr(
-                cs.as_ptr(),
-                p_pre,
-                p_len,
-                Str2NrBases::from_bits(what),
-                p_num,
-                p_unum,
-                maxlen,
-                strict,
-                ptr::null_mut(),
-            );
+        // What `vim_str2nr` did with its out-arguments: the length always,
+        // the rest only for a parse a strict check did not reject. The
+        // signed value is only asked for when its slot was passed.
+        let want_signed = passed.contains(&1);
+        let text = s.as_bytes();
+        let text = match usize::try_from(maxlen) {
+            Ok(n @ 1..) => &text[..n.min(text.len())],
+            _ => text,
+        };
+        let parsed = str2nr_scan(
+            text,
+            maxlen,
+            Str2NrBases::from_bits(what),
+            strict,
+            want_signed,
+        );
+        let len = c_int::try_from(parsed.len).unwrap_or(c_int::MAX);
+        if !parsed.rejected {
+            num = parsed.value;
+            unum = parsed.magnitude;
+            pre = parsed.prefix;
         }
 
         let ctx = format!("(s={s:?}, w={what}, m={maxlen}, strict={strict}, mask={mask:b})");
@@ -539,137 +526,36 @@ fn works_with_weirdly_quoted_numbers() {
 /// width, which every caller reaches from text a user typed. It saturates
 /// now; these pin that, and the non-strict arm's unchanged `def` answer.
 mod getdigits {
-    use std::ffi::c_char;
-
-    use neovim::charset::{getdigits, getdigits_int, getdigits_int32};
-
-    use crate::support::cstr;
-
-    /// Read `s` through `f`, and answer what it returned alongside how many
-    /// bytes it consumed.
-    fn read<T>(s: &str, f: impl FnOnce(*mut *mut c_char) -> T) -> (T, usize) {
-        let owned = cstr(s);
-        let start = owned.as_ptr() as *mut c_char;
-        let mut p = start;
-        let got = f(&raw mut p);
-        (got, (p as usize) - (start as usize))
-    }
+    use neovim::charset::{getdigits_at, getdigits_int_at};
 
     #[test]
-    #[cfg_attr(miri, ignore = "strtoimax is a foreign function")]
     fn strict_saturates_at_the_target_width() {
-        // SAFETY: every string below is NUL-terminated by `CString`.
-        unsafe {
-            assert_eq!(
-                read("2147483648", |p| getdigits_int(p, true, 0)).0,
-                i32::MAX
-            );
-            assert_eq!(
-                read("-2147483649", |p| getdigits_int(p, true, 0)).0,
-                i32::MIN
-            );
-            assert_eq!(
-                read("2147483648", |p| getdigits_int32(p, true, 0)).0,
-                i32::MAX
-            );
-            // Past `intmax_t` as well: `strtoimax` reports ERANGE, and the
-            // clamped value it left behind is what comes back.
-            assert_eq!(
-                read("99999999999999999999999", |p| getdigits_int(p, true, 7)).0,
-                i32::MAX
-            );
-            assert_eq!(
-                read("99999999999999999999999", |p| getdigits(p, true, 7)).0,
-                i64::MAX as _
-            );
-        }
+        assert_eq!(getdigits_int_at(b"2147483648", 0, true, 0).0, i32::MAX);
+        assert_eq!(getdigits_int_at(b"-2147483649", 0, true, 0).0, i32::MIN);
+        // Past `intmax_t` as well: the clamped value is what comes back.
+        assert_eq!(
+            getdigits_int_at(b"99999999999999999999999", 0, true, 7).0,
+            i32::MAX
+        );
+        assert_eq!(
+            getdigits_at(b"99999999999999999999999", 0, true, 7).0,
+            i64::MAX as _
+        );
     }
 
     #[test]
-    #[cfg_attr(miri, ignore = "strtoimax is a foreign function")]
     fn non_strict_still_answers_the_default() {
-        // SAFETY: as above.
-        unsafe {
-            assert_eq!(read("2147483648", |p| getdigits_int(p, false, 7)).0, 7);
-            assert_eq!(read("2147483648", |p| getdigits_int32(p, false, 7)).0, 7);
-            assert_eq!(
-                read("99999999999999999999999", |p| getdigits(p, false, 7)).0,
-                7
-            );
-        }
+        assert_eq!(getdigits_int_at(b"2147483648", 0, false, 7).0, 7);
+        assert_eq!(getdigits_at(b"99999999999999999999999", 0, false, 7).0, 7);
     }
 
     #[test]
-    #[cfg_attr(miri, ignore = "strtoimax is a foreign function")]
-    fn an_in_range_number_is_unmoved_and_the_pointer_advances() {
-        // SAFETY: as above.
-        unsafe {
-            let (got, used) = read("2147483647rest", |p| getdigits_int(p, true, 0));
-            assert_eq!((got, used), (i32::MAX, 10));
-            let (got, used) = read("42:", |p| getdigits_int(p, false, 7));
-            assert_eq!((got, used), (42, 2));
-        }
-    }
-}
-
-/// Every fixture the skippers are asked about: leading and trailing runs of
-/// each class, an empty string, and the escapes only `skiptowhite_esc` sees.
-const SKIP_CASES: &[&[u8]] = &[
-    b"",
-    b" ",
-    b"   ",
-    b"\t \tx  ",
-    b"x  y",
-    b"0x1Fg",
-    b"90210abc",
-    b"1012",
-    b"abc123",
-    b"a\\ b c",
-    b"a\\",
-    b"\x16 z",
-    b"nowhitespaceatall",
-];
-
-/// `charset::skip`'s offsets name the same byte the pointer skippers do.
-///
-/// This is the contract the `&[u8]` rewrites lean on: `s[skip::white(s)..]`
-/// starts where `skipwhite(s)` pointed, so a walk converted from a pointer to
-/// an index looks at the same bytes. The pointer forms need a NUL to stop at,
-/// so the fixtures carry none inside; that difference is stated in
-/// `charset/skip.rs`'s own tests.
-#[test]
-fn the_slice_skippers_stop_where_the_pointer_skippers_stop() {
-    for case in SKIP_CASES {
-        let owned: Vec<c_char> = case
-            .iter()
-            .map(|&b| b as c_char)
-            .chain(std::iter::once(0))
-            .collect();
-        let base = owned.as_ptr();
-        // SAFETY: `owned` is NUL-terminated, which is all these forms ask
-        // for; `skiphex` wants a `*mut`, and nothing writes.
-        let want = unsafe {
-            [
-                skipwhite(base).cast_const(),
-                skiptowhite(base).cast_const(),
-                skiptowhite_esc(base).cast_const(),
-                skipdigits(base).cast_const(),
-                skiphex(base.cast_mut()).cast_const(),
-                skipbin(base),
-            ]
-        };
-        let got = [
-            skip::white(case),
-            skip::to_white(case),
-            skip::to_white_esc(case),
-            skip::digits(case),
-            skip::hex(case),
-            skip::bin(case),
-        ];
-        for (n, (&stopped, offset)) in want.iter().zip(got).enumerate() {
-            // SAFETY: both pointers are into `owned`.
-            let want_offset = unsafe { stopped.offset_from(base) };
-            assert_eq!(offset as isize, want_offset, "skipper {n} on {case:x?}");
-        }
+    fn an_in_range_number_is_unmoved_and_the_offset_advances() {
+        assert_eq!(
+            getdigits_int_at(b"2147483647rest", 0, true, 0),
+            (i32::MAX, 10)
+        );
+        assert_eq!(getdigits_int_at(b"42:", 0, false, 7), (42, 2));
+        assert_eq!(getdigits_int_at(b"x 42:", 1, false, 7), (42, 4));
     }
 }

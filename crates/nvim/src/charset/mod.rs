@@ -11,13 +11,9 @@
 //! Nearly every function here runs per character on a parsing or drawing
 //! path, which is why every one-line helper is `#[inline(always)]`: the test
 //! suites run unoptimised builds in which nothing else is inlined. The text
-//! they read is a `&[u8]`; the pointer spellings upstream's callers still use
-//! are one-line shims in `walk.rs`, the one file here that allows `unsafe`.
+//! they read is a `&[u8]`.
 
-// No `unsafe` here, and none allowed: the crate denies it. Not `forbid`,
-// because a `forbid` reaches the whole subtree and `walk.rs` keeps the
-// pointer shims, which need the allow.
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -50,19 +46,17 @@ pub(crate) use display::{
 pub use display::{byte2cells, char2cells};
 pub use display::{ptr2cells_at, strnsize, strsize, transchar_hex_into};
 
-// The pointer spellings, for the callers whose cursor is still a pointer.
-// The module itself is private: its names are re-exported here.
-mod walk;
+mod digits;
 
-pub use walk::{
-    backslash_halve, backslash_halve_save, getdigits, getdigits_int, getdigits_int32,
-    rem_backslash, skipbin, skipdigits, skiphex, skiptowhite, skiptowhite_esc, skipwhite,
-    vim_iswordp, vim_iswordp_buf, vim_str2nr,
-};
-pub(crate) use walk::{
-    getdigits_at, getdigits_int_at, getwhitecols_curline, try_getdigits, try_getdigits_at,
-};
-pub use walk::{rl_mirror_ascii, str_foldcase, trans_characters, transstr, transstr_buf};
+/// The indent of the cursor's line, in bytes.
+pub(crate) fn getwhitecols_curline() -> crate::types::intptr_t {
+    let win = crate::winlayer::Win::current();
+    let mut lines = win.buffer().lines();
+    crate::types::intptr_t::try_from(skip::white(lines.line(win.w_cursor.lnum))).unwrap_or(0)
+}
+
+pub(crate) use digits::try_getdigits_at;
+pub use digits::{getdigits_at, getdigits_int_at};
 
 /// Bits of a `g_chartab` entry.
 const CT_CELL_MASK: uint8_t = 0x7;
@@ -380,7 +374,7 @@ pub fn vim_iswordc_buf(c: c_int, buffer: Buf) -> bool {
 /// Whether the character at the start of `bytes` belongs to a word in
 /// `buffer`. A byte that leads no multibyte sequence is judged as itself.
 #[inline]
-pub(crate) fn is_word_at(bytes: &[u8], buffer: Buf) -> bool {
+pub fn is_word_at(bytes: &[u8], buffer: Buf) -> bool {
     let lead = cstr::byte_at(bytes, 0);
     let c = if utf8len_tab[usize::from(lead)] > 1 {
         char_at(bytes)
@@ -457,17 +451,17 @@ impl Scan<'_> {
 /// there was none, or a strict parse rejected it), its value signed and
 /// unsigned, and whether the signed value was clamped.
 #[derive(Debug, Default, PartialEq, Eq)]
-pub(crate) struct ParsedNumber {
-    pub(crate) len: usize,
+pub struct ParsedNumber {
+    pub len: usize,
     /// The prefix letter that named the base (`x`, `b`, `o`, ...), `0` for a
     /// leading-zero octal, or zero for none.
-    pub(crate) prefix: c_int,
-    pub(crate) value: VarNumber,
-    pub(crate) magnitude: UVarNumber,
-    pub(crate) overflow: bool,
+    pub prefix: c_int,
+    pub value: VarNumber,
+    pub magnitude: UVarNumber,
+    pub overflow: bool,
     /// A strict parse found a letter or digit after the number: nothing but
     /// `len` (zero) and `overflow` is set.
-    pub(crate) rejected: bool,
+    pub rejected: bool,
 }
 
 /// Parse the number `text` starts with, in the bases `what` allows.
@@ -479,7 +473,7 @@ pub(crate) struct ParsedNumber {
 /// upstream reports a clamp from the branch that writes `nptr` alone.
 ///
 /// The slice form of `vim_str2nr`, whose scan is [`str2nr::scan`].
-pub(crate) fn str2nr_scan(
+pub fn str2nr_scan(
     text: &[u8],
     maxlen: c_int,
     what: Str2NrBases,
@@ -573,7 +567,7 @@ pub fn hexhex_at(text: &[u8]) -> c_int {
 
 /// Whether the backslash `text` starts with escapes the byte after it, i.e.
 /// whether [`backslash_halved`] would remove it.
-pub(crate) fn escapes_next(text: &[u8]) -> bool {
+pub fn escapes_next(text: &[u8]) -> bool {
     text.first() == Some(&b'\\') && text.get(1).is_some_and(|&next| next != 0)
 }
 
@@ -584,7 +578,7 @@ pub(crate) fn is_blank_line(text: &[u8]) -> bool {
 
 /// `text` with each backslash that escapes the byte after it removed, up to
 /// the first NUL.
-pub(crate) fn backslash_halved(text: &[u8]) -> Vec<u8> {
+pub fn backslash_halved(text: &[u8]) -> Vec<u8> {
     let text = &text[..text.iter().position(|&b| b == 0).unwrap_or(text.len())];
     // Room for a terminator too, for a caller that hands the result to C.
     let mut out = Vec::with_capacity(text.len() + 1);

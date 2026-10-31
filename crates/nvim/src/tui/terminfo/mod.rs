@@ -24,15 +24,15 @@ pub mod builtin;
 pub mod caps;
 pub mod param;
 
-use crate::charset::transstr;
-use crate::memory::{arena_strdup, xfree};
+use crate::charset::transstr_owned;
+use crate::memory::arena_strdup;
 use crate::tui::terminfo::caps::{
     BACK_COLOR_ERASE, COLUMNS, EXT_CAPS, FUNCTION_KEYS, KEYS, LINES, MAX_COLORS, STRING_CAPS,
     kTerm_reset_cursor_style, kTermCount,
 };
 use crate::tui::unibi;
 use crate::types::{Arena, String_0, TPVAR, TerminfoEntry, size_t};
-use core::ffi::{CStr, c_char, c_long, c_void};
+use core::ffi::{CStr, c_char, c_long};
 
 /// Does `term` name a terminal of the `family` family?
 ///
@@ -202,12 +202,10 @@ pub unsafe fn terminfo_info_msg(
     // unprintable option value is shown.
     // Again the `unsafe` is inside the closure, so the three walks below are
     // safe Rust.
-    // SAFETY: the caller's NUL-terminated sequence; `transstr` answers a
-    // fresh NUL-terminated string this closure owns and frees.
-    let escaped = |msg: &mut Vec<u8>, seq: *const c_char| unsafe {
-        let printable = transstr(seq, false);
-        msg.extend_from_slice(CStr::from_ptr(printable).to_bytes());
-        xfree(printable.cast::<c_void>());
+    let escaped = |msg: &mut Vec<u8>, seq: *const c_char| {
+        // SAFETY: the caller's NUL-terminated sequence.
+        let seq = unsafe { CStr::from_ptr(seq) };
+        msg.extend_from_slice(transstr_owned(seq.to_bytes(), false).as_cstr().to_bytes());
     };
 
     let def_names = STRING_CAPS

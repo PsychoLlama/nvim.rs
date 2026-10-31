@@ -54,10 +54,9 @@ const MT_META_LINES: MetaIndex = 1;
 const TAB: int32_t = b'\t' as int32_t;
 
 /// The most bytes measuring one character reads: its own sequence and the
-/// one after it, which a VS-16 can widen it by. A caller still holding a
-/// pointer into a string hands the measure this much of it
-/// (`cstr::prefix_at`), which answers what the whole string would -- and
-/// does not pay a `strlen` per character for it.
+/// one after it, which a VS-16 can widen it by. A caller holding a long
+/// line hands the measure this much of it, which answers what the whole
+/// line would.
 pub(crate) const CHAR_CELLS_SPAN: usize = 2 * MB_MAXCHAR;
 
 /// The marktree filter that selects inline virtual text and nothing else.

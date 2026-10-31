@@ -28,17 +28,17 @@
 pub mod address;
 
 use crate::cstr;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
 use crate::os::uv_error::{UV_EACCES, UV_EADDRINUSE, UV_EINVAL, UV_ENOENT};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ops::{Deref, DerefMut};
 use core::{mem, ptr};
 
-use crate::charset::try_getdigits;
+use crate::charset::try_getdigits_at;
 use crate::event::libuv::{
     uv_accept, uv_close, uv_freeaddrinfo, uv_getaddrinfo, uv_listen, uv_pipe_bind2,
-    uv_pipe_connect, uv_pipe_init, uv_strerror, uv_tcp_bind, uv_tcp_connect, uv_tcp_getsockname,
-    uv_tcp_init, uv_tcp_nodelay,
+    uv_pipe_connect, uv_pipe_init, uv_tcp_bind, uv_tcp_connect, uv_tcp_getsockname, uv_tcp_init,
+    uv_tcp_nodelay,
 };
 use crate::event::r#loop::{one_arg_event, process_events_until};
 use crate::event::multiqueue::multiqueue_put_event;
@@ -49,7 +49,7 @@ use crate::event::{pack_int, unpack_int};
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, LOGLVL_WRN, logmsg};
 use crate::memory::{xfree, xstrdup, xstrlcpy};
 use crate::os::cshim::gettext;
-use crate::os::fs::{os_remove, path_exists};
+use crate::os::fs::{os_remove, os_strerror, path_exists};
 use crate::path::tail_index;
 use crate::startup::main_loop;
 use crate::types::{
@@ -218,17 +218,18 @@ pub unsafe fn socket_watcher_init(
             // SAFETY: the port half starts one past the separator.
             let mut port = unsafe { addr.add(host_end + 1) };
 
-            let mut iport = 0;
-            let mut scan = port;
-            // SAFETY: `scan` walks the NUL-terminated port half.
-            let ok = unsafe { try_getdigits(&raw mut scan, &raw mut iport) };
-            if !ok || iport < 0 || iport > intmax_t::from(u16::MAX) {
+            // SAFETY: the port half is NUL-terminated by the buffer's own
+            // terminator.
+            let port_text = unsafe { CStr::from_ptr(port) };
+            let valid = try_getdigits_at(port_text.to_bytes(), 0)
+                .is_some_and(|(iport, _)| (0..=intmax_t::from(u16::MAX)).contains(&iport));
+            if !valid {
                 logmsg!(
                     LOGLVL_ERR,
                     c"socket_watcher_init",
                     62,
                     "Invalid port: {}",
-                    unsafe { c_str(port) }
+                    msg_cstr(port_text)
                 );
                 return UV_EINVAL;
             }
@@ -260,7 +261,7 @@ pub unsafe fn socket_watcher_init(
                     c"socket_watcher_init",
                     78,
                     "Host lookup failed: {}",
-                    unsafe { c_str(endpoint) }
+                    msg_cstr(unsafe { CStr::from_ptr(endpoint) })
                 );
                 return retval;
             }
@@ -346,7 +347,7 @@ pub unsafe fn socket_watcher_start(
         // libuv reports a missing parent directory as EACCES, for Windows
         // compatibility. ENOENT is the more useful answer.
         // SAFETY: the watcher's own NUL-terminated address buffer.
-        unsafe { *addr.add(tail_index(cstr::bytes_at(addr))) = 0 };
+        unsafe { *addr.add(tail_index(CStr::from_ptr(addr).to_bytes())) = 0 };
         // SAFETY: as above.
         if !path_exists(unsafe { CStr::from_ptr(addr) }) {
             result = UV_ENOENT;
@@ -396,6 +397,9 @@ fn rebind_stale_socket(mut watcher: Watcher, failure: c_int) -> c_int {
     // SAFETY: the watcher's handle, which libuv gave the editor's loop.
     let uv_loop: *mut Loop = unsafe { (*(*stream).loop_0).data }.cast();
 
+    // SAFETY: the watcher's own NUL-terminated address buffer, which
+    // nothing below writes.
+    let address = unsafe { CStr::from_ptr(addr) };
     // SAFETY: the loop the watcher's handle belongs to, and its address.
     if unsafe { socket_alive(uv_loop, addr) } {
         logmsg!(
@@ -403,7 +407,7 @@ fn rebind_stale_socket(mut watcher: Watcher, failure: c_int) -> c_int {
             c"socket_watcher_start",
             203,
             "Socket already in use by another Nvim instance: {}",
-            unsafe { c_str(addr) }
+            msg_cstr(address)
         );
         return failure;
     }
@@ -413,20 +417,17 @@ fn rebind_stale_socket(mut watcher: Watcher, failure: c_int) -> c_int {
         c"socket_watcher_start",
         180,
         "Removing stale socket: {}",
-        unsafe { c_str(addr) }
+        msg_cstr(address)
     );
-    // SAFETY: the watcher's own address.
-    let rm_result = unsafe { os_remove(cstr::at(addr)) };
+    let rm_result = os_remove(address);
     if rm_result != 0 {
-        // SAFETY: libuv's error strings are static.
-        let why = unsafe { uv_strerror(rm_result) };
         logmsg!(
             LOGLVL_WRN,
             c"socket_watcher_start",
             185,
             "Failed to remove stale socket {}: {}",
-            unsafe { c_str(addr) },
-            unsafe { c_str(why) }
+            msg_cstr(address),
+            msg_cstr(os_strerror(rm_result))
         );
         return failure;
     }

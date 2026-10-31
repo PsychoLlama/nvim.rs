@@ -127,7 +127,7 @@ fn byte_cells(b: c_int) -> c_int {
 /// `bytes` is the whole buffer, the string NUL-terminated inside it. Stops
 /// early rather than overflowing when the expansions no longer fit, leaving
 /// the tail untranslated.
-pub(crate) fn trans_characters_in(bytes: &mut [u8]) {
+pub fn trans_characters_in(bytes: &mut [u8]) {
     let bufsize = bytes.len();
     // Bytes of the string still to be translated, and bytes left over after
     // it. Both are counted from the cursor, so their sum is invariant.
@@ -203,7 +203,7 @@ fn transstr_len_in(s: &[u8], untab: bool) -> usize {
 /// character that starts inside the bound is taken whole. The output is
 /// truncated at a character boundary rather than overrunning `out`, which
 /// must be at least one byte: the last of them is the terminator's.
-pub(crate) fn transstr_into(s: &[u8], slen: Option<usize>, out: &mut [u8], untab: bool) -> usize {
+pub fn transstr_into(s: &[u8], slen: Option<usize>, out: &mut [u8], untab: bool) -> usize {
     // The last byte of the buffer belongs to the terminator.
     let limit = out.len() - 1;
     let mut cursor = Chars::new(s);
@@ -255,7 +255,7 @@ pub(crate) fn transstr_into(s: &[u8], slen: Option<usize>, out: &mut [u8], untab
 }
 
 /// [`transstr_into`] into a freshly allocated string, sized exactly.
-pub(crate) fn transstr_owned(s: &[u8], untab: bool) -> XString {
+pub fn transstr_owned(s: &[u8], untab: bool) -> XString {
     let len = transstr_len_in(s, untab);
     let mut out = vec![0u8; len + 1];
     let written = transstr_into(s, None, &mut out, untab);
@@ -268,7 +268,7 @@ pub(crate) fn transstr_owned(s: &[u8], untab: bool) -> XString {
 /// With a `room`, the result is what fits a buffer of that many bytes: the
 /// text is cut to `room - 1` bytes first, and a character whose lowercase
 /// form is longer and no longer fits is left as it was.
-pub(crate) fn foldcase(text: &[u8], room: Option<usize>) -> Vec<u8> {
+pub fn foldcase(text: &[u8], room: Option<usize>) -> Vec<u8> {
     let mut len = room.map_or(text.len(), |room| text.len().min(room - 1));
     // The folding happens in a copy terminated where the C string was, so a
     // walk over it stops where upstream's did.

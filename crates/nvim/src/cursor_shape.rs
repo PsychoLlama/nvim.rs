@@ -20,14 +20,13 @@
 //! `what` is `SHAPE_CURSOR` at every call site today, but the `used_for`
 //! filter and the `mouse_shape` key are upstream's and stay.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::types::ApiDict;
 use crate::types::String_0;
 use core::ffi::{CStr, c_char, c_int};
 
-use crate::charset::getdigits_int;
+use crate::charset::getdigits_int_at;
 use crate::ex_getln::{cmdline_at_end, cmdline_overstrike};
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::{syn_check_group, syn_id2attr};
@@ -240,21 +239,6 @@ fn mode_name_matches(idx: usize, text: &[u8], len: usize) -> bool {
     name.len() >= len && text.len() >= len && text[..len].eq_ignore_ascii_case(&name[..len])
 }
 
-/// `getdigits_int(&p, false, 0)` at offset `at`: the number, and the offset
-/// just past what it consumed.
-///
-/// # Safety
-/// `opt` must be NUL-terminated and `at` an offset inside it.
-unsafe fn digits_at(opt: *mut c_char, at: usize) -> (c_int, usize) {
-    // SAFETY: caller contract; `getdigits_int` advances the pointer over the
-    // digits and does not write through it.
-    unsafe {
-        let mut p = opt.add(at);
-        let n = getdigits_int(&raw mut p, false, 0);
-        (n, p.offset_from(opt) as usize)
-    }
-}
-
 /// Parses `'guicursor'` into the shape table, and clears it when the option
 /// is empty.
 ///
@@ -278,16 +262,7 @@ pub(crate) fn parse_shape_opt(what: c_int) -> Result<(), OptError> {
                 return Ok(());
             }
         }
-        // SAFETY: `bytes` is the string `opt` points at.
-        if let Err(msg) = unsafe {
-            parse_parts(
-                opt.as_ptr().cast_mut(),
-                bytes,
-                what,
-                round == 2,
-                &mut found_ve,
-            )
-        } {
+        if let Err(msg) = parse_parts(bytes, what, round == 2, &mut found_ve) {
             // The option layer reports it, so it is handed back rather
             // than reported here.
             return Err((msg).into());
@@ -317,11 +292,7 @@ pub(crate) fn parse_shape_opt(what: c_int) -> Result<(), OptError> {
 /// exactly as it was.
 ///
 /// `found_ve` accumulates across both rounds, as upstream's local does.
-///
-/// # Safety
-/// `bytes` must be the string `opt` points at; defines highlight groups.
-unsafe fn parse_parts(
-    opt: *mut c_char,
+fn parse_parts(
     bytes: &[u8],
     what: c_int,
     apply: bool,
@@ -413,8 +384,7 @@ unsafe fn parse_parts(
                     if !bytes.get(p).is_some_and(u8::is_ascii_digit) {
                         return Err(E_DIGIT_EXPECTED);
                     }
-                    // SAFETY: `p` indexes inside the string `opt` points at.
-                    let (n, next) = unsafe { digits_at(opt, p) };
+                    let (n, next) = getdigits_int_at(bytes, p, false, 0);
                     p = next;
                     if len == 3 {
                         // "ver"/"hor". Note there is no upper bound: hor101

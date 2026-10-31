@@ -1,10 +1,6 @@
 module	file	files	unsafe_stmts	unsafe_fns	wrappers	regions	raw_params	raw_returns	outside_callees
-charset/	*	1	47	24	29	deref:9 expr:2 compound:1	str:23 other:6 pp_str:4	str:10	bytes_at:5 from_raw_parts_mut:3 prefix_at:3 from_raw_parts:2 slice_at:2
-charset/	charset/walk.rs	1	47	24	29	deref:9 expr:2 compound:1	str:23 other:6 pp_str:4	str:10	bytes_at:5 from_raw_parts_mut:3 prefix_at:3 from_raw_parts:2 slice_at:2
-cstr.rs	*	1	10	5	7	expr:2 deref:1	str:5	-	CStr::from_ptr:3 from_raw_parts:3 CStr::from_bytes_with_nul_unchecked:1
-cstr.rs	cstr.rs	1	10	5	7	expr:2 deref:1	str:5	-	CStr::from_ptr:3 from_raw_parts:3 CStr::from_bytes_with_nul_unchecked:1
-cursor_shape.rs	*	1	5	2	2	compound:1	str:2	-	-
-cursor_shape.rs	cursor_shape.rs	1	5	2	2	compound:1	str:2	-	-
+cstr.rs	*	1	5	3	5	-	str:3	-	CStr::from_ptr:3 CStr::from_bytes_with_nul_unchecked:1 from_raw_parts:1
+cstr.rs	cstr.rs	1	5	3	5	-	str:3	-	CStr::from_ptr:3 CStr::from_bytes_with_nul_unchecked:1 from_raw_parts:1
 getchar/	*	1	0	0	0	-	-	-	-
 getchar/	getchar/state.rs	1	0	0	0	-	-	-	-
 grid/	*	1	3	1	1	ref:2	other:1	other:1	-

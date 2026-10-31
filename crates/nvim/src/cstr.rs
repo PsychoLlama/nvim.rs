@@ -1,22 +1,12 @@
-//! The crate's C-string vocabulary.
+//! The crate's C-string vocabulary, over borrowed strings and slices.
 //!
-//! Fifteen modules each grew their own `cstr_at`/`cstr_opt`/`cstr_bytes`
-//! one-liner around [`CStr`]; this is the one home. Three questions are
-//! being asked, and the names say which:
-//!
-//! - **`at*`** — borrow what a pointer points at. `unsafe`, because only
-//!   the caller knows the bytes are live and (for the terminated forms)
-//!   terminated. Plain pointer-to-[`CStr`] is [`CStr::from_ptr`] and stays
-//!   there; what lives here is the null case, the bytes case and the two
-//!   bounded cases, which std does not spell.
-//! - **`in_*`** — borrow the string a buffer *starts with*. Safe: the
-//!   buffer bounds the search, and a buffer with no terminator answers the
-//!   empty string rather than reading past the end.
-//! - **`owned`** — copy bytes into a [`CString`].
-//!
-//! The borrowing forms hand out an unbounded lifetime, which is what every
-//! caller needed: the string outlives the pointer variable it was read
-//! from. That is the caller's obligation, stated once here.
+//! Every helper here is safe. A pointer becomes a [`CStr`] at the one place
+//! it is read -- [`CStr::from_ptr`], in the perimeter module that holds the
+//! foreign call -- and from there on the text is a borrow with a length.
+//! What lives here is what std does not spell: the string a buffer *starts
+//! with* ([`in_bytes`]), the tail of a string ([`suffix`]), the reader that
+//! answers NUL past the end ([`byte_at`]), and `strncmp`'s comparison over
+//! two slices ([`ncmp_eq`]).
 //!
 //! # The parameter convention
 //!
@@ -26,10 +16,9 @@
 //! - **`&CStr`** — a borrowed *NUL-terminated* string of arbitrary bytes.
 //!   This is the default, because it is what the editor's text mostly is:
 //!   option values, file names, function names, command lines. The length
-//!   is implicit, so a caller that has one costs nothing and a caller that
-//!   only has a pointer converts once, at the boundary, with [`at`]. Write
-//!   a literal as `c"…"` — Rust has C string literals, so no macro is
-//!   needed and none is provided.
+//!   is implicit, so a caller that has one costs nothing. Write a literal
+//!   as `c"…"` — Rust has C string literals, so no macro is needed and none
+//!   is provided.
 //! - **`&[u8]`** — bytes with an *explicit* length, and therefore the type
 //!   for text that may hold an interior NUL or is not terminated at all: a
 //!   buffer line (`memline` stores a NUL as an `NL`, so a line's bytes can
@@ -56,44 +45,38 @@
 //!
 //! | C | slice |
 //! | --- | --- |
-//! | `strlen(p)` | [`bytes_at(p)`](bytes_at)`.len()` |
+//! | `strlen(p)` | `s.to_bytes().len()` |
 //! | `strcmp(a, b) == 0` | slices compared |
-//! | `strncmp(a, b, n)` | [`prefix_at`]s compared |
-//! | `strchr(s, c)` | `bytes_at(s).iter().position(…)` |
-//! | `strstr(h, n)` | `bytes_at(h).windows(n.len()).position(…)` |
-//! | `memcmp(a, b, n)` | [`slice_at(a, n)`](slice_at)` == slice_at(b, n)` |
-//! | `memcpy(d, s, n)` | `d.cast::<u8>().copy_from_nonoverlapping(…)` |
-//! | `memmove(d, s, n)` | `d.cast::<u8>().copy_from(s.cast::<u8>(), n)` |
-//! | `memset(d, b, n)` | `d.cast::<u8>().write_bytes(b, n)` |
+//! | `strncmp(a, b, n) == 0` | [`ncmp_eq`] |
+//! | `strchr(s, c)` | [`find_byte`] |
+//! | `strstr(h, n)` | `h.windows(n.len()).position(…)` |
+//! | `memcmp(a, b, n)` | `a[..n] == b[..n]` |
 //!
 //! Four differences bite, and each has cost this tree a bug:
 //!
 //! 1. **`strlen` is not `len()`.** `strlen` stops at the first NUL; a
 //!    slice's `len()` counts every byte it was given, terminator included.
 //!    A `&[u8]` built from a buffer is one byte longer than the `strlen` of
-//!    the same buffer.
+//!    the same buffer ([`until_nul`] is the `strlen` of a buffer).
 //! 2. **`strncmp`'s length may exceed either operand.** It stops at the
 //!    first NUL *or* at `n`, whichever comes first, so `strncmp(p, "ab", 5)`
-//!    asks whether `p` is exactly `"ab"`. [`prefix_at`] reproduces that by
-//!    stopping at the NUL as well; a plain `p[..5]` would panic or compare
-//!    bytes past the end.
+//!    asks whether `p` is exactly `"ab"`. [`ncmp_eq`] reproduces that by
+//!    reading NUL past each end; a plain `p[..5]` would panic.
 //! 3. **`memcmp` does not care about lengths, and `==` does.** Two slices
 //!    of different lengths are simply unequal in Rust; `memcmp` compares
-//!    `n` bytes of both and would read past the shorter one. Where the two
-//!    lengths differ on purpose, compare explicit [`slice_at`]s.
+//!    `n` bytes of both and would read past the shorter one.
 //! 4. **`strchr(s, 0)` is an idiom**, and it answers a pointer to the
-//!    terminator rather than null. `bytes_at(s).iter().position(…)` cannot
-//!    find a NUL at all, because the terminator is not in the slice; such a
-//!    site wants `bytes_at(s).len()`.
-//! 5. **Measuring both operands is not comparing them.** `bytes_at(a) ==
-//!    bytes_at(b)` and `prefix_at(a, n) == prefix_at(b, n)` read *every*
-//!    byte of both strings before they look at the first pair, where the C
-//!    call stops at the first difference. Where the caller is a filter
-//!    rejecting candidates — completion's duplicate scan, a maphash bucket
-//!    walk — that turns an O(match) test into O(length) and doubles the
-//!    loop. Walk the two together where that matters (`Iterator::eq` over
-//!    the bytes stops at the first difference). [`prefix_at`] is for the
-//!    sites that want the *span* itself, not a comparison.
+//!    terminator rather than null. A search of the bytes cannot find a NUL
+//!    at all, because the terminator is not in the slice; such a site wants
+//!    the length.
+//! 5. **Measuring both operands is not comparing them.** Building two
+//!    `CStr`s and comparing them reads *every* byte of both strings before
+//!    it looks at the first pair, where the C call stops at the first
+//!    difference. Where the caller is a filter rejecting candidates —
+//!    completion's duplicate scan, a maphash bucket walk — that turns an
+//!    O(match) test into O(length) and doubles the loop. Walk the two
+//!    together where that matters (`Iterator::eq` over the bytes stops at
+//!    the first difference).
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
@@ -155,43 +138,6 @@ pub(crate) unsafe fn at_opt<'a>(p: *const c_char) -> Option<&'a CStr> {
 pub(crate) unsafe fn bytes_at<'a>(p: *const c_char) -> &'a [u8] {
     // SAFETY: caller's contract.
     unsafe { CStr::from_ptr(p) }.to_bytes()
-}
-
-/// The first `n` bytes of the string at `p`, stopping at its terminator --
-/// which is exactly the span `strncmp(p, _, n)` compares.
-///
-/// Answers fewer than `n` bytes for a shorter string, so comparing two of
-/// them reproduces `strncmp`'s answer including the case where one operand
-/// runs out first.
-///
-/// # Safety
-/// `p` points at a NUL-terminated string, live and unwritten for `'a`. It
-/// need not have `n` bytes: the scan stops at the terminator.
-pub(crate) unsafe fn prefix_at<'a>(p: *const c_char, n: usize) -> &'a [u8] {
-    let mut len = 0;
-    // SAFETY: caller's contract -- every byte up to and including the
-    // terminator is readable, and the loop stops at it.
-    while len < n && unsafe { *p.add(len) } != 0 {
-        len += 1;
-    }
-    // SAFETY: `len` bytes were just read one at a time.
-    unsafe { slice::from_raw_parts(p.cast::<u8>(), len) }
-}
-
-/// Exactly `n` bytes at `p`, terminator or not.
-///
-/// The `mem*` calls' operand: a length the caller already knows, with no
-/// scan and no NUL rule. A null `p` with `n == 0` answers the empty slice,
-/// which [`slice::from_raw_parts`] itself refuses.
-///
-/// # Safety
-/// `p` has `n` readable bytes, live and unwritten for `'a`.
-pub(crate) unsafe fn slice_at<'a>(p: *const c_char, n: usize) -> &'a [u8] {
-    if n == 0 {
-        return &[];
-    }
-    // SAFETY: caller's contract.
-    unsafe { slice::from_raw_parts(p.cast::<u8>(), n) }
 }
 
 /// The string `s` from byte `at` on.
@@ -392,40 +338,6 @@ pub(crate) fn find_byte(hay: &[u8], needle: u8) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn prefix_stops_at_the_terminator_and_at_n() {
-        let s = c"abcdef";
-        // SAFETY: a literal, live for the test.
-        let (short, exact, long) = unsafe {
-            (
-                prefix_at(s.as_ptr(), 3),
-                prefix_at(s.as_ptr(), 6),
-                prefix_at(s.as_ptr(), 20),
-            )
-        };
-        assert_eq!(short, b"abc");
-        assert_eq!(exact, b"abcdef");
-        assert_eq!(long, b"abcdef", "the terminator bounds it, not `n`");
-    }
-
-    /// `strncmp(a, b, n)`'s three answers, as slice comparisons.
-    #[test]
-    fn prefix_reproduces_strncmp() {
-        let cases: &[(&CStr, &CStr, usize, core::cmp::Ordering)] = &[
-            (c"ab", c"abc", 5, core::cmp::Ordering::Less),
-            (c"ab", c"ab", 5, core::cmp::Ordering::Equal),
-            (c"abc", c"abd", 2, core::cmp::Ordering::Equal),
-            (c"abc", c"abd", 3, core::cmp::Ordering::Less),
-            (c"", c"a", 1, core::cmp::Ordering::Less),
-            (c"a", c"", 4, core::cmp::Ordering::Greater),
-        ];
-        for &(a, b, n, want) in cases {
-            // SAFETY: both are literals, live for the test.
-            let got = unsafe { prefix_at(a.as_ptr(), n).cmp(prefix_at(b.as_ptr(), n)) };
-            assert_eq!(got, want, "{a:?} vs {b:?} over {n}");
-        }
-    }
 
     /// The word-at-a-time search answers what a byte walk does, wherever
     /// the bytes fall against the word boundaries — including a byte above
