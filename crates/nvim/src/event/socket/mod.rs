@@ -27,7 +27,6 @@
 
 pub mod address;
 
-use crate::cstr;
 use crate::message_fmt::msg_cstr;
 use crate::os::uv_error::{UV_EACCES, UV_EADDRINUSE, UV_EINVAL, UV_ENOENT};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
@@ -559,8 +558,9 @@ impl Listener {
     /// The address it listens on: the endpoint as resolved, with the port
     /// the kernel picked once it is bound.
     pub(crate) fn address(&self) -> &CStr {
-        // SAFETY: the watcher this value owns, live until `close`.
-        cstr::in_chars(unsafe { &(*self.0.as_ptr()).addr })
+        // SAFETY: the watcher this value owns, live until `close`; its
+        // address buffer is always NUL-terminated (`xstrlcpy` writes it).
+        unsafe { CStr::from_ptr((*self.0.as_ptr()).addr.as_ptr()) }
     }
 
     /// Bind and listen, reporting each connection to `cb`; the libuv error

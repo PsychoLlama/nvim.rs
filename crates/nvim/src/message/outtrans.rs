@@ -99,7 +99,7 @@ pub fn msg_display_char(bytes: &[u8], hl_id: c_int, hist: bool) -> usize {
     // what the pointer form showed at the terminator, and what every caller
     // that walks up to a bound already expects.
     let rendered = transchar_byte_buf(None, c_int::from(cstr::byte_at(bytes, 0)));
-    msg_str_hl(cstr::in_chars(&rendered), hl_id, hist);
+    msg_str_hl(cstr::in_bytes(&rendered), hl_id, hist);
     1
 }
 
@@ -150,7 +150,7 @@ fn display(bytes: &[u8], hl_id: c_int, hist: bool, whole_message: bool) -> c_int
                 msg_part(run, hl_id, hist);
             }
         }
-        Shown::Instead(text) => msg_str_hl(cstr::in_chars(&text), special_hl(hl_id), false),
+        Shown::Instead(text) => msg_str_hl(cstr::in_bytes(&text), special_hl(hl_id), false),
     });
 
     got_int.set(got_int.get() | save_got_int);
@@ -206,7 +206,7 @@ fn walk_display(bytes: &[u8], emit: &mut impl FnMut(Shown<'_>)) -> c_int {
                 if at > run {
                     emit(Shown::Plain(&bytes[run..at]));
                 }
-                cells += cstr::in_chars(&rendered).count_bytes() as c_int;
+                cells += cstr::in_bytes(&rendered).count_bytes() as c_int;
                 emit(Shown::Instead(rendered));
                 run = at + 1;
             } else {
@@ -281,7 +281,7 @@ pub fn msg_display_keys(text: &CStr, from: bool, maxlen: c_int) -> c_int {
         let display: CharDisplay;
         let shown: &[u8] = if piece.len() == 1 {
             display = transchar_byte_buf(None, c_int::from(piece[0]));
-            cstr::in_chars(&display).to_bytes()
+            cstr::in_bytes(&display).to_bytes()
         } else {
             &piece
         };
@@ -378,7 +378,7 @@ pub(crate) fn special_key_into(
         || (replace_lt && c == b'<' as c_int)
     {
         let name = get_special_key_name(c, modifiers);
-        out.extend_from_slice(cstr::in_chars(&name).to_bytes());
+        out.extend_from_slice(cstr::in_bytes(&name).to_bytes());
         return;
     }
     // Below 256 here: a multibyte character either came back whole above or
@@ -429,7 +429,7 @@ mod tests {
         let cells = walk_display(bytes, &mut |shown| {
             let text = match shown {
                 Shown::Plain(run) => run.to_vec(),
-                Shown::Instead(rendered) => cstr::in_chars(&rendered).to_bytes().to_vec(),
+                Shown::Instead(rendered) => cstr::in_bytes(&rendered).to_bytes().to_vec(),
             };
             runs.push(String::from_utf8_lossy(&text).into_owned());
         });

@@ -78,8 +78,7 @@
 //!    together where that matters (`Iterator::eq` over the bytes stops at
 //!    the first difference).
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -88,42 +87,23 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{CStr, c_char};
-use core::slice;
+use core::ffi::CStr;
 use std::ffi::CString;
-
-/// A C string literal as the fixed-size `c_char` array a global holds.
-///
-/// c2rust spelled every `static char foo[] = "…"` as a `transmute` from the
-/// byte string, which is one `unsafe` block per global — 194 of them in
-/// `startup/mod.rs` alone before this replaced them. Copying the bytes is
-/// const-evaluable, needs no `unsafe`, and unlike `transmute` it works with
-/// a const generic length.
-pub(crate) const fn c_bytes<const N: usize>(bytes: &[u8; N]) -> [c_char; N] {
-    let mut out = [0 as c_char; N];
-    let mut i = 0;
-    while i < N {
-        out[i] = bytes[i].cast_signed();
-        i += 1;
-    }
-    out
-}
 
 /// The string `s` from byte `at` on.
 ///
-/// Safe, and free: a terminated string stays terminated however much of its
-/// front is dropped, so this is the one shape of "a pointer into a C string"
-/// that needs no promise from the caller. It is what a caller that used to
-/// write `p + n` and pass that on wants.
+/// A terminated string stays terminated however much of its front is
+/// dropped, so this is the one shape of "a pointer into a C string" that
+/// needs no promise from the caller. It is what a caller that used to write
+/// `p + n` and pass that on wants. It costs a scan of the tail, which
+/// `CStr` makes to confirm the terminator is the only NUL.
 ///
 /// # Panics
 /// When `at` is past the terminator.
 pub(crate) fn suffix(s: &CStr, at: usize) -> &CStr {
     let bytes = s.to_bytes_with_nul();
     assert!(at < bytes.len(), "suffix past the end of the string");
-    // SAFETY: the tail of a NUL-terminated string is NUL-terminated, and
-    // `s` held no interior NUL to begin with.
-    unsafe { CStr::from_bytes_with_nul_unchecked(&bytes[at..]) }
+    CStr::from_bytes_with_nul(&bytes[at..]).expect("the tail of a C string is one")
 }
 
 /// The string `buf` starts with.
@@ -133,23 +113,6 @@ pub(crate) fn suffix(s: &CStr, at: usize) -> &CStr {
 /// the answer that keeps a formatting bug from becoming a panic.
 pub(crate) fn in_bytes(buf: &[u8]) -> &CStr {
     CStr::from_bytes_until_nul(buf).unwrap_or(c"")
-}
-
-/// [`in_bytes`] for a buffer a C callee wrote, typed `c_char`.
-pub(crate) fn in_chars(buf: &[c_char]) -> &CStr {
-    in_bytes(as_bytes(buf))
-}
-
-/// A `c_char` buffer's bytes.
-///
-/// `c_char` is `i8` on this tree's targets and `u8` on others; the two are
-/// the same bytes either way, and the editor's text is bytes. Reading a
-/// buffer *as* bytes is the first move of almost every conversion away from
-/// a `str*` call, so it is one function rather than a `cast` at each site.
-pub(crate) fn as_bytes(buf: &[c_char]) -> &[u8] {
-    // SAFETY: `c_char` and `u8` have the same size and alignment, and every
-    // bit pattern is valid for both.
-    unsafe { slice::from_raw_parts(buf.as_ptr().cast::<u8>(), buf.len()) }
 }
 
 /// The first byte of a C string, or NUL when it has none.

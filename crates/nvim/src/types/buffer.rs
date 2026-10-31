@@ -79,7 +79,7 @@ pub struct WinConfig {
     pub style: WinStyle,
     pub border: bool,
     pub shadow: bool,
-    pub border_chars: [[::core::ffi::c_char; 32]; 8],
+    pub border_chars: [[u8; 32]; 8],
     pub border_hl_ids: [::core::ffi::c_int; 8],
     pub border_attr: [::core::ffi::c_int; 8],
     pub title: bool,

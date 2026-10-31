@@ -366,8 +366,8 @@ fn key_code(name: &str) -> c_int {
 
 fn key_name(code: c_int, modifiers: ModMask) -> String {
     let name = get_special_key_name(code, modifiers);
-    // SAFETY: `get_special_key_name` NUL-terminates its answer.
-    unsafe { CStr::from_ptr(name.as_ptr()) }
+    CStr::from_bytes_until_nul(&name)
+        .expect("the name is NUL-terminated")
         .to_string_lossy()
         .into_owned()
 }

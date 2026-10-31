@@ -194,7 +194,7 @@ pub(crate) fn insert_special(mut c: c_int, mut allow_modmask: c_int, mut ctrlv: 
     }
     if c < 0 || (!mod_mask.get().is_empty() && allow_modmask != 0) {
         let name = get_special_key_name(c, mod_mask.get());
-        let name = cstr::until_nul(cstr::as_bytes(&name));
+        let name = cstr::until_nul(&name);
         let (&last, head) = name.split_last().expect("a key name is never empty");
         c = c_int::from(last);
         if name.len() > 2 {

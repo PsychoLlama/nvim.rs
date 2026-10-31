@@ -109,7 +109,7 @@ pub fn grid_draw_border(
     };
 
     let chars: [ScreenChar; 8] =
-        core::array::from_fn(|i| schar_from_str(cstr::in_chars(&config.border_chars[i])));
+        core::array::from_fn(|i| schar_from_str(cstr::in_bytes(&config.border_chars[i])));
 
     // Interior size, i.e. the window minus whichever sides it has.
     let irow = grid.rows - adj[0] - adj[2];

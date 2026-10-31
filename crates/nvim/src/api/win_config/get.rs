@@ -75,11 +75,7 @@ fn border_array(fconfig: &WinConfig) -> Array {
     let mut border = Array::with_capacity(8);
     for (i, chars) in fconfig.border_chars.iter().enumerate() {
         // Up to the cell's NUL, or all of it.
-        let text: Vec<u8> = chars
-            .iter()
-            .take_while(|&&c| c != 0)
-            .map(|&c| c.cast_unsigned())
-            .collect();
+        let text: Vec<u8> = chars.iter().take_while(|&&c| c != 0).copied().collect();
         let cell = String_0::from_bytes(&text);
         let name = syn_id2name(fconfig.border_hl_ids[i]);
         let highlighted = !name.is_empty();

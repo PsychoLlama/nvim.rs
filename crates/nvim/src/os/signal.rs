@@ -27,16 +27,15 @@ use crate::log::{LOGLVL_ERR, LOGLVL_INF, logmsg};
 use crate::memline::ml_sync_all;
 use crate::message_fmt::msg_cstr;
 use crate::option::vars::p_awa;
-use crate::os::cshim::snprintf;
 use crate::startup::{main_loop, preserve_exit, v_dying};
 use crate::types::AutoEvent;
 use crate::types::{
-    IOSIZE, SignalWatcher, Vv, uv__queue, uv_handle_type, uv_signal_s_tree_entry, uv_signal_s_u,
+    SignalWatcher, Vv, uv__queue, uv_handle_type, uv_signal_s_tree_entry, uv_signal_s_u,
     uv_signal_t,
 };
 use crate::winlayer::Buf;
 use ::libc::{pthread_sigmask, sigemptyset, sigset_t};
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int, c_void};
 use core::ptr;
 
 // Signal numbers, for this module and for anything else that names one. Only
@@ -200,33 +199,27 @@ fn signal_name(signum: c_int) -> &'static CStr {
 /// from Elvis). Reached from the event loop, not from a signal handler.
 fn deadly_signal(signum: c_int) -> ! {
     let name = signal_name(signum);
-    let mut dying = [0 as c_char; IOSIZE as usize];
-    // SAFETY: main-thread editor state; both log/format calls' arguments
-    // match their format strings, and `dying` is IOSIZE chars.
-    unsafe {
-        // Set the v:dying variable.
-        set_vim_var_nr(Vv::Dying, 1);
-        v_dying.set(1);
-        logmsg!(
-            LOGLVL_INF,
-            c"deadly_signal",
-            196,
-            "got signal {} ({})",
-            signum,
-            msg_cstr(name)
-        );
-        snprintf(
-            dying.as_mut_ptr(),
-            IOSIZE as usize,
-            c"Nvim: Caught deadly signal '%s'\n".as_ptr(),
-            name.as_ptr(),
-        );
-        if p_awa() && signum != SIGTERM && signum != SIGINT {
-            autowrite_all();
-        }
-        // Preserve files and exit.
-        preserve_exit(Some(crate::cstr::in_chars(&dying)))
+    let dying = crate::formatted!(
+        crate::types::IOSIZE as usize,
+        b"Nvim: Caught deadly signal '%s'\n",
+        name
+    );
+    // Set the v:dying variable.
+    set_vim_var_nr(Vv::Dying, 1);
+    v_dying.set(1);
+    logmsg!(
+        LOGLVL_INF,
+        c"deadly_signal",
+        196,
+        "got signal {} ({})",
+        signum,
+        msg_cstr(name)
+    );
+    if p_awa() && signum != SIGTERM && signum != SIGINT {
+        autowrite_all();
     }
+    // Preserve files and exit.
+    preserve_exit(Some(&crate::cstr::owned(&dying)))
 }
 
 /// The `signal_cb` libuv's watchers are started with: unpack and hand over.

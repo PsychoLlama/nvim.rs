@@ -12,7 +12,7 @@
 
 use crate::cstr;
 use core::ffi::CStr;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use crate::mbyte::{
     c_cluster_len, char_at, char_len, cluster_len, encode_char, mb_tolower, utf_char2cells,
@@ -315,7 +315,7 @@ pub fn foldcase(text: &[u8], room: Option<usize>) -> Vec<u8> {
 /// Upstream answers a pointer into one shared static buffer, so a second
 /// rendering invalidates the first — which the `msg_display` family walks
 /// straight into, holding one rendering while it asks for the next.
-pub(crate) type CharDisplay = [c_char; CHAR_DISPLAY_LEN];
+pub(crate) type CharDisplay = [u8; CHAR_DISPLAY_LEN];
 
 /// How long a [`CharDisplay`] is.
 pub(crate) const CHAR_DISPLAY_LEN: usize = render::MAX_LEN;
@@ -325,9 +325,7 @@ pub(crate) const CHAR_DISPLAY_LEN: usize = render::MAX_LEN;
 fn owned(rendered: &render::Rendered) -> CharDisplay {
     let mut out: CharDisplay = [0; render::MAX_LEN];
     // A rendering and its terminator are never longer than `MAX_LEN`.
-    for (slot, &byte) in out.iter_mut().zip(&rendered.bytes[..=rendered.len]) {
-        *slot = byte as c_char;
-    }
+    out[..=rendered.len].copy_from_slice(&rendered.bytes[..=rendered.len]);
     out
 }
 
@@ -418,10 +416,10 @@ pub(crate) fn transchar_nonprint_form(buffer: Option<Buf>, c: c_int) -> CharDisp
 
 /// Write `c`'s `<xx>` form into `out`, NUL-terminated. Answers the length,
 /// excluding the NUL; nine bytes hold the widest form.
-pub fn transchar_hex_into(out: &mut [c_char], c: c_int) -> usize {
+pub fn transchar_hex_into(out: &mut [u8], c: c_int) -> usize {
     let rendered = render::hex_form(c);
     for (slot, &byte) in out.iter_mut().zip(&rendered.bytes[..=rendered.len]) {
-        *slot = byte as c_char;
+        *slot = byte;
     }
     rendered.len
 }

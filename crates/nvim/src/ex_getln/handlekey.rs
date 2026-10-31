@@ -618,7 +618,7 @@ pub(crate) fn command_line_handle_key(s: &mut CommandLineState) -> ::core::ffi::
     // C's `end:` — put the character in the command line.
     if is_special(s.c) || !mod_mask.get().is_empty() {
         let name = get_special_key_name(s.c, mod_mask.get());
-        put_on_cmdline(cstr::in_chars(&name).to_bytes(), true);
+        put_on_cmdline(cstr::in_bytes(&name).to_bytes(), true);
     } else {
         // One character, its own buffer, without its composing characters.
         let mut ch = [0u8; MB_MAXCHAR];

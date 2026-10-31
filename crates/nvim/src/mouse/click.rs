@@ -49,7 +49,7 @@ pub(crate) fn call_click_def_func(click_defs: ClickDefs, col: c_int, which_butto
         TypVal::Number(VarNumber::from(def.tabnr)),
         TypVal::Number(click_count(mod_mask.get())),
         TypVal::string_from(button_name(which_button).to_bytes()),
-        TypVal::string_from(cstr::in_chars(&modifiers).to_bytes()),
+        TypVal::string_from(cstr::in_bytes(&modifiers).to_bytes()),
     ];
     let mut rettv = TV_INITIAL_VALUE;
 

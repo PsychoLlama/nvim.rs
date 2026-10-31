@@ -278,7 +278,7 @@ fn paint_showcmd(col: c_int, tabcount: c_int, attr: c_int) {
     let sc = showcmd_buf.get();
     paint_text(
         Columns.get() - width - c_int::from(tabcount > 1) * 2,
-        crate::cstr::as_bytes(sc.cells(usize::try_from(width).unwrap_or(0))),
+        sc.cells(usize::try_from(width).unwrap_or(0)),
         attr,
     );
 }

@@ -1,6 +1,6 @@
 count	callee	no_raw	defs	def
-41	CStr::from_ptr	0	0	
-33	from_raw_parts	0	0	
+42	CStr::from_ptr	0	0	
+32	from_raw_parts	0	0	
 28	f	0	0	
 26	Term::new	0	1	crates/nvim/src/terminal/mod.rs
 21	multiqueue_put_event	0	1	crates/nvim/src/event/multiqueue.rs
@@ -168,7 +168,6 @@ count	callee	no_raw	defs	def
 1	.offset_from_unsigned	0	0	
 1	BorrowedFd::borrow_raw	0	0	
 1	Box::new	0	17	
-1	CStr::from_bytes_with_nul_unchecked	0	0	
 1	DictRef::retained	0	1	crates/nvim/src/eval/typval/handle.rs
 1	ListRef::retained	0	1	crates/nvim/src/eval/typval/handle.rs
 1	ModeState::terminal	0	1	crates/nvim/src/state.rs

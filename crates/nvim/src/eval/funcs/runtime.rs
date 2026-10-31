@@ -333,9 +333,9 @@ pub fn f_menu_get(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_mode(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut buf = get_mode();
     if !args.first().is_some_and(non_zero_arg) {
-        buf[1] = NUL as c_char;
+        buf[1] = 0;
     }
-    result.write_string(Some(c_chars_until_nul(&buf)));
+    result.write_string(Some(ThinCString::from(crate::cstr::until_nul(&buf))));
 }
 
 /// `state([{what}])` — the letters for whatever is currently in the way of

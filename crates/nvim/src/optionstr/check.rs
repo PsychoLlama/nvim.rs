@@ -81,7 +81,7 @@ pub fn didset_string_options() {
 pub fn illegal_char(c: c_int) -> OptError {
     let fmt = gettext(c"E539: Illegal character <%s>");
     let shown = transchar(c);
-    let message = formatted!(OptError::ROOM, fmt.to_bytes(), cstr::in_chars(&shown));
+    let message = formatted!(OptError::ROOM, fmt.to_bytes(), cstr::in_bytes(&shown));
     OptError::Owned(XString::from_vec(message))
 }
 

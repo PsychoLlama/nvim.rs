@@ -57,10 +57,6 @@ pub(super) const UNSET_POS: Pos = Pos {
 /// [`FileMarkView::NONE`].
 pub(super) const NO_VIEW: FileMarkView = FileMarkView::NONE;
 
-/// `NUL` in the stores' own byte type: `NUL` itself is a `c_int`, and every
-/// mark name lives in a `c_char`.
-pub(super) const NUL_BYTE: c_char = 0;
-
 /// One byte of a mark name, as the stores spell it.
 ///
 /// Every caller works the name out by adding an index to a letter, and every

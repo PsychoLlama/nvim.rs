@@ -23,7 +23,7 @@
 use crate::option::split_option_part;
 use crate::strings::has_char;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use super::*;
 use crate::api::private::validate::{err_bad_value, err_conflict, err_expected};
@@ -40,7 +40,7 @@ fn err_border(want: &CStr, got: Option<&CStr>) -> Error {
 
 /// One border cell: up to `MAX_SCHAR_SIZE` bytes of UTF-8, NUL-terminated.
 /// The same shape as one slot of `WinConfig::border_chars`.
-type BorderChar = [c_char; MAX_SCHAR_SIZE as usize];
+type BorderChar = [u8; MAX_SCHAR_SIZE as usize];
 
 /// An empty border cell, which the drawing code reads as "nothing here".
 const BLANK_CHAR: BorderChar = [0; MAX_SCHAR_SIZE as usize];
@@ -55,9 +55,8 @@ pub(crate) const BORDER_NONE: &CStr = c"none";
 
 /// A border cell holding one character.
 ///
-/// Written out rather than transmuted: `c_char` is signed here, so the two
-/// arrays are not the same type, and c2rust spelled every one of these as a
-/// `transmute` from a 32-byte string literal.
+/// Written out rather than transmuted: c2rust spelled every one of these as
+/// a `transmute` from a 32-byte string literal.
 const fn border_char(text: &str) -> BorderChar {
     let bytes = text.as_bytes();
     assert!(
@@ -67,7 +66,7 @@ const fn border_char(text: &str) -> BorderChar {
     let mut out = BLANK_CHAR;
     let mut i = 0;
     while i < bytes.len() {
-        out[i] = bytes[i].cast_signed();
+        out[i] = bytes[i];
         i += 1;
     }
     out
@@ -203,7 +202,7 @@ fn cell_of(string: String_0) -> BorderChar {
     // The last byte stays the NUL already there.
     let room = MAX_SCHAR_SIZE as usize - 1;
     for (cell, &byte) in out[..room].iter_mut().zip(string.as_bytes()) {
-        *cell = byte.cast_signed();
+        *cell = byte;
     }
     out
 }
@@ -355,14 +354,7 @@ mod tests {
     #[test]
     fn a_border_cell_is_its_bytes_then_nuls() {
         let cell = border_char("╔");
-        assert_eq!(
-            &cell[..3],
-            &[
-                0xE2u8.cast_signed(),
-                0x95u8.cast_signed(),
-                0x94u8.cast_signed()
-            ]
-        );
+        assert_eq!(&cell[..3], &[0xE2, 0x95, 0x94]);
         assert!(cell[3..].iter().all(|&b| b == 0));
     }
 
@@ -397,7 +389,7 @@ mod tests {
             assert_eq!(0, shadows[0].chars[slot][0]);
         }
         for slot in [2, 3, 4, 5, 6] {
-            assert_eq!(b' '.cast_signed(), shadows[0].chars[slot][0]);
+            assert_eq!(b' ', shadows[0].chars[slot][0]);
         }
     }
 

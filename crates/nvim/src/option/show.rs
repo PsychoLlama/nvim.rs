@@ -414,12 +414,7 @@ pub(crate) fn put_set(
             if wc_use_keyname(opt_idx, varp, &mut wc) {
                 let key = c_int::try_from(wc).expect("a key code fits an int");
                 let key_name = get_special_key_name(key, ModMask::NONE);
-                line.extend_from_slice(
-                    cstr::as_bytes(&key_name)
-                        .split(|&b| b == 0)
-                        .next()
-                        .unwrap_or_default(),
-                );
+                line.extend_from_slice(cstr::until_nul(&key_name));
             } else {
                 line.extend_from_slice(number.to_string().as_bytes());
             }
@@ -540,14 +535,14 @@ pub(crate) fn option_value_text(opt_idx: OptIndex, opt_flags: OptionSetFlags) ->
         let mut wc: OptInt = 0;
         let shown = if wc_use_keyname(opt_idx, varp, &mut wc) {
             let key = c_int::try_from(wc).expect("a key code fits an int");
-            cstr::in_chars(&get_special_key_name(key, ModMask::NONE))
+            cstr::in_bytes(&get_special_key_name(key, ModMask::NONE))
                 .to_bytes()
                 .to_vec()
         } else if wc != 0 {
             // A 'wildchar' that is not a named key still shows as the
             // character rather than as its code.
             let key = c_int::try_from(wc).expect("a key code fits an int");
-            cstr::in_chars(&transchar(key)).to_bytes().to_vec()
+            cstr::in_bytes(&transchar(key)).to_bytes().to_vec()
         } else {
             varp.number_var().get().to_string().into_bytes()
         };

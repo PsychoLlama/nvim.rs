@@ -270,7 +270,7 @@ pub fn emsg(s: &CStr) -> bool {
 /// "E354: Invalid register name" for register `name`.
 pub fn emsg_invreg(name: c_int) {
     let display = transchar_buf(None, name);
-    let display = msg_cstr(cstr::in_chars(&display));
+    let display = msg_cstr(cstr::in_bytes(&display));
     crate::semsg!("E354: Invalid register name: '{}'", display);
 }
 

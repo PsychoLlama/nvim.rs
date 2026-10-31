@@ -84,7 +84,7 @@ pub fn msg_prt_line(line: &CStr, list: bool) {
             } else if extra_fill != 0 {
                 extra_fill
             } else {
-                let byte = extra_text.get(extra_at).map_or(0, |&b| b as u8);
+                let byte = extra_text.get(extra_at).copied().unwrap_or(0);
                 extra_at += 1;
                 ScreenChar::from(byte)
             };

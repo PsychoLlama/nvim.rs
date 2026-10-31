@@ -304,7 +304,7 @@ fn resolve_border(config: &mut WinConfig) -> Option<PumBorder> {
     }
 
     let scrollbar = (pum_scrollbar.get() != 0).then(|| {
-        let right = cstr::in_chars(&config.border_chars[3]);
+        let right = cstr::in_bytes(&config.border_chars[3]);
         (schar_from_str(right), config.border_attr[3])
     });
     Some(PumBorder { width, scrollbar })

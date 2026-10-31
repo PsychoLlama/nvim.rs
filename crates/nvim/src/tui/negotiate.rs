@@ -24,15 +24,13 @@
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_DBG, LOGLVL_WRN, logmsg};
 use crate::memory::strequal;
-use crate::message_fmt::{msg_cstr, msg_cstr_opt};
+use crate::message_fmt::msg_cstr_opt;
 use crate::startup::nvim_testing;
 use crate::tui::output::{flush, out, out_fmt};
 use crate::tui::terminfo::caps::kTerm_set_underline_style;
 use crate::types::{KeyEncoding, TUIData, TermInput, TermMode, TermModeState, termios};
 use ::libc::tcgetattr;
 use core::ffi::{CStr, c_char, c_void};
-
-use crate::cstr;
 
 /// DEC private modes the TUI asks about or sets. The numbers are the
 /// terminal's own.
@@ -264,7 +262,7 @@ unsafe fn tui_get_stty_erase(input: *mut TermInput) -> u8 {
                 c"tui_get_stty_erase",
                 0,
                 "stty/termios:erase={}",
-                msg_cstr(cstr::in_chars(&ONE_CHAR_STRINGS[usize::from(erase)]))
+                crate::message_fmt::msg_bytes(&[erase][..usize::from(erase != 0)])
             );
         }
     }

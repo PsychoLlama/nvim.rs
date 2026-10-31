@@ -25,13 +25,12 @@
 )]
 #![forbid(unsafe_code)]
 
-use crate::cstr;
 use crate::keycodes::Key;
 use crate::keycodes::ModMask;
 use crate::mbyte::c_cluster_len;
 use crate::strings::has_char;
 use crate::winlayer::{Buf, Win, first_tab};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::*;
 use crate::types::{NUL, OK};
@@ -62,13 +61,12 @@ pub(crate) fn ins_start_select(c: c_int) -> bool {
     if !mod_mask.get().is_empty() {
         // The modifiers have to be stuffed back too, as the three-byte
         // K_SPECIAL sequence that carries them.
-        let buf: [c_char; 4] = [
-            K_SPECIAL.to_le_bytes()[0].cast_signed(),
-            KS_MODIFIER.to_le_bytes()[0].cast_signed(),
-            mod_mask.get().bits().to_le_bytes()[0].cast_signed(),
-            0,
+        let buf: [u8; 3] = [
+            K_SPECIAL.to_le_bytes()[0],
+            KS_MODIFIER.to_le_bytes()[0],
+            mod_mask.get().bits().to_le_bytes()[0],
         ];
-        stuff_readbuf_len(&cstr::as_bytes(&buf)[..3]);
+        stuff_readbuf_len(&buf);
     }
     stuff_readbuf_char(c);
     true

@@ -50,7 +50,7 @@ use crate::types::{
     ExArg, Expand, ExpandContext, FuncCall, LineNr, ProfTime, ScriptItem, SnPrl, UserFunc,
     VarNumber, Vv, int64_t,
 };
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 use std::rc::Rc;
 pub(crate) static do_profiling: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
@@ -183,20 +183,6 @@ pub fn profile_cmp(tm1: ProfTime, tm2: ProfTime) -> c_int {
 /// by `reltimestr()`.
 pub fn profile_msg_str(tm: ProfTime) -> String {
     format!("{:10.6}", profile_signed(tm) as f64 / 1e9)
-}
-
-/// C-string flavor of [`profile_msg_str`] for the transpiled callers
-/// (syntime report, `reltimestr()`), in its own storage. Upstream answers a
-/// static buffer the next call overwrites.
-pub(crate) fn profile_msg(tm: ProfTime) -> [c_char; 50] {
-    let s = profile_msg_str(tm);
-    let mut buf = [0 as c_char; 50];
-    let n = s.len().min(buf.len() - 1);
-    for (dst, src) in buf.iter_mut().zip(s.as_bytes()[..n].iter()) {
-        *dst = c_char::from_ne_bytes([*src]);
-    }
-    buf[n] = 0;
-    buf
 }
 
 // ---------------------------------------------------------------------------

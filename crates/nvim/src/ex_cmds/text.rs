@@ -105,7 +105,7 @@ fn describe_byte(c: c_int, cval: c_int, need_clear: &mut bool) {
     // twenty bytes upstream gives it.
     let nonprint = if vim_isprintc(c) && !(' ' as c_int..='~' as c_int).contains(&c) {
         let raw = transchar_nonprint_form(Buf::current_or_none(), c);
-        crate::formatted!(20, b"  <%s>", cstr::in_chars(&raw))
+        crate::formatted!(20, b"  <%s>", cstr::in_bytes(&raw))
     } else {
         Vec::new()
     };
@@ -125,7 +125,7 @@ fn describe_byte(c: c_int, cval: c_int, need_clear: &mut bool) {
     let line = crate::formatted!(
         IOSIZE as usize,
         gettext(fmt).to_bytes(),
-        cstr::in_chars(&shown),
+        cstr::in_bytes(&shown),
         &nonprint[..],
         empty,
         cval,

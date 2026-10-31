@@ -229,10 +229,11 @@ pub fn hostname_into(hostname: &mut [u8]) {
     // SAFETY: `uname` fills in the record it is handed, which is this
     // frame's.
     let failed = unsafe { uname(&raw mut names) } < 0;
+    let nodename = names.nodename.map(::core::ffi::c_char::cast_unsigned);
     let name = if failed {
         &[][..]
     } else {
-        cstr::in_chars(&names.nodename).to_bytes()
+        cstr::until_nul(&nodename)
     };
     let kept = name.len().min(hostname.len() - 1);
     hostname[..kept].copy_from_slice(&name[..kept]);

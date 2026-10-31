@@ -75,7 +75,7 @@ pub(crate) use shada::{
 pub use show::{ex_delmarks, ex_marks, fm_getname};
 
 pub(crate) use store::fresh_mark;
-use store::{NO_VIEW, NUL_BYTE, mark_name, slot};
+use store::{NO_VIEW, mark_name, slot};
 
 pub const GETF_SETMARK: GetFileFlags = 1;
 pub const AUGROUP_ALL: c_int = -3;
@@ -139,11 +139,11 @@ fn do_markset_autocmd(c: c_char, pos: Pos, buffer: Buf) {
     if !has_event(AutoEvent::MarkSet) {
         return;
     }
-    let mark_str: [c_char; 2] = [c, NUL_BYTE];
+    let mark_str: [u8; 2] = [c.cast_unsigned(), 0];
     let items: Vec<KeyValuePair> = vec![
         key_value_pair {
             key: c"name".into(),
-            value: Object::string(String_0::from_bytes(&[mark_str[0].cast_unsigned()])),
+            value: Object::string(String_0::from_bytes(&mark_str[..1])),
         },
         key_value_pair {
             key: c"line".into(),
@@ -158,7 +158,7 @@ fn do_markset_autocmd(c: c_char, pos: Pos, buffer: Buf) {
     // `aucmd_defer` copies the name and the payload before it returns.
     aucmd_defer(
         AutoEvent::MarkSet,
-        Some(cstr::in_chars(&mark_str)),
+        Some(cstr::in_bytes(&mark_str)),
         None,
         AUGROUP_ALL,
         buffer,

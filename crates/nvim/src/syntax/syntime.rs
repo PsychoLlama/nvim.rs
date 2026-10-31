@@ -6,7 +6,6 @@
 
 #![forbid(unsafe_code)]
 
-use crate::cstr;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::Candidate;
@@ -119,7 +118,7 @@ fn syntime_report() {
     }
     if !got_int.get() {
         msg_str(c"\n");
-        msg_str(cstr::in_chars(&profile_msg(total_total)));
+        crate::message::msg_bytes(profile_msg_str(total_total).as_bytes(), 0, false);
         msg_advance(13);
         msg_outnum(total_count);
         msg_str(c"\n");
@@ -132,7 +131,7 @@ fn syntime_report() {
 /// pushes the rest of the row right; the trailing space after each value is
 /// what keeps two of them from running together when that happens.
 fn report_row(entry: &TimeEntry) {
-    msg_str(cstr::in_chars(&profile_msg(entry.total)));
+    crate::message::msg_bytes(profile_msg_str(entry.total).as_bytes(), 0, false);
     msg_str(c" ");
     msg_advance(13);
     msg_outnum(entry.count);
@@ -141,10 +140,10 @@ fn report_row(entry: &TimeEntry) {
     msg_outnum(entry.matches);
     msg_str(c" ");
     msg_advance(26);
-    msg_str(cstr::in_chars(&profile_msg(entry.slowest)));
+    crate::message::msg_bytes(profile_msg_str(entry.slowest).as_bytes(), 0, false);
     msg_str(c" ");
     msg_advance(38);
-    msg_str(cstr::in_chars(&profile_msg(entry.average)));
+    crate::message::msg_bytes(profile_msg_str(entry.average).as_bytes(), 0, false);
     msg_str(c" ");
     msg_advance(50);
     msg_display(syn_id2name(entry.id), 0, false);

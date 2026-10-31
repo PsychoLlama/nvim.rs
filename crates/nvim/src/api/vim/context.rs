@@ -74,7 +74,7 @@ pub fn nvim_load_context(dict: ApiDict) -> Result<Object, Error> {
 pub fn nvim_get_mode() -> ApiDict {
     let mut rv: ApiDict = ApiDict::with_capacity(2 as size_t);
     // `get_mode` answers the name NUL-padded to `MODE_MAX_LENGTH` bytes.
-    let modestr = get_mode().map(|c| c.cast_unsigned());
+    let modestr = get_mode();
     let len = modestr
         .iter()
         .position(|&c| c == 0)

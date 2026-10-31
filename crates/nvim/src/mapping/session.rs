@@ -262,7 +262,7 @@ pub(crate) fn put_escstr(out: &mut Vec<u8>, text: &[u8], what: EscTarget) {
             if c < 0 || !modifiers.is_empty() {
                 // A special key.
                 let name = get_special_key_name(c, modifiers);
-                out.extend_from_slice(cstr::in_chars(&name).to_bytes());
+                out.extend_from_slice(cstr::in_bytes(&name).to_bytes());
                 i += 1;
                 continue;
             }

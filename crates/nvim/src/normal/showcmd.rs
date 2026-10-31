@@ -33,10 +33,10 @@ use crate::option::vars::{P_SBR, P_SEL, p_ch, p_sc, p_sloc};
 use crate::plines::getvcols;
 use crate::pos::lt;
 use crate::statusline::{draw_tabline, hl_attr, win_redr_status};
-use crate::types::{Array, LineNr, NUL, Object, OptInt, String_0};
+use crate::types::{Array, LineNr, Object, OptInt, String_0};
 use crate::ui::state::Rows;
 use crate::ui::{ui_call_msg_showcmd, ui_has};
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use crate::highlight_group::HLF_MSG;
 use crate::keycodes::{
@@ -57,7 +57,7 @@ use crate::types::ui::kUIMessages;
 pub(crate) struct ShowCmd {
     /// `len` bytes of text, then a NUL, then whatever the last longer text
     /// left behind.
-    chars: [c_char; SHOWCMD_BUFLEN as usize],
+    chars: [u8; SHOWCMD_BUFLEN as usize],
     len: usize,
 }
 
@@ -78,12 +78,12 @@ impl ShowCmd {
 
     /// The text as the NUL-terminated string a C consumer takes.
     pub(crate) fn as_cstr(&self) -> &CStr {
-        cstr::in_chars(&self.chars)
+        cstr::in_bytes(&self.chars)
     }
 
     /// The whole array, for a caller that wants a fixed number of cells and
     /// lets the terminator stop it early.
-    pub(crate) fn cells(&self, n: usize) -> &[c_char] {
+    pub(crate) fn cells(&self, n: usize) -> &[u8] {
         &self.chars[..n.min(SHOWCMD_BUFLEN as usize)]
     }
 
@@ -91,7 +91,7 @@ impl ShowCmd {
     fn truncate(&mut self, at: usize) {
         if at < self.len {
             self.len = at;
-            self.chars[at] = NUL as c_char;
+            self.chars[at] = 0;
         }
     }
 
@@ -100,9 +100,9 @@ impl ShowCmd {
     fn set_text(&mut self, text: &[u8]) {
         self.len = text.len().min(Self::CAP);
         for (at, &b) in text[..self.len].iter().enumerate() {
-            self.chars[at] = b as c_char;
+            self.chars[at] = b;
         }
-        self.chars[self.len] = NUL as c_char;
+        self.chars[self.len] = 0;
     }
 
     /// Append `text`, shifting the oldest bytes out rather than refusing to
@@ -114,10 +114,10 @@ impl ShowCmd {
         self.chars.copy_within(overflow..self.len, 0);
         self.len -= overflow;
         for &b in text {
-            self.chars[self.len] = b as c_char;
+            self.chars[self.len] = b;
             self.len += 1;
         }
-        self.chars[self.len] = NUL as c_char;
+        self.chars[self.len] = 0;
     }
 }
 
@@ -313,7 +313,7 @@ pub(crate) fn add_to_showcmd(c: c_int) -> bool {
         if display[0] as c_int == ' ' as c_int {
             b"<20>"
         } else {
-            cstr::in_chars(&display).to_bytes()
+            cstr::in_bytes(&display).to_bytes()
         }
     } else {
         let n = encode_char(c, &mut mbyte_buf);

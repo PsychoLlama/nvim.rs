@@ -30,7 +30,6 @@
 
 pub mod entry;
 
-use crate::cstr;
 use core::ffi::{c_char, c_int, c_long, c_uint, c_void};
 use core::slice;
 
@@ -437,11 +436,9 @@ impl VTermState {
     /// How many columns the first `len` bytes of the pending grapheme occupy,
     /// and the handle the screen stores that grapheme under.
     pub(super) fn grapheme_metrics(&self, len: usize) -> (c_int, ScreenChar) {
-        let cells = c_partial_cells_in(cstr::as_bytes(&self.grapheme_buf), 0, len);
-        (
-            cells,
-            schar_from_buf(cstr::as_bytes(&self.grapheme_buf[..len])),
-        )
+        let bytes = self.grapheme_buf.map(c_char::cast_unsigned);
+        let cells = c_partial_cells_in(&bytes, 0, len);
+        (cells, schar_from_buf(&bytes[..len]))
     }
 
     // --------------------------------------------------------- character sets

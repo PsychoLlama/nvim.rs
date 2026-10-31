@@ -162,7 +162,7 @@ pub fn f_reltime(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_reltimestr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_string(None);
     if let Some(tm) = list2proftime(&args[0]) {
-        // Cut to the 49 bytes `profile_msg`'s buffer holds.
+        // Cut to the 49 bytes upstream's `profile_msg` buffer holds.
         let text = profile_msg_str(tm);
         let text = &text.as_bytes()[..text.len().min(49)];
         result.write_string(Some(ThinCString::from_bytes(text)));

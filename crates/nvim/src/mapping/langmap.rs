@@ -151,7 +151,7 @@ pub fn did_set_langmap(_args: &mut OptSet) -> Result<(), OptError> {
             }
             if to == NUL {
                 let missing = c"E357: 'langmap': Matching character missing for %s";
-                return fail(missing, crate::cstr::in_chars(&transchar(from)).to_bytes());
+                return fail(missing, crate::cstr::in_bytes(&transchar(from)).to_bytes());
             }
 
             if from >= 256 {

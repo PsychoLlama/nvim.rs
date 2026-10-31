@@ -222,7 +222,7 @@ pub fn did_set_shada(_args: &mut OptSet) -> Result<(), OptError> {
                 let byte = c_int::from(at(i - 1));
                 let fmt = gettext(c"E526: Missing number after <%s>");
                 let shown = transchar_byte(byte);
-                let message = formatted!(OptError::ROOM, fmt.to_bytes(), cstr::in_chars(&shown));
+                let message = formatted!(OptError::ROOM, fmt.to_bytes(), cstr::in_bytes(&shown));
                 return Err(XString::from_vec(message).into());
             }
         }

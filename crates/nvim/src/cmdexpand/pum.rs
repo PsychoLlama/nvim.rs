@@ -316,7 +316,7 @@ pub(crate) fn redraw_wildmenu(
         let emenu = ctx == ExpandContext::Menus || ctx == ExpandContext::Menunames;
         if emenu && is_separator(s.to_bytes()) {
             let bar = transchar(c_int::from(b'|'));
-            let bar = cstr::in_chars(&bar).to_bytes();
+            let bar = cstr::in_bytes(&bar).to_bytes();
             buf.extend_from_slice(bar);
             clen += as_count(bar.len());
         } else {
@@ -334,7 +334,7 @@ pub(crate) fn redraw_wildmenu(
                     p += l;
                 } else {
                     let shown = transchar_byte(c_int::from(s[p]));
-                    buf.extend_from_slice(cstr::in_chars(&shown).to_bytes());
+                    buf.extend_from_slice(cstr::in_bytes(&shown).to_bytes());
                     p += 1;
                 }
             }

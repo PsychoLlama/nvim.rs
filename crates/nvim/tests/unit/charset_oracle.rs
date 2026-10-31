@@ -7,7 +7,7 @@
 
 #![cfg(not(miri))]
 
-use std::ffi::{c_char, c_int};
+use std::ffi::c_int;
 
 use neovim::charset::display::{foldcase, trans_characters_in, transstr_into, transstr_owned};
 use neovim::charset::{
@@ -24,14 +24,6 @@ use crate::support::editor_lock;
 /// The bytes up to the first NUL: what a C reader handed `text` sees.
 fn until_nul(text: &[u8]) -> &[u8] {
     &text[..text.iter().position(|&b| b == 0).unwrap_or(text.len())]
-}
-
-/// The bytes up to `buf`'s first NUL, from a `c_char` buffer.
-fn chars_until_nul(buf: &[c_char]) -> Vec<u8> {
-    buf.iter()
-        .take_while(|&&b| b != 0)
-        .map(|&b| b as u8)
-        .collect()
 }
 
 /// `text` with `room` bytes of NUL slack after it.
@@ -246,10 +238,10 @@ fn the_hex_form() {
     let _editor = editor_lock();
     let mut d = Digest::new();
     for c in (0..0x400).chain([0xffff, 0x10000, 0x10ffff, 0x7fff_ffff]) {
-        let mut buf = [0 as c_char; 16];
+        let mut buf = [0u8; 16];
         let n = transchar_hex_into(&mut buf, c);
         d.add(n as i64);
-        d.bytes(&chars_until_nul(&buf));
+        d.bytes(until_nul(&buf));
     }
     assert_eq!(d.value(), 0x8903a5a44af10085, "hex form");
 }

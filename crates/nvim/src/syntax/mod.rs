@@ -63,7 +63,8 @@ use crate::os::input::line_breakcheck;
 use crate::path::path_is_absolute;
 use crate::pos::MAXLNUM;
 use crate::profile::{
-    profile_add, profile_cmp, profile_divide, profile_end, profile_msg, profile_start, profile_zero,
+    profile_add, profile_cmp, profile_divide, profile_end, profile_msg_str, profile_start,
+    profile_zero,
 };
 use crate::regexp::{
     ExtMatch, ExtMatchIo, ExtMatchRef, OwnedProg, vim_regcomp, vim_regcomp_ext, vim_regexec,

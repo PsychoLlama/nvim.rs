@@ -428,7 +428,7 @@ pub fn do_put(regname: c_int, reg: Option<&YankReg>, dir: c_int, count: c_int, f
         if put.lines.is_empty() {
             let display = transchar(regname);
             let name = if regname != 0 {
-                cstr::in_chars(&display)
+                cstr::in_bytes(&display)
             } else {
                 c"\""
             };

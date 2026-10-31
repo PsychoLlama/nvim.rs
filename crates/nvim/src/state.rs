@@ -24,7 +24,7 @@ use crate::cstr;
 use crate::keycodes::{Ctrl_V, Key, get_special_key_name};
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use crate::autocmd::{apply_autocmds, has_event};
 use crate::debugger::state::debug_mode;
@@ -199,7 +199,7 @@ pub(crate) fn state_enter(mut s: ModeState<'_>) {
                     c"K_EVENT"
                 } else {
                     keyname_buf = get_special_key_name(key, mod_mask.get());
-                    cstr::in_chars(&keyname_buf)
+                    cstr::in_bytes(&keyname_buf)
                 };
                 let keyname = msg_cstr(keyname);
                 logmsg!(LOGLVL_DBG, c"state_enter", 97, "input: {keyname}");
@@ -329,10 +329,10 @@ fn real_state(
 }
 
 /// One to three mode letters, NUL-padded — upstream's `char[MODE_MAX_LENGTH]`.
-type ModeName = [c_char; 4];
+type ModeName = [u8; 4];
 
 /// The letters of a mode name, without the NUL padding.
-fn letters(mode: &ModeName) -> &[c_char] {
+fn letters(mode: &ModeName) -> &[u8] {
     let len = mode.iter().position(|&c| c == 0).unwrap_or(mode.len());
     &mode[..len]
 }
@@ -345,7 +345,7 @@ struct ModeWriter {
 
 impl ModeWriter {
     fn push(&mut self, letter: u8) {
-        self.name[self.len] = letter.cast_signed();
+        self.name[self.len] = letter;
         self.len += 1;
     }
 
@@ -497,9 +497,9 @@ pub fn get_mode() -> ModeName {
 ///
 /// Both halves are at most three letters, so the eight bytes upstream sizes
 /// this at are exactly enough and it never truncates.
-fn modechanged_pattern(old: &ModeName, new: &ModeName) -> [c_char; 2 * size_of::<ModeName>()] {
-    let mut pattern = [0 as c_char; 2 * size_of::<ModeName>()];
-    let colon = [b':'.cast_signed()];
+fn modechanged_pattern(old: &ModeName, new: &ModeName) -> [u8; 2 * size_of::<ModeName>()] {
+    let mut pattern = [0u8; 2 * size_of::<ModeName>()];
+    let colon = *b":";
     let joined = letters(old).iter().chain(&colon).chain(letters(new));
     for (slot, &letter) in pattern.iter_mut().zip(joined) {
         *slot = letter;
@@ -526,15 +526,15 @@ pub fn may_trigger_modechanged() {
         sve_hashtab: HashTab::new(),
     };
     let v_event = get_v_event(&mut save_v_event);
-    let new_mode = cstr::as_bytes(letters(&curr_mode));
+    let new_mode = letters(&curr_mode);
     let _ = v_event.edit().add_str_len(b"new_mode", Some(new_mode));
-    let old_mode = cstr::as_bytes(letters(&old_mode));
+    let old_mode = letters(&old_mode);
     let _ = v_event.edit().add_str_len(b"old_mode", Some(old_mode));
     v_event.edit().set_keys_readonly();
     let buf = Buf::current_or_none();
     apply_autocmds(
         AutoEvent::ModeChanged,
-        Some(cstr::in_chars(&pattern)),
+        Some(cstr::in_bytes(&pattern)),
         None,
         false,
         buf,
@@ -604,19 +604,16 @@ mod tests {
 
     /// A [`ModeName`] from its letters, NUL-padded as the writer leaves it.
     fn name(letters: &str) -> ModeName {
-        let mut out = [0 as c_char; 4];
+        let mut out = [0u8; 4];
         for (slot, byte) in out.iter_mut().zip(letters.bytes()) {
-            *slot = byte.cast_signed();
+            *slot = byte;
         }
         out
     }
 
     /// The letters of a mode name, as text.
     fn text(mode: &ModeName) -> String {
-        letters(mode)
-            .iter()
-            .map(|&c| char::from(c.cast_unsigned()))
-            .collect()
+        letters(mode).iter().map(|&c| char::from(c)).collect()
     }
 
     /// A quiescent editor in `state`: nothing pending anywhere.
@@ -643,9 +640,9 @@ mod tests {
     /// no NUL to stop at.
     #[test]
     fn letters_stop_at_the_padding() {
-        assert_eq!(letters(&name("")), &[] as &[c_char]);
+        assert_eq!(letters(&name("")), &[] as &[u8]);
         assert_eq!(text(&name("no")), "no");
-        assert_eq!(text(&[b'n'.cast_signed(); 4]), "nnnn");
+        assert_eq!(text(&[b'n'; 4]), "nnnn");
     }
 
     /// `push_key` takes the low byte of a key, which is all a mode letter
@@ -830,7 +827,7 @@ mod tests {
     fn select_letter(inputs: &ModeInputs) -> u8 {
         let mode = mode_name(inputs);
         assert_eq!(letters(&mode).len(), 1);
-        mode[0].cast_unsigned()
+        mode[0]
     }
 
     /// A visual mode the operator will return to appends `s`; select mode
@@ -985,10 +982,10 @@ mod tests {
     }
 
     /// A pattern from its letters, NUL-padded.
-    fn name2(letters: &str) -> [c_char; 2 * size_of::<ModeName>()] {
-        let mut out = [0 as c_char; 2 * size_of::<ModeName>()];
+    fn name2(letters: &str) -> [u8; 2 * size_of::<ModeName>()] {
+        let mut out = [0u8; 2 * size_of::<ModeName>()];
         for (slot, byte) in out.iter_mut().zip(letters.bytes()) {
-            *slot = byte.cast_signed();
+            *slot = byte;
         }
         out
     }

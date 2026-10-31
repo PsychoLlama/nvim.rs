@@ -19,7 +19,7 @@
 
 use crate::keycodes::Key;
 use crate::keycodes::ModMask;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use super::{MOUSE_LEFT, MOUSE_MIDDLE, MOUSE_RIGHT, MOUSE_X1, MOUSE_X2, MSCR_RIGHT};
 use crate::mouse::state::{mouse_col, mouse_grid, mouse_row};
@@ -100,9 +100,8 @@ pub(crate) fn click_count(mod_mask: ModMask) -> VarNumber {
 
 /// The four-byte modifier string a `%@Func@` handler receives, one letter per
 /// modifier held down and a space where it was not.
-pub(crate) fn modifier_letters(mod_mask: ModMask) -> [c_char; 5] {
-    let held =
-        |bit: ModMask, letter: u8| (if mod_mask.has(bit) { letter } else { b' ' }).cast_signed();
+pub(crate) fn modifier_letters(mod_mask: ModMask) -> [u8; 5] {
+    let held = |bit: ModMask, letter: u8| if mod_mask.has(bit) { letter } else { b' ' };
     [
         held(ModMask::SHIFT, b's'),
         held(ModMask::CTRL, b'c'),

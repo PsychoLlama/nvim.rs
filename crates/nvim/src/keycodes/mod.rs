@@ -24,7 +24,7 @@ use crate::strings::has_char;
 use crate::types::BS;
 use crate::types::DEL;
 use crate::types::TAB;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use crate::ascii::{ascii_isdigit, ascii_isident};
 use crate::charset::{str2nr_in, transchar, vim_isprintc};
@@ -136,7 +136,7 @@ fn handle_x_keys(key: c_int) -> c_int {
 /// Upstream answers a pointer into one static buffer, valid only until the
 /// next call, which is why `str2special_arena` has to measure and copy in
 /// two passes and why two callers in one test tread on each other.
-pub(crate) type SpecialKeyName = [c_char; MAX_KEY_NAME_LEN as usize + 1];
+pub(crate) type SpecialKeyName = [u8; MAX_KEY_NAME_LEN as usize + 1];
 
 /// The `<...>` spelling of `key` with `modifiers` held down.
 pub fn get_special_key_name(key: c_int, modifiers: ModMask) -> SpecialKeyName {
@@ -163,7 +163,7 @@ pub fn get_special_key_name(key: c_int, modifiers: ModMask) -> SpecialKeyName {
         }
     }
 
-    let mut out = [0u8; MAX_KEY_NAME_LEN as usize + 1];
+    let mut out: SpecialKeyName = [0; MAX_KEY_NAME_LEN as usize + 1];
     out[0] = b'<';
     let mut at = 1;
     for letter in printed_modifiers(modifiers) {
@@ -191,7 +191,7 @@ pub fn get_special_key_name(key: c_int, modifiers: ModMask) -> SpecialKeyName {
                 at += len;
             } else {
                 let display = transchar(key);
-                let shown = cstr::in_chars(&display).to_bytes();
+                let shown = cstr::in_bytes(&display).to_bytes();
                 out[at..at + shown.len()].copy_from_slice(shown);
                 at += shown.len();
             }
@@ -205,12 +205,7 @@ pub fn get_special_key_name(key: c_int, modifiers: ModMask) -> SpecialKeyName {
         }
     }
     out[at] = b'>';
-
-    let mut name: SpecialKeyName = [0; MAX_KEY_NAME_LEN as usize + 1];
-    for (slot, byte) in name.iter_mut().zip(out) {
-        *slot = byte as c_char;
-    }
-    name
+    out
 }
 
 /// The bytes one key is encoded as, held inline: room for a modifier prefix

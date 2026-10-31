@@ -294,7 +294,8 @@ pub fn channel_from_connection(watcher: &mut SocketWatcher) {
     }
     attach_socket(id);
     rpc_start(id);
-    let address = crate::cstr::in_chars(&watcher.addr).to_owned();
+    let address = watcher.addr.map(core::ffi::c_char::cast_unsigned);
+    let address = crate::cstr::in_bytes(&address).to_owned();
     channel_create_event(id, Some(&address));
 }
 

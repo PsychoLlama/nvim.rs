@@ -42,13 +42,12 @@
 #![allow(non_upper_case_globals)]
 
 use super::MODE_NORMAL;
-use crate::cstr::c_bytes;
 use crate::global_cell::state_record;
 use crate::highlight_group::HLF_NONE;
 use crate::memory::XString;
 use crate::normal::VisualMode;
 use crate::types::{ColNr, Hlf, LineNr, Pos};
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 /// The origin, which every position here starts at.
 const POS_ZERO: Pos = Pos {
@@ -66,7 +65,7 @@ state_record! {
     /// The mode word: `MODE_NORMAL`, `MODE_INSERT`, ... with flags.
     pub(crate) State: c_int = MODE_NORMAL;
     /// The mode `mode()` reported last, for `ModeChanged`.
-    pub(crate) last_mode: [c_char; 4] = c_bytes(b"n\0\0\0");
+    pub(crate) last_mode: [u8; 4] = *b"n\0\0\0";
     /// In Ex mode (`Q`/`gQ`).
     pub(crate) exmode_active: bool = false;
     /// Enter Ex mode when the current command is done.

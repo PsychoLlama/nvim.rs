@@ -347,7 +347,7 @@ impl Cells {
 
     /// Draw an unprintable character in its `^X` or `<xx>` form.
     pub(super) fn escaped(&mut self, wlv: &mut WinLineVars, window: Win) {
-        let shown = transchar_buf(window.buffer_or_none(), self.char_code).map(|c| c as u8);
+        let shown = transchar_buf(window.buffer_or_none(), self.char_code);
         let len = shown.iter().position(|&c| c == 0).unwrap_or(shown.len());
         let mut shown = shown;
         let text = &mut shown[..len];
