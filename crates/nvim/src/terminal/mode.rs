@@ -119,26 +119,27 @@ impl TerminalState {
 
 /// One terminal-mode session the caller has promised is live.
 ///
-/// The editor's state loop holds the session by pointer and hands it back
-/// to [`terminal_check`] and [`terminal_execute`], and everything either of
+/// The editor's state loop holds the session and hands it back to
+/// [`terminal_check`] and [`terminal_execute`], and everything either of
 /// those reaches can run Vimscript that comes back through them — so the
-/// pointer stays raw and `Session` is
-/// [`Copy`], exactly as [`Term`] is for the terminal. Every borrow it
-/// produces lives for one expression.
+/// pointer stays raw and `TerminalSession` is [`Copy`], exactly as [`Term`]
+/// is for the terminal. Every borrow it produces lives for one expression.
+/// Only [`terminal_enter`] makes one, of its own frame's state, and the
+/// state loop it hands it to returns before that frame does.
 #[derive(Clone, Copy)]
-struct Session(*mut TerminalState);
+pub(crate) struct TerminalSession(*mut TerminalState);
 
-impl Deref for Session {
+impl Deref for TerminalSession {
     type Target = TerminalState;
 
     #[inline(always)]
     fn deref(&self) -> &TerminalState {
-        // SAFETY: `Session::new`'s promise — the session is live.
+        // SAFETY: `TerminalSession::new`'s promise — the session is live.
         unsafe { &*self.0 }
     }
 }
 
-impl DerefMut for Session {
+impl DerefMut for TerminalSession {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut TerminalState {
         // SAFETY: as above.
@@ -146,18 +147,12 @@ impl DerefMut for Session {
     }
 }
 
-impl Session {
+impl TerminalSession {
     /// # Safety
     /// `s` must stay a live session for as long as the value is used.
     #[inline(always)]
     const unsafe fn new(s: *mut TerminalState) -> Self {
         Self(s)
-    }
-
-    /// The pointer back, for the loop that drives the session.
-    #[inline(always)]
-    const fn raw(self) -> *mut TerminalState {
-        self.0
     }
 }
 
@@ -190,7 +185,7 @@ fn terminal_focus(term: Term, focus: bool) {
 /// `'cursorline'` survives only as `'culopt'=number`, which highlights the
 /// number column and leaves the child's own colours alone; everything else
 /// that would draw over the child's output is turned off.
-fn set_terminal_winopts(mut s: Session) {
+fn set_terminal_winopts(mut s: TerminalSession) {
     assert!(
         s.save_curwin.is_none(),
         "terminal window options saved twice"
@@ -237,7 +232,7 @@ fn set_terminal_winopts(mut s: Session) {
 /// rather than the window's live set. If neither can be found there is
 /// nothing to restore but the saved `'culopt'` string, which is freed
 /// either way.
-fn unset_terminal_winopts(mut s: Session) {
+fn unset_terminal_winopts(mut s: TerminalSession) {
     assert!(
         s.save_curwin.is_some(),
         "terminal window options restored without being saved"
@@ -260,7 +255,7 @@ fn unset_terminal_winopts(mut s: Session) {
 
 /// Where [`unset_terminal_winopts`] should write, redrawing the window on
 /// the way if it is still showing the terminal.
-fn saved_winopts(s: Session) -> Option<*mut WinOpt> {
+fn saved_winopts(s: TerminalSession) -> Option<*mut WinOpt> {
     let mut wp = s.save_curwin?.get()?;
     if wp.buffer().handle != s.term.buf_handle {
         // The window went elsewhere; the terminal's buffer kept a copy of
@@ -309,7 +304,7 @@ pub(crate) fn terminal_enter() -> bool {
     let mut session = TerminalState::new(unsafe { Term::new(buf.terminal) });
     // SAFETY: the session outlives every use below — the state stack is
     // left before this frame is.
-    let mut s = unsafe { Session::new(&raw mut session) };
+    let mut s = unsafe { TerminalSession::new(&raw mut session) };
 
     stop_insert_mode.set(false);
     terminal_check_size(s.term);
@@ -337,8 +332,7 @@ pub(crate) fn terminal_enter() -> bool {
         s.close = true;
     }
 
-    // SAFETY: the session outlives the loop -- it is this frame's.
-    state_enter(unsafe { ModeState::terminal(s.raw()) });
+    state_enter(ModeState::terminal(s));
 
     if !s.got_bsl_o {
         restart_edit.set(0);
@@ -430,7 +424,7 @@ pub(super) fn terminal_check_cursor(term: Term) {
 ///
 /// Returns false once the current buffer has no terminal at all, which is
 /// how the mode loop learns to stop.
-fn terminal_check_focus(mut s: Session) -> bool {
+fn terminal_check_focus(mut s: TerminalSession) -> bool {
     if current_buf().terminal.is_null() {
         return false;
     }
@@ -461,13 +455,7 @@ fn terminal_check_focus(mut s: Session) -> bool {
 
 /// The mode loop's per-iteration work: refresh, redraw, and place the
 /// cursor. Returning zero leaves terminal mode.
-///
-/// # Safety
-///
-/// `state` must point at a live `TerminalState`, unaliased for the call.
-pub(crate) unsafe fn terminal_check(state: *mut TerminalState) -> c_int {
-    // SAFETY: the loop hands back the session this module gave it.
-    let mut s = unsafe { Session::new(state) };
+pub(crate) fn terminal_check(mut s: TerminalSession) -> c_int {
     debug_assert!(
         !s.close || (s.term.buf_handle == 0 && s.term.raw() != current_buf().terminal),
         "a terminal marked closed is still the current buffer's"
@@ -526,13 +514,7 @@ pub(crate) unsafe fn terminal_check(state: *mut TerminalState) -> c_int {
 }
 
 /// Dispatch one key. Returning zero leaves terminal mode.
-///
-/// # Safety
-///
-/// `state` must point at a live `TerminalState`, unaliased for the call.
-pub(crate) unsafe fn terminal_execute(state: *mut TerminalState, key: c_int) -> c_int {
-    // SAFETY: the loop hands back the session this module gave it.
-    let mut s = unsafe { Session::new(state) };
+pub(crate) fn terminal_execute(mut s: TerminalSession, key: c_int) -> c_int {
     // `merge_modifiers` folds a pending modifier into the key so that e.g.
     // `<C-\>` is one code to compare against.
     let mut mods = mod_mask.get();

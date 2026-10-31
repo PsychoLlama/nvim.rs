@@ -1,5 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 #![deny(
@@ -32,8 +31,7 @@ use crate::drawscreen::state::must_redraw;
 use crate::drawscreen::{setcursor, update_screen};
 use crate::edit::{InsertState, insert_check, insert_execute};
 use crate::eval::{get_v_event, restore_v_event};
-use crate::event::r#loop::main_loop_events;
-use crate::event::multiqueue::{multiqueue_empty, multiqueue_get};
+use crate::event::r#loop::run_next_main_event;
 use crate::ex_docmd::state::global_busy;
 use crate::ex_getln::cmdline_overstrike;
 use crate::ex_getln::{CommandLineState, command_line_check, command_line_execute};
@@ -59,7 +57,7 @@ use crate::state::mode::{
     State, exmode_active, finish_op, last_mode, motion_force, restart_VIsual_select, restart_edit,
     virtual_op,
 };
-use crate::terminal::{TerminalState, terminal_check, terminal_execute};
+use crate::terminal::{TerminalSession, terminal_check, terminal_execute};
 use crate::types::{Direction, HashTab, NUL, ProcType, SaveVEvent};
 use crate::ui::ui_flush;
 use crate::winlayer::{Cc, Win};
@@ -101,9 +99,10 @@ pub const MODE_NORMAL: ModeFlags = 1;
 /// checked. Naming the machine instead makes the dispatch a `match` and the
 /// layout nobody's business.
 ///
-/// The address is raw rather than a `&mut` for the terminal's, and the
-/// promise that it is live is booked at the constructor the way every other
-/// handle in the tree books it: a `check` or an `execute` re-enters the
+/// The terminal's is a handle ([`TerminalSession`]) rather than a `&mut`,
+/// and the promise that it is live is booked where the terminal makes it,
+/// the way every other handle in the tree books it: a `check` or an
+/// `execute` re-enters the
 /// editor, and the frames below it reach the same state through the globals
 /// that name it, so a `&mut` spanning the loop would be a promise the editor
 /// does not keep. Insert mode's, normal mode's and the command line's states
@@ -114,13 +113,13 @@ pub const MODE_NORMAL: ModeFlags = 1;
 /// than to its key loop.
 pub(crate) struct ModeState<'a>(Machine<'a>);
 
-/// [`ModeState`]'s arms. Private, so the only way to make one is through a
-/// constructor that takes the liveness promise.
+/// [`ModeState`]'s arms. Private, so the only way to make one is through
+/// one of its constructors.
 enum Machine<'a> {
     Normal(&'a mut NormalState),
     Insert(&'a mut InsertState),
     CommandLine(&'a mut CommandLineState),
-    Terminal(*mut TerminalState),
+    Terminal(TerminalSession),
 }
 
 impl<'a> ModeState<'a> {
@@ -141,9 +140,9 @@ impl<'a> ModeState<'a> {
         Self(Machine::CommandLine(s))
     }
 
-    /// # Safety
-    /// `s` must stay a live `TerminalState` for the whole of [`state_enter`].
-    pub(crate) const unsafe fn terminal(s: *mut TerminalState) -> Self {
+    /// Terminal mode's session, a handle the terminal took the liveness
+    /// promise for when it made it.
+    pub(crate) const fn terminal(s: TerminalSession) -> Self {
         Self(Machine::Terminal(s))
     }
 
@@ -151,24 +150,21 @@ impl<'a> ModeState<'a> {
     /// again (something it did invalidated what came after), anything else
     /// goes on to read a key.
     fn check(&mut self) -> c_int {
-        // SAFETY (the terminal's arm): the constructor's promise -- a live
-        // state of the named kind.
         match &mut self.0 {
             Machine::Normal(s) => normal_check(s),
             Machine::Insert(s) => insert_check(s),
             Machine::CommandLine(s) => command_line_check(s),
-            Machine::Terminal(s) => unsafe { terminal_check(*s) },
+            Machine::Terminal(s) => terminal_check(*s),
         }
     }
 
     /// The key, answered the same three ways as [`Self::check`].
     fn execute(&mut self, key: c_int) -> c_int {
-        // SAFETY (the terminal's arm): as [`Self::check`].
         match &mut self.0 {
             Machine::Normal(s) => normal_execute(s, key),
             Machine::Insert(s) => insert_execute(s, key),
             Machine::CommandLine(s) => command_line_execute(s, key),
-            Machine::Terminal(s) => unsafe { terminal_execute(*s, key) },
+            Machine::Terminal(s) => terminal_execute(*s, key),
         }
     }
 }
@@ -248,13 +244,7 @@ fn next_key() -> c_int {
 /// arrives first. What [`state_enter`]'s `K_EVENT` dispatches to.
 pub fn state_handle_k_event() {
     loop {
-        // SAFETY: the main loop's queue is live, and an `Event` it answers
-        // owns its own `argv`.
-        let mut event = unsafe { multiqueue_get(main_loop_events()) };
-        if let Some(handler) = event.handler {
-            unsafe { handler((&raw mut event.argv).cast::<*mut core::ffi::c_void>()) };
-        }
-        if unsafe { multiqueue_empty(main_loop_events()) } {
+        if run_next_main_event() {
             return;
         }
         os_breakcheck();

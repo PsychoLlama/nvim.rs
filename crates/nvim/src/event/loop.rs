@@ -33,7 +33,7 @@ use crate::event::libuv::{
     uv_signal_init, uv_stop, uv_timer_init, uv_timer_start, uv_timer_stop, uv_walk,
 };
 use crate::event::multiqueue::{
-    multiqueue_empty, multiqueue_free, multiqueue_move_events, multiqueue_new,
+    multiqueue_empty, multiqueue_free, multiqueue_get, multiqueue_move_events, multiqueue_new,
     multiqueue_new_child, multiqueue_process_events, multiqueue_purge_events, multiqueue_put_event,
     multiqueue_size,
 };
@@ -210,6 +210,21 @@ pub(crate) fn main_loop_raw() -> *mut Loop {
 pub(crate) fn main_loop_events() -> *mut MultiQueue {
     // SAFETY: the static loop; reading one field of it.
     unsafe { (*main_loop_raw()).events }
+}
+
+/// Run the next event on the editor's main queue, if it holds one, and
+/// answer whether the queue is empty afterwards: one step of the main
+/// loop's `K_EVENT` drain, which checks for input between steps.
+pub(crate) fn run_next_main_event() -> bool {
+    // SAFETY: the static loop's own queue, which lives as long as the loop.
+    let mut event = unsafe { multiqueue_get(main_loop_events()) };
+    if let Some(handler) = event.handler {
+        // SAFETY: an event carries the argv its handler was queued with, and
+        // the array is this frame's copy.
+        unsafe { handler(event.argv.as_mut_ptr()) };
+    }
+    // SAFETY: as above; read again, after the handler.
+    unsafe { multiqueue_empty(main_loop_events()) }
 }
 
 /// The editor's fast queue, drained by every poll of its loop.

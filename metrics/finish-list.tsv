@@ -1,3 +1,1 @@
 module	file	files	unsafe_stmts	unsafe_fns	wrappers	regions	raw_params	raw_returns	outside_callees
-state.rs	*	1	5	1	5	-	other:1	-	handler:1 multiqueue_empty:1 multiqueue_get:1 terminal_check:1 terminal_execute:1
-state.rs	state.rs	1	5	1	5	-	other:1	-	handler:1 multiqueue_empty:1 multiqueue_get:1 terminal_check:1 terminal_execute:1

@@ -50,7 +50,6 @@ count	callee	no_raw	defs	def
 4	xmemdupz	0	1	crates/nvim/src/memory/mod.rs
 3	.next_arg::<::core::ffi::c_int>	0	0	
 3	Live::new	0	1	crates/nvim/src/winlayer/live.rs
-3	Session::new	0	1	crates/nvim/src/terminal/mode.rs
 3	Stack::above_top	0	1	crates/nvim/src/lua/stack/mod.rs
 3	ThinCString::from_raw	0	1	crates/nvim/src/memory/thin_cstring.rs
 3	XString::from_raw	0	1	crates/nvim/src/memory/xstring.rs
@@ -170,9 +169,9 @@ count	callee	no_raw	defs	def
 1	Box::new	0	17	
 1	DictRef::retained	0	1	crates/nvim/src/eval/typval/handle.rs
 1	ListRef::retained	0	1	crates/nvim/src/eval/typval/handle.rs
-1	ModeState::terminal	0	1	crates/nvim/src/state.rs
 1	OwnedFd::from_raw_fd	0	0	
 1	Some	0	0	
+1	TerminalSession::new	0	1	crates/nvim/src/terminal/mode.rs
 1	Win::new	0	1	crates/nvim/src/winlayer.rs
 1	action	0	0	
 1	alloc_block	0	1	crates/nvim/src/memory/arena.rs
@@ -303,8 +302,6 @@ count	callee	no_raw	defs	def
 1	strncasecmp	0	1	crates/nvim/src/os/cshim.rs
 1	strptime	0	0	
 1	term_set_title	1	1	crates/nvim/src/terminal/callbacks.rs
-1	terminal_check	0	1	crates/nvim/src/terminal/mode.rs
-1	terminal_execute	0	1	crates/nvim/src/terminal/mode.rs
 1	terminfo_disable	0	1	crates/nvim/src/tui/tui.rs
 1	terminfo_fmt	0	1	crates/nvim/src/tui/terminfo/mod.rs
 1	terminfo_info_msg	0	1	crates/nvim/src/tui/terminfo/mod.rs
