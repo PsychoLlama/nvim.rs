@@ -250,8 +250,7 @@ pub(crate) fn os_time_raw() -> time_t {
 /// times its cost on the undo path, which stamps every change.
 #[cfg(miri)]
 pub(crate) fn os_time_raw() -> time_t {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let seconds = |d: std::time::Duration| time_t::try_from(d.as_secs()).unwrap_or(time_t::MAX);
+    let seconds = |d: Duration| time_t::try_from(d.as_secs()).unwrap_or(time_t::MAX);
     match SystemTime::now().duration_since(UNIX_EPOCH) {
         Ok(after) => seconds(after),
         Err(before) => {
