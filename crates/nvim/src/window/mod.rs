@@ -65,7 +65,7 @@ use crate::types::{
     AlignTextPos, BlnFlags, CdCause, Direction, DoBufAction, DoBufStart, Error, GetFileFlags,
     Handle, MotionType, OptInt, WinSplit, WinStyle, Window, kErrorTypeException,
 };
-use crate::ui_compositor::{ui_comp_remove_grid, win_grid};
+use crate::ui_compositor::ui_comp_remove_grid;
 use crate::winlayer::graph::{first_tabpage, firstwin, lastwin};
 use crate::winlayer::{
     Buf, FrameRef, TabPage, Win, current_topframe, free_frame, new_frame, tab_windows, windows,
@@ -457,7 +457,7 @@ fn run_cmd(cmd: &::core::ffi::CStr) {
 
 /// Drop `win`'s external grid, which the compositor still holds.
 fn drop_grid(win: Win) {
-    ui_comp_remove_grid(win_grid(win));
+    ui_comp_remove_grid(win.grid_alloc());
 }
 
 static command_frame_height: GlobalCell<bool> = GlobalCell::new(true);

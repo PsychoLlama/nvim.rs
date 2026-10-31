@@ -34,7 +34,6 @@ use crate::plines::win_charsize;
 use crate::popupmenu::pum_grid_ref;
 use crate::types::{CharsizeArg, Handle, LineNr};
 use crate::ui_compositor::ui_comp_mouse_focus;
-use crate::ui_compositor::win_grid;
 use crate::winlayer::{current_topframe, first_window, windows};
 
 /// The screen row the first window starts at: the tab page line's height.
@@ -121,7 +120,7 @@ fn find_grid_win(pos: &mut MousePos) -> Option<Win> {
             return None;
         }
         for wp in windows() {
-            let Some(grid) = grid.filter(|grid| grid.same(win_grid(wp))) else {
+            let Some(grid) = grid.filter(|grid| grid.same(wp.grid_alloc())) else {
                 continue;
             };
             pos.grid = grid.handle as c_int;

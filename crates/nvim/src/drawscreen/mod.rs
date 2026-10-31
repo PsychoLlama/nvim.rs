@@ -109,7 +109,7 @@ use crate::ui::{
     ui_call_grid_clear, ui_call_grid_resize, ui_call_msg_clear, ui_call_win_extmark, ui_flush,
     ui_grid_cursor_goto, ui_has,
 };
-use crate::ui_compositor::{ui_comp_set_screen_valid, win_grid};
+use crate::ui_compositor::ui_comp_set_screen_valid;
 use crate::version::{intro_message, may_show_intro};
 use crate::window::{
     frame2window, global_stl_height, last_stl_height, min_rows, min_rows_for_all_tabpages,
@@ -463,7 +463,7 @@ pub fn update_screen() -> Result<(), Failed> {
         if wp.w_redr_border || wp.w_redr_type >= UPD_NOT_VALID {
             let hl_attr = wp.w_ns_hl_attr.map(GlobalCell::get);
             grid_draw_border(
-                win_grid(wp),
+                wp.grid_alloc(),
                 &wp.w_config,
                 Some(wp.w_border_adj),
                 wp.w_onebuf_opt.wo_winbl as c_int,

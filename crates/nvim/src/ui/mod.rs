@@ -81,7 +81,6 @@ use crate::types::{
 use crate::ui::state::{called_vim_beep, resize_events, ui_ext_names, ui_refresh_cmdheight};
 use crate::ui_compositor::{
     ui_comp_attach, ui_comp_detach, ui_comp_get_grid_at_coord, ui_comp_init, ui_comp_should_draw,
-    win_grid,
 };
 use crate::window::{win_set_inner_size, win_ui_flush};
 use crate::winfloat::win_config_float;
@@ -755,7 +754,7 @@ fn ui_cursor_is_behind_floatwin() -> bool {
     };
     let ccol = win.w_wincol + win.w_wincol_off + wcol;
     let top_grid = ui_comp_get_grid_at_coord(crow, ccol);
-    !top_grid.same(win_grid(win)) && !top_grid.same(default_grid_ref())
+    !top_grid.same(win.grid_alloc()) && !top_grid.same(default_grid_ref())
 }
 
 /// Whether `ext` is drawn by the UIs rather than into the grid.

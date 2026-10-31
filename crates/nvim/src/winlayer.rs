@@ -135,6 +135,7 @@
 
 mod frame;
 pub mod graph;
+mod grid;
 mod handles;
 mod live;
 mod walk;
@@ -142,6 +143,9 @@ mod walk;
 use crate::syntax::SynBlockRef;
 pub(crate) use frame::{current_topframe, free_frame, new_frame};
 pub(crate) use live::{Cc, Live};
+
+pub use grid::GridRef;
+pub(crate) use grid::grid_of_view;
 
 pub use handles::BufId;
 

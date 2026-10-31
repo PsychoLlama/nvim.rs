@@ -535,7 +535,7 @@ impl Refloat {
         if !tp.is_current() && tp.tp_curwin == Some(self.win.id()) {
             tp.tp_curwin = self.altwin.map(Win::id);
         }
-        ui_comp_remove_grid(crate::ui_compositor::win_grid(self.win));
+        ui_comp_remove_grid(self.win.grid_alloc());
         redraw_later(self.win, UPD_NOT_VALID);
         set_must_redraw(UPD_NOT_VALID);
     }

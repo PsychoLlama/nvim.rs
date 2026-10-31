@@ -1,7 +1,3 @@
 module	file	files	unsafe_stmts	unsafe_fns	wrappers	regions	raw_params	raw_returns	outside_callees
-grid/	*	1	3	1	1	ref:2	other:1	other:1	-
-grid/	grid/mod.rs	1	3	1	1	ref:2	other:1	other:1	-
 state.rs	*	1	5	1	5	-	other:1	-	handler:1 multiqueue_empty:1 multiqueue_get:1 terminal_check:1 terminal_execute:1
 state.rs	state.rs	1	5	1	5	-	other:1	-	handler:1 multiqueue_empty:1 multiqueue_get:1 terminal_check:1 terminal_execute:1
-ui_compositor/	*	1	2	1	2	-	other:1	-	GridRef::new:2
-ui_compositor/	ui_compositor/mod.rs	1	2	1	2	-	other:1	-	GridRef::new:2

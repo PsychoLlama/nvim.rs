@@ -53,7 +53,6 @@ use crate::types::{
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_msg_ruler, ui_has};
-use crate::ui_compositor::win_grid;
 use crate::window::lastwin_nofloating;
 
 static DID_SHOW_EXT_RULER: GlobalCell<bool> = GlobalCell::new(false);
@@ -96,7 +95,7 @@ impl Target {
         let is_stl_global = stl_is_global();
         let floating = win.is_some_and(|w| w.w_floating) && !is_stl_global;
         // A floating window owns its grid allocation.
-        let own = || win_grid(win.expect("a float is a window"));
+        let own = || win.expect("a float is a window").grid_alloc();
         let mut canvas = if floating { own() } else { screen_canvas() };
         let mut col = 0;
 

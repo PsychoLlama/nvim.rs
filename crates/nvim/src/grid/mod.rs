@@ -1,5 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -31,7 +30,8 @@
 //! thread down the draw path at all.
 //!
 //! So the whole draw path carries [`GridRef`]: a `Copy` handle that names a
-//! grid by address, checked once at its `unsafe` constructor, after which
+//! grid by address, checked once at its `unsafe` constructor in `winlayer`
+//! (the handle family's home), after which
 //! every borrow of the cells lasts exactly one accessor call. It is the one
 //! handle -- the compositor's layer, the statusline's canvas and the line
 //! batch's target are all `GridRef`, not wrappers around it. `Rex` is the
@@ -59,6 +59,8 @@ use crate::ui::{
     ui_call_grid_resize, ui_call_grid_scroll, ui_check_cursor_grid, ui_grid_cursor_goto, ui_has,
     ui_line,
 };
+pub use crate::winlayer::GridRef;
+pub(crate) use crate::winlayer::grid_of_view;
 use crate::winlayer::{Win, windows};
 
 use core::ffi::{c_char, c_int};
@@ -99,70 +101,6 @@ pub const SLF_INC_VCOL: c_int = 4;
 /// Handle of `default_grid`; window grids are numbered above it.
 const DEFAULT_GRID_HANDLE: c_int = 1;
 
-/// A live grid, named by address rather than borrowed. See the module docs
-/// for why nothing in the draw path may hold a `&mut ScreenGrid`.
-#[derive(Clone, Copy)]
-pub struct GridRef(*mut ScreenGrid);
-
-impl GridRef {
-    /// # Safety
-    /// `grid` must name a live `ScreenGrid` that outlives every use of the
-    /// handle -- a window's own grid, or a local the caller keeps alive.
-    /// For a grid that lives in a global cell use [`GridRef::of_cell`],
-    /// which discharges this obligation from the cell's own lifetime.
-    pub const unsafe fn new(grid: *mut ScreenGrid) -> GridRef {
-        GridRef(grid)
-    }
-
-    /// The grid a global cell holds.
-    ///
-    /// Safe, and the only constructor that is: a `&'static GlobalCell` is
-    /// exactly the promise [`GridRef::new`] has to be told, so the three
-    /// screen grids need no `unsafe` at all to be named.
-    pub(crate) fn of_cell(cell: &'static GlobalCell<ScreenGrid>) -> GridRef {
-        GridRef(cell.ptr())
-    }
-
-    /// The address, for the calls that still spell a raw pointer.
-    pub fn raw(self) -> *mut ScreenGrid {
-        self.0
-    }
-
-    /// Whether the handle names no grid at all.
-    ///
-    /// The one caller that has to ask is [`grid_adjust`]'s: a window's
-    /// `w_grid` view is a transpiled struct whose target is null until the
-    /// window has one. Nothing else may produce such a handle -- the batch
-    /// in progress and the compositor's selected layer are `Option<GridRef>`
-    /// rather than a null one, so that no absent grid is ever a value whose
-    /// `Deref` claims a promise it cannot keep.
-    pub fn is_unresolved(self) -> bool {
-        self.0.is_null()
-    }
-
-    /// Whether both name the same grid.
-    pub fn same(self, other: GridRef) -> bool {
-        ::core::ptr::eq(self.0, other.0)
-    }
-}
-
-impl ::core::ops::Deref for GridRef {
-    type Target = ScreenGrid;
-
-    fn deref(&self) -> &ScreenGrid {
-        // SAFETY: the constructor's promise.
-        unsafe { &*self.0 }
-    }
-}
-
-impl ::core::ops::DerefMut for GridRef {
-    fn deref_mut(&mut self) -> &mut ScreenGrid {
-        // SAFETY: the constructor's promise. The borrow lasts one call: see
-        // the type's own docs for why it may not last longer.
-        unsafe { &mut *self.0 }
-    }
-}
-
 /// The screen grid, as a handle.
 ///
 /// One acquisition per path: the grid is the bottom layer of the
@@ -199,17 +137,6 @@ pub fn grid_adjust(view: GridView, row_off: &mut c_int, col_off: &mut c_int) -> 
     *row_off += view.row_offset;
     *col_off += view.col_offset;
     grid_of_view(view)
-}
-
-/// The grid a view draws on.
-///
-/// A view always names a live grid -- a window's own or `default_grid` --
-/// once `win_grid_alloc` has resolved it, which every caller here runs
-/// after; that is the one promise this module takes on trust, and the
-/// reason [`GridRef`] stays a handle (see the module docs).
-pub(crate) fn grid_of_view(view: GridView) -> GridRef {
-    // SAFETY: as above.
-    unsafe { GridRef::new(view.target) }
 }
 
 /// Read one cell straight out of the grid, optionally with its attribute.

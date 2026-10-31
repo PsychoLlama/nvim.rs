@@ -34,7 +34,7 @@ use crate::types::ui::kUIMultigrid;
 use crate::types::{FAIL, Failed, Integer, OptInt};
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_win_hide, ui_has};
-use crate::ui_compositor::{ui_comp_remove_grid, win_grid};
+use crate::ui_compositor::ui_comp_remove_grid;
 use crate::winfloat::win_float_anchor_laststatus;
 use crate::winlayer::{FrameRef, Win, frames, tabs};
 
@@ -464,7 +464,7 @@ fn insert_window(flags: c_int, new_wp: Option<Win>, oldwin: Win, _vertical: bool
         return Some(wp);
     }
     // A float becoming an ordinary window gives up its own grid.
-    ui_comp_remove_grid(win_grid(wp));
+    ui_comp_remove_grid(wp.grid_alloc());
     if ui_has(kUIMultigrid) {
         wp.w_pos_changed = true;
     } else {

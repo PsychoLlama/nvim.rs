@@ -1129,8 +1129,9 @@ PERIMETER = {
     "owned type in the tree",
     "crates/nvim/src/global_cell.rs": "the checked wrapper over c2rust's "
     "mutable statics; the raw static is touched here so it is nowhere else",
-    "crates/nvim/src/winlayer.rs": "the window/buffer/position handles: "
-    "constructing one is the unsafe step, dereferencing it is not",
+    "crates/nvim/src/winlayer.rs": "the window/buffer/position handles and "
+    "the screen grid handle: constructing one is the unsafe step, "
+    "dereferencing it is not",
     "crates/nvim/src/winlayer/": "the same, split out by family",
     "crates/nvim/src/eval/typval/handle.rs": "the value handles (`ListRef`, "
     "`DictRef`, `BlobRef`, `PartialRef`) and a dictionary's item store: "

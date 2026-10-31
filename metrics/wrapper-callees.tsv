@@ -49,7 +49,6 @@ count	callee	no_raw	defs	def
 4	uv_timer_start	0	0	
 4	xmemdupz	0	1	crates/nvim/src/memory/mod.rs
 3	.next_arg::<::core::ffi::c_int>	0	0	
-3	GridRef::new	0	1	crates/nvim/src/grid/mod.rs
 3	Live::new	0	1	crates/nvim/src/winlayer/live.rs
 3	Session::new	0	1	crates/nvim/src/terminal/mode.rs
 3	Stack::above_top	0	1	crates/nvim/src/lua/stack/mod.rs
@@ -85,6 +84,7 @@ count	callee	no_raw	defs	def
 2	Cc::new	0	17	
 2	DictRef::owning	0	1	crates/nvim/src/eval/typval/handle.rs
 2	File::from_raw_fd	0	0	
+2	GridRef::new	0	1	crates/nvim/src/winlayer/grid.rs
 2	KeyModes::read	0	0	
 2	NonNull::new_unchecked	0	0	
 2	Parser::of	0	1	crates/nvim/src/vterm/parser.rs

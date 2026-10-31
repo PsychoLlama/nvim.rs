@@ -15,7 +15,6 @@ use crate::api_error;
 use crate::grid::default_grid_ref;
 use crate::log::logmsg;
 use crate::popupmenu::pum_grid_ref;
-use crate::ui_compositor::win_grid;
 
 // `nvim__id` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
@@ -160,7 +159,7 @@ pub fn nvim__inspect_cell(grid: Integer, row: Integer, col: Integer) -> Result<A
             error = err_bad_number(c"grid handle", grid);
             return ret.reported(error);
         };
-        g = win_grid(wp);
+        g = wp.grid_alloc();
     }
     if row < 0 as Integer
         || row >= g.rows as Integer

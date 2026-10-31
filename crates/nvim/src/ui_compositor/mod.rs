@@ -22,8 +22,7 @@
 //! contributors; licensed under the Apache License, Version 2.0, as recorded
 //! in `LICENSE.txt`.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -44,8 +43,7 @@ use crate::options::{kOptRdbFlagCompositor, kOptRdbFlagInvalid};
 use crate::os::time::os_sleep;
 use crate::types::ui::{kLineFlagInvalid, kLineFlagWrap, kUIMultigrid};
 use crate::types::{
-    Boolean, Handle, Integer, LineFlags, NUL, RemoteUI, ScreenAttr, ScreenChar, ScreenGrid,
-    String_0,
+    Boolean, Handle, Integer, LineFlags, NUL, RemoteUI, ScreenAttr, ScreenChar, String_0,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{
@@ -63,12 +61,6 @@ fn default_layer() -> GridRef {
 /// The message grid, which the `'msgsep'` row is also attributed to.
 fn msg_layer() -> GridRef {
     msg_grid_ref()
-}
-
-/// The window's own grid.
-pub(crate) fn win_grid(mut window: Win) -> GridRef {
-    // SAFETY: a live window owns its `w_grid_alloc` outright.
-    unsafe { GridRef::new(&raw mut window.w_grid_alloc) }
 }
 
 /// How many UIs this module draws for. Zero means nothing is composed.
@@ -256,7 +248,7 @@ pub fn ui_comp_put_grid(
             && !on_top
         {
             let below = layer_at(insert_at - 1);
-            let curwin_grid = win_grid(win);
+            let curwin_grid = win.grid_alloc();
             if below.same(curwin_grid) && below.zindex == grid.zindex {
                 insert_at -= 1;
             }
@@ -376,7 +368,7 @@ pub(crate) fn ui_comp_mouse_focus(row: c_int, col: c_int) -> Option<GridRef> {
         // With `ext_multigrid` a window's grid is not composed and so has no
         // `comp_row`/`comp_col`; the window's own position stands in.
         for wp in windows_in_curtab() {
-            let grid = win_grid(wp);
+            let grid = wp.grid_alloc();
             let (winrow, wincol) = (wp.w_winrow, wp.w_wincol);
             if grid.mouse_enabled
                 && row >= winrow
@@ -397,7 +389,7 @@ pub fn ui_comp_get_grid_at_coord(row: c_int, col: c_int) -> GridRef {
         return grid;
     }
     for wp in windows_in_curtab() {
-        let grid = win_grid(wp);
+        let grid = wp.grid_alloc();
         let hidden = wp.w_config.hide;
         if grid.covers(row, col) && !hidden {
             return grid;
@@ -622,18 +614,6 @@ fn compose_under(grid: GridRef) {
     let bot = grid.comp_row + grid.rows;
     let right = grid.comp_col + grid.cols;
     compose_area(grid.comp_row, bot, grid.comp_col, right);
-}
-
-/// Recomposes the area under `grid`, which is what an option affecting
-/// composition — `'pumblend'` for the popup menu, say — needs after a change.
-///
-/// # Safety
-/// `grid` must satisfy [`GridRef`]'s contract.
-pub unsafe fn ui_comp_compose_grid(grid: *mut ScreenGrid) {
-    if ui_comp_should_draw() {
-        // SAFETY: the caller's obligation.
-        compose_under(unsafe { GridRef::new(grid) });
-    }
 }
 
 /// C's `DLOG`, for the two geometry complaints below.

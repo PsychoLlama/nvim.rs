@@ -43,9 +43,7 @@ use crate::ui::{
     ui_call_win_external_pos, ui_call_win_float_pos, ui_call_win_hide, ui_call_win_pos,
     ui_call_win_viewport, ui_check_cursor_grid, ui_has,
 };
-use crate::ui_compositor::{
-    ui_comp_layers_adjust, ui_comp_put_grid, ui_comp_remove_grid, win_grid,
-};
+use crate::ui_compositor::{ui_comp_layers_adjust, ui_comp_put_grid, ui_comp_remove_grid};
 use crate::window::state::FLOAT_ANCHOR_STR;
 use crate::winfloat::WIN_CONFIG_INIT;
 use crate::winlayer::{Buf, Win};
@@ -232,11 +230,11 @@ fn ext_win_position(window: Win, validate: bool) {
         if ui_has(kUIMultigrid) {
             ui_call_win_hide(wp.w_grid_alloc.handle as Integer);
         }
-        ui_comp_remove_grid(win_grid(wp));
+        ui_comp_remove_grid(wp.grid_alloc());
         return;
     }
     let (h, w) = (wp.w_height_outer, wp.w_width_outer);
-    ui_comp_put_grid(win_grid(wp), comp_row, comp_col, h, w, valid, false);
+    ui_comp_put_grid(wp.grid_alloc(), comp_row, comp_col, h, w, valid, false);
     if ui_has(kUIMultigrid) {
         let anchor = String_0::from_cstr(FLOAT_ANCHOR_STR[c.anchor as usize]);
         let anchor_grid = grid.handle;
