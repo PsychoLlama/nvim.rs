@@ -6,10 +6,7 @@
 //! the UI before `VimEnter`. The `time_msg_at` calls between the phases are
 //! the seams `--startuptime` reports.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// The exports here are metrics/abi-ledger.jsonl rows (`early_init`, `event_init`), and
-// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::env::appname_is_valid;
 use crate::event::multiqueue::ChildQueue;
@@ -101,9 +98,8 @@ use crate::winlayer::{Win, first_window, windows};
 
 /// Bring up the event loop and everything that hangs off it.
 ///
-/// Exported: the unit tests build an editor without a `main`.
-#[unsafe(no_mangle)]
-pub extern "C" fn event_init() {
+/// Exported (`harness.rs`): the unit tests build an editor without a `main`.
+pub fn event_init() {
     main_loop_init();
     env_init();
     resize_events.set(Some(ChildQueue::of_main_loop()));
@@ -141,9 +137,8 @@ pub(crate) fn event_teardown() -> bool {
 /// looked at: the option defaults, the first window, the runtime paths.
 /// `clean` is `--clean`, which has to be known before any config is read.
 ///
-/// Exported: the unit tests build an editor without a `main`.
-#[unsafe(no_mangle)]
-pub extern "C" fn early_init(clean: bool) {
+/// Exported (`harness.rs`): the unit tests build an editor without a `main`.
+pub fn early_init(clean: bool) {
     os_hint_priority();
     estack_init();
     cmdline_init();

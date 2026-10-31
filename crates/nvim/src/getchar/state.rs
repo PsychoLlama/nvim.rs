@@ -27,7 +27,7 @@
 //! typeahead's static initial storage is compared by address), the
 //! `:source!` stream stack, the `vim.on_key()` byte buffer, the 'langmap'
 //! table, and `test_disable_char_avail`, which the oldtest harness writes by
-//! symbol name.
+//! symbol name (so it is defined in `harness.rs` and re-exported here).
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -35,10 +35,7 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-#![deny(unsafe_op_in_unsafe_fn)]
-// The exports here are metrics/abi-ledger.jsonl rows (`test_disable_char_avail`), and
-// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -49,8 +46,7 @@ use crate::os::fs::CFile;
 use crate::types::{LuaRef, size_t, uint8_t};
 use core::ffi::c_int;
 
-#[unsafe(no_mangle)]
-pub static test_disable_char_avail: GlobalCell<bool> = GlobalCell::new(false);
+pub use crate::harness::test_disable_char_avail;
 pub(crate) static langmap_mapchar: GlobalCell<[uint8_t; 256]> = GlobalCell::new([0; 256]);
 
 /// The key [`vungetc`](super::vungetc) put back, and what came with it.

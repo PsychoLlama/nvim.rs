@@ -14,12 +14,11 @@
 //! stopping inside it; the decoders reject the value separately.
 //!
 //! `utf8len_tab` is exported by name: `test/unit/fixtures/shim.h` indexes it
-//! directly from C, so it must stay a 256-byte array under that symbol.
+//! directly from C, so it must stay a 256-byte array under that symbol. The
+//! static itself is defined in `harness.rs`, the home of the exported names,
+//! and re-exported here.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// The exports here are metrics/abi-ledger.jsonl rows (`utf8len_tab`), and
-// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 #![deny(
@@ -31,7 +30,7 @@
 )]
 
 /// One of the two tables, given the answer for a byte that introduces nothing.
-const fn lead_byte_lengths(introduces_nothing: u8) -> [u8; 256] {
+pub(crate) const fn lead_byte_lengths(introduces_nothing: u8) -> [u8; 256] {
     let mut tab = [0u8; 256];
     let mut b = 0;
     while b < 256 {
@@ -49,10 +48,7 @@ const fn lead_byte_lengths(introduces_nothing: u8) -> [u8; 256] {
     tab
 }
 
-/// Sequence length per lead byte, answering **1** for a byte that introduces
-/// nothing — so a walk over invalid text always makes progress.
-#[unsafe(no_mangle)]
-pub static utf8len_tab: [u8; 256] = lead_byte_lengths(1);
+pub use crate::harness::utf8len_tab;
 
 /// Sequence length per lead byte, answering **0** for a byte that introduces
 /// nothing — so a caller can tell a valid lead byte from any other.

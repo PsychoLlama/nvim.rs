@@ -1118,6 +1118,10 @@ PERIMETER = {
     "parser, and the terminfo entry unibilium hands back",
     "crates/nvim/src/xdiff/": "libxdiff, vendored: which bytes are whitespace "
     "is `isspace(3)`'s answer in the user's locale",
+    "crates/nvim/src/harness.rs": "the C symbols the in-repo test harnesses "
+    "resolve by name (docs/abi-ledger.md's editor rows): fronts over the "
+    "modules' slice forms that read the C side's pointers, and the data "
+    "symbols the modules re-export",
     # -- The primitives everything else stands on. Their whole job is to be
     # the one place a raw operation happens, so that callers need not.
     "crates/nvim/src/allocator.rs": "the global allocator: malloc/realloc/free",

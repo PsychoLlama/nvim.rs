@@ -1,5 +1,4 @@
-//! The UTF-8 codec: bytes to a codepoint and back -- and the home of the two
-//! pointer spellings of the multibyte readers the C harness still resolves.
+//! The UTF-8 codec: bytes to a codepoint and back.
 //!
 //! This port decodes the *original* UTF-8, up to six bytes, not the four-byte
 //! form Unicode settled on in 2003. That is upstream's choice and it shows up
@@ -9,11 +8,11 @@
 //!
 //! Two decoders, deliberately different.
 //!
-//! - [`utf_ptr2char`] ([`char_at`]) is forgiving: given a byte that is not
+//! - [`char_at`] (upstream's `utf_ptr2char`) is forgiving: given a byte that is not
 //!   the start of a valid sequence, or a sequence with a bad continuation
 //!   byte, it answers the *first byte's own value*. Nothing is ever an error,
 //!   so a caller walking a buffer of arbitrary bytes always gets something.
-//! - [`utf_ptr2char_info_impl`] ([`strict_char_at`]) is strict: it answers a
+//! - [`strict_char_at`] (upstream's `utf_ptr2char_info_impl`) is strict: it answers a
 //!   **negative** number for a sequence it will not accept, which is how the
 //!   header's inlined `utf_ptr2char_info` decides to report a length of one.
 //!   It never handles ASCII — its caller must have ruled that out — and its
@@ -37,16 +36,15 @@
 //! Four items are exported by name and may not change signature:
 //! `utf_ptr2char`, `utf_ptr2len` and `utf_ptr2char_info_impl` are
 //! `metrics/abi-ledger.jsonl` rows, and `utf8len_tab` (in `tables`) is
-//! compiled *against* by `unit-fixtures.so`. They are the only pointer forms
-//! left, and why this file allows `unsafe` and its siblings do not.
+//! compiled *against* by `unit-fixtures.so`. They live in `harness.rs`, as
+//! fronts over [`char_at`], [`char_len`] and [`sequence_value`] (and the
+//! table as a data symbol re-exported here), so nothing in this family
+//! reads through a pointer.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// The exports here are metrics/abi-ledger.jsonl rows (`utf_ptr2char`, `utf_ptr2char_info_impl`, `utf_ptr2len`), and
-// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 // The carve of the transpiled module; see each child's docs.
 mod slice;
@@ -58,8 +56,8 @@ pub use self::slice::{
 };
 pub use self::tables::*;
 use self::text::{
-    CBytes, NulTerminated, Prefix, Text, ambiguous_width_in, cells_in, char_at_in, char_info_in,
-    char_len_in, cluster_len_in, head_off_in, next_cluster_in, string_cells_in,
+    CBytes, Prefix, Text, ambiguous_width_in, cells_in, char_at_in, char_info_in, cluster_len_in,
+    head_off_in, next_cluster_in, string_cells_in,
 };
 
 /// The characters of `s`, as `MB_PTR_ADV` steps over them: one item per base
@@ -86,7 +84,7 @@ const LEAD_PAYLOAD: [u32; 7] = [0, 0, 0x1f, 0x0f, 0x07, 0x03, 0x01];
 /// bytes, `0b1110xxxx` for three, and so on.
 const LEAD_PREFIX: [u32; 7] = [0, 0, 0xc0, 0xe0, 0xf0, 0xf8, 0xfc];
 
-/// What [`utf_ptr2char_info_impl`] adds to its accumulated bits, per length.
+/// What [`sequence_value`] adds to its accumulated bits, per length.
 ///
 /// The accumulator sums whole bytes rather than masking each one, so what is
 /// left over is the sum of the UTF-8 framing bits, and this subtracts it. For
@@ -118,55 +116,17 @@ pub(crate) fn utf_is_trail_byte(byte: u8) -> bool {
     byte & 0xc0 == 0x80
 }
 
-/// Decode the multibyte sequence at `p`, which is `len` bytes long.
+/// Decode the multibyte sequence `bytes` starts with, which is `len` bytes
+/// long: the arithmetic of upstream's `utf_ptr2char_info_impl`, which the C
+/// fixture resolves by name (`harness.rs` exports it).
 ///
 /// **Does not handle ASCII**: a `len` of 0 or 1 means "not a character" and
 /// makes the answer negative, which is also what a bad continuation byte
 /// produces. So a negative answer means "this is not a character here", and
-/// the caller displays the byte rather than the codepoint.
-///
-/// # Safety
-///
-/// `p` must point at `max(2, len)` readable bytes — the second byte is read
-/// unconditionally, which is sound for every sequence this is called for
-/// because an incomplete one cannot be the last byte of a NUL-terminated
-/// string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn utf_ptr2char_info_impl(p: *const uint8_t, len: uintptr_t) -> int32_t {
-    // The second byte is always read, even for `len` 0 and 1; the
-    // correction makes the answer negative either way.
-    let read = if len < 3 { 2 } else { len };
-    let mut code_point = unsafe { *p } as u32;
-    for i in 1..read {
-        let cur = unsafe { *p.add(i) };
-        if !utf_is_trail_byte(cur) {
-            return -1;
-        }
-        code_point = (code_point << 6).wrapping_add(cur as u32);
-    }
-    code_point.wrapping_add(CORRECTIONS[len]) as int32_t
-}
-
-/// The codepoint at `p`, or the first byte's own value if there is no
-/// complete sequence there; [`char_at`] over a string.
-///
-/// # Safety
-///
-/// `p` must point at a NUL-terminated string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn utf_ptr2char(p: *const c_char) -> c_int {
-    char_at_in(unsafe { NulTerminated::new(p) }, 0)
-}
-
-/// How many bytes the character at `p` occupies, or 0 at a NUL;
-/// [`char_len`] over a string.
-///
-/// # Safety
-///
-/// `p` must point at a NUL-terminated string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn utf_ptr2len(p: *const c_char) -> c_int {
-    char_len_in(unsafe { NulTerminated::new(p) }, 0) as c_int
+/// the caller displays the byte rather than the codepoint. The second byte
+/// is read whatever `len` says; past the end of `bytes` it reads as a NUL.
+pub(crate) fn sequence_value(bytes: &[u8], len: usize) -> i32 {
+    text::sequence_value_in(bytes, 0, len)
 }
 
 /// Can `c` combine onto a character before it, whatever that character is?
@@ -577,19 +537,8 @@ mod tests {
         let mut check = |c: c_int| {
             let len = encode_char(c, &mut buf);
             assert_eq!(len as c_int, utf_char2len(c), "{c:#x} length");
-            buf[len] = 0;
-            // SAFETY: `buf` holds the sequence and the NUL written after it.
-            assert_eq!(unsafe { utf_ptr2char(buf.as_ptr().cast()) }, c, "{c:#x}");
-            // A NUL is the one character whose length `utf_ptr2len`
-            // reports as 0 rather than 1 — it is the end of the string,
-            // not a character in it.
-            let want = if c == 0 { 0 } else { len as c_int };
-            // SAFETY: as above.
-            assert_eq!(
-                unsafe { utf_ptr2len(buf.as_ptr().cast()) },
-                want,
-                "{c:#x} ptr2len"
-            );
+            assert_eq!(char_at(&buf[..len]), c, "{c:#x}");
+            assert_eq!(char_len(&buf[..len]), len, "{c:#x} char_len");
         };
         for c in 0..0x2000 {
             check(c);
@@ -604,48 +553,6 @@ mod tests {
         }
     }
 
-    /// The two exported pointer readers, at every offset of strings that end
-    /// in the middle of a sequence, a cluster or an emoji, each in an
-    /// allocation that ends exactly at its NUL: under Miri, a reader that
-    /// looked one byte past the terminator would be an out-of-bounds read.
-    /// This is the claim `text.rs`'s safety argument makes, checked.
-    #[test]
-    fn no_pointer_reader_reads_past_the_nul() {
-        let texts: [&[u8]; 14] = [
-            b"",
-            b"a",
-            b"\xc3",
-            b"\xe2\x82",
-            b"\xf0\x9f\x98",
-            b"\xfc\x84\x80\x80\x80",
-            b"a\xcc",
-            b"\xd8\x80\xe2",
-            b"\xd8\x80\xe2\x82",
-            b"\xe2\x9d\xa4\xef\xb8",
-            b"\xf0\x9f\xa7\x91\xe2\x80\x8d\xf0\x9f",
-            b"\xd9\x84\xd8",
-            b"\x80\x80\x80",
-            b"x\xcc\x80\xcc\x81\xcc",
-        ];
-        for text in texts {
-            // An allocation of exactly the string and its NUL.
-            let buf: Box<[c_char]> = text
-                .iter()
-                .map(|&b| b as c_char)
-                .chain(core::iter::once(0))
-                .collect();
-            let p = buf.as_ptr();
-            for at in 0..=text.len() {
-                // SAFETY: `p + at` is inside the NUL-terminated `buf`.
-                unsafe {
-                    let q = p.add(at);
-                    let _ = utf_ptr2char(q);
-                    let _ = utf_ptr2len(q);
-                }
-            }
-        }
-    }
-
     /// A NUL, a continuation byte and `0xFE` are all "one byte, its own
     /// value" to the forgiving decoder, and all negative to the strict one.
     #[test]
@@ -656,10 +563,7 @@ mod tests {
             b"\xfe\x80",
             b"\xc3\x41",
         ] {
-            let p = bytes.as_ptr() as *const c_char;
-            // SAFETY: every literal above is at least two bytes long and the
-            // decoders read no further than the lead byte promises.
-            assert_eq!(unsafe { utf_ptr2char(p) }, bytes[0] as c_int, "{bytes:?}");
+            assert_eq!(char_at(bytes), c_int::from(bytes[0]), "{bytes:?}");
             let info = char_info_at(bytes);
             if bytes[0] >= 0x80 {
                 assert!(info.value < 0, "{bytes:?}");

@@ -21,12 +21,12 @@ use std::ffi::{c_char, c_int};
 use neovim::ex_docmd::do_cmdline_cmd;
 use neovim::grid::MAX_SCHAR_SIZE;
 use neovim::harness::schar_get;
+use neovim::harness::{utf_ptr2char, utf_ptr2len};
 use neovim::mbyte::{
     c_ambiguous_width, c_cells_at, c_char_info, c_cluster_len, c_cluster_schar, c_head_off,
     c_next_cluster, c_off_next, c_partial_cells_in, c_prev_start, c_string_cells,
     c_string_cells_len, c_utf_index_to_byte, c_utf_lengths, char_count, class_in, cluster_len,
-    cp_bounds, encode_char, promised_char_len, strcmp_ic_in, strnicmp_in, utf_ptr2char,
-    utf_ptr2len, valid_utf8,
+    cp_bounds, encode_char, promised_char_len, strcmp_ic_in, strnicmp_in, valid_utf8,
 };
 use neovim::memory::XString;
 use neovim::option::vars::{P_AMBW, P_ARSHAPE, P_EMOJI};

@@ -1,6 +1,6 @@
 count	callee	no_raw	defs	def
 39	CStr::from_ptr	0	0	
-31	from_raw_parts	0	0	
+33	from_raw_parts	0	0	
 28	f	0	0	
 26	Term::new	0	1	crates/nvim/src/terminal/mod.rs
 21	multiqueue_put_event	0	1	crates/nvim/src/event/multiqueue.rs
@@ -34,7 +34,7 @@ count	callee	no_raw	defs	def
 6	Stack::from_raw	0	1	crates/nvim/src/lua/stack/mod.rs
 5	.next_arg::<::core::ffi::c_ulong>	0	0	
 5	Handle::new	0	1	crates/nvim/src/event/time.rs
-5	Self::new	0	18	
+5	Self::new	0	17	
 5	Signal::new	0	1	crates/nvim/src/event/signal.rs
 5	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
 5	handler	0	0	
@@ -85,12 +85,11 @@ count	callee	no_raw	defs	def
 2	.copy_from_nonoverlapping	0	0	
 2	.next_arg::<::core::ffi::c_long>	0	0	
 2	.read	0	0	
-2	Cc::new	0	18	
+2	Cc::new	0	17	
 2	DictRef::owning	0	1	crates/nvim/src/eval/typval/handle.rs
 2	File::from_raw_fd	0	0	
 2	KeyModes::read	0	0	
 2	NonNull::new_unchecked	0	0	
-2	NulTerminated::new	0	1	crates/nvim/src/mbyte/utf8/text.rs
 2	Parser::of	0	1	crates/nvim/src/vterm/parser.rs
 2	Stack::entry	0	1	crates/nvim/src/lua/stack/dispatch.rs
 2	Vec::from_raw_parts	0	0	
@@ -99,6 +98,7 @@ count	callee	no_raw	defs	def
 2	arena_dup	0	1	crates/nvim/src/tui/quirks.rs
 2	arena_memdupz	0	1	crates/nvim/src/memory/arena.rs
 2	cells_mut	0	1	crates/nvim/src/vterm/screen/mod.rs
+2	character_bytes	0	1	crates/nvim/src/harness.rs
 2	copy_bytes	0	1	crates/nvim/src/memory/mod.rs
 2	copy_nonoverlapping	0	0	
 2	decref	0	1	crates/nvim/src/event/proc.rs
@@ -148,7 +148,6 @@ count	callee	no_raw	defs	def
 2	ts_node_is_null	0	0	
 2	ts_tree_delete	0	0	
 2	tv_dict_free_dict	0	1	crates/nvim/src/eval/typval/handle.rs
-2	utf_ptr2char	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 2	uv_freeaddrinfo	0	0	
 2	uv_fs_lstat	0	0	
 2	uv_fs_req_cleanup	0	0	
@@ -171,7 +170,7 @@ count	callee	no_raw	defs	def
 1	.next_arg::<::core::ffi::c_uint>	0	0	
 1	.offset_from_unsigned	0	0	
 1	BorrowedFd::borrow_raw	0	0	
-1	Box::new	0	18	
+1	Box::new	0	17	
 1	CStr::from_bytes_with_nul_unchecked	0	0	
 1	DictRef::retained	0	1	crates/nvim/src/eval/typval/handle.rs
 1	ListRef::retained	0	1	crates/nvim/src/eval/typval/handle.rs
@@ -360,7 +359,6 @@ count	callee	no_raw	defs	def
 1	tui_wait_ready	0	1	crates/nvim/src/tui/tui.rs
 1	tzset	0	0	
 1	uname	0	0	
-1	utf_ptr2len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 1	uv_accept	0	0	
 1	uv_dlopen	0	0	
 1	uv_dlsym	0	0	

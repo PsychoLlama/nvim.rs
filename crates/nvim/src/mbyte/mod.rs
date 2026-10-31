@@ -22,9 +22,10 @@
 //! `8g8` ([`utf_find_illegal`]), a validity check and the `K_SPECIAL`
 //! unescaper.
 //!
-//! Three symbols in [`utf8`] are exported by name and may not change
+//! Three of this family's readers are exported by name and may not change
 //! signature (`utf_ptr2char`, `utf_ptr2len`, `utf_ptr2char_info_impl`), and
-//! `utf8len_tab` is compiled *against* by `unit-fixtures.so`.
+//! `utf8len_tab` is compiled *against* by `unit-fixtures.so`; all four live
+//! in `harness.rs`, as fronts over the slice forms below.
 //!
 //! # The slice API
 //!
@@ -38,7 +39,7 @@
 //! | upstream | slice form | C-string form | answers |
 //! | --- | --- | --- | --- |
 //! | `utf_ptr2char` | [`char_at`] | (the export) | the codepoint, or the lead byte's own value |
-//! | `utf_ptr2char_info_impl` | [`strict_char_at`] | | the codepoint, or a negative "not a character" |
+//! | `utf_ptr2char_info_impl` | [`strict_char_at`] | (the export) | the codepoint, or a negative "not a character" |
 //! | `utf_ptr2char_info` | [`char_info_at`] | [`c_char_info`] | both of the above, as a [`CharInfo`] |
 //! | `utf_ptr2len` | [`char_len`] | (the export) | bytes in the character, never past the end |
 //! | `utf_ptr2len_len` | [`promised_char_len`] | | bytes the lead byte *promised* |
@@ -67,14 +68,12 @@
 //!
 //! # The pointer forms
 //!
-//! Gone, but for the two exports in the table: every reader is written once,
-//! in `utf8/text.rs`, over either kind of text, and the pointer spellings
-//! that were one-line shims over it were deleted with their last callers.
+//! Gone: every reader is written once, in `utf8/text.rs`, over either kind
+//! of text, and the pointer spellings that were one-line shims over it were
+//! deleted with their last callers. The three exports in the table are
+//! fronts in `harness.rs` that read the C string's bytes there.
 
-// No `unsafe` here, and none allowed: the crate denies it. Not `forbid`,
-// because a `forbid` reaches the whole subtree and `utf8/` keeps the
-// family's exported symbols, which need the allow.
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 
 use core::fmt::Write as _;
 
@@ -104,8 +103,8 @@ use crate::pos::MAXCOL;
 use crate::types::{
     CONV_9_TO_UTF8, CONV_ICONV, CONV_NONE, CONV_NONE_INIT, CONV_TO_LATIN1, CONV_TO_LATIN9,
     CONV_TO_UTF8, CharBoundsOff, CharInfo, ColNr, EvalFuncData, Expand, GraphemeState, IOSIZE,
-    List, MB_MAXCHAR, ScreenChar, TypVal, VarNumber, VimConv, int8_t, int32_t, ptrdiff_t, size_t,
-    uint8_t, uint64_t, uintptr_t, utf8proc_int32_t,
+    List, MB_MAXCHAR, ScreenChar, TypVal, VarNumber, VimConv, int8_t, ptrdiff_t, size_t, uint64_t,
+    utf8proc_int32_t,
 };
 use crate::utf8proc::{
     UTF8PROC_CASEFOLD, UTF8PROC_CATEGORY_ME, UTF8PROC_CATEGORY_MN, utf8proc_decompose_char,

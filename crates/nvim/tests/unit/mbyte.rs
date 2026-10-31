@@ -17,12 +17,12 @@ use std::ffi::{c_char, c_int};
 
 use neovim::charset::{is_word_at, vim_iswordc};
 use neovim::grid::MAX_SCHAR_SIZE;
-use neovim::harness::schar_get;
+use neovim::harness::{schar_get, utf_ptr2char, utf_ptr2char_info_impl, utf_ptr2len};
 use neovim::mbyte::{
     c_cells_at, c_char_info, c_cluster_len, c_cluster_schar, c_head_off, c_next_cluster,
     c_off_next, c_partial_cells_in, c_prev_start, c_string_cells, c_string_cells_len, cells_at,
     char_at, char_count, char_info_at, char_len, cluster_len, cp_bounds, encode_char,
-    strict_char_at, string_cells, utf_fold, utf_ptr2char, utf_ptr2len,
+    strict_char_at, string_cells, utf_fold,
 };
 use neovim::option::vars::P_ARSHAPE;
 use neovim::winlayer::Buf;
@@ -761,5 +761,64 @@ fn the_strict_decoder_rejects_what_the_forgiving_one_passes_through() {
     ] {
         assert!(strict_char_at(case) < 0, "{case:x?}");
         assert_eq!(char_at(case), i32::from(case.first().copied().unwrap_or(0)));
+    }
+}
+
+/// Encode then decode through the exported readers, over every codepoint the
+/// six-byte form reaches -- sampled, plus every boundary of every length.
+#[test]
+fn the_exports_round_trip() {
+    let mut buf = [0u8; 7];
+    let mut check = |c: c_int| {
+        let len = encode_char(c, &mut buf);
+        buf[len] = 0;
+        // SAFETY: `buf` holds the sequence and the NUL written after it.
+        unsafe {
+            assert_eq!(utf_ptr2char(buf.as_ptr().cast()), c, "{c:#x}");
+            // A NUL is the one character whose length `utf_ptr2len`
+            // reports as 0 rather than 1 — it is the end of the string,
+            // not a character in it.
+            let want = if c == 0 { 0 } else { len as c_int };
+            assert_eq!(utf_ptr2len(buf.as_ptr().cast()), want, "{c:#x} ptr2len");
+            if len > 1 {
+                assert_eq!(utf_ptr2char_info_impl(buf.as_ptr(), len), c, "{c:#x} info");
+            }
+        }
+    };
+    for c in 0..0x2000 {
+        check(c);
+    }
+    for boundary in [0x80, 0x800, 0x10000, 0x20_0000, 0x400_0000] {
+        for c in boundary - 2..boundary + 2 {
+            check(c);
+        }
+    }
+    for c in (0x10000..0x7fff_ffff).step_by(0x9_1d31) {
+        check(c);
+    }
+}
+
+/// A NUL, a continuation byte and `0xFE` are all "one byte, its own value"
+/// to the forgiving exported reader; the strict one answers negative for
+/// any length below two.
+#[test]
+fn the_exports_on_what_is_not_a_character() {
+    for &bytes in &[
+        b"\x00\x00".as_slice(),
+        b"\x80\x80",
+        b"\xfe\x80",
+        b"\xc3\x41",
+    ] {
+        // SAFETY: every literal above is two bytes long and the readers read
+        // no further than the lead byte promises.
+        unsafe {
+            let p = bytes.as_ptr();
+            assert_eq!(utf_ptr2char(p.cast()), c_int::from(bytes[0]), "{bytes:?}");
+            if bytes[0] >= 0x80 {
+                for len in 0..2 {
+                    assert!(utf_ptr2char_info_impl(p, len) < 0, "{bytes:?} {len}");
+                }
+            }
+        }
     }
 }

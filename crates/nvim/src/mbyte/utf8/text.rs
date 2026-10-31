@@ -1,38 +1,22 @@
-//! The UTF-8 readers, written once over the two kinds of text a caller can
-//! hold: a slice, whose end is the end of the text, and a pointer into a
-//! NUL-terminated string, whose NUL is.
+//! The UTF-8 readers, written once over the kinds of text a caller can
+//! hold: a slice, whose end is the end of the text, and the bytes of a C
+//! string, whose first NUL is.
 //!
-//! Every slice form in this family and every pointer form that still has
-//! callers outside it is a one-line call into a reader here, so the two
-//! cannot drift: they are the same code, monomorphised twice. [`Text`] is
-//! the difference between them, and it is three questions -- the byte at an
-//! offset, whether the text has ended there, and how much of it is left if
-//! the text can say.
+//! Every slice form in this family is a one-line call into a reader here, so
+//! the two cannot drift: they are the same code, monomorphised per text.
+//! [`Text`] is the difference between them, and it is three questions -- the
+//! byte at an offset, whether the text has ended there, and how much of it
+//! is left if the text can say.
 //!
 //! The answers differ exactly where the slice forms document that they do.
 //! A slice's end reads as a NUL, so a sequence the slice cuts short is
 //! incomplete, as one cut short by a NUL is; a NUL *inside* a slice is an
-//! ordinary byte, one character long, where the pointer forms stop. A reader
-//! that cares about the difference (whether an incomplete sequence at the end
-//! may still be completed, say) asks [`Text::left`], which only a slice can
-//! answer.
-//!
-//! # The pointer text, and why it is sound
-//!
-//! [`NulTerminated`] reads its bytes through a raw pointer, and nothing in
-//! the type stops a reader asking for a byte past the NUL. What stops it is
-//! that **every reader in this file reads forwards from the offset it was
-//! given and stops at the first byte that is not part of what it is
-//! decoding**, and a NUL never is: it is ASCII, so it ends a character, never
-//! continues a sequence and never composes. The backwards walk of
-//! [`head_off_in`] reads only bytes before the offset it was given, which a
-//! caller's pointer into a string is past. That discipline is the whole of
-//! the safety argument, so the type and every reader that can be handed one
-//! live in this one file, and nothing outside it can name either.
+//! ordinary byte, one character long, where the C-string forms stop. A
+//! reader that cares about the difference (whether an incomplete sequence at
+//! the end may still be completed, say) asks [`Text::left`], which only a
+//! slice can answer.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// `NulTerminated` reads a C string through its pointer; see the module docs.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -40,8 +24,6 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-
-use core::ffi::c_char;
 
 use super::{
     CORRECTIONS, GRAPHEME_STATE_INIT, LEAD_PAYLOAD, iscomposing, utf_is_trail_byte, utf8len_tab,
@@ -64,13 +46,14 @@ const VS16: i32 = 0xfe0f;
 /// The text a reader walks; see the module docs.
 pub(super) trait Text: Copy {
     /// The byte at `i`. Past the end of a slice this is a NUL, which is what
-    /// a pointer would have read there.
+    /// a C string's terminator reads as.
     fn byte(self, i: usize) -> u8;
     /// Whether the text has ended at `i`: past a slice's last byte, or at a
-    /// pointer's NUL.
+    /// C string's NUL.
     fn ends_at(self, i: usize) -> bool;
     /// How many bytes the text holds from `i` on, when it can say -- a slice
-    /// can, a NUL-terminated string cannot without reading them.
+    /// can, a C string's bytes cannot say where its NUL is without reading
+    /// them.
     fn left(self, i: usize) -> Option<usize>;
 }
 
@@ -94,8 +77,8 @@ impl Text for &[u8] {
 /// The bytes of a C string, held as a slice: the slice's end or a NUL in it
 /// ends the text, and nothing in it is "cut short" -- a sequence its end
 /// interrupts is just not one, as it would be at a NUL. The readers answer
-/// over this exactly what they answer over the [`NulTerminated`] string the
-/// bytes came from.
+/// over this exactly what upstream's pointer forms answered over the string
+/// the bytes came from.
 #[derive(Clone, Copy)]
 pub(super) struct CBytes<'a>(pub(super) &'a [u8]);
 
@@ -103,40 +86,6 @@ impl Text for CBytes<'_> {
     #[inline(always)]
     fn byte(self, i: usize) -> u8 {
         self.0.get(i).copied().unwrap_or(0)
-    }
-
-    #[inline(always)]
-    fn ends_at(self, i: usize) -> bool {
-        self.byte(i) == 0
-    }
-
-    #[inline(always)]
-    fn left(self, _i: usize) -> Option<usize> {
-        None
-    }
-}
-
-/// A NUL-terminated string, read through a pointer to its start.
-#[derive(Clone, Copy)]
-pub(super) struct NulTerminated(*const u8);
-
-impl NulTerminated {
-    /// # Safety
-    ///
-    /// `p` must point into a NUL-terminated string, and the text is read
-    /// only by the readers in this file (see the module docs).
-    #[inline(always)]
-    pub(super) const unsafe fn new(p: *const c_char) -> Self {
-        Self(p.cast::<u8>())
-    }
-}
-
-impl Text for NulTerminated {
-    #[inline(always)]
-    fn byte(self, i: usize) -> u8 {
-        // SAFETY: the readers in this file read only up to the NUL; see the
-        // module docs.
-        unsafe { *self.0.add(i) }
     }
 
     #[inline(always)]
@@ -265,13 +214,12 @@ pub(super) fn char_at_in<T: Text>(t: T, i: usize) -> i32 {
     code_point.cast_signed()
 }
 
-/// [`utf_ptr2char_info_impl`](super::utf_ptr2char_info_impl)'s decode at `i`
-/// for a sequence of `len` bytes: negative for anything that is not one,
-/// including a `len` of 0 or 1. The second byte is read whatever `len` says,
-/// as the pointer form reads it; a byte at or above 0x80 is never a text's
-/// last.
+/// [`sequence_value`](super::sequence_value)'s decode at `i` for a sequence
+/// of `len` bytes: negative for anything that is not one, including a `len`
+/// of 0 or 1. The second byte is read whatever `len` says, as the pointer
+/// form read it; a byte at or above 0x80 is never a C string's last.
 #[inline(always)]
-fn decode_in<T: Text>(t: T, i: usize, len: usize) -> i32 {
+pub(super) fn sequence_value_in<T: Text>(t: T, i: usize, len: usize) -> i32 {
     let read = if len < 3 { 2 } else { len };
     let mut code_point = u32::from(t.byte(i));
     for k in 1..read {
@@ -290,10 +238,10 @@ fn decode_in<T: Text>(t: T, i: usize, len: usize) -> i32 {
 ///
 /// Which negative number is the one place the two texts part ways beyond the
 /// end: a slice answers -1, as its form always has, and a NUL-terminated
-/// string answers whatever [`utf_ptr2char_info_impl`]'s arithmetic leaves
-/// for a byte that leads nothing, as the pointer form always has.
+/// string answers whatever [`sequence_value`]'s arithmetic leaves for a byte
+/// that leads nothing, as the pointer form always has.
 ///
-/// [`utf_ptr2char_info_impl`]: super::utf_ptr2char_info_impl
+/// [`sequence_value`]: super::sequence_value
 #[inline(always)]
 pub(super) fn strict_char_at_in<T: Text>(t: T, i: usize) -> i32 {
     if t.left(i) == Some(0) {
@@ -307,7 +255,7 @@ pub(super) fn strict_char_at_in<T: Text>(t: T, i: usize) -> i32 {
     if t.left(i).is_some() && (len < 2 || cut_short(t, i)) {
         return -1;
     }
-    decode_in(t, i, len)
+    sequence_value_in(t, i, len)
 }
 
 /// The codepoint at `i` and the bytes it occupies; a byte that is not a
@@ -434,7 +382,7 @@ pub(super) fn head_off_in<T: Text>(t: T, at: usize) -> usize {
 
     let mut start = step_back_to_lead(at, at);
     let last_len = announced(t, start);
-    let mut cur_code = decode_in(t, start, last_len);
+    let mut cur_code = sequence_value_in(t, start, last_len);
     if cur_code < 0 || at - start >= last_len {
         return 0; // `at` is part of an illegal sequence
     }
@@ -460,7 +408,7 @@ pub(super) fn head_off_in<T: Text>(t: T, at: usize) -> usize {
         start = step_back_to_lead(start, cur_pos);
 
         let prev_len = announced(t, start);
-        let prev_code = decode_in(t, start, prev_len);
+        let prev_code = sequence_value_in(t, start, prev_len);
         if prev_code < 0 || prev_len < cur_pos - start {
             start = cur_pos; // resume at the valid sequence after the junk
             break;
@@ -526,7 +474,7 @@ fn next_cluster_slow<T: Text>(t: T, mut next: usize, mut prev_code: i32) -> (usi
     let mut state: GraphemeState = GRAPHEME_STATE_INIT;
     loop {
         let next_len = announced(t, next);
-        let next_code = decode_in(t, next, next_len);
+        let next_code = sequence_value_in(t, next, next_len);
         let len = if next_code < 0 { 1 } else { next_len };
         if !iscomposing(prev_code, next_code, Some(&mut state)) {
             let len = i32::try_from(len).expect("a sequence is short");
@@ -559,7 +507,7 @@ pub(super) fn cells_in<T: Text>(t: T, i: usize) -> i32 {
     let c = if cut_short(t, i) {
         -1
     } else {
-        decode_in(t, i, len)
+        sequence_value_in(t, i, len)
     };
     // An illegal byte, an incomplete sequence, or an overlong encoding of
     // NUL: all displayed as <xx>.

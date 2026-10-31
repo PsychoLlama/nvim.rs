@@ -26,10 +26,7 @@
 //! [`winlayer`]: crate::winlayer::graph
 //! [`state`]: crate::state::mode
 //! [`message`]: crate::message::state
-#![deny(unsafe_op_in_unsafe_fn)]
-// The exports here are metrics/abi-ledger.jsonl rows (`starting`), and
-// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -155,8 +152,7 @@ pub(crate) const SYS_VIMRC_FILE: &CStr = c"$VIM/sysinit.vim";
 pub(crate) const VIMRC_FILE: &CStr = c".nvimrc";
 pub(crate) const NO_BUFFERS: c_int = 1 as c_int;
 pub static ex_exitval: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-#[unsafe(no_mangle)]
-pub static starting: GlobalCell<c_int> = GlobalCell::new(2 as c_int);
+pub use crate::harness::starting;
 pub static exiting: GlobalCell<bool> = GlobalCell::new(false);
 pub static v_dying: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static stdin_isatty: GlobalCell<bool> = GlobalCell::new(true);
