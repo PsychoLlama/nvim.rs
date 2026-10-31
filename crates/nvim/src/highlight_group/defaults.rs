@@ -563,15 +563,11 @@ pub(crate) fn load_colors(name: &CStr) -> Result<(), Failed> {
     }
     RECURSIVE.set(true);
 
-    // A copy of the buffer's name, for the call: a handler may rename the
-    // buffer.
     let buffer = Buf::current();
-    let fname = buffer.name.shown().map(XString::from_cstr);
-    let fname = fname.as_ref().map(XString::as_cstr);
     apply_autocmds(
         AutoEvent::ColorSchemePre,
-        Some(name),
-        fname,
+        Some(XString::from_cstr(name)),
+        buffer.name.shown().map(XString::from_cstr),
         false,
         Some(buffer),
     );
@@ -580,14 +576,12 @@ pub(crate) fn load_colors(name: &CStr) -> Result<(), Failed> {
     let pattern = crate::cstr::owned(&pattern);
     let retval = source_runtime_vim_lua(&pattern, RuntimeOpts::START | RuntimeOpts::OPT);
     if retval.is_ok() {
-        // As above; the scheme's own file may have changed it.
+        // The scheme's own file may have changed the current buffer.
         let buffer = Buf::current();
-        let fname = buffer.name.shown().map(XString::from_cstr);
-        let fname = fname.as_ref().map(XString::as_cstr);
         apply_autocmds(
             AutoEvent::ColorScheme,
-            Some(name),
-            fname,
+            Some(XString::from_cstr(name)),
+            buffer.name.shown().map(XString::from_cstr),
             false,
             Some(buffer),
         );

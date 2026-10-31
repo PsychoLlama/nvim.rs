@@ -15,6 +15,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::memory::XString;
 use crate::winlayer::Win;
 use core::ffi::c_int;
 use std::rc::Rc;
@@ -371,7 +372,14 @@ pub(crate) fn call_func_with(
                 // Trigger FuncUndefined, which may load the function.
                 let event = AutoEvent::FuncUndefined;
                 if func.is_none()
-                    && fire_autocmds_for(event, Some(rfname_c), Some(rfname_c), true, None, None)
+                    && fire_autocmds_for(
+                        event,
+                        Some(XString::from_cstr(rfname_c)),
+                        Some(XString::from_cstr(rfname_c)),
+                        true,
+                        None,
+                        None,
+                    )
                     && !aborting()
                 {
                     func = find_func(rfname);

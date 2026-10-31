@@ -11,6 +11,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::autocmd::{fire_autocmds, fire_autocmds_for};
+use crate::memory::XString;
 use crate::types::{AutoEvent, String_0};
 use core::ffi::CStr;
 use core::ffi::c_int;
@@ -142,10 +143,9 @@ pub fn getout(mut exitval: c_int) -> ! {
                 let live = wp.surviving_buffer();
                 if let Some(buffer) = live.filter(|b| buf_get_changedtick(*b) != -1) {
                     let bufref = BufRef::of(buffer);
-                    // A copy: the autocommands may rename the buffer.
-                    let fname = buffer.name.shown().map(CStr::to_owned);
-                    let (fname, event) = (fname.as_deref(), AutoEvent::BufWinLeave);
-                    fire_autocmds_for(event, fname, fname, false, Some(buffer), None);
+                    let fname = buffer.name.shown().map(XString::from_cstr);
+                    let event = AutoEvent::BufWinLeave;
+                    fire_autocmds_for(event, fname.clone(), fname, false, Some(buffer), None);
                     // The event may have wiped it; ask again before writing.
                     if let Some(buffer) = bufref.get() {
                         buf_set_changedtick(buffer, -1);
@@ -165,10 +165,9 @@ pub fn getout(mut exitval: c_int) -> ! {
         while let Some(buf) = cur {
             if buf.b_ml.ml_mfp.is_some() {
                 let bufref = BufRef::of(buf);
-                // A copy, as above.
-                let name = buf.name.shown().map(CStr::to_owned);
-                let (name, some) = (name.as_deref(), Some(buf));
-                fire_autocmds_for(AutoEvent::BufUnload, name, name, false, some, None);
+                let name = buf.name.shown().map(XString::from_cstr);
+                let some = Some(buf);
+                fire_autocmds_for(AutoEvent::BufUnload, name.clone(), name, false, some, None);
                 if !bufref.valid() {
                     // An autocommand deleted the buffer we were standing
                     // on, so the `b_next` link is gone with it.

@@ -336,14 +336,10 @@ pub(crate) fn ex_ownsyntax(excmd: &mut ExArg) {
 
     // Apply the Syntax autocommand, which finds and loads the syntax file.
     let buffer = Buf::current();
-    // A copy of the name: the autocommand runs commands of its own.
-    let mut name = excmd.line.arg().to_vec();
-    name.push(0);
-    let fname = buffer.name.shown().map(CStr::to_owned);
     let _ = apply_autocmds_exarg(
         AutoEvent::Syntax,
-        Some(cstr::in_bytes(&name)),
-        fname.as_deref(),
+        Some(XString::from_bytes(cstr::until_nul(excmd.line.arg()))),
+        buffer.name.shown().map(XString::from_cstr),
         true,
         Some(buffer),
         None,

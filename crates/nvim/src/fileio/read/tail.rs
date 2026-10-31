@@ -99,16 +99,18 @@ pub(crate) fn run_read_autocmds(
     } else {
         (AutoEvent::FileReadPost, sfname, None)
     };
-    apply_autocmds_exarg(ev, iofile, sfname, false, buf, excmd);
+    let (iofile, afile) = (
+        iofile.map(XString::from_cstr),
+        sfname.map(XString::from_cstr),
+    );
+    apply_autocmds_exarg(ev, iofile, afile, false, buf, excmd);
     if buf_read && !Buf::current().b_au_did_filetype && Buf::current().b_p_ft.first_byte() != 0 {
-        // Copies: the handlers may change both. `curbuf` is re-read because
-        // `BufReadPost` may have moved us.
+        // `curbuf` is re-read because `BufReadPost` may have moved us.
         let ft = Buf::current().b_p_ft.get();
-        let fname = Buf::current().name.shown().map(CStr::to_owned);
-        let (ft, fname) = (Some(ft.as_cstr()), fname.as_deref());
+        let fname = Buf::current().name.shown().map(XString::from_cstr);
         fire_autocmds_for(
             AutoEvent::FileType,
-            ft,
+            Some(ft),
             fname,
             true,
             Buf::current_or_none(),

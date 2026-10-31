@@ -370,10 +370,11 @@ fn restore_syntax_events(save_ei: Option<XString>) {
         let mut bnext = buf.next();
         if buf.b_nwindows > 0 && buf.b_flags.has(BufFlags::SYN_SET) {
             buf.b_flags.clear(BufFlags::SYN_SET);
-            // Copies, read before the switch: the autocommands may change
-            // either.
-            let (syn, name) = (buf.b_p_syn.get(), buf.name.shown().map(CStr::to_owned));
-            let (syn, name) = (Some(syn.as_cstr()), name.as_deref());
+            // Read before the switch: the autocommands may change either.
+            let (syn, name) = (
+                Some(buf.b_p_syn.get()),
+                buf.name.shown().map(XString::from_cstr),
+            );
             if buf.raw() == Buf::current_raw() {
                 let current = Buf::current_or_none();
                 fire_autocmds_for(AutoEvent::Syntax, syn, name, true, current, None);

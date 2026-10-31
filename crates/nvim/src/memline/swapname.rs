@@ -324,10 +324,9 @@ fn do_swapexists(buffer: Buf, fname: &CStr) -> SwapExistsChoice {
     // `<afile>` is the file being edited. Changing directory is not
     // allowed from here.
     let locked = Lock::all_buffers();
-    let name = buffer.name.shown().map(CStr::to_owned);
     fire_autocmds_for(
         AutoEvent::SwapExists,
-        name.as_deref(),
+        buffer.name.shown().map(XString::from_cstr),
         None,
         false,
         None,

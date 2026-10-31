@@ -122,15 +122,21 @@ pub(crate) enum PreWrite {
 /// and none matched.
 fn apply_pre(
     event: AutoEvent,
-    sfname: &CStr,
+    sfname: &XString,
     excmd: Option<&mut ExArg>,
     overwriting: bool,
 ) -> bool {
     if overwriting && buf_is_nofilename(current_buf()) {
         return true;
     }
-    let sfname = Some(sfname);
-    apply_autocmds_exarg(event, sfname, sfname, false, Buf::current_or_none(), excmd);
+    apply_autocmds_exarg(
+        event,
+        Some(sfname.clone()),
+        Some(sfname.clone()),
+        false,
+        Buf::current_or_none(),
+        excmd,
+    );
     false
 }
 
@@ -150,10 +156,8 @@ pub(crate) fn buf_write_do_autocmds(
     let old_line_count = buffer.b_ml.ml_line_count;
     let msg_save = msg_scroll.get();
     let empty_memline = buffer.b_ml.ml_mfp.is_none();
-    // The short name the events are fired with: a copy, which nothing they
-    // run can free.
+    // The short name the events are fired with, each firing its own.
     let sfname = names.sfname.text.clone();
-    let sfname = sfname.as_cstr();
 
     // Which of the three names are the buffer's own, and so have to be
     // re-read if the autocommands rename it.
@@ -168,11 +172,12 @@ pub(crate) fn buf_write_do_autocmds(
     let bufref = BufRef::of_opt(Some(buffer));
 
     // One firing of a `*WriteCmd`-family event against the short name.
-    let fire = |event, iofile: Option<&CStr>, excmd| {
+    // `with_io` names the file as `<afile>` too.
+    let fire = |event, with_io: bool, excmd| {
         apply_autocmds_exarg(
             event,
-            iofile,
-            Some(sfname),
+            with_io.then(|| sfname.clone()),
+            Some(sfname.clone()),
             false,
             Buf::current_or_none(),
             excmd,
@@ -184,20 +189,20 @@ pub(crate) fn buf_write_do_autocmds(
     let mut nofile_err = false;
     if mode.req.append {
         let event = AutoEvent::FileAppendCmd;
-        did_cmd = fire(event, Some(sfname), excmd.as_deref_mut());
+        did_cmd = fire(event, true, excmd.as_deref_mut());
         if !did_cmd {
             let pre = AutoEvent::FileAppendPre;
-            nofile_err = apply_pre(pre, sfname, excmd.as_deref_mut(), mode.overwriting);
+            nofile_err = apply_pre(pre, &sfname, excmd.as_deref_mut(), mode.overwriting);
         }
     } else if mode.req.filtering {
         // No <afile>: the filter's output file is not what the event is
         // about.
         let event = AutoEvent::FilterWritePre;
-        fire(event, None, excmd.as_deref_mut());
+        fire(event, false, excmd.as_deref_mut());
     } else if mode.req.reset_changed && mode.whole {
         let was_changed = curbuf_is_changed();
         let event = AutoEvent::BufWriteCmd;
-        did_cmd = fire(event, Some(sfname), excmd.as_deref_mut());
+        did_cmd = fire(event, true, excmd.as_deref_mut());
         if did_cmd {
             if was_changed && !curbuf_is_changed() {
                 // BufWriteCmd wrote everything correctly and reset
@@ -208,14 +213,14 @@ pub(crate) fn buf_write_do_autocmds(
             }
         } else {
             let pre = AutoEvent::BufWritePre;
-            nofile_err = apply_pre(pre, sfname, excmd.as_deref_mut(), mode.overwriting);
+            nofile_err = apply_pre(pre, &sfname, excmd.as_deref_mut(), mode.overwriting);
         }
     } else {
         let event = AutoEvent::FileWriteCmd;
-        did_cmd = fire(event, Some(sfname), excmd.as_deref_mut());
+        did_cmd = fire(event, true, excmd.as_deref_mut());
         if !did_cmd {
             let pre = AutoEvent::FileWritePre;
-            nofile_err = apply_pre(pre, sfname, excmd, mode.overwriting);
+            nofile_err = apply_pre(pre, &sfname, excmd, mode.overwriting);
         }
     }
 
@@ -343,11 +348,11 @@ pub(crate) fn buf_write_do_post_autocmds(
         AutoEvent::FileWritePost
     };
     // As for FilterWritePre, the filter's file is not the <afile>.
-    let afile = (!mode.req.filtering).then_some(fname);
+    let afile = (!mode.req.filtering).then(|| XString::from_cstr(fname));
     apply_autocmds_exarg(
         event,
         afile,
-        Some(fname),
+        Some(XString::from_cstr(fname)),
         false,
         Buf::current_or_none(),
         excmd,

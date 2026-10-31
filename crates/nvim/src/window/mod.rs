@@ -38,6 +38,7 @@
 
 pub(crate) mod state;
 use crate::cstr;
+use crate::memory::XString;
 use crate::types::AutoEvent;
 use crate::types::CAR;
 use crate::types::CmdIdx;
@@ -425,7 +426,8 @@ fn fire(event: AutoEvent, buffer: Buf) -> bool {
 /// against: a window id for `WinClosed`, a tab page index for `TabClosed`, a
 /// file name for `TabNew`. `None` is the buffer-less form two events take.
 fn fire_named(event: AutoEvent, name: Option<&::core::ffi::CStr>, buffer: Option<Buf>) -> bool {
-    apply_autocmds(event, name, name, false, buffer)
+    let name = name.map(XString::from_cstr);
+    apply_autocmds(event, name.clone(), name, false, buffer)
 }
 
 /// Ring the bell and drop the typeahead, the family's answer to a move that

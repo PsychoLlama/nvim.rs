@@ -21,6 +21,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::memory::XString;
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;
 use core::ffi::c_int;
@@ -343,17 +344,14 @@ fn fire_resized(resize: &mut Subject, windows_list: Option<ListRef>) {
     let v_event = get_v_event(&mut save);
     if v_event.edit().add_list(b"windows", windows_list).is_ok() {
         let buf = resize.buffer();
-        let name = resize.winid.as_c_str();
+        let name = XString::from_cstr(resize.winid.as_c_str());
         v_event.edit().set_keys_readonly();
-
-        let __hoisted_0 = Some(buf);
-
         apply_autocmds(
             AutoEvent::WinResized,
-            Some(name),
+            Some(name.clone()),
             Some(name),
             false,
-            __hoisted_0,
+            Some(buf),
         );
     }
     restore_v_event(v_event, &mut save);
@@ -369,16 +367,13 @@ fn fire_scrolled(scroll: &mut Subject, scroll_dict: Option<DictRef>) {
     v_event.edit().set_keys_readonly();
     drop(scroll_dict);
     let buf = scroll.buffer();
-    let name = scroll.winid.as_c_str();
-
-    let __hoisted_0 = Some(buf);
-
+    let name = XString::from_cstr(scroll.winid.as_c_str());
     apply_autocmds(
         AutoEvent::WinScrolled,
-        Some(name),
+        Some(name.clone()),
         Some(name),
         false,
-        __hoisted_0,
+        Some(buf),
     );
     restore_v_event(v_event, &mut save);
 }

@@ -66,8 +66,7 @@ pub fn do_doautocmd(
     };
     let mut fname_at = at + events_len;
     fname_at += skip::white(&arg[fname_at..]);
-    let fname = CStr::from_bytes_with_nul(&arg_start.to_bytes_with_nul()[fname_at..])
-        .expect("the rest of a C string is one");
+    let pattern = &arg[fname_at..];
 
     while byte(at) != 0
         && ends_excmd(::core::ffi::c_int::from(byte(at))) == 0
@@ -82,7 +81,7 @@ pub fn do_doautocmd(
         };
         let ran = apply_autocmds_group(
             event,
-            Some(fname),
+            Some(XString::from_bytes(pattern)),
             None,
             true,
             group,
@@ -220,8 +219,8 @@ fn deferred_event(
     aucmd_prepbuf(&mut aco, buf);
     apply_autocmds_group(
         event,
-        fname.as_ref().map(XString::as_cstr),
-        fname_io.as_ref().map(XString::as_cstr),
+        fname,
+        fname_io,
         false,
         group,
         Some(buf),
@@ -334,14 +333,10 @@ pub fn do_filetype_autocmd(mut buffer: Buf, force: bool) -> bool {
     let ft_recursing = Depth::of(ft_recursive);
 
     buffer.b_did_filetype = true;
-    // Copies: a handler may set 'filetype' or rename the buffer while the
-    // names are still the call's.
-    let filetype = buffer.b_p_ft.get();
-    let shown = buffer.name.shown().map(XString::from_cstr);
     let ret = apply_autocmds(
         AutoEvent::FileType,
-        Some(filetype.as_cstr()),
-        shown.as_ref().map(XString::as_cstr),
+        Some(buffer.b_p_ft.get()),
+        buffer.name.shown().map(XString::from_cstr),
         force || ft_recursive.get() == 1,
         Some(buffer),
     );

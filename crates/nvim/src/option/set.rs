@@ -161,8 +161,7 @@ fn apply_optionset_autocmd(
         set_vim_var_tv(Vv::OptionOldlocal, &mut oldval_tv);
     }
 
-    // The name is the table's own literal, which nothing frees.
-    let name = get_option(opt_idx).fullname;
+    let name = XString::from_cstr(get_option(opt_idx).fullname);
     fire_autocmds_for(AutoEvent::OptionSet, Some(name), None, false, None, None);
     reset_v_option_vars();
 }

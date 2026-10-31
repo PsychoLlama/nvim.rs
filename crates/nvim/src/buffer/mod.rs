@@ -377,12 +377,10 @@ pub(crate) fn fire(event: AutoEvent, buffer: Buf) -> bool {
 }
 
 /// `apply_autocmds(event, buf->b_fname, buf->b_fname, false, buf)`, the form
-/// the unload/delete/wipe events take -- with a copy of the name, which the
-/// autocommands may free.
+/// the unload/delete/wipe events take.
 pub(crate) fn fire_named(event: AutoEvent, buffer: Buf) -> bool {
     let name = buffer.name.shown().map(XString::from_cstr);
-    let name = name.as_ref().map(XString::as_cstr);
-    apply_autocmds_exarg(event, name, name, false, Some(buffer), None)
+    apply_autocmds_exarg(event, name.clone(), name, false, Some(buffer), None)
 }
 
 /// `apply_autocmds_retval()`: as [`fire`], but the event may turn `retval`

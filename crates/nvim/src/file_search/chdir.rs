@@ -75,8 +75,8 @@ pub(crate) fn do_autocmd_dirchanged(new_dir: &CStr, scope: CdScope, cause: CdCau
 
     fire_autocmds_for(
         event,
-        Some(pattern),
-        Some(new_dir),
+        Some(XString::from_cstr(pattern)),
+        Some(XString::from_cstr(new_dir)),
         false,
         Buf::current_or_none(),
         None,

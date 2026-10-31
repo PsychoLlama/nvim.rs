@@ -229,11 +229,9 @@ fn file_changed_shell(buffer: Buf, bufref: BufRef, reason: Reason) -> Fcs {
     set_vim_var_string(Vv::FcsReason, Some(name.to_bytes()));
     set_vim_var_string(Vv::FcsChoice, Some(b""));
     let locked = Lock::all_buffers();
-    // A copy: the handlers may rename the buffer.
-    let fname = buffer.name.shown().map(CStr::to_owned);
-    let fname = fname.as_deref();
+    let fname = buffer.name.shown().map(XString::from_cstr);
     let event = AutoEvent::FileChangedShell;
-    let handled = fire_autocmds_for(event, fname, fname, false, Some(buffer), None);
+    let handled = fire_autocmds_for(event, fname.clone(), fname, false, Some(buffer), None);
     drop(locked);
     BUSY.set(false);
 
@@ -487,10 +485,9 @@ pub fn buf_check_timestamp(mut buffer: Buf) -> c_int {
 
     // Trigger FileChangedShellPost when the file was changed in any way.
     if bufref.valid() && retval != 0 {
-        // A copy: the handlers may rename the buffer.
-        let fname = buffer.name.shown().map(CStr::to_owned);
-        let (post, fname) = (AutoEvent::FileChangedShellPost, fname.as_deref());
-        fire_autocmds_for(post, fname, fname, false, Some(buffer), None);
+        let fname = buffer.name.shown().map(XString::from_cstr);
+        let post = AutoEvent::FileChangedShellPost;
+        fire_autocmds_for(post, fname.clone(), fname, false, Some(buffer), None);
     }
     retval
 }

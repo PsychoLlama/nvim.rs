@@ -462,12 +462,10 @@ fn keep_or_drop_dummy(
     // The Filetype autocommands and the modelines need to run now, in
     // that buffer — but not the window-local options.
     let aco = AucmdBuf::enter(buffer);
-    let filetype = buffer.b_p_ft.get();
-    let name = buffer.name.shown().map(CStr::to_owned);
     fire_autocmds_for(
         AutoEvent::FileType,
-        Some(filetype.as_cstr()),
-        name.as_deref(),
+        Some(buffer.b_p_ft.get()),
+        buffer.name.shown().map(XString::from_cstr),
         true,
         Some(buffer),
         None,

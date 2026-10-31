@@ -37,6 +37,7 @@ use crate::api::private::validate::{err_bad_value, err_expected, err_required};
 use crate::api_error;
 use crate::ex_docmd::is_user_cmd;
 use crate::guard::Suppress;
+use crate::memory::XString;
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::types::CmdIdx;
 use crate::types::{CmdFilter, CmdLine, ExArgt, NUL};
@@ -198,8 +199,14 @@ fn resolve_command(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<Option<bool>,
         && excmd.line.byte_at(excmd.line.cmd).is_ascii_uppercase()
         && has_event(AutoEvent::CmdUndefined)
     {
-        let event = Some(name.as_cstr());
-        let ret = apply_autocmds(AutoEvent::CmdUndefined, event, event, true, None);
+        let event = XString::from_cstr(name.as_cstr());
+        let ret = apply_autocmds(
+            AutoEvent::CmdUndefined,
+            Some(event.clone()),
+            Some(event),
+            true,
+            None,
+        );
         found = if ret as c_int != 0 && !aborting() {
             find_ex_command(excmd, None)
         } else {

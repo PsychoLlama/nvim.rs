@@ -44,8 +44,9 @@ fn read_autocmd(
     excmd: Option<&mut ExArg>,
     for_file: bool,
 ) -> bool {
+    let sfname = sfname.map(XString::from_cstr);
     let (iofile, buf) = if for_file {
-        (sfname, None)
+        (sfname.clone(), None)
     } else {
         (None, Buf::current_or_none())
     };
@@ -317,8 +318,8 @@ pub(crate) fn open_source<'a>(
             }
             apply_autocmds_exarg(
                 AutoEvent::BufNewFile,
-                sfname,
-                sfname,
+                sfname.map(XString::from_cstr),
+                sfname.map(XString::from_cstr),
                 false,
                 Buf::current_or_none(),
                 excmd.as_deref_mut(),

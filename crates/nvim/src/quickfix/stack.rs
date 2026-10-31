@@ -37,6 +37,7 @@
 
 use super::*;
 use crate::id_table::IdTable;
+use crate::memory::XString;
 use crate::types::{CmdIdx, Failed, QfId, Refcount};
 use crate::winlayer::{Buf, Live, Win, windows};
 use core::ffi::{CStr, c_int, c_uint};
@@ -227,14 +228,14 @@ pub(crate) fn qf_emsg(msg: &'static CStr) {
 /// event, the ones taking their input from Vimscript match on neither.
 pub(crate) fn fire_qf_autocmd(event: AutoEvent, name: &CStr, on_fname: bool) -> bool {
     let fname = if on_fname {
-        Buf::current().name.shown().map(CStr::to_owned)
+        Buf::current().name.shown().map(XString::from_cstr)
     } else {
         None
     };
     fire_autocmds_for(
         event,
-        Some(name),
-        fname.as_deref(),
+        Some(XString::from_cstr(name)),
+        fname,
         on_fname,
         Buf::current_or_none(),
         None,

@@ -139,13 +139,11 @@ fn spell_load_lang(lang: &[u8]) {
             if r.is_err() && !sl.lang.is_empty() && round == 1 && {
                 // Re-read each round: the handler may have changed buffers.
                 let buffer = Buf::current();
-                let pattern = cstr::owned(lang);
-                let afile = buffer.name.shown().map(CStr::to_owned);
                 let event = AutoEvent::SpellFileMissing;
                 fire_autocmds_for(
                     event,
-                    Some(&pattern),
-                    afile.as_deref(),
+                    Some(XString::from_bytes(cstr::until_nul(lang))),
+                    buffer.name.shown().map(XString::from_cstr),
                     false,
                     Some(buffer),
                     None,

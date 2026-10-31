@@ -20,6 +20,7 @@
 #![forbid(unsafe_code)]
 
 use crate::ex_docmd::ex_msg;
+use crate::memory::XString;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use core::ffi::{CStr, c_int};
@@ -246,9 +247,16 @@ fn locate_command(
             end += 1;
         }
         let name = excmd.line.slice_at(excmd.line.cmd, end - excmd.line.cmd);
-        let cmdname = CString::new(name).expect("a command name holds no NUL");
+        let cmdname = XString::from_bytes(name);
         let event = AutoEvent::CmdUndefined;
-        let ret = fire_autocmds_for(event, Some(&cmdname), Some(&cmdname), true, None, None);
+        let ret = fire_autocmds_for(
+            event,
+            Some(cmdname.clone()),
+            Some(cmdname),
+            true,
+            None,
+            None,
+        );
         // Look again only if the autocommands did something and did not
         // fail.
         p = if ret && !aborting() {

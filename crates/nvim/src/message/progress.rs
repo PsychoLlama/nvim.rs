@@ -146,8 +146,10 @@ pub fn do_autocmd_progress(msg_id: Object, msg: &[HlMessageChunk], msg_data: Opt
     // The autocommand pattern is the message's source, so an autocommand
     // can match one producer's progress.
     let pattern = match msg_data {
-        Some(msg_data) if !msg_data.source.is_empty() => msg_data.source.as_cstr(),
-        _ => c"",
+        Some(msg_data) if !msg_data.source.is_empty() => {
+            XString::from_cstr(msg_data.source.as_cstr())
+        }
+        _ => XString::new(),
     };
     let event_data = data.object();
     // No file name, no buffer and no `:autocmd` argument block: the pattern

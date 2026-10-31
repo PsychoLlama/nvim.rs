@@ -9,6 +9,7 @@
 use super::*;
 use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_conflict, err_expected};
+use crate::memory::XString;
 use crate::types::OptionSetFlags;
 use crate::winlayer::Buf;
 
@@ -82,19 +83,19 @@ pub fn nvim_exec_autocmds(event: Object, opts: &mut KeyDict_exec_autocmds) -> Re
         let mut pat_index: size_t = 0 as size_t;
         while pat_index < patterns.len() {
             let pat = &patterns[pat_index];
-            let fname = if !has_buf {
-                Some(
+            let pattern = if !has_buf {
+                Some(XString::from_cstr(
                     pat.as_string()
                         .expect("`get_patterns_from_pattern_or_buf` answers Strings only")
                         .as_cstr(),
-                )
+                ))
             } else {
                 None
             };
             did_aucmd = did_aucmd as ::core::ffi::c_int
                 | apply_autocmds_group(
                     event_nr,
-                    fname,
+                    pattern,
                     None,
                     true,
                     au_group,

@@ -29,8 +29,21 @@ pub(crate) fn trigger_cmd_autocmd(typechar: ::core::ffi::c_int, evt: AutoEvent) 
 /// C's `apply_autocmds(evt, fname, fname, false, curbuf)`: the one shape
 /// every `Cmdline*`/`Cmdwin*` event is fired with, where `<afile>` and
 /// `<amatch>` are the same string.
-pub(crate) fn cmdline_autocmd(evt: AutoEvent, fname: &CStr) -> bool {
-    apply_autocmds(evt, Some(fname), Some(fname), false, Buf::current_or_none())
+///
+/// Some of these fire on every key typed on the command line, so the names
+/// are only built for an event something listens to.
+pub(crate) fn cmdline_autocmd(evt: AutoEvent, name: &CStr) -> bool {
+    if !has_event(evt) {
+        return false;
+    }
+    let name = XString::from_cstr(name);
+    apply_autocmds(
+        evt,
+        Some(name.clone()),
+        Some(name),
+        false,
+        Buf::current_or_none(),
+    )
 }
 
 /// Record everything about `window`'s view that an incremental search may scroll.

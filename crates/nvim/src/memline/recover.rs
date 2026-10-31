@@ -272,8 +272,8 @@ pub fn ml_recover(checkext: bool) {
         // first one's autocommands may have changed either.
         for event in [AutoEvent::BufReadPost, AutoEvent::BufWinEnter] {
             let current = Buf::current();
-            let name = current.name.shown().map(CStr::to_owned);
-            fire_autocmds_for(event, None, name.as_deref(), false, Some(current), None);
+            let name = current.name.shown().map(XString::from_cstr);
+            fire_autocmds_for(event, None, name, false, Some(current), None);
         }
     }
 }

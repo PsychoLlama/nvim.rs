@@ -257,8 +257,15 @@ fn source_name(req: &SourceRequest) -> Result<(SourceCookie, XString), c_int> {
 
 /// Fire `event` with the script's name as `<amatch>` and `<afile>`.
 fn fire_source_event(event: AutoEvent, fname_exp: &CStr) -> bool {
-    let name = Some(fname_exp);
-    fire_autocmds_for(event, name, name, false, Buf::current_or_none(), None)
+    let name = XString::from_cstr(fname_exp);
+    fire_autocmds_for(
+        event,
+        Some(name.clone()),
+        Some(name),
+        false,
+        Buf::current_or_none(),
+        None,
+    )
 }
 
 /// Run the `SourceCmd` and `SourcePre` autocommands.

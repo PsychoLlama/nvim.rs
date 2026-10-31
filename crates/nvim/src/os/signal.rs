@@ -25,6 +25,7 @@ use crate::ex_cmds2::autowrite_all;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, logmsg};
 use crate::memline::ml_sync_all;
+use crate::memory::XString;
 use crate::message_fmt::msg_cstr;
 use crate::option::vars::p_awa;
 use crate::startup::{main_loop, preserve_exit, v_dying};
@@ -250,17 +251,10 @@ fn handle_signal(signum: c_int) {
         // The autocommand is named for the signal, which is exactly what
         // signal_name yields.
         SIGUSR1 | SIGWINCH => {
-            // A copy of the buffer's name, for the call: a handler may
-            // rename the buffer.
             apply_autocmds(
                 AutoEvent::Signal,
-                Some(signal_name(signum)),
-                Buf::current()
-                    .name
-                    .shown()
-                    .map(crate::memory::XString::from_cstr)
-                    .as_ref()
-                    .map(crate::memory::XString::as_cstr),
+                Some(XString::from_cstr(signal_name(signum))),
+                Buf::current().name.shown().map(XString::from_cstr),
                 true,
                 Buf::current_or_none(),
             );

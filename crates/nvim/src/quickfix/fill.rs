@@ -302,7 +302,7 @@ fn finish_qf_buffer() {
     let buffer = Buf::current_or_none();
     fire_autocmds_for(
         AutoEvent::BufReadPost,
-        Some(c"quickfix"),
+        Some(XString::from_cstr(c"quickfix")),
         None,
         false,
         buffer,
@@ -311,7 +311,7 @@ fn finish_qf_buffer() {
     let buffer = Buf::current_or_none();
     fire_autocmds_for(
         AutoEvent::BufWinEnter,
-        Some(c"quickfix"),
+        Some(XString::from_cstr(c"quickfix")),
         None,
         false,
         buffer,

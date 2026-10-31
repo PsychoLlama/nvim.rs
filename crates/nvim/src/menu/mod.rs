@@ -27,6 +27,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::memory::XString;
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
@@ -381,7 +382,7 @@ pub(crate) fn show_popupmenu() {
     // afterwards.
     fire_autocmds_for(
         AutoEvent::MenuPopup,
-        Some(mode),
+        Some(XString::from_cstr(mode)),
         None,
         false,
         Buf::current_or_none(),

@@ -701,14 +701,10 @@ pub(crate) fn do_syntax_autocmd(mut buffer: Buf, value_changed: bool) {
 
     let _syn_recursive = Depth::of(&syn_recursive);
     buffer.b_flags |= BufFlags::SYN_SET;
-    // Copies: the autocommands may set 'syntax' again, or rename or wipe
-    // the buffer.
-    let syn = buffer.b_p_syn.get();
-    let name = buffer.name.shown().map(XString::from_cstr);
     fire_autocmds_for(
         AutoEvent::Syntax,
-        Some(syn.as_cstr()),
-        name.as_ref().map(XString::as_cstr),
+        Some(buffer.b_p_syn.get()),
+        buffer.name.shown().map(XString::from_cstr),
         value_changed || syn_recursive.get() == 1,
         Some(buffer),
         None,

@@ -21,6 +21,7 @@
 pub(crate) mod mode;
 use crate::cstr;
 use crate::keycodes::{Ctrl_V, Key, get_special_key_name};
+use crate::memory::XString;
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
@@ -524,7 +525,7 @@ pub fn may_trigger_modechanged() {
     let buf = Buf::current_or_none();
     apply_autocmds(
         AutoEvent::ModeChanged,
-        Some(cstr::in_bytes(&pattern)),
+        Some(XString::from_cstr(cstr::in_bytes(&pattern))),
         None,
         false,
         buf,

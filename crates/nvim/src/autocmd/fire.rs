@@ -28,7 +28,6 @@
 )]
 
 use super::*;
-use crate::cstr;
 use crate::ex_docmd::{DoCmdOpts, LineSource};
 use crate::getchar::KeyBuffer;
 use crate::guard::{Depth, Script, Suppress};
@@ -119,8 +118,8 @@ pub fn fire_autocmds(event: AutoEvent, force: bool, buffer: Option<Buf>) -> bool
 /// message's fields.
 pub(crate) fn fire_autocmds_for(
     event: AutoEvent,
-    pattern: Option<&CStr>,
-    afile: Option<&CStr>,
+    pattern: Option<XString>,
+    afile: Option<XString>,
     force: bool,
     buffer: Option<Buf>,
     data: Option<&Object>,
@@ -137,23 +136,23 @@ pub(crate) fn fire_autocmds_for(
     )
 }
 
-/// Fire `event`, in every group.
+/// Fire `event`, in every group, matching the patterns against `pattern`
+/// (or the buffer's name, for `None`) with `afile` as `<afile>`.
 ///
-/// The names are copied before any autocommand runs. A caller hands in its
-/// own copy of a name an autocommand could change (a buffer's, an
-/// option's): a borrow passed in lives for the whole call, handlers and
-/// all.
+/// The names are owned: the call takes them, so nothing an autocommand
+/// frees -- a buffer's name, an option's value -- can be a name it is still
+/// using.
 pub fn apply_autocmds(
     event: AutoEvent,
-    fname: Option<&CStr>,
-    fname_io: Option<&CStr>,
+    pattern: Option<XString>,
+    afile: Option<XString>,
     force: bool,
     buffer: Option<Buf>,
 ) -> bool {
     apply_autocmds_group(
         event,
-        fname,
-        fname_io,
+        pattern,
+        afile,
         force,
         AUGROUP_ALL,
         buffer,
@@ -165,14 +164,12 @@ pub fn apply_autocmds(
 /// `fire_autocmds_for` passing an `ExArg` on, so that `v:cmdarg` and
 /// `v:cmdbang` are set for the handlers: fire `event` in every group,
 /// matching the patterns against `pattern` (or the buffer's name, for
-/// `None`) with `afile` as `<afile>`.
-///
-/// Both names are the caller's for the whole call, while the handlers run:
-/// a caller naming a buffer hands in a copy of its name.
+/// `None`) with `afile` as `<afile>`. The names are owned, as
+/// [`apply_autocmds`]' are.
 pub fn apply_autocmds_exarg(
     event: AutoEvent,
-    pattern: Option<&CStr>,
-    afile: Option<&CStr>,
+    pattern: Option<XString>,
+    afile: Option<XString>,
     force: bool,
     buffer: Option<Buf>,
     excmd: Option<&mut ExArg>,
@@ -204,8 +201,8 @@ pub(crate) fn fire_autocmds_retval(
 /// aborted.
 pub fn apply_autocmds_retval(
     event: AutoEvent,
-    fname: Option<&CStr>,
-    fname_io: Option<&CStr>,
+    pattern: Option<XString>,
+    afile: Option<XString>,
     force: bool,
     buffer: Buf,
     retval: &mut ::core::ffi::c_int,
@@ -215,8 +212,8 @@ pub fn apply_autocmds_retval(
     }
     let did_cmd = apply_autocmds_group(
         event,
-        fname,
-        fname_io,
+        pattern,
+        afile,
         force,
         AUGROUP_ALL,
         Some(buffer),
@@ -256,13 +253,13 @@ fn ignored_in_every_window(event: AutoEvent, buffer: Option<Buf>) -> bool {
 /// buffer's own autocommands, and remembering that `FileType` ran -- are
 /// after it.
 ///
-/// `fname` and `fname_io` are copied before anything runs; see
-/// [`apply_autocmds`] for what a caller hands in. `data` is the caller's,
-/// which a Lua handler is given a copy of.
+/// `pattern` is what the patterns match (the buffer's name for `None`) and
+/// `afile` is `<afile>`; both are owned, as [`apply_autocmds`] says why.
+/// `data` is the caller's, which a Lua handler is given a copy of.
 pub fn apply_autocmds_group(
     event: AutoEvent,
-    fname: Option<&CStr>,
-    fname_io: Option<&CStr>,
+    pattern: Option<XString>,
+    afile: Option<XString>,
     force: bool,
     group: ::core::ffi::c_int,
     buffer: Option<Buf>,
@@ -327,16 +324,17 @@ pub fn apply_autocmds_group(
         let save_changed = Buf::current().b_changed != 0;
         let old_curbuf = Buf::current_raw();
 
-        // `<afile>`.  A copy, so renaming a buffer or changing
-        // directory cannot invalidate it.
-        let afile_orig: Option<XString> = if let Some(fname_io) = fname_io {
-            Some(XString::from_cstr(fname_io))
+        // `<afile>`: the caller's, the pattern's name, or a copy of the
+        // buffer's, so renaming a buffer or changing directory cannot
+        // invalidate it.
+        let afile_orig: Option<XString> = if let Some(afile) = afile {
+            Some(afile)
         } else if afile_is_not_a_name(event) {
             None
-        } else if let Some(fname) =
-            fname.filter(|fname| ends_excmd(::core::ffi::c_int::from(cstr::first(fname))) == 0)
-        {
-            Some(XString::from_cstr(fname))
+        } else if let Some(name) = pattern.as_ref().filter(|name| {
+            ends_excmd(::core::ffi::c_int::from(name.first().copied().unwrap_or(0))) == 0
+        }) {
+            Some(name.clone())
         } else {
             buffer.and_then(|b| b.name.full().map(XString::from_cstr))
         };
@@ -356,7 +354,7 @@ pub fn apply_autocmds_group(
         // The name to match the patterns against.  Always a full path,
         // in case a pattern has `allow_dirs` set.
         let mut sfname: Option<XString> = None;
-        let fname: XString = match fname.filter(|fname| !fname.is_empty()) {
+        let fname: XString = match pattern.filter(|name| !name.is_empty()) {
             None => match (buffer, event) {
                 (None, _) => XString::new(),
                 (Some(b), AutoEvent::Syntax) => b.b_p_syn.get(),
@@ -366,15 +364,16 @@ pub fn apply_autocmds_group(
                     b.name.full().map_or_else(XString::new, XString::from_cstr)
                 }
             },
-            Some(fname) => {
-                sfname = Some(XString::from_cstr(fname));
-                if afile_is_not_expanded(event) {
+            Some(name) => {
+                let full = if afile_is_not_expanded(event) {
                     // Don't expand it later either.
                     autocmd_fname_full.set(true);
-                    XString::from_cstr(fname)
+                    name.clone()
                 } else {
-                    full_name_save(fname, false)
-                }
+                    full_name_save(name.as_cstr(), false)
+                };
+                sfname = Some(name);
+                full
             }
         };
 
