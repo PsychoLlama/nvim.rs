@@ -229,6 +229,13 @@ pub(crate) fn main_loop_is_closing() -> bool {
     unsafe { (*main_loop_raw()).closing }
 }
 
+/// [`loop_poll_events`] on the editor's own loop: run libuv once (for up to
+/// `ms` milliseconds), then drain the fast queue. Whether `ms` ran out.
+pub(crate) fn poll_main_loop(ms: i64) -> bool {
+    // SAFETY: the static loop, up from startup to exit.
+    unsafe { loop_poll_events(main_loop_raw(), ms) }
+}
+
 /// Run what is already queued on the editor's loop, then poll it once
 /// without waiting -- the drain before the loop is taken down.
 pub(crate) fn main_loop_drain() {

@@ -35,7 +35,7 @@
 use crate::event::libuv::{
     uv_close, uv_timer_get_due_in, uv_timer_init, uv_timer_start, uv_timer_stop,
 };
-use crate::event::r#loop::schedule_fast_job;
+use crate::event::r#loop::{main_loop_raw, schedule_fast_job};
 use crate::event::rstream::{
     rstream_available, rstream_consume, rstream_init_fd, rstream_may_close, rstream_start,
     rstream_stop,
@@ -56,12 +56,13 @@ use crate::tui::termkey::termkey::{
     TERMKEY_TYPE_MOUSE, TERMKEY_TYPE_OSC, TERMKEY_TYPE_UNICODE, TERMKEY_TYPE_UNKNOWN_CSI, TermKey,
     csi_param_value, interpret_modereport,
 };
-use crate::tui::tui::tui_set_size;
+use crate::tui::tui::{tui_set_size, with_started_tui};
+use crate::types::TUIData;
 use crate::types::builders::ArrayBuf;
 use crate::types::libc::STDIN_FILENO;
 use crate::types::termios;
 use crate::types::{
-    Array, Integer, KEY_BUFFER_SIZE, KeyEncoding, Loop, Object, RStream, String_0, TermInput,
+    Array, Integer, KEY_BUFFER_SIZE, KeyEncoding, Object, RStream, String_0, TermInput,
     TermInputCallbacks, TermKeyKey, TerminfoEntry, size_t, uv_handle_t, uv_timer_t,
 };
 use ::libc::tcgetattr;
@@ -123,76 +124,68 @@ impl TermInput {
             timer_handle: unsafe { core::mem::zeroed() },
             bg_query_timer: unsafe { core::mem::zeroed() },
             read_stream: unsafe { core::mem::zeroed() },
-            loop_0: core::ptr::null_mut(),
-            tui_data: core::ptr::null_mut(),
             key_buffer: [0; KEY_BUFFER_SIZE],
             key_buffer_len: 0,
         }
     }
 }
 
-/// Set up the input layer on `loop_0`, parsing keys as `ti` describes them.
+/// Set up the input layer on the editor's loop, parsing keys as `ti`
+/// describes them.
 ///
-/// # Safety
-/// `input` must point to a [`TermInput::new`] input layer that outlives
-/// `loop_0` and does not move: the timers and the read stream registered
-/// here hold its address.
-pub unsafe fn tinput_init(input: *mut TermInput, loop_0: *mut Loop, ti: &TerminfoEntry) {
-    // SAFETY: the caller guarantees all three; the timers and the read
-    // stream live in `input` itself.
+/// `input` is the started TUI's own, boxed with it: the timers and the read
+/// stream registered here keep their addresses, and their callbacks look
+/// the TUI up again rather than carrying one.
+pub fn tinput_init(input: &mut TermInput, ti: &TerminfoEntry) {
+    assert!(input.tk.is_none(), "input layer initialised twice");
+    input.paste = PASTE_NONE;
+    input.in_fd = STDIN_FILENO;
+    input.ttimeout = p_ttimeout();
+    input.ttimeoutlen = p_ttm();
+    // SAFETY: the editor's loop, and the TUI's own read stream, which
+    // stays put; stdin is open.
+    unsafe { rstream_init_fd(main_loop_raw(), &raw mut input.read_stream, input.in_fd) };
+
+    // UTF-8 because that is all nvim reads; C0 kept because the editor wants
+    // the control characters themselves rather than termkey's names for
+    // them; NOSTART because starting is separate, below.
+    let mut tk = TermKey::new(
+        None,
+        (TERMKEY_FLAG_UTF8 | TERMKEY_FLAG_NOSTART | TERMKEY_FLAG_KEEPC0) as c_int,
+    );
+    tk.set_buffer_size(INPUT_BUFFER_SIZE);
+    // The line discipline's erase character decides what backspace is,
+    // whatever terminfo says; it is read once, here, before termkey loads
+    // its keys.
+    let erase = stty_erase(input.in_fd);
+    tk.set_terminfo_hook(Box::new(move |name, value| {
+        tui_tk_ti_getstr(erase, name, value)
+    }));
+    tk.start(Some(ti));
+    // Backspace and delete are one key as far as the editor is concerned,
+    // whichever byte this terminal sends for it.
+    tk.set_canonflags(tk.canonflags() | TERMKEY_CANON_DELBS as c_int);
+    input.tk = Some(tk);
+
+    // SAFETY: the editor's loop, and the TUI's own two timers.
     unsafe {
-        assert!((*input).loop_0.is_null(), "input layer initialised twice");
-        (*input).loop_0 = loop_0;
-        (*input).paste = PASTE_NONE;
-        (*input).in_fd = STDIN_FILENO;
-        (*input).ttimeout = p_ttimeout();
-        (*input).ttimeoutlen = p_ttm();
-        rstream_init_fd(loop_0, &raw mut (*input).read_stream, (*input).in_fd);
-
-        // UTF-8 because that is all nvim reads; C0 kept because the editor
-        // wants the control characters themselves rather than termkey's
-        // names for them; NOSTART because starting is separate, below.
-        let mut tk = TermKey::new(
-            None,
-            (TERMKEY_FLAG_UTF8 | TERMKEY_FLAG_NOSTART | TERMKEY_FLAG_KEEPC0) as c_int,
+        uv_timer_init(&raw mut (*main_loop_raw()).uv, &raw mut input.timer_handle);
+        uv_timer_init(
+            &raw mut (*main_loop_raw()).uv,
+            &raw mut input.bg_query_timer,
         );
-        tk.set_buffer_size(INPUT_BUFFER_SIZE);
-        // The line discipline's erase character decides what backspace is,
-        // whatever terminfo says; it is read once, here, before termkey
-        // loads its keys.
-        let erase = stty_erase((*input).in_fd);
-        tk.set_terminfo_hook(Box::new(move |name, value| {
-            tui_tk_ti_getstr(erase, name, value)
-        }));
-        tk.start(Some(ti));
-        // Backspace and delete are one key as far as the editor is
-        // concerned, whichever byte this terminal sends for it.
-        tk.set_canonflags(tk.canonflags() | TERMKEY_CANON_DELBS as c_int);
-        (*input).tk = Some(tk);
-
-        uv_timer_init(&raw mut (*loop_0).uv, &raw mut (*input).timer_handle);
-        (*input).timer_handle.data = input.cast::<c_void>();
-        uv_timer_init(&raw mut (*loop_0).uv, &raw mut (*input).bg_query_timer);
-        (*input).bg_query_timer.data = input.cast::<c_void>();
     }
 }
 
 /// Let go of the terminal and everything read from it.
-///
-/// # Safety
-/// `input` must point to a live [`TermInput`].
-pub unsafe fn tinput_destroy(input: *mut TermInput) {
-    // SAFETY: the caller guarantees `input`; the handles are its own.
+pub fn tinput_destroy(input: &mut TermInput) {
+    // SAFETY: the input layer's own handles, open since `tinput_init`.
     unsafe {
-        uv_close((&raw mut (*input).timer_handle).cast::<uv_handle_t>(), None);
-        uv_close(
-            (&raw mut (*input).bg_query_timer).cast::<uv_handle_t>(),
-            None,
-        );
-        rstream_may_close(&raw mut (*input).read_stream);
-        (*input).tk = None;
-        (*input).loop_0 = core::ptr::null_mut();
+        uv_close((&raw mut input.timer_handle).cast::<uv_handle_t>(), None);
+        uv_close((&raw mut input.bg_query_timer).cast::<uv_handle_t>(), None);
+        rstream_may_close(&raw mut input.read_stream);
     }
+    input.tk = None;
 }
 
 /// The line discipline's erase character on `fd`, or 0 when it names none
@@ -220,31 +213,25 @@ fn stty_erase(fd: c_int) -> u8 {
 }
 
 /// Start reading.
-///
-/// # Safety
-/// `input` must point to a live [`TermInput`].
-pub unsafe fn tinput_start(input: *mut TermInput) {
-    // SAFETY: the caller guarantees `input`, which is what the read
-    // callback is handed back.
+pub fn tinput_start(input: &mut TermInput) {
+    // SAFETY: the input layer's own read stream; the callback looks the
+    // TUI up again.
     unsafe {
         rstream_start(
-            &raw mut (*input).read_stream,
+            &raw mut input.read_stream,
             Some(tinput_read_cb),
-            input.cast::<c_void>(),
+            core::ptr::null_mut(),
         );
     }
 }
 
 /// Stop reading, and stop waiting for anything half-read.
-///
-/// # Safety
-/// `input` must point to a live [`TermInput`].
-pub unsafe fn tinput_stop(input: *mut TermInput) {
-    // SAFETY: the caller guarantees `input`.
+pub fn tinput_stop(input: &mut TermInput) {
+    // SAFETY: the input layer's own read stream and timers.
     unsafe {
-        rstream_stop(&raw mut (*input).read_stream);
-        uv_timer_stop(&raw mut (*input).timer_handle);
-        uv_timer_stop(&raw mut (*input).bg_query_timer);
+        rstream_stop(&raw mut input.read_stream);
+        uv_timer_stop(&raw mut input.timer_handle);
+        uv_timer_stop(&raw mut input.bg_query_timer);
     }
 }
 
@@ -309,78 +296,83 @@ fn send_term_event(response: &mut [u8]) {
 /// The read callback: take what arrived, and ask for the rest.
 ///
 /// # Safety
-/// Called by the read stream with the [`TermInput`] it was started with.
+/// The read stream's callback: `buf` is `count` readable bytes of the
+/// stream's own block, which is not part of the TUI's state.
 unsafe fn tinput_read_cb(
     _stream: *mut RStream,
     buf: *const c_char,
     count: size_t,
-    data: *mut c_void,
+    _data: *mut c_void,
     eof: bool,
 ) -> size_t {
-    let input: *mut TermInput = data.cast();
-    // SAFETY: the stream holds this input layer's own pointer, and `buf`
-    // with `count` describe the stream's own buffer.
+    // SAFETY: the caller's contract.
+    let arrived = unsafe { bytes(buf, count) };
+    with_started_tui(|tui| take_arrived(tui, arrived, eof))
+}
+
+/// [`tinput_read_cb`] on the TUI's state: hand on what `arrived` holds, and
+/// answer how much of it went.
+fn take_arrived(tui: &mut TUIData, arrived: &[u8], eof: bool) -> usize {
+    let consumed = handle_raw_buffer(tui, false, arrived);
+    tinput_flush(&mut tui.input);
+    if eof {
+        // The terminal is gone; there is nothing to go on reading. The exit
+        // runs on the editor's loop rather than here, so this read finishes
+        // first.
+        schedule_fast_job(Box::new(|| os_exit(1)));
+        return consumed;
+    }
+    // Bytes left over are an incomplete sequence: give the rest of it
+    // `'ttimeoutlen'` to arrive.
+    if consumed < arrived.len() {
+        let input = &mut tui.input;
+        let ms: i64 = if input.ttimeout && input.ttimeoutlen >= 0 {
+            input.ttimeoutlen
+        } else {
+            0
+        };
+        restart_timer(input, u64::from(ms as u32));
+    }
+    consumed
+}
+
+/// Wait `ms` for the rest of a sequence, from now.
+fn restart_timer(input: &mut TermInput, ms: u64) {
+    // SAFETY: the input layer's own timer.
     unsafe {
-        let consumed = handle_raw_buffer(input, false, bytes(buf, count));
-        tinput_flush(&mut *input);
-        if eof {
-            // The terminal is gone; there is nothing to go on reading. The
-            // exit runs on the editor's loop rather than here, so this read
-            // finishes first.
-            schedule_fast_job(Box::new(|| os_exit(1)));
-            return consumed;
-        }
-        // Bytes left over are an incomplete sequence: give the rest of it
-        // `'ttimeoutlen'` to arrive.
-        if consumed < count {
-            let ms: i64 = if (*input).ttimeout && (*input).ttimeoutlen >= 0 {
-                (*input).ttimeoutlen
-            } else {
-                0
-            };
-            uv_timer_stop(&raw mut (*input).timer_handle);
-            uv_timer_start(
-                &raw mut (*input).timer_handle,
-                Some(tinput_timer_cb),
-                u64::from(ms as u32),
-                0,
-            );
-        }
-        consumed
+        uv_timer_stop(&raw mut input.timer_handle);
+        uv_timer_start(&raw mut input.timer_handle, Some(tinput_timer_cb), ms, 0);
     }
 }
 
 /// An incomplete sequence has waited long enough: take it as it stands.
 ///
 /// # Safety
-/// Called by libuv with the timer this input layer started.
-unsafe extern "C" fn tinput_timer_cb(handle: *mut uv_timer_t) {
-    // SAFETY: the timer's `data` is the input layer that started it, and
-    // the read stream's unread bytes are its own buffer.
-    unsafe {
-        let input: *mut TermInput = (*handle).data.cast();
-        let available = rstream_available(&raw mut (*input).read_stream);
+/// libuv's timer callback, on the input layer's timer.
+unsafe extern "C" fn tinput_timer_cb(_handle: *mut uv_timer_t) {
+    with_started_tui(|tui| {
+        let stream = &raw mut tui.input.read_stream;
+        // SAFETY: the input layer's own read stream.
+        let available = unsafe { rstream_available(stream) };
         if available > 0 {
-            let unread = bytes((*input).read_stream.read_pos, available);
-            let consumed = handle_raw_buffer(input, true, unread);
-            rstream_consume(&raw mut (*input).read_stream, consumed);
+            // SAFETY: the stream's unread bytes, in its own block, which is
+            // not part of the TUI's state and is not written while this runs.
+            let unread = unsafe { bytes(tui.input.read_stream.read_pos, available) };
+            let consumed = handle_raw_buffer(tui, true, unread);
+            // SAFETY: as above; `consumed` is no more than was available.
+            unsafe { rstream_consume(stream, consumed) };
         }
-        tk_getkeys(input, true);
-        tinput_flush(&mut *input);
-    }
+        tk_getkeys(tui, true);
+        tinput_flush(&mut tui.input);
+    });
 }
 
 /// Time to ask the terminal for its background colour again.
 ///
 /// # Safety
-/// Called by libuv with the timer this input layer started.
-unsafe extern "C" fn bg_query_timer_cb(handle: *mut uv_timer_t) {
-    // SAFETY: the timer's `data` is the input layer that started it, and it
-    // knows the TUI it belongs to.
-    unsafe {
-        let input: *mut TermInput = (*handle).data.cast();
-        tui_query_bg_color(&mut *(*input).tui_data);
-    }
+/// libuv's timer callback, on the input layer's background-query timer.
+unsafe extern "C" fn bg_query_timer_cb(_handle: *mut uv_timer_t) {
+    with_started_tui(tui_query_bg_color);
 }
 
 /// Take what can be taken out of `data`, and say how much that was.
@@ -389,39 +381,32 @@ unsafe extern "C" fn bg_query_timer_cb(handle: *mut uv_timer_t) {
 /// focus event arriving mid-stream is recognised before the parser swallows
 /// it. `force` skips those two checks: it is the timeout path, where what is
 /// left is known not to be either.
-///
-/// # Safety
-/// `input` must point to a live [`TermInput`].
-unsafe fn handle_raw_buffer(input: *mut TermInput, force: bool, data: &[u8]) -> usize {
+fn handle_raw_buffer(tui: &mut TUIData, force: bool, data: &[u8]) -> usize {
     let mut rest = data;
-    // SAFETY: the caller guarantees `input`. `data` is the read stream's
-    // buffer, which is not part of this struct.
-    unsafe {
-        loop {
-            let mut consumed = 0;
-            if !force {
-                consumed = handle_focus_event(rest);
-                if consumed == 0 {
-                    let (taken, incomplete) = handle_bracketed_paste(&mut *input, rest);
-                    if incomplete {
-                        // Half a paste bracket: leave it for the next read
-                        // to complete rather than typing it into the editor.
-                        return data.len() - rest.len();
-                    }
-                    consumed = taken;
-                }
-            }
+    loop {
+        let mut consumed = 0;
+        if !force {
+            consumed = handle_focus_event(rest);
             if consumed == 0 {
-                consumed = take_one_sequence(&mut *input, rest);
-            }
-            rest = &rest[consumed..];
-            if rest.is_empty() {
-                break;
+                let (taken, incomplete) = handle_bracketed_paste(&mut tui.input, rest);
+                if incomplete {
+                    // Half a paste bracket: leave it for the next read to
+                    // complete rather than typing it into the editor.
+                    return data.len() - rest.len();
+                }
+                consumed = taken;
             }
         }
-        shrink_parser_buffer(parser(&mut *input));
-        data.len() - rest.len()
+        if consumed == 0 {
+            consumed = take_one_sequence(tui, rest);
+        }
+        rest = &rest[consumed..];
+        if rest.is_empty() {
+            break;
+        }
     }
+    shrink_parser_buffer(parser(&mut tui.input));
+    data.len() - rest.len()
 }
 
 /// Hand over the next sequence in `rest`, returning how many bytes went.
@@ -429,7 +414,8 @@ unsafe fn handle_raw_buffer(input: *mut TermInput, force: bool, data: &[u8]) -> 
 /// Everything up to the next escape belongs to one sequence, since an escape
 /// can only begin one. Mid-paste there is nothing to parse and the bytes go
 /// to the editor as they are.
-fn take_one_sequence(input: &mut TermInput, rest: &[u8]) -> usize {
+fn take_one_sequence(tui: &mut TUIData, rest: &[u8]) -> usize {
+    let input = &mut tui.input;
     let count = rest
         .iter()
         .skip(1)
@@ -444,8 +430,7 @@ fn take_one_sequence(input: &mut TermInput, rest: &[u8]) -> usize {
     let pushed = tk
         .push_bytes(&rest[..count])
         .expect("the parser's buffer was grown to fit");
-    // SAFETY: `input` is a live input layer, borrowed here for the call.
-    unsafe { tk_getkeys(input, false) };
+    tk_getkeys(tui, false);
     pushed
 }
 
@@ -494,74 +479,57 @@ unsafe fn bytes<'a>(data: *const c_char, len: usize) -> &'a [u8] {
 ///
 /// `force` takes an incomplete sequence as whatever it already spells, which
 /// is how a lone `<Esc>` eventually arrives.
-///
-/// # Safety
-/// `input` must point to a live [`TermInput`].
-unsafe fn tk_getkeys(input: *mut TermInput, force: bool) {
-    // SAFETY: the caller guarantees `input`; `key` is this frame's.
-    unsafe {
-        let mut key = TermKeyKey::default();
-        let result = loop {
-            let tk = parser(&mut *input);
-            let result = if force {
-                tk.getkey_force(&mut key)
-            } else {
-                tk.getkey(&mut key)
-            };
-            if result != TERMKEY_RES_KEY {
-                break result;
-            }
-            // A key going up is not something the editor has a notion of.
-            if key.event == TERMKEY_EVENT_PRESS || key.event == TERMKEY_EVENT_REPEAT {
-                dispatch_key(input, &key);
-            }
-        };
-        if result != TERMKEY_RES_AGAIN {
-            return;
-        }
-        // Half a sequence: either it is worth waiting for the rest, or
-        // `'ttimeout'` says to take it as it is straight away.
-        if (*input).ttimeout && (*input).ttimeoutlen >= 0 {
-            uv_timer_stop(&raw mut (*input).timer_handle);
-            uv_timer_start(
-                &raw mut (*input).timer_handle,
-                Some(tinput_timer_cb),
-                (*input).ttimeoutlen as u64,
-                0,
-            );
+fn tk_getkeys(tui: &mut TUIData, force: bool) {
+    let mut key = TermKeyKey::default();
+    let result = loop {
+        let tk = parser(&mut tui.input);
+        let result = if force {
+            tk.getkey_force(&mut key)
         } else {
-            tk_getkeys(input, true);
+            tk.getkey(&mut key)
+        };
+        if result != TERMKEY_RES_KEY {
+            break result;
         }
+        // A key going up is not something the editor has a notion of.
+        if key.event == TERMKEY_EVENT_PRESS || key.event == TERMKEY_EVENT_REPEAT {
+            dispatch_key(tui, &key);
+        }
+    };
+    if result != TERMKEY_RES_AGAIN {
+        return;
+    }
+    // Half a sequence: either it is worth waiting for the rest, or
+    // `'ttimeout'` says to take it as it is straight away.
+    let input = &mut tui.input;
+    if input.ttimeout && input.ttimeoutlen >= 0 {
+        let ms = input.ttimeoutlen as u64;
+        restart_timer(input, ms);
+    } else {
+        tk_getkeys(tui, true);
     }
 }
 
 /// Send `key` where it belongs: to the editor, or to the TUI.
-///
-/// # Safety
-/// `input` must point to a live [`TermInput`], and `key` must have come from
-/// its parser.
-unsafe fn dispatch_key(input: *mut TermInput, key: &TermKeyKey) {
-    // SAFETY: the caller guarantees both.
-    unsafe {
-        match key.kind {
-            TERMKEY_TYPE_UNICODE if key.modifiers & KEYMOD_RECOGNIZED == 0 => {
-                tinput_enqueue(&mut *input, simple_utf8(key).as_bytes());
-            }
-            TERMKEY_TYPE_UNICODE | TERMKEY_TYPE_FUNCTION | TERMKEY_TYPE_KEYSYM => {
-                tinput_enqueue(&mut *input, modified_utf8(key).as_bytes());
-            }
-            TERMKEY_TYPE_MOUSE => {
-                if let Some(text) = mouse_event(key) {
-                    tinput_enqueue(&mut *input, text.as_bytes());
-                }
-            }
-            TERMKEY_TYPE_MODEREPORT => handle_modereport(input, key),
-            TERMKEY_TYPE_UNKNOWN_CSI => handle_unknown_csi(input, key),
-            TERMKEY_TYPE_OSC | TERMKEY_TYPE_DCS | TERMKEY_TYPE_APC => {
-                handle_term_response(input, key);
-            }
-            _ => {}
+fn dispatch_key(tui: &mut TUIData, key: &TermKeyKey) {
+    match key.kind {
+        TERMKEY_TYPE_UNICODE if key.modifiers & KEYMOD_RECOGNIZED == 0 => {
+            tinput_enqueue(&mut tui.input, simple_utf8(key).as_bytes());
         }
+        TERMKEY_TYPE_UNICODE | TERMKEY_TYPE_FUNCTION | TERMKEY_TYPE_KEYSYM => {
+            tinput_enqueue(&mut tui.input, modified_utf8(key).as_bytes());
+        }
+        TERMKEY_TYPE_MOUSE => {
+            if let Some(text) = mouse_event(key) {
+                tinput_enqueue(&mut tui.input, text.as_bytes());
+            }
+        }
+        TERMKEY_TYPE_MODEREPORT => handle_modereport(tui, key),
+        TERMKEY_TYPE_UNKNOWN_CSI => handle_unknown_csi(tui, key),
+        TERMKEY_TYPE_OSC | TERMKEY_TYPE_DCS | TERMKEY_TYPE_APC => {
+            handle_term_response(tui, key);
+        }
+        _ => {}
     }
 }
 
@@ -627,70 +595,50 @@ fn handle_bracketed_paste(input: &mut TermInput, data: &[u8]) -> (usize, bool) {
 }
 
 /// The terminal answering a question about one of its modes.
-///
-/// # Safety
-/// `input` must point to a live [`TermInput`], and `key` must have come from
-/// its parser.
-unsafe fn handle_modereport(input: *mut TermInput, key: &TermKeyKey) {
+fn handle_modereport(tui: &mut TUIData, key: &TermKeyKey) {
     if let Some((_initial, mode, value)) = interpret_modereport(key) {
-        // SAFETY: the caller guarantees `input`, which knows its TUI.
-        unsafe { tui_handle_term_mode(&mut *(*input).tui_data, mode as _, value as _) };
+        tui_handle_term_mode(tui, mode as _, value as _);
     }
 }
 
 /// Anything else the terminal says in a CSI sequence.
-///
-/// # Safety
-/// `input` must point to a live [`TermInput`], and `key` must have come from
-/// its parser.
-unsafe fn handle_unknown_csi(input: *mut TermInput, key: &TermKeyKey) {
-    // SAFETY: the caller guarantees both. The sequence's parameters are read
-    // out of the parser's buffer into values here, so nothing borrows the
-    // parser while the TUI is reached below.
-    let (command, initial, args) = unsafe {
-        let Some(csi) = (*input).tk.as_ref().and_then(|tk| tk.interpret_csi(key)) else {
-            return;
-        };
-        let args: Vec<c_int> = csi.params().iter().map(|&p| csi_param_value(p)).collect();
-        let initial = (csi.command >> 8 & 0xff) as u8;
-        let command = (csi.command & 0xff) as u8;
-        (command, initial, args)
+fn handle_unknown_csi(tui: &mut TUIData, key: &TermKeyKey) {
+    // The sequence's parameters are read out of the parser's buffer into
+    // values here, so nothing borrows the parser while the TUI is reached.
+    let Some(csi) = tui.input.tk.as_ref().and_then(|tk| tk.interpret_csi(key)) else {
+        return;
     };
-    // SAFETY: the caller guarantees `input`, whose TUI and timer are its own.
-    unsafe {
-        match (command, initial) {
-            // The terminal supports the kitty keyboard protocol, which the
-            // TUI has by now asked it to speak.
-            (b'u', b'?') => (*input).key_encoding = KEY_ENCODING_KITTY,
-            (b'c', b'?') => handle_primary_device_attr(input, &args),
-            // A resize the terminal is reporting itself.
-            (b't', _) if args.len() == 5 => {
-                if args[0] == REPORT_SIZE_IN_CELLS {
-                    let (height, width) = (args[1], args[2]);
-                    tui_set_size(&mut *(*input).tui_data, width, height);
-                }
+    let args: Vec<c_int> = csi.params().iter().map(|&p| csi_param_value(p)).collect();
+    let initial = (csi.command >> 8 & 0xff) as u8;
+    let command = (csi.command & 0xff) as u8;
+    match (command, initial) {
+        // The terminal supports the kitty keyboard protocol, which the TUI
+        // has by now asked it to speak.
+        (b'u', b'?') => tui.input.key_encoding = KEY_ENCODING_KITTY,
+        (b'c', b'?') => handle_primary_device_attr(tui, &args),
+        // A resize the terminal is reporting itself.
+        (b't', _) if args.len() == 5 => {
+            if args[0] == REPORT_SIZE_IN_CELLS {
+                let (height, width) = (args[1], args[2]);
+                tui_set_size(tui, width, height);
             }
-            (b'n', _) if args.len() == 1 => {
-                let mut response = Vec::new();
-                let _ = write!(Bytes(&mut response), "\x1b[{}n", args[0]);
-                send_term_event(&mut response);
-            }
-            // The terminal's colour scheme changed. Terminals send a flurry
-            // of these, so the query it provokes is rationed.
-            (b'n', _)
-                if args.len() == 2
-                    && args[0] == THEME_CHANGED
-                    && uv_timer_get_due_in(&raw mut (*input).bg_query_timer) == 0 =>
-            {
-                uv_timer_start(
-                    &raw mut (*input).bg_query_timer,
-                    Some(bg_query_timer_cb),
-                    BG_QUERY_DELAY_MS,
-                    0,
-                );
-            }
-            _ => {}
         }
+        (b'n', _) if args.len() == 1 => {
+            let mut response = Vec::new();
+            let _ = write!(Bytes(&mut response), "\x1b[{}n", args[0]);
+            send_term_event(&mut response);
+        }
+        // The terminal's colour scheme changed. Terminals send a flurry of
+        // these, so the query it provokes is rationed.
+        (b'n', _) if args.len() == 2 && args[0] == THEME_CHANGED => {
+            let timer = &raw mut tui.input.bg_query_timer;
+            // SAFETY: the input layer's own timer.
+            if unsafe { uv_timer_get_due_in(timer) } == 0 {
+                // SAFETY: as above.
+                unsafe { uv_timer_start(timer, Some(bg_query_timer_cb), BG_QUERY_DELAY_MS, 0) };
+            }
+        }
+        _ => {}
     }
 }
 
@@ -703,73 +651,61 @@ const REPORT_SIZE_IN_CELLS: c_int = 48;
 const THEME_CHANGED: c_int = 997;
 
 /// The terminal's device attributes: what it is and what it can do.
-///
-/// # Safety
-/// `input` must point to a live [`TermInput`]; `params` are the values of a
-/// device-attributes reply's parameters.
-unsafe fn handle_primary_device_attr(input: *mut TermInput, params: &[c_int]) {
-    // SAFETY: the caller guarantees both. The callback is taken before it
-    // is called: it runs once, and what it does reaches back here.
-    unsafe {
-        if let Some(callback) = (*input).callbacks.primary_device_attr.take() {
-            callback(&mut *(*input).tui_data);
-        }
-        if params.is_empty() {
-            return;
-        }
-        let mut response = Vec::new();
-        response.extend_from_slice(b"\x1b[?");
-        for (i, &param) in params.iter().enumerate() {
-            if i > 0 {
-                response.push(b';');
-            }
-            let _ = write!(Bytes(&mut response), "{param}");
-        }
-        response.push(b'c');
-        send_term_event(&mut response);
+/// `params` are the values of a device-attributes reply's parameters.
+fn handle_primary_device_attr(tui: &mut TUIData, params: &[c_int]) {
+    // The callback is taken before it is called: it runs once.
+    if let Some(callback) = tui.input.callbacks.primary_device_attr.take() {
+        callback(tui);
     }
+    if params.is_empty() {
+        return;
+    }
+    let mut response = Vec::new();
+    response.extend_from_slice(b"\x1b[?");
+    for (i, &param) in params.iter().enumerate() {
+        if i > 0 {
+            response.push(b';');
+        }
+        let _ = write!(Bytes(&mut response), "{param}");
+    }
+    response.push(b'c');
+    send_term_event(&mut response);
 }
 
 /// Everything the terminal says outside a CSI sequence: the answers to
 /// colour and capability queries, and whatever else it volunteers.
-///
-/// # Safety
-/// `input` must point to a live [`TermInput`], and `key` must have come from
-/// its parser.
-unsafe fn handle_term_response(input: *mut TermInput, key: &TermKeyKey) {
-    // SAFETY: the caller guarantees both. The string is copied out of the
-    // parser before the TUI is reached.
-    unsafe {
-        let Some(text) = (*input)
-            .tk
-            .as_ref()
-            .and_then(|tk| tk.interpret_string(key))
-            .map(<[u8]>::to_vec)
-        else {
-            return;
-        };
+fn handle_term_response(tui: &mut TUIData, key: &TermKeyKey) {
+    // The string is copied out of the parser before the TUI is reached.
+    let Some(text) = tui
+        .input
+        .tk
+        .as_ref()
+        .and_then(|tk| tk.interpret_string(key))
+        .map(<[u8]>::to_vec)
+    else {
+        return;
+    };
 
-        // A terminal that answers the underline-style query with a style
-        // has extended underlines, whatever its terminfo entry says.
-        if key.kind == TERMKEY_TYPE_DCS
-            && (text.starts_with(b"1$r4:3m") || text.starts_with(b"1$r0;4:3m"))
-        {
-            tui_enable_extended_underline(&mut *(*input).tui_data);
-        }
-
-        // The editor is told what was said, introducer and all, so that a
-        // plugin can recognise the answer to its own query.
-        let introducer: &[u8] = match key.kind {
-            TERMKEY_TYPE_OSC => b"\x1b]",
-            TERMKEY_TYPE_DCS => b"\x1bP",
-            TERMKEY_TYPE_APC => b"\x1b_",
-            _ => unreachable!("not a key carrying a string"),
-        };
-        let mut response = Vec::with_capacity(introducer.len() + text.len());
-        response.extend_from_slice(introducer);
-        response.extend_from_slice(&text);
-        send_term_event(&mut response);
+    // A terminal that answers the underline-style query with a style has
+    // extended underlines, whatever its terminfo entry says.
+    if key.kind == TERMKEY_TYPE_DCS
+        && (text.starts_with(b"1$r4:3m") || text.starts_with(b"1$r0;4:3m"))
+    {
+        tui_enable_extended_underline(tui);
     }
+
+    // The editor is told what was said, introducer and all, so that a
+    // plugin can recognise the answer to its own query.
+    let introducer: &[u8] = match key.kind {
+        TERMKEY_TYPE_OSC => b"\x1b]",
+        TERMKEY_TYPE_DCS => b"\x1bP",
+        TERMKEY_TYPE_APC => b"\x1b_",
+        _ => unreachable!("not a key carrying a string"),
+    };
+    let mut response = Vec::with_capacity(introducer.len() + text.len());
+    response.extend_from_slice(introducer);
+    response.extend_from_slice(&text);
+    send_term_event(&mut response);
 }
 
 /// [`core::fmt`] over a byte vector, for building a response out of numbers.

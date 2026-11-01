@@ -47,8 +47,6 @@ pub const KEY_BUFFER_SIZE: usize = 0x1000;
 /// that which can be enforced rather than promised -- that what is staged
 /// really is within the buffer -- is [`Staging`]'s doing.
 pub struct TUIData {
-    /// The editor's event loop, borrowed. Not the loop writes go out on.
-    pub loop_0: *mut Loop,
     /// Bytes on their way to the terminal.
     pub staging: Staging,
     pub input: TermInput,
@@ -282,10 +280,7 @@ pub struct TermInput {
     /// Rations the background-colour queries that a terminal announcing a
     /// theme change would otherwise provoke one of per announcement.
     pub bg_query_timer: uv_timer_t,
-    pub loop_0: *mut Loop,
     pub read_stream: RStream,
-    /// The TUI this belongs to.
-    pub tui_data: *mut TUIData,
     /// Keys named but not yet sent. One `nvim_input` carries as many as have
     /// accumulated by the end of a read.
     pub key_buffer: [u8; KEY_BUFFER_SIZE],

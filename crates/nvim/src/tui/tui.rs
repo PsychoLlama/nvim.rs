@@ -14,11 +14,11 @@
 //! lifecycle: starting the terminal up, negotiating what it supports,
 //! and putting it back the way it was found.
 //!
-//! Almost everything here takes a raw `*mut TUIData`. That is deliberate:
-//! the lifecycle pumps the event loop, which runs callbacks that reach the
-//! same structure through the pointers libuv and the input layer hold, so a
-//! long-lived `&mut` would be a lie. The painting side, which never pumps,
-//! uses references.
+//! The state lives in one cell for the life of the process. Everything takes
+//! `&mut TUIData`, borrowed from the cell for one step; the lifecycle steps
+//! that turn the event loop (waiting for the terminal's answers) hold
+//! nothing of it while they wait, because the loop's callbacks -- the input
+//! layer's reads and timers, the resize watcher -- look it up themselves.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `tui/{tui,input,output,events}.rs` row in docs/perimeter.md.
@@ -36,11 +36,12 @@ use crate::event::libuv::{
     uv_timer_init, uv_timer_start, uv_tty_get_winsize, uv_tty_init, uv_tty_reset_mode,
     uv_tty_set_mode,
 };
-use crate::event::r#loop::{loop_poll_events, process_events_until};
+use crate::event::r#loop::{Drain, main_loop_raw, poll_main_loop, wait_on_main_loop};
 use crate::event::signal::{
     signal_watcher_close, signal_watcher_init, signal_watcher_start, signal_watcher_stop,
 };
 use crate::event::stream::stream_set_blocking;
+use crate::global_cell::GlobalCell;
 use crate::highlight::HlAttrFlags;
 use crate::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
 use crate::memory::XString;
@@ -49,7 +50,7 @@ use crate::os::env::{env_get_within, getenv_owned};
 use crate::os::fs::os_strerror;
 use crate::os::input::os_isatty;
 use crate::os::uv_error::UV_EINTR;
-use crate::startup::{main_loop, ui_client_error_exit, ui_client_exit_status};
+use crate::startup::{ui_client_error_exit, ui_client_exit_status};
 use crate::tui::events::{tui_mode_change, tui_mouse_off, tui_mouse_on, tui_set_title};
 use crate::tui::input::{tinput_destroy, tinput_init, tinput_start, tinput_stop};
 use crate::tui::negotiate::{
@@ -78,6 +79,7 @@ use crate::ui::state::t_colors;
 use crate::ui_client::{ui_client_attach, ui_client_detach, ui_client_set_size};
 use ::libc::{abort, kill};
 use core::ffi::{CStr, c_int, c_void};
+use core::ptr;
 use std::borrow::Cow;
 
 // --------------------------------------------------------------- the state
@@ -110,116 +112,104 @@ pub(crate) const DEFAULT_ATTRS: HlAttrs = HlAttrs {
 
 // ------------------------------------------------------------- the lifecycle
 
-/// The running TUI, as its client holds it.
+/// The TUI's state, from [`Tui::start`] for the life of the process.
 ///
-/// It owns the [`TUIData`] that libuv's handles and the input layer point
-/// back into, which is why the data sits at a fixed address and is never
-/// freed: the process exits with it. The raw pointer stays here, inside the
-/// terminal layer; the client sees the methods below.
+/// Boxed, because libuv keeps the addresses of the handles inside it; the
+/// handles' callbacks carry no address back, they look the state up here.
+/// Every step borrows it for its own length and none across a turn of the
+/// event loop, so a callback the loop runs finds it free -- and the cell's
+/// debug borrow tracking says so loudly if one ever does not.
+static STATE: GlobalCell<Option<Box<TUIData>>> = GlobalCell::new(None);
+
+/// Run `f` on the started TUI's state. `f` must not run the event loop.
+fn with_tui<R>(f: impl FnOnce(&mut TUIData) -> R) -> R {
+    STATE.with_mut(|state| f(state.as_mut().expect("the TUI is started")))
+}
+
+/// Read the started TUI's state.
+fn read_tui<R>(f: impl FnOnce(&TUIData) -> R) -> R {
+    STATE.with(|state| f(state.as_ref().expect("the TUI is started")))
+}
+
+/// [`with_tui`], for the input layer's callbacks, which are reached from
+/// libuv with nothing of the TUI borrowed.
+pub(crate) fn with_started_tui<R>(f: impl FnOnce(&mut TUIData) -> R) -> R {
+    with_tui(f)
+}
+
+/// The running TUI, as its client holds it: a token for the state in
+/// [`STATE`], which the process exits with.
 pub struct Tui {
-    data: core::ptr::NonNull<TUIData>,
-    /// Set while [`Tui::with_state`] lends the data out, so a nested lend
-    /// panics instead of making a second `&mut`.
-    lent: core::cell::Cell<bool>,
+    _started: (),
 }
 
 impl Tui {
-    /// [`tui_start`], owned. Panics if a TUI was started before: there is
+    /// Take over the terminal. Panics if a TUI was started before: there is
     /// one terminal.
+    ///
+    /// The queries whose answers the client needs — size, name, colour
+    /// depth — have been sent but not answered when this returns;
+    /// [`Tui::wait_ready`] collects them.
     pub fn start() -> Self {
-        static STARTED: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
-        let again = STARTED.swap(true, core::sync::atomic::Ordering::Relaxed);
-        assert!(!again, "the TUI is started once");
-        // SAFETY: once (above). The main-thread half is the editor's cells'
-        // own check: `tui_start` reaches the main loop through one.
-        let data = unsafe { tui_start() };
-        Self {
-            data: core::ptr::NonNull::new(data).expect("tui_start answers its data"),
-            lent: core::cell::Cell::new(false),
-        }
+        let fresh = STATE.with_mut(|state| state.replace(TUIData::new()).is_none());
+        assert!(fresh, "the TUI is started once");
+        with_tui(|tui| {
+            // SAFETY: the editor's loop, live from startup to exit, and the
+            // watcher inside the boxed state, which never moves; its callback
+            // looks the state up again.
+            unsafe {
+                signal_watcher_init(main_loop_raw(), &raw mut tui.winch_handle, ptr::null_mut());
+                signal_watcher_start(&raw mut tui.winch_handle, Some(sigwinch_cb), SIGWINCH);
+            }
+            tui_terminal_start(tui);
+            // SAFETY: as above, for the startup timer.
+            unsafe {
+                uv_timer_init(
+                    &raw mut (*main_loop_raw()).uv,
+                    &raw mut tui.startup_delay_timer,
+                );
+                uv_timer_start(
+                    &raw mut tui.startup_delay_timer,
+                    Some(after_startup_cb),
+                    STARTUP_DELAY_MS,
+                    0,
+                );
+            }
+        });
+        Self { _started: () }
     }
 
-    /// [`tui_wait_ready`].
+    /// Wait for the terminal to answer what [`Tui::start`] asked it.
+    ///
+    /// One turn of the event loop, so that what the client is told is the
+    /// terminal's answer rather than the guess. It is separate from
+    /// starting because that turn can run any callback the loop has pending
+    /// — including the one that stops this TUI when its channel is already
+    /// at EOF — so the caller has to have published the TUI first.
     pub fn wait_ready(&self) -> TuiStart {
-        // SAFETY: the data this value owns, live for the process.
-        unsafe { tui_wait_ready(self.data.as_ptr()) }
+        poll_main_loop(1);
+        read_tui(|tui| TuiStart {
+            width: tui.width,
+            height: tui.height,
+            term: tui.term.as_deref().map(CStr::to_owned),
+            rgb: tui.rgb,
+        })
     }
 
-    /// [`tui_is_stopped`].
+    /// Has the TUI been stopped?
     pub fn is_stopped(&self) -> bool {
-        // SAFETY: as above.
-        unsafe { tui_is_stopped(&*self.data.as_ptr()) }
+        read_tui(|tui| tui.stopped)
     }
 
-    /// [`tui_stop`].
+    /// Stop the TUI: reset the terminal, wait for it to say so, and let go
+    /// of everything.
     pub fn stop(&self) {
-        // SAFETY: as above.
-        unsafe { tui_stop(self.data.as_ptr()) }
+        tui_stop();
     }
 
     /// Run `f`, one of the drawing sinks, on the TUI's state.
     pub fn with_state<R>(&self, f: impl FnOnce(&mut TUIData) -> R) -> R {
-        assert!(!self.lent.replace(true), "the TUI's state is already lent");
-        // SAFETY: the data this value owns; `lent` says no other `&mut` from
-        // here is live, and the sinks do not run the event loop.
-        let result = f(unsafe { &mut *self.data.as_ptr() });
-        self.lent.set(false);
-        result
-    }
-}
-
-/// Take over the terminal, returning the TUI that now owns it.
-///
-/// The queries whose answers the client needs — size, name, colour depth —
-/// have been sent but not answered when this returns; [`tui_wait_ready`]
-/// collects them.
-///
-/// # Safety
-/// Must be called once, on the main thread.
-pub unsafe fn tui_start() -> *mut TUIData {
-    // SAFETY: called once, on the main thread, before anything is drawn.
-    unsafe {
-        let tui: *mut TUIData = Box::into_raw(TUIData::new());
-        signal_watcher_init((*tui).loop_0, &raw mut (*tui).winch_handle, tui.cast());
-        signal_watcher_start(&raw mut (*tui).winch_handle, Some(sigwinch_cb), SIGWINCH);
-        tui_terminal_start(tui);
-
-        uv_timer_init(
-            &raw mut (*(*tui).loop_0).uv,
-            &raw mut (*tui).startup_delay_timer,
-        );
-        (*tui).startup_delay_timer.data = tui.cast();
-        uv_timer_start(
-            &raw mut (*tui).startup_delay_timer,
-            Some(after_startup_cb),
-            STARTUP_DELAY_MS,
-            0,
-        );
-
-        tui
-    }
-}
-
-/// Wait for the terminal to answer what [`tui_start`] asked it.
-///
-/// One turn of the event loop, so that what the client is told is the
-/// terminal's answer rather than the guess. It is separate from
-/// [`tui_start`] because that turn can run any callback the loop has
-/// pending — including the one that stops this TUI when its channel is
-/// already at EOF — so the caller has to have published the TUI first.
-///
-/// # Safety
-/// `tui` must be the result of [`tui_start`].
-pub unsafe fn tui_wait_ready(tui: *mut TUIData) -> TuiStart {
-    // SAFETY: the caller guarantees `tui`.
-    unsafe {
-        loop_poll_events(main_loop.ptr(), 1);
-        TuiStart {
-            width: (*tui).width,
-            height: (*tui).height,
-            term: (*tui).term.as_deref().map(CStr::to_owned),
-            rgb: (*tui).rgb,
-        }
+        with_tui(f)
     }
 }
 
@@ -251,7 +241,6 @@ impl TUIData {
         // reading them, exactly as they did when this struct was xcalloc'ed.
         unsafe {
             Box::new(Self {
-                loop_0: main_loop.ptr(),
                 staging: Staging::new(),
                 input: TermInput::new(),
                 write_loop: core::mem::zeroed(),
@@ -518,32 +507,22 @@ fn terminfo_stop(tui: &mut TUIData) {
 }
 
 /// Start the terminal and the input layer on top of it.
-///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
-unsafe fn tui_terminal_start(tui: *mut TUIData) {
-    // SAFETY: the caller guarantees `tui`.
-    unsafe {
-        (*tui).print_attr_id = -1;
-        // The input layer's way back to this TUI, made from the caller's
-        // pointer rather than from a borrow that ends here.
-        (*tui).input.tui_data = tui;
-        terminfo_start(&mut *tui);
-        if (*tui).input.loop_0.is_null() {
-            tinput_init(&raw mut (*tui).input, main_loop.ptr(), &(*tui).ti);
-        }
-        tui_guess_size(&mut *tui);
-        tinput_start(&raw mut (*tui).input);
+fn tui_terminal_start(tui: &mut TUIData) {
+    tui.print_attr_id = -1;
+    terminfo_start(tui);
+    if tui.input.tk.is_none() {
+        tinput_init(&mut tui.input, &tui.ti);
     }
+    tui_guess_size(tui);
+    tinput_start(&mut tui.input);
 }
 
 /// The startup delay timer's callback.
 ///
 /// # Safety
-/// Called by libuv with the timer this TUI started.
-unsafe extern "C" fn after_startup_cb(handle: *mut uv_timer_t) {
-    // SAFETY: the timer's `data` is the TUI that started it.
-    unsafe { tui_terminal_after_startup(&mut *(*handle).data.cast::<TUIData>()) };
+/// libuv's timer callback, on the TUI's startup timer.
+unsafe extern "C" fn after_startup_cb(_handle: *mut uv_timer_t) {
+    with_tui(tui_terminal_after_startup);
 }
 
 /// Send what had to wait until the terminal had settled.
@@ -556,27 +535,29 @@ fn tui_terminal_after_startup(tui: &mut TUIData) {
 /// Stop the TUI: reset the terminal, wait for it to say so, and let go of
 /// everything.
 ///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
-pub unsafe fn tui_stop(tui: *mut TUIData) {
-    // SAFETY: the caller guarantees `tui`.
-    unsafe {
-        if uv_is_closing((&raw mut (*tui).output_handle).cast::<uv_handle_t>()) != 0 {
+/// The wait turns the event loop, whose read callback reaches the state, so
+/// it holds nothing of it: the state is borrowed before and after.
+fn tui_stop() {
+    let stopping = with_tui(|tui| {
+        // SAFETY: the TUI's own output handle.
+        if unsafe { uv_is_closing((&raw mut tui.output_handle).cast::<uv_handle_t>()) } != 0 {
             logmsg!(LOGLVL_ERR, c"tui_stop", 0, "TUI already stopped (race?)");
-            (*tui).stopped = true;
-            return;
+            tui.stopped = true;
+            return false;
         }
         // The terminal's answer to the device-attributes query terminfo
         // disable ends with is what says the resets have been processed.
-        (*tui).input.callbacks.primary_device_attr = Some(tui_stop_cb);
-        terminfo_disable(&mut *tui);
-        process_events_until(
-            (*tui).loop_0,
-            Some(crate::event_queue::QueueId::MAIN),
-            DA1_TIMEOUT_MS,
-            || (*tui).stopped || (*tui).input.read_stream.did_eof,
-        );
-        if !(*tui).stopped && !(*tui).input.read_stream.did_eof {
+        tui.input.callbacks.primary_device_attr = Some(tui_stop_cb);
+        terminfo_disable(tui);
+        true
+    });
+    if !stopping {
+        return;
+    }
+    let answered = || read_tui(|tui| tui.stopped || tui.input.read_stream.did_eof);
+    wait_on_main_loop(Drain::Events, DA1_TIMEOUT_MS, answered);
+    with_tui(|tui| {
+        if !tui.stopped && !tui.input.read_stream.did_eof {
             logmsg!(
                 LOGLVL_WRN,
                 c"tui_stop",
@@ -584,17 +565,20 @@ pub unsafe fn tui_stop(tui: *mut TUIData) {
                 "TUI: timed out waiting for DA1 response"
             );
         }
-        (*tui).stopped = true;
+        tui.stopped = true;
         tui_terminal_stop(tui);
-        stream_set_blocking((*tui).input.in_fd, true);
-        tinput_destroy(&raw mut (*tui).input);
-        signal_watcher_stop(&raw mut (*tui).winch_handle);
-        signal_watcher_close(&raw mut (*tui).winch_handle, None);
-        uv_close(
-            (&raw mut (*tui).startup_delay_timer).cast::<uv_handle_t>(),
-            None,
-        );
-    }
+        stream_set_blocking(tui.input.in_fd, true);
+        tinput_destroy(&mut tui.input);
+        // SAFETY: the TUI's own watcher and timer, open until here.
+        unsafe {
+            signal_watcher_stop(&raw mut tui.winch_handle);
+            signal_watcher_close(&raw mut tui.winch_handle, None);
+            uv_close(
+                (&raw mut tui.startup_delay_timer).cast::<uv_handle_t>(),
+                None,
+            );
+        }
+    });
 }
 
 /// How long to wait for the terminal to answer the shutdown query.
@@ -606,15 +590,9 @@ fn tui_stop_cb(tui: &mut TUIData) {
 }
 
 /// Stop reading input and close the terminal.
-///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
-unsafe fn tui_terminal_stop(tui: *mut TUIData) {
-    // SAFETY: the caller guarantees `tui`.
-    unsafe {
-        tinput_stop(&raw mut (*tui).input);
-        terminfo_stop(&mut *tui);
-    }
+fn tui_terminal_stop(tui: &mut TUIData) {
+    tinput_stop(&mut tui.input);
+    terminfo_stop(tui);
 }
 
 /// Has the TUI been stopped?
@@ -636,25 +614,21 @@ pub fn tui_suspend(tui: &mut TUIData) {
 
 /// Actually suspend, once the terminal has confirmed the reset.
 fn tui_suspend_cb(tui: &mut TUIData) {
-    let tui: *mut TUIData = tui;
-    // SAFETY: the TUI the input layer lent, reached through the one pointer
-    // made from that loan: restarting the terminal re-registers its handles,
-    // which keep this address.
-    unsafe {
-        tui_terminal_stop(tui);
-        stream_set_blocking((*tui).input.in_fd, true);
-        // Stop the whole process group, which is what returns to the shell.
-        kill(0, SIGSTOP);
-        // Execution resumes here on SIGCONT.
-        tui_terminal_start(tui);
-        tui_terminal_after_startup(&mut *tui);
-        if (*tui).mouse_enabled_save {
-            tui_mouse_on(&mut *tui);
-        }
-        stream_set_blocking((*tui).input.in_fd, false);
-        let term = (*tui).term.clone();
-        ui_client_attach((*tui).width, (*tui).height, term.as_deref(), (*tui).rgb);
+    tui_terminal_stop(tui);
+    stream_set_blocking(tui.input.in_fd, true);
+    // Stop the whole process group, which is what returns to the shell.
+    // SAFETY: signals this process's own group.
+    unsafe { kill(0, SIGSTOP) };
+    // Execution resumes here on SIGCONT. Restarting the terminal
+    // re-registers its handles, which keep their addresses in the box.
+    tui_terminal_start(tui);
+    tui_terminal_after_startup(tui);
+    if tui.mouse_enabled_save {
+        tui_mouse_on(tui);
     }
+    stream_set_blocking(tui.input.in_fd, false);
+    let term = tui.term.clone();
+    ui_client_attach(tui.width, tui.height, term.as_deref(), tui.rgb);
 }
 
 // ------------------------------------------------------------------- sizing
@@ -662,17 +636,15 @@ fn tui_suspend_cb(tui: &mut TUIData) {
 /// The terminal was resized.
 ///
 /// # Safety
-/// Called by the signal watcher with the TUI as its data.
-unsafe fn sigwinch_cb(_watcher: *mut SignalWatcher, _signum: c_int, cbdata: *mut c_void) {
-    let tui: *mut TUIData = cbdata.cast();
-    // SAFETY: the watcher holds this TUI's own pointer.
-    unsafe {
+/// The signal watcher's callback; the TUI's state is looked up again.
+unsafe fn sigwinch_cb(_watcher: *mut SignalWatcher, _signum: c_int, _cbdata: *mut c_void) {
+    with_tui(|tui| {
         // Terminals that report resizes themselves have already told us.
-        if tui_is_stopped(&*tui) || (*tui).resize_events_enabled {
+        if tui_is_stopped(tui) || tui.resize_events_enabled {
             return;
         }
-        tui_guess_size(&mut *tui);
-    }
+        tui_guess_size(tui);
+    });
 }
 
 /// Tell the editor the terminal is `width` by `height`.
