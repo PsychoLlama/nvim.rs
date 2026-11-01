@@ -31,12 +31,11 @@
 )]
 
 use core::ffi::c_void;
-use core::ptr;
 
 use crate::event::libuv::{uv_close, uv_timer_init, uv_timer_start, uv_timer_stop};
 use crate::event::r#loop::{main_loop_raw, one_arg_event};
-use crate::event::multiqueue::{ChildQueue, multiqueue_empty, multiqueue_put_event};
-use crate::types::{MultiQueue, uv_handle_t, uv_timer_t};
+use crate::event_queue::{self, ChildQueue, QueueId};
+use crate::types::{uv_handle_t, uv_timer_t};
 
 /// Where a watcher's expiries are delivered.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -71,7 +70,7 @@ struct Watcher {
     on_due: OnDue,
     on_closed: Option<fn(u64)>,
     /// The queue expiries go on, or null to run them inline.
-    events: *mut MultiQueue,
+    events: Option<QueueId>,
     /// The queue `events` names, when the watcher owns it.
     queue: Option<ChildQueue>,
     /// Skip an expiry while the previous one is still queued.
@@ -139,9 +138,9 @@ impl OwnedTimer {
     /// owner of one of these exists.
     pub(crate) fn new(queue: TimerQueue, blockable: bool, owner: u64) -> Self {
         let own = (queue == TimerQueue::OwnChild).then(ChildQueue::of_main_loop);
-        let events = own.as_ref().map_or(ptr::null_mut(), ChildQueue::as_ptr);
+        let events = own.as_ref().map(ChildQueue::id);
         debug_assert!(
-            !blockable || !events.is_null(),
+            !blockable || events.is_some(),
             "a blockable timer has a queue"
         );
         let watcher = Box::into_raw(Box::new(Watcher {
@@ -190,7 +189,7 @@ impl OwnedTimer {
     }
 
     /// The queue expiries are delivered on, or null for an inline timer.
-    pub(crate) fn events(&self) -> *mut MultiQueue {
+    pub(crate) fn events(&self) -> Option<QueueId> {
         self.0.events
     }
 
@@ -250,16 +249,13 @@ impl ScopedTimer {
 /// Deliver `handler` for `watcher`: queued when it has a queue, run on the
 /// spot when it does not.
 fn deliver(watcher: Handle, handler: unsafe extern "C" fn(*mut *mut c_void)) {
-    let arg = watcher.0.cast::<c_void>();
-    if watcher.events.is_null() {
-        let mut argv = [arg];
-        // SAFETY: the handler takes the watcher it is given, live until its
-        // close event; the argv is this frame's.
-        unsafe { handler(argv.as_mut_ptr()) };
-    } else {
-        // SAFETY: the watcher's queue, which lives as long as the watcher;
-        // the box is freed only by the close event, queued behind this one.
-        unsafe { multiqueue_put_event(watcher.events, one_arg_event(Some(handler), arg)) };
+    // SAFETY: the handler takes the watcher it is given, live until its
+    // close event, which is queued behind every other event of its; the box
+    // is freed only by that close event.
+    let event = unsafe { one_arg_event(handler, watcher.0.cast::<c_void>()) };
+    match watcher.events {
+        None => event.run(),
+        Some(events) => event_queue::put(events, event),
     }
 }
 
@@ -274,8 +270,8 @@ fn deliver(watcher: Handle, handler: unsafe extern "C" fn(*mut *mut c_void)) {
 unsafe extern "C" fn time_watcher_cb(handle: *mut uv_timer_t) {
     // SAFETY: the box lives until the handle's close callback.
     let watcher = unsafe { Handle::new(Handle::from_uv(handle)) };
-    // SAFETY: a blockable watcher always has a queue, its own.
-    if watcher.blockable && !unsafe { multiqueue_empty(watcher.events) } {
+    // A blockable watcher always has a queue, its own.
+    if watcher.blockable && !event_queue::is_empty(watcher.events.expect("a blockable queue")) {
         return;
     }
     deliver(watcher, time_event);

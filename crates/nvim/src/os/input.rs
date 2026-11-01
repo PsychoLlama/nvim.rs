@@ -25,10 +25,9 @@ use crate::autocmd::fire_autocmds;
 use crate::autocmd::state::did_cursorhold;
 use crate::autocmd::trigger_cursorhold;
 use crate::event::libuv::uv_guess_handle;
-use crate::event::r#loop::{loop_poll_events, process_events_until};
-use crate::event::multiqueue::{ChildQueue, queue_in};
-use crate::event::multiqueue::{multiqueue_empty, multiqueue_process_events, multiqueue_put_event};
+use crate::event::r#loop::{Drain, loop_poll_events, wait_on_main_loop};
 use crate::event::rstream::{rstream_init_fd, rstream_may_close, rstream_start, rstream_stop};
+use crate::event_queue::{self, ChildQueue, QueueId, queue_in};
 use crate::getchar::state::{ctrl_c_interrupts, got_int, mapped_ctrl_c, typebuf_was_filled};
 use crate::getchar::{before_blocking, typebuf_changed};
 use crate::global_cell::GlobalCell;
@@ -52,8 +51,7 @@ use crate::state::{MODE_INSERT, get_real_state};
 use crate::types::AutoEvent;
 use crate::types::libc::STDIN_FILENO;
 use crate::types::{
-    Event, KeyExtra, MultiQueue, RStream, Stream, String_0, size_t, uint8_t, uint64_t,
-    uv_handle_type,
+    Event, KeyExtra, RStream, Stream, String_0, size_t, uint8_t, uint64_t, uv_handle_type,
 };
 use crate::ui::state::{Columns, Rows, current_ui};
 use crate::winlayer::Buf;
@@ -134,10 +132,8 @@ fn stdin_closed() -> bool {
     read_stream.with(|stream| stream.s.closed)
 }
 
-/// The queued CursorHold, fired once the event loop gets to it. An
-/// `argv_callback` that reads no argument, so there is nothing for a caller
-/// to promise.
-extern "C" fn cursorhold_event(_argv: *mut *mut c_void) {
+/// The queued CursorHold, fired once the event loop gets to it.
+fn cursorhold_event() {
     let event = if State.get() & MODE_INSERT != 0 {
         AutoEvent::CursorHoldI
     } else {
@@ -151,8 +147,7 @@ fn create_cursorhold_event(events_enabled: bool) {
     // If events are enabled and the queue has any items, this should not
     // have been reached — `inbuf_poll` would have answered `Ready`.
     debug_assert!(!events_enabled || !main_loop_has_events());
-    // SAFETY: `main_loop.events` is the process's event queue.
-    unsafe { multiqueue_put_event(main_events(), Event::new(Some(cursorhold_event), [])) };
+    event_queue::put(QueueId::MAIN, Event::Job(Box::new(cursorhold_event)));
 }
 
 fn reset_cursorhold_wait(tb_change_cnt: c_int) {
@@ -186,20 +181,19 @@ pub(crate) enum InputEvents {
 }
 
 impl InputEvents {
-    /// The queue as the poll takes it: null, or a live queue.
-    fn queue(self) -> *mut MultiQueue {
+    /// The queue as the poll takes it, if there is one.
+    fn queue(self) -> Option<QueueId> {
         match self {
-            InputEvents::None => ptr::null_mut(),
-            InputEvents::MainLoop => main_events(),
+            InputEvents::None => None,
+            InputEvents::MainLoop => Some(QueueId::MAIN),
             InputEvents::Queue(cell) => queue_in(cell),
         }
     }
 
     /// Whether the queue holds events to process: never when there is none.
     fn pending(self) -> bool {
-        let queue = self.queue();
-        // SAFETY: the main loop's queue, or one its cell keeps alive.
-        !queue.is_null() && unsafe { !multiqueue_empty(queue) }
+        self.queue()
+            .is_some_and(|queue| !event_queue::is_empty(queue))
     }
 
     /// Whether this is the main loop's own queue.
@@ -208,16 +202,9 @@ impl InputEvents {
     }
 }
 
-/// The main loop's event queue.
-fn main_events() -> *mut MultiQueue {
-    // SAFETY: `main_loop` is the process's event loop, always live.
-    unsafe { (*main_loop.ptr()).events }
-}
-
 /// Whether the main loop's event queue holds anything.
 pub(crate) fn main_loop_has_events() -> bool {
-    // SAFETY: the main loop's queue, always live.
-    unsafe { !multiqueue_empty(main_events()) }
+    !event_queue::is_empty(QueueId::MAIN)
 }
 
 /// Read OS input into `buf`, consuming pending events while waiting (when
@@ -724,10 +711,9 @@ fn inbuf_poll(ms: c_int, events: InputEvents) -> InputAvail {
         // The pending input provoked a blocking wait. Do special events
         // now. #6247
         blocking.set(true);
-        // SAFETY: the queue the channel layer made at startup and keeps.
-        unsafe { multiqueue_process_events(queue_in(&ch_before_blocking_events)) };
+        event_queue::process_events_in(&ch_before_blocking_events);
     }
-    let has_events = if events.queue().is_null() {
+    let has_events = if events.queue().is_none() {
         "false"
     } else {
         "true"
@@ -741,12 +727,9 @@ fn inbuf_poll(ms: c_int, events: InputEvents) -> InputAvail {
     // Upstream polls with a NULL queue here, so the macro's "drain this
     // queue instead" branch is dead: `events` is only read by
     // `input_ready`.
-    // SAFETY: the process's event loop, always live, and no queue.
-    unsafe {
-        process_events_until(main_loop.ptr(), ptr::null_mut(), i64::from(ms), || {
-            input_ready(events) || input_eof.get()
-        });
-    }
+    wait_on_main_loop(Drain::Nothing, i64::from(ms), || {
+        input_ready(events) || input_eof.get()
+    });
     blocking.set(false);
 
     if do_profiling.get() == PROF_YES && ms != 0 {

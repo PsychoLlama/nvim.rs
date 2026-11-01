@@ -34,8 +34,8 @@ use crate::event::r#loop::EventLoop;
 use crate::log::{LOGLVL_DBG, LOGLVL_WRN, logmsg};
 use crate::message_fmt::msg_addr;
 use crate::types::{
-    Loop, MultiQueue, Stream, uv_handle_t, uv_handle_type, uv_idle_t, uv_loop_t, uv_pipe_t,
-    uv_run_mode, uv_stream_t, uv_tcp_t,
+    Loop, Stream, uv_handle_t, uv_handle_type, uv_idle_t, uv_loop_t, uv_pipe_t, uv_run_mode,
+    uv_stream_t, uv_tcp_t,
 };
 use core::ffi::{c_int, c_void};
 use core::ops::{Deref, DerefMut};
@@ -103,13 +103,6 @@ impl Conn {
         // SAFETY: a field of the live stream; every arm of the union starts
         // with the `uv_handle_t` header this reads.
         unsafe { (*self.idle()).loop_0 }
-    }
-
-    /// The queue this stream's events go on, or `None` when it is driven
-    /// synchronously.
-    pub fn events(self) -> Option<*mut MultiQueue> {
-        let events = self.events;
-        (!events.is_null()).then_some(events)
     }
 
     /// The `uv_stream_t` this stream reads and writes, when it has one. A
@@ -224,7 +217,6 @@ pub unsafe fn stream_init(
     stream.close_cb = None;
     stream.internal_close_cb = None;
     stream.closed = false;
-    stream.events = ptr::null_mut();
 }
 
 /// Mark `stream` closed, and close its handle once nothing is outstanding.

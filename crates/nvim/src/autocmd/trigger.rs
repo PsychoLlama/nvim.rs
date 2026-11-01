@@ -22,7 +22,7 @@
 use super::*;
 use crate::buffer::BufRef;
 use crate::charset::skip;
-use crate::event::multiqueue::{put_job_in, put_job_on_main_loop};
+use crate::event_queue::{put_job_in, put_job_on_main_loop};
 use crate::guard::Depth;
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;

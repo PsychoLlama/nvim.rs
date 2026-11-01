@@ -572,7 +572,7 @@ pub unsafe fn tui_stop(tui: *mut TUIData) {
         terminfo_disable(&mut *tui);
         process_events_until(
             (*tui).loop_0,
-            (*(*tui).loop_0).events,
+            Some(crate::event_queue::QueueId::MAIN),
             DA1_TIMEOUT_MS,
             || (*tui).stopped || (*tui).input.read_stream.did_eof,
         );

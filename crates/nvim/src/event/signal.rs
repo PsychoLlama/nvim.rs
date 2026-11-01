@@ -24,10 +24,8 @@ use core::ops::{Deref, DerefMut};
 
 use crate::event::libuv::{uv_close, uv_signal_init, uv_signal_start, uv_signal_stop};
 use crate::event::r#loop::{EventLoop, one_arg_event};
-use crate::event::multiqueue::multiqueue_put_event;
-use crate::types::{
-    Loop, MultiQueue, SignalWatcher, signal_cb, signal_close_cb, uv_handle_t, uv_signal_t,
-};
+use crate::event_queue::{self, QueueId};
+use crate::types::{Loop, SignalWatcher, signal_cb, signal_close_cb, uv_handle_t, uv_signal_t};
 
 /// A signal watcher, reached through the raw pointer libuv keeps in its
 /// handle's `data` field.
@@ -57,9 +55,8 @@ impl Signal {
 
     /// The queue this watcher's events go on, or `None` when it is driven
     /// synchronously.
-    fn events(self) -> Option<*mut MultiQueue> {
-        let events = self.events;
-        (!events.is_null()).then_some(events)
+    fn events(self) -> Option<QueueId> {
+        self.events
     }
 }
 
@@ -96,7 +93,7 @@ pub unsafe fn signal_watcher_init(
     watcher.uv.data = watcher.as_ptr().cast();
     watcher.data = data;
     watcher.cb = None;
-    watcher.events = uv_loop.fast_events;
+    watcher.events = Some(QueueId::FAST);
 }
 
 /// Listen for `signum`, reporting each delivery to `cb`.
@@ -143,11 +140,11 @@ unsafe extern "C" fn signal_watcher_cb(handle: *mut uv_signal_t, _signum: c_int)
     let watcher = unsafe { Signal::new((*handle).data.cast()) };
     let arg = watcher.as_ptr().cast::<c_void>();
     match watcher.events() {
-        // SAFETY: the watcher outlives the event, which carries nothing but
-        // the watcher itself.
-        Some(events) => unsafe {
-            multiqueue_put_event(events, one_arg_event(Some(signal_event), arg));
-        },
+        Some(events) => {
+            // SAFETY: the watcher outlives the event, which carries nothing
+            // but the watcher itself.
+            event_queue::put(events, unsafe { one_arg_event(signal_event, arg) });
+        }
         None => {
             let mut argv = [arg];
             // SAFETY: as above; the argv is this frame's.

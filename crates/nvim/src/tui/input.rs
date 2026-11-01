@@ -35,7 +35,7 @@
 use crate::event::libuv::{
     uv_close, uv_timer_get_due_in, uv_timer_init, uv_timer_start, uv_timer_stop,
 };
-use crate::event::r#loop::loop_schedule_fast;
+use crate::event::r#loop::schedule_fast_job;
 use crate::event::rstream::{
     rstream_available, rstream_consume, rstream_init_fd, rstream_may_close, rstream_start,
     rstream_stop,
@@ -44,7 +44,7 @@ use crate::log::{LOGLVL_DBG, logmsg};
 use crate::message_fmt::msg_bytes;
 use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::option::vars::{p_ttimeout, p_ttm};
-use crate::startup::{main_loop, os_exit, ui_client_channel_id};
+use crate::startup::{os_exit, ui_client_channel_id};
 use crate::tui::keys::{KEYMOD_RECOGNIZED, modified_utf8, mouse_event, simple_utf8};
 use crate::tui::negotiate::{
     tui_enable_extended_underline, tui_handle_term_mode, tui_query_bg_color, tui_tk_ti_getstr,
@@ -61,8 +61,8 @@ use crate::types::builders::ArrayBuf;
 use crate::types::libc::STDIN_FILENO;
 use crate::types::termios;
 use crate::types::{
-    Array, Event, Integer, KEY_BUFFER_SIZE, KeyEncoding, Loop, Object, RStream, String_0,
-    TermInput, TermInputCallbacks, TermKeyKey, TerminfoEntry, size_t, uv_handle_t, uv_timer_t,
+    Array, Integer, KEY_BUFFER_SIZE, KeyEncoding, Loop, Object, RStream, String_0, TermInput,
+    TermInputCallbacks, TermKeyKey, TerminfoEntry, size_t, uv_handle_t, uv_timer_t,
 };
 use ::libc::tcgetattr;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -327,13 +327,7 @@ unsafe fn tinput_read_cb(
             // The terminal is gone; there is nothing to go on reading. The
             // exit runs on the editor's loop rather than here, so this read
             // finishes first.
-            loop_schedule_fast(
-                main_loop.ptr(),
-                Event {
-                    handler: Some(tinput_done_event),
-                    argv: [core::ptr::null_mut(); 10],
-                },
-            );
+            schedule_fast_job(Box::new(|| os_exit(1)));
             return consumed;
         }
         // Bytes left over are an incomplete sequence: give the rest of it
@@ -354,14 +348,6 @@ unsafe fn tinput_read_cb(
         }
         consumed
     }
-}
-
-/// The end of input, once the editor's loop gets to it.
-///
-/// # Safety
-/// Called by the event loop, which passes arguments this takes none of.
-unsafe extern "C" fn tinput_done_event(_argv: *mut *mut c_void) {
-    os_exit(1);
 }
 
 /// An incomplete sequence has waited long enough: take it as it stands.

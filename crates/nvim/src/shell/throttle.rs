@@ -17,7 +17,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::event::multiqueue::put_job_on_fast_events;
+use crate::event_queue::put_job_on_fast_events;
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::{HLF_SE, HLF_SO};
 use crate::mbyte::{cluster_len, utf8len_tab_zero};

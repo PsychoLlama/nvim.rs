@@ -27,13 +27,13 @@
 use crate::cstr;
 use crate::event::libuv_proc::libuv_proc_init;
 use crate::event::r#loop::loop_poll_events;
-use crate::event::multiqueue::{multiqueue_empty, multiqueue_free, multiqueue_new_child};
 use crate::event::proc::{proc_spawn, proc_stop, proc_wait};
 use crate::event::rstream::{rstream_init, rstream_start};
 use crate::event::stream::stream_may_close;
 use crate::event::wstream::{
     wstream_init, wstream_new_buffer, wstream_set_write_cb, wstream_write,
 };
+use crate::event_queue::{self, ChildQueue};
 use crate::getchar::state::got_int;
 use crate::guard::Suppress;
 use crate::memory::ThinCString;
@@ -47,7 +47,7 @@ use crate::os::fs::{os_err_name, os_strerror};
 use crate::shell::Argv;
 use crate::shell::throttle::{Ring, out_data, out_data_decide_throttle, out_data_ring};
 use crate::startup::main_loop;
-use crate::types::{LibuvProc, MAXPATHL, MultiQueue, Proc, RStream, Stream, WBuffer};
+use crate::types::{LibuvProc, MAXPATHL, Proc, RStream, Stream, WBuffer};
 use crate::types::{size_t, stream_read_cb};
 use crate::ui::ui_flush;
 use crate::ui::{ui_busy_start, ui_busy_stop};
@@ -136,8 +136,8 @@ pub(crate) fn do_os_system(
     unsafe {
         let mut uvproc: LibuvProc = libuv_proc_init(main_loop.ptr(), (&raw mut buf).cast());
         let proc: *mut Proc = &raw mut uvproc.proc;
-        let events: *mut MultiQueue = multiqueue_new_child((*main_loop.ptr()).events);
-        (*proc).events = events;
+        let events = ChildQueue::of_main_loop();
+        (*proc).events = Some(events.id());
         (*proc).argv = argv;
 
         let status = proc_spawn(proc, has_input, true, true);
@@ -151,7 +151,6 @@ pub(crate) fn do_os_system(
                 msg_display(&prog, 0, false);
                 msg_putchar('\n' as c_int);
             }
-            multiqueue_free(events);
             return (exitcode, None);
         }
 
@@ -174,7 +173,6 @@ pub(crate) fn do_os_system(
             if wstream_write(&raw mut (*proc).in_0, input_buffer) != 0 {
                 // Could not write: stop the child and tell the user.
                 proc_stop(proc);
-                multiqueue_free(events);
                 return (exitcode, None);
             }
             // Close stdin once everything has been written.
@@ -191,7 +189,7 @@ pub(crate) fn do_os_system(
             msg_no_more.set(true);
             lines_left.set(-1);
         }
-        exitcode = proc_wait(proc, -1, ptr::null_mut());
+        exitcode = proc_wait(proc, -1, None);
         if !got_int.get() && out_data_decide_throttle(0) {
             // The last chunk of output was skipped; show it now.
             out_data_ring(Ring::Print);
@@ -205,8 +203,7 @@ pub(crate) fn do_os_system(
         }
         ui_busy_stop();
 
-        debug_assert!(multiqueue_empty(events));
-        multiqueue_free(events);
+        debug_assert!(event_queue::is_empty(events.id()));
     }
     (exitcode, (capture && !buf.is_empty()).then_some(buf))
 }

@@ -9,7 +9,6 @@ typedef struct Dict Dict;
 typedef struct DictItem DictItem;
 typedef struct Expand Expand;
 typedef struct List List;
-typedef struct MultiQueue MultiQueue;
 typedef struct OptSet OptSet;
 typedef struct Partial Partial;
 typedef struct Scrollback Scrollback;
@@ -312,7 +311,6 @@ typedef Partial *PartialRef;
 typedef struct proc Proc;
 typedef unsigned int ProcType;
 typedef uint64_t ProfTime;
-typedef void (*PutCallback)(MultiQueue *, void *);
 typedef unsigned int PutFlags;
 typedef queue QUEUE;
 typedef struct QfId QfId;
@@ -383,7 +381,6 @@ typedef unsigned int WinSplit;
 typedef unsigned int WinStyle;
 typedef Handle WindowHandle;
 typedef int XDGVarType;
-typedef void (*argv_callback)(void **);
 typedef unsigned int gid_t;
 typedef void (*internal_proc_cb)(Proc *);
 typedef int (*lua_CFunction)(lua_State *);
@@ -638,7 +635,6 @@ struct stream {
   void *close_cb_data;
   void *internal_data;
   size_t pending_reqs;
-  MultiQueue *events;
   stream_write_cb write_cb;
   size_t curmem;
   size_t maxmem;
@@ -659,33 +655,6 @@ struct rstream {
   uv_buf_t uvbuf;
   stream_read_cb read_cb;
   size_t num_bytes;
-};
-struct proc {
-  ProcType type;
-  Loop *loop;
-  void *data;
-  int pid;
-  int status;
-  Refcount refcount;
-  uint8_t exit_signal;
-  uint64_t stopped_time;
-  const char *cwd;
-  char **argv;
-  const char *exepath;
-  Dict *env;
-  Stream in;
-  RStream out;
-  RStream err;
-  proc_exit_cb cb;
-  proc_state_cb state_cb;
-  internal_proc_cb internal_exit_cb;
-  internal_proc_cb internal_close_cb;
-  bool closed;
-  bool detach;
-  bool overlapped;
-  bool fwd_err;
-  bool stdio_noinherit;
-  MultiQueue *events;
 };
 struct uv_process_options_s {
   uv_exit_cb exit_cb;
@@ -725,12 +694,6 @@ struct uv_stdio_container_s {
   uv_stdio_flags flags;
   uv_stdio_container_s_data data;
 };
-struct LibuvProc {
-  Proc proc;
-  uv_process_t uv;
-  uv_process_options_t uvopts;
-  uv_stdio_container_t uvstdio[4];
-};
 struct MTPos {
   int32_t row;
   int32_t col;
@@ -746,13 +709,6 @@ struct Pos {
   LineNr lnum;
   ColNr col;
   ColNr coladd;
-};
-struct PtyProc {
-  Proc proc;
-  uint16_t width;
-  uint16_t height;
-  winsize winsize;
-  int tty_fd;
 };
 struct VTermColor_indexed {
   uint8_t type;
@@ -823,13 +779,6 @@ struct uv_signal_s {
   uv_signal_s_tree_entry tree_entry;
   unsigned int caught_signals;
   unsigned int dispatched_signals;
-};
-struct signal_watcher {
-  uv_signal_t uv;
-  void *data;
-  signal_cb cb;
-  signal_close_cb close_cb;
-  MultiQueue *events;
 };
 struct StderrState {
   bool closed;

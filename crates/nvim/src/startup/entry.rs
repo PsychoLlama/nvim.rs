@@ -9,7 +9,7 @@
 #![forbid(unsafe_code)]
 
 use crate::env::appname_is_valid;
-use crate::event::multiqueue::ChildQueue;
+use crate::event_queue::ChildQueue;
 use crate::memory::ThinCString;
 use crate::types::ArgListId;
 use crate::types::AutoEvent;

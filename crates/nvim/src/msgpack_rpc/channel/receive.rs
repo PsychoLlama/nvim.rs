@@ -25,7 +25,7 @@ use core::ffi::{CStr, c_int, c_void};
 
 use crate::api::private::dispatch_wrappers::{handle_nvim_get_mode, handle_nvim_ui_try_resize};
 use crate::channel::{channel_decref, with_channel};
-use crate::event::multiqueue::{put_job, put_job_in, put_job_on_either};
+use crate::event_queue::{put_job, put_job_in, put_job_on_either};
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, logmsg};
 use crate::message_fmt::{msg_addr, msg_bytes};
 use crate::msgpack_rpc::channel::ch_before_blocking_events;

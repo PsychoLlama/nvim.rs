@@ -41,6 +41,7 @@ pub(crate) mod edit;
 pub mod env;
 pub mod eval;
 pub mod event;
+pub mod event_queue;
 pub mod ex_cmds;
 pub(crate) mod ex_cmds2;
 pub mod ex_docmd;

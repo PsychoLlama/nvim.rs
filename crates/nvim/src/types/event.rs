@@ -14,52 +14,32 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-/// One queued event: a handler and up to ten arguments for it.
+/// One queued event, run once when its queue reaches it.
 ///
-/// Not `Copy`. The handler frees what `argv` points at, so an event is
-/// run -- and therefore delivered -- exactly once. The one place two queues
-/// receive the same event says `.clone()`, and pairs it with the two-hold
-/// one-shot wrapper that makes that correct.
-#[derive(Clone)]
-pub struct Event {
-    pub handler: argv_callback,
-    pub argv: [*mut ::core::ffi::c_void; 10],
-}
-
-impl Event {
-    /// An event carrying `args`, with the unused tail of the argv left
-    /// null.
+/// Not `Clone`: an event owns what it runs with, so it is run -- and
+/// therefore delivered -- exactly once.
+pub enum Event {
+    /// A C-shaped handler and the argument words it is run with. Building
+    /// one is the unsafe step ([`RawEvent::new`]); running one is not.
     ///
-    /// The argv is a fixed ten slots because C's `event_create` is a
-    /// variadic macro that pads; handlers read only the slots they were
-    /// given. Spelling the padding out at every call site is what made the
-    /// transpiled queueing code twelve lines an event.
-    pub fn new<const N: usize>(
-        handler: argv_callback,
-        args: [*mut ::core::ffi::c_void; N],
-    ) -> Self {
-        const { assert!(N <= 10, "an event carries at most ten arguments") };
-        let mut argv = [::core::ptr::null_mut::<::core::ffi::c_void>(); 10];
-        argv[..N].copy_from_slice(&args);
-        Self { handler, argv }
-    }
+    /// [`RawEvent::new`]: crate::event::r#loop::RawEvent::new
+    Raw(crate::event::r#loop::RawEvent),
+    /// Work that owns what it needs.
+    Job(Box<dyn FnOnce()>),
+    /// `handler(a, b)`: work whose state is two ids, which finds its record
+    /// again by them.
+    Ids(fn(u64, u64), u64, u64),
 }
 pub type Proc = proc;
 pub type ProcType = ::core::ffi::c_uint;
-pub type PutCallback =
-    Option<unsafe extern "C" fn(*mut MultiQueue, *mut ::core::ffi::c_void) -> ()>;
 pub type RStream = rstream;
 pub type SignalWatcher = signal_watcher;
 pub type SocketWatcher = socket_watcher;
 pub type Stream = stream;
 pub type WBuffer = wbuffer;
-pub type argv_callback = Option<unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> ()>;
 pub type internal_proc_cb = Option<unsafe fn(*mut Proc) -> ()>;
 pub struct loop_0 {
     pub uv: uv_loop_t,
-    pub events: *mut MultiQueue,
-    pub thread_events: *mut MultiQueue,
-    pub fast_events: *mut MultiQueue,
     /// The job-control children. Owned: a `Box<Vec<*mut Proc>>` that
     /// `loop_init` leaves here and `loop_close` takes back.
     pub children: *mut Vec<*mut Proc>,
@@ -68,7 +48,6 @@ pub struct loop_0 {
     pub poll_timer: uv_timer_t,
     pub exit_delay_timer: uv_timer_t,
     pub async_0: uv_async_t,
-    pub mutex: uv_mutex_t,
     pub recursive: ::core::ffi::c_int,
     pub closing: bool,
 }
@@ -98,7 +77,7 @@ pub struct proc {
     pub overlapped: bool,
     pub fwd_err: bool,
     pub stdio_noinherit: bool,
-    pub events: *mut MultiQueue,
+    pub events: Option<crate::event_queue::QueueId>,
 }
 pub type proc_exit_cb =
     Option<unsafe fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
@@ -131,7 +110,7 @@ pub struct signal_watcher {
     pub data: *mut ::core::ffi::c_void,
     pub cb: signal_cb,
     pub close_cb: signal_close_cb,
-    pub events: *mut MultiQueue,
+    pub events: Option<crate::event_queue::QueueId>,
 }
 /// A listening socket's connection callback: the watcher, and libuv's
 /// status for the connection.
@@ -144,7 +123,6 @@ pub struct socket_watcher {
     pub data: *mut ::core::ffi::c_void,
     pub cb: socket_cb,
     pub close_cb: socket_close_cb,
-    pub events: *mut MultiQueue,
 }
 #[repr(C)]
 pub union socket_watcher_uv {
@@ -183,7 +161,6 @@ pub struct stream {
     pub close_cb_data: *mut ::core::ffi::c_void,
     pub internal_data: *mut ::core::ffi::c_void,
     pub pending_reqs: size_t,
-    pub events: *mut MultiQueue,
     pub write_cb: stream_write_cb,
     pub curmem: size_t,
     pub maxmem: size_t,

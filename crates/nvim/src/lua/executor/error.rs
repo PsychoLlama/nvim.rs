@@ -21,7 +21,7 @@ use core::ffi::{CStr, c_int};
 use std::io::Write;
 
 use super::{LUA_ERRMEM, LUVF_CALLBACK_NOEXIT, in_fast_callback, in_script};
-use crate::event::multiqueue::put_job_on_main_loop;
+use crate::event_queue::put_job_on_main_loop;
 use crate::guard::Depth;
 use crate::lua::ffi::LUA_MULTRET;
 use crate::lua::stack::{At, Kind, LuaFailed, Stack};

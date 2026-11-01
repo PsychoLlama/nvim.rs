@@ -7,6 +7,8 @@
     "crates/nvim/src/buffer_updates.rs": 1,
     "crates/nvim/src/drawline/mod.rs": 1,
     "crates/nvim/src/eval/timer.rs": 1,
+    "crates/nvim/src/event/loop.rs": 1,
+    "crates/nvim/src/event_queue.rs": 1,
     "crates/nvim/src/extmark/get.rs": 1,
     "crates/nvim/src/extmark/mod.rs": 2,
     "crates/nvim/src/extmark/set.rs": 1,
@@ -15,6 +17,7 @@
     "crates/nvim/src/mark/adjust.rs": 1,
     "crates/nvim/src/os/env/mod.rs": 1,
     "crates/nvim/src/statusline/tabline.rs": 1,
+    "crates/nvim/src/terminal/mod.rs": 1,
     "crates/nvim/tests/unit/charset_oracle.rs": 1
   }
 }

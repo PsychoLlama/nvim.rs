@@ -23,7 +23,7 @@ use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
     ListRef, callback_copy, callback_free, dict_find, tv_clear, tv_list_alloc,
 };
-use crate::event::multiqueue::put_id_event;
+use crate::event_queue::put_id_event;
 use crate::memory::ThinCString;
 use crate::semsg;
 use crate::terminal::terminal_receive;

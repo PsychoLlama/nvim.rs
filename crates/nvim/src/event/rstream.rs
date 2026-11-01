@@ -32,8 +32,6 @@
 use crate::event::libuv::{
     uv_fs_read, uv_fs_req_cleanup, uv_idle_start, uv_idle_stop, uv_read_start, uv_read_stop,
 };
-use crate::event::r#loop::one_arg_event;
-use crate::event::multiqueue::multiqueue_put_event;
 use crate::event::stream::{Conn, close_handle, may_close, stream_init};
 use crate::log::{LOGLVL_DBG, logmsg};
 use crate::memory::{alloc_block, free_block};
@@ -315,7 +313,8 @@ unsafe extern "C" fn fread_idle_cb(handle: *mut uv_idle_t) {
     invoke_read_cb(stream, false);
 }
 
-/// Post a read event, or run it inline when the stream has no queue.
+/// Hand what was read to the consumer, unless a delivery is already under
+/// way further up the stack (the consumer can poll the loop).
 ///
 /// Filling the block stops the reads: [`rstream_consume`] restarts them.
 fn invoke_read_cb(mut stream: Reader, eof: bool) {
@@ -329,28 +328,11 @@ fn invoke_read_cb(mut stream: Reader, eof: bool) {
     }
     stream.s.pending_reqs += 1;
     stream.pending_read = true;
-    let arg = stream.as_ptr().cast::<c_void>();
-    match stream.conn().events() {
-        // SAFETY: the stream outlives the event, which carries nothing but
-        // the stream itself.
-        Some(events) => unsafe {
-            multiqueue_put_event(events, one_arg_event(Some(read_event), arg));
-        },
-        None => {
-            let mut argv = [arg];
-            // SAFETY: as above; the argv is this frame's.
-            unsafe { read_event(argv.as_mut_ptr()) };
-        }
-    }
+    deliver_reads(stream);
 }
 
 /// Hand the filled span to the consumer and take back what it consumed.
-///
-/// # Safety
-/// `argv` slot 0 is the stream, as [`invoke_read_cb`] packed it.
-unsafe extern "C" fn read_event(argv: *mut *mut c_void) {
-    // SAFETY: the caller's promise.
-    let mut stream = unsafe { Reader::new((*argv).cast()) };
+fn deliver_reads(mut stream: Reader) {
     stream.pending_read = false;
     if let Some(consume) = stream.read_cb {
         let available = stream.available();

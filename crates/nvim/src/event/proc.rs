@@ -51,10 +51,9 @@ use crate::event::libuv_proc::{libuv_proc_close, libuv_proc_spawn};
 use crate::event::r#loop::{
     loop_children, loop_poll_events, one_arg_event, process_events, process_events_until,
 };
-use crate::event::multiqueue::{multiqueue_empty, multiqueue_process_events, multiqueue_put_event};
 use crate::event::rstream::{Reader, rstream_may_close};
 use crate::event::stream::{stream_init, stream_may_close};
-use crate::event::{pack_int, unpack_int};
+use crate::event_queue::{self, QueueId};
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_DBG, LOGLVL_INF, logmsg};
@@ -70,7 +69,7 @@ use crate::startup::{
     exiting, main_loop, os_exit, preserve_exit, ui_client_channel_id, ui_client_exit_status,
 };
 use crate::types::{
-    LibuvProc, Loop, MultiQueue, Proc, ProcType, PtyProc, Refcount, Stream, uv_loop_t, uv_timer_t,
+    Event, LibuvProc, Loop, Proc, ProcType, PtyProc, Refcount, Stream, uv_loop_t, uv_timer_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};
@@ -92,7 +91,7 @@ const KILL_TIMEOUT_MS: u64 = 2000;
 static PROC_IS_TEARING_DOWN: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Non-zero while [`proc_close_handles`] is draining a child's output.
-/// Exiting in the middle of that deadlocks, so [`exit_event`] reschedules
+/// Exiting in the middle of that deadlocks, so [`exit_with`] reschedules
 /// itself instead.
 static EXIT_NEED_DELAY: GlobalCell<c_int> = GlobalCell::new(0);
 
@@ -140,12 +139,6 @@ impl Child {
         let uv_loop = self.loop_0;
         // SAFETY: a child's loop outlives it.
         unsafe { &raw mut (*uv_loop).uv }
-    }
-
-    /// The loop's deferred-event queue.
-    fn loop_events(self) -> *mut MultiQueue {
-        // SAFETY: a child's loop outlives it.
-        unsafe { (*self.loop_0).events }
     }
 
     /// The one timer that kills every child that outstayed [`proc_stop`].
@@ -367,7 +360,7 @@ pub(crate) fn proc_teardown() {
         if child.detach || child.is_pty() {
             let arg = child.as_ptr().cast();
             // SAFETY: the loop's own queue, and the child the handler wants.
-            unsafe { create_event((*uv_loop).events, proc_close_handles, arg) };
+            unsafe { create_event(Some(QueueId::MAIN), proc_close_handles, arg) };
         } else {
             // SAFETY: a live child.
             unsafe { proc_stop(child.as_ptr()) };
@@ -377,10 +370,11 @@ pub(crate) fn proc_teardown() {
 
     let drained = || {
         // SAFETY: the editor's own loop, which outlives the process's children.
-        unsafe { (*loop_children(uv_loop)).is_empty() && multiqueue_empty((*uv_loop).events) }
+        let no_children = unsafe { (*loop_children(uv_loop)).is_empty() };
+        no_children && event_queue::is_empty(QueueId::MAIN)
     };
     // SAFETY: the editor's own loop, which outlives the process's children.
-    unsafe { process_events_until(uv_loop, (*uv_loop).events, -1, drained) };
+    unsafe { process_events_until(uv_loop, Some(QueueId::MAIN), -1, drained) };
     // SAFETY: as above.
     unsafe { pty_proc_teardown(uv_loop) };
 }
@@ -409,8 +403,8 @@ pub unsafe fn proc_close_streams(proc: *mut Proc) {
 /// still running, or -2 if the user interrupted it.
 ///
 /// # Safety
-/// `proc` is a live child, and `events`, if non-null, is a live queue.
-pub unsafe fn proc_wait(proc: *mut Proc, ms: c_int, mut events: *mut MultiQueue) -> c_int {
+/// `proc` is a live child.
+pub unsafe fn proc_wait(proc: *mut Proc, ms: c_int, events: Option<QueueId>) -> c_int {
     // SAFETY: the caller's promise.
     let mut child = unsafe { Child::new(proc) };
 
@@ -422,9 +416,7 @@ pub unsafe fn proc_wait(proc: *mut Proc, ms: c_int, mut events: *mut MultiQueue)
         return status;
     }
 
-    if events.is_null() {
-        events = child.events;
-    }
+    let events = events.or(child.events);
 
     // Hold a reference of our own so the exit callback cannot free the child
     // before its status has been read.
@@ -453,10 +445,9 @@ pub unsafe fn proc_wait(proc: *mut Proc, ms: c_int, mut events: *mut MultiQueue)
     if child.refcount == Refcount::one() {
         // SAFETY: a live child holding the reference taken above.
         unsafe { decref(child.as_ptr()) };
-        if !child.events.is_null() {
+        if let Some(events) = child.events {
             // `decref` queued the exit event; run it now.
-            // SAFETY: the child's own queue.
-            unsafe { multiqueue_process_events(child.events) };
+            event_queue::process(events);
         }
     } else {
         child.refcount.release();
@@ -513,9 +504,7 @@ pub fn exit_on_closed_chan(status: c_int) {
         440,
         "self-exit triggered by closed RPC channel..."
     );
-    let event = one_arg_event(Some(exit_event), pack_int(status));
-    // SAFETY: `main_loop.fast_events` is live for as long as the editor is.
-    unsafe { multiqueue_put_event((*main_loop.ptr()).fast_events, event) };
+    event_queue::put(QueueId::FAST, exit_event(status));
 }
 
 // ---------------------------------------------------------------------------
@@ -559,17 +548,15 @@ fn remove_child(children: &mut Vec<*mut Proc>, proc: *mut Proc) {
 /// `queue`, if non-null, is a live queue, and `arg` is what `handler` expects
 /// to find in the first slot of its argv.
 unsafe fn create_event(
-    queue: *mut MultiQueue,
+    queue: Option<QueueId>,
     handler: unsafe extern "C" fn(*mut *mut c_void),
     arg: *mut c_void,
 ) {
-    if queue.is_null() {
-        let mut argv = [arg];
-        // SAFETY: the caller's promise about `arg`.
-        unsafe { handler(argv.as_mut_ptr()) };
-    } else {
-        // SAFETY: the caller's queue.
-        unsafe { multiqueue_put_event(queue, one_arg_event(Some(handler), arg)) };
+    // SAFETY: the caller's promise about `arg`.
+    let event = unsafe { one_arg_event(handler, arg) };
+    match queue {
+        None => event.run(),
+        Some(queue) => event_queue::put(queue, event),
     }
 }
 
@@ -719,9 +706,6 @@ fn flush_stream(child: Child, stream: Reader) {
         // SAFETY: the child's loop, and the stream's own queue.
         unsafe {
             loop_poll_events(child.loop_0, 0);
-            if !stream.s.events.is_null() {
-                multiqueue_process_events(stream.s.events);
-            }
         }
 
         if num_bytes != stream.num_bytes {
@@ -756,36 +740,37 @@ unsafe extern "C" fn proc_close_handles(argv: *mut *mut c_void) {
     EXIT_NEED_DELAY.with_mut(|pending| *pending -= 1);
 }
 
+/// The exit status an exit that had to wait for [`proc_close_handles`]
+/// replays once [`exit_delay_cb`] fires.
+static DELAYED_EXIT_STATUS: GlobalCell<c_int> = GlobalCell::new(0);
+
 /// Retry an exit that had to wait for [`proc_close_handles`] to finish.
 ///
 /// # Safety
 /// libuv's: `handle` is the main loop's `exit_delay_timer`.
-unsafe extern "C" fn exit_delay_cb(_handle: *mut uv_timer_t) {
-    let main = main_loop.ptr();
-    // SAFETY: the main loop is live for as long as the editor is.
-    unsafe { uv_timer_stop(&raw mut (*main).exit_delay_timer) };
-    // SAFETY: as above; the timer carries the status this event replays.
-    let status = unsafe { (*main).exit_delay_timer.data };
-    let event = one_arg_event(Some(exit_event), status);
-    // SAFETY: as above.
-    unsafe { multiqueue_put_event((*main).fast_events, event) };
+unsafe extern "C" fn exit_delay_cb(handle: *mut uv_timer_t) {
+    // SAFETY: the main loop's own timer, which libuv handed back.
+    unsafe { uv_timer_stop(handle) };
+    event_queue::put(QueueId::FAST, exit_event(DELAYED_EXIT_STATUS.get()));
 }
 
-/// Exit the editor with the status packed into `argv[0]`.
-///
-/// # Safety
-/// Queued by [`exit_on_closed_chan`] or [`exit_delay_cb`]: `argv[0]` carries
-/// an exit status packed by [`pack_int`].
-unsafe extern "C" fn exit_event(argv: *mut *mut c_void) {
-    // SAFETY: the caller's promise about the argv.
-    let packed = unsafe { *argv };
-    let status = unpack_int(packed);
+/// The event that exits the editor with `status`, once the fast queue
+/// reaches it.
+fn exit_event(status: c_int) -> Event {
+    Event::Ids(exit_with, u64::from(status.cast_unsigned()), 0)
+}
+
+/// Exit the editor with `status` (a C int, widened by [`exit_event`]), or
+/// wait for [`proc_close_handles`] to let go first.
+fn exit_with(status: u64, _: u64) {
+    let status = u32::try_from(status)
+        .expect("`exit_event` widens a C int")
+        .cast_signed();
     if EXIT_NEED_DELAY.get() != 0 {
+        DELAYED_EXIT_STATUS.set(status);
         let main = main_loop.ptr();
-        // The exit timer doubles as the carrier for the status.
-        // SAFETY: the main loop is live for as long as the editor is.
-        unsafe { (*main).exit_delay_timer.data = packed };
-        // SAFETY: as above.
+        // SAFETY: the main loop's own timer, live for as long as the editor
+        // is.
         unsafe { uv_timer_start(&raw mut (*main).exit_delay_timer, Some(exit_delay_cb), 0, 0) };
         return;
     }
@@ -824,13 +809,9 @@ unsafe fn on_proc_exit(proc: *mut Proc) {
         status
     );
 
-    let queue = if child.events.is_null() {
-        child.loop_events()
-    } else {
-        child.events
-    };
+    let queue = child.events.unwrap_or(QueueId::MAIN);
     // SAFETY: the child's queue, and `proc_close_handles` wants the child.
-    unsafe { create_event(queue, proc_close_handles, child.as_ptr().cast()) };
+    unsafe { create_event(Some(queue), proc_close_handles, child.as_ptr().cast()) };
 }
 
 /// One of the child's streams finished closing.

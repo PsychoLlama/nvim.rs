@@ -37,10 +37,7 @@ use core::ptr;
 
 use crate::channel::with_channel;
 use crate::eval::typval::DictRef;
-use crate::event::r#loop::{Drain, main_loop_raw};
-use crate::event::multiqueue::{
-    ParkingQueue, multiqueue_process_events, multiqueue_replace_parent,
-};
+use crate::event::r#loop::main_loop_raw;
 use crate::event::proc::{proc_free, proc_spawn, proc_stop, proc_wait};
 use crate::event::rstream::{
     rstream_init, rstream_init_fd, rstream_may_close, rstream_start, rstream_start_inner,
@@ -51,6 +48,7 @@ use crate::event::stream::stream_may_close;
 use crate::event::wstream::{
     SharedBuffer, wstream_init, wstream_init_fd, wstream_new_buffer, wstream_write,
 };
+use crate::event_queue::{self, ParkingQueue, QueueId};
 use crate::memory::{xfree, xmemdup};
 use crate::os::pty_proc_unix::{
     pty_proc_close_master, pty_proc_resize, pty_proc_resume, pty_proc_tty_name,
@@ -376,7 +374,7 @@ pub(crate) struct JobSpawn<'a> {
 /// which case the child's handles are already closed and its argv released.
 pub(crate) fn spawn_job(id: u64, spec: JobSpawn<'_>) -> Result<(), c_int> {
     let proc = with(id, |channel| {
-        let events = channel.events.as_ptr();
+        let events = channel.events.id();
         let job = channel.stream_mut().job();
         let proc = job.expect("the channel is a job").proc_ptr();
         // SAFETY: the unspawned child at its fixed address, lent for its
@@ -388,7 +386,7 @@ pub(crate) fn spawn_job(id: u64, spec: JobSpawn<'_>) -> Result<(), c_int> {
         fields.env = spec.env.map_or(ptr::null_mut(), DictRef::into_raw);
         fields.cb = Some(job_exit_shim);
         fields.state_cb = Some(job_state_shim);
-        fields.events = events;
+        fields.events = Some(events);
         fields.detach = spec.detach;
         fields.overlapped = spec.overlapped;
         fields.fwd_err = spec.fwd_err;
@@ -612,7 +610,7 @@ pub(crate) fn write_shared(channel: &mut Channel, buffer: SharedBuffer) -> c_int
 /// its address through every event the wait lets run.
 pub(crate) fn wait_job(id: u64, ms: c_int, drain: Option<&ParkingQueue>) -> c_int {
     let proc = job_proc(id);
-    let events = drain.map_or(ptr::null_mut(), |queue| Drain::Parked(queue).queue());
+    let events = drain.map(ParkingQueue::id);
     // SAFETY: the job channel's child, at its fixed address; the wait holds
     // no borrow of it across the events it runs.
     unsafe { proc_wait(proc, ms, events) }
@@ -623,28 +621,25 @@ pub(crate) fn wait_job(id: u64, ms: c_int, drain: Option<&ParkingQueue>) -> c_in
 /// RPC call waits for its answer. The caller holds a reference to the
 /// channel, which keeps the queue alive for the wait.
 pub(crate) fn wait_on_channel_events(id: u64, done: impl FnMut() -> bool) {
-    let events = with(id, |channel| channel.events.as_ptr());
-    // SAFETY: the editor's loop, live from startup to exit, and the
-    // channel's own queue, which the caller's reference keeps alive; nothing
-    // of the channel is borrowed while the events run.
-    unsafe { crate::event::r#loop::process_events_until(main_loop_raw(), events, -1, done) };
+    let events = with(id, |channel| channel.events.id());
+    // SAFETY: the editor's loop, live from startup to exit; the channel's
+    // own queue lives as long as the caller's reference, and nothing of the
+    // channel is borrowed while the events run.
+    unsafe { crate::event::r#loop::process_events_until(main_loop_raw(), Some(events), -1, done) };
 }
 
 pub(crate) fn process_channel_events(id: u64) {
-    let events = with(id, |channel| channel.events.as_ptr());
-    // SAFETY: the channel's own queue, which lives as long as the channel;
-    // nothing of the channel is borrowed while its events run.
-    unsafe { multiqueue_process_events(events) };
+    let events = with(id, |channel| channel.events.id());
+    // Nothing of the channel is borrowed while its events run.
+    event_queue::process(events);
 }
 
 /// Re-parent channel `id`'s queue: onto `parking` while a frame waits on
 /// the job, back onto the main loop's queue with `None`.
 pub(crate) fn park_channel_events(id: u64, parking: Option<&ParkingQueue>) {
-    let events = with(id, |channel| channel.events.as_ptr());
-    let parent = parking.map_or_else(crate::event::r#loop::main_loop_events, ParkingQueue::as_ptr);
-    // SAFETY: the channel's own queue, a child, and a parent that outlives
-    // the parking.
-    unsafe { multiqueue_replace_parent(events, parent) };
+    let events = with(id, |channel| channel.events.id());
+    let parent = parking.map_or(QueueId::MAIN, ParkingQueue::id);
+    event_queue::replace_parent(events, parent);
 }
 
 // ---------------------------------------------------------------------------

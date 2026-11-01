@@ -18,7 +18,7 @@
 #[cfg(not(miri))]
 use crate::event::libuv::uv_hrtime;
 use crate::event::libuv::{uv_now, uv_sleep};
-use crate::event::r#loop::process_events_until;
+use crate::event::r#loop::{Drain, wait_on_main_loop};
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_DBG, logmsg};
@@ -115,19 +115,13 @@ pub fn os_delay(ms: u64, ignoreinput: bool) {
             input_ready(InputEvents::None)
         }
     };
-    // SAFETY: the process's event loop, always live, and no queue.
-    unsafe { process_events_until(main_loop.ptr(), ptr::null_mut(), ms, done) };
+    wait_on_main_loop(Drain::Nothing, ms, done);
 }
 
 /// Sleep for `ms` milliseconds serving the main loop's own queue, until an
 /// interrupt -- what `:sleep` does.
 pub(crate) fn sleep_serving_events(ms: i64) {
-    // SAFETY: the main loop and its queue are live for the editor's
-    // lifetime.
-    unsafe {
-        let uv_loop = main_loop.ptr();
-        process_events_until(uv_loop, (*uv_loop).events, ms, || got_int.get());
-    }
+    wait_on_main_loop(Drain::Events, ms, || got_int.get());
 }
 
 /// Sleep for `ms` milliseconds without checking for events or interrupts.

@@ -26,7 +26,7 @@
 //! [`unpacker`]: crate::msgpack_rpc::unpacker
 //! [`packer`]: crate::msgpack_rpc::packer
 
-use crate::event::multiqueue::{ChildQueue, put_id_event_on_fast_events, put_job};
+use crate::event_queue::{ChildQueue, put_id_event_on_fast_events, put_job};
 use crate::message_fmt::{msg_addr, msg_bytes};
 use crate::os::uv_error::UV_EPIPE;
 use core::ffi::{CStr, c_int};

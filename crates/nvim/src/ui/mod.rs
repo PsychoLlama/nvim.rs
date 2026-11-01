@@ -45,7 +45,7 @@ use crate::cursor_shape::{
 };
 use crate::drawscreen::state::updating_screen;
 use crate::drawscreen::{conceal_check_cursor_line, screen_resize};
-use crate::event::multiqueue::put_job_in;
+use crate::event_queue::put_job_in;
 use crate::ex_getln::cmdline_ui_flush;
 use crate::getchar::state::expr_map_lock;
 use crate::global_cell::GlobalCell;

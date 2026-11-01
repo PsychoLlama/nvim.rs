@@ -20,8 +20,8 @@ use crate::eval::typval::{
 use crate::eval::vars::vim_var_bytes;
 use crate::eval::{ArgvRefusal, common_job_callbacks, find_job, tv_to_argv};
 use crate::event::channel::{park_channel_events, wait_job};
-use crate::event::multiqueue::ParkingQueue;
 use crate::event::proc::proc_is_stopped;
+use crate::event_queue::ParkingQueue;
 use crate::ex_cmds::check_secure;
 use crate::ex_getln::{text_locked, text_locked_msg};
 use crate::memline::ml_open;

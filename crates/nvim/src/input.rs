@@ -9,7 +9,7 @@
 #![forbid(unsafe_code)]
 
 use crate::drawscreen::state::cmdline_row;
-use crate::event::multiqueue::ChildQueue;
+use crate::event_queue::ChildQueue;
 use crate::ex_getln::getcmdline_prompt;
 use crate::getchar::state::{mapped_ctrl_c, mod_mask};
 use crate::getchar::{fix_input_buffer, merge_modifiers};

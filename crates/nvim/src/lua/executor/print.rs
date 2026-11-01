@@ -21,7 +21,7 @@ use std::ffi::CString;
 use super::{in_fast_callback, nlua_error, nlua_pcall, require_ref, until_nul};
 use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear};
 use crate::event::r#loop::schedule_deferred_job;
-use crate::event::multiqueue::put_job_on_main_loop;
+use crate::event_queue::put_job_on_main_loop;
 use crate::ex_getln::{get_user_input, ui_ext_cmdline_block_append, ui_ext_cmdline_block_leave};
 use crate::lua::stack::{At, CFunction, Function, Raise, Stack};
 use crate::lua_functions;

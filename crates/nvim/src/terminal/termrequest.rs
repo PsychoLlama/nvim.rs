@@ -29,13 +29,13 @@
 
 use crate::autocmd::{apply_autocmds_group, has_event};
 use crate::eval::vars::set_vim_var_string;
-use crate::event::r#loop::main_loop_events;
-use crate::event::multiqueue::multiqueue_put_event;
+use crate::event::r#loop::RawEvent;
+use crate::event_queue::{self, ParkingQueue, QueueId};
 use crate::highlight::hl_add_url;
 use crate::types::AutoEvent;
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
-    Event, Handle, Object, RefcountSize, String_0, VTermStateFallbacks, VTermStringFragment,
+    Handle, Object, RefcountSize, String_0, VTermStateFallbacks, VTermStringFragment,
     VTermTerminator, VTermValue, Vv, size_t,
 };
 use crate::vterm::pen::set_pen_attr;
@@ -102,10 +102,11 @@ unsafe extern "C" fn emit_termrequest(argv: *mut *mut c_void) {
     // SAFETY: a buffer that still has its terminal.
     let term = unsafe { Term::new(buf.terminal) };
     if term.sb.pending() > 0 {
-        let events = term.pending.events;
-        let event = Event::new(Some(emit_termrequest), [Box::into_raw(request).cast()]);
-        // SAFETY: the terminal's own queue, drained by the refresh.
-        unsafe { multiqueue_put_event(events, event) };
+        let events = term.pending.events.as_ref().map(ParkingQueue::id);
+        let events = events.expect("a live terminal has its pending queue");
+        // SAFETY: `emit_termrequest` takes back the request leaked here, once.
+        let event = unsafe { RawEvent::new(emit_termrequest, [Box::into_raw(request).cast()]) };
+        event_queue::put(events, event);
         return;
     }
     report(&mut request, term, buf);
@@ -187,9 +188,9 @@ pub(crate) fn schedule_termrequest(mut term: Term) {
     //
     // SAFETY: the box just allocated, reachable from nowhere else yet.
     term.pending.send = unsafe { &raw mut (*request).pending_send };
-    let event = Event::new(Some(emit_termrequest), [request.cast()]);
-    // SAFETY: the main loop's queue, live from startup to exit.
-    unsafe { multiqueue_put_event(main_loop_events(), event) };
+    // SAFETY: `emit_termrequest` takes back the request leaked here, once.
+    let event = unsafe { RawEvent::new(emit_termrequest, [request.cast()]) };
+    event_queue::put(QueueId::MAIN, event);
 }
 
 /// The bytes of a fragment vterm handed over.

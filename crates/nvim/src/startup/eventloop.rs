@@ -18,10 +18,10 @@
 
 use crate::global_cell::SharedCell;
 use crate::types::{
-    Loop, MultiQueue, Proc, UV_MUTEX_INIT, UV_RWLOCK_INIT, uv__io_t, uv__queue, uv_async_s_u,
-    uv_async_t, uv_handle_t, uv_handle_type, uv_loop_s_active_reqs, uv_loop_s_timer_heap,
-    uv_loop_t, uv_signal_s, uv_signal_s_tree_entry, uv_signal_s_u, uv_signal_t, uv_timer_s_node,
-    uv_timer_s_u, uv_timer_t,
+    Loop, Proc, UV_MUTEX_INIT, UV_RWLOCK_INIT, uv__io_t, uv__queue, uv_async_s_u, uv_async_t,
+    uv_handle_t, uv_handle_type, uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t,
+    uv_signal_s, uv_signal_s_tree_entry, uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u,
+    uv_timer_t,
 };
 use core::ffi::c_void;
 
@@ -177,9 +177,6 @@ pub static main_loop: SharedCell<Loop> = SharedCell::new(Loop {
         inotify_watchers: ::core::ptr::null_mut::<c_void>(),
         inotify_fd: 0,
     },
-    events: ::core::ptr::null_mut::<MultiQueue>(),
-    thread_events: ::core::ptr::null_mut::<MultiQueue>(),
-    fast_events: ::core::ptr::null_mut::<MultiQueue>(),
     children: ::core::ptr::null_mut::<Vec<*mut Proc>>(),
     children_watcher: uv_signal_t {
         data: ::core::ptr::null_mut::<c_void>(),
@@ -283,7 +280,6 @@ pub static main_loop: SharedCell<Loop> = SharedCell::new(Loop {
         },
         pending: 0,
     },
-    mutex: UV_MUTEX_INIT,
     recursive: 0,
     closing: false,
 });

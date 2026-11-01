@@ -20,7 +20,8 @@
     clippy::ptr_as_ptr
 )]
 
-use super::{Event, MultiQueue};
+use super::Event;
+use crate::event_queue::QueueId;
 
 /// A queue's items, in order.
 pub type ItemList = List<Item>;
@@ -35,7 +36,7 @@ pub enum Item {
     },
     /// A placeholder in a parent's list, standing for the head event of
     /// `child` at the time the parent reaches it.
-    Link { child: *mut MultiQueue },
+    Link { child: QueueId },
 }
 
 /// Where an element sits in a [`List`]. Only meaningful for the list that

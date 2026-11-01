@@ -18,7 +18,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::event::multiqueue::ChildQueue;
+use crate::event_queue::ChildQueue;
 use crate::global_cell::GlobalCell;
 use crate::types::{uint32_t, uint64_t};
 use core::ffi::{CStr, c_int};

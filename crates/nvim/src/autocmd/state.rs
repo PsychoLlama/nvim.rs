@@ -26,7 +26,7 @@
 #![allow(non_upper_case_globals)]
 
 use super::{AUGROUP_DEFAULT, SuspendLatch};
-use crate::event::multiqueue::ChildQueue;
+use crate::event_queue::ChildQueue;
 use crate::global_cell::{GlobalCell, state_record};
 use crate::memory::XString;
 use crate::registry::{IdMap, SlotTable, id_map};

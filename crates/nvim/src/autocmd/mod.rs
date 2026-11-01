@@ -10,7 +10,7 @@
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
-use crate::event::multiqueue::ChildQueue;
+use crate::event_queue::ChildQueue;
 use crate::types::AutoEvent;
 use core::cmp::Ordering;
 use core::ffi::CStr;

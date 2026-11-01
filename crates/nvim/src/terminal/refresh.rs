@@ -22,14 +22,13 @@
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::change::changed_lines;
 use crate::cursor_shape::{SHAPE_BLOCK, SHAPE_HOR, SHAPE_IDX_TERM, SHAPE_VER, update_shape_entry};
-use crate::event::r#loop::main_loop_events;
-use crate::event::multiqueue::{multiqueue_move_events, multiqueue_process_events};
 use crate::event::time::{OwnedTimer, TimerQueue};
+use crate::event_queue::{self, QueueId};
 use crate::global_cell::GlobalCell;
 use crate::memline::{ml_append_buf_terminated, ml_replace_buf_text};
 use crate::r#move::{curs_columns, set_topline};
 use crate::startup::exiting;
-use crate::types::{ColNr, LineNr, MultiQueue, Terminal, uint16_t, uint64_t};
+use crate::types::{ColNr, LineNr, Terminal, uint16_t, uint64_t};
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_mode_info_set};
 use crate::winlayer::{Buf, Win, tab_windows};
 use core::ffi::c_int;
@@ -66,12 +65,8 @@ pub(crate) fn terminal_teardown() {
 
 /// The queue refresh work is deferred onto. Draining it is
 /// [`terminal_check_refresh`].
-pub(super) fn refresh_queue() -> *mut MultiQueue {
-    REFRESH_TIMER.with(|timer| {
-        timer
-            .as_ref()
-            .map_or(core::ptr::null_mut(), OwnedTimer::events)
-    })
+pub(super) fn refresh_queue() -> Option<QueueId> {
+    REFRESH_TIMER.with(|timer| timer.as_ref().and_then(OwnedTimer::events))
 }
 
 /// Mark `rows` as needing a redraw and arm the refresh timer.
@@ -108,8 +103,9 @@ pub(crate) fn invalidate_terminal(mut term: Term, rows: Option<(c_int, c_int)>) 
 /// Run whatever refresh work has come due. Called from the editor's idle
 /// paths, since the timer only queues.
 pub(crate) fn terminal_check_refresh() {
-    // SAFETY: the refresh queue, whose events are this module's own.
-    unsafe { multiqueue_process_events(refresh_queue()) };
+    if let Some(queue) = refresh_queue() {
+        event_queue::process(queue);
+    }
 }
 
 fn refresh_timer_cb(_owner: uint64_t) {
@@ -166,9 +162,9 @@ pub(crate) fn refresh_terminal(term: Term) {
     }
     // Events the child's output produced were held back until the buffer
     // agreed with the screen; it does now.
-    let events = term.pending.events;
-    // SAFETY: the terminal's own queue and the main loop's, both live.
-    unsafe { multiqueue_move_events(main_loop_events(), events) };
+    if let Some(events) = &term.pending.events {
+        event_queue::move_events(QueueId::MAIN, events.id());
+    }
 }
 
 /// Tell the child about a resize the editor already applied to vterm.

@@ -52,8 +52,7 @@ use crate::drawscreen::redraw_buf_line_later;
 use crate::eval::typval::DictRef;
 use crate::eval::vars::globvar_dict;
 use crate::eval::{get_v_event, restore_v_event};
-use crate::event::r#loop::main_loop_events;
-use crate::event::multiqueue::{multiqueue_free, multiqueue_new, multiqueue_put_event};
+use crate::event_queue::{self, ParkingQueue, put_id_event_on_main_loop};
 use crate::highlight::{HlAttrFlags, hl_combine_attr, hl_get_term_attr};
 use crate::highlight_group::name_to_color;
 use crate::memline::MlFlags;
@@ -317,8 +316,7 @@ pub(crate) fn terminal_alloc(mut buffer: Buf, opts: TerminalOptions) -> Term {
 
     term.invalid_start = 0;
     term.invalid_end = opts.height as c_int;
-    // SAFETY: a queue with no "on put" hook, freed by `terminal_destroy`.
-    term.pending.events = unsafe { multiqueue_new(None, ::core::ptr::null_mut()) };
+    term.pending.events = Some(ParkingQueue::detached());
 
     if !buffer.b_ml.ml_flags.has(MlFlags::EMPTY) {
         let line_count = buffer.line_count();
@@ -505,15 +503,22 @@ pub(crate) fn terminal_close(mut term: Term, status: c_int) {
 /// Redraw the last line of a terminal's buffer, where the "running" /
 /// "suspended" marker is drawn.
 ///
-/// # Safety
-///
-/// `argv` must point at a writable `*mut c_void` slot the caller owns for the
-/// call.
-unsafe extern "C" fn terminal_state_change_event(argv: *mut *mut c_void) {
-    // SAFETY: the event carries the buffer handle `terminal_set_state` put
-    // in it.
-    let handle = unsafe { (*argv).expose_provenance() as Handle };
-    let buf = buf_for_handle(handle);
+/// A buffer handle as an id event's word.
+fn handle_word(handle: Handle) -> u64 {
+    u64::from(handle.cast_unsigned())
+}
+
+/// The buffer handle [`handle_word`] packed.
+fn handle_of(word: u64) -> Handle {
+    u32::try_from(word)
+        .expect("`handle_word` packs a handle")
+        .cast_signed()
+}
+
+/// The child behind buffer `handle`'s terminal was stopped or resumed:
+/// redraw its last line, once the refresh queue gets here.
+fn terminal_state_change_event(handle: u64, _: u64) {
+    let buf = buf_for_handle(handle_of(handle));
     if let Some(buf) = buf
         && !buf.terminal.is_null()
     {
@@ -528,14 +533,10 @@ unsafe extern "C" fn terminal_state_change_event(argv: *mut *mut c_void) {
 /// which is no place to touch the screen.
 pub(crate) fn terminal_set_state(mut term: Term, suspended: bool) {
     if term.suspended != suspended {
-        let event = Event::new(
-            Some(terminal_state_change_event),
-            [::core::ptr::with_exposed_provenance_mut::<c_void>(
-                term.buf_handle as usize,
-            )],
-        );
-        // SAFETY: the refresh queue is the editor's own, live from startup.
-        unsafe { multiqueue_put_event(refresh::refresh_queue(), event) };
+        if let Some(queue) = refresh::refresh_queue() {
+            let event = Event::Ids(terminal_state_change_event, handle_word(term.buf_handle), 0);
+            event_queue::put(queue, event);
+        }
     }
     term.suspended = suspended;
 }
@@ -608,13 +609,12 @@ pub(crate) fn terminal_destroy(mut term: Term) -> bool {
     if term.refcount != RefcountSize::ZERO {
         return false;
     }
-    let (raw, vt, events) = (term.raw(), term.vt, term.pending.events);
+    let (raw, vt, events) = (term.raw(), term.vt, term.pending.events.take());
     refresh::refresh_before_destroy(term);
     // SAFETY: the terminal is the last thing standing on all of these, and
     // each is released exactly once.
     unsafe { vterm_free(vt) };
-    // SAFETY: as above.
-    unsafe { multiqueue_free(events) };
+    drop(events);
     // SAFETY: the other half of `terminal_alloc`'s `Box::into_raw`;
     // everything the terminal owns goes with it, and the caller drops its
     // handle so that nothing reaches it again.
@@ -646,18 +646,13 @@ fn terminal_send(term: Term, data: &[u8]) {
 
 /// Redraw after the child closed a synchronized-output frame.
 ///
-/// # Safety
-///
-/// `argv` must point at a writable `*mut c_void` slot the caller owns for the
-/// call.
-unsafe extern "C" fn on_sync_flush(argv: *mut *mut c_void) {
+/// The child finished a synchronized frame in buffer `handle`'s terminal:
+/// redraw it, from the main loop.
+fn on_sync_flush(handle: u64, _: u64) {
     if exiting.get() {
         return;
     }
-    // SAFETY: the event carries the buffer handle `terminal_receive` put in
-    // it.
-    let handle = unsafe { (*argv).expose_provenance() as Handle };
-    let buf = buf_for_handle(handle);
+    let buf = buf_for_handle(handle_of(handle));
     let Some(buf) = buf.filter(|buf| !buf.terminal.is_null()) else {
         return;
     };
@@ -696,15 +691,7 @@ pub(crate) fn terminal_receive(mut term: Term, bytes: &[u8]) {
         let (height, _) = term.size();
         term.invalid_start = 0;
         term.invalid_end = height;
-        let event = Event::new(
-            Some(on_sync_flush),
-            [::core::ptr::with_exposed_provenance_mut::<c_void>(
-                term.buf_handle as usize,
-            )],
-        );
-        // SAFETY: the main loop's queue is the editor's own, live until it
-        // stops.
-        unsafe { multiqueue_put_event(main_loop_events(), event) };
+        put_id_event_on_main_loop(on_sync_flush, handle_word(term.buf_handle), 0);
     }
 }
 

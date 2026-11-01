@@ -1,9 +1,10 @@
 //! The editor's event loop: a libuv loop plus the multi-level event queue.
 //!
-//! `Loop` owns three queues. `events` is the deferred queue the editor drains
-//! from its main state machine; `fast_events` is its child, drained as soon as
-//! `uv_run` returns; `thread_events` is the mutex-guarded inbox other threads
-//! post to, moved into `fast_events` by the async handle.
+//! The loop drains two queues of [`crate::event_queue`]'s: [`QueueId::MAIN`],
+//! the deferred queue the editor drains from its main state machine, and
+//! [`QueueId::FAST`], its child, drained as soon as `uv_run` returns. Other
+//! threads post jobs to an inbox behind a mutex, which the async handle
+//! moves onto the fast queue.
 //!
 //! Every subsystem in `event/` reaches the loop through a raw pointer libuv
 //! also holds — in the loop's own `data` field, and in each handle's. That is
@@ -29,22 +30,20 @@ use core::ptr;
 
 use crate::event::libuv::{
     uv_async_init, uv_async_send, uv_close, uv_is_closing, uv_loop_close, uv_loop_init,
-    uv_mutex_destroy, uv_mutex_init, uv_mutex_lock, uv_mutex_unlock, uv_print_all_handles, uv_run,
-    uv_signal_init, uv_stop, uv_timer_init, uv_timer_start, uv_timer_stop, uv_walk,
+    uv_print_all_handles, uv_run, uv_signal_init, uv_stop, uv_timer_init, uv_timer_start,
+    uv_timer_stop, uv_walk,
 };
-use crate::event::multiqueue::{
-    multiqueue_empty, multiqueue_free, multiqueue_get, multiqueue_move_events, multiqueue_new,
-    multiqueue_new_child, multiqueue_process_events, multiqueue_purge_events, multiqueue_put_event,
-    multiqueue_size,
-};
+use crate::event_queue::{self, QueueId};
 use crate::log::{LOGLVL_ERR, log_file_path, logmsg, with_log_lock};
 use crate::os::cshim::stderr;
 use crate::os::time::os_hrtime;
 use crate::types::{
-    Event, Loop, MultiQueue, Proc, argv_callback, uv_async_t, uv_handle_t, uv_loop_t, uv_mutex_t,
-    uv_run_mode, uv_signal_t, uv_timer_t,
+    Event, Loop, Proc, uv_async_t, uv_handle_t, uv_loop_t, uv_run_mode, uv_signal_t, uv_timer_t,
 };
 use ::libc::{abort, fclose, fopen};
+use std::collections::VecDeque;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicPtr, Ordering};
 
 const UV_RUN_DEFAULT: uv_run_mode = 0;
 const UV_RUN_ONCE: uv_run_mode = 1;
@@ -78,12 +77,6 @@ impl EventLoop {
     pub fn uv(self) -> *mut uv_loop_t {
         // SAFETY: a field of the live loop, derived from the wrapped pointer.
         unsafe { &raw mut (*self.0).uv }
-    }
-
-    /// The mutex guarding `thread_events`. See [`with_mutex`].
-    fn mutex(self) -> *mut uv_mutex_t {
-        // SAFETY: a field of the live loop.
-        unsafe { &raw mut (*self.0).mutex }
     }
 
     /// The handle other threads wake the loop with.
@@ -144,20 +137,6 @@ impl DerefMut for EventLoop {
     }
 }
 
-/// Run `body` with the loop's mutex held.
-///
-/// `thread_events` is the only state other threads touch, so it is the only
-/// state this guards. A panic inside `body` leaves the mutex locked, exactly
-/// as the C's early `return` would have.
-fn with_mutex<T>(uv_loop: EventLoop, body: impl FnOnce() -> T) -> T {
-    // SAFETY: the mutex is live from `loop_init` until `main_loop_close`.
-    unsafe { uv_mutex_lock(uv_loop.mutex()) };
-    let rv = body();
-    // SAFETY: as above, and this thread holds the lock.
-    unsafe { uv_mutex_unlock(uv_loop.mutex()) };
-    rv
-}
-
 // ---------------------------------------------------------------------------
 // Lifetime
 // ---------------------------------------------------------------------------
@@ -177,17 +156,10 @@ pub unsafe fn loop_init(uv_loop: *mut Loop) {
     uv_loop.closing = false;
     uv_loop.uv.data = uv_loop.as_ptr().cast();
     uv_loop.children = Box::into_raw(Box::new(Vec::<*mut Proc>::new()));
-    // SAFETY: the queues are this loop's own, and `loop_on_put` is called
-    // with the loop it is installed on.
+    event_queue::create_loop_queues(wake_main_loop);
+    // SAFETY: every handle below is a field of the loop just initialised,
+    // and each is registered with that same loop.
     unsafe {
-        uv_loop.events = multiqueue_new(Some(loop_on_put), uv_loop.as_ptr().cast());
-        uv_loop.fast_events = multiqueue_new_child(uv_loop.events);
-        uv_loop.thread_events = multiqueue_new(None, ptr::null_mut());
-    }
-    // SAFETY: the mutex and every handle below are fields of the loop just
-    // initialised, and each is registered with that same loop.
-    unsafe {
-        uv_mutex_init(uv_loop.mutex());
         uv_async_init(uv_loop.uv(), uv_loop.wakeup(), Some(async_cb));
         uv_signal_init(uv_loop.uv(), uv_loop.children_watcher());
         uv_timer_init(uv_loop.uv(), uv_loop.kill_timer());
@@ -197,6 +169,8 @@ pub unsafe fn loop_init(uv_loop: *mut Loop) {
     // The poll timer's only job is to flip this flag; it outlives every
     // `loop_uv_run` and is released by the handle's close callback.
     uv_loop.poll_timer.data = Box::into_raw(Box::new(false)).cast();
+    // Other threads wake the loop through this handle from now on.
+    WAKEUP.store(uv_loop.wakeup(), Ordering::Release);
 }
 
 /// The editor's own loop, as the functions here take it. It is a static, so
@@ -205,45 +179,27 @@ pub(crate) fn main_loop_raw() -> *mut Loop {
     crate::startup::main_loop.ptr()
 }
 
-/// The editor's main event queue, which is where deferred frees,
-/// autocommands and anything else a caller must not run inline are put.
-pub(crate) fn main_loop_events() -> *mut MultiQueue {
-    // SAFETY: the static loop; reading one field of it.
-    unsafe { (*main_loop_raw()).events }
-}
-
 /// Run the next event on the editor's main queue, if it holds one, and
 /// answer whether the queue is empty afterwards: one step of the main
 /// loop's `K_EVENT` drain, which checks for input between steps.
 pub(crate) fn run_next_main_event() -> bool {
-    // SAFETY: the static loop's own queue, which lives as long as the loop.
-    let mut event = unsafe { multiqueue_get(main_loop_events()) };
-    if let Some(handler) = event.handler {
-        // SAFETY: an event carries the argv its handler was queued with, and
-        // the array is this frame's copy.
-        unsafe { handler(event.argv.as_mut_ptr()) };
+    if let Some(event) = event_queue::take(QueueId::MAIN) {
+        event.run();
     }
-    // SAFETY: as above; read again, after the handler.
-    unsafe { multiqueue_empty(main_loop_events()) }
+    event_queue::is_empty(QueueId::MAIN)
 }
 
-/// [`loop_size`] of the editor's own loop: how many events other threads
-/// have posted to it and it has not moved yet.
+/// How many jobs other threads have posted to the editor's loop and it has
+/// not moved onto its fast queue yet.
 pub(crate) fn main_loop_size() -> usize {
-    // SAFETY: the static loop, which lives for the process.
-    unsafe { loop_size(main_loop_raw()) }
+    inbox().len()
 }
 
-/// [`loop_purge`] of the editor's own loop.
+/// Drop everything posted to the editor's loop but not yet processed: the
+/// other threads' jobs and the fast queue.
 pub(crate) fn main_loop_purge() {
-    // SAFETY: the static loop, which lives for the process.
-    unsafe { loop_purge(main_loop_raw()) }
-}
-
-/// The editor's fast queue, drained by every poll of its loop.
-pub(crate) fn main_loop_fast_events() -> *mut MultiQueue {
-    // SAFETY: the static loop; reading one field of it.
-    unsafe { (*main_loop_raw()).fast_events }
+    inbox().clear();
+    event_queue::purge(QueueId::FAST);
 }
 
 /// [`loop_init`] of the editor's own loop. Once, at startup.
@@ -255,8 +211,7 @@ pub(crate) fn main_loop_init() {
 
 /// Whether [`main_loop_init`] has run: the loop's queues exist.
 pub(crate) fn main_loop_is_up() -> bool {
-    // SAFETY: the static loop; reading one field of it.
-    !unsafe { (*main_loop_raw()).events }.is_null()
+    !WAKEUP.load(Ordering::Acquire).is_null()
 }
 
 /// Whether the editor's loop is running a callback of its own right now —
@@ -276,10 +231,8 @@ pub(crate) fn main_loop_is_closing() -> bool {
 /// Run what is already queued on the editor's loop, then poll it once
 /// without waiting -- the drain before the loop is taken down.
 pub(crate) fn main_loop_drain() {
-    // SAFETY: the static loop, up (the caller checked [`main_loop_is_up`]),
-    // and its own queue.
-    unsafe { multiqueue_process_events((*main_loop_raw()).events) };
-    // SAFETY: as above.
+    event_queue::process(QueueId::MAIN);
+    // SAFETY: the static loop, up (the caller checked [`main_loop_is_up`]).
     unsafe { loop_poll_events(main_loop_raw(), 0) };
 }
 
@@ -291,9 +244,9 @@ pub(crate) fn main_loop_close(wait: bool) -> bool {
     // SAFETY: the static loop, up and no longer in use.
     let mut uv_loop = unsafe { EventLoop::new(main_loop_raw()) };
     uv_loop.closing = true;
-    // SAFETY: the loop's own mutex and handles, each still open.
+    WAKEUP.store(ptr::null_mut(), Ordering::Release);
+    // SAFETY: the loop's own handles, each still open.
     unsafe {
-        uv_mutex_destroy(uv_loop.mutex());
         uv_close(uv_loop.children_watcher().cast(), None);
         uv_close(uv_loop.kill_timer().cast(), None);
         uv_close(uv_loop.poll_timer().cast(), Some(timer_close_cb));
@@ -303,14 +256,11 @@ pub(crate) fn main_loop_close(wait: bool) -> bool {
 
     let rv = drain_until_closed(uv_loop, wait);
 
-    // SAFETY: the three queues this loop made, and the children list it
-    // boxed. Nothing reaches any of them after the loop is closed.
-    unsafe {
-        multiqueue_free(uv_loop.fast_events);
-        multiqueue_free(uv_loop.thread_events);
-        multiqueue_free(uv_loop.events);
-        drop(Box::from_raw(uv_loop.children));
-    }
+    inbox().clear();
+    event_queue::free_loop_queues();
+    // SAFETY: the children list this loop boxed. Nothing reaches it after
+    // the loop is closed.
+    drop(unsafe { Box::from_raw(uv_loop.children) });
     uv_loop.children = ptr::null_mut();
     rv
 }
@@ -428,8 +378,7 @@ pub unsafe fn loop_poll_events(uv_loop: *mut Loop, ms: i64) -> bool {
     // Read before the queue is drained: a handler may poll again.
     // SAFETY: as above.
     let expired = unsafe { *timeout_expired };
-    // SAFETY: the loop's own queue.
-    unsafe { multiqueue_process_events(uv_loop.fast_events) };
+    event_queue::process(QueueId::FAST);
     expired
 }
 
@@ -437,15 +386,13 @@ pub unsafe fn loop_poll_events(uv_loop: *mut Loop, ms: i64) -> bool {
 /// anything, otherwise let the loop poll for `timeout` milliseconds.
 ///
 /// # Safety
-/// `uv_loop` is live, `queue` is live or null, and so is everything their
-/// events reach.
-pub unsafe fn process_events(uv_loop: *mut Loop, queue: *mut MultiQueue, timeout: i64) {
-    // SAFETY: the caller's queue and loop.
-    unsafe {
-        if !queue.is_null() && !multiqueue_empty(queue) {
-            multiqueue_process_events(queue);
-        } else {
-            loop_poll_events(uv_loop, timeout);
+/// `uv_loop` is live, and so is everything its events reach.
+pub unsafe fn process_events(uv_loop: *mut Loop, queue: Option<QueueId>, timeout: i64) {
+    match queue {
+        Some(queue) if !event_queue::is_empty(queue) => event_queue::process(queue),
+        _ => {
+            // SAFETY: the caller's loop.
+            unsafe { loop_poll_events(uv_loop, timeout) };
         }
     }
 }
@@ -461,7 +408,7 @@ pub unsafe fn process_events(uv_loop: *mut Loop, queue: *mut MultiQueue, timeout
 /// As [`process_events`].
 pub unsafe fn process_events_until(
     uv_loop: *mut Loop,
-    queue: *mut MultiQueue,
+    queue: Option<QueueId>,
     ms: i64,
     mut done: impl FnMut() -> bool,
 ) {
@@ -477,19 +424,19 @@ pub unsafe fn process_events_until(
 }
 
 /// What a wait on the editor's own loop drains between polls.
-pub(crate) enum Drain<'a> {
+pub(crate) enum Drain {
     /// The main queue: everything the editor has deferred.
     Events,
     /// Only the fast queue, which the poll itself drains.
     FastOnly,
-    /// A queue the waiting frame owns -- a job wait's parking queue.
-    Parked(&'a crate::event::multiqueue::ParkingQueue),
+    /// Nothing but what the poll itself runs.
+    Nothing,
 }
 
 /// [`process_events_until`] on the editor's own loop: the safe spelling for
 /// a frame that waits on its own condition, `done`, which may read anything
 /// the events it lets run have changed.
-pub(crate) fn wait_on_main_loop(drain: Drain<'_>, ms: i64, done: impl FnMut() -> bool) {
+pub(crate) fn wait_on_main_loop(drain: Drain, ms: i64, done: impl FnMut() -> bool) {
     let uv_loop = main_loop_raw();
     let queue = drain.queue();
     // SAFETY: the editor's loop and its queues, live from startup to exit,
@@ -497,13 +444,13 @@ pub(crate) fn wait_on_main_loop(drain: Drain<'_>, ms: i64, done: impl FnMut() ->
     unsafe { process_events_until(uv_loop, queue, ms, done) };
 }
 
-impl Drain<'_> {
+impl Drain {
     /// The queue this drains, which lives at least as long as `self`.
-    pub(crate) fn queue(&self) -> *mut MultiQueue {
+    pub(crate) fn queue(&self) -> Option<QueueId> {
         match self {
-            Drain::Events => main_loop_events(),
-            Drain::FastOnly => main_loop_fast_events(),
-            Drain::Parked(queue) => queue.as_ptr(),
+            Drain::Events => Some(QueueId::MAIN),
+            Drain::FastOnly => Some(QueueId::FAST),
+            Drain::Nothing => None,
         }
     }
 }
@@ -572,148 +519,147 @@ unsafe extern "C" fn timer_close_cb(handle: *mut uv_handle_t) {
 }
 
 // ---------------------------------------------------------------------------
-// Posting events
+// Events
 // ---------------------------------------------------------------------------
 
-/// An [`Event`] carrying a single argument, which is all most handlers take.
-pub fn one_arg_event(handler: argv_callback, arg: *mut c_void) -> Event {
-    Event::new(handler, [arg])
+/// A C-shaped event: a handler and the argument words it is run with --
+/// upstream's `Event`, which the stream, process, timer and signal watchers
+/// here still post with their own address in the first word.
+pub struct RawEvent {
+    handler: unsafe extern "C" fn(*mut *mut c_void),
+    argv: [*mut c_void; 10],
 }
 
-/// Post `event` to the fast queue from any thread.
-///
-/// # Safety
-/// `uv_loop` is live, and `event`'s handler is safe to call with its argv
-/// once the loop reaches it.
-pub unsafe fn loop_schedule_fast(uv_loop: *mut Loop, event: Event) {
-    // SAFETY: the caller's loop.
-    let uv_loop = unsafe { EventLoop::new(uv_loop) };
-    with_mutex(uv_loop, || {
-        // SAFETY: the inbox is this loop's own, and the async handle is what
-        // tells the loop's thread to drain it.
-        unsafe {
-            multiqueue_put_event(uv_loop.thread_events, event);
-            uv_async_send(uv_loop.wakeup());
-        }
-    });
-}
-
-/// Post `event` to the deferred queue from any thread.
-///
-/// The event has to travel through the fast queue to get there — only the
-/// main thread may touch `loop->events` — so it is boxed and unwrapped by
-/// [`loop_deferred_event`] once it lands.
-///
-/// # Safety
-/// As [`loop_schedule_fast`].
-pub unsafe fn loop_schedule_deferred(uv_loop: *mut Loop, event: Event) {
-    let boxed = Box::into_raw(Box::new(event)).cast::<c_void>();
-    let wrapper = Event::new(Some(loop_deferred_event), [uv_loop.cast(), boxed]);
-    // SAFETY: the caller's loop; `loop_deferred_event` is called with the two
-    // arguments packed just above.
-    unsafe { loop_schedule_fast(uv_loop, wrapper) };
-}
-
-/// Run `job` once, later, from the main loop's deferred queue: the safe
-/// spelling of an [`Event`] whose one argument is the work to do.
-///
-/// For a caller that cannot do the work where it is -- an error raised
-/// where it cannot be shown, say. The job owns what it needs, so there is
-/// no argument array to keep alive; a job the loop never runs is dropped
-/// unrun with the process, as an unrun event's arguments always were.
-pub(crate) fn schedule_deferred_job(job: Box<dyn FnOnce() + Send>) {
-    let job = Box::into_raw(Box::new(job)).cast::<c_void>();
-    let event = Event::new(Some(run_deferred_job), [job]);
-    // SAFETY: the editor's own main loop, which lives for the process; the
-    // handler takes back the job packed just above.
-    unsafe { loop_schedule_deferred(main_loop_raw(), event) };
-}
-
-/// The deferred queue reached a [`schedule_deferred_job`] event: run it.
-///
-/// # Safety
-/// `argv[0]` is the boxed job that function packed, taken back once here.
-unsafe extern "C" fn run_deferred_job(argv: *mut *mut c_void) {
-    // SAFETY: the caller's promise.
-    let job = unsafe { Box::from_raw((*argv).cast::<Box<dyn FnOnce() + Send>>()) };
-    job();
-}
-
-/// The fast queue reached the wrapper [`loop_schedule_deferred`] made:
-/// unpack the caller's event onto the deferred queue.
-///
-/// # Safety
-/// `argv` is that wrapper's — the loop, then the boxed event.
-unsafe extern "C" fn loop_deferred_event(argv: *mut *mut c_void) {
-    // SAFETY: the two arguments `loop_schedule_deferred` packed — the loop,
-    // and the caller's event, boxed there and taken back here.
-    let uv_loop = unsafe { EventLoop::new((*argv).cast()) };
-    // SAFETY: as above.
-    let event = unsafe { Box::from_raw((*argv.add(1)).cast::<Event>()) };
-    // SAFETY: the loop's own deferred queue.
-    unsafe { multiqueue_put_event(uv_loop.events, *event) };
-}
-
-/// Break out of `uv_run` when an event lands while the loop is running, so
-/// the caller gets a chance to process it.
-///
-/// # Safety
-/// `data` is the loop this callback was installed for.
-pub unsafe extern "C" fn loop_on_put(_queue: *mut MultiQueue, data: *mut c_void) {
-    // SAFETY: the caller's promise.
-    let uv_loop = unsafe { EventLoop::new(data.cast()) };
-    if uv_loop.recursive != 0 {
-        // SAFETY: the loop is live and this thread is inside its `uv_run`.
-        unsafe { uv_stop(uv_loop.uv()) };
+impl RawEvent {
+    /// The event that runs `handler` with `args` (the unused tail of the
+    /// ten-word argv left null).
+    ///
+    /// # Safety
+    /// `handler` is safe to call, once, with that argv, whenever the queue
+    /// the event is put on reaches it: whatever `args` name outlives the
+    /// event, or is released by the handler.
+    pub unsafe fn new<const N: usize>(
+        handler: unsafe extern "C" fn(*mut *mut c_void),
+        args: [*mut c_void; N],
+    ) -> Event {
+        const { assert!(N <= 10, "an event carries at most ten arguments") };
+        let mut argv = [ptr::null_mut::<c_void>(); 10];
+        argv[..N].copy_from_slice(&args);
+        Event::Raw(RawEvent { handler, argv })
     }
 }
 
-/// Another thread posted to `thread_events`; move the lot to `fast_events`.
-///
-/// # Safety
-/// libuv's async callback: `handle` is the one [`loop_init`] registered, on
-/// the loop whose address it left in the libuv loop's `data`.
-unsafe extern "C" fn async_cb(handle: *mut uv_async_t) {
-    // SAFETY: libuv hands back the handle `loop_init` registered, and
-    // `loop_init` put the loop's own address in the libuv loop's `data`.
-    let uv_loop = unsafe { EventLoop::new((*(*handle).loop_0).data.cast()) };
-    with_mutex(uv_loop, || {
-        // SAFETY: both queues are this loop's own.
-        unsafe { multiqueue_move_events(uv_loop.fast_events, uv_loop.thread_events) };
-    });
-}
-
-// ---------------------------------------------------------------------------
-// Queue inspection
-// ---------------------------------------------------------------------------
-
-/// Drop everything queued but not yet processed.
-///
-/// # Safety
-/// `uv_loop` is live.
-pub unsafe fn loop_purge(uv_loop: *mut Loop) {
-    // SAFETY: the caller's loop.
-    let uv_loop = unsafe { EventLoop::new(uv_loop) };
-    with_mutex(uv_loop, || {
-        // SAFETY: both queues are this loop's own.
-        unsafe {
-            multiqueue_purge_events(uv_loop.thread_events);
-            multiqueue_purge_events(uv_loop.fast_events);
+impl Event {
+    /// Run the event, once.
+    pub fn run(self) {
+        match self {
+            Event::Raw(mut raw) => {
+                // SAFETY: `RawEvent::new`'s contract; the argv is this
+                // frame's own copy, so the handler cannot reach it again by
+                // re-entering the queue.
+                unsafe { (raw.handler)(raw.argv.as_mut_ptr()) };
+            }
+            Event::Job(job) => job(),
+            Event::Ids(handler, a, b) => handler(a, b),
         }
-    });
+    }
 }
 
-/// How many events other threads have posted and the loop has not moved yet.
+/// A [`RawEvent`] carrying a single argument, which is all most handlers
+/// here take.
 ///
 /// # Safety
-/// `uv_loop` is live.
-pub unsafe fn loop_size(uv_loop: *mut Loop) -> usize {
-    // SAFETY: the caller's loop.
-    let uv_loop = unsafe { EventLoop::new(uv_loop) };
-    // SAFETY: the inbox is this loop's own.
-    with_mutex(uv_loop, || unsafe {
-        multiqueue_size(uv_loop.thread_events)
-    })
+/// As [`RawEvent::new`].
+pub unsafe fn one_arg_event(
+    handler: unsafe extern "C" fn(*mut *mut c_void),
+    arg: *mut c_void,
+) -> Event {
+    // SAFETY: the caller's promise.
+    unsafe { RawEvent::new(handler, [arg]) }
+}
+
+/// What another thread posts: work it hands over whole.
+type ThreadJob = Box<dyn FnOnce() + Send>;
+
+/// Which of the editor's queues a [`ThreadJob`] is for.
+enum Lane {
+    Fast,
+    Deferred,
+}
+
+/// The jobs other threads have posted and the loop has not moved onto its
+/// fast queue yet. The one piece of the loop other threads touch.
+static INBOX: Mutex<VecDeque<(Lane, ThreadJob)>> = Mutex::new(VecDeque::new());
+
+/// The handle another thread wakes the editor's loop with: null before
+/// [`loop_init`] and after [`main_loop_close`].
+static WAKEUP: AtomicPtr<uv_async_t> = AtomicPtr::new(ptr::null_mut());
+
+/// The inbox, locked. A panic while it was held cannot leave it half-made:
+/// every critical section is one push, one drain or one clear.
+fn inbox() -> std::sync::MutexGuard<'static, VecDeque<(Lane, ThreadJob)>> {
+    INBOX
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Post `job` from any thread, and wake the loop to take it.
+fn post(lane: Lane, job: ThreadJob) {
+    inbox().push_back((lane, job));
+    let wakeup = WAKEUP.load(Ordering::Acquire);
+    if !wakeup.is_null() {
+        // SAFETY: the loop's async handle, open from `loop_init` until
+        // `main_loop_close` clears the pointer; `uv_async_send` is the one
+        // libuv call that may be made from any thread.
+        unsafe { uv_async_send(wakeup) };
+    }
+}
+
+/// Run `job` once, soon, from the editor loop's fast queue: what a thread
+/// that is not the main one -- or a callback that must not run the editor
+/// inline -- posts.
+pub(crate) fn schedule_fast_job(job: ThreadJob) {
+    post(Lane::Fast, job);
+}
+
+/// Run `job` once, later, from the main loop's deferred queue.
+///
+/// For a caller that cannot do the work where it is -- an error raised
+/// where it cannot be shown, say, or another thread. A job the loop never
+/// runs is dropped unrun with the process.
+pub(crate) fn schedule_deferred_job(job: ThreadJob) {
+    post(Lane::Deferred, job);
+}
+
+/// Break out of `uv_run` when an event lands on a child of the main queue
+/// while the loop is running, so the caller gets a chance to process it.
+pub(crate) fn wake_main_loop() {
+    // SAFETY: the static loop, which lives for the process; reading one
+    // field of it.
+    let recursive = unsafe { (*main_loop_raw()).recursive };
+    if recursive != 0 {
+        // SAFETY: the loop is live and this thread is inside its `uv_run`.
+        unsafe { uv_stop(&raw mut (*main_loop_raw()).uv) };
+    }
+}
+
+/// Another thread posted to the inbox: move the lot to the fast queue. A
+/// deferred job travels through the fast queue to get to the main one --
+/// only the main thread may touch that -- as upstream's did.
+///
+/// # Safety
+/// libuv's async callback, on the handle [`loop_init`] registered.
+unsafe extern "C" fn async_cb(_handle: *mut uv_async_t) {
+    let posted: Vec<_> = inbox().drain(..).collect();
+    for (lane, job) in posted {
+        let event = match lane {
+            Lane::Fast => Event::Job(job),
+            Lane::Deferred => Event::Job(Box::new(move || {
+                event_queue::put(QueueId::MAIN, Event::Job(job));
+            })),
+        };
+        event_queue::put(QueueId::FAST, event);
+    }
 }
 
 /// Dump libuv's handle table to the log — the `:checkhealth`-adjacent view

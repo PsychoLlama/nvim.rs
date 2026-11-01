@@ -80,7 +80,7 @@ pub struct Channel {
     /// events, a terminal, a waiting frame. The last release queues the free.
     pub refcount: RefcountSize,
     /// The channel's own event queue, a child of the main loop's.
-    pub(crate) events: crate::event::multiqueue::ChildQueue,
+    pub(crate) events: crate::event_queue::ChildQueue,
     stream: Pin<Box<ChannelStream>>,
     pub is_rpc: bool,
     pub detach: bool,
@@ -100,7 +100,7 @@ impl Channel {
     /// state and no callbacks.
     pub(crate) fn new(
         id: uint64_t,
-        events: crate::event::multiqueue::ChildQueue,
+        events: crate::event_queue::ChildQueue,
         stream: ChannelStream,
     ) -> Self {
         Self {

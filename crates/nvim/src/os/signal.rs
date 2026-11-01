@@ -93,7 +93,7 @@ const WATCHER_UNSET: SignalWatcher = SignalWatcher {
     data: ptr::null_mut(),
     cb: None,
     close_cb: None,
-    events: ptr::null_mut(),
+    events: None,
 };
 
 static WATCHERS: GlobalCell<[SignalWatcher; WATCHED.len()]> =

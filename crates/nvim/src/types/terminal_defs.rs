@@ -105,7 +105,7 @@ impl terminal {
                 resize: false,
                 cursor: false,
                 send: ::core::ptr::null_mut(),
-                events: ::core::ptr::null_mut(),
+                events: None,
             },
             streamed_paste: false,
             theme_updates: false,
@@ -264,7 +264,7 @@ pub struct TerminalPending {
     /// fully reported. Null the rest of the time, meaning "write through".
     /// Borrowed from the in-flight request, which outlives the borrow.
     pub send: *mut Vec<u8>,
-    pub events: *mut MultiQueue,
+    pub(crate) events: Option<crate::event_queue::ParkingQueue>,
 }
 #[repr(C)]
 pub struct TerminalCursor {

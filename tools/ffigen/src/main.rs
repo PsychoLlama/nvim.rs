@@ -914,6 +914,9 @@ struct Emitter<'w> {
     opaque: BTreeSet<String>,
     queue: Vec<(String, String)>, // (file context, name)
     unknown: BTreeSet<String>,
+    /// Types left incomplete because a field had no C image: a by-value
+    /// field of one cannot render either.
+    incomplete: BTreeSet<String>,
     denied_refs: BTreeSet<String>,
     notes: Vec<String>,
 }
@@ -926,6 +929,7 @@ impl<'w> Emitter<'w> {
             opaque: BTreeSet::new(),
             queue: Vec::new(),
             unknown: BTreeSet::new(),
+            incomplete: BTreeSet::new(),
             denied_refs: BTreeSet::new(),
             notes: Vec::new(),
         }
@@ -1232,7 +1236,28 @@ impl<'w> Emitter<'w> {
             }
             return false;
         }
-        self.unknown.contains(&name)
+        self.unknown.contains(&name) || self.left_incomplete(&name, 0)
+    }
+
+    /// Whether `name` -- or the type it aliases -- was left incomplete.
+    fn left_incomplete(&self, name: &str, depth: usize) -> bool {
+        if self.incomplete.contains(name) {
+            return true;
+        }
+        if depth > 8 {
+            return false;
+        }
+        match self.emitted.get(name).map(|def| &def.kind) {
+            Some(Kind::Alias(target)) => match &**target {
+                syn::Type::Path(tp) => tp
+                    .path
+                    .segments
+                    .last()
+                    .is_some_and(|seg| self.left_incomplete(&seg.ident.to_string(), depth + 1)),
+                _ => false,
+            },
+            _ => false,
+        }
     }
 
     fn run(&mut self) {
@@ -1755,6 +1780,7 @@ fn main() {
                     emitter
                         .notes
                         .push(format!("type left incomplete: {}", name));
+                    emitter.incomplete.insert(name.clone());
                     continue;
                 }
                 let align = def

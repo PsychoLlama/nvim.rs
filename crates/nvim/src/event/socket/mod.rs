@@ -39,12 +39,10 @@ use crate::event::libuv::{
     uv_pipe_connect, uv_pipe_init, uv_tcp_bind, uv_tcp_connect, uv_tcp_getsockname, uv_tcp_init,
     uv_tcp_nodelay,
 };
-use crate::event::r#loop::{one_arg_event, process_events_until};
-use crate::event::multiqueue::multiqueue_put_event;
+use crate::event::r#loop::process_events_until;
 use crate::event::rstream::Reader;
 use crate::event::socket::address::{SOCKET_ADDR_LEN, port_suffix, tcp_host_end};
 use crate::event::stream::{may_close, stream_init, stream_may_close};
-use crate::event::{pack_int, unpack_int};
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, LOGLVL_WRN, logmsg};
 use crate::memory::{xfree, xstrdup, xstrlcpy};
 use crate::os::cshim::gettext;
@@ -287,7 +285,6 @@ pub unsafe fn socket_watcher_init(
     unsafe { (*stream).data = watcher.as_ptr().cast() };
     watcher.cb = None;
     watcher.close_cb = None;
-    watcher.events = ptr::null_mut();
     watcher.data = ptr::null_mut();
     0
 }
@@ -440,7 +437,7 @@ fn rebind_stale_socket(mut watcher: Watcher, failure: c_int) -> c_int {
     // SAFETY: as above.
     unsafe { uv_close(handle.cast(), Some(early_server_close_cb)) };
     // SAFETY: the main loop is live for as long as the editor is.
-    unsafe { process_events_until(main_loop.ptr(), ptr::null_mut(), -1, || closed) };
+    unsafe { process_events_until(main_loop.ptr(), None, -1, || closed) };
 
     // SAFETY: a fresh handle, on the loop the closed one used.
     unsafe { uv_pipe_init(handle_loop, handle, 0) };
@@ -474,7 +471,7 @@ unsafe fn socket_alive(uv_loop: *mut Loop, addr: *const c_char) -> bool {
     // SAFETY: the probe stream, still on this frame.
     unsafe { stream_may_close(&raw mut stream.s) };
     // SAFETY: the main loop is live for as long as the editor is.
-    unsafe { process_events_until(main_loop.ptr(), ptr::null_mut(), -1, || closed) };
+    unsafe { process_events_until(main_loop.ptr(), None, -1, || closed) };
     true
 }
 
@@ -700,7 +697,7 @@ pub unsafe fn socket_connect(
 
             let ms = i64::from(timeout);
             // SAFETY: the main loop is live for as long as the editor is.
-            unsafe { process_events_until(main_loop.ptr(), ptr::null_mut(), ms, || status != 1) };
+            unsafe { process_events_until(main_loop.ptr(), None, ms, || status != 1) };
             if status == 0 {
                 success = true;
                 break 'settled;
@@ -710,7 +707,7 @@ pub unsafe fn socket_connect(
             // Wait for the close callback before retrying or returning:
             // `stream` may be on the caller's stack.
             // SAFETY: the main loop is live for as long as the editor is.
-            unsafe { process_events_until(main_loop.ptr(), ptr::null_mut(), -1, || closed) };
+            unsafe { process_events_until(main_loop.ptr(), None, -1, || closed) };
 
             // The short circuit is load-bearing: a pipe connect never looked
             // an address up, so `candidate` is still null here.
@@ -738,34 +735,14 @@ pub unsafe fn socket_connect(
 // Callbacks
 // ---------------------------------------------------------------------------
 
-/// libuv: a client is waiting. `status` rides in the event's second argument
-/// as an integer, which is what upstream's `CREATE_EVENT` does with it.
+/// libuv: a client is waiting. Reported to the watcher's callback straight
+/// from libuv's stack, as upstream's watcher without a queue does.
 ///
 /// # Safety
 /// libuv's: `handle` is a listening handle whose `data` is its watcher.
 unsafe extern "C" fn connection_cb(handle: *mut uv_stream_t, status: c_int) {
     // SAFETY: the caller's promise.
     let watcher = unsafe { Watcher::new((*handle).data.cast()) };
-    let status = pack_int(status);
-    if watcher.events.is_null() {
-        let mut argv = [watcher.as_ptr().cast::<c_void>(), status];
-        // SAFETY: exactly the argv `connection_event` reads.
-        unsafe { connection_event(argv.as_mut_ptr()) };
-    } else {
-        let mut event = one_arg_event(Some(connection_event), watcher.as_ptr().cast());
-        event.argv[1] = status;
-        // SAFETY: the watcher's own queue.
-        unsafe { multiqueue_put_event(watcher.events, event) };
-    }
-}
-
-/// # Safety
-/// Queued by [`connection_cb`]: `argv` is the watcher and its libuv status.
-unsafe extern "C" fn connection_event(argv: *mut *mut c_void) {
-    // SAFETY: the caller's promise about the argv.
-    let watcher = unsafe { Watcher::new((*argv).cast()) };
-    // SAFETY: as above.
-    let status = unpack_int(unsafe { *argv.add(1) });
     let notify = watcher.cb.expect("a started watcher has a callback");
     // SAFETY: the watcher is live while it listens, and nothing else
     // borrows it while its callback runs.

@@ -21,7 +21,7 @@
 )]
 
 use super::*;
-use crate::event::multiqueue::process_events_in;
+use crate::event_queue::process_events_in;
 use crate::guard::Keys;
 use crate::keycodes::{Ctrl_B, Ctrl_C, Ctrl_F, Key, NotAKey};
 use crate::log::logmsg;

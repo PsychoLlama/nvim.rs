@@ -44,7 +44,7 @@ use core::ffi::{CStr, c_int};
 use crate::eval::typval::callback_free;
 use crate::event::channel::TransportMut;
 use crate::event::channel::{process_channel_events, wait_job};
-use crate::event::multiqueue::{ChildQueue, put_job_on_main_loop};
+use crate::event_queue::{ChildQueue, put_job_on_main_loop};
 use crate::global_cell::GlobalCell;
 use crate::lua::executor::release_luaref;
 use crate::message::{e_invchan, e_invstream, e_invstreamrpc};

@@ -18,17 +18,14 @@
 #![allow(unsafe_code)]
 use crate::drawscreen::status_redraw_buf;
 use crate::eval::eval_call_provider;
-use crate::event::r#loop::main_loop_events;
-use crate::memory::ThinCString;
 
 use crate::api::private::helpers::{dict_set_var, scope_vars};
 use crate::eval::typval::tv_list_alloc;
-use crate::event::multiqueue::multiqueue_put_event;
-use crate::memory::xmemdupz;
+use crate::event_queue::put_job_on_main_loop;
 use crate::option::vars::p_bg;
 use crate::options::kOptBoFlagTerm;
 use crate::types::{
-    Error, Event, Object, String_0, VTermPos, VTermProp, VTermRect, VTermScreenCallbacks,
+    Error, Object, String_0, VTermPos, VTermProp, VTermRect, VTermScreenCallbacks,
     VTermSelectionCallbacks, VTermSelectionMask, VTermStringFragment, VTermValue, kListLenMayKnow,
     ptrdiff_t,
 };
@@ -236,23 +233,16 @@ unsafe extern "C" fn term_theme(dark: *mut bool, _data: *mut c_void) -> c_int {
     1
 }
 
-/// # Safety
-///
-/// `argv` must point at a writable `*mut c_void` slot the caller owns for the
-/// call.
-unsafe extern "C" fn term_clipboard_set(argv: *mut *mut c_void) {
-    // SAFETY: the event's own two arguments, as `term_selection_set` left
-    // them: a selection mask, and the string it allocated, taken over here.
-    let (mask, payload) = unsafe {
-        let data = *argv.add(1) as *mut c_char;
-        ((*argv).expose_provenance(), ThinCString::from_raw(data))
-    };
-    let regname = if mask as VTermSelectionMask == VTERM_SELECTION_PRIMARY {
+/// Hand a finished OSC 52 write to the clipboard provider: `payload` (up
+/// to its first NUL, as the C string it was) into the register `mask`
+/// names.
+fn term_clipboard_set(mask: VTermSelectionMask, payload: &[u8]) {
+    let regname = if mask == VTERM_SELECTION_PRIMARY {
         b'*' as c_char
     } else {
         b'+' as c_char
     };
-    let payload = payload.as_ref().map_or(&b""[..], ThinCString::as_bytes);
+    let payload = payload.split(|&byte| byte == 0).next().unwrap_or_default();
     // A readfile()-style list of lines (`:h chansend()`), the last one kept
     // even when empty so that a trailing newline survives: a newline inside
     // one item would reach a command-line provider as a NUL.
@@ -290,18 +280,8 @@ unsafe extern "C" fn term_selection_set(
     term.selection
         .extend_from_slice(unsafe { fragment_bytes(&frag) });
     if frag.final_0() {
-        let (bytes, len) = (
-            term.selection.as_ptr().cast::<c_void>(),
-            term.selection.len(),
-        );
-        // The event handler hands this to a list, which frees it.
-        //
-        // SAFETY: a slice of the terminal's own accumulator, copied.
-        let data = unsafe { xmemdupz(bytes, len) };
-        let mask = ::core::ptr::with_exposed_provenance_mut::<c_void>(mask as usize);
-        let event = Event::new(Some(term_clipboard_set), [mask, data]);
-        // SAFETY: the main loop's queue, live from startup to exit.
-        unsafe { multiqueue_put_event(main_loop_events(), event) };
+        let payload = term.selection.clone();
+        put_job_on_main_loop(move || term_clipboard_set(mask, &payload));
     }
     1
 }
