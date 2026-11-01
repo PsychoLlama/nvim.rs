@@ -977,20 +977,22 @@ impl<'w> Emitter<'w> {
     }
 
     /// Convert a syn type to a CTy, enqueueing referenced named types.
-    /// Whether `Option<T>` has `T`'s own image: only a function pointer and
-    /// a `NonNull<T>` promise the niche that makes it so, plus any alias or
-    /// `repr(transparent)` newtype over one of those.
+    /// Whether `Option<T>` has `T`'s own image: only a function pointer, a
+    /// reference, a `NonNull<T>` and a `Box<T>` promise the niche that makes
+    /// it so, plus any alias or `repr(transparent)` newtype over one of those.
     fn option_is_transparent(&self, file: &str, inner: &syn::Type, depth: u32) -> bool {
         if depth > 8 {
             return false;
         }
         match inner {
-            syn::Type::BareFn(_) => true,
+            // A reference is never null, so `None` is the null pointer: the
+            // same promise `NonNull<T>` makes.
+            syn::Type::BareFn(_) | syn::Type::Reference(_) => true,
             syn::Type::Path(tp) => {
                 let Some(seg) = tp.path.segments.last() else {
                     return false;
                 };
-                if seg.ident == "NonNull" {
+                if seg.ident == "NonNull" || seg.ident == "Box" {
                     return true;
                 }
                 let name = seg.ident.to_string();
@@ -1043,6 +1045,25 @@ impl<'w> Emitter<'w> {
                             if self.option_is_transparent(file, &t, 0) {
                                 return self.cty(file, &t);
                             }
+                        }
+                    }
+                    return None;
+                }
+                if name == "Box" {
+                    // `Box<T>` of a sized `T` is a `T *` on the wire (the
+                    // standard library documents the ABI), and like
+                    // `NonNull<T>` it is never null, so `Option<Box<T>>` is
+                    // the same eight bytes. A `T` with no C image of its own
+                    // goes out incomplete, which is all a C reader of the
+                    // pointer needs.
+                    if let syn::PathArguments::AngleBracketed(ab) = &seg.arguments {
+                        if let Some(syn::GenericArgument::Type(t)) = ab.args.first() {
+                            if matches!(t, syn::Type::Slice(_) | syn::Type::TraitObject(_)) {
+                                return None;
+                            }
+                            let t = t.clone();
+                            let inner = self.cty(file, &t)?;
+                            return Some(CTy::Ptr(Box::new(inner), false));
                         }
                     }
                     return None;
