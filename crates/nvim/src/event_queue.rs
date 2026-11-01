@@ -108,6 +108,7 @@ impl Queues {
         }
     }
 
+    #[inline]
     fn get(&mut self, id: QueueId) -> &mut Queue {
         let slot = &mut self.slots[id.index()];
         assert!(
@@ -185,7 +186,11 @@ impl Queues {
 
     /// Take the head event, unlinking it from the other side as well.
     fn take(&mut self, id: QueueId) -> Option<Event> {
-        let event = match self.get(id).items.pop_front()? {
+        let queue = self.get(id);
+        let item = queue.items.pop_front()?;
+        queue.size = queue.size.wrapping_sub(1);
+        let parent = queue.parent;
+        Some(match item {
             // Reached from a parent: the link stands for the child's head
             // event. Upstream leaves the child's own counter alone here, so
             // this does too.
@@ -196,16 +201,12 @@ impl Queues {
             // Reached from the queue the event was pushed to.
             Item::Event { event, parent_slot } => {
                 if let Some(slot) = parent_slot {
-                    let parent = self.get(id).parent;
                     let parent = parent.expect("an event with a parent slot has a parent");
                     self.get(parent).items.remove(slot);
                 }
                 event
             }
-        };
-        let queue = self.get(id);
-        queue.size = queue.size.wrapping_sub(1);
-        Some(event)
+        })
     }
 }
 

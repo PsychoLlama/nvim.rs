@@ -29,6 +29,7 @@ count	callee	no_raw	defs	def
 5	.next_arg::<::core::ffi::c_ulong>	0	0	
 5	EventLoop::new	0	1	crates/nvim/src/event/loop.rs
 5	Handle::new	0	1	crates/nvim/src/event/time.rs
+5	RawEvent::new	0	1	crates/nvim/src/event/loop.rs
 5	Self::new	0	17	
 5	Signal::new	0	1	crates/nvim/src/event/signal.rs
 5	loop_poll_events	0	1	crates/nvim/src/event/loop.rs
@@ -46,7 +47,6 @@ count	callee	no_raw	defs	def
 3	.get_unchecked_mut	0	0	
 3	.next_arg::<::core::ffi::c_int>	0	0	
 3	Live::new	0	1	crates/nvim/src/winlayer/live.rs
-3	RawEvent::new	0	1	crates/nvim/src/event/loop.rs
 3	Stack::above_top	0	1	crates/nvim/src/lua/stack/mod.rs
 3	ThinCString::from_raw	0	1	crates/nvim/src/memory/thin_cstring.rs
 3	XString::from_raw	0	1	crates/nvim/src/memory/xstring.rs
@@ -55,7 +55,6 @@ count	callee	no_raw	defs	def
 3	copy_entry	0	1	crates/nvim/src/os/users.rs
 3	create_event	0	1	crates/nvim/src/event/proc.rs
 3	fragment_bytes	1	2	
-3	one_arg_event	0	1	crates/nvim/src/event/loop.rs
 3	proc_free	0	1	crates/nvim/src/event/proc.rs
 3	proc_get_exepath	0	1	crates/nvim/src/event/proc.rs
 3	process_events	0	1	crates/nvim/src/event/loop.rs

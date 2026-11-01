@@ -23,7 +23,7 @@ use core::ffi::{c_int, c_void};
 use core::ops::{Deref, DerefMut};
 
 use crate::event::libuv::{uv_close, uv_signal_init, uv_signal_start, uv_signal_stop};
-use crate::event::r#loop::{EventLoop, one_arg_event};
+use crate::event::r#loop::{EventLoop, RawEvent};
 use crate::event_queue::{self, QueueId};
 use crate::types::{Loop, SignalWatcher, signal_cb, signal_close_cb, uv_handle_t, uv_signal_t};
 
@@ -143,7 +143,7 @@ unsafe extern "C" fn signal_watcher_cb(handle: *mut uv_signal_t, _signum: c_int)
         Some(events) => {
             // SAFETY: the watcher outlives the event, which carries nothing
             // but the watcher itself.
-            event_queue::put(events, unsafe { one_arg_event(signal_event, arg) });
+            event_queue::put(events, unsafe { RawEvent::new(signal_event, arg) });
         }
         None => {
             let mut argv = [arg];

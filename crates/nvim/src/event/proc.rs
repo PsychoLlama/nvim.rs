@@ -50,7 +50,7 @@ use crate::event::libuv::{
 use crate::event::libuv_proc::free_raw_argv;
 use crate::event::libuv_proc::{libuv_proc_close, libuv_proc_spawn};
 use crate::event::r#loop::{
-    loop_children, loop_poll_events, one_arg_event, process_events, process_events_until,
+    RawEvent, loop_children, loop_poll_events, process_events, process_events_until,
     stop_children_watcher,
 };
 use crate::event::rstream::{Reader, rstream_may_close};
@@ -553,7 +553,7 @@ unsafe fn create_event(
     arg: *mut c_void,
 ) {
     // SAFETY: the caller's promise about `arg`.
-    let event = unsafe { one_arg_event(handler, arg) };
+    let event = unsafe { RawEvent::new(handler, arg) };
     match queue {
         None => event.run(),
         Some(queue) => event_queue::put(queue, event),

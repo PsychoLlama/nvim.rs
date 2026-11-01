@@ -105,7 +105,7 @@ unsafe extern "C" fn emit_termrequest(argv: *mut *mut c_void) {
         let events = term.pending.events.as_ref().map(ParkingQueue::id);
         let events = events.expect("a live terminal has its pending queue");
         // SAFETY: `emit_termrequest` takes back the request leaked here, once.
-        let event = unsafe { RawEvent::new(emit_termrequest, [Box::into_raw(request).cast()]) };
+        let event = unsafe { RawEvent::new(emit_termrequest, Box::into_raw(request).cast()) };
         event_queue::put(events, event);
         return;
     }
@@ -189,7 +189,7 @@ pub(crate) fn schedule_termrequest(mut term: Term) {
     // SAFETY: the box just allocated, reachable from nowhere else yet.
     term.pending.send = unsafe { &raw mut (*request).pending_send };
     // SAFETY: `emit_termrequest` takes back the request leaked here, once.
-    let event = unsafe { RawEvent::new(emit_termrequest, [request.cast()]) };
+    let event = unsafe { RawEvent::new(emit_termrequest, request.cast()) };
     event_queue::put(QueueId::MAIN, event);
 }
 

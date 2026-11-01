@@ -543,30 +543,23 @@ unsafe extern "C" fn timer_close_cb(handle: *mut uv_handle_t) {
 // Events
 // ---------------------------------------------------------------------------
 
-/// A C-shaped event: a handler and the argument words it is run with --
+/// A C-shaped event: a handler and the one argument word it is run with --
 /// upstream's `Event`, which the stream, process, timer and signal watchers
-/// here still post with their own address in the first word.
+/// here still post with their own address as the argument.
 pub struct RawEvent {
     handler: unsafe extern "C" fn(*mut *mut c_void),
-    argv: [*mut c_void; 10],
+    arg: *mut c_void,
 }
 
 impl RawEvent {
-    /// The event that runs `handler` with `args` (the unused tail of the
-    /// ten-word argv left null).
+    /// The event that runs `handler` with an argv whose one word is `arg`.
     ///
     /// # Safety
     /// `handler` is safe to call, once, with that argv, whenever the queue
-    /// the event is put on reaches it: whatever `args` name outlives the
+    /// the event is put on reaches it: whatever `arg` names outlives the
     /// event, or is released by the handler.
-    pub unsafe fn new<const N: usize>(
-        handler: unsafe extern "C" fn(*mut *mut c_void),
-        args: [*mut c_void; N],
-    ) -> Event {
-        const { assert!(N <= 10, "an event carries at most ten arguments") };
-        let mut argv = [ptr::null_mut::<c_void>(); 10];
-        argv[..N].copy_from_slice(&args);
-        Event::Raw(RawEvent { handler, argv })
+    pub unsafe fn new(handler: unsafe extern "C" fn(*mut *mut c_void), arg: *mut c_void) -> Event {
+        Event::Raw(RawEvent { handler, arg })
     }
 }
 
@@ -574,29 +567,16 @@ impl Event {
     /// Run the event, once.
     pub fn run(self) {
         match self {
-            Event::Raw(mut raw) => {
+            Event::Raw(raw) => {
+                let mut argv = [raw.arg];
                 // SAFETY: `RawEvent::new`'s contract; the argv is this
-                // frame's own copy, so the handler cannot reach it again by
-                // re-entering the queue.
-                unsafe { (raw.handler)(raw.argv.as_mut_ptr()) };
+                // frame's own.
+                unsafe { (raw.handler)(argv.as_mut_ptr()) };
             }
             Event::Job(job) => job(),
             Event::Ids(handler, a, b) => handler(a, b),
         }
     }
-}
-
-/// A [`RawEvent`] carrying a single argument, which is all most handlers
-/// here take.
-///
-/// # Safety
-/// As [`RawEvent::new`].
-pub unsafe fn one_arg_event(
-    handler: unsafe extern "C" fn(*mut *mut c_void),
-    arg: *mut c_void,
-) -> Event {
-    // SAFETY: the caller's promise.
-    unsafe { RawEvent::new(handler, [arg]) }
 }
 
 /// What another thread posts: work it hands over whole.
