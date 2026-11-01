@@ -134,7 +134,9 @@ impl TermInput {
 /// Set up the input layer on `loop_0`, parsing keys as `ti` describes them.
 ///
 /// # Safety
-/// `input` must point to a zeroed [`TermInput`] that outlives `loop_0`.
+/// `input` must point to a [`TermInput::new`] input layer that outlives
+/// `loop_0` and does not move: the timers and the read stream registered
+/// here hold its address.
 pub unsafe fn tinput_init(input: *mut TermInput, loop_0: *mut Loop, ti: &TerminfoEntry) {
     // SAFETY: the caller guarantees all three; the timers and the read
     // stream live in `input` itself.

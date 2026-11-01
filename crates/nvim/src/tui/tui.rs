@@ -112,7 +112,7 @@ pub(crate) const DEFAULT_ATTRS: HlAttrs = HlAttrs {
 
 /// The running TUI, as its client holds it.
 ///
-/// It owns the [`TUIData`] that libuv's handles and termkey's hooks point
+/// It owns the [`TUIData`] that libuv's handles and the input layer point
 /// back into, which is why the data sits at a fixed address and is never
 /// freed: the process exits with it. The raw pointer stays here, inside the
 /// terminal layer; the client sees the methods below.
@@ -247,7 +247,7 @@ impl TUIData {
     /// under it, and no hyperlink is -1 rather than 0.
     fn new() -> Box<Self> {
         // SAFETY: the fields left zeroed are C layouts whose owners --
-        // libuv, the terminfo reader, the grid -- fill them in before
+        // libuv and the grid -- fill them in before
         // reading them, exactly as they did when this struct was xcalloc'ed.
         unsafe {
             Box::new(Self {
