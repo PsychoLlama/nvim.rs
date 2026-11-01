@@ -29,7 +29,7 @@ use crate::option::cpo_has;
 use crate::pos::MAXCOL;
 use crate::search::SEARCH_HL_PRIORITY;
 use crate::types::CpoFlag;
-use crate::winlayer::Win;
+use crate::winlayer::{Buf, Win};
 
 /// Which pattern's highlight state: `'hlsearch'`'s, or the window's match
 /// at this index.
@@ -327,13 +327,11 @@ fn next_search_hl(window: Win, which: Which, lnum: LineNr, mincol: ColNr) {
             // Not Vi-compatible, or an empty match: continue at the next
             // character, and stop if that is past the end of the line.
             let at = usize::try_from(start.col).unwrap_or(0);
-            let mut lines = window.buffer().lines();
-            let line = lines.line(lnum);
-            if cstr::byte_at(line, at) == 0 {
+            let Some(len) = cluster_len_in_line(window.buffer(), lnum, at) else {
                 set_lnum(0);
                 break;
-            }
-            start.col + col_len(c_cluster_len(&line[at..]))
+            };
+            start.col + col_len(len)
         } else {
             // Vi-compatible: continue at the end of the previous match.
             end.col
@@ -471,10 +469,21 @@ fn col_len(n: usize) -> ColNr {
 /// the line.
 #[inline(always)]
 fn char_len_at(window: Win, lnum: LineNr, col: ColNr) -> ColNr {
-    let mut lines = window.buffer().lines();
-    let line = lines.line(lnum);
     let at = usize::try_from(col).unwrap_or(usize::MAX);
-    col_len(c_cluster_len(line.get(at..).unwrap_or_default()))
+    col_len(cluster_len_in_line(window.buffer(), lnum, at).unwrap_or(0))
+}
+
+/// The length of the character, with its combining characters, at byte
+/// `at` of line `lnum` of `buffer`; `None` at or past the end of the line.
+///
+/// Out of line on purpose: the line read inlines the memline's cache
+/// lookup, and inlined here it lands in `win_line`, whose drawing loop then
+/// loses registers to a branch it almost never takes (scrbench +0.4 % Ir).
+#[inline(never)]
+fn cluster_len_in_line(buffer: Buf, lnum: LineNr, at: usize) -> Option<usize> {
+    let mut lines = buffer.lines();
+    let line = lines.line(lnum);
+    (cstr::byte_at(line, at) != 0).then(|| c_cluster_len(&line[at..]))
 }
 
 /// How far an empty match at `col` of line `lnum` highlights: the
