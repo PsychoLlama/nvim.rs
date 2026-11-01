@@ -521,7 +521,7 @@ impl VTerm {
 }
 
 /// What a `VTermValue` accompanying `attr` holds.
-pub fn vterm_get_attr_type(attr: VTermAttr) -> VTermValueType {
+pub(crate) fn attr_value_type(attr: VTermAttr) -> VTermValueType {
     match attr {
         VTERM_ATTR_UNDERLINE | VTERM_ATTR_FONT | VTERM_ATTR_BASELINE | VTERM_ATTR_URI => {
             VTERM_VALUETYPE_INT
@@ -662,14 +662,14 @@ mod tests {
 
     #[test]
     fn every_attribute_reports_the_kind_of_value_it_carries() {
-        assert_eq!(vterm_get_attr_type(VTERM_ATTR_BOLD), VTERM_VALUETYPE_BOOL);
-        assert_eq!(vterm_get_attr_type(VTERM_ATTR_FONT), VTERM_VALUETYPE_INT);
+        assert_eq!(attr_value_type(VTERM_ATTR_BOLD), VTERM_VALUETYPE_BOOL);
+        assert_eq!(attr_value_type(VTERM_ATTR_FONT), VTERM_VALUETYPE_INT);
         assert_eq!(
-            vterm_get_attr_type(VTERM_ATTR_FOREGROUND),
+            attr_value_type(VTERM_ATTR_FOREGROUND),
             VTERM_VALUETYPE_COLOR
         );
         // Past the last attribute there is no value at all.
-        assert_eq!(vterm_get_attr_type(VTERM_N_ATTRS), 0);
-        assert_eq!(vterm_get_attr_type(0), 0);
+        assert_eq!(attr_value_type(VTERM_N_ATTRS), 0);
+        assert_eq!(attr_value_type(0), 0);
     }
 }

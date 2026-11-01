@@ -2,9 +2,9 @@
 //!
 //! The emulator's screen holds only as many rows as the window is tall.
 //! Everything above that lives here, oldest last, capped by `'scrollback'`.
-//! vterm hands rows over as they scroll away ([`term_sb_push`]) and asks for
+//! vterm hands rows over as they scroll away ([`scrollback_push`]) and asks for
 //! them back when the screen grows or leaves the alternate screen
-//! ([`term_sb_pop`]); the refresh path then mirrors what is stored into the
+//! ([`scrollback_pop`]); the refresh path then mirrors what is stored into the
 //! buffer's lines.
 //!
 //! Two numbers connect this to the buffer. `pending` counts rows pushed but
@@ -61,7 +61,7 @@ fn scrollback_limit(mut buffer: Buf) -> usize {
 }
 
 /// A row scrolled off the top of the screen.
-pub(crate) fn term_sb_push(mut term: Term, row: &[VTermScreenCell]) -> c_int {
+pub(crate) fn scrollback_push(mut term: Term, row: &[VTermScreenCell]) -> c_int {
     if !term_may_alloc_scrollback(term, None) {
         return 0;
     }
@@ -74,7 +74,7 @@ pub(crate) fn term_sb_push(mut term: Term, row: &[VTermScreenCell]) -> c_int {
 
 /// The screen grew: give back the row most recently scrolled off, into
 /// `row`.
-pub(crate) fn term_sb_pop(mut term: Term, row: &mut [VTermScreenCell]) -> c_int {
+pub(crate) fn scrollback_pop(mut term: Term, row: &mut [VTermScreenCell]) -> c_int {
     let mut old_height = term.old_height;
     if !term.sb.pop(row, &mut old_height) {
         return 0;
@@ -87,7 +87,7 @@ pub(crate) fn term_sb_pop(mut term: Term, row: &mut [VTermScreenCell]) -> c_int 
 }
 
 /// The child asked for the scrollback to go.
-pub(crate) fn term_sb_clear(mut term: Term) -> c_int {
+pub(crate) fn scrollback_clear(mut term: Term) -> c_int {
     // On the alternate screen the scrollback belongs to the screen
     // underneath, which is about to be restored; clearing it there would
     // lose history the program never touched.

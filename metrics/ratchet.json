@@ -912,7 +912,7 @@
     "crates/nvim/src/vterm/pen.rs": {"pub_items": 8},
     "crates/nvim/src/vterm/screen/mod.rs": {"pub_items": 3},
     "crates/nvim/src/vterm/state/mod.rs": {"pub_items": 4},
-    "crates/nvim/src/vterm/vterm.rs": {"pub_items": 120},
+    "crates/nvim/src/vterm/vterm.rs": {"pub_items": 119},
     "crates/nvim/src/window/alloc.rs": {"pub_items": 5},
     "crates/nvim/src/window/close.rs": {"pub_items": 7},
     "crates/nvim/src/window/cmd.rs": {"pub_items": 1},

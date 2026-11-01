@@ -26,7 +26,7 @@ use crate::vterm::vterm::{
     VTERM_BASELINE_RAISE, VTERM_COLOR_DEFAULT_BG, VTERM_COLOR_DEFAULT_FG, VTERM_COLOR_DEFAULT_MASK,
     VTERM_COLOR_INDEXED, VTERM_COLOR_RGB, VTERM_COLOR_TYPE_MASK, VTERM_UNDERLINE_CURLY,
     VTERM_UNDERLINE_DOUBLE, VTERM_UNDERLINE_OFF, VTERM_UNDERLINE_SINGLE, VTERM_VALUETYPE_BOOL,
-    VTERM_VALUETYPE_COLOR, VTERM_VALUETYPE_INT, VTERM_VALUETYPE_STRING, vterm_get_attr_type,
+    VTERM_VALUETYPE_COLOR, VTERM_VALUETYPE_INT, VTERM_VALUETYPE_STRING, attr_value_type,
 };
 
 /// Set on a control-sequence parameter that is followed by a sub-parameter,
@@ -244,7 +244,7 @@ fn value_type(val: &Value<'_>) -> VTermValueType {
 /// Sets one attribute of the pen directly, bypassing SGR. Rejects a value
 /// whose type does not match the attribute's.
 pub(crate) fn set_pen_attr(state: &mut StateCx<'_>, attr: VTermAttr, val: Value<'_>) -> bool {
-    if value_type(&val) != vterm_get_attr_type(attr) {
+    if value_type(&val) != attr_value_type(attr) {
         return false;
     }
     let boolean = val.int() as c_uint;

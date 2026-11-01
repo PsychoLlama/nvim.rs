@@ -79,7 +79,7 @@ impl ScreenHost for ScreenReports {
     }
 
     fn settermprop(&mut self, prop: VTermProp, val: &Value<'_>) -> Option<c_int> {
-        Some(term_settermprop(self.0, prop, val))
+        Some(apply_termprop(self.0, prop, val))
     }
 
     fn bell(&mut self) -> Option<c_int> {
@@ -94,15 +94,15 @@ impl ScreenHost for ScreenReports {
     }
 
     fn sb_pushline(&mut self, cells: &[VTermScreenCell]) -> Option<c_int> {
-        Some(scrollback::term_sb_push(self.0, cells))
+        Some(scrollback::scrollback_push(self.0, cells))
     }
 
     fn sb_popline(&mut self, cells: &mut [VTermScreenCell]) -> Option<c_int> {
-        Some(scrollback::term_sb_pop(self.0, cells))
+        Some(scrollback::scrollback_pop(self.0, cells))
     }
 
     fn sb_clear(&mut self) -> Option<c_int> {
-        Some(scrollback::term_sb_clear(self.0))
+        Some(scrollback::scrollback_clear(self.0))
     }
 }
 
@@ -131,7 +131,7 @@ pub(crate) fn buf_set_term_title(buffer: Option<Buf>, title: &[u8]) {
 
 /// Accumulate a fragmented title, publishing it once the last fragment
 /// arrives.
-fn term_set_title(mut term: Term, frag: &Fragment<'_>) {
+fn accumulate_title(mut term: Term, frag: &Fragment<'_>) {
     let bytes = frag.bytes();
     let buf = term_buf(term);
     if frag.initial && frag.last {
@@ -150,10 +150,10 @@ fn term_set_title(mut term: Term, frag: &Fragment<'_>) {
     }
 }
 
-fn term_settermprop(mut term: Term, prop: VTermProp, val: &Value<'_>) -> c_int {
+fn apply_termprop(mut term: Term, prop: VTermProp, val: &Value<'_>) -> c_int {
     if prop == VTERM_PROP_TITLE {
         if let Value::Str(frag) = val {
-            term_set_title(term, frag);
+            accumulate_title(term, frag);
         }
         return 1;
     }
