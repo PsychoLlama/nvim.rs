@@ -56,8 +56,10 @@ use ::libc::{calloc, free, malloc, realloc};
 ///
 /// # Safety
 ///
-/// Runs on the main thread with the editor in a state where the scrollback
-/// and the memfiles may be dropped -- i.e. from inside an allocation.
+/// It frees the message scrollback, every memfile's cached blocks and the
+/// block pool's spare blocks, so no reference into any of them may be live
+/// across the call; the allocation paths that call it hold none. Main thread
+/// only: those are main-thread state.
 unsafe fn try_to_free_memory() {
     static trying_to_free: SharedCell<bool> = SharedCell::new(false);
     if trying_to_free.get() {
@@ -142,7 +144,11 @@ unsafe fn seam_free(ptr: *mut c_void) {
 ///
 /// # Safety
 ///
-/// Main thread, mid-allocation (see [`try_to_free_memory`]).
+/// As [`try_to_free_memory`], which it calls when the first attempt fails:
+/// no reference into the scrollback, a memfile's cached blocks or the block
+/// pool's spare blocks may be live across the call. A non-null answer is an
+/// allocation of at least `size` bytes the caller owns and frees with
+/// [`xfree`].
 pub unsafe fn try_malloc(size: usize) -> *mut c_void {
     // A zero-byte malloc may answer NULL, which every caller here reads as
     // failure; upstream rounds up for the same reason.
