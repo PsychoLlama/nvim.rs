@@ -123,12 +123,22 @@ static STATE: GlobalCell<Option<Box<TUIData>>> = GlobalCell::new(None);
 
 /// Run `f` on the started TUI's state. `f` must not run the event loop.
 fn with_tui<R>(f: impl FnOnce(&mut TUIData) -> R) -> R {
-    STATE.with_mut(|state| f(state.as_mut().expect("the TUI is started")))
+    let mut f = Some(f);
+    let mut answer = None;
+    lend_state(&mut |tui| answer = f.take().map(|f| f(tui)));
+    answer.expect("the state was lent")
+}
+
+/// [`with_tui`]'s one body that names the cell: not generic, so the cell
+/// is only ever reached from this module's code and stays unexported.
+#[inline(never)]
+fn lend_state(f: &mut dyn FnMut(&mut TUIData)) {
+    STATE.with_mut(|state| f(state.as_mut().expect("the TUI is started")));
 }
 
 /// Read the started TUI's state.
 fn read_tui<R>(f: impl FnOnce(&TUIData) -> R) -> R {
-    STATE.with(|state| f(state.as_ref().expect("the TUI is started")))
+    with_tui(|tui| f(tui))
 }
 
 /// [`with_tui`], for the input layer's callbacks, which are reached from
