@@ -76,7 +76,7 @@ use crate::types::{
 };
 use crate::ui::state::t_colors;
 use crate::ui_client::{ui_client_attach, ui_client_detach, ui_client_set_size};
-use ::libc::{abort, kill, sscanf};
+use ::libc::{abort, kill};
 use core::ffi::{CStr, c_int, c_void};
 use std::borrow::Cow;
 
@@ -148,7 +148,7 @@ impl Tui {
     /// [`tui_is_stopped`].
     pub fn is_stopped(&self) -> bool {
         // SAFETY: as above.
-        unsafe { tui_is_stopped(self.data.as_ptr()) }
+        unsafe { tui_is_stopped(&*self.data.as_ptr()) }
     }
 
     /// [`tui_stop`].
@@ -316,130 +316,119 @@ impl TUIData {
 
 /// Bring the terminal up: resolve its terminfo, negotiate what it can do,
 /// and open the write path.
-///
-/// # Safety
-/// `tui` must point to a live [`TUIData`] whose terminfo is not resolved.
-unsafe fn terminfo_start(tui: *mut TUIData) {
-    // SAFETY: the caller guarantees `tui`.
-    unsafe {
-        (*tui).staging.clear();
-        (*tui).default_attr = false;
-        (*tui).can_clear_attr = false;
-        (*tui).is_invisible = true;
-        (*tui).want_invisible = false;
-        (*tui).busy = false;
-        (*tui).set_cursor_color_as_str = false;
-        (*tui).cursor_has_color = false;
-        (*tui).resize_events_enabled = false;
-        (*tui).modes.set_grapheme_clusters(false);
-        (*tui).modes.set_resize_events(false);
-        (*tui).modes.set_theme_updates(false);
-        (*tui).showing_mode = 0;
-        (*tui).terminfo_ext = TerminfoExt::default();
-        (*tui).out_fd = STDOUT_FILENO;
-        (*tui).out_isatty = os_isatty((*tui).out_fd);
-        (*tui).input.tui_data = tui;
-        assert!((*tui).term.is_none(), "terminfo already resolved");
+fn terminfo_start(tui: &mut TUIData) {
+    tui.staging.clear();
+    tui.default_attr = false;
+    tui.can_clear_attr = false;
+    tui.is_invisible = true;
+    tui.want_invisible = false;
+    tui.busy = false;
+    tui.set_cursor_color_as_str = false;
+    tui.cursor_has_color = false;
+    tui.resize_events_enabled = false;
+    tui.modes.set_grapheme_clusters(false);
+    tui.modes.set_resize_events(false);
+    tui.modes.set_theme_updates(false);
+    tui.showing_mode = 0;
+    tui.terminfo_ext = TerminfoExt::default();
+    tui.out_fd = STDOUT_FILENO;
+    tui.out_isatty = os_isatty(tui.out_fd);
+    assert!(tui.term.is_none(), "terminfo already resolved");
 
-        let term = getenv_owned(c"TERM");
-        let term_name = term.as_ref().map(XString::as_cstr);
-        (*tui).terminfo_found_in_db = false;
-        if let Some(name) = term_name
-            && let Some(entry) = terminfo_from_database(name)
-        {
-            (*tui).ti = entry;
-            (*tui).term = Some(Cow::Owned(name.to_owned()));
-            (*tui).terminfo_found_in_db = true;
-        }
-        if !(*tui).terminfo_found_in_db {
-            let (builtin_name, entry) = terminfo_from_builtin(term_name);
-            (*tui).ti = entry;
-            (*tui).term = Some(Cow::Borrowed(builtin_name));
-        }
-
-        let quirks = Terminal::identify(term_name);
-        (*tui).screen_or_tmux = quirks.screen || quirks.tmux;
-        (*tui).rgb = quirks.has_truecolor(&(*tui).ti);
-        patch_terminfo_bugs(&mut (*tui).ti, &quirks);
-        let augmented = augment_terminfo(&mut (*tui).ti, &quirks);
-        (*tui).can_resize_screen = augmented.can_resize_screen;
-        (*tui).can_set_title = augmented.can_set_title;
-        (*tui).set_cursor_color_as_str = augmented.set_cursor_color_as_str;
-        (*tui).terminfo_ext = augmented.ext;
-        (*tui).input.key_encoding = augmented.key_encoding;
-        if augmented.extended_underline {
-            tui_enable_extended_underline(&mut *tui);
-        }
-
-        let ti = &(*tui).ti;
-        let defined = |cap: TerminfoDef| ti.has(cap);
-        (*tui).can_change_scroll_region = defined(kTerm_change_scroll_region);
-        (*tui).can_set_lr_margin = defined(kTerm_set_lr_margin);
-        (*tui).can_scroll = defined(kTerm_delete_line)
-            && defined(kTerm_parm_delete_line)
-            && defined(kTerm_insert_line)
-            && defined(kTerm_parm_insert_line);
-        (*tui).can_erase_chars = defined(kTerm_erase_chars);
-        (*tui).immediate_wrap_after_last_column = quirks.wraps_after_last_column;
-        (*tui).bce = (*tui).ti.bce;
-        t_colors.set((*tui).ti.max_colors);
-
-        terminfo_out(&mut *tui, kTerm_enter_ca_mode);
-        terminfo_out(&mut *tui, kTerm_keypad_xmit);
-        terminfo_out(&mut *tui, kTerm_clear_screen);
-        tui_set_term_mode(&mut *tui, BRACKETED_PASTE, true);
-
-        // What the terminal supports is only known once it answers; assume
-        // nothing until then.
-        (*tui).has_left_and_right_margin_mode = false;
-        (*tui).has_sync_mode = false;
-        if !quirks.nsterm {
-            // Terminal.app answers mode queries with gibberish that ends up
-            // in the editor as typed input, so it is never asked.
-            for mode in [
-                LEFT_AND_RIGHT_MARGINS,
-                SYNCHRONIZED_OUTPUT,
-                GRAPHEME_CLUSTERS,
-                THEME_UPDATES,
-                RESIZE_EVENTS,
-            ] {
-                tui_request_term_mode(&mut *tui, mode);
-            }
-        }
-        if !defined(kTerm_set_underline_style) && !quirks.screen && !quirks.tmux && !quirks.nsterm {
-            tui_query_extended_underline(&mut *tui);
-        }
-        tui_query_kitty_keyboard(&mut *tui);
-        tui_query_bg_color_noflush(&mut *tui);
-
-        open_output(tui);
-        flush(&mut *tui);
+    let term = getenv_owned(c"TERM");
+    let term_name = term.as_ref().map(XString::as_cstr);
+    tui.terminfo_found_in_db = false;
+    if let Some(name) = term_name
+        && let Some(entry) = terminfo_from_database(name)
+    {
+        tui.ti = entry;
+        tui.term = Some(Cow::Owned(name.to_owned()));
+        tui.terminfo_found_in_db = true;
     }
+    if !tui.terminfo_found_in_db {
+        let (builtin_name, entry) = terminfo_from_builtin(term_name);
+        tui.ti = entry;
+        tui.term = Some(Cow::Borrowed(builtin_name));
+    }
+
+    let quirks = Terminal::identify(term_name);
+    tui.screen_or_tmux = quirks.screen || quirks.tmux;
+    tui.rgb = quirks.has_truecolor(&tui.ti);
+    patch_terminfo_bugs(&mut tui.ti, &quirks);
+    let augmented = augment_terminfo(&mut tui.ti, &quirks);
+    tui.can_resize_screen = augmented.can_resize_screen;
+    tui.can_set_title = augmented.can_set_title;
+    tui.set_cursor_color_as_str = augmented.set_cursor_color_as_str;
+    tui.terminfo_ext = augmented.ext;
+    tui.input.key_encoding = augmented.key_encoding;
+    if augmented.extended_underline {
+        tui_enable_extended_underline(tui);
+    }
+
+    let defined = |tui: &TUIData, cap: TerminfoDef| tui.ti.has(cap);
+    tui.can_change_scroll_region = defined(tui, kTerm_change_scroll_region);
+    tui.can_set_lr_margin = defined(tui, kTerm_set_lr_margin);
+    tui.can_scroll = defined(tui, kTerm_delete_line)
+        && defined(tui, kTerm_parm_delete_line)
+        && defined(tui, kTerm_insert_line)
+        && defined(tui, kTerm_parm_insert_line);
+    tui.can_erase_chars = defined(tui, kTerm_erase_chars);
+    tui.immediate_wrap_after_last_column = quirks.wraps_after_last_column;
+    tui.bce = tui.ti.bce;
+    t_colors.set(tui.ti.max_colors);
+
+    terminfo_out(tui, kTerm_enter_ca_mode);
+    terminfo_out(tui, kTerm_keypad_xmit);
+    terminfo_out(tui, kTerm_clear_screen);
+    tui_set_term_mode(tui, BRACKETED_PASTE, true);
+
+    // What the terminal supports is only known once it answers; assume
+    // nothing until then.
+    tui.has_left_and_right_margin_mode = false;
+    tui.has_sync_mode = false;
+    if !quirks.nsterm {
+        // Terminal.app answers mode queries with gibberish that ends up
+        // in the editor as typed input, so it is never asked.
+        for mode in [
+            LEFT_AND_RIGHT_MARGINS,
+            SYNCHRONIZED_OUTPUT,
+            GRAPHEME_CLUSTERS,
+            THEME_UPDATES,
+            RESIZE_EVENTS,
+        ] {
+            tui_request_term_mode(tui, mode);
+        }
+    }
+    if !defined(tui, kTerm_set_underline_style) && !quirks.screen && !quirks.tmux && !quirks.nsterm
+    {
+        tui_query_extended_underline(tui);
+    }
+    tui_query_kitty_keyboard(tui);
+    tui_query_bg_color_noflush(tui);
+
+    open_output(tui);
+    flush(tui);
 }
 
 /// Attach the output file descriptor to the TUI's own write loop.
-///
-/// # Safety
-/// `tui` must point to a live [`TUIData`] with `out_fd` set.
-unsafe fn open_output(tui: *mut TUIData) {
-    // SAFETY: the caller guarantees `tui`; the handles live in it.
+fn open_output(tui: &mut TUIData) {
+    let out_fd = tui.out_fd as uv_file;
+    // SAFETY: the write loop and the output handle are this TUI's own
+    // fields, which do not move (the TUI is boxed for the process); libuv
+    // keeps their addresses from here until `terminfo_stop` closes them.
     unsafe {
-        uv_loop_init(&raw mut (*tui).write_loop);
-        if !(*tui).out_isatty {
-            let ret = uv_pipe_init(
-                &raw mut (*tui).write_loop,
-                &raw mut (*tui).output_handle.pipe,
-                0,
-            );
+        uv_loop_init(&raw mut tui.write_loop);
+        if !tui.out_isatty {
+            let ret = uv_pipe_init(&raw mut tui.write_loop, &raw mut tui.output_handle.pipe, 0);
             log_uv_error(ret, "uv_pipe_init");
-            let ret = uv_pipe_open(&raw mut (*tui).output_handle.pipe, (*tui).out_fd as uv_file);
+            let ret = uv_pipe_open(&raw mut tui.output_handle.pipe, out_fd);
             log_uv_error(ret, "uv_pipe_open");
             return;
         }
         let ret = uv_tty_init(
-            &raw mut (*tui).write_loop,
-            &raw mut (*tui).output_handle.tty,
-            (*tui).out_fd as uv_file,
+            &raw mut tui.write_loop,
+            &raw mut tui.output_handle.tty,
+            out_fd,
             0,
         );
         log_uv_error(ret, "uv_tty_init");
@@ -448,7 +437,7 @@ unsafe fn open_output(tui: *mut TUIData) {
         let mut retries = 10;
         let mut ret = UV_EINTR;
         while ret == UV_EINTR && retries > 0 {
-            ret = uv_tty_set_mode(&raw mut (*tui).output_handle.tty, UV_TTY_MODE_IO);
+            ret = uv_tty_set_mode(&raw mut tui.output_handle.tty, UV_TTY_MODE_IO);
             retries -= 1;
         }
         log_uv_error(ret, "uv_tty_set_mode");
@@ -471,69 +460,61 @@ fn log_uv_error(ret: c_int, call: &str) {
 /// Every mode this TUI turned on is turned off, in the reverse of the order
 /// it was turned on, and the terminal is asked for its device attributes —
 /// the reply is what tells the caller the resets have been processed.
-///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
-unsafe fn terminfo_disable(tui: *mut TUIData) {
-    // SAFETY: the caller guarantees `tui`.
-    unsafe {
-        if (*tui).modes.theme_updates() {
-            tui_set_term_mode(&mut *tui, THEME_UPDATES, false);
-        }
-        tui_mode_change(&mut *tui, String_0::NULL, 0);
-        tui_mouse_off(&mut *tui);
-        terminfo_out(&mut *tui, kTerm_exit_attribute_mode);
-        terminfo_out(&mut *tui, kTerm_cursor_normal);
-        terminfo_out(&mut *tui, kTerm_reset_cursor_style);
-        terminfo_out(&mut *tui, kTerm_keypad_local);
-        tui_reset_key_encoding(&mut *tui);
-        if (*tui).modes.resize_events() {
-            tui_set_term_mode(&mut *tui, RESIZE_EVENTS, false);
-        }
-        if (*tui).modes.grapheme_clusters() {
-            tui_set_term_mode(&mut *tui, GRAPHEME_CLUSTERS, false);
-        }
-        tui_set_title(&mut *tui, String_0::NULL);
-        if (*tui).cursor_has_color {
-            terminfo_out(&mut *tui, kTerm_reset_cursor_color);
-        }
-        tui_set_term_mode(&mut *tui, BRACKETED_PASTE, false);
-        let focus_off = (*tui).terminfo_ext.disable_focus_reporting;
-        out_cstr(&mut *tui, focus_off);
-        out(&mut *tui, b"\x1b[c");
-        flush(&mut *tui);
+fn terminfo_disable(tui: &mut TUIData) {
+    if tui.modes.theme_updates() {
+        tui_set_term_mode(tui, THEME_UPDATES, false);
     }
+    tui_mode_change(tui, String_0::NULL, 0);
+    tui_mouse_off(tui);
+    terminfo_out(tui, kTerm_exit_attribute_mode);
+    terminfo_out(tui, kTerm_cursor_normal);
+    terminfo_out(tui, kTerm_reset_cursor_style);
+    terminfo_out(tui, kTerm_keypad_local);
+    tui_reset_key_encoding(tui);
+    if tui.modes.resize_events() {
+        tui_set_term_mode(tui, RESIZE_EVENTS, false);
+    }
+    if tui.modes.grapheme_clusters() {
+        tui_set_term_mode(tui, GRAPHEME_CLUSTERS, false);
+    }
+    tui_set_title(tui, String_0::NULL);
+    if tui.cursor_has_color {
+        terminfo_out(tui, kTerm_reset_cursor_color);
+    }
+    tui_set_term_mode(tui, BRACKETED_PASTE, false);
+    let focus_off = tui.terminfo_ext.disable_focus_reporting;
+    out_cstr(tui, focus_off);
+    out(tui, b"\x1b[c");
+    flush(tui);
 }
 
 /// Close the terminal down and give back everything terminfo allocated.
-///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
-unsafe fn terminfo_stop(tui: *mut TUIData) {
-    // SAFETY: the caller guarantees `tui`.
+fn terminfo_stop(tui: &mut TUIData) {
+    // On a clean exit the cursor is left on the last line, so whatever the
+    // shell prints next starts below the editor's output rather than over
+    // it. After an error the screen is left as it is.
+    if ui_client_exit_status.get() == 0 && ui_client_error_exit.get() > 0 {
+        ui_client_exit_status.set(ui_client_error_exit.get());
+    }
+    if ui_client_exit_status.get() == ui_client_error_exit.get().max(0) {
+        cursor_goto(tui, tui.height - 1, 0);
+        terminfo_out(tui, kTerm_exit_ca_mode);
+    }
+    flush(tui);
+    // SAFETY: the output handle and the write loop `open_output` opened;
+    // the loop runs the close to completion before it is closed itself.
     unsafe {
-        // On a clean exit the cursor is left on the last line, so whatever
-        // the shell prints next starts below the editor's output rather
-        // than over it. After an error the screen is left as it is.
-        if ui_client_exit_status.get() == 0 && ui_client_error_exit.get() > 0 {
-            ui_client_exit_status.set(ui_client_error_exit.get());
-        }
-        if ui_client_exit_status.get() == ui_client_error_exit.get().max(0) {
-            cursor_goto(&mut *tui, (*tui).height - 1, 0);
-            terminfo_out(&mut *tui, kTerm_exit_ca_mode);
-        }
-        flush(&mut *tui);
         uv_tty_reset_mode();
-        uv_close((&raw mut (*tui).output_handle).cast::<uv_handle_t>(), None);
-        uv_run(&raw mut (*tui).write_loop, UV_RUN_DEFAULT);
-        if uv_loop_close(&raw mut (*tui).write_loop) != 0 {
+        uv_close((&raw mut tui.output_handle).cast::<uv_handle_t>(), None);
+        uv_run(&raw mut tui.write_loop, UV_RUN_DEFAULT);
+        if uv_loop_close(&raw mut tui.write_loop) != 0 {
             // A loop that will not close has a handle still open, which
             // would mean writing to a terminal that is being reset.
             abort();
         }
-        (*tui).ti = TerminfoEntry::default();
-        (*tui).term = None;
     }
+    tui.ti = TerminfoEntry::default();
+    tui.term = None;
 }
 
 /// Start the terminal and the input layer on top of it.
@@ -544,11 +525,14 @@ unsafe fn tui_terminal_start(tui: *mut TUIData) {
     // SAFETY: the caller guarantees `tui`.
     unsafe {
         (*tui).print_attr_id = -1;
-        terminfo_start(tui);
+        // The input layer's way back to this TUI, made from the caller's
+        // pointer rather than from a borrow that ends here.
+        (*tui).input.tui_data = tui;
+        terminfo_start(&mut *tui);
         if (*tui).input.loop_0.is_null() {
             tinput_init(&raw mut (*tui).input, main_loop.ptr(), &(*tui).ti);
         }
-        tui_guess_size(tui);
+        tui_guess_size(&mut *tui);
         tinput_start(&raw mut (*tui).input);
     }
 }
@@ -559,20 +543,14 @@ unsafe fn tui_terminal_start(tui: *mut TUIData) {
 /// Called by libuv with the timer this TUI started.
 unsafe extern "C" fn after_startup_cb(handle: *mut uv_timer_t) {
     // SAFETY: the timer's `data` is the TUI that started it.
-    unsafe { tui_terminal_after_startup((*handle).data.cast()) };
+    unsafe { tui_terminal_after_startup(&mut *(*handle).data.cast::<TUIData>()) };
 }
 
 /// Send what had to wait until the terminal had settled.
-///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
-unsafe fn tui_terminal_after_startup(tui: *mut TUIData) {
-    // SAFETY: the caller guarantees `tui`.
-    unsafe {
-        let focus_on = (*tui).terminfo_ext.enable_focus_reporting;
-        out_cstr(&mut *tui, focus_on);
-        flush(&mut *tui);
-    }
+fn tui_terminal_after_startup(tui: &mut TUIData) {
+    let focus_on = tui.terminfo_ext.enable_focus_reporting;
+    out_cstr(tui, focus_on);
+    flush(tui);
 }
 
 /// Stop the TUI: reset the terminal, wait for it to say so, and let go of
@@ -591,7 +569,7 @@ pub unsafe fn tui_stop(tui: *mut TUIData) {
         // The terminal's answer to the device-attributes query terminfo
         // disable ends with is what says the resets have been processed.
         (*tui).input.callbacks.primary_device_attr = Some(tui_stop_cb);
-        terminfo_disable(tui);
+        terminfo_disable(&mut *tui);
         process_events_until(
             (*tui).loop_0,
             (*(*tui).loop_0).events,
@@ -635,17 +613,13 @@ unsafe fn tui_terminal_stop(tui: *mut TUIData) {
     // SAFETY: the caller guarantees `tui`.
     unsafe {
         tinput_stop(&raw mut (*tui).input);
-        terminfo_stop(tui);
+        terminfo_stop(&mut *tui);
     }
 }
 
 /// Has the TUI been stopped?
-///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
-pub unsafe fn tui_is_stopped(tui: *mut TUIData) -> bool {
-    // SAFETY: the caller guarantees `tui`.
-    unsafe { (*tui).stopped }
+pub fn tui_is_stopped(tui: &TUIData) -> bool {
+    tui.stopped
 }
 
 /// Suspend the editor, giving the terminal back to the shell.
@@ -657,8 +631,7 @@ pub fn tui_suspend(tui: &mut TUIData) {
     ui_client_detach();
     tui.mouse_enabled_save = tui.mouse_enabled;
     tui.input.callbacks.primary_device_attr = Some(tui_suspend_cb);
-    // SAFETY: the live TUI this borrow names.
-    unsafe { terminfo_disable(tui) };
+    terminfo_disable(tui);
 }
 
 /// Actually suspend, once the terminal has confirmed the reset.
@@ -674,7 +647,7 @@ fn tui_suspend_cb(tui: &mut TUIData) {
         kill(0, SIGSTOP);
         // Execution resumes here on SIGCONT.
         tui_terminal_start(tui);
-        tui_terminal_after_startup(tui);
+        tui_terminal_after_startup(&mut *tui);
         if (*tui).mouse_enabled_save {
             tui_mouse_on(&mut *tui);
         }
@@ -695,25 +668,19 @@ unsafe fn sigwinch_cb(_watcher: *mut SignalWatcher, _signum: c_int, cbdata: *mut
     // SAFETY: the watcher holds this TUI's own pointer.
     unsafe {
         // Terminals that report resizes themselves have already told us.
-        if tui_is_stopped(tui) || (*tui).resize_events_enabled {
+        if tui_is_stopped(&*tui) || (*tui).resize_events_enabled {
             return;
         }
-        tui_guess_size(tui);
+        tui_guess_size(&mut *tui);
     }
 }
 
 /// Tell the editor the terminal is `width` by `height`.
-///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
-pub unsafe fn tui_set_size(tui: *mut TUIData, width: c_int, height: c_int) {
-    // SAFETY: the caller guarantees `tui`.
-    unsafe {
-        (*tui).pending_resize_events += 1;
-        (*tui).width = width;
-        (*tui).height = height;
-        ui_client_set_size(width, height);
-    }
+pub fn tui_set_size(tui: &mut TUIData, width: c_int, height: c_int) {
+    tui.pending_resize_events += 1;
+    tui.width = width;
+    tui.height = height;
+    ui_client_set_size(width, height);
 }
 
 /// Work out how big the terminal is, from the best source that answers.
@@ -721,48 +688,48 @@ pub unsafe fn tui_set_size(tui: *mut TUIData, width: c_int, height: c_int) {
 /// The terminal itself is authoritative; `$LINES`/`$COLUMNS` come next (they
 /// are how a terminal-less run says what to pretend), then whatever terminfo
 /// claimed, and finally a plain 80x24.
-///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
-unsafe fn tui_guess_size(tui: *mut TUIData) {
-    // SAFETY: the caller guarantees `tui`; the environment reads borrow.
-    unsafe {
-        let (mut width, mut height) = (0, 0);
-        let from_tty = (*tui).out_isatty
-            && uv_tty_get_winsize(
-                &raw mut (*tui).output_handle.tty,
+fn tui_guess_size(tui: &mut TUIData) {
+    let (mut width, mut height) = (0, 0);
+    // SAFETY: the tty handle `open_output` opened when `out_isatty`, and two
+    // ints of this frame's for libuv to fill.
+    let from_tty = tui.out_isatty
+        && unsafe {
+            uv_tty_get_winsize(
+                &raw mut tui.output_handle.tty,
                 &raw mut width,
                 &raw mut height,
-            ) == 0;
-        if !from_tty
-            && !(env_size(c"LINES", &raw mut height) && env_size(c"COLUMNS", &raw mut width))
-        {
-            height = (*tui).ti.lines;
-            width = (*tui).ti.columns;
+            )
+        } == 0;
+    if !from_tty {
+        match (env_size(c"LINES"), env_size(c"COLUMNS")) {
+            (Some(lines), Some(columns)) => (height, width) = (lines, columns),
+            _ => (height, width) = (tui.ti.lines, tui.ti.columns),
         }
-        if width <= 0 || height <= 0 {
-            width = DFLT_COLS;
-            height = DFLT_ROWS;
-        }
-        tui_set_size(tui, width, height);
     }
+    if width <= 0 || height <= 0 {
+        width = DFLT_COLS;
+        height = DFLT_ROWS;
+    }
+    tui_set_size(tui, width, height);
 }
 
-/// Read a size out of the environment variable `name`.
-///
-/// # Safety
-/// `out` must be valid for writes.
-unsafe fn env_size(name: &CStr, out: *mut c_int) -> bool {
-    let Some(value) = env_get_within(name, crate::types::MAXPATHL as usize) else {
-        return false;
-    };
-    let value = crate::cstr::owned(&value);
-    let mut consumed: c_int = 0;
-    // SAFETY: `value` is NUL-terminated, and `%d%n` writes one int to the
-    // caller's `out` and one to `consumed`.
-    unsafe {
-        sscanf(value.as_ptr(), c"%d%n".as_ptr(), out, &raw mut consumed) != EOF && consumed != 0
+/// Read a size out of the environment variable `name`: what `sscanf`'s
+/// `%d` reads -- leading whitespace, a sign, at least one digit -- or `None`.
+/// A number past `c_int`'s range is `None` too, where `sscanf` was undefined.
+fn env_size(name: &CStr) -> Option<c_int> {
+    let value = env_get_within(name, crate::types::MAXPATHL as usize)?;
+    let text = value.to_vec();
+    let text = text.trim_ascii_start();
+    let sign = usize::from(matches!(text.first(), Some(b'+' | b'-')));
+    let digits = text[sign..]
+        .iter()
+        .take_while(|b| b.is_ascii_digit())
+        .count();
+    if digits == 0 {
+        return None;
     }
+    core::str::from_utf8(&text[..sign + digits])
+        .ok()?
+        .parse()
+        .ok()
 }
-
-const EOF: c_int = -1;

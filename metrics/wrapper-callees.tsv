@@ -293,7 +293,6 @@ count	callee	no_raw	defs	def
 1	strncasecmp	0	1	crates/nvim/src/os/cshim.rs
 1	strptime	0	0	
 1	term_set_title	1	1	crates/nvim/src/terminal/callbacks.rs
-1	terminfo_disable	0	1	crates/nvim/src/tui/tui.rs
 1	test	0	0	
 1	theme	0	1	crates/nvim/src/vterm/screen/callbacks.rs
 1	tk_getkeys	0	1	crates/nvim/src/tui/input.rs
@@ -334,10 +333,10 @@ count	callee	no_raw	defs	def
 1	ts_tree_copy	0	0	
 1	ts_tree_included_ranges	0	0	
 1	tui_handle_term_mode	0	0	
-1	tui_is_stopped	0	1	crates/nvim/src/tui/tui.rs
+1	tui_is_stopped	0	0	
 1	tui_start	0	1	crates/nvim/src/tui/tui.rs
 1	tui_stop	0	1	crates/nvim/src/tui/tui.rs
-1	tui_terminal_after_startup	0	1	crates/nvim/src/tui/tui.rs
+1	tui_terminal_after_startup	0	0	
 1	tui_wait_ready	0	1	crates/nvim/src/tui/tui.rs
 1	tzset	0	0	
 1	uname	0	0	
@@ -381,6 +380,7 @@ count	callee	no_raw	defs	def
 1	uv_tcp_getsockname	0	0	
 1	uv_thread_self	0	0	
 1	uv_timer_init	0	0	
+1	uv_tty_get_winsize	0	0	
 1	uv_tty_set_mode	0	0	
 1	uv_unref	0	0	
 1	uv_uptime	0	0	

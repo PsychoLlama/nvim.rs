@@ -681,7 +681,7 @@ unsafe fn handle_unknown_csi(input: *mut TermInput, key: &TermKeyKey) {
             (b't', _) if args.len() == 5 => {
                 if args[0] == REPORT_SIZE_IN_CELLS {
                     let (height, width) = (args[1], args[2]);
-                    tui_set_size((*input).tui_data, width, height);
+                    tui_set_size(&mut *(*input).tui_data, width, height);
                 }
             }
             (b'n', _) if args.len() == 1 => {
