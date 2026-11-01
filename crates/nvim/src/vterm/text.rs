@@ -66,12 +66,16 @@ pub(super) fn print(state: &mut StateCx<'_>, codepoints: &[u32]) {
         }
 
         let (width, schar) = state.grapheme_metrics(len);
-        if state.at_phantom != 0 || state.pos.col + width > state.cursor_row_width() {
+        // Nothing below changes the cursor row's width but the wrap, so it
+        // is read once per glyph and again only after wrapping.
+        let mut row_width = state.cursor_row_width();
+        if state.at_phantom != 0 || state.pos.col + width > row_width {
             state.linefeed();
             state.pos.col = 0;
             state.at_phantom = 0;
             let row = usize::try_from(state.pos.row).expect("a row is never negative");
             state.lineinfo_mut()[row].set_continuation(1);
+            row_width = state.cursor_row_width();
         }
 
         if state.mode.insert() != 0 && !recombine {
@@ -81,7 +85,7 @@ pub(super) fn print(state: &mut StateCx<'_>, codepoints: &[u32]) {
                 start_row: state.pos.row,
                 end_row: state.pos.row + 1,
                 start_col: state.pos.col,
-                end_col: state.cursor_row_width(),
+                end_col: row_width,
             };
             state.scroll(rect, 0, -1);
         }
@@ -102,7 +106,7 @@ pub(super) fn print(state: &mut StateCx<'_>, codepoints: &[u32]) {
             recombine = false;
         }
 
-        if state.pos.col + width >= state.cursor_row_width() {
+        if state.pos.col + width >= row_width {
             // Sit on the phantom column past the right edge, so that the wrap
             // only happens once something else is printed.
             if state.mode.autowrap() != 0 {

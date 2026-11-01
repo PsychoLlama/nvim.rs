@@ -134,11 +134,7 @@ impl VTermScreen {
         let mut new_row = new_rows - 1;
         {
             let old = OldBuffer {
-                cells: if bufidx == BUFIDX_PRIMARY {
-                    &self.owned.primary
-                } else {
-                    self.owned.altscreen.as_deref().unwrap_or_default()
-                },
+                cells: &self.owned.buffers[bufidx],
                 lineinfo: &lineinfos[bufidx],
                 rows: old_rows,
                 cols: old_cols,
@@ -288,11 +284,7 @@ impl VTermScreen {
             }
         }
 
-        if bufidx == BUFIDX_PRIMARY {
-            self.owned.primary = new.cells;
-        } else {
-            self.owned.altscreen = Some(new.cells);
-        }
+        self.owned.buffers[bufidx] = new.cells;
         lineinfos[bufidx] = new.lineinfo;
         if active {
             *pos = new_cursor;
@@ -342,7 +334,7 @@ impl VTermScreen {
         pos: &mut VTermPos,
         lineinfos: &mut [Vec<VTermLineInfo>; 2],
     ) -> c_int {
-        let has_altscreen = self.owned.altscreen.is_some();
+        let has_altscreen = self.owned.has_altscreen;
         let altscreen_active = self.altscreen_active();
         let (old_rows, old_cols) = (self.rows, self.cols);
 
@@ -361,7 +353,11 @@ impl VTermScreen {
             lineinfos[BUFIDX_ALTSCREEN] = vec![BLANK_LINEINFO; new_rows.max(0) as usize];
         }
 
-        self.owned.on_altscreen = altscreen_active;
+        self.owned.active = if altscreen_active {
+            BUFIDX_ALTSCREEN
+        } else {
+            BUFIDX_PRIMARY
+        };
         self.rows = new_rows;
         self.cols = new_cols;
         if new_cols <= old_cols {

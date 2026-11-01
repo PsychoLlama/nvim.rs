@@ -60,12 +60,14 @@ pub(crate) const ZERO_SCREEN_CELL: VTermScreenCell = VTermScreenCell {
 
 /// What a screen owns that C does not read.
 pub(crate) struct ScreenOwned {
-    /// The cells, row-major, `rows * cols` of them.
-    primary: Vec<ScreenCell>,
-    /// The alternate screen's cells, once enabled.
-    altscreen: Option<Vec<ScreenCell>>,
-    /// Whether the alternate screen is the one showing.
-    on_altscreen: bool,
+    /// The cells, row-major, `rows * cols` of them: the primary screen's at
+    /// [`BUFIDX_PRIMARY`], the alternate screen's at [`BUFIDX_ALTSCREEN`]
+    /// (empty until enabled).
+    buffers: [Vec<ScreenCell>; 2],
+    /// Whether the alternate screen has been enabled.
+    has_altscreen: bool,
+    /// Which of `buffers` is showing.
+    active: usize,
     /// One row of reported cells, carried to and from the host's scrollback.
     sb_buffer: Vec<VTermScreenCell>,
     pub(crate) host: Option<Box<dyn ScreenHost>>,
@@ -100,15 +102,15 @@ impl VTermScreen {
             global_reverse_reflow: [0; 1],
             _pad: [0; 3],
             owned: Box::new(ScreenOwned {
-                primary: Vec::new(),
-                altscreen: None,
-                on_altscreen: false,
+                buffers: [Vec::new(), Vec::new()],
+                has_altscreen: false,
+                active: BUFIDX_PRIMARY,
                 sb_buffer: Vec::new(),
                 host: None,
             }),
             pen: ZERO_CELL.pen,
         };
-        screen.owned.primary = new_buffer(screen.pen, rows, cols);
+        screen.owned.buffers[BUFIDX_PRIMARY] = new_buffer(screen.pen, rows, cols);
         screen.realloc_sb_buffer(cols);
         screen
     }
@@ -117,18 +119,12 @@ impl VTermScreen {
 
     /// The cells of the buffer showing.
     fn grid(&self) -> &[ScreenCell] {
-        match &self.owned.altscreen {
-            Some(altscreen) if self.owned.on_altscreen => altscreen,
-            _ => &self.owned.primary,
-        }
+        &self.owned.buffers[self.owned.active]
     }
 
     fn grid_mut(&mut self) -> &mut [ScreenCell] {
         let owned = &mut *self.owned;
-        match &mut owned.altscreen {
-            Some(altscreen) if owned.on_altscreen => altscreen,
-            _ => &mut owned.primary,
-        }
+        &mut owned.buffers[owned.active]
     }
 
     /// Where the cell at `row`/`col` is in a grid, or `None` outside it.
@@ -139,13 +135,7 @@ impl VTermScreen {
         Some((self.cols * row + col) as usize)
     }
 
-    /// The cell at `row`/`col`, or `None` outside the grid.
-    fn cell(&self, row: c_int, col: c_int) -> Option<&ScreenCell> {
-        let at = self.index(row, col)?;
-        self.grid().get(at)
-    }
-
-    /// [`VTermScreen::cell`], to write through.
+    /// The cell at `row`/`col`, to write through; `None` outside the grid.
     pub(crate) fn cell_mut(&mut self, row: c_int, col: c_int) -> Option<&mut ScreenCell> {
         let at = self.index(row, col)?;
         self.grid_mut().get_mut(at)
@@ -153,7 +143,7 @@ impl VTermScreen {
 
     /// Whether the buffer showing is the primary one.
     fn on_primary(&self) -> bool {
-        !self.owned.on_altscreen || self.owned.altscreen.is_none()
+        self.owned.active == BUFIDX_PRIMARY
     }
 
     // ------------------------------------------------- the host's callbacks
@@ -263,17 +253,27 @@ impl VTermScreen {
     /// Copies the screen's row `row` into the scrollback staging buffer and
     /// hands it over to the host.
     fn push_line(&mut self, row: c_int) {
-        let cols = self.cols;
-        for col in 0..cols {
-            let mut cell = self.owned.sb_buffer[col as usize];
-            self.export_cell(VTermPos { row, col }, &mut cell);
-            self.owned.sb_buffer[col as usize] = cell;
-        }
+        let cols = self.cols.max(0) as usize;
+        let reverse = self.global_reverse() != 0;
+        let start = self.index(row, 0);
         let ScreenOwned {
-            sb_buffer, host, ..
+            buffers,
+            active,
+            sb_buffer,
+            host,
+            ..
         } = &mut *self.owned;
+        let grid: &[ScreenCell] = &buffers[*active];
+        // A row outside the grid exports nothing, leaving the staging
+        // buffer as it was.
+        if let Some(start) = start {
+            let line = &grid[start..start + cols];
+            for (col, out) in sb_buffer[..cols].iter_mut().enumerate() {
+                export_at(line, col, reverse, out);
+            }
+        }
         if let Some(host) = host {
-            let _ = host.sb_pushline(&sb_buffer[..cols as usize]);
+            let _ = host.sb_pushline(&sb_buffer[..cols]);
         }
     }
 
@@ -320,21 +320,24 @@ impl VTermScreen {
         lines: &[VTermLineInfo],
     ) {
         let (fg, bg) = (self.pen.fg, self.pen.bg);
+        // The columns of `rect` that are inside the grid; the rows are
+        // checked one at a time below.
+        let (first, last) = (rect.start_col.max(0), rect.end_col.min(self.cols));
         let mut row = rect.start_row;
         while row < state_rows && row < rect.end_row {
             let info = lines[row as usize];
             let (dwl, dhl) = (info.doublewidth(), info.doubleheight());
-            for col in rect.start_col..rect.end_col {
-                let Some(cell) = self.cell_mut(row, col) else {
-                    continue;
-                };
-                if selective && cell.pen.protected_cell() != 0 {
-                    continue;
+            if let Some(start) = self.index(row, first).filter(|_| first < last) {
+                let width = (last - first) as usize;
+                for cell in &mut self.grid_mut()[start..start + width] {
+                    if selective && cell.pen.protected_cell() != 0 {
+                        continue;
+                    }
+                    cell.schar = 0;
+                    cell.pen = erased_pen(fg, bg);
+                    cell.pen.set_dwl(dwl);
+                    cell.pen.set_dhl(dhl);
                 }
-                cell.schar = 0;
-                cell.pen = erased_pen(fg, bg);
-                cell.pen.set_dwl(dwl);
-                cell.pen.set_dhl(dhl);
             }
             row += 1;
         }
@@ -345,20 +348,14 @@ impl VTermScreen {
     /// The reported form of the cell at `pos` into `out`. Returns 0 for a
     /// position outside the screen, leaving `out` alone.
     pub(crate) fn export_cell(&self, pos: VTermPos, out: &mut VTermScreenCell) -> c_int {
-        let Some(cell) = self.cell(pos.row, pos.col) else {
+        let Some(at) = self.index(pos.row, pos.col) else {
             return 0;
         };
-        // The gap behind a double-width glyph reports as empty.
-        out.schar = if cell.schar == SCHAR_CONTINUATION {
-            0
-        } else {
-            cell.schar
-        };
-        export_pen(&cell.pen, self.global_reverse() != 0, out);
-        let gap = self.cell(pos.row, pos.col + 1);
-        let followed_by_gap =
-            pos.col < self.cols - 1 && gap.is_some_and(|next| next.schar == SCHAR_CONTINUATION);
-        out.width = if followed_by_gap { 2 } else { 1 };
+        // The row runs to the end of the grid's row, so the cell after this
+        // one is in it exactly when it is on the same row.
+        let end = at + (self.cols - pos.col) as usize;
+        let line = &self.grid()[at..end];
+        export_at(line, 0, self.global_reverse() != 0, out);
         1
     }
 
@@ -370,8 +367,9 @@ impl VTermScreen {
     /// Allocates the alternate screen buffer, which the terminal starts
     /// without, at the terminal's size.
     pub(crate) fn enable_altscreen(&mut self, rows: c_int, cols: c_int) {
-        if self.owned.altscreen.is_none() {
-            self.owned.altscreen = Some(new_buffer(self.pen, rows, cols));
+        if !self.owned.has_altscreen {
+            self.owned.buffers[BUFIDX_ALTSCREEN] = new_buffer(self.pen, rows, cols);
+            self.owned.has_altscreen = true;
         }
     }
 
@@ -380,6 +378,54 @@ impl VTermScreen {
     fn realloc_sb_buffer(&mut self, cols: c_int) {
         self.owned.sb_buffer = vec![ZERO_SCREEN_CELL; cols.max(0) as usize];
     }
+}
+
+/// One row of the screen, to read cells out of in their reported form
+/// without finding the row again for each.
+pub(crate) struct ScreenRow<'a> {
+    line: &'a [ScreenCell],
+    global_reverse: bool,
+}
+
+impl ScreenRow<'_> {
+    /// The reported form of cell `col` into `out`; false, leaving `out`
+    /// alone, outside the row.
+    pub(crate) fn export(&self, col: c_int, out: &mut VTermScreenCell) -> bool {
+        match usize::try_from(col) {
+            Ok(col) if col < self.line.len() => {
+                export_at(self.line, col, self.global_reverse, out);
+                true
+            }
+            _ => false,
+        }
+    }
+}
+
+impl VTermScreen {
+    /// Row `row`, or `None` outside the grid.
+    pub(crate) fn row(&self, row: c_int) -> Option<ScreenRow<'_>> {
+        let start = self.index(row, 0)?;
+        Some(ScreenRow {
+            line: &self.grid()[start..start + self.cols as usize],
+            global_reverse: self.global_reverse() != 0,
+        })
+    }
+}
+
+/// The reported form of cell `col` of `line`, a whole row of the grid.
+fn export_at(line: &[ScreenCell], col: usize, global_reverse: bool, out: &mut VTermScreenCell) {
+    let cell = &line[col];
+    // The gap behind a double-width glyph reports as empty.
+    out.schar = if cell.schar == SCHAR_CONTINUATION {
+        0
+    } else {
+        cell.schar
+    };
+    export_pen(&cell.pen, global_reverse, out);
+    let followed_by_gap = line
+        .get(col + 1)
+        .is_some_and(|next| next.schar == SCHAR_CONTINUATION);
+    out.width = if followed_by_gap { 2 } else { 1 };
 }
 
 /// A freshly allocated, fully blanked cell grid.

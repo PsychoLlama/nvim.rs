@@ -114,11 +114,16 @@ pub(crate) fn fetch_row(mut term: Term, row: c_int, end_col: c_int) {
     }
     // Out of the terminal for the walk: reading a cell does not touch it.
     // The two arms are the same walk, specialised: which half of
-    // `fetch_cell` runs is decided once per row rather than once per cell.
+    // `fetch_cell` runs is decided once per row rather than once per cell,
+    // and a screen row is found once rather than for each of its cells.
     let mut text = core::mem::take(&mut term.textbuf);
     let line_len = if row >= 0 {
+        let screen = term.vt.screen_row(row);
         render_row(&mut text, end_col, |col, cell| {
-            fetch_cell(term, row, col, cell)
+            if let Some(screen) = &screen {
+                screen.export(col, cell);
+            }
+            true
         })
     } else {
         render_row(&mut text, end_col, |col, cell| {

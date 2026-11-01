@@ -98,10 +98,14 @@ impl VTermScreen {
         match prop {
             VTERM_PROP_ALTSCREEN => {
                 let want_altscreen = boolean != 0;
-                if want_altscreen && self.owned.altscreen.is_none() {
+                if want_altscreen && !self.owned.has_altscreen {
                     return 0;
                 }
-                self.owned.on_altscreen = want_altscreen;
+                self.owned.active = if want_altscreen {
+                    super::BUFIDX_ALTSCREEN
+                } else {
+                    super::BUFIDX_PRIMARY
+                };
                 // Only on disable: enabling is followed by an erase, which
                 // reports the damage anyway.
                 if !want_altscreen {
@@ -193,6 +197,6 @@ impl VTermScreen {
 
     /// Which buffer a resize treats as the one holding the cursor.
     pub(super) fn altscreen_active(&self) -> bool {
-        self.owned.altscreen.is_some() && self.owned.on_altscreen
+        self.owned.has_altscreen && self.owned.active == super::BUFIDX_ALTSCREEN
     }
 }

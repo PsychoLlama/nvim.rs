@@ -2,7 +2,8 @@
 //!
 //! The scroll region, the width of a row and the tab stops all come from
 //! plain fields of the state plus the line marks, so all of it is arithmetic
-//! over [`VTermState`] and none of it touches the consumer's callbacks.
+//! over [`VTermState`] -- except a linefeed on the last line of the region,
+//! which scrolls it, and so is a [`StateCx`] method.
 //!
 //! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
 //! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.

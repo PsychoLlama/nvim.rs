@@ -32,6 +32,7 @@ use crate::vterm::mode;
 use crate::vterm::output::EscapeSeq;
 use crate::vterm::parser;
 use crate::vterm::pen::{convert_color_to_rgb, set_palette_color};
+use crate::vterm::screen::ScreenRow;
 use crate::vterm::state::StateCx;
 
 /// How much of the screen a single damaged cell is reported as.
@@ -492,6 +493,12 @@ impl VTerm {
             .screen
             .as_deref()
             .is_some_and(|screen| screen.export_cell(pos, out) != 0)
+    }
+
+    /// Row `row` of the screen, to read cells out of; `None` outside it or
+    /// before there is a screen.
+    pub(crate) fn screen_row(&self, row: c_int) -> Option<ScreenRow<'_>> {
+        self.inner.screen.as_deref()?.row(row)
     }
 
     /// Repaints one of the sixteen ANSI palette slots.
