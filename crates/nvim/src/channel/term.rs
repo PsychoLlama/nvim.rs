@@ -19,16 +19,13 @@ use crate::log::{LOGLVL_INF, logmsg};
 use crate::terminal::{terminal_alloc, terminal_destroy};
 use crate::types::{ChannelStream, JobProc, TerminalOptions, uint16_t, uint64_t};
 use crate::winlayer::Buf;
+use core::pin::Pin;
 
 use super::{ChannelRef, channel_decref, with_channel};
 
 /// Run `f` on job channel `id`'s child, if it is still a registered job.
-fn with_job<R>(id: uint64_t, f: impl FnOnce(&mut JobProc) -> R) -> Option<R> {
-    with_channel(id, |channel| match &mut channel.stream {
-        ChannelStream::Job(job) => Some(f(job)),
-        _ => None,
-    })
-    .flatten()
+fn with_job<R>(id: uint64_t, f: impl FnOnce(Pin<&mut JobProc>) -> R) -> Option<R> {
+    with_channel(id, |channel| channel.stream_mut().job().map(f)).flatten()
 }
 
 /// Gives `buffer` a terminal driven by pty job channel `id`.
@@ -67,7 +64,7 @@ fn term_read_pause(pause: bool, id: uint64_t) {
 /// The user typed into the terminal; forward it to the child.
 fn term_write(bytes: &[u8], id: uint64_t) {
     let written = with_job(id, |job| {
-        let stdin = &mut job.proc_mut().in_0;
+        let stdin = job.stdin();
         if stdin.closed {
             return false;
         }
@@ -95,7 +92,7 @@ fn term_resume(id: uint64_t) {
 /// The terminal window went away: stop the child and wait for its streams.
 fn term_close(id: uint64_t) {
     with_channel(id, |channel| {
-        if let ChannelStream::Job(job) = &mut channel.stream {
+        if let Some(job) = channel.stream_mut().job() {
             job.stop();
         }
         put_id_event(&channel.events, term_delayed_free, id, 0);
@@ -108,7 +105,7 @@ fn term_close(id: uint64_t) {
 /// those requests hold buffers the terminal owns.
 fn term_delayed_free(id: uint64_t, _: u64) {
     let Some(term) = with_channel(id, |channel| {
-        if let ChannelStream::Job(job) = &channel.stream
+        if let ChannelStream::Job(job) = channel.stream()
             && job.has_pending_requests()
         {
             put_id_event(&channel.events, term_delayed_free, id, 0);

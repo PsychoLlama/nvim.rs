@@ -103,7 +103,11 @@ pub struct proc {
 pub type proc_exit_cb =
     Option<unsafe fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
 pub type proc_state_cb = Option<unsafe fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> ()>;
-#[derive(Copy, Clone)]
+/// A stream's reading half.
+///
+/// Not `Copy` and not `Unpin` (its [`stream`] is neither): libuv keeps the
+/// address of the handle inside, so a registered one must not move or be
+/// duplicated.
 #[repr(C)]
 pub struct rstream {
     pub s: Stream,
@@ -158,7 +162,13 @@ pub struct socket_watcher_uv_tcp {
     pub handle: uv_tcp_t,
     pub addrinfo: *mut addrinfo,
 }
-#[derive(Copy, Clone)]
+/// A stream: a libuv pipe, TTY, TCP or idle handle, and what reads and
+/// writes it.
+///
+/// Not `Copy`, and not `Unpin`: libuv keeps the address of `uv` from the
+/// moment the stream is opened until its close callback, so a registered
+/// stream must not move or be duplicated. The transports that hold one are
+/// reached through `Pin` everywhere outside `event/`.
 #[repr(C)]
 pub struct stream {
     pub closed: bool,
@@ -177,6 +187,7 @@ pub struct stream {
     pub write_cb: stream_write_cb,
     pub curmem: size_t,
     pub maxmem: size_t,
+    pub _pinned: ::core::marker::PhantomPinned,
 }
 pub type stream_close_cb = Option<unsafe fn(*mut Stream, *mut ::core::ffi::c_void) -> ()>;
 pub type stream_read_cb = Option<

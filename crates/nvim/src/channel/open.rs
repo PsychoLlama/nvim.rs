@@ -205,7 +205,7 @@ pub fn channel_job_start(opts: JobOptions<'_>) -> Result<uint64_t, VarNumber> {
     if let Err(status) = spawn_job(id, spec) {
         let (why, cmd) = (msg_cstr(os_strerror(status)), msg_cstr(&cmd));
         semsg!("E903: Process failed to start: {why}: \"{cmd}\"");
-        let status = with_channel(id, |channel| match &channel.stream {
+        let status = with_channel(id, |channel| match channel.stream() {
             ChannelStream::Job(job) => VarNumber::from(job.proc().status),
             _ => VarNumber::from(status),
         })

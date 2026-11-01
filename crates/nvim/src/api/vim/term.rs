@@ -88,7 +88,7 @@ fn term_read_pause(_pause: bool, _owner: uint64_t) {}
 /// The user typed into the terminal: hand it to the `on_input` callback.
 fn term_write(bytes: &[u8], id: uint64_t) {
     let Some((cb, term)) = with_channel(id, |channel| {
-        let cb = match &channel.stream {
+        let cb = match channel.stream() {
             ChannelStream::Internal(internal) => internal.cb,
             _ => LUA_NOREF,
         };
@@ -120,9 +120,9 @@ fn term_close(id: uint64_t) {
     {
         with_channel(id, |channel| channel.term = None);
     }
-    let cb = with_channel(id, |channel| match &mut channel.stream {
-        ChannelStream::Internal(internal) => core::mem::replace(&mut internal.cb, LUA_NOREF),
-        _ => LUA_NOREF,
+    let cb = with_channel(id, |channel| match channel.stream_mut().internal() {
+        Some(internal) => core::mem::replace(&mut internal.cb, LUA_NOREF),
+        None => LUA_NOREF,
     });
     if let Some(cb) = cb {
         release_luaref(cb);

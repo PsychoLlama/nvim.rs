@@ -45,6 +45,7 @@ count	callee	no_raw	defs	def
 4	uv_dlclose	0	0	
 4	uv_timer_start	0	0	
 4	xmemdupz	0	1	crates/nvim/src/memory/mod.rs
+3	.get_unchecked_mut	0	0	
 3	.next_arg::<::core::ffi::c_int>	0	0	
 3	Live::new	0	1	crates/nvim/src/winlayer/live.rs
 3	Stack::above_top	0	1	crates/nvim/src/lua/stack/mod.rs
@@ -74,6 +75,7 @@ count	callee	no_raw	defs	def
 2	.bit_copy	1	1	crates/nvim/src/eval/typval/handle.rs
 2	.copy_from	0	0	
 2	.copy_from_nonoverlapping	0	0	
+2	.map_unchecked_mut	0	0	
 2	.next_arg::<::core::ffi::c_long>	0	0	
 2	.read	0	0	
 2	.write	0	0	

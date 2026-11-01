@@ -32,6 +32,7 @@
 )]
 
 use core::ffi::{CStr, c_char, c_int, c_void};
+use core::pin::Pin;
 use core::ptr;
 
 use crate::channel::with_channel;
@@ -56,7 +57,10 @@ use crate::os::pty_proc_unix::{
 };
 use crate::os::system::argv_into_raw;
 use crate::shell::Argv;
-use crate::types::{Channel, ChannelStream, JobProc, Proc, RStream, StdioPair, Stream, size_t};
+use crate::types::{
+    Channel, ChannelStream, InternalState, JobProc, Proc, PtyProc, RStream, StderrState, StdioPair,
+    Stream, size_t,
+};
 
 /// The `data` word a channel's handles carry: its id, not its address.
 pub(crate) fn owner_data(id: u64) -> *mut c_void {
@@ -82,8 +86,8 @@ fn with<R>(id: u64, f: impl FnOnce(&mut Channel) -> R) -> R {
 /// provenance of the whole `LibuvProc`/`PtyProc` the process layer casts it
 /// back to.
 fn job_proc(id: u64) -> *mut Proc {
-    with(id, |channel| match &mut channel.stream {
-        ChannelStream::Job(job) => job.proc_ptr(),
+    with(id, |channel| match channel.stream_mut().project() {
+        TransportMut::Job(job) => job.proc_ptr(),
         _ => unreachable!("channel {id} is not a job"),
     })
 }
@@ -92,18 +96,98 @@ fn job_proc(id: u64) -> *mut Proc {
 // The transport, borrowed
 // ---------------------------------------------------------------------------
 
+/// A channel's transport lent for one step: every part libuv holds by
+/// address stays pinned, and only the two without a handle are plain
+/// references.
+pub(crate) enum TransportMut<'a> {
+    Job(Pin<&'a mut JobProc>),
+    Socket(Pin<&'a mut RStream>),
+    /// This process's stdin, then its stdout.
+    Stdio(Pin<&'a mut RStream>, Pin<&'a mut Stream>),
+    Stderr(&'a mut StderrState),
+    Internal(&'a mut InternalState),
+}
+
+impl ChannelStream {
+    /// The transport, each part as [`TransportMut`] lends it. The one place
+    /// a pinned transport is opened up.
+    pub(crate) fn project(self: Pin<&mut Self>) -> TransportMut<'_> {
+        // SAFETY: structural pinning. The payload stays in the box the
+        // channel pinned it in: a part holding a libuv handle is lent pinned
+        // again, and the two without one (`StderrState`, `InternalState`)
+        // hold no address anybody keeps, so moving them is harmless.
+        unsafe {
+            match self.get_unchecked_mut() {
+                ChannelStream::Job(job) => TransportMut::Job(Pin::new_unchecked(job)),
+                ChannelStream::Socket(socket) => TransportMut::Socket(Pin::new_unchecked(socket)),
+                ChannelStream::Stdio(stdio) => TransportMut::Stdio(
+                    Pin::new_unchecked(&mut stdio.in_0),
+                    Pin::new_unchecked(&mut stdio.out),
+                ),
+                ChannelStream::Stderr(err) => TransportMut::Stderr(err),
+                ChannelStream::Internal(internal) => TransportMut::Internal(internal),
+            }
+        }
+    }
+
+    /// The child, for a job channel.
+    pub(crate) fn job(self: Pin<&mut Self>) -> Option<Pin<&mut JobProc>> {
+        match self.project() {
+            TransportMut::Job(job) => Some(job),
+            _ => None,
+        }
+    }
+
+    /// The `nvim_open_term()` state, for an internal channel.
+    pub(crate) fn internal(self: Pin<&mut Self>) -> Option<&mut InternalState> {
+        match self.project() {
+            TransportMut::Internal(internal) => Some(internal),
+            _ => None,
+        }
+    }
+
+    /// The stream this transport writes to: a job's stdin, a socket, this
+    /// process's stdout.
+    pub(crate) fn write_stream(self: Pin<&mut Self>) -> Option<Pin<&mut Stream>> {
+        match self.project() {
+            TransportMut::Job(job) => Some(job.stdin()),
+            TransportMut::Socket(socket) => Some(socket.writer()),
+            TransportMut::Stdio(_, out) => Some(out),
+            TransportMut::Stderr(_) | TransportMut::Internal(_) => None,
+        }
+    }
+}
+
 impl JobProc {
     /// The child as the process layer takes it, derived from the whole
     /// variant so that a cast back to `LibuvProc`/`PtyProc` stays in bounds.
-    fn proc_ptr(&mut self) -> *mut Proc {
-        match self {
+    fn proc_ptr(self: Pin<&mut Self>) -> *mut Proc {
+        // SAFETY: only an address is taken; nothing is moved.
+        match unsafe { self.get_unchecked_mut() } {
             JobProc::Uv(uv) => (&raw mut *uv).cast(),
             JobProc::Pty(pty) => (&raw mut *pty).cast(),
         }
     }
 
-    /// The child's `Proc`, mutably.
-    pub(crate) fn proc_mut(&mut self) -> &mut Proc {
+    /// The pty half, for a job started behind one. Its fields are plain
+    /// data; the master descriptor is closed only through this module.
+    fn pty_ptr(self: Pin<&mut Self>) -> Option<*mut PtyProc> {
+        // SAFETY: as above.
+        match unsafe { self.get_unchecked_mut() } {
+            JobProc::Pty(pty) => Some(&raw mut *pty),
+            JobProc::Uv(_) => None,
+        }
+    }
+
+    /// The child's stdin, pinned with the child.
+    pub(crate) fn stdin(self: Pin<&mut Self>) -> Pin<&mut Stream> {
+        // SAFETY: structural pinning: a field of the pinned child, lent
+        // pinned.
+        unsafe { self.map_unchecked_mut(|job| &mut job.proc_mut().in_0) }
+    }
+
+    /// The child's `Proc`, mutably. Private: its streams are pinned.
+    fn proc_mut(&mut self) -> &mut Proc {
         match self {
             JobProc::Uv(uv) => &mut uv.proc,
             JobProc::Pty(pty) => &mut pty.proc,
@@ -111,14 +195,14 @@ impl JobProc {
     }
 
     /// Ask the child to terminate, and arm the kill timer.
-    pub(crate) fn stop(&mut self) {
+    pub(crate) fn stop(self: Pin<&mut Self>) {
         // SAFETY: a spawned child at its fixed address; stopping registers
         // nothing new.
         unsafe { proc_stop(self.proc_ptr()) };
     }
 
     /// Release the argument vector the child was started with.
-    pub(crate) fn free_argv(&mut self) {
+    pub(crate) fn free_argv(self: Pin<&mut Self>) {
         // SAFETY: as above; the vector is the child's own.
         unsafe { proc_free(self.proc_ptr()) };
     }
@@ -143,38 +227,41 @@ impl JobProc {
     }
 
     /// Close the requested halves of the child's pipes.
-    pub(crate) fn close_streams(&mut self, stdin: bool, stdout: bool, stderr: bool) {
-        let proc = self.proc_mut();
-        if stdin {
-            proc.in_0.close();
-        }
-        if stdout {
-            proc.out.close();
-        }
-        if stderr {
-            proc.err.close();
+    pub(crate) fn close_streams(self: Pin<&mut Self>, stdin: bool, stdout: bool, stderr: bool) {
+        let proc = self.proc_ptr();
+        // SAFETY: the child's own streams, at their fixed addresses.
+        unsafe {
+            if stdin {
+                stream_may_close(&raw mut (*proc).in_0);
+            }
+            if stdout {
+                rstream_may_close(&raw mut (*proc).out);
+            }
+            if stderr {
+                rstream_may_close(&raw mut (*proc).err);
+            }
         }
     }
 
     /// Close a pty child's master, which sends it SIGHUP.
-    pub(crate) fn close_master(&mut self) {
-        if let JobProc::Pty(pty) = self {
+    pub(crate) fn close_master(self: Pin<&mut Self>) {
+        if let Some(pty) = self.pty_ptr() {
             // SAFETY: the child's own pty.
             unsafe { pty_proc_close_master(pty) };
         }
     }
 
     /// Tell a pty child its terminal changed size.
-    pub(crate) fn resize(&mut self, width: u16, height: u16) {
-        if let JobProc::Pty(pty) = self {
+    pub(crate) fn resize(self: Pin<&mut Self>, width: u16, height: u16) {
+        if let Some(pty) = self.pty_ptr() {
             // SAFETY: the child's own pty.
             unsafe { pty_proc_resize(pty, width, height) };
         }
     }
 
     /// Resume a suspended pty child.
-    pub(crate) fn resume(&mut self) {
-        if let JobProc::Pty(pty) = self {
+    pub(crate) fn resume(self: Pin<&mut Self>) {
+        if let Some(pty) = self.pty_ptr() {
             // SAFETY: the child's own pty.
             unsafe { pty_proc_resume(pty) };
         }
@@ -182,10 +269,8 @@ impl JobProc {
 
     /// The path of a pty child's side of the pty, copied out of libc's
     /// buffer.
-    pub(crate) fn tty_name(&mut self) -> Option<std::ffi::CString> {
-        let JobProc::Pty(pty) = self else {
-            return None;
-        };
+    pub(crate) fn tty_name(self: Pin<&mut Self>) -> Option<std::ffi::CString> {
+        let pty = self.pty_ptr()?;
         // SAFETY: the child's own pty; `ptsname` answers null or libc's
         // NUL-terminated buffer, copied before anything else can call it.
         let name = unsafe { pty_proc_tty_name(pty) };
@@ -194,9 +279,13 @@ impl JobProc {
 
     /// Stop or restart reading the child's output, without changing whether
     /// it wants reads: the terminal's back-pressure.
-    pub(crate) fn pause_output(&mut self, pause: bool) {
-        let out = &mut self.proc_mut().out;
-        if out.s.closed {
+    pub(crate) fn pause_output(self: Pin<&mut Self>, pause: bool) {
+        let proc = self.proc_ptr();
+        // SAFETY: the child's own output stream, started by the spawn, at
+        // its fixed address.
+        let out = unsafe { &raw mut (*proc).out };
+        // SAFETY: as above.
+        if unsafe { (*out).s.closed } {
             return;
         }
         let action = if pause {
@@ -204,7 +293,7 @@ impl JobProc {
         } else {
             rstream_start_inner
         };
-        // SAFETY: the child's own output stream, started by the spawn.
+        // SAFETY: as above.
         unsafe { action(out) };
     }
 
@@ -217,22 +306,28 @@ impl JobProc {
 
 impl RStream {
     /// Mark the stream closed; its handle closes once nothing is in flight.
-    pub(crate) fn close(&mut self) {
+    pub(crate) fn close(self: Pin<&mut Self>) {
         // SAFETY: a stream this module initialised, at its fixed address.
-        unsafe { rstream_may_close(self) };
+        unsafe { rstream_may_close(self.get_unchecked_mut()) };
+    }
+
+    /// The common half, which a socket also writes through.
+    fn writer(self: Pin<&mut Self>) -> Pin<&mut Stream> {
+        // SAFETY: structural pinning: a field of the pinned stream.
+        unsafe { self.map_unchecked_mut(|stream| &mut stream.s) }
     }
 }
 
 impl Stream {
     /// Mark the stream closed; its handle closes once nothing is in flight.
-    pub(crate) fn close(&mut self) {
+    pub(crate) fn close(self: Pin<&mut Self>) {
         // SAFETY: a stream this module initialised, at its fixed address.
-        unsafe { stream_may_close(self) };
+        unsafe { stream_may_close(self.get_unchecked_mut()) };
     }
 
     /// Queue `bytes` for writing, handing their block to the write queue;
     /// whether libuv took it.
-    pub(crate) fn write_owned(&mut self, bytes: Vec<u8>) -> bool {
+    pub(crate) fn write_owned(self: Pin<&mut Self>, bytes: Vec<u8>) -> bool {
         if bytes.capacity() == 0 {
             // No block to hand over (a dangling `Vec` pointer is not one).
             return self.write_bytes(&bytes);
@@ -242,20 +337,20 @@ impl Stream {
         // The global allocator is `malloc`, so the vector's block is one the
         // buffer's `xfree` finalizer releases.
         let buffer = wstream_new_buffer(block.cast::<c_char>(), len, 1, Some(xfree));
-        // SAFETY: a write stream this module initialised, and a buffer whose
-        // one reference the write takes over.
-        unsafe { wstream_write(self, buffer) == 0 }
+        // SAFETY: a write stream this module initialised, at its fixed
+        // address, and a buffer whose one reference the write takes over.
+        unsafe { wstream_write(self.get_unchecked_mut(), buffer) == 0 }
     }
 
     /// Queue a copy of `bytes` for writing; whether libuv took it.
-    pub(crate) fn write_bytes(&mut self, bytes: &[u8]) -> bool {
+    pub(crate) fn write_bytes(self: Pin<&mut Self>, bytes: &[u8]) -> bool {
         // SAFETY: the caller's readable bytes, copied into a block the
         // buffer's finalizer frees.
         let copy = unsafe { xmemdup(bytes.as_ptr().cast(), bytes.len()) };
         let buffer = wstream_new_buffer(copy.cast::<c_char>(), bytes.len(), 1, Some(xfree));
-        // SAFETY: a write stream this module initialised, and a buffer whose
-        // one reference the write takes over.
-        unsafe { wstream_write(self, buffer) == 0 }
+        // SAFETY: a write stream this module initialised, at its fixed
+        // address, and a buffer whose one reference the write takes over.
+        unsafe { wstream_write(self.get_unchecked_mut(), buffer) == 0 }
     }
 }
 
@@ -282,35 +377,33 @@ pub(crate) struct JobSpawn<'a> {
 pub(crate) fn spawn_job(id: u64, spec: JobSpawn<'_>) -> Result<(), c_int> {
     let proc = with(id, |channel| {
         let events = channel.events.as_ptr();
-        let ChannelStream::Job(job) = &mut channel.stream else {
-            unreachable!("channel {id} is not a job")
-        };
-        let proc = job.proc_mut();
-        proc.argv = argv_into_raw(spec.argv);
-        proc.exepath = spec.exepath.map_or(ptr::null(), CStr::as_ptr);
-        proc.cwd = spec.cwd.map_or(ptr::null(), CStr::as_ptr);
-        proc.env = spec.env.map_or(ptr::null_mut(), DictRef::into_raw);
-        proc.cb = Some(job_exit_shim);
-        proc.state_cb = Some(job_state_shim);
-        proc.events = events;
-        proc.detach = spec.detach;
-        proc.overlapped = spec.overlapped;
-        proc.fwd_err = spec.fwd_err;
-        job.proc_ptr()
+        let job = channel.stream_mut().job();
+        let proc = job.expect("the channel is a job").proc_ptr();
+        // SAFETY: the unspawned child at its fixed address, lent for its
+        // plain fields only: no stream is moved or replaced.
+        let fields = unsafe { &mut *proc };
+        fields.argv = argv_into_raw(spec.argv);
+        fields.exepath = spec.exepath.map_or(ptr::null(), CStr::as_ptr);
+        fields.cwd = spec.cwd.map_or(ptr::null(), CStr::as_ptr);
+        fields.env = spec.env.map_or(ptr::null_mut(), DictRef::into_raw);
+        fields.cb = Some(job_exit_shim);
+        fields.state_cb = Some(job_state_shim);
+        fields.events = events;
+        fields.detach = spec.detach;
+        fields.overlapped = spec.overlapped;
+        fields.fwd_err = spec.fwd_err;
+        proc
     });
     // SAFETY: the job's child, at its fixed address and unspawned; the
     // strings outlive the spawn, which is the only reader of `exepath` and
     // `cwd`.
     let status = unsafe { proc_spawn(proc, spec.has_in, spec.has_out, spec.has_err) };
-    let env = with(id, |channel| {
-        let ChannelStream::Job(job) = &mut channel.stream else {
-            unreachable!("channel {id} is not a job")
-        };
-        let proc = job.proc_mut();
-        proc.exepath = ptr::null();
-        proc.cwd = ptr::null();
-        core::mem::replace(&mut proc.env, ptr::null_mut())
-    });
+    // SAFETY: the child, still at its fixed address (the caller's reference
+    // keeps the channel), lent for its plain fields only.
+    let fields = unsafe { &mut *proc };
+    fields.exepath = ptr::null();
+    fields.cwd = ptr::null();
+    let env = core::mem::replace(&mut fields.env, ptr::null_mut());
     // The environment was only for the spawn.
     // SAFETY: the reference `into_raw` gave the child, taken back once.
     drop(unsafe { DictRef::owning(env) });
@@ -345,12 +438,14 @@ pub(crate) fn init_job_streams(id: u64, has_in: bool, has_out: bool) {
 
 /// Start delivering channel `id`'s reads to `reads`.
 pub(crate) fn start_reads(id: u64, reads: Reads) {
-    let (stream, init) = with(id, |channel| match (&mut channel.stream, reads) {
-        (ChannelStream::Job(job), Reads::Stderr) => (&raw mut job.proc_mut().err, true),
-        (ChannelStream::Job(job), _) => (&raw mut job.proc_mut().out, false),
-        (ChannelStream::Socket(socket), _) => (&raw mut *socket, false),
-        (ChannelStream::Stdio(stdio), _) => (&raw mut stdio.in_0, false),
-        _ => unreachable!("channel {id} has nothing to read"),
+    let (stream, init) = with(id, |channel| {
+        match (channel.stream_mut().project(), reads) {
+            (TransportMut::Job(job), Reads::Stderr) => (job_output(job, true), true),
+            (TransportMut::Job(job), _) => (job_output(job, false), false),
+            (TransportMut::Socket(socket), _) => (address(socket), false),
+            (TransportMut::Stdio(stdin, _), _) => (address(stdin), false),
+            _ => unreachable!("channel {id} has nothing to read"),
+        }
     });
     let shim: unsafe fn(*mut RStream, *const c_char, size_t, *mut c_void, bool) -> size_t =
         match reads {
@@ -408,21 +503,43 @@ pub(crate) fn accept_socket(
 /// Channel `id`'s write and read streams' addresses, for the log line
 /// that names them; never dereferenced.
 pub(crate) fn stream_addresses(id: u64) -> (*mut c_void, *mut c_void) {
-    with(id, |channel| match &mut channel.stream {
-        ChannelStream::Job(job) => {
-            let proc = job.proc_mut();
-            ((&raw mut proc.in_0).cast(), (&raw mut proc.out).cast())
+    with(id, |channel| match channel.stream_mut().project() {
+        TransportMut::Job(mut job) => {
+            let output = job_output(job.as_mut(), false);
+            (address(job.stdin()).cast(), output.cast())
         }
-        ChannelStream::Socket(socket) => ((&raw mut socket.s).cast(), (&raw mut *socket).cast()),
-        ChannelStream::Stdio(stdio) => ((&raw mut stdio.out).cast(), (&raw mut stdio.in_0).cast()),
+        TransportMut::Socket(socket) => {
+            let socket = address(socket);
+            (socket.cast(), socket.cast())
+        }
+        TransportMut::Stdio(stdin, stdout) => (address(stdout).cast(), address(stdin).cast()),
         _ => (ptr::null_mut(), ptr::null_mut()),
     })
 }
 
+/// The address of a pinned part, for a libuv registration or a log line.
+fn address<T>(pinned: Pin<&mut T>) -> *mut T {
+    // SAFETY: only the address is taken; nothing is moved.
+    unsafe { pinned.get_unchecked_mut() }
+}
+
+/// A job's stdout, or its stderr, at its fixed address.
+fn job_output(job: Pin<&mut JobProc>, stderr: bool) -> *mut RStream {
+    let proc = job.proc_ptr();
+    if stderr {
+        // SAFETY: a field of the child at its fixed address; only the
+        // address is taken.
+        unsafe { &raw mut (*proc).err }
+    } else {
+        // SAFETY: as above.
+        unsafe { &raw mut (*proc).out }
+    }
+}
+
 /// Socket channel `id`'s stream, at its fixed address.
 fn socket_stream(id: u64) -> *mut RStream {
-    with(id, |channel| match &mut channel.stream {
-        ChannelStream::Socket(socket) => &raw mut *socket,
+    with(id, |channel| match channel.stream_mut().project() {
+        TransportMut::Socket(socket) => address(socket),
         _ => unreachable!("channel {id} is not a socket"),
     })
 }
@@ -430,14 +547,13 @@ fn socket_stream(id: u64) -> *mut RStream {
 /// Make socket channel `id` the owner of its connected stream: closing the
 /// stream drops the channel's reference, and both halves get their buffers.
 pub(crate) fn attach_socket(id: u64) {
-    with(id, |channel| {
-        if let ChannelStream::Socket(socket) = &mut channel.stream {
-            socket.s.internal_close_cb = Some(stream_close_shim);
-            socket.s.internal_data = owner_data(id);
-        }
-    });
     let socket = socket_stream(id);
-    // SAFETY: the socket channel's connected stream, at its fixed address.
+    // SAFETY: the socket channel's connected stream, at its fixed address,
+    // lent for its two hook fields.
+    let hooks = unsafe { &mut (*socket).s };
+    hooks.internal_close_cb = Some(stream_close_shim);
+    hooks.internal_data = owner_data(id);
+    // SAFETY: as above.
     unsafe { wstream_init(&raw mut (*socket).s, 0) };
     // SAFETY: as above.
     unsafe { rstream_init(socket) };
@@ -445,8 +561,8 @@ pub(crate) fn attach_socket(id: u64) {
 
 /// Open stdio channel `id`'s two streams over `stdin_fd` and `stdout_fd`.
 pub(crate) fn open_stdio(id: u64, stdin_fd: c_int, stdout_fd: c_int) {
-    let (stdin, stdout) = with(id, |channel| match &mut channel.stream {
-        ChannelStream::Stdio(stdio) => (&raw mut stdio.in_0, &raw mut stdio.out),
+    let (stdin, stdout) = with(id, |channel| match channel.stream_mut().project() {
+        TransportMut::Stdio(stdin, stdout) => (address(stdin), address(stdout)),
         _ => unreachable!("channel {id} is not stdio"),
     });
     // SAFETY: the stdio channel's streams, at their fixed address, over two
@@ -476,14 +592,10 @@ pub(crate) fn unopened_stdio() -> StdioPair {
 /// borrows the channel for the step anyway, and a lookup per message is its
 /// hot path's cost. libuv runs no callback from inside the write.
 pub(crate) fn write_shared(channel: &mut Channel, buffer: SharedBuffer) -> c_int {
-    let stream = match &mut channel.stream {
-        ChannelStream::Job(job) => &raw mut job.proc_mut().in_0,
-        ChannelStream::Socket(socket) => &raw mut socket.s,
-        ChannelStream::Stdio(stdio) => &raw mut stdio.out,
-        _ => unreachable!("the channel has no write stream"),
-    };
-    // SAFETY: the channel's write stream, at its fixed address in the boxed
-    // channel and initialised, and a reference to the buffer the write
+    let stream = channel.stream_mut().write_stream();
+    let stream = address(stream.expect("the channel has a write stream"));
+    // SAFETY: the channel's write stream, at its fixed address in the pinned
+    // transport and initialised, and a reference to the buffer the write
     // takes over.
     unsafe { wstream_write(stream, buffer.into_raw()) }
 }

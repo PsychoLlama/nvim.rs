@@ -12,6 +12,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use core::ffi::CStr;
+use core::pin::Pin;
 
 pub use crate::msgpack_rpc::channel::call_stack::CallStack;
 
@@ -64,13 +65,15 @@ impl Default for CallbackReader {
 }
 
 /// A channel: a numbered connection over one of five transports, owned by
-/// the channel table (`channel::channels`) at a fixed address.
+/// the channel table (`channel::channels`).
 ///
 /// The transport is registered with libuv *by address* -- its handles'
-/// `data` fields point into it -- which is why the table boxes every
-/// channel and nothing moves one out of its box: `event/channel.rs` is the
-/// one module that hands those addresses to libuv, and it reaches the
-/// transport by the channel's id.
+/// `data` fields point into it -- so it lives in a pinned box of its own,
+/// private to this type: outside `event/` it is read through
+/// [`Channel::stream`] and changed only through the methods
+/// `event/channel.rs` defines on [`Pin<&mut ChannelStream>`](Pin), which is
+/// the one module that hands those addresses to libuv. Nothing else can move
+/// a transport out of its box or swap two of them.
 pub struct Channel {
     pub id: uint64_t,
     /// Who still stands on the channel: its transport's open handles, queued
@@ -78,7 +81,7 @@ pub struct Channel {
     pub refcount: RefcountSize,
     /// The channel's own event queue, a child of the main loop's.
     pub(crate) events: crate::event::multiqueue::ChildQueue,
-    pub stream: ChannelStream,
+    stream: Pin<Box<ChannelStream>>,
     pub is_rpc: bool,
     pub detach: bool,
     pub rpc: RpcState,
@@ -93,16 +96,59 @@ pub struct Channel {
 }
 
 impl Channel {
+    /// A channel over `stream`, with one reference (the caller's), no RPC
+    /// state and no callbacks.
+    pub(crate) fn new(
+        id: uint64_t,
+        events: crate::event::multiqueue::ChildQueue,
+        stream: ChannelStream,
+    ) -> Self {
+        Self {
+            id,
+            refcount: RefcountSize::ONE,
+            events,
+            stream: Box::pin(stream),
+            is_rpc: false,
+            detach: false,
+            rpc: RpcState {
+                closed: false,
+                unpacker: None,
+                next_request_id: 0,
+                call_stack: CallStack::new(),
+                info: ApiDict::EMPTY,
+                client_type: 0,
+            },
+            term: None,
+            on_data: CallbackReader::none(),
+            on_stderr: CallbackReader::none(),
+            on_exit: Callback::None,
+            exit_status: -1,
+            callback_busy: false,
+            callback_scheduled: false,
+        }
+    }
+
     /// Which of the five transports this is, as the C enum numbers them.
     pub fn streamtype(&self) -> ChannelStreamType {
         self.stream.kind()
+    }
+
+    /// The transport, to read.
+    pub fn stream(&self) -> &ChannelStream {
+        &self.stream
+    }
+
+    /// The transport, to change through `event/channel.rs`'s methods. Pinned:
+    /// libuv holds the addresses inside it.
+    pub fn stream_mut(&mut self) -> Pin<&mut ChannelStream> {
+        self.stream.as_mut()
     }
 }
 
 /// A channel's transport.
 ///
-/// Inline, as upstream's union was: every channel is boxed by the table, so
-/// a socket or stdio channel carrying a job's size costs what it always did.
+/// Not `Unpin` (every variant with a libuv handle embeds a `Stream`, which
+/// is not): a channel keeps it in a pinned box, see [`Channel`].
 #[allow(clippy::large_enum_variant)]
 pub enum ChannelStream {
     /// A child process, with up to three pipes or a pty master.
@@ -197,7 +243,6 @@ pub struct RpcState {
 pub struct StderrState {
     pub closed: bool,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct StdioPair {
     pub in_0: RStream,

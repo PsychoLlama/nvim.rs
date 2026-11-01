@@ -42,6 +42,7 @@
 use core::ffi::{CStr, c_int};
 
 use crate::eval::typval::callback_free;
+use crate::event::channel::TransportMut;
 use crate::event::channel::{process_channel_events, wait_job};
 use crate::event::multiqueue::{ChildQueue, put_job_on_main_loop};
 use crate::global_cell::GlobalCell;
@@ -58,10 +59,7 @@ use crate::types::channel::{
     kChannelStreamInternal, kChannelStreamProc, kChannelStreamSocket, kChannelStreamStderr,
     kChannelStreamStdio,
 };
-use crate::types::{
-    ApiDict, Callback, CallbackReader, Channel, ChannelPart, ChannelStream, LuaRef, RefcountSize,
-    RpcState, StderrState, uint64_t,
-};
+use crate::types::{Channel, ChannelPart, ChannelStream, LuaRef, StderrState, uint64_t};
 use std::os::fd::AsFd as _;
 
 /// Values these belong to other modules; nested so they stay out of the flat
@@ -122,20 +120,6 @@ pub(crate) fn with_channel<R>(id: uint64_t, f: impl FnOnce(&mut Channel) -> R) -
     channels.with_mut(|table| table.get_mut(&id).map(|channel| f(channel)))
 }
 
-/// The address of channel `id`, or null.
-///
-/// For the code that still reaches a channel by pointer (`msgpack_rpc/`,
-/// `event::channel`): the channel stays at this address until the event
-/// loop frees it, so a caller that runs the editor in between looks it up
-/// again.
-pub fn find_channel(id: uint64_t) -> *mut Channel {
-    channels.with_mut(|table| {
-        table
-            .get_mut(&id)
-            .map_or(core::ptr::null_mut(), |channel| &raw mut **channel)
-    })
-}
-
 /// Whether channel `id` is registered.
 pub(crate) fn channel_exists(id: uint64_t) -> bool {
     with_channel(id, |_| ()).is_some()
@@ -163,29 +147,7 @@ pub(crate) fn alloc_channel(
     });
     // Channel ids are handed to Vimscript as Numbers.
     debug_assert!(i64::try_from(id).is_ok());
-    let channel = Box::new(Channel {
-        id,
-        refcount: RefcountSize::ONE,
-        events: ChildQueue::of_main_loop(),
-        stream: stream(id),
-        is_rpc: false,
-        detach: false,
-        rpc: RpcState {
-            closed: false,
-            unpacker: None,
-            next_request_id: 0,
-            call_stack: crate::msgpack_rpc::channel::call_stack::CallStack::new(),
-            info: ApiDict::EMPTY,
-            client_type: 0,
-        },
-        term: None,
-        on_data: CallbackReader::none(),
-        on_stderr: CallbackReader::none(),
-        on_exit: Callback::None,
-        exit_status: -1,
-        callback_busy: false,
-        callback_scheduled: false,
-    });
+    let channel = Box::new(Channel::new(id, ChildQueue::of_main_loop(), stream(id)));
     channels.with_mut(|table| table.insert(id, channel));
     id
 }
@@ -264,7 +226,7 @@ fn channel_destroy(mut channel: Box<Channel>) {
     if channel.is_rpc {
         rpc_free(&mut channel);
     }
-    if let ChannelStream::Job(job) = &mut channel.stream {
+    if let Some(job) = channel.stream_mut().job() {
         job.free_argv();
     }
     callback_reader_free(&mut channel.on_data);
@@ -337,7 +299,7 @@ pub fn channel_close(id: uint64_t, part: ChannelPart) -> Result<(), CloseError> 
                 return Err(e_invstream);
             }
             with_channel(id, |channel| {
-                if let ChannelStream::Socket(socket) = &mut channel.stream {
+                if let TransportMut::Socket(socket) = channel.stream_mut().project() {
                     socket.close();
                 }
             });
@@ -370,8 +332,8 @@ pub(crate) fn channel_close_or_report(id: uint64_t, part: ChannelPart) -> bool {
 /// Closes the requested halves of a job's pipes, and its pty master last.
 fn close_job_parts(id: uint64_t, part: ChannelPart, close_main: bool) {
     with_channel(id, |channel| {
-        if let ChannelStream::Job(job) = &mut channel.stream {
-            job.close_streams(
+        if let Some(mut job) = channel.stream_mut().job() {
+            job.as_mut().close_streams(
                 part == kChannelPartStdin || close_main,
                 part == kChannelPartStdout || close_main,
                 part == kChannelPartStderr || part == kChannelPartAll,
@@ -390,12 +352,12 @@ fn close_stdio_parts(id: uint64_t, part: ChannelPart, close_main: bool) -> Resul
         return Err(e_invstream);
     }
     with_channel(id, |channel| {
-        if let ChannelStream::Stdio(stdio) = &mut channel.stream {
+        if let TransportMut::Stdio(stdin, stdout) = channel.stream_mut().project() {
             if part == kChannelPartStdin || close_main {
-                stdio.in_0.close();
+                stdin.close();
             }
             if part == kChannelPartStdout || close_main {
-                stdio.out.close();
+                stdout.close();
             }
         }
     });
@@ -407,8 +369,8 @@ fn close_stderr(id: uint64_t, part: ChannelPart) -> Result<(), CloseError> {
     if part != kChannelPartAll && part != kChannelPartStderr {
         return Err(e_invstream);
     }
-    let was_open = with_channel(id, |channel| match &mut channel.stream {
-        ChannelStream::Stderr(err) => !core::mem::replace(&mut err.closed, true),
+    let was_open = with_channel(id, |channel| match channel.stream_mut().project() {
+        TransportMut::Stderr(err) => !core::mem::replace(&mut err.closed, true),
         _ => false,
     })
     .unwrap_or(false);
@@ -435,12 +397,12 @@ fn close_internal(id: uint64_t) {
     };
     let cb = with_channel(id, |channel| {
         channel.exit_status = 0;
-        match &mut channel.stream {
-            ChannelStream::Internal(internal) => {
+        match channel.stream_mut().internal() {
+            Some(internal) => {
                 internal.closed = true;
                 core::mem::replace(&mut internal.cb, LUA_NOREF as LuaRef)
             }
-            _ => LUA_NOREF as LuaRef,
+            None => LUA_NOREF as LuaRef,
         }
     });
     if let Some(cb) = cb {
@@ -469,7 +431,7 @@ pub fn channel_send(id: uint64_t, data: Vec<u8>) -> Result<usize, &'static CStr>
     let route = with_channel(id, |channel| {
         let is_rpc = channel.is_rpc;
         let term = channel.term;
-        match &mut channel.stream {
+        match channel.stream() {
             ChannelStream::Stderr(err) => {
                 if err.closed {
                     Err(CLOSED)
@@ -486,13 +448,9 @@ pub fn channel_send(id: uint64_t, data: Vec<u8>) -> Result<usize, &'static CStr>
                     term.map(Route::Terminal).ok_or(CLOSED)
                 }
             }
-            stream => {
-                let out = match stream {
-                    ChannelStream::Job(job) => &mut job.proc_mut().in_0,
-                    ChannelStream::Socket(socket) => &mut socket.s,
-                    ChannelStream::Stdio(stdio) => &mut stdio.out,
-                    _ => unreachable!("matched above"),
-                };
+            _ => {
+                let out = channel.stream_mut().write_stream();
+                let out = out.expect("every other transport writes");
                 if out.closed {
                     Err(CLOSED)
                 } else if is_rpc {
@@ -531,12 +489,12 @@ pub fn channel_send(id: uint64_t, data: Vec<u8>) -> Result<usize, &'static CStr>
 /// answer, or `None` when there is no such job any more.
 pub(crate) fn channel_job_stop_wait(id: uint64_t, ms: c_int) -> Option<c_int> {
     let held = ChannelRef::new(id)?;
-    let is_job = with_channel(id, |channel| match &mut channel.stream {
-        ChannelStream::Job(job) => {
+    let is_job = with_channel(id, |channel| match channel.stream_mut().job() {
+        Some(job) => {
             job.stop();
             true
         }
-        _ => false,
+        None => false,
     })?;
     let status = is_job.then(|| wait_job(held.id(), ms, None));
     drop(held);

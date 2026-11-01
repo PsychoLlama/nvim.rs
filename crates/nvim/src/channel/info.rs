@@ -120,7 +120,7 @@ fn set_info_event(id: uint64_t, row: u64) {
 
 /// Whether `id` names a job whose process is still running.
 pub fn channel_job_running(id: uint64_t) -> bool {
-    with_channel(id, |channel| match &channel.stream {
+    with_channel(id, |channel| match channel.stream() {
         ChannelStream::Job(job) => !proc_is_stopped(job.proc()),
         _ => false,
     })
@@ -148,17 +148,17 @@ fn channel_info_of(channel: &mut crate::types::Channel) -> ApiDict {
 
     push(c"id", Object::Integer(channel.id.cast_signed()));
 
-    let stream_desc = match &mut channel.stream {
-        ChannelStream::Job(job) => {
-            if job.pty().is_some() {
-                // A closed master has no name, which reads as a null string.
-                let name = job.tty_name();
-                let name = name.as_deref().map_or(String_0::NULL, String_0::from_cstr);
-                push(c"pty", Object::string(name));
-            }
-            push(c"argv", Object::array(argv_array(&job.argv())));
-            c"job"
+    if let Some(mut job) = channel.stream_mut().job() {
+        if job.pty().is_some() {
+            // A closed master has no name, which reads as a null string.
+            let name = job.as_mut().tty_name();
+            let name = name.as_deref().map_or(String_0::NULL, String_0::from_cstr);
+            push(c"pty", Object::string(name));
         }
+        push(c"argv", Object::array(argv_array(&job.argv())));
+    }
+    let stream_desc = match channel.stream() {
+        ChannelStream::Job(_) => c"job",
         ChannelStream::Stdio(_) => c"stdio",
         ChannelStream::Stderr(_) => c"stderr",
         ChannelStream::Internal(_) => {

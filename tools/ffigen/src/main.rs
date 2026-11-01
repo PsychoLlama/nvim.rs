@@ -600,6 +600,18 @@ fn is_opaque_struct(fields: &syn::FieldsNamed) -> bool {
         })
 }
 
+/// A zero-sized marker field (`PhantomData`, `PhantomPinned`): it has no
+/// C-visible layout, so a struct carrying one renders without it.
+fn is_marker(ty: &syn::Type) -> bool {
+    let syn::Type::Path(tp) = ty else {
+        return false;
+    };
+    tp.path
+        .segments
+        .last()
+        .is_some_and(|s| s.ident == "PhantomData" || s.ident == "PhantomPinned")
+}
+
 fn collect_file(world: &mut World, rel: &str, ast: syn::File) {
     let is_types = rel.starts_with("src/types/");
     let bitfields = bitfield_invocations(&ast);
@@ -1167,7 +1179,7 @@ impl<'w> Emitter<'w> {
 
     /// Render one struct/union field to C declaration line(s).
     fn field_lines(&mut self, file: &str, f: &Field) -> Option<Vec<String>> {
-        if f.padding {
+        if f.padding || is_marker(&f.ty) {
             return Some(vec![]);
         }
         if !f.bits.is_empty() {
@@ -1247,7 +1259,7 @@ impl<'w> Emitter<'w> {
                         let deffile = def.file.clone();
                         self.emitted.insert(name, def);
                         for f in &fields {
-                            if f.padding || !f.bits.is_empty() {
+                            if f.padding || !f.bits.is_empty() || is_marker(&f.ty) {
                                 continue;
                             }
                             let _ = self.cty(&deffile, &f.ty);

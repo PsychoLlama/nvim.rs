@@ -40,14 +40,15 @@ use crate::terminal::{Term, buf_terminal_running, terminal_buf, terminal_open};
 use crate::types::AutoEvent;
 use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
-    Callback, CallbackReader, ChannelStdinMode, ChannelStream, Dict, EvalFuncData, IOSIZE, Integer,
-    JobProc, MAXPATHL, Object, String_0, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER,
-    VAR_STRING, VarNumber, Vv, uint16_t, uint64_t,
+    Callback, CallbackReader, ChannelStdinMode, Dict, EvalFuncData, IOSIZE, Integer, JobProc,
+    MAXPATHL, Object, String_0, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING,
+    VarNumber, Vv, uint16_t, uint64_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
+use core::pin::Pin;
 use std::ffi::CString;
 
 /// A cleared `CallbackReader`, which the option parser fills in.
@@ -84,12 +85,8 @@ pub fn f_jobpid(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 }
 
 /// Run `f` on job channel `id`'s child, if it is still a registered job.
-fn with_job<R>(id: uint64_t, f: impl FnOnce(&mut JobProc) -> R) -> Option<R> {
-    with_channel(id, |channel| match &mut channel.stream {
-        ChannelStream::Job(job) => Some(f(job)),
-        _ => None,
-    })
-    .flatten()
+fn with_job<R>(id: uint64_t, f: impl FnOnce(Pin<&mut JobProc>) -> R) -> Option<R> {
+    with_channel(id, |channel| channel.stream_mut().job().map(f)).flatten()
 }
 
 /// `jobresize({job}, {width}, {height})` — only for a pty job.
