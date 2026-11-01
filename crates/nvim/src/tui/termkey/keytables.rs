@@ -32,7 +32,7 @@ pub const CSI_FUNC_COUNT: usize = 35;
 
 /// No key registered for this slot.
 const UNSET: keyinfo = keyinfo {
-    type_0: TERMKEY_TYPE_UNICODE,
+    kind: TERMKEY_TYPE_UNICODE,
     sym: TERMKEY_SYM_UNKNOWN,
     modifier_mask: 0,
     modifier_set: 0,
@@ -40,7 +40,7 @@ const UNSET: keyinfo = keyinfo {
 
 const fn sym(sym: TermKeySym) -> keyinfo {
     keyinfo {
-        type_0: TERMKEY_TYPE_KEYSYM,
+        kind: TERMKEY_TYPE_KEYSYM,
         sym,
         modifier_mask: 0,
         modifier_set: 0,
@@ -51,7 +51,7 @@ const fn sym(sym: TermKeySym) -> keyinfo {
 /// when the type is TERMKEY_TYPE_FUNCTION.
 const fn func(number: c_int) -> keyinfo {
     keyinfo {
-        type_0: TERMKEY_TYPE_FUNCTION,
+        kind: TERMKEY_TYPE_FUNCTION,
         sym: number,
         modifier_mask: 0,
         modifier_set: 0,
@@ -78,7 +78,7 @@ pub static CSI_SS3: [keyinfo; 64] = {
     table[slot(b'R')] = func(3);
     table[slot(b'S')] = func(4);
     table[slot(b'Z')] = keyinfo {
-        type_0: TERMKEY_TYPE_KEYSYM,
+        kind: TERMKEY_TYPE_KEYSYM,
         sym: TERMKEY_SYM_TAB,
         modifier_mask: TERMKEY_KEYMOD_SHIFT as c_int,
         modifier_set: TERMKEY_KEYMOD_SHIFT as c_int,
@@ -192,7 +192,7 @@ mod tests {
 
     #[test]
     fn function_keys_carry_their_number_in_the_sym_field() {
-        assert_eq!(CSI_SS3[slot(b'P')].type_0, TERMKEY_TYPE_FUNCTION);
+        assert_eq!(CSI_SS3[slot(b'P')].kind, TERMKEY_TYPE_FUNCTION);
         assert_eq!(CSI_SS3[slot(b'P')].sym, 1);
         assert_eq!(CSI_FUNCS[34], func(20));
     }

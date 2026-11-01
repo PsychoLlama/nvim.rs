@@ -12,7 +12,7 @@ the migration's debt, counted by the ratchet as
 `unsafe_stmts_outside_perimeter` and shrink-only like every other metric. That
 number is the one to drive to zero.
 
-Today: **2,432** unchecked statements inside the perimeter (84 files),
+Today: **2,339** unchecked statements inside the perimeter (80 files),
 **0** outside it (0 files, of 1,386 measured). It was 138,877 when this
 file was written, at the end of phase 23's slice 15 — in _lines_, which is what
 this metric counted until phase 31 changed the unit to statements.
@@ -170,16 +170,16 @@ where `files_allowing_unsafe_code` counts the ones that have made the opposite
 claim, deliberately, in a line a reviewer can see.
 
 **There are no free `forbid`s left, and there will not be until a subtree
-finishes.** Exactly 11 files carry neither attribute, and every one of them is
+finishes.** Exactly 10 files carry neither attribute, and every one of them is
 a `mod.rs` (or `lib.rs`) with at least one descendant that still allows
 unsafe: `allow` under a `forbid` is `E0453`, a hard error, so writing the
-attribute on any of them fails to compile. Eight sit over perimeter files and
+attribute on any of them fails to compile. Seven sit over perimeter files and
 stay bare for good — `lua/`, `lua/executor/`, `event/`, `os/`, `tui/`,
-`tui/termkey/`, `vterm/`, `xdiff/` — and `lib.rs` is the root of everything.
+`vterm/`, `xdiff/` — and `lib.rs` is the root of everything.
 `eval/` and `eval/typval/` sit over `eval/typval/handle.rs`, a perimeter
-row, and stay bare as well; `charset/`, `getchar/`, `mbyte/`, `startup/`
-and `strings/` took their `forbid` in the commit that finished the last of
-their descendants. Counting files without
+row, and stay bare as well; `charset/`, `getchar/`, `mbyte/`, `startup/`,
+`strings/` and `tui/termkey/` took their `forbid` in the commit that
+finished the last of their descendants. Counting files without
 the attribute therefore says nothing about progress. This is the same rule as
 "take a `mod.rs` last", stated for the attribute rather than for the lint.
 

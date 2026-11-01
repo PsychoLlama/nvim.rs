@@ -117,7 +117,6 @@ typedef struct signal_watcher signal_watcher;
 typedef struct StderrState StderrState;
 typedef struct StdioPair StdioPair;
 typedef struct StrCharInfo StrCharInfo;
-typedef union TermKeyKey_code TermKeyKey_code;
 typedef struct TerminalCursor TerminalCursor;
 typedef struct TerminalPending TerminalPending;
 typedef struct terminal terminal;
@@ -842,12 +841,6 @@ struct StdioPair {
 struct StrCharInfo {
   char *ptr;
   CharInfo chr;
-};
-union TermKeyKey_code {
-  int codepoint;
-  int number;
-  TermKeySym sym;
-  char mouse[4];
 };
 struct TerminalCursor {
   int row;
@@ -2704,7 +2697,6 @@ static const int MAX_CHAIN_LENGTH = 64;
 static const int MAX_CHUNK_SIZE = 5120;
 static const int MAX_CLUSTER_ID = 9767;
 static const int MAX_COLUMNS = 10000;
-static const int MAX_CSI_PARAMS = 16;
 static const int MAX_DEPTH = 4;
 static const int MAX_DIFF_ANCHORS = 20;
 static const int MAX_ERRORS = 3;

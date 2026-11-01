@@ -274,8 +274,9 @@ pub struct TermInput {
     pub key_encoding: KeyEncoding,
     /// `'ttimeoutlen'`: how long to wait for the rest of a sequence.
     pub ttimeoutlen: OptInt,
-    /// termkey's parser, holding whatever sequence is half-read.
-    pub tk: *mut TermKey,
+    /// termkey's parser, holding whatever sequence is half-read. `None`
+    /// until the input layer is initialised and after it is destroyed.
+    pub tk: Option<crate::tui::termkey::termkey::TermKey>,
     /// Fires when an incomplete sequence has waited long enough.
     pub timer_handle: uv_timer_t,
     /// Rations the background-colour queries that a terminal announcing a

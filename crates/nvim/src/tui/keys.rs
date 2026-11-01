@@ -10,9 +10,7 @@
 //! kitty keyboard protocol's private-use codepoints and the super/meta
 //! modifiers, which is why those two are spelled out here.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `tui/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -22,15 +20,13 @@
 )]
 
 use crate::global_cell::GlobalCell;
-use crate::tui::termkey::driver_csi::termkey_interpret_mouse;
 use crate::tui::termkey::termkey::{
     TERMKEY_FORMAT_ALTISMETA, TERMKEY_FORMAT_WRAPBRACKET, TERMKEY_KEYMOD_ALT, TERMKEY_KEYMOD_CTRL,
     TERMKEY_KEYMOD_SHIFT, TERMKEY_MOUSE_DRAG, TERMKEY_MOUSE_PRESS, TERMKEY_MOUSE_RELEASE,
-    TERMKEY_MOUSE_UNKNOWN, TERMKEY_SYM_SUSPEND, TERMKEY_TYPE_KEYSYM, TERMKEY_TYPE_UNICODE,
-    termkey_strfkey,
+    TERMKEY_SYM_SUSPEND, TERMKEY_TYPE_KEYSYM, TERMKEY_TYPE_UNICODE, interpret_mouse, strfkey,
 };
-use crate::types::{TermKey, TermKeyKey, TermKeyMouseEvent};
-use core::ffi::{c_char, c_int};
+use crate::types::TermKeyKey;
+use core::ffi::c_int;
 use core::fmt::Write;
 
 /// The modifiers termkey reports, as the bits a key carries them in.
@@ -238,9 +234,8 @@ fn kitty_key_name(codepoint: c_int) -> Option<&'static str> {
 /// Keys outside the private-use area, and codepoints in it that the protocol
 /// does not define, are not this module's to name.
 fn kitty_protocol(key: &TermKeyKey) -> Option<KeyText> {
-    // SAFETY: `code` is a union tagged by `type_0`; every caller here has
-    // already established this is a unicode key, whose arm is `codepoint`.
-    let codepoint = unsafe { key.code.codepoint };
+    // Every caller here has already established this is a unicode key.
+    let codepoint = key.code.codepoint();
     if !PRIVATE_USE.contains(&codepoint) {
         return None;
     }
@@ -264,7 +259,7 @@ pub(super) fn simple_utf8(key: &TermKeyKey) -> KeyText {
     }
     let mut text = KeyText::new();
     for &byte in &key.utf8 {
-        match byte.cast_unsigned() {
+        match byte {
             0 => break,
             b'<' => text.push_str("<lt>"),
             byte => text.push(byte),
@@ -274,28 +269,24 @@ pub(super) fn simple_utf8(key: &TermKeyKey) -> KeyText {
 }
 
 /// Name a key carrying modifiers, or one termkey has a name for.
-///
-/// # Safety
-/// `tk` must be the termkey instance `key` came from.
-pub(super) unsafe fn modified_utf8(tk: *mut TermKey, key: &TermKeyKey) -> KeyText {
-    // SAFETY: `code` is tagged by `type_0`, and the caller guarantees `tk`.
-    let mut text = unsafe {
-        if key.type_0 == TERMKEY_TYPE_KEYSYM && key.code.sym == TERMKEY_SYM_SUSPEND {
+pub(super) fn modified_utf8(key: &TermKeyKey) -> KeyText {
+    let mut text = {
+        if key.kind == TERMKEY_TYPE_KEYSYM && key.code.sym() == TERMKEY_SYM_SUSPEND {
             // The editor's own suspend, rather than a key named `Suspend`.
             let mut text = KeyText::new();
             text.push_str("<C-Z>");
             text
-        } else if key.type_0 != TERMKEY_TYPE_UNICODE {
-            strfkey(tk, key)
+        } else if key.kind != TERMKEY_TYPE_UNICODE {
+            spell(key)
         } else {
             debug_assert!(key.modifiers != 0, "an unmodified key is not this one");
             if let Some(text) = kitty_protocol(key) {
                 return text;
             }
-            let mut text = strfkey(tk, key);
+            let mut text = spell(key);
             // termkey spells a control key in its uppercase form, so the
             // shift that tells `<C-S-A>` from `<C-A>` has to be put back.
-            let codepoint = key.code.codepoint;
+            let codepoint = key.code.codepoint();
             let shifted_control = key.modifiers & MOD_CTRL != 0
                 && key.modifiers & MOD_SHIFT == 0
                 && (c_int::from(b'A')..=c_int::from(b'Z')).contains(&codepoint);
@@ -310,25 +301,12 @@ pub(super) unsafe fn modified_utf8(tk: *mut TermKey, key: &TermKeyKey) -> KeyTex
 }
 
 /// Let termkey spell `key` itself.
-///
-/// # Safety
-/// `tk` must be the termkey instance `key` came from.
-unsafe fn strfkey(tk: *mut TermKey, key: &TermKeyKey) -> KeyText {
+fn spell(key: &TermKeyKey) -> KeyText {
+    let spelled = strfkey(key, KEY_FORMAT);
+    assert!(spelled.len() < KEY_TEXT_MAX, "key name too long");
     let mut text = KeyText::new();
-    // SAFETY: the caller guarantees `tk`; the buffer is this frame's, and
-    // termkey writes at most as many bytes as it is given. `key` is read,
-    // not written, but termkey's signature does not say so.
-    let len = unsafe {
-        termkey_strfkey(
-            tk,
-            text.buf.as_mut_ptr().cast::<c_char>(),
-            KEY_TEXT_MAX,
-            core::ptr::from_ref(key).cast_mut(),
-            KEY_FORMAT,
-        )
-    };
-    assert!(len < KEY_TEXT_MAX, "key name too long");
-    text.len = len;
+    text.buf[..spelled.len()].copy_from_slice(&spelled);
+    text.len = spelled.len();
     text
 }
 
@@ -342,24 +320,8 @@ static LAST_PRESSED_BUTTON: GlobalCell<c_int> = GlobalCell::new(0);
 ///
 /// Returns `None` for the events the editor has no notation for — anything
 /// that is not a press, a drag or a release.
-///
-/// # Safety
-/// `tk` must be the termkey instance `key` came from.
-pub(super) unsafe fn mouse_event(tk: *mut TermKey, key: &TermKeyKey) -> Option<KeyText> {
-    let mut event: TermKeyMouseEvent = TERMKEY_MOUSE_UNKNOWN;
-    let (mut button, mut row, mut col) = (0, 0, 0);
-    // SAFETY: the caller guarantees `tk`; the out-parameters are this
-    // frame's. `key` is read, not written.
-    unsafe {
-        termkey_interpret_mouse(
-            tk,
-            core::ptr::from_ref(key),
-            &raw mut event,
-            &raw mut button,
-            &raw mut row,
-            &raw mut col,
-        );
-    }
+pub(super) fn mouse_event(key: &TermKeyKey) -> Option<KeyText> {
+    let (event, mut button, row, col) = interpret_mouse(key)?;
 
     // A drag or a release names no button; it is whichever one went down.
     if (event == TERMKEY_MOUSE_RELEASE || event == TERMKEY_MOUSE_DRAG) && button == 0 {

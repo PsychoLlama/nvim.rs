@@ -132,7 +132,7 @@ mod tests {
 
     fn info(sym: i32) -> keyinfo {
         keyinfo {
-            type_0: 2,
+            kind: 2,
             sym,
             modifier_mask: 0,
             modifier_set: 0,

@@ -19,7 +19,7 @@ use super::*;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct keyinfo {
-    pub type_0: TermKeyType,
+    pub kind: TermKeyType,
     pub sym: TermKeySym,
     pub modifier_mask: ::core::ffi::c_int,
     pub modifier_set: ::core::ffi::c_int,

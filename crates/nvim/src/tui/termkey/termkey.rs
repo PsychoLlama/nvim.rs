@@ -4,20 +4,19 @@
 //! Ported from libtermkey, Copyright (c) 2007-2011 Paul Evans, under the MIT
 //! license; the notice is reproduced in licenses/libtermkey-LICENSE.txt.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `tui/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::memory::{xfree, xmalloc, xrealloc};
+use crate::tui::termkey::csi::{self, CSI_MAX_PARAMS};
+use crate::tui::termkey::driver_csi::CsiDriver;
+use crate::tui::termkey::driver_ti::TerminfoDriver;
 use crate::tui::termkey::format::{self, KeyBody};
 use crate::tui::termkey::utf8::{self, Decoded, UNICODE_INVALID};
 use crate::tui::termkey::{driver_csi, driver_ti, report};
 use crate::types::{
-    TermKey, TermKeyEvent, TermKeyFormat, TermKeyKey, TermKeyKey_code, TermKeyMouseEvent,
-    TermKeyResult, TermKeySym, TermKeyType, TerminfoEntry, size_t,
+    KeyCode, TermKeyEvent, TermKeyFormat, TermKeyKey, TermKeyMouseEvent, TermKeyResult, TermKeySym,
+    TermKeyType, TerminfoEntry,
 };
-use core::ffi::{CStr, c_char, c_int, c_uchar, c_void};
-use core::ops::{Deref, DerefMut};
+use core::ffi::{CStr, c_int};
 
 pub const TERMKEY_EVENT_UNKNOWN: TermKeyEvent = 0;
 pub const TERMKEY_EVENT_PRESS: TermKeyEvent = 1;
@@ -114,8 +113,8 @@ pub const TERMKEY_FORMAT_LOWERMOD: TermKeyFormat = 32;
 pub const TERMKEY_FORMAT_LOWERSPACE: TermKeyFormat = 64;
 pub const TERMKEY_FORMAT_MOUSE_POS: TermKeyFormat = 256;
 
-/// How much input is held before `termkey_push_bytes` starts refusing it.
-const TERMKEY_DEFAULT_BUFFER_SIZE: size_t = 256;
+/// How much input is held before [`TermKey::push_bytes`] starts refusing it.
+const TERMKEY_DEFAULT_BUFFER_SIZE: usize = 256;
 
 /// The symbol each C0 control byte stands for, or `TERMKEY_SYM_NONE` where it
 /// has none and the Ctrl-letter reading applies instead.
@@ -131,46 +130,152 @@ static C0_SYMS: [TermKeySym; 32] = {
     table
 };
 
-/// A live key reader — the C ABI's `TermKey *`, with the promise that reaching
-/// it is sound.
-///
-/// Constructing one is the unsafe operation; everything after it is checked
-/// code, which is why this file spends a line per entry point rather than one
-/// per `(*tk)`.
-#[derive(Copy, Clone)]
-pub struct Tk(*mut TermKey);
+/// nvim's say over a key capability the terminfo driver loads: given the
+/// capability's name and what the terminal's description holds for it, the
+/// sequence to register instead, or `None` for none.
+pub type TerminfoHook = Box<dyn Fn(&CStr, Option<&[u8]>) -> Option<Vec<u8>>>;
 
-impl Tk {
-    /// # Safety
-    ///
-    /// `tk` must point at a live `TermKey` that outlives the wrapper and that
-    /// nothing else reads or writes meanwhile, whose `buffer` addresses
-    /// `buffsize` writable bytes, and whose `buffstart + buffcount` stays
-    /// inside them — the invariant every function here relies on and restores.
-    pub unsafe fn of(tk: *mut TermKey) -> Self {
-        Self(tk)
+/// A key reader: bytes go in through [`TermKey::push_bytes`], keys come out
+/// of [`TermKey::getkey`].
+pub struct TermKey {
+    pub flags: c_int,
+    pub canonflags: c_int,
+    /// The input buffer, its whole length usable.
+    buffer: Vec<u8>,
+    /// Where the unread input starts, and how much of it there is. The pair
+    /// walks forward through `buffer` until a read compacts it.
+    pub(super) buffstart: usize,
+    pub(super) buffcount: usize,
+    /// Bytes of an unrecognised control sequence held back so the consumer can
+    /// re-read them, and discarded at the start of the next read.
+    pub(super) hightide: usize,
+    ti_getstr_hook: Option<TerminfoHook>,
+    pub is_started: bool,
+    /// The terminfo driver's state.
+    pub(super) ti: TerminfoDriver,
+    /// The CSI driver's state.
+    pub(super) csi: CsiDriver,
+}
+
+/// An unrecognised control sequence, re-read: its parameters (`None` for an
+/// omitted one) and its packed command -- the final byte, with the
+/// private-use introducer in bits 8-15 and the intermediate byte in bits
+/// 16-23.
+pub struct UnknownCsi<'a> {
+    params: [Option<&'a [u8]>; CSI_MAX_PARAMS],
+    nparams: usize,
+    pub command: u32,
+}
+
+impl<'a> UnknownCsi<'a> {
+    /// The parameters the sequence carried.
+    pub fn params(&self) -> &[Option<&'a [u8]>] {
+        &self.params[..self.nparams]
+    }
+}
+
+/// The value of a CSI parameter, ignoring any sub-parameters. An omitted
+/// parameter reads as -1.
+pub fn csi_param_value(param: Option<&[u8]>) -> c_int {
+    csi::param_groups(param).0
+}
+
+impl TermKey {
+    /// A key reader. `term` is the terminal's description, `None` when
+    /// nothing is known about it; it is read when the reader starts, which
+    /// is now unless `flags` holds `TERMKEY_FLAG_NOSTART`.
+    pub fn new(term: Option<&TerminfoEntry>, flags: c_int) -> Self {
+        let mut tk = Self {
+            flags: 0,
+            canonflags: 0,
+            buffer: vec![0; TERMKEY_DEFAULT_BUFFER_SIZE],
+            buffstart: 0,
+            buffcount: 0,
+            hightide: 0,
+            ti_getstr_hook: None,
+            is_started: false,
+            ti: TerminfoDriver::default(),
+            csi: CsiDriver::default(),
+        };
+        tk.set_flags(flags);
+        if flags & TERMKEY_FLAG_NOSTART as c_int == 0 {
+            tk.start(term);
+        }
+        tk
     }
 
-    /// The reader as the C ABI spells it, for the entry points that hand it
-    /// back and for the calls that have not been narrowed yet.
-    pub fn raw(self) -> *mut TermKey {
-        self.0
+    /// Install nvim's override for terminfo capability lookups, so it can
+    /// supply key sequences the terminal's description does not name. It is
+    /// consulted when the reader starts.
+    pub fn set_terminfo_hook(&mut self, hook: TerminfoHook) {
+        self.ti_getstr_hook = Some(hook);
+    }
+
+    /// The installed terminfo hook, if any.
+    pub(super) fn terminfo_hook(&self) -> Option<&TerminfoHook> {
+        self.ti_getstr_hook.as_ref()
+    }
+
+    /// Begin reading keys, building the terminfo driver's key table from
+    /// `term` the first time. Upstream also put the terminal into raw mode
+    /// here and restored it on stop, but that was guarded on a file
+    /// descriptor this tree never gives it -- nvim owns the terminal and
+    /// feeds bytes in by hand.
+    pub fn start(&mut self, term: Option<&TerminfoEntry>) {
+        if self.is_started {
+            return;
+        }
+        driver_ti::load_keys(self, term);
+        self.is_started = true;
+    }
+
+    fn set_flags(&mut self, newflags: c_int) {
+        self.flags = newflags;
+        // The two spellings of "a space is a symbol, not a character" are
+        // kept in step in both directions.
+        if self.flags & TERMKEY_FLAG_SPACESYMBOL as c_int != 0 {
+            self.canonflags |= TERMKEY_CANON_SPACESYMBOL as c_int;
+        } else {
+            self.canonflags &= !(TERMKEY_CANON_SPACESYMBOL as c_int);
+        }
+    }
+
+    pub fn canonflags(&self) -> c_int {
+        self.canonflags
+    }
+
+    pub fn set_canonflags(&mut self, flags: c_int) {
+        self.canonflags = flags;
+        if self.canonflags & TERMKEY_CANON_SPACESYMBOL as c_int != 0 {
+            self.flags |= TERMKEY_FLAG_SPACESYMBOL as c_int;
+        } else {
+            self.flags &= !(TERMKEY_FLAG_SPACESYMBOL as c_int);
+        }
+    }
+
+    /// How many bytes the input buffer holds.
+    pub fn buffer_size(&self) -> usize {
+        self.buffer.len()
+    }
+
+    /// Resize the input buffer, keeping what is in it. Shrinking it below
+    /// what is buffered is the caller's mistake, as upstream's `realloc` was.
+    pub fn set_buffer_size(&mut self, size: usize) {
+        self.buffer.resize(size, 0);
+    }
+
+    /// How much more input the buffer can take.
+    pub fn buffer_remaining(&self) -> usize {
+        self.buffer.len() - self.buffcount
     }
 
     /// The input that has been pushed in and not yet read out.
-    pub fn buffered(&self) -> &[u8] {
-        // SAFETY: `buffstart + buffcount` is inside the buffer, by `Tk::of`.
-        unsafe { core::slice::from_raw_parts(self.buffer.add(self.buffstart), self.buffcount) }
-    }
-
-    /// The whole buffer, for the two compactions that slide bytes inside it.
-    fn whole_buffer(&mut self) -> &mut [u8] {
-        // SAFETY: the buffer addresses `buffsize` writable bytes, by `Tk::of`.
-        unsafe { core::slice::from_raw_parts_mut(self.buffer, self.buffsize) }
+    pub(super) fn buffered(&self) -> &[u8] {
+        &self.buffer[self.buffstart..self.buffstart + self.buffcount]
     }
 
     /// Consume `count` bytes of input.
-    fn eat_bytes(&mut self, count: size_t) {
+    fn eat_bytes(&mut self, count: usize) {
         if count >= self.buffcount {
             self.buffstart = 0;
             self.buffcount = 0;
@@ -179,297 +284,141 @@ impl Tk {
             self.buffcount -= count;
         }
     }
-}
 
-impl Deref for Tk {
-    type Target = TermKey;
+    /// Hand more input to the reader. Returns how much of it was taken, or
+    /// `None` when the buffer was already full.
+    pub fn push_bytes(&mut self, bytes: &[u8]) -> Option<usize> {
+        if self.buffstart != 0 {
+            // Slide what is left of the previous read back to the front.
+            let (start, count) = (self.buffstart, self.buffcount);
+            self.buffer.copy_within(start..start + count, 0);
+            self.buffstart = 0;
+        }
+        if self.buffcount >= self.buffer.len() {
+            return None;
+        }
+        let taken = bytes.len().min(self.buffer.len() - self.buffcount);
+        let count = self.buffcount;
+        self.buffer[count..count + taken].copy_from_slice(&bytes[..taken]);
+        self.buffcount += taken;
+        Some(taken)
+    }
 
-    fn deref(&self) -> &TermKey {
-        // SAFETY: the reader is live, by `Tk::of`.
-        unsafe { &*self.0 }
+    /// Read the next key into `key`, consuming it. `TERMKEY_RES_AGAIN` means
+    /// a sequence could still grow; `key` is then filled in with what it
+    /// spells so far, so a caller that gives up waiting has something to
+    /// report, and the bytes stay in the buffer.
+    pub fn getkey(&mut self, key: &mut TermKeyKey) -> TermKeyResult {
+        let mut nbytes = 0;
+        let ret = peekkey(self, key, false, &mut nbytes);
+        if ret == TERMKEY_RES_KEY {
+            self.eat_bytes(nbytes);
+        }
+        if ret == TERMKEY_RES_AGAIN {
+            peekkey(self, key, true, &mut nbytes);
+        }
+        ret
+    }
+
+    /// [`TermKey::getkey`], taking a sequence that could still grow as
+    /// complete.
+    pub fn getkey_force(&mut self, key: &mut TermKeyKey) -> TermKeyResult {
+        let mut nbytes = 0;
+        let ret = peekkey(self, key, true, &mut nbytes);
+        if ret == TERMKEY_RES_KEY {
+            self.eat_bytes(nbytes);
+        }
+        ret
+    }
+
+    /// The payload of the last DCS, OSC or APC string, if `key` is still the
+    /// one that reported it: up to its first NUL, as upstream's C string
+    /// ended there. Borrowed from the reader, so it is read before the next
+    /// control string replaces it.
+    pub fn interpret_string(&self, key: &TermKeyKey) -> Option<&[u8]> {
+        let kind = key.kind;
+        if kind != TERMKEY_TYPE_DCS && kind != TERMKEY_TYPE_OSC && kind != TERMKEY_TYPE_APC {
+            return None;
+        }
+        // Each string gets a serial number, so a key held past the next one
+        // cannot read a payload that is no longer its own.
+        if self.csi.saved_string_id != key.code.number() {
+            return None;
+        }
+        let saved = &self.csi.saved_string;
+        Some(saved.split(|&byte| byte == 0).next().unwrap_or(saved))
+    }
+
+    /// Re-parse the control sequence a `TERMKEY_TYPE_UNKNOWN_CSI` key stands
+    /// for, so the consumer can decide what to make of it.
+    ///
+    /// The sequence is still sitting at the head of the buffer: `peekkey`
+    /// consumed only its introducer and parked the rest under `hightide`,
+    /// which it discards on the next read. `None` once it has, or for any
+    /// other key.
+    pub fn interpret_csi(&self, key: &TermKeyKey) -> Option<UnknownCsi<'_>> {
+        if self.hightide == 0 || key.kind != TERMKEY_TYPE_UNKNOWN_CSI {
+            return None;
+        }
+        let bytes = self.buffered();
+        let seq = csi::parse(bytes, 0)?;
+        let mut params = [None; CSI_MAX_PARAMS];
+        for (slot, param) in params.iter_mut().zip(&seq.params[..seq.nparams]) {
+            *slot = param.map(|(start, end)| &bytes[start..end]);
+        }
+        Some(UnknownCsi {
+            params,
+            nparams: seq.nparams,
+            command: seq.command,
+        })
     }
 }
 
-impl DerefMut for Tk {
-    fn deref_mut(&mut self) -> &mut TermKey {
-        // SAFETY: the reader is live and unaliased, by `Tk::of`.
-        unsafe { &mut *self.0 }
+/// A mouse key's (event, button, line, column), or `None` for any other key.
+/// A key whose report names no event has button 0.
+pub fn interpret_mouse(key: &TermKeyKey) -> Option<(TermKeyMouseEvent, c_int, c_int, c_int)> {
+    if key.kind != TERMKEY_TYPE_MOUSE {
+        return None;
     }
+    let payload = key.code.payload();
+    let (line, col) = report::unpack_position(&payload);
+    let (event, button) = report::decode_mouse(&payload);
+    Some((event, button, line, col))
 }
 
-/// The arms of a key's `code` union.
-///
-/// The three scalar arms — a character's codepoint, a function key's number
-/// and a symbol — are one `c_int` at offset 0, and the report payload covers
-/// the same four bytes, so every arm is written whenever any is. Reading the
-/// arm a key is not in therefore reads a stale value, never an uninitialised
-/// one; which arm is *meaningful* is what `type_0` says.
-pub trait KeyCode {
-    /// The character a `TERMKEY_TYPE_UNICODE` key stands for.
-    fn codepoint(&self) -> c_int;
-    /// The number of a `TERMKEY_TYPE_FUNCTION` key, or the serial number of a
-    /// control string or an unrecognised control sequence.
-    fn number(&self) -> c_int;
-    /// The symbol of a `TERMKEY_TYPE_KEYSYM` key.
-    fn sym(&self) -> TermKeySym;
-    /// The four packed bytes of a mouse, position or mode report.
-    fn report(&self) -> report::Payload;
-}
-
-impl KeyCode for TermKeyKey {
-    fn codepoint(&self) -> c_int {
-        // SAFETY: the scalar arms are one `c_int` at offset 0; see the trait.
-        unsafe { self.code.codepoint }
-    }
-
-    fn number(&self) -> c_int {
-        self.codepoint()
-    }
-
-    fn sym(&self) -> TermKeySym {
-        self.codepoint()
-    }
-
-    fn report(&self) -> report::Payload {
-        // SAFETY: the payload covers the same four bytes; see the trait.
-        unsafe { self.code.mouse }
-    }
+/// A mode report's (introducer, mode, value), or `None` for any other key.
+pub fn interpret_modereport(key: &TermKeyKey) -> Option<(c_int, c_int, c_int)> {
+    (key.kind == TERMKEY_TYPE_MODEREPORT).then(|| report::unpack_mode(&key.code.payload()))
 }
 
 /// A key's `utf8` field, up to its terminator.
 ///
 /// Bounded, unlike upstream's `%s`: a key the consumer built itself need not
 /// have terminated the field.
-fn utf8_bytes(field: &[c_char; 7]) -> &[u8] {
+fn utf8_bytes(field: &[u8; 7]) -> &[u8] {
     let len = field
         .iter()
         .position(|&byte| byte == 0)
         .unwrap_or(field.len());
-    // SAFETY: `c_char` and `u8` have the same size and alignment and every bit
-    // pattern is valid for both, so the prefix reads as bytes unchanged.
-    unsafe { core::slice::from_raw_parts(field.as_ptr() as *const u8, len) }
-}
-
-/// Create a key reader. `term` is the terminal's description, which may be null
-/// when nothing is known about it.
-///
-/// # Safety
-/// `term` must be null or a live terminfo entry that outlives the reader.
-pub unsafe fn termkey_new_abstract(term: *mut TerminfoEntry, flags: c_int) -> *mut TermKey {
-    // SAFETY: xmalloc returns a fresh allocation of the size asked for; it
-    // aborts rather than returning null.
-    let raw = unsafe { xmalloc(size_of::<TermKey>()) } as *mut TermKey;
-    // SAFETY: as above.
-    let buffer = unsafe { xmalloc(TERMKEY_DEFAULT_BUFFER_SIZE) } as *mut c_uchar;
-    let fresh = TermKey {
-        flags: 0,
-        canonflags: 0,
-        buffer,
-        buffstart: 0,
-        buffcount: 0,
-        buffsize: TERMKEY_DEFAULT_BUFFER_SIZE,
-        hightide: 0,
-        ti_getstr_hook: None,
-        is_started: 0,
-        ti: driver_ti::new_driver(term),
-        csi: driver_csi::new_driver(),
-    };
-    // SAFETY: `raw` is a fresh allocation of exactly one `TermKey`.
-    unsafe { raw.write(fresh) };
-    // SAFETY: it now holds a live reader whose buffer addresses
-    // `TERMKEY_DEFAULT_BUFFER_SIZE` bytes with nothing pushed into it yet.
-    let tk = unsafe { Tk::of(raw) };
-    set_flags(tk, flags);
-    if flags & TERMKEY_FLAG_NOSTART as c_int == 0 {
-        start(tk);
-    }
-    raw
-}
-
-/// Release the reader and everything it owns; the pointer dangles afterwards.
-fn free(mut tk: Tk) {
-    let buffer = tk.buffer;
-    // SAFETY: allocated by `termkey_new_abstract` and freed exactly once — a
-    // reader is destroyed once, and the field is cleared here.
-    unsafe { xfree(buffer as *mut c_void) };
-    tk.buffer = core::ptr::null_mut();
-    let (ti, csi, raw) = (tk.ti, tk.csi, tk.raw());
-    // SAFETY: the two drivers and the reader itself, allocated with it and
-    // freed exactly once. Nothing reads `tk` after this.
-    unsafe {
-        driver_ti::free_driver(ti);
-        driver_csi::free_driver(csi);
-        xfree(raw as *mut c_void);
-    }
-}
-
-/// # Safety
-/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
-/// yet destroyed, with nothing else reading or writing it meanwhile -- the
-/// contract [`Tk::of`] spells out. Nothing may name it afterwards.
-pub unsafe fn termkey_destroy(tk: *mut TermKey) {
-    // SAFETY: the caller's reader, as at every entry point here.
-    let mut tk = unsafe { Tk::of(tk) };
-    tk.is_started = 0;
-    free(tk);
-}
-
-/// nvim's say over a key capability the terminfo driver loads: given the
-/// capability's name and what the terminal's description holds for it, the
-/// sequence to register instead, or `None` for none.
-pub type TerminfoHook = Box<dyn Fn(&CStr, Option<&[u8]>) -> Option<Vec<u8>>>;
-
-/// Install nvim's override for terminfo capability lookups, so it can supply
-/// key sequences the terminal's description does not name.
-///
-/// # Safety
-/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
-/// yet destroyed, with nothing else reading or writing it meanwhile -- the
-/// contract [`Tk::of`] spells out.
-pub unsafe fn termkey_hook_terminfo_getstr(tk: *mut TermKey, hook: TerminfoHook) {
-    // SAFETY: the caller's reader, as at every entry point here.
-    let mut tk = unsafe { Tk::of(tk) };
-    tk.ti_getstr_hook = Some(hook);
-}
-
-/// Begin reading keys. Upstream also put the terminal into raw mode here and
-/// restored it on stop, but that was guarded on a file descriptor this tree
-/// never gives it — nvim owns the terminal and feeds bytes in by hand.
-fn start(mut tk: Tk) -> c_int {
-    if tk.is_started != 0 {
-        return 1;
-    }
-    driver_ti::load_keys(tk);
-    tk.is_started = 1;
-    1
-}
-
-/// # Safety
-/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
-/// yet destroyed, with nothing else reading or writing it meanwhile -- the
-/// contract [`Tk::of`] spells out.
-pub unsafe fn termkey_start(tk: *mut TermKey) -> c_int {
-    // SAFETY: the caller's reader, as at every entry point here.
-    start(unsafe { Tk::of(tk) })
-}
-
-fn set_flags(mut tk: Tk, newflags: c_int) {
-    tk.flags = newflags;
-    // The two spellings of "a space is a symbol, not a character" are kept in
-    // step in both directions.
-    if tk.flags & TERMKEY_FLAG_SPACESYMBOL as c_int != 0 {
-        tk.canonflags |= TERMKEY_CANON_SPACESYMBOL as c_int;
-    } else {
-        tk.canonflags &= !(TERMKEY_CANON_SPACESYMBOL as c_int);
-    }
-}
-
-/// # Safety
-/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
-/// yet destroyed, with nothing else reading or writing it meanwhile -- the
-/// contract [`Tk::of`] spells out.
-pub unsafe fn termkey_get_canonflags(tk: *mut TermKey) -> c_int {
-    // SAFETY: the caller's reader, as at every entry point here.
-    unsafe { Tk::of(tk) }.canonflags
-}
-
-/// # Safety
-/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
-/// yet destroyed, with nothing else reading or writing it meanwhile -- the
-/// contract [`Tk::of`] spells out.
-pub unsafe fn termkey_set_canonflags(tk: *mut TermKey, flags: c_int) {
-    // SAFETY: the caller's reader, as at every entry point here.
-    let mut tk = unsafe { Tk::of(tk) };
-    tk.canonflags = flags;
-    if tk.canonflags & TERMKEY_CANON_SPACESYMBOL as c_int != 0 {
-        tk.flags |= TERMKEY_FLAG_SPACESYMBOL as c_int;
-    } else {
-        tk.flags &= !(TERMKEY_FLAG_SPACESYMBOL as c_int);
-    }
-}
-
-/// # Safety
-/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
-/// yet destroyed, with nothing else reading or writing it meanwhile -- the
-/// contract [`Tk::of`] spells out.
-pub unsafe fn termkey_get_buffer_size(tk: *mut TermKey) -> size_t {
-    // SAFETY: the caller's reader, as at every entry point here.
-    unsafe { Tk::of(tk) }.buffsize
-}
-
-/// # Safety
-/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
-/// yet destroyed, with nothing else reading or writing it meanwhile -- the
-/// contract [`Tk::of`] spells out.
-pub unsafe fn termkey_set_buffer_size(tk: *mut TermKey, size: size_t) -> c_int {
-    // SAFETY: the caller's reader, as at every entry point here.
-    let mut tk = unsafe { Tk::of(tk) };
-    let buffer = tk.buffer;
-    // SAFETY: the buffer this reader allocated, resized in place; xrealloc
-    // aborts rather than returning null.
-    tk.buffer = unsafe { xrealloc(buffer as *mut c_void, size) } as *mut c_uchar;
-    tk.buffsize = size;
-    1
-}
-
-/// # Safety
-/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
-/// yet destroyed, with nothing else reading or writing it meanwhile -- the
-/// contract [`Tk::of`] spells out.
-pub unsafe fn termkey_get_buffer_remaining(tk: *mut TermKey) -> size_t {
-    // SAFETY: the caller's reader, as at every entry point here.
-    let tk = unsafe { Tk::of(tk) };
-    tk.buffsize - tk.buffcount
-}
-
-/// Hand more input to the reader. Returns how much of it was taken, or `-1` as
-/// a `size_t` when the buffer was already full.
-///
-/// # Safety
-/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
-/// yet destroyed, with nothing else reading or writing it meanwhile -- the
-/// contract [`Tk::of`] spells out. `bytes` must address `len` readable bytes.
-pub unsafe fn termkey_push_bytes(tk: *mut TermKey, bytes: *const c_char, len: size_t) -> size_t {
-    // SAFETY: the caller's reader, as at every entry point here.
-    let mut tk = unsafe { Tk::of(tk) };
-    // SAFETY: the caller's input, `len` bytes of it.
-    let bytes = unsafe { core::slice::from_raw_parts(bytes as *const u8, len) };
-    if tk.buffstart != 0 {
-        // Slide what is left of the previous read back to the front.
-        let (start, count) = (tk.buffstart, tk.buffcount);
-        tk.whole_buffer().copy_within(start..start + count, 0);
-        tk.buffstart = 0;
-    }
-    if tk.buffcount >= tk.buffsize {
-        return -1i32 as size_t;
-    }
-    let taken = len.min(tk.buffsize - tk.buffcount);
-    let count = tk.buffcount;
-    tk.whole_buffer()[count..count + taken].copy_from_slice(&bytes[..taken]);
-    tk.buffcount += taken;
-    taken
+    &field[..len]
 }
 
 /// Write a codepoint's UTF-8 into a key's `utf8` field, which is exactly wide
 /// enough for the longest encoding plus its terminator.
-fn fill_utf8(codepoint: c_int, out: &mut [c_char; 7]) {
+fn fill_utf8(codepoint: c_int, out: &mut [u8; 7]) {
     let (bytes, len) = utf8::encode(codepoint);
-    for (slot, byte) in out.iter_mut().zip(bytes[..len].iter()) {
-        *slot = *byte as c_char;
-    }
+    out[..len].copy_from_slice(&bytes[..len]);
     out[len] = 0;
 }
 
 /// Turn a codepoint into a key, applying the C0 and C1 readings.
-pub fn emit_codepoint(tk: Tk, codepoint: c_int, key: &mut TermKeyKey) {
+pub fn emit_codepoint(tk: &TermKey, codepoint: c_int, key: &mut TermKeyKey) {
     let flags = tk.flags;
     let interpret = flags & TERMKEY_FLAG_NOINTERPRET as c_int == 0;
     if codepoint == 0 {
         // NUL is Ctrl-Space, which has no character of its own.
-        key.type_0 = TERMKEY_TYPE_KEYSYM;
-        key.code = TermKeyKey_code {
-            sym: TERMKEY_SYM_SPACE,
-        };
+        key.kind = TERMKEY_TYPE_KEYSYM;
+        key.code = KeyCode::scalar(TERMKEY_SYM_SPACE);
         key.modifiers = TERMKEY_KEYMOD_CTRL as c_int;
     } else if codepoint < 0x20 && flags & TERMKEY_FLAG_KEEPC0 as c_int == 0 {
         let sym = if interpret {
@@ -480,81 +429,76 @@ pub fn emit_codepoint(tk: Tk, codepoint: c_int, key: &mut TermKeyKey) {
         if sym == TERMKEY_SYM_NONE {
             // Ctrl-letter: C0 codes map onto '@' through '_', but the
             // lower-case letter is the friendlier name for A-Z.
-            key.type_0 = TERMKEY_TYPE_UNICODE;
+            key.kind = TERMKEY_TYPE_UNICODE;
             let base = if (b'A' as c_int..=b'Z' as c_int).contains(&(codepoint + 0x40)) {
                 0x60
             } else {
                 0x40
             };
-            key.code = TermKeyKey_code {
-                codepoint: codepoint + base,
-            };
+            key.code = KeyCode::scalar(codepoint + base);
             key.modifiers = TERMKEY_KEYMOD_CTRL as c_int;
         } else {
-            key.type_0 = TERMKEY_TYPE_KEYSYM;
-            key.code = TermKeyKey_code { sym };
+            key.kind = TERMKEY_TYPE_KEYSYM;
+            key.code = KeyCode::scalar(sym);
             key.modifiers = 0;
         }
     } else if codepoint == 0x7f && interpret {
-        key.type_0 = TERMKEY_TYPE_KEYSYM;
-        key.code = TermKeyKey_code {
-            sym: TERMKEY_SYM_DEL,
-        };
+        key.kind = TERMKEY_TYPE_KEYSYM;
+        key.code = KeyCode::scalar(TERMKEY_SYM_DEL);
         key.modifiers = 0;
     } else if (0x80..0xa0).contains(&codepoint) {
         // The C1 controls are Alt-Ctrl-letter.
-        key.type_0 = TERMKEY_TYPE_UNICODE;
-        key.code = TermKeyKey_code {
-            codepoint: codepoint - 0x40,
-        };
+        key.kind = TERMKEY_TYPE_UNICODE;
+        key.code = KeyCode::scalar(codepoint - 0x40);
         key.modifiers = (TERMKEY_KEYMOD_CTRL | TERMKEY_KEYMOD_ALT) as c_int;
     } else {
-        key.type_0 = TERMKEY_TYPE_UNICODE;
-        key.code = TermKeyKey_code { codepoint };
+        key.kind = TERMKEY_TYPE_UNICODE;
+        key.code = KeyCode::scalar(codepoint);
         key.modifiers = 0;
     }
     canonicalise(tk, key);
-    if key.type_0 == TERMKEY_TYPE_UNICODE {
-        fill_utf8(key.codepoint(), &mut key.utf8);
+    if key.kind == TERMKEY_TYPE_UNICODE {
+        fill_utf8(key.code.codepoint(), &mut key.utf8);
     }
 }
 
 /// Apply the consumer's preferences about which of two equivalent spellings a
 /// key gets: space as a symbol or a character, and DEL as backspace.
-fn canonicalise(tk: Tk, key: &mut TermKeyKey) {
+fn canonicalise(tk: &TermKey, key: &mut TermKeyKey) {
     let flags = tk.canonflags;
     if flags & TERMKEY_CANON_SPACESYMBOL as c_int != 0 {
-        if key.type_0 == TERMKEY_TYPE_UNICODE && key.codepoint() == 0x20 {
-            key.type_0 = TERMKEY_TYPE_KEYSYM;
-            key.code = TermKeyKey_code {
-                sym: TERMKEY_SYM_SPACE,
-            };
+        if key.kind == TERMKEY_TYPE_UNICODE && key.code.codepoint() == 0x20 {
+            key.kind = TERMKEY_TYPE_KEYSYM;
+            key.code = KeyCode::scalar(TERMKEY_SYM_SPACE);
         }
-    } else if key.type_0 == TERMKEY_TYPE_KEYSYM && key.sym() == TERMKEY_SYM_SPACE {
-        key.type_0 = TERMKEY_TYPE_UNICODE;
-        key.code = TermKeyKey_code { codepoint: 0x20 };
+    } else if key.kind == TERMKEY_TYPE_KEYSYM && key.code.sym() == TERMKEY_SYM_SPACE {
+        key.kind = TERMKEY_TYPE_UNICODE;
+        key.code = KeyCode::scalar(0x20);
         fill_utf8(0x20, &mut key.utf8);
     }
     if flags & TERMKEY_CANON_DELBS as c_int != 0
-        && key.type_0 == TERMKEY_TYPE_KEYSYM
-        && key.sym() == TERMKEY_SYM_DEL
+        && key.kind == TERMKEY_TYPE_KEYSYM
+        && key.code.sym() == TERMKEY_SYM_DEL
     {
-        key.code = TermKeyKey_code {
-            sym: TERMKEY_SYM_BACKSPACE,
-        };
+        key.code = KeyCode::scalar(TERMKEY_SYM_BACKSPACE);
     }
 }
 
 /// Read the next key without consuming it. `force` means "decide now": a
 /// sequence that could still grow is taken as complete instead of waiting.
-fn peekkey(mut tk: Tk, key: &mut TermKeyKey, force: c_int, nbytep: &mut size_t) -> TermKeyResult {
-    if tk.is_started == 0 {
+fn peekkey(
+    tk: &mut TermKey,
+    key: &mut TermKeyKey,
+    force: bool,
+    nbytep: &mut usize,
+) -> TermKeyResult {
+    if !tk.is_started {
         return TERMKEY_RES_ERROR;
     }
     key.event = TERMKEY_EVENT_PRESS;
     if tk.hightide != 0 {
         // The tail of an unrecognised control sequence, held back so the
-        // consumer could re-read it with `termkey_interpret_csi`.
+        // consumer could re-read it with `interpret_csi`.
         tk.buffstart += tk.hightide;
         tk.buffcount -= tk.hightide;
         tk.hightide = 0;
@@ -573,15 +517,15 @@ fn peekkey(mut tk: Tk, key: &mut TermKeyKey, force: c_int, nbytep: &mut size_t) 
                 // Reclaim the front half of the buffer once reads have walked
                 // past its midpoint, so a long run does not push buffstart off
                 // the end. Only worth doing when a key was actually consumed.
-                let halfsize = tk.buffsize / 2;
+                let halfsize = tk.buffer.len() / 2;
                 if tk.buffstart > halfsize {
-                    tk.whole_buffer().copy_within(halfsize..halfsize * 2, 0);
+                    tk.buffer.copy_within(halfsize..halfsize * 2, 0);
                     tk.buffstart -= halfsize;
                 }
                 return ret;
             }
             TERMKEY_RES_EOF | TERMKEY_RES_ERROR => return ret,
-            TERMKEY_RES_AGAIN => again |= force == 0,
+            TERMKEY_RES_AGAIN => again |= !force,
             _ => {}
         }
     }
@@ -594,10 +538,10 @@ fn peekkey(mut tk: Tk, key: &mut TermKeyKey, force: c_int, nbytep: &mut size_t) 
 /// Whatever neither driver claimed: a plain character, or an escape prefix that
 /// makes the key after it an Alt- key (unless that key is a repeat or release).
 fn peekkey_simple(
-    mut tk: Tk,
+    tk: &mut TermKey,
     key: &mut TermKeyKey,
-    force: c_int,
-    nbytep: &mut size_t,
+    force: bool,
+    nbytep: &mut usize,
 ) -> TermKeyResult {
     if tk.buffcount == 0 {
         return TERMKEY_RES_NONE;
@@ -605,11 +549,11 @@ fn peekkey_simple(
     let first = tk.buffered()[0];
     if first == 0x1b {
         if tk.buffcount == 1 {
-            if force == 0 {
+            if !force {
                 return TERMKEY_RES_AGAIN;
             }
             // Nothing followed it, so it was the escape key itself.
-            emit_codepoint(tk, first as c_int, key);
+            emit_codepoint(tk, c_int::from(first), key);
             *nbytep = 1;
             return TERMKEY_RES_KEY;
         }
@@ -625,7 +569,7 @@ fn peekkey_simple(
                 // escape sequence, so the escape before it cannot be its Alt:
                 // it was the escape key, pressed on its own.
                 key.event = TERMKEY_EVENT_PRESS;
-                emit_codepoint(tk, first as c_int, key);
+                emit_codepoint(tk, c_int::from(first), key);
                 *nbytep = 1;
                 return TERMKEY_RES_KEY;
             }
@@ -635,7 +579,7 @@ fn peekkey_simple(
         return result;
     }
     if first < 0xa0 {
-        emit_codepoint(tk, first as c_int, key);
+        emit_codepoint(tk, c_int::from(first), key);
         *nbytep = 1;
         return TERMKEY_RES_KEY;
     }
@@ -643,7 +587,7 @@ fn peekkey_simple(
         let bytes = tk.buffered();
         let (codepoint, len, result) = match utf8::decode(bytes) {
             Decoded::Char { codepoint, len } => (codepoint, len, TERMKEY_RES_KEY),
-            Decoded::Incomplete if force != 0 => {
+            Decoded::Incomplete if force => {
                 // Out of patience: take what there is as one bad character.
                 (UNICODE_INVALID, bytes.len(), TERMKEY_RES_KEY)
             }
@@ -654,18 +598,16 @@ fn peekkey_simple(
         }
         // Upstream fills the key in even when it is about to report AGAIN, and
         // the caller re-reads with force set rather than trusting it.
-        key.type_0 = TERMKEY_TYPE_UNICODE;
+        key.kind = TERMKEY_TYPE_UNICODE;
         key.modifiers = 0;
         emit_codepoint(tk, codepoint, key);
         return result;
     }
     // No UTF-8: every byte is its own character.
-    key.type_0 = TERMKEY_TYPE_UNICODE;
-    key.code = TermKeyKey_code {
-        codepoint: first as c_int,
-    };
+    key.kind = TERMKEY_TYPE_UNICODE;
+    key.code = KeyCode::scalar(c_int::from(first));
     key.modifiers = 0;
-    key.utf8[0] = first as c_char;
+    key.utf8[0] = first;
     key.utf8[1] = 0;
     *nbytep = 1;
     TERMKEY_RES_KEY
@@ -673,88 +615,35 @@ fn peekkey_simple(
 
 /// Decode an X10 mouse report: three bytes of button-and-modifiers, column and
 /// line, each offset by a space so they stay printable.
-pub fn peekkey_mouse(tk: Tk, key: &mut TermKeyKey, nbytep: &mut size_t) -> TermKeyResult {
+pub fn peekkey_mouse(tk: &TermKey, key: &mut TermKeyKey, nbytep: &mut usize) -> TermKeyResult {
     if tk.buffcount < 3 {
         return TERMKEY_RES_AGAIN;
     }
-    key.type_0 = TERMKEY_TYPE_MOUSE;
+    key.kind = TERMKEY_TYPE_MOUSE;
     let mut payload: report::Payload = [0; 4];
     for (slot, byte) in payload.iter_mut().zip(&tk.buffered()[..3]) {
-        *slot = (*byte as c_char as c_int - 0x20) as c_char;
+        *slot = (*byte as core::ffi::c_char as c_int - 0x20) as core::ffi::c_char;
     }
     // Bits 2-4 of the button code are the modifiers; lift them out of it.
     key.modifiers = (payload[0] as c_int & 0x1c) >> 2;
-    payload[0] = (payload[0] as c_int & !0x1c) as c_char;
-    key.code = TermKeyKey_code { mouse: payload };
+    payload[0] = (payload[0] as c_int & !0x1c) as core::ffi::c_char;
+    key.code = KeyCode::report(payload);
     *nbytep = 3;
     TERMKEY_RES_KEY
 }
 
-/// # Safety
-/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
-/// yet destroyed, with nothing else reading or writing it meanwhile -- the
-/// contract [`Tk::of`] spells out. `key` must be a writable key.
-pub unsafe fn termkey_getkey(tk: *mut TermKey, key: *mut TermKeyKey) -> TermKeyResult {
-    // SAFETY: the caller's reader and the key it is reading into.
-    let (mut tk, key) = unsafe { (Tk::of(tk), &mut *key) };
-    let mut nbytes: size_t = 0;
-    let ret = peekkey(tk, key, 0, &mut nbytes);
-    if ret == TERMKEY_RES_KEY {
-        tk.eat_bytes(nbytes);
-    }
-    if ret == TERMKEY_RES_AGAIN {
-        // Fill the key in anyway, so a caller that gives up waiting has
-        // something to report. The bytes stay in the buffer.
-        peekkey(tk, key, 1, &mut nbytes);
-    }
-    ret
-}
-
-/// # Safety
-/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
-/// yet destroyed, with nothing else reading or writing it meanwhile -- the
-/// contract [`Tk::of`] spells out. `key` must be a writable key.
-pub unsafe fn termkey_getkey_force(tk: *mut TermKey, key: *mut TermKeyKey) -> TermKeyResult {
-    // SAFETY: the caller's reader and the key it is reading into.
-    let (mut tk, key) = unsafe { (Tk::of(tk), &mut *key) };
-    let mut nbytes: size_t = 0;
-    let ret = peekkey(tk, key, 1, &mut nbytes);
-    if ret == TERMKEY_RES_KEY {
-        tk.eat_bytes(nbytes);
-    }
-    ret
-}
-
-/// Render a key as text, in the manner of `snprintf`: at most `len - 1` bytes
-/// plus a terminator are written, and the return value is the length the whole
-/// rendering would have taken.
+/// Render a key as text: what upstream's `termkey_strfkey` wrote, whole.
 ///
 /// Upstream built the text with a series of `snprintf`s into `buffer + pos`
-/// with a remaining size of `len - pos`. Once `pos` passed `len` — a key whose
-/// modifiers alone overflowed the buffer, which `TERMKEY_FORMAT_MOUSE_POS`
-/// makes easy — that subtraction wrapped to a size_t of about 2^64 and the next
-/// write ran off the end of the caller's buffer. Rendering once and copying
-/// what fits has no such edge.
-///
-/// # Safety
-/// The reader is not read. `buffer` must address `len` writable bytes and
-/// `key` must be a readable key; the key is taken by pointer only because
-/// this is the shape the C ABI had.
-pub unsafe fn termkey_strfkey(
-    _tk: *mut TermKey,
-    buffer: *mut c_char,
-    len: size_t,
-    key: *mut TermKeyKey,
-    format: TermKeyFormat,
-) -> size_t {
-    // SAFETY: the caller's key.
-    let key = unsafe { &*key };
-    // A key whose UTF-8 was never filled in — one the consumer built itself —
-    // gets it derived from the codepoint.
-    let mut encoded = [0 as c_char; 7];
-    let utf8: &[u8] = if key.type_0 == TERMKEY_TYPE_UNICODE {
+/// with a remaining size of `len - pos`, which wrapped once `pos` passed
+/// `len`; rendering into a growable buffer has no such edge.
+pub fn strfkey(key: &TermKeyKey, format: TermKeyFormat) -> Vec<u8> {
+    // A key whose UTF-8 was never filled in -- one the consumer built itself
+    // -- gets it derived from the codepoint.
+    let mut encoded = [0u8; 7];
+    let utf8: &[u8] = if key.kind == TERMKEY_TYPE_UNICODE {
         if key.utf8[0] == 0 {
-            fill_utf8(key.codepoint(), &mut encoded);
+            fill_utf8(key.code.codepoint(), &mut encoded);
             utf8_bytes(&encoded)
         } else {
             utf8_bytes(&key.utf8)
@@ -763,17 +652,15 @@ pub unsafe fn termkey_strfkey(
         b""
     };
 
-    let body = match key.type_0 {
+    let body = match key.kind {
         TERMKEY_TYPE_UNICODE => KeyBody::Unicode {
-            codepoint: key.codepoint(),
+            codepoint: key.code.codepoint(),
             utf8,
         },
-        TERMKEY_TYPE_KEYSYM => KeyBody::Sym(key.sym()),
-        TERMKEY_TYPE_FUNCTION => KeyBody::Function(key.number()),
+        TERMKEY_TYPE_KEYSYM => KeyBody::Sym(key.code.sym()),
+        TERMKEY_TYPE_FUNCTION => KeyBody::Function(key.code.number()),
         TERMKEY_TYPE_MOUSE => {
-            // What `termkey_interpret_mouse` answers, without the four
-            // out-parameters: every one of them is wanted here.
-            let payload = key.report();
+            let payload = key.code.payload();
             let (line, col) = report::unpack_position(&payload);
             let (event, button) = report::decode_mouse(&payload);
             KeyBody::Mouse {
@@ -785,8 +672,7 @@ pub unsafe fn termkey_strfkey(
         }
         TERMKEY_TYPE_POSITION => KeyBody::Position,
         TERMKEY_TYPE_MODEREPORT => {
-            // Likewise `termkey_interpret_modereport`.
-            let (initial, mode, value) = report::unpack_mode(&key.report());
+            let (initial, mode, value) = report::unpack_mode(&key.code.payload());
             KeyBody::Mode {
                 initial,
                 mode,
@@ -796,51 +682,9 @@ pub unsafe fn termkey_strfkey(
         TERMKEY_TYPE_DCS => KeyBody::Dcs,
         TERMKEY_TYPE_OSC => KeyBody::Osc,
         TERMKEY_TYPE_APC => KeyBody::Apc,
-        TERMKEY_TYPE_UNKNOWN_CSI => KeyBody::UnknownCsi(key.number()),
+        TERMKEY_TYPE_UNKNOWN_CSI => KeyBody::UnknownCsi(key.code.number()),
         _ => KeyBody::Unrecognised,
     };
 
-    let text = format::render(&body, key.modifiers, format);
-    if len > 0 {
-        let written = text.len().min(len - 1);
-        // SAFETY: the caller's buffer holds `len` bytes and `written < len`.
-        unsafe {
-            core::ptr::copy_nonoverlapping(text.as_ptr(), buffer as *mut u8, written);
-            *buffer.add(written) = 0;
-        }
-    }
-    text.len()
-}
-
-/// The payload of the last DCS, OSC or APC string, if `key` is still the one
-/// that reported it.
-///
-/// # Safety
-/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
-/// yet destroyed, with nothing else reading or writing it meanwhile -- the
-/// contract [`Tk::of`] spells out. `key` must be a readable key, and `strp` a
-/// writable out-parameter. The answer borrows the reader's saved payload and
-/// is invalidated by the next control string it reads.
-pub unsafe fn termkey_interpret_string(
-    tk: *mut TermKey,
-    key: *const TermKeyKey,
-    strp: *mut *const c_char,
-) -> TermKeyResult {
-    // SAFETY: the caller's reader and the key it is asking about.
-    let (tk, key) = unsafe { (Tk::of(tk), &*key) };
-    let kind = key.type_0;
-    if kind != TERMKEY_TYPE_DCS && kind != TERMKEY_TYPE_OSC && kind != TERMKEY_TYPE_APC {
-        return TERMKEY_RES_NONE;
-    }
-    // SAFETY: the CSI driver's state, allocated with this reader and live for
-    // as long as it is.
-    let csi = unsafe { &*tk.csi };
-    // Each string gets a serial number, so a key held past the next one cannot
-    // read a payload that is no longer its own.
-    if csi.saved_string_id != key.number() {
-        return TERMKEY_RES_NONE;
-    }
-    // SAFETY: the caller's out-parameter.
-    unsafe { *strp = csi.saved_string };
-    TERMKEY_RES_KEY
+    format::render(&body, key.modifiers, format)
 }

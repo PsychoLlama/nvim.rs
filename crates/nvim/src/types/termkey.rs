@@ -13,58 +13,72 @@
 // These are libtermkey's types, Copyright (c) 2007-2011 Paul Evans, under
 // the MIT license; the notice is reproduced in
 // licenses/libtermkey-LICENSE.txt.
-use super::*;
 
-/// A libtermkey instance.
-///
-/// Not `Copy`: it owns its input buffer, its CSI state and its terminfo
-/// driver, all of which `termkey_destroy` releases.
-pub struct TermKey {
-    pub flags: ::core::ffi::c_int,
-    pub canonflags: ::core::ffi::c_int,
-    pub buffer: *mut ::core::ffi::c_uchar,
-    /// Where the unread input starts, and how much of it there is. The pair
-    /// walks forward through `buffer` until a read compacts it.
-    pub buffstart: size_t,
-    pub buffcount: size_t,
-    pub buffsize: size_t,
-    /// Bytes of an unrecognised control sequence held back so the consumer can
-    /// re-read them, and discarded at the start of the next read.
-    pub hightide: size_t,
-    pub ti_getstr_hook: Option<crate::tui::termkey::termkey::TerminfoHook>,
-    pub is_started: ::core::ffi::c_char,
-    /// Terminfo driver state (`TerminfoDriver`), opaque outside
-    /// `tui::termkey::driver_ti`.
-    pub ti: *mut ::core::ffi::c_void,
-    pub csi: *mut TermKeyCsi,
-}
-pub struct TermKeyCsi {
-    pub saved_string_id: ::core::ffi::c_int,
-    pub saved_string: *mut ::core::ffi::c_char,
-}
-#[derive(Copy, Clone)]
-pub struct TermKeyCsiParam {
-    pub param: *const ::core::ffi::c_uchar,
-    pub length: size_t,
-}
 pub type TermKeyEvent = ::core::ffi::c_uint;
 pub type TermKeyFormat = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
+/// One key, as the reader hands it back.
+#[derive(Copy, Clone, Default)]
 pub struct TermKeyKey {
-    pub type_0: TermKeyType,
-    pub code: TermKeyKey_code,
+    /// Which kind of key this is (`TERMKEY_TYPE_*`), which is also what
+    /// says how to read `code`.
+    pub kind: TermKeyType,
+    pub code: KeyCode,
     pub modifiers: ::core::ffi::c_int,
     pub event: TermKeyEvent,
-    pub utf8: [::core::ffi::c_char; 7],
+    /// The key's character as UTF-8, NUL-terminated, for a unicode key.
+    pub utf8: [u8; 7],
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union TermKeyKey_code {
-    pub codepoint: ::core::ffi::c_int,
-    pub number: ::core::ffi::c_int,
-    pub sym: TermKeySym,
-    pub mouse: [::core::ffi::c_char; 4],
+
+/// A key's four-byte code: a character's codepoint, a function key's
+/// number, a symbol, a control string's serial number, or the packed
+/// payload of a mouse, position or mode report -- which one is what the
+/// key's `kind` says.
+///
+/// The scalar readings are one `c_int` and the payload is the same four
+/// bytes in memory order, so every reading is defined whichever was
+/// written; reading one the key is not in gives a stale value, never an
+/// undefined one. This is libtermkey's `code` union with the layout spelled
+/// out instead of overlaid.
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
+pub struct KeyCode(::core::ffi::c_int);
+
+impl KeyCode {
+    /// A codepoint, number or symbol.
+    pub const fn scalar(value: ::core::ffi::c_int) -> Self {
+        Self(value)
+    }
+
+    /// A report's packed payload.
+    pub fn report(payload: [::core::ffi::c_char; 4]) -> Self {
+        Self(::core::ffi::c_int::from_ne_bytes(
+            payload.map(|byte| byte.to_ne_bytes()[0]),
+        ))
+    }
+
+    /// The character a `TERMKEY_TYPE_UNICODE` key stands for.
+    pub const fn codepoint(self) -> ::core::ffi::c_int {
+        self.0
+    }
+
+    /// The number of a `TERMKEY_TYPE_FUNCTION` key, or the serial number of
+    /// a control string or an unrecognised control sequence.
+    pub const fn number(self) -> ::core::ffi::c_int {
+        self.0
+    }
+
+    /// The symbol of a `TERMKEY_TYPE_KEYSYM` key.
+    pub const fn sym(self) -> TermKeySym {
+        self.0
+    }
+
+    /// The four packed bytes of a mouse, position or mode report.
+    pub fn payload(self) -> [::core::ffi::c_char; 4] {
+        self.0
+            .to_ne_bytes()
+            .map(|byte| ::core::ffi::c_char::from_ne_bytes([byte]))
+    }
 }
+
 pub type TermKeyMouseEvent = ::core::ffi::c_uint;
 pub type TermKeyResult = ::core::ffi::c_uint;
 pub type TermKeySym = ::core::ffi::c_int;

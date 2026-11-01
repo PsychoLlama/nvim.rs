@@ -71,8 +71,8 @@ use crate::tui::terminfo::caps::{
 use crate::tui::terminfo::{terminfo_from_builtin, terminfo_from_database};
 use crate::types::libc::STDOUT_FILENO;
 use crate::types::{
-    HlAttrs, SignalWatcher, Staging, String_0, TUIData, TerminfoEntry, TerminfoExt, uv_file,
-    uv_handle_t, uv_timer_t, uv_tty_mode_t,
+    HlAttrs, SignalWatcher, Staging, String_0, TUIData, TermInput, TerminfoEntry, TerminfoExt,
+    uv_file, uv_handle_t, uv_timer_t, uv_tty_mode_t,
 };
 use crate::ui::state::t_colors;
 use crate::ui_client::{ui_client_attach, ui_client_detach, ui_client_set_size};
@@ -253,7 +253,7 @@ impl TUIData {
             Box::new(Self {
                 loop_0: main_loop.ptr(),
                 staging: Staging::new(),
-                input: core::mem::zeroed(),
+                input: TermInput::new(),
                 write_loop: core::mem::zeroed(),
                 ti: TerminfoEntry::default(),
                 term: None,

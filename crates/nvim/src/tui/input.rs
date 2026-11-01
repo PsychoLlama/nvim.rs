@@ -49,18 +49,12 @@ use crate::tui::keys::{KEYMOD_RECOGNIZED, modified_utf8, mouse_event, simple_utf
 use crate::tui::negotiate::{
     tui_enable_extended_underline, tui_handle_term_mode, tui_query_bg_color, tui_tk_ti_getstr,
 };
-use crate::tui::termkey::driver_csi::{
-    csi_param_value, termkey_interpret_csi, termkey_interpret_modereport,
-};
 use crate::tui::termkey::termkey::{
     TERMKEY_CANON_DELBS, TERMKEY_EVENT_PRESS, TERMKEY_EVENT_REPEAT, TERMKEY_FLAG_KEEPC0,
     TERMKEY_FLAG_NOSTART, TERMKEY_FLAG_UTF8, TERMKEY_RES_AGAIN, TERMKEY_RES_KEY, TERMKEY_TYPE_APC,
     TERMKEY_TYPE_DCS, TERMKEY_TYPE_FUNCTION, TERMKEY_TYPE_KEYSYM, TERMKEY_TYPE_MODEREPORT,
-    TERMKEY_TYPE_MOUSE, TERMKEY_TYPE_OSC, TERMKEY_TYPE_UNICODE, TERMKEY_TYPE_UNKNOWN_CSI,
-    termkey_destroy, termkey_get_buffer_remaining, termkey_get_buffer_size, termkey_get_canonflags,
-    termkey_getkey, termkey_getkey_force, termkey_hook_terminfo_getstr, termkey_interpret_string,
-    termkey_new_abstract, termkey_push_bytes, termkey_set_buffer_size, termkey_set_canonflags,
-    termkey_start,
+    TERMKEY_TYPE_MOUSE, TERMKEY_TYPE_OSC, TERMKEY_TYPE_UNICODE, TERMKEY_TYPE_UNKNOWN_CSI, TermKey,
+    csi_param_value, interpret_modereport,
 };
 use crate::tui::tui::tui_set_size;
 use crate::types::builders::ArrayBuf;
@@ -68,8 +62,7 @@ use crate::types::libc::STDIN_FILENO;
 use crate::types::termios;
 use crate::types::{
     Array, Event, Integer, KEY_BUFFER_SIZE, KeyEncoding, Loop, Object, RStream, String_0,
-    TermInput, TermKey, TermKeyCsiParam, TermKeyKey, TerminfoEntry, size_t, uv_handle_t,
-    uv_timer_t,
+    TermInput, TermInputCallbacks, TermKeyKey, TerminfoEntry, size_t, uv_handle_t, uv_timer_t,
 };
 use ::libc::tcgetattr;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -100,9 +93,6 @@ const END_PASTE: &[u8; 6] = b"\x1b[201~";
 const FOCUS_GAINED: &[u8; 3] = b"\x1b[I";
 const FOCUS_LOST: &[u8; 3] = b"\x1b[O";
 
-/// The most CSI parameters read out of one sequence.
-const MAX_CSI_PARAMS: usize = 16;
-
 /// The terminal speaks the kitty keyboard protocol.
 const KEY_ENCODING_KITTY: KeyEncoding = 1;
 
@@ -112,6 +102,34 @@ const BG_QUERY_DELAY_MS: u64 = 100;
 const ESC: u8 = 0x1b;
 
 // -------------------------------------------------------------- the lifecycle
+
+impl TermInput {
+    /// An input layer that has not been initialised: no parser, no loop, and
+    /// libuv's handles not yet registered.
+    pub(crate) fn new() -> Self {
+        Self {
+            in_fd: 0,
+            paste: PASTE_NONE,
+            ttimeout: false,
+            callbacks: TermInputCallbacks {
+                primary_device_attr: None,
+            },
+            key_encoding: 0,
+            ttimeoutlen: 0,
+            tk: None,
+            // SAFETY: libuv handles and the read stream are C layouts for
+            // which all-zero is the state `tinput_init` initialises from, as
+            // it was when this struct was xcalloc'ed.
+            timer_handle: unsafe { core::mem::zeroed() },
+            bg_query_timer: unsafe { core::mem::zeroed() },
+            read_stream: unsafe { core::mem::zeroed() },
+            loop_0: core::ptr::null_mut(),
+            tui_data: core::ptr::null_mut(),
+            key_buffer: [0; KEY_BUFFER_SIZE],
+            key_buffer_len: 0,
+        }
+    }
+}
 
 /// Set up the input layer on `loop_0`, parsing keys as `ti` describes them.
 ///
@@ -132,24 +150,23 @@ pub unsafe fn tinput_init(input: *mut TermInput, loop_0: *mut Loop, ti: &Terminf
         // UTF-8 because that is all nvim reads; C0 kept because the editor
         // wants the control characters themselves rather than termkey's
         // names for them; NOSTART because starting is separate, below.
-        (*input).tk = termkey_new_abstract(
-            core::ptr::from_ref(ti).cast_mut(),
+        let mut tk = TermKey::new(
+            None,
             (TERMKEY_FLAG_UTF8 | TERMKEY_FLAG_NOSTART | TERMKEY_FLAG_KEEPC0) as c_int,
         );
-        termkey_set_buffer_size((*input).tk, INPUT_BUFFER_SIZE);
+        tk.set_buffer_size(INPUT_BUFFER_SIZE);
         // The line discipline's erase character decides what backspace is,
         // whatever terminfo says; it is read once, here, before termkey
         // loads its keys.
         let erase = stty_erase((*input).in_fd);
-        termkey_hook_terminfo_getstr(
-            (*input).tk,
-            Box::new(move |name, value| tui_tk_ti_getstr(erase, name, value)),
-        );
-        termkey_start((*input).tk);
+        tk.set_terminfo_hook(Box::new(move |name, value| {
+            tui_tk_ti_getstr(erase, name, value)
+        }));
+        tk.start(Some(ti));
         // Backspace and delete are one key as far as the editor is
         // concerned, whichever byte this terminal sends for it.
-        let canonflags = termkey_get_canonflags((*input).tk);
-        termkey_set_canonflags((*input).tk, canonflags | TERMKEY_CANON_DELBS as c_int);
+        tk.set_canonflags(tk.canonflags() | TERMKEY_CANON_DELBS as c_int);
+        (*input).tk = Some(tk);
 
         uv_timer_init(&raw mut (*loop_0).uv, &raw mut (*input).timer_handle);
         (*input).timer_handle.data = input.cast::<c_void>();
@@ -171,7 +188,7 @@ pub unsafe fn tinput_destroy(input: *mut TermInput) {
             None,
         );
         rstream_may_close(&raw mut (*input).read_stream);
-        termkey_destroy((*input).tk);
+        (*input).tk = None;
         (*input).loop_0 = core::ptr::null_mut();
     }
 }
@@ -414,7 +431,7 @@ unsafe fn handle_raw_buffer(input: *mut TermInput, force: bool, data: &[u8]) -> 
                 break;
             }
         }
-        shrink_parser_buffer((*input).tk);
+        shrink_parser_buffer(parser(&mut *input));
         data.len() - rest.len()
     }
 }
@@ -434,52 +451,38 @@ fn take_one_sequence(input: &mut TermInput, rest: &[u8]) -> usize {
         tinput_enqueue(input, &rest[..count]);
         return count;
     }
-    // SAFETY: `tk` is this input layer's parser, and the bytes handed to it
-    // are the caller's, read and not kept.
-    unsafe {
-        grow_parser_buffer(input.tk, count);
-        let pushed = termkey_push_bytes(input.tk, rest.as_ptr().cast::<c_char>(), count);
-        assert!(pushed <= count, "the parser took more than it was given");
-        tk_getkeys(input, false);
-        pushed
-    }
+    let tk = parser(input);
+    grow_parser_buffer(tk, count);
+    let pushed = tk
+        .push_bytes(&rest[..count])
+        .expect("the parser's buffer was grown to fit");
+    // SAFETY: `input` is a live input layer, borrowed here for the call.
+    unsafe { tk_getkeys(input, false) };
+    pushed
+}
+
+/// The input layer's parser, which exists from [`tinput_init`] to
+/// [`tinput_destroy`].
+fn parser(input: &mut TermInput) -> &mut TermKey {
+    input.tk.as_mut().expect("the input layer is initialised")
 }
 
 /// Make room in the parser's buffer for `wanted` more bytes.
-///
-/// # Safety
-/// `tk` must be a live parser.
-unsafe fn grow_parser_buffer(tk: *mut TermKey, wanted: usize) {
-    // SAFETY: the caller guarantees `tk`.
-    unsafe {
-        let remaining = termkey_get_buffer_remaining(tk);
-        if wanted <= remaining {
-            return;
-        }
-        let size = termkey_get_buffer_size(tk);
-        let grown = (size + (wanted - remaining)).max(size * 2);
-        assert!(
-            termkey_set_buffer_size(tk, grown) != 0,
-            "out of memory growing the key parser's buffer"
-        );
+fn grow_parser_buffer(tk: &mut TermKey, wanted: usize) {
+    let remaining = tk.buffer_remaining();
+    if wanted <= remaining {
+        return;
     }
+    let size = tk.buffer_size();
+    tk.set_buffer_size((size + (wanted - remaining)).max(size * 2));
 }
 
 /// Give back the room a burst of input needed.
-///
-/// # Safety
-/// `tk` must be a live parser.
-unsafe fn shrink_parser_buffer(tk: *mut TermKey) {
-    // SAFETY: the caller guarantees `tk`.
-    unsafe {
-        let size = termkey_get_buffer_size(tk);
-        let used = size - termkey_get_buffer_remaining(tk);
-        if used < INPUT_BUFFER_SIZE && size > INPUT_BUFFER_SIZE {
-            assert!(
-                termkey_set_buffer_size(tk, INPUT_BUFFER_SIZE) != 0,
-                "out of memory shrinking the key parser's buffer"
-            );
-        }
+fn shrink_parser_buffer(tk: &mut TermKey) {
+    let size = tk.buffer_size();
+    let used = size - tk.buffer_remaining();
+    if used < INPUT_BUFFER_SIZE && size > INPUT_BUFFER_SIZE {
+        tk.set_buffer_size(INPUT_BUFFER_SIZE);
     }
 }
 
@@ -507,15 +510,15 @@ unsafe fn bytes<'a>(data: *const c_char, len: usize) -> &'a [u8] {
 /// # Safety
 /// `input` must point to a live [`TermInput`].
 unsafe fn tk_getkeys(input: *mut TermInput, force: bool) {
-    // SAFETY: the caller guarantees `input`; `key` is this frame's, and a
-    // zeroed one is a valid unicode key carrying no modifiers.
+    // SAFETY: the caller guarantees `input`; `key` is this frame's.
     unsafe {
-        let mut key: TermKeyKey = core::mem::zeroed();
+        let mut key = TermKeyKey::default();
         let result = loop {
+            let tk = parser(&mut *input);
             let result = if force {
-                termkey_getkey_force((*input).tk, &raw mut key)
+                tk.getkey_force(&mut key)
             } else {
-                termkey_getkey((*input).tk, &raw mut key)
+                tk.getkey(&mut key)
             };
             if result != TERMKEY_RES_KEY {
                 break result;
@@ -552,16 +555,15 @@ unsafe fn tk_getkeys(input: *mut TermInput, force: bool) {
 unsafe fn dispatch_key(input: *mut TermInput, key: &TermKeyKey) {
     // SAFETY: the caller guarantees both.
     unsafe {
-        let tk = (*input).tk;
-        match key.type_0 {
+        match key.kind {
             TERMKEY_TYPE_UNICODE if key.modifiers & KEYMOD_RECOGNIZED == 0 => {
                 tinput_enqueue(&mut *input, simple_utf8(key).as_bytes());
             }
             TERMKEY_TYPE_UNICODE | TERMKEY_TYPE_FUNCTION | TERMKEY_TYPE_KEYSYM => {
-                tinput_enqueue(&mut *input, modified_utf8(tk, key).as_bytes());
+                tinput_enqueue(&mut *input, modified_utf8(key).as_bytes());
             }
             TERMKEY_TYPE_MOUSE => {
-                if let Some(text) = mouse_event(tk, key) {
+                if let Some(text) = mouse_event(key) {
                     tinput_enqueue(&mut *input, text.as_bytes());
                 }
             }
@@ -642,20 +644,9 @@ fn handle_bracketed_paste(input: &mut TermInput, data: &[u8]) -> (usize, bool) {
 /// `input` must point to a live [`TermInput`], and `key` must have come from
 /// its parser.
 unsafe fn handle_modereport(input: *mut TermInput, key: &TermKeyKey) {
-    // SAFETY: the caller guarantees both; the out-parameters are this
-    // frame's.
-    unsafe {
-        let (mut initial, mut mode, mut value) = (0, 0, 0);
-        let result = termkey_interpret_modereport(
-            (*input).tk,
-            key,
-            &raw mut initial,
-            &raw mut mode,
-            &raw mut value,
-        );
-        if result == TERMKEY_RES_KEY {
-            tui_handle_term_mode(&mut *(*input).tui_data, mode as _, value as _);
-        }
+    if let Some((_initial, mode, value)) = interpret_modereport(key) {
+        // SAFETY: the caller guarantees `input`, which knows its TUI.
+        unsafe { tui_handle_term_mode(&mut *(*input).tui_data, mode as _, value as _) };
     }
 }
 
@@ -665,60 +656,50 @@ unsafe fn handle_modereport(input: *mut TermInput, key: &TermKeyKey) {
 /// `input` must point to a live [`TermInput`], and `key` must have come from
 /// its parser.
 unsafe fn handle_unknown_csi(input: *mut TermInput, key: &TermKeyKey) {
-    // SAFETY: the caller guarantees both; the parameter array is this
-    // frame's, and termkey fills in no more of it than it says it has.
-    unsafe {
-        let mut params = [TermKeyCsiParam {
-            param: core::ptr::null(),
-            length: 0,
-        }; MAX_CSI_PARAMS];
-        let mut nparams = MAX_CSI_PARAMS;
-        let mut cmd: core::ffi::c_uint = 0;
-        let result = termkey_interpret_csi(
-            (*input).tk,
-            key,
-            params.as_mut_ptr(),
-            &raw mut nparams,
-            &raw mut cmd,
-        );
-        if result != TERMKEY_RES_KEY {
+    // SAFETY: the caller guarantees both. The sequence's parameters are read
+    // out of the parser's buffer into values here, so nothing borrows the
+    // parser while the TUI is reached below.
+    let (command, initial, args) = unsafe {
+        let Some(csi) = (*input).tk.as_ref().and_then(|tk| tk.interpret_csi(key)) else {
             return;
-        }
-        let params = &params[..nparams];
-        let initial = (cmd >> 8 & 0xff) as u8;
-        let command = (cmd & 0xff) as u8;
+        };
+        let args: Vec<c_int> = csi.params().iter().map(|&p| csi_param_value(p)).collect();
+        let initial = (csi.command >> 8 & 0xff) as u8;
+        let command = (csi.command & 0xff) as u8;
+        (command, initial, args)
+    };
+    // SAFETY: the caller guarantees `input`, whose TUI and timer are its own.
+    unsafe {
         match (command, initial) {
             // The terminal supports the kitty keyboard protocol, which the
             // TUI has by now asked it to speak.
             (b'u', b'?') => (*input).key_encoding = KEY_ENCODING_KITTY,
-            (b'c', b'?') => handle_primary_device_attr(input, params),
+            (b'c', b'?') => handle_primary_device_attr(input, &args),
             // A resize the terminal is reporting itself.
-            (b't', _) if params.len() == 5 => {
-                let args: [c_int; 3] = core::array::from_fn(|i| csi_param_value(params[i]));
+            (b't', _) if args.len() == 5 => {
                 if args[0] == REPORT_SIZE_IN_CELLS {
                     let (height, width) = (args[1], args[2]);
                     tui_set_size((*input).tui_data, width, height);
                 }
             }
-            (b'n', _) if params.len() == 1 => {
+            (b'n', _) if args.len() == 1 => {
                 let mut response = Vec::new();
-                let _ = write!(Bytes(&mut response), "\x1b[{}n", csi_param_value(params[0]));
+                let _ = write!(Bytes(&mut response), "\x1b[{}n", args[0]);
                 send_term_event(&mut response);
             }
-            (b'n', _) if params.len() == 2 => {
-                let args: [c_int; 2] = core::array::from_fn(|i| csi_param_value(params[i]));
-                // The terminal's colour scheme changed. Terminals send a
-                // flurry of these, so the query it provokes is rationed.
-                if args[0] == THEME_CHANGED
-                    && uv_timer_get_due_in(&raw mut (*input).bg_query_timer) == 0
-                {
-                    uv_timer_start(
-                        &raw mut (*input).bg_query_timer,
-                        Some(bg_query_timer_cb),
-                        BG_QUERY_DELAY_MS,
-                        0,
-                    );
-                }
+            // The terminal's colour scheme changed. Terminals send a flurry
+            // of these, so the query it provokes is rationed.
+            (b'n', _)
+                if args.len() == 2
+                    && args[0] == THEME_CHANGED
+                    && uv_timer_get_due_in(&raw mut (*input).bg_query_timer) == 0 =>
+            {
+                uv_timer_start(
+                    &raw mut (*input).bg_query_timer,
+                    Some(bg_query_timer_cb),
+                    BG_QUERY_DELAY_MS,
+                    0,
+                );
             }
             _ => {}
         }
@@ -736,9 +717,9 @@ const THEME_CHANGED: c_int = 997;
 /// The terminal's device attributes: what it is and what it can do.
 ///
 /// # Safety
-/// `input` must point to a live [`TermInput`], and `params` must be the
-/// parameters of a device-attributes reply.
-unsafe fn handle_primary_device_attr(input: *mut TermInput, params: &[TermKeyCsiParam]) {
+/// `input` must point to a live [`TermInput`]; `params` are the values of a
+/// device-attributes reply's parameters.
+unsafe fn handle_primary_device_attr(input: *mut TermInput, params: &[c_int]) {
     // SAFETY: the caller guarantees both. The callback is taken before it
     // is called: it runs once, and what it does reaches back here.
     unsafe {
@@ -754,7 +735,7 @@ unsafe fn handle_primary_device_attr(input: *mut TermInput, params: &[TermKeyCsi
             if i > 0 {
                 response.push(b';');
             }
-            let _ = write!(Bytes(&mut response), "{}", csi_param_value(param));
+            let _ = write!(Bytes(&mut response), "{param}");
         }
         response.push(b'c');
         send_term_event(&mut response);
@@ -768,22 +749,21 @@ unsafe fn handle_primary_device_attr(input: *mut TermInput, params: &[TermKeyCsi
 /// `input` must point to a live [`TermInput`], and `key` must have come from
 /// its parser.
 unsafe fn handle_term_response(input: *mut TermInput, key: &TermKeyKey) {
-    // SAFETY: the caller guarantees both; the string termkey hands back
-    // borrows its buffer, and is read before anything else is parsed.
+    // SAFETY: the caller guarantees both. The string is copied out of the
+    // parser before the TUI is reached.
     unsafe {
-        let mut answer = core::ptr::null::<c_char>();
-        if termkey_interpret_string((*input).tk, key, &raw mut answer) != TERMKEY_RES_KEY {
+        let Some(text) = (*input)
+            .tk
+            .as_ref()
+            .and_then(|tk| tk.interpret_string(key))
+            .map(<[u8]>::to_vec)
+        else {
             return;
-        }
-        assert!(
-            !answer.is_null(),
-            "the parser reported a string it does not have"
-        );
-        let text = CStr::from_ptr(answer).to_bytes();
+        };
 
         // A terminal that answers the underline-style query with a style
         // has extended underlines, whatever its terminfo entry says.
-        if key.type_0 == TERMKEY_TYPE_DCS
+        if key.kind == TERMKEY_TYPE_DCS
             && (text.starts_with(b"1$r4:3m") || text.starts_with(b"1$r0;4:3m"))
         {
             tui_enable_extended_underline(&mut *(*input).tui_data);
@@ -791,7 +771,7 @@ unsafe fn handle_term_response(input: *mut TermInput, key: &TermKeyKey) {
 
         // The editor is told what was said, introducer and all, so that a
         // plugin can recognise the answer to its own query.
-        let introducer: &[u8] = match key.type_0 {
+        let introducer: &[u8] = match key.kind {
             TERMKEY_TYPE_OSC => b"\x1b]",
             TERMKEY_TYPE_DCS => b"\x1bP",
             TERMKEY_TYPE_APC => b"\x1b_",
@@ -799,7 +779,7 @@ unsafe fn handle_term_response(input: *mut TermInput, key: &TermKeyKey) {
         };
         let mut response = Vec::with_capacity(introducer.len() + text.len());
         response.extend_from_slice(introducer);
-        response.extend_from_slice(text);
+        response.extend_from_slice(&text);
         send_term_event(&mut response);
     }
 }
