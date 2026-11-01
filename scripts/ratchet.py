@@ -44,14 +44,13 @@ unmeasured, as they were when they lived at the repo root):
               lowers it, adopting the deny and wrapping a body is neutral —
               and adds the one lines got wrong.
 
-  static_mut  occurrences of "static mut "
+  static_mut · variadic  retired: `static mut ` and `: ...` were counted per
+              file until the last of each sat in `os/cshim.rs` (four
+              `static mut`, one variadic definition: the `snprintf` shim) and
+              were documented as the floor. Both need `unsafe` to touch, so
+              the placement check keeps them on the perimeter and that file's
+              own `unsafe_stmts` keeps them from growing.
   no_mangle   occurrences of "#[unsafe(no_mangle)]"
-  variadic    occurrences of ": ..." — C-variadic parameters, whose calls
-              are format-string-unchecked. They retire as their callers
-              migrate to the format_args!-based macros (semsg! and friends)
-              or their modules are rewritten; vim_snprintf/vim_vsnprintf
-              (vim's own user-visible format language) are expected to be
-              the long-lived remainder.
   extern_abi  definitions of functions carrying a C ABI — `extern "C" fn
               name` / `extern "C-unwind" fn name`, i.e. the named form, so an
               `extern` *type* (a function pointer) and a declaration inside an
@@ -257,14 +256,15 @@ plus these whole-tree metrics, which are not per-file:
                     still declares a cell, so a deleted global cannot leave a
                     stale entry propping the floor up.
 
-  unsafe_stmts_outside_perimeter
-                    `unsafe_stmts` restricted to files that are *not* on the
-                    unsafe perimeter (PERIMETER, below) — the tree's unchecked
-                    code minus the part that is expected to stay unchecked.
-                    This is the migration's debt number: the total says how
-                    much unchecked code the binary contains, this says how
-                    much of it the compiler should one day be checking, and
-                    the two stop being confused for each other.
+  the perimeter  the files whose unchecked code is expected to stay
+                    unchecked (PERIMETER, below). `unsafe_stmts_outside_perimeter`
+                    -- `unsafe_stmts` restricted to the files *off* the list --
+                    was the migration's debt number: the total said how much
+                    unchecked code the binary contains, this said how much of
+                    it the compiler should one day be checking. It reached 0
+                    and retired when the placement check (below) became a hard
+                    failure: a file off the list cannot allow unsafe code, so
+                    it cannot hold an unchecked statement either.
 
                     The perimeter is where unsafe *bottoms out* in something
                     the migration cannot rewrite: a C library's ABI (LuaJIT,
@@ -490,8 +490,8 @@ plus these whole-tree metrics, which are not per-file:
                       curwin_raw      `curwin`/`curbuf`/`curtab` `.get()`
                         reads outside `winlayer`, which is the module whose
                         job it is to turn those globals into handles. The
-                        same outside-a-home shape as
-                        `unsafe_stmts_outside_perimeter`: the reads inside
+                        same outside-a-home shape as the perimeter's:
+                        the reads inside
                         the home are the implementation, the ones outside are
                         the debt.
 
@@ -527,7 +527,7 @@ plus these whole-tree metrics, which are not per-file:
                     compiler then enforces, and the ratchet only counts who
                     has made it.
 
-  files_without_deny_unsafe_op  the number of source files carrying neither
+  files_without_deny_unsafe_op  (retired) the number of source files carrying neither
                     #![forbid(unsafe_code)] nor
                     #![deny(unsafe_op_in_unsafe_fn)]. Same trick for edition
                     2024's honest-unsafe lint: Cargo.toml allows it (blanket
@@ -538,7 +538,11 @@ plus these whole-tree metrics, which are not per-file:
                     attribute is crate-level rather than per-module, so lib.rs
                     could only take it once every file beneath it already had
                     a marker — which is exactly the state the criterion
-                    describes, and why lib.rs went last.
+                    describes, and why lib.rs went last. Retired at 0 when the
+                    placement check became a hard failure: its third rule asks
+                    every file allowing unsafe code for the deny, a forbidding
+                    file needs none, and a module file carrying neither holds
+                    no unsafe code for the deny to govern.
 
   files_allowing_<lint>  one per entry in FILE_ALLOWS: the number of source
                     files carrying that lint's blanket `#![allow]`. The same
@@ -574,7 +578,7 @@ plus these whole-tree metrics, which are not per-file:
                     rewritten to Rust's spelling for a global. Eight of the
                     files carrying it are generated and take it from apigen.
 
-                    files_allowing_unsafe_code  the migration's own posture,
+                    files_allowing_unsafe_code  (retired) the migration's own posture,
                     and the one entry here that is not about names. rustc
                     allows `unsafe_code` by default, so for the whole
                     transpile nothing said where unsafe was permitted to live:
@@ -594,11 +598,15 @@ plus these whole-tree metrics, which are not per-file:
                     which is what retired `files_without_forbid_unsafe`, this
                     metric's complement, when the default flipped. The
                     generated files take theirs from apigen, emitted only for
-                    a chunk that holds unsafe.
+                    a chunk that holds unsafe. Retired when the placement
+                    check became a hard failure: every file allowing unsafe
+                    code is then on the perimeter, so the count is the
+                    perimeter's file count (docs/unsafe-audit.md), and a new
+                    one is a new PERIMETER row, which a reviewer reads.
 
-                    All four may only fall, and a new file has no business
-                    taking any of them unless it is describing someone else's
-                    names or standing on the perimeter.
+                    The three left may only fall, and a new file has no
+                    business taking any of them unless it is describing
+                    someone else's names.
 
   the instruments  the C vocabulary above measures idioms; these measure the
                     C *calling convention* and the C *shape*, which is what is
@@ -671,18 +679,20 @@ plus these whole-tree metrics, which are not per-file:
                         regions by shape, raw signature pointers by what they
                         point at, and the wrapped callees its module does not
                         define. See `finish_list`.
-                      stored_addr_handles  `Win::new`/`Buf::new`/
+                      stored_addr_handles  (retired) `Win::new`/`Buf::new`/
                         `TabPage::new`/`FrameRef::new`/`::at`/`::from_raw`
-                        whose argument is not `<expr>.raw()`. See
-                        HANDLE_BUILDER for the rule and why it is coarse.
+                        whose argument is not `<expr>.raw()`.
                         Building a handle *reads* the object's `handle` field,
                         so an address the C only ever compared becomes a
                         dereference — and phase 28 closed on two
                         heap-use-after-frees of exactly that shape, which
                         whole-suite ASan was the only gate to see. Counted
                         outside `winlayer/`, where the constructors live.
-                        Retires by inspection: every site is either vouched
-                        for at the point of use or fixed. Phase 29.
+                        Retired at 0: every constructor that takes an
+                        address is an `unsafe fn` or private to `winlayer/`,
+                        so a call needs an `unsafe` region, which the
+                        placement check keeps on the perimeter and the
+                        file's `unsafe_stmts` keeps from growing. Phase 29.
                       raw_ptr_params  a parameter *directly* typed `*mut T`/
                         `*const T`, over the parameter list alone. The C
                         calling convention itself, and the thing every
@@ -713,15 +723,18 @@ plus these whole-tree metrics, which are not per-file:
                         scope: `OptSlot::String(*mut *mut c_char)` is a
                         selector and not storage, and it retires with the
                         options table. Phase 32.
-                      ml_get_raw · mbyte_raw · bytes_at  the three
-                        families that hand a raw pointer *back*: a buffer line
-                        (`ml_get*`), a multibyte cursor (`utf_ptr2*`, pointer
-                        forms only — the `_len` variants are the safe bodies
-                        and are deliberately not matched), and `bytes_at`.
-                        Each has a documented FFI floor rather than a zero.
-                        Phase 29. (A fourth, `msg_raw`, matched the message
-                        entry points by name; it reached 0 and was retired,
-                        since a name list cannot see a new pointer form.)
+                      mbyte_raw · bytes_at  the families that hand a raw
+                        pointer *back*: a multibyte cursor (`utf_ptr2*`,
+                        pointer forms only — the `_len` variants are the safe
+                        bodies and are deliberately not matched; the floor is
+                        `harness.rs`'s C exports), and `bytes_at`. Phase 29.
+                        Two more retired: `msg_raw` matched the message entry
+                        points by name and reached 0 (a name list cannot see
+                        a new pointer form), and `ml_get_raw` -- the forms that
+                        handed back a buffer line's address -- reached 0 when
+                        they were deleted, and a pointer one handed back could
+                        only be read inside an `unsafe` region, which the
+                        placement check keeps on the perimeter.
                       vval_raw · typval_raw_params  the C value model: reads
                         of the `TypVal` union's `vval` arm, and `*mut TypVal`
                         parameters. Both retire when the union becomes an
@@ -754,24 +767,16 @@ plus these whole-tree metrics, which are not per-file:
                         transpiler's rendering of C's `goto`. A lifetime bound
                         (`'a: 'b`) cannot match: what follows the colon has to
                         open a block. Phase 34.
-                      lua_raw_stack  `lua_push*`/`lua_pop`/`lua_to*`/
-                        `lua_get*`/`lua_set*` outside LUA_STACK_HOME:
-                        `lua/stack/`, the typed `Stack`, and `lua/ffi.rs`,
-                        whose hits are declarations and macro shims rather
-                        than call sites. Every other site moves into the
-                        `Stack`.
-                      raw_variadic_calls  direct calls to the C printf-family
-                        variadics (`snprintf`, `printf`, `fprintf`,
-                        `sscanf`, `luaL_error`, `lua_pushfstring`). A variadic
-                        argument is not type-checked: a `&CStr` or an
-                        `XString` handed to `%s` compiles and reads garbage,
-                        which shipped twice. Each callee has a macro of the
-                        same name in `variadic.rs` that binds every argument
-                        through `CArg`, so `name!(` is checked and `name(` is
-                        not. The macros' own expansions go through
-                        `variadic::direct::` and do not count, and neither
-                        does a `fn name(` header. What is left is the
-                        perimeter's. Phase 33.
+                      lua_raw_stack · raw_variadic_calls  (retired) raw
+                        `lua_State` stack calls outside `lua/stack/` and
+                        `lua/ffi.rs`, and direct calls to the C printf-family
+                        variadics outside the `CArg`-checked macros of
+                        `variadic.rs`. Both reached 0. Every one of those
+                        callees is a foreign `unsafe fn`, so a call needs an
+                        `unsafe` region: off the perimeter the placement check
+                        refuses the file, and on it the region is a new
+                        statement in a file whose `unsafe_stmts` may only
+                        shrink. Phase 33.
                       long_fns  functions whose item spans more than
                         LONG_FN_LINES lines, outside generated files — c2rust
                         translated each C function whole, so a 700-line body
@@ -818,27 +823,29 @@ plus these whole-tree metrics, which are not per-file:
                         field an FFI struct needs for its layout stays; the
                         rest retire as their functions stop handing text
                         around by pointer.
-                      unsafe_placement  where the unsafe-code attributes
-                        sit, over crates/nvim/src: a file allowing unsafe code
-                        off PERIMETER (a generated file holding unsafe
-                        excepted), a file carrying neither the allow nor
-                        `forbid(unsafe_code)` that is not a module file over
-                        an allowing descendant (the "neither" list, computed),
-                        and an allow file without the unsafe-op deny or --
-                        on the perimeter -- without its row named in the `//`
-                        comment directly above the attribute. One per broken
-                        rule. Report-only while the outside files finish: it
-                        is ratcheted like the rest, and `--dimension
-                        unsafe_placement` lists each offender with the two
-                        ways out (finish it, or a PERIMETER row with a
-                        reason). At zero it becomes a hard check.
 
 A `warnings` metric used to sit alongside it; phase 5 drove the count to
 zero and the dev shell (flake.nix) now sets `RUSTFLAGS="-D warnings"` for
 every local and CI build instead, so the counter is retired.
 
-One thing here is not a count but a hard check, and it fails the run outright:
-**a write through an accessor that answers by value**. `f().field = x`
+Two things here are not counts but hard checks, and each fails the run
+outright.
+
+**Where the unsafe-code attributes sit** (`check_unsafe_placement`, over
+crates/nvim/src): a file allowing unsafe code off PERIMETER; a file carrying
+neither the allow nor `forbid(unsafe_code)` that is not a module file (`mod.rs`,
+`lib.rs`, `x.rs` beside `x/`) over a descendant that allows -- the "neither"
+list, computed, because `allow` under a `forbid` is E0453; and an allow file
+without `deny(unsafe_op_in_unsafe_fn)` or -- on the perimeter -- without its
+row named in the `//` comment directly above the attribute. The message names
+each file, the rule it breaks and the two ways out (finish it, or a PERIMETER
+row with a reason); `--dimension unsafe_placement` prints the same list. It
+was a ratcheted count while the files outside finished, and became the check
+when it read 0. A generated file has no exemption: apigen emits the allow only
+for a chunk that holds unsafe, and such a chunk off the perimeter fails here
+like any other file.
+
+**A write through an accessor that answers by value**. `f().field = x`
 compiles when `f` returns a value — the assignment lands in a temporary that
 is dropped on the next line, and the write is a silent no-op. Three of those
 shipped past `cargo test`, the unit suite, Miri and 2 743 functional tests;
@@ -968,9 +975,7 @@ UNIT_TEST_ALSO_COVERS = {"options": ("option",)}
 LINE_CAP = 1000
 # name -> needles counted in the masked source, summed.
 COUNTED = {
-    "static_mut": ("static mut ",),
     "no_mangle": ("#[unsafe(no_mangle)]",),
-    "variadic": (": ...",),
     "cell_ptr": (".ptr()", ".as_raw()"),
 }
 # name -> regex counted in the masked source, for what a substring cannot
@@ -1086,8 +1091,8 @@ CELL_DECL = r"\bstatic\s+{}\s*:\s*(?:GlobalCell|SharedCell)\b"
 
 # The unsafe perimeter: the modules whose unchecked code is expected to
 # outlive the migration, because removing it would mean rewriting something
-# this tree does not own. `unsafe_stmts_outside_perimeter` is the tree's
-# unchecked lines minus these; docs/perimeter.md carries the prose. An entry
+# this tree does not own; `check_unsafe_placement` refuses an allow anywhere
+# else, and docs/perimeter.md carries the prose. An entry
 # is a directory prefix (trailing `/`) or one exact path, and every entry must
 # have a file with unchecked lines behind it or `check_perimeter` fails --
 # the list prunes itself as modules finish.
@@ -1554,8 +1559,8 @@ VOCABULARY = {
 # apart: every match lands in exactly one of them.
 REPR_C = re.compile(r"#\[repr\(\s*C\s*[,)]")
 
-# The same, but counted only in files *outside* a home — the shape
-# `unsafe_stmts_outside_perimeter` established. name -> (needle, home).
+# The same, but counted only in files *outside* a home — the shape the
+# perimeter established. name -> (needle, home).
 VOCABULARY_OUTSIDE = {
     "repr_c_editor_state": (REPR_C, {**PERIMETER, **FOREIGN_ABI_TYPES}),
     "curwin_raw": (re.compile(r"\bcur(?:win|buf|tab)\s*\.\s*get\(\)"), WINLAYER),
@@ -1725,8 +1730,8 @@ API_DIR = "crates/nvim/src/api/"
 # the doc block for what each counts and what retires it. Every one of them
 # decomposes per file, so `--dimension NAME` can list where the debt sits.
 
-# The C printf-family variadics: `raw_variadic_calls` counts a direct call to
-# one, and `variadic.rs` gives each a CArg-checked macro of the same name.
+# The C printf-family variadics: `variadic.rs` gives each a CArg-checked macro
+# of the same name.
 # `vim_snprintf*`/`printf_string` left when they stopped being variadics (their
 # macros build a typed argument array), and `nlua_push_errstr` when it began
 # taking its message whole.
@@ -1750,20 +1755,6 @@ ARGUMENT_MACROS = VARIADIC_CALLEES + (
 
 # Counted over every masked file, tree-wide.
 INSTRUMENTS = {
-    # The forms that handed back a line's *address*: `ml_get(`, `ml_get_buf(`
-    # and `ml_get_buf_mut(`, and their aliases -- `Buf::line_raw`/
-    # `line_mut_raw` and `get_cursor_line_ptr`/`get_cursor_pos_ptr` were thin
-    # wrappers a caller reached for instead of the free function, so a needle
-    # blind to them would book a rename as progress (p31-e). All of them are
-    # deleted; the needle stays at 0 so none comes back. The length forms
-    # (`ml_get_len`, `ml_get_buf_len`, `Buf::line_len_raw`,
-    # `get_cursor_{line,pos}_len`) answer a number, are safe, and stay when
-    # the pointer forms go, so they are not debt and are not matched.
-    "ml_get_raw": re.compile(
-        r"\bml_get(?:_buf(?:_mut)?)?\(|\bml_get_(?:pos|cursor)\("
-        r"|\bline(?:_mut)?_raw\("
-        r"|\bget_cursor_(?:line|pos)_ptr\("
-    ),
     # The `(` is what keeps the *pointer* forms apart from the `_len` ones
     # that take a slice's length and are the safe bodies underneath them:
     # `utfc_ptr2len(` matches, `utfc_ptr2len_len(` does not.
@@ -1784,12 +1775,6 @@ INSTRUMENTS = {
     "labeled_blocks": re.compile(
         r"'[A-Za-z_][A-Za-z0-9_]*\s*:\s*(?:\{|loop\b|while\b|for\b)"
     ),
-    # A call, not a mention: `name!(` (the checked macro) cannot match because
-    # of the `!`, `.name(` is somebody's method, `fn name(` is the declaration,
-    # and `direct::name(` is the macros' own expansion.
-    "raw_variadic_calls": re.compile(
-        r"(?<![\w.])(?<!fn )(?<!direct::)(?:" + "|".join(VARIADIC_CALLEES) + r")\s*\("
-    ),
     # The fixed-size C string buffer: a `[c_char; N]` type (a local, a
     # parameter, a return, a field) or a `[0 as c_char; N]` initialiser
     # (`vec![..]` included -- the same buffer on the heap). One array is one
@@ -1801,27 +1786,6 @@ INSTRUMENTS = {
         r"\[\s*c_char\s*;[^\]]*\]\s*=\s*(?:vec!\s*)?\[\s*0(?:\s+as\s+c_char)?\s*;"
         r"|\[\s*c_char\s*;"
         r"|\[\s*0\s+as\s+c_char\s*;"
-    ),
-}
-# The typed `Stack` over the `lua_State` and the declarations it calls:
-# `lua_raw_stack` is "raw stack traffic outside the one module allowed to
-# have it" -- the same shape PERIMETER and WINLAYER use. `ffi.rs` is in the
-# home because its hits are the `extern` declarations and the inline shims
-# over LuaJIT's header macros, not call sites; `stack/` is where every call
-# site outside it moves.
-LUA_STACK_HOME = {
-    "crates/nvim/src/lua/stack/": "the typed `Stack` over the `lua_State`",
-    "crates/nvim/src/lua/ffi.rs": "LuaJIT's declarations and macro shims",
-}
-# The same, but only outside a home, the shape `curwin_raw` established.
-# name -> (needle, home).
-INSTRUMENTS_OUTSIDE = {
-    "lua_raw_stack": (
-        re.compile(
-            r"\blua_(?:push[A-Za-z0-9_]*|pop|to[A-Za-z0-9_]*"
-            r"|get[A-Za-z0-9_]*|set[A-Za-z0-9_]*)\("
-        ),
-        LUA_STACK_HOME,
     ),
 }
 # `types/`: c2rust's one `types_defs.h`-sized namespace. Phase 34 moves each
@@ -1896,27 +1860,6 @@ CHAR_AS_C_INT = re.compile(
     r"(?:(?:::)?(?:core|std)::ffi::|(?:::)?libc::)?c_u?int\b"
 )
 
-# The handle constructors, and the one argument shape that is not a stored
-# address. Phase 28 closed on two heap-use-after-frees of exactly this shape:
-# `Win::new`/`Buf::new` *read* the object's `handle` field, so an address that
-# the C only ever compared becomes a dereference the moment a handle is built
-# from it -- and if the object was freed by an autocommand in between, that is
-# a use-after-free ASan is the only gate that sees.
-#
-# The rule, deliberately coarse: a builder call whose argument is not
-# `<expr>.raw()` counts. `.raw()` is the address of a handle the caller
-# already holds, which means something vouched for the object being live
-# within the same statement; anything else -- a struct field, a `GlobalCell`
-# read, a local that outlived a call into user code -- is an address whose
-# liveness nobody re-checked. The exemption is generous in the unsafe
-# direction (the `.raw()` receiver could itself be a stored handle) and the
-# needle is blind to *when* the argument was loaded, so this is a guard, not a
-# proof: it says how many sites a reviewer has to look at, and it may only
-# fall. `winlayer/` is carved out the way `raw_win_buf_sigs` is -- the
-# constructors and the registry lookups live there, and they are the reason
-# the rest of the tree can be counted at all.
-HANDLE_BUILDER = re.compile(r"\b(?:Win|Buf|TabPage|FrameRef)::(?:new|from_raw|at)\s*\(")
-VOUCHED_ARGUMENT = re.compile(r"\.\s*raw\s*\(\s*\)\s*$")
 
 # A function long enough that nobody reads it: c2rust translated a C function
 # whole, and a 700-line body is a family of operations sharing one stack
@@ -1954,12 +1897,10 @@ INSTRUMENT_KEYS = (
     "unsafe_fns_without_raw_params",
     "safety_on_safe_fns",
     "wrappers",
-    "stored_addr_handles",
     "raw_ptr_params",
     "raw_cstr_params",
     "raw_cstr_returns",
     "raw_cstr_fields",
-    "ml_get_raw",
     "mbyte_raw",
     "bytes_at",
     "vval_raw",
@@ -1972,14 +1913,11 @@ INSTRUMENT_KEYS = (
     "char_as_c_int",
     "failed_uses",
     "labeled_blocks",
-    "lua_raw_stack",
-    "raw_variadic_calls",
     "long_fns",
     "dup_consts",
     "types_files",
     "untested_dirs",
     "cchar_scratch",
-    "unsafe_placement",
 )
 
 FORBID = "#![forbid(unsafe_code)]"
@@ -1996,7 +1934,6 @@ FILE_ALLOWS = {
     "non_camel_case_types": "#![allow(non_camel_case_types)]",
     "non_snake_case": "#![allow(non_snake_case)]",
     "non_upper_case_globals": "#![allow(non_upper_case_globals)]",
-    "unsafe_code": "#![allow(unsafe_code)]",
 }
 # A `# Safety` heading in a doc comment. Any heading level, any case, because
 # what is being counted is whether the obligation is written down.
@@ -3244,7 +3181,6 @@ def missing_safety_doc(text, masked):
 
 def measure():
     """(repo-relative file -> {metric: count} with zeros included,
-    number of files carrying neither forbid nor the unsafe-op deny,
     number of files not carrying the cast deny,
     lint name -> number of files carrying its blanket allow,
     repo-relative file -> its masked source, for the whole-tree checks,
@@ -3255,7 +3191,6 @@ def measure():
     stats = {}
     tree = {}
     sources = {}
-    without_deny = 0
     without_casts = 0
     allowing = dict.fromkeys(FILE_ALLOWS, 0)
     for path in sorted(
@@ -3276,11 +3211,10 @@ def measure():
         stats[str(path.relative_to(ROOT))] = counts
         tree[str(path.relative_to(ROOT))] = masked
         sources[str(path.relative_to(ROOT))] = text
-        without_deny += FORBID not in masked and DENY_UNSAFE_OP not in masked
         without_casts += DENY_CASTS.search(masked) is None
         for lint, needle in FILE_ALLOWS.items():
             allowing[lint] += needle in masked
-    return stats, without_deny, without_casts, allowing, tree, sources
+    return stats, without_casts, allowing, tree, sources
 
 
 def ledgers():
@@ -3510,9 +3444,7 @@ def placement_findings(tree, sources):
 
     Three rules, over `crates/nvim/src` only:
 
-    1. a file carrying `#![allow(unsafe_code)]` is on PERIMETER (or is a
-       generated file that holds unsafe, which takes the attribute from
-       tools/apigen);
+    1. a file carrying `#![allow(unsafe_code)]` is on PERIMETER;
     2. every other file carries `#![forbid(unsafe_code)]`, unless it is a
        module file with a descendant that carries the allow -- `allow` under
        a `forbid` is E0453, so that file cannot say either (the "neither"
@@ -3523,7 +3455,7 @@ def placement_findings(tree, sources):
 
     A finding is one broken rule, so a file can hold more than one.
     """
-    allow = FILE_ALLOWS["unsafe_code"]
+    allow = FILE_ALLOWS_UNSAFE
     files = {f: m for f, m in tree.items() if f.startswith(CRATE_SRC)}
     allowing = {f for f, m in files.items() if allow in m}
     found = {}
@@ -3532,9 +3464,7 @@ def placement_findings(tree, sources):
         broken = []
         generated = GENERATED_MARKER.search(source[:GENERATED_HEAD]) is not None
         if file in allowing:
-            if not in_perimeter(file) and not (
-                generated and UNSAFE_WORD.search(masked.replace(allow, ""))
-            ):
+            if not in_perimeter(file):
                 broken.append("allows unsafe code off the perimeter")
             if DENY_UNSAFE_OP not in masked:
                 broken.append(f"allows unsafe code without {DENY_UNSAFE_OP}")
@@ -3557,6 +3487,27 @@ def placement_findings(tree, sources):
         if broken:
             found[file] = broken
     return found
+
+
+def check_unsafe_placement(tree, sources):
+    """Fail the run when an unsafe-code attribute is in the wrong place.
+
+    The three rules are `placement_findings`'. A ratcheted count of them would
+    only say "no worse than before"; at zero the only honest number is zero,
+    so a finding stops the run, in `--check` (minimal-ci, the pre-commit hook)
+    and when writing the baseline alike.
+    """
+    if found := placement_findings(tree, sources):
+        sys.exit(
+            "ratchet: unsafe code is allowed only on the perimeter "
+            "(docs/perimeter.md). These files break a placement rule:\n  "
+            + "\n  ".join(
+                f"{file}: {rule}"
+                for file, broken in sorted(found.items())
+                for rule in broken
+            )
+            + f"\nEach: {PLACEMENT_EXITS}."
+        )
 
 
 def vocabulary(tree):
@@ -3672,11 +3623,6 @@ def instrument_sites(tree, sources, wrappers=None):
         for name, needle in INSTRUMENTS.items():
             if found := len(needle.findall(masked)):
                 sites[name][file] = found
-        for name, (needle, home) in INSTRUMENTS_OUTSIDE.items():
-            if in_home(file, home):
-                continue
-            if found := len(needle.findall(masked)):
-                sites[name][file] = found
         declarations = list(fn_signatures(masked))
         for name, needle in INSTRUMENTS_PARAMS.items():
             if found := sum(len(needle.findall(s.params)) for s in declarations):
@@ -3700,16 +3646,6 @@ def instrument_sites(tree, sources, wrappers=None):
             sites["char_as_c_int"][file] = found
         if in_home(file, TYPES_HOME):
             sites["types_files"][file] = 1
-        if not in_home(file, WINLAYER):
-            if found := sum(
-                not VOUCHED_ARGUMENT.search(
-                    masked[
-                        m.end() : balanced(masked, m.end() - 1, "(", ")") - 1
-                    ].strip()
-                )
-                for m in HANDLE_BUILDER.finditer(masked)
-            ):
-                sites["stored_addr_handles"][file] = found
         if not GENERATED_MARKER.search(source[:GENERATED_HEAD]):
             if found := sum(
                 fn_body_lines(masked, s) > LONG_FN_LINES for s in declarations
@@ -3729,8 +3665,6 @@ def instrument_sites(tree, sources, wrappers=None):
                 tops.add(top)
             if "#[test]" in masked:
                 tested.add(top)
-    for file, broken in placement_findings(tree, sources).items():
-        sites["unsafe_placement"][file] = len(broken)
     for (name, _), files in consts.items():
         if len(files) > 1:
             sites["dup_consts"][name] += len(files) - 1
@@ -3793,7 +3727,6 @@ def whole_tree(stats, tree, sites):
     """The name-keyed whole-tree counts. See the doc block."""
     return {
         **cell_ptr_partition(stats, tree),
-        "unsafe_stmts_outside_perimeter": perimeter_lines(stats)[1],
         "cell_copy_owner": sum(
             len(CELL_COPY_OWNER_RE.findall(m)) for m in tree.values()
         ),
@@ -3870,7 +3803,6 @@ def check_names(tree):
 def render(
     stats,
     ledger_counts,
-    without_deny,
     without_casts,
     allowing,
 ):
@@ -3896,7 +3828,6 @@ def render(
     return (
         "{\n"
         f"{head}"
-        f'  "files_without_deny_unsafe_op": {without_deny},\n'
         f'  "files_without_deny_casts": {without_casts},\n'
         f"{allows}"
         f'  "files": {{\n{body}\n  }}\n'
@@ -3912,7 +3843,6 @@ WHOLE_TREE_LABEL = {
     "cell_ptr_keepers": "cell_ptr sites on a ruled multi-site keeper",
     "cell_ptr_accessors": "one-per-cell acquire-once cell_ptr sites",
     "cell_copy_owner": "get() copies of a Copy global owning a pointer",
-    "unsafe_stmts_outside_perimeter": "unchecked statements outside the unsafe perimeter",
     # The C vocabulary, in the order the phases retire it.
     "c_int_returns": "`-> c_int` status-code returns",
     "ok_fail": "OK/FAIL returns and comparisons",
@@ -3941,12 +3871,10 @@ WHOLE_TREE_LABEL = {
     "unsafe_fns": "`unsafe fn` items",
     "unsafe_fns_without_raw_params": "`unsafe fn`s with no raw pointer in the signature, off the allowlist",
     "wrappers": "single-call `unsafe { f(..) }` regions",
-    "stored_addr_handles": "handles built from an address nobody re-vouched for",
     "raw_ptr_params": "raw-pointer parameters",
     "raw_cstr_params": "raw `c_char` pointers in a parameter list",
     "raw_cstr_returns": "raw `c_char` pointer returns",
     "raw_cstr_fields": "raw `c_char` pointers in a struct's fields",
-    "ml_get_raw": "pointer-form ml_get* calls",
     "mbyte_raw": "pointer-form multibyte cursor calls",
     "bytes_at": "bytes_at() calls",
     "vval_raw": "`.vval.` union reads",
@@ -3959,15 +3887,12 @@ WHOLE_TREE_LABEL = {
     "char_as_c_int": "character literals cast to C's int",
     "failed_uses": "`Failed`, the sentinel wearing a Rust type",
     "labeled_blocks": "labelled blocks and loops (the transpiled goto)",
-    "lua_raw_stack": "raw lua_State stack calls outside the Stack module",
-    "raw_variadic_calls": "printf-family variadic calls outside the CArg-checked macros",
     "long_fns": f"functions over {LONG_FN_LINES} lines outside generated files",
     "safety_on_safe_fns": "safe fns whose doc comment still has a `# Safety` section",
     "dup_consts": "redundant copies of a constant declared in another file",
     "types_files": "files under types/",
     "untested_dirs": "top-level modules with no test of any kind",
     "cchar_scratch": "fixed-size `[c_char; N]` buffers",
-    "unsafe_placement": "unsafe-code attributes in the wrong place (report-only)",
 }
 # The C-vocabulary subset of the above, for the run's summary line.
 VOCABULARY_KEYS = (
@@ -3987,7 +3912,6 @@ VOCABULARY_KEYS = (
 def violations(
     stats,
     counts,
-    without_deny,
     without_casts,
     allowing,
     baseline,
@@ -3999,11 +3923,6 @@ def violations(
         base = baseline.get(name, counts[name])
         if counts[name] > base:
             found.append(f"{label}: {base} -> {counts[name]}")
-    base_deny = baseline.get("files_without_deny_unsafe_op", without_deny)
-    if without_deny > base_deny:
-        found.append(
-            f"files without {FORBID} or {DENY_UNSAFE_OP}: {base_deny} -> {without_deny}"
-        )
     base_casts = baseline.get("files_without_deny_casts", without_casts)
     if without_casts > base_casts:
         found.append(f"files without the cast deny: {base_casts} -> {without_casts}")
@@ -4027,7 +3946,7 @@ def violations(
     return found
 
 
-def summary(stats, counts, without_deny, without_casts, allowing):
+def summary(stats, counts, without_casts, allowing):
     counted = (*COUNTED, *COUNTED_RE, *DERIVED)
     totals = {name: sum(c[name] for c in stats.values()) for name in counted}
     over = sum(c["lines"] > LINE_CAP for c in stats.values())
@@ -4039,10 +3958,7 @@ def summary(stats, counts, without_deny, without_casts, allowing):
         f"{counts['cell_ptr_keepers']} keeper cell_ptr sites",
         f"{counts['cell_ptr_accessors']} acquire-once cell_ptr sites",
         f"{counts['cell_copy_owner']} Copy-owner get()s",
-        f"{counts['unsafe_stmts_outside_perimeter']} unchecked statements outside the "
-        f"perimeter ({perimeter_lines(stats)[0]} inside)",
-        f"{without_deny} files without forbid(unsafe_code) or "
-        "deny(unsafe_op_in_unsafe_fn)",
+        f"{perimeter_lines(stats)[0]} unchecked statements on the perimeter",
         f"{without_casts} files without the cast deny",
     ]
     parts += [f"{n} files allowing {lint}" for lint, n in allowing.items()]
@@ -4199,7 +4115,6 @@ SELF_TEST_FILE_ALLOWS = [
     ("#![allow(non_camel_case_types)]\n", {"non_camel_case_types"}),
     ("#![allow(non_snake_case)]\n", {"non_snake_case"}),
     ("#![allow(non_upper_case_globals)]\n", {"non_upper_case_globals"}),
-    ("#![allow(unsafe_code)]\n", {"unsafe_code"}),
     (
         "#![allow(non_camel_case_types)]\n#![allow(non_snake_case)]\n",
         {"non_camel_case_types", "non_snake_case"},
@@ -4209,10 +4124,8 @@ SELF_TEST_FILE_ALLOWS = [
     ("#[allow(non_camel_case_types)]\nstruct uv_loop_t;\n", set()),
     ("#[allow(non_snake_case)]\npub fn nvim__id() {}\n", set()),
     ("#[allow(non_upper_case_globals)]\nunsafe fn apply_opts() {}\n", set()),
-    ("#[allow(unsafe_code)]\nfn f() { unsafe { g() } }\n", set()),
     # Prose about the attribute does not switch it on.
     ("//! `#![allow(non_camel_case_types)]` is what libuv's names need.\n", set()),
-    ("// Not `#![allow(unsafe_code)]`: this module is finished.\n", set()),
 ]
 # (source, expected number of lines exempted from the line cap)
 # (source, the finish list's (unsafe fns, wrappers, region kinds, raw params,
@@ -4938,21 +4851,6 @@ SELF_TEST_INSTRUMENTS = [
         },
         {"unsafe_fns": 2},
     ),
-    # A handle built from a `.raw()` in the same statement is vouched for; a
-    # field, a global read and a bare local are not, and `winlayer/` is out.
-    (
-        {
-            "crates/nvim/src/a.rs": "fn f() {\n"
-            "    Win::new(other.raw());\n"
-            "    Buf::new(state.saved_buf);\n"
-            "    TabPage::from_raw(cell.get());\n"
-            "    Buf::new(buf);\n"
-            "    FrameRef::at(frame_of(win).raw());\n"
-            "}\n",
-            "crates/nvim/src/winlayer/handles.rs": "fn g() {\n    Win::new(raw);\n}\n",
-        },
-        {"stored_addr_handles": 3},
-    ),
     # A parameter and a return are different debts and never share a count.
     (
         {
@@ -5005,35 +4903,15 @@ SELF_TEST_INSTRUMENTS = [
         },
         {"raw_cstr_fields": 6},
     ),
-    # The pointer forms count and the `_len` bodies underneath them do not;
-    # nor do the memline's length forms.
+    # The pointer forms count and the `_len` bodies underneath them do not.
     (
         {
             "crates/nvim/src/a.rs": "fn f() {\n"
             "    utf_ptr2char(p);\n    utfc_ptr2len(p);\n"
             "    utfc_ptr2len_len(s, n);\n    utf_ptr2char_info(p);\n"
-            "    ml_get(lnum);\n    ml_get_buf_len(buf, lnum);\n"
-            "    ml_get_buf_mut(buf, lnum);\n    ml_get_len(lnum);\n"
-            "    buf.line_raw(lnum);\n    buf.line_len_raw(lnum);\n"
-            "    get_cursor_pos_ptr();\n    get_cursor_line_len();\n"
-            "    buf.lines().line(lnum);\n"
             "}\n",
         },
-        {"mbyte_raw": 2, "ml_get_raw": 4},
-    ),
-    # A direct variadic call counts; the checked macro, a method of the same
-    # name, the declaration and the macros' own expansion do not.
-    (
-        {
-            "crates/nvim/src/a.rs": 'unsafe extern "C" fn snprintf(s: *mut c_char) {}\n'
-            "fn f() {\n"
-            "    snprintf(buf, n, fmt, a);\n    libc::fprintf(f, fmt);\n"
-            "    snprintf!(buf, n, fmt, a);\n    self.printf(s);\n"
-            "    $crate::variadic::direct::snprintf(buf, n, fmt);\n"
-            "    sscanf(buf, fmt, a);\n    vim_snprintf(buf, n, fmt, &[]);\n"
-            "}\n",
-        },
-        {"raw_variadic_calls": 3},
+        {"mbyte_raw": 2},
     ),
     # A char-literal cast counts; the same text in a comment or a string does
     # not, and neither does an ordinary `as c_int` on a name.
@@ -5137,19 +5015,13 @@ SELF_TEST_INSTRUMENTS = [
         },
         {"untested_dirs": 0},
     ),
-    # `types/` is counted by the file, and `lua_raw_stack` counts outside
-    # LUA_STACK_HOME only.
+    # `types/` is counted by the file.
     (
         {
             "crates/nvim/src/types/eval.rs": "pub struct A;\n",
             "crates/nvim/src/types/uv.rs": "pub struct B;\n",
-            "crates/nvim/src/lua/executor/mod.rs": "fn f() {\n"
-            "    lua_pushnil(l);\n    lua_pop(l, 1);\n    lua_tolstring(l, -1, &n);\n"
-            "    luaL_error(l);\n}\n",
-            "crates/nvim/src/lua/stack/mod.rs": "fn g() {\n    lua_pushnil(l);\n}\n",
-            "crates/nvim/src/lua/ffi.rs": "fn lua_pop(l) {\n    lua_settop(l, -2);\n}\n",
         },
-        {"types_files": 2, "lua_raw_stack": 3},
+        {"types_files": 2},
     ),
 ]
 
@@ -5464,7 +5336,7 @@ def main():
         sys.exit(f"ratchet: unknown argument(s): {' '.join(sorted(unknown))}")
 
     self_test()
-    stats, without_deny, without_casts, allowing, tree, sources = measure()
+    stats, without_casts, allowing, tree, sources = measure()
     wrappers, by_callee = wrapper_scan(tree)
     sites = instrument_sites(tree, sources, wrappers)
     if dimension == "unsafe_placement":
@@ -5482,13 +5354,14 @@ def main():
     check_cell_ptr(tree)
     check_names(tree)
     check_perimeter(stats)
+    check_unsafe_placement(tree, sources)
     index = unsafe_fn_index(tree)
     check_unsafe_fn_allowlist(index, unsafe_fn_allowlist())
     sync_perimeter_doc(stats, "--check" in args)
     sync_wrapper_table(wrapper_table(by_callee, index), "--check" in args)
     sync_finish_list(finish_list(stats, tree), "--check" in args)
     counts = {**ledgers(), **whole_tree(stats, tree, sites)}
-    content = render(stats, counts, without_deny, without_casts, allowing)
+    content = render(stats, counts, without_casts, allowing)
     committed = BASELINE.read_text() if BASELINE.exists() else None
 
     if "--check" in args:
@@ -5499,7 +5372,6 @@ def main():
         if grew := violations(
             stats,
             counts,
-            without_deny,
             without_casts,
             allowing,
             json.loads(committed),
@@ -5521,7 +5393,6 @@ def main():
         if grew := violations(
             stats,
             counts,
-            without_deny,
             without_casts,
             allowing,
             json.loads(committed),
@@ -5534,7 +5405,7 @@ def main():
     BASELINE.write_text(content)
     print(
         f"wrote {BASELINE.relative_to(ROOT)}: "
-        f"{summary(stats, counts, without_deny, without_casts, allowing)}"
+        f"{summary(stats, counts, without_casts, allowing)}"
     )
 
 

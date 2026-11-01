@@ -7,10 +7,10 @@ C library, the operating system, or raw memory — code that will still be
 `unsafe` when the migration is finished, because the thing on the other side
 cannot be rewritten from here.
 
-The **perimeter** is that second part, named explicitly. What is left over is
-the migration's debt, counted by the ratchet as
-`unsafe_stmts_outside_perimeter` and shrink-only like every other metric. That
-number is the one to drive to zero.
+The **perimeter** is that second part, named explicitly. What was left over
+was the migration's debt, counted by the ratchet as
+`unsafe_stmts_outside_perimeter` and driven to zero; the ratchet now refuses
+unsafe code anywhere off this list (see "How the ratchet enforces it").
 
 Today: **1,615** unchecked statements inside the perimeter (64 files),
 **0** outside it (0 files, of 1,390 measured). It was 138,877 when this
@@ -80,34 +80,38 @@ the contract.
 ## How the ratchet enforces it
 
 `PERIMETER` in `scripts/ratchet.py` is the list, one entry per row above, each
-carrying its reason. Six things follow from it:
+carrying its reason. Five things follow from it:
 
-- **`unsafe_stmts_outside_perimeter`** — the tree's unchecked statements minus
-  the perimeter's — is recorded in `metrics/ratchet.json` and may only shrink.
-  A region is charged by what it _does_: every `;`-terminated statement, every
-  block's tail expression and every `match` arm, at every depth, minimum one.
-  Splitting `unsafe { a; b; c }` into three regions is not progress; deleting
-  an operation is.
+- **Unsafe code is allowed here and nowhere else.** `check_unsafe_placement`
+  fails `just ratchet --check` — so `just minimal-ci` and the pre-commit hook —
+  and `just refresh` alike on any `crates/nvim/src` file whose attributes are in
+  the wrong place: an `allow(unsafe_code)` off the list, generated files
+  included; a file with neither attribute that is not a module file over an
+  allowing descendant (the "neither" list below, computed rather than listed);
+  and an allow file without `deny(unsafe_op_in_unsafe_fn)` or without its row
+  named above the attribute. The message names each file, the rule it breaks
+  and its two exits — finish the file, or give its module a row here with a
+  reason; `--dimension unsafe_placement` prints the same list. While the files
+  outside were finishing, this was a shrink-only count (`unsafe_placement`)
+  beside `unsafe_stmts_outside_perimeter` (the unchecked statements off the
+  list) and `files_allowing_unsafe_code`; when the first read zero the check
+  went hard, and the three counts retired with the four the check implies
+  (`files_without_deny_unsafe_op`, `stored_addr_handles`, `lua_raw_stack`,
+  `raw_variadic_calls`, beside the long-zero `ml_get_raw` and the per-file
+  `static_mut`/`variadic` counts of `os/cshim.rs`'s shim).
+- **The perimeter cannot silently grow.** It needs no check of its own for
+  that: every file's `unsafe_stmts` is ratcheted individually, a brand-new
+  file included, so unchecked code appearing inside the perimeter is a
+  violation — and moving an unsafe file into a perimeter module shows up as a
+  new path at full size. A region is charged by what it _does_: every
+  `;`-terminated statement, every block's tail expression and every `match`
+  arm, at every depth, minimum one. Splitting `unsafe { a; b; c }` into three
+  regions is not progress; deleting an operation is.
 - **The list is self-pruning.** `check_perimeter` fails the run when an entry
   has no file with unchecked code behind it, so a module that finishes,
   moves or disappears has to leave the list in the same commit. A module
   reaching zero is the outcome the list is for, and it has to say so.
-- **The perimeter cannot silently grow.** It needs no check of its own for
-  that: every file's `unsafe_stmts` is already ratcheted individually, a
-  brand-new file included, so unchecked code appearing inside the perimeter is
-  a violation exactly as it is outside — and moving an unsafe file into a
-  perimeter module shows up as a new path at full size.
 - **A file on the list says so in its own source.** See below.
-- **Placement is checked, not assumed.** `unsafe_placement` counts every
-  `crates/nvim/src` file whose attributes are in the wrong place: an
-  `allow(unsafe_code)` off the list (a generated file holding unsafe
-  excepted), a file with neither attribute that is not a module file over an
-  allowing descendant (the "neither" list below, computed rather than
-  listed), and an allow file without `deny(unsafe_op_in_unsafe_fn)` or, on
-  the list, without its row named above the attribute. It is shrink-only and
-  report-only until it reads zero, when it becomes a hard failure;
-  `--dimension unsafe_placement` names each offender and its two exits —
-  finish the file, or give its module a row here with a reason.
 - **The "Today" line above is written, not typed.** `sync_perimeter_doc`
   rewrites its five numbers from the same measurement, and the `--check` form
   fails when they are stale. Hand-maintained, all five drifted — the line
@@ -137,49 +141,50 @@ an inner
 
     #![allow(unsafe_code)]
 
-with its other inner attributes, and `scripts/ratchet.py` holds the count of
-files doing so as `files_allowing_unsafe_code`, shrink-only like everything
-else. Three rules about that line:
+with its other inner attributes, and `scripts/ratchet.py`'s placement check
+holds where that line may appear. Three rules about it:
 
 - **A file inside a perimeter module names its row**, in a one-line comment
   directly above the attribute — "Unsafe perimeter: the `os/` row in
   docs/perimeter.md." That allow is permanent — the module is on the list
   precisely because its unsafe does not retire — and the comment is what makes
   the difference visible while reading the file rather than the list.
-- **Every other file carries it bare.** There is no reason to write, because
-  the count is the reason: those files are the migration's debt, the same
-  population `unsafe_stmts_outside_perimeter` measures, and each one that
-  finishes drops the allow for a `forbid` and the total falls by one. The
-  exception is the handful of non-perimeter files exporting a C symbol
-  somebody else resolves: they name their `metrics/abi-ledger.jsonl` rows,
-  because the export is the whole reason the file cannot be finished. An
-  export that is only a front over a module's own function (or a data symbol
-  the module can re-export) lives in `harness.rs` instead, so the module it
-  reaches can forbid.
+- **No other file carries it.** For most of the migration a file off the list
+  carried it bare, because there the count was the reason: those files were
+  the debt, and each that finished dropped the allow for a `forbid`. The last
+  of them did, and the placement check now refuses the line off the list. A
+  file exporting a C symbol somebody else resolves is no exception any more:
+  an export that is only a front over a module's own function (or a data
+  symbol the module can re-export) lives in `harness.rs`, a row of its own,
+  so the module it reaches forbids.
 - **A generated file takes it from the generator.** A hand-written attribute
   under `crates/nvim/src/api/private/dispatch*/` or `src/lua/api_wrappers/` is
   gone at the next `just apigen`, so `tools/apigen` emits it — and only for a
-  chunk that actually holds unsafe, which is what keeps the count honest.
+  chunk that actually holds unsafe. No generated file is on the list, so
+  every one takes `forbid`, and a chunk that came out holding unsafe fails
+  the placement check like any other file.
 
 `forbid` still overrides the deny and still cannot be lifted by a module
 underneath it, so it remains the stronger claim and the one a finished module
 takes. What retired with the flip is the metric that used to stand in for
 this: `files_without_forbid_unsafe` counted files that had not made a claim,
-where `files_allowing_unsafe_code` counts the ones that have made the opposite
-claim, deliberately, in a line a reviewer can see.
+where `files_allowing_unsafe_code` counted the ones that had made the opposite
+claim, deliberately, in a line a reviewer can see — until the placement
+check made that count the perimeter's own file count, and it retired too.
 
-**There are no free `forbid`s left, and there will not be until a subtree
-finishes.** Exactly 10 files carry neither attribute, and every one of them is
-a `mod.rs` (or `lib.rs`) with at least one descendant that still allows
-unsafe: `allow` under a `forbid` is `E0453`, a hard error, so writing the
-attribute on any of them fails to compile. Seven sit over perimeter files and
-stay bare for good — `lua/`, `lua/executor/`, `event/`, `os/`, `tui/`,
-`vterm/`, `xdiff/` — and `lib.rs` is the root of everything.
-`eval/` and `eval/typval/` sit over `eval/typval/handle.rs`, a perimeter
-row, and stay bare as well; `charset/`, `getchar/`, `mbyte/`, `startup/`,
-`strings/` and `tui/termkey/` took their `forbid` in the commit that
-finished the last of their descendants. Counting files without
-the attribute therefore says nothing about progress. This is the same rule as
+**There are no free `forbid`s left.** Exactly 10 files carry neither
+attribute, and every one of them is a module file with a descendant on the
+perimeter that allows unsafe: `allow` under a `forbid` is `E0453`, a hard
+error, so writing the attribute on any of them fails to compile. They stay
+bare for as long as the row beneath them does: `lib.rs`, the root of
+everything; `lua/mod.rs` and `lua/executor/mod.rs` (over `lua/ffi.rs`,
+`lua/stack/` and `lua/executor/{luv,state}.rs`); `event/mod.rs`; `os/mod.rs`;
+`tui/mod.rs` (over its four handle files); `vterm/mod.rs` (over
+`vterm/abi/`); `xdiff/mod.rs` (over `xdiff/ffi.rs`); and `eval/mod.rs` and
+`eval/typval/mod.rs` (over `eval/typval/handle.rs`). Every other module file
+forbids — `charset/`, `getchar/`, `mbyte/`, `startup/`, `strings/`,
+`tui/termkey/`, `terminal/`, `memfile/` and `marktree/` among the last, each in
+the commit that finished the last of its descendants. This is the same rule as
 "take a `mod.rs` last", stated for the attribute rather than for the lint.
 
 ## The types the perimeter cannot hold

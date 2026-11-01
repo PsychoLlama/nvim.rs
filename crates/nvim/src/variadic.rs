@@ -34,9 +34,9 @@
 //! `unsafe` to get right, which is why every one of them still has to sit in
 //! an `unsafe` block.
 //!
-//! The ratchet's `raw_variadic_calls` counts the direct calls left, which is
-//! the perimeter's: [`direct`] is the one path the macros reach the callees
-//! through, and the needle does not count it.
+//! A direct call is a call of a foreign `unsafe fn`, so it can sit only in a
+//! perimeter file (the ratchet's placement check refuses `unsafe` anywhere
+//! else); [`direct`] is the one path the macros reach the callees through.
 
 #![forbid(unsafe_code)]
 #![deny(

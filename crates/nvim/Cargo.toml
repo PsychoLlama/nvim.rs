@@ -60,10 +60,10 @@ unsafe_op_in_unsafe_fn = "allow"
 # `unsafe_code` is allow-by-default, so silence was the tree's only answer for
 # where unsafe may live — and silence is not a claim a file makes, it is one it
 # fails to make. Denying it inverts that: a file that needs unsafe says so with
-# an inner `#![allow(unsafe_code)]` and a one-line reason, and scripts/ratchet.py
-# holds `files_allowing_unsafe_code` shrink-only. A perimeter module names its
-# row in docs/perimeter.md; anything else is debt. `forbid` still wins over this
-# deny and cannot be lifted, so a finished module keeps taking it.
+# an inner `#![allow(unsafe_code)]` naming its row in docs/perimeter.md, and
+# scripts/ratchet.py fails the run for an allow anywhere off that list
+# (`check_unsafe_placement`). `forbid` still wins over this deny and cannot be
+# lifted, so every other file takes it.
 unsafe_code = "deny"
 
 # The crate root is a flat namespace of ~130 `pub mod`s, so for most of the

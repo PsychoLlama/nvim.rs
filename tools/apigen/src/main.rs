@@ -986,10 +986,10 @@ const UNSAFE_CONSTRUCTS: [&str; 6] = [
 /// The crate denies `unsafe_code` in `crates/nvim/Cargo.toml`, so a file that
 /// still needs unsafe says so with an inner allow (see docs/perimeter.md). A
 /// hand-written one in a generated file is gone at the next `just apigen`, so
-/// it is emitted here, and only where the chunk earned it: that is what keeps
-/// the ratchet's `files_allowing_unsafe_code` honest. `reason` is the
-/// one-line comment above it, empty for a chunk off the perimeter -- there
-/// the count *is* the reason, and it is debt.
+/// it is emitted here, and only where the chunk earned it: the ratchet's
+/// placement check refuses an allow off the perimeter, generated or not, so
+/// a chunk holding unsafe there fails the run. `reason` is the one-line
+/// comment above it, empty for a chunk off the perimeter.
 ///
 /// The allow lands under `#![deny(unsafe_op_in_unsafe_fn)]`, which every
 /// header emitting unsafe already carries; a chunk that came out clean takes
