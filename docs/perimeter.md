@@ -1,16 +1,19 @@
 # The unsafe perimeter
 
-The tree carries some 42,000 statements of unchecked code, and reading that as
-one number is misleading: some of it is transpiled editor logic that safe Rust
-will eventually replace, and some of it is the seam where this program meets a
-C library, the operating system, or raw memory — code that will still be
-`unsafe` when the migration is finished, because the thing on the other side
-cannot be rewritten from here.
+Unchecked code is one of two things: transpiled editor logic that safe Rust
+can replace, or the seam where this program meets a C library, the operating
+system, or raw memory — code that will still be `unsafe` when the migration is
+finished, because the thing on the other side cannot be rewritten from here.
+For most of the migration the tree carried tens of thousands of statements of
+the first kind; reading them as one number with the second was misleading.
 
 The **perimeter** is that second part, named explicitly. What was left over
 was the migration's debt, counted by the ratchet as
 `unsafe_stmts_outside_perimeter` and driven to zero; the ratchet now refuses
 unsafe code anywhere off this list (see "How the ratchet enforces it").
+[docs/unsafe-audit.md](unsafe-audit.md) is the same list read row by row for a
+reader who is not a specialist: what each row holds, the contract that keeps
+it sound, and what would retire it.
 
 Today: **1,615** unchecked statements inside the perimeter (64 files),
 **0** outside it (0 files, of 1,390 measured). It was 138,877 when this
@@ -68,10 +71,10 @@ should move out of the module rather than be carved out of the list.
 | `xdiff/`                                    |     1 |         1 | libxdiff, vendored: which bytes are whitespace is `isspace(3)`'s answer in the user's locale, read through glibc's table.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `harness.rs`                                |     1 |         8 | The C symbols the in-repo test harnesses resolve by name — the editor rows of `docs/abi-ledger.md` (`starting`, `test_disable_char_avail`, `early_init`/`event_init`, the UTF-8 readers and `utf8len_tab`, `schar_get`, …). Each function is a front over its module's slice form that reads the C side's pointer here; each data symbol is defined here and re-exported by its module, so the module forbids unsafe code. Retires row by row with the specs and fixtures that resolve the names.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `allocator.rs`                              |     1 |        20 | The global allocator: malloc/realloc/free.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `memory/`                                   |     4 |       137 | `xmalloc` and the block pool the event loop reads into and the packers write into — the floor under every owned type in the tree, and the C `strchr`/`strlen` scans over a terminated slice the matchers use.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `memory/`                                   |     4 |        99 | `xmalloc` and its family over the global allocator, with the out-of-memory retry and the allocation log the unit suite reads (`mod.rs`); the C-shaped string helpers the perimeter's callers and the unit specs still call (`xstrdup`, `xstrlcpy`, `xmemdupz`, …) and the C `memchr`/`strchr`/`strlen` scans over a terminated slice the matchers use; the block pool the event loop reads into and the packers write into, chained through each spent block's first bytes (`blocks.rs`); and the two owned C strings, `XString` and `ThinCString`, which adopt a `malloc` block from C and hand one back (`xstring.rs`, `thin_cstring.rs`) — the floor under every owned type in the tree.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `global_cell.rs`                            |     1 |        13 | The checked wrapper over c2rust's mutable statics; the raw static is touched here so it is nowhere else.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `winlayer.rs`, `winlayer/`                  |     5 |        51 | The window/buffer/position handles, the screen grid handle (`GridRef` in `winlayer/grid.rs`, which the compositor reads while it is drawn on), the terminal handle (`Term` in `winlayer/terminal.rs`, which the emulator's callbacks, the channel and the buffer all reach a `:terminal` through), and the window's syntax block (`w_s`): constructing one is the unsafe step, dereferencing it is not.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `eval/typval/handle.rs`                     |     1 |        50 | The value handles (`ListRef`, `DictRef`, `BlobRef`, `PartialRef`) and a dictionary's item store: constructing a handle is the unsafe step, dereferencing it is not. A value is reached from many holders at once and the evaluator re-enters at every call, so `edit()` lends `&mut` from a shared handle on the `Live` promise (checked in debug builds by `typval/edit.rs`); the reference count, the `xcalloc`/`Box` that holds each object, the item slots that name a boxed or an embedded `DictItem`, and `TypVal::bit_copy` (an argument frame naming its caller's values) are the rest. Retires only with a different value model.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `eval/typval/handle.rs`                     |     1 |        51 | The value handles (`ListRef`, `DictRef`, `BlobRef`, `PartialRef`) and a dictionary's item store: constructing a handle is the unsafe step, dereferencing it is not. A value is reached from many holders at once and the evaluator re-enters at every call, so `edit()` lends `&mut` from a shared handle on the `Live` promise (checked in debug builds by `typval/edit.rs`); the reference count, the `xcalloc`/`Box` that holds each object, the item slots that name a boxed or an embedded `DictItem`, and `TypVal::bit_copy` (an argument frame naming its caller's values) are the rest. Retires only with a different value model.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 Paths are relative to `crates/nvim/src/`. Counts are `unsafe_stmts` from
 `metrics/ratchet.json` and drift as work lands; the list, not the table, is
@@ -122,6 +125,95 @@ To add an entry: put the path and its reason in `PERIMETER`, add the row here,
 run `just refresh`, and justify it in the commit message. The number this
 lowers is the number the migration is judged by, so the bar is the criteria
 above and nothing softer.
+
+## The raw vocabularies, and where each bottoms out
+
+Three vocabularies make up almost everything the perimeter does with raw
+memory: C strings, manual allocation, and pointer arithmetic. This is where
+each one's floor sits and why it is not lower. The totals are the ratchet's
+needles (`metrics/ratchet.json`), split per row by the same needles. Off the
+perimeter a raw pointer _type_ is safe to write — it is reading through one
+that needs `unsafe` — so a few appear there; they are listed too.
+
+**C strings.**
+
+- `*const c_char`/`*mut c_char` (`raw_cstr`, 240). On the perimeter, 180:
+  the declarations of C functions that take or answer a C string
+  (`os/cshim.rs` 41, `event/libuv.rs` 35, `lua/ffi.rs` 19), the C-shaped string
+  helpers and the owned strings' C views (`memory/` 29), tree-sitter's names
+  and query strings (`lua/treesitter/` 18), the socket address, a child's
+  argv/environment and a job's name (`event/`, 19 more), `libcall()`'s
+  arguments and the PTY's name (`os/`, 7 more), and the C entry points the
+  harnesses and libvterm's clients call (`harness.rs` 5, `vterm/abi/` 5,
+  `tui/input.rs` 2). Off it, 60: fields of the `#[repr(C)]` structs a C library
+  reads (`types/uv.rs` 13, `types/vterm.rs` 9, `types/event.rs` 7, …) and a
+  dozen safe functions that hand an owned string's address (`as_ptr()`) to a
+  perimeter callee without reading through it. The floor is the C side's
+  signatures: a string crosses into C as a pointer.
+- `CStr::from_ptr` (54, all on the perimeter): where a C callee's answer
+  becomes a `&CStr` — `os/` 26 (`strerror`/`uv_strerror`, directory entries,
+  the `getpw*` records, `environ`, locale names, `dlerror`, `ptsname`, the Miri
+  stand-ins), `event/` 14 (the socket address 10; a child's argv words,
+  program and executable path, and a libuv error 4), `memory/` 7 (the owned strings adopting a block), `lua/stack/` 6
+  (`lua_tolstring`, `lua_getinfo`), `lua/treesitter/` 1. Each falls only
+  with its callee.
+- `[c_char; N]` (`cchar_scratch`, 6). On the perimeter, 3: the listening
+  socket's address, split and appended in place (`event/socket/mod.rs`, the
+  one that is editor-shaped — it needs the watcher built whole instead of
+  through `Box::new_uninit`), the 400-byte buffer `iconv(3)` writes its
+  probe into (`os/iconv.rs`), and the device-attribute answer the TUI specs
+  overwrite through FFI (`vterm/abi/mod.rs`). Off it, 3 that are byte tables
+  spelled in C's type: termkey's keypad table and report payload
+  (`tui/termkey/`) and `windowsversion()`'s always-empty string
+  (`os/state.rs`). None is filled through a pointer by editor code.
+- `slice::from_raw_parts` (30, all on the perimeter): a slice over memory C
+  describes by pointer and length — libuv's read buffers (`event/`,
+  `os/input.rs`, `tui/input.rs`), `lua_tolstring`'s bytes (`lua/stack/` 5),
+  tree-sitter's arrays (`lua/treesitter/` 5), the allocator family's blocks
+  (`memory/` 8), the harness's and libvterm's C arguments (`harness.rs` 3,
+  `vterm/abi/` 3).
+
+**Allocation.**
+
+- The `xmalloc` family (`manual_alloc`, 26, all on the perimeter): the family
+  itself and the owned strings (`memory/` 17); Lists and Dictionaries, which
+  stay `xcalloc`'d because the unit suite's allocation log pins that family
+  (`eval/typval/handle.rs` 4); a spawned child's `char **` argv/environment
+  and the socket watcher (`event/` 3); buffers tree-sitter frees
+  (`lua/treesitter/` 2).
+- `Box::from_raw`/`Box::into_raw` (13 each): a box parked behind an address —
+  libuv handle data (`event/` 7 and 5), the window block (`winlayer/graph.rs`,
+  `ParkedWindow`), the terminal (`winlayer/terminal.rs`), Blobs and partials
+  (`eval/typval/handle.rs` 3 and 1), Lua userdata (`lua/stack/userdata.rs`),
+  the `VTerm` a C client is handed (`vterm/abi/mod.rs`), the allocator. Three
+  `into_raw`s sit off the perimeter (`eval/typval/dictitem.rs`,
+  `memory/handoff.rs`, `types/api_string.rs`): `into_raw` is safe, and each
+  hands its box to a perimeter file that takes it back.
+- `GlobalCell`s holding a raw pointer (`cell_raw_ptr`, 4), all on the
+  perimeter: `curwin`/`curbuf`/`curtab` (`winlayer/graph.rs`; `curwin` is a C
+  symbol the unit suite reads) and the block pool's reuse-list head
+  (`memory/blocks.rs`). The raw escape hatches `.ptr()`/`.as_raw()`
+  (`cell_ptr`, 22) are all on the perimeter too: the globals libuv holds by
+  address (`main_loop`, `read_stream`, the signal watchers, the refresh timer,
+  `main_thread`, the saved termios) and `global_cell.rs`'s own tests.
+
+**Pointer arithmetic** (`ptr_arith`, 100: `.add`/`.offset`/`.sub`/
+`.offset_from` and pointer `wrapping_*`). On the perimeter, 46: the C-shaped
+string helpers (`memory/` 13), the Miri stand-ins for libc's string
+functions and the `isspace` table read (`os/cshim.rs` 10; `os/env/mod.rs`'s
+`environ` walk 2; `os/signal.rs` 1), the socket address 6, the read stream's
+block positions 4, a child's argv 3 and a channel 1 (`event/`), `lua/stack/`
+2, `lua/treesitter/` 2, `harness.rs` 1 and `xdiff/ffi.rs` 1 (glibc's
+character-class table). The 54 off the perimeter are not pointer arithmetic:
+the needle matches any method named `add`/`offset`/`sub`, and those are the
+evaluator's cursor `offset()` and the keyword and visited-file tables' `add`.
+The needle keeps counting them, because one a rewrite could make grow would be
+worse than one that over-counts.
+
+The three editor-shaped items above — the socket's address buffer, the read
+stream's block positions and a child's `char **` argv/environment, all in
+`event/` — are the only places a vocabulary sits higher than its foreign
+callee requires.
 
 ## The default, and what a file has to say
 

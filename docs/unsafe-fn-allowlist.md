@@ -1,7 +1,7 @@
 # The `unsafe fn` allowlist
 
-A quarter of the tree's `unsafe fn`s take no raw pointer at all. Their
-parameters were retyped in an earlier phase, the keyword stayed, and a
+When this list was opened, a quarter of the tree's `unsafe fn`s took no raw
+pointer at all. Their parameters had been retyped, the keyword stayed, and a
 `# Safety` section was written to satisfy the ratchet — "the window must be
 live" on a `Win`, "`tv` must point at an initialized typval" on a `&TypVal`,
 "main thread only" on editor code that is main-thread everywhere. None of
@@ -50,9 +50,11 @@ or it now carries a raw pointer or a C ABI and the needle would skip it anyway.
 A row that stops being needed has to leave in the same commit, the way a
 `PERIMETER` entry does.
 
-The phase exit is `unsafe_fns_without_raw_params` = 0 with this list as the
-floor. Adding a row lowers the count, so a row is a claim a reviewer reads:
-the bar is the four classes above and nothing softer.
+`unsafe_fns_without_raw_params` is 0 with this list as the floor, and every
+`unsafe fn` left in the tree — 228, all on the perimeter
+([docs/unsafe-audit.md](unsafe-audit.md)) — has a `# Safety` section naming
+what its caller must hold. Adding a row lowers the count, so a row is a claim
+a reviewer reads: the bar is the four classes above and nothing softer.
 
 | item                 | file                                    | why the type system cannot hold it                                                                                                                |
 | -------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
