@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Confined unsafe code to a short list of modules where the editor meets C libraries, the operating system or raw memory, and made the build's checks refuse it anywhere else; [docs/unsafe-audit.md](docs/unsafe-audit.md) says what each holds and why. The terminal emulator, the TUI's terminfo description and key parser, the event queue, the editor's hash tables and growable arrays, and the extmark tree are safe Rust, and a channel's transport can no longer be moved while libuv holds it.
+
+### Fixed
+
+- `confirm()` ignored a multibyte hotkey: with `&été` among the choices, typing `é` did not pick it.
+- A `$LINES` or `$COLUMNS` too large for a C `int` was parsed with undefined results by the TUI; it is ignored.
+
 ## [2026.10.30-9049d0284d]
 
 ### Changed
