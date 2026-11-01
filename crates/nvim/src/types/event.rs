@@ -36,7 +36,6 @@ pub type RStream = rstream;
 pub type SignalWatcher = signal_watcher;
 pub type SocketWatcher = socket_watcher;
 pub type Stream = stream;
-pub type WBuffer = wbuffer;
 pub type internal_proc_cb = Option<unsafe fn(*mut Proc) -> ()>;
 pub struct loop_0 {
     pub uv: uv_loop_t,
@@ -185,10 +184,3 @@ pub union stream_uv {
 }
 pub type stream_write_cb =
     Option<unsafe fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> ()>;
-pub struct wbuffer {
-    pub size: size_t,
-    pub refcount: RefcountSize,
-    pub data: *mut ::core::ffi::c_char,
-    pub cb: wbuffer_data_finalizer,
-}
-pub type wbuffer_data_finalizer = Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ()>;

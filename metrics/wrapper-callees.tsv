@@ -3,10 +3,10 @@ count	callee	no_raw	defs	def
 28	f	0	0	
 27	from_raw_parts	0	0	
 26	Term::new	0	1	crates/nvim/src/terminal/mod.rs
+17	zeroed	0	0	
 16	Reader::new	0	1	crates/nvim/src/event/rstream.rs
-16	zeroed	0	0	
-13	Box::from_raw	0	6	
 13	vterm_dealloc	0	1	crates/nvim/src/vterm/vterm.rs
+12	Box::from_raw	0	6	
 11	Child::new	0	1	crates/nvim/src/event/proc.rs
 11	Screen::of	0	1	crates/nvim/src/vterm/screen/mod.rs
 11	vterm_alloc	0	1	crates/nvim/src/vterm/vterm.rs
@@ -62,11 +62,11 @@ count	callee	no_raw	defs	def
 3	rstream_may_close	0	1	crates/nvim/src/event/rstream.rs
 3	ts_tree_root_node	0	0	
 3	uv_fs_access	0	0	
+3	uv_fs_req_cleanup	0	0	
 3	uv_pipe_init	0	0	
 3	uv_timer_stop	0	0	
 3	vterm_get_size	0	1	crates/nvim/src/vterm/vterm.rs
 3	vterm_push_output_bytes	0	1	crates/nvim/src/vterm/vterm.rs
-3	wstream_release_wbuffer	0	1	crates/nvim/src/event/wstream.rs
 3	xmemdupz	0	1	crates/nvim/src/memory/mod.rs
 2	.as_mut	0	0	
 2	.assume_init	0	0	
@@ -137,7 +137,6 @@ count	callee	no_raw	defs	def
 2	tv_dict_free_dict	0	1	crates/nvim/src/eval/typval/handle.rs
 2	uv_freeaddrinfo	0	0	
 2	uv_fs_lstat	0	0	
-2	uv_fs_req_cleanup	0	0	
 2	uv_listen	0	0	
 2	uv_pipe_open	0	0	
 2	uv_signal_start	0	0	
@@ -172,7 +171,6 @@ count	callee	no_raw	defs	def
 1	bell	0	1	crates/nvim/src/vterm/screen/callbacks.rs
 1	bind_textdomain_codeset	0	0	
 1	calloc	0	0	
-1	cb	0	0	
 1	consume	0	0	
 1	convert_color_to_rgb	0	0	
 1	copy	0	0	
@@ -338,6 +336,7 @@ count	callee	no_raw	defs	def
 1	uv_fs_stat	0	0	
 1	uv_fs_unlink	0	0	
 1	uv_fs_utime	0	0	
+1	uv_fs_write	0	0	
 1	uv_guess_handle	0	0	
 1	uv_hrtime	0	0	
 1	uv_idle_stop	0	0	
@@ -387,5 +386,4 @@ count	callee	no_raw	defs	def
 1	wstream_init_fd	0	1	crates/nvim/src/event/wstream.rs
 1	wstream_set_write_cb	0	1	crates/nvim/src/event/wstream.rs
 1	xcalloc_retry	0	1	crates/nvim/src/memory/mod.rs
-1	xmemdup	0	1	crates/nvim/src/memory/mod.rs
 1	xstrdup	0	1	crates/nvim/src/memory/mod.rs

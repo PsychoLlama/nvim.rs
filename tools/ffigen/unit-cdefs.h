@@ -19,7 +19,6 @@ typedef struct key_value_pair key_value_pair;
 typedef struct loop loop;
 typedef struct queue queue;
 typedef struct socket_watcher socket_watcher;
-typedef struct wbuffer wbuffer;
 typedef struct __pthread_mutex_s __pthread_mutex_s;
 typedef struct __pthread_rwlock_arch_t __pthread_rwlock_arch_t;
 typedef struct termios termios;
@@ -376,7 +375,6 @@ typedef struct VirtLines VirtLines;
 typedef struct VirtText VirtText;
 typedef unsigned int VirtTextPos;
 typedef unsigned int Vv;
-typedef wbuffer WBuffer;
 typedef unsigned int WinSplit;
 typedef unsigned int WinStyle;
 typedef Handle WindowHandle;
@@ -461,7 +459,6 @@ typedef uid_t uv_uid_t;
 typedef void (*uv_walk_cb)(uv_handle_t *, void *);
 typedef struct uv_write_s uv_write_t;
 typedef void (*uv_write_cb)(uv_write_t *, int);
-typedef void (*wbuffer_data_finalizer)(void *);
 struct Callback {
   unsigned int tag;
   union {

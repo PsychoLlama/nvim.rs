@@ -463,7 +463,7 @@ pub(crate) fn run_to_exit(
     }
 
     if has_input {
-        let buffer = SharedBuffer::from_vec(input.to_vec()).into_raw();
+        let buffer = SharedBuffer::from_vec(input.to_vec());
         // SAFETY: the child's stdin, initialised above, and the one
         // reference the write takes over.
         if unsafe { wstream_write(&raw mut (*proc).in_0, buffer) } != 0 {

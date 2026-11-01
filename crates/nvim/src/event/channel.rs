@@ -46,11 +46,8 @@ use crate::event::rstream::{
 };
 use crate::event::socket::{socket_connect, socket_watcher_accept};
 use crate::event::stream::stream_may_close;
-use crate::event::wstream::{
-    SharedBuffer, wstream_init, wstream_init_fd, wstream_new_buffer, wstream_write,
-};
+use crate::event::wstream::{SharedBuffer, wstream_init, wstream_init_fd, wstream_write};
 use crate::event_queue::{self, ParkingQueue, QueueId};
-use crate::memory::{xfree, xmemdup};
 use crate::os::pty_proc_unix::{
     pty_proc_close_master, pty_proc_resize, pty_proc_resume, pty_proc_tty_name,
 };
@@ -320,29 +317,15 @@ impl Stream {
     /// Queue `bytes` for writing, handing their block to the write queue;
     /// whether libuv took it.
     pub(crate) fn write_owned(self: Pin<&mut Self>, bytes: Vec<u8>) -> bool {
-        if bytes.capacity() == 0 {
-            // No block to hand over (a dangling `Vec` pointer is not one).
-            return self.write_bytes(&bytes);
-        }
-        let len = bytes.len();
-        let block = core::mem::ManuallyDrop::new(bytes).as_mut_ptr();
-        // The global allocator is `malloc`, so the vector's block is one the
-        // buffer's `xfree` finalizer releases.
-        let buffer = wstream_new_buffer(block.cast::<c_char>(), len, 1, Some(xfree));
+        let buffer = SharedBuffer::from_vec(bytes);
         // SAFETY: a write stream this module initialised, at its fixed
-        // address, and a buffer whose one reference the write takes over.
+        // address.
         unsafe { wstream_write(self.get_unchecked_mut(), buffer) == 0 }
     }
 
     /// Queue a copy of `bytes` for writing; whether libuv took it.
     pub(crate) fn write_bytes(self: Pin<&mut Self>, bytes: &[u8]) -> bool {
-        // SAFETY: the caller's readable bytes, copied into a block the
-        // buffer's finalizer frees.
-        let copy = unsafe { xmemdup(bytes.as_ptr().cast(), bytes.len()) };
-        let buffer = wstream_new_buffer(copy.cast::<c_char>(), bytes.len(), 1, Some(xfree));
-        // SAFETY: a write stream this module initialised, at its fixed
-        // address, and a buffer whose one reference the write takes over.
-        unsafe { wstream_write(self.get_unchecked_mut(), buffer) == 0 }
+        self.write_owned(bytes.to_vec())
     }
 }
 
@@ -589,7 +572,7 @@ pub(crate) fn write_shared(channel: &mut Channel, buffer: SharedBuffer) -> c_int
     // SAFETY: the channel's write stream, at its fixed address in the pinned
     // transport and initialised, and a reference to the buffer the write
     // takes over.
-    unsafe { wstream_write(stream, buffer.into_raw()) }
+    unsafe { wstream_write(stream, buffer) }
 }
 
 // ---------------------------------------------------------------------------

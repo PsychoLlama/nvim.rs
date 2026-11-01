@@ -263,13 +263,6 @@ impl RefcountSize {
     /// Exactly one owner.
     pub const ONE: RefcountSize = RefcountSize(1);
 
-    /// A count of `n` owners. `wstream_new_buffer` takes the number of
-    /// writers that will share the payload as an argument, so this one
-    /// is not always 0 or 1.
-    pub const fn new(n: size_t) -> Self {
-        RefcountSize(n)
-    }
-
     /// The count as an integer, for messages and assertions.
     pub const fn get(self) -> size_t {
         self.0

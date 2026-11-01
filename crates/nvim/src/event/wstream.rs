@@ -1,6 +1,6 @@
 //! The writing half of a stream.
 //!
-//! A write takes a reference-counted [`WBuffer`]: the caller hands over one
+//! A write takes a reference-counted [`SharedBuffer`]: the caller hands over one
 //! reference and the buffer is released when the write completes, so the same
 //! payload can be broadcast to several streams without copying. Writes to a
 //! `uv_stream_t` are queued with libuv and reported through the stream's
@@ -23,23 +23,23 @@
 
 use crate::event::libuv::{uv_fs_req_cleanup, uv_fs_write, uv_write};
 use crate::event::stream::{Conn, close_handle, stream_init};
+use crate::memory::recycle_block;
 use crate::os::uv_error::{UV_ENOMEM, UV_UNKNOWN};
-use crate::types::{
-    Loop, RefcountSize, Stream, WBuffer, size_t, stream_write_cb, uv_buf_t, uv_fs_t, uv_write_t,
-    wbuffer_data_finalizer,
-};
+use crate::types::{Loop, Stream, size_t, stream_write_cb, uv_buf_t, uv_fs_t, uv_write_t};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
+use std::rc::Rc;
 
 /// How much unwritten payload a stream may hold before writes are refused.
 const DEFAULT_MAXMEM: size_t = 1024 * 1024 * 2000;
 
 /// One queued `uv_write`. libuv is handed `&uv_req` and finds its way back
 /// through that request's `data` field, which points at the whole `WRequest`.
-pub struct WRequest {
-    pub stream: *mut Stream,
-    pub buffer: *mut WBuffer,
-    pub uv_req: uv_write_t,
+struct WRequest {
+    stream: *mut Stream,
+    /// The payload, held until libuv is done reading it.
+    buffer: SharedBuffer,
+    uv_req: uv_write_t,
 }
 
 /// # Safety
@@ -76,91 +76,79 @@ pub unsafe fn wstream_set_write_cb(stream: *mut Stream, cb: stream_write_cb, dat
     stream.cb_data = data;
 }
 
-/// Queue `buffer` for writing to `stream`, taking over the caller's
-/// reference. Returns 0 when the write was queued — or, for a regular file,
+/// Queue `buffer` for writing to `stream`, which holds it until the write
+/// completes. Returns 0 when the write was queued — or, for a regular file,
 /// completed — and a libuv error code otherwise.
 ///
 /// # Safety
-/// `stream` has been through [`wstream_init`], and `buffer` is a reference
-/// the caller owns.
-pub unsafe fn wstream_write(stream: *mut Stream, buffer: *mut WBuffer) -> c_int {
-    // SAFETY: the caller's stream and buffer.
+/// `stream` has been through [`wstream_init`].
+pub(crate) unsafe fn wstream_write(stream: *mut Stream, buffer: SharedBuffer) -> c_int {
+    // SAFETY: the caller's stream.
     let mut stream = unsafe { Conn::new(stream) };
     debug_assert!(stream.maxmem != 0, "wstream_init was not called");
     debug_assert!(!stream.closed);
 
-    // SAFETY: the caller's buffer, still holding its reference.
-    let uvbuf = unsafe {
-        uv_buf_t {
-            base: (*buffer).data,
-            len: (*buffer).size,
-        }
-    };
-
     let Some(uvstream) = stream.uv_stream() else {
-        return write_file(stream, buffer, &raw const uvbuf);
+        return write_file(stream, &buffer);
     };
-
-    let err = if stream.curmem > stream.maxmem {
-        UV_ENOMEM
-    } else {
-        stream.curmem += uvbuf.len;
-        // SAFETY: the request is boxed here and taken back by `write_cb`,
-        // which libuv reaches through the `data` field set just below.
-        let (request, err) = unsafe {
-            let request = Box::into_raw(Box::new(WRequest {
-                stream: stream.as_ptr(),
-                buffer,
-                uv_req: core::mem::zeroed(),
-            }));
-            (*request).uv_req.data = request.cast();
-            let err = uv_write(
-                &raw mut (*request).uv_req,
-                uvstream,
-                &raw const uvbuf,
-                1,
-                Some(write_cb),
-            );
-            (request, err)
-        };
-        if err == 0 {
-            stream.pending_reqs += 1;
-            return 0;
-        }
-        // SAFETY: libuv refused the write, so nothing else holds the request.
-        drop(unsafe { Box::from_raw(request) });
-        err
+    if stream.curmem > stream.maxmem {
+        return UV_ENOMEM;
+    }
+    let uvbuf = buffer.uv_buf();
+    stream.curmem += uvbuf.len;
+    let request = Box::into_raw(Box::new(WRequest {
+        stream: stream.as_ptr(),
+        buffer,
+        // SAFETY: a libuv request is plain C data whose all-zero value is
+        // the unset one `uv_write` fills in.
+        uv_req: unsafe { core::mem::zeroed() },
+    }));
+    // SAFETY: the request just boxed, taken back by `write_cb`, which libuv
+    // reaches through the `data` field set here; the payload it holds is
+    // what `uvbuf` points into.
+    let err = unsafe {
+        (*request).uv_req.data = request.cast();
+        uv_write(
+            &raw mut (*request).uv_req,
+            uvstream,
+            &raw const uvbuf,
+            1,
+            Some(write_cb),
+        )
     };
-
-    // SAFETY: the caller's reference, given up here because the write did
-    // not take it.
-    unsafe { wstream_release_wbuffer(buffer) };
-    debug_assert!(err != 0);
+    if err == 0 {
+        stream.pending_reqs += 1;
+        return 0;
+    }
+    stream.curmem -= uvbuf.len;
+    // SAFETY: libuv refused the write, so nothing else holds the request.
+    drop(unsafe { Box::from_raw(request) });
     err
 }
 
 /// The regular-file path: one synchronous `uv_fs_write` at the stream's
 /// current offset. Such a stream never has a write callback, so the outcome
 /// is reported by the return value alone.
-fn write_file(mut stream: Conn, buffer: *mut WBuffer, uvbuf: *const uv_buf_t) -> c_int {
-    // SAFETY: the descriptor the stream was built from, and a request that
-    // lives as long as the synchronous call.
-    let (err, result) = unsafe {
-        let mut req: uv_fs_t = core::mem::zeroed();
-        let err = uv_fs_write(
+fn write_file(mut stream: Conn, buffer: &SharedBuffer) -> c_int {
+    let uvbuf = buffer.uv_buf();
+    let mut req = uv_fs_t::default();
+    // SAFETY: the descriptor the stream was built from, the payload `uvbuf`
+    // points into, and a request that lives as long as the synchronous
+    // call.
+    let err = unsafe {
+        uv_fs_write(
             stream.uv_loop(),
             &raw mut req,
             stream.fd,
-            uvbuf,
+            &raw const uvbuf,
             1,
             stream.fpos,
             None,
-        );
-        uv_fs_req_cleanup(&raw mut req);
-        (err, req.result)
+        )
     };
-    // SAFETY: the caller's reference, given up now that the write is done.
-    unsafe { wstream_release_wbuffer(buffer) };
+    let result = req.result;
+    // SAFETY: the request the call just filled.
+    unsafe { uv_fs_req_cleanup(&raw mut req) };
     debug_assert!(stream.write_cb.is_none());
     stream.fpos += i64::try_from(result.max(0)).expect("a write fits in a file offset");
     if result > 0 {
@@ -170,22 +158,6 @@ fn write_file(mut stream: Conn, buffer: *mut WBuffer, uvbuf: *const uv_buf_t) ->
     } else {
         UV_UNKNOWN
     }
-}
-
-/// A buffer of `size` bytes at `data`, held by `refcount` writers. `cb`, when
-/// given, releases `data` once the last of them is done with it.
-pub fn wstream_new_buffer(
-    data: *mut c_char,
-    size: size_t,
-    refcount: size_t,
-    cb: wbuffer_data_finalizer,
-) -> *mut WBuffer {
-    Box::into_raw(Box::new(WBuffer {
-        size,
-        refcount: RefcountSize::new(refcount),
-        data,
-        cb,
-    }))
 }
 
 /// libuv's write callback: release the payload, report the status, and close
@@ -200,11 +172,8 @@ unsafe extern "C" fn write_cb(req: *mut uv_write_t, status: c_int) {
     // SAFETY: the stream the request was queued on, live until its last
     // request completes — which is this one only if `pending_reqs` says so.
     let mut stream = unsafe { Conn::new(request.stream) };
-    // SAFETY: the reference the write took over.
-    unsafe {
-        stream.curmem -= (*request.buffer).size;
-        wstream_release_wbuffer(request.buffer);
-    }
+    stream.curmem -= request.buffer.bytes().len();
+    drop(request);
     if let Some(report) = stream.write_cb {
         let data = stream.cb_data;
         // SAFETY: the callback and its data were installed together by
@@ -217,81 +186,41 @@ unsafe extern "C" fn write_cb(req: *mut uv_write_t, status: c_int) {
     }
 }
 
-/// Drop one reference to `buffer`, releasing it when the last one goes.
-///
-/// # Safety
-/// `buffer` is a reference the caller owns, and gives up here.
-pub unsafe fn wstream_release_wbuffer(buffer: *mut WBuffer) {
-    // SAFETY: the caller's reference.
-    let last = unsafe { (*buffer).refcount.release() == 0 };
-    if last {
-        // SAFETY: nothing else holds a reference now, and
-        // `wstream_new_buffer` boxed it.
-        let buffer = unsafe { Box::from_raw(buffer) };
-        if let Some(cb) = buffer.cb {
-            // SAFETY: the finalizer the buffer was made with, given the
-            // payload it was made for.
-            unsafe { cb(buffer.data.cast::<c_void>()) };
-        }
-    }
-}
-
-/// One reference to a write buffer: what a block of packed bytes travels
+/// One reference to a write payload: what a block of packed bytes travels
 /// as once it leaves its packer, so one block can go to several writers
 /// (an RPC broadcast) and be released when the last is done with it.
 ///
 /// Cloning takes a reference and dropping gives one up; the last frees the
 /// bytes, back onto the block pool's reuse list when they are a block's size.
-pub(crate) struct SharedBuffer(ptr::NonNull<WBuffer>);
+#[derive(Clone)]
+pub(crate) struct SharedBuffer(Rc<Payload>);
+
+/// The bytes a [`SharedBuffer`] shares.
+struct Payload(Vec<u8>);
+
+impl Drop for Payload {
+    fn drop(&mut self) {
+        recycle_block(core::mem::take(&mut self.0));
+    }
+}
 
 impl SharedBuffer {
     /// `bytes` as a buffer, one reference held.
     pub(crate) fn from_vec(bytes: Vec<u8>) -> Self {
-        let size = bytes.len();
-        let finalizer: wbuffer_data_finalizer = if bytes.capacity() == 0 {
-            // A dangling vector pointer is not a block.
-            None
-        } else if bytes.capacity() == crate::memory::BLOCK_SIZE {
-            Some(crate::memory::free_block)
-        } else {
-            Some(crate::memory::xfree)
-        };
-        let data = core::mem::ManuallyDrop::new(bytes).as_mut_ptr();
-        let buffer = wstream_new_buffer(data.cast::<c_char>(), size, 1, finalizer);
-        Self(ptr::NonNull::new(buffer).expect("a boxed buffer is not null"))
+        Self(Rc::new(Payload(bytes)))
     }
 
     /// The bytes.
     pub(crate) fn bytes(&self) -> &[u8] {
-        // SAFETY: the buffer this reference keeps alive, whose `data` is
-        // `size` initialised bytes (or dangling, with `size` 0).
-        unsafe {
-            let buffer = self.0.as_ptr();
-            if (*buffer).size == 0 {
-                return &[];
-            }
-            core::slice::from_raw_parts((*buffer).data.cast::<u8>(), (*buffer).size)
+        &self.0.0
+    }
+
+    /// The bytes as libuv's buffer descriptor: a pointer into the shared
+    /// payload, valid for as long as a reference is held.
+    fn uv_buf(&self) -> uv_buf_t {
+        uv_buf_t {
+            base: self.0.0.as_ptr().cast::<c_char>().cast_mut(),
+            len: self.0.0.len(),
         }
-    }
-
-    /// Give the reference up to a writer that releases it with
-    /// [`wstream_release_wbuffer`].
-    pub(crate) fn into_raw(self) -> *mut WBuffer {
-        core::mem::ManuallyDrop::new(self).0.as_ptr()
-    }
-}
-
-impl Clone for SharedBuffer {
-    fn clone(&self) -> Self {
-        // SAFETY: the buffer this reference keeps alive.
-        unsafe { (*self.0.as_ptr()).refcount.retain() };
-        Self(self.0)
-    }
-}
-
-impl Drop for SharedBuffer {
-    fn drop(&mut self) {
-        // SAFETY: the reference this value held.
-        unsafe { wstream_release_wbuffer(self.0.as_ptr()) };
     }
 }
