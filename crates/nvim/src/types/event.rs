@@ -22,7 +22,7 @@ pub enum Event {
     /// A C-shaped handler and the argument words it is run with. Building
     /// one is the unsafe step ([`RawEvent::event`]); running one is not.
     ///
-    /// [`RawEvent::event`]: crate::event::r#loop::RawEvent::event
+    /// [`RawEvent::event`]: crate::event::loop::RawEvent::event
     Raw(crate::event::r#loop::RawEvent),
     /// Work that owns what it needs.
     Job(Box<dyn FnOnce()>),

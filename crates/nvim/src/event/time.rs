@@ -1,7 +1,7 @@
 //! Timer watchers: a libuv timer whose expiry is delivered as an event.
 //!
 //! The callback does not run from libuv's stack. It is queued on the
-//! watcher's own [`MultiQueue`] and runs when that queue is drained, so a
+//! watcher's own queue ([`crate::event_queue`]) and runs when that queue is drained, so a
 //! timer cannot re-enter the editor from inside `uv_run`. A watcher with no
 //! queue is driven synchronously and its callback runs on the spot.
 //!

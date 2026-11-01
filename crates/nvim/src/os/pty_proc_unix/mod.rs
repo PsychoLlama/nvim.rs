@@ -1,6 +1,6 @@
 //! Children started on a pseudo-terminal.
 //!
-//! A [`PtyProc`] is a [`Proc`] with the pty master descriptor and the window
+//! A [`PtyProc`] is a [`Proc`](crate::types::Proc) with the pty master descriptor and the window
 //! size bolted on. `Proc` is the first field, so `event/proc.rs` casts freely
 //! between the two.
 //!

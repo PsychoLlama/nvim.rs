@@ -33,10 +33,11 @@ pub const KEY_BUFFER_SIZE: usize = 0x1000;
 
 /// Everything the TUI knows about the terminal it is driving.
 ///
-/// One of these exists per UI process. It is built by [`tui_start`](crate::tui::tui::tui_start) and
-/// lives as long as the process does: libuv handles and the input layer
-/// hold pointers into it, so it can neither move nor be freed while the
-/// loop it registered with is still running.
+/// One of these exists per UI process. It is built by
+/// [`Tui::start`](crate::tui::tui::Tui::start) into a boxed cell and lives
+/// as long as the process does: libuv keeps the addresses of the handles
+/// inside it, so it can neither move nor be freed while the loop it
+/// registered with is still running.
 ///
 /// Holding a `&mut TUIData` means holding a TUI that `tui_start` finished
 /// setting up: the write handles are open and `ti` describes the terminal

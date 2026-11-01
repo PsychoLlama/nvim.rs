@@ -19,13 +19,12 @@
 //! the rest, and if it does not come, take what is there. That is what the
 //! timer here is for, and why a lone `<Esc>` takes a moment to arrive.
 //!
-//! Almost everything here takes a raw `*mut TermInput`. Reading pumps: the
-//! terminal's device-attributes reply is what [`tui_stop`] and
-//! [`tui_suspend`] wait for, and their callbacks re-enter this struct
-//! through the TUI, so a long-lived `&mut` would be a lie. Staging and
-//! sending keys never pump, and take references.
+//! Everything here takes `&mut TUIData` or `&mut TermInput`, borrowed from
+//! the TUI's state cell for one step: the read and timer callbacks look the
+//! state up themselves, and the device-attributes reply that
+//! [`Tui::stop`](super::tui::Tui::stop) and [`tui_suspend`] wait for reaches
+//! their callbacks as the same borrow, handed down.
 //!
-//! [`tui_stop`]: super::tui::tui_stop
 //! [`tui_suspend`]: super::tui::tui_suspend
 
 #![deny(unsafe_op_in_unsafe_fn)]
