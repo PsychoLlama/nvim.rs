@@ -28,10 +28,8 @@ mod termios;
 mod wait_status;
 
 use crate::eval::typval::dict_to_env;
-use crate::event::libuv::{
-    uv_chdir, uv_disable_stdio_inheritance, uv_pipe_open, uv_signal_start, uv_signal_stop,
-};
-use crate::event::r#loop::loop_children;
+use crate::event::libuv::{uv_chdir, uv_disable_stdio_inheritance, uv_pipe_open};
+use crate::event::r#loop::{loop_children, start_children_watcher};
 use crate::event::proc::{kProcTypePty, proc_get_exepath, proc_init};
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, logmsg};
@@ -40,7 +38,7 @@ use crate::os::cshim::environ;
 use crate::os::fs::{errno_text, os_strerror, set_cloexec};
 use crate::os::signal::{SIGALRM, SIGCHLD, SIGCONT, SIGHUP, SIGINT, SIGKILL, SIGQUIT, SIGTERM};
 use crate::os::uv_error::uv_code;
-use crate::types::{Loop, Proc, PtyProc, speed_t, uv_pipe_t, uv_signal_t};
+use crate::types::{Loop, PtyProc, speed_t, uv_pipe_t, uv_signal_t};
 use ::libc::{
     __errno_location, _exit, SIG_DFL, cfsetispeed, cfsetospeed, close, execvp, fcntl, forkpty,
     ioctl, kill, killpg, poll, pollfd, ptsname, setsid, signal, waitpid,
@@ -108,11 +106,10 @@ fn warn(who: &'static CStr, line: c_int, what: &str) {
 /// Fork the child onto a new pseudo-terminal. Returns zero, or a negative
 /// error code.
 ///
-/// # Safety
-///
-/// `ptyproc` points to a live, unspawned [`PtyProc`] whose `Proc` half has
-/// been initialized (`proc_init`) and whose loop outlives the child.
-pub unsafe fn pty_proc_spawn(ptyproc: *mut PtyProc) -> c_int {
+/// `ptyproc` is unspawned, its `Proc` half initialised (`proc_init`), and
+/// it stays where it is while the child lives: its two pipes are handed to
+/// libuv here.
+pub fn pty_proc_spawn(ptyproc: &mut PtyProc) -> c_int {
     // Built at first use and reused, as upstream did.
     static TERMIOS_DEFAULT: GlobalCell<crate::types::termios> =
         GlobalCell::new(crate::types::termios {
@@ -142,26 +139,15 @@ pub unsafe fn pty_proc_spawn(ptyproc: *mut PtyProc) -> c_int {
         });
     }
 
-    let proc = ptyproc.cast::<Proc>();
-    // SAFETY: the caller's process. `Proc` is `PtyProc`'s first field, so
-    // the cast addresses the same object; every field touched below is one
-    // `proc_init` filled in.
-    unsafe {
-        // stderr is folded into the pty; there is one stream in each
-        // direction.
-        debug_assert!((*proc).err.s.closed);
-
-        uv_signal_start(
-            &raw mut (*(*proc).loop_0).children_watcher,
-            Some(chld_handler),
-            SIGCHLD,
-        );
-        (*ptyproc).winsize.ws_row = (*ptyproc).height;
-        (*ptyproc).winsize.ws_col = (*ptyproc).width;
-        (*ptyproc).winsize.ws_xpixel = 0;
-        (*ptyproc).winsize.ws_ypixel = 0;
-        uv_disable_stdio_inheritance();
-    }
+    // stderr is folded into the pty; there is one stream in each direction.
+    debug_assert!(ptyproc.proc.err.s.closed);
+    start_children_watcher(chld_handler);
+    ptyproc.winsize.ws_row = ptyproc.height;
+    ptyproc.winsize.ws_col = ptyproc.width;
+    ptyproc.winsize.ws_xpixel = 0;
+    ptyproc.winsize.ws_ypixel = 0;
+    // SAFETY: marks this process's own descriptors close-on-exec.
+    unsafe { uv_disable_stdio_inheritance() };
 
     let mut master: c_int = 0;
     // SAFETY: `forkpty` writes the master descriptor into `master` and reads
@@ -172,7 +158,7 @@ pub unsafe fn pty_proc_spawn(ptyproc: *mut PtyProc) -> c_int {
             &raw mut master,
             ptr::null_mut(),
             TERMIOS_DEFAULT.ptr(),
-            &raw mut (*ptyproc).winsize,
+            &raw mut ptyproc.winsize,
         )
     };
     if pid < 0 {
@@ -181,56 +167,13 @@ pub unsafe fn pty_proc_spawn(ptyproc: *mut PtyProc) -> c_int {
         return status;
     }
     if pid == 0 {
-        // SAFETY: the child half of the fork; never returns.
-        unsafe { init_child(ptyproc) };
+        init_child(ptyproc);
     }
 
     // SAFETY: the descriptor `forkpty` just handed back, which this process
     // owns and nothing else holds.
     let master = unsafe { OwnedFd::from_raw_fd(master) };
-    let status = 'configure: {
-        // SAFETY: `master` is open for as long as it is borrowed here, and
-        // the two pipes are this process's own.
-        unsafe {
-            // The master must be non-blocking: libuv polls it.
-            let flags = fcntl(master.as_raw_fd(), F_GETFL);
-            if flags == -1 {
-                // Captured before the logging, which does I/O of its own.
-                let status = -errno();
-                let what = "Failed to get master descriptor status flags";
-                warn_errno(c"pty_proc_spawn", 200, what);
-                break 'configure status;
-            }
-            if fcntl(master.as_raw_fd(), F_SETFL, flags | O_NONBLOCK) == -1 {
-                let status = -errno();
-                let what = "Failed to make master descriptor non-blocking";
-                warn_errno(c"pty_proc_spawn", 205, what);
-                break 'configure status;
-            }
-            // Other jobs and providers must not get a copy of this
-            // descriptor.
-            if let Err(status) = set_cloexec(master.as_fd()) {
-                let what = "Failed to set CLOEXEC on ptmx file descriptor";
-                warn(c"pty_proc_spawn", 212, what);
-                break 'configure status;
-            }
-            // Each direction gets its own copy of the master, so that
-            // closing one pipe does not take the other with it.
-            for (closed, pipe) in [
-                ((*proc).in_0.closed, &raw mut (*proc).in_0.uv.pipe),
-                ((*proc).out.s.closed, &raw mut (*proc).out.s.uv.pipe),
-            ] {
-                if !closed {
-                    let status = open_duplicate(master.as_fd(), pipe);
-                    if status != 0 {
-                        break 'configure status;
-                    }
-                }
-            }
-        }
-        0
-    };
-
+    let status = configure_master(ptyproc, master.as_fd());
     if status != 0 {
         drop(master);
         // SAFETY: `pid` is this call's own child, and the status word is
@@ -241,54 +184,86 @@ pub unsafe fn pty_proc_spawn(ptyproc: *mut PtyProc) -> c_int {
         }
         return status;
     }
-    // SAFETY: the caller's process. The master is handed to it as the raw
-    // descriptor its C layout keeps, closed by `pty_proc_close_master`.
-    unsafe {
-        (*ptyproc).tty_fd = master.into_raw_fd();
-        (*proc).pid = pid;
+    // The master is kept as the raw descriptor the C layout holds, closed by
+    // `pty_proc_close_master`.
+    ptyproc.tty_fd = master.into_raw_fd();
+    ptyproc.proc.pid = pid;
+    0
+}
+
+/// Make the new master non-blocking and close-on-exec, and give each
+/// direction the child talks over a copy of it. Zero, or a negative error
+/// code.
+fn configure_master(ptyproc: &mut PtyProc, master: BorrowedFd<'_>) -> c_int {
+    // The master must be non-blocking: libuv polls it.
+    // SAFETY: `master` is open for as long as it is borrowed here.
+    let flags = unsafe { fcntl(master.as_raw_fd(), F_GETFL) };
+    if flags == -1 {
+        // Captured before the logging, which does I/O of its own.
+        let status = -errno();
+        let what = "Failed to get master descriptor status flags";
+        warn_errno(c"pty_proc_spawn", 200, what);
+        return status;
+    }
+    // SAFETY: as above.
+    if unsafe { fcntl(master.as_raw_fd(), F_SETFL, flags | O_NONBLOCK) } == -1 {
+        let status = -errno();
+        let what = "Failed to make master descriptor non-blocking";
+        warn_errno(c"pty_proc_spawn", 205, what);
+        return status;
+    }
+    // Other jobs and providers must not get a copy of this descriptor.
+    if let Err(status) = set_cloexec(master) {
+        let what = "Failed to set CLOEXEC on ptmx file descriptor";
+        warn(c"pty_proc_spawn", 212, what);
+        return status;
+    }
+    // Each direction gets its own copy of the master, so that closing one
+    // pipe does not take the other with it.
+    let proc = &mut ptyproc.proc;
+    for (closed, pipe) in [
+        (proc.in_0.closed, &raw mut proc.in_0.uv.pipe),
+        (proc.out.s.closed, &raw mut proc.out.s.uv.pipe),
+    ] {
+        if !closed {
+            // SAFETY: the child's own unopened pipe handle.
+            let status = unsafe { open_duplicate(master, pipe) };
+            if status != 0 {
+                return status;
+            }
+        }
     }
     0
 }
 
-/// The path of the child's side of the pty.
-///
-/// # Safety
-///
-/// `ptyproc` points to a live, spawned [`PtyProc`]. The result points into
-/// libc's static buffer and dies at the next `ptsname`.
-pub unsafe fn pty_proc_tty_name(ptyproc: *mut PtyProc) -> *const c_char {
-    // SAFETY: the caller's process, whose `tty_fd` is the pty master.
-    unsafe { ptsname((*ptyproc).tty_fd) }
+/// The path of the child's side of the pty, copied out of libc's buffer;
+/// `None` once the master is closed.
+pub fn pty_proc_tty_name(ptyproc: &PtyProc) -> Option<CString> {
+    // SAFETY: `ptsname` answers null or its own NUL-terminated buffer,
+    // copied before anything else can call it.
+    let name = unsafe { ptsname(ptyproc.tty_fd) };
+    // SAFETY: as above.
+    (!name.is_null()).then(|| unsafe { CStr::from_ptr(name) }.to_owned())
 }
 
 /// Tell the child its terminal changed size.
-///
-/// # Safety
-///
-/// `ptyproc` points to a live [`PtyProc`].
-pub unsafe fn pty_proc_resize(ptyproc: *mut PtyProc, width: u16, height: u16) {
-    // SAFETY: the caller's process; `TIOCSWINSZ` reads the `winsize` this
-    // hands it, which is the process's own field.
-    unsafe {
-        (*ptyproc).winsize.ws_row = height;
-        (*ptyproc).winsize.ws_col = width;
-        (*ptyproc).winsize.ws_xpixel = 0;
-        (*ptyproc).winsize.ws_ypixel = 0;
-        ioctl((*ptyproc).tty_fd, TIOCSWINSZ, &raw mut (*ptyproc).winsize);
-    }
+pub fn pty_proc_resize(ptyproc: &mut PtyProc, width: u16, height: u16) {
+    ptyproc.winsize.ws_row = height;
+    ptyproc.winsize.ws_col = width;
+    ptyproc.winsize.ws_xpixel = 0;
+    ptyproc.winsize.ws_ypixel = 0;
+    // SAFETY: `TIOCSWINSZ` reads the `winsize` this hands it, the process's
+    // own field.
+    unsafe { ioctl(ptyproc.tty_fd, TIOCSWINSZ, &raw mut ptyproc.winsize) };
 }
 
 /// Resume a suspended child.
 ///
 /// The signal goes to the whole process group: some shells (fish, for one) do
 /// not propagate SIGCONT to their own suspended children.
-///
-/// # Safety
-///
-/// `ptyproc` points to a live, spawned [`PtyProc`].
-pub unsafe fn pty_proc_resume(ptyproc: *mut PtyProc) {
-    // SAFETY: `Proc` is `PtyProc`'s first field, and `pid` is the child.
-    unsafe { killpg((*ptyproc.cast::<Proc>()).pid, SIGCONT) };
+pub fn pty_proc_resume(ptyproc: &PtyProc) {
+    // SAFETY: signals the child's own process group.
+    unsafe { killpg(ptyproc.proc.pid, SIGCONT) };
 }
 
 /// Nudge the kernel into flushing the pty master's pending work.
@@ -296,14 +271,9 @@ pub unsafe fn pty_proc_resume(ptyproc: *mut PtyProc) {
 /// On Linux libuv polls with epoll, which does not run the pty's workqueue;
 /// an explicit `poll` does, but only when no data is immediately available.
 /// So this is needed before *every* libuv poll in `flush_stream`. #37982
-///
-/// # Safety
-///
-/// `ptyproc` points to a live [`PtyProc`].
-pub unsafe fn pty_proc_flush_master(ptyproc: *mut PtyProc) {
-    // SAFETY: the caller's process; the descriptor is its own.
+pub fn pty_proc_flush_master(ptyproc: &PtyProc) {
     let mut fds = pollfd {
-        fd: unsafe { (*ptyproc).tty_fd },
+        fd: ptyproc.tty_fd,
         events: POLLIN,
         revents: 0,
     };
@@ -311,47 +281,14 @@ pub unsafe fn pty_proc_flush_master(ptyproc: *mut PtyProc) {
     while unsafe { poll(&raw mut fds, 1, 0) } < 0 && errno() == EINTR {}
 }
 
-/// Drop the master and tell the owner the process is closed.
-///
-/// # Safety
-///
-/// `ptyproc` points to a live [`PtyProc`] whose close callback is prepared
-/// to run.
-pub unsafe fn pty_proc_close(ptyproc: *mut PtyProc) {
-    // SAFETY: the caller's process. The callback is read into a local before
-    // it runs, because it is the owner's code and may touch the process.
-    unsafe { pty_proc_close_master(ptyproc) };
-    let proc = ptyproc.cast::<Proc>();
-    let close_cb = unsafe { (*proc).internal_close_cb };
-    if let Some(notify) = close_cb {
-        unsafe { notify(proc) };
-    }
-}
-
 /// Drop the master descriptor, which is what sends the child SIGHUP.
-///
-/// # Safety
-///
-/// `ptyproc` points to a live [`PtyProc`].
-pub unsafe fn pty_proc_close_master(ptyproc: *mut PtyProc) {
-    // SAFETY: the caller's process; `tty_fd` is a descriptor it owns, and
-    // it is marked spent before anything else can close it twice.
-    unsafe {
-        if (*ptyproc).tty_fd >= 0 {
-            close((*ptyproc).tty_fd);
-            (*ptyproc).tty_fd = -1;
-        }
+pub fn pty_proc_close_master(ptyproc: &mut PtyProc) {
+    if ptyproc.tty_fd >= 0 {
+        // SAFETY: a descriptor the process owns, marked spent below before
+        // anything else can close it twice.
+        unsafe { close(ptyproc.tty_fd) };
+        ptyproc.tty_fd = -1;
     }
-}
-
-/// Stop watching for SIGCHLD when the loop shuts down.
-///
-/// # Safety
-///
-/// `uv_loop` points to a live `Loop` whose children watcher was started.
-pub unsafe fn pty_proc_teardown(uv_loop: *mut Loop) {
-    // SAFETY: the caller's loop and its own watcher.
-    unsafe { uv_signal_stop(&raw mut (*uv_loop).children_watcher) };
 }
 
 /// The child side of the fork, which either `execvp`s or exits.
@@ -366,54 +303,53 @@ pub unsafe fn pty_proc_teardown(uv_loop: *mut Loop) {
 /// fork would change when the child's variables are read. Do not add
 /// anything further that allocates, formats or takes a lock.
 ///
-/// # Safety
-///
-/// Runs in the child half of a `forkpty`, with `ptyproc` still addressing the
-/// (copied) process the parent set up.
-unsafe fn init_child(ptyproc: *mut PtyProc) -> ! {
+/// Runs in the child half of a `forkpty`, on the (copied) process the
+/// parent set up.
+fn init_child(ptyproc: &PtyProc) -> ! {
     /// The code Vim has always used when a child could not be started.
     const EXEC_FAILED: c_int = 122;
 
-    // SAFETY: this is the whole child. `setsid`, `signal` and `_exit` touch
-    // only this process; `cwd`, `argv` and `env` are the copies the parent
-    // built, and `execvp` replaces the image or returns having done nothing.
-    unsafe {
-        // New session and process group, so the child owns its terminal.
-        // #6530
-        setsid();
-
-        // Whatever the editor was ignoring or handling, the child should
-        // not.
-        for sig in [SIGCHLD, SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGALRM] {
-            signal(sig, SIG_DFL);
-        }
-
-        let proc = ptyproc.cast::<Proc>();
-        // Not `os_chdir`: that would buffer UI events for nobody.
-        if !(*proc).cwd.is_null() {
-            let err = uv_chdir((*proc).cwd);
-            if err != 0 {
-                let (cwd, why) = (
-                    msg_cstr(CStr::from_ptr((*proc).cwd)),
-                    msg_cstr(os_strerror(err)),
-                );
-                logmsg!(LOGLVL_ERR, c"init_child", 318, "chdir({cwd}) failed: {why}");
-                _exit(EXEC_FAILED);
-            }
-        }
-
-        let prog = proc_get_exepath(proc);
-        debug_assert!(!(*proc).env.is_null());
-        environ = dict_to_env(&*((*proc).env));
-        execvp(prog, (*proc).argv.cast::<*const c_char>());
-        let (at, why) = (c"init_child", why());
-        let (prog, why) = (
-            msg_cstr_opt((!prog.is_null()).then(|| CStr::from_ptr(prog))),
-            msg_cstr(&why),
-        );
-        logmsg!(LOGLVL_ERR, at, 327, "execvp({prog}) failed: {why}");
-        _exit(EXEC_FAILED);
+    // New session and process group, so the child owns its terminal. #6530
+    // SAFETY: this process's own session.
+    unsafe { setsid() };
+    // Whatever the editor was ignoring or handling, the child should not.
+    for sig in [SIGCHLD, SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGALRM] {
+        // SAFETY: the default disposition, in this process.
+        unsafe { signal(sig, SIG_DFL) };
     }
+
+    let proc = &ptyproc.proc;
+    // Not `os_chdir`: that would buffer UI events for nobody.
+    if !proc.cwd.is_null() {
+        // SAFETY: the parent's NUL-terminated copy of the directory.
+        let cwd = unsafe { CStr::from_ptr(proc.cwd) };
+        // SAFETY: as above.
+        let err = unsafe { uv_chdir(cwd.as_ptr()) };
+        if err != 0 {
+            let (cwd, why) = (msg_cstr(cwd), msg_cstr(os_strerror(err)));
+            logmsg!(LOGLVL_ERR, c"init_child", 318, "chdir({cwd}) failed: {why}");
+            // SAFETY: ends this process without running the parent's exit
+            // handlers.
+            unsafe { _exit(EXEC_FAILED) };
+        }
+    }
+
+    // SAFETY: the parent's copy of the child, whose argv it filled in.
+    let prog = unsafe { proc_get_exepath(ptr::from_ref(proc).cast_mut()) };
+    debug_assert!(!proc.env.is_null());
+    // SAFETY: the parent's dictionary of variables; `environ` is this
+    // process's own, about to be replaced by the exec.
+    unsafe { environ = dict_to_env(&*proc.env) };
+    // SAFETY: the program and the NULL-terminated argv the parent built;
+    // `execvp` replaces the image or returns having done nothing.
+    unsafe { execvp(prog, proc.argv.cast::<*const c_char>()) };
+    let (at, why) = (c"init_child", why());
+    // SAFETY: as above, the program's NUL-terminated name.
+    let prog = msg_cstr_opt((!prog.is_null()).then(|| unsafe { CStr::from_ptr(prog) }));
+    let why = msg_cstr(&why);
+    logmsg!(LOGLVL_ERR, at, 327, "execvp({prog}) failed: {why}");
+    // SAFETY: as above.
+    unsafe { _exit(EXEC_FAILED) }
 }
 
 /// Give `pipe` its own copy of `fd`. Returns zero, or a negative error code.

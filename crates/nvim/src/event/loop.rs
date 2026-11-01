@@ -23,15 +23,16 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::os::signal::SIGCHLD;
 use crate::os::uv_error::UV_EBUSY;
-use core::ffi::c_void;
+use core::ffi::{c_int, c_void};
 use core::ops::{Deref, DerefMut};
 use core::ptr;
 
 use crate::event::libuv::{
     uv_async_init, uv_async_send, uv_close, uv_is_closing, uv_loop_close, uv_loop_init,
-    uv_print_all_handles, uv_run, uv_signal_init, uv_stop, uv_timer_init, uv_timer_start,
-    uv_timer_stop, uv_walk,
+    uv_print_all_handles, uv_run, uv_signal_init, uv_signal_start, uv_signal_stop, uv_stop,
+    uv_timer_init, uv_timer_start, uv_timer_stop, uv_walk,
 };
 use crate::event_queue::{self, QueueId};
 use crate::log::{LOGLVL_ERR, log_file_path, logmsg, with_log_lock};
@@ -302,6 +303,26 @@ fn drain_until_closed(uv_loop: EventLoop, wait: bool) -> bool {
             didstop = true;
         }
     }
+}
+
+/// Arm the editor loop's `SIGCHLD` watcher with `on_child`: what reaps the
+/// children libuv did not spawn itself (the pty ones). Starting it again
+/// replaces the callback.
+pub(crate) fn start_children_watcher(on_child: unsafe extern "C" fn(*mut uv_signal_t, c_int)) {
+    // SAFETY: the static loop's own watcher, initialised by `loop_init`.
+    unsafe {
+        uv_signal_start(
+            &raw mut (*main_loop_raw()).children_watcher,
+            Some(on_child),
+            SIGCHLD,
+        )
+    };
+}
+
+/// Disarm [`start_children_watcher`], when the loop shuts down.
+pub(crate) fn stop_children_watcher() {
+    // SAFETY: the static loop's own watcher.
+    unsafe { uv_signal_stop(&raw mut (*main_loop_raw()).children_watcher) };
 }
 
 /// The list of job-control children.

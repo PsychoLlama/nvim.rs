@@ -51,6 +51,7 @@ use crate::event::libuv_proc::free_raw_argv;
 use crate::event::libuv_proc::{libuv_proc_close, libuv_proc_spawn};
 use crate::event::r#loop::{
     loop_children, loop_poll_events, one_arg_event, process_events, process_events_until,
+    stop_children_watcher,
 };
 use crate::event::rstream::{Reader, rstream_may_close};
 use crate::event::stream::{stream_init, stream_may_close};
@@ -60,9 +61,7 @@ use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_DBG, LOGLVL_INF, logmsg};
 use crate::message_fmt::msg_cstr_opt;
 use crate::os::proc::os_proc_tree_kill;
-use crate::os::pty_proc_unix::{
-    pty_proc_close, pty_proc_close_master, pty_proc_flush_master, pty_proc_spawn, pty_proc_teardown,
-};
+use crate::os::pty_proc_unix::{pty_proc_close_master, pty_proc_flush_master, pty_proc_spawn};
 use crate::os::signal::{SIGHUP, SIGKILL, SIGTERM};
 use crate::os::time::os_hrtime;
 use crate::startup::{
@@ -124,9 +123,13 @@ impl Child {
         self.0.cast()
     }
 
-    /// The same child as a `PtyProc`. `Proc` is its first field.
-    fn as_pty(self) -> *mut PtyProc {
-        self.0.cast()
+    /// The same child as a `PtyProc`, for a pty child. `Proc` is its first
+    /// field.
+    fn pty<'a>(self) -> &'a mut PtyProc {
+        debug_assert!(self.is_pty());
+        // SAFETY: a pty child is a `PtyProc`, live for as long as this
+        // handle; the pty layer reads and writes its plain fields only.
+        unsafe { &mut *self.0.cast::<PtyProc>() }
     }
 
     /// Was the child started by `forkpty` rather than by libuv?
@@ -275,8 +278,7 @@ pub unsafe fn proc_spawn(proc: *mut Proc, has_in: bool, has_out: bool, has_err: 
     }
 
     let status = if child.is_pty() {
-        // SAFETY: a pty child is a `PtyProc`, and is not yet spawned.
-        unsafe { pty_proc_spawn(child.as_pty()) }
+        pty_proc_spawn(child.pty())
     } else {
         // SAFETY: a libuv child is a `LibuvProc`, and is not yet spawned.
         unsafe { libuv_proc_spawn(child.as_libuv()) }
@@ -375,8 +377,7 @@ pub(crate) fn proc_teardown() {
     };
     // SAFETY: the editor's own loop, which outlives the process's children.
     unsafe { process_events_until(uv_loop, Some(QueueId::MAIN), -1, drained) };
-    // SAFETY: as above.
-    unsafe { pty_proc_teardown(uv_loop) };
+    stop_children_watcher();
 }
 
 /// Close all three of a child's standard streams.
@@ -472,8 +473,7 @@ pub unsafe fn proc_stop(proc: *mut Proc) {
         child.exit_signal = as_exit_signal(SIGHUP);
         // SAFETY: a live child.
         unsafe { proc_close_streams(child.as_ptr()) };
-        // SAFETY: a pty child is a `PtyProc`.
-        unsafe { pty_proc_close_master(child.as_pty()) };
+        pty_proc_close_master(child.pty());
     } else {
         child.exit_signal = as_exit_signal(SIGTERM);
         os_proc_tree_kill(child.pid, SIGTERM);
@@ -654,8 +654,12 @@ fn proc_close(mut child: Child) {
     }
 
     if child.is_pty() {
-        // SAFETY: a pty child is a `PtyProc`.
-        unsafe { pty_proc_close(child.as_pty()) };
+        // Dropping the master is the pty child's close; tell the owner.
+        pty_proc_close_master(child.pty());
+        if let Some(notify) = child.internal_close_cb {
+            // SAFETY: the child's own close callback.
+            unsafe { notify(child.as_ptr()) };
+        }
     } else {
         // SAFETY: a libuv child is a `LibuvProc`.
         unsafe { libuv_proc_close(child.as_libuv()) };
@@ -700,8 +704,7 @@ fn flush_stream(child: Child, stream: Reader) {
         let num_bytes = stream.num_bytes;
 
         if child.is_pty() && !stream.did_eof {
-            // SAFETY: a pty child is a `PtyProc`.
-            unsafe { pty_proc_flush_master(child.as_pty()) };
+            pty_proc_flush_master(child.pty());
         }
         // SAFETY: the child's loop, and the stream's own queue.
         unsafe {

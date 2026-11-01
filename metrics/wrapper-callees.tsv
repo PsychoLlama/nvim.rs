@@ -1,5 +1,5 @@
 count	callee	no_raw	defs	def
-32	CStr::from_ptr	0	0	
+34	CStr::from_ptr	0	0	
 28	f	0	0	
 27	from_raw_parts	0	0	
 26	Term::new	0	1	crates/nvim/src/terminal/mod.rs
@@ -36,6 +36,7 @@ count	callee	no_raw	defs	def
 5	stream_may_close	0	1	crates/nvim/src/event/stream.rs
 5	vterm_scroll_rect	0	1	crates/nvim/src/vterm/vterm.rs
 4	Uv::new	0	1	crates/nvim/src/event/libuv_proc.rs
+4	fcntl	0	0	
 4	proc_stop	0	1	crates/nvim/src/event/proc.rs
 4	try_to_free_memory	1	1	crates/nvim/src/memory/mod.rs
 4	ts_node_child	0	0	
@@ -56,8 +57,8 @@ count	callee	no_raw	defs	def
 3	fragment_bytes	1	2	
 3	one_arg_event	0	1	crates/nvim/src/event/loop.rs
 3	proc_free	0	1	crates/nvim/src/event/proc.rs
+3	proc_get_exepath	0	1	crates/nvim/src/event/proc.rs
 3	process_events	0	1	crates/nvim/src/event/loop.rs
-3	pty_proc_close_master	0	1	crates/nvim/src/os/pty_proc_unix/mod.rs
 3	rstream_init	0	1	crates/nvim/src/event/rstream.rs
 3	rstream_may_close	0	1	crates/nvim/src/event/rstream.rs
 3	ts_tree_root_node	0	0	
@@ -86,14 +87,15 @@ count	callee	no_raw	defs	def
 2	Parser::of	0	1	crates/nvim/src/vterm/parser.rs
 2	Stack::entry	0	1	crates/nvim/src/lua/stack/dispatch.rs
 2	Vec::from_raw_parts	0	0	
+2	_exit	0	0	
 2	alloc_buffer	0	1	crates/nvim/src/vterm/screen/mod.rs
 2	cells_mut	0	1	crates/nvim/src/vterm/screen/mod.rs
 2	character_bytes	0	1	crates/nvim/src/harness.rs
+2	close	0	0	
 2	copy_bytes	0	1	crates/nvim/src/memory/mod.rs
 2	copy_nonoverlapping	0	0	
 2	decref	0	1	crates/nvim/src/event/proc.rs
 2	erase	0	1	crates/nvim/src/vterm/screen/callbacks.rs
-2	fcntl	0	0	
 2	free	0	0	
 2	free_block	0	1	crates/nvim/src/memory/blocks.rs
 2	free_child_env	0	1	crates/nvim/src/event/libuv_proc.rs
@@ -112,7 +114,6 @@ count	callee	no_raw	defs	def
 2	nlua_luv_thread_common_cfpcall	0	1	crates/nvim/src/lua/executor/luv.rs
 2	nth_child	0	1	crates/nvim/src/event/proc.rs
 2	proc_close_streams	0	1	crates/nvim/src/event/proc.rs
-2	proc_get_exepath	0	1	crates/nvim/src/event/proc.rs
 2	proc_spawn	0	1	crates/nvim/src/event/proc.rs
 2	proc_wait	0	1	crates/nvim/src/event/proc.rs
 2	push_c_string	0	1	crates/nvim/src/lua/treesitter/mod.rs
@@ -138,6 +139,7 @@ count	callee	no_raw	defs	def
 2	uv_fs_req_cleanup	0	0	
 2	uv_listen	0	0	
 2	uv_pipe_open	0	0	
+2	uv_signal_start	0	0	
 2	uv_signal_stop	0	0	
 2	uv_sleep	0	0	
 2	vterm_keyboard_end_paste	0	1	crates/nvim/src/vterm/keyboard.rs
@@ -170,7 +172,6 @@ count	callee	no_raw	defs	def
 1	bind_textdomain_codeset	0	0	
 1	calloc	0	0	
 1	cb	0	0	
-1	close	0	0	
 1	consume	0	0	
 1	convert_color_to_rgb	0	0	
 1	copy	0	0	
@@ -178,6 +179,7 @@ count	callee	no_raw	defs	def
 1	decode	0	0	
 1	endpwent	0	0	
 1	eq_upto	0	0	
+1	execvp	0	0	
 1	fclose	0	0	
 1	fdopen	0	0	
 1	fopen	0	0	
@@ -190,7 +192,7 @@ count	callee	no_raw	defs	def
 1	getxattr	0	0	
 1	iconv_close	0	0	
 1	iconv_open	0	0	
-1	init_child	0	1	crates/nvim/src/os/pty_proc_unix/mod.rs
+1	ioctl	0	0	
 1	killpg	0	0	
 1	libuv_proc_close	0	1	crates/nvim/src/event/libuv_proc.rs
 1	libuv_proc_spawn	0	1	crates/nvim/src/event/libuv_proc.rs
@@ -238,18 +240,12 @@ count	callee	no_raw	defs	def
 1	nlua_luv_thread_cfpcall	0	1	crates/nvim/src/lua/executor/luv.rs
 1	notify_internal	0	0	
 1	on_scrollback_option_changed	0	1	crates/nvim/src/terminal/refresh.rs
+1	open_duplicate	0	1	crates/nvim/src/os/pty_proc_unix/mod.rs
 1	outfunc	0	0	
 1	paste_marker	0	0	
 1	poll	0	0	
 1	predicate_steps	0	1	crates/nvim/src/lua/treesitter/query.rs
 1	ptsname	0	0	
-1	pty_proc_close	0	1	crates/nvim/src/os/pty_proc_unix/mod.rs
-1	pty_proc_flush_master	0	1	crates/nvim/src/os/pty_proc_unix/mod.rs
-1	pty_proc_resize	0	1	crates/nvim/src/os/pty_proc_unix/mod.rs
-1	pty_proc_resume	0	1	crates/nvim/src/os/pty_proc_unix/mod.rs
-1	pty_proc_spawn	0	1	crates/nvim/src/os/pty_proc_unix/mod.rs
-1	pty_proc_teardown	0	1	crates/nvim/src/os/pty_proc_unix/mod.rs
-1	pty_proc_tty_name	0	1	crates/nvim/src/os/pty_proc_unix/mod.rs
 1	raise	0	1	crates/nvim/src/lua/stack/dispatch.rs
 1	read	0	0	
 1	realloc	0	1	crates/nvim/src/allocator.rs
@@ -264,8 +260,10 @@ count	callee	no_raw	defs	def
 1	setlocale	0	0	
 1	setpenattr	0	1	crates/nvim/src/vterm/screen/callbacks.rs
 1	setpwent	0	0	
+1	setsid	0	0	
 1	settermprop	0	1	crates/nvim/src/vterm/screen/callbacks.rs
 1	setxattr	0	0	
+1	signal	0	0	
 1	signal_event	0	1	crates/nvim/src/event/signal.rs
 1	socket_alive	0	1	crates/nvim/src/event/socket/mod.rs
 1	socket_watcher_accept	0	1	crates/nvim/src/event/socket/mod.rs
@@ -327,6 +325,8 @@ count	callee	no_raw	defs	def
 1	uname	0	0	
 1	uv_accept	0	0	
 1	uv_async_send	0	0	
+1	uv_chdir	0	0	
+1	uv_disable_stdio_inheritance	0	0	
 1	uv_dlopen	0	0	
 1	uv_dlsym	0	0	
 1	uv_fs_chmod	0	0	
@@ -356,7 +356,6 @@ count	callee	no_raw	defs	def
 1	uv_recv_buffer_size	0	0	
 1	uv_run	0	0	
 1	uv_signal_init	0	0	
-1	uv_signal_start	0	0	
 1	uv_spawn	0	0	
 1	uv_stop	0	0	
 1	uv_stream_get_write_queue_size	0	0	

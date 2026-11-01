@@ -167,12 +167,13 @@ impl JobProc {
         }
     }
 
-    /// The pty half, for a job started behind one. Its fields are plain
-    /// data; the master descriptor is closed only through this module.
-    fn pty_ptr(self: Pin<&mut Self>) -> Option<*mut PtyProc> {
-        // SAFETY: as above.
+    /// The pty half, for a job started behind one, lent to the pty layer,
+    /// which reads and writes its plain fields and moves nothing.
+    fn pty_mut(self: Pin<&mut Self>) -> Option<&mut PtyProc> {
+        // SAFETY: as above; the callees in `os/pty_proc_unix` take the
+        // child's fields in place.
         match unsafe { self.get_unchecked_mut() } {
-            JobProc::Pty(pty) => Some(&raw mut *pty),
+            JobProc::Pty(pty) => Some(pty),
             JobProc::Uv(_) => None,
         }
     }
@@ -243,36 +244,29 @@ impl JobProc {
 
     /// Close a pty child's master, which sends it SIGHUP.
     pub(crate) fn close_master(self: Pin<&mut Self>) {
-        if let Some(pty) = self.pty_ptr() {
-            // SAFETY: the child's own pty.
-            unsafe { pty_proc_close_master(pty) };
+        if let Some(pty) = self.pty_mut() {
+            pty_proc_close_master(pty);
         }
     }
 
     /// Tell a pty child its terminal changed size.
     pub(crate) fn resize(self: Pin<&mut Self>, width: u16, height: u16) {
-        if let Some(pty) = self.pty_ptr() {
-            // SAFETY: the child's own pty.
-            unsafe { pty_proc_resize(pty, width, height) };
+        if let Some(pty) = self.pty_mut() {
+            pty_proc_resize(pty, width, height);
         }
     }
 
     /// Resume a suspended pty child.
     pub(crate) fn resume(self: Pin<&mut Self>) {
-        if let Some(pty) = self.pty_ptr() {
-            // SAFETY: the child's own pty.
-            unsafe { pty_proc_resume(pty) };
+        if let Some(pty) = self.pty_mut() {
+            pty_proc_resume(pty);
         }
     }
 
     /// The path of a pty child's side of the pty, copied out of libc's
     /// buffer.
     pub(crate) fn tty_name(self: Pin<&mut Self>) -> Option<std::ffi::CString> {
-        let pty = self.pty_ptr()?;
-        // SAFETY: the child's own pty; `ptsname` answers null or libc's
-        // NUL-terminated buffer, copied before anything else can call it.
-        let name = unsafe { pty_proc_tty_name(pty) };
-        (!name.is_null()).then(|| unsafe { CStr::from_ptr(name) }.to_owned())
+        pty_proc_tty_name(self.pty_mut()?)
     }
 
     /// Stop or restart reading the child's output, without changing whether
