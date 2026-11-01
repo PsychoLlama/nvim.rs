@@ -54,47 +54,49 @@ impl Stack {
     /// Whether the value at `at` is the C function `function`, closure or
     /// not.
     pub fn is_c_function(&self, at: At, function: CFunction) -> bool {
-        unsafe {
-            lua_iscfunction(self.l(), at.0) != 0
-                && lua_tocfunction(self.l(), at.0)
-                    .is_some_and(|f| core::ptr::fn_addr_eq(f, function))
+        // SAFETY: a live state.
+        if unsafe { lua_iscfunction(self.l(), at.0) } == 0 {
+            return false;
         }
+        // SAFETY: as above.
+        unsafe { lua_tocfunction(self.l(), at.0) }
+            .is_some_and(|f| core::ptr::fn_addr_eq(f, function))
     }
 
     /// Frame `level` of the running call stack, 0 being the running
     /// function; `None` past the bottom.
     pub fn frame(&mut self, level: c_int) -> Option<Frame> {
         let mut record = lua_Debug::default();
-        // SAFETY: a live state and a record for it to fill; the strings it
-        // answers live in the state and are copied before anything runs.
-        unsafe {
-            if lua_getstack(self.l(), level, &raw mut record) != 1
-                || lua_getinfo(self.l(), c"nSl".as_ptr(), &raw mut record) == 0
-            {
-                return None;
-            }
-            Some(Frame {
-                is_c: *record.what == b'C'.cast_signed(),
-                source: CStr::from_ptr(record.source).to_bytes().to_vec(),
-                current_line: record.currentline,
-            })
+        // SAFETY: a live state and a record for it to fill.
+        if unsafe { lua_getstack(self.l(), level, &raw mut record) } != 1 {
+            return None;
         }
+        // SAFETY: as above, the record `lua_getstack` filled.
+        if unsafe { lua_getinfo(self.l(), c"nSl".as_ptr(), &raw mut record) } == 0 {
+            return None;
+        }
+        // SAFETY: the strings LuaJIT answered, which live in the state and
+        // are copied before anything runs.
+        let (what, source) = unsafe { (*record.what, CStr::from_ptr(record.source)) };
+        Some(Frame {
+            is_c: what == b'C'.cast_signed(),
+            source: source.to_bytes().to_vec(),
+            current_line: record.currentline,
+        })
     }
 
     /// Pop the function on top and answer where it was defined: its chunk
     /// name and the line its definition starts on (`lua_getinfo(L, ">S")`).
     pub fn pop_function_source(&mut self) -> Option<(Vec<u8>, c_int)> {
+        debug_assert!(self.depth() >= 1, "consumes a slot below the base");
         let mut record = lua_Debug::default();
-        // SAFETY: a live state with a function on top, which `>S` consumes;
-        // the source is copied before anything else runs.
-        unsafe {
-            if lua_getinfo(self.l(), c">S".as_ptr(), &raw mut record) == 0 {
-                return None;
-            }
-            Some((
-                CStr::from_ptr(record.source).to_bytes().to_vec(),
-                record.linedefined,
-            ))
+        // SAFETY: a live state with a function on top, which `>S` consumes.
+        if unsafe { lua_getinfo(self.l(), c">S".as_ptr(), &raw mut record) } == 0 {
+            return None;
         }
+        // SAFETY: the chunk name LuaJIT answered, copied before anything
+        // else runs.
+        let source = unsafe { CStr::from_ptr(record.source) };
+        Some((source.to_bytes().to_vec(), record.linedefined))
     }
 }

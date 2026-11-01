@@ -1,5 +1,5 @@
 count	callee	no_raw	defs	def
-34	CStr::from_ptr	0	0	
+35	CStr::from_ptr	0	0	
 28	f	0	0	
 27	from_raw_parts	0	0	
 26	Term::new	0	1	crates/nvim/src/terminal/mod.rs
@@ -108,6 +108,7 @@ count	callee	no_raw	defs	def
 2	listxattr	0	0	
 2	luaL_ref	0	0	
 2	luaL_unref	0	0	
+2	lua_getinfo	0	0	
 2	lua_newuserdata	0	0	
 2	lua_settop	0	0	
 2	luv_set_thread_cb	0	0	
@@ -206,9 +207,11 @@ count	callee	no_raw	defs	def
 1	lua_createtable	0	0	
 1	lua_getfenv	0	0	
 1	lua_getfield	0	0	
+1	lua_getstack	0	0	
 1	lua_gettable	0	0	
 1	lua_gettop	0	0	
 1	lua_insert	0	0	
+1	lua_iscfunction	0	0	
 1	lua_objlen	0	0	
 1	lua_pcall	0	0	
 1	lua_pushboolean	0	0	
@@ -228,6 +231,7 @@ count	callee	no_raw	defs	def
 1	lua_setfield	0	0	
 1	lua_setmetatable	0	0	
 1	lua_settable	0	0	
+1	lua_tocfunction	0	0	
 1	lua_tointeger	0	0	
 1	lua_tonumber	0	0	
 1	lua_topointer	0	0	
