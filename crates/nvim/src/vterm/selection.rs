@@ -9,10 +9,11 @@
 
 #![forbid(unsafe_code)]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
-use crate::types::{VTermSelectionMask, VTermState, VTermStringFragment};
-use crate::vterm::state::fragment_bytes;
+use crate::types::VTermSelectionMask;
+use crate::vterm::host::Fragment;
+use crate::vterm::state::StateCx;
 use crate::vterm::vterm::{
     SELECTION_INITIAL, SELECTION_INVALID, SELECTION_QUERY, SELECTION_SELECTED, SELECTION_SET,
     SELECTION_SET_INITIAL, VTERM_PROP_ICONNAME, VTERM_PROP_TITLE, VTERM_SELECTION_CLIPBOARD,
@@ -20,28 +21,10 @@ use crate::vterm::vterm::{
     VTERM_SELECTION_SELECT,
 };
 
-/// Builds a string fragment for the consumer's selection callback.
-pub(super) fn fragment(
-    text: *const c_char,
-    len: usize,
-    initial: bool,
-    last: bool,
-) -> VTermStringFragment {
-    let mut frag = VTermStringFragment {
-        str: text,
-        len_initial_final_0: [0; 4],
-        terminator: 0,
-    };
-    frag.set_len(len);
-    frag.set_initial(initial);
-    frag.set_final_0(last);
-    frag
-}
-
 /// Handles one Operating System Command. Whether the sequence counts as
 /// handled is not this module's call: upstream offers every OSC to the
 /// consumer's fallback afterwards and reports only what that made of it.
-pub(super) fn osc(state: &mut VTermState, command: c_int, frag: VTermStringFragment) {
+pub(super) fn osc(state: &mut StateCx<'_>, command: c_int, frag: Fragment<'_>) {
     match command {
         0 => {
             state.set_termprop_string(VTERM_PROP_ICONNAME, frag);
@@ -74,15 +57,15 @@ fn unbase64one(c: u8) -> Option<u8> {
 
 /// OSC 52: a selection name, then either `?` to ask for its contents or
 /// base64 to set them.
-fn clipboard(state: &mut VTermState, frag: VTermStringFragment) {
+fn clipboard(state: &mut StateCx<'_>, frag: Fragment<'_>) {
     let mut progress = state.selection_progress();
-    if frag.initial() {
+    if frag.initial {
         progress.mask = 0;
         progress.set_state(SELECTION_INITIAL);
         state.set_selection_progress(progress);
     }
 
-    let mut rest = fragment_bytes(&frag);
+    let mut rest = frag.bytes();
     // The selection name: any number of buffer letters, ended by a semicolon.
     while progress.state() == SELECTION_INITIAL && !rest.is_empty() {
         match rest[0] {
@@ -109,7 +92,7 @@ fn clipboard(state: &mut VTermState, frag: VTermStringFragment) {
     if rest.is_empty() {
         // Nothing followed the name, so a finished command clears the
         // selection rather than setting it.
-        if frag.final_0() {
+        if frag.last {
             state.selection_set(mask, None, progress.state() != SELECTION_SET, true);
         }
         return;
@@ -188,7 +171,7 @@ fn clipboard(state: &mut VTermState, frag: VTermStringFragment) {
         if rest.is_empty() || buflen - bufcur < 3 {
             if bufcur > 0 {
                 let initial = progress.state() == SELECTION_SET_INITIAL;
-                let last = frag.final_0() && rest.is_empty();
+                let last = frag.last && rest.is_empty();
                 state.selection_set(mask, Some(bufcur), initial, last);
                 progress.set_state(SELECTION_SET);
                 state.set_selection_progress(progress);

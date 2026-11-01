@@ -15,24 +15,25 @@ use std::collections::VecDeque;
 
 use super::*;
 
-/// How much of a selection sequence vterm can reassemble before it gives up
-/// and reports the write truncated.
+/// How much of a selection sequence vterm decodes before it hands a chunk
+/// over.
 pub const SELECTIONBUF_SIZE: usize = 0x400;
 
 /// One `:terminal` buffer's emulator state.
 ///
-/// Owned by the buffer it draws into: `terminal_alloc` leaks a `Box` and
-/// `terminal_destroy` reclaims it. Not `Copy` — there is exactly one of
+/// Owned by the buffer it draws into: `terminal_alloc` makes it and
+/// `terminal_destroy` frees it. Not `Copy` — there is exactly one of
 /// these per terminal buffer, reached through `Buffer::terminal`, and
 /// duplicating it would duplicate the allocations it owns.
 ///
 /// Still `repr(C)`: `Buffer` is `repr(C)` and holds a `*mut Terminal`, so
-/// the FFI-safety lint follows the pointer into this definition.
+/// the FFI-safety lint follows the pointer into this definition. Reached
+/// through `winlayer::Term`.
 #[repr(C)]
 pub struct terminal {
     pub opts: TerminalOptions,
-    pub vt: *mut VTerm,
-    pub vts: *mut VTermScreen,
+    /// The emulator the child's output is written into.
+    pub vt: Box<VTerm>,
     /// Where a screen row is rendered to text before being written into
     /// the buffer's lines. Grown to fit the widest row seen and then
     /// reused, so the refresh does not allocate per line.
@@ -58,10 +59,6 @@ pub struct terminal {
     pub synchronized_output: bool,
     pub sync_flush_pending: bool,
     pub color_set: [bool; 16],
-    /// Scratch space vterm reassembles selection sequences in. Handed over
-    /// as a raw pointer when the callbacks are installed and held by vterm
-    /// for as long as the terminal lives, so it is never resized.
-    pub selection_buffer: Box<[::core::ffi::c_char; SELECTIONBUF_SIZE]>,
     /// The clipboard write being reassembled. Empty between writes.
     pub selection: Vec<u8>,
     /// The escape sequence currently being reassembled from the fragments
@@ -80,8 +77,10 @@ impl terminal {
         Self {
             opts,
             buf_handle,
-            vt: ::core::ptr::null_mut(),
-            vts: ::core::ptr::null_mut(),
+            vt: VTerm::new(
+                ::core::ffi::c_int::from(opts.height),
+                ::core::ffi::c_int::from(opts.width),
+            ),
             textbuf: Vec::new(),
             sb: Scrollback::default(),
             old_sb_deleted: 0,
@@ -104,7 +103,7 @@ impl terminal {
             pending: TerminalPending {
                 resize: false,
                 cursor: false,
-                send: ::core::ptr::null_mut(),
+                send: None,
                 events: None,
             },
             streamed_paste: false,
@@ -112,10 +111,6 @@ impl terminal {
             synchronized_output: false,
             sync_flush_pending: false,
             color_set: [false; 16],
-            selection_buffer: vec![0; SELECTIONBUF_SIZE]
-                .into_boxed_slice()
-                .try_into()
-                .expect("sized to SELECTIONBUF_SIZE"),
             selection: Vec::new(),
             termrequest_buffer: Vec::new(),
             termrequest_terminator: 0,
@@ -261,9 +256,9 @@ pub struct TerminalPending {
     pub cursor: bool,
     /// Where writes to the child go while a `TermRequest` autocommand is
     /// running, so that a handler's reply lands after the request has been
-    /// fully reported. Null the rest of the time, meaning "write through".
-    /// Borrowed from the in-flight request, which outlives the borrow.
-    pub send: *mut Vec<u8>,
+    /// fully reported. `None` the rest of the time, meaning "write through".
+    /// Shared with the in-flight request, which flushes it.
+    pub send: Option<std::rc::Rc<std::cell::RefCell<Vec<u8>>>>,
     pub(crate) events: Option<crate::event_queue::ParkingQueue>,
 }
 #[repr(C)]

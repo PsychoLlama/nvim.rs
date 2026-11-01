@@ -15,18 +15,18 @@
 
 use core::ffi::c_int;
 
-use crate::types::{ScreenChar, VTermRect, VTermState};
+use crate::types::{ScreenChar, VTermRect};
 use crate::vterm::geometry::{DHL_BOTTOM, DHL_OFF, DHL_TOP, DWL_OFF, DWL_ON};
 use crate::vterm::mode;
 use crate::vterm::pen::save_pen;
-use crate::vterm::state::{PenChange, is_composing};
+use crate::vterm::state::{PenChange, StateCx, is_composing};
 use crate::vterm::vterm::{
     VTERM_PROP_CURSORBLINK, VTERM_PROP_CURSORSHAPE, VTERM_PROP_CURSORVISIBLE,
 };
 
 /// Prints a decoded run of codepoints, gathering each grapheme cluster and
 /// stamping it as one glyph.
-pub(super) fn print(state: &mut VTermState, codepoints: &[u32]) {
+pub(super) fn print(state: &mut StateCx<'_>, codepoints: &[u32]) {
     let oldpos = state.pos;
     let mut grapheme = 0 as _;
     let mut len = 0usize;
@@ -118,7 +118,7 @@ pub(super) fn print(state: &mut VTermState, codepoints: &[u32]) {
 
 /// Handles one C0 or C1 control. Reports whether it was recognised, here or
 /// by the consumer's fallback.
-pub(super) fn control(state: &mut VTermState, control: u8) -> bool {
+pub(super) fn control(state: &mut StateCx<'_>, control: u8) -> bool {
     let oldpos = state.pos;
     match control {
         0x07 => state.bell(), // BEL - ECMA-48 8.3.3
@@ -145,7 +145,11 @@ pub(super) fn control(state: &mut VTermState, control: u8) -> bool {
             state.linefeed();
             state.pos.col = 0;
         }
-        0x88 => state.set_tabstop(state.pos.col), // HTS - ECMA-48 8.3.62
+        // HTS - ECMA-48 8.3.62
+        0x88 => {
+            let col = state.pos.col;
+            state.set_tabstop(col);
+        }
         0x8d => {
             // RI - ECMA-48 8.3.104
             if state.pos.row == state.scrollregion_top {
@@ -166,7 +170,7 @@ pub(super) fn control(state: &mut VTermState, control: u8) -> bool {
 /// Handles an escape sequence — the intermediates followed by the final byte.
 /// Returns how many of those bytes it consumed, zero when it recognised
 /// nothing.
-pub(super) fn escape(state: &mut VTermState, seq: &[u8]) -> c_int {
+pub(super) fn escape(state: &mut StateCx<'_>, seq: &[u8]) -> c_int {
     // The first byte decides the sequence even though the last one ends it.
     match seq.first().copied().unwrap_or(0) {
         b' ' => {
@@ -203,7 +207,7 @@ pub(super) fn escape(state: &mut VTermState, seq: &[u8]) -> c_int {
             if seq.len() != 2 {
                 return 0;
             }
-            state.designate_charset(usize::from(first - 0x28), seq[1].cast_signed());
+            state.designate_charset(usize::from(first - 0x28), seq[1]);
             2
         }
         b'7' => {
@@ -266,7 +270,7 @@ pub(super) fn escape(state: &mut VTermState, seq: &[u8]) -> c_int {
 }
 
 /// DECALN: fill the screen with `E`, the alignment pattern.
-fn screen_alignment_test(state: &mut VTermState) {
+fn screen_alignment_test(state: &mut StateCx<'_>) {
     let e = ScreenChar::from(b'E');
     for row in 0..state.rows {
         for col in 0..state.row_width(row) {
@@ -278,7 +282,7 @@ fn screen_alignment_test(state: &mut VTermState) {
 
 /// DECSC and DECRC: stash the cursor, the pen and the cursor's appearance, or
 /// put them all back.
-pub(super) fn save_cursor(state: &mut VTermState, save: bool) {
+pub(super) fn save_cursor(state: &mut StateCx<'_>, save: bool) {
     if save {
         state.saved.pos = state.pos;
         let (visible, blink, shape) = (

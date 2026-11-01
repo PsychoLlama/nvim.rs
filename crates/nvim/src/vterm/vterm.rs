@@ -7,11 +7,7 @@
 //! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
 //! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `vterm/` row in docs/perimeter.md.
-// The exports here are metrics/abi-ledger.jsonl rows (`vterm_new`, `vterm_output_set_callback`, `vterm_set_size`, `vterm_set_utf8`), and
-// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -20,16 +16,23 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{c_int, c_uint};
 
-use crate::memory::{xfree, xmalloc};
 use crate::types::{
-    VTerm, VTermAttr, VTermDamageSize, VTermKey, VTermModifier, VTermOutputCallback,
-    VTermParserState, VTermProp, VTermRect, VTermSelectionMask, VTermState_mouse_protocol,
-    VTermState_tmp_selection_state, VTermTerminator, VTermValueType, size_t,
+    ParserScratch, VTerm, VTerm_mode, VTerm_parser, VTermAttr, VTermColor, VTermDamageSize,
+    VTermKey, VTermModifier, VTermParserState, VTermPos, VTermProp, VTermRect, VTermScreen,
+    VTermScreenCell, VTermSelectionMask, VTermState, VTermState_mouse_protocol,
+    VTermState_tmp_selection_state, VTermTerminator, VTermValueType,
 };
-use crate::vterm::screen::vterm_screen_free;
-use crate::vterm::state::entry::vterm_state_free;
+use crate::vterm::abi::{ForeignOutput, ForeignParser};
+use crate::vterm::host::{
+    Fallbacks, NoParserHandler, ParserHandler, ScreenHost, SelectionHost, Value,
+};
+use crate::vterm::mode;
+use crate::vterm::output::EscapeSeq;
+use crate::vterm::parser;
+use crate::vterm::pen::{convert_color_to_rgb, set_palette_color};
+use crate::vterm::state::StateCx;
 
 /// How much of the screen a single damaged cell is reported as.
 pub const VTERM_DAMAGE_CELL: VTermDamageSize = 0;
@@ -182,202 +185,339 @@ pub const VTERM_PROP_CURSORSHAPE_BAR_LEFT: c_int = 3;
 pub const VTERM_PROP_MOUSE_MOVE: c_int = 3;
 
 /// How much room the reply buffer and the text decoder's scratch get.
-const VTERM_BUFFER_SIZE: size_t = 4096;
+const VTERM_BUFFER_SIZE: usize = 4096;
 
-/// Zero-filled storage for one of the terminal's internal arrays.
-///
-/// # Safety
-///
-/// The result is only valid until it is handed to [`vterm_dealloc`].
-pub unsafe fn vterm_alloc(size: size_t) -> *mut c_void {
-    // SAFETY: the allocator answers a run of `size` writable bytes -- it
-    // dies rather than return null, but the guard upstream wrote is kept.
-    let ptr = unsafe { xmalloc(size) };
-    if !ptr.is_null() {
-        // SAFETY: exactly the run just allocated.
-        unsafe { ptr.cast::<u8>().write_bytes(0, size) };
-    }
-    ptr
+/// A Rust consumer's reply sink.
+pub(crate) type ReplySink = Box<dyn FnMut(&[u8])>;
+
+/// Where replies to the host go.
+pub(crate) enum OutputSink {
+    /// Nowhere yet: they collect in the terminal's own buffer until it is
+    /// full, and a reply that does not fit is dropped whole.
+    Buffer,
+    /// A C consumer's callback.
+    Foreign(ForeignOutput),
+    /// A Rust consumer's.
+    Rust(ReplySink),
 }
 
-/// Releases storage from [`vterm_alloc`].
-///
-/// # Safety
-///
-/// `ptr` must be null, or a live allocation `vterm_alloc` answered with that
-/// nothing has freed yet; it is freed here.
-pub unsafe fn vterm_dealloc(ptr: *mut c_void) {
-    // SAFETY: forwarded to this function's own caller.
-    unsafe { xfree(ptr) };
+/// The terminal's reply channel: what keys, mouse reports and the state
+/// machine's answers are written to.
+pub(crate) struct Output {
+    sink: OutputSink,
+    buffer: Vec<u8>,
 }
 
-/// A terminal `rows` by `cols`, with no state machine or screen yet — those
-/// are built on first ask by `vterm_obtain_state` and `vterm_obtain_screen`.
-#[unsafe(no_mangle)]
-pub extern "C" fn vterm_new(rows: c_int, cols: c_int) -> *mut VTerm {
-    // SAFETY: the allocator answers a zeroed `VTerm`-sized run, and all-zero
-    // is a valid `VTerm` -- every field is a scalar, a raw pointer, or a
-    // nullable function pointer -- so a reference to it is sound and the
-    // fields below are then ordinary assignments.
-    let vt = unsafe { vterm_alloc(::core::mem::size_of::<VTerm>()) }.cast::<VTerm>();
-    // SAFETY: as above.
-    let term = unsafe { &mut *vt };
-    term.rows = rows;
-    term.cols = cols;
-    term.parser.state = NORMAL;
-    term.parser.callbacks = ::core::ptr::null();
-    term.parser.cbdata = ::core::ptr::null_mut();
-    term.parser.emit_nul = false;
-    term.outfunc = None;
-    term.outdata = ::core::ptr::null_mut();
-    term.outbuffer_len = VTERM_BUFFER_SIZE;
-    term.outbuffer_cur = 0;
-    term.tmpbuffer_len = VTERM_BUFFER_SIZE;
-    // SAFETY: as above -- two more runs from the same allocator.
-    term.outbuffer = unsafe { vterm_alloc(VTERM_BUFFER_SIZE) }.cast::<c_char>();
-    // SAFETY: as above.
-    term.tmpbuffer = unsafe { vterm_alloc(VTERM_BUFFER_SIZE) }.cast::<c_char>();
-    vt
-}
-
-/// # Safety
-///
-/// `vt` must point at a live `VTerm`, unaliased for the call.
-pub unsafe fn vterm_free(vt: *mut VTerm) {
-    // Everything the terminal owns is read out before anything is freed, so
-    // that the last release -- the terminal itself -- has nothing left to
-    // invalidate.
-    //
-    // SAFETY: the caller hands over a terminal from `vterm_new` and does not
-    // use it again.
-    let term = unsafe { *vt };
-    if !term.screen.is_null() {
-        // SAFETY: a screen this terminal obtained, released exactly once.
-        unsafe { vterm_screen_free(term.screen) };
-    }
-    if !term.state.is_null() {
-        // SAFETY: a state this terminal obtained, released exactly once.
-        unsafe { vterm_state_free(term.state) };
-    }
-    // SAFETY: the three runs `vterm_new` allocated, each released exactly
-    // once, the terminal itself last.
-    unsafe { vterm_dealloc(term.outbuffer.cast::<c_void>()) };
-    // SAFETY: as above.
-    unsafe { vterm_dealloc(term.tmpbuffer.cast::<c_void>()) };
-    // SAFETY: as above.
-    unsafe { vterm_dealloc(vt.cast::<c_void>()) };
-}
-
-/// # Safety
-///
-/// `vt` must point at a live `VTerm`. `rowsp` must point at a writable `int`
-/// the caller owns. `colsp` must point at a writable `int` the caller owns.
-pub unsafe fn vterm_get_size(vt: *const VTerm, rowsp: *mut c_int, colsp: *mut c_int) {
-    // SAFETY: the caller hands over a live terminal.
-    let (rows, cols) = unsafe { ((*vt).rows, (*vt).cols) };
-    // A null out-parameter means "don't report this one".
-    //
-    // SAFETY: a non-null one points at a writable `c_int`.
-    if let Some(slot) = unsafe { rowsp.as_mut() } {
-        *slot = rows;
-    }
-    // SAFETY: as above.
-    if let Some(slot) = unsafe { colsp.as_mut() } {
-        *slot = cols;
+impl Output {
+    /// Writes a reply back to the host.
+    pub(crate) fn push(&mut self, bytes: &[u8]) {
+        match &mut self.sink {
+            OutputSink::Foreign(sink) => sink.write(bytes),
+            OutputSink::Rust(sink) => sink(bytes),
+            OutputSink::Buffer => {
+                if bytes.len() <= VTERM_BUFFER_SIZE - self.buffer.len() {
+                    self.buffer.extend_from_slice(bytes);
+                }
+            }
+        }
     }
 }
 
-/// Resizes the terminal, telling the parser's consumer so that it can move
-/// the cursor and the screen contents. A degenerate size is refused.
-///
-/// # Safety
-///
-/// `vt` must point at a live `VTerm`, unaliased for the call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vterm_set_size(vt: *mut VTerm, rows: c_int, cols: c_int) {
-    if rows < 1 || cols < 1 {
-        return;
+/// Who the parser reports to.
+pub(crate) enum ParserTarget {
+    None,
+    /// The terminal's own state machine, once it has one.
+    State,
+    /// A C consumer's callback table.
+    Foreign(ForeignParser),
+}
+
+/// What a terminal owns that C does not read.
+pub(crate) struct VTermInner {
+    pub(crate) output: Output,
+    /// Where the text decoder writes codepoints, sized as libvterm's scratch.
+    scratch: Box<[u32]>,
+    pub(crate) state: Option<Box<VTermState>>,
+    pub(crate) screen: Option<Box<VTermScreen>>,
+    pub(crate) parser_target: ParserTarget,
+}
+
+/// The state machine's view of `inner`, borrowing the mode bits beside it:
+/// what every entry point that drives the state machine builds first.
+pub(crate) fn state_cx<'a>(
+    mode: &'a mut VTerm_mode,
+    inner: &'a mut VTermInner,
+) -> Option<StateCx<'a>> {
+    let VTermInner {
+        output,
+        scratch,
+        state,
+        screen,
+        ..
+    } = inner;
+    let state = state.as_deref_mut()?;
+    Some(StateCx::new(
+        state,
+        mode,
+        output,
+        scratch,
+        screen.as_deref_mut(),
+    ))
+}
+
+impl VTerm {
+    /// A terminal `rows` by `cols`, with no state machine or screen yet --
+    /// those are built on first ask by [`VTerm::obtain_state`] and
+    /// [`VTerm::obtain_screen`].
+    pub(crate) fn new(rows: c_int, cols: c_int) -> Box<VTerm> {
+        Box::new(VTerm {
+            rows,
+            cols,
+            mode: VTerm_mode {
+                utf8_ctrl8bit: [0; 1],
+                _pad: [0; 3],
+            },
+            parser: VTerm_parser {
+                state: NORMAL,
+                in_esc: [0; 1],
+                _pad: [0; 3],
+                intermedlen: 0,
+                intermed: [0; 16],
+                v: ParserScratch {
+                    leaderlen: 0,
+                    leader: [0; 16],
+                    argi: 0,
+                    args: [0; 32],
+                },
+                callbacks: core::ptr::null(),
+                cbdata: core::ptr::null_mut(),
+                string_initial: false,
+                emit_nul: false,
+            },
+            inner: Box::new(VTermInner {
+                output: Output {
+                    sink: OutputSink::Buffer,
+                    buffer: Vec::with_capacity(VTERM_BUFFER_SIZE),
+                },
+                scratch: vec![0; VTERM_BUFFER_SIZE / size_of::<u32>()].into_boxed_slice(),
+                state: None,
+                screen: None,
+                parser_target: ParserTarget::None,
+            }),
+        })
     }
-    // The consumer's resize callback is free to re-enter the terminal, so
-    // the borrow of it ends before the callback is reached.
-    //
-    // SAFETY: the caller hands over a live terminal, whose parser callback
-    // table is the consumer's own and live for as long as it is installed.
-    let (resize, cbdata) = unsafe {
-        let term = &mut *vt;
-        term.rows = rows;
-        term.cols = cols;
-        let resize = term.parser.callbacks.as_ref().and_then(|c| c.resize);
-        (resize, term.parser.cbdata)
-    };
-    if let Some(resize) = resize {
-        // SAFETY: the consumer's own callback, taking the data it registered.
-        unsafe { resize(rows, cols, cbdata) };
+
+    /// The terminal's size, rows first.
+    pub(crate) fn size(&self) -> (c_int, c_int) {
+        (self.rows, self.cols)
+    }
+
+    /// Resizes the terminal, telling the parser's consumer so that it can
+    /// move the cursor and the screen contents. A degenerate size is refused.
+    pub(crate) fn set_size(&mut self, rows: c_int, cols: c_int) {
+        if rows < 1 || cols < 1 {
+            return;
+        }
+        self.rows = rows;
+        self.cols = cols;
+        match &self.inner.parser_target {
+            ParserTarget::None => {}
+            ParserTarget::Foreign(foreign) => {
+                let _ = { *foreign }.resize(rows, cols);
+            }
+            ParserTarget::State => {
+                if let Some(mut state) = state_cx(&mut self.mode, &mut self.inner) {
+                    let _ = state.resize(rows, cols);
+                }
+            }
+        }
+    }
+
+    /// Selects whether input bytes are decoded as UTF-8.
+    pub(crate) fn set_utf8(&mut self, utf8: bool) {
+        self.mode.set_utf8(c_uint::from(utf8));
+    }
+
+    /// Installs the sink replies are written to.
+    pub(crate) fn set_output(&mut self, sink: OutputSink) {
+        self.inner.output.sink = sink;
+    }
+
+    /// Installs a C consumer's parser callbacks in place of the state
+    /// machine's.
+    pub(crate) fn set_parser_target(&mut self, target: ParserTarget) {
+        self.inner.parser_target = target;
+    }
+
+    /// Feeds bytes of the child's output to the parser, which reports what it
+    /// recognises to its consumer.
+    pub(crate) fn input_write(&mut self, bytes: &[u8]) {
+        let VTerm {
+            mode,
+            parser,
+            inner,
+            ..
+        } = self;
+        let utf8 = mode.utf8() != 0;
+        match &inner.parser_target {
+            ParserTarget::None => parser::write(parser, utf8, bytes, &mut NoParserHandler),
+            ParserTarget::Foreign(foreign) => {
+                let mut foreign = *foreign;
+                parser::write(parser, utf8, bytes, &mut foreign);
+            }
+            ParserTarget::State => match state_cx(mode, inner) {
+                Some(mut state) => parser::write(parser, utf8, bytes, &mut state),
+                None => parser::write(parser, utf8, bytes, &mut NoParserHandler),
+            },
+        }
+    }
+
+    /// The terminal's state machine, created and wired to the parser on
+    /// first ask.
+    pub(crate) fn obtain_state(&mut self) -> &mut VTermState {
+        if self.inner.state.is_none() {
+            let back = core::ptr::from_mut(self);
+            let state = VTermState::new(self.rows, self.cols, back);
+            self.inner.state = Some(Box::new(state));
+            self.inner.parser_target = ParserTarget::State;
+            self.parser.callbacks = core::ptr::null();
+            self.parser.cbdata = core::ptr::null_mut();
+        }
+        self.inner
+            .state
+            .as_deref_mut()
+            .expect("the state machine was just made")
+    }
+
+    /// The terminal's screen, created on first ask and installed as its state
+    /// machine's consumer.
+    pub(crate) fn obtain_screen(&mut self) -> &mut VTermScreen {
+        if self.inner.screen.is_none() {
+            let back = core::ptr::from_mut(self);
+            let state = core::ptr::from_mut(self.obtain_state());
+            let screen = VTermScreen::new(self.rows, self.cols, back, state);
+            self.inner.screen = Some(Box::new(screen));
+            self.obtain_state().attach_screen();
+        }
+        self.inner
+            .screen
+            .as_deref_mut()
+            .expect("the screen was just made")
+    }
+
+    /// The state machine's view of this terminal, once it has a state
+    /// machine.
+    pub(crate) fn state_cx(&mut self) -> Option<StateCx<'_>> {
+        state_cx(&mut self.mode, &mut self.inner)
+    }
+
+    /// The terminal's screen, if it has one.
+    pub(crate) fn screen_mut(&mut self) -> Option<&mut VTermScreen> {
+        self.inner.screen.as_deref_mut()
+    }
+
+    /// Writes a reply back to the host.
+    pub(crate) fn push_output(&mut self, bytes: &[u8]) {
+        self.inner.output.push(bytes);
+    }
+
+    /// Writes a reply built by an encoder, if it built one.
+    pub(crate) fn send(&mut self, report: Option<EscapeSeq>) {
+        if let Some(bytes) = report.as_ref().and_then(EscapeSeq::finish) {
+            self.push_output(bytes);
+        }
+    }
+
+    /// Returns the screen and the state machine to their power-on settings,
+    /// repainting through the screen.
+    pub(crate) fn screen_reset(&mut self, hard: bool) {
+        if let Some(screen) = self.screen_mut() {
+            screen.discard_damage();
+        }
+        if let Some(mut state) = self.state_cx() {
+            mode::reset(&mut state, hard);
+        }
+        if let Some(screen) = self.screen_mut() {
+            screen.flush_damage();
+        }
     }
 }
 
-/// Selects whether input bytes are decoded as UTF-8.
-///
-/// # Safety
-///
-/// `vt` must point at a live `VTerm`, unaliased for the call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vterm_set_utf8(vt: *mut VTerm, is_utf8: c_int) {
-    // SAFETY: the caller hands over a live terminal.
-    unsafe { &mut *vt }.mode.set_utf8(is_utf8.cast_unsigned());
-}
+// ------------------------------------------------- the front for the editor
 
-/// Installs the sink replies are written to. Without one they collect in the
-/// terminal's own buffer until it is full.
-///
-/// # Safety
-///
-/// `vt` must point at a live `VTerm`, unaliased for the call. `user` must be
-/// the payload this callback was registered with, live for the call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vterm_output_set_callback(
-    vt: *mut VTerm,
-    func: Option<VTermOutputCallback>,
-    user: *mut c_void,
-) {
-    // SAFETY: the caller hands over a live terminal.
-    let term = unsafe { &mut *vt };
-    term.outfunc = func;
-    term.outdata = user;
-}
+impl VTerm {
+    /// Allocates the screen's alternate buffer, at the terminal's size.
+    pub(crate) fn screen_enable_altscreen(&mut self) {
+        let (rows, cols) = self.size();
+        if let Some(screen) = self.screen_mut() {
+            screen.enable_altscreen(rows, cols);
+        }
+    }
 
-/// Writes a reply back to the host. With no sink installed and no room left
-/// in the buffer, the reply is dropped whole rather than truncated.
-///
-/// # Safety
-///
-/// `vt` must point at a live `VTerm`, unaliased for the call. `bytes` must
-/// point at `len` readable bytes.
-pub unsafe fn vterm_push_output_bytes(vt: *mut VTerm, bytes: *const c_char, len: size_t) {
-    // The consumer's sink is free to re-enter the terminal, so it is reached
-    // with nothing borrowed.
-    //
-    // SAFETY: the caller hands over a live terminal.
-    let (outfunc, outdata) = unsafe { ((*vt).outfunc, (*vt).outdata) };
-    if let Some(outfunc) = outfunc {
-        // SAFETY: the consumer's own sink, taking the reply and the data it
-        // registered; `bytes` and `len` are the caller's, unchanged.
-        unsafe { outfunc(bytes, len, outdata) };
-        return;
+    /// Installs what the screen reports to.
+    pub(crate) fn set_screen_host(&mut self, host: Box<dyn ScreenHost>) {
+        self.obtain_screen().set_host(Some(host));
     }
-    // SAFETY: the same live terminal; nothing below re-enters.
-    let term = unsafe { &mut *vt };
-    let room = term.outbuffer_len - term.outbuffer_cur;
-    if len > room {
-        return;
+
+    /// Installs what the state machine offers the sequences it does not
+    /// recognise to.
+    pub(crate) fn set_fallbacks(&mut self, fallbacks: Box<dyn Fallbacks>) {
+        self.obtain_state().set_fallbacks(Some(fallbacks));
     }
-    // SAFETY: `outbuffer_cur` bytes of the terminal's own buffer are in use,
-    // so that offset is in bounds of it.
-    let free = unsafe { term.outbuffer.add(term.outbuffer_cur) };
-    // SAFETY: `len` bytes fit in what is left, and the terminal's buffer is a
-    // separate allocation from the caller's `bytes`.
-    unsafe { free.copy_from_nonoverlapping(bytes, len) };
-    term.outbuffer_cur += len;
+
+    /// Installs OSC 52 handling, decoding through a staging buffer of
+    /// `buflen` bytes.
+    pub(crate) fn set_selection_host(&mut self, host: Box<dyn SelectionHost>, buflen: usize) {
+        self.obtain_state().set_selection(Some(host), buflen);
+    }
+
+    /// Hands the screen's host everything held back by the merge level.
+    pub(crate) fn flush_damage(&mut self) {
+        if let Some(screen) = self.screen_mut() {
+            screen.flush_damage();
+        }
+    }
+
+    /// Changes how the screen batches damage.
+    pub(crate) fn set_damage_merge(&mut self, size: VTermDamageSize) {
+        if let Some(screen) = self.screen_mut() {
+            screen.set_damage_merge(size);
+        }
+    }
+
+    /// The reported form of the screen's cell at `pos`, into `out`; false,
+    /// leaving `out` alone, outside the screen.
+    pub(crate) fn get_cell(&self, pos: VTermPos, out: &mut VTermScreenCell) -> bool {
+        self.inner
+            .screen
+            .as_deref()
+            .is_some_and(|screen| screen.export_cell(pos, out) != 0)
+    }
+
+    /// Repaints one of the sixteen ANSI palette slots.
+    pub(crate) fn set_palette_color(&mut self, index: c_int, color: &VTermColor) {
+        set_palette_color(self.obtain_state(), index, color);
+    }
+
+    /// `color` resolved against the palette to a literal colour.
+    pub(crate) fn rgb_of(&mut self, mut color: VTermColor) -> VTermColor {
+        convert_color_to_rgb(self.obtain_state(), &mut color);
+        color
+    }
+
+    /// Applies a terminal property; false if the screen refused it.
+    pub(crate) fn set_termprop(&mut self, prop: VTermProp, val: Value<'_>) -> bool {
+        self.obtain_state();
+        self.state_cx()
+            .is_some_and(|mut state| state.set_termprop(prop, &val))
+    }
+
+    /// Tells the child whether its window has focus, if it asked to hear.
+    pub(crate) fn focus(&mut self, focused: bool) {
+        if let Some(mut state) = self.state_cx() {
+            state.report_focus(if focused { b'I' } else { b'O' });
+        }
+    }
 }
 
 /// What a `VTermValue` accompanying `attr` holds.
@@ -392,6 +532,15 @@ pub fn vterm_get_attr_type(attr: VTermAttr) -> VTermValueType {
         | VTERM_ATTR_OVERLINE => VTERM_VALUETYPE_BOOL,
         _ => 0,
     }
+}
+
+/// The two primitives a scroll can be driven out of, for a consumer that
+/// does not take the whole scroll itself.
+pub(crate) trait ScrollTarget {
+    /// Moves the cells of `src` to `dest`.
+    fn moverect(&mut self, dest: VTermRect, src: VTermRect);
+    /// Blanks `rect`.
+    fn erase(&mut self, rect: VTermRect);
 }
 
 /// The two rectangles a scroll moves between, or `None` when the shift is at
@@ -458,36 +607,19 @@ fn scroll_vacated(mut rect: VTermRect, downward: c_int, rightward: c_int) -> VTe
     rect
 }
 
-/// Drives a scroll out of a consumer's move and erase primitives, for a
-/// consumer that did not want to take the whole scroll itself.
-///
-/// # Safety
-///
-/// `moverect` and `eraserect` must be the consumer's own primitives, and
-/// `user` the payload they were handed alongside — both are called with it.
-/// `eraserect` must be `Some`: a scroll cannot be driven without a way to
-/// erase.
-pub unsafe fn vterm_scroll_rect(
+/// Drives a scroll out of a consumer's move and erase primitives.
+pub(crate) fn scroll_rect(
     rect: VTermRect,
     downward: c_int,
     rightward: c_int,
-    moverect: Option<unsafe extern "C" fn(VTermRect, VTermRect, *mut c_void) -> c_int>,
-    eraserect: Option<unsafe extern "C" fn(VTermRect, c_int, *mut c_void) -> c_int>,
-    user: *mut c_void,
+    target: &mut impl ScrollTarget,
 ) {
-    let erase = eraserect.expect("scrolling without a way to erase");
     let Some((dest, src)) = scroll_split(rect, downward, rightward) else {
-        // SAFETY: the consumer's own primitives, taking the data it passed in
-        // alongside them.
-        unsafe { erase(rect, 0, user) };
+        target.erase(rect);
         return;
     };
-    if let Some(moverect) = moverect {
-        // SAFETY: as above.
-        unsafe { moverect(dest, src, user) };
-    }
-    // SAFETY: as above.
-    unsafe { erase(scroll_vacated(rect, downward, rightward), 0, user) };
+    target.moverect(dest, src);
+    target.erase(scroll_vacated(rect, downward, rightward));
 }
 
 #[cfg(test)]

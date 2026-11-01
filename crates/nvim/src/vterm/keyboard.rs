@@ -6,26 +6,22 @@
 //! Kitty keyboard protocol's disambiguation level, when the host has pushed it
 //! onto the key-encoding stack, replaces almost everything with `CSI <code>;<mod>u`.
 //!
-//! The four entry points keep their C ABI — the unit specs call them through
-//! LuaJIT's FFI — but the encoding itself is pure and pointer-free.
+//! The four entry points are methods on [`VTerm`]; the unit specs reach them
+//! through the C entry points in [`super::abi`].
 //!
 //! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
 //! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `vterm/` row in docs/perimeter.md.
-// The exports here are metrics/abi-ledger.jsonl rows (`vterm_keyboard_end_paste`, `vterm_keyboard_key`, `vterm_keyboard_start_paste`, `vterm_keyboard_unichar`), and
-// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::types::{VTerm, VTermKey, VTermKeyEncodingFlags, VTermModifier, VTermState, uint32_t};
 use crate::vterm::output::EscapeSeq;
 use crate::vterm::vterm::{
     VTERM_KEY_BACKSPACE, VTERM_KEY_ENTER, VTERM_KEY_FUNCTION_0, VTERM_KEY_FUNCTION_MAX,
     VTERM_KEY_KP_0, VTERM_KEY_NONE, VTERM_KEY_TAB, VTERM_MOD_ALT, VTERM_MOD_CTRL, VTERM_MOD_NONE,
-    VTERM_MOD_SHIFT, vterm_push_output_bytes,
+    VTERM_MOD_SHIFT,
 };
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 use core::fmt::Write;
 
 /// How a special key is spelled on the wire.
@@ -338,45 +334,6 @@ fn encode_unichar(c: u32, mod_0: VTermModifier, modes: KeyModes) -> Option<Escap
     Some(seq)
 }
 
-/// Writes a spelled key back to the host, if it spelled to anything.
-///
-/// # Safety
-///
-/// `vt` must point at a live terminal.
-unsafe fn send(vt: *mut VTerm, report: Option<EscapeSeq>) {
-    let Some(bytes) = report.as_ref().and_then(EscapeSeq::finish) else {
-        return;
-    };
-    // SAFETY: forwarded to this function's own caller; `bytes` outlives the
-    // call, which copies out of it.
-    unsafe { vterm_push_output_bytes(vt, bytes.as_ptr().cast::<c_char>(), bytes.len()) };
-}
-
-/// # Safety
-///
-/// `vt` must point at a live `VTerm`, unaliased for the call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vterm_keyboard_unichar(vt: *mut VTerm, c: uint32_t, mod_0: VTermModifier) {
-    // SAFETY: the caller hands over a live terminal that has a state.
-    let modes = unsafe { KeyModes::read(&*vt, &*(*vt).state) };
-    // SAFETY: `vt` is that same live terminal.
-    unsafe { send(vt, encode_unichar(c, mod_0, modes)) };
-}
-
-/// # Safety
-///
-/// `vt` must point at a live `VTerm`, unaliased for the call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vterm_keyboard_key(vt: *mut VTerm, key: VTermKey, mod_0: VTermModifier) {
-    if key == VTERM_KEY_NONE {
-        return;
-    }
-    // SAFETY: the caller hands over a live terminal that has a state.
-    let modes = unsafe { KeyModes::read(&*vt, &*(*vt).state) };
-    // SAFETY: `vt` is that same live terminal.
-    unsafe { send(vt, encode_key(key, mod_0, modes)) };
-}
-
 /// The bracketed-paste brackets, sent only when the host turned the mode on.
 fn paste_marker(state: &VTermState, ctrl8bit: bool, body: &[u8]) -> Option<EscapeSeq> {
     if state.mode.bracketpaste() == 0 {
@@ -387,34 +344,52 @@ fn paste_marker(state: &VTermState, ctrl8bit: bool, body: &[u8]) -> Option<Escap
     Some(seq)
 }
 
-/// Writes one bracketed-paste marker back to the host.
-///
-/// # Safety
-///
-/// `vt` must point at a live terminal that has a state.
-unsafe fn push_paste_marker(vt: *mut VTerm, body: &[u8]) {
-    // SAFETY: forwarded to this function's own caller.
-    let report = unsafe { paste_marker(&*(*vt).state, (*vt).mode.ctrl8bit() != 0, body) };
-    // SAFETY: `vt` is that same live terminal.
-    unsafe { send(vt, report) };
-}
+impl VTerm {
+    /// The modes that decide how a key is spelled; `None` before the
+    /// terminal has a state machine, when nothing is sent.
+    fn key_modes(&self) -> Option<KeyModes> {
+        let state = self.inner.state.as_deref()?;
+        Some(KeyModes::read(self, state))
+    }
 
-/// # Safety
-///
-/// `vt` must point at a live `VTerm`, unaliased for the call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vterm_keyboard_start_paste(vt: *mut VTerm) {
-    // SAFETY: forwarded to this function's own caller.
-    unsafe { push_paste_marker(vt, b"200~") };
-}
+    /// Sends the character `c`, with modifiers.
+    pub(crate) fn keyboard_unichar(&mut self, c: uint32_t, mods: VTermModifier) {
+        let Some(modes) = self.key_modes() else {
+            return;
+        };
+        self.send(encode_unichar(c, mods, modes));
+    }
 
-/// # Safety
-///
-/// `vt` must point at a live `VTerm`, unaliased for the call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vterm_keyboard_end_paste(vt: *mut VTerm) {
-    // SAFETY: forwarded to this function's own caller.
-    unsafe { push_paste_marker(vt, b"201~") };
+    /// Sends the special key `key`, with modifiers.
+    pub(crate) fn keyboard_key(&mut self, key: VTermKey, mods: VTermModifier) {
+        if key == VTERM_KEY_NONE {
+            return;
+        }
+        let Some(modes) = self.key_modes() else {
+            return;
+        };
+        self.send(encode_key(key, mods, modes));
+    }
+
+    /// Writes one bracketed-paste marker back to the host.
+    fn push_paste_marker(&mut self, body: &[u8]) {
+        let ctrl8bit = self.mode.ctrl8bit() != 0;
+        let Some(state) = self.inner.state.as_deref() else {
+            return;
+        };
+        let report = paste_marker(state, ctrl8bit, body);
+        self.send(report);
+    }
+
+    /// Opens a bracketed paste, if the host asked for them.
+    pub(crate) fn keyboard_start_paste(&mut self) {
+        self.push_paste_marker(b"200~");
+    }
+
+    /// Closes a bracketed paste, if the host asked for them.
+    pub(crate) fn keyboard_end_paste(&mut self) {
+        self.push_paste_marker(b"201~");
+    }
 }
 
 #[cfg(test)]

@@ -11,9 +11,12 @@ typedef struct Expand Expand;
 typedef struct List List;
 typedef struct OptSet OptSet;
 typedef struct Partial Partial;
+typedef struct ScreenOwned ScreenOwned;
 typedef struct Scrollback Scrollback;
+typedef struct StateOwned StateOwned;
 typedef struct String String;
 typedef struct TerminalOptions TerminalOptions;
+typedef struct VTermInner VTermInner;
 typedef struct Window Window;
 typedef struct key_value_pair key_value_pair;
 typedef struct loop loop;
@@ -100,6 +103,7 @@ typedef struct uv_stdio_container_s uv_stdio_container_s;
 typedef struct LibuvProc LibuvProc;
 typedef struct MTPos MTPos;
 typedef struct MTKey MTKey;
+typedef struct ParserScratch ParserScratch;
 typedef struct Pos Pos;
 typedef struct PtyProc PtyProc;
 typedef struct VTermColor_indexed VTermColor_indexed;
@@ -117,15 +121,11 @@ typedef struct StdioPair StdioPair;
 typedef struct StrCharInfo StrCharInfo;
 typedef struct TerminalCursor TerminalCursor;
 typedef struct TerminalPending TerminalPending;
-typedef struct terminal terminal;
-typedef struct TypVal TypVal;
 typedef struct VTerm_mode VTerm_mode;
-typedef struct VTerm_parser_v_csi VTerm_parser_v_csi;
-typedef struct VTerm_parser_v_dcs VTerm_parser_v_dcs;
-typedef struct VTerm_parser_v_osc VTerm_parser_v_osc;
-typedef union VTerm_parser_v VTerm_parser_v;
 typedef struct VTerm_parser VTerm_parser;
 typedef struct VTerm VTerm;
+typedef struct terminal terminal;
+typedef struct TypVal TypVal;
 typedef struct VTermEncoding VTermEncoding;
 typedef struct VTermEncodingInstance VTermEncodingInstance;
 typedef struct VTermGlyphInfo VTermGlyphInfo;
@@ -146,7 +146,7 @@ typedef struct VTermState_saved_mode VTermState_saved_mode;
 typedef struct VTermState_saved VTermState_saved;
 typedef struct VTermState_selection VTermState_selection;
 typedef struct VTermState_tmp_selection VTermState_tmp_selection;
-typedef union VTermState_tmp VTermState_tmp;
+typedef struct VTermState_tmp VTermState_tmp;
 typedef struct VTermState VTermState;
 typedef struct VTermStateCallbacks VTermStateCallbacks;
 typedef struct VTermStateFallbacks VTermStateFallbacks;
@@ -702,6 +702,12 @@ struct MTKey {
   MtFlags flags;
   DecorInline decor_data;
 };
+struct ParserScratch {
+  int leaderlen;
+  uint8_t leader[16];
+  int argi;
+  long args[32];
+};
 struct Pos {
   LineNr lnum;
   ColNr col;
@@ -795,6 +801,28 @@ struct TerminalCursor {
   bool visible;
   bool blink;
 };
+struct __attribute__((aligned(4))) VTerm_mode {
+  unsigned int utf8 : 1;
+  unsigned int ctrl8bit : 1;
+};
+struct VTerm_parser {
+  VTermParserState state;
+  bool in_esc : 1;
+  int intermedlen;
+  uint8_t intermed[16];
+  ParserScratch v;
+  const VTermParserCallbacks *callbacks;
+  void *cbdata;
+  bool string_initial;
+  bool emit_nul;
+};
+struct VTerm {
+  int rows;
+  int cols;
+  VTerm_mode mode;
+  VTerm_parser parser;
+  VTermInner *inner;
+};
 struct TypVal {
   unsigned int tag;
   union {
@@ -810,61 +838,13 @@ struct TypVal {
     BlobRef blob_;
   } payload;
 };
-struct __attribute__((aligned(4))) VTerm_mode {
-  unsigned int utf8 : 1;
-  unsigned int ctrl8bit : 1;
-};
-struct VTerm_parser_v_csi {
-  int leaderlen;
-  char leader[16];
-  int argi;
-  long args[32];
-};
-struct VTerm_parser_v_dcs {
-  int commandlen;
-  char command[16];
-};
-struct VTerm_parser_v_osc {
-  int command;
-};
-union VTerm_parser_v {
-  VTerm_parser_v_csi csi;
-  VTerm_parser_v_osc osc;
-  VTerm_parser_v_dcs dcs;
-};
-struct VTerm_parser {
-  VTermParserState state;
-  bool in_esc : 1;
-  int intermedlen;
-  char intermed[16];
-  VTerm_parser_v v;
-  const VTermParserCallbacks *callbacks;
-  void *cbdata;
-  bool string_initial;
-  bool emit_nul;
-};
-struct VTerm {
-  int rows;
-  int cols;
-  VTerm_mode mode;
-  VTerm_parser parser;
-  VTermOutputCallback outfunc;
-  void *outdata;
-  char *outbuffer;
-  size_t outbuffer_len;
-  size_t outbuffer_cur;
-  char *tmpbuffer;
-  size_t tmpbuffer_len;
-  VTermState *state;
-  VTermScreen *screen;
-};
 struct VTermEncoding {
   void (*init)(VTermEncoding *, void *);
   void (*decode)(VTermEncoding *, void *, uint32_t *, int *, int, const char *, size_t *, size_t);
 };
 struct VTermEncodingInstance {
   VTermEncoding *enc;
-  char data[16];
+  uint8_t data[16];
 };
 struct VTermGlyphInfo {
   ScreenChar schar;
@@ -942,9 +922,7 @@ struct VTermScreen {
   int cols;
   unsigned int global_reverse : 1;
   unsigned int reflow : 1;
-  ScreenCell *buffers[2];
-  ScreenCell *buffer;
-  VTermScreenCell *sb_buffer;
+  ScreenOwned *owned;
   ScreenPen pen;
 };
 struct VTermScreenCallbacks {
@@ -1018,7 +996,7 @@ struct VTermState_saved {
 struct VTermState_selection {
   const VTermSelectionCallbacks *callbacks;
   void *user;
-  char *buffer;
+  size_t _buffer_slot;
   size_t buflen;
 };
 struct VTermState_tmp_selection {
@@ -1027,8 +1005,7 @@ struct VTermState_tmp_selection {
   uint32_t recvpartial;
   uint32_t sendpartial;
 };
-union VTermState_tmp {
-  char decrqss[4];
+struct VTermState_tmp {
   VTermState_tmp_selection selection;
 };
 struct VTermState {
@@ -1045,9 +1022,8 @@ struct VTermState {
   int scrollregion_bottom;
   int scrollregion_left;
   int scrollregion_right;
-  uint8_t *tabstops;
-  VTermLineInfo *lineinfos[2];
-  VTermLineInfo *lineinfo;
+  StateOwned *owned;
+  size_t _lineinfo_slots[3];
   int mouse_col;
   int mouse_row;
   int mouse_buttons;

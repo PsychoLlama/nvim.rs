@@ -10,23 +10,20 @@
 
 #![forbid(unsafe_code)]
 
-use core::ffi::{c_char, c_int, c_long};
+use core::ffi::{c_int, c_long};
 use core::fmt::Write;
 
-use crate::types::{VTermState, VTermStringFragment};
+use crate::types::VTermState;
+use crate::vterm::host::Fragment;
 use crate::vterm::output::EscapeSeq;
 use crate::vterm::pen::{CSI_ARG_FLAG_MORE, CSI_ARG_MASK, pen_sgr_params};
-use crate::vterm::state::fragment_bytes;
+use crate::vterm::state::StateCx;
 use crate::vterm::vterm::{
     VTERM_PROP_CURSORSHAPE_BAR_LEFT, VTERM_PROP_CURSORSHAPE_BLOCK, VTERM_PROP_CURSORSHAPE_UNDERLINE,
 };
 
 /// Handles a device control string, reporting whether it was recognised.
-pub(super) fn device_control(
-    state: &mut VTermState,
-    command: &[u8],
-    frag: VTermStringFragment,
-) -> bool {
+pub(super) fn device_control(state: &mut StateCx<'_>, command: &[u8], frag: Fragment<'_>) -> bool {
     if command != b"$q" {
         return false;
     }
@@ -37,27 +34,27 @@ pub(super) fn device_control(
 /// DECRQSS. The request names a control sequence in up to three bytes, which
 /// may themselves arrive split across fragments, so they are gathered in the
 /// state until the string ends.
-fn request_status_string(state: &mut VTermState, frag: VTermStringFragment) {
-    let mut request = if frag.initial() {
-        [0 as c_char; 4]
+fn request_status_string(state: &mut StateCx<'_>, frag: Fragment<'_>) {
+    let mut request = if frag.initial {
+        [0u8; 4]
     } else {
-        state.decrqss()
+        state.tmp.decrqss()
     };
     let mut len = request.iter().take(3).take_while(|&&b| b != 0).count();
-    for &byte in fragment_bytes(&frag).iter().take(3 - len) {
-        request[len] = byte as c_char;
+    for &byte in frag.bytes().iter().take(3 - len) {
+        request[len] = byte;
         len += 1;
     }
     request[len] = 0;
-    state.set_decrqss(request);
+    state.tmp.set_decrqss(request);
 
-    if !frag.final_0() {
+    if !frag.last {
         return;
     }
 
     let ctrl8bit = state.ctrl8bit();
     let mut seq = EscapeSeq::dcs(ctrl8bit);
-    let named = [request[0] as u8, request[1] as u8, request[2] as u8];
+    let named = [request[0], request[1], request[2]];
     match named {
         [b'm', 0, 0] => report_pen(state, &mut seq),
         [b'r', 0, 0] => {

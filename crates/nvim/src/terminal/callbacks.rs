@@ -1,9 +1,8 @@
 //! What the emulator tells the editor.
 //!
-//! vterm reports through callback tables installed when the terminal is
-//! allocated: [`SCREEN_CALLBACKS`] for everything about the screen, and
-//! [`SELECTION_CALLBACKS`] for clipboard writes. Each entry's `data` is the
-//! [`Terminal`] the report belongs to.
+//! vterm reports through the hosts installed when the terminal is allocated:
+//! [`ScreenReports`] for everything about the screen, and [`Clipboard`] for
+//! clipboard writes. Each holds the [`Term`] the reports belong to.
 //!
 //! Almost all of these do one of two things: record something on the
 //! `Terminal` and mark rows invalid, or hand work to the main loop. Nothing
@@ -13,9 +12,7 @@
 //! write has to run the clipboard provider, so it is queued rather than done
 //! here.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `terminal/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 use crate::drawscreen::status_redraw_buf;
 use crate::eval::eval_call_provider;
 
@@ -25,95 +22,88 @@ use crate::event_queue::put_job_on_main_loop;
 use crate::option::vars::p_bg;
 use crate::options::kOptBoFlagTerm;
 use crate::types::{
-    Error, Object, String_0, VTermPos, VTermProp, VTermRect, VTermScreenCallbacks,
-    VTermSelectionCallbacks, VTermSelectionMask, VTermStringFragment, VTermValue, kListLenMayKnow,
-    ptrdiff_t,
+    Error, Object, String_0, VTermPos, VTermProp, VTermRect, VTermScreenCell, VTermSelectionMask,
+    kListLenMayKnow, ptrdiff_t,
 };
 use crate::ui::vim_beep;
+use crate::vterm::host::{Fragment, ScreenHost, SelectionHost, Value};
 use crate::vterm::vterm::{
     VTERM_PROP_ALTSCREEN, VTERM_PROP_CURSORBLINK, VTERM_PROP_CURSORSHAPE, VTERM_PROP_CURSORVISIBLE,
     VTERM_PROP_MOUSE, VTERM_PROP_SYNCOUTPUT, VTERM_PROP_THEMEUPDATES, VTERM_PROP_TITLE,
     VTERM_SELECTION_PRIMARY,
 };
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int};
 
 use crate::winlayer::Buf;
 
 use super::refresh::invalidate_terminal;
-use super::{Term, scrollback};
+use super::{Term, scrollback, term_buf};
 
-pub(crate) static SCREEN_CALLBACKS: VTermScreenCallbacks = VTermScreenCallbacks {
-    damage: Some(term_damage),
-    moverect: Some(term_moverect),
-    movecursor: Some(term_movecursor),
-    settermprop: Some(term_settermprop),
-    bell: Some(term_bell),
-    resize: None,
-    theme: Some(term_theme),
-    sb_pushline: Some(scrollback::term_sb_push),
-    sb_popline: Some(scrollback::term_sb_pop),
-    sb_clear: Some(scrollback::term_sb_clear),
-};
+/// What the screen reports, for the terminal it belongs to.
+pub(crate) struct ScreenReports(pub(crate) Term);
 
-pub(crate) static SELECTION_CALLBACKS: VTermSelectionCallbacks = VTermSelectionCallbacks {
-    set: Some(term_selection_set),
-    query: None,
-};
-
-/// The bytes of a fragment vterm handed over.
-///
-/// # Safety
-/// `frag.str` must point at `frag.len()` readable bytes, which is vterm's
-/// contract for a fragment callback.
-unsafe fn fragment_bytes(frag: &VTermStringFragment) -> &[u8] {
-    if frag.str.is_null() || frag.is_empty() {
-        return &[];
+impl ScreenHost for ScreenReports {
+    fn takes_moves(&self) -> bool {
+        true
     }
-    unsafe { ::core::slice::from_raw_parts(frag.str.cast::<u8>(), frag.len()) }
-}
 
-/// # Safety
-///
-/// `data` must be the payload this callback was registered with, live for the
-/// call.
-unsafe extern "C" fn term_damage(rect: VTermRect, data: *mut c_void) -> c_int {
-    // SAFETY: vterm hands back the terminal registered alongside this table.
-    let term = unsafe { Term::new(data.cast()) };
-    invalidate_terminal(term, Some((rect.start_row, rect.end_row)));
-    1
-}
+    fn takes_scrollback(&self) -> bool {
+        true
+    }
 
-/// # Safety
-///
-/// `data` must be the payload this callback was registered with, live for the
-/// call.
-unsafe extern "C" fn term_moverect(dest: VTermRect, src: VTermRect, data: *mut c_void) -> c_int {
-    // SAFETY: as above.
-    let term = unsafe { Term::new(data.cast()) };
-    let rows = (
-        dest.start_row.min(src.start_row),
-        dest.end_row.max(src.end_row),
-    );
-    invalidate_terminal(term, Some(rows));
-    1
-}
+    fn damage(&mut self, rect: VTermRect) -> Option<c_int> {
+        invalidate_terminal(self.0, Some((rect.start_row, rect.end_row)));
+        Some(1)
+    }
 
-/// # Safety
-///
-/// `data` must be the payload this callback was registered with, live for the
-/// call.
-unsafe extern "C" fn term_movecursor(
-    new_pos: VTermPos,
-    _old_pos: VTermPos,
-    _visible: c_int,
-    data: *mut c_void,
-) -> c_int {
-    // SAFETY: as above.
-    let mut term = unsafe { Term::new(data.cast()) };
-    term.cursor.row = new_pos.row;
-    term.cursor.col = new_pos.col;
-    invalidate_terminal(term, None);
-    1
+    fn moverect(&mut self, dest: VTermRect, src: VTermRect) -> Option<c_int> {
+        let rows = (
+            dest.start_row.min(src.start_row),
+            dest.end_row.max(src.end_row),
+        );
+        invalidate_terminal(self.0, Some(rows));
+        Some(1)
+    }
+
+    fn movecursor(
+        &mut self,
+        new_pos: VTermPos,
+        _old_pos: VTermPos,
+        _visible: c_int,
+    ) -> Option<c_int> {
+        let mut term = self.0;
+        term.cursor.row = new_pos.row;
+        term.cursor.col = new_pos.col;
+        invalidate_terminal(term, None);
+        Some(1)
+    }
+
+    fn settermprop(&mut self, prop: VTermProp, val: &Value<'_>) -> Option<c_int> {
+        Some(term_settermprop(self.0, prop, val))
+    }
+
+    fn bell(&mut self) -> Option<c_int> {
+        vim_beep(kOptBoFlagTerm as ::core::ffi::c_uint);
+        Some(1)
+    }
+
+    /// Answer vterm's "is the background dark?" query from `'background'`.
+    fn theme(&mut self, dark: &mut bool) -> Option<c_int> {
+        p_bg(|value| *dark = value.to_bytes().first() == Some(&b'd'));
+        Some(1)
+    }
+
+    fn sb_pushline(&mut self, cells: &[VTermScreenCell]) -> Option<c_int> {
+        Some(scrollback::term_sb_push(self.0, cells))
+    }
+
+    fn sb_popline(&mut self, cells: &mut [VTermScreenCell]) -> Option<c_int> {
+        Some(scrollback::term_sb_pop(self.0, cells))
+    }
+
+    fn sb_clear(&mut self) -> Option<c_int> {
+        Some(scrollback::term_sb_clear(self.0))
+    }
 }
 
 /// Publish `title` as the buffer's `b:term_title`.
@@ -141,22 +131,18 @@ pub(crate) fn buf_set_term_title(buffer: Option<Buf>, title: &[u8]) {
 
 /// Accumulate a fragmented title, publishing it once the last fragment
 /// arrives.
-///
-/// # Safety
-/// `frag` must be a fragment vterm handed over, as [`fragment_bytes`] wants.
-unsafe fn term_set_title(mut term: Term, frag: &VTermStringFragment) {
-    // SAFETY: the caller's promise.
-    let bytes = unsafe { fragment_bytes(frag) };
-    let buf = term.buf();
-    if frag.initial() && frag.final_0() {
+fn term_set_title(mut term: Term, frag: &Fragment<'_>) {
+    let bytes = frag.bytes();
+    let buf = term_buf(term);
+    if frag.initial && frag.last {
         buf_set_term_title(buf, bytes);
         return;
     }
-    if frag.initial() {
+    if frag.initial {
         term.title.clear();
     }
     term.title.extend_from_slice(bytes);
-    if frag.final_0() {
+    if frag.last {
         // Taken rather than borrowed: publishing reaches the editor, and
         // the accumulator is done with either way.
         let title = ::core::mem::take(&mut term.title);
@@ -164,26 +150,15 @@ unsafe fn term_set_title(mut term: Term, frag: &VTermStringFragment) {
     }
 }
 
-/// # Safety
-///
-/// `val` must point at a live `VTermValue`, unaliased for the call. `data`
-/// must be the payload this callback was registered with, live for the call.
-unsafe extern "C" fn term_settermprop(
-    prop: VTermProp,
-    val: *mut VTermValue,
-    data: *mut c_void,
-) -> c_int {
-    // SAFETY: vterm hands back the terminal registered alongside this table.
-    let mut term = unsafe { Term::new(data.cast()) };
+fn term_settermprop(mut term: Term, prop: VTermProp, val: &Value<'_>) -> c_int {
     if prop == VTERM_PROP_TITLE {
-        // SAFETY: the value carries the arm the property's type names, and
-        // the fragment is vterm's own.
-        unsafe { term_set_title(term, &(*val).string) };
+        if let Value::Str(frag) = val {
+            term_set_title(term, frag);
+        }
         return 1;
     }
-    // SAFETY: as above; every property below is integer-typed, and
-    // `boolean` and `number` are the same `c_int` at offset 0.
-    let number = unsafe { (*val).number };
+    // Every property below is integer-typed.
+    let number = val.int();
     let flag = number != 0;
     match prop {
         VTERM_PROP_ALTSCREEN => term.in_altscreen = flag,
@@ -216,23 +191,6 @@ unsafe extern "C" fn term_settermprop(
     1
 }
 
-extern "C" fn term_bell(_data: *mut c_void) -> c_int {
-    vim_beep(kOptBoFlagTerm as ::core::ffi::c_uint);
-    1
-}
-
-/// Answer vterm's "is the background dark?" query from `'background'`.
-///
-/// # Safety
-///
-/// `dark` must point at a writable `bool` the caller owns.
-unsafe extern "C" fn term_theme(dark: *mut bool, _data: *mut c_void) -> c_int {
-    // SAFETY: vterm's own out-parameter, and `'background'` is a live
-    // option string.
-    p_bg(|value| unsafe { *dark = *value.as_ptr().cast_mut() == b'd' as c_char });
-    1
-}
-
 /// Hand a finished OSC 52 write to the clipboard provider: `payload` (up
 /// to its first NUL, as the C string it was) into the register `mask`
 /// names.
@@ -259,29 +217,29 @@ fn term_clipboard_set(mask: VTermSelectionMask, payload: &[u8]) {
     eval_call_provider(c"clipboard", c"set", Some(held), true);
 }
 
-/// Accumulate an OSC 52 clipboard write, queueing it once complete.
-///
-/// # Safety
-///
-/// `frag` must be an initialized `VTermStringFragment` whose pointer fields
-/// point at live data for the call. `user` must be the payload this callback
-/// was registered with, live for the call.
-unsafe extern "C" fn term_selection_set(
-    mask: VTermSelectionMask,
-    frag: VTermStringFragment,
-    user: *mut c_void,
-) -> c_int {
-    // SAFETY: vterm hands back the terminal registered alongside this table.
-    let mut term = unsafe { Term::new(user.cast()) };
-    if frag.initial() {
-        term.selection.clear();
+/// OSC 52 writes, for the terminal they arrive at.
+pub(crate) struct Clipboard(pub(crate) Term);
+
+impl SelectionHost for Clipboard {
+    fn takes_set(&self) -> bool {
+        true
     }
-    // SAFETY: a fragment vterm handed over.
-    term.selection
-        .extend_from_slice(unsafe { fragment_bytes(&frag) });
-    if frag.final_0() {
-        let payload = term.selection.clone();
-        put_job_on_main_loop(move || term_clipboard_set(mask, &payload));
+
+    /// Accumulate a clipboard write, queueing it once complete.
+    fn set(&mut self, mask: VTermSelectionMask, frag: Fragment<'_>) -> Option<c_int> {
+        let mut term = self.0;
+        if frag.initial {
+            term.selection.clear();
+        }
+        term.selection.extend_from_slice(frag.bytes());
+        if frag.last {
+            let payload = term.selection.clone();
+            put_job_on_main_loop(move || term_clipboard_set(mask, &payload));
+        }
+        Some(1)
     }
-    1
+
+    fn query(&mut self, _mask: VTermSelectionMask) -> Option<c_int> {
+        None
+    }
 }

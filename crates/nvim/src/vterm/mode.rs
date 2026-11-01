@@ -9,10 +9,10 @@
 use core::ffi::c_int;
 use core::fmt::Write;
 
-use crate::types::{VTermKeyEncodingFlags, VTermKeyEncodingStack, VTermRect, VTermState};
+use crate::types::{VTermKeyEncodingFlags, VTermKeyEncodingStack, VTermRect};
 use crate::vterm::geometry::{DHL_OFF, DWL_OFF};
 use crate::vterm::output::EscapeSeq;
-use crate::vterm::state::{MOUSE_WANT_CLICK, MOUSE_WANT_DRAG, MOUSE_WANT_MOVE, PenChange};
+use crate::vterm::state::{MOUSE_WANT_CLICK, MOUSE_WANT_DRAG, MOUSE_WANT_MOVE, PenChange, StateCx};
 use crate::vterm::text::save_cursor;
 use crate::vterm::vterm::{
     MOUSE_RXVT, MOUSE_SGR, MOUSE_UTF8, MOUSE_X10, VTERM_PROP_ALTSCREEN, VTERM_PROP_CURSORBLINK,
@@ -33,7 +33,7 @@ pub const KEY_ENCODING_REPORT_ASSOCIATED: c_int = 0x10;
 // ---------------------------------------------------------------- ANSI modes
 
 /// `SM` / `RM`: the two ANSI modes this terminal implements.
-pub(super) fn set_ansi_mode(state: &mut VTermState, num: c_int, on: bool) {
+pub(super) fn set_ansi_mode(state: &mut StateCx<'_>, num: c_int, on: bool) {
     match num {
         4 => state.mode.set_insert(on as _),   // IRM - ECMA-48 7.2.10
         20 => state.mode.set_newline(on as _), // LNM - ANSI X3.4-1977
@@ -44,7 +44,7 @@ pub(super) fn set_ansi_mode(state: &mut VTermState, num: c_int, on: bool) {
 // ----------------------------------------------------------- DEC private modes
 
 /// `CSI ? … h` / `CSI ? … l`: the DEC private modes.
-pub(super) fn set_dec_mode(state: &mut VTermState, num: c_int, on: bool) {
+pub(super) fn set_dec_mode(state: &mut StateCx<'_>, num: c_int, on: bool) {
     match num {
         1 => state.mode.set_cursor(on as _), // DECCKM - cursor keys
         5 => {
@@ -113,7 +113,7 @@ pub(super) fn set_dec_mode(state: &mut VTermState, num: c_int, on: bool) {
 
 /// `CSI ? … $ p` (DECRQM): report whether a DEC private mode is set. A mode
 /// this terminal does not know reports as "not recognised".
-pub(super) fn request_dec_mode(state: &mut VTermState, num: c_int) {
+pub(super) fn request_dec_mode(state: &mut StateCx<'_>, num: c_int) {
     let set = match num {
         1 => Some(state.mode.cursor() != 0),
         5 => Some(state.mode.screen() != 0),
@@ -146,7 +146,7 @@ pub(super) fn request_dec_mode(state: &mut VTermState, num: c_int) {
 }
 
 /// `CSI > q` (XTVERSION): name the terminal and its version.
-pub(super) fn request_version_string(state: &mut VTermState) {
+pub(super) fn request_version_string(state: &mut StateCx<'_>) {
     let ctrl8bit = state.ctrl8bit();
     let mut seq = EscapeSeq::dcs(ctrl8bit);
     let _ = write!(
@@ -169,13 +169,13 @@ fn no_flags() -> VTermKeyEncodingFlags {
 /// The flag stack for the screen that is currently showing. The two screens
 /// keep separate stacks so that a full-screen program cannot leak its key
 /// encoding back to the shell.
-fn flag_stack(state: &mut VTermState) -> &mut VTermKeyEncodingStack {
+fn flag_stack<'s>(state: &'s mut StateCx<'_>) -> &'s mut VTermKeyEncodingStack {
     let screen = state.active_buffer();
     &mut state.key_encoding_stacks[screen]
 }
 
 /// `CSI ? u`: report the flags on top of the stack.
-pub(super) fn request_key_encoding_flags(state: &mut VTermState) {
+pub(super) fn request_key_encoding_flags(state: &mut StateCx<'_>) {
     let stack = flag_stack(state);
     debug_assert!(stack.size > 0);
     let flags = stack.items[usize::from(stack.size - 1)];
@@ -203,7 +203,7 @@ pub(super) fn request_key_encoding_flags(state: &mut VTermState) {
 /// mode and replaces the top of the stack with it, so 2 and 3 do not really
 /// add to or subtract from what was there; a bit `arg` does not name always
 /// ends up clear, and only the meaning of a named bit varies.
-pub(super) fn set_key_encoding_flags(state: &mut VTermState, arg: c_int, mode: c_int) {
+pub(super) fn set_key_encoding_flags(state: &mut StateCx<'_>, arg: c_int, mode: c_int) {
     let set = mode != 3;
     let named = |bit: c_int| arg & bit != 0 && set;
     let mut flags = no_flags();
@@ -221,7 +221,7 @@ pub(super) fn set_key_encoding_flags(state: &mut VTermState, arg: c_int, mode: c
 
 /// `CSI > u`: push a new set of flags, evicting the oldest when the stack is
 /// already full.
-pub(super) fn push_key_encoding_flags(state: &mut VTermState, arg: c_int) {
+pub(super) fn push_key_encoding_flags(state: &mut StateCx<'_>, arg: c_int) {
     let stack = flag_stack(state);
     let depth = stack.items.len();
     debug_assert!(usize::from(stack.size) <= depth);
@@ -234,7 +234,7 @@ pub(super) fn push_key_encoding_flags(state: &mut VTermState, arg: c_int) {
 }
 
 /// `CSI < u`: pop `arg` entries. Popping the stack empty resets the flags.
-pub(super) fn pop_key_encoding_flags(state: &mut VTermState, arg: c_int) {
+pub(super) fn pop_key_encoding_flags(state: &mut StateCx<'_>, arg: c_int) {
     let stack = flag_stack(state);
     if arg >= c_int::from(stack.size) {
         stack.size = 1;
@@ -248,7 +248,7 @@ pub(super) fn pop_key_encoding_flags(state: &mut VTermState, arg: c_int) {
 
 /// Returns the terminal to its power-on settings. A hard reset also homes the
 /// cursor and clears the screen; a soft one (DECSTR) leaves both alone.
-pub(super) fn reset(state: &mut VTermState, hard: bool) {
+pub(super) fn reset(state: &mut StateCx<'_>, hard: bool) {
     state.scrollregion_top = 0;
     state.scrollregion_bottom = -1;
     state.scrollregion_left = 0;

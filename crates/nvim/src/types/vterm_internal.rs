@@ -39,10 +39,13 @@ pub struct VTermEncoding {
         ) -> (),
     >,
 }
+/// One character-set slot: which set, and the scratch its decoder keeps
+/// between calls.
+#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermEncodingInstance {
-    pub enc: *mut VTermEncoding,
-    pub data: [::core::ffi::c_char; 16],
+    pub enc: Option<::core::ptr::NonNull<VTermEncoding>>,
+    pub data: [u8; 16],
 }
 pub type VTermEncodingType = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]

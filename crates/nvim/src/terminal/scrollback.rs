@@ -12,20 +12,16 @@
 //! the terminal's whole life — buffer line numbers are only meaningful
 //! relative to it, which is why [`super::row_to_linenr`] exists.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `terminal/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::change::{appended_lines_buf, deleted_lines_buf};
 use crate::grid::{MAX_SCHAR_SIZE, schar_put_scratch};
 use crate::mark::mark_adjust_buf;
 use crate::memline::{ml_append_buf_terminated, ml_delete_buf};
-use crate::types::{
-    LineNr, NUL, OptInt, ScreenChar, VTermColor, VTermPos, VTermScreenCell, VTermScreenCellAttrs,
-};
-use crate::vterm::screen::vterm_screen_get_cell;
+use crate::types::{LineNr, NUL, OptInt, VTermPos, VTermScreenCell};
+use crate::vterm::screen::ZERO_SCREEN_CELL;
 use crate::winlayer::Buf;
-use core::ffi::{c_int, c_void};
+use core::ffi::c_int;
 
 use super::refresh::invalidate_terminal;
 use super::{SB_MAX, Term, kExtmarkUndo, kMarkAdjustTerm};
@@ -35,15 +31,8 @@ use crate::pos::MAXLNUM;
 /// the width still has to be 1 or the row scan below would not advance.
 fn blank_cell() -> VTermScreenCell {
     VTermScreenCell {
-        schar: 0 as ScreenChar,
         width: 1,
-        attrs: VTermScreenCellAttrs {
-            bold_underline_italic_blink_reverse_conceal_strike_font_dwl_dhl_small_baseline_dim_overline: [0; 3],
-            _pad: [0; 1],
-        },
-        fg: VTermColor { type_0: 0 },
-        bg: VTermColor { type_0: 0 },
-        uri: 0,
+        ..ZERO_SCREEN_CELL
     }
 }
 
@@ -55,7 +44,7 @@ pub(crate) fn term_may_alloc_scrollback(mut term: Term, buffer: Option<Buf>) -> 
     if term.sb.is_sized() {
         return true;
     }
-    let Some(buf) = buffer.or_else(|| term.buf()) else {
+    let Some(buf) = buffer.or_else(|| super::term_buf(term)) else {
         return false;
     };
     term.sb.set_capacity(scrollback_limit(buf));
@@ -71,19 +60,8 @@ fn scrollback_limit(mut buffer: Buf) -> usize {
     buffer.b_p_scbk as usize
 }
 
-/// # Safety
-///
-/// `cells` must point at a live `VTermScreenCell`. `data` must be the payload
-/// this callback was registered with, live for the call.
-pub(crate) unsafe extern "C" fn term_sb_push(
-    cols: c_int,
-    cells: *const VTermScreenCell,
-    data: *mut c_void,
-) -> c_int {
-    // SAFETY: vterm hands back the terminal registered alongside this table.
-    let mut term = unsafe { Term::new(data.cast()) };
-    // SAFETY: `cells` points at `cols` cells vterm owns.
-    let row = unsafe { ::core::slice::from_raw_parts(cells, cols as usize) };
+/// A row scrolled off the top of the screen.
+pub(crate) fn term_sb_push(mut term: Term, row: &[VTermScreenCell]) -> c_int {
     if !term_may_alloc_scrollback(term, None) {
         return 0;
     }
@@ -94,20 +72,9 @@ pub(crate) unsafe extern "C" fn term_sb_push(
     1
 }
 
-/// # Safety
-///
-/// `cells` must point at a live `VTermScreenCell`, unaliased for the call.
-/// `data` must be the payload this callback was registered with, live for the
-/// call.
-pub(crate) unsafe extern "C" fn term_sb_pop(
-    cols: c_int,
-    cells: *mut VTermScreenCell,
-    data: *mut c_void,
-) -> c_int {
-    // SAFETY: as above.
-    let mut term = unsafe { Term::new(data.cast()) };
-    // SAFETY: `cells` is vterm's own row of `cols` cells, to fill in.
-    let row = unsafe { ::core::slice::from_raw_parts_mut(cells, cols as usize) };
+/// The screen grew: give back the row most recently scrolled off, into
+/// `row`.
+pub(crate) fn term_sb_pop(mut term: Term, row: &mut [VTermScreenCell]) -> c_int {
     let mut old_height = term.old_height;
     if !term.sb.pop(row, &mut old_height) {
         return 0;
@@ -119,13 +86,8 @@ pub(crate) unsafe extern "C" fn term_sb_pop(
     1
 }
 
-/// # Safety
-///
-/// `data` must be the payload this callback was registered with, live for the
-/// call.
-pub(crate) unsafe extern "C" fn term_sb_clear(data: *mut c_void) -> c_int {
-    // SAFETY: vterm hands back the terminal registered alongside this table.
-    let mut term = unsafe { Term::new(data.cast()) };
+/// The child asked for the scrollback to go.
+pub(crate) fn term_sb_clear(mut term: Term) -> c_int {
     // On the alternate screen the scrollback belongs to the screen
     // underneath, which is about to be restored; clearing it there would
     // lose history the program never touched.
@@ -203,9 +165,7 @@ fn render_row(
 /// stored while the terminal was narrower; the cell is left blank.
 pub(crate) fn fetch_cell(term: Term, row: c_int, col: c_int, cell: &mut VTermScreenCell) -> bool {
     if row >= 0 {
-        let vts = term.vts;
-        // SAFETY: the terminal's own screen, and a cell of the caller's.
-        unsafe { vterm_screen_get_cell(vts, VTermPos { row, col }, cell) };
+        term.vt.get_cell(VTermPos { row, col }, cell);
         return true;
     }
     let stored = term

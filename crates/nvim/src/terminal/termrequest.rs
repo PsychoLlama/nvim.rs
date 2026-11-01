@@ -16,9 +16,7 @@
 //! OSC 8 is the exception: hyperlinks are a display attribute, so they are
 //! applied to vterm's pen immediately rather than waiting for the queue.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `terminal/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -27,43 +25,56 @@
     clippy::ptr_as_ptr
 )]
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use crate::autocmd::{apply_autocmds_group, has_event};
 use crate::eval::vars::set_vim_var_string;
-use crate::event::r#loop::RawEvent;
 use crate::event_queue::{self, ParkingQueue, QueueId};
 use crate::highlight::hl_add_url;
 use crate::types::AutoEvent;
 use crate::types::builders::{ArrayBuf, DictBuf};
-use crate::types::{
-    Handle, Object, RefcountSize, String_0, VTermStateFallbacks, VTermStringFragment,
-    VTermTerminator, VTermValue, Vv, size_t,
-};
+use crate::types::{Event, Handle, Object, RefcountSize, String_0, VTermTerminator, Vv};
+use crate::vterm::host::{Fallbacks, Fragment, Value};
 use crate::vterm::pen::set_pen_attr;
+use crate::vterm::state::StateCx;
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int};
 
 use super::{AUGROUP_ALL, Term, buf_for_handle, row_to_linenr, terminal_send};
-use crate::vterm::vterm::{VTERM_ATTR_URI, VTERM_TERMINATOR_BEL, VTERM_VALUETYPE_INT};
+use crate::vterm::vterm::{VTERM_ATTR_URI, VTERM_TERMINATOR_BEL};
 
-/// The sequences vterm hands over rather than acting on itself.
+/// The sequences vterm hands over rather than acting on itself, for the
+/// terminal they arrive at.
 ///
 /// Only the string-carrying ones are taken: a control or CSI sequence vterm
 /// does not know is not something an autocommand could make sense of
 /// either.
-pub(crate) static FALLBACKS: VTermStateFallbacks = VTermStateFallbacks {
-    control: None,
-    csi: None,
-    osc: Some(on_osc),
-    dcs: Some(on_dcs),
-    apc: Some(on_apc),
-    pm: None,
-    sos: None,
-};
+pub(crate) struct Requests(pub(crate) Term);
+
+impl Fallbacks for Requests {
+    fn osc(
+        &mut self,
+        command: c_int,
+        frag: Fragment<'_>,
+        state: &mut StateCx<'_>,
+    ) -> Option<c_int> {
+        Some(on_osc(self.0, command, frag, state))
+    }
+
+    fn dcs(&mut self, command: &[u8], frag: Fragment<'_>) -> Option<c_int> {
+        Some(on_dcs(self.0, command, frag))
+    }
+
+    fn apc(&mut self, frag: Fragment<'_>) -> Option<c_int> {
+        Some(on_apc(self.0, frag))
+    }
+}
 
 /// A finished escape sequence, waiting on the main loop to be reported.
 ///
-/// Owned by the queued event: [`schedule_termrequest`] leaks the box and
-/// [`emit_termrequest`] reclaims it, possibly after re-queueing itself once.
+/// Owned by the queued event, which hands it to [`emit_termrequest`],
+/// possibly after re-queueing itself once.
 pub(crate) struct TermRequest {
     /// The buffer rather than the terminal: by the time this runs the
     /// terminal may have been destroyed, and a handle can be checked.
@@ -78,7 +89,7 @@ pub(crate) struct TermRequest {
     terminator: VTermTerminator,
     /// Writes to the child made while the handler runs. See
     /// [`TerminalPending::send`](crate::types::TerminalPending).
-    pending_send: Vec<u8>,
+    pending_send: Rc<RefCell<Vec<u8>>>,
 }
 
 /// Report `request` to `TermRequest` autocommands, or drop it if the
@@ -88,24 +99,17 @@ pub(crate) struct TermRequest {
 /// rows: the reported cursor line is a buffer line number, and appending
 /// those rows is what makes it correct.
 ///
-/// # Safety
-///
-/// `argv` must point at a writable `*mut c_void` slot the caller owns for the
-/// call.
-unsafe extern "C" fn emit_termrequest(argv: *mut *mut c_void) {
-    // SAFETY: the event carries the request `schedule_termrequest` leaked,
-    // and this is the only thing that reclaims it.
-    let mut request = unsafe { Box::from_raw((*argv).cast::<TermRequest>()) };
-    let Some(buf) = buf_for_handle(request.buf_handle).filter(|buf| !buf.terminal.is_null()) else {
+fn emit_termrequest(mut request: TermRequest) {
+    let Some(buf) = buf_for_handle(request.buf_handle) else {
         return;
     };
-    // SAFETY: a buffer that still has its terminal.
-    let term = unsafe { Term::new(buf.terminal) };
+    let Some(term) = buf.terminal_handle() else {
+        return;
+    };
     if term.sb.pending() > 0 {
         let events = term.pending.events.as_ref().map(ParkingQueue::id);
         let events = events.expect("a live terminal has its pending queue");
-        // SAFETY: `emit_termrequest` takes back the request leaked here, once.
-        let event = unsafe { RawEvent::event(emit_termrequest, Box::into_raw(request).cast()) };
+        let event = Event::Job(Box::new(move || emit_termrequest(request)));
         event_queue::put(events, event);
         return;
     }
@@ -151,16 +155,17 @@ fn report(request: &mut TermRequest, mut term: Term, buffer: Buf) {
 
     // Let writes through again before flushing what the handler wrote, or
     // it would be appended to the buffer it is being read from.
-    let held = term.pending.send;
-    term.pending.send = ::core::ptr::null_mut();
-    if !request.pending_send.is_empty() {
-        terminal_send(term, &request.pending_send);
-        request.pending_send.clear();
+    let held = term.pending.send.take();
+    let written = ::core::mem::take(&mut *request.pending_send.borrow_mut());
+    if !written.is_empty() {
+        terminal_send(term, &written);
     }
     // A handler that produced a request of its own left a newer buffer in
     // place; that one is still filling.
-    if !::core::ptr::eq(held, &raw mut request.pending_send) {
-        term.pending.send = held;
+    if let Some(held) = held
+        && !Rc::ptr_eq(&held, &request.pending_send)
+    {
+        term.pending.send = Some(held);
     }
 
     if term.buf_handle == 0 && term.refcount == RefcountSize::ZERO {
@@ -174,52 +179,32 @@ fn report(request: &mut TermRequest, mut term: Term, buffer: Buf) {
 
 /// Queue the sequence assembled so far for reporting on the main loop.
 pub(crate) fn schedule_termrequest(mut term: Term) {
-    let request = Box::into_raw(Box::new(TermRequest {
+    let pending_send = Rc::new(RefCell::new(Vec::new()));
+    let request = TermRequest {
         buf_handle: term.buf_handle,
         sequence: term.termrequest_buffer.clone(),
         line: row_to_linenr(term, term.cursor.row),
         col: term.cursor.col,
         sb_deleted: term.sb.deleted(),
         terminator: term.termrequest_terminator,
-        pending_send: Vec::new(),
-    }));
-    // Valid until emit_termrequest drops the box, and that is the last
-    // thing it does.
-    //
-    // SAFETY: the box just allocated, reachable from nowhere else yet.
-    term.pending.send = unsafe { &raw mut (*request).pending_send };
-    // SAFETY: `emit_termrequest` takes back the request leaked here, once.
-    let event = unsafe { RawEvent::event(emit_termrequest, request.cast()) };
+        pending_send: Rc::clone(&pending_send),
+    };
+    // Shared with the request until `report` flushes it.
+    term.pending.send = Some(pending_send);
+    let event = Event::Job(Box::new(move || emit_termrequest(request)));
     event_queue::put(QueueId::MAIN, event);
-}
-
-/// The bytes of a fragment vterm handed over.
-///
-/// # Safety
-/// `frag.str` must point at `frag.len()` readable bytes, as vterm's
-/// contract for a fragment callback promises.
-unsafe fn fragment_bytes(frag: &VTermStringFragment) -> &[u8] {
-    if frag.str.is_null() || frag.is_empty() {
-        return &[];
-    }
-    unsafe { ::core::slice::from_raw_parts(frag.str.cast::<u8>(), frag.len()) }
 }
 
 /// Start or continue reassembling a sequence. `prefix` is what vterm ate
 /// before handing the payload over, and is re-emitted so that what the
 /// autocommand sees is what the child sent.
-///
-/// # Safety
-/// `frag` must be a fragment vterm handed over, as [`fragment_bytes`] wants.
-unsafe fn accumulate(mut term: Term, frag: &VTermStringFragment, prefix: &[u8]) {
-    if frag.initial() {
+fn accumulate(mut term: Term, frag: &Fragment<'_>, prefix: &[u8]) {
+    if frag.initial {
         term.termrequest_buffer.clear();
         term.termrequest_buffer.extend_from_slice(prefix);
     }
-    // SAFETY: the caller's promise.
-    let bytes = unsafe { fragment_bytes(frag) };
-    term.termrequest_buffer.extend_from_slice(bytes);
-    if frag.final_0() {
+    term.termrequest_buffer.extend_from_slice(frag.bytes());
+    if frag.last {
         term.termrequest_terminator = frag.terminator;
     }
 }
@@ -248,101 +233,60 @@ fn parse_osc8(payload: &[u8]) -> Option<c_int> {
 
 /// Apply a finished OSC 8 to vterm's pen, so that the cells written after
 /// it carry the link.
-fn apply_osc8(term: Term) {
+fn apply_osc8(term: Term, state: &mut StateCx<'_>) {
     let buffer: &[u8] = &term.termrequest_buffer;
     // Past the "\x1b]8;" that `accumulate` put back.
     let Some(attr) = buffer.get(b"\x1b]8;".len()..).and_then(parse_osc8) else {
         return;
     };
-    let state = term.state();
-    let value = VTermValue { number: attr };
-    // SAFETY: the emulator's own state machine, and a value read through
-    // the arm the type names.
-    unsafe { set_pen_attr(&mut *state.0, VTERM_ATTR_URI, VTERM_VALUETYPE_INT, &value) };
+    set_pen_attr(state, VTERM_ATTR_URI, Value::Int(attr));
 }
 
-/// # Safety
-///
-/// `frag` must be an initialized `VTermStringFragment` whose pointer fields
-/// point at live data for the call. `user` must be the payload this callback
-/// was registered with, live for the call.
-pub(crate) unsafe extern "C" fn on_osc(
-    command: c_int,
-    frag: VTermStringFragment,
-    user: *mut c_void,
-) -> c_int {
-    // SAFETY: vterm hands back the terminal registered alongside this
-    // fallback table.
-    let term = unsafe { Term::new(user.cast()) };
-    if frag.str.is_null() || frag.is_empty() {
+fn on_osc(term: Term, command: c_int, frag: Fragment<'_>, state: &mut StateCx<'_>) -> c_int {
+    if frag.bytes().is_empty() {
         return 0;
     }
     // OSC 8 is handled here whether or not anyone is listening.
     if command != 8 && !listening() {
         return 1;
     }
-    // SAFETY: a fragment vterm handed over.
-    unsafe { accumulate(term, &frag, format!("\x1b]{command};").as_bytes()) };
-    if frag.final_0() {
+    accumulate(term, &frag, format!("\x1b]{command};").as_bytes());
+    if frag.last {
         if listening() {
             schedule_termrequest(term);
         }
         if command == 8 {
-            apply_osc8(term);
+            apply_osc8(term, state);
         }
     }
     1
 }
 
-/// # Safety
-///
-/// `command` must point at a NUL-terminated string. `frag` must be an
-/// initialized `VTermStringFragment` whose pointer fields point at live data
-/// for the call. `user` must be the payload this callback was registered
-/// with, live for the call.
-pub(crate) unsafe extern "C" fn on_dcs(
-    command: *const c_char,
-    commandlen: size_t,
-    frag: VTermStringFragment,
-    user: *mut c_void,
-) -> c_int {
-    // SAFETY: as in `on_osc`.
-    let term = unsafe { Term::new(user.cast()) };
-    if command.is_null() || frag.str.is_null() {
+fn on_dcs(term: Term, command: &[u8], frag: Fragment<'_>) -> c_int {
+    if frag.buffer().is_none() {
         return 0;
     }
     if !listening() {
         return 1;
     }
     let mut prefix = b"\x1bP".to_vec();
-    // SAFETY: vterm's own command name, `commandlen` bytes of it.
-    let name = unsafe { ::core::slice::from_raw_parts(command.cast::<u8>(), commandlen) };
-    prefix.extend_from_slice(name);
-    // SAFETY: a fragment vterm handed over.
-    unsafe { accumulate(term, &frag, &prefix) };
-    if frag.final_0() {
+    prefix.extend_from_slice(command);
+    accumulate(term, &frag, &prefix);
+    if frag.last {
         schedule_termrequest(term);
     }
     1
 }
 
-/// # Safety
-///
-/// `frag` must be an initialized `VTermStringFragment` whose pointer fields
-/// point at live data for the call. `user` must be the payload this callback
-/// was registered with, live for the call.
-pub(crate) unsafe extern "C" fn on_apc(frag: VTermStringFragment, user: *mut c_void) -> c_int {
-    // SAFETY: as in `on_osc`.
-    let term = unsafe { Term::new(user.cast()) };
-    if frag.str.is_null() || frag.is_empty() {
+fn on_apc(term: Term, frag: Fragment<'_>) -> c_int {
+    if frag.bytes().is_empty() {
         return 0;
     }
     if !listening() {
         return 1;
     }
-    // SAFETY: a fragment vterm handed over.
-    unsafe { accumulate(term, &frag, b"\x1b_") };
-    if frag.final_0() {
+    accumulate(term, &frag, b"\x1b_");
+    if frag.last {
         schedule_termrequest(term);
     }
     1
@@ -350,6 +294,5 @@ pub(crate) unsafe extern "C" fn on_apc(frag: VTermStringFragment, user: *mut c_v
 
 /// Whether any autocommand is waiting for a `TermRequest`.
 fn listening() -> bool {
-    // SAFETY: reads the editor's own event table.
     has_event(AutoEvent::TermRequest)
 }

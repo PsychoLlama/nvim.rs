@@ -3,75 +3,49 @@
 //! It remembers everything a terminal remembers apart from the screen itself —
 //! where the cursor is, which modes are set, what the scroll region and the
 //! tab stops are, which character sets are mapped — and hands every visible
-//! effect to the callback table its consumer installed with
-//! [`entry::vterm_state_set_callbacks`], which in practice is
-//! [`crate::vterm::screen`].
+//! effect to its consumer, which in practice is [`crate::vterm::screen`].
 //!
-//! This file owns the boundary. Callback tables, the out-of-line line-mark and
-//! tab-stop arrays and the allocator all arrive as raw pointers, so they are
-//! wrapped here exactly once, as safe methods on [`VTermState`]. The sequence
-//! handling itself lives in sibling modules — [`super::text`] for printable
-//! text and the C0/C1 controls, [`super::csi`] for control sequences,
-//! [`super::mode`] for modes and properties, [`super::selection`] for OSC,
-//! [`super::dcs`] for the other control strings,
-//! and `geometry` for the shape of the screen — all of which are written
-//! against those methods and do no pointer work of their own. The state
-//! machine's own lifetime and the `extern "C"` entry points, which cannot be
-//! written that way, live in [`entry`](self::entry).
+//! The state machine is driven through a [`StateCx`]: the state itself plus
+//! what it borrows of the terminal around it for the length of one call —
+//! the mode bits it shares with the parser, the reply channel, the text
+//! decoder's scratch and the screen it paints on. The sequence handling lives
+//! in sibling modules — [`super::text`] for printable text and the C0/C1
+//! controls, [`super::csi`] for control sequences, [`super::mode`] for modes
+//! and properties, [`super::selection`] for OSC, [`super::dcs`] for the other
+//! control strings, and `geometry` for the shape of the screen — all of it
+//! written against the methods here. The state machine's construction and its
+//! parser events live in [`entry`](self::entry).
 //!
 //! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
 //! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `vterm/` row in docs/perimeter.md.
-// The exports here are metrics/abi-ledger.jsonl rows (`vterm_primary_device_attr`), and
-// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 pub mod entry;
 
-use core::ffi::{c_char, c_int, c_long, c_uint, c_void};
-use core::slice;
+use core::ffi::{c_int, c_long, c_uint};
+use core::ops::{Deref, DerefMut};
 
-use self::entry::vterm_state_set_termprop;
-use crate::global_cell::GlobalCell;
 use crate::grid::schar_from_buf;
 use crate::mbyte::{c_partial_cells_in, encode_char, iscomposing};
 use crate::types::{
-    GraphemeState, ScreenChar, VTerm, VTermGlyphInfo, VTermLineInfo, VTermPos, VTermProp,
-    VTermRect, VTermSelectionCallbacks, VTermSelectionMask, VTermState, VTermState_tmp_selection,
-    VTermStateCallbacks, VTermStateFallbacks, VTermStateFields, VTermStringFragment, VTermValue,
-    uint8_t,
+    GraphemeState, ScreenChar, VTerm_mode, VTermAttr, VTermGlyphInfo, VTermLineInfo, VTermPos,
+    VTermProp, VTermRect, VTermScreen, VTermSelectionMask, VTermState, VTermState_tmp,
+    VTermState_tmp_selection, VTermStateFields,
 };
-use crate::vterm::encoding::{ENC_SINGLE_94, ENC_UTF8, vterm_lookup_encoding};
+use crate::vterm::abi::ForeignState;
+use crate::vterm::encoding::{self, Charset};
+use crate::vterm::host::{Fallbacks, Fragment, SelectionHost, Value};
 use crate::vterm::output::EscapeSeq;
 use crate::vterm::pen::{apply_sgr, reset_pen, restore_pen};
 use crate::vterm::screen::{BUFIDX_ALTSCREEN, BUFIDX_PRIMARY};
-use crate::vterm::selection;
-use crate::vterm::vterm::{vterm_alloc, vterm_dealloc, vterm_push_output_bytes, vterm_scroll_rect};
+use crate::vterm::vterm::{Output, ScrollTarget, scroll_rect};
 
 /// What the host asked to be told about the pointer, as
 /// `VTERM_PROP_MOUSE` reduces to.
 pub const MOUSE_WANT_CLICK: c_int = 0x1;
 pub const MOUSE_WANT_DRAG: c_int = 0x2;
 pub const MOUSE_WANT_MOVE: c_int = 0x4;
-
-/// Primary Device Attributes (DA1) response, `61;22;52` and its terminator.
-/// Exported so that the TUI tests can substitute another terminal's answer
-/// through FFI, which is why it is spelled as the `c_char` array the wire
-/// wants rather than as a byte string.
-#[unsafe(no_mangle)]
-pub static vterm_primary_device_attr: GlobalCell<[c_char; 9]> = GlobalCell::new([
-    b'6' as c_char,
-    b'1' as c_char,
-    b';' as c_char,
-    b'2' as c_char,
-    b'2' as c_char,
-    b';' as c_char,
-    b'5' as c_char,
-    b'2' as c_char,
-    0,
-]);
 
 /// A change to the pen that the consumer is told about.
 pub(super) enum PenChange<'a> {
@@ -81,15 +55,6 @@ pub(super) enum PenChange<'a> {
     Restore,
     /// Return the pen to its defaults.
     Reset,
-}
-
-/// The bytes a control string fragment carries.
-pub(super) fn fragment_bytes(frag: &VTermStringFragment) -> &[u8] {
-    if frag.str.is_null() {
-        return &[];
-    }
-    // SAFETY: the parser promises a fragment's `str` points at `len` bytes.
-    unsafe { slice::from_raw_parts(frag.str.cast::<u8>(), frag.len()) }
 }
 
 /// A line with no double-width, double-height or continuation marking.
@@ -108,35 +73,72 @@ fn tabstop_bytes(cols: c_int) -> usize {
     (cols.max(0) as usize).div_ceil(8)
 }
 
-// --------------------------------------------------------- the raw boundary
+/// Who the state machine paints through.
+#[derive(Copy, Clone)]
+pub(crate) enum Consumer {
+    None,
+    /// The terminal's own screen.
+    Screen,
+    /// A C consumer's callback table.
+    Foreign(ForeignState),
+}
+
+/// What a state machine owns that C does not read.
+pub(crate) struct StateOwned {
+    /// One bit per column.
+    tabstops: Vec<u8>,
+    /// Per-row double-width, double-height and continuation marks, for the
+    /// primary screen and the alternate one.
+    pub(crate) lineinfos: [Vec<VTermLineInfo>; 2],
+    /// Which of `lineinfos` the state is reading. Moved by the alternate
+    /// screen switch and by a resize, and by nothing else -- a reset leaves
+    /// it where it was, as libvterm's pointer was left.
+    pub(crate) active_lineinfo: usize,
+    /// Where an OSC 52 write is decoded into, a chunk at a time.
+    selection_buffer: Vec<u8>,
+    pub(crate) consumer: Consumer,
+    pub(crate) fallbacks: Option<Box<dyn Fallbacks>>,
+    pub(crate) selection: Option<Box<dyn SelectionHost>>,
+}
+
+impl StateOwned {
+    pub(super) fn new(rows: c_int, cols: c_int) -> Self {
+        let rows = rows.max(0) as usize;
+        StateOwned {
+            tabstops: vec![0; tabstop_bytes(cols)],
+            // TODO(vterm): the altscreen's marks could wait until it is
+            // switched on.
+            lineinfos: [vec![BLANK_LINE; rows], vec![BLANK_LINE; rows]],
+            active_lineinfo: BUFIDX_PRIMARY,
+            selection_buffer: Vec::new(),
+            consumer: Consumer::None,
+            fallbacks: None,
+            selection: None,
+        }
+    }
+}
+
+impl VTermState_tmp {
+    /// The bytes of a DECRQSS request gathered so far, NUL-terminated. They
+    /// share their four bytes with the selection decoder's progress, as
+    /// libvterm's union had it: only one of the two is ever part-way through.
+    pub(super) fn decrqss(&self) -> [u8; 4] {
+        let [low, high] = self.selection.mask.to_ne_bytes();
+        [low, high, self.selection.state[0], self.selection._pad[0]]
+    }
+
+    pub(super) fn set_decrqss(&mut self, request: [u8; 4]) {
+        self.selection.mask = u16::from_ne_bytes([request[0], request[1]]);
+        self.selection.state = [request[2]];
+        self.selection._pad = [request[3]];
+    }
+}
+
+// ------------------------------------------------- what the state owns alone
 
 impl VTermState {
-    /// The terminal this state belongs to.
-    ///
-    /// A `VTerm` and its `VTermState` are separate allocations, made and
-    /// freed together, so a borrow of one never aliases the other.
-    fn terminal(&self) -> &VTerm {
-        // SAFETY: `vt` is the terminal this state was made for.
-        unsafe { &*self.vt }
-    }
-
-    /// Whether the host asked for single-byte C1 controls on the wire.
-    pub(super) fn ctrl8bit(&self) -> bool {
-        self.terminal().mode.ctrl8bit() != 0
-    }
-
-    /// Selects between the 7-bit and 8-bit forms of the C1 controls.
-    pub(super) fn set_ctrl8bit(&mut self, eight_bit: bool) {
-        // SAFETY: as `terminal` above.
-        unsafe { (*self.vt).mode.set_ctrl8bit(eight_bit as c_uint) };
-    }
-
-    /// Whether the terminal is decoding its input as UTF-8.
-    pub(super) fn utf8(&self) -> bool {
-        self.terminal().mode.utf8() != 0
-    }
-
-    /// Which of the two line-mark arrays the live screen is using.
+    /// Which of the two buffers the live screen is: the key-encoding stacks
+    /// are kept per buffer.
     pub(super) fn active_buffer(&self) -> usize {
         if self.mode.alt_screen() != 0 {
             BUFIDX_ALTSCREEN
@@ -146,57 +148,286 @@ impl VTermState {
     }
 
     /// Per-row double-width and double-height marks, one entry per screen row.
-    pub(super) fn lineinfo(&self) -> &[VTermLineInfo] {
-        // SAFETY: `lineinfo` points at one of the two mark arrays, each of
-        // which is allocated and resized to hold exactly `rows` entries.
-        unsafe { slice::from_raw_parts(self.lineinfo, self.rows.max(0) as usize) }
+    pub(crate) fn lineinfo(&self) -> &[VTermLineInfo] {
+        &self.owned.lineinfos[self.owned.active_lineinfo]
     }
 
     pub(super) fn lineinfo_mut(&mut self) -> &mut [VTermLineInfo] {
-        // SAFETY: as `lineinfo` above.
-        unsafe { slice::from_raw_parts_mut(self.lineinfo, self.rows.max(0) as usize) }
+        let active = self.owned.active_lineinfo;
+        &mut self.owned.lineinfos[active]
+    }
+
+    /// Points the state at the line marks of the buffer the mode bits say is
+    /// live.
+    fn follow_active_buffer(&mut self) {
+        self.owned.active_lineinfo = self.active_buffer();
     }
 
     /// The tab-stop bit vector, one bit per column.
     pub(super) fn tabstops_mut(&mut self) -> &mut [u8] {
-        // SAFETY: `tabstops` is allocated and resized to `tabstop_bytes(cols)`
-        // bytes, which is what is asked for here.
-        unsafe { slice::from_raw_parts_mut(self.tabstops, tabstop_bytes(self.cols)) }
+        &mut self.owned.tabstops
     }
 
-    /// One slot of the table of screen effects the consumer installed.
+    /// Reallocates the tab-stop vector for a new column count, keeping the
+    /// stops that survive and giving fresh columns the default stop every
+    /// eighth column.
+    fn resize_tabstops(&mut self, cols: c_int) {
+        let bytes = tabstop_bytes(cols);
+        let mut stops = Vec::with_capacity(bytes);
+        for byte in 0..bytes {
+            let mut bits = 0u8;
+            for bit in 0..8 {
+                let col = (byte as c_int) << 3 | bit;
+                // Columns the old screen had keep their stop; fresh ones get
+                // the default one every eighth column.
+                let stop = if col < self.cols {
+                    self.owned.tabstops[byte] & 1 << bit != 0
+                } else {
+                    col % 8 == 0
+                };
+                bits |= u8::from(stop && col < cols) << bit;
+            }
+            stops.push(bits);
+        }
+        self.owned.tabstops = stops;
+    }
+
+    /// Makes the terminal's own screen this state's consumer, as libvterm's
+    /// `vterm_obtain_screen` installed the screen's callback table.
+    pub(crate) fn attach_screen(&mut self) {
+        self.callbacks = core::ptr::null();
+        self.cbdata = core::ptr::null_mut();
+        self.owned.consumer = Consumer::Screen;
+    }
+
+    /// Installs a consumer, telling it to reset its pen when it is a C one
+    /// that asked to be told.
+    pub(crate) fn set_consumer(&mut self, consumer: Consumer) {
+        self.owned.consumer = consumer;
+    }
+
+    /// Installs the sequences this state does not recognise.
+    pub(crate) fn set_fallbacks(&mut self, fallbacks: Option<Box<dyn Fallbacks>>) {
+        self.owned.fallbacks = fallbacks;
+    }
+
+    /// Installs OSC 52 handling, with a staging buffer of `buflen` bytes.
+    pub(crate) fn set_selection(&mut self, host: Option<Box<dyn SelectionHost>>, buflen: usize) {
+        self.owned.selection = host;
+        self.owned.selection_buffer = vec![0; buflen];
+        self.selection.buflen = buflen;
+    }
+
+    /// The line-mark array the state is reading, for a C caller to index.
+    pub(crate) fn lineinfo_base(&self) -> *const VTermLineInfo {
+        self.lineinfo().as_ptr()
+    }
+
+    // ------------------------------------------------- the grapheme buffer
+
+    /// Appends `codepoint` to the pending grapheme at offset `at`, returning
+    /// how many bytes it took.
     ///
-    /// The slot is read *out* of the table rather than handed back behind a
-    /// borrow: every one of these is a callback into the consumer, which may
-    /// re-enter this state machine, so nothing may still be borrowed when it
-    /// is called.
-    pub(super) fn consumer<T>(
-        &self,
-        pick: impl FnOnce(&VTermStateCallbacks) -> Option<T>,
-    ) -> Option<T> {
-        // SAFETY: the consumer promised its table outlives its installation.
-        unsafe { self.callbacks.as_ref() }.and_then(pick)
+    /// Upstream guarded the buffer against a four-byte encoding but let a
+    /// six-byte one write past its end; anything that does not fit is dropped
+    /// here instead.
+    pub(super) fn append_grapheme(&mut self, at: usize, codepoint: u32) -> usize {
+        let mut encoded = [0u8; 8];
+        // Eight bytes, more than any encoding needs.
+        let len = encode_char(codepoint as c_int, &mut encoded);
+        let len = len.min(self.grapheme_buf.len() - at);
+        for (to, &from) in self.grapheme_buf[at..at + len].iter_mut().zip(&encoded) {
+            *to = from.cast_signed();
+        }
+        len
     }
 
-    /// One slot of the table the consumer installed for sequences this module
-    /// does not recognise. Read out for the reason `consumer` gives.
-    pub(super) fn fallback<T>(
-        &self,
-        pick: impl FnOnce(&VTermStateFallbacks) -> Option<T>,
-    ) -> Option<T> {
-        // SAFETY: as `consumer` above.
-        unsafe { self.fallbacks.as_ref() }.and_then(pick)
+    /// How many columns the first `len` bytes of the pending grapheme occupy,
+    /// and the handle the screen stores that grapheme under.
+    pub(super) fn grapheme_metrics(&self, len: usize) -> (c_int, ScreenChar) {
+        let bytes = self.grapheme_buf.map(core::ffi::c_char::cast_unsigned);
+        let cells = c_partial_cells_in(&bytes, 0, len);
+        (cells, schar_from_buf(&bytes[..len]))
+    }
+
+    // --------------------------------------------------------- character sets
+
+    /// Designates slot `slot` (G0 to G3) to the 94-character set named by
+    /// `designator`. An unknown name leaves the slot alone.
+    pub(super) fn designate_charset(&mut self, slot: usize, designator: u8) {
+        if let Some(enc) = encoding::lookup(encoding::ENC_SINGLE_94, designator) {
+            self.encoding[slot].enc = Some(enc);
+            self.init_encoding(slot);
+        }
+    }
+
+    /// Points every slot at the terminal's default set: UTF-8 when the
+    /// terminal decodes UTF-8, ASCII otherwise.
+    pub(super) fn reset_charsets(&mut self, utf8: bool) {
+        let default = if utf8 {
+            encoding::lookup(encoding::ENC_UTF8, b'u')
+        } else {
+            encoding::lookup(encoding::ENC_SINGLE_94, b'B')
+        };
+        for slot in 0..self.encoding.len() {
+            self.encoding[slot].enc = default;
+            self.init_encoding(slot);
+        }
+    }
+
+    /// Resets slot `slot`'s decoder scratch.
+    fn init_encoding(&mut self, slot: usize) {
+        let instance = &mut self.encoding[slot];
+        if let Some(charset) = instance.enc.map(Charset::of) {
+            charset.init(&mut instance.data);
+        }
+    }
+
+    // ------------------------------------------------------------- selection
+
+    /// How far the OSC 52 decoder has got. It shares its storage with the
+    /// DECRQSS request, so only one of the two can be part-way through.
+    pub(super) fn selection_progress(&self) -> VTermState_tmp_selection {
+        self.tmp.selection
+    }
+
+    pub(super) fn set_selection_progress(&mut self, progress: VTermState_tmp_selection) {
+        self.tmp.selection = progress;
+    }
+
+    /// Whether the consumer wants to hear about OSC 52 selection traffic.
+    pub(super) fn selection_enabled(&self) -> bool {
+        self.owned.selection.is_some()
+    }
+
+    /// Whether the consumer will take a selection at all.
+    pub(super) fn selection_accepts_set(&self) -> bool {
+        self.owned
+            .selection
+            .as_ref()
+            .is_some_and(|host| host.takes_set())
+    }
+
+    /// The staging buffer selection data is decoded into, one chunk at a time.
+    pub(super) fn selection_buffer_mut(&mut self) -> &mut [u8] {
+        &mut self.owned.selection_buffer
+    }
+
+    /// Hands on the first `len` bytes of the staging buffer, or ends the
+    /// selection with no content at all, which clears it.
+    pub(super) fn selection_set(
+        &mut self,
+        mask: VTermSelectionMask,
+        len: Option<usize>,
+        initial: bool,
+        last: bool,
+    ) {
+        let StateOwned {
+            selection,
+            selection_buffer,
+            ..
+        } = &mut *self.owned;
+        let Some(host) = selection else {
+            return;
+        };
+        let frag = match len {
+            Some(len) => Fragment::new(&selection_buffer[..len], initial, last, 0),
+            None => Fragment::absent(initial, true),
+        };
+        let _ = host.set(mask, frag);
+    }
+
+    /// Asks the consumer to report the current selection back to the host.
+    pub(super) fn selection_query(&mut self, mask: VTermSelectionMask) {
+        if let Some(host) = &mut self.owned.selection {
+            let _ = host.query(mask);
+        }
+    }
+}
+
+// --------------------------------------------- the state, driven for a call
+
+/// A state machine and what it borrows of its terminal for the length of one
+/// call: everything that call can reach.
+///
+/// Dereferences to the [`VTermState`], so the sequence handlers read and write
+/// its fields directly; what goes past the state -- a reply on the wire, a
+/// glyph on the screen, a report to the consumer -- is a method here.
+pub(crate) struct StateCx<'a> {
+    state: &'a mut VTermState,
+    /// The terminal's mode bits: whether input is UTF-8, and whether C1
+    /// controls are sent 8-bit.
+    vt_mode: &'a mut VTerm_mode,
+    output: &'a mut Output,
+    /// Where the text decoder writes codepoints.
+    pub(super) scratch: &'a mut [u32],
+    screen: Option<&'a mut VTermScreen>,
+}
+
+impl Deref for StateCx<'_> {
+    type Target = VTermState;
+
+    fn deref(&self) -> &VTermState {
+        self.state
+    }
+}
+
+impl DerefMut for StateCx<'_> {
+    fn deref_mut(&mut self) -> &mut VTermState {
+        self.state
+    }
+}
+
+impl<'a> StateCx<'a> {
+    pub(crate) fn new(
+        state: &'a mut VTermState,
+        vt_mode: &'a mut VTerm_mode,
+        output: &'a mut Output,
+        scratch: &'a mut [u32],
+        screen: Option<&'a mut VTermScreen>,
+    ) -> Self {
+        StateCx {
+            state,
+            vt_mode,
+            output,
+            scratch,
+            screen,
+        }
+    }
+}
+
+impl StateCx<'_> {
+    /// Whether the host asked for single-byte C1 controls on the wire.
+    pub(super) fn ctrl8bit(&self) -> bool {
+        self.vt_mode.ctrl8bit() != 0
+    }
+
+    /// Selects between the 7-bit and 8-bit forms of the C1 controls.
+    pub(super) fn set_ctrl8bit(&mut self, eight_bit: bool) {
+        self.vt_mode.set_ctrl8bit(c_uint::from(eight_bit));
+    }
+
+    /// Whether the terminal is decoding its input as UTF-8.
+    pub(super) fn utf8(&self) -> bool {
+        self.vt_mode.utf8() != 0
     }
 
     /// Writes a reply back to the host. A sequence that outgrew its builder is
     /// dropped whole rather than truncated onto the wire.
     pub(super) fn reply(&mut self, seq: &EscapeSeq) {
         if let Some(bytes) = seq.finish() {
-            let (buf, len) = (bytes.as_ptr().cast::<c_char>(), bytes.len());
-            // SAFETY: `vt` is this state's terminal and `buf`/`len` is the
-            // finished sequence, which outlives the call.
-            unsafe { vterm_push_output_bytes(self.vt, buf, len) };
+            self.output.push(bytes);
         }
+    }
+
+    /// The consumer to report to, and the screen if that is the consumer.
+    fn consumer(&mut self) -> (Consumer, Option<&mut VTermScreen>, &VTermState) {
+        let consumer = self.state.owned.consumer;
+        let screen = match consumer {
+            Consumer::Screen => self.screen.as_deref_mut(),
+            _ => None,
+        };
+        (consumer, screen, self.state)
     }
 
     // -------------------------------------------------------- screen effects
@@ -213,9 +444,14 @@ impl VTermState {
         info.set_protected_cell(self.protected_cell());
         info.set_dwl(line.doublewidth());
         info.set_dhl(line.doubleheight());
-        let cbdata = self.cbdata;
-        if let Some(f) = self.consumer(|c| c.putglyph) {
-            unsafe { f(&raw mut info, pos, cbdata) };
+        match self.consumer() {
+            (Consumer::Screen, Some(screen), _) => {
+                screen.put_glyph(&info, pos);
+            }
+            (Consumer::Foreign(foreign), ..) => {
+                let _ = foreign.putglyph(&mut info, pos);
+            }
+            _ => {}
         }
     }
 
@@ -234,9 +470,15 @@ impl VTermState {
     /// Reports the cursor's position whether or not it moved, which is what a
     /// full reset needs so that the consumer redraws it.
     pub(super) fn force_cursor_report(&mut self, oldpos: VTermPos) {
-        let (pos, visible, cbdata) = (self.pos, self.mode.cursor_visible() as c_int, self.cbdata);
-        if let Some(f) = self.consumer(|c| c.movecursor) {
-            unsafe { f(pos, oldpos, visible, cbdata) };
+        let (pos, visible) = (self.pos, self.mode.cursor_visible() as c_int);
+        match self.consumer() {
+            (Consumer::Screen, Some(screen), _) => {
+                screen.movecursor(pos, oldpos, visible);
+            }
+            (Consumer::Foreign(foreign), ..) => {
+                let _ = foreign.movecursor(pos, oldpos, visible);
+            }
+            _ => {}
         }
     }
 
@@ -250,9 +492,14 @@ impl VTermState {
                 self.lineinfo_mut()[row as usize].set_continuation(0);
             }
         }
-        let cbdata = self.cbdata;
-        if let Some(f) = self.consumer(|c| c.erase) {
-            unsafe { f(rect, selective as c_int, cbdata) };
+        match self.consumer() {
+            (Consumer::Screen, Some(screen), state) => {
+                screen.erase(rect, selective, state.rows, state.lineinfo());
+            }
+            (Consumer::Foreign(foreign), ..) => {
+                let _ = foreign.erase(rect, c_int::from(selective));
+            }
+            _ => {}
         }
     }
 
@@ -284,18 +531,20 @@ impl VTermState {
             }
         }
 
-        let cbdata = self.cbdata;
-        if let Some(f) = self.consumer(|c| c.scrollrect)
-            && unsafe { f(rect, downward, rightward, cbdata) } != 0
-        {
-            return;
-        }
-        // The consumer did not take the scroll whole, so drive it out of the
-        // move and erase primitives instead.
-        if let Some((moverect, erase)) = self.consumer(|c| Some((c.moverect, c.erase))) {
-            // SAFETY: both slots are the consumer's own, and `cbdata` is what
-            // it installed beside them; nothing here is borrowed.
-            unsafe { vterm_scroll_rect(rect, downward, rightward, moverect, erase, cbdata) };
+        match self.consumer() {
+            (Consumer::Screen, Some(screen), state) => {
+                screen.scroll_rect(rect, downward, rightward, state.rows, state.lineinfo());
+            }
+            (Consumer::Foreign(mut foreign), ..) => {
+                let taken = foreign.scrollrect(rect, downward, rightward);
+                if taken.is_none_or(|taken| taken == 0) {
+                    // The consumer did not take the scroll whole, so drive it
+                    // out of the move and erase primitives instead.
+                    assert!(foreign.has_erase(), "scrolling without a way to erase");
+                    scroll_rect(rect, downward, rightward, &mut foreign);
+                }
+            }
+            _ => {}
         }
     }
 
@@ -310,14 +559,21 @@ impl VTermState {
         doubleheight: c_uint,
     ) {
         let mut info = self.lineinfo()[row as usize];
-        info.set_doublewidth(doublewidth as c_uint);
+        info.set_doublewidth(c_uint::from(doublewidth));
         info.set_doubleheight(doubleheight);
-        let cbdata = self.cbdata;
-        let mut accepted = false;
-        if let Some(f) = self.consumer(|c| c.setlineinfo) {
-            let current = self.lineinfo.cast_const().wrapping_add(row as usize);
-            accepted = unsafe { f(row, &raw const info, current, cbdata) } != 0;
-        }
+        let accepted = match self.consumer() {
+            (Consumer::Screen, Some(screen), state) => {
+                let lines = state.lineinfo();
+                screen.set_lineinfo(row, &info, &lines[row as usize], state.rows, lines) != 0
+            }
+            (Consumer::Foreign(foreign), _, state) => {
+                let current = &state.lineinfo()[row as usize];
+                foreign
+                    .setlineinfo(row, &info, current)
+                    .is_some_and(|accepted| accepted != 0)
+            }
+            _ => false,
+        };
         if accepted || force {
             self.lineinfo_mut()[row as usize] = info;
         }
@@ -325,87 +581,125 @@ impl VTermState {
 
     /// Rings the terminal bell.
     pub(super) fn bell(&mut self) {
-        let cbdata = self.cbdata;
-        if let Some(f) = self.consumer(|c| c.bell) {
-            unsafe { f(cbdata) };
+        match self.consumer() {
+            (Consumer::Screen, Some(screen), _) => {
+                screen.bell();
+            }
+            (Consumer::Foreign(foreign), ..) => {
+                let _ = foreign.bell();
+            }
+            _ => {}
         }
     }
 
     /// Drops the scrollback, reporting whether the consumer took the request.
     pub(super) fn clear_scrollback(&mut self) -> bool {
-        let cbdata = self.cbdata;
-        match self.consumer(|c| c.sb_clear) {
-            Some(f) => unsafe { f(cbdata) != 0 },
-            None => false,
+        match self.consumer() {
+            (Consumer::Screen, Some(screen), _) => screen.sb_clear() != 0,
+            (Consumer::Foreign(foreign), ..) => foreign.sb_clear().is_some_and(|taken| taken != 0),
+            _ => false,
         }
     }
 
     /// Asks the consumer whether it is showing a dark colour scheme; `None`
     /// when it does not know.
     pub(super) fn theme_is_dark(&mut self) -> Option<bool> {
-        let cbdata = self.cbdata;
-        let f = self.consumer(|c| c.theme)?;
         let mut dark = false;
-        (unsafe { f(&raw mut dark, cbdata) } != 0).then_some(dark)
+        let known = match self.consumer() {
+            (Consumer::Screen, Some(screen), _) => screen.theme(&mut dark),
+            (Consumer::Foreign(foreign), ..) => foreign.theme(&mut dark)?,
+            _ => return None,
+        };
+        (known != 0).then_some(dark)
     }
 
     /// Tells the consumer to return its own pen to the defaults.
     pub(super) fn init_consumer_pen(&mut self) {
-        let cbdata = self.cbdata;
-        if let Some(f) = self.consumer(|c| c.initpen) {
-            unsafe { f(cbdata) };
+        if let (Consumer::Foreign(foreign), ..) = self.consumer() {
+            let _ = foreign.initpen();
         }
     }
 
-    /// Resizes the consumer's screen, letting it move the cursor and swap in
-    /// its own line-mark arrays.
-    fn resize_consumer(&mut self, rows: c_int, cols: c_int) {
-        let mut fields = VTermStateFields {
-            pos: self.pos,
-            lineinfos: self.lineinfos,
-        };
-        let cbdata = self.cbdata;
-        let Some(f) = self.consumer(|c| c.resize) else {
-            return;
-        };
-        unsafe { f(rows, cols, &raw mut fields, cbdata) };
-        self.pos = fields.pos;
-        self.lineinfos = fields.lineinfos;
-    }
-
-    /// Reallocates the tab-stop vector for a new column count, keeping the
-    /// stops that survive and giving fresh columns the default stop every
-    /// eighth column.
-    fn resize_tabstops(&mut self, cols: c_int) {
-        let bytes = tabstop_bytes(cols);
-        let mut stops = Vec::with_capacity(bytes);
-        for byte in 0..bytes {
-            let mut bits = 0u8;
-            for bit in 0..8 {
-                let col = (byte as c_int) << 3 | bit;
-                // Columns the old screen had keep their stop; fresh ones get
-                // the default one every eighth column.
-                let stop = if col < self.cols {
-                    self.tabstops_mut()[byte] & 1 << bit != 0
-                } else {
-                    col % 8 == 0
-                };
-                bits |= u8::from(stop && col < cols) << bit;
+    /// Tells the consumer one attribute of the pen changed.
+    pub(super) fn report_pen(&mut self, attr: VTermAttr, val: Value<'_>) {
+        match self.consumer() {
+            (Consumer::Screen, Some(screen), _) => {
+                screen.set_pen_attr(attr, &val);
             }
-            stops.push(bits);
+            (Consumer::Foreign(foreign), ..) => {
+                let _ = foreign.setpenattr(attr, &val);
+            }
+            _ => {}
         }
-        // SAFETY: a fresh allocation of `bytes` bytes, filled from a vector
-        // of exactly that length, replacing the array it succeeds.
-        let fresh = unsafe { vterm_alloc(bytes) }.cast::<uint8_t>();
-        unsafe { fresh.copy_from_nonoverlapping(stops.as_ptr(), bytes) };
-        unsafe { vterm_dealloc(self.tabstops.cast::<c_void>()) };
-        self.tabstops = fresh;
+    }
+
+    /// Offers a terminal property to the consumer, which may refuse it.
+    /// Answers whether it was accepted; no consumer accepts everything.
+    fn offer_termprop(&mut self, prop: VTermProp, val: &Value<'_>) -> bool {
+        match self.consumer() {
+            (Consumer::Screen, Some(screen), _) => screen.set_termprop(prop, val) != 0,
+            (Consumer::Foreign(foreign), ..) => foreign.settermprop(prop, val) != Some(0),
+            _ => true,
+        }
+    }
+
+    /// Resizes the consumer's screen, letting it move the cursor and replace
+    /// the line-mark arrays.
+    fn resize_consumer(&mut self, rows: c_int, cols: c_int) {
+        let consumer = self.state.owned.consumer;
+        if let (Consumer::Screen, Some(screen)) = (consumer, self.screen.as_deref_mut()) {
+            let state = &mut *self.state;
+            screen.resize(rows, cols, &mut state.pos, &mut state.owned.lineinfos);
+            return;
+        }
+        // No screen to rebuild them, so the marks follow the new height here,
+        // keeping the rows that survive.
+        for lines in &mut self.state.owned.lineinfos {
+            lines.resize(rows.max(0) as usize, BLANK_LINE);
+        }
+        if let Consumer::Foreign(foreign) = consumer {
+            let [primary, altscreen] = &mut self.state.owned.lineinfos;
+            let mut fields = VTermStateFields {
+                pos: self.state.pos,
+                lineinfos: [primary.as_mut_ptr(), altscreen.as_mut_ptr()],
+            };
+            if foreign.resize(rows, cols, &mut fields).is_some() {
+                self.state.pos = fields.pos;
+            }
+        }
+    }
+
+    /// The parser's resize: the screen changed size underneath the state.
+    pub(crate) fn resize(&mut self, rows: c_int, cols: c_int) -> Option<c_int> {
+        let oldpos = self.pos;
+        if cols != self.cols {
+            self.resize_tabstops(cols);
+        }
+        self.rows = rows;
+        self.cols = cols;
+        if self.scrollregion_bottom > -1 {
+            self.scrollregion_bottom = self.scrollregion_bottom.min(rows);
+        }
+        if self.scrollregion_right > -1 {
+            self.scrollregion_right = self.scrollregion_right.min(cols);
+        }
+
+        self.resize_consumer(rows, cols);
+        self.follow_active_buffer();
+
+        if self.at_phantom != 0 && self.pos.col < cols - 1 {
+            self.at_phantom = 0;
+            self.pos.col += 1;
+        }
+        self.pos.row = self.pos.row.clamp(0, (rows - 1).max(0));
+        self.pos.col = self.pos.col.clamp(0, (cols - 1).max(0));
+        self.update_cursor(oldpos, true);
+        Some(1)
     }
 
     // -------------------------------------------------------------- the pen
 
-    /// Makes one of the changes to the pen that are echoed to the consumer's
-    /// raw `setpenattr` callback.
+    /// Makes one of the changes to the pen that are echoed to the consumer.
     pub(super) fn change_pen(&mut self, change: PenChange<'_>) {
         match change {
             PenChange::Sgr(args) => apply_sgr(self, args),
@@ -414,177 +708,32 @@ impl VTermState {
         }
     }
 
-    // -------------------------------------------------- the grapheme buffer
-
-    /// Appends `codepoint` to the pending grapheme at offset `at`, returning
-    /// how many bytes it took.
-    ///
-    /// Upstream guarded the buffer against a four-byte encoding but let a
-    /// six-byte one write past its end; anything that does not fit is dropped
-    /// here instead.
-    pub(super) fn append_grapheme(&mut self, at: usize, codepoint: u32) -> usize {
-        let mut encoded = [0u8; 8];
-        // Eight bytes, more than any encoding needs.
-        let len = encode_char(codepoint as c_int, &mut encoded);
-        let len = len.min(self.grapheme_buf.len() - at);
-        for (to, &from) in self.grapheme_buf[at..at + len].iter_mut().zip(&encoded) {
-            *to = from as c_char;
-        }
-        len
-    }
-
-    /// How many columns the first `len` bytes of the pending grapheme occupy,
-    /// and the handle the screen stores that grapheme under.
-    pub(super) fn grapheme_metrics(&self, len: usize) -> (c_int, ScreenChar) {
-        let bytes = self.grapheme_buf.map(c_char::cast_unsigned);
-        let cells = c_partial_cells_in(&bytes, 0, len);
-        (cells, schar_from_buf(&bytes[..len]))
-    }
-
     // --------------------------------------------------------- character sets
 
-    /// Designates slot `slot` (G0 to G3) to the 94-character set named by
-    /// `designator`. An unknown name leaves the slot alone.
-    pub(super) fn designate_charset(&mut self, slot: usize, designator: c_char) {
-        let enc = vterm_lookup_encoding(ENC_SINGLE_94, designator);
-        if !enc.is_null() {
-            self.encoding[slot].enc = enc;
-            self.init_encoding(slot);
-        }
-    }
-
-    /// Points every slot at the terminal's default set: UTF-8 when the
-    /// terminal decodes UTF-8, ASCII otherwise.
+    /// [`VTermState::reset_charsets`] for the terminal's own UTF-8 setting.
     pub(super) fn reset_charsets(&mut self) {
-        let default = if self.utf8() {
-            vterm_lookup_encoding(ENC_UTF8, b'u' as c_char)
-        } else {
-            vterm_lookup_encoding(ENC_SINGLE_94, b'B' as c_char)
-        };
-        for slot in 0..self.encoding.len() {
-            self.encoding[slot].enc = default;
-            self.init_encoding(slot);
-        }
-    }
-
-    /// Hands slot `slot` its per-instance decoder scratch to initialise.
-    fn init_encoding(&mut self, slot: usize) {
-        let enc = self.encoding[slot].enc;
-        let data = (&raw mut self.encoding[slot].data).cast::<c_void>();
-        // SAFETY: `enc` is one of the encoding module's static tables, and
-        // `data` is this slot's own inline scratch.
-        if let Some(init) = unsafe { (*enc).init } {
-            unsafe { init(enc, data) };
-        }
+        let utf8 = self.utf8();
+        self.state.reset_charsets(utf8);
     }
 
     // ------------------------------------------------------- terminal properties
 
-    fn set_termprop_value(&mut self, prop: VTermProp, mut val: VTermValue) -> bool {
-        // SAFETY: this state machine and a value of the arm `prop` calls for.
-        unsafe { vterm_state_set_termprop(self, prop, &raw mut val) != 0 }
-    }
-
     pub(super) fn set_termprop_bool(&mut self, prop: VTermProp, value: bool) -> bool {
-        let boolean = c_int::from(value);
-        self.set_termprop_value(prop, VTermValue { boolean })
+        self.set_termprop(prop, &Value::Bool(value))
     }
 
     pub(super) fn set_termprop_int(&mut self, prop: VTermProp, value: c_int) -> bool {
-        self.set_termprop_value(prop, VTermValue { number: value })
+        self.set_termprop(prop, &Value::Int(value))
     }
 
-    pub(super) fn set_termprop_string(&mut self, prop: VTermProp, s: VTermStringFragment) -> bool {
-        self.set_termprop_value(prop, VTermValue { string: s })
-    }
-
-    /// The bytes of a DECRQSS request gathered so far, NUL-terminated.
-    pub(super) fn decrqss(&self) -> [c_char; 4] {
-        // SAFETY: the union is four bytes of request or a selection's
-        // progress, both plain data, so either arm reads what was written to
-        // whichever of them the state is part-way through.
-        unsafe { self.tmp.decrqss }
-    }
-
-    pub(super) fn set_decrqss(&mut self, request: [c_char; 4]) {
-        self.tmp.decrqss = request;
-    }
-
-    // ------------------------------------------------------------- selection
-
-    /// Whether the consumer wants to hear about OSC 52 selection traffic.
-    pub(super) fn selection_enabled(&self) -> bool {
-        !self.selection.callbacks.is_null()
-    }
-
-    /// Whether the consumer will take a selection at all.
-    pub(super) fn selection_accepts_set(&self) -> bool {
-        self.selection_slot(|c| c.set).is_some()
-    }
-
-    /// How far the OSC 52 decoder has got. It shares its storage with the
-    /// DECRQSS request, so only one of the two can be part-way through.
-    pub(super) fn selection_progress(&self) -> VTermState_tmp_selection {
-        // SAFETY: as `decrqss` above.
-        unsafe { self.tmp.selection }
-    }
-
-    pub(super) fn set_selection_progress(&mut self, progress: VTermState_tmp_selection) {
-        self.tmp.selection = progress;
-    }
-
-    /// One slot of the consumer's selection table, read out for the reason
-    /// [`VTermState::consumer`] gives.
-    fn selection_slot<T>(
-        &self,
-        pick: impl FnOnce(&VTermSelectionCallbacks) -> Option<T>,
-    ) -> Option<T> {
-        // SAFETY: the consumer promised its table outlives its installation.
-        unsafe { self.selection.callbacks.as_ref() }.and_then(pick)
-    }
-
-    /// The staging buffer selection data is decoded into, one chunk at a time.
-    pub(super) fn selection_buffer_mut(&mut self) -> &mut [u8] {
-        if self.selection.buffer.is_null() {
-            return &mut [];
-        }
-        let (buf, len) = (self.selection.buffer.cast::<u8>(), self.selection.buflen);
-        // SAFETY: the buffer and its length are what the consumer installed,
-        // or what `vterm_state_set_selection_callbacks` allocated for it.
-        unsafe { slice::from_raw_parts_mut(buf, len) }
-    }
-
-    /// Hands on the first `len` bytes of the staging buffer, or ends the
-    /// selection with no content at all, which clears it.
-    pub(super) fn selection_set(
-        &mut self,
-        mask: VTermSelectionMask,
-        len: Option<usize>,
-        initial: bool,
-        last: bool,
-    ) {
-        let frag = match len {
-            Some(len) => selection::fragment(self.selection.buffer, len, initial, last),
-            None => selection::fragment(core::ptr::null(), 0, initial, true),
-        };
-        let user = self.selection.user;
-        if let Some(f) = self.selection_slot(|c| c.set) {
-            unsafe { f(mask, frag, user) };
-        }
-    }
-
-    /// Asks the consumer to report the current selection back to the host.
-    pub(super) fn selection_query(&mut self, mask: VTermSelectionMask) {
-        let user = self.selection.user;
-        if let Some(f) = self.selection_slot(|c| c.query) {
-            unsafe { f(mask, user) };
-        }
+    pub(super) fn set_termprop_string(&mut self, prop: VTermProp, s: Fragment<'_>) -> bool {
+        self.set_termprop(prop, &Value::Str(s))
     }
 
     // ------------------------------------------------------------- fallbacks
 
     /// `CSI I` / `CSI O`, the focus reports.
-    fn report_focus(&mut self, command: u8) {
+    pub(crate) fn report_focus(&mut self, command: u8) {
         if self.mode.report_focus() == 0 {
             return;
         }
@@ -592,28 +741,50 @@ impl VTermState {
         seq.push(command);
         self.reply(&seq);
     }
+
+    /// Runs `call` against the consumer's fallbacks with the state machine
+    /// in hand, if there are fallbacks; the table is out of the state while
+    /// it runs, so a fallback that reaches back into the state finds none.
+    pub(super) fn with_fallbacks<T>(
+        &mut self,
+        call: impl FnOnce(&mut dyn Fallbacks, &mut StateCx<'_>) -> Option<T>,
+    ) -> Option<T> {
+        let mut fallbacks = self.state.owned.fallbacks.take()?;
+        let answer = call(&mut *fallbacks, self);
+        self.state.owned.fallbacks = Some(fallbacks);
+        answer
+    }
 }
 
-/// A bare state machine for the sequence handlers' own tests: no terminal
-/// behind it and no consumer callbacks, with the caller supplying the two
-/// arrays that live outside the struct. Only handlers that stay clear of the
-/// terminal and the callbacks can be driven with one.
+impl ScrollTarget for ForeignState {
+    fn moverect(&mut self, dest: VTermRect, src: VTermRect) {
+        let _ = ForeignState::moverect(*self, dest, src);
+    }
+
+    fn erase(&mut self, rect: VTermRect) {
+        let _ = ForeignState::erase(*self, rect, 0);
+    }
+}
+
 #[cfg(test)]
-pub(super) fn test_state(
-    lineinfo: &mut [VTermLineInfo],
-    tabstops: &mut [u8],
-    cols: c_int,
-) -> VTermState {
-    let mut state: VTermState = unsafe { ::core::mem::zeroed() };
-    state.rows = lineinfo.len() as c_int;
-    state.cols = cols;
-    // Both arrays are borrowed exactly once: taking a second pointer out of
-    // the same reference would invalidate the first.
-    let marks = lineinfo.as_mut_ptr();
-    state.lineinfo = marks;
-    state.lineinfos = [marks; 2];
-    state.tabstops = tabstops.as_mut_ptr();
-    state.scrollregion_bottom = -1;
-    state.scrollregion_right = -1;
-    state
+pub(super) mod test_cx {
+    //! A bare state machine for the sequence handlers' own tests: no consumer
+    //! and nobody listening for replies.
+
+    use super::*;
+    use crate::types::VTerm;
+
+    /// Runs `body` against a state machine `rows` by `cols`.
+    pub(in crate::vterm) fn with_state(
+        rows: c_int,
+        cols: c_int,
+        body: impl FnOnce(&mut StateCx<'_>),
+    ) {
+        let mut vt = VTerm::new(rows, cols);
+        vt.obtain_state();
+        let mut cx = vt.state_cx().expect("a state machine was just made");
+        cx.scrollregion_bottom = -1;
+        cx.scrollregion_right = -1;
+        body(&mut cx);
+    }
 }

@@ -6,22 +6,17 @@
 //! how a reportable event is spelled, in whichever of the four protocols the
 //! host selected.
 //!
-//! The two entry points keep their C ABI — the unit specs call them through
-//! LuaJIT's FFI — but everything they call is safe and pointer-free.
+//! The two entry points are methods on [`VTerm`]; the unit specs reach them
+//! through the C entry points in [`super::abi`].
 //!
 //! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
 //! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `vterm/` row in docs/perimeter.md.
-// The exports here are metrics/abi-ledger.jsonl rows (`vterm_mouse_button`, `vterm_mouse_move`), and
-// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::types::{VTerm, VTermModifier, VTermState};
+use crate::types::{VTerm, VTermModifier};
 use crate::vterm::output::EscapeSeq;
-use crate::vterm::vterm::vterm_push_output_bytes;
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{c_int, c_uint};
 use core::fmt::Write;
 
 /// The host wants motion reported while a button is held.
@@ -131,98 +126,71 @@ fn button_code(button: c_int) -> Option<c_int> {
     }
 }
 
-/// Writes one mouse report back to the host, if the protocol could spell it.
-///
-/// # Safety
-///
-/// `vt` must point at a live terminal.
-unsafe fn send(vt: *mut VTerm, report: Option<EscapeSeq>) {
-    let Some(bytes) = report.as_ref().and_then(EscapeSeq::finish) else {
-        return;
-    };
-    // SAFETY: forwarded to this function's own caller; `bytes` outlives the
-    // call, which copies out of it.
-    unsafe { vterm_push_output_bytes(vt, bytes.as_ptr().cast::<c_char>(), bytes.len()) };
-}
-
-/// # Safety
-///
-/// `vt` must point at a live `VTerm`, unaliased for the call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vterm_mouse_move(
-    vt: *mut VTerm,
-    row: c_int,
-    col: c_int,
-    mod_0: VTermModifier,
-) {
-    // SAFETY: the caller hands over a live terminal that has a state.
-    let state: &mut VTermState = unsafe { &mut *(*vt).state };
-    if col == state.mouse_col && row == state.mouse_row {
-        return;
-    }
-    state.mouse_col = col;
-    state.mouse_row = row;
-
-    let dragging = state.mouse_flags & MOUSE_WANT_DRAG != 0 && state.mouse_buttons != 0;
-    if !dragging && state.mouse_flags & MOUSE_WANT_MOVE == 0 {
-        return;
-    }
-    let Some(code) = drag_code(state.mouse_buttons) else {
-        return;
-    };
-    // SAFETY: `vt` is that same live terminal.
-    let ctrl8bit = unsafe { (*vt).mode }.ctrl8bit() != 0;
-    let report = encode_mouse(state.mouse_protocol, ctrl8bit, code, true, mod_0, col, row);
-    // SAFETY: as above.
-    unsafe { send(vt, report) };
-}
-
-/// # Safety
-///
-/// `vt` must point at a live `VTerm`, unaliased for the call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vterm_mouse_button(
-    vt: *mut VTerm,
-    button: c_int,
-    pressed: bool,
-    mod_0: VTermModifier,
-) {
-    // SAFETY: the caller hands over a live terminal that has a state.
-    let state: &mut VTermState = unsafe { &mut *(*vt).state };
-    let old_buttons = state.mouse_buttons;
-    // The wheel (4-7) has no held state, so it never touches the mask.
-    if matches!(button, 1..=3 | 8..=11) {
-        let bit = 1 << (button - 1);
-        if pressed {
-            state.mouse_buttons |= bit;
-        } else {
-            state.mouse_buttons &= !bit;
+impl VTerm {
+    /// The pointer moved to `row`/`col`. Reported only if the host asked for
+    /// motion, or for drags and a button is held. Nothing happens before the
+    /// terminal has a state machine.
+    pub(crate) fn mouse_move(&mut self, row: c_int, col: c_int, mods: VTermModifier) {
+        let ctrl8bit = self.mode.ctrl8bit() != 0;
+        let Some(state) = self.inner.state.as_deref_mut() else {
+            return;
+        };
+        if col == state.mouse_col && row == state.mouse_row {
+            return;
         }
+        state.mouse_col = col;
+        state.mouse_row = row;
+
+        let dragging = state.mouse_flags & MOUSE_WANT_DRAG != 0 && state.mouse_buttons != 0;
+        if !dragging && state.mouse_flags & MOUSE_WANT_MOVE == 0 {
+            return;
+        }
+        let Some(code) = drag_code(state.mouse_buttons) else {
+            return;
+        };
+        let report = encode_mouse(state.mouse_protocol, ctrl8bit, code, true, mods, col, row);
+        self.send(report);
     }
-    // A press of an already-held button, or a release of one that wasn't
-    // held, is not an event — except for the wheel, whose every click is.
-    if state.mouse_buttons == old_buttons && !matches!(button, 4..=7) {
-        return;
+
+    /// Button `button` (1-based) was pressed or released where the pointer
+    /// last was.
+    pub(crate) fn mouse_button(&mut self, button: c_int, pressed: bool, mods: VTermModifier) {
+        let ctrl8bit = self.mode.ctrl8bit() != 0;
+        let Some(state) = self.inner.state.as_deref_mut() else {
+            return;
+        };
+        let old_buttons = state.mouse_buttons;
+        // The wheel (4-7) has no held state, so it never touches the mask.
+        if matches!(button, 1..=3 | 8..=11) {
+            let bit = 1 << (button - 1);
+            if pressed {
+                state.mouse_buttons |= bit;
+            } else {
+                state.mouse_buttons &= !bit;
+            }
+        }
+        // A press of an already-held button, or a release of one that wasn't
+        // held, is not an event — except for the wheel, whose every click is.
+        if state.mouse_buttons == old_buttons && !matches!(button, 4..=7) {
+            return;
+        }
+        if state.mouse_flags == 0 {
+            return;
+        }
+        let Some(code) = button_code(button) else {
+            return;
+        };
+        let report = encode_mouse(
+            state.mouse_protocol,
+            ctrl8bit,
+            code,
+            pressed,
+            mods,
+            state.mouse_col,
+            state.mouse_row,
+        );
+        self.send(report);
     }
-    if state.mouse_flags == 0 {
-        return;
-    }
-    let Some(code) = button_code(button) else {
-        return;
-    };
-    // SAFETY: `vt` is that same live terminal.
-    let ctrl8bit = unsafe { (*vt).mode }.ctrl8bit() != 0;
-    let report = encode_mouse(
-        state.mouse_protocol,
-        ctrl8bit,
-        code,
-        pressed,
-        mod_0,
-        state.mouse_col,
-        state.mouse_row,
-    );
-    // SAFETY: as above.
-    unsafe { send(vt, report) };
 }
 
 #[cfg(test)]

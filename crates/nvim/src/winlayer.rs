@@ -138,6 +138,7 @@ pub mod graph;
 mod grid;
 mod handles;
 mod live;
+mod terminal;
 mod walk;
 
 use crate::syntax::SynBlockRef;
@@ -148,6 +149,7 @@ pub use grid::GridRef;
 pub(crate) use grid::grid_of_view;
 
 pub use handles::BufId;
+pub(crate) use terminal::Term;
 
 pub(crate) use graph::forget_window;
 pub(crate) use handles::{

@@ -1,24 +1,21 @@
 //! Character-set decoders for the terminal emulator's text path.
 //!
-//! An encoding is a `VTermEncoding` vtable: `decode` pulls bytes off the
-//! parser's input and appends codepoints to a caller-owned array, keeping any
-//! partially decoded sequence in a small scratch area the caller supplies.
-//! The unit specs call those function pointers directly through LuaJIT's FFI,
-//! so the vtable and the C signatures behind it are fixed; the decoding itself
-//! is ordinary Rust.
+//! A decoder pulls bytes off the parser's input and appends codepoints to a
+//! caller-owned array, keeping any partially decoded sequence in a 16-byte
+//! scratch area the caller supplies. The unit specs reach the same decoders
+//! through `VTermEncoding` tables of C function pointers, which live with the
+//! rest of the C surface in [`super::abi`]; a state machine's slot names its
+//! set by which of those tables it holds.
 //!
 //! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
 //! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `vterm/` row in docs/perimeter.md.
-// The exports here are metrics/abi-ledger.jsonl rows (`vterm_lookup_encoding`), and
-// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::types::{VTermEncoding, VTermEncodingType, size_t, uint32_t};
-use core::ffi::{c_char, c_int, c_void};
-use core::slice;
+use crate::types::{VTermEncoding, VTermEncodingType, uint32_t};
+use crate::vterm::abi::{ENCODING_DEC_DRAWING, ENCODING_USASCII, ENCODING_UTF8};
+use core::ffi::c_int;
+use core::ptr::NonNull;
 
 pub const ENC_UTF8: VTermEncodingType = 0;
 pub const ENC_SINGLE_94: VTermEncodingType = 1;
@@ -32,9 +29,9 @@ const UNICODE_INVALID: u32 = 0xfffd;
 /// abandoned sequence, then the byte itself — and upstream did that without
 /// re-checking the bound, so a full array could be written one element past
 /// its end. Pushes here stop at capacity instead.
-struct Codepoints<'a> {
-    out: &'a mut [uint32_t],
-    len: usize,
+pub(crate) struct Codepoints<'a> {
+    pub(crate) out: &'a mut [uint32_t],
+    pub(crate) len: usize,
 }
 
 impl Codepoints<'_> {
@@ -64,6 +61,24 @@ struct Utf8Decoder {
 }
 
 impl Utf8Decoder {
+    /// The decoder a slot's scratch holds: three `int`s, as libvterm laid
+    /// them out.
+    fn load(data: &[u8; 16]) -> Self {
+        let int =
+            |at: usize| c_int::from_ne_bytes([data[at], data[at + 1], data[at + 2], data[at + 3]]);
+        Utf8Decoder {
+            bytes_remaining: int(0),
+            bytes_total: int(4),
+            this_cp: int(8),
+        }
+    }
+
+    fn store(&self, data: &mut [u8; 16]) {
+        data[0..4].copy_from_slice(&self.bytes_remaining.to_ne_bytes());
+        data[4..8].copy_from_slice(&self.bytes_total.to_ne_bytes());
+        data[8..12].copy_from_slice(&self.this_cp.to_ne_bytes());
+    }
+
     fn reset(&mut self) {
         self.bytes_remaining = 0;
         self.bytes_total = 0;
@@ -165,146 +180,75 @@ fn decode_single_94(
     }
 }
 
-/// Bridge the C `decode` ABI to a Rust decoder.
-///
-/// `scratch` is whatever the decoder keeps between calls; the vtable hands it
-/// over as an opaque pointer, so each shim names the type it stored there.
-#[allow(clippy::too_many_arguments)]
-fn decode_bridge<T>(
-    scratch: *mut c_void,
-    cp: *mut uint32_t,
-    cpi: *mut c_int,
-    cplen: c_int,
-    bytes: *const c_char,
-    pos: *mut size_t,
-    bytelen: size_t,
-    decode: impl FnOnce(&mut T, &[u8], &mut usize, &mut Codepoints),
-) {
-    // The caller of a `VTermEncoding::decode` promises `cp` points at `cplen`
-    // writable codepoints, `bytes` at `bytelen` readable ones, `cpi` and `pos`
-    // at live scalars, and `scratch` at the `T` the matching `init` set up
-    // (or, for the stateless decoders, at something layout-compatible). Each
-    // region below is one of those four promises.
-    //
-    // SAFETY: `cp` and `cplen` are the caller's output array.
-    let out = unsafe { slice::from_raw_parts_mut(cp, cplen.max(0) as usize) };
-    // SAFETY: `bytes` and `bytelen` are the caller's input run.
-    let input = unsafe { slice::from_raw_parts(bytes.cast::<u8>(), bytelen) };
-    // SAFETY: `scratch` holds the `T` this decoder stored there.
-    let state = unsafe { &mut *scratch.cast::<T>() };
-    // SAFETY: `cpi` and `pos` are the caller's live scalars.
-    let (len, mut at) = unsafe { ((*cpi).max(0) as usize, *pos) };
-
-    let mut sink = Codepoints { out, len };
-    decode(state, input, &mut at, &mut sink);
-
-    // SAFETY: as above -- the same two scalars, written back.
-    unsafe { (*cpi, *pos) = (sink.len as c_int, at) };
+/// The character sets a slot can hold.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub(crate) enum Charset {
+    Utf8,
+    UsAscii,
+    /// The DEC Special Graphics set.
+    DecDrawing,
 }
 
-extern "C" fn init_utf8(_enc: *mut VTermEncoding, scratch: *mut c_void) {
-    // SAFETY: `scratch` is the instance's inline data area, which is at least
-    // as large and as aligned as `Utf8Decoder`.
-    unsafe { &mut *scratch.cast::<Utf8Decoder>() }.reset();
+impl Charset {
+    /// The set `enc` is the table of. Every table a slot holds came from
+    /// [`lookup`], so it is one of the three.
+    pub(crate) fn of(enc: NonNull<VTermEncoding>) -> Self {
+        if enc == NonNull::from(&ENCODING_UTF8) {
+            Charset::Utf8
+        } else if enc == NonNull::from(&ENCODING_DEC_DRAWING) {
+            Charset::DecDrawing
+        } else {
+            Charset::UsAscii
+        }
+    }
+
+    /// Gives a slot's scratch its starting state.
+    pub(crate) fn init(self, data: &mut [u8; 16]) {
+        if self == Charset::Utf8 {
+            let mut decoder = Utf8Decoder::load(data);
+            decoder.reset();
+            decoder.store(data);
+        }
+    }
+
+    /// Decodes from `bytes[*pos..]` into `out`, from its `len` on, until
+    /// either runs out or a byte the parser owns is reached.
+    pub(crate) fn decode_into(
+        self,
+        data: &mut [u8; 16],
+        bytes: &[u8],
+        pos: &mut usize,
+        out: &mut Codepoints,
+    ) {
+        match self {
+            Charset::Utf8 => {
+                let mut decoder = Utf8Decoder::load(data);
+                decoder.decode(bytes, pos, out);
+                decoder.store(data);
+            }
+            Charset::UsAscii => decode_single_94(None, bytes, pos, out),
+            Charset::DecDrawing => decode_single_94(Some(&DEC_DRAWING), bytes, pos, out),
+        }
+    }
+
+    /// Decodes a run of `bytes` into `out`, answering how many codepoints it
+    /// wrote and how many bytes it consumed.
+    pub(crate) fn decode(
+        self,
+        data: &mut [u8; 16],
+        bytes: &[u8],
+        out: &mut [u32],
+    ) -> (usize, usize) {
+        let mut sink = Codepoints { out, len: 0 };
+        let mut pos = 0;
+        self.decode_into(data, bytes, &mut pos, &mut sink);
+        (sink.len, pos)
+    }
 }
-
-extern "C" fn decode_utf8(
-    _enc: *mut VTermEncoding,
-    scratch: *mut c_void,
-    cp: *mut uint32_t,
-    cpi: *mut c_int,
-    cplen: c_int,
-    bytes: *const c_char,
-    pos: *mut size_t,
-    bytelen: size_t,
-) {
-    decode_bridge(
-        scratch,
-        cp,
-        cpi,
-        cplen,
-        bytes,
-        pos,
-        bytelen,
-        Utf8Decoder::decode,
-    );
-}
-
-extern "C" fn decode_usascii(
-    _enc: *mut VTermEncoding,
-    scratch: *mut c_void,
-    cp: *mut uint32_t,
-    cpi: *mut c_int,
-    cplen: c_int,
-    bytes: *const c_char,
-    pos: *mut size_t,
-    bytelen: size_t,
-) {
-    decode_bridge(
-        scratch,
-        cp,
-        cpi,
-        cplen,
-        bytes,
-        pos,
-        bytelen,
-        |_: &mut (), bytes, pos, out| decode_single_94(None, bytes, pos, out),
-    );
-}
-
-/// A `VTermEncoding` whose translation table follows it inline, so that
-/// `decode_table` can recover the table from the vtable pointer it is given.
-#[repr(C)]
-struct TableEncoding {
-    enc: VTermEncoding,
-    chars: [uint32_t; 128],
-}
-
-extern "C" fn decode_table(
-    enc: *mut VTermEncoding,
-    _scratch: *mut c_void,
-    cp: *mut uint32_t,
-    cpi: *mut c_int,
-    cplen: c_int,
-    bytes: *const c_char,
-    pos: *mut size_t,
-    bytelen: size_t,
-) {
-    // The table travels with the vtable, not in the instance data, so the
-    // bridge's "scratch" for this decoder is the vtable itself.
-    decode_bridge(
-        enc.cast::<c_void>(),
-        cp,
-        cpi,
-        cplen,
-        bytes,
-        pos,
-        bytelen,
-        |table: &mut TableEncoding, bytes, pos, out| {
-            decode_single_94(Some(&table.chars), bytes, pos, out)
-        },
-    );
-}
-
-static ENCODING_UTF8: VTermEncoding = VTermEncoding {
-    init: Some(init_utf8),
-    decode: Some(decode_utf8),
-};
-
-static ENCODING_USASCII: VTermEncoding = VTermEncoding {
-    init: None,
-    decode: Some(decode_usascii),
-};
 
 /// The DEC Special Graphics set: box drawing and a handful of symbols mapped
 /// over the printable ASCII positions from `` ` `` onwards.
-static ENCODING_DEC_DRAWING: TableEncoding = TableEncoding {
-    enc: VTermEncoding {
-        init: None,
-        decode: Some(decode_table),
-    },
-    chars: dec_drawing_chars(),
-};
+static DEC_DRAWING: [uint32_t; 128] = dec_drawing_chars();
 
 const fn dec_drawing_chars() -> [uint32_t; 128] {
     let mut chars = [0; 128];
@@ -322,19 +266,18 @@ const fn dec_drawing_chars() -> [uint32_t; 128] {
     chars
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn vterm_lookup_encoding(
-    type_0: VTermEncodingType,
-    designation: c_char,
-) -> *mut VTermEncoding {
-    match (type_0, designation as u8) {
-        (ENC_UTF8, b'u') => (&raw const ENCODING_UTF8).cast_mut(),
-        (ENC_SINGLE_94, b'0') => (&raw const ENCODING_DEC_DRAWING)
-            .cast::<VTermEncoding>()
-            .cast_mut(),
-        (ENC_SINGLE_94, b'B') => (&raw const ENCODING_USASCII).cast_mut(),
-        _ => core::ptr::null_mut(),
-    }
+/// The table of the set `designation` names, among those of kind `type_0`.
+///
+/// The table is a static nothing writes; C is handed it as the non-`const`
+/// pointer libvterm declared.
+pub(crate) fn lookup(type_0: VTermEncodingType, designation: u8) -> Option<NonNull<VTermEncoding>> {
+    let table = match (type_0, designation) {
+        (ENC_UTF8, b'u') => &ENCODING_UTF8,
+        (ENC_SINGLE_94, b'0') => &ENCODING_DEC_DRAWING,
+        (ENC_SINGLE_94, b'B') => &ENCODING_USASCII,
+        _ => return None,
+    };
+    Some(NonNull::from(table))
 }
 
 #[cfg(test)]
@@ -486,11 +429,17 @@ mod tests {
 
     #[test]
     fn lookup_rejects_unknown_designations() {
-        assert!(!vterm_lookup_encoding(ENC_UTF8, b'u' as c_char).is_null());
-        assert!(!vterm_lookup_encoding(ENC_SINGLE_94, b'0' as c_char).is_null());
-        assert!(!vterm_lookup_encoding(ENC_SINGLE_94, b'B' as c_char).is_null());
-        assert!(vterm_lookup_encoding(ENC_UTF8, b'0' as c_char).is_null());
-        assert!(vterm_lookup_encoding(ENC_SINGLE_94, b'u' as c_char).is_null());
-        assert!(vterm_lookup_encoding(ENC_SINGLE_94, 0).is_null());
+        assert_eq!(lookup(ENC_UTF8, b'u').map(Charset::of), Some(Charset::Utf8));
+        assert_eq!(
+            lookup(ENC_SINGLE_94, b'0').map(Charset::of),
+            Some(Charset::DecDrawing)
+        );
+        assert_eq!(
+            lookup(ENC_SINGLE_94, b'B').map(Charset::of),
+            Some(Charset::UsAscii)
+        );
+        assert!(lookup(ENC_UTF8, b'0').is_none());
+        assert!(lookup(ENC_SINGLE_94, b'u').is_none());
+        assert!(lookup(ENC_SINGLE_94, 0).is_none());
     }
 }

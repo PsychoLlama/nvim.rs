@@ -19,12 +19,13 @@
 use core::ffi::{c_int, c_long};
 use core::fmt::Write;
 
-use crate::types::{VTermRect, VTermState};
+use crate::types::VTermRect;
+use crate::vterm::abi::vterm_primary_device_attr;
 use crate::vterm::geometry::{DHL_OFF, DWL_OFF};
 use crate::vterm::mode;
 use crate::vterm::output::EscapeSeq;
 use crate::vterm::pen::{CSI_ARG_MASK, CSI_ARG_MISSING};
-use crate::vterm::state::{PenChange, vterm_primary_device_attr};
+use crate::vterm::state::{PenChange, StateCx};
 use crate::vterm::vterm::{
     VTERM_PROP_CURSORBLINK, VTERM_PROP_CURSORSHAPE, VTERM_PROP_CURSORSHAPE_BAR_LEFT,
     VTERM_PROP_CURSORSHAPE_BLOCK, VTERM_PROP_CURSORSHAPE_UNDERLINE,
@@ -64,7 +65,7 @@ fn repeat(args: &[c_long], n: usize) -> c_int {
 
 /// Acts on one control sequence.
 pub(super) fn dispatch(
-    state: &mut VTermState,
+    state: &mut StateCx<'_>,
     leader: [u8; 2],
     args: &[c_long],
     intermed: [u8; 2],
@@ -248,7 +249,10 @@ pub(super) fn dispatch(
             // TBC - ECMA-48 8.3.154. Line tab stops are not modelled, so the
             // three parameters that clear them do nothing.
             match param_or(args, 0, 0) {
-                0 => state.clear_tabstop(state.pos.col),
+                0 => {
+                    let col = state.pos.col;
+                    state.clear_tabstop(col);
+                }
                 3 | 5 => {
                     for col in 0..state.cols {
                         state.clear_tabstop(col);
@@ -355,7 +359,7 @@ pub(super) fn dispatch(
 }
 
 /// Pulls the cursor back inside its bounds and reports the move.
-fn finish(state: &mut VTermState, oldpos: crate::types::VTermPos, cancel: bool) -> Outcome {
+fn finish(state: &mut StateCx<'_>, oldpos: crate::types::VTermPos, cancel: bool) -> Outcome {
     state.clamp_cursor();
     state.update_cursor(oldpos, cancel);
     Outcome::Handled
@@ -364,14 +368,14 @@ fn finish(state: &mut VTermState, oldpos: crate::types::VTermPos, cancel: bool) 
 /// Moves the cursor relatively. A host may name a distance far larger than
 /// the screen, so the arithmetic wraps rather than trapping; the caller pulls
 /// the cursor back inside afterwards.
-fn cursor_by(state: &mut VTermState, rows: c_int, cols: c_int) {
+fn cursor_by(state: &mut StateCx<'_>, rows: c_int, cols: c_int) {
     state.pos.row = state.pos.row.wrapping_add(rows);
     state.pos.col = state.pos.col.wrapping_add(cols);
     state.at_phantom = 0;
 }
 
 /// `IL` and `DL`: open or close whole lines at the cursor.
-fn scroll_region_by(state: &mut VTermState, downward: c_int) {
+fn scroll_region_by(state: &mut StateCx<'_>, downward: c_int) {
     if !state.cursor_in_scroll_region() {
         return;
     }
@@ -386,7 +390,7 @@ fn scroll_region_by(state: &mut VTermState, downward: c_int) {
 
 /// `ED` / `DECSED`. Reports whether the sequence is already complete, which
 /// only happens when the consumer swallowed a scrollback clear.
-fn erase_display(state: &mut VTermState, args: &[c_long], selective: bool) -> bool {
+fn erase_display(state: &mut StateCx<'_>, args: &[c_long], selective: bool) -> bool {
     let (rows, cols) = (state.rows, state.cols);
     match param(args, 0) {
         // Below the cursor: the rest of its line, then everything under it.
@@ -456,7 +460,7 @@ fn erase_display(state: &mut VTermState, args: &[c_long], selective: bool) -> bo
 }
 
 /// `REP`: print the last glyph again, `count` more times.
-fn repeat_glyph(state: &mut VTermState, count: c_int, cancel_phantom: &mut bool) {
+fn repeat_glyph(state: &mut StateCx<'_>, count: c_int, cancel_phantom: &mut bool) {
     let row_width = state.cursor_row_width();
     let last_col = state.pos.col.wrapping_add(count).min(row_width);
     let (_, schar) = state.grapheme_metrics(state.grapheme_len);
@@ -478,7 +482,7 @@ fn repeat_glyph(state: &mut VTermState, count: c_int, cancel_phantom: &mut bool)
 }
 
 /// `DSR` / `DECDSR`: the status and cursor-position reports.
-fn device_status(state: &mut VTermState, request: c_int, leader: u8) {
+fn device_status(state: &mut StateCx<'_>, request: c_int, leader: u8) {
     let private = leader == b'?';
     let mut seq = EscapeSeq::csi(state.ctrl8bit());
     match request {
@@ -509,7 +513,7 @@ fn device_status(state: &mut VTermState, request: c_int, leader: u8) {
 }
 
 /// `DECSTBM`: the top and bottom margins, which also homes the cursor.
-fn set_vertical_margins(state: &mut VTermState, args: &[c_long]) {
+fn set_vertical_margins(state: &mut StateCx<'_>, args: &[c_long]) {
     state.scrollregion_top = (param_or(args, 0, 1) - 1).max(0).min(state.rows);
     state.scrollregion_bottom = match param(args, 1) {
         Some(bottom) if args.len() >= 2 => bottom.max(-1),
@@ -530,7 +534,7 @@ fn set_vertical_margins(state: &mut VTermState, args: &[c_long]) {
 
 /// `DECSLRM`: the left and right margins. They are always accepted, but only
 /// take effect once DECVSSM turns margin mode on.
-fn set_horizontal_margins(state: &mut VTermState, args: &[c_long]) {
+fn set_horizontal_margins(state: &mut StateCx<'_>, args: &[c_long]) {
     state.scrollregion_left = (param_or(args, 0, 1) - 1).max(0).min(state.cols);
     state.scrollregion_right = match param(args, 1) {
         Some(right) if args.len() >= 2 => right.max(-1),
@@ -549,7 +553,7 @@ fn set_horizontal_margins(state: &mut VTermState, args: &[c_long]) {
 }
 
 /// Setting either pair of margins puts the cursor back at the origin.
-fn home_cursor(state: &mut VTermState) {
+fn home_cursor(state: &mut StateCx<'_>) {
     state.pos.row = 0;
     state.pos.col = 0;
     if state.mode.origin() != 0 {

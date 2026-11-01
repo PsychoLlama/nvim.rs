@@ -17,9 +17,7 @@
 //! characters `'termpastefilter'` names, so that pasting a file containing
 //! an escape sequence cannot drive the emulator.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `terminal/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -38,11 +36,6 @@ use crate::options::{
     kOptTpfFlagHT,
 };
 use crate::types::{VTermKey, VTermModifier};
-use crate::vterm::keyboard::{
-    vterm_keyboard_end_paste, vterm_keyboard_key, vterm_keyboard_start_paste,
-    vterm_keyboard_unichar,
-};
-use crate::vterm::mouse::{vterm_mouse_button, vterm_mouse_move};
 use crate::winlayer::graph::switch_to;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
@@ -222,19 +215,16 @@ fn convert_key(key: &mut c_int, mods: ModMask, state: &mut VTermModifier) -> VTe
 ///
 /// A keycode with no vterm name is a codepoint, unless it is negative — one
 /// of the extras vterm has no equivalent for, which is simply dropped.
-pub(super) fn terminal_send_key(term: Term, c: c_int) {
+pub(super) fn terminal_send_key(mut term: Term, c: c_int) {
     let mut state = VTERM_MOD_NONE;
     // The editor spells NUL as an extra so it survives being a C string;
     // vterm wants the control character back.
     let mut key = if c == Key::Zero.code() { Ctrl_AT } else { c };
     let named = convert_key(&mut key, mod_mask.get(), &mut state);
-    let vt = term.vt;
     if named != VTERM_KEY_NONE {
-        // SAFETY: the terminal's own emulator.
-        unsafe { vterm_keyboard_key(vt, named, state) };
+        term.vt.keyboard_key(named, state);
     } else if key >= 0 {
-        // SAFETY: as above.
-        unsafe { vterm_keyboard_unichar(vt, key as u32, state) };
+        term.vt.keyboard_unichar(key as u32, state);
     }
 }
 
@@ -259,19 +249,14 @@ fn is_filter_char(c: c_int) -> bool {
 /// call, so the child of `buffer`'s terminal, if it has one, sees one paste
 /// rather than several.
 pub(crate) fn buf_terminal_set_streamed_paste(buffer: Buf, streamed: bool) {
-    if buffer.terminal.is_null() {
+    let Some(mut term) = buffer.terminal_handle() else {
         return;
-    }
-    // SAFETY: a live buffer's own terminal.
-    let mut term = unsafe { Term::new(buffer.terminal) };
+    };
     if term.streamed_paste != streamed {
-        let vt = term.vt;
         if streamed {
-            // SAFETY: a live emulator.
-            unsafe { vterm_keyboard_start_paste(vt) };
+            term.vt.keyboard_start_paste();
         } else {
-            // SAFETY: as above.
-            unsafe { vterm_keyboard_end_paste(vt) };
+            term.vt.keyboard_end_paste();
         }
     }
     term.streamed_paste = streamed;
@@ -285,13 +270,13 @@ pub(crate) fn terminal_paste(lines: &[XString], count: c_int) {
     if lines.is_empty() {
         return;
     }
-    // SAFETY: `curbuf` is set from startup to exit, and a paste only
-    // reaches here while it has a terminal.
-    let term = unsafe { Term::new(Buf::current().terminal) };
-    let (bracket, vt) = (!term.streamed_paste, term.vt);
+    // A paste only reaches here while the current buffer has a terminal.
+    let mut term = Buf::current()
+        .terminal_handle()
+        .expect("a paste into a terminal buffer");
+    let bracket = !term.streamed_paste;
     if bracket {
-        // SAFETY: the terminal's own emulator.
-        unsafe { vterm_keyboard_start_paste(vt) };
+        term.vt.keyboard_start_paste();
     }
     let mut filtered: Vec<u8> = Vec::new();
     for _ in 0..count {
@@ -314,8 +299,7 @@ pub(crate) fn terminal_paste(lines: &[XString], count: c_int) {
         }
     }
     if bracket {
-        // SAFETY: the terminal's own emulator.
-        unsafe { vterm_keyboard_end_paste(vt) };
+        term.vt.keyboard_end_paste();
     }
 }
 
@@ -388,7 +372,7 @@ fn scroll_window(mouse_win: Win, key: c_int, direction: c_int) {
 /// the child gets the event, the editor scrolls the window under the
 /// pointer, or the event is pushed back for normal-mode processing (which
 /// is what makes clicking out of a terminal work).
-pub(super) fn send_mouse_event(term: Term, c: c_int) -> bool {
+pub(super) fn send_mouse_event(mut term: Term, c: c_int) -> bool {
     let mut pos = MousePos::current();
     let mouse_win = find_win_inner(&mut pos);
     let MousePos { grid, row, col } = pos;
@@ -411,12 +395,9 @@ pub(super) fn send_mouse_event(term: Term, c: c_int) -> bool {
             };
             let mut state = VTERM_MOD_NONE;
             convert_modifiers(&mut { c }, mod_mask.get(), &mut state);
-            let vt = term.vt;
-            // SAFETY: the terminal's own emulator.
-            unsafe { vterm_mouse_move(vt, row, col - offset, state) };
+            term.vt.mouse_move(row, col - offset, state);
             if button != 0 {
-                // SAFETY: as above.
-                unsafe { vterm_mouse_button(vt, button, pressed, state) };
+                term.vt.mouse_button(button, pressed, state);
             }
             return false;
         }

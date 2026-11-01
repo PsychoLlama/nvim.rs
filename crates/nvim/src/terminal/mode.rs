@@ -20,9 +20,7 @@
 //! `CTRL-\ CTRL-O` leaves for a single command. Both are recognised here
 //! rather than being sent to the child.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `terminal/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -50,11 +48,9 @@ use crate::state::{
 use crate::types::AutoEvent;
 use crate::types::{ColNr, LineNr, OptInt, Pos, WinOpt, uint8_t};
 use crate::ui::{ui_busy_stop, ui_cursor_shape, ui_flush};
-use crate::vterm::state::entry::{vterm_state_focus_in, vterm_state_focus_out};
 use crate::window::{may_trigger_win_scrolled_resized, win_valid};
 use crate::winlayer::{Buf, Win, WinId};
 use core::ffi::c_int;
-use core::ops::{Deref, DerefMut};
 
 use super::input::{is_mouse_key, send_mouse_event, terminal_send_key};
 use super::refresh::{
@@ -117,45 +113,6 @@ impl TerminalState {
     }
 }
 
-/// One terminal-mode session the caller has promised is live.
-///
-/// The editor's state loop holds the session and hands it back to
-/// [`terminal_check`] and [`terminal_execute`], and everything either of
-/// those reaches can run Vimscript that comes back through them — so the
-/// pointer stays raw and `TerminalSession` is [`Copy`], exactly as [`Term`]
-/// is for the terminal. Every borrow it produces lives for one expression.
-/// Only [`terminal_enter`] makes one, of its own frame's state, and the
-/// state loop it hands it to returns before that frame does.
-#[derive(Clone, Copy)]
-pub(crate) struct TerminalSession(*mut TerminalState);
-
-impl Deref for TerminalSession {
-    type Target = TerminalState;
-
-    #[inline(always)]
-    fn deref(&self) -> &TerminalState {
-        // SAFETY: `TerminalSession::new`'s promise — the session is live.
-        unsafe { &*self.0 }
-    }
-}
-
-impl DerefMut for TerminalSession {
-    #[inline(always)]
-    fn deref_mut(&mut self) -> &mut TerminalState {
-        // SAFETY: as above.
-        unsafe { &mut *self.0 }
-    }
-}
-
-impl TerminalSession {
-    /// # Safety
-    /// `s` must stay a live session for as long as the value is used.
-    #[inline(always)]
-    const unsafe fn new(s: *mut TerminalState) -> Self {
-        Self(s)
-    }
-}
-
 /// The window the editor is working in.
 fn current_win() -> Win {
     Win::current()
@@ -168,15 +125,8 @@ fn current_buf() -> Buf {
 
 /// Tell the child whether it has focus, so it can show its own cursor
 /// accordingly.
-fn terminal_focus(term: Term, focus: bool) {
-    let state = term.state();
-    if focus {
-        // SAFETY: the emulator's own state machine.
-        unsafe { vterm_state_focus_in(state.0) };
-    } else {
-        // SAFETY: as above.
-        unsafe { vterm_state_focus_out(state.0) };
-    }
+fn terminal_focus(mut term: Term, focus: bool) {
+    term.vt.focus(focus);
 }
 
 /// Force the current window's options to what a terminal needs, saving what
@@ -185,7 +135,7 @@ fn terminal_focus(term: Term, focus: bool) {
 /// `'cursorline'` survives only as `'culopt'=number`, which highlights the
 /// number column and leaves the child's own colours alone; everything else
 /// that would draw over the child's output is turned off.
-fn set_terminal_winopts(mut s: TerminalSession) {
+fn set_terminal_winopts(s: &mut TerminalState) {
     assert!(
         s.save_curwin.is_none(),
         "terminal window options saved twice"
@@ -232,48 +182,54 @@ fn set_terminal_winopts(mut s: TerminalSession) {
 /// rather than the window's live set. If neither can be found there is
 /// nothing to restore but the saved `'culopt'` string, which is freed
 /// either way.
-fn unset_terminal_winopts(mut s: TerminalSession) {
+fn unset_terminal_winopts(s: &mut TerminalState) {
     assert!(
         s.save_curwin.is_some(),
         "terminal window options restored without being saved"
     );
-    if let Some(winopts) = saved_winopts(s) {
-        // SAFETY: either a live window's own option set, or the copy the
-        // terminal's buffer kept of it.
-        let winopts = unsafe { &mut *winopts };
-        if s.save_w_p_culopt.is_some() {
-            winopts.wo_culopt = s.save_w_p_culopt.take();
-        }
-        winopts.wo_cul = s.save_w_p_cul as c_int;
-        winopts.wo_cuc = s.save_w_p_cuc;
-        winopts.wo_so = s.save_w_p_so;
-        winopts.wo_siso = s.save_w_p_siso;
-    }
+    restore_saved_winopts(s);
     s.save_w_p_culopt = None;
     s.save_curwin = None;
 }
 
-/// Where [`unset_terminal_winopts`] should write, redrawing the window on
-/// the way if it is still showing the terminal.
-fn saved_winopts(s: TerminalSession) -> Option<*mut WinOpt> {
-    let mut wp = s.save_curwin?.get()?;
+/// Writes the saved options back into `winopts`.
+fn put_back_winopts(s: &mut TerminalState, winopts: &mut WinOpt) {
+    if s.save_w_p_culopt.is_some() {
+        winopts.wo_culopt = s.save_w_p_culopt.take();
+    }
+    winopts.wo_cul = s.save_w_p_cul as c_int;
+    winopts.wo_cuc = s.save_w_p_cuc;
+    winopts.wo_so = s.save_w_p_so;
+    winopts.wo_siso = s.save_w_p_siso;
+}
+
+/// Puts back the options [`set_terminal_winopts`] changed: into the window
+/// if it still shows the terminal, redrawing it on the way, or into the copy
+/// the terminal's buffer kept of them if the window moved on. Does nothing
+/// if neither can be found.
+fn restore_saved_winopts(s: &mut TerminalState) {
+    let Some(mut wp) = s.save_curwin.and_then(WinId::get) else {
+        return;
+    };
     if wp.buffer().handle != s.term.buf_handle {
         // The window went elsewhere; the terminal's buffer kept a copy of
         // the options this window had while it was showing it.
-        let buf = s.term.buf()?;
-        let mut buf = buf;
+        let Some(mut buf) = super::term_buf(s.term) else {
+            return;
+        };
         for wip in buf.b_wininfo.iter_mut() {
             if wip.wi_win == Some(wp.id()) && wip.wi_optset {
-                return Some(&raw mut wip.wi_opt);
+                put_back_winopts(s, &mut wip.wi_opt);
+                return;
             }
         }
-        return None;
+        return;
     }
 
     // Not `Win::valid`: `wp` came out of the registry just above, so it is
     // registered by construction. What is asked here is the *layout*
     // question — is it still on this tab page's window list — which stays a
-    // list walk. SAFETY: the pointer is only compared.
+    // list walk.
     if win_valid(wp.id()) {
         if s.save_w_p_cuc != wp.w_onebuf_opt.wo_cuc {
             wp.redraw_later(UPD_SOME_VALID);
@@ -284,8 +240,7 @@ fn saved_winopts(s: TerminalSession) -> Option<*mut WinOpt> {
         }
     }
     wp.w_p_culopt_flags = s.save_w_p_culopt_flags;
-    // SAFETY: a live window's own option set.
-    Some(unsafe { &raw mut (*wp.raw()).w_onebuf_opt })
+    put_back_winopts(s, &mut wp.w_onebuf_opt);
 }
 
 /// Run terminal mode for the current buffer's terminal until the user
@@ -295,16 +250,11 @@ fn saved_winopts(s: TerminalSession) -> Option<*mut WinOpt> {
 /// into a single normal-mode command before coming back.
 pub(crate) fn terminal_enter() -> bool {
     let buf = current_buf();
-    assert!(
-        !buf.terminal.is_null(),
-        "terminal mode entered on a buffer with no terminal"
-    );
-    // SAFETY: the current buffer's own terminal, which the assertion above
-    // says is there.
-    let mut session = TerminalState::new(unsafe { Term::new(buf.terminal) });
-    // SAFETY: the session outlives every use below — the state stack is
-    // left before this frame is.
-    let mut s = unsafe { TerminalSession::new(&raw mut session) };
+    let term = buf
+        .terminal_handle()
+        .expect("terminal mode entered on a buffer with no terminal");
+    let mut session = TerminalState::new(term);
+    let s = &mut session;
 
     stop_insert_mode.set(false);
     terminal_check_size(s.term);
@@ -424,7 +374,7 @@ pub(super) fn terminal_check_cursor(term: Term) {
 ///
 /// Returns false once the current buffer has no terminal at all, which is
 /// how the mode loop learns to stop.
-fn terminal_check_focus(mut s: TerminalSession) -> bool {
+fn terminal_check_focus(s: &mut TerminalState) -> bool {
     if current_buf().terminal.is_null() {
         return false;
     }
@@ -444,8 +394,9 @@ fn terminal_check_focus(mut s: TerminalSession) -> bool {
             close_cb.expect("non-null function pointer")(owner);
             s.close = false;
         }
-        // SAFETY: the terminal of the buffer the user moved to.
-        s.term = unsafe { Term::new(current_buf().terminal) };
+        s.term = current_buf()
+            .terminal_handle()
+            .expect("checked to be a terminal buffer above");
         s.term.pending.cursor = true;
         invalidate_terminal(s.term, None);
         terminal_focus(s.term, true);
@@ -455,7 +406,7 @@ fn terminal_check_focus(mut s: TerminalSession) -> bool {
 
 /// The mode loop's per-iteration work: refresh, redraw, and place the
 /// cursor. Returning zero leaves terminal mode.
-pub(crate) fn terminal_check(mut s: TerminalSession) -> c_int {
+pub(crate) fn terminal_check(s: &mut TerminalState) -> c_int {
     debug_assert!(
         !s.close || (s.term.buf_handle == 0 && s.term.raw() != current_buf().terminal),
         "a terminal marked closed is still the current buffer's"
@@ -514,7 +465,7 @@ pub(crate) fn terminal_check(mut s: TerminalSession) -> c_int {
 }
 
 /// Dispatch one key. Returning zero leaves terminal mode.
-pub(crate) fn terminal_execute(mut s: TerminalSession, key: c_int) -> c_int {
+pub(crate) fn terminal_execute(s: &mut TerminalState, key: c_int) -> c_int {
     // `merge_modifiers` folds a pending modifier into the key so that e.g.
     // `<C-\>` is one code to compare against.
     let mut mods = mod_mask.get();

@@ -61,22 +61,16 @@ crate::bitfield_accessors! {
         19..=20 => dhl, set_dhl: ::core::ffi::c_uint;
     }
 }
-#[derive(Copy, Clone)]
+/// A terminal. What C reads of it -- the size, the mode bits and the parser
+/// block, through the unit fixtures and the battery's own declaration -- keeps
+/// libvterm's layout; everything else it owns is Rust's, behind `inner`.
 #[repr(C)]
 pub struct VTerm {
     pub rows: ::core::ffi::c_int,
     pub cols: ::core::ffi::c_int,
     pub mode: VTerm_mode,
     pub parser: VTerm_parser,
-    pub outfunc: Option<VTermOutputCallback>,
-    pub outdata: *mut ::core::ffi::c_void,
-    pub outbuffer: *mut ::core::ffi::c_char,
-    pub outbuffer_len: size_t,
-    pub outbuffer_cur: size_t,
-    pub tmpbuffer: *mut ::core::ffi::c_char,
-    pub tmpbuffer_len: size_t,
-    pub state: *mut VTermState,
-    pub screen: *mut VTermScreen,
+    pub(crate) inner: Box<crate::vterm::vterm::VTermInner>,
 }
 pub type VTermAttr = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
@@ -204,10 +198,17 @@ pub struct VTermRect {
     pub start_col: ::core::ffi::c_int,
     pub end_col: ::core::ffi::c_int,
 }
+/// A terminal's screen. The C side reads the fields up to `reflow`; the cell
+/// grids and the host's callbacks are owned behind `owned`.
 #[repr(C)]
 pub struct VTermScreen {
+    /// The terminal this screen belongs to. Only the C entry points read it,
+    /// to get from a screen pointer back to the terminal that owns it.
     pub vt: *mut VTerm,
+    /// The terminal's state machine, for a C reader; the screen itself is
+    /// handed what it needs of the state by the call that reaches it.
     pub state: *mut VTermState,
+    /// The callback table a C host installed, as C sees it.
     pub callbacks: *const VTermScreenCallbacks,
     pub cbdata: *mut ::core::ffi::c_void,
     pub damage_merge: VTermDamageSize,
@@ -219,9 +220,7 @@ pub struct VTermScreen {
     pub cols: ::core::ffi::c_int,
     pub global_reverse_reflow: [u8; 1],
     pub _pad: [u8; 3],
-    pub buffers: [*mut ScreenCell; 2],
-    pub buffer: *mut ScreenCell,
-    pub sb_buffer: *mut VTermScreenCell,
+    pub(crate) owned: Box<crate::vterm::screen::ScreenOwned>,
     pub pen: ScreenPen,
 }
 crate::bitfield_accessors! {
@@ -335,9 +334,17 @@ pub struct VTermSelectionCallbacks {
     >,
 }
 pub type VTermSelectionMask = ::core::ffi::c_uint;
+/// The state machine. Its layout is libvterm's, field for field, because the
+/// unit fixture and the battery read nearly all of it from C; what it owns
+/// (the tab stops, the line marks, the selection buffer and the Rust
+/// callbacks) lives behind `owned`, in the slot the tab-stop pointer had.
 #[repr(C)]
 pub struct VTermState {
+    /// The terminal this state belongs to. Only the C entry points read it,
+    /// to get from a state pointer back to the terminal that owns it.
     pub vt: *mut VTerm,
+    /// The callback and fallback tables a C consumer installed, as C sees
+    /// them.
     pub callbacks: *const VTermStateCallbacks,
     pub cbdata: *mut ::core::ffi::c_void,
     pub fallbacks: *const VTermStateFallbacks,
@@ -350,9 +357,11 @@ pub struct VTermState {
     pub scrollregion_bottom: ::core::ffi::c_int,
     pub scrollregion_left: ::core::ffi::c_int,
     pub scrollregion_right: ::core::ffi::c_int,
-    pub tabstops: *mut uint8_t,
-    pub lineinfos: [*mut VTermLineInfo; 2],
-    pub lineinfo: *mut VTermLineInfo,
+    pub(crate) owned: Box<crate::vterm::state::StateOwned>,
+    /// Where libvterm kept its two line-mark arrays and the live one; they
+    /// are in `owned` now, and the slots stay so that every field after them
+    /// is where C reads it.
+    pub _lineinfo_slots: [usize; 3],
     pub mouse_col: ::core::ffi::c_int,
     pub mouse_row: ::core::ffi::c_int,
     pub mouse_buttons: ::core::ffi::c_int,
@@ -553,14 +562,20 @@ crate::bitfield_accessors! {
 }
 #[repr(C)]
 pub struct VTermState_selection {
+    /// The table a C consumer installed, as C sees it.
     pub callbacks: *const VTermSelectionCallbacks,
     pub user: *mut ::core::ffi::c_void,
-    pub buffer: *mut ::core::ffi::c_char,
+    /// Where libvterm kept the staging buffer; it is in the state's `owned`
+    /// now, and the slot stays so that `buflen` is where C reads it.
+    pub _buffer_slot: usize,
     pub buflen: size_t,
 }
+/// What a control string being read in pieces has got to: an OSC 52's
+/// selection progress, or -- in the same first four bytes, as libvterm's
+/// union had it -- a DECRQSS request's name.
+#[derive(Copy, Clone)]
 #[repr(C)]
-pub union VTermState_tmp {
-    pub decrqss: [::core::ffi::c_char; 4],
+pub struct VTermState_tmp {
     pub selection: VTermState_tmp_selection,
 }
 #[derive(Copy, Clone)]
@@ -629,8 +644,8 @@ pub struct VTerm_parser {
     pub in_esc: [u8; 1],
     pub _pad: [u8; 3],
     pub intermedlen: ::core::ffi::c_int,
-    pub intermed: [::core::ffi::c_char; 16],
-    pub v: VTerm_parser_v,
+    pub intermed: [u8; 16],
+    pub v: ParserScratch,
     pub callbacks: *const VTermParserCallbacks,
     pub cbdata: *mut ::core::ffi::c_void,
     pub string_initial: bool,
@@ -641,31 +656,20 @@ crate::bitfield_accessors! {
         0..=0 => in_esc, set_in_esc: bool;
     }
 }
+/// What the parser has gathered of the sequence in progress.
+///
+/// libvterm kept this as a union of three views; they overlap the same way
+/// here, as one struct. A control sequence uses all of it: the private
+/// marker bytes (`leader`, `leaderlen` of them), then the parameters. An OSC
+/// keeps its command number in `leaderlen`; a DCS keeps its command bytes in
+/// `leader` and their count in `leaderlen`.
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub union VTerm_parser_v {
-    pub csi: VTerm_parser_v_csi,
-    pub osc: VTerm_parser_v_osc,
-    pub dcs: VTerm_parser_v_dcs,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct VTerm_parser_v_csi {
+pub struct ParserScratch {
     pub leaderlen: ::core::ffi::c_int,
-    pub leader: [::core::ffi::c_char; 16],
+    pub leader: [u8; 16],
     pub argi: ::core::ffi::c_int,
     pub args: [::core::ffi::c_long; 32],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct VTerm_parser_v_dcs {
-    pub commandlen: ::core::ffi::c_int,
-    pub command: [::core::ffi::c_char; 16],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct VTerm_parser_v_osc {
-    pub command: ::core::ffi::c_int,
 }
 
 // ---------------------------------------------------------------------------
@@ -707,10 +711,7 @@ const _: () = {
     assert!(size_of::<VTermState_selection>() == 32 && align_of::<VTermState_selection>() == 8);
     assert!(size_of::<VTermStateFields>() == 24 && align_of::<VTermStateFields>() == 8);
     assert!(size_of::<VTerm_mode>() == 4 && align_of::<VTerm_mode>() == 4);
-    assert!(size_of::<VTerm_parser_v_csi>() == 280 && align_of::<VTerm_parser_v_csi>() == 8);
-    assert!(size_of::<VTerm_parser_v_osc>() == 4 && align_of::<VTerm_parser_v_osc>() == 4);
-    assert!(size_of::<VTerm_parser_v_dcs>() == 20 && align_of::<VTerm_parser_v_dcs>() == 4);
-    assert!(size_of::<VTerm_parser_v>() == 280 && align_of::<VTerm_parser_v>() == 8);
+    assert!(size_of::<ParserScratch>() == 280 && align_of::<ParserScratch>() == 8);
     assert!(size_of::<VTerm_parser>() == 336 && align_of::<VTerm_parser>() == 8);
     assert!(size_of::<VTermParserCallbacks>() == 80 && align_of::<VTermParserCallbacks>() == 8);
     assert!(size_of::<VTermStateCallbacks>() == 104 && align_of::<VTermStateCallbacks>() == 8);
@@ -720,8 +721,8 @@ const _: () = {
         size_of::<VTermSelectionCallbacks>() == 16 && align_of::<VTermSelectionCallbacks>() == 8
     );
     assert!(size_of::<VTermState>() == 544 && align_of::<VTermState>() == 8);
-    assert!(size_of::<VTermScreen>() == 136 && align_of::<VTermScreen>() == 8);
-    assert!(size_of::<VTerm>() == 424 && align_of::<VTerm>() == 8);
+    assert!(size_of::<VTermScreen>() == 112 && align_of::<VTermScreen>() == 8);
+    assert!(size_of::<VTerm>() == 360 && align_of::<VTerm>() == 8);
 
     assert!(offset_of!(VTermScreenCell, schar) == 0);
     assert!(offset_of!(VTermScreenCell, width) == 4);
@@ -751,9 +752,8 @@ const _: () = {
     assert!(offset_of!(VTermState, scrollregion_bottom) == 64);
     assert!(offset_of!(VTermState, scrollregion_left) == 68);
     assert!(offset_of!(VTermState, scrollregion_right) == 72);
-    assert!(offset_of!(VTermState, tabstops) == 80);
-    assert!(offset_of!(VTermState, lineinfos) == 88);
-    assert!(offset_of!(VTermState, lineinfo) == 104);
+    assert!(offset_of!(VTermState, owned) == 80);
+    assert!(offset_of!(VTermState, _lineinfo_slots) == 88);
     assert!(offset_of!(VTermState, mouse_col) == 112);
     assert!(offset_of!(VTermState, mouse_row) == 116);
     assert!(offset_of!(VTermState, mouse_buttons) == 120);
@@ -779,6 +779,7 @@ const _: () = {
     assert!(offset_of!(VTermState, saved) == 428);
     assert!(offset_of!(VTermState, tmp) == 456);
     assert!(offset_of!(VTermState, selection) == 472);
+    assert!(offset_of!(VTermState_selection, buflen) == 24);
     assert!(offset_of!(VTermState, key_encoding_stacks) == 504);
     assert!(offset_of!(VTermScreen, vt) == 0);
     assert!(offset_of!(VTermScreen, state) == 8);
@@ -791,23 +792,13 @@ const _: () = {
     assert!(offset_of!(VTermScreen, pending_scroll_rightward) == 72);
     assert!(offset_of!(VTermScreen, rows) == 76);
     assert!(offset_of!(VTermScreen, cols) == 80);
-    assert!(offset_of!(VTermScreen, buffers) == 88);
-    assert!(offset_of!(VTermScreen, buffer) == 104);
-    assert!(offset_of!(VTermScreen, sb_buffer) == 112);
-    assert!(offset_of!(VTermScreen, pen) == 120);
+    assert!(offset_of!(VTermScreen, owned) == 88);
+    assert!(offset_of!(VTermScreen, pen) == 96);
     assert!(offset_of!(VTerm, rows) == 0);
     assert!(offset_of!(VTerm, cols) == 4);
     assert!(offset_of!(VTerm, mode) == 8);
     assert!(offset_of!(VTerm, parser) == 16);
-    assert!(offset_of!(VTerm, outfunc) == 352);
-    assert!(offset_of!(VTerm, outdata) == 360);
-    assert!(offset_of!(VTerm, outbuffer) == 368);
-    assert!(offset_of!(VTerm, outbuffer_len) == 376);
-    assert!(offset_of!(VTerm, outbuffer_cur) == 384);
-    assert!(offset_of!(VTerm, tmpbuffer) == 392);
-    assert!(offset_of!(VTerm, tmpbuffer_len) == 400);
-    assert!(offset_of!(VTerm, state) == 408);
-    assert!(offset_of!(VTerm, screen) == 416);
+    assert!(offset_of!(VTerm, inner) == 352);
     assert!(offset_of!(VTerm_parser, state) == 0);
     assert!(offset_of!(VTerm_parser, intermedlen) == 8);
     assert!(offset_of!(VTerm_parser, intermed) == 12);

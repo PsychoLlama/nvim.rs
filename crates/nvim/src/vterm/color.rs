@@ -23,6 +23,19 @@
 
 use core::ffi::c_long;
 
+use crate::types::{VTermColor, VTermColor_rgb};
+
+/// A colour with all four of its bytes zero: what libvterm's zeroed
+/// allocations held before anything set one.
+pub(crate) const UNSET: VTermColor = VTermColor {
+    rgb: VTermColor_rgb {
+        type_0: 0,
+        red: 0,
+        green: 0,
+        blue: 0,
+    },
+};
+
 /// What a colour actually names.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum ColorValue {

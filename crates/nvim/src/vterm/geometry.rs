@@ -19,6 +19,7 @@
 use core::ffi::{c_int, c_uint};
 
 use crate::types::{VTermRect, VTermState};
+use crate::vterm::state::StateCx;
 
 /// A row is drawn at its normal width, or at half of it when the line is
 /// marked double-width.
@@ -111,17 +112,6 @@ impl VTermState {
         }
     }
 
-    /// Moves the cursor down a line, scrolling the region when it is already
-    /// on the last line of it.
-    pub(super) fn linefeed(&mut self) {
-        if self.pos.row == self.scroll_bottom() - 1 {
-            let rect = self.scroll_region();
-            self.scroll(rect, 1, 0);
-        } else if self.pos.row < self.rows - 1 {
-            self.pos.row += 1;
-        }
-    }
-
     /// Moves the cursor to the `count`th tab stop, forwards when `forward`.
     /// Running out of row stops the walk short.
     pub(super) fn tab(&mut self, count: c_int, forward: bool) {
@@ -177,138 +167,147 @@ impl VTermState {
     }
 }
 
+impl StateCx<'_> {
+    /// Moves the cursor down a line, scrolling the region when it is already
+    /// on the last line of it.
+    pub(super) fn linefeed(&mut self) {
+        if self.pos.row == self.scroll_bottom() - 1 {
+            let rect = self.scroll_region();
+            self.scroll(rect, 1, 0);
+        } else if self.pos.row < self.rows - 1 {
+            self.pos.row += 1;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::types::VTermState;
-    use crate::vterm::state::{BLANK_LINE, test_state};
-
-    /// A screen with room for the margins the tests set.
-    fn screen(state: &mut VTermState) {
-        state.reset_tabstops();
-    }
+    use crate::types::VTermPos;
+    use crate::vterm::state::test_cx::with_state;
 
     #[test]
     fn an_unset_margin_reaches_the_edge_of_the_screen() {
-        let (mut marks, mut stops) = ([BLANK_LINE; 8], [0u8; 2]);
-        let mut state = test_state(&mut marks, &mut stops, 16);
-        assert_eq!(state.scroll_bottom(), 8);
-        assert_eq!((state.scroll_left(), state.scroll_right()), (0, 16));
+        with_state(8, 16, |state| {
+            assert_eq!(state.scroll_bottom(), 8);
+            assert_eq!((state.scroll_left(), state.scroll_right()), (0, 16));
 
-        state.scrollregion_bottom = 5;
-        assert_eq!(state.scroll_bottom(), 5);
+            state.scrollregion_bottom = 5;
+            assert_eq!(state.scroll_bottom(), 5);
 
-        // The horizontal margins are only honoured once margin mode is on.
-        state.scrollregion_left = 2;
-        state.scrollregion_right = 12;
-        assert_eq!((state.scroll_left(), state.scroll_right()), (0, 16));
-        state.mode.set_leftrightmargin(1);
-        assert_eq!((state.scroll_left(), state.scroll_right()), (2, 12));
+            // The horizontal margins are only honoured once margin mode is on.
+            state.scrollregion_left = 2;
+            state.scrollregion_right = 12;
+            assert_eq!((state.scroll_left(), state.scroll_right()), (0, 16));
+            state.mode.set_leftrightmargin(1);
+            assert_eq!((state.scroll_left(), state.scroll_right()), (2, 12));
+        });
     }
 
     #[test]
     fn a_row_marked_double_width_is_half_as_wide() {
-        let (mut marks, mut stops) = ([BLANK_LINE; 4], [0u8; 2]);
-        let mut state = test_state(&mut marks, &mut stops, 16);
-        assert_eq!(state.row_width(1), 16);
-        state.lineinfo_mut()[1].set_doublewidth(1);
-        assert_eq!(state.row_width(1), 8);
-        assert_eq!(state.row_width(0), 16);
+        with_state(4, 16, |state| {
+            assert_eq!(state.row_width(1), 16);
+            state.lineinfo_mut()[1].set_doublewidth(1);
+            assert_eq!(state.row_width(1), 8);
+            assert_eq!(state.row_width(0), 16);
 
-        state.pos.row = 1;
-        assert_eq!(state.cursor_row_width(), 8);
+            state.pos.row = 1;
+            assert_eq!(state.cursor_row_width(), 8);
+        });
     }
 
     #[test]
     fn the_cursor_is_pulled_inside_the_screen_or_the_origin() {
-        let (mut marks, mut stops) = ([BLANK_LINE; 8], [0u8; 2]);
-        let mut state = test_state(&mut marks, &mut stops, 16);
+        with_state(8, 16, |state| {
+            state.pos = VTermPos { row: 99, col: -3 };
+            state.clamp_cursor();
+            assert_eq!((state.pos.row, state.pos.col), (7, 0));
 
-        state.pos = crate::types::VTermPos { row: 99, col: -3 };
-        state.clamp_cursor();
-        assert_eq!((state.pos.row, state.pos.col), (7, 0));
+            // Origin mode confines the cursor to the scroll region instead.
+            state.scrollregion_top = 2;
+            state.scrollregion_bottom = 6;
+            state.scrollregion_left = 4;
+            state.scrollregion_right = 10;
+            state.mode.set_origin(1);
+            state.mode.set_leftrightmargin(1);
+            state.pos = VTermPos { row: 0, col: 99 };
+            state.clamp_cursor();
+            assert_eq!((state.pos.row, state.pos.col), (2, 9));
 
-        // Origin mode confines the cursor to the scroll region instead.
-        state.scrollregion_top = 2;
-        state.scrollregion_bottom = 6;
-        state.scrollregion_left = 4;
-        state.scrollregion_right = 10;
-        state.mode.set_origin(1);
-        state.mode.set_leftrightmargin(1);
-        state.pos = crate::types::VTermPos { row: 0, col: 99 };
-        state.clamp_cursor();
-        assert_eq!((state.pos.row, state.pos.col), (2, 9));
-
-        // A double-width row halves the column bound outside origin mode.
-        state.mode.set_origin(0);
-        state.mode.set_leftrightmargin(0);
-        state.lineinfo_mut()[2].set_doublewidth(1);
-        state.pos.col = 99;
-        state.clamp_cursor();
-        assert_eq!(state.pos.col, 7);
+            // A double-width row halves the column bound outside origin mode.
+            state.mode.set_origin(0);
+            state.mode.set_leftrightmargin(0);
+            state.lineinfo_mut()[2].set_doublewidth(1);
+            state.pos.col = 99;
+            state.clamp_cursor();
+            assert_eq!(state.pos.col, 7);
+        });
     }
 
     #[test]
     fn the_cursor_is_only_in_the_scroll_region_within_both_margins() {
-        let (mut marks, mut stops) = ([BLANK_LINE; 8], [0u8; 2]);
-        let mut state = test_state(&mut marks, &mut stops, 16);
-        state.scrollregion_top = 2;
-        state.scrollregion_bottom = 6;
-        state.scrollregion_left = 4;
-        state.scrollregion_right = 10;
-        state.mode.set_leftrightmargin(1);
+        with_state(8, 16, |state| {
+            state.scrollregion_top = 2;
+            state.scrollregion_bottom = 6;
+            state.scrollregion_left = 4;
+            state.scrollregion_right = 10;
+            state.mode.set_leftrightmargin(1);
 
-        state.pos = crate::types::VTermPos { row: 3, col: 5 };
-        assert!(state.cursor_in_scroll_region());
-        state.pos.row = 6;
-        assert!(!state.cursor_in_scroll_region());
-        state.pos.row = 1;
-        assert!(!state.cursor_in_scroll_region());
-        state.pos = crate::types::VTermPos { row: 3, col: 10 };
-        assert!(!state.cursor_in_scroll_region());
-        state.pos.col = 3;
-        assert!(!state.cursor_in_scroll_region());
+            state.pos = VTermPos { row: 3, col: 5 };
+            assert!(state.cursor_in_scroll_region());
+            state.pos.row = 6;
+            assert!(!state.cursor_in_scroll_region());
+            state.pos.row = 1;
+            assert!(!state.cursor_in_scroll_region());
+            state.pos = VTermPos { row: 3, col: 10 };
+            assert!(!state.cursor_in_scroll_region());
+            state.pos.col = 3;
+            assert!(!state.cursor_in_scroll_region());
+        });
     }
 
     #[test]
     fn tab_stops_start_every_eighth_column_and_bound_the_walk() {
-        let (mut marks, mut stops) = ([BLANK_LINE; 4], [0u8; 3]);
-        let mut state = test_state(&mut marks, &mut stops, 24);
-        screen(&mut state);
-        assert!(state.is_tabstop(0) && state.is_tabstop(8) && state.is_tabstop(16));
-        assert!(!state.is_tabstop(7));
+        with_state(4, 24, |state| {
+            state.reset_tabstops();
+            assert!(state.is_tabstop(0) && state.is_tabstop(8) && state.is_tabstop(16));
+            assert!(!state.is_tabstop(7));
 
-        state.tab(1, true);
-        assert_eq!(state.pos.col, 8);
-        state.tab(2, true);
-        assert_eq!(state.pos.col, 23); // the last column, not the stop past it
-        state.tab(1, false);
-        assert_eq!(state.pos.col, 16);
-        state.tab(9, false);
-        assert_eq!(state.pos.col, 0);
+            state.tab(1, true);
+            assert_eq!(state.pos.col, 8);
+            state.tab(2, true);
+            assert_eq!(state.pos.col, 23); // the last column, not the stop past it
+            state.tab(1, false);
+            assert_eq!(state.pos.col, 16);
+            state.tab(9, false);
+            assert_eq!(state.pos.col, 0);
 
-        state.clear_tabstop(8);
-        state.pos.col = 0;
-        state.tab(1, true);
-        assert_eq!(state.pos.col, 16);
+            state.clear_tabstop(8);
+            state.pos.col = 0;
+            state.tab(1, true);
+            assert_eq!(state.pos.col, 16);
+        });
     }
 
     #[test]
     fn a_linefeed_on_the_last_row_of_the_region_scrolls_it() {
-        let (mut marks, mut stops) = ([BLANK_LINE; 8], [0u8; 2]);
-        let mut state = test_state(&mut marks, &mut stops, 16);
-        state.pos.row = 3;
-        state.linefeed();
-        assert_eq!(state.pos.row, 4);
+        with_state(8, 16, |state| {
+            state.pos.row = 3;
+            state.linefeed();
+            assert_eq!(state.pos.row, 4);
 
-        // With a bottom margin the cursor stays put and the region scrolls.
-        state.scrollregion_bottom = 5;
-        state.pos.row = 4;
-        state.lineinfo_mut()[3].set_doublewidth(1);
-        state.linefeed();
-        assert_eq!(state.pos.row, 4);
-        // The marks moved up with their rows, leaving a blank line behind.
-        assert_eq!(state.lineinfo()[2].doublewidth(), 1);
-        assert_eq!(state.lineinfo()[3].doublewidth(), 0);
-        assert_eq!(state.lineinfo()[4].doublewidth(), 0);
+            // With a bottom margin the cursor stays put and the region
+            // scrolls.
+            state.scrollregion_bottom = 5;
+            state.pos.row = 4;
+            state.lineinfo_mut()[3].set_doublewidth(1);
+            state.linefeed();
+            assert_eq!(state.pos.row, 4);
+            // The marks moved up with their rows, leaving a blank line
+            // behind.
+            assert_eq!(state.lineinfo()[2].doublewidth(), 1);
+            assert_eq!(state.lineinfo()[3].doublewidth(), 0);
+            assert_eq!(state.lineinfo()[4].doublewidth(), 0);
+        });
     }
 }

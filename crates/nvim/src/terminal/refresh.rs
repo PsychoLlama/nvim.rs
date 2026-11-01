@@ -15,9 +15,7 @@
 //! numbers are relative to how much scrollback exists, so the scrollback
 //! has to settle before the screen is written at the right lines.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `terminal/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::change::changed_lines;
@@ -28,7 +26,7 @@ use crate::global_cell::GlobalCell;
 use crate::memline::{ml_append_buf_terminated, ml_replace_buf_text};
 use crate::r#move::{curs_columns, set_topline};
 use crate::startup::exiting;
-use crate::types::{ColNr, LineNr, Terminal, uint16_t, uint64_t};
+use crate::types::{ColNr, LineNr, uint16_t, uint64_t};
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_mode_info_set};
 use crate::winlayer::{Buf, Win, tab_windows};
 use core::ffi::c_int;
@@ -139,7 +137,7 @@ pub(super) fn refresh_before_destroy(term: Term) {
 
 /// Mirror everything `term` has accumulated into its buffer.
 pub(crate) fn refresh_terminal(term: Term) {
-    let Some(buf) = term.buf() else {
+    let Some(buf) = super::term_buf(term) else {
         return;
     };
     let ml_before = buf.line_count();
@@ -189,21 +187,14 @@ fn refresh_size(mut term: Term) -> bool {
 /// [`on_scrollback_option_changed`] for the terminal a buffer shows, if it
 /// shows one.
 pub(crate) fn on_scrollback_changed_in(buffer: Buf) {
-    if !buffer.terminal.is_null() {
-        // SAFETY: a buffer's terminal lives as long as the buffer does.
-        unsafe { on_scrollback_option_changed(buffer.terminal) };
+    if let Some(term) = buffer.terminal_handle() {
+        on_scrollback_option_changed(term);
     }
 }
 
 /// `'scrollback'` changed; trim or extend to match, but only once the
 /// scrollback has been sized at all.
-///
-/// # Safety
-///
-/// `term` must point at a live `Terminal`, unaliased for the call.
-pub(crate) unsafe fn on_scrollback_option_changed(term: *mut Terminal) {
-    // SAFETY: the caller hands over a live terminal.
-    let term = unsafe { Term::new(term) };
+fn on_scrollback_option_changed(term: Term) {
     if term.sb.is_sized() {
         refresh_terminal(term);
     }

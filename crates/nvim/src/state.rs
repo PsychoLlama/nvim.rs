@@ -58,7 +58,7 @@ use crate::state::mode::{
     State, exmode_active, finish_op, last_mode, motion_force, restart_VIsual_select, restart_edit,
     virtual_op,
 };
-use crate::terminal::{TerminalSession, terminal_check, terminal_execute};
+use crate::terminal::{TerminalState, terminal_check, terminal_execute};
 use crate::types::{Direction, HashTab, NUL, ProcType, SaveVEvent};
 use crate::ui::ui_flush;
 use crate::winlayer::{Cc, Win};
@@ -100,18 +100,13 @@ pub const MODE_NORMAL: ModeFlags = 1;
 /// checked. Naming the machine instead makes the dispatch a `match` and the
 /// layout nobody's business.
 ///
-/// The terminal's is a handle ([`TerminalSession`]) rather than a `&mut`,
-/// and the promise that it is live is booked where the terminal makes it,
-/// the way every other handle in the tree books it: a `check` or an
-/// `execute` re-enters the
-/// editor, and the frames below it reach the same state through the globals
-/// that name it, so a `&mut` spanning the loop would be a promise the editor
-/// does not keep. Insert mode's, normal mode's and the command line's states
-/// are lent for the length of the loop: no global names the first, the one
-/// global that reaches into a normal-mode frame (`op_pending`) reads its
-/// operator, which the frame table owns, and the command line's completion,
-/// which the Vimscript functions read, belongs to the command line rather
-/// than to its key loop.
+/// Every mode's state is lent for the length of the loop: no global names
+/// insert mode's or terminal mode's (a terminal's own state is reached
+/// through its handle, which the session holds, not through the session),
+/// the one global that reaches into a normal-mode frame (`op_pending`) reads
+/// its operator, which the frame table owns, and the command line's
+/// completion, which the Vimscript functions read, belongs to the command
+/// line rather than to its key loop.
 pub(crate) struct ModeState<'a>(Machine<'a>);
 
 /// [`ModeState`]'s arms. Private, so the only way to make one is through
@@ -120,7 +115,7 @@ enum Machine<'a> {
     Normal(&'a mut NormalState),
     Insert(&'a mut InsertState),
     CommandLine(&'a mut CommandLineState),
-    Terminal(TerminalSession),
+    Terminal(&'a mut TerminalState),
 }
 
 impl<'a> ModeState<'a> {
@@ -143,7 +138,7 @@ impl<'a> ModeState<'a> {
 
     /// Terminal mode's session, a handle the terminal took the liveness
     /// promise for when it made it.
-    pub(crate) const fn terminal(s: TerminalSession) -> Self {
+    pub(crate) const fn terminal(s: &'a mut TerminalState) -> Self {
         Self(Machine::Terminal(s))
     }
 
@@ -155,7 +150,7 @@ impl<'a> ModeState<'a> {
             Machine::Normal(s) => normal_check(s),
             Machine::Insert(s) => insert_check(s),
             Machine::CommandLine(s) => command_line_check(s),
-            Machine::Terminal(s) => terminal_check(*s),
+            Machine::Terminal(s) => terminal_check(s),
         }
     }
 
@@ -165,7 +160,7 @@ impl<'a> ModeState<'a> {
             Machine::Normal(s) => normal_execute(s, key),
             Machine::Insert(s) => insert_execute(s, key),
             Machine::CommandLine(s) => command_line_execute(s, key),
-            Machine::Terminal(s) => terminal_execute(*s, key),
+            Machine::Terminal(s) => terminal_execute(s, key),
         }
     }
 }

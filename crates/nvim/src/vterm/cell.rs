@@ -28,7 +28,7 @@ pub const SCHAR_CONTINUATION: ScreenChar = ScreenChar::MAX;
 /// The pen an erased cell is left with: the current colours, everything else
 /// back to its reset state. The caller stamps the line's double-width and
 /// double-height bits on afterwards.
-pub fn erased_pen(fg: VTermColor, bg: VTermColor) -> ScreenPen {
+pub const fn erased_pen(fg: VTermColor, bg: VTermColor) -> ScreenPen {
     ScreenPen {
         fg,
         bg,

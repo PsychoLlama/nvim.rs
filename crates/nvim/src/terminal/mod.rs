@@ -23,14 +23,12 @@
 //! `Buffer` across anything that might run autocommands — `buf_handle` plus
 //! [`buf_for_handle`] is the pattern throughout. `refcount` is the other
 //! half: it is raised around anything that can run Vimscript, and
-//! [`terminal_destroy`] only frees at zero. [`Term`] is how all of that
-//! survives being written in safe code: it wraps the `*mut Terminal` the
-//! editor passes around, makes the *construction* the unsafe step, and hands
-//! out one short-lived borrow per use.
+//! [`terminal_destroy`] only frees at zero. The terminal itself is reached
+//! through [`Term`], the handle `winlayer` keeps beside `Win` and `Buf`,
+//! which hands out one short-lived borrow per use; the emulator is a
+//! [`VTerm`] the terminal owns and drives through its methods.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `terminal/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -68,36 +66,26 @@ use crate::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::types::{
     AcoSave, BufferHandle, ColNr, Event, ExtmarkOp, Handle, HlAttrs, LineNr, MarkAdjustMode,
     Object, OptVal, OptionSetFlags, Pos, RefcountSize, RgbValue, SaveVEvent, Terminal,
-    TerminalOptions, VTermColor, VTermColor_rgb, VTermScreenCell, VTermScreenCellAttrs, VTermState,
-    VTermValue, VarNumber, int16_t, size_t, uint8_t,
+    TerminalOptions, VTermColor, VTermColor_rgb, VTermScreenCell, VTermScreenCellAttrs, VarNumber,
+    int16_t, uint8_t,
 };
-use crate::vterm::parser::vterm_input_write;
-use crate::vterm::pen::{convert_color_to_rgb, set_palette_color};
-use crate::vterm::screen::{
-    vterm_obtain_screen, vterm_screen_enable_altscreen, vterm_screen_enable_reflow,
-    vterm_screen_flush_damage, vterm_screen_reset, vterm_screen_set_callbacks,
-    vterm_screen_set_damage_merge, vterm_screen_set_unrecognised_fallbacks,
-};
-use crate::vterm::state::entry::{
-    vterm_obtain_state, vterm_state_set_selection_callbacks, vterm_state_set_termprop,
-};
+use crate::vterm::host::Value;
+use crate::vterm::screen::ZERO_SCREEN_CELL;
 use crate::vterm::vterm::{
-    VTERM_COLOR_DEFAULT_BG, VTERM_COLOR_DEFAULT_FG, VTERM_COLOR_INDEXED, VTERM_COLOR_RGB,
-    VTERM_COLOR_TYPE_MASK, VTERM_DAMAGE_SCROLL, VTERM_PROP_CURSORBLINK, VTERM_PROP_CURSORSHAPE,
-    VTERM_PROP_CURSORSHAPE_BAR_LEFT, VTERM_PROP_CURSORSHAPE_BLOCK,
-    VTERM_PROP_CURSORSHAPE_UNDERLINE, vterm_free, vterm_get_size, vterm_new,
-    vterm_output_set_callback, vterm_set_size, vterm_set_utf8,
+    OutputSink, VTERM_COLOR_DEFAULT_BG, VTERM_COLOR_DEFAULT_FG, VTERM_COLOR_INDEXED,
+    VTERM_COLOR_RGB, VTERM_COLOR_TYPE_MASK, VTERM_DAMAGE_SCROLL, VTERM_PROP_CURSORBLINK,
+    VTERM_PROP_CURSORSHAPE, VTERM_PROP_CURSORSHAPE_BAR_LEFT, VTERM_PROP_CURSORSHAPE_BLOCK,
+    VTERM_PROP_CURSORSHAPE_UNDERLINE,
 };
 use crate::winlayer::{self, Buf, Win, tab_windows, windows};
-use ::libc::abort;
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
-use core::ops::{Deref, DerefMut};
+use core::ffi::{CStr, c_int, c_uint};
 
 use scrollback::{fetch_cell, refresh_scrollback, term_may_alloc_scrollback};
 
 use crate::state::MODE_TERMINAL;
+pub(crate) use crate::winlayer::Term;
 pub(crate) use input::{buf_terminal_set_streamed_paste, terminal_paste};
-pub(crate) use mode::{TerminalSession, terminal_check, terminal_enter, terminal_execute};
+pub(crate) use mode::{TerminalState, terminal_check, terminal_enter, terminal_execute};
 pub(crate) use refresh::{
     on_scrollback_changed_in, terminal_check_refresh, terminal_init, terminal_teardown,
 };
@@ -115,139 +103,36 @@ const TERM_ATTRS_MAX: c_int = 1024;
 const AUGROUP_ALL: c_int = -3;
 
 // ---------------------------------------------------------------------------
-// The pointers, wrapped
+// The emulator, through the handle
 
-/// A terminal the caller has promised is live.
-///
-/// The editor passes `*mut Terminal` around and the pointer has to stay raw:
-/// vterm re-enters [`callbacks`](self::callbacks) with the same terminal
-/// while [`terminal_receive`] is still inside `vterm_input_write`, and every
-/// autocommand fired from here can run Vimscript that reaches it again. What
-/// does not have to stay raw is the *dereference*. [`Term::new`] takes the
-/// promise once — each `unsafe fn` below restates it in its own `# Safety`
-/// section — and from there [`Deref`]/[`DerefMut`] give ordinary field
-/// access, on [`winlayer`](crate::winlayer)'s pattern.
-///
-/// Being `Copy` is what keeps that honest: every borrow a `Term` produces
-/// lives for one expression, so **no reference into a terminal is held
-/// across a callback, an autocommand, a vterm write or a refresh**. Read the
-/// slot out first and call afterwards.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Term(*mut Terminal);
-
-/// The state machine of a live terminal's emulator.
-///
-/// [`Term::state`] is the only way to one, and it re-asks vterm every time
-/// rather than caching, exactly as the C did. Two methods rather than a
-/// `Deref`: the palette is all this module wants from a state.
-#[derive(Clone, Copy)]
-pub(crate) struct TermState(*mut VTermState);
-
-impl Deref for Term {
-    type Target = Terminal;
-
-    #[inline(always)]
-    fn deref(&self) -> &Terminal {
-        // SAFETY: `Term::new`'s promise — the terminal is live.
-        unsafe { &*self.0 }
-    }
-}
-
-impl DerefMut for Term {
-    #[inline(always)]
-    fn deref_mut(&mut self) -> &mut Terminal {
-        // SAFETY: as above.
-        unsafe { &mut *self.0 }
-    }
-}
-
-impl TermState {
-    /// Point palette entry `index` at `color`.
-    fn set_palette(self, index: c_int, color: &VTermColor) {
-        // SAFETY: `Term::state`'s promise — the state belongs to a live
-        // emulator and is freed with it.
-        set_palette_color(unsafe { &mut *self.0 }, index, color);
+impl Terminal {
+    /// The emulator's size, rows first.
+    fn size(&self) -> (c_int, c_int) {
+        self.vt.size()
     }
 
     /// `color` as a packed 24-bit RGB value, resolving the palette.
-    fn rgb(self, mut color: VTermColor) -> c_int {
-        // SAFETY: as above.
-        convert_color_to_rgb(unsafe { &*self.0 }, &mut color);
-        // SAFETY: `convert_color_to_rgb` leaves the value in its `rgb` arm.
-        let rgb = unsafe { color.rgb };
-        ((rgb.red as c_int) << 16) | ((rgb.green as c_int) << 8) | rgb.blue as c_int
+    fn rgb(&mut self, color: VTermColor) -> c_int {
+        let (red, green, blue) = self.vt.rgb_of(color).channels();
+        (c_int::from(red) << 16) | (c_int::from(green) << 8) | c_int::from(blue)
     }
 }
 
-impl Term {
-    /// # Safety
-    /// `term` must stay a live terminal for as long as the value is used.
-    #[inline(always)]
-    pub(crate) const unsafe fn new(term: *mut Terminal) -> Self {
-        Self(term)
-    }
+/// Feed bytes of the child's output to the emulator. Re-entrant: vterm
+/// reports what changed through the screen callbacks, which reach this
+/// terminal again through their own copy of the handle.
+fn write_to_emulator(mut term: Term, bytes: &[u8]) {
+    term.vt.input_write(bytes);
+}
 
-    #[inline(always)]
-    pub(crate) fn raw(self) -> *mut Terminal {
-        self.0
-    }
-
-    /// The buffer this terminal draws into, `None` once it has been wiped.
-    fn buf(self) -> Option<Buf> {
-        buf_for_handle(self.buf_handle)
-    }
-
-    /// The emulator's state machine.
-    fn state(self) -> TermState {
-        // SAFETY: the terminal's own emulator, which keeps the state it
-        // builds on first ask until `vterm_free`.
-        TermState(unsafe { vterm_obtain_state(self.vt) })
-    }
-
-    /// The emulator's size, rows first.
-    fn size(self) -> (c_int, c_int) {
-        let (mut rows, mut cols) = (0, 0);
-        // SAFETY: the terminal's own emulator, and two live out-parameters.
-        unsafe { vterm_get_size(self.vt, &raw mut rows, &raw mut cols) };
-        (rows, cols)
-    }
-
-    /// Feed bytes of the child's output to the emulator. Re-entrant: vterm
-    /// reports what changed through the screen callbacks, which reach this
-    /// terminal again, so nothing of it is borrowed here.
-    fn write(self, bytes: &[u8]) {
-        let vt = self.vt;
-        // SAFETY: the terminal's own emulator, and a slice of its caller's
-        // readable bytes.
-        unsafe { vterm_input_write(vt, bytes.as_ptr().cast(), bytes.len()) };
-    }
-
-    /// Deliver whatever the emulator has been holding back. Re-entrant for
-    /// the same reason as [`Term::write`].
-    fn flush_damage(self) {
-        let vts = self.vts;
-        // SAFETY: the terminal's own screen.
-        unsafe { vterm_screen_flush_damage(vts) };
-    }
+/// The buffer this terminal draws into, `None` once it has been wiped.
+fn term_buf(term: Term) -> Option<Buf> {
+    buf_for_handle(term.buf_handle)
 }
 
 /// The buffer a handle names, `None` once it has been wiped.
 fn buf_for_handle(handle: Handle) -> Option<Buf> {
     winlayer::buffer(handle)
-}
-
-/// vterm's "here are bytes for the child" callback.
-///
-/// # Safety
-///
-/// `s` must point at `len` readable bytes. `user_data` must be the payload
-/// this callback was registered with, live for the call.
-unsafe extern "C" fn term_output_callback(s: *const c_char, len: size_t, user_data: *mut c_void) {
-    // SAFETY: vterm hands back the terminal registered alongside this
-    // callback, and `s` points at `len` readable bytes.
-    let bytes = unsafe { ::core::slice::from_raw_parts(s.cast::<u8>(), len) };
-    // SAFETY: as above.
-    terminal_send(unsafe { Term::new(user_data as *mut Terminal) }, bytes);
 }
 
 /// Create a terminal for `buffer` and wire it to vterm.
@@ -259,60 +144,50 @@ unsafe extern "C" fn term_output_callback(s: *const c_char, len: size_t, user_da
 /// The buffer owns the terminal from here; whoever drives it frees it with
 /// [`terminal_destroy`].
 pub(crate) fn terminal_alloc(mut buffer: Buf, opts: TerminalOptions) -> Term {
-    // SAFETY: the caller hands over a live buffer that has no terminal yet.
-    // Leaked here and reclaimed by terminal_destroy. The buffer is the
-    // owner; every other reference reaches it through `Buffer::terminal`.
-    let raw: *mut Terminal = Box::into_raw(Box::new(Terminal::new(opts, buffer.handle)));
-    buffer.terminal = raw;
-    // SAFETY: just allocated, and nothing else has reached it yet.
-    let mut term = unsafe { Term::new(raw) };
-    let user = raw.cast::<c_void>();
+    // Owned by the buffer from here; every other reference reaches it
+    // through `Buffer::terminal`, and `terminal_destroy` frees it.
+    let mut term = Term::alloc(Terminal::new(opts, buffer.handle));
+    buffer.terminal = term.raw();
 
-    // SAFETY: a fresh emulator of the requested size, and every call below
-    // is against the emulator, screen and state it owns. None of the
-    // consumers being installed can run before this returns.
-    unsafe {
-        term.vt = vterm_new(opts.height as c_int, opts.width as c_int);
-        vterm_set_utf8(term.vt, 1);
-        term.vts = vterm_obtain_screen(term.vt);
-        vterm_screen_enable_altscreen(term.vts, 1);
-        vterm_screen_enable_reflow(term.vts, true);
-        vterm_screen_set_callbacks(term.vts, &raw const callbacks::SCREEN_CALLBACKS, user);
-        vterm_screen_set_unrecognised_fallbacks(term.vts, &raw const termrequest::FALLBACKS, user);
-        // Merge damage reports up to a whole scrolled region before they are
-        // delivered; the refresh works in row ranges anyway.
-        vterm_screen_set_damage_merge(term.vts, VTERM_DAMAGE_SCROLL);
-        vterm_screen_reset(term.vts, 1);
-        vterm_output_set_callback(term.vt, Some(term_output_callback), user);
-    }
-
-    let state = term.state();
-    let selection_cbs = &raw const callbacks::SELECTION_CALLBACKS;
-    let scratch = term.selection_buffer.as_mut_ptr();
-    let size = SELECTIONBUF_SIZE as size_t;
-    // SAFETY: the state is the emulator's own; the scratch buffer is the
-    // terminal's and is never resized while vterm holds it.
-    unsafe { vterm_state_set_selection_callbacks(state.0, selection_cbs, user, scratch, size) };
+    // None of the consumers being installed can run before this returns.
+    term.vt.set_utf8(true);
+    term.vt.obtain_screen();
+    term.vt.screen_enable_altscreen();
+    term.vt.obtain_screen().enable_reflow(true);
+    let handle = term;
+    term.vt
+        .set_screen_host(Box::new(callbacks::ScreenReports(handle)));
+    term.vt
+        .set_fallbacks(Box::new(termrequest::Requests(handle)));
+    // Merge damage reports up to a whole scrolled region before they are
+    // delivered; the refresh works in row ranges anyway.
+    term.vt.set_damage_merge(VTERM_DAMAGE_SCROLL);
+    term.vt.screen_reset(true);
+    term.vt
+        .set_output(OutputSink::Rust(Box::new(move |bytes: &[u8]| {
+            terminal_send(handle, bytes);
+        })));
+    term.vt
+        .set_selection_host(Box::new(callbacks::Clipboard(handle)), SELECTIONBUF_SIZE);
 
     // Start the child off with the cursor the user configured for terminal
     // mode; it is free to change it.
     let shape = shape_entry(SHAPE_IDX_TERM);
-    let mut cursor_shape = VTermValue { boolean: 0 };
     // vterm's shapes are DECSCUSR's rather than the editor's.
-    cursor_shape.number = match shape.shape {
+    let cursor_shape = match shape.shape {
         0 => VTERM_PROP_CURSORSHAPE_BLOCK,
         1 => VTERM_PROP_CURSORSHAPE_UNDERLINE,
         2 => VTERM_PROP_CURSORSHAPE_BAR_LEFT,
         // Not a shape vterm knows; leave its default alone.
         _ => 0,
     };
-    let mut cursor_blink = VTermValue { boolean: 0 };
-    cursor_blink.boolean = (shape.blinkon != 0 && shape.blinkoff != 0) as c_int;
-    // SAFETY: the state is the emulator's own, and each property is read
-    // through the arm of `VTermValue` its type names.
-    unsafe { vterm_state_set_termprop(state.0, VTERM_PROP_CURSORSHAPE, &raw mut cursor_shape) };
-    // SAFETY: as above.
-    unsafe { vterm_state_set_termprop(state.0, VTERM_PROP_CURSORBLINK, &raw mut cursor_blink) };
+    let cursor_blink = shape.blinkon != 0 && shape.blinkoff != 0;
+    let _ = term
+        .vt
+        .set_termprop(VTERM_PROP_CURSORSHAPE, Value::Int(cursor_shape));
+    let _ = term
+        .vt
+        .set_termprop(VTERM_PROP_CURSORBLINK, Value::Bool(cursor_blink));
 
     term.invalid_start = 0;
     term.invalid_end = opts.height as c_int;
@@ -338,11 +213,7 @@ pub(crate) fn terminal_alloc(mut buffer: Buf, opts: TerminalOptions) -> Term {
 /// answers whether the terminal's driver still holds it, and only then is
 /// it reached.
 pub(crate) fn terminal_open(mut term: Term, mut buffer: Buf, attached: &dyn Fn() -> bool) {
-    assert!(!term.raw().is_null(), "terminal_open without a terminal");
-    // SAFETY: the caller hands over a live buffer.
-
-    // SAFETY: a plain save area `aucmd_prepbuf` fills in, restored below.
-    let mut aco: AcoSave = unsafe { ::core::mem::zeroed() };
+    let mut aco = AcoSave::default();
     // SAFETY: paired with the `aucmd_restbuf` below.
     aucmd_prepbuf(&mut aco, buffer);
     if term.sb.is_sized() {
@@ -388,26 +259,22 @@ pub(crate) fn terminal_open(mut term: Term, mut buffer: Buf, attached: &dyn Fn()
         return;
     }
     if !term_may_alloc_scrollback(term, Some(buffer)) {
-        // SAFETY: there is nothing to unwind; the scrollback could not be
-        // sized and the buffer can no longer mirror the screen.
-        unsafe { abort() };
+        // There is nothing to unwind; the scrollback could not be sized and
+        // the buffer can no longer mirror the screen.
+        std::process::abort();
     }
 
     // `g:terminal_color_0` .. `_15`, or a buffer-local override, set the
     // emulator's palette. Only the ones actually configured are taken: the
     // rest stay at vterm's defaults, and `color_set` records which, so that
     // the attribute code knows to leave them indexed for the UI to resolve.
-    let state = term.state();
     for i in 0..16 {
         let key = format!("terminal_color_{i}\0");
-        // SAFETY: `key` is NUL-terminated and `buffer` is live.
-        let name = unsafe { get_config_string(buffer, key.as_ptr().cast::<c_char>()) };
-        if name.is_null() {
+        let key = CStr::from_bytes_with_nul(key.as_bytes()).expect("one NUL, at the end");
+        let Some(name) = get_config_string(buffer, key) else {
             continue;
-        }
-        // SAFETY: the variable's own NUL-terminated bytes, borrowed for as
-        // long as nothing assigns to it — and nothing here does.
-        let rgb = name_to_color(unsafe { CStr::from_ptr(name) }).0;
+        };
+        let rgb = name_to_color(name.as_cstr()).0;
         if rgb == -1 as RgbValue {
             continue;
         }
@@ -419,7 +286,7 @@ pub(crate) fn terminal_open(mut term: Term, mut buffer: Buf, attached: &dyn Fn()
                 blue: (rgb & 0xff) as uint8_t,
             },
         };
-        state.set_palette(i, &color);
+        term.vt.set_palette_color(i, &color);
         term.color_set[i as usize] = true;
     }
 }
@@ -435,7 +302,7 @@ pub(crate) fn terminal_close(mut term: Term, status: c_int) {
     if term.destroy {
         return;
     }
-    let buf = term.buf();
+    let buf = term_buf(term);
 
     // Closing an already-closed terminal leaves only the freeing half.
     let only_destroy = term.closed;
@@ -543,16 +410,14 @@ pub(crate) fn terminal_set_state(mut term: Term, suspended: bool) {
 
 /// [`terminal_check_size`] for the terminal `buffer` holds, if it holds one.
 pub(crate) fn buf_terminal_check_size(buffer: Buf) {
-    if !buffer.terminal.is_null() {
-        // SAFETY: a live buffer's own terminal.
-        terminal_check_size(unsafe { Term::new(buffer.terminal) });
+    if let Some(term) = buffer.terminal_handle() {
+        terminal_check_size(term);
     }
 }
 
 /// Whether `buffer` holds a terminal whose job is still running.
 pub(crate) fn buf_terminal_running(buffer: Buf) -> bool {
-    // SAFETY: a live buffer's own terminal.
-    !buffer.terminal.is_null() && terminal_running(unsafe { Term::new(buffer.terminal) })
+    buffer.terminal_handle().is_some_and(terminal_running)
 }
 
 /// Resize the emulator to fit the windows showing it.
@@ -587,11 +452,10 @@ pub(crate) fn terminal_check_size(mut term: Term) {
     if (curheight == height && curwidth == width) || height == 0 || width == 0 {
         return;
     }
-    let vt = term.vt;
-    // SAFETY: the terminal's own emulator. The resize reaches the screen's
-    // consumer, so nothing of the terminal is borrowed across it.
-    unsafe { vterm_set_size(vt, height, width) };
-    term.flush_damage();
+    // The resize reaches the screen's consumer, which comes back to the
+    // terminal through its own handle.
+    term.vt.set_size(height, width);
+    term.vt.flush_damage();
     term.pending.resize = true;
     refresh::invalidate_terminal(term, None);
 }
@@ -602,23 +466,19 @@ pub(crate) fn terminal_check_size(mut term: Term) {
 /// wiped — and does nothing until `refcount` reaches zero. Answers whether
 /// it freed the terminal, after which the caller drops its handle.
 pub(crate) fn terminal_destroy(mut term: Term) -> bool {
-    if let Some(mut buf) = term.buf() {
+    if let Some(mut buf) = term_buf(term) {
         term.buf_handle = 0 as Handle;
         buf.terminal = ::core::ptr::null_mut();
     }
     if term.refcount != RefcountSize::ZERO {
         return false;
     }
-    let (raw, vt, events) = (term.raw(), term.vt, term.pending.events.take());
+    let events = term.pending.events.take();
     refresh::refresh_before_destroy(term);
-    // SAFETY: the terminal is the last thing standing on all of these, and
-    // each is released exactly once.
-    unsafe { vterm_free(vt) };
     drop(events);
-    // SAFETY: the other half of `terminal_alloc`'s `Box::into_raw`;
-    // everything the terminal owns goes with it, and the caller drops its
-    // handle so that nothing reaches it again.
-    drop(unsafe { Box::from_raw(raw) });
+    // Everything the terminal owns goes with it, the emulator included, and
+    // the caller drops its handle so that nothing reaches it again.
+    term.free();
     true
 }
 
@@ -630,12 +490,9 @@ fn terminal_send(term: Term, data: &[u8]) {
     if term.closed {
         return;
     }
-    let held = term.pending.send;
-    if !held.is_null() {
+    if let Some(held) = &term.pending.send {
         if !data.is_empty() {
-            // SAFETY: the buffer is borrowed from the in-flight request,
-            // which outlives it.
-            unsafe { (*held).extend_from_slice(data) };
+            held.borrow_mut().extend_from_slice(data);
         }
         return;
     }
@@ -652,12 +509,9 @@ fn on_sync_flush(handle: u64, _: u64) {
     if exiting.get() {
         return;
     }
-    let buf = buf_for_handle(handle_of(handle));
-    let Some(buf) = buf.filter(|buf| !buf.terminal.is_null()) else {
+    let Some(term) = buf_for_handle(handle_of(handle)).and_then(Buf::terminal_handle) else {
         return;
     };
-    // SAFETY: a buffer that still has its terminal.
-    let term = unsafe { Term::new(buf.terminal) };
     block_autocmds();
     refresh::refresh_terminal(term);
     unblock_autocmds();
@@ -677,11 +531,11 @@ pub(crate) fn terminal_receive(mut term: Term, bytes: &[u8]) {
             }
             crlf.push(byte);
         }
-        term.write(&crlf);
+        write_to_emulator(term, &crlf);
     } else {
-        term.write(bytes);
+        write_to_emulator(term, bytes);
     }
-    term.flush_damage();
+    term.vt.flush_damage();
 
     if term.sync_flush_pending {
         // The frame the child was assembling is complete: invalidate all of
@@ -700,14 +554,12 @@ pub(crate) fn terminal_receive(mut term: Term, bytes: &[u8]) {
 /// vterm fills a colour in whole, so the reads below all rest on the same
 /// thing; it is booked here once instead of at each of the eight uses.
 fn color_type(color: &VTermColor) -> c_uint {
-    // SAFETY: `type_0` is an arm of its own, at offset 0 of the others.
-    c_uint::from(unsafe { color.type_0 })
+    c_uint::from(color.type_byte())
 }
 
 /// The palette entry an indexed colour names.
 fn color_index(color: &VTermColor) -> int16_t {
-    // SAFETY: as above; the caller has checked the type says indexed.
-    int16_t::from(unsafe { color.indexed.idx })
+    int16_t::from(color.index())
 }
 
 /// The highlight bit for a cell's underline style. vterm names more styles
@@ -734,12 +586,8 @@ pub(crate) fn terminal_get_line_attributes(
     linenr: c_int,
     term_attrs: &mut [c_int; TERM_ATTRS_MAX as usize],
 ) {
-    debug_assert!(!buffer.terminal.is_null(), "buf->terminal");
-    // SAFETY: a live buffer's own terminal, which nothing else holds while
-    // a line of it is drawn.
-    let term = unsafe { Term::new(buffer.terminal) };
+    let mut term = buffer.terminal_handle().expect("buf->terminal");
     let (height, width) = term.size();
-    let state = term.state();
     debug_assert!(linenr != 0, "buffer line numbers are one-based");
 
     let row = linenr_to_row(term, linenr);
@@ -752,9 +600,8 @@ pub(crate) fn terminal_get_line_attributes(
         // False for a scrollback cell past the end of a row stored while
         // the terminal was narrower; such a cell has no colours at all.
         //
-        // SAFETY: all-zeroes is a valid cell — every field is a scalar or a
-        // union of them — and `fetch_cell` fills it in whole either way.
-        let mut cell: VTermScreenCell = unsafe { ::core::mem::zeroed() };
+        // `fetch_cell` fills it in whole either way.
+        let mut cell: VTermScreenCell = ZERO_SCREEN_CELL;
         let color_valid = fetch_cell(term, row, col, &mut cell);
         let fg_default = !color_valid || color_type(&cell.fg) & VTERM_COLOR_DEFAULT_FG != 0;
         let bg_default = !color_valid || color_type(&cell.bg) & VTERM_COLOR_DEFAULT_BG != 0;
@@ -802,8 +649,8 @@ pub(crate) fn terminal_get_line_attributes(
             let resolved = HlAttrs {
                 rgb_ae_attr: hl_attrs,
                 cterm_ae_attr: hl_attrs,
-                rgb_fg_color: if fg_default { -1 } else { state.rgb(cell.fg) },
-                rgb_bg_color: if bg_default { -1 } else { state.rgb(cell.bg) },
+                rgb_fg_color: if fg_default { -1 } else { term.rgb(cell.fg) },
+                rgb_bg_color: if bg_default { -1 } else { term.rgb(cell.bg) },
                 rgb_sp_color: -1 as RgbValue,
                 cterm_fg_color: vt_fg_idx,
                 cterm_bg_color: vt_bg_idx,
@@ -828,16 +675,13 @@ pub(crate) fn terminal_buf(term: Term) -> BufferHandle {
 
 /// [`terminal_close`] of `buffer`'s terminal, which must be set.
 pub(crate) fn close_buf_terminal(buffer: Buf) {
-    debug_assert!(!buffer.terminal.is_null(), "buf->terminal");
-    // SAFETY: the buffer's own live terminal.
-    terminal_close(unsafe { Term::new(buffer.terminal) }, -1);
+    terminal_close(buffer.terminal_handle().expect("buf->terminal"), -1);
 }
 
 /// [`terminal_check_size`] of `buffer`'s terminal, when it has one.
 pub(crate) fn check_buf_terminal_size(buffer: Buf) {
-    if !buffer.terminal.is_null() {
-        // SAFETY: a buffer's terminal is live for as long as the buffer.
-        terminal_check_size(unsafe { Term::new(buffer.terminal) });
+    if let Some(term) = buffer.terminal_handle() {
+        terminal_check_size(term);
     }
 }
 
@@ -848,19 +692,15 @@ pub(crate) fn terminal_running(term: Term) -> bool {
 
 /// Whether `buffer` holds a terminal whose job is suspended.
 pub(crate) fn buf_terminal_suspended(buffer: Buf) -> bool {
-    // SAFETY: a live buffer's own terminal.
-    !buffer.terminal.is_null() && unsafe { (*buffer.terminal).suspended }
+    buffer.terminal_handle().is_some_and(|term| term.suspended)
 }
 
 /// Tell the child of `buffer`'s terminal, if it has one and asked for theme
 /// updates, that `'background'` changed.
 pub(crate) fn terminal_notify_theme(buffer: Buf, dark: bool) {
-    let term = buffer.terminal;
-    if term.is_null() {
+    let Some(term) = buffer.terminal_handle() else {
         return;
-    }
-    // SAFETY: a live buffer's terminal is live until the buffer closes it.
-    let term = unsafe { Term::new(term) };
+    };
     if !term.theme_updates {
         return;
     }
@@ -899,19 +739,10 @@ fn dict_lookup(dict: &DictRef, key: &CStr) -> Object {
 }
 
 /// `b:<key>`, falling back to `g:<key>`, if it is a string.
-///
-/// The answer is a fresh allocation the caller frees, or null.
-///
-/// # Safety
-///
-/// `key` must point at a NUL-terminated string.
-unsafe fn get_config_string(buffer: Buf, key: *const c_char) -> *mut c_char {
-    // SAFETY: the caller's NUL-terminated key.
-    let key = unsafe { CStr::from_ptr(key) };
+fn get_config_string(buffer: Buf, key: &CStr) -> Option<String_0> {
     let mut obj = dict_lookup(&scope_vars(&buffer.b_bufvar), key);
     if obj.is_nil() {
         obj = dict_lookup(&globvar_dict(), key);
     }
     obj.into_string()
-        .map_or(::core::ptr::null_mut(), String_0::into_raw)
 }

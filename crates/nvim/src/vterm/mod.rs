@@ -2,6 +2,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+pub mod abi;
 pub mod cell;
 pub mod color;
 pub mod csi;
@@ -9,6 +10,7 @@ pub mod damage;
 pub mod dcs;
 pub mod encoding;
 pub mod geometry;
+pub(crate) mod host;
 pub mod keyboard;
 pub mod mode;
 pub mod mouse;
