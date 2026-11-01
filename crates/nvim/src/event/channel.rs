@@ -37,6 +37,7 @@ use core::ptr;
 
 use crate::channel::with_channel;
 use crate::eval::typval::DictRef;
+use crate::event::libuv_proc::argv_into_raw;
 use crate::event::r#loop::main_loop_raw;
 use crate::event::proc::{proc_free, proc_spawn, proc_stop, proc_wait};
 use crate::event::rstream::{
@@ -53,7 +54,6 @@ use crate::memory::{xfree, xmemdup};
 use crate::os::pty_proc_unix::{
     pty_proc_close_master, pty_proc_resize, pty_proc_resume, pty_proc_tty_name,
 };
-use crate::os::system::argv_into_raw;
 use crate::shell::Argv;
 use crate::types::{
     Channel, ChannelStream, InternalState, JobProc, Proc, PtyProc, RStream, StderrState, StdioPair,

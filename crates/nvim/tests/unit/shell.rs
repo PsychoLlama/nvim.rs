@@ -17,8 +17,8 @@ use std::ffi::c_int;
 
 use neovim::memory::{ThinCString, XString};
 use neovim::option::vars::{P_SH, P_SHCF, P_SXE, P_SXQ};
-use neovim::os::system::os_system_capture;
 use neovim::shell::Argv;
+use neovim::shell::system::os_system_capture;
 
 use crate::support::{Editor, cstr, editor_lock};
 

@@ -47,6 +47,7 @@
 use crate::event::libuv::{
     uv_close, uv_pipe_init, uv_recv_buffer_size, uv_timer_start, uv_timer_stop, uv_unref,
 };
+use crate::event::libuv_proc::free_raw_argv;
 use crate::event::libuv_proc::{libuv_proc_close, libuv_proc_spawn};
 use crate::event::r#loop::{
     loop_children, loop_poll_events, one_arg_event, process_events, process_events_until,
@@ -63,7 +64,6 @@ use crate::os::pty_proc_unix::{
     pty_proc_close, pty_proc_close_master, pty_proc_flush_master, pty_proc_spawn, pty_proc_teardown,
 };
 use crate::os::signal::{SIGHUP, SIGKILL, SIGTERM};
-use crate::os::system::free_raw_argv;
 use crate::os::time::os_hrtime;
 use crate::startup::{
     exiting, main_loop, os_exit, preserve_exit, ui_client_channel_id, ui_client_exit_status,

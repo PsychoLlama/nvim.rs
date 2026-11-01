@@ -19,7 +19,6 @@ pub mod proc;
 pub mod pty_proc_unix;
 pub mod signal;
 pub(crate) mod state;
-pub mod system;
 pub mod time;
 pub mod users;
 pub mod uv_error;

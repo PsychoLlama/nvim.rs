@@ -24,11 +24,11 @@ use crate::message::{msg_str, verbose_enter_scroll, verbose_leave_scroll};
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::option::vars::p_verbose;
 use crate::os::fs::executable_path;
-use crate::os::system::os_system_capture;
 use crate::profile::do_profiling;
 use crate::profile::{prof_child_enter, prof_child_exit};
 use crate::semsg;
 use crate::shell::Argv;
+use crate::shell::system::os_system_capture;
 use crate::smsg;
 use crate::types::{
     EvalFuncData, Failed, IOSIZE, List, OptInt, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING,

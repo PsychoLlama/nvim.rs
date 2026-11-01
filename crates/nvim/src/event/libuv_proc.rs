@@ -23,17 +23,26 @@
 
 use crate::eval::typval::dict_to_env;
 use crate::event::libuv::{uv_close, uv_pipe, uv_pipe_open, uv_spawn};
-use crate::event::proc::{kProcTypeUv, proc_get_exepath, proc_init};
+use crate::event::r#loop::{loop_poll_events, main_loop_raw};
+use crate::event::proc::{
+    kProcTypeUv, proc_get_exepath, proc_init, proc_spawn, proc_stop, proc_wait,
+};
+use crate::event::rstream::{rstream_init, rstream_start};
+use crate::event::stream::stream_may_close;
+use crate::event::wstream::{SharedBuffer, wstream_init, wstream_set_write_cb, wstream_write};
+use crate::event_queue::{self, ChildQueue};
 use crate::log::{LOGLVL_INF, logmsg};
+use crate::memory::ThinCString;
 use crate::memory::xfree;
 use crate::message_fmt::{msg_cstr, msg_cstr_opt};
 use crate::narrow::number_as_int;
 use crate::os::fs::os_strerror;
+use crate::shell::Argv;
 use crate::startup::ui_client_forward_stdin;
 use crate::types::libc::STDERR_FILENO;
 use crate::types::{
-    LibuvProc, Loop, Proc, uv_file, uv_handle_t, uv_loop_t, uv_pipe_t, uv_process_options_t,
-    uv_process_t, uv_stdio_container_t, uv_stdio_flags,
+    LibuvProc, Loop, Proc, RStream, Stream, size_t, stream_read_cb, uv_file, uv_handle_t,
+    uv_loop_t, uv_pipe_t, uv_process_options_t, uv_process_t, uv_stdio_container_t, uv_stdio_flags,
 };
 use ::libc::close;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -342,6 +351,178 @@ unsafe fn free_child_env(env: *mut *mut c_char) {
         }
         xfree(env.cast());
     }
+}
+
+// ---------------------------------------------------------------------------
+// A child's command line
+// ---------------------------------------------------------------------------
+
+/// Lay `argv` out as the NULL-terminated vector of NUL-terminated words a
+/// child is spawned with; the child owns it until [`free_raw_argv`].
+pub(crate) fn argv_into_raw(argv: Argv) -> *mut *mut c_char {
+    let slots: Box<[*mut c_char]> = argv
+        .into_words()
+        .into_iter()
+        .map(ThinCString::into_raw)
+        .chain([ptr::null_mut()])
+        .collect();
+    Box::into_raw(slots).cast::<*mut c_char>()
+}
+
+/// Release a vector [`argv_into_raw`] laid out.
+///
+/// # Safety
+/// `argv` is null or an answer of [`argv_into_raw`], released once.
+pub(crate) unsafe fn free_raw_argv(argv: *mut *mut c_char) {
+    if argv.is_null() {
+        return;
+    }
+    // SAFETY: the caller's contract -- a boxed slice of words ending in the
+    // null, each word a `ThinCString` taken over once.
+    unsafe {
+        let mut len = 0;
+        while !(*argv.add(len)).is_null() {
+            drop(ThinCString::from_raw(*argv.add(len)));
+            len += 1;
+        }
+        drop(Box::from_raw(ptr::slice_from_raw_parts_mut(argv, len + 1)));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Running a child to completion
+// ---------------------------------------------------------------------------
+
+/// What reads a child's output in [`run_to_exit`]: each chunk, the
+/// descriptor it came from (1 or 2), and whether the stream ended. Answers
+/// how much it took.
+pub(crate) type OutputSink<'a> = &'a mut dyn FnMut(&[u8], c_int, bool) -> usize;
+
+/// How a [`run_to_exit`] went.
+pub(crate) enum ChildRun {
+    /// The child could not be started: libuv's error.
+    NotStarted(c_int),
+    /// Its stdin would not take the input; it has been asked to stop.
+    InputRefused,
+    /// It exited with this status (as `proc_wait` answers it).
+    Exited(c_int),
+}
+
+/// Spawn `argv` on the editor's loop with `input` on its stdin, hand its
+/// stdout and stderr to `output` (or drop them when there is none), and pump
+/// the loop until it exits: what `system()`, `:!` and wildcard expansion
+/// run on. `on_input_written` is told libuv's status once the input is
+/// written, after which stdin is closed; `before_wait` runs once the child
+/// is going and before the wait.
+///
+/// The child, its streams and its queue live on this frame, which outlives
+/// every callback they register.
+pub(crate) fn run_to_exit(
+    argv: Argv,
+    input: &[u8],
+    output: Option<OutputSink<'_>>,
+    on_input_written: fn(c_int),
+    before_wait: impl FnOnce(),
+) -> ChildRun {
+    let mut sink = output;
+    let has_input = !input.is_empty();
+    let reader: stream_read_cb = if sink.is_some() {
+        Some(sink_shim)
+    } else {
+        None
+    };
+    let sink_data = (&raw mut sink).cast::<c_void>();
+    let events = ChildQueue::of_main_loop();
+    let mut uvproc = libuv_proc_init(main_loop_raw(), ptr::null_mut());
+    uvproc.proc.events = Some(events.id());
+    uvproc.proc.argv = argv_into_raw(argv);
+    let proc = &raw mut uvproc.proc;
+
+    // SAFETY: the child on this frame, unspawned, with its argv set.
+    let status = unsafe { proc_spawn(proc, has_input, true, true) };
+    if status != 0 {
+        // SAFETY: the editor's loop, live for the process; this lets the
+        // spawn's closes finish.
+        unsafe { loop_poll_events(main_loop_raw(), 0) };
+        return ChildRun::NotStarted(status);
+    }
+
+    // Unlike process events, stream events are not queued: they are dealt
+    // with as fast as possible so the streams are not closed while the OS
+    // buffer still holds data the child wrote before exiting.
+    // SAFETY: the spawned child's streams, on this frame, which outlives
+    // them; `sink_shim` reads `sink`, which does too.
+    unsafe {
+        if has_input {
+            wstream_init(&raw mut (*proc).in_0, 0);
+        }
+        for out in [&raw mut (*proc).out, &raw mut (*proc).err] {
+            rstream_init(out);
+            rstream_start(out, reader, sink_data);
+        }
+    }
+
+    if has_input {
+        let buffer = SharedBuffer::from_vec(input.to_vec()).into_raw();
+        // SAFETY: the child's stdin, initialised above, and the one
+        // reference the write takes over.
+        if unsafe { wstream_write(&raw mut (*proc).in_0, buffer) } != 0 {
+            // SAFETY: the spawned child.
+            unsafe { proc_stop(proc) };
+            return ChildRun::InputRefused;
+        }
+        // Close stdin once everything has been written.
+        let report = on_input_written as *mut c_void;
+        // SAFETY: as above; `input_written_shim` reads the hook back.
+        unsafe { wstream_set_write_cb(&raw mut (*proc).in_0, Some(input_written_shim), report) };
+    }
+
+    before_wait();
+    // SAFETY: the spawned child, which this frame keeps for the wait.
+    let code = unsafe { proc_wait(proc, -1, None) };
+    debug_assert!(event_queue::is_empty(events.id()));
+    ChildRun::Exited(code)
+}
+
+/// [`run_to_exit`]'s read callback: hand the chunk to the caller's sink.
+///
+/// # Safety
+/// A `stream_read_cb` started by `run_to_exit`: `buf` is `count` readable
+/// bytes, `data` that frame's `Option<OutputSink>`, which outlives the read.
+unsafe fn sink_shim(
+    stream: *mut RStream,
+    buf: *const c_char,
+    count: size_t,
+    data: *mut c_void,
+    eof: bool,
+) -> size_t {
+    if count == 0 {
+        return count;
+    }
+    // SAFETY: the caller's contract; the sink is not otherwise borrowed
+    // while the child runs.
+    let (sink, bytes, fd) = unsafe {
+        (
+            &mut *data.cast::<Option<OutputSink<'_>>>(),
+            core::slice::from_raw_parts(buf.cast::<u8>(), count),
+            (*stream).s.fd,
+        )
+    };
+    sink.as_mut().map_or(count, |sink| sink(bytes, fd, eof))
+}
+
+/// [`run_to_exit`]'s write callback: tell the caller's hook, and close
+/// stdin.
+///
+/// # Safety
+/// A `stream_write_cb` set by `run_to_exit`: `stream` is the child's live
+/// stdin and `data` a `fn(c_int)`.
+unsafe fn input_written_shim(stream: *mut Stream, data: *mut c_void, status: c_int) {
+    // SAFETY: `run_to_exit` stored a `fn(c_int)` here.
+    let report = unsafe { core::mem::transmute::<*mut c_void, fn(c_int)>(data) };
+    report(status);
+    // SAFETY: the caller's stream.
+    unsafe { stream_may_close(stream) };
 }
 
 #[cfg(test)]

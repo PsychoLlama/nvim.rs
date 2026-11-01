@@ -3,7 +3,7 @@
 //! # Boundary
 //!
 //! Nothing here talks to the OS: the child is spawned and pumped by
-//! `crate::os::system`, and its output reaches the screen through the
+//! `crate::shell::system`, and its output reaches the screen through the
 //! message layer ([`throttle`]). What this module owns is everything
 //! *around* that -- turning `'shell'`, `'shellcmdflag'`, `'shellxquote'`
 //! and `'shellxescape'` into an argument vector, deciding where the output
@@ -19,6 +19,7 @@
 #![forbid(unsafe_code)]
 
 mod expand;
+pub mod system;
 pub(crate) mod throttle;
 
 use crate::buffer::read_buffer_into;
@@ -38,10 +39,10 @@ use crate::option::vars::{P_SH, P_SHCF, P_SXE, P_SXQ, p_sh, p_verbose};
 use crate::os::cshim::gettext;
 use crate::os::fs::os_remove;
 use crate::os::signal::{signal_accept_deadly, signal_reject_deadly};
-use crate::os::system::do_os_system;
 use crate::profile::do_profiling;
 use crate::profile::{prof_child_enter, prof_child_exit};
 use crate::semsg;
+use crate::shell::system::do_os_system;
 use crate::smsg;
 use crate::state::MODE_EXTERNCMD;
 use crate::state::mode::State;
@@ -87,7 +88,7 @@ const NL: c_int = '\n' as c_int;
 const SHELL_SPECIAL: &[u8] = b"\t \"&'$;<>()\\|\n";
 
 /// An owned argument vector, the program first: what a child process is
-/// started with. `crate::os::system` lays it out as the NULL-terminated
+/// started with. `crate::shell::system` lays it out as the NULL-terminated
 /// `char **` libuv wants when the child is spawned.
 pub struct Argv(Vec<ThinCString>);
 
