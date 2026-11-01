@@ -60,9 +60,9 @@ use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::libc::{STDERR_FILENO, STDOUT_FILENO};
 use crate::types::ui::kLineFlagWrap;
 use crate::types::{
-    ApiDict, Arena, Array, CallbackReader, Error, GridLineEvent, HlAttrs, Integer,
-    KeyDict_highlight, Object, ObjectType, String_0, TUIData, UIClientHandler, Unpacker,
-    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
+    ApiDict, Array, CallbackReader, Error, GridLineEvent, HlAttrs, Integer, KeyDict_highlight,
+    Object, ObjectType, String_0, TUIData, UIClientHandler, Unpacker, kObjectTypeArray,
+    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
 };
 use crate::ui::state::t_colors;
 use core::ffi::{CStr, c_int};
@@ -333,11 +333,7 @@ pub(crate) fn ui_client_get_redraw_handler(name: &[u8]) -> UIClientHandler {
 /// Its address is also what the decoder compares against to recognise the
 /// `redraw` method at all, which is why this exists rather than a null
 /// entry in the dispatch table.
-pub(crate) fn handle_ui_client_redraw(
-    _channel_id: u64,
-    _args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub(crate) fn handle_ui_client_redraw(_channel_id: u64, _args: Array) -> Result<Object, Error> {
     Err(Error::validation(c"'redraw' cannot be sent as a request"))
 }
 

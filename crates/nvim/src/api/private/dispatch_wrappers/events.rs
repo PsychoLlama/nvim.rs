@@ -12,11 +12,7 @@ use super::*;
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_error_event(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_error_event(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_error_event",
@@ -42,11 +38,7 @@ pub fn handle_nvim_error_event(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_ui_term_event(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_ui_term_event(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_ui_term_event",

@@ -12,11 +12,7 @@ use super::*;
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_open_win(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_open_win(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_open_win",
@@ -52,11 +48,7 @@ pub fn handle_nvim_open_win(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_win_get_config(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_win_get_config(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_win_get_config",
@@ -79,11 +71,7 @@ pub fn handle_nvim_win_get_config(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_win_set_config(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_win_set_config(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_win_set_config",

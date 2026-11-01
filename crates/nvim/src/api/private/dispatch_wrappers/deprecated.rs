@@ -12,11 +12,7 @@ use super::*;
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_buffer_del_line(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_buffer_del_line(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_buffer_del_line",
@@ -42,11 +38,7 @@ pub fn handle_buffer_del_line(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_buffer_del_var(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_buffer_del_var(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_buffer_del_var",
@@ -71,11 +63,7 @@ pub fn handle_buffer_del_var(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_buffer_get_line(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_buffer_get_line(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_buffer_get_line",
@@ -101,11 +89,7 @@ pub fn handle_buffer_get_line(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_buffer_get_line_slice(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_buffer_get_line_slice(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_buffer_get_line_slice",
@@ -140,11 +124,7 @@ pub fn handle_buffer_get_line_slice(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_buffer_insert(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_buffer_insert(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_buffer_insert",
@@ -173,11 +153,7 @@ pub fn handle_buffer_insert(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_buffer_set_line(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_buffer_set_line(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_buffer_set_line",
@@ -206,11 +182,7 @@ pub fn handle_buffer_set_line(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_buffer_set_line_slice(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_buffer_set_line_slice(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_buffer_set_line_slice",
@@ -248,11 +220,7 @@ pub fn handle_buffer_set_line_slice(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_buffer_set_var(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_buffer_set_var(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_buffer_set_var",
@@ -278,11 +246,7 @@ pub fn handle_buffer_set_var(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_buf_add_highlight(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_buf_add_highlight(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_buf_add_highlight",
@@ -320,11 +284,7 @@ pub fn handle_nvim_buf_add_highlight(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_buf_clear_highlight(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_buf_clear_highlight(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_buf_clear_highlight",
@@ -356,11 +316,7 @@ pub fn handle_nvim_buf_clear_highlight(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_buf_get_number(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_buf_get_number(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_buf_get_number",
@@ -383,11 +339,7 @@ pub fn handle_nvim_buf_get_number(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_buf_get_option(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_buf_get_option(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_buf_get_option",
@@ -412,11 +364,7 @@ pub fn handle_nvim_buf_get_option(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_buf_set_option(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_buf_set_option(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_buf_set_option",
@@ -446,7 +394,6 @@ pub fn handle_nvim_buf_set_option(
 pub fn handle_nvim_buf_set_virtual_text(
     channel_id: uint64_t,
     args: Array,
-    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -490,11 +437,7 @@ pub fn handle_nvim_buf_set_virtual_text(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_call_atomic(
-    channel_id: uint64_t,
-    args: Array,
-    arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_call_atomic(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_call_atomic",
@@ -508,7 +451,7 @@ pub fn handle_nvim_call_atomic(
     let Some(arg_1) = as_array(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_call_atomic", c"Array"));
     };
-    let rv = nvim_call_atomic(channel_id, arg_1, arena)?;
+    let rv = nvim_call_atomic(channel_id, arg_1)?;
     Ok(Object::array(rv))
 }
 
@@ -517,11 +460,7 @@ pub fn handle_nvim_call_atomic(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_command_output(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_command_output(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_command_output",
@@ -544,11 +483,7 @@ pub fn handle_nvim_command_output(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_err_write(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_err_write(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_err_write",
@@ -571,11 +506,7 @@ pub fn handle_nvim_err_write(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_err_writeln(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_err_writeln(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_err_writeln",
@@ -598,11 +529,7 @@ pub fn handle_nvim_err_writeln(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_exec(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_exec(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_exec",
@@ -628,11 +555,7 @@ pub fn handle_nvim_exec(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_execute_lua(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_execute_lua(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_execute_lua",
@@ -657,11 +580,7 @@ pub fn handle_nvim_execute_lua(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_get_hl_by_id(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_get_hl_by_id(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_get_hl_by_id",
@@ -687,11 +606,7 @@ pub fn handle_nvim_get_hl_by_id(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_get_hl_by_name(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_get_hl_by_name(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_get_hl_by_name",
@@ -717,11 +632,7 @@ pub fn handle_nvim_get_hl_by_name(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_get_option(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_get_option(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_get_option",
@@ -743,11 +654,7 @@ pub fn handle_nvim_get_option(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_get_option_info(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_get_option_info(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_get_option_info",
@@ -770,11 +677,7 @@ pub fn handle_nvim_get_option_info(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_notify(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_notify(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_notify",
@@ -802,11 +705,7 @@ pub fn handle_nvim_notify(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_out_write(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_out_write(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_out_write",
@@ -829,11 +728,7 @@ pub fn handle_nvim_out_write(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_set_option(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_set_option(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_set_option",
@@ -857,11 +752,7 @@ pub fn handle_nvim_set_option(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_subscribe(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_subscribe(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_subscribe",
@@ -884,11 +775,7 @@ pub fn handle_nvim_subscribe(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_unsubscribe(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_unsubscribe(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_unsubscribe",
@@ -911,11 +798,7 @@ pub fn handle_nvim_unsubscribe(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_win_get_option(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_win_get_option(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_win_get_option",
@@ -940,11 +823,7 @@ pub fn handle_nvim_win_get_option(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_win_set_option(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_win_set_option(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_win_set_option",
@@ -964,4 +843,125 @@ pub fn handle_nvim_win_set_option(
     let arg_3 = args[2].take();
     nvim_win_set_option(channel_id, arg_1, arg_2, arg_3)?;
     Ok(Object::Nil)
+}
+
+/// The msgpack-RPC dispatch wrapper for `tabpage_del_var`.
+///
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
+pub fn handle_tabpage_del_var(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
+    let mut args = args;
+    log_invoke(
+        c"handle_tabpage_del_var",
+        c"tabpage_del_var",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 2 {
+        return Err(wrong_arity(2, args.len()));
+    }
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeTabpage) else {
+        return Err(wrong_type(1, c"tabpage_del_var", c"Tabpage"));
+    };
+    let Some(arg_2) = as_string(args[1].take()) else {
+        return Err(wrong_type(2, c"tabpage_del_var", c"String"));
+    };
+    tabpage_del_var(arg_1, arg_2)
+}
+
+/// The msgpack-RPC dispatch wrapper for `tabpage_set_var`.
+///
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
+pub fn handle_tabpage_set_var(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
+    let mut args = args;
+    log_invoke(
+        c"handle_tabpage_set_var",
+        c"tabpage_set_var",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 3 {
+        return Err(wrong_arity(3, args.len()));
+    }
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeTabpage) else {
+        return Err(wrong_type(1, c"tabpage_set_var", c"Tabpage"));
+    };
+    let Some(arg_2) = as_string(args[1].take()) else {
+        return Err(wrong_type(2, c"tabpage_set_var", c"String"));
+    };
+    let arg_3 = args[2].take();
+    tabpage_set_var(arg_1, arg_2, arg_3)
+}
+
+/// The msgpack-RPC dispatch wrapper for `vim_del_var`.
+///
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
+pub fn handle_vim_del_var(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
+    let mut args = args;
+    log_invoke(
+        c"handle_vim_del_var",
+        c"vim_del_var",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        return Err(wrong_arity(1, args.len()));
+    }
+    let Some(arg_1) = as_string(args[0].take()) else {
+        return Err(wrong_type(1, c"vim_del_var", c"String"));
+    };
+    vim_del_var(arg_1)
+}
+
+/// The msgpack-RPC dispatch wrapper for `vim_set_var`.
+///
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
+pub fn handle_vim_set_var(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
+    let mut args = args;
+    log_invoke(
+        c"handle_vim_set_var",
+        c"vim_set_var",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 2 {
+        return Err(wrong_arity(2, args.len()));
+    }
+    let Some(arg_1) = as_string(args[0].take()) else {
+        return Err(wrong_type(1, c"vim_set_var", c"String"));
+    };
+    let arg_2 = args[1].take();
+    vim_set_var(arg_1, arg_2)
+}
+
+/// The msgpack-RPC dispatch wrapper for `window_del_var`.
+///
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
+pub fn handle_window_del_var(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
+    let mut args = args;
+    log_invoke(
+        c"handle_window_del_var",
+        c"window_del_var",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 2 {
+        return Err(wrong_arity(2, args.len()));
+    }
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+        return Err(wrong_type(1, c"window_del_var", c"Window"));
+    };
+    let Some(arg_2) = as_string(args[1].take()) else {
+        return Err(wrong_type(2, c"window_del_var", c"String"));
+    };
+    window_del_var(arg_1, arg_2)
 }

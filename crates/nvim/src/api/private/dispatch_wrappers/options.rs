@@ -15,7 +15,6 @@ use super::*;
 pub fn handle_nvim_get_all_options_info(
     channel_id: uint64_t,
     args: Array,
-    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     log_invoke(
         c"handle_nvim_get_all_options_info",
@@ -35,11 +34,7 @@ pub fn handle_nvim_get_all_options_info(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_get_option_info2(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_get_option_info2(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_get_option_info2",
@@ -69,11 +64,7 @@ pub fn handle_nvim_get_option_info2(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_get_option_value(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_get_option_value(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_get_option_value",
@@ -102,11 +93,7 @@ pub fn handle_nvim_get_option_value(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_set_option_value(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_set_option_value(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_set_option_value",

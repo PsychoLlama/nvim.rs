@@ -41,11 +41,7 @@ pub fn nvim_execute_lua(code: String_0, args: Array) -> Result<Object, Error> {
 
 /// Run each `[name, args]` pair of `calls` through the dispatcher, stopping
 /// at the first that fails.
-pub fn nvim_call_atomic(
-    channel_id: uint64_t,
-    calls: Array,
-    arena: &mut Arena,
-) -> Result<Array, Error> {
+pub fn nvim_call_atomic(channel_id: uint64_t, calls: Array) -> Result<Array, Error> {
     let mut error = Error::none();
     // "results" and the error report, and one result per call.
     let mut rv: Array = Array::with_capacity(2 as size_t);
@@ -92,7 +88,7 @@ pub fn nvim_call_atomic(
                     }
                 };
             let dispatch = handler.fn_0.expect("non-null function pointer");
-            let result = match dispatch(channel_id, args.clone(), arena) {
+            let result = match dispatch(channel_id, args.clone()) {
                 Ok(rv) => rv,
                 Err(e) => {
                     nested_error = e;

@@ -1,5 +1,5 @@
-//! The xmalloc allocation family, memory/string helpers, and the arena
-//! allocator: safe cores + C-ABI shims.
+//! The xmalloc allocation family, memory/string helpers, and the block
+//! pool: safe cores + C-ABI shims.
 //!
 //! [`alloc_log`] is how a test asserts an exact allocation sequence: the four
 //! `seam_*` wrappers below are this module's only calls into the platform
@@ -51,7 +51,7 @@ use crate::types::size_t;
 use ::libc::{calloc, free, malloc, realloc};
 
 /// Ask the editor to give memory back: drop the scrollback, release
-/// memfile blocks, hand the arena's spare blocks to the allocator. Runs at
+/// memfile blocks, hand the block pool's spare blocks to the allocator. Runs at
 /// most once at a time, since everything it calls may allocate.
 ///
 /// # Safety
@@ -64,12 +64,9 @@ unsafe fn try_to_free_memory() {
         return;
     }
     trying_to_free.set(true);
-    // SAFETY: the caller's promise about the editor's state.
-    unsafe {
-        clear_sb_text(true);
-        mf_release_all();
-        free_reuse_blks();
-    }
+    clear_sb_text(true);
+    mf_release_all();
+    free_reuse_blks();
     trying_to_free.set(false);
 }
 
@@ -719,13 +716,12 @@ pub unsafe fn strnequal(a: *const c_char, b: *const c_char, n: usize) -> bool {
 }
 
 pub mod alloc_log;
-pub mod arena;
+pub mod blocks;
 pub(crate) mod handoff;
 pub mod thin_cstring;
 pub mod xstring;
-/// The arena allocator, re-exported: every caller in the tree spells it
-/// `crate::memory::arena_*`, and it is the same allocation family.
-pub use arena::*;
+/// The block pool, re-exported: it is the same allocation family.
+pub use blocks::*;
 pub use thin_cstring::ThinCString;
 pub use xstring::XString;
 

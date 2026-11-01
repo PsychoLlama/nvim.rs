@@ -14,11 +14,7 @@ use super::*;
 /// `Object`.
 // `handle_nvim__buf_debug_extmarks` is derived from an API method's own name.
 #[allow(non_snake_case)]
-pub fn handle_nvim__buf_debug_extmarks(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim__buf_debug_extmarks(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim__buf_debug_extmarks",
@@ -49,11 +45,7 @@ pub fn handle_nvim__buf_debug_extmarks(
 /// `Object`.
 // `handle_nvim__ns_get` is derived from an API method's own name.
 #[allow(non_snake_case)]
-pub fn handle_nvim__ns_get(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim__ns_get(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim__ns_get",
@@ -78,11 +70,7 @@ pub fn handle_nvim__ns_get(
 /// `Object`.
 // `handle_nvim__ns_set` is derived from an API method's own name.
 #[allow(non_snake_case)]
-pub fn handle_nvim__ns_set(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim__ns_set(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim__ns_set",
@@ -112,11 +100,7 @@ pub fn handle_nvim__ns_set(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_buf_clear_namespace(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_buf_clear_namespace(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_buf_clear_namespace",
@@ -148,11 +132,7 @@ pub fn handle_nvim_buf_clear_namespace(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_buf_del_extmark(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_buf_del_extmark(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_buf_del_extmark",
@@ -184,7 +164,6 @@ pub fn handle_nvim_buf_del_extmark(
 pub fn handle_nvim_buf_get_extmark_by_id(
     channel_id: uint64_t,
     args: Array,
-    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -225,11 +204,7 @@ pub fn handle_nvim_buf_get_extmark_by_id(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_buf_get_extmarks(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_buf_get_extmarks(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_buf_get_extmarks",
@@ -268,11 +243,7 @@ pub fn handle_nvim_buf_get_extmarks(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_buf_set_extmark(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_buf_set_extmark(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_buf_set_extmark",
@@ -315,11 +286,7 @@ pub fn handle_nvim_buf_set_extmark(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_create_namespace(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_create_namespace(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
         c"handle_nvim_create_namespace",
@@ -342,11 +309,7 @@ pub fn handle_nvim_create_namespace(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-pub fn handle_nvim_get_namespaces(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: &mut Arena,
-) -> Result<Object, Error> {
+pub fn handle_nvim_get_namespaces(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     log_invoke(
         c"handle_nvim_get_namespaces",
         c"nvim_get_namespaces",

@@ -2,10 +2,8 @@
 // C declarations for the unit tests' ffi.cdef, derived from the Rust crate.
 typedef struct lua_State lua_State;
 typedef struct ApiDict ApiDict;
-typedef struct Arena Arena;
 typedef struct Array Array;
 typedef struct Blob Blob;
-typedef struct ConsumedBlk ConsumedBlk;
 typedef struct DecorRange_data DecorRange_data;
 typedef struct Dict Dict;
 typedef struct DictItem DictItem;
@@ -194,7 +192,6 @@ typedef struct uv_tty_s uv_tty_s;
 typedef struct uv_write_s uv_write_s;
 typedef unsigned int AlignTextPos;
 typedef struct ApiDispatchFn ApiDispatchFn;
-typedef ConsumedBlk *ArenaMem;
 typedef int ArgListId;
 typedef struct ArgvFunc ArgvFunc;
 typedef unsigned int AutoEvent;
@@ -1583,7 +1580,6 @@ static const int BLOCK0_ID0 = 98;
 static const int BLOCK0_ID1 = 48;
 static const int BLOCK_BYTES = 4096;
 static const int BLOCK_END = 268435455;
-static const int BLOCK_SIZE = 64;
 static const int BOOL_BEGIN = 0;
 static const int BOOL_END = 45;
 static const int BRACE_AT_END = 3;

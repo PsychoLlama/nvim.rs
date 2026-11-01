@@ -80,8 +80,6 @@ enum Param {
     /// client; recognised by name because its type (`uint64_t`) is not
     /// distinctive.
     ChannelId,
-    /// The request arena. Supplied by the dispatcher.
-    Arena,
     /// The Lua stack. Only the Lua binding has one; the RPC wrapper passes `None`.
     LuaState,
     /// A value the client sends, at 0-based position `index` of the argument
@@ -173,8 +171,8 @@ impl RetType {
 /// the hand-written layer is converted one function at a time:
 ///
 /// ```ignore
-/// pub unsafe extern "C" fn nvim_x(args.., arena: &mut Arena, err: *mut Error) -> T
-/// pub [unsafe] fn nvim_x(args.., arena: &mut Arena) -> Result<T, Error>
+/// pub unsafe extern "C" fn nvim_x(args.., err: *mut Error) -> T
+/// pub [unsafe] fn nvim_x(args..) -> Result<T, Error>
 /// ```
 ///
 /// The first reports failure through an out-parameter the caller has to
@@ -464,7 +462,7 @@ fn value_ret(ty: &syn::Type) -> Option<RetType> {
 }
 
 /// Classify a signature's parameters, in declaration order. The dispatcher
-/// supplies `channel_id`, the arena, the error slot and (for functions with a
+/// supplies `channel_id`, the error slot and (for functions with a
 /// Lua implementation) no Lua stack (`None`); everything else comes off the wire.
 fn classify(sig: &syn::Signature) -> Result<Vec<Param>, String> {
     let mut params = Vec::new();
@@ -479,7 +477,6 @@ fn classify(sig: &syn::Signature) -> Result<Vec<Param>, String> {
         };
         let param = match pointee_name(&arg.ty).as_deref() {
             _ if is_lua_stack(&arg.ty) => Param::LuaState,
-            Some("Arena") => Param::Arena,
             // An API function reports failure by answering `Err`. The
             // out-parameter is gone, and a signature that grows one back
             // would silently lose its failures here.
@@ -1049,7 +1046,6 @@ fn emit_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         })
         .collect();
     let arity = values.len();
-    let takes_arena = f.params.contains(&Param::Arena);
 
     for n in spec.declared.keys() {
         if *n > arity {
@@ -1064,7 +1060,7 @@ fn emit_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
     // hand-written docs in generated files are gone the next time `just
     // apigen` runs. A wrapper is safe to call: the argument array is its own,
     // each value it uses is taken out of its slot and whatever is left drops
-    // with the array, and the arena is a borrow for the call.
+    // with the array.
     writeln!(out, "/// The msgpack-RPC dispatch wrapper for `{name}`.").unwrap();
     writeln!(out, "///").unwrap();
     writeln!(
@@ -1078,12 +1074,6 @@ fn emit_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
     writeln!(out, "pub fn {handler}(").unwrap();
     writeln!(out, "    channel_id: uint64_t,").unwrap();
     writeln!(out, "    args: Array,").unwrap();
-    writeln!(
-        out,
-        "    {}arena: &mut Arena,",
-        if takes_arena { "" } else { "_" }
-    )
-    .unwrap();
     writeln!(out, ") -> Result<Object, Error> {{").unwrap();
     if !values.is_empty() {
         writeln!(out, "    let mut args = args;").unwrap();
@@ -1161,7 +1151,6 @@ fn emit_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         .iter()
         .map(|p| match p {
             Param::ChannelId => "channel_id".into(),
-            Param::Arena => "arena".into(),
             Param::LuaState => "None".into(),
             Param::Value {
                 index,
@@ -1513,7 +1502,6 @@ const KNOWN: &[(&str, &str, &str)] = &[
 /// Names re-exported by `crate::types`, emitted when referenced.
 const TYPE_NAMES: &[&str] = &[
     "ApiDict",
-    "Arena",
     "Array",
     "Boolean",
     "Error",
@@ -2250,17 +2238,11 @@ fn pusher(ret: &RetType) -> (String, &'static str, bool) {
 fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
     let name = &f.name;
     // The tree forbids unsafe code, so a binding can only call a safe API
-    // function, and it has no request arena to lend: nothing would release
-    // what an arena-allocated result points into.
+    // function.
     if f.is_unsafe {
         return Err(format!(
             "{name}: a Lua binding calls only safe API functions \
              (lua/api_wrappers/ forbids unsafe code)"
-        ));
-    }
-    if f.params.contains(&Param::Arena) {
-        return Err(format!(
-            "{name}: a Lua binding has no arena to lend; return an owned result"
         ));
     }
     let values: Vec<(usize, &ApiType, &str)> = f
@@ -2367,7 +2349,6 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         .iter()
         .map(|p| match p {
             Param::ChannelId => "LUA_INTERNAL_CALL".into(),
-            Param::Arena => unreachable!("refused above"),
             Param::LuaState => "Some(&mut *stack)".into(),
             Param::Value { index, ty, .. } => value(*index, ty),
         })

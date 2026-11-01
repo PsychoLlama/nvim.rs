@@ -46,7 +46,7 @@
 )]
 
 use crate::event::wstream::SharedBuffer;
-use crate::memory::{ARENA_BLOCK_SIZE, block_vec};
+use crate::memory::{BLOCK_SIZE, block_vec};
 use crate::msgpack_rpc::channel::rpc_write_raw;
 use crate::msgpack_rpc::packer::{
     mpack_array, mpack_array_dyn16, mpack_object_array, mpack_str_small, mpack_uint,
@@ -56,7 +56,7 @@ use core::ffi::CStr;
 
 /// The whole buffer for one batch. One arena block, so that the allocator
 /// hands out and takes back a size it already keeps a free list for.
-pub(super) const UI_BUF_SIZE: usize = ARENA_BLOCK_SIZE;
+pub(super) const UI_BUF_SIZE: usize = BLOCK_SIZE;
 
 /// Room kept free for the next event, so that [`push_call`] never has to
 /// check whether what it is packing fits.

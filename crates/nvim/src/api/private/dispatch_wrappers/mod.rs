@@ -29,7 +29,6 @@ mod tabpage;
 mod ui;
 mod vim;
 mod vim_2;
-mod vim_3;
 mod vimscript;
 mod win_config;
 mod window;
@@ -46,7 +45,6 @@ pub use self::tabpage::*;
 pub use self::ui::*;
 pub use self::vim::*;
 pub use self::vim_2::*;
-pub use self::vim_3::*;
 pub use self::vimscript::*;
 pub use self::win_config::*;
 pub use self::window::*;
@@ -135,15 +133,15 @@ use crate::log::logmsg;
 use crate::message::e_textlock;
 use crate::message_fmt::msg_cstr;
 use crate::types::{
-    ApiDict, Arena, Array, Boolean, Error, Float, Handle, Integer, KeyDict_buf_attach,
-    KeyDict_buf_delete, KeyDict_clear_autocmds, KeyDict_cmd, KeyDict_cmd_opts,
-    KeyDict_complete_set, KeyDict_context, KeyDict_create_augroup, KeyDict_create_autocmd,
-    KeyDict_echo_opts, KeyDict_empty, KeyDict_eval_statusline, KeyDict_exec_autocmds,
-    KeyDict_exec_opts, KeyDict_get_autocmds, KeyDict_get_commands, KeyDict_get_extmark,
-    KeyDict_get_extmarks, KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight, KeyDict_keymap,
-    KeyDict_ns_opts, KeyDict_open_term, KeyDict_option, KeyDict_redraw, KeyDict_runtime,
-    KeyDict_set_extmark, KeyDict_tabpage_config, KeyDict_user_command, KeyDict_win_config,
-    KeyDict_win_text_height, Object, ObjectType, String_0, uint64_t,
+    ApiDict, Array, Boolean, Error, Float, Handle, Integer, KeyDict_buf_attach, KeyDict_buf_delete,
+    KeyDict_clear_autocmds, KeyDict_cmd, KeyDict_cmd_opts, KeyDict_complete_set, KeyDict_context,
+    KeyDict_create_augroup, KeyDict_create_autocmd, KeyDict_echo_opts, KeyDict_empty,
+    KeyDict_eval_statusline, KeyDict_exec_autocmds, KeyDict_exec_opts, KeyDict_get_autocmds,
+    KeyDict_get_commands, KeyDict_get_extmark, KeyDict_get_extmarks, KeyDict_get_highlight,
+    KeyDict_get_ns, KeyDict_highlight, KeyDict_keymap, KeyDict_ns_opts, KeyDict_open_term,
+    KeyDict_option, KeyDict_redraw, KeyDict_runtime, KeyDict_set_extmark, KeyDict_tabpage_config,
+    KeyDict_user_command, KeyDict_win_config, KeyDict_win_text_height, Object, ObjectType,
+    String_0, uint64_t,
 };
 use core::ffi::{CStr, c_int};
 

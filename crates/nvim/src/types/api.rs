@@ -19,20 +19,6 @@ pub struct AdditionalDataBuilder {
     pub capacity: size_t,
     pub items: *mut ::core::ffi::c_char,
 }
-/// An arena allocator: a bump pointer into `cur_blk`, which heads a chain of
-/// blocks the arena owns and `arena_mem_free` releases.
-///
-/// Not `Copy`. Two arenas over one block chain would each believe they may
-/// bump it and each free it, so every hand-off is a move -- see
-/// `unpack_object`, which lends its caller's arena to a scratch unpacker and
-/// leaves `ARENA_EMPTY` behind until it is handed back.
-#[derive(Clone)]
-pub struct Arena {
-    pub cur_blk: *mut ::core::ffi::c_char,
-    pub pos: size_t,
-    pub size: size_t,
-}
-pub type ArenaMem = *mut ConsumedBlk;
 /// The API's array: an owned, growable sequence of [`Object`]s.
 ///
 /// A newtype over `Vec<Object>` rather than the type alias, so that the

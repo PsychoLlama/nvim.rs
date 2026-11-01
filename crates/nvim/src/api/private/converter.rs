@@ -360,18 +360,9 @@ fn object_to_vim(value: Object, take_luaref: bool) -> TypVal {
 }
 
 /// Call the RPC handler in row `row` of the method table with `args` on
-/// behalf of Vimscript, and convert its answer to a value before the arena
-/// the call allocated its scratch in is released.
+/// behalf of Vimscript, and convert its answer to a value.
 pub(crate) fn call_handler_for_vimscript(row: usize, args: Array) -> Result<TypVal, Error> {
     let handler = crate::api::private::dispatch::method_handlers[row];
     let call = handler.fn_0.expect("non-null function pointer");
-    // Scratch the handler may allocate in. Nothing in the API does any more
-    // -- every answer owns its storage -- so it stays empty.
-    let mut arena = crate::memory::ARENA_EMPTY;
-    let answer = call(crate::eval::funcs::VIML_INTERNAL_CALL, args, &mut arena).map(TypVal::from);
-    debug_assert!(
-        arena.cur_blk.is_null(),
-        "a handler allocated into its arena"
-    );
-    answer
+    call(crate::eval::funcs::VIML_INTERNAL_CALL, args).map(TypVal::from)
 }

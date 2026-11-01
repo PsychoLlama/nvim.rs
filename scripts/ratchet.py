@@ -1125,8 +1125,8 @@ PERIMETER = {
     # -- The primitives everything else stands on. Their whole job is to be
     # the one place a raw operation happens, so that callers need not.
     "crates/nvim/src/allocator.rs": "the global allocator: malloc/realloc/free",
-    "crates/nvim/src/memory/": "xmalloc and the arena — the floor under every "
-    "owned type in the tree",
+    "crates/nvim/src/memory/": "xmalloc and the block pool — the floor under "
+    "every owned type in the tree",
     "crates/nvim/src/global_cell.rs": "the checked wrapper over c2rust's "
     "mutable statics; the raw static is touched here so it is nowhere else",
     "crates/nvim/src/winlayer.rs": "the window/buffer/position handles and "

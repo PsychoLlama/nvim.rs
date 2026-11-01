@@ -27,7 +27,6 @@ use crate::api::private::dispatch_wrappers::{handle_nvim_get_mode, handle_nvim_u
 use crate::channel::{channel_decref, with_channel};
 use crate::event::multiqueue::{put_job, put_job_in, put_job_on_either};
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, logmsg};
-use crate::memory::ARENA_EMPTY;
 use crate::message_fmt::{msg_addr, msg_bytes};
 use crate::msgpack_rpc::channel::ch_before_blocking_events;
 use crate::os::input::input_blocking;
@@ -305,23 +304,16 @@ fn request_event(request: Request) {
     // A channel closed while the request sat on a queue is simply dropped —
     // there is nowhere left to send the answer.
     if with_channel(id, |chan| !chan.rpc.closed) == Some(true) {
-        // Scratch the handler may allocate in. Nothing in the API does any
-        // more -- every answer owns its storage -- so it stays empty.
-        let mut arena = ARENA_EMPTY;
         // A refused call answers nil, as every wrapper's own refusal paths
         // did, and the failure travels in `error` for the response below.
         let dispatch = handler.fn_0.expect("dispatched with a handler");
-        let mut answer = match dispatch(id, args, &mut arena) {
+        let mut answer = match dispatch(id, args) {
             Ok(rv) => rv,
             Err(e) => {
                 error = e;
                 Object::Nil
             }
         };
-        debug_assert!(
-            arena.cur_blk.is_null(),
-            "a handler allocated into its arena"
-        );
         // A notification is only answered when it failed, and then with
         // `nvim_error_event` rather than a response.
         if type_0 == kMessageTypeRequest || error.is_set() {

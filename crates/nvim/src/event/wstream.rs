@@ -241,7 +241,7 @@ pub unsafe fn wstream_release_wbuffer(buffer: *mut WBuffer) {
 /// (an RPC broadcast) and be released when the last is done with it.
 ///
 /// Cloning takes a reference and dropping gives one up; the last frees the
-/// bytes, back onto the arena's reuse list when they are a block's size.
+/// bytes, back onto the block pool's reuse list when they are a block's size.
 pub(crate) struct SharedBuffer(ptr::NonNull<WBuffer>);
 
 impl SharedBuffer {
@@ -251,7 +251,7 @@ impl SharedBuffer {
         let finalizer: wbuffer_data_finalizer = if bytes.capacity() == 0 {
             // A dangling vector pointer is not a block.
             None
-        } else if bytes.capacity() == crate::memory::ARENA_BLOCK_SIZE {
+        } else if bytes.capacity() == crate::memory::BLOCK_SIZE {
             Some(crate::memory::free_block)
         } else {
             Some(crate::memory::xfree)

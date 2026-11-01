@@ -10,6 +10,8 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 
+/// The link a spent block on the block pool's reuse list carries in its own
+/// first bytes: the block below it on the list.
 pub struct ConsumedBlk {
     pub prev: *mut ConsumedBlk,
 }

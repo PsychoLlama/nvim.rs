@@ -13,8 +13,8 @@
 mod support;
 
 mod api_converter;
-mod arena;
 mod arglist;
+mod blocks;
 mod buffer;
 mod bufwrite;
 mod change;
