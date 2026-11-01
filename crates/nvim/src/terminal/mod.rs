@@ -532,11 +532,11 @@ fn terminal_state_change_event(handle: u64, _: u64) {
 /// The redraw is deferred: this is reached from a process-status callback,
 /// which is no place to touch the screen.
 pub(crate) fn terminal_set_state(mut term: Term, suspended: bool) {
-    if term.suspended != suspended {
-        if let Some(queue) = refresh::refresh_queue() {
-            let event = Event::Ids(terminal_state_change_event, handle_word(term.buf_handle), 0);
-            event_queue::put(queue, event);
-        }
+    if term.suspended != suspended
+        && let Some(queue) = refresh::refresh_queue()
+    {
+        let event = Event::Ids(terminal_state_change_event, handle_word(term.buf_handle), 0);
+        event_queue::put(queue, event);
     }
     term.suspended = suspended;
 }

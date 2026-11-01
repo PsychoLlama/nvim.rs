@@ -553,7 +553,7 @@ unsafe fn create_event(
     arg: *mut c_void,
 ) {
     // SAFETY: the caller's promise about `arg`.
-    let event = unsafe { RawEvent::new(handler, arg) };
+    let event = unsafe { RawEvent::event(handler, arg) };
     match queue {
         None => event.run(),
         Some(queue) => event_queue::put(queue, event),

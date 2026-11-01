@@ -252,7 +252,7 @@ fn deliver(watcher: Handle, handler: unsafe extern "C" fn(*mut *mut c_void)) {
     // SAFETY: the handler takes the watcher it is given, live until its
     // close event, which is queued behind every other event of its; the box
     // is freed only by that close event.
-    let event = unsafe { RawEvent::new(handler, watcher.0.cast::<c_void>()) };
+    let event = unsafe { RawEvent::event(handler, watcher.0.cast::<c_void>()) };
     match watcher.events {
         None => event.run(),
         Some(events) => event_queue::put(events, event),

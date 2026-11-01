@@ -20,9 +20,9 @@ use super::*;
 /// therefore delivered -- exactly once.
 pub enum Event {
     /// A C-shaped handler and the argument words it is run with. Building
-    /// one is the unsafe step ([`RawEvent::new`]); running one is not.
+    /// one is the unsafe step ([`RawEvent::event`]); running one is not.
     ///
-    /// [`RawEvent::new`]: crate::event::r#loop::RawEvent::new
+    /// [`RawEvent::event`]: crate::event::r#loop::RawEvent::event
     Raw(crate::event::r#loop::RawEvent),
     /// Work that owns what it needs.
     Job(Box<dyn FnOnce()>),

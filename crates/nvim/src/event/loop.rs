@@ -565,7 +565,10 @@ impl RawEvent {
     /// `handler` is safe to call, once, with that argv, whenever the queue
     /// the event is put on reaches it: whatever `arg` names outlives the
     /// event, or is released by the handler.
-    pub unsafe fn new(handler: unsafe extern "C" fn(*mut *mut c_void), arg: *mut c_void) -> Event {
+    pub unsafe fn event(
+        handler: unsafe extern "C" fn(*mut *mut c_void),
+        arg: *mut c_void,
+    ) -> Event {
         Event::Raw(RawEvent { handler, arg })
     }
 }
@@ -576,7 +579,7 @@ impl Event {
         match self {
             Event::Raw(raw) => {
                 let mut argv = [raw.arg];
-                // SAFETY: `RawEvent::new`'s contract; the argv is this
+                // SAFETY: `RawEvent::event`'s contract; the argv is this
                 // frame's own.
                 unsafe { (raw.handler)(argv.as_mut_ptr()) };
             }

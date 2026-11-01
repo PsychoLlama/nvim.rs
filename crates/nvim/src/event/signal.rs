@@ -143,7 +143,7 @@ unsafe extern "C" fn signal_watcher_cb(handle: *mut uv_signal_t, _signum: c_int)
         Some(events) => {
             // SAFETY: the watcher outlives the event, which carries nothing
             // but the watcher itself.
-            event_queue::put(events, unsafe { RawEvent::new(signal_event, arg) });
+            event_queue::put(events, unsafe { RawEvent::event(signal_event, arg) });
         }
         None => {
             let mut argv = [arg];

@@ -478,7 +478,7 @@ pub(crate) fn put_job_on_either(
     job: impl FnOnce() + 'static,
 ) {
     let other = queue_in(second).expect("a job is queued after its queue is made");
-    let shared: Rc<Cell<Option<Box<dyn FnOnce()>>>> = Rc::new(Cell::new(Some(Box::new(job))));
+    let shared: Rc<SharedJob> = Rc::new(Cell::new(Some(Box::new(job))));
     let first_copy = Rc::clone(&shared);
     put(
         first.id(),
@@ -487,8 +487,11 @@ pub(crate) fn put_job_on_either(
     put(other, Event::Job(Box::new(move || run_shared(&shared))));
 }
 
+/// A job two queues hold, taken by whichever runs it first.
+type SharedJob = Cell<Option<Box<dyn FnOnce()>>>;
+
 /// Run the job [`put_job_on_either`] shared, if the other queue has not.
-fn run_shared(shared: &Cell<Option<Box<dyn FnOnce()>>>) {
+fn run_shared(shared: &SharedJob) {
     if let Some(job) = shared.take() {
         job();
     }
