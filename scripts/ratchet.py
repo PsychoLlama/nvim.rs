@@ -1114,8 +1114,16 @@ PERIMETER = {
     "callbacks it takes and the symbols it exports are that library's",
     "crates/nvim/src/terminal/": "the terminal emulator's glue: a PTY on one "
     'side and libvterm\'s `extern "C"` callbacks on the other',
-    "crates/nvim/src/tui/": "the terminal: libuv tty handles, termkey's "
-    "parser, and the terminfo entry unibilium hands back",
+    "crates/nvim/src/tui/tui.rs": "the terminal's lifecycle: the output "
+    "tty/pipe handle on a private write loop, the startup timer, the SIGWINCH "
+    "watcher, and stopping the process group on suspend",
+    "crates/nvim/src/tui/input.rs": "reading the terminal: stdin's read "
+    "stream, the escape and background-query timers, and the line "
+    "discipline's erase character (`tcgetattr`)",
+    "crates/nvim/src/tui/output.rs": "the flush: one `uv_write` to the "
+    "output handle, run to completion on the write loop",
+    "crates/nvim/src/tui/events.rs": "the UI events that reach libuv: tty "
+    "mode, the visual bell's sleep, `ui_send`'s direct write, `uv_chdir`",
     "crates/nvim/src/xdiff/": "libxdiff, vendored: which bytes are whitespace "
     "is `isspace(3)`'s answer in the user's locale",
     "crates/nvim/src/harness.rs": "the C symbols the in-repo test harnesses "

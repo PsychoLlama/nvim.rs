@@ -11,7 +11,7 @@
 //! only function here that talks to libuv.
 
 #![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `tui/` row in docs/perimeter.md.
+// Unsafe perimeter: the `tui/{tui,input,output,events}.rs` row in docs/perimeter.md.
 #![allow(unsafe_code)]
 #![deny(
     clippy::cast_lossless,

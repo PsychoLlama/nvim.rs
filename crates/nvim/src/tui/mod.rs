@@ -1,10 +1,11 @@
 //! The built-in terminal UI: it renders the grid the editor publishes and
 //! feeds the keys and mouse events it reads back in.
 //!
-//! Every file in this subtree spells its `unsafe` operations out, which is
-//! what the deny below asserts -- it propagates into all of them. There is
-//! no `forbid(unsafe_code)` here: the TUI owns raw grids, libuv streams and
-//! the terminfo database's C strings.
+//! Four files here touch libuv -- `tui.rs`, `input.rs`, `output.rs` and
+//! `events.rs`, the `tui/` rows of docs/perimeter.md -- and spell their
+//! `unsafe` operations out, which is what the deny below asserts. The rest
+//! forbid unsafe code. This file cannot: `allow` under a `forbid` is
+//! E0453, so it stays bare while those four allow.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
