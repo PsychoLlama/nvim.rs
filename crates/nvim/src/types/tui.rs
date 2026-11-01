@@ -18,6 +18,7 @@
 
 use super::*;
 use core::ffi::{CStr, c_char, c_int};
+use std::borrow::Cow;
 
 pub type TermMode = ::core::ffi::c_uint;
 pub type TermModeState = ::core::ffi::c_uint;
@@ -56,8 +57,9 @@ pub struct TUIData {
     pub write_loop: uv_loop_t,
     /// This terminal's capabilities.
     pub ti: TerminfoEntry,
-    /// `$TERM`, or the name of the built-in entry standing in for it.
-    pub term: *mut c_char,
+    /// `$TERM`, or the name of the built-in entry standing in for it; `None`
+    /// until the terminal is started and after it is stopped.
+    pub term: Option<Cow<'static, CStr>>,
     pub output_handle: OutputHandle,
     pub out_isatty: bool,
     pub winch_handle: SignalWatcher,
@@ -107,7 +109,7 @@ pub struct TUIData {
     /// Terminal modes this TUI turned on and owes the terminal a reset for.
     pub modes: TermModes,
     /// Where a screenshot is being written instead of to the terminal.
-    pub screenshot: *mut FILE,
+    pub screenshot: Option<std::fs::File>,
     pub cursor_shapes: [CursorEntry; 18],
     /// The colours unset colours fall back to.
     pub clear_attrs: HlAttrs,
@@ -136,7 +138,6 @@ pub struct TUIData {
     pub screen_or_tmux: bool,
     /// The hyperlink the cells being painted are inside, or -1.
     pub url: c_int,
-    pub ti_arena: Arena,
 }
 
 /// The bytes on their way to the terminal.
@@ -213,6 +214,11 @@ impl Staging {
         self.len += used;
     }
 
+    /// What is staged.
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.buf[..self.len]
+    }
+
     /// What a flush writes, as libuv wants it. The pointer is this buffer's
     /// own and stays good until the next call that stages anything.
     pub fn staged(&mut self) -> (*mut c_char, usize) {
@@ -270,9 +276,6 @@ pub struct TermInput {
     pub ttimeoutlen: OptInt,
     /// termkey's parser, holding whatever sequence is half-read.
     pub tk: *mut TermKey,
-    /// How termkey asks the TUI for a capability, which is how nvim gets key
-    /// sequences the terminal's own description does not name.
-    pub tk_ti_hook_fn: Option<TermKey_Terminfo_Getstr_Hook>,
     /// Fires when an incomplete sequence has waited long enough.
     pub timer_handle: uv_timer_t,
     /// Rations the background-colour queries that a terminal announcing a
@@ -293,7 +296,7 @@ pub struct TermInputCallbacks {
     /// Called on the next reply to a device-attributes query, once. The TUI
     /// sends such a query after resetting the terminal, so the reply is what
     /// says the reset has been processed.
-    pub primary_device_attr: Option<unsafe fn(*mut TUIData)>,
+    pub primary_device_attr: Option<fn(&mut TUIData)>,
 }
 
 /// The extra capability strings nvim carries because terminfo has no slot

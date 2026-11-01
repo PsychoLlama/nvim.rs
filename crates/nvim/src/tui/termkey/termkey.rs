@@ -13,11 +13,10 @@ use crate::tui::termkey::format::{self, KeyBody};
 use crate::tui::termkey::utf8::{self, Decoded, UNICODE_INVALID};
 use crate::tui::termkey::{driver_csi, driver_ti, report};
 use crate::types::{
-    TermKey, TermKey_Terminfo_Getstr_Hook, TermKeyEvent, TermKeyFormat, TermKeyKey,
-    TermKeyKey_code, TermKeyMouseEvent, TermKeyResult, TermKeySym, TermKeyType, TerminfoEntry,
-    size_t,
+    TermKey, TermKeyEvent, TermKeyFormat, TermKeyKey, TermKeyKey_code, TermKeyMouseEvent,
+    TermKeyResult, TermKeySym, TermKeyType, TerminfoEntry, size_t,
 };
-use core::ffi::{c_char, c_int, c_uchar, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uchar, c_void};
 use core::ops::{Deref, DerefMut};
 
 pub const TERMKEY_EVENT_UNKNOWN: TermKeyEvent = 0;
@@ -271,7 +270,6 @@ pub unsafe fn termkey_new_abstract(term: *mut TerminfoEntry, flags: c_int) -> *m
         buffsize: TERMKEY_DEFAULT_BUFFER_SIZE,
         hightide: 0,
         ti_getstr_hook: None,
-        ti_getstr_hook_data: core::ptr::null_mut(),
         is_started: 0,
         ti: driver_ti::new_driver(term),
         csi: driver_csi::new_driver(),
@@ -316,23 +314,22 @@ pub unsafe fn termkey_destroy(tk: *mut TermKey) {
     free(tk);
 }
 
+/// nvim's say over a key capability the terminfo driver loads: given the
+/// capability's name and what the terminal's description holds for it, the
+/// sequence to register instead, or `None` for none.
+pub type TerminfoHook = Box<dyn Fn(&CStr, Option<&[u8]>) -> Option<Vec<u8>>>;
+
 /// Install nvim's override for terminfo capability lookups, so it can supply
 /// key sequences the terminal's description does not name.
 ///
 /// # Safety
 /// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
 /// yet destroyed, with nothing else reading or writing it meanwhile -- the
-/// contract [`Tk::of`] spells out. `data` is handed back to `hookfn`
-/// untouched and must outlive the reader.
-pub unsafe fn termkey_hook_terminfo_getstr(
-    tk: *mut TermKey,
-    hookfn: Option<TermKey_Terminfo_Getstr_Hook>,
-    data: *mut c_void,
-) {
+/// contract [`Tk::of`] spells out.
+pub unsafe fn termkey_hook_terminfo_getstr(tk: *mut TermKey, hook: TerminfoHook) {
     // SAFETY: the caller's reader, as at every entry point here.
     let mut tk = unsafe { Tk::of(tk) };
-    tk.ti_getstr_hook = hookfn;
-    tk.ti_getstr_hook_data = data;
+    tk.ti_getstr_hook = Some(hook);
 }
 
 /// Begin reading keys. Upstream also put the terminal into raw mode here and

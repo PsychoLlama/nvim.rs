@@ -40,12 +40,14 @@ use crate::event::rstream::{
     rstream_available, rstream_consume, rstream_init_fd, rstream_may_close, rstream_start,
     rstream_stop,
 };
+use crate::log::{LOGLVL_DBG, logmsg};
+use crate::message_fmt::msg_bytes;
 use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::option::vars::{p_ttimeout, p_ttm};
 use crate::startup::{main_loop, os_exit, ui_client_channel_id};
 use crate::tui::keys::{KEYMOD_RECOGNIZED, modified_utf8, mouse_event, simple_utf8};
 use crate::tui::negotiate::{
-    tui_enable_extended_underline, tui_handle_term_mode, tui_query_bg_color,
+    tui_enable_extended_underline, tui_handle_term_mode, tui_query_bg_color, tui_tk_ti_getstr,
 };
 use crate::tui::termkey::driver_csi::{
     csi_param_value, termkey_interpret_csi, termkey_interpret_modereport,
@@ -63,11 +65,13 @@ use crate::tui::termkey::termkey::{
 use crate::tui::tui::tui_set_size;
 use crate::types::builders::ArrayBuf;
 use crate::types::libc::STDIN_FILENO;
+use crate::types::termios;
 use crate::types::{
     Array, Event, Integer, KEY_BUFFER_SIZE, KeyEncoding, Loop, Object, RStream, String_0,
     TermInput, TermKey, TermKeyCsiParam, TermKeyKey, TerminfoEntry, size_t, uv_handle_t,
     uv_timer_t,
 };
+use ::libc::tcgetattr;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::fmt::Write;
 
@@ -112,9 +116,8 @@ const ESC: u8 = 0x1b;
 /// Set up the input layer on `loop_0`, parsing keys as `ti` describes them.
 ///
 /// # Safety
-/// `input` must point to a zeroed [`TermInput`] that outlives `loop_0`, and
-/// `ti` to a terminfo entry that outlives the parser built from it.
-pub unsafe fn tinput_init(input: *mut TermInput, loop_0: *mut Loop, ti: *mut TerminfoEntry) {
+/// `input` must point to a zeroed [`TermInput`] that outlives `loop_0`.
+pub unsafe fn tinput_init(input: *mut TermInput, loop_0: *mut Loop, ti: &TerminfoEntry) {
     // SAFETY: the caller guarantees all three; the timers and the read
     // stream live in `input` itself.
     unsafe {
@@ -130,11 +133,18 @@ pub unsafe fn tinput_init(input: *mut TermInput, loop_0: *mut Loop, ti: *mut Ter
         // wants the control characters themselves rather than termkey's
         // names for them; NOSTART because starting is separate, below.
         (*input).tk = termkey_new_abstract(
-            ti,
+            core::ptr::from_ref(ti).cast_mut(),
             (TERMKEY_FLAG_UTF8 | TERMKEY_FLAG_NOSTART | TERMKEY_FLAG_KEEPC0) as c_int,
         );
         termkey_set_buffer_size((*input).tk, INPUT_BUFFER_SIZE);
-        termkey_hook_terminfo_getstr((*input).tk, (*input).tk_ti_hook_fn, input.cast::<c_void>());
+        // The line discipline's erase character decides what backspace is,
+        // whatever terminfo says; it is read once, here, before termkey
+        // loads its keys.
+        let erase = stty_erase((*input).in_fd);
+        termkey_hook_terminfo_getstr(
+            (*input).tk,
+            Box::new(move |name, value| tui_tk_ti_getstr(erase, name, value)),
+        );
         termkey_start((*input).tk);
         // Backspace and delete are one key as far as the editor is
         // concerned, whichever byte this terminal sends for it.
@@ -164,6 +174,30 @@ pub unsafe fn tinput_destroy(input: *mut TermInput) {
         termkey_destroy((*input).tk);
         (*input).loop_0 = core::ptr::null_mut();
     }
+}
+
+/// The line discipline's erase character on `fd`, or 0 when it names none
+/// or `fd` is not a terminal.
+fn stty_erase(fd: c_int) -> u8 {
+    /// The `termios` slot holding the erase character.
+    const VERASE: usize = 2;
+    // SAFETY: `tcgetattr` fills the `termios` this frame owns, and an
+    // all-zero `termios` is a valid one for it to overwrite.
+    let erase = unsafe {
+        let mut t: termios = core::mem::zeroed();
+        if tcgetattr(fd, &raw mut t) == -1 {
+            return 0;
+        }
+        t.c_cc[VERASE]
+    };
+    logmsg!(
+        LOGLVL_DBG,
+        c"tui_get_stty_erase",
+        0,
+        "stty/termios:erase={}",
+        msg_bytes(&[erase][..usize::from(erase != 0)])
+    );
+    erase
 }
 
 /// Start reading.
@@ -340,7 +374,7 @@ unsafe extern "C" fn bg_query_timer_cb(handle: *mut uv_timer_t) {
     // knows the TUI it belongs to.
     unsafe {
         let input: *mut TermInput = (*handle).data.cast();
-        tui_query_bg_color((*input).tui_data);
+        tui_query_bg_color(&mut *(*input).tui_data);
     }
 }
 
@@ -620,7 +654,7 @@ unsafe fn handle_modereport(input: *mut TermInput, key: &TermKeyKey) {
             &raw mut value,
         );
         if result == TERMKEY_RES_KEY {
-            tui_handle_term_mode((*input).tui_data, mode as _, value as _);
+            tui_handle_term_mode(&mut *(*input).tui_data, mode as _, value as _);
         }
     }
 }
@@ -709,7 +743,7 @@ unsafe fn handle_primary_device_attr(input: *mut TermInput, params: &[TermKeyCsi
     // is called: it runs once, and what it does reaches back here.
     unsafe {
         if let Some(callback) = (*input).callbacks.primary_device_attr.take() {
-            callback((*input).tui_data);
+            callback(&mut *(*input).tui_data);
         }
         if params.is_empty() {
             return;
@@ -752,7 +786,7 @@ unsafe fn handle_term_response(input: *mut TermInput, key: &TermKeyKey) {
         if key.type_0 == TERMKEY_TYPE_DCS
             && (text.starts_with(b"1$r4:3m") || text.starts_with(b"1$r0;4:3m"))
         {
-            tui_enable_extended_underline((*input).tui_data);
+            tui_enable_extended_underline(&mut *(*input).tui_data);
         }
 
         // The editor is told what was said, introducer and all, so that a

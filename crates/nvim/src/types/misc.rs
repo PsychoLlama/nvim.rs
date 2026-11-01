@@ -110,11 +110,6 @@ impl<'a> IntoIterator for &'a StringArray {
         self.0.iter()
     }
 }
-pub type TermKey_Terminfo_Getstr_Hook = unsafe extern "C" fn(
-    *const ::core::ffi::c_char,
-    *const ::core::ffi::c_char,
-    *mut ::core::ffi::c_void,
-) -> *const ::core::ffi::c_char;
 pub type VTermOutputCallback =
     unsafe extern "C" fn(*const ::core::ffi::c_char, size_t, *mut ::core::ffi::c_void) -> ();
 /// A block of virtual lines, each one a [`VirtText`] of its own.

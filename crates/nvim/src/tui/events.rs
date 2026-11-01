@@ -32,7 +32,7 @@ use crate::tui::cursor::{
 use crate::tui::negotiate::{
     MOUSE_ANY_EVENT, MOUSE_BUTTON_EVENT, MOUSE_SGR_EXT, tui_set_term_mode,
 };
-use crate::tui::output::{TERMINFO_SEQ_LIMIT, flush, out, out_raw, terminfo_out};
+use crate::tui::output::{TERMINFO_SEQ_LIMIT, flush, out, terminfo_out};
 use crate::tui::paint::invalidate;
 use crate::tui::terminfo::caps::{kTerm_from_status_line, kTerm_to_status_line};
 use crate::tui::terminfo::terminfo_info_msg;
@@ -230,8 +230,7 @@ pub fn tui_set_title(tui: &mut TUIData, title: String_0) {
             flush(tui);
         }
         terminfo_out(tui, kTerm_to_status_line);
-        // SAFETY: an API string owns `len()` readable bytes.
-        unsafe { out_raw(tui, title.data(), title.len()) };
+        out(tui, title.as_bytes());
         terminfo_out(tui, kTerm_from_status_line);
     } else if tui.title_enabled {
         out(tui, b"\x1b[23;0t");
@@ -318,10 +317,11 @@ pub fn tui_chdir(_tui: &mut TUIData, path: String_0) {
 
 /// Echo what was resolved about this terminal, for `nvim -V3`.
 ///
-/// `tui`'s terminfo must be resolved.
+/// `tui`'s terminfo must be resolved; an unresolved one is reported under
+/// an empty name.
 fn show_verbose_terminfo(tui: &TUIData) {
-    // SAFETY: `tui`'s terminfo is resolved, per this function's contract.
-    let info = unsafe { terminfo_info_msg(&tui.ti, tui.term, tui.terminfo_found_in_db) };
+    let term = tui.term.as_deref().unwrap_or_default();
+    let info = terminfo_info_msg(&tui.ti, term, tui.terminfo_found_in_db);
 
     // Each chunk is [text] or [text, highlight group], as `nvim_echo` takes.
     let mut title = ArrayBuf::<2>::new();

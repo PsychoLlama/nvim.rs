@@ -169,7 +169,7 @@ pub(crate) fn update_attrs(tui: &mut TUIData, attr_id: c_int) {
 
     // Terminals that can style an underline get the exact style asked for;
     // the rest get a plain underline for any of them.
-    let styled_underline = !tui.ti.defs[kTerm_set_underline_style as usize].is_null();
+    let styled_underline = tui.ti.has(kTerm_set_underline_style);
     let underline_bits = attr.masked(HlAttrFlags::UNDERLINE_MASK);
     let underline = if styled_underline {
         underline_bits == HlAttrFlags::UNDERLINE
@@ -179,7 +179,7 @@ pub(crate) fn update_attrs(tui: &mut TUIData, attr_id: c_int) {
     let style_of = |bit: HlAttrFlags| styled_underline && underline_bits == bit;
     let any_underline = underline || UNDERLINE_STYLES.iter().any(|&(bit, _)| style_of(bit));
 
-    if !tui.ti.defs[kTerm_set_attributes as usize].is_null() {
+    if tui.ti.has(kTerm_set_attributes) {
         // One sequence describes the six attributes `sgr` covers, so
         // whatever it does not mention is turned off for free.
         if bold || dim || blink || reverse || underline || standout {

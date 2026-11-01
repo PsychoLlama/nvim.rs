@@ -43,7 +43,7 @@ use crate::event::signal::{
 use crate::event::stream::stream_set_blocking;
 use crate::highlight::HlAttrFlags;
 use crate::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
-use crate::memory::{ARENA_EMPTY, XString, arena_finish, arena_mem_free, arena_strdup};
+use crate::memory::XString;
 use crate::message_fmt::msg_cstr;
 use crate::os::env::{env_get_within, getenv_owned};
 use crate::os::fs::os_strerror;
@@ -56,7 +56,7 @@ use crate::tui::negotiate::{
     BRACKETED_PASTE, GRAPHEME_CLUSTERS, LEFT_AND_RIGHT_MARGINS, RESIZE_EVENTS, SYNCHRONIZED_OUTPUT,
     THEME_UPDATES, tui_enable_extended_underline, tui_query_bg_color_noflush,
     tui_query_extended_underline, tui_query_kitty_keyboard, tui_request_term_mode,
-    tui_reset_key_encoding, tui_set_term_mode, tui_tk_ti_getstr,
+    tui_reset_key_encoding, tui_set_term_mode,
 };
 use crate::tui::output::{flush, out, out_cstr, terminfo_out};
 use crate::tui::paint::cursor_goto;
@@ -71,13 +71,14 @@ use crate::tui::terminfo::caps::{
 use crate::tui::terminfo::{terminfo_from_builtin, terminfo_from_database};
 use crate::types::libc::STDOUT_FILENO;
 use crate::types::{
-    HlAttrs, SignalWatcher, Staging, String_0, TUIData, TerminfoExt, uv_file, uv_handle_t,
-    uv_timer_t, uv_tty_mode_t,
+    HlAttrs, SignalWatcher, Staging, String_0, TUIData, TerminfoEntry, TerminfoExt, uv_file,
+    uv_handle_t, uv_timer_t, uv_tty_mode_t,
 };
 use crate::ui::state::t_colors;
 use crate::ui_client::{ui_client_attach, ui_client_detach, ui_client_set_size};
 use ::libc::{abort, kill, sscanf};
 use core::ffi::{CStr, c_int, c_void};
+use std::borrow::Cow;
 
 // --------------------------------------------------------------- the state
 
@@ -181,7 +182,6 @@ pub unsafe fn tui_start() -> *mut TUIData {
         let tui: *mut TUIData = Box::into_raw(TUIData::new());
         signal_watcher_init((*tui).loop_0, &raw mut (*tui).winch_handle, tui.cast());
         signal_watcher_start(&raw mut (*tui).winch_handle, Some(sigwinch_cb), SIGWINCH);
-        (*tui).input.tk_ti_hook_fn = Some(tui_tk_ti_getstr);
         tui_terminal_start(tui);
 
         uv_timer_init(
@@ -217,7 +217,7 @@ pub unsafe fn tui_wait_ready(tui: *mut TUIData) -> TuiStart {
         TuiStart {
             width: (*tui).width,
             height: (*tui).height,
-            term: (!(*tui).term.is_null()).then(|| CStr::from_ptr((*tui).term).to_owned()),
+            term: (*tui).term.as_deref().map(CStr::to_owned),
             rgb: (*tui).rgb,
         }
     }
@@ -255,8 +255,8 @@ impl TUIData {
                 staging: Staging::new(),
                 input: core::mem::zeroed(),
                 write_loop: core::mem::zeroed(),
-                ti: core::mem::zeroed(),
-                term: core::ptr::null_mut(),
+                ti: TerminfoEntry::default(),
+                term: None,
                 output_handle: core::mem::zeroed(),
                 out_isatty: false,
                 winch_handle: core::mem::zeroed(),
@@ -289,7 +289,7 @@ impl TUIData {
                 is_starting: true,
                 resize_events_enabled: false,
                 modes: core::mem::zeroed(),
-                screenshot: core::ptr::null_mut(),
+                screenshot: None,
                 cursor_shapes: crate::types::CursorEntry::BLANK_TABLE,
                 clear_attrs: core::mem::zeroed(),
                 attrs: vec![DEFAULT_ATTRS],
@@ -309,7 +309,6 @@ impl TUIData {
                 rgb: false,
                 screen_or_tmux: false,
                 url: -1,
-                ti_arena: ARENA_EMPTY,
             })
         }
     }
@@ -321,8 +320,7 @@ impl TUIData {
 /// # Safety
 /// `tui` must point to a live [`TUIData`] whose terminfo is not resolved.
 unsafe fn terminfo_start(tui: *mut TUIData) {
-    // SAFETY: the caller guarantees `tui`; the terminfo lookups either
-    // borrow from the arena below or from static tables.
+    // SAFETY: the caller guarantees `tui`.
     unsafe {
         (*tui).staging.clear();
         (*tui).default_attr = false;
@@ -341,29 +339,28 @@ unsafe fn terminfo_start(tui: *mut TUIData) {
         (*tui).out_fd = STDOUT_FILENO;
         (*tui).out_isatty = os_isatty((*tui).out_fd);
         (*tui).input.tui_data = tui;
-        (*tui).ti_arena = ARENA_EMPTY;
-        assert!((*tui).term.is_null(), "terminfo already resolved");
+        assert!((*tui).term.is_none(), "terminfo already resolved");
 
         let term = getenv_owned(c"TERM");
         let term_name = term.as_ref().map(XString::as_cstr);
         (*tui).terminfo_found_in_db = false;
         if let Some(name) = term_name
-            && let Some(entry) = terminfo_from_database(name, &raw mut (*tui).ti_arena)
+            && let Some(entry) = terminfo_from_database(name)
         {
             (*tui).ti = entry;
-            (*tui).term = arena_strdup(&raw mut (*tui).ti_arena, name.as_ptr());
+            (*tui).term = Some(Cow::Owned(name.to_owned()));
             (*tui).terminfo_found_in_db = true;
         }
         if !(*tui).terminfo_found_in_db {
             let (builtin_name, entry) = terminfo_from_builtin(term_name);
             (*tui).ti = entry;
-            (*tui).term = builtin_name.as_ptr().cast_mut();
+            (*tui).term = Some(Cow::Borrowed(builtin_name));
         }
 
         let quirks = Terminal::identify(term_name);
         (*tui).screen_or_tmux = quirks.screen || quirks.tmux;
         (*tui).rgb = quirks.has_truecolor(&(*tui).ti);
-        patch_terminfo_bugs(&mut (*tui).ti, &raw mut (*tui).ti_arena, &quirks);
+        patch_terminfo_bugs(&mut (*tui).ti, &quirks);
         let augmented = augment_terminfo(&mut (*tui).ti, &quirks);
         (*tui).can_resize_screen = augmented.can_resize_screen;
         (*tui).can_set_title = augmented.can_set_title;
@@ -371,11 +368,11 @@ unsafe fn terminfo_start(tui: *mut TUIData) {
         (*tui).terminfo_ext = augmented.ext;
         (*tui).input.key_encoding = augmented.key_encoding;
         if augmented.extended_underline {
-            tui_enable_extended_underline(tui);
+            tui_enable_extended_underline(&mut *tui);
         }
 
-        let defs = (*tui).ti.defs;
-        let defined = |cap: TerminfoDef| !defs[cap as usize].is_null();
+        let ti = &(*tui).ti;
+        let defined = |cap: TerminfoDef| ti.has(cap);
         (*tui).can_change_scroll_region = defined(kTerm_change_scroll_region);
         (*tui).can_set_lr_margin = defined(kTerm_set_lr_margin);
         (*tui).can_scroll = defined(kTerm_delete_line)
@@ -410,10 +407,10 @@ unsafe fn terminfo_start(tui: *mut TUIData) {
             }
         }
         if !defined(kTerm_set_underline_style) && !quirks.screen && !quirks.tmux && !quirks.nsterm {
-            tui_query_extended_underline(tui);
+            tui_query_extended_underline(&mut *tui);
         }
-        tui_query_kitty_keyboard(tui);
-        tui_query_bg_color_noflush(tui);
+        tui_query_kitty_keyboard(&mut *tui);
+        tui_query_bg_color_noflush(&mut *tui);
 
         open_output(tui);
         flush(&mut *tui);
@@ -489,7 +486,7 @@ unsafe fn terminfo_disable(tui: *mut TUIData) {
         terminfo_out(&mut *tui, kTerm_cursor_normal);
         terminfo_out(&mut *tui, kTerm_reset_cursor_style);
         terminfo_out(&mut *tui, kTerm_keypad_local);
-        tui_reset_key_encoding(tui);
+        tui_reset_key_encoding(&mut *tui);
         if (*tui).modes.resize_events() {
             tui_set_term_mode(&mut *tui, RESIZE_EVENTS, false);
         }
@@ -534,9 +531,8 @@ unsafe fn terminfo_stop(tui: *mut TUIData) {
             // would mean writing to a terminal that is being reset.
             abort();
         }
-        arena_mem_free(arena_finish(&raw mut (*tui).ti_arena));
-        (*tui).ti = core::mem::zeroed();
-        (*tui).term = core::ptr::null_mut();
+        (*tui).ti = TerminfoEntry::default();
+        (*tui).term = None;
     }
 }
 
@@ -550,7 +546,7 @@ unsafe fn tui_terminal_start(tui: *mut TUIData) {
         (*tui).print_attr_id = -1;
         terminfo_start(tui);
         if (*tui).input.loop_0.is_null() {
-            tinput_init(&raw mut (*tui).input, main_loop.ptr(), &raw mut (*tui).ti);
+            tinput_init(&raw mut (*tui).input, main_loop.ptr(), &(*tui).ti);
         }
         tui_guess_size(tui);
         tinput_start(&raw mut (*tui).input);
@@ -627,12 +623,8 @@ pub unsafe fn tui_stop(tui: *mut TUIData) {
 const DA1_TIMEOUT_MS: i64 = 1000;
 
 /// The device-attributes reply that ends [`tui_stop`]'s wait.
-///
-/// # Safety
-/// Called by the input layer with the TUI it belongs to.
-unsafe fn tui_stop_cb(tui: *mut TUIData) {
-    // SAFETY: the input layer holds this TUI's own pointer.
-    unsafe { (*tui).stopped = true };
+fn tui_stop_cb(tui: &mut TUIData) {
+    tui.stopped = true;
 }
 
 /// Stop reading input and close the terminal.
@@ -670,11 +662,11 @@ pub fn tui_suspend(tui: &mut TUIData) {
 }
 
 /// Actually suspend, once the terminal has confirmed the reset.
-///
-/// # Safety
-/// Called by the input layer with the TUI it belongs to.
-unsafe fn tui_suspend_cb(tui: *mut TUIData) {
-    // SAFETY: the input layer holds this TUI's own pointer.
+fn tui_suspend_cb(tui: &mut TUIData) {
+    let tui: *mut TUIData = tui;
+    // SAFETY: the TUI the input layer lent, reached through the one pointer
+    // made from that loan: restarting the terminal re-registers its handles,
+    // which keep this address.
     unsafe {
         tui_terminal_stop(tui);
         stream_set_blocking((*tui).input.in_fd, true);
@@ -687,8 +679,8 @@ unsafe fn tui_suspend_cb(tui: *mut TUIData) {
             tui_mouse_on(&mut *tui);
         }
         stream_set_blocking((*tui).input.in_fd, false);
-        let term = (!(*tui).term.is_null()).then(|| CStr::from_ptr((*tui).term));
-        ui_client_attach((*tui).width, (*tui).height, term, (*tui).rgb);
+        let term = (*tui).term.clone();
+        ui_client_attach((*tui).width, (*tui).height, term.as_deref(), (*tui).rgb);
     }
 }
 

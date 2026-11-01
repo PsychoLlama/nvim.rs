@@ -23,9 +23,8 @@
 //
 // Everything here takes `&mut TUIData` and is safe on the strength of that
 // type's invariant (see `TUIData`): the handles, staging buffer and terminfo
-// entry it holds are the ones `tui_start` set up. What stays `unsafe` is
-// what trusts something the *caller* supplies instead -- a pointer and a
-// length, or a scratch buffer.
+// entry it holds are the ones `tui_start` set up. What stays `unsafe` is the
+// one `uv_write` a flush makes.
 
 use crate::event::libuv::{uv_run, uv_write};
 use crate::log::{LOGLVL_ERR, logmsg};
@@ -34,10 +33,11 @@ use crate::os::fs::os_strerror;
 use crate::tui::terminfo::caps::{
     TerminfoDef, kTerm_cursor_invisible, kTerm_cursor_normal, kTermCount,
 };
+use crate::tui::terminfo::param::Param;
 use crate::tui::terminfo::terminfo_fmt;
-use crate::types::{BUF_SIZE, TPVAR, TUIData, size_t, uv_buf_t, uv_stream_t, uv_write_t};
-use ::libc::fwrite;
-use core::ffi::{CStr, c_char, c_int};
+use crate::types::{BUF_SIZE, TUIData, uv_buf_t, uv_stream_t, uv_write_t};
+use core::ffi::{CStr, c_int};
+use std::io::Write;
 
 /// How much room a parameterised capability is assumed to need. If less than
 /// this is left in the buffer, flush first rather than risk a short write.
@@ -54,9 +54,9 @@ const SYNC_END: &CStr = c"\x1b[?2026l";
 
 /// terminfo's parameter stack, all nine slots empty. Capabilities that take
 /// no parameters still have to be handed one of these.
-const NO_PARAMS: [TPVAR; 9] = [TPVAR {
+const NO_PARAMS: [Param<'static>; 9] = [Param {
     num: 0,
-    string: core::ptr::null_mut(),
+    string: None,
 }; 9];
 
 /// Should the cursor be hidden right now? It is, while the editor is busy
@@ -88,24 +88,6 @@ pub fn out_cstr(tui: &mut TUIData, s: Option<&CStr>) {
     if let Some(s) = s {
         out(tui, s.to_bytes());
     }
-}
-
-/// Stage `len` bytes starting at `data`.
-///
-/// For the callers that hold a pointer and a length rather than a slice:
-/// an API `String_0`, the URL builder's buffer, a `strlen`-measured cell.
-///
-/// # Safety
-/// `data` must be valid for reads of `len` bytes.
-pub unsafe fn out_raw(tui: &mut TUIData, data: *const c_char, len: usize) {
-    // SAFETY: the caller guarantees the pointer and the length; a length of
-    // zero says nothing about the pointer, so it is answered here.
-    let bytes = if len == 0 {
-        &[][..]
-    } else {
-        unsafe { core::slice::from_raw_parts(data.cast::<u8>(), len) }
-    };
-    out(tui, bytes);
 }
 
 /// Format up to three integers into `fmt` and stage the result.
@@ -177,7 +159,7 @@ pub fn out_repeat(tui: &mut TUIData, byte: u8, count: usize) {
 pub fn terminfo_print_nums(tui: &mut TUIData, what: TerminfoDef, nums: &[c_int]) {
     let mut params = NO_PARAMS;
     for (slot, &n) in params.iter_mut().zip(nums) {
-        slot.num = core::ffi::c_long::from(n);
+        slot.num = i64::from(n);
     }
     terminfo_print(tui, what, &mut params);
 }
@@ -188,7 +170,7 @@ pub fn terminfo_print_nums(tui: &mut TUIData, what: TerminfoDef, nums: &[c_int])
 /// borrow is enough.
 pub fn terminfo_print_str(tui: &mut TUIData, what: TerminfoDef, s: &CStr) {
     let mut params = NO_PARAMS;
-    params[0].string = s.as_ptr().cast_mut();
+    params[0].string = Some(s.to_bytes());
     terminfo_print(tui, what, &mut params);
 }
 
@@ -199,102 +181,82 @@ pub fn terminfo_print_str(tui: &mut TUIData, what: TerminfoDef, s: &CStr) {
 /// room -- again after a flush. `terminfo_fmt` consumes the parameter stack,
 /// which is why the first attempt gets a copy.
 ///
-fn terminfo_print(tui: &mut TUIData, what: TerminfoDef, params: &mut [TPVAR; 9]) {
+fn terminfo_print(tui: &mut TUIData, what: TerminfoDef, params: &mut [Param<'_>; 9]) {
     assert!(what < kTermCount, "capability {what} out of range");
-    // SAFETY: the capability strings belong to this TUI's terminfo entry,
-    // and the expansion is bounded by the staging buffer's own end.
-    unsafe {
-        let str = tui.ti.defs[what as usize];
-        if str.is_null() || *str == 0 {
-            return;
-        }
-        let expand = |tui: &mut TUIData, params: *mut TPVAR| -> size_t {
-            let spare = tui.staging.spare();
-            let start = spare.as_mut_ptr().cast::<c_char>();
-            terminfo_fmt(start, start.add(spare.len()), str, params)
-        };
-        if tui.staging.room() > TERMINFO_SEQ_LIMIT {
-            let mut copy = *params;
-            let len = expand(tui, copy.as_mut_ptr());
-            if len > 0 {
-                tui.staging.commit(len);
-                return;
-            }
-        }
-        flush(tui);
-        let len = expand(tui, params.as_mut_ptr());
+    if tui.ti.def(what).is_none_or(<[u8]>::is_empty) {
+        return;
+    }
+    if tui.staging.room() > TERMINFO_SEQ_LIMIT {
+        let mut copy = *params;
+        let len = expand_staged(tui, what, &mut copy);
         if len > 0 {
             tui.staging.commit(len);
+            return;
         }
+    }
+    flush(tui);
+    let len = expand_staged(tui, what, params);
+    if len > 0 {
+        tui.staging.commit(len);
     }
 }
 
+/// Expand capability `what` into the staging buffer's spare room, answering
+/// how much it wrote; [`Staging::commit`](crate::types::Staging::commit)
+/// stages it.
+fn expand_staged(tui: &mut TUIData, what: TerminfoDef, params: &mut [Param<'_>; 9]) -> usize {
+    let TUIData { ti, staging, .. } = tui;
+    terminfo_fmt(staging.spare(), ti.def(what).unwrap_or_default(), params)
+}
+
 /// Expand a no-parameter capability into `buf`, returning how much it used.
-///
-/// # Safety
-/// `buf` must be valid for `len` bytes.
-unsafe fn fmt_into(str: *const c_char, buf: *mut c_char, len: usize) -> size_t {
+fn fmt_into(capability: &[u8], buf: &mut [u8]) -> usize {
     let mut params = NO_PARAMS;
-    unsafe { terminfo_fmt(buf, buf.add(len), str, params.as_mut_ptr()) }
+    terminfo_fmt(buf, capability, &mut params)
 }
 
 // ------------------------------------------------------------------ flushing
 
 /// Build the bytes that precede a flush: open a synchronised update if the
 /// terminal has one, and otherwise hide the cursor for the duration.
-///
-/// # Safety
-/// `tui` must be live and `buf` valid for `len` bytes.
-unsafe fn flush_buf_start(tui: &mut TUIData, buf: *mut c_char, len: usize) -> size_t {
-    // SAFETY: the caller guarantees `buf`; the capability string comes from
-    // this terminal's own entry.
-    unsafe {
-        if tui.sync_output && tui.has_sync_mode {
-            let bytes = SYNC_START.to_bytes();
-            core::ptr::copy_nonoverlapping(bytes.as_ptr().cast::<c_char>(), buf, bytes.len());
-            return bytes.len();
-        }
-        if !tui.is_invisible {
-            tui.is_invisible = true;
-            let str = tui.ti.defs[kTerm_cursor_invisible as usize];
-            if !str.is_null() {
-                return fmt_into(str, buf, len);
-            }
-        }
-        0
+fn flush_buf_start(tui: &mut TUIData, buf: &mut [u8]) -> usize {
+    if tui.sync_output && tui.has_sync_mode {
+        let bytes = SYNC_START.to_bytes();
+        buf[..bytes.len()].copy_from_slice(bytes);
+        return bytes.len();
     }
+    if !tui.is_invisible {
+        tui.is_invisible = true;
+        if let Some(seq) = tui.ti.def(kTerm_cursor_invisible) {
+            return fmt_into(seq, buf);
+        }
+    }
+    0
 }
 
 /// Build the bytes that follow a flush: close the synchronised update, then
 /// bring the cursor back to whatever visibility the editor last asked for.
-///
-/// # Safety
-/// `tui` must be live and `buf` valid for `len` bytes.
-unsafe fn flush_buf_end(tui: &mut TUIData, buf: *mut c_char, len: usize) -> size_t {
-    // SAFETY: the caller guarantees `buf`; the capability strings come from
-    // this terminal's own entry.
-    unsafe {
-        let mut offset = 0;
-        if tui.sync_output && tui.has_sync_mode {
-            let bytes = SYNC_END.to_bytes();
-            core::ptr::copy_nonoverlapping(bytes.as_ptr().cast::<c_char>(), buf, bytes.len());
-            offset += bytes.len();
-        }
-        let want_hidden = should_invisible(tui);
-        let str = if tui.is_invisible && !want_hidden {
-            tui.is_invisible = false;
-            tui.ti.defs[kTerm_cursor_normal as usize]
-        } else if !tui.is_invisible && want_hidden {
-            tui.is_invisible = true;
-            tui.ti.defs[kTerm_cursor_invisible as usize]
-        } else {
-            core::ptr::null()
-        };
-        if !str.is_null() {
-            offset += fmt_into(str, buf.add(offset), len - offset);
-        }
-        offset
+fn flush_buf_end(tui: &mut TUIData, buf: &mut [u8]) -> usize {
+    let mut offset = 0;
+    if tui.sync_output && tui.has_sync_mode {
+        let bytes = SYNC_END.to_bytes();
+        buf[..bytes.len()].copy_from_slice(bytes);
+        offset += bytes.len();
     }
+    let want_hidden = should_invisible(tui);
+    let slot = if tui.is_invisible && !want_hidden {
+        tui.is_invisible = false;
+        Some(kTerm_cursor_normal)
+    } else if !tui.is_invisible && want_hidden {
+        tui.is_invisible = true;
+        Some(kTerm_cursor_invisible)
+    } else {
+        None
+    };
+    if let Some(seq) = slot.and_then(|slot| tui.ti.def(slot)) {
+        offset += fmt_into(seq, &mut buf[offset..]);
+    }
+    offset
 }
 
 /// Write everything staged, wrapped in its prologue and epilogue.
@@ -313,30 +275,32 @@ pub fn flush(tui: &mut TUIData) {
 /// Nothing is staged when there is an oversized write: it got here through
 /// [`out`], which flushes before handing one over.
 fn write_out(tui: &mut TUIData, oversized: Option<&[u8]>) {
-    // SAFETY: the handles and screenshot file are this TUI's own, the staged
-    // bytes are its buffer's, an oversized write is the caller's slice and
-    // outlives this call, and the two scratch buffers are on this frame.
-    unsafe {
-        if oversized.is_none()
-            && tui.staging.is_empty()
-            && tui.is_invisible == should_invisible(tui)
-        {
-            return;
-        }
+    if oversized.is_none() && tui.staging.is_empty() && tui.is_invisible == should_invisible(tui) {
+        return;
+    }
 
-        let mut pre = [0 as c_char; WRAP_BUF];
-        let mut post = [0 as c_char; WRAP_BUF];
-        // The wrappers first: both decide what to send from the cursor
-        // state, and both change it.
-        let pre_len = flush_buf_start(tui, pre.as_mut_ptr(), WRAP_BUF);
-        let post_len = flush_buf_end(tui, post.as_mut_ptr(), WRAP_BUF);
+    let mut pre = [0u8; WRAP_BUF];
+    let mut post = [0u8; WRAP_BUF];
+    // The wrappers first: both decide what to send from the cursor state,
+    // and both change it.
+    let pre_len = flush_buf_start(tui, &mut pre);
+    let post_len = flush_buf_end(tui, &mut post);
+
+    if let Some(file) = tui.screenshot.as_mut() {
+        let body = oversized.unwrap_or_else(|| tui.staging.as_bytes());
+        // A screenshot is a test's record; a short write shows up there.
+        let _ = file
+            .write_all(&pre[..pre_len])
+            .and_then(|()| file.write_all(body))
+            .and_then(|()| file.write_all(&post[..post_len]));
+    } else {
         let (body, body_len) = match oversized {
-            Some(bytes) => (bytes.as_ptr().cast_mut().cast::<c_char>(), bytes.len()),
+            Some(bytes) => (bytes.as_ptr().cast_mut().cast(), bytes.len()),
             None => tui.staging.staged(),
         };
         let bufs = [
             uv_buf_t {
-                base: pre.as_mut_ptr(),
+                base: pre.as_mut_ptr().cast(),
                 len: pre_len,
             },
             uv_buf_t {
@@ -344,18 +308,17 @@ fn write_out(tui: &mut TUIData, oversized: Option<&[u8]>) {
                 len: body_len,
             },
             uv_buf_t {
-                base: post.as_mut_ptr(),
+                base: post.as_mut_ptr().cast(),
                 len: post_len,
             },
         ];
-
-        if !tui.screenshot.is_null() {
-            for b in &bufs {
-                fwrite(b.base.cast(), b.len, 1, tui.screenshot);
-            }
-        } else {
-            // Zeroed rather than field-by-field: `uv_write` fills the
-            // request in, and every field starts as null or zero.
+        // SAFETY: the output handle is this TUI's own, open since
+        // `tui_start`; the three buffers are this frame's scratch, the
+        // staging buffer and the caller's slice, all of which outlive the
+        // write, which the loop below runs to completion. The request is
+        // zeroed rather than filled field by field: `uv_write` fills it in,
+        // and every field starts as null or zero.
+        unsafe {
             let mut req: uv_write_t = core::mem::zeroed();
             let ret = uv_write(
                 &raw mut req,
@@ -377,9 +340,9 @@ fn write_out(tui: &mut TUIData, oversized: Option<&[u8]>) {
             // here, which is what makes the flush synchronous.
             uv_run(&raw mut tui.write_loop, UV_RUN_DEFAULT);
         }
-
-        tui.staging.clear();
     }
+
+    tui.staging.clear();
 }
 
 const UV_RUN_DEFAULT: core::ffi::c_uint = 0;

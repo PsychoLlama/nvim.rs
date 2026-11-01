@@ -26,10 +26,13 @@ mod emulators;
 mod multiplexers;
 mod windows;
 
-use crate::tui::terminfo::caps::{MAX_FUNCTION_KEY, TerminfoDef, kTermCount};
+use crate::tui::terminfo::caps::TerminfoDef;
+#[cfg(test)]
+use crate::tui::terminfo::caps::{MAX_FUNCTION_KEY, kTermCount};
 use crate::tui::terminfo::is_term_family;
 use crate::types::TerminfoEntry;
 use core::ffi::{CStr, c_int};
+use std::borrow::Cow;
 
 /// A built-in terminal description: what the terminal can do, in the sparse
 /// form it is written in.
@@ -54,8 +57,8 @@ pub struct Description {
 impl Description {
     /// Expand to the dense entry the TUI reads.
     ///
-    /// The sequences are pointers into this binary's read-only data, so the
-    /// entry borrows nothing that can go away; the TUI copies it into its own
+    /// The sequences are borrowed from this binary's read-only data, so the
+    /// entry holds nothing that can go away; the TUI keeps it in its own
     /// state and may then patch individual slots.
     pub fn entry(&self) -> TerminfoEntry {
         let mut entry = TerminfoEntry {
@@ -65,19 +68,17 @@ impl Description {
             max_colors: self.max_colors,
             lines: self.lines,
             columns: self.columns,
-            defs: [core::ptr::null(); kTermCount as usize],
-            keys: [[core::ptr::null(); 2]; 16],
-            f_keys: [core::ptr::null(); MAX_FUNCTION_KEY],
+            ..TerminfoEntry::default()
         };
+        let borrowed = |seq: &'static CStr| Some(Cow::Borrowed(seq.to_bytes()));
         for &(slot, seq) in self.defs {
-            entry.defs[slot as usize] = seq.as_ptr();
+            entry.defs[slot as usize] = borrowed(seq);
         }
         for &(slot, seq, shifted) in self.keys {
-            entry.keys[slot][0] = seq.as_ptr();
-            entry.keys[slot][1] = shifted.map_or(core::ptr::null(), CStr::as_ptr);
+            entry.keys[slot] = [borrowed(seq), shifted.and_then(borrowed)];
         }
-        for (i, seq) in self.f_keys.iter().enumerate() {
-            entry.f_keys[i] = seq.map_or(core::ptr::null(), CStr::as_ptr);
+        for (slot, seq) in entry.f_keys.iter_mut().zip(self.f_keys) {
+            *slot = seq.and_then(borrowed);
         }
         entry
     }
@@ -151,11 +152,10 @@ pub const DESCRIPTIONS: [(&str, &Description); 16] = [
     ("vtpcon", &windows::VTPCON),
 ];
 
-/// A slot's expansion, identified by the literal it must have come from --
-/// the entry holds bare pointers, and this module may not dereference them.
+/// Does a slot's expansion hold exactly `want`?
 #[cfg(test)]
-fn holds(slot: *const core::ffi::c_char, want: Option<&'static CStr>) -> bool {
-    slot == want.map_or(core::ptr::null(), CStr::as_ptr)
+fn holds(slot: &crate::types::Capability, want: Option<&'static CStr>) -> bool {
+    slot.as_deref() == want.map(CStr::to_bytes)
 }
 
 #[cfg(test)]
@@ -202,13 +202,13 @@ mod tests {
         assert_eq!(xterm.0, c"xterm");
         let entry = xterm.1.entry();
         assert!(
-            holds(entry.defs[STRING_CAPS.len() - 1], None),
+            holds(&entry.defs[STRING_CAPS.len() - 1], None),
             "to_status_line"
         );
-        assert!(holds(entry.defs[0], Some(c"\r")), "carriage_return");
-        assert!(holds(entry.keys[key_slot::LEFT][0], Some(c"\x1bOD")));
-        assert!(holds(entry.keys[key_slot::LEFT][1], Some(c"\x1b[1;2D")));
-        assert!(holds(entry.f_keys[0], Some(c"\x1bOP")));
+        assert!(holds(&entry.defs[0], Some(c"\r")), "carriage_return");
+        assert!(holds(&entry.keys[key_slot::LEFT][0], Some(c"\x1bOD")));
+        assert!(holds(&entry.keys[key_slot::LEFT][1], Some(c"\x1b[1;2D")));
+        assert!(holds(&entry.f_keys[0], Some(c"\x1bOP")));
         assert!(entry.bce);
         assert_eq!(entry.max_colors, 256);
     }
@@ -248,8 +248,8 @@ mod tests {
     #[test]
     fn the_fallback_is_usable() {
         let entry = from_term(None).1.entry();
-        assert!(holds(entry.defs[0], Some(c"\r")));
-        assert!(holds(entry.defs[kTermCount as usize - 1], None));
+        assert!(holds(&entry.defs[0], Some(c"\r")));
+        assert!(holds(&entry.defs[kTermCount as usize - 1], None));
         assert_eq!(entry.max_colors, 8);
     }
 }

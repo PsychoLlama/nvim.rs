@@ -19,7 +19,6 @@ use super::*;
 ///
 /// Not `Copy`: it owns its input buffer, its CSI state and its terminfo
 /// driver, all of which `termkey_destroy` releases.
-#[derive(Clone)]
 pub struct TermKey {
     pub flags: ::core::ffi::c_int,
     pub canonflags: ::core::ffi::c_int,
@@ -32,8 +31,7 @@ pub struct TermKey {
     /// Bytes of an unrecognised control sequence held back so the consumer can
     /// re-read them, and discarded at the start of the next read.
     pub hightide: size_t,
-    pub ti_getstr_hook: Option<TermKey_Terminfo_Getstr_Hook>,
-    pub ti_getstr_hook_data: *mut ::core::ffi::c_void,
+    pub ti_getstr_hook: Option<crate::tui::termkey::termkey::TerminfoHook>,
     pub is_started: ::core::ffi::c_char,
     /// Terminfo driver state (`TerminfoDriver`), opaque outside
     /// `tui::termkey::driver_ti`.

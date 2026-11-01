@@ -13,11 +13,9 @@
 //! [`invalidate`] and drawn at the next [`tui_flush`], so a burst of updates
 //! costs one write.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `tui/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::event::r#loop::{loop_purge, loop_size};
+use crate::event::r#loop::{main_loop_purge, main_loop_size};
 use crate::grid::{
     SCHAR_BUF_SIZE, SCharBuf, schar_cache_clear_if_full, schar_get_ascii, schar_text,
 };
@@ -37,11 +35,10 @@ use crate::tui::terminfo::caps::{
     kTerm_parm_insert_line, kTerm_parm_left_cursor, kTerm_parm_right_cursor, kTerm_parm_up_cursor,
     kTerm_set_lr_margin,
 };
-use crate::types::{
-    FILE, Integer, LineFlags, Rect, ScreenAttr, ScreenChar, String_0, TUIData, UCell,
-};
-use ::libc::{fclose, fopen, fprintf};
+use crate::types::{Integer, LineFlags, Rect, ScreenAttr, ScreenChar, String_0, TUIData, UCell};
 use core::ffi::c_int;
+use std::io::Write;
+use std::os::unix::ffi::OsStrExt;
 
 /// The `ScreenChar` value of a cell nothing has been drawn into, and of the
 /// second half of a double-width character.
@@ -547,22 +544,20 @@ pub fn tui_raw_line(
 /// editor last asked for it.
 ///
 pub fn tui_flush(tui: &mut TUIData) {
-    // SAFETY: the loop is the TUI's own, alive for as long as the TUI is.
-    unsafe {
-        let queued = loop_size(tui.loop_0);
-        if queued > TOO_MANY_EVENTS {
-            // The editor is producing updates faster than they can be drawn;
-            // drawing every one of them would only fall further behind.
-            logmsg!(
-                LOGLVL_WRN,
-                c"tui_flush",
-                0,
-                "TUI event-queue flooded (thread_events={}); purging",
-                queued
-            );
-            loop_purge(tui.loop_0);
-            tui_busy_stop(tui);
-        }
+    // The TUI runs on the editor's own loop (`TUIData::loop_0`).
+    let queued = main_loop_size();
+    if queued > TOO_MANY_EVENTS {
+        // The editor is producing updates faster than they can be drawn;
+        // drawing every one of them would only fall further behind.
+        logmsg!(
+            LOGLVL_WRN,
+            c"tui_flush",
+            0,
+            "TUI event-queue flooded (thread_events={}); purging",
+            queued
+        );
+        main_loop_purge();
+        tui_busy_stop(tui);
     }
 
     // Taken from the back, and taken off the list before it is painted:
@@ -614,18 +609,16 @@ fn repaint_row(tui: &mut TUIData, row: c_int, left: c_int, right: c_int) {
 /// the file, so the result is the sequences a terminal would have received,
 /// not a rendering of them.
 pub fn tui_screenshot(tui: &mut TUIData, path: String_0) {
-    // SAFETY: two NUL-terminated strings.
-    let file = unsafe { fopen(path.as_cstr().as_ptr(), c"w".as_ptr()) };
-    if file.is_null() {
+    let path = std::ffi::OsStr::from_bytes(path.as_cstr().to_bytes());
+    let Ok(mut file) = std::fs::File::create(path) else {
         return;
-    }
+    };
     flush(tui);
     let (height, width) = (tui.grid.height, tui.grid.width);
-    // SAFETY: `file` is the handle just opened, and the format string holds
-    // the two `%d` these arguments fill.
-    unsafe { fprintf(file, c"%d,%d\n".as_ptr(), height, width) };
+    // A screenshot is a test's record; a short write shows up there.
+    let _ = writeln!(file, "{height},{width}");
     tui.grid.goto(0, 0);
-    tui.screenshot = file.cast::<FILE>();
+    tui.screenshot = Some(file);
     emit_out(tui, kTerm_clear_screen);
     for row in 0..tui.grid.height {
         cursor_goto(tui, row, 0);
@@ -636,7 +629,6 @@ pub fn tui_screenshot(tui: &mut TUIData, path: String_0) {
         }
     }
     flush(tui);
-    tui.screenshot = core::ptr::null_mut();
-    // SAFETY: `file` is the handle opened above and not closed since.
-    unsafe { fclose(file) };
+    // Dropping the file closes it.
+    tui.screenshot = None;
 }

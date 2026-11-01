@@ -227,6 +227,19 @@ pub(crate) fn run_next_main_event() -> bool {
     unsafe { multiqueue_empty(main_loop_events()) }
 }
 
+/// [`loop_size`] of the editor's own loop: how many events other threads
+/// have posted to it and it has not moved yet.
+pub(crate) fn main_loop_size() -> usize {
+    // SAFETY: the static loop, which lives for the process.
+    unsafe { loop_size(main_loop_raw()) }
+}
+
+/// [`loop_purge`] of the editor's own loop.
+pub(crate) fn main_loop_purge() {
+    // SAFETY: the static loop, which lives for the process.
+    unsafe { loop_purge(main_loop_raw()) }
+}
+
 /// The editor's fast queue, drained by every poll of its loop.
 pub(crate) fn main_loop_fast_events() -> *mut MultiQueue {
     // SAFETY: the static loop; reading one field of it.

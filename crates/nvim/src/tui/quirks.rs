@@ -17,9 +17,7 @@
 //! environment variables terminals set about themselves. It happens once, in
 //! [`Terminal::identify`], rather than being re-derived per question.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `tui/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -28,7 +26,6 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::memory::arena_memdupz;
 use crate::os::env::{env_exists, getenv_owned};
 use crate::tui::terminfo::caps::{
     TerminfoDef, kTerm_carriage_return, kTerm_cursor_invisible, kTerm_cursor_normal,
@@ -40,8 +37,9 @@ use crate::tui::terminfo::caps::{
     kTerm_to_status_line,
 };
 use crate::tui::terminfo::{is_term_family, terminfo_is_bsd_console};
-use crate::types::{Arena, KeyEncoding, TerminfoEntry, TerminfoExt};
-use core::ffi::{CStr, c_char, c_int};
+use crate::types::{KeyEncoding, TerminfoEntry, TerminfoExt};
+use core::ffi::{CStr, c_int};
+use std::borrow::Cow;
 
 /// The two key-encoding schemes this module chooses between. `KeyEncoding`
 /// is a bare integer alias, so name the values rather than spelling them.
@@ -79,41 +77,36 @@ fn contains(haystack: &[u8], needle: &[u8]) -> bool {
 }
 
 /// The capability in `slot` as bytes, or `None` when the description has no
-/// entry. The result borrows the capability's own storage, not `ti`, so the
-/// caller stays free to write the slot back.
-fn cap(ti: &TerminfoEntry, slot: TerminfoDef) -> Option<&'static [u8]> {
-    let p = ti.defs[slot as usize];
-    // SAFETY: a non-null `defs` entry is a NUL-terminated string owned by
-    // either the arena the description was parsed into or by static storage.
-    // Both outlive the entry itself, which is what `'static` stands in for
-    // here -- the arena is freed only when the description is discarded.
-    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) }.to_bytes())
+/// entry.
+fn cap(ti: &TerminfoEntry, slot: TerminfoDef) -> Option<&[u8]> {
+    ti.def(slot)
 }
 
 fn set(ti: &mut TerminfoEntry, slot: TerminfoDef, val: &'static CStr) {
-    ti.defs[slot as usize] = val.as_ptr();
+    ti.set_def(slot, val);
 }
 
 fn set_if_empty(ti: &mut TerminfoEntry, slot: TerminfoDef, val: &'static CStr) {
-    if ti.defs[slot as usize].is_null() {
+    if !ti.has(slot) {
         set(ti, slot, val);
     }
 }
 
 fn clear(ti: &mut TerminfoEntry, slot: TerminfoDef) {
-    ti.defs[slot as usize] = core::ptr::null();
+    ti.defs[slot as usize] = None;
 }
 
-/// Copy `bytes` into `arena` as a NUL-terminated string.
-///
-/// A capability trimmed at the end is not a suffix of the original, so it
-/// needs storage of its own. The arena the description was parsed into is
-/// exactly that: it lives and dies with the description.
-///
-/// # Safety
-/// `arena` must point to a live arena that outlives every use of the result.
-unsafe fn arena_dup(arena: *mut Arena, bytes: &[u8]) -> *const c_char {
-    unsafe { arena_memdupz(arena, bytes.as_ptr().cast(), bytes.len()) }
+/// Replace capability `slot` with what `trim` leaves of it, when that is
+/// less than the whole.
+fn trim(ti: &mut TerminfoEntry, slot: TerminfoDef, trim: impl FnOnce(&[u8]) -> &[u8]) {
+    let Some(full) = cap(ti, slot) else {
+        return;
+    };
+    let trimmed = trim(full);
+    if trimmed.len() != full.len() {
+        let owned = trimmed.to_vec();
+        ti.defs[slot as usize] = Some(Cow::Owned(owned));
+    }
 }
 
 /// The value of `$name`, or `None` when it is unset or empty.
@@ -221,7 +214,7 @@ impl Terminal {
         let nsterm = has(&term_program, b"Apple_Terminal") || family(b"nsterm");
         // Constant `false` off the BSDs; kept so a BSD build can switch the
         // workarounds it guards back on.
-        let bsdvt = terminfo_is_bsd_console(term.map_or(core::ptr::null(), CStr::as_ptr));
+        let bsdvt = terminfo_is_bsd_console(term);
 
         // An xterm by description, or Apple's Terminal, which is close
         // enough that the same workarounds apply.
@@ -300,42 +293,21 @@ impl Terminal {
 // ------------------------------------------------------------------ patching
 
 /// Correct the description's outright errors and omissions, in place.
-///
-/// # Safety
-/// `arena` must point to a live arena outliving every use of `ti`'s
-/// capability pointers.
-pub unsafe fn patch_terminfo_bugs(ti: &mut TerminfoEntry, arena: *mut Arena, t: &Terminal) {
+pub fn patch_terminfo_bugs(ti: &mut TerminfoEntry, t: &Terminal) {
     // A `cursor_normal` that starts by re-enabling blink, or (on the linux
     // console) ends by resetting the shape, fights nvim's own cursor
-    // handling. Trim both. Dropping the prefix leaves a suffix of the
-    // original, still NUL-terminated where it stands; dropping the suffix
-    // does not, so that one needs a copy.
-    let normal = ti.defs[kTerm_cursor_normal as usize];
-    if !normal.is_null() {
-        // SAFETY: non-null capability pointers are NUL-terminated strings.
-        let full = unsafe { CStr::from_ptr(normal) }.to_bytes();
-        let mut bytes = full;
-        let mut patched = normal;
-        if let Some(rest) = full.strip_prefix(SHOW_CURSOR_BLINK_PREFIX) {
-            bytes = rest;
-            patched = rest.as_ptr().cast();
+    // handling. Trim both.
+    trim(ti, kTerm_cursor_normal, |full| {
+        let bytes = full.strip_prefix(SHOW_CURSOR_BLINK_PREFIX).unwrap_or(full);
+        match bytes.strip_suffix(LINUX_SET_SHAPE_0) {
+            Some(trimmed) if t.linuxvt => trimmed,
+            _ => bytes,
         }
-        if t.linuxvt
-            && let Some(trimmed) = bytes.strip_suffix(LINUX_SET_SHAPE_0)
-        {
-            // SAFETY: `arena` is the caller's live terminfo arena.
-            patched = unsafe { arena_dup(arena, trimmed) };
-        }
-        ti.defs[kTerm_cursor_normal as usize] = patched;
-    }
-    let invisible = ti.defs[kTerm_cursor_invisible as usize];
-    if !invisible.is_null() && t.linuxvt {
-        // SAFETY: as above.
-        let bytes = unsafe { CStr::from_ptr(invisible) }.to_bytes();
-        if let Some(trimmed) = bytes.strip_suffix(LINUX_SET_SHAPE_1) {
-            // SAFETY: as above.
-            ti.defs[kTerm_cursor_invisible as usize] = unsafe { arena_dup(arena, trimmed) };
-        }
+    });
+    if t.linuxvt {
+        trim(ti, kTerm_cursor_invisible, |full| {
+            full.strip_suffix(LINUX_SET_SHAPE_1).unwrap_or(full)
+        });
     }
 
     // Multiplexers and kitty advertise back-colour-erase but do not honour
@@ -547,9 +519,9 @@ pub fn augment_terminfo(ti: &mut TerminfoEntry, t: &Terminal) -> Augmentation {
             set(ti, kTerm_set_cursor_color, c"\x1b]12;%p1%s\x07");
         }
     }
-    let mut set_cursor_color_as_str = false;
-    if let Some(setter) = cap(ti, kTerm_set_cursor_color) {
-        set_cursor_color_as_str = contains(setter, b"%s");
+    let set_cursor_color_as_str =
+        cap(ti, kTerm_set_cursor_color).is_some_and(|setter| contains(setter, b"%s"));
+    if ti.has(kTerm_set_cursor_color) {
         set_if_empty(ti, kTerm_reset_cursor_color, c"\x1b]112\x07");
     }
 

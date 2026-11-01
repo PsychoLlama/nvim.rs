@@ -25,7 +25,7 @@ use crate::tui::termkey::trie::{KeyTrie, Lookup};
 use crate::types::{
     TermKeyKey, TermKeyResult, TermKeySym, TermKeyType, TerminfoEntry, keyinfo, size_t,
 };
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int, c_void};
 use std::ffi::CString;
 
 /// One of the named (non-`key_fN`) capabilities the driver looks up.
@@ -112,25 +112,14 @@ fn driver_of<'a>(tk: Tk) -> &'a mut TerminfoDriver {
 
 /// Read one capability, giving nvim's hook the final say.
 ///
-/// Returns the escape sequence, or `None` when the capability is absent.
-/// Terminfo spells absence two ways — a null pointer and the historical
-/// `(char *)-1` — and the hook may return either; an empty string is no
-/// sequence to match against.
-fn capability<'a>(tk: Tk, from_entry: *const c_char, name: &CStr) -> Option<&'a [u8]> {
-    let mut value = from_entry;
-    if let Some(hook) = tk.ti_getstr_hook {
-        // SAFETY: the hook nvim installed with `termkey_hook_terminfo_getstr`,
-        // called with a capability name and its own data, as it expects.
-        value = unsafe { hook(name.as_ptr(), value, tk.ti_getstr_hook_data) };
-    }
-    if value.is_null() || value.addr() == usize::MAX {
-        return None;
-    }
-    // SAFETY: a terminfo capability is a NUL-terminated string, whether it came
-    // from the terminal's description or from nvim's hook, and both outlive the
-    // trie built out of them.
-    let bytes = unsafe { CStr::from_ptr(value) }.to_bytes();
-    (!bytes.is_empty()).then_some(bytes)
+/// Returns the escape sequence, or `None` when the capability is absent. An
+/// empty string is no sequence to match against.
+fn capability(tk: Tk, from_entry: Option<&[u8]>, name: &CStr) -> Option<Vec<u8>> {
+    let value = match &tk.ti_getstr_hook {
+        Some(hook) => hook(name, from_entry),
+        None => from_entry.map(<[u8]>::to_vec),
+    };
+    value.filter(|bytes| !bytes.is_empty())
 }
 
 /// Register a capability's sequence if the terminal has one. Reports whether it
@@ -139,13 +128,13 @@ fn capability<'a>(tk: Tk, from_entry: *const c_char, name: &CStr) -> Option<&'a 
 fn register(
     tk: Tk,
     trie: &mut KeyTrie,
-    from_entry: *const c_char,
+    from_entry: Option<&[u8]>,
     name: &CStr,
     info: keyinfo,
 ) -> bool {
     match capability(tk, from_entry, name) {
         Some(seq) => {
-            trie.insert(seq, info);
+            trie.insert(&seq, info);
             true
         }
         None => false,
@@ -161,8 +150,11 @@ fn load(tk: Tk, entry: *mut TerminfoEntry) -> KeyTrie {
     for key in &NAMED_KEYS {
         let cap = &KEYS[key.slot];
         let (plain, shifted) = match entry {
-            Some(entry) => (entry.keys[key.slot][0], entry.keys[key.slot][1]),
-            None => (core::ptr::null(), core::ptr::null()),
+            Some(entry) => (
+                entry.keys[key.slot][0].as_deref(),
+                entry.keys[key.slot][1].as_deref(),
+            ),
+            None => (None, None),
         };
         let loaded = register(
             tk,
@@ -199,8 +191,8 @@ fn load(tk: Tk, entry: *mut TerminfoEntry) -> KeyTrie {
     // first gap, so a terminal without `key_f1` gets no function keys at all.
     for number in 1..=MAX_FUNCTION_KEY {
         let from_entry = match entry {
-            Some(entry) => entry.f_keys[number - 1],
-            None => core::ptr::null(),
+            Some(entry) => entry.f_keys[number - 1].as_deref(),
+            None => None,
         };
         let name = CString::new(format!("key_f{number}")).expect("no interior NUL");
         let loaded = register(
