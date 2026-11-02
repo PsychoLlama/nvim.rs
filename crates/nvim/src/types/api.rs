@@ -19,6 +19,36 @@ pub struct AdditionalDataBuilder {
     pub capacity: size_t,
     pub items: *mut ::core::ffi::c_char,
 }
+/// A vector's elements as a boxed slice.
+///
+/// At exact capacity the allocation is kept, which is free. A small vector
+/// with room to spare moves into an allocation of its size instead:
+/// `into_boxed_slice` would shrink it in place, and glibc's in-place shrink
+/// (split the chunk, free the tail into the unsorted bin, consolidate later)
+/// measured several times the cost of a fresh small allocation and a copy.
+/// A large one shrinks in place, where the copy would be the cost.
+#[inline]
+fn freeze<T>(items: Vec<T>) -> Box<[T]> {
+    if items.len() == items.capacity() {
+        items.into_boxed_slice()
+    } else {
+        freeze_spare(items)
+    }
+}
+
+/// [`freeze`] of a vector with room to spare: out of line, since every
+/// producer that knows its length never comes here.
+#[cold]
+#[inline(never)]
+fn freeze_spare<T>(mut items: Vec<T>) -> Box<[T]> {
+    const COPY_MAX: usize = 4096;
+    if items.capacity() * size_of::<T>() > COPY_MAX {
+        items.into_boxed_slice()
+    } else {
+        items.drain(..).collect()
+    }
+}
+
 /// The API's array: an owned, fixed-length sequence of [`Object`]s.
 ///
 /// A boxed slice, two words, rather than a `Vec`'s three: an array is built
@@ -50,8 +80,9 @@ impl Array {
 
 impl From<Vec<Object>> for Array {
     /// Freeze `items`; free when the vector is at its exact capacity.
+    #[inline]
     fn from(items: Vec<Object>) -> Self {
-        Self(items.into_boxed_slice())
+        Self(freeze(items))
     }
 }
 
@@ -143,8 +174,9 @@ impl ApiDict {
 
 impl From<Vec<KeyValuePair>> for ApiDict {
     /// Freeze `items`; free when the vector is at its exact capacity.
+    #[inline]
     fn from(items: Vec<KeyValuePair>) -> Self {
-        Self(items.into_boxed_slice())
+        Self(freeze(items))
     }
 }
 
@@ -234,6 +266,14 @@ impl DictBuilder {
     /// The finished dictionary.
     pub fn finish(self) -> ApiDict {
         ApiDict::from(self.0)
+    }
+
+    /// The entries so far as a dictionary of exactly their size, leaving
+    /// the builder empty with its capacity, for a caller that fills one
+    /// reservation many times. [`finish`](Self::finish) of a builder that
+    /// is not full shrinks it in place, which is a `realloc`.
+    pub fn take_exact(&mut self) -> ApiDict {
+        self.0.drain(..).collect()
     }
 }
 

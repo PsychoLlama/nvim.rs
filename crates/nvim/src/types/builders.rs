@@ -1,7 +1,7 @@
 //! Constructing API values.
 //!
 //! [`Object`] is a tag plus a payload, and [`Array`]/[`ApiDict`] are owned
-//! vectors. Building one literally takes a dozen lines of struct syntax per
+//! boxed slices. Building one literally takes a dozen lines of struct syntax per
 //! element, which is why the transpiled call sites run to hundreds of lines
 //! for a single `nvim_echo`.
 //!
@@ -22,7 +22,7 @@
 )]
 
 use super::{
-    ApiDict, ApiString, Array, BufferHandle, DictBuilder, DictKey, Float, Integer, LuaRef, Object,
+    ApiDict, ApiString, Array, BufferHandle, DictKey, Float, Integer, KeyValuePair, LuaRef, Object,
     TabpageHandle, WindowHandle,
 };
 use core::ffi::CStr;
@@ -92,25 +92,35 @@ impl Object {
 ///
 /// The capacity is a property of the call site -- how many times the code
 /// below can push -- so it is stated once, in the type, and [`Self::push`]
-/// panics past it rather than growing.
-pub struct ArrayBuf<const N: usize>(Vec<Object>);
+/// panics past it rather than growing. The elements wait in the builder
+/// itself, so the array is one allocation of exactly the size pushed: a
+/// heap reservation of `N` would be a second, and a shrink when fewer came.
+pub struct ArrayBuf<const N: usize> {
+    items: [Object; N],
+    len: usize,
+}
 
 impl<const N: usize> ArrayBuf<N> {
     pub fn new() -> Self {
-        Self(Vec::with_capacity(N))
+        Self {
+            items: [const { Object::Nil }; N],
+            len: 0,
+        }
     }
 
     /// Appends `value`. Panics past `N` elements -- the capacity is a
     /// property of the call site, not of anything a user can influence.
     pub fn push(&mut self, value: Object) -> &mut Self {
-        assert!(self.0.len() < N, "ArrayBuf overflow");
-        self.0.push(value);
+        assert!(self.len < N, "ArrayBuf overflow");
+        self.items[self.len] = value;
+        self.len += 1;
         self
     }
 
     /// The elements pushed so far, leaving the builder empty.
     pub fn array(&mut self) -> Array {
-        Array::from(::core::mem::take(&mut self.0))
+        let len = ::core::mem::take(&mut self.len);
+        self.items[..len].iter_mut().map(Object::take).collect()
     }
 
     /// [`Self::array`], wrapped for nesting inside another builder.
@@ -127,11 +137,22 @@ impl<const N: usize> Default for ArrayBuf<N> {
 
 /// A builder for an [`ApiDict`] of at most `N` entries. [`ArrayBuf`]'s rules
 /// apply unchanged.
-pub struct DictBuf<const N: usize>(DictBuilder);
+pub struct DictBuf<const N: usize> {
+    entries: [KeyValuePair; N],
+    len: usize,
+}
 
 impl<const N: usize> DictBuf<N> {
     pub fn new() -> Self {
-        Self(DictBuilder::with_capacity(N))
+        Self {
+            entries: [const {
+                KeyValuePair {
+                    key: DictKey::EMPTY,
+                    value: Object::Nil,
+                }
+            }; N],
+            len: 0,
+        }
     }
 
     /// Appends `key: value`, with `key` a literal. Dict keys in generated
@@ -143,14 +164,25 @@ impl<const N: usize> DictBuf<N> {
     /// [`Self::insert`] for a key the caller built, whose bytes the
     /// dictionary copies.
     pub fn insert_string(&mut self, key: impl Into<DictKey>, value: Object) -> &mut Self {
-        assert!(self.0.len() < N, "DictBuf overflow");
-        self.0.insert(key, value);
+        assert!(self.len < N, "DictBuf overflow");
+        self.entries[self.len] = KeyValuePair {
+            key: key.into(),
+            value,
+        };
+        self.len += 1;
         self
     }
 
     /// The entries inserted so far, leaving the builder empty.
     pub fn dict(&mut self) -> ApiDict {
-        ::core::mem::take(&mut self.0).finish()
+        let len = ::core::mem::take(&mut self.len);
+        self.entries[..len]
+            .iter_mut()
+            .map(|pair| KeyValuePair {
+                key: ::core::mem::replace(&mut pair.key, DictKey::EMPTY),
+                value: pair.value.take(),
+            })
+            .collect()
     }
 
     /// [`Self::dict`], wrapped for nesting inside another builder.

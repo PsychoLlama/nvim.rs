@@ -66,18 +66,27 @@ pub fn virt_text_to_array(items: &[VirtTextChunk], hl_name: bool) -> Array {
 }
 
 /// One mark as `[id, row, col]`, with its decoration as a fourth item when
-/// `add_dict`.
-fn extmark_to_array(extmark: MTPair, id: bool, add_dict: bool, hl_name: bool) -> Array {
+/// there is a `details` scratch.
+///
+/// `details` is the scratch the details dictionary is built in, reserved
+/// for [`DETAILS_KEYS`] and reused from mark to mark: the frozen dictionary
+/// is an exact copy of however many keys the mark has, where freezing the
+/// reservation itself would shrink it with a `realloc` per mark.
+fn extmark_to_array(
+    extmark: MTPair,
+    id: bool,
+    details: Option<&mut DictBuilder>,
+    hl_name: bool,
+) -> Array {
     let start: MTKey = extmark.start;
-    let mut rv = Vec::with_capacity(4);
+    let mut rv = Vec::with_capacity(2 + usize::from(id) + usize::from(details.is_some()));
     if id {
         rv.push(Object::integer(Integer::from(start.id)));
     }
     rv.push(Object::integer(Integer::from(start.pos.row)));
     rv.push(Object::integer(Integer::from(start.pos.col)));
-    if add_dict {
-        // As many keys as `decor_to_dict_legacy` and the block above can add.
-        let mut dict = DictBuilder::with_capacity(DETAILS_KEYS);
+    if let Some(dict) = details {
+        debug_assert!(dict.is_empty() && dict.capacity() >= DETAILS_KEYS);
         dict.insert(c"ns_id", Object::integer(Integer::from(start.ns)));
         let d_right_gravity = Object::boolean(mt_right(start));
         dict.insert(c"right_gravity", d_right_gravity);
@@ -98,8 +107,8 @@ fn extmark_to_array(extmark: MTPair, id: bool, add_dict: bool, hl_name: bool) ->
         if mt_invalid(start) {
             dict.insert(c"invalid", Object::boolean(true));
         }
-        decor_to_dict_legacy(&mut dict, mt_decor(start), hl_name);
-        rv.push(Object::dict(dict));
+        decor_to_dict_legacy(dict, mt_decor(start), hl_name);
+        rv.push(Object::dict(dict.take_exact()));
     }
     rv.into()
 }
@@ -123,7 +132,8 @@ pub fn nvim_buf_get_extmark_by_id(
     if extmark.start.pos.row < 0 as int32_t {
         return Ok(rv);
     }
-    Ok(extmark_to_array(extmark, false, details, hl_name))
+    let mut scratch = details.then(|| DictBuilder::with_capacity(DETAILS_KEYS));
+    Ok(extmark_to_array(extmark, false, scratch.as_mut(), hl_name))
 }
 
 pub fn nvim_buf_get_extmarks(
@@ -183,19 +193,26 @@ pub fn nvim_buf_get_extmarks(
         opts.overlap.unwrap_or(false),
     );
     rv = Vec::with_capacity(found.len().min(rv_limit));
+    let mut scratch = details.then(|| DictBuilder::with_capacity(DETAILS_KEYS));
     if reverse {
         // A backwards range takes the *last* `limit` marks, so the walk goes
         // the other way and the limit is applied here rather than by the
         // search.
         for mark in found.iter().rev().take(rv_limit) {
             rv.push(Object::array(extmark_to_array(
-                *mark, true, details, hl_name,
+                *mark,
+                true,
+                scratch.as_mut(),
+                hl_name,
             )));
         }
     } else {
         for mark in &found {
             rv.push(Object::array(extmark_to_array(
-                *mark, true, details, hl_name,
+                *mark,
+                true,
+                scratch.as_mut(),
+                hl_name,
             )));
         }
     }
