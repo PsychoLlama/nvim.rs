@@ -6,25 +6,41 @@
 //! `fix_cursor_cols` for the columns of every window showing the buffer.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api::private::validate::err_out_of_range;
 use crate::memline::Lines;
 use crate::r#move::WinValid;
-use crate::narrow::len_as_int;
-use crate::narrow::number_as_int;
+use crate::narrow::{len_as_int, len_as_integer};
+
+use super::lines::{byte_count, line_below, line_span};
 use crate::normal::{set_visual_anchor, visual_active, visual_anchor, visual_mode};
 use crate::winlayer::{Buf, Win, tab_windows};
+
+/// `col` as a byte offset into `line`, if it lands inside it or just past
+/// its end; a negative one counts back from the end, `-1` being the end.
+fn column_in(line: &[u8], col: Integer) -> Option<usize> {
+    let len = len_as_integer(line.len());
+    let col = if col < 0 { len + col + 1 } else { col };
+    usize::try_from(col).ok().filter(|&col| col <= line.len())
+}
 
 /// Replace the text from (`start_row`, `start_col`) to (`end_row`,
 /// `end_col`) of `buf` with `replacement`'s lines.
 pub fn nvim_buf_set_text(
     channel_id: uint64_t,
     buf: BufferHandle,
-    mut start_row: Integer,
-    mut start_col: Integer,
-    mut end_row: Integer,
-    mut end_col: Integer,
+    start_row: Integer,
+    start_col: Integer,
+    end_row: Integer,
+    end_col: Integer,
     mut replacement: Array,
 ) -> Result<(), Error> {
     if replacement.is_empty() {
@@ -32,100 +48,72 @@ pub fn nvim_buf_set_text(
         // replacing it with one empty line.
         replacement = Array::from([Object::string(ApiString::from_cstr(c""))]);
     }
-    let Some(b) = api_buf_ensure_loaded(buf)? else {
+    let Some(buffer) = api_buf_ensure_loaded(buf)? else {
         return Ok(());
     };
-    let buffer = b;
     let mut oob: bool = false;
-    start_row = normalize_index(b, start_row as int64_t, false, &mut oob) as Integer;
+    let start_row = normalize_index(buffer, start_row, false, &mut oob);
     if oob {
         return Err(err_out_of_range(c"start_row"));
     }
-    end_row = normalize_index(b, end_row as int64_t, false, &mut oob) as Integer;
+    let end_row = normalize_index(buffer, end_row, false, &mut oob);
     if oob {
         return Err(err_out_of_range(c"end_row"));
     }
-    let at_start: Vec<u8> = Lines::in_buffer(b)
-        .line(LineNr::new(number_as_int(start_row)))
-        .to_vec();
-    let len_at_start = at_start.len() as ColNr;
-    start_col = if start_col < 0 as Integer {
-        len_at_start as Integer + start_col + 1 as Integer
-    } else {
-        start_col
-    };
-    if !(start_col >= 0 as Integer && start_col <= len_at_start as Integer) {
-        return Err(err_out_of_range(c"start_col"));
-    }
-    let at_end: Vec<u8> = Lines::in_buffer(b)
-        .line(LineNr::new(number_as_int(end_row)))
-        .to_vec();
-    let len_at_end = at_end.len() as ColNr;
-    end_col = if end_col < 0 as Integer {
-        len_at_end as Integer + end_col + 1 as Integer
-    } else {
-        end_col
-    };
-    if !(end_col >= 0 as Integer && end_col <= len_at_end as Integer) {
-        return Err(err_out_of_range(c"end_col"));
-    }
+    let at_start: Vec<u8> = Lines::in_buffer(buffer).line(start_row).to_vec();
+    let start_col =
+        column_in(&at_start, start_col).ok_or_else(|| err_out_of_range(c"start_col"))?;
+    let at_end: Vec<u8> = Lines::in_buffer(buffer).line(end_row).to_vec();
+    let end_col = column_in(&at_end, end_col).ok_or_else(|| err_out_of_range(c"end_col"))?;
     if !(start_row <= end_row && !(end_row == start_row && start_col > end_col)) {
         return Err(Error::validation(c"'start' is higher than 'end'"));
     }
     let disallow_nl: bool = channel_id != VIML_INTERNAL_CALL;
     check_string_array(&replacement, c"replacement string", disallow_nl)?;
-    let new_len: size_t = replacement.len();
-    let mut new_byte: BCount = 0 as BCount;
-    let mut old_byte: BCount = 0 as BCount;
-    if start_row == end_row {
-        old_byte = end_col as BCount - start_col as BCount;
+    let new_len = replacement.len();
+    let old_bytes = if start_row == end_row {
+        end_col - start_col
     } else {
-        old_byte = (old_byte as ::core::ffi::c_long
-            + (len_at_start as Integer - start_col) as ::core::ffi::c_long)
-            as BCount;
-        let mut i: int64_t = 1 as int64_t;
-        while i < end_row - start_row {
-            let lnum: int64_t = start_row as int64_t + i;
-            old_byte += (ml_get_buf_len(b, LineNr::new(number_as_int(lnum)))
-                + 1 as ::core::ffi::c_int) as BCount;
-            i += 1;
-        }
-        old_byte += end_col as BCount + 1 as BCount;
-    }
-    let last_index = replacement.len().wrapping_sub(1 as size_t);
+        let between: usize = (start_row + 1)
+            .up_to(end_row)
+            .map(|lnum| {
+                let len = ml_get_buf_len(buffer, lnum);
+                usize::try_from(len).expect("a line length is not negative") + 1
+            })
+            .sum();
+        at_start.len() - start_col + between + end_col + 1
+    };
     // Every item is a String: `check_string_array` above turned anything else
     // into an error.
     let only_strings = "check_string_array accepted only Strings";
     let first_item: ApiString = replacement[0].as_string().expect(only_strings).clone();
-    // SAFETY: as above.
-    let last_item: ApiString = replacement[last_index]
+    let last_item: ApiString = replacement[new_len - 1]
         .as_string()
         .expect(only_strings)
         .clone();
     // The new lines, each NUL-terminated: the first keeps the old start
     // line's head and the last the old end line's tail, which are one line
     // when the replacement is.
-    let head = &at_start[..start_col as usize];
-    let tail = &at_end[end_col as usize..];
+    let head = &at_start[..start_col];
+    let tail = &at_end[end_col..];
     let mut lines: Vec<Vec<u8>> = Vec::with_capacity(new_len);
     let mut first = head.to_vec();
     api_text_into(&mut first, first_item.as_bytes());
     if new_len > 1 {
         first.push(0);
     }
-    new_byte += first_item.len() as BCount;
+    let mut new_bytes = first_item.len();
     lines.push(first);
-    for i in 1..new_len.saturating_sub(1) {
-        // SAFETY: `i` is below `replacement.size`.
-        let l = replacement[i].as_string().expect(only_strings);
+    for item in replacement.iter().take(new_len.saturating_sub(1)).skip(1) {
+        let l = item.as_string().expect(only_strings);
         lines.push(api_line(l.as_bytes()));
-        new_byte += l.len() as BCount + 1 as BCount;
+        new_bytes += l.len() + 1;
     }
     if new_len > 1 {
         let mut last = Vec::with_capacity(last_item.len() + tail.len() + 1);
         api_text_into(&mut last, last_item.as_bytes());
         lines.push(last);
-        new_byte += last_item.len() as BCount + 1 as BCount;
+        new_bytes += last_item.len() + 1;
     }
     let last = lines.last_mut().expect("the replacement has a first line");
     last.extend_from_slice(tail);
@@ -135,13 +123,13 @@ pub fn nvim_buf_set_text(
     let edit = Replacement {
         buffer,
         start_row,
-        start_col,
+        start_col: len_as_int(start_col),
         end_row,
-        end_col,
+        end_col: len_as_int(end_col),
         lines,
-        last_len: last_item.len() as ColNr,
-        old_byte,
-        new_byte,
+        last_len: len_as_int(last_item.len()),
+        old_byte: byte_count(old_bytes),
+        new_byte: byte_count(new_bytes),
     };
     let outcome = edit.apply();
     // The bracket outranks whatever the body answered, which is the order the
@@ -154,10 +142,10 @@ pub fn nvim_buf_set_text(
 /// and the replacement lines are built.
 struct Replacement {
     buffer: Buf,
-    start_row: Integer,
-    start_col: Integer,
-    end_row: Integer,
-    end_col: Integer,
+    start_row: LineNr,
+    start_col: ColNr,
+    end_row: LineNr,
+    end_col: ColNr,
     /// The lines that replace the range, each NUL-terminated.
     lines: Vec<Vec<u8>>,
     /// How long the last one is: where the range's tail ends up.
@@ -175,33 +163,30 @@ impl Replacement {
         if b.b_p_ma == 0 {
             return Err(Error::exception(c"Buffer is not 'modifiable'"));
         }
-        let (from, to) = (
-            LineNr::new(number_as_int(self.start_row)) - 1,
-            LineNr::new(number_as_int(self.end_row)) + 1,
-        );
-        if u_save_buf(self.buffer, from, to).is_err() {
+        let (start_row, end_row) = (self.start_row, self.end_row);
+        if u_save_buf(b, start_row - 1, end_row + 1).is_err() {
             return Err(Error::exception(c"Failed to save undo information"));
         }
         let extra = self.write_lines()?;
-        let new_len = self.lines.len();
+        let new_rows = len_as_int(self.lines.len());
 
-        let col_extent: ColNr = (self.end_col
-            - if self.end_row == self.start_row {
+        let col_extent: ColNr = self.end_col
+            - if end_row == start_row {
                 self.start_col
             } else {
                 0
-            }) as ColNr;
-        let adjust: i32 = if self.end_row >= self.start_row {
+            };
+        let adjust: i32 = if end_row >= start_row {
             MAXLNUM.get()
         } else {
             0
         };
         mark_adjust_buf(
-            self.buffer,
-            LineNr::new(number_as_int(self.start_row)),
-            LineNr::new(number_as_int(self.end_row)) - 1,
+            b,
+            start_row,
+            end_row - 1,
             adjust,
-            extra as i32,
+            extra,
             true,
             kMarkAdjustApi,
             kExtmarkNOOP,
@@ -211,11 +196,11 @@ impl Replacement {
             fix_pos_col(
                 b,
                 &mut anchor,
-                LineNr::new(number_as_int(self.start_row)),
-                self.start_col as ColNr,
-                LineNr::new(number_as_int(self.end_row)),
-                self.end_col as ColNr,
-                len_as_int(new_len),
+                start_row,
+                self.start_col,
+                end_row,
+                self.end_col,
+                new_rows,
                 self.last_len,
                 1,
             );
@@ -223,46 +208,34 @@ impl Replacement {
             check_visual_pos();
         }
         extmark_splice(
-            self.buffer,
-            self.start_row as ::core::ffi::c_int - 1,
-            self.start_col as ColNr,
-            (self.end_row - self.start_row) as ::core::ffi::c_int,
+            b,
+            start_row.get() - 1,
+            self.start_col,
+            end_row - start_row,
             col_extent,
             self.old_byte,
-            new_len as ::core::ffi::c_int - 1,
+            new_rows - 1,
             self.last_len,
             self.new_byte,
             kExtmarkUndo,
         );
-        changed_lines(
-            self.buffer,
-            LineNr::new(number_as_int(self.start_row)),
-            self.start_col as ColNr,
-            LineNr::new(number_as_int(self.end_row)) + 1,
-            extra as i32,
-            true,
-        );
+        changed_lines(b, start_row, self.start_col, end_row + 1, extra, true);
         for win in tab_windows() {
             if win.w_buffer != b {
                 continue;
             }
-            let cursor = i64::from(win.w_cursor.lnum);
-            if cursor >= self.start_row && cursor <= self.end_row {
+            if (start_row..=end_row).contains(&win.w_cursor.lnum) {
                 fix_cursor_cols(
                     win,
-                    LineNr::new(number_as_int(self.start_row)),
-                    self.start_col as ColNr,
-                    LineNr::new(number_as_int(self.end_row)),
-                    self.end_col as ColNr,
-                    len_as_int(new_len),
+                    start_row,
+                    self.start_col,
+                    end_row,
+                    self.end_col,
+                    new_rows,
                     self.last_len,
                 );
             } else {
-                let (lo, hi) = (
-                    LineNr::new(number_as_int(self.start_row)),
-                    LineNr::new(number_as_int(self.end_row)),
-                );
-                fix_cursor(win, lo, hi, extra as i32);
+                fix_cursor(win, start_row, end_row, extra);
             }
         }
         Ok(())
@@ -270,37 +243,28 @@ impl Replacement {
 
     /// Delete, replace and append until the range holds the new lines,
     /// answering how many lines the buffer grew by.
-    fn write_lines(&mut self) -> Result<ptrdiff_t, Error> {
+    fn write_lines(&mut self) -> Result<i32, Error> {
         let b = self.buffer;
-        let mut extra: ptrdiff_t = 0;
-        let old_len: size_t = (self.end_row - self.start_row + 1) as size_t;
+        let old_len = line_span(self.start_row, self.end_row) + 1;
         let new_len = self.lines.len();
         let to_delete = old_len.saturating_sub(new_len);
         for _ in 0..to_delete {
-            if ml_delete_buf(b, LineNr::new(number_as_int(self.start_row)), false).is_err() {
+            if ml_delete_buf(b, self.start_row, false).is_err() {
                 return Err(Error::exception(c"Failed to delete line"));
             }
         }
-        extra -= to_delete as ptrdiff_t;
+        let mut extra = -len_as_int(to_delete);
         let to_replace = old_len.min(new_len);
-        for i in 0..to_replace {
-            let lnum: int64_t = self.start_row as int64_t + i as int64_t;
-            if lnum >= i64::from(MAXLNUM) {
-                return Err(Error::validation(c"Index out of bounds"));
-            }
+        for (i, line) in self.lines.iter().enumerate().take(to_replace) {
+            let lnum = line_below(self.start_row, i)?;
             // The memline writes the line straight into its block.
-            if ml_replace_buf_now(b, LineNr::new(number_as_int(lnum)), &self.lines[i]).is_err() {
+            if ml_replace_buf_now(b, lnum, line).is_err() {
                 return Err(Error::exception(c"Failed to replace line"));
             }
         }
-        for i in to_replace..new_len {
-            let lnum: int64_t = self.start_row as int64_t + i as int64_t - 1;
-            if lnum >= i64::from(MAXLNUM) {
-                return Err(Error::validation(c"Index out of bounds"));
-            }
-            if ml_append_buf_terminated(b, LineNr::new(number_as_int(lnum)), &self.lines[i], false)
-                .is_err()
-            {
+        for (i, line) in self.lines.iter().enumerate().skip(to_replace) {
+            let lnum = line_below(self.start_row - 1, i)?;
+            if ml_append_buf_terminated(b, lnum, line, false).is_err() {
                 return Err(Error::exception(c"Failed to insert line"));
             }
             extra += 1;
@@ -342,15 +306,15 @@ fn fix_pos_col(
         return;
     }
     let old_rows: i32 = end_row - start_row + 1;
-    let lnum_shift: LineNr = LineNr::new(new_rows - old_rows);
+    let lnum_shift = new_rows - old_rows;
     if pos.lnum > end_row {
-        pos.lnum += lnum_shift.get();
+        pos.lnum += lnum_shift;
         return;
     }
-    let end_row_change_start: ColNr = if new_rows == 1 { start_col } else { 0 as ColNr };
+    let end_row_change_start: ColNr = if new_rows == 1 { start_col } else { 0 };
     let end_row_change_end: ColNr = end_row_change_start + new_cols_at_end_row;
     if pos.lnum == end_row && pos.col + mode_col_adj > end_col {
-        pos.lnum += lnum_shift.get();
+        pos.lnum += lnum_shift;
         pos.col += end_row_change_end - end_col;
         return;
     }
@@ -384,9 +348,9 @@ fn fix_cursor_cols(
     new_cols_at_end_row: ColNr,
 ) {
     let mode_col_adj: ColNr = if win == Win::current() && State.get() & MODE_INSERT != 0 {
-        0 as ColNr
+        0
     } else {
-        1 as ColNr
+        1
     };
     let mut cursor = win.w_cursor;
     fix_pos_col(

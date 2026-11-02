@@ -1,4 +1,11 @@
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -35,8 +42,7 @@ use crate::types::{
     AcoSave, AlignTextPos, ApiDict, ApiString, Array, BCount, Boolean, BufUpdateCallbacks,
     BufferHandle, ColNr, DoBufAction, DoBufStart, Error, ExtmarkOp, Integer, KeyDict_buf_attach,
     KeyDict_buf_delete, KeyDict_empty, KeyDict_keymap, LineNr, LuaRef, MarkAdjustMode, MarkGet,
-    Object, Pos, TryState, UndoObjectType, WinSplit, WinStyle, int64_t, ptrdiff_t, size_t,
-    uint64_t,
+    Object, Pos, TryState, UndoObjectType, WinSplit, WinStyle, size_t, uint64_t,
 };
 use crate::undo::u_save_buf;
 

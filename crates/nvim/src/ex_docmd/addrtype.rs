@@ -5,6 +5,13 @@
 //! every other command declares one in the command table. What the
 //! rest of `address` reads is the `addr_type` these leave behind.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::address::{head, tail};
 use crate::narrow::len_as_int;

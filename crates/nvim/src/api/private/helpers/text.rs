@@ -12,7 +12,6 @@
 
 use super::{CAR, NL};
 use crate::api::private::validate::err_out_of_range;
-use crate::narrow::number_as_int;
 
 use crate::pos::MAXLNUM;
 use crate::types::{ApiString, Array, Error, LineNr, Object, int64_t};
@@ -59,7 +58,7 @@ pub(crate) fn string_to_array(input: &ApiString, crlf: bool) -> Array {
 
 // -- Buffer text -----------------------------------------------------------
 
-/// Turn a signed, end-relative line index into a 1-based line number,
+/// Turn a signed, end-relative line index into a line number,
 /// clamping it into the buffer and reporting through `oob` that it had to.
 ///
 /// `end_exclusive` allows one past the last line, which is what an
@@ -69,7 +68,7 @@ pub(crate) fn normalize_index(
     index: int64_t,
     end_exclusive: bool,
     oob: &mut bool,
-) -> int64_t {
+) -> LineNr {
     // The callers have checked that `buffer` is loaded.
     let line_count = buffer.b_ml.ml_line_count;
     debug_assert!(line_count > LineNr::ZERO);
@@ -86,22 +85,22 @@ pub(crate) fn normalize_index(
         *oob = true;
         index = 0;
     }
-    index + 1
+    LineNr::try_from(index + 1).expect("clamped into the buffer")
 }
 
 /// The text of line `lnum` between the two columns, copied out of the
 /// buffer's own line. Negative columns count back from the end.
 pub(crate) fn buf_get_text(
     buffer: Buf,
-    lnum: int64_t,
+    lnum: LineNr,
     start_col: int64_t,
     end_col: int64_t,
 ) -> Result<ApiString, Error> {
-    if lnum >= i64::from(MAXLNUM) {
+    if lnum >= MAXLNUM {
         return Err(err_out_of_range(c"line index"));
     }
     let mut lines = buffer.lines();
-    let bufstr = lines.line(LineNr::new(number_as_int(lnum)));
+    let bufstr = lines.line(lnum);
     let line_length = int64_t::try_from(bufstr.len()).unwrap_or(0);
 
     let relative = |col: int64_t| if col < 0 { line_length + col + 1 } else { col };
