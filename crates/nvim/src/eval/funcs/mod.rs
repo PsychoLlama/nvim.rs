@@ -8,8 +8,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::types::{
-    ApiString, Array, ChannelPart, Context, GRegFlags, LuaRetMode, MotionType, ProcType,
-    XDGVarType, uint64_t,
+    ChannelPart, GRegFlags, LuaRetMode, MotionType, ProcType, XDGVarType, uint64_t,
 };
 
 /// The generated builtin table: one row per builtin, plus the perfect-hash
@@ -134,8 +133,6 @@ pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const ARENA_BLOCK_SIZE: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-pub const KV_INITIAL_VALUE: Array = Array::EMPTY;
-pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
 pub const INTERNAL_CALL_MASK: uint64_t = 1_u64
     << ::core::mem::size_of::<uint64_t>()
         .wrapping_mul(8_usize)
@@ -143,13 +140,6 @@ pub const INTERNAL_CALL_MASK: uint64_t = 1_u64
 pub const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
 pub const VARNUMBER_MAX: ::core::ffi::c_long = INT64_MAX;
 pub const VARNUMBER_MIN: ::core::ffi::c_long = INT64_MIN;
-pub const CONTEXT_INIT: Context = Context {
-    regs: ApiString::NULL,
-    jumps: ApiString::NULL,
-    bufs: ApiString::NULL,
-    gvars: ApiString::NULL,
-    funcs: ARRAY_DICT_INIT,
-};
 static e_string_list_or_blob_required: &::core::ffi::CStr = c"E1098: String, List or Blob required";
 static e_missing_function_argument: &::core::ffi::CStr = c"E1132: Missing function argument";
 pub const TV_TRANSLATE: ::core::ffi::c_ulong = SIZE_MAX;

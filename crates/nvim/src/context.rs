@@ -30,6 +30,7 @@ use crate::shada::{
     shada_encode_buflist, shada_encode_gvars, shada_encode_jumps, shada_encode_regs,
     shada_read_string,
 };
+use crate::types::DictBuilder;
 use crate::types::TypVal;
 use crate::types::{
     ApiDict, ApiString, Array, Context, Error, KeyDict_exec_opts, KeyValuePair, Object, OptVal,
@@ -63,15 +64,6 @@ pub const CTX_ALL: c_int = kCtxRegs as c_int
     | kCtxSFuncs as c_int
     | kCtxFuncs as c_int;
 
-const ARRAY_INIT: Array = Array::EMPTY;
-const CONTEXT_INIT: Context = Context {
-    regs: ApiString::NULL,
-    jumps: ApiString::NULL,
-    bufs: ApiString::NULL,
-    gvars: ApiString::NULL,
-    funcs: ARRAY_INIT,
-};
-
 /// The `ctxpush`/`ctxpop` stack. Contexts are pushed and popped at the end,
 /// but [`ctx_get`] indexes from the *top*, which is what `ctxget()` takes.
 static CTX_STACK: GlobalCell<Vec<Context>> = GlobalCell::new(Vec::new());
@@ -94,7 +86,7 @@ pub(crate) fn with_ctx<R>(index: size_t, f: impl FnOnce(&mut Context) -> R) -> O
 /// Free everything a context owns.
 pub fn ctx_free(ctx: &mut Context) {
     // Assigning the empty context releases the five fields it replaces.
-    *ctx = CONTEXT_INIT;
+    *ctx = Context::default();
 }
 
 /// Save the editor state selected by `flags` into `ctx`, or push a new
@@ -105,7 +97,7 @@ pub fn ctx_save(ctx: Option<&mut Context>, flags: c_int) {
         None => {
             // Filled before it is pushed: each encoder runs editor code, so
             // the stack is not borrowed across them.
-            let mut pushed = CONTEXT_INIT;
+            let mut pushed = Context::default();
             ctx_save_into(&mut pushed, flags);
             CTX_STACK.with_mut(|stack| stack.push(pushed));
         }
@@ -188,7 +180,7 @@ const fn shada_while_restoring() -> OptVal {
 /// `scriptonly` so is everything but the script-local (`s:`) ones, whose
 /// names start with the `K_SPECIAL` byte.
 fn ctx_save_funcs(ctx: &mut Context, scriptonly: bool) {
-    ctx.funcs = ARRAY_INIT;
+    let mut funcs = Vec::new();
     // Collected before any of them is executed: upstream walks the table
     // with `exec_impl` running inside the walk, which is only safe because
     // listing a function cannot define or delete one.
@@ -205,9 +197,10 @@ fn ctx_save_funcs(ctx: &mut Context, scriptonly: bool) {
         let mut opts = KeyDict_exec_opts { output: Some(true) };
         let src = ApiString::from_bytes(&cmd);
         if let Ok(func_body) = exec_impl(VIML_INTERNAL_CALL, src, &mut opts) {
-            ctx.funcs.push(Object::string(func_body));
+            funcs.push(Object::string(func_body));
         }
     }
+    ctx.funcs = funcs.into();
 }
 
 /// Re-execute the captured `:function` definitions.
@@ -242,20 +235,20 @@ fn array_to_string(array: Array) -> Result<ApiString, Error> {
 }
 
 /// Append one `key: [bytes...]` entry to a dict.
-fn put_array(rv: &mut ApiDict, key: &CStr, array: Array) {
+fn put_array(rv: &mut DictBuilder, key: &CStr, array: Array) {
     rv.insert(key, Object::array(array));
 }
 
 /// The dict form of a context: each blob as an array of byte-strings, plus
 /// the function bodies. This shape is API surface — see the module docs.
 pub fn ctx_to_dict(ctx: &Context) -> ApiDict {
-    let mut rv = ApiDict::with_capacity(5);
+    let mut rv = DictBuilder::with_capacity(5);
     put_array(&mut rv, c"regs", string_to_array(&ctx.regs, false));
     put_array(&mut rv, c"jumps", string_to_array(&ctx.jumps, false));
     put_array(&mut rv, c"bufs", string_to_array(&ctx.bufs, false));
     put_array(&mut rv, c"gvars", string_to_array(&ctx.gvars, false));
     put_array(&mut rv, c"funcs", ctx.funcs.clone());
-    rv
+    rv.into()
 }
 
 /// Read a context back out of its dict form, into `ctx`. Returns the

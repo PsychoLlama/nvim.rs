@@ -25,6 +25,7 @@ use super::*;
 use crate::api_error;
 use crate::message_fmt::msg_bytes;
 use crate::narrow::len_as_integer;
+use crate::types::DictBuilder;
 use crate::types::NodeId;
 use core::ffi::{CStr, c_int, c_uint};
 
@@ -44,7 +45,7 @@ pub fn nvim_parse_expression(
 
     // "len" and "ast", plus "error" and "highlight" when they apply.
     let ret_size = 2 + size_t::from(east.err.is_some()) + size_t::from(hl);
-    let mut ret: ApiDict = ApiDict::with_capacity(ret_size);
+    let mut ret = DictBuilder::with_capacity(ret_size);
     // A multi-line expression stops at the end of the first line.
     let consumed = if pstate.pos.line == 1 {
         expr.len()
@@ -54,7 +55,7 @@ pub fn nvim_parse_expression(
     ret.insert(c"len", Object::integer(len_as_integer(consumed)));
 
     if let Some(err) = &east.err {
-        let mut err_dict: ApiDict = ApiDict::with_capacity(2);
+        let mut err_dict = DictBuilder::with_capacity(2);
         let arg = err.arg.map_or(ApiString::NULL, ApiString::from_bytes);
         err_dict.insert(c"message", Object::string(ApiString::from_cstr(err.msg)));
         err_dict.insert(c"arg", Object::string(arg));
@@ -63,13 +64,14 @@ pub fn nvim_parse_expression(
 
     if hl {
         let colors = pstate.take_highlight();
-        let mut hl_arr: Array = Array::with_capacity(colors.len());
+        let mut hl_arr = Vec::with_capacity(colors.len());
         for chunk in &colors {
-            let mut chunk_arr: Array = Array::with_capacity(4);
-            chunk_arr.push(Object::integer(len_as_integer(chunk.start.line)));
-            chunk_arr.push(Object::integer(len_as_integer(chunk.start.col)));
-            chunk_arr.push(Object::integer(len_as_integer(chunk.end_col)));
-            chunk_arr.push(Object::string(ApiString::from_cstr(chunk.group)));
+            let chunk_arr = vec![
+                Object::integer(len_as_integer(chunk.start.line)),
+                Object::integer(len_as_integer(chunk.start.col)),
+                Object::integer(len_as_integer(chunk.end_col)),
+                Object::string(ApiString::from_cstr(chunk.group)),
+            ];
             hl_arr.push(Object::array(chunk_arr));
         }
         ret.insert(c"highlight", Object::array(hl_arr));
@@ -77,7 +79,7 @@ pub fn nvim_parse_expression(
 
     ret.insert(c"ast", convert_ast(&east));
     debug_assert!(ret.len() == ret.capacity(), "ret.len() == ret.capacity()");
-    Ok(ret)
+    Ok(ret.into())
 }
 
 /// The `flags` argument as `ExprParserFlags`, or which character was not one.
@@ -135,11 +137,11 @@ fn convert_ast(east: &ExprAST<'_>) -> Object {
             }
             Step::Leave(id) => {
                 let node = east.node(id);
-                let mut ret_node = ApiDict::with_capacity(node_dict_size(node));
+                let mut ret_node = DictBuilder::with_capacity(node_dict_size(node));
                 let num_children = east.children(id).count();
                 if num_children != 0 {
                     let children = done.split_off(done.len() - num_children);
-                    let mut children_array: Array = Array::with_capacity(num_children);
+                    let mut children_array = Vec::with_capacity(num_children);
                     for child in children {
                         children_array.push(child);
                     }
@@ -181,9 +183,9 @@ fn node_dict_size(node: &ExprASTNode) -> size_t {
 /// The pairs a node contributes once its children have been rendered: the
 /// three every node has, then whatever its own variant carries. `ret_node`
 /// was sized by [`node_dict_size`].
-fn finish_node(node: &ExprASTNode<'_>, ret_node: &mut ApiDict) {
+fn finish_node(node: &ExprASTNode<'_>, ret_node: &mut DictBuilder) {
     let type_0 = node.type_0;
-    let put = |dict: &mut ApiDict, key: &'static CStr, value: Object| {
+    let put = |dict: &mut DictBuilder, key: &'static CStr, value: Object| {
         dict.insert(key, value);
     };
     // The three name tables hold static C strings.
@@ -193,9 +195,10 @@ fn finish_node(node: &ExprASTNode<'_>, ret_node: &mut ApiDict) {
     let type_name = NODE_TYPE_NAMES[type_0 as usize];
     put(ret_node, c"type", table_name(type_name));
 
-    let mut start_array: Array = Array::with_capacity(2);
-    start_array.push(Object::integer(len_as_integer(node.start.line)));
-    start_array.push(Object::integer(len_as_integer(node.start.col)));
+    let start_array = vec![
+        Object::integer(len_as_integer(node.start.line)),
+        Object::integer(len_as_integer(node.start.col)),
+    ];
     put(ret_node, c"start", Object::array(start_array));
     put(ret_node, c"len", Object::integer(len_as_integer(node.len)));
 

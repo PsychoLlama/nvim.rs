@@ -33,17 +33,17 @@ use crate::winlayer::{Win, windows_in_tab};
 
 /// The windows of `tabpage`, oldest first.
 pub fn nvim_tabpage_list_wins(tabpage: TabpageHandle) -> Result<Array, Error> {
-    let mut rv = Array::EMPTY;
+    let mut rv = Vec::new();
     let Some(tab) = find_tab_by_handle(tabpage)?.filter(|&t| valid_tabpage(t.id())) else {
-        return Ok(rv);
+        return Ok(rv.into());
     };
     // Counted first, so the array is allocated once.
     let n = windows_in_tab(tab).count() as size_t;
-    rv = Array::with_capacity(n);
+    rv = Vec::with_capacity(n);
     for wp in windows_in_tab(tab) {
         rv.push(Object::window(wp.handle));
     }
-    Ok(rv)
+    Ok(rv.into())
 }
 
 /// The tab-scoped variable `name`.

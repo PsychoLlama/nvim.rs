@@ -115,7 +115,7 @@ impl Channel {
                 unpacker: None,
                 next_request_id: 0,
                 call_stack: CallStack::new(),
-                info: ApiDict::EMPTY,
+                info: ApiDict::new(),
                 client_type: 0,
             },
             term: None,

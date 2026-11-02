@@ -33,9 +33,8 @@ use crate::grid::schar_bytes;
 use crate::highlight::dict::put;
 use crate::highlight_group::syn_id2name;
 use crate::sign::sign_text_bytes;
-use crate::types::{
-    ApiDict, ApiString, Array, DecorInline, DecorSignHighlight, DecorVirtText, Object, uint16_t,
-};
+use crate::types::DictBuilder;
+use crate::types::{ApiString, DecorInline, DecorSignHighlight, DecorVirtText, Object, uint16_t};
 use core::ffi::{CStr, c_int};
 
 /// `kExtmark*`: which kinds of decoration a mark carries, as the bit mask the
@@ -72,7 +71,7 @@ const HL_MODE_STR: [&CStr; 4] = [c"", c"replace", c"combine", c"blend"];
 ///
 /// `put` panics rather than overflowing `dict`: its callers size it for the
 /// whole `set_extmark` keyset.
-pub fn decor_to_dict_legacy(dict: &mut ApiDict, decor: DecorInline, hl_name: bool) {
+pub fn decor_to_dict_legacy(dict: &mut DictBuilder, decor: DecorInline, hl_name: bool) {
     let mut sh_hl = DECOR_ID_INVALID;
     let mut sh_sign = DECOR_ID_INVALID;
     let mut virt_text = DECOR_ID_INVALID;
@@ -130,7 +129,7 @@ pub fn decor_to_dict_legacy(dict: &mut ApiDict, decor: DecorInline, hl_name: boo
 /// The highlight half of [`decor_to_dict_legacy`], raising `priority` to the
 /// highlight's when it names a group.
 fn put_highlight(
-    dict: &mut ApiDict,
+    dict: &mut DictBuilder,
     sh_hl: &DecorSignHighlight,
     hl_name: bool,
     priority: &mut i32,
@@ -174,7 +173,7 @@ fn put_highlight(
 
 /// The virt-text half of [`decor_to_dict_legacy`]: `vt` is a virtual *text*
 /// link, not a virtual-lines one.
-fn put_virt_text(dict: &mut ApiDict, vt: &DecorVirtText, hl_name: bool) {
+fn put_virt_text(dict: &mut DictBuilder, vt: &DecorVirtText, hl_name: bool) {
     if vt.hl_mode != 0 {
         let mode = HL_MODE_STR[vt.hl_mode as usize];
         let value = Object::string(ApiString::from_cstr(mode));
@@ -201,9 +200,9 @@ fn put_virt_text(dict: &mut ApiDict, vt: &DecorVirtText, hl_name: bool) {
 /// `virt_lines_leftcol` and `virt_lines_overflow` come from the *last* line's
 /// flags: the flags are per line, the dictionary has one slot for them. That
 /// is upstream's shape.
-fn put_virt_lines(dict: &mut ApiDict, vt: &DecorVirtText, hl_name: bool) {
+fn put_virt_lines(dict: &mut DictBuilder, vt: &DecorVirtText, hl_name: bool) {
     let lines = vt.data.lines();
-    let mut all_chunks: Array = Array::with_capacity(lines.len());
+    let mut all_chunks = Vec::with_capacity(lines.len());
     let mut line_flags: c_int = 0;
     for line in lines {
         line_flags = line.flags;
@@ -226,7 +225,7 @@ fn put_virt_lines(dict: &mut ApiDict, vt: &DecorVirtText, hl_name: bool) {
 }
 
 /// The sign half of [`decor_to_dict_legacy`].
-fn put_sign(dict: &mut ApiDict, sh: &DecorSignHighlight, hl_name: bool) {
+fn put_sign(dict: &mut DictBuilder, sh: &DecorSignHighlight, hl_name: bool) {
     if sh.text[0] != 0 {
         let value = Object::string(ApiString::from_bytes(&sign_text_bytes(&sh.text)));
         put(dict, c"sign_text", value);

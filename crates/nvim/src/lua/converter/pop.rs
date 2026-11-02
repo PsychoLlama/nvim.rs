@@ -10,6 +10,7 @@
 #![forbid(unsafe_code)]
 
 use crate::semsg;
+use crate::types::DictBuilder;
 use core::ffi::c_int;
 
 use super::{API_INTEGER_MAX, API_INTEGER_MIN, LuaTableProps, TYPE_IDX_VALUE, pop_object};
@@ -252,7 +253,7 @@ pub fn pop_float(stack: &mut Stack) -> Result<Float, Error> {
 
 /// [`pop_array`] once the table is known to be one.
 fn pop_array_unchecked(stack: &mut Stack, table_props: LuaTableProps) -> Result<Array, Error> {
-    let mut ret = Array::with_capacity(table_props.maxidx);
+    let mut ret = Vec::with_capacity(table_props.maxidx);
     for i in 1..=table_props.maxidx {
         stack.raw_get_index(At::TOP, i as c_int);
         match pop_object(stack, false) {
@@ -264,7 +265,7 @@ fn pop_array_unchecked(stack: &mut Stack, table_props: LuaTableProps) -> Result<
         }
     }
     stack.pop(1);
-    Ok(ret)
+    Ok(ret.into())
 }
 
 /// Pop an array-shaped Lua table.
@@ -274,7 +275,7 @@ pub fn pop_array(stack: &mut Stack) -> Result<Array, Error> {
         return Err(why);
     }
     if table_props.type_0 != kObjectTypeArray {
-        return Ok(Array::EMPTY);
+        return Ok(Array::new());
     }
     pop_array_unchecked(stack, table_props)
 }
@@ -285,10 +286,10 @@ fn pop_dict_unchecked(
     table_props: LuaTableProps,
     as_ref: bool,
 ) -> Result<ApiDict, Error> {
-    let mut ret = ApiDict::with_capacity(table_props.string_keys_num);
+    let mut ret = DictBuilder::with_capacity(table_props.string_keys_num);
     if table_props.string_keys_num == 0 {
         stack.pop(1);
-        return Ok(ret);
+        return Ok(ret.into());
     }
     stack.push_nil();
     let mut i: size_t = 0;
@@ -313,7 +314,7 @@ fn pop_dict_unchecked(
         i += 1;
     }
     stack.pop(1);
-    Ok(ret)
+    Ok(ret.into())
 }
 
 /// Pop a dictionary-shaped Lua table. With `as_ref`, a function value becomes
@@ -324,7 +325,7 @@ pub fn pop_dict(stack: &mut Stack, as_ref: bool) -> Result<ApiDict, Error> {
         stack.pop(1);
         return match why {
             Some(why) => Err(why),
-            None => Ok(ApiDict::EMPTY),
+            None => Ok(ApiDict::new()),
         };
     }
     pop_dict_unchecked(stack, table_props, as_ref)

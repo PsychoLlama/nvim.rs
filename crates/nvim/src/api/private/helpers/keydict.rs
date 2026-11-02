@@ -20,6 +20,7 @@ use crate::api::private::keyset::{FieldKind, KeySet, Slot};
 use crate::api::private::validate::err_expected;
 use crate::api_error;
 use crate::narrow::number_as_int;
+use crate::types::DictBuilder;
 use crate::types::Handle;
 use crate::types::{ApiDict, Error, Float, KeyValuePair, Object, kErrorTypeValidation};
 
@@ -72,7 +73,7 @@ pub(crate) fn api_dict_to_keydict(retval: &mut dyn KeySet, dict: ApiDict) -> Res
                 // An empty array is how msgpack spells an empty map.
                 let empty = given.as_array().is_some_and(|array| array.is_empty());
                 let pairs = if empty {
-                    Some(ApiDict::EMPTY)
+                    Some(ApiDict::new())
                 } else {
                     given.into_dict()
                 };
@@ -111,7 +112,7 @@ pub(crate) fn api_dict_to_keydict(retval: &mut dyn KeySet, dict: ApiDict) -> Res
 /// The keyset keeps its fields; what the answer holds is copies.
 pub(crate) fn api_keydict_to_dict(value: &mut dyn KeySet) -> ApiDict {
     let fields = value.fields();
-    let mut rv = ApiDict::with_capacity(fields.len());
+    let mut rv = DictBuilder::with_capacity(fields.len());
     for (index, field) in fields.iter().enumerate() {
         let val = match value.slot(index) {
             Slot::Any(Some(v)) => v.clone(),
@@ -134,5 +135,5 @@ pub(crate) fn api_keydict_to_dict(value: &mut dyn KeySet) -> ApiDict {
         };
         rv.insert(field.name.to_bytes(), val);
     }
-    rv
+    rv.into()
 }

@@ -22,8 +22,8 @@
 
 #![forbid(unsafe_code)]
 
-use crate::types::ApiDict;
 use crate::types::ApiString;
+use crate::types::DictBuilder;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::charset::getdigits_int_at;
@@ -163,14 +163,14 @@ fn clear_shape_table() {
 /// The whole table as the `mode_info_set` UI event carries it: one dict per
 /// mode, in table order.
 pub(crate) fn mode_style_array() -> Array {
-    let mut all = Array::with_capacity(SHAPE_IDX_COUNT as size_t);
+    let mut all = Vec::with_capacity(SHAPE_IDX_COUNT as size_t);
     for idx in 0..SHAPE_IDX_COUNT {
         let cur = shape_entry(idx);
         let for_mouse = c_int::from(cur.used_for) & SHAPE_MOUSE != 0;
         let for_cursor = c_int::from(cur.used_for) & SHAPE_CURSOR != 0;
         // Upstream sizes for three keys plus the nine cursor ones, so a
         // cursor-only entry ("sm", "t") leaves one slot unused.
-        let mut dic = ApiDict::with_capacity(if for_cursor { 12 } else { 3 });
+        let mut dic = DictBuilder::with_capacity(if for_cursor { 12 } else { 3 });
         let mut put = |key, value| dic.insert(key, value);
         let full_name = ApiString::from_cstr(cur.full_name);
         let short_name = ApiString::from_cstr(cur.name);
@@ -204,7 +204,7 @@ pub(crate) fn mode_style_array() -> Array {
         }
         all.push(Object::dict(dic));
     }
-    all
+    all.into()
 }
 
 /// The attribute a cursor highlight group resolves to; zero for "no group",

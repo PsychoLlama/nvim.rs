@@ -53,7 +53,7 @@ pub fn nvim__runtime_inspect() -> Array {
 /// The files matching `name` under 'runtimepath': the first, or with `all`
 /// every one.
 pub fn nvim_get_runtime_file(name: ApiString, all: Boolean) -> Result<Array, Error> {
-    let mut rv = Array::EMPTY;
+    let mut rv = Vec::new();
     let flags = RuntimeOpts::DIRFILE | RuntimeOpts::ALL.when(all);
     api_try(|| {
         // The name is this call's own, which no script the walk runs can
@@ -68,7 +68,7 @@ pub fn nvim_get_runtime_file(name: ApiString, all: Boolean) -> Result<Array, Err
             !fnames.is_empty()
         });
     })?;
-    Ok(rv)
+    Ok(rv.into())
 }
 
 // `nvim__get_lib_dir` is an API method's own name, published over msgpack-RPC.

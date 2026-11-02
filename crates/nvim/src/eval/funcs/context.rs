@@ -1,7 +1,7 @@
 //! The editor context stack: the `ctx*()` family.
 #![forbid(unsafe_code)]
 
-use super::{CONTEXT_INIT, kCtxBufs, kCtxFuncs, kCtxGVars, kCtxJumps, kCtxRegs, kCtxSFuncs};
+use super::{kCtxBufs, kCtxFuncs, kCtxGVars, kCtxJumps, kCtxRegs, kCtxSFuncs};
 use crate::context::{
     CTX_ALL, ctx_from_dict, ctx_restore, ctx_save, ctx_size, ctx_to_dict, with_ctx,
 };
@@ -10,7 +10,8 @@ use crate::message::state::did_emsg;
 use crate::message_fmt::msg_cstr;
 use crate::semsg;
 use crate::types::{
-    Error, EvalFuncData, Object, TypVal, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN, VarNumber,
+    Context, Error, EvalFuncData, Object, TypVal, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN,
+    VarNumber,
 };
 use core::ffi::c_int;
 
@@ -113,7 +114,7 @@ pub fn f_ctxset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     let dict = Object::from(&args[0])
         .into_dict()
         .expect("a VAR_DICT converts to a Dict object");
-    let mut read = CONTEXT_INIT;
+    let mut read = Context::default();
     match ctx_from_dict(dict, &mut read) {
         Err(e) => {
             // The message is whatever the API layer produced.

@@ -27,7 +27,8 @@
 use super::packer::{push_call, ui_flush_buf};
 use crate::highlight::{HLATTRS_DICT_SIZE, hlattrs2dict, syn_attr2entry};
 use crate::option::vars::P_BG;
-use crate::types::builders::{ArrayBuf, DictBuf};
+use crate::types::DictBuilder;
+use crate::types::builders::ArrayBuf;
 use crate::types::ui::{kUILinegrid, kUITermColors};
 use crate::types::{ApiString, Array, Boolean, Integer, Object, RemoteUI, WindowHandle};
 use core::ffi::c_int;
@@ -248,8 +249,7 @@ pub(super) fn remote_ui_highlight_set(ui: &mut RemoteUI, id: c_int) {
     }
     ui.hl_id = id;
 
-    let mut buf = DictBuf::<HLATTRS_DICT_SIZE>::new();
-    let mut dict = buf.dict();
+    let mut dict = DictBuilder::with_capacity(HLATTRS_DICT_SIZE);
     hlattrs2dict(&mut dict, None, syn_attr2entry(id), ui.rgb, false);
     send!(ui, c"highlight_set", Object::dict(dict));
 }

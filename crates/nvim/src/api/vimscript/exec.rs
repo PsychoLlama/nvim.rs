@@ -17,6 +17,7 @@
 use super::*;
 use crate::api::private::helpers::api_try;
 use crate::guard::Suppress;
+use crate::types::DictBuilder;
 
 pub fn nvim_exec2(
     channel_id: uint64_t,
@@ -25,13 +26,13 @@ pub fn nvim_exec2(
 ) -> Result<ApiDict, Error> {
     let output: ApiString = (exec_impl(channel_id, src, opts))?;
     if !opts.output.unwrap_or(false) {
-        return Ok(ApiDict::EMPTY);
+        return Ok(ApiDict::new());
     }
     // Heap-allocated rather than arena-allocated: the caller frees this
     // dictionary key by key, so the key is a copy too.
-    let mut result: ApiDict = ApiDict::with_capacity(1);
+    let mut result = DictBuilder::with_capacity(1);
     result.insert(c"output", Object::string(output));
-    Ok(result)
+    Ok(result.into())
 }
 
 /// Source `src` as an anonymous script, answering whatever it printed when

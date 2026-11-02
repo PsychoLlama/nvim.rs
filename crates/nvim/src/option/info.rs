@@ -13,6 +13,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::types::DictBuilder;
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
 
@@ -31,7 +32,7 @@ use super::{
 
 /// Append `key: value` to the dictionary.
 ///
-fn push(dict: &mut ApiDict, key: &'static CStr, value: Object) {
+fn push(dict: &mut DictBuilder, key: &'static CStr, value: Object) {
     dict.insert(key, value);
 }
 
@@ -73,14 +74,14 @@ pub(crate) fn get_vimoption(
 pub(crate) fn get_all_vimoptions() -> ApiDict {
     // SAFETY: the arena is live, and it is asked for exactly `kOptCount`
     // pairs before any is pushed.
-    let mut retval = ApiDict::with_capacity(kOptCount as size_t);
+    let mut retval = DictBuilder::with_capacity(kOptCount as size_t);
     for opt_idx in kOptAleph..kOptCount {
         let (scope, buf, win) = (OptionSetFlags::GLOBAL, Buf::current(), Win::current());
         let opt_dict = vimoption2dict(opt_idx, scope, buf, win);
         let key = get_option(opt_idx).fullname.to_bytes();
         retval.insert(key, Object::dict(opt_dict));
     }
-    retval
+    retval.into()
 }
 
 /// Which script last set the option, for the scope `opt_flags` names. A
@@ -117,7 +118,7 @@ pub(crate) fn vimoption2dict(
     let opt = get_option(opt_idx);
     // SAFETY: the caller's pointers are live, and the dictionary is asked
     // for exactly the thirteen slots pushed below.
-    let mut dict = ApiDict::with_capacity(13 as size_t);
+    let mut dict = DictBuilder::with_capacity(13 as size_t);
 
     // An option in more than one scope reports the narrowest.
     let scope = if option_has_scope(opt_idx, kOptScopeBuf) {
@@ -161,5 +162,5 @@ pub(crate) fn vimoption2dict(
         push(&mut dict, key, value);
     }
 
-    dict
+    dict.into()
 }

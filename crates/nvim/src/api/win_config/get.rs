@@ -72,7 +72,7 @@ fn config_put_bordertext(
 /// The eight border cells as the `border` key takes them: a bare string per
 /// cell, or a `[char, highlight]` pair for a cell that carries one.
 fn border_array(fconfig: &WinConfig) -> Array {
-    let mut border = Array::with_capacity(8);
+    let mut border = Vec::with_capacity(8);
     for (i, chars) in fconfig.border_chars.iter().enumerate() {
         // Up to the cell's NUL, or all of it.
         let text: Vec<u8> = chars.iter().take_while(|&&c| c != 0).copied().collect();
@@ -80,15 +80,16 @@ fn border_array(fconfig: &WinConfig) -> Array {
         let name = syn_id2name(fconfig.border_hl_ids[i]);
         let highlighted = !name.is_empty();
         if highlighted {
-            let mut tuple = Array::with_capacity(2);
-            tuple.push(Object::string(cell));
-            tuple.push(Object::string(ApiString::from_cstr(name)));
+            let tuple = vec![
+                Object::string(cell),
+                Object::string(ApiString::from_cstr(name)),
+            ];
             border.push(Object::array(tuple));
         } else {
             border.push(Object::string(cell));
         }
     }
-    border
+    border.into()
 }
 
 /// `win`'s configuration, as the dictionary `nvim_open_win` would take.
@@ -112,11 +113,11 @@ pub fn nvim_win_get_config(win: WindowHandle) -> Result<KeyDict_win_config, Erro
             if config.relative == kFloatRelativeWindow {
                 rv.win = Some(config.window);
                 if config.bufpos.lnum >= 0 {
-                    let mut pos = Array::with_capacity(2);
+                    let mut pos = Vec::with_capacity(2);
                     let (lnum, col) = (config.bufpos.lnum, config.bufpos.col);
                     pos.push(Object::integer(Integer::from(lnum)));
                     pos.push(Object::integer(Integer::from(col)));
-                    rv.bufpos = Some(pos);
+                    rv.bufpos = Some(pos.into());
                 }
             }
             let anchor = usize::try_from(config.anchor).expect("an anchor is one of four");

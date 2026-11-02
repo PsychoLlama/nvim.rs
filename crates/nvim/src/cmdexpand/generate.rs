@@ -216,7 +216,7 @@ pub(crate) fn get_healthcheck_names(_expand: &Expand, idx: usize) -> Option<Cand
     static names: GlobalCell<Object> = GlobalCell::new(Object::Nil);
     static last_gen: GlobalCell<c_uint> = GlobalCell::new(0);
     if last_gen.get() != get_cmdline_last_prompt_id() || last_gen.get() == 0 {
-        cache_lua_answer(&names, c"return vim.health._complete()", Array::EMPTY);
+        cache_lua_answer(&names, c"return vim.health._complete()", Array::new());
         last_gen.set(get_cmdline_last_prompt_id());
     }
     nth_lua_string(&names, idx)

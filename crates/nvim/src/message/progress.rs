@@ -127,7 +127,7 @@ pub fn do_autocmd_progress(msg_id: Object, msg: &[HlMessageChunk], msg_data: Opt
 
     // The event carries copies: the message and its data block outlive the
     // autocommand and go on being the caller's.
-    let mut messages = Array::with_capacity(msg.len());
+    let mut messages = Vec::with_capacity(msg.len());
     for chunk in msg {
         messages.push(Object::string(chunk.text.clone()));
     }

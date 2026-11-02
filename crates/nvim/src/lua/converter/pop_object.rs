@@ -24,6 +24,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::types::DictBuilder;
 use core::ffi::CStr;
 
 use super::pop::TURN_SLOTS;
@@ -45,16 +46,17 @@ const CANNOT_CONVERT: &CStr = c"Cannot convert given Lua type";
 /// table's shape before the descent: a table with more than that in it has
 /// the rest ignored, which is what the capacity test upstream writes says.
 enum OpenValue {
-    /// A Lua array table becoming an [`Array`].
+    /// A Lua array table becoming an [`Array`], filled in a vector sized
+    /// to `wanted` so that the freeze in [`finish`](Self::finish) is free.
     Array {
-        array: Array,
+        array: Vec<Object>,
         wanted: size_t,
         table: At,
     },
     /// A Lua string-keyed table becoming an [`ApiDict`].  The key `lua_next`
     /// handed back sits at `table + 1` until its value has been converted.
     Dict {
-        dict: ApiDict,
+        dict: DictBuilder,
         wanted: size_t,
         table: At,
     },
@@ -195,10 +197,10 @@ fn convert_table(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Result<Convert
         kObjectTypeArray => {
             let wanted = table_props.maxidx;
             if wanted == 0 {
-                return Ok(Converted::Value(Object::array(Array::EMPTY)));
+                return Ok(Converted::Value(Object::array(Array::new())));
             }
             open.push(OpenValue::Array {
-                array: Array::with_capacity(wanted),
+                array: Vec::with_capacity(wanted),
                 wanted,
                 table,
             });
@@ -207,10 +209,10 @@ fn convert_table(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Result<Convert
         kObjectTypeDict => {
             let wanted = table_props.string_keys_num;
             if wanted == 0 {
-                return Ok(Converted::Value(Object::dict(ApiDict::EMPTY)));
+                return Ok(Converted::Value(Object::dict(ApiDict::new())));
             }
             open.push(OpenValue::Dict {
-                dict: ApiDict::with_capacity(wanted),
+                dict: DictBuilder::with_capacity(wanted),
                 wanted,
                 table,
             });

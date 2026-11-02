@@ -287,7 +287,7 @@ pub fn f_serverlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // Array the Lua helper is passed.
     let list = tv_list_alloc(addrs.len() as isize);
     result.write_list(Some(list.clone()));
-    let mut addrs_arr = Array::with_capacity(addrs.len());
+    let mut addrs_arr = Vec::with_capacity(addrs.len());
     for addr in &addrs {
         list.edit().push_str(Some(addr));
         addrs_arr.push(Object::string(ApiString::from_cstr(addr)));

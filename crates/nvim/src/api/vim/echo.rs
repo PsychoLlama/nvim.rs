@@ -46,7 +46,7 @@ pub fn nvim_echo(
         opts.source.as_ref().unwrap_or(&no_string),
     );
     let percent = opts.percent.unwrap_or(0);
-    let (no_dict, nil) = (ApiDict::EMPTY, Object::Nil);
+    let (no_dict, nil) = (ApiDict::new(), Object::Nil);
     let data = opts.data.as_ref().unwrap_or(&no_dict);
     let given_id = opts.id.as_ref().unwrap_or(&nil);
     let mut hl_msg = HlMessage::new();

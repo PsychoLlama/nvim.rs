@@ -28,7 +28,7 @@ pub fn nvim_buf_set_text(
     if replacement.is_empty() {
         // An empty replacement deletes the range, which is the same as
         // replacing it with one empty line.
-        replacement.push(Object::string(ApiString::from_cstr(c"")));
+        replacement = Array::from([Object::string(ApiString::from_cstr(c""))]);
     }
     let Some(b) = api_buf_ensure_loaded(buf)? else {
         return Ok(());

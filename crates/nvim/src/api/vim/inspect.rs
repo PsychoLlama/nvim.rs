@@ -22,6 +22,7 @@ use crate::grid::default_grid_ref;
 use crate::log::logmsg;
 use crate::narrow::{len_as_integer, number_as_int};
 use crate::popupmenu::pum_grid_ref;
+use crate::types::DictBuilder;
 
 // `nvim__id` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
@@ -71,11 +72,11 @@ pub fn nvim__stats() -> ApiDict {
             Object::integer(tslua_query_parse_count.get().cast_signed()),
         ),
     ];
-    let mut rv: ApiDict = ApiDict::with_capacity(entries.len());
+    let mut rv = DictBuilder::with_capacity(entries.len());
     for (key, value) in entries {
         rv.insert(key, value);
     }
-    rv
+    rv.into()
 }
 
 /// The pids of `pid`'s child processes.
@@ -99,9 +100,13 @@ pub fn nvim_get_proc_children(pid: Integer) -> Result<Array, Error> {
         1924,
         "fallback to vim._os_proc_children()"
     );
-    let mut a: Array = Array::with_capacity(1);
-    a.push(Object::integer(pid.into()));
-    let o = nlua_exec(b"return vim._os_proc_children(...)", None, a, kRetObject)?;
+    let a = vec![Object::integer(pid.into())];
+    let o = nlua_exec(
+        b"return vim._os_proc_children(...)",
+        None,
+        a.into(),
+        kRetObject,
+    )?;
     o.into_array().ok_or_else(|| {
         api_error!(
             kErrorTypeException,
@@ -115,9 +120,8 @@ pub fn nvim_get_proc(pid: Integer) -> Result<Object, Error> {
     if !(pid > 0 && pid <= Integer::from(::core::ffi::c_int::MAX)) {
         return Err(err_bad_number(c"pid", pid));
     }
-    let mut a: Array = Array::with_capacity(1);
-    a.push(Object::integer(pid));
-    let o = nlua_exec(b"return vim._os_proc_info(...)", None, a, kRetObject)?;
+    let a = vec![Object::integer(pid)];
+    let o = nlua_exec(b"return vim._os_proc_info(...)", None, a.into(), kRetObject)?;
     if o.as_array().is_some_and(|array| array.is_empty()) {
         return Ok(Object::Nil);
     }
@@ -134,7 +138,7 @@ pub fn nvim_get_proc(pid: Integer) -> Result<Object, Error> {
 // `nvim__inspect_cell` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub fn nvim__inspect_cell(grid: Integer, row: Integer, col: Integer) -> Result<Array, Error> {
-    let mut ret: Array = Array::EMPTY;
+    let mut ret = Vec::new();
     let mut g: GridRef = default_grid_ref();
     if grid == Integer::from(pum_grid_ref().handle) {
         g = pum_grid_ref();
@@ -151,9 +155,9 @@ pub fn nvim__inspect_cell(grid: Integer, row: Integer, col: Integer) -> Result<A
         || col < 0 as Integer
         || col >= Integer::from(g.cols)
     {
-        return Ok(ret);
+        return Ok(ret.into());
     }
-    ret = Array::with_capacity(3 as size_t);
+    ret = Vec::with_capacity(3 as size_t);
     let off: size_t = g.cell_offset(number_as_int(row), number_as_int(col));
     let mut sc_buf: SCharBuf = [0; SCHAR_BUF_SIZE];
     ret.push(Object::string(ApiString::from_bytes(schar_text(
@@ -166,7 +170,7 @@ pub fn nvim__inspect_cell(grid: Integer, row: Integer, col: Integer) -> Result<A
     if !highlight_use_hlstate() {
         ret.push(Object::array(hl_inspect(attr)));
     }
-    Ok(ret)
+    Ok(ret.into())
 }
 
 // `nvim__screenshot` is an API method's own name, published over msgpack-RPC.

@@ -17,6 +17,7 @@
 
 use super::*;
 use crate::api::private::validate::err_expected;
+use crate::types::Object;
 use core::ffi::CStr;
 
 /// `v` as a list of strings: one string, or an array of them, under the
@@ -30,12 +31,11 @@ pub(crate) fn unpack_string_or_array(
         if required {
             return Err(err_expected(k, c"Array or String", Some(c"nil")));
         }
-        return Ok(Array::EMPTY);
+        return Ok(Array::new());
     };
     if matches!(v, Object::String(_)) {
-        let mut arr: Array = Array::with_capacity(1);
-        arr.push(v);
-        return Ok(arr);
+        let arr = vec![v];
+        return Ok(arr.into());
     }
     if matches!(v, Object::Array(_)) {
         let array = v.into_array().expect("the arm above matched an Array");
@@ -56,7 +56,7 @@ pub(crate) fn get_patterns_from_pattern_or_buf(
 ) -> Result<Array, Error> {
     /// One pattern string per `,`-separated span of `text`, which is what
     /// `aucmd_span_pattern` walks.
-    fn push_spans(patterns: &mut Array, text: &ApiString) {
+    fn push_spans(patterns: &mut Vec<Object>, text: &ApiString) {
         let text = text.as_bytes();
         let (mut start, mut len) = aucmd_span_pattern(text);
         while len != 0 {
@@ -67,7 +67,7 @@ pub(crate) fn get_patterns_from_pattern_or_buf(
         }
     }
 
-    let mut patterns = Array::EMPTY;
+    let mut patterns = Vec::new();
     let pattern = pattern.filter(|pattern| !pattern.is_nil());
     if let Some(string) = pattern.and_then(Object::as_string) {
         push_spans(&mut patterns, string);
@@ -95,5 +95,5 @@ pub(crate) fn get_patterns_from_pattern_or_buf(
     {
         patterns.push(Object::string(ApiString::from_cstr(fallback)));
     }
-    Ok(patterns)
+    Ok(patterns.into())
 }

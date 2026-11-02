@@ -96,5 +96,3 @@ pub const kExprFlagsDisallowEOC: ExprParserFlags = 2;
 pub const kExprFlagsMulti: ExprParserFlags = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const KV_INITIAL_VALUE: ApiDict = ApiDict::EMPTY;
-pub const ARRAY_DICT_INIT: ApiDict = KV_INITIAL_VALUE;

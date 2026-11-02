@@ -69,7 +69,7 @@ pub(crate) fn msg_ext_emit_chunk() {
     }
     // The accumulated text moves out, leaving the buffer empty.
     let accumulated = msg_ext_last_chunk.take();
-    let mut chunk = Array::with_capacity(3);
+    let mut chunk = Vec::with_capacity(3);
 
     chunk.push(Object::integer(msg_ext_last_attr.get().into()));
     msg_ext_last_attr.set(-1);
@@ -92,8 +92,9 @@ pub(crate) fn msg_ext_emit_chunk() {
 pub(crate) fn msg_ext_init_chunks() -> Array {
     msg_col.set(0);
     msg_ext_chunks
-        .replace(Some(Array::EMPTY))
-        .unwrap_or(Array::EMPTY)
+        .replace(Some(Vec::new()))
+        .map(Array::from)
+        .unwrap_or_default()
 }
 
 /// Emit everything accumulated so far as one `msg_show` event.

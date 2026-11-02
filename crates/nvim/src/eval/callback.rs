@@ -14,6 +14,7 @@
 use crate::eval::typval::{LUA_NOREF, PartialRef, partial_name};
 use crate::guard::Depth;
 use crate::memory::ThinCString;
+use crate::types::Array;
 use core::ffi::{CStr, c_int};
 use core::mem::ManuallyDrop;
 
@@ -23,7 +24,7 @@ use crate::eval::userfunc::{
     CallWith, call_func_with, func_ref_name, func_unref_name, scriptlocal_funcname,
 };
 use crate::eval::vars::{emsg_static, lua_partial};
-use crate::eval::{ARRAY_DICT_INIT, callback_depth, check_luafunc_name, kRetNilBool};
+use crate::eval::{callback_depth, check_luafunc_name, kRetNilBool};
 use crate::lua::executor::{
     api_new_luaref, funcref_description, nlua_call_ref_quiet, nlua_is_table_from_lua,
     register_table_as_callable, release_luaref,
@@ -258,7 +259,7 @@ pub fn callback_call(callback: &Callback, args: &[TypVal], result: &mut TypVal) 
             // A Lua reference is called directly, with no arguments —
             // this is the "is it still wanted" question, not a
             // general-purpose call.
-            let no_args = ARRAY_DICT_INIT;
+            let no_args = Array::new();
             // No arguments, no arena and no error sink.
             let rv = nlua_call_ref_quiet(*luaref, None, no_args, kRetNilBool);
             return rv.as_boolean().unwrap_or(false);

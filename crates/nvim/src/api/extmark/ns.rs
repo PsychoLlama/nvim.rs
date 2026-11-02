@@ -29,6 +29,7 @@ use crate::api::private::validate::err_bad_number;
 use crate::global_cell::GlobalCell;
 use crate::narrow::{number_as_int, number_as_u32};
 use crate::registry::{IdSet, SlotTable, id_set, interned_key};
+use crate::types::DictBuilder;
 use crate::types::{Handle, uint32_t};
 use crate::winlayer::{Win, tab_windows};
 
@@ -94,7 +95,7 @@ pub fn nvim_create_namespace(name: ApiString) -> Integer {
 
 pub fn nvim_get_namespaces() -> ApiDict {
     namespace_ids.with(|ids| {
-        let mut retval: ApiDict = ApiDict::with_capacity(ids.len() as size_t);
+        let mut retval = DictBuilder::with_capacity(ids.len() as size_t);
         for (name, id) in ids.entries() {
             // `ns_key` terminated the key, and it is re-measured -- so a name
             // with an interior NUL is answered truncated, as it was when the
@@ -103,7 +104,7 @@ pub fn nvim_get_namespaces() -> ApiDict {
             let value = Object::integer(Integer::from(*id));
             retval.insert(key, value);
         }
-        retval
+        retval.finish()
     })
 }
 
@@ -193,8 +194,8 @@ pub fn nvim__ns_set(ns_id: Integer, opts: &mut KeyDict_ns_opts) -> Result<(), Er
 #[allow(non_snake_case)]
 pub fn nvim__ns_get(ns_id: Integer) -> Result<KeyDict_ns_opts, Error> {
     let mut opts = KeyDict_ns_opts::default();
-    let mut windows: Array = Array::EMPTY;
-    opts.wins = Some(windows);
+    let mut windows = Vec::new();
+    opts.wins = Some(windows.into());
     if !ns_initialized(number_as_u32(ns_id)) {
         return Err(err_bad_number(c"ns_id", ns_id));
     }
@@ -207,12 +208,12 @@ pub fn nvim__ns_get(ns_id: Integer) -> Result<KeyDict_ns_opts, Error> {
             count = count.wrapping_add(1);
         }
     }
-    windows = Array::with_capacity(count);
+    windows = Vec::with_capacity(count);
     for win in tab_windows() {
         if window_shows_ns(win, number_as_u32(ns_id)) {
             windows.push(Object::integer(Integer::from(win.handle())));
         }
     }
-    opts.wins = Some(windows);
+    opts.wins = Some(windows.into());
     Ok(opts)
 }

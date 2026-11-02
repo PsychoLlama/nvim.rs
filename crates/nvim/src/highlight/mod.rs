@@ -48,9 +48,8 @@ use crate::highlight_group::{
 };
 use crate::message::emsg;
 use crate::os::cshim::gettext;
-use crate::types::{
-    ApiDict, ApiString, Array, HlAttrs, HlEntry, HlKind, Integer, Object, uint32_t,
-};
+use crate::types::DictBuilder;
+use crate::types::{ApiString, Array, HlAttrs, HlEntry, HlKind, Integer, Object, uint32_t};
 use crate::ui::ui_call_hl_attr_define;
 use cache::AttrCache;
 use core::ffi::{CStr, c_int};
@@ -592,11 +591,11 @@ pub fn syn_attr2entry(attr: c_int) -> HlAttrs {
 /// Empty unless some UI asked for `ext_hlstate`.
 pub fn hl_inspect(attr: c_int) -> Array {
     if !HLSTATE_ACTIVE.get() {
-        return Array::EMPTY;
+        return Array::new();
     }
-    let mut ret = Array::with_capacity(hl_inspect_size(attr));
+    let mut ret = Vec::with_capacity(hl_inspect_size(attr));
     hl_inspect_impl(&mut ret, attr);
-    ret
+    ret.into()
 }
 
 /// How many entries [`hl_inspect_impl`] will produce for `attr`. Combinations
@@ -614,19 +613,19 @@ fn hl_inspect_size(attr: c_int) -> usize {
 }
 
 /// Appends `attr`'s provenance to `arr`.
-fn hl_inspect_impl(arr: &mut Array, attr: c_int) {
+fn hl_inspect_impl(arr: &mut Vec<Object>, attr: c_int) {
     let Some(entry) = ATTRS.with(|attrs| attrs.live(attr)) else {
         return;
     };
     let mut item = match entry.kind {
         kHlSyntax => {
-            let mut item = ApiDict::with_capacity(3);
+            let mut item = DictBuilder::with_capacity(3);
             put(&mut item, c"kind", Object::literal("syntax"));
             put(&mut item, c"hi_name", name_object(syn_id2name(entry.id1)));
             item
         }
         kHlUI => {
-            let mut item = ApiDict::with_capacity(4);
+            let mut item = DictBuilder::with_capacity(4);
             put(&mut item, c"kind", Object::literal("ui"));
             // -1 is `Normal`, which is not one of the `hlf_names`.
             let ui_name = if entry.id1 == -1 {
@@ -639,7 +638,7 @@ fn hl_inspect_impl(arr: &mut Array, attr: c_int) {
             item
         }
         kHlTerminal => {
-            let mut item = ApiDict::with_capacity(2);
+            let mut item = DictBuilder::with_capacity(2);
             put(&mut item, c"kind", Object::literal("term"));
             item
         }
@@ -662,7 +661,7 @@ fn name_object(name: &CStr) -> Object {
 }
 
 /// Appends `key: value`, with the key copied out of the literal.
-fn put(dict: &mut ApiDict, key: &'static CStr, value: Object) {
+fn put(dict: &mut DictBuilder, key: &'static CStr, value: Object) {
     dict.insert(key, value);
 }
 

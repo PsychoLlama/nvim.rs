@@ -24,9 +24,6 @@ pub(crate) fn with_on_print<R>(f: impl FnOnce(&mut Callback) -> R) -> R {
     on_print.with_mut(f)
 }
 
-/// C's `ARRAY_DICT_INIT`: empty, and owning nothing.
-const EMPTY_ARRAY: Array = Array::EMPTY;
-
 /// Start putting a message on the screen.
 ///
 /// Decides *where* the message goes: over the last one, or on a fresh line
@@ -154,7 +151,7 @@ fn put_bytes(bytes: &[u8], hl_id: c_int, hist: bool, whole_message: bool) {
             msg_ext_ui_flush(); // ensure messages until now are emitted
             ui_call_msg_show(
                 ApiString::from_cstr(c"empty"),
-                EMPTY_ARRAY,
+                Array::new(),
                 false,
                 false,
                 false,

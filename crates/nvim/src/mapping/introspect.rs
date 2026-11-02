@@ -19,6 +19,7 @@ use crate::eval::typval::NumBuf;
 use crate::lua::executor::funcref_description;
 use crate::memory::ThinCString;
 use crate::option::vars::P_CPO;
+use crate::types::DictBuilder;
 use crate::types::{VAR_DICT, kListLenUnknown};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
@@ -50,10 +51,10 @@ const MAPARG_DICT_KEYS: size_t = 20;
 /// size with nothing checking that the reservation was big enough.  The
 /// promise is made once, at construction; every [`Filling::put`] after it is
 /// ordinary checked code, which is what makes the twenty appends below safe.
-struct Filling(ApiDict);
+struct Filling(DictBuilder);
 
 impl Filling {
-    fn new(dict: ApiDict) -> Self {
+    fn new(dict: DictBuilder) -> Self {
         Self(dict)
     }
 
@@ -65,7 +66,7 @@ impl Filling {
 
     /// The finished dict.
     fn finish(self) -> ApiDict {
-        self.0
+        self.0.finish()
     }
 }
 
@@ -83,7 +84,7 @@ pub(crate) fn mapblock_fill_dict(
     abbr: bool,
     compatible: bool,
 ) -> ApiDict {
-    let dict = ApiDict::with_capacity(MAPARG_DICT_KEYS);
+    let dict = DictBuilder::with_capacity(MAPARG_DICT_KEYS);
     let lhs = special_keys_text(mp.m_keys.as_cstr().to_bytes(), compatible, !compatible);
     let mapmode = map_mode_to_chars(mp.m_mode);
     let rhs = &mp.m_rhs;
@@ -331,7 +332,7 @@ pub fn keymap_array(mode: ApiString, buffer: Option<Buf>) -> Array {
         None => MapTable::Global,
     };
 
-    let mut mappings = Array::EMPTY;
+    let mut mappings = Vec::new();
     table.with(|tables| {
         for mp in tables.walk(is_abbrev) {
             if mp.m_simplified || int_mode & mp.m_mode == 0 {
@@ -342,5 +343,5 @@ pub fn keymap_array(mode: ApiString, buffer: Option<Buf>) -> Array {
             mappings.push(Object::dict(dict));
         }
     });
-    mappings
+    mappings.into()
 }

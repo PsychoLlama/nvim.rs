@@ -70,6 +70,7 @@ use crate::startup::{exiting, full_screen, starting, ui_client_channel_id};
 use crate::state::MODE_CMDLINE;
 use crate::state::mode::State;
 use crate::strings::has_char;
+use crate::types::DictBuilder;
 use crate::types::ui::{
     kLineFlagInvalid, kLineFlagWrap, kUIExtCount, kUIFloatDebug, kUIHlState, kUILinegrid,
     kUIMessages, kUIMultigrid, kUITermColors,
@@ -764,18 +765,12 @@ pub fn ui_has(ext: UIExtension) -> bool {
 
 /// Describes every attached UI, for `nvim_list_uis()`.
 pub fn ui_array() -> Array {
-    uis.with(|table| {
-        let mut all_uis = Array::with_capacity(table.len());
-        for ui in table {
-            all_uis.push(Object::dict(ui_info(ui)));
-        }
-        all_uis
-    })
+    uis.with(|table| table.iter().map(|ui| Object::dict(ui_info(ui))).collect())
 }
 
 /// One UI's entry in [`ui_array`].
 fn ui_info(ui: &RemoteUI) -> ApiDict {
-    let mut info = ApiDict::with_capacity(10 + kUIExtCount as usize);
+    let mut info = DictBuilder::with_capacity(10 + kUIExtCount as usize);
     let fixed: [(&'static str, Object); 9] = [
         ("width", Object::integer(ui.width as Integer)),
         ("height", Object::integer(ui.height as Integer)),
@@ -801,7 +796,7 @@ fn ui_info(ui: &RemoteUI) -> ApiDict {
         }
     }
     info.insert("chan", Object::integer(ui.channel_id as Integer));
-    info
+    info.into()
 }
 
 /// Resizes the grid a UI asked about, for `nvim_ui_try_resize_grid`.

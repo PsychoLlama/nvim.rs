@@ -33,7 +33,7 @@ use crate::option::vars::{P_SBR, P_SEL, p_ch, p_sc, p_sloc};
 use crate::plines::getvcols;
 use crate::pos::lt;
 use crate::statusline::{draw_tabline, hl_attr, win_redr_status};
-use crate::types::{ApiString, Array, LineNr, Object, OptInt};
+use crate::types::{ApiString, LineNr, Object, OptInt};
 use crate::ui::state::Rows;
 use crate::ui::{ui_call_msg_showcmd, ui_has};
 use core::ffi::{CStr, c_int};
@@ -407,16 +407,17 @@ pub(crate) fn display_showcmd() {
 ///
 /// The event carries one `[attr, text, hl_id]` chunk, or nothing at all.
 fn show_through_ui(clear: bool) {
-    let mut content = Array::with_capacity(usize::from(!clear));
+    let mut content = Vec::with_capacity(usize::from(!clear));
     if !clear {
         let sc = showcmd_buf.get();
-        let mut chunk = Array::with_capacity(3);
-        chunk.push(Object::integer(0));
-        chunk.push(Object::string(ApiString::from_cstr(sc.as_cstr())));
-        chunk.push(Object::integer(0));
+        let chunk = vec![
+            Object::integer(0),
+            Object::string(ApiString::from_cstr(sc.as_cstr())),
+            Object::integer(0),
+        ];
         content.push(Object::array(chunk));
     }
-    ui_call_msg_showcmd(content);
+    ui_call_msg_showcmd(content.into());
 }
 
 /// The built-in form: write the text into the reserved columns of the last

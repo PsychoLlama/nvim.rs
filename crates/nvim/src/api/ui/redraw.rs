@@ -31,7 +31,8 @@ use super::events::{count, linegrid, send};
 use super::packer::push_call;
 use crate::highlight::{HLATTRS_DICT_SIZE, hl_get_url, hlattrs2dict, syn_attr2entry};
 use crate::narrow::number_as_int;
-use crate::types::builders::{ArrayBuf, DictBuf};
+use crate::types::DictBuilder;
+use crate::types::builders::ArrayBuf;
 use crate::types::ui::{kUIHlState, kUIPopupmenu, kUIWildmenu};
 use crate::types::{ApiDict, Array, HlAttrs, Integer, Object, RemoteUI};
 use core::ffi::CStr;
@@ -55,10 +56,8 @@ pub fn remote_ui_hl_attr_define(
     }
 
     // One spare entry past what `hlattrs2dict` fills, for the URL below.
-    let mut rgb_buf = DictBuf::<{ HLATTRS_DICT_SIZE + 1 }>::new();
-    let mut cterm_buf = DictBuf::<HLATTRS_DICT_SIZE>::new();
-    let mut rgb = rgb_buf.dict();
-    let mut cterm = cterm_buf.dict();
+    let mut rgb = DictBuilder::with_capacity(HLATTRS_DICT_SIZE + 1);
+    let mut cterm = DictBuilder::with_capacity(HLATTRS_DICT_SIZE);
     hlattrs2dict(&mut rgb, None, rgb_attrs, true, false);
     hlattrs2dict(&mut cterm, None, rgb_attrs, false, false);
     if rgb_attrs.url >= 0 {
@@ -71,7 +70,7 @@ pub fn remote_ui_hl_attr_define(
     // `info` says which highlight groups produced the attributes, which is
     // only meaningful to a UI that asked to track highlight state.
     let hl_state = ui.ui_ext[kUIHlState as usize];
-    let info = if hl_state { info } else { Array::EMPTY };
+    let info = if hl_state { info } else { Array::new() };
     send!(
         ui,
         c"hl_attr_define",
@@ -99,7 +98,7 @@ pub fn remote_ui_event(ui: &mut RemoteUI, name: &'static CStr, args: Array) {
                 let block = args[0]
                     .as_array()
                     .expect("cmdline_block_show carries a block of lines");
-                let mut new_block = Array::with_capacity(block.len());
+                let mut new_block = Vec::with_capacity(block.len());
                 for item in block {
                     let line = item
                         .as_array()
@@ -135,7 +134,7 @@ pub fn remote_ui_event(ui: &mut RemoteUI, name: &'static CStr, args: Array) {
                     let items = args[0]
                         .as_array()
                         .expect("popupmenu_show carries an item list");
-                    let mut new_items = Array::with_capacity(items.len());
+                    let mut new_items = Vec::with_capacity(items.len());
                     for item in items {
                         let fields = item.as_array().expect("a popupmenu item is a field list");
                         new_items.push(fields[0].clone());
@@ -173,7 +172,7 @@ pub fn remote_ui_event(ui: &mut RemoteUI, name: &'static CStr, args: Array) {
 
 /// [`translate_contents`] applied to the first argument, the rest copied.
 fn translate_firstarg(ui: &RemoteUI, args: &Array) -> Array {
-    let mut new_args = Array::with_capacity(args.len());
+    let mut new_args = Vec::with_capacity(args.len());
     let contents = args[0]
         .as_array()
         .expect("the first argument is a chunk list");
@@ -182,13 +181,13 @@ fn translate_firstarg(ui: &RemoteUI, args: &Array) -> Array {
     for item in args.iter().skip(1) {
         new_args.push(item.clone());
     }
-    new_args
+    new_args.into()
 }
 
 /// Expands the highlight ids in a chunk list into attribute dicts.
 fn translate_contents(ui: &RemoteUI, contents: &Array) -> Array {
     let rgb = ui.rgb;
-    let mut new_contents = Array::with_capacity(contents.len());
+    let mut new_contents = Vec::with_capacity(contents.len());
     for chunk in contents {
         let item = chunk.as_array().expect("a chunk is an [attr, text] pair");
         let attr = number_as_int(
@@ -196,18 +195,18 @@ fn translate_contents(ui: &RemoteUI, contents: &Array) -> Array {
                 .as_integer()
                 .expect("a chunk's first element is its attribute id"),
         );
-        let mut new_item = Array::with_capacity(2);
+        let mut new_item = Vec::with_capacity(2);
         let attrs = if attr != 0 {
-            let mut dict = ApiDict::with_capacity(HLATTRS_DICT_SIZE);
+            let mut dict = DictBuilder::with_capacity(HLATTRS_DICT_SIZE);
             // `attr` is a resolved attribute id.
             hlattrs2dict(&mut dict, None, syn_attr2entry(attr), rgb, false);
-            dict
+            dict.finish()
         } else {
-            ApiDict::EMPTY
+            ApiDict::new()
         };
         new_item.push(Object::dict(attrs));
         new_item.push(item[1].clone());
         new_contents.push(Object::array(new_item));
     }
-    new_contents
+    new_contents.into()
 }

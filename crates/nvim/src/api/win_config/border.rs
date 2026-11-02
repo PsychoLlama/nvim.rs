@@ -328,7 +328,7 @@ pub(crate) fn parse_winborder(fconfig: &mut WinConfig, border_opt: &CStr) -> Res
 fn border_cell_list(border_opt: &[u8]) -> Option<Array> {
     // Room for the eight it must have: nine parts is already a failure, so
     // the transpile's doubling growth step never got past this size either.
-    let mut cells = Array::with_capacity(8);
+    let mut cells = Vec::with_capacity(8);
     let mut rest = border_opt;
     while !rest.is_empty() {
         // A ninth part is already a failure, and an empty one is too.
@@ -342,7 +342,7 @@ fn border_cell_list(border_opt: &[u8]) -> Option<Array> {
         rest = after;
         cells.push(Object::string(ApiString::from_bytes(&part)));
     }
-    (cells.len() == 8).then_some(cells)
+    (cells.len() == 8).then_some(cells.into())
 }
 
 #[cfg(test)]

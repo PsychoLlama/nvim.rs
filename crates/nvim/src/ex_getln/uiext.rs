@@ -13,10 +13,10 @@ use crate::cstr;
 /// Send `cmdline_show` for one command line: its content as
 /// `[[attr, text, hl_id], …]`, the cursor position and the prompt.
 pub(crate) fn ui_ext_cmdline_show(line: Cc) {
-    let mut content: Array;
+    let mut content: Vec<Object>;
     if cmdline_star.get() != 0 {
         // Obscured (`inputsecret()`): one '*' per *character*.
-        content = Array::with_capacity(1);
+        content = Vec::with_capacity(1);
         let stars = {
             let cc = Cc::current();
             let line = cstr::until_nul(cc.bytes());
@@ -29,17 +29,18 @@ pub(crate) fn ui_ext_cmdline_show(line: Cc) {
             vec![b'*'; len]
         };
 
-        let mut item = Array::with_capacity(3);
-        item.push(Object::integer(0));
-        item.push(Object::string(ApiString::from_bytes(&stars)));
-        item.push(Object::integer(0));
+        let item = vec![
+            Object::integer(0),
+            Object::string(ApiString::from_bytes(&stars)),
+            Object::integer(0),
+        ];
         content.push(Object::array(item));
     } else if !line.last_colors.chunks().is_empty() {
-        content = Array::with_capacity(line.last_colors.chunks().len());
+        content = Vec::with_capacity(line.last_colors.chunks().len());
         let mut i: size_t = 0;
         while i < line.last_colors.chunks().len() {
             let chunk: CmdlineColorChunk = line.last_colors.chunks()[i];
-            let mut item = Array::with_capacity(3);
+            let mut item = Vec::with_capacity(3);
             item.push(Object::integer(if chunk.hl_id == 0 {
                 0
             } else {
@@ -58,14 +59,12 @@ pub(crate) fn ui_ext_cmdline_show(line: Cc) {
             i += 1;
         }
     } else {
-        let mut item = Array::with_capacity(3);
-        item.push(Object::integer(0));
-        item.push(Object::string(ApiString::from_bytes(cstr::until_nul(
-            line.bytes(),
-        ))));
-        item.push(Object::integer(0));
-        content = Array::with_capacity(1);
-        content.push(Object::array(item));
+        let item = vec![
+            Object::integer(0),
+            Object::string(ApiString::from_bytes(cstr::until_nul(line.bytes()))),
+            Object::integer(0),
+        ];
+        content = vec![Object::array(item)];
     }
 
     let firstc = [line.cmdfirstc as u8];
@@ -74,7 +73,7 @@ pub(crate) fn ui_ext_cmdline_show(line: Cc) {
         ApiString::from_bytes(prompt.as_cstr().to_bytes())
     });
     ui_call_cmdline_show(
-        content,
+        content.into(),
         line.cmdpos as Integer,
         ApiString::from_bytes(cstr::until_nul(&firstc)),
         prompt,
@@ -98,17 +97,17 @@ pub(crate) fn ui_ext_cmdline_show(line: Cc) {
 /// second owner of the same `items` pointer, so the cell and the caller both
 /// believed they had to free it. The array owns its lines, so the free is
 /// the field's own, and [`ui_ext_cmdline_block_leave`]'s move a `take`.
-pub(crate) struct CmdlineBlock(Array);
+pub(crate) struct CmdlineBlock(Vec<Object>);
 
 impl CmdlineBlock {
-    pub(crate) const EMPTY: CmdlineBlock = CmdlineBlock(ARRAY_DICT_INIT);
+    pub(crate) const EMPTY: CmdlineBlock = CmdlineBlock(Vec::new());
 
     /// The lines, for the UI call that serialises them.
     ///
     /// A copy: the UI call takes over what it is handed, and the block goes
     /// on owning its own lines.
     fn lines(&self) -> Array {
-        self.0.clone()
+        Array::from(self.0.clone())
     }
 
     fn is_empty(&self) -> bool {
@@ -130,13 +129,13 @@ pub fn ui_ext_cmdline_block_append(indent: size_t, line: &[u8]) {
     text.resize(indent, b' ');
     text.extend_from_slice(line);
 
-    let mut item = Array::with_capacity(3);
-    item.push(Object::integer(0));
-    item.push(Object::string(ApiString::from_bytes(&text)));
-    item.push(Object::integer(0));
+    let item = vec![
+        Object::integer(0),
+        Object::string(ApiString::from_bytes(&text)),
+        Object::integer(0),
+    ];
 
-    let mut content = Array::with_capacity(1);
-    content.push(Object::array(item));
+    let content = vec![Object::array(item)];
 
     // A leaf closure over the array itself: nothing it runs can re-enter
     // the block, so the exclusive borrow cannot overlap another.
@@ -147,7 +146,7 @@ pub fn ui_ext_cmdline_block_append(indent: size_t, line: &[u8]) {
     if first {
         ui_call_cmdline_block_show(cmdline_block.with(CmdlineBlock::lines));
     } else {
-        ui_call_cmdline_block_append(content);
+        ui_call_cmdline_block_append(content.into());
     }
 }
 

@@ -100,13 +100,14 @@ fn term_write(bytes: &[u8], id: uint64_t) {
     if cb == LUA_NOREF {
         return;
     }
-    let mut args: Array = Array::with_capacity(3);
-    args.push(Object::integer(id.cast_signed()));
-    args.push(Object::buffer(term.map_or(Handle::NONE, terminal_buf)));
-    args.push(Object::string(ApiString::from_bytes(bytes)));
+    let args = vec![
+        Object::integer(id.cast_signed()),
+        Object::buffer(term.map_or(Handle::NONE, terminal_buf)),
+        Object::string(ApiString::from_bytes(bytes)),
+    ];
     let _locked = Lock::text();
     // The handler reports nothing, so it is given no error slot.
-    nlua_call_ref_quiet(cb, Some(c"input"), args, kRetNilBool);
+    nlua_call_ref_quiet(cb, Some(c"input"), args.into(), kRetNilBool);
 }
 
 fn term_resize(_width: uint16_t, _height: uint16_t, _owner: uint64_t) {}

@@ -81,7 +81,6 @@ pub const GETF_SETMARK: GetFileFlags = 1;
 pub const AUGROUP_ALL: c_int = -3;
 pub const kExtmarkNOOP: ExtmarkOp = 0;
 pub const kMTCharWise: MotionType = 0;
-pub const ARRAY_DICT_INIT: ApiDict = ApiDict::EMPTY;
 
 /// How `mark_get` is allowed to resolve a mark's name.
 pub const kMarkBufLocal: MarkGet = 0;

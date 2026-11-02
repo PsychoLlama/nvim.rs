@@ -20,6 +20,7 @@ use crate::api_error;
 use crate::charset::skip;
 use crate::message_fmt::msg_cstr;
 use crate::types::CmdIdx;
+use crate::types::DictBuilder;
 use crate::types::{CmdLine, ExArgt};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
@@ -27,7 +28,7 @@ use core::ffi::{CStr, c_int};
 /// A `:map`-family right-hand side is one opaque string, however much
 /// whitespace it contains, so the arguments are exactly "lhs" and "rhs".
 fn parse_map_cmd(arg: &[u8]) -> Array {
-    let mut args: Array = Array::with_capacity(2);
+    let mut args = Vec::with_capacity(2);
     let lhs_len = skip::to_white(arg);
     args.push(Object::string(ApiString::from_bytes(&arg[..lhs_len])));
     let rhs = &arg[lhs_len + skip::white(&arg[lhs_len..])..];
@@ -35,7 +36,7 @@ fn parse_map_cmd(arg: &[u8]) -> Array {
         // The rest of the line is one opaque argument.
         args.push(Object::string(ApiString::from_bytes(rhs)));
     }
-    args
+    args.into()
 }
 
 /// The command's arguments, split the way the command itself would have them.
@@ -56,17 +57,16 @@ fn parse_args(excmd: &mut ExArg) -> Array {
     if excmd.argt.has(ExArgt::NOSPC) {
         // One argument, whitespace and all.
         if empty {
-            return Array::EMPTY;
+            return Array::new();
         }
-        let mut args: Array = Array::with_capacity(1);
-        args.push(Object::string(ApiString::from_bytes(excmd.line.arg())));
-        return args;
+        let args = vec![Object::string(ApiString::from_bytes(excmd.line.arg()))];
+        return args.into();
     }
 
     // `uc_split_args_iter` unescapes one argument per call.
     let arg = excmd.line.arg();
     debug_assert_eq!(arg.len(), length);
-    let mut args = Array::with_capacity(uc_nargs_upper_bound(arg));
+    let mut args = Vec::with_capacity(uc_nargs_upper_bound(arg));
     let mut end = 0;
     let mut word = Vec::with_capacity(length);
     let mut done = false;
@@ -76,7 +76,7 @@ fn parse_args(excmd: &mut ExArg) -> Array {
             args.push(Object::string(ApiString::from_bytes(&word)));
         }
     }
-    args
+    args.into()
 }
 
 /// The name of the command `excmd` names: a user command's own spelling
@@ -114,11 +114,11 @@ fn addr_type_name(addr_type: CmdAddr) -> &'static CStr {
 /// Sizing from the same array that is then drained is what keeps the
 /// dictionary to one allocation.
 fn dict_of<const N: usize>(entries: [(&'static CStr, Object); N]) -> ApiDict {
-    let mut dict = ApiDict::with_capacity(N);
+    let mut dict = DictBuilder::with_capacity(N);
     for (key, value) in entries {
         dict.insert(key, value);
     }
-    dict
+    dict.into()
 }
 
 /// The `mods` sub-dictionary: every command modifier the line carried.
@@ -219,12 +219,12 @@ pub fn nvim_parse_cmd(str: ApiString, _opts: &mut KeyDict_empty) -> Result<KeyDi
 
     if excmd.argt.has(ExArgt::RANGE) && excmd.addr_count > 0 {
         // Two addresses give both bounds, one gives only `line2`.
-        let mut range: Array = Array::with_capacity(2);
+        let mut range = Vec::with_capacity(2);
         if excmd.addr_count > 1 {
             range.push(Object::integer(Integer::from(excmd.line1)));
         }
         range.push(Object::integer(Integer::from(excmd.line2)));
-        result.range = Some(range);
+        result.range = Some(range.into());
     }
 
     if excmd.argt.has(ExArgt::COUNT) {

@@ -33,7 +33,7 @@ use crate::mpack::token::{self, Kind, Tok};
 use crate::msgpack_rpc::packer::{EXT_BUFFER, EXT_TABPAGE, EXT_WINDOW};
 use crate::narrow::msgpack_uint_as_u32;
 use crate::types::{
-    ApiDict, ApiDispatchFn, ApiString, Array, DictKey, Error, GridLineEvent, Integer, KeyValuePair,
+    ApiDict, ApiDispatchFn, ApiString, DictKey, Error, GridLineEvent, Integer, KeyValuePair,
     MessageType, MsgpackRpcRequestHandler, Object, UIClientHandler,
 };
 use crate::ui_client::handle_ui_client_redraw;
@@ -361,8 +361,12 @@ pub(crate) enum Building {
     /// was handed to its parent the moment it was read.
     #[default]
     Nothing,
-    /// A container being filled.
+    /// A finished value on its way to its parent.
     Value(Object),
+    /// An array being filled, frozen into an [`Array`] when it is done.
+    Array(Vec<Object>),
+    /// A map being filled, frozen into an [`ApiDict`] when it is done.
+    Dict(Vec<KeyValuePair>),
     /// A `str` or `bin` that is a map's key, collected straight into one.
     Key(DictKey),
     /// A string value's bytes so far.
@@ -399,10 +403,10 @@ impl BodyWalk<'_> {
             return;
         };
         match &mut parent.data {
-            Building::Value(Object::Array(items)) => {
+            Building::Array(items) => {
                 items.push(finished(value).unwrap_or(Object::Nil));
             }
-            Building::Value(Object::Dict(entries)) => {
+            Building::Dict(entries) => {
                 if is_key {
                     // Only a string can be a key; anything else leaves the
                     // entry's key empty, as it always has.
@@ -448,12 +452,8 @@ impl crate::mpack::object::Decode<Building> for BodyWalk<'_> {
                 bytes: [0; EXT_PAYLOAD_MAX],
                 value: Object::Nil,
             })),
-            TOKEN_ARRAY => {
-                Building::Value(Object::array(Array::with_capacity(len.min(RESERVE_MAX))))
-            }
-            TOKEN_MAP => {
-                Building::Value(Object::dict(ApiDict::with_capacity(len.min(RESERVE_MAX))))
-            }
+            TOKEN_ARRAY => Building::Array(Vec::with_capacity(len.min(RESERVE_MAX))),
+            TOKEN_MAP => Building::Dict(Vec::with_capacity(len.min(RESERVE_MAX))),
             TOKEN_CHUNK => {
                 copy_chunk(parent.expect("a chunk always has a parent"), chunk);
                 Building::Nothing
@@ -480,6 +480,9 @@ impl crate::mpack::object::Decode<Building> for BodyWalk<'_> {
 fn finished(data: Building) -> Option<Object> {
     match data {
         Building::Value(value) => Some(value),
+        // Free when the header told the truth: the vector was sized to it.
+        Building::Array(items) => Some(Object::array(items)),
+        Building::Dict(entries) => Some(Object::dict(ApiDict::from(entries))),
         Building::Ext(ext) => Some(ext.value),
         Building::Text(text) => Some(Object::string(ApiString::from_xstring(text))),
         Building::Key(_) | Building::Nothing => None,

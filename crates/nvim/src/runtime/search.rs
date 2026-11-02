@@ -44,6 +44,7 @@ use crate::os::fs::dir_exists;
 use crate::path::{ExpandFlags, add_pathsep};
 use crate::semsg;
 use crate::smsg;
+use crate::types::DictBuilder;
 
 use crate::types::{ExpandContext, FAIL, Failed, OK};
 use core::ffi::{CStr, c_int};
@@ -369,9 +370,9 @@ fn dict_obj(dict: ApiDict) -> Object {
 /// cache it was read out of.
 pub fn runtime_inspect() -> Array {
     let path = runtime_search_path_as_is();
-    let mut rv = Array::with_capacity(path.len());
+    let mut rv = Vec::with_capacity(path.len());
     for item in path.iter() {
-        let mut entry = ApiDict::with_capacity(5);
+        let mut entry = DictBuilder::with_capacity(5);
         entry.insert(
             c"path",
             string_obj(ApiString::from_cstr(item.path.as_cstr())),
@@ -387,9 +388,9 @@ pub fn runtime_inspect() -> Array {
         }
         let pos_in_rtp = Integer::try_from(item.pos_in_rtp).unwrap_or(Integer::MAX);
         entry.insert(c"pos_in_rtp", integer_obj(pos_in_rtp));
-        rv.push(dict_obj(entry));
+        rv.push(dict_obj(entry.into()));
     }
-    rv
+    rv.into()
 }
 
 /// `nvim__get_runtime()`: the readable files named by `pat` along the cached
@@ -429,7 +430,7 @@ fn dir_has_lua(item: &SearchPathItem, buf: &mut Vec<u8>) -> bool {
 
 /// The shared body of [`runtime_get_named`] and its thread variant.
 fn runtime_get_named_common(lua: bool, pat: &Array, all: bool, path: &[SearchPathItem]) -> Array {
-    let mut rv = Array::with_capacity(path.len().wrapping_mul(pat.len()));
+    let mut rv = Vec::with_capacity(path.len().wrapping_mul(pat.len()));
     let mut buf = Vec::with_capacity(PATH_ROOM);
     for item in path {
         if lua && !dir_has_lua(item, &mut buf) {
@@ -454,11 +455,11 @@ fn runtime_get_named_common(lua: bool, pat: &Array, all: bool, path: &[SearchPat
             }
             rv.push(string_obj(ApiString::from_cstr(found)));
             if !all {
-                return rv;
+                return rv.into();
             }
         }
     }
-    rv
+    rv.into()
 }
 
 /// Find `name` in `path`, and then — for `RuntimeOpts::START`/`RuntimeOpts::OPT` — in

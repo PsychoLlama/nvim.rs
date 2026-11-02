@@ -77,11 +77,11 @@ pub fn nvim_get_mark(name: ApiString, _opts: &mut KeyDict_empty) -> Result<Array
             XString::new()
         }
     };
-    let mut rv = Array::with_capacity(4 as size_t);
+    let mut rv = Vec::with_capacity(4 as size_t);
     let path = Object::string(ApiString::from_bytes(filename.as_cstr().to_bytes()));
     rv.push(Object::integer(row));
     rv.push(Object::integer(col));
     rv.push(Object::integer(Integer::from(bufnr)));
     rv.push(path);
-    Ok(rv)
+    Ok(rv.into())
 }

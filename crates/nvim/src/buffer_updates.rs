@@ -255,10 +255,10 @@ fn flush_deleted_bytes(buffer: Buf) -> Deleted {
 
 /// `linedata` for `nvim_buf_lines_event`: `n` lines from `first`.
 fn collect_lines(buffer: Buf, n: size_t, first: LineNr) -> Array {
-    let mut linedata = Array::EMPTY;
+    let mut linedata = Vec::new();
     let mut lines = LineSink::new(None, &mut linedata, n);
     buf_collect_lines(buffer, n, first, 0, true, &mut lines);
-    linedata
+    linedata.into()
 }
 
 // ---------------------------------------------------------------------------
@@ -323,7 +323,7 @@ fn register(
 /// the whole buffer as one replacement of the range `0 .. -1`.
 fn send_whole_buffer(buffer: Buf, channel_id: uint64_t) {
     let line_count = buffer.line_count() as size_t;
-    let mut linedata = Array::EMPTY;
+    let mut linedata = Array::new();
     if line_count > 0 {
         linedata = collect_lines(buffer, line_count, 1);
     }
@@ -506,7 +506,7 @@ fn send_changes(mut buffer: Buf, firstline: LineNr, num_added: int64_t, num_remo
     // it later.
     let mut badchannelid = 0;
 
-    let mut linedata = Array::EMPTY;
+    let mut linedata = Array::new();
     if num_added > 0 && buffer.channels().len() != 0 {
         let n = num_added as size_t;
         linedata = collect_lines(buffer, n, firstline);

@@ -97,7 +97,6 @@ pub const kZIndexFloatDefault: c_uint = 50;
 pub const CPT_MENU: c_uint = 2;
 pub const CPT_KIND: c_uint = 1;
 pub const CPT_ABBR: c_uint = 0;
-pub const ARRAY_DICT_INIT: Array = Array::EMPTY;
 pub const DEFAULT_GRID_HANDLE: c_int = 1;
 
 // The menu's state. Every one of these is written by one of the placement
@@ -284,17 +283,18 @@ fn pum_publish_external(items: &[PumItem], selected: c_int, anchor: &PumAnchor) 
     let text = |text: Option<&XString>| {
         Object::string(text.map_or(ApiString::NULL, |text| ApiString::from_bytes(text)))
     };
-    let mut arr = Array::with_capacity(items.len());
+    let mut arr = Vec::with_capacity(items.len());
     for src in items {
-        let mut item = Array::with_capacity(4);
-        item.push(text(Some(&src.pum_text)));
-        item.push(text(src.pum_kind.as_ref()));
-        item.push(text(src.pum_extra.as_ref()));
-        item.push(text(src.pum_info.as_ref()));
+        let item = vec![
+            text(Some(&src.pum_text)),
+            text(src.pum_kind.as_ref()),
+            text(src.pum_extra.as_ref()),
+            text(src.pum_info.as_ref()),
+        ];
         arr.push(Object::array(item));
     }
     ui_call_popupmenu_show(
-        arr,
+        arr.into(),
         selected as Integer,
         (anchor.win_row - pum_win_row_offset.get()) as Integer,
         (anchor.cursor_col - pum_win_col_offset.get()) as Integer,

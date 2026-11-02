@@ -19,6 +19,7 @@
 use super::*;
 use crate::api::private::validate::{err_bad_number, err_expected};
 use crate::narrow::{number_as_int, number_as_u32};
+use crate::types::DictBuilder;
 use crate::winlayer::Buf;
 use core::ffi::CStr;
 
@@ -31,21 +32,21 @@ const DETAILS_KEYS: size_t = 36;
 /// A run of text-less chunks is the stack of highlights the chunk that ends
 /// it carries, so those become one array rather than chunks of their own.
 pub fn virt_text_to_array(items: &[VirtTextChunk], hl_name: bool) -> Array {
-    let mut chunks = Array::with_capacity(items.len());
+    let mut chunks = Vec::with_capacity(items.len());
     let mut i = 0;
     while i < items.len() {
         let Some(run) = items[i..].iter().position(|chunk| chunk.text.is_some()) else {
             break;
         };
         let stack_end = i + run;
-        let mut groups = Array::with_capacity(if i < stack_end { stack_end - i + 1 } else { 0 });
+        let mut groups = Vec::with_capacity(if i < stack_end { stack_end - i + 1 } else { 0 });
         for chunk in &items[i..stack_end] {
             if chunk.hl_id >= 0 {
                 groups.push(hl_group_name(chunk.hl_id, hl_name));
             }
         }
         let last = &items[stack_end];
-        let mut chunk = Array::with_capacity(2);
+        let mut chunk = Vec::with_capacity(2);
         let text = last.text.as_deref().map_or(&b""[..], CStr::to_bytes);
         chunk.push(Object::string(ApiString::from_bytes(text)));
         if groups.is_empty() {
@@ -61,14 +62,14 @@ pub fn virt_text_to_array(items: &[VirtTextChunk], hl_name: bool) -> Array {
         chunks.push(Object::array(chunk));
         i = stack_end + 1;
     }
-    chunks
+    chunks.into()
 }
 
 /// One mark as `[id, row, col]`, with its decoration as a fourth item when
 /// `add_dict`.
 fn extmark_to_array(extmark: MTPair, id: bool, add_dict: bool, hl_name: bool) -> Array {
     let start: MTKey = extmark.start;
-    let mut rv = Array::with_capacity(4);
+    let mut rv = Vec::with_capacity(4);
     if id {
         rv.push(Object::integer(Integer::from(start.id)));
     }
@@ -76,7 +77,7 @@ fn extmark_to_array(extmark: MTPair, id: bool, add_dict: bool, hl_name: bool) ->
     rv.push(Object::integer(Integer::from(start.pos.col)));
     if add_dict {
         // As many keys as `decor_to_dict_legacy` and the block above can add.
-        let mut dict = ApiDict::with_capacity(DETAILS_KEYS);
+        let mut dict = DictBuilder::with_capacity(DETAILS_KEYS);
         dict.insert(c"ns_id", Object::integer(Integer::from(start.ns)));
         let d_right_gravity = Object::boolean(mt_right(start));
         dict.insert(c"right_gravity", d_right_gravity);
@@ -100,7 +101,7 @@ fn extmark_to_array(extmark: MTPair, id: bool, add_dict: bool, hl_name: bool) ->
         decor_to_dict_legacy(&mut dict, mt_decor(start), hl_name);
         rv.push(Object::dict(dict));
     }
-    rv
+    rv.into()
 }
 
 pub fn nvim_buf_get_extmark_by_id(
@@ -109,7 +110,7 @@ pub fn nvim_buf_get_extmark_by_id(
     id: Integer,
     opts: &mut KeyDict_get_extmark,
 ) -> Result<Array, Error> {
-    let rv: Array = Array::EMPTY;
+    let rv: Array = Array::new();
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(rv);
     };
@@ -132,9 +133,9 @@ pub fn nvim_buf_get_extmarks(
     end: Object,
     opts: &mut KeyDict_get_extmarks,
 ) -> Result<Array, Error> {
-    let mut rv: Array = Array::EMPTY;
+    let mut rv = Vec::new();
     let Some(b) = find_buffer_by_handle(buf)? else {
-        return Ok(rv);
+        return Ok(rv.into());
     };
     if !(ns_id == -1 || ns_initialized(number_as_u32(ns_id))) {
         return Err(err_bad_number(c"ns_id", ns_id));
@@ -157,7 +158,7 @@ pub fn nvim_buf_get_extmarks(
     }
     let mut limit: Integer = opts.limit.unwrap_or(-1);
     if limit == 0 {
-        return Ok(rv);
+        return Ok(rv.into());
     } else if limit < 0 {
         limit = Integer::MAX;
     }
@@ -181,7 +182,7 @@ pub fn nvim_buf_get_extmarks(
         type_0,
         opts.overlap.unwrap_or(false),
     );
-    rv = Array::with_capacity(found.len().min(rv_limit));
+    rv = Vec::with_capacity(found.len().min(rv_limit));
     if reverse {
         // A backwards range takes the *last* `limit` marks, so the walk goes
         // the other way and the limit is applied here rather than by the
@@ -198,7 +199,7 @@ pub fn nvim_buf_get_extmarks(
             )));
         }
     }
-    Ok(rv)
+    Ok(rv.into())
 }
 
 /// A range endpoint, in the spellings one may take: a mark id, `0` for the

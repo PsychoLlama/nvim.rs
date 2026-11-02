@@ -37,7 +37,7 @@ pub fn nvim_buf_get_changedtick(buf: BufferHandle) -> Result<Integer, Error> {
 
 pub fn nvim_buf_get_keymap(buf: BufferHandle, mode: ApiString) -> Result<Array, Error> {
     let Some(b) = find_buffer_by_handle(buf)? else {
-        return Ok(Array::EMPTY);
+        return Ok(Array::new());
     };
     Ok(keymap_array(mode, Some(b)))
 }

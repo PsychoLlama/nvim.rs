@@ -22,7 +22,7 @@
 )]
 
 use super::{
-    ApiDict, ApiString, Array, BufferHandle, DictKey, Float, Integer, LuaRef, Object,
+    ApiDict, ApiString, Array, BufferHandle, DictBuilder, DictKey, Float, Integer, LuaRef, Object,
     TabpageHandle, WindowHandle,
 };
 use core::ffi::CStr;
@@ -53,14 +53,16 @@ impl Object {
         Self::string(ApiString::from(text))
     }
 
-    /// An array, whose elements the object takes over.
-    pub const fn array(value: Array) -> Self {
-        Self::Array(ManuallyDrop::new(value))
+    /// An array, whose elements the object takes over: an [`Array`], or
+    /// the `Vec<Object>` it was built in, frozen here.
+    pub fn array(value: impl Into<Array>) -> Self {
+        Self::Array(ManuallyDrop::new(value.into()))
     }
 
-    /// A dictionary, whose entries the object takes over.
-    pub const fn dict(value: ApiDict) -> Self {
-        Self::Dict(ManuallyDrop::new(value))
+    /// A dictionary, whose entries the object takes over: an [`ApiDict`],
+    /// or the [`DictBuilder`] it was built in, frozen here.
+    pub fn dict(value: impl Into<ApiDict>) -> Self {
+        Self::Dict(ManuallyDrop::new(value.into()))
     }
 
     /// A reference to a Lua value, held in that state's registry. The
@@ -91,11 +93,11 @@ impl Object {
 /// The capacity is a property of the call site -- how many times the code
 /// below can push -- so it is stated once, in the type, and [`Self::push`]
 /// panics past it rather than growing.
-pub struct ArrayBuf<const N: usize>(Array);
+pub struct ArrayBuf<const N: usize>(Vec<Object>);
 
 impl<const N: usize> ArrayBuf<N> {
     pub fn new() -> Self {
-        Self(Array::with_capacity(N))
+        Self(Vec::with_capacity(N))
     }
 
     /// Appends `value`. Panics past `N` elements -- the capacity is a
@@ -108,7 +110,7 @@ impl<const N: usize> ArrayBuf<N> {
 
     /// The elements pushed so far, leaving the builder empty.
     pub fn array(&mut self) -> Array {
-        ::core::mem::take(&mut self.0)
+        Array::from(::core::mem::take(&mut self.0))
     }
 
     /// [`Self::array`], wrapped for nesting inside another builder.
@@ -125,11 +127,11 @@ impl<const N: usize> Default for ArrayBuf<N> {
 
 /// A builder for an [`ApiDict`] of at most `N` entries. [`ArrayBuf`]'s rules
 /// apply unchanged.
-pub struct DictBuf<const N: usize>(ApiDict);
+pub struct DictBuf<const N: usize>(DictBuilder);
 
 impl<const N: usize> DictBuf<N> {
     pub fn new() -> Self {
-        Self(ApiDict::with_capacity(N))
+        Self(DictBuilder::with_capacity(N))
     }
 
     /// Appends `key: value`, with `key` a literal. Dict keys in generated
@@ -148,7 +150,7 @@ impl<const N: usize> DictBuf<N> {
 
     /// The entries inserted so far, leaving the builder empty.
     pub fn dict(&mut self) -> ApiDict {
-        ::core::mem::take(&mut self.0)
+        ::core::mem::take(&mut self.0).finish()
     }
 
     /// [`Self::dict`], wrapped for nesting inside another builder.

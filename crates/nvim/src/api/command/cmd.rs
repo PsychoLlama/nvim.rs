@@ -48,11 +48,10 @@ use crate::memory::XString;
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::narrow::{len_as_int, number_as_int};
 use crate::types::CmdIdx;
+use crate::types::Object;
 use crate::types::{CmdFilter, CmdLine, ExArgt, NUL};
 use crate::usercmd::user_command_name;
 use core::ffi::{CStr, c_char, c_int};
-
-const EMPTY_ARRAY: Array = Array::EMPTY;
 
 /// C's `strtol(text, &end, 10)` where the number has to be the whole of
 /// `text`: leading white space and a sign allowed, nothing after the
@@ -133,7 +132,7 @@ fn prepare_cmd(
         return Ok(false);
     };
 
-    let mut args = EMPTY_ARRAY;
+    let mut args = Vec::new();
     let mut count_from_first_arg = false;
     if let Some(given) = cmd.args.as_ref() {
         count_from_first_arg = collect_args(given, excmd, &mut args)?;
@@ -163,7 +162,7 @@ fn prepare_cmd(
 
     // Render the Dict back into a command line: `execute_cmd` and everything
     // under it read the line, not the Array.
-    build_cmdline_str(excmd, cmdinfo, args);
+    build_cmdline_str(excmd, cmdinfo, args.into());
     apply_argopt(excmd)?;
     if excmd.argt.has(ExArgt::CMDARG) && !excmd.usefilter {
         excmd.do_ecmd_cmd = getargcmd(excmd);
@@ -281,7 +280,7 @@ fn resolve_command(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<Option<bool>,
 /// from, and check the count against `argt`.
 ///
 /// `Ok(true)` means the one argument was consumed as the command's count.
-fn collect_args(given: &Array, excmd: &mut ExArg, args: &mut Array) -> Result<bool, Error> {
+fn collect_args(given: &Array, excmd: &mut ExArg, args: &mut Vec<Object>) -> Result<bool, Error> {
     // For a command that takes a count but no regular arguments, a lone
     // numeric argument *is* the count.
     if given.len() == 1 && excmd.argt.has(ExArgt::COUNT) && !excmd.argt.has(ExArgt::EXTRA) {
@@ -298,12 +297,12 @@ fn collect_args(given: &Array, excmd: &mut ExArg, args: &mut Array) -> Result<bo
             excmd.addr_count = 1;
             excmd.line2 = number_as_int(count);
             excmd.line1 = excmd.line2;
-            *args = Array::with_capacity(0);
+            *args = Vec::new();
             return Ok(true);
         }
     }
 
-    *args = Array::with_capacity(given.len());
+    *args = Vec::with_capacity(given.len());
     for elem in given {
         match elem {
             // A boolean argument is spelled to the command as "0" or "1".
@@ -596,7 +595,7 @@ fn split_direction(name: &CStr) -> Option<Option<c_int>> {
 /// Unpack `mods.filter` and compile its pattern.
 fn apply_filter_mod(mods: &KeyDict_cmd_mods, cmdinfo: &mut CmdParseInfo) -> Result<(), Error> {
     let filter =
-        sub_keyset::<KeyDict_cmd_mods_filter>(mods.filter.as_ref().unwrap_or(&ApiDict::EMPTY))?;
+        sub_keyset::<KeyDict_cmd_mods_filter>(mods.filter.as_ref().unwrap_or(&ApiDict::new()))?;
     let Some(pattern) = filter.pattern.as_ref() else {
         return Ok(());
     };

@@ -29,6 +29,7 @@ use crate::api_error;
 use crate::highlight::HlAttrFlags;
 use crate::highlight_group::{name_to_color, name_to_ctermcolor};
 use crate::message_fmt::msg_cstr;
+use crate::types::DictBuilder;
 use crate::types::{
     ApiDict, Boolean, Error, HlAttrs, Integer, KeyDict_highlight, KeyDict_highlight_cterm, Object,
     int16_t, int32_t, kErrorTypeException, kErrorTypeValidation, size_t,
@@ -47,7 +48,7 @@ pub const HLATTRS_DICT_SIZE: size_t = 24;
 /// so a push that has to grow means a reservation is wrong. Growing is
 /// correct rather than the heap overwrite upstream's `PUT_C` performed, so
 /// that is a debug check rather than a panic.
-pub(crate) fn put(dict: &mut ApiDict, key: &'static CStr, value: Object) {
+pub(crate) fn put(dict: &mut DictBuilder, key: &'static CStr, value: Object) {
     debug_assert!(dict.len() < dict.capacity(), "highlight dict overflow");
     dict.insert(key, value);
 }
@@ -58,7 +59,7 @@ pub(crate) fn put(dict: &mut ApiDict, key: &'static CStr, value: Object) {
 /// Refuses an id no [`get_attr_entry`](super::get_attr_entry) ever handed
 /// out.
 pub fn hl_get_attr_by_id(attr_id: Integer, rgb: Boolean) -> Result<ApiDict, Error> {
-    let empty = ApiDict::EMPTY;
+    let empty = ApiDict::new();
     if attr_id == 0 {
         return Ok(empty);
     }
@@ -66,11 +67,11 @@ pub fn hl_get_attr_by_id(attr_id: Integer, rgb: Boolean) -> Result<ApiDict, Erro
         let why = api_error!(kErrorTypeException, "Invalid attribute id: {attr_id}");
         return Err(why);
     }
-    let mut retval = ApiDict::with_capacity(HLATTRS_DICT_SIZE);
+    let mut retval = DictBuilder::with_capacity(HLATTRS_DICT_SIZE);
     // The range check above keeps the id inside the table.
     let attrs = syn_attr2entry(c_int::try_from(attr_id).unwrap_or(0));
     hlattrs2dict(&mut retval, None, attrs, rgb, false);
-    Ok(retval)
+    Ok(retval.into())
 }
 
 /// Writes `ae` out as a dict.
@@ -86,8 +87,8 @@ pub fn hl_get_attr_by_id(attr_id: Integer, rgb: Boolean) -> Result<ApiDict, Erro
 /// Both dicts must have been reserved for [`HLATTRS_DICT_SIZE`] entries
 /// (checked).
 pub fn hlattrs2dict(
-    hl: &mut ApiDict,
-    hl_attrs: Option<&mut ApiDict>,
+    hl: &mut DictBuilder,
+    hl_attrs: Option<&mut DictBuilder>,
     ae: HlAttrs,
     use_rgb: bool,
     short_keys: bool,
@@ -115,7 +116,7 @@ pub fn hlattrs2dict(
 }
 
 /// The attribute bits of `mask`, one boolean key each.
-fn put_flags(hl: &mut ApiDict, mask: HlAttrFlags) {
+fn put_flags(hl: &mut DictBuilder, mask: HlAttrFlags) {
     let flag = |bit: HlAttrFlags| mask.has(bit);
     if flag(HlAttrFlags::INVERSE) {
         put(hl, c"reverse", Object::boolean(true));
@@ -162,7 +163,13 @@ fn put_flags(hl: &mut ApiDict, mask: HlAttrFlags) {
 }
 
 /// The colours of `ae`, plus `blend`.
-fn put_colors(hl: &mut ApiDict, ae: HlAttrs, mask: HlAttrFlags, use_rgb: bool, short_keys: bool) {
+fn put_colors(
+    hl: &mut DictBuilder,
+    ae: HlAttrs,
+    mask: HlAttrFlags,
+    use_rgb: bool,
+    short_keys: bool,
+) {
     if use_rgb {
         if ae.rgb_fg_color != -1 {
             let key = if short_keys { c"fg" } else { c"foreground" };

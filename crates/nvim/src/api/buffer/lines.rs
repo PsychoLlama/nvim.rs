@@ -36,12 +36,12 @@ pub fn nvim_buf_get_lines(
     strict_indexing: Boolean,
     stack: Option<&mut Stack>,
 ) -> Result<Array, Error> {
-    let mut rv: Array = Array::EMPTY;
+    let mut rv = Vec::new();
     let Some(b) = find_buffer_by_handle(buf)? else {
-        return Ok(rv);
+        return Ok(rv.into());
     };
     if b.b_ml.ml_mfp.is_none() {
-        return Ok(rv);
+        return Ok(rv.into());
     }
     let mut oob: bool = false;
     let start = normalize_index(b, start, true, &mut oob);
@@ -50,14 +50,14 @@ pub fn nvim_buf_get_lines(
         return Err(Error::validation(c"Index out of bounds"));
     }
     if start >= end {
-        return Ok(rv);
+        return Ok(rv.into());
     }
     let size: size_t = (end - start) as size_t;
     let at = start as LineNr;
     let nl = channel_id != VIML_INTERNAL_CALL;
     let mut lines = LineSink::new(stack, &mut rv, size);
     buf_collect_lines(b, size, at, 0, nl, &mut lines);
-    Ok(rv)
+    Ok(rv.into())
 }
 
 /// An API string as a buffer line: NUL-terminated, with each NUL it holds
@@ -243,13 +243,13 @@ pub fn nvim_buf_get_text(
     _opts: &mut KeyDict_empty,
     stack: Option<&mut Stack>,
 ) -> Result<Array, Error> {
-    let mut rv: Array = Array::EMPTY;
+    let mut rv = Vec::new();
     let Some(b) = find_buffer_by_handle(buf)? else {
-        return Ok(rv);
+        return Ok(rv.into());
     };
     // SAFETY: non-null, so the handle named a live buffer.
     if b.b_ml.ml_mfp.is_none() {
-        return Ok(rv);
+        return Ok(rv.into());
     }
     let mut oob: bool = false;
     start_row = normalize_index(b, start_row as int64_t, false, &mut oob) as Integer;
@@ -268,7 +268,7 @@ pub fn nvim_buf_get_text(
         let (from, to) = (start_col as int64_t, end_col as int64_t);
         let line: ApiString = buf_get_text(b, first, from, to)?;
         lines.push(line.as_bytes(), 0, replace_nl);
-        return Ok(rv);
+        return Ok(rv.into());
     }
     let from = start_col as int64_t;
     let to = (MAXCOL as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as int64_t;
@@ -284,7 +284,7 @@ pub fn nvim_buf_get_text(
     let line = buf_get_text(b, last, 0 as int64_t, to)?;
     let at = size.wrapping_sub(1 as size_t) as ::core::ffi::c_int;
     lines.push(line.as_bytes(), at, replace_nl);
-    Ok(rv)
+    Ok(rv.into())
 }
 
 pub fn nvim_buf_get_offset(buf: BufferHandle, index: Integer) -> Result<Integer, Error> {
@@ -306,20 +306,24 @@ pub fn nvim_buf_get_offset(buf: BufferHandle, index: Integer) -> Result<Integer,
 /// stack, when Lua asked, or into an API array.
 pub(crate) enum LineSink<'a> {
     Lua(&'a mut Stack),
-    Api(&'a mut Array),
+    Api(&'a mut Vec<Object>),
 }
 
 impl<'a> LineSink<'a> {
     /// A sink for `size` lines: a fresh Lua table pushed for them when there
     /// is a `stack`, else `array` reserved for them.
-    pub(crate) fn new(stack: Option<&'a mut Stack>, array: &'a mut Array, size: size_t) -> Self {
+    pub(crate) fn new(
+        stack: Option<&'a mut Stack>,
+        array: &'a mut Vec<Object>,
+        size: size_t,
+    ) -> Self {
         match stack {
             Some(stack) => {
                 stack.new_table(size, 0);
                 LineSink::Lua(stack)
             }
             None => {
-                *array = Array::with_capacity(size);
+                *array = Vec::with_capacity(size);
                 LineSink::Api(array)
             }
         }

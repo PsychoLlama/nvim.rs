@@ -228,9 +228,6 @@ fn clear_msg_area(top: c_int, bot: c_int, left: c_int, right: c_int) {
     grid_clear(grid, top, bot, left, right, attr);
 }
 
-/// An [`Array`] owning nothing, C's `ARRAY_DICT_INIT`.
-pub(crate) const EMPTY_ARRAY: Array = Array::EMPTY;
-
 /// Show a message.
 ///
 /// Answers false when the message needed a hit-enter prompt that has not been

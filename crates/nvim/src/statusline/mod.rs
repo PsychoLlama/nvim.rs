@@ -37,6 +37,7 @@
 pub(crate) mod state;
 use crate::statusline::state::tab_page_click_defs;
 use crate::types::CAR;
+use crate::types::DictBuilder;
 use crate::types::NL;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
@@ -55,9 +56,9 @@ use crate::highlight_group::{HLF_S, HLF_SNC};
 use crate::options::kOptStatuscolumn;
 use crate::optionstr::OptStringRef;
 use crate::types::{
-    AlignTextPos, ApiDict, Array, ClickLine, GridView, Hlf, LineNr, MAXPATHL, Object, OptIndex,
-    OptionSetFlags, ScreenChar, SignTextAttrs, StatusCol, StlClickDefinition,
-    StlClickDefinition_type_0, StlClickRecord, VarNumber, Vv, WinSplit, WinStyle,
+    AlignTextPos, ClickLine, GridView, Hlf, LineNr, MAXPATHL, Object, OptIndex, OptionSetFlags,
+    ScreenChar, SignTextAttrs, StatusCol, StlClickDefinition, StlClickDefinition_type_0,
+    StlClickRecord, VarNumber, Vv, WinSplit, WinStyle,
 };
 use crate::window::global_stl_height;
 use crate::winlayer::Win;
@@ -86,8 +87,6 @@ pub type NumberBase = ::core::ffi::c_uint;
 pub const kNumBaseHexadecimal: NumberBase = 16;
 pub const kNumBaseDecimal: NumberBase = 10;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const KV_INITIAL_VALUE: Array = Array::EMPTY;
-pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
 pub const FR_COL: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
@@ -326,12 +325,12 @@ pub(crate) fn stl_is_global() -> bool {
 /// Safe because every caller in this module sizes the dictionary from the
 /// same expression that decides how many keys it puts; the debug assertion
 /// inside catches a mismatch.
-pub(crate) fn put(dict: &mut ApiDict, key: &'static CStr, value: Object) {
+pub(crate) fn put(dict: &mut DictBuilder, key: &'static CStr, value: Object) {
     dict.insert(key, value);
 }
 
 /// C's `ADD_C`. See [`put`].
-pub(crate) fn push(array: &mut Array, value: Object) {
+pub(crate) fn push(array: &mut Vec<Object>, value: Object) {
     array.push(value);
 }
 

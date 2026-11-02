@@ -32,11 +32,11 @@ fn string_optval(value: &'static CStr) -> OptVal {
 /// Every listed and unlisted buffer's handle.
 pub fn nvim_list_bufs() -> Array {
     let n: size_t = buffers().count();
-    let mut rv: Array = Array::with_capacity(n);
+    let mut rv = Vec::with_capacity(n);
     for buf in buffers() {
         rv.push(Object::buffer(buf.handle));
     }
-    rv
+    rv.into()
 }
 
 /// The current buffer's handle.
@@ -65,11 +65,11 @@ pub fn nvim_set_current_buf(buf: BufferHandle) -> Result<(), Error> {
 /// Every window of the current tab page, in layout order.
 pub fn nvim_list_wins() -> Array {
     let n: size_t = tab_windows().count();
-    let mut rv: Array = Array::with_capacity(n);
+    let mut rv = Vec::with_capacity(n);
     for win in tab_windows() {
         rv.push(Object::window(win.handle));
     }
-    rv
+    rv.into()
 }
 
 /// The current window's handle.
@@ -153,11 +153,11 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
 /// Every tab page's handle, in order.
 pub fn nvim_list_tabpages() -> Array {
     let n: size_t = tabs().count();
-    let mut rv: Array = Array::with_capacity(n);
+    let mut rv = Vec::with_capacity(n);
     for tp in tabs() {
         rv.push(Object::tabpage(tp.handle));
     }
-    rv
+    rv.into()
 }
 
 /// The current tab page's handle.

@@ -16,16 +16,17 @@
 )]
 
 use super::*;
+use crate::types::DictBuilder;
 
 pub fn nvim_get_api_info(channel_id: uint64_t) -> Array {
-    let mut rv: Array = Array::with_capacity(2 as size_t);
+    let mut rv = Vec::with_capacity(2 as size_t);
     debug_assert!(
         channel_id <= 9223372036854775807 as uint64_t,
         "channel_id <= INT64_MAX"
     );
     rv.push(Object::integer(channel_id.cast_signed()));
     rv.push(api_metadata());
-    rv
+    rv.into()
 }
 
 pub fn nvim_set_client_info(
@@ -36,18 +37,20 @@ pub fn nvim_set_client_info(
     methods: ApiDict,
     attributes: ApiDict,
 ) {
-    let mut info: ApiDict = ApiDict::with_capacity(5);
+    let mut info = DictBuilder::with_capacity(5);
     info.insert(c"name", Object::string(name));
     // A client that did not say which major version it speaks is version 0.
     let has_major = version.iter().any(|pair| pair.key.bytes() == b"major");
     if !has_major {
-        version.insert(c"major", Object::integer(0 as Integer));
+        let mut grown = version.into_builder();
+        grown.insert(c"major", Object::integer(0 as Integer));
+        version = grown.finish();
     }
     info.insert(c"version", Object::dict(version));
     info.insert(c"type", Object::string(type_0));
     info.insert(c"methods", Object::dict(methods));
     info.insert(c"attributes", Object::dict(attributes));
-    rpc_set_client_info(channel_id, info.clone());
+    rpc_set_client_info(channel_id, info.finish());
 }
 
 // `nvim__chan_set_detach` is an API method's own name, published over msgpack-RPC.
@@ -61,7 +64,7 @@ pub fn nvim__chan_set_detach(channel_id: uint64_t, detach: Boolean) -> Result<()
 
 pub fn nvim_get_chan_info(channel_id: uint64_t, mut chan: Integer) -> ApiDict {
     if chan < 0 as Integer {
-        return ApiDict::EMPTY;
+        return ApiDict::new();
     }
     if chan == 0 as Integer && !is_internal_call(channel_id) {
         debug_assert!(

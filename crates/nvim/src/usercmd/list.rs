@@ -34,6 +34,7 @@ use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::types::ApiString;
+use crate::types::DictBuilder;
 use crate::types::{
     ApiDict, CmdAddr, ExArgt, ExpandContext, LuaRef, Object, ScriptCtx, UserCmd, int64_t,
 };
@@ -282,7 +283,7 @@ fn dict_of<const N: usize>(
     entries: [(&'static CStr, Option<Object>); N],
 ) -> ApiDict {
     debug_assert!(N <= capacity, "dict_of past capacity");
-    let mut dict = ApiDict::with_capacity(capacity);
+    let mut dict = DictBuilder::with_capacity(capacity);
     // SAFETY: the dict was reserved for `capacity` pairs, at most `N` are
     // written, and this is the only thing that writes to it.
     for (key, value) in entries {
@@ -290,18 +291,18 @@ fn dict_of<const N: usize>(
             dict.insert(key, value);
         }
     }
-    dict
+    dict.into()
 }
 
 /// `nvim_get_commands()`: every user command of `buffer`, or every global one
 /// when `buffer` is `None`, as a map from name to description.
 pub(crate) fn commands_array(buffer: Option<Buf>) -> ApiDict {
     let rows = rows(buffer.map_or(Table::Global, Table::Buffer), b"");
-    let mut rv = ApiDict::with_capacity(rows.len());
+    let mut rv = DictBuilder::with_capacity(rows.len());
     for row in &rows {
         rv.insert(row.name.to_bytes(), Object::dict(describe(row)));
     }
-    rv
+    rv.into()
 }
 
 /// One command as the API describes it. The key order is upstream's and is

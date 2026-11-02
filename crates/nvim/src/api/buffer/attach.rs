@@ -17,6 +17,7 @@
 
 use super::*;
 use crate::narrow::len_as_integer;
+use crate::types::DictBuilder;
 use crate::winlayer::Buf;
 
 pub(crate) fn api_buf_ensure_loaded(buffer: BufferHandle) -> Result<Option<Buf>, Error> {
@@ -79,7 +80,7 @@ pub fn nvim_buf_call(buf: BufferHandle, fun: LuaRef) -> Result<Object, Error> {
     try_enter(&mut tstate);
     let mut aco: AcoSave = AcoSave::default();
     aucmd_prepbuf(&mut aco, b);
-    let args: Array = Array::EMPTY;
+    let args: Array = Array::new();
     let res = nlua_call_ref_reporting(fun, None, args, kRetLuaref);
     aucmd_restbuf(&mut aco);
     // The bracket outranks the call's own failure, as it did when both went
@@ -92,10 +93,10 @@ pub fn nvim_buf_call(buf: BufferHandle, fun: LuaRef) -> Result<Object, Error> {
 #[allow(non_snake_case)]
 pub fn nvim__buf_stats(buf: BufferHandle) -> Result<ApiDict, Error> {
     let Some(b) = find_buffer_by_handle(buf)? else {
-        return Ok(ApiDict::EMPTY);
+        return Ok(ApiDict::new());
     };
     let buffer = b;
-    let mut rv: ApiDict = ApiDict::with_capacity(7 as size_t);
+    let mut rv = DictBuilder::with_capacity(7 as size_t);
     let d_flush_count = Object::integer(Integer::from(b.flush_count));
     rv.insert(c"flush_count", d_flush_count);
     let d_current_lnum = Object::integer(Integer::from(b.b_ml.cached_lnum()));
@@ -117,5 +118,5 @@ pub fn nvim__buf_stats(buf: BufferHandle) -> Result<ApiDict, Error> {
         let d_uhp_extmark_size = Object::integer(len_as_integer(uhp.extmarks.len()));
         rv.insert(c"uhp_extmark_size", d_uhp_extmark_size);
     }
-    Ok(rv)
+    Ok(rv.into())
 }

@@ -234,7 +234,7 @@ fn has_wsl() -> bool {
     if ANSWER.get().is_none() {
         let mut err = Error::none();
         const PROBE: &CStr = c"return vim.uv.os_uname()['release']:lower():match('microsoft')";
-        let o: Object = match nlua_exec_cstr(PROBE, Array::EMPTY, kRetNilBool) {
+        let o: Object = match nlua_exec_cstr(PROBE, Array::new(), kRetNilBool) {
             Ok(value) => value,
             Err(e) => {
                 err = e;

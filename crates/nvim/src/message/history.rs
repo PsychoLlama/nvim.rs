@@ -279,18 +279,19 @@ fn entry_from(seq: u64) -> Option<Shown> {
 /// One history entry as the `msg_history_show` UI event carries it:
 /// `[kind, [[attr, text, hl_id], ..], append]`.
 fn entry_to_event(entry: &Shown) -> Object {
-    let mut content = EMPTY_ARRAY;
-    let mut out = EMPTY_ARRAY;
+    let mut content = Vec::new();
+    let mut out = Vec::new();
     for chunk in &entry.chunks {
         let attr = if chunk.hl_id != 0 {
             syn_id2attr(chunk.hl_id)
         } else {
             0
         };
-        let mut content_entry = EMPTY_ARRAY;
-        content_entry.push(Object::integer(attr.into()));
-        content_entry.push(Object::string(chunk.text.clone()));
-        content_entry.push(Object::integer(chunk.hl_id.into()));
+        let content_entry = vec![
+            Object::integer(attr.into()),
+            Object::string(chunk.text.clone()),
+            Object::integer(chunk.hl_id.into()),
+        ];
         content.push(Object::array(content_entry));
     }
 
@@ -316,7 +317,7 @@ pub fn ex_messages(excmd: &mut ExArg) {
         return;
     }
 
-    let mut entries = EMPTY_ARRAY;
+    let mut entries = Vec::new();
     // `g<` starts at its mark, which may be unset; `:messages` at the start.
     let mut next = if excmd.skip {
         HISTORY.with(|history| history.temp_from)
@@ -371,7 +372,7 @@ pub fn ex_messages(excmd: &mut ExArg) {
     }
 
     if !entries.is_empty() {
-        ui_call_msg_history_show(entries, excmd.skip);
+        ui_call_msg_history_show(entries.into(), excmd.skip);
     }
 }
 

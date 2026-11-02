@@ -13,6 +13,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::types::DictBuilder;
 use crate::types::Handle;
 use core::ffi::{CStr, c_int};
 
@@ -27,15 +28,12 @@ use super::{
     syn_name2id_bytes,
 };
 
-/// The empty dict every "nothing to say" path answers.
-const NO_DICT: ApiDict = ApiDict::EMPTY;
-
 /// Describes the group with id `hl_id`, as namespace `ns_id` sees it.
 ///
 /// Answers false — leaving `hl` alone — for a group the namespace says
 /// nothing about, and for a table entry that was created by a lookup and
 /// never given settings.
-fn hlgroup2dict(hl: &mut ApiDict, ns_id: NS, hl_id: c_int) -> bool {
+fn hlgroup2dict(hl: &mut DictBuilder, ns_id: NS, hl_id: c_int) -> bool {
     let entry = group(hl_id);
     let mut ns = ns_id;
     let link = if ns_id == Handle::NONE {
@@ -60,7 +58,7 @@ fn hlgroup2dict(hl: &mut ApiDict, ns_id: NS, hl_id: c_int) -> bool {
 
     // `default` and `link`, then the rgb pass, then the `cterm` sub-dict
     // the second pass fills: what this function can write, reserved once.
-    *hl = ApiDict::with_capacity(HLATTRS_DICT_SIZE + 3);
+    *hl = DictBuilder::with_capacity(HLATTRS_DICT_SIZE + 3);
     if attr.rgb_ae_attr.has(HlAttrFlags::DEFAULT) {
         put(hl, c"default", Object::boolean(true));
     }
@@ -69,7 +67,7 @@ fn hlgroup2dict(hl: &mut ApiDict, ns_id: NS, hl_id: c_int) -> bool {
         let value = Object::string(ApiString::from_cstr(group(link).name));
         put(hl, c"link", value);
     }
-    let mut cterm = ApiDict::with_capacity(HLATTRS_DICT_SIZE);
+    let mut cterm = DictBuilder::with_capacity(HLATTRS_DICT_SIZE);
     hlattrs2dict(hl, None, attr, true, true);
     hlattrs2dict(hl, Some(&mut cterm), attr, false, true);
     if !cterm.is_empty() {
@@ -99,7 +97,7 @@ pub(crate) fn ns_get_hl_defs(
             syn_name2id_bytes(name)
         };
         if id == 0 && !create {
-            return Ok(NO_DICT);
+            return Ok(ApiDict::new());
         }
     } else if let Some(given) = opts.id {
         id = number_as_int(given);
@@ -109,17 +107,17 @@ pub(crate) fn ns_get_hl_defs(
         if id < 1 || id > highlight_num_groups() {
             return Err(Error::validation(c"Highlight id out of bounds"));
         }
-        let mut attrs = NO_DICT;
+        let mut attrs = DictBuilder::new();
         let id = if link { id } else { syn_get_final_id(id) };
         hlgroup2dict(&mut attrs, ns_id, id);
-        return Ok(attrs);
+        return Ok(attrs.finish());
     }
 
     let groups = usize::try_from(highlight_num_groups())
         .expect("the highlight group count is never negative");
-    let mut rv = ApiDict::with_capacity(groups);
+    let mut rv = DictBuilder::with_capacity(groups);
     for id in 1..=highlight_num_groups() {
-        let mut attrs = NO_DICT;
+        let mut attrs = DictBuilder::new();
         if !hlgroup2dict(&mut attrs, ns_id, id) {
             continue;
         }
@@ -127,7 +125,7 @@ pub(crate) fn ns_get_hl_defs(
         let key = group(named).name.to_bytes();
         rv.insert(key, Object::dict(attrs));
     }
-    Ok(rv)
+    Ok(rv.into())
 }
 
 /// `synIDattr({id}, {flag})` for a boolean attribute: `"1"` if the group has

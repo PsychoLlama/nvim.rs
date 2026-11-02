@@ -111,7 +111,7 @@ pub fn rpc_start(id: uint64_t) {
         rpc.closed = false;
         rpc.unpacker = Some(Box::new(Unpacker::new()));
         rpc.next_request_id = 1;
-        rpc.info = ApiDict::EMPTY;
+        rpc.info = ApiDict::new();
         rpc.call_stack = CallStack::new();
         chan.streamtype() == kChannelStreamInternal
     })

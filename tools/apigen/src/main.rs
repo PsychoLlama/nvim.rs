@@ -1402,7 +1402,7 @@ fn as_dict(o: Object) -> Option<ApiDict> {
     if is_empty_array(&o) {
         // An empty Lua table is indistinguishable from an empty list on the
         // wire, so a Dict parameter accepts one.
-        return Some(ApiDict::EMPTY);
+        return Some(ApiDict::new());
     }
     o.into_dict()
 }

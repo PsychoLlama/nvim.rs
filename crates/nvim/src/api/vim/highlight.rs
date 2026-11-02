@@ -18,6 +18,7 @@
 use super::*;
 use crate::api::private::validate::{err_bad_number, err_bad_value};
 use crate::narrow::number_as_int;
+use crate::types::DictBuilder;
 
 pub fn nvim_get_hl_id_by_name(name: ApiString) -> Integer {
     Integer::from(syn_check_group(name.as_bytes()))
@@ -92,10 +93,10 @@ pub fn nvim_get_color_by_name(name: ApiString) -> Integer {
 }
 
 pub fn nvim_get_color_map() -> ApiDict {
-    let mut colors: ApiDict = ApiDict::with_capacity(COLOR_NAMES.len() as size_t);
+    let mut colors = DictBuilder::with_capacity(COLOR_NAMES.len() as size_t);
     for entry in &COLOR_NAMES {
         let color = Object::integer(Integer::from(entry.color));
         colors.insert(entry.name, color);
     }
-    colors
+    colors.into()
 }

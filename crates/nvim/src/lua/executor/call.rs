@@ -30,7 +30,7 @@ use crate::message::e_fast_api_disabled;
 use crate::message::state::did_emsg;
 use crate::msgpack_rpc::channel::{rpc_call_with, rpc_send_event};
 use crate::narrow::len_as_int;
-use crate::types::{Array, Error, kErrorTypeException, kErrorTypeValidation};
+use crate::types::{Error, kErrorTypeException, kErrorTypeValidation};
 
 /// How much of a rejected function's name the "not allowed in a fast event"
 /// message quotes.
@@ -180,7 +180,7 @@ fn rpc(stack: &mut Stack, request: bool) -> Result<c_int, Raise> {
     let nargs = args.top().index() - 2;
 
     let mut err = Error::none();
-    let mut converted = Array::with_capacity(usize::try_from(nargs).unwrap_or(0));
+    let mut converted = Vec::with_capacity(usize::try_from(nargs).unwrap_or(0));
     let mut converts = true;
     for i in 0..nargs {
         args.push_value(At::arg(i + 3));
@@ -196,13 +196,13 @@ fn rpc(stack: &mut Stack, request: bool) -> Result<c_int, Raise> {
 
     if converts {
         if request {
-            let answered = rpc_call_with(chan_id, name, converted, |result| {
+            let answered = rpc_call_with(chan_id, name, converted.into(), |result| {
                 push_object(&mut args, &result, false);
             });
             if let Err(e) = answered {
                 err = e;
             }
-        } else if !rpc_send_event(chan_id, name, converted) {
+        } else if !rpc_send_event(chan_id, name, converted.into()) {
             err = api_error!(kErrorTypeValidation, "Invalid channel: {chan_id}");
         }
     }

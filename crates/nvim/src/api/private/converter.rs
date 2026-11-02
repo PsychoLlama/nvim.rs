@@ -36,6 +36,7 @@
 // a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::types::DictBuilder;
 use core::ffi::{CStr, c_int};
 
 use crate::eval::decode::decode_string;
@@ -52,12 +53,19 @@ use crate::types::{
     kSpecialVarNull,
 };
 
+/// A container the walk has opened and not yet closed: the open form of
+/// an [`Array`] or an [`ApiDict`], which freezes into one when it closes.
+enum Open {
+    Array(Vec<Object>),
+    Dict(DictBuilder),
+}
+
 /// The `From<&TypVal> for Object` sink: upstream's `EncodedData`.
 struct ObjectSink {
     /// The containers the walk has opened and not yet closed, innermost
     /// last. A converted value is not on it: it goes straight into the
     /// innermost container, or -- with nothing open -- into [`Self::root`].
-    stack: Vec<Object>,
+    stack: Vec<Open>,
     /// The whole answer, once the walk is done.
     root: Object,
 }
@@ -82,29 +90,32 @@ impl ObjectSink {
     /// overwrite a single slot.
     fn emit(&mut self, value: Object) {
         match self.stack.last_mut() {
-            Some(Object::Array(array)) => {
+            Some(Open::Array(array)) => {
                 debug_assert!(array.len() < array.capacity());
                 array.push(value);
             }
-            Some(Object::Dict(dict)) => {
+            Some(Open::Dict(dict)) => {
                 dict.last_mut().expect("a key precedes its value").value = value;
             }
-            Some(_) => unreachable!("only a container is left open"),
             None => self.root = value,
         }
     }
 
     /// The dictionary the walk is currently filling.
-    fn open_dict(&mut self) -> &mut ApiDict {
-        let Some(Object::Dict(dict)) = self.stack.last_mut() else {
+    fn open_dict(&mut self) -> &mut DictBuilder {
+        let Some(Open::Dict(dict)) = self.stack.last_mut() else {
             unreachable!("the walk is inside a dictionary");
         };
         dict
     }
 
-    /// Close the innermost container and hand it to whatever holds it.
+    /// Close the innermost container, freezing it, and hand it to whatever
+    /// holds it. The freeze is free: the walk sized it exactly.
     fn close(&mut self) {
-        let done = self.stack.pop().expect("the walk opened a container");
+        let done = match self.stack.pop().expect("the walk opened a container") {
+            Open::Array(items) => Object::array(items),
+            Open::Dict(entries) => Object::dict(entries),
+        };
         self.emit(done);
     }
 }
@@ -171,17 +182,17 @@ impl TypvalSink for ObjectSink {
     }
 
     fn conv_empty_list(&mut self) {
-        self.emit(Object::array(Array::EMPTY));
+        self.emit(Object::array(Array::new()));
     }
 
     fn conv_empty_dict(&mut self) {
-        self.emit(Object::dict(ApiDict::EMPTY));
+        self.emit(Object::dict(ApiDict::new()));
     }
 
     /// Reserve the whole array now; the items push into the reservation.
     fn conv_list_start(&mut self, len: c_int) -> Flow {
         let len = usize::try_from(len).expect("a list length is never negative");
-        self.stack.push(Object::array(Array::with_capacity(len)));
+        self.stack.push(Open::Array(Vec::with_capacity(len)));
         Flow::Go
     }
 
@@ -191,13 +202,13 @@ impl TypvalSink for ObjectSink {
     fn conv_list_end(&mut self) {
         debug_assert!(matches!(
             self.stack.last(),
-            Some(Object::Array(a)) if a.len() == a.capacity()
+            Some(Open::Array(a)) if a.len() == a.capacity()
         ));
         self.close();
     }
 
     fn conv_dict_start(&mut self, len: usize) -> Flow {
-        self.stack.push(Object::dict(ApiDict::with_capacity(len)));
+        self.stack.push(Open::Dict(DictBuilder::with_capacity(len)));
         Flow::Go
     }
 
@@ -225,7 +236,7 @@ impl TypvalSink for ObjectSink {
     fn conv_dict_end(&mut self) {
         debug_assert!(matches!(
             self.stack.last(),
-            Some(Object::Dict(d)) if d.len() == d.capacity()
+            Some(Open::Dict(d)) if d.len() == d.capacity()
         ));
         self.close();
     }

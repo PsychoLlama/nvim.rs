@@ -46,8 +46,8 @@ pub fn nvim_execute_lua(code: ApiString, args: Array) -> Result<Object, Error> {
 /// at the first that fails.
 pub fn nvim_call_atomic(channel_id: uint64_t, calls: Array) -> Result<Array, Error> {
     // "results" and the error report, and one result per call.
-    let mut rv: Array = Array::with_capacity(2 as size_t);
-    let mut results: Array = Array::with_capacity(calls.len());
+    let mut rv = Vec::with_capacity(2 as size_t);
+    let mut results = Vec::with_capacity(calls.len());
     let mut nested_error: Option<Error> = None;
     let mut i: size_t = 0;
     // A call that is not a well-formed [name, args] pair is the caller's
@@ -97,7 +97,7 @@ pub fn nvim_call_atomic(channel_id: uint64_t, calls: Array) -> Result<Array, Err
     }
     rv.push(Object::array(results));
     if let Some(nested_error) = nested_error {
-        let mut errval: Array = Array::with_capacity(3 as size_t);
+        let mut errval = Vec::with_capacity(3 as size_t);
         let failed_at = Integer::try_from(i).expect("a call index fits an Integer");
         errval.push(Object::integer(failed_at));
         errval.push(Object::integer(nested_error.kind().into()));
@@ -107,5 +107,5 @@ pub fn nvim_call_atomic(channel_id: uint64_t, calls: Array) -> Result<Array, Err
     } else {
         rv.push(Object::Nil);
     }
-    Ok(rv)
+    Ok(rv.into())
 }

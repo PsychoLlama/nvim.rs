@@ -337,7 +337,7 @@ pub fn nvim_buf_get_commands(
     }
     let b = find_buffer_by_handle(buf)?;
     let (false, Some(b)) = (builtin, b) else {
-        return Ok(ApiDict::EMPTY);
+        return Ok(ApiDict::new());
     };
     Ok(commands_array(Some(b)))
 }

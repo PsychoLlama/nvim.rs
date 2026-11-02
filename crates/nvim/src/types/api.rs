@@ -19,37 +19,45 @@ pub struct AdditionalDataBuilder {
     pub capacity: size_t,
     pub items: *mut ::core::ffi::c_char,
 }
-/// The API's array: an owned, growable sequence of [`Object`]s.
+/// The API's array: an owned, fixed-length sequence of [`Object`]s.
 ///
-/// A newtype over `Vec<Object>` rather than the type alias, so that the
-/// conversions that have to be deliberate (`From<Vec<Object>>` in, and
-/// nothing implicit out) are, and so `ffigen` has a name to render. Every
-/// reader goes through [`Deref`](core::ops::Deref) to the vector.
+/// A boxed slice, two words, rather than a `Vec`'s three: an array is built
+/// once -- by a producer that knows its length, or by a `Vec<Object>` that
+/// is then frozen -- and only read after that, so a capacity word would be
+/// carried through every copy of every [`Object`] for nothing. It is what
+/// keeps an `Object` at 24 bytes.
+///
+/// The open container is a plain `Vec<Object>`: the sink, the msgpack
+/// unpacker and the Lua pop build in one and freeze it with `From`, which
+/// costs nothing when the vector was sized exactly. Every reader goes
+/// through [`Deref`](core::ops::Deref) to the slice; a caller that has to
+/// grow an array it was handed takes [`into_vec`](Self::into_vec) and
+/// freezes the answer again.
 #[derive(Clone, Default)]
-pub struct Array(Vec<Object>);
+pub struct Array(Box<[Object]>);
 
 impl Array {
-    /// No elements and nothing allocated: C's `ARRAY_DICT_INIT`.
-    pub const EMPTY: Self = Self(Vec::new());
-
-    /// An empty array with room for `capacity` elements.
-    ///
-    /// Every producer knows its element count up front -- the arena arrays
-    /// this replaces had to, since a bump allocation cannot grow -- so this
-    /// is the usual constructor and `push` never reallocates.
-    pub fn with_capacity(capacity: size_t) -> Self {
-        Self(Vec::with_capacity(capacity))
+    /// No elements and nothing allocated: C's `Array::new()`.
+    pub fn new() -> Self {
+        Self::default()
     }
 
-    /// The elements, which the array owns.
+    /// The elements, which the array owns, as a vector to grow.
     pub fn into_vec(self) -> Vec<Object> {
-        self.0
+        self.0.into_vec()
     }
 }
 
 impl From<Vec<Object>> for Array {
+    /// Freeze `items`; free when the vector is at its exact capacity.
     fn from(items: Vec<Object>) -> Self {
-        Self(items)
+        Self(items.into_boxed_slice())
+    }
+}
+
+impl<const N: usize> From<[Object; N]> for Array {
+    fn from(items: [Object; N]) -> Self {
+        Self(Box::new(items))
     }
 }
 
@@ -64,7 +72,7 @@ impl IntoIterator for Array {
     type IntoIter = ::std::vec::IntoIter<Object>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
+        self.0.into_vec().into_iter()
     }
 }
 
@@ -78,15 +86,15 @@ impl<'a> IntoIterator for &'a Array {
 }
 
 impl ::core::ops::Deref for Array {
-    type Target = Vec<Object>;
+    type Target = [Object];
 
-    fn deref(&self) -> &Vec<Object> {
+    fn deref(&self) -> &[Object] {
         &self.0
     }
 }
 
 impl ::core::ops::DerefMut for Array {
-    fn deref_mut(&mut self) -> &mut Vec<Object> {
+    fn deref_mut(&mut self) -> &mut [Object] {
         &mut self.0
     }
 }
@@ -98,31 +106,20 @@ impl ::core::fmt::Debug for Array {
 }
 pub type Boolean = bool;
 pub type BufferHandle = Handle;
-/// The API's dictionary: an owned, ordered sequence of key/value pairs.
+/// The API's dictionary: an owned, ordered, fixed-length sequence of
+/// key/value pairs.
 ///
 /// Ordered, not hashed: the API's dictionaries are small and are built once
 /// and read once, and the order a caller sent is the order the answer
-/// carries. [`Array`]'s shape, over [`KeyValuePair`].
+/// carries. [`Array`]'s shape, over [`KeyValuePair`]; its open container is
+/// [`DictBuilder`].
 #[derive(Clone, Default)]
-pub struct ApiDict(Vec<KeyValuePair>);
+pub struct ApiDict(Box<[KeyValuePair]>);
 
 impl ApiDict {
-    /// No entries and nothing allocated: C's `ARRAY_DICT_INIT`.
-    pub const EMPTY: Self = Self(Vec::new());
-
-    /// An empty dictionary with room for `capacity` entries. See
-    /// [`Array::with_capacity`].
-    pub fn with_capacity(capacity: size_t) -> Self {
-        Self(Vec::with_capacity(capacity))
-    }
-
-    /// Append `key: value`. Nothing checks for a duplicate key: the API's
-    /// dictionaries are built from sources that cannot produce one.
-    pub fn insert(&mut self, key: impl Into<DictKey>, value: Object) {
-        self.0.push(KeyValuePair {
-            key: key.into(),
-            value,
-        });
+    /// No entries and nothing allocated: C's `Array::new()`.
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// The value under `key`, by a linear scan -- these dictionaries are
@@ -133,15 +130,27 @@ impl ApiDict {
             .map(|pair| &pair.value)
     }
 
+    /// The entries, which the dictionary owns, as a builder to grow.
+    pub fn into_builder(self) -> DictBuilder {
+        DictBuilder(self.0.into_vec())
+    }
+
     /// The entries, which the dictionary owns.
     pub fn into_vec(self) -> Vec<KeyValuePair> {
-        self.0
+        self.0.into_vec()
     }
 }
 
 impl From<Vec<KeyValuePair>> for ApiDict {
+    /// Freeze `items`; free when the vector is at its exact capacity.
     fn from(items: Vec<KeyValuePair>) -> Self {
-        Self(items)
+        Self(items.into_boxed_slice())
+    }
+}
+
+impl From<DictBuilder> for ApiDict {
+    fn from(builder: DictBuilder) -> Self {
+        Self::from(builder.0)
     }
 }
 
@@ -156,7 +165,7 @@ impl IntoIterator for ApiDict {
     type IntoIter = ::std::vec::IntoIter<KeyValuePair>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
+        self.0.into_vec().into_iter()
     }
 }
 
@@ -170,15 +179,15 @@ impl<'a> IntoIterator for &'a ApiDict {
 }
 
 impl ::core::ops::Deref for ApiDict {
-    type Target = Vec<KeyValuePair>;
+    type Target = [KeyValuePair];
 
-    fn deref(&self) -> &Vec<KeyValuePair> {
+    fn deref(&self) -> &[KeyValuePair] {
         &self.0
     }
 }
 
 impl ::core::ops::DerefMut for ApiDict {
-    fn deref_mut(&mut self) -> &mut Vec<KeyValuePair> {
+    fn deref_mut(&mut self) -> &mut [KeyValuePair] {
         &mut self.0
     }
 }
@@ -188,6 +197,57 @@ impl ::core::fmt::Debug for ApiDict {
         f.debug_map()
             .entries(self.0.iter().map(|pair| (&pair.key, &pair.value)))
             .finish()
+    }
+}
+
+/// An [`ApiDict`] being built: the entries so far, in a vector that grows.
+///
+/// [`ApiDict`] is frozen, so a producer fills one of these and converts it
+/// with `From` (which [`Object::dict`] takes) -- free when it was sized
+/// exactly. Reads see the vector through [`Deref`](core::ops::Deref).
+#[derive(Clone, Debug, Default)]
+pub struct DictBuilder(Vec<KeyValuePair>);
+
+impl DictBuilder {
+    /// No entries and nothing allocated.
+    pub const fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    /// An empty builder with room for `capacity` entries.
+    ///
+    /// Every producer knows its entry count up front, so this is the usual
+    /// constructor: `insert` never reallocates and the freeze is free.
+    pub fn with_capacity(capacity: size_t) -> Self {
+        Self(Vec::with_capacity(capacity))
+    }
+
+    /// Append `key: value`. Nothing checks for a duplicate key: the API's
+    /// dictionaries are built from sources that cannot produce one.
+    pub fn insert(&mut self, key: impl Into<DictKey>, value: Object) {
+        self.0.push(KeyValuePair {
+            key: key.into(),
+            value,
+        });
+    }
+
+    /// The finished dictionary.
+    pub fn finish(self) -> ApiDict {
+        ApiDict::from(self.0)
+    }
+}
+
+impl ::core::ops::Deref for DictBuilder {
+    type Target = Vec<KeyValuePair>;
+
+    fn deref(&self) -> &Vec<KeyValuePair> {
+        &self.0
+    }
+}
+
+impl ::core::ops::DerefMut for DictBuilder {
+    fn deref_mut(&mut self) -> &mut Vec<KeyValuePair> {
+        &mut self.0
     }
 }
 pub type ErrorType = ::core::ffi::c_int;
@@ -281,6 +341,10 @@ pub enum Object {
     /// A tabpage handle. See [`Object::Buffer`].
     Tabpage(Integer) = 10,
 }
+
+// The lever the boxed-slice containers pull: a tag word and two payload
+// words. Every `Vec<Object>`, every copy and every move is this wide.
+const _: () = assert!(::core::mem::size_of::<Object>() == 24);
 
 impl Object {
     /// The tag, as the number the Lua binding and the keyset tables speak.

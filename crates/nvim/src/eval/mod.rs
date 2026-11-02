@@ -31,9 +31,7 @@ use crate::types::NL;
 // path; it belongs to `message`.
 pub(crate) use crate::message::e_invalblob;
 use crate::registry::SlotTable;
-use crate::types::{
-    Array, ExprType, Failed, GRegFlags, LuaRetMode, MarkGet, MotionType, Timer, uint64_t,
-};
+use crate::types::{ExprType, Failed, GRegFlags, LuaRetMode, MarkGet, MotionType, Timer, uint64_t};
 use core::ffi::{CStr, c_int, c_long, c_uint, c_ulong};
 
 mod entry;
@@ -100,8 +98,6 @@ pub const INT64_MIN: c_long = -9223372036854775807 as c_long - 1 as c_long;
 pub const INT64_MAX: c_long = 9223372036854775807 as c_long;
 pub const UINT32_MAX: c_uint = 4294967295 as c_uint;
 pub const SIZE_MAX: c_ulong = 18446744073709551615 as c_ulong;
-pub const KV_INITIAL_VALUE: Array = Array::EMPTY;
-pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
 pub const VARNUMBER_MAX: c_long = INT64_MAX;
 pub const VARNUMBER_MIN: c_long = INT64_MIN;
 pub const FF: c_int = '\u{c}' as c_int;

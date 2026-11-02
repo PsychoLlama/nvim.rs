@@ -59,9 +59,9 @@ pub fn nvim_buf_set_mark(
 }
 
 pub fn nvim_buf_get_mark(buf: BufferHandle, name: ApiString) -> Result<Array, Error> {
-    let mut rv: Array = Array::EMPTY;
+    let mut rv = Vec::new();
     let Some(b) = find_buffer_by_handle(buf)? else {
-        return Ok(rv);
+        return Ok(rv.into());
     };
     if !(name.len() == 1 as size_t) {
         let name = name.as_cstr();
@@ -87,8 +87,8 @@ pub fn nvim_buf_get_mark(buf: BufferHandle, name: ApiString) -> Result<Array, Er
     } else {
         pos = fm.mark;
     }
-    rv = Array::with_capacity(2 as size_t);
+    rv = Vec::with_capacity(2 as size_t);
     rv.push(Object::integer(Integer::from(pos.lnum)));
     rv.push(Object::integer(Integer::from(pos.col)));
-    Ok(rv)
+    Ok(rv.into())
 }

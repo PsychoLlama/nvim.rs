@@ -18,6 +18,7 @@ use crate::cursor::check_cursor_col;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID};
 use crate::eval::window::{restore_win, switch_win, win_execute_after, win_execute_before};
 use crate::ex_docmd::ex_win_close;
+use crate::types::DictBuilder;
 use crate::types::Handle;
 use crate::winlayer::TabPage;
 
@@ -68,16 +69,16 @@ pub fn nvim_win_set_buf(win: WindowHandle, buf: BufferHandle) -> Result<(), Erro
 /// `win`'s cursor, as a `[line, column]` pair.
 pub fn nvim_win_get_cursor(win: WindowHandle) -> Result<Array, Error> {
     let Some(w) = find_window_by_handle(win)? else {
-        return Ok(Array::EMPTY);
+        return Ok(Array::new());
     };
-    let mut rv = Array::with_capacity(2 as size_t);
+    let mut rv = Vec::with_capacity(2 as size_t);
     let (lnum, col) = (
         Integer::from(w.w_cursor.lnum),
         Integer::from(w.w_cursor.col),
     );
     rv.push(Object::integer(lnum));
     rv.push(Object::integer(col));
-    Ok(rv)
+    Ok(rv.into())
 }
 
 /// Move `win`'s cursor to the `[line, column]` `pos` names.
@@ -176,13 +177,13 @@ pub fn nvim_win_del_var(win: WindowHandle, name: ApiString) -> Result<(), Error>
 /// `win`'s top-left corner, as a `[row, column]` pair of screen cells.
 pub fn nvim_win_get_position(win: WindowHandle) -> Result<Array, Error> {
     let Some(w) = find_window_by_handle(win)? else {
-        return Ok(Array::EMPTY);
+        return Ok(Array::new());
     };
-    let mut rv = Array::with_capacity(2 as size_t);
+    let mut rv = Vec::with_capacity(2 as size_t);
     let (row, col) = (Integer::from(w.w_winrow), Integer::from(w.w_wincol));
     rv.push(Object::integer(row));
     rv.push(Object::integer(col));
-    Ok(rv)
+    Ok(rv.into())
 }
 
 /// The tab page a window the API just looked up is on. Every live window is
@@ -268,7 +269,7 @@ pub fn nvim_win_call(win: WindowHandle, fun: LuaRef) -> Result<Object, Error> {
         let switched = win_execute_before(&mut switch_args, w, tabpage);
         if switched {
             // The call runs Lua, which `api_try` catches.
-            res = nlua_call_ref_reporting(fun, None, Array::EMPTY, kRetLuaref);
+            res = nlua_call_ref_reporting(fun, None, Array::new(), kRetLuaref);
         }
         win_execute_after(&mut switch_args);
         res
@@ -298,9 +299,9 @@ pub fn nvim_win_text_height(
     // Upstream asks for two and writes four (`all`, `fill`, `end_row`,
     // `end_vcol`), so every successful call overruns the arena block by two
     // `KeyValuePair`s.  `dict_put`'s capacity assertion is what found it.
-    let mut rv: ApiDict = ApiDict::with_capacity(4 as size_t);
+    let mut rv = DictBuilder::with_capacity(4 as size_t);
     let Some(w) = find_window_by_handle(win)? else {
-        return Ok(rv);
+        return Ok(rv.into());
     };
     let buf = w.buffer();
     let line_count: LineNr = w.buffer().line_count();
@@ -377,5 +378,5 @@ pub fn nvim_win_text_height(
     let end_row = Object::integer(Integer::from(end_lnum - 1));
     rv.insert(c"end_row", end_row);
     rv.insert(c"end_vcol", Object::integer(end_vcol));
-    Ok(rv)
+    Ok(rv.into())
 }

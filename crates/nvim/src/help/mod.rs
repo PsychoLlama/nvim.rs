@@ -235,7 +235,7 @@ fn trimmed_subject(arg: &[u8]) -> Vec<u8> {
 /// owned bytes, or `None` when it declines to pick one.
 fn resolve_tag_at_cursor() -> Option<Vec<u8>> {
     let chunk = c"return require'vim._core.help'.resolve_tag()";
-    let res = nlua_exec_cstr(chunk, Array::EMPTY, kRetObject).ok()?;
+    let res = nlua_exec_cstr(chunk, Array::new(), kRetObject).ok()?;
     let tag = res.as_string().filter(|tag| !tag.is_empty())?;
     // Upstream copied the answer as a C string: up to a NUL.
     Some(
@@ -538,7 +538,7 @@ pub(crate) fn prepare_help_buffer() {
 /// Populate `*local-additions*` in `help.txt`.
 pub(crate) fn get_local_additions() {
     let chunk = c"return require'vim._core.help'.local_additions()";
-    if let Err(mut err) = nlua_exec_cstr(chunk, Array::EMPTY, kRetNilBool) {
+    if let Err(mut err) = nlua_exec_cstr(chunk, Array::new(), kRetNilBool) {
         emsg_multiline(err.message_or_empty(), Some(c"lua_error"), HLF_E, true);
         err.clear();
     }

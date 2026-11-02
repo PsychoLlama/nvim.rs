@@ -193,7 +193,7 @@ pub(crate) struct ColoredCmdline {
 
 impl ColoredCmdline {
     /// Nothing cached: C's `(ColoredCmdline){ .cmdbuff = NULL,
-    /// .colors = KV_INITIAL_VALUE }`.
+    /// .colors = Array::new() }`.
     pub(crate) const NONE: ColoredCmdline = ColoredCmdline {
         prompt_id: 0,
         text: Vec::new(),

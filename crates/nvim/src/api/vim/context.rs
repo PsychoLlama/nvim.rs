@@ -17,6 +17,7 @@
 
 use super::*;
 use crate::api::private::validate::err_bad_value;
+use crate::types::DictBuilder;
 
 /// The `types` key's spellings, and the `kCtx*` bit each one names.
 const NAMES: [&::core::ffi::CStr; 6] = [c"regs", c"jumps", c"bufs", c"gvars", c"sfuncs", c"funcs"];
@@ -32,7 +33,7 @@ const FLAGS: [::core::ffi::c_int; 6] = [
 ];
 
 pub fn nvim_get_context(opts: &mut KeyDict_context) -> Result<ApiDict, Error> {
-    let types: Array = opts.types.as_ref().unwrap_or(&Array::EMPTY).clone();
+    let types: Array = opts.types.as_ref().unwrap_or(&Array::new()).clone();
     let mut int_types: ::core::ffi::c_int = if types.len() > 0 as size_t {
         0 as ::core::ffi::c_int
     } else {
@@ -53,7 +54,7 @@ pub fn nvim_get_context(opts: &mut KeyDict_context) -> Result<ApiDict, Error> {
             i = i.wrapping_add(1);
         }
     }
-    let mut ctx: Context = CONTEXT_INIT;
+    let mut ctx: Context = Context::default();
     ctx_save(Some(&mut ctx), int_types);
     let dict: ApiDict = ctx_to_dict(&ctx);
     ctx_free(&mut ctx);
@@ -61,7 +62,7 @@ pub fn nvim_get_context(opts: &mut KeyDict_context) -> Result<ApiDict, Error> {
 }
 
 pub fn nvim_load_context(dict: ApiDict) -> Result<Object, Error> {
-    let mut ctx: Context = CONTEXT_INIT;
+    let mut ctx: Context = Context::default();
     let save_did_emsg: ::core::ffi::c_int = did_emsg.get();
     did_emsg.set(0);
     let read = ctx_from_dict(dict, &mut ctx);
@@ -76,7 +77,7 @@ pub fn nvim_load_context(dict: ApiDict) -> Result<Object, Error> {
 /// The current mode's short name, and whether the editor is blocked waiting
 /// for input.
 pub fn nvim_get_mode() -> ApiDict {
-    let mut rv: ApiDict = ApiDict::with_capacity(2 as size_t);
+    let mut rv = DictBuilder::with_capacity(2 as size_t);
     // `get_mode` answers the name NUL-padded to `MODE_MAX_LENGTH` bytes.
     let modestr = get_mode();
     let len = modestr
@@ -87,5 +88,5 @@ pub fn nvim_get_mode() -> ApiDict {
     let mode = ApiString::from_bytes(&modestr[..len]);
     rv.insert(c"mode", Object::string(mode));
     rv.insert(c"blocking", Object::boolean(blocked));
-    rv
+    rv.into()
 }

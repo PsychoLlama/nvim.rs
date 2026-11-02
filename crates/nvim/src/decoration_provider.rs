@@ -157,7 +157,7 @@ fn decor_provider_invoke(
         if let Some(res) = res {
             // `kRetMulti` is what asked for an array, so this is the shape
             // `nlua_call_ref` promises back.
-            *res = ret.into_array().unwrap_or(Array::EMPTY);
+            *res = ret.into_array().unwrap_or(Array::new());
             return true;
         }
         match api_object_to_bool(&ret, c"provider %s retval", default_true) {
@@ -385,7 +385,7 @@ pub(crate) fn decor_providers_invoke_range(
         args.push(Object::integer(end_row.into()));
         args.push(Object::integer(end_col.into()));
 
-        let mut res = Array::EMPTY;
+        let mut res = Array::new();
         let (name, cb, args) = (c"range", p.redraw_range, args.array());
         // as above; `res` receives the callback's return list.
         let status = decor_provider_invoke(idx, name, cb, args, true, Some(&mut res));

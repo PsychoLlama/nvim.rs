@@ -17,6 +17,7 @@ use super::*;
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_conflict, err_expected};
 use crate::api_error;
 use crate::narrow::number_as_int;
+use crate::types::DictBuilder;
 use crate::types::Handle;
 
 /// The keyset this call was handed, with checked field access.
@@ -45,7 +46,7 @@ pub fn nvim_get_autocmds(opts: &mut KeyDict_get_autocmds) -> Result<Array, Error
     let buffers = buffer_patterns(opts, has_buf)?;
     let patterns = pattern_filters(opts, &buffers)?;
 
-    let mut autocmd_list = Array::EMPTY;
+    let mut autocmd_list = Vec::new();
     for event in AutoEvent::all() {
         if events.is_some_and(|wanted| !wanted[event.index()]) {
             continue;
@@ -67,7 +68,7 @@ pub fn nvim_get_autocmds(opts: &mut KeyDict_get_autocmds) -> Result<Array, Error
             }
         });
     }
-    Ok(autocmd_list)
+    Ok(autocmd_list.into())
 }
 
 /// The `group` key: a name or an id, and `0` for "every group".
@@ -138,7 +139,7 @@ fn event_filter(opts: &Opts) -> Result<Option<[bool; EVENT_COUNT]>, Error> {
 /// The `buf`/`buffer` key, as the `<buffer=N>` patterns it stands for.
 fn buffer_patterns(opts: &Opts, has_buf: bool) -> Result<Array, Error> {
     let Some(given) = opts.buf.as_ref().or(opts.buffer.as_ref()) else {
-        return Ok(Array::EMPTY);
+        return Ok(Array::new());
     };
     let buflocal = |handle: Integer| -> Result<Object, Error> {
         let b = find_buffer_by_handle(Handle::new(number_as_int(handle)))?;
@@ -146,13 +147,12 @@ fn buffer_patterns(opts: &Opts, has_buf: bool) -> Result<Array, Error> {
         Ok(Object::string(ApiString::from_bytes(pat.as_bytes())))
     };
     if let Object::Integer(handle) | Object::Buffer(handle) = given {
-        let mut buffers = Array::with_capacity(1);
-        buffers.push(buflocal(*handle)?);
-        return Ok(buffers);
+        let buffers = vec![buflocal(*handle)?];
+        return Ok(buffers.into());
     }
     let Some(handles) = given.as_array() else {
         if !has_buf {
-            return Ok(Array::EMPTY);
+            return Ok(Array::new());
         }
         let want = c"Integer or Array";
         let got = api_typename(given.kind());
@@ -165,7 +165,7 @@ fn buffer_patterns(opts: &Opts, has_buf: bool) -> Result<Array, Error> {
             "Too many buffers (maximum of {max})"
         ));
     }
-    let mut buffers = Array::with_capacity(handles.len());
+    let mut buffers = Vec::with_capacity(handles.len());
     for item in handles.iter() {
         let (Object::Integer(handle) | Object::Buffer(handle)) = item else {
             let got = api_typename(item.kind());
@@ -173,7 +173,7 @@ fn buffer_patterns(opts: &Opts, has_buf: bool) -> Result<Array, Error> {
         };
         buffers.push(buflocal(*handle)?);
     }
-    Ok(buffers)
+    Ok(buffers.into())
 }
 
 /// The patterns a command's own is compared against: the `pattern` key's
@@ -240,7 +240,7 @@ fn matches_pattern(ap: &AutoPat, filters: &[&::core::ffi::CStr]) -> bool {
 
 /// One command, as the Dict `nvim_get_autocmds` reports it.
 fn autocmd_dict(event: AutoEvent, ac: &AutoCmd, ap: &AutoPat) -> ApiDict {
-    let mut info = ApiDict::with_capacity(DICT_KEYS);
+    let mut info = DictBuilder::with_capacity(DICT_KEYS);
     if ap.group != AUGROUP_DEFAULT {
         info.insert(c"group", Object::integer(Integer::from(ap.group)));
         let name =
@@ -286,5 +286,5 @@ fn autocmd_dict(event: AutoEvent, ac: &AutoCmd, ap: &AutoPat) -> ApiDict {
         info.insert(c"buf", Object::integer(Integer::from(ap.buflocal_nr)));
         info.insert(c"buffer", Object::integer(Integer::from(ap.buflocal_nr)));
     }
-    info
+    info.into()
 }

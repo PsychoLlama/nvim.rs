@@ -33,16 +33,15 @@ pub fn buffer_get_line(buffer: BufferHandle, index: Integer) -> Result<ApiString
 
 /// Replace line `index` (the 0.1 API's numbering) with `line`.
 pub fn buffer_set_line(buffer: BufferHandle, index: Integer, line: ApiString) -> Result<(), Error> {
-    let mut array = Array::with_capacity(1);
-    array.push(Object::string(line));
+    let array = vec![Object::string(line)];
     let index = convert_index(index as int64_t) as Integer;
-    nvim_buf_set_lines(0, buffer, index, index + 1, true, array)
+    nvim_buf_set_lines(0, buffer, index, index + 1, true, array.into())
 }
 
 /// Delete line `index` (the 0.1 API's numbering).
 pub fn buffer_del_line(buffer: BufferHandle, index: Integer) -> Result<(), Error> {
     let index = convert_index(index as int64_t) as Integer;
-    nvim_buf_set_lines(0, buffer, index, index + 1, true, Array::EMPTY)
+    nvim_buf_set_lines(0, buffer, index, index + 1, true, Array::new())
 }
 
 pub fn buffer_get_line_slice(

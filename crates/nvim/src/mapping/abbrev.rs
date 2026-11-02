@@ -222,7 +222,7 @@ pub(crate) fn eval_map_expr(expr: &MapExpr, c: c_int) -> Option<MapStr> {
     let save_msg_row = msg_row.get();
 
     let answer: Option<Vec<u8>> = if let Some(lua) = &expr.lua {
-        match nlua_call_ref_reporting(lua.0, None, ARRAY_DICT_INIT, kRetObject) {
+        match nlua_call_ref_reporting(lua.0, None, Array::new(), kRetObject) {
             Ok(ret) => ret.as_string().map(|s| c_prefix(s.as_bytes()).to_vec()),
             Err(mut err) => {
                 semsg_multiline!(c"emsg", "E5108: {}", msg_cstr(err.message_or_empty()));

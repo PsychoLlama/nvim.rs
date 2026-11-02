@@ -309,7 +309,7 @@ fn paint_chunks(
     line: &[u8],
     runs: &[StlHlRun],
     win: Option<Win>,
-    mut content: Option<&mut Array>,
+    mut content: Option<&mut Vec<Object>>,
 ) -> (c_int, c_int) {
     let mut transbuf = [0u8; MAXPATHL as usize];
     let mut col = target.col;
@@ -379,12 +379,13 @@ fn run_highlight(
 }
 
 /// Append one `[attr, text, group]` chunk to an `ext_messages` array.
-fn push_chunk(content: &mut Array, attr: c_int, text: &[u8], group: c_int) {
-    let mut chunk = Array::with_capacity(3);
+fn push_chunk(content: &mut Vec<Object>, attr: c_int, text: &[u8], group: c_int) {
     // The text is copied: the event outlives the buffer it was built in.
-    chunk.push(Object::integer(attr as Integer));
-    chunk.push(Object::string(ApiString::from_bytes(text)));
-    chunk.push(Object::integer(group as Integer));
+    let chunk = [
+        Object::integer(attr as Integer),
+        Object::string(ApiString::from_bytes(text)),
+        Object::integer(group as Integer),
+    ];
     content.push(Object::array(chunk));
 }
 
@@ -436,9 +437,9 @@ fn draw_custom(window: Option<Win>, draw_winbar: bool, draw_ruler: bool, ui_even
     let start_col = target.col;
 
     if ui_event {
-        let mut content = Array::EMPTY;
+        let mut content = Vec::new();
         paint_chunks(&target, &built.text, &built.hl, win, Some(&mut content));
-        ui_call_msg_ruler(content);
+        ui_call_msg_ruler(content.into());
         DID_SHOW_EXT_RULER.set(true);
         return;
     }
@@ -500,7 +501,7 @@ pub fn redraw_ruler() {
         || (p_ch() == 0 as OptInt && !ui_has(kUIMessages))
     {
         if DID_SHOW_EXT_RULER.get() && ui_has(kUIMessages) {
-            ui_call_msg_ruler(ARRAY_DICT_INIT);
+            ui_call_msg_ruler(Array::new());
             DID_SHOW_EXT_RULER.set(false);
         } else if DID_RULER_COL.get() > 0 {
             msg_col.set(DID_RULER_COL.get());
@@ -594,7 +595,7 @@ pub fn redraw_ruler() {
         return;
     }
     if DID_SHOW_EXT_RULER.get() {
-        ui_call_msg_ruler(ARRAY_DICT_INIT);
+        ui_call_msg_ruler(Array::new());
         DID_SHOW_EXT_RULER.set(false);
     }
     truncate_at_width(&mut buffer, this_ru_col, width);
@@ -646,8 +647,8 @@ fn truncate_at_width(buffer: &mut Vec<u8>, this_ru_col: c_int, width: c_int) {
 
 /// Send the ruler to a UI that has taken the message area over.
 fn show_ext_ruler(buffer: &[u8], attr: c_int) {
-    let mut content = Array::with_capacity(1);
-    let mut chunk = Array::with_capacity(3);
+    let mut content = Vec::with_capacity(1);
+    let mut chunk = Vec::with_capacity(3);
     debug_assert!(
         attr == hl_attr(HLF_MSG as c_int),
         "attr == HL_ATTR(HLF_MSG)"
@@ -656,7 +657,7 @@ fn show_ext_ruler(buffer: &[u8], attr: c_int) {
     chunk.push(Object::string(ApiString::from_bytes(buffer)));
     chunk.push(Object::integer(HLF_MSG as Integer));
     content.push(Object::array(chunk));
-    ui_call_msg_ruler(content);
+    ui_call_msg_ruler(content.into());
     DID_SHOW_EXT_RULER.set(true);
     DID_RULER_COL.set(1);
 }

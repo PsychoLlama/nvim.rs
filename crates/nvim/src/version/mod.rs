@@ -280,7 +280,7 @@ pub(crate) fn list_in_columns(items: &[&CStr], current: c_int) {
 pub(crate) fn list_lua_version() {
     const CODE: &CStr = c"return ((jit and jit.version) and jit.version or _VERSION)";
 
-    let ret = nlua_exec(CODE.to_bytes(), None, Array::EMPTY, kRetObject)
+    let ret = nlua_exec(CODE.to_bytes(), None, Array::new(), kRetObject)
         .expect("a literal chunk cannot fail");
     let version = ret.as_string().expect("_VERSION is a string");
     msg_str(version.as_cstr());

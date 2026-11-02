@@ -183,11 +183,4 @@ pub const INTERNAL_CALL_MASK: uint64_t = 1 << (::core::mem::size_of::<uint64_t>(
 fn is_internal_call(channel_id: uint64_t) -> bool {
     channel_id & INTERNAL_CALL_MASK != 0
 }
-pub const CONTEXT_INIT: Context = Context {
-    regs: ApiString::NULL,
-    jumps: ApiString::NULL,
-    bufs: ApiString::NULL,
-    gvars: ApiString::NULL,
-    funcs: Array::EMPTY,
-};
 pub const MODE_MAX_LENGTH: ::core::ffi::c_int = 4 as ::core::ffi::c_int;

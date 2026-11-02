@@ -52,11 +52,9 @@ pub fn nvim_paste(
     }
     if !CANCELLED.get() {
         let lines = string_to_array(&data, crlf);
-        let mut args = Array::with_capacity(2);
-        args.push(Object::array(lines));
-        args.push(Object::integer(phase));
+        let args = vec![Object::array(lines), Object::integer(phase)];
         // The handler re-enters the editor through Lua.
-        let rv = match nlua_exec(b"return vim.paste(...)", None, args, kRetNilBool) {
+        let rv = match nlua_exec(b"return vim.paste(...)", None, args.into(), kRetNilBool) {
             Ok(value) => value,
             Err(e) => {
                 failure = Some(e);

@@ -64,7 +64,7 @@ pub(crate) fn parse_known(header: &Header, cursor: &mut Cursor) -> Result<ShadaE
         kind::HEADER => {
             // The header is written for the benefit of anyone reading the
             // file by hand; Nvim has never read it back.
-            (ShadaEntryData::Header(ApiDict::EMPTY), 0)
+            (ShadaEntryData::Header(ApiDict::new()), 0)
         }
         kind::SEARCH_PATTERN => parse_search_pattern(pos, cursor, &mut extra)?,
         kind::CHANGE | kind::JUMP | kind::GLOBAL_MARK | kind::LOCAL_MARK => {

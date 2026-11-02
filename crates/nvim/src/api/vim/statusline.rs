@@ -22,6 +22,7 @@
 )]
 
 use crate::narrow::{len_as_integer, number_as_int};
+use crate::types::DictBuilder;
 use core::ffi::{CStr, c_int};
 use core::ptr;
 use std::ffi::CString;
@@ -74,7 +75,7 @@ pub fn nvim_eval_statusline(
     }; SIGN_SHOW_MAX as usize];
     let ctx = Context::of(opts, &mut statuscol, &mut sattrs)?;
 
-    let mut result = ApiDict::with_capacity(3);
+    let mut result = DictBuilder::with_capacity(3);
 
     // Temporarily reset 'cursorbind' to prevent side effects from moving the
     // cursor away and back.
@@ -119,7 +120,7 @@ pub fn nvim_eval_statusline(
         c"str",
         Object::string(ApiString::from_bytes(&built.text)),
     );
-    Ok(result)
+    Ok(result.into())
 }
 
 impl Context {
@@ -267,7 +268,7 @@ fn highlight_dicts(
     runs: &[StlHlRun],
     runs_len: size_t,
 ) -> Array {
-    let mut values = Array::with_capacity(runs_len + 1);
+    let mut values = Vec::with_capacity(runs_len + 1);
     // For the tab line the default group belongs to no window.
     let ctxwin = (!opts.use_tabline.unwrap_or(false)).then_some(ctx.win);
     let dfltname = get_default_stl_hl(ctxwin, opts.use_winbar.unwrap_or(false), ctx.stc_hl_id);
@@ -275,14 +276,14 @@ fn highlight_dicts(
     // If the first character has no highlight of its own, the default one
     // opens the list.
     if runs.first().is_none_or(|run| run.start != 0) {
-        let mut info = ApiDict::with_capacity(3);
+        let mut info = DictBuilder::with_capacity(3);
         put(&mut info, c"start", Object::integer(0));
         put(
             &mut info,
             c"group",
             Object::string(ApiString::from_cstr(dfltname)),
         );
-        let mut groups = Array::with_capacity(1);
+        let mut groups = Vec::with_capacity(1);
         push(&mut groups, Object::string(ApiString::from_cstr(dfltname)));
         put(&mut info, c"groups", Object::array(groups));
         push(&mut values, Object::dict(info));
@@ -312,7 +313,7 @@ fn highlight_dicts(
             dfltname
         };
 
-        let mut info = ApiDict::with_capacity(3);
+        let mut info = DictBuilder::with_capacity(3);
         put(
             &mut info,
             c"start",
@@ -320,7 +321,7 @@ fn highlight_dicts(
         );
         let (grp, comb) = (ApiString::from_cstr(grpname), ApiString::from_cstr(combine));
         put(&mut info, c"group", Object::string(grp.clone()));
-        let mut groups = Array::with_capacity(1 + size_t::from(!ptr::eq(combine, grpname)));
+        let mut groups = Vec::with_capacity(1 + size_t::from(!ptr::eq(combine, grpname)));
         if !ptr::eq(combine, grpname) {
             push(&mut groups, Object::string(comb));
         }
@@ -328,7 +329,7 @@ fn highlight_dicts(
         put(&mut info, c"groups", Object::array(groups));
         push(&mut values, Object::dict(info));
     }
-    values
+    values.into()
 }
 
 // `nvim__complete_set` is an API method's own name, published over msgpack-RPC.
@@ -337,7 +338,7 @@ pub fn nvim__complete_set(
     index: Integer,
     opts: &mut KeyDict_complete_set,
 ) -> Result<ApiDict, Error> {
-    let mut rv = ApiDict::with_capacity(2);
+    let mut rv = DictBuilder::with_capacity(2);
     let opts = &*opts;
     if get_cot_flags() & kOptCotFlagPopup == 0 {
         return Err(Error::exception(
@@ -351,5 +352,5 @@ pub fn nvim__complete_set(
             put(&mut rv, c"bufnr", Object::buffer(win.buffer().handle));
         }
     }
-    Ok(rv)
+    Ok(rv.into())
 }

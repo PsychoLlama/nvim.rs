@@ -99,7 +99,7 @@ pub(crate) fn remote_request(parm: &mut MainParams, remote_args: usize, ui_only:
 
     // The forwarded arguments, as an API Array of strings.
     let forwarded = &parm.argv[remote_args..];
-    let mut args = Array::with_capacity(forwarded.len());
+    let mut args = Vec::with_capacity(forwarded.len());
     for word in forwarded {
         args.push(Object::string(ApiString::from_cstr(word)));
     }

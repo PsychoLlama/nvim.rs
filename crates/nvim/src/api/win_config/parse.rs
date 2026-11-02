@@ -137,7 +137,7 @@ fn align_pos(spelling: &CStr) -> Option<AlignTextPos> {
 /// The `bufpos` key: the `[lnum, col]` pair a `relative='win'` float hangs
 /// off.
 fn float_bufpos(bufpos: &Array) -> Option<LPos> {
-    let [lnum, col] = bufpos.as_slice() else {
+    let [lnum, col] = &**bufpos else {
         return None;
     };
     Some(LPos {
@@ -737,7 +737,7 @@ mod tests {
         ]))
         .expect("a pair");
         assert_eq!((at.lnum, at.col), (3, 7));
-        assert!(float_bufpos(&Array::EMPTY).is_none());
+        assert!(float_bufpos(&Array::new()).is_none());
         assert!(float_bufpos(&Array::from(vec![Object::Integer(3)])).is_none());
         assert!(
             float_bufpos(&Array::from(vec![

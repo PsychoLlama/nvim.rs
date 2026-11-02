@@ -214,7 +214,7 @@ pub(crate) fn ui_client_reattach() {
     client.push(Object::dict(api_version()));
     client.push(Object::string(ApiString::from_cstr(c"ui")));
     // A UI exposes no methods of its own.
-    client.push(Object::array(Array::EMPTY));
+    client.push(Object::array(Array::new()));
     client.push(info.object());
     rpc_send_event(
         ui_client_channel_id.get(),
@@ -249,7 +249,7 @@ fn log_startup_step(step: &'static CStr) {
 
 /// Detaches from the server without stopping this process.
 pub(crate) fn ui_client_detach() {
-    rpc_send_event(ui_client_channel_id.get(), c"nvim_ui_detach", Array::EMPTY);
+    rpc_send_event(ui_client_channel_id.get(), c"nvim_ui_detach", Array::new());
     ui_client_attached.set(false);
 }
 
@@ -390,7 +390,7 @@ static EVENT_HANDLERS: [Handler; 27] = {
 ///
 /// The value is **taken** out of the array: an event's arguments are handed
 /// on to the sink, which owns what it is given.
-fn take_arg(args: &mut Array, index: usize, want: Option<ObjectType>) -> Option<Object> {
+fn take_arg(args: &mut [Object], index: usize, want: Option<ObjectType>) -> Option<Object> {
     let value = args.get_mut(index)?;
     match want {
         Some(ty) if value.kind() != ty => None,
@@ -725,10 +725,10 @@ fn connect_and_reattach(address: &CStr) {
 /// second owner of the same `items` pointer, so the cell and the caller both
 /// believed they had to free it. Owning them here makes the free this type's
 /// `Drop` and the one genuine move `GlobalCell::take`.
-struct RestartArgs(Array);
+struct RestartArgs(Vec<Object>);
 
 impl RestartArgs {
-    const EMPTY: RestartArgs = RestartArgs(Array::EMPTY);
+    const EMPTY: RestartArgs = RestartArgs(Vec::new());
 }
 
 impl Default for RestartArgs {
@@ -743,13 +743,9 @@ static restart_args: GlobalCell<RestartArgs> = GlobalCell::new(RestartArgs::EMPT
 static restart_pending: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Remembers where to reconnect after `:restart`.
-///
-/// The arguments are copied because they live in the decoder's arena,
-/// which is reused as soon as this returns.
 pub(crate) fn ui_client_event_restart(args: Array) {
-    // `set` drops what the cell held, which frees the previous copy.
-    let copied = args.clone();
-    restart_args.set(RestartArgs(copied));
+    // `set` drops what the cell held, which frees the previous arguments.
+    restart_args.set(RestartArgs(args.into_vec()));
     restart_pending.set(true);
 }
 

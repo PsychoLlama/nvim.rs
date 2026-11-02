@@ -15,6 +15,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::types::DictBuilder;
 use core::ffi::CStr;
 use std::ffi::CString;
 
@@ -136,14 +137,14 @@ pub(crate) fn channel_stream_type(id: uint64_t) -> Option<ChannelStreamType> {
 /// What `nvim_get_chan_info()` reports. An unknown id answers with an empty
 /// dict rather than an error.
 pub fn channel_info(id: uint64_t) -> ApiDict {
-    with_channel(id, channel_info_of).unwrap_or(ApiDict::EMPTY)
+    with_channel(id, channel_info_of).unwrap_or(ApiDict::new())
 }
 
 /// [`channel_info`] of a channel borrowed from the table. Nothing here runs
 /// user code.
 fn channel_info_of(channel: &mut crate::types::Channel) -> ApiDict {
     // id, stream, mode, and up to six more from the branches below.
-    let mut info = ApiDict::with_capacity(9);
+    let mut info = DictBuilder::with_capacity(9);
     let mut push = |key: &CStr, value: Object| info.insert(key, value);
 
     push(c"id", Object::Integer(channel.id.cast_signed()));
@@ -190,7 +191,7 @@ fn channel_info_of(channel: &mut crate::types::Channel) -> ApiDict {
         c"bytes"
     };
     push(c"mode", literal_obj(mode_desc));
-    info
+    info.into()
 }
 
 /// The child's command line, as an array of strings copied out of it.

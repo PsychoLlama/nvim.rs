@@ -25,6 +25,7 @@
 #![forbid(unsafe_code)]
 
 use crate::option::vars::{P_SLOC, P_TAL, p_sc};
+use crate::types::DictBuilder;
 use crate::winlayer::Buf;
 use core::ffi::c_int;
 
@@ -64,9 +65,9 @@ fn current_window_of(tabpage: TabPage) -> Win {
 /// itself.
 fn ui_ext_tabline_update() {
     // Each container is sized by the same walk that fills it.
-    let mut tab_infos = Array::with_capacity(tabs().count());
+    let mut tab_infos = Vec::with_capacity(tabs().count());
     for tp in tabs() {
-        let mut info = ApiDict::with_capacity(2);
+        let mut info = DictBuilder::with_capacity(2);
         let (handle, cwp) = (tp.handle as TabpageHandle, current_window_of(tp));
         put(&mut info, c"tab", Object::tabpage(handle));
         let name = trans_bufname(cwp.buffer());
@@ -80,9 +81,9 @@ fn ui_ext_tabline_update() {
 
     // Unlisted buffers are left out of the event.
     let listed = || buffers().filter(|buf| buf.b_p_bl != 0);
-    let mut bufs = Array::with_capacity(listed().count());
+    let mut bufs = Vec::with_capacity(listed().count());
     for buf in listed() {
-        let mut info = ApiDict::with_capacity(2);
+        let mut info = DictBuilder::with_capacity(2);
         put(&mut info, c"buffer", Object::buffer(buf.handle));
         let name = trans_bufname(buf);
         put(
@@ -97,7 +98,7 @@ fn ui_ext_tabline_update() {
         TabPage::current().handle as TabpageHandle,
         Buf::current().handle as BufferHandle,
     );
-    ui_call_tabline_update(tab, tab_infos, buf, bufs);
+    ui_call_tabline_update(tab, tab_infos.into(), buf, bufs.into());
 }
 
 /// Draw the tab pages line at the top of the editor.
