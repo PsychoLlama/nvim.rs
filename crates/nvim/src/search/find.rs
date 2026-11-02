@@ -78,7 +78,7 @@ impl Searcher<'_, '_> {
     /// Run the pattern against line `lnum` from column `col`.
     #[inline(always)]
     fn exec(&mut self, lnum: LineNr, col: ColNr) -> c_int {
-        self.matcher.exec(lnum, col, &mut self.timed_out).get()
+        self.matcher.exec(lnum, col, &mut self.timed_out)
     }
 
     /// The match `exec` just reported.

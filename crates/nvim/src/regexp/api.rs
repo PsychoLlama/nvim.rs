@@ -205,7 +205,6 @@ impl OwnedProg {
         walk_with(self, out, win, &buffer, None, io, Some(lnum), |lines| {
             lines.exec_seated(lnum, col, &mut false)
         })
-        .get()
     }
 }
 
@@ -348,13 +347,13 @@ fn regexec_string(
     };
     let result = in_match_scope(None, |firstlnum| {
         let result = run.once(prog, matches, firstlnum);
-        if result == LineNr::new(NFA_TOO_EXPENSIVE) && prog.automatic() {
+        if result == NFA_TOO_EXPENSIVE && prog.automatic() {
             run.again_backtracking(prog, matches, firstlnum)
         } else {
             result
         }
     });
-    result > LineNr::ZERO
+    result > 0
 }
 
 /// What one string match runs with, whichever program runs it.
@@ -371,7 +370,7 @@ impl StringRun<'_> {
     /// Run `prog` once, leaving its groups in `matches` (as offsets into the
     /// string) on a hit and clearing them on a miss.
     #[inline(always)]
-    fn once(&self, prog: &OwnedProg, matches: &mut RegMatch, firstlnum: LineNr) -> LineNr {
+    fn once(&self, prog: &OwnedProg, matches: &mut RegMatch, firstlnum: LineNr) -> i32 {
         let zslots;
         let setup = MatchSetup {
             buf: self.buffer,
@@ -399,7 +398,7 @@ impl StringRun<'_> {
         } else {
             matches.clear_groups();
         }
-        LineNr::new(result)
+        result
     }
 
     /// The NFA engine gave up on the pattern: recompile it for the
@@ -412,9 +411,9 @@ impl StringRun<'_> {
         prog: &mut OwnedProg,
         matches: &mut RegMatch,
         firstlnum: LineNr,
-    ) -> LineNr {
+    ) -> i32 {
         let Some(new) = recompile_backtracking(prog, false) else {
-            return LineNr::new(NFA_TOO_EXPENSIVE);
+            return NFA_TOO_EXPENSIVE;
         };
         *prog = new;
         self.once(prog, matches, firstlnum)
@@ -529,7 +528,7 @@ fn regexec_multi_io(
     if flag && let Some(timed_out) = timed_out {
         *timed_out = true;
     }
-    result.get()
+    result
 }
 
 /// Run `f` with `rmp`'s program set up to match line after line of
@@ -627,7 +626,7 @@ impl LineMatcher<'_> {
     /// out of time sets `timed_out`.
     ///
     /// The line is read afresh each time, as a single match reads it.
-    pub(crate) fn exec(&mut self, lnum: LineNr, col: ColNr, timed_out: &mut bool) -> LineNr {
+    pub(crate) fn exec(&mut self, lnum: LineNr, col: ColNr, timed_out: &mut bool) -> i32 {
         LAST_FIRSTLNUM.set(lnum);
         self.ctx.seat(lnum);
         self.exec_seated(lnum, col, timed_out)
@@ -635,19 +634,19 @@ impl LineMatcher<'_> {
 
     /// [`LineMatcher::exec`] of a match already seated on `lnum`.
     #[inline(always)]
-    fn exec_seated(&mut self, lnum: LineNr, col: ColNr, timed_out: &mut bool) -> LineNr {
+    fn exec_seated(&mut self, lnum: LineNr, col: ColNr, timed_out: &mut bool) -> i32 {
         let result = self.run(col, timed_out);
-        let result = if result == LineNr::new(NFA_TOO_EXPENSIVE) && self.prog.automatic() {
+        let result = if result == NFA_TOO_EXPENSIVE && self.prog.automatic() {
             self.again_backtracking(lnum, col, timed_out)
         } else {
             result
         };
-        result.max(LineNr::ZERO)
+        result.max(0)
     }
 
     /// Run the program once, from where the match is seated.
     #[inline(always)]
-    fn run(&mut self, col: ColNr, timed_out: &mut bool) -> LineNr {
+    fn run(&mut self, col: ColNr, timed_out: &mut bool) -> i32 {
         let ctx = self.ctx;
         let result = self.prog.run(ctx.rex(), col);
         ctx.release_line();
@@ -657,7 +656,7 @@ impl LineMatcher<'_> {
         if ctx.timed_out() {
             *timed_out = true;
         }
-        LineNr::new(result)
+        result
     }
 
     /// The NFA engine gave up on the pattern: recompile it for the
@@ -665,9 +664,9 @@ impl LineMatcher<'_> {
     /// the old program rather than leaving the caller without one.
     #[cold]
     #[inline(never)]
-    fn again_backtracking(&mut self, lnum: LineNr, col: ColNr, timed_out: &mut bool) -> LineNr {
+    fn again_backtracking(&mut self, lnum: LineNr, col: ColNr, timed_out: &mut bool) -> i32 {
         let Some(new) = recompile_backtracking(self.prog, true) else {
-            return LineNr::new(NFA_TOO_EXPENSIVE);
+            return NFA_TOO_EXPENSIVE;
         };
         *self.prog = new;
         self.ctx.seat(lnum);
@@ -742,10 +741,8 @@ pub(crate) fn vim_regexec_syntax(
     tm: Option<&ProfTime>,
     timed_out: Option<&mut bool>,
     io: ExtMatchIo<'_>,
-) -> LineNr {
-    LineNr::new(regexec_multi_io(
-        rmp, win, buffer, lnum, col, tm, timed_out, io,
-    ))
+) -> i32 {
+    regexec_multi_io(rmp, win, buffer, lnum, col, tm, timed_out, io)
 }
 
 impl RegMatch {
@@ -775,13 +772,7 @@ impl RegMMatch {
     /// [`vim_regexec_multi`] over `buffer` from line `lnum`, column `col`,
     /// with no time limit: how many lines the match spans (counting the
     /// one it starts in), or 0 for no match.
-    pub(crate) fn exec(
-        &mut self,
-        win: Option<Win>,
-        buffer: Buf,
-        lnum: LineNr,
-        col: ColNr,
-    ) -> LineNr {
-        LineNr::new(vim_regexec_multi(self, win, buffer, lnum, col, None, None))
+    pub(crate) fn exec(&mut self, win: Option<Win>, buffer: Buf, lnum: LineNr, col: ColNr) -> i32 {
+        vim_regexec_multi(self, win, buffer, lnum, col, None, None)
     }
 }

@@ -510,7 +510,7 @@ impl SynState {
                 time.slowest = took;
             }
             time.count += 1;
-            if r > LineNr::ZERO {
+            if r > 0 {
                 time.match_0 += 1;
             }
         }
@@ -525,7 +525,7 @@ impl SynState {
             );
         }
 
-        if r > LineNr::ZERO {
+        if r > 0 {
             regmatch.startpos[0].lnum += lnum.get();
             regmatch.endpos[0].lnum += lnum.get();
             return true;

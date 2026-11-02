@@ -71,7 +71,7 @@ fn selects(kind: u8, matched: bool) -> bool {
 
 /// Does the pattern match line `lnum`, searching from its first column?
 fn matches_line(regmatch: &mut RegMMatch, lnum: LineNr) -> bool {
-    regmatch.exec(Some(Win::current()), Buf::current(), lnum, 0 as ColNr) != LineNr::ZERO
+    regmatch.exec(Some(Win::current()), Buf::current(), lnum, 0 as ColNr) != 0
 }
 
 /// The head of a `:global` argument, parsed.
