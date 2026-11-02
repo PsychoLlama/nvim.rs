@@ -6,6 +6,13 @@
 //! depends on which shell it is — see [`ShellStyle`].
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -196,7 +203,7 @@ fn build_command(
         // Upstream steps back from the byte it just wrote, so the ')' or ';'
         // is not itself considered.
         let mut at = last.saturating_sub(1);
-        while at > 0 && ascii_iswhite(command[at] as c_int) {
+        while at > 0 && ascii_iswhite(c_int::from(command[at])) {
             at -= 1;
         }
         if command[at] == b'&' {

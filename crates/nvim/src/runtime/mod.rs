@@ -25,6 +25,13 @@
 //! | `THREAD_SEARCH_PATH_VALID` | [`cache`], [`pack`] | [`cache`] |
 //! | `RUNTIME_EXPAND_FLAGS` | [`search`]'s `set_context_in_runtime_cmd` | [`expand`]'s `runtime_cmd_matches` |
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The constants here keep upstream's spelling (`kXDG*`, `kRet*`).
 #![allow(non_upper_case_globals)]
 

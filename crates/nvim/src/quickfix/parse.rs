@@ -14,6 +14,13 @@
 //! own.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::env::expand_env_within;
@@ -228,7 +235,7 @@ impl Fields {
             return Status::Fail;
         }
         self.kind = if b"EWIN".contains(&prefix) {
-            prefix as c_char
+            prefix.cast_signed()
         } else {
             0
         };
@@ -323,7 +330,9 @@ impl Fields {
             4 => self.end_lnum = parse_int(start), // %e
             5 => self.col = parse_int(start),      // %c
             6 => self.end_col = parse_int(start),  // %k
-            7 => self.kind = start.first().copied().unwrap_or(0) as c_char, // %t
+            // %t: the byte as C's signed `char`, so that one past 0x7f reads
+            // as negative and `vim_isprintc` refuses it below.
+            7 => self.kind = start.first().copied().unwrap_or(0).cast_signed(),
             10 => {
                 // %p: a pointer line such as "   ^", whose width is the
                 // column. A tab advances to the next multiple of eight.
