@@ -6,9 +6,16 @@
 //! than for file names.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
-use crate::cmdexpand::state::{save_p_ls, save_p_wmh, wild_menu_showing};
+use crate::cmdexpand::state::{saved_status_opts, wild_menu_showing};
 use crate::drawscreen::state::cmdline_row;
 use crate::drawscreen::{redraw_statuslines, update_screen, win_redraw_last_status};
 use crate::ex_docmd::set_no_hlsearch;
@@ -19,7 +26,7 @@ use crate::keycodes::{Ctrl_N, Ctrl_P, Key};
 use crate::mbyte::head_off;
 use crate::option::vars::{P_LS, P_WMH, p_wc, p_wmnu};
 use crate::path::{PATHSEP, vim_ispathsep};
-use crate::types::{ExpandContext, OptInt};
+use crate::types::ExpandContext;
 use crate::window::last_status;
 use crate::winlayer::{Cc, current_topframe};
 use core::ffi::c_int;
@@ -87,9 +94,12 @@ fn cmdline_del(mut cclp: Cc, from: c_int) {
 ///
 /// `KeyTyped` is set in case the key that got us here came from a mapping:
 /// the wildchar has to look typed or the completion will not run.
+///
+/// A 'wildchar' too wide for a key code can never be typed, so it answers
+/// `<Ignore>` rather than the truncated key upstream's `(int)p_wc` made of it.
 fn recomplete() -> c_int {
     KeyTyped.set(true);
-    p_wc() as c_int
+    c_int::try_from(p_wc()).unwrap_or(Key::Ignore.code())
 }
 
 /// A key pressed while the wildmenu for menu names (`ExpandContext::Menunames`) is up.
@@ -156,7 +166,7 @@ fn wildmenu_process_key_filenames(cclp: Cc, key: c_int, expand: &Expand) -> c_in
 
     if key == Key::Down.code()
         && cclp.cmdpos > 0
-        && at(cclp.cmdpos - 1) == PATHSEP as u8
+        && c_int::from(at(cclp.cmdpos - 1)) == PATHSEP
         && (cclp.cmdpos < 3 || at(cclp.cmdpos - 2) != b'.' || at(cclp.cmdpos - 3) != b'.')
     {
         // Go down a directory.
@@ -272,14 +282,13 @@ pub(crate) fn wildmenu_cleanup(cclp: Cc) {
         // Entered the command line, move it up.
         cmdline_row.set(cmdline_row.get() - 1);
         redrawcmd();
-    } else if save_p_ls.get() != -1 {
-        // Restore 'laststatus' and 'winminheight'.
-        P_LS.set(save_p_ls.get() as OptInt);
-        P_WMH.set(save_p_wmh.get() as OptInt);
+    } else if let Some((laststatus, winminheight)) = saved_status_opts.get() {
+        P_LS.set(laststatus);
+        P_WMH.set(winminheight);
         last_status(false);
         let _ = update_screen(); // redraw the screen NOW
         redrawcmd();
-        save_p_ls.set(-1);
+        saved_status_opts.set(None);
     } else {
         win_redraw_last_status(current_topframe());
         // Must be cleared before redraw_statuslines (#8385), which is why

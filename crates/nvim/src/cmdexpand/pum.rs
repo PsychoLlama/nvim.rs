@@ -7,12 +7,19 @@
 //! drawing reads.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::charset::{ptr2cells_at, transchar, transchar_byte};
-use crate::cmdexpand::state::{save_p_ls, save_p_wmh, wild_menu_showing};
+use crate::cmdexpand::state::{saved_status_opts, wild_menu_showing};
 use crate::cstr;
 use crate::drawscreen::state::cmdline_row;
 use crate::drawscreen::win_redraw_last_status;
@@ -31,8 +38,8 @@ use crate::option::vars::{P_LS, P_WMH, p_ls, p_wmh, wop_flags};
 use crate::options::kOptWopFlagPum;
 use crate::popupmenu::{pum_display, pum_undisplay, pum_visible};
 use crate::statusline::{fillchar_status_of, hl_attr};
+use crate::types::ExpandContext;
 use crate::types::ui::{kUICmdline, kUIPopupmenu, kUIWildmenu};
-use crate::types::{ExpandContext, OptInt};
 use crate::ui::state::{Columns, Rows};
 use crate::ui::ui_has;
 use crate::window::{global_stl_height, last_status};
@@ -375,10 +382,9 @@ pub(crate) fn redraw_wildmenu(
                 // 2.  Set 'winminheight' to zero to avoid that the window
                 // is resized.
                 if needs_status_line() {
-                    save_p_ls.set(p_ls() as c_int);
-                    save_p_wmh.set(p_wmh() as c_int);
-                    P_LS.set(2 as OptInt);
-                    P_WMH.set(0 as OptInt);
+                    saved_status_opts.set(Some((p_ls(), p_wmh())));
+                    P_LS.set(2);
+                    P_WMH.set(0);
                     last_status(false);
                 }
                 wild_menu_showing.set(WM_SHOWN);

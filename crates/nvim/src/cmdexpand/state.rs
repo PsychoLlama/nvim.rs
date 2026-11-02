@@ -14,8 +14,10 @@
 #![allow(non_upper_case_globals)]
 
 use crate::global_cell::GlobalCell;
+use crate::types::OptInt;
 use core::ffi::c_int;
 
-pub(crate) static save_p_ls: GlobalCell<c_int> = GlobalCell::new(-1 as c_int);
-pub(crate) static save_p_wmh: GlobalCell<c_int> = GlobalCell::new(-1 as c_int);
+/// `'laststatus'` and `'winminheight'` as they were before the wildmenu forced
+/// a status line open, while it holds one open; `None` otherwise.
+pub(crate) static saved_status_opts: GlobalCell<Option<(OptInt, OptInt)>> = GlobalCell::new(None);
 pub(crate) static wild_menu_showing: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
