@@ -7,6 +7,7 @@ use crate::ex_docmd::source::ex_errmsg;
 use crate::memory::XString;
 use crate::types::Candidate;
 use crate::types::CmdIdx;
+use crate::types::LineNr;
 use crate::window::tab_index;
 use crate::winlayer::TabPage;
 use crate::winlayer::last_used_tab;
@@ -355,11 +356,11 @@ pub(crate) fn get_tabpage_arg(excmd: &mut ExArg) -> c_int {
                 invarg2(excmd);
             }
         } else if excmd.addr_count > 0 {
-            if unaccept_arg0 != 0 && excmd.line2 == 0 {
+            if unaccept_arg0 != 0 && excmd.line2 == LineNr::ZERO {
                 excmd.errmsg = Some(ex_msg(e_invrange));
                 tab_number = 0;
             } else {
-                tab_number = excmd.line2 as c_int;
+                tab_number = excmd.line2.get();
                 if unaccept_arg0 == 0 {
                     // `:-tabmove` is spelled as a range, so the sign has
                     // to be read back off the command line — the range

@@ -39,7 +39,7 @@ use std::time::{Duration, Instant};
 use neovim::eval::eval_to_string;
 use neovim::ex_docmd::do_cmdline_cmd;
 use neovim::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regexec_multi};
-use neovim::types::{RegMMatch, RegMatch};
+use neovim::types::{LineNr, RegMMatch, RegMatch};
 use neovim::winlayer::Buf;
 
 use crate::support::{Sandbox, cstr};
@@ -1560,18 +1560,34 @@ fn a_multi_line_match_spans_the_lines_it_reads_out_of_the_buffer() {
     // buffer. Line 2 is where `beta` is.
     // No time limit and no timeout slot, which is what every plain caller
     // passes.
-    let spanned = vim_regexec_multi(&mut rmm, None, Buf::current(), 2, 0, None, None);
+    let spanned = vim_regexec_multi(
+        &mut rmm,
+        None,
+        Buf::current(),
+        LineNr::new(2),
+        0,
+        None,
+        None,
+    );
     // The answer is how many lines the match covers: it starts on line 2
     // and ends on line 3, so two.
     assert_eq!(spanned, 2, "a two-line match");
     // The positions are `lnum` *relative to the line the search started on*
     // and a byte column, which is the shape the retype has to keep.
-    assert_eq!((rmm.startpos[0].lnum, rmm.startpos[0].col), (0, 0));
-    assert_eq!((rmm.endpos[0].lnum, rmm.endpos[0].col), (1, 5));
+    assert_eq!((rmm.startpos[0].lnum.get(), rmm.startpos[0].col), (0, 0));
+    assert_eq!((rmm.endpos[0].lnum.get(), rmm.endpos[0].col), (1, 5));
 
     // A start line the pattern does not begin on does not match, and one
     // whose continuation runs off the end of the buffer does not either.
-    let missing = vim_regexec_multi(&mut rmm, None, Buf::current(), 3, 0, None, None);
+    let missing = vim_regexec_multi(
+        &mut rmm,
+        None,
+        Buf::current(),
+        LineNr::new(3),
+        0,
+        None,
+        None,
+    );
     assert_eq!(missing, 0, "no match from line 3");
     put("silent! keepjumps keepmarks %delete _");
 }
@@ -1673,10 +1689,10 @@ fn a_pattern_the_nfa_gives_up_on_comes_back_recompiled_in_its_holder() {
         ..Default::default()
     };
     for _ in 0..2 {
-        let lines = vim_regexec_multi(&mut rmm, None, Buf::current(), 1, 0, None, None);
+        let lines = vim_regexec_multi(&mut rmm, None, Buf::current(), LineNr::ONE, 0, None, None);
         assert_eq!(lines, 1, "a one-line match");
         assert_eq!(
-            (rmm.endpos[0].lnum, rmm.endpos[0].col),
+            (rmm.endpos[0].lnum.get(), rmm.endpos[0].col),
             (0, 100_001),
             "it ends past the `b`"
         );

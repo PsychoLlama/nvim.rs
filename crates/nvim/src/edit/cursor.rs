@@ -175,11 +175,11 @@ pub(crate) fn oneleft() -> Result<(), Failed> {
 /// loop runs one more time.
 ///
 /// Safe: a [`Win`] carries the whole of the promise this needs.
-pub(crate) fn cursor_up_inner(mut win: Win, mut n: LineNr, skip_conceal: bool) {
+pub(crate) fn cursor_up_inner(mut win: Win, mut n: i32, skip_conceal: bool) {
     let mut lnum = win.w_cursor.lnum;
 
-    if n >= lnum {
-        lnum = 1;
+    if n >= lnum.get() {
+        lnum = LineNr::ONE;
     } else if lines_concealed(win) {
         // Count each sequence of folded lines as one logical line: go to
         // the start of the fold the cursor is in first.
@@ -188,10 +188,10 @@ pub(crate) fn cursor_up_inner(mut win: Win, mut n: LineNr, skip_conceal: bool) {
         while n != 0 {
             n -= 1;
             lnum -= 1;
-            if lnum <= 1 {
+            if lnum <= LineNr::ONE {
                 break;
             }
-            n += LineNr::from(skip_conceal && line_concealed(win, lnum));
+            n += i32::from(skip_conceal && line_concealed(win, lnum));
             // On entering a fold, move to its beginning -- unless this is
             // the last step and the fold is about to open anyway.
             if n > 0
@@ -201,7 +201,7 @@ pub(crate) fn cursor_up_inner(mut win: Win, mut n: LineNr, skip_conceal: bool) {
                 fold_start(win, lnum, &mut lnum);
             }
         }
-        lnum = lnum.max(1);
+        lnum = lnum.max(LineNr::ONE);
     } else {
         lnum -= n;
     }
@@ -212,9 +212,9 @@ pub(crate) fn cursor_up_inner(mut win: Win, mut n: LineNr, skip_conceal: bool) {
 /// `k`: move the cursor up `n` lines and back to the wanted column.
 ///
 /// `Err` when the cursor is already on line 1.
-pub(crate) fn cursor_up(n: LineNr, upd_topline: bool) -> Result<(), Failed> {
+pub(crate) fn cursor_up(n: i32, upd_topline: bool) -> Result<(), Failed> {
     let win = Win::current();
-    if n > 0 && win.w_cursor.lnum <= 1 {
+    if n > 0 && win.w_cursor.lnum <= LineNr::ONE {
         return Err(Failed);
     }
     cursor_up_inner(win, n, false);
@@ -238,10 +238,10 @@ pub(crate) fn cursor_down_inner(mut win: Win, mut n: c_int, skip_conceal: bool) 
     let mut lnum = win.w_cursor.lnum;
     let line_count = win.buffer().b_ml.ml_line_count;
 
-    if lnum + n as LineNr >= line_count {
+    if lnum + n >= line_count {
         lnum = line_count;
     } else if lines_concealed(win) {
-        let mut last: LineNr = 0;
+        let mut last: LineNr = LineNr::ZERO;
         while n != 0 {
             n -= 1;
             if fold_end(win, lnum, &mut last) {
@@ -256,7 +256,7 @@ pub(crate) fn cursor_down_inner(mut win: Win, mut n: c_int, skip_conceal: bool) 
         }
         lnum = lnum.min(line_count);
     } else {
-        lnum += n as LineNr;
+        lnum += n;
     }
 
     win.w_cursor.lnum = lnum;
@@ -336,7 +336,7 @@ fn lines_concealed(win: Win) -> bool {
 /// Is the line *before* `lnum` hidden by a `conceal_lines` decoration?
 #[inline(always)]
 fn line_concealed(win: Win, lnum: LineNr) -> bool {
-    decor_conceal_line(win, lnum as c_int - 1, true)
+    decor_conceal_line(win, lnum.get() - 1, true)
 }
 
 /// Is `lnum` inside a closed fold of `win`?  `first` is left holding that

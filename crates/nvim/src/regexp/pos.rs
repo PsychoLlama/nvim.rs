@@ -43,6 +43,7 @@
 )]
 
 use crate::types::LPos;
+use crate::types::LineNr;
 
 /// Which kind of match a position belongs to. Fixed for the whole of one
 /// match; see [`super::rex::Rex::pos_kind`].
@@ -62,10 +63,16 @@ pub(crate) struct MatchPos(LPos);
 impl MatchPos {
     /// Line 0 column 0: what a blank frame holds before the pusher fills it
     /// in. Never read as a position.
-    pub(crate) const NOWHERE: MatchPos = MatchPos(LPos { lnum: 0, col: 0 });
+    pub(crate) const NOWHERE: MatchPos = MatchPos(LPos {
+        lnum: LineNr::ZERO,
+        col: 0,
+    });
 
     /// A capture slot nothing has filled in.
-    const UNSET: MatchPos = MatchPos(LPos { lnum: -1, col: -1 });
+    const UNSET: MatchPos = MatchPos(LPos {
+        lnum: LineNr::new(-1),
+        col: -1,
+    });
 
     #[inline(always)]
     pub(crate) const fn from_pos(pos: LPos) -> MatchPos {
@@ -101,7 +108,7 @@ impl MatchPos {
     /// Has a capture slot holding this been filled in?
     #[inline(always)]
     pub(crate) fn is_set(self, _kind: PosKind) -> bool {
-        self.0.lnum >= 0
+        self.0.lnum >= LineNr::ZERO
     }
 
     /// Make a capture slot holding this read as unset.
@@ -117,7 +124,7 @@ impl MatchPos {
     pub(crate) fn mark_unset(&mut self, kind: PosKind) {
         match kind {
             PosKind::Str => *self = MatchPos::UNSET,
-            PosKind::Buf => self.0.lnum = -1,
+            PosKind::Buf => self.0.lnum = LineNr::new(-1),
         }
     }
 
@@ -136,7 +143,7 @@ impl MatchPos {
     #[inline(always)]
     pub(crate) fn same_capture(self, other: MatchPos, _kind: PosKind) -> bool {
         let (a, b) = (self.0, other.0);
-        a.lnum == b.lnum && (a.lnum < 0 || a.col == b.col)
+        a.lnum == b.lnum && (a.lnum < LineNr::ZERO || a.col == b.col)
     }
 }
 
@@ -209,10 +216,13 @@ mod tests {
 
     #[test]
     fn the_look_behind_walks_a_column_back_in_place() {
-        let mut saved = MatchPos::from_pos(LPos { lnum: 4, col: 9 });
+        let mut saved = MatchPos::from_pos(LPos {
+            lnum: LineNr::new(4),
+            col: 9,
+        });
         saved.pos_mut().col -= 3;
         saved.pos_mut().lnum -= 1;
-        assert_eq!(saved.as_pos().lnum, 3);
+        assert_eq!(saved.as_pos().lnum, LineNr::new(3));
         assert_eq!(saved.as_pos().col, 6);
     }
 
@@ -223,8 +233,20 @@ mod tests {
             assert!(!capture.start.is_set(kind));
             assert!(!capture.end.is_set(kind));
         }
-        assert!(MatchPos::from_pos(LPos { lnum: 0, col: 0 }).is_set(PosKind::Str));
-        assert!(MatchPos::from_pos(LPos { lnum: 0, col: 0 }).is_set(PosKind::Buf));
+        assert!(
+            MatchPos::from_pos(LPos {
+                lnum: LineNr::ZERO,
+                col: 0
+            })
+            .is_set(PosKind::Str)
+        );
+        assert!(
+            MatchPos::from_pos(LPos {
+                lnum: LineNr::ZERO,
+                col: 0
+            })
+            .is_set(PosKind::Buf)
+        );
     }
 
     /// The slots a buffer match's walk steps over are marked unset by their
@@ -233,16 +255,40 @@ mod tests {
     #[test]
     fn marking_a_position_unset_follows_the_kind() {
         let mut capture = Capture {
-            start: MatchPos::from_pos(LPos { lnum: 3, col: 11 }),
-            end: MatchPos::from_pos(LPos { lnum: 4, col: 12 }),
+            start: MatchPos::from_pos(LPos {
+                lnum: LineNr::new(3),
+                col: 11,
+            }),
+            end: MatchPos::from_pos(LPos {
+                lnum: LineNr::new(4),
+                col: 12,
+            }),
         };
         capture.mark_unset(PosKind::Buf);
-        assert_eq!(capture.start.as_pos(), LPos { lnum: -1, col: 11 });
-        assert_eq!(capture.end.as_pos(), LPos { lnum: -1, col: 12 });
+        assert_eq!(
+            capture.start.as_pos(),
+            LPos {
+                lnum: LineNr::new(-1),
+                col: 11
+            }
+        );
+        assert_eq!(
+            capture.end.as_pos(),
+            LPos {
+                lnum: LineNr::new(-1),
+                col: 12
+            }
+        );
 
         let mut capture = Capture {
-            start: MatchPos::from_pos(LPos { lnum: 0, col: 1 }),
-            end: MatchPos::from_pos(LPos { lnum: 0, col: 2 }),
+            start: MatchPos::from_pos(LPos {
+                lnum: LineNr::ZERO,
+                col: 1,
+            }),
+            end: MatchPos::from_pos(LPos {
+                lnum: LineNr::ZERO,
+                col: 2,
+            }),
         };
         capture.mark_unset(PosKind::Str);
         assert_eq!(capture.start, MatchPos::unset(PosKind::Str));
@@ -254,14 +300,29 @@ mod tests {
     #[test]
     fn same_capture_ignores_an_unset_position_s_column() {
         let (a, b) = (
-            MatchPos::from_pos(LPos { lnum: -1, col: 5 }),
-            MatchPos::from_pos(LPos { lnum: -1, col: 9 }),
+            MatchPos::from_pos(LPos {
+                lnum: LineNr::new(-1),
+                col: 5,
+            }),
+            MatchPos::from_pos(LPos {
+                lnum: LineNr::new(-1),
+                col: 9,
+            }),
         );
         assert!(a.same_capture(b, PosKind::Buf));
         assert!(!a.same(b, PosKind::Buf));
 
-        let set = MatchPos::from_pos(LPos { lnum: 2, col: 5 });
-        assert!(!set.same_capture(MatchPos::from_pos(LPos { lnum: 2, col: 9 }), PosKind::Buf));
+        let set = MatchPos::from_pos(LPos {
+            lnum: LineNr::new(2),
+            col: 5,
+        });
+        assert!(!set.same_capture(
+            MatchPos::from_pos(LPos {
+                lnum: LineNr::new(2),
+                col: 9
+            }),
+            PosKind::Buf
+        ));
         assert!(set.same_capture(set, PosKind::Buf));
     }
 
@@ -270,9 +331,9 @@ mod tests {
     #[test]
     fn positions_order_by_line_then_column() {
         let at = |lnum, col| MatchPos::from_pos(LPos { lnum, col });
-        assert!(at(0, 3).is_before(at(0, 4), PosKind::Str));
-        assert!(!at(0, 4).is_before(at(0, 4), PosKind::Str));
-        assert!(at(1, 9).is_before(at(2, 0), PosKind::Buf));
-        assert!(MatchPos::unset(PosKind::Str).is_before(at(0, 0), PosKind::Str));
+        assert!(at(LineNr::ZERO, 3).is_before(at(LineNr::ZERO, 4), PosKind::Str));
+        assert!(!at(LineNr::ZERO, 4).is_before(at(LineNr::ZERO, 4), PosKind::Str));
+        assert!(at(LineNr::ONE, 9).is_before(at(LineNr::new(2), 0), PosKind::Buf));
+        assert!(MatchPos::unset(PosKind::Str).is_before(at(LineNr::ZERO, 0), PosKind::Str));
     }
 }

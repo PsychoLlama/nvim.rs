@@ -180,22 +180,16 @@ fn split_carriage_returns(st: &mut Sub, at: usize) {
                 // then cut off the front of what is being rebuilt.
                 line.terminate_at(at);
                 // `ml_append` copies the `at + 1` bytes just terminated.
-                let _ = ml_append_cstr(st.lnum - 1 as LineNr, line.head_cstr());
+                let _ = ml_append_cstr(st.lnum - 1, line.head_cstr());
                 line.drop_head(at + 1);
-                mark_adjust(
-                    st.lnum + 1 as LineNr,
-                    MAXLNUM,
-                    1 as LineNr,
-                    0 as LineNr,
-                    kExtmarkNOOP,
-                );
+                mark_adjust(st.lnum + 1, MAXLNUM, 1, 0, kExtmarkNOOP);
                 if SUB_FLAGS.with(|flags| flags.do_ask) {
-                    appended_lines(st.lnum - 1 as LineNr, 1 as LineNr);
+                    appended_lines(st.lnum - 1, 1);
                 } else {
-                    if st.first_line == 0 as LineNr {
+                    if st.first_line == LineNr::ZERO {
                         st.first_line = st.lnum;
                     }
-                    st.last_line = st.lnum + 1 as LineNr;
+                    st.last_line = st.lnum + 1;
                 }
                 // All line numbers increase.
                 st.sub_firstlnum += 1;
@@ -244,7 +238,7 @@ pub(super) fn build_replacement(
     st.sublen = {
         let _locked = Lock::text();
         let lnum = st.sub_firstlnum - st.regmatch.startpos[0].lnum;
-        regsub_multi_len(&st.regmatch, lnum, &st.sub, regsub_flags())
+        regsub_multi_len(&st.regmatch, LineNr::new(lnum), &st.sub, regsub_flags())
             .map_or(0, |size| c_int::try_from(size).unwrap_or(c_int::MAX))
     };
 
@@ -259,7 +253,7 @@ pub(super) fn build_replacement(
     // A multi-line match consumes the lines below, which are appended to the
     // rebuilt line and deleted from the buffer once it is committed.
     if st.nmatch != 1 as c_int {
-        st.nmatch_tl += st.nmatch as LineNr - 1 as LineNr;
+        st.nmatch_tl += st.nmatch - 1;
     }
 
     // Copy the text up to the part that matched.  Upstream grows its buffer
@@ -289,7 +283,7 @@ pub(super) fn build_replacement(
             .expect("a substitution has been built on this line");
         line.append_written(sublen, |dest| {
             // `dest` is the length the measuring pass just answered.
-            regsub_multi_into(regmatch, lnum, sub, dest, regsub_flags());
+            regsub_multi_into(regmatch, LineNr::new(lnum), sub, dest, regsub_flags());
         });
     }
     SUB_NSUBS.set(SUB_NSUBS.get() + 1);
@@ -310,7 +304,7 @@ pub(super) fn build_replacement(
     let mut replaced_bytes = 0 as BCount;
     let mut i = 0 as c_int;
     while i < st.nmatch - 1 as c_int {
-        replaced_bytes += ml_get_len(st.lnum_start + i as LineNr) as BCount + 1 as BCount;
+        replaced_bytes += ml_get_len(st.lnum_start + i) as BCount + 1 as BCount;
         i += 1;
     }
     replaced_bytes += (end.col - start.col) as BCount;
@@ -361,15 +355,15 @@ fn delete_matched_lines(st: &mut Sub) -> bool {
     if u_savedel(st.lnum, st.nmatch_tl).is_err() {
         return false;
     }
-    let mut i = 0 as LineNr;
-    while i < st.nmatch_tl {
+    let mut i = LineNr::ZERO;
+    while i < LineNr::new(st.nmatch_tl) {
         let _ = ml_delete(st.lnum);
         i += 1;
     }
     mark_adjust(
         st.lnum,
-        st.lnum + st.nmatch_tl - 1 as LineNr,
-        MAXLNUM,
+        st.lnum + st.nmatch_tl - 1,
+        MAXLNUM.get(),
         -st.nmatch_tl,
         kExtmarkNOOP,
     );
@@ -378,7 +372,7 @@ fn delete_matched_lines(st: &mut Sub) -> bool {
     }
     st.lnum -= 1;
     st.line2 -= st.nmatch_tl; // the number of lines decreases
-    st.nmatch_tl = 0 as LineNr;
+    st.nmatch_tl = 0;
     true
 }
 
@@ -411,12 +405,12 @@ pub(super) fn commit_line(st: &mut Sub) -> bool {
     for m in &st.line_matches {
         extmark_splice(
             Buf::current(),
-            m.lnum_before as c_int - 1 as c_int,
+            m.lnum_before.get() - 1 as c_int,
             m.start_col as ColNr,
-            m.end.lnum as c_int - m.start.lnum as c_int,
+            m.end.lnum.get() - m.start.lnum.get(),
             m.matchcols as ColNr,
             m.matchbytes,
-            m.lnum_after as c_int - m.lnum_before as c_int,
+            m.lnum_after.get() - m.lnum_before.get(),
             m.subcols as ColNr,
             m.subbytes,
             kExtmarkUndo,
@@ -425,7 +419,7 @@ pub(super) fn commit_line(st: &mut Sub) -> bool {
     // Reset the match data for the next line.
     st.line_matches.clear();
 
-    if st.nmatch_tl > 0 as LineNr && !delete_matched_lines(st) {
+    if st.nmatch_tl > 0 && !delete_matched_lines(st) {
         return false;
     }
 
@@ -434,10 +428,10 @@ pub(super) fn commit_line(st: &mut Sub) -> bool {
     if SUB_FLAGS.with(|flags| flags.do_ask) {
         changed_bytes(st.lnum, 0 as ColNr);
     } else {
-        if st.first_line == 0 as LineNr {
+        if st.first_line == LineNr::ZERO {
             st.first_line = st.lnum;
         }
-        st.last_line = st.lnum + 1 as LineNr;
+        st.last_line = st.lnum + 1;
     }
 
     st.sub_firstlnum = st.lnum;

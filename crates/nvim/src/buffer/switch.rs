@@ -241,7 +241,7 @@ pub(crate) fn handle_swap_exists(old_curbuf: Option<BufRef>) {
                 // Block autocommands here because curwin->w_buffer is NULL.
                 block_autocmds_now();
                 let flags = BLN_CURBUF as c_int | BLN_LISTED as c_int;
-                let buf = buflist_new(None, None, 1, flags);
+                let buf = buflist_new(None, None, LineNr::ONE, flags);
                 unblock_autocmds_now();
                 buf
             }

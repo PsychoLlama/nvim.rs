@@ -343,7 +343,7 @@ fn regsub_buffer(
             matches,
             buf,
             firstlnum: lnum,
-            maxline: buf.b_ml.ml_line_count - lnum,
+            maxline: LineNr::new(buf.b_ml.ml_line_count - lnum),
         },
         line_lbr: false,
     };
@@ -393,12 +393,12 @@ impl Expanding<'_> {
 /// Line `lnum` of a buffer match, counted from `firstlnum`, its terminator
 /// not included: `None` above line 1, empty past the end.
 fn getline(lines: &mut Lines, firstlnum: LineNr, maxline: LineNr, lnum: LineNr) -> Option<&[u8]> {
-    if firstlnum + lnum < 1 {
+    if firstlnum + lnum.get() < LineNr::ONE {
         None
     } else if lnum > maxline {
         Some(b"")
     } else {
-        Some(lines.line(firstlnum + lnum))
+        Some(lines.line(firstlnum + lnum.get()))
     }
 }
 
@@ -680,7 +680,7 @@ fn copy_capture(
         } => {
             let mut clnum = matches.startpos[no].lnum;
             let end = matches.endpos[no];
-            if clnum < 0 || end.lnum < 0 {
+            if clnum < LineNr::ZERO || end.lnum < LineNr::ZERO {
                 return Outcome::Done;
             }
             let mut col = matches.startpos[no].col;

@@ -75,7 +75,7 @@ pub fn op_shift(op: &OpArg, curs_top: bool, amount: c_int) {
     // The cursor line must not be in a closed fold.
     fold_open_cursor();
 
-    if op.line_count as OptInt > p_report() {
+    if i64::from(op.line_count) > p_report() {
         // Two plural forms, nested: "line"/"lines" on the line count and
         // "time"/"times" on the shift count, which is why the outer
         // `ngettext` chooses between two already-translated formats.
@@ -84,7 +84,7 @@ pub fn op_shift(op: &OpArg, curs_top: bool, amount: c_int) {
         } else {
             c"<"
         };
-        let lines = op.line_count as c_ulong;
+        let lines = op.line_count as u64;
         let single = ngettext(
             c"%ld line %sed %d time",
             c"%ld line %sed %d times",
@@ -101,7 +101,7 @@ pub fn op_shift(op: &OpArg, curs_top: bool, amount: c_int) {
         let report = crate::formatted!(
             IOSIZE as usize,
             fmt.to_bytes(),
-            op.line_count as int64_t,
+            i64::from(op.line_count),
             op_char,
             amount,
         );
@@ -335,7 +335,7 @@ fn shift_block(op: &OpArg, amount: c_int) {
     let _ = ml_replace_owned(lnum, XString::from_vec(shifted.line));
     changed_bytes(lnum, bd.textcol);
     let (at, old, new) = (shifted.start_col, shifted.old_len, shifted.new_len);
-    let (buffer, row) = (Buf::current(), lnum as c_int - 1);
+    let (buffer, row) = (Buf::current(), lnum.get() - 1);
     extmark_splice_cols(buffer, row, at, old, new, kExtmarkUndo);
 
     State.set(old_state);
@@ -461,7 +461,7 @@ fn shift_block_left(op: &OpArg, bd: &mut BlockDef, old: &[u8], total: c_int) -> 
     if bd.startspaces != 0 {
         verbatim_copy_width -= bd.start_char_vcols;
     }
-    (csarg, cstype) = CharsizeArg::new(Win::current(), 0, base);
+    (csarg, cstype) = CharsizeArg::new(Win::current(), LineNr::ZERO, base);
     let mut at = 0;
     let mut chr = c_char_info(base, 0);
     while verbatim_copy_width < destination_col {

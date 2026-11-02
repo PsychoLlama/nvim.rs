@@ -584,7 +584,8 @@ fn curs_rows(mut win: Win) {
             } else {
                 let (n, last, _) = win.corrected_plines(lnum, true);
                 lnum = last + 1;
-                if lnum + win.conceals_line(lnum - 1, false) as LineNr > win.w_cursor.lnum {
+                if lnum + i32::from(win.conceals_line((lnum - 1).get(), false)) > win.w_cursor.lnum
+                {
                     break;
                 }
                 win.w_cline_row += n;

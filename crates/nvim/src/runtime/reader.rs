@@ -69,9 +69,9 @@ impl SourceCookie {
         Self {
             lines: ScriptLines::None,
             nextline: None,
-            sourcing_lnum: 0,
+            sourcing_lnum: LineNr::ZERO,
             finished: false,
-            breakpoint: 0,
+            breakpoint: LineNr::ZERO,
             fname: XString::new(),
             dbg_tick: 0,
             level: 0,
@@ -158,7 +158,8 @@ impl SourceCookie {
         }
 
         // Did we encounter a breakpoint?
-        if !from_buf_or_str && self.breakpoint != 0 && self.breakpoint <= sourcing_lnum() {
+        if !from_buf_or_str && self.breakpoint != LineNr::ZERO && self.breakpoint <= sourcing_lnum()
+        {
             dbg_breakpoint(self.fname.as_cstr(), sourcing_lnum());
             self.refresh_breakpoint();
         }

@@ -59,14 +59,14 @@ use super::expand::buflist_match;
 /// `INIT_FMARK`: a mark that has never been set.
 pub(crate) const INIT_FMARK: FileMark = FileMark {
     mark: Pos {
-        lnum: 0 as LineNr,
+        lnum: LineNr::ZERO,
         col: 0 as ColNr,
         coladd: 0 as ColNr,
     },
     fnum: 0,
     timestamp: 0 as Timestamp,
     view: FileMarkView {
-        topline_offset: MAXLNUM,
+        topline_offset: MAXLNUM.get(),
         skipcol: 0 as ColNr,
     },
     extra: None,
@@ -249,7 +249,7 @@ pub fn buflist_new(
 /// The entry a buffer with this name already has: refresh its position and
 /// options, and list it if `BLN_LISTED` asked and it was not listed.
 fn reuse_entry(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Option<Buf> {
-    if lnum != 0 as LineNr {
+    if lnum != LineNr::ZERO {
         let win = (flags & BLN_NOCURWIN as c_int == 0).then(current_win);
         buflist_setfpos(buffer, win, lnum, 0 as ColNr, false);
     }
@@ -504,7 +504,7 @@ pub fn buflist_getfile(
     let mut col: ColNr = 0;
     // Default line number: where the cursor was left last time -- a copy,
     // taken before the switch runs anything.
-    let fm = (lnum == 0 as LineNr).then(|| buflist_findfmark(buf));
+    let fm = (lnum == LineNr::ZERO).then(|| buflist_findfmark(buf));
     if let Some(fm) = &fm {
         (lnum, col) = (fm.mark.lnum, fm.mark.col);
     }

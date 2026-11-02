@@ -46,12 +46,12 @@ pub fn put_folds(out: &mut dyn Write, window: Win) -> Result<(), Failed> {
 pub(super) fn put_folds_recurse(
     out: &mut dyn Write,
     folds: &[Fold],
-    off: LineNr,
+    off: i32,
 ) -> Result<(), Failed> {
     for fold in folds {
         // The nested folds are written first, because `:fold` over a range
         // that already holds folds swallows them.
-        put_folds_recurse(out, &fold.nested, off + fold.top)?;
+        put_folds_recurse(out, &fold.nested, off + fold.top.get())?;
         let (top, last) = (
             int64_t::from(fold.top + off),
             int64_t::from(fold.last() + off),
@@ -68,7 +68,7 @@ pub(super) fn put_foldopen_recurse(
     out: &mut dyn Write,
     window: Win,
     folds: &[Fold],
-    off: LineNr,
+    off: i32,
 ) -> Result<(), Failed> {
     for fold in folds {
         if fold.is(FoldState::Level) {
@@ -79,7 +79,7 @@ pub(super) fn put_foldopen_recurse(
             // Open it first, so the nested commands can reach inside.
             put_line(out, format_args!("{}", int64_t::from(fold.top + off)))?;
             put_line(out, format_args!("sil! normal! zo"))?;
-            put_foldopen_recurse(out, window, &fold.nested, off + fold.top)?;
+            put_foldopen_recurse(out, window, &fold.nested, off + fold.top.get())?;
             if fold.is(FoldState::Closed) {
                 put_fold_open_close(out, fold, off)?;
             }
@@ -87,7 +87,7 @@ pub(super) fn put_foldopen_recurse(
         }
         // A leaf: only write the command when its state differs from what
         // 'foldlevel' would give it anyway.
-        let level = fold_level_win(window, off + fold.top);
+        let level = fold_level_win(window, fold.top + off);
         let foldlevel = window.w_onebuf_opt.wo_fdl;
         let differs = if fold.is(FoldState::Closed) {
             foldlevel >= OptInt::from(level)
@@ -107,7 +107,7 @@ pub(super) fn put_foldopen_recurse(
 pub(super) fn put_fold_open_close(
     out: &mut dyn Write,
     fold: &Fold,
-    off: LineNr,
+    off: i32,
 ) -> Result<(), Failed> {
     put_line(out, format_args!("{}", fold.top + off))?;
     let action = if fold.is(FoldState::Closed) { 'c' } else { 'o' };

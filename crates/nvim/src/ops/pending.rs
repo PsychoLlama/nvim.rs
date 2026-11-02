@@ -775,8 +775,8 @@ fn run_operator(
                 // has already switched it off.
                 set_visual_active(true);
                 restore_lbr(lbr_saved != 0);
-                let (count, g) = (cmd_arg.count1 as LineNr, REDO_VISUAL.get().rv_arg != 0);
-                op.on_copy(|arg| op_addsub(arg, count, g));
+                let (count, g) = (LineNr::new(cmd_arg.count1), REDO_VISUAL.get().rv_arg != 0);
+                op.on_copy(|arg| op_addsub(arg, count.get(), g));
                 set_visual_active(false);
             }
             check_cursor_col(Win::current());

@@ -340,11 +340,11 @@ pub(crate) fn terminal_enter() -> bool {
 pub(super) fn terminal_check_cursor(term: Term) {
     let mut win = current_win();
     let buf = current_buf();
-    let cursor_line = row_to_linenr(term, term.cursor.row) as LineNr;
+    let cursor_line = LineNr::new(row_to_linenr(term, term.cursor.row));
     win.w_cursor.lnum = buf.line_count().min(cursor_line);
 
     // Terminal windows always show the bottom of the buffer.
-    let topline = (buf.line_count() - win.w_view_height as LineNr + 1).max(1);
+    let topline = (buf.line_count() - win.w_view_height + 1).max(LineNr::ONE);
     if topline != win.w_topline {
         // SAFETY: a live window.
         set_topline(win, topline);

@@ -17,6 +17,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::types::LineNr;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -127,9 +128,9 @@ pub fn auto_format(trailblank: bool, prev_line: bool) {
     // Format, then restore the cursor: `saved_cursor` is adjusted by the
     // formatting as the text moves under it.
     saved_cursor.set(pos);
-    format_lines(-1, false);
+    format_lines(LineNr::new(-1), false);
     Win::current().w_cursor = saved_cursor.get();
-    saved_cursor.set(saved_cursor.get().with_lnum(0));
+    saved_cursor.set(saved_cursor.get().with_lnum(LineNr::ZERO));
 
     if Win::current().w_cursor.lnum > Buf::current().b_ml.ml_line_count {
         // "cannot happen"

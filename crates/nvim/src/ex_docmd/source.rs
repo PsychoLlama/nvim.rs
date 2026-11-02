@@ -195,7 +195,7 @@ pub(crate) fn msg_verbose_cmd(lnum: LineNr, cmd: &[u8]) {
     let _no_prompt = Suppress::wait_return();
     verbose_enter_scroll();
     let cmd = msg_bytes(cmd);
-    if lnum == 0 {
+    if lnum == LineNr::ZERO {
         smsg!(0, "Executing: {cmd}");
     } else {
         smsg!(0, "line {}: {cmd}", lnum);

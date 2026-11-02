@@ -718,7 +718,7 @@ pub fn set_indent(size: c_int, flags: c_int) -> bool {
         if flags & SIN_NOMARK as c_int == 0 {
             extmark_splice_cols(
                 buf,
-                lnum as c_int - 1,
+                lnum.get() - 1,
                 skipcols,
                 old_offset - skipcols,
                 new_offset - skipcols,
@@ -757,7 +757,7 @@ pub fn get_number_indent(lnum: LineNr) -> c_int {
         return -1;
     }
     let mut pos = Pos {
-        lnum: 0,
+        lnum: LineNr::ZERO,
         col: 0,
         coladd: 0,
     };
@@ -784,7 +784,7 @@ pub fn get_number_indent(lnum: LineNr) -> c_int {
         }
     }
     // The match may have ended at the line's NUL, which is not an indent.
-    if pos.lnum == 0 || byte_at(Lines::current().line(pos.lnum), pos.col as usize) == 0 {
+    if pos.lnum == LineNr::ZERO || byte_at(Lines::current().line(pos.lnum), pos.col as usize) == 0 {
         return -1;
     }
     line_vcol(pos.lnum, pos.col)

@@ -52,6 +52,7 @@ use crate::message::{
 };
 use crate::message_fmt::msg_bytes;
 use crate::r#move::update_topline;
+use crate::narrow::len_as_int;
 use crate::option::vars::{P_FFS, p_ar, p_enc, p_fencs, p_ffs, p_fic, p_ur, p_verbose};
 use crate::option::{
     default_fileformat, get_fileformat, get_fileformat_force, set_fileformat, set_option_direct,
@@ -83,8 +84,8 @@ use crate::types::CAR;
 use crate::types::NL;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    AcoSave, BlnFlags, Directory, ExArg, Failed, FileInfo, FileOffset, IOSIZE, LineNr, OptInt,
-    OptVal, OptionSetFlags, RegMatch, ScriptId, ShmFlag, int64_t, uv_gid_t,
+    AcoSave, BlnFlags, Directory, ExArg, Failed, FileInfo, FileOffset, IOSIZE, LineNr, OptVal,
+    OptionSetFlags, RegMatch, ScriptId, ShmFlag, int64_t, uv_gid_t,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::{
@@ -232,9 +233,9 @@ pub fn filemess(buffer: Buf, name: Option<&CStr>, note: &CStr) {
 /// estimate the line number we are now on. Used for error messages.
 ///
 /// @param linecnt  the line count before `text` was read
-pub(crate) fn readfile_linenr(linecnt: LineNr, text: &[u8]) -> LineNr {
+pub(crate) fn readfile_linenr(linecnt: i32, text: &[u8]) -> LineNr {
     let newlines = text.iter().filter(|&&b| b == b'\n').count();
-    Buf::current().b_ml.ml_line_count - linecnt + 1 + newlines as LineNr
+    Buf::current().b_ml.ml_line_count - linecnt + 1 + len_as_int(newlines)
 }
 
 /// Set the name of the current buffer, for a `:r` or `:w` command with a file

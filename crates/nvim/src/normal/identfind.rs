@@ -336,12 +336,12 @@ pub(crate) fn find_decl(word: &[u8], locally: bool, thisblock: bool, flags_arg: 
     let in_block = locally && findpar(BACKWARD as c_int, 1, '{' as c_int, false).is_some();
     if !in_block {
         setpcmark();
-        Win::current().w_cursor.lnum = 1;
+        Win::current().w_cursor.lnum = LineNr::ONE;
         par_pos = Win::current().w_cursor;
     } else {
         par_pos = Win::current().w_cursor;
         // Back up over the function's own header lines.
-        while Win::current().w_cursor.lnum > 1 {
+        while Win::current().w_cursor.lnum > LineNr::ONE {
             let lnum = Win::current().w_cursor.lnum;
             if Lines::current()
                 .line(lnum)
@@ -358,7 +358,7 @@ pub(crate) fn find_decl(word: &[u8], locally: bool, thisblock: bool, flags_arg: 
     // The last match that was inside a comment or a string, kept as the
     // answer of last resort.
     let mut found_pos = Pos {
-        lnum: 0,
+        lnum: LineNr::ZERO,
         col: 0,
         coladd: 0,
     };
@@ -391,7 +391,7 @@ pub(crate) fn find_decl(word: &[u8], locally: bool, thisblock: bool, flags_arg: 
             }
         }
         if !found {
-            if found_pos.lnum != 0 {
+            if found_pos.lnum != LineNr::ZERO {
                 Win::current().w_cursor = found_pos;
                 found = true;
             }
@@ -407,7 +407,7 @@ pub(crate) fn find_decl(word: &[u8], locally: bool, thisblock: bool, flags_arg: 
         }
         let cursor = Win::current().w_cursor;
         let valid = is_ident(Lines::current().line(cursor.lnum), cursor.col);
-        if !valid && found_pos.lnum != 0 {
+        if !valid && found_pos.lnum != LineNr::ZERO {
             // Nothing better than what was already found.
             Win::current().w_cursor = found_pos;
             break;
@@ -418,7 +418,7 @@ pub(crate) fn find_decl(word: &[u8], locally: bool, thisblock: bool, flags_arg: 
         if valid && Win::current().w_cursor.lnum >= par_pos.lnum {
             // Past the start of the block: a local search is done, and
             // the earlier match wins if there was one.
-            if found_pos.lnum != 0 {
+            if found_pos.lnum != LineNr::ZERO {
                 Win::current().w_cursor = found_pos;
             }
             break;

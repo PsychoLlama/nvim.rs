@@ -224,34 +224,58 @@ fn folded(range: std::ops::RangeInclusive<LineNr>) -> impl Fn(LineNr) -> LineNr 
 
 #[test]
 fn without_folds_the_span_is_the_line_difference() {
-    assert_eq!(folded_line_span(1, 5, unfolded), 4);
-    assert_eq!(folded_line_span(1, 1, unfolded), 0);
+    assert_eq!(folded_line_span(LineNr::ONE, LineNr::new(5), unfolded), 4);
+    assert_eq!(folded_line_span(LineNr::ONE, LineNr::ONE, unfolded), 0);
 }
 
 #[test]
 fn a_closed_fold_counts_as_one_line() {
     // Lines 1, [2-4], 5 between 1 and 6: three visible steps, not five.
-    assert_eq!(folded_line_span(1, 6, folded(2..=4)), 3);
+    assert_eq!(
+        folded_line_span(
+            LineNr::ONE,
+            LineNr::new(6),
+            folded(LineNr::new(2)..=LineNr::new(4))
+        ),
+        3
+    );
 }
 
 #[test]
 fn a_fold_reaching_past_the_target_loses_its_last_step() {
     // `to` is inside the fold 3-7, so the step that swallowed it was not a
     // whole line: lines 1 and 2, then the fold the target sits in.
-    assert_eq!(folded_line_span(1, 5, folded(3..=7)), 2);
+    assert_eq!(
+        folded_line_span(
+            LineNr::ONE,
+            LineNr::new(5),
+            folded(LineNr::new(3)..=LineNr::new(7))
+        ),
+        2
+    );
 }
 
 #[test]
 fn a_fold_the_span_starts_in_still_counts_once() {
-    assert_eq!(folded_line_span(3, 9, folded(3..=7)), 2);
+    assert_eq!(
+        folded_line_span(
+            LineNr::new(3),
+            LineNr::new(9),
+            folded(LineNr::new(3)..=LineNr::new(7))
+        ),
+        2
+    );
 }
 
 #[test]
 fn the_span_is_a_column_of_visible_rows() {
     // Every from/to pair inside one closed fold has no visible lines
     // between them at all.
-    let fold = folded(2..=9);
+    let fold = folded(LineNr::new(2)..=LineNr::new(9));
     for from in 2..=8 as ColNr {
-        assert_eq!(folded_line_span(from, from + 1, &fold), 0);
+        assert_eq!(
+            folded_line_span(LineNr::new(from), LineNr::new(from + 1), &fold),
+            0
+        );
     }
 }

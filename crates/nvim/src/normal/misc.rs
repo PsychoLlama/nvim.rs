@@ -183,7 +183,7 @@ pub(crate) fn nv_ctrlo(cmd_arg: &mut CmdArg) {
 pub(crate) fn nv_hat(cmd_arg: &mut CmdArg) {
     if !check_clear_op_quit(cmd_arg.op()) {
         let flags = GETF_SETMARK.cast_signed() | GETF_ALT.cast_signed();
-        let _ = buflist_getfile(cmd_arg.count0, 0 as LineNr, flags, 0);
+        let _ = buflist_getfile(cmd_arg.count0, LineNr::ZERO, flags, 0);
     }
 }
 

@@ -67,8 +67,8 @@ impl SynState {
     /// minlines is MAXLNUM.
     fn sync_backoff(&self, start_lnum: LineNr) -> LineNr {
         let minlines = self.block().b_syn_sync_minlines;
-        if minlines > start_lnum {
-            return 1;
+        if minlines > start_lnum.get() {
+            return LineNr::ONE;
         }
         let mut back = if minlines == 1 {
             1
@@ -81,8 +81,8 @@ impl SynState {
         if maxlines != 0 && back > maxlines {
             back = maxlines;
         }
-        if back >= start_lnum {
-            1
+        if back >= start_lnum.get() {
+            LineNr::ONE
         } else {
             start_lnum - back
         }
@@ -98,7 +98,7 @@ impl SynState {
         let saved_buf = switch_buffer(self.buffer);
 
         // Skip lines that end in a backslash.
-        while start_lnum > 1 {
+        while start_lnum > LineNr::ONE {
             if Lines::current().line(start_lnum - 1).last() != Some(&b'\\') {
                 break;
             }
@@ -137,10 +137,10 @@ impl SynState {
     /// Search backwards, one line at a time, for a `:syntax sync match`.
     fn sync_by_match(&mut self, start_lnum: LineNr, last_valid: Option<EntryId>) {
         let maxlines = self.block().b_syn_sync_maxlines;
-        let break_lnum = if maxlines != 0 && start_lnum > maxlines {
+        let break_lnum = if maxlines != 0 && start_lnum > LineNr::new(maxlines) {
             start_lnum - maxlines
         } else {
-            0
+            LineNr::ZERO
         };
 
         let mut end_lnum = start_lnum;
@@ -166,7 +166,7 @@ impl SynState {
                 break;
             }
             // Does the previous line have the line-continuation pattern?
-            if lnum > 1 && self.match_linecont(lnum - 1) {
+            if lnum > LineNr::ONE && self.match_linecont(lnum - 1) {
                 continue;
             }
 
@@ -331,8 +331,14 @@ impl SynState {
 
         let mut regmatch = RegMMatch {
             regprog: self.block().b_syn_linecont_prog.take(),
-            startpos: [LPos { lnum: 0, col: 0 }; 10],
-            endpos: [LPos { lnum: 0, col: 0 }; 10],
+            startpos: [LPos {
+                lnum: LineNr::ZERO,
+                col: 0,
+            }; 10],
+            endpos: [LPos {
+                lnum: LineNr::ZERO,
+                col: 0,
+            }; 10],
             rmm_matchcol: 0,
             rmm_ic: self.block().b_syn_linecont_ic,
             rmm_maxcol: 0,
@@ -459,7 +465,7 @@ pub(crate) fn syn_cmd_sync(args: &mut ExArg, _syncing: c_int) {
             }
         } else if word == b"FROMSTART" {
             if !args.skip {
-                cur_syn_block().b_syn_sync_minlines = MAXLNUM;
+                cur_syn_block().b_syn_sync_minlines = MAXLNUM.get();
                 cur_syn_block().b_syn_sync_maxlines = 0;
             }
         } else if word == b"LINECONT" {

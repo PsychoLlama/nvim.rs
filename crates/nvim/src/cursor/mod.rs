@@ -464,7 +464,7 @@ pub(crate) fn inc_cursor_gchar() -> (c_int, c_int) {
 /// How far `lnum` is from the cursor, counting each closed fold in between
 /// as a single line.
 ///
-pub fn get_cursor_rel_lnum(win: Win, lnum: LineNr) -> LineNr {
+pub fn get_cursor_rel_lnum(win: Win, lnum: LineNr) -> i32 {
     let cursor = win.cursor().lnum();
     if lnum == cursor || !win.has_any_folding() {
         return lnum - cursor;
@@ -494,8 +494,8 @@ pub fn check_cursor_lnum(win: Win) {
         // its first line rather than on the buffer's last.
         cursor.set_lnum(win.fold_first(last).unwrap_or(last));
     }
-    if cursor.lnum() <= 0 {
-        cursor.set_lnum(1);
+    if cursor.lnum() <= LineNr::ZERO {
+        cursor.set_lnum(LineNr::ONE);
     }
 }
 

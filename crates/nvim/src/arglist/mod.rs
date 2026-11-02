@@ -315,7 +315,8 @@ pub(crate) fn alist_add(id: ArgListId, name: XString, set_fnum: c_int) {
     wp.w_locked = true;
     let fnum = if set_fnum > 0 {
         let flags = BLN_LISTED as c_int | flag_if(set_fnum == 2, BLN_CURBUF);
-        buflist_add_name(Some(name.as_cstr()), 0, flags).map_or(0, |buf| buf.handle.get())
+        buflist_add_name(Some(name.as_cstr()), LineNr::ZERO, flags)
+            .map_or(0, |buf| buf.handle.get())
     } else {
         0
     };
@@ -442,8 +443,8 @@ fn alist_add_list(files: Vec<XString>, after: c_int, will_edit: bool) {
     let added: Vec<ArgEntry> = files
         .into_iter()
         .map(|name| {
-            let fnum =
-                buflist_add_name(Some(name.as_cstr()), 0, flags).map_or(0, |buf| buf.handle.get());
+            let fnum = buflist_add_name(Some(name.as_cstr()), LineNr::ZERO, flags)
+                .map_or(0, |buf| buf.handle.get());
             ArgEntry { name, fnum }
         })
         .collect();

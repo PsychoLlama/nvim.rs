@@ -23,6 +23,7 @@ use crate::ex_docmd::ex_msg;
 use crate::memory::XString;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
+use crate::types::LineNr;
 use core::ffi::{CStr, c_int};
 use core::ptr;
 use std::ffi::CString;
@@ -88,8 +89,8 @@ use crate::winlayer::{Buf, Win};
 /// line numbers.
 pub(crate) fn fresh_exarg<'s>() -> ExArg<'s> {
     ExArg {
-        line1: 1,
-        line2: 1,
+        line1: LineNr::ONE,
+        line2: LineNr::ONE,
         ..ExArg::default()
     }
 }
@@ -357,7 +358,7 @@ fn check_may_run(
 
     // `CmdAddr::Other` counts from 1 rather than from the cursor.
     if excmd.addr_type == CmdAddr::Other && excmd.addr_count == 0 {
-        excmd.line2 = 1;
+        excmd.line2 = LineNr::ONE;
     }
     correct_range(excmd);
 
@@ -609,8 +610,8 @@ pub(crate) fn do_one_cmd(
     }
 
     // Can happen with a zero line number.
-    if Win::current().w_cursor.lnum == 0 {
-        Win::current().w_cursor.lnum = 1;
+    if Win::current().w_cursor.lnum == LineNr::ZERO {
+        Win::current().w_cursor.lnum = LineNr::ONE;
         Win::current().w_cursor.col = 0;
     }
 
@@ -748,11 +749,15 @@ pub(crate) fn ex_range_without_command(excmd: &mut ExArg) -> Option<CString> {
         }
     } else if excmd.addr_count != 0 {
         excmd.line2 = excmd.line2.min(Buf::current().b_ml.ml_line_count);
-        if excmd.line2 < 0 {
+        if excmd.line2 < LineNr::ZERO {
             errormsg = Some(ex_msg(e_invrange));
         } else {
             // Line 0 is not a position; the cursor goes to line 1.
-            Win::current().w_cursor.lnum = if excmd.line2 == 0 { 1 } else { excmd.line2 };
+            Win::current().w_cursor.lnum = if excmd.line2 == LineNr::ZERO {
+                LineNr::ONE
+            } else {
+                excmd.line2
+            };
             beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
         }
     }

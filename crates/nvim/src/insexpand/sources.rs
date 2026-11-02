@@ -787,7 +787,7 @@ pub(super) fn search_for_fuzzy_match(
         }
     };
     if whole_line && start_pos.lnum != pos.lnum {
-        current_pos.lnum += dir as LineNr;
+        current_pos.lnum += dir;
     }
     let mut looped_around = false;
     loop {
@@ -800,7 +800,7 @@ pub(super) fn search_for_fuzzy_match(
         {
             return None;
         }
-        if current_pos.lnum >= 1 && current_pos.lnum <= buffer.b_ml.ml_line_count {
+        if current_pos.lnum >= LineNr::ONE && current_pos.lnum <= buffer.b_ml.ml_line_count {
             let at = if whole_line {
                 0
             } else {
@@ -841,11 +841,11 @@ pub(super) fn search_for_fuzzy_match(
         // if `'wrapscan'` allows it.
         let last = buffer.b_ml.ml_line_count;
         current_pos.lnum += if dir == FORWARD { 1 } else { -1 };
-        if !(1..=last).contains(&current_pos.lnum) {
+        if !(LineNr::ONE..=last).contains(&current_pos.lnum) {
             if !p_ws() {
                 return None;
             }
-            current_pos.lnum = if dir == FORWARD { 1 } else { last };
+            current_pos.lnum = if dir == FORWARD { LineNr::ONE } else { last };
             looped_around = true;
         }
         current_pos.col = 0;

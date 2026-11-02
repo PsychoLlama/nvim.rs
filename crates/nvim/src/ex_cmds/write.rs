@@ -125,7 +125,7 @@ pub fn ex_file(excmd: &mut ExArg) {
 
     // ":0file" removes the file name.  Check for illegal uses ":3file",
     // "0file name", etc.
-    if excmd.addr_count > 0 && (!no_arg || excmd.line2 > 0 || excmd.addr_count > 1) {
+    if excmd.addr_count > 0 && (!no_arg || excmd.line2 > LineNr::ZERO || excmd.addr_count > 1) {
         emsg(gettext(e_invarg));
         return;
     }
@@ -161,7 +161,7 @@ pub fn ex_update(excmd: &mut ExArg) {
 pub fn ex_write(excmd: &mut ExArg) {
     if excmd.cmdidx == CmdIdx::saveas {
         // :saveas does not take a range, uses all lines.
-        excmd.line1 = 1;
+        excmd.line1 = LineNr::ONE;
         excmd.line2 = Buf::current().b_ml.ml_line_count;
     }
 
@@ -228,7 +228,7 @@ pub fn do_write(args: &mut ExArg) -> Result<(), Failed> {
     if other {
         let (full, typed) = (full.as_ref().map(XString::as_cstr), typed.as_deref());
         alt_buf = if cpo_has(CpoFlag::ALTWRITE) || args.cmdidx == CmdIdx::saveas {
-            setaltfname(full, typed, 1)
+            setaltfname(full, typed, LineNr::ONE)
         } else {
             full.and_then(buflist_findname)
         };
@@ -344,7 +344,7 @@ fn cannot_write_curbuf(args: &mut ExArg) -> bool {
 
 /// Writing less than the whole buffer needs a `!`, or the user's blessing.
 fn confirm_partial_write(args: &mut ExArg) -> bool {
-    if (args.line1 == 1 && args.line2 == Buf::current().b_ml.ml_line_count)
+    if (args.line1 == LineNr::ONE && args.line2 == Buf::current().b_ml.ml_line_count)
         || args.forceit
         || args.append
         || p_wa()
@@ -511,14 +511,14 @@ fn swap_dir() -> CString {
 /// `:wnext`, `:wNext` and `:wprevious` -- write, then step through the
 /// argument list.
 pub fn ex_wnext(excmd: &mut ExArg) {
-    let step = excmd.line2 as c_int;
+    let step = excmd.line2.get();
     let forwards = c_int::from(excmd.line.byte_at(excmd.line.cmd + 1)) == 'n' as c_int;
     let i = if forwards {
         Win::current().w_arg_idx + step
     } else {
         Win::current().w_arg_idx - step
     };
-    excmd.line1 = 1;
+    excmd.line1 = LineNr::ONE;
     excmd.line2 = Buf::current().b_ml.ml_line_count;
     if do_write(excmd).is_ok() {
         do_argfile(excmd, i);
@@ -748,7 +748,7 @@ pub fn getfile(
     }
 
     if !other {
-        if lnum != 0 {
+        if lnum != LineNr::ZERO {
             Win::current().w_cursor.lnum = lnum;
         }
         check_cursor_lnum(Win::current());

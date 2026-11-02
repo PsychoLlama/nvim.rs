@@ -68,7 +68,7 @@ pub(crate) fn qf_update_buffer(qi: Qi, old_last: Option<usize>) {
 
     let old_line_count = buf.b_ml.ml_line_count;
     let old_endcol = ml_get_buf_len(buf, old_line_count);
-    let old_bytecount = get_region_bytecount(buf, 1, old_line_count, 0, old_endcol);
+    let old_bytecount = get_region_bytecount(buf, LineNr::ONE, old_line_count, 0, old_endcol);
 
     // A location list's window id goes to 'quickfixtextfunc'; it is the
     // window the list belongs to, not the one showing it.
@@ -99,21 +99,21 @@ pub(crate) fn qf_update_buffer(qi: Qi, old_last: Option<usize>) {
     let new_endcol = ml_get_buf_len(buf, new_line_count);
     let delta = new_line_count - old_line_count;
     if old_last.is_none() {
-        let bytes = get_region_bytecount(buf, 1, new_line_count, 0, new_endcol);
+        let bytes = get_region_bytecount(buf, LineNr::ONE, new_line_count, 0, new_endcol);
         splice(
             buf,
             &Splice {
-                start: (0, 0),
+                start: (LineNr::ZERO, 0),
                 old: (old_line_count - 1, 0, old_bytecount),
                 new: (new_line_count - 1, new_endcol, bytes),
             },
         );
-        let lnume = if old_line_count > 0 {
+        let lnume = if old_line_count > LineNr::ZERO {
             old_line_count + 1
         } else {
-            1
+            LineNr::ONE
         };
-        changed_lines(buf, 1, 0, lnume, delta, true);
+        changed_lines(buf, LineNr::ONE, 0, lnume, delta, true);
     } else if delta > 0 {
         let start_lnum = old_line_count + 1;
         let bytes = get_region_bytecount(buf, start_lnum, new_line_count, 0, new_endcol);
@@ -121,8 +121,8 @@ pub(crate) fn qf_update_buffer(qi: Qi, old_last: Option<usize>) {
             buf,
             &Splice {
                 start: (old_line_count - 1, old_endcol),
-                old: (0, 0, 0),
-                new: (delta, new_endcol, bytes),
+                old: (LineNr::ZERO, 0, 0),
+                new: (LineNr::new(delta), new_endcol, bytes),
             },
         );
         changed_lines(buf, start_lnum, 0, start_lnum, delta, true);
@@ -191,7 +191,7 @@ fn qf_buf_line(
     }
 
     out.push(b'|');
-    if entry.lnum > 0 {
+    if entry.lnum > LineNr::ZERO {
         qf_range_text(out, entry);
         out.extend_from_slice(qf_types(c_int::from(entry.kind), entry.nr).to_bytes());
     } else if let Some(pattern) = &entry.pattern {
@@ -274,7 +274,7 @@ fn clear_qf_buffer() -> bool {
     // not modifiable — so the undo stack is cleaned up instead, or an
     // autocommand could invalidate it.
     while !Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
-        if ml_delete(1).is_err() {
+        if ml_delete(LineNr::ONE).is_err() {
             internal_error(c"qf_fill_buffer()");
             return false;
         }
@@ -340,7 +340,16 @@ fn splice(buffer: Buf, at: &Splice) {
     let (nrow, ncol, nbytes) = at.new;
     let undo = kExtmarkNoUndo;
     extmark_splice(
-        buffer, srow, scol, orow, ocol, obytes, nrow, ncol, nbytes, undo,
+        buffer,
+        srow.get(),
+        scol,
+        orow.get(),
+        ocol,
+        obytes,
+        nrow.get(),
+        ncol,
+        nbytes,
+        undo,
     );
 }
 
@@ -368,19 +377,19 @@ pub(crate) fn qf_fill_buffer(qfl: Qfl, buffer: Buf, old_last: Option<usize>, qf_
         // One line per entry, from the start or after the last entry
         // that is already in the buffer.
         let (mut at, mut lnum) = match old_last {
-            None => (0, 0),
+            None => (0, LineNr::ZERO),
             Some(last) if last + 1 < qfl.entries.len() => (last + 1, buffer.b_ml.ml_line_count),
             Some(last) => (last, buffer.b_ml.ml_line_count),
         };
 
-        let qftf_list = call_qftf_func(qfl, qf_winid, lnum as c_int + 1, qfl.count());
+        let qftf_list = call_qftf_func(qfl, qf_winid, lnum.get() + 1, qfl.count());
         // An index: appending a line below runs autocommands.
         let mut qftf_at = 0;
         let mut prev_bufnr = -1;
         let mut invalid_val = false;
         let mut line = Vec::new();
 
-        while lnum < LineNr::from(qfl.count()) {
+        while lnum < LineNr::new(qfl.count()) {
             // Use the text the user's function supplied, if any. Once it
             // answers something that is not a string, the rest of its
             // answer is ignored too.

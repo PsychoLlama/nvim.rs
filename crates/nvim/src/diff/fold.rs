@@ -106,7 +106,7 @@ pub fn diff_check_with_linestatus(window: Win, lnum: LineNr) -> (c_int, c_int) {
     }
     // One past the last line is legal: that is where the filler for a
     // deletion at end of buffer goes.
-    if lnum < 1 || lnum > buf.b_ml.ml_line_count + 1 {
+    if lnum < LineNr::ONE || lnum > buf.b_ml.ml_line_count + 1 {
         return (0, 0);
     }
     let idx = tp.diff_index(buf);
@@ -117,7 +117,7 @@ pub fn diff_check_with_linestatus(window: Win, lnum: LineNr) -> (c_int, c_int) {
     // A line inside a closed fold or concealed away has no status of its
     // own to report.
     //
-    if window.fold_span(lnum).0 || decor_conceal_line(window, lnum - 1, false) {
+    if window.fold_span(lnum).0 || decor_conceal_line(window, (lnum - 1).get(), false) {
         return (0, 0);
     }
 
@@ -236,14 +236,14 @@ pub fn diff_infold(window: Win, lnum: LineNr) -> bool {
     if tp.tp_diff_invalid != 0 {
         diff_update(None);
     }
-    let context = diff_context.get() as LineNr;
+    let context = LineNr::new(diff_context.get());
     // The blocks are in line order, so the first one starting below the
     // context window ends the search. No blocks at all folds everything.
     for dp in &tp.tp_diff {
-        if dp.df_lnum[idx] - context > lnum {
+        if dp.df_lnum[idx] - context > lnum.get() {
             break;
         }
-        if dp.end(idx) + context > lnum {
+        if dp.end(idx) + context.get() > lnum {
             return false;
         }
     }
@@ -257,7 +257,7 @@ pub fn diff_infold(window: Win, lnum: LineNr) -> bool {
 /// has already taken out of the list.
 pub(crate) fn diff_fold_update(
     lnum: &[LineNr; DB_COUNT as usize],
-    count: &[LineNr; DB_COUNT as usize],
+    count: &[i32; DB_COUNT as usize],
     skip_idx: c_int,
 ) {
     let tp = TabPage::current();

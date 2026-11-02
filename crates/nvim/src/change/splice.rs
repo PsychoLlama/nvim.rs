@@ -47,7 +47,7 @@ fn changed_lines_invalidate_win(
     lnum: LineNr,
     col: ColNr,
     mut lnume: LineNr,
-    xtra: LineNr,
+    xtra: i32,
 ) {
     if window.w_cursor.lnum <= lnum {
         let below =
@@ -108,7 +108,7 @@ pub fn changed_lines_invalidate_buf(
     lnum: LineNr,
     col: ColNr,
     lnume: LineNr,
-    xtra: LineNr,
+    xtra: i32,
 ) {
     for wp in tab_windows() {
         if wp.w_buffer == buffer {
@@ -128,7 +128,7 @@ fn record_change_mark(mut buffer: Buf, lnum: LineNr, col: ColNr) {
     // Only record the view if the changed line is on screen: a change can
     // be made outside the current window's view.
     let mut view = FileMarkView {
-        topline_offset: MAXLNUM,
+        topline_offset: MAXLNUM.get(),
         skipcol: 0,
     };
     let win = Win::current();
@@ -207,19 +207,13 @@ fn record_change_mark(mut buffer: Buf, lnum: LineNr, col: ColNr) {
 
 /// Bring one window's fold, scroll and cursor-line state up to date with a
 /// change that covered `lnum`..`lnume` and moved what follows by `xtra`.
-fn redraw_win_for_change(
-    mut window: Win,
-    mut lnum: LineNr,
-    col: ColNr,
-    lnume: LineNr,
-    xtra: LineNr,
-) {
+fn redraw_win_for_change(mut window: Win, mut lnum: LineNr, col: ColNr, lnume: LineNr, xtra: i32) {
     if !redraw_not_allowed.get() && window.w_redr_type < UPD_VALID {
         window.w_redr_type = UPD_VALID;
     }
     // Adding or removing lines invalidates a pending w_redraw_top/bot
     // range, so redraw everything instead.
-    if xtra != 0 && window.w_redraw_top != 0 {
+    if xtra != 0 && window.w_redraw_top != LineNr::ZERO {
         window.redraw_later(UPD_NOT_VALID);
     }
 
@@ -268,14 +262,14 @@ fn redraw_win_for_change(
     // 'relativenumber' always needs a redraw when lines came or went, even
     // if the cursor did not move.
     if window.w_onebuf_opt.wo_rnu != 0 && xtra != 0 {
-        window.w_last_cursor_lnum_rnu = 0;
+        window.w_last_cursor_lnum_rnu = LineNr::ZERO;
     }
 
     if window.w_onebuf_opt.wo_cul != 0 && window.w_last_cursorline >= lnum {
         if window.w_last_cursorline < lnume {
             // 'cursorline' was inside the change: the loop above has
             // already invalidated it in w_lines[].
-            window.w_last_cursorline = 0;
+            window.w_last_cursorline = LineNr::ZERO;
         } else {
             // Below the change: shift it.
             window.w_last_cursorline += xtra;
@@ -288,7 +282,7 @@ fn redraw_win_for_change(
 /// cached display state.
 ///
 /// See [`changed_lines`] for the arguments.
-fn changed_common(buffer: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: LineNr) {
+fn changed_common(buffer: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: i32) {
     changed(buffer);
 
     for win in windows() {
@@ -327,7 +321,7 @@ fn changed_common(buffer: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: Li
         && lnum <= win.w_cursor.lnum
         && lnume + xtra.abs() > win.w_cursor.lnum
     {
-        last_cursormoved.set(last_cursormoved.get().with_lnum(0));
+        last_cursormoved.set(last_cursormoved.get().with_lnum(LineNr::ZERO));
     }
 }
 
@@ -355,7 +349,7 @@ pub fn changed_bytes(lnum: LineNr, col: ColNr) {
             if wp.w_onebuf_opt.wo_diff != 0 && !wp.is_current() {
                 wp.redraw_later(UPD_VALID);
                 let wlnum = diff_lnum_win(lnum, wp);
-                if wlnum > 0 {
+                if wlnum > LineNr::ZERO {
                     changed_lines_redraw_buf(wp.buffer(), wlnum, wlnum + 1, 0);
                 }
             }
@@ -367,7 +361,14 @@ pub fn changed_bytes(lnum: LineNr, col: ColNr) {
 pub fn inserted_bytes(lnum: LineNr, start_col: ColNr, old_col: c_int, new_col: c_int) {
     if curbuf_splice_pending.get() == 0 {
         let cb = Buf::current();
-        extmark_splice_cols(cb, lnum - 1, start_col, old_col, new_col, kExtmarkUndo);
+        extmark_splice_cols(
+            cb,
+            (lnum - 1).get(),
+            start_col,
+            old_col,
+            new_col,
+            kExtmarkUndo,
+        );
     }
     changed_bytes(lnum, start_col);
 }
@@ -375,12 +376,12 @@ pub fn inserted_bytes(lnum: LineNr, start_col: ColNr, old_col: c_int, new_col: c
 /// `count` lines were appended below line `lnum` of `buffer`.
 ///
 /// Call AFTER the change and after `mark_adjust()`.
-pub fn appended_lines_buf(buffer: Buf, lnum: LineNr, count: LineNr) {
+pub fn appended_lines_buf(buffer: Buf, lnum: LineNr, count: i32) {
     changed_lines(buffer, lnum + 1, 0, lnum + 1, count, true);
 }
 
 /// [`appended_lines_buf`] for the current buffer.
-pub fn appended_lines(lnum: LineNr, count: LineNr) {
+pub fn appended_lines(lnum: LineNr, count: i32) {
     appended_lines_buf(Buf::current(), lnum, count);
 }
 
@@ -395,12 +396,12 @@ pub fn appended_lines_mark(lnum: LineNr, count: c_int) {
 /// `count` lines were deleted at line `lnum` of `buffer`.
 ///
 /// Call AFTER the change and after `mark_adjust()`.
-pub fn deleted_lines_buf(buffer: Buf, lnum: LineNr, count: LineNr) {
+pub fn deleted_lines_buf(buffer: Buf, lnum: LineNr, count: i32) {
     changed_lines(buffer, lnum, 0, lnum + count, -count, true);
 }
 
 /// [`deleted_lines_buf`] for the current buffer.
-pub fn deleted_lines(lnum: LineNr, count: LineNr) {
+pub fn deleted_lines(lnum: LineNr, count: i32) {
     deleted_lines_buf(Buf::current(), lnum, count);
 }
 
@@ -415,8 +416,8 @@ pub fn deleted_lines_mark(lnum: LineNr, count: c_int) {
     let max = MAXLNUM;
     // Deleting the whole buffer implicitly adds one empty line back.
     let back = -count + i32::from(made_empty);
-    mark_adjust(lnum, last, max, -count, kExtmarkNOOP);
-    extmark_adjust(cb, lnum, last, max, back, kExtmarkUndo);
+    mark_adjust(lnum, last, max.get(), -count, kExtmarkNOOP);
+    extmark_adjust(cb, lnum, last, max.get(), back, kExtmarkUndo);
     changed_lines(cb, lnum, 0, lnum + count, -count, true);
 }
 
@@ -428,13 +429,13 @@ pub fn deleted_lines_mark(lnum: LineNr, count: c_int) {
 /// one *before* the change, and `xtra` the net number of lines added
 /// (negative when deleting).
 ///
-pub fn changed_lines_redraw_buf(mut buffer: Buf, lnum: LineNr, mut lnume: LineNr, xtra: LineNr) {
+pub fn changed_lines_redraw_buf(mut buffer: Buf, lnum: LineNr, mut lnume: LineNr, xtra: i32) {
     // A decoration whose mark moved has to be re-measured and redrawn at
     // wherever it moved to, so widen by one line; a virt_line mark may be
     // drawn two lines below, so a deletion widens by one more.
     if xtra != 0 && buffer.b_marktree.n_keys > 0 {
         let lines = buf_meta_total(buffer, kMTMetaLines);
-        lnume += 1 + LineNr::from(xtra < 0 && lines != 0);
+        lnume += 1 + i32::from(xtra < 0 && lines != 0);
     }
 
     if buffer.b_mod_set {
@@ -473,7 +474,7 @@ pub fn changed_lines(
     lnum: LineNr,
     col: ColNr,
     lnume: LineNr,
-    xtra: LineNr,
+    xtra: i32,
     do_buf_event: bool,
 ) {
     changed_lines_redraw_buf(buffer, lnum, lnume, xtra);
@@ -489,8 +490,8 @@ pub fn changed_lines(
             if wp.w_onebuf_opt.wo_diff != 0 && !wp.is_current() {
                 wp.redraw_later(UPD_VALID);
                 let wlnum = diff_lnum_win(lnum, wp);
-                if wlnum > 0 {
-                    let bot = lnume - lnum + wlnum;
+                if wlnum > LineNr::ZERO {
+                    let bot = wlnum + (lnume - lnum);
                     changed_lines_redraw_buf(wp.buffer(), wlnum, bot, 0);
                 }
             }

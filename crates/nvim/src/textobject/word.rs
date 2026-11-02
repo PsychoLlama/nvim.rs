@@ -17,6 +17,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::option::vars::P_SEL;
+use crate::types::LineNr;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -333,7 +334,7 @@ pub fn current_word(
     bigword: bool,
 ) -> Result<(), Failed> {
     let mut start_pos = Pos {
-        lnum: 0,
+        lnum: LineNr::ZERO,
         col: 0,
         coladd: 0,
     };

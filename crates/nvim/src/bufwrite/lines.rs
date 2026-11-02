@@ -102,7 +102,7 @@ pub(crate) fn write_lines(
             rest = &rest[taken..];
             if writer.is_full() {
                 if !flush_full(writer, &mut nchars) {
-                    end = 0; // write error: break the loop
+                    end = LineNr::ZERO; // write error: break the loop
                     break;
                 }
                 writer.start_lnum = lnum;
@@ -110,7 +110,7 @@ pub(crate) fn write_lines(
         }
 
         // Write failed, or the last line has no end-of-line: stop here.
-        if end == 0
+        if end == LineNr::ZERO
             || (lnum == end
                 && (write_bin || buffer.b_p_fixeol == 0)
                 && ((write_bin && lnum == buffer.b_no_eol_lnum)
@@ -130,7 +130,7 @@ pub(crate) fn write_lines(
                 full
             } else {
                 if full && !flush_full(writer, &mut nchars) {
-                    end = 0; // write error: break the loop
+                    end = LineNr::ZERO; // write error: break the loop
                     break;
                 }
                 writer.push(NL as u8)
@@ -138,30 +138,30 @@ pub(crate) fn write_lines(
         };
         if full {
             if !flush_full(writer, &mut nchars) {
-                end = 0; // write error: break the loop
+                end = LineNr::ZERO; // write error: break the loop
                 break;
             }
             os_breakcheck();
             if got_int.get() {
-                end = 0; // interrupted: break the loop
+                end = LineNr::ZERO; // interrupted: break the loop
                 break;
             }
         }
         lnum += 1;
     }
 
-    if writer.staged() > 0 && end > 0 {
+    if writer.staged() > 0 && end > LineNr::ZERO {
         let remaining = writer.staged() as c_int;
         if !writer.flush() {
-            end = 0; // write error
+            end = LineNr::ZERO; // write error
         }
         nchars = nchars.wrapping_add(remaining - writer.staged() as c_int);
     }
     // Did everything convert and get written?
-    if end != 0 && writer.staged() > 0 {
+    if end != LineNr::ZERO && writer.staged() > 0 {
         writer.conv_error = true;
         writer.conv_error_lnum = end;
-        end = 0;
+        end = LineNr::ZERO;
     }
     if buffer.b_p_fixeol == 0 && buffer.b_p_eof != 0 {
         // Write the trailing CTRL-Z that 'endoffile' asks for.
@@ -172,7 +172,7 @@ pub(crate) fn write_lines(
         lnum,
         nchars,
         no_eol,
-        failed: end == 0,
+        failed: end == LineNr::ZERO,
     }
 }
 
@@ -193,9 +193,9 @@ pub(crate) fn report_written(
     let mut insert_space = notes.conv_error || notes.notconverted || notes.converted;
     if notes.conv_error {
         note(&mut report, c" CONVERSION ERROR");
-        if notes.conv_error_lnum != 0 {
+        if notes.conv_error_lnum != LineNr::ZERO {
             let fmt = translate(c" in line %ld;");
-            report.push_fmt(fmt, &[(notes.conv_error_lnum as int64_t).into()]);
+            report.push_fmt(fmt, &[i64::from(notes.conv_error_lnum).into()]);
         }
     } else if notes.notconverted {
         note(&mut report, c"[NOT converted]");

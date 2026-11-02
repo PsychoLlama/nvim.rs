@@ -34,6 +34,7 @@ use crate::mark::setpcmark;
 use crate::memory::XString;
 use crate::message::emsg;
 use crate::r#move::validate_cursor;
+use crate::narrow::len_as_int;
 use crate::normal::do_check_scrollbind;
 use crate::optionstr::OptString;
 use crate::pos::MAXLNUM;
@@ -170,7 +171,7 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
         ListDo::Windows => {
             while let Some(cur) = wp
                 .and_then(WinId::get)
-                .filter(|_| (i as LineNr + 1) < excmd.line1)
+                .filter(|_| (LineNr::new(i) + 1) < excmd.line1)
             {
                 i += 1;
                 wp = cur.next().map(Win::id);
@@ -179,13 +180,13 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
         ListDo::Tabs => {
             while let Some(cur) = tp
                 .and_then(TabId::get)
-                .filter(|_| (i as LineNr + 1) < excmd.line1)
+                .filter(|_| (LineNr::new(i) + 1) < excmd.line1)
             {
                 i += 1;
                 tp = cur.next().map(TabPage::id);
             }
         }
-        ListDo::Args => i = excmd.line1 as c_int - 1,
+        ListDo::Args => i = excmd.line1.get() - 1,
         _ => {}
     }
 
@@ -197,9 +198,9 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
         ListDo::Buffers => {
             // Advance to the first listed buffer after "eap->line1".
             let mut cur = first_buffer();
-            let unlisted = |b: &Buf| (b.handle.get() as LineNr) < excmd.line1 || b.b_p_bl == 0;
+            let unlisted = |b: &Buf| b.handle.get() < excmd.line1.get() || b.b_p_bl == 0;
             while let Some(b) = cur.filter(unlisted) {
-                if b.handle.get() as LineNr > excmd.line2 {
+                if b.handle.get() > excmd.line2.get() {
                     cur = None;
                     break;
                 }
@@ -217,17 +218,17 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
         }
         ListDo::Quickfix { .. } => {
             qf_size = qf_get_valid_size(excmd.cmdidx);
-            debug_assert!(excmd.line1 >= 0 as LineNr, "eap->line1 >= 0");
-            if qf_size == 0 || excmd.line1 as size_t > qf_size {
+            debug_assert!(excmd.line1 >= LineNr::ZERO, "eap->line1 >= 0");
+            if qf_size == 0 || usize::try_from(excmd.line1).unwrap_or(0) > qf_size {
                 buf = None;
             } else {
                 ex_cc(excmd);
                 buf = Some(Buf::current());
-                i = excmd.line1 as c_int - 1;
+                i = excmd.line1.get() - 1;
                 if excmd.addr_count <= 0 {
                     // Default to every quickfix/location list entry.
-                    debug_assert!(qf_size < MAXLNUM as size_t, "qf_size < MAXLNUM");
-                    excmd.line2 = qf_size as LineNr;
+                    debug_assert!(LineNr::try_from(qf_size).is_ok_and(|n| n < MAXLNUM));
+                    excmd.line2 = LineNr::new(len_as_int(qf_size));
                 }
             }
         }
@@ -305,7 +306,7 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
         match list {
             ListDo::Buffers => {
                 // Done?
-                if next_fnum < 0 || next_fnum as LineNr > excmd.line2 {
+                if next_fnum < 0 || LineNr::new(next_fnum) > excmd.line2 {
                     break;
                 }
                 // Does the buffer still exist?
@@ -320,7 +321,7 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
             }
             ListDo::Quickfix { .. } => {
                 debug_assert!(i >= 0, "i >= 0");
-                if i as size_t >= qf_size || i as LineNr >= excmd.line2 {
+                if i as size_t >= qf_size || LineNr::new(i) >= excmd.line2 {
                     break;
                 }
                 let qf_idx = qf_get_cur_idx(excmd.cmdidx);
@@ -339,17 +340,17 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
                         do_check_scrollbind(true);
                     }
                 }
-                if i as LineNr + 1 > excmd.line2 {
+                if LineNr::new(i) + 1 > excmd.line2 {
                     break;
                 }
             }
             ListDo::Tabs => {
-                if i as LineNr + 1 > excmd.line2 {
+                if LineNr::new(i) + 1 > excmd.line2 {
                     break;
                 }
             }
             ListDo::Args => {
-                if i as LineNr >= excmd.line2 {
+                if LineNr::new(i) >= excmd.line2 {
                     break;
                 }
             }

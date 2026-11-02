@@ -127,7 +127,7 @@ fn report_yank(op: &OpArg, yank_type: MotionType, yanklines: size_t) {
 pub fn op_yank_reg(op: &OpArg, message: bool, reg: Reg, append: bool) {
     let region = *op;
     let mut yank_type = region.motion_type;
-    let mut yanklines = region.line_count as size_t;
+    let mut yanklines = usize::try_from(region.line_count).expect("a region holds a line");
     let mut yankendlnum = region.end.lnum;
 
     // Appending yanks into a scratch register first, then merges.

@@ -569,7 +569,7 @@ impl ScriptCtx {
     pub const NONE: ScriptCtx = ScriptCtx {
         sc_sid: 0,
         sc_seq: 0,
-        sc_lnum: 0,
+        sc_lnum: LineNr::ZERO,
         sc_chan: 0,
     };
 

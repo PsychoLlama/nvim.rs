@@ -153,7 +153,7 @@ fn read_extra_fields(
         } else if field.starts_with(b"user_data:") {
             *user_data = Some(at + 10);
         } else if field.starts_with(b"line:") {
-            tagp.tagline = atoi(&field[5..]);
+            tagp.tagline = LineNr::new(atoi(&field[5..]));
         }
         if kind.is_some() && user_data.is_some() {
             // Nothing else is read from here.
@@ -353,7 +353,14 @@ impl Jump {
         } else {
             // Careful: this may trigger autocommands, which can call
             // `jumpto_tag` recursively. The name is this jump's own.
-            getfile(0, Some(self.fname()), None, true, 0, forceit != 0)
+            getfile(
+                0,
+                Some(self.fname()),
+                None,
+                true,
+                LineNr::ZERO,
+                forceit != 0,
+            )
         };
         keep_help_flag.set(false);
 
@@ -503,7 +510,7 @@ impl Jump {
         let save_lnum = Win::current().w_cursor.lnum;
         // Start before the line the "line:" field named, or before the
         // first line.
-        Win::current().w_cursor.lnum = (tagp.tagline - 1).max(0);
+        Win::current().w_cursor.lnum = (tagp.tagline - 1).max(LineNr::ZERO);
 
         let found = if self.pattern.search(search_options) {
             Found::Exactly
@@ -651,7 +658,7 @@ impl Pattern {
 
         // Start the command in line 1.
         Win::current().w_cursor = Pos {
-            lnum: 1,
+            lnum: LineNr::ONE,
             col: 0,
             coladd: 0,
         };

@@ -196,13 +196,7 @@ pub fn diff_invalidate(buffer: Buf) {
 ///
 /// The parameters are `mark_adjust`'s: lines `line1`..`line2` moved by
 /// `amount`, everything below by `amount_after`.
-pub fn diff_mark_adjust(
-    buffer: Buf,
-    line1: LineNr,
-    line2: LineNr,
-    amount: LineNr,
-    amount_after: LineNr,
-) {
+pub fn diff_mark_adjust(buffer: Buf, line1: LineNr, line2: LineNr, amount: i32, amount_after: i32) {
     for tp in tabs() {
         let idx = tp.diff_index(buffer);
         if idx != DB_COUNT {
@@ -213,7 +207,7 @@ pub fn diff_mark_adjust(
 
 /// The edit `mark_adjust`'s four numbers describe, as the two counts every
 /// case below is written in terms of.
-fn inserted_deleted(line2: LineNr, amount: LineNr, amount_after: LineNr) -> (LineNr, LineNr) {
+fn inserted_deleted(line2: LineNr, amount: i32, amount_after: i32) -> (i32, i32) {
     if line2 == MAXLNUM {
         (amount, 0) // `mark_adjust(99, MAXLNUM, 9, 0)`: insert lines
     } else if amount_after > 0 {
@@ -235,8 +229,8 @@ fn diff_mark_adjust_tp(
     idx: c_int,
     line1: LineNr,
     line2: LineNr,
-    amount: LineNr,
-    amount_after: LineNr,
+    amount: i32,
+    amount_after: i32,
 ) {
     if diff_internal() != 0 {
         // The blocks will be recomputed before the next redraw, so
@@ -275,8 +269,8 @@ struct Edit {
     idx: usize,
     line1: LineNr,
     line2: LineNr,
-    amount: LineNr,
-    amount_after: LineNr,
+    amount: i32,
+    amount_after: i32,
     /// `:diffget`/`:diffput` is walking the list and doing its own
     /// bookkeeping: only line numbers may move.
     busy: bool,
@@ -286,9 +280,9 @@ impl Edit {
     /// Slide the *other* buffers' ranges of `dp` by the edit: `off` is how
     /// far the block's start moved up, `n` how many lines they gain -- which
     /// is how a deletion in one buffer becomes a change in the rest.
-    fn adjust_others(&self, dp: &mut DiffBlock, slots: &DiffSlots, off: LineNr, n: LineNr) {
+    fn adjust_others(&self, dp: &mut DiffBlock, slots: &DiffSlots, off: i32, n: i32) {
         for i in used_slots(slots).filter(|&i| i != self.idx) {
-            dp.df_lnum[i] = (dp.df_lnum[i] - off).max(1);
+            dp.df_lnum[i] = (dp.df_lnum[i] - off).max(LineNr::ONE);
             dp.df_count[i] += n;
         }
     }
@@ -330,7 +324,7 @@ impl Edit {
                     // previous block left behind.
                     dnext.df_lnum[i] = match prev {
                         None => line1,
-                        Some(p) => line1 + blocks[p].end(i) - blocks[p].end(idx),
+                        Some(p) => LineNr::new(line1 + blocks[p].end(i).get() - blocks[p].end(idx)),
                     };
                     dnext.df_count[i] = deleted;
                 }

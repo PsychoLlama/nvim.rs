@@ -332,7 +332,7 @@ pub fn do_c_expr_indent() {
 pub fn f_cindent(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let pos = Win::current().w_cursor;
     let lnum = tv_get_lnum(&args[0]) as LineNr;
-    let amount = if lnum >= 1 && lnum <= Buf::current().b_ml.ml_line_count {
+    let amount = if lnum >= LineNr::ONE && lnum <= Buf::current().b_ml.ml_line_count {
         Win::current().w_cursor.lnum = lnum;
         let amount = VarNumber::from(get_c_indent());
         Win::current().w_cursor = pos;

@@ -18,9 +18,9 @@ use neovim::eval::typval::{
 };
 use neovim::memory::{xfree, xmalloc};
 use neovim::types::{
-    TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, VarType, kBoolVarFalse, kBoolVarTrue,
-    kSpecialVarNull,
+    LineNr, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
+    VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, VarType, kBoolVarFalse,
+    kBoolVarTrue, kSpecialVarNull,
 };
 use neovim::winlayer::Win;
 
@@ -1258,7 +1258,7 @@ fn getting_a_line_number_resolves_the_cursor() {
     let answers = [42, 100500, 46, -1, -1, -1, -1, -1, 0, 1, 0, -1];
 
     for (row, want) in rows.into_iter().zip(answers) {
-        win.w_cursor.lnum = 46;
+        win.w_cursor.lnum = LineNr::new(46);
         let tv = row.tv;
         log.check(&[]);
         let got = check_emsg(log.editor(), || tv_get_lnum(&tv), row.emsg);

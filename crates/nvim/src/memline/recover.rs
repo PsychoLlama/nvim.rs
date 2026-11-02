@@ -38,12 +38,7 @@ use crate::winlayer::{Buf, Win};
 /// Both callers name `curbuf`'s own full path and pass no `:read` command,
 /// which is the whole of `readfile`'s precondition; they differ only in the
 /// range and in whether the buffer is new.
-fn read_original(
-    from: LineNr,
-    skip: LineNr,
-    lines: LineNr,
-    flags: c_int,
-) -> Result<Loaded, Failed> {
+fn read_original(from: LineNr, skip: i32, lines: i32, flags: c_int) -> Result<Loaded, Failed> {
     // A copy: the read's autocommands may rename the buffer.
     let name = Buf::current().name.full().map(CStr::to_owned);
     let flags = ReadFlags::from_bits(flags);
@@ -177,7 +172,7 @@ pub fn ml_recover(checkext: bool) {
 
         // Recovery is going ahead, so the buffer's current contents go.
         while !Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
-            let _ = ml_delete(1);
+            let _ = ml_delete(LineNr::ONE);
         }
 
         // Read the original file, to pick up 'fileformat', 'fileencoding'
@@ -185,7 +180,7 @@ pub fn ml_recover(checkext: bool) {
         // used — except as the "unchanged?" comparison below.
         let mut orig_file_status = Err(Failed);
         if Buf::current().name.full().is_some() {
-            orig_file_status = read_original(0, 0, MAXLNUM, READ_NEW as c_int);
+            orig_file_status = read_original(LineNr::ZERO, 0, MAXLNUM.get(), READ_NEW as c_int);
         }
 
         // What the swap file recorded wins over what the file suggests.
@@ -210,22 +205,23 @@ pub fn ml_recover(checkext: bool) {
         // Lines 1 to lnum are what was recovered, lines lnum + 1 to
         // ml_line_count are the file's, and line ml_line_count + 1 is the
         // empty buffer's dummy line.
-        if orig_file_status != Ok(Loaded::Read) || Buf::current().b_ml.ml_line_count != lnum * 2 + 1
+        if orig_file_status != Ok(Loaded::Read)
+            || Buf::current().b_ml.ml_line_count != LineNr::new(lnum.get() * 2 + 1)
         {
             // Recovering an empty file gives two lines of which the first
             // is empty; that is not a modification.
-            if !(Buf::current().b_ml.ml_line_count == 2
-                && Buf::current().lines().line(1).is_empty())
+            if !(Buf::current().b_ml.ml_line_count == LineNr::new(2)
+                && Buf::current().lines().line(LineNr::ONE).is_empty())
             {
                 changed_internal(Buf::current());
                 buf_inc_changedtick(Buf::current());
             }
         } else {
-            for idx in 1..=lnum {
+            for idx in 1..=lnum.get() {
                 // One of the two lines has to be copied: fetching the
                 // other flushes the cache the first came out of.
-                let recovered = Buf::current().lines().line_copy(idx);
-                let same = *recovered == *Buf::current().lines().line(idx + lnum);
+                let recovered = Buf::current().lines().line_copy(LineNr::new(idx));
+                let same = *recovered == *Buf::current().lines().line(lnum + idx);
                 if !same {
                     changed_internal(Buf::current());
                     buf_inc_changedtick(Buf::current());
@@ -457,8 +453,8 @@ fn choose_swapfile(fname: &CStr) -> Option<XString> {
 fn recover_lines(mut buffer: Buf) -> Result<(LineNr, c_int), ()> {
     let mut bnum: BlockNr = 1; // start with block 1
     let mut page_count: c_uint = 1; // which is one page
-    let mut lnum: LineNr = 0; // append after line 0 in curbuf
-    let mut line_count: LineNr = 0;
+    let mut lnum: LineNr = LineNr::ZERO; // append after line 0 in curbuf
+    let mut line_count: LineNr = LineNr::ZERO;
     let mut idx: usize = 0; // start with the first index in block 1
     let mut error = 0;
     buffer.b_ml.stack_clear();
@@ -483,7 +479,7 @@ fn recover_lines(mut buffer: Buf) -> Result<(LineNr, c_int), ()> {
             }
             let block = buffer.b_ml.memfile().get(bnum, page_count);
             if let Some(id) = block {
-                buffer.b_ml.lock(id, 0, 0);
+                buffer.b_ml.lock(id, LineNr::ZERO, LineNr::ZERO);
             }
             if block.is_none() {
                 if bnum == 1 {
@@ -517,9 +513,9 @@ fn recover_lines(mut buffer: Buf) -> Result<(LineNr, c_int), ()> {
                 let count = usize::from(pointers.count());
                 // The first time down this block, its entries should
                 // account for exactly the line count promised above it.
-                if idx == 0 && line_count != 0 {
+                if idx == 0 && line_count != LineNr::ZERO {
                     line_count -= pointers.line_total();
-                    if line_count != 0 {
+                    if line_count != LineNr::ZERO {
                         error += 1;
                         append_note(&mut lnum, c"???LINE COUNT WRONG");
                     }
@@ -536,17 +532,23 @@ fn recover_lines(mut buffer: Buf) -> Result<(LineNr, c_int), ()> {
                         // original file. Reading them back from there is
                         // slow, but it works.
                         if !cannot_open {
-                            line_count = pe.pe_line_count;
+                            line_count = LineNr::new(pe.pe_line_count);
                             // `pe_line_count` and `pe_old_lnum` come off
                             // disk; readfile() must not be handed either
                             // of them unchecked.
-                            if line_count <= 0
-                                || pe.pe_old_lnum < 1
-                                || read_original(lnum, pe.pe_old_lnum - 1, line_count, 0).is_err()
+                            if line_count <= LineNr::ZERO
+                                || pe.pe_old_lnum < LineNr::ONE
+                                || read_original(
+                                    lnum,
+                                    (pe.pe_old_lnum - 1).get(),
+                                    line_count.get(),
+                                    0,
+                                )
+                                .is_err()
                             {
                                 cannot_open = true;
                             } else {
-                                lnum += line_count;
+                                lnum += line_count.get();
                             }
                         }
                         if cannot_open {
@@ -561,14 +563,14 @@ fn recover_lines(mut buffer: Buf) -> Result<(LineNr, c_int), ()> {
                     let top = ml_add_stack(buffer);
                     let frame = InfoPtr {
                         ip_bnum: bnum,
-                        ip_low: 0,
-                        ip_high: 0,
+                        ip_low: LineNr::ZERO,
+                        ip_high: LineNr::ZERO,
                         ip_index: idx as c_int,
                     };
                     buffer.b_ml.stack_set(top, frame);
 
                     bnum = pe.pe_bnum;
-                    line_count = pe.pe_line_count;
+                    line_count = LineNr::new(pe.pe_line_count);
                     page_count = pe.pe_page_count as c_uint;
                     // `pe_page_count` sizes the allocation `get` makes, so a
                     // bogus value (0x40000000, say) would ask for gigabytes.
@@ -758,7 +760,7 @@ pub fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) {
             continue;
         }
         ml_flush_line(buf); // flush the buffered line
-        let _ = ml_find_line(buf, 0, ML_FLUSH); // flush the locked block
+        let _ = ml_find_line(buf, LineNr::ZERO, ML_FLUSH); // flush the locked block
 
         if buf_is_changed(buf)
             && check_file != 0
@@ -819,7 +821,7 @@ pub fn ml_preserve(mut buffer: Buf, message: bool, do_fsync: bool) {
     got_int.set(false);
 
     ml_flush_line(buffer); // flush the buffered line
-    let _ = ml_find_line(buffer, 0, ML_FLUSH); // flush the locked block
+    let _ = ml_find_line(buffer, LineNr::ZERO, ML_FLUSH); // flush the locked block
     let sync_flags = MFS_ALL | if do_fsync { MFS_FLUSH } else { 0 };
     // `ml_preserve` still answers OK/FAIL to its own callers, so the
     // memfile's result is converted here and again below.
@@ -835,7 +837,7 @@ pub fn ml_preserve(mut buffer: Buf, message: bool, do_fsync: bool) {
     // the negative numbers as it fetches each block's first line.
     'theend: {
         if buffer.b_ml.memfile().need_trans() && !got_int.get() {
-            let mut lnum: LineNr = 1;
+            let mut lnum: LineNr = LineNr::ONE;
             while buffer.b_ml.memfile().need_trans() && lnum <= buffer.b_ml.ml_line_count {
                 if ml_find_line(buffer, lnum, ML_FIND).is_none() {
                     status = FAIL;
@@ -843,7 +845,7 @@ pub fn ml_preserve(mut buffer: Buf, message: bool, do_fsync: bool) {
                 }
                 lnum = buffer.b_ml.locked_high() + 1;
             }
-            let _ = ml_find_line(buffer, 0, ML_FLUSH); // flush the locked block
+            let _ = ml_find_line(buffer, LineNr::ZERO, ML_FLUSH); // flush the locked block
             // Sync the pointer blocks that were just updated.
             if buffer.b_ml.memfile().sync(sync_flags).is_err() {
                 status = FAIL;

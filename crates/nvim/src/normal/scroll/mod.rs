@@ -42,7 +42,7 @@ pub(crate) use self::zet::*;
 /// windows showing the same buffer at different widths wrap it differently,
 /// so buffer line numbers would not line up.
 pub(crate) fn get_vtopline(window: Win) -> c_int {
-    plines_m_win_fill(window, 1, window.w_topline) - window.w_topfill
+    plines_m_win_fill(window, LineNr::ONE, window.w_topline) - window.w_topfill
 }
 
 /// After a command that may have scrolled: bring the 'scrollbind' windows
@@ -52,7 +52,7 @@ pub(crate) fn do_check_scrollbind(check: bool) {
     // rather than an absolute position, so that a window bound to two others
     // does not fight itself.
     static OLD_CURWIN: GlobalCell<Option<WinId>> = GlobalCell::new(None);
-    static OLD_VTOPLINE: GlobalCell<LineNr> = GlobalCell::new(0);
+    static OLD_VTOPLINE: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
     static OLD_BUF: GlobalCell<Option<BufId>> = GlobalCell::new(None);
     static OLD_LEFTCOL: GlobalCell<ColNr> = GlobalCell::new(0);
 
@@ -64,20 +64,21 @@ pub(crate) fn do_check_scrollbind(check: bool) {
             did_syncbind.set(false);
         } else if OLD_CURWIN.get() == Some(win.id()) {
             if (win.buffer().try_id() == OLD_BUF.get() || win.w_onebuf_opt.wo_diff != 0)
-                && (vtopline as LineNr != OLD_VTOPLINE.get() || win.w_leftcol != OLD_LEFTCOL.get())
+                && (LineNr::new(vtopline) != OLD_VTOPLINE.get()
+                    || win.w_leftcol != OLD_LEFTCOL.get())
             {
-                let down = vtopline as LineNr - OLD_VTOPLINE.get();
+                let down = LineNr::new(vtopline) - OLD_VTOPLINE.get();
                 check_scrollbind(down, win.w_leftcol - OLD_LEFTCOL.get());
             }
         } else if p_sbo(|value| has_char(value, 'j' as c_int)) {
             // Just moved into this window, and 'scrollopt' has "jump":
             // bring it back to where the binding says it should be.
-            check_scrollbind(vtopline as LineNr - win.w_scbind_pos as LineNr, 0);
+            check_scrollbind((LineNr::new(vtopline) - win.w_scbind_pos).get(), 0);
         }
         win.w_scbind_pos = vtopline;
     }
     OLD_CURWIN.set(Some(win.id()));
-    OLD_VTOPLINE.set(vtopline as LineNr);
+    OLD_VTOPLINE.set(LineNr::new(vtopline));
     OLD_BUF.set(win.buffer().try_id());
     OLD_LEFTCOL.set(win.w_leftcol);
 }
@@ -88,7 +89,7 @@ pub(crate) fn do_check_scrollbind(check: bool) {
 /// Each window is made current in turn, because the scrolling functions work
 /// on `curwin`. Any Visual selection is put down for the duration so that
 /// nothing extends it.
-pub(crate) fn check_scrollbind(vtopline_diff: LineNr, leftcol_diff: c_int) {
+pub(crate) fn check_scrollbind(vtopline_diff: i32, leftcol_diff: c_int) {
     let (old_curwin, old_curbuf) = (Win::current(), Buf::current());
     let old_visual_select = visual_select();
     let old_visual_active = visual_active();
@@ -124,9 +125,9 @@ pub(crate) fn check_scrollbind(vtopline_diff: LineNr, leftcol_diff: c_int) {
                     let new_vtopline = win.w_scbind_pos.min(max_vtopline).max(1);
                     let y = new_vtopline - curr_vtopline;
                     if y > 0 {
-                        scrollup(win, y as LineNr, false);
+                        scrollup(win, y, false);
                     } else {
-                        scrolldown(win, -(y as LineNr), false);
+                        scrolldown(win, -y, false);
                     }
                 }
                 redraw_later(win, UPD_VALID);
@@ -166,7 +167,7 @@ pub(crate) fn nv_page(cmd_arg: &mut CmdArg) {
 /// the screen for as long as it can.
 pub(crate) fn nv_scroll_line(cmd_arg: &mut CmdArg) {
     if !check_clear_op(cmd_arg.op()) {
-        scroll_redraw(cmd_arg.arg, cmd_arg.count1 as LineNr);
+        scroll_redraw(cmd_arg.arg, cmd_arg.count1);
     }
 }
 

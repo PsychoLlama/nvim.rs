@@ -61,9 +61,9 @@ pub(crate) fn u_getbot(mut buffer: Buf) {
         return;
     };
     if let Some(entry) = uh.getbot.take().and_then(|at| uh.entries.get_mut(at)) {
-        let extra: LineNr = line_count - entry.lcount;
+        let extra: i32 = line_count - entry.lcount;
         entry.bot = entry.top + entry.size() + 1 + extra;
-        if entry.bot < 1 || entry.bot > line_count {
+        if entry.bot < LineNr::ONE || entry.bot > line_count {
             iemsg(gettext(c"E440: Undo line missing"));
             entry.bot = entry.top + 1;
         }
@@ -170,7 +170,7 @@ pub fn u_clearall(mut buffer: Buf) {
     buffer.b_u_synced = true;
     buffer.b_u_numhead = 0;
     buffer.b_u_line = None;
-    buffer.b_u_line_lnum = 0;
+    buffer.b_u_line_lnum = LineNr::ZERO;
 }
 
 /// Frees every header the buffer's tree still reaches, and the `U` line.
@@ -200,7 +200,7 @@ pub(crate) fn u_saveline(mut buffer: Buf, lnum: LineNr) {
     if lnum == buffer.b_u_line_lnum {
         return;
     }
-    if lnum < 1 || lnum > buffer.b_ml.ml_line_count {
+    if lnum < LineNr::ONE || lnum > buffer.b_ml.ml_line_count {
         return;
     }
     u_clearline(buffer);
@@ -217,7 +217,7 @@ pub(crate) fn u_saveline(mut buffer: Buf, lnum: LineNr) {
 /// Forgets the line `U` would have put back.
 pub fn u_clearline(mut buffer: Buf) {
     if buffer.b_u_line.take().is_some() {
-        buffer.b_u_line_lnum = 0;
+        buffer.b_u_line_lnum = LineNr::ZERO;
     }
 }
 
@@ -229,7 +229,7 @@ pub fn u_undoline() {
         return;
     }
     let lnum = buf.b_u_line_lnum;
-    if u_savecommon(buf, lnum - 1, lnum + 1, 0, false).is_err() {
+    if u_savecommon(buf, lnum - 1, lnum + 1, LineNr::ZERO, false).is_err() {
         return;
     }
     let lnum = buf.b_u_line_lnum;
@@ -244,7 +244,7 @@ pub fn u_undoline() {
     buf.b_u_line = Some(current);
     extmark_splice_cols(
         buf,
-        lnum - 1,
+        (lnum - 1).get(),
         0,
         len_as_int(old_len),
         len_as_int(new_len),
@@ -289,9 +289,9 @@ mod tests {
             alt_next: UndoLink::to_seq(alt_next),
             alt_prev: UndoLink::to_seq(alt_prev),
             entries: vec![UndoEntry {
-                top: 0,
-                bot: 2,
-                lcount: 0,
+                top: LineNr::ZERO,
+                bot: LineNr::new(2),
+                lcount: LineNr::ZERO,
                 lines: vec![XString::from_bytes(format!("saved by {seq}").as_bytes())],
             }],
             ..Default::default()

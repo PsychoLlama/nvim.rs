@@ -120,7 +120,7 @@ pub(crate) fn do_exbuffer(excmd: &mut ExArg) {
             excmd,
             DOBUF_FIRST as c_int,
             FORWARD as c_int,
-            excmd.line2 as c_int,
+            excmd.line2.get(),
         );
     }
     run_ecmd_cmd(excmd);
@@ -139,7 +139,7 @@ pub(crate) fn ex_bmodified(excmd: &mut ExArg) {
         excmd,
         DOBUF_MOD as c_int,
         FORWARD as c_int,
-        excmd.line2 as c_int,
+        excmd.line2.get(),
     );
     run_ecmd_cmd(excmd);
 }
@@ -150,7 +150,7 @@ pub(crate) fn ex_bnext(excmd: &mut ExArg) {
         excmd,
         DOBUF_CURRENT as c_int,
         FORWARD as c_int,
-        excmd.line2 as c_int,
+        excmd.line2.get(),
     );
     run_ecmd_cmd(excmd);
 }
@@ -161,7 +161,7 @@ pub(crate) fn ex_bprevious(excmd: &mut ExArg) {
         excmd,
         DOBUF_CURRENT as c_int,
         BACKWARD as c_int,
-        excmd.line2 as c_int,
+        excmd.line2.get(),
     );
     run_ecmd_cmd(excmd);
 }
@@ -220,15 +220,20 @@ pub(crate) fn ex_find(excmd: &mut ExArg) {
         return;
     }
     let count = if excmd.addr_count > 0 {
-        excmd.line2 as c_int
+        excmd.line2.get()
     } else {
         1
     };
     let fname = if !get_findfunc().is_empty() {
         findfunc_find_file(excmd.line.arg(), count)
     } else {
-        let nth = if excmd.addr_count > 0 { excmd.line2 } else { 1 };
-        find_nth_file_in_path(excmd.line.arg(), FileNameOpts::MESS, nth).map(ThinCString::from)
+        let nth = if excmd.addr_count > 0 {
+            excmd.line2
+        } else {
+            LineNr::ONE
+        };
+        find_nth_file_in_path(excmd.line.arg(), FileNameOpts::MESS, nth.get())
+            .map(ThinCString::from)
     };
     let Some(fname) = fname else {
         return;
@@ -427,7 +432,7 @@ pub(crate) fn ex_read(excmd: &mut ExArg) {
             shown.as_deref(),
             excmd.line2,
             0,
-            MAXLNUM,
+            MAXLNUM.get(),
             Some(excmd),
             ReadFlags::NONE,
             false,
@@ -436,7 +441,7 @@ pub(crate) fn ex_read(excmd: &mut ExArg) {
         // 'cpoptions' `a` makes `:read file` set the alternate file.
         if cpo_has(CpoFlag::ALTREAD) {
             let name = excmd.line.cstr_from(excmd.line.arg);
-            setaltfname(Some(name), Some(name), 1);
+            setaltfname(Some(name), Some(name), LineNr::ONE);
         }
         // A copy, as `ex_edit`'s: `readfile` takes the command too.
         let name = excmd.line.cstr_from(excmd.line.arg).to_owned();
@@ -445,7 +450,7 @@ pub(crate) fn ex_read(excmd: &mut ExArg) {
             None,
             excmd.line2,
             0,
-            MAXLNUM,
+            MAXLNUM.get(),
             Some(excmd),
             ReadFlags::NONE,
             false,
@@ -463,14 +468,14 @@ pub(crate) fn ex_read(excmd: &mut ExArg) {
     // Reading into an empty buffer in Ex mode leaves the empty line the
     // buffer started with; drop it.
     if was_empty && exmode_active.get() {
-        let lnum = if excmd.line2 == 0 {
+        let lnum = if excmd.line2 == LineNr::ZERO {
             Buf::current().b_ml.ml_line_count
         } else {
-            1
+            LineNr::ONE
         };
         if ml_get_len(lnum) == 0 && u_savedel(lnum, 1).is_ok() {
             let _ = ml_delete(lnum);
-            if Win::current().w_cursor.lnum > 1 && Win::current().w_cursor.lnum >= lnum {
+            if Win::current().w_cursor.lnum > LineNr::ONE && Win::current().w_cursor.lnum >= lnum {
                 Win::current().w_cursor.lnum -= 1;
             }
             deleted_lines_mark(lnum, 1);
@@ -515,7 +520,7 @@ pub(crate) fn ex_checkpath(excmd: &mut ExArg) {
         } else {
             ACTION_SHOW as c_int
         },
-        1,
+        LineNr::ONE,
         MAXLNUM,
         excmd.forceit,
         false,
@@ -544,7 +549,7 @@ pub(crate) fn ex_shada(excmd: &mut ExArg) {
 
 /// `:fclose` — close a floating window by its handle.
 pub(crate) fn ex_fclose(excmd: &mut ExArg) {
-    win_float_remove(excmd.forceit, excmd.line1 as c_int);
+    win_float_remove(excmd.forceit, excmd.line1.get());
 }
 
 /// `buf_hide()` as checked code.

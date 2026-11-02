@@ -450,7 +450,7 @@ pub(crate) fn get_func_line(frame: &FuncCall) -> Option<XString> {
                     .linenr
                     .set(c_int::try_from(linenr).unwrap_or(c_int::MAX));
                 let dup = XString::from_bytes(line);
-                crate::runtime::set_sourcing_lnum(LineNr::from(frame.linenr.get()));
+                crate::runtime::set_sourcing_lnum(LineNr::new(frame.linenr.get()));
                 if do_profiling.get() == PROF_YES {
                     func_line_start(frame);
                 }
@@ -467,7 +467,7 @@ pub(crate) fn get_func_line(frame: &FuncCall) -> Option<XString> {
 
     // Did we encounter a breakpoint?
     let breakpoint = frame.breakpoint.get();
-    if breakpoint != 0 && breakpoint <= sourcing_lnum() {
+    if breakpoint != LineNr::ZERO && breakpoint <= sourcing_lnum() {
         let at = sourcing_lnum();
         dbg_breakpoint(name, at);
         // Find the next breakpoint.

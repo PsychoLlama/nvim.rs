@@ -454,7 +454,7 @@ pub(crate) const CMDLINE_INFO_INIT: CmdlineInfo = CmdlineInfo {
 
 /// An all-zero [`Pos`].
 pub(crate) const POS_INIT: Pos = Pos {
-    lnum: 0,
+    lnum: LineNr::ZERO,
     col: 0,
     coladd: 0,
 };
@@ -464,9 +464,9 @@ pub(crate) const VIEWSTATE_INIT: ViewState = ViewState {
     vs_curswant: 0,
     vs_leftcol: 0,
     vs_skipcol: 0,
-    vs_topline: 0,
+    vs_topline: LineNr::ZERO,
     vs_topfill: 0,
-    vs_botline: 0,
+    vs_botline: LineNr::ZERO,
     vs_empty_rows: 0,
 };
 
@@ -503,12 +503,12 @@ pub(crate) const EXARG_T_INIT: ExArg<'static> = ExArg {
     skip: false,
     forceit: false,
     addr_count: 0,
-    line1: 0,
-    line2: 0,
+    line1: LineNr::ZERO,
+    line2: LineNr::ZERO,
     addr_type: CmdAddr::Lines,
     flags: 0,
     do_ecmd_cmd: EcmdCmd::None,
-    do_ecmd_lnum: 0,
+    do_ecmd_lnum: LineNr::ZERO,
     append: false,
     usefilter: false,
     amount: 0,
@@ -554,7 +554,7 @@ pub(crate) const CP_UNDO_INFO_INIT: CpUndoInfo = CpUndoInfo {
     save_b_u_time_cur: 0,
     save_b_u_save_nr_cur: 0,
     save_b_u_line: None,
-    save_b_u_line_lnum: 0,
+    save_b_u_line_lnum: LineNr::ZERO,
     save_b_u_line_colnr: 0,
 };
 

@@ -189,7 +189,7 @@ pub(crate) fn comp_pos(win: Win, row: &mut c_int, col: &mut c_int) -> (LineNr, b
     }
 
     // Mouse row reached, adjust lnum for concealed lines.
-    while lnum < last_line && win.conceals_line(lnum - 1, false) {
+    while lnum < last_line && win.conceals_line((lnum - 1).get(), false) {
         lnum = win.fold_last(lnum + 1);
     }
 

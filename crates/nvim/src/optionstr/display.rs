@@ -305,7 +305,7 @@ pub fn did_set_signcolumn(args: &mut OptSet) -> Result<(), OptError> {
     // "number" shares the sign column with the number column, so
     // leaving or entering it invalidates the cached number width.
     if old_bytes(args).starts_with(b"nu") || wp.w_minscwidth == SCL_NUM {
-        wp.w_nrwidth_line_count = 0 as LineNr;
+        wp.w_nrwidth_line_count = LineNr::ZERO;
     }
     Ok(())
 }
@@ -369,7 +369,7 @@ pub(crate) fn parse_border_opt(border_opt: &CStr) -> bool {
     let mut fconfig = WinConfig {
         window: Handle::NONE,
         bufpos: LPos {
-            lnum: -1 as LineNr,
+            lnum: LineNr::new(-1),
             col: 0 as ColNr,
         },
         height: 0,

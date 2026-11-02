@@ -153,13 +153,15 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
     match qf_buf {
         // Use the existing quickfix buffer.
         Some(bufnr) => {
-            if edit_buffer_number(bufnr.get(), 1, hide | EcmdFlags::OLDBUF, oldwin).is_err() {
+            if edit_buffer_number(bufnr.get(), LineNr::ONE, hide | EcmdFlags::OLDBUF, oldwin)
+                .is_err()
+            {
                 return false;
             }
         }
         // Create a new quickfix buffer and remember its number.
         None => {
-            if edit_buffer_number(0, 1, hide, oldwin).is_err() {
+            if edit_buffer_number(0, LineNr::ONE, hide, oldwin).is_err() {
                 return false;
             }
             qi.bufnr = Buf::current().handle.get();
@@ -241,7 +243,7 @@ pub fn ex_copen(excmd: &mut ExArg) {
 
     let (addr_count, line2) = (excmd.addr_count, excmd.line2);
     let height = if addr_count != 0 {
-        line2 as c_int
+        line2.get()
     } else {
         QF_WINHEIGHT.cast_signed()
     };
@@ -270,7 +272,7 @@ pub fn ex_copen(excmd: &mut ExArg) {
     drop(busy);
 
     let mut win = Win::current();
-    win.w_cursor.lnum = LineNr::from(lnum);
+    win.w_cursor.lnum = LineNr::new(lnum);
     win.w_cursor.col = 0;
     check_cursor(win);
     win.update_topline(); // scroll to show the line
@@ -346,7 +348,7 @@ impl Win {
             Some(shown) if self.is_location_list_window() => shown.stack(),
             _ => Qi::global(),
         };
-        LineNr::from(qi.current_list().index)
+        LineNr::new(qi.current_list().index)
     }
 }
 
@@ -357,11 +359,11 @@ pub(crate) fn qf_win_pos_update(qi: Qi, old_qf_index: c_int) -> bool {
     let Some(mut win) = qf_find_win(qi) else {
         return false;
     };
-    if LineNr::from(qf_index) <= win.buffer().b_ml.ml_line_count && old_qf_index != qf_index {
+    if LineNr::new(qf_index) <= win.buffer().b_ml.ml_line_count && old_qf_index != qf_index {
         // Both the old and the new line need redrawing.
-        win.w_redraw_top = LineNr::from(old_qf_index.min(qf_index));
-        win.w_redraw_bot = LineNr::from(old_qf_index.max(qf_index));
-        win_goto_line(win, LineNr::from(qf_index));
+        win.w_redraw_top = LineNr::new(old_qf_index.min(qf_index));
+        win.w_redraw_bot = LineNr::new(old_qf_index.max(qf_index));
+        win_goto_line(win, LineNr::new(qf_index));
     }
     true
 }

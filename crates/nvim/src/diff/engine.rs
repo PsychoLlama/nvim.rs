@@ -131,9 +131,9 @@ pub(crate) fn diff_file_internal(
     let mut push = |start_a: i64, count_a: i64, start_b: i64, count_b: i64| {
         let int = |n: i64| c_int::try_from(n).map_err(|_| Aborted);
         hunks.push(DiffHunk {
-            lnum_orig: int(start_a + 1)?,
+            lnum_orig: LineNr::new(int(start_a + 1)?),
             count_orig: int(count_a)?,
-            lnum_new: int(start_b + 1)?,
+            lnum_new: LineNr::new(int(start_b + 1)?),
             count_new: int(count_b)?,
         });
         Ok(())

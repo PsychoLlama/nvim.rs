@@ -14,6 +14,7 @@ use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::startup::vim_ignored;
 use crate::tag::{TagFiles, get_tags, get_tagstack, set_tagstack};
+use crate::types::LineNr;
 use crate::types::{
     DictRef, EvalFuncData, Pos, TypVal, VarNumber, kListLenMayKnow, kListLenUnknown,
 };
@@ -29,7 +30,7 @@ pub fn f_changenr(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// One `{lnum, col, coladd}` entry, for the caller to add to and push.
 fn mark_dict(mark: Pos) -> DictRef {
     let d = tv_dict_alloc();
-    let _ = d.edit().add_number(b"lnum", mark.lnum as VarNumber);
+    let _ = d.edit().add_number(b"lnum", i64::from(mark.lnum));
     let _ = d.edit().add_number(b"col", mark.col as VarNumber);
     let _ = d.edit().add_number(b"coladd", mark.coladd as VarNumber);
     d
@@ -72,7 +73,7 @@ pub fn f_getchangelist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
 
     for i in 0..buf.b_changelistlen {
         let mark = buf.b_changelist[i as usize].mark;
-        if mark.lnum != 0 {
+        if mark.lnum != LineNr::ZERO {
             entries.edit().push_dict(Some(mark_dict(mark)));
         }
     }
@@ -91,7 +92,7 @@ pub fn f_getjumplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     out.push_number(wp.w_jumplistidx as VarNumber);
     for i in 0..wp.w_jumplistlen {
         let entry = &wp.w_jumplist[i as usize];
-        if entry.fmark.mark.lnum == 0 {
+        if entry.fmark.mark.lnum == LineNr::ZERO {
             continue;
         }
         let d = mark_dict(entry.fmark.mark);

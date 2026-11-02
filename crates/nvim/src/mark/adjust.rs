@@ -45,7 +45,7 @@ use crate::types::CmdModFlags;
 /// Where `clrallmarks` leaves `b_last_cursor`, and therefore what
 /// "`'"` has never really been set" looks like to the adjuster.
 const INIT_POS: Pos = Pos {
-    lnum: 1,
+    lnum: LineNr::ONE,
     col: 0,
     coladd: 0,
 };
@@ -58,8 +58,8 @@ const INIT_POS: Pos = Pos {
 struct LineShift {
     line1: LineNr,
     line2: LineNr,
-    amount: LineNr,
-    amount_after: LineNr,
+    amount: i32,
+    amount_after: i32,
 }
 
 impl LineShift {
@@ -67,8 +67,8 @@ impl LineShift {
     #[inline(always)]
     fn line(self, lnum: &mut LineNr) {
         if *lnum >= self.line1 && *lnum <= self.line2 {
-            *lnum = if self.amount == MAXLNUM {
-                0
+            *lnum = if self.amount == MAXLNUM.get() {
+                LineNr::ZERO
             } else {
                 *lnum + self.amount
             };
@@ -82,7 +82,7 @@ impl LineShift {
     #[inline(always)]
     fn line_nodel(self, lnum: &mut LineNr) {
         if *lnum >= self.line1 && *lnum <= self.line2 {
-            *lnum = if self.amount == MAXLNUM {
+            *lnum = if self.amount == MAXLNUM.get() {
                 self.line1
             } else {
                 *lnum + self.amount
@@ -97,8 +97,8 @@ impl LineShift {
     #[inline(always)]
     fn cursor(self, posp: &mut Pos) {
         if posp.lnum >= self.line1 && posp.lnum <= self.line2 {
-            if self.amount == MAXLNUM {
-                posp.lnum = (self.line1 - 1).max(1);
+            if self.amount == MAXLNUM.get() {
+                posp.lnum = (self.line1 - 1).max(LineNr::ONE);
                 posp.col = 0;
             } else {
                 posp.lnum += self.amount;
@@ -137,7 +137,7 @@ impl LineShift {
 struct ColShift {
     lnum: LineNr,
     mincol: ColNr,
-    lnum_amount: LineNr,
+    lnum_amount: i32,
     col_amount: ColNr,
     spaces_removed: c_int,
 }
@@ -182,13 +182,7 @@ impl ColShift {
 /// Example: Delete lines 34 and 35: mark_adjust(34, 35, MAXLNUM, -2);
 /// Example: Insert two lines below 55: mark_adjust(56, MAXLNUM, 2, 0);
 /// or: mark_adjust(56, 55, MAXLNUM, 2);
-pub fn mark_adjust(
-    line1: LineNr,
-    line2: LineNr,
-    amount: LineNr,
-    amount_after: LineNr,
-    op: ExtmarkOp,
-) {
+pub fn mark_adjust(line1: LineNr, line2: LineNr, amount: i32, amount_after: i32, op: ExtmarkOp) {
     mark_adjust_buf(
         Buf::current(),
         line1,
@@ -209,8 +203,8 @@ pub fn mark_adjust(
 pub fn mark_adjust_nofold(
     line1: LineNr,
     line2: LineNr,
-    amount: LineNr,
-    amount_after: LineNr,
+    amount: i32,
+    amount_after: i32,
     op: ExtmarkOp,
 ) {
     mark_adjust_buf(
@@ -229,8 +223,8 @@ pub fn mark_adjust_buf(
     mut buffer: Buf,
     line1: LineNr,
     line2: LineNr,
-    amount: LineNr,
-    amount_after: LineNr,
+    amount: i32,
+    amount_after: i32,
     adjust_folds: bool,
     mode: MarkAdjustMode,
     op: ExtmarkOp,
@@ -318,7 +312,7 @@ pub fn mark_adjust_buf(
         shift.line(&mut curwin_handle.w_pcmark.lnum);
         shift.line(&mut curwin_handle.w_prev_pcmark.lnum);
         let mut saved = saved_cursor.get();
-        if saved.lnum != 0 {
+        if saved.lnum != LineNr::ZERO {
             shift.line_nodel(&mut saved.lnum);
             saved_cursor.set(saved);
         }
@@ -342,7 +336,7 @@ pub fn mark_adjust_buf(
         }
         // The remembered Visual range of a window that is not the current
         // one; the two move together or not at all.
-        if win.w_old_cursor_lnum != 0 {
+        if win.w_old_cursor_lnum != LineNr::ZERO {
             shift.line_nodel(&mut win.w_old_cursor_lnum);
             shift.line_nodel(&mut win.w_old_visual_lnum);
         }
@@ -358,11 +352,11 @@ pub fn mark_adjust_buf(
         // these three tests.
         if by_api || follows(win, by_term, buffer) {
             if win.w_topline >= line1 && win.w_topline <= line2 {
-                if amount == MAXLNUM {
+                if amount == MAXLNUM.get() {
                     // An API splice that *replaces* the topline's range with
                     // at least as many lines leaves the topline where it is.
                     if !(by_api && amount_after > line1 - line2 - 1) {
-                        win.w_topline = (line1 - 1).max(1);
+                        win.w_topline = (line1 - 1).max(LineNr::ONE);
                     }
                 } else if win.w_topline > line1 {
                     win.w_topline += amount;
@@ -421,7 +415,7 @@ fn follows(win: Win, by_term: bool, buffer: Buf) -> bool {
 pub fn mark_col_adjust(
     lnum: LineNr,
     mincol: ColNr,
-    lnum_amount: LineNr,
+    lnum_amount: i32,
     col_amount: ColNr,
     spaces_removed: c_int,
 ) {
@@ -503,18 +497,18 @@ mod tests {
 
     /// `:56,57d` — delete two lines, shifting everything after them up.
     const DELETE_56_57: LineShift = LineShift {
-        line1: 56,
-        line2: 57,
-        amount: MAXLNUM,
+        line1: LineNr::new(56),
+        line2: LineNr::new(57),
+        amount: MAXLNUM.get(),
         amount_after: -2,
     };
 
     /// `:56 insert two lines` — the second form `mark_adjust.c` documents,
     /// where the moved range is empty and `amount_after` does the work.
     const INSERT_TWO_BELOW_55: LineShift = LineShift {
-        line1: 56,
-        line2: 55,
-        amount: MAXLNUM,
+        line1: LineNr::new(56),
+        line2: LineNr::new(55),
+        amount: MAXLNUM.get(),
         amount_after: 2,
     };
 
@@ -528,58 +522,58 @@ mod tests {
 
     #[test]
     fn a_deleted_mark_is_invalidated() {
-        let mut lnum = 57;
+        let mut lnum = LineNr::new(57);
         DELETE_56_57.line(&mut lnum);
-        assert_eq!(lnum, 0);
+        assert_eq!(lnum.get(), 0);
     }
 
     #[test]
     fn a_deleted_mark_can_instead_land_on_the_first_deleted_line() {
-        let mut lnum = 57;
+        let mut lnum = LineNr::new(57);
         DELETE_56_57.line_nodel(&mut lnum);
-        assert_eq!(lnum, 56);
+        assert_eq!(lnum.get(), 56);
     }
 
     #[test]
     fn a_deleted_cursor_moves_to_the_line_above_the_range() {
-        let mut pos = at(57);
+        let mut pos = at(LineNr::new(57));
         DELETE_56_57.cursor(&mut pos);
-        assert_eq!((pos.lnum, pos.col), (55, 0));
+        assert_eq!((pos.lnum.get(), pos.col), (55, 0));
     }
 
     /// Deleting from line 1 leaves the cursor on line 1, not line 0.
     #[test]
     fn a_cursor_in_a_range_starting_at_line_one_stays_on_line_one() {
         let shift = LineShift {
-            line1: 1,
-            line2: 3,
-            amount: MAXLNUM,
+            line1: LineNr::ONE,
+            line2: LineNr::new(3),
+            amount: MAXLNUM.get(),
             amount_after: -3,
         };
-        let mut pos = at(2);
+        let mut pos = at(LineNr::new(2));
         shift.cursor(&mut pos);
-        assert_eq!((pos.lnum, pos.col), (1, 0));
+        assert_eq!((pos.lnum.get(), pos.col), (1, 0));
     }
 
     #[test]
     fn marks_past_the_range_shift_by_amount_after() {
         for shift in [DELETE_56_57, INSERT_TWO_BELOW_55] {
-            let mut lnum = 100;
+            let mut lnum = LineNr::new(100);
             shift.line(&mut lnum);
-            assert_eq!(lnum, 100 + shift.amount_after);
+            assert_eq!(lnum.get(), 100 + shift.amount_after);
 
-            let mut pos = at(100);
+            let mut pos = at(LineNr::new(100));
             shift.cursor(&mut pos);
-            assert_eq!((pos.lnum, pos.col), (100 + shift.amount_after, 7));
+            assert_eq!((pos.lnum.get(), pos.col), (100 + shift.amount_after, 7));
         }
     }
 
     #[test]
     fn marks_before_the_range_are_untouched() {
         for shift in [DELETE_56_57, INSERT_TWO_BELOW_55] {
-            let mut lnum = 10;
+            let mut lnum = LineNr::new(10);
             shift.line(&mut lnum);
-            assert_eq!(lnum, 10);
+            assert_eq!(lnum.get(), 10);
         }
     }
 
@@ -588,31 +582,35 @@ mod tests {
     #[test]
     fn an_insertion_moves_the_marks_it_covers() {
         let shift = LineShift {
-            line1: 56,
+            line1: LineNr::new(56),
             line2: MAXLNUM,
             amount: 2,
             amount_after: 0,
         };
-        let mut lnum = 60;
+        let mut lnum = LineNr::new(60);
         shift.line(&mut lnum);
-        assert_eq!(lnum, 62);
+        assert_eq!(lnum.get(), 62);
     }
 
     /// The three rules over one deletion, side by side — which is the whole
     /// per-store decision `mark_adjust_buf` makes forty times.
     #[test]
     fn the_three_rules_disagree_only_inside_the_deleted_range() {
-        let mut invalidated = 57;
-        let mut landed = 57;
-        let mut cursor = at(57);
+        let mut invalidated = LineNr::new(57);
+        let mut landed = LineNr::new(57);
+        let mut cursor = at(LineNr::new(57));
         DELETE_56_57.line(&mut invalidated);
         DELETE_56_57.line_nodel(&mut landed);
         DELETE_56_57.cursor(&mut cursor);
-        assert_eq!((invalidated, landed, cursor.lnum), (0, 56, 55));
+        assert_eq!(
+            (invalidated.get(), landed.get(), cursor.lnum.get()),
+            (0, 56, 55)
+        );
 
         // Outside it they agree.
         for lnum in [10, 100] {
-            let (mut a, mut b, mut c) = (lnum, lnum, at(lnum));
+            let (mut a, mut b, mut c) =
+                (LineNr::new(lnum), LineNr::new(lnum), at(LineNr::new(lnum)));
             DELETE_56_57.line(&mut a);
             DELETE_56_57.line_nodel(&mut b);
             DELETE_56_57.cursor(&mut c);
@@ -622,7 +620,7 @@ mod tests {
 
     fn col_shift(col_amount: ColNr, spaces_removed: c_int) -> ColShift {
         ColShift {
-            lnum: 5,
+            lnum: LineNr::new(5),
             mincol: 4,
             lnum_amount: 0,
             col_amount,
@@ -633,7 +631,7 @@ mod tests {
     #[test]
     fn a_column_before_mincol_is_untouched() {
         let mut pos = Pos {
-            lnum: 5,
+            lnum: LineNr::new(5),
             col: 3,
             coladd: 0,
         };
@@ -644,7 +642,7 @@ mod tests {
     #[test]
     fn a_column_on_another_line_is_untouched() {
         let mut pos = Pos {
-            lnum: 6,
+            lnum: LineNr::new(6),
             col: 40,
             coladd: 0,
         };
@@ -654,7 +652,7 @@ mod tests {
 
     #[test]
     fn a_column_shifted_off_the_start_of_the_line_lands_on_column_zero() {
-        let mut pos = at(5);
+        let mut pos = at(LineNr::new(5));
         col_shift(-9, 0).col(&mut pos);
         assert_eq!(pos.col, 0);
     }
@@ -664,22 +662,22 @@ mod tests {
     /// change rather than from the mark.
     #[test]
     fn a_column_inside_removed_whitespace_is_rebased_on_the_change() {
-        let mut pos = at(5);
+        let mut pos = at(LineNr::new(5));
         col_shift(-3, 9).col(&mut pos);
         assert_eq!(pos.col, 6);
     }
 
     #[test]
     fn an_ordinary_column_shifts_and_the_line_moves_with_it() {
-        let mut pos = at(5);
+        let mut pos = at(LineNr::new(5));
         ColShift {
-            lnum: 5,
+            lnum: LineNr::new(5),
             mincol: 4,
             lnum_amount: 3,
             col_amount: 11,
             spaces_removed: 0,
         }
         .col(&mut pos);
-        assert_eq!((pos.lnum, pos.col), (8, 18));
+        assert_eq!((pos.lnum.get(), pos.col), (8, 18));
     }
 }

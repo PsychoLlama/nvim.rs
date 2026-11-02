@@ -14,6 +14,7 @@ use crate::api::private::validate::{
     Bad, err_bad_number, err_bad_value, err_expected, err_invalid, err_out_of_range,
 };
 use crate::decoration::decor_drawing_window;
+use crate::narrow::number_as_int;
 use crate::winlayer::Buf;
 
 /// The keyset this call was handed.
@@ -539,7 +540,7 @@ fn end_position(
     let mut line2 = -1;
     // `end_line` wrote `end_row` above, so one test covers both.
     if let Some(given) = opts.end_row {
-        if given < 0 || (given > b.line_count() as Integer && strict) {
+        if given < 0 || (given > i64::from(b.line_count()) && strict) {
             return Err(err_out_of_range(c"end_row"));
         }
         line2 = given as ::core::ffi::c_int;
@@ -581,13 +582,13 @@ fn clamp(
         return Err(err_out_of_range(c"line"));
     }
     let mut len: ColNr = 0;
-    if line > b.line_count() as Integer {
+    if line > i64::from(b.line_count()) {
         if strict {
             return Err(err_out_of_range(c"line"));
         }
-        line = b.line_count() as Integer;
-    } else if line < b.line_count() as Integer {
-        len = line_len(line as LineNr + 1);
+        line = i64::from(b.line_count());
+    } else if line < i64::from(b.line_count()) {
+        len = line_len(LineNr::new(number_as_int(line)) + 1);
     }
     if col == -1 {
         col = Integer::from(len);
@@ -600,9 +601,9 @@ fn clamp(
         return Err(err_out_of_range(c"col"));
     }
     if col2 >= 0 {
-        if line2 >= 0 && (line2 as LineNr) < b.line_count() {
-            len = line_len(line2 as LineNr + 1);
-        } else if line2 as LineNr == b.line_count() {
+        if line2 >= 0 && LineNr::new(line2) < b.line_count() {
+            len = line_len(LineNr::new(line2) + 1);
+        } else if LineNr::new(line2) == b.line_count() {
             len = 0;
         } else {
             // An end column with no end row is on the mark's own line.

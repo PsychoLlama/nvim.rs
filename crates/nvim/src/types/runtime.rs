@@ -123,7 +123,7 @@ pub struct ScriptItem {
     pub sn_prl_start: ProfTime,
     pub sn_prl_children: ProfTime,
     pub sn_prl_wait: ProfTime,
-    pub sn_prl_idx: LineNr,
+    pub sn_prl_idx: i32,
     pub sn_prl_execed: ::core::ffi::c_int,
 }
 

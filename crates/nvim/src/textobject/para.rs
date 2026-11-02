@@ -60,7 +60,7 @@ pub fn findpar(dir: c_int, mut count: c_int, what: c_int, both: bool) -> Option<
             if first {
                 let (folded, fold_first, fold_last) = Win::current().fold_span(curr);
                 if folded {
-                    curr = (if dir > 0 { fold_last } else { fold_first }) + dir as LineNr;
+                    curr = (if dir > 0 { fold_last } else { fold_first }) + dir;
                     fold_skipped = true;
                 }
             }
@@ -68,14 +68,14 @@ pub fn findpar(dir: c_int, mut count: c_int, what: c_int, both: bool) -> Option<
                 break;
             }
             if fold_skipped {
-                curr -= dir as LineNr;
+                curr -= dir;
             }
-            curr += dir as LineNr;
-            if curr < 1 || curr > Buf::current().b_ml.ml_line_count {
+            curr += dir;
+            if curr < LineNr::ONE || curr > Buf::current().b_ml.ml_line_count {
                 if count != 0 {
                     return None;
                 }
-                curr -= dir as LineNr;
+                curr -= dir;
                 break;
             }
             first = false;
@@ -174,7 +174,7 @@ fn extend_paragraphs(mut start_lnum: LineNr, count: c_int, include: bool) -> c_i
         if dir == BACKWARD as c_int {
             1
         } else {
-            Buf::current().b_ml.ml_line_count
+            Buf::current().b_ml.ml_line_count.get()
         }
     };
     let mut i = count;
@@ -183,7 +183,7 @@ fn extend_paragraphs(mut start_lnum: LineNr, count: c_int, include: bool) -> c_i
         if i < 0 {
             break;
         }
-        if start_lnum == limit(dir) {
+        if start_lnum == LineNr::new(limit(dir)) {
             retval = FAIL;
             break;
         }
@@ -193,22 +193,22 @@ fn extend_paragraphs(mut start_lnum: LineNr, count: c_int, include: bool) -> c_i
         // of paragraph.
         let mut prev_start_is_white = -1;
         for _ in 0..2 {
-            start_lnum += dir as LineNr;
+            start_lnum += dir;
             let start_is_white = c_int::from(line_is_white(start_lnum));
             if prev_start_is_white == start_is_white {
-                start_lnum -= dir as LineNr;
+                start_lnum -= dir;
                 break;
             }
-            while start_lnum != limit(dir) {
-                if start_is_white != c_int::from(line_is_white(start_lnum + dir as LineNr))
+            while start_lnum != LineNr::new(limit(dir)) {
+                if start_is_white != c_int::from(line_is_white(start_lnum + dir))
                     || (start_is_white == 0
                         && line_starts_para(start_lnum + if dir > 0 { 1 } else { 0 }, 0, false))
                 {
                     break;
                 }
-                start_lnum += dir as LineNr;
+                start_lnum += dir;
             }
-            if !include || start_lnum == limit(dir) {
+            if !include || start_lnum == LineNr::new(limit(dir)) {
                 break;
             }
             prev_start_is_white = start_is_white;
@@ -238,7 +238,7 @@ pub fn current_par(op: &mut OpArg, count: c_int, include: bool, type_0: c_int) -
 
     // Back to the start of the paragraph, or of the run of white lines.
     let white_in_front = line_is_white(start_lnum);
-    while start_lnum > 1 {
+    while start_lnum > LineNr::ONE {
         if white_in_front {
             if !line_is_white(start_lnum - 1) {
                 break; // stop at the first white line
@@ -299,7 +299,7 @@ pub fn current_par(op: &mut OpArg, count: c_int, include: bool, type_0: c_int) -
     // With no empty lines at the end, take some at the start instead --
     // unless that has been done already.
     if !white_in_front && !line_is_white(end_lnum) && include {
-        while start_lnum > 1 && line_is_white(start_lnum - 1) {
+        while start_lnum > LineNr::ONE && line_is_white(start_lnum - 1) {
             start_lnum -= 1;
         }
     }

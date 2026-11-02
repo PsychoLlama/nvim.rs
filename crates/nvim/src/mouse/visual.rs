@@ -99,7 +99,7 @@ pub(crate) fn extend_visual_block(mut win: Win, mut start_visual: Pos, mut end_v
         } else {
             rightcol
         };
-        if win.w_cursor.lnum >= (start_visual.lnum + end_visual.lnum) / 2 {
+        if win.w_cursor.lnum.get() >= (start_visual.lnum.get() + end_visual.lnum.get()) / 2 {
             end_visual.lnum = start_visual.lnum;
         }
 

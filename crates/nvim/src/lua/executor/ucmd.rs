@@ -15,6 +15,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::types::LineNr;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
@@ -53,7 +54,7 @@ pub fn nlua_set_sctx(current: &mut ScriptCtx) {
     if !script_is_lua(current.sc_sid) {
         return;
     }
-    current.sc_lnum = 0;
+    current.sc_lnum = LineNr::ZERO;
     if p_verbose() <= 0 as OptInt {
         return;
     }
@@ -82,7 +83,7 @@ pub fn nlua_set_sctx(current: &mut ScriptCtx) {
     }
     current.sc_sid = sid as ScriptId;
     current.sc_seq = -1;
-    current.sc_lnum = line;
+    current.sc_lnum = LineNr::new(line);
 }
 
 /// Store the value on top under `name` in the table below it.
@@ -109,9 +110,9 @@ pub(crate) fn nlua_do_ucmd(cmd: &LuaCommand, excmd: &ExArg, preview: bool) -> c_
         set(stack, c"name");
         stack.push_boolean(excmd.forceit);
         set(stack, c"bang");
-        stack.push_integer(excmd.line1 as lua_Integer);
+        stack.push_integer(excmd.line1.get() as isize);
         set(stack, c"line1");
-        stack.push_integer(excmd.line2 as lua_Integer);
+        stack.push_integer(excmd.line2.get() as isize);
         set(stack, c"line2");
 
         // `excmd` is the raw argument text; `fargs` the split one. The raw
@@ -160,7 +161,7 @@ pub(crate) fn nlua_do_ucmd(cmd: &LuaCommand, excmd: &ExArg, preview: bool) -> c_
         stack.push_integer(excmd.addr_count as lua_Integer);
         set(stack, c"range");
         if excmd.addr_count > 0 {
-            stack.push_integer(excmd.line2 as lua_Integer);
+            stack.push_integer(excmd.line2.get() as isize);
         } else {
             stack
                 .push_integer(lua_Integer::try_from(cmd.default_count).unwrap_or(lua_Integer::MAX));

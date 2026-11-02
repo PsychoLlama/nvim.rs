@@ -59,7 +59,7 @@ fn buf_set_sign(
         sh_idx: decor_put_sh(sign),
         vt_idx: DECOR_ID_INVALID,
     });
-    let row = buffer.line_count().min(lnum) - 1;
+    let row = buffer.line_count().min(lnum).get() - 1;
     extmark_set(
         buffer,
         ns,
@@ -89,13 +89,13 @@ fn buf_mod_sign(
     def: &Sign,
 ) -> LineNr {
     let Some(ns) = placed_ns(group) else {
-        return 0;
+        return LineNr::ZERO;
     };
     let mark = lookup_ns(buffer, ns, *id, false);
     if mark.pos.row >= 0 {
-        buf_set_sign(buffer, id, group, prio, mark.pos.row + 1, def);
+        buf_set_sign(buffer, id, group, prio, LineNr::new(mark.pos.row + 1), def);
     }
-    mark.pos.row + 1
+    LineNr::new(mark.pos.row + 1)
 }
 
 /// The one namespace a placement lookup runs in, or `None` for a group that
@@ -201,12 +201,16 @@ fn buf_delete_signs(buffer: Buf, group: Option<&[u8]>, id: c_int, atlnum: LineNr
     }
 
     let mut itr = MarkTreeIter::default();
-    let row = if atlnum > 0 { atlnum - 1 } else { 0 };
+    let row = if atlnum > LineNr::ZERO {
+        atlnum.get() - 1
+    } else {
+        0
+    };
     let mut signs: Vec<MTKey> = Vec::new();
 
     {
         let mut walk = Cursor::in_buffer(buffer, &mut itr);
-        if atlnum > 0 {
+        if atlnum > LineNr::ZERO {
             // Signs that *started* above this row but still cover it.
             if !walk.seek_overlap(row, 0) {
                 return FAIL;
@@ -231,7 +235,7 @@ fn buf_delete_signs(buffer: Buf, group: Option<&[u8]>, id: c_int, atlnum: LineNr
             break;
         }
         let wanted = wanted_sign(mark, ns) && (id == 0 || mark.id.cast_signed() == id);
-        if wanted && atlnum <= 0 {
+        if wanted && atlnum <= LineNr::ZERO {
             // `extmark::del` advances the iterator itself.
             extmark::del(buffer, &mut itr, mark, true);
             continue;
@@ -245,7 +249,7 @@ fn buf_delete_signs(buffer: Buf, group: Option<&[u8]>, id: c_int, atlnum: LineNr
     if signs.is_empty() {
         // Only the single-line form treats "nothing matched" as failure; the
         // sweeping forms are content to have deleted nothing.
-        return if atlnum > 0 { FAIL } else { OK };
+        return if atlnum > LineNr::ZERO { FAIL } else { OK };
     }
     sort_signs(&mut signs);
     extmark_del_id(buffer, signs[0].ns, signs[0].id);
@@ -285,13 +289,13 @@ pub(crate) fn sign_place(
         (given, _) => given,
     };
 
-    let lnum = if lnum > 0 {
+    let lnum = if lnum > LineNr::ZERO {
         buf_set_sign(buffer, id, group, prio, lnum, &def);
         lnum
     } else {
         buf_mod_sign(buffer, id, group, prio, &def)
     };
-    if lnum <= 0 {
+    if lnum <= LineNr::ZERO {
         semsg!("E885: Not possible to change sign {}", msg_bytes(name));
         return Err(Failed);
     }
@@ -304,7 +308,7 @@ fn sign_unplace_inner(buffer: Buf, id: c_int, group: Option<&[u8]>, atlnum: Line
         return FAIL;
     }
     let all_groups = group.is_some_and(|group| group.first() == Some(&b'*'));
-    if id == 0 || atlnum > 0 || all_groups {
+    if id == 0 || atlnum > LineNr::ZERO || all_groups {
         return buf_delete_signs(buffer, group, id, atlnum);
     }
     let ns = group_get_ns(group);
@@ -345,11 +349,11 @@ pub(crate) fn sign_jump(id: c_int, group: Option<&[u8]>, buffer: Buf) -> LineNr 
     let lnum = buf_findsign(buffer, id, group);
     if lnum <= 0 {
         semsg!("E157: Invalid sign ID: {}", id);
-        return -1;
+        return LineNr::new(-1);
     }
     if buf_jump_open_win(buffer).is_some() {
         let mut win = Win::current();
-        win.w_cursor.lnum = lnum;
+        win.w_cursor.lnum = LineNr::new(lnum);
         check_cursor_lnum(win);
         beginline(BeginlineOpts::WHITE);
     } else {
@@ -357,7 +361,7 @@ pub(crate) fn sign_jump(id: c_int, group: Option<&[u8]>, buffer: Buf) -> LineNr 
             emsg(gettext(
                 c"E934: Cannot jump to a buffer that does not have a name",
             ));
-            return -1;
+            return LineNr::new(-1);
         };
         let mut cmd = format!("e +{lnum} ").into_bytes();
         cmd.extend_from_slice(name.to_bytes());
@@ -366,5 +370,5 @@ pub(crate) fn sign_jump(id: c_int, group: Option<&[u8]>, buffer: Buf) -> LineNr 
     }
 
     fold_open_cursor();
-    lnum
+    LineNr::new(lnum)
 }

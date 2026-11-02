@@ -120,12 +120,8 @@ pub fn carried_coladd(oldcol: ColNr, oldcoladd: ColNr, col: ColNr, ve_all: bool)
 /// Lines from `from` to `to`, counting each closed fold as one. `fold_last`
 /// answers the last line of the fold containing its argument, or that argument
 /// itself when it is in none.
-pub fn folded_line_span(
-    mut from: LineNr,
-    to: LineNr,
-    fold_last: impl Fn(LineNr) -> LineNr,
-) -> LineNr {
-    let mut span: LineNr = 0;
+pub fn folded_line_span(mut from: LineNr, to: LineNr, fold_last: impl Fn(LineNr) -> LineNr) -> i32 {
+    let mut span: i32 = 0;
     while from < to {
         from = fold_last(from) + 1;
         span += 1;

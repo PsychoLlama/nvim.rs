@@ -198,8 +198,8 @@ pub fn mark_get_visual(buffer: Buf, name: c_int) -> Option<FileMark> {
     let (start, end) = (buffer.b_visual.vi_start, buffer.b_visual.vi_end);
     // `'<` is whichever end comes FIRST, not whichever was set first: a
     // Visual selection made backwards still reports its marks in order.
-    let wants_start = (name == '<' as c_int) == lt(start, end) || end.lnum == 0;
-    let at = if wants_start && start.lnum != 0 {
+    let wants_start = (name == '<' as c_int) == lt(start, end) || end.lnum == LineNr::ZERO;
+    let at = if wants_start && start.lnum != LineNr::ZERO {
         start
     } else {
         end
@@ -241,7 +241,7 @@ pub fn getnextmark(startpos: Pos, dir: c_int, begin_line: bool) -> Option<FileMa
     for mark in &buf.b_namedm {
         // `> 0` rather than `!= 0`: a negative line number is what a mangled
         // shada record leaves behind, and it is not a mark to jump to.
-        if mark.mark.lnum <= 0 {
+        if mark.mark.lnum <= LineNr::ZERO {
             continue;
         }
         let nearer = match result {

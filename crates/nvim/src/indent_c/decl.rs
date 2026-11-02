@@ -71,7 +71,7 @@ pub(crate) fn is_jump_label() -> bool {
     }
 
     let cursor_save = Win::current().w_cursor;
-    while Win::current().w_cursor.lnum > 1 {
+    while Win::current().w_cursor.lnum > LineNr::ONE {
         Win::current().w_cursor.lnum -= 1;
         Win::current().w_cursor.col = 0;
         if let Some(trypos) = ind_find_start_comment_or_raw_string(None) {
@@ -210,7 +210,7 @@ pub(crate) fn preproc_start(lnum: &mut LineNr, amount: &mut c_int) -> bool {
             *lnum = at_lnum;
             break;
         }
-        if at_lnum == 1 {
+        if at_lnum == LineNr::ONE {
             break;
         }
         at_lnum -= 1;

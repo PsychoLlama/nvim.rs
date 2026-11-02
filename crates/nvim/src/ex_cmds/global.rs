@@ -71,7 +71,7 @@ fn selects(kind: u8, matched: bool) -> bool {
 
 /// Does the pattern match line `lnum`, searching from its first column?
 fn matches_line(regmatch: &mut RegMMatch, lnum: LineNr) -> bool {
-    regmatch.exec(Some(Win::current()), Buf::current(), lnum, 0 as ColNr) != 0
+    regmatch.exec(Some(Win::current()), Buf::current(), lnum, 0 as ColNr) != LineNr::ZERO
 }
 
 /// The head of a `:global` argument, parsed.
@@ -186,7 +186,7 @@ pub fn ex_global(excmd: &mut ExArg) {
     // When nesting, the command works on one line.  That allows for
     // ":g/found/v/notfound/command".
     if global_busy.get() != 0
-        && (excmd.line1 != 1 || excmd.line2 != Buf::current().b_ml.ml_line_count)
+        && (excmd.line1 != LineNr::ONE || excmd.line2 != Buf::current().b_ml.ml_line_count)
     {
         // Will increment global_busy to break out of the loop.
         emsg(gettext(c"E147: Cannot do :global recursive with a range"));
@@ -258,7 +258,7 @@ pub fn global_exe(cmd: &[u8]) {
     msg_didout.set(true);
 
     SUB_NSUBS.set(0 as c_int);
-    SUB_NLINES.set(0 as LineNr);
+    SUB_NLINES.set(0);
     GLOBAL_NEED_MSG_KIND.set(true);
     GLOBAL_NEED_BEGINLINE.set(false);
     global_busy.set(1 as c_int);
@@ -266,7 +266,7 @@ pub fn global_exe(cmd: &[u8]) {
 
     while !got_int.get() {
         let lnum = ml_firstmarked();
-        if lnum == 0 as LineNr || global_busy.get() != 1 as c_int {
+        if lnum == LineNr::ZERO || global_busy.get() != 1 as c_int {
             break;
         }
         global_exe_one(cmd, lnum);
@@ -295,6 +295,6 @@ pub fn global_exe(cmd: &[u8]) {
     // edge case where the buffer we are in after execution is different from
     // the one we started in.
     if !do_sub_msg(false) && Buf::current_raw() == old_buf {
-        say::more(Buf::current().b_ml.ml_line_count as c_int - old_lcount as c_int);
+        say::more(Buf::current().b_ml.ml_line_count.get() - old_lcount.get());
     }
 }

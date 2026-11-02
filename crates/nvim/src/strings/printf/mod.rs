@@ -95,6 +95,13 @@ impl From<crate::types::Handle> for FmtArg<'_> {
     }
 }
 
+impl From<crate::types::LineNr> for FmtArg<'_> {
+    #[inline(always)]
+    fn from(value: crate::types::LineNr) -> Self {
+        FmtArg::Int(i64::from(value))
+    }
+}
+
 impl From<isize> for FmtArg<'_> {
     #[inline(always)]
     fn from(value: isize) -> Self {

@@ -106,7 +106,9 @@ pub(crate) fn ins_left() {
             revins_legal.set(revins_legal.get() + 1);
         }
         revins_chars.set(revins_chars.get() + 1);
-    } else if p_ww(|value| has_char(value, '[' as c_int)) && Win::current().w_cursor.lnum > 1 {
+    } else if p_ww(|value| has_char(value, '[' as c_int))
+        && Win::current().w_cursor.lnum > LineNr::ONE
+    {
         // 'whichwrap' allows the motion to leave the line.
         start_arrow_at(InsertEnd::At(tpos));
         Win::current().w_cursor.lnum -= 1;
@@ -125,7 +127,7 @@ pub(crate) fn ins_home(c: c_int) {
 
     let tpos = Win::current().w_cursor;
     if c == Key::CHome.code() {
-        Win::current().w_cursor.lnum = 1;
+        Win::current().w_cursor.lnum = LineNr::ONE;
     }
     Win::current().w_cursor.col = 0;
     Win::current().w_cursor.coladd = 0;
@@ -153,7 +155,7 @@ pub(crate) fn ins_s_left() {
     may_open_fold_hor();
     hide_dollar();
 
-    if Win::current().w_cursor.lnum > 1 || Win::current().w_cursor.col > 0 {
+    if Win::current().w_cursor.lnum > LineNr::ONE || Win::current().w_cursor.col > 0 {
         start_arrow_changing(InsertEnd::cursor(), end_change);
         if !end_change {
             append_to_redobuff_char(Key::SLeft.code());

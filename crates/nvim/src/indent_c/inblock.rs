@@ -219,7 +219,7 @@ pub(crate) fn indent_in_block(line: &Line, brace: Pos) -> c_int {
         whilelevel: 0,
         lookfor_break,
         lookfor_cpp_namespace,
-        raw_string_start: 0,
+        raw_string_start: LineNr::ZERO,
         cache: CppBaseclassCache {
             found: 0,
             lpos: LPos {

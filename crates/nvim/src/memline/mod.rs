@@ -188,7 +188,7 @@ fn tell(text: &'static ::core::ffi::CStr, hl_id: ::core::ffi::c_int) {
 
 /// The lowest line number that may still carry a [`DB_MARKED`] bit, so
 /// `ml_firstmarked` need not start its search at line one.
-static lowest_marked: GlobalCell<LineNr> = GlobalCell::new(0);
+static lowest_marked: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
 
 /// Published by `swapfile_info` for the ATTENTION dialog: whether the process
 /// that owns the swap file it just described is still alive.
@@ -213,7 +213,7 @@ pub fn ml_open(mut buffer: Buf) -> Result<(), Failed> {
 
     buffer.b_ml.ml_mfp = Some(MemFile::in_memory());
     buffer.b_ml.ml_flags = MlFlags::EMPTY;
-    buffer.b_ml.ml_line_count = 1;
+    buffer.b_ml.ml_line_count = LineNr::ONE;
     if ml_open_blocks(buffer).is_ok() {
         return Ok(());
     }
@@ -289,7 +289,7 @@ fn ml_open_blocks(mut buffer: Buf) -> Result<(), Failed> {
     let mut pointers = PointerBlock(memfile.page_mut(id));
     pointers.set_count(1);
     // Line count after the insertion below.
-    pointers.set_child(0, 2, 1, 1, 1);
+    pointers.set_child(0, 2, 1, 1, LineNr::ONE);
     memfile.put(id, true, false);
 
     // Block two: the first data block, holding one empty line.

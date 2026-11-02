@@ -74,7 +74,7 @@ use crate::startup::exiting;
 use crate::state::mode::exmode_active;
 use crate::tag::state::keep_help_flag;
 use crate::terminal::buf_terminal_check_size;
-use crate::types::{ExArg, Failed, LineNr, NUL, OptInt, OptionSetFlags, ShmFlag, Vv};
+use crate::types::{ExArg, Failed, LineNr, NUL, OptionSetFlags, ShmFlag, Vv};
 use crate::undo::{u_savecommon, u_sync, u_unchanged};
 use crate::window::{check_lnums, curwin_init, win_valid};
 use crate::winlayer::Buf;
@@ -87,7 +87,9 @@ use core::ffi::c_int;
 ///
 /// Returns true if `v:swapcommand` was actually set.
 pub fn set_swapcommand(command: Option<&CStr>, newlnum: LineNr) -> bool {
-    if command.is_none() && newlnum <= 0 || !with_vim_var_str(Vv::Swapcommand, CStr::is_empty) {
+    if command.is_none() && newlnum <= LineNr::ZERO
+        || !with_vim_var_str(Vv::Swapcommand, CStr::is_empty)
+    {
         return false;
     }
     let val = match command {
@@ -128,11 +130,11 @@ pub mod newlnum {
     use crate::types::LineNr;
 
     /// The first line.
-    pub const ONE: LineNr = 1;
+    pub const ONE: LineNr = LineNr::ONE;
     /// The last position in *any* file -- the one `'"` names.
-    pub const LAST: LineNr = -1;
+    pub const LAST: LineNr = LineNr::new(-1);
     /// The last position in *this* file, if it has been visited before.
-    pub const LASTL: LineNr = 0;
+    pub const LASTL: LineNr = LineNr::ZERO;
 }
 
 /// The line and column `do_ecmd`'s stages hand each other, plus the flags that
@@ -236,7 +238,7 @@ pub(crate) fn do_ecmd(
         newlnum,
         newcol: -1,
         solcol: -1,
-        topline: 0,
+        topline: LineNr::ZERO,
         oldbuf: false,
         auto_buf: false,
         did_get_winopts: false,
@@ -303,7 +305,7 @@ pub(crate) fn do_ecmd(
         }
         if must_ask && check_changed(Buf::current(), ccgd) {
             if fnum == 0 && other_file && ecmd.ffname.is_some() {
-                let lnum = state.newlnum.max(0);
+                let lnum = state.newlnum.max(LineNr::ZERO);
                 setaltfname(ecmd.ffname, ecmd.sfname, lnum);
             }
             break 'theend;
@@ -327,7 +329,7 @@ pub(crate) fn do_ecmd(
                 Switch::Abandon => break 'theend,
                 Switch::Ready => {}
             }
-            Win::current().w_pcmark.lnum = 1;
+            Win::current().w_pcmark.lnum = LineNr::ONE;
             Win::current().w_pcmark.col = 0;
         } else if flags.has(EcmdFlags::ADDBUF | EcmdFlags::ALTBUF) || check_fname().is_err() {
             break 'theend;
@@ -509,15 +511,15 @@ fn reuse_current_buffer(state: &mut Ecmd) -> bool {
     // the reload can be undone.  Do not do this if the (empty) buffer is
     // being re-used for another file.
     if !Buf::current().b_flags.has(BufFlags::NEVERLOADED)
-        && (p_ur() < 0 || Buf::current().b_ml.ml_line_count as OptInt <= p_ur())
+        && (p_ur() < 0 || i64::from(Buf::current().b_ml.ml_line_count) <= p_ur())
     {
         // Sync first so that this is a separate undo-able action.
         u_sync(false);
         if u_savecommon(
             Buf::current(),
-            0,
+            LineNr::ZERO,
             Buf::current().b_ml.ml_line_count + 1,
-            0,
+            LineNr::ZERO,
             true,
         )
         .is_err()
@@ -550,8 +552,8 @@ fn reuse_current_buffer(state: &mut Ecmd) -> bool {
     }
     buf_clear_file(Buf::current());
     // clear '[ and '] marks
-    Buf::current().b_op_start.lnum = 0;
-    Buf::current().b_op_end.lnum = 0;
+    Buf::current().b_op_start.lnum = LineNr::ZERO;
+    Buf::current().b_op_end.lnum = LineNr::ZERO;
     true
 }
 
@@ -628,7 +630,7 @@ fn enter_new_buffer(
         }
     }
     if Win::current().w_topline == state.topline {
-        state.topline = 0;
+        state.topline = LineNr::ZERO;
     }
 
     // Even when the cursor didn't move we need to recompute topline.
@@ -644,7 +646,7 @@ fn place_cursor(state: &Ecmd) {
         Win::current().w_cursor.lnum = state.newlnum;
         Win::current().w_cursor.col = state.newcol;
         check_cursor(Win::current());
-    } else if state.newlnum > 0 {
+    } else if state.newlnum > LineNr::ZERO {
         // line number from caller or old position
         Win::current().w_cursor.lnum = state.newlnum;
         check_cursor_lnum(Win::current());
@@ -697,12 +699,13 @@ fn report_file_info() {
 /// `so` is the current window's scroll margin.
 fn recenter(so: ScrollOff, topline: LineNr, has_command: bool) {
     let n = so.get();
-    if topline == 0 && !has_command {
+    if topline == LineNr::ZERO && !has_command {
         // force the cursor to be vertically centered in the window
         so.set(999);
     }
     update_topline(Win::current());
-    Win::current().w_scbind_pos = plines_m_win_fill(Win::current(), 1, Win::current().w_topline);
+    Win::current().w_scbind_pos =
+        plines_m_win_fill(Win::current(), LineNr::ONE, Win::current().w_topline);
     so.set(n);
     // redraw this buffer later
     redraw_curbuf_later(UPD_NOT_VALID);

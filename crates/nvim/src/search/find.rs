@@ -78,7 +78,7 @@ impl Searcher<'_, '_> {
     /// Run the pattern against line `lnum` from column `col`.
     #[inline(always)]
     fn exec(&mut self, lnum: LineNr, col: ColNr) -> c_int {
-        self.matcher.exec(lnum, col, &mut self.timed_out)
+        self.matcher.exec(lnum, col, &mut self.timed_out).get()
     }
 
     /// The match `exec` just reported.
@@ -164,7 +164,7 @@ impl Searcher<'_, '_> {
         start: StartPos,
         first_match: bool,
     ) -> bool {
-        while found.start.lnum == 0
+        while found.start.lnum == LineNr::ZERO
             && if self.opt(SEARCH_END) && first_match {
                 // A match landing on the NUL puts the cursor one back
                 // afterwards; compare against that, or `/$` sticks at
@@ -205,7 +205,7 @@ impl Searcher<'_, '_> {
             *found = self.found();
             // The loop only works while the match starts in this line:
             // above that, `line` would not be a buffer line.
-            if found.start.lnum != 0 {
+            if found.start.lnum != LineNr::ZERO {
                 return true;
             }
         }
@@ -234,7 +234,7 @@ impl Searcher<'_, '_> {
 
             // A valid match; now see whether another one follows it.
             // Every read below is of the line the match starts in.
-            let at = lnum + found.start.lnum;
+            let at = lnum + found.start.lnum.get();
             let matchcol = if self.from_match_end {
                 if *nmatched > 1 {
                     break;
@@ -247,7 +247,7 @@ impl Searcher<'_, '_> {
                 }
             } else {
                 // Stop when the match is in a following line.
-                if found.start.lnum > 0 {
+                if found.start.lnum > LineNr::ZERO {
                     break;
                 }
                 self.step_over(at, found.start.col)
@@ -273,13 +273,13 @@ impl Searcher<'_, '_> {
     fn before_start_pos(&self, lnum: LineNr, start: StartPos) -> bool {
         if self.opt(SEARCH_END) {
             let end = self.matcher.end(0);
-            lnum + end.lnum < start.pos.lnum
-                || (lnum + end.lnum == start.pos.lnum
+            lnum + end.lnum.get() < start.pos.lnum
+                || (lnum + end.lnum.get() == start.pos.lnum
                     && end.col - 1 < start.pos.col + start.extra_col)
         } else {
             let begin = self.matcher.start(0);
-            lnum + begin.lnum < start.pos.lnum
-                || (lnum + begin.lnum == start.pos.lnum
+            lnum + begin.lnum.get() < start.pos.lnum
+                || (lnum + begin.lnum.get() == start.pos.lnum
                     && begin.col < start.pos.col + start.extra_col)
         }
     }
@@ -311,7 +311,7 @@ impl Searcher<'_, '_> {
             // MAXCOL + 1 is zero.
             let start_char_len = if pos.col == MAXCOL as c_int {
                 0
-            } else if pos.lnum >= 1
+            } else if pos.lnum >= LineNr::ONE
                 && pos.lnum <= self.buf.b_ml.ml_line_count
                 && pos.col < MAXCOL - 2
             {
@@ -342,9 +342,9 @@ impl Searcher<'_, '_> {
 
             found = 0;
             let mut at_first_line = true;
-            if pos.lnum == 0 {
+            if pos.lnum == LineNr::ZERO {
                 // Correct lnum for when starting in line 0.
-                pos.lnum = 1;
+                pos.lnum = LineNr::ONE;
                 pos.col = 0;
                 at_first_line = false;
             }
@@ -361,9 +361,9 @@ impl Searcher<'_, '_> {
 
             // Loop twice if 'wrapscan' is set.
             for wrapped in [false, true] {
-                'lines: while lnum > 0 && lnum <= self.buf.b_ml.ml_line_count {
+                'lines: while lnum > LineNr::ZERO && lnum <= self.buf.b_ml.ml_line_count {
                     // Stop after checking "stop_lnum", if it is set.
-                    if stop_lnum != 0
+                    if stop_lnum != LineNr::ZERO
                         && if dir == FORWARD {
                             lnum > stop_lnum
                         } else {
@@ -453,7 +453,7 @@ impl Searcher<'_, '_> {
                 // after an interrupt, after a match, and after looping
                 // twice.
                 if !p_ws()
-                    || stop_lnum != 0
+                    || stop_lnum != LineNr::ZERO
                     || got_int.get()
                     || self.aborted()
                     || break_loop
@@ -470,7 +470,7 @@ impl Searcher<'_, '_> {
                 lnum = if dir == BACKWARD {
                     self.buf.b_ml.ml_line_count
                 } else {
-                    1
+                    LineNr::ONE
                 };
                 if !shortmess(ShmFlag::SEARCH)
                     && shortmess(ShmFlag::SEARCHCOUNT)
@@ -507,12 +507,12 @@ impl Searcher<'_, '_> {
     fn record(&self, lnum: LineNr, found: Found, pos: &mut Pos, end_pos: Option<&mut Pos>) {
         let empty = found.start.lnum == found.end.lnum && found.start.col == found.end.col;
         let (at, other) = if self.opt(SEARCH_END) && !self.opt(SEARCH_NOOF) && !empty {
-            pos.lnum = lnum + found.end.lnum;
+            pos.lnum = lnum + found.end.lnum.get();
             pos.col = found.end.col;
             if found.end.col == 0 {
                 // A match in the first column ends on the NUL of the
                 // line before.
-                if pos.lnum > 1 {
+                if pos.lnum > LineNr::ONE {
                     pos.lnum -= 1;
                     pos.col = self.lines().line_len(pos.lnum);
                 }
@@ -528,13 +528,13 @@ impl Searcher<'_, '_> {
             }
             (pos, found.start)
         } else {
-            pos.lnum = lnum + found.start.lnum;
+            pos.lnum = lnum + found.start.lnum.get();
             pos.col = found.start.col;
             (pos, found.end)
         };
         at.coladd = 0;
         if let Some(end_pos) = end_pos {
-            end_pos.lnum = lnum + other.lnum;
+            end_pos.lnum = lnum + other.lnum.get();
             end_pos.col = other.col;
             end_pos.coladd = 0;
         }
@@ -597,7 +597,7 @@ pub fn searchit(
     }
 
     // Stop after this line number, when it is not zero.
-    let mut stop_lnum: LineNr = 0;
+    let mut stop_lnum: LineNr = LineNr::ZERO;
     let (mut tm, mut timed_out) = (None, false);
     if let Some(extra) = &extra_arg {
         stop_lnum = extra.sa_stop_lnum;
@@ -641,7 +641,7 @@ pub fn searchit(
         } else if options & SEARCH_MSG == SEARCH_MSG {
             let msg = if p_ws() {
                 gettext(e_patnotf2)
-            } else if lnum == 0 {
+            } else if lnum == LineNr::ZERO {
                 gettext(c"E384: Search hit TOP without match for: %s")
             } else {
                 gettext(c"E385: Search hit BOTTOM without match for: %s")
@@ -731,7 +731,7 @@ pub(crate) fn search_in_current(
 #[inline(always)]
 fn first_submatch(matcher: &LineMatcher) -> c_int {
     (1..10)
-        .find(|&i| matcher.start(i).lnum >= 0)
+        .find(|&i| matcher.start(i).lnum >= LineNr::ZERO)
         .map_or(0, |i| i as c_int)
 }
 
@@ -750,16 +750,16 @@ pub fn search_for_exact_line(
     pat: &[u8],
 ) -> Result<(), Failed> {
     let pat = cstr::until_nul(pat);
-    let mut start: LineNr = 0;
+    let mut start: LineNr = LineNr::ZERO;
     let compl_len = ins_compl_len();
-    if buffer.b_ml.ml_line_count == 0 {
+    if buffer.b_ml.ml_line_count == LineNr::ZERO {
         return Err(Failed);
     }
     loop {
         pos.lnum += dir;
-        if pos.lnum < 1 {
+        if pos.lnum < LineNr::ONE {
             if !p_ws() {
-                pos.lnum = 1;
+                pos.lnum = LineNr::ONE;
                 break;
             }
             pos.lnum = buffer.b_ml.ml_line_count;
@@ -767,7 +767,7 @@ pub fn search_for_exact_line(
                 give_warning(gettext(top_bot_msg), true, false);
             }
         } else if pos.lnum > buffer.b_ml.ml_line_count {
-            pos.lnum = 1;
+            pos.lnum = LineNr::ONE;
             if !p_ws() {
                 break;
             }
@@ -778,7 +778,7 @@ pub fn search_for_exact_line(
         if pos.lnum == start {
             break;
         }
-        if start == 0 {
+        if start == LineNr::ZERO {
             start = pos.lnum;
         }
 

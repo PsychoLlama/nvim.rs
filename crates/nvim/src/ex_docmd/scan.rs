@@ -81,9 +81,9 @@ pub(crate) fn parse_register(excmd: &mut ExArg) {
 
 /// Turn a count into a range, which is what a count means for every command
 /// that takes one: "this many lines, starting where the range ended".
-pub fn set_cmd_count(excmd: &mut ExArg, count: LineNr, validate: bool) {
+pub fn set_cmd_count(excmd: &mut ExArg, count: i32, validate: bool) {
     if excmd.addr_type != CmdAddr::Lines {
-        excmd.line2 = count;
+        excmd.line2 = LineNr::new(count);
         if excmd.addr_count == 0 {
             excmd.addr_count = 1;
         }
@@ -95,8 +95,8 @@ pub fn set_cmd_count(excmd: &mut ExArg, count: LineNr, validate: bool) {
     // right-hand side itself overflows. The C wraps there, so the
     // comparison always succeeds and the answer is `INT32_MAX`. Spelled
     // as a wrapping subtraction so the debug build does not abort.
-    if excmd.line2 >= (INT32_MAX as LineNr).wrapping_sub(count.wrapping_sub(1)) {
-        excmd.line2 = INT32_MAX as LineNr;
+    if excmd.line2 >= LineNr::new(INT32_MAX.wrapping_sub(count.wrapping_sub(1))) {
+        excmd.line2 = LineNr::new(INT32_MAX);
     } else {
         excmd.line2 += count - 1;
     }
@@ -130,7 +130,7 @@ pub(crate) fn parse_count(
 
     let arg = excmd.line.arg;
     let (n, past) = getdigits_int_at(excmd.line.buffer_mut(), arg, false, INT32_MAX);
-    let n = n as LineNr;
+    let n = LineNr::new(n);
     excmd.line.arg = excmd.line.skip_white(past);
     if let Some(&(first, first_len)) = excmd.line.args.first() {
         // `nvim_cmd` supplies the arguments already split, so the count
@@ -143,11 +143,11 @@ pub(crate) fn parse_count(
             shift_cmd_args(excmd);
         }
     }
-    if n <= 0 && !excmd.argt.has(ExArgt::ZEROR) {
+    if n <= LineNr::ZERO && !excmd.argt.has(ExArgt::ZEROR) {
         *errormsg = Some(ex_msg(e_zerocount));
         return Err(Failed);
     }
-    set_cmd_count(excmd, n, validate);
+    set_cmd_count(excmd, n.get(), validate);
     Ok(())
 }
 

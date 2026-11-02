@@ -95,7 +95,7 @@ enum Minus {
 ///
 /// `op` describes a region of the current buffer; everything below works on
 /// that region and on the cursor line.
-pub fn op_addsub(op: &mut OpArg, prenum1: LineNr, g_cmd: bool) {
+pub fn op_addsub(op: &mut OpArg, prenum1: i32, g_cmd: bool) {
     // 'foldexpr' may be re-evaluated part way through, and it must not see
     // the buffer mid-operation.
     let folds_frozen = Suppress::fold_update();
@@ -121,7 +121,7 @@ pub fn op_addsub(op: &mut OpArg, prenum1: LineNr, g_cmd: bool) {
     let mut bd = BlockDef::ZERO;
     let mut change_cnt: ssize_t = 0;
     let mut startpos = Pos {
-        lnum: 0,
+        lnum: LineNr::ZERO,
         col: 0,
         coladd: 0,
     };
@@ -204,7 +204,7 @@ fn addsub_line_span(op: &mut OpArg, bd: &mut BlockDef, pos: &mut Pos) -> c_int {
 /// `length` is the region the caller allows the number to occupy; it is 0
 /// outside Visual mode, where the number's own extent decides instead. `pos`
 /// names a position in the current buffer.
-pub fn do_addsub(op_type: OpType, pos: &mut Pos, mut length: c_int, prenum1: LineNr) -> bool {
+pub fn do_addsub(op_type: OpType, pos: &mut Pos, mut length: c_int, prenum1: i32) -> bool {
     let fmt = NrFormats::current();
     let visual = visual_active();
     let save_cursor = Win::current().w_cursor;
@@ -414,18 +414,13 @@ fn minus_before(text: &[u8], col: ColNr, min_col: ColNr, fmt: &NrFormats) -> Min
 /// and `z`/`Z`.
 ///
 /// Answers the `'[`/`']` positions.
-fn bump_alpha_char(
-    mut firstdigit: c_int,
-    op_type: OpType,
-    prenum1: LineNr,
-    col: ColNr,
-) -> (Pos, Pos) {
+fn bump_alpha_char(mut firstdigit: c_int, op_type: OpType, prenum1: i32, col: ColNr) -> (Pos, Pos) {
     // The letter's ordinal within its own case.
-    let ord = LineNr::from(if firstdigit < 'a' as c_int {
+    let ord = if firstdigit < 'a' as c_int {
         firstdigit - 'A' as c_int
     } else {
         firstdigit - 'a' as c_int
-    });
+    };
     // The C library's own locale table: `firstdigit` is an ASCII letter.
     let class = c_int::from(ctype_bits(firstdigit as u8));
     let upper = class & _ISupper as ::core::ffi::c_ushort as c_int != 0;
@@ -477,7 +472,7 @@ struct Scan<'a> {
 fn replace_number(
     op_type: OpType,
     length: &mut c_int,
-    prenum1: LineNr,
+    prenum1: i32,
     fmt: &NrFormats,
     scan: Scan,
 ) -> (Pos, Pos) {
@@ -596,7 +591,7 @@ fn replace_number(
 /// nothing is added at all.
 fn add_or_subtract(
     mut n: UVarNumber,
-    prenum1: LineNr,
+    prenum1: i32,
     subtract: bool,
     mut negative: bool,
     overflow: bool,

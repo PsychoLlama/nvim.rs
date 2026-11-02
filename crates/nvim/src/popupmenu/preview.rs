@@ -72,7 +72,7 @@ fn pum_preview_set_text(mut win: Win, info: &[u8]) -> (LineNr, c_int) {
         // inflate the answer in a narrow window.
         let save_wrap = win.w_onebuf_opt.wo_wrap;
         win.w_onebuf_opt.wo_wrap = 0;
-        max_width = max_width.max(win_linetabsize(win, 0, line, MAXCOL as c_int));
+        max_width = max_width.max(win_linetabsize(win, LineNr::ZERO, line, MAXCOL as c_int));
         win.w_onebuf_opt.wo_wrap = save_wrap;
 
         lines.push(Object::string(ApiString::from_bytes(line)));
@@ -160,7 +160,7 @@ pub fn pum_set_info(selected: c_int, info: &[u8]) -> Option<Win> {
             // NOTE: a failure here leaves autocmds blocked and the two
             // counters raised, as upstream does.
             let mut fresh = win_float_create_preview(false, true)?;
-            fresh.w_topline = 1;
+            fresh.w_topline = LineNr::ONE;
             fresh.w_onebuf_opt.wo_wfb = 1;
             fresh
         }
@@ -327,8 +327,8 @@ fn pum_fill_info(
     // Grow a preview split to fit the text, up to 'previewheight'.
     if repeat == 0 && !use_float {
         let lnum = lnum.min(LineNr::try_from(p_pvh()).unwrap_or(LineNr::MAX));
-        if LineNr::from(Win::current().w_height) < lnum {
-            win_setheight(lnum as c_int);
+        if LineNr::new(Win::current().w_height) < lnum {
+            win_setheight(lnum.get());
             resized = true;
         }
     }
@@ -336,11 +336,11 @@ fn pum_fill_info(
     Buf::current().b_changed = 0;
     Buf::current().b_p_ma = 0;
     if pum_selected.get() != prev_selected {
-        Win::current().w_topline = 1;
+        Win::current().w_topline = LineNr::ONE;
     } else if Win::current().w_topline > Buf::current().b_ml.ml_line_count {
         Win::current().w_topline = Buf::current().b_ml.ml_line_count;
     }
-    Win::current().w_cursor.lnum = 1;
+    Win::current().w_cursor.lnum = LineNr::ONE;
     Win::current().w_cursor.col = 0;
 
     if use_float

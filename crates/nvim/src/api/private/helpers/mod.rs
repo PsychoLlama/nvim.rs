@@ -27,6 +27,7 @@
 )]
 
 use crate::narrow::number_as_int;
+use crate::types::LineNr;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::ex_eval::state::{
@@ -191,7 +192,7 @@ pub(crate) fn try_leave(tstate: &TryState) -> Result<(), Error> {
             caught = Some(Error::from_message(kErrorTypeException, value.as_cstr()));
         } else {
             let (name, value) = (msg_cstr(name.as_cstr()), msg_cstr(value.as_cstr()));
-            caught = Some(if lnum != 0 {
+            caught = Some(if lnum != LineNr::ZERO {
                 api_error!(kErrorTypeException, "{name}, line {lnum}: {value}")
             } else {
                 api_error!(kErrorTypeException, "{name}: {value}")
@@ -266,7 +267,7 @@ pub(crate) fn set_mark(
     debug_assert!((Integer::from(i32::MIN)..=Integer::from(i32::MAX)).contains(&line));
 
     let pos = Pos {
-        lnum: number_as_int(line),
+        lnum: LineNr::new(number_as_int(line)),
         col: number_as_int(col),
         coladd: 0,
     };
@@ -328,7 +329,7 @@ pub(crate) fn api_set_sctx(channel_id: uint64_t) -> SavedSctx {
     if channel_id == VIML_INTERNAL_CALL {
         return Script::saved();
     }
-    let mut sctx = caller.with_lnum(0);
+    let mut sctx = caller.with_lnum(LineNr::ZERO);
     if channel_id == LUA_INTERNAL_CALL {
         // Unless the caller is a Lua script, which keeps its own id.
         if !script_is_lua(sctx.sc_sid) {

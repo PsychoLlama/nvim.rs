@@ -231,7 +231,7 @@ fn extmark_index_from_obj(
             return Ok((0, 0));
         }
         if id == -1 {
-            return Ok((MAXLNUM, MAXCOL));
+            return Ok((MAXLNUM.get(), MAXCOL));
         }
         if id < 0 {
             return Err(err_bad_number(c"mark id", id));
@@ -259,7 +259,7 @@ fn extmark_index_from_obj(
         if row >= 0 {
             number_as_int(row)
         } else {
-            MAXLNUM
+            MAXLNUM.get()
         },
         if col >= 0 { number_as_int(col) } else { MAXCOL },
     ))

@@ -13,6 +13,7 @@ use super::*;
 use crate::api::private::helpers::api_try;
 use crate::lua::stack::{At, Stack};
 use crate::memory::memchr_in;
+use crate::narrow::number_as_int;
 use crate::normal::{visual_active, visual_anchor, with_visual_anchor};
 use crate::winlayer::{Buf, tab_windows};
 
@@ -23,7 +24,7 @@ pub fn nvim_buf_line_count(buf: BufferHandle) -> Result<Integer, Error> {
     if b.b_ml.ml_mfp.is_none() {
         return Ok(0 as Integer);
     }
-    Ok(b.line_count() as Integer)
+    Ok(i64::from(b.line_count()))
 }
 
 /// Lines `start..end` of `buf`. Called from Lua (`stack` is `Some`), the
@@ -53,7 +54,7 @@ pub fn nvim_buf_get_lines(
         return Ok(rv.into());
     }
     let size: size_t = (end - start) as size_t;
-    let at = start as LineNr;
+    let at = LineNr::new(number_as_int(start));
     let nl = channel_id != VIML_INTERNAL_CALL;
     let mut lines = LineSink::new(stack, &mut rv, size);
     buf_collect_lines(b, size, at, 0, nl, &mut lines);
@@ -119,13 +120,19 @@ pub fn nvim_buf_set_lines(
         if buffer.b_p_ma == 0 {
             return Err(Error::exception(c"Buffer is not 'modifiable'"));
         }
-        if u_save_buf(buffer, (start - 1) as LineNr, end as LineNr).is_err() {
+        if u_save_buf(
+            buffer,
+            LineNr::new(number_as_int(start - 1)),
+            LineNr::new(number_as_int(end)),
+        )
+        .is_err()
+        {
             return Err(Error::exception(c"Failed to save undo information"));
         }
         let deleted_bytes: BCount = get_region_bytecount(
             buffer,
-            start as LineNr,
-            end as LineNr,
+            LineNr::new(number_as_int(start)),
+            LineNr::new(number_as_int(end)),
             0 as ColNr,
             0 as ColNr,
         );
@@ -136,7 +143,7 @@ pub fn nvim_buf_set_lines(
         };
         let mut i_0: size_t = 0 as size_t;
         while i_0 < to_delete {
-            if ml_delete_buf(buffer, start as LineNr, false).is_err() {
+            if ml_delete_buf(buffer, LineNr::new(number_as_int(start)), false).is_err() {
                 return Err(Error::exception(c"Failed to delete line"));
             } else {
                 i_0 = i_0.wrapping_add(1);
@@ -150,9 +157,11 @@ pub fn nvim_buf_set_lines(
         let mut i_1: size_t = 0 as size_t;
         while i_1 < to_replace {
             let lnum: int64_t = start as int64_t + i_1 as int64_t;
-            if !(lnum < MAXLNUM as int64_t) {
+            if !(lnum < i64::from(MAXLNUM)) {
                 return Err(Error::validation(c"Index out of bounds"));
-            } else if ml_replace_buf_now(buffer, lnum as LineNr, &lines[i_1]).is_err() {
+            } else if ml_replace_buf_now(buffer, LineNr::new(number_as_int(lnum)), &lines[i_1])
+                .is_err()
+            {
                 return Err(Error::exception(c"Failed to replace line"));
             } else {
                 // The line and its NUL.
@@ -163,10 +172,15 @@ pub fn nvim_buf_set_lines(
         let mut i_2: size_t = to_replace;
         while i_2 < new_len {
             let lnum_0: int64_t = start as int64_t + i_2 as int64_t - 1 as int64_t;
-            if !(lnum_0 < MAXLNUM as int64_t) {
+            if !(lnum_0 < i64::from(MAXLNUM)) {
                 return Err(Error::validation(c"Index out of bounds"));
-            } else if ml_append_buf_terminated(buffer, lnum_0 as LineNr, &lines[i_2], false)
-                .is_err()
+            } else if ml_append_buf_terminated(
+                buffer,
+                LineNr::new(number_as_int(lnum_0)),
+                &lines[i_2],
+                false,
+            )
+            .is_err()
             {
                 return Err(Error::exception(c"Failed to insert line"));
             } else {
@@ -176,27 +190,23 @@ pub fn nvim_buf_set_lines(
                 i_2 = i_2.wrapping_add(1);
             }
         }
-        let adjust: LineNr = if end > start {
-            MAXLNUM as LineNr
-        } else {
-            0 as LineNr
-        };
+        let adjust: i32 = if end > start { MAXLNUM.get() } else { 0 };
         mark_adjust_buf(
             buffer,
-            start as LineNr,
-            (end - 1 as Integer) as LineNr,
+            LineNr::new(number_as_int(start)),
+            LineNr::new(number_as_int(end - 1 as Integer)),
             adjust,
-            extra as LineNr,
+            extra as i32,
             true,
             kMarkAdjustApi,
             kExtmarkNOOP,
         );
         if visual_active() as ::core::ffi::c_int != 0
             && Some(buffer) == Buf::current_or_none()
-            && visual_anchor().lnum >= start as LineNr
+            && visual_anchor().lnum >= LineNr::new(number_as_int(start))
         {
-            if visual_anchor().lnum >= end as LineNr {
-                with_visual_anchor(|a| a.lnum += extra as LineNr);
+            if visual_anchor().lnum >= LineNr::new(number_as_int(end)) {
+                with_visual_anchor(|a| a.lnum += extra as i32);
             }
             check_visual_pos();
         }
@@ -214,16 +224,19 @@ pub fn nvim_buf_set_lines(
         );
         changed_lines(
             buffer,
-            start as LineNr,
+            LineNr::new(number_as_int(start)),
             0 as ColNr,
-            end as LineNr,
-            extra as LineNr,
+            LineNr::new(number_as_int(end)),
+            extra as i32,
             true,
         );
         for win in tab_windows() {
             if win.w_buffer == buffer {
-                let (lo, hi) = (start as LineNr, end as LineNr);
-                fix_cursor(win, lo, hi, extra as LineNr);
+                let (lo, hi) = (
+                    LineNr::new(number_as_int(start)),
+                    LineNr::new(number_as_int(end)),
+                );
+                fix_cursor(win, lo, hi, extra as i32);
             }
         }
         Ok(())
@@ -276,7 +289,7 @@ pub fn nvim_buf_get_text(
     lines.push(line.as_bytes(), 0, replace_nl);
     if size > 2 as size_t {
         let n = size.wrapping_sub(2 as size_t);
-        let at = start_row as LineNr + 1 as LineNr;
+        let at = LineNr::new(number_as_int(start_row)) + 1;
         buf_collect_lines(b, n, at, 1, replace_nl, &mut lines);
     }
     let last = end_row as int64_t;
@@ -294,10 +307,10 @@ pub fn nvim_buf_get_offset(buf: BufferHandle, index: Integer) -> Result<Integer,
     if b.b_ml.ml_mfp.is_none() {
         return Ok(-1 as Integer);
     }
-    if !(index >= 0 as Integer && index <= b.line_count() as Integer) {
+    if !(index >= 0 as Integer && index <= i64::from(b.line_count())) {
         return Err(Error::validation(c"Index out of bounds"));
     }
-    let lnum = index as LineNr + 1 as LineNr;
+    let lnum = LineNr::new(number_as_int(index)) + 1;
     let offset = ml_find_line_or_offset(b, lnum, None, true);
     Ok(offset as Integer)
 }
@@ -375,7 +388,7 @@ pub(crate) fn buf_collect_lines(
 ) {
     let mut text = buffer.lines();
     for i in 0..n {
-        let lnum: LineNr = start + i as LineNr;
+        let lnum: LineNr = start + i as i32;
         let at = start_idx + i as ::core::ffi::c_int;
         lines.push(text.line(lnum), at, replace_nl);
     }

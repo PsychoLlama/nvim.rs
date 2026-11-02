@@ -131,7 +131,11 @@ pub(crate) fn open_source<'a>(
 
         // Set the '[ mark to the line above where the lines go, line
         // 1 if zero.
-        Buf::current().b_op_start.lnum = if from == 0 { 1 } else { from };
+        Buf::current().b_op_start.lnum = if from == LineNr::ZERO {
+            LineNr::ONE
+        } else {
+            from
+        };
         Buf::current().b_op_start.col = 0;
 
         if how.newfile {
@@ -406,7 +410,11 @@ pub(crate) fn open_source<'a>(
     // Set the '[ mark to the line above where the lines go, line 1 if
     // zero.
     orig_start = Buf::current().b_op_start;
-    Buf::current().b_op_start.lnum = if from == 0 { 1 } else { from };
+    Buf::current().b_op_start.lnum = if from == LineNr::ZERO {
+        LineNr::ONE
+    } else {
+        from
+    };
     Buf::current().b_op_start.col = 0;
 
     let mut guess = FormatGuess::from_ffs();

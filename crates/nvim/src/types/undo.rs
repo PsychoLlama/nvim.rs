@@ -34,8 +34,8 @@ pub struct UndoEntry {
 
 impl UndoEntry {
     /// How many lines the entry holds, in the unit the line numbers use.
-    pub fn size(&self) -> LineNr {
-        LineNr::try_from(self.lines.len()).unwrap_or(LineNr::MAX)
+    pub fn size(&self) -> i32 {
+        i32::try_from(self.lines.len()).unwrap_or(i32::MAX)
     }
 }
 

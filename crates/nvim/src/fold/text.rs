@@ -69,9 +69,12 @@ pub(crate) fn get_foldtext(
     // raise one error per drawn fold.
     static GOT_FDT_ERROR: GlobalCell<bool> = GlobalCell::new(false);
     static LAST_WIN: GlobalCell<Option<WinId>> = GlobalCell::new(None);
-    static LAST_LNUM: GlobalCell<LineNr> = GlobalCell::new(0);
+    static LAST_LNUM: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
     let save_did_emsg = did_emsg.get();
-    if LAST_WIN.get() != Some(window.id()) || LAST_LNUM.get() > lnum || LAST_LNUM.get() == 0 {
+    if LAST_WIN.get() != Some(window.id())
+        || LAST_LNUM.get() > lnum
+        || LAST_LNUM.get() == LineNr::ZERO
+    {
         GOT_FDT_ERROR.set(false);
     }
     if !GOT_FDT_ERROR.get() {

@@ -43,7 +43,7 @@ state_record! {
     /// its cursor then.
     pub(crate) last_cursormoved_win: Option<WinId> = None;
     pub(crate) last_cursormoved: Pos = Pos {
-        lnum: 0 as LineNr,
+        lnum: LineNr::ZERO,
         col: 0 as ColNr,
         coladd: 0 as ColNr,
     };

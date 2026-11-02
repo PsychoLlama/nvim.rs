@@ -24,6 +24,7 @@ pub(crate) mod state;
 
 use crate::global_cell::GlobalCell;
 use crate::memory::XString;
+use crate::types::LineNr;
 use crate::types::{Expand, Pos, PumItem};
 use core::ffi::c_int;
 
@@ -171,7 +172,7 @@ pub(crate) const WM_SHOWN: c_int = 1;
 static cmd_showtail: GlobalCell<bool> = GlobalCell::new(false);
 static may_expand_pattern: GlobalCell<bool> = GlobalCell::new(false);
 static pre_incsearch_pos: GlobalCell<Pos> = GlobalCell::new(Pos {
-    lnum: 0,
+    lnum: LineNr::ZERO,
     col: 0,
     coladd: 0,
 });

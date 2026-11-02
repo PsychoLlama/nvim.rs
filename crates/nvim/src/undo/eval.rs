@@ -159,7 +159,7 @@ pub fn u_force_get_undo_header(buffer: Buf) -> Option<UndoLink> {
         return Some(link);
     }
     // Nothing to hang it on: force an undo header, even for an empty change.
-    let _ = u_savecommon(buffer, 0, 1, 1, true);
+    let _ = u_savecommon(buffer, LineNr::ZERO, LineNr::ONE, LineNr::ONE, true);
     let link = current(buffer);
     assert!(
         link.is_some() || get_undolevel(buffer) <= 0,

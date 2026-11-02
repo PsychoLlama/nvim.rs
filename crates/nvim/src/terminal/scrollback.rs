@@ -18,6 +18,7 @@ use crate::change::{appended_lines_buf, deleted_lines_buf};
 use crate::grid::{MAX_SCHAR_SIZE, schar_put_scratch};
 use crate::mark::mark_adjust_buf;
 use crate::memline::{ml_append_buf_terminated, ml_delete_buf};
+use crate::narrow::len_as_int;
 use crate::types::{LineNr, NUL, OptInt, VTermPos, VTermScreenCell};
 use crate::vterm::screen::ZERO_SCREEN_CELL;
 use crate::winlayer::Buf;
@@ -203,23 +204,23 @@ pub(crate) fn adjust_scrollback(mut term: Term, buffer: Buf) {
     if limit < term.sb.len() {
         let diff = term.sb.len() - limit;
         for _ in 0..diff {
-            let _ = ml_delete_buf(buffer, 1 as LineNr, false);
+            let _ = ml_delete_buf(buffer, LineNr::ONE, false);
             term.sb.drop_oldest();
         }
-        let diff = diff as LineNr;
-        mark_adjust_term(buffer, 1 as LineNr, diff, -diff);
+        let diff = len_as_int(diff);
+        mark_adjust_term(buffer, LineNr::new(diff), -diff);
         // Report what the deletion took away.
-        deleted_lines_buf(buffer, 1 as LineNr, diff);
+        deleted_lines_buf(buffer, LineNr::ONE, diff);
     }
     term.sb.set_capacity(limit);
 }
 
 /// `mark_adjust_buf` as this module always calls it: a deletion at the top
 /// of a terminal buffer, running to the end of it.
-fn mark_adjust_term(buffer: Buf, line1: LineNr, line2: LineNr, amount: LineNr) {
-    let (end, after) = (MAXLNUM, true);
+fn mark_adjust_term(buffer: Buf, line2: LineNr, amount: i32) {
+    let (end, after) = (MAXLNUM.get(), true);
     let (mode, op) = (kMarkAdjustTerm, kExtmarkUndo);
-    mark_adjust_buf(buffer, line1, line2, end, amount, after, mode, op);
+    mark_adjust_buf(buffer, LineNr::ONE, line2, end, amount, after, mode, op);
 }
 
 /// Mirror everything the scrollback gained or lost into the buffer's lines.
@@ -233,38 +234,38 @@ pub(crate) fn refresh_scrollback(mut term: Term, buffer: Buf) {
 
     // Rows evicted since the last refresh are gone from the buffer's top;
     // move the marks that were pointing at them.
-    let mut deleted = (term.sb.deleted() - term.old_sb_deleted) as LineNr;
-    deleted = deleted.min(buffer.line_count());
-    mark_adjust_term(buffer, 1 as LineNr, deleted, -deleted);
+    let mut deleted =
+        LineNr::new(len_as_int(term.sb.deleted() - term.old_sb_deleted)).min(buffer.line_count());
+    mark_adjust_term(buffer, deleted, -deleted.get());
     term.old_sb_deleted = term.sb.deleted();
 
     let mut old_height = term.old_height;
     let (height, width) = term.size();
 
-    while deleted > 0 && buffer.line_count() > old_height as LineNr {
-        let _ = ml_delete_buf(buffer, 1 as LineNr, false);
-        deleted_lines_buf(buffer, 1 as LineNr, 1 as LineNr);
+    while deleted > LineNr::ZERO && buffer.line_count() > LineNr::new(old_height) {
+        let _ = ml_delete_buf(buffer, LineNr::ONE, false);
+        deleted_lines_buf(buffer, LineNr::ONE, 1);
         deleted -= 1;
     }
-    old_height = old_height.min(buffer.line_count() as c_int);
+    old_height = old_height.min(buffer.line_count().get());
 
     // Each owed row is appended just above the rows that make up the
     // screen, which sit at the end of the buffer.
     while term.sb.pending() > 0 {
         fetch_row(term, -term.sb.pending(), width);
-        let at = (buffer.line_count() as c_int - old_height) as LineNr;
+        let at = LineNr::new(buffer.line_count().get() - old_height);
         let text = crate::cstr::in_bytes(&term.textbuf).to_bytes_with_nul();
         let _ = ml_append_buf_terminated(buffer, at, text, false);
-        appended_lines_buf(buffer, at, 1 as LineNr);
+        appended_lines_buf(buffer, at, 1);
         term.sb.mark_mirrored();
     }
 
     // Anything past the scrollback plus one screen is stale.
-    let max_line_count = (term.sb.len() as c_int + height) as LineNr;
+    let max_line_count = LineNr::new(term.sb.len() as c_int + height);
     while buffer.line_count() > max_line_count {
         let last = buffer.line_count();
         let _ = ml_delete_buf(buffer, last, false);
-        deleted_lines_buf(buffer, buffer.line_count(), 1 as LineNr);
+        deleted_lines_buf(buffer, buffer.line_count(), 1);
     }
 
     adjust_scrollback(term, buffer);

@@ -63,7 +63,7 @@ use crate::startup::exiting;
 use crate::strings::{FmtArg, format_into};
 use crate::types::{
     AcoSave, CmdModFlags, CpoFlag, ExArg, FAIL, Failed, FileInfo, FileOffset, IOSIZE, LineNr,
-    MAXPATHL, Pos, ShmFlag, VimAcl, int64_t, uint64_t, uv_gid_t, uv_uid_t,
+    MAXPATHL, Pos, ShmFlag, VimAcl, uint64_t, uv_gid_t, uv_uid_t,
 };
 use crate::ui::ui_flush;
 use crate::undo::{curbuf_is_changed, u_unchanged, u_update_save_nr, u_write_undo};
@@ -173,7 +173,7 @@ impl WriteError {
 
 /// "conversion failed", naming the line it failed on when one is known.
 pub(crate) fn conversion_failed(lnum: LineNr) -> WriteError {
-    if lnum == 0 {
+    if lnum == LineNr::ZERO {
         return WriteError::plain(
             c"E513: Write error, conversion failed (make 'fenc' empty to override)",
         );
@@ -292,7 +292,7 @@ pub(crate) fn buf_write(
     let mut retval = Ok(());
     let msg_save = msg_scroll.get();
     let mut prev_got_int = got_int.get();
-    let whole = start == 1 && end == b.b_ml.ml_line_count;
+    let whole = start == LineNr::ONE && end == b.b_ml.ml_line_count;
     let mut write_undo_file = false;
     let mut sha_ctx = Sha256::new();
     let bkc = get_bkc_flags(b);
@@ -551,7 +551,7 @@ pub(crate) fn buf_write(
                             4 // FioFlags::UCS4
                         };
                         if !writer.reserve_conv_buf(mult) {
-                            end = 0;
+                            end = LineNr::ZERO;
                         }
                     }
                 }
@@ -560,7 +560,7 @@ pub(crate) fn buf_write(
                     // 'charconvert' pass over a temp file afterwards.
                     if writer.open_iconv(fenc) {
                         if !writer.reserve_iconv_buf() {
-                            end = 0;
+                            end = LineNr::ZERO;
                         }
                     } else if P_CCV.first_byte() != 0 {
                         let Some(temp) = temp_name() else {
@@ -638,7 +638,7 @@ pub(crate) fn buf_write(
                     {
                         writer.flags = FioFlags::NOCONVERT | wb_flags; // don't convert
                         if !writer.flush() {
-                            end = 0;
+                            end = LineNr::ZERO;
                         } else {
                             // Upstream reads the staged length back
                             // *after* the flush, where it is zero:
@@ -666,11 +666,11 @@ pub(crate) fn buf_write(
                     written = write_lines(buf, lines, &mut writer, fileformat, write_bin, hash);
                     written.nchars += bom_chars;
                     if written.failed {
-                        end = 0;
+                        end = LineNr::ZERO;
                     }
 
                     // Stop when the writing is done or an error happened.
-                    if !checking_conversion || end == 0 {
+                    if !checking_conversion || end == LineNr::ZERO {
                         break;
                     }
                     // Nothing went wrong, so writing should be fine: go
@@ -685,21 +685,23 @@ pub(crate) fn buf_write(
                         finish_write(buf, file, wpath, &target, &backup, acl, &file_info_old);
                     if let Some(e) = done {
                         err = Some(e);
-                        end = 0;
+                        end = LineNr::ZERO;
                     }
                     if let WriteTarget::Temp(temp) = &wfname {
                         // The file went to a temp file; 'charconvert'
                         // turns that into the output file.
                         let from = temp.as_cstr();
-                        if end != 0 && eval_charconvert(c"utf-8", fenc, from, fname) == FAIL {
+                        if end != LineNr::ZERO
+                            && eval_charconvert(c"utf-8", fenc, from, fname) == FAIL
+                        {
                             writer.conv_error = true;
-                            end = 0;
+                            end = LineNr::ZERO;
                         }
                         os_remove(from);
                     }
                 }
 
-                if end == 0 {
+                if end == LineNr::ZERO {
                     if err.is_none() {
                         err = Some(if writer.conv_error {
                             conversion_failed(writer.conv_error_lnum)
@@ -710,12 +712,12 @@ pub(crate) fn buf_write(
                         });
                     }
                     if recover_from_backup(&backup, fname) {
-                        end = 1; // the original is back; no extra warning
+                        end = LineNr::ONE; // the original is back; no extra warning
                     }
                     break 'failed;
                 }
 
-                written.lnum -= start; // the number of lines written
+                written.lnum -= start.get(); // the number of lines written
                 no_wait_return.set(no_wait_return.get() - 1); // may wait now
 
                 if !req.filtering {
@@ -782,7 +784,7 @@ pub(crate) fn buf_write(
             // and put the original back if it was moved out of the way.
             let direct = matches!(wfname, WriteTarget::Direct);
             if !restore_backup(&backup, fname, direct, target.newfile) {
-                end = 0; // the original no longer exists either
+                end = LineNr::ZERO; // the original no longer exists either
             }
         }
         no_wait_return.set(no_wait_return.get() - 1); // may wait for return now
@@ -799,7 +801,7 @@ pub(crate) fn buf_write(
         let quoted = Report::quoted_fname(b, Some(fname), IOSIZE as usize - 100);
         err.emit(quoted.as_cstr());
         retval = Err(Failed);
-        if end == 0 {
+        if end == LineNr::ZERO {
             let hl_id = HLF_E;
             let warning = translate(c"\nWARNING: Original file may be lost or damaged\n");
             msg_str_hl(warning, hl_id, true);

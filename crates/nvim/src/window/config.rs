@@ -14,6 +14,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::narrow::number_as_int;
 use core::ffi::{c_int, c_uint};
 
 use super::*;
@@ -288,14 +289,14 @@ fn anchor_to_window(
     *grid = grid_adjust(own, &mut row_off, &mut col_off);
     *row += row_off as Float;
     *col += col_off as Float;
-    if c.bufpos.lnum < 0 as LineNr {
+    if c.bufpos.lnum < LineNr::ZERO {
         return;
     }
     // The line after the one `bufpos` names, clamped to the buffer. Widened:
     // `bufpos={INT_MAX, ...}` reaches here, and the C's `lnum + 1` wraps.
-    let lnum = (c.bufpos.lnum as i64 + 1).min(parent.buffer().line_count() as i64);
+    let lnum = (i64::from(c.bufpos.lnum) + 1).min(i64::from(parent.buffer().line_count()));
     let mut pos = Pos {
-        lnum: lnum as LineNr,
+        lnum: LineNr::new(number_as_int(lnum)),
         col: c.bufpos.col,
         coladd: 0 as ColNr,
     };
@@ -341,7 +342,7 @@ fn ext_win_viewport(window: Win) {
         // Scrolled up: measure the text between the two positions.
         let mut vcole = last_skipcol;
         let mut lnume = last_topline;
-        if last_topline > 0 && cur_botline < last_topline {
+        if last_topline > LineNr::ZERO && cur_botline < last_topline {
             delta -= (last_topline - cur_botline) as int64_t;
             lnume = cur_botline;
             vcole = 0;
@@ -359,7 +360,7 @@ fn ext_win_viewport(window: Win) {
         // Scrolled down.
         let mut vcole = window.w_skipcol as int64_t;
         let mut lnume = cur_topline;
-        if last_botline > 0 && cur_topline > last_botline {
+        if last_botline > LineNr::ZERO && cur_topline > last_botline {
             delta += (cur_topline - last_botline) as int64_t;
             lnume = last_botline;
             vcole = 0;
@@ -379,19 +380,19 @@ fn ext_win_viewport(window: Win) {
         ui_call_win_viewport(
             Integer::from(window.w_grid_alloc.handle),
             window.handle as WindowHandle,
-            (window.w_topline - 1) as Integer,
-            ev_botline as Integer,
-            (window.w_cursor.lnum - 1) as Integer,
+            i64::from(window.w_topline - 1),
+            i64::from(ev_botline),
+            i64::from(window.w_cursor.lnum - 1),
             window.w_cursor.col as Integer,
-            line_count as Integer,
+            i64::from(line_count),
             delta as Integer,
         );
     }
     window.w_viewport_invalid = false;
     window.w_viewport_last_topline = window.w_topline;
     window.w_viewport_last_botline = window.w_botline;
-    window.w_viewport_last_topfill = window.w_topfill as LineNr;
-    window.w_viewport_last_skipcol = window.w_skipcol as LineNr;
+    window.w_viewport_last_topfill = window.w_topfill;
+    window.w_viewport_last_skipcol = window.w_skipcol;
 }
 
 /// The screen lines between two buffer positions, `win_text_height()` with its

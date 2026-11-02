@@ -336,7 +336,7 @@ pub fn autocmd_register(
     };
     let mut script_ctx = current_sctx.get();
     // `SOURCING_LNUM`: the line of the innermost execution-stack frame.
-    script_ctx.sc_lnum += crate::runtime::sourcing_lnum();
+    script_ctx.sc_lnum += crate::runtime::sourcing_lnum().get();
     nlua_set_sctx(&mut script_ctx);
     let cmd = AutoCmd {
         pat: Some(pat_id),

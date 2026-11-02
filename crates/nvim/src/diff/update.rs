@@ -60,7 +60,7 @@ fn clear_diffout(dout: &mut DiffOut) {
 /// flag for it.
 pub(crate) fn diff_write_buffer(buffer: Buf, out: &mut Vec<u8>, start: LineNr, mut end: LineNr) {
     out.clear();
-    if end < 0 {
+    if end < LineNr::ZERO {
         end = buffer.b_ml.ml_line_count;
     }
     if buffer.b_ml.ml_flags.has(MlFlags::EMPTY) || end < start {
@@ -68,13 +68,14 @@ pub(crate) fn diff_write_buffer(buffer: Buf, out: &mut Vec<u8>, start: LineNr, m
     }
 
     let mut lines = buffer.lines();
-    let len = (start..=end)
+    let len = start
+        .through(end)
         .map(|lnum| lines.line(lnum).len() + 1)
         .sum::<usize>();
     out.resize(len, 0);
 
     let mut at = 0;
-    for lnum in start..=end {
+    for lnum in start.through(end) {
         let line = lines.line(lnum);
         if diff_flags.get() & DIFF_ICASE == 0 {
             let copy = &mut out[at..at + line.len()];
@@ -147,7 +148,7 @@ fn diff_write(
     if frames_locked() {
         return Err(Failed);
     }
-    if end < 0 {
+    if end < LineNr::ZERO {
         end = buffer.b_ml.ml_line_count;
     }
 
@@ -196,7 +197,7 @@ fn diff_write(
 fn diff_try_update(dio: &mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg>) {
     let tp = TabPage::current();
     let idx_orig = usize::try_from(idx_orig).unwrap_or(usize::MAX);
-    let mut anchors = [[0 as LineNr; MAX_DIFF_ANCHORS as usize]; DB_COUNT as usize];
+    let mut anchors = [[LineNr::ZERO; MAX_DIFF_ANCHORS as usize]; DB_COUNT as usize];
     'theend: {
         if dio.internal {
             dio.diff.hunks.clear();
@@ -238,7 +239,7 @@ fn diff_try_update(dio: &mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg>)
                 let Ok(buf_num_anchors) = found else {
                     emsg(gettext(e_failed_to_find_all_diff_anchors));
                     num_anchors = 0;
-                    anchors = [[0; MAX_DIFF_ANCHORS as usize]; DB_COUNT as usize];
+                    anchors = [[LineNr::ZERO; MAX_DIFF_ANCHORS as usize]; DB_COUNT as usize];
                     break;
                 };
                 num_anchors = num_anchors.min(buf_num_anchors);
@@ -259,12 +260,12 @@ fn diff_try_update(dio: &mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg>)
                     if anchor_i == 0 {
                         1
                     } else {
-                        anchors[idx][anchor_i - 1]
+                        anchors[idx][anchor_i - 1].get()
                     },
                     if anchor_i == num_anchors {
                         -1
                     } else {
-                        anchors[idx][anchor_i] - 1
+                        (anchors[idx][anchor_i] - 1).get()
                     },
                 )
             };
@@ -277,7 +278,12 @@ fn diff_try_update(dio: &mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg>)
             };
 
             let (start, end) = segment(idx_orig);
-            let wrote = diff_write(tp.used_diffbuf(idx_orig), &mut dio.orig, start, end);
+            let wrote = diff_write(
+                tp.used_diffbuf(idx_orig),
+                &mut dio.orig,
+                LineNr::new(start),
+                LineNr::new(end),
+            );
             if wrote.is_err() {
                 if anchor_i != 0 {
                     // Upstream puts the earlier segments back only to
@@ -292,7 +298,9 @@ fn diff_try_update(dio: &mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg>)
                     continue;
                 };
                 let (start, end) = segment(idx_new);
-                if diff_write(buf, &mut dio.new, start, end).is_ok() && diff_file(dio).is_ok() {
+                if diff_write(buf, &mut dio.new, LineNr::new(start), LineNr::new(end)).is_ok()
+                    && diff_file(dio).is_ok()
+                {
                     if let Some(hunks) = HunkSource::open(dio) {
                         let current = TabPage::current();
                         let slots = current.tp_diffbuf;
@@ -316,8 +324,8 @@ fn diff_try_update(dio: &mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg>)
                 for dp in blocks.iter_mut() {
                     for (idx, row) in anchors.iter().enumerate() {
                         let anchor = row[anchor_i - 1];
-                        if anchor > 0 {
-                            dp.df_lnum[idx] += anchor - 1;
+                        if anchor > LineNr::ZERO {
+                            dp.df_lnum[idx] += (anchor - 1).get();
                         }
                     }
                 }
@@ -374,7 +382,7 @@ pub(crate) fn diff_update(excmd: Option<&mut ExArg>) {
             ..DiffIo::default()
         };
         diff_try_update(&mut diffio, idx_orig, excmd);
-        Win::current().w_valid_cursor.lnum = 0;
+        Win::current().w_valid_cursor.lnum = LineNr::ZERO;
     }
 
     if had_diffs || !tp.tp_diff.is_empty() {

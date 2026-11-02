@@ -104,8 +104,8 @@ impl<'a> NewEntry<'a> {
             module: None,
             bufnum: 0,
             mesg,
-            lnum: 0,
-            end_lnum: 0,
+            lnum: LineNr::ZERO,
+            end_lnum: LineNr::ZERO,
             col: 0,
             end_col: 0,
             vis_col: 0,
@@ -316,8 +316,8 @@ impl Buf {
         window: Option<Win>,
         line1: LineNr,
         line2: LineNr,
-        amount: LineNr,
-        amount_after: LineNr,
+        amount: i32,
+        amount_after: i32,
     ) -> bool {
         let wanted = if window.is_none() {
             BUF_HAS_QF_ENTRY
@@ -336,8 +336,8 @@ fn adjust_entries(
     window: Option<Win>,
     line1: LineNr,
     line2: LineNr,
-    amount: LineNr,
-    amount_after: LineNr,
+    amount: i32,
+    amount_after: i32,
 ) -> bool {
     let mut qi = match window {
         None => Qi::global(),
@@ -361,7 +361,7 @@ fn adjust_entries(
             }
             found_one = true;
             if entry.lnum >= line1 && entry.lnum <= line2 {
-                if amount == MAXLNUM {
+                if amount == MAXLNUM.get() {
                     entry.cleared = true;
                 } else {
                     entry.lnum += amount;

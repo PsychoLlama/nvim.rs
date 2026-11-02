@@ -23,6 +23,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::narrow::number_as_int;
 use crate::types::Handle;
 use crate::winlayer::cmdwin_window;
 use crate::winlayer::prev_window;
@@ -79,7 +80,10 @@ const NO_VIRT_TEXT: VirtText = VirtText::new();
 /// same C macro, for the border it draws without a window.)
 pub(crate) const WIN_CONFIG_INIT: WinConfig = WinConfig {
     window: Handle::NONE,
-    bufpos: LPos { lnum: -1, col: 0 },
+    bufpos: LPos {
+        lnum: LineNr::new(-1),
+        col: 0,
+    },
     height: 0,
     width: 0,
     row: 0.0,
@@ -565,13 +569,13 @@ fn anchored_position(win: Win) -> (c_int, c_int) {
         row += parent.w_winrow;
         col += parent.w_wincol;
         adjust_for_grid(&mut parent, &mut row, &mut col);
-        if win.w_config.bufpos.lnum >= 0 as LineNr {
+        if win.w_config.bufpos.lnum >= LineNr::ZERO {
             // Widened: `bufpos={2147483647, ...}` reaches here and the C's
             // `lnum + 1` overflows before the clamp can catch it.
-            let lnum =
-                (win.w_config.bufpos.lnum as i64 + 1).min(parent.buffer().line_count() as i64);
+            let lnum = (i64::from(win.w_config.bufpos.lnum) + 1)
+                .min(i64::from(parent.buffer().line_count()));
             let mut pos = Pos {
-                lnum: lnum as LineNr,
+                lnum: LineNr::new(number_as_int(lnum)),
                 col: win.w_config.bufpos.col,
                 coladd: 0 as ColNr,
             };

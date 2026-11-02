@@ -355,8 +355,8 @@ pub fn extmark_adjust(
     buffer: Buf,
     line1: LineNr,
     line2: LineNr,
-    amount: LineNr,
-    amount_after: LineNr,
+    amount: i32,
+    amount_after: i32,
     undo: ExtmarkOp,
 ) {
     splice::adjust(buffer, line1, line2, amount, amount_after, undo);

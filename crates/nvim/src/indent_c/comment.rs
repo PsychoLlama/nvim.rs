@@ -268,7 +268,7 @@ pub(crate) fn find_line_comment() -> Option<Pos> {
     let mut lines = Lines::current();
     loop {
         pos.lnum -= 1;
-        if pos.lnum <= 0 {
+        if pos.lnum <= LineNr::ZERO {
             return None;
         }
         let line = lines.line(pos.lnum);

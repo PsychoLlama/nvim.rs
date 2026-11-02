@@ -82,7 +82,7 @@ impl Win {
 
         // Do the lines from `top` to `bot` fit in the window? If they do, set
         // `new_topline` and take in more lines.
-        while top > 0 {
+        while top > LineNr::ZERO {
             let i = self.plines_nofill(top, true);
             top = self.fold_first(top).unwrap_or(top);
             if top < self.w_topline {
@@ -223,12 +223,12 @@ impl Win {
 
         // Scroll up when the cursor is a little off the bottom of the screen;
         // otherwise put it at half the screen.
-        if line_count >= self.w_view_height as LineNr && line_count > min_scroll as LineNr {
+        if line_count >= self.w_view_height && line_count > min_scroll {
             self.scroll_cursor_halfway(false, true);
         } else if line_count > 0 {
             if do_sms {
                 // TODO(vim):
-                self.scrollup(scrolled as LineNr, true);
+                self.scrollup(scrolled, true);
             } else {
                 self.scrollup(line_count, true);
             }
@@ -332,7 +332,7 @@ impl Win {
 
         let mut extra = 0;
         let so = scrolloff_or_drag(self);
-        while loff.lnum > 1 {
+        while loff.lnum > LineNr::ONE {
             if ((scrolled <= 0 || scrolled >= min_scroll) && extra as int64_t >= so
                 || boff.lnum + 1 > self.buffer().line_count())
                 && loff.lnum <= self.w_botline
@@ -396,14 +396,14 @@ impl Win {
 
     /// Turn the screen lines below the window into the number of logical lines
     /// to scroll by -- 0 for none, 9999 for "more than the window holds".
-    fn lines_to_scroll(self, used: c_int, scrolled: c_int) -> LineNr {
+    fn lines_to_scroll(self, used: c_int, scrolled: c_int) -> i32 {
         if scrolled <= 0 {
             // `w_empty_rows` is larger: no need to scroll.
             return 0;
         }
         if used > self.w_view_height {
             // More than a screenful: don't scroll, redraw.
-            return used as LineNr;
+            return used;
         }
         // Scroll the minimal number of lines.
         let mut line_count = 0;
@@ -457,7 +457,7 @@ impl Win {
         }
 
         let mut topfill = 0;
-        while topline > 1 {
+        while topline > LineNr::ONE {
             if do_sms {
                 // With 'smoothscroll' we can scroll to the exact point where
                 // the cursor is halfway down the screen.
@@ -559,7 +559,7 @@ impl Win {
             }
         }
         self.w_topfill = topfill;
-        if old_topline > self.w_topline + self.w_view_height as LineNr {
+        if old_topline > self.w_topline + self.w_view_height {
             self.w_botfill = false;
         }
         self.check_topfill(false);
@@ -585,7 +585,7 @@ impl Win {
         // whether the first and last line of the file are on screen.
         let mut above_wanted = scrolloff_or_drag(self);
         let mut below_wanted = above_wanted;
-        if self.w_topline == 1 {
+        if self.w_topline == LineNr::ONE {
             above_wanted = 0;
             below_wanted = below_wanted.min((self.w_view_height / 2) as int64_t);
         }
@@ -597,8 +597,8 @@ impl Win {
 
         // Enough file lines above and below the cursor: nothing to do.
         let cursor_lnum = self.w_cursor.lnum;
-        if cursor_lnum as int64_t >= self.w_topline as int64_t + above_wanted
-            && (cursor_lnum as int64_t) < self.w_botline as int64_t - below_wanted
+        if i64::from(cursor_lnum) >= i64::from(self.w_topline) + above_wanted
+            && i64::from(cursor_lnum) < i64::from(self.w_botline) - below_wanted
             && !self.lines_concealed()
         {
             return;
@@ -645,12 +645,12 @@ impl Win {
                 topline += 1;
             }
         }
-        if topline == botline || botline == 0 {
+        if topline == botline || botline == LineNr::ZERO {
             self.w_cursor.lnum = topline;
         } else if topline > botline {
             self.w_cursor.lnum = botline;
         } else {
-            if cursor_lnum < topline && self.w_topline > 1 {
+            if cursor_lnum < topline && self.w_topline > LineNr::ONE {
                 self.w_cursor.lnum = topline;
                 self.w_valid = self
                     .w_valid
@@ -688,7 +688,9 @@ pub(super) fn get_scroll_overlap(win: Win, dir: Direction) -> c_int {
     let backward = dir == BACKWARD;
 
     win.validate_botline();
-    if backward && win.w_topline == 1 || forward && win.w_botline > win.buffer().line_count() {
+    if backward && win.w_topline == LineNr::ONE
+        || forward && win.w_botline > win.buffer().line_count()
+    {
         // No overlap; still handle 'smoothscroll'.
         return min_height + 2;
     }
@@ -702,7 +704,7 @@ pub(super) fn get_scroll_overlap(win: Win, dir: Direction) -> c_int {
         lnum,
         // Paging backwards, the filler lines that matter are the ones above
         // the line *below* this one.
-        fill: win.fill_above(lnum + backward as LineNr)
+        fill: win.fill_above(lnum + i32::from(backward))
             - if forward {
                 win.w_filler_rows
             } else {
@@ -770,7 +772,7 @@ pub(super) fn scroll_with_sms(
     let prev_topfill = win.w_topfill;
 
     win.w_onebuf_opt.wo_sms = 1;
-    scroll_redraw_cur(win, dir == FORWARD, count as LineNr);
+    scroll_redraw_cur(win, dir == FORWARD, count);
 
     // Not actually smoothscrolling, but we ended up with a partly visible
     // line. Keep scrolling until `w_skipcol` is zero again.
@@ -778,7 +780,7 @@ pub(super) fn scroll_with_sms(
         // Reverse the scroll direction when `w_topline` already changed. One
         // line extra scrolling backward, so that consuming `w_skipcol` is
         // symmetric.
-        let fixdir = if (win.w_topline - prev_topline).abs() > (dir == BACKWARD) as LineNr {
+        let fixdir = if (win.w_topline - prev_topline).abs() > i32::from(dir == BACKWARD) {
             -dir
         } else {
             dir
@@ -792,7 +794,7 @@ pub(super) fn scroll_with_sms(
             arith::sms_fixup_count_back(win.w_skipcol, width1, width2)
         };
 
-        scroll_redraw_cur(win, fixdir == FORWARD, count as LineNr);
+        scroll_redraw_cur(win, fixdir == FORWARD, count);
         *curscount += count * if fixdir == dir { 1 } else { -1 };
     }
     win.w_onebuf_opt.wo_sms = prev_sms;

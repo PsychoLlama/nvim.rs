@@ -457,9 +457,9 @@ fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
 pub fn ex_all(excmd: &mut ExArg) {
     // `:all` takes an optional count as its range.
     if excmd.addr_count == 0 {
-        excmd.line2 = 9999 as LineNr;
+        excmd.line2 = LineNr::new(9999);
     }
-    let count = excmd.line2 as c_int;
+    let count = excmd.line2.get();
     let forceit = excmd.forceit;
     let drop = excmd.cmdidx == CmdIdx::drop;
     do_arg_all(count, forceit, drop);

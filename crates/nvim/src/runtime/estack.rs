@@ -53,7 +53,7 @@ fn push_entry(entry: EStack) {
 pub fn estack_init() {
     // Ten frames of nesting are the common case; upstream pre-grows for it.
     EXESTACK.with_mut(|stack| stack.reserve(10));
-    push_entry(entry_for(ETYPE_TOP, FrameName::None, 0));
+    push_entry(entry_for(ETYPE_TOP, FrameName::None, LineNr::ZERO));
 }
 
 /// Add an item to the execution stack.
@@ -114,7 +114,7 @@ pub fn innermost_frame() -> EStack {
         Some(entry) => entry,
         None => {
             debug_assert!(false, "the execution stack has no frame");
-            entry_for(ETYPE_TOP, FrameName::None, 0)
+            entry_for(ETYPE_TOP, FrameName::None, LineNr::ZERO)
         }
     }
 }
@@ -142,7 +142,7 @@ pub(crate) fn set_sourcing_name(name: FrameName) {
 
 /// The line number the innermost frame is on -- upstream's `SOURCING_LNUM`.
 pub(crate) fn sourcing_lnum() -> LineNr {
-    EXESTACK.with(|stack| stack.last().map_or(0, |entry| entry.es_lnum))
+    LineNr::new(EXESTACK.with(|stack| stack.last().map_or(0, |entry| entry.es_lnum.get())))
 }
 
 /// Whether the innermost frame has a name -- upstream's
@@ -260,7 +260,7 @@ fn render_stack(stack: &[EStack], which: EStackArg) -> Option<XString> {
         let lnum = if idx == innermost && which != ESTACK_STACK {
             0
         } else {
-            entry.es_lnum
+            entry.es_lnum.get()
         };
 
         named = true;
@@ -325,7 +325,7 @@ pub fn stacktrace_create() -> Option<ListRef> {
                     continue;
                 };
                 let sctx = func.script_ctx.get();
-                let lnum = entry.es_lnum + sctx.sc_lnum;
+                let lnum = entry.es_lnum + sctx.sc_lnum.get();
                 let path = script_path(sctx);
                 stacktrace_push_item(&list, Some(func), None, lnum, Some(&path));
             }
@@ -334,7 +334,7 @@ pub fn stacktrace_create() -> Option<ListRef> {
                 let Some(sctx) = entry.es_info.autocommand() else {
                     continue;
                 };
-                let lnum = entry.es_lnum + sctx.sc_lnum;
+                let lnum = entry.es_lnum + sctx.sc_lnum.get();
                 let path = script_path(sctx);
                 stacktrace_push_item(&list, None, entry.name(), lnum, Some(&path));
             }

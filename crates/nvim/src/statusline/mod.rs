@@ -58,7 +58,7 @@ use crate::optionstr::OptStringRef;
 use crate::types::{
     AlignTextPos, ClickLine, GridView, Hlf, LineNr, MAXPATHL, Object, OptIndex, OptionSetFlags,
     ScreenChar, SignTextAttrs, StatusCol, StlClickDefinition, StlClickDefinition_type_0,
-    StlClickRecord, VarNumber, Vv, WinSplit, WinStyle,
+    StlClickRecord, Vv, WinSplit, WinStyle,
 };
 use crate::window::global_stl_height;
 use crate::winlayer::Win;
@@ -376,11 +376,11 @@ pub(crate) fn build_statuscol_str(
     let mut win = window;
     // Only update the click definitions once per window per redraw, and not
     // at all while the column is empty -- it is redrawn again once it is not.
-    let fillclick = relnum >= 0 && stcp.width > 0 && lnum == win.w_topline;
+    let fillclick = relnum >= LineNr::ZERO && stcp.width > 0 && lnum == win.w_topline;
 
-    if relnum >= 0 {
-        set_vim_var_nr(Vv::Lnum, lnum as VarNumber);
-        set_vim_var_nr(Vv::Relnum, relnum as VarNumber);
+    if relnum >= LineNr::ZERO {
+        set_vim_var_nr(Vv::Lnum, i64::from(lnum));
+        set_vim_var_nr(Vv::Relnum, i64::from(relnum));
     }
 
     let job = StlJob {

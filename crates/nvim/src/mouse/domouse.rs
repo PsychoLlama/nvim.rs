@@ -77,7 +77,7 @@ use crate::winlayer::graph::cmdwin_type;
 static in_tab_line: GlobalCell<bool> = GlobalCell::new(false);
 /// Where the multi-click selection started, which a drag extends away from.
 static orig_cursor: GlobalCell<Pos> = GlobalCell::new(Pos {
-    lnum: 0,
+    lnum: LineNr::ZERO,
     col: 0,
     coladd: 0,
 });
@@ -168,7 +168,7 @@ pub(crate) fn do_mouse(
     }
 
     let mut m_pos = Pos {
-        lnum: 0,
+        lnum: LineNr::ZERO,
         col: 0,
         coladd: 0,
     };

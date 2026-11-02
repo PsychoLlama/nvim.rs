@@ -11,7 +11,7 @@
   "raw_cstr": 240,
   "libc_strings": 5,
   "const_c_int": 1051,
-  "const_int_alias": 2151,
+  "const_int_alias": 2148,
   "unions": 20,
   "repr_c_ffi_types": 91,
   "repr_c_editor_state": 78,

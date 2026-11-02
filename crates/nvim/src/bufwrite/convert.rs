@@ -158,8 +158,8 @@ impl ByteWriter {
             iconv: None,
             first: false,
             conv_error: false,
-            conv_error_lnum: 0,
-            start_lnum: 0,
+            conv_error_lnum: LineNr::ZERO,
+            start_lnum: LineNr::ZERO,
         }
     }
 

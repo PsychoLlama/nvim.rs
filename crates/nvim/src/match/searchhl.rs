@@ -165,15 +165,15 @@ impl Win {
                 syn_id2attr(item.mit_hlg_id)
             };
             shl.conceals = item.mit_hlg_id != 0 && item.mit_hlg_id == conceal;
-            shl.lnum = 0;
-            shl.first_lnum = 0;
+            shl.lnum = LineNr::ZERO;
+            shl.first_lnum = LineNr::ZERO;
             shl.tm = profile_setlimit(p_rdt());
             item.mit_suspended = false;
         }
         let attr = win_hl_attr(self, HLF_L);
         screen_search_hl.with_mut(|shl| {
-            shl.lnum = 0;
-            shl.first_lnum = 0;
+            shl.lnum = LineNr::ZERO;
+            shl.first_lnum = LineNr::ZERO;
             shl.attr = attr;
         });
         // The time limit is set at the top level, for every window at once.
@@ -187,12 +187,12 @@ impl Win {
 /// winner to the front of the still-unvisited tail, which is what makes
 /// repeated calls walk one line's positions left to right.
 fn next_search_hl_pos(item: &mut MatchItem, lnum: LineNr, mincol: ColNr) -> usize {
-    item.mit_hl.lnum = 0;
+    item.mit_hl.lnum = LineNr::ZERO;
     let mut found: Option<usize> = None;
     let start = usize::try_from(item.mit_pos_cur).unwrap_or(0);
     for i in start..item.mit_pos_array.len() {
         let pos = &item.mit_pos_array[i];
-        if pos.lnum == 0 {
+        if pos.lnum == LineNr::ZERO {
             break;
         }
         // A whole-line position (len 0) before the column asked for is
@@ -228,9 +228,9 @@ fn next_search_hl_pos(item: &mut MatchItem, lnum: LineNr, mincol: ColNr) -> usiz
 
     let shl = &mut item.mit_hl;
     shl.lnum = lnum;
-    shl.rm.startpos[0].lnum = 0;
+    shl.rm.startpos[0].lnum = LineNr::ZERO;
     shl.rm.startpos[0].col = start;
-    shl.rm.endpos[0].lnum = 0;
+    shl.rm.endpos[0].lnum = LineNr::ZERO;
     shl.rm.endpos[0].col = end;
     shl.is_addpos = true;
     shl.has_cursor = false;
@@ -291,21 +291,21 @@ fn next_search_hl(window: Win, which: Which, lnum: LineNr, mincol: ColNr) {
 
     // `:{range}s/pat` only highlights inside the range.
     if (lnum < search_first_line.get() || lnum > search_last_line.get()) && which == Which::Search {
-        set_lnum(0);
+        set_lnum(LineNr::ZERO);
         return;
     }
 
     let (prev_lnum, start, end) = with_shl(window, which, |shl| {
         (shl.lnum, shl.rm.startpos[0], shl.rm.endpos[0])
     });
-    if prev_lnum != 0 {
+    if prev_lnum != LineNr::ZERO {
         // Three cases: `lnum` is below the previous match, so start
         // again; the previous match already includes `mincol`, so keep
         // it; otherwise continue after it.
-        let l = prev_lnum + end.lnum - start.lnum;
-        if lnum > l {
-            set_lnum(0);
-        } else if lnum < l || end.col > mincol {
+        let l = prev_lnum + end.lnum.get() - start.lnum;
+        if lnum > LineNr::new(l) {
+            set_lnum(LineNr::ZERO);
+        } else if lnum < LineNr::new(l) || end.col > mincol {
             return;
         }
     }
@@ -316,19 +316,19 @@ fn next_search_hl(window: Win, which: Which, lnum: LineNr, mincol: ColNr) {
             (shl.tm, shl.lnum, shl.rm.startpos[0], shl.rm.endpos[0])
         });
         if profile_passed_limit(tm) {
-            set_lnum(0); // no match found in time
+            set_lnum(LineNr::ZERO); // no match found in time
             break;
         }
 
-        let matchcol: ColNr = if prev_lnum == 0 {
+        let matchcol: ColNr = if prev_lnum == LineNr::ZERO {
             // No useful previous match: search from the line's start.
             0
-        } else if !cpo_has(CpoFlag::SEARCH) || (end.lnum == 0 && end.col <= start.col) {
+        } else if !cpo_has(CpoFlag::SEARCH) || (end.lnum == LineNr::ZERO && end.col <= start.col) {
             // Not Vi-compatible, or an empty match: continue at the next
             // character, and stop if that is past the end of the line.
             let at = usize::try_from(start.col).unwrap_or(0);
             let Some(len) = cluster_len_in_line(window.buffer(), lnum, at) else {
-                set_lnum(0);
+                set_lnum(LineNr::ZERO);
                 break;
             };
             start.col + col_len(len)
@@ -352,7 +352,7 @@ fn next_search_hl(window: Win, which: Which, lnum: LineNr, mincol: ColNr) {
                     }
                     Which::Item(i) => with_item(window, i, |item| item.mit_suspended = true),
                 }
-                set_lnum(0);
+                set_lnum(LineNr::ZERO);
                 got_int.set(false); // avoid the "Type :quit to exit Vim" message
                 break;
             }
@@ -361,16 +361,16 @@ fn next_search_hl(window: Win, which: Which, lnum: LineNr, mincol: ColNr) {
         }
 
         if nmatched == 0 {
-            set_lnum(0);
+            set_lnum(LineNr::ZERO);
             break;
         }
         let useful = with_shl(window, which, |shl| {
-            let useful = shl.rm.startpos[0].lnum > 0
+            let useful = shl.rm.startpos[0].lnum > LineNr::ZERO
                 || shl.rm.startpos[0].col >= mincol
                 || nmatched > 1
                 || shl.rm.endpos[0].col > mincol;
             if useful {
-                shl.lnum += shl.rm.startpos[0].lnum;
+                shl.lnum += shl.rm.startpos[0].lnum.get();
             }
             useful
         });
@@ -406,11 +406,11 @@ fn pos_in_progress(window: Win, which: Which) -> bool {
 pub(crate) fn prepare_search_hl(window: Win, lnum: LineNr) {
     let mut walk = ShlWalk::new(Order::SearchFirst);
     while let Some(which) = walk.next(window) {
-        if !is_multiline(window, which) || with_shl(window, which, |shl| shl.lnum) != 0 {
+        if !is_multiline(window, which) || with_shl(window, which, |shl| shl.lnum) != LineNr::ZERO {
             continue;
         }
 
-        if with_shl(window, which, |shl| shl.first_lnum) == 0 {
+        if with_shl(window, which, |shl| shl.first_lnum) == LineNr::ZERO {
             let mut first = lnum;
             while first > window.w_topline {
                 if has_folding(window, first - 1, None, None) {
@@ -434,8 +434,10 @@ pub(crate) fn prepare_search_hl(window: Win, lnum: LineNr) {
             next_search_hl(window, which, first, n);
             pos_inprogress = pos_in_progress(window, which);
             n = with_shl(window, which, |shl| {
-                if shl.lnum != 0 {
-                    shl.first_lnum = shl.lnum + shl.rm.endpos[0].lnum - shl.rm.startpos[0].lnum;
+                if shl.lnum != LineNr::ZERO {
+                    shl.first_lnum = LineNr::new(
+                        shl.lnum + shl.rm.endpos[0].lnum.get() - shl.rm.startpos[0].lnum,
+                    );
                     shl.rm.endpos[0].col
                 } else {
                     shl.first_lnum += 1;
@@ -522,7 +524,7 @@ pub(crate) fn prepare_search_hl_line(
         next_search_hl(window, which, lnum, mincol);
 
         let found = with_shl(window, which, |shl| {
-            if shl.lnum == 0 || shl.lnum > lnum {
+            if shl.lnum == LineNr::ZERO || shl.lnum > lnum {
                 return false;
             }
             // A match that started on an earlier line covers this one from
@@ -532,7 +534,9 @@ pub(crate) fn prepare_search_hl_line(
             } else {
                 0
             };
-            shl.endcol = if lnum == shl.lnum + shl.rm.endpos[0].lnum - shl.rm.startpos[0].lnum {
+            shl.endcol = if lnum
+                == LineNr::new(shl.lnum + shl.rm.endpos[0].lnum.get() - shl.rm.startpos[0].lnum)
+            {
                 shl.rm.endpos[0].col
             } else {
                 MAXCOL
@@ -663,7 +667,7 @@ pub(crate) fn update_search_hl(
                     return false;
                 }
                 shl.startcol = shl.rm.startpos[0].col;
-                shl.endcol = if shl.rm.endpos[0].lnum == 0 {
+                shl.endcol = if shl.rm.endpos[0].lnum == LineNr::ZERO {
                     shl.rm.endpos[0].col
                 } else {
                     MAXCOL

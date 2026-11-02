@@ -181,7 +181,7 @@ pub(crate) fn in_baseclass_list(cached: &mut CppBaseclassCache) -> bool {
     //            : something(4),
     //            somethingelse(3)
     //    {}
-    while lnum > 1 {
+    while lnum > LineNr::ONE {
         let line = lines.line(lnum - 1);
         let mut at = skip::white(line);
         let stop = if byte_at(line, at) == b'#' || byte_at(line, at) == 0 {

@@ -18,7 +18,7 @@ use neovim::buffer::{
     BLN_LISTED, DOBUF_DEL, DOBUF_UNLOAD, DOBUF_WIPE, buf_valid, buflist_findpat, buflist_new,
     close_buffer,
 };
-use neovim::types::Buffer;
+use neovim::types::{Buffer, LineNr};
 use neovim::winlayer::{Buf, BufId};
 
 use crate::support::{Probe, Sandbox, cstr};
@@ -64,7 +64,7 @@ impl Buffers {
     /// which is what a caller with a bare relative name does.
     fn open(&self, name: &str) -> *mut Buffer {
         let owned = cstr(name);
-        let buf = buflist_new(Some(&owned), Some(&owned), 1, BLN_LISTED as c_int);
+        let buf = buflist_new(Some(&owned), Some(&owned), LineNr::ONE, BLN_LISTED as c_int);
         let buf = buf.expect("buflist_new answers a buffer").raw();
         self.opened.borrow_mut().push(buf);
         buf

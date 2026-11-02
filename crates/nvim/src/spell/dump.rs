@@ -140,7 +140,7 @@ pub fn ex_spelldump(excmd: &mut ExArg) {
     spell_dump_compl(None, 0, None, dumpflags);
 
     // Drop the empty line the new buffer started with.
-    if Buf::current().b_ml.ml_line_count > 1 {
+    if Buf::current().b_ml.ml_line_count > LineNr::ONE {
         let _ = ml_delete(Buf::current().b_ml.ml_line_count);
     }
     redraw_later(Win::current(), UPD_NOT_VALID);
@@ -169,7 +169,7 @@ pub fn spell_dump_compl(
     dumpflags_arg: c_int,
 ) {
     let pat = pat.map(until_nul);
-    let mut lnum: LineNr = 0;
+    let mut lnum: LineNr = LineNr::ZERO;
     let mut dumpflags = dumpflags_arg;
 
     // Case handling of the pattern is dump_word()'s problem, but what
@@ -513,7 +513,7 @@ fn dump_prefixes(
                         flags
                     };
                     dump_word(slang, &prefix, sink, pfx_flags, lnum);
-                    if lnum != 0 {
+                    if lnum != LineNr::ZERO {
                         lnum += 1;
                     }
                 }

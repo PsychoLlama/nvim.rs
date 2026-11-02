@@ -45,7 +45,7 @@ pub fn f_bufadd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let name = numbuf.string(&args[0]);
     // An empty name asks for an unnamed buffer.
     let name = (!name.is_empty()).then_some(name);
-    let buffer = buflist_add_name(name, 0, 0);
+    let buffer = buflist_add_name(name, LineNr::ZERO, 0);
     result.write_number(buffer.map_or(0, |b| VarNumber::from(b.handle)));
 }
 
@@ -117,7 +117,7 @@ pub fn f_bufnr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         && tv_get_number_chk(&args[1]).is_ok_and(|create| create != 0)
         && let Some(name) = numbuf.string_chk(&args[0])
     {
-        buf = buflist_add_name(Some(name), 1, 0);
+        buf = buflist_add_name(Some(name), LineNr::ONE, 0);
     }
     if let Some(buf) = buf {
         result.write_number(VarNumber::from(buf.handle));

@@ -203,7 +203,7 @@ pub(crate) fn buf_do_map(
     // the table's borrow: it asks Lua where the definition came from.
     let sctx = (has_rhs && !is_unmap).then(|| {
         let mut ctx = current_sctx.get();
-        ctx.sc_lnum += sourcing_lnum();
+        ctx.sc_lnum += sourcing_lnum().get();
         nlua_set_sctx(&mut ctx);
         ctx
     });
@@ -397,8 +397,8 @@ pub(crate) fn buf_do_map(
                 noremap,
                 mode,
                 is_abbrev,
-                0, // sid
-                0, // lnum
+                0,            // sid
+                LineNr::ZERO, // lnum
                 keyround1_simplified,
             ));
         }

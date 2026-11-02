@@ -28,6 +28,7 @@ use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::mbyte::c_cluster_len;
 use crate::message_fmt::msg_cstr;
+use crate::narrow::len_as_int;
 use crate::semsg;
 use crate::types::RegLines;
 use crate::winlayer::{Buf, Win};
@@ -59,7 +60,7 @@ pub(crate) struct Put {
     lines: RegLines,
 
     /// Lines the put added, for `msgmore` and `mark_adjust`.
-    nr_lines: LineNr,
+    nr_lines: i32,
     /// Where a `PUT_LINE_SPLIT` broke the cursor line, for the extmark
     /// splice.
     split_pos: ColNr,
@@ -235,7 +236,7 @@ impl Put {
     /// Answers false when undo could not be saved.
     fn save_for_undo(&self) -> bool {
         if self.kind == kMTBlockWise {
-            let mut lnum = Win::current().w_cursor.lnum + self.lines.len() as LineNr + 1;
+            let mut lnum = Win::current().w_cursor.lnum + len_as_int(self.lines.len()) + 1;
             lnum = lnum.min(Buf::current().b_ml.ml_line_count + 1);
             // `lnum` is capped at one past the last line.
             return u_save(Win::current().w_cursor.lnum - 1, lnum).is_ok();
@@ -262,7 +263,7 @@ impl Put {
         // has to be part of what is saved.
         //
         let saved = if buf_is_empty(Buf::current()) {
-            u_save(0, 2)
+            u_save(LineNr::ZERO, LineNr::new(2))
         } else {
             u_save(lnum - 1, lnum)
         };

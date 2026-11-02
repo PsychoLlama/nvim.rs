@@ -121,12 +121,12 @@ pub(crate) fn parse_pattern_and_range(incsearch_start: Pos) -> Option<PatternSpa
     let line = CmdLine::from_bytes(cstr::until_nul(Cc::current().bytes()));
 
     // Default range: all lines.
-    search_first_line.set(0);
+    search_first_line.set(LineNr::ZERO);
     search_last_line.set(MAXLNUM);
 
     let mut ea = ExArg {
-        line1: 1,
-        line2: 1,
+        line1: LineNr::ONE,
+        line2: LineNr::ONE,
         line,
         addr_type: CmdAddr::Lines,
         ..EXARG_T_INIT
@@ -285,7 +285,7 @@ pub(crate) fn do_incsearch_highlighting(
     }
 
     // By default search all lines.
-    search_first_line.set(0);
+    search_first_line.set(LineNr::ZERO);
     search_last_line.set(MAXLNUM);
 
     if firstc == '/' as ::core::ffi::c_int || firstc == '?' as ::core::ffi::c_int {
@@ -344,7 +344,7 @@ pub(crate) fn may_do_incsearch_highlighting(
         ui_flush();
     }
 
-    if search_first_line.get() == 0 {
+    if search_first_line.get() == LineNr::ZERO {
         // Start at the original cursor position.
         Win::current().w_cursor = s.search_start;
     } else if search_first_line.get() > Buf::current().b_ml.ml_line_count {
@@ -365,7 +365,7 @@ pub(crate) fn may_do_incsearch_highlighting(
         if !p_hls() {
             search_flags += SEARCH_KEEP;
         }
-        if search_first_line.get() != 0 {
+        if search_first_line.get() != LineNr::ZERO {
             search_flags += SEARCH_START;
         }
         // Half a second of search time.
@@ -555,7 +555,7 @@ pub(crate) fn finish_incsearch_highlighting(
     highlight_match.set(false);
 
     // By default search all lines.
-    search_first_line.set(0);
+    search_first_line.set(LineNr::ZERO);
     search_last_line.set(MAXLNUM);
 
     magic_overruled.set(s.magic_overruled_save);

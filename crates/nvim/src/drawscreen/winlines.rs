@@ -97,7 +97,7 @@ pub(crate) fn draw_window_lines(
         lnum: window.w_topline,
         eof: false,
         didline: false,
-        syntax_last_parsed: 0,
+        syntax_last_parsed: LineNr::ZERO,
         scrolled_for_mod: false,
         did_update: DidUpdate::None,
     };
@@ -156,13 +156,13 @@ pub(crate) fn draw_window_lines(
         window.w_last_cursor_lnum_rnu = if window.w_onebuf_opt.wo_rnu != 0 {
             window.w_cursor.lnum
         } else {
-            0
+            LineNr::ZERO
         };
         window.w_lines_valid = window.w_lines_valid.max(w.idx);
         window.w_display_tick = display_tick.get();
 
         // Tell the syntax machinery where parsing stopped.
-        if w.syntax_last_parsed != 0 && syntax_present(window) {
+        if w.syntax_last_parsed != LineNr::ZERO && syntax_present(window) {
             syntax_end_parsing(window, w.syntax_last_parsed + 1);
         }
 
@@ -229,7 +229,7 @@ fn line_needs_drawing(window: Win, buffer: Buf, rg: &Regions, w: &Walk) -> bool 
     // `syntax_check_changed` finishes the previous line and stores the
     // syntax state for this one, so short-circuiting past it on the cursor
     // line would leave the state cache one line behind.
-    if rg.mod_top != 0
+    if rg.mod_top != LineNr::ZERO
         && (w.lnum == rg.mod_top
             || (w.lnum >= rg.mod_top
                 // Keep going past the change while the highlighting can
@@ -279,7 +279,7 @@ fn draw_one_line(
     };
 
     // A concealed line with no filler lines takes no rows at all.
-    let concealed = decor_conceal_line(window, w.lnum - 1, false);
+    let concealed = decor_conceal_line(window, (w.lnum - 1).get(), false);
     if concealed && win_get_fill(window, w.lnum) == 0 {
         let step = if foldinfo.fi_lines != 0 {
             foldinfo.fi_lines
@@ -290,7 +290,7 @@ fn draw_one_line(
             rg.mod_top += step;
         }
         w.lnum += step;
-        spv.spv_capcol_lnum = 0;
+        spv.spv_capcol_lnum = LineNr::ZERO;
         return true;
     }
 
@@ -312,7 +312,9 @@ fn draw_one_line(
     } else {
         prepare_search_hl(window, w.lnum);
         // Let the syntax machinery know lines were skipped.
-        if w.syntax_last_parsed != 0 && w.syntax_last_parsed + 1 < w.lnum && syntax_present(window)
+        if w.syntax_last_parsed != LineNr::ZERO
+            && w.syntax_last_parsed + 1 < w.lnum
+            && syntax_present(window)
         {
             syntax_end_parsing(window, w.syntax_last_parsed + 1);
         }
@@ -342,14 +344,14 @@ fn draw_one_line(
         if display_buf_line {
             w.syntax_last_parsed = w.lnum;
         } else {
-            spv.spv_capcol_lnum = 0;
+            spv.spv_capcol_lnum = LineNr::ZERO;
         }
 
-        let lastlnum = w.lnum + foldinfo.fi_lines - LineNr::from(foldinfo.fi_lines > 0);
+        let lastlnum = w.lnum + foldinfo.fi_lines - i32::from(foldinfo.fi_lines > 0);
         let wl = &mut window.w_lines[idx];
         wl.wl_folded = foldinfo.fi_lines > 0;
-        wl.wl_foldend = lastlnum;
-        wl.wl_lastlnum = lastlnum;
+        wl.wl_foldend = LineNr::new(lastlnum.get());
+        wl.wl_lastlnum = LineNr::new(lastlnum.get());
         w.did_update = if foldinfo.fi_lines > 0 {
             DidUpdate::Fold
         } else {
@@ -360,17 +362,24 @@ fn draw_one_line(
         // unless a virtual line is attached below it, which has to be drawn
         // and so ends the run. A virtual line below a *second* adjacent
         // concealed line is concealed with it.
-        let mut virt_below = decor_virt_lines(window, lastlnum, lastlnum + 1, None, None, true) > 0;
+        let mut virt_below = decor_virt_lines(
+            window,
+            lastlnum.get(),
+            (lastlnum + 1).get(),
+            None,
+            None,
+            true,
+        ) > 0;
         let mut last = lastlnum;
         while !virt_below
-            && last < buffer.b_ml.ml_line_count
-            && decor_conceal_line(window, last, false)
+            && last < LineNr::new(buffer.b_ml.ml_line_count.get())
+            && decor_conceal_line(window, last.get(), false)
         {
             virt_below = false;
             last += 1;
-            has_folding(window, last, None, Some(&mut last));
+            has_folding(window, LineNr::new(last.get()), None, Some(&mut last));
         }
-        window.w_lines[idx].wl_lastlnum = last;
+        window.w_lines[idx].wl_lastlnum = LineNr::new(last.get());
     }
 
     let wl = &mut window.w_lines[idx];
@@ -578,7 +587,7 @@ fn skip_one_line(
 ) {
     let size = c_int::from(window.w_lines[w.idx as usize].wl_size);
     let numbers_moved = (window.w_onebuf_opt.wo_nu != 0
-        && rg.mod_top != 0
+        && rg.mod_top != LineNr::ZERO
         && w.lnum >= rg.mod_bot
         && buffer.b_mod_set
         && buffer.b_mod_xlines != 0)
@@ -610,7 +619,7 @@ fn skip_one_line(
     }
     w.lnum = window.w_lines[(w.idx - 1) as usize].wl_lastlnum + 1;
     w.did_update = DidUpdate::None;
-    spv.spv_capcol_lnum = 0;
+    spv.spv_capcol_lnum = LineNr::ZERO;
 }
 
 /// Reset the walk state so the window is drawn again from its top line.

@@ -103,17 +103,17 @@ pub(crate) fn init_empty(window: Win) {
     let mut window = window;
     window.redraw_later(UPD_NOT_VALID);
     window.w_lines_valid = 0;
-    window.w_cursor.lnum = 1;
+    window.w_cursor.lnum = LineNr::ONE;
     window.w_cursor.col = 0;
     window.w_curswant = window.w_cursor.col;
     window.w_cursor.coladd = 0 as ColNr;
-    window.w_pcmark.lnum = 1; // pcmark not cleared but set to line 1
+    window.w_pcmark.lnum = LineNr::ONE; // pcmark not cleared but set to line 1
     window.w_pcmark.col = 0;
-    window.w_prev_pcmark.lnum = 0 as LineNr;
+    window.w_prev_pcmark.lnum = LineNr::ZERO;
     window.w_prev_pcmark.col = 0;
-    window.w_topline = 1;
+    window.w_topline = LineNr::ONE;
     window.w_topfill = 0;
-    window.w_botline = 2;
+    window.w_botline = LineNr::new(2);
     window.w_valid = WinValid::NONE;
     window.w_s = window.buffer().syntax_block();
 }

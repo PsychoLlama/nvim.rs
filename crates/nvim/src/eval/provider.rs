@@ -10,6 +10,7 @@ use crate::guard::Depth;
 use crate::memory::ThinCString;
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::semsg;
+use crate::types::LineNr;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
@@ -45,7 +46,7 @@ use crate::winlayer::{Buf, Win};
 pub(crate) static provider_caller_scope: GlobalCell<CallerScope> = GlobalCell::new(CallerScope {
     script_ctx: ScriptCtx::NONE,
     es_entry: EStack {
-        es_lnum: 0,
+        es_lnum: LineNr::ZERO,
         es_name: crate::types::FrameName::None,
         es_type: ETYPE_TOP,
         es_info: EstackInfo::None,
@@ -290,7 +291,7 @@ pub fn prompt_get_input(buffer: Option<Buf>) -> Option<ThinCString> {
     // recorded column.
     let skip = usize::try_from(col).ok().filter(|&col| col <= first.len());
     let mut text = first[skip.unwrap_or(0)..].to_vec();
-    for lnum in (lnum_start + 1)..=lnum_last {
+    for lnum in (lnum_start + 1).through(lnum_last) {
         text.push(b'\n');
         text.extend_from_slice(lines.line(lnum));
     }

@@ -428,7 +428,7 @@ pub(crate) fn did_set_number_relativenumber(args: &mut OptSet) -> Result<(), Opt
     // A 'statuscolumn' draws the number itself, so the cached width has
     // to be recomputed rather than reused.
     if !win.w_onebuf_opt.wo_stc.bytes().is_empty() {
-        win.w_nrwidth_line_count = 0 as LineNr;
+        win.w_nrwidth_line_count = LineNr::ZERO;
     }
     let _ = check_window_signcolumn(win);
     Ok(())
@@ -436,7 +436,7 @@ pub(crate) fn did_set_number_relativenumber(args: &mut OptSet) -> Result<(), Opt
 
 /// 'numberwidth': the cached number-column width is stale.
 pub(crate) fn did_set_numberwidth(args: &mut OptSet) -> Result<(), OptError> {
-    Frame::read(args).win.w_nrwidth_line_count = 0 as LineNr;
+    Frame::read(args).win.w_nrwidth_line_count = LineNr::ZERO;
     Ok(())
 }
 

@@ -307,7 +307,7 @@ pub fn mark_view_restore(fm: Option<&FileMark>) {
         return;
     }
     let topline = fm.mark.lnum - fm.view.topline_offset;
-    if topline < 1 {
+    if topline < LineNr::ONE {
         return;
     }
     let mut win = Win::current();
@@ -372,7 +372,7 @@ pub(super) fn fname2fnum(fname: &CStr) {
     let room = usize::try_from(IOSIZE).unwrap_or(0);
     let dir = dirname_within(room).unwrap_or_else(|message| message);
     let short = path_shorten_fname(name.as_cstr(), &dir);
-    buflist_new(Some(name.as_cstr()), short, 1, 0);
+    buflist_new(Some(name.as_cstr()), short, LineNr::ONE, 0);
 }
 
 /// Check all file marks for a name that matches the file name in buf.
@@ -426,10 +426,10 @@ pub(crate) fn mark_check(fm: Option<&FileMark>, errormsg: &mut Option<CString>) 
         *errormsg = Some(ex_msg(e_umark));
         return false;
     };
-    if fm.mark.lnum <= 0 {
+    if fm.mark.lnum <= LineNr::ZERO {
         // A negative line number is a mark the shada file mangled; it is not
         // "not set", so it gets no message at all.
-        if fm.mark.lnum == 0 {
+        if fm.mark.lnum == LineNr::ZERO {
             *errormsg = Some(ex_msg(e_marknotset));
         }
         return false;
@@ -476,11 +476,11 @@ pub fn clrallmarks(mut buffer: Buf, timestamp: Timestamp) {
     // `'"` is the one store that is cleared to line 1 rather than to 0: the
     // whole point of it is where to put the cursor when the file is opened
     // again, and "the top" is a better answer than "nowhere".
-    b.b_last_cursor.mark.lnum = 1;
+    b.b_last_cursor.mark.lnum = LineNr::ONE;
     b.b_last_insert.clear(timestamp);
     b.b_last_change.clear(timestamp);
-    b.b_op_start.lnum = 0;
-    b.b_op_end.lnum = 0;
+    b.b_op_start.lnum = LineNr::ZERO;
+    b.b_op_end.lnum = LineNr::ZERO;
     let len = slot(b.b_changelistlen);
     for change in &mut b.b_changelist[..len] {
         change.clear(timestamp);

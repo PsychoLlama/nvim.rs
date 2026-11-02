@@ -498,10 +498,22 @@ const EMPTY_STATE_ITEM: StateItem = StateItem {
     si_trans_id: 0,
     si_m_lnum: 0,
     si_m_startcol: 0,
-    si_m_endpos: LPos { lnum: 0, col: 0 },
-    si_h_startpos: LPos { lnum: 0, col: 0 },
-    si_h_endpos: LPos { lnum: 0, col: 0 },
-    si_eoe_pos: LPos { lnum: 0, col: 0 },
+    si_m_endpos: LPos {
+        lnum: LineNr::ZERO,
+        col: 0,
+    },
+    si_h_startpos: LPos {
+        lnum: LineNr::ZERO,
+        col: 0,
+    },
+    si_h_endpos: LPos {
+        lnum: LineNr::ZERO,
+        col: 0,
+    },
+    si_eoe_pos: LPos {
+        lnum: LineNr::ZERO,
+        col: 0,
+    },
     si_end_idx: 0,
     si_ends: 0,
     si_attr: 0,

@@ -23,6 +23,7 @@ use crate::memline::MlFlags;
 use crate::memline::{ml_append_cstr, ml_delete};
 use crate::message::emsg;
 use crate::message::state::{lines_left, msg_scroll, need_wait_return};
+use crate::narrow::{len_as_int, number_as_int};
 use crate::option::vars::P_WINDOW;
 use crate::os::cshim::gettext;
 use crate::state::mode::State;
@@ -55,7 +56,7 @@ pub fn ex_append(excmd: &mut ExArg) {
     }
 
     // First autoindent comes from the line we start on.
-    if cmdidx != CmdIdx::change && Buf::current().b_p_ai != 0 && lnum > 0 {
+    if cmdidx != CmdIdx::change && Buf::current().b_p_ai != 0 && lnum > LineNr::ZERO {
         APPEND_INDENT.set(get_indent_lnum(lnum));
     }
 
@@ -63,8 +64,8 @@ pub fn ex_append(excmd: &mut ExArg) {
         lnum -= 1;
     }
     // When the buffer is empty we need to delete the dummy line.
-    if empty && lnum == 1 {
-        lnum = 0;
+    if empty && lnum == LineNr::ONE {
+        lnum = LineNr::ZERO;
     }
 
     // Behave like in Insert mode.
@@ -79,7 +80,7 @@ pub fn ex_append(excmd: &mut ExArg) {
         if Buf::current().b_p_ai != 0 {
             if APPEND_INDENT.get() >= 0 {
                 indent = APPEND_INDENT.replace(-1);
-            } else if lnum > 0 {
+            } else if lnum > LineNr::ZERO {
                 indent = get_indent_lnum(lnum);
             }
         }
@@ -107,8 +108,7 @@ pub fn ex_append(excmd: &mut ExArg) {
         }
 
         let ended = &text[typed..] == b".";
-        let undo_failed =
-            !ended && !did_undo && u_save(lnum, lnum + 1 + LineNr::from(empty)).is_err();
+        let undo_failed = !ended && !did_undo && u_save(lnum, lnum + 1 + i32::from(empty)).is_err();
         if ended || undo_failed {
             break;
         }
@@ -131,7 +131,7 @@ pub fn ex_append(excmd: &mut ExArg) {
         lnum += 1;
 
         if empty {
-            let _ = ml_delete(2);
+            let _ = ml_delete(LineNr::new(2));
             empty = false;
         }
     }
@@ -289,8 +289,8 @@ pub fn ex_z(excmd: &mut ExArg) {
             repeat += 1;
         }
     }
-    let repeat = repeat as LineNr;
-    let bigness = bigness as LineNr;
+    let repeat = len_as_int(repeat);
+    let bigness = number_as_int(bigness);
     let half = (bigness + 1) / 2;
 
     // `minus` asks for the ruled line `:z=` draws around the current line.
@@ -320,11 +320,11 @@ pub fn ex_z(excmd: &mut ExArg) {
     };
 
     let last = Buf::current().b_ml.ml_line_count;
-    start = start.max(1);
+    start = start.max(LineNr::ONE);
     end = end.min(last);
-    curs = curs.max(1).min(last);
+    curs = curs.max(LineNr::ONE).min(last);
 
-    for i in start..=end {
+    for i in start.through(end) {
         if minus && i == lnum {
             rule_off();
         }

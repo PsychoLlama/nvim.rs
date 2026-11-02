@@ -171,7 +171,8 @@ pub(super) fn close_folds_off_cursor(folds: &mut [Fold], lnum: LineNr, level: c_
             fold.state = FoldState::Level;
             changed = true;
         } else {
-            changed |= close_folds_off_cursor(&mut fold.nested, lnum - fold.top, level - 1);
+            changed |=
+                close_folds_off_cursor(&mut fold.nested, LineNr::new(lnum - fold.top), level - 1);
         }
     }
     changed
@@ -235,8 +236,8 @@ fn insert_new_fold(
                     // beside it rather than inside it.
                     break idx;
                 }
-                top -= fold.top;
-                bot -= fold.top;
+                top -= fold.top.get();
+                bot -= fold.top.get();
                 if use_level || fold.is(FoldState::Level) {
                     use_level = true;
                     if OptInt::try_from(depth).unwrap_or(OptInt::MAX) >= foldlevel {
@@ -264,7 +265,7 @@ fn insert_new_fold(
         top = top.min(first.top);
         bot = bot.max(last.last());
         for child in &mut nested {
-            child.top -= top;
+            child.top -= top.get();
         }
     }
     folds.insert(
@@ -332,12 +333,12 @@ pub fn delete_fold(window: Win, start: LineNr, end: LineNr, recursive: c_int, ha
     let mut lnum = start;
     let mut did_one = false;
     let mut first_lnum = MAXLNUM;
-    let mut last_lnum: LineNr = 0;
+    let mut last_lnum: LineNr = LineNr::ZERO;
     let win = window;
     checkupdate(win);
     while lnum <= end {
         let mut found: Option<(usize, LineNr)> = None;
-        let mut lnum_off: LineNr = 0;
+        let mut lnum_off: i32 = 0;
         let mut use_level = false;
         let mut depth = 0;
         // Descend to the innermost fold over `lnum`, stopping at the first
@@ -345,12 +346,12 @@ pub fn delete_fold(window: Win, start: LineNr, end: LineNr, recursive: c_int, ha
         loop {
             let top = win.with_folds(|root| fold_on_line(root, lnum, depth).map(|fold| fold.top));
             let Some(top) = top else { break };
-            found = Some((depth, lnum_off));
+            found = Some((depth, LineNr::new(lnum_off)));
             let (ul, ms) = (&mut use_level, &mut maybe_small);
             if closed_at(win, lnum, depth, ul, level, ms, lnum_off) {
                 break;
             }
-            lnum_off += top;
+            lnum_off += top.get();
             level += 1;
             depth += 1;
         }
@@ -368,7 +369,7 @@ pub fn delete_fold(window: Win, start: LineNr, end: LineNr, recursive: c_int, ha
                 Some(span)
             });
             let (top, len) = span.expect("the walk's own fold");
-            lnum = top + len + found_off;
+            lnum = top + len + found_off.get();
         } else {
             // 'foldmethod' is "marker": the fold only goes away once its
             // markers are gone from the buffer text.
@@ -376,14 +377,14 @@ pub fn delete_fold(window: Win, start: LineNr, end: LineNr, recursive: c_int, ha
                 .with_folds(|root| {
                     fold_on_line(root, pointed, found_depth).map(|fold| {
                         (
-                            marker_spans(fold, recursive != 0, found_off),
+                            marker_spans(fold, recursive != 0, found_off.get()),
                             (fold.top, fold.len),
                         )
                     })
                 })
                 .expect("the walk's own fold");
-            lnum = top + len + found_off;
-            first_lnum = first_lnum.min(top + found_off);
+            lnum = top + len + found_off.get();
+            first_lnum = first_lnum.min(top + found_off.get());
             last_lnum = last_lnum.max(lnum);
             if !did_one {
                 parse_marker(win);
@@ -401,7 +402,7 @@ pub fn delete_fold(window: Win, start: LineNr, end: LineNr, recursive: c_int, ha
     } else {
         check_cursor_col(window);
     }
-    if last_lnum > 0 {
+    if last_lnum > LineNr::ZERO {
         let num_changed = int64_t::from(last_lnum - first_lnum);
         let buf = win.buffer();
         changed_lines(buf, first_lnum, 0, last_lnum, 0, false);
@@ -445,7 +446,7 @@ pub(super) fn set_manual_fold(
                 continue;
             }
             let dlnum = diff_lnum_win(Win::current().w_cursor.lnum, win);
-            if dlnum != 0 {
+            if dlnum != LineNr::ZERO {
                 set_manual_fold_win(win, dlnum, opening, recurse, None);
             }
         }
@@ -474,7 +475,7 @@ fn set_folds_on_line(
     let mut use_level = false;
     let mut found_fold = false;
     let mut next = MAXLNUM;
-    let mut off: LineNr = 0;
+    let mut off: i32 = 0;
     let mut done: c_int = 0;
     // The depth of the innermost fold the walk passed through open: the one
     // a close acts on.
@@ -523,8 +524,8 @@ fn set_folds_on_line(
             break;
         }
         found = Some(depth);
-        lnum_rel -= fold.top;
-        off += fold.top;
+        lnum_rel -= fold.top.get();
+        off += fold.top.get();
         level += 1;
         depth += 1;
         folds = &mut fold.nested;
@@ -658,7 +659,7 @@ pub(super) fn closed_at(
     use_levelp: &mut bool,
     level: c_int,
     maybe_smallp: &mut bool,
-    lnum_off: LineNr,
+    lnum_off: i32,
 ) -> bool {
     let (foldlevel, foldminlines) = (win.w_onebuf_opt.wo_fdl, win.w_onebuf_opt.wo_fml);
     let verdict = win.with_folds(|root| {

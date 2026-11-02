@@ -203,5 +203,5 @@ pub(crate) fn extmark_setraw(
 /// which upstream reads here even though every other line in
 /// [`extmark_setraw`] is about `buffer`.
 fn last_line() -> c_int {
-    current_buf().b_ml.ml_line_count - 1
+    (current_buf().b_ml.ml_line_count - 1).get()
 }

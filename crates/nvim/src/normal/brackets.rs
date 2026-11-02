@@ -12,6 +12,7 @@
 
 use crate::keycodes::Key;
 use crate::strings::has_char;
+use crate::types::LineNr;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 
@@ -65,12 +66,12 @@ fn match_direction(cmd_arg: &mut CmdArg) -> c_int {
 /// `old_pos` is the cursor position the caller saved.
 fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
     let mut new_pos = Pos {
-        lnum: 0,
+        lnum: LineNr::ZERO,
         col: 0,
         coladd: 0,
     };
     let mut prev_pos = Pos {
-        lnum: 0,
+        lnum: LineNr::ZERO,
         col: 0,
         coladd: 0,
     };
@@ -95,7 +96,7 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
     while n > 0 {
         pos = findmatchlimit(Some(&mut cmd_arg.op()), findc, match_direction(cmd_arg), 0);
         let Some(found) = pos else {
-            if new_pos.lnum == 0 {
+            if new_pos.lnum == LineNr::ZERO {
                 // Nothing found at all. A method search says so by leaving
                 // `pos` empty for the second pass to notice.
                 if !method {
@@ -119,7 +120,7 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
         // before it. `norm` is true for the first pair.
         let norm = (findc == '{' as c_int) == (cmd_arg.nchar == 'm' as c_int);
         n = cmd_arg.count1;
-        if prev_pos.lnum != 0 {
+        if prev_pos.lnum != LineNr::ZERO {
             pos = Some(prev_pos);
             Win::current().w_cursor = prev_pos;
             if norm {
@@ -151,7 +152,7 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
                     new_pos = Win::current().w_cursor;
                     pos = Some(new_pos);
                     n = 0;
-                } else if new_pos.lnum == 0 {
+                } else if new_pos.lnum == LineNr::ZERO {
                     new_pos = Win::current().w_cursor;
                     pos = Some(new_pos);
                 } else {
@@ -170,7 +171,7 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
         }
         Win::current().w_cursor = old_pos;
         // A position was found on the way out but lost on the way back in.
-        if pos.is_none() && new_pos.lnum != 0 {
+        if pos.is_none() && new_pos.lnum != LineNr::ZERO {
             clear_op_beep(cmd_arg.op());
         }
     }
@@ -223,7 +224,7 @@ fn nv_bracket_ident(cmd_arg: &mut CmdArg) {
     let from = if cmd_arg.cmdchar == ']' as c_int {
         Win::current().w_cursor.lnum + 1
     } else {
-        1
+        LineNr::ONE
     };
     let (dir, n) = (kDirectionNotSet, cmd_arg.count1);
     let last = MAXLNUM;

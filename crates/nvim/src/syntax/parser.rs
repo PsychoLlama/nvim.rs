@@ -111,7 +111,7 @@ impl ParsedLine {
     const fn none() -> ParsedLine {
         ParsedLine {
             buffer: Handle::NONE,
-            lnum: 0,
+            lnum: LineNr::ZERO,
             changedtick: 0,
             bytes: Vec::new(),
         }
@@ -218,13 +218,13 @@ impl SynState {
 
     /// Forget the line copy, so the next read fetches the line.
     pub(crate) fn forget_line(&mut self) {
-        self.line.lnum = 0;
+        self.line.lnum = LineNr::ZERO;
     }
 
     /// Forget the line copy if it was made before change `changedtick`.
     pub(crate) fn line_changed_since(&mut self, changedtick: VarNumber) {
         if self.line.changedtick != changedtick {
-            self.line.lnum = 0;
+            self.line.lnum = LineNr::ZERO;
         }
     }
 
@@ -250,7 +250,10 @@ impl SynState {
 impl SynState {
     /// A parser that has never started.
     pub(crate) fn new() -> SynState {
-        let zero = LPos { lnum: 0, col: 0 };
+        let zero = LPos {
+            lnum: LineNr::ZERO,
+            col: 0,
+        };
         SynState {
             win: None,
             buf: None,
@@ -258,7 +261,7 @@ impl SynState {
             parsed: None,
             changedtick: 0,
             deadline: None,
-            lnum: 0,
+            lnum: LineNr::ZERO,
             col: 0,
             state_stored: false,
             finished: false,

@@ -73,7 +73,7 @@ pub(crate) fn op_format(op: &OpArg, keep_cursor: bool) {
         saved_cursor.set(op.cursor_start);
     }
 
-    format_lines(op.line_count, keep_cursor);
+    format_lines(LineNr::new(op.line_count), keep_cursor);
 
     // Leave the cursor on the first non-blank of the last formatted line.
     // If it moved a line back (`Q}` does that), step forward so `.`
@@ -82,8 +82,8 @@ pub(crate) fn op_format(op: &OpArg, keep_cursor: bool) {
         Win::current().w_cursor.lnum += 1;
     }
     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
-    old_line_count = Buf::current().b_ml.ml_line_count - old_line_count;
-    msgmore(old_line_count as c_int);
+    old_line_count = LineNr::new(Buf::current().b_ml.ml_line_count - old_line_count);
+    msgmore(old_line_count.get());
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
         // The `']` mark goes at the end of it.
@@ -91,7 +91,7 @@ pub(crate) fn op_format(op: &OpArg, keep_cursor: bool) {
     }
     if keep_cursor {
         Win::current().w_cursor = saved_cursor.get();
-        saved_cursor.set(saved_cursor.get().with_lnum(0));
+        saved_cursor.set(saved_cursor.get().with_lnum(LineNr::ZERO));
         // Formatting may have made the position invalid.
         check_cursor(Win::current());
     }
@@ -100,13 +100,13 @@ pub(crate) fn op_format(op: &OpArg, keep_cursor: bool) {
         // `curtab == curtab` here, so it always takes the `firstwin` arm --
         // which is what [`windows`] walks.
         for mut wp in windows() {
-            if wp.w_old_cursor_lnum != 0 {
+            if wp.w_old_cursor_lnum != LineNr::ZERO {
                 // Lines were inserted or deleted: move the end of the
                 // Visual area that has to be redrawn with them.
                 if wp.w_old_cursor_lnum > wp.w_old_visual_lnum {
-                    wp.w_old_cursor_lnum += old_line_count;
+                    wp.w_old_cursor_lnum += old_line_count.get();
                 } else {
-                    wp.w_old_visual_lnum += old_line_count;
+                    wp.w_old_visual_lnum += old_line_count.get();
                 }
             }
         }
@@ -120,7 +120,7 @@ pub(crate) fn op_formatexpr(op: &OpArg) {
         // When nothing changes, the Visual selection still has to go.
         redraw_curbuf_later(UPD_INVERTED);
     }
-    if fex_format(op.start.lnum, op.line_count as c_long, NUL) != 0 {
+    if fex_format(op.start.lnum, i64::from(op.line_count), NUL) != 0 {
         op_format(op, false);
     }
 }
@@ -130,7 +130,7 @@ pub(crate) fn op_formatexpr(op: &OpArg) {
 pub(crate) fn fex_format(lnum: LineNr, count: c_long, c: c_int) -> c_int {
     let use_sandbox = was_set_insecurely(Win::current(), kOptFormatexpr, OptionSetFlags::LOCAL);
 
-    set_vim_var_nr(Vv::Lnum, lnum as VarNumber);
+    set_vim_var_nr(Vv::Lnum, i64::from(lnum));
     set_vim_var_nr(Vv::Count, count as VarNumber);
     set_vim_var_char(c);
 
@@ -176,7 +176,7 @@ fn paragraph_indent(first_line: LineNr) -> c_int {
 fn join_next_line(next_leader_len: c_int, second_indent: c_int, line_count: LineNr) -> bool {
     Win::current().w_cursor.lnum += 1;
     Win::current().w_cursor.col = 0;
-    if line_count < 0 && u_save_cursor().is_err() {
+    if line_count < LineNr::ZERO && u_save_cursor().is_err() {
         return false;
     }
     let strip = if next_leader_len > 0 {
@@ -240,7 +240,7 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
     let do_trail_white = has_format_option(FoFlag::WHITE_PAR);
 
     // The previous and current lines.
-    let mut is_not_par = if Win::current().w_cursor.lnum > 1 {
+    let mut is_not_par = if Win::current().w_cursor.lnum > LineNr::ONE {
         fmt_check_par(Win::current().w_cursor.lnum - 1, &mut leader, do_comments)
     } else {
         true
@@ -253,7 +253,7 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
     }
 
     Win::current().w_cursor.lnum -= 1;
-    let mut count = line_count as c_long;
+    let mut count = i64::from(line_count);
     while count != 0 && !got_int.get() {
         if advance {
             Win::current().w_cursor.lnum += 1;
@@ -281,7 +281,7 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
 
         if is_not_par {
             // Skip lines that are not in a paragraph.
-            if line_count < 0 {
+            if line_count < LineNr::ZERO {
                 break;
             }
         } else {
@@ -387,7 +387,7 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
                 if is_end_par {
                     // A negative count means "stop at the end of this
                     // paragraph".
-                    if line_count < 0 {
+                    if line_count < LineNr::ZERO {
                         break;
                     }
                     first_par_line = true;

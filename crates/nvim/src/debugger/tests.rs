@@ -14,6 +14,7 @@
 
 use super::{dbg_find_breakpoint_named, has_profiling_named};
 use crate::eval::test_fixture::{Fixture, Scratch};
+use crate::types::LineNr;
 
 /// What `:breaklist` says, a line per entry, with the numbers dropped: they
 /// count every breakpoint the process ever made.
@@ -38,18 +39,42 @@ fn breakpoints_are_added_listed_and_deleted() {
          '#  expr g:ee_watch']"
     );
     // The lookups the callers make.
-    assert_eq!(dbg_find_breakpoint_named(false, c"EeTarget", 0), 1);
-    assert_eq!(dbg_find_breakpoint_named(false, c"EeTarget", 1), 0);
-    assert_eq!(dbg_find_breakpoint_named(false, c"EeOther", 0), 3);
-    assert_eq!(dbg_find_breakpoint_named(false, c"Nothing", 0), 0);
+    assert_eq!(
+        dbg_find_breakpoint_named(false, c"EeTarget", LineNr::ZERO),
+        LineNr::ONE
+    );
+    assert_eq!(
+        dbg_find_breakpoint_named(false, c"EeTarget", LineNr::ONE),
+        LineNr::ZERO
+    );
+    assert_eq!(
+        dbg_find_breakpoint_named(false, c"EeOther", LineNr::ZERO),
+        LineNr::new(3)
+    );
+    assert_eq!(
+        dbg_find_breakpoint_named(false, c"Nothing", LineNr::ZERO),
+        LineNr::ZERO
+    );
     // A function's breakpoint is not a file's.
-    assert_eq!(dbg_find_breakpoint_named(true, c"EeTarget", 0), 0);
+    assert_eq!(
+        dbg_find_breakpoint_named(true, c"EeTarget", LineNr::ZERO),
+        LineNr::ZERO
+    );
     // The watch has not moved, so it stops nothing; once it moves it stops
     // at the line asked about, once.
-    assert_eq!(dbg_find_breakpoint_named(false, c"Nothing", 4), 0);
+    assert_eq!(
+        dbg_find_breakpoint_named(false, c"Nothing", LineNr::new(4)),
+        LineNr::ZERO
+    );
     fx.run("let g:ee_watch = 2");
-    assert_eq!(dbg_find_breakpoint_named(false, c"Nothing", 4), 4);
-    assert_eq!(dbg_find_breakpoint_named(false, c"Nothing", 4), 0);
+    assert_eq!(
+        dbg_find_breakpoint_named(false, c"Nothing", LineNr::new(4)),
+        LineNr::new(4)
+    );
+    assert_eq!(
+        dbg_find_breakpoint_named(false, c"Nothing", LineNr::new(4)),
+        LineNr::ZERO
+    );
 
     // By name: the closest line, then the next.
     fx.run("breakadd func 9 EeTarget");
@@ -113,11 +138,26 @@ fn a_file_breakpoint_names_the_full_path() {
         )
     );
     let full = std::ffi::CString::new(script).expect("no NUL");
-    assert_eq!(dbg_find_breakpoint_named(true, &full, 0), 2);
-    assert_eq!(dbg_find_breakpoint_named(true, &full, 2), 7);
-    assert_eq!(dbg_find_breakpoint_named(true, c"/a/dir/y.vim", 0), 1);
-    assert_eq!(dbg_find_breakpoint_named(true, c"/elsewhere/x.c", 0), 0);
-    assert_eq!(dbg_find_breakpoint_named(false, c"x.vim", 0), 0);
+    assert_eq!(
+        dbg_find_breakpoint_named(true, &full, LineNr::ZERO),
+        LineNr::new(2)
+    );
+    assert_eq!(
+        dbg_find_breakpoint_named(true, &full, LineNr::new(2)),
+        LineNr::new(7)
+    );
+    assert_eq!(
+        dbg_find_breakpoint_named(true, c"/a/dir/y.vim", LineNr::ZERO),
+        LineNr::ONE
+    );
+    assert_eq!(
+        dbg_find_breakpoint_named(true, c"/elsewhere/x.c", LineNr::ZERO),
+        LineNr::ZERO
+    );
+    assert_eq!(
+        dbg_find_breakpoint_named(false, c"x.vim", LineNr::ZERO),
+        LineNr::ZERO
+    );
     fx.run("breakdel *");
 }
 
@@ -139,7 +179,10 @@ fn profiling_points_sit_beside_breakpoints() {
     assert!(!has_profiling_named(false, c"EeBoth"));
     assert!(has_profiling_named(true, c"/x/a.vim"));
     assert!(!has_profiling_named(true, c"/y/a.vim"));
-    assert_eq!(dbg_find_breakpoint_named(false, c"EeProfiled", 0), 0);
+    assert_eq!(
+        dbg_find_breakpoint_named(false, c"EeProfiled", LineNr::ZERO),
+        LineNr::ZERO
+    );
     fx.run("profdel func EeProf*");
     assert!(!has_profiling_named(false, c"EeProfiled"));
     for (cmd, err) in [("profdel func EeNone", "E161"), ("profile func", "E475")] {
@@ -173,7 +216,10 @@ fn a_function_breakpoint_is_found_by_its_call() {
     internal.extend_from_slice(snr.as_bytes());
     internal.push(0);
     let internal = std::ffi::CStr::from_bytes_with_nul(&internal).expect("one NUL");
-    assert_eq!(dbg_find_breakpoint_named(false, internal, 0), 1);
+    assert_eq!(
+        dbg_find_breakpoint_named(false, internal, LineNr::ZERO),
+        LineNr::ONE
+    );
     fx.run("breakdel *");
     fx.run("unlet g:EeLocalRef");
 }

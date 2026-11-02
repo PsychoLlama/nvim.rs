@@ -62,9 +62,9 @@ pub fn buflist_setfpos(
     let found = buffer.b_wininfo.iter().position(|e| e.window() == win);
     let mut entry = match found {
         None => {
-            if lnum == 0 as LineNr {
+            if lnum == LineNr::ZERO {
                 // Set lnum even when it is 0.
-                lnum = 1 as LineNr;
+                lnum = LineNr::ONE;
             }
             WinInfo::new(win.map(Win::id))
         }
@@ -78,7 +78,7 @@ pub fn buflist_setfpos(
         }
     };
 
-    if lnum != 0 as LineNr {
+    if lnum != LineNr::ZERO {
         entry.wi_mark.mark.lnum = lnum;
         entry.wi_mark.mark.col = col;
         if let Some(win) = win {
@@ -212,14 +212,14 @@ pub fn buflist_findfmark(buffer: Buf) -> FileMark {
         Some(i) => buffer.b_wininfo[i].wi_mark.clone(),
         None => FileMark {
             mark: Pos {
-                lnum: 1 as LineNr,
+                lnum: LineNr::ONE,
                 col: 0 as ColNr,
                 coladd: 0 as ColNr,
             },
             fnum: 0,
             timestamp: 0 as Timestamp,
             view: FileMarkView {
-                topline_offset: MAXLNUM,
+                topline_offset: MAXLNUM.get(),
                 skipcol: 0 as ColNr,
             },
             extra: None,

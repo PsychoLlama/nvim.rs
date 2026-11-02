@@ -28,8 +28,8 @@ use crate::winlayer::Win;
 /// address: a buffer allocated where a wiped one was must not inherit its
 /// cached position.
 static ml_upd_lastbuf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
-static ml_upd_lastline: GlobalCell<LineNr> = GlobalCell::new(0);
-static ml_upd_lastcurline: GlobalCell<LineNr> = GlobalCell::new(0);
+static ml_upd_lastline: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
+static ml_upd_lastcurline: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
 static ml_upd_lastcurix: GlobalCell<usize> = GlobalCell::new(0);
 
 impl Buf {
@@ -54,7 +54,7 @@ impl Buf {
             b.b_ml.ml_chunks.build();
         }
 
-        if updtype == ML_CHNK_UPDLINE && b.b_ml.ml_line_count == 1 {
+        if updtype == ML_CHNK_UPDLINE && b.b_ml.ml_line_count == LineNr::ONE {
             // First line in an empty buffer, from ml_flush_line: reset.
             let textlen = b.b_ml.cached_len();
             b.b_ml.ml_chunks.reset_to_one(textlen);
@@ -69,7 +69,7 @@ impl Buf {
             || line != ml_upd_lastline.get() + 1
             || updtype != ML_CHNK_ADDLINE
         {
-            curline = 1;
+            curline = LineNr::ONE;
             curix = 0;
             while curix + 1 < b.b_ml.ml_chunks.len()
                 && line >= curline + b.b_ml.ml_chunks.lines(curix)
@@ -228,7 +228,7 @@ pub fn ml_find_line_or_offset(
 ) -> c_int {
     let mut b = buffer;
     let ffdos = Wide::from(!no_ff && get_fileformat(b) == EOL_DOS);
-    let mut extra: LineNr = 0;
+    let mut extra: i32 = 0;
 
     // Take care of the cached line first, and only if it is before the
     // requested line. The value for the cached line is then cached in
@@ -238,24 +238,24 @@ pub fn ml_find_line_or_offset(
     // Caching does not work with 'fileformat', which is no problem for
     // byte tracking (it ignores 'fileformat'), but a line2byte() call
     // does invalidate the cache for the time being.
-    let can_cache = lnum != 0 && ffdos == 0 && b.b_ml.cached_lnum() == lnum;
-    if lnum == 0 || b.b_ml.cached_lnum() < lnum || !no_ff {
+    let can_cache = lnum != LineNr::ZERO && ffdos == 0 && b.b_ml.cached_lnum() == lnum;
+    if lnum == LineNr::ZERO || b.b_ml.cached_lnum() < lnum || !no_ff {
         ml_flush_line(Buf::current());
     } else if can_cache && b.b_ml.cached_offset() > 0 {
         return b.b_ml.cached_offset() as c_int;
     }
 
-    if b.b_ml.ml_chunks.is_off() || !b.b_ml.ml_chunks.is_built() || lnum < 0 {
+    if b.b_ml.ml_chunks.is_off() || !b.b_ml.ml_chunks.is_built() || lnum < LineNr::ZERO {
         // The memline is empty. If it is open at all it still behaves as
         // though it held one empty line.
-        if no_ff && b.b_ml.is_open() && (lnum == 1 || lnum == 2) {
-            return lnum - 1;
+        if no_ff && b.b_ml.is_open() && (lnum == LineNr::ONE || lnum == LineNr::new(2)) {
+            return (lnum - 1).get();
         }
         return -1;
     }
 
     let offset = Wide::from(offp.as_deref().copied().unwrap_or(0));
-    if lnum == 0 && offset <= 0 {
+    if lnum == LineNr::ZERO && offset <= 0 {
         // Not a "find offset", and offset 0 must be in line 1.
         return 1;
     }
@@ -265,11 +265,11 @@ pub fn ml_find_line_or_offset(
     let chunks = &buffer.b_ml.ml_chunks;
     let lines_in = |at: usize| Wide::from(chunks.lines(at));
     let size_of_chunk = |at: usize| Wide::from(chunks.size(at));
-    let mut curline: LineNr = 1;
+    let mut curline: LineNr = LineNr::ONE;
     let mut curix = 0usize;
     let mut size: Wide = 0;
     while curix + 1 < chunks.len()
-        && (lnum != 0 && lnum >= curline + chunks.lines(curix)
+        && (lnum != LineNr::ZERO && lnum >= curline + chunks.lines(curix)
             || offset != 0 && offset > size + size_of_chunk(curix) + ffdos * lines_in(curix))
     {
         curline += chunks.lines(curix);
@@ -281,7 +281,7 @@ pub fn ml_find_line_or_offset(
     }
 
     // Then walk the data blocks of that chunk line by line.
-    while lnum != 0 && curline < lnum || offset != 0 && size < offset {
+    while lnum != LineNr::ZERO && curline < lnum || offset != 0 && size < offset {
         // The bounds test has to come first: ml_find_line complains about
         // a line past the end.
         if curline > b.b_ml.ml_line_count {
@@ -296,13 +296,17 @@ pub fn ml_find_line_or_offset(
         let page = buffer.b_ml.page(id);
         let data = DataBlock(page);
         let starts = data.index_entries(count as usize);
-        let start_of =
-            |idx: LineNr| Wide::from(u32::from_ne_bytes(starts[idx as usize]) & DB_INDEX_MASK);
+        let start_of = |idx: LineNr| {
+            Wide::from(
+                u32::from_ne_bytes(starts[usize::try_from(idx).expect("an index into the block")])
+                    & DB_INDEX_MASK,
+            )
+        };
         // First line in the block has its text at the end of it.
         let text_end = Wide::from(data.line_end(idx as usize));
 
         // Index of the last line of this block to account for.
-        if lnum != 0 {
+        if lnum != LineNr::ZERO {
             if curline + (count - idx) >= lnum {
                 idx += lnum - curline - 1;
             } else {
@@ -310,7 +314,7 @@ pub fn ml_find_line_or_offset(
             }
         } else {
             extra = 0;
-            while offset >= size + text_end - start_of(idx) + ffdos {
+            while offset >= size + text_end - start_of(LineNr::new(idx)) + ffdos {
                 if ffdos != 0 {
                     size += 1;
                 }
@@ -323,7 +327,7 @@ pub fn ml_find_line_or_offset(
             }
         }
 
-        let len = text_end - start_of(idx);
+        let len = text_end - start_of(LineNr::new(idx));
         size += len;
         if offset != 0 && size >= offset {
             // A non-zero offset was read through `offp`, so it is there.
@@ -334,18 +338,18 @@ pub fn ml_find_line_or_offset(
             } else if idx == start_idx {
                 (offset - size + len) as c_int
             } else {
-                (offset - size + len - (text_end - start_of(idx - 1))) as c_int
+                (offset - size + len - (text_end - start_of(LineNr::new(idx - 1)))) as c_int
             };
             curline += idx - start_idx + extra;
             if curline > b.b_ml.ml_line_count {
                 return -1; // exactly one byte beyond the end
             }
-            return curline;
+            return curline.get();
         }
         curline = b.b_ml.locked_high() + 1;
     }
 
-    if lnum != 0 {
+    if lnum != LineNr::ZERO {
         // Count the extra CR characters.
         if ffdos != 0 {
             size += Wide::from(lnum - 1);
@@ -375,14 +379,14 @@ pub fn goto_byte(cnt: c_int) {
     if boff != 0 {
         boff -= 1;
     }
-    let lnum = ml_find_line_or_offset(Buf::current(), 0, Some(&mut boff), false);
+    let lnum = ml_find_line_or_offset(Buf::current(), LineNr::ZERO, Some(&mut boff), false);
     if lnum < 1 {
         // Past the end.
         Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
         Win::current().w_curswant = MAXCOL as c_int;
         coladvance(Win::current(), MAXCOL as c_int);
     } else {
-        Win::current().w_cursor.lnum = lnum;
+        Win::current().w_cursor.lnum = LineNr::new(lnum);
         Win::current().w_cursor.col = boff;
         Win::current().w_cursor.coladd = 0;
         Win::current().w_set_curswant = true;

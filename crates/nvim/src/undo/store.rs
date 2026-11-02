@@ -463,6 +463,7 @@ pub(crate) fn store_release(mut buffer: Buf) {
 mod tests {
     use super::*;
     use crate::memory::XString;
+    use crate::types::LineNr;
     use crate::types::{ExtmarkSplice, ExtmarkUndoObject, UndoEntry};
 
     /// A header carrying `seq`, and `walk` as a tag to tell two apart by.
@@ -578,9 +579,9 @@ mod tests {
         let mut store = UndoStore::new();
         let mut uh = header(5, 0);
         uh.entries.push(UndoEntry {
-            top: 0,
-            bot: 3,
-            lcount: 0,
+            top: LineNr::ZERO,
+            bot: LineNr::new(3),
+            lcount: LineNr::ZERO,
             lines: vec![
                 XString::from_bytes(b"one"),
                 XString::from_bytes("tw\u{f6}".as_bytes()),

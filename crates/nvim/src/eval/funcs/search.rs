@@ -8,6 +8,7 @@
 #![forbid(unsafe_code)]
 
 use super::wrappers::arg_number_chk;
+use crate::narrow::number_as_int;
 use crate::option::SavedCpo;
 
 use crate::cursor::check_cursor;
@@ -124,7 +125,7 @@ fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut c_int) 
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let _wrapscan = SavedWrapScan::new();
-    let mut lnum_stop: LineNr = 0;
+    let mut lnum_stop: LineNr = LineNr::ZERO;
     let mut time_limit: int64_t = 0;
     let mut options = SEARCH_KEEP as c_int;
     let mut use_skip = false;
@@ -152,8 +153,8 @@ fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut c_int) 
     // only read when the one before it was supplied, so a {skip} passed
     // without a {flags} is silently ignored.
     if args.len() > 1 && args.len() > 2 {
-        lnum_stop = arg_number_chk(&args[2], None) as LineNr;
-        if lnum_stop < 0 {
+        lnum_stop = LineNr::new(number_as_int(arg_number_chk(&args[2], None)));
+        if lnum_stop < LineNr::ZERO {
             return 0;
         }
         if args.len() > 3 {
@@ -179,7 +180,7 @@ fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut c_int) 
     let save_cursor = Win::current().w_cursor;
     let mut pos = save_cursor;
     let mut firstpos = Pos {
-        lnum: 0,
+        lnum: LineNr::ZERO,
         col: 0,
         coladd: 0,
     };
@@ -189,13 +190,13 @@ fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut c_int) 
     loop {
         subpatnum = search_in_current(&mut pos, dir as Direction, &pat, options, lnum_stop, &tm);
         // Coming back to the first match means every match was skipped.
-        if firstpos.lnum != 0 && equalpos(pos, firstpos) {
+        if firstpos.lnum != LineNr::ZERO && equalpos(pos, firstpos) {
             subpatnum = FAIL;
         }
         if subpatnum == FAIL || !use_skip {
             break;
         }
-        if firstpos.lnum == 0 {
+        if firstpos.lnum == LineNr::ZERO {
             firstpos = pos;
         }
 
@@ -220,7 +221,7 @@ fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut c_int) 
         retval = if flags & SP_SUBPAT != 0 {
             subpatnum
         } else {
-            pos.lnum as c_int
+            pos.lnum.get()
         };
         if flags & SP_SETPCMARK != 0 {
             setpcmark();
@@ -252,7 +253,7 @@ pub fn f_search(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// sub-pattern number under the `p` flag.
 pub fn f_searchpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut match_pos = Pos {
-        lnum: 0,
+        lnum: LineNr::ZERO,
         col: 0,
         coladd: 0,
     };
@@ -260,7 +261,7 @@ pub fn f_searchpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let n = search_cmn(args, Some(&mut match_pos), &mut flags);
     let list = tv_list_alloc_ret(result, 2 + (flags & SP_SUBPAT != 0) as isize);
     let (lnum, col) = if n > 0 {
-        (match_pos.lnum as c_int, match_pos.col as c_int)
+        (match_pos.lnum.get(), match_pos.col as c_int)
     } else {
         (0, 0)
     };
@@ -303,7 +304,7 @@ fn searchpair_cmn(args: &[TypVal], match_pos: Option<&mut Pos>) -> c_int {
     let mut numbuf4 = NumBuf::new();
     let _wrapscan = SavedWrapScan::new();
     let mut flags = 0;
-    let mut lnum_stop: LineNr = 0;
+    let mut lnum_stop: LineNr = LineNr::ZERO;
     let mut time_limit: int64_t = 0;
 
     let mut nbuf1 = NumBuf::new();
@@ -341,8 +342,8 @@ fn searchpair_cmn(args: &[TypVal], match_pos: Option<&mut Pos>) -> c_int {
     } else {
         // The type is checked later, when the expression is evaluated.
         if args.len() > 5 {
-            lnum_stop = arg_number_chk(&args[5], None) as LineNr;
-            if lnum_stop < 0 {
+            lnum_stop = LineNr::new(number_as_int(arg_number_chk(&args[5], None)));
+            if lnum_stop < LineNr::ZERO {
                 let what = msg_cstr(numbuf3.string(&args[5]));
                 semsg!("E475: Invalid argument: {what}");
                 return 0;
@@ -376,7 +377,7 @@ pub fn f_searchpair(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `searchpairpos()` — as `searchpair()`, answering `[lnum, col]`.
 pub fn f_searchpairpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut match_pos = Pos {
-        lnum: 0,
+        lnum: LineNr::ZERO,
         col: 0,
         coladd: 0,
     };
@@ -384,7 +385,7 @@ pub fn f_searchpairpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     // The List is allocated after the search: {skip} is user code, and
     // the return value is not yet anything it could reach either way.
     if searchpair_cmn(args, Some(&mut match_pos)) > 0 {
-        lnum = match_pos.lnum as c_int;
+        lnum = match_pos.lnum.get();
         col = match_pos.col as c_int;
     }
     let list = tv_list_alloc_ret(result, 2);
@@ -453,7 +454,7 @@ pub fn do_searchpair(
     let save_cursor = Win::current().w_cursor;
     let mut pos = save_cursor;
     let mut firstpos = Pos {
-        lnum: 0,
+        lnum: LineNr::ZERO,
         col: 0,
         coladd: 0,
     };
@@ -465,10 +466,10 @@ pub fn do_searchpair(
     loop {
         let n = search_in_current(&mut pos, dir as Direction, pat, options, lnum_stop, &tm);
         // No match, or back at the first one: the walk is done.
-        if n == FAIL || (firstpos.lnum != 0 && equalpos(pos, firstpos)) {
+        if n == FAIL || (firstpos.lnum != LineNr::ZERO && equalpos(pos, firstpos)) {
             break;
         }
-        if firstpos.lnum == 0 {
+        if firstpos.lnum == LineNr::ZERO {
             firstpos = pos;
         }
         // Landing on the same spot twice means a zero-width match; step
@@ -521,7 +522,7 @@ pub fn do_searchpair(
         if flags & SP_RETCOUNT != 0 {
             retval += 1;
         } else {
-            retval = pos.lnum as c_int;
+            retval = pos.lnum.get();
         }
         if flags & SP_SETPCMARK != 0 {
             setpcmark();

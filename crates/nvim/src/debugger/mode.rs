@@ -135,7 +135,7 @@ fn show_debug_banner(cmd: &CStr) {
 fn show_debug_line(cmd: &CStr) {
     let lnum = sourcing_lnum();
     let cmd = msg_cstr(cmd);
-    if lnum != 0 {
+    if lnum != LineNr::ZERO {
         smsg!(0, "line {}: {cmd}", i64::from(lnum));
     } else {
         smsg!(0, "cmd: {cmd}");
@@ -424,5 +424,5 @@ pub fn ex_debug(excmd: &mut ExArg) {
 /// `:debuggreedy`, whose `0` argument turns it back off.
 pub(crate) fn ex_debuggreedy(excmd: &mut ExArg) {
     let (addr_count, line2) = (excmd.addr_count, excmd.line2);
-    debug_greedy.set(addr_count == 0 || line2 != 0);
+    debug_greedy.set(addr_count == 0 || line2 != LineNr::ZERO);
 }

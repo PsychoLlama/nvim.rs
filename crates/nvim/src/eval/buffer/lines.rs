@@ -29,7 +29,7 @@ pub(crate) fn set_buffer_lines(
     lines: &TypVal,
     result: &mut TypVal,
 ) {
-    let mut lnum: LineNr = lnum_arg + LineNr::from(append);
+    let mut lnum: LineNr = lnum_arg + i32::from(append);
     let mut added: c_int = 0;
     let is_curbuf: bool = buffer == Buf::current_or_none();
     let unloaded = |b: Buf| !is_curbuf && b.b_ml.ml_mfp.is_none();
@@ -37,7 +37,7 @@ pub(crate) fn set_buffer_lines(
         result.write_number(1);
         return;
     };
-    if lnum < 1 {
+    if lnum < LineNr::ONE {
         result.write_number(1);
         return;
     }
@@ -157,7 +157,7 @@ fn get_buffer_lines(
         }
         return;
     };
-    if start < 0 || end < start {
+    if start < LineNr::ZERO || end < start {
         if retlist {
             tv_list_alloc_ret(result, 0);
         }
@@ -165,15 +165,15 @@ fn get_buffer_lines(
     }
     let mut text = Lines::in_buffer(buffer);
     if !retlist {
-        let line = (start >= 1 && start <= buffer.line_count())
+        let line = (start >= LineNr::ONE && start <= buffer.line_count())
             .then(|| ThinCString::from_bytes(text.line(start)));
         result.write_string(line);
         return;
     }
-    start = start.max(1);
+    start = start.max(LineNr::ONE);
     end = end.min(buffer.line_count());
     let list = tv_list_alloc_ret(result, (end - start + 1) as ptrdiff_t);
-    for lnum in start..=end {
+    for lnum in start.through(end) {
         list.push_bytes(Some(text.line(lnum)));
     }
 }
@@ -261,7 +261,7 @@ pub fn f_deletebufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
         first
     };
     let (loaded, count) = (buf.b_ml.is_open(), buf.b_ml.ml_line_count);
-    if !loaded || first < 1 || first > count || last < first {
+    if !loaded || first < LineNr::ONE || first > count || last < first {
         return;
     }
     let is_curbuf = Some(buf) == Buf::current_or_none();
@@ -275,7 +275,7 @@ pub fn f_deletebufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     if u_save(first - 1, last + 1).is_ok() {
         // Every delete takes the same line number: the lines below move
         // up.
-        for _ in first..=last {
+        for _ in first.through(last) {
             let _ = ml_delete_flags(first, ML_DEL_MESSAGE);
         }
         // Pull every cursor that was inside or after the deleted range

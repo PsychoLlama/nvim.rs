@@ -40,10 +40,15 @@ fn window(rex: Rex) -> Win {
 pub(crate) fn at_line(rex: Rex, state: &NfaState) -> bool {
     let want = state.val;
     assert!(
-        want >= 0 && rex.buf_lnum() >= 0,
+        want >= 0 && rex.buf_lnum() >= LineNr::ZERO,
         "line assertion out of range"
     );
-    rex.multi() && nfa_re_num_cmp(want as u64, state.c - NfaOp::Lnum.code(), lnum(rex) as u64)
+    rex.multi()
+        && nfa_re_num_cmp(
+            want as u64,
+            state.c - NfaOp::Lnum.code(),
+            lnum(rex).get() as u64,
+        )
 }
 
 /// `\%23c`: the byte column, counted from one.
@@ -77,9 +82,9 @@ pub(crate) fn at_vcol(rex: Rex, state: &NfaState) -> bool {
             return true;
         }
     }
-    let mut lnum = if rex.multi() { lnum(rex) } else { 1 };
-    if rex.multi() && (lnum <= 0 || lnum > wp.buffer().b_ml.ml_line_count) {
-        lnum = 1;
+    let mut lnum = if rex.multi() { lnum(rex) } else { LineNr::ONE };
+    if rex.multi() && (lnum <= LineNr::ZERO || lnum > wp.buffer().b_ml.ml_line_count) {
+        lnum = LineNr::ONE;
     }
     let vcol = win_linetabsize(wp, lnum, rex.line(), col);
     assert!(want >= 0, "virtual column assertion out of range");
@@ -97,14 +102,14 @@ pub(crate) fn at_mark(rex: Rex, state: &NfaState) -> bool {
     if rex.multi() {
         rex.seek(reg_getline(rex, rex.lnum()).unwrap_or(b"\0"), col);
     }
-    let Some(fm) = fm.filter(|fm| fm.mark.lnum > 0) else {
+    let Some(fm) = fm.filter(|fm| fm.mark.lnum > LineNr::ZERO) else {
         return false;
     };
     let pos = fm.mark;
     let here = lnum(rex);
     // A mark parked at MAXCOL means the end of its line.
     let pos_col = if pos.lnum == here && pos.col == MAXCOL as c_int {
-        reg_getline_len(rex, pos.lnum - rex.reg_firstlnum())
+        reg_getline_len(rex, LineNr::new(pos.lnum - rex.reg_firstlnum()))
     } else {
         pos.col
     };

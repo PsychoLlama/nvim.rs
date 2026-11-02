@@ -156,7 +156,7 @@ pub(super) fn add_sound_suggest(
         .as_ref()
         .expect("a loaded `.sug` has its buffer");
     let mut lines = Lines::in_buffer(sugbuf.buf());
-    let deltas = lines.line(sfwordnr as LineNr + 1);
+    let deltas = lines.line(LineNr::new(sfwordnr) + 1);
     let mut pos = 0;
     let mut orgnr = 0;
 

@@ -143,7 +143,15 @@ fn write_orig(tmp_orig: &CStr) -> Result<(), Failed> {
     let end = Buf::current().b_ml.ml_line_count;
     let req = WriteRequest::filter();
     // No shortname and no `ExArg` are wanted.
-    buf_write(cb, WriteName::Other(tmp_orig), None, 1, end, None, req)
+    buf_write(
+        cb,
+        WriteName::Other(tmp_orig),
+        None,
+        LineNr::ONE,
+        end,
+        None,
+        req,
+    )
 }
 
 /// The working directory, if it can be named and changed back to later.

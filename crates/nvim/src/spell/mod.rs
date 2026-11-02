@@ -94,7 +94,7 @@ pub use soundfold::{eval_soundfold, spell_soundfold};
 pub(crate) use wordtree::Tree;
 pub use wordtree::WordTree;
 
-pub(crate) static spell_redraw_lnum: GlobalCell<LineNr> = GlobalCell::new(0 as LineNr);
+pub(crate) static spell_redraw_lnum: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
 
 pub const kEqualFiles: FileComparison = 1;
 
@@ -383,7 +383,7 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
     // Round-tripped through a bool, as in C: any non-zero 'wrapscan'
     // comes back as 1.
     let save_ws = p_ws();
-    let mut prev_lnum: LineNr = 0;
+    let mut prev_lnum: LineNr = LineNr::ZERO;
 
     // A copy: the searches and line changes below can run autocommands.
     let Some(SpellReplacement {
@@ -406,7 +406,7 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
 
     SUB_NSUBS.set(0);
     SUB_NLINES.set(0);
-    Win::current().w_cursor.lnum = 0;
+    Win::current().w_cursor.lnum = LineNr::ZERO;
     while !got_int.get() {
         let slash = '/' as c_int;
         let found = do_search(None, slash, slash, &frompat, 1, SEARCH_KEEP, None);

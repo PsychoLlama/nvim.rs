@@ -197,7 +197,10 @@ impl NfaVars {
 pub(crate) type Slots = Cell<[LPos; SLOTS]>;
 
 /// What an unset capture slot holds; see [`MatchPos::unset`].
-const UNSET: LPos = LPos { lnum: -1, col: -1 };
+const UNSET: LPos = LPos {
+    lnum: LineNr::new(-1),
+    col: -1,
+};
 
 /// Two slot arrays: the ones a string match records its groups in, or a
 /// `\z(` program's.
@@ -267,8 +270,8 @@ impl<'t> RegExec<'t> {
             multi,
             buf: setup.buf,
             win: setup.win,
-            firstlnum: Cell::new(0),
-            maxline: Cell::new(0),
+            firstlnum: Cell::new(LineNr::ZERO),
+            maxline: Cell::new(LineNr::ZERO),
             line_lbr: false,
             nobreak: setup.nobreak,
             maxcol: 0,
@@ -277,7 +280,7 @@ impl<'t> RegExec<'t> {
             caller_ic: setup.ic,
             ic: Cell::new(setup.ic),
             icombine: Cell::new(false),
-            lnum: Cell::new(0),
+            lnum: Cell::new(LineNr::ZERO),
             line: Cell::new(line),
             input: Cell::new(0),
             starts,
@@ -332,7 +335,7 @@ impl<'t> RegExec<'t> {
         let line_count = setup.buf.b_ml.ml_line_count;
         let mut ctx = RegExec::for_lines(setup, maxcol, starts, ends);
         ctx.firstlnum = Cell::new(lnum);
-        ctx.maxline = Cell::new(line_count - lnum);
+        ctx.maxline = Cell::new(LineNr::new(line_count - lnum));
         ctx
     }
 
@@ -358,10 +361,11 @@ impl<'t> RegExec<'t> {
     #[inline(always)]
     pub(crate) fn seat(&self, lnum: LineNr) {
         self.firstlnum.set(lnum);
-        self.maxline.set(self.buf.b_ml.ml_line_count - lnum);
+        self.maxline
+            .set(LineNr::new(self.buf.b_ml.ml_line_count - lnum));
         self.ic.set(self.caller_ic);
         self.icombine.set(false);
-        self.lnum.set(0);
+        self.lnum.set(LineNr::ZERO);
         self.input.set(0);
         self.need_clear_subexpr.set(false);
         self.need_clear_zsubexpr.set(false);
@@ -563,7 +567,7 @@ impl<'t> Rex<'t> {
     /// The buffer line the cursor is on.
     #[inline(always)]
     pub(crate) fn buf_lnum(self) -> LineNr {
-        self.reg_firstlnum() + self.lnum()
+        self.reg_firstlnum() + self.lnum().get()
     }
 
     /// Give up once a match starts past this column, or 0 for no bound.

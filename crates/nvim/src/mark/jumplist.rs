@@ -57,8 +57,8 @@ pub fn setpcmark() {
     let (mut win, buf) = (Win::current(), Buf::current());
     win.w_prev_pcmark = win.w_pcmark;
     win.w_pcmark = win.w_cursor;
-    if win.w_pcmark.lnum == 0 {
-        win.w_pcmark.lnum = 1;
+    if win.w_pcmark.lnum == LineNr::ZERO {
+        win.w_pcmark.lnum = LineNr::ONE;
     }
     // With 'jumpoptions' "stack", a new jump truncates everything the user
     // had walked back past, the way a browser's history does.
@@ -90,12 +90,12 @@ pub fn setpcmark() {
 /// If pcmark was deleted (with "dG") the previous mark is restored.
 pub fn checkpcmark() {
     let mut win = Win::current();
-    if win.w_prev_pcmark.lnum != 0
-        && (equalpos(win.w_pcmark, win.w_cursor) || win.w_pcmark.lnum == 0)
+    if win.w_prev_pcmark.lnum != LineNr::ZERO
+        && (equalpos(win.w_pcmark, win.w_cursor) || win.w_pcmark.lnum == LineNr::ZERO)
     {
         win.w_pcmark = win.w_prev_pcmark;
     }
-    win.w_prev_pcmark.lnum = 0;
+    win.w_prev_pcmark.lnum = LineNr::ZERO;
 }
 
 /// Get mark in "count" position in the |jumplist| relative to the current index.
@@ -220,7 +220,7 @@ pub fn cleanup_jumplist(mut window: Win, loadfiles: bool) {
         while i < window.w_jumplistlen {
             let jump = &window.w_jumplist[slot(i)];
             if jump.fmark.fnum == 0
-                && jump.fmark.mark.lnum != 0
+                && jump.fmark.mark.lnum != LineNr::ZERO
                 && let Some(fname) = jump.fname.clone()
             {
                 fname2fnum(fname.as_cstr());
@@ -313,7 +313,7 @@ fn list_row(width: usize, current: bool, distance: c_int, pos: Pos) -> Row {
     row.push(b' ');
     row.number(distance, width);
     row.push(b' ');
-    row.number(pos.lnum, 5);
+    row.number(pos.lnum.get(), 5);
     row.push(b' ');
     row.number(pos.col, 4);
     row.push(b' ');
@@ -329,7 +329,7 @@ pub fn ex_jumps(_excmd: &mut ExArg) {
     let mut i: c_int = 0;
     while i < win.w_jumplistlen && !got_int.get() {
         let fmark = win.w_jumplist[slot(i)].fmark.clone();
-        if fmark.mark.lnum != 0 {
+        if fmark.mark.lnum != LineNr::ZERO {
             // The entry the index stands on is shown even when its file has
             // gone, so `:jumps` never silently loses the `>` row.
             let name = fm_getname(&fmark, 16)
@@ -378,7 +378,7 @@ pub fn ex_changes(_excmd: &mut ExArg) {
     let mut i: c_int = 0;
     while i < buf.b_changelistlen && !got_int.get() {
         let pos = buf.b_changelist[slot(i)].mark;
-        if pos.lnum != 0 {
+        if pos.lnum != LineNr::ZERO {
             msg_putchar('\n' as c_int);
             if got_int.get() {
                 break;

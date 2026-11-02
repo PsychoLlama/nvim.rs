@@ -418,7 +418,7 @@ pub fn check_need_cap(mut window: Win, lnum: LineNr, col: ColNr) -> bool {
         let at_line_start = col == 0 || skip::white(lines.line(lnum)) as ColNr >= col;
         if !at_line_start {
             scan_before(lines.line(lnum), col as usize)
-        } else if lnum == 1 {
+        } else if lnum == LineNr::ONE {
             CapCheck::Needed
         } else {
             sentence_before(lines.line(lnum - 1))

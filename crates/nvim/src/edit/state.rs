@@ -59,7 +59,7 @@ fn insert_enter(s: &mut InsertState) {
         trigger_insert_enter(s.cmdchar);
     }
 
-    if where_paste_started.get().lnum != 0 {
+    if where_paste_started.get().lnum != LineNr::ZERO {
         Insstart.set(where_paste_started.get());
     } else {
         Insstart.set(Win::current().w_cursor);
@@ -133,7 +133,7 @@ fn insert_enter(s: &mut InsertState) {
     // Handle restarting Insert mode: put the cursor back where CTRL-O
     // took it from.
     if restart_edit.get() != 0 && stuff_empty() {
-        arrow_used.set(where_paste_started.get().lnum == 0);
+        arrow_used.set(where_paste_started.get().lnum == LineNr::ZERO);
         restart_edit.set(0);
         validate_virtcol(Win::current());
         update_curswant();
@@ -145,7 +145,7 @@ fn insert_enter(s: &mut InsertState) {
 
     need_start_insertmode.set(false);
     ins_need_undo.set(true);
-    where_paste_started.set(where_paste_started.get().with_lnum(0));
+    where_paste_started.set(where_paste_started.get().with_lnum(LineNr::ZERO));
     can_cindent.set(true);
     if did_restart_edit.get() == 0 {
         // Open a fold at the cursor line, unless it was already open when
@@ -697,7 +697,7 @@ pub(crate) fn edit(cmdchar: c_int, startln: bool, count: c_int) -> bool {
         i: 0,
         did_backspace: false,
         line_is_white: false,
-        old_topline: 0,
+        old_topline: LineNr::ZERO,
         old_topfill: 0,
         inserted_space: 0,
         replace_state: 0,

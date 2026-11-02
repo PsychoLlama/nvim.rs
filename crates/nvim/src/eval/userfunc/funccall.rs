@@ -437,7 +437,7 @@ pub(crate) fn create_funccal(func: &Rc<UserFunc>) -> Rc<FuncCall> {
             reused.scope_ready.set(false);
             reused.linenr.set(0);
             reused.returned.set(false);
-            reused.breakpoint.set(0);
+            reused.breakpoint.set(LineNr::ZERO);
             reused.dbg_tick.set(0);
             reused.prof_child.set(0);
             reused.refcount.set(0);
@@ -455,7 +455,7 @@ pub(crate) fn create_funccal(func: &Rc<UserFunc>) -> Rc<FuncCall> {
                 linenr: Cell::new(0),
                 returned: Cell::new(false),
                 rettv: RefCell::new(TypVal::Unknown),
-                breakpoint: Cell::new(0),
+                breakpoint: Cell::new(LineNr::ZERO),
                 dbg_tick: Cell::new(0),
                 level,
                 defer: RefCell::new(Vec::new()),

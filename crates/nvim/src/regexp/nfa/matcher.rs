@@ -21,6 +21,7 @@
 )]
 
 use crate::regexp::NfaOp;
+use crate::types::LineNr;
 use core::ffi::c_int;
 
 use super::list::{BLANK_SUBS, NfaPim, ThreadList, addstate, addstate_here};
@@ -407,7 +408,7 @@ fn wants_restart(rex: Rex, toplevel: bool, clen: c_int) -> bool {
     // The outer match may start at any column of the first line, up to
     // 'reg_maxcol' where the caller set one.
     if toplevel
-        && rex.lnum() == 0
+        && rex.lnum() == LineNr::ZERO
         && clen != 0
         && (rex.reg_maxcol() == 0 || (rex.col()) < rex.reg_maxcol())
     {

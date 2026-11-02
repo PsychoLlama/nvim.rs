@@ -30,7 +30,7 @@ pub fn ex_cc(excmd: &mut ExArg) {
     };
 
     let mut errornr = if excmd.addr_count > 0 {
-        excmd.line2 as c_int
+        excmd.line2.get()
     } else {
         match excmd.cmdidx {
             // The current entry.
@@ -75,7 +75,7 @@ pub fn ex_cnext(excmd: &mut ExArg) {
         CmdIdx::cdo | CmdIdx::ldo | CmdIdx::cfdo | CmdIdx::lfdo
     );
     let errornr = if excmd.addr_count > 0 && !is_do {
-        excmd.line2 as c_int
+        excmd.line2.get()
     } else {
         1
     };
@@ -224,7 +224,7 @@ impl Adjacent<'_> {
 
     /// The `n`th entry of the same file below `at`, or the last one there
     /// is.
-    fn nth_below(&self, mut at: usize, n: LineNr) -> usize {
+    fn nth_below(&self, mut at: usize, n: i32) -> usize {
         let mut left = n;
         while left > 0 && !got_int.get() {
             left -= 1;
@@ -246,7 +246,7 @@ impl Adjacent<'_> {
 
     /// The `n`th entry of the same file above `at`, or the first one there
     /// is.
-    fn nth_above(&self, mut at: usize, n: LineNr) -> usize {
+    fn nth_above(&self, mut at: usize, n: i32) -> usize {
         let mut left = n;
         while left > 0 && !got_int.get() {
             left -= 1;
@@ -263,7 +263,7 @@ impl Adjacent<'_> {
 
     /// The number of the `n`th entry adjacent to the position, or 0 when
     /// there is none.
-    fn nth(&self, n: LineNr, dir: Direction) -> c_int {
+    fn nth(&self, n: i32, dir: Direction) -> c_int {
         let Some(closest) = self.closest(dir) else {
             return 0;
         };
@@ -288,7 +288,7 @@ impl Adjacent<'_> {
 /// `:cabove`/`:cbelow` work in whole lines, `:cbefore`/`:cafter` in
 /// line-and-column positions.
 pub fn ex_cbelow(excmd: &mut ExArg) {
-    if excmd.addr_count > 0 && excmd.line2 <= 0 {
+    if excmd.addr_count > 0 && excmd.line2 <= LineNr::ZERO {
         qf_emsg(e_invrange);
         return;
     }
@@ -332,14 +332,18 @@ pub fn ex_cbelow(excmd: &mut ExArg) {
     let mut pos = Win::current().w_cursor;
     // An entry's column is 1 based where the cursor's is 0 based.
     pos.col += 1;
-    let n = if excmd.addr_count > 0 { excmd.line2 } else { 0 };
+    let n = if excmd.addr_count > 0 {
+        excmd.line2
+    } else {
+        LineNr::ZERO
+    };
     let errornr = Adjacent {
         entries: &qi.current_list().entries,
         bnr: Buf::current().handle.get(),
         pos,
         linewise,
     }
-    .nth(n, dir);
+    .nth(n.get(), dir);
 
     if errornr > 0 {
         qf_jump(qi, 0, errornr, false);

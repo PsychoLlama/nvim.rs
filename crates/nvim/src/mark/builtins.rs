@@ -36,7 +36,7 @@ fn add_mark(
 ) -> Result<(), Failed> {
     // An unset mark is omitted rather than reported at line 0: the list is
     // "the marks that exist", which is what makes it usable without a filter.
-    if pos.lnum <= 0 {
+    if pos.lnum <= LineNr::ZERO {
         return Ok(());
     }
     let mut d_held = tv_dict_alloc();

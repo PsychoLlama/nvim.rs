@@ -126,10 +126,10 @@ pub fn do_modelines(flags: OptionSetFlags) {
     }
     let _entered = Depth::of(&entered);
 
-    let mut lnum: LineNr = 1;
+    let mut lnum: LineNr = LineNr::ONE;
     while current_buf().b_p_ml != 0
         && lnum <= current_buf().b_ml.ml_line_count
-        && lnum <= nmlines as LineNr
+        && lnum <= LineNr::new(nmlines)
     {
         if chk_modeline(lnum, flags).is_err() {
             nmlines = 0;
@@ -139,9 +139,9 @@ pub fn do_modelines(flags: OptionSetFlags) {
 
     lnum = current_buf().b_ml.ml_line_count;
     while current_buf().b_p_ml != 0
-        && lnum > 0
-        && lnum > nmlines as LineNr
-        && lnum > current_buf().b_ml.ml_line_count - nmlines as LineNr
+        && lnum > LineNr::ZERO
+        && lnum > LineNr::new(nmlines)
+        && lnum > current_buf().b_ml.ml_line_count - nmlines
     {
         if chk_modeline(lnum, flags).is_err() {
             nmlines = 0;

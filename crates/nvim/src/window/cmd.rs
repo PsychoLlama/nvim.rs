@@ -535,7 +535,7 @@ fn goto_file(nchar: c_int, prenum1: c_int) {
     if text_or_buffer_locked() {
         return;
     }
-    let mut lnum = -1 as LineNr;
+    let mut lnum = LineNr::new(-1);
     let Some(name) = grab_filename(prenum1, &mut lnum) else {
         return;
     };
@@ -562,7 +562,7 @@ fn goto_file(nchar: c_int, prenum1: c_int) {
             wp = Some(Win::current());
         }
     }
-    if wp.is_some() && nchar == b'F' as c_int && lnum >= 0 as LineNr {
+    if wp.is_some() && nchar == b'F' as c_int && lnum >= LineNr::ZERO {
         let mut cur = Win::current();
         cur.w_cursor.lnum = lnum;
         revalidate_cursor_lnum(cur);
@@ -695,7 +695,7 @@ fn find_buffer_by_name(name: &CStr) -> Option<Buf> {
 
 /// Edit buffer `fnum` in the current window, remembering the alternate file.
 fn open_buffer_here(fnum: c_int) {
-    let _ = buflist_getfile(fnum, 0 as LineNr, GETF_ALT as c_int, 0);
+    let _ = buflist_getfile(fnum, LineNr::ZERO, GETF_ALT as c_int, 0);
 }
 
 /// Whether the current buffer may not be changed right now.
@@ -733,7 +733,7 @@ fn first_non_blank() {
 /// `find_pattern_in_path()` as CTRL-W i / d asks it: split a window on the
 /// first, or the `prenum1`th, match of `pat` along `'path'`.
 fn search_path(pat: &[u8], kind: c_int, skip_comments: bool, prenum1: c_int) {
-    let (first, last) = (1 as LineNr, MAXLNUM);
+    let (first, last) = (LineNr::ONE, MAXLNUM);
     let action = ACTION_SPLIT as c_int;
     find_pattern_in_path(
         pat,

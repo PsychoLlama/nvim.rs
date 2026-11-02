@@ -66,7 +66,16 @@ fn read_file(
     flags: ReadFlags,
     silent: bool,
 ) -> Result<Loaded, Failed> {
-    readfile_named(ffname, fname, lnum, from, to, excmd, flags, silent)
+    readfile_named(
+        ffname,
+        fname,
+        lnum,
+        from.get(),
+        to.get(),
+        excmd,
+        flags,
+        silent,
+    )
 }
 
 /// The buffer's two names, copied: a read fires autocommands that may change
@@ -199,7 +208,7 @@ fn read_buffer(
         ffname.as_deref(),
         fname.as_deref(),
         line_count,
-        0,
+        LineNr::ZERO,
         last,
         excmd,
         flags | ReadFlags::BUFFER,
@@ -207,8 +216,8 @@ fn read_buffer(
     );
     if retval == Ok(Loaded::Read) {
         // Delete the binary lines.
-        for _ in 0..line_count {
-            delete_line(1 as LineNr);
+        for _ in 0..line_count.get() {
+            delete_line(LineNr::ONE);
         }
     } else {
         // Delete the converted lines.
@@ -218,7 +227,7 @@ fn read_buffer(
     }
     // Put the cursor on the first line.
     let mut cursor = Win::current().cursor();
-    cursor.lnum = 1 as LineNr;
+    cursor.lnum = LineNr::ONE;
     cursor.col = 0 as ColNr;
 
     if read_stdin {
@@ -320,8 +329,8 @@ fn open_buffer_inner(
         retval = read_file(
             ffname.as_deref(),
             fname.as_deref(),
-            0,
-            0,
+            LineNr::ZERO,
+            LineNr::ZERO,
             last,
             excmd.as_deref_mut(),
             read,
@@ -347,7 +356,16 @@ fn open_buffer_inner(
         // retry when 'fileformat' or 'fileencoding' was guessed wrong.
         buf.b_p_bin = 1;
         let read = flags | ReadFlags::NEW | ReadFlags::STDIN;
-        retval = read_file(None, None, 0, 0, MAXLNUM, None, read, silent);
+        retval = read_file(
+            None,
+            None,
+            LineNr::ZERO,
+            LineNr::ZERO,
+            MAXLNUM,
+            None,
+            read,
+            silent,
+        );
         Buf::current().b_p_bin = save_bin;
         if retval == Ok(Loaded::Read) {
             retval = read_buffer(true, excmd, flags);
@@ -406,7 +424,7 @@ fn open_buffer_inner(
     // need to set w_topline, unless some autocommand already did that.
     let mut win = Win::current();
     if !win.w_valid.has(WinValid::TOPLINE) {
-        win.w_topline = 1 as LineNr;
+        win.w_topline = LineNr::ONE;
         win.w_topfill = 0;
     }
     fire_retval(AutoEvent::BufEnter, Buf::current(), &mut retval);
@@ -469,7 +487,7 @@ fn no_memfile(old_tw: OptInt) -> Result<(), Failed> {
 pub fn buf_contents_changed(buffer: Buf) -> bool {
     let mut differ = true;
 
-    let newbuf = buflist_new(None, None, 1, BLN_DUMMY as c_int);
+    let newbuf = buflist_new(None, None, LineNr::ONE, BLN_DUMMY as c_int);
     if newbuf.is_none() {
         return true;
     }
@@ -483,10 +501,20 @@ pub fn buf_contents_changed(buffer: Buf) -> bool {
         let ((ffname, fname), last) = (names_of(buffer), MAXLNUM);
         let (ffname, fname) = (ffname.as_deref(), fname.as_deref());
         if open_memline(Buf::current()).is_ok()
-            && read_file(ffname, fname, 0, 0, last, Some(&mut ea), read, false) == Ok(Loaded::Read)
+            && read_file(
+                ffname,
+                fname,
+                LineNr::ZERO,
+                LineNr::ZERO,
+                last,
+                Some(&mut ea),
+                read,
+                false,
+            ) == Ok(Loaded::Read)
             && buffer.line_count() == Buf::current().line_count()
         {
-            differ = (1..=Buf::current().line_count()).any(|lnum| lines_differ(buffer, lnum));
+            differ = (1..=Buf::current().line_count().get())
+                .any(|lnum| lines_differ(buffer, LineNr::new(lnum)));
         }
     });
     if Buf::current() != newbuf {

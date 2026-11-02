@@ -141,7 +141,7 @@ pub fn op_delete(op: &mut OpArg) -> Result<(), NotDeleted> {
             delete_chars(op)?;
         }
 
-        let n = Buf::current().line_count() as c_int - old_lcount as c_int;
+        let n = Buf::current().line_count().get() - old_lcount.get();
         msgmore(n);
     } else if !op_virtual() {
         // Operating on an empty region is an error when 'cpoptions'
@@ -272,7 +272,7 @@ fn delete_block(op: &mut OpArg) -> Result<(), UndoFailed> {
                 line
             };
             let _ = ml_replace_buf_text(Buf::current(), lnum, &line);
-            let row = lnum as c_int - 1;
+            let row = lnum.get() - 1;
             let buffer = Buf::current();
             extmark_splice_cols(buffer, row, bd.textcol, bd.textlen, pad, kExtmarkUndo);
         }
@@ -476,8 +476,8 @@ fn delete_chars_across_lines(op: &OpArg) -> Result<(), UndoFailed> {
     let _ = do_join(2, false, false, false, false);
     drop(splice);
 
-    let rows = op.line_count as c_int - 1;
-    let row = startpos.lnum as c_int - 1;
+    let rows = op.line_count - 1;
+    let row = startpos.lnum.get() - 1;
     let buf = Buf::current();
     extmark_splice(buf, row, col, rows, n, deleted_bytes, 0, 0, 0, kExtmarkUndo);
     Ok(())

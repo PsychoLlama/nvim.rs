@@ -165,7 +165,7 @@ fn count_matched_chars(lines: &[Option<&[u8]>], iwhite: bool) -> c_int {
 /// block ends before that line starts.
 pub fn block_from_lnum(block: &[u8], lnum: LineNr) -> Option<&[u8]> {
     let mut rest = block;
-    for _ in 1..lnum {
+    for _ in 1..lnum.get() {
         let end = rest.iter().position(|&b| b == b'\n')?;
         rest = &rest[end + 1..];
     }
@@ -253,7 +253,7 @@ impl Tensor<'_> {
             from_vals[k] = iter;
             if choice & (1 << k) != 0 {
                 from_vals[k] -= 1;
-                lines[k] = block_from_lnum(blocks[k], iter);
+                lines[k] = block_from_lnum(blocks[k], LineNr::new(iter));
             }
         }
         let n = df_iters.len();
@@ -387,12 +387,15 @@ mod tests {
     #[test]
     fn block_from_lnum_walks_lines() {
         let block = b"one\ntwo\nthree\n";
-        assert_eq!(block_from_lnum(block, 1), Some(&block[..]));
-        assert_eq!(block_from_lnum(block, 3), Some(&b"three\n"[..]));
+        assert_eq!(block_from_lnum(block, LineNr::ONE), Some(&block[..]));
+        assert_eq!(
+            block_from_lnum(block, LineNr::new(3)),
+            Some(&b"three\n"[..])
+        );
         // The trailing newline leaves an empty — but present — remainder.
-        assert_eq!(block_from_lnum(block, 4), Some(&b""[..]));
-        assert_eq!(block_from_lnum(block, 5), None);
-        assert_eq!(block_from_lnum(b"", 2), None);
+        assert_eq!(block_from_lnum(block, LineNr::new(4)), Some(&b""[..]));
+        assert_eq!(block_from_lnum(block, LineNr::new(5)), None);
+        assert_eq!(block_from_lnum(b"", LineNr::new(2)), None);
     }
 
     #[test]

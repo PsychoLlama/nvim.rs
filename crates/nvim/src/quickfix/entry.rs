@@ -50,7 +50,7 @@ fn buffer_for(bufname: &CStr) -> Option<Buf> {
     if cached && LAST_BUFREF.get().valid() {
         return LAST_BUFREF.get().get();
     }
-    let buf = buflist_add_name(Some(bufname), 0, BLN_NOOPT.cast_signed());
+    let buf = buflist_add_name(Some(bufname), LineNr::ZERO, BLN_NOOPT.cast_signed());
     LAST_BUFNAME.with_mut(|slot| *slot = Some(Name::from_bytes(bufname.to_bytes())));
     LAST_BUFREF.set(BufRef::of_opt(buf));
     buf

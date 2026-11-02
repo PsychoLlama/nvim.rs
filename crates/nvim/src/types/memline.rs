@@ -296,7 +296,7 @@ impl MemLine {
     /// over the zeroes.
     pub fn closed() -> Self {
         MemLine {
-            ml_line_count: 0,
+            ml_line_count: LineNr::ZERO,
             ml_mfp: None,
             ml_stack: Vec::new(),
             ml_flags: MlFlags::NONE,
@@ -331,7 +331,7 @@ impl MemLine {
 
     /// Correct the last line entry `idx` covers, after lines were added to
     /// or removed from the block below it.
-    pub fn stack_add_high(&mut self, idx: usize, count: LineNr) {
+    pub fn stack_add_high(&mut self, idx: usize, count: i32) {
         self.ml_stack[idx].ip_high += count;
     }
 
@@ -339,8 +339,8 @@ impl MemLine {
     pub fn stack_push(&mut self) -> usize {
         self.ml_stack.push(InfoPtr {
             ip_bnum: 0,
-            ip_low: 0,
-            ip_high: 0,
+            ip_low: LineNr::ZERO,
+            ip_high: LineNr::ZERO,
             ip_index: 0,
         });
         self.ml_stack.len() - 1
@@ -595,12 +595,16 @@ impl MemLine {
     /// The first line of the locked block. Every caller has just had one
     /// back from `ml_find_line`, so the "no block" answer never arises.
     pub fn locked_low(&self) -> LineNr {
-        self.ml_locked.as_ref().map_or(0, |locked| locked.low)
+        self.ml_locked
+            .as_ref()
+            .map_or(LineNr::ZERO, |locked| locked.low)
     }
 
     /// The last line of the locked block; see [`Self::locked_low`].
     pub fn locked_high(&self) -> LineNr {
-        self.ml_locked.as_ref().map_or(0, |locked| locked.high)
+        self.ml_locked
+            .as_ref()
+            .map_or(LineNr::ZERO, |locked| locked.high)
     }
 
     /// A line is going into (`delta` 1) or out of (-1) the locked block
@@ -609,7 +613,7 @@ impl MemLine {
     pub fn shift_locked(&mut self, delta: ::core::ffi::c_int) {
         if let Some(locked) = self.ml_locked.as_mut() {
             locked.lineadd += delta;
-            locked.high += delta as LineNr;
+            locked.high += delta;
         }
     }
 
@@ -680,12 +684,15 @@ mod tests {
         let mut ml = MemLine::closed();
         for i in 0..64i32 {
             let at = ml.stack_push();
-            ml.stack_set(at, entry(BlockNr::from(i), i, i + 1));
+            ml.stack_set(
+                at,
+                entry(BlockNr::from(i), LineNr::new(i), LineNr::new(i + 1)),
+            );
         }
         for i in 0..64i32 {
             let seen = ml.stack_at(usize::try_from(i).unwrap());
             assert_eq!(seen.ip_bnum, BlockNr::from(i));
-            assert_eq!(seen.ip_high, i + 1);
+            assert_eq!(seen.ip_high, LineNr::new(i + 1));
         }
     }
 
@@ -694,18 +701,22 @@ mod tests {
         // `ml_pointer_add_entry` and `ml_free_data_block` both cut the stack
         // to `stack_idx + 1` and then correct entry `stack_idx` -- which is
         // the entry upstream read from *above* `ml_stack_top`.
-        let mut ml = with_stack(&[entry(1, 1, 100), entry(2, 1, 50), entry(3, 1, 20)]);
+        let mut ml = with_stack(&[
+            entry(1, LineNr::ONE, LineNr::new(100)),
+            entry(2, LineNr::ONE, LineNr::new(50)),
+            entry(3, LineNr::ONE, LineNr::new(20)),
+        ]);
         ml.stack_truncate(2);
         assert_eq!(ml.stack_len(), 2);
         ml.stack_add_high(1, 5);
-        assert_eq!(ml.stack_at(1).ip_high, 55);
+        assert_eq!(ml.stack_at(1).ip_high, LineNr::new(55));
         ml.stack_set_index(1, 7);
         assert_eq!(ml.stack_at(1).ip_index, 7);
     }
 
     #[test]
     fn stack_pop_answers_none_at_the_bottom() {
-        let mut ml = with_stack(&[entry(1, 1, 9)]);
+        let mut ml = with_stack(&[entry(1, LineNr::ONE, LineNr::new(9))]);
         assert_eq!(ml.stack_pop().map(|e| e.ip_bnum), Some(1));
         assert!(ml.stack_pop().is_none());
         ml.stack_clear();
@@ -720,10 +731,10 @@ mod tests {
         assert!(ml.locked_id().is_none());
 
         let id = BlockId::unbacked();
-        ml.lock(id, 10, 20);
+        ml.lock(id, LineNr::new(10), LineNr::new(20));
         assert!(ml.is_locked());
         assert_eq!(ml.locked_id(), Some(id));
-        assert_eq!((ml.locked_low(), ml.locked_high()), (10, 20));
+        assert_eq!((ml.locked_low().get(), ml.locked_high().get()), (10, 20));
 
         let locked = ml.unlock().expect("just locked");
         assert!(!locked.dirty);
@@ -735,11 +746,11 @@ mod tests {
     #[test]
     fn shifting_a_locked_block_moves_its_end_and_its_debt() {
         let mut ml = MemLine::closed();
-        ml.lock(BlockId::unbacked(), 1, 5);
+        ml.lock(BlockId::unbacked(), LineNr::ONE, LineNr::new(5));
         ml.shift_locked(1);
         ml.shift_locked(1);
         ml.shift_locked(-1);
-        assert_eq!(ml.locked_high(), 6);
+        assert_eq!(ml.locked_high(), LineNr::new(6));
         assert_eq!(ml.take_locked_lineadd(), 1);
         // Taken means paid: it must not be paid twice.
         assert_eq!(ml.take_locked_lineadd(), 0);
@@ -760,7 +771,7 @@ mod tests {
     #[test]
     fn forgetting_a_locked_block_still_answers_its_debt() {
         let mut ml = MemLine::closed();
-        ml.lock(BlockId::unbacked(), 1, 5);
+        ml.lock(BlockId::unbacked(), LineNr::ONE, LineNr::new(5));
         ml.shift_locked(-1);
         ml.locked_has_moved();
         assert_eq!(ml.forget_locked(), -1);
@@ -852,14 +863,14 @@ mod tests {
         data.set_index(0, 100);
         data.write(100, b"hello\0");
 
-        ml.cache_block_line(id, 0, 3);
-        assert_eq!(ml.cached_lnum(), 3);
+        ml.cache_block_line(id, 0, LineNr::new(3));
+        assert_eq!(ml.cached_lnum(), LineNr::new(3));
         assert_eq!(ml.cached_bytes(), b"hello");
         assert_eq!(ml.cached_len(), 6);
         assert!(!ml.line_is_dirty());
         assert!(ml.take_replacement().is_none());
 
-        ml.cache_replacement(b"bye\0".to_vec(), 3);
+        ml.cache_replacement(b"bye\0".to_vec(), LineNr::new(3));
         assert!(ml.line_is_dirty());
         assert_eq!(ml.cached_bytes(), b"bye");
         assert_eq!(ml.take_replacement().as_deref(), Some(&b"bye\0"[..]));
@@ -870,20 +881,20 @@ mod tests {
     #[test]
     fn an_owned_line_can_be_shortened_and_swapped() {
         let mut ml = MemLine::closed();
-        ml.cache_replacement(b"one two\0".to_vec(), 1);
+        ml.cache_replacement(b"one two\0".to_vec(), LineNr::ONE);
         ml.cached_bytes_mut()[3] = b'_';
         ml.set_cached_len(4);
         assert_eq!(ml.cached_bytes(), b"one");
         ml.swap_cached_text(b"two\0".to_vec());
         assert_eq!(ml.cached_bytes(), b"two");
-        assert_eq!(ml.cached_lnum(), 1);
+        assert_eq!(ml.cached_lnum(), LineNr::ONE);
         assert!(ml.line_is_dirty());
     }
 
     #[test]
     fn a_placeholder_reads_as_itself() {
         let mut ml = MemLine::closed();
-        ml.cache_placeholder(c"???", 9);
+        ml.cache_placeholder(c"???", LineNr::new(9));
         assert_eq!(ml.cached_bytes(), b"???");
         assert_eq!(ml.cached_len(), 4);
         assert!(!ml.line_is_dirty());
@@ -893,11 +904,11 @@ mod tests {
     #[test]
     fn clearing_the_cache_forgets_the_line_and_its_offset() {
         let mut ml = MemLine::closed();
-        ml.cache_replacement(b"x\0".to_vec(), 9);
+        ml.cache_replacement(b"x\0".to_vec(), LineNr::new(9));
         ml.set_cached_offset(64);
         assert_eq!(ml.cached_offset(), 64);
         ml.clear_cache();
-        assert_eq!(ml.cached_lnum(), 0);
+        assert_eq!(ml.cached_lnum(), LineNr::ZERO);
         assert_eq!(ml.cached_offset(), 0);
         assert!(!ml.line_is_dirty());
         assert!(ml.cached_bytes().is_empty());

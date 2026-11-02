@@ -58,7 +58,7 @@ fn hgr_search_file(qfl: Qfl, fname: &CStr, prog: &mut OwnedProg) {
     };
     let mut file = crate::fileio::Fgets::new(file);
     let mut line = Vec::new();
-    let mut lnum: LineNr = 1;
+    let mut lnum: LineNr = LineNr::ONE;
     while !got_int.get() && file.line_capped(&mut line, IOSIZE as usize) {
         // As C reads the line: up to its first NUL.
         let end = line.iter().position(|&b| b == 0).unwrap_or(line.len());

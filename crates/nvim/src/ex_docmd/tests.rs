@@ -21,6 +21,7 @@
 )]
 
 use crate::eval::test_fixture::{Fixture, Scratch};
+use crate::types::LineNr;
 
 /// Run `lines` as one block (through `execute()`'s list) and answer
 /// `g:log` as `string()` renders it.
@@ -363,10 +364,10 @@ fn a_sources_kind_is_seen_through_the_loops_around_it() {
     twice.script_mut().expect("a script").finished = true;
     let pos = twice.debug().expect("a script has a breakpoint");
     assert_eq!(pos.name.as_cstr(), c"");
-    pos.breakpoint.set(12);
+    pos.breakpoint.set(LineNr::new(12));
     pos.tick.set(3);
     assert!(cookie.finished);
-    assert_eq!((cookie.breakpoint, cookie.dbg_tick), (12, 3));
+    assert_eq!((cookie.breakpoint.get(), cookie.dbg_tick), (12, 3));
 }
 
 /// The loop store, driven directly: a line past the end is read from the
@@ -384,7 +385,7 @@ fn the_loop_store_reads_through_stores_and_replays_at_depth() {
     // A frame of the case's own: reading and replaying move the innermost
     // frame's line number, which the next case would otherwise inherit.
     let name = crate::types::FrameName::Static(c"edstore");
-    crate::runtime::estack_push(crate::runtime::ETYPE_SCRIPT, name, 0);
+    crate::runtime::estack_push(crate::runtime::ETYPE_SCRIPT, name, LineNr::ZERO);
     let mut cookie = SourceCookie::from_lines(
         ["one", "two", "three"]
             .into_iter()
@@ -459,7 +460,7 @@ fn the_loop_store_reads_through_stores_and_replays_at_depth() {
     }
     assert_eq!(lines(&inner)[0].0, "one");
     // The script itself is still at its second line.
-    assert_eq!(cookie.sourcing_lnum, 2);
+    assert_eq!(cookie.sourcing_lnum, LineNr::new(2));
     crate::runtime::estack_pop();
 }
 

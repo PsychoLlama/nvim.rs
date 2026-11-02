@@ -23,6 +23,7 @@ use crate::option::vars::{p_enc, p_hi};
 use crate::os::env::process_id;
 use crate::os::time::os_time;
 use crate::search::{search_was_last_used, state::no_hlsearch};
+use crate::types::LineNr;
 use crate::types::builders::DictBuf;
 use crate::types::{
     ApiString, Integer, Object, TypVal, VAR_DICT, VAR_FLAVOUR_SHADA, VAR_FUNC, VAR_LIST,
@@ -447,7 +448,7 @@ impl Writing<'_> {
     fn update_numbered_marks(&mut self) {
         if !self.limits.global_marks
             || ignore_buf(Buf::current_or_none(), &self.removable_bufs)
-            || Win::current().w_cursor.lnum == 0
+            || Win::current().w_cursor.lnum == LineNr::ZERO
         {
             return;
         }

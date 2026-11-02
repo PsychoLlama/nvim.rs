@@ -80,8 +80,8 @@ pub(crate) fn nv_addsub(cmd_arg: &mut CmdArg) {
         } else {
             OpType::NrSub
         };
-        let (count, g_cmd) = (cmd_arg.count1 as LineNr, cmd_arg.arg != 0);
-        cmd_arg.op().on_copy(|op| op_addsub(op, count, g_cmd));
+        let (count, g_cmd) = (LineNr::new(cmd_arg.count1), cmd_arg.arg != 0);
+        cmd_arg.op().on_copy(|op| op_addsub(op, count.get(), g_cmd));
         cmd_arg.op().op_type = OpType::Nop;
     } else if visual_active() {
         nv_operator(cmd_arg);
@@ -421,8 +421,8 @@ pub(crate) fn n_opencmd(cmd_arg: &mut CmdArg) {
     }
     win.w_cursor.lnum = edge;
     Buf::current().b_last_changedtick_i = buf_get_changedtick(Buf::current());
-    let undo_first = win.w_cursor.lnum - LineNr::from(opening_above);
-    let undo_last = win.w_cursor.lnum + LineNr::from(!opening_above);
+    let undo_first = win.w_cursor.lnum - i32::from(opening_above);
+    let undo_last = win.w_cursor.lnum + i32::from(!opening_above);
     let dir = if opening_above {
         BACKWARD as c_int
     } else {
@@ -433,7 +433,8 @@ pub(crate) fn n_opencmd(cmd_arg: &mut CmdArg) {
     } else {
         0
     };
-    let opened = u_save(undo_first, undo_last).is_ok() && open_line(dir, flags, 0, None);
+    let opened =
+        u_save(LineNr::new(undo_first.get()), undo_last).is_ok() && open_line(dir, flags, 0, None);
     if opened {
         if win_cursorline_standout(win) {
             // The cursor line moved, so its highlight has to be redrawn.
@@ -564,9 +565,7 @@ pub(crate) fn nv_join(cmd_arg: &mut CmdArg) {
     // Joining fewer than two lines means nothing; `J` and `1J` both join
     // this line with the next.
     cmd_arg.count0 = cmd_arg.count0.max(2);
-    if Win::current().w_cursor.lnum + cmd_arg.count0 as LineNr - 1
-        > Buf::current().b_ml.ml_line_count
-    {
+    if Win::current().w_cursor.lnum + cmd_arg.count0 - 1 > Buf::current().b_ml.ml_line_count {
         // A count that runs off the end joins what is left -- unless there
         // was no count, in which case there is nothing below to join to.
         if cmd_arg.count0 <= 2 {

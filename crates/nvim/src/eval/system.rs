@@ -30,6 +30,7 @@ use crate::semsg;
 use crate::shell::Argv;
 use crate::shell::system::os_system_capture;
 use crate::smsg;
+use crate::types::LineNr;
 use crate::types::{
     EvalFuncData, Failed, IOSIZE, List, OptInt, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING,
     VAR_UNKNOWN, VarNumber, Vv, kListLenMayKnow,
@@ -232,8 +233,8 @@ fn buffer_as_string(tv: &TypVal) -> Result<Option<Vec<u8>>, Failed> {
     // with `strlen`, not whatever the memline records as the length.
     let mut lines = Lines::in_buffer(buffer);
     let mut out = Vec::new();
-    for lnum in 1..=buffer.line_count() {
-        let line = lines.line(lnum);
+    for lnum in 1..=buffer.line_count().get() {
+        let line = lines.line(LineNr::new(lnum));
         let line = line.split(|&b| b == 0).next().unwrap_or_default();
         push_swapping_nl(&mut out, line);
         out.push(b'\n');

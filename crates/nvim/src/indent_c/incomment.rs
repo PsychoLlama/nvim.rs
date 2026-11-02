@@ -34,7 +34,7 @@ const LEN: usize = COM_MAX_LEN as usize;
 /// line directly above is searched for one starting *after* code.
 pub(crate) fn align_with_line_comment() -> Option<c_int> {
     let mut trypos = find_line_comment();
-    if trypos.is_none() && Win::current().w_cursor.lnum > 1 {
+    if trypos.is_none() && Win::current().w_cursor.lnum > LineNr::ONE {
         // There may be a statement before the comment; search from the
         // end of the line above for a comment start.
         let lnum = Win::current().w_cursor.lnum - 1;
@@ -69,7 +69,7 @@ pub(crate) fn align_in_comment(line: &Line, comment: &mut Pos) -> c_int {
 
     // More than one line below the opener: take the indent of the
     // previous non-empty line.
-    for lnum in (comment.lnum + 1..line.cur_curpos.lnum).rev() {
+    for lnum in (comment.lnum + 1).up_to(line.cur_curpos.lnum).rev() {
         if !linewhite(lnum) {
             return get_indent_lnum(lnum);
         }
@@ -180,7 +180,7 @@ fn align_with_comment_leader(line: &Line, comment: &Pos, amount: &mut c_int) -> 
             && !ncmp_eq(theline, &lead_end, lead_end_len)
         {
             done = true;
-            if Win::current().w_cursor.lnum > 1 {
+            if Win::current().w_cursor.lnum > LineNr::ONE {
                 let prev = Win::current().w_cursor.lnum - 1;
                 // The line above starting with the start leader: its
                 // indent plus the offset.  With the middle leader: its

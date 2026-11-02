@@ -198,7 +198,7 @@ pub fn win_line(
     let mut term_attrs: [::core::ffi::c_int; TERM_ATTRS_MAX as usize] =
         [0; TERM_ATTRS_MAX as usize];
     if setup.has_terminal {
-        terminal_get_line_attributes(window.buffer(), lnum, &mut term_attrs);
+        terminal_get_line_attributes(window.buffer(), lnum.get(), &mut term_attrs);
     }
 
     let mut frame = LineFrame {
@@ -336,7 +336,7 @@ fn decor_providers_setup(
     };
 
     // Called here because the line pointer has to be invalidated anyway.
-    decor_providers_invoke_line(window, lnum - 1);
+    decor_providers_invoke_line(window, (lnum - 1).get());
     validate_virtcol(window);
 
     invoke_range_next(window, lnum, col, rem_vcols + 1)
@@ -374,11 +374,17 @@ fn invoke_range_next(
     };
 
     if let Some(end_col) = end_col {
-        decor_providers_invoke_range(window, lnum - 1, begin_col, lnum - 1, end_col);
+        decor_providers_invoke_range(
+            window,
+            (lnum - 1).get(),
+            begin_col,
+            (lnum - 1).get(),
+            end_col,
+        );
         validate_virtcol(window);
         end_col
     } else {
-        decor_providers_invoke_range(window, lnum - 1, begin_col, lnum, 0);
+        decor_providers_invoke_range(window, (lnum - 1).get(), begin_col, lnum.get(), 0);
         validate_virtcol(window);
         ::core::ffi::c_int::MAX
     }

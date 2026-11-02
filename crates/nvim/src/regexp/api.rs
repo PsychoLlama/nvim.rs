@@ -41,7 +41,7 @@ use crate::types::{ColNr, LPos, LineNr, OptInt, ProfTime, RE_GROUPS, RegMMatch, 
 /// The first line of the last buffer match, which upstream's `rex` kept
 /// after the match was over: a string match never set it, so `\%'m` in one
 /// compares the mark against that line. Kept here so that it still does.
-static LAST_FIRSTLNUM: GlobalCell<LineNr> = GlobalCell::new(0);
+static LAST_FIRSTLNUM: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
 
 /// How many matches (or expansions) are running, one inside another.
 static MATCH_DEPTH: GlobalCell<c_int> = GlobalCell::new(0);
@@ -205,6 +205,7 @@ impl OwnedProg {
         walk_with(self, out, win, &buffer, None, io, Some(lnum), |lines| {
             lines.exec_seated(lnum, col, &mut false)
         })
+        .get()
     }
 }
 
@@ -347,13 +348,13 @@ fn regexec_string(
     };
     let result = in_match_scope(None, |firstlnum| {
         let result = run.once(prog, matches, firstlnum);
-        if result == NFA_TOO_EXPENSIVE && prog.automatic() {
+        if result == LineNr::new(NFA_TOO_EXPENSIVE) && prog.automatic() {
             run.again_backtracking(prog, matches, firstlnum)
         } else {
             result
         }
     });
-    result > 0
+    result > LineNr::ZERO
 }
 
 /// What one string match runs with, whichever program runs it.
@@ -398,7 +399,7 @@ impl StringRun<'_> {
         } else {
             matches.clear_groups();
         }
-        result
+        LineNr::new(result)
     }
 
     /// The NFA engine gave up on the pattern: recompile it for the
@@ -413,7 +414,7 @@ impl StringRun<'_> {
         firstlnum: LineNr,
     ) -> LineNr {
         let Some(new) = recompile_backtracking(prog, false) else {
-            return NFA_TOO_EXPENSIVE;
+            return LineNr::new(NFA_TOO_EXPENSIVE);
         };
         *prog = new;
         self.once(prog, matches, firstlnum)
@@ -425,7 +426,8 @@ impl StringRun<'_> {
 /// position: nothing in either engine moves a string match onto another
 /// line.
 fn record_groups(matches: &mut RegMatch, starts: &[LPos; RE_GROUPS], ends: &[LPos; RE_GROUPS]) {
-    let offset = |pos: &LPos| (pos.lnum >= 0).then(|| usize::try_from(pos.col).unwrap_or(0));
+    let offset =
+        |pos: &LPos| (pos.lnum >= LineNr::ZERO).then(|| usize::try_from(pos.col).unwrap_or(0));
     for no in 0..RE_GROUPS {
         matches.starts[no] = offset(&starts[no]);
         matches.ends[no] = offset(&ends[no]);
@@ -527,7 +529,7 @@ fn regexec_multi_io(
     if flag && let Some(timed_out) = timed_out {
         *timed_out = true;
     }
-    result
+    result.get()
 }
 
 /// Run `f` with `rmp`'s program set up to match line after line of
@@ -635,12 +637,12 @@ impl LineMatcher<'_> {
     #[inline(always)]
     fn exec_seated(&mut self, lnum: LineNr, col: ColNr, timed_out: &mut bool) -> LineNr {
         let result = self.run(col, timed_out);
-        let result = if result == NFA_TOO_EXPENSIVE && self.prog.automatic() {
+        let result = if result == LineNr::new(NFA_TOO_EXPENSIVE) && self.prog.automatic() {
             self.again_backtracking(lnum, col, timed_out)
         } else {
             result
         };
-        result.max(0)
+        result.max(LineNr::ZERO)
     }
 
     /// Run the program once, from where the match is seated.
@@ -655,7 +657,7 @@ impl LineMatcher<'_> {
         if ctx.timed_out() {
             *timed_out = true;
         }
-        result
+        LineNr::new(result)
     }
 
     /// The NFA engine gave up on the pattern: recompile it for the
@@ -665,7 +667,7 @@ impl LineMatcher<'_> {
     #[inline(never)]
     fn again_backtracking(&mut self, lnum: LineNr, col: ColNr, timed_out: &mut bool) -> LineNr {
         let Some(new) = recompile_backtracking(self.prog, true) else {
-            return NFA_TOO_EXPENSIVE;
+            return LineNr::new(NFA_TOO_EXPENSIVE);
         };
         *self.prog = new;
         self.ctx.seat(lnum);
@@ -741,7 +743,9 @@ pub(crate) fn vim_regexec_syntax(
     timed_out: Option<&mut bool>,
     io: ExtMatchIo<'_>,
 ) -> LineNr {
-    regexec_multi_io(rmp, win, buffer, lnum, col, tm, timed_out, io)
+    LineNr::new(regexec_multi_io(
+        rmp, win, buffer, lnum, col, tm, timed_out, io,
+    ))
 }
 
 impl RegMatch {
@@ -778,6 +782,6 @@ impl RegMMatch {
         lnum: LineNr,
         col: ColNr,
     ) -> LineNr {
-        vim_regexec_multi(self, win, buffer, lnum, col, None, None)
+        LineNr::new(vim_regexec_multi(self, win, buffer, lnum, col, None, None))
     }
 }

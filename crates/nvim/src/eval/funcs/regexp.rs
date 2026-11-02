@@ -323,7 +323,7 @@ pub fn f_matchbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     if did_emsg.get() > did_emsg_before {
         return;
     }
-    if slnum < 1 {
+    if slnum < LineNr::ONE {
         let arg0 = "lnum";
         semsg!("E475: Invalid value for argument {arg0}");
         return;
@@ -332,7 +332,7 @@ pub fn f_matchbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     if did_emsg.get() > did_emsg_before {
         return;
     }
-    if elnum < 1 || elnum < slnum {
+    if elnum < LineNr::ONE || elnum < slnum {
         let arg0 = "end_lnum";
         semsg!("E475: Invalid value for argument {arg0}");
         return;
@@ -351,7 +351,14 @@ pub fn f_matchbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     let mut lines = Lines::in_buffer(buf);
     while slnum <= elnum {
         let text = lines.line_cstr(slnum, 0);
-        get_matches_in_str(text, (&mut prog, ignore_case), out, slnum, submatches, true);
+        get_matches_in_str(
+            text,
+            (&mut prog, ignore_case),
+            out,
+            slnum.get(),
+            submatches,
+            true,
+        );
         slnum += 1;
     }
 }

@@ -172,7 +172,7 @@ pub(crate) fn first_id_amount() -> c_int {
 /// ends in a backslash -- the assignment started further up, so this line's
 /// `=` is not the one to line up with.
 pub(crate) fn equal_amount(lnum: LineNr) -> c_int {
-    if lnum > 1 && ends_in_backslash(Lines::current().line(lnum - 1)) {
+    if lnum > LineNr::ONE && ends_in_backslash(Lines::current().line(lnum - 1)) {
         return -1;
     }
 

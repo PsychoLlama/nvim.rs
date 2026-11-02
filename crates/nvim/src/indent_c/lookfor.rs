@@ -79,7 +79,7 @@ impl BlockScan<'_> {
             if lnum == self.ourscope {
                 return Step::Again;
             }
-            if lnum == 0 || lnum < self.ourscope - FIND_NAMESPACE_LIM {
+            if lnum == LineNr::ZERO || lnum < self.ourscope - FIND_NAMESPACE_LIM {
                 return Step::Done;
             }
 
@@ -121,7 +121,7 @@ impl BlockScan<'_> {
     /// ```
     fn at_scope_start_enum_or_init(&mut self) -> Step {
         let lnum = Win::current().w_cursor.lnum;
-        if lnum == 0 || lnum < self.ourscope - Buf::current().b_ind_maxparen {
+        if lnum == LineNr::ZERO || lnum < self.ourscope - Buf::current().b_ind_maxparen {
             // Nothing found (abusing `b_ind_maxparen` as the limit):
             // assume a terminated line, i.e. a variable initialisation.
             if self.cont_amount > 0 {
@@ -152,8 +152,8 @@ impl BlockScan<'_> {
 
         // At top level and looking like a function declaration: done, it
         // is a variable declaration.
-        let is_var_decl =
-            self.start_brace != BRACE_IN_COL0 || !is_func_decl(Win::current().w_cursor.lnum, 0);
+        let is_var_decl = self.start_brace != BRACE_IN_COL0
+            || !is_func_decl(Win::current().w_cursor.lnum, LineNr::ZERO);
         if is_var_decl {
             // Terminated with another ',': a continued initialisation, so
             // no extra indent.
@@ -676,7 +676,7 @@ impl BlockScan<'_> {
         //               bla",
         //          here;
         if terminated == b',' {
-            while Win::current().w_cursor.lnum > 1 {
+            while Win::current().w_cursor.lnum > LineNr::ONE {
                 // `lnum - 1` is at least 1, so it is a line of the buffer.
                 let above = Win::current().w_cursor.lnum - 1;
                 if !ends_in_backslash(Lines::current().line(above)) {

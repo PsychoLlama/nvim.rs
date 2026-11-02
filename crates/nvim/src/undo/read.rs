@@ -127,7 +127,7 @@ fn read_undo_file(
         corruption_error(c"hash", file_name);
         return;
     }
-    let line_count = bi.read_4c() as LineNr;
+    let line_count = LineNr::new(bi.read_4c());
     // The tree describes text; a buffer holding different text cannot
     // have it applied.
     if *hash != read_hash || line_count != Buf::current().b_ml.ml_line_count {
@@ -186,9 +186,9 @@ fn read_file_header(bi: &mut BufInfo, file_name: &CStr) -> Option<FileHeader> {
     } else {
         None
     };
-    let line_lnum = bi.read_4c() as LineNr;
+    let line_lnum = LineNr::new(bi.read_4c());
     let line_colnr = bi.read_4c();
-    if line_lnum < 0 || line_colnr < 0 {
+    if line_lnum < LineNr::ZERO || line_colnr < 0 {
         corruption_error(c"line lnum/col", file_name);
         return None;
     }

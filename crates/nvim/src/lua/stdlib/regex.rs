@@ -145,7 +145,7 @@ fn regex_match_line(stack: &mut Stack) -> Result<c_int, Raise> {
     }
 
     let bufnr: Handle = Handle::new(check_int(stack, 2)?);
-    let rownr: LineNr = check_int(stack, 3)?;
+    let rownr: LineNr = LineNr::new(check_int(stack, 3)?);
     let mut start: c_int = 0;
     let mut end: c_int = -1;
     if narg >= 4 {

@@ -85,8 +85,8 @@ impl DictEntry {
             filename: dict_string(d, b"filename"),
             module: dict_string(d, b"module"),
             bufnum: dict_int(d, b"bufnr"),
-            lnum: dict_int(d, b"lnum"),
-            end_lnum: dict_int(d, b"end_lnum"),
+            lnum: LineNr::new(dict_int(d, b"lnum")),
+            end_lnum: LineNr::new(dict_int(d, b"end_lnum")),
             col: dict_int(d, b"col"),
             end_col: dict_int(d, b"end_col"),
             // Not narrowed to a bool: `setqflist({'vcol': 5})` stores the 5
@@ -117,8 +117,8 @@ fn qf_add_entry_from_dict(qfl: Qfl, mut from: DictEntry, first_entry: bool) -> b
 
     // An entry that names neither a file nor a position cannot be
     // jumped to.
-    let mut valid =
-        !(from.filename.is_none() && from.bufnum == 0 || from.lnum == 0 && from.pattern.is_none());
+    let mut valid = !(from.filename.is_none() && from.bufnum == 0
+        || from.lnum == LineNr::ZERO && from.pattern.is_none());
 
     if from.bufnum != 0 && find_buf(from.bufnum).is_none() {
         // Ignore the buffer number, and report it once per call.
@@ -178,12 +178,12 @@ fn entry_is_closer_to_target(
         return is_target_file;
     }
 
-    if target_lnum == 0 {
+    if target_lnum == LineNr::ZERO {
         return false;
     }
     // An entry without a line number is infinitely far away.
     let distance = |entry: &QfEntry| {
-        if entry.lnum != 0 {
+        if entry.lnum != LineNr::ZERO {
             (entry.lnum - target_lnum).abs()
         } else {
             INT_MAX
@@ -227,7 +227,7 @@ fn qf_add_entries(
     // Where the list was, so that 'u' can find the nearest entry again.
     let (prev_fnum, prev_lnum, prev_col) = qfl
         .current()
-        .map_or((0, 0, 0), |entry| (entry.fnum, entry.lnum, entry.col));
+        .map_or((0, 0, 0), |entry| (entry.fnum, entry.lnum.get(), entry.col));
 
     let mut select_first_entry = false;
     let mut select_nearest_entry = false;
@@ -277,7 +277,7 @@ fn qf_add_entries(
                                 &qfl.entries[added],
                                 &qfl.entries[chosen],
                                 prev_fnum,
-                                prev_lnum,
+                                LineNr::new(prev_lnum),
                                 prev_col,
                             )
                         });

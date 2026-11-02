@@ -115,7 +115,7 @@ pub(crate) fn win_chartabsize(window: Win, text: &[u8], col: ColNr) -> c_int {
 /// Cells the string `s` takes, as if it began at virtual column `startvcol`
 /// of the current window.
 pub(crate) fn linetabsize_col(startvcol: c_int, s: &[u8]) -> c_int {
-    win_linetabsize_col(Win::current(), 0, s, startvcol, MAXCOL)
+    win_linetabsize_col(Win::current(), LineNr::ZERO, s, startvcol, MAXCOL)
 }
 
 /// [`linetabsize_col`] of a string the caller holds.
@@ -199,11 +199,11 @@ impl<'a> CharsizeArg<'a> {
         // the walk would find nothing.
         let mut virt_row = -1;
         let mut iter = None;
-        if lnum > 0 && window.buffer().meta_total(kMTMetaInline) != 0 {
+        if lnum > LineNr::ZERO && window.buffer().meta_total(kMTMetaInline) != 0 {
             let mut itr = MarkTreeIter::default();
             let mut walk = Cursor::in_buffer(window.buffer(), &mut itr);
-            if walk.seek_filter(lnum - 1, 0, lnum, 0, &INLINE_FILTER) {
-                virt_row = lnum - 1;
+            if walk.seek_filter((lnum - 1).get(), 0, lnum.get(), 0, &INLINE_FILTER) {
+                virt_row = (lnum - 1).get();
                 iter = Some(Box::new(itr));
             }
         }

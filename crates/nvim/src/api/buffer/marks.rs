@@ -31,7 +31,7 @@ pub fn nvim_buf_del_mark(buf: BufferHandle, name: ApiString) -> Result<Boolean, 
     let Some(fm) = mark_get(b, Win::current(), kMarkAllNoResolve, mark) else {
         return Err(err_bad_value(c"mark name", name.as_cstr()));
     };
-    if fm.mark.lnum != 0 as LineNr && fm.fnum == b.handle.get() {
+    if fm.mark.lnum != LineNr::ZERO && fm.fnum == b.handle.get() {
         set_mark(Some(b), name, 0 as Integer, 0 as Integer)?;
         res = true;
     }
@@ -68,7 +68,7 @@ pub fn nvim_buf_get_mark(buf: BufferHandle, name: ApiString) -> Result<Array, Er
         return Err(err_bad_value(c"mark name (must be a single char)", name));
     }
     let mut pos: Pos = Pos {
-        lnum: 0,
+        lnum: LineNr::ZERO,
         col: 0,
         coladd: 0,
     };
@@ -82,7 +82,7 @@ pub fn nvim_buf_get_mark(buf: BufferHandle, name: ApiString) -> Result<Array, Er
         return Err(err_bad_value(c"mark name", name.as_cstr()));
     };
     if fm.fnum != b.handle.get() {
-        pos.lnum = 0 as ::core::ffi::c_int as LineNr;
+        pos.lnum = LineNr::ZERO;
         pos.col = 0 as ::core::ffi::c_int as ColNr;
     } else {
         pos = fm.mark;

@@ -7,6 +7,7 @@
 #![forbid(unsafe_code)]
 
 use super::address::{head, tail};
+use crate::narrow::len_as_int;
 use crate::quickfix::{qf_get_cur_idx, qf_get_cur_valid_idx, qf_get_valid_size};
 
 use crate::ex_docmd::is_user_cmd;
@@ -93,27 +94,27 @@ pub fn get_cmd_default_range(excmd: &mut ExArg) -> LineNr {
                 .lnum
                 .min(Buf::current().b_ml.ml_line_count)
         }
-        CmdAddr::Windows => current_win_nr(Win::current_or_none()) as LineNr,
+        CmdAddr::Windows => LineNr::new(current_win_nr(Win::current_or_none())),
         CmdAddr::Arguments => {
             let len = arglist_len();
             if Win::current().w_arg_idx + 1 < len {
-                Win::current().w_arg_idx as LineNr + 1
+                LineNr::new(Win::current().w_arg_idx) + 1
             } else {
-                len as LineNr
+                LineNr::new(len)
             }
         }
-        CmdAddr::LoadedBuffers | CmdAddr::Buffers => Buf::current().handle.get() as LineNr,
-        CmdAddr::Tabs => current_tab_nr(TabPage::current_or_none()) as LineNr,
-        CmdAddr::TabsRelative | CmdAddr::Unsigned => 1,
-        CmdAddr::Quickfix => qf_get_cur_idx(excmd.cmdidx) as LineNr,
-        CmdAddr::QuickfixValid => qf_get_cur_valid_idx(excmd.cmdidx) as LineNr,
-        _ => 0,
+        CmdAddr::LoadedBuffers | CmdAddr::Buffers => LineNr::new(Buf::current().handle.get()),
+        CmdAddr::Tabs => LineNr::new(current_tab_nr(TabPage::current_or_none())),
+        CmdAddr::TabsRelative | CmdAddr::Unsigned => LineNr::ONE,
+        CmdAddr::Quickfix => LineNr::new(len_as_int(qf_get_cur_idx(excmd.cmdidx))),
+        CmdAddr::QuickfixValid => LineNr::new(qf_get_cur_valid_idx(excmd.cmdidx)),
+        _ => LineNr::ZERO,
     }
 }
 
 /// The range an `ExArgt::DFLALL` command means by "no range": everything.
 pub fn set_cmd_dflall_range(excmd: &mut ExArg) {
-    excmd.line1 = 1;
+    excmd.line1 = LineNr::ONE;
     match excmd.addr_type {
         CmdAddr::Lines | CmdAddr::Other => {
             excmd.line2 = Buf::current().b_ml.ml_line_count;
@@ -124,29 +125,29 @@ pub fn set_cmd_dflall_range(excmd: &mut ExArg) {
             excmd.line2 = last;
         }
         CmdAddr::Buffers => {
-            excmd.line1 = head().handle.get() as LineNr;
-            excmd.line2 = tail().handle.get() as LineNr;
+            excmd.line1 = LineNr::new(head().handle.get());
+            excmd.line2 = LineNr::new(tail().handle.get());
         }
         CmdAddr::Windows => {
-            excmd.line2 = current_win_nr(None) as LineNr;
+            excmd.line2 = LineNr::new(current_win_nr(None));
         }
         CmdAddr::Tabs => {
-            excmd.line2 = current_tab_nr(None) as LineNr;
+            excmd.line2 = LineNr::new(current_tab_nr(None));
         }
-        CmdAddr::TabsRelative => excmd.line2 = 1,
+        CmdAddr::TabsRelative => excmd.line2 = LineNr::ONE,
         CmdAddr::Arguments => {
             let len = arglist_len();
             if len == 0 {
-                excmd.line2 = 0;
-                excmd.line1 = 0;
+                excmd.line2 = LineNr::ZERO;
+                excmd.line1 = LineNr::ZERO;
             } else {
-                excmd.line2 = len as LineNr;
+                excmd.line2 = LineNr::new(len);
             }
         }
         CmdAddr::QuickfixValid => {
-            excmd.line2 = qf_get_valid_size(excmd.cmdidx) as LineNr;
-            if excmd.line2 == 0 {
-                excmd.line2 = 1;
+            excmd.line2 = LineNr::new(len_as_int(qf_get_valid_size(excmd.cmdidx)));
+            if excmd.line2 == LineNr::ZERO {
+                excmd.line2 = LineNr::ONE;
             }
         }
         t if t == CmdAddr::NoRange || t == CmdAddr::Unsigned || t == CmdAddr::Quickfix => {
@@ -168,11 +169,11 @@ pub(super) fn loaded_buffer_range() -> (LineNr, LineNr) {
         let Some(next) = buf.next() else { break };
         buf = next;
     }
-    let first = buf.handle.get() as LineNr;
+    let first = LineNr::new(buf.handle.get());
     let mut buf = tail();
     while buf.b_ml.ml_mfp.is_none() {
         let Some(prev) = buf.prev() else { break };
         buf = prev;
     }
-    (first, buf.handle.get() as LineNr)
+    (first, LineNr::new(buf.handle.get()))
 }

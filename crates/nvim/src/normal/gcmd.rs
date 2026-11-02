@@ -197,7 +197,7 @@ pub(crate) fn nv_g_dollar_cmd(cmd_arg: &mut CmdArg) {
 /// shorter.
 pub(crate) fn nv_gi_cmd(cmd_arg: &mut CmdArg) {
     let mut win = Win::current();
-    if Buf::current().b_last_insert.mark.lnum != 0 {
+    if Buf::current().b_last_insert.mark.lnum != LineNr::ZERO {
         win.w_cursor = Buf::current().b_last_insert.mark;
         check_cursor_lnum(win);
         let len = get_cursor_line_len();
@@ -231,7 +231,7 @@ fn nv_g_screen_line(cmd_arg: &mut CmdArg, dir: c_int) {
         if dir == FORWARD as c_int {
             cursor_down(cmd_arg.count1, stop_at_end).is_ok()
         } else {
-            cursor_up(cmd_arg.count1 as LineNr, stop_at_end).is_ok()
+            cursor_up(cmd_arg.count1, stop_at_end).is_ok()
         }
     } else {
         nv_screengo(op, dir, cmd_arg.count1, false)

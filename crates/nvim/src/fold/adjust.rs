@@ -44,7 +44,7 @@ pub fn fold_move_to(updown: bool, dir: c_int, count: c_int) -> c_int {
             break;
         }
         let cursor = win.w_cursor.lnum;
-        let mut lnum_off: LineNr = 0;
+        let mut lnum_off: i32 = 0;
         let mut use_level = false;
         let mut maybe_small = false;
         let mut lnum_found = cursor;
@@ -107,7 +107,7 @@ pub fn fold_move_to(updown: bool, dir: c_int, count: c_int) -> c_int {
                     Some(folds[i].top + lnum_off).filter(|&lnum| lnum < cursor)
                 };
                 // A miss may stand one past the end; it ends the walk anyway.
-                (found, if contains { folds[i].top } else { 0 })
+                (found, if contains { folds[i].top } else { LineNr::ZERO })
             });
             if let Some(lnum) = found {
                 lnum_found = lnum;
@@ -115,7 +115,7 @@ pub fn fold_move_to(updown: bool, dir: c_int, count: c_int) -> c_int {
             if last {
                 break;
             }
-            lnum_off += top;
+            lnum_off += top.get();
             level += 1;
             depth += 1;
         }
@@ -196,10 +196,10 @@ pub fn fold_mark_adjust(
     window: Win,
     mut line1: LineNr,
     mut line2: LineNr,
-    amount: LineNr,
-    amount_after: LineNr,
+    amount: i32,
+    amount_after: i32,
 ) {
-    if amount == LINES_DELETED && line2 >= line1 && line2 - line1 >= -amount_after {
+    if amount == LINES_DELETED.get() && line2 >= line1 && line2 - line1 >= -amount_after {
         line2 = line1 - amount_after - 1;
     }
     if line2 < line1 {
@@ -228,8 +228,8 @@ pub fn adjust_fold_list(
     folds: &mut Vec<Fold>,
     line1: LineNr,
     line2: LineNr,
-    amount: LineNr,
-    amount_after: LineNr,
+    amount: i32,
+    amount_after: i32,
 ) {
     let insert_mode = State.get() & MODE_INSERT != 0;
     adjust_folds(folds, line1, line2, amount, amount_after, insert_mode);
@@ -240,8 +240,8 @@ fn adjust_folds(
     folds: &mut Vec<Fold>,
     line1: LineNr,
     line2: LineNr,
-    amount: LineNr,
-    amount_after: LineNr,
+    amount: i32,
+    amount_after: i32,
     insert_mode: bool,
 ) {
     if folds.is_empty() {
@@ -267,7 +267,7 @@ fn adjust_folds(
                 fold.top += amount_after;
             } else if fold.top >= top && last <= line2 {
                 // 2: entirely inside the change.
-                if amount == LINES_DELETED {
+                if amount == LINES_DELETED.get() {
                     delete_fold_entry(folds, i, true);
                     // The fold that took its place is next; do not advance.
                     continue;
@@ -278,14 +278,14 @@ fn adjust_folds(
                 let ft = fold.top;
                 adjust_folds(
                     &mut fold.nested,
-                    line1 - ft,
-                    line2 - ft,
+                    LineNr::new(line1 - ft),
+                    LineNr::new(line2 - ft),
                     amount,
                     amount_after,
                     insert_mode,
                 );
                 if last <= line2 {
-                    if amount == LINES_DELETED {
+                    if amount == LINES_DELETED.get() {
                         fold.len = line1 - ft;
                     } else {
                         fold.len += amount;
@@ -293,14 +293,14 @@ fn adjust_folds(
                 } else {
                     fold.len += amount_after;
                 }
-            } else if amount == LINES_DELETED {
+            } else if amount == LINES_DELETED.get() {
                 // 4: starts inside the change and ends below it, and the
                 //    lines it loses are gone for good.
                 let ft = fold.top;
                 adjust_folds(
                     &mut fold.nested,
-                    0,
-                    line2 - ft,
+                    LineNr::ZERO,
+                    LineNr::new(line2 - ft),
                     amount,
                     amount_after + (ft - top),
                     insert_mode,
@@ -312,8 +312,8 @@ fn adjust_folds(
                 let ft = fold.top;
                 adjust_folds(
                     &mut fold.nested,
-                    0,
-                    line2 - ft,
+                    LineNr::ZERO,
+                    LineNr::new(line2 - ft),
                     amount,
                     amount_after - amount,
                     insert_mode,
@@ -338,7 +338,7 @@ pub(super) fn fold_split(folds: &mut Vec<Fold>, i: usize, top: LineNr, bot: Line
     debug_assert!(below_top > bot, "below.top > bot");
     // Hand the nested folds that start below "bot" to the new second half,
     // relative to it.
-    let first = find_at_or_below(&fold.nested, below_top - fold.top);
+    let first = find_at_or_below(&fold.nested, LineNr::new(below_top - fold.top));
     let mut moved = fold.nested.split_off(first);
     for child in &mut moved {
         child.top -= below_top - fold.top;
@@ -383,7 +383,11 @@ pub(super) fn fold_remove(folds: &mut Vec<Fold>, top: LineNr, bot: LineNr) {
         {
             let fold = &mut folds[i];
             let ft = fold.top;
-            fold_remove(&mut fold.nested, top - ft, bot - ft);
+            fold_remove(
+                &mut fold.nested,
+                LineNr::new(top - ft),
+                LineNr::new(bot - ft),
+            );
             if fold.last() > bot {
                 // 3: split in two, one stopping above "top" and one starting
                 //    below "bot".
@@ -413,7 +417,13 @@ pub(super) fn fold_remove(folds: &mut Vec<Fold>, top: LineNr, bot: LineNr) {
         if fold.last() > bot {
             // 5: made to start below "bot".
             let ft = fold.top;
-            adjust_fold_list(&mut fold.nested, 0, bot - ft, LINES_DELETED, ft - bot - 1);
+            adjust_fold_list(
+                &mut fold.nested,
+                LineNr::ZERO,
+                LineNr::new(bot - ft),
+                LINES_DELETED.get(),
+                ft - bot - 1,
+            );
             fold.len -= bot - ft + 1;
             fold.top = bot + 1;
             break;
@@ -426,7 +436,7 @@ pub(super) fn fold_remove(folds: &mut Vec<Fold>, top: LineNr, bot: LineNr) {
 /// Drop everything in `fold` below line `end`, nested folds included.
 pub(super) fn truncate_fold(fold: &mut Fold, end: LineNr) {
     let end = end + 1;
-    fold_remove(&mut fold.nested, end - fold.top, MAXLNUM);
+    fold_remove(&mut fold.nested, LineNr::new(end - fold.top), MAXLNUM);
     fold.len = end - fold.top;
 }
 
@@ -469,15 +479,20 @@ pub fn fold_move_range(folds: &mut [Fold], line1: LineNr, line2: LineNr, dest: L
             let ft = fold.top;
             if fold.last() > dest {
                 // 4: the whole move happens inside this one fold.
-                fold_move_range(&mut fold.nested, line1 - ft, line2 - ft, dest - ft);
+                fold_move_range(
+                    &mut fold.nested,
+                    LineNr::new(line1 - ft),
+                    LineNr::new(line2 - ft),
+                    LineNr::new(dest - ft),
+                );
                 return;
             } else if fold.last() > line2 {
                 // 3: shortened by the lines that left it.
                 adjust_fold_list(
                     &mut fold.nested,
-                    line1 - ft,
-                    line2 - ft,
-                    LINES_DELETED,
+                    LineNr::new(line1 - ft),
+                    LineNr::new(line2 - ft),
+                    LINES_DELETED.get(),
                     -range_len,
                 );
                 fold.len -= range_len;
@@ -514,9 +529,9 @@ pub fn fold_move_range(folds: &mut [Fold], line1: LineNr, line2: LineNr, dest: L
         let ft = fold.top;
         adjust_fold_list(
             &mut fold.nested,
-            line2 + 1 - ft,
-            dest - ft,
-            LINES_DELETED,
+            LineNr::new(line2 + 1 - ft),
+            LineNr::new(dest - ft),
+            LINES_DELETED.get(),
             -move_len,
         );
         fold.len -= move_len;
@@ -571,7 +586,10 @@ pub(super) fn fold_merge(folds: &mut Vec<Fold>, i: usize) {
 fn merge_into(first: &mut Fold, second: &mut Fold) {
     // If the last fold nested in `first` touches the first one nested in
     // `second`, those two merge as well.
-    if let (Ok(a), Ok(b)) = (find(&first.nested, first.len - 1), find(&second.nested, 0)) {
+    if let (Ok(a), Ok(b)) = (
+        find(&first.nested, LineNr::new(first.len - 1)),
+        find(&second.nested, LineNr::ZERO),
+    ) {
         let mut touching = second.nested.remove(b);
         merge_into(&mut first.nested[a], &mut touching);
         fold_changed.set(true);

@@ -148,12 +148,12 @@ fn cbuffer_process_args(excmd: &mut ExArg) -> Option<Buf> {
     }
 
     if excmd.addr_count == 0 {
-        excmd.line1 = 1;
+        excmd.line1 = LineNr::ONE;
         excmd.line2 = buf.b_ml.ml_line_count;
     }
-    if excmd.line1 < 1
+    if excmd.line1 < LineNr::ONE
         || excmd.line1 > buf.b_ml.ml_line_count
-        || excmd.line2 < 1
+        || excmd.line2 < LineNr::ONE
         || excmd.line2 > buf.b_ml.ml_line_count
     {
         qf_emsg(e_invrange);

@@ -217,7 +217,7 @@ pub(crate) fn refresh_screen(mut term: Term, buffer: Buf) {
 
     let first_linenr = row_to_linenr(term, term.invalid_start);
     for (offset, row) in (term.invalid_start..term.invalid_end).enumerate() {
-        let linenr = (first_linenr + offset as c_int) as LineNr;
+        let linenr = LineNr::new(first_linenr + offset as c_int);
         fetch_row(term, row, width);
         let text = crate::cstr::in_bytes(&term.textbuf);
         // Past the end of the buffer means the terminal is still filling
@@ -232,12 +232,19 @@ pub(crate) fn refresh_screen(mut term: Term, buffer: Buf) {
     }
 
     term.old_height = height;
-    let change_start = row_to_linenr(term, term.invalid_start) as LineNr;
-    let change_end = change_start + changed as LineNr;
+    let change_start = LineNr::new(row_to_linenr(term, term.invalid_start));
+    let change_end = change_start + changed;
     clear_invalid(term);
     // Reports the lines replaced and appended above.
-    let added = added as LineNr;
-    changed_lines(buffer, change_start, 0 as ColNr, change_end, added, true);
+    let added = LineNr::new(added);
+    changed_lines(
+        buffer,
+        change_start,
+        0 as ColNr,
+        change_end,
+        added.get(),
+        true,
+    );
 }
 
 /// Reset the damaged-row range to "nothing damaged" — an empty range that
@@ -264,9 +271,9 @@ pub(crate) fn adjust_topline_cursor(term: Term, mut buffer: Buf, added: c_int) {
             terminal_check_cursor(term);
             continue;
         }
-        if ml_end == wp.w_cursor.lnum + added as LineNr {
+        if ml_end == wp.w_cursor.lnum + added {
             wp.w_cursor.lnum = ml_end;
-            let topline = (wp.w_cursor.lnum - wp.w_view_height as LineNr + 1).max(1);
+            let topline = (wp.w_cursor.lnum - wp.w_view_height + 1).max(LineNr::ONE);
             // SAFETY: a window of the current tab page's own list.
             set_topline(wp, topline);
         } else {
@@ -279,11 +286,11 @@ pub(crate) fn adjust_topline_cursor(term: Term, mut buffer: Buf, added: c_int) {
 
     // Windows are not the only things remembering a line: the buffer's own
     // last-cursor mark and the per-window info follow too.
-    if ml_end == buffer.b_last_cursor.mark.lnum + added as LineNr {
+    if ml_end == buffer.b_last_cursor.mark.lnum + added {
         buffer.b_last_cursor.mark.lnum = ml_end;
     }
     for wip in buffer.b_wininfo.iter_mut() {
-        if ml_end == wip.wi_mark.mark.lnum + added as LineNr {
+        if ml_end == wip.wi_mark.mark.lnum + added {
             wip.wi_mark.mark.lnum = ml_end;
         }
     }

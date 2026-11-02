@@ -45,7 +45,10 @@ pub(crate) struct RegionEnd {
 impl RegionEnd {
     /// The "no end in this line" answer.
     const fn none() -> Self {
-        let zero = LPos { lnum: 0, col: 0 };
+        let zero = LPos {
+            lnum: LineNr::ZERO,
+            col: 0,
+        };
         RegionEnd {
             m_endpos: zero,
             hl_endpos: zero,
@@ -320,8 +323,14 @@ impl SynState {
 pub(crate) const fn empty_regmmatch() -> RegMMatch {
     RegMMatch {
         regprog: None,
-        startpos: [LPos { lnum: 0, col: 0 }; 10],
-        endpos: [LPos { lnum: 0, col: 0 }; 10],
+        startpos: [LPos {
+            lnum: LineNr::ZERO,
+            col: 0,
+        }; 10],
+        endpos: [LPos {
+            lnum: LineNr::ZERO,
+            col: 0,
+        }; 10],
         rmm_matchcol: 0,
         rmm_ic: 0,
         rmm_maxcol: 0,
@@ -339,7 +348,7 @@ pub(crate) fn limit_pos(pos: &mut LPos, limit: LPos) {
 
 /// [`limit_pos`], but a `pos` of line 0 -- "not set" -- takes the limit.
 pub(crate) fn limit_pos_zero(pos: &mut LPos, limit: LPos) {
-    if pos.lnum == 0 {
+    if pos.lnum == LineNr::ZERO {
         *pos = limit;
     } else {
         limit_pos(pos, limit);
@@ -501,7 +510,7 @@ impl SynState {
                 time.slowest = took;
             }
             time.count += 1;
-            if r > 0 {
+            if r > LineNr::ZERO {
                 time.match_0 += 1;
             }
         }
@@ -516,9 +525,9 @@ impl SynState {
             );
         }
 
-        if r > 0 {
-            regmatch.startpos[0].lnum += lnum;
-            regmatch.endpos[0].lnum += lnum;
+        if r > LineNr::ZERO {
+            regmatch.startpos[0].lnum += lnum.get();
+            regmatch.endpos[0].lnum += lnum.get();
             return true;
         }
         false

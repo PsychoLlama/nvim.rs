@@ -23,9 +23,9 @@ use crate::types::{ColNr, LineNr, OptMagic};
 use core::ffi::c_int;
 
 pub(crate) static highlight_match: GlobalCell<bool> = GlobalCell::new(false);
-pub(crate) static search_match_lines: GlobalCell<LineNr> = GlobalCell::new(0);
+pub(crate) static search_match_lines: GlobalCell<i32> = GlobalCell::new(0);
 pub(crate) static search_match_endcol: GlobalCell<ColNr> = GlobalCell::new(0);
-pub(crate) static search_first_line: GlobalCell<LineNr> = GlobalCell::new(0 as LineNr);
+pub(crate) static search_first_line: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
 /// `MAXLNUM`, spelled as the type's own maximum: the two are the same
 /// number, and saying it this way needs no cast.
 pub(crate) static search_last_line: GlobalCell<LineNr> = GlobalCell::new(LineNr::MAX);

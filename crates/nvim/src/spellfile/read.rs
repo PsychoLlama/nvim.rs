@@ -193,7 +193,7 @@ fn load_spl(
     estack_push(
         ETYPE_SPELL,
         crate::types::FrameName::owned(fname),
-        0 as LineNr,
+        LineNr::ZERO,
     );
     *did_estack_push = true;
 
@@ -440,7 +440,7 @@ fn read_sug_body(spl: &mut Spl, slang: &mut SpellLang) -> SplResult<()> {
                 break;
             }
         }
-        let at = wordnr as LineNr;
+        let at = LineNr::new(wordnr);
         let appended = ml_append_buf_terminated(sugbuf, at, &line, true);
         if appended.is_err() {
             return Err(SpellReadError::Other);

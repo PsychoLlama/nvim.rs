@@ -46,7 +46,7 @@ fn check_lnums_both(do_curwin: bool, nested: bool) {
         }
         if !nested {
             wp.w_save_cursor.w_cursor_save = wp.w_cursor;
-            wp.w_save_cursor.w_topline_save = wp.w_topline as c_int;
+            wp.w_save_cursor.w_topline_save = wp.w_topline.get();
         }
         let mut need_adjust = wp.w_cursor.lnum > line_count;
         if need_adjust {
@@ -60,7 +60,7 @@ fn check_lnums_both(do_curwin: bool, nested: bool) {
             wp.w_topline = line_count;
         }
         if need_adjust || !nested {
-            wp.w_save_cursor.w_topline_corr = wp.w_topline as c_int;
+            wp.w_save_cursor.w_topline_corr = wp.w_topline.get();
         }
     }
 }
@@ -81,16 +81,16 @@ pub fn reset_lnums() {
         // Restore the value if it was changed by `check_lnums` and has not been
         // changed since.
         if equalpos(wp.w_save_cursor.w_cursor_corr, wp.w_cursor)
-            && wp.w_save_cursor.w_cursor_save.lnum != 0 as LineNr
+            && wp.w_save_cursor.w_cursor_save.lnum != LineNr::ZERO
         {
             wp.w_cursor = wp.w_save_cursor.w_cursor_save;
         }
-        if wp.w_save_cursor.w_topline_corr as LineNr == wp.w_topline
+        if LineNr::new(wp.w_save_cursor.w_topline_corr) == wp.w_topline
             && wp.w_save_cursor.w_topline_save != 0
         {
-            wp.w_topline = wp.w_save_cursor.w_topline_save as LineNr;
+            wp.w_topline = LineNr::new(wp.w_save_cursor.w_topline_save);
         }
-        if wp.w_save_cursor.w_topline_save as LineNr > wp.buffer().line_count() {
+        if LineNr::new(wp.w_save_cursor.w_topline_save) > wp.buffer().line_count() {
             wp.w_valid.clear(WinValid::TOPLINE);
         }
     }

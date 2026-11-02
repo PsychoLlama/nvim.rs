@@ -342,12 +342,13 @@ pub(crate) fn parse_command_modifiers(
                             0,
                             1,
                             errormsg,
-                        ) as c_int;
+                        )
+                        .get();
                         let Some(cursor) = cursor else {
                             return Err(Failed);
                         };
                         excmd.line.cmd = cursor;
-                        if tabnr == MAXLNUM {
+                        if tabnr == MAXLNUM.get() {
                             cm.cmod_tab = tab_index(TabPage::current()) + 1;
                         } else {
                             if tabnr < 0 || tabnr > current_tab_nr(None) {

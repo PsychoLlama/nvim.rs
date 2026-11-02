@@ -46,14 +46,14 @@ pub(super) fn prepare_assert_error() -> Vec<u8> {
     let lnum = sourcing_lnum();
     if let Some(source) = &source {
         message.extend_from_slice(source.as_cstr().to_bytes());
-        if lnum > 0 {
+        if lnum > LineNr::ZERO {
             message.push(b' ');
         }
     }
-    if lnum > 0 {
+    if lnum > LineNr::ZERO {
         message.extend_from_slice(format!("line {lnum}").as_bytes());
     }
-    if source.is_some() || lnum > 0 {
+    if source.is_some() || lnum > LineNr::ZERO {
         push_lit(&mut message, c": ");
     }
     message

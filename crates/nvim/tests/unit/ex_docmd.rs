@@ -160,8 +160,8 @@ fn a_range_fills_both_endpoints_and_counts_them() {
         parse(&editor, "2,4delete"),
         Ok(Parsed {
             cmdidx: "delete",
-            line1: 2,
-            line2: 4,
+            line1: LineNr::new(2),
+            line2: LineNr::new(4),
             addr_count: 2,
             forceit: false,
             regname: None,
@@ -171,12 +171,21 @@ fn a_range_fills_both_endpoints_and_counts_them() {
     );
     // One address sets both ends.
     let one = parse(&editor, "3print").unwrap();
-    assert_eq!((one.line1, one.line2, one.addr_count), (3, 3, 1));
+    assert_eq!(
+        (one.line1.get(), one.line2.get(), one.addr_count),
+        (3, 3, 1)
+    );
     // `%` is the whole buffer, `$` the last line, `.` the cursor's.
     let whole = parse(&editor, "%print").unwrap();
-    assert_eq!((whole.line1, whole.line2, whole.addr_count), (1, 5, 2));
+    assert_eq!(
+        (whole.line1.get(), whole.line2.get(), whole.addr_count),
+        (1, 5, 2)
+    );
     let last = parse(&editor, "$print").unwrap();
-    assert_eq!((last.line1, last.line2, last.addr_count), (5, 5, 1));
+    assert_eq!(
+        (last.line1.get(), last.line2.get(), last.addr_count),
+        (5, 5, 1)
+    );
     // No range at all leaves the count at zero and both ends at the cursor.
     let none = parse(&editor, "print").unwrap();
     assert_eq!(none.addr_count, 0);
@@ -189,9 +198,9 @@ fn an_offset_and_a_search_are_addresses_too() {
     run(&editor, LINES);
     run(&editor, "1");
     let offset = parse(&editor, ".+2print").unwrap();
-    assert_eq!((offset.line1, offset.line2), (3, 3));
+    assert_eq!((offset.line1.get(), offset.line2.get()), (3, 3));
     let search = parse(&editor, "/four/print").unwrap();
-    assert_eq!((search.line1, search.line2), (4, 4));
+    assert_eq!((search.line1.get(), search.line2.get()), (4, 4));
     // The parse puts the cursor and the last search pattern back.
     assert_eq!(num(&editor, "line('.')"), 1);
 }
@@ -214,7 +223,7 @@ fn a_register_and_a_count_follow_the_argument() {
     let got = parse(&editor, "2delete x 3").unwrap();
     assert_eq!(got.regname, Some('x'));
     // A count after the register is a *number of lines* from `line1`.
-    assert_eq!((got.line1, got.line2), (2, 4));
+    assert_eq!((got.line1.get(), got.line2.get()), (2, 4));
     assert_eq!(parse(&editor, "2delete").unwrap().regname, None);
 }
 
@@ -334,21 +343,33 @@ fn a_visual_range_survives_the_modifiers_it_was_typed_in_front_of() {
     // is still seen, and then has to shuffle the modifier out of the way so
     // the range reaches the command. Both have to survive it.
     let got = parse(&editor, "'<,'>keepjumps print").unwrap();
-    assert_eq!((got.cmdidx, got.line1, got.line2), ("print", 2, 4));
+    assert_eq!(
+        (got.cmdidx, got.line1.get(), got.line2.get()),
+        ("print", 2, 4)
+    );
     let (flags, _) = parse_mods(&editor, "'<,'>keepjumps print");
     assert!(flags.has(CmdModFlags::KEEPJUMPS));
     // Two modifiers: the shuffle moves both, and the range still lands
     // immediately in front of the command word.
     let got = parse(&editor, "'<,'>keepjumps keepmarks print").unwrap();
-    assert_eq!((got.cmdidx, got.line1, got.line2), ("print", 2, 4));
+    assert_eq!(
+        (got.cmdidx, got.line1.get(), got.line2.get()),
+        ("print", 2, 4)
+    );
     // No modifier at all: the scan puts the cursor back where it found it
     // rather than moving anything.
     let got = parse(&editor, "'<,'>print").unwrap();
-    assert_eq!((got.cmdidx, got.line1, got.line2), ("print", 2, 4));
+    assert_eq!(
+        (got.cmdidx, got.line1.get(), got.line2.get()),
+        ("print", 2, 4)
+    );
     // A `'<,'>` with nothing behind it is not stepped over at all: it is
     // a bare range, which `parse_cmdline` reads without finding a command.
     let got = parse(&editor, "'<,'>").unwrap();
-    assert_eq!((got.cmdidx, got.line1, got.line2), ("SIZE", 2, 4));
+    assert_eq!(
+        (got.cmdidx, got.line1.get(), got.line2.get()),
+        ("SIZE", 2, 4)
+    );
 }
 
 #[test]
@@ -371,7 +392,10 @@ fn a_user_command_parses_to_the_user_row() {
     );
     let got = parse(&editor, "2,4Rec! y one two").unwrap();
     assert_eq!(got.cmdidx, "USER");
-    assert_eq!((got.line1, got.line2, got.addr_count), (2, 4, 2));
+    assert_eq!(
+        (got.line1.get(), got.line2.get(), got.addr_count),
+        (2, 4, 2)
+    );
     assert!(got.forceit);
     assert_eq!(got.regname, Some('y'));
     assert_eq!(got.arg, "one two");

@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::charset::{Str2NrBases, str2nr_in};
+use crate::narrow::number_as_int;
 use crate::semsg;
 use crate::strings::format_float_g;
 use crate::winlayer::Buf;
@@ -76,8 +77,8 @@ pub fn tv_get_bool_chk(tv: &TypVal) -> Result<VarNumber, Unconvertible> {
 /// through `var2fpos`.
 pub fn tv_get_lnum(tv: &TypVal) -> LineNr {
     let did_emsg_before = did_emsg.get();
-    let mut lnum = tv_get_bool(tv) as LineNr;
-    if lnum <= 0 && did_emsg_before == did_emsg.get() && tv.v_type() != VAR_NUMBER {
+    let mut lnum = LineNr::new(number_as_int(tv_get_bool(tv)));
+    if lnum <= LineNr::ZERO && did_emsg_before == did_emsg.get() && tv.v_type() != VAR_NUMBER {
         // No valid number, try using same function as line() does.
         let mut fnum = 0;
         let fp = var2fpos(tv, true, &mut fnum, false, Win::current());
@@ -95,7 +96,7 @@ pub fn tv_get_lnum_buf(tv: &TypVal, buffer: Option<Buf>) -> LineNr {
     {
         return buffer.b_ml.ml_line_count;
     }
-    tv_get_bool(tv) as LineNr
+    LineNr::new(number_as_int(tv_get_bool(tv)))
 }
 
 /// `tv` as a float, raising an error and answering 0.0 for a value that has no

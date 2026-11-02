@@ -77,7 +77,7 @@ pub fn do_sub_msg(count_only: bool) -> bool {
     // the command was typed by the user or more than one line changed, and
     // messages are not disabled.
     let worth_reporting = SUB_NSUBS.get() as OptInt > p_report()
-        && (KeyTyped.get() || SUB_NLINES.get() > 1 as LineNr || p_report() < 1 as OptInt);
+        && (KeyTyped.get() || SUB_NLINES.get() > 1 || p_report() < 1 as OptInt);
     if (worth_reporting || count_only) && messaging() {
         let forms = report_forms(count_only);
         let nsubs = SUB_NSUBS.get();
@@ -136,17 +136,17 @@ impl PreviewBuf {
     /// buffer, and answer where the match sits in what was written.
     fn add_match(&mut self, orig_buf: Buf, m: SubResult) -> (LPos, LPos) {
         let mut p_start = LPos {
-            lnum: 0 as LineNr,
+            lnum: LineNr::ZERO,
             col: m.start.col,
         };
         let mut p_end = LPos {
-            lnum: 0 as LineNr,
+            lnum: LineNr::ZERO,
             col: m.end.col,
         };
         // You Might Gonna Need It.
         buf_ensure_loaded(self.buf);
 
-        let mut next_linenr = if m.pre_match == 0 as LineNr {
+        let mut next_linenr = if m.pre_match == LineNr::ZERO {
             m.start.lnum
         } else {
             m.pre_match
@@ -161,10 +161,10 @@ impl PreviewBuf {
 
         while next_linenr <= m.end.lnum {
             if next_linenr == m.start.lnum {
-                p_start.lnum = self.linenr_preview + 1 as LineNr;
+                p_start.lnum = self.linenr_preview + 1;
             }
             if next_linenr == m.end.lnum {
-                p_end.lnum = self.linenr_preview + 1 as LineNr;
+                p_end.lnum = self.linenr_preview + 1;
             }
             self.add_line(orig_buf, next_linenr);
             next_linenr += 1;
@@ -175,7 +175,7 @@ impl PreviewBuf {
 
     /// Put `"|lnum| line"` into the scratch and append it to the preview.
     fn add_line(&mut self, orig_buf: Buf, lnum: LineNr) {
-        let line = if lnum == orig_buf.b_ml.ml_line_count + 1 as LineNr {
+        let line = if lnum == orig_buf.b_ml.ml_line_count + 1 {
             Vec::new()
         } else {
             let line = Lines::in_buffer(orig_buf).line(lnum).to_vec();
@@ -201,8 +201,8 @@ impl PreviewBuf {
         text.truncate(self.line_size - 1);
         self.scratch[..text.len()].copy_from_slice(&text);
         self.scratch[text.len()] = 0;
-        if self.linenr_preview == 0 as LineNr {
-            let _ = ml_replace_buf_text(self.buf, 1 as LineNr, &text);
+        if self.linenr_preview == LineNr::ZERO {
+            let _ = ml_replace_buf_text(self.buf, LineNr::ONE, &text);
         } else {
             // The whole `line_size`, as upstream appends it: past the
             // terminator just written may lie the previous line's tail.
@@ -272,14 +272,14 @@ pub(crate) fn show_sub(
             let mut col_width = 0 as c_int;
             if let Some(last) = preview_lines.subresults.last() {
                 let highest_lnum = last.start.lnum.max(last.end.lnum);
-                debug_assert!(highest_lnum > 0 as LineNr, "highest_lnum > 0");
+                debug_assert!(highest_lnum > LineNr::ZERO, "highest_lnum > 0");
                 col_width = f64::from(highest_lnum).log10() as c_int + 1 as c_int + 3 as c_int;
             }
             PreviewBuf {
                 buf,
                 col_width,
-                linenr_preview: 0 as LineNr,
-                linenr_origbuf: 0 as LineNr,
+                linenr_preview: LineNr::ZERO,
+                linenr_origbuf: LineNr::ZERO,
                 scratch: Vec::new(),
                 line_size: 0,
             }

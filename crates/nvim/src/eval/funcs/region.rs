@@ -35,7 +35,7 @@ use core::ffi::{CStr, c_int};
 use crate::winlayer::{Buf, Win};
 /// The zeroed position every local in this module starts from.
 const NOWHERE: Pos = Pos {
-    lnum: 0,
+    lnum: LineNr::ZERO,
     col: 0,
     coladd: 0,
 };
@@ -243,7 +243,7 @@ fn parse_type(spec: &CStr) -> Option<(MotionType, c_int)> {
 /// Validate one corner against the buffer, resolving `MAXCOL` to the end of
 /// its line.
 fn check_corner(buffer: Buf, p: &mut Pos) -> Option<()> {
-    if p.lnum < 1 || p.lnum > buffer.b_ml.ml_line_count {
+    if p.lnum < LineNr::ONE || p.lnum > buffer.b_ml.ml_line_count {
         semsg!("E966: Invalid line number: {}", p.lnum);
         return None;
     }
@@ -321,7 +321,7 @@ pub fn f_getregion(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let Some(r) = resolve(args, result) else {
         return;
     };
-    for lnum in r.p1.lnum..=r.p2.lnum {
+    for lnum in r.p1.lnum.through(r.p2.lnum) {
         let bd = if r.region_type == kMTBlockWise {
             Some(block_def(&r.op, lnum))
         } else if r.region_type == kMTLineWise || (r.p1.lnum < lnum && lnum < r.p2.lnum) {
@@ -353,7 +353,7 @@ pub fn f_getregionpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     let allow_eol = args.get(2).is_some_and(|arg| arg.v_type() == VAR_DICT)
         && dict_get_bool(args[2].dict_ref(), b"eol", 0) != 0;
 
-    for lnum in r.p1.lnum..=r.p2.lnum {
+    for lnum in r.p1.lnum.through(r.p2.lnum) {
         let (mut ret_p1, mut ret_p2) = line_corners(&r, lnum);
         let line_len = Lines::current().line(lnum).len() as ColNr;
         clamp_corners(&mut ret_p1, &mut ret_p2, line_len, allow_eol);
@@ -457,7 +457,7 @@ fn add_regionpos_range(result: &mut TypVal, p1: Pos, p2: Pos) {
         let mut pos = tv_list_alloc(4);
         let l = &mut *pos;
         l.push_number(Buf::current().handle.get() as VarNumber);
-        l.push_number(p.lnum as VarNumber);
+        l.push_number(i64::from(p.lnum));
         l.push_number(p.col as VarNumber);
         l.push_number(p.coladd as VarNumber);
         pair.edit().push_list(Some(pos));

@@ -16,6 +16,7 @@
 )]
 
 use crate::types::Handle;
+use crate::types::LineNr;
 use core::ffi::{CStr, c_int};
 
 use super::TRY_STATE_INIT;
@@ -51,7 +52,7 @@ const FLAG_KEYS: [(&CStr, CmdModFlags); 11] = [
 const WIN_EXECUTE_INIT: WinExecute = WinExecute {
     wp: None,
     curpos: Pos {
-        lnum: 0,
+        lnum: LineNr::ZERO,
         col: 0,
         coladd: 0,
     },

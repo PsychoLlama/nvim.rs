@@ -96,9 +96,9 @@ fn start_arrow_common(end_insert_pos: Option<InsertEnd>, end_change: bool) {
 ///
 /// It may be skipped again, so the line number is cleared first.
 pub(crate) fn check_spell_redraw() {
-    if spell_redraw_lnum.get() != 0 {
+    if spell_redraw_lnum.get() != LineNr::ZERO {
         let lnum = spell_redraw_lnum.get();
-        spell_redraw_lnum.set(0);
+        spell_redraw_lnum.set(LineNr::ZERO);
         redraw_win_line(Win::current(), lnum);
     }
 }

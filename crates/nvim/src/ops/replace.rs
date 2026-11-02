@@ -46,7 +46,7 @@ pub(crate) fn pbyte(mut pos: Pos, c: c_int) {
         *byte = c as u8;
     }
     if curbuf_splice_pending.get() == 0 {
-        let row = pos.lnum as c_int - 1;
+        let row = pos.lnum.get() - 1;
         extmark_splice_cols(Buf::current(), row, pos.col, 1, 1, kExtmarkUndo);
     }
 }
@@ -222,7 +222,7 @@ fn replace_block_line(op: &mut OpArg, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr
     drop(splice);
     let old_bytes = bd.textlen as BCount;
     let new_bytes = (newrows + newcols) as BCount;
-    let row = baselnum as c_int - 1;
+    let row = baselnum.get() - 1;
     let (col, len) = (bd.textcol, bd.textlen);
     let op = kExtmarkUndo;
     extmark_splice(

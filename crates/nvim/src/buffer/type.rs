@@ -211,7 +211,7 @@ pub fn buf_is_empty(buffer: Buf) -> bool {
     let b = buffer;
     // SAFETY: line 1 exists in every buffer, and `ml_get_buf` answers a
     // NUL-terminated line.
-    b.b_ml.ml_line_count == 1 as LineNr && buffer.lines().line(1).is_empty()
+    b.b_ml.ml_line_count == LineNr::ONE && buffer.lines().line(LineNr::ONE).is_empty()
 }
 
 pub fn buf_inc_changedtick(buffer: Buf) {

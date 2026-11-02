@@ -42,7 +42,7 @@ pub(super) fn spell_read_wordfile(spin: &mut SpellInfo, fname: &CStr) -> Result<
     spell_message_fmt(&*spin, format_args!("Reading word file {name}..."));
 
     let mut rline: Vec<u8> = Vec::new();
-    let mut lnum: LineNr = 0;
+    let mut lnum: LineNr = LineNr::ZERO;
     let mut retval = Ok(());
     let mut did_word = false;
     let mut non_ascii = 0;

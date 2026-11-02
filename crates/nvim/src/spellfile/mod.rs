@@ -732,11 +732,7 @@ pub fn ex_spell(excmd: &mut ExArg) {
     };
     // `:N spellgood` files the word in the Nth 'spellfile'; `!` means the
     // internal word list instead.
-    let which = if forceit {
-        0
-    } else {
-        line2 as ::core::ffi::c_int
-    };
+    let which = if forceit { 0 } else { line2.get() };
 
     let undo = cmdidx == CmdIdx::spellundo;
     spell_add_word(&word, kind as SpellAddType, which, undo);

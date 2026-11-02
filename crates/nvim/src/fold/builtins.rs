@@ -38,9 +38,9 @@ use crate::types::Vv;
 /// "foldclosed()" and "foldclosedend()" functions
 pub(super) fn foldclosed_both(args: &[TypVal], result: &mut TypVal, end: bool) {
     let (rv, lnum) = (result, tv_get_lnum(&args[0]));
-    if lnum >= 1 && lnum <= Buf::current().b_ml.ml_line_count {
-        let mut first: LineNr = 0;
-        let mut last: LineNr = 0;
+    if lnum >= LineNr::ONE && lnum <= Buf::current().b_ml.ml_line_count {
+        let mut first: LineNr = LineNr::ZERO;
+        let mut last: LineNr = LineNr::ZERO;
         let win = Win::current();
         let closed = has_folding_win(win, lnum, Some(&mut first), Some(&mut last), false, None);
         if closed {
@@ -64,7 +64,7 @@ pub fn f_foldclosedend(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
 /// "foldlevel()" function
 pub fn f_foldlevel(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let (rv, lnum) = (result, tv_get_lnum(&args[0]));
-    if lnum >= 1 && lnum <= Buf::current().b_ml.ml_line_count {
+    if lnum >= LineNr::ONE && lnum <= Buf::current().b_ml.ml_line_count {
         rv.write_number(VarNumber::from(fold_level(lnum)));
     }
 }
@@ -81,10 +81,10 @@ pub fn f_foldtext(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         vim_var_string(dash).unwrap_or_else(ThinCString::empty),
     );
     let (foldstart, foldend) = (
-        LineNr::try_from(foldstart).unwrap_or(0),
+        LineNr::try_from(foldstart).unwrap_or(LineNr::ZERO),
         LineNr::try_from(foldend).unwrap_or(LineNr::MAX),
     );
-    if !(foldstart > 0 && foldend <= Buf::current().b_ml.ml_line_count) {
+    if !(foldstart > LineNr::ZERO && foldend <= Buf::current().b_ml.ml_line_count) {
         return;
     }
     // The first line of the fold that has anything on it.
@@ -146,7 +146,7 @@ pub fn f_foldtextresult(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
         return;
     }
     entered.set(true);
-    let lnum = tv_get_lnum(&args[0]).max(0);
+    let lnum = tv_get_lnum(&args[0]).max(LineNr::ZERO);
     let win = Win::current();
     let info = fold_info(win, lnum);
     if info.fi_lines > 0 {

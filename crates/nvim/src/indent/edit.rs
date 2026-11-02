@@ -68,8 +68,8 @@ pub fn op_reindent(op: &OpArg, how: Indenter) {
         emsg(gettext(e_modifiable));
         return;
     }
-    let mut first_changed: LineNr = 0;
-    let mut last_changed: LineNr = 0;
+    let mut first_changed: LineNr = LineNr::ZERO;
+    let mut last_changed: LineNr = LineNr::ZERO;
     // Undo once for all the lines: much faster than per line, especially
     // when undoing.
     let mut i = 0;
@@ -82,13 +82,10 @@ pub fn op_reindent(op: &OpArg, how: Indenter) {
     )
     .is_ok()
     {
-        i = (line_count - 1) as c_int;
+        i = line_count - 1;
         while i >= 0 && !got_int.get() {
             // A slow thing to do, so say so — otherwise it looks hung.
-            if i > 1
-                && (i % 50 == 0 || i as LineNr == line_count - 1)
-                && line_count as OptInt > p_report()
-            {
+            if i > 1 && (i % 50 == 0 || i == line_count - 1) && i64::from(line_count) > p_report() {
                 // Restore the cursor first, so the `msg_show` callback
                 // does not redraw `curwin`.
                 let save_lnum = win.w_cursor.lnum;
@@ -102,8 +99,7 @@ pub fn op_reindent(op: &OpArg, how: Indenter) {
             }
             // Vi-compatible: with Lisp indenting the first line is not
             // indented, unless it is the only line.
-            let lisp_first =
-                i as LineNr == line_count - 1 && line_count != 1 && how == Indenter::Lisp;
+            let lisp_first = i == line_count - 1 && line_count != 1 && how == Indenter::Lisp;
             if !lisp_first {
                 // A blank line gets no indent rather than the engine's.
                 let blank = {
@@ -113,7 +109,7 @@ pub fn op_reindent(op: &OpArg, how: Indenter) {
                 };
                 let amount = if blank { 0 } else { how.amount() };
                 if amount >= 0 && set_indent(amount, 0) {
-                    if first_changed == 0 {
+                    if first_changed == LineNr::ZERO {
                         first_changed = win.w_cursor.lnum;
                     }
                     last_changed = win.w_cursor.lnum;
@@ -130,7 +126,7 @@ pub fn op_reindent(op: &OpArg, how: Indenter) {
     // Mark the changed lines for redraw. Under Visual highlighting that
     // has to reach the last line even when nothing changed, so that the
     // highlight goes away.
-    if last_changed != 0 {
+    if last_changed != LineNr::ZERO {
         let end = if op.is_visual {
             start_lnum + line_count
         } else {
@@ -140,8 +136,8 @@ pub fn op_reindent(op: &OpArg, how: Indenter) {
     } else if op.is_visual {
         redraw_curbuf_later(UPD_INVERTED);
     }
-    if line_count as OptInt > p_report() {
-        let done = (line_count - (i as LineNr + 1)) as c_int;
+    if i64::from(line_count) > p_report() {
+        let done = line_count - (i + 1);
         indent_progress(
             ngettext(
                 c"%ld line indented ",
@@ -215,7 +211,7 @@ fn si_should_shift_back() -> bool {
     let old_pos = win.w_cursor;
     let here = get_indent();
     let mut lines = Lines::current();
-    while win.w_cursor.lnum > 1 {
+    while win.w_cursor.lnum > LineNr::ONE {
         win.w_cursor.lnum -= 1;
         let line = lines.line(win.w_cursor.lnum);
         let first = byte_at(line, skip::white(line));
@@ -246,7 +242,7 @@ pub fn ins_try_si(c: c_int) {
         } else if win.w_cursor.col > 0 {
             let shift = !(c == '{' as c_int
                 && can_si_back.get()
-                && win.w_cursor.lnum > 1
+                && win.w_cursor.lnum > LineNr::ONE
                 && !si_should_shift_back());
             if shift {
                 shift_line(true, false, 1, true);
@@ -303,7 +299,7 @@ fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
         let mut lines = Lines::current();
         let line = lines.line(win.w_cursor.lnum);
         if !line.is_empty() {
-            let (mut csarg, cstype) = CharsizeArg::new(win, 0, line);
+            let (mut csarg, cstype) = CharsizeArg::new(win, LineNr::ZERO, line);
             let mut at = 0;
             let mut chr = c_char_info(line, 0);
             loop {
@@ -387,7 +383,7 @@ fn vreplace_restore(orig_line: XString, orig_col: ColNr) {
     let delta = orig_col as c_int - new_col as c_int;
     extmark_splice_cols(
         Buf::current(),
-        win.w_cursor.lnum as c_int - 1,
+        win.w_cursor.lnum.get() - 1,
         new_col,
         if delta < 0 { -delta as ColNr } else { 0 },
         if delta > 0 { delta as ColNr } else { 0 },
@@ -669,11 +665,11 @@ impl Retab {
         new_line.extend((0..len).map(|i| if i < num_tabs { b'\t' } else { b' ' }));
         new_line.extend_from_slice(&scan.text[scan.col as usize..]);
         if ml_replace_owned(scan.lnum, XString::from_bytes(&new_line)).is_ok() {
-            let lnum = scan.lnum as c_int - 1;
+            let lnum = scan.lnum.get() - 1;
             let (old, new) = (old_len, new_len - 1);
             extmark_splice_cols(buf, lnum, 0, old, new, kExtmarkUndo);
         }
-        if self.first_line == 0 {
+        if self.first_line == LineNr::ZERO {
             self.first_line = scan.lnum;
         }
         self.last_line = scan.lnum;
@@ -776,8 +772,8 @@ pub fn ex_retab(excmd: &mut ExArg) {
         num_spaces: 0,
         start_col: 0,
         start_vcol: 0,
-        first_line: 0,
-        last_line: 0,
+        first_line: LineNr::ZERO,
+        last_line: LineNr::ZERO,
     };
     let mut lnum = excmd.line1;
     while !got_int.get() && lnum <= excmd.line2 {
@@ -799,7 +795,7 @@ pub fn ex_retab(excmd: &mut ExArg) {
     if !unchanged {
         redraw_curbuf_later(UPD_NOT_VALID);
     }
-    if retab.first_line != 0 {
+    if retab.first_line != LineNr::ZERO {
         changed_lines(buf, retab.first_line, 0, retab.last_line + 1, 0, true);
     }
     win.w_onebuf_opt.wo_list = save_list; // restore 'list'

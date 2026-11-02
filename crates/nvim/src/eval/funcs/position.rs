@@ -25,6 +25,7 @@ use crate::search::{
     set_csearch_direction, set_csearch_until, set_last_csearch,
 };
 use crate::semsg;
+use crate::types::LineNr;
 use crate::types::{
     ColNr, Direction, EvalFuncData, List, Pos, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber,
 };
@@ -39,7 +40,7 @@ const END_OF_LINE: ColNr = MAXCOL as ColNr;
 
 /// The zeroed position both the getters and the setters start from.
 const NOWHERE: Pos = Pos {
-    lnum: 0,
+    lnum: LineNr::ZERO,
     col: 0,
     coladd: 0,
 };
@@ -50,7 +51,7 @@ pub fn f_byte2line(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(if boff < 0 {
         -1
     } else {
-        ml_find_line_or_offset(Buf::current(), 0, Some(&mut boff), false) as VarNumber
+        ml_find_line_or_offset(Buf::current(), LineNr::ZERO, Some(&mut boff), false) as VarNumber
     });
 }
 
@@ -58,7 +59,7 @@ pub fn f_byte2line(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// past the end. One past the last line is allowed: it is the buffer size.
 pub fn f_line2byte(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let lnum = arg_lnum(&args[0]);
-    let offset = if lnum < 1 || lnum > Buf::current().b_ml.ml_line_count + 1 {
+    let offset = if lnum < LineNr::ONE || lnum > Buf::current().b_ml.ml_line_count + 1 {
         -1
     } else {
         ml_find_line_or_offset(Buf::current(), lnum, None, false) as VarNumber
@@ -200,7 +201,7 @@ pub fn f_line(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             }
         }
     };
-    result.write_number(fp.map_or(0, |fp| fp.lnum as VarNumber));
+    result.write_number(fp.map_or(0, |fp| i64::from(fp.lnum)));
 }
 
 /// `getpos({expr})`.
@@ -259,11 +260,7 @@ fn getpos_both(args: &[TypVal], result: &mut TypVal, getcurpos: bool, charcol: b
         } else {
             fp.col + 1
         };
-        (
-            fp.lnum as VarNumber,
-            col as VarNumber,
-            fp.coladd as VarNumber,
-        )
+        (i64::from(fp.lnum), col as VarNumber, fp.coladd as VarNumber)
     });
     l.push_number(lnum);
     l.push_number(col);
@@ -334,12 +331,12 @@ fn set_cursorpos(args: &[TypVal], result: &mut TypVal, charcol: bool) {
             .is_some_and(|arg| matches!(arg.v_type(), VAR_NUMBER | VAR_STRING))
     {
         let mut lnum = arg_lnum(&args[0]);
-        if lnum < 0 {
+        if lnum < LineNr::ZERO {
             // Note that this reports and then carries on to the range
             // check below.
             let what = msg_cstr(numbuf.string(&args[0]));
             semsg!("E475: Invalid argument: {what}");
-        } else if lnum == 0 {
+        } else if lnum == LineNr::ZERO {
             lnum = Win::current().w_cursor.lnum;
         }
         let mut col = arg_number_chk(&args[1], None) as ColNr;
@@ -357,10 +354,10 @@ fn set_cursorpos(args: &[TypVal], result: &mut TypVal, charcol: bool) {
         return;
     };
 
-    if lnum < 0 || col < 0 || coladd < 0 {
+    if lnum < LineNr::ZERO || col < 0 || coladd < 0 {
         return;
     }
-    if lnum > 0 {
+    if lnum > LineNr::ZERO {
         Win::current().w_cursor.lnum = lnum;
     }
     // The column is one-based on the way in, except for MAXCOL which

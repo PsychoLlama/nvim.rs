@@ -424,7 +424,7 @@ fn replay_change(op: &OpArg, bd: &mut BlockDef, mut pre_textlen: c_int, pre_inde
             };
             let _ = ml_replace_buf_text(Buf::current(), linenr, &line);
             let splice = vpos.coladd + ins_len;
-            let row = linenr as c_int - 1;
+            let row = linenr.get() - 1;
             let buffer = Buf::current();
             extmark_splice_cols(buffer, row, bd.textcol, 0, splice, kExtmarkUndo);
         }

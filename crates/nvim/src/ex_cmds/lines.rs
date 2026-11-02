@@ -66,9 +66,9 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
     // How many lines the copies added before `line1`.
     let mut extra = 0;
     let mut copy = LineCopy::new();
-    for l in line1..=line2 {
+    for l in line1.through(line2) {
         copy.fill_line(l + extra);
-        let _ = ml_append_cstr(dest + l - line1, copy.as_cstr());
+        let _ = ml_append_cstr(LineNr::new(dest + l.get() - line1), copy.as_cstr());
         if dest < line1 {
             extra += 1;
         }
@@ -137,7 +137,7 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
 
     // Now we delete the original text -- webb
     u_save(line1 + extra - 1, line2 + extra + 1)?;
-    for _ in line1..=line2 {
+    for _ in line1.through(line2) {
         let _ = ml_delete_flags(line1 + extra, ML_DEL_MESSAGE as c_int);
     }
 
@@ -148,13 +148,13 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
 
     extmark_move_region(
         Buf::current(),
-        line1 - 1,
+        (line1 - 1).get(),
         0,
         start_byte,
         line2 - line1 + 1,
         0,
         extent_byte,
-        dest + line_off,
+        (dest + line_off).get(),
         0,
         dest_byte + byte_off,
         kExtmarkUndo,

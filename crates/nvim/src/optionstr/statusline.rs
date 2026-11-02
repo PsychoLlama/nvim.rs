@@ -105,7 +105,7 @@ pub(crate) fn did_set_statustabline_rulerformat(
     if rulerformat {
         ru_wid.set(0);
     } else if statuscolumn {
-        wp.w_nrwidth_line_count = 0 as LineNr;
+        wp.w_nrwidth_line_count = LineNr::ZERO;
     }
 
     let (idx, flags) = (args.os_idx, args.os_flags);

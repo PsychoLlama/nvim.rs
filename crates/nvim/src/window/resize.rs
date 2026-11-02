@@ -93,7 +93,7 @@ fn cursor_down(window: Win, n: c_int) {
     cursor_down_inner(window, n, false);
 }
 
-fn cursor_up(window: Win, n: LineNr) {
+fn cursor_up(window: Win, n: i32) {
     cursor_up_inner(window, n, false);
 }
 
@@ -175,7 +175,7 @@ pub(crate) fn fix_cursor(normal: bool) {
     let mut wp = Win::current();
     if skip_win_fix_cursor.get()
         || !wp.w_do_win_fix_cursor
-        || wp.buffer().line_count() < wp.w_view_height as LineNr
+        || wp.buffer().line_count() < LineNr::new(wp.w_view_height)
     {
         return;
     }
@@ -187,17 +187,17 @@ pub(crate) fn fix_cursor(normal: bool) {
     cursor_down(wp, so);
     let top = wp.w_cursor.lnum;
     wp.w_cursor.lnum = wp.w_botline - 1;
-    cursor_up(wp, so as LineNr);
+    cursor_up(wp, so);
     let bot = wp.w_cursor.lnum;
     wp.w_cursor.lnum = lnum;
 
-    let mut nlnum = 0 as LineNr;
+    let mut nlnum = LineNr::ZERO;
     if lnum > bot && wp.w_botline - wp.buffer().line_count() != 1 {
         nlnum = bot;
-    } else if lnum < top && wp.w_topline != 1 {
+    } else if lnum < top && wp.w_topline != LineNr::ONE {
         nlnum = if so == wp.w_view_height / 2 { bot } else { top };
     }
-    if nlnum != 0 {
+    if nlnum != LineNr::ZERO {
         if normal {
             // Save the position for the `''` mark.
             let _ = setmark('\'' as c_int);
@@ -242,11 +242,11 @@ pub(crate) fn to_fraction(window: Win, prev_height: c_int) {
     // buffer fits and its first line is visible.
     if height > 0
         && (window.w_onebuf_opt.wo_scb == 0 || window.is_current())
-        && ((height as LineNr) < window.buffer().line_count() || window.w_topline > 1)
+        && (LineNr::new(height) < window.buffer().line_count() || window.w_topline > LineNr::ONE)
     {
         // Find a `w_topline` that shows the cursor at the same relative
         // position in the window as before (more or less).
-        let mut lnum = window.w_cursor.lnum.max(1); // can be 0 during startup
+        let mut lnum = window.w_cursor.lnum.max(LineNr::ONE); // can be 0 during startup
         window.w_wrow = arith::fraction_row(window.w_fraction, height);
         let mut line_size =
             plines_to_col(window, lnum, window.w_cursor.col as ::core::ffi::c_long) - 1;
@@ -274,11 +274,11 @@ pub(crate) fn to_fraction(window: Win, prev_height: c_int) {
                 }
             }
         } else if sline > 0 {
-            while sline > 0 && lnum > 1 {
+            while sline > 0 && lnum > LineNr::ONE {
                 if let Some(first) = window.fold_first(lnum) {
                     lnum = first;
                 }
-                if lnum == 1 {
+                if lnum == LineNr::ONE {
                     // The first line in the buffer is folded.
                     line_size = !decor_conceal_line(window, 0, false) as c_int;
                     sline -= 1;
@@ -299,7 +299,7 @@ pub(crate) fn to_fraction(window: Win, prev_height: c_int) {
                 window.w_wrow -= line_size + sline;
             } else if sline > 0 {
                 // The first line of the file was reached: use that as topline.
-                lnum = 1;
+                lnum = LineNr::ONE;
                 window.w_wrow -= sline;
             }
         }
@@ -431,7 +431,7 @@ pub(crate) fn comp_scroll(window: Win) {
     if window.w_onebuf_opt.wo_scr != old {
         let ctx = &mut window.w_onebuf_opt.wo_script_ctx[kWinOptScroll as usize];
         ctx.sc_sid = SID_WINLAYOUT as ScriptId;
-        ctx.sc_lnum = 0 as LineNr;
+        ctx.sc_lnum = LineNr::ZERO;
     }
 }
 

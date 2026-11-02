@@ -38,7 +38,7 @@ use crate::plines::getvcol;
 use crate::search::state::{highlight_match, search_match_endcol, search_match_lines};
 use crate::state::mode::{State, exmode_active};
 use crate::types::ui::kUIMessages;
-use crate::types::{Callback, ColNr, CpoFlag, ExpandContext, IOSIZE, LineNr, NUL};
+use crate::types::{Callback, ColNr, CpoFlag, ExpandContext, IOSIZE, NUL};
 use crate::ui::ui_has;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
@@ -155,7 +155,7 @@ fn prompt_visual(st: &Sub) -> c_int {
 
     search_match_lines.set(st.regmatch.endpos[0].lnum - st.regmatch.startpos[0].lnum);
     search_match_endcol.set(st.regmatch.endpos[0].col + len_change);
-    if search_match_lines.get() == 0 as LineNr && search_match_endcol.get() == 0 as ColNr {
+    if search_match_lines.get() == 0 && search_match_endcol.get() == 0 as ColNr {
         // Highlight at least one character for /^/.
         search_match_endcol.set(1 as ColNr);
     }

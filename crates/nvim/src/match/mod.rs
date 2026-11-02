@@ -13,6 +13,7 @@
 #![forbid(unsafe_code)]
 
 use crate::cstr;
+use crate::narrow::number_as_int;
 use crate::regexp::{char_delim, skip_regexp_at};
 use crate::semsg;
 use core::ffi::{CStr, c_int};
@@ -124,8 +125,8 @@ fn match_add(
         },
         mit_pos_array: Vec::new(),
         mit_pos_cur: 0,
-        mit_toplnum: 0,
-        mit_botlnum: 0,
+        mit_toplnum: LineNr::ZERO,
+        mit_botlnum: LineNr::ZERO,
         mit_hl: MatchState {
             conceals: hlg_id == syn_name2id(c"Conceal"),
             ..MatchState::default()
@@ -138,7 +139,7 @@ fn match_add(
     if let Some(pos_list) = pos_list {
         item.mit_pos_array = vec![LLPos::default(); list_items(Some(pos_list)).len()];
         match fill_pos_array(&mut item.mit_pos_array, pos_list) {
-            Some((toplnum, botlnum)) if toplnum != 0 => {
+            Some((toplnum, botlnum)) if toplnum != LineNr::ZERO => {
                 redraw_win_range_later(window, toplnum, botlnum);
                 item.mit_toplnum = toplnum;
                 item.mit_botlnum = botlnum;
@@ -170,14 +171,14 @@ fn match_add(
 /// taking a slot, which is why the array can end up with unused slots at
 /// its end (a zero line number ends it).
 fn fill_pos_array(positions: &mut [LLPos], pos_list: &List) -> Option<(LineNr, LineNr)> {
-    let mut toplnum: LineNr = 0;
-    let mut botlnum: LineNr = 0;
+    let mut toplnum: LineNr = LineNr::ZERO;
+    let mut botlnum: LineNr = LineNr::ZERO;
     let mut i = 0;
 
     for (at, li) in list_iter(Some(pos_list)).enumerate() {
         let at = index_of(at);
         let tv = &li.li_tv;
-        let mut lnum: LineNr = 0;
+        let mut lnum: LineNr = LineNr::ZERO;
         let mut col: ColNr = 0;
         let mut len: c_int = 1;
         let mut skip = false;
@@ -191,8 +192,8 @@ fn fill_pos_array(positions: &mut [LLPos], pos_list: &List) -> Option<(LineNr, L
             let Ok(first) = tv_get_number_chk(&sub[0].li_tv) else {
                 return None;
             };
-            lnum = first as LineNr;
-            if lnum <= 0 {
+            lnum = LineNr::new(number_as_int(first));
+            if lnum <= LineNr::ZERO {
                 skip = true;
             } else {
                 positions[i].lnum = lnum;
@@ -224,7 +225,7 @@ fn fill_pos_array(positions: &mut [LLPos], pos_list: &List) -> Option<(LineNr, L
             if tv.number_or_zero() <= 0 {
                 skip = true;
             } else {
-                lnum = tv.number_or_zero() as LineNr;
+                lnum = LineNr::new(number_as_int(tv.number_or_zero()));
                 positions[i] = LLPos {
                     lnum,
                     col: 0,
@@ -237,10 +238,10 @@ fn fill_pos_array(positions: &mut [LLPos], pos_list: &List) -> Option<(LineNr, L
         }
 
         if !skip {
-            if toplnum == 0 || lnum < toplnum {
+            if toplnum == LineNr::ZERO || lnum < toplnum {
                 toplnum = lnum;
             }
-            if botlnum == 0 || lnum >= botlnum {
+            if botlnum == LineNr::ZERO || lnum >= botlnum {
                 botlnum = lnum + 1;
             }
             i += 1;
@@ -270,7 +271,7 @@ fn match_delete(mut window: Win, id: c_int, perr: bool) -> c_int {
         return -1;
     };
     let item = window.w_matches.remove(at);
-    if item.mit_toplnum != 0 {
+    if item.mit_toplnum != LineNr::ZERO {
         redraw_win_range_later(window, item.mit_toplnum, item.mit_botlnum);
         rtype = UPD_VALID;
     }
@@ -299,11 +300,11 @@ fn get_match(window: &Window, id: c_int) -> Option<&MatchItem> {
 pub(crate) fn ex_match(excmd: &mut ExArg) {
     // SAFETY: the caller's command.
     // The command's count is the match id: `:match`, `:2match`, `:3match`.
-    if excmd.line2 > 3 {
+    if excmd.line2 > LineNr::new(3) {
         emsg(e_invcmd);
         return;
     }
-    let id = excmd.line2 as c_int;
+    let id = excmd.line2.get();
     let skip = excmd.skip;
 
     // Whatever happens next, the old pattern for this id goes.

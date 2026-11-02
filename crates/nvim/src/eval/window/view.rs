@@ -11,6 +11,7 @@
 )]
 
 use super::*;
+use crate::narrow::number_as_int;
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_VERT};
 
 /// `getwinpos([{timeout}])` — the GUI's window position, which a terminal
@@ -200,7 +201,7 @@ pub fn f_winrestview(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData)
     let entry = |key: &CStr| dict_find(dict, key.to_bytes()).map(|di| tv_get_number(&di.di_tv));
 
     if let Some(v) = entry(c"lnum") {
-        win.w_cursor.lnum = number_as_int(v);
+        win.w_cursor.lnum = LineNr::new(number_as_int(v));
     }
     if let Some(v) = entry(c"col") {
         win.w_cursor.col = number_as_int(v);
@@ -215,7 +216,7 @@ pub fn f_winrestview(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData)
     if let Some(v) = entry(c"topline") {
         // Not a plain assignment: 'scrolloff' and folds decide where the
         // window can actually start.
-        set_topline(win, number_as_int(v));
+        set_topline(win, LineNr::new(number_as_int(v)));
     }
     if let Some(v) = entry(c"topfill") {
         win.w_topfill = number_as_int(v);
@@ -245,11 +246,15 @@ pub fn f_winrestview(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData)
 /// and `winrestview()` cannot reach one, but the order is what upstream does
 /// and a differential would see any other answer.
 fn restored_topline(topline: LineNr, line_count: LineNr) -> LineNr {
-    let topline = if topline <= 0 { 1 } else { topline };
-    if topline > line_count {
+    let topline = if topline <= LineNr::ZERO {
+        1
+    } else {
+        topline.get()
+    };
+    if topline > line_count.get() {
         line_count
     } else {
-        topline
+        LineNr::new(topline)
     }
 }
 
@@ -281,12 +286,21 @@ mod tests {
     #[test]
     fn a_restored_topline_is_pulled_inside_the_buffer() {
         // Inside the buffer, nothing moves.
-        assert_eq!(restored_topline(1, 10), 1);
-        assert_eq!(restored_topline(10, 10), 10);
+        assert_eq!(restored_topline(LineNr::ONE, LineNr::new(10)), LineNr::ONE);
+        assert_eq!(
+            restored_topline(LineNr::new(10), LineNr::new(10)),
+            LineNr::new(10)
+        );
         // Above the first line, and past the last.
-        assert_eq!(restored_topline(0, 10), 1);
-        assert_eq!(restored_topline(-5, 10), 1);
-        assert_eq!(restored_topline(11, 10), 10);
+        assert_eq!(restored_topline(LineNr::ZERO, LineNr::new(10)), LineNr::ONE);
+        assert_eq!(
+            restored_topline(LineNr::new(-5), LineNr::new(10)),
+            LineNr::ONE
+        );
+        assert_eq!(
+            restored_topline(LineNr::new(11), LineNr::new(10)),
+            LineNr::new(10)
+        );
     }
 
     #[test]
@@ -294,7 +308,7 @@ mod tests {
         // Not `clamp(1, line_count)`, which would panic on the crossed
         // bounds, and not `max(1)`, which would answer 1: the second bound is
         // applied after the first and wins.
-        assert_eq!(restored_topline(0, 0), 0);
-        assert_eq!(restored_topline(5, 0), 0);
+        assert_eq!(restored_topline(LineNr::ZERO, LineNr::ZERO), LineNr::ZERO);
+        assert_eq!(restored_topline(LineNr::new(5), LineNr::ZERO), LineNr::ZERO);
     }
 }

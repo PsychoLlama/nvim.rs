@@ -59,7 +59,7 @@ impl Win {
             self.line_display_width(self.w_topline)
         };
 
-        if self.w_topline == 1 && self.w_skipcol == 0 {
+        if self.w_topline == LineNr::ONE && self.w_skipcol == 0 {
             // Ignore 'scrolloff' at the top of the buffer.
             so_cols = 0;
         } else if so_cols > (space_cols / 2) as int64_t {
@@ -116,7 +116,7 @@ impl Win {
 }
 
 /// [`scroll_redraw_cur`], for the callers still holding a raw count.
-pub fn scroll_redraw(up: c_int, count: LineNr) {
+pub fn scroll_redraw(up: c_int, count: i32) {
     scroll_redraw_cur(Win::current(), up != 0, count);
 }
 
@@ -124,7 +124,7 @@ pub fn scroll_redraw(up: c_int, count: LineNr) {
 ///
 /// `win` must be the current window: the cursor corrections below move
 /// `curwin`'s cursor.
-pub(super) fn scroll_redraw_cur(mut win: Win, up: bool, count: LineNr) {
+pub(super) fn scroll_redraw_cur(mut win: Win, up: bool, count: i32) {
     let prev_topline = win.w_topline;
     let prev_skipcol = win.w_skipcol;
     let prev_topfill = win.w_topfill;
@@ -154,7 +154,7 @@ pub(super) fn scroll_redraw_cur(mut win: Win, up: bool, count: LineNr) {
                 if win.w_cursor.lnum > prev_lnum || cursor_down(1, false).is_err() {
                     break;
                 }
-            } else if win.w_cursor.lnum < prev_lnum || prev_topline == 1 {
+            } else if win.w_cursor.lnum < prev_lnum || prev_topline == LineNr::ONE {
                 break;
             } else {
                 if cursor_up(1, false).is_err() {
@@ -177,12 +177,12 @@ pub(super) fn scroll_redraw_cur(mut win: Win, up: bool, count: LineNr) {
 }
 
 /// [`Win::scrolldown`], for the callers still holding a raw window.
-pub fn scrolldown(window: Win, line_count: LineNr, byfold: bool) -> bool {
+pub fn scrolldown(window: Win, line_count: i32, byfold: bool) -> bool {
     window.scrolldown(line_count, byfold)
 }
 
 /// [`Win::scrollup`], for the callers still holding a raw window.
-pub fn scrollup(window: Win, line_count: LineNr, byfold: bool) -> bool {
+pub fn scrollup(window: Win, line_count: i32, byfold: bool) -> bool {
     window.scrollup(line_count, byfold)
 }
 
@@ -190,7 +190,7 @@ impl Win {
     /// Scroll the window down by `line_count` logical lines -- CTRL-Y.
     /// `byfold` counts a closed fold as one line. Answers whether the cursor
     /// had to be moved.
-    pub(super) fn scrolldown(mut self, line_count: LineNr, byfold: bool) -> bool {
+    pub(super) fn scrolldown(mut self, line_count: i32, byfold: bool) -> bool {
         // Total screen lines scrolled, which is what the cursor row moves by.
         let mut done = 0;
         let do_sms = do_sms(self);
@@ -201,12 +201,12 @@ impl Win {
         // `w_wrow` has to be valid.
         self.validate_cursor();
 
-        let mut todo = line_count as c_int;
+        let mut todo = line_count;
         while todo > 0 {
             let can_fill = self.w_topfill < self.w_view_height - 1
                 && self.w_topfill < self.fill_above(self.w_topline);
             // At the very top there is nothing left to scroll to.
-            if self.w_topline == 1 && !can_fill && (!do_sms || self.w_skipcol < width1) {
+            if self.w_topline == LineNr::ONE && !can_fill && (!do_sms || self.w_skipcol < width1) {
                 break;
             }
             if do_sms && self.w_skipcol >= width1 {
@@ -224,14 +224,14 @@ impl Win {
                 self.w_topfill = 0;
                 if let Some(first) = self.fold_first(self.w_topline) {
                     // A sequence of folded lines counts as one logical line.
-                    done += !self.conceals_line(first - 1, false) as c_int;
+                    done += !self.conceals_line((first - 1).get(), false) as c_int;
                     let span = self.w_topline - first;
                     if !byfold {
                         todo -= span - 1;
                     }
                     self.w_botline -= span;
                     self.w_topline = first;
-                } else if self.conceals_line(self.w_topline - 1, false) {
+                } else if self.conceals_line((self.w_topline - 1).get(), false) {
                     todo += 1;
                 } else if do_sms {
                     let size = self.line_display_width(self.w_topline);
@@ -254,7 +254,8 @@ impl Win {
         }
 
         // Adjust for concealed lines above `w_topline`.
-        while self.w_topline > 1 && self.conceals_line(self.w_topline - 2, false) {
+        while self.w_topline > LineNr::ONE && self.conceals_line((self.w_topline - 2).get(), false)
+        {
             self.w_topline -= 1;
             self.w_topline = self.fold_first(self.w_topline).unwrap_or(self.w_topline);
         }
@@ -276,10 +277,10 @@ impl Win {
             wrow += self.w_cline_height - 1 - self.w_virtcol / self.w_view_width;
         }
         let mut moved = false;
-        while wrow >= self.w_view_height && self.w_cursor.lnum > 1 {
+        while wrow >= self.w_view_height && self.w_cursor.lnum > LineNr::ONE {
             if let Some(first) = self.fold_first(self.w_cursor.lnum) {
-                wrow -= !self.conceals_line(self.w_cursor.lnum - 1, false) as c_int;
-                self.w_cursor.lnum = (first - 1).max(1);
+                wrow -= !self.conceals_line((self.w_cursor.lnum - 1).get(), false) as c_int;
+                self.w_cursor.lnum = (first - 1).max(LineNr::ONE);
             } else {
                 let lnum = self.w_cursor.lnum;
                 self.w_cursor.lnum = lnum - 1;
@@ -308,7 +309,7 @@ impl Win {
     /// Scroll the window up by `line_count` logical lines -- CTRL-E.
     /// `byfold` counts a closed fold as one line. Answers whether the visible
     /// range changed.
-    pub(super) fn scrollup(mut self, line_count: LineNr, byfold: bool) -> bool {
+    pub(super) fn scrollup(mut self, line_count: i32, byfold: bool) -> bool {
         let topline = self.w_topline;
         let botline = self.w_botline;
         let do_sms = do_sms(self);
@@ -326,9 +327,9 @@ impl Win {
             // `w_skipcol` until it goes past the end of the line, then advance
             // to the next one. Folding: each sequence of folded lines counts
             // as one logical line.
-            let mut todo = line_count as c_int;
+            let mut todo = line_count;
             while todo > 0 {
-                todo += self.conceals_line(self.w_topline - 1, false) as c_int;
+                todo += self.conceals_line((self.w_topline - 1).get(), false) as c_int;
                 if self.w_topfill > 0 {
                     self.w_topfill -= 1;
                 } else {
@@ -358,7 +359,8 @@ impl Win {
 
                     if lnum > self.w_topline {
                         // Approximate `w_botline`.
-                        self.w_botline += lnum - self.w_topline;
+                        let gained = lnum - self.w_topline;
+                        self.w_botline += gained;
                         self.w_topline = lnum;
                         self.w_topfill = self.fill_above(lnum);
                         self.w_skipcol = 0;
@@ -491,7 +493,7 @@ impl Win {
         if self.w_topfill > 0 {
             let n = self.plines_nofill(self.w_topline, true);
             if self.w_topfill + n > self.w_view_height {
-                if down && self.w_topline > 1 {
+                if down && self.w_topline > LineNr::ONE {
                     self.w_topline -= 1;
                     self.w_topfill = 0;
                 } else {
@@ -507,7 +509,7 @@ impl Win {
 pub fn scrolldown_clamp() {
     let mut win = Win::current();
     let can_fill = win.w_topfill < win.fill_above(win.w_topline);
-    if win.w_topline <= 1 && !can_fill {
+    if win.w_topline <= LineNr::ONE && !can_fill {
         return;
     }
 
@@ -589,12 +591,12 @@ pub(super) fn topline_back_winheight(win: Win, line: &mut LineOff, winheight: bo
     } else {
         line.lnum -= 1;
         line.fill = 0;
-        if line.lnum < 1 {
+        if line.lnum < LineNr::ONE {
             line.height = MAXCOL as c_int;
         } else if let Some(first) = win.fold_first(line.lnum) {
             // Add a closed fold, unless it is concealed.
             line.lnum = first;
-            line.height = !win.conceals_line(line.lnum - 1, false) as c_int;
+            line.height = !win.conceals_line((line.lnum - 1).get(), false) as c_int;
         } else {
             line.height = win.plines_nofill(line.lnum, winheight);
         }
@@ -625,7 +627,7 @@ pub(super) fn botline_forw(win: Win, line: &mut LineOff) {
         if folded {
             // Add a closed fold, unless it is concealed.
             line.lnum = last;
-            line.height = !win.conceals_line(line.lnum - 1, false) as c_int;
+            line.height = !win.conceals_line((line.lnum - 1).get(), false) as c_int;
         } else {
             line.height = win.plines_nofill(line.lnum, true);
         }

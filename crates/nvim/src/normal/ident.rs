@@ -380,7 +380,7 @@ pub(crate) fn nv_gotofile(cmd_arg: &mut CmdArg) {
         return;
     }
     // `gF` also takes a line number off the end of the name.
-    let mut lnum: LineNr = -1;
+    let mut lnum: LineNr = LineNr::new(-1);
     let Some(name) = grab_file_name(cmd_arg.count1, Some(&mut lnum)) else {
         clear_op(cmd_arg.op());
         return;
@@ -398,7 +398,7 @@ pub(crate) fn nv_gotofile(cmd_arg: &mut CmdArg) {
     let last = newlnum::LAST as LineNr;
     let win = Some(Win::current().id());
     let opened = do_ecmd(0, Some(name.as_cstr()), None, None, last, hide, win);
-    if opened.is_ok() && cmd_arg.nchar == 'F' as c_int && lnum >= 0 {
+    if opened.is_ok() && cmd_arg.nchar == 'F' as c_int && lnum >= LineNr::ZERO {
         Win::current().w_cursor.lnum = lnum;
         check_cursor_lnum(Win::current());
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);

@@ -2,6 +2,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::narrow::number_as_int;
 use crate::winlayer::Buf;
 use core::ffi::c_int;
 
@@ -105,8 +106,8 @@ pub fn var2fpos(
     if tv.v_type() == VAR_LIST {
         let l = tv.list_ref()?;
         let mut error = false;
-        pos.lnum = list_find_nr(Some(l), 0, Some(&mut error)) as LineNr;
-        if error || pos.lnum <= 0 || pos.lnum > bp.line_count() {
+        pos.lnum = LineNr::new(number_as_int(list_find_nr(Some(l), 0, Some(&mut error))));
+        if error || pos.lnum <= LineNr::ZERO || pos.lnum > bp.line_count() {
             return None;
         }
         pos.col = list_find_nr(Some(l), 1, Some(&mut error)) as ColNr;
@@ -156,7 +157,7 @@ pub fn var2fpos(
     } else if first == b'\'' {
         let mname = c_int::from(second);
         let fm = mark_get(bp, wp, kMarkAll, mname)?;
-        if fm.mark.lnum <= 0 {
+        if fm.mark.lnum <= LineNr::ZERO {
             return None;
         }
         pos = fm.mark;
@@ -166,7 +167,7 @@ pub fn var2fpos(
         }
     }
 
-    if pos.lnum != 0 {
+    if pos.lnum != LineNr::ZERO {
         if charcol {
             pos.col = buf_byteidx_to_charidx(Some(bp), pos.lnum, pos.col) as ColNr;
         }
@@ -179,15 +180,15 @@ pub fn var2fpos(
         pos.col = 0;
         if second == b'0' {
             update_topline(wp);
-            pos.lnum = wp.w_topline.max(1);
+            pos.lnum = wp.w_topline.max(LineNr::ONE);
             return Some(pos);
         }
         if second == b'$' {
             validate_botline_win(wp);
-            pos.lnum = if wp.w_botline > 0 {
+            pos.lnum = if wp.w_botline > LineNr::ZERO {
                 wp.w_botline - 1
             } else {
-                0
+                LineNr::ZERO
             };
             return Some(pos);
         }
@@ -255,7 +256,7 @@ pub fn list2fpos(
     if n < 0 {
         return Err(Failed);
     }
-    pos.lnum = n as LineNr;
+    pos.lnum = LineNr::new(n);
 
     let mut n = list_find_nr(Some(l), i, None) as c_int;
     i += 1;
@@ -267,7 +268,7 @@ pub fn list2fpos(
         let Some(buf) = find_buf(handle).filter(|b| b.b_ml.ml_mfp.is_some()) else {
             return Err(Failed);
         };
-        let lnum = if pos.lnum == 0 {
+        let lnum = if pos.lnum == LineNr::ZERO {
             Win::current().w_cursor.lnum
         } else {
             pos.lnum

@@ -322,10 +322,10 @@ fn register(
 /// The `nvim_buf_lines_event` a channel attaching with `send_buffer` gets:
 /// the whole buffer as one replacement of the range `0 .. -1`.
 fn send_whole_buffer(buffer: Buf, channel_id: uint64_t) {
-    let line_count = buffer.line_count() as size_t;
+    let line_count = usize::try_from(buffer.line_count()).unwrap_or(0);
     let mut linedata = Array::new();
     if line_count > 0 {
-        linedata = collect_lines(buffer, line_count, 1);
+        linedata = collect_lines(buffer, line_count, LineNr::ONE);
     }
 
     let mut args = ArrayBuf::<6>::new();
@@ -520,8 +520,8 @@ fn send_changes(mut buffer: Buf, firstline: LineNr, num_added: int64_t, num_remo
         args.push(Object::buffer(buffer.handle));
         args.push(tick_obj(buffer, send_tick));
         // The first line that changed (zero-indexed), then the last.
-        args.push(Object::integer((firstline - 1) as Integer));
-        args.push(Object::integer((firstline - 1) as int64_t + num_removed));
+        args.push(Object::integer(i64::from(firstline - 1)));
+        args.push(Object::integer(i64::from(firstline - 1) + num_removed));
         // Linedata of the lines being swapped in.
         // One copy per channel: the event takes over what it is sent.
         args.push(Object::array(linedata.clone()));
@@ -554,9 +554,9 @@ fn send_changes(mut buffer: Buf, firstline: LineNr, num_added: int64_t, num_remo
             args.push(tick_obj(buffer, send_tick));
             // First changed line, last changed line, last line of the new
             // range, then the byte count of the previous contents.
-            args.push(Object::integer((firstline - 1) as Integer));
-            args.push(Object::integer((firstline - 1) as int64_t + num_removed));
-            args.push(Object::integer((firstline - 1) as int64_t + num_added));
+            args.push(Object::integer(i64::from(firstline - 1)));
+            args.push(Object::integer(i64::from(firstline - 1) + num_removed));
+            args.push(Object::integer(i64::from(firstline - 1) + num_added));
             args.push(Object::integer(deleted.bytes as Integer));
             if cb.utf_sizes {
                 args.push(Object::integer(deleted.codepoints as Integer));

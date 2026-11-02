@@ -58,8 +58,13 @@ pub(crate) fn init_prompt(cmdchar_todo: c_int) {
     // The mark may name a line that no longer exists.  It is read and
     // written a field at a time rather than held: the calls below adjust
     // marks, this one included.
-    if start().lnum < 1 || start().lnum > Buf::current().b_ml.ml_line_count {
-        set_start_lnum(start().lnum.min(Buf::current().b_ml.ml_line_count).max(1));
+    if start().lnum < LineNr::ONE || start().lnum > Buf::current().b_ml.ml_line_count {
+        set_start_lnum(
+            start()
+                .lnum
+                .min(Buf::current().b_ml.ml_line_count)
+                .max(LineNr::ONE),
+        );
         Buf::current().b_prompt_append_new_line = true;
     }
 

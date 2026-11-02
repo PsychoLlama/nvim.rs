@@ -106,11 +106,7 @@ pub(crate) fn msg_add_lines(
         return;
     }
 
-    let fmt = ngettext(
-        c"%s%ld line, ",
-        c"%s%ld lines, ",
-        lnum as core::ffi::c_ulong,
-    );
+    let fmt = ngettext(c"%s%ld line, ", c"%s%ld lines, ", lnum.get() as u64);
     report.push_fmt(fmt, &[space.into(), lines.into()]);
     let fmt = ngettext(c"%ld byte", c"%ld bytes", nchars as core::ffi::c_ulong);
     report.push_fmt(fmt, &[bytes.into()]);
@@ -128,7 +124,7 @@ pub(crate) struct Outcome {
     pub illegal_byte: LineNr,
     pub error: bool,
     pub fileformat: c_int,
-    pub linecnt: LineNr,
+    pub linecnt: i32,
     pub filesize: FileOffset,
 }
 
@@ -157,7 +153,7 @@ pub(crate) fn report_read(sfname: Option<&CStr>, how: How, out: &Outcome) {
         };
         note(&mut report, ro);
     }
-    if out.read_no_eol_lnum != 0 {
+    if out.read_no_eol_lnum != LineNr::ZERO {
         note(&mut report, translate(c"[noeol]"));
     }
     if out.ff_error == EOL_DOS {
@@ -171,11 +167,11 @@ pub(crate) fn report_read(sfname: Option<&CStr>, how: How, out: &Outcome) {
     } else if out.converted {
         note(&mut report, translate(c"[converted]"));
     }
-    if out.conv_error != 0 {
+    if out.conv_error != LineNr::ZERO {
         let fmt = translate(c"[CONVERSION ERROR in line %ld]");
         report.push_fmt(fmt, &[int64_t::from(out.conv_error).into()]);
         noted = true;
-    } else if out.illegal_byte > 0 {
+    } else if out.illegal_byte > LineNr::ZERO {
         let fmt = translate(c"[ILLEGAL BYTE in line %ld]");
         report.push_fmt(fmt, &[int64_t::from(out.illegal_byte).into()]);
         noted = true;
@@ -185,7 +181,7 @@ pub(crate) fn report_read(sfname: Option<&CStr>, how: How, out: &Outcome) {
     if msg_add_fileformat(&mut report, out.fileformat) {
         noted = true;
     }
-    msg_add_lines(&mut report, noted, out.linecnt, out.filesize);
+    msg_add_lines(&mut report, noted, LineNr::new(out.linecnt), out.filesize);
 
     keep_msg.set(None);
     let mut shown = None;

@@ -41,16 +41,22 @@ pub(crate) static redraw_not_allowed: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static screen_search_hl: GlobalCell<MatchState> = GlobalCell::new(MatchState {
     rm: RegMMatch {
         regprog: None,
-        startpos: [LPos { lnum: 0, col: 0 }; 10],
-        endpos: [LPos { lnum: 0, col: 0 }; 10],
+        startpos: [LPos {
+            lnum: LineNr::ZERO,
+            col: 0,
+        }; 10],
+        endpos: [LPos {
+            lnum: LineNr::ZERO,
+            col: 0,
+        }; 10],
         rmm_matchcol: 0,
         rmm_ic: 0,
         rmm_maxcol: 0,
     },
-    lnum: 0,
+    lnum: LineNr::ZERO,
     attr: 0,
     attr_cur: 0,
-    first_lnum: 0,
+    first_lnum: LineNr::ZERO,
     startcol: 0,
     endcol: 0,
     is_addpos: false,
@@ -58,7 +64,7 @@ pub(crate) static screen_search_hl: GlobalCell<MatchState> = GlobalCell::new(Mat
     conceals: false,
     tm: 0,
 });
-pub(crate) static search_hl_has_cursor_lnum: GlobalCell<LineNr> = GlobalCell::new(0 as LineNr);
+pub(crate) static search_hl_has_cursor_lnum: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
 pub(crate) static cmdline_row: GlobalCell<c_int> = GlobalCell::new(0);
 pub(crate) static redraw_cmdline: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static redraw_mode: GlobalCell<bool> = GlobalCell::new(false);

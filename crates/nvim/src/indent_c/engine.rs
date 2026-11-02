@@ -71,7 +71,7 @@ pub fn get_c_indent() -> c_int {
     let cur_curpos = Win::current().w_cursor;
 
     // At line 1, zero indent is fine, right?
-    if cur_curpos.lnum == 1 {
+    if cur_curpos.lnum == LineNr::ONE {
         return 0;
     }
 

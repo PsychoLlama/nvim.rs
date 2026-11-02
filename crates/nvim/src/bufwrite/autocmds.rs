@@ -333,7 +333,7 @@ pub(crate) fn buf_write_do_post_autocmds(
     mode: WriteMode,
 ) {
     // In case it was set by the previous read.
-    Buf::current().b_no_eol_lnum = 0;
+    Buf::current().b_no_eol_lnum = LineNr::ZERO;
 
     let mut aco = AcoSave::default();
     aucmd_prepbuf(&mut aco, buffer);

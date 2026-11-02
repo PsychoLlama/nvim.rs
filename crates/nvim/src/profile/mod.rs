@@ -409,7 +409,7 @@ pub(crate) fn func_line_start(frame: &FuncCall) {
     let body = func.body();
     let mut prof = func.prof.borrow_mut();
     if prof.profiling
-        && lnum >= 1
+        && lnum >= LineNr::ONE
         && usize::try_from(lnum).is_ok_and(|lnum| lnum <= body.lines.len())
     {
         let mut idx = usize::try_from(lnum - 1).unwrap_or(0);
@@ -511,7 +511,7 @@ pub fn script_prof_restore(wait: ProfTime) {
 pub fn script_line_start() {
     let lnum = sourcing_lnum();
     with_current_script(|si| {
-        if !(si.sn_prof_on && lnum >= 1) {
+        if !(si.sn_prof_on && lnum >= LineNr::ONE) {
             return;
         }
         // Grow the array before starting the timer, so that the time spent
@@ -521,7 +521,7 @@ pub fn script_line_start() {
         if si.sn_prl_ga.len() < lines {
             si.sn_prl_ga.resize(lines, SnPrl::default());
         }
-        si.sn_prl_idx = lnum - 1;
+        si.sn_prl_idx = (lnum - 1).get();
         si.sn_prl_execed = 0;
         si.sn_prl_start = profile_start();
         si.sn_prl_children = profile_zero();

@@ -85,7 +85,7 @@ impl SynState {
                 if entry.lnum > lnum {
                     break;
                 }
-                if entry.change_lnum == 0 {
+                if entry.change_lnum == LineNr::ZERO {
                     last_valid = Some(id);
                     if entry.lnum >= lnum - minlines {
                         last_min_valid = Some(id);
@@ -102,13 +102,13 @@ impl SynState {
             self.lnum
         } else {
             self.sync(window, lnum, last_valid);
-            if self.lnum == 1 {
+            LineNr::new(if self.lnum == LineNr::ONE {
                 1 // the first line is always valid, whatever "minlines" says
             } else {
                 // "minlines" lines have to be parsed before a state can be
                 // considered valid enough to store.
-                self.lnum + block.b_syn_sync_minlines
-            }
+                (self.lnum + block.b_syn_sync_minlines).get()
+            })
         };
 
         // Advance from the sync point or the saved state to the wanted line,
@@ -136,13 +136,13 @@ impl SynState {
 
     /// How many lines apart to store cache entries for lines that are not
     /// displayed. Displayed lines get one each; the rest share what is left.
-    pub(crate) fn store_distance(&self) -> LineNr {
+    pub(crate) fn store_distance(&self) -> i32 {
         let entries = c_int::try_from(self.block().b_sst.len())
             .expect("the cache is a few thousand entries at most");
         if entries <= Rows.get() {
             999999
         } else {
-            self.line_count() / (entries - Rows.get()) + 1
+            self.line_count().get() / (entries - Rows.get()) + 1
         }
     }
 
@@ -158,7 +158,7 @@ impl SynState {
         &mut self,
         mut prev: Option<EntryId>,
         lnum: LineNr,
-        dist: LineNr,
+        dist: i32,
     ) -> Option<EntryId> {
         let parsed_lnum = self.lnum;
         let mut block = self.block();
@@ -185,10 +185,10 @@ impl SynState {
                 let entry = block.b_sst.entry_mut(id);
                 if entry.lnum <= lnum {
                     prev = id; // a valid state before the desired line
-                } else if entry.change_lnum == 0 {
+                } else if entry.change_lnum == LineNr::ZERO {
                     break; // past the states that depend on a change
                 }
-                entry.change_lnum = 0;
+                entry.change_lnum = LineNr::ZERO;
                 sp = block.b_sst.next(id);
             }
             self.load_current_state(prev);
@@ -246,7 +246,10 @@ impl SynState {
                     && cur_si.si_m_endpos.lnum < lnum
                 {
                     cur_si.si_flags |= SynFlags::MATCHCONT;
-                    cur_si.si_m_endpos = LPos { lnum: 0, col: 0 };
+                    cur_si.si_m_endpos = LPos {
+                        lnum: LineNr::ZERO,
+                        col: 0,
+                    };
                     cur_si.si_h_endpos = cur_si.si_m_endpos;
                     cur_si.si_ends = 1;
                 }
@@ -369,7 +372,7 @@ pub(crate) fn syntax_end_parsing(window: Win, lnum: LineNr) {
             sp = block.b_sst.next(id);
         }
         if let Some(id) = sp
-            && block.b_sst.entry(id).change_lnum != 0
+            && block.b_sst.entry(id).change_lnum != LineNr::ZERO
         {
             block.b_sst.entry_mut(id).change_lnum = lnum;
         }

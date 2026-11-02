@@ -95,7 +95,7 @@ pub(super) fn spell_make_sugfile(spin: &mut SpellInfo, wfname: &CStr) {
 
     spell_message(spin, c"Performing soundfolding...");
     if sug_filltree(spin, &mut slang).is_ok() && sug_maketable(spin) != FAIL {
-        let done = spin.spellbuf().line_count() as i64;
+        let done = i64::from(spin.spellbuf().line_count());
         smsg!(0, "Number of words after soundfolding: {}", done);
         spell_message(spin, super::wordtree::MSG_COMPRESSING);
         let foldroot = spin.si_foldroot;
@@ -262,7 +262,7 @@ fn sug_filltable(
         }
         line.push(0);
 
-        let at = wordnr as LineNr;
+        let at = LineNr::new(wordnr);
         if ml_append_buf_terminated(spellbuf, at, line, true).is_err() {
             return -1;
         }
@@ -349,13 +349,13 @@ fn sug_write(spin: &mut SpellInfo, fname: &CStr) {
     let spellbuf = spin.spellbuf();
     // The scratch buffer holds one line per word end.
     let wcount = spellbuf.line_count();
-    debug_assert!(wcount >= 0);
-    w.u32(wcount as usize);
+    debug_assert!(wcount >= LineNr::ZERO);
+    w.u32(usize::try_from(wcount).expect("a count"));
 
-    for lnum in 1..=wcount {
+    for lnum in 1..=wcount.get() {
         // The stored terminator goes out with the line.
         let mut lines = spellbuf.lines();
-        let line = lines.line_cstr(lnum, 0).to_bytes_with_nul();
+        let line = lines.line_cstr(LineNr::new(lnum), 0).to_bytes_with_nul();
         w.bytes(line);
         if !w.landed() {
             emsg(gettext(e_write));

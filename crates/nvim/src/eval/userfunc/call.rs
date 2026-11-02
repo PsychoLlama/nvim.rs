@@ -115,9 +115,11 @@ pub(crate) fn call_user_func(
     // The funccall's return value starts as what the caller put in its own
     // (upstream's `fc_rettv` *is* the caller's): a plain `:return` leaves it.
     drop(frame.rettv.replace(result.take()));
-    frame
-        .breakpoint
-        .set(dbg_find_breakpoint_named(false, func.name().as_cstr(), 0));
+    frame.breakpoint.set(dbg_find_breakpoint_named(
+        false,
+        func.name().as_cstr(),
+        LineNr::ZERO,
+    ));
     frame.dbg_tick.set(debug_tick.get());
 
     let body = func.body();
@@ -255,7 +257,7 @@ pub(crate) fn call_user_func(
 
     let sandboxed = func.has_flag(FuncFlags::SANDBOX).then(Lock::sandbox);
 
-    estack_push_ufunc(func, 1);
+    estack_push_ufunc(func, LineNr::ONE);
     if p_verbose() >= 12 {
         verbose_report(|| {
             let called = sourcing_name_text();

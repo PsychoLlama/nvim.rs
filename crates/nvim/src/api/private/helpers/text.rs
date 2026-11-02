@@ -72,8 +72,8 @@ pub(crate) fn normalize_index(
 ) -> int64_t {
     // The callers have checked that `buffer` is loaded.
     let line_count = buffer.b_ml.ml_line_count;
-    debug_assert!(line_count > 0);
-    let max_index = int64_t::from(line_count + LineNr::from(end_exclusive) - 1);
+    debug_assert!(line_count > LineNr::ZERO);
+    let max_index = int64_t::from(line_count + i32::from(end_exclusive) - 1);
     let mut index = if index < 0 {
         max_index + index + 1
     } else {
@@ -101,7 +101,7 @@ pub(crate) fn buf_get_text(
         return Err(err_out_of_range(c"line index"));
     }
     let mut lines = buffer.lines();
-    let bufstr = lines.line(number_as_int(lnum));
+    let bufstr = lines.line(LineNr::new(number_as_int(lnum)));
     let line_length = int64_t::try_from(bufstr.len()).unwrap_or(0);
 
     let relative = |col: int64_t| if col < 0 { line_length + col + 1 } else { col };

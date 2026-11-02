@@ -155,7 +155,7 @@ impl Landed {
 
 /// The top line of the window a click moved focus to, remembered so that the
 /// double click that follows still counts as one.
-static orig_topline: GlobalCell<LineNr> = GlobalCell::new(0);
+static orig_topline: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
 static orig_topfill: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// Whether a press was seen; drags and releases without one are ignored.
@@ -468,9 +468,9 @@ fn find_longest_lnum(win: Win) -> LineNr {
         return cursor;
     }
 
-    let mut ret: LineNr = 0;
+    let mut ret: LineNr = LineNr::ZERO;
     let mut max: ColNr = 0;
-    for lnum in win.w_topline..win.w_botline {
+    for lnum in win.w_topline.up_to(win.w_botline) {
         let len = scroll_line_len(win, lnum);
         if len > max {
             max = len;
@@ -593,7 +593,7 @@ pub(crate) fn f_getmousepos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
     let mut winid: VarNumber = 0;
     let mut winrow: VarNumber = 0;
     let mut wincol: VarNumber = 0;
-    let mut lnum: LineNr = 0;
+    let mut lnum: LineNr = LineNr::ZERO;
     let mut column: VarNumber = 0;
     let mut coladd: ColNr = 0;
 
@@ -625,7 +625,7 @@ pub(crate) fn f_getmousepos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
     add(c"winid", winid);
     add(c"winrow", winrow);
     add(c"wincol", wincol);
-    add(c"line", lnum as VarNumber);
+    add(c"line", i64::from(lnum));
     add(c"column", column);
     add(c"coladd", coladd as VarNumber);
 }

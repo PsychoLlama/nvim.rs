@@ -23,6 +23,7 @@
 
 use super::*;
 use crate::mbyte::{c_cluster_len, char_at, class_in, class_of, encode_char};
+use crate::narrow::len_as_int;
 use crate::winlayer::BufId;
 use core::ffi::c_int;
 
@@ -74,7 +75,8 @@ fn merge_gaps(
         // here rather than reproduced.
         let last = dp.end(idx1) - 1;
         let right = next.df_lnum[idx1] - 1;
-        if last >= map.len() as LineNr || right >= map.len() as LineNr {
+        if last >= LineNr::new(len_as_int(map.len())) || right >= LineNr::new(len_as_int(map.len()))
+        {
             at += 1;
             continue;
         }
@@ -118,21 +120,22 @@ fn merge_gaps(
 /// while the last pass both merged something and left something alone.
 fn refine_inline_char(blocks: &mut Vec<DiffBlock>, linemap: &LineMap, idx1: usize) {
     for _ in 0..4 {
-        let (merged, unmerged) = merge_gaps(blocks, linemap, idx1, 1, |dp, next, _, _| {
-            let gap = next.df_lnum[idx1] - dp.end(idx1);
-            if gap > 3 {
-                return Gap::Keep(false);
-            }
-            let longest = (0..DB_COUNT as usize)
-                .map(|i| dp.df_count[i] + next.df_count[i])
-                .max()
-                .unwrap_or(0);
-            if longest >= gap * 4 {
-                Gap::Merge
-            } else {
-                Gap::Keep(true)
-            }
-        });
+        let (merged, unmerged) =
+            merge_gaps(blocks, linemap, idx1, LineNr::ONE, |dp, next, _, _| {
+                let gap = next.df_lnum[idx1] - dp.end(idx1);
+                if gap > 3 {
+                    return Gap::Keep(false);
+                }
+                let longest = (0..DB_COUNT as usize)
+                    .map(|i| dp.df_count[i] + next.df_count[i])
+                    .max()
+                    .unwrap_or(0);
+                if longest >= gap * 4 {
+                    Gap::Merge
+                } else {
+                    Gap::Keep(true)
+                }
+            });
         if !unmerged || !merged {
             break;
         }
@@ -154,50 +157,56 @@ fn refine_inline_word(
 ) {
     let buf = used_slot(slots, idx1);
     for _ in 0..4 {
-        merge_gaps(blocks, linemap, idx1, 2, |dp, next, entry1, entry2| {
-            let gap_start = entry1.byte_start + entry1.num_bytes;
-            let gap_size = entry2.byte_start - gap_start;
-            if gap_size <= 0 || gap_size > DIFF_WORD_GAP {
-                return Gap::Keep(false);
-            }
-            // The gap is only worth swallowing if it is *punctuation*
-            // between two changed words; a word in the gap is a real
-            // unchanged word and splitting there is the point.
-            let mut lines = buf.lines();
-            let line = lines.line(start_lnum + entry1.lineoff as LineNr);
-            let from = (gap_start as usize).min(line.len());
-            let gap_len = (gap_size as usize).min(line.len() - from);
-            // Each character is classed as the line holds it, so one that
-            // runs past the gap's end still decodes whole.
-            if gap_len == 0
-                || (from..from + gap_len).any(|i| class_in(&line[i..], buf) == CLASS_WORD)
-            {
-                return Gap::Keep(false);
-            }
-            // How much text the two blocks either side of the gap cover:
-            // a gap is only worth swallowing next to a substantial change.
-            let mut changed: i64 = 0;
-            for (i, map) in linemap.iter().enumerate() {
-                if slots[i].is_none() {
-                    continue;
+        merge_gaps(
+            blocks,
+            linemap,
+            idx1,
+            LineNr::new(2),
+            |dp, next, entry1, entry2| {
+                let gap_start = entry1.byte_start + entry1.num_bytes;
+                let gap_size = entry2.byte_start - gap_start;
+                if gap_size <= 0 || gap_size > DIFF_WORD_GAP {
+                    return Gap::Keep(false);
                 }
-                for block in [dp, next] {
-                    for k in 0..block.df_count[i] {
-                        let at = block.df_lnum[i] + k - 1;
-                        if let Ok(at) = usize::try_from(at)
-                            && let Some(e) = map.get(at)
-                        {
-                            changed += e.num_bytes as i64;
+                // The gap is only worth swallowing if it is *punctuation*
+                // between two changed words; a word in the gap is a real
+                // unchanged word and splitting there is the point.
+                let mut lines = buf.lines();
+                let line = lines.line(start_lnum + entry1.lineoff);
+                let from = (gap_start as usize).min(line.len());
+                let gap_len = (gap_size as usize).min(line.len() - from);
+                // Each character is classed as the line holds it, so one that
+                // runs past the gap's end still decodes whole.
+                if gap_len == 0
+                    || (from..from + gap_len).any(|i| class_in(&line[i..], buf) == CLASS_WORD)
+                {
+                    return Gap::Keep(false);
+                }
+                // How much text the two blocks either side of the gap cover:
+                // a gap is only worth swallowing next to a substantial change.
+                let mut changed: i64 = 0;
+                for (i, map) in linemap.iter().enumerate() {
+                    if slots[i].is_none() {
+                        continue;
+                    }
+                    for block in [dp, next] {
+                        for k in 0..block.df_count[i] {
+                            let at = block.df_lnum[i] + k - 1;
+                            if let Ok(at) = usize::try_from(at)
+                                && let Some(e) = map.get(at)
+                            {
+                                changed += e.num_bytes as i64;
+                            }
                         }
                     }
                 }
-            }
-            if changed >= (gap_size * 2) as i64 {
-                Gap::Merge
-            } else {
-                Gap::Keep(false)
-            }
-        });
+                if changed >= (gap_size * 2) as i64 {
+                    Gap::Merge
+                } else {
+                    Gap::Keep(false)
+                }
+            },
+        );
     }
 }
 
@@ -337,10 +346,10 @@ fn change_for(new_diff: &DiffBlock, linemap: &LineMap) -> DiffLineChange {
     };
     for (i, map) in linemap.iter().enumerate() {
         // Never negative; the test is for safety only.
-        if new_diff.df_lnum[i] <= 0 {
+        if new_diff.df_lnum[i] <= LineNr::ZERO {
             continue;
         }
-        let start = (new_diff.df_lnum[i] - 1) as usize; // zero-indexed
+        let start = new_diff.df_lnum[i].index();
         let end = start + new_diff.df_count[i] as usize;
         match map.get(start) {
             Some(e) => {

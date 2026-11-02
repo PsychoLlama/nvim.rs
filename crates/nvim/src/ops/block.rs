@@ -144,7 +144,7 @@ pub(crate) fn block_insert(op: &OpArg, s: &[u8], b_insert: bool, bdp: &mut Block
         let splice = offset - startcol;
         extmark_splice_cols(
             Buf::current(),
-            lnum as c_int - 1,
+            lnum.get() - 1,
             startcol,
             skipped,
             splice,

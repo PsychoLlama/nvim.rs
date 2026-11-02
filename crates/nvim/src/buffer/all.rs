@@ -179,10 +179,10 @@ pub fn ex_buffer_all(excmd: &mut ExArg) {
 
     // The maximum number of windows to open: as many as possible, or as many
     // as the count asked for.
-    let count: LineNr = if excmd.addr_count == 0 {
-        9999 as LineNr
+    let count: i32 = if excmd.addr_count == 0 {
+        9999
     } else {
-        excmd.line2
+        excmd.line2.get()
     };
 
     // Whether to load inactive buffers too.
@@ -206,7 +206,7 @@ pub fn ex_buffer_all(excmd: &mut ExArg) {
     let no_leave = Suppress::win_leave_autocmds();
 
     for b in buffers() {
-        if (open_wins as LineNr) >= count {
+        if LineNr::new(open_wins) >= LineNr::new(count) {
             break;
         }
         if !open_window_for(b, all, had_tab, &mut split_ret, &mut open_wins) {
@@ -363,9 +363,9 @@ fn open_window_for(
 }
 
 /// The last stage: close the windows over the count asked for.
-fn close_extra_windows(count: LineNr, open_wins: &mut c_int) {
+fn close_extra_windows(count: i32, open_wins: &mut c_int) {
     let mut wp = last_window();
-    while *open_wins as LineNr > count {
+    while LineNr::new(*open_wins) > LineNr::new(count) {
         let Some(win) = wp else { break };
         let r = (buf_hidden(win.buffer())
             || !buf_changed(win.buffer())

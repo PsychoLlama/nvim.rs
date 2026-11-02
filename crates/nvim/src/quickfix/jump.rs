@@ -100,14 +100,20 @@ fn qf_jump_edit_buffer(
             return Jumped::Restore;
         }
         let oldwin = (prev_winid == Win::current().handle.get()).then(|| Win::current().id());
-        edit_buffer_number(fnum, 1, EcmdFlags::HIDE | EcmdFlags::SET_HELP, oldwin).is_ok()
+        edit_buffer_number(
+            fnum,
+            LineNr::ONE,
+            EcmdFlags::HIDE | EcmdFlags::SET_HELP,
+            oldwin,
+        )
+        .is_ok()
     } else {
         match escape_winfixbuf(qi, fnum, forceit, opened_window) {
             None => return Jumped::Restore,
             Some(false) => false,
             Some(true) => buflist_getfile(
                 fnum,
-                1,
+                LineNr::ONE,
                 GETF_SETMARK.cast_signed() | GETF_SWITCH.cast_signed(),
                 c_int::from(forceit),
             )
@@ -197,7 +203,7 @@ fn qf_jump_goto_line(position: &Position) {
         // Search from before the first line, and stay put if the
         // pattern is not there any more.
         let save_cursor = Win::current().w_cursor;
-        Win::current().w_cursor.lnum = 0;
+        Win::current().w_cursor.lnum = LineNr::ZERO;
         if !search_forward_keep(pattern) {
             Win::current().w_cursor = save_cursor;
         }
@@ -205,7 +211,7 @@ fn qf_jump_goto_line(position: &Position) {
     }
 
     // A line number of 0 means the entry names no line.
-    if position.lnum > 0 {
+    if position.lnum > LineNr::ZERO {
         Win::current().w_cursor.lnum = position.lnum.min(Buf::current().b_ml.ml_line_count);
     }
     if position.col <= 0 {

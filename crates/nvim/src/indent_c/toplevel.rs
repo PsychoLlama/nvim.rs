@@ -60,7 +60,7 @@ pub(crate) fn indent_at_top_level(line: &Line) -> c_int {
     //              here";
     //        char *foo = "asdf\
     //                     here";
-    if line.cur_curpos.lnum > 1 {
+    if line.cur_curpos.lnum > LineNr::ONE {
         // `lnum - 1` is at least 1, so it is a line of the buffer.
         let above = line.cur_curpos.lnum - 1;
         let continued = ends_in_backslash(Lines::current().line(above));
@@ -87,7 +87,7 @@ fn search_backwards(line: &Line) -> c_int {
     };
 
     Win::current().w_cursor = line.cur_curpos;
-    while Win::current().w_cursor.lnum > 1 {
+    while Win::current().w_cursor.lnum > LineNr::ONE {
         Win::current().w_cursor.lnum -= 1;
         Win::current().w_cursor.col = 0;
 
@@ -145,7 +145,7 @@ fn search_backwards(line: &Line) -> c_int {
             //     char *foo = "bla\
             //               bla",
             //          here;
-            while !continued && Win::current().w_cursor.lnum > 1 {
+            while !continued && Win::current().w_cursor.lnum > LineNr::ONE {
                 let above = Win::current().w_cursor.lnum - 1;
                 if !ends_in_backslash(Lines::current().line(above)) {
                     break;
@@ -165,7 +165,7 @@ fn search_backwards(line: &Line) -> c_int {
         }
 
         // A function declaration, and not in a comment: the left margin.
-        if is_func_decl(line.cur_curpos.lnum, 0) {
+        if is_func_decl(line.cur_curpos.lnum, LineNr::ZERO) {
             return amount;
         }
 
@@ -203,7 +203,7 @@ fn search_backwards(line: &Line) -> c_int {
         };
         if lone_semicolon {
             let curpos_save = Win::current().w_cursor;
-            while Win::current().w_cursor.lnum > 1 {
+            while Win::current().w_cursor.lnum > LineNr::ONE {
                 Win::current().w_cursor.lnum -= 1;
                 let lnum = Win::current().w_cursor.lnum;
                 let no_code = only_comment_left(Lines::current().line(lnum), 0);
@@ -216,7 +216,7 @@ fn search_backwards(line: &Line) -> c_int {
             // Upstream reads the line `cin_ispreproc_cont` last left it on,
             // which is the cursor's own either way.
             let lnum = Win::current().w_cursor.lnum;
-            if lnum > 0 && ends_in(Lines::current().line(lnum), 0, b"}") {
+            if lnum > LineNr::ZERO && ends_in(Lines::current().line(lnum), 0, b"}") {
                 return amount;
             }
             Win::current().w_cursor = curpos_save;
@@ -224,7 +224,7 @@ fn search_backwards(line: &Line) -> c_int {
 
         // If the PREVIOUS line is a function declaration, this line (and
         // the ones after it) are parameters.
-        if is_func_decl(Win::current().w_cursor.lnum, 0) {
+        if is_func_decl(Win::current().w_cursor.lnum, LineNr::ZERO) {
             return Buf::current().b_ind_param;
         }
 

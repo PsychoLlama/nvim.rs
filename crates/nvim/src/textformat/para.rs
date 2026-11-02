@@ -191,7 +191,7 @@ fn leaders_match(first: &[u8], first_len: usize, second: &[u8], second_len: usiz
 /// Whether a paragraph starts at line `lnum` -- that is, whether the line
 /// above it is *not* in the same paragraph. Used by 'formatoptions' `a`.
 pub(crate) fn paragraph_start(lnum: LineNr) -> bool {
-    if lnum <= 1 {
+    if lnum <= LineNr::ONE {
         return true; // start of the file
     }
     if Lines::current().line(lnum - 1).is_empty() {

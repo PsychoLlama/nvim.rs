@@ -30,6 +30,7 @@ use crate::mark::mark_adjust;
 use crate::memline::{Lines, ml_append_cstr, ml_delete};
 use crate::message::emsg;
 use crate::message_fmt::{msg_bytes, msg_cstr};
+use crate::narrow::len_as_int;
 use crate::option::vars::p_ic;
 use crate::os::cshim::{cstr_ncasecmp, gettext, strcoll, strtod_prefix};
 use crate::os::input::fast_breakcheck;
@@ -452,7 +453,7 @@ fn collect_sort_keys(
     let mut sorted = Vec::with_capacity((line2 - line1 + 1) as usize);
     let mut lines = Lines::current();
 
-    for lnum in line1..=line2 {
+    for lnum in line1.through(line2) {
         let (start, end) = match_range(regmatch, &mut lines, lnum, spec.use_match);
         let text = lines.line(lnum);
         let key = if spec.numeric || spec.float {
@@ -519,7 +520,7 @@ fn append_sorted(
 
         // If the original line number of the line being placed is not the
         // same as "lnum" (accounting for offset), the buffer changed.
-        if get_lnum + (count as LineNr - 1) != placed.lnum {
+        if get_lnum + (len_as_int(count) - 1) != placed.lnum {
             placed.moved = true;
         }
 
@@ -611,9 +612,15 @@ fn sort_range(args: &mut ExArg) {
 /// on the first of them.
 fn finish_sort(line1: LineNr, line2: LineNr, count: size_t, placed: &Placed) {
     let lnum = placed.lnum;
-    let deleted = count as LineNr - (lnum - line2);
+    let deleted = len_as_int(count) - (lnum - line2);
     if deleted > 0 {
-        mark_adjust(line2 - deleted, line2, MAXLNUM, -deleted, kExtmarkNOOP);
+        mark_adjust(
+            line2 - deleted,
+            line2,
+            MAXLNUM.get(),
+            -deleted,
+            kExtmarkNOOP,
+        );
         say::more(-deleted);
     } else if deleted < 0 {
         mark_adjust(line2, MAXLNUM, -deleted, 0, kExtmarkNOOP);
@@ -622,7 +629,7 @@ fn finish_sort(line1: LineNr, line2: LineNr, count: size_t, placed: &Placed) {
     if placed.moved || deleted != 0 {
         extmark_splice(
             Buf::current(),
-            line1 - 1,
+            (line1 - 1).get(),
             0,
             count as c_int,
             0,
@@ -668,7 +675,7 @@ impl UniqScan {
         &mut self,
         mode: UniqMode,
         i: LineNr,
-        count: LineNr,
+        count: i32,
         lnum: LineNr,
         is_match: bool,
     ) -> (LineNr, bool) {
@@ -678,7 +685,7 @@ impl UniqScan {
         let is_match = is_match && !forced;
         match mode {
             UniqMode::Dedup if is_match => (lnum, false),
-            UniqMode::Dedup => (0, true),
+            UniqMode::Dedup => (LineNr::ZERO, true),
 
             UniqMode::OnlyRepeated if is_match => {
                 self.done_lnum = lnum - 1;
@@ -689,13 +696,13 @@ impl UniqScan {
                 // The line before this one ended a run of one, so it is the
                 // one to drop -- and this line has then lost the line it was
                 // compared against.
-                let delete = if i > 0 && !self.in_run && lnum - 1 > self.done_lnum {
+                let delete = if i > LineNr::ZERO && !self.in_run && lnum - 1 > self.done_lnum {
                     self.force_unmatch = true;
                     lnum - 1
-                } else if i >= count - 1 {
+                } else if i >= LineNr::new(count - 1) {
                     lnum
                 } else {
-                    0
+                    LineNr::ZERO
                 };
                 self.in_run = false;
                 (delete, true)
@@ -709,7 +716,11 @@ impl UniqScan {
             UniqMode::OnlyUnique => {
                 // Only reachable once the previous step deleted this line's
                 // predecessor and reset the index to zero.
-                let delete = if i == 0 && self.in_run { lnum } else { 0 };
+                let delete = if i == LineNr::ZERO && self.in_run {
+                    lnum
+                } else {
+                    LineNr::ZERO
+                };
                 self.in_run = false;
                 (delete, true)
             }
@@ -775,12 +786,12 @@ fn uniq_range(args: &mut ExArg) {
 
             let is_match =
                 i > 0 && order.compare(current.with_nul(), previous.with_nul()) == Ordering::Equal;
-            let (delete_lnum, keep) = scan.step(mode, i, count, get_lnum, is_match);
+            let (delete_lnum, keep) = scan.step(mode, LineNr::new(i), count, get_lnum, is_match);
             if keep {
                 core::mem::swap(&mut previous, &mut current);
             }
 
-            if delete_lnum > 0 {
+            if delete_lnum > LineNr::ZERO {
                 let _ = ml_delete(delete_lnum);
                 i -= get_lnum - delete_lnum + 1;
                 count -= 1;
@@ -799,7 +810,7 @@ fn uniq_range(args: &mut ExArg) {
         mark_adjust(
             line2 - deleted,
             line2,
-            MAXLNUM,
+            MAXLNUM.get(),
             -deleted,
             if change_occurred {
                 kExtmarkUndo

@@ -8,6 +8,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::types::LineNr;
 use core::ffi::c_int;
 
 use super::compile::BtProg;
@@ -340,7 +341,7 @@ fn star(
                 if rex.at_bol() {
                     // Back over a line break, which a `\_x` may have
                     // consumed.
-                    if rex.lnum() == 0 {
+                    if rex.lnum() == LineNr::ZERO {
                         *status = RA_NOMATCH;
                         break;
                     }

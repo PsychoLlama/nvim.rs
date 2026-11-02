@@ -167,14 +167,18 @@ fn sign_get_placed_in_buf(
         return;
     }
 
-    let first_row = if lnum != 0 { lnum - 1 } else { 0 };
-    let mut signs = placed_signs(buffer, first_row, ns, |mark| {
-        if lnum != 0 && mark.pos.row >= lnum {
+    let first_row = if lnum != LineNr::ZERO {
+        lnum - 1
+    } else {
+        LineNr::ZERO
+    };
+    let mut signs = placed_signs(buffer, first_row.get(), ns, |mark| {
+        if lnum != LineNr::ZERO && mark.pos.row >= lnum.get() {
             // The tree is in row order, so nothing past this row can match.
             return Keep::Stop;
         }
         // A zero `lnum` or `sign_id` means "any"; the two combine.
-        let on_line = lnum == 0 || lnum == mark.pos.row + 1;
+        let on_line = lnum == LineNr::ZERO || lnum == LineNr::new(mark.pos.row + 1);
         let is_id = sign_id == 0 || sign_id == mark.id.cast_signed();
         if on_line && is_id {
             Keep::Yes
@@ -206,7 +210,7 @@ fn sign_get_placed(
         if buf_has_signs(cbuf) {
             // `lnum` is deliberately dropped: an all-buffers query
             // reports every line whatever line was asked for.
-            sign_get_placed_in_buf(cbuf, 0, id, group, retlist);
+            sign_get_placed_in_buf(cbuf, LineNr::ZERO, id, group, retlist);
         }
     }
 }
@@ -293,7 +297,7 @@ pub(crate) fn f_sign_getdefined(args: &[TypVal], result: &mut TypVal, _fptr: Eva
 /// `sign_getplaced()`.
 pub(crate) fn f_sign_getplaced(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut buf = None;
-    let mut lnum: LineNr = 0;
+    let mut lnum: LineNr = LineNr::ZERO;
     let mut sign_id = 0;
     let mut group = None;
 
@@ -312,7 +316,7 @@ pub(crate) fn f_sign_getplaced(args: &[TypVal], result: &mut TypVal, _fptr: Eval
 
             if let Some(tv) = key(dict, "lnum") {
                 lnum = tv_get_lnum(tv);
-                if lnum <= 0 {
+                if lnum <= LineNr::ZERO {
                     return;
                 }
             }
@@ -418,10 +422,10 @@ fn sign_place_from_dict(given: PlaceArgs<'_>, dict: Option<&Dict>) -> c_int {
         return -1;
     };
 
-    let mut lnum: LineNr = 0;
+    let mut lnum: LineNr = LineNr::ZERO;
     if let Some(tv) = key(dict, "lnum") {
         lnum = tv_get_lnum(tv);
-        if lnum <= 0 {
+        if lnum <= LineNr::ZERO {
             emsg(gettext(e_invarg));
             return -1;
         }
@@ -527,7 +531,7 @@ fn sign_unplace_from_dict(group_tv: Option<&TypVal>, dict: Option<&Dict>) -> c_i
         }
     }
 
-    sign_unplace(buf, id, group.as_deref(), 0) - 1
+    sign_unplace(buf, id, group.as_deref(), LineNr::ZERO) - 1
 }
 
 /// `sign_unplace()`.

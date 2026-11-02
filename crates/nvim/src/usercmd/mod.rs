@@ -242,7 +242,7 @@ pub(crate) fn find_ucmd(
                     expand.luaref = uc.complete_luaref;
                     expand.arg = uc.complete_arg.as_deref().map(XString::from_cstr);
                     expand.script_ctx = uc.script_ctx;
-                    expand.script_ctx.sc_lnum += sourcing_lnum();
+                    expand.script_ctx.sc_lnum += sourcing_lnum().get();
                 }
                 // Do not look for further abbreviations of an exact match.
                 matchlen = k;
@@ -345,7 +345,7 @@ impl Definition {
     /// The entry this definition makes, the references moving into it.
     fn into_command(mut self, name: Rc<CStr>, replacement: Rc<CStr>) -> UserCmd {
         let mut script_ctx = current_sctx.get();
-        script_ctx.sc_lnum += sourcing_lnum();
+        script_ctx.sc_lnum += sourcing_lnum().get();
         nlua_set_sctx(&mut script_ctx);
         UserCmd {
             name,

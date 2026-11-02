@@ -92,7 +92,7 @@ use crate::global_cell::GlobalCell;
 use core::ffi::c_int;
 
 pub(crate) static SUB_NSUBS: GlobalCell<c_int> = GlobalCell::new(0);
-pub(crate) static SUB_NLINES: GlobalCell<LineNr> = GlobalCell::new(0);
+pub(crate) static SUB_NLINES: GlobalCell<i32> = GlobalCell::new(0);
 
 /// `:vimgrep`'s pattern argument at the start of a command line's string.
 struct VimgrepPat<'a> {
@@ -206,7 +206,7 @@ pub struct SubResult {
 #[derive(Default)]
 pub struct PreviewLines {
     pub subresults: Vec<SubResult>,
-    pub lines_needed: LineNr,
+    pub lines_needed: i32,
 }
 #[derive(Copy, Clone)]
 pub struct SubFlags {

@@ -51,12 +51,12 @@ pub fn nv_diffgetput(put: bool, count: size_t) {
         skip: false,
         forceit: false,
         addr_count: 0,
-        line1: 0,
-        line2: 0,
+        line1: LineNr::ZERO,
+        line2: LineNr::ZERO,
         addr_type: CmdAddr::Lines,
         flags: 0,
         do_ecmd_cmd: EcmdCmd::None,
-        do_ecmd_lnum: 0,
+        do_ecmd_lnum: LineNr::ZERO,
         append: false,
         usefilter: false,
         amount: 0,
@@ -174,13 +174,13 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
         // The short circuit is upstream's.
         let below_end = line1 == Buf::current().b_ml.ml_line_count
             && diff_check_with_linestatus(Win::current(), line1) == (0, 0)
-            && (line1 == 1 as LineNr || {
+            && (line1 == LineNr::ONE || {
                 let (fill, linestatus) = diff_check_with_linestatus(Win::current(), line1 - 1);
                 fill >= 0 && linestatus == 0
             });
         if below_end {
             excmd.line2 += 1;
-        } else if line1 > 0 as LineNr {
+        } else if line1 > LineNr::ZERO {
             excmd.line1 -= 1;
         }
     }
@@ -261,14 +261,14 @@ fn diffgetput(
 ) {
     let (idx_cur, idx_from, idx_to) = (idx_cur as usize, idx_from as usize, idx_to as usize);
     let mut tp = TabPage::current();
-    let mut off = 0 as LineNr;
+    let mut off: i32 = 0;
     let mut at = 0;
     while at < tp.tp_diff.len() {
         if addr_count == 0 {
             // Without a range, a run of blocks that touch is taken as one.
             while let Some(next) = tp.tp_diff.get(at + 1)
                 && next.df_lnum[idx_cur] == tp.tp_diff[at].end(idx_cur)
-                && next.df_lnum[idx_cur] == line1 + off + 1 as LineNr
+                && next.df_lnum[idx_cur] == line1 + off + 1
             {
                 at += 1;
             }
@@ -283,8 +283,7 @@ fn diffgetput(
         let mut count = df_count[idx_to];
         let generation = tp.tp_diff_gen;
         // The short circuit is upstream's.
-        let undoable =
-            end(idx_cur) > line1 + off && u_save(lnum - 1 as LineNr, lnum + count).is_ok();
+        let undoable = end(idx_cur) > line1 + off && u_save(lnum - 1, lnum + count).is_ok();
         // `u_save` can run `FileChangedRO`.
         if tp.tp_diff_gen != generation {
             break;
@@ -292,23 +291,23 @@ fn diffgetput(
         if undoable {
             // With a range, the first and last block of it are only partly
             // copied; `start_skip`/`end_skip` are the parts left out.
-            let mut start_skip = 0 as LineNr;
-            let mut end_skip = 0 as LineNr;
+            let mut start_skip = 0;
+            let mut end_skip = 0;
             if addr_count > 0 {
                 start_skip = line1 + off - df_lnum[idx_cur];
-                if start_skip > 0 as LineNr {
+                if start_skip > 0 {
                     if start_skip > count {
                         lnum += count;
-                        count = 0 as LineNr;
+                        count = 0;
                     } else {
                         count -= start_skip;
                         lnum += start_skip;
                     }
                 } else {
-                    start_skip = 0 as LineNr;
+                    start_skip = 0;
                 }
-                end_skip = end(idx_cur) - 1 as LineNr - (line2 + off);
-                if end_skip > 0 as LineNr {
+                end_skip = end(idx_cur) - 1 - (line2 + off);
+                if end_skip > 0 {
                     if idx_cur == idx_from {
                         count = count.min(df_count[idx_cur] - start_skip - end_skip);
                     } else {
@@ -316,19 +315,19 @@ fn diffgetput(
                         end_skip = (df_count[idx_from] - start_skip - count).max(0);
                     }
                 } else {
-                    end_skip = 0 as LineNr;
+                    end_skip = 0;
                 }
             }
 
             let mut buf_empty = buf_is_empty(Buf::current());
             let mut added: c_int = 0;
             for _ in 0..count {
-                buf_empty = Buf::current().b_ml.ml_line_count == 1 as LineNr;
+                buf_empty = Buf::current().b_ml.ml_line_count == LineNr::ONE;
                 if ml_delete(lnum).is_ok() {
                     added -= 1;
                 }
             }
-            let mut i = 0 as LineNr;
+            let mut i = 0;
             while i < df_count[idx_from] - start_skip - end_skip {
                 let src = tp.used_diffbuf(idx_from);
                 let nr = df_lnum[idx_from] + start_skip + i;
@@ -339,22 +338,22 @@ fn diffgetput(
                 // line was read from. Its length counts the terminator,
                 // which is why the copy keeps one.
                 let text = Lines::in_buffer(src).line_copy(nr);
-                let at = lnum + i - 1 as LineNr;
+                let at = lnum + i - 1;
                 let _ = ml_append_cstr(at, text.as_cstr());
                 added += 1;
-                if buf_empty && Buf::current().b_ml.ml_line_count == 2 as LineNr {
+                if buf_empty && Buf::current().b_ml.ml_line_count == LineNr::new(2) {
                     buf_empty = false;
-                    let _ = ml_delete(2 as LineNr);
+                    let _ = ml_delete(LineNr::new(2));
                 }
                 i += 1;
             }
-            let new_count = df_count[idx_to] + added as LineNr;
+            let new_count = df_count[idx_to] + added;
             tp.tp_diff[at].df_count[idx_to] = new_count;
 
             // A block that now reads the same in every buffer is not a
             // difference any more.
             let mut freed_ranges = None;
-            if start_skip == 0 as LineNr && end_skip == 0 as LineNr {
+            if start_skip == 0 && end_skip == 0 {
                 let slots = tp.tp_diffbuf;
                 let dp = &tp.tp_diff[at];
                 let all_equal = (0..DB_COUNT as usize).all(|i| {
@@ -373,9 +372,9 @@ fn diffgetput(
             }
             let generation = tp.tp_diff_gen;
 
-            let last = lnum + count - 1 as LineNr;
-            let max = MAXLNUM as LineNr;
-            let amount = added as LineNr;
+            let last = lnum + count - 1;
+            let max = MAXLNUM.get();
+            let amount = added;
             if added != 0 {
                 mark_adjust(lnum, last, max, amount, kExtmarkNOOP);
                 if Win::current().w_cursor.lnum >= lnum {

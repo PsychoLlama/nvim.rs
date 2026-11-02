@@ -67,7 +67,7 @@ fn may_force_numberwidth_recompute(buffer: Buf, unplace: bool) {
             && (wp.w_onebuf_opt.wo_nu != 0 || wp.w_onebuf_opt.wo_rnu != 0)
             && (unplace || wp.w_nrwidth_width < 2)
         {
-            wp.w_nrwidth_line_count = 0 as LineNr;
+            wp.w_nrwidth_line_count = LineNr::ZERO;
         }
     }
 }

@@ -67,7 +67,7 @@ impl SynState {
         let cur_si = self.item_mut(top);
         cur_si.si_h_startpos = h_startpos;
         cur_si.si_m_startcol = col;
-        cur_si.si_m_lnum = lnum;
+        cur_si.si_m_lnum = lnum.get();
         cur_si.si_flags = spp.sp_flags | outer_conceal;
         cur_si.si_seqnr = seqnr;
         cur_si.si_cchar = spp.sp_cchar;
@@ -118,7 +118,7 @@ impl SynState {
             let cur_si = self.item_mut(top);
             cur_si.si_h_startpos = h_startpos;
             cur_si.si_m_startcol = col;
-            cur_si.si_m_lnum = lnum;
+            cur_si.si_m_lnum = lnum.get();
             cur_si.si_m_endpos = eos_pos;
             cur_si.si_h_endpos = eos_pos;
             cur_si.si_ends = 1;
@@ -314,21 +314,27 @@ impl SynState {
             i -= 1;
         }
 
-        let mut maxpos = LPos { lnum: 0, col: 0 };
-        let mut maxpos_h = LPos { lnum: 0, col: 0 };
+        let mut maxpos = LPos {
+            lnum: LineNr::ZERO,
+            col: 0,
+        };
+        let mut maxpos_h = LPos {
+            lnum: LineNr::ZERO,
+            col: 0,
+        };
         while i < self.state_len() {
             let sip = self.item_mut(i);
-            if maxpos.lnum != 0 {
+            if maxpos.lnum != LineNr::ZERO {
                 limit_pos_zero(&mut sip.si_m_endpos, maxpos);
                 limit_pos_zero(&mut sip.si_h_endpos, maxpos_h);
                 limit_pos_zero(&mut sip.si_eoe_pos, maxpos);
                 sip.si_ends = 1;
             }
             if sip.si_ends != 0 && sip.si_flags.has(SynFlags::KEEPEND) {
-                if maxpos.lnum == 0 || pos_after(maxpos, sip.si_m_endpos) {
+                if maxpos.lnum == LineNr::ZERO || pos_after(maxpos, sip.si_m_endpos) {
                     maxpos = sip.si_m_endpos;
                 }
-                if maxpos_h.lnum == 0 || pos_after(maxpos_h, sip.si_h_endpos) {
+                if maxpos_h.lnum == LineNr::ZERO || pos_after(maxpos_h, sip.si_h_endpos) {
                     maxpos_h = sip.si_h_endpos;
                 }
             }
@@ -361,7 +367,7 @@ impl SynState {
         let end = self.find_endpos(si_idx, startpos, start_ext.as_deref());
         // A "oneline" that found no end never continues in the next line:
         // it ends with this one. Only then is the line's length wanted.
-        let oneline_end = (end.m_endpos.lnum == 0
+        let oneline_end = (end.m_endpos.lnum == LineNr::ZERO
             && self.block().pattern(si_idx).sp_flags.has(SynFlags::ONELINE))
         .then(|| self.curline_len());
         let lnum = self.lnum;
@@ -370,7 +376,7 @@ impl SynState {
         if let Some(flags) = end.flags {
             sip.si_flags = flags;
         }
-        if end.m_endpos.lnum == 0 {
+        if end.m_endpos.lnum == LineNr::ZERO {
             // No end pattern matched.
             if let Some(line_len) = oneline_end {
                 sip.si_ends = 1;
@@ -378,7 +384,7 @@ impl SynState {
                 sip.si_m_endpos.col = line_len;
             } else {
                 sip.si_ends = 0;
-                sip.si_m_endpos.lnum = 0;
+                sip.si_m_endpos.lnum = LineNr::ZERO;
             }
             sip.si_h_endpos = sip.si_m_endpos;
         } else {

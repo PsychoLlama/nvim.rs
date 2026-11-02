@@ -59,8 +59,8 @@ impl<'a> CallWith<'a> {
     pub(crate) fn new(evaluate: bool) -> Self {
         CallWith {
             argv_func: None,
-            firstline: 0,
-            lastline: 0,
+            firstline: LineNr::ZERO,
+            lastline: LineNr::ZERO,
             evaluate,
             partial: None,
             selfdict: None,

@@ -18,6 +18,7 @@ use crate::ex_docmd::cmdmod_has;
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::memory::XString;
 use crate::message::msg_display_bytes;
+use crate::narrow::number_as_int;
 use crate::option::{ScrollMargin, ScrollOff, cpo_has};
 use crate::optionstr::{OptString, OptStringRef};
 use crate::plines::getvcol;
@@ -300,7 +301,7 @@ fn back_off_start(pos: &mut Pos, off: i64) {
         }
         if c != 0 {
             // At the start of the buffer; lnum == 0 is allowed here.
-            pos.lnum = 0;
+            pos.lnum = LineNr::ZERO;
             pos.col = MAXCOL as ColNr;
         }
     } else {
@@ -328,11 +329,11 @@ fn add_offset(pos: &mut Pos, off: SearchOffset) -> c_int {
         let lnum = i64::from(pos.lnum) + off.off;
         let last = Buf::current().b_ml.ml_line_count;
         pos.lnum = if lnum < 1 {
-            1
+            LineNr::ONE
         } else if lnum > i64::from(last) {
             last
         } else {
-            lnum as LineNr
+            LineNr::new(number_as_int(lnum))
         };
         pos.col = 0;
         return 2; // pattern found, line offset added

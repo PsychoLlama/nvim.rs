@@ -58,7 +58,7 @@ impl Default for WinExecute {
         WinExecute {
             wp: None,
             curpos: Pos {
-                lnum: 0,
+                lnum: LineNr::ZERO,
                 col: 0,
                 coladd: 0,
             },
@@ -247,8 +247,8 @@ pub struct Window {
     pub w_viewport_invalid: bool,
     pub w_viewport_last_topline: LineNr,
     pub w_viewport_last_botline: LineNr,
-    pub w_viewport_last_topfill: LineNr,
-    pub w_viewport_last_skipcol: LineNr,
+    pub w_viewport_last_topfill: i32,
+    pub w_viewport_last_skipcol: ColNr,
     pub w_cline_height: ::core::ffi::c_int,
     pub w_cline_folded: bool,
     pub w_cline_row: ::core::ffi::c_int,
@@ -364,7 +364,7 @@ impl WinInfo {
             wi_win: win,
             wi_mark: FileMark {
                 mark: Pos {
-                    lnum: 0,
+                    lnum: LineNr::ZERO,
                     col: 0,
                     coladd: 0,
                 },

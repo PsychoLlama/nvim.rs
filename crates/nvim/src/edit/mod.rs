@@ -308,7 +308,7 @@ state_record! {
     revins_scol: ::core::ffi::c_int = 0;
     ins_need_undo: bool = false;
     dont_sync_undo: KeepUndo = KeepUndo::No;
-    o_lnum: LineNr = 0;
+    o_lnum: LineNr = LineNr::ZERO;
     /// The Replace-mode stack of overwritten bytes -- see [`replace`].
     ///
     /// A `Vec`, not klib's `kvec_t(char)`: the growth policy was the only

@@ -139,7 +139,7 @@ impl Source<'_, '_> {
     fn breakpoint_due(&mut self, lnum: LineNr) -> bool {
         self.lines.debug().is_some_and(|pos| {
             let at = pos.breakpoint.get();
-            at != 0 && at <= lnum
+            at != LineNr::ZERO && at <= lnum
         })
     }
 

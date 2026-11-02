@@ -65,7 +65,7 @@ pub(crate) struct PointerEntry {
     /// The child's block number.
     pub pe_bnum: BlockNr,
     /// How many lines the child holds.
-    pub pe_line_count: LineNr,
+    pub pe_line_count: i32,
     /// Which line the child held first when the file was read: all
     /// `:recover` has to order a block it can only find in the file by.
     pub pe_old_lnum: LineNr,
@@ -588,14 +588,14 @@ impl<P: AsRef<[u8]>> PointerBlock<P> {
         PointerEntry {
             pe_bnum: get_i64(bytes, at + offset_of!(PointerEntry, pe_bnum)),
             pe_line_count: get_i32(bytes, at + offset_of!(PointerEntry, pe_line_count)),
-            pe_old_lnum: get_i32(bytes, at + offset_of!(PointerEntry, pe_old_lnum)),
+            pe_old_lnum: LineNr::new(get_i32(bytes, at + offset_of!(PointerEntry, pe_old_lnum))),
             pe_page_count: get_i32(bytes, at + offset_of!(PointerEntry, pe_page_count)),
         }
     }
 
     /// The line count of entry `i`, without reading the rest of it.
     #[inline]
-    pub(crate) fn line_count(&self, i: usize) -> LineNr {
+    pub(crate) fn line_count(&self, i: usize) -> i32 {
         get_i32(
             self.bytes(),
             Self::entry_at(i) + offset_of!(PointerEntry, pe_line_count),
@@ -606,7 +606,7 @@ impl<P: AsRef<[u8]>> PointerBlock<P> {
     /// adds up to find the child holding a line. One bounds check for the
     /// lot rather than one per entry.
     #[inline]
-    pub(crate) fn line_counts(&self) -> impl Iterator<Item = LineNr> + '_ {
+    pub(crate) fn line_counts(&self) -> impl Iterator<Item = i32> + '_ {
         let count = usize::from(self.count());
         let at = offset_of!(PointerEntry, pe_line_count);
         let (entries, _) = self.bytes()[PE_AT..Self::entry_at(count)].as_chunks::<PE_SIZE>();
@@ -666,19 +666,19 @@ impl<P: AsRef<[u8]> + AsMut<[u8]>> PointerBlock<P> {
         );
     }
 
-    pub(crate) fn set_line_count(&mut self, i: usize, count: LineNr) {
+    pub(crate) fn set_line_count(&mut self, i: usize, count: i32) {
         let at = Self::entry_at(i) + offset_of!(PointerEntry, pe_line_count);
         set_i32(self.bytes_mut(), at, count);
     }
 
-    pub(crate) fn add_line_count(&mut self, i: usize, delta: LineNr) {
+    pub(crate) fn add_line_count(&mut self, i: usize, delta: i32) {
         let count = self.line_count(i);
         self.set_line_count(i, count + delta);
     }
 
     pub(crate) fn set_old_lnum(&mut self, i: usize, lnum: LineNr) {
         let at = Self::entry_at(i) + offset_of!(PointerEntry, pe_old_lnum);
-        set_i32(self.bytes_mut(), at, lnum);
+        set_i32(self.bytes_mut(), at, lnum.get());
     }
 
     pub(crate) fn set_page_count(&mut self, i: usize, count: c_int) {
@@ -699,7 +699,7 @@ impl<P: AsRef<[u8]> + AsMut<[u8]>> PointerBlock<P> {
         self.set_bnum(i, bnum);
         self.set_line_count(i, lines);
         self.set_page_count(i, pages);
-        if old_lnum != 0 {
+        if old_lnum != LineNr::ZERO {
             self.set_old_lnum(i, old_lnum);
         }
     }
@@ -1045,7 +1045,7 @@ mod tests {
         block.set_count(3);
         for i in 0..3 {
             let n = c_int::try_from(i).unwrap();
-            block.set_child(i, BlockNr::from(n) - 5, 10 * n, 1, n + 1);
+            block.set_child(i, BlockNr::from(n) - 5, 10 * n, 1, LineNr::new(n + 1));
         }
         assert_eq!(block.line_total(), 30);
         assert_eq!(
@@ -1053,13 +1053,13 @@ mod tests {
             PointerEntry {
                 pe_bnum: -3,
                 pe_line_count: 20,
-                pe_old_lnum: 3,
+                pe_old_lnum: LineNr::new(3),
                 pe_page_count: 1
             }
         );
         // `set_child` with no line leaves the old one.
-        block.set_child(0, 9, 1, 2, 0);
-        assert_eq!(block.entry(0).pe_old_lnum, 1);
+        block.set_child(0, 9, 1, 2, LineNr::ZERO);
+        assert_eq!(block.entry(0).pe_old_lnum, LineNr::ONE);
 
         block.move_entries(1, 2, 2);
         assert_eq!(block.entry(3).pe_line_count, 20);

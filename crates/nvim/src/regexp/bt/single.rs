@@ -60,7 +60,9 @@ pub(crate) fn match_one(
         BtOp::Bol => nomatch_unless(rex.at_bol()),
         BtOp::Eol => nomatch_unless(c == NUL),
         BtOp::ReBof => nomatch_unless(
-            rex.lnum() == 0 && rex.at_bol() && (!rex.multi() || rex.reg_firstlnum() <= 1),
+            rex.lnum() == LineNr::ZERO
+                && rex.at_bol()
+                && (!rex.multi() || rex.reg_firstlnum() <= LineNr::ONE),
         ),
         BtOp::ReEof => nomatch_unless(rex.lnum() == rex.reg_maxline() && c == NUL),
         BtOp::Cursor => nomatch_unless(match cursor_of(rex) {
@@ -73,7 +75,7 @@ pub(crate) fn match_one(
         // `\%23l`, `\%23c`, `\%23v` and their `<`/`>` forms. A line
         // number only means something in a multi-line match.
         BtOp::ReLnum => {
-            nomatch_unless(rex.multi() && re_num_cmp(prog, rex.buf_lnum() as uint32_t, scan))
+            nomatch_unless(rex.multi() && re_num_cmp(prog, rex.buf_lnum().get() as u32, scan))
         }
         BtOp::ReCol => nomatch_unless(re_num_cmp(
             prog,
@@ -220,11 +222,15 @@ fn char_class(rex: Rex) -> c_int {
 /// `\%23v` compares against this: the screen column the cursor sits in.
 fn virtual_column(rex: Rex) -> uint32_t {
     let wp = rex.reg_win().unwrap_or_else(Win::current);
-    let mut lnum: LineNr = if rex.multi() { rex.buf_lnum() } else { 1 };
+    let mut lnum: LineNr = if rex.multi() {
+        rex.buf_lnum()
+    } else {
+        LineNr::ONE
+    };
     // A string match has no line numbers, and a multi-line match may be
     // running over a line that has since been deleted.
-    if rex.multi() && (lnum <= 0 || lnum > wp.buffer().b_ml.ml_line_count) {
-        lnum = 1;
+    if rex.multi() && (lnum <= LineNr::ZERO || lnum > wp.buffer().b_ml.ml_line_count) {
+        lnum = LineNr::ONE;
     }
     win_linetabsize(wp, lnum, rex.line(), rex.col()) as uint32_t
 }
@@ -247,13 +253,13 @@ fn at_mark(rex: Rex, prog: BtProg<'_>, scan: usize) -> c_int {
         return RA_NOMATCH;
     };
     let pos = fm.mark;
-    if pos.lnum <= 0 {
+    if pos.lnum <= LineNr::ZERO {
         return RA_NOMATCH;
     }
     let here_lnum = rex.buf_lnum();
     // A mark at MAXCOL sits at the end of its line.
     let pos_col = if pos.lnum == here_lnum && pos.col == MAXCOL as c_int {
-        reg_getline_len(rex, pos.lnum - rex.reg_firstlnum())
+        reg_getline_len(rex, LineNr::new(pos.lnum - rex.reg_firstlnum()))
     } else {
         pos.col
     };

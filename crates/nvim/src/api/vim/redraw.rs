@@ -35,7 +35,7 @@ fn redraw_status(mut window: Win, opts: &Redraw, flush: bool) -> bool {
     );
     let has_statuscolumn = ::core::ffi::c_int::from(window.w_onebuf_opt.wo_stc.first_byte()) != NUL;
     if statuscolumn && has_statuscolumn {
-        window.w_nrwidth_line_count = 0 as LineNr;
+        window.w_nrwidth_line_count = LineNr::ZERO;
         changed_window_setting(window);
     }
     let old_row_offset = window.w_grid.row_offset;
@@ -115,7 +115,7 @@ pub fn nvim__redraw(opts: &mut KeyDict_redraw) -> Result<(), Error> {
             end_raw.max(begin).min(line_count)
         };
         if begin < end {
-            let first = 1 + LineNr::try_from(begin).expect("the range is clamped to the buffer");
+            let first = LineNr::try_from(begin).expect("the range is clamped to the buffer") + 1;
             let last = LineNr::try_from(end).expect("the range is clamped to the buffer");
             redraw_buf_range_later(rbuf, first, last);
         }

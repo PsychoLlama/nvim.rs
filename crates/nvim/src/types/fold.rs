@@ -16,5 +16,5 @@ pub struct FoldInfo {
     pub fi_lnum: LineNr,
     pub fi_level: ::core::ffi::c_int,
     pub fi_low_level: ::core::ffi::c_int,
-    pub fi_lines: LineNr,
+    pub fi_lines: i32,
 }

@@ -14,6 +14,7 @@
 )]
 
 use crate::regexp::NfaOp;
+use crate::types::LineNr;
 use core::ffi::c_int;
 
 use super::assertions::{at_col, at_cursor, at_line, at_mark, at_vcol, in_visual};
@@ -199,7 +200,9 @@ pub(crate) fn step<'p>(
         Ok(NfaOp::Bow) => Step::zero_width(at_word_start(rex, curc), states, out),
         Ok(NfaOp::Eow) => Step::zero_width(at_word_end(rex), states, out),
         Ok(NfaOp::Bof) => Step::zero_width(
-            rex.lnum() == 0 && rex.at_bol() && (!rex.multi() || rex.reg_firstlnum() == 1),
+            rex.lnum() == LineNr::ZERO
+                && rex.at_bol()
+                && (!rex.multi() || rex.reg_firstlnum() == LineNr::ONE),
             states,
             out,
         ),

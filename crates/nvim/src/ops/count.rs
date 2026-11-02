@@ -243,7 +243,7 @@ fn count_buffer(counts: &mut PosCounts, mut selection: Option<&mut Selection>) -
     let mut bd = BlockDef::ZERO;
     let mut last_check: VarNumber = 100_000;
 
-    for lnum in 1..=Buf::current().line_count() {
+    for lnum in 1..=Buf::current().line_count().get() {
         if counts.bytes > last_check {
             os_breakcheck();
             if got_int.get() {
@@ -253,10 +253,10 @@ fn count_buffer(counts: &mut PosCounts, mut selection: Option<&mut Selection>) -
         }
 
         if let Some(sel) = selection.as_mut() {
-            if lnum >= sel.min.lnum && lnum <= sel.max.lnum {
-                count_selected_line(counts, sel, &mut bd, lnum, eol_size);
+            if lnum >= sel.min.lnum.get() && lnum <= sel.max.lnum.get() {
+                count_selected_line(counts, sel, &mut bd, LineNr::new(lnum), eol_size);
             }
-        } else if lnum == Win::current().w_cursor.lnum {
+        } else if lnum == Win::current().w_cursor.lnum.get() {
             // Outside Visual mode the `_cursor` totals are the running
             // ones up to this line, plus this line up to the cursor.
             counts.words_cursor += counts.words;
@@ -268,14 +268,14 @@ fn count_buffer(counts: &mut PosCounts, mut selection: Option<&mut Selection>) -
                 ..
             } = counts;
             let mut lines = Lines::current();
-            let taken = line_count_info(lines.line(lnum), wc, cc, upto, eol_size);
+            let taken = line_count_info(lines.line(LineNr::new(lnum)), wc, cc, upto, eol_size);
             counts.bytes_cursor = counts.bytes + taken;
         }
 
         let PosCounts { words, chars, .. } = counts;
         let all = VarNumber::from(MAXCOL);
         let mut lines = Lines::current();
-        counts.bytes += line_count_info(lines.line(lnum), words, chars, all, eol_size);
+        counts.bytes += line_count_info(lines.line(LineNr::new(lnum)), words, chars, all, eol_size);
     }
 
     // The last line has no EOL, so it was counted one byte too long.

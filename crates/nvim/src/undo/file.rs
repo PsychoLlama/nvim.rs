@@ -38,9 +38,9 @@ use crate::semsg;
 /// that is no longer there.
 pub fn u_compute_hash(buffer: Buf, hash: &mut [u8; UNDO_HASH_SIZE as usize]) {
     let mut ctx = Sha256::new();
-    for lnum in 1..=buffer.b_ml.ml_line_count {
+    for lnum in 1..=buffer.b_ml.ml_line_count.get() {
         let mut lines = buffer.lines();
-        ctx.update(lines.line(lnum));
+        ctx.update(lines.line(LineNr::new(lnum)));
         // The terminating NUL goes in too, as a line separator.
         ctx.update(&[0]);
     }
@@ -166,14 +166,14 @@ pub(crate) fn serialize_header(bi: &mut BufInfo, hash: &[u8; UNDO_HASH_SIZE as u
     if !bi.write(hash) {
         return false;
     }
-    bi.write_int(buf.b_ml.ml_line_count, 4);
+    bi.write_int(buf.b_ml.ml_line_count.get(), 4);
 
     let line: &[u8] = buf.b_u_line.as_deref().unwrap_or_default();
     bi.write_len(line.len());
     if !line.is_empty() && !bi.write(line) {
         return false;
     }
-    bi.write_int(buf.b_u_line_lnum, 4);
+    bi.write_int(buf.b_u_line_lnum.get(), 4);
     bi.write_int(buf.b_u_line_colnr, 4);
 
     bi.put_header_link(buf.b_u_oldhead);
@@ -403,9 +403,9 @@ pub(crate) fn unserialize_extmark(bi: &mut BufInfo, file_name: &CStr) -> Option<
 
 /// Writes one undo entry: where the lines it saved came from, and the lines.
 pub(crate) fn serialize_uep(bi: &mut BufInfo, entry: &UndoEntry) -> bool {
-    bi.write_int(entry.top, 4);
-    bi.write_int(entry.bot, 4);
-    bi.write_int(entry.lcount, 4);
+    bi.write_int(entry.top.get(), 4);
+    bi.write_int(entry.bot.get(), 4);
+    bi.write_int(entry.lcount.get(), 4);
     bi.write_len(entry.lines.len());
     for line in &entry.lines {
         if !bi.write_len(line.len()) {
@@ -444,16 +444,16 @@ pub(crate) fn unserialize_uep(bi: &mut BufInfo, file_name: &CStr) -> Option<Undo
         lines.push(undo_read_string(bi, line_len)?);
     }
     Some(UndoEntry {
-        top,
-        bot,
-        lcount,
+        top: LineNr::new(top),
+        bot: LineNr::new(bot),
+        lcount: LineNr::new(lcount),
         lines,
     })
 }
 
 /// Writes a position as three four-byte fields.
 pub(crate) fn serialize_pos(bi: &mut BufInfo, pos: Pos) {
-    bi.write_int(pos.lnum, 4);
+    bi.write_int(pos.lnum.get(), 4);
     bi.write_int(pos.col, 4);
     bi.write_int(pos.coladd, 4);
 }
@@ -462,7 +462,7 @@ pub(crate) fn serialize_pos(bi: &mut BufInfo, pos: Pos) {
 /// column is not a position, and every caller would have to check anyway.
 pub(crate) fn unserialize_pos(bi: &mut BufInfo) -> Pos {
     Pos {
-        lnum: bi.read_4c().max(0),
+        lnum: LineNr::new(bi.read_4c().max(0)),
         col: bi.read_4c().max(0),
         coladd: bi.read_4c().max(0),
     }
@@ -561,7 +561,7 @@ mod tests {
             alt_prev: UndoLink::NONE,
             seq: 5,
             cursor: Pos {
-                lnum: 4,
+                lnum: LineNr::new(4),
                 col: 2,
                 coladd: 0,
             },
@@ -571,20 +571,20 @@ mod tests {
             time: 1_700_000_000,
             ..Default::default()
         };
-        uh.named_marks[0].mark.lnum = 9;
+        uh.named_marks[0].mark.lnum = LineNr::new(9);
         uh.named_marks[25].mark.col = 3;
-        uh.visual.vi_start.lnum = 1;
+        uh.visual.vi_start.lnum = LineNr::ONE;
         uh.visual.vi_mode = c_int::from(b'V');
         uh.entries.push(UndoEntry {
-            top: 0,
-            bot: 0,
-            lcount: 0,
+            top: LineNr::ZERO,
+            bot: LineNr::ZERO,
+            lcount: LineNr::ZERO,
             lines: vec![XString::from_bytes("h\u{e9}llo".as_bytes()), XString::new()],
         });
         uh.entries.push(UndoEntry {
-            top: 3,
-            bot: 5,
-            lcount: 12,
+            top: LineNr::new(3),
+            bot: LineNr::new(5),
+            lcount: LineNr::new(12),
             lines: vec![XString::from_bytes(b"newest")],
         });
         uh.extmarks.push(ExtmarkUndoObject::Splice(splice(1)));
@@ -622,20 +622,20 @@ mod tests {
         assert!(back.cursor == uh.cursor);
         assert_eq!((back.cursor_vcol, back.flags), (-1, uh.flags));
         assert_eq!((back.save_nr, back.time), (2, 1_700_000_000));
-        assert_eq!(back.named_marks[0].mark.lnum, 9);
+        assert_eq!(back.named_marks[0].mark.lnum, LineNr::new(9));
         assert_eq!(back.named_marks[25].mark.col, 3);
         assert_eq!(
-            (back.visual.vi_start.lnum, back.visual.vi_mode),
+            (back.visual.vi_start.lnum.get(), back.visual.vi_mode),
             (1, c_int::from(b'V'))
         );
-        let entries: Vec<(LineNr, LineNr, LineNr, Vec<Vec<u8>>)> = back
+        let entries: Vec<(i32, i32, i32, Vec<Vec<u8>>)> = back
             .entries
             .iter()
             .map(|e| {
                 (
-                    e.top,
-                    e.bot,
-                    e.lcount,
+                    e.top.get(),
+                    e.bot.get(),
+                    e.lcount.get(),
                     e.lines.iter().map(|l| l.to_vec()).collect(),
                 )
             })

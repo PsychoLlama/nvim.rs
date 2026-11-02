@@ -76,11 +76,11 @@ fn update_topline_win(mut win: Win) {
 
     if buf_is_empty(win.buffer()) {
         // Special case: an empty file always starts at line 1.
-        if win.w_topline != 1 {
+        if win.w_topline != LineNr::ONE {
             win.redraw_later(UPD_NOT_VALID);
         }
-        win.w_topline = 1;
-        win.w_botline = 2;
+        win.w_topline = LineNr::ONE;
+        win.w_botline = LineNr::new(2);
         win.w_skipcol = 0;
         win.w_valid |= WinValid::BOTLINE | WinValid::BOTLINE_AP;
         win.w_viewport_invalid = true;
@@ -92,7 +92,7 @@ fn update_topline_win(mut win: Win) {
         let n = if win.lines_concealed() {
             unconcealed_above(win, halfheight, so.get())
         } else {
-            (win.w_topline as OptInt + so.get() - win.w_cursor.lnum as OptInt) as int64_t
+            (i64::from(win.w_topline) + so.get() - i64::from(win.w_cursor.lnum)) as int64_t
         };
         // Far out to begin with: put the cursor in the middle of the window.
         // Close: put it near the top.
@@ -167,7 +167,7 @@ fn update_topline_win(mut win: Win) {
 /// Whether the cursor is above the window, or too close to its top for
 /// 'scrolloff', or the window shows more filler lines than there is room for.
 fn check_topline(win: Win) -> bool {
-    if win.w_topline > 1 || win.w_skipcol > 0 {
+    if win.w_topline > LineNr::ONE || win.w_skipcol > 0 {
         // Above the top line: scrolling is always needed. Far below it and
         // with no folding: scrolling down never is.
         if win.w_cursor.lnum < win.w_topline {
@@ -196,10 +196,10 @@ fn check_topline(win: Win) -> bool {
 fn unconcealed_above(win: Win, halfheight: c_int, so: OptInt) -> int64_t {
     let mut n: int64_t = 0;
     let mut lnum = win.w_cursor.lnum;
-    while (lnum as OptInt) < win.w_topline as OptInt + so {
+    while i64::from(lnum) < i64::from(win.w_topline) + so {
         // Stop at the end of the file, or once we know we are far off.
         if lnum >= win.buffer().line_count() || {
-            n += !win.conceals_line(lnum, false) as int64_t;
+            n += !win.conceals_line(lnum.get(), false) as int64_t;
             n >= halfheight as int64_t
         } {
             break;
@@ -216,9 +216,9 @@ fn unconcealed_above(win: Win, halfheight: c_int, so: OptInt) -> int64_t {
 fn unconcealed_below(win: Win, so: OptInt) -> int64_t {
     let mut n: int64_t = 0;
     let mut lnum = win.w_cursor.lnum;
-    while (lnum as OptInt) >= win.w_botline as OptInt - so {
-        if lnum <= 0 || {
-            n += !win.conceals_line(lnum - 1, false) as int64_t;
+    while i64::from(lnum) >= i64::from(win.w_botline) - so {
+        if lnum <= LineNr::ZERO || {
+            n += !win.conceals_line((lnum - 1).get(), false) as int64_t;
             n > (win.w_view_height + 1) as int64_t
         } {
             break;
@@ -231,7 +231,7 @@ fn unconcealed_below(win: Win, so: OptInt) -> int64_t {
 /// Whether there are already 'scrolloff' window lines below the cursor, so
 /// that nothing has to be scrolled.
 fn enough_below(win: Win, so: OptInt) -> bool {
-    if (win.w_cursor.lnum as OptInt) < win.w_botline as OptInt - so && !win.lines_concealed() {
+    if i64::from(win.w_cursor.lnum) < i64::from(win.w_botline) - so && !win.lines_concealed() {
         return true;
     }
     let mut loff = LineOff {
@@ -260,7 +260,7 @@ fn enough_below(win: Win, so: OptInt) -> bool {
 /// slowed-down one. That is upstream's shape, kept.
 fn check_top_offset(win: Win) -> bool {
     let so = win.scrolloff();
-    if (win.w_cursor.lnum as int64_t) < win.w_topline as int64_t + so || win.lines_concealed() {
+    if i64::from(win.w_cursor.lnum) < i64::from(win.w_topline) + so || win.lines_concealed() {
         let mut loff = LineOff {
             lnum: win.w_cursor.lnum,
             fill: 0,
@@ -335,11 +335,11 @@ fn check_cursor_moved_win(mut win: Win) {
         );
         // Concealed-line visibility toggled.
         if win.is_current()
-            && win.w_valid_cursor.lnum > 0
+            && win.w_valid_cursor.lnum > LineNr::ZERO
             && win.w_onebuf_opt.wo_cole >= 2
             && !win.conceal_cursor_line()
-            && (win.conceals_line(win.w_cursor.lnum - 1, true)
-                || win.conceals_line(win.w_valid_cursor.lnum - 1, true))
+            && (win.conceals_line((win.w_cursor.lnum - 1).get(), true)
+                || win.conceals_line((win.w_valid_cursor.lnum - 1).get(), true))
         {
             win.changed_window_setting();
         }

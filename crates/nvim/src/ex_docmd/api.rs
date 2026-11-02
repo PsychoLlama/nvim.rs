@@ -262,7 +262,13 @@ pub(crate) fn execute_cmd0(
                 at
             };
             let name = excmd.line.cstr_from(arg);
-            excmd.line2 = buflist_findpat_prefix(name, end - arg, unlisted, false, false) as LineNr;
+            excmd.line2 = LineNr::new(buflist_findpat_prefix(
+                name,
+                end - arg,
+                unlisted,
+                false,
+                false,
+            ));
             excmd.addr_count = 1;
             excmd.line.arg = excmd.line.skip_white(end);
         } else {
@@ -270,11 +276,11 @@ pub(crate) fn execute_cmd0(
             // is the name with no scanning at all.
             let (at, len) = excmd.line.args[0];
             let name = excmd.line.cstr_from(at);
-            excmd.line2 = buflist_findpat_prefix(name, len, unlisted, false, false) as LineNr;
+            excmd.line2 = LineNr::new(buflist_findpat_prefix(name, len, unlisted, false, false));
             excmd.addr_count = 1;
             shift_cmd_args(excmd);
         }
-        if excmd.line2 < 0 {
+        if excmd.line2 < LineNr::ZERO {
             return Err(Failed);
         }
     }

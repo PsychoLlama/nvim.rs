@@ -131,7 +131,7 @@ unsafe extern "C" fn input_cb(
     let (input, bytes_read) = unsafe { (&mut *payload.cast::<BufferInput>(), &mut *bytes_read) };
     let buffer = input.buffer;
     let line_count = buffer.b_ml.ml_line_count;
-    let row = LineNr::try_from(position.row).unwrap_or(LineNr::MAX);
+    let row = i32::try_from(position.row).map_or(LineNr::MAX, LineNr::new);
     *bytes_read = 0;
     if row >= line_count {
         return c"".as_ptr();

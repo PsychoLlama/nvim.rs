@@ -39,8 +39,8 @@ impl Put {
 
         if visual_active() {
             let visual = Buf::current().b_visual;
-            end_lnum = visual.vi_end.lnum.max(visual.vi_start.lnum);
-            if end_lnum > start_lnum {
+            end_lnum = visual.vi_end.lnum.max(visual.vi_start.lnum).get();
+            if end_lnum > start_lnum.get() {
                 // `col` is only right for the first line; the others have
                 // to be found by *screen* column, which matters as soon as
                 // a multi-byte character is involved.
@@ -75,7 +75,7 @@ impl Put {
                 // straight to the condition at the bottom.
                 if visual_active() && col > oldlen {
                     lnum += 1;
-                    if !(visual_active() && lnum <= end_lnum) {
+                    if !(visual_active() && lnum <= LineNr::new(end_lnum)) {
                         break;
                     }
                     continue;
@@ -113,11 +113,11 @@ impl Put {
                 changed_bytes(lnum, col);
                 let inserted = totlen as c_int;
                 let buffer = Buf::current();
-                extmark_splice_cols(buffer, lnum - 1, col, 0, inserted, kExtmarkUndo);
+                extmark_splice_cols(buffer, (lnum - 1).get(), col, 0, inserted, kExtmarkUndo);
                 if visual_active() {
                     lnum += 1;
                 }
-                if !(visual_active() && lnum <= end_lnum) {
+                if !(visual_active() && lnum <= LineNr::new(end_lnum)) {
                     break;
                 }
             }
@@ -203,7 +203,7 @@ impl Put {
         } else {
             kExtmarkNOOP
         };
-        let from = Buf::current().b_op_start.lnum + LineNr::from(self.kind == kMTCharWise);
+        let from = Buf::current().b_op_start.lnum + i32::from(self.kind == kMTCharWise);
         mark_adjust(from, MAXLNUM, self.nr_lines, 0, kind);
 
         // The range is the lines the put just rewrote.
@@ -343,7 +343,18 @@ impl Put {
                         // newline the split itself added.
                         (self.split_pos, y_size + 1, 0, totsize + 2)
                     };
-                    extmark_splice(buf, at, start, 0, 0, 0, rows, cols, bytes, kExtmarkUndo);
+                    extmark_splice(
+                        buf,
+                        at.get(),
+                        start,
+                        0,
+                        0,
+                        0,
+                        rows,
+                        cols,
+                        bytes,
+                        kExtmarkUndo,
+                    );
                 }
 
                 if cnt == 1 {

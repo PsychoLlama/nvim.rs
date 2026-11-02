@@ -363,7 +363,7 @@ pub(crate) struct Conv {
     pub conv_error: LineNr,
     /// Buffer line count before this read, for turning an offset into a line
     /// number.
-    pub linecnt: LineNr,
+    pub linecnt: i32,
     /// Is rewinding and trying another `'fileencoding'` still an option?
     pub can_retry: bool,
 }
@@ -376,7 +376,7 @@ impl Conv {
             rest: [0; CONV_RESTLEN],
             restlen: 0,
             bad_char,
-            conv_error: 0,
+            conv_error: LineNr::ZERO,
             linecnt: 0,
             can_retry: false,
         }
@@ -405,7 +405,7 @@ impl Conv {
     /// Note a conversion error on the line `text` ends on, if none was noted
     /// yet.
     fn note_error(&mut self, text: &[u8]) {
-        if self.conv_error == 0 {
+        if self.conv_error == LineNr::ZERO {
             self.conv_error = readfile_linenr(self.linecnt, text);
         }
     }
@@ -723,7 +723,7 @@ impl Conv {
                 self.note_error(&w.bytes[start..p]);
             }
             // Remember the first line with an illegal byte.
-            if self.conv_error == 0 && *illegal_byte == 0 {
+            if self.conv_error == LineNr::ZERO && *illegal_byte == LineNr::ZERO {
                 *illegal_byte = readfile_linenr(self.linecnt, &w.bytes[start..p]);
             }
 

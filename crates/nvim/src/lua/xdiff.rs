@@ -129,8 +129,8 @@ fn as_hunk(start_a: i64, count_a: i64, start_b: i64, count_b: i64) -> Hunk {
 /// The finer hunks `linematch` finds inside `hunk`, reported to `emit`. Runs
 /// only when `linematch` is on and the hunk is small enough.
 fn linematch_hunks(text_a: &[u8], text_b: &[u8], hunk: Hunk, iwhite: bool, emit: impl FnMut(Hunk)) {
-    let block_a = block_from_lnum(text_a, LineNr::from(hunk.start_a) + 1).unwrap_or_default();
-    let block_b = block_from_lnum(text_b, LineNr::from(hunk.start_b) + 1).unwrap_or_default();
+    let block_a = block_from_lnum(text_a, LineNr::new(hunk.start_a) + 1).unwrap_or_default();
+    let block_b = block_from_lnum(text_b, LineNr::new(hunk.start_b) + 1).unwrap_or_default();
     let decisions = linematch_nbuffers(&[block_a, block_b], &[hunk.count_a, hunk.count_b], iwhite);
     walk_decisions(hunk, &decisions, emit);
 }

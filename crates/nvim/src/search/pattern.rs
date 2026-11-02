@@ -113,7 +113,7 @@ state_record! {
     saved_no_hlsearch: bool = false;
     /// The incremental-search highlight range, kept across `searchcount()`.
     saved_search_match_endcol: ColNr = 0;
-    saved_search_match_lines: LineNr = 0;
+    saved_search_match_lines: i32 = 0;
 }
 
 /// A slot index as the array index it is.

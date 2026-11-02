@@ -6,6 +6,7 @@ use crate::getchar::ins_typebuf;
 use crate::memline::MlFlags;
 use crate::message::emsg;
 use crate::message_fmt::msg_bytes;
+use crate::narrow::number_as_int;
 use crate::ops::run_ex_operator;
 use crate::os::cshim::gettext;
 use crate::os::time::sleep_serving_events;
@@ -58,7 +59,7 @@ use crate::register::do_execreg;
 use crate::search::{BACKWARD, FORWARD};
 use crate::types::{
     ColNr, CpoFlag, ExArg, Handle, LineNr, NUL, OpArg, OpType, OptMagic, PUT_CURSLINE,
-    PUT_FIXINDENT, PUT_LINE, Pos, int64_t, size_t, ssize_t,
+    PUT_FIXINDENT, PUT_LINE, Pos, int64_t, size_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 
@@ -93,7 +94,7 @@ pub(crate) fn ex_print(excmd: &mut ExArg) {
 
 /// `:goto` — the range is a byte offset, not a line number.
 pub(crate) fn ex_goto(excmd: &mut ExArg) {
-    goto_byte(excmd.line2 as c_int);
+    goto_byte(excmd.line2.get());
 }
 
 /// `:syncbind` — line up every 'scrollbind' window at the same relative
@@ -104,28 +105,31 @@ pub(crate) fn ex_syncbind(_excmd: &mut ExArg) {
 
     // The topline to use is the smallest that every bound window can
     // reach: one of them may be shorter than the rest.
-    let mut vtopline: LineNr = 1;
+    let mut vtopline: LineNr = LineNr::ONE;
     if Win::current().w_onebuf_opt.wo_scb != 0 {
-        vtopline = get_vtopline(Win::current()) as LineNr;
+        vtopline = LineNr::new(get_vtopline(Win::current()));
         for wp in windows() {
             if wp.w_onebuf_opt.wo_scb != 0 && !wp.w_buffer.is_null() {
-                let limit = plines_m_win_fill(wp, 1, wp.w_buffer.b_ml.ml_line_count) as LineNr
-                    - get_scrolloff_value(Win::current()) as LineNr;
-                vtopline = vtopline.min(limit);
+                let limit = LineNr::new(plines_m_win_fill(
+                    wp,
+                    LineNr::ONE,
+                    wp.w_buffer.b_ml.ml_line_count,
+                )) - LineNr::new(number_as_int(get_scrolloff_value(Win::current())));
+                vtopline = vtopline.min(LineNr::new(limit));
             }
         }
-        vtopline = vtopline.max(1);
+        vtopline = vtopline.max(LineNr::ONE);
     }
 
     for mut wp in windows() {
         if wp.w_onebuf_opt.wo_scb != 0 {
-            let y = vtopline as c_int - get_vtopline(wp);
+            let y = vtopline.get() - get_vtopline(wp);
             if y > 0 {
-                scrollup(wp, y as LineNr, true);
+                scrollup(wp, y, true);
             } else {
-                scrolldown(wp, -(y as LineNr), true);
+                scrolldown(wp, -y, true);
             }
-            wp.w_scbind_pos = vtopline as c_int;
+            wp.w_scbind_pos = vtopline.get();
             redraw_later(wp, UPD_VALID);
             cursor_correct(wp);
             wp.w_redr_status = true;
@@ -151,7 +155,7 @@ pub(crate) fn ex_equal(excmd: &mut ExArg) {
         ex_lua(excmd);
     } else {
         excmd.line.next = excmd.line.find_next(excmd.line.arg);
-        smsg!(0, "{}", excmd.line2 as int64_t);
+        smsg!(0, "{}", i64::from(excmd.line2));
     }
 }
 
@@ -160,7 +164,7 @@ pub(crate) fn ex_sleep(excmd: &mut ExArg) {
     if cursor_valid(Win::current()) != 0 {
         setcursor_mayforce(Win::current(), true);
     }
-    let mut len = excmd.line2 as int64_t;
+    let mut len = i64::from(excmd.line2);
     match c_int::from(excmd.line.byte_at(excmd.line.arg)) {
         c if c == 'm' as c_int => {}
         c if c == NUL => len *= 1000,
@@ -202,7 +206,7 @@ pub(crate) fn ex_operators(excmd: &mut ExArg) {
         regname: excmd.regname,
         start: line(excmd.line1),
         end: line(excmd.line2),
-        line_count: excmd.line2 - excmd.line1 + 1,
+        line_count: (excmd.line2 - excmd.line1 + 1),
         motion_type: kMTLineWise,
         ..OpArg::default()
     };
@@ -259,8 +263,8 @@ pub(crate) fn ex_iput(excmd: &mut ExArg) {
 
 /// `:0put` puts *above* line 1, which is spelled as a forced put at line 1.
 fn put_lines(excmd: &mut ExArg, flags: c_int) {
-    if excmd.line2 == 0 {
-        excmd.line2 = 1;
+    if excmd.line2 == LineNr::ZERO {
+        excmd.line2 = LineNr::ONE;
         excmd.forceit = true;
     }
     Win::current().w_cursor.lnum = excmd.line2;
@@ -303,7 +307,7 @@ pub(crate) fn ex_copymove(excmd: &mut ExArg) {
     get_flags(excmd);
 
     // `MAXLNUM` is what `get_address` answers for "no address at all".
-    if n == MAXLNUM || n < 0 || n > Buf::current().b_ml.ml_line_count {
+    if n == MAXLNUM || n < LineNr::ZERO || n > Buf::current().b_ml.ml_line_count {
         emsg(gettext(e_invrange));
         return;
     }
@@ -380,7 +384,7 @@ pub(crate) fn ex_join(excmd: &mut ExArg) {
         excmd.line2 += 1;
     }
     let _ = do_join(
-        (excmd.line2 as ssize_t - excmd.line1 as ssize_t + 1) as size_t,
+        (excmd.line2.get() as isize - excmd.line1.get() as isize + 1) as size_t,
         !excmd.forceit,
         true,
         true,
@@ -435,11 +439,11 @@ pub(crate) fn ex_undo(excmd: &mut ExArg) {
     }
     let step = excmd.line2;
     if !excmd.forceit {
-        undo_time(step as c_int, false, false, true);
+        undo_time(step.get(), false, false, true);
         return;
     }
 
-    if step >= Buf::current().b_u_seq_cur as LineNr {
+    if step >= LineNr::new(Buf::current().b_u_seq_cur) {
         emsg(gettext(e_undobang_cannot_redo_or_move_branch));
         return;
     }
@@ -452,8 +456,8 @@ pub(crate) fn ex_undo(excmd: &mut ExArg) {
     let mut count = 0;
     let mut reached = None;
     for link in header_chain(Buf::current(), start, |uh| uh.next) {
-        if link.seq() as LineNr <= step {
-            reached = Some(link.seq() as LineNr);
+        if LineNr::new(link.seq()) <= step {
+            reached = Some(LineNr::new(link.seq()));
             break;
         }
         count += 1;
@@ -461,7 +465,7 @@ pub(crate) fn ex_undo(excmd: &mut ExArg) {
     // Running past it, or off the end, means `step` is on another
     // branch. Sequence 0 is the state before any change and is always
     // reachable.
-    if step != 0 && reached.is_none_or(|seq| seq < step) {
+    if step != LineNr::ZERO && reached.is_none_or(|seq| seq < step) {
         emsg(gettext(e_undobang_cannot_redo_or_move_branch));
         return;
     }

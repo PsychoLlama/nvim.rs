@@ -18,7 +18,7 @@ pub(crate) fn win_may_fill(window: Win) -> bool {
 /// Filler lines above `lnum`: virtual lines plus, in a diff, the lines the
 /// other buffer has here and this one does not.
 pub(crate) fn win_get_fill(window: Win, lnum: LineNr) -> c_int {
-    let virt_lines = decor_virt_lines(window, lnum - 1, lnum, None, None, true);
+    let virt_lines = decor_virt_lines(window, (lnum - 1).get(), lnum.get(), None, None, true);
 
     // Be quick when there are no filler lines.
     if diffopt_filler() {
@@ -37,7 +37,7 @@ pub(crate) fn plines_win(window: Win, lnum: LineNr, limit_winheight: bool) -> c_
 
 /// Window lines buffer line `lnum` occupies, filler lines excluded.
 pub(crate) fn plines_win_nofill(window: Win, lnum: LineNr, limit_winheight: bool) -> c_int {
-    if decor_conceal_line(window, lnum - 1, false) {
+    if decor_conceal_line(window, (lnum - 1).get(), false) {
         return 0;
     }
     if window.w_onebuf_opt.wo_wrap == 0 || window.w_view_width == 0 {
@@ -173,7 +173,7 @@ pub(crate) fn plines_win_full(
         win_get_fill(window, lnum)
     };
 
-    if decor_conceal_line(window, lnum - 1, false) {
+    if decor_conceal_line(window, (lnum - 1).get(), false) {
         return filler_lines;
     }
 
@@ -207,7 +207,9 @@ pub(crate) fn plines_m_win(window: Win, mut first: LineNr, last: LineNr, max: c_
 /// [`plines_m_win`], a fold is not one line and a wrapped line is not
 /// several. Mainly used for scrolling offsets.
 pub(crate) fn plines_m_win_fill(window: Win, first: LineNr, last: LineNr) -> c_int {
-    let mut count = last - first + 1 + decor_virt_lines(window, first - 1, last, None, None, false);
+    let mut count = last - first
+        + 1
+        + decor_virt_lines(window, (first - 1).get(), last.get(), None, None, false);
 
     if diffopt_filler() {
         let mut lnum = first;

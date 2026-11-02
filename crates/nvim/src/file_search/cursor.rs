@@ -17,6 +17,7 @@ use crate::mbyte::{c_cluster_len, head_off};
 use crate::memline::Lines;
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
+use crate::narrow::number_as_int;
 use crate::normal::visual_active;
 use crate::optionstr::OptString;
 use crate::semsg;
@@ -49,7 +50,7 @@ pub(crate) fn grab_file_name(count: c_int, file_lnum: Option<&mut LineNr>) -> Op
         && cstr::byte_at(text, len) == b':'
         && cstr::byte_at(text, len + 1).is_ascii_digit()
     {
-        *file_lnum = getdigits_int_at(text, len + 1, false, 0).0;
+        *file_lnum = LineNr::new(getdigits_int_at(text, len + 1, false, 0).0);
     }
     let rel_fname = own_buffer_name();
     find_file_name_in_path(
@@ -228,7 +229,7 @@ fn name_in_line(
     if let Some(file_lnum) = file_lnum
         && let Some(lnum) = trailing_line_number(&name[len..])
     {
-        *file_lnum = lnum as LineNr;
+        *file_lnum = LineNr::new(number_as_int(lnum));
     }
     Some(name[..len].to_vec())
 }

@@ -33,6 +33,7 @@ use crate::getchar::KeyBuffer;
 use crate::guard::{Depth, Script, Suppress};
 use crate::memory::XString;
 use crate::optionstr::{OptString, OptStringRef};
+use crate::types::LineNr;
 use crate::types::{FAIL, MAXPATHL, OK};
 use crate::winlayer::{Buf, Win, tab_windows};
 
@@ -384,7 +385,7 @@ pub fn apply_autocmds_group(
         let redraw_off = Suppress::redraw();
 
         // `es_name` and `es_lnum` are filled in by `aucmd_next`.
-        estack_push(ETYPE_AUCMD, crate::types::FrameName::None, 0);
+        estack_push(ETYPE_AUCMD, crate::types::FrameName::None, LineNr::ZERO);
 
         // Restored below, in the run of teardown before the call stack is;
         // the handlers this fires each point it at themselves.

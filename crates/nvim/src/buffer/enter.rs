@@ -334,7 +334,7 @@ pub(crate) fn enter_buffer(mut buffer: Buf) {
 
     // Cursor on first line by default.
     let mut cursor = win.cursor();
-    cursor.lnum = 1 as LineNr;
+    cursor.lnum = LineNr::ONE;
     cursor.col = 0 as ColNr;
     cursor.coladd = 0 as ColNr;
     win.w_set_curswant = true;
@@ -361,7 +361,7 @@ pub(crate) fn enter_buffer(mut buffer: Buf) {
         check_timestamp(Buf::current()); // check if file changed
 
         let mut win = Win::current();
-        win.w_topline = 1 as LineNr;
+        win.w_topline = LineNr::ONE;
         win.w_topfill = 0;
         fire(AutoEvent::BufEnter, Buf::current());
         fire(AutoEvent::BufWinEnter, Buf::current());
@@ -369,7 +369,7 @@ pub(crate) fn enter_buffer(mut buffer: Buf) {
 
     // If autocommands did not change the cursor position, restore cursor lnum
     // and possibly cursor col.
-    if Win::current().cursor().lnum == 1 as LineNr && cursor_in_indent() {
+    if Win::current().cursor().lnum == LineNr::ONE && cursor_in_indent() {
         restore_position();
     }
 
@@ -377,7 +377,7 @@ pub(crate) fn enter_buffer(mut buffer: Buf) {
     rebuild_title();
     // when autocmds didn't change it
     let win = Win::current();
-    if win.w_topline == 1 as LineNr && !win.w_topline_was_set {
+    if win.w_topline == LineNr::ONE && !win.w_topline_was_set {
         scroll_halfway(win); // redisplay at correct position
     }
 

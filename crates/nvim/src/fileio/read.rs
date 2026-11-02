@@ -60,7 +60,16 @@ pub(crate) struct How {
 /// buffer that exists only to be searched (`READ_NEW | READ_DUMMY`).
 pub(crate) fn read_dummy_file(fname: &CStr) -> Result<Loaded, Failed> {
     let flags = ReadFlags::NEW | ReadFlags::DUMMY;
-    readfile_named(Some(fname), None, 0, 0, MAXLNUM, None, flags, false)
+    readfile_named(
+        Some(fname),
+        None,
+        LineNr::ZERO,
+        0,
+        MAXLNUM.get(),
+        None,
+        flags,
+        false,
+    )
 }
 
 /// Read the lines of `fname` into the current buffer, after line `from`.
@@ -79,8 +88,8 @@ pub(crate) fn readfile_named(
     fname: Option<&CStr>,
     sfname: Option<&CStr>,
     from: LineNr,
-    lines_to_skip: LineNr,
-    lines_to_read: LineNr,
+    lines_to_skip: i32,
+    lines_to_read: i32,
     mut excmd: Option<&mut ExArg>,
     flags: ReadFlags,
     silent: bool,
@@ -102,7 +111,7 @@ pub(crate) fn readfile_named(
 
     // Where the next line and character to read from curbuf are, for
     // READ_BUFFER.
-    let mut read_buf_lnum: LineNr = 1;
+    let mut read_buf_lnum: LineNr = LineNr::ONE;
     let mut read_buf_col: usize = 0;
 
     let mut lnum = from;
@@ -116,13 +125,13 @@ pub(crate) fn readfile_named(
     let mut ff_error = EOL_UNKNOWN; // file format with errors
     let mut fileformat = 0;
     let mut keep_fileformat = false;
-    let mut skip_count: LineNr = 0;
-    let mut read_count: LineNr = 0;
+    let mut skip_count: i32 = 0;
+    let mut read_count: i32 = 0;
     let msg_save = msg_scroll.get();
     // Non-zero line number when the last line read had no end-of-line.
-    let mut read_no_eol_lnum: LineNr = 0;
+    let mut read_no_eol_lnum: LineNr = LineNr::ZERO;
     let mut file_rewind = false;
-    let mut illegal_byte: LineNr = 0; // line nr with an illegal byte
+    let mut illegal_byte: LineNr = LineNr::ZERO; // line nr with an illegal byte
     // Don't retry when a character doesn't fit in the destination
     // encoding.
     let mut keep_dest_enc = false;
@@ -135,13 +144,13 @@ pub(crate) fn readfile_named(
     let mut converted = false;
     let mut notconverted = false;
     let mut conv = Conv::new(BAD_REPLACE);
-    let mut linecnt: LineNr;
+    let mut linecnt: i32;
     let wasempty;
 
     // Reset before triggering any autocommands.
     Buf::current().b_au_did_filetype = false;
     // In case it was set by the previous read.
-    Buf::current().b_no_eol_lnum = 0;
+    Buf::current().b_no_eol_lnum = LineNr::ZERO;
 
     'theend: {
         // If there is no file name yet, use the one for the read file, and
@@ -197,7 +206,7 @@ pub(crate) fn readfile_named(
 
         // Set linecnt now, before the "retry" caused by a wrong guess at
         // the fileformat, and after the autocommands, which may change it.
-        linecnt = Buf::current().b_ml.ml_line_count;
+        linecnt = Buf::current().b_ml.ml_line_count.get();
 
         // The "++bad=" argument.
         if let Some(command) = excmd.as_deref()
@@ -253,7 +262,7 @@ pub(crate) fn readfile_named(
         'retry: loop {
             if file_rewind {
                 if how.buffer {
-                    read_buf_lnum = 1;
+                    read_buf_lnum = LineNr::ONE;
                     read_buf_col = 0;
                 } else if how.stdin || !rewind(input.as_ref()) {
                     // Can't rewind the file, give up.
@@ -270,7 +279,7 @@ pub(crate) fn readfile_named(
                     Buf::current().b_p_bomb = false as c_int;
                     Buf::current().b_start_bomb = false as c_int;
                 }
-                conv.conv_error = 0;
+                conv.conv_error = LineNr::ZERO;
             }
 
             // The "fileformat" is reset the first time round, and whenever
@@ -308,7 +317,7 @@ pub(crate) fn readfile_named(
                     // The conversion given with "++enc=" wasn't possible;
                     // read without conversion.
                     notconverted = true;
-                    conv.conv_error = 0;
+                    conv.conv_error = LineNr::ZERO;
                     fenc = XString::new();
                 } else {
                     fenc = fencs.next();
@@ -481,11 +490,11 @@ pub(crate) fn readfile_named(
                                     );
                                     continue 'retry;
                                 }
-                                if conv.conv_error == 0 {
+                                if conv.conv_error == LineNr::ZERO {
                                     conv.conv_error =
                                         Buf::current().b_ml.ml_line_count - linecnt + 1;
                                 }
-                            } else if illegal_byte == 0 {
+                            } else if illegal_byte == LineNr::ZERO {
                                 // Remember the first line with an illegal
                                 // byte.
                                 illegal_byte = Buf::current().b_ml.ml_line_count - linecnt + 1;
@@ -738,7 +747,7 @@ pub(crate) fn readfile_named(
             Buf::current().deleted_bytes2 = 0;
             Buf::current().deleted_codepoints = 0;
             Buf::current().deleted_codeunits = 0;
-            linecnt = Buf::current().b_ml.ml_line_count - linecnt;
+            linecnt = (Buf::current().b_ml.ml_line_count - linecnt).get();
             if filesize == 0 {
                 linecnt = 0;
             }

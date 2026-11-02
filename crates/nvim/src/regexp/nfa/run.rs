@@ -8,6 +8,7 @@ use super::program::{NfaRegProg, NfaState, StateId};
 use super::step::Run;
 use crate::regexp::NfaOp;
 use crate::siemsg;
+use crate::types::LineNr;
 use core::ffi::c_int;
 
 use super::matcher::nfa_regmatch;
@@ -75,7 +76,7 @@ pub(crate) fn match_backref(rex: Rex, sub: &RegSub, subidx: c_int, bytelen: &mut
     }
     let capture = sub.list[subidx as usize];
     let (start, end) = (capture.start.as_pos(), capture.end.as_pos());
-    if start.lnum < 0 || end.lnum < 0 {
+    if start.lnum < LineNr::ZERO || end.lnum < LineNr::ZERO {
         *bytelen = 0;
         return true;
     }
@@ -389,7 +390,11 @@ pub(crate) fn find_match_text(
         // grapheme, so it is not the text after all.
         if matched && !utf_iscomposing_legacy(char_at_nul(line, s2)) {
             cleanup_subexpr(rex);
-            let lnum = if rex.multi() { rex.lnum() } else { 0 };
+            let lnum = if rex.multi() {
+                rex.lnum()
+            } else {
+                LineNr::ZERO
+            };
             rex.start(0).set(MatchPos::from_pos(LPos { lnum, col }));
             rex.end(0).set(MatchPos::from_pos(LPos {
                 lnum,

@@ -425,7 +425,7 @@ fn write_output(output: &mut [u8], eof: bool) -> usize {
             Buf::current().b_no_eol_lnum = Win::current().w_cursor.lnum;
             start = output.len();
         } else {
-            Buf::current().b_no_eol_lnum = 0 as LineNr;
+            Buf::current().b_no_eol_lnum = LineNr::ZERO;
         }
     }
 

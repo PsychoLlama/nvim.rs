@@ -384,7 +384,7 @@ fn do_filter(
                     None,
                     line2,
                     0,
-                    MAXLNUM,
+                    MAXLNUM.get(),
                     Some(args),
                     ReadFlags::FILTER,
                     false,
@@ -402,12 +402,12 @@ fn do_filter(
                 }
             }
 
-            read_linecount = Buf::current().b_ml.ml_line_count - read_linecount;
+            read_linecount = LineNr::new(Buf::current().b_ml.ml_line_count - read_linecount);
 
             if shell_flags.has(ShellOpts::READ) {
                 Buf::current().b_op_start.lnum = line2 + 1;
                 Buf::current().b_op_end.lnum = Win::current().w_cursor.lnum;
-                appended_lines_mark(line2, read_linecount as c_int);
+                appended_lines_mark(line2, read_linecount.get());
             }
 
             if do_in {
@@ -415,7 +415,7 @@ fn do_filter(
                     // TODO(bfredl): Currently not active for extmarks. What
                     // would we do if columns don't match, assume added/deleted
                     // bytes at the end of each line?
-                    if read_linecount >= linecount {
+                    if read_linecount >= LineNr::new(linecount) {
                         // move all marks from old lines to new lines
                         mark_adjust(line1, line2, linecount, 0, kExtmarkNOOP);
                     } else {
@@ -423,12 +423,18 @@ fn do_filter(
                         // marks that are in deleted lines
                         mark_adjust(
                             line1,
-                            line1 + read_linecount - 1,
+                            line1 + read_linecount.get() - 1,
                             linecount,
                             0,
                             kExtmarkNOOP,
                         );
-                        mark_adjust(line1 + read_linecount, line2, MAXLNUM, 0, kExtmarkNOOP);
+                        mark_adjust(
+                            line1 + read_linecount.get(),
+                            line2,
+                            MAXLNUM.get(),
+                            0,
+                            kExtmarkNOOP,
+                        );
                     }
                 }
 
@@ -487,7 +493,7 @@ fn do_filter(
 
 /// `:range!cmd`'s "N lines filtered". `set_keep_msg` takes a copy, so it
 /// survives the redraw without a buffer outliving this call.
-fn report_filtered(linecount: LineNr) {
+fn report_filtered(linecount: i32) {
     let count = linecount as i64;
     // `MSG_BUF_LEN` is where upstream's scratch buffer truncated this.
     let shown = to_message(tr!("{count} lines filtered"), MSG_BUF_LEN as usize);

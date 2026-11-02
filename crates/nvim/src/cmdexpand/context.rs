@@ -37,6 +37,7 @@ use crate::search::state::search_first_line;
 use crate::search::{BACKWARD, FORWARD};
 use crate::strings::has_char;
 use crate::syntax::set_context_in_echohl_cmd;
+use crate::types::LineNr;
 use crate::types::{CmdIdx, CmdLine, ExArg, ExpandContext};
 use crate::usercmd::find_ucmd;
 use crate::winlayer::Cc;
@@ -124,7 +125,7 @@ pub fn set_expand_context(expand: &mut Expand) {
         expand.pattern = 0;
         expand.has_pattern = true;
         expand.pattern_len = usize::try_from(ccline.cmdpos).unwrap_or(0);
-        search_first_line.set(0); // Search entire buffer
+        search_first_line.set(LineNr::ZERO); // Search entire buffer
         return;
     }
 

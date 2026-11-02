@@ -1843,14 +1843,18 @@ CHAR_AS_C_INT = re.compile(
 # format string cannot end it early. The sentinel is the *next* statement --
 # a `return x;` or a tail `x }` -- after the `;` that ends the emitting one,
 # so a message that is followed by bookkeeping first is not counted: the
-# needle is the shape, not every path that reaches a sentinel.
+# needle is the shape, not every path that reaches a sentinel. A line number's
+# sentinels are spelled `LineNr::ZERO`/`LineNr::new(-1)` since it became a
+# newtype; they are the same `0`/`-1`.
 EMIT_CALL = re.compile(
     r"\b(?:emsg|semsg!|iemsg|siemsg!|emsg_multiline|emsg_invreg|internal_error"
     r"|give_warning|smsg!|swmsg!|msg_warn\w*|api_error!|nlua_error"
     r"|report_emsg_multiline|msg_puts\w*|msg_outtrans\w*|msg_\w*hl|msg_bytes"
     r"|msg_cstr)\s*\("
 )
-EMIT_SENTINEL = re.compile(r"\s*(?:return\s+)?(?:false|None|-1|0|FAIL)\s*[;}]")
+EMIT_SENTINEL = re.compile(
+    r"\s*(?:return\s+)?(?:false|None|-1|0|LineNr::(?:ZERO|new\(-1\))|FAIL)\s*[;}]"
+)
 
 
 def emit_sentinels(masked):

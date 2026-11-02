@@ -378,7 +378,7 @@ fn pack_buffer_list(list: &[ShadaBufferListItem], out: &mut Packer) {
         out.bin(buffer.fname.as_cstr().to_bytes());
         if buffer.pos.lnum != default.lnum {
             out.key(b"l");
-            out.uint64(buffer.pos.lnum as u64);
+            out.uint64(buffer.pos.lnum.get() as u64);
         }
         if buffer.pos.col != default.col {
             out.key(b"c");

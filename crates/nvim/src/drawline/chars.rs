@@ -487,7 +487,7 @@ impl Cells {
 
         // `lnum` 0: virtual text is not to be counted here.
         let chr = c_char_info(self.line.with_nul(), at).value;
-        let (mut csarg, cstype) = CharsizeArg::new(window, 0, self.line.text());
+        let (mut csarg, cstype) = CharsizeArg::new(window, LineNr::ZERO, self.line.text());
         wlv.extra_todo = win_charsize(cstype, wlv.vcol, at, chr, &mut csarg).width - 1;
 
         // Do not bleed an underline, strikethrough or overline into the

@@ -90,7 +90,7 @@ pub(super) fn list_on_line(
     for _ in 0..depth {
         let i = find(folds, lnum_rel).ok()?;
         let fold = &mut folds[i];
-        lnum_rel -= fold.top;
+        lnum_rel -= fold.top.get();
         folds = &mut fold.nested;
     }
     Some((folds, lnum_rel))
@@ -115,7 +115,7 @@ mod tests {
             .iter()
             .map(|&(top, len)| Fold {
                 top,
-                len,
+                len: len.get(),
                 nested: Vec::new(),
                 state: FoldState::Open,
                 small: None,
@@ -125,44 +125,61 @@ mod tests {
 
     #[test]
     fn find_lands_on_the_fold_that_contains_the_line() {
-        let folds = list(&[(2, 3), (10, 1), (20, 5)]);
-        assert_eq!(find(&folds, 2), Ok(0));
-        assert_eq!(find(&folds, 4), Ok(0));
-        assert_eq!(find(&folds, 10), Ok(1));
-        assert_eq!(find(&folds, 24), Ok(2));
+        let folds = list(&[
+            (LineNr::new(2), LineNr::new(3)),
+            (LineNr::new(10), LineNr::ONE),
+            (LineNr::new(20), LineNr::new(5)),
+        ]);
+        assert_eq!(find(&folds, LineNr::new(2)), Ok(0));
+        assert_eq!(find(&folds, LineNr::new(4)), Ok(0));
+        assert_eq!(find(&folds, LineNr::new(10)), Ok(1));
+        assert_eq!(find(&folds, LineNr::new(24)), Ok(2));
     }
 
     #[test]
     fn a_miss_names_the_first_fold_below_the_line() {
-        let folds = list(&[(2, 3), (10, 1), (20, 5)]);
+        let folds = list(&[
+            (LineNr::new(2), LineNr::new(3)),
+            (LineNr::new(10), LineNr::ONE),
+            (LineNr::new(20), LineNr::new(5)),
+        ]);
         // Above everything, in the gaps, and past the end.
-        assert_eq!(find(&folds, 1), Err(0));
-        assert_eq!(find(&folds, 5), Err(1));
-        assert_eq!(find(&folds, 11), Err(2));
-        assert_eq!(find(&folds, 25), Err(3));
-        assert_eq!(find(&folds, 9_999), Err(3));
-        assert_eq!(find_at_or_below(&folds, 11), 2);
+        assert_eq!(find(&folds, LineNr::ONE), Err(0));
+        assert_eq!(find(&folds, LineNr::new(5)), Err(1));
+        assert_eq!(find(&folds, LineNr::new(11)), Err(2));
+        assert_eq!(find(&folds, LineNr::new(25)), Err(3));
+        assert_eq!(find(&folds, LineNr::new(9_999)), Err(3));
+        assert_eq!(find_at_or_below(&folds, LineNr::new(11)), 2);
     }
 
     #[test]
     fn an_empty_list_misses_at_zero() {
-        assert_eq!(find(&[], 1), Err(0));
+        assert_eq!(find(&[], LineNr::ONE), Err(0));
     }
 
     #[test]
     fn a_zero_length_entry_is_stepped_over_as_upstream_steps() {
         // `fold.c`'s loop on `[(5, 0), (5, 3)]` probes index 0 first, finds
         // line 5 past its (empty) end, and moves right.
-        let folds = list(&[(5, 0), (5, 3)]);
-        assert_eq!(find(&folds, 5), Ok(1));
-        assert_eq!(find(&folds, 4), Err(0));
+        let folds = list(&[
+            (LineNr::new(5), LineNr::ZERO),
+            (LineNr::new(5), LineNr::new(3)),
+        ]);
+        assert_eq!(find(&folds, LineNr::new(5)), Ok(1));
+        assert_eq!(find(&folds, LineNr::new(4)), Err(0));
     }
 
     #[test]
     fn a_path_names_a_nested_list_until_the_tree_changes() {
-        let mut root = list(&[(2, 10), (20, 5)]);
-        root[0].nested = list(&[(1, 3), (6, 2)]);
-        root[0].nested[1].nested = list(&[(0, 1)]);
+        let mut root = list(&[
+            (LineNr::new(2), LineNr::new(10)),
+            (LineNr::new(20), LineNr::new(5)),
+        ]);
+        root[0].nested = list(&[
+            (LineNr::ONE, LineNr::new(3)),
+            (LineNr::new(6), LineNr::new(2)),
+        ]);
+        root[0].nested[1].nested = list(&[(LineNr::ZERO, LineNr::ONE)]);
         assert_eq!(list_at(&mut root, &[]).map(|l| l.len()), Some(2));
         assert_eq!(list_at(&mut root, &[0]).map(|l| l.len()), Some(2));
         assert_eq!(list_at(&mut root, &[0, 1]).map(|l| l[0].len), Some(1));
@@ -174,12 +191,24 @@ mod tests {
 
     #[test]
     fn a_line_and_a_depth_name_a_fold() {
-        let mut root = list(&[(2, 10), (20, 5)]);
-        root[0].nested = list(&[(1, 3), (6, 2)]);
+        let mut root = list(&[
+            (LineNr::new(2), LineNr::new(10)),
+            (LineNr::new(20), LineNr::new(5)),
+        ]);
+        root[0].nested = list(&[
+            (LineNr::ONE, LineNr::new(3)),
+            (LineNr::new(6), LineNr::new(2)),
+        ]);
         // Line 9 is 7 into the first fold: inside its second child.
-        assert_eq!(fold_on_line(&mut root, 9, 0).map(|f| f.top), Some(2));
-        assert_eq!(fold_on_line(&mut root, 9, 1).map(|f| f.top), Some(6));
-        assert!(fold_on_line(&mut root, 9, 2).is_none());
-        assert!(fold_on_line(&mut root, 15, 0).is_none());
+        assert_eq!(
+            fold_on_line(&mut root, LineNr::new(9), 0).map(|f| f.top.get()),
+            Some(2)
+        );
+        assert_eq!(
+            fold_on_line(&mut root, LineNr::new(9), 1).map(|f| f.top.get()),
+            Some(6)
+        );
+        assert!(fold_on_line(&mut root, LineNr::new(9), 2).is_none());
+        assert!(fold_on_line(&mut root, LineNr::new(15), 0).is_none());
     }
 }

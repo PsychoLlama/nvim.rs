@@ -10,6 +10,7 @@ use crate::mbyte::cluster_len;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::CmdIdx;
+use crate::types::LineNr;
 use core::ffi::CStr;
 use core::ffi::c_int;
 use std::ffi::CString;
@@ -177,8 +178,8 @@ fn escape_k_special(src: &[u8]) -> Option<Vec<u8>> {
 /// `:startinsert`, `:startreplace` and `:startgreplace`.
 pub(crate) fn ex_startinsert(excmd: &mut ExArg) {
     if excmd.forceit {
-        if Win::current().w_cursor.lnum == 0 {
-            Win::current().w_cursor.lnum = 1;
+        if Win::current().w_cursor.lnum == LineNr::ZERO {
+            Win::current().w_cursor.lnum = LineNr::ONE;
         }
         set_cursor_for_append_to_line();
     }

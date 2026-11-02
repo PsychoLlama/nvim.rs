@@ -31,7 +31,7 @@ const TAGSTACKSIZE: usize = super::TAGSTACKSIZE as usize;
 
 /// The view a stack entry's mark starts with: no remembered scroll position.
 const NO_VIEW: FileMarkView = FileMarkView {
-    topline_offset: MAXLNUM,
+    topline_offset: MAXLNUM.get(),
     skipcol: 0,
 };
 
@@ -263,7 +263,7 @@ fn tag_details(tag: &Taggy, retdict: &mut Dict) {
         0
     };
     pos.edit().push_number(str_m);
-    pos.edit().push_number(mark.mark.lnum as VarNumber);
+    pos.edit().push_number(i64::from(mark.mark.lnum));
     // Columns are counted from one outside, except for the "past the
     // end of the line" sentinel, which is passed through.
     let n2 = if mark.mark.col == MAXCOL as ColNr {

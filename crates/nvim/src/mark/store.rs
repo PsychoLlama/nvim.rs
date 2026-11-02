@@ -38,6 +38,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::types::LineNr;
 use core::ffi::{c_char, c_int};
 
 use crate::ascii::ascii_islower;
@@ -48,7 +49,7 @@ use crate::winlayer::Buf;
 /// The position a mark that has never been set reports, and what
 /// [`FileMark::clear`] puts back.
 pub(super) const UNSET_POS: Pos = Pos {
-    lnum: 0,
+    lnum: LineNr::ZERO,
     col: 0,
     coladd: 0,
 };
@@ -175,7 +176,7 @@ mod tests {
 
     fn at(lnum: i32, col: i32) -> Pos {
         Pos {
-            lnum,
+            lnum: LineNr::new(lnum),
             col,
             coladd: 0,
         }
@@ -229,7 +230,7 @@ mod tests {
         original.fname = None;
         assert_eq!(copy.fmark.extra.as_deref(), Some(&extra));
         assert_eq!(copy.file_name(), Some(c"/a/file"));
-        assert_eq!(copy.fmark.mark.lnum, 5);
+        assert_eq!(copy.fmark.mark.lnum, LineNr::new(5));
         assert!(original.fmark.extra.is_none());
     }
 

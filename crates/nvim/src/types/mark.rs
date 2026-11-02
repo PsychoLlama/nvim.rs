@@ -36,7 +36,7 @@ pub struct FileMark {
 }
 #[derive(Copy, Clone)]
 pub struct FileMarkView {
-    pub topline_offset: LineNr,
+    pub topline_offset: i32,
     pub skipcol: ColNr,
 }
 
@@ -45,7 +45,7 @@ impl FileMarkView {
     /// "remember nothing", so `mark_view_restore` computes a topline far
     /// below line 1 and gives up.
     pub const NONE: Self = Self {
-        topline_offset: crate::pos::MAXLNUM,
+        topline_offset: crate::pos::MAXLNUM.get(),
         skipcol: 0,
     };
 }
@@ -54,7 +54,7 @@ impl FileMark {
     /// A mark that is not set.
     pub const UNSET: Self = Self {
         mark: Pos {
-            lnum: 0,
+            lnum: LineNr::ZERO,
             col: 0,
             coladd: 0,
         },
@@ -68,7 +68,7 @@ impl FileMark {
     /// set", and what `mark_check` turns into `E20`.
     #[inline]
     pub fn is_set(&self) -> bool {
-        self.mark.lnum != 0
+        self.mark.lnum != LineNr::ZERO
     }
 
     /// Release what the record holds and leave it unset, stamped
@@ -98,7 +98,7 @@ impl SavedMark {
     /// A mark that is not set, with every field zero.
     pub const ZERO: Self = Self {
         mark: Pos {
-            lnum: 0,
+            lnum: LineNr::ZERO,
             col: 0,
             coladd: 0,
         },

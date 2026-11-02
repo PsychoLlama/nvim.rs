@@ -48,15 +48,15 @@ impl CursorPick {
         saved: &[XString],
         last: bool,
         top: LineNr,
-        oldsize: LineNr,
-        newsize: LineNr,
+        oldsize: i32,
+        newsize: i32,
     ) {
         // If the header's saved cursor falls inside this entry it wins: that
         // is what puts the cursor back where it was after a "gwap".
         let saved_line = saved_cursor.lnum;
         if saved_line >= top && saved_line <= top + newsize + 1 {
             self.pos = saved_cursor;
-            self.line = -1;
+            self.line = LineNr::new(-1);
             return;
         }
         if top >= self.line {
@@ -64,11 +64,11 @@ impl CursorPick {
         }
         // Otherwise the first line that really differs, so that undoing an
         // auto-format does not land on the line before it.
-        let mut same: LineNr = 0;
+        let mut same = 0;
         let mut lines = Buf::current().lines();
         for (was, lnum) in saved
             .iter()
-            .zip(top + 1..)
+            .zip((top.get() + 1..).map(LineNr::new))
             .take(usize::try_from(oldsize).unwrap_or(0))
         {
             if **was != *lines.line(lnum) {
@@ -126,7 +126,7 @@ pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
     let saved_visual = buf.b_visual;
     buf.b_op_start.lnum = buf.b_ml.ml_line_count;
     buf.b_op_start.col = 0;
-    buf.b_op_end.lnum = 0;
+    buf.b_op_end.lnum = LineNr::ZERO;
     buf.b_op_end.col = 0;
 
     let mut pick = CursorPick {
@@ -270,7 +270,7 @@ fn apply_entry(
     // Zero is the sentinel for "to the end of the buffer" — `u_savecommon`
     // writes it whenever the change ran past the last line — and it is
     // resolved here, against the buffer as it stands now.
-    let bot = if saved_bot == 0 {
+    let bot = if saved_bot == LineNr::ZERO {
         buffer.b_ml.ml_line_count + 1
     } else {
         saved_bot
@@ -289,7 +289,7 @@ fn apply_entry(
         taken.push(line_copy(Buf::current(), top + 1 + i));
         // Deleting the buffer's last line leaves a dummy empty one behind,
         // which the insert below has to replace.
-        if buffer.b_ml.ml_line_count == 1 {
+        if buffer.b_ml.ml_line_count == LineNr::ONE {
             emptied = true;
         }
         let _ = ml_delete(top + 1 + i);
@@ -300,9 +300,9 @@ fn apply_entry(
 
     // Put the entry's saved lines in between top and bot.
     for (line, i) in core::mem::take(&mut entry.lines).into_iter().zip(0..) {
-        if emptied && top + i == 0 {
+        if emptied && top + i == LineNr::ZERO {
             // Over the dummy line the delete left, without a copy.
-            let _ = ml_replace_buf_owned(Buf::current(), 1, line);
+            let _ = ml_replace_buf_owned(Buf::current(), LineNr::ONE, line);
         } else {
             let _ = ml_append_flags(top + i, line.as_bytes_with_nul(), 0);
         }
@@ -310,7 +310,7 @@ fn apply_entry(
 
     if oldsize != newsize {
         let delta = newsize - oldsize;
-        mark_adjust(top + 1, top + oldsize, MAXLNUM, delta, kExtmarkNOOP);
+        mark_adjust(top + 1, top + oldsize, MAXLNUM.get(), delta, kExtmarkNOOP);
         if buffer.b_op_start.lnum > top + oldsize {
             buffer.b_op_start.lnum += delta;
         }
@@ -361,19 +361,19 @@ fn swap_marks(
         return;
     };
     for (i, saved) in saved.iter().enumerate() {
-        if header.named_marks[i].mark.lnum != 0 {
+        if header.named_marks[i].mark.lnum != LineNr::ZERO {
             // The buffer's mark is replaced, and its payload goes with it.
             b.b_namedm[i] = header.named_marks[i].to_mark();
         }
-        if saved.mark.lnum != 0 {
+        if saved.mark.lnum != LineNr::ZERO {
             header.named_marks[i] = *saved;
         } else {
             // Only the line number is cleared, as the C clears it: the rest
             // of the mark is left as it was.
-            header.named_marks[i].mark.lnum = 0;
+            header.named_marks[i].mark.lnum = LineNr::ZERO;
         }
     }
-    if header.visual.vi_start.lnum != 0 {
+    if header.visual.vi_start.lnum != LineNr::ZERO {
         b.b_visual = header.visual;
         header.visual = saved_visual;
     }
@@ -384,7 +384,7 @@ fn swap_marks(
 fn place_cursor(buffer: Buf, mut win: Win, cursor: Pos, cursor_vcol: ColNr) {
     // Off by exactly one line: put it back where the change started, which is
     // what the "o" command wants. Otherwise it goes to the first undone line.
-    if cursor.lnum + 1 == win.w_cursor.lnum && win.w_cursor.lnum > 1 {
+    if cursor.lnum + 1 == win.w_cursor.lnum && win.w_cursor.lnum > LineNr::ONE {
         win.w_cursor.lnum -= 1;
     }
     if win.w_cursor.lnum > buffer.b_ml.ml_line_count {

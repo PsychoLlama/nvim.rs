@@ -258,7 +258,7 @@ pub(crate) fn cmdpreview_restore_state(cpinfo: &mut CpInfo) {
             cmdpreview_ns.get().cast_unsigned(),
             0,
             0,
-            MAXLNUM,
+            MAXLNUM.get(),
             MAXCOL,
         );
 

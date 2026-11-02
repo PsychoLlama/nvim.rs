@@ -35,7 +35,7 @@ pub(super) fn fold_create_markers(window: Win, start: Pos, end: Pos) {
         emsg(gettext(e_modifiable));
         return;
     }
-    let num_changed = (1 + end.lnum - start.lnum) as int64_t;
+    let num_changed = int64_t::from(end.lnum - start.lnum + 1);
     parse_marker(window);
     // Copies: `u_save` may run autocommands, which may set 'foldmarker'.
     let (open, close) = {
@@ -96,7 +96,7 @@ pub(super) fn fold_add_marker(buffer: Buf, pos: Pos, marker: &[u8]) {
     if added != 0 {
         extmark_splice_cols(
             buffer,
-            lnum as c_int - 1,
+            lnum.get() - 1,
             text.len() as ColNr,
             0,
             added as ColNr,
@@ -114,15 +114,11 @@ pub(super) fn fold_add_marker(buffer: Buf, pos: Pos, marker: &[u8]) {
 /// that. Deleting a marker never moves a line, so the numbers stay good.
 ///
 /// `lnum_off` — offset for `fold.top`
-pub(super) fn marker_spans(
-    fold: &Fold,
-    recursive: bool,
-    lnum_off: LineNr,
-) -> Vec<(LineNr, LineNr)> {
-    fn collect(fold: &Fold, recursive: bool, lnum_off: LineNr, out: &mut Vec<(LineNr, LineNr)>) {
+pub(super) fn marker_spans(fold: &Fold, recursive: bool, lnum_off: i32) -> Vec<(LineNr, LineNr)> {
+    fn collect(fold: &Fold, recursive: bool, lnum_off: i32, out: &mut Vec<(LineNr, LineNr)>) {
         if recursive {
             for child in &fold.nested {
-                collect(child, true, lnum_off + fold.top, out);
+                collect(child, true, lnum_off + fold.top.get(), out);
             }
         }
         out.push((fold.top + lnum_off, fold.last() + lnum_off));
@@ -191,7 +187,7 @@ pub(super) fn fold_del_marker(buffer: Buf, lnum: LineNr, marker: &[u8]) {
     let _ = ml_replace_buf_text(buffer, lnum, &new[..new.len() - 1]);
     extmark_splice_cols(
         buffer,
-        lnum as c_int - 1,
+        lnum.get() - 1,
         start as ColNr,
         len as ColNr,
         0,

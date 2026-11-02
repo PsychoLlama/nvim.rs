@@ -117,7 +117,7 @@ pub struct BufferRef {
 #[derive(Default)]
 pub struct DiffBlock {
     pub df_lnum: [LineNr; 8],
-    pub df_count: [LineNr; 8],
+    pub df_count: [i32; 8],
     pub is_linematched: bool,
     pub has_changes: bool,
     /// The block's inline changes, cached by `diff_find_change_inline_diff`
@@ -421,7 +421,7 @@ pub struct Buffer {
     pub b_mod_set: bool,
     pub b_mod_top: LineNr,
     pub b_mod_bot: LineNr,
-    pub b_mod_xlines: LineNr,
+    pub b_mod_xlines: i32,
     /// What each window that has shown this buffer remembers of it, most
     /// recently used first.
     pub b_wininfo: Vec<WinInfo>,
@@ -794,9 +794,9 @@ pub struct SynBlock {
     pub b_syn_containedin: ::core::ffi::c_int,
     pub b_syn_sync_flags: ::core::ffi::c_int,
     pub b_syn_sync_id: int16_t,
-    pub b_syn_sync_minlines: LineNr,
-    pub b_syn_sync_maxlines: LineNr,
-    pub b_syn_sync_linebreaks: LineNr,
+    pub b_syn_sync_minlines: i32,
+    pub b_syn_sync_maxlines: i32,
+    pub b_syn_sync_linebreaks: i32,
     /// `:syntax sync linecont`'s pattern, owned; `b_syn_linecont_prog`
     /// is what it compiled to.
     pub(crate) b_syn_linecont_pat: Option<::std::ffi::CString>,

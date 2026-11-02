@@ -47,7 +47,7 @@ fn apply_linematch_results(
     slots: &DiffSlots,
     decisions: &[c_int],
 ) {
-    let mut line_numbers = [0 as LineNr; DB_COUNT as usize];
+    let mut line_numbers = [LineNr::ZERO; DB_COUNT as usize];
     let mut outputmap = [0usize; DB_COUNT as usize];
     let mut ndiffs = 0;
     let dp = &mut blocks[at];

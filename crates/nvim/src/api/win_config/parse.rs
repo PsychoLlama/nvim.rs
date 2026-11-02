@@ -25,6 +25,7 @@ use crate::narrow::len_as_int;
 use crate::narrow::number_as_int;
 use crate::os::cshim::cstr_ncasecmp;
 use crate::types::Handle;
+use crate::types::LineNr;
 use crate::winfloat::WIN_CONFIG_INIT;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
@@ -141,7 +142,7 @@ fn float_bufpos(bufpos: &Array) -> Option<LPos> {
         return None;
     };
     Some(LPos {
-        lnum: number_as_int(lnum.as_integer()?),
+        lnum: LineNr::new(number_as_int(lnum.as_integer()?)),
         col: number_as_int(col.as_integer()?),
     })
 }
@@ -362,7 +363,7 @@ impl Decode<'_> {
                 self.fconfig.external = false;
                 if kind == kFloatRelativeWindow {
                     self.relative_is_win = true;
-                    self.fconfig.bufpos.lnum = -1;
+                    self.fconfig.bufpos.lnum = LineNr::new(-1);
                 }
             }
             None if !self.config.external.unwrap_or(false) => {
@@ -736,7 +737,7 @@ mod tests {
             Object::Integer(7 as Integer),
         ]))
         .expect("a pair");
-        assert_eq!((at.lnum, at.col), (3, 7));
+        assert_eq!((at.lnum.get(), at.col), (3, 7));
         assert!(float_bufpos(&Array::new()).is_none());
         assert!(float_bufpos(&Array::from(vec![Object::Integer(3)])).is_none());
         assert!(

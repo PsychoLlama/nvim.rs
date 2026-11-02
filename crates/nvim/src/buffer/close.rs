@@ -57,14 +57,14 @@ use crate::winlayer::{Buf, TabPage, Win, defer_free_buffer, forget_buffer, tab_w
 /// which is *not* `INIT_FMARK` (that seeds `topline_offset` with `MAXLNUM`).
 const ZERO_FMARK: FileMark = FileMark {
     mark: Pos {
-        lnum: 0 as LineNr,
+        lnum: LineNr::ZERO,
         col: 0 as ColNr,
         coladd: 0 as ColNr,
     },
     fnum: 0,
     timestamp: 0 as Timestamp,
     view: FileMarkView {
-        topline_offset: 0 as LineNr,
+        topline_offset: 0,
         skipcol: 0 as ColNr,
     },
     extra: None,
@@ -142,13 +142,13 @@ fn free_callback(cb: &mut Callback) {
 
 /// Move every mark in `buffer` up by `count` lines from line 1 -- what an
 /// emptied buffer needs so a reload starts from a clean slate.
-fn forget_lines(buffer: Buf, count: LineNr) {
+fn forget_lines(buffer: Buf, count: i32) {
     let last = MAXLNUM;
     mark_adjust_buf(
         buffer,
-        1,
-        count,
-        last,
+        LineNr::ONE,
+        LineNr::new(count),
+        last.get(),
         -count,
         false,
         kMarkAdjustNormal,
@@ -165,8 +165,8 @@ fn close_memline(buffer: Buf) {
     ml_close(buffer, 1);
 }
 
-fn mark_lines_deleted(count: LineNr) {
-    deleted_lines_mark(1 as LineNr, count as c_int);
+fn mark_lines_deleted(count: i32) {
+    deleted_lines_mark(LineNr::ONE, count as c_int);
 }
 
 /// Free every buffer-local variable.
@@ -358,8 +358,12 @@ fn close_buffer_inner(
             remember_last_cursor(wp);
         }
         let cursor = wp.w_cursor;
-        let lnum = if cursor.lnum == 1 { 0 } else { cursor.lnum };
-        buflist_setfpos(buffer, Some(wp), lnum, cursor.col, true);
+        let lnum = if cursor.lnum == LineNr::ONE {
+            0
+        } else {
+            cursor.lnum.get()
+        };
+        buflist_setfpos(buffer, Some(wp), LineNr::new(lnum), cursor.col, true);
     }
 
     let bufref = BufRef::of(buffer);
@@ -567,7 +571,7 @@ fn unlink_and_free(mut buffer: Buf, clear_w_buf: Option<Win>) {
 /// Make buffer not contain a file.
 ///
 pub fn buf_clear_file(mut buffer: Buf) {
-    buffer.b_ml.ml_line_count = 1 as LineNr;
+    buffer.b_ml.ml_line_count = LineNr::ONE;
     unchanged_now(buffer, true, true);
     buffer.b_p_eof = 0;
     buffer.b_start_eof = 0;
@@ -595,9 +599,9 @@ pub fn buf_clear() {
     let line_count = buf.line_count();
     free_extmarks(buf); // delete any extmarks
     while !Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
-        delete_line(1 as LineNr);
+        delete_line(LineNr::ONE);
     }
-    mark_lines_deleted(line_count); // prepare for display
+    mark_lines_deleted(line_count.get()); // prepare for display
 }
 
 // ---------------------------------------------------------------------------
@@ -665,12 +669,12 @@ pub fn buf_freeall(buffer: Buf, flags: c_int) {
 
     let count = buf.line_count();
     close_memline(buf); // close and delete the memline/memfile
-    buf.b_ml.ml_line_count = 0 as LineNr; // no lines in buffer
+    buf.b_ml.ml_line_count = LineNr::ZERO; // no lines in buffer
 
     // Ensure marks are adjusted for cleared buffer in case buffer not on
     // disk: if it is reloaded the buffer will be empty.
     if buf_is_nofilename(Some(buf)) && !exiting.get() {
-        forget_lines(buf, count);
+        forget_lines(buf, count.get());
     }
 
     if flags & BFA_KEEP_UNDO as c_int == 0 {

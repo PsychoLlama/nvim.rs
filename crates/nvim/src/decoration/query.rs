@@ -133,7 +133,7 @@ pub fn decor_conceal_line(window: Win, row: c_int, check_cursor: bool) -> bool {
         || window.w_onebuf_opt.wo_cole < 2 as OptInt
         || (!check_cursor
             && window.is_current()
-            && row as LineNr + 1 == window.w_cursor.lnum
+            && LineNr::new(row) + 1 == window.w_cursor.lnum
             && !window.conceals_cursor_line())
     {
         return false;
@@ -232,7 +232,7 @@ pub(crate) fn decor_virt_lines(
                 if draw_row >= start_row
                     && draw_row < end_row
                     && (!apply_folds
-                        || !(wp.fold_span(mrow as LineNr + 1).0 || wp.conceal_line(mrow, false)))
+                        || !(wp.fold_span(LineNr::new(mrow) + 1).0 || wp.conceal_line(mrow, false)))
                 {
                     virt_lines += len_as_int(count);
                     if let Some(lines) = lines.as_deref_mut() {

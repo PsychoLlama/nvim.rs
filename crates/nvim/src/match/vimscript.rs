@@ -60,7 +60,7 @@ fn match_dict(item: &MatchItem) -> DictRef {
     if item.mit_match.regprog.is_none() {
         // Added with matchaddpos(): one `posN` key per position.
         for (i, llpos) in item.mit_pos_array.iter().enumerate() {
-            if llpos.lnum == 0 {
+            if llpos.lnum == LineNr::ZERO {
                 break;
             }
             // A column of zero means the whole line, and is reported

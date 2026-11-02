@@ -41,6 +41,7 @@
 #![forbid(unsafe_code)]
 
 use crate::env::home_to_tilde;
+use crate::narrow::number_as_int;
 use crate::normal::{set_visual_active, showcmd_buf, visual_active};
 use core::cell::Cell;
 use core::ffi::{CStr, c_int};
@@ -76,7 +77,7 @@ use crate::state::mode::State;
 use crate::strings::{FmtArg, format_into};
 use crate::types::{
     ColNr, FoldInfo, LineNr, MAXPATHL, OptIndex, ScreenChar, SignTextAttrs, StlClickRecord,
-    StlHlRun, TypVal, VarNumber, Vv, int64_t,
+    StlHlRun, TypVal, VarNumber, Vv,
 };
 use crate::undo::buf_is_changed;
 use crate::winlayer::graph::{switch_buffer, switch_window};
@@ -223,8 +224,8 @@ impl Env<'_> {
     /// `%p`: how far through the buffer the cursor is, as a percentage.
     pub(super) fn percentage(&self) -> c_int {
         calc_percentage(
-            self.win.w_cursor.lnum as int64_t,
-            self.buf.b_ml.ml_line_count as int64_t,
+            i64::from(self.win.w_cursor.lnum),
+            i64::from(self.buf.b_ml.ml_line_count),
         )
     }
 
@@ -314,7 +315,7 @@ impl Env<'_> {
     pub(super) fn fold_glyphs(&self, fdc: c_int, text: &mut Vec<u8>) -> c_int {
         let mut glyphs = [0 as ScreenChar; 9];
         // The line the fold item describes is `v:lnum`, not the cursor line.
-        let lnum = vim_var(Vv::Lnum) as LineNr;
+        let lnum = LineNr::new(number_as_int(vim_var(Vv::Lnum)));
         let stc = self.stc();
         let mut fold_vcol = stc.fold_vcol.get();
         fill_foldcolumn(

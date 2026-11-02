@@ -101,7 +101,7 @@ pub(crate) fn copy_substring_from_pos(start: Pos, end: Pos) -> Result<(Vec<u8>, 
         text.extend_from_slice(newline);
 
         // Append full lines between start and end.
-        for lnum in start.lnum + 1..end.lnum {
+        for lnum in (start.lnum + 1).up_to(end.lnum) {
             text.extend_from_slice(Lines::current().line(lnum));
             text.extend_from_slice(newline);
         }
@@ -181,7 +181,7 @@ pub(crate) fn concat_pattern_with_buffer_match(
 /// `dir` is `FORWARD` or `BACKWARD`.
 pub(crate) fn expand_pattern_in_buf(pat: &CStr, dir: Direction) -> Result<Vec<XString>, Failed> {
     let exacttext = exacttext();
-    let has_range = search_first_line.get() != 0;
+    let has_range = search_first_line.get() != LineNr::ZERO;
 
     if pat.is_empty() {
         return Err(Failed);
@@ -264,7 +264,7 @@ pub(crate) fn expand_pattern_in_buf(pat: &CStr, dir: Direction) -> Result<Vec<XS
         // searching for "foo\n" if "foo" is at end of buffer.
         if end_match_pos.lnum > Buf::current().b_ml.ml_line_count {
             cur_match_pos = Pos {
-                lnum: 1,
+                lnum: LineNr::ONE,
                 col: 0,
                 coladd: 0,
             };

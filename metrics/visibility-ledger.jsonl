@@ -547,7 +547,7 @@
 {"path":"neovim::types::KeyDict_option","kind":"struct","file":"crates/nvim/src/types/keysets.rs","tests":["crates/nvim/tests/unit/options.rs"]}
 {"path":"neovim::types::KeyValuePair","kind":"type","file":"crates/nvim/src/types/api.rs","tests":["crates/nvim/tests/unit/packer.rs"]}
 {"path":"neovim::types::LangP","kind":"struct","file":"crates/nvim/src/types/spell.rs","tests":["crates/nvim/tests/unit/spellfile.rs"]}
-{"path":"neovim::types::LineNr","kind":"type","file":"crates/nvim/src/types/pos.rs","tests":["crates/nvim/tests/unit/cursor.rs","crates/nvim/tests/unit/ex_docmd.rs","crates/nvim/tests/unit/fold.rs","crates/nvim/tests/unit/memline.rs"]}
+{"path":"neovim::types::LineNr","kind":"struct","file":"crates/nvim/src/types/pos.rs","tests":["crates/nvim/tests/unit/buffer.rs","crates/nvim/tests/unit/cursor.rs","crates/nvim/tests/unit/ex_docmd.rs","crates/nvim/tests/unit/fold.rs","crates/nvim/tests/unit/memline.rs","crates/nvim/tests/unit/regexp.rs","crates/nvim/tests/unit/typval_value.rs"]}
 {"path":"neovim::types::List","kind":"struct","file":"crates/nvim/src/types/multiqueue_list.rs","tests":["crates/nvim/tests/unit/eval_encode.rs","crates/nvim/tests/unit/support.rs","crates/nvim/tests/unit/support/tv.rs","crates/nvim/tests/unit/typval.rs","crates/nvim/tests/unit/typval_list.rs"]}
 {"path":"neovim::types::ListItem","kind":"struct","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/support/tv.rs"]}
 {"path":"neovim::types::MAXPATHL","kind":"const","file":"crates/nvim/src/types/os.rs","tests":["crates/nvim/tests/unit/env.rs"]}

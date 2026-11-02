@@ -59,7 +59,7 @@ use crate::winlayer::{
 
 /// A position that is all zero bytes.
 const ZERO_POS: Pos = Pos {
-    lnum: 0,
+    lnum: LineNr::ZERO,
     col: 0,
     coladd: 0,
 };
@@ -167,19 +167,19 @@ fn zeroed_window() -> Win {
             w_cursor: ZERO_POS,
             w_curswant: 0,
             w_set_curswant: false,
-            w_cursorline: 0,
-            w_last_cursorline: 0,
+            w_cursorline: LineNr::ZERO,
+            w_last_cursorline: LineNr::ZERO,
             w_old_visual_mode: 0,
-            w_old_cursor_lnum: 0,
+            w_old_cursor_lnum: LineNr::ZERO,
             w_old_cursor_fcol: 0,
             w_old_cursor_lcol: 0,
-            w_old_visual_lnum: 0,
+            w_old_visual_lnum: LineNr::ZERO,
             w_old_visual_col: 0,
             w_old_curswant: 0,
-            w_last_cursor_lnum_rnu: 0,
+            w_last_cursor_lnum_rnu: LineNr::ZERO,
             w_p_lcs_chars: ZERO_LCS,
             w_p_fcs_chars: ZERO_FCS,
-            w_topline: 0,
+            w_topline: LineNr::ZERO,
             w_topline_was_set: false,
             w_topfill: 0,
             w_old_topfill: 0,
@@ -187,7 +187,7 @@ fn zeroed_window() -> Win {
             w_old_botfill: false,
             w_leftcol: 0,
             w_skipcol: 0,
-            w_last_topline: 0,
+            w_last_topline: LineNr::ZERO,
             w_last_topfill: 0,
             w_last_leftcol: 0,
             w_last_skipcol: 0,
@@ -224,8 +224,8 @@ fn zeroed_window() -> Win {
             w_valid_leftcol: 0,
             w_valid_skipcol: 0,
             w_viewport_invalid: false,
-            w_viewport_last_topline: 0,
-            w_viewport_last_botline: 0,
+            w_viewport_last_topline: LineNr::ZERO,
+            w_viewport_last_botline: LineNr::ZERO,
             w_viewport_last_topfill: 0,
             w_viewport_last_skipcol: 0,
             w_cline_height: 0,
@@ -234,7 +234,7 @@ fn zeroed_window() -> Win {
             w_virtcol: 0,
             w_wrow: 0,
             w_wcol: 0,
-            w_botline: 0,
+            w_botline: LineNr::ZERO,
             w_empty_rows: 0,
             w_filler_rows: 0,
             w_lines_valid: 0,
@@ -248,16 +248,16 @@ fn zeroed_window() -> Win {
             w_maxscwidth: 0,
             w_redr_type: 0,
             w_upd_rows: 0,
-            w_redraw_top: 0,
-            w_redraw_bot: 0,
+            w_redraw_top: LineNr::ZERO,
+            w_redraw_bot: LineNr::ZERO,
             w_redr_status: false,
             w_redr_border: false,
             w_redr_statuscol: false,
             w_display_tick: 0,
             w_stl_cursor: ZERO_POS,
             w_stl_virtcol: 0,
-            w_stl_topline: 0,
-            w_stl_line_count: 0,
+            w_stl_topline: LineNr::ZERO,
+            w_stl_line_count: LineNr::ZERO,
             w_stl_topfill: 0,
             w_stl_empty: false,
             w_stl_recording: 0,
@@ -304,8 +304,8 @@ fn zeroed_window() -> Win {
             w_config: WIN_CONFIG_INIT,
             w_fraction: 0,
             w_prev_fraction_row: 0,
-            w_nrwidth_line_count: 0,
-            w_statuscol_line_count: 0,
+            w_nrwidth_line_count: LineNr::ZERO,
+            w_statuscol_line_count: LineNr::ZERO,
             w_nrwidth_width: 0,
             w_llist: None,
             w_llist_ref: None,
@@ -378,7 +378,7 @@ pub(crate) fn win_alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
     match oldwin {
         None => {
             // Very first window: make a new empty buffer for it.
-            let buf = buflist_new(None, None, 1, BLN_LISTED.cast_signed());
+            let buf = buflist_new(None, None, LineNr::ONE, BLN_LISTED.cast_signed());
             let Some(mut buf) = buf else {
                 leave_curbuf();
                 return Err(Failed);
@@ -461,15 +461,15 @@ pub(crate) fn win_alloc(after: Option<Win>, hidden: bool) -> Win {
     }
     new_wp.w_wincol = 0;
     new_wp.w_width = Columns.get();
-    new_wp.w_topline = 1 as LineNr;
+    new_wp.w_topline = LineNr::ONE;
     new_wp.w_topfill = 0;
-    new_wp.w_botline = 2 as LineNr;
-    new_wp.w_cursor.lnum = 1 as LineNr;
+    new_wp.w_botline = LineNr::new(2);
+    new_wp.w_cursor.lnum = LineNr::ONE;
     new_wp.w_scbind_pos = 1;
     new_wp.w_floating = false;
     new_wp.w_config = WIN_CONFIG_INIT;
     new_wp.w_viewport_invalid = true;
-    new_wp.w_viewport_last_topline = 1 as LineNr;
+    new_wp.w_viewport_last_topline = LineNr::ONE;
     new_wp.w_ns_hl = Handle::new(-1);
     new_wp.w_onebuf_opt.wo_so = -1 as OptInt;
     new_wp.w_allbuf_opt.wo_so = new_wp.w_onebuf_opt.wo_so;

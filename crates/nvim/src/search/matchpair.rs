@@ -346,7 +346,7 @@ fn find_hash_match(mut pos: Pos, hash_dir: c_int, initc: c_int) -> Option<Pos> {
             if pos.lnum == Buf::current().b_ml.ml_line_count {
                 break;
             }
-        } else if pos.lnum == 1 {
+        } else if pos.lnum == LineNr::ONE {
             break;
         }
         pos.lnum += hash_dir;
@@ -448,7 +448,7 @@ impl Walk {
             return true;
         }
         // At the start of the line, go to the previous one.
-        if self.pos.lnum == 1 {
+        if self.pos.lnum == LineNr::ONE {
             return false; // start of file
         }
         self.pos.lnum -= 1;
@@ -629,7 +629,7 @@ impl Walk {
                 }
             }
         }
-        if self.pos.lnum <= 1 {
+        if self.pos.lnum <= LineNr::ONE {
             return;
         }
         // The line above is a second read of the same cache, so the borrow

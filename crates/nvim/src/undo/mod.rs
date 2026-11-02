@@ -162,7 +162,7 @@ impl From<Failed> for UndoFailed {
 /// Safe: as [`u_save`], over the cursor's line.
 pub fn u_save_cursor() -> Result<(), Failed> {
     let cur: LineNr = Win::current().w_cursor.lnum;
-    u_save((cur - 1).max(0), cur + 1)
+    u_save((cur - 1).max(LineNr::ZERO), cur + 1)
 }
 
 /// [`u_save_buf`] for the current buffer.
@@ -186,7 +186,7 @@ pub fn u_save_buf(buffer: Buf, top: LineNr, bot: LineNr) -> Result<(), Failed> {
         // A single line: `U` can put it back.
         u_saveline(buffer, top + 1);
     }
-    u_savecommon(buffer, top, bot, 0, false)
+    u_savecommon(buffer, top, bot, LineNr::ZERO, false)
 }
 
 /// Saves the line a `:substitute` is about to replace.
@@ -206,13 +206,13 @@ pub fn u_inssub(lnum: LineNr) -> Result<(), Failed> {
 /// Saves the `nlines` lines from `lnum` that are about to be deleted.
 ///
 /// Safe: as [`u_save`].
-pub fn u_savedel(lnum: LineNr, nlines: LineNr) -> Result<(), Failed> {
-    let whole_buffer = nlines == Buf::current().b_ml.ml_line_count;
+pub fn u_savedel(lnum: LineNr, nlines: i32) -> Result<(), Failed> {
+    let whole_buffer = nlines == Buf::current().b_ml.ml_line_count.get();
     u_savecommon(
         Buf::current(),
         lnum - 1,
         lnum + nlines,
-        if whole_buffer { 2 } else { lnum },
+        if whole_buffer { LineNr::new(2) } else { lnum },
         false,
     )
 }
@@ -287,7 +287,7 @@ pub fn u_savecommon(
             return Err(Failed);
         }
     }
-    let size: LineNr = bot - top - 1;
+    let size: i32 = bot - top - 1;
     if b.b_u_synced {
         // A boundary: this change starts an undo header of its own.
         if !start_new_header(b) {
@@ -444,7 +444,7 @@ fn extend_last_entry(mut b: Buf, top: LineNr, bot: LineNr, newbot: LineNr) -> bo
         let stale = if uh.getbot == Some(at) {
             entry.lcount != line_count
         } else {
-            let below = if entry.bot == 0 {
+            let below = if entry.bot == LineNr::ZERO {
                 line_count + 1
             } else {
                 entry.bot
@@ -499,12 +499,12 @@ fn set_entry_bottom(
     let Some(entry) = uh.entries.get_mut(at) else {
         return;
     };
-    if newbot != 0 {
+    if newbot != LineNr::ZERO {
         entry.bot = newbot;
     } else if bot > line_count {
         // The change reaches the end of the buffer, and `bot` is the
         // sentinel for that rather than a line number.
-        entry.bot = 0;
+        entry.bot = LineNr::ZERO;
     } else {
         entry.lcount = line_count;
         uh.getbot = Some(at);
@@ -520,7 +520,7 @@ fn set_entry_bottom(
 fn record_entry(
     mut b: Buf,
     top: LineNr,
-    size: LineNr,
+    size: i32,
     bot: LineNr,
     newbot: LineNr,
     reload: bool,
@@ -636,15 +636,15 @@ pub fn u_find_first_changed() {
     let Some(size) = b
         .header(newhead)
         .and_then(|uh| uh.entries.last())
-        .filter(|entry| entry.top == 0 && entry.bot == 0)
+        .filter(|entry| entry.top == LineNr::ZERO && entry.bot == LineNr::ZERO)
         .map(UndoEntry::size)
     else {
         // No entry, or not a whole-buffer one: nothing to line up against.
         return;
     };
-    let mut lnum: LineNr = 1;
+    let mut lnum: LineNr = LineNr::ONE;
     let mut found = false;
-    while lnum < b.line_count() && lnum <= size {
+    while lnum < b.line_count() && lnum <= LineNr::new(size) {
         let at = usize::try_from(lnum - 1).expect("the loop counts up from one");
         let mut lines = b.lines();
         let differs = b
@@ -657,7 +657,7 @@ pub fn u_find_first_changed() {
         }
         lnum += 1;
     }
-    if (found || b.line_count() != size)
+    if (found || b.line_count() != LineNr::new(size))
         && let Some(uh) = b.header_mut(newhead)
     {
         clearpos(&mut uh.cursor);

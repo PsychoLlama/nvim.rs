@@ -410,7 +410,7 @@ fn drag_or_extend(pos: &mut MousePos, flags: c_int, which_button: c_int) -> Opti
 fn scroll_back(mut win: Win, row: c_int) {
     let mut count = 0;
     let mut first = true;
-    while win.w_topline > 1 {
+    while win.w_topline > LineNr::ONE {
         if win.w_topfill < win.fill_above(win.w_topline) {
             count += 1;
         } else {

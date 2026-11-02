@@ -36,7 +36,7 @@ use crate::search::{SEARCH_HIS, search_regcomp_owned};
 use crate::semsg;
 use crate::types::CmdIdx;
 use crate::types::RegMMatch;
-use crate::types::{ExArg, LineNr, NUL};
+use crate::types::{ExArg, NUL};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int};
@@ -216,7 +216,7 @@ fn read_count(args: &mut ExArg, at: &mut usize) -> bool {
         return false;
     }
     args.line1 = args.line2;
-    args.line2 += i as LineNr - 1 as LineNr;
+    args.line2 += i - 1;
     args.line2 = args.line2.min(Buf::current().b_ml.ml_line_count);
     true
 }

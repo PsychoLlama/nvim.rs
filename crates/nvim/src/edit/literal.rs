@@ -299,7 +299,7 @@ pub(crate) fn ins_digraph() -> c_int {
 /// cursor's virtual column is reached.  Answers NUL -- and beeps -- when the
 /// line does not exist or is too short.
 pub(crate) fn ins_copychar(lnum: LineNr) -> c_int {
-    if lnum < 1 || lnum > Buf::current().b_ml.ml_line_count {
+    if lnum < LineNr::ONE || lnum > Buf::current().b_ml.ml_line_count {
         vim_beep(kOptBoFlagCopy as ::core::ffi::c_uint);
         return NUL;
     }

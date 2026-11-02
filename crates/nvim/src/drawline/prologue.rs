@@ -122,8 +122,8 @@ pub(crate) fn prepare_line(
         s.line.fill(window.buffer(), lnum);
     }
 
-    decor_redraw_line(window, lnum - 1);
-    if !s.has_decor && decor_has_more_decorations(window, lnum - 1) {
+    decor_redraw_line(window, (lnum - 1).get());
+    if !s.has_decor && decor_has_more_decorations(window, (lnum - 1).get()) {
         s.has_decor = true;
         s.extra_check = true;
     }
@@ -386,8 +386,8 @@ impl LineSetup {
     fn filler_lines(&mut self, wlv: &mut WinLineVars, window: Win) {
         wlv.n_virt_lines = decor_virt_lines(
             window,
-            wlv.lnum - 1,
-            wlv.lnum,
+            (wlv.lnum - 1).get(),
+            wlv.lnum.get(),
             Some(&mut wlv.n_virt_below),
             Some(&mut self.virt_lines),
             true,
@@ -436,7 +436,7 @@ impl LineSetup {
         decor_redraw_signs(
             window,
             window.buffer(),
-            wlv.lnum - 1,
+            (wlv.lnum - 1).get(),
             Some(&mut wlv.sign_attrs),
             Some(&mut sign_line_attr),
             Some(&mut wlv.sign_cul_attr),
@@ -501,12 +501,12 @@ impl LineSetup {
         // The previous line was not spell checked — the first line of an
         // updated region, or the line after a closed fold — so this one
         // has to decide for itself whether a capital is required.
-        if spv.spv_capcol_lnum == 0 && check_need_cap(window, lnum, 0) {
+        if spv.spv_capcol_lnum == LineNr::ZERO && check_need_cap(window, lnum, 0) {
             spv.spv_cap_col = 0;
         } else if lnum != spv.spv_capcol_lnum {
             spv.spv_cap_col = -1;
         }
-        spv.spv_checked_lnum = 0;
+        spv.spv_checked_lnum = LineNr::ZERO;
 
         // Trick: `spell_cat_line` skips a few characters for C/shell/Vim
         // comment leaders.

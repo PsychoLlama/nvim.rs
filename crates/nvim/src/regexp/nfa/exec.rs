@@ -11,6 +11,7 @@ use crate::regexp::ExtMatch;
 use crate::regexp::ExtMatchRef;
 use crate::regexp::RF_HAD_EOL;
 use crate::regexp::RegCompiler;
+use crate::types::LineNr;
 use core::ffi::c_int;
 
 use super::build::{Pass, nfa_postprocess, post2nfa};
@@ -60,7 +61,7 @@ fn nfa_regtry(rex: Rex, prog: &NfaRegProg, col: ColNr) -> c_int {
         ExtMatchRef::new(z_captures(rex, &subs))
     });
     rex.put_ext_out(captures);
-    1 + rex.lnum() as c_int
+    1 + rex.lnum().get()
 }
 
 /// Copy the capture positions into the match's slots.
@@ -81,7 +82,10 @@ fn report_match(rex: Rex, subs: &RegSubs, col: ColNr) {
     let (start, end) = (rex.start(0), rex.end(0));
     let kind = rex.pos_kind();
     if !start.get().is_set(kind) {
-        start.set(MatchPos::from_pos(LPos { lnum: 0, col }));
+        start.set(MatchPos::from_pos(LPos {
+            lnum: LineNr::ZERO,
+            col,
+        }));
     }
     if !end.get().is_set(kind) {
         end.set(rex.here());
@@ -100,7 +104,7 @@ fn z_captures(rex: Rex, subs: &RegSubs) -> ExtMatch {
         let line = if rex.multi() {
             // A capture that spans lines cannot be handed over as one
             // string, so it is dropped.
-            if start.lnum < 0 || start.lnum != end.lnum || end.col < start.col {
+            if start.lnum < LineNr::ZERO || start.lnum != end.lnum || end.col < start.col {
                 continue;
             }
             let Some(line) = reg_getline(rex, start.lnum) else {
@@ -108,7 +112,7 @@ fn z_captures(rex: Rex, subs: &RegSubs) -> ExtMatch {
             };
             line
         } else {
-            if start.lnum < 0 || end.lnum < 0 {
+            if start.lnum < LineNr::ZERO || end.lnum < LineNr::ZERO {
                 continue;
             }
             rex.line()
@@ -131,7 +135,7 @@ fn z_captures(rex: Rex, subs: &RegSubs) -> ExtMatch {
 pub(crate) fn nfa_regexec(rex: Rex, prog: &NfaRegProg, startcol: ColNr) -> c_int {
     let mut col = startcol;
     let line = if rex.multi() {
-        reg_getline(rex, 0)
+        reg_getline(rex, LineNr::ZERO)
     } else {
         Some(rex.line())
     };
@@ -150,7 +154,7 @@ pub(crate) fn nfa_regexec(rex: Rex, prog: &NfaRegProg, startcol: ColNr) -> c_int
                 rex.set_reg_icombine(true);
             }
             rex.set_line(line);
-            rex.set_lnum(0);
+            rex.set_lnum(LineNr::ZERO);
             rex.set_nfa_has_zend(prog.has_zend);
             rex.set_nfa_has_backref(prog.has_backref);
             rex.set_nfa_nsubexpr(prog.nsubexp);

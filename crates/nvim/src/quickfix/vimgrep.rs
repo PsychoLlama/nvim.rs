@@ -82,9 +82,9 @@ impl Search {
     fn parse(excmd: &mut ExArg) -> Option<(Search, Vec<XString>)> {
         let title = qf_cmdtitle(excmd.line.line());
         let tomatch = if excmd.addr_count > 0 {
-            excmd.line2 as c_int
+            excmd.line2.get()
         } else {
-            MAXLNUM
+            MAXLNUM.get()
         };
 
         let arg = excmd.line.arg();
@@ -200,7 +200,7 @@ fn match_buflines(
     let global = search.flags & VGR_GLOBAL.cast_signed() != 0;
     let mut found_match = false;
 
-    let mut lnum: LineNr = 1;
+    let mut lnum: LineNr = LineNr::ONE;
     while lnum <= buffer.b_ml.ml_line_count && search.tomatch > 0 {
         if search.flags & VGR_FUZZY.cast_signed() == 0 {
             let mut col: ColNr = 0;
@@ -218,14 +218,14 @@ fn match_buflines(
                 let end = regmatch.endpos[0];
                 // A copy: adding the entry lists the file, which runs
                 // autocommands, and those can change the buffer.
-                let text = XString::from_cstr(buffer.lines().line_cstr(start.lnum + lnum, 0));
+                let text = XString::from_cstr(buffer.lines().line_cstr(start.lnum + lnum.get(), 0));
                 qf_add_entry(
                     qfl,
                     &NewEntry {
                         fname: Some(fname),
                         bufnum: bufnum.get(),
-                        lnum: start.lnum + lnum,
-                        end_lnum: end.lnum + lnum,
+                        lnum: start.lnum + lnum.get(),
+                        end_lnum: end.lnum + lnum.get(),
                         col: start.col + 1,
                         end_col: end.col + 1,
                         ..NewEntry::new(text.as_cstr())
@@ -240,7 +240,7 @@ fn match_buflines(
                 // Without `g` only the first match of a line counts, and
                 // a match that ran into the next line has consumed this
                 // one either way.
-                if !global || end.lnum > 0 {
+                if !global || end.lnum > LineNr::ZERO {
                     break;
                 }
                 // Move past the match, and past one more column when the

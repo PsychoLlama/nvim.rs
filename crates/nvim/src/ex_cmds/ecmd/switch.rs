@@ -16,6 +16,7 @@ use super::{Ecmd, EcmdArgs};
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
 use crate::message_fmt::msg_cstr;
+use crate::narrow::number_as_int;
 use crate::types::AutoEvent;
 use crate::window::valid_win;
 use crate::winlayer::WinId;
@@ -88,7 +89,7 @@ pub(super) fn switch_to_other_buffer(
         let mut tlnum = 0;
         if let Some(command) = command {
             // `atol`, which saturates, cut to a line number.
-            tlnum = crate::charset::skip::decimal(command.to_bytes()).0 as LineNr;
+            tlnum = number_as_int(crate::charset::skip::decimal(command.to_bytes()).0);
             if tlnum <= 0 {
                 tlnum = 1;
             }
@@ -96,7 +97,7 @@ pub(super) fn switch_to_other_buffer(
         let newbuf = buflist_new(
             ffname,
             sfname,
-            tlnum,
+            LineNr::new(tlnum),
             BLN_LISTED as c_int | BLN_NOCURWIN as c_int,
         );
         if let Some(newbuf) = newbuf.filter(|_| flags.has(EcmdFlags::ALTBUF)) {
@@ -107,7 +108,7 @@ pub(super) fn switch_to_other_buffer(
         buf = buflist_new(
             ffname,
             sfname,
-            0,
+            LineNr::ZERO,
             BLN_CURBUF as c_int
                 | (if flags.has(EcmdFlags::SET_HELP) {
                     0

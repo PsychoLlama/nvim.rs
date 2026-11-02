@@ -126,8 +126,7 @@ fn half_page(mut win: Win, dir: Direction, count: c_int, saved: Saved, op: Op) -
     let mut curscount = count;
     // Adjust the count so as not to reveal lines past the end of the buffer.
     if dir == FORWARD
-        && (win.w_topline + win.w_view_height as LineNr + count as LineNr > saved.buflen
-            || win.lines_concealed())
+        && (win.w_topline + win.w_view_height + count > saved.buflen || win.lines_concealed())
     {
         let mut n = win.corrected_plines(win.w_topline, false).0;
         if n - count < win.w_view_height && win.w_topline < saved.buflen {
@@ -154,7 +153,7 @@ fn half_page(mut win: Win, dir: Direction, count: c_int, saved: Saved, op: Op) -
     } else if dir == FORWARD {
         cursor_down_inner(win, curscount, true);
     } else {
-        cursor_up_inner(win, curscount as LineNr, true);
+        cursor_up_inner(win, curscount, true);
     }
     did_move
 }
@@ -187,7 +186,7 @@ fn whole_page(mut win: Win, dir: Direction, count: c_int) -> bool {
         };
         // In silent Ex mode `w_botline - 1` may be 0, but the cursor's line
         // number has to be at least 1.
-        win.w_cursor.lnum = lnum.max(1);
+        win.w_cursor.lnum = lnum.max(LineNr::ONE);
     }
     did_move
 }
@@ -197,7 +196,7 @@ fn whole_page(mut win: Win, dir: Direction, count: c_int) -> bool {
 pub fn do_check_cursorbind() {
     static PREV_CURWIN: GlobalCell<Option<WinId>> = GlobalCell::new(None);
     static PREV_CURSOR: GlobalCell<Pos> = GlobalCell::new(Pos {
-        lnum: 0,
+        lnum: LineNr::ZERO,
         col: 0,
         coladd: 0,
     });

@@ -25,6 +25,7 @@ use crate::id_table::{IdTable, TableId};
 use crate::keycodes::ModMask;
 use crate::ops::Op;
 use crate::types::AutoEvent;
+use crate::types::LineNr;
 use crate::winlayer::TabPage;
 use crate::winlayer::{Buf, Win};
 
@@ -184,7 +185,7 @@ fn new_state(oa: Op) -> NormalState {
         c: 0,
         old_col: 0,
         old_pos: Pos {
-            lnum: 0,
+            lnum: LineNr::ZERO,
             col: 0,
             coladd: 0,
         },

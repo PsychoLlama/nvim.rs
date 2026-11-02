@@ -166,7 +166,7 @@ fn set_mouse_vars() {
     let winnr = windows().take_while(|wp| wp.raw() != win.raw()).count() + 1;
     set_vim_var_nr(Vv::MouseWin, winnr as VarNumber);
     set_vim_var_nr(Vv::MouseWinid, win.handle.get() as VarNumber);
-    set_vim_var_nr(Vv::MouseLnum, lnum as VarNumber);
+    set_vim_var_nr(Vv::MouseLnum, i64::from(lnum));
     set_vim_var_nr(Vv::MouseCol, (pos.col + 1) as VarNumber);
 }
 

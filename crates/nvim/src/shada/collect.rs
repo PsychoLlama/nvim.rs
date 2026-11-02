@@ -25,6 +25,7 @@ use crate::os::time::os_time;
 use crate::register::{op_reg_index, shada_registers};
 use crate::search::shada_pattern;
 use crate::siemsg;
+use crate::types::LineNr;
 use crate::types::{
     ApiString, KeyDict__shada_search_pat, TypVal, VAR_FLAVOUR_DEFAULT, VAR_FLAVOUR_SESSION,
     VAR_FLAVOUR_SHADA, VAR_FUNC, VAR_PARTIAL, VarFlavour,
@@ -249,7 +250,7 @@ pub(crate) fn shada_init_jumps(
     let mut jumps_size = 0;
     let len = list.len();
     for (i, fm) in list.into_iter().enumerate() {
-        if fm.mark.lnum == 0 {
+        if fm.mark.lnum == LineNr::ZERO {
             mark_lnum_zero(i + 1, len);
             continue;
         }

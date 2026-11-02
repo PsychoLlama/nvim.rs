@@ -40,8 +40,8 @@ pub(crate) fn report_and_place(
     }
 
     // With errors, writing the file requires ":w!".
-    let bad_bytes = out.illegal_byte > 0 && bad_char != BAD_KEEP;
-    if how.newfile && (out.error || out.conv_error != 0 || bad_bytes) {
+    let bad_bytes = out.illegal_byte > LineNr::ZERO && bad_char != BAD_KEEP;
+    if how.newfile && (out.error || out.conv_error != LineNr::ZERO || bad_bytes) {
         Buf::current().b_p_ro = c_int::from(true);
     }
 

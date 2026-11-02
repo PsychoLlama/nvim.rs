@@ -618,7 +618,7 @@ fn ruler_position(win: Win, virtcol: ColNr) -> Vec<u8> {
     let lnum = if empty_buffer {
         0 as int64_t
     } else {
-        win.w_cursor.lnum as int64_t
+        i64::from(win.w_cursor.lnum)
     };
     let room = RULER_BUF_LEN as usize;
     // l10n: leave as-is unless a space after the comma is preferred

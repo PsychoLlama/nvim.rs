@@ -11,6 +11,8 @@ use super::*;
 use crate::api::private::validate::err_out_of_range;
 use crate::memline::Lines;
 use crate::r#move::WinValid;
+use crate::narrow::len_as_int;
+use crate::narrow::number_as_int;
 use crate::normal::{set_visual_anchor, visual_active, visual_anchor, visual_mode};
 use crate::winlayer::{Buf, Win, tab_windows};
 
@@ -43,7 +45,9 @@ pub fn nvim_buf_set_text(
     if oob {
         return Err(err_out_of_range(c"end_row"));
     }
-    let at_start: Vec<u8> = Lines::in_buffer(b).line(start_row as LineNr).to_vec();
+    let at_start: Vec<u8> = Lines::in_buffer(b)
+        .line(LineNr::new(number_as_int(start_row)))
+        .to_vec();
     let len_at_start = at_start.len() as ColNr;
     start_col = if start_col < 0 as Integer {
         len_at_start as Integer + start_col + 1 as Integer
@@ -53,7 +57,9 @@ pub fn nvim_buf_set_text(
     if !(start_col >= 0 as Integer && start_col <= len_at_start as Integer) {
         return Err(err_out_of_range(c"start_col"));
     }
-    let at_end: Vec<u8> = Lines::in_buffer(b).line(end_row as LineNr).to_vec();
+    let at_end: Vec<u8> = Lines::in_buffer(b)
+        .line(LineNr::new(number_as_int(end_row)))
+        .to_vec();
     let len_at_end = at_end.len() as ColNr;
     end_col = if end_col < 0 as Integer {
         len_at_end as Integer + end_col + 1 as Integer
@@ -80,7 +86,8 @@ pub fn nvim_buf_set_text(
         let mut i: int64_t = 1 as int64_t;
         while i < end_row - start_row {
             let lnum: int64_t = start_row as int64_t + i;
-            old_byte += (ml_get_buf_len(b, lnum as LineNr) + 1 as ::core::ffi::c_int) as BCount;
+            old_byte += (ml_get_buf_len(b, LineNr::new(number_as_int(lnum)))
+                + 1 as ::core::ffi::c_int) as BCount;
             i += 1;
         }
         old_byte += end_col as BCount + 1 as BCount;
@@ -168,7 +175,10 @@ impl Replacement {
         if b.b_p_ma == 0 {
             return Err(Error::exception(c"Buffer is not 'modifiable'"));
         }
-        let (from, to) = (self.start_row as LineNr - 1, self.end_row as LineNr + 1);
+        let (from, to) = (
+            LineNr::new(number_as_int(self.start_row)) - 1,
+            LineNr::new(number_as_int(self.end_row)) + 1,
+        );
         if u_save_buf(self.buffer, from, to).is_err() {
             return Err(Error::exception(c"Failed to save undo information"));
         }
@@ -181,17 +191,17 @@ impl Replacement {
             } else {
                 0
             }) as ColNr;
-        let adjust: LineNr = if self.end_row >= self.start_row {
-            MAXLNUM as LineNr
+        let adjust: i32 = if self.end_row >= self.start_row {
+            MAXLNUM.get()
         } else {
             0
         };
         mark_adjust_buf(
             self.buffer,
-            self.start_row as LineNr,
-            self.end_row as LineNr - 1,
+            LineNr::new(number_as_int(self.start_row)),
+            LineNr::new(number_as_int(self.end_row)) - 1,
             adjust,
-            extra as LineNr,
+            extra as i32,
             true,
             kMarkAdjustApi,
             kExtmarkNOOP,
@@ -201,11 +211,11 @@ impl Replacement {
             fix_pos_col(
                 b,
                 &mut anchor,
-                self.start_row as LineNr,
+                LineNr::new(number_as_int(self.start_row)),
                 self.start_col as ColNr,
-                self.end_row as LineNr,
+                LineNr::new(number_as_int(self.end_row)),
                 self.end_col as ColNr,
-                new_len as LineNr,
+                len_as_int(new_len),
                 self.last_len,
                 1,
             );
@@ -226,30 +236,33 @@ impl Replacement {
         );
         changed_lines(
             self.buffer,
-            self.start_row as LineNr,
+            LineNr::new(number_as_int(self.start_row)),
             self.start_col as ColNr,
-            self.end_row as LineNr + 1,
-            extra as LineNr,
+            LineNr::new(number_as_int(self.end_row)) + 1,
+            extra as i32,
             true,
         );
         for win in tab_windows() {
             if win.w_buffer != b {
                 continue;
             }
-            let cursor = win.w_cursor.lnum as Integer;
+            let cursor = i64::from(win.w_cursor.lnum);
             if cursor >= self.start_row && cursor <= self.end_row {
                 fix_cursor_cols(
                     win,
-                    self.start_row as LineNr,
+                    LineNr::new(number_as_int(self.start_row)),
                     self.start_col as ColNr,
-                    self.end_row as LineNr,
+                    LineNr::new(number_as_int(self.end_row)),
                     self.end_col as ColNr,
-                    new_len as LineNr,
+                    len_as_int(new_len),
                     self.last_len,
                 );
             } else {
-                let (lo, hi) = (self.start_row as LineNr, self.end_row as LineNr);
-                fix_cursor(win, lo, hi, extra as LineNr);
+                let (lo, hi) = (
+                    LineNr::new(number_as_int(self.start_row)),
+                    LineNr::new(number_as_int(self.end_row)),
+                );
+                fix_cursor(win, lo, hi, extra as i32);
             }
         }
         Ok(())
@@ -264,7 +277,7 @@ impl Replacement {
         let new_len = self.lines.len();
         let to_delete = old_len.saturating_sub(new_len);
         for _ in 0..to_delete {
-            if ml_delete_buf(b, self.start_row as LineNr, false).is_err() {
+            if ml_delete_buf(b, LineNr::new(number_as_int(self.start_row)), false).is_err() {
                 return Err(Error::exception(c"Failed to delete line"));
             }
         }
@@ -272,20 +285,22 @@ impl Replacement {
         let to_replace = old_len.min(new_len);
         for i in 0..to_replace {
             let lnum: int64_t = self.start_row as int64_t + i as int64_t;
-            if lnum >= MAXLNUM as int64_t {
+            if lnum >= i64::from(MAXLNUM) {
                 return Err(Error::validation(c"Index out of bounds"));
             }
             // The memline writes the line straight into its block.
-            if ml_replace_buf_now(b, lnum as LineNr, &self.lines[i]).is_err() {
+            if ml_replace_buf_now(b, LineNr::new(number_as_int(lnum)), &self.lines[i]).is_err() {
                 return Err(Error::exception(c"Failed to replace line"));
             }
         }
         for i in to_replace..new_len {
             let lnum: int64_t = self.start_row as int64_t + i as int64_t - 1;
-            if lnum >= MAXLNUM as int64_t {
+            if lnum >= i64::from(MAXLNUM) {
                 return Err(Error::validation(c"Index out of bounds"));
             }
-            if ml_append_buf_terminated(b, lnum as LineNr, &self.lines[i], false).is_err() {
+            if ml_append_buf_terminated(b, LineNr::new(number_as_int(lnum)), &self.lines[i], false)
+                .is_err()
+            {
                 return Err(Error::exception(c"Failed to insert line"));
             }
             extra += 1;
@@ -294,11 +309,11 @@ impl Replacement {
     }
 }
 
-pub(crate) fn fix_cursor(mut win: Win, lo: LineNr, hi: LineNr, extra: LineNr) {
+pub(crate) fn fix_cursor(mut win: Win, lo: LineNr, hi: LineNr, extra: i32) {
     if win.w_cursor.lnum >= lo {
         if win.w_cursor.lnum >= hi {
             win.w_cursor.lnum += extra;
-        } else if extra < 0 as LineNr {
+        } else if extra < 0 {
             check_cursor_lnum(win);
         }
         check_cursor_col(win);
@@ -319,27 +334,23 @@ fn fix_pos_col(
     start_col: ColNr,
     end_row: LineNr,
     end_col: ColNr,
-    new_rows: LineNr,
+    new_rows: i32,
     new_cols_at_end_row: ColNr,
     mode_col_adj: ColNr,
 ) {
     if pos.lnum < start_row {
         return;
     }
-    let old_rows: LineNr = end_row - start_row + 1 as LineNr;
-    let lnum_shift: LineNr = new_rows - old_rows;
+    let old_rows: i32 = end_row - start_row + 1;
+    let lnum_shift: LineNr = LineNr::new(new_rows - old_rows);
     if pos.lnum > end_row {
-        pos.lnum += lnum_shift;
+        pos.lnum += lnum_shift.get();
         return;
     }
-    let end_row_change_start: ColNr = if new_rows == 1 as LineNr {
-        start_col
-    } else {
-        0 as ColNr
-    };
+    let end_row_change_start: ColNr = if new_rows == 1 { start_col } else { 0 as ColNr };
     let end_row_change_end: ColNr = end_row_change_start + new_cols_at_end_row;
     if pos.lnum == end_row && pos.col + mode_col_adj > end_col {
-        pos.lnum += lnum_shift;
+        pos.lnum += lnum_shift.get();
         pos.col += end_row_change_end - end_col;
         return;
     }
@@ -347,7 +358,7 @@ fn fix_pos_col(
     let coladd = pos.coladd;
     pos.col += coladd;
     pos.coladd = 0;
-    let new_end_row: LineNr = start_row + new_rows - 1 as LineNr;
+    let new_end_row: LineNr = start_row + new_rows - 1;
     if pos.lnum > new_end_row {
         pos.lnum = new_end_row;
         let len: ColNr = ml_get_buf_len(buffer, new_end_row);
@@ -369,7 +380,7 @@ fn fix_cursor_cols(
     start_col: ColNr,
     end_row: LineNr,
     end_col: ColNr,
-    new_rows: LineNr,
+    new_rows: i32,
     new_cols_at_end_row: ColNr,
 ) {
     let mode_col_adj: ColNr = if win == Win::current() && State.get() & MODE_INSERT != 0 {

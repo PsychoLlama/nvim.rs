@@ -289,7 +289,7 @@ fn ml_append_flush(buffer: Buf, lnum: LineNr, line: &[u8], flags: c_int) -> Resu
     if lnum > buffer.b_ml.ml_line_count {
         return Err(Failed); // lnum out of range
     }
-    if buffer.b_ml.cached_lnum() != 0 {
+    if buffer.b_ml.cached_lnum() != LineNr::ZERO {
         // This may invoke ml_append_int in turn.
         ml_flush_line(buffer);
     }
@@ -466,7 +466,7 @@ pub fn ml_delete(lnum: LineNr) -> Result<(), Failed> {
 /// [`ml_delete`] taking `ML_DEL_` flags.
 pub fn ml_delete_flags(lnum: LineNr, flags: c_int) -> Result<(), Failed> {
     ml_flush_line(Buf::current());
-    if lnum < 1 || lnum > Buf::current().b_ml.ml_line_count {
+    if lnum < LineNr::ONE || lnum > Buf::current().b_ml.ml_line_count {
         return Err(Failed);
     }
     ml_delete_int(Buf::current(), lnum, flags)
@@ -475,10 +475,10 @@ pub fn ml_delete_flags(lnum: LineNr, flags: c_int) -> Result<(), Failed> {
 /// Set the [`DB_MARKED`] bit on line `lnum`.
 pub fn ml_setmarked(lnum: LineNr) {
     let mut buffer = Buf::current();
-    if lnum < 1 || lnum > buffer.b_ml.ml_line_count || !buffer.b_ml.is_open() {
+    if lnum < LineNr::ONE || lnum > buffer.b_ml.ml_line_count || !buffer.b_ml.is_open() {
         return; // invalid line number
     }
-    if lowest_marked.get() == 0 || lowest_marked.get() > lnum {
+    if lowest_marked.get() == LineNr::ZERO || lowest_marked.get() > lnum {
         lowest_marked.set(lnum);
     }
     let Some(id) = ml_find_line(buffer, lnum, ML_FIND) else {
@@ -498,10 +498,10 @@ fn clear_marks(first: bool) -> LineNr {
     // 1's block. Upstream starts there anyway and reads index entry -1 --
     // the top half of the block's line count, which is never marked -- so
     // starting at line 1 skips only a read that could find nothing.
-    let mut lnum = lowest_marked.get().max(1);
+    let mut lnum = lowest_marked.get().max(LineNr::ONE);
     while lnum <= buffer.b_ml.ml_line_count {
         let Some(id) = ml_find_line(buffer, lnum, ML_FIND) else {
-            return 0;
+            return LineNr::ZERO;
         };
         let (low, high) = (buffer.b_ml.locked_low(), buffer.b_ml.locked_high());
         let mut data = DataBlock(buffer.b_ml.page_mut(id));
@@ -525,14 +525,14 @@ fn clear_marks(first: bool) -> LineNr {
             return found;
         }
     }
-    0
+    LineNr::ZERO
 }
 
 /// The first line with its [`DB_MARKED`] bit set, clearing the bit. Zero when
 /// there is none left.
 pub fn ml_firstmarked() -> LineNr {
     if !Buf::current().b_ml.is_open() {
-        return 0;
+        return LineNr::ZERO;
     }
     // Start at lowest_marked: the last line a mark was found at, kept up
     // to date as lines are inserted and deleted.
@@ -545,7 +545,7 @@ pub fn ml_clearmarked() {
         return; // nothing to do
     }
     let _ = clear_marks(false);
-    lowest_marked.set(0);
+    lowest_marked.set(LineNr::ZERO);
 }
 
 /// Take and reset the deleted-byte counters the buffer-update callbacks
@@ -628,7 +628,7 @@ pub fn dec(pos: &mut Pos) -> c_int {
         snap(pos, false);
         return 0;
     }
-    if pos.lnum > 1 {
+    if pos.lnum > LineNr::ONE {
         // There is a previous line.
         pos.lnum -= 1;
         snap(pos, true);

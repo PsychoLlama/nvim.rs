@@ -29,6 +29,7 @@ use crate::registry::{IdMap, IdSet, id_map, id_set};
 use crate::search::{
     ShadaPattern, set_last_used_pattern, shada_pattern_timestamp, shada_set_pattern,
 };
+use crate::types::LineNr;
 use crate::types::{
     ApiString, BlnFlags, ColNr, ListRef, SearchOffset, TypVal, Vv, kListLenUnknown,
 };
@@ -374,7 +375,9 @@ fn apply_buffer_list(list: Vec<ShadaBufferListItem>) {
     for item in list {
         let fname = item.fname.as_cstr();
         let sfname = path_try_shorten_fname(fname);
-        let Some(mut buf) = buflist_new(Some(fname), Some(sfname), 0, BLN_LISTED as c_int) else {
+        let Some(mut buf) =
+            buflist_new(Some(fname), Some(sfname), LineNr::ZERO, BLN_LISTED as c_int)
+        else {
             continue;
         };
         shada_restore_last_cursor(buf, item.pos);

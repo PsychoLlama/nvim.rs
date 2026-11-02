@@ -212,8 +212,8 @@ pub fn file_ff_differs(buffer: Buf, ignore_empty: bool) -> bool {
     }
     if ignore_empty
         && buffer.b_flags.has(BufFlags::NEW)
-        && buffer.b_ml.ml_line_count == 1
-        && buffer.lines().line(1).is_empty()
+        && buffer.b_ml.ml_line_count == LineNr::ONE
+        && buffer.lines().line(LineNr::ONE).is_empty()
     {
         return false;
     }

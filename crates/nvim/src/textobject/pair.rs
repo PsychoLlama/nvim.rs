@@ -16,6 +16,7 @@
 #![forbid(unsafe_code)]
 
 use crate::normal::{VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor};
+use crate::types::LineNr;
 use crate::winlayer::Win;
 use core::ffi::c_int;
 
@@ -64,7 +65,7 @@ pub fn current_block(
 ) -> Result<(), Failed> {
     let mut pos: Option<Pos>;
     let mut start_pos = Pos {
-        lnum: 0,
+        lnum: LineNr::ZERO,
         col: 0,
         coladd: 0,
     };
@@ -281,7 +282,7 @@ fn in_html_tag(end_tag: bool) -> bool {
 /// pattern, no skip expression, no match position, no stop line and no
 /// time limit.
 fn search_tag_pair(spat: &[u8], epat: &[u8], dir: c_int) -> c_int {
-    do_searchpair(spat, b"", epat, dir, None, 0, None, 0, 0)
+    do_searchpair(spat, b"", epat, dir, None, 0, None, LineNr::ZERO, 0)
 }
 
 /// `it` / `at`: the region between an enclosing HTML start and end tag,

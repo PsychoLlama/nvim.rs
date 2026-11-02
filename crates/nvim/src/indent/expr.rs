@@ -376,25 +376,29 @@ pub fn fix_indent() {
 /// `indent()`.
 pub fn f_indent(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let lnum = tv_get_lnum(&args[0]);
-    result.write_number(if (1..=Buf::current().b_ml.ml_line_count).contains(&lnum) {
-        VarNumber::from(get_indent_lnum(lnum))
-    } else {
-        -1
-    });
+    result.write_number(
+        if (LineNr::ONE..=Buf::current().b_ml.ml_line_count).contains(&lnum) {
+            VarNumber::from(get_indent_lnum(lnum))
+        } else {
+            -1
+        },
+    );
 }
 /// `lispindent(lnum)`.
 pub fn f_lispindent(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut win = Win::current();
     let pos = win.w_cursor;
     let lnum = tv_get_lnum(&args[0]);
-    (*result).write_number(if (1..=Buf::current().b_ml.ml_line_count).contains(&lnum) {
-        win.w_cursor.lnum = lnum;
-        let amount = VarNumber::from(get_lisp_indent());
-        win.w_cursor = pos;
-        amount
-    } else {
-        -1
-    });
+    (*result).write_number(
+        if (LineNr::ONE..=Buf::current().b_ml.ml_line_count).contains(&lnum) {
+            win.w_cursor.lnum = lnum;
+            let amount = VarNumber::from(get_lisp_indent());
+            win.w_cursor = pos;
+            amount
+        } else {
+            -1
+        },
+    );
 }
 
 #[cfg(test)]

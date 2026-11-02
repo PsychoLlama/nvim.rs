@@ -148,14 +148,23 @@ pub(crate) fn read_stdin() {
     let save_msg_didany = msg_didany.get();
 
     if !Buf::current().name.full().is_none() {
-        let Some(stdin_buf) = buflist_add_name(None, 0, BLN_LISTED as c_int) else {
+        let Some(stdin_buf) = buflist_add_name(None, LineNr::ZERO, BLN_LISTED as c_int) else {
             semsg!("Failed to create buffer for stdin");
             return;
         };
         let initial_buf_handle: Handle = Buf::current().handle;
         set_curbuf(stdin_buf, 0, false);
         let flags = ReadFlags::NEW | ReadFlags::STDIN;
-        let _ = readfile_named(None, None, 0, 0, MAXLNUM, None, flags, true);
+        let _ = readfile_named(
+            None,
+            None,
+            LineNr::ZERO,
+            0,
+            MAXLNUM.get(),
+            None,
+            flags,
+            true,
+        );
         let stdin_buf_handle: Handle = stdin_buf.handle;
         let stdin_buf_empty = buf_is_empty(Buf::current());
 

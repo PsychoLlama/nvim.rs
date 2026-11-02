@@ -12,6 +12,7 @@ use crate::env::{get_appname, user_config_path, xdg_var};
 use crate::memory::XString;
 use crate::message_fmt::msg_cstr;
 use crate::semsg;
+use crate::types::LineNr;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
@@ -44,11 +45,11 @@ pub(crate) fn exe_pre_commands(parm: &MainParams) {
 
     // Line 0 says "no line yet", so that a `--cmd` that moves the cursor
     // is not immediately overridden by the first file's position.
-    Win::current().w_cursor.lnum = 0;
+    Win::current().w_cursor.lnum = LineNr::ZERO;
     estack_push(
         ETYPE_ARGS,
         crate::types::FrameName::Static(gettext(c"pre-vimrc command line")),
-        0,
+        LineNr::ZERO,
     );
     current_sctx.set(current_sctx.get().with_sid(SID_CMDARG as ScriptId));
     for cmd in &parm.pre_commands {
@@ -64,16 +65,16 @@ pub(crate) fn exe_pre_commands(parm: &MainParams) {
 /// first file.
 pub(crate) fn exe_commands(parm: &MainParams) {
     msg_scroll.set(1);
-    if parm.tag.is_none() && Win::current().w_cursor.lnum <= 1 {
+    if parm.tag.is_none() && Win::current().w_cursor.lnum <= LineNr::ONE {
         // As in `exe_pre_commands`: let the commands decide the line.
-        Win::current().w_cursor.lnum = 0;
+        Win::current().w_cursor.lnum = LineNr::ZERO;
     }
 
     // NB: not translated, unlike the pre-vimrc one above.
     estack_push(
         ETYPE_ARGS,
         crate::types::FrameName::Static(c"command line"),
-        0,
+        LineNr::ZERO,
     );
     current_sctx.set(
         current_sctx
@@ -87,8 +88,8 @@ pub(crate) fn exe_commands(parm: &MainParams) {
     estack_pop();
     current_sctx.set(current_sctx.get().with_sid(0));
 
-    if Win::current().w_cursor.lnum == 0 {
-        Win::current().w_cursor.lnum = 1;
+    if Win::current().w_cursor.lnum == LineNr::ZERO {
+        Win::current().w_cursor.lnum = LineNr::ONE;
     }
     if !exmode_active.get() {
         msg_scroll.set(0);

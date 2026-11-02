@@ -129,7 +129,7 @@ fn smart_indent_forward(
     let mut text = XString::from_bytes(line);
     // Skip preprocessor directives, unless they are comments.
     if lead_len == 0 && byte(&text, 0) == '#' as c_int {
-        while byte(&text, 0) == '#' as c_int && Win::current().w_cursor.lnum > 1 {
+        while byte(&text, 0) == '#' as c_int && Win::current().w_cursor.lnum > LineNr::ONE {
             Win::current().w_cursor.lnum -= 1;
             text = line_copy(Win::current().w_cursor.lnum);
         }

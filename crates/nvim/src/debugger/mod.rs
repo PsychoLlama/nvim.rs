@@ -191,7 +191,7 @@ impl BreakList {
 /// The breakpoint `dbg_breakpoint` recorded, waiting for `do_one_cmd` to
 /// reach a command that is actually executed.
 static debug_breakpoint_name: GlobalCell<Option<XString>> = GlobalCell::new(None);
-static debug_breakpoint_lnum: GlobalCell<LineNr> = GlobalCell::new(0);
+static debug_breakpoint_lnum: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
 /// A prompt that was owed but not shown, because the command it belonged to
 /// was skipped (an untaken `:if` branch, say). A skipped command that decides
 /// to run something itself calls [`dbg_check_skipped`] to collect it.
@@ -342,7 +342,7 @@ fn dbg_parsearg(arg: &[u8], list: BreakList) -> Result<Breakpoint, Failed> {
         at = skip_white(arg, at + len);
         lnum
     } else {
-        0
+        LineNr::ZERO
     };
 
     // `here` takes no name and everything else requires one; and a function
@@ -417,9 +417,9 @@ pub fn ex_breakadd(excmd: &mut ExArg) {
     };
     breakpoint.prog = Some(prog);
 
-    if breakpoint.lnum == 0 {
+    if breakpoint.lnum == LineNr::ZERO {
         // The default line number is the first.
-        breakpoint.lnum = 1;
+        breakpoint.lnum = LineNr::ONE;
     }
     // A profiling point is not numbered and does not bump `debug_tick`:
     // nothing lists or deletes it by number.
@@ -464,10 +464,11 @@ pub fn ex_breakdel(excmd: &mut ExArg) {
                 let matches = wanted.kind == entry.kind
                     && wanted.name[..] == entry.name[..]
                     && (wanted.lnum == entry.lnum
-                        || (wanted.lnum == 0 && (best_lnum == 0 || entry.lnum < best_lnum)));
+                        || (wanted.lnum == LineNr::ZERO
+                            && (best_lnum == 0 || entry.lnum < LineNr::new(best_lnum))));
                 if matches {
                     found = Some(i);
-                    best_lnum = entry.lnum;
+                    best_lnum = entry.lnum.get();
                 }
             }
             found
@@ -552,8 +553,8 @@ pub(crate) fn has_profiling_named(file: bool, name: &CStr) -> bool {
 /// Whether profiling is on for a function or sourced file, and if so
 /// whether its point was defined with `!`.
 pub(crate) fn profiling_forced(file: bool, name: &CStr) -> Option<bool> {
-    let (lnum, forced) = debuggy_find(file, name, 0, BreakList::Profiling);
-    (lnum != 0).then_some(forced)
+    let (lnum, forced) = debuggy_find(file, name, LineNr::ZERO, BreakList::Profiling);
+    (lnum != LineNr::ZERO).then_some(forced)
 }
 
 /// The shared body of the lookups: the lowest line above `after` that a name
@@ -561,7 +562,7 @@ pub(crate) fn profiling_forced(file: bool, name: &CStr) -> Option<bool> {
 /// `after` itself; and whether the entry that matched was defined with `!`.
 fn debuggy_find(file: bool, fname: &CStr, after: LineNr, list: BreakList) -> (LineNr, bool) {
     if list.is_empty() {
-        return (0, false);
+        return (LineNr::ZERO, false);
     }
 
     // A script-local function arrives with `K_SNR` in front of its name; the
@@ -587,7 +588,8 @@ fn debuggy_find(file: bool, fname: &CStr, after: LineNr, list: BreakList) -> (Li
         // profiling is per file, not per line.
         let candidate = (kind == DBG_FILE) == file
             && kind != DBG_EXPR
-            && (list == BreakList::Profiling || (line > after && (lnum == 0 || line < lnum)));
+            && (list == BreakList::Profiling
+                || (line > after && (lnum == 0 || line < LineNr::new(lnum))));
 
         if candidate {
             // A previous interruption must not cancel the match; only a
@@ -602,18 +604,18 @@ fn debuggy_find(file: bool, fname: &CStr, after: LineNr, list: BreakList) -> (Li
                 .is_some_and(|prog| prog.exec(name, 0, false).is_some());
             list.with(i, |entry| entry.prog = prog);
             if matched {
-                lnum = line;
+                lnum = line.get();
                 forced = forceit;
             }
             got_int.set(got_int.get() | prev_got_int);
         } else if kind == DBG_EXPR && watch_changed(list, i) {
-            lnum = if after > 0 { after } else { 1 };
+            lnum = if after > LineNr::ZERO { after.get() } else { 1 };
             break;
         }
         i += 1;
     }
 
-    (lnum, forced)
+    (LineNr::new(lnum), forced)
 }
 
 /// Re-evaluate the watch expression at `idx` and answer whether its value

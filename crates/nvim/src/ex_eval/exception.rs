@@ -68,6 +68,7 @@ use crate::option::vars::p_vfile;
 use crate::os::cshim::gettext;
 use crate::runtime::{estack_sfile, sourcing_lnum, stacktrace_create};
 use crate::tr;
+use crate::types::LineNr;
 use crate::types::{
     CondId, ErrorMsg, ErrorMsgs, ExcId, ExceptType, Exception, ExceptionState, Failed, IOSIZE,
     TypVal, Vv,
@@ -544,7 +545,7 @@ fn set_exception_vars(excp: Option<ExcId>) {
         // `throw_name` is empty for an exception from a typed command.
         let throwpoint = (!exception.throw_name.is_empty()).then(|| {
             let mut point = exception.throw_name.to_vec();
-            if exception.throw_lnum != 0 {
+            if exception.throw_lnum != LineNr::ZERO {
                 point.extend_from_slice(format!(", line {}", exception.throw_lnum).as_bytes());
             }
             // Upstream renders it into `IObuff`.

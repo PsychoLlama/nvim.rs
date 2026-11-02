@@ -119,7 +119,7 @@ pub(crate) fn nv_screengo(mut op: Op, dir: c_int, mut dist: c_int, skip_conceal:
                 if win.w_curswant >= width1 && !folded(win, win.w_cursor.lnum) {
                     // Still inside this line: back one row.
                     win.w_curswant -= width2;
-                } else if win.w_cursor.lnum <= 1 {
+                } else if win.w_cursor.lnum <= LineNr::ONE {
                     retval = false;
                     break;
                 } else {
@@ -206,8 +206,8 @@ pub(crate) fn nv_scroll(cmd_arg: &mut CmdArg) {
     if cmdchar == 'L' as c_int {
         validate_botline_win(wp);
         win.w_cursor.lnum = win.w_botline - 1;
-        if count1 as LineNr > win.w_cursor.lnum {
-            win.w_cursor.lnum = 1;
+        if LineNr::new(count1) > win.w_cursor.lnum {
+            win.w_cursor.lnum = LineNr::ONE;
         } else if win_lines_concealed(wp) {
             // A concealed line takes no screen row, so the count has to be
             // walked rather than subtracted.
@@ -215,14 +215,14 @@ pub(crate) fn nv_scroll(cmd_arg: &mut CmdArg) {
             while n > 0 && win.w_cursor.lnum > win.w_topline {
                 let lnum = win.w_cursor.lnum;
                 has_folding(win, lnum, Some(&mut win.w_cursor.lnum), None);
-                n += c_int::from(decor_conceal_line(wp, win.w_cursor.lnum as c_int, true));
+                n += c_int::from(decor_conceal_line(wp, win.w_cursor.lnum.get(), true));
                 if win.w_cursor.lnum > win.w_topline {
                     win.w_cursor.lnum -= 1;
                 }
                 n -= 1;
             }
         } else {
-            win.w_cursor.lnum -= count1 as LineNr - 1;
+            win.w_cursor.lnum -= count1 - 1;
         }
     } else {
         let mut n;
@@ -233,17 +233,17 @@ pub(crate) fn nv_scroll(cmd_arg: &mut CmdArg) {
             validate_botline_win(wp);
             let half = (win.w_view_height - win.w_empty_rows + 1) / 2;
             n = 0;
-            while (win.w_topline + n as LineNr) < Buf::current().b_ml.ml_line_count {
-                if n > 0 && used + win_get_fill(wp, win.w_topline + n as LineNr) / 2 >= half {
+            while (win.w_topline + n) < Buf::current().b_ml.ml_line_count {
+                if n > 0 && used + win_get_fill(wp, win.w_topline + n) / 2 >= half {
                     n -= 1;
                     break;
                 }
-                used += plines_win(wp, win.w_topline + n as LineNr, true);
+                used += plines_win(wp, win.w_topline + n, true);
                 if used >= half {
                     break;
                 }
-                let mut last: LineNr = 0;
-                let at = win.w_topline + n as LineNr;
+                let mut last: LineNr = LineNr::ZERO;
+                let at = win.w_topline + n;
                 if has_folding(wp, at, None, Some(&mut last)) {
                     // The whole fold is one screen row.
                     n = (last - win.w_topline) as c_int;
@@ -259,7 +259,7 @@ pub(crate) fn nv_scroll(cmd_arg: &mut CmdArg) {
                 let mut lnum = win.w_topline;
                 // The decrement is inside the condition, so a concealed
                 // line is stepped over without spending any of the count.
-                while (decor_conceal_line(wp, lnum as c_int - 1, true) || {
+                while (decor_conceal_line(wp, lnum.get() - 1, true) || {
                     let before = n;
                     n -= 1;
                     before > 0
@@ -271,7 +271,7 @@ pub(crate) fn nv_scroll(cmd_arg: &mut CmdArg) {
                 n = (lnum - win.w_topline) as c_int;
             }
         }
-        win.w_cursor.lnum = (win.w_topline + n as LineNr).min(Buf::current().b_ml.ml_line_count);
+        win.w_cursor.lnum = (win.w_topline + n).min(Buf::current().b_ml.ml_line_count);
     }
     if op.op_type == OpType::Nop {
         cursor_correct(wp);
@@ -392,7 +392,9 @@ pub(crate) fn nv_left(cmd_arg: &mut CmdArg) {
     let mut n = cmd_arg.count1;
     while n > 0 {
         if oneleft().is_err() {
-            if wrap_flag != NUL && p_ww(|value| has_char(value, wrap_flag)) && win.w_cursor.lnum > 1
+            if wrap_flag != NUL
+                && p_ww(|value| has_char(value, wrap_flag))
+                && win.w_cursor.lnum > LineNr::ONE
             {
                 win.w_cursor.lnum -= 1;
                 coladvance(win, MAXCOL as c_int);
@@ -431,12 +433,7 @@ pub(crate) fn nv_up(cmd_arg: &mut CmdArg) {
         return;
     }
     cmd_arg.op().motion_type = kMTLineWise;
-    if cursor_up(
-        cmd_arg.count1 as LineNr,
-        cmd_arg.op().op_type == OpType::Nop,
-    )
-    .is_err()
-    {
+    if cursor_up(cmd_arg.count1, cmd_arg.op().op_type == OpType::Nop).is_err() {
         clear_op_beep(cmd_arg.op());
     } else if cmd_arg.arg != 0 {
         // `-` and `CTRL-P` land on the first non-blank; `k` does not.
@@ -568,15 +565,16 @@ pub(crate) fn nv_percent(cmd_arg: &mut CmdArg) {
         } else {
             op.motion_type = kMTLineWise;
             setpcmark();
-            let count = Buf::current().b_ml.ml_line_count;
+            let line_count = Buf::current().b_ml.ml_line_count;
+            let count = line_count.get();
             // Divide first for a file long enough that `count * 100`
             // would not fit.
-            win.w_cursor.lnum = if count >= 21474836 {
-                (count + 99) / 100 * count0 as LineNr
+            win.w_cursor.lnum = LineNr::new(if count >= 21474836 {
+                (count + 99) / 100 * count0
             } else {
-                (count * count0 as LineNr + 99) / 100
-            };
-            win.w_cursor.lnum = win.w_cursor.lnum.max(1).min(count);
+                (count * count0 + 99) / 100
+            });
+            win.w_cursor.lnum = win.w_cursor.lnum.max(LineNr::ONE).min(line_count);
             beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
         }
     } else {
@@ -739,13 +737,13 @@ pub(crate) fn nv_beginline(cmd_arg: &mut CmdArg) {
 /// `gg` and `G`: to the first or last line, or to the count'th.
 pub(crate) fn nv_goto(cmd_arg: &mut CmdArg) {
     let last = Buf::current().b_ml.ml_line_count;
-    let mut lnum = if cmd_arg.arg != 0 { last } else { 1 };
+    let mut lnum = if cmd_arg.arg != 0 { last } else { LineNr::ONE };
     cmd_arg.op().motion_type = kMTLineWise;
     setpcmark();
     if cmd_arg.count0 != 0 {
-        lnum = cmd_arg.count0 as LineNr;
+        lnum = LineNr::new(cmd_arg.count0);
     }
-    Win::current().w_cursor.lnum = lnum.max(1).min(last);
+    Win::current().w_cursor.lnum = lnum.max(LineNr::ONE).min(last);
     beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     may_fold_open(cmd_arg, kOptFdoFlagJump as c_uint);
 }

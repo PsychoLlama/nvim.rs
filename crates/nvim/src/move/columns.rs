@@ -12,6 +12,7 @@
 #![forbid(unsafe_code)]
 
 use crate::cstr;
+use crate::narrow::number_as_int;
 use core::ffi::c_int;
 
 use super::*;
@@ -245,7 +246,7 @@ pub fn textpos2screenpos(win: Win, pos: &mut Pos, local: bool) -> (c_int, c_int,
         win.w_view_height - 1
     };
 
-    let existing_row = lnum > 0 && lnum <= win.buffer().line_count();
+    let existing_row = lnum > LineNr::ZERO && lnum <= win.buffer().line_count();
     if (local || visible_row) && existing_row {
         let off = win.col_off();
         if is_folded {
@@ -317,7 +318,7 @@ pub fn f_screenpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // The builtin table checks for three arguments.
     let (lnum, col) = (tv_get_number(&args[1]), tv_get_number(&args[2]));
     let mut pos = Pos {
-        lnum: lnum as LineNr,
+        lnum: LineNr::new(number_as_int(lnum)),
         col: (col as ColNr - 1).max(0),
         coladd: 0,
     };
@@ -368,8 +369,8 @@ pub fn f_virtcol2col(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     let Ok(lnum) = tv_get_number_chk(&args[1]) else {
         return;
     };
-    let lnum = lnum as LineNr;
-    if lnum < 0 || lnum > win.buffer().line_count() {
+    let lnum = LineNr::new(number_as_int(lnum));
+    if lnum < LineNr::ZERO || lnum > win.buffer().line_count() {
         return;
     }
     let Ok(screencol) = tv_get_number_chk(&args[2]) else {

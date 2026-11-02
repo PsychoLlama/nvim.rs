@@ -24,7 +24,7 @@ use crate::winlayer::{Buf, buffers};
 
 /// In large buffers a timeout can miss nearby matches, so the search starts
 /// this many lines above the cursor.
-const LOOKBACK_LINE_COUNT: LineNr = 1000;
+const LOOKBACK_LINE_COUNT: i32 = 1000;
 
 /// The running completion's own copy of `'complete'`, and how far the scan
 /// through it has got.
@@ -186,7 +186,7 @@ pub(crate) fn process_next_cpt_value(
                 st.first_match_pos.col = 0;
                 st.last_match_pos.col = 0;
                 st.first_match_pos.lnum = buf.line_count() + 1;
-                st.last_match_pos.lnum = 0;
+                st.last_match_pos.lnum = LineNr::ZERO;
                 compl_type = 0;
             } else {
                 // Unloaded buffer: scan it like a dictionary.
@@ -290,7 +290,19 @@ pub(crate) fn get_next_include_file_completion(compl_type: c_int) {
     let auto = compl_autocomplete.get();
     {
         let action = ACTION_EXPAND;
-        find_pattern_in_path(pat, dir, false, false, what, 1, action, 1, end, false, auto)
+        find_pattern_in_path(
+            pat,
+            dir,
+            false,
+            false,
+            what,
+            1,
+            action,
+            LineNr::ONE,
+            end,
+            false,
+            auto,
+        )
     };
 }
 
@@ -571,7 +583,7 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> c_int {
         }
 
         if compl_autocomplete.get() && is_nearest_active() {
-            start_pos.lnum = (start_pos.lnum - LOOKBACK_LINE_COUNT).max(1);
+            start_pos.lnum = (start_pos.lnum - LOOKBACK_LINE_COUNT).max(LineNr::ONE);
             start_pos.col = 0;
         }
         st.first_match_pos = start_pos;

@@ -427,16 +427,22 @@ impl SynState {
             let eos_pos = self.syn_add_end_off(scan.offsets, &regmatch, SPO_RS_OFF, 0);
 
             let mut flags = SynFlags::NONE;
-            let mut eoe_pos = LPos { lnum: 0, col: 0 };
+            let mut eoe_pos = LPos {
+                lnum: LineNr::ZERO,
+                col: 0,
+            };
             let mut end_idx = 0;
-            let mut hl_endpos = LPos { lnum: 0, col: 0 };
+            let mut hl_endpos = LPos {
+                lnum: LineNr::ZERO,
+                col: 0,
+            };
 
             if scan.ty == SPTYPE_START && scan.flags.has(SynFlags::ONELINE) {
                 // A "oneline" must end in this line too. Look for the end
                 // after the start match, and set every resulting position at
                 // once.
                 let end = self.find_endpos(idx, endpos, captures.as_deref());
-                if end.m_endpos.lnum == 0 {
+                if end.m_endpos.lnum == LineNr::ZERO {
                     continue; // not found
                 }
                 endpos = end.m_endpos;
@@ -543,7 +549,7 @@ impl SynState {
             walked = Some(idx);
             let started = lnum > sip.si_h_startpos.lnum
                 || (lnum == sip.si_h_startpos.lnum && col >= sip.si_h_startpos.col);
-            let not_ended = sip.si_h_endpos.lnum == 0
+            let not_ended = sip.si_h_endpos.lnum == LineNr::ZERO
                 || lnum < sip.si_h_endpos.lnum
                 || (lnum == sip.si_h_endpos.lnum && col < sip.si_h_endpos.col);
             if started && not_ended {
@@ -611,7 +617,7 @@ impl SynState {
         self.stack
             .iter()
             .rev()
-            .any(|si| si.si_m_startcol == col && si.si_m_lnum == lnum && si.si_idx == idx)
+            .any(|si| si.si_m_startcol == col && si.si_m_lnum == lnum.get() && si.si_idx == idx)
             || gap.contains(&idx)
     }
 }

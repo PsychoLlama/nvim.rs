@@ -244,7 +244,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
     if get_hislen() > 0 && histtype != HIST_INVALID {
         let mut i = get_hisidx(histtype);
         if i >= 0 {
-            let mut lnum: LineNr = 0;
+            let mut lnum: LineNr = LineNr::ZERO;
             // C's do-while: `get_hisidx` is re-read at the test, because
             // `ml_append`'s autocommands can move it.
             loop {

@@ -109,7 +109,7 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
         | BLN_NEW.cast_signed()
         | if listed { BLN_LISTED.cast_signed() } else { 0 };
     // A new buffer with neither a file name nor a short name.
-    let buf = buflist_new(None, None, 0 as LineNr, flags);
+    let buf = buflist_new(None, None, LineNr::ZERO, flags);
     let opened = buf.is_some() && ml_open(buf.expect("a live handle")).is_ok();
     if !opened {
         unblock_autocmds();

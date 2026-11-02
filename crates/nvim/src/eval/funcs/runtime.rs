@@ -33,6 +33,7 @@ use crate::state::mode::State;
 use crate::state::{MODE_CMDLINE, get_mode, get_was_safe_state};
 use crate::strings::has_char;
 use crate::syntax::syntax_present;
+use crate::types::LineNr;
 use crate::types::{
     Array, ColNr, Error, EvalFuncData, NUL, Object, TypVal, VAR_STRING, VarNumber, Vv,
     kListLenMayKnow,
@@ -388,8 +389,8 @@ pub fn f_nextnonblank(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     let mut lnum = arg_lnum(&args[0]);
     let mut lines = Lines::current();
     loop {
-        if lnum < 0 || lnum > lines.count() {
-            lnum = 0;
+        if lnum < LineNr::ZERO || lnum > lines.count() {
+            lnum = LineNr::ZERO;
             break;
         }
         if !is_blank(lines.line(lnum)) {
@@ -397,7 +398,7 @@ pub fn f_nextnonblank(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
         }
         lnum += 1;
     }
-    result.write_number(lnum as VarNumber);
+    result.write_number(i64::from(lnum));
 }
 
 /// `prevnonblank({lnum})` — the last line at or before `{lnum}` that is not
@@ -405,14 +406,14 @@ pub fn f_nextnonblank(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
 pub fn f_prevnonblank(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut lnum = arg_lnum(&args[0]);
     let mut lines = Lines::current();
-    if lnum < 1 || lnum > lines.count() {
-        lnum = 0;
+    if lnum < LineNr::ONE || lnum > lines.count() {
+        lnum = LineNr::ZERO;
     } else {
-        while lnum >= 1 && is_blank(lines.line(lnum)) {
+        while lnum >= LineNr::ONE && is_blank(lines.line(lnum)) {
             lnum -= 1;
         }
     }
-    result.write_number(lnum as VarNumber);
+    result.write_number(i64::from(lnum));
 }
 
 /// Whether `line` is nothing but spaces and tabs.

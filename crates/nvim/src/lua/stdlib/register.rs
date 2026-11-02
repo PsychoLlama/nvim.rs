@@ -74,11 +74,11 @@ fn foldupdate(stack: &mut Stack) -> Result<c_int, Raise> {
     let Some(win) = winlayer::window(Handle::new(int_arg(stack, 1)?)) else {
         return Err(Raise::message("invalid window"));
     };
-    let top: LineNr = int_arg(stack, 2)? + 1;
-    if top < 1 {
+    let top: LineNr = LineNr::new(int_arg(stack, 2)? + 1);
+    if top < LineNr::ONE {
         return Err(Raise::message("invalid top"));
     }
-    let bot: LineNr = int_arg(stack, 3)?;
+    let bot: LineNr = LineNr::new(int_arg(stack, 3)?);
     if top > bot {
         return Err(Raise::message("invalid bot"));
     }

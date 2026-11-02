@@ -67,7 +67,7 @@ pub fn nvim_get_mark(name: ApiString, _opts: &mut KeyDict_empty) -> Result<Array
     let mut row: Integer = 0;
     let mut col: Integer = 0;
     let filename = match filename {
-        Some(name) if pos.lnum > 0 as LineNr => {
+        Some(name) if pos.lnum > LineNr::ZERO => {
             row = Integer::from(pos.lnum);
             col = Integer::from(pos.col);
             name

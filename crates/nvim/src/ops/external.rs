@@ -48,7 +48,7 @@ pub(crate) fn op_colon(op: &OpArg) {
         if op.start.lnum == Win::current().w_cursor.lnum {
             stuff_readbuf_char('.' as c_int);
         } else {
-            stuff_readbuf_number(op.start.lnum as c_int);
+            stuff_readbuf_number(op.start.lnum.get());
         }
 
         // When using !! on a closed fold the range ".!" works best to
@@ -67,9 +67,9 @@ pub(crate) fn op_colon(op: &OpArg) {
                 && !Win::current().fold_span(op.end.lnum).0
             {
                 stuff_readbuf(b".+");
-                stuff_readbuf_number(op.line_count as c_int - 1);
+                stuff_readbuf_number(op.line_count - 1);
             } else {
-                stuff_readbuf_number(op.end.lnum as c_int);
+                stuff_readbuf_number(op.end.lnum.get());
             }
         }
     }

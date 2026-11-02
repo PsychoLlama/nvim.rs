@@ -184,8 +184,8 @@ fn script_host_execute(name: &CStr, excmd: &mut ExArg) {
     let mut argv = tv_list_alloc(3 as ptrdiff_t);
     let into = &mut *argv;
     into.push_str(Some(script.as_cstr()));
-    into.push_number(excmd.line1 as c_int as VarNumber);
-    into.push_number(excmd.line2 as c_int as VarNumber);
+    into.push_number(excmd.line1.get() as VarNumber);
+    into.push_number(excmd.line2.get() as VarNumber);
     eval_call_provider(name, c"execute", Some(argv), true);
 }
 
@@ -205,8 +205,8 @@ fn script_host_execute_file(name: &CStr, excmd: &mut ExArg) {
     let mut argv = tv_list_alloc(3 as ptrdiff_t);
     let into = &mut *argv;
     into.push_str(Some(&full));
-    into.push_number(excmd.line1 as c_int as VarNumber);
-    into.push_number(excmd.line2 as c_int as VarNumber);
+    into.push_number(excmd.line1.get() as VarNumber);
+    into.push_number(excmd.line2.get() as VarNumber);
     eval_call_provider(name, c"execute_file", Some(argv), true);
 }
 
@@ -217,8 +217,8 @@ fn script_host_do_range(name: &CStr, excmd: &mut ExArg) {
     }
     let mut argv = tv_list_alloc(3 as ptrdiff_t);
     let into = &mut *argv;
-    into.push_number(excmd.line1 as c_int as VarNumber);
-    into.push_number(excmd.line2 as c_int as VarNumber);
+    into.push_number(excmd.line1.get() as VarNumber);
+    into.push_number(excmd.line2.get() as VarNumber);
     into.push_str(Some(excmd.line.cstr_from(excmd.line.arg)));
     eval_call_provider(name, c"do_range", Some(argv), true);
 }
@@ -539,7 +539,7 @@ pub(crate) fn buf_write_all(buffer: Buf, forceit: bool) -> Result<(), Failed> {
             buffer,
             WriteName::Full,
             Some(WriteName::Shown),
-            1 as LineNr,
+            LineNr::ONE,
             buffer.b_ml.ml_line_count,
             None,
             WriteRequest {
@@ -630,7 +630,7 @@ pub(crate) fn ex_checktime(excmd: &mut ExArg) {
         // The default is all buffers.
         check_timestamps(0);
     } else {
-        if let Some(buf) = find_buf(excmd.line2 as c_int) {
+        if let Some(buf) = find_buf(excmd.line2.get()) {
             // Cannot happen?
             buf_check_timestamp(buf);
         }
@@ -689,7 +689,7 @@ pub(crate) fn ex_drop(excmd: &mut ExArg) {
         // to newly loaded buffers.
         if !excmd.do_ecmd_cmd.is_none() {
             let text = excmd.do_ecmd_cmd.cstr(&excmd.line).map(CStr::to_owned);
-            let did_set_swapcommand = set_swapcommand(text.as_deref(), 0 as LineNr);
+            let did_set_swapcommand = set_swapcommand(text.as_deref(), LineNr::ZERO);
             let verbose = DoCmdOpts::VERBOSE;
             let _ = do_cmdline(text.as_deref().map(CStr::to_bytes), None, verbose);
             if did_set_swapcommand {

@@ -88,7 +88,7 @@ use crate::startup::{
 use crate::state::mode::{exmode_active, restart_edit};
 use crate::syntax::syn_maybe_enable;
 use crate::terminal::{terminal_init, terminal_teardown};
-use crate::types::{CallbackReader, LineNr, OptInt, VarNumber, Vv};
+use crate::types::{CallbackReader, OptInt, VarNumber, Vv};
 use crate::ui::state::{Rows, resize_events};
 use crate::ui::{do_autocmd_uienter_all, ui_init};
 use crate::ui_client::{ui_client_run, ui_client_start_server};
@@ -453,7 +453,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
 
     if Win::current().w_onebuf_opt.wo_diff != 0 && Win::current().w_onebuf_opt.wo_scb != 0 {
         update_topline(Win::current());
-        check_scrollbind(0 as LineNr, 0);
+        check_scrollbind(0, 0);
         time_msg_at(c"diff scrollbinding");
     }
 

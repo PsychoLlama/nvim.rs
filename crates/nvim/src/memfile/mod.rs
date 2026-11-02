@@ -54,6 +54,7 @@
 
 mod swapfile;
 mod table;
+use crate::types::LineNr;
 use swapfile::perror_msg;
 pub(crate) use swapfile::*;
 pub(crate) use table::BlockHdr;
@@ -793,8 +794,8 @@ pub(crate) fn mf_close_file(mut buffer: Buf, getlines: bool) {
         // Read every line once, which pulls each block into memory before
         // the file under them goes.
         let mut lines = buffer.lines();
-        for lnum in 1..=lines.count() {
-            lines.line(lnum);
+        for lnum in 1..=lines.count().get() {
+            lines.line(LineNr::new(lnum));
         }
     }
 

@@ -62,7 +62,7 @@ impl MemLine {
 pub(crate) fn fetch_line(mut buffer: Buf, lnum: LineNr, will_change: bool) {
     if !buffer.b_ml.is_open() {
         // There are no lines at all.
-        buffer.b_ml.cache_placeholder(c"", 0);
+        buffer.b_ml.cache_placeholder(c"", LineNr::ZERO);
         return;
     }
 
@@ -80,7 +80,7 @@ pub(crate) fn fetch_line(mut buffer: Buf, lnum: LineNr, will_change: bool) {
     }
 
     // Pretend line 0 is line 1.
-    let lnum = lnum.max(1);
+    let lnum = lnum.max(LineNr::ONE);
 
     // If it is the line handed out last time, it is already unpacked;
     // otherwise the one that was may need flushing first.
@@ -95,7 +95,7 @@ pub(crate) fn fetch_line(mut buffer: Buf, lnum: LineNr, will_change: bool) {
             && buffer.b_ml.locked_low() <= lnum
             && lnum <= buffer.b_ml.locked_high()
         {
-            if buffer.b_ml.cached_lnum() != 0 {
+            if buffer.b_ml.cached_lnum() != LineNr::ZERO {
                 buffer.b_ml.clear_cache();
             }
             let idx = (lnum - buffer.b_ml.locked_low()) as usize;
@@ -157,7 +157,7 @@ static flushing: GlobalCell<bool> = GlobalCell::new(false);
 /// Write the line `ml_replace` left in the line cache back into its data
 /// block, and forget it.
 pub(crate) fn ml_flush_line(mut buffer: Buf) {
-    if buffer.b_ml.cached_lnum() == 0 || !buffer.b_ml.is_open() {
+    if buffer.b_ml.cached_lnum() == LineNr::ZERO || !buffer.b_ml.is_open() {
         return; // nothing to do
     }
 
@@ -312,7 +312,7 @@ pub(crate) fn ml_find_line(mut buffer: Buf, lnum: LineNr, action: c_int) -> Opti
 
     let mut bnum: BlockNr = 1; // start at the root of the tree
     let mut page_count: c_int = 1;
-    let mut low: LineNr = 1;
+    let mut low: LineNr = LineNr::ONE;
     let mut high: LineNr = buffer.b_ml.ml_line_count;
 
     if action == ML_FIND {

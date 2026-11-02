@@ -225,9 +225,9 @@ pub fn last_set_msg(script_ctx: ScriptCtx) {
     verbose_enter();
     msg_str(gettext(c"\n\tLast set from "));
     msg_str(&p);
-    if script_ctx.sc_lnum > 0 as LineNr {
+    if script_ctx.sc_lnum > LineNr::ZERO {
         msg_str(gettext(line_msg));
-        msg_outnum(script_ctx.sc_lnum as c_int);
+        msg_outnum(script_ctx.sc_lnum.get());
     // SAFETY: the caller's promise about `script_ctx`.
     } else if script_is_lua(script_ctx.sc_sid) {
         // SAFETY: the hint is a NUL-terminated literal.

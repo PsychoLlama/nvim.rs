@@ -67,8 +67,8 @@ fn decor_spell_nav_col(
 ) -> Option<bool> {
     if *decor_lnum != lnum {
         window.decor_redraw_reset();
-        decor_providers_invoke_spell(window, lnum as c_int - 1, col, lnum as c_int - 1, -1);
-        decor_redraw_line(window, lnum as c_int - 1);
+        decor_providers_invoke_spell(window, lnum.get() - 1, col, lnum.get() - 1, -1);
+        decor_redraw_line(window, lnum.get() - 1);
         *decor_lnum = lnum;
     }
     decor_redraw_col(window, col, 0, false, MAXCOL as c_int);
@@ -104,7 +104,7 @@ pub fn spell_move_to(
     }
 
     let mut found_pos = Pos {
-        lnum: 0,
+        lnum: LineNr::ZERO,
         col: 0,
         coladd: 0,
     };
@@ -129,7 +129,7 @@ pub fn spell_move_to(
     // state occupies the same cell -- a provider's ephemeral mark reaches
     // it from the API side, exactly as during a redraw.
     let saved_decor_start = decor_state_set_aside();
-    let mut decor_lnum: LineNr = -1;
+    let mut decor_lnum: LineNr = LineNr::new(-1);
 
     let mut lines = window.buffer().lines();
     while !got_int.get() {
@@ -139,7 +139,7 @@ pub fn spell_move_to(
         }
 
         // The first word of the first line is always capital-checked.
-        if lnum == 1 {
+        if lnum == LineNr::ONE {
             capcol = 0;
         }
 
@@ -247,7 +247,7 @@ pub fn spell_move_to(
             break; // found it, going forward
         }
 
-        if dir == BACKWARD && found_pos.lnum != 0 {
+        if dir == BACKWARD && found_pos.lnum != LineNr::ZERO {
             // Take the last match in the line, before the cursor.
             window.w_cursor = found_pos;
             ret = found_len;
@@ -264,7 +264,7 @@ pub fn spell_move_to(
         }
 
         if dir == BACKWARD {
-            if lnum > 1 {
+            if lnum > LineNr::ONE {
                 lnum -= 1;
             } else if !p_ws() {
                 break; // at the first line and 'nowrapscan'
@@ -286,7 +286,7 @@ pub fn spell_move_to(
             } else {
                 // Wrap to the start. The starting line may be searched
                 // again, to accept its first match.
-                lnum = 1;
+                lnum = LineNr::ONE;
                 wrapped = true;
                 if !shortmess(ShmFlag::SEARCH) {
                     give_warning(gettext(bot_top_msg), true, false);

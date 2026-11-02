@@ -356,7 +356,7 @@ fn read_file_or_blob(args: &[TypVal], result: &mut TypVal, always_blob: bool) {
     let mut numbuf3 = NumBuf::new();
     let mut binary = false;
     let mut blob = always_blob;
-    let mut maxline = MAXLNUM as int64_t;
+    let mut maxline = i64::from(MAXLNUM);
     let mut offset: FileOffset = 0;
     let mut size: FileOffset = -1;
 

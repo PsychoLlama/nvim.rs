@@ -35,7 +35,7 @@ pub(crate) fn find_rawstring_end(lines: &mut Lines, startpos: &Pos, endpos: &Pos
         tail[..tail.iter().position(|&b| b == b'(').unwrap_or(tail.len())].to_vec()
     };
 
-    for lnum in start_lnum..=end_lnum {
+    for lnum in start_lnum.through(end_lnum) {
         let line = lines.line(lnum);
         let mut at = if lnum == start_lnum {
             (start_col + 1).min(line.len())

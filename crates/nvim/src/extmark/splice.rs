@@ -44,8 +44,8 @@ pub(crate) fn adjust(
     buffer: Buf,
     line1: LineNr,
     line2: LineNr,
-    amount: LineNr,
-    amount_after: LineNr,
+    amount: i32,
+    amount_after: i32,
     undo: ExtmarkOp,
 ) {
     if splice_pending() {
@@ -56,7 +56,7 @@ pub(crate) fn adjust(
     let mut new_byte = 0;
     let old_row;
     let new_row;
-    if amount == MAXLNUM {
+    if amount == MAXLNUM.get() {
         old_row = line2 - line1 + 1;
         // TODO(bfredl): ej kasta?
         old_byte = buffer.deleted_bytes2.cast_signed();
@@ -73,7 +73,7 @@ pub(crate) fn adjust(
         new_byte = line_offset(buffer, line1 + new_row) as BCount - start_byte;
     }
     let start = Extent {
-        row: line1 - 1,
+        row: (line1 - 1).get(),
         col: 0,
         byte: start_byte,
     };
@@ -99,7 +99,7 @@ pub(crate) fn splice(
     new: Extent,
     undo: ExtmarkOp,
 ) {
-    let mut offset = line_offset(buffer, start_row + 1);
+    let mut offset = line_offset(buffer, LineNr::new(start_row + 1));
 
     // On an empty buffer, editing the first line leaves the line buffered and
     // the offset negative. The buffer is not actually empty, but the buffered
@@ -162,7 +162,7 @@ pub(crate) fn splice_impl(
         let count = if buffer.b_prev_line_count > 0 {
             buffer.b_prev_line_count
         } else {
-            buffer.b_ml.ml_line_count
+            buffer.b_ml.ml_line_count.get()
         };
         signcols_count_range(
             buffer,
@@ -181,8 +181,8 @@ pub(crate) fn splice_impl(
     tree_splice(buffer.marktree(), at, old.row, old.col, new.row, new.col);
 
     if old.row > 0 || new.row > 0 {
-        let row2 = (buffer.b_ml.ml_line_count - 1).min(start.row + new.row);
-        signcols_count_range(buffer, start.row, row2, 0, SignCountHalf::Add);
+        let row2 = (buffer.b_ml.ml_line_count - 1).min(LineNr::new(start.row + new.row));
+        signcols_count_range(buffer, start.row, row2.get(), 0, SignCountHalf::Add);
     }
 
     if undo == kExtmarkUndo {

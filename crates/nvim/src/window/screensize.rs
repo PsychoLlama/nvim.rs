@@ -196,7 +196,7 @@ enum Scan<'a> {
 fn scan_windows(what: &mut Scan) {
     let mut tot = [0 as c_int; 6];
     for mut wp in windows() {
-        if wp.w_floating && wp.w_last_topline == 0 as LineNr {
+        if wp.w_floating && wp.w_last_topline == LineNr::ZERO {
             // A just-created float has no previous size to compare with.
             snapshot_window(&mut wp);
             continue;
@@ -243,7 +243,7 @@ fn scan_windows(what: &mut Scan) {
         let deltas = [
             wp.w_width - wp.w_last_width,
             wp.w_height - wp.w_last_height,
-            wp.w_topline as c_int - wp.w_last_topline as c_int,
+            wp.w_topline.get() - wp.w_last_topline.get(),
             wp.w_topfill - wp.w_last_topfill,
             wp.w_leftcol as c_int - wp.w_last_leftcol as c_int,
             wp.w_skipcol as c_int - wp.w_last_skipcol as c_int,

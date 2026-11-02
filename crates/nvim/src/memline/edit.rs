@@ -92,7 +92,7 @@ pub(crate) fn ml_append_int(
         return Err(Failed); // lnum out of range
     }
 
-    if lowest_marked.get() != 0 && lowest_marked.get() > lnum {
+    if lowest_marked.get() != LineNr::ZERO && lowest_marked.get() > lnum {
         lowest_marked.set(lnum + 1);
     }
 
@@ -113,7 +113,7 @@ pub(crate) fn ml_append_int(
 /// The buffer holds one more line.
 fn count_new_line(mut buffer: Buf) {
     if buffer.b_prev_line_count == 0 {
-        buffer.b_prev_line_count = buffer.b_ml.ml_line_count;
+        buffer.b_prev_line_count = buffer.b_ml.ml_line_count.get();
     }
     buffer.b_ml.ml_line_count += 1;
 }
@@ -129,8 +129,8 @@ fn append_to_locked(ml: &mut MemLine, lnum: LineNr, new: &NewLine, space_needed:
         return false;
     };
     // The line `ml_find_line` would be asked for.
-    let wanted = if lnum == 0 { 1 } else { lnum };
-    if wanted < locked.low || wanted > locked.high {
+    let wanted = if lnum == LineNr::ZERO { 1 } else { lnum.get() };
+    if wanted < locked.low.get() || wanted > locked.high.get() {
         return false;
     }
     let mut data = DataBlock(memfile.page_mut(locked.id));
@@ -139,7 +139,11 @@ fn append_to_locked(ml: &mut MemLine, lnum: LineNr, new: &NewLine, space_needed:
         return false;
     }
     let at = InsertAt {
-        db_idx: if lnum == 0 { -1 } else { lnum - locked.low },
+        db_idx: if lnum == LineNr::ZERO {
+            -1
+        } else {
+            lnum - locked.low
+        },
         line_count: locked.high + 1 - locked.low,
     };
     insert_line(&mut data, header, at, new, space_needed);
@@ -167,14 +171,22 @@ fn append_by_walk(
     // Find the data block holding the previous line. This also fills the
     // stack with the blocks from the root down, and releases any block
     // that was locked.
-    let Some(mut id) = ml_find_line(buffer, if lnum == 0 { 1 } else { lnum }, ML_INSERT) else {
+    let Some(mut id) = ml_find_line(
+        buffer,
+        if lnum == LineNr::ZERO {
+            LineNr::ONE
+        } else {
+            lnum
+        },
+        ML_INSERT,
+    ) else {
         return Err(Failed);
     };
     buffer.b_ml.ml_flags.clear(MlFlags::EMPTY);
 
     // Index of `lnum` within the block. Negative when the block found was
     // line one's rather than `lnum`'s, which is the `lnum == 0` case.
-    let mut db_idx = if lnum == 0 {
+    let mut db_idx = if lnum == LineNr::ZERO {
         -1
     } else {
         lnum - buffer.b_ml.locked_low()
@@ -392,11 +404,11 @@ fn ml_split_data_block(
     }
 
     let (lnum_left, lnum_right) = if db_idx < 0 {
-        (lnum + 1, 0) // left block is new
+        (lnum + 1, LineNr::ZERO) // left block is new
     } else if in_left {
-        (0, lnum + 2) // right block is new
+        (LineNr::ZERO, lnum + 2) // right block is new
     } else {
-        (0, lnum + 1)
+        (LineNr::ZERO, lnum + 1)
     };
 
     // Release the two data blocks. The new one already has a correct
@@ -414,7 +426,7 @@ fn ml_split_data_block(
     // Flush the old data block. The lines it owes the pointer blocks
     // above it go with it, because they are about to be paid by hand.
     let lineadd = buffer.b_ml.take_locked_lineadd();
-    let _ = ml_find_line(buffer, 0, ML_FLUSH);
+    let _ = ml_find_line(buffer, LineNr::ZERO, ML_FLUSH);
 
     SplitBlocks {
         bnum_left,
@@ -483,7 +495,7 @@ fn ml_insert_pointer(mut buffer: Buf, split: &mut SplitBlocks) -> bool {
                 split.bnum_right,
                 split.line_count_right,
                 split.page_count_right,
-                0,
+                LineNr::ZERO,
             );
             new_pointers.set_old_lnum(0, split.lnum_right);
         }
@@ -493,8 +505,8 @@ fn ml_insert_pointer(mut buffer: Buf, split: &mut SplitBlocks) -> bool {
             split.page_count_left,
         );
         pointers.set_child(pb_idx, bnum, lines, pages, split.lnum_left);
-        split.lnum_left = 0;
-        split.lnum_right = 0;
+        split.lnum_left = LineNr::ZERO;
+        split.lnum_right = LineNr::ZERO;
 
         // The two pointer blocks are now the pair the level above has to
         // describe, so recount their lines.
@@ -585,8 +597,8 @@ fn ml_split_pointer_block(mut buffer: Buf, id: &mut BlockId, stack_idx: &mut c_i
         let memfile = buffer.b_ml.memfile();
         let mut root = PointerBlock(memfile.page_mut(*id));
         root.set_bnum(0, bnum_new);
-        root.set_line_count(0, line_count);
-        root.set_old_lnum(0, 1);
+        root.set_line_count(0, line_count.get());
+        root.set_old_lnum(0, LineNr::ONE);
         root.set_page_count(0, 1);
         memfile.put(*id, true, false); // release block 1
         *id = new_id; // the new block is the one to split
@@ -600,16 +612,16 @@ fn ml_split_pointer_block(mut buffer: Buf, id: &mut BlockId, stack_idx: &mut c_i
 /// `flags` is [`ML_DEL_MESSAGE`], which asks for "--No lines in buffer--" if
 /// the buffer ends up empty.
 pub(crate) fn ml_delete_int(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Result<(), Failed> {
-    if lowest_marked.get() != 0 && lowest_marked.get() > lnum {
+    if lowest_marked.get() != LineNr::ZERO && lowest_marked.get() > lnum {
         lowest_marked.set(lowest_marked.get() - 1);
     }
 
     // If the file becomes empty the last line is replaced by an empty one.
-    if buffer.b_ml.ml_line_count == 1 {
+    if buffer.b_ml.ml_line_count == LineNr::ONE {
         if flags & ML_DEL_MESSAGE != 0 {
             set_keep_msg(Some(gettext(no_lines_msg)), 0);
         }
-        let i = ml_replace_buf_text(buffer, 1, b"");
+        let i = ml_replace_buf_text(buffer, LineNr::ONE, b"");
         buffer.b_ml.ml_flags |= MlFlags::EMPTY;
         return i;
     }
@@ -618,7 +630,7 @@ pub(crate) fn ml_delete_int(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Resu
     // with the blocks from the root down, and releases any locked block.
     // Line 0 is line 1's block, where upstream went on to delete whatever
     // index entry -1 -- the block's own header -- said; it is refused.
-    if !buffer.b_ml.is_open() || lnum < 1 {
+    if !buffer.b_ml.is_open() || lnum < LineNr::ONE {
         return Err(Failed);
     }
     let Some(id) = ml_find_line(buffer, lnum, ML_DELETE) else {
@@ -631,7 +643,7 @@ pub(crate) fn ml_delete_int(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Resu
     let idx = (lnum - buffer.b_ml.locked_low()) as usize;
 
     if buffer.b_prev_line_count == 0 {
-        buffer.b_prev_line_count = buffer.b_ml.ml_line_count;
+        buffer.b_prev_line_count = buffer.b_ml.ml_line_count.get();
     }
     buffer.b_ml.ml_line_count -= 1;
 

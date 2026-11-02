@@ -440,7 +440,7 @@ fn handle_include(
         reader: Some(Fgets::new(file)),
         name: new_fname,
         id,
-        lnum: 0,
+        lnum: LineNr::ZERO,
         matched: false,
     });
     let name = walk.files.innermost().name.as_cstr();

@@ -187,7 +187,7 @@ impl ComplOrigExtmarks {
     /// `splice_delete` runs no editor code that could look, and nothing
     /// sees it half-grown.
     pub(crate) fn save(self) {
-        let lnum = Win::current().w_cursor.lnum as c_int - 1;
+        let lnum = Win::current().w_cursor.lnum.get() - 1;
         let buf = Buf::current();
         let (start, end) = (compl_col.get(), compl_col.get() + compl_length.get());
         COMPL_ORIG_EXTMARKS.update(|saved| {

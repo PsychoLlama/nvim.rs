@@ -55,7 +55,7 @@ pub fn ex_marks(excmd: &mut ExArg) {
     // `'<` is whichever end of the Visual range comes FIRST, so a selection
     // made backwards still lists in order.
     let (start, end) = (buf.b_visual.vi_start, buf.b_visual.vi_end);
-    let starts_first = (lt(start, end) || end.lnum == 0) && start.lnum != 0;
+    let starts_first = (lt(start, end) || end.lnum == LineNr::ZERO) && start.lnum != LineNr::ZERO;
     let (first, second) = if starts_first {
         (start, end)
     } else {
@@ -147,7 +147,7 @@ pub(super) fn show_one_mark(
     current: bool,
 ) {
     let wanted = arg.is_none_or(|arg| find_char(arg, c).is_some());
-    if got_int.get() || !wanted || pos.lnum == 0 {
+    if got_int.get() || !wanted || pos.lnum == LineNr::ZERO {
         return;
     }
 
@@ -175,7 +175,7 @@ pub(super) fn show_one_mark(
     row.push(b' ');
     row.push(u8::try_from(c).unwrap_or(b'?'));
     row.push(b' ');
-    row.number(pos.lnum, 6);
+    row.number(pos.lnum.get(), 6);
     row.push(b' ');
     row.number(pos.col, 4);
     row.push(b' ');
@@ -316,7 +316,7 @@ pub fn ex_delmarks(excmd: &mut ExArg) {
                 // record: `:delmarks a` is not `clear_fmark`, and the shada
                 // writer wants the stamp to say when.
                 let mark = &mut buf.b_namedm[at];
-                mark.mark.lnum = 0;
+                mark.mark.lnum = LineNr::ZERO;
                 mark.timestamp = timestamp;
             } else {
                 // The fourth and fifth writings of the `namedfm` index
@@ -339,7 +339,7 @@ pub fn ex_delmarks(excmd: &mut ExArg) {
                 }
                 namedfm.with_mut(|table| {
                     let slot = &mut table[n];
-                    slot.fmark.mark.lnum = 0;
+                    slot.fmark.mark.lnum = LineNr::ZERO;
                     slot.fmark.fnum = 0;
                     slot.fmark.timestamp = timestamp;
                     slot.fname = None;
@@ -364,8 +364,8 @@ fn delmarks_all(buffer: Buf) {
         ('"', buffer.b_last_cursor.is_set()),
         ('^', buffer.b_last_insert.is_set()),
         ('.', buffer.b_last_change.is_set()),
-        ('[', buffer.b_op_start.lnum != 0),
-        (']', buffer.b_op_end.lnum != 0),
+        ('[', buffer.b_op_start.lnum != LineNr::ZERO),
+        (']', buffer.b_op_end.lnum != LineNr::ZERO),
     ] {
         if set {
             do_markset_autocmd(name as c_char, UNSET_POS, buffer);
@@ -390,7 +390,7 @@ fn delmarks_one(buffer: &mut Buf, name: c_char, timestamp: Timestamp) -> bool {
         58 | 32 => return true,
         _ => return false,
     };
-    if lnum != 0 {
+    if lnum != LineNr::ZERO {
         do_markset_autocmd(name, UNSET_POS, *buffer);
     }
     // The three fmark stores are released; the four positions are only
@@ -399,10 +399,10 @@ fn delmarks_one(buffer: &mut Buf, name: c_char, timestamp: Timestamp) -> bool {
         34 => buffer.b_last_cursor.clear(timestamp),
         94 => buffer.b_last_insert.clear(timestamp),
         46 => buffer.b_last_change.clear(timestamp),
-        91 => buffer.b_op_start.lnum = 0,
-        93 => buffer.b_op_end.lnum = 0,
-        60 => buffer.b_visual.vi_start.lnum = 0,
-        _ => buffer.b_visual.vi_end.lnum = 0,
+        91 => buffer.b_op_start.lnum = LineNr::ZERO,
+        93 => buffer.b_op_end.lnum = LineNr::ZERO,
+        60 => buffer.b_visual.vi_start.lnum = LineNr::ZERO,
+        _ => buffer.b_visual.vi_end.lnum = LineNr::ZERO,
     }
     true
 }
@@ -410,7 +410,7 @@ fn delmarks_one(buffer: &mut Buf, name: c_char, timestamp: Timestamp) -> bool {
 /// Return the line at mark "mp".  Truncate to fit in window.
 pub(super) fn mark_line(pos: Pos, lead_len: c_int) -> XString {
     let buf = Buf::current();
-    if pos.lnum == 0 || pos.lnum > buf.b_ml.ml_line_count {
+    if pos.lnum == LineNr::ZERO || pos.lnum > buf.b_ml.ml_line_count {
         return XString::from_cstr(c"-invalid-");
     }
     debug_assert!(Columns.get() >= 0, "Columns >= 0");

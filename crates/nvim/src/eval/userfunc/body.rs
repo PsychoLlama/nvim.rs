@@ -138,9 +138,9 @@ pub(crate) fn get_function_body(
             // than one.
             let mut sourcing_lnum_off = sourced_lnum_of(excmd);
             if sourcing_lnum() < sourcing_lnum_off {
-                sourcing_lnum_off -= sourcing_lnum();
+                sourcing_lnum_off -= sourcing_lnum().get();
             } else {
-                sourcing_lnum_off = 0;
+                sourcing_lnum_off = LineNr::ZERO;
             }
 
             let indented = skip::white(line);
@@ -339,7 +339,7 @@ pub(crate) fn get_function_body(
             // line, so that the line count equals the index.
             newlines.reserve(1 + usize::try_from(sourcing_lnum_off).unwrap_or(0));
             newlines.push(Some(line.into()));
-            for _ in 0..sourcing_lnum_off {
+            for _ in 0..sourcing_lnum_off.get() {
                 newlines.push(None);
             }
 

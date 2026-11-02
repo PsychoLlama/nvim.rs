@@ -100,7 +100,7 @@ fn calculate_topfill_and_topline(
 
     // Spend them on the other side, which runs out of real lines first
     // wherever it is the shorter one.
-    let mut to_lnum = blocks.get(from_top).map_or(1, |dp| dp.df_lnum[toidx]);
+    let mut to_lnum = blocks.get(from_top).map_or(1, |dp| dp.df_lnum[toidx].get());
     let mut left = passed;
     let mut at = from_top;
     while left > 0
@@ -116,17 +116,20 @@ fn calculate_topfill_and_topline(
     // the filler has to make up.
     let mut max_virt_lines = 0;
     for dp in &blocks[from_top..] {
-        if dp.end(toidx) <= to_lnum {
+        if dp.end(toidx) <= LineNr::new(to_lnum) {
             max_virt_lines += dp.max_len(slots);
         } else {
-            if dp.df_lnum[toidx] <= to_lnum {
-                max_virt_lines += to_lnum - dp.df_lnum[toidx];
+            if dp.df_lnum[toidx] <= LineNr::new(to_lnum) {
+                max_virt_lines += to_lnum - dp.df_lnum[toidx].get();
             }
             break;
         }
     }
     let filler = diff_flags.get() & DIFF_FILLER != 0;
-    (filler.then_some(max_virt_lines - passed), to_lnum)
+    (
+        filler.then_some(max_virt_lines - passed),
+        LineNr::new(to_lnum),
+    )
 }
 
 /// Set `towin`'s topline and topfill from `fromwin`'s.
@@ -186,8 +189,8 @@ pub fn diff_set_topline(fromwin: Win, mut towin: Win) {
         towin.w_topline = tobuf.b_ml.ml_line_count;
         towin.w_botfill = true;
     }
-    if towin.w_topline < 1 {
-        towin.w_topline = 1;
+    if towin.w_topline < LineNr::ONE {
+        towin.w_topline = LineNr::ONE;
         towin.w_topfill = 0;
     }
     invalidate_botline_win(towin);
@@ -311,7 +314,7 @@ pub fn diff_lnum_win(lnum: LineNr, window: Win) -> LineNr {
     let tp = TabPage::current();
     let idx = tp.diff_index(Buf::current());
     if idx == DB_COUNT {
-        return 0;
+        return LineNr::ZERO;
     }
     if tp.tp_diff_invalid != 0 {
         diff_update(None);
@@ -324,7 +327,7 @@ pub fn diff_lnum_win(lnum: LineNr, window: Win) -> LineNr {
     };
     let i = tp.diff_index(buf);
     if i == DB_COUNT {
-        return 0;
+        return LineNr::ZERO;
     }
     let i = slot_index(i);
     (lnum + (dp.df_lnum[i] - dp.df_lnum[idx])).min(dp.end(i))

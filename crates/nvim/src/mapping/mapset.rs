@@ -12,6 +12,7 @@ use crate::eval::typval::NumBuf;
 use crate::eval::userfunc::FuncFlags;
 use crate::lua::executor::release_luaref;
 use crate::message_fmt::{msg_bytes, msg_cstr};
+use crate::narrow::number_as_int;
 use crate::option::vars::P_CPO;
 use crate::semsg;
 use crate::types::Handle;
@@ -129,7 +130,7 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     };
 
     let sid = number(c"sid") as ScriptId;
-    let lnum = number(c"lnum") as LineNr;
+    let lnum = LineNr::new(number_as_int(number(c"lnum")));
     let buffer = number(c"buffer") != 0;
     // The dict's "mode" is not used past get_map_mode_string.
 

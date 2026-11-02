@@ -424,7 +424,7 @@ pub fn bufhl_add_hl_pos_offset(
     let decor = decor_inline_hl(hl_id);
 
     // TODO(bfredl): if decoration had blocky mode, we could avoid this loop
-    for lnum in pos_start.lnum..=pos_end.lnum {
+    for lnum in pos_start.lnum.through(pos_end.lnum) {
         let first = lnum == pos_start.lnum;
         let last = lnum == pos_end.lnum;
         // A middle or last line starts one column left of `offset`. This
@@ -445,7 +445,7 @@ pub fn bufhl_add_hl_pos_offset(
         };
 
         let ns = u32::try_from(src_id).expect("a namespace id fits its own handle type");
-        let (row, end_row) = (lnum as c_int - 1, lnum as c_int - 1 + end_off);
+        let (row, end_row) = (lnum.get() - 1, lnum.get() - 1 + end_off);
         let flags = MtFlags::DECOR_HL;
         extmark_set(
             buffer, ns, None, row, hl_start, end_row, hl_end, decor, flags, true, false, true,
@@ -487,7 +487,7 @@ pub fn decor_redraw(buffer: Buf, row1: c_int, row2: c_int, col1: c_int, decor: D
         let (flags, pos) = with_decor_virt(idx, |vt| (vt.flags, vt.pos));
         let is_lines = flags & kVTIsLines != 0;
         let below = is_lines && flags & kVTLinesAbove == 0;
-        let vt_lnum = row1 as LineNr + 1 + LineNr::from(below);
+        let vt_lnum = LineNr::new(row1) + 1 + i32::from(below);
         redraw_buf_line_later(buffer, vt_lnum, true);
         // Virtual lines and inline virtual text change how much room the
         // line takes, so the cached line sizes have to go as well.
@@ -507,7 +507,7 @@ pub fn decor_redraw(buffer: Buf, row1: c_int, row2: c_int, col1: c_int, decor: D
 pub(crate) fn decor_redraw_sh(buffer: Buf, row1: c_int, row2: c_int, sh: ShRedraw) {
     let paints = sh.flags & (kSHIsSign | kSHSpellOn | kSHSpellOff | kSHConceal) != 0;
     if (sh.hl_id != 0 || sh.has_url || paints) && row2 >= row1 {
-        redraw_buf_range_later(buffer, row1 as LineNr + 1, row2 as LineNr + 1);
+        redraw_buf_range_later(buffer, LineNr::new(row1) + 1, LineNr::new(row2) + 1);
     }
 
     if sh.flags & kSHConcealLines != 0 {
@@ -521,16 +521,16 @@ pub(crate) fn decor_redraw_sh(buffer: Buf, row1: c_int, row2: c_int, sh: ShRedra
     }
 
     if sh.flags & kSHUIWatched != 0 {
-        redraw_buf_line_later(buffer, row1 as LineNr + 1, false);
+        redraw_buf_line_later(buffer, LineNr::new(row1) + 1, false);
     }
 }
 
 /// Accounts for a decoration that has just been placed on rows `row..=row2`.
 pub fn buf_put_decor(buffer: Buf, decor: DecorInline, row: c_int, mut row2: c_int) {
-    if !decor.is_ext() || row as LineNr >= buffer.b_ml.ml_line_count {
+    if !decor.is_ext() || LineNr::new(row) >= buffer.b_ml.ml_line_count {
         return;
     }
-    row2 = (buffer.b_ml.ml_line_count - 1).min(row2 as LineNr) as c_int;
+    row2 = (buffer.b_ml.ml_line_count - 1).min(LineNr::new(row2)).get();
     for idx in sh_chain(decor) {
         buf_put_decor_sh(buffer, idx, row, row2);
     }
@@ -547,8 +547,8 @@ pub fn buf_decor_remove(
     free: bool,
 ) {
     decor_redraw(buffer, row1, row2, col1, decor);
-    if decor.is_ext() && (row1 as LineNr) < buffer.b_ml.ml_line_count {
-        row2 = (buffer.b_ml.ml_line_count - 1).min(row2 as LineNr) as c_int;
+    if decor.is_ext() && LineNr::new(row1) < buffer.b_ml.ml_line_count {
+        row2 = (buffer.b_ml.ml_line_count - 1).min(LineNr::new(row2)).get();
         for idx in sh_chain(decor) {
             buf_remove_decor_sh(buffer, row1, row2, idx);
         }

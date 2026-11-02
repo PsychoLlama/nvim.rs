@@ -49,7 +49,7 @@ const DT_LAST: c_uint = 6;
 /// The view the tag stack starts a jump from: no remembered scroll
 /// position.
 const NO_VIEW: FileMarkView = FileMarkView {
-    topline_offset: MAXLNUM,
+    topline_offset: MAXLNUM.get(),
     skipcol: 0,
 };
 

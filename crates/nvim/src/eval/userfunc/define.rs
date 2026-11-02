@@ -534,7 +534,7 @@ impl Definition<'_, '_> {
         func.flags.set(self.flags);
         func.calls.set(0);
         let mut sctx = current_sctx.get();
-        sctx.sc_lnum += sourcing_lnum_top;
+        sctx.sc_lnum += sourcing_lnum_top.get();
         nlua_set_sctx(&mut sctx);
         func.script_ctx.set(sctx);
     }

@@ -366,7 +366,7 @@ pub fn truncate_line(fixpos: c_int) {
 ///
 /// The cursor column is reset and the line clamped into the buffer; the
 /// cursor's line is *not* otherwise moved.
-pub fn del_lines(nlines: LineNr, undo: bool) {
+pub fn del_lines(nlines: i32, undo: bool) {
     let first = Win::current().w_cursor.lnum;
     if nlines <= 0 {
         return;

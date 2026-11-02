@@ -16,6 +16,7 @@
 
 use super::*;
 use crate::api::private::helpers::find_window_by_handle;
+use crate::types::LineNr;
 use core::ffi::CStr;
 
 // The enumerated keys' spellings, each indexed by the value it names. They
@@ -112,7 +113,7 @@ pub fn nvim_win_get_config(win: WindowHandle) -> Result<KeyDict_win_config, Erro
         if !config.external {
             if config.relative == kFloatRelativeWindow {
                 rv.win = Some(config.window);
-                if config.bufpos.lnum >= 0 {
+                if config.bufpos.lnum >= LineNr::ZERO {
                     let mut pos = Vec::with_capacity(2);
                     let (lnum, col) = (config.bufpos.lnum, config.bufpos.col);
                     pos.push(Object::integer(Integer::from(lnum)));

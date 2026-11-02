@@ -344,11 +344,11 @@ impl WinLineVars {
 #[inline]
 fn line_number_str(window: Win, lnum: LineNr, buf: &mut [u8; 32]) {
     let (num, left) = if window.w_onebuf_opt.wo_nu != 0 && window.w_onebuf_opt.wo_rnu == 0 {
-        (lnum, false)
+        (lnum.get(), false)
     } else {
         let rel = get_cursor_rel_lnum(window, lnum).abs();
         if rel == 0 && window.w_onebuf_opt.wo_nu != 0 && window.w_onebuf_opt.wo_rnu != 0 {
-            (lnum, true)
+            (lnum.get(), true)
         } else {
             (rel, false)
         }
@@ -392,7 +392,7 @@ impl WinLineVars {
                 decor_redraw_signs(
                     window,
                     window.buffer(),
-                    self.lnum - 2,
+                    (self.lnum - 2).get(),
                     None,
                     None,
                     None,
@@ -520,12 +520,15 @@ impl WinLineVars {
         // Filler lines belonging to the line above report that line's
         // number; `v:relnum` is only set on the first row of each of the
         // three groups (filler, buffer line, virtual lines below).
-        let lnum = self.lnum - (self.n_virt_lines - self.filler_todo < self.n_virt_below) as LineNr;
+        let lnum = self.lnum
+            - LineNr::new(i32::from(
+                self.n_virt_lines - self.filler_todo < self.n_virt_below,
+            ));
         let relnum = if virtnum == -self.filler_lines
             || virtnum == 0
             || virtnum == self.n_virt_below - self.filler_lines
         {
-            get_cursor_rel_lnum(window, lnum).abs()
+            get_cursor_rel_lnum(window, LineNr::new(lnum)).abs()
         } else {
             -1
         };
@@ -560,13 +563,19 @@ impl WinLineVars {
         }
 
         set_vim_var_nr(Vv::Virtnum, virtnum as VarNumber);
-        let built = build_statuscol_str(window, lnum, relnum, stc, &self.sign_attrs);
+        let built = build_statuscol_str(
+            window,
+            LineNr::new(lnum),
+            LineNr::new(relnum),
+            stc,
+            &self.sign_attrs,
+        );
         let width = built.width;
         let was_reset = window.w_onebuf_opt.wo_stc.first_byte() == 0;
         if was_reset || (width > stc.width && stc.width < MAX_STCWIDTH) {
             if was_reset {
                 // 'statuscolumn' was reset because the expression failed.
-                window.w_nrwidth_line_count = 0;
+                window.w_nrwidth_line_count = LineNr::ZERO;
                 window.w_nrwidth = (window.w_onebuf_opt.wo_nu != 0
                     || window.w_onebuf_opt.wo_rnu != 0)
                     as ::core::ffi::c_int

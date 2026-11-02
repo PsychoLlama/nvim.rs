@@ -23,6 +23,7 @@
 
 use crate::tr;
 use crate::types::AutoEvent;
+use crate::types::LineNr;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 
@@ -82,7 +83,7 @@ pub(crate) fn set_option_sctx(
     if !opt_flags.has(OptionSetFlags::MODELINE) {
         // The execution stack always has the frame being sourced on top
         // while anything can set an option.
-        script_ctx.sc_lnum += crate::runtime::sourcing_lnum();
+        script_ctx.sc_lnum += crate::runtime::sourcing_lnum().get();
     }
     nlua_set_sctx(&mut script_ctx);
 
@@ -377,7 +378,7 @@ pub(crate) fn did_set_option(
             ScriptCtx {
                 sc_sid: set_sid,
                 sc_seq: 0,
-                sc_lnum: 0,
+                sc_lnum: LineNr::ZERO,
                 sc_chan: 0,
             }
         };

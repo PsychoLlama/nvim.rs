@@ -33,6 +33,7 @@ use crate::log::{LOG_DEBUG, logmsg};
 use crate::message_fmt::{msg_bytes as text_arg, msg_cstr};
 use crate::runtime::{estack_sfile, sourcing_lnum, sourcing_name_copy, with_sourcing_name};
 use crate::strings::has_char;
+use crate::types::LineNr;
 use core::ffi::{CStr, c_int, c_long};
 use std::ffi::CString;
 
@@ -77,8 +78,8 @@ fn emsg_lnum_line() -> Option<CString> {
     // time.
     let lnum = sourcing_lnum();
     if !with_sourcing_name(|name| name.is_some())
-        || !(other_sourcing_name() || lnum != last_sourcing_lnum.get())
-        || lnum == 0
+        || !(other_sourcing_name() || lnum != LineNr::new(last_sourcing_lnum.get()))
+        || lnum == LineNr::ZERO
     {
         return None;
     }
@@ -100,7 +101,7 @@ pub fn msg_source(hl_id: c_int) {
     }
     if let Some(line) = emsg_lnum_line() {
         msg(&line, HLF_N);
-        last_sourcing_lnum.set(sourcing_lnum());
+        last_sourcing_lnum.set(sourcing_lnum().get());
     }
 
     // Remember the source name and line number, so we can tell when
@@ -188,7 +189,7 @@ pub fn emsg_multiline(s: &CStr, kind: Option<&CStr>, hl_id: c_int, multiline: bo
                 let text = msg_cstr(s);
                 let lnum = sourcing_lnum();
                 with_sourcing_name(|name| match name {
-                    Some(name) if lnum != 0 => {
+                    Some(name) if lnum != LineNr::ZERO => {
                         let name = text_arg(name);
                         logmsg!(
                             LOGLVL_DBG,
@@ -209,7 +210,7 @@ pub fn emsg_multiline(s: &CStr, kind: Option<&CStr>, hl_id: c_int, multiline: bo
             let text = msg_cstr(s);
             let lnum = sourcing_lnum();
             with_sourcing_name(|name| match name {
-                Some(name) if lnum != 0 => {
+                Some(name) if lnum != LineNr::ZERO => {
                     let name = text_arg(name);
                     logmsg!(
                         LOGLVL_INF,

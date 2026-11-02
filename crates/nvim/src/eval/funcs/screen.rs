@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 
 use super::wrappers::{arg_lnum, arg_number, arg_number_chk};
+use crate::types::LineNr;
 use crate::winlayer::{Buf, Win};
 
 use crate::eval::typval::{NumBuf, tv_list_alloc_ret};
@@ -246,7 +247,7 @@ pub fn f_syn_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     let mut id = 0;
     if !transerr
-        && lnum >= 1
+        && lnum >= LineNr::ONE
         && lnum <= Buf::current().b_ml.ml_line_count
         && col >= 0
         && col < ml_get_len(lnum)
@@ -276,7 +277,7 @@ pub fn f_synconcealed(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
 
     // Note the `<=`: unlike synID(), the position one past the end of
     // the line is in range here.
-    if lnum >= 1
+    if lnum >= LineNr::ONE
         && lnum <= Buf::current().b_ml.ml_line_count
         && col >= 0
         && col <= ml_get_len(lnum)
@@ -319,7 +320,10 @@ pub fn f_synstack(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // Wraps because the C's does.
     let col = (arg_number(&args[1]) as ColNr).wrapping_sub(1);
 
-    if lnum >= 1 && lnum <= Buf::current().b_ml.ml_line_count && col >= 0 && col <= ml_get_len(lnum)
+    if lnum >= LineNr::ONE
+        && lnum <= Buf::current().b_ml.ml_line_count
+        && col >= 0
+        && col <= ml_get_len(lnum)
     {
         let list = tv_list_alloc_ret(result, kListLenMayKnow as isize);
         // Run the syntax engine, keeping the stack this time.

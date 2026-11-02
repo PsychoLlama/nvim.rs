@@ -220,7 +220,7 @@ fn tab_spaces_to_tabs() {
 
     // Use as many TABs as possible, measuring each one's width where it
     // lands.
-    let (mut csarg, cstype) = CharsizeArg::new(Win::current(), 0, b"\t");
+    let (mut csarg, cstype) = CharsizeArg::new(Win::current(), LineNr::ZERO, b"\t");
     loop {
         let byte = c_int::from(byte_at(&line, at));
         if !ascii_iswhite(byte) {
@@ -248,7 +248,7 @@ fn tab_spaces_to_tabs() {
         // Skip over the spaces the TABs have made redundant.
         let mut repl_off = 0;
         let base = at;
-        let (mut csarg, cstype) = CharsizeArg::new(Win::current(), 0, &line[base..]);
+        let (mut csarg, cstype) = CharsizeArg::new(Win::current(), LineNr::ZERO, &line[base..]);
         while vcol < want_vcol && byte_at(&line, at) == b' ' {
             vcol += win_charsize(cstype, vcol, at - base, b' ' as int32_t, &mut csarg).width;
             at += 1;

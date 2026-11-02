@@ -59,7 +59,7 @@ pub(crate) fn qf_fmt_text(out: &mut Vec<u8>, text: &[u8]) {
 /// the entry has them.
 pub(crate) fn qf_range_text(out: &mut Vec<u8>, entry: &QfEntry) {
     let mut range = format!("{}", entry.lnum);
-    if entry.end_lnum > 0 && entry.lnum != entry.end_lnum {
+    if entry.end_lnum > LineNr::ZERO && entry.lnum != entry.end_lnum {
         range.push_str(&format!("-{}", entry.end_lnum));
     }
     if entry.col > 0 {
@@ -107,7 +107,7 @@ impl Listed {
             });
         }
         let mut position = Vec::new();
-        if entry.lnum != 0 {
+        if entry.lnum != LineNr::ZERO {
             qf_range_text(&mut position, entry);
         }
         position.extend_from_slice(qf_types(c_int::from(entry.kind), entry.nr).to_bytes());
@@ -117,7 +117,7 @@ impl Listed {
             pattern: entry.pattern.clone(),
             text: entry.text.clone(),
             position,
-            has_lnum: entry.lnum != 0,
+            has_lnum: entry.lnum != LineNr::ZERO,
         }
     }
 }
@@ -350,7 +350,7 @@ pub fn qf_age(excmd: &mut ExArg) {
         return;
     };
     let count = if excmd.addr_count != 0 {
-        excmd.line2 as c_int
+        excmd.line2.get()
     } else {
         1
     };
@@ -381,8 +381,10 @@ pub fn qf_history(excmd: &mut ExArg) {
     if excmd.addr_count > 0 {
         match stack {
             None => qf_emsg(e_loclist),
-            Some(mut qi) if excmd.line2 > 0 && excmd.line2 <= LineNr::from(qi.list_count) => {
-                qi.current = (excmd.line2 - 1) as c_int;
+            Some(mut qi)
+                if excmd.line2 > LineNr::ZERO && excmd.line2 <= LineNr::new(qi.list_count) =>
+            {
+                qi.current = (excmd.line2 - 1).get();
                 qf_msg(qi, qi.current, "");
                 qf_update_buffer(qi, None);
             }
@@ -458,7 +460,7 @@ pub fn qf_view_result(split: bool) {
         return;
     }
     if split {
-        let lnum = Win::current().w_cursor.lnum as c_int;
+        let lnum = Win::current().w_cursor.lnum.get();
         qf_jump_newwin(qi, 0, lnum, false, true);
         let _ = do_cmdline_cmd(c"clearjumps");
         return;

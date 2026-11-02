@@ -481,11 +481,11 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: StlOpt, pos: usize, text: &mut V
                 v.num = if env.buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
                     0
                 } else {
-                    env.win.w_cursor.lnum as c_int
+                    env.win.w_cursor.lnum.get()
                 };
             }
         }
-        StlOpt::NumLines => v.num = env.buf.b_ml.ml_line_count as c_int,
+        StlOpt::NumLines => v.num = env.buf.b_ml.ml_line_count.get(),
         StlOpt::Column => {
             v.num = if !in_insert_mode() && env.empty_line {
                 0

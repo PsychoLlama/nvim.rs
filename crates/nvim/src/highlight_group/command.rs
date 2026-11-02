@@ -243,7 +243,7 @@ pub(crate) fn do_highlight(text: &CStr, forceit: bool, init: bool) {
 
 /// `SOURCING_LNUM`: the line of the script being sourced.
 pub(crate) fn sourcing_lnum() -> c_int {
-    crate::runtime::sourcing_lnum()
+    crate::runtime::sourcing_lnum().get()
 }
 
 /// `:highlight [default] link {from} {to}`.

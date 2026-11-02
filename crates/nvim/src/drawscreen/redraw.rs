@@ -188,10 +188,10 @@ pub fn redraw_buf_line_later(buffer: Buf, line: LineNr, force: bool) {
 pub fn redraw_win_range_later(window: Win, first: LineNr, last: LineNr) {
     let mut win = window;
     if last >= win.w_topline && first < win.w_botline {
-        if win.w_redraw_top == 0 || win.w_redraw_top > first {
+        if win.w_redraw_top == LineNr::ZERO || win.w_redraw_top > first {
             win.w_redraw_top = first;
         }
-        if win.w_redraw_bot == 0 || win.w_redraw_bot < last {
+        if win.w_redraw_bot == LineNr::ZERO || win.w_redraw_bot < last {
             win.w_redraw_bot = last;
         }
         redraw_later(window, UPD_VALID);

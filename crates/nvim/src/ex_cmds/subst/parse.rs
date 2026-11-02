@@ -32,7 +32,7 @@ use crate::os::time::os_time;
 use crate::regexp::{RE_LAST, RE_SUBST, regtilde_owned};
 use crate::search::save_re_pat;
 use crate::shada::ShadaExtra;
-use crate::types::{CmdLine, ExArg, Failed, LineNr, NUL, Timestamp, size_t};
+use crate::types::{CmdLine, ExArg, Failed, NUL, Timestamp, size_t};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::c_int;
@@ -165,13 +165,12 @@ pub(crate) fn sub_joining_lines(
     };
     // The number of lines joined is the number of lines in the range, plus
     // one more if this is not the end of the file.
-    let joined_lines_count = args.line2 - args.line1
-        + 1 as LineNr
-        + LineNr::from(args.line2 < Buf::current().b_ml.ml_line_count);
-    if joined_lines_count > 1 as LineNr {
+    let joined_lines_count =
+        args.line2 - args.line1 + 1 + i32::from(args.line2 < Buf::current().b_ml.ml_line_count);
+    if joined_lines_count > 1 {
         let _ = do_join(joined_lines_count as size_t, false, true, false, true);
-        SUB_NSUBS.set(joined_lines_count - 1 as LineNr);
-        SUB_NLINES.set(1 as LineNr);
+        SUB_NSUBS.set(joined_lines_count - 1);
+        SUB_NLINES.set(1);
         do_sub_msg(false);
         ex_may_print(args);
     }

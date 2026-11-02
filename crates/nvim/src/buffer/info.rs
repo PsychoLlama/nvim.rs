@@ -52,7 +52,7 @@ use crate::terminal::buf_terminal_running;
 use crate::types::ApiString;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    ExArg, IOSIZE, LineNr, MAXPATHL, OptIndex, OptInt, OptionSetFlags, ShmFlag, StlSyntax, int64_t,
+    ExArg, IOSIZE, LineNr, MAXPATHL, OptIndex, OptInt, OptionSetFlags, ShmFlag, StlSyntax,
 };
 use crate::ui::state::Columns;
 use crate::ui::{ui_call_set_icon, ui_call_set_title, ui_has};
@@ -259,7 +259,7 @@ fn show(buffer: Buf, by_time: bool, name: &XString) {
     let tail = if by_time && last_used != 0 {
         undo_time_text(last_used, room).into_vec()
     } else {
-        formatted!(room, gettext(c"line %ld").to_bytes(), lnum as int64_t)
+        formatted!(room, gettext(c"line %ld").to_bytes(), i64::from(lnum))
     };
     line.extend(tail.into_iter().take_while(|&b| b != 0));
     msg_display(XString::from_vec(line).as_cstr(), 0, false);
@@ -343,18 +343,18 @@ pub fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
         let fmt = ngettext(
             c"%ld line --%d%%--",
             c"%ld lines --%d%%--",
-            lines as ::core::ffi::c_ulong,
+            lines.get() as u64,
         );
         let percent = percentage(cursor, lines);
-        out.push_fmt(fmt, &[(lines as int64_t).into(), percent.into()]);
+        out.push_fmt(fmt, &[i64::from(lines).into(), percent.into()]);
     } else {
         let fmt = gettext(c"line %ld of %ld --%d%%-- col ");
         let percent = percentage(cursor, lines);
         out.push_fmt(
             fmt,
             &[
-                (cursor as int64_t).into(),
-                (lines as int64_t).into(),
+                i64::from(cursor).into(),
+                i64::from(lines).into(),
                 percent.into(),
             ],
         );
@@ -386,7 +386,7 @@ pub fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
 }
 
 fn percentage(part: LineNr, whole: LineNr) -> c_int {
-    calc_percentage(part as int64_t, whole as int64_t)
+    calc_percentage(i64::from(part), i64::from(whole))
 }
 
 /// The column indicator: `col` alone when the virtual column agrees with it,
@@ -531,23 +531,23 @@ pub fn get_rel_pos(window: Win, room: usize) -> Vec<u8> {
 
     // The number of lines above the window.
     let fill = win_get_fill(win, win.w_topline);
-    let mut above = win.w_topline - 1 + (fill - win.w_topfill) as LineNr;
-    if win.w_topline == 1 && win.w_topfill >= 1 {
+    let mut above = win.w_topline - 1 + (fill - win.w_topfill);
+    if win.w_topline == LineNr::ONE && win.w_topfill >= 1 {
         // All the buffer's lines are displayed and there is an indication of
         // filler lines, which can be considered seeing all of them.
-        above = 0;
+        above = LineNr::ZERO;
     }
     // The number of lines below it.
     let below = win.buffer().b_ml.ml_line_count - win.w_botline + 1;
     if below <= 0 {
-        let all_or_bot = if above == 0 {
+        let all_or_bot = if above == LineNr::ZERO {
             gettext(c"All")
         } else {
             gettext(c"Bot")
         };
         return cut(all_or_bot.to_bytes(), room);
     }
-    if above <= 0 {
+    if above <= LineNr::ZERO {
         return cut(gettext(c"Top").to_bytes(), room);
     }
 

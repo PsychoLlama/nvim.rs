@@ -232,7 +232,7 @@ fn sign_place_cmd(args: &SignCmdArgs) {
     if args.id <= 0 {
         // The listing forms: `:sign place [group=X] [file=Y|buffer=N]`.
         // A `line=` or a `name=` means a placement was intended.
-        if args.lnum >= 0 || args.name.is_some() || empty_group {
+        if args.lnum >= LineNr::ZERO || args.name.is_some() || empty_group {
             emsg(gettext(e_invarg));
         } else {
             sign_list_placed(args.buf, args.group.as_deref());
@@ -261,7 +261,7 @@ fn sign_place_cmd(args: &SignCmdArgs) {
 /// `buf_delete_signs`' single-line form, since an explicit `line=` is E474.
 fn sign_unplace_cmd(args: &SignCmdArgs) {
     let empty_group = args.group.as_deref().is_some_and(<[u8]>::is_empty);
-    if args.lnum >= 0 || args.name.is_some() || empty_group {
+    if args.lnum >= LineNr::ZERO || args.name.is_some() || empty_group {
         emsg(gettext(e_invarg));
         return;
     }
@@ -272,7 +272,8 @@ fn sign_unplace_cmd(args: &SignCmdArgs) {
         (args.buf, args.lnum)
     };
 
-    if sign_unplace(buf, args.id.max(0), args.group.as_deref(), lnum) == FAIL && lnum > 0 {
+    if sign_unplace(buf, args.id.max(0), args.group.as_deref(), lnum) == FAIL && lnum > LineNr::ZERO
+    {
         emsg(gettext(c"E159: Missing sign number"));
     }
 }
@@ -286,7 +287,7 @@ fn sign_jump_cmd(args: &SignCmdArgs) {
     // No buffer, an empty group, or a `line=`/`name=` that jumping has
     // no use for.
     let empty_group = args.group.as_deref().is_some_and(<[u8]>::is_empty);
-    let bad = empty_group || args.lnum >= 0 || args.name.is_some();
+    let bad = empty_group || args.lnum >= LineNr::ZERO || args.name.is_some();
     let (Some(buffer), false) = (args.buf, bad) else {
         emsg(gettext(e_invarg));
         return;
@@ -320,7 +321,7 @@ impl Default for SignCmdArgs {
             group: None,
             prio: -1,
             buf: None,
-            lnum: -1,
+            lnum: LineNr::new(-1),
         }
     }
 }
@@ -355,7 +356,7 @@ fn parse_sign_cmd_args(cmd: c_int, line: &[u8]) -> Option<SignCmdArgs> {
 
     while !arg.is_empty() {
         if let Some(v) = arg.strip_prefix(b"line=") {
-            out.lnum = atoi(v);
+            out.lnum = LineNr::new(atoi(v));
             arg = split_white(v).1;
             lnum_arg = true;
         } else if cmd == SIGNCMD_UNPLACE && arg[0] == b'*' {

@@ -209,7 +209,7 @@ fn truncate_old_line(
         let cb = Buf::current();
         let row = Win::current().w_cursor.lnum - 1;
         let gone = Win::current().w_cursor.col - new_len;
-        extmark_splice_cols(cb, row, new_len, gone, 0, kExtmarkUndo);
+        extmark_splice_cols(cb, row.get(), new_len, gone, 0, kExtmarkUndo);
         cols_spliced = gone;
     }
 
@@ -231,7 +231,7 @@ fn truncate_old_line(
         let new_b = (1 + added) as BCount;
         let undo = kExtmarkUndo;
         let (cur_lnum, cur_col) = (Win::current().w_cursor.lnum, Win::current().w_cursor.col);
-        extmark_splice(cb, row, at, 0, off, old_b, 1, added, new_b, undo);
+        extmark_splice(cb, row.get(), at, 0, off, old_b, 1, added, new_b, undo);
         changed_lines(cb, cur_lnum, cur_col, cur_lnum + 1, 1, true);
         // Move marks that were after the break onto the new line.
         if flags & OPENLINE_MARKFIX != 0 {
@@ -552,7 +552,18 @@ pub fn open_line(
             let cb = Buf::current();
             let at = Win::current().w_cursor.lnum;
             let extra = BCount::try_from(cb.lines().line_len(at)).unwrap_or(0);
-            extmark_splice(cb, at - 1, 0, 0, 0, 0, 1, 0, 1 + extra, kExtmarkUndo);
+            extmark_splice(
+                cb,
+                (at - 1).get(),
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                1 + extra,
+                kExtmarkUndo,
+            );
             changed_lines(cb, at, 0, at, 1, true);
         }
         drop(splice);

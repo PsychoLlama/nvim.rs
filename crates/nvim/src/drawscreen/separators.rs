@@ -67,7 +67,7 @@ pub(crate) fn win_redraw_signcols(mut window: Win) -> bool {
     {
         buf.b_signcols.autom = true;
         let last = buf.b_ml.ml_line_count - 1;
-        buf_signcols_count_range(buf, 0, last, MAXLNUM, SignCountHalf::Both);
+        buf_signcols_count_range(buf, 0, last.get(), MAXLNUM.get(), SignCountHalf::Both);
     }
 
     // `b_signcols.max` is a high-water mark that nothing lowers as signs go
@@ -87,7 +87,7 @@ pub(crate) fn win_redraw_signcols(mut window: Win) -> bool {
 
     if rebuild_stc {
         // Make `number_width` re-estimate the 'statuscolumn' width.
-        window.w_nrwidth_line_count = 0;
+        window.w_nrwidth_line_count = LineNr::ZERO;
     } else if window.w_minscwidth == 0 && window.w_maxscwidth == 1 {
         // Plain `'signcolumn'` "auto": one column iff the buffer has any
         // sign text at all, which is cheaper than the per-line counts.

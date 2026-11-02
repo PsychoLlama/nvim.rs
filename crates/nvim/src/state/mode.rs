@@ -51,7 +51,7 @@ use core::ffi::{CStr, c_int};
 
 /// The origin, which every position here starts at.
 const POS_ZERO: Pos = Pos {
-    lnum: 0,
+    lnum: LineNr::ZERO,
     col: 0,
     coladd: 0,
 };
@@ -94,7 +94,7 @@ state_record! {
     pub(crate) redo_VIsual_busy: bool = false;
     /// The previous Visual area, for `gv` and `.`.
     pub(crate) resel_VIsual_mode: VisualMode = VisualMode::NONE;
-    pub(crate) resel_VIsual_line_count: LineNr = 0;
+    pub(crate) resel_VIsual_line_count: i32 = 0;
     pub(crate) resel_VIsual_vcol: ColNr = 0;
     /// 'keymodel' has `startsel`: a shifted special key starts a selection.
     pub(crate) km_startsel: bool = false;
@@ -125,7 +125,7 @@ state_record! {
     /// Start Insert mode at the next chance.
     pub(crate) need_start_insertmode: bool = false;
     /// The line count when `gR` started.
-    pub(crate) orig_line_count: LineNr = 0;
+    pub(crate) orig_line_count: LineNr = LineNr::ZERO;
     /// Lines changed by `gR` so far.
     pub(crate) vr_lines_changed: c_int = 0;
     /// The cursor before text was formatted.

@@ -129,8 +129,8 @@ impl Fields {
             directory: None,
             current_file: None,
             bnr: 0,
-            lnum: 0,
-            end_lnum: 0,
+            lnum: LineNr::ZERO,
+            end_lnum: LineNr::ZERO,
             col: 0,
             end_col: 0,
             use_viscol: false,
@@ -171,8 +171,8 @@ impl Fields {
         if !multiscan {
             self.errmsg.truncate(0);
         }
-        self.lnum = 0;
-        self.end_lnum = 0;
+        self.lnum = LineNr::ZERO;
+        self.end_lnum = LineNr::ZERO;
         self.col = 0;
         self.end_col = 0;
         self.use_viscol = false;
@@ -325,11 +325,11 @@ impl Fields {
                 }
                 self.bnr = bnr;
             }
-            2 => self.enr = parse_int(start),      // %n
-            3 => self.lnum = parse_int(start),     // %l
-            4 => self.end_lnum = parse_int(start), // %e
-            5 => self.col = parse_int(start),      // %c
-            6 => self.end_col = parse_int(start),  // %k
+            2 => self.enr = parse_int(start),               // %n
+            3 => self.lnum = LineNr::new(parse_int(start)), // %l
+            4 => self.end_lnum = LineNr::new(parse_int(start)), // %e
+            5 => self.col = parse_int(start),               // %c
+            6 => self.end_col = parse_int(start),           // %k
             // %t: the byte as C's signed `char`, so that one past 0x7f reads
             // as negative and `vim_isprintc` refuses it below.
             7 => self.kind = start.first().copied().unwrap_or(0).cast_signed(),
@@ -500,7 +500,7 @@ pub(crate) fn parse_line(
 /// be jumped to.
 fn no_match(line: &[u8], linelen: usize, fields: &mut Fields) {
     fields.namebuf.truncate(0); // no match found, so no file name
-    fields.lnum = 0; // don't jump to this line
+    fields.lnum = LineNr::ZERO; // don't jump to this line
     fields.valid = false;
     fields.set_message(line, linelen);
 }
@@ -561,10 +561,10 @@ fn continue_multiline(prefix: u8, mut qfl: Qfl, fields: &mut Fields) -> Status {
                 // Only printable characters allowed.
                 prev.kind = fields.kind;
             }
-            if prev.lnum == 0 {
+            if prev.lnum == LineNr::ZERO {
                 prev.lnum = fields.lnum;
             }
-            if prev.end_lnum == 0 {
+            if prev.end_lnum == LineNr::ZERO {
                 prev.end_lnum = fields.end_lnum;
             }
             if prev.col == 0 {

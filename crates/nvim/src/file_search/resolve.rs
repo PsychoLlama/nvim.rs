@@ -36,7 +36,7 @@ use core::ffi::c_int;
 pub(crate) fn find_nth_file_in_path(
     name: &[u8],
     options: FileNameOpts,
-    nth: LineNr,
+    nth: i32,
 ) -> Option<XString> {
     let mut walk = PathWalk::new();
     // A copy: the search can run user code, which may rename the buffer.

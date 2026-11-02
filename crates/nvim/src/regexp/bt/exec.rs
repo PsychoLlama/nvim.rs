@@ -10,6 +10,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::types::LineNr;
 use core::ffi::c_int;
 
 use super::compile::BtProg;
@@ -65,7 +66,7 @@ fn regtry(rex: Rex, prog: BtProg, state: &mut BtState, col: ColNr) -> c_int {
         ExtMatchRef::new(z_captures(rex))
     });
     rex.put_ext_out(captures);
-    1 + rex.lnum() as c_int
+    1 + rex.lnum().get()
 }
 
 /// Fill in whatever group 0 does not already say.
@@ -77,7 +78,10 @@ fn settle_group_zero(rex: Rex, col: ColNr) {
     let kind = rex.pos_kind();
     let (start, end) = (rex.start(0), rex.end(0));
     if !start.get().is_set(kind) {
-        start.set(MatchPos::from_pos(LPos { lnum: 0, col }));
+        start.set(MatchPos::from_pos(LPos {
+            lnum: LineNr::ZERO,
+            col,
+        }));
     }
     if !end.get().is_set(kind) {
         end.set(rex.here());
@@ -97,7 +101,7 @@ fn z_captures(rex: Rex) -> ExtMatch {
         let text = if rex.multi() {
             // A capture that spans lines cannot be handed over as one
             // string, so it is dropped.
-            if start.lnum < 0 || end.lnum != start.lnum || end.col < start.col {
+            if start.lnum < LineNr::ZERO || end.lnum != start.lnum || end.col < start.col {
                 continue;
             }
             let Some(line) = reg_getline(rex, start.lnum) else {
@@ -105,7 +109,7 @@ fn z_captures(rex: Rex) -> ExtMatch {
             };
             span(line, start.col, end.col)
         } else {
-            if start.lnum < 0 || end.lnum < 0 {
+            if start.lnum < LineNr::ZERO || end.lnum < LineNr::ZERO {
                 continue;
             }
             span(rex.line(), start.col, end.col)
@@ -145,7 +149,7 @@ fn bt_regexec_both(rex: Rex, prog: BtProg, state: &mut BtState, startcol: ColNr)
     // A buffer match starts on its line 0; a string match is already on its
     // string.
     let line = if rex.multi() {
-        reg_getline(rex, 0)
+        reg_getline(rex, LineNr::ZERO)
     } else {
         Some(rex.line())
     };
@@ -169,7 +173,7 @@ fn bt_regexec_both(rex: Rex, prog: BtProg, state: &mut BtState, startcol: ColNr)
                 // does not hold that run anywhere past `col`.
                 if prog.regmust().is_none() || has_regmust(rex, prog, line, col) {
                     rex.set_line(line);
-                    rex.set_lnum(0);
+                    rex.set_lnum(LineNr::ZERO);
                     retval = if prog.is_anchored() {
                         try_anchored(rex, prog, state, col)
                     } else {
@@ -275,9 +279,9 @@ fn scan_columns(rex: Rex, prog: BtProg, state: &mut BtState, col: &mut ColNr) ->
         }
 
         // A failed attempt may have walked onto a later line.
-        if rex.lnum() != 0 {
-            rex.set_lnum(0);
-            rex.set_line(reg_getline(rex, 0).unwrap_or(b"\0"));
+        if rex.lnum() != LineNr::ZERO {
+            rex.set_lnum(LineNr::ZERO);
+            rex.set_line(reg_getline(rex, LineNr::ZERO).unwrap_or(b"\0"));
         }
         let rest = rest_from(rex.line(), *col);
         if rest[0] == NUL as u8 {

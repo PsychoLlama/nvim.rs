@@ -100,7 +100,7 @@ pub fn nvim_win_set_cursor(win: WindowHandle, pos: Array) -> Result<(), Error> {
     if col > int64_t::from(MAXCOL) || col < 0 {
         return Err(err_out_of_range(c"cursor column"));
     }
-    w.w_cursor.lnum = number_as_int(row);
+    w.w_cursor.lnum = LineNr::new(number_as_int(row));
     w.w_cursor.col = number_as_int(col);
     w.w_cursor.coladd = 0;
     check_cursor_col(w);
@@ -308,15 +308,25 @@ pub fn nvim_win_text_height(
     let line_count: LineNr = w.buffer().line_count();
 
     let opts = &*opts;
-    let mut start_lnum: LineNr = 1 as LineNr;
+    let mut start_lnum: LineNr = LineNr::ONE;
     let mut end_lnum: LineNr = line_count;
     let mut oob: bool = false;
     // SAFETY: `buf` is live and `oob` is this frame's own.
     if let Some(row) = opts.start_row {
-        start_lnum = number_as_int(normalize_index(buf, row as int64_t, false, &mut oob));
+        start_lnum = LineNr::new(number_as_int(normalize_index(
+            buf,
+            row as int64_t,
+            false,
+            &mut oob,
+        )));
     }
     if let Some(row) = opts.end_row {
-        end_lnum = number_as_int(normalize_index(buf, row as int64_t, false, &mut oob));
+        end_lnum = LineNr::new(number_as_int(normalize_index(
+            buf,
+            row as int64_t,
+            false,
+            &mut oob,
+        )));
     }
     if oob {
         return Err(Error::validation(c"Line index out of bounds"));

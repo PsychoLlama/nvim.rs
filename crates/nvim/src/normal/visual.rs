@@ -154,7 +154,7 @@ static VISUAL: GlobalCell<VisualState> = GlobalCell::new(VisualState {
     active: false,
     sel: VisualSelection {
         anchor: Pos {
-            lnum: 0,
+            lnum: LineNr::ZERO,
             col: 0,
             coladd: 0,
         },
@@ -233,7 +233,7 @@ pub(crate) fn set_visual_anchor(anchor: Pos) {
 /// so `\%V` in a buffer that has never been in Visual mode still matches
 /// nothing until some buffer has.
 pub(crate) fn visual_ever_started() -> bool {
-    VISUAL.get().sel.anchor.lnum != 0
+    VISUAL.get().sel.anchor.lnum != LineNr::ZERO
 }
 
 /// Read-modify-write of the anchor.
@@ -508,11 +508,13 @@ fn reselect_scaled(cmd_arg: &mut CmdArg) {
     // is both what the C produces and safe. The transpile used Rust's
     // checked operators here and aborted the debug build instead.
     if !resel_VIsual_mode.get().is_char() || resel_VIsual_line_count.get() > 1 {
-        Win::current().w_cursor.lnum = Win::current().w_cursor.lnum.wrapping_add(
-            resel_VIsual_line_count
-                .get()
-                .wrapping_mul(cmd_arg.count0 as LineNr)
-                .wrapping_sub(1),
+        Win::current().w_cursor.lnum = LineNr::new(
+            Win::current().w_cursor.lnum.get().wrapping_add(
+                resel_VIsual_line_count
+                    .get()
+                    .wrapping_mul(cmd_arg.count0)
+                    .wrapping_sub(1),
+            ),
         );
         check_cursor(Win::current());
     }
@@ -668,9 +670,9 @@ pub(crate) fn n_start_visual_mode(c: c_int) {
 pub(crate) fn nv_gv_cmd(cmd_arg: &mut CmdArg) {
     let mut buf = Buf::current();
     let last = buf.b_visual;
-    if last.vi_start.lnum == 0
+    if last.vi_start.lnum == LineNr::ZERO
         || last.vi_start.lnum > buf.b_ml.ml_line_count
-        || last.vi_end.lnum == 0
+        || last.vi_end.lnum == LineNr::ZERO
     {
         beep_flush();
         return;
@@ -759,7 +761,7 @@ pub(crate) fn unadjust_for_sel_inner(pos: &mut Pos) -> bool {
             let (cs, _, ce) = getvcol(Win::current(), pos);
             pos.coladd = ce - cs;
         }
-    } else if pos.lnum > 1 {
+    } else if pos.lnum > LineNr::ONE {
         pos.lnum -= 1;
         pos.col = Buf::current().lines().line_len(pos.lnum);
         return true;

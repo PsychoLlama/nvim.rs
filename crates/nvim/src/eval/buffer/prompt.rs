@@ -43,7 +43,7 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
     if !buf_is_prompt(Some(buf)) {
         return;
     }
-    let lnum: LineNr = (buf.b_prompt_start.mark.lnum - 1).max(0);
+    let lnum: LineNr = (buf.b_prompt_start.mark.lnum - 1).max(LineNr::ZERO);
     // A String argument that is glued onto the prompt line is replaced by
     // the joined text, which this local owns; a List argument is joined in
     // place, in the caller's own list.
@@ -54,7 +54,7 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
     if !buf.b_prompt_append_new_line {
         // The text so far on the prompt's last line, which the first item
         // of the new text is glued onto.
-        let text = if lnum > 0 {
+        let text = if lnum > LineNr::ZERO {
             Lines::in_buffer(buf).line(lnum).to_vec()
         } else {
             Vec::new()
@@ -173,7 +173,7 @@ pub fn f_prompt_setprompt(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFunc
 /// Put `new_prompt` in place of the old one on the buffer's prompt line;
 /// `buffer` is a loaded prompt buffer.
 fn rewrite_prompt_line(mut buffer: Buf, new_prompt: &[u8]) {
-    if buffer.b_prompt_start.mark.lnum < 1
+    if buffer.b_prompt_start.mark.lnum < LineNr::ONE
         || buffer.b_prompt_start.mark.lnum > Buf::current().line_count()
     {
         // MAX(1, MIN(lnum, line_count)); spelled with min-then-max
@@ -183,7 +183,7 @@ fn rewrite_prompt_line(mut buffer: Buf, new_prompt: &[u8]) {
             .mark
             .lnum
             .min(buffer.line_count())
-            .max(1);
+            .max(LineNr::ONE);
         Buf::current().b_prompt_append_new_line = true;
     }
     let new_prompt_len = len_as_int(new_prompt.len());
@@ -212,7 +212,14 @@ fn rewrite_prompt_line(mut buffer: Buf, new_prompt: &[u8]) {
     // there, replaced by the new prompt.
     let row = prompt_lno - 1;
     let splice = |old_len: c_int| {
-        extmark_splice_cols(buffer, row, 0, old_len, new_prompt_len, kExtmarkNoUndo);
+        extmark_splice_cols(
+            buffer,
+            row.get(),
+            0,
+            old_len,
+            new_prompt_len,
+            kExtmarkNoUndo,
+        );
     };
     if intact {
         let new_line = [new_prompt, &old_line[offset(prompt_col)..]].concat();

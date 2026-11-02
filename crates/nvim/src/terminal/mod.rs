@@ -198,9 +198,9 @@ pub(crate) fn terminal_alloc(mut buffer: Buf, opts: TerminalOptions) -> Term {
         // Not immutable: ml_delete_buf() mutates b_ml behind the pointer.
         #[allow(clippy::while_immutable_condition)]
         while !buffer.b_ml.ml_flags.has(MlFlags::EMPTY) {
-            let _ = ml_delete_buf(buffer, 1 as LineNr, false);
+            let _ = ml_delete_buf(buffer, LineNr::ONE, false);
         }
-        deleted_lines_buf(buffer, 1 as LineNr, line_count);
+        deleted_lines_buf(buffer, LineNr::ONE, line_count.get());
     }
     term.old_height = 1;
     term
@@ -243,7 +243,7 @@ pub(crate) fn terminal_open(mut term: Term, mut buffer: Buf, attached: &dyn Fn()
     win.w_onebuf_opt.wo_scb = 0;
     win.w_onebuf_opt.wo_crb = 0;
     win.w_cursor = Pos {
-        lnum: 1 as LineNr,
+        lnum: LineNr::ONE,
         col: 0 as ColNr,
         coladd: 0 as ColNr,
     };
@@ -319,7 +319,7 @@ pub(crate) fn terminal_close(mut term: Term, status: c_int) {
 
     // Where the child left off, reported to `TermClose` as `v:event`-adjacent
     // data.
-    let mut pos = buf.map_or(0, |buf| buf.line_count() as c_int - 1);
+    let mut pos = buf.map_or(0, |buf| buf.line_count().get() - 1);
     if status == -1 || exiting.get() {
         // Nothing to report on: detach from the buffer straight away.
         term.buf_handle = Handle::NONE;

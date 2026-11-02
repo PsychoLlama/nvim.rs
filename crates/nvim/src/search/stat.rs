@@ -67,7 +67,7 @@ struct Counted {
 impl Counted {
     const NONE: Counted = Counted {
         at: Pos {
-            lnum: 0,
+            lnum: LineNr::ZERO,
             col: 0,
             coladd: 0,
         },
@@ -370,7 +370,7 @@ pub fn f_searchcount(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
             let Some(lnum) = list_number(&items[0].li_tv) else {
                 return;
             };
-            pos.lnum = lnum;
+            pos.lnum = LineNr::new(lnum);
             // The list is 1-based, the position is not.
             let Some(col) = list_number(&items[1].li_tv) else {
                 return;

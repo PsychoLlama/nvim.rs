@@ -333,7 +333,7 @@ pub(crate) fn diff_find_change(window: Win, lnum: LineNr, diffline: &mut DiffLin
 /// one line has one range.  With `inline:char`/`inline:word` a line can carry
 /// several, so the cache is bypassed and `diffline` is walked per column.
 pub fn f_diff_hl_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    static prev_lnum: GlobalCell<LineNr> = GlobalCell::new(0);
+    static prev_lnum: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
     static changedtick: GlobalCell<VarNumber> = GlobalCell::new(0);
     static fnum: GlobalCell<c_int> = GlobalCell::new(0);
     static prev_diff_flags: GlobalCell<c_int> = GlobalCell::new(0);
@@ -343,7 +343,7 @@ pub fn f_diff_hl_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     let mut diffline = DiffLine::default();
     let cache_results = diff_flags.get() & ALL_INLINE_DIFF == 0;
-    let lnum = tv_get_lnum(&args[0]).max(0);
+    let lnum = tv_get_lnum(&args[0]).max(LineNr::ZERO);
 
     let stale = !cache_results
         || lnum != prev_lnum.get()

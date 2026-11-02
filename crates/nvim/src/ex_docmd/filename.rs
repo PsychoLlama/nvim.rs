@@ -494,7 +494,7 @@ pub(crate) fn eval_vars(
         }
         SPEC_SLNUM => {
             let lnum = crate::runtime::sourcing_lnum();
-            if !crate::runtime::has_sourcing_name() || lnum == 0 {
+            if !crate::runtime::has_sourcing_name() || lnum == LineNr::ZERO {
                 return Expansion::Refused(gettext(e_no_line_number_to_use_for_slnum));
             }
             number(lnum)
@@ -502,8 +502,8 @@ pub(crate) fn eval_vars(
         SPEC_SFLNUM => {
             // The line the *script* is on, which is the script's own
             // offset plus the line inside it.
-            let lnum = current_sctx.get().sc_lnum + crate::runtime::sourcing_lnum();
-            if lnum == 0 {
+            let lnum = current_sctx.get().sc_lnum + crate::runtime::sourcing_lnum().get();
+            if lnum == LineNr::ZERO {
                 return Expansion::Refused(gettext(e_no_line_number_to_use_for_sflnum));
             }
             number(lnum)

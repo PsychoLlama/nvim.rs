@@ -333,7 +333,7 @@ pub(crate) fn map_add(
         }
     } else {
         let mut ctx = current_sctx.get();
-        ctx.sc_lnum += sourcing_lnum();
+        ctx.sc_lnum += sourcing_lnum().get();
         nlua_set_sctx(&mut ctx);
         ctx
     };

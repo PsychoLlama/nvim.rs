@@ -103,13 +103,13 @@ impl BufferMatch {
     /// Line `lnum` of the match, counted from its first line: `None` above
     /// line 1, an empty line past the match's last one.
     fn line(&self, lnum: LineNr, read: impl FnOnce(&[u8])) -> Option<()> {
-        if self.firstlnum + lnum < 1 {
+        if self.firstlnum + lnum.get() < LineNr::ONE {
             return None;
         }
         if lnum > self.maxline {
             read(&[]);
         } else {
-            read(Lines::in_buffer(self.buf).line(self.firstlnum + lnum));
+            read(Lines::in_buffer(self.buf).line(self.firstlnum + lnum.get()));
         }
         Some(())
     }
@@ -194,7 +194,7 @@ pub(crate) fn reg_submatch(no: c_int) -> Option<XString> {
         Group::Buf(m) => m,
     };
     let mut lnum = m.start.lnum;
-    if lnum < 0 || m.end.lnum < 0 {
+    if lnum < LineNr::ZERO || m.end.lnum < LineNr::ZERO {
         return None;
     }
     // Anti-crash check; cannot happen.
@@ -243,7 +243,7 @@ pub(crate) fn reg_submatch_list(no: c_int) -> Option<ListRef> {
         Group::Buf(m) => m,
     };
     let (slnum, elnum) = (m.start.lnum, m.end.lnum);
-    if slnum < 0 || elnum < 0 {
+    if slnum < LineNr::ZERO || elnum < LineNr::ZERO {
         return None;
     }
     let (scol, ecol) = (m.start.col, m.end.col);
@@ -268,7 +268,7 @@ pub(crate) fn reg_submatch_list(no: c_int) -> Option<ListRef> {
         // The first line from the start column on, the whole lines between,
         // and the head of the last.
         push(slnum, scol, usize::MAX);
-        for lnum in slnum + 1..elnum {
+        for lnum in (slnum + 1).up_to(elnum) {
             push(lnum, 0, usize::MAX);
         }
         push(elnum, 0, span_len(ecol));

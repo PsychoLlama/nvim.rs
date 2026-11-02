@@ -17,58 +17,85 @@ use neovim::types::LineNr;
 const DELETED: LineNr = MAXLNUM;
 
 /// Every fold in `folds` as `(top, len)`.
-fn spans(folds: &[Fold]) -> Vec<(LineNr, LineNr)> {
-    folds.iter().map(|fold| (fold.top, fold.len)).collect()
+fn spans(folds: &[Fold]) -> Vec<(i32, i32)> {
+    folds
+        .iter()
+        .map(|fold| (fold.top.get(), fold.len))
+        .collect()
 }
 
 #[test]
 fn lines_inserted_above_a_fold_push_it_down() {
-    let mut folds = vec![Fold::new(10, 5)];
+    let mut folds = vec![Fold::new(LineNr::new(10), 5)];
     // `:normal 3O` at line 5 -> mark_adjust(5, MAXLNUM, 3, 0).
-    adjust_fold_list(&mut folds, 5, DELETED, 3, 0);
+    adjust_fold_list(&mut folds, LineNr::new(5), DELETED, 3, 0);
     assert_eq!(spans(&folds), [(13, 5)]);
 }
 
 #[test]
 fn a_fold_swallowed_whole_is_deleted() {
-    let mut folds = vec![Fold::new(10, 5), Fold::new(20, 2)];
+    let mut folds = vec![Fold::new(LineNr::new(10), 5), Fold::new(LineNr::new(20), 2)];
     // `:10,14d` -> the first fold's every line is gone, and the second
     // one slides up by the five removed lines.
-    adjust_fold_list(&mut folds, 10, 14, DELETED, -5);
+    adjust_fold_list(
+        &mut folds,
+        LineNr::new(10),
+        LineNr::new(14),
+        DELETED.get(),
+        -5,
+    );
     assert_eq!(spans(&folds), [(15, 2)]);
 }
 
 #[test]
 fn a_deletion_inside_a_fold_only_shortens_it() {
-    let mut folds = vec![Fold::new(10, 5)];
+    let mut folds = vec![Fold::new(LineNr::new(10), 5)];
     // `:12,13d` -> the fold still starts at 10 and is two lines shorter.
-    adjust_fold_list(&mut folds, 12, 13, DELETED, -2);
+    adjust_fold_list(
+        &mut folds,
+        LineNr::new(12),
+        LineNr::new(13),
+        DELETED.get(),
+        -2,
+    );
     assert_eq!(spans(&folds), [(10, 3)]);
 }
 
 #[test]
 fn a_deletion_reaches_nested_folds() {
-    let mut parent = Fold::new(10, 10);
+    let mut parent = Fold::new(LineNr::new(10), 10);
     // Absolute 12..14, i.e. 2..4 relative to the parent.
-    parent.nested.push(Fold::new(2, 3));
+    parent.nested.push(Fold::new(LineNr::new(2), 3));
     let mut folds = vec![parent];
-    adjust_fold_list(&mut folds, 12, 13, DELETED, -2);
+    adjust_fold_list(
+        &mut folds,
+        LineNr::new(12),
+        LineNr::new(13),
+        DELETED.get(),
+        -2,
+    );
     assert_eq!(spans(&folds), [(10, 8)]);
     assert_eq!(spans(&folds[0].nested), [(2, 1)]);
 }
 
 #[test]
 fn a_fold_entirely_below_the_change_only_shifts() {
-    let mut folds = vec![Fold::new(10, 3), Fold::new(30, 4)];
+    let mut folds = vec![Fold::new(LineNr::new(10), 3), Fold::new(LineNr::new(30), 4)];
     // `:15,19d` touches neither fold's lines; only the later one moves.
-    adjust_fold_list(&mut folds, 15, 19, DELETED, -5);
+    adjust_fold_list(
+        &mut folds,
+        LineNr::new(15),
+        LineNr::new(19),
+        DELETED.get(),
+        -5,
+    );
     assert_eq!(spans(&folds), [(10, 3), (25, 4)]);
 }
 
 #[test]
 fn an_empty_list_is_left_alone() {
     let mut folds: Vec<Fold> = Vec::new();
-    adjust_fold_list(&mut folds, 1, 10, DELETED, -10);
+    adjust_fold_list(&mut folds, LineNr::ONE, LineNr::new(10), DELETED.get(), -10);
     assert!(folds.is_empty());
 }
 

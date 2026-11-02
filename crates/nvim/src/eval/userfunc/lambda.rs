@@ -189,7 +189,7 @@ pub(crate) fn get_lambda_tv(
             func.flags.set(flags);
             func.calls.set(0);
             let mut sctx = current_sctx.get();
-            sctx.sc_lnum += sourcing_lnum() - 1;
+            sctx.sc_lnum += (sourcing_lnum() - 1).get();
             func.script_ctx.set(sctx);
 
             let part = Partial {

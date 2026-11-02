@@ -62,12 +62,12 @@ const PAST_THE_END: &[u8] = b"\0";
 /// the current buffer, from the line the last buffer match started on.
 pub(crate) fn reg_getline<'t>(rex: Rex<'t>, lnum: LineNr) -> Option<&'t [u8]> {
     let first = rex.reg_firstlnum();
-    if first + lnum < 1 {
+    if first + lnum.get() < LineNr::ONE {
         None
     } else if lnum > rex.reg_maxline() {
         Some(PAST_THE_END)
     } else {
-        Some(rex.buffer_line(first + lnum))
+        Some(rex.buffer_line(first + lnum.get()))
     }
 }
 

@@ -171,7 +171,7 @@ pub struct RedoVisual {
     /// `v`, `V` or CTRL-V.
     pub rv_mode: ::core::ffi::c_int,
     /// Number of lines.
-    pub rv_line_count: LineNr,
+    pub rv_line_count: i32,
     /// Number of columns, or the end column.
     pub rv_vcol: ColNr,
     /// Count typed before the Visual operator.

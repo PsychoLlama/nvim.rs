@@ -75,8 +75,8 @@ pub(crate) fn ex_bunload(excmd: &mut ExArg) {
         action,
         excmd.line.cstr_from(excmd.line.arg),
         excmd.addr_count,
-        excmd.line1 as c_int,
-        excmd.line2 as c_int,
+        excmd.line1.get(),
+        excmd.line2.get(),
         c_int::from(excmd.forceit),
     );
 }
@@ -141,7 +141,7 @@ pub(crate) fn ex_quit(excmd: &mut ExArg) {
         return;
     }
     let wp = if excmd.addr_count > 0 {
-        window_at(excmd.line2)
+        window_at(excmd.line2.get())
     } else {
         Win::current_or_none()
     };
@@ -187,7 +187,7 @@ pub(crate) fn ex_quit(excmd: &mut ExArg) {
 }
 
 /// The `nr`'th window of the current tab page, clamped to the last one.
-fn window_at(nr: LineNr) -> Option<Win> {
+fn window_at(nr: i32) -> Option<Win> {
     let mut wp = first_win();
     let mut n = nr;
     while let Some(next) = wp.next() {
@@ -212,7 +212,7 @@ fn first_win() -> Win {
 /// pointer type and a `-> !` fn item does not coerce to it.
 pub(crate) fn ex_cquit(excmd: &mut ExArg) {
     let status = if excmd.addr_count > 0 {
-        excmd.line2 as c_int
+        excmd.line2.get()
     } else {
         EXIT_FAILURE
     };
@@ -267,7 +267,7 @@ pub(crate) fn ex_close(excmd: &mut ExArg) {
     let win = if excmd.addr_count == 0 {
         Win::current()
     } else {
-        numbered_window(excmd.line2)
+        numbered_window(excmd.line2.get())
     };
     ex_win_close(c_int::from(excmd.forceit), win, None);
 }
@@ -276,11 +276,11 @@ pub(crate) fn ex_close(excmd: &mut ExArg) {
 ///
 /// Unlike `window_at`, this counts from one and falls back to `lastwin`
 /// rather than stopping at the end.
-fn numbered_window(nr: LineNr) -> Win {
+fn numbered_window(nr: i32) -> Win {
     let mut winnr = 0;
     for wp in windows() {
         winnr += 1;
-        if winnr as LineNr == nr {
+        if LineNr::new(winnr) == LineNr::new(nr) {
             return wp;
         }
     }
@@ -486,7 +486,7 @@ pub(crate) fn ex_only(excmd: &mut ExArg) {
         return;
     }
     if excmd.addr_count > 0 {
-        let wp = window_at_stepwise(excmd.line2);
+        let wp = window_at_stepwise(excmd.line2.get());
         if wp != Win::current_or_none() {
             win_goto(wp.expect("a live handle"));
         }
@@ -498,7 +498,7 @@ pub(crate) fn ex_only(excmd: &mut ExArg) {
 ///
 /// `:1only` is the *current* window: the count is spent before the walk
 /// starts, unlike `window_at`, which always steps at least once.
-fn window_at_stepwise(nr: LineNr) -> Option<Win> {
+fn window_at_stepwise(nr: i32) -> Option<Win> {
     let mut wp = first_win();
     let mut n = nr;
     loop {
@@ -519,7 +519,7 @@ pub(crate) fn ex_hide(excmd: &mut ExArg) {
     let win = if excmd.addr_count == 0 {
         Win::current()
     } else {
-        numbered_window(excmd.line2)
+        numbered_window(excmd.line2.get())
     };
     if !win.w_floating && window_layout_locked(CmdIdx::hide) {
         return;

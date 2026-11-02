@@ -284,9 +284,17 @@ fn parse_diff_ed(line: &[u8]) -> Option<DiffHunk> {
         return None;
     }
     Some(DiffHunk {
-        lnum_orig: if difftype == b'a' { f1 + 1 } else { f1 },
+        lnum_orig: if difftype == b'a' {
+            LineNr::new(f1 + 1)
+        } else {
+            LineNr::new(f1)
+        },
         count_orig: if difftype == b'a' { 0 } else { l1 - f1 + 1 },
-        lnum_new: if difftype == b'd' { f2 + 1 } else { f2 },
+        lnum_new: if difftype == b'd' {
+            LineNr::new(f2 + 1)
+        } else {
+            LineNr::new(f2)
+        },
         count_new: if difftype == b'd' { 0 } else { l2 - f2 + 1 },
     })
 }
@@ -319,10 +327,10 @@ fn parse_diff_unified(line: &[u8]) -> Option<DiffHunk> {
         newline += 1;
     }
     Some(DiffHunk {
-        lnum_orig: oldline,
+        lnum_orig: LineNr::new(oldline),
         count_orig: oldcount,
         // `@@ -1,2 +0,0 @@` deletes the whole file; line 0 is not a line.
-        lnum_new: newline.max(1),
+        lnum_new: LineNr::new(newline.max(1)),
         count_new: newcount,
     })
 }

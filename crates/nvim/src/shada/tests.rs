@@ -111,7 +111,7 @@ fn what_the_parser_reads_out_of_each_kind() {
         panic!("a global mark");
     };
     assert_eq!(
-        (mark.name, mark.mark.lnum, mark.fname.as_cstr()),
+        (mark.name, mark.mark.lnum.get(), mark.fname.as_cstr()),
         (1, 1, c"/x")
     );
     let ShadaEntryData::Register(reg) = &entries[6].data else {

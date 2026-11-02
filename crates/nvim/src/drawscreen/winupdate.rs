@@ -77,8 +77,8 @@ impl Regions {
             bot_scroll_start: NO_ROW,
             scrolled_down: false,
             top_to_mod: false,
-            mod_top: 0,
-            mod_bot: 0,
+            mod_top: LineNr::ZERO,
+            mod_bot: LineNr::ZERO,
             redr_type,
         }
     }
@@ -188,9 +188,9 @@ pub(crate) fn win_update(window: Win) {
         find_changed_lines(win, buf, &mut rg);
     }
 
-    win.w_redraw_top = 0; // reset for next time
-    win.w_redraw_bot = 0;
-    search_hl_has_cursor_lnum.set(0);
+    win.w_redraw_top = LineNr::ZERO; // reset for next time
+    win.w_redraw_bot = LineNr::ZERO;
+    search_hl_has_cursor_lnum.set(LineNr::ZERO);
 
     // UPD_REDRAW_TOP: only the top `w_upd_rows` lines, used when the window
     // scrolled down for `msg_scrolled`.
@@ -231,7 +231,7 @@ pub(crate) fn win_update(window: Win) {
     let mut spv = SpellVars::default();
     if spell_check_window(window) {
         spv.spv_has_spell = true;
-        spv.spv_unchanged = rg.mod_top == 0;
+        spv.spv_unchanged = rg.mod_top == LineNr::ZERO;
     }
 
     let old_botline = draw_window_lines(window, buf, &mut rg, cursorline_fi, &mut spv);
@@ -281,7 +281,7 @@ fn add_suspended_terminal_note(buffer: Buf) {
     };
     let vt = decor_put_vt(note, DECOR_ID_INVALID);
     let last = buffer.b_ml.ml_line_count - 1;
-    decor_range_add_virt(last, 0, last, 0, vt, true);
+    decor_range_add_virt(last.get(), 0, last.get(), 0, vt, true);
 }
 
 /// Round `w_skipcol` down to a column a wrapped line actually starts a screen
@@ -321,22 +321,22 @@ fn clamp_skipcol(mut window: Win) {
 fn find_changed_lines(win: Win, buffer: Buf, rg: &mut Regions) {
     // What `redraw_win_range_later` asked for.
     rg.mod_top = win.w_redraw_top;
-    rg.mod_bot = if win.w_redraw_bot != 0 {
+    rg.mod_bot = if win.w_redraw_bot != LineNr::ZERO {
         win.w_redraw_bot + 1
     } else {
-        0
+        LineNr::ZERO
     };
 
     if buffer.b_mod_set {
-        if rg.mod_top == 0 || rg.mod_top > buffer.b_mod_top {
+        if rg.mod_top == LineNr::ZERO || rg.mod_top > buffer.b_mod_top {
             rg.mod_top = buffer.b_mod_top;
             // Lines above the change may be included in a pattern match.
             if syntax_present(win) {
                 rg.mod_top -= buffer.b_s.b_syn_sync_linebreaks;
-                rg.mod_top = rg.mod_top.max(1);
+                rg.mod_top = rg.mod_top.max(LineNr::ONE);
             }
         }
-        if rg.mod_bot == 0 || rg.mod_bot < buffer.b_mod_bot {
+        if rg.mod_bot == LineNr::ZERO || rg.mod_bot < buffer.b_mod_bot {
             rg.mod_bot = buffer.b_mod_bot;
         }
 
@@ -352,26 +352,26 @@ fn find_changed_lines(win: Win, buffer: Buf, rg: &mut Regions) {
         }
     }
 
-    if search_hl_has_cursor_lnum.get() > 0 {
+    if search_hl_has_cursor_lnum.get() > LineNr::ZERO {
         // CurSearch was used last time; that line has to be redrawn or two
         // matches end up highlighted with it.
         let cursor_lnum = search_hl_has_cursor_lnum.get();
-        if rg.mod_top == 0 || rg.mod_top > cursor_lnum {
+        if rg.mod_top == LineNr::ZERO || rg.mod_top > cursor_lnum {
             rg.mod_top = cursor_lnum;
         }
-        if rg.mod_bot == 0 || rg.mod_bot < cursor_lnum + 1 {
+        if rg.mod_bot == LineNr::ZERO || rg.mod_bot < cursor_lnum + 1 {
             rg.mod_bot = cursor_lnum + 1;
         }
     }
 
-    if rg.mod_top != 0 && win_lines_concealed(win) {
+    if rg.mod_top != LineNr::ZERO && win_lines_concealed(win) {
         widen_over_folds(win, rg);
     }
 
     // A change that starts above `w_topline` and ends below it starts the
     // redraw at `w_topline`. One that ends above it needs only the first
     // line redrawn, to pick up the syntax state.
-    if rg.mod_top != 0 && rg.mod_top < win.w_topline {
+    if rg.mod_top != LineNr::ZERO && rg.mod_top < win.w_topline {
         if rg.mod_bot > win.w_topline {
             rg.mod_top = win.w_topline;
         } else if syntax_present(win) {
@@ -439,7 +439,7 @@ fn plan_scroll(win: Win, buffer: Buf, rg: &mut Regions) {
     // skipping it on the non-scrollable path would be a change.
     let mut topline_conceal = win.w_topline;
     while topline_conceal < buffer.b_ml.ml_line_count
-        && decor_conceal_line(win, topline_conceal - 1, false)
+        && decor_conceal_line(win, (topline_conceal - 1).get(), false)
     {
         topline_conceal += 1;
         has_folding(win, topline_conceal, None, Some(&mut topline_conceal));
@@ -457,7 +457,7 @@ fn plan_scroll(win: Win, buffer: Buf, rg: &mut Regions) {
     }
 
     let first = win.w_lines[0];
-    if rg.mod_top != 0
+    if rg.mod_top != LineNr::ZERO
         && win.w_topline == rg.mod_top
         && (!first.wl_valid || topline_conceal == first.wl_lnum)
     {
@@ -488,7 +488,7 @@ fn scroll_down(mut win: Win, rg: &mut Regions) {
         let mut count = 0;
         let mut ln = win.w_topline;
         while ln < first_lnum {
-            count += c_int::from(!decor_conceal_line(win, ln - 1, false));
+            count += c_int::from(!decor_conceal_line(win, (ln - 1).get(), false));
             if count >= win.w_view_height - 2 {
                 break;
             }
@@ -614,7 +614,8 @@ fn scroll_up(mut win: Win, rg: &mut Regions) {
 /// taken away.
 fn plan_visual_area(win: Win, buffer: Buf, rg: &mut Regions) {
     let shown = visual_selection().filter(|_| buffer == Win::current().buffer());
-    if shown.is_none() && !(win.w_old_cursor_lnum != 0 && rg.redr_type != UPD_NOT_VALID) {
+    if shown.is_none() && !(win.w_old_cursor_lnum != LineNr::ZERO && rg.redr_type != UPD_NOT_VALID)
+    {
         return;
     }
 
@@ -699,14 +700,14 @@ fn visual_line_range(mut win: Win, sel: VisualSelection, redr_type: c_int) -> (L
             // plus the anchor if it moved.
             let (mut from, to) = if cursor < win.w_old_cursor_lnum {
                 (cursor, win.w_old_cursor_lnum)
-            } else if win.w_old_cursor_lnum == 0 {
+            } else if win.w_old_cursor_lnum == LineNr::ZERO {
                 (cursor, cursor) // Visual mode just started
             } else {
                 (win.w_old_cursor_lnum, cursor)
             };
             let mut to = to;
             if anchor != win.w_old_visual_lnum || sel.anchor.col != win.w_old_visual_col {
-                if win.w_old_visual_lnum < from && win.w_old_visual_lnum != 0 {
+                if win.w_old_visual_lnum < from && win.w_old_visual_lnum != LineNr::ZERO {
                     from = win.w_old_visual_lnum;
                 }
                 to = to.max(win.w_old_visual_lnum).max(anchor);
@@ -789,8 +790,8 @@ fn remember_visual_area(mut window: Win, buffer: Buf) {
         window.w_old_curswant = Win::current().w_curswant;
     } else {
         window.w_old_visual_mode = 0;
-        window.w_old_cursor_lnum = 0;
-        window.w_old_visual_lnum = 0;
+        window.w_old_cursor_lnum = LineNr::ZERO;
+        window.w_old_visual_lnum = LineNr::ZERO;
         window.w_old_visual_col = 0;
     }
 }

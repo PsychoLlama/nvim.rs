@@ -182,7 +182,7 @@ pub fn conceal_check_cursor_line() {
     redraw_win_line(wp, wp.w_cursor.lnum);
 
     // Whether the line is displayed at all may have changed with it.
-    if decor_conceal_line(wp, wp.w_cursor.lnum - 1, true) {
+    if decor_conceal_line(wp, (wp.w_cursor.lnum - 1).get(), true) {
         changed_window_setting(wp);
     }
     // The cursor column has to be recomputed, e.g. when entering Visual
@@ -651,7 +651,7 @@ pub fn number_width(mut window: Win) -> c_int {
     // With 'relativenumber' alone the largest number shown is the window
     // height (the cursor line shows "0"); otherwise it is the line count.
     let largest = if window.w_onebuf_opt.wo_rnu != 0 && window.w_onebuf_opt.wo_nu == 0 {
-        window.w_view_height as LineNr
+        LineNr::new(window.w_view_height)
     } else {
         window.w_buffer.b_ml.ml_line_count
     };
@@ -665,7 +665,7 @@ pub fn number_width(mut window: Win) -> c_int {
         // 'statuscolumn' draws the number itself, so all that is reserved
         // here is 'numberwidth'; the real width is re-estimated from the
         // expression's output.
-        window.w_statuscol_line_count = 0;
+        window.w_statuscol_line_count = LineNr::ZERO;
         window.w_nrwidth_width =
             c_int::from(window.w_onebuf_opt.wo_nu != 0 || window.w_onebuf_opt.wo_rnu != 0)
                 * window.w_onebuf_opt.wo_nuw as c_int;
@@ -675,7 +675,7 @@ pub fn number_width(mut window: Win) -> c_int {
     // Digits in `largest`, at least one -- upstream's do-while, which
     // answers 1 for a line count of 0.
     let mut n = 0;
-    let mut rest = largest;
+    let mut rest = largest.get();
     loop {
         rest /= 10;
         n += 1;
@@ -741,7 +741,7 @@ pub fn win_update_cursorline(mut window: Win, foldinfo: &mut FoldInfo) {
     window.w_cursorline = if win_cursorline_standout(window) {
         window.w_cursor.lnum
     } else {
-        0
+        LineNr::ZERO
     };
     if window.w_onebuf_opt.wo_cul != 0 {
         *foldinfo = fold_info(window, window.w_cursor.lnum);

@@ -63,12 +63,12 @@ pub(crate) struct CachedState {
 impl CachedState {
     const EMPTY: CachedState = CachedState {
         next: None,
-        lnum: 0,
+        lnum: LineNr::ZERO,
         items: Vec::new(),
         next_list: IdList::NONE,
         next_flags: SynFlags::NONE,
         tick: 0,
-        change_lnum: 0,
+        change_lnum: LineNr::ZERO,
     };
 }
 
@@ -240,7 +240,7 @@ impl StateCache {
     /// `change_lnum`, the line that has to be re-parsed before the entry can
     /// be trusted again. `linebreaks` widens the change upwards (`:syntax
     /// sync linebreaks`).
-    fn apply_changes(&mut self, linebreaks: LineNr, top: LineNr, bot: LineNr, xlines: LineNr) {
+    fn apply_changes(&mut self, linebreaks: i32, top: LineNr, bot: LineNr, xlines: i32) {
         let mut prev: Option<EntryId> = None;
         let mut at = self.first;
         while let Some(id) = at {
@@ -260,14 +260,14 @@ impl StateCache {
                 }
                 // Below the changed area: remember the line that has to be
                 // parsed before this entry is valid again.
-                if entry.change_lnum != 0 && entry.change_lnum > top {
+                if entry.change_lnum != LineNr::ZERO && entry.change_lnum > top {
                     if entry.change_lnum + xlines > top {
                         entry.change_lnum += xlines;
                     } else {
                         entry.change_lnum = top;
                     }
                 }
-                if entry.change_lnum == 0 || entry.change_lnum < bot {
+                if entry.change_lnum == LineNr::ZERO || entry.change_lnum < bot {
                     entry.change_lnum = bot;
                 }
                 entry.lnum = n;
@@ -284,7 +284,7 @@ impl StateCache {
     /// user is actually looking at cached. `lasttick` is the tick of the
     /// last parse; the tick wraps around, so an entry *above* it is older
     /// than any below it. The first entry is never a candidate.
-    fn cleanup(&mut self, dist: LineNr, lasttick: DispTick) -> bool {
+    fn cleanup(&mut self, dist: i32, lasttick: DispTick) -> bool {
         let Some(first) = self.first else {
             return false;
         };
@@ -362,7 +362,7 @@ impl SynState {
     /// length has moved far enough that the current size is a poor fit.
     pub(crate) fn stack_alloc(&mut self) {
         let block = self.block();
-        let lines = self.line_count();
+        let lines = self.line_count().get();
         let want = clamp_entries(lines / SST_DIST + Rows.get() * 2);
         let have = c_int::try_from(block.b_sst.len()).unwrap_or(c_int::MAX);
         if have <= want * 2 && have >= want {
@@ -479,7 +479,7 @@ impl SynState {
         entry.next_flags = self.next_flags;
         entry.next_list = self.next_list.clone();
         entry.tick = display_tick.get();
-        entry.change_lnum = 0;
+        entry.change_lnum = LineNr::ZERO;
     }
 
     /// Copy cached entry `id` into the state.
@@ -649,9 +649,9 @@ mod tests {
         }
 
         /// The line numbers of the used entries, in list order.
-        fn used_lines(&self) -> Vec<LineNr> {
+        fn used_lines(&self) -> Vec<i32> {
             let cache = self.cache();
-            cache.used().map(|id| cache.entry(id).lnum).collect()
+            cache.used().map(|id| cache.entry(id).lnum.get()).collect()
         }
 
         /// The stack as `(idx, seqnr, cchar, extmatch)` rows.
@@ -716,19 +716,23 @@ mod tests {
         let before = f.stack();
         assert_eq!(refs(&em), 2);
 
-        let entry = f.store(5).expect("room in the cache");
+        let entry = f.store(LineNr::new(5)).expect("room in the cache");
         assert_eq!(refs(&em), 3, "the entry holds its own reference");
         assert!(f.parser.syn_stack_equal(entry));
 
         f.parser.invalidate_current_state();
         assert_eq!(refs(&em), 2, "invalidating gives the stack's back");
-        assert_eq!(f.cache().find(5), Some(entry));
-        assert_eq!(f.cache().find(9), Some(entry), "the last one before");
-        assert_eq!(f.cache().find(4), None);
+        assert_eq!(f.cache().find(LineNr::new(5)), Some(entry));
+        assert_eq!(
+            f.cache().find(LineNr::new(9)),
+            Some(entry),
+            "the last one before"
+        );
+        assert_eq!(f.cache().find(LineNr::new(4)), None);
 
-        f.parser.lnum = 0;
+        f.parser.lnum = LineNr::ZERO;
         f.parser.load_current_state(entry);
-        assert_eq!(f.parser.lnum, 5);
+        assert_eq!(f.parser.lnum, LineNr::new(5));
         assert_eq!(f.stack(), before);
         assert_eq!(refs(&em), 3);
         assert!(f.parser.syn_stack_equal(entry));
@@ -753,7 +757,7 @@ mod tests {
             f.parser.item_mut(top).si_seqnr = i;
         }
         let before = f.stack();
-        let entry = f.store(1).expect("room in the cache");
+        let entry = f.store(LineNr::ONE).expect("room in the cache");
         f.parser.invalidate_current_state();
         f.parser.load_current_state(entry);
         assert_eq!(f.stack(), before);
@@ -766,7 +770,7 @@ mod tests {
         let mut f = Fixture::new(1, 20);
         let (a, b, c) = (extmatch("same"), extmatch("same"), extmatch("other"));
         f.push(0, Some(&a));
-        let entry = f.store(3).expect("room in the cache");
+        let entry = f.store(LineNr::new(3)).expect("room in the cache");
 
         f.parser.item_mut(0).si_extmatch = Some(b.clone());
         assert!(f.parser.syn_stack_equal(entry), "same text, other set");
@@ -782,7 +786,7 @@ mod tests {
         f.push(0, None);
         for (lnum, tick) in [(30, 3), (10, 1), (20, 2)] {
             display_tick.set(tick);
-            f.store(lnum);
+            f.store(LineNr::new(lnum));
         }
         assert_eq!(f.used_lines(), [10, 20, 30]);
         assert_eq!(f.cache().free_count(), 17);
@@ -795,7 +799,7 @@ mod tests {
         assert_eq!(f.cache().free_count(), 18);
 
         // Storing over an existing line reuses its entry.
-        f.store(30);
+        f.store(LineNr::new(30));
         assert_eq!(f.used_lines(), [10, 30]);
         assert_eq!(f.cache().free_count(), 18);
     }
@@ -805,7 +809,7 @@ mod tests {
         let mut f = Fixture::new(1, 20);
         f.push(0, None);
         for lnum in [4, 8, 2] {
-            f.store(lnum);
+            f.store(LineNr::new(lnum));
         }
         f.parser.resize_cache(40);
         assert_eq!(f.cache().len(), 40);
@@ -819,7 +823,7 @@ mod tests {
         assert_eq!(f.used_lines(), [2]);
         assert_eq!(f.cache().len(), 3);
         assert_eq!(f.cache().free_count(), 2);
-        let entry = f.cache().find(4).expect("the entry before");
-        assert_eq!(f.cache().entry(entry).lnum, 2);
+        let entry = f.cache().find(LineNr::new(4)).expect("the entry before");
+        assert_eq!(f.cache().entry(entry).lnum, LineNr::new(2));
     }
 }

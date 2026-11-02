@@ -164,7 +164,7 @@ impl Context {
         let mut statuscol_lnum = 0;
         if let Some(lnum) = opts.use_statuscol_lnum {
             statuscol_lnum = number_as_int(lnum);
-            if !(statuscol_lnum > 0 && statuscol_lnum as LineNr <= win.buffer().line_count()) {
+            if !(statuscol_lnum > 0 && LineNr::new(statuscol_lnum) <= win.buffer().line_count()) {
                 let why = Bad::Bare(c"out of range");
                 return Err(err_invalid(c"use_statuscol_lnum", why));
             }
@@ -220,14 +220,14 @@ fn statuscol_state(
     statuscol: &mut StatusCol,
     sattrs: &mut [SignTextAttrs; SIGN_SHOW_MAX as usize],
 ) -> (c_int, c_int) {
-    let lnum = lnum as LineNr;
+    let lnum = LineNr::new(lnum);
     let (mut line_id, mut cul_id, mut num_id) = (0, 0, 0);
     let mut cursorline_fi = FoldInfo::default();
     let buf = win.buffer();
     decor_redraw_signs(
         win,
         buf,
-        lnum - 1,
+        (lnum - 1).get(),
         Some(sattrs),
         Some(&mut line_id),
         Some(&mut cul_id),

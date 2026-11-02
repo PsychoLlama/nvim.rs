@@ -12,6 +12,7 @@
 
 use crate::cstr;
 use crate::mbyte::{c_char_info, c_next_cluster, head_off};
+use crate::narrow::len_as_int;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -85,7 +86,7 @@ fn land_block(line: &[u8], col: ColNr) -> Landing {
 /// How many spaces `line`, one line of the block, needs on its right to
 /// reach the block's full width.
 fn right_padding(line: &[u8], y_width: c_int) -> c_int {
-    let (mut csarg, cstype) = CharsizeArg::new(Win::current(), 0, line);
+    let (mut csarg, cstype) = CharsizeArg::new(Win::current(), LineNr::ZERO, line);
     let mut at = 0;
     let mut chr = c_char_info(line, 0);
     let mut spaces = y_width + 1;
@@ -225,7 +226,14 @@ impl Put {
         let buf = Buf::current();
         let at = Win::current().w_cursor.lnum - 1;
         let inserted = *totlen as c_int + lines_appended;
-        extmark_splice_cols(buf, at, land.textcol, land.delcount, inserted, kExtmarkUndo);
+        extmark_splice_cols(
+            buf,
+            at.get(),
+            land.textcol,
+            land.delcount,
+            inserted,
+            kExtmarkUndo,
+        );
 
         Win::current().w_cursor.lnum += 1;
         if i == 0 {
@@ -249,7 +257,7 @@ impl Put {
             }
         }
 
-        let to = Buf::current().b_op_start.lnum + self.lines.len() as LineNr - self.nr_lines;
+        let to = Buf::current().b_op_start.lnum + len_as_int(self.lines.len()) - self.nr_lines;
         // The range is the lines the put rewrote.
         changed_lines(Buf::current(), lnum, 0, to, self.nr_lines, true);
 

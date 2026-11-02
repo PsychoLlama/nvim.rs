@@ -17,6 +17,7 @@
 #![forbid(unsafe_code)]
 
 use crate::guard::Suppress;
+use crate::narrow::len_as_int;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -103,7 +104,7 @@ pub fn do_join(
     let remove_comments = use_formatoptions && has_format_option(FoFlag::REMOVE_COMS);
 
     let above = Win::current().w_cursor.lnum - 1;
-    let past = Win::current().w_cursor.lnum + count as LineNr;
+    let past = Win::current().w_cursor.lnum + len_as_int(count);
     if save_undo {
         u_save(above, past)?;
     }
@@ -143,7 +144,7 @@ fn measure_join(
 
     for t in 0..count {
         let mut lines = Lines::current();
-        let line = lines.line(Win::current().w_cursor.lnum + t as LineNr);
+        let line = lines.line(Win::current().w_cursor.lnum + len_as_int(t));
         let mut curr = 0;
         let mut spaces = 0;
 
@@ -200,7 +201,7 @@ fn measure_join(
         let added = spaces;
         if t > 0 && curbuf_splice_pending.get() == 0 {
             let removed = curr as ColNr;
-            let row = Win::current().w_cursor.lnum as c_int - 1;
+            let row = Win::current().w_cursor.lnum.get() - 1;
             let (old, new) = ((removed + 1) as BCount, added as BCount);
             let op = kExtmarkUndo;
             extmark_splice(
@@ -278,8 +279,8 @@ fn assemble_join(count: size_t, setmark: bool, plan: &mut JoinPlan) {
     // was added.
     for t in (0..count).rev() {
         let (at, spaces_removed) = plan.landed[t];
-        let lnum = Win::current().w_cursor.lnum + t as LineNr;
-        mark_col_adjust(lnum, 0, -(t as LineNr), at, spaces_removed);
+        let lnum = Win::current().w_cursor.lnum + len_as_int(t);
+        mark_col_adjust(lnum, 0, -len_as_int(t), at, spaces_removed);
     }
 
     let joined = ::core::mem::take(&mut plan.joined);
@@ -304,7 +305,7 @@ fn assemble_join(count: size_t, setmark: bool, plan: &mut JoinPlan) {
     // number is kept.
     let joined_lnum = Win::current().w_cursor.lnum;
     Win::current().w_cursor.lnum += 1;
-    del_lines(count as LineNr - 1, false);
+    del_lines(len_as_int(count) - 1, false);
     Win::current().w_cursor.lnum = joined_lnum;
     drop(splice);
     Buf::current().deleted_bytes2 = 0;

@@ -134,7 +134,8 @@ fn do_source_buffer_init(excmd: &ExArg, ex_lua: bool) -> Option<(SourceCookie, X
     };
     let (line1, line2) = (excmd.line1, excmd.line2);
     let mut lines = Lines::in_buffer(buf);
-    let copied = (line1..=line2)
+    let copied = line1
+        .through(line2)
         .map(|lnum| CString::new(lines.line(lnum)).expect("a buffer line holds no NUL"))
         .collect();
     let mut cookie = SourceCookie::from_lines(copied);
@@ -517,7 +518,7 @@ fn source_bracket(
         vimrc_found(fname_exp.as_cstr(), c"MYVIMRC");
     }
 
-    cookie.breakpoint = dbg_find_breakpoint_named(true, fname_exp.as_cstr(), 0);
+    cookie.breakpoint = dbg_find_breakpoint_named(true, fname_exp.as_cstr(), LineNr::ZERO);
     cookie.fname = fname_exp.clone();
     cookie.dbg_tick = debug_tick.get();
     cookie.level = ex_nesting_level.get();
@@ -548,7 +549,7 @@ fn source_bracket(
     if !req.is_str() || !script_is_lua(current_sctx.get().sc_sid) {
         current_sctx.with_mut(|sctx| {
             sctx.sc_sid = sid;
-            sctx.sc_lnum = 0;
+            sctx.sc_lnum = LineNr::ZERO;
         });
     }
 
@@ -558,7 +559,11 @@ fn source_bracket(
     let frame_name = item
         .and_then(script_name)
         .unwrap_or_else(|| fname_exp.clone());
-    estack_push(ETYPE_SCRIPT, FrameName::Owned(frame_name.clone()), 0);
+    estack_push(
+        ETYPE_SCRIPT,
+        FrameName::Owned(frame_name.clone()),
+        LineNr::ZERO,
+    );
     if profiling && let Some(sid) = item {
         profile_script_start(sid, frame_name.as_cstr());
     }

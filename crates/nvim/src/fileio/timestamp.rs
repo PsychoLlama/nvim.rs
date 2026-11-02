@@ -183,7 +183,7 @@ fn move_lines(frombuf: Buf, tobuf: Buf) -> c_int {
     let mut retval = OK;
 
     // Copy the lines in "frombuf" to "tobuf".
-    let mut lnum = 1;
+    let mut lnum = LineNr::ONE;
     while lnum <= frombuf.b_ml.ml_line_count {
         // Copied out: `ml_append` writes into the *other* buffer, and the
         // line came from this one's cache.
@@ -201,7 +201,7 @@ fn move_lines(frombuf: Buf, tobuf: Buf) -> c_int {
     if retval != FAIL {
         frombuf.make_current();
         let mut lnum = Buf::current().b_ml.ml_line_count;
-        while lnum > 0 {
+        while lnum > LineNr::ZERO {
             if ml_delete(lnum).is_err() {
                 // Oops! We could try putting back the saved lines, but
                 // that might fail again...
@@ -525,15 +525,15 @@ pub fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
     let old_cursor = Win::current().w_cursor;
     let old_topline = Win::current().w_topline;
 
-    if p_ur() < 0 || Buf::current().b_ml.ml_line_count as OptInt <= p_ur() {
+    if p_ur() < 0 || i64::from(Buf::current().b_ml.ml_line_count) <= p_ur() {
         // Save all the text, so that the reload can be undone. Sync first
         // so that this is a separate undo-able action.
         u_sync(false);
         saved = u_savecommon(
             Buf::current(),
-            0,
+            LineNr::ZERO,
             Buf::current().b_ml.ml_line_count + 1,
-            0,
+            LineNr::ZERO,
             true,
         );
         flags |= ReadFlags::KEEP_UNDO;
@@ -547,7 +547,7 @@ pub fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
     let mut bufref = BufRef::NONE;
     if !(buf_is_empty(Buf::current()) || saved.is_err()) {
         // Allocate a buffer without putting it in the buffer list.
-        let savebuf = buflist_new(None, None, 1, BLN_DUMMY as c_int);
+        let savebuf = buflist_new(None, None, LineNr::ONE, BLN_DUMMY as c_int);
         bufref = BufRef::of_opt(savebuf);
         if let Some(scratch) = savebuf
             && buffer.raw() == Buf::current_raw()
@@ -580,9 +580,9 @@ pub fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
         let read = readfile_named(
             ffname.as_deref(),
             fname.as_deref(),
+            LineNr::ZERO,
             0,
-            0,
-            MAXLNUM,
+            MAXLNUM.get(),
             Some(&mut ea),
             flags,
             quiet,
@@ -675,8 +675,8 @@ pub fn buf_store_file_info(mut buffer: Buf, file_info: &FileInfo) {
 /// Adjust the line with a missing end-of-line, used for the next write.
 ///
 /// Needed by `do_filter()`, where the input lines for the filter are deleted.
-pub fn write_lnum_adjust(offset: LineNr) {
-    if Buf::current().b_no_eol_lnum != 0 {
+pub fn write_lnum_adjust(offset: i32) {
+    if Buf::current().b_no_eol_lnum != LineNr::ZERO {
         // Only if there is a missing end-of-line.
         Buf::current().b_no_eol_lnum += offset;
     }

@@ -699,7 +699,7 @@ fn env_script() -> SavedSctx {
             .get()
             .with_sid(SID_ENV as ScriptId)
             .with_seq(0)
-            .with_lnum(0),
+            .with_lnum(LineNr::ZERO),
     )
 }
 
@@ -710,7 +710,11 @@ fn env_script() -> SavedSctx {
 pub(crate) fn execute_env(env: &'static CStr) -> Result<(), Failed> {
     let initstr = getenv_owned(env).ok_or(Failed)?;
 
-    estack_push(ETYPE_ENV, crate::types::FrameName::Static(env), 0 as LineNr);
+    estack_push(
+        ETYPE_ENV,
+        crate::types::FrameName::Static(env),
+        LineNr::ZERO,
+    );
     let sctx = env_script();
 
     let _ = do_cmdline_cmd(initstr.as_cstr());

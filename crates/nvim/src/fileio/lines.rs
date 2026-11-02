@@ -34,9 +34,9 @@ pub(crate) struct LineSplit<'a> {
     /// The line to append after.
     pub lnum: LineNr,
     /// How many more lines to throw away before keeping any (`:recover`).
-    pub skip_count: LineNr,
+    pub skip_count: i32,
     /// How many more lines to keep.
-    pub read_count: LineNr,
+    pub read_count: i32,
     /// The hash of the text, for the undo file.
     pub sha: &'a mut Sha256,
     pub read_undo_file: bool,
