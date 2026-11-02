@@ -301,11 +301,8 @@ visibility-ledger *args:
 # unchecked-statement / static mut / #[no_mangle] / variadic / GlobalCell-ptr
 # counts, file sizes (1k-line cap, current offenders grandfathered), the size
 # of the crate's `pub` surface, and a count from each ledger may only shrink.
-# It also writes the finish list (metrics/finish-list.tsv: per module, each
-# file outside the perimeter still allowing unsafe code and what keeps it
-# there -- the work order), the wrapper-callee table
-# (metrics/wrapper-callees.tsv), and rewrites docs/perimeter.md's measured
-# "Today" line. `--check` compares against the committed copies instead.
+# It also writes the wrapper-callee table (metrics/wrapper-callees.tsv) and
+# rewrites docs/perimeter.md's measured "Today" line. `--check` compares against the committed copies instead.
 ratchet *args:
   @scripts/ratchet.py {{ args }}
 
