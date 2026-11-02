@@ -29,6 +29,7 @@
 #![forbid(unsafe_code)]
 
 use crate::cstr::{byte_at, until_nul};
+use crate::narrow::len_as_int;
 use crate::strings::has_char;
 use crate::winlayer::Win;
 use core::ffi::c_int;
@@ -71,7 +72,7 @@ fn decor_spell_nav_col(
         decor_redraw_line(window, lnum.get() - 1);
         *decor_lnum = lnum;
     }
-    decor_redraw_col(window, col, 0, false, MAXCOL as c_int);
+    decor_redraw_col(window, col, 0, false, MAXCOL);
     decor_spell()
 }
 
@@ -79,7 +80,7 @@ fn decor_spell_nav_col(
 #[inline]
 fn can_syn_spell(window: Win, lnum: LineNr, col: c_int) -> bool {
     let mut can_spell = false;
-    window.syntax_id(lnum, col as ColNr, false, Some(&mut can_spell), false);
+    window.syntax_id(lnum, ColNr::new(col), false, Some(&mut can_spell), false);
     can_spell
 }
 
@@ -105,7 +106,7 @@ pub fn spell_move_to(
 
     let mut found_pos = Pos {
         lnum: LineNr::ZERO,
-        col: 0,
+        col: ColNr::ZERO,
         coladd: 0,
     };
     let mut found_len: size_t = 0;
@@ -115,7 +116,7 @@ pub fn spell_move_to(
     // between lines while it is long enough.
     let mut buf: Vec<u8> = Vec::new();
     let mut skip = 0;
-    let mut capcol: ColNr = -1;
+    let mut capcol: ColNr = ColNr::NONE;
     let mut found_one = false;
     let mut wrapped = false;
     let mut ret: size_t = 0;
@@ -133,22 +134,22 @@ pub fn spell_move_to(
 
     let mut lines = window.buffer().lines();
     while !got_int.get() {
-        let line_len = lines.line_len(lnum) as usize;
+        let line_len = lines.line_len(lnum).as_usize();
         if buf.len() < line_len + MAXWLEN + 2 {
             buf = vec![0; line_len + MAXWLEN + 2];
         }
 
         // The first word of the first line is always capital-checked.
         if lnum == LineNr::ONE {
-            capcol = 0;
+            capcol = ColNr::ZERO;
         }
 
-        if capcol == 0 {
-            capcol = skip::white(lines.line(lnum)) as ColNr;
+        if capcol == ColNr::ZERO {
+            capcol = ColNr::from_index(skip::white(lines.line(lnum)));
         } else if curline && window == Win::current() {
             // For spellbadword(): does the first word need a capital?
             // The borrow ends before the call, which reads the line above.
-            let col = skip::white(lines.line(lnum)) as ColNr;
+            let col = ColNr::from_index(skip::white(lines.line(lnum)));
             if check_need_cap(Win::current(), lnum, col) {
                 capcol = col;
             }
@@ -174,7 +175,7 @@ pub fn spell_move_to(
             if dir == BACKWARD
                 && lnum == window.w_cursor.lnum
                 && !wrapped
-                && p as ColNr >= window.w_cursor.col
+                && ColNr::from_index(p) >= window.w_cursor.col
             {
                 break;
             }
@@ -189,23 +190,23 @@ pub fn spell_move_to(
             {
                 // Searching forward, only a bad word after the cursor
                 // counts.
-                let col = p as ColNr;
+                let col = ColNr::from_index(p);
                 let past_cursor = dir == BACKWARD
                     || lnum != window.w_cursor.lnum
                     || wrapped
-                    || col + if curline { len as ColNr } else { 0 } > window.w_cursor.col;
+                    || col + if curline { len_as_int(len) } else { 0 } > window.w_cursor.col;
 
                 if past_cursor {
                     let no_plain_buffer =
                         window.syn_block().b_p_spo_flags & kOptSpoFlagNoplainbuffer != 0;
                     let mut can_spell = !no_plain_buffer;
-                    let decor_says = decor_spell_nav_col(window, lnum, &mut decor_lnum, col);
+                    let decor_says = decor_spell_nav_col(window, lnum, &mut decor_lnum, col.get());
                     if decor_says == Some(true) {
                         can_spell = true;
                     } else if decor_says == Some(false) {
                         can_spell = false;
                     } else if has_syntax {
-                        can_spell = can_syn_spell(window, lnum, col);
+                        can_spell = can_syn_spell(window, lnum, col.get());
                     }
 
                     if !can_spell {
@@ -277,7 +278,7 @@ pub fn spell_move_to(
                     give_warning(gettext(top_bot_msg), true, false);
                 }
             }
-            capcol = -1;
+            capcol = ColNr::NONE;
         } else {
             if lnum < window.w_buffer.b_ml.ml_line_count {
                 lnum += 1;
@@ -306,7 +307,7 @@ pub fn spell_move_to(
 
             // After an empty line, check the next line's first word.
             if empty_line {
-                capcol = 0;
+                capcol = ColNr::ZERO;
             }
         }
 

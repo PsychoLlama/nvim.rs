@@ -19,7 +19,6 @@ use crate::grid::default_grid_ref;
 use crate::r#move::WinValid;
 use crate::normal::{VisualSelection, visual_selection};
 use crate::optionstr::OptString;
-use crate::pos::MAXCOL;
 use crate::winlayer::Buf;
 use crate::winlayer::{self, Win};
 
@@ -290,7 +289,7 @@ fn add_suspended_terminal_note(buffer: Buf) {
 /// It depends on the window width and on several options, any of which may have
 /// changed since it was set.
 fn clamp_skipcol(mut window: Win) {
-    if window.w_skipcol <= 0 || window.w_view_width <= window.col_off() {
+    if window.w_skipcol <= ColNr::ZERO || window.w_view_width <= window.col_off() {
         return;
     }
     let width1 = window.w_view_width - window.col_off();
@@ -298,10 +297,10 @@ fn clamp_skipcol(mut window: Win) {
 
     // The first screen row of a wrapped line is `width1` wide and every
     // later one `width2`, so the valid skip columns are that series.
-    let mut at = 0;
+    let mut at = ColNr::ZERO;
     let mut step = width1;
     while at < window.w_skipcol {
-        if at > 0 {
+        if at > ColNr::ZERO {
             step = width2;
         }
         at += step;
@@ -750,21 +749,21 @@ fn visual_block_columns(win: Win, sel: VisualSelection) -> (ColNr, ColNr) {
     toc += 1;
     Win::current().w_onebuf_opt.wo_ve_flags = save_ve_flags;
 
-    if Win::current().w_curswant != MAXCOL as ColNr {
+    if Win::current().w_curswant != ColNr::MAX {
         return (fromc, toc);
     }
 
     // `$` in blockwise mode: highlight to the end of every line, unless
     // 'virtualedit' has "block", in which case it stops at the longest one.
     if get_ve_flags(Win::current()) & kOptVeFlagBlock == 0 {
-        return (fromc, MAXCOL as ColNr);
+        return (fromc, ColNr::MAX);
     }
 
     let cursor_lnum = Win::current().w_cursor.lnum;
     let anchor_lnum = sel.anchor.lnum;
     let cursor_above = cursor_lnum < anchor_lnum;
     let mut pos = Pos::default();
-    toc = 0;
+    toc = ColNr::ZERO;
     let mut lnum = cursor_lnum;
     while if cursor_above {
         lnum <= anchor_lnum
@@ -792,7 +791,7 @@ fn remember_visual_area(mut window: Win, buffer: Buf) {
         window.w_old_visual_mode = 0;
         window.w_old_cursor_lnum = LineNr::ZERO;
         window.w_old_visual_lnum = LineNr::ZERO;
-        window.w_old_visual_col = 0;
+        window.w_old_visual_col = ColNr::ZERO;
     }
 }
 
@@ -824,7 +823,7 @@ fn finish_botline(mut window: Win, buffer: Buf, old_botline: LineNr, nrwidth_bef
     // Recursion guard: the second pass must not start a third.
     static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
 
-    if dollar_vcol.get() == -1 || window.raw() != Win::current_raw() {
+    if dollar_vcol.get() == ColNr::NONE || window.raw() != Win::current_raw() {
         window.w_valid |= WinValid::BOTLINE;
         window.w_viewport_invalid = true;
         if window.raw() == Win::current_raw() && window.w_botline != old_botline && !RECURSIVE.get()

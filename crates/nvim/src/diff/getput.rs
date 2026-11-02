@@ -388,7 +388,7 @@ fn diffgetput(
             }
             let cb = Buf::current();
             extmark_adjust(cb, lnum, last, max, amount, kExtmarkUndo);
-            changed_lines(cb, lnum, 0 as ColNr, lnum + count, amount, true);
+            changed_lines(cb, lnum, ColNr::ZERO, lnum + count, amount, true);
             if let Some((lnum, count)) = &freed_ranges {
                 diff_fold_update(lnum, count, idx_to as c_int);
             }

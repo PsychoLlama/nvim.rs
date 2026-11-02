@@ -432,16 +432,16 @@ pub fn bufhl_add_hl_pos_offset(
         // the highlighted text is what shows that the `\n` is part of the
         // substituted text.
         let hl_start = if first {
-            pos_start.col + offset
+            pos_start.col + offset.get()
         } else {
-            (offset - 1).max(0)
+            (offset - 1).max(ColNr::ZERO)
         };
         // Anything but the last line runs to the end, which is spelled as
         // "column 0 of the next line".
         let (end_off, hl_end) = if last {
-            (0, pos_end.col + offset)
+            (0, pos_end.col + offset.get())
         } else {
-            (1, 0)
+            (1, ColNr::ZERO)
         };
 
         let ns = u32::try_from(src_id).expect("a namespace id fits its own handle type");
@@ -492,7 +492,11 @@ pub fn decor_redraw(buffer: Buf, row1: c_int, row2: c_int, col1: c_int, decor: D
         // Virtual lines and inline virtual text change how much room the
         // line takes, so the cached line sizes have to go as well.
         if is_lines || pos == kVPosInline {
-            let vt_col: ColNr = if is_lines { 0 } else { col1 };
+            let vt_col: ColNr = if is_lines {
+                ColNr::ZERO
+            } else {
+                ColNr::new(col1)
+            };
             changed_lines_invalidate_buf(buffer, vt_lnum, vt_col, vt_lnum + 1, 0);
         }
     }

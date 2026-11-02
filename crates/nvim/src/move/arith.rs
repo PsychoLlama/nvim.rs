@@ -25,11 +25,11 @@ use crate::types::{ColNr, OptInt, int64_t};
 /// `width1` is the text width of a line's first screen line and `width2` that
 /// of its later ones. From `adjust_plines_for_skipcol()`.
 pub fn skipped_plines(skipcol: ColNr, width1: c_int, width2: c_int) -> c_int {
-    if skipcol == 0 {
+    if skipcol == ColNr::ZERO {
         return 0;
     }
-    if skipcol >= width1 && width2 > 0 {
-        (skipcol - width1) / width2 + 1
+    if skipcol >= ColNr::new(width1) && width2 > 0 {
+        (skipcol - width1).get() / width2 + 1
     } else {
         0
     }
@@ -73,10 +73,10 @@ pub fn marker_overlap(extra2: c_int, showbreak: bool, list_precedes: bool) -> c_
 /// similar formula" to `curs_columns()`'s and the difference is deliberate --
 /// here the partly-hidden first screen line still has to be scrolled past.
 pub fn top_skipped_plines(skipcol: ColNr, width1: c_int, width2: c_int) -> c_int {
-    if skipcol > width1 {
-        (skipcol - width1) / width2 + 1
+    if skipcol > ColNr::new(width1) {
+        (skipcol - width1).get() / width2 + 1
     } else {
-        (skipcol > 0) as c_int
+        (skipcol > ColNr::ZERO) as c_int
     }
 }
 
@@ -120,15 +120,15 @@ pub fn visible_sms_col(
     width2: c_int,
 ) -> ColNr {
     let mut col = col;
-    if (col as int64_t) < top {
-        if col < width1 {
+    if i64::from(col) < top {
+        if col < ColNr::new(width1) {
             col += width1;
         }
-        while width2 > 0 && (col as int64_t) < top {
+        while width2 > 0 && i64::from(col) < top {
             col += width2;
         }
     } else {
-        while width2 > 0 && col as int64_t >= bot {
+        while width2 > 0 && i64::from(col) >= bot {
             col -= width2;
         }
     }
@@ -139,7 +139,7 @@ pub fn visible_sms_col(
 /// screen line is `width1` wide, every later one `width2`. From
 /// `scrolldown()` and `adjust_skipcol()`.
 pub fn skipcol_line_back(skipcol: ColNr, width1: c_int, width2: c_int) -> ColNr {
-    if skipcol >= width1 + width2 {
+    if skipcol >= ColNr::new(width1 + width2) {
         skipcol - width2
     } else {
         skipcol - width1
@@ -150,7 +150,7 @@ pub fn skipcol_line_back(skipcol: ColNr, width1: c_int, width2: c_int) -> ColNr 
 /// the top of the window. From `scrolldown()`'s 'smoothscroll' arm.
 pub fn skipcol_showing_last(size: c_int, width1: c_int, width2: c_int) -> ColNr {
     if size <= width1 {
-        return 0;
+        return ColNr::ZERO;
     }
     let mut skipcol = width1;
     let mut left = size - width1;
@@ -158,7 +158,7 @@ pub fn skipcol_showing_last(size: c_int, width1: c_int, width2: c_int) -> ColNr 
         skipcol += width2;
         left -= width2;
     }
-    skipcol
+    ColNr::new(skipcol)
 }
 
 /// The screen row the cursor sits on once 'scrolloff' has been added to its
@@ -175,7 +175,7 @@ pub fn sms_cursor_row(
     width2: c_int,
 ) -> c_int {
     let mut row = 0;
-    let mut col = virtcol as int64_t + scrolloff_cols;
+    let mut col = i64::from(virtcol) + scrolloff_cols;
     // Avoid adjusting for 'scrolloff' beyond the text line height.
     if scrolloff_cols > 0 {
         // The width of the line rounded up to a whole screen line.
@@ -184,7 +184,7 @@ pub fn sms_cursor_row(
             col -= width2 as int64_t;
         }
     }
-    col -= skipcol as int64_t;
+    col -= i64::from(skipcol);
     if col >= width1 as int64_t {
         col -= width1 as int64_t;
         row += 1;
@@ -201,13 +201,13 @@ pub fn sms_cursor_row(
 /// `w_skipcol` back to zero: the screen lines of the top line already
 /// scrolled past.
 pub fn sms_fixup_count_back(skipcol: ColNr, width1: c_int, width2: c_int) -> c_int {
-    1 + (skipcol - width1 - 1) / width2
+    1 + (skipcol - width1 - 1).get() / width2
 }
 
 /// As [`sms_fixup_count_back`], *forwards*: the screen lines of a
 /// `size`-wide top line still to come.
 pub fn sms_fixup_count_forw(skipcol: ColNr, size: c_int, width1: c_int, width2: c_int) -> c_int {
-    1 + (size - skipcol - width1 + width2 - 1) / width2
+    1 + (size - skipcol.get() - width1 + width2 - 1) / width2
 }
 
 /// Lines a scroll moves at a minimum: 'scrolljump' as a count when positive,
@@ -233,7 +233,7 @@ pub fn recentre_threshold(view_height: c_int) -> c_int {
 /// From the shared formula in `curs_columns()`, `validate_cursor_col()` and
 /// `textpos2screenpos()`.
 pub fn wrap_rowoff(col: ColNr, view_width: c_int, width: c_int) -> c_int {
-    (col - view_width) / width + 1
+    (col - view_width).get() / width + 1
 }
 
 /// The window column the cursor's virtual column shows at: `w_wcol` as
@@ -243,7 +243,7 @@ pub fn wrap_rowoff(col: ColNr, view_width: c_int, width: c_int) -> c_int {
 /// wrapped line's later screen lines.
 pub fn cursor_screen_col(
     virtcol: ColNr,
-    off: ColNr,
+    off: i32,
     view_width: c_int,
     width: c_int,
     wrap: bool,
@@ -251,7 +251,7 @@ pub fn cursor_screen_col(
 ) -> c_int {
     let mut col = virtcol + off;
     // Long line wrapping: bring the column back onto its own screen line.
-    if wrap && col >= view_width && width > 0 {
+    if wrap && col >= ColNr::new(view_width) && width > 0 {
         col -= wrap_rowoff(col, view_width, width) * width;
     }
     if col > leftcol { col - leftcol } else { 0 }
@@ -276,16 +276,16 @@ pub fn wrap_cursor_cell(
     // Skip the columns 'smoothscroll' has scrolled past. Deducting whole
     // multiples of width2 is what lets the wrapping formula below still give
     // the right answer.
-    if at_topline && skipcol > 0 && wcol >= skipcol {
-        if skipcol <= width1 {
+    if at_topline && skipcol > ColNr::ZERO && wcol >= skipcol.get() {
+        if skipcol <= ColNr::new(width1) {
             wcol -= width2;
         } else {
-            wcol -= width2 * ((skipcol - width1) / width2 + 1);
+            wcol -= width2 * ((skipcol - width1).get() / width2 + 1);
         }
         did_sub_skipcol = true;
     }
     if wcol >= view_width {
-        let n = wrap_rowoff(wcol, view_width, width2);
+        let n = wrap_rowoff(ColNr::new(wcol), view_width, width2);
         wcol -= n * width2;
         wrow += n;
     }
@@ -327,11 +327,12 @@ pub fn sidescroll_leftcol(
             debug_assert!(sidescroll <= c_int::MAX as OptInt, "p_ss <= INT_MAX");
             diff = sidescroll;
         }
-        if off_left < 0 {
+        (if off_left < 0 {
             leftcol - diff as c_int
         } else {
             leftcol + diff as c_int
-        }
+        })
+        .get()
     };
     Some(if new_leftcol > 0 { new_leftcol } else { 0 })
 }
@@ -354,7 +355,7 @@ pub fn skipcol_for_tall_line(
     // 1: less than 'scrolloff' lines above; 2: less than 'scrolloff' below;
     // 3: both.
     let mut extra = 0;
-    if skipcol as int64_t + so * width2 as int64_t > virtcol as int64_t {
+    if i64::from(skipcol) + so * width2 as int64_t > i64::from(virtcol) {
         extra = 1;
     }
     let plines = plines - 1;
@@ -368,13 +369,13 @@ pub fn skipcol_for_tall_line(
     } else {
         plines
     };
-    if n as int64_t >= (view_height + skipcol / width2) as int64_t - so {
+    if n as int64_t >= (view_height + skipcol.get() / width2) as int64_t - so {
         extra += 2;
     }
 
     if extra == 3 || view_height as int64_t <= so * 2 {
         // Not enough room for 'scrolloff' either way: centre the cursor.
-        let mut n = virtcol / width2;
+        let mut n = virtcol.get() / width2;
         if n > view_height / 2 {
             n -= view_height / 2;
         } else {
@@ -384,16 +385,20 @@ pub fn skipcol_for_tall_line(
         if n > plines - view_height + 1 {
             n = plines - view_height + 1;
         }
-        if n > 0 { width1 + (n - 1) * width2 } else { 0 }
+        if n > 0 {
+            ColNr::new(width1 + (n - 1) * width2)
+        } else {
+            ColNr::ZERO
+        }
     } else if extra == 1 {
         debug_assert!(so <= c_int::MAX as int64_t, "so <= INT_MAX");
-        let mut back = ((skipcol as int64_t + so * width2 as int64_t - virtcol as int64_t
+        let mut back = ((i64::from(skipcol) + so * width2 as int64_t - i64::from(virtcol)
             + width2 as int64_t
             - 1)
             / width2 as int64_t) as c_int;
         if back > 0 {
-            if back * width2 > skipcol {
-                back = skipcol / width2;
+            if back * width2 > skipcol.get() {
+                back = skipcol.get() / width2;
             }
             skipcol - back * width2
         } else {
@@ -401,10 +406,14 @@ pub fn skipcol_for_tall_line(
         }
     } else if extra == 2 {
         let mut endcol = (n - view_height + 1) * width2;
-        while endcol > virtcol {
+        while endcol > virtcol.get() {
             endcol -= width2;
         }
-        if skipcol > endcol { skipcol } else { endcol }
+        if skipcol > ColNr::new(endcol) {
+            skipcol
+        } else {
+            ColNr::new(endcol)
+        }
     } else {
         skipcol
     }
@@ -429,7 +438,7 @@ pub fn fit_skipcol_to_window(
     if did_sub_skipcol {
         wrow -= (skipcol - prev_skipcol) / width2;
     } else {
-        wrow -= skipcol / width2;
+        wrow -= skipcol.get() / width2;
     }
     // A small window: make sure the cursor is still in it.
     if wrow >= view_height {

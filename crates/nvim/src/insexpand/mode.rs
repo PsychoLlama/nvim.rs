@@ -348,7 +348,7 @@ pub(crate) fn ins_compl_long_shown_match() -> bool {
         return false;
     };
     let typed = Win::current().w_cursor.col - compl_col.get();
-    ColNr::try_from(shown.text_len()).unwrap_or(ColNr::MAX) > typed
+    ColNr::try_from(shown.text_len()).unwrap_or(ColNr::MAX) > ColNr::new(typed)
 }
 
 /// `'completeopt'`, buffer-local value first.

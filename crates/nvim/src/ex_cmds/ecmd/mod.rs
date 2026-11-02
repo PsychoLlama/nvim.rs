@@ -32,6 +32,7 @@ use crate::arglist::check_arg_idx;
 use crate::ex_cmds::say;
 use crate::fileio::ReadFlags;
 use crate::types::AutoEvent;
+use crate::types::ColNr;
 use crate::winlayer::WinId;
 use core::ffi::CStr;
 use std::ffi::CString;
@@ -330,7 +331,7 @@ pub(crate) fn do_ecmd(
                 Switch::Ready => {}
             }
             Win::current().w_pcmark.lnum = LineNr::ONE;
-            Win::current().w_pcmark.col = 0;
+            Win::current().w_pcmark.col = ColNr::ZERO;
         } else if flags.has(EcmdFlags::ADDBUF | EcmdFlags::ALTBUF) || check_fname().is_err() {
             break 'theend;
         } else {
@@ -499,7 +500,7 @@ fn reuse_current_buffer(state: &mut Ecmd) -> bool {
     set_last_cursor(Win::current());
     if state.newlnum == newlnum::LAST as LineNr || state.newlnum == newlnum::LASTL as LineNr {
         state.newlnum = Win::current().w_cursor.lnum;
-        state.solcol = Win::current().w_cursor.col;
+        state.solcol = Win::current().w_cursor.col.get();
     }
     let buf = Buf::current();
     // The buffer's own file name; see [`switch`]'s copy for why it is owned
@@ -624,9 +625,9 @@ fn enter_new_buffer(
     if !equalpos(Win::current().w_cursor, orig_pos) {
         let cursor = Win::current().w_cursor;
         let first_nonblank = skip::white(Lines::current().line(cursor.lnum)) as c_int;
-        if cursor.lnum != orig_pos.lnum || cursor.col != first_nonblank {
+        if cursor.lnum != orig_pos.lnum || cursor.col != ColNr::new(first_nonblank) {
             state.newlnum = Win::current().w_cursor.lnum;
-            state.newcol = Win::current().w_cursor.col;
+            state.newcol = Win::current().w_cursor.col.get();
         }
     }
     if Win::current().w_topline == state.topline {
@@ -644,7 +645,7 @@ fn place_cursor(state: &Ecmd) {
     if state.newcol >= 0 {
         // position set by autocommands
         Win::current().w_cursor.lnum = state.newlnum;
-        Win::current().w_cursor.col = state.newcol;
+        Win::current().w_cursor.col = ColNr::new(state.newcol);
         check_cursor(Win::current());
     } else if state.newlnum > LineNr::ZERO {
         // line number from caller or old position
@@ -652,7 +653,7 @@ fn place_cursor(state: &Ecmd) {
         check_cursor_lnum(Win::current());
         if state.solcol >= 0 && !p_sol() {
             // 'sol' is off: use the last known column.
-            Win::current().w_cursor.col = state.solcol;
+            Win::current().w_cursor.col = ColNr::new(state.solcol);
             check_cursor_col(Win::current());
             Win::current().w_cursor.coladd = 0;
             Win::current().w_set_curswant = true;

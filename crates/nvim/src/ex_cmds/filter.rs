@@ -17,6 +17,7 @@ use super::say;
 use super::{buf_autocmd, check_secure, kExtmarkNOOP};
 use crate::memline::Lines;
 use crate::types::AutoEvent;
+use crate::types::ColNr;
 use crate::winlayer::{Buf, Win};
 
 use crate::autocmd::state::autocmd_busy;
@@ -264,7 +265,7 @@ fn do_filter(
 
     let mut linecount = line2 - line1 + 1;
     Win::current().w_cursor.lnum = line1;
-    Win::current().w_cursor.col = 0;
+    Win::current().w_cursor.col = ColNr::ZERO;
     changed_line_abv_curs();
     invalidate_botline_win(Win::current());
 

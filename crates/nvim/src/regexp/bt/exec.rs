@@ -10,6 +10,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::narrow::len_as_int;
 use crate::types::LineNr;
 use core::ffi::c_int;
 
@@ -157,7 +158,7 @@ fn bt_regexec_both(rex: Rex, prog: BtProg, state: &mut BtState, startcol: ColNr)
     let mut retval = 0;
     match line {
         Some(line) => {
-            if !magic_wrong(prog) && !(rex.reg_maxcol() > 0 && col >= rex.reg_maxcol()) {
+            if !magic_wrong(prog) && !(rex.reg_maxcol() > ColNr::ZERO && col >= rex.reg_maxcol()) {
                 // The pattern's own `\c`/`\C`/`\Z` override what the caller
                 // asked for.
                 if prog.regflags() & RF_ICASE as u32 != 0 {
@@ -265,11 +266,11 @@ fn scan_columns(rex: Rex, prog: BtProg, state: &mut BtState, col: &mut ColNr) ->
         // next place it occurs.
         if prog.regstart() != NUL {
             match cstrchr_line(rex, rest_from(rex.line(), *col), prog.regstart()) {
-                Some(off) => *col += off as ColNr,
+                Some(off) => *col += len_as_int(off),
                 None => return 0,
             }
         }
-        if rex.reg_maxcol() > 0 && *col >= rex.reg_maxcol() {
+        if rex.reg_maxcol() > ColNr::ZERO && *col >= rex.reg_maxcol() {
             return 0;
         }
 
@@ -287,7 +288,7 @@ fn scan_columns(rex: Rex, prog: BtProg, state: &mut BtState, col: &mut ColNr) ->
         if rest[0] == NUL as u8 {
             return 0;
         }
-        *col += cluster_len_at(rest, 0) as ColNr;
+        *col += len_as_int(cluster_len_at(rest, 0));
 
         if let Some(deadline) = rex.deadline() {
             tm_count += 1;

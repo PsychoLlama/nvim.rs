@@ -82,7 +82,7 @@ fn esc_leaves_insert(at: &mut CursorAt) -> bool {
 
     // Move the cursor left, if that is possible.
     if cursor_col != 0 {
-        let mut col: ColNr = 0;
+        let mut col: ColNr = ColNr::ZERO;
         if win.w_wcol > 0 {
             let trailing_white = {
                 let mut lines = Lines::current();
@@ -104,13 +104,13 @@ fn esc_leaves_insert(at: &mut CursorAt) -> bool {
                 };
                 win.w_wcol = start.map_or(0, |start| {
                     let len = ColNr::try_from(start).expect("a column");
-                    win_line_prefix_cells(win, lnum, len)
+                    win_line_prefix_cells(win, lnum, len).get()
                 });
 
                 win.w_wrow = win.w_cline_row + win.w_wcol / win.w_view_width;
                 win.w_wcol %= win.w_view_width;
                 win.w_wcol += win.col_off();
-                col = 0; // no correction needed
+                col = ColNr::ZERO; // no correction needed
             } else {
                 win.w_wcol -= 1;
                 col = win.w_cursor.col - 1;
@@ -120,7 +120,7 @@ fn esc_leaves_insert(at: &mut CursorAt) -> bool {
             win.w_wcol = win.w_view_width - 1;
             col = win.w_cursor.col - 1;
         }
-        if col > 0 && win.w_wcol > 0 {
+        if col > ColNr::ZERO && win.w_wcol > 0 {
             // Correct for the cursor sitting on the right half of a
             // double-width character.
             let mut lines = Lines::current();

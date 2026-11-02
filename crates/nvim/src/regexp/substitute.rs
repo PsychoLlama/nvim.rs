@@ -715,7 +715,7 @@ fn copy_capture(
                 }
                 out.push(CAR as u8);
                 clnum += 1;
-                col = 0;
+                col = ColNr::ZERO;
             }
         }
     }

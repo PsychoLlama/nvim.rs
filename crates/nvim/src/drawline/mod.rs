@@ -134,7 +134,7 @@ pub fn win_line(
         foldinfo,
         startrow,
         row: startrow,
-        vcol: 0,
+        vcol: ColNr::ZERO,
         col: 0,
         boguscols: 0,
         old_boguscols: 0,
@@ -149,8 +149,8 @@ pub fn win_line(
         // `fromcol` -10 and `tocol` MAXCOL mean "no inverted range at
         // all", which is a different thing from an empty one.
         fromcol: -10,
-        tocol: MAXCOL as ::core::ffi::c_int,
-        showbreak_vcol: -1,
+        tocol: MAXCOL,
+        showbreak_vcol: ColNr::NONE,
         need_showbreak: false,
         char_attr: 0,
         extra_todo: 0,
@@ -253,7 +253,7 @@ fn wlv_put_linebuf(
     }
 
     if wlv.row == 0
-        && window.w_skipcol > 0
+        && window.w_skipcol > ColNr::ZERO
         // Do not overwrite the 'showbreak' text with "<<<" ...
         && !window.has_showbreak()
         // ... nor the 'listchars' "precedes" text.
@@ -350,7 +350,7 @@ fn invoke_range_next(
     window: Win,
     lnum: LineNr,
     begin_col: ColNr,
-    col_off: ColNr,
+    col_off: i32,
 ) -> ::core::ffi::c_int {
     let col_off = col_off.max(1);
     // The line only for the arithmetic: the callbacks re-enter the editor.
@@ -369,7 +369,7 @@ fn invoke_range_next(
             } else {
                 c_cluster_len(&line[at - back..]) - back
             };
-            end_col + ColNr::try_from(fwd).unwrap_or(0)
+            end_col + ColNr::try_from(fwd).unwrap_or(ColNr::ZERO).get()
         })
     };
 
@@ -377,14 +377,14 @@ fn invoke_range_next(
         decor_providers_invoke_range(
             window,
             (lnum - 1).get(),
-            begin_col,
+            begin_col.get(),
             (lnum - 1).get(),
-            end_col,
+            end_col.get(),
         );
         validate_virtcol(window);
-        end_col
+        end_col.get()
     } else {
-        decor_providers_invoke_range(window, (lnum - 1).get(), begin_col, lnum.get(), 0);
+        decor_providers_invoke_range(window, (lnum - 1).get(), begin_col.get(), lnum.get(), 0);
         validate_virtcol(window);
         ::core::ffi::c_int::MAX
     }

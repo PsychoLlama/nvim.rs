@@ -54,7 +54,7 @@ struct BlockInsertPre {
 pub(crate) fn op_insert(op: &mut OpArg, count1: c_int) {
     let mut bd = BlockDef::ZERO;
     // `edit()` changes `w_curswant`; record it now, for `A`.
-    bd.is_max = c_int::from(Win::current().w_curswant == MAXCOL);
+    bd.is_max = c_int::from(Win::current().w_curswant == ColNr::MAX);
 
     // The Visual block is still marked; get rid of it now.
     Win::current().w_cursor.lnum = op.start.lnum;
@@ -62,7 +62,7 @@ pub(crate) fn op_insert(op: &mut OpArg, count1: c_int) {
     let _ = update_screen();
 
     let mut pre = BlockInsertPre {
-        ind_pre_col: 0,
+        ind_pre_col: ColNr::ZERO,
         ind_pre_vcol: 0,
         pre_textlen: 0,
     };
@@ -133,7 +133,7 @@ fn measure_before_insert(op: &OpArg, bd: &mut BlockDef) -> Option<BlockInsertPre
         pre_textlen -= bd.textlen;
     }
     Some(BlockInsertPre {
-        ind_pre_col: getwhitecols_curline() as ColNr,
+        ind_pre_col: getwhitecols_curline(),
         ind_pre_vcol: get_indent(),
         pre_textlen,
     })
@@ -186,7 +186,7 @@ fn replay_insert(op: &mut OpArg, bd: &mut BlockDef, pre: &mut BlockInsertPre, st
     let mut did_indent = false;
     // If indenting kicked in the first line has moved -- but only count it
     // when the indent actually grew.
-    let ind_post_col = getwhitecols_curline() as ColNr;
+    let ind_post_col = getwhitecols_curline();
     if Buf::current().b_op_start.col > pre.ind_pre_col && ind_post_col > pre.ind_pre_col {
         bd.textcol += ind_post_col - pre.ind_pre_col;
         ind_post_vcol = get_indent();
@@ -251,7 +251,7 @@ fn replay_insert(op: &mut OpArg, bd: &mut BlockDef, pre: &mut BlockInsertPre, st
     let mut len = Lines::current().line_len(op.start.lnum);
     let mut add = bd.textcol;
     // How far the cursor was moved during the insert.
-    let mut offset: ColNr = 0;
+    let mut offset: i32 = 0;
     if op.op_type == OpType::Append {
         add += bd.textlen;
         // The cursor may have been moved during the insert when `$` was
@@ -262,7 +262,7 @@ fn replay_insert(op: &mut OpArg, bd: &mut BlockDef, pre: &mut BlockInsertPre, st
         {
             offset = start_insert.col - Insstart.get().col;
             add -= offset;
-            if op.end_vcol <= offset {
+            if op.end_vcol <= ColNr::new(offset) {
                 // Moved outside the Visual block; nothing sensible to do.
                 return;
             }
@@ -271,10 +271,10 @@ fn replay_insert(op: &mut OpArg, bd: &mut BlockDef, pre: &mut BlockInsertPre, st
     }
     // A short line: start at its end.
     add = add.min(len);
-    len -= add;
+    len -= add.get();
 
     let ins_len = len - pre.pre_textlen - offset;
-    if pre.pre_textlen >= 0 && ins_len > 0 {
+    if pre.pre_textlen >= 0 && ins_len > ColNr::ZERO {
         // The arithmetic above says the span is inside the line; clamped
         // anyway, because a wrong `pre_textlen` would otherwise panic where
         // upstream read past the end.
@@ -282,7 +282,7 @@ fn replay_insert(op: &mut OpArg, bd: &mut BlockDef, pre: &mut BlockInsertPre, st
             let mut lines = Lines::current();
             let firstline = lines.line(op.start.lnum);
             let at = usize::try_from(add).unwrap_or(0).min(firstline.len());
-            let end = (at + ins_len as usize).min(firstline.len());
+            let end = (at + ins_len.as_usize()).min(firstline.len());
             firstline[at..end].to_vec()
         };
         let (first, last) = (op.start.lnum, op.end.lnum + 1);
@@ -302,7 +302,7 @@ fn replay_insert(op: &mut OpArg, bd: &mut BlockDef, pre: &mut BlockInsertPre, st
 pub(crate) fn op_change(op: &mut OpArg) -> c_int {
     let mut l = op.start.col;
     if op.motion_type == kMTLineWise {
-        l = 0;
+        l = ColNr::ZERO;
         // Like opening a new line: do smart indent.
         can_si.set(may_do_si());
     }
@@ -335,7 +335,7 @@ pub(crate) fn op_change(op: &mut OpArg) -> c_int {
         }
         let mut lines = Lines::current();
         let firstline = lines.line(op.start.lnum);
-        pre_textlen = ColNr::try_from(firstline.len()).unwrap_or(ColNr::MAX);
+        pre_textlen = ColNr::try_from(firstline.len()).unwrap_or(ColNr::MAX).get();
         pre_indent = skip::white(firstline) as c_int;
         bd.textcol = Win::current().w_cursor.col;
     }
@@ -373,7 +373,7 @@ fn replay_change(op: &OpArg, bd: &mut BlockDef, mut pre_textlen: c_int, pre_inde
         let firstline = lines.line(op.start.lnum);
         // Auto-indenting may have changed the indent. If the cursor was past
         // the indent, that change is not part of the inserted text.
-        if bd.textcol > pre_indent {
+        if bd.textcol > ColNr::new(pre_indent) {
             let new_indent = skip::white(firstline) as c_int;
             pre_textlen += new_indent - pre_indent;
             bd.textcol += new_indent - pre_indent;
@@ -400,7 +400,7 @@ fn replay_change(op: &OpArg, bd: &mut BlockDef, mut pre_textlen: c_int, pre_inde
             // padding in front of the text.
             let mut vpos = Pos {
                 lnum: linenr,
-                col: 0,
+                col: ColNr::ZERO,
                 coladd: 0,
             };
             if bd.is_short != 0 {
@@ -426,21 +426,28 @@ fn replay_change(op: &OpArg, bd: &mut BlockDef, mut pre_textlen: c_int, pre_inde
             let splice = vpos.coladd + ins_len;
             let row = linenr.get() - 1;
             let buffer = Buf::current();
-            extmark_splice_cols(buffer, row, bd.textcol, 0, splice, kExtmarkUndo);
+            extmark_splice_cols(
+                buffer,
+                row,
+                bd.textcol,
+                ColNr::ZERO,
+                ColNr::new(splice),
+                kExtmarkUndo,
+            );
         }
         linenr += 1;
     }
 
     let (first, last) = (op.start.lnum + 1, op.end.lnum + 1);
     check_cursor(Win::current());
-    changed_lines(Buf::current(), first, 0, last, 0, true);
+    changed_lines(Buf::current(), first, ColNr::ZERO, last, 0, true);
 }
 
 /// Move the cursor left off the NUL past the end of the line, when it should
 /// not be sitting there.
 pub fn adjust_cursor_eol() {
     let cur_ve_flags = get_ve_flags(Win::current());
-    let adj_cursor = Win::current().w_cursor.col > 0
+    let adj_cursor = Win::current().w_cursor.col > ColNr::ZERO
         && gchar_cursor() == NUL
         && cur_ve_flags & kOptVeFlagOnemore as c_uint == 0
         && cur_ve_flags & kOptVeFlagAll as c_uint == 0

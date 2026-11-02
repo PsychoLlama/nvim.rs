@@ -228,10 +228,10 @@ fn extmark_index_from_obj(
 ) -> Result<(::core::ffi::c_int, ColNr), Error> {
     if let Object::Integer(id) = obj {
         if id == 0 {
-            return Ok((0, 0));
+            return Ok((0, ColNr::ZERO));
         }
         if id == -1 {
-            return Ok((MAXLNUM.get(), MAXCOL));
+            return Ok((MAXLNUM.get(), ColNr::MAX));
         }
         if id < 0 {
             return Err(err_bad_number(c"mark id", id));
@@ -240,7 +240,7 @@ fn extmark_index_from_obj(
         if extmark.start.pos.row < 0 as int32_t {
             return Err(err_bad_number(c"mark id (not found)", id));
         }
-        return Ok((extmark.start.pos.row, extmark.start.pos.col as ColNr));
+        return Ok((extmark.start.pos.row, ColNr::new(extmark.start.pos.col)));
     }
     let Some(pos) = obj.as_array() else {
         let want = c"mark id Integer or 2-item Array";
@@ -261,7 +261,11 @@ fn extmark_index_from_obj(
         } else {
             MAXLNUM.get()
         },
-        if col >= 0 { number_as_int(col) } else { MAXCOL },
+        if col >= 0 {
+            ColNr::new(number_as_int(col))
+        } else {
+            ColNr::MAX
+        },
     ))
 }
 

@@ -274,7 +274,14 @@ fn delete_block(op: &mut OpArg) -> Result<(), UndoFailed> {
             let _ = ml_replace_buf_text(Buf::current(), lnum, &line);
             let row = lnum.get() - 1;
             let buffer = Buf::current();
-            extmark_splice_cols(buffer, row, bd.textcol, bd.textlen, pad, kExtmarkUndo);
+            extmark_splice_cols(
+                buffer,
+                row,
+                bd.textcol,
+                ColNr::new(bd.textlen),
+                ColNr::new(pad),
+                kExtmarkUndo,
+            );
         }
         lnum += 1;
     }
@@ -366,13 +373,13 @@ fn break_tabs_at_edges(op: &mut OpArg) -> Result<(), UndoFailed> {
         // end was in *columns* first.
         let mut endcol = 0;
         if op.line_count == 1 {
-            endcol = getviscol2(op.end.col, op.end.coladd);
+            endcol = getviscol2(op.end.col, op.end.coladd).get();
         }
         let startcol = getviscol2(op.start.col, op.start.coladd);
         coladvance_force(startcol);
         op.start = Win::current().w_cursor;
         if op.line_count == 1 {
-            Win::current().coladvance(endcol);
+            Win::current().coladvance(ColNr::new(endcol));
             op.end.col = Win::current().w_cursor.col;
             op.end.coladd = Win::current().w_cursor.coladd;
             Win::current().w_cursor = op.start;
@@ -468,9 +475,9 @@ fn delete_chars_across_lines(op: &OpArg) -> Result<(), UndoFailed> {
 
     // From the start of the last line up to the region's end.
     let n = op.end.col + 1 - c_int::from(!op.inclusive);
-    Win::current().w_cursor.col = 0;
+    Win::current().w_cursor.col = ColNr::ZERO;
     let fixpos = op.op_type == OpType::Delete && !op.is_visual;
-    let _ = del_bytes(n, !op_virtual(), fixpos);
+    let _ = del_bytes(n.get(), !op_virtual(), fixpos);
 
     Win::current().w_cursor = curpos;
     let _ = do_join(2, false, false, false, false);
@@ -479,7 +486,18 @@ fn delete_chars_across_lines(op: &OpArg) -> Result<(), UndoFailed> {
     let rows = op.line_count - 1;
     let row = startpos.lnum.get() - 1;
     let buf = Buf::current();
-    extmark_splice(buf, row, col, rows, n, deleted_bytes, 0, 0, 0, kExtmarkUndo);
+    extmark_splice(
+        buf,
+        row,
+        col,
+        rows,
+        n,
+        deleted_bytes,
+        0,
+        ColNr::ZERO,
+        0,
+        kExtmarkUndo,
+    );
     Ok(())
 }
 

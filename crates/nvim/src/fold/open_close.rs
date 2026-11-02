@@ -61,7 +61,7 @@ pub fn op_fold_range(
     while lnum <= last {
         let at = Pos {
             lnum,
-            col: 0,
+            col: ColNr::ZERO,
             coladd: 0,
         };
         let mut lnum_next = lnum;
@@ -405,7 +405,7 @@ pub fn delete_fold(window: Win, start: LineNr, end: LineNr, recursive: c_int, ha
     if last_lnum > LineNr::ZERO {
         let num_changed = int64_t::from(last_lnum - first_lnum);
         let buf = win.buffer();
-        changed_lines(buf, first_lnum, 0, last_lnum, 0, false);
+        changed_lines(buf, first_lnum, ColNr::ZERO, last_lnum, 0, false);
         buf_updates_send_changes(buf, first_lnum, num_changed, num_changed);
     }
 }

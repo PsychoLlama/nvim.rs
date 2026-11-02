@@ -244,8 +244,8 @@ pub(crate) fn terminal_open(mut term: Term, mut buffer: Buf, attached: &dyn Fn()
     win.w_onebuf_opt.wo_crb = 0;
     win.w_cursor = Pos {
         lnum: LineNr::ONE,
-        col: 0 as ColNr,
-        coladd: 0 as ColNr,
+        col: ColNr::ZERO,
+        coladd: 0,
     };
     // SAFETY: TermOpen against a live buffer. It may wipe the buffer or
     // close the terminal, which is what the re-check below is for, and

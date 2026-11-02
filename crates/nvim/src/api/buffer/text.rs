@@ -123,11 +123,11 @@ pub fn nvim_buf_set_text(
     let edit = Replacement {
         buffer,
         start_row,
-        start_col: len_as_int(start_col),
+        start_col: ColNr::new(len_as_int(start_col)),
         end_row,
-        end_col: len_as_int(end_col),
+        end_col: ColNr::new(len_as_int(end_col)),
         lines,
-        last_len: len_as_int(last_item.len()),
+        last_len: ColNr::new(len_as_int(last_item.len())),
         old_byte: byte_count(old_bytes),
         new_byte: byte_count(new_bytes),
     };
@@ -170,11 +170,11 @@ impl Replacement {
         let extra = self.write_lines()?;
         let new_rows = len_as_int(self.lines.len());
 
-        let col_extent: ColNr = self.end_col
+        let col_extent: i32 = self.end_col
             - if end_row == start_row {
                 self.start_col
             } else {
-                0
+                ColNr::ZERO
             };
         let adjust: i32 = if end_row >= start_row {
             MAXLNUM.get()
@@ -201,7 +201,7 @@ impl Replacement {
                 end_row,
                 self.end_col,
                 new_rows,
-                self.last_len,
+                self.last_len.get(),
                 1,
             );
             set_visual_anchor(anchor);
@@ -212,7 +212,7 @@ impl Replacement {
             start_row.get() - 1,
             self.start_col,
             end_row - start_row,
-            col_extent,
+            ColNr::new(col_extent),
             self.old_byte,
             new_rows - 1,
             self.last_len,
@@ -232,7 +232,7 @@ impl Replacement {
                     end_row,
                     self.end_col,
                     new_rows,
-                    self.last_len,
+                    self.last_len.get(),
                 );
             } else {
                 fix_cursor(win, start_row, end_row, extra);
@@ -299,8 +299,8 @@ fn fix_pos_col(
     end_row: LineNr,
     end_col: ColNr,
     new_rows: i32,
-    new_cols_at_end_row: ColNr,
-    mode_col_adj: ColNr,
+    new_cols_at_end_row: i32,
+    mode_col_adj: i32,
 ) {
     if pos.lnum < start_row {
         return;
@@ -311,14 +311,18 @@ fn fix_pos_col(
         pos.lnum += lnum_shift;
         return;
     }
-    let end_row_change_start: ColNr = if new_rows == 1 { start_col } else { 0 };
+    let end_row_change_start: ColNr = if new_rows == 1 {
+        start_col
+    } else {
+        ColNr::ZERO
+    };
     let end_row_change_end: ColNr = end_row_change_start + new_cols_at_end_row;
     if pos.lnum == end_row && pos.col + mode_col_adj > end_col {
         pos.lnum += lnum_shift;
         pos.col += end_row_change_end - end_col;
         return;
     }
-    let old_coladd: ColNr = pos.coladd;
+    let old_coladd: i32 = pos.coladd;
     let coladd = pos.coladd;
     pos.col += coladd;
     pos.coladd = 0;
@@ -345,9 +349,9 @@ fn fix_cursor_cols(
     end_row: LineNr,
     end_col: ColNr,
     new_rows: i32,
-    new_cols_at_end_row: ColNr,
+    new_cols_at_end_row: i32,
 ) {
-    let mode_col_adj: ColNr = if win == Win::current() && State.get() & MODE_INSERT != 0 {
+    let mode_col_adj: i32 = if win == Win::current() && State.get() & MODE_INSERT != 0 {
         0
     } else {
         1

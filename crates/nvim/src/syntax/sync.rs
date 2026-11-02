@@ -109,7 +109,7 @@ impl SynState {
         // Set the cursor to the start of the search.
         let cursor_save = window.w_cursor;
         window.w_cursor.lnum = start_lnum;
-        window.w_cursor.col = 0;
+        window.w_cursor.col = ColNr::ZERO;
 
         // Restrict the search for the end of the comment to "maxlines".
         if find_start_comment(self.block().b_syn_sync_maxlines as c_int).is_some() {
@@ -196,8 +196,8 @@ impl SynState {
                     let top = self.top();
                     let cur_si = self.item_mut(top);
                     cur_si.si_h_startpos.lnum = found.lnum;
-                    cur_si.si_h_startpos.col = found.col;
-                    self.update_si_end(top, self.col, true);
+                    cur_si.si_h_startpos.col = ColNr::new(found.col);
+                    self.update_si_end(top, self.col.get(), true);
                     self.check_keepend();
                 }
                 self.finish_line(false);
@@ -257,7 +257,7 @@ impl SynState {
                     flags,
                     match_idx,
                     lnum: self.lnum,
-                    col: self.col,
+                    col: self.col.get(),
                     m_endpos,
                 });
 
@@ -333,15 +333,15 @@ impl SynState {
             regprog: self.block().b_syn_linecont_prog.take(),
             startpos: [LPos {
                 lnum: LineNr::ZERO,
-                col: 0,
+                col: ColNr::ZERO,
             }; 10],
             endpos: [LPos {
                 lnum: LineNr::ZERO,
-                col: 0,
+                col: ColNr::ZERO,
             }; 10],
-            rmm_matchcol: 0,
+            rmm_matchcol: ColNr::ZERO,
             rmm_ic: self.block().b_syn_linecont_ic,
-            rmm_maxcol: 0,
+            rmm_maxcol: ColNr::ZERO,
         };
         let mut block = self.block();
         let time = &mut block.b_syn_linecont_time;
@@ -349,7 +349,7 @@ impl SynState {
             input: None,
             output: None,
         };
-        let r = self.syn_regexec(&mut regmatch, lnum, 0, time, io);
+        let r = self.syn_regexec(&mut regmatch, lnum, ColNr::ZERO, time, io);
         self.block().b_syn_linecont_prog = regmatch.regprog.take();
 
         self.restore_chartab(&buf_chartab);

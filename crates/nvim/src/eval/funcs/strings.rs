@@ -31,6 +31,7 @@ use crate::sha256::hex_digest;
 use crate::spell::{SMT_ALL, eval_soundfold, parse_spelllang, spell_check, spell_move_to};
 use crate::spellsuggest::spell_suggest_list;
 use crate::strings::{escaped_bytes, format_typvals, shellescape};
+use crate::types::ColNr;
 use crate::types::{
     EvalFuncData, Hlf, List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber, kListLenMayKnow,
     time_t, tm,
@@ -259,7 +260,7 @@ pub fn f_spellbadword(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
             }
         } else if Buf::current().b_s.b_p_spl.first_byte() != 0 {
             let text = numbuf.string_chk(&args[0]);
-            let mut capcol: c_int = -1;
+            let mut capcol = ColNr::NONE;
             if let Some(text) = text {
                 let text = text.to_bytes_with_nul();
                 let end = text.len() - 1;

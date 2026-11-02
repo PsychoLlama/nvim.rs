@@ -247,7 +247,7 @@ pub fn diff_move_to(dir: c_int, mut count: c_int) -> Result<(), Failed> {
     }
     setpcmark();
     Win::current().w_cursor.lnum = lnum;
-    Win::current().w_cursor.col = 0;
+    Win::current().w_cursor.col = ColNr::ZERO;
     Ok(())
 }
 

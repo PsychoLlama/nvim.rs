@@ -24,6 +24,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::narrow::number_as_lnum;
+use crate::types::ColNr;
 use crate::types::Handle;
 use crate::winlayer::cmdwin_window;
 use crate::winlayer::prev_window;
@@ -45,7 +46,7 @@ use crate::options::kOptBufhidden;
 use crate::optionstr::OptStringRef;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    AlignTextPos, BufferHandle, ColNr, Error, FAIL, FloatAnchor, LPos, LineNr, OptInt, OptVal,
+    AlignTextPos, BufferHandle, Error, FAIL, FloatAnchor, LPos, LineNr, OptInt, OptVal,
     OptionSetFlags, Pos, ScreenChar, VirtText, WinConfig, WinSplit, WinStyle, WindowHandle,
     kErrorTypeException, kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus,
     kFloatRelativeMouse, kFloatRelativeWindow,
@@ -82,7 +83,7 @@ pub(crate) const WIN_CONFIG_INIT: WinConfig = WinConfig {
     window: Handle::NONE,
     bufpos: LPos {
         lnum: LineNr::new(-1),
-        col: 0,
+        col: ColNr::ZERO,
     },
     height: 0,
     width: 0,
@@ -577,7 +578,7 @@ fn anchored_position(win: Win) -> (c_int, c_int) {
             let mut pos = Pos {
                 lnum: number_as_lnum(lnum),
                 col: win.w_config.bufpos.col,
-                coladd: 0 as ColNr,
+                coladd: 0,
             };
             let (trow, tcol) = screen_pos_of(parent, &mut pos);
             row += trow - 1;

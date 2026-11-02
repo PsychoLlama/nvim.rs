@@ -20,6 +20,7 @@ use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID};
 use crate::eval::window::{restore_win, switch_win, win_execute_after, win_execute_before};
 use crate::ex_docmd::ex_win_close;
 use crate::narrow::number_as_lnum;
+use crate::types::ColNr;
 use crate::types::DictBuilder;
 use crate::types::Handle;
 use crate::winlayer::TabPage;
@@ -102,7 +103,7 @@ pub fn nvim_win_set_cursor(win: WindowHandle, pos: Array) -> Result<(), Error> {
         return Err(err_out_of_range(c"cursor column"));
     }
     w.w_cursor.lnum = number_as_lnum(row);
-    w.w_cursor.col = number_as_int(col);
+    w.w_cursor.col = ColNr::new(number_as_int(col));
     w.w_cursor.coladd = 0;
     check_cursor_col(w);
     w.w_set_curswant = true;

@@ -52,7 +52,7 @@ use std::ffi::CString;
 /// global may change.
 fn global_exe_one(cmd: &[u8], lnum: LineNr) {
     Win::current().w_cursor.lnum = lnum;
-    Win::current().w_cursor.col = 0 as ColNr;
+    Win::current().w_cursor.col = ColNr::ZERO;
     let cmd = match cmd.first() {
         None | Some(b'\n') => b"p".as_slice(),
         Some(_) => cmd,
@@ -71,7 +71,7 @@ fn selects(kind: u8, matched: bool) -> bool {
 
 /// Does the pattern match line `lnum`, searching from its first column?
 fn matches_line(regmatch: &mut RegMMatch, lnum: LineNr) -> bool {
-    regmatch.exec(Some(Win::current()), Buf::current(), lnum, 0 as ColNr) != 0
+    regmatch.exec(Some(Win::current()), Buf::current(), lnum, ColNr::ZERO) != 0
 }
 
 /// The head of a `:global` argument, parsed.

@@ -17,6 +17,7 @@
 
 use crate::option::vars::P_SEL;
 use crate::strings::has_char;
+use crate::types::ColNr;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -74,7 +75,7 @@ pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
                     break 'found;
                 }
             } else if dir as c_int == FORWARD as c_int
-                && pos.col == 0
+                && pos.col == ColNr::ZERO
                 && starts_para(pos.lnum, NUL, false)
             {
                 // At the start of a paragraph or section, going forward:
@@ -126,7 +127,7 @@ pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
                 // Find the end of the sentence.
                 let mut c = gchar_pos(&pos);
                 // `pos.lnum` is a line of the current buffer.
-                if c == NUL || (pos.col == 0 && starts_para(pos.lnum, NUL, false)) {
+                if c == NUL || (pos.col == ColNr::ZERO && starts_para(pos.lnum, NUL, false)) {
                     if dir as c_int == BACKWARD as c_int && pos.lnum != startlnum {
                         pos.lnum += 1;
                     }

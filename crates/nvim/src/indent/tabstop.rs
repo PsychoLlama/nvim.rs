@@ -8,6 +8,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::narrow::number_as_col;
 use core::ffi::c_int;
 
 use crate::types::{ColNr, OptInt};
@@ -24,7 +25,7 @@ pub use limit::TABSTOP_MAX;
 /// widths.
 #[derive(Clone, Copy)]
 pub struct TabStops<'a> {
-    stops: &'a [ColNr],
+    stops: &'a [i32],
 }
 
 impl<'a> TabStops<'a> {
@@ -32,12 +33,12 @@ impl<'a> TabStops<'a> {
     /// cases every caller treats as "use the uniform width".
     ///
     /// `stops` must be at least `stops[0] + 1` long.
-    pub fn new(stops: &'a [ColNr]) -> Option<Self> {
+    pub fn new(stops: &'a [i32]) -> Option<Self> {
         (!stops.is_empty() && stops[0] != 0).then_some(TabStops { stops })
     }
 
     /// The widths, without the count in front of them.
-    pub fn widths(self) -> &'a [ColNr] {
+    pub fn widths(self) -> &'a [i32] {
         &self.stops[1..=self.count() as usize]
     }
 
@@ -47,7 +48,7 @@ impl<'a> TabStops<'a> {
     }
 
     /// The width of stop `t`, counting from one.
-    fn width(self, t: c_int) -> ColNr {
+    fn width(self, t: c_int) -> i32 {
         self.stops[t as usize]
     }
 
@@ -59,7 +60,7 @@ impl<'a> TabStops<'a> {
     /// The stop that `col` falls inside: its one-based index and the column
     /// it starts at. Answers `None` when `col` is past the last stop.
     fn containing(self, col: ColNr) -> Option<(c_int, ColNr)> {
-        let mut tabcol: ColNr = 0;
+        let mut tabcol: ColNr = ColNr::ZERO;
         for t in 1..=self.count() {
             tabcol += self.width(t);
             if tabcol > col {
@@ -71,9 +72,9 @@ impl<'a> TabStops<'a> {
 
     /// The column where the repeating tail begins, and the width it repeats
     /// with — used once `col` is past the last named stop.
-    fn tail(self) -> (ColNr, ColNr) {
-        let total: ColNr = self.stops[1..=self.count() as usize].iter().sum();
-        (total, self.width(self.count()))
+    fn tail(self) -> (ColNr, c_int) {
+        let total: i32 = self.stops[1..=self.count() as usize].iter().sum();
+        (ColNr::new(total), self.width(self.count()))
     }
 
     /// How many columns from `col` to the next tabstop.
@@ -92,7 +93,7 @@ impl<'a> TabStops<'a> {
     /// itself.
     pub fn at(self, col: ColNr, left: bool) -> c_int {
         match self.containing(col) {
-            Some((1, _)) if left => col,
+            Some((1, _)) if left => col.get(),
             Some((t, _)) => self.width(t - c_int::from(left)),
             None => self.width(self.count()),
         }
@@ -106,7 +107,7 @@ impl<'a> TabStops<'a> {
                 let (total, last) = self.tail();
                 // The repeating tail is offset by however far the named stops
                 // overshoot a multiple of the last width.
-                col - (col - total % last) % last
+                col - (col - total.get() % last).get() % last
             }
         }
     }
@@ -142,7 +143,7 @@ impl<'a> TabStops<'a> {
 
 /// Whether two lists name the same stops. A null list only equals another
 /// null one.
-pub fn eq(a: Option<&[ColNr]>, b: Option<&[ColNr]>) -> bool {
+pub fn eq(a: Option<&[i32]>, b: Option<&[i32]>) -> bool {
     match (a, b) {
         (None, None) => true,
         (Some(a), Some(b)) => a[0] == b[0] && a[1..=a[0] as usize] == b[1..=b[0] as usize],
@@ -154,14 +155,14 @@ pub fn eq(a: Option<&[ColNr]>, b: Option<&[ColNr]>) -> bool {
 /// default of eight.
 pub fn uniform_padding(col: ColNr, ts: OptInt) -> c_int {
     let ts = if ts == 0 { 8 } else { ts };
-    (ts - col as OptInt % ts) as c_int
+    (ts - i64::from(col) % ts) as c_int
 }
 
 /// [`TabStops::from_to`] for a uniform 'tabstop' of `ts`.
 pub fn uniform_from_to(start_col: ColNr, end_col: ColNr, ts: c_int) -> (c_int, c_int) {
     let mut spaces = end_col - start_col;
     let mut tabs = 0;
-    let initspc = ts - start_col % ts;
+    let initspc = ts - start_col.get() % ts;
     if spaces >= initspc {
         spaces -= initspc;
         tabs += 1;
@@ -184,7 +185,7 @@ pub enum ParseError {
 
 /// Parse a comma-separated 'vartabstop' value into the count-prefixed array
 /// the option holds. An empty value, or a bare `0`, means "no list".
-pub fn parse(var: &[u8]) -> Result<Option<Vec<ColNr>>, ParseError> {
+pub fn parse(var: &[u8]) -> Result<Option<Vec<i32>>, ParseError> {
     if var.is_empty() || var == b"0" {
         return Ok(None);
     }
@@ -221,7 +222,7 @@ pub fn parse(var: &[u8]) -> Result<Option<Vec<ColNr>>, ParseError> {
         if n <= 0 || n > TABSTOP_MAX as i64 {
             return Err(ParseError::OutOfRange(at));
         }
-        array.push(n as ColNr);
+        array.push(number_as_col(n).get());
         at += part.len() + 1;
     }
     Ok(Some(array))
@@ -255,8 +256,8 @@ mod tests {
     use super::*;
 
     /// `:set vartabstop=4,8,2` — the list nvim would build.
-    fn stops(widths: &[ColNr]) -> Vec<ColNr> {
-        let mut v = vec![widths.len() as ColNr];
+    fn stops(widths: &[i32]) -> Vec<i32> {
+        let mut v = vec![i32::try_from(widths.len()).unwrap()];
         v.extend_from_slice(widths);
         v
     }
@@ -273,50 +274,50 @@ mod tests {
         let v = stops(&[4, 8, 2]);
         let ts = TabStops::new(&v).unwrap();
         // Stops end at columns 4, 12 and 14.
-        assert_eq!(ts.padding(0), 4);
-        assert_eq!(ts.padding(3), 1);
-        assert_eq!(ts.padding(4), 8);
-        assert_eq!(ts.padding(11), 1);
-        assert_eq!(ts.padding(12), 2);
+        assert_eq!(ts.padding(ColNr::ZERO), 4);
+        assert_eq!(ts.padding(ColNr::new(3)), 1);
+        assert_eq!(ts.padding(ColNr::new(4)), 8);
+        assert_eq!(ts.padding(ColNr::new(11)), 1);
+        assert_eq!(ts.padding(ColNr::new(12)), 2);
         // Past the list the final width of 2 repeats.
-        assert_eq!(ts.padding(14), 2);
-        assert_eq!(ts.padding(15), 1);
-        assert_eq!(ts.padding(100), 2);
+        assert_eq!(ts.padding(ColNr::new(14)), 2);
+        assert_eq!(ts.padding(ColNr::new(15)), 1);
+        assert_eq!(ts.padding(ColNr::new(100)), 2);
     }
 
     #[test]
     fn uniform_padding_defaults_to_eight() {
-        assert_eq!(uniform_padding(0, 0), 8);
-        assert_eq!(uniform_padding(3, 4), 1);
-        assert_eq!(uniform_padding(4, 4), 4);
+        assert_eq!(uniform_padding(ColNr::ZERO, 0), 8);
+        assert_eq!(uniform_padding(ColNr::new(3), 4), 1);
+        assert_eq!(uniform_padding(ColNr::new(4), 4), 4);
     }
 
     #[test]
     fn at_reports_the_width_of_the_stop_the_column_is_in() {
         let v = stops(&[4, 8, 2]);
         let ts = TabStops::new(&v).unwrap();
-        assert_eq!(ts.at(0, false), 4);
-        assert_eq!(ts.at(5, false), 8);
-        assert_eq!(ts.at(13, false), 2);
-        assert_eq!(ts.at(99, false), 2);
+        assert_eq!(ts.at(ColNr::ZERO, false), 4);
+        assert_eq!(ts.at(ColNr::new(5), false), 8);
+        assert_eq!(ts.at(ColNr::new(13), false), 2);
+        assert_eq!(ts.at(ColNr::new(99), false), 2);
         // Moving left out of the first stop can only go back to column zero.
-        assert_eq!(ts.at(3, true), 3);
-        assert_eq!(ts.at(5, true), 4);
-        assert_eq!(ts.at(13, true), 8);
+        assert_eq!(ts.at(ColNr::new(3), true), 3);
+        assert_eq!(ts.at(ColNr::new(5), true), 4);
+        assert_eq!(ts.at(ColNr::new(13), true), 8);
     }
 
     #[test]
     fn start_reports_where_the_current_stop_begins() {
         let v = stops(&[4, 8, 2]);
         let ts = TabStops::new(&v).unwrap();
-        assert_eq!(ts.start(0), 0);
-        assert_eq!(ts.start(3), 0);
-        assert_eq!(ts.start(4), 4);
-        assert_eq!(ts.start(11), 4);
-        assert_eq!(ts.start(12), 12);
-        assert_eq!(ts.start(14), 14);
-        assert_eq!(ts.start(15), 14);
-        assert_eq!(ts.start(17), 16);
+        assert_eq!(ts.start(ColNr::ZERO), ColNr::ZERO);
+        assert_eq!(ts.start(ColNr::new(3)), ColNr::ZERO);
+        assert_eq!(ts.start(ColNr::new(4)), ColNr::new(4));
+        assert_eq!(ts.start(ColNr::new(11)), ColNr::new(4));
+        assert_eq!(ts.start(ColNr::new(12)), ColNr::new(12));
+        assert_eq!(ts.start(ColNr::new(14)), ColNr::new(14));
+        assert_eq!(ts.start(ColNr::new(15)), ColNr::new(14));
+        assert_eq!(ts.start(ColNr::new(17)), ColNr::new(16));
     }
 
     #[test]
@@ -324,23 +325,23 @@ mod tests {
         let v = stops(&[4, 8, 2]);
         let ts = TabStops::new(&v).unwrap();
         // Not even one stop away: spaces only.
-        assert_eq!(ts.from_to(0, 3), (0, 3));
-        assert_eq!(ts.from_to(0, 4), (1, 0));
-        assert_eq!(ts.from_to(0, 12), (2, 0));
-        assert_eq!(ts.from_to(0, 13), (2, 1));
-        assert_eq!(ts.from_to(0, 14), (3, 0));
+        assert_eq!(ts.from_to(ColNr::ZERO, ColNr::new(3)), (0, 3));
+        assert_eq!(ts.from_to(ColNr::ZERO, ColNr::new(4)), (1, 0));
+        assert_eq!(ts.from_to(ColNr::ZERO, ColNr::new(12)), (2, 0));
+        assert_eq!(ts.from_to(ColNr::ZERO, ColNr::new(13)), (2, 1));
+        assert_eq!(ts.from_to(ColNr::ZERO, ColNr::new(14)), (3, 0));
         // Into the repeating tail.
-        assert_eq!(ts.from_to(0, 18), (5, 0));
-        assert_eq!(ts.from_to(0, 19), (5, 1));
-        assert_eq!(ts.from_to(5, 12), (1, 0));
+        assert_eq!(ts.from_to(ColNr::ZERO, ColNr::new(18)), (5, 0));
+        assert_eq!(ts.from_to(ColNr::ZERO, ColNr::new(19)), (5, 1));
+        assert_eq!(ts.from_to(ColNr::new(5), ColNr::new(12)), (1, 0));
     }
 
     #[test]
     fn uniform_from_to_matches_a_single_repeated_stop() {
-        assert_eq!(uniform_from_to(0, 3, 4), (0, 3));
-        assert_eq!(uniform_from_to(0, 4, 4), (1, 0));
-        assert_eq!(uniform_from_to(0, 9, 4), (2, 1));
-        assert_eq!(uniform_from_to(2, 8, 4), (2, 0));
+        assert_eq!(uniform_from_to(ColNr::ZERO, ColNr::new(3), 4), (0, 3));
+        assert_eq!(uniform_from_to(ColNr::ZERO, ColNr::new(4), 4), (1, 0));
+        assert_eq!(uniform_from_to(ColNr::ZERO, ColNr::new(9), 4), (2, 1));
+        assert_eq!(uniform_from_to(ColNr::new(2), ColNr::new(8), 4), (2, 0));
     }
 
     #[test]

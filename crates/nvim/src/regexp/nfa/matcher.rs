@@ -21,6 +21,7 @@
 )]
 
 use crate::regexp::NfaOp;
+use crate::types::ColNr;
 use crate::types::LineNr;
 use core::ffi::c_int;
 
@@ -410,7 +411,7 @@ fn wants_restart(rex: Rex, toplevel: bool, clen: c_int) -> bool {
     if toplevel
         && rex.lnum() == LineNr::ZERO
         && clen != 0
-        && (rex.reg_maxcol() == 0 || (rex.col()) < rex.reg_maxcol())
+        && (rex.reg_maxcol() == ColNr::ZERO || (rex.col()) < rex.reg_maxcol())
     {
         return true;
     }

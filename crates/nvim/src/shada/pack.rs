@@ -382,7 +382,7 @@ fn pack_buffer_list(list: &[ShadaBufferListItem], out: &mut Packer) {
         }
         if buffer.pos.col != default.col {
             out.key(b"c");
-            out.uint64(buffer.pos.col as u64);
+            out.uint64(buffer.pos.col.get() as u64);
         }
         out.extra(&buffer.extra);
     }

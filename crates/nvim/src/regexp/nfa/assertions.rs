@@ -13,7 +13,6 @@ use core::ffi::c_int;
 use super::run::nfa_re_num_cmp;
 use crate::mark::mark_get;
 use crate::plines::win_linetabsize;
-use crate::pos::MAXCOL;
 use crate::regexp::{Rex, kMarkBufLocal, reg_getline, reg_getline_len, reg_match_visual};
 use crate::types::{ColNr, LineNr, MB_MAXBYTES};
 
@@ -57,7 +56,7 @@ pub(crate) fn at_col(rex: Rex, state: &NfaState) -> bool {
     nfa_re_num_cmp(
         state.val as u64,
         state.c - NfaOp::Col.code(),
-        col(rex) as u64 + 1,
+        col(rex).get() as u64 + 1,
     )
 }
 
@@ -70,15 +69,15 @@ pub(crate) fn at_vcol(rex: Rex, state: &NfaState) -> bool {
     // A virtual column is never smaller than the byte column divided by
     // the widest a character can be, so a `\%<` can be answered without
     // measuring anything.
-    if op != 1 && col > want * MB_MAXBYTES as c_int {
+    if op != 1 && col > ColNr::new(want * MB_MAXBYTES as c_int) {
         return false;
     }
     let wp = window(rex);
     // Likewise for `\%>`, but the bound is the tab width: no character
     // expands to more columns than one tab does.
-    if op == 1 && col - 1 > want && col > 100 {
+    if op == 1 && col - 1 > ColNr::new(want) && col > ColNr::new(100) {
         let ts = wp.buffer().b_p_ts.max(4);
-        if col as i64 > want as i64 * ts {
+        if i64::from(col) > want as i64 * ts {
             return true;
         }
     }
@@ -93,7 +92,7 @@ pub(crate) fn at_vcol(rex: Rex, state: &NfaState) -> bool {
 
 /// `\%'m`: the position of mark `m`.
 pub(crate) fn at_mark(rex: Rex, state: &NfaState) -> bool {
-    let col = if rex.multi() { col(rex) } else { 0 };
+    let col = if rex.multi() { col(rex) } else { ColNr::ZERO };
     let name = state.val;
     // `mark_get` computes a motion mark (`'{`, `'(`) on the spot.
     let fm = mark_get(rex.reg_buf(), Win::current(), kMarkBufLocal, name);
@@ -108,7 +107,7 @@ pub(crate) fn at_mark(rex: Rex, state: &NfaState) -> bool {
     let pos = fm.mark;
     let here = lnum(rex);
     // A mark parked at MAXCOL means the end of its line.
-    let pos_col = if pos.lnum == here && pos.col == MAXCOL as c_int {
+    let pos_col = if pos.lnum == here && pos.col == ColNr::MAX {
         reg_getline_len(rex, LineNr::new(pos.lnum - rex.reg_firstlnum()))
     } else {
         pos.col

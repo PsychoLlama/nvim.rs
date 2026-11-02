@@ -12,6 +12,7 @@
 
 use crate::keycodes::Key;
 use crate::strings::has_char;
+use crate::types::ColNr;
 use crate::types::LineNr;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
@@ -67,12 +68,12 @@ fn match_direction(cmd_arg: &mut CmdArg) -> c_int {
 fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
     let mut new_pos = Pos {
         lnum: LineNr::ZERO,
-        col: 0,
+        col: ColNr::ZERO,
         coladd: 0,
     };
     let mut prev_pos = Pos {
         lnum: LineNr::ZERO,
-        col: 0,
+        col: ColNr::ZERO,
         coladd: 0,
     };
     let mut pos: Option<Pos> = None;

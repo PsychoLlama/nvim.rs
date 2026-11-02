@@ -27,6 +27,7 @@ use crate::option::get_fileformat;
 use crate::os::cshim::gettext;
 use crate::plines::linetabsize_text;
 use crate::types::CmdIdx;
+use crate::types::ColNr;
 use crate::types::MB_MAXCHAR;
 use crate::types::{ExArg, IOSIZE, NUL};
 use crate::undo::u_save;
@@ -49,7 +50,7 @@ pub(crate) fn describe_cursor_char() {
     let cursor = Win::current().w_cursor;
     let mut lines = Lines::current();
     let line = lines.line(cursor.lnum);
-    let data = &line[(cursor.col.max(0) as usize).min(line.len())..];
+    let data = &line[cursor.col.max(ColNr::ZERO).as_usize().min(line.len())..];
     let len = cluster_len(data);
     // A copy of the character and its composing ones: the messages below
     // may redraw, which reads other lines through the same cache.
@@ -229,7 +230,7 @@ pub fn ex_align(excmd: &mut ExArg) {
         lnum += 1;
     }
 
-    changed_lines(Buf::current(), line1, 0, line2 + 1, 0, true);
+    changed_lines(Buf::current(), line1, ColNr::ZERO, line2 + 1, 0, true);
     Win::current().w_cursor = save_curpos;
     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
 }

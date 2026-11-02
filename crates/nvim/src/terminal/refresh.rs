@@ -151,8 +151,8 @@ pub(crate) fn refresh_terminal(term: Term) {
         // The child now knows the width, so a window scrolled sideways is
         // showing a column that no longer means anything.
         for mut wp in windows_showing(buf) {
-            if wp.w_leftcol != 0 {
-                wp.w_leftcol = 0 as ColNr;
+            if wp.w_leftcol != ColNr::ZERO {
+                wp.w_leftcol = ColNr::ZERO;
                 // SAFETY: a window of the current tab page's own list.
                 curs_columns(wp, 1);
             }
@@ -240,7 +240,7 @@ pub(crate) fn refresh_screen(mut term: Term, buffer: Buf) {
     changed_lines(
         buffer,
         change_start,
-        0 as ColNr,
+        ColNr::ZERO,
         change_end,
         added.get(),
         true,

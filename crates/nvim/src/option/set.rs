@@ -23,9 +23,10 @@
 
 use crate::tr;
 use crate::types::AutoEvent;
+use crate::types::ColNr;
 use crate::types::LineNr;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
 
 use crate::autocmd::{do_filetype_autocmd, fire_autocmds_for};
 use crate::charset::buf_init_chartab;
@@ -68,7 +69,6 @@ use super::{
     option_scope_idx, option_var, replace_slot, restore_slot, set_option_last_set, slot_holds,
     slot_value, tty_option_end, validate_option_value, write_slot,
 };
-use crate::pos::MAXCOL;
 use crate::winlayer::Buf;
 
 /// Record where the option was just set, in every scope the flags name.
@@ -429,7 +429,7 @@ pub(crate) fn did_set_option(
         _ => {}
     }
 
-    if Win::current().w_curswant != MAXCOL as c_int
+    if Win::current().w_curswant != ColNr::MAX
         && opt.flags & (kOptFlagCurswant | kOptFlagRedrAll) as uint32_t != 0
         && opt.flags & kOptFlagHLOnly as uint32_t == 0
     {

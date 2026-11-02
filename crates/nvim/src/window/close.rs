@@ -22,6 +22,7 @@
 
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
+use crate::types::ColNr;
 use core::ffi::c_int;
 
 use super::*;
@@ -39,7 +40,7 @@ use crate::r#move::WinValid;
 use crate::option::vars::{p_confirm, p_write};
 use crate::state::MODE_INSERT;
 use crate::state::mode::{State, restart_edit, stop_insert_mode};
-use crate::types::{CmdModFlags, ColNr, Error, FAIL, LineNr, NUL};
+use crate::types::{CmdModFlags, Error, FAIL, LineNr, NUL};
 use crate::winlayer::graph::{
     cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win, leave_curbuf,
 };
@@ -104,13 +105,13 @@ pub(crate) fn init_empty(window: Win) {
     window.redraw_later(UPD_NOT_VALID);
     window.w_lines_valid = 0;
     window.w_cursor.lnum = LineNr::ONE;
-    window.w_cursor.col = 0;
+    window.w_cursor.col = ColNr::ZERO;
     window.w_curswant = window.w_cursor.col;
-    window.w_cursor.coladd = 0 as ColNr;
+    window.w_cursor.coladd = 0;
     window.w_pcmark.lnum = LineNr::ONE; // pcmark not cleared but set to line 1
-    window.w_pcmark.col = 0;
+    window.w_pcmark.col = ColNr::ZERO;
     window.w_prev_pcmark.lnum = LineNr::ZERO;
-    window.w_prev_pcmark.col = 0;
+    window.w_prev_pcmark.col = ColNr::ZERO;
     window.w_topline = LineNr::ONE;
     window.w_topfill = 0;
     window.w_botline = LineNr::new(2);

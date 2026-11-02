@@ -44,8 +44,8 @@ state_record! {
     pub(crate) last_cursormoved_win: Option<WinId> = None;
     pub(crate) last_cursormoved: Pos = Pos {
         lnum: LineNr::ZERO,
-        col: 0 as ColNr,
-        coladd: 0 as ColNr,
+        col: ColNr::ZERO,
+        coladd: 0,
     };
     pub(crate) autocmd_busy: bool = false;
     pub(crate) autocmd_no_enter: c_int = 0;

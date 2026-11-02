@@ -203,7 +203,7 @@ fn indent_after_open(open: &Pos) -> c_int {
     let mut chr = c_char_info(line, 0);
     let mut amount = 0;
     let mut col = open.col;
-    while byte_at(line, that) != 0 && col > 0 {
+    while byte_at(line, that) != 0 && col > ColNr::ZERO {
         amount += win_charsize(cstype, amount, that, chr.value, &mut csarg).width;
         (that, chr) = c_next_cluster(line, that, chr);
         col -= 1;
@@ -300,7 +300,7 @@ fn measure_first_argument(
 pub fn get_lisp_indent() -> c_int {
     let mut win = Win::current();
     let realpos = win.w_cursor;
-    win.w_cursor.col = 0;
+    win.w_cursor.col = ColNr::ZERO;
     let amount = match enclosing_open() {
         // No enclosing '(' or '[': no indent.
         None => 0,

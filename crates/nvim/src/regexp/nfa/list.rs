@@ -26,6 +26,7 @@
 
 use crate::regexp::NfaOp;
 use crate::regexp::NotAnOpcode;
+use crate::types::ColNr;
 use core::cell::Cell;
 use core::ffi::c_int;
 
@@ -86,7 +87,7 @@ const BLANK_SUB: RegSub = RegSub {
         start: MatchPos::NOWHERE,
         end: MatchPos::NOWHERE,
     }; NSUBEXP as usize],
-    orig_start_col: 0,
+    orig_start_col: ColNr::ZERO,
 };
 
 pub(crate) const BLANK_SUBS: RegSubs = RegSubs {

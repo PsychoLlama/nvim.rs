@@ -169,7 +169,7 @@ pub(super) fn switch_to_other_buffer(
     {
         let pos = buflist_findfmark_pos(buffer);
         state.newlnum = pos.lnum;
-        state.solcol = pos.col;
+        state.solcol = pos.col.get();
     }
 
     // Make the (new) buffer the one used by the current window.  If the old

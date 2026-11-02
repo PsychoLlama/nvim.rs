@@ -16,7 +16,7 @@
 use std::ffi::c_int;
 
 use neovim::indent::{get_sts_value, indent_size_ts};
-use neovim::types::{ColNr, OptInt};
+use neovim::types::OptInt;
 use neovim::winlayer::Buf;
 
 use crate::support::{Editor, Sandbox};
@@ -73,7 +73,7 @@ fn a_negative_softtabstop_is_the_effective_shiftwidth() {
 /// The [`Editor`] token is not decoration: `indent_size_ts` opens with a
 /// `debug_assert!` that a space is one cell wide, which reads the character
 /// table the editor's startup fills in.
-fn indent_size(_editor: &Editor, line: &str, ts: OptInt, vts: Option<&mut [ColNr]>) -> c_int {
+fn indent_size(_editor: &Editor, line: &str, ts: OptInt, vts: Option<&mut [i32]>) -> c_int {
     indent_size_ts(line.as_bytes(), ts, vts.as_deref())
 }
 
@@ -100,7 +100,7 @@ fn tabs_advance_to_the_next_uniform_stop() {
 fn a_vartabstop_array_with_no_entries_falls_back_to_tabstop() {
     let editor = Sandbox::globals();
     let line = "   \t  \t \t\t       a ";
-    let mut vts: [ColNr; 1] = [0];
+    let mut vts: [i32; 1] = [0];
     assert_eq!(indent_size(editor.editor(), line, 4, Some(&mut vts)), 23);
     assert_eq!(indent_size(editor.editor(), line, 4, None), 23);
 }
@@ -111,7 +111,7 @@ fn a_vartabstop_array_with_no_entries_falls_back_to_tabstop() {
 fn a_vartabstop_array_walks_the_widths_after_its_count() {
     let editor = Sandbox::globals();
     let line = "      \t  \t \t\t   a ";
-    let mut vts: [ColNr; 3] = [2, 7, 2];
+    let mut vts: [i32; 3] = [2, 7, 2];
     assert_eq!(indent_size(editor.editor(), line, 4, Some(&mut vts)), 18);
     // The same line under the uniform 'tabstop' is a different answer, so
     // the case really is reading the array.

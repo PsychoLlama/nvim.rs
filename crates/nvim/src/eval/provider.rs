@@ -10,6 +10,7 @@ use crate::guard::Depth;
 use crate::memory::ThinCString;
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::semsg;
+use crate::types::ColNr;
 use crate::types::LineNr;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
@@ -309,7 +310,7 @@ pub fn prompt_invoke_callback() {
     let _ = ml_append_bytes(Buf::current(), lnum, b"");
     appended_lines_mark(lnum, 1);
     Win::current().w_cursor.lnum = lnum + 1;
-    Win::current().w_cursor.col = 0;
+    Win::current().w_cursor.col = ColNr::ZERO;
     Buf::current().b_prompt_start.mark.lnum = lnum + 1;
 
     if !Buf::current().b_prompt_callback.is_set() {

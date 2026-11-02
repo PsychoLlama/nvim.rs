@@ -32,8 +32,8 @@ use crate::options::{
     kOptSsopFlagCurdir, kOptSsopFlagCursor, kOptSsopFlagFolds, kOptSsopFlagLocaloptions,
     kOptSsopFlagOptions, kOptSsopFlagTerminal,
 };
-use crate::pos::MAXCOL;
 use crate::types::ArgListId;
+use crate::types::ColNr;
 use crate::types::{OptionSetFlags, int64_t};
 use crate::window::{DirOwner, has_own_dir, own_dir};
 use crate::winlayer::graph::switch_to;
@@ -256,12 +256,12 @@ fn put_cursor(out: &mut SessionFile, window: Win) -> bool {
     }
 
     // The column, and the left offset when not wrapping.
-    if window.w_cursor.col == 0 {
+    if window.w_cursor.col == ColNr::ZERO {
         return out.line(c"normal! 0");
     }
     let width = window.w_width;
-    if window.w_onebuf_opt.wo_wrap == 0 && window.w_leftcol > 0 && width > 0 {
-        let virtcol = window.w_virtcol as int64_t;
+    if window.w_onebuf_opt.wo_wrap == 0 && window.w_leftcol > ColNr::ZERO && width > 0 {
+        let virtcol = i64::from(window.w_virtcol);
         return out.write(format_args!(
             "let s:c = {} - (({} * winwidth(0) + {}) / {})\nif s:c > 0\n  exe 'normal! ' . s:c . '|zs' . {} . '|'\nelse\n",
             virtcol + 1,
@@ -279,7 +279,7 @@ fn put_cursor(out: &mut SessionFile, window: Win) -> bool {
 /// cursor was at end-of-line ('curswant' is `MAXCOL`), otherwise the virtual
 /// column, one-based.
 fn put_view_curpos(out: &mut SessionFile, window: Win, spaces: &str) -> bool {
-    if window.w_curswant == MAXCOL {
+    if window.w_curswant == ColNr::MAX {
         out.write(format_args!("{spaces}normal! $\n"))
     } else {
         out.write(format_args!("{spaces}normal! 0{}|\n", window.w_virtcol + 1))

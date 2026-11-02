@@ -115,7 +115,7 @@ pub(crate) fn win_chartabsize(window: Win, text: &[u8], col: ColNr) -> c_int {
 /// Cells the string `s` takes, as if it began at virtual column `startvcol`
 /// of the current window.
 pub(crate) fn linetabsize_col(startvcol: c_int, s: &[u8]) -> c_int {
-    win_linetabsize_col(Win::current(), LineNr::ZERO, s, startvcol, MAXCOL)
+    win_linetabsize_col(Win::current(), LineNr::ZERO, s, startvcol, ColNr::MAX)
 }
 
 /// [`linetabsize_col`] of a string the caller holds.
@@ -167,14 +167,14 @@ fn win_linetabsize_col(
 /// 'listchars' "eol".
 pub(crate) fn linetabsize(window: Win, lnum: LineNr) -> c_int {
     let mut lines = window.buffer().lines();
-    win_linetabsize(window, lnum, lines.line(lnum), MAXCOL)
+    win_linetabsize(window, lnum, lines.line(lnum), ColNr::MAX)
 }
 
 /// Cells the first `len` bytes of line `lnum` take in `window`, counting
 /// inline virtual text: the virtual column `len` starts at.
 pub(crate) fn win_line_prefix_cells(window: Win, lnum: LineNr, len: ColNr) -> ColNr {
     let mut lines = window.buffer().lines();
-    win_linetabsize(window, lnum, lines.line(lnum), len)
+    ColNr::new(win_linetabsize(window, lnum, lines.line(lnum), len))
 }
 
 /// Like [`linetabsize`], but counts the 'listchars' "eol".
@@ -292,7 +292,7 @@ fn showbreak_head(
     let view_width = wp.w_view_width;
     let mut col_off_prev = wp.col_off();
     let width2 = view_width - col_off_prev + wp.col_off2();
-    let mut wcol = vcol + col_off_prev;
+    let mut wcol = vcol.get() + col_off_prev;
     let max_head_vcol = csarg.max_head_vcol;
     let mut added = 0;
     let mut head = 0;
@@ -310,7 +310,7 @@ fn showbreak_head(
             head_prev -= wcol;
             wcol += head_prev;
             added += head_prev;
-            if max_head_vcol <= 0 || vcol < max_head_vcol {
+            if max_head_vcol <= 0 || vcol < ColNr::new(max_head_vcol) {
                 head += head_prev;
             }
         } else {
@@ -333,10 +333,10 @@ fn showbreak_head(
             let cnt = (size - prev_rem + width - 1) / width;
             added += cnt * head_mid;
 
-            if max_head_vcol == 0 || vcol + size + added < max_head_vcol {
+            if max_head_vcol == 0 || vcol + size + added < ColNr::new(max_head_vcol) {
                 head += cnt * head_mid;
-            } else if width2 > 0 && max_head_vcol > vcol + head_prev + prev_rem {
-                head += (max_head_vcol - (vcol + head_prev + prev_rem) + width2 - 1) / width2
+            } else if width2 > 0 && max_head_vcol > (vcol + head_prev + prev_rem).get() {
+                head += (max_head_vcol - (vcol + head_prev + prev_rem).get() + width2 - 1) / width2
                     * head_mid;
             } else if max_head_vcol < 0 {
                 let on_nul = byte_at(csarg.line, at) == NUL as u8;
@@ -455,11 +455,11 @@ fn linebreak_size(win: Win, line: &[u8], at: usize, vcol: ColNr, size: c_int) ->
     let numberextra = win.col_off();
     let col_adj = size - 1;
     let mut colmax = win.w_view_width - numberextra - col_adj;
-    if vcol >= colmax {
+    if vcol >= ColNr::new(colmax) {
         colmax += col_adj;
         let n = colmax + win.col_off2();
         if n > 0 {
-            colmax += ((vcol + col_adj - colmax) / n + 1) * n - col_adj;
+            colmax += ((vcol + col_adj - colmax).get() / n + 1) * n - col_adj;
         }
     }
 
@@ -476,9 +476,9 @@ fn linebreak_size(win: Win, line: &[u8], at: usize, vcol: ColNr, size: c_int) ->
             return size;
         }
         vcol2 += win_chartabsize(win, &line[s..], vcol2);
-        if vcol2 >= colmax {
+        if vcol2 >= ColNr::new(colmax) {
             // Doesn't fit.
-            return colmax - vcol + col_adj;
+            return colmax - vcol.get() + col_adj;
         }
     }
 }
@@ -604,9 +604,9 @@ pub(crate) fn win_charsize(
     csarg: &mut CharsizeArg<'_>,
 ) -> CharSize {
     if cstype == CharsizeKind::Fast {
-        charsize_fast(csarg, at, vcol, chr)
+        charsize_fast(csarg, at, ColNr::new(vcol), chr)
     } else {
-        charsize_regular(csarg, at, vcol, chr)
+        charsize_regular(csarg, at, ColNr::new(vcol), chr)
     }
 }
 
@@ -636,10 +636,10 @@ fn in_win_border(window: Win, vcol: ColNr) -> bool {
     }
     // Width of the first screen line, after the line number.
     let width1 = view_width - window.col_off();
-    if vcol < width1 - 1 {
+    if vcol < ColNr::new(width1 - 1) {
         return false;
     }
-    if vcol == width1 - 1 {
+    if vcol == ColNr::new(width1 - 1) {
         return true;
     }
     // Width of the wrapped screen lines after it.
@@ -647,7 +647,7 @@ fn in_win_border(window: Win, vcol: ColNr) -> bool {
     if width2 <= 0 {
         return false;
     }
-    (vcol - width1) % width2 == width2 - 1
+    (vcol - width1).get() % width2 == width2 - 1
 }
 
 /// Whether the character `chr` at byte `at` of `line` is the end of the
@@ -682,7 +682,7 @@ pub(crate) fn linesize_regular(
     let mut at = 0;
     let mut chr: CharInfo = c_char_info(line, 0);
     while at < end && !ends_at(line, at, chr) {
-        vcol += charsize_regular(csarg, at, vcol_arg, chr.value).width as int64_t;
+        vcol += charsize_regular(csarg, at, ColNr::new(vcol_arg), chr.value).width as int64_t;
         (at, chr) = c_next_cluster(line, at, chr);
         if vcol > MAXCOL as int64_t {
             vcol_arg = MAXCOL;
@@ -692,8 +692,8 @@ pub(crate) fn linesize_regular(
     }
 
     // Inline virtual text after the end of the line.
-    if len == MAXCOL && csarg.virt_row >= 0 && byte_at(line, at) == NUL as u8 {
-        let head = charsize_regular(csarg, at, vcol_arg, chr.value).head;
+    if len == ColNr::MAX && csarg.virt_row >= 0 && byte_at(line, at) == NUL as u8 {
+        let head = charsize_regular(csarg, at, ColNr::new(vcol_arg), chr.value).head;
         vcol += (csarg.cur_text_width_left + csarg.cur_text_width_right + head) as int64_t;
         vcol_arg = if vcol > MAXCOL as int64_t {
             MAXCOL
@@ -717,7 +717,8 @@ pub(crate) fn linesize_fast(csarg: &CharsizeArg<'_>, mut vcol_arg: c_int, len: C
     let mut at = 0;
     let mut chr: CharInfo = c_char_info(line, 0);
     while at < end && !ends_at(line, at, chr) {
-        vcol += charsize_fast_impl(wp, line, at, use_tabstop, vcol_arg, chr.value).width as int64_t;
+        vcol += charsize_fast_impl(wp, line, at, use_tabstop, ColNr::new(vcol_arg), chr.value).width
+            as int64_t;
         (at, chr) = c_next_cluster(line, at, chr);
         if vcol > MAXCOL as int64_t {
             vcol_arg = MAXCOL;

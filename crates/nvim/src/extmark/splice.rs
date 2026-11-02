@@ -74,17 +74,17 @@ pub(crate) fn adjust(
     }
     let start = Extent {
         row: (line1 - 1).get(),
-        col: 0,
+        col: ColNr::ZERO,
         byte: start_byte,
     };
     let old = Extent {
         row: old_row,
-        col: 0,
+        col: ColNr::ZERO,
         byte: old_byte,
     };
     let new = Extent {
         row: new_row,
-        col: 0,
+        col: ColNr::ZERO,
         byte: new_byte,
     };
     splice_impl(buffer, start, old, new, undo);
@@ -113,7 +113,7 @@ pub(crate) fn splice(
     let start = Extent {
         row: start_row,
         col: start_col,
-        byte: (offset + start_col) as BCount,
+        byte: (offset + start_col.get()) as BCount,
     };
     splice_impl(buffer, start, old, new, undo);
 }
@@ -130,20 +130,20 @@ pub(crate) fn splice_impl(
     buffer.deleted_bytes2 = 0;
     send_splice(buffer, start, old, new);
 
-    if old.row > 0 || old.col > 0 {
+    if old.row > 0 || old.col > ColNr::ZERO {
         // Copy and invalidate the marks a delete would affect.
         // TODO(bfredl): be smart about marks already saved (important for
         // the merge below).
         let end_row = start.row + old.row;
-        let end_col = (if old.row != 0 { 0 } else { start.col }) + old.col;
+        let end_col = old.col + if old.row != 0 { 0 } else { start.col.get() };
         let header = undo_header(buffer);
         let lo = MTPos {
             row: start.row,
-            col: start.col,
+            col: start.col.get(),
         };
         let hi = MTPos {
             row: end_row,
-            col: end_col,
+            col: end_col.get(),
         };
         // The marks it saves are gathered here and appended after: the walk
         // runs with no undo header borrowed.
@@ -176,9 +176,16 @@ pub(crate) fn splice_impl(
 
     let at = MTPos {
         row: start.row,
-        col: start.col,
+        col: start.col.get(),
     };
-    tree_splice(buffer.marktree(), at, old.row, old.col, new.row, new.col);
+    tree_splice(
+        buffer.marktree(),
+        at,
+        old.row,
+        old.col.get(),
+        new.row,
+        new.col.get(),
+    );
 
     if old.row > 0 || new.row > 0 {
         let row2 = (buffer.b_ml.ml_line_count - 1).min(LineNr::new(start.row + new.row));
@@ -227,21 +234,21 @@ fn merge_into_last(
     if splice.start_row != start.row || splice.old_row != 0 || splice.new_row != 0 {
         return false;
     }
-    if old.col == 0
+    if old.col == ColNr::ZERO
         && start.col >= splice.start_col
-        && start.col <= splice.start_col + splice.new_col
+        && start.col <= splice.start_col + splice.new_col.get()
     {
-        splice.new_col += new.col;
+        splice.new_col += new.col.get();
         splice.new_byte += new.byte;
         true
-    } else if new.col == 0 && start.col == splice.start_col + splice.new_col {
-        splice.old_col += old.col;
+    } else if new.col == ColNr::ZERO && start.col == splice.start_col + splice.new_col.get() {
+        splice.old_col += old.col.get();
         splice.old_byte += old.byte;
         true
-    } else if new.col == 0 && start.col + old.col == splice.start_col {
+    } else if new.col == ColNr::ZERO && start.col + old.col.get() == splice.start_col {
         splice.start_col = start.col;
         splice.start_byte = start.byte;
-        splice.old_col += old.col;
+        splice.old_col += old.col.get();
         splice.old_byte += old.byte;
         true
     } else {
@@ -269,7 +276,7 @@ pub(crate) fn move_region(
 
     let at = MTPos {
         row: start.row,
-        col: start.col,
+        col: start.col.get(),
     };
     tree_move_region(
         buffer.marktree(),
@@ -291,11 +298,11 @@ pub(crate) fn move_region(
 
         let move_0 = ExtmarkMove {
             start_row: start.row,
-            start_col: start.col,
+            start_col: start.col.get(),
             extent_row: extent.row,
-            extent_col: extent.col,
+            extent_col: extent.col.get(),
             new_row: new.row,
-            new_col: new.col,
+            new_col: new.col.get(),
             start_byte: start.byte,
             extent_byte: extent.byte,
             new_byte: new.byte,

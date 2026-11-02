@@ -52,7 +52,7 @@ pub fn extmark_get(
 
     if overlap {
         // Every mark overlapping the start position.
-        if !itr_get_overlap(buffer.marktree(), l_row, l_col, &mut iter) {
+        if !itr_get_overlap(buffer.marktree(), l_row, l_col.get(), &mut iter) {
             return array;
         }
 
@@ -69,7 +69,7 @@ pub fn extmark_get(
         // Every mark beginning at or after the start position.
         let start = MTPos {
             row: l_row,
-            col: l_col,
+            col: l_col.get(),
         };
         itr_get_ext(buffer.marktree(), start, &mut iter);
     }
@@ -78,7 +78,7 @@ pub fn extmark_get(
         let mark = itr_current(buffer.marktree(), &iter);
         if mark.pos.row < 0
             || mark.pos.row > u_row
-            || (mark.pos.row == u_row && mark.pos.col > u_col)
+            || (mark.pos.row == u_row && mark.pos.col > u_col.get())
         {
             break;
         }

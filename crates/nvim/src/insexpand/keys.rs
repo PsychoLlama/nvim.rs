@@ -49,7 +49,7 @@ pub fn ins_compl_bs() -> c_int {
         let to_c = |n: usize| c_int::try_from(n).unwrap_or(c_int::MAX);
         to_c(col) - to_c(back)
     };
-    let from_start = p_off - compl_col.get();
+    let from_start = p_off - compl_col.get().get();
 
     // Stop completion when the whole word was deleted.  For Omni
     // completion allow the word to be deleted, we won't match everything.
@@ -74,7 +74,7 @@ pub fn ins_compl_bs() -> c_int {
     // afresh.
     // TODO(bfredl): get rid of random update_screen() calls deep inside
     // completion logic
-    compl_leader().set(cursor_line_part(compl_col.get(), p_off));
+    compl_leader().set(cursor_line_part(compl_col.get(), ColNr::new(p_off)));
 
     // Clear the selection if a menu item is currently selected in
     // autocompletion.
@@ -282,14 +282,14 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
         let prev_col = Win::current().w_cursor.col;
 
         // Put the cursor on the last char, for 'tw' formatting.
-        if prev_col > 0 {
+        if prev_col > ColNr::ZERO {
             dec_cursor();
         }
         // Only format when something was inserted.
         if !arrow_used.get() && !ins_need_undo_get() && c != Ctrl_E {
             insertchar(NUL, 0, -1);
         }
-        if prev_col > 0 && Win::current().w_cursor.col < get_cursor_line_len() {
+        if prev_col > ColNr::ZERO && Win::current().w_cursor.col < get_cursor_line_len() {
             inc_cursor();
         }
     }
@@ -360,7 +360,7 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
     compl_autocomplete.set(false);
     compl_from_nonkeyword.set(false);
     compl_num_bests.set(0);
-    compl_ins_end_col.set(0);
+    compl_ins_end_col.set(ColNr::ZERO);
 
     if c == Ctrl_C && cmdwin_type.get() != 0 {
         // Avoid the popup menu remaining displayed when leaving the

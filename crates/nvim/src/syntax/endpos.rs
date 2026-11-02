@@ -10,6 +10,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::narrow::number_as_col;
 use core::ffi::c_int;
 
 use crate::charset::display::foldcase;
@@ -47,7 +48,7 @@ impl RegionEnd {
     const fn none() -> Self {
         let zero = LPos {
             lnum: LineNr::ZERO,
-            col: 0,
+            col: ColNr::ZERO,
         };
         RegionEnd {
             m_endpos: zero,
@@ -195,9 +196,10 @@ impl SynState {
             if spp.sp_type as c_int != SPTYPE_END {
                 break; // past the last END pattern of this region
             }
-            let lc_col = (matchcol as c_int - spp.sp_offsets[SPO_LC_OFF as usize]).max(0);
+            let lc_col = (matchcol.get() - spp.sp_offsets[SPO_LC_OFF as usize]).max(0);
 
-            let (matched, regmatch, _) = self.run_pattern(idx, startpos.lnum, lc_col as ColNr, ext);
+            let (matched, regmatch, _) =
+                self.run_pattern(idx, startpos.lnum, ColNr::new(lc_col), ext);
             let col = regmatch.startpos[0].col;
             if matched && best.as_ref().is_none_or(|(_, b)| col < b.startpos[0].col) {
                 best = Some((idx, regmatch));
@@ -229,9 +231,9 @@ impl SynState {
         ext: Option<&ExtMatch>,
     ) -> Skipped {
         let offsets = self.block().pattern(skip_idx).offsets();
-        let lc_col = (matchcol as c_int - offsets.offsets[SPO_LC_OFF as usize]).max(0);
+        let lc_col = (matchcol.get() - offsets.offsets[SPO_LC_OFF as usize]).max(0);
         let (matched, regmatch, _) =
-            self.run_pattern(skip_idx, startpos.lnum, lc_col as ColNr, ext);
+            self.run_pattern(skip_idx, startpos.lnum, ColNr::new(lc_col), ext);
         if !matched || regmatch.startpos[0].col > best_start.col {
             return Skipped::No;
         }
@@ -325,15 +327,15 @@ pub(crate) const fn empty_regmmatch() -> RegMMatch {
         regprog: None,
         startpos: [LPos {
             lnum: LineNr::ZERO,
-            col: 0,
+            col: ColNr::ZERO,
         }; 10],
         endpos: [LPos {
             lnum: LineNr::ZERO,
-            col: 0,
+            col: ColNr::ZERO,
         }; 10],
-        rmm_matchcol: 0,
+        rmm_matchcol: ColNr::ZERO,
         rmm_ic: 0,
-        rmm_maxcol: 0,
+        rmm_maxcol: ColNr::ZERO,
     }
 }
 
@@ -380,11 +382,11 @@ impl SynState {
             // "rs=e+2" when there is a matchgroup.
             0
         } else {
-            self.walk_chars(base.lnum, base.col, off)
+            self.walk_chars(base.lnum, base.col, off).get()
         };
         LPos {
             lnum: base.lnum,
-            col,
+            col: ColNr::new(col),
         }
     }
 
@@ -431,7 +433,7 @@ impl SynState {
         }
         let mut lines = Lines::in_buffer(self.buffer);
         let line = lines.line(lnum);
-        let mut at = (col as usize).min(line.len());
+        let mut at = col.as_usize().min(line.len());
         let mut left = off;
         if off > 0 {
             while left > 0 && at < line.len() {
@@ -444,7 +446,7 @@ impl SynState {
                 left += 1;
             }
         }
-        at as ColNr
+        ColNr::from_index(at)
     }
 
     /// Length of the line being parsed.
@@ -455,7 +457,7 @@ impl SynState {
 
     /// The byte at `col` of the line being parsed, NUL at and past its end.
     pub(crate) fn curline_byte(&mut self, col: ColNr) -> u8 {
-        cstr::byte_at(self.curline(), col as usize)
+        cstr::byte_at(self.curline(), col.as_usize())
     }
 
     /// Whether `col`, and `col + 1`, are at or past the end of the line
@@ -496,7 +498,7 @@ impl SynState {
         // The window and buffer the parser was started for -- the window may
         // have gone, the buffer never has once the parse has begun.
         let (win, buf) = (self.win.and_then(WinId::get), self.buffer);
-        regmatch.rmm_maxcol = buf.b_p_smc as ColNr;
+        regmatch.rmm_maxcol = number_as_col(buf.b_p_smc);
         let mut timed_out = false;
         let tm = self.deadline.as_ref();
         let r = vim_regexec_syntax(regmatch, win, buf, lnum, col, tm, Some(&mut timed_out), io);

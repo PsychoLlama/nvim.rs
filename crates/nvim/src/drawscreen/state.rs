@@ -43,22 +43,22 @@ pub(crate) static screen_search_hl: GlobalCell<MatchState> = GlobalCell::new(Mat
         regprog: None,
         startpos: [LPos {
             lnum: LineNr::ZERO,
-            col: 0,
+            col: ColNr::ZERO,
         }; 10],
         endpos: [LPos {
             lnum: LineNr::ZERO,
-            col: 0,
+            col: ColNr::ZERO,
         }; 10],
-        rmm_matchcol: 0,
+        rmm_matchcol: ColNr::ZERO,
         rmm_ic: 0,
-        rmm_maxcol: 0,
+        rmm_maxcol: ColNr::ZERO,
     },
     lnum: LineNr::ZERO,
     attr: 0,
     attr_cur: 0,
     first_lnum: LineNr::ZERO,
-    startcol: 0,
-    endcol: 0,
+    startcol: ColNr::ZERO,
+    endcol: ColNr::ZERO,
     is_addpos: false,
     has_cursor: false,
     conceals: false,
@@ -70,7 +70,7 @@ pub(crate) static redraw_cmdline: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static redraw_mode: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static clear_cmdline: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static mode_displayed: GlobalCell<bool> = GlobalCell::new(false);
-pub(crate) static dollar_vcol: GlobalCell<ColNr> = GlobalCell::new(-1 as ColNr);
+pub(crate) static dollar_vcol: GlobalCell<ColNr> = GlobalCell::new(ColNr::NONE);
 pub(crate) static need_maketitle: GlobalCell<bool> = GlobalCell::new(true);
 pub(crate) static redraw_tabline: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static ru_col: GlobalCell<c_int> = GlobalCell::new(0);

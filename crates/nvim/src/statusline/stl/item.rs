@@ -23,6 +23,7 @@
 #![forbid(unsafe_code)]
 
 use crate::memline::MlFlags;
+use crate::types::ColNr;
 use core::ffi::c_int;
 
 use super::{
@@ -490,7 +491,7 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: StlOpt, pos: usize, text: &mut V
             v.num = if !in_insert_mode() && env.empty_line {
                 0
             } else {
-                env.win.w_cursor.col + 1
+                (env.win.w_cursor.col + 1).get()
             };
         }
         StlOpt::VirtCol | StlOpt::VirtColAlt => {
@@ -498,11 +499,11 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: StlOpt, pos: usize, text: &mut V
             let col = if !in_insert_mode() && env.empty_line {
                 0
             } else {
-                env.win.w_cursor.col + 1
+                (env.win.w_cursor.col + 1).get()
             };
             // `%V` is not shown when it says the same as `%c`.
-            if !(opt == StlOpt::VirtColAlt && virtcol == col) {
-                v.num = virtcol;
+            if !(opt == StlOpt::VirtColAlt && virtcol == ColNr::new(col)) {
+                v.num = virtcol.get();
             }
         }
         StlOpt::Percentage => v.num = env.percentage(),
@@ -532,7 +533,7 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: StlOpt, pos: usize, text: &mut V
                     + if !in_insert_mode() && env.empty_line {
                         0
                     } else {
-                        env.win.w_cursor.col
+                        env.win.w_cursor.col.get()
                     }
             };
         }

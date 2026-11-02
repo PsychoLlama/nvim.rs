@@ -17,6 +17,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::types::ColNr;
 use crate::types::LineNr;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
@@ -31,7 +32,6 @@ use crate::cursor::{
 use crate::global_cell::GlobalCell;
 use crate::memline::{Lines, ml_replace_owned};
 use crate::memory::XString;
-use crate::pos::MAXCOL;
 use crate::state::MODE_INSERT;
 use crate::state::mode::{State, saved_cursor};
 use crate::types::NUL;
@@ -76,7 +76,7 @@ pub fn auto_format(trailblank: bool, prev_line: bool) {
         dec_cursor();
         let mut cc = gchar_cursor();
         if !whitechar(cc)
-            && Win::current().w_cursor.col > 0
+            && Win::current().w_cursor.col > ColNr::ZERO
             && has_format_option(FoFlag::ONE_LETTER)
         {
             dec_cursor();
@@ -94,7 +94,11 @@ pub fn auto_format(trailblank: bool, prev_line: bool) {
     // `OPENLINE_DELSPACES` would eat that space at the break. Deferring
     // means the next non-white character lands next to the space, which
     // protects it, and the keystroke after that reformats properly.
-    if !old.is_empty() && !trailblank && !wasatend && pos.col > 0 && State.get() & MODE_INSERT != 0
+    if !old.is_empty()
+        && !trailblank
+        && !wasatend
+        && pos.col > ColNr::ZERO
+        && State.get() & MODE_INSERT != 0
     {
         let before = byte_at(
             Lines::current().line(pos.lnum),
@@ -135,7 +139,7 @@ pub fn auto_format(trailblank: bool, prev_line: bool) {
     if Win::current().w_cursor.lnum > Buf::current().b_ml.ml_line_count {
         // "cannot happen"
         Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
-        coladvance(Win::current(), MAXCOL);
+        coladvance(Win::current(), ColNr::MAX);
     } else {
         check_cursor_col(Win::current());
     }

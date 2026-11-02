@@ -28,6 +28,7 @@ use crate::normal::{visual_active, with_visual_anchor};
 use crate::option::vars::p_report;
 use crate::os::cshim::{gettext, ngettext};
 use crate::tr_plural;
+use crate::types::ColNr;
 use crate::types::{BCount, Failed, LineNr, OptInt, int64_t};
 use crate::undo::u_save;
 use crate::winlayer::Buf;
@@ -95,7 +96,7 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
         changed_lines(
             Buf::current(),
             last_line - num_lines + 1,
-            0,
+            ColNr::ZERO,
             last_line + 1,
             num_lines,
             false,
@@ -125,7 +126,7 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
         changed_lines(
             Buf::current(),
             last_line - num_lines + 1,
-            0,
+            ColNr::ZERO,
             last_line + 1,
             -extra,
             false,
@@ -149,13 +150,13 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
     extmark_move_region(
         Buf::current(),
         (line1 - 1).get(),
-        0,
+        ColNr::ZERO,
         start_byte,
         line2 - line1 + 1,
-        0,
+        ColNr::ZERO,
         extent_byte,
         (dest + line_off).get(),
-        0,
+        ColNr::ZERO,
         dest_byte + byte_off,
         kExtmarkUndo,
     );
@@ -165,9 +166,16 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
 
     if line1 < dest {
         let end = (dest + num_lines + 1).min(Buf::current().b_ml.ml_line_count + 1);
-        changed_lines(Buf::current(), line1, 0, end, 0, false);
+        changed_lines(Buf::current(), line1, ColNr::ZERO, end, 0, false);
     } else {
-        changed_lines(Buf::current(), dest + 1, 0, line1 + num_lines, 0, false);
+        changed_lines(
+            Buf::current(),
+            dest + 1,
+            ColNr::ZERO,
+            line1 + num_lines,
+            0,
+            false,
+        );
     }
     // Send nvim_buf_lines_event regarding lines that were deleted.
     buf_updates_send_changes(Buf::current(), line1 + extra, 0, num_lines as int64_t);
@@ -211,9 +219,9 @@ pub(super) fn set_op_range(start: LineNr, end: LineNr) {
         return;
     }
     Buf::current().b_op_start.lnum = start;
-    Buf::current().b_op_start.col = 0;
+    Buf::current().b_op_start.col = ColNr::ZERO;
     Buf::current().b_op_end.lnum = end;
-    Buf::current().b_op_end.col = 0;
+    Buf::current().b_op_end.col = ColNr::ZERO;
 }
 
 /// `:copy` and `:t` -- copy lines `line1`..`line2` to below line `n`.

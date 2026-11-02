@@ -297,11 +297,11 @@ pub(crate) fn show_sub(
                 hl_id,
                 p_start,
                 p_end,
-                pv.col_width as ColNr,
+                ColNr::new(pv.col_width),
             );
         }
         let (start, end) = (m.start, m.end);
-        bufhl_add_hl_pos_offset(orig_buf, cmdpreview_ns, hl_id, start, end, 0);
+        bufhl_add_hl_pos_offset(orig_buf, cmdpreview_ns, hl_id, start, end, ColNr::ZERO);
     }
 
     drop(pv);

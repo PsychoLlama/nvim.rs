@@ -30,11 +30,11 @@ use crate::message::{e_backslash, e_invcmd, e_modifiable, e_nopresub, e_zerocoun
 use crate::message_fmt::msg_bytes;
 use crate::option::magic_isset;
 use crate::os::cshim::gettext;
-use crate::pos::MAXCOL;
 use crate::regexp::{RE_LAST, RE_SEARCH, RE_SUBST, regtilde_owned, skip_regexp_in_place};
 use crate::search::{SEARCH_HIS, search_regcomp_owned};
 use crate::semsg;
 use crate::types::CmdIdx;
+use crate::types::ColNr;
 use crate::types::RegMMatch;
 use crate::types::{ExArg, NUL};
 use crate::winlayer::Buf;
@@ -119,7 +119,7 @@ fn read_pattern(args: &mut ExArg, cmdpreview_ns: c_int, keeppatterns: bool) -> O
             sub: Some(previous),
             which_pat,
             has_second_delim: false,
-            endcolumn: Win::current().w_curswant == MAXCOL as c_int,
+            endcolumn: Win::current().w_curswant == ColNr::MAX,
             flags_at: at,
         });
     }

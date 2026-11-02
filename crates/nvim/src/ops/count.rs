@@ -190,7 +190,7 @@ fn measure_selection(sel: VisualSelection) -> Selection {
     } else {
         (Win::current().w_cursor, sel.anchor)
     };
-    if sel_exclusive() && max.col > 0 {
+    if sel_exclusive() && max.col > ColNr::ZERO {
         max.col -= 1;
     }
 
@@ -208,9 +208,9 @@ fn measure_selection(sel: VisualSelection) -> Selection {
         P_SBR.restore(saved_sbr);
         Win::current().w_onebuf_opt.wo_sbr = saved_w_sbr;
 
-        if Win::current().w_curswant == MAXCOL {
+        if Win::current().w_curswant == ColNr::MAX {
             // `$`: the block has no right edge.
-            oparg.end_vcol = MAXCOL;
+            oparg.end_vcol = ColNr::MAX;
         }
         if oparg.end_vcol < oparg.start_vcol {
             ::core::mem::swap(&mut oparg.start_vcol, &mut oparg.end_vcol);
@@ -304,13 +304,17 @@ fn count_selected_line(
         virtual_op.set(None);
         Some((bd.textcol, bd.textlen))
     } else if sel.mode.is_line() {
-        Some((0, MAXCOL))
+        Some((ColNr::ZERO, MAXCOL))
     } else if sel.mode.is_char() {
-        let start_col = if lnum == sel.min.lnum { sel.min.col } else { 0 };
+        let start_col = if lnum == sel.min.lnum {
+            sel.min.col
+        } else {
+            ColNr::ZERO
+        };
         let end_col = if lnum == sel.max.lnum {
             sel.max.col - start_col + 1
         } else {
-            MAXCOL
+            ColNr::MAX.get()
         };
         Some((start_col, end_col))
     } else {
@@ -367,9 +371,9 @@ fn report_counts(counts: &PosCounts, selection: Option<&Selection>) -> String {
             Win::current().w_virtcol + 1,
         );
         validate_virtcol(Win::current());
-        let at = col_text(col, virtcol);
+        let at = col_text(col.get(), virtcol.get());
         let width = linetabsize_str(Lines::current().line(Win::current().w_cursor.lnum));
-        let of = col_text(get_cursor_line_len(), width);
+        let of = col_text(get_cursor_line_len().get(), width);
         return if same_as_bytes {
             tr!(
                 "Col {at} of {of}; Line {lnum} of {lines}; Word {wc} of {words}; Byte {bc} of {bytes}"
@@ -382,7 +386,7 @@ fn report_counts(counts: &PosCounts, selection: Option<&Selection>) -> String {
     };
 
     // A blockwise selection with a right edge also reports its width.
-    let width = if sel.mode.is_block() && Win::current().w_curswant < MAXCOL {
+    let width = if sel.mode.is_block() && Win::current().w_curswant < ColNr::MAX {
         let mut min = sel.min;
         let mut max = sel.max;
         // Both vcols are `c_int`, so the difference cannot overflow an
@@ -460,12 +464,12 @@ pub fn get_region_bytecount(
         if start_lnum + i > max_lnum {
             return bytes;
         }
-        bytes += (buffer.line_len_raw(start_lnum + i) + 1) as BCount;
+        bytes += (buffer.line_len_raw(start_lnum + i) + 1).get() as isize;
     }
     if end_lnum > max_lnum {
         return bytes;
     }
-    bytes + end_col as BCount
+    bytes + end_col.get() as isize
 }
 
 #[cfg(test)]

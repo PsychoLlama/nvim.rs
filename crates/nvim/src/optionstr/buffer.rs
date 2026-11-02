@@ -48,9 +48,7 @@ use crate::options::{
     kOptFileencoding, kOptIskeyword, opt_bh_values, opt_bkc_values, opt_bt_values,
 };
 use crate::spell::spell_reload;
-use crate::types::{
-    Buffer, ColNr, FileMarkView, OptError, OptInt, OptSet, OptVal, OptionSetFlags, Pos,
-};
+use crate::types::{Buffer, FileMarkView, OptError, OptInt, OptSet, OptVal, OptionSetFlags, Pos};
 use crate::window::global_stl_height;
 
 use super::OptStringRef;
@@ -161,7 +159,7 @@ pub fn did_set_buftype(args: &mut OptSet) -> Result<(), OptError> {
         let next_prompt = Pos {
             lnum: buf.b_ml.ml_line_count,
             col: buf.b_prompt_start.mark.col,
-            coladd: 0 as ColNr,
+            coladd: 0,
         };
         buf.b_prompt_start = fresh_mark(next_prompt, 0, FileMarkView::NONE);
     }

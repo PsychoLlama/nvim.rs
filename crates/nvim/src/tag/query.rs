@@ -82,7 +82,7 @@ fn reshape_match(found: &TagMatch) -> XString {
 /// anything is appended.
 pub fn get_tags(list: &mut List, pat: &CStr, buf_fname: Option<&CStr>) -> Result<(), Failed> {
     let flags = (TAG_REGEXP | TAG_NOIC) as c_int;
-    let mincount = MAXCOL as c_int;
+    let mincount = MAXCOL;
     let found = find_tags(pat.to_bytes(), flags, mincount, buf_fname)?;
 
     let mut ret = Ok(());

@@ -44,7 +44,7 @@ pub(super) fn fold_create_markers(window: Win, start: Pos, end: Pos) {
     };
     fold_add_marker(buf, start, &open);
     fold_add_marker(buf, end, &close);
-    changed_lines(buf, start.lnum, 0, end.lnum, 0, false);
+    changed_lines(buf, start.lnum, ColNr::ZERO, end.lnum, 0, false);
     buf_updates_send_changes(buf, start.lnum, num_changed, num_changed);
 }
 
@@ -97,9 +97,9 @@ pub(super) fn fold_add_marker(buffer: Buf, pos: Pos, marker: &[u8]) {
         extmark_splice_cols(
             buffer,
             lnum.get() - 1,
-            text.len() as ColNr,
-            0,
-            added as ColNr,
+            ColNr::from_index(text.len()),
+            ColNr::ZERO,
+            ColNr::from_index(added),
             kExtmarkUndo,
         );
     }
@@ -188,9 +188,9 @@ pub(super) fn fold_del_marker(buffer: Buf, lnum: LineNr, marker: &[u8]) {
     extmark_splice_cols(
         buffer,
         lnum.get() - 1,
-        start as ColNr,
-        len as ColNr,
-        0,
+        ColNr::from_index(start),
+        ColNr::from_index(len),
+        ColNr::ZERO,
         kExtmarkUndo,
     );
 }

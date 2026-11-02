@@ -66,7 +66,7 @@ pub fn current_block(
     let mut pos: Option<Pos>;
     let mut start_pos = Pos {
         lnum: LineNr::ZERO,
-        col: 0,
+        col: ColNr::ZERO,
         coladd: 0,
     };
     // `{` at the start of a line, so the object claims the line break.
@@ -149,7 +149,7 @@ pub fn current_block(
     if !include {
         loop {
             incl(&mut start_pos);
-            sol = Win::current().w_cursor.col == 0;
+            sol = Win::current().w_cursor.col == ColNr::ZERO;
             decl(&mut Win::current().cursor());
             while inindent(1) {
                 sol = true;
@@ -399,7 +399,7 @@ pub fn current_tagblock(op: &mut OpArg, count_arg: c_int, include: bool) -> c_in
             // Exclude the `<` of the end tag. With the closing tag on a
             // new line, leave the cursor where it is and make the
             // operation exclusive instead, so the line feed is selected.
-            if c == '<' as c_int && !visual_active() && Win::current().w_cursor.col == 0 {
+            if c == '<' as c_int && !visual_active() && Win::current().w_cursor.col == ColNr::ZERO {
                 is_inclusive = false;
             } else if c == '<' as c_int {
                 dec_cursor();

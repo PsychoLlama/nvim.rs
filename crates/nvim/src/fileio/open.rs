@@ -13,6 +13,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::types::ColNr;
 use std::fs::File;
 
 use crate::buffer::BufFlags;
@@ -136,7 +137,7 @@ pub(crate) fn open_source<'a>(
         } else {
             from
         };
-        Buf::current().b_op_start.col = 0;
+        Buf::current().b_op_start.col = ColNr::ZERO;
 
         if how.newfile {
             if read_autocmd(AutoEvent::BufReadCmd, sfname, excmd.as_deref_mut(), false) {
@@ -415,7 +416,7 @@ pub(crate) fn open_source<'a>(
     } else {
         from
     };
-    Buf::current().b_op_start.col = 0;
+    Buf::current().b_op_start.col = ColNr::ZERO;
 
     let mut guess = FormatGuess::from_ffs();
 

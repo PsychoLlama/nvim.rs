@@ -302,7 +302,7 @@ fn back_off_start(pos: &mut Pos, off: i64) {
         if c != 0 {
             // At the start of the buffer; lnum == 0 is allowed here.
             pos.lnum = LineNr::ZERO;
-            pos.col = MAXCOL as ColNr;
+            pos.col = ColNr::MAX;
         }
     } else {
         while c != 0 {
@@ -314,7 +314,7 @@ fn back_off_start(pos: &mut Pos, off: i64) {
         if c != 0 {
             // At the end of the buffer.
             pos.lnum = Buf::current().b_ml.ml_line_count + 1;
-            pos.col = 0;
+            pos.col = ColNr::ZERO;
         }
     }
 }
@@ -335,10 +335,10 @@ fn add_offset(pos: &mut Pos, off: SearchOffset) -> c_int {
         } else {
             number_as_lnum(lnum)
         };
-        pos.col = 0;
+        pos.col = ColNr::ZERO;
         return 2; // pattern found, line offset added
     }
-    if pos.col < MAXCOL - 2 {
+    if pos.col < ColNr::new(MAXCOL - 2) {
         // Just in case.
         let mut c = off.off;
         if c > 0 {
@@ -449,10 +449,10 @@ pub fn do_search(
     // the same fold.
     if dirc == '/' as c_int {
         if has_folding(Win::current(), pos.lnum, None, Some(&mut pos.lnum)) {
-            pos.col = (MAXCOL - 2) as ColNr; // avoid overflow when adding 1
+            pos.col = ColNr::new(MAXCOL - 2); // avoid overflow when adding 1
         }
     } else if has_folding(Win::current(), pos.lnum, Some(&mut pos.lnum), None) {
-        pos.col = 0;
+        pos.col = ColNr::ZERO;
     }
 
     // Turn 'hlsearch' highlighting back on.
@@ -540,7 +540,7 @@ pub fn do_search(
             let echoed = echo_search_cmd(dirc, &searchstr, options);
 
             let off = search_offset();
-            if !off.line && off.off != 0 && pos.col < MAXCOL - 2 {
+            if !off.line && off.off != 0 && pos.col < ColNr::new(MAXCOL - 2) {
                 back_off_start(&mut pos, off.off);
             }
 
@@ -710,8 +710,8 @@ pub fn showmatch(c: c_int) {
 
     // Handle "$" in 'cpo': if the ')' is typed on top of the "$", stop
     // displaying the "$".
-    if dollar_vcol.get() >= 0 && dollar_vcol.get() == Win::current().w_virtcol {
-        dollar_vcol.set(-1);
+    if dollar_vcol.get() >= ColNr::ZERO && dollar_vcol.get() == Win::current().w_virtcol {
+        dollar_vcol.set(ColNr::NONE);
     }
     Win::current().w_virtcol += 1; // do display ')' just before "$"
 

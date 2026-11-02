@@ -190,7 +190,7 @@ pub(crate) fn expand_pattern_in_buf(pat: &CStr, dir: Direction) -> Result<Vec<XS
     let mut cur_match_pos = if has_range {
         Pos {
             lnum: search_first_line.get(),
-            col: 0,
+            col: ColNr::ZERO,
             coladd: 0,
         }
     } else {
@@ -265,7 +265,7 @@ pub(crate) fn expand_pattern_in_buf(pat: &CStr, dir: Direction) -> Result<Vec<XS
         if end_match_pos.lnum > Buf::current().b_ml.ml_line_count {
             cur_match_pos = Pos {
                 lnum: LineNr::ONE,
-                col: 0,
+                col: ColNr::ZERO,
                 coladd: 0,
             };
             continue;

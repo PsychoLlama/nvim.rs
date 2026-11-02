@@ -177,7 +177,7 @@ pub(super) fn show_one_mark(
     row.push(b' ');
     row.number(pos.lnum.get(), 6);
     row.push(b' ');
-    row.number(pos.col, 4);
+    row.number(pos.col.get(), 4);
     row.push(b' ');
     msg_display_bytes(row.bytes(), 0, false);
     if let Some(name) = name {

@@ -9,11 +9,186 @@
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
+use core::ffi::c_int;
 use core::fmt;
 use core::num::TryFromIntError;
 use core::ops::{Add, AddAssign, Sub, SubAssign};
 
-pub type ColNr = ::core::ffi::c_int;
+/// `colnr_T`: a column in a line — a byte index into the line's text, or a
+/// virtual (screen) column, 0 for the first.
+///
+/// A newtype rather than C's `int`, so a column cannot be mistaken for a
+/// line, a width or a count. Moving along a line is `+`/`-` with an `i32`
+/// count, and the distance between two columns is `ColNr - ColNr`, an `i32`;
+/// nothing adds two columns. A line's length is a `ColNr` too: it is the
+/// column of the NUL that ends the line.
+///
+/// Two values are not columns, and what each stands for is the caller's:
+/// [`NONE`](Self::NONE) (`-1`) is "no column" or "not yet known", and
+/// [`MAX`](Self::MAX) (`MAXCOL`) is "the end of the line" or "unbounded".
+///
+/// `#[repr(transparent)]` over `c_int`, so `tools/ffigen` still renders it as
+/// `typedef int ColNr` and the structs that carry one keep their layout.
+#[repr(transparent)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct ColNr(c_int);
+
+impl ColNr {
+    /// The first column.
+    pub const ZERO: Self = Self(0);
+
+    /// `MAXCOL`: past any column a line can have; "to the end of the line".
+    pub const MAX: Self = Self(c_int::MAX);
+
+    /// `-1`: no column, or one not looked up yet.
+    pub const NONE: Self = Self(-1);
+
+    /// The column numbered `n`.
+    pub const fn new(n: i32) -> Self {
+        Self(n)
+    }
+
+    /// The number, as C's `int`.
+    pub const fn get(self) -> i32 {
+        self.0
+    }
+
+    /// Whether this is [`NONE`](Self::NONE).
+    pub const fn is_none(self) -> bool {
+        self.0 == -1
+    }
+
+    /// The column as an index into the line's bytes (or a screen row's
+    /// cells).
+    ///
+    /// Debug builds assert that this is a column (not negative).
+    #[allow(
+        clippy::cast_sign_loss,
+        reason = "asserted non-negative; the release build keeps C's conversion"
+    )]
+    pub fn as_usize(self) -> usize {
+        debug_assert!(self.0 >= 0, "column {} has no index", self.0);
+        self.0 as usize
+    }
+
+    /// The column at byte index `index`.
+    ///
+    /// # Panics
+    /// If the index does not fit in a `c_int`.
+    pub fn from_index(index: usize) -> Self {
+        c_int::try_from(index)
+            .map(Self)
+            .unwrap_or_else(|_| panic!("column index {index} past MAXCOL"))
+    }
+
+    /// `count` columns on, stopping at [`MAX`](Self::MAX) rather than
+    /// wrapping.
+    pub const fn saturating_add(self, count: i32) -> Self {
+        Self(self.0.saturating_add(count))
+    }
+
+    /// `count` columns back, stopping at `c_int::MIN` rather than wrapping.
+    pub const fn saturating_sub(self, count: i32) -> Self {
+        Self(self.0.saturating_sub(count))
+    }
+}
+
+impl Add<i32> for ColNr {
+    type Output = Self;
+
+    fn add(self, count: i32) -> Self {
+        Self(self.0 + count)
+    }
+}
+
+impl Sub<i32> for ColNr {
+    type Output = Self;
+
+    fn sub(self, count: i32) -> Self {
+        Self(self.0 - count)
+    }
+}
+
+/// How many columns `other` is before `self`.
+impl Sub for ColNr {
+    type Output = i32;
+
+    fn sub(self, other: Self) -> i32 {
+        self.0 - other.0
+    }
+}
+
+impl AddAssign<i32> for ColNr {
+    fn add_assign(&mut self, count: i32) {
+        self.0 += count;
+    }
+}
+
+impl SubAssign<i32> for ColNr {
+    fn sub_assign(&mut self, count: i32) {
+        self.0 -= count;
+    }
+}
+
+impl From<ColNr> for i32 {
+    fn from(col: ColNr) -> Self {
+        col.0
+    }
+}
+
+impl From<ColNr> for i64 {
+    fn from(col: ColNr) -> Self {
+        Self::from(col.0)
+    }
+}
+
+impl From<ColNr> for f64 {
+    fn from(col: ColNr) -> Self {
+        Self::from(col.0)
+    }
+}
+
+/// The column as a `usize`, for a length or an offset, if it is not
+/// negative.
+impl TryFrom<ColNr> for usize {
+    type Error = TryFromIntError;
+
+    fn try_from(col: ColNr) -> Result<Self, Self::Error> {
+        Self::try_from(col.0)
+    }
+}
+
+/// An API `Integer` or a Vimscript `Number` as a column, if it is one
+/// `c_int` can hold.
+impl TryFrom<i64> for ColNr {
+    type Error = TryFromIntError;
+
+    fn try_from(n: i64) -> Result<Self, Self::Error> {
+        c_int::try_from(n).map(Self)
+    }
+}
+
+/// A byte length or index as a column, if `c_int` can hold it.
+impl TryFrom<usize> for ColNr {
+    type Error = TryFromIntError;
+
+    fn try_from(n: usize) -> Result<Self, Self::Error> {
+        c_int::try_from(n).map(Self)
+    }
+}
+
+impl fmt::Display for ColNr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+/// The bare number, as the alias printed.
+impl fmt::Debug for ColNr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.0, f)
+    }
+}
 
 /// `linenr_T`: a line number in a buffer, 1 for the first line.
 ///
@@ -229,7 +404,7 @@ pub struct LPos {
 pub struct Pos {
     pub lnum: LineNr,
     pub col: ColNr,
-    pub coladd: ColNr,
+    pub coladd: i32,
 }
 
 impl Pos {

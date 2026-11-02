@@ -49,7 +49,6 @@ use crate::r#move::{
     WinValid, adjust_skipcol, sms_marker_overlap, update_curswant_force, validate_cheight,
     validate_virtcol, win_col_off2,
 };
-use crate::pos::MAXCOL;
 
 // The non-printing bytes the tree dispatches on, spelled as the bytes a
 // pattern can name.
@@ -79,19 +78,19 @@ pub(crate) fn nv_g_home_m_cmd(cmd_arg: &mut CmdArg) {
         let width2 = width1 + win_col_off2(win);
         validate_virtcol(win);
         i = 0;
-        if win.w_virtcol >= width1 && width2 > 0 {
-            i = (win.w_virtcol - width1) / width2 * width2 + width1;
+        if win.w_virtcol >= ColNr::new(width1) && width2 > 0 {
+            i = (win.w_virtcol - width1).get() / width2 * width2 + width1;
         }
-        if win.w_skipcol > 0 && win.w_cursor.lnum == win.w_topline {
+        if win.w_skipcol > ColNr::ZERO && win.w_cursor.lnum == win.w_topline {
             // 'smoothscroll' hides part of the top row behind its marker;
             // the text starts after it.
             let overlap = sms_marker_overlap(win, win.w_view_width - width2);
-            if overlap > 0 && i == win.w_skipcol {
+            if overlap > 0 && i == win.w_skipcol.get() {
                 i += overlap;
             }
         }
     } else {
-        i = win.w_leftcol;
+        i = win.w_leftcol.get();
     }
     if cmd_arg.nchar == 'm' as c_int {
         i += (win.w_view_width - win.col_off()
@@ -102,7 +101,7 @@ pub(crate) fn nv_g_home_m_cmd(cmd_arg: &mut CmdArg) {
             })
             / 2;
     }
-    coladvance(win, i);
+    coladvance(win, ColNr::new(i));
     if to_first_non_blank {
         while ascii_iswhite(gchar_cursor()) && oneright().is_ok() {}
         win.w_valid.clear(WinValid::WCOL);
@@ -124,7 +123,7 @@ pub(crate) fn nv_g_underscore_cmd(cmd_arg: &mut CmdArg) {
     let mut win = Win::current();
     cmd_arg.op().motion_type = kMTCharWise;
     cmd_arg.op().inclusive = true;
-    win.w_curswant = MAXCOL as ColNr;
+    win.w_curswant = ColNr::MAX;
     if cursor_down(cmd_arg.count1 - 1, cmd_arg.op().op_type == OpType::Nop).is_err() {
         clear_op_beep(cmd_arg.op());
         return;
@@ -133,10 +132,10 @@ pub(crate) fn nv_g_underscore_cmd(cmd_arg: &mut CmdArg) {
     let line = lines.line(win.w_cursor.lnum);
     let byte_at = |col: ColNr| cstr::byte_at(line, usize::try_from(col).unwrap_or(0));
     // 'virtualedit' can leave the cursor on the terminator.
-    if win.w_cursor.col > 0 && c_int::from(byte_at(win.w_cursor.col)) == NUL {
+    if win.w_cursor.col > ColNr::ZERO && c_int::from(byte_at(win.w_cursor.col)) == NUL {
         win.w_cursor.col -= 1;
     }
-    while win.w_cursor.col > 0 && ascii_iswhite(c_int::from(byte_at(win.w_cursor.col))) {
+    while win.w_cursor.col > ColNr::ZERO && ascii_iswhite(c_int::from(byte_at(win.w_cursor.col))) {
         win.w_cursor.col -= 1;
     }
     win.w_set_curswant = true;
@@ -153,20 +152,23 @@ pub(crate) fn nv_g_dollar_cmd(cmd_arg: &mut CmdArg) {
     op.motion_type = kMTCharWise;
     op.inclusive = true;
     if win.w_onebuf_opt.wo_wrap != 0 && win.w_view_width != 0 {
-        win.w_curswant = MAXCOL as ColNr;
+        win.w_curswant = ColNr::MAX;
         if cmd_arg.count1 == 1 {
             let width1 = win.w_view_width - col_off;
             let width2 = width1 + win_col_off2(win);
             validate_virtcol(win);
             let mut i = width1 - 1;
-            if win.w_virtcol >= width1 {
-                i += ((win.w_virtcol - width1) / width2 + 1) * width2;
+            if win.w_virtcol >= ColNr::new(width1) {
+                i += ((win.w_virtcol - width1).get() / width2 + 1) * width2;
             }
-            coladvance(win, i);
+            coladvance(win, ColNr::new(i));
             update_curswant_force();
             // A character wider than one cell straddles the edge; step
             // back onto the last one that fits.
-            if win.w_cursor.col > 0 && win.w_onebuf_opt.wo_wrap != 0 && win.w_virtcol > i {
+            if win.w_cursor.col > ColNr::ZERO
+                && win.w_onebuf_opt.wo_wrap != 0
+                && win.w_virtcol > ColNr::new(i)
+            {
                 win.w_cursor.col -= 1;
             }
         } else if !nv_screengo(op, FORWARD as c_int, cmd_arg.count1 - 1, false) {
@@ -179,7 +181,7 @@ pub(crate) fn nv_g_dollar_cmd(cmd_arg: &mut CmdArg) {
         }
         let i = win.w_leftcol + win.w_view_width - col_off - 1;
         coladvance(win, i);
-        if win.w_cursor.col > 0 && with_cursor_rest(cells_at) > 1 {
+        if win.w_cursor.col > ColNr::ZERO && with_cursor_rest(cells_at) > 1 {
             let vcol = win.virtual_vcol_span(win.cursor()).1;
             if vcol >= win.w_leftcol + win.w_view_width - col_off {
                 win.w_cursor.col -= 1;
@@ -348,9 +350,9 @@ pub(crate) fn nv_g_cmd(cmd_arg: &mut CmdArg) {
             op.inclusive = false;
             let width = linetabsize(Win::current(), Win::current().w_cursor.lnum);
             if cmd_arg.count0 > 0 && cmd_arg.count0 <= 100 {
-                coladvance(Win::current(), width * cmd_arg.count0 / 100);
+                coladvance(Win::current(), ColNr::new(width * cmd_arg.count0 / 100));
             } else {
-                coladvance(Win::current(), width / 2);
+                coladvance(Win::current(), ColNr::new(width / 2));
             }
             Win::current().w_set_curswant = true;
         }

@@ -46,7 +46,7 @@ impl FileMarkView {
     /// below line 1 and gives up.
     pub const NONE: Self = Self {
         topline_offset: crate::pos::MAXLNUM.get(),
-        skipcol: 0,
+        skipcol: ColNr::ZERO,
     };
 }
 
@@ -55,7 +55,7 @@ impl FileMark {
     pub const UNSET: Self = Self {
         mark: Pos {
             lnum: LineNr::ZERO,
-            col: 0,
+            col: ColNr::ZERO,
             coladd: 0,
         },
         fnum: 0,
@@ -99,14 +99,14 @@ impl SavedMark {
     pub const ZERO: Self = Self {
         mark: Pos {
             lnum: LineNr::ZERO,
-            col: 0,
+            col: ColNr::ZERO,
             coladd: 0,
         },
         fnum: 0,
         timestamp: 0,
         view: FileMarkView {
             topline_offset: 0,
-            skipcol: 0,
+            skipcol: ColNr::ZERO,
         },
     };
 

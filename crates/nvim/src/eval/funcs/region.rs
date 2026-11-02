@@ -22,7 +22,7 @@ use crate::normal::unadjust_for_sel_inner;
 use crate::ops::{block_def, charwise_block_def, reset_lbr, restore_lbr};
 use crate::option::vars::P_SEL;
 use crate::os::cshim::gettext;
-use crate::pos::{MAXCOL, equalpos, lt};
+use crate::pos::{equalpos, lt};
 use crate::semsg;
 use crate::state::mode::virtual_op;
 use crate::state::virtual_active;
@@ -36,7 +36,7 @@ use crate::winlayer::{Buf, Win};
 /// The zeroed position every local in this module starts from.
 const NOWHERE: Pos = Pos {
     lnum: LineNr::ZERO,
-    col: 0,
+    col: ColNr::ZERO,
     coladd: 0,
 };
 
@@ -55,8 +55,8 @@ const NO_OPARG: OpArg = OpArg {
     line_count: 0,
     empty: false,
     is_visual: false,
-    start_vcol: 0,
-    end_vcol: 0,
+    start_vcol: ColNr::ZERO,
+    end_vcol: ColNr::ZERO,
     prev_opcount: 0,
     prev_count0: 0,
     excl_tr_ws: false,
@@ -184,8 +184,8 @@ fn resolve(args: &[TypVal], result: &mut TypVal) -> Option<Region> {
 
     // Extend the far corner over the rest of a multibyte character.
     let l = cluster_at(p2);
-    if l > 1 {
-        p2.col += l - 1;
+    if l > ColNr::new(1) {
+        p2.col += (l - 1).get();
     }
     Some(Region {
         p1,
@@ -209,9 +209,9 @@ fn cluster_at(pos: Pos) -> ColNr {
     let line = lines.line(pos.lnum);
     let at = usize::try_from(pos.col).unwrap_or(0);
     if at >= line.len() {
-        return 0;
+        return ColNr::ZERO;
     }
-    ColNr::try_from(cluster_len(&line[at..])).unwrap_or(0)
+    ColNr::try_from(cluster_len(&line[at..])).unwrap_or(ColNr::ZERO)
 }
 
 /// The `type` option: "v", "V", or CTRL-V optionally followed by a width.
@@ -248,9 +248,9 @@ fn check_corner(buffer: Buf, p: &mut Pos) -> Option<()> {
         return None;
     }
     let len = ml_get_buf_len(buffer, p.lnum);
-    if p.col == MAXCOL as ColNr {
+    if p.col == ColNr::MAX {
         p.col = len + 1;
-    } else if p.col < 1 || p.col > len + 1 {
+    } else if p.col < ColNr::new(1) || p.col > len + 1 {
         semsg!("E964: Invalid column number: {}", p.col);
         return None;
     }
@@ -278,7 +278,7 @@ fn block_oparg(p1: Pos, p2: Pos, is_select_exclusive: bool, block_width: c_int) 
         end_vcol: if block_width > 0 {
             // An explicit width wins over where the corners landed.
             start_vcol + block_width - 1
-        } else if is_select_exclusive && ec1 < sc2 && sc2 > 0 && ec2 > ec1 {
+        } else if is_select_exclusive && ec1 < sc2 && sc2 > ColNr::ZERO && ec2 > ec1 {
             // Exclusive: the far corner's own column is not covered.
             sc2 - 1
         } else {
@@ -355,7 +355,7 @@ pub fn f_getregionpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
 
     for lnum in r.p1.lnum.through(r.p2.lnum) {
         let (mut ret_p1, mut ret_p2) = line_corners(&r, lnum);
-        let line_len = Lines::current().line(lnum).len() as ColNr;
+        let line_len = ColNr::from_index(Lines::current().line(lnum).len());
         clamp_corners(&mut ret_p1, &mut ret_p2, line_len, allow_eol);
         ret_p1.lnum = lnum;
         ret_p2.lnum = lnum;
@@ -370,9 +370,12 @@ fn line_corners(r: &Region, lnum: LineNr) -> (Pos, Pos) {
     if r.region_type == kMTLineWise {
         // A linewise region always covers the whole line.
         return (
-            Pos { col: 1, ..NOWHERE },
             Pos {
-                col: MAXCOL as ColNr,
+                col: ColNr::new(1),
+                ..NOWHERE
+            },
+            Pos {
+                col: ColNr::MAX,
                 ..NOWHERE
             },
         );
@@ -392,7 +395,7 @@ fn line_corners(r: &Region, lnum: LineNr) -> (Pos, Pos) {
         } else {
             at - head_off(line, at - 1) - 1
         };
-        prev as ColNr + 1
+        ColNr::from_index(prev) + 1
     };
 
     let mut p1 = NOWHERE;
@@ -406,7 +409,7 @@ fn line_corners(r: &Region, lnum: LineNr) -> (Pos, Pos) {
         }
     } else if r.region_type == kMTBlockWise && r.op.start_vcol > bd.start_vcol {
         // The block starts inside a character that begins before it.
-        p1.col = MAXCOL as ColNr;
+        p1.col = ColNr::MAX;
         p1.coladd = r.op.start_vcol - bd.start_vcol;
         bd.is_one_char = 1;
     } else if bd.startspaces > 0 {
@@ -434,14 +437,18 @@ fn line_corners(r: &Region, lnum: LineNr) -> (Pos, Pos) {
 /// end.
 fn clamp_corners(p1: &mut Pos, p2: &mut Pos, line_len: ColNr, allow_eol: bool) {
     if !allow_eol && p1.col > line_len {
-        p1.col = 0;
+        p1.col = ColNr::ZERO;
         p1.coladd = 0;
     } else if p1.col > line_len + 1 {
         p1.col = line_len + 1;
     }
     if !allow_eol && p2.col > line_len {
         // The end follows the start into "nothing here".
-        p2.col = if p1.col == 0 { 0 } else { line_len };
+        p2.col = if p1.col == ColNr::ZERO {
+            ColNr::ZERO
+        } else {
+            line_len
+        };
         p2.coladd = 0;
     } else if p2.col > line_len + 1 {
         p2.col = line_len + 1;
@@ -458,7 +465,7 @@ fn add_regionpos_range(result: &mut TypVal, p1: Pos, p2: Pos) {
         let l = &mut *pos;
         l.push_number(Buf::current().handle.get() as VarNumber);
         l.push_number(i64::from(p.lnum));
-        l.push_number(p.col as VarNumber);
+        l.push_number(i64::from(p.col));
         l.push_number(p.coladd as VarNumber);
         pair.edit().push_list(Some(pos));
     }

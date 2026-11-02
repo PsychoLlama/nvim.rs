@@ -659,7 +659,7 @@ impl Pattern {
         // Start the command in line 1.
         Win::current().w_cursor = Pos {
             lnum: LineNr::ONE,
-            col: 0,
+            col: ColNr::ZERO,
             coladd: 0,
         };
         let _ = do_cmdline_cmd(cstr::in_bytes(&self.buf));

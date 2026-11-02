@@ -4,6 +4,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::types::ColNr;
 use core::ffi::c_int;
 
 use super::compile::BtProg;
@@ -14,7 +15,6 @@ use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
 use crate::mark::mark_get;
 use crate::mbyte::{class_in, utf_iscomposing_legacy};
 use crate::plines::win_linetabsize;
-use crate::pos::MAXCOL;
 use crate::regexp::{
     ByteClass, RA_CONT, RA_MATCH, RA_NOMATCH, RI_FLAGS, Rex, char_at_nul, char_len_at,
     cleanup_subexpr, cleanup_zsubexpr, cluster_len_at, composes_at, cstrchr, cstrncmp,
@@ -79,7 +79,7 @@ pub(crate) fn match_one(
         }
         BtOp::ReCol => nomatch_unless(re_num_cmp(
             prog,
-            (rex.col() as uint32_t).wrapping_add(1),
+            (rex.col().get() as u32).wrapping_add(1),
             scan,
         )),
         BtOp::ReVcol => nomatch_unless(re_num_cmp(prog, virtual_column(rex).wrapping_add(1), scan)),
@@ -242,7 +242,7 @@ fn at_mark(rex: Rex, prog: BtProg<'_>, scan: usize) -> c_int {
         c_int::from(prog.byte(scan, 3)),
         c_int::from(prog.byte(scan, 4)),
     );
-    let col = if rex.multi() { rex.col() } else { 0 };
+    let col = if rex.multi() { rex.col() } else { ColNr::ZERO };
     // `mark_get` computes a motion mark (`'{`, `'(`) on the spot.
     let fm = mark_get(rex.reg_buf(), Win::current(), kMarkBufLocal, mark);
     // Looking the mark up can move the buffer's line, so fetch it again.
@@ -258,7 +258,7 @@ fn at_mark(rex: Rex, prog: BtProg<'_>, scan: usize) -> c_int {
     }
     let here_lnum = rex.buf_lnum();
     // A mark at MAXCOL sits at the end of its line.
-    let pos_col = if pos.lnum == here_lnum && pos.col == MAXCOL as c_int {
+    let pos_col = if pos.lnum == here_lnum && pos.col == ColNr::MAX {
         reg_getline_len(rex, LineNr::new(pos.lnum - rex.reg_firstlnum()))
     } else {
         pos.col

@@ -646,8 +646,8 @@ pub(crate) fn prepare_cpt_compl_funcs() {
             } else {
                 startcol = -2;
             }
-        } else if startcol < 0 || startcol > Win::current().w_cursor.col {
-            startcol = Win::current().w_cursor.col;
+        } else if startcol < 0 || startcol > Win::current().w_cursor.col.get() {
+            startcol = Win::current().w_cursor.col.get();
         }
         cpt_sources().update(idx, |source| source.cs_startcol = startcol);
     }
@@ -745,8 +745,8 @@ pub(crate) fn cpt_compl_refresh() {
                 } else {
                     startcol = -2;
                 }
-            } else if startcol < 0 || startcol > Win::current().w_cursor.col {
-                startcol = Win::current().w_cursor.col;
+            } else if startcol < 0 || startcol > Win::current().w_cursor.col.get() {
+                startcol = Win::current().w_cursor.col.get();
             }
             cpt_sources().update(idx, |source| source.cs_startcol = startcol);
             if ret.is_ok() {

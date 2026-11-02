@@ -54,14 +54,14 @@ pub(crate) fn op_tilde(op: &mut OpArg) {
         }
         if did_change {
             let (first, last) = (op.start.lnum, op.end.lnum + 1);
-            changed_lines(Buf::current(), first, 0, last, 0, true);
+            changed_lines(Buf::current(), first, ColNr::ZERO, last, 0, true);
         }
     } else {
         if op.motion_type == kMTLineWise {
-            op.start.col = 0;
-            pos.col = 0;
+            op.start.col = ColNr::ZERO;
+            pos.col = ColNr::ZERO;
             op.end.col = Lines::current().line_len(op.end.lnum);
-            if op.end.col != 0 {
+            if op.end.col != ColNr::ZERO {
                 op.end.col -= 1;
             }
         } else if !op.inclusive {
@@ -74,7 +74,7 @@ pub(crate) fn op_tilde(op: &mut OpArg) {
         } else {
             loop {
                 let len = if pos.lnum == op.end.lnum {
-                    op.end.col + 1
+                    (op.end.col + 1).get()
                 } else {
                     Lines::current().line_len(pos.lnum) - pos.col
                 };
@@ -187,9 +187,9 @@ pub fn swapchar(op_type: OpType, pos: Pos) -> bool {
             let mut lines = Lines::current();
             let line = lines.line(pos.lnum);
             let col = usize::try_from(pos.col).unwrap_or(0).min(line.len());
-            ColNr::try_from(char_len(&line[col..])).unwrap_or(1)
+            ColNr::try_from(char_len(&line[col..])).unwrap_or(ColNr::new(1))
         };
-        let _ = del_bytes(len, false, false);
+        let _ = del_bytes(len.get(), false, false);
         ins_char(nc);
         Win::current().w_cursor = saved;
     } else {

@@ -296,7 +296,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
     // The cursor should end up on the last inserted character.  Not for
     // CTRL-O, unless it is past the end of the line.
     if !nomove
-        && (Win::current().w_cursor.col != 0 || Win::current().w_cursor.coladd > 0)
+        && (Win::current().w_cursor.col != ColNr::ZERO || Win::current().w_cursor.coladd > 0)
         && (restart_edit.get() == NUL || (char_at_cursor() == NUL && !visual_active()))
         && !revins_on.get()
     {
@@ -364,7 +364,7 @@ pub(crate) fn ins_ctrl_() {
     P_RI.set(!p_ri());
     revins_on.set(State.get() == MODE_INSERT && p_ri());
     if revins_on.get() {
-        revins_scol.set(Win::current().w_cursor.col);
+        revins_scol.set(Win::current().w_cursor.col.get());
         revins_legal.set(revins_legal.get() + 1);
         revins_chars.set(0);
         undisplay_dollar();

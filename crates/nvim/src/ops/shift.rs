@@ -39,7 +39,7 @@ pub fn op_shift(op: &OpArg, curs_top: bool, amount: c_int) {
         return;
     }
 
-    let mut block_col: ColNr = 0;
+    let mut block_col: ColNr = ColNr::ZERO;
     if op.motion_type == kMTBlockWise {
         block_col = Win::current().w_cursor.col;
     }
@@ -50,7 +50,7 @@ pub fn op_shift(op: &OpArg, curs_top: bool, amount: c_int) {
         if first_char == NUL {
             // Empty line: nothing to indent, but the cursor still has to
             // land somewhere legal.
-            Win::current().w_cursor.col = 0;
+            Win::current().w_cursor.col = ColNr::ZERO;
         } else if op.motion_type == kMTBlockWise {
             shift_block(op, amount);
         } else if first_char != '#' as c_int || !preprocs_left() {
@@ -112,13 +112,13 @@ pub fn op_shift(op: &OpArg, curs_top: bool, amount: c_int) {
         Buf::current().b_op_start = op.start;
         Buf::current().b_op_end.lnum = op.end.lnum;
         Buf::current().b_op_end.col = Lines::current().line_len(op.end.lnum);
-        if Buf::current().b_op_end.col > 0 {
+        if Buf::current().b_op_end.col > ColNr::ZERO {
             Buf::current().b_op_end.col -= 1;
         }
     }
 
     let (first, last) = (op.start.lnum, op.end.lnum + 1);
-    changed_lines(Buf::current(), first, 0, last, 0, true);
+    changed_lines(Buf::current(), first, ColNr::ZERO, last, 0, true);
 }
 
 /// Width of the `index`-th 'vartabstop' stop, the last one repeating forever.
@@ -336,7 +336,14 @@ fn shift_block(op: &OpArg, amount: c_int) {
     changed_bytes(lnum, bd.textcol);
     let (at, old, new) = (shifted.start_col, shifted.old_len, shifted.new_len);
     let (buffer, row) = (Buf::current(), lnum.get() - 1);
-    extmark_splice_cols(buffer, row, at, old, new, kExtmarkUndo);
+    extmark_splice_cols(
+        buffer,
+        row,
+        ColNr::new(at),
+        ColNr::new(old),
+        ColNr::new(new),
+        kExtmarkUndo,
+    );
 
     State.set(old_state);
     Win::current().w_cursor.col = old_col;
@@ -354,7 +361,7 @@ fn shift_block(op: &OpArg, amount: c_int) {
 /// `old` is the cursor line and `bd` describes it, as [`block_prep`] left it.
 fn shift_block_right(bd: &mut BlockDef, old: &[u8], mut total: c_int) -> ShiftedLine {
     // The block's first byte, which every walk below starts from.
-    let block_at = (bd.textcol as usize).min(old.len());
+    let block_at = bd.textcol.as_usize().min(old.len());
 
     // All the virtual white space up to and including a split TAB.
     total += bd.pre_whitesp;
@@ -366,7 +373,7 @@ fn shift_block_right(bd: &mut BlockDef, old: &[u8], mut total: c_int) -> Shifted
         } else {
             // A multi-byte character straddles the edge: it cannot be
             // rebuilt as white space, so start the run at the block.
-            ws_vcol = 0;
+            ws_vcol = ColNr::ZERO;
             bd.startspaces = 0;
         }
     }
@@ -377,7 +384,7 @@ fn shift_block_right(bd: &mut BlockDef, old: &[u8], mut total: c_int) -> Shifted
     let (mut csarg, cstype) = CharsizeArg::new(Win::current(), lnum, base);
     let mut at = 0;
     let mut chr = c_char_info(base, 0);
-    let mut vcol = bd.start_vcol as c_int;
+    let mut vcol = bd.start_vcol.get();
     while ascii_iswhite(chr.value) {
         let incr = win_charsize(cstype, vcol, at, chr.value, &mut csarg).width;
         (at, chr) = c_next_cluster(base, at, chr);
@@ -387,7 +394,7 @@ fn shift_block_right(bd: &mut BlockDef, old: &[u8], mut total: c_int) -> Shifted
     // `total` is now all the white space wanted, and the text resumes at the
     // first non-white character in the block.
     let rest = text_at + at;
-    bd.start_vcol = vcol;
+    bd.start_vcol = ColNr::new(vcol);
 
     let (tabs, spaces) = if Buf::current().b_p_et == 0 {
         Buf::current().tab_fill(ws_vcol, ws_vcol + total)
@@ -399,7 +406,7 @@ fn shift_block_right(bd: &mut BlockDef, old: &[u8], mut total: c_int) -> Shifted
     let col_pre = bd.pre_whitesp_c - c_int::from(bd.startspaces != 0);
     bd.textcol -= col_pre;
 
-    let keep = (bd.textcol as usize).min(old.len());
+    let keep = bd.textcol.as_usize().min(old.len());
     let mut line = Vec::with_capacity(keep + (tabs + spaces) as usize + old.len() - rest + 1);
     line.extend_from_slice(&old[..keep]);
     line.resize(line.len() + tabs as usize, TAB as u8);
@@ -407,7 +414,7 @@ fn shift_block_right(bd: &mut BlockDef, old: &[u8], mut total: c_int) -> Shifted
     line.extend_from_slice(&old[rest..]);
 
     let shifted = ShiftedLine {
-        start_col: bd.textcol,
+        start_col: bd.textcol.get(),
         old_len: (rest - block_at) as c_int + col_pre,
         new_len: tabs + spaces,
         line,
@@ -430,7 +437,7 @@ fn shift_block_right(bd: &mut BlockDef, old: &[u8], mut total: c_int) -> Shifted
 /// `old` is the cursor line and `bd` describes it, as [`block_prep`] left it.
 fn shift_block_left(op: &OpArg, bd: &mut BlockDef, old: &[u8], total: c_int) -> ShiftedLine {
     // The block's first byte, which every walk below starts from.
-    let block_at = (bd.textcol as usize).min(old.len());
+    let block_at = bd.textcol.as_usize().min(old.len());
     let base = &old[block_at..];
 
     // Find the first non-white character displayed after the block's start
@@ -446,7 +453,7 @@ fn shift_block_left(op: &OpArg, bd: &mut BlockDef, old: &[u8], total: c_int) -> 
     let (mut csarg, mut cstype) = CharsizeArg::new(Win::current(), lnum, base);
     while ascii_iswhite(c_int::from(byte_at(base, non_white))) {
         let c = int32_t::from(base[non_white]);
-        non_white_col += win_charsize(cstype, non_white_col, non_white, c, &mut csarg).width;
+        non_white_col += win_charsize(cstype, non_white_col.get(), non_white, c, &mut csarg).width;
         non_white += 1;
     }
 
@@ -466,7 +473,7 @@ fn shift_block_left(op: &OpArg, bd: &mut BlockDef, old: &[u8], total: c_int) -> 
     let mut chr = c_char_info(base, 0);
     while verbatim_copy_width < destination_col {
         let w = verbatim_copy_width;
-        let incr = win_charsize(cstype, w, at, chr.value, &mut csarg).width;
+        let incr = win_charsize(cstype, w.get(), at, chr.value, &mut csarg).width;
         if verbatim_copy_width + incr > destination_col {
             break;
         }
@@ -489,7 +496,7 @@ fn shift_block_left(op: &OpArg, bd: &mut BlockDef, old: &[u8], total: c_int) -> 
 
     let shifted = ShiftedLine {
         start_col: fixedlen as c_int,
-        old_len: bd.textcol + non_white as c_int - fixedlen as c_int,
+        old_len: (bd.textcol + non_white as c_int - fixedlen as c_int).get(),
         new_len: fill,
         line,
     };

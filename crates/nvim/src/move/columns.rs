@@ -12,6 +12,7 @@
 #![forbid(unsafe_code)]
 
 use crate::cstr;
+use crate::narrow::number_as_col;
 use crate::narrow::number_as_lnum;
 use core::ffi::c_int;
 
@@ -72,11 +73,11 @@ fn curs_columns_win(mut win: Win, may_scroll: bool) {
 
     // Remove the `$` of a change command once the cursor moves onto it.
     if startcol > dollar_vcol.get() {
-        dollar_vcol.set(-1);
+        dollar_vcol.set(ColNr::NONE);
     }
 
     let extra = win.col_off();
-    win.w_wcol = win.w_virtcol + extra;
+    win.w_wcol = (win.w_virtcol + extra).get();
     endcol += extra;
 
     // Now `w_wrow`, counting screen lines from `w_cline_row`.
@@ -123,17 +124,17 @@ fn curs_columns_win(mut win: Win, may_scroll: bool) {
             p_ss(),
         );
         if let Some(new_leftcol) = scrolled
-            && new_leftcol != win.w_leftcol
+            && new_leftcol != win.w_leftcol.get()
         {
-            win.w_leftcol = new_leftcol;
+            win.w_leftcol = ColNr::new(new_leftcol);
             win.check_anchored_floats();
             // The screen has to be redrawn with the new `w_leftcol`.
             win.redraw_later(UPD_NOT_VALID);
         }
-        let leftcol = win.w_leftcol;
+        let leftcol = win.w_leftcol.get();
         win.w_wcol -= leftcol;
-    } else if win.w_wcol > win.w_leftcol {
-        let leftcol = win.w_leftcol;
+    } else if win.w_wcol > win.w_leftcol.get() {
+        let leftcol = win.w_leftcol.get();
         win.w_wcol -= leftcol;
     } else {
         win.w_wcol = 0;
@@ -154,12 +155,14 @@ fn curs_columns_win(mut win: Win, may_scroll: bool) {
     // A single line that does not fit on the screen: find a `w_skipcol` that
     // shows the text around the cursor, without scrolling all the time.
     let too_tall = win.w_wrow >= win.w_view_height
-        || (prev_skipcol > 0 || win.w_wrow as int64_t + so >= win.w_view_height as int64_t) && {
-            plines = win.plines_nofill(win.w_cursor.lnum, false);
-            // The C spells this `plines - 1 >= w_view_height`; `plines` is a
-            // screen-line count, so the two never differ.
-            plines > win.w_view_height
-        };
+        || (prev_skipcol > ColNr::ZERO
+            || win.w_wrow as int64_t + so >= win.w_view_height as int64_t)
+            && {
+                plines = win.plines_nofill(win.w_cursor.lnum, false);
+                // The C spells this `plines - 1 >= w_view_height`; `plines` is a
+                // screen-line count, so the two never differ.
+                plines > win.w_view_height
+            };
     if too_tall
         && win.w_view_height != 0
         && win.w_cursor.lnum == win.w_topline
@@ -196,7 +199,7 @@ fn curs_columns_win(mut win: Win, may_scroll: bool) {
             win.scroll_grid_lines(scrolled);
         }
     } else if win.w_onebuf_opt.wo_sms == 0 {
-        win.w_skipcol = 0;
+        win.w_skipcol = ColNr::ZERO;
     }
     if prev_skipcol != win.w_skipcol {
         win.redraw_later(UPD_SOME_VALID);
@@ -218,8 +221,9 @@ fn curs_columns_win(mut win: Win, may_scroll: bool) {
 /// `pos` is written back: the column walk clamps a column past the end of
 /// the line, as upstream's did through its pointer.
 pub fn textpos2screenpos(win: Win, pos: &mut Pos, local: bool) -> (c_int, c_int, c_int, c_int) {
-    let (mut scol, mut ccol, mut ecol): (ColNr, ColNr, ColNr) = (0, 0, 0);
-    let mut coloff: ColNr = 0;
+    let (mut scol, mut ccol, mut ecol): (ColNr, ColNr, ColNr) =
+        (ColNr::ZERO, ColNr::ZERO, ColNr::ZERO);
+    let mut coloff: i32 = 0;
     let mut visible_row = false;
     let mut is_folded = false;
 
@@ -269,7 +273,7 @@ pub fn textpos2screenpos(win: Win, pos: &mut Pos, local: bool) -> (c_int, c_int,
             let mut col = scol + off;
             let width = win.w_view_width - off + win.col_off2();
             // Long line wrapping, adjusting the row.
-            if win.w_onebuf_opt.wo_wrap != 0 && col >= win.w_view_width && width > 0 {
+            if win.w_onebuf_opt.wo_wrap != 0 && col >= ColNr::new(win.w_view_width) && width > 0 {
                 let rowoff = if visible_row {
                     arith::wrap_rowoff(col, win.w_view_width, width)
                 } else {
@@ -278,9 +282,13 @@ pub fn textpos2screenpos(win: Win, pos: &mut Pos, local: bool) -> (c_int, c_int,
                 col -= rowoff * width;
                 row += rowoff;
             }
-            col -= win.w_leftcol;
+            col -= win.w_leftcol.get();
 
-            if col >= 0 && col < win.w_view_width && row >= 0 && row < win.w_view_height {
+            if col >= ColNr::ZERO
+                && col < ColNr::new(win.w_view_width)
+                && row >= 0
+                && row < win.w_view_height
+            {
                 coloff = col - scol
                     + if local {
                         0
@@ -295,18 +303,27 @@ pub fn textpos2screenpos(win: Win, pos: &mut Pos, local: bool) -> (c_int, c_int,
                 } + 1;
             } else {
                 // The character is left of, right of or below the window.
-                scol = 0;
-                ccol = 0;
-                ecol = 0;
+                scol = ColNr::ZERO;
+                ccol = ColNr::ZERO;
+                ecol = ColNr::ZERO;
                 if local {
-                    coloff = if col < 0 { -1 } else { win.w_view_width + 1 };
+                    coloff = if col < ColNr::ZERO {
+                        -1
+                    } else {
+                        win.w_view_width + 1
+                    };
                 } else {
                     row = 0;
                 }
             }
         }
     }
-    (row, scol + coloff, ccol + coloff, ecol + coloff)
+    (
+        row,
+        (scol + coloff).get(),
+        (ccol + coloff).get(),
+        (ecol + coloff).get(),
+    )
 }
 
 /// `screenpos({winid}, {lnum}, {col})`.
@@ -319,7 +336,7 @@ pub fn f_screenpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let (lnum, col) = (tv_get_number(&args[1]), tv_get_number(&args[2]));
     let mut pos = Pos {
         lnum: number_as_lnum(lnum),
-        col: (col as ColNr - 1).max(0),
+        col: (number_as_col(col) - 1).max(ColNr::ZERO),
         coladd: 0,
     };
     if pos.lnum > wp.buffer().line_count() {
@@ -342,18 +359,18 @@ pub fn f_screenpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// first column is one; for a multibyte character the column of its first
 /// byte is answered.
 fn virtcol2col(win: Win, lnum: LineNr, vcol: c_int) -> c_int {
-    let (offset, _) = vcol_to_col(win, lnum, vcol - 1);
+    let (offset, _) = vcol_to_col(win, lnum, ColNr::new(vcol - 1));
     let mut lines = win.buffer().lines();
     let line = lines.line(lnum);
-    if cstr::byte_at(line, offset as usize) != 0 {
-        return offset + 1;
+    if cstr::byte_at(line, offset.as_usize()) != 0 {
+        return (offset + 1).get();
     }
-    if offset == 0 {
+    if offset == ColNr::ZERO {
         // An empty line.
         return 0;
     }
     // Move back onto the first byte of the last character.
-    offset - head_off(line, (offset - 1) as usize) as c_int
+    (offset - head_off(line, (offset - 1).as_usize()) as c_int).get()
 }
 
 /// `virtcol2col({winid}, {lnum}, {col})`.

@@ -29,7 +29,6 @@
 )]
 
 use super::*;
-use crate::pos::MAXCOL;
 use crate::types::NUL;
 
 impl Cells {
@@ -334,7 +333,7 @@ impl Cells {
         let has_spell = f.spv.spv_has_spell;
         let cell = get_syntax_attr(
             window.buffer(),
-            at - 1,
+            ColNr::new(at - 1),
             has_spell.then_some(can_spell),
             false,
         );
@@ -416,8 +415,8 @@ impl Cells {
         if spell_hlf != HLF_COUNT
             && State.get() & MODE_INSERT != 0
             && window.w_cursor.lnum == wlv.lnum
-            && window.w_cursor.col >= prev_col
-            && window.w_cursor.col < self.word_end
+            && window.w_cursor.col >= ColNr::new(prev_col)
+            && window.w_cursor.col < ColNr::new(self.word_end)
         {
             spell_hlf = HLF_COUNT;
             spell_redraw_lnum.set(wlv.lnum);
@@ -438,13 +437,13 @@ impl Cells {
             self.spell_attr = default_hl_attr(usize::try_from(spell_hlf).unwrap_or(0));
         }
 
-        if f.spv.spv_cap_col > 0 {
+        if f.spv.spv_cap_col > ColNr::ZERO {
             if let Some(next_col) = next_col
-                && next_col + f.spv.spv_cap_col >= self.nextline_idx
+                && f.spv.spv_cap_col + next_col >= ColNr::new(self.nextline_idx)
             {
                 // The word on the next line must start with a capital.
                 f.spv.spv_capcol_lnum = wlv.lnum + 1;
-                f.spv.spv_cap_col = next_col + f.spv.spv_cap_col - self.nextline_idx;
+                f.spv.spv_cap_col = f.spv.spv_cap_col + next_col - self.nextline_idx;
             } else {
                 // Turn it back into a column of this line.
                 f.spv.spv_cap_col += prev_col;
@@ -488,7 +487,7 @@ impl Cells {
         // `lnum` 0: virtual text is not to be counted here.
         let chr = c_char_info(self.line.with_nul(), at).value;
         let (mut csarg, cstype) = CharsizeArg::new(window, LineNr::ZERO, self.line.text());
-        wlv.extra_todo = win_charsize(cstype, wlv.vcol, at, chr, &mut csarg).width - 1;
+        wlv.extra_todo = win_charsize(cstype, wlv.vcol.get(), at, chr, &mut csarg).width - 1;
 
         // Do not bleed an underline, strikethrough or overline into the
         // filler for the pushed-down word: over blank cells it looks like a
@@ -547,8 +546,8 @@ impl Cells {
                 || (self.char_code == ' ' as ::core::ffi::c_int
                     && self.char_len == 1
                     && (lcs.space != 0 || (self.in_multispace && lcs.multispace.is_some()))
-                    && at >= self.leadcol as isize
-                    && at <= self.trailcol as isize))
+                    && at >= self.leadcol.get() as isize
+                    && at <= self.trailcol.get() as isize))
         {
             if self.in_multispace
                 && let Some(run) = lcs.multispace.as_deref()
@@ -571,20 +570,20 @@ impl Cells {
         // this one is honoured with 'nolist' too.
         if self.char_code == ' ' as ::core::ffi::c_int
             && self.char_len == 1
-            && ((self.trailcol != MAXCOL as ColNr && at > self.trailcol as isize)
-                || (self.leadcol != 0 && at < self.leadcol as isize))
+            && ((self.trailcol != ColNr::MAX && at > self.trailcol.get() as isize)
+                || (self.leadcol != ColNr::ZERO && at < self.leadcol.get() as isize))
         {
-            if self.leadcol != 0
+            if self.leadcol != ColNr::ZERO
                 && self.in_multispace
-                && at < self.leadcol as isize
+                && at < self.leadcol.get() as isize
                 && let Some(run) = lcs.leadmultispace.as_deref()
             {
                 self.cell_char = cycle_run(run, &mut self.multispace_pos);
-            } else if at > self.trailcol as isize && lcs.trail != 0 {
+            } else if at > self.trailcol.get() as isize && lcs.trail != 0 {
                 self.cell_char = lcs.trail;
-            } else if at < self.leadcol as isize && lcs.lead != 0 {
+            } else if at < self.leadcol.get() as isize && lcs.lead != 0 {
                 self.cell_char = lcs.lead;
-            } else if self.leadcol != 0 && lcs.space != 0 {
+            } else if self.leadcol != ColNr::ZERO && lcs.space != 0 {
                 self.cell_char = lcs.space;
             }
             wlv.n_attr = 1;

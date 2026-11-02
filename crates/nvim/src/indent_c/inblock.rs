@@ -224,7 +224,7 @@ pub(crate) fn indent_in_block(line: &Line, brace: Pos) -> c_int {
             found: 0,
             lpos: LPos {
                 lnum: MAXLNUM,
-                col: 0,
+                col: ColNr::ZERO,
             },
         },
         js_cur_has_key,
@@ -239,7 +239,7 @@ impl BlockScan<'_> {
         Win::current().w_cursor = self.line.cur_curpos;
         loop {
             Win::current().w_cursor.lnum -= 1;
-            Win::current().w_cursor.col = 0;
+            Win::current().w_cursor.col = ColNr::ZERO;
 
             // Back at the start of our scope: line up with it.
             if Win::current().w_cursor.lnum <= self.ourscope {

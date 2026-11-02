@@ -91,7 +91,7 @@ pub fn get_c_indent() -> c_int {
     // Move the cursor to the start of the line, and judge the line before
     // anything else moves: 'cinoptions' `L` reads the answer again at the
     // very end.
-    Win::current().w_cursor.col = 0;
+    Win::current().w_cursor.col = ColNr::ZERO;
     let line = Line {
         copy,
         start,

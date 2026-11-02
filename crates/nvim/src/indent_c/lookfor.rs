@@ -45,7 +45,7 @@ impl BlockScan<'_> {
     /// decrement lands on `lnum` itself.
     fn resume_at(&self, lnum: LineNr) {
         Win::current().w_cursor.lnum = lnum + 1;
-        Win::current().w_cursor.col = 0;
+        Win::current().w_cursor.col = ColNr::ZERO;
     }
 
     /// The scan reached the line the enclosing `{` is on.
@@ -270,7 +270,7 @@ impl BlockScan<'_> {
                 self.ind_continuation = 0;
                 return Step::Again;
             } else {
-                self.amount = get_baseclass_amount(self.cache.lpos.col);
+                self.amount = get_baseclass_amount(self.cache.lpos.col.get());
             }
             return Step::Done;
         }
@@ -683,7 +683,7 @@ impl BlockScan<'_> {
                     break;
                 }
                 Win::current().w_cursor.lnum -= 1;
-                Win::current().w_cursor.col = 0;
+                Win::current().w_cursor.col = ColNr::ZERO;
             }
         }
 

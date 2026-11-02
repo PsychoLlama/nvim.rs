@@ -624,8 +624,12 @@ fn ruler_position(win: Win, virtcol: ColNr) -> Vec<u8> {
     // l10n: leave as-is unless a space after the comma is preferred
     // l10n: do not add any row/column label, due to the limited space
     let mut text = formatted(room, gettext(c"%ld,").to_bytes(), &[FmtArg::from(lnum)]);
-    let col = if empty_line { 0 } else { win.w_cursor.col + 1 };
-    let col = col_text(col, virtcol + 1);
+    let col = if empty_line {
+        0
+    } else {
+        (win.w_cursor.col + 1).get()
+    };
+    let col = col_text(col, (virtcol + 1).get());
     let keep = col.len().min(room.saturating_sub(text.len() + 1));
     text.extend_from_slice(&col.as_bytes()[..keep]);
     text

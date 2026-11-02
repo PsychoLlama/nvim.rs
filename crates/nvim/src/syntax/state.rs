@@ -214,7 +214,7 @@ impl SynState {
     /// Reset the per-line state before parsing a line.
     pub(crate) fn start_line(&mut self) {
         self.finished = false;
-        self.col = 0;
+        self.col = ColNr::ZERO;
 
         // The end of a start/skip/end that continues from the previous line
         // needs updating, and so do regions with "keepend".
@@ -248,7 +248,7 @@ impl SynState {
                     cur_si.si_flags |= SynFlags::MATCHCONT;
                     cur_si.si_m_endpos = LPos {
                         lnum: LineNr::ZERO,
-                        col: 0,
+                        col: ColNr::ZERO,
                     };
                     cur_si.si_h_endpos = cur_si.si_m_endpos;
                     cur_si.si_ends = 1;
@@ -280,7 +280,7 @@ impl SynState {
                 || (innermost && startofline)
             {
                 // Highlighting starts in column 0.
-                cur_si.si_h_startpos.col = 0;
+                cur_si.si_h_startpos.col = ColNr::ZERO;
                 cur_si.si_h_startpos.lnum = lnum;
 
                 let (matchcont, keepend) = (
@@ -288,7 +288,7 @@ impl SynState {
                     cur_si.si_flags.has(SynFlags::KEEPEND),
                 );
                 if !matchcont {
-                    self.update_si_end(i, self.col, !startofline);
+                    self.update_si_end(i, self.col.get(), !startofline);
                 }
                 if !startofline && keepend {
                     seen_keepend = true;

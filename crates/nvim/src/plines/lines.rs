@@ -67,8 +67,8 @@ pub(crate) fn plines_win_nofold(window: Win, lnum: LineNr) -> c_int {
     }
 
     let mut col = match cstype {
-        CharsizeKind::Fast => linesize_fast(&csarg, 0, MAXCOL),
-        CharsizeKind::Regular => linesize_regular(&mut csarg, 0, MAXCOL),
+        CharsizeKind::Fast => linesize_fast(&csarg, 0, ColNr::MAX),
+        CharsizeKind::Regular => linesize_regular(&mut csarg, 0, ColNr::MAX),
     } as int64_t;
 
     // In 'list' mode the trailing '$' may take one more column.
@@ -108,7 +108,7 @@ pub(crate) fn plines_win_col(window: Win, lnum: LineNr, mut column: c_long) -> c
     let line = text.line(lnum);
     let (mut csarg, cstype) = CharsizeArg::new(window, lnum, line);
 
-    let mut vcol: ColNr = 0;
+    let mut vcol: ColNr = ColNr::ZERO;
     let mut at = 0;
     let mut chr = c_char_info(line, 0);
     if cstype == CharsizeKind::Fast {
@@ -136,7 +136,7 @@ pub(crate) fn plines_win_col(window: Win, lnum: LineNr, mut column: c_long) -> c
     // next (when 'columns' is not a multiple of 'ts') -- webb.
     let mut col = vcol;
     if chr.value == TAB && State.get() & MODE_NORMAL != 0 && csarg.use_tabstop {
-        col += win_charsize(cstype, col, at, chr.value, &mut csarg).width - 1;
+        col += win_charsize(cstype, col.get(), at, chr.value, &mut csarg).width - 1;
     }
 
     // Column offset for 'number', 'relativenumber', 'foldcolumn', etc.
@@ -146,8 +146,8 @@ pub(crate) fn plines_win_col(window: Win, lnum: LineNr, mut column: c_long) -> c
     }
 
     lines += 1;
-    if col > width {
-        lines += (col - width) / (width + win_col_off2(window)) + 1;
+    if col > ColNr::new(width) {
+        lines += (col - width).get() / (width + win_col_off2(window)) + 1;
     }
     lines
 }

@@ -2,6 +2,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::narrow::number_as_col;
 use crate::narrow::number_as_lnum;
 use crate::winlayer::Buf;
 use core::ffi::c_int;
@@ -110,7 +111,7 @@ pub fn var2fpos(
         if error || pos.lnum <= LineNr::ZERO || pos.lnum > bp.line_count() {
             return None;
         }
-        pos.col = list_find_nr(Some(l), 1, Some(&mut error)) as ColNr;
+        pos.col = number_as_col(list_find_nr(Some(l), 1, Some(&mut error)));
         if error {
             return None;
         }
@@ -118,20 +119,20 @@ pub fn var2fpos(
         let len = if charcol {
             line_char_count(bp, pos.lnum)
         } else {
-            ml_get_buf_len(bp, pos.lnum) as c_int
+            ml_get_buf_len(bp, pos.lnum).get()
         };
         // The column may be spelled `"$"`, meaning end of line.
         let li = l.items().get(1);
         let dollar = li.is_some_and(|li| li.li_tv.string_bytes() == b"$");
         if dollar {
-            pos.col = len + 1;
+            pos.col = ColNr::new(len + 1);
         }
-        if pos.col == 0 || pos.col > len + 1 {
+        if pos.col == ColNr::ZERO || pos.col > ColNr::new(len + 1) {
             return None;
         }
         pos.col -= 1;
 
-        pos.coladd = list_find_nr(Some(l), 2, Some(&mut error)) as ColNr;
+        pos.coladd = list_find_nr(Some(l), 2, Some(&mut error)) as i32;
         if error {
             pos.coladd = 0;
         }
@@ -169,7 +170,7 @@ pub fn var2fpos(
 
     if pos.lnum != LineNr::ZERO {
         if charcol {
-            pos.col = buf_byteidx_to_charidx(Some(bp), pos.lnum, pos.col) as ColNr;
+            pos.col = ColNr::new(buf_byteidx_to_charidx(Some(bp), pos.lnum, pos.col.get()));
         }
         return Some(pos);
     }
@@ -177,7 +178,7 @@ pub fn var2fpos(
     pos.coladd = 0;
     if first == b'w' && dollar_lnum {
         check_cursor_moved(wp);
-        pos.col = 0;
+        pos.col = ColNr::ZERO;
         if second == b'0' {
             update_topline(wp);
             pos.lnum = wp.w_topline.max(LineNr::ONE);
@@ -197,12 +198,12 @@ pub fn var2fpos(
         // end of the current line where a column is.
         if dollar_lnum {
             pos.lnum = bp.line_count();
-            pos.col = 0;
+            pos.col = ColNr::ZERO;
         } else {
             let lnum = wp.w_cursor.lnum;
             pos.lnum = lnum;
             pos.col = if charcol {
-                line_char_count(bp, lnum)
+                ColNr::new(line_char_count(bp, lnum))
             } else {
                 ml_get_buf_len(bp, lnum)
             };
@@ -275,14 +276,14 @@ pub fn list2fpos(
         };
         n = buf_charidx_to_byteidx(Some(buf), lnum, n) + 1;
     }
-    pos.col = n as ColNr;
+    pos.col = ColNr::new(n);
 
     // A missing or negative offset is no offset.
     let off = list_find_nr(Some(l), i, None) as c_int;
-    pos.coladd = if off < 0 { 0 } else { off as ColNr };
+    pos.coladd = if off < 0 { 0 } else { off as i32 };
 
     if let Some(curswant) = curswant {
-        *curswant = list_find_nr(Some(l), i + 1, None) as ColNr;
+        *curswant = number_as_col(list_find_nr(Some(l), i + 1, None));
     }
     Ok(())
 }

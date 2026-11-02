@@ -14,6 +14,7 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::types::ColNr;
 use core::ffi::c_int;
 
 use super::*;
@@ -125,7 +126,7 @@ pub(crate) fn same_leader(lnum: LineNr, first: Leader, second: Leader) -> bool {
                     // A comment's opening line joins the next one only
                     // when it has text of its own and the next line's
                     // item is the comment's middle.
-                    if Lines::current().line_len(lnum) <= first.len {
+                    if Lines::current().line_len(lnum) <= ColNr::new(first.len) {
                         return false;
                     }
                     if second.flags.is_none() || second.len == 0 {

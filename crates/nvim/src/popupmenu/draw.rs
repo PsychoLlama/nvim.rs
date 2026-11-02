@@ -18,6 +18,7 @@ use super::*;
 use crate::cstr;
 use crate::grid::with_linebuf;
 use crate::message::emsg;
+use crate::types::ColNr;
 use crate::types::kFloatRelativeEditor;
 use crate::winlayer::Win;
 
@@ -29,7 +30,7 @@ const WIN_CONFIG_INIT: WinConfig = WinConfig {
     window: Handle::NONE,
     bufpos: LPos {
         lnum: LineNr::new(-1),
-        col: 0,
+        col: ColNr::ZERO,
     },
     height: 0,
     width: 0,

@@ -122,7 +122,12 @@ fn suggest_and_replace(count: c_int, prev_cursor: Pos, msg_scroll_save: c_int) {
     // allows, whichever is smaller.
     let limit = sps_limit.get().min(Rows.get() - 2);
     let mut sug = SugInfo::new();
-    let col = (Win::current().w_cursor.col.max(0) as usize).min(line.len());
+    let col = Win::current()
+        .w_cursor
+        .col
+        .max(ColNr::ZERO)
+        .as_usize()
+        .min(line.len());
     spell_find_suggest(&line[col..], badlen, &mut sug, limit, true, need_cap, true);
 
     let mut selected = count;
@@ -182,7 +187,11 @@ fn move_to_bad_word(prev_cursor: Pos) -> Option<c_int> {
     Win::current().w_cursor = prev_cursor;
     let mut lines = Lines::current();
     let curline = lines.line(prev_cursor.lnum);
-    let mut p = (prev_cursor.col.max(0) as usize).min(curline.len());
+    let mut p = prev_cursor
+        .col
+        .max(ColNr::ZERO)
+        .as_usize()
+        .min(curline.len());
     // Back up to before the start of the word...
     while p > 0 && spell_iswordp_nmw(&curline[p..], Win::current()) {
         p -= head_off(curline, p - 1) + 1;
@@ -195,7 +204,7 @@ fn move_to_bad_word(prev_cursor: Pos) -> Option<c_int> {
         beep_flush(); // no word at all
         return None;
     }
-    Win::current().w_cursor.col = p as ColNr;
+    Win::current().w_cursor.col = ColNr::from_index(p);
     Some(0)
 }
 
@@ -355,6 +364,6 @@ fn apply_suggestion(sug: &SugInfo, stp: &Suggest, line: &[u8], col: usize) {
 
     let lnum = Win::current().w_cursor.lnum;
     let _ = ml_replace_owned(lnum, XString::from_vec(newline));
-    Win::current().w_cursor.col = col as ColNr;
-    inserted_bytes(lnum, col as ColNr, stp.st_orglen, stp.st_wordlen);
+    Win::current().w_cursor.col = ColNr::from_index(col);
+    inserted_bytes(lnum, ColNr::from_index(col), stp.st_orglen, stp.st_wordlen);
 }

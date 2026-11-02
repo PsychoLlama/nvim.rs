@@ -88,7 +88,7 @@ pub(crate) fn set_buffer_lines(
                 if u_savesub(lnum).is_ok()
                     && ml_replace_buf_text(Buf::current(), lnum, text).is_ok()
                 {
-                    inserted_bytes(lnum, 0, old_len, len_as_int(text.len()));
+                    inserted_bytes(lnum, ColNr::ZERO, old_len.get(), len_as_int(text.len()));
                     if is_curbuf && lnum == Win::current().w_cursor.lnum {
                         check_cursor_col(Win::current());
                     }

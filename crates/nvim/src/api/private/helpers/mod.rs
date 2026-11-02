@@ -28,6 +28,7 @@
 
 use crate::narrow::number_as_int;
 use crate::narrow::number_as_lnum;
+use crate::types::ColNr;
 use crate::types::LineNr;
 use core::ffi::{CStr, c_char, c_int};
 
@@ -269,7 +270,7 @@ pub(crate) fn set_mark(
 
     let pos = Pos {
         lnum: number_as_lnum(line),
-        col: number_as_int(col),
+        col: ColNr::new(number_as_int(col)),
         coladd: 0,
     };
     // As C read it: a `char`, so a byte past ASCII is negative. A name that

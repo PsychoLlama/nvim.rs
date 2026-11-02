@@ -531,14 +531,14 @@ pub(crate) fn get_rightmost_vcol(window: Win, color_col: usize) -> ::core::ffi::
     let mut ret = if window.w_onebuf_opt.wo_cuc != 0 {
         window.w_virtcol
     } else {
-        0
+        ColNr::ZERO
     };
     if let Some(cols) = window.w_p_cc_cols.get(color_col..) {
         for &col in cols.iter().take_while(|&&col| col >= 0) {
-            ret = ret.max(col);
+            ret = ret.max(ColNr::new(col));
         }
     }
-    ret
+    ret.get()
 }
 
 impl Win {
@@ -560,7 +560,7 @@ impl Win {
 
         let width1 = self.w_view_width - self.col_off();
         let width2 = width1 + win_col_off2(self);
-        if SAVED_W_VIRTCOL.get() == self.w_virtcol
+        if SAVED_W_VIRTCOL.get() == self.w_virtcol.get()
             && PREV_WIN.get() == Some(self.id())
             && PREV_WIDTH1.get() == width1
             && PREV_WIDTH2.get() == width2
@@ -568,11 +568,11 @@ impl Win {
             return (PREV_LEFT_COL.get(), PREV_RIGHT_COL.get());
         }
 
-        let (left_col, right_col) = if self.w_virtcol >= width1 && width2 > 0 {
+        let (left_col, right_col) = if self.w_virtcol >= ColNr::new(width1) && width2 > 0 {
             let past = self.w_virtcol - width1;
             (
-                past / width2 * width2 + width1,
-                width1 + (past / width2 + 1) * width2,
+                past.get() / width2 * width2 + width1,
+                width1 + (past.get() / width2 + 1) * width2,
             )
         } else {
             (0, width1)
@@ -583,7 +583,7 @@ impl Win {
         PREV_WIN.set(Some(self.id()));
         PREV_WIDTH1.set(width1);
         PREV_WIDTH2.set(width2);
-        SAVED_W_VIRTCOL.set(self.w_virtcol);
+        SAVED_W_VIRTCOL.set(self.w_virtcol.get());
         (left_col, right_col)
     }
 }
@@ -601,7 +601,7 @@ impl WinLineVars {
         self.off = 0;
         self.linebreak_armed = false;
         for i in 0..window.w_view_width {
-            put_cell(i, schar_from_ascii(b' '), 0, -1);
+            put_cell(i, schar_from_ascii(b' '), 0, ColNr::NONE);
         }
     }
 
@@ -613,7 +613,7 @@ impl WinLineVars {
     /// which counts the cells the line would have taken unconcealed.
     #[inline(always)]
     pub(crate) fn hl_vcol(&self) -> ::core::ffi::c_int {
-        self.vcol - self.vcol_off_co
+        (self.vcol - self.vcol_off_co).get()
     }
 
     /// Undo the fake columns concealment added to force a wrap.
@@ -677,8 +677,8 @@ impl WinLineVars {
         window: Win,
         attr: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int {
-        self.advance_color_col(window, self.vcol);
-        if self.is_color_col(window, self.vcol) {
+        self.advance_color_col(window, self.vcol.get());
+        if self.is_color_col(window, self.vcol.get()) {
             hl_combine_attr(win_hl_attr(window, HLF_MC), attr)
         } else {
             attr

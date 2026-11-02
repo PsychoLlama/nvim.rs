@@ -34,7 +34,7 @@
 
 use core::ffi::c_int;
 
-use crate::types::LineNr;
+use crate::types::{ColNr, LineNr};
 
 /// A 64-bit editor number narrowed to a C `int`, exactly as upstream's
 /// `(int)` casts do: the low 32 bits, wrapping.
@@ -52,6 +52,13 @@ pub(crate) const fn number_as_int(n: i64) -> c_int {
 /// is not refused here; the callers clamp it as upstream does.
 pub(crate) const fn number_as_lnum(n: i64) -> LineNr {
     LineNr::new(number_as_int(n))
+}
+
+/// A 64-bit editor number narrowed to a column, exactly as upstream's
+/// `(colnr_T)` casts do: [`number_as_int`]'s low 32 bits. A column past
+/// `MAXCOL` is not refused here; the callers clamp it as upstream does.
+pub(crate) const fn number_as_col(n: i64) -> ColNr {
+    ColNr::new(number_as_int(n))
 }
 
 /// An API `Integer` narrowed to the `uint32_t` a namespace or extmark id is,

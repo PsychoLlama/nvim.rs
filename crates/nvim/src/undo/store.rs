@@ -463,7 +463,7 @@ pub(crate) fn store_release(mut buffer: Buf) {
 mod tests {
     use super::*;
     use crate::memory::XString;
-    use crate::types::LineNr;
+    use crate::types::{ColNr, LineNr};
     use crate::types::{ExtmarkSplice, ExtmarkUndoObject, UndoEntry};
 
     /// A header carrying `seq`, and `walk` as a tag to tell two apart by.
@@ -591,11 +591,11 @@ mod tests {
         uh.getbot = Some(1);
         uh.extmarks.push(ExtmarkUndoObject::Splice(ExtmarkSplice {
             start_row: 0,
-            start_col: 0,
+            start_col: ColNr::ZERO,
             old_row: 0,
-            old_col: 1,
+            old_col: ColNr::new(1),
             new_row: 0,
-            new_col: 2,
+            new_col: ColNr::new(2),
             start_byte: 0,
             old_byte: 1,
             new_byte: 2,

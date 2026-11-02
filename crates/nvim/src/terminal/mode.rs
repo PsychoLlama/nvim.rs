@@ -353,7 +353,7 @@ pub(super) fn terminal_check_cursor(term: Term) {
     if term.suspended && State.get() & MODE_TERMINAL != 0 {
         win.w_cursor = Pos {
             lnum: buf.line_count(),
-            col: 0,
+            col: ColNr::ZERO,
             coladd: 0,
         };
         return;
@@ -365,7 +365,7 @@ pub(super) fn terminal_check_cursor(term: Term) {
     } else {
         -1
     };
-    let col = (term.cursor.col + off).max(0) as ColNr;
+    let col = ColNr::new((term.cursor.col + off).max(0));
     // SAFETY: a live window, and a column of the line its cursor is on.
     coladvance(win, col);
 }

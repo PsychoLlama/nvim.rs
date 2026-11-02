@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 
 use super::wrappers::{arg_lnum, arg_number, arg_number_chk};
+use crate::narrow::number_as_col;
 use crate::types::LineNr;
 use crate::winlayer::{Buf, Win};
 
@@ -241,7 +242,7 @@ pub fn f_syn_id_attr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 pub fn f_syn_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let lnum = arg_lnum(&args[0]);
     // Wraps because the C's does; `col` is only used as a range test.
-    let col = (arg_number(&args[1]) as ColNr).wrapping_sub(1);
+    let col = number_as_col(arg_number(&args[1]).wrapping_sub(1));
     let mut transerr = false;
     let trans = arg_number_chk(&args[2], Some(&mut transerr)) as c_int;
 
@@ -249,7 +250,7 @@ pub fn f_syn_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if !transerr
         && lnum >= LineNr::ONE
         && lnum <= Buf::current().b_ml.ml_line_count
-        && col >= 0
+        && col >= ColNr::ZERO
         && col < ml_get_len(lnum)
     {
         id = Win::current().syntax_id(lnum, col, trans != 0, None, false);
@@ -273,13 +274,13 @@ pub fn f_synconcealed(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     result.write_list(None);
     let lnum = arg_lnum(&args[0]);
     // Wraps because the C's does.
-    let col = (arg_number(&args[1]) as ColNr).wrapping_sub(1);
+    let col = number_as_col(arg_number(&args[1]).wrapping_sub(1));
 
     // Note the `<=`: unlike synID(), the position one past the end of
     // the line is in range here.
     if lnum >= LineNr::ONE
         && lnum <= Buf::current().b_ml.ml_line_count
-        && col >= 0
+        && col >= ColNr::ZERO
         && col <= ml_get_len(lnum)
         && Win::current().w_onebuf_opt.wo_cole > 0
     {
@@ -318,11 +319,11 @@ pub fn f_synstack(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_list(None);
     let lnum = arg_lnum(&args[0]);
     // Wraps because the C's does.
-    let col = (arg_number(&args[1]) as ColNr).wrapping_sub(1);
+    let col = number_as_col(arg_number(&args[1]).wrapping_sub(1));
 
     if lnum >= LineNr::ONE
         && lnum <= Buf::current().b_ml.ml_line_count
-        && col >= 0
+        && col >= ColNr::ZERO
         && col <= ml_get_len(lnum)
     {
         let list = tv_list_alloc_ret(result, kListLenMayKnow as isize);

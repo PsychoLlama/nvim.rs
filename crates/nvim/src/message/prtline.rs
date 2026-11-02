@@ -11,6 +11,7 @@ use crate::charset::CharDisplay;
 use crate::cstr;
 use crate::grid::{SCHAR_BUF_SIZE, schar_text};
 use crate::mbyte::char_at;
+use crate::types::ColNr;
 use crate::types::{MB_MAXBYTES, NUL};
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
@@ -133,7 +134,7 @@ pub fn msg_prt_line(line: &CStr, list: bool) {
 
             if c == TAB && (!list || lcs.tab1 != 0) {
                 // How wide the tab is depends on where it starts.
-                extra_left = Buf::current().tab_padding(col) - 1;
+                extra_left = Buf::current().tab_padding(ColNr::new(col)) - 1;
                 if list {
                     let (mut tab1, mut tab2, mut tab3) = (lcs.tab1, lcs.tab2, lcs.tab3);
                     if in_lead && lcs.leadtab1 != 0 {

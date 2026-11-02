@@ -641,7 +641,7 @@ fn send_splice(mut buffer: Buf, start: Corner, old: Corner, new: Corner) {
             args.push(Object::integer(changedtick(buffer)));
             for corner in [start, old, new] {
                 args.push(Object::integer(corner.row as Integer));
-                args.push(Object::integer(corner.col as Integer));
+                args.push(Object::integer(i64::from(corner.col)));
                 args.push(Object::integer(corner.byte as Integer));
             }
             let res = call_ref(cb.on_bytes, c"bytes", args.array(), kRetNilBool);

@@ -159,7 +159,7 @@ fn with_cursor_text<R>(f: impl FnOnce(&[u8]) -> R) -> R {
 /// The length of the character under the cursor, its composing characters
 /// included; 0 at the end of the line.
 fn cursor_char_len() -> ColNr {
-    with_cursor_text(|rest| ColNr::try_from(c_cluster_len(rest)).unwrap_or(0))
+    with_cursor_text(|rest| ColNr::try_from(c_cluster_len(rest)).unwrap_or(ColNr::ZERO))
 }
 
 /// Split a `"=` result into lines at each `\n`.
@@ -378,7 +378,7 @@ pub fn do_put(regname: c_int, reg: Option<&YankReg>, dir: c_int, count: c_int, f
         width: 0,
         lines: RegLines::NONE,
         nr_lines: 0,
-        split_pos: 0,
+        split_pos: ColNr::ZERO,
     };
 
     if let Some(text) = insert_string {
@@ -454,10 +454,10 @@ pub fn do_put(regname: c_int, reg: Option<&YankReg>, dir: c_int, count: c_int, f
                 // character.
                 if put.dir == FORWARD && gchar_cursor() != NUL {
                     let bytelen = cursor_char_len();
-                    col += bytelen;
+                    col += bytelen.get();
                     if !put.lines[0].is_empty() {
-                        Win::current().w_cursor.col += bytelen;
-                        Buf::current().b_op_end.col += bytelen;
+                        Win::current().w_cursor.col += bytelen.get();
+                        Buf::current().b_op_end.col += bytelen.get();
                     }
                 }
                 Buf::current().b_op_start = Win::current().w_cursor;

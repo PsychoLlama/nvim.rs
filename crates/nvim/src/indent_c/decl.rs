@@ -73,7 +73,7 @@ pub(crate) fn is_jump_label() -> bool {
     let cursor_save = Win::current().w_cursor;
     while Win::current().w_cursor.lnum > LineNr::ONE {
         Win::current().w_cursor.lnum -= 1;
-        Win::current().w_cursor.col = 0;
+        Win::current().w_cursor.col = ColNr::ZERO;
         if let Some(trypos) = ind_find_start_comment_or_raw_string(None) {
             Win::current().w_cursor = trypos;
         }

@@ -122,7 +122,10 @@ pub fn in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> bool {
         } else if c == b'e' {
             // Check for "else" at the start of the line and just before
             // the cursor.
-            if try_match && keytyped == c_int::from(b'e') && Win::current().w_cursor.col >= 4 {
+            if try_match
+                && keytyped == c_int::from(b'e')
+                && Win::current().w_cursor.col >= ColNr::new(4)
+            {
                 let back = usize::try_from(Win::current().w_cursor.col - 4).unwrap_or(0);
                 let cursor_lnum = Win::current().w_cursor.lnum;
                 let mut lines = Lines::current();
@@ -312,8 +315,7 @@ fn word_matches(
     // "0=word" also requires that only blanks precede the word.
     if matched && try_match_word && !try_match {
         let white = getwhitecols_curline();
-        let col = isize::try_from(Win::current().w_cursor.col).unwrap_or(isize::MAX);
-        return white == col - len.cast_signed();
+        return Win::current().w_cursor.col.as_usize().checked_sub(len) == Some(white.as_usize());
     }
     matched
 }

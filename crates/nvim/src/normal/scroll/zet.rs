@@ -182,10 +182,8 @@ fn scroll_sideways(cmd_arg: &mut CmdArg, right: bool) {
     }
     let target = if right {
         win.w_leftcol + cmd_arg.count1
-    } else if cmd_arg.count1 > win.w_leftcol {
-        0
     } else {
-        win.w_leftcol - cmd_arg.count1
+        (win.w_leftcol - cmd_arg.count1).max(ColNr::ZERO)
     };
     set_leftcol(target);
 }
@@ -198,26 +196,26 @@ fn scroll_cursor_to_edge(to_left: bool) {
         return;
     }
     let siso = get_sidescrolloff_value(win);
-    let mut col: ColNr = 0;
+    let mut col: ColNr = ColNr::ZERO;
     // A closed fold shows one line of its own, which starts at column 0.
     if !folded(win.w_cursor.lnum) {
         let (start, end) = win.vcol_span(win.cursor());
         col = if to_left { start } else { end };
     }
     if to_left {
-        col = if col as int64_t > siso {
+        col = if i64::from(col) > siso {
             col - siso as c_int
         } else {
-            0
+            ColNr::ZERO
         };
     } else {
         let width = win.w_view_width - win.col_off();
-        col = if (col as int64_t + siso) < width as int64_t {
-            0
-        } else if (siso - width as int64_t) < (INT_MAX - col) as int64_t {
-            (col as int64_t + siso - width as int64_t + 1) as c_int
+        col = if (i64::from(col) + siso) < width as int64_t {
+            ColNr::ZERO
+        } else if (siso - width as int64_t) < i64::from(INT_MAX - col.get()) {
+            ColNr::new((i64::from(col) + siso - width as int64_t + 1) as c_int)
         } else {
-            INT_MAX
+            ColNr::new(INT_MAX)
         };
     }
     if win.w_leftcol != col {

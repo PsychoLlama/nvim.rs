@@ -12,6 +12,7 @@ use crate::eval::decode::decode_string;
 use crate::memory::XString;
 use crate::message_fmt::{emsg_text, msg_cstr_opt};
 use crate::mpack::mpack_core::MPACK_OK;
+use crate::narrow::number_as_col;
 use crate::narrow::number_as_lnum;
 use crate::tr_c;
 use crate::types::{
@@ -149,7 +150,7 @@ fn parse_mark(header: &Header, cursor: &mut Cursor, extra: &mut Option<ShadaExtr
         mark.lnum = number_as_lnum(lnum);
     }
     if let Some(col) = it.c {
-        mark.col = col as ColNr;
+        mark.col = number_as_col(col);
     }
     let Some(fname) = it.f.as_ref().map(|f| c_string(f.as_bytes())) else {
         malformed_entry(c"E575: Error while reading ShaDa file: mark entry at position %lu is missing file name", pos);
@@ -159,7 +160,7 @@ fn parse_mark(header: &Header, cursor: &mut Cursor, extra: &mut Option<ShadaExtr
         malformed_entry(c"E575: Error while reading ShaDa file: mark entry at position %lu has invalid line number", pos);
         return Err(Malformed);
     }
-    if mark.col < 0 {
+    if mark.col < ColNr::ZERO {
         malformed_entry(c"E575: Error while reading ShaDa file: mark entry at position %lu has invalid column number", pos);
         return Err(Malformed);
     }
@@ -324,13 +325,13 @@ fn parse_buffer_list(pos: u64, cursor: &mut Cursor) -> Parsed2 {
             at.lnum = number_as_lnum(lnum);
         }
         if let Some(col) = it.c {
-            at.col = col as ColNr;
+            at.col = number_as_col(col);
         }
         let fname = it.f.as_ref().map(|f| c_string(f.as_bytes()));
 
         let complaint: &CStr = if at.lnum <= LineNr::ZERO {
             c"E575: Error while reading ShaDa file: buffer list at position %lu contains entry with invalid line number"
-        } else if at.col < 0 {
+        } else if at.col < ColNr::ZERO {
             c"E575: Error while reading ShaDa file: buffer list at position %lu contains entry with invalid column number"
         } else if let Some(fname) = fname {
             items.push(ShadaBufferListItem {

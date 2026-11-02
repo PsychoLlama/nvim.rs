@@ -4,6 +4,7 @@
 #![forbid(unsafe_code)]
 
 use crate::memory::XString;
+use crate::narrow::number_as_col;
 use core::ffi::CStr;
 
 use super::*;
@@ -48,7 +49,7 @@ use crate::winlayer::{Buf, Win};
 pub fn inindent(extra: c_int) -> bool {
     let cursor = Win::current().w_cursor;
     let col = skip::white(Lines::current().line(cursor.lnum)) as c_int;
-    col >= cursor.col as c_int + extra
+    col >= cursor.col.get() + extra
 }
 
 /// Shows `fmt` formatted with `n` as `:indent` progress, cut where
@@ -116,7 +117,7 @@ pub fn op_reindent(op: &OpArg, how: Indenter) {
                 }
             }
             win.w_cursor.lnum += 1;
-            win.w_cursor.col = 0; // keep it valid
+            win.w_cursor.col = ColNr::ZERO; // keep it valid
             i -= 1;
         }
     }
@@ -132,7 +133,7 @@ pub fn op_reindent(op: &OpArg, how: Indenter) {
         } else {
             last_changed + 1
         };
-        changed_lines(buf, first_changed, 0, end, 0, true);
+        changed_lines(buf, first_changed, ColNr::ZERO, end, 0, true);
     } else if op.is_visual {
         redraw_curbuf_later(UPD_INVERTED);
     }
@@ -177,7 +178,7 @@ pub fn may_do_si() -> bool {
 fn si_indent_like_open_brace(pos: Pos) {
     let mut win = Win::current();
     let old_pos = win.w_cursor;
-    let mut i = pos.col as c_int;
+    let mut i = pos.col.get();
     // The line is read here and nowhere else: `findmatch` below walks the
     // buffer itself, so the borrow has to be over before it is called.
     let mut lines = Lines::current();
@@ -191,7 +192,7 @@ fn si_indent_like_open_brace(pos: Pos) {
     }
     let after_paren = byte_at(line, i as usize) == b')';
     win.w_cursor.lnum = pos.lnum;
-    win.w_cursor.col = i as ColNr;
+    win.w_cursor.col = ColNr::new(i);
     if after_paren && let Some(open) = findmatch(None, '(' as c_int) {
         win.w_cursor = open;
     }
@@ -239,7 +240,7 @@ pub fn ins_try_si(c: c_int) {
         };
         if let Some(matching) = matching {
             si_indent_like_open_brace(matching);
-        } else if win.w_cursor.col > 0 {
+        } else if win.w_cursor.col > ColNr::ZERO {
             let shift = !(c == '{' as c_int
                 && can_si_back.get()
                 && win.w_cursor.lnum > LineNr::ONE
@@ -250,7 +251,7 @@ pub fn ins_try_si(c: c_int) {
         }
     }
     // The indent of a '#' is always zero.
-    if win.w_cursor.col > 0 && can_si.get() && c == '#' as c_int && inindent(0) {
+    if win.w_cursor.col > ColNr::ZERO && can_si.get() && c == '#' as c_int && inindent(0) {
         // Remember the current indent for the next line.
         old_indent.set(get_indent());
         set_indent(0, SIN_CHANGED as c_int);
@@ -292,7 +293,7 @@ fn apply_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_bytes: 
 /// byte column the cursor should take.
 fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
     let mut win = Win::current();
-    win.w_virtcol = end_vcol as ColNr;
+    win.w_virtcol = ColNr::new(end_vcol);
     let mut new_cursor_col = 0;
     let mut vcol = 0;
     {
@@ -316,13 +317,13 @@ fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
             new_cursor_col = at as c_int;
         }
     }
-    if vcol == win.w_virtcol as c_int {
+    if vcol == win.w_virtcol.get() {
         return new_cursor_col;
     }
     // No character starts at that column, so make one: insert the spaces
     // the cursor needs to sit where it was asked to.
-    win.w_cursor.col = new_cursor_col as ColNr;
-    let ptrlen = (win.w_virtcol as c_int - vcol) as size_t;
+    win.w_cursor.col = ColNr::new(new_cursor_col);
+    let ptrlen = (win.w_virtcol.get() - vcol) as size_t;
     ins_str(&vec![b' '; ptrlen]);
     new_cursor_col + ptrlen as c_int
 }
@@ -332,18 +333,18 @@ fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
 fn adjust_insert_start(insstart_less: c_int) {
     let mut insstart = Insstart.get();
     let lnum = Win::current().w_cursor.lnum;
-    if lnum == insstart.lnum && insstart.col != 0 {
-        insstart.col = if (insstart.col as c_int) <= insstart_less {
-            0
+    if lnum == insstart.lnum && insstart.col != ColNr::ZERO {
+        insstart.col = if insstart.col.get() <= insstart_less {
+            ColNr::ZERO
         } else {
-            insstart.col - insstart_less as ColNr
+            insstart.col - insstart_less
         };
         Insstart.set(insstart);
     }
-    ai_col.set(if (ai_col.get() as c_int) <= insstart_less {
-        0
+    ai_col.set(if ai_col.get().get() <= insstart_less {
+        ColNr::ZERO
     } else {
-        ai_col.get() - insstart_less as ColNr
+        ai_col.get() - insstart_less
     });
 }
 
@@ -351,11 +352,11 @@ fn adjust_insert_start(insstart_less: c_int) {
 /// the line lost, push NULs for what it gained.
 fn fix_replace_stack(mut start_col: c_int) {
     let win = Win::current();
-    while start_col > win.w_cursor.col as c_int {
+    while start_col > win.w_cursor.col.get() {
         replace_join(0); // remove a NUL from the replace stack
         start_col -= 1;
     }
-    while start_col < win.w_cursor.col as c_int {
+    while start_col < win.w_cursor.col.get() {
         replace_push_nul();
         start_col += 1;
     }
@@ -372,7 +373,7 @@ fn vreplace_restore(orig_line: XString, orig_col: ColNr) {
     let new_line = {
         let mut lines = Lines::current();
         let line = lines.line(win.w_cursor.lnum);
-        line[..(new_col as usize).min(line.len())].to_vec()
+        line[..new_col.as_usize().min(line.len())].to_vec()
     };
     let _ = ml_replace_owned(win.w_cursor.lnum, orig_line);
     win.w_cursor.col = orig_col;
@@ -380,13 +381,21 @@ fn vreplace_restore(orig_line: XString, orig_col: ColNr) {
     backspace_until_column(0);
     ins_bytes(&new_line);
     drop(splice);
-    let delta = orig_col as c_int - new_col as c_int;
+    let delta = orig_col.get() - new_col.get();
     extmark_splice_cols(
         Buf::current(),
         win.w_cursor.lnum.get() - 1,
         new_col,
-        if delta < 0 { -delta as ColNr } else { 0 },
-        if delta > 0 { delta as ColNr } else { 0 },
+        if delta < 0 {
+            ColNr::new(-delta)
+        } else {
+            ColNr::ZERO
+        },
+        if delta > 0 {
+            ColNr::new(delta)
+        } else {
+            ColNr::ZERO
+        },
         kExtmarkUndo,
     );
 }
@@ -409,16 +418,16 @@ pub fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_by
     win.w_onebuf_opt.wo_list = 0;
     // A copy of the cursor, written back: the walk reads the window.
     let mut cursor = win.w_cursor;
-    let mut vcol = getvcol_nolist(&mut cursor) as c_int;
+    let mut vcol = getvcol_nolist(&mut cursor).get();
     win.w_cursor = cursor;
     // Replace mode fixes its stack below, which is only possible when the
     // cursor is in the indent; this is how many characters precede it.
-    let mut start_col = win.w_cursor.col as c_int;
+    let mut start_col = win.w_cursor.col.get();
     // Offset of the cursor from the first non-blank.
-    let mut new_cursor_col = win.w_cursor.col as c_int;
+    let mut new_cursor_col = win.w_cursor.col.get();
     beginline(BeginlineOpts::WHITE);
-    new_cursor_col -= win.w_cursor.col as c_int;
-    let mut insstart_less = win.w_cursor.col as c_int;
+    new_cursor_col -= win.w_cursor.col.get();
+    let mut insstart_less = win.w_cursor.col.get();
     if new_cursor_col < 0 {
         // The cursor is inside the indent: how many screen columns it
         // sits left of the first non-blank.
@@ -428,7 +437,7 @@ pub fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_by
         start_col = -1; // the replace stack cannot be fixed
     }
     apply_indent(type_0, amount, round, call_changed_bytes);
-    insstart_less -= win.w_cursor.col as c_int;
+    insstart_less -= win.w_cursor.col.get();
 
     // Try to keep the cursor on the same character: at or after the first
     // non-blank that is a byte offset from it, outside Insert mode it just
@@ -437,18 +446,18 @@ pub fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_by
     if new_cursor_col >= 0 {
         if new_cursor_col == 0 {
             // The cursor is touching the indent, so `Insstart.col` resets.
-            insstart_less = MAXCOL as c_int;
+            insstart_less = MAXCOL;
         }
-        new_cursor_col += win.w_cursor.col as c_int;
+        new_cursor_col += win.w_cursor.col.get();
     } else if State.get() & MODE_INSERT == 0 {
-        new_cursor_col = win.w_cursor.col as c_int;
+        new_cursor_col = win.w_cursor.col.get();
     } else {
         new_cursor_col = place_cursor_in_indent((get_indent() - vcol).max(0));
-        insstart_less = MAXCOL as c_int;
+        insstart_less = MAXCOL;
     }
 
     win.w_onebuf_opt.wo_list = save_p_list;
-    win.w_cursor.col = new_cursor_col.max(0) as ColNr;
+    win.w_cursor.col = ColNr::new(new_cursor_col.max(0));
     win.w_set_curswant = true;
     changed_cline_bef_curs(win);
     if State.get() & MODE_INSERT != 0 {
@@ -473,7 +482,7 @@ pub fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_by
 /// read.
 pub fn copy_indent(size: c_int, src: &[u8]) -> bool {
     let buf = Buf::current();
-    let pad = |col: c_int| buf.tab_padding(col as ColNr);
+    let pad = |col: c_int| buf.tab_padding(ColNr::new(col));
     let expandtab = buf.b_p_et != 0;
     let src_indent = src;
 
@@ -529,7 +538,7 @@ pub fn copy_indent(size: c_int, src: &[u8]) -> bool {
     let lnum = Win::current().w_cursor.lnum;
     indent.extend_from_slice(Lines::current().line(lnum));
     let _ = ml_replace_owned(lnum, XString::from_vec(indent));
-    Win::current().w_cursor.col = ind_len as ColNr;
+    Win::current().w_cursor.col = ColNr::new(ind_len);
     true
 }
 
@@ -633,7 +642,7 @@ impl Retab {
         self.num_spaces = width;
         let mut num_tabs = 0;
         if buf.b_p_et == 0 {
-            let (start, end) = (self.start_vcol as ColNr, scan.vcol as ColNr);
+            let (start, end) = (number_as_col(self.start_vcol), number_as_col(scan.vcol));
             (num_tabs, self.num_spaces) = match tabstops(tabs.vts.as_deref()) {
                 Some(stops) => stops.from_to(start, end),
                 None => {
@@ -656,7 +665,7 @@ impl Retab {
         let len = self.num_spaces + num_tabs;
         let old_len = scan.text.len() as c_int;
         let new_len = old_len - scan.col + self.start_col + len + 1;
-        if new_len <= 0 || new_len >= MAXCOL as c_int {
+        if new_len <= 0 || new_len == MAXCOL {
             emsg_text_too_long();
             return Retabulated::TooLong;
         }
@@ -667,7 +676,14 @@ impl Retab {
         if ml_replace_owned(scan.lnum, XString::from_bytes(&new_line)).is_ok() {
             let lnum = scan.lnum.get() - 1;
             let (old, new) = (old_len, new_len - 1);
-            extmark_splice_cols(buf, lnum, 0, old, new, kExtmarkUndo);
+            extmark_splice_cols(
+                buf,
+                lnum,
+                ColNr::ZERO,
+                ColNr::new(old),
+                ColNr::new(new),
+                kExtmarkUndo,
+            );
         }
         if self.first_line == LineNr::ZERO {
             self.first_line = scan.lnum;
@@ -692,7 +708,7 @@ impl Retab {
         let width = |s: &LineScan| {
             let at = s.col as usize;
             let text = &s.text[at..(at + CHAR_CELLS_SPAN).min(s.text.len())];
-            win_chartabsize(win, text, s.vcol as ColNr)
+            win_chartabsize(win, text, number_as_col(s.vcol))
         };
         let charlen = |s: &LineScan| c_cluster_len(&s.text[s.col as usize..]) as c_int;
         loop {
@@ -796,7 +812,14 @@ pub fn ex_retab(excmd: &mut ExArg) {
         redraw_curbuf_later(UPD_NOT_VALID);
     }
     if retab.first_line != LineNr::ZERO {
-        changed_lines(buf, retab.first_line, 0, retab.last_line + 1, 0, true);
+        changed_lines(
+            buf,
+            retab.first_line,
+            ColNr::ZERO,
+            retab.last_line + 1,
+            0,
+            true,
+        );
     }
     win.w_onebuf_opt.wo_list = save_list; // restore 'list'
     if let Some(ts_str) = &tabs.ts_str {

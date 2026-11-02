@@ -192,7 +192,7 @@ impl ScreenGrid {
         let end = off + at(width);
         self.chars[off..end].fill(BLANK);
         self.attrs[off..end].fill(if valid { 0 } else { -1 });
-        self.vcols[off..end].fill(-1);
+        self.vcols[off..end].fill(ColNr::NONE);
     }
 
     /// Copy `width` cells from `from` to `to`. The runs may overlap.
@@ -239,7 +239,7 @@ impl ScreenGrid {
         let cells = nrows * ncols;
         let mut chars = vec![BLANK; cells];
         let mut attrs = vec![if valid { 0 } else { -1 }; cells];
-        let mut vcols = vec![-1; cells];
+        let mut vcols = vec![ColNr::NONE; cells];
 
         if copy && self.is_allocated() {
             let width = ncols.min(at(self.cols));
@@ -354,10 +354,10 @@ impl LineBuf {
         }
         self.chars.resize(width, 0);
         self.attrs.resize(width, 0);
-        self.vcols.resize(width, 0);
+        self.vcols.resize(width, ColNr::ZERO);
         self.mirror_chars.resize(width, 0);
         self.mirror_attrs.resize(width, 0);
-        self.mirror_vcols.resize(width, 0);
+        self.mirror_vcols.resize(width, ColNr::ZERO);
     }
 
     /// The glyphs, for the readers that only look.

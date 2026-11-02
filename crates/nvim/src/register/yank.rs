@@ -140,10 +140,10 @@ pub fn op_yank_reg(op: &OpArg, message: bool, reg: Reg, append: bool) {
     // a later line is really a linewise one.
     let sel_old = region.is_visual && P_SEL.first_byte() != b'o';
     if region.motion_type == kMTCharWise
-        && region.start.col == 0
+        && region.start.col == ColNr::ZERO
         && !region.inclusive
         && !sel_old
-        && region.end.col == 0
+        && region.end.col == ColNr::ZERO
         && yanklines > 1
     {
         yank_type = kMTLineWise;
@@ -154,7 +154,7 @@ pub fn op_yank_reg(op: &OpArg, message: bool, reg: Reg, append: bool) {
     let mut width = 0;
     if yank_type == kMTBlockWise {
         // A `$`-extended block has no fixed width.
-        let narrow = Win::current().w_curswant == MAXCOL;
+        let narrow = Win::current().w_curswant == ColNr::MAX;
         width = region.end_vcol - region.start_vcol;
         if narrow && width > 0 {
             width -= 1;
@@ -213,8 +213,8 @@ pub fn op_yank_reg(op: &OpArg, message: bool, reg: Reg, append: bool) {
         Buf::current().b_op_start = region.start;
         Buf::current().b_op_end = region.end;
         if yank_type == kMTLineWise {
-            Buf::current().b_op_start.col = 0;
-            Buf::current().b_op_end.col = MAXCOL;
+            Buf::current().b_op_start.col = ColNr::ZERO;
+            Buf::current().b_op_end.col = ColNr::MAX;
         }
         if yank_type != kMTLineWise && !region.inclusive {
             // An exclusive region's `']` is the character *before* the end.
@@ -229,7 +229,7 @@ pub fn op_yank_reg(op: &OpArg, message: bool, reg: Reg, append: bool) {
 /// Render a register's type as the string `getregtype()` and `:registers`
 /// show: `v`, `V`, or `CTRL-V` followed by the block width; empty for an
 /// unknown type.
-pub fn format_reg_type(reg_type: MotionType, reg_width: ColNr) -> ThinCString {
+pub fn format_reg_type(reg_type: MotionType, reg_width: i32) -> ThinCString {
     match reg_type {
         kMTLineWise => ThinCString::from_bytes(b"V"),
         kMTCharWise => ThinCString::from_bytes(b"v"),

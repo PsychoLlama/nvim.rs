@@ -63,7 +63,8 @@ impl Cells {
             area = self.vi_attr;
             self.area_active = true;
         } else if area != 0
-            && (wlv.vcol == wlv.tocol || (self.noinvcur && wlv.vcol == window.w_virtcol))
+            && (wlv.vcol == ColNr::new(wlv.tocol)
+                || (self.noinvcur && wlv.vcol == window.w_virtcol))
         {
             area = 0;
             self.area_active = false;
@@ -94,10 +95,10 @@ impl Cells {
         } else if self.search_attr != 0 {
             hl_combine_attr(wlv.line_attr, self.search_attr)
         } else if wlv.line_attr != 0
-            && ((wlv.fromcol == -10 && wlv.tocol == MAXCOL as ::core::ffi::c_int)
-                || wlv.vcol < wlv.fromcol
-                || self.prev_vcol < self.fromcol_prev
-                || wlv.vcol >= wlv.tocol)
+            && ((wlv.fromcol == -10 && wlv.tocol == MAXCOL)
+                || wlv.vcol < ColNr::new(wlv.fromcol)
+                || self.prev_vcol < ColNr::new(self.fromcol_prev)
+                || wlv.vcol >= ColNr::new(wlv.tocol))
         {
             // `area_attr` may be 0 here even inside the range, when
             // "noinvcur" made it skip the cursor.
@@ -116,13 +117,13 @@ impl Cells {
     /// or resuming after the cursor that "noinvcur" skipped, which is what
     /// `prev_vcol == fromcol_prev` says.
     pub(super) fn area_starts_here(&self, wlv: &WinLineVars) -> bool {
-        wlv.vcol == wlv.fromcol
-            || (wlv.vcol + 1 == wlv.fromcol
+        wlv.vcol == ColNr::new(wlv.fromcol)
+            || (wlv.vcol + 1 == ColNr::new(wlv.fromcol)
                 && ((wlv.extra_todo == 0 && c_cells_at(self.rest()) > 1)
                     || (wlv.extra_todo > 0 && c_cells_at(wlv.extra.rest()) > 1)))
-            || (self.prev_vcol == self.fromcol_prev
+            || (self.prev_vcol == ColNr::new(self.fromcol_prev)
                 && self.prev_vcol < wlv.vcol
-                && wlv.vcol < wlv.tocol)
+                && wlv.vcol < ColNr::new(wlv.tocol))
     }
 
     /// Run the decoration walk for this cell and feed the loop whatever inline
@@ -130,15 +131,18 @@ impl Cells {
     pub(super) fn decorations_at(&mut self, wlv: &mut WinLineVars, window: Win) {
         // The Visual-area test below is repeated here rather than shared,
         // because this one may not look inside the run's text.
-        if wlv.vcol == wlv.fromcol
-            || (wlv.vcol + 1 == wlv.fromcol && wlv.extra_todo == 0 && c_cells_at(self.rest()) > 1)
-            || (self.prev_vcol == self.fromcol_prev
+        if wlv.vcol == ColNr::new(wlv.fromcol)
+            || (wlv.vcol + 1 == ColNr::new(wlv.fromcol)
+                && wlv.extra_todo == 0
+                && c_cells_at(self.rest()) > 1)
+            || (self.prev_vcol == ColNr::new(self.fromcol_prev)
                 && self.prev_vcol < wlv.vcol
-                && wlv.vcol < wlv.tocol)
+                && wlv.vcol < ColNr::new(wlv.tocol))
         {
             self.area_active = true;
         } else if self.area_active
-            && (wlv.vcol == wlv.tocol || (self.noinvcur && wlv.vcol == window.w_virtcol))
+            && (wlv.vcol == ColNr::new(wlv.tocol)
+                || (self.noinvcur && wlv.vcol == window.w_virtcol))
         {
             self.area_active = false;
         }
@@ -192,7 +196,7 @@ impl Cells {
         let attr = update_search_hl(
             window,
             wlv.lnum,
-            at,
+            ColNr::new(at),
             char_len_here,
             &mut self.has_match_conc,
             &mut self.match_conc,
@@ -285,7 +289,7 @@ impl Cells {
             return;
         }
         if window.w_onebuf_opt.wo_cuc != 0
-            && wlv.hl_vcol() == window.w_virtcol
+            && wlv.hl_vcol() == window.w_virtcol.get()
             && wlv.lnum != window.w_cursor.lnum
         {
             self.attr_before_vcol_hl = wlv.char_attr;

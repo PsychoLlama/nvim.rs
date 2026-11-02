@@ -68,7 +68,7 @@ impl Counted {
     const NONE: Counted = Counted {
         at: Pos {
             lnum: LineNr::ZERO,
-            col: 0,
+            col: ColNr::ZERO,
             coladd: 0,
         },
         cur: 0,
@@ -375,7 +375,7 @@ pub fn f_searchcount(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
             let Some(col) = list_number(&items[1].li_tv) else {
                 return;
             };
-            pos.col = col - 1;
+            pos.col = ColNr::new(col - 1);
             let Some(coladd) = list_number(&items[2].li_tv) else {
                 return;
             };

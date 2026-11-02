@@ -85,11 +85,11 @@ pub fn nvim_buf_add_highlight(
     if line < 0 as Integer || line >= Integer::from(MAXLNUM) {
         return Err(err_invalid(c"line number", Bad::Bare(out_of_range)));
     }
-    if col_start < 0 as Integer || col_start > Integer::from(MAXCOL as ::core::ffi::c_int) {
+    if col_start < 0 as Integer || col_start > Integer::from(MAXCOL) {
         return Err(err_invalid(c"column", Bad::Bare(out_of_range)));
     }
-    if col_end < 0 as Integer || col_end > Integer::from(MAXCOL as ::core::ffi::c_int) {
-        col_end = Integer::from(MAXCOL as ::core::ffi::c_int);
+    if col_end < 0 as Integer || col_end > Integer::from(MAXCOL) {
+        col_end = Integer::from(MAXCOL);
     }
     let ns = src2ns(&mut ns_id);
     if line >= Integer::from(buf.b_ml.ml_line_count) {
@@ -103,7 +103,7 @@ pub fn nvim_buf_add_highlight(
     // A highlight that runs to the end of the line is one that ends at
     // column zero of the next.
     let mut end_line = number_as_int(line);
-    if col_end == Integer::from(MAXCOL as ::core::ffi::c_int) {
+    if col_end == Integer::from(MAXCOL) {
         col_end = 0 as Integer;
         end_line += 1;
     }
@@ -111,9 +111,9 @@ pub fn nvim_buf_add_highlight(
         buf,
         ns,
         number_as_int(line),
-        number_as_int(col_start),
+        ColNr::new(number_as_int(col_start)),
         end_line,
-        number_as_int(col_end),
+        ColNr::new(number_as_int(col_end)),
         decor_inline_hl(hl_id),
         MtFlags::DECOR_HL,
     );
@@ -166,9 +166,9 @@ pub fn nvim_buf_set_virtual_text(
         buf,
         ns_id,
         lnum,
-        0 as ColNr,
+        ColNr::ZERO,
         -1 as ::core::ffi::c_int,
-        -1 as ColNr,
+        ColNr::NONE,
         decor,
         MtFlags::NONE,
     );

@@ -227,7 +227,7 @@ pub(crate) fn edit_unputchar() {
 /// text.  Only works while the cursor is in the line that changes, at a
 /// column `col_arg` inside it.
 pub(crate) fn display_dollar(col_arg: ColNr) {
-    let col = col_arg.max(0);
+    let col = col_arg.max(ColNr::ZERO);
 
     if !redrawing() {
         return;
@@ -243,7 +243,7 @@ pub(crate) fn display_dollar(col_arg: ColNr) {
         let line = lines.line(win.w_cursor.lnum);
         head_off(line, usize::try_from(col).unwrap_or(0).min(line.len()))
     };
-    win.w_cursor.col -= ColNr::try_from(back).unwrap_or(0);
+    win.w_cursor.col -= ColNr::try_from(back).unwrap_or(ColNr::ZERO).get();
     curs_columns(win, 0); // recompute w_wrow and w_wcol
     if win.w_wcol < win.w_view_width {
         edit_putchar('$' as c_int, false);
@@ -255,10 +255,10 @@ pub(crate) fn display_dollar(col_arg: ColNr) {
 /// Take the `$` away again.  Call before moving the cursor off the normal
 /// insert position.
 pub(crate) fn undisplay_dollar() {
-    if dollar_vcol.get() < 0 {
+    if dollar_vcol.get() < ColNr::ZERO {
         return;
     }
-    dollar_vcol.set(-1);
+    dollar_vcol.set(ColNr::NONE);
     redraw_win_line(Win::current(), Win::current().w_cursor.lnum);
 }
 
@@ -270,7 +270,7 @@ pub(crate) fn get_nolist_virtcol() -> ColNr {
         || win.buffer().b_ml.ml_mfp.is_none()
         || win.w_cursor.lnum > win.buffer().b_ml.ml_line_count
     {
-        return 0;
+        return ColNr::ZERO;
     }
     if win.w_onebuf_opt.wo_list != 0 && !cpo_has(CpoFlag::LISTWM) {
         // A copy of the cursor, written back: the walk reads the window.

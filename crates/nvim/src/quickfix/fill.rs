@@ -68,7 +68,8 @@ pub(crate) fn qf_update_buffer(qi: Qi, old_last: Option<usize>) {
 
     let old_line_count = buf.b_ml.ml_line_count;
     let old_endcol = ml_get_buf_len(buf, old_line_count);
-    let old_bytecount = get_region_bytecount(buf, LineNr::ONE, old_line_count, 0, old_endcol);
+    let old_bytecount =
+        get_region_bytecount(buf, LineNr::ONE, old_line_count, ColNr::ZERO, old_endcol);
 
     // A location list's window id goes to 'quickfixtextfunc'; it is the
     // window the list belongs to, not the one showing it.
@@ -99,12 +100,12 @@ pub(crate) fn qf_update_buffer(qi: Qi, old_last: Option<usize>) {
     let new_endcol = ml_get_buf_len(buf, new_line_count);
     let delta = new_line_count - old_line_count;
     if old_last.is_none() {
-        let bytes = get_region_bytecount(buf, LineNr::ONE, new_line_count, 0, new_endcol);
+        let bytes = get_region_bytecount(buf, LineNr::ONE, new_line_count, ColNr::ZERO, new_endcol);
         splice(
             buf,
             &Splice {
-                start: (LineNr::ZERO, 0),
-                old: (old_line_count - 1, 0, old_bytecount),
+                start: (LineNr::ZERO, ColNr::ZERO),
+                old: (old_line_count - 1, ColNr::ZERO, old_bytecount),
                 new: (new_line_count - 1, new_endcol, bytes),
             },
         );
@@ -113,19 +114,19 @@ pub(crate) fn qf_update_buffer(qi: Qi, old_last: Option<usize>) {
         } else {
             LineNr::ONE
         };
-        changed_lines(buf, LineNr::ONE, 0, lnume, delta, true);
+        changed_lines(buf, LineNr::ONE, ColNr::ZERO, lnume, delta, true);
     } else if delta > 0 {
         let start_lnum = old_line_count + 1;
-        let bytes = get_region_bytecount(buf, start_lnum, new_line_count, 0, new_endcol);
+        let bytes = get_region_bytecount(buf, start_lnum, new_line_count, ColNr::ZERO, new_endcol);
         splice(
             buf,
             &Splice {
                 start: (old_line_count - 1, old_endcol),
-                old: (LineNr::ZERO, 0, 0),
+                old: (LineNr::ZERO, ColNr::ZERO, 0),
                 new: (LineNr::new(delta), new_endcol, bytes),
             },
         );
-        changed_lines(buf, start_lnum, 0, start_lnum, delta, true);
+        changed_lines(buf, start_lnum, ColNr::ZERO, start_lnum, delta, true);
     }
     buf.b_changed = c_int::from(false);
 
@@ -281,7 +282,7 @@ fn clear_qf_buffer() -> bool {
     }
     find_tab_win(|mut wp| {
         if wp.w_buffer.is_current() {
-            wp.w_skipcol = 0;
+            wp.w_skipcol = ColNr::ZERO;
         }
         false
     });

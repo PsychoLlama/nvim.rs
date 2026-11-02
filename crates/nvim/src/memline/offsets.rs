@@ -17,7 +17,6 @@ use crate::winlayer::BufId;
 use core::ffi::c_int;
 
 use super::*;
-use crate::pos::MAXCOL;
 use crate::winlayer::Win;
 
 /// Where `Buf::update_line_chunks` last left off. Appending runs down the buffer in
@@ -57,7 +56,7 @@ impl Buf {
         if updtype == ML_CHNK_UPDLINE && b.b_ml.ml_line_count == LineNr::ONE {
             // First line in an empty buffer, from ml_flush_line: reset.
             let textlen = b.b_ml.cached_len();
-            b.b_ml.ml_chunks.reset_to_one(textlen);
+            b.b_ml.ml_chunks.reset_to_one(textlen.get());
             return;
         }
 
@@ -379,11 +378,11 @@ pub fn goto_byte(cnt: c_int) {
     if lnum < 1 {
         // Past the end.
         Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
-        Win::current().w_curswant = MAXCOL as c_int;
-        coladvance(Win::current(), MAXCOL as c_int);
+        Win::current().w_curswant = ColNr::MAX;
+        coladvance(Win::current(), ColNr::MAX);
     } else {
         Win::current().w_cursor.lnum = LineNr::new(lnum);
-        Win::current().w_cursor.col = boff;
+        Win::current().w_cursor.col = ColNr::new(boff);
         Win::current().w_cursor.coladd = 0;
         Win::current().w_set_curswant = true;
     }

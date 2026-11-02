@@ -79,7 +79,8 @@ fn prompt_exmode(st: &Sub) -> c_int {
     let mut cursor = Win::current().w_cursor;
     let (mut sc, _, _) = getvcol(Win::current(), &mut cursor);
     Win::current().w_cursor = cursor;
-    Win::current().w_cursor.col = (st.regmatch.endpos[0].col - 1 as c_int).max(0 as c_int);
+    Win::current().w_cursor.col =
+        (st.regmatch.endpos[0].col - 1 as c_int).max(ColNr::new(0 as c_int));
     let mut cursor = Win::current().w_cursor;
     let (_, _, mut ec) = getvcol(Win::current(), &mut cursor);
     Win::current().w_cursor = cursor;
@@ -95,8 +96,8 @@ fn prompt_exmode(st: &Sub) -> c_int {
     // a match that somehow ended before it started asked for a memset of
     // four billion bytes.  A `resize` past the end of a shorter buffer
     // truncates instead.
-    let mut prompt = vec![b' '; sc.max(0) as usize];
-    prompt.resize(ec.max(0) as usize + 1, b'^');
+    let mut prompt = vec![b' '; sc.max(ColNr::ZERO).as_usize()];
+    prompt.resize(ec.max(ColNr::ZERO).as_usize() + 1, b'^');
     let prompt = XString::from_vec(prompt);
     let resp = getcmdline_prompt_text(
         -1 as c_int,
@@ -155,9 +156,9 @@ fn prompt_visual(st: &Sub) -> c_int {
 
     search_match_lines.set(st.regmatch.endpos[0].lnum - st.regmatch.startpos[0].lnum);
     search_match_endcol.set(st.regmatch.endpos[0].col + len_change);
-    if search_match_lines.get() == 0 && search_match_endcol.get() == 0 as ColNr {
+    if search_match_lines.get() == 0 && search_match_endcol.get() == ColNr::ZERO {
         // Highlight at least one character for /^/.
-        search_match_endcol.set(1 as ColNr);
+        search_match_endcol.set(ColNr::new(1));
     }
     highlight_match.set(true);
 
@@ -244,7 +245,7 @@ pub(super) fn ask_confirm(st: &mut Sub) -> Confirm {
         // on the next line.  Avoids that ":%s/\nB\@=//gc" and ":%s/\n/,\r/gc"
         // get stuck when pressing 'n'.
         if st.nmatch > 1 as c_int {
-            st.matchcol = st.old_line().len() as ColNr;
+            st.matchcol = ColNr::from_index(st.old_line().len());
             st.skip_match = true;
         }
         return Confirm::Skip;

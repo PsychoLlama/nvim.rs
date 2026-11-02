@@ -11,6 +11,7 @@
 use super::*;
 use crate::mbyte::{char_at, char_len, cluster_len};
 use crate::memline::Lines;
+use crate::narrow::len_as_int;
 use crate::types::{OK, VarLock};
 use crate::winlayer::{Buf, Win};
 
@@ -194,14 +195,14 @@ pub fn ins_compl_delete(new_leader: bool) {
         if stop_arrow().is_err() {
             return;
         }
-        backspace_until_column(col);
+        backspace_until_column(col.get());
         compl_ins_end_col.set(Win::current().w_cursor.col);
     }
 
     if let Some(remaining) = remaining {
-        orig_col = Win::current().w_cursor.col;
+        orig_col = Win::current().w_cursor.col.get();
         ins_str(remaining.as_bytes());
-        Win::current().w_cursor.col = orig_col;
+        Win::current().w_cursor.col = ColNr::new(orig_col);
     }
 
     // TODO(vim): is this sufficient for redrawing?  Redrawing everything
@@ -263,11 +264,11 @@ pub fn ins_compl_insert(move_cursor: bool, insert_prefix: bool) {
         // to the intended replacement range.
         let cpt_idx = shown.with(ComplItem::cpt_source);
         if let Some(cpt_idx) = cpt_idx
-            && compl_col.get() >= 0
+            && compl_col.get() >= ColNr::ZERO
         {
             let startcol = cpt_sources().row(cpt_idx as c_int).cs_startcol;
-            if startcol >= 0 && startcol < compl_col.get() {
-                let skip = (compl_col.get() - startcol) as usize;
+            if startcol >= 0 && startcol < compl_col.get().get() {
+                let skip = (compl_col.get() - startcol).as_usize();
                 if skip <= len {
                     len -= skip;
                     start = skip;
@@ -296,7 +297,7 @@ pub fn ins_compl_insert(move_cursor: bool, insert_prefix: bool) {
                 // match need not start with it), and upstream's `size_t`
                 // underflow narrows to a negative `ColNr`, i.e. the
                 // cursor moves the other way.
-                Win::current().w_cursor.col -= len.wrapping_sub(leader_len) as ColNr;
+                Win::current().w_cursor.col -= len_as_int(len.wrapping_sub(leader_len));
             }
         }
     }

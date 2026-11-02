@@ -61,7 +61,7 @@ pub(crate) fn line_putchar(
 
     let is_tab = text.first() == Some(&b'\t');
     if is_tab {
-        cells = buffer.tab_padding(vcol).min(maxcells);
+        cells = buffer.tab_padding(ColNr::new(vcol)).min(maxcells);
     }
     // Overwriting the left half of a double-width character: clear its
     // orphaned right half.
@@ -295,7 +295,7 @@ pub(crate) fn draw_virt_text_item(
             while skip_cells > 0 && at < chunk.len() {
                 let rest = &chunk[at..];
                 let cells = if rest[0] == b'\t' {
-                    buffer.tab_padding(vcol)
+                    buffer.tab_padding(ColNr::new(vcol))
                 } else {
                     c_cells_at(rest)
                 };

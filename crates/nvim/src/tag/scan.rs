@@ -658,7 +658,7 @@ fn search(
 ) -> Result<Vec<Found>, Failed> {
     // Find every match when the caller wants them all, and also for
     // completion, where the count is only a cut-off.
-    let findall = mincount == MAXCOL as c_int || mincount == TAG_MANY as c_int;
+    let findall = mincount == MAXCOL || mincount == TAG_MANY as c_int;
     let has_re = flags & TAG_REGEXP as c_int != 0;
     let noic = flags & TAG_NOIC as c_int != 0;
     // The pattern as the caller gave it, for 'tagcase' and 'tagfunc'.

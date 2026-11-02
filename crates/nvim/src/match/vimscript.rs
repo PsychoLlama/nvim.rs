@@ -65,10 +65,10 @@ fn match_dict(item: &MatchItem) -> DictRef {
             }
             // A column of zero means the whole line, and is reported
             // as a one-element list.
-            let mut held = tv_list_alloc(1 + if llpos.col > 0 { 2 } else { 0 });
+            let mut held = tv_list_alloc(1 + if llpos.col > ColNr::ZERO { 2 } else { 0 });
             let sub = &mut *held;
             sub.push_number(VarNumber::from(llpos.lnum));
-            if llpos.col > 0 {
+            if llpos.col > ColNr::ZERO {
                 sub.push_number(VarNumber::from(llpos.col));
                 sub.push_number(VarNumber::from(llpos.len));
             }

@@ -17,6 +17,7 @@
 use crate::memory::XString;
 use crate::registry::{IdMap, IdSet, id_map, id_set};
 use crate::types::Buffer;
+use crate::types::ColNr;
 use crate::types::LineNr;
 use crate::types::{
     ApiDict, ApiString, KeyDict__shada_search_pat, MotionType, Pos, Timestamp, TypVal,
@@ -447,7 +448,7 @@ fn mark_local_index(name: c_char) -> Option<usize> {
 /// Where a mark the file does not place sits: line 1, column 0.
 pub(crate) const DEFAULT_POS: Pos = Pos {
     lnum: LineNr::ONE,
-    col: 0,
+    col: ColNr::ZERO,
     coladd: 0,
 };
 

@@ -52,7 +52,7 @@ use core::ffi::{CStr, c_int};
 /// The origin, which every position here starts at.
 const POS_ZERO: Pos = Pos {
     lnum: LineNr::ZERO,
-    col: 0,
+    col: ColNr::ZERO,
     coladd: 0,
 };
 
@@ -95,7 +95,7 @@ state_record! {
     /// The previous Visual area, for `gv` and `.`.
     pub(crate) resel_VIsual_mode: VisualMode = VisualMode::NONE;
     pub(crate) resel_VIsual_line_count: i32 = 0;
-    pub(crate) resel_VIsual_vcol: ColNr = 0;
+    pub(crate) resel_VIsual_vcol: ColNr = ColNr::ZERO;
     /// 'keymodel' has `startsel`: a shifted special key starts a selection.
     pub(crate) km_startsel: bool = false;
     /// 'keymodel' has `stopsel`: an unshifted special key stops it.
@@ -140,7 +140,7 @@ state_record! {
     /// Autoindent was done; undone if nothing is typed.
     pub(crate) did_ai: bool = false;
     /// The column the autoindent reached.
-    pub(crate) ai_col: ColNr = 0;
+    pub(crate) ai_col: ColNr = ColNr::ZERO;
     /// The end character of a three-part comment leader just inserted.
     pub(crate) end_comment_pending: c_int = 0;
     /// Smartindent was done.

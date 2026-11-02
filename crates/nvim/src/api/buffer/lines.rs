@@ -153,7 +153,8 @@ pub fn nvim_buf_set_lines(
         if u_save_buf(buffer, start - 1, end).is_err() {
             return Err(Error::exception(c"Failed to save undo information"));
         }
-        let deleted_bytes: BCount = get_region_bytecount(buffer, start, end, 0, 0);
+        let deleted_bytes: BCount =
+            get_region_bytecount(buffer, start, end, ColNr::ZERO, ColNr::ZERO);
         let to_delete = old_len.saturating_sub(new_len);
         for _ in 0..to_delete {
             if ml_delete_buf(buffer, start, false).is_err() {
@@ -204,16 +205,16 @@ pub fn nvim_buf_set_lines(
         extmark_splice(
             buffer,
             start.get() - 1,
-            0,
+            ColNr::ZERO,
             end - start,
-            0,
+            ColNr::ZERO,
             deleted_bytes,
             len_as_int(new_len),
-            0,
+            ColNr::ZERO,
             inserted_bytes,
             kExtmarkUndo,
         );
-        changed_lines(buffer, start, 0, end, extra, true);
+        changed_lines(buffer, start, ColNr::ZERO, end, extra, true);
         for win in tab_windows() {
             if win.w_buffer == buffer {
                 fix_cursor(win, start, end, extra);

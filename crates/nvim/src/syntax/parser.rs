@@ -48,7 +48,7 @@ pub(crate) struct NextMatch {
     /// Its pattern; -1 for "not looked yet".
     pub(crate) idx: c_int,
     /// The column it starts at; `MAXCOL` for "nothing found in this line".
-    pub(crate) col: c_int,
+    pub(crate) col: ColNr,
     /// Where the match ends, and where its highlighting starts and ends.
     pub(crate) m_endpos: LPos,
     pub(crate) h_startpos: LPos,
@@ -252,7 +252,7 @@ impl SynState {
     pub(crate) fn new() -> SynState {
         let zero = LPos {
             lnum: LineNr::ZERO,
-            col: 0,
+            col: ColNr::ZERO,
         };
         SynState {
             win: None,
@@ -262,7 +262,7 @@ impl SynState {
             changedtick: 0,
             deadline: None,
             lnum: LineNr::ZERO,
-            col: 0,
+            col: ColNr::ZERO,
             state_stored: false,
             finished: false,
             line_id: 0,
@@ -275,7 +275,7 @@ impl SynState {
             next_flags: SynFlags::NONE,
             next_match: NextMatch {
                 idx: 0,
-                col: 0,
+                col: ColNr::ZERO,
                 m_endpos: zero,
                 h_startpos: zero,
                 h_endpos: zero,

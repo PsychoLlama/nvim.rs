@@ -114,7 +114,7 @@ pub(crate) fn get_fpos_of_mouse(mpos: &mut Pos) -> c_int {
         return IN_UNKNOWN;
     }
 
-    (mpos.col, mpos.coladd) = vcol_to_col(win, mpos.lnum, pos.col);
+    (mpos.col, mpos.coladd) = vcol_to_col(win, mpos.lnum, ColNr::new(pos.col));
     IN_BUFFER
 }
 

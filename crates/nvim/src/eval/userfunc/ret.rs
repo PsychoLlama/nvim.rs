@@ -21,6 +21,7 @@ use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::CmdIdx;
+use crate::types::ColNr;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -111,7 +112,7 @@ fn ex_call_inner(
                 break;
             }
             Win::current().w_cursor.lnum = lnum;
-            Win::current().w_cursor.col = 0;
+            Win::current().w_cursor.col = ColNr::ZERO;
             Win::current().w_cursor.coladd = 0;
         }
 

@@ -35,6 +35,7 @@
 use crate::memline::Lines;
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
+use crate::narrow::len_as_int;
 use crate::semsg;
 use crate::types::TAB;
 use crate::winlayer::Win;
@@ -53,8 +54,7 @@ use crate::option::vars::{P_WS, p_ws};
 use crate::os::cshim::gettext;
 use crate::search::{SEARCH_KEEP, do_search};
 use crate::types::{
-    ColNr, ExArg, FileComparison, LangId, LangP, LineNr, Pos, SpellLang, SpellMoveType, SpellTab,
-    uint8_t,
+    ExArg, FileComparison, LangId, LangP, LineNr, Pos, SpellLang, SpellMoveType, SpellTab, uint8_t,
 };
 use crate::undo::u_save_cursor;
 
@@ -420,7 +420,7 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
         let replaced = {
             let mut lines = Lines::current();
             let line = lines.line(Win::current().w_cursor.lnum);
-            let at = col as usize;
+            let at = col.as_usize();
             let present = chartab::tail(line, at).starts_with(&repl_to);
             (addlen <= 0 || !present).then(|| {
                 let mut rebuilt = XString::from_bytes(&line[..at.min(line.len())]);
@@ -441,7 +441,7 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
             }
             SUB_NSUBS.set(SUB_NSUBS.get() + 1);
         }
-        Win::current().w_cursor.col += repl_to_len as ColNr;
+        Win::current().w_cursor.col += len_as_int(repl_to_len);
     }
 
     P_WS.set(save_ws);

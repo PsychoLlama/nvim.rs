@@ -29,6 +29,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::narrow::len_as_int;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -105,7 +106,7 @@ pub(crate) fn block_insert(op: &OpArg, s: &[u8], b_insert: bool, bdp: &mut Block
 
             if spaces > 0 {
                 // Do not copy part of a multi-byte character.
-                offset -= head_off(oldp, offset as usize) as ColNr;
+                offset -= len_as_int(head_off(oldp, offset.as_usize()));
             }
             // Can go negative when the cursor was moved.
             spaces = spaces.max(0);
@@ -118,7 +119,7 @@ pub(crate) fn block_insert(op: &OpArg, s: &[u8], b_insert: bool, bdp: &mut Block
             line.extend_from_slice(s);
 
             let startcol = offset;
-            offset += s.len() as ColNr;
+            offset += len_as_int(s.len());
             let mut tail = at;
             if spaces > 0 && bdp.is_short == 0 {
                 if byte_at(oldp, at) == TAB as u8 {
@@ -146,8 +147,8 @@ pub(crate) fn block_insert(op: &OpArg, s: &[u8], b_insert: bool, bdp: &mut Block
             Buf::current(),
             lnum.get() - 1,
             startcol,
-            skipped,
-            splice,
+            ColNr::new(skipped),
+            ColNr::new(splice),
             kExtmarkUndo,
         );
 
@@ -170,7 +171,7 @@ pub(crate) fn block_insert(op: &OpArg, s: &[u8], b_insert: bool, bdp: &mut Block
     // loop's own bound.
     if op.start.lnum < op.end.lnum {
         let (first, last) = (op.start.lnum + 1, op.end.lnum + 1);
-        changed_lines(Buf::current(), first, 0, last, 0, true);
+        changed_lines(Buf::current(), first, ColNr::ZERO, last, 0, true);
     }
 }
 
@@ -237,8 +238,8 @@ pub(crate) fn block_prep_line(
     bd.startspaces = 0;
     bd.endspaces = 0;
     bd.textlen = 0;
-    bd.start_vcol = 0;
-    bd.end_vcol = 0;
+    bd.start_vcol = ColNr::ZERO;
+    bd.end_vcol = ColNr::ZERO;
     bd.is_short = 0;
     bd.is_one_char = 0;
     bd.pre_whitesp = 0;
@@ -259,7 +260,7 @@ pub(crate) fn block_prep_line(
     let mut chr = c_char_info(line, 0);
     let mut vcol = bd.start_vcol;
     while vcol < op.start_vcol && !at_end(at, chr) {
-        incr = win_charsize(cstype, vcol, at, chr.value, &mut csarg).width;
+        incr = win_charsize(cstype, vcol.get(), at, chr.value, &mut csarg).width;
         vcol += incr;
         if ascii_iswhite(chr.value) {
             bd.pre_whitesp += incr;
@@ -316,7 +317,7 @@ pub(crate) fn block_prep_line(
             let mut prev_pend = pend;
             while vcol <= op.end_vcol && !at_end(at, chr) {
                 prev_pend = at;
-                incr = win_charsize(cstype, vcol, at, chr.value, &mut csarg).width;
+                incr = win_charsize(cstype, vcol.get(), at, chr.value, &mut csarg).width;
                 vcol += incr;
                 (at, chr) = c_next_cluster(line, at, chr);
             }
@@ -351,7 +352,7 @@ pub(crate) fn block_prep_line(
         bd.textlen = (pend - pstart) as c_int;
     }
 
-    bd.textcol = pstart as ColNr;
+    bd.textcol = ColNr::from_index(pstart);
     restore_lbr(lbr_saved);
 }
 
@@ -379,8 +380,8 @@ fn charwise_block_prep(
     bd.is_one_char = 0;
     bd.start_char_vcols = 0;
 
-    let mut startcol: ColNr = 0;
-    let mut endcol: ColNr = MAXCOL;
+    let mut startcol: ColNr = ColNr::ZERO;
+    let mut endcol: ColNr = ColNr::MAX;
 
     if lnum == start.lnum {
         startcol = start.col;
@@ -418,7 +419,7 @@ fn charwise_block_prep(
         }
     }
 
-    if endcol == MAXCOL {
+    if endcol == ColNr::MAX {
         endcol = plen;
     }
     bd.textlen = if startcol > endcol || bd.is_one_char != 0 {
@@ -451,7 +452,7 @@ pub(crate) fn charwise_block_def(start: Pos, end: Pos, lnum: LineNr, inclusive: 
     let len = ml_get_len(lnum);
     let onto_line = |pos: Pos| Pos {
         col: if pos.lnum == lnum {
-            pos.col.clamp(0, len)
+            pos.col.clamp(ColNr::ZERO, len)
         } else {
             pos.col
         },
@@ -472,7 +473,9 @@ pub(crate) fn charwise_block_def(start: Pos, end: Pos, lnum: LineNr, inclusive: 
 /// to be skipped. `redo_visual_vcol` is the recorded width a `.` replay uses
 /// instead of measuring the selection again.
 pub(crate) fn get_op_vcol(op: &mut OpArg, redo_visual_vcol: ColNr, initial: bool) {
-    if !visual_mode().is_block() || (!initial && op.end.col < Win::current().w_view_width) {
+    if !visual_mode().is_block()
+        || (!initial && op.end.col < ColNr::new(Win::current().w_view_width))
+    {
         return;
     }
 
@@ -486,7 +489,7 @@ pub(crate) fn get_op_vcol(op: &mut OpArg, redo_visual_vcol: ColNr, initial: bool
         let (start, _, end) = getvvcol(Win::current(), &mut op.end);
         op.start_vcol = op.start_vcol.min(start);
         if end > op.end_vcol {
-            if initial && sel_exclusive() && start >= 1 && start > op.end_vcol {
+            if initial && sel_exclusive() && start >= ColNr::new(1) && start > op.end_vcol {
                 op.end_vcol = start - 1;
             } else {
                 op.end_vcol = end;
@@ -494,10 +497,10 @@ pub(crate) fn get_op_vcol(op: &mut OpArg, redo_visual_vcol: ColNr, initial: bool
         }
     }
 
-    if Win::current().w_curswant == MAXCOL {
+    if Win::current().w_curswant == ColNr::MAX {
         // `$` was used: the block's right edge is the longest line's.
-        Win::current().w_cursor.col = MAXCOL;
-        op.end_vcol = 0;
+        Win::current().w_cursor.col = ColNr::MAX;
+        op.end_vcol = ColNr::ZERO;
         Win::current().w_cursor.lnum = op.start.lnum;
         while Win::current().w_cursor.lnum <= op.end.lnum {
             let (_, end) = Win::current().virtual_vcol_span(Win::current().cursor());
@@ -505,7 +508,7 @@ pub(crate) fn get_op_vcol(op: &mut OpArg, redo_visual_vcol: ColNr, initial: bool
             Win::current().w_cursor.lnum += 1;
         }
     } else if redo_VIsual_busy.get() {
-        op.end_vcol = op.start_vcol + redo_visual_vcol - 1;
+        op.end_vcol = op.start_vcol + redo_visual_vcol.get() - 1;
     }
 
     // Turn the column pair back into the block's two corner *positions*.

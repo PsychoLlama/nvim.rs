@@ -125,9 +125,9 @@ pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
     let saved_marks = buf.b_namedm.each_ref().map(SavedMark::of);
     let saved_visual = buf.b_visual;
     buf.b_op_start.lnum = buf.b_ml.ml_line_count;
-    buf.b_op_start.col = 0;
+    buf.b_op_start.col = ColNr::ZERO;
     buf.b_op_end.lnum = LineNr::ZERO;
-    buf.b_op_end.col = 0;
+    buf.b_op_end.col = ColNr::ZERO;
 
     let mut pick = CursorPick {
         line: MAXLNUM,
@@ -319,7 +319,14 @@ fn apply_entry(
         }
     }
     if oldsize > 0 || newsize > 0 {
-        changed_lines(buffer, top + 1, 0, bot, newsize - oldsize, do_buf_event);
+        changed_lines(
+            buffer,
+            top + 1,
+            ColNr::ZERO,
+            bot,
+            newsize - oldsize,
+            do_buf_event,
+        );
         // The next line's start may have gained or lost a SpellCap, so
         // schedule it for redrawing just in case.
         if spell_check_window(Win::current()) && bot <= buffer.b_ml.ml_line_count {
@@ -391,11 +398,11 @@ fn place_cursor(buffer: Buf, mut win: Win, cursor: Pos, cursor_vcol: ColNr) {
         // Past the end, which happens after undoing lines added at the end of
         // the file. `check_cursor` below moves it to the last line, so all
         // that is left is to put it in the first column.
-        win.w_cursor.col = 0;
+        win.w_cursor.col = ColNr::ZERO;
         win.w_cursor.coladd = 0;
     } else if cursor.lnum == win.w_cursor.lnum {
         win.w_cursor.col = cursor.col;
-        if virtual_active(win) && cursor_vcol >= 0 {
+        if virtual_active(win) && cursor_vcol >= ColNr::ZERO {
             coladvance(win, cursor_vcol);
         } else {
             win.w_cursor.coladd = 0;

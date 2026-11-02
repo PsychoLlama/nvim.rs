@@ -539,7 +539,7 @@ pub(crate) fn normal_finish_command(ns: &mut NormalState) {
 pub(crate) fn normal_execute(ns: &mut NormalState, key: c_int) -> c_int {
     ns.command_finished = false;
     ns.ctrl_w = false;
-    ns.old_col = Win::current().w_curswant as c_int;
+    ns.old_col = Win::current().w_curswant.get();
     ns.c = key;
     langmap_adjust(&mut ns.c, get_real_state() != MODE_SELECT);
 

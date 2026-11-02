@@ -205,13 +205,13 @@ pub fn f_winrestview(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData)
         win.w_cursor.lnum = number_as_lnum(v);
     }
     if let Some(v) = entry(c"col") {
-        win.w_cursor.col = number_as_int(v);
+        win.w_cursor.col = ColNr::new(number_as_int(v));
     }
     if let Some(v) = entry(c"coladd") {
         win.w_cursor.coladd = number_as_int(v);
     }
     if let Some(v) = entry(c"curswant") {
-        win.w_curswant = number_as_int(v);
+        win.w_curswant = ColNr::new(number_as_int(v));
         win.w_set_curswant = false;
     }
     if let Some(v) = entry(c"topline") {
@@ -223,10 +223,10 @@ pub fn f_winrestview(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData)
         win.w_topfill = number_as_int(v);
     }
     if let Some(v) = entry(c"leftcol") {
-        win.w_leftcol = number_as_int(v);
+        win.w_leftcol = ColNr::new(number_as_int(v));
     }
     if let Some(v) = entry(c"skipcol") {
-        win.w_skipcol = number_as_int(v);
+        win.w_skipcol = ColNr::new(number_as_int(v));
     }
 
     check_cursor(win);

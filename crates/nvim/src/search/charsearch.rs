@@ -151,7 +151,7 @@ pub fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), Failed> {
     let len = line.len() as c_int;
     let bytelen = lastc_bytelen.get();
     let bytes = lastc_bytes.get();
-    let mut col = Win::current().w_cursor.col as c_int;
+    let mut col = Win::current().w_cursor.col.get();
     // The first `n` bytes of `text`, or up to its NUL: what `strncmp` reads.
     let prefix = |text: &[u8], n: usize| cstr::until_nul(&text[..n.min(text.len())]).to_vec();
     let want = prefix(&bytes, bytelen as usize);
@@ -194,6 +194,6 @@ pub fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), Failed> {
             col -= head_off(line, col as usize) as c_int;
         }
     }
-    Win::current().w_cursor.col = col as ColNr;
+    Win::current().w_cursor.col = ColNr::new(col);
     Ok(())
 }

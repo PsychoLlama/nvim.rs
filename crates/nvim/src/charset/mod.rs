@@ -49,10 +49,10 @@ pub use display::{ptr2cells_at, strnsize, strsize, transchar_hex_into};
 mod digits;
 
 /// The indent of the cursor's line, in bytes.
-pub(crate) fn getwhitecols_curline() -> crate::types::intptr_t {
+pub(crate) fn getwhitecols_curline() -> crate::types::ColNr {
     let win = crate::winlayer::Win::current();
     let mut lines = win.buffer().lines();
-    crate::types::intptr_t::try_from(skip::white(lines.line(win.w_cursor.lnum))).unwrap_or(0)
+    crate::types::ColNr::from_index(skip::white(lines.line(win.w_cursor.lnum)))
 }
 
 pub(crate) use digits::try_getdigits_at;

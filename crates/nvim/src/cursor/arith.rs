@@ -28,8 +28,8 @@ use crate::types::{ColNr, LineNr};
 /// last virtual column. Insert mode is allowed one column further, which is
 /// what happens when typing reaches the right edge of the window.
 pub fn wrap_target_col(wcol: ColNr, width: c_int, last_vcol: c_int, insert: bool) -> ColNr {
-    if wcol / width > last_vcol / width && (!insert || wcol > last_vcol + 1) {
-        (last_vcol / width + 1) * width - 1
+    if wcol.get() / width > last_vcol / width && (!insert || wcol > ColNr::new(last_vcol + 1)) {
+        ColNr::new((last_vcol / width + 1) * width - 1)
     } else {
         wcol
     }
@@ -42,7 +42,7 @@ pub fn wrap_target_col(wcol: ColNr, width: c_int, last_vcol: c_int, insert: bool
 /// `head` is the part of that width belonging to 'showbreak' and
 /// 'breakindent' rather than to the character, and is not the cursor's to
 /// stand on.
-pub fn step_back(idx: c_int, col: ColNr, csize: c_int, head: c_int) -> (c_int, ColNr, c_int) {
+pub fn step_back(idx: ColNr, col: ColNr, csize: c_int, head: c_int) -> (ColNr, ColNr, c_int) {
     let csize = csize - head;
     (idx - 1, col - csize, csize)
 }
@@ -51,7 +51,7 @@ pub fn step_back(idx: c_int, col: ColNr, csize: c_int, head: c_int) -> (c_int, C
 /// landed and where it was asked for. Zero unless the gap is real and
 /// plausible: 'virtualedit' admits absurd columns, and `view_width` sets the
 /// scale at which one stops being believable.
-pub fn gap_coladd(gap: c_int, view_width: c_int) -> ColNr {
+pub fn gap_coladd(gap: c_int, view_width: c_int) -> i32 {
     if gap > 0 && gap < MAXCOL - 2 * view_width {
         gap
     } else {
@@ -72,16 +72,16 @@ pub fn checked_col(
     len: ColNr,
     may_rest_on_nul: impl FnOnce() -> bool,
 ) -> (ColNr, bool) {
-    if len == 0 {
-        (0, false)
+    if len == ColNr::ZERO {
+        (ColNr::ZERO, false)
     } else if col >= len {
         if may_rest_on_nul() {
             (len, false)
         } else {
             (len - 1, true)
         }
-    } else if col < 0 {
-        (0, false)
+    } else if col < ColNr::ZERO {
+        (ColNr::ZERO, false)
     } else {
         (col, false)
     }
@@ -99,19 +99,19 @@ pub enum ColAdd {
     Zero,
     /// Keep the cursor where it virtually was; this is how far into the
     /// character it sits, still to be capped at that character's width.
-    Carry(ColNr),
+    Carry(i32),
 }
 
 /// Whether the cursor's old virtual position survives the column clamp.
 /// `oldcoladd` is the *virtual* column it held — `col + coladd` before the
 /// clamp — and `col` the column it holds now.
-pub fn carried_coladd(oldcol: ColNr, oldcoladd: ColNr, col: ColNr, ve_all: bool) -> ColAdd {
-    if oldcol == MAXCOL {
+pub fn carried_coladd(oldcol: ColNr, oldcoladd: i32, col: ColNr, ve_all: bool) -> ColAdd {
+    if oldcol == ColNr::MAX {
         ColAdd::Zero
     } else if !ve_all {
         ColAdd::Keep
-    } else if oldcoladd > col {
-        ColAdd::Carry(oldcoladd - col)
+    } else if oldcoladd > col.get() {
+        ColAdd::Carry(oldcoladd - col.get())
     } else {
         ColAdd::Zero
     }

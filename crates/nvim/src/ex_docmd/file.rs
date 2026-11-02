@@ -18,6 +18,7 @@ use crate::message_fmt::msg_bytes;
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::CmdIdx;
+use crate::types::ColNr;
 use crate::undo::UNDO_HASH_SIZE;
 use crate::undo::u_compute_hash;
 use crate::window::valid_win;
@@ -473,7 +474,7 @@ pub(crate) fn ex_read(excmd: &mut ExArg) {
         } else {
             LineNr::ONE
         };
-        if ml_get_len(lnum) == 0 && u_savedel(lnum, 1).is_ok() {
+        if ml_get_len(lnum) == ColNr::ZERO && u_savedel(lnum, 1).is_ok() {
             let _ = ml_delete(lnum);
             if Win::current().w_cursor.lnum > LineNr::ONE && Win::current().w_cursor.lnum >= lnum {
                 Win::current().w_cursor.lnum -= 1;

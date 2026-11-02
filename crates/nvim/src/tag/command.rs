@@ -50,7 +50,7 @@ const DT_LAST: c_uint = 6;
 /// position.
 const NO_VIEW: FileMarkView = FileMarkView {
     topline_offset: MAXLNUM.get(),
-    skipcol: 0,
+    skipcol: ColNr::ZERO,
 };
 
 /// The preview window's entry: the match it shows, and the buffer it came
@@ -434,13 +434,13 @@ impl DoTag {
 
         match self.kind as c_uint {
             DT_FIRST => self.cur_match = self.count - 1,
-            DT_SELECT | DT_JUMP | DT_LAST => self.cur_match = MAXCOL as c_int - 1,
+            DT_SELECT | DT_JUMP | DT_LAST => self.cur_match = MAXCOL - 1,
             DT_NEXT => self.cur_match += self.count,
             DT_PREV => self.cur_match -= self.count,
             _ => {}
         }
-        if self.cur_match >= MAXCOL as c_int {
-            self.cur_match = MAXCOL as c_int - 1;
+        if self.cur_match == MAXCOL {
+            self.cur_match = MAXCOL - 1;
         } else if self.cur_match < 0 {
             tag_emsg(c"E425: Cannot go before first matching tag");
             self.skip_msg = true;
@@ -505,7 +505,7 @@ impl DoTag {
                     .is_none_or(|remembered| remembered != &name)
             });
             if (self.new_tag
-                || (self.cur_match >= match_count() && MATCH_LIMIT.get() != MAXCOL as c_int)
+                || (self.cur_match >= match_count() && MATCH_LIMIT.get() != MAXCOL)
                 || other)
                 && !self.search(&mut name, other)
             {
@@ -558,10 +558,10 @@ impl DoTag {
 
         if matches!(self.kind as c_uint, DT_SELECT | DT_JUMP | DT_LTAG) {
             // Every match is wanted, to list them.
-            self.cur_match = MAXCOL as c_int - 1;
+            self.cur_match = MAXCOL - 1;
         }
         MATCH_LIMIT.set(if self.kind == DT_TAG as c_int {
-            MAXCOL as c_int
+            MAXCOL
         } else {
             self.cur_match + 1
         });
@@ -588,7 +588,7 @@ impl DoTag {
             Ok(found) => {
                 if c_int::try_from(found.len()).is_ok_and(|n| n < MATCH_LIMIT.get()) {
                     // Fewer than the limit: that is all of them.
-                    MATCH_LIMIT.set(MAXCOL as c_int);
+                    MATCH_LIMIT.set(MAXCOL);
                 }
                 found
             }
@@ -732,7 +732,7 @@ impl DoTag {
         // can be one.
         let more = (self.kind == DT_PREV as c_int && self.cur_match > 0)
             || (matches!(self.kind as c_uint, DT_TAG | DT_NEXT | DT_FIRST)
-                && (MATCH_LIMIT.get() != MAXCOL as c_int || self.cur_match < match_count() - 1));
+                && (MATCH_LIMIT.get() != MAXCOL || self.cur_match < match_count() - 1));
         if !more {
             let missing = MISSING_FILE.with(Clone::clone).unwrap_or_default();
             let arg0 = msg_cstr(missing.as_cstr());
@@ -762,7 +762,7 @@ impl DoTag {
         {
             return;
         }
-        let more = if MATCH_LIMIT.get() != MAXCOL as c_int {
+        let more = if MATCH_LIMIT.get() != MAXCOL {
             tr!(" or more")
         } else {
             String::new()

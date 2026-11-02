@@ -24,8 +24,8 @@ use core::ffi::c_int;
 /// including the one `startpos` is on -- so a caller holding a slice from
 /// that cache must have dropped it.
 pub(crate) fn find_rawstring_end(lines: &mut Lines, startpos: &Pos, endpos: &Pos) -> bool {
-    let (start_lnum, start_col) = (startpos.lnum, startpos.col as usize);
-    let (end_lnum, end_col) = (endpos.lnum, endpos.col as usize);
+    let (start_lnum, start_col) = (startpos.lnum, startpos.col.as_usize());
+    let (end_lnum, end_col) = (endpos.lnum, endpos.col.as_usize());
     // The delimiter runs from just after the quote to the '(' -- or, when
     // the line has none, to its end. A copy, because the scan below reads
     // other lines out of the same cache.
@@ -96,7 +96,7 @@ pub fn check_linecomment(line: &[u8]) -> c_int {
                 }
             } else if !in_str
                 && (at < 2 || (line[at - 1] != b'\\' && line[at - 2] != b'#'))
-                && !is_pos_in_string(line, at as ColNr)
+                && !is_pos_in_string(line, ColNr::from_index(at))
             {
                 break; // found!
             }
@@ -114,7 +114,7 @@ pub fn check_linecomment(line: &[u8]) -> c_int {
             // not inside a string.
             if byte_at(line, at + 1) == b'/'
                 && (at == 0 || line[at - 1] != b'*' || byte_at(line, at + 2) != b'*')
-                && !is_pos_in_string(line, at as ColNr)
+                && !is_pos_in_string(line, ColNr::from_index(at))
             {
                 break;
             }

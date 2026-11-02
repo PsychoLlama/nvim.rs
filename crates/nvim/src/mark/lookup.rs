@@ -21,7 +21,7 @@ use crate::cursor::check_cursor;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_docmd::state::listcmd_busy;
 use crate::message::emsg;
-use crate::pos::{MAXCOL, lt};
+use crate::pos::lt;
 use crate::textobject::{findpar, findsent};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_uint};
@@ -209,9 +209,9 @@ pub fn mark_get_visual(buffer: Buf, name: c_int) -> Option<FileMark> {
         // A linewise selection has no columns of its own; `'<` is the start
         // of the line and `'>` the end of it.
         mark.mark.col = if name == '<' as c_int {
-            0
+            ColNr::ZERO
         } else {
-            MAXCOL as ColNr
+            ColNr::MAX
         };
         mark.mark.coladd = 0;
     }
@@ -231,9 +231,9 @@ pub fn getnextmark(startpos: Pos, dir: c_int, begin_line: bool) -> Option<FileMa
     // current one.
     if begin_line {
         pos.col = if dir == BACKWARD as c_int {
-            0
+            ColNr::ZERO
         } else {
-            MAXCOL as ColNr
+            ColNr::MAX
         };
     }
     let buf = Buf::current();

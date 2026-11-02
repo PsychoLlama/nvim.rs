@@ -128,9 +128,9 @@ pub(crate) fn button_name(which_button: c_int) -> &'static CStr {
 ///
 /// A similar formula is used in `curs_columns()`; see `move/arith.rs`.
 pub(crate) fn skipped_top_lines(skipcol: ColNr, width1: c_int, width2: c_int) -> c_int {
-    if skipcol > width1 {
-        (skipcol - width1) / width2 + 1
-    } else if skipcol > 0 {
+    if skipcol > ColNr::new(width1) {
+        (skipcol - width1).get() / width2 + 1
+    } else if skipcol > ColNr::ZERO {
         1
     } else {
         0
@@ -141,5 +141,5 @@ pub(crate) fn skipped_top_lines(skipcol: ColNr, width1: c_int, width2: c_int) ->
 /// a window's width) left or right of `leftcol`, never past the left margin.
 pub(crate) fn wheel_leftcol(leftcol: ColNr, step: c_int, direction: c_int) -> ColNr {
     let moved = leftcol + if direction == MSCR_RIGHT { -step } else { step };
-    moved.max(0)
+    moved.max(ColNr::ZERO)
 }

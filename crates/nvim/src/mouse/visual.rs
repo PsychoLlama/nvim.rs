@@ -16,6 +16,7 @@
 )]
 
 use crate::keycodes::ModMask;
+use crate::types::ColNr;
 use core::cmp::Ordering;
 use core::ffi::c_int;
 
@@ -94,7 +95,7 @@ pub(crate) fn extend_visual_block(mut win: Win, mut start_visual: Pos, mut end_v
 
     if visual_mode().is_block() {
         let (leftcol, rightcol) = vcols_between(win, start_visual, end_visual);
-        end_visual.col = if win.w_curswant > (leftcol + rightcol) / 2 {
+        end_visual.col = if win.w_curswant > ColNr::new((leftcol + rightcol.get()).get() / 2) {
             leftcol
         } else {
             rightcol
@@ -135,7 +136,7 @@ pub(crate) fn extend_visual_block(mut win: Win, mut start_visual: Pos, mut end_v
             Ordering::Less => end_visual,      // closest to start
             // In the middle line.
             Ordering::Equal => {
-                if cursor.col < (start_visual.col + end_visual.col) / 2 {
+                if cursor.col < ColNr::new((start_visual.col + end_visual.col.get()).get() / 2) {
                     end_visual
                 } else {
                     start_visual

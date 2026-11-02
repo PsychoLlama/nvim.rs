@@ -195,7 +195,7 @@ fn read_file_header(bi: &mut BufInfo, file_name: &CStr) -> Option<FileHeader> {
     let mut header = FileHeader {
         line,
         line_lnum,
-        line_colnr,
+        line_colnr: ColNr::new(line_colnr),
         old_head: bi.read_4c(),
         new_head: bi.read_4c(),
         cur_head: bi.read_4c(),

@@ -23,6 +23,7 @@ use crate::ex_docmd::ex_msg;
 use crate::memory::XString;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
+use crate::types::ColNr;
 use crate::types::LineNr;
 use core::ffi::{CStr, c_int};
 use core::ptr;
@@ -612,7 +613,7 @@ pub(crate) fn do_one_cmd(
     // Can happen with a zero line number.
     if Win::current().w_cursor.lnum == LineNr::ZERO {
         Win::current().w_cursor.lnum = LineNr::ONE;
-        Win::current().w_cursor.col = 0;
+        Win::current().w_cursor.col = ColNr::ZERO;
     }
 
     if let Some(msg) = errormsg

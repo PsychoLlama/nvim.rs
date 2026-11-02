@@ -22,7 +22,6 @@ use core::ffi::{CStr, c_int};
 
 use super::store::{global_mark, global_mark_names, slot};
 use super::*;
-use crate::pos::MAXCOL;
 use crate::types::Failed;
 use crate::types::kListLenMayKnow;
 
@@ -48,10 +47,10 @@ fn add_mark(
     // what a linewise `'>` carries — is passed through rather than
     // incremented, so it stays recognisable.
     lpos.edit()
-        .push_number(VarNumber::from(if pos.col < MAXCOL {
+        .push_number(VarNumber::from(if pos.col < ColNr::MAX {
             pos.col + 1
         } else {
-            MAXCOL
+            ColNr::MAX
         }));
     lpos.edit().push_number(VarNumber::from(pos.coladd));
     let d = &mut *d_held;

@@ -13,6 +13,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::types::ColNr;
 use core::ffi::c_int;
 use core::mem::{offset_of, size_of};
 
@@ -165,11 +166,11 @@ pub fn decode_splice(image: &[u8; EXTMARK_PAYLOAD_LEN]) -> Option<ExtmarkSplice>
     let (ints, bytes) = payload_fields(image);
     in_range(ints, bytes).then(|| ExtmarkSplice {
         start_row: ints[0],
-        start_col: ints[1],
+        start_col: ColNr::new(ints[1]),
         old_row: ints[2],
-        old_col: ints[3],
+        old_col: ColNr::new(ints[3]),
         new_row: ints[4],
-        new_col: ints[5],
+        new_col: ColNr::new(ints[5]),
         start_byte: bytes[0],
         old_byte: bytes[1],
         new_byte: bytes[2],
@@ -197,11 +198,11 @@ pub fn encode_splice(splice: &ExtmarkSplice) -> [u8; EXTMARK_PAYLOAD_LEN] {
     payload_image(
         [
             splice.start_row,
-            splice.start_col,
+            splice.start_col.get(),
             splice.old_row,
-            splice.old_col,
+            splice.old_col.get(),
             splice.new_row,
-            splice.new_col,
+            splice.new_col.get(),
         ],
         [splice.start_byte, splice.old_byte, splice.new_byte],
     )
@@ -271,11 +272,11 @@ mod tests {
     fn a_splice() -> ExtmarkSplice {
         ExtmarkSplice {
             start_row: 2,
-            start_col: 0,
+            start_col: ColNr::ZERO,
             old_row: 2,
-            old_col: 0,
+            old_col: ColNr::ZERO,
             new_row: 1,
-            new_col: 0,
+            new_col: ColNr::ZERO,
             start_byte: 24,
             old_byte: 24,
             new_byte: 8,
@@ -336,7 +337,7 @@ mod tests {
         // Negative coordinates are not something a change produces either,
         // and `extmark_setraw` would place a mark at one.
         let mut negative = a_splice();
-        negative.start_col = -1;
+        negative.start_col = ColNr::NONE;
         assert!(decode_splice(&encode_splice(&negative)).is_none());
 
         let mut moved = ExtmarkMove {

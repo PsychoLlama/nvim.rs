@@ -14,6 +14,7 @@ use crate::api::private::validate::{
     Bad, err_bad_number, err_bad_value, err_expected, err_invalid, err_out_of_range,
 };
 use crate::decoration::decor_drawing_window;
+use crate::narrow::number_as_col;
 use crate::narrow::number_as_lnum;
 use crate::winlayer::Buf;
 
@@ -263,7 +264,7 @@ impl Decoration {
         id: uint32_t,
     ) -> Result<(), Error> {
         // An ephemeral mark with no end covers the one position it names.
-        let (row, col) = (at.line as ::core::ffi::c_int, at.col as ColNr);
+        let (row, col) = (at.line as ::core::ffi::c_int, number_as_col(at.col));
         let (end_row, end_col) = if at.line2 == -1 {
             (row, col)
         } else {
@@ -279,11 +280,11 @@ impl Decoration {
         // Each part of the decoration is handed over exactly once.
         if !self.virt_text.data.text().is_empty() {
             let vt = decor_put_vt(take_virt(&mut self.virt_text), DECOR_ID_INVALID);
-            decor_range_add_virt(row, col, end_row, end_col, vt, true);
+            decor_range_add_virt(row, col.get(), end_row, end_col.get(), vt, true);
         }
         if !self.virt_lines.data.lines().is_empty() {
             let vt = decor_put_vt(take_virt(&mut self.virt_lines), DECOR_ID_INVALID);
-            decor_range_add_virt(row, col, end_row, end_col, vt, true);
+            decor_range_add_virt(row, col.get(), end_row, end_col.get(), vt, true);
         }
         if self.has_hl {
             let mut sh = HlSource::inline(self.hl);
@@ -296,9 +297,9 @@ impl Decoration {
             }
             decor_range_add_sh(
                 row,
-                col,
+                col.get(),
                 end_row,
-                end_col,
+                end_col.get(),
                 sh,
                 true,
                 ns_id as uint32_t,
@@ -402,7 +403,7 @@ impl Decoration {
             ns_id as uint32_t,
             Some(id),
             at.line as ::core::ffi::c_int,
-            at.col as ColNr,
+            number_as_col(at.col),
             at.line2,
             at.col2,
             decor,
@@ -497,7 +498,7 @@ fn set_extmark(
     decor.priority(opts)?;
     decor.sign_text(opts)?;
     let right_gravity = opts.right_gravity.unwrap_or(true);
-    if line2 == -1 && col2 == -1 && opts.end_right_gravity.is_some() {
+    if line2 == -1 && col2 == ColNr::NONE && opts.end_right_gravity.is_some() {
         let why = c"cannot set end_right_gravity without end_row or end_col";
         return Err(Error::validation(why));
     }
@@ -545,13 +546,17 @@ fn end_position(
         }
         line2 = given as ::core::ffi::c_int;
     }
-    let mut col2: ColNr = -1;
+    let mut col2: ColNr = ColNr::NONE;
     if let Some(given) = opts.end_col {
         if !(-1..=Integer::from(MAXCOL)).contains(&given) {
             return Err(err_out_of_range(c"end_col"));
         }
         // `-1` is "to the end of the line", which is what `MAXCOL` says.
-        col2 = if given == -1 { MAXCOL } else { given as ColNr };
+        col2 = if given == -1 {
+            ColNr::MAX
+        } else {
+            number_as_col(given)
+        };
     }
     Ok((line2, col2))
 }
@@ -573,7 +578,7 @@ fn clamp(
 ) -> Result<Range, Error> {
     let line_len = |at: LineNr| -> ColNr {
         if ephemeral {
-            MAXCOL
+            ColNr::MAX
         } else {
             b.line_len_raw(at)
         }
@@ -581,7 +586,7 @@ fn clamp(
     if line < 0 {
         return Err(err_out_of_range(c"line"));
     }
-    let mut len: ColNr = 0;
+    let mut len: ColNr = ColNr::ZERO;
     if line > i64::from(b.line_count()) {
         if strict {
             return Err(err_out_of_range(c"line"));
@@ -600,11 +605,11 @@ fn clamp(
     } else if col < -1 {
         return Err(err_out_of_range(c"col"));
     }
-    if col2 >= 0 {
+    if col2 >= ColNr::ZERO {
         if line2 >= 0 && LineNr::new(line2) < b.line_count() {
             len = line_len(LineNr::new(line2) + 1);
         } else if LineNr::new(line2) == b.line_count() {
-            len = 0;
+            len = ColNr::ZERO;
         } else {
             // An end column with no end row is on the mark's own line.
             line2 = line as ::core::ffi::c_int;
@@ -616,7 +621,7 @@ fn clamp(
             col2 = len;
         }
     } else if line2 >= 0 {
-        col2 = 0;
+        col2 = ColNr::ZERO;
     }
     Ok(Range {
         line,

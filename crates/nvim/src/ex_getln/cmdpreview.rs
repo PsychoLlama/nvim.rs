@@ -257,9 +257,9 @@ pub(crate) fn cmdpreview_restore_state(cpinfo: &mut CpInfo) {
             buf,
             cmdpreview_ns.get().cast_unsigned(),
             0,
-            0,
+            ColNr::ZERO,
             MAXLNUM.get(),
-            MAXCOL,
+            ColNr::MAX,
         );
 
         // Undo all the changes the preview made to this buffer.

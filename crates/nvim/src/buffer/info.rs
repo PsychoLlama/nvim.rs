@@ -359,7 +359,7 @@ pub fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
             ],
         );
         validate_virtcol(win);
-        out.push(col_text(win.w_cursor.col as c_int + 1, win.w_virtcol as c_int + 1).as_bytes());
+        out.push(col_text(win.w_cursor.col.get() + 1, win.w_virtcol.get() + 1).as_bytes());
     }
 
     if let Some((fmt, idx, count)) = arg_number(win) {

@@ -183,7 +183,7 @@ pub struct DiffHunk {
 pub const MAX_DIFF_ANCHORS: ::core::ffi::c_int = 20;
 pub struct LinemapEntry {
     pub byte_start: ColNr,
-    pub num_bytes: ColNr,
+    pub num_bytes: i32,
     pub lineoff: ::core::ffi::c_int,
 }
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();

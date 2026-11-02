@@ -22,6 +22,7 @@ use crate::mark::{
     shada_set_global_mark, shada_set_local_mark,
 };
 use crate::memory::{ThinCString, XString};
+use crate::narrow::len_as_int;
 use crate::option::vars::p_hi;
 use crate::path::{path_fnamecmp, path_try_shorten_fname};
 use crate::register::{ShadaYank, shada_register_timestamp, shada_set_register};
@@ -30,9 +31,7 @@ use crate::search::{
     ShadaPattern, set_last_used_pattern, shada_pattern_timestamp, shada_set_pattern,
 };
 use crate::types::LineNr;
-use crate::types::{
-    ApiString, BlnFlags, ColNr, ListRef, SearchOffset, TypVal, Vv, kListLenUnknown,
-};
+use crate::types::{ApiString, BlnFlags, ListRef, SearchOffset, TypVal, Vv, kListLenUnknown};
 use crate::winlayer::{Buf, BufId, Win, buffers, tab_windows};
 use core::ffi::{c_char, c_int};
 
@@ -205,7 +204,7 @@ impl Reading {
                 let yank = ShadaYank {
                     contents: reg.contents,
                     motion: reg.motion,
-                    width: reg.width as ColNr,
+                    width: len_as_int(reg.width),
                     timestamp,
                     extra,
                 };

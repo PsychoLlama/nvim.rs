@@ -78,7 +78,7 @@ static in_tab_line: GlobalCell<bool> = GlobalCell::new(false);
 /// Where the multi-click selection started, which a drag extends away from.
 static orig_cursor: GlobalCell<Pos> = GlobalCell::new(Pos {
     lnum: LineNr::ZERO,
-    col: 0,
+    col: ColNr::ZERO,
     coladd: 0,
 });
 
@@ -169,7 +169,7 @@ pub(crate) fn do_mouse(
 
     let mut m_pos = Pos {
         lnum: LineNr::ZERO,
-        col: 0,
+        col: ColNr::ZERO,
         coladd: 0,
     };
     let mut m_pos_flag = 0;

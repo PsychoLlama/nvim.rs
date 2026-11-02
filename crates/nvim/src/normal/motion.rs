@@ -42,7 +42,7 @@ use crate::options::{
     kOptFdoFlagBlock, kOptFdoFlagHor, kOptFdoFlagJump, kOptFdoFlagPercent, kOptVeFlagOnemore,
 };
 use crate::plines::{linetabsize, plines_win, win_get_fill};
-use crate::pos::{MAXCOL, lt};
+use crate::pos::lt;
 use crate::quickfix::qf_view_result;
 use crate::search::{BACKWARD, FORWARD, findmatch, searchc};
 use crate::state::mode::{VIsual_select_exclu_adj, ins_at_eol, restart_edit};
@@ -73,7 +73,7 @@ pub(crate) fn nv_screengo(mut op: Op, dir: c_int, mut dist: c_int, skip_conceal:
     // every row rather than carried as a column.
     let mut atend = false;
     op.motion_type = kMTCharWise;
-    op.inclusive = win.w_curswant == MAXCOL as c_int;
+    op.inclusive = win.w_curswant == ColNr::MAX;
 
     // The first screen row of a line can be narrower than the rest: only
     // it carries the number column and the signs.
@@ -97,26 +97,27 @@ pub(crate) fn nv_screengo(mut op: Op, dir: c_int, mut dist: c_int, skip_conceal:
     }
 
     if win.w_view_width != 0 {
-        if win.w_curswant == MAXCOL as c_int {
+        if win.w_curswant == ColNr::MAX {
             atend = true;
             validate_virtcol(wp);
             if width1 <= 0 {
-                win.w_curswant = 0;
+                win.w_curswant = ColNr::ZERO;
             } else {
                 // Start from the end of the row the cursor is on.
-                win.w_curswant = width1 - 1;
+                win.w_curswant = ColNr::new(width1 - 1);
                 if win.w_virtcol > win.w_curswant {
-                    win.w_curswant += ((win.w_virtcol - win.w_curswant - 1) / width2 + 1) * width2;
+                    let rows = (win.w_virtcol - win.w_curswant - 1) / width2 + 1;
+                    win.w_curswant += rows * width2;
                 }
             }
         } else {
             let n = line_end!();
-            win.w_curswant = win.w_curswant.min(n - 1);
+            win.w_curswant = win.w_curswant.min(ColNr::new(n - 1));
         }
         while dist != 0 {
             dist -= 1;
             if dir == BACKWARD as c_int {
-                if win.w_curswant >= width1 && !folded(win, win.w_cursor.lnum) {
+                if win.w_curswant >= ColNr::new(width1) && !folded(win, win.w_cursor.lnum) {
                     // Still inside this line: back one row.
                     win.w_curswant -= width2;
                 } else if win.w_cursor.lnum <= LineNr::ONE {
@@ -128,13 +129,13 @@ pub(crate) fn nv_screengo(mut op: Op, dir: c_int, mut dist: c_int, skip_conceal:
                     if linelen > width1 {
                         // Land on the *last* row of the line above.
                         let w = ((linelen - width1 - 1) / width2 + 1) * width2;
-                        debug_assert!(w <= 0 || win.w_curswant <= c_int::MAX - w);
+                        debug_assert!(w <= 0 || win.w_curswant <= ColNr::new(c_int::MAX - w));
                         win.w_curswant += w;
                     }
                 }
             } else {
                 let n = line_end!();
-                if win.w_curswant + width2 < n && !folded(win, win.w_cursor.lnum) {
+                if win.w_curswant + width2 < ColNr::new(n) && !folded(win, win.w_cursor.lnum) {
                     win.w_curswant += width2;
                 } else if win.w_cursor.lnum >= win.buffer().b_ml.ml_line_count {
                     retval = false;
@@ -142,8 +143,8 @@ pub(crate) fn nv_screengo(mut op: Op, dir: c_int, mut dist: c_int, skip_conceal:
                 } else {
                     cursor_down_inner(wp, 1, skip_conceal);
                     // Land on the *first* row of the line below.
-                    win.w_curswant %= width2;
-                    if win.w_curswant >= width1 {
+                    win.w_curswant = ColNr::new(win.w_curswant.get() % width2);
+                    if win.w_curswant >= ColNr::new(width1) {
                         win.w_curswant -= width2;
                     }
                     linelen = linetabsize(wp, win.w_cursor.lnum);
@@ -153,17 +154,17 @@ pub(crate) fn nv_screengo(mut op: Op, dir: c_int, mut dist: c_int, skip_conceal:
     }
 
     if virtual_active(win) && atend {
-        coladvance(win, MAXCOL as c_int);
+        coladvance(win, ColNr::MAX);
     } else {
         coladvance(win, win.w_curswant);
     }
 
-    if win.w_cursor.col > 0 && win.w_onebuf_opt.wo_wrap != 0 {
+    if win.w_cursor.col > ColNr::ZERO && win.w_onebuf_opt.wo_wrap != 0 {
         validate_virtcol(wp);
         let mut virtcol = win.w_virtcol;
         // 'showbreak' is drawn in front of every continuation row and is
         // not part of the text.
-        if virtcol > width1 && wp.has_showbreak() {
+        if virtcol > ColNr::new(width1) && wp.has_showbreak() {
             virtcol -= wp.showbreak_cells();
         }
         let c = gchar_cursor();
@@ -171,7 +172,7 @@ pub(crate) fn nv_screengo(mut op: Op, dir: c_int, mut dist: c_int, skip_conceal:
         // wider than the cell the column arithmetic assumed.
         if dir == FORWARD as c_int
             && virtcol < win.w_curswant
-            && win.w_curswant <= width1
+            && win.w_curswant <= ColNr::new(width1)
             && !vim_isprintc(c)
             && c > 255
         {
@@ -179,17 +180,17 @@ pub(crate) fn nv_screengo(mut op: Op, dir: c_int, mut dist: c_int, skip_conceal:
         }
         // Landed past the wanted column on a multi-cell character: keep
         // it only if more than half of it is before the wanted column.
-        let mostly_past = if win.w_curswant < width1 {
-            win.w_curswant > width1 / 2
+        let mostly_past = if win.w_curswant < ColNr::new(width1) {
+            win.w_curswant > ColNr::new(width1 / 2)
         } else {
-            (win.w_curswant - width1) % width2 > width2 / 2
+            (win.w_curswant - width1).get() % width2 > width2 / 2
         };
         if virtcol > win.w_curswant && mostly_past {
             win.w_cursor.col -= 1;
         }
     }
     if atend {
-        win.w_curswant = MAXCOL as ColNr;
+        win.w_curswant = ColNr::MAX;
     }
     adjust_skipcol();
     retval
@@ -331,7 +332,7 @@ pub(crate) fn nv_right(cmd_arg: &mut CmdArg) {
                     op.inclusive = true;
                 } else {
                     win.w_cursor.lnum += 1;
-                    win.w_cursor.col = 0;
+                    win.w_cursor.col = ColNr::ZERO;
                     win.w_cursor.coladd = 0;
                     win.w_set_curswant = true;
                     op.inclusive = false;
@@ -353,8 +354,9 @@ pub(crate) fn nv_right(cmd_arg: &mut CmdArg) {
             if virtual_active(win) {
                 let _ = oneright();
             } else {
-                win.w_cursor.col +=
-                    ColNr::try_from(with_cursor_rest(cluster_len)).unwrap_or(ColNr::MAX);
+                win.w_cursor.col += ColNr::try_from(with_cursor_rest(cluster_len))
+                    .unwrap_or(ColNr::MAX)
+                    .get();
             }
         }
         n -= 1;
@@ -397,7 +399,7 @@ pub(crate) fn nv_left(cmd_arg: &mut CmdArg) {
                 && win.w_cursor.lnum > LineNr::ONE
             {
                 win.w_cursor.lnum -= 1;
-                coladvance(win, MAXCOL as c_int);
+                coladvance(win, ColNr::MAX);
                 win.w_set_curswant = true;
                 // A delete or a change that wrapped back over the line
                 // break must take the break with it, so put the cursor
@@ -407,8 +409,9 @@ pub(crate) fn nv_left(cmd_arg: &mut CmdArg) {
                     || cmd_arg.op().op_type == OpType::Change)
                     && !Buf::current().lines().line(win.w_cursor.lnum).is_empty()
                 {
-                    win.w_cursor.col +=
-                        ColNr::try_from(with_cursor_rest(cluster_len)).unwrap_or(ColNr::MAX);
+                    win.w_cursor.col += ColNr::try_from(with_cursor_rest(cluster_len))
+                        .unwrap_or(ColNr::MAX)
+                        .get();
                     cmd_arg.outcome |= Outcome::NO_ADJ_OP_END;
                 }
             } else {
@@ -501,7 +504,7 @@ pub(crate) fn nv_dollar(cmd_arg: &mut CmdArg) {
         || gchar_cursor() != NUL
         || cmd_arg.op().op_type == OpType::Nop
     {
-        Win::current().w_curswant = MAXCOL as ColNr;
+        Win::current().w_curswant = ColNr::MAX;
     }
     if cursor_down(cmd_arg.count1 - 1, cmd_arg.op().op_type == OpType::Nop).is_err() {
         clear_op_beep(cmd_arg.op());
@@ -646,10 +649,10 @@ pub(crate) fn nv_pipe(cmd_arg: &mut CmdArg) {
     cmd_arg.op().inclusive = false;
     beginline(BeginlineOpts::NONE);
     if cmd_arg.count0 > 0 {
-        coladvance(Win::current(), cmd_arg.count0 - 1);
-        Win::current().w_curswant = cmd_arg.count0 - 1;
+        coladvance(Win::current(), ColNr::new(cmd_arg.count0 - 1));
+        Win::current().w_curswant = ColNr::new(cmd_arg.count0 - 1);
     } else {
-        Win::current().w_curswant = 0;
+        Win::current().w_curswant = ColNr::ZERO;
     }
     // The column was named outright, so it is not a remembered want.
     Win::current().w_set_curswant = false;
@@ -712,7 +715,7 @@ pub(crate) fn nv_wordcmd(cmd_arg: &mut CmdArg) {
 /// Pull the cursor back off the line's terminator, which is not a position an
 /// operator may include -- and say the operator now covers the last character.
 pub(crate) fn adjust_cursor(mut op: Op) {
-    if Win::current().w_cursor.col > 0
+    if Win::current().w_cursor.col > ColNr::ZERO
         && gchar_cursor() == NUL
         && (!visual_active() || P_SEL.first_byte() == b'o')
         && !virtual_active(Win::current())

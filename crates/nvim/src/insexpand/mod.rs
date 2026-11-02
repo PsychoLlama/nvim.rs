@@ -310,7 +310,7 @@ pub(crate) const TYPVAL_T_INIT: TypVal = TV_INITIAL_VALUE;
 /// A zeroed `Pos`.
 pub(crate) const POS_T_INIT: Pos = Pos {
     lnum: LineNr::ZERO,
-    col: 0,
+    col: ColNr::ZERO,
     coladd: 0,
 };
 /// A zeroed `SaveVEvent`, which `get_v_event` fills in.
@@ -737,9 +737,9 @@ state_record! {
     /// The line the completion started on.
     compl_lnum: LineNr = LineNr::ZERO;
     /// The column the completed text starts at.
-    compl_col: ColNr = 0;
+    compl_col: ColNr = ColNr::ZERO;
     /// Where the inserted completion text ends.
-    compl_ins_end_col: ColNr = 0;
+    compl_ins_end_col: ColNr = ColNr::ZERO;
     /// See [`compl_orig_text`].
     COMPL_ORIG_TEXT: ApiString = ApiString::NULL;
     /// See [`ComplOrigExtmarks`].

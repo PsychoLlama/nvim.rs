@@ -43,7 +43,7 @@ pub(crate) fn getvcol(window: Win, pos: &mut Pos) -> (ColNr, ColNr, ColNr) {
     csarg.max_head_vcol = -1;
 
     let mut on_nul = false;
-    let mut vcol: ColNr = 0;
+    let mut vcol: ColNr = ColNr::ZERO;
     let mut char_size;
     let mut at = 0;
     let mut chr = c_char_info(line, 0);
@@ -85,7 +85,7 @@ pub(crate) fn getvcol(window: Win, pos: &mut Pos) -> (ColNr, ColNr, ColNr) {
     }
 
     if byte_at(line, at) == b'\0'
-        && end_col < MAXCOL
+        && end_col < ColNr::MAX
         && !past_end(at, end_col)
         && usize::try_from(end_col) != Ok(at)
     {
@@ -136,7 +136,7 @@ pub(crate) fn getvvcol(window: Win, pos: &mut Pos) -> (ColNr, ColNr, ColNr) {
     let mut col = getvcol(window, pos).0;
 
     let mut coladd = pos.coladd;
-    let mut endadd: ColNr = 0;
+    let mut endadd: i32 = 0;
 
     // The cursor cannot sit on part of a wide character.
     let mut lines = window.buffer().lines();

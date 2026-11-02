@@ -6,6 +6,7 @@
 use crate::cstr;
 use crate::keycodes::{Ctrl_A, Ctrl_E, Ctrl_Q, Ctrl_V, Ctrl_Y, Key};
 use crate::memline::MlFlags;
+use crate::narrow::len_as_int;
 use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
 
@@ -45,7 +46,6 @@ use crate::option::get_ve_flags;
 use crate::option::vars::{P_SEL, cb_flags, p_sta, p_to, p_ww};
 use crate::options::{kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, kOptVeFlagAll};
 use crate::os::cshim::gettext;
-use crate::pos::MAXCOL;
 use crate::register::{copy_register, do_put};
 use crate::search::{BACKWARD, FORWARD};
 use crate::state::mode::{State, restart_edit};
@@ -145,7 +145,7 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
     }
     // There have to be `count1` characters left on the line, counted both
     // ways: the byte length rules out a short line cheaply.
-    if (get_cursor_pos_len() as size_t) < cmd_arg.count1 as c_uint as size_t
+    if (get_cursor_pos_len() as usize) < cmd_arg.count1 as c_uint as size_t
         || with_cursor_rest(char_count) < cmd_arg.count1 as usize
     {
         clear_op_beep(cmd_arg.op());
@@ -315,7 +315,7 @@ pub(crate) fn n_swapchar(cmd_arg: &mut CmdArg) {
                 break;
             }
             Win::current().w_cursor.lnum += 1;
-            Win::current().w_cursor.col = 0;
+            Win::current().w_cursor.col = ColNr::ZERO;
             // Each further line needs its own undo entry.
             if n > 1 {
                 if u_savesub(Win::current().w_cursor.lnum).is_err() {
@@ -334,7 +334,7 @@ pub(crate) fn n_swapchar(cmd_arg: &mut CmdArg) {
         changed_lines(Buf::current(), from, col, to, 0, true);
         Buf::current().b_op_start = startpos;
         Buf::current().b_op_end = Win::current().w_cursor;
-        if Buf::current().b_op_end.col > 0 {
+        if Buf::current().b_op_end.col > ColNr::ZERO {
             Buf::current().b_op_end.col -= 1;
         }
     }
@@ -465,10 +465,10 @@ pub(crate) fn set_cursor_for_append_to_line() {
         // past the end.
         let save_state = State.get();
         State.set(MODE_INSERT);
-        coladvance(Win::current(), MAXCOL as c_int);
+        coladvance(Win::current(), ColNr::MAX);
         State.set(save_state);
     } else {
-        Win::current().w_cursor.col += with_cursor_rest(<[u8]>::len) as ColNr;
+        Win::current().w_cursor.col += len_as_int(with_cursor_rest(<[u8]>::len));
     }
 }
 
@@ -738,7 +738,7 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
         deleted_lines(Buf::current().b_ml.ml_line_count + 1, 1);
         if win.w_cursor.lnum > Buf::current().b_ml.ml_line_count {
             win.w_cursor.lnum = Buf::current().b_ml.ml_line_count;
-            coladvance(win, MAXCOL as c_int);
+            coladvance(win, ColNr::MAX);
         }
     }
     auto_format(false, true);

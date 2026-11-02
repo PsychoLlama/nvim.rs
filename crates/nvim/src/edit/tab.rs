@@ -46,7 +46,7 @@ pub(crate) fn ins_shift(c: c_int, lastc: c_int) {
     // character and has to come off again.
     if c == Ctrl_D
         && (lastc == '0' as c_int || lastc == '^' as c_int)
-        && Win::current().w_cursor.col > 0
+        && Win::current().w_cursor.col > ColNr::ZERO
     {
         Win::current().w_cursor.col -= 1;
         let _ = del_char(false);
@@ -81,7 +81,7 @@ pub(crate) fn ins_shift(c: c_int, lastc: c_int) {
 /// which is the common case: 'expandtab' off, 'softtabstop' unset, and either
 /// 'smarttab' off or 'tabstop' equal to 'shiftwidth' anyway.
 pub(crate) fn ins_tab() -> bool {
-    if Insstart_blank_vcol.get() == MAXCOL as ColNr
+    if Insstart_blank_vcol.get() == ColNr::MAX
         && Win::current().w_cursor.lnum == Insstart.get().lnum
     {
         Insstart_blank_vcol.set(nolist_virtcol());
@@ -123,7 +123,7 @@ pub(crate) fn ins_tab() -> bool {
     let mut temp = if p_sta() && ind {
         // A tab in the indent uses 'shiftwidth'.
         let sw = sw_value();
-        sw - nolist_virtcol() % sw
+        sw - nolist_virtcol().get() % sw
     } else if tabstops(StopList::SoftTab) > 0 || Buf::current().b_p_sts != 0 {
         let sts = sts_value() as OptInt;
         Buf::current().stop_padding(StopList::SoftTab, nolist_virtcol(), sts)
@@ -187,7 +187,7 @@ fn tab_spaces_to_tabs() {
         pos = Win::current().w_cursor;
     }
     // The byte being looked at, which is the cursor's column to begin with.
-    let mut at = Win::current().w_cursor.col as usize;
+    let mut at = Win::current().w_cursor.col.as_usize();
 
     // 'list' changes what a TAB is worth; unless 'cpoptions' has `L`, it
     // must not be allowed to.
@@ -197,7 +197,7 @@ fn tab_spaces_to_tabs() {
 
     // Find the first white character of the run.
     let mut fpos = Win::current().w_cursor;
-    while fpos.col > 0 && ascii_iswhite(c_int::from(line[at - 1])) {
+    while fpos.col > ColNr::ZERO && ascii_iswhite(c_int::from(line[at - 1])) {
         fpos.col -= 1;
         at -= 1;
     }
@@ -226,14 +226,14 @@ fn tab_spaces_to_tabs() {
         if !ascii_iswhite(byte) {
             break;
         }
-        let i = win_charsize(cstype, vcol, 0, TAB, &mut csarg).width;
+        let i = win_charsize(cstype, vcol.get(), 0, TAB, &mut csarg).width;
         if vcol + i > want_vcol {
             break;
         }
         if byte != TAB {
             line[at] = TAB as u8;
             if change_col < 0 {
-                change_col = fpos.col; // remember the first changed column
+                change_col = fpos.col.get(); // remember the first changed column
                 if fpos.lnum == Insstart.get().lnum && fpos.col < Insstart.get().col {
                     Insstart.set(Insstart.get().with_col(fpos.col));
                 }
@@ -250,7 +250,7 @@ fn tab_spaces_to_tabs() {
         let base = at;
         let (mut csarg, cstype) = CharsizeArg::new(Win::current(), LineNr::ZERO, &line[base..]);
         while vcol < want_vcol && byte_at(&line, at) == b' ' {
-            vcol += win_charsize(cstype, vcol, at - base, b' ' as int32_t, &mut csarg).width;
+            vcol += win_charsize(cstype, vcol.get(), at - base, b' ' as int32_t, &mut csarg).width;
             at += 1;
             repl_off += 1;
         }
@@ -272,7 +272,12 @@ fn tab_spaces_to_tabs() {
             Buf::current().b_ml.swap_cached_text(newp);
             let old_len = walk_col(&pos, vreplace) - change_col;
             let new_len = fpos.col - change_col;
-            inserted_bytes(fpos.lnum, change_col, old_len, new_len);
+            inserted_bytes(
+                fpos.lnum,
+                ColNr::new(change_col),
+                old_len.get(),
+                new_len.get(),
+            );
         } else if i > 0 {
             line.drain(at..at + i as usize);
         } else if !vreplace {
@@ -304,7 +309,7 @@ fn tab_spaces_to_tabs() {
         if vreplace {
             backspace_until_column(change_col);
             let from = change_col as usize;
-            let len = (walk_col(&pos, vreplace) - change_col) as usize;
+            let len = (walk_col(&pos, vreplace) - change_col).as_usize();
             ins_bytes(&line[from..from + len]);
         }
     }

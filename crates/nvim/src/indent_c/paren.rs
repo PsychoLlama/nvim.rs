@@ -66,7 +66,7 @@ pub(crate) fn find_start_brace() -> Option<Pos> {
         // `brace.col`, and the `&&` chain is left whole so that it keeps
         // doing so.
         let mut pos = None;
-        let uncommented = first_code_col(brace) == brace.col && {
+        let uncommented = first_code_col(brace) == brace.col.get() && {
             pos = ind_find_start_comment_or_raw_string(None);
             pos.is_none()
         };
@@ -107,12 +107,12 @@ pub(crate) fn find_match_char(c: u8, ind_maxparen: c_int) -> Option<Pos> {
         // Is the match inside a `//` comment?  `trypos` is a position
         // `findmatchlimit` found in the current buffer, so the cache answers
         // with the line it sits on.
-        if first_code_col(trypos) > trypos.col {
+        if first_code_col(trypos) > trypos.col.get() {
             ind_maxp_wk = ind_maxparen - (cursor_save.lnum - trypos.lnum);
             if ind_maxp_wk <= 0 {
                 break None;
             }
-            Win::current().w_cursor = trypos.with_col(0);
+            Win::current().w_cursor = trypos.with_col(ColNr::ZERO);
             continue;
         }
 
@@ -170,7 +170,7 @@ pub(crate) fn corr_ind_maxparen(startpos: &Pos) -> c_int {
 pub(crate) fn find_last_paren(line: &[u8], start: u8, end: u8) -> bool {
     let mut retval = false;
     let mut open_count = 0;
-    Win::current().w_cursor.col = 0; // default is start of line
+    Win::current().w_cursor.col = ColNr::ZERO; // default is start of line
 
     let mut at = 0usize;
     while byte_at(line, at) != 0 {
@@ -207,11 +207,11 @@ pub(crate) fn find_match(lookfor: c_int, ourscope: LineNr) -> bool {
         (0, 1)
     };
 
-    Win::current().w_cursor.col = 0;
+    Win::current().w_cursor.col = ColNr::ZERO;
 
     while Win::current().w_cursor.lnum > ourscope + 1 {
         Win::current().w_cursor.lnum -= 1;
-        Win::current().w_cursor.col = 0;
+        Win::current().w_cursor.col = ColNr::ZERO;
 
         // Upstream tests the four in this order and stops at the first that
         // answers; the `while`-of-`do` half that re-enters is asked last, so

@@ -26,7 +26,6 @@ use super::*;
 use crate::drawscreen::state::screen_search_hl;
 use crate::mbyte::c_cluster_len;
 use crate::option::cpo_has;
-use crate::pos::MAXCOL;
 use crate::search::SEARCH_HL_PRIORITY;
 use crate::types::CpoFlag;
 use crate::winlayer::{Buf, Win};
@@ -220,8 +219,8 @@ fn next_search_hl_pos(item: &mut MatchItem, lnum: LineNr, mincol: ColNr) -> usiz
     let best = &item.mit_pos_array[found];
     // Column 0 means the whole line; otherwise the position is 1-based
     // and `len` wide.
-    let (start, end) = if best.col == 0 {
-        (0, MAXCOL)
+    let (start, end) = if best.col == ColNr::ZERO {
+        (ColNr::ZERO, ColNr::MAX)
     } else {
         (best.col - 1, best.col - 1 + best.len)
     };
@@ -322,7 +321,7 @@ fn next_search_hl(window: Win, which: Which, lnum: LineNr, mincol: ColNr) {
 
         let matchcol: ColNr = if prev_lnum == LineNr::ZERO {
             // No useful previous match: search from the line's start.
-            0
+            ColNr::ZERO
         } else if !cpo_has(CpoFlag::SEARCH) || (end.lnum == LineNr::ZERO && end.col <= start.col) {
             // Not Vi-compatible, or an empty match: continue at the next
             // character, and stop if that is past the end of the line.
@@ -331,7 +330,7 @@ fn next_search_hl(window: Win, which: Which, lnum: LineNr, mincol: ColNr) {
                 set_lnum(LineNr::ZERO);
                 break;
             };
-            start.col + col_len(len)
+            start.col + col_len(len).get()
         } else {
             // Vi-compatible: continue at the end of the previous match.
             end.col
@@ -426,7 +425,7 @@ pub(crate) fn prepare_search_hl(window: Win, lnum: LineNr) {
         // positions on the line it is on.
         let is_item = matches!(which, Which::Item(_));
         let mut pos_inprogress = true;
-        let mut n: ColNr = 0;
+        let mut n: ColNr = ColNr::ZERO;
         while with_shl(window, which, |shl| shl.first_lnum) < lnum
             && (has_prog(window, which) || (is_item && pos_inprogress))
         {
@@ -441,7 +440,7 @@ pub(crate) fn prepare_search_hl(window: Win, lnum: LineNr) {
                     shl.rm.endpos[0].col
                 } else {
                     shl.first_lnum += 1;
-                    0
+                    ColNr::ZERO
                 }
             });
         }
@@ -492,7 +491,7 @@ fn cluster_len_in_line(buffer: Buf, lnum: LineNr, at: usize) -> Option<usize> {
 /// character there, or one cell past the end of the line.
 #[inline(always)]
 fn empty_match_width(window: Win, lnum: LineNr, col: ColNr) -> ColNr {
-    char_len_at(window, lnum, col).max(1)
+    char_len_at(window, lnum, col).max(ColNr::new(1))
 }
 
 /// Prepares every pattern for one window line, and answers whether any of
@@ -514,8 +513,8 @@ pub(crate) fn prepare_search_hl_line(
     let mut walk = ShlWalk::new(Order::SearchFirst);
     while let Some(which) = walk.next(window) {
         with_shl(window, which, |shl| {
-            shl.startcol = MAXCOL;
-            shl.endcol = MAXCOL;
+            shl.startcol = ColNr::MAX;
+            shl.endcol = ColNr::MAX;
             shl.attr_cur = 0;
             shl.is_addpos = false;
             shl.has_cursor = false;
@@ -532,14 +531,14 @@ pub(crate) fn prepare_search_hl_line(
             shl.startcol = if shl.lnum == lnum {
                 shl.rm.startpos[0].col
             } else {
-                0
+                ColNr::ZERO
             };
             shl.endcol = if lnum
                 == LineNr::new(shl.lnum + shl.rm.endpos[0].lnum.get() - shl.rm.startpos[0].lnum)
             {
                 shl.rm.endpos[0].col
             } else {
-                MAXCOL
+                ColNr::MAX
             };
             true
         });
@@ -556,7 +555,7 @@ pub(crate) fn prepare_search_hl_line(
         let (startcol, endcol) = with_shl(window, which, |shl| (shl.startcol, shl.endcol));
         if startcol == endcol {
             let width = empty_match_width(window, lnum, endcol);
-            with_shl(window, which, |shl| shl.endcol += width);
+            with_shl(window, which, |shl| shl.endcol += width.get());
         }
         if startcol < mincol {
             // Already highlighted at the left edge.
@@ -617,9 +616,9 @@ pub(crate) fn update_search_hl(
             let Peek {
                 startcol, endcol, ..
             } = peek;
-            if startcol != MAXCOL && col >= startcol && col < endcol {
+            if startcol != ColNr::MAX && col >= startcol && col < endcol {
                 // Inside the match. Widen it to a whole character.
-                let next_col = col + col_len(char_len_here());
+                let next_col = col + col_len(char_len_here()).get();
                 let cursor_attr = match which {
                     Which::Search if screen_search_hl.with(|shl| shl.has_cursor) => {
                         Some(win_hl_attr(window, HLF_LC))
@@ -670,7 +669,7 @@ pub(crate) fn update_search_hl(
                 shl.endcol = if shl.rm.endpos[0].lnum == LineNr::ZERO {
                     shl.rm.endpos[0].col
                 } else {
-                    MAXCOL
+                    ColNr::MAX
                 };
                 true
             });
@@ -684,7 +683,7 @@ pub(crate) fn update_search_hl(
             if startcol == endcol {
                 // Highlight the empty match, then try again after it.
                 let width = empty_match_width(window, lnum, endcol);
-                with_shl(window, which, |shl| shl.endcol += width);
+                with_shl(window, which, |shl| shl.endcol += width.get());
             }
             // Round again, in case the new match starts here.
         };
@@ -752,7 +751,7 @@ pub(crate) fn get_prevcol_hl_flag(window: Win, curcol: ColNr) -> bool {
     let prevcol = if skip > curcol { curcol + 1 } else { curcol };
 
     let covers = |m: &MatchState| {
-        !m.is_addpos && (prevcol == m.startcol || (prevcol > m.startcol && m.endcol == MAXCOL))
+        !m.is_addpos && (prevcol == m.startcol || (prevcol > m.startcol && m.endcol == ColNr::MAX))
     };
 
     screen_search_hl.with(covers) || window.w_matches.iter().any(|item| covers(&item.mit_hl))

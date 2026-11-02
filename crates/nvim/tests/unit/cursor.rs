@@ -35,35 +35,62 @@ const LAST: c_int = 24;
 #[test]
 fn a_column_on_the_line_is_left_alone() {
     // Same screen row as the line's end (row 1 vs row 2 is not "past").
-    assert_eq!(wrap_target_col(15, WIDTH, LAST, false), 15);
+    assert_eq!(
+        wrap_target_col(ColNr::new(15), WIDTH, LAST, false),
+        ColNr::new(15)
+    );
     // The line's own last column.
-    assert_eq!(wrap_target_col(24, WIDTH, LAST, false), 24);
+    assert_eq!(
+        wrap_target_col(ColNr::new(24), WIDTH, LAST, false),
+        ColNr::new(24)
+    );
 }
 
 #[test]
 fn a_column_past_the_last_screen_row_lands_on_its_end() {
     // Row 3 does not exist, so the cursor stops at the end of row 2.
-    assert_eq!(wrap_target_col(35, WIDTH, LAST, false), 29);
+    assert_eq!(
+        wrap_target_col(ColNr::new(35), WIDTH, LAST, false),
+        ColNr::new(29)
+    );
     // Far past: still the end of row 2, not some multiple of it.
-    assert_eq!(wrap_target_col(999, WIDTH, LAST, false), 29);
+    assert_eq!(
+        wrap_target_col(ColNr::new(999), WIDTH, LAST, false),
+        ColNr::new(29)
+    );
 }
 
 #[test]
 fn insert_mode_is_allowed_one_column_past_the_line() {
     // `wcol > csize + 1` fails at exactly one past, which is where typing at
     // the right window edge leaves the cursor.
-    assert_eq!(wrap_target_col(30, WIDTH, 29, true), 30);
-    assert_eq!(wrap_target_col(30, WIDTH, 29, false), 29);
+    assert_eq!(
+        wrap_target_col(ColNr::new(30), WIDTH, 29, true),
+        ColNr::new(30)
+    );
+    assert_eq!(
+        wrap_target_col(ColNr::new(30), WIDTH, 29, false),
+        ColNr::new(29)
+    );
     // Two past is beyond the concession.
-    assert_eq!(wrap_target_col(31, WIDTH, 29, true), 29);
+    assert_eq!(
+        wrap_target_col(ColNr::new(31), WIDTH, 29, true),
+        ColNr::new(29)
+    );
 }
 
 #[test]
 fn an_empty_line_pulls_back_to_its_first_row() {
     // `linetabsize_eol` of an empty line is 0, so every row but the first is
     // out of reach.
-    assert_eq!(wrap_target_col(15, WIDTH, 0, false), 9);
-    assert_eq!(wrap_target_col(5, WIDTH, 0, false), 5);
+    assert_eq!(
+        wrap_target_col(ColNr::new(15), WIDTH, 0, false),
+        ColNr::new(9)
+    );
+    assert_eq!(
+        wrap_target_col(ColNr::new(5), WIDTH, 0, false),
+        ColNr::new(5)
+    );
 }
 
 // -------------------------------------------------------------------- step_back
@@ -77,16 +104,25 @@ fn an_empty_line_pulls_back_to_its_first_row() {
 #[test]
 fn stepping_back_undoes_one_character() {
     // A 2-cell character measured at column 10 left `col` at 12.
-    assert_eq!(step_back(5, 12, 2, 0), (4, 10, 2));
+    assert_eq!(
+        step_back(ColNr::new(5), ColNr::new(12), 2, 0),
+        (ColNr::new(4), ColNr::new(10), 2)
+    );
 }
 
 #[test]
 fn showbreak_padding_is_not_the_characters_to_give_back() {
     // Three cells charged, one of them 'showbreak': the character is 2 wide
     // and the cursor goes back to where its own cells began.
-    assert_eq!(step_back(5, 12, 3, 1), (4, 10, 2));
+    assert_eq!(
+        step_back(ColNr::new(5), ColNr::new(12), 3, 1),
+        (ColNr::new(4), ColNr::new(10), 2)
+    );
     // All padding and no character: nothing to give back but the index.
-    assert_eq!(step_back(5, 12, 1, 1), (4, 12, 0));
+    assert_eq!(
+        step_back(ColNr::new(5), ColNr::new(12), 1, 1),
+        (ColNr::new(4), ColNr::new(12), 0)
+    );
 }
 
 // ------------------------------------------------------------------- gap_coladd
@@ -121,34 +157,61 @@ fn an_implausible_gap_is_refused() {
 
 #[test]
 fn an_empty_line_puts_the_cursor_at_zero() {
-    assert_eq!(checked_col(7, 0, || true), (0, false));
-    assert_eq!(checked_col(7, 0, || false), (0, false));
+    assert_eq!(
+        checked_col(ColNr::new(7), ColNr::ZERO, || true),
+        (ColNr::ZERO, false)
+    );
+    assert_eq!(
+        checked_col(ColNr::new(7), ColNr::ZERO, || false),
+        (ColNr::ZERO, false)
+    );
 }
 
 #[test]
 fn insert_mode_may_rest_on_the_nul() {
-    assert_eq!(checked_col(7, 3, || true), (3, false));
+    assert_eq!(
+        checked_col(ColNr::new(7), ColNr::new(3), || true),
+        (ColNr::new(3), false)
+    );
     // Exactly at the NUL is already "past the last character".
-    assert_eq!(checked_col(3, 3, || true), (3, false));
+    assert_eq!(
+        checked_col(ColNr::new(3), ColNr::new(3), || true),
+        (ColNr::new(3), false)
+    );
 }
 
 #[test]
 fn normal_mode_steps_back_onto_the_last_character() {
     // The `true` asks for the head-byte adjustment the C does with
     // `mark_mb_adjustpos` — `len - 1` can land inside a multibyte character.
-    assert_eq!(checked_col(7, 3, || false), (2, true));
-    assert_eq!(checked_col(3, 3, || false), (2, true));
+    assert_eq!(
+        checked_col(ColNr::new(7), ColNr::new(3), || false),
+        (ColNr::new(2), true)
+    );
+    assert_eq!(
+        checked_col(ColNr::new(3), ColNr::new(3), || false),
+        (ColNr::new(2), true)
+    );
 }
 
 #[test]
 fn a_column_inside_the_line_is_kept() {
-    assert_eq!(checked_col(1, 3, || unreachable!()), (1, false));
-    assert_eq!(checked_col(0, 3, || unreachable!()), (0, false));
+    assert_eq!(
+        checked_col(ColNr::new(1), ColNr::new(3), || unreachable!()),
+        (ColNr::new(1), false)
+    );
+    assert_eq!(
+        checked_col(ColNr::ZERO, ColNr::new(3), || unreachable!()),
+        (ColNr::ZERO, false)
+    );
 }
 
 #[test]
 fn a_negative_column_is_pulled_to_zero() {
-    assert_eq!(checked_col(-1, 3, || unreachable!()), (0, false));
+    assert_eq!(
+        checked_col(ColNr::NONE, ColNr::new(3), || unreachable!()),
+        (ColNr::ZERO, false)
+    );
 }
 
 #[test]
@@ -160,9 +223,9 @@ fn the_mode_question_is_only_asked_when_it_matters() {
         asked.set(asked.get() + 1);
         true
     };
-    checked_col(1, 3, ask);
+    checked_col(ColNr::new(1), ColNr::new(3), ask);
     assert_eq!(asked.get(), 0);
-    checked_col(9, 3, ask);
+    checked_col(ColNr::new(9), ColNr::new(3), ask);
     assert_eq!(asked.get(), 1);
 }
 
@@ -176,29 +239,47 @@ fn the_mode_question_is_only_asked_when_it_matters() {
 
 #[test]
 fn the_end_of_the_line_drops_the_virtual_offset() {
-    assert_eq!(carried_coladd(MAXCOL, 9, 5, true), ColAdd::Zero);
+    assert_eq!(
+        carried_coladd(ColNr::MAX, 9, ColNr::new(5), true),
+        ColAdd::Zero
+    );
     // MAXCOL wins over the 'virtualedit' question entirely.
-    assert_eq!(carried_coladd(MAXCOL, 9, 5, false), ColAdd::Zero);
+    assert_eq!(
+        carried_coladd(ColNr::MAX, 9, ColNr::new(5), false),
+        ColAdd::Zero
+    );
 }
 
 #[test]
 fn a_partial_virtualedit_leaves_the_offset_alone() {
     // Only ve=all lets the cursor keep a position the text does not have;
     // under the other spellings the C touches nothing.
-    assert_eq!(carried_coladd(3, 9, 5, false), ColAdd::Keep);
+    assert_eq!(
+        carried_coladd(ColNr::new(3), 9, ColNr::new(5), false),
+        ColAdd::Keep
+    );
 }
 
 #[test]
 fn virtualedit_all_carries_the_distance_past_the_clamp() {
-    assert_eq!(carried_coladd(3, 7, 5, true), ColAdd::Carry(2));
+    assert_eq!(
+        carried_coladd(ColNr::new(3), 7, ColNr::new(5), true),
+        ColAdd::Carry(2)
+    );
 }
 
 #[test]
 fn a_virtual_column_the_clamp_caught_up_with_is_dropped() {
     // Not a miscalculation, just nothing left to be virtual about.
-    assert_eq!(carried_coladd(3, 5, 5, true), ColAdd::Zero);
+    assert_eq!(
+        carried_coladd(ColNr::new(3), 5, ColNr::new(5), true),
+        ColAdd::Zero
+    );
     // And the overflow guard the C's comment calls "a weird number".
-    assert_eq!(carried_coladd(3, 4, 5, true), ColAdd::Zero);
+    assert_eq!(
+        carried_coladd(ColNr::new(3), 4, ColNr::new(5), true),
+        ColAdd::Zero
+    );
 }
 
 // ------------------------------------------------------------ folded_line_span
@@ -272,7 +353,7 @@ fn the_span_is_a_column_of_visible_rows() {
     // Every from/to pair inside one closed fold has no visible lines
     // between them at all.
     let fold = folded(LineNr::new(2)..=LineNr::new(9));
-    for from in 2..=8 as ColNr {
+    for from in 2..=8 {
         assert_eq!(
             folded_line_span(LineNr::new(from), LineNr::new(from + 1), &fold),
             0

@@ -762,7 +762,7 @@ fn goto_match(
         }
     }
     if action != ACTION_SHOW {
-        Win::current().w_cursor.col = startp as ColNr;
+        Win::current().w_cursor.col = ColNr::from_index(startp);
         Win::current().w_set_curswant = true;
     }
 

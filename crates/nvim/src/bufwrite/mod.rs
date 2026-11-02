@@ -17,6 +17,7 @@ use crate::narrow::len_as_int;
 use crate::semsg;
 use crate::tr_plural;
 use crate::types::CAR;
+use crate::types::ColNr;
 use crate::types::NL;
 use core::ffi::CStr;
 use std::borrow::Cow;
@@ -354,9 +355,9 @@ pub(crate) fn buf_write(
     };
     // Set '[ and '] to the lines to be written.
     b.b_op_start.lnum = start;
-    b.b_op_start.col = 0;
+    b.b_op_start.col = ColNr::ZERO;
     b.b_op_end.lnum = end;
-    b.b_op_end.col = 0;
+    b.b_op_end.col = ColNr::ZERO;
 
     let mode = WriteMode {
         req,

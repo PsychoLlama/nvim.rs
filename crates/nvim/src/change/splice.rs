@@ -129,7 +129,7 @@ fn record_change_mark(mut buffer: Buf, lnum: LineNr, col: ColNr) {
     // be made outside the current window's view.
     let mut view = FileMarkView {
         topline_offset: MAXLNUM.get(),
-        skipcol: 0,
+        skipcol: ColNr::ZERO,
     };
     let win = Win::current();
     if win.w_buffer == buffer && lnum >= win.w_topline && lnum <= win.w_botline {
@@ -221,14 +221,14 @@ fn redraw_win_for_change(mut window: Win, mut lnum: LineNr, col: ColNr, lnume: L
 
     // Reset 'smoothscroll''s w_skipcol if the topline has become so short
     // that nothing would be visible, allowing for the `<<<` marker.
-    let hide_all = window.w_skipcol > 0
+    let hide_all = window.w_skipcol > ColNr::ZERO
         && (last < window.w_topline
             || (window.w_topline >= lnum
                 && window.w_topline < lnume
                 && linetabsize_eol(window, window.w_topline)
-                    <= window.w_skipcol + sms_marker_overlap(window, -1)));
+                    <= (window.w_skipcol + sms_marker_overlap(window, -1)).get()));
     if hide_all {
-        window.w_skipcol = 0;
+        window.w_skipcol = ColNr::ZERO;
     }
 
     // Can't postpone the fold update: a following operator might work on
@@ -365,8 +365,8 @@ pub fn inserted_bytes(lnum: LineNr, start_col: ColNr, old_col: c_int, new_col: c
             cb,
             (lnum - 1).get(),
             start_col,
-            old_col,
-            new_col,
+            ColNr::new(old_col),
+            ColNr::new(new_col),
             kExtmarkUndo,
         );
     }
@@ -377,7 +377,7 @@ pub fn inserted_bytes(lnum: LineNr, start_col: ColNr, old_col: c_int, new_col: c
 ///
 /// Call AFTER the change and after `mark_adjust()`.
 pub fn appended_lines_buf(buffer: Buf, lnum: LineNr, count: i32) {
-    changed_lines(buffer, lnum + 1, 0, lnum + 1, count, true);
+    changed_lines(buffer, lnum + 1, ColNr::ZERO, lnum + 1, count, true);
 }
 
 /// [`appended_lines_buf`] for the current buffer.
@@ -390,14 +390,14 @@ pub fn appended_lines_mark(lnum: LineNr, count: c_int) {
     let max = MAXLNUM;
     let cb = Buf::current();
     mark_adjust(lnum + 1, max, count, 0, kExtmarkUndo);
-    changed_lines(cb, lnum + 1, 0, lnum + 1, count, true);
+    changed_lines(cb, lnum + 1, ColNr::ZERO, lnum + 1, count, true);
 }
 
 /// `count` lines were deleted at line `lnum` of `buffer`.
 ///
 /// Call AFTER the change and after `mark_adjust()`.
 pub fn deleted_lines_buf(buffer: Buf, lnum: LineNr, count: i32) {
-    changed_lines(buffer, lnum, 0, lnum + count, -count, true);
+    changed_lines(buffer, lnum, ColNr::ZERO, lnum + count, -count, true);
 }
 
 /// [`deleted_lines_buf`] for the current buffer.
@@ -418,7 +418,7 @@ pub fn deleted_lines_mark(lnum: LineNr, count: c_int) {
     let back = -count + i32::from(made_empty);
     mark_adjust(lnum, last, max.get(), -count, kExtmarkNOOP);
     extmark_adjust(cb, lnum, last, max.get(), back, kExtmarkUndo);
-    changed_lines(cb, lnum, 0, lnum + count, -count, true);
+    changed_lines(cb, lnum, ColNr::ZERO, lnum + count, -count, true);
 }
 
 /// Widen `buffer`'s pending redraw area (`b_mod_*`) to cover a change.

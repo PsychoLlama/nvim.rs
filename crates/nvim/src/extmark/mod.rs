@@ -186,7 +186,13 @@ fn tree_move_region(
     new_col: ColNr,
 ) {
     marktree_move_region(
-        tree, start.row, start.col, extent_row, extent_col, new_row, new_col,
+        tree,
+        start.row,
+        ColNr::new(start.col),
+        extent_row,
+        extent_col,
+        new_row,
+        new_col,
     )
 }
 
@@ -405,12 +411,12 @@ pub fn extmark_splice_cols(
     let old = Extent {
         row: 0,
         col: old_col,
-        byte: old_col as BCount,
+        byte: old_col.get() as isize,
     };
     let new = Extent {
         row: 0,
         col: new_col,
-        byte: new_col as BCount,
+        byte: new_col.get() as isize,
     };
     splice::splice(buffer, start_row, start_col, old, new, undo);
 }

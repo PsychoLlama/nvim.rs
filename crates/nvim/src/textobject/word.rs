@@ -17,6 +17,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::option::vars::P_SEL;
+use crate::types::ColNr;
 use crate::types::LineNr;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
@@ -34,7 +35,7 @@ use crate::normal::{
     VisualMode, set_visual_anchor, set_visual_mode, unadjust_for_sel, visual_active, visual_anchor,
     visual_mode,
 };
-use crate::pos::{MAXCOL, clearpos, equalpos, lt, ltoreq};
+use crate::pos::{clearpos, equalpos, lt, ltoreq};
 use crate::search::{BACKWARD, FORWARD};
 use crate::state::mode::VIsual_select_exclu_adj;
 use crate::types::{Failed, NUL, OpArg, Pos};
@@ -81,7 +82,7 @@ fn skip_chars(cclass: c_int, dir: c_int) -> bool {
 /// cursor is inside -- without leaving the line.
 fn back_in_line() {
     let sclass = cls();
-    while Win::current().w_cursor.col != 0 {
+    while Win::current().w_cursor.col != ColNr::ZERO {
         dec_cursor();
         if cls() != sclass {
             inc_cursor(); // stop at the start of the word
@@ -107,7 +108,7 @@ pub fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), Failed
         if let Some(last) = Win::current().fold_end(Win::current().w_cursor.lnum) {
             Win::current().w_cursor.lnum = last;
             // `cur_win()` is a live window.
-            coladvance(Win::current(), MAXCOL);
+            coladvance(Win::current(), ColNr::MAX);
         }
         let sclass = cls();
 
@@ -134,7 +135,7 @@ pub fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), Failed
         // Then on to the next non-white character.
         while cls() == 0 {
             // Stop on a blank line.
-            if Win::current().w_cursor.col == 0 && get_cursor_line_len() == 0 {
+            if Win::current().w_cursor.col == ColNr::ZERO && get_cursor_line_len() == ColNr::ZERO {
                 break;
             }
             i = inc_cursor();
@@ -162,7 +163,7 @@ pub fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> Result<(), F
         // Inside a fold, move to the first character of the first line.
         if let Some(first) = Win::current().fold_first(Win::current().w_cursor.lnum) {
             Win::current().w_cursor.lnum = first;
-            Win::current().w_cursor.col = 0;
+            Win::current().w_cursor.col = ColNr::ZERO;
         }
         let sclass = cls();
         if dec_cursor() == -1 {
@@ -173,7 +174,7 @@ pub fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> Result<(), F
                 // Skip the white space before the word, stopping on an
                 // empty line.
                 while cls() == 0 {
-                    if Win::current().w_cursor.col == 0
+                    if Win::current().w_cursor.col == ColNr::ZERO
                         && Lines::current()
                             .line(Win::current().w_cursor.lnum)
                             .is_empty()
@@ -234,7 +235,7 @@ pub fn end_word(
         if let Some(last) = Win::current().fold_end(Win::current().w_cursor.lnum) {
             Win::current().w_cursor.lnum = last;
             // `cur_win()` is a live window.
-            coladvance(Win::current(), MAXCOL);
+            coladvance(Win::current(), ColNr::MAX);
         }
         let sclass = cls();
         if inc_cursor() == -1 {
@@ -251,7 +252,7 @@ pub fn end_word(
                 // skipping white space first.
                 while cls() == 0 {
                     if empty
-                        && Win::current().w_cursor.col == 0
+                        && Win::current().w_cursor.col == ColNr::ZERO
                         && Lines::current()
                             .line(Win::current().w_cursor.lnum)
                             .is_empty()
@@ -304,7 +305,7 @@ pub fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), Fai
         }
         // Then back to the end of the previous word.
         while cls() == 0 {
-            if Win::current().w_cursor.col == 0
+            if Win::current().w_cursor.col == ColNr::ZERO
                 && Lines::current()
                     .line(Win::current().w_cursor.lnum)
                     .is_empty()
@@ -335,7 +336,7 @@ pub fn current_word(
 ) -> Result<(), Failed> {
     let mut start_pos = Pos {
         lnum: LineNr::ZERO,
-        col: 0,
+        col: ColNr::ZERO,
         coladd: 0,
     };
     let mut inclusive = true;
@@ -367,7 +368,7 @@ pub fn current_word(
             // the next line (a single-character word) means backing up to
             // the end of this one.
             let _ = fwd_word(1, bigword, true);
-            if Win::current().w_cursor.col == 0 {
+            if Win::current().w_cursor.col == ColNr::ZERO {
                 decl(&mut Win::current().cursor());
             } else {
                 let _ = oneleft();
@@ -424,7 +425,7 @@ pub fn current_word(
         count -= 1;
     }
 
-    if include_white && (cls() != 0 || (Win::current().w_cursor.col == 0 && !inclusive)) {
+    if include_white && (cls() != 0 || (Win::current().w_cursor.col == ColNr::ZERO && !inclusive)) {
         // No white space was included at the end, so take some at the
         // start instead. That is what makes `daw` work on the last word
         // of a sentence (and `2daw` on the last but one), and what
@@ -435,7 +436,7 @@ pub fn current_word(
         Win::current().w_cursor = start_pos;
         if oneleft().is_ok() {
             back_in_line();
-            if cls() == 0 && Win::current().w_cursor.col > 0 {
+            if cls() == 0 && Win::current().w_cursor.col > ColNr::ZERO {
                 if visual_active() {
                     set_visual_anchor(Win::current().w_cursor);
                 } else {

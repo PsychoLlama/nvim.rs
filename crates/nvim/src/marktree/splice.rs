@@ -438,11 +438,11 @@ pub fn marktree_move_region(
 ) {
     let start = MTPos {
         row: start_row,
-        col: start_col,
+        col: start_col.get(),
     };
     let size = MTPos {
         row: extent_row,
-        col: extent_col,
+        col: extent_col.get(),
     };
     let mut end = size;
     unrelative(start, &mut end);
@@ -463,7 +463,7 @@ pub fn marktree_move_region(
     marktree_splice(tree, start.row, start.col, size.row, size.col, 0, 0);
     let new = MTPos {
         row: new_row,
-        col: new_col,
+        col: new_col.get(),
     };
     marktree_splice(tree, new.row, new.col, 0, 0, size.row, size.col);
 

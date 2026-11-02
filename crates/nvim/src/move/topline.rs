@@ -81,7 +81,7 @@ fn update_topline_win(mut win: Win) {
         }
         win.w_topline = LineNr::ONE;
         win.w_botline = LineNr::new(2);
-        win.w_skipcol = 0;
+        win.w_skipcol = ColNr::ZERO;
         win.w_valid |= WinValid::BOTLINE | WinValid::BOTLINE_AP;
         win.w_viewport_invalid = true;
         win.w_scbind_pos = 1;
@@ -145,13 +145,13 @@ fn update_topline_win(mut win: Win) {
 
     // The top line moved, so the window has to be redrawn.
     if win.w_topline != old_topline || win.w_topfill != old_topfill {
-        dollar_vcol.set(-1);
+        dollar_vcol.set(ColNr::NONE);
         win.redraw_later(UPD_VALID);
 
         // Without 'smoothscroll' there is nothing for `w_skipcol` to mean.
         if win.w_onebuf_opt.wo_sms == 0 {
             win.reset_skipcol();
-        } else if win.w_skipcol != 0 {
+        } else if win.w_skipcol != ColNr::ZERO {
             win.redraw_later(UPD_SOME_VALID);
         }
 
@@ -167,7 +167,7 @@ fn update_topline_win(mut win: Win) {
 /// Whether the cursor is above the window, or too close to its top for
 /// 'scrolloff', or the window shows more filler lines than there is room for.
 fn check_topline(win: Win) -> bool {
-    if win.w_topline > LineNr::ONE || win.w_skipcol > 0 {
+    if win.w_topline > LineNr::ONE || win.w_skipcol > ColNr::ZERO {
         // Above the top line: scrolling is always needed. Far below it and
         // with no folding: scrolling down never is.
         if win.w_cursor.lnum < win.w_topline {
@@ -176,7 +176,7 @@ fn check_topline(win: Win) -> bool {
         if check_top_offset(win) {
             return true;
         }
-        if win.w_skipcol > 0 && win.w_cursor.lnum == win.w_topline {
+        if win.w_skipcol > ColNr::ZERO && win.w_cursor.lnum == win.w_topline {
             // Is the cursor's own column visible? Add the columns the
             // top-left marker covers.
             let vcol = win.virtual_vcol(win.cursor());

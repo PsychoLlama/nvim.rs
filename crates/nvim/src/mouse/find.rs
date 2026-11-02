@@ -167,7 +167,7 @@ pub(crate) fn comp_pos(win: Win, row: &mut c_int, col: &mut c_int) -> (LineNr, b
             win.plines(lnum, false)
         };
 
-        if win.w_skipcol > 0 && lnum == win.w_topline {
+        if win.w_skipcol > ColNr::ZERO && lnum == win.w_topline {
             let (width1, width2) = win.text_widths();
             if width1 > 0 {
                 // Adjust for 'smoothscroll' clipping the top screen lines.
@@ -199,12 +199,12 @@ pub(crate) fn comp_pos(win: Win, row: &mut c_int, col: &mut c_int) -> (LineNr, b
         screen_col = screen_col.max(off) + screen_row * (win.w_view_width - off);
         // Add skip column for the topline.
         if lnum == win.w_topline {
-            screen_col += win.w_skipcol;
+            screen_col += win.w_skipcol.get();
         }
     }
 
     if win.w_onebuf_opt.wo_wrap == 0 {
-        screen_col += win.w_leftcol;
+        screen_col += win.w_leftcol.get();
     }
 
     // Skip the line number and fold column in front of the line.
@@ -216,7 +216,7 @@ pub(crate) fn comp_pos(win: Win, row: &mut c_int, col: &mut c_int) -> (LineNr, b
 /// Convert a virtual (screen) column to a character column, the first column
 /// being zero.  Answers the byte index and the columns left over inside the
 /// character it landed in.
-pub(crate) fn vcol_to_col(win: Win, lnum: LineNr, vcol: ColNr) -> (ColNr, ColNr) {
+pub(crate) fn vcol_to_col(win: Win, lnum: LineNr, vcol: ColNr) -> (ColNr, i32) {
     let mut lines = win.buffer().lines();
     let line = lines.line(lnum);
     let (mut csarg, cstype) = CharsizeArg::new(win, lnum, line);
@@ -224,14 +224,14 @@ pub(crate) fn vcol_to_col(win: Win, lnum: LineNr, vcol: ColNr) -> (ColNr, ColNr)
     let mut chr = c_char_info(line, 0);
     let mut cur_vcol: c_int = 0;
     // Try to advance to the specified column, stopping at the line's end.
-    while cur_vcol < vcol && cstr::byte_at(line, at) != 0 {
+    while cur_vcol < vcol.get() && cstr::byte_at(line, at) != 0 {
         let width = win_charsize(cstype, cur_vcol, at, chr.value, &mut csarg).width;
-        if cur_vcol + width > vcol {
+        if cur_vcol + width > vcol.get() {
             break;
         }
         cur_vcol += width;
         (at, chr) = c_next_cluster(line, at, chr);
     }
     let col = ColNr::try_from(at).expect("a column of the line");
-    (col, vcol - cur_vcol)
+    (col, (vcol - cur_vcol).get())
 }

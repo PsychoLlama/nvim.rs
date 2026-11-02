@@ -19,6 +19,7 @@ use super::*;
 use crate::decoration::decor_sign;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
+use crate::types::ColNr;
 use crate::types::Failed;
 
 /// Places or replaces the sign extmark `*id` in `buffer` at `lnum`.
@@ -65,9 +66,9 @@ fn buf_set_sign(
         ns,
         Some(id),
         row,
-        0,
+        ColNr::ZERO,
         -1,
-        -1,
+        ColNr::NONE,
         decor,
         decor_flags,
         true,

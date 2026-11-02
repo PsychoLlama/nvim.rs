@@ -87,9 +87,9 @@ impl WinLineVars {
                     self.vcol += 1;
                     at
                 } else if let Some(fold_vcol) = &mut fold_vcol {
-                    fold_vcol.next().copied().unwrap_or(-1)
+                    fold_vcol.next().copied().unwrap_or(ColNr::NONE)
                 } else {
-                    -1
+                    ColNr::NONE
                 };
                 let at = self.off as usize;
                 with_linebuf(|line| {
@@ -191,7 +191,7 @@ fn fold_column_cells(
         None
     };
 
-    let mut cells = [(0 as ScreenChar, 0 as ColNr); MAX_FOLDCOLUMN];
+    let mut cells = [(0 as ScreenChar, ColNr::ZERO); MAX_FOLDCOLUMN];
     for (i, cell) in cells.iter_mut().enumerate().take(fdc as usize) {
         let i = i as ::core::ffi::c_int;
         let mut symbol = if i >= level {
@@ -217,7 +217,7 @@ fn fold_column_cells(
         } else {
             -3
         };
-        *cell = (symbol, vcol);
+        *cell = (symbol, ColNr::new(vcol));
     }
     cells
 }
@@ -433,7 +433,7 @@ impl WinLineVars {
         // line — but 'breakindent' assumes there is one anyway.
         if has_cpo_n
             && window.w_onebuf_opt.wo_bri == 0
-            && window.w_skipcol > 0
+            && window.w_skipcol > ColNr::ZERO
             && self.lnum == window.w_topline
         {
             return;
@@ -453,7 +453,7 @@ impl WinLineVars {
         let width = number_width(window) + 1;
         let attr = self.line_number_attr(window);
         let both = window.w_onebuf_opt.wo_nu != 0 && window.w_onebuf_opt.wo_rnu != 0;
-        if !(first_row && (window.w_skipcol == 0 || self.row > 0 || both)) {
+        if !(first_row && (window.w_skipcol == ColNr::ZERO || self.row > 0 || both)) {
             // A continuation row, or the first row of a line whose top is
             // scrolled off with 'smoothscroll': blank.
             self.draw_col_fill(schar_from_ascii(b' '), width, attr);
@@ -462,7 +462,7 @@ impl WinLineVars {
 
         let mut buf = [0u8; 32];
         line_number_str(window, self.lnum, &mut buf);
-        if window.w_skipcol > 0 && self.startrow == 0 {
+        if window.w_skipcol > ColNr::ZERO && self.startrow == 0 {
             // Part of this line is scrolled off above: say so by filling
             // the number's padding with dashes.
             for c in buf.iter_mut() {
@@ -678,15 +678,15 @@ impl WinLineVars {
 
             // Move the start and end of the highlighted area past the
             // indent. The end needs it when 'linebreak' is also set.
-            if self.fromcol >= vcol_before && self.fromcol < self.vcol {
-                self.fromcol = self.vcol;
+            if self.fromcol >= vcol_before.get() && self.fromcol < self.vcol.get() {
+                self.fromcol = self.vcol.get();
             }
-            if self.tocol == vcol_before {
-                self.tocol = self.vcol;
+            if self.tocol == vcol_before.get() {
+                self.tocol = self.vcol.get();
             }
         }
 
-        if window.w_skipcol > 0
+        if window.w_skipcol > ColNr::ZERO
             && self.startrow == 0
             && window.w_onebuf_opt.wo_wrap != 0
             && window.w_briopt_sbr
@@ -731,15 +731,15 @@ impl WinLineVars {
 
             // As in `handle_breakindent`: move the highlighted area past
             // what was just drawn.
-            if self.fromcol >= vcol_before && self.fromcol < self.vcol {
-                self.fromcol = self.vcol;
+            if self.fromcol >= vcol_before.get() && self.fromcol < self.vcol.get() {
+                self.fromcol = self.vcol.get();
             }
-            if self.tocol == vcol_before {
-                self.tocol = self.vcol;
+            if self.tocol == vcol_before.get() {
+                self.tocol = self.vcol.get();
             }
         }
 
-        if window.w_skipcol == 0
+        if window.w_skipcol == ColNr::ZERO
             || self.startrow > 0
             || window.w_onebuf_opt.wo_wrap == 0
             || !window.w_briopt_sbr

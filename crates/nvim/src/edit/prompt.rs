@@ -84,7 +84,7 @@ pub(crate) fn init_prompt(cmdchar_todo: c_int) {
         if empty {
             // The line is empty: the prompt *is* the line.
             let _ = ml_replace_buf_text(Buf::current(), start().lnum, prompt);
-            inserted_bytes(start().lnum, 0, 0, prompt_len);
+            inserted_bytes(start().lnum, ColNr::ZERO, 0, prompt_len);
         } else {
             // The line holds something else, so the prompt goes on a new
             // last line.
@@ -97,9 +97,9 @@ pub(crate) fn init_prompt(cmdchar_todo: c_int) {
             // prompt.
             u_clearallandblockfree(Buf::current());
         }
-        set_start_col(prompt_len);
+        set_start_col(ColNr::new(prompt_len));
         win.w_cursor.lnum = Buf::current().b_ml.ml_line_count;
-        coladvance_win(win, MAXCOL as c_int);
+        coladvance_win(win, MAXCOL);
     }
 
     // The insert always starts after the prompt; text after it stays
@@ -111,12 +111,12 @@ pub(crate) fn init_prompt(cmdchar_todo: c_int) {
         Insstart.set(insstart);
         Insstart_orig.set(insstart);
         Insstart_textlen.set(insstart.col);
-        Insstart_blank_vcol.set(MAXCOL as ColNr);
+        Insstart_blank_vcol.set(ColNr::MAX);
         arrow_used.set(false);
     }
 
     if cmdchar_todo == 'A' as c_int {
-        coladvance_win(win, MAXCOL as c_int);
+        coladvance_win(win, MAXCOL);
     }
     if start().lnum == win.w_cursor.lnum {
         win.w_cursor.col = win.w_cursor.col.max(start().col);
@@ -146,7 +146,7 @@ fn set_start_col(col: ColNr) {
 /// Move `win`'s cursor to virtual column `vcol` of its line.
 #[inline(always)]
 fn coladvance_win(win: Win, vcol: c_int) {
-    coladvance(win, vcol);
+    coladvance(win, ColNr::new(vcol));
 }
 
 /// Is the cursor in the editable part of the prompt line?

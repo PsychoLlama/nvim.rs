@@ -88,7 +88,7 @@ pub(crate) fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
         && !p_ri()
     {
         let mut buf = [0u8; INPUT_BUFLEN as usize];
-        let mut virtcol: ColNr = 0;
+        let mut virtcol: ColNr = ColNr::ZERO;
 
         buf[0] = c as u8;
         let mut i = 1;
@@ -107,7 +107,7 @@ pub(crate) fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
                 && i < INPUT_BUFLEN
                 && (textwidth == 0 || {
                     virtcol += byte2cells(c_int::from(buf[i as usize - 1]));
-                    virtcol < textwidth
+                    virtcol < ColNr::new(textwidth)
                 })
                 && !(!no_abbr.get()
                     && !vim_iswordc(next)
@@ -177,8 +177,8 @@ fn wrap_before_insert(c: c_int, flags: c_int, second_indent: c_int, textwidth: c
                 && State.get() & VREPLACE_FLAG == 0
                 && cursor_byte() != NUL as u8)
             && (Win::current().w_cursor.lnum != Insstart.get().lnum
-                || ((!fo_ins_long || Insstart_textlen.get() <= textwidth)
-                    && (!fo_ins_blank || Insstart_blank_vcol.get() <= textwidth))));
+                || ((!fo_ins_long || Insstart_textlen.get() <= ColNr::new(textwidth))
+                    && (!fo_ins_blank || Insstart_blank_vcol.get() <= ColNr::new(textwidth)))));
     if !wanted {
         return;
     }
@@ -190,7 +190,7 @@ fn wrap_before_insert(c: c_int, flags: c_int, second_indent: c_int, textwidth: c
 
     if Buf::current().b_p_fex.first_byte() as c_int != NUL
         && flags & INSCHAR_NO_FEX as c_int == 0
-        && (force_format != 0 || virtcol > textwidth)
+        && (force_format != 0 || virtcol > ColNr::new(textwidth))
     {
         do_internal = fex_format(Win::current().w_cursor.lnum, 1, c) != 0;
         // Saving for undo may be needed again, e.g. when the expression
@@ -255,20 +255,20 @@ fn end_pending_comment(c: c_int) {
     {
         let mut lines = Lines::current();
         let line = lines.line(lnum);
-        while i > 0 && ascii_iswhite(c_int::from(line[i as usize - 1])) {
+        while i > ColNr::ZERO && ascii_iswhite(c_int::from(line[i.as_usize() - 1])) {
             i -= 1;
         }
     }
     i -= middle_len;
 
     // Check some expected things before going on.
-    if i >= 0
+    if i >= ColNr::ZERO
         && lead_end
             .last()
             .is_some_and(|&last| c_int::from(last) == end_comment_pending.get())
     {
         // Backspace over everything being replaced.
-        backspace_until_column(i);
+        backspace_until_column(i.get());
         // Insert the end-comment string except for its last character,
         // which the caller inserts as an ordinary one.
         ins_bytes(&lead_end[..lead_end.len() - 1]);
@@ -290,7 +290,7 @@ pub(crate) fn echeck_abbr(c: c_int) -> bool {
     let start_col = if Win::current().w_cursor.lnum == Insstart.get().lnum {
         Insstart.get().col
     } else {
-        0
+        ColNr::ZERO
     };
     let cursor = Win::current().w_cursor;
     let col = usize::try_from(cursor.col).unwrap_or(0);
@@ -299,7 +299,7 @@ pub(crate) fn echeck_abbr(c: c_int) -> bool {
     let mut lines = Lines::current();
     let line = lines.line(cursor.lnum);
     let line = line[..col.min(line.len())].to_vec();
-    check_abbr(c, line, start_col)
+    check_abbr(c, line, start_col.get())
 }
 
 /// Run the `InsertCharPre` autocommand for `c`.
@@ -338,5 +338,5 @@ pub(crate) fn do_insert_char_pre(c: c_int) -> Option<XString> {
 /// The byte under the cursor, NUL past the end of its line.
 fn cursor_byte() -> u8 {
     let cursor = Win::current().w_cursor;
-    byte_at(Lines::current().line(cursor.lnum), cursor.col as usize)
+    byte_at(Lines::current().line(cursor.lnum), cursor.col.as_usize())
 }

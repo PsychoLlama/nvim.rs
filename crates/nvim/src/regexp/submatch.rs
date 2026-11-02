@@ -132,15 +132,15 @@ impl BufferMatch {
     fn line_len(&self, lnum: LineNr) -> ColNr {
         let mut len = 0;
         let _ = self.line(lnum, |line| {
-            len = ColNr::try_from(line.len()).unwrap_or(ColNr::MAX);
+            len = ColNr::try_from(line.len()).unwrap_or(ColNr::MAX).get();
         });
-        len
+        ColNr::new(len)
     }
 }
 
 /// A count that upstream held in a `size_t`: negative is huge, which the
 /// readers then bound by the line's end.
-fn span_len(len: ColNr) -> usize {
+fn span_len(len: i32) -> usize {
     usize::try_from(len).unwrap_or(usize::MAX)
 }
 
@@ -216,12 +216,14 @@ pub(crate) fn reg_submatch(no: c_int) -> Option<XString> {
     text.push_byte(b'\n');
     lnum += 1;
     while lnum < m.end.lnum {
-        let whole = span_len(m.line_len(lnum));
-        m.head(lnum, 0, whole, |bytes| text.push_bytes(bytes));
+        let whole = span_len(m.line_len(lnum).get());
+        m.head(lnum, ColNr::ZERO, whole, |bytes| text.push_bytes(bytes));
         text.push_byte(b'\n');
         lnum += 1;
     }
-    m.head(lnum, 0, span_len(ecol), |bytes| text.push_bytes(bytes));
+    m.head(lnum, ColNr::ZERO, span_len(ecol.get()), |bytes| {
+        text.push_bytes(bytes)
+    });
     Some(text)
 }
 
@@ -269,9 +271,9 @@ pub(crate) fn reg_submatch_list(no: c_int) -> Option<ListRef> {
         // and the head of the last.
         push(slnum, scol, usize::MAX);
         for lnum in (slnum + 1).up_to(elnum) {
-            push(lnum, 0, usize::MAX);
+            push(lnum, ColNr::ZERO, usize::MAX);
         }
-        push(elnum, 0, span_len(ecol));
+        push(elnum, ColNr::ZERO, span_len(ecol.get()));
     }
     Some(list)
 }

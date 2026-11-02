@@ -31,6 +31,7 @@
 
 #![cfg(not(miri))]
 
+use neovim::types::ColNr;
 use std::ffi::CString;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -1565,7 +1566,7 @@ fn a_multi_line_match_spans_the_lines_it_reads_out_of_the_buffer() {
         None,
         Buf::current(),
         LineNr::new(2),
-        0,
+        ColNr::ZERO,
         None,
         None,
     );
@@ -1574,8 +1575,14 @@ fn a_multi_line_match_spans_the_lines_it_reads_out_of_the_buffer() {
     assert_eq!(spanned, 2, "a two-line match");
     // The positions are `lnum` *relative to the line the search started on*
     // and a byte column, which is the shape the retype has to keep.
-    assert_eq!((rmm.startpos[0].lnum.get(), rmm.startpos[0].col), (0, 0));
-    assert_eq!((rmm.endpos[0].lnum.get(), rmm.endpos[0].col), (1, 5));
+    assert_eq!(
+        (rmm.startpos[0].lnum.get(), rmm.startpos[0].col),
+        (0, ColNr::ZERO)
+    );
+    assert_eq!(
+        (rmm.endpos[0].lnum.get(), rmm.endpos[0].col),
+        (1, ColNr::new(5))
+    );
 
     // A start line the pattern does not begin on does not match, and one
     // whose continuation runs off the end of the buffer does not either.
@@ -1584,7 +1591,7 @@ fn a_multi_line_match_spans_the_lines_it_reads_out_of_the_buffer() {
         None,
         Buf::current(),
         LineNr::new(3),
-        0,
+        ColNr::ZERO,
         None,
         None,
     );
@@ -1689,11 +1696,19 @@ fn a_pattern_the_nfa_gives_up_on_comes_back_recompiled_in_its_holder() {
         ..Default::default()
     };
     for _ in 0..2 {
-        let lines = vim_regexec_multi(&mut rmm, None, Buf::current(), LineNr::ONE, 0, None, None);
+        let lines = vim_regexec_multi(
+            &mut rmm,
+            None,
+            Buf::current(),
+            LineNr::ONE,
+            ColNr::ZERO,
+            None,
+            None,
+        );
         assert_eq!(lines, 1, "a one-line match");
         assert_eq!(
             (rmm.endpos[0].lnum.get(), rmm.endpos[0].col),
-            (0, 100_001),
+            (0, ColNr::new(100_001)),
             "it ends past the `b`"
         );
         assert!(rmm.regprog.is_some(), "the holder keeps a program");

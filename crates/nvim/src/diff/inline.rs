@@ -77,10 +77,10 @@ impl DiffLine {
     /// A change that can no longer be read starts past every column.
     pub(crate) fn raw_start(&self, i: c_int) -> c_int {
         match self.changes {
-            DiffLineChanges::Simple { start, .. } => start,
+            DiffLineChanges::Simple { start, .. } => start.get(),
             _ => self
                 .inline_change(i)
-                .map_or(c_int::MAX, |ch| ch.dc_start[self.bufidx as usize]),
+                .map_or(c_int::MAX, |ch| ch.dc_start[self.bufidx as usize].get()),
         }
     }
 
@@ -95,7 +95,7 @@ impl DiffLine {
     /// past every column.
     pub(crate) fn change(&self, i: c_int) -> (c_int, c_int, bool) {
         if let DiffLineChanges::Simple { start, end } = self.changes {
-            return (start, end, false);
+            return (start.get(), end.get(), false);
         }
         let Some(ch) = self.inline_change(i) else {
             return (c_int::MAX, c_int::MAX, false);
@@ -105,12 +105,12 @@ impl DiffLine {
         let start = if ch.dc_start_lnum_off[buf] < lineoff {
             0
         } else {
-            ch.dc_start[buf] as c_int
+            ch.dc_start[buf].get()
         };
         let end = if ch.dc_end_lnum_off[buf] > lineoff {
             c_int::MAX
         } else {
-            ch.dc_end[buf] as c_int
+            ch.dc_end[buf].get()
         };
         // An addition is a change that is empty in every *other* buffer.
         let added = (0..DB_COUNT as usize).all(|i| {
@@ -272,14 +272,14 @@ pub(crate) fn diff_find_change(window: Win, lnum: LineNr, diffline: &mut DiffLin
         diffline.lineoff = off;
 
         if diff_flags.get() & ALL_INLINE_DIFF == 0 {
-            let mut change_start = MAXCOL as c_int;
+            let mut change_start = MAXCOL;
             let mut change_end = -1;
             let start = &mut change_start;
             let end = &mut change_end;
             let added = diff_find_change_simple(window, lnum, dp, &slots, idx, start, end);
             diffline.changes = DiffLineChanges::Simple {
-                start: change_start,
-                end: change_end + 1,
+                start: ColNr::new(change_start),
+                end: ColNr::new(change_end + 1),
             };
             return added;
         }
@@ -354,7 +354,7 @@ pub fn f_diff_hl_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         let (_, linestatus) = diff_check_with_linestatus(Win::current(), lnum);
         hlID.set(match linestatus {
             LINE_CHANGED => {
-                change_start.set(MAXCOL as c_int);
+                change_start.set(MAXCOL);
                 change_end.set(-1);
                 let added = diff_find_change(Win::current(), lnum, &mut diffline);
                 if added {
@@ -365,8 +365,8 @@ pub fn f_diff_hl_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                     if let DiffLineChanges::Simple { start, end } = diffline.changes
                         && cache_results
                     {
-                        change_start.set(start);
-                        change_end.set(end);
+                        change_start.set(start.get());
+                        change_end.set(end.get());
                     }
                     HLF_CHD
                 }

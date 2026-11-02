@@ -81,7 +81,7 @@ fn is_upper(c: c_int) -> bool {
 pub fn spell_check(
     window: Win,
     text: &[u8],
-    mut capcol: Option<&mut c_int>,
+    mut capcol: Option<&mut ColNr>,
     docount: bool,
 ) -> (usize, Hlf) {
     // A word never starts at a space or a control character.
@@ -133,7 +133,7 @@ pub fn spell_check(
         if let Some(end) = regmatch.ends[0]
             && r
         {
-            *capcol = end as c_int;
+            *capcol = ColNr::from_index(end);
         }
     }
     (c_cluster_len(text), HLF_COUNT)
@@ -148,7 +148,7 @@ fn look_up(
     text: &[u8],
     langs: &LoadedLangs,
     ends: &mut Vec<WordEnd>,
-    capcol: Option<&mut c_int>,
+    capcol: Option<&mut ColNr>,
     docount: bool,
     counted: &mut Option<(LangId, usize)>,
 ) -> Option<(usize, Hlf)> {
@@ -193,7 +193,7 @@ fn look_up(
             }
         }
 
-        if capcol.as_deref() == Some(&0) && syn.b_cap_prog.is_some() {
+        if capcol.as_deref() == Some(&ColNr::ZERO) && syn.b_cap_prog.is_some() {
             // This word should have started with a capital.
             if !is_upper(char_at(text)) {
                 wrongcaplen = mi.fend;
@@ -201,7 +201,7 @@ fn look_up(
         }
     }
     if let Some(capcol) = capcol {
-        *capcol = -1;
+        *capcol = ColNr::NONE;
     }
 
     // Characters up to the next non-word character are consumed even
@@ -415,9 +415,10 @@ pub fn check_need_cap(mut window: Win, lnum: LineNr, col: ColNr) -> bool {
     // into the cache.
     let context = {
         let mut lines = window.buffer().lines();
-        let at_line_start = col == 0 || skip::white(lines.line(lnum)) as ColNr >= col;
+        let at_line_start =
+            col == ColNr::ZERO || ColNr::from_index(skip::white(lines.line(lnum))) >= col;
         if !at_line_start {
-            scan_before(lines.line(lnum), col as usize)
+            scan_before(lines.line(lnum), col.as_usize())
         } else if lnum == LineNr::ONE {
             CapCheck::Needed
         } else {

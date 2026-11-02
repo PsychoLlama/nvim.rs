@@ -319,10 +319,10 @@ pub fn mark_view_restore(fm: Option<&FileMark>) {
     // `topline_offset` above, because that is the order upstream reads the
     // two fields in.
     let skipcol = fm.view.skipcol;
-    let keep = skipcol > 0
+    let keep = skipcol > ColNr::ZERO
         && !has_folding(win, topline, None, None)
-        && skipcol < linetabsize_eol(win, topline);
-    win.w_skipcol = if keep { skipcol } else { 0 };
+        && skipcol < ColNr::new(linetabsize_eol(win, topline));
+    win.w_skipcol = if keep { skipcol } else { ColNr::ZERO };
 }
 
 pub fn mark_view_make(window: Win, pos: Pos) -> FileMarkView {
@@ -504,7 +504,7 @@ pub fn set_last_cursor(win: Win) {
 /// `buffer` — Buffer to adjust position in.
 /// `pos` — Position to adjust, naming a line of `buffer`.
 pub fn mark_mb_adjustpos(buffer: Buf, pos: &mut Pos) {
-    if pos.col <= 0 && pos.coladd <= 1 {
+    if pos.col <= ColNr::ZERO && pos.coladd <= 1 {
         return;
     }
     let mut lines = buffer.lines();

@@ -533,7 +533,8 @@ fn do_backspace(s: &mut InsertState, mode: Backspace) {
 /// Only while nothing else is typed ahead -- autocompletion must never make
 /// a burst of keys slow.
 fn may_autocomplete_before_cursor(s: &mut InsertState) {
-    if !(ins_compl_has_autocomplete() && !char_avail() && Win::current().w_cursor.col > 0) {
+    if !(ins_compl_has_autocomplete() && !char_avail() && Win::current().w_cursor.col > ColNr::ZERO)
+    {
         return;
     }
     s.c = char_before_cursor();
@@ -609,7 +610,7 @@ fn insert_normal_char(s: &mut InsertState) {
         if inindent(0) {
             can_cindent.set(false);
         }
-        if Insstart_blank_vcol.get() == MAXCOL as ColNr
+        if Insstart_blank_vcol.get() == ColNr::MAX
             && Win::current().w_cursor.lnum == Insstart.get().lnum
         {
             Insstart_blank_vcol.set(get_nolist_virtcol());

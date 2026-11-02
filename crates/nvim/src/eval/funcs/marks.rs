@@ -31,7 +31,7 @@ pub fn f_changenr(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 fn mark_dict(mark: Pos) -> DictRef {
     let d = tv_dict_alloc();
     let _ = d.edit().add_number(b"lnum", i64::from(mark.lnum));
-    let _ = d.edit().add_number(b"col", mark.col as VarNumber);
+    let _ = d.edit().add_number(b"col", i64::from(mark.col));
     let _ = d.edit().add_number(b"coladd", mark.coladd as VarNumber);
     d
 }

@@ -31,7 +31,6 @@ use crate::ex_docmd::state::ex_normal_busy;
 use crate::ex_docmd::{exec_normal_cmd, restore_current_state, save_current_state};
 use crate::getchar::ins_typebuf;
 use crate::normal::{VisualMode, set_visual_active, set_visual_anchor, set_visual_mode};
-use crate::pos::MAXCOL;
 use crate::runtime::state::current_sctx;
 use crate::state::mode::{State, VIsual_reselect, restart_edit};
 use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_TERMINAL, MODE_VISUAL, get_real_state};
@@ -128,10 +127,10 @@ fn select_range(line1: LineNr, line2: LineNr) {
         set_visual_mode(VisualMode::LINE);
         let mut win = Win::current();
         win.w_cursor.lnum = line1;
-        win.w_cursor.col = 1;
+        win.w_cursor.col = ColNr::new(1);
         Pos {
             lnum: line2,
-            col: MAXCOL as ColNr,
+            col: ColNr::MAX,
             coladd: 0,
         }
     };

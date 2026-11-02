@@ -59,7 +59,7 @@ impl Default for WinExecute {
             wp: None,
             curpos: Pos {
                 lnum: LineNr::ZERO,
-                col: 0,
+                col: ColNr::ZERO,
                 coladd: 0,
             },
             cwd: None,
@@ -365,14 +365,14 @@ impl WinInfo {
             wi_mark: FileMark {
                 mark: Pos {
                     lnum: LineNr::ZERO,
-                    col: 0,
+                    col: ColNr::ZERO,
                     coladd: 0,
                 },
                 fnum: 0,
                 timestamp: 0,
                 view: FileMarkView {
                     topline_offset: 0,
-                    skipcol: 0,
+                    skipcol: ColNr::ZERO,
                 },
                 extra: None,
             },

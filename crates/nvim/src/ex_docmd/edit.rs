@@ -597,8 +597,8 @@ pub(crate) fn ex_foldopen(excmd: &mut ExArg) {
 fn range_start(excmd: &mut ExArg) -> Pos {
     Pos {
         lnum: excmd.line1,
-        col: 1 as ColNr,
-        coladd: 0 as ColNr,
+        col: ColNr::new(1),
+        coladd: 0,
     }
 }
 
@@ -606,8 +606,8 @@ fn range_start(excmd: &mut ExArg) -> Pos {
 fn range_end(excmd: &mut ExArg) -> Pos {
     Pos {
         lnum: excmd.line2,
-        col: 1 as ColNr,
-        coladd: 0 as ColNr,
+        col: ColNr::new(1),
+        coladd: 0,
     }
 }
 

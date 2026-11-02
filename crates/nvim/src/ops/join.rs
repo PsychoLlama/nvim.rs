@@ -151,7 +151,7 @@ fn measure_join(
         if t == 0 && setmark && !cmdmod_has(CmdModFlags::LOCKMARKS) {
             let mut buf = Win::current().buffer();
             buf.b_op_start.lnum = Win::current().w_cursor.lnum;
-            buf.b_op_start.col = line.len() as ColNr;
+            buf.b_op_start.col = ColNr::from_index(line.len());
         }
 
         if plan.remove_comments {
@@ -200,19 +200,19 @@ fn measure_join(
 
         let added = spaces;
         if t > 0 && curbuf_splice_pending.get() == 0 {
-            let removed = curr as ColNr;
+            let removed = ColNr::from_index(curr);
             let row = Win::current().w_cursor.lnum.get() - 1;
-            let (old, new) = ((removed + 1) as BCount, added as BCount);
+            let (old, new) = ((removed + 1).get() as isize, added as BCount);
             let op = kExtmarkUndo;
             extmark_splice(
                 Buf::current(),
                 row,
-                plan.sumsize,
+                ColNr::new(plan.sumsize),
                 1,
                 removed,
                 old,
                 0,
-                added,
+                ColNr::new(added),
                 new,
                 op,
             );
@@ -227,7 +227,8 @@ fn measure_join(
         }
         // Where this line's marks go: its spaces start at `sumsize`.
         let removed = curr as c_int - added;
-        plan.landed.push((plan.sumsize - removed, removed));
+        plan.landed
+            .push((ColNr::new(plan.sumsize - removed), removed));
         plan.joined.resize(plan.joined.len() + added as usize, b' ');
         plan.joined.extend_from_slice(text);
         plan.currsize = text.len() as c_int;
@@ -280,7 +281,7 @@ fn assemble_join(count: size_t, setmark: bool, plan: &mut JoinPlan) {
     for t in (0..count).rev() {
         let (at, spaces_removed) = plan.landed[t];
         let lnum = Win::current().w_cursor.lnum + len_as_int(t);
-        mark_col_adjust(lnum, 0, -len_as_int(t), at, spaces_removed);
+        mark_col_adjust(lnum, ColNr::ZERO, -len_as_int(t), at.get(), spaces_removed);
     }
 
     let joined = ::core::mem::take(&mut plan.joined);
@@ -289,7 +290,7 @@ fn assemble_join(count: size_t, setmark: bool, plan: &mut JoinPlan) {
     if setmark && !cmdmod_has(CmdModFlags::LOCKMARKS) {
         let mut buf = Win::current().buffer();
         buf.b_op_end.lnum = Win::current().w_cursor.lnum;
-        buf.b_op_end.col = plan.sumsize;
+        buf.b_op_end.col = ColNr::new(plan.sumsize);
     }
 
     // Only the first line's change is reported here; `del_lines` reports
@@ -298,7 +299,14 @@ fn assemble_join(count: size_t, setmark: bool, plan: &mut JoinPlan) {
         Win::current().w_cursor.lnum,
         Win::current().w_cursor.lnum + 1,
     );
-    changed_lines(Buf::current(), lnum, plan.first_size, next, 0, true);
+    changed_lines(
+        Buf::current(),
+        lnum,
+        ColNr::new(plan.first_size),
+        next,
+        0,
+        true,
+    );
 
     // Delete the following lines with the cursor moved there briefly.
     // `del_lines` may move it up again if the last line went, so the line
@@ -313,9 +321,9 @@ fn assemble_join(count: size_t, setmark: bool, plan: &mut JoinPlan) {
     // 'cpoptions' `q`: Vi puts the cursor at the column of the *first*
     // join, Vim at the column of the last.
     Win::current().w_cursor.col = if cpo_has(CpoFlag::JOINCOL) {
-        plan.first_size
+        ColNr::new(plan.first_size)
     } else {
-        col
+        ColNr::new(col)
     };
     check_cursor_col(Win::current());
     Win::current().w_cursor.coladd = 0;

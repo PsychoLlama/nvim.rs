@@ -14,7 +14,6 @@
 use core::ffi::c_int;
 
 use super::*;
-use crate::pos::MAXCOL;
 
 impl SynState {
     /// Number of items on the state stack.
@@ -66,7 +65,7 @@ impl SynState {
         let h_startpos = self.next_match.h_startpos;
         let cur_si = self.item_mut(top);
         cur_si.si_h_startpos = h_startpos;
-        cur_si.si_m_startcol = col;
+        cur_si.si_m_startcol = col.get();
         cur_si.si_m_lnum = lnum.get();
         cur_si.si_flags = spp.sp_flags | outer_conceal;
         cur_si.si_seqnr = seqnr;
@@ -78,7 +77,7 @@ impl SynState {
             // A start-skip-end that may cross lines: work out how much of it
             // is in this line.
             let endcol = self.next_match.m_endpos.col;
-            self.update_si_end(top, endcol, true);
+            self.update_si_end(top, endcol.get(), true);
             self.check_keepend();
         } else {
             let next = &self.next_match;
@@ -117,7 +116,7 @@ impl SynState {
             let (h_startpos, eos_pos) = (self.next_match.h_startpos, self.next_match.eos_pos);
             let cur_si = self.item_mut(top);
             cur_si.si_h_startpos = h_startpos;
-            cur_si.si_m_startcol = col;
+            cur_si.si_m_startcol = col.get();
             cur_si.si_m_lnum = lnum.get();
             cur_si.si_m_endpos = eos_pos;
             cur_si.si_h_endpos = eos_pos;
@@ -185,7 +184,7 @@ impl SynState {
                 // matches next may be different now.
                 self.next_list = IdList::NONE;
                 self.next_match.idx = 0;
-                self.next_match.col = MAXCOL as c_int;
+                self.next_match.col = ColNr::MAX;
                 return;
             }
 
@@ -228,7 +227,7 @@ impl SynState {
                 && self.block().pattern(cur_si.si_idx).sp_type as c_int == SPTYPE_START
                 && !cur_si.si_flags.has(SynFlags::MATCH | SynFlags::KEEPEND)
             {
-                self.update_si_end(cur, self.col, true);
+                self.update_si_end(cur, self.col.get(), true);
                 self.check_keepend();
                 if self.next_flags.has(SynFlags::HAS_EOL)
                     && self.keepend_level < 0
@@ -316,11 +315,11 @@ impl SynState {
 
         let mut maxpos = LPos {
             lnum: LineNr::ZERO,
-            col: 0,
+            col: ColNr::ZERO,
         };
         let mut maxpos_h = LPos {
             lnum: LineNr::ZERO,
-            col: 0,
+            col: ColNr::ZERO,
         };
         while i < self.state_len() {
             let sip = self.item_mut(i);
@@ -361,7 +360,7 @@ impl SynState {
 
         let startpos = LPos {
             lnum: self.lnum,
-            col: startcol as ColNr,
+            col: ColNr::new(startcol),
         };
         let (si_idx, start_ext) = (sip.si_idx, sip.si_extmatch.clone());
         let end = self.find_endpos(si_idx, startpos, start_ext.as_deref());

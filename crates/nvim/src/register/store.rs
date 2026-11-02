@@ -32,7 +32,7 @@
 use crate::mbyte::c_string_cells_len;
 use crate::shada::ShadaExtra;
 use crate::strings::has_char;
-use crate::types::{ColNr, MotionType, RegLines, Timestamp};
+use crate::types::{MotionType, RegLines, Timestamp};
 use core::ffi::{c_char, c_int};
 
 use super::*;
@@ -135,7 +135,7 @@ pub fn get_default_register_name() -> c_int {
 pub(crate) struct ShadaYank {
     pub(crate) contents: Vec<ApiString>,
     pub(crate) motion: MotionType,
-    pub(crate) width: ColNr,
+    pub(crate) width: i32,
     pub(crate) timestamp: Timestamp,
     pub(crate) extra: Option<ShadaExtra>,
 }

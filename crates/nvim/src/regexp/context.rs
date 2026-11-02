@@ -29,7 +29,7 @@ use crate::mbyte::{class_in, strnicmp_in};
 use crate::normal::{VisualMode, visual_ever_started, visual_selection};
 use crate::os::input::fast_breakcheck;
 use crate::plines::win_linetabsize;
-use crate::pos::{MAXCOL, lt};
+use crate::pos::lt;
 use crate::regexp::state::rc_did_emsg;
 use crate::semsg;
 use crate::types::{ColNr, LineNr};
@@ -74,7 +74,7 @@ pub(crate) fn reg_getline<'t>(rex: Rex<'t>, lnum: LineNr) -> Option<&'t [u8]> {
 /// The length of [`reg_getline`]'s line, its NUL left out; 0 for either
 /// stand-in.
 pub(crate) fn reg_getline_len(rex: Rex, lnum: LineNr) -> ColNr {
-    reg_getline(rex, lnum).map_or(0, |line| {
+    reg_getline(rex, lnum).map_or(ColNr::ZERO, |line| {
         ColNr::try_from(line.len() - 1).unwrap_or(ColNr::MAX)
     })
 }
@@ -118,7 +118,7 @@ pub(crate) struct ExtMatchIo<'a> {
 /// The character class of the character before the cursor, or -1 at the
 /// start of the line. Backs `\<` and `\>`.
 pub(crate) fn reg_prev_class(rex: Rex) -> c_int {
-    if rex.col() <= 0 {
+    if rex.col() <= ColNr::ZERO {
         return -1;
     }
     // The cursor is past the start of the line, so the byte before it is on
@@ -170,7 +170,7 @@ pub(crate) fn reg_match_visual(rex: Rex) -> bool {
     let col = rex.col();
     if mode.is_char() {
         // 'selection' decides whether the last character is included.
-        let inclusive = ColNr::from(P_SEL.first_byte() != b'e');
+        let inclusive = i32::from(P_SEL.first_byte() != b'e');
         !((lnum == top.lnum && col < top.col) || (lnum == bot.lnum && col >= bot.col + inclusive))
     } else if mode.is_block() {
         let (start, end) = wp.virtual_vcol_span_at(top);
@@ -178,15 +178,15 @@ pub(crate) fn reg_match_visual(rex: Rex) -> bool {
         let start = start.min(start2);
         let mut end = end.max(end2);
         // `$` in blockwise Visual stretches the block to end of line.
-        if top.col == MAXCOL as c_int || bot.col == MAXCOL as c_int || curswant == MAXCOL as c_int {
-            end = MAXCOL as c_int;
+        if top.col == ColNr::MAX || bot.col == ColNr::MAX || curswant == ColNr::MAX {
+            end = ColNr::MAX;
         }
         // The virtual columns read other lines, which moves the line out
         // from under the match: fetch it again.
         let line = reg_getline(rex, rex.lnum()).unwrap_or(PAST_THE_END);
         rex.seek(line, col);
         let cols = win_linetabsize(wp, rex.buf_lnum(), line, col);
-        cols >= start && cols <= end - ColNr::from(P_SEL.first_byte() == b'e')
+        cols >= start.get() && cols <= (end - i32::from(P_SEL.first_byte() == b'e')).get()
     } else {
         true
     }
@@ -304,7 +304,7 @@ pub(crate) fn match_with_backref(
             *n = 0;
         }
         clnum += 1;
-        ccol = 0;
+        ccol = ColNr::ZERO;
         if got_int.get() {
             return RA_FAIL;
         }

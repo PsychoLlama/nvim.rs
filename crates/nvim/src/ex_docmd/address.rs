@@ -44,7 +44,7 @@ use crate::ex_docmd::{
 use crate::fold::has_folding;
 
 use crate::option::magic_isset;
-use crate::pos::{MAXCOL, MAXLNUM};
+use crate::pos::MAXLNUM;
 use crate::quickfix::{qf_get_cur_idx, qf_get_cur_valid_idx, qf_get_size, qf_get_valid_size};
 
 use crate::regexp::{RE_SEARCH, RE_SUBST, skip_regexp_at};
@@ -390,7 +390,7 @@ pub fn get_address(
     let mut lnum: LineNr = MAXLNUM;
     let mut pos = Pos {
         lnum: LineNr::ZERO,
-        col: 0,
+        col: ColNr::ZERO,
         coladd: 0,
     };
     // Upstream's null `cmd`: the address was malformed and the caller's
@@ -479,9 +479,9 @@ pub fn get_address(
                     }
                     Win::current().w_cursor.col =
                         if c == '/' as c_int && Win::current().w_cursor.lnum > LineNr::ZERO {
-                            MAXCOL as ColNr
+                            ColNr::MAX
                         } else {
-                            0
+                            ColNr::ZERO
                         };
                     searchcmdlen.set(0);
                     let flags = if silent {
@@ -529,9 +529,9 @@ pub fn get_address(
                         Win::current().w_cursor.lnum
                     };
                     pos.col = if byte_at(text, cmd) != b'?' {
-                        MAXCOL as ColNr
+                        ColNr::MAX
                     } else {
-                        0
+                        ColNr::ZERO
                     };
                     pos.coladd = 0;
                     let dir = if byte_at(text, cmd) == b'?' {

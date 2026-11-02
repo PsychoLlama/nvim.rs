@@ -431,7 +431,7 @@ fn find_help_tags(subject: &[u8], keep_lang: bool) -> Result<Vec<Vec<u8>>, Faile
     if keep_lang {
         flags |= TAG_KEEP_LANG as c_int;
     }
-    let mut matches = find_help_tag_matches(pattern.as_cstr(), flags, MAXCOL as c_int)?;
+    let mut matches = find_help_tag_matches(pattern.as_cstr(), flags, MAXCOL)?;
     // Sort on the heuristic number `find_tags` put after the tag.
     matches.sort_unstable_by(help_compare);
     // Drop everything past TAG_MANY to keep the listing short.

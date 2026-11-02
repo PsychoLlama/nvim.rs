@@ -203,7 +203,7 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
     // cursor's line it starts at.
     let mut text: Option<Vec<u8>> = None;
     let mut n: usize = 0;
-    let mut word_col: ColNr = 0;
+    let mut word_col: ColNr = ColNr::ZERO;
     let mut visual_sel = false;
     if cmdchar == ']' as c_int || cmdchar == Ctrl_RSB || cmdchar == 'K' as c_int {
         if visual_active() {

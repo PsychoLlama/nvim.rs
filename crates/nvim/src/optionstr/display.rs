@@ -370,7 +370,7 @@ pub(crate) fn parse_border_opt(border_opt: &CStr) -> bool {
         window: Handle::NONE,
         bufpos: LPos {
             lnum: LineNr::new(-1),
-            col: 0 as ColNr,
+            col: ColNr::ZERO,
         },
         height: 0,
         width: 0,

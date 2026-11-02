@@ -169,7 +169,7 @@ pub(crate) fn find_ident_at_pos(
     // Pass 0 wants a word character; pass 1 will take punctuation too.
     let mut pass = c_int::from(find_type & FIND_IDENT.cast_signed() == 0);
     while pass < 2 {
-        col = startcol;
+        col = startcol.get();
         while line.at(col) != NUL {
             // A `]` ends an expression, and is where the backwards walk
             // has to start from.
@@ -238,13 +238,13 @@ pub(crate) fn find_ident_at_pos(
         } else {
             line.class(col) != CLASS_WHITE
         } || (eval
-            && col <= startcol
+            && col <= startcol.get()
             && line.is_eval_item(&mut col, &mut bn, FORWARD as c_int)))
     {
         col += line.char_len(col);
     }
     debug_assert!(col >= 0);
-    Some((textcol, usize::try_from(col).unwrap_or(0)))
+    Some((ColNr::new(textcol), usize::try_from(col).unwrap_or(0)))
 }
 
 /// `gd` and `gD`: jump to the local or global declaration of the identifier
@@ -353,13 +353,13 @@ pub(crate) fn find_decl(word: &[u8], locally: bool, thisblock: bool, flags_arg: 
             Win::current().w_cursor.lnum -= 1;
         }
     }
-    Win::current().w_cursor.col = 0;
+    Win::current().w_cursor.col = ColNr::ZERO;
 
     // The last match that was inside a comment or a string, kept as the
     // answer of last resort.
     let mut found_pos = Pos {
         lnum: LineNr::ZERO,
-        col: 0,
+        col: ColNr::ZERO,
         coladd: 0,
     };
     let mut found;
@@ -402,11 +402,11 @@ pub(crate) fn find_decl(word: &[u8], locally: bool, thisblock: bool, flags_arg: 
         if leader > 0 {
             // The whole line is a comment; skip past it.
             Win::current().w_cursor.lnum += 1;
-            Win::current().w_cursor.col = 0;
+            Win::current().w_cursor.col = ColNr::ZERO;
             continue;
         }
         let cursor = Win::current().w_cursor;
-        let valid = is_ident(Lines::current().line(cursor.lnum), cursor.col);
+        let valid = is_ident(Lines::current().line(cursor.lnum), cursor.col.get());
         if !valid && found_pos.lnum != LineNr::ZERO {
             // Nothing better than what was already found.
             Win::current().w_cursor = found_pos;

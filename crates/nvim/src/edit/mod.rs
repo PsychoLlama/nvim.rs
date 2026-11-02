@@ -292,8 +292,8 @@ state_record! {
     pub(crate) struct EditState in EDIT as EditField;
 
     compl_busy: bool = false;
-    Insstart_textlen: ColNr = 0;
-    Insstart_blank_vcol: ColNr = 0;
+    Insstart_textlen: ColNr = ColNr::ZERO;
+    Insstart_blank_vcol: ColNr = ColNr::ZERO;
     update_Insstart_orig: bool = true;
     /// The text of the last insert, the redo-buffer spelling, with the
     /// command that started it on the front -- see [`lastins`].

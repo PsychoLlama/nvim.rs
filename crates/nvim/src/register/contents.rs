@@ -42,7 +42,7 @@ use crate::types::NUL;
 ///
 /// `kMTUnknown` for an invalid or empty register. May run the clipboard
 /// provider.
-pub fn get_reg_type(regname: c_int) -> (MotionType, ColNr) {
+pub fn get_reg_type(regname: c_int) -> (MotionType, i32) {
     // Every computed register reads as charwise.
     match regname {
         Ctrl_F | Ctrl_P | Ctrl_W | Ctrl_A => return (kMTCharWise, 0),
@@ -209,7 +209,7 @@ enum RegText<'a> {
 /// `yank_type` may be `kMTUnknown`, in which case it is worked out from the
 /// text: a trailing newline (or carriage return) means linewise. `blocklen`
 /// is the block width, or -1 to measure it.
-fn str_to_reg(reg: &mut YankReg, mut yank_type: MotionType, text: RegText<'_>, blocklen: ColNr) {
+fn str_to_reg(reg: &mut YankReg, mut yank_type: MotionType, text: RegText<'_>, blocklen: i32) {
     if yank_type == kMTUnknown {
         let ends_line = match text {
             RegText::Lines(_) => true,
@@ -351,7 +351,7 @@ pub fn write_reg_contents_lst(
     lines: &[&CStr],
     must_append: bool,
     yank_type: MotionType,
-    block_len: ColNr,
+    block_len: i32,
 ) {
     if name == '/' as c_int || name == '=' as c_int {
         // Neither register can hold more than one line.
@@ -386,7 +386,7 @@ pub(crate) fn write_reg_contents_cstr(
     text: &CStr,
     must_append: bool,
     yank_type: MotionType,
-    block_len: ColNr,
+    block_len: i32,
 ) {
     write_reg_contents_ex(name, text.to_bytes(), must_append, yank_type, block_len);
 }
@@ -402,7 +402,7 @@ pub fn write_reg_contents_ex(
     text: &[u8],
     must_append: bool,
     yank_type: MotionType,
-    block_len: ColNr,
+    block_len: i32,
 ) {
     if name == '/' as c_int {
         // The pattern is copied, not kept.

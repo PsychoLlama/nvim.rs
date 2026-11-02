@@ -782,7 +782,7 @@ pub(super) fn search_for_fuzzy_match(
     } else {
         Pos {
             lnum: buffer.b_ml.ml_line_count,
-            col: 0,
+            col: ColNr::ZERO,
             coladd: 0,
         }
     };
@@ -848,6 +848,6 @@ pub(super) fn search_for_fuzzy_match(
             current_pos.lnum = if dir == FORWARD { LineNr::ONE } else { last };
             looped_around = true;
         }
-        current_pos.col = 0;
+        current_pos.col = ColNr::ZERO;
     }
 }

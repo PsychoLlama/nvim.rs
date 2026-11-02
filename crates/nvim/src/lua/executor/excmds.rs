@@ -129,7 +129,7 @@ pub fn ex_luado(excmd: &mut ExArg) {
                 let new_line = stack.to_bytes(At::TOP).unwrap_or_default();
                 let new_line_len = len_as_int(new_line.len());
                 let _ = ml_replace_owned(l, nul_to_nl(new_line));
-                inserted_bytes(l, 0 as ColNr, old_line_len, new_line_len);
+                inserted_bytes(l, ColNr::ZERO, old_line_len, new_line_len);
             }
             stack.pop(1);
             l += 1;

@@ -199,7 +199,7 @@ pub(crate) type Slots = Cell<[LPos; SLOTS]>;
 /// What an unset capture slot holds; see [`MatchPos::unset`].
 const UNSET: LPos = LPos {
     lnum: LineNr::new(-1),
-    col: -1,
+    col: ColNr::NONE,
 };
 
 /// Two slot arrays: the ones a string match records its groups in, or a
@@ -274,7 +274,7 @@ impl<'t> RegExec<'t> {
             maxline: Cell::new(LineNr::ZERO),
             line_lbr: false,
             nobreak: setup.nobreak,
-            maxcol: 0,
+            maxcol: ColNr::ZERO,
             deadline: setup.deadline,
             ext_in: setup.ext_in,
             caller_ic: setup.ic,
@@ -659,7 +659,7 @@ impl<'t> Rex<'t> {
         MatchPos::from_pos(if self.multi() && off == -1 {
             LPos {
                 lnum: self.lnum() + 1,
-                col: 0,
+                col: ColNr::ZERO,
             }
         } else {
             LPos {

@@ -82,26 +82,26 @@ fn search_backwards(line: &Line) -> c_int {
         found: 0,
         lpos: LPos {
             lnum: MAXLNUM,
-            col: 0,
+            col: ColNr::ZERO,
         },
     };
 
     Win::current().w_cursor = line.cur_curpos;
     while Win::current().w_cursor.lnum > LineNr::ONE {
         Win::current().w_cursor.lnum -= 1;
-        Win::current().w_cursor.col = 0;
+        Win::current().w_cursor.col = ColNr::ZERO;
 
         // In a comment or raw string now: skip to the start of it.
         if let Some(trypos) = ind_find_start_comment_or_raw_string(None) {
             Win::current().w_cursor.lnum = trypos.lnum + 1;
-            Win::current().w_cursor.col = 0;
+            Win::current().w_cursor.col = ColNr::ZERO;
             continue;
         }
 
         // The start of a C++ base-class declaration or constructor
         // initialisation?
         if Buf::current().b_ind_cpp_baseclass != 0 && in_baseclass_list(&mut cache) {
-            return get_baseclass_amount(cache.lpos.col);
+            return get_baseclass_amount(cache.lpos.col.get());
         }
         // Skip preprocessor directives and blank lines.  `preproc_start`
         // may move the cursor's line number, so the text is read after it.
@@ -151,7 +151,7 @@ fn search_backwards(line: &Line) -> c_int {
                     break;
                 }
                 Win::current().w_cursor.lnum -= 1;
-                Win::current().w_cursor.col = 0;
+                Win::current().w_cursor.col = ColNr::ZERO;
             }
 
             amount = get_indent();

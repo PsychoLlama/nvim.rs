@@ -123,7 +123,7 @@ fn quoted_span(
             if end < 0 {
                 // It was a starting quote after all.
                 end = col_start;
-                col_start = Win::current().w_cursor.col as c_int;
+                col_start = Win::current().w_cursor.col.get();
             }
             col_end = end;
         } else {
@@ -135,7 +135,7 @@ fn quoted_span(
             if at(col_start) != quotechar {
                 // It was an ending quote after all.
                 col_start = end;
-                end = Win::current().w_cursor.col as c_int;
+                end = Win::current().w_cursor.col.get();
             }
             col_end = end;
         }
@@ -201,7 +201,7 @@ pub fn current_quote(op: &mut OpArg, count: c_int, include: bool, quotechar: c_i
     let line = Lines::current().line_copy(Win::current().w_cursor.lnum);
     // Past the end reads as the terminator, which no quote character is.
     let at = |col: c_int| byte_at(&line, col as usize);
-    let mut col_start = Win::current().w_cursor.col as c_int;
+    let mut col_start = Win::current().w_cursor.col.get();
     let mut inclusive = false;
     let mut vis_empty = true; // the Visual selection is one character or less
     let mut vis_bef_curs = false; // the Visual area starts before the cursor
@@ -244,19 +244,19 @@ pub fn current_quote(op: &mut OpArg, count: c_int, include: bool, quotechar: c_i
         let mut i;
         let sel_end;
         if vis_bef_curs {
-            inside_quotes = visual_anchor().col > 0
-                && at(visual_anchor().col - 1) == quotechar as u8
-                && at(Win::current().w_cursor.col) != 0
-                && at(Win::current().w_cursor.col + 1) == quotechar as u8;
-            i = visual_anchor().col as c_int;
-            sel_end = Win::current().w_cursor.col as c_int;
+            inside_quotes = visual_anchor().col > ColNr::ZERO
+                && at((visual_anchor().col - 1).get()) == quotechar as u8
+                && at(Win::current().w_cursor.col.get()) != 0
+                && at((Win::current().w_cursor.col + 1).get()) == quotechar as u8;
+            i = visual_anchor().col.get();
+            sel_end = Win::current().w_cursor.col.get();
         } else {
-            inside_quotes = Win::current().w_cursor.col > 0
-                && at(Win::current().w_cursor.col - 1) == quotechar as u8
-                && at(visual_anchor().col) != 0
-                && at(visual_anchor().col + 1) == quotechar as u8;
-            i = Win::current().w_cursor.col as c_int;
-            sel_end = visual_anchor().col as c_int;
+            inside_quotes = Win::current().w_cursor.col > ColNr::ZERO
+                && at((Win::current().w_cursor.col - 1).get()) == quotechar as u8
+                && at(visual_anchor().col.get()) != 0
+                && at((visual_anchor().col + 1).get()) == quotechar as u8;
+            i = Win::current().w_cursor.col.get();
+            sel_end = visual_anchor().col.get();
         }
         // Is there a quote in the selection at all?
         while i <= sel_end {
@@ -309,7 +309,7 @@ pub fn current_quote(op: &mut OpArg, count: c_int, include: bool, quotechar: c_i
     if !include && count < 2 && (vis_empty || !inside_quotes) {
         col_start += 1;
     }
-    Win::current().w_cursor.col = col_start as ColNr;
+    Win::current().w_cursor.col = ColNr::new(col_start);
     if visual_active() {
         // Set the start of the Visual area when it was empty, when we
         // were just inside quotes, or when it neither started at a quote
@@ -319,8 +319,9 @@ pub fn current_quote(op: &mut OpArg, count: c_int, include: bool, quotechar: c_i
             || (vis_bef_curs
                 && !selected_quote
                 && (inside_quotes
-                    || (at(anchor_col) != quotechar as u8
-                        && (anchor_col == 0 || at(anchor_col - 1) != quotechar as u8))))
+                    || (at(anchor_col.get()) != quotechar as u8
+                        && (anchor_col == ColNr::ZERO
+                            || at((anchor_col - 1).get()) != quotechar as u8))))
         {
             set_visual_anchor(Win::current().w_cursor);
             redraw_curbuf_later(UPD_INVERTED);
@@ -331,7 +332,7 @@ pub fn current_quote(op: &mut OpArg, count: c_int, include: bool, quotechar: c_i
     }
 
     // The end position.
-    Win::current().w_cursor.col = col_end as ColNr;
+    Win::current().w_cursor.col = ColNr::new(col_end);
     if (include || count > 1 || (!vis_empty && inside_quotes)) && inc_cursor() == 2 {
         inclusive = true;
     }
@@ -347,14 +348,14 @@ pub fn current_quote(op: &mut OpArg, count: c_int, include: bool, quotechar: c_i
             // a quote.
             if inside_quotes
                 || (!selected_quote
-                    && at(visual_anchor().col) != quotechar as u8
-                    && (at(visual_anchor().col) == 0
-                        || at(visual_anchor().col + 1) != quotechar as u8))
+                    && at(visual_anchor().col.get()) != quotechar as u8
+                    && (at(visual_anchor().col.get()) == 0
+                        || at((visual_anchor().col + 1).get()) != quotechar as u8))
             {
                 dec_cursor();
                 set_visual_anchor(Win::current().w_cursor);
             }
-            Win::current().w_cursor.col = col_start as ColNr;
+            Win::current().w_cursor.col = ColNr::new(col_start);
         }
         if visual_mode().is_line() {
             set_visual_mode(VisualMode::CHAR);

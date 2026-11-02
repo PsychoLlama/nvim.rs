@@ -196,7 +196,7 @@ pub(crate) fn draw_window_lines(
                         continue 'restart;
                     }
                 }
-            } else if dollar_vcol.get() == -1 || window.raw() != Win::current_raw() {
+            } else if dollar_vcol.get() == ColNr::NONE || window.raw() != Win::current_raw() {
                 window.w_botline = w.lnum;
             }
 
@@ -392,13 +392,13 @@ fn draw_one_line(
 
     if w.row > window.w_view_height {
         // Past the end of the grid. The height may still be needed later.
-        if dollar_vcol.get() == -1 || !is_curline {
+        if dollar_vcol.get() == ColNr::NONE || !is_curline {
             window.w_lines[idx].wl_size = plines_win(window, w.lnum, true) as uint16_t;
         }
         w.idx += 1;
         return false;
     }
-    if dollar_vcol.get() == -1 || !is_curline {
+    if dollar_vcol.get() == ColNr::NONE || !is_curline {
         window.w_lines[idx].wl_size = (w.row - w.srow) as uint16_t;
     }
     w.lnum = window.w_lines[idx].wl_lastlnum + 1;
@@ -465,7 +465,7 @@ fn scroll_for_changed_lines(window: Win, rg: &mut Regions, w: &mut Walk) {
     let mut j = w.idx;
     let mut l = w.lnum;
     while l < rg.mod_bot {
-        if dollar_vcol.get() >= 0
+        if dollar_vcol.get() >= ColNr::ZERO
             && window.raw() == Win::current_raw()
             && old_cline_height > 0
             && l == window.w_cursor.lnum

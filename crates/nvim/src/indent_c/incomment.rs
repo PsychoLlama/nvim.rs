@@ -43,7 +43,7 @@ pub(crate) fn align_with_line_comment() -> Option<c_int> {
             let lnum = Win::current().w_cursor.lnum - 1;
             trypos = Some(Pos {
                 lnum,
-                col,
+                col: ColNr::new(col),
                 coladd: 0,
             });
         }

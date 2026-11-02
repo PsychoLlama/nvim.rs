@@ -391,7 +391,7 @@ fn start_new_header(mut b: Buf) -> bool {
     let cursor_vcol = if virtual_active(win) && win.w_cursor.coladd > 0 {
         getviscol()
     } else {
-        -1
+        ColNr::NONE
     };
     b.b_u_time_cur = now + 1;
     let flags = if b.b_changed != 0 { UH_CHANGED } else { 0 }

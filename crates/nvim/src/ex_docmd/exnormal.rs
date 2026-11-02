@@ -117,7 +117,7 @@ pub(crate) fn ex_normal(excmd: &mut ExArg) {
             if excmd.addr_count != 0 {
                 Win::current().w_cursor.lnum = excmd.line1;
                 excmd.line1 += 1;
-                Win::current().w_cursor.col = 0 as ColNr;
+                Win::current().w_cursor.col = ColNr::ZERO;
                 check_cursor_moved(Win::current());
             }
             exec_normal_cmd(keys, remap, false);
@@ -200,7 +200,7 @@ pub(crate) fn ex_startinsert(excmd: &mut ExArg) {
         if idx == CmdIdx::startinsert {
             restart_edit.set('i' as c_int);
         }
-        Win::current().w_curswant = 0 as ColNr;
+        Win::current().w_curswant = ColNr::ZERO;
     }
     if visual_active() {
         showmode();

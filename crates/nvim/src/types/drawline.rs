@@ -23,6 +23,6 @@ pub struct SpellVars {
     pub spv_unchanged: bool,
     pub spv_checked_col: ::core::ffi::c_int,
     pub spv_checked_lnum: LineNr,
-    pub spv_cap_col: ::core::ffi::c_int,
+    pub spv_cap_col: ColNr,
     pub spv_capcol_lnum: LineNr,
 }

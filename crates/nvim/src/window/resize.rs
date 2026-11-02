@@ -248,8 +248,7 @@ pub(crate) fn to_fraction(window: Win, prev_height: c_int) {
         // position in the window as before (more or less).
         let mut lnum = window.w_cursor.lnum.max(LineNr::ONE); // can be 0 during startup
         window.w_wrow = arith::fraction_row(window.w_fraction, height);
-        let mut line_size =
-            plines_to_col(window, lnum, window.w_cursor.col as ::core::ffi::c_long) - 1;
+        let mut line_size = plines_to_col(window, lnum, i64::from(window.w_cursor.col)) - 1;
         let mut sline = window.w_wrow - line_size;
 
         if sline >= 0 {
@@ -266,10 +265,12 @@ pub(crate) fn to_fraction(window: Win, prev_height: c_int) {
             // fit whole.
             window.w_wrow = line_size;
             if window.w_wrow >= window.w_view_height && window.w_view_width - col_off(window) > 0 {
-                window.w_skipcol += window.w_view_width - col_off(window);
+                let width1 = window.w_view_width - col_off(window);
+                window.w_skipcol += width1;
                 window.w_wrow -= 1;
                 while window.w_wrow >= window.w_view_height {
-                    window.w_skipcol += window.w_view_width - col_off(window) + col_off2(window);
+                    let width2 = window.w_view_width - col_off(window) + col_off2(window);
+                    window.w_skipcol += width2;
                     window.w_wrow -= 1;
                 }
             }
@@ -351,7 +352,7 @@ pub(crate) fn set_inner_size(window: Win, valid_cursor: bool) {
         window.w_view_height = height;
         comp_scroll(window);
         if valid_cursor && !exiting.get() && (keeps_cursor || window.w_floating) {
-            window.w_skipcol = 0 as ColNr;
+            window.w_skipcol = ColNr::ZERO;
             to_fraction(window, prev_height);
         }
         window.redraw_later(UPD_SOME_VALID);

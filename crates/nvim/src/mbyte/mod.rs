@@ -99,7 +99,6 @@ use crate::options::{kOptCmpFlagInternal, kOptCmpFlagKeepascii};
 use crate::optionstr::OptStringRef;
 use crate::optionstr::check_chars_options;
 use crate::os::cshim::gettext;
-use crate::pos::MAXCOL;
 use crate::types::{
     CONV_9_TO_UTF8, CONV_ICONV, CONV_NONE, CONV_NONE_INIT, CONV_TO_LATIN1, CONV_TO_LATIN9,
     CONV_TO_UTF8, CharBoundsOff, CharInfo, ColNr, EvalFuncData, Expand, GraphemeState, IOSIZE,
@@ -216,7 +215,7 @@ pub fn utf_find_illegal() {
     Win::current().w_cursor.coladd = 0;
     let found = loop {
         let at = if vimconv.vc_type == CONV_NONE {
-            with_cursor_rest(first_illegal).map(|at| ColNr::try_from(at).unwrap_or(MAXCOL))
+            with_cursor_rest(first_illegal).map(|at| ColNr::try_from(at).unwrap_or(ColNr::MAX))
         } else {
             let Some(converted) = with_cursor_rest(|text| vimconv.convert(text)) else {
                 break false;
@@ -234,12 +233,12 @@ pub fn utf_find_illegal() {
                         }
                         col += len;
                     }
-                    ColNr::try_from(col).unwrap_or(MAXCOL)
+                    ColNr::try_from(col).unwrap_or(ColNr::MAX)
                 })
             })
         };
         if let Some(at) = at {
-            Win::current().w_cursor.col += at;
+            Win::current().w_cursor.col += at.get();
             break true;
         }
 
@@ -247,7 +246,7 @@ pub fn utf_find_illegal() {
             break false;
         }
         Win::current().w_cursor.lnum += 1;
-        Win::current().w_cursor.col = 0;
+        Win::current().w_cursor.col = ColNr::ZERO;
     };
 
     if !found {

@@ -60,14 +60,14 @@ use super::expand::buflist_match;
 pub(crate) const INIT_FMARK: FileMark = FileMark {
     mark: Pos {
         lnum: LineNr::ZERO,
-        col: 0 as ColNr,
-        coladd: 0 as ColNr,
+        col: ColNr::ZERO,
+        coladd: 0,
     },
     fnum: 0,
     timestamp: 0 as Timestamp,
     view: FileMarkView {
         topline_offset: MAXLNUM.get(),
-        skipcol: 0 as ColNr,
+        skipcol: ColNr::ZERO,
     },
     extra: None,
 };
@@ -240,7 +240,7 @@ pub fn buflist_new(
     buf.b_prompt_interrupt = Callback::None;
     buf.b_prompt_start = INIT_FMARK;
     // The default prompt is "% ".
-    buf.b_prompt_start.mark.col = 2 as ColNr;
+    buf.b_prompt_start.mark.col = ColNr::new(2);
     buf.b_prompt_append_new_line = true;
 
     Some(buf)
@@ -251,7 +251,7 @@ pub fn buflist_new(
 fn reuse_entry(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Option<Buf> {
     if lnum != LineNr::ZERO {
         let win = (flags & BLN_NOCURWIN as c_int == 0).then(current_win);
-        buflist_setfpos(buffer, win, lnum, 0 as ColNr, false);
+        buflist_setfpos(buffer, win, lnum, ColNr::ZERO, false);
     }
     if flags & BLN_NOOPT as c_int == 0 {
         // Copy the options now, if 'cpo' doesn't have 's' and not done
@@ -501,7 +501,7 @@ pub fn buflist_getfile(
         return Err(Failed);
     }
 
-    let mut col: ColNr = 0;
+    let mut col: ColNr = ColNr::ZERO;
     // Default line number: where the cursor was left last time -- a copy,
     // taken before the switch runs anything.
     let fm = (lnum == LineNr::ZERO).then(|| buflist_findfmark(buf));
@@ -522,11 +522,11 @@ pub fn buflist_getfile(
         return Err(Failed);
     }
 
-    if !p_sol() && col != 0 {
+    if !p_sol() && col != ColNr::ZERO {
         let mut win = current_win();
         win.w_cursor.col = col;
         check_cursor_col(win);
-        win.w_cursor.coladd = 0 as ColNr;
+        win.w_cursor.coladd = 0;
         win.w_set_curswant = true;
     }
     if jop_flags.get() & kOptJopFlagView as c_int as u32 != 0 && fm.is_some() {
@@ -569,11 +569,11 @@ pub(crate) fn buflist_getfpos() {
     win.w_cursor.lnum = lnum;
     check_cursor_lnum(win);
     if p_sol() {
-        win.w_cursor.col = 0 as ColNr;
+        win.w_cursor.col = ColNr::ZERO;
     } else {
         win.w_cursor.col = col;
         check_cursor_col(win);
-        win.w_cursor.coladd = 0 as ColNr;
+        win.w_cursor.coladd = 0;
         win.w_set_curswant = true;
     }
     if jop_flags.get() & kOptJopFlagView as c_int as u32 != 0 {

@@ -315,7 +315,7 @@ fn list_row(width: usize, current: bool, distance: c_int, pos: Pos) -> Row {
     row.push(b' ');
     row.number(pos.lnum.get(), 5);
     row.push(b' ');
-    row.number(pos.col, 4);
+    row.number(pos.col.get(), 4);
     row.push(b' ');
     row
 }

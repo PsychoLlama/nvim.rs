@@ -273,7 +273,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
         let _ = ml_replace_buf_text(Buf::current(), last, &text);
     }
     Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
-    Win::current().w_cursor.col = Cc::current().cmdpos as ColNr;
+    Win::current().w_cursor.col = ColNr::new(Cc::current().cmdpos);
     changed_line_abv_curs();
     invalidate_botline_win(Win::current());
     ui_ext_cmdline_hide(false);
@@ -365,7 +365,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
             cc.cmdpos = 0;
             cmdwin_result.set(Ctrl_C);
         } else {
-            cc.cmdpos = Win::current().w_cursor.col as ::core::ffi::c_int;
+            cc.cmdpos = Win::current().w_cursor.col.get();
             // If the cursor is on the last character, it probably should
             // be after it.
             if cc.cmdpos == cc.len() - 1 || cc.cmdpos > cc.len() {

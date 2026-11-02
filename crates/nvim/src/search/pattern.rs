@@ -112,7 +112,7 @@ state_record! {
     saved_last_idx: c_int = 0;
     saved_no_hlsearch: bool = false;
     /// The incremental-search highlight range, kept across `searchcount()`.
-    saved_search_match_endcol: ColNr = 0;
+    saved_search_match_endcol: ColNr = ColNr::ZERO;
     saved_search_match_lines: i32 = 0;
 }
 
@@ -228,7 +228,7 @@ pub fn search_regcomp(
     }
 
     regmatch.rmm_ic = c_int::from(ignorecase(text));
-    regmatch.rmm_maxcol = 0;
+    regmatch.rmm_maxcol = ColNr::ZERO;
     regmatch.regprog = vim_regcomp(source.as_cstr(), if magic { RE_MAGIC } else { 0 });
     if regmatch.regprog.is_none() {
         return Err(Failed);
@@ -556,7 +556,7 @@ pub(crate) fn is_zero_width(
     }
 
     // Init startcol correctly.
-    regmatch.startpos[0].col = -1;
+    regmatch.startpos[0].col = ColNr::NONE;
     // Searching from the top starts at the zeroed position; searching
     // from the cursor accepts a match at the cursor itself.
     let mut pos = if move_to_match { Pos::default() } else { cur };

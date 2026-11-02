@@ -183,8 +183,8 @@ pub(crate) fn process_next_cpt_value(
             if buf.b_ml.ml_mfp.is_some() {
                 // Loaded buffer.
                 compl_started.set(true);
-                st.first_match_pos.col = 0;
-                st.last_match_pos.col = 0;
+                st.first_match_pos.col = ColNr::ZERO;
+                st.last_match_pos.col = ColNr::ZERO;
                 st.first_match_pos.lnum = buf.line_count() + 1;
                 st.last_match_pos.lnum = LineNr::ZERO;
                 compl_type = 0;
@@ -584,7 +584,7 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> c_int {
 
         if compl_autocomplete.get() && is_nearest_active() {
             start_pos.lnum = (start_pos.lnum - LOOKBACK_LINE_COUNT).max(LineNr::ONE);
-            start_pos.col = 0;
+            start_pos.col = ColNr::ZERO;
         }
         st.first_match_pos = start_pos;
         st.last_match_pos = start_pos;

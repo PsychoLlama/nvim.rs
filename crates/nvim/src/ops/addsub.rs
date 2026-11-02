@@ -108,7 +108,7 @@ pub fn op_addsub(op: &mut OpArg, prenum1: i32, g_cmd: bool) {
         let changed = do_addsub(op.op_type, &mut pos, 0, prenum1);
         drop(folds_frozen);
         if changed {
-            changed_lines(Buf::current(), pos.lnum, 0, pos.lnum + 1, 0, true);
+            changed_lines(Buf::current(), pos.lnum, ColNr::ZERO, pos.lnum + 1, 0, true);
         }
         return;
     }
@@ -122,7 +122,7 @@ pub fn op_addsub(op: &mut OpArg, prenum1: i32, g_cmd: bool) {
     let mut change_cnt: ssize_t = 0;
     let mut startpos = Pos {
         lnum: LineNr::ZERO,
-        col: 0,
+        col: ColNr::ZERO,
         coladd: 0,
     };
     let mut amount = prenum1;
@@ -146,7 +146,7 @@ pub fn op_addsub(op: &mut OpArg, prenum1: i32, g_cmd: bool) {
     drop(folds_frozen);
     if change_cnt != 0 {
         let (first, last) = (op.start.lnum, op.end.lnum + 1);
-        changed_lines(Buf::current(), first, 0, last, 0, true);
+        changed_lines(Buf::current(), first, ColNr::ZERO, last, 0, true);
     } else if op.is_visual {
         // Nothing changed, so the selection has to come off the screen.
         redraw_curbuf_later(UPD_INVERTED);
@@ -176,24 +176,24 @@ fn addsub_line_span(op: &mut OpArg, bd: &mut BlockDef, pos: &mut Pos) -> c_int {
         return bd.textlen;
     }
     if op.motion_type == kMTLineWise {
-        Win::current().w_cursor.col = 0;
-        pos.col = 0;
-        return Lines::current().line_len(pos.lnum);
+        Win::current().w_cursor.col = ColNr::ZERO;
+        pos.col = ColNr::ZERO;
+        return Lines::current().line_len(pos.lnum).get();
     }
 
     // Charwise: the first and last lines are clipped to the region.
     if pos.lnum == op.start.lnum && !op.inclusive {
         dec(&mut op.end);
     }
-    let mut length = Lines::current().line_len(pos.lnum);
-    pos.col = 0;
+    let mut length = Lines::current().line_len(pos.lnum).get();
+    pos.col = ColNr::ZERO;
     if pos.lnum == op.start.lnum {
-        pos.col += op.start.col;
-        length -= op.start.col;
+        pos.col = op.start.col;
+        length -= op.start.col.get();
     }
     if pos.lnum == op.end.lnum {
-        length = Lines::current().line_len(op.end.lnum);
-        op.end.col = op.end.col.min(length - 1);
+        let end_len = Lines::current().line_len(op.end.lnum);
+        op.end.col = op.end.col.min(end_len - 1);
         length = op.end.col - pos.col + 1;
     }
     length
@@ -209,7 +209,7 @@ pub fn do_addsub(op_type: OpType, pos: &mut Pos, mut length: c_int, prenum1: i32
     let visual = visual_active();
     let save_cursor = Win::current().w_cursor;
 
-    let mut save_coladd: ColNr = 0;
+    let mut save_coladd: i32 = 0;
     if virtual_active(Win::current()) {
         save_coladd = pos.coladd;
         pos.coladd = 0;
@@ -251,7 +251,7 @@ pub fn do_addsub(op_type: OpType, pos: &mut Pos, mut length: c_int, prenum1: i32
             }
         }
 
-        let firstdigit = c_int::from(byte_at(&text, col as usize));
+        let firstdigit = c_int::from(byte_at(&text, col.as_usize()));
         let is_alpha = fmt.alpha && ascii_isalpha(firstdigit);
         if !ascii_isdigit(firstdigit) && !is_alpha {
             beep_flush();
@@ -261,7 +261,7 @@ pub fn do_addsub(op_type: OpType, pos: &mut Pos, mut length: c_int, prenum1: i32
             } else {
                 let scan = Scan {
                     text: &text,
-                    linelen,
+                    linelen: linelen.get(),
                     col,
                     firstdigit,
                     visual,
@@ -276,7 +276,7 @@ pub fn do_addsub(op_type: OpType, pos: &mut Pos, mut length: c_int, prenum1: i32
             if !cmdmod_has(CmdModFlags::LOCKMARKS) {
                 Buf::current().b_op_start = startpos;
                 Buf::current().b_op_end = endpos;
-                if Buf::current().b_op_end.col > 0 {
+                if Buf::current().b_op_end.col > ColNr::ZERO {
                     Buf::current().b_op_end.col -= 1;
                 }
             }
@@ -287,7 +287,7 @@ pub fn do_addsub(op_type: OpType, pos: &mut Pos, mut length: c_int, prenum1: i32
 }
 
 /// Put the cursor back where the caller expects it, and answer `did_change`.
-fn finish_addsub(visual: bool, did_change: bool, save_cursor: Pos, save_coladd: ColNr) -> bool {
+fn finish_addsub(visual: bool, did_change: bool, save_cursor: Pos, save_coladd: i32) -> bool {
     if visual {
         Win::current().w_cursor = save_cursor;
     } else if did_change {
@@ -311,37 +311,37 @@ fn finish_addsub(visual: bool, did_change: bool, save_cursor: Pos, save_coladd: 
 fn find_number_start(text: &[u8], start_col: ColNr, fmt: &NrFormats) -> ColNr {
     // Every column the walks below reach is one of `text`'s, the terminator
     // included -- which `byte_at` answers as NUL -- and the walks stop there.
-    let byte = |c: ColNr| c_int::from(byte_at(text, c as usize));
+    let byte = |c: ColNr| c_int::from(byte_at(text, c.as_usize()));
     // Step back one character, not one byte.
     let back = |c: ColNr| {
         let c = c - 1;
-        c - head_off(text, c as usize) as ColNr
+        c - ColNr::from_index(head_off(text, c.as_usize()))
     };
     // `0x`/`0b` at `col`, with a digit of that base after it.
     let prefixed_at = |c: ColNr, upper: u8, lower: u8, digit: fn(c_int) -> bool| {
-        c > 0
+        c > ColNr::ZERO
             && (byte(c) == c_int::from(upper) || byte(c) == c_int::from(lower))
             && byte(c - 1) == '0' as c_int
-            && head_off(text, (c - 1) as usize) == 0
+            && head_off(text, (c - 1).as_usize()) == 0
             && digit(byte(c + 1))
     };
 
     let mut col = start_col;
     if fmt.bin {
-        while col > 0 && ascii_isbdigit(byte(col)) {
-            col = back(col);
+        while col > ColNr::ZERO && ascii_isbdigit(byte(col)) {
+            col = ColNr::new(back(col));
         }
     }
     if fmt.hex {
-        while col > 0 && ascii_isxdigit(byte(col)) {
-            col = back(col);
+        while col > ColNr::ZERO && ascii_isxdigit(byte(col)) {
+            col = ColNr::new(back(col));
         }
     }
     if fmt.bin && fmt.hex && !prefixed_at(col, b'X', b'x', ascii_isxdigit) {
         // Binary and hexadecimal overlap: rescan over decimal digits.
         col = Win::current().w_cursor.col;
-        while col > 0 && ascii_isdigit(byte(col)) {
-            col = back(col);
+        while col > ColNr::ZERO && ascii_isdigit(byte(col)) {
+            col = ColNr::new(back(col));
         }
     }
 
@@ -349,7 +349,7 @@ fn find_number_start(text: &[u8], start_col: ColNr, fmt: &NrFormats) -> ColNr {
         || (fmt.bin && prefixed_at(col, b'B', b'b', ascii_isbdigit))
     {
         // On the base letter of a `0x`/`0b` number: move onto the `0`.
-        return back(col);
+        return ColNr::new(back(col));
     }
 
     // No prefix: search forwards for a digit, then back to its number's
@@ -359,7 +359,10 @@ fn find_number_start(text: &[u8], start_col: ColNr, fmt: &NrFormats) -> ColNr {
     {
         col += 1;
     }
-    while col > 0 && ascii_isdigit(byte(col - 1)) && !(fmt.alpha && ascii_isalpha(byte(col))) {
+    while col > ColNr::ZERO
+        && ascii_isdigit(byte(col - 1))
+        && !(fmt.alpha && ascii_isalpha(byte(col)))
+    {
         col -= 1;
     }
     col
@@ -376,13 +379,13 @@ fn visual_skip_to_number(
     mut length: c_int,
     fmt: &NrFormats,
 ) -> Option<(ColNr, c_int)> {
-    let byte = |c: ColNr| c_int::from(byte_at(text, c as usize));
+    let byte = |c: ColNr| c_int::from(byte_at(text, c.as_usize()));
     while byte(col) != NUL
         && length > 0
         && !ascii_isdigit(byte(col))
         && !(fmt.alpha && ascii_isalpha(byte(col)))
     {
-        let mb_len = cluster_len(&text[(col as usize).min(text.len())..]) as c_int;
+        let mb_len = cluster_len(&text[col.as_usize().min(text.len())..]) as c_int;
         col += mb_len;
         length -= mb_len;
     }
@@ -397,13 +400,16 @@ fn visual_skip_to_number(
 fn minus_before(text: &[u8], col: ColNr, min_col: ColNr, fmt: &NrFormats) -> Minus {
     // Each read below is guarded by the bound that keeps it inside the line.
     if !(col > min_col
-        && byte_at(text, (col - 1) as usize) == b'-'
-        && head_off(text, (col - 1) as usize) == 0
+        && byte_at(text, (col - 1).as_usize()) == b'-'
+        && head_off(text, (col - 1).as_usize()) == 0
         && !fmt.unsigned)
     {
         return Minus::Absent;
     }
-    if fmt.blank && col >= 2 && !ascii_iswhite(c_int::from(byte_at(text, (col - 2) as usize))) {
+    if fmt.blank
+        && col >= ColNr::new(2)
+        && !ascii_iswhite(c_int::from(byte_at(text, (col - 2).as_usize())))
+    {
         Minus::BlankUnsigned
     } else {
         Minus::Negative
@@ -488,7 +494,7 @@ fn replace_number(
     } = scan;
 
     if !visual {
-        match minus_before(text, col, 0, fmt) {
+        match minus_before(text, col, ColNr::ZERO, fmt) {
             Minus::Absent => {}
             Minus::Negative => {
                 col -= 1;
@@ -502,8 +508,8 @@ fn replace_number(
     // a linewise selection or one opened with `$`.
     let mut maxlen = 0;
     if visual && !visual_mode().is_line() {
-        maxlen = if Buf::current().b_visual.vi_curswant == MAXCOL {
-            linelen - col
+        maxlen = if Buf::current().b_visual.vi_curswant == ColNr::MAX {
+            linelen - col.get()
         } else {
             *length
         };
@@ -544,7 +550,7 @@ fn replace_number(
         negative = false;
     }
 
-    if visual && !was_positive && !negative && col > 0 {
+    if visual && !was_positive && !negative && col > ColNr::ZERO {
         // The `-` has to go.
         col -= 1;
         *length += 1;
@@ -575,7 +581,7 @@ fn replace_number(
     render_number(n, pre, len, firstdigit, negative, visual, was_positive, fmt);
 
     let endpos = Win::current().w_cursor;
-    if Win::current().w_cursor.col != 0 {
+    if Win::current().w_cursor.col != ColNr::ZERO {
         Win::current().w_cursor.col -= 1;
     }
     (startpos, endpos)
@@ -721,73 +727,97 @@ mod tests {
     fn a_number_starts_where_its_digits_do() {
         let fmt = formats(true, false);
         // From inside the number, back to its first digit.
-        assert_eq!(find_number_start(b"x = 123;", 5, &fmt), 4);
-        assert_eq!(find_number_start(b"x = 123;", 4, &fmt), 4);
+        assert_eq!(
+            find_number_start(b"x = 123;", ColNr::new(5), &fmt),
+            ColNr::new(4)
+        );
+        assert_eq!(
+            find_number_start(b"x = 123;", ColNr::new(4), &fmt),
+            ColNr::new(4)
+        );
         // From before it, forwards to the first digit.
-        assert_eq!(find_number_start(b"x = 123;", 0, &fmt), 4);
+        assert_eq!(
+            find_number_start(b"x = 123;", ColNr::ZERO, &fmt),
+            ColNr::new(4)
+        );
         // A `0x` prefix is part of the number.
-        assert_eq!(find_number_start(b"n = 0x1f;", 7, &fmt), 4);
+        assert_eq!(
+            find_number_start(b"n = 0x1f;", ColNr::new(7), &fmt),
+            ColNr::new(4)
+        );
         // Without `x` in 'nrformats' the letter is not a prefix and the
         // backwards scans do not run at all: the answer is the first digit
         // at or after the column, and the `f` of `1f` is not one.
         assert_eq!(
-            find_number_start(b"n = 0x1f;", 6, &formats(false, false)),
-            6
+            find_number_start(b"n = 0x1f;", ColNr::new(6), &formats(false, false)),
+            ColNr::new(6)
         );
         assert_eq!(
-            find_number_start(b"n = 0x1f;", 7, &formats(false, false)),
-            9
+            find_number_start(b"n = 0x1f;", ColNr::new(7), &formats(false, false)),
+            ColNr::new(9)
         );
     }
 
     #[test]
     fn a_binary_prefix_is_recognised_on_its_own() {
         let fmt = formats(false, true);
-        assert_eq!(find_number_start(b"n = 0b101;", 8, &fmt), 4);
+        assert_eq!(
+            find_number_start(b"n = 0b101;", ColNr::new(8), &fmt),
+            ColNr::new(4)
+        );
     }
 
     #[test]
     fn the_selection_skips_forward_to_a_number() {
         let fmt = formats(true, false);
         // Six bytes of "ab 12": the digits start at 3.
-        assert_eq!(visual_skip_to_number(b"ab 12", 0, 5, &fmt), Some((3, 2)));
+        assert_eq!(
+            visual_skip_to_number(b"ab 12", ColNr::ZERO, 5, &fmt),
+            Some((ColNr::new(3), 2))
+        );
         // The selection runs out first.
-        assert_eq!(visual_skip_to_number(b"abcd 1", 0, 4, &fmt), None);
+        assert_eq!(visual_skip_to_number(b"abcd 1", ColNr::ZERO, 4, &fmt), None);
         // A multibyte character is one step, not one byte.
         let line = "\u{4e00}9".as_bytes();
-        assert_eq!(visual_skip_to_number(line, 0, 4, &fmt), Some((3, 1)));
+        assert_eq!(
+            visual_skip_to_number(line, ColNr::ZERO, 4, &fmt),
+            Some((ColNr::new(3), 1))
+        );
     }
 
     #[test]
     fn a_minus_belongs_to_the_number_unless_the_option_says_not() {
         let plain = formats(true, false);
         assert!(matches!(
-            minus_before(b"x -12", 3, 0, &plain),
+            minus_before(b"x -12", ColNr::new(3), ColNr::ZERO, &plain),
             Minus::Negative
         ));
         // No `-` there at all.
-        assert!(matches!(minus_before(b"x 12", 2, 0, &plain), Minus::Absent));
+        assert!(matches!(
+            minus_before(b"x 12", ColNr::new(2), ColNr::ZERO, &plain),
+            Minus::Absent
+        ));
         // `min_col` is how far back the caller allows the look.
         assert!(matches!(
-            minus_before(b"x -12", 3, 3, &plain),
+            minus_before(b"x -12", ColNr::new(3), ColNr::new(3), &plain),
             Minus::Absent
         ));
         // 'nrformats' `u`: a `-` is never a sign.
         let mut unsigned = formats(true, false);
         unsigned.unsigned = true;
         assert!(matches!(
-            minus_before(b"x -12", 3, 0, &unsigned),
+            minus_before(b"x -12", ColNr::new(3), ColNr::ZERO, &unsigned),
             Minus::Absent
         ));
         // 'nrformats' `k`: a `-` is only a sign after white space.
         let mut blank = formats(true, false);
         blank.blank = true;
         assert!(matches!(
-            minus_before(b"x -12", 3, 0, &blank),
+            minus_before(b"x -12", ColNr::new(3), ColNr::ZERO, &blank),
             Minus::Negative
         ));
         assert!(matches!(
-            minus_before(b"xx-12", 3, 0, &blank),
+            minus_before(b"xx-12", ColNr::new(3), ColNr::ZERO, &blank),
             Minus::BlankUnsigned
         ));
     }

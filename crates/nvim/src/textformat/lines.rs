@@ -175,7 +175,7 @@ fn paragraph_indent(first_line: LineNr) -> c_int {
 /// Answers false when the join failed and the walk has to stop.
 fn join_next_line(next_leader_len: c_int, second_indent: c_int, line_count: LineNr) -> bool {
     Win::current().w_cursor.lnum += 1;
-    Win::current().w_cursor.col = 0;
+    Win::current().w_cursor.col = ColNr::ZERO;
     if line_count < LineNr::ZERO && u_save_cursor().is_err() {
         return false;
     }
@@ -183,13 +183,13 @@ fn join_next_line(next_leader_len: c_int, second_indent: c_int, line_count: Line
         next_leader_len
     } else if second_indent > 0 {
         // The "leader" `FoFlag::Q_SECOND` left behind.
-        getwhitecols_curline() as c_int
+        getwhitecols_curline().get()
     } else {
         0
     };
     if strip > 0 {
-        let _ = del_bytes(strip as ColNr, false, false);
-        mark_col_adjust(Win::current().w_cursor.lnum, 0, 0, -(strip as ColNr), 0);
+        let _ = del_bytes(strip, false, false);
+        mark_col_adjust(Win::current().w_cursor.lnum, ColNr::ZERO, 0, -strip, 0);
     }
     Win::current().w_cursor.lnum -= 1;
     if do_join(2 as size_t, true, false, false, false).is_err() {
@@ -345,8 +345,8 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
 
                 // Put the cursor on the last non-space.
                 State.set(MODE_NORMAL); // don't go past end-of-line
-                coladvance(Win::current(), MAXCOL);
-                while Win::current().w_cursor.col != 0 && ascii_isspace(gchar_cursor()) {
+                coladvance(Win::current(), ColNr::MAX);
+                while Win::current().w_cursor.col != ColNr::ZERO && ascii_isspace(gchar_cursor()) {
                     dec_cursor();
                 }
 
@@ -403,7 +403,7 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
                 }
                 first_par_line = false;
                 // A line getting long is formatted next time round.
-                force_format = get_cursor_line_len() > max_len;
+                force_format = get_cursor_line_len() > ColNr::new(max_len);
             }
         }
         line_breakcheck();

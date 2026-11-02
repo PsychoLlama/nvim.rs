@@ -68,7 +68,7 @@ pub(crate) fn truncate_spaces(line: &mut Vec<u8>) {
 /// non-Replace arm goes through [`del_char_after_col`] rather than
 /// `del_char`.
 pub(crate) fn backspace_until_column(col: c_int) {
-    while Win::current().w_cursor.col > col {
+    while Win::current().w_cursor.col > ColNr::new(col) {
         Win::current().w_cursor.col -= 1;
         if State.get() & REPLACE_FLAG != 0 {
             replace_do_bs(col);
@@ -93,12 +93,12 @@ fn del_char_after_col(limit_col: c_int) -> bool {
         // Put the cursor at the start of a character, then step forward
         // again if a composing character took it too far back.
         mb_adjust_cursor();
-        while Win::current().w_cursor.col < limit_col {
+        while Win::current().w_cursor.col < ColNr::new(limit_col) {
             let l = ColNr::try_from(cursor_tail(char_len)).unwrap_or(ColNr::MAX);
-            if l == 0 {
+            if l == ColNr::ZERO {
                 break; // end of line
             }
-            Win::current().w_cursor.col += l;
+            Win::current().w_cursor.col += l.get();
         }
         if cursor_tail(|tail| byte_at(tail, 0)) == b'\0' || Win::current().w_cursor.col == ecol {
             return false;
@@ -215,7 +215,7 @@ pub(crate) fn replace_do_bs(limit_col: c_int) {
     let l_state = State.get();
     let cc = replace_pop_if_nul();
     if cc > 0 {
-        let mut start_vcol: ColNr = 0;
+        let mut start_vcol: ColNr = ColNr::ZERO;
         let mut orig_vcols = 0;
         if l_state & VREPLACE_FLAG != 0 {
             // How many screen cells the character about to be deleted
@@ -251,12 +251,12 @@ pub(crate) fn replace_do_bs(limit_col: c_int) {
                 vcol += win_chartabsize(Win::current(), at, vcol);
                 i += step;
             }
-            vcol -= start_vcol;
+            vcol -= start_vcol.get();
 
             // Virtual Replace keeps the following text aligned, so any
             // spaces it padded with have to come off again.
             Win::current().w_cursor.col += ins_len;
-            while vcol > orig_vcols && gchar_cursor() == ' ' as c_int {
+            while vcol > ColNr::new(orig_vcols) && gchar_cursor() == ' ' as c_int {
                 let _ = del_char(false);
                 orig_vcols += 1;
             }

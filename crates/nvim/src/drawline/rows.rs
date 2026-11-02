@@ -236,7 +236,7 @@ impl Cells {
                 self.view_width,
                 0,
                 if self.virt_line_flags & kVLScroll as ::core::ffi::c_int != 0 {
-                    window.w_leftcol
+                    window.w_leftcol.get()
                 } else {
                     0
                 },
@@ -326,7 +326,9 @@ impl Cells {
         buffer: Buf,
         f: &mut LineFrame<'_>,
     ) {
-        wlv.vcol = wlv.vcol.max(self.start_vcol + wlv.col - window.col_off());
+        wlv.vcol = wlv
+            .vcol
+            .max(ColNr::new(self.start_vcol + wlv.col - window.col_off()));
         // Drop the bogus columns: 'cursorcolumn' wants drawing all the way
         // to the right edge.
         wlv.col -= wlv.boguscols;
@@ -349,8 +351,8 @@ impl Cells {
         });
 
         if (window.w_onebuf_opt.wo_cuc != 0
-            && window.w_virtcol >= wlv.hl_vcol() - self.eol_extra_cell
-            && (window.w_virtcol as ptrdiff_t)
+            && window.w_virtcol >= ColNr::new(wlv.hl_vcol() - self.eol_extra_cell)
+            && (window.w_virtcol.get() as isize)
                 < self.view_width as ptrdiff_t * (wlv.row - wlv.startrow + 1) as ptrdiff_t
                     + self.start_vcol as ptrdiff_t
             && wlv.lnum != window.w_cursor.lnum)
@@ -431,7 +433,7 @@ impl Cells {
 
             let mut col_attr = base_attr;
             if window.w_onebuf_opt.wo_cuc != 0
-                && wlv.hl_vcol() == window.w_virtcol
+                && wlv.hl_vcol() == window.w_virtcol.get()
                 && wlv.lnum != window.w_cursor.lnum
             {
                 col_attr = hl_combine_attr(col_attr, cuc_attr);

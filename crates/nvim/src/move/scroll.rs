@@ -59,7 +59,7 @@ impl Win {
             self.line_display_width(self.w_topline)
         };
 
-        if self.w_topline == LineNr::ONE && self.w_skipcol == 0 {
+        if self.w_topline == LineNr::ONE && self.w_skipcol == ColNr::ZERO {
             // Ignore 'scrolloff' at the top of the buffer.
             so_cols = 0;
         } else if so_cols > (space_cols / 2) as int64_t {
@@ -68,20 +68,19 @@ impl Win {
         }
         so_cols = arith::fit_scrolloff_cols(so_cols, size, width1, width2);
 
-        let overlap = if self.w_skipcol == 0 {
+        let overlap = if self.w_skipcol == ColNr::ZERO {
             0
         } else {
             self.marker_overlap(self.w_view_width - width2)
         };
         // With a non-zero 'scrolloff' the marker overlap does not matter.
-        let top = self.w_skipcol as int64_t
+        let top = i64::from(self.w_skipcol)
             + if so_cols != 0 {
                 so_cols
             } else {
                 overlap as int64_t
             };
-        let bot =
-            (self.w_skipcol + width1 + (self.w_view_height - 1) * width2) as int64_t - so_cols;
+        let bot = i64::from(self.w_skipcol + width1 + (self.w_view_height - 1) * width2) - so_cols;
 
         self.validate_virtcol();
         let col = arith::visible_sms_col(self.w_virtcol, top, bot, width1, width2);
@@ -100,16 +99,19 @@ impl Win {
                 | WinValid::CROW
                 | WinValid::VIRTCOL,
         );
-        if reached || self.w_skipcol == 0 || self.w_cursor.lnum >= self.buffer().line_count() {
+        if reached
+            || self.w_skipcol == ColNr::ZERO
+            || self.w_cursor.lnum >= self.buffer().line_count()
+        {
             return;
         }
         self.validate_virtcol();
         if self.w_virtcol < self.w_skipcol + overlap {
             // Cursor still not visible: move it to the next line instead.
             self.w_cursor.lnum += 1;
-            self.w_cursor.col = 0;
+            self.w_cursor.col = ColNr::ZERO;
             self.w_cursor.coladd = 0;
-            self.w_curswant = 0;
+            self.w_curswant = ColNr::ZERO;
             self.w_valid.clear(WinValid::VIRTCOL);
         }
     }
@@ -206,10 +208,13 @@ impl Win {
             let can_fill = self.w_topfill < self.w_view_height - 1
                 && self.w_topfill < self.fill_above(self.w_topline);
             // At the very top there is nothing left to scroll to.
-            if self.w_topline == LineNr::ONE && !can_fill && (!do_sms || self.w_skipcol < width1) {
+            if self.w_topline == LineNr::ONE
+                && !can_fill
+                && (!do_sms || self.w_skipcol < ColNr::new(width1))
+            {
                 break;
             }
-            if do_sms && self.w_skipcol >= width1 {
+            if do_sms && self.w_skipcol >= ColNr::new(width1) {
                 // Scroll one screen line down.
                 self.w_skipcol = arith::skipcol_line_back(self.w_skipcol, width1, width2);
                 self.redraw_later(UPD_NOT_VALID);
@@ -220,7 +225,7 @@ impl Win {
             } else {
                 // Scroll one text line down.
                 self.w_topline -= 1;
-                self.w_skipcol = 0;
+                self.w_skipcol = ColNr::ZERO;
                 self.w_topfill = 0;
                 if let Some(first) = self.fold_first(self.w_topline) {
                     // A sequence of folded lines counts as one logical line.
@@ -274,7 +279,7 @@ impl Win {
         if self.w_onebuf_opt.wo_wrap != 0 && self.w_view_width != 0 {
             self.validate_virtcol();
             self.validate_cheight();
-            wrow += self.w_cline_height - 1 - self.w_virtcol / self.w_view_width;
+            wrow += self.w_cline_height - 1 - self.w_virtcol.get() / self.w_view_width;
         }
         let mut moved = false;
         while wrow >= self.w_view_height && self.w_cursor.lnum > LineNr::ONE {
@@ -340,9 +345,13 @@ impl Win {
                         self.w_topline
                     };
                     if lnum == self.w_topline && do_sms {
-                        let add = if self.w_skipcol > 0 { width2 } else { width1 };
+                        let add = if self.w_skipcol > ColNr::ZERO {
+                            width2
+                        } else {
+                            width1
+                        };
                         self.w_skipcol += add;
-                        if self.w_skipcol >= size {
+                        if self.w_skipcol >= ColNr::new(size) {
                             if lnum == self.buffer().line_count() {
                                 // At the last screen line: can't scroll on.
                                 self.w_skipcol -= add;
@@ -363,7 +372,7 @@ impl Win {
                         self.w_botline += gained;
                         self.w_topline = lnum;
                         self.w_topfill = self.fill_above(lnum);
-                        self.w_skipcol = 0;
+                        self.w_skipcol = ColNr::ZERO;
                         if todo > 1 && do_sms {
                             size = self.line_display_width(self.w_topline);
                         }
@@ -372,7 +381,7 @@ impl Win {
                 todo -= 1;
             }
 
-            if prev_skipcol > 0 || self.w_skipcol > 0 {
+            if prev_skipcol > ColNr::ZERO || self.w_skipcol > ColNr::ZERO {
                 // More has to be redrawn: the new top line's remembered
                 // `wl_size` may now be wrong.
                 self.redraw_later(UPD_NOT_VALID);
@@ -440,8 +449,8 @@ pub fn adjust_skipcol() {
     win.validate_virtcol();
     let overlap = win.marker_overlap(win.w_view_width - width2);
     let mut scrolled = false;
-    while win.w_skipcol > 0
-        && (win.w_virtcol as int64_t) < (win.w_skipcol + overlap) as int64_t + scrolloff_cols
+    while win.w_skipcol > ColNr::ZERO
+        && i64::from(win.w_virtcol) < i64::from(win.w_skipcol + overlap) + scrolloff_cols
     {
         // Scroll one screen line down.
         win.w_skipcol = arith::skipcol_line_back(win.w_skipcol, width1, width2);
@@ -470,12 +479,13 @@ pub fn adjust_skipcol() {
     );
     if row >= win.w_view_height {
         let mut row = row;
-        if win.w_skipcol == 0 {
+        if win.w_skipcol == ColNr::ZERO {
             win.w_skipcol += width1;
             row -= 1;
         }
         if row >= win.w_view_height {
-            win.w_skipcol += (row - win.w_view_height) * width2;
+            let skip = (row - win.w_view_height) * width2;
+            win.w_skipcol += skip;
         }
         win.redraw_later(UPD_NOT_VALID);
     }
@@ -527,7 +537,7 @@ pub fn scrolldown_clamp() {
     if win.w_onebuf_opt.wo_wrap != 0 && win.w_view_width != 0 {
         win.validate_cheight();
         win.validate_virtcol();
-        end_row += win.w_cline_height - 1 - win.w_virtcol / win.w_view_width;
+        end_row += win.w_cline_height - 1 - win.w_virtcol.get() / win.w_view_width;
     }
     if (end_row as int64_t) < win.w_view_height as int64_t - win.scrolloff() {
         if can_fill {
@@ -562,7 +572,7 @@ pub fn scrollup_clamp() {
     let mut start_row = win.w_wrow - win.plines_nofill(win.w_topline, true) - win.w_topfill;
     if win.w_onebuf_opt.wo_wrap != 0 && win.w_view_width != 0 {
         win.validate_virtcol();
-        start_row -= win.w_virtcol / win.w_view_width;
+        start_row -= win.w_virtcol.get() / win.w_view_width;
     }
     if start_row as int64_t >= win.scrolloff() {
         if win.w_topfill > 0 {
@@ -592,7 +602,7 @@ pub(super) fn topline_back_winheight(win: Win, line: &mut LineOff, winheight: bo
         line.lnum -= 1;
         line.fill = 0;
         if line.lnum < LineNr::ONE {
-            line.height = MAXCOL as c_int;
+            line.height = MAXCOL;
         } else if let Some(first) = win.fold_first(line.lnum) {
             // Add a closed fold, unless it is concealed.
             line.lnum = first;
@@ -620,7 +630,7 @@ pub(super) fn botline_forw(win: Win, line: &mut LineOff) {
         line.fill = 0;
         debug_assert!(!win.buffer().raw().is_null(), "wp->w_buffer != 0");
         if line.lnum > win.buffer().line_count() {
-            line.height = MAXCOL as c_int;
+            line.height = MAXCOL;
             return;
         }
         let (folded, _, last) = win.fold_span(line.lnum);

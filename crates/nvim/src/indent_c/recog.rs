@@ -264,8 +264,8 @@ pub(crate) fn while_closes_do(lnum: LineNr) -> bool {
 /// Whether an `if`, `for` or `while` sits just before `*offset` in `line`,
 /// and if so where -- 'cinoptions' `U`'s "is this paren a control clause's"
 /// test.
-pub(crate) fn control_clause_before(line: &[u8], offset: &mut c_int) -> bool {
-    let mut at = *offset;
+pub(crate) fn control_clause_before(line: &[u8], offset: &mut ColNr) -> bool {
+    let mut at = offset.get();
     if at < 2 {
         return false;
     }
@@ -309,7 +309,7 @@ pub(crate) fn control_clause_before(line: &[u8], offset: &mut c_int) -> bool {
     if at != 0 && vim_is_ident_char(c_int::from(before)) {
         return false;
     }
-    *offset = at;
+    *offset = ColNr::new(at);
     true
 }
 
@@ -626,25 +626,25 @@ mod tests {
     fn a_control_clause_is_looked_for_just_left_of_the_paren() {
         chartab();
         // The offset handed in is the `(`'s; the answer is the keyword's.
-        let mut offset = 2;
+        let mut offset = ColNr::new(2);
         assert!(control_clause_before(b"if(x)", &mut offset));
-        assert_eq!(offset, 0);
-        let mut offset = 7;
+        assert_eq!(offset, ColNr::new(0));
+        let mut offset = ColNr::new(7);
         assert!(control_clause_before(b"    if (x)", &mut offset));
-        assert_eq!(offset, 4);
-        let mut offset = 10;
+        assert_eq!(offset, ColNr::new(4));
+        let mut offset = ColNr::new(10);
         assert!(control_clause_before(b"    while (x)", &mut offset));
-        assert_eq!(offset, 4);
-        let mut offset = 8;
+        assert_eq!(offset, ColNr::new(4));
+        let mut offset = ColNr::new(8);
         assert!(control_clause_before(b"    for (x)", &mut offset));
-        assert_eq!(offset, 4);
+        assert_eq!(offset, ColNr::new(4));
         // An identifier in front of the keyword makes it part of a name.
-        let mut offset = 9;
+        let mut offset = ColNr::new(9);
         assert!(!control_clause_before(b"    xxif (x)", &mut offset));
         // Upstream's white-space skip is guarded by `offset > 2`, so a
         // keyword at the very left margin with a space after it is missed
         // (O-B29-1).  Reproduced: `if (x)` in column 0 is not one.
-        let mut offset = 3;
+        let mut offset = ColNr::new(3);
         assert!(!control_clause_before(b"if (x)", &mut offset));
     }
 }

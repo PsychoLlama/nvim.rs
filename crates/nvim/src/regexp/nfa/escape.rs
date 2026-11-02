@@ -284,7 +284,7 @@ fn cursor_lnum() -> i64 {
 }
 
 fn cursor_col() -> i64 {
-    Win::current().w_cursor.col as i64
+    i64::from(Win::current().w_cursor.col)
 }
 
 fn cursor_vcol() -> i64 {

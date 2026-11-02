@@ -388,14 +388,14 @@ fn match_range(
 ) -> (ColNr, ColNr) {
     let len = lines.line_len(lnum);
     let Some(regmatch) = regmatch.as_mut() else {
-        return (0, len);
+        return (ColNr::ZERO, len);
     };
     if !vim_regexec(regmatch, lines.line_cstr(lnum, 0), 0) {
-        return (0, 0);
+        return (ColNr::ZERO, ColNr::ZERO);
     }
     let (start, end) = match regmatch.group(0) {
-        Some(span) => (span.start as ColNr, span.end as ColNr),
-        None => (0, 0),
+        Some(span) => (ColNr::from_index(span.start), ColNr::from_index(span.end)),
+        None => (ColNr::ZERO, ColNr::ZERO),
     };
     if use_match { (start, end) } else { (end, len) }
 }
@@ -403,7 +403,7 @@ fn match_range(
 /// The number or float in `line[start..end]`, read so that no digit past
 /// `end` counts -- what upstream terminates the line in place for.
 fn number_key(line: &[u8], start: ColNr, end: ColNr, spec: &SortSpec) -> SortKey {
-    let from = &line[start as usize..end as usize];
+    let from = &line[start.as_usize()..end.as_usize()];
 
     if spec.float {
         let mut at = skip::white(from);
@@ -460,7 +460,7 @@ fn collect_sort_keys(
             // `match_range` answers offsets into `text`.
             number_key(text, start, end, spec)
         } else {
-            SortKey::Text(Key::new(&text[start as usize..end as usize]))
+            SortKey::Text(Key::new(&text[start.as_usize()..end.as_usize()]))
         };
         sorted.push(SortLine { lnum, key });
 
@@ -630,16 +630,23 @@ fn finish_sort(line1: LineNr, line2: LineNr, count: size_t, placed: &Placed) {
         extmark_splice(
             Buf::current(),
             (line1 - 1).get(),
-            0,
+            ColNr::ZERO,
             count as c_int,
-            0,
+            ColNr::ZERO,
             placed.old_bytes,
             lnum - line2,
-            0,
+            ColNr::ZERO,
             placed.new_bytes,
             kExtmarkUndo,
         );
-        changed_lines(Buf::current(), line1, 0, line2 + 1, -deleted, true);
+        changed_lines(
+            Buf::current(),
+            line1,
+            ColNr::ZERO,
+            line2 + 1,
+            -deleted,
+            true,
+        );
     }
 
     Win::current().w_cursor.lnum = line1;
@@ -780,8 +787,12 @@ fn uniq_range(args: &mut ExArg) {
                 // A line the pattern missed compares its whole text, which is
                 // what upstream's "terminate at `end` only when there is an
                 // end to terminate at" comes to.
-                let stop = if end > 0 { end as usize } else { text.len() };
-                current.fill(&text[start as usize..stop]);
+                let stop = if end > ColNr::ZERO {
+                    end.as_usize()
+                } else {
+                    text.len()
+                };
+                current.fill(&text[start.as_usize()..stop]);
             }
 
             let is_match =
@@ -820,7 +831,14 @@ fn uniq_range(args: &mut ExArg) {
         );
         say::more(-deleted);
         if change_occurred {
-            changed_lines(Buf::current(), line1, 0, line2 + 1, -deleted, true);
+            changed_lines(
+                Buf::current(),
+                line1,
+                ColNr::ZERO,
+                line2 + 1,
+                -deleted,
+                true,
+            );
         }
         Win::current().w_cursor.lnum = line1;
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);

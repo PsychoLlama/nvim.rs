@@ -69,7 +69,7 @@ pub fn nvim_buf_get_mark(buf: BufferHandle, name: ApiString) -> Result<Array, Er
     }
     let mut pos: Pos = Pos {
         lnum: LineNr::ZERO,
-        col: 0,
+        col: ColNr::ZERO,
         coladd: 0,
     };
     let mark = ::core::ffi::c_char::from_ne_bytes([name.as_bytes()[0]]);
@@ -83,7 +83,7 @@ pub fn nvim_buf_get_mark(buf: BufferHandle, name: ApiString) -> Result<Array, Er
     };
     if fm.fnum != b.handle.get() {
         pos.lnum = LineNr::ZERO;
-        pos.col = 0 as ::core::ffi::c_int as ColNr;
+        pos.col = ColNr::ZERO;
     } else {
         pos = fm.mark;
     }

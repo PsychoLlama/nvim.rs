@@ -205,7 +205,7 @@ impl Win {
             if self.w_topline != old_topline
                 || self.w_topfill != old_topfill
                 || self.w_skipcol != old_skipcol
-                || self.w_skipcol != 0
+                || self.w_skipcol != ColNr::ZERO
             {
                 self.w_valid.clear(WinValid::WROW | WinValid::CROW);
                 if self.w_skipcol != old_skipcol {
@@ -259,7 +259,7 @@ impl Win {
         let mut loff = lineoff_at(last + 1);
         loop {
             topline_back_winheight(self, &mut loff, false);
-            if loff.height == MAXCOL as c_int {
+            if loff.height == MAXCOL {
                 break;
             }
             if used + loff.height > self.w_view_height {
@@ -344,8 +344,8 @@ impl Win {
             // Add one line above.
             let loff_lnum_before = loff.lnum;
             topline_back(self, &mut loff);
-            if loff.height == MAXCOL as c_int {
-                used = MAXCOL as c_int;
+            if loff.height == MAXCOL {
+                used = MAXCOL;
             } else {
                 used += loff.height;
             }
@@ -371,7 +371,7 @@ impl Win {
             // Add one line below.
             let boff_lnum_before = boff.lnum;
             botline_forw(self, &mut boff);
-            debug_assert!(boff.height != MAXCOL as c_int, "boff.height != MAXCOL");
+            debug_assert!(boff.height != MAXCOL, "boff.height != MAXCOL");
             used += boff.height;
             if used > self.w_view_height {
                 break;
@@ -442,7 +442,7 @@ impl Win {
         };
         let mut used = self.plines_nofill(loff.lnum, true);
         let mut topline = loff.lnum;
-        let mut skipcol: ColNr = 0;
+        let mut skipcol: ColNr = ColNr::ZERO;
 
         let do_sms = self.w_onebuf_opt.wo_wrap != 0 && self.w_onebuf_opt.wo_sms != 0;
         // Only read under `do_sms`, which is also the only arm that sets it.
@@ -462,7 +462,7 @@ impl Win {
                 // With 'smoothscroll' we can scroll to the exact point where
                 // the cursor is halfway down the screen.
                 topline_back_winheight(self, &mut loff, false);
-                if loff.height == MAXCOL as c_int {
+                if loff.height == MAXCOL {
                     break;
                 }
                 used += loff.height;
@@ -526,8 +526,8 @@ impl Win {
                     };
                 if add_above {
                     topline_back(self, &mut loff);
-                    if loff.height == MAXCOL as c_int {
-                        used = MAXCOL as c_int;
+                    if loff.height == MAXCOL {
+                        used = MAXCOL;
                     } else {
                         used += loff.height;
                     }
@@ -549,9 +549,12 @@ impl Win {
         // goes through the `skipcol` bookkeeping below.
         if let Some(first) = self.fold_first(topline) {
             self.w_topline = first;
-        } else if self.w_topline != topline || skipcol != 0 || self.w_skipcol != 0 {
+        } else if self.w_topline != topline
+            || skipcol != ColNr::ZERO
+            || self.w_skipcol != ColNr::ZERO
+        {
             self.w_topline = topline;
-            if skipcol != 0 {
+            if skipcol != ColNr::ZERO {
                 self.w_skipcol = skipcol;
                 self.redraw_later(UPD_NOT_VALID);
             } else if do_sms {
@@ -735,17 +738,17 @@ pub(super) fn get_scroll_overlap(win: Win, dir: Direction) -> c_int {
     }
     step(&mut loff);
     let h2 = loff.height;
-    if h2 == MAXCOL as c_int || h2 + h1 > min_height {
+    if h2 == MAXCOL || h2 + h1 > min_height {
         return min_height + 2;
     }
     step(&mut loff);
     let h3 = loff.height;
-    if h3 == MAXCOL as c_int || h3 + h2 > min_height {
+    if h3 == MAXCOL || h3 + h2 > min_height {
         return min_height + 2;
     }
     step(&mut loff);
     let h4 = loff.height;
-    if h4 == MAXCOL as c_int || h4 + h3 + h2 > min_height || h3 + h2 + h1 > min_height {
+    if h4 == MAXCOL || h4 + h3 + h2 > min_height || h3 + h2 + h1 > min_height {
         // One line of overlap.
         min_height + 1
     } else {
@@ -776,7 +779,7 @@ pub(super) fn scroll_with_sms(
 
     // Not actually smoothscrolling, but we ended up with a partly visible
     // line. Keep scrolling until `w_skipcol` is zero again.
-    if prev_sms == 0 && win.w_skipcol > 0 {
+    if prev_sms == 0 && win.w_skipcol > ColNr::ZERO {
         // Reverse the scroll direction when `w_topline` already changed. One
         // line extra scrolling backward, so that consuming `w_skipcol` is
         // symmetric.

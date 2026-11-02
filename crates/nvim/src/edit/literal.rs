@@ -314,9 +314,9 @@ pub(crate) fn ins_copychar(lnum: LineNr) -> c_int {
     let mut at = 0;
     let mut chr = c_char_info(&line, 0);
     let mut vcol = 0;
-    while vcol < end_vcol && byte_at(&line, at) != b'\0' {
+    while vcol < end_vcol.get() && byte_at(&line, at) != b'\0' {
         vcol += win_charsize(cstype, vcol, at, chr.value, &mut csarg).width;
-        if vcol > end_vcol {
+        if vcol > end_vcol.get() {
             break;
         }
         (at, chr) = c_next_cluster(&line, at, chr);

@@ -482,7 +482,7 @@ impl MemLine {
         let textlen = data.line_end(idx).wrapping_sub(start).cast_signed();
         self.ml_line.lnum = lnum;
         self.ml_line.text = CachedText::Block { id, start };
-        self.ml_line.textlen = textlen;
+        self.ml_line.textlen = ColNr::new(textlen);
     }
 
     /// Answer one of the two literals a failed read hands back, for line
@@ -866,7 +866,7 @@ mod tests {
         ml.cache_block_line(id, 0, LineNr::new(3));
         assert_eq!(ml.cached_lnum(), LineNr::new(3));
         assert_eq!(ml.cached_bytes(), b"hello");
-        assert_eq!(ml.cached_len(), 6);
+        assert_eq!(ml.cached_len(), ColNr::new(6));
         assert!(!ml.line_is_dirty());
         assert!(ml.take_replacement().is_none());
 
@@ -883,7 +883,7 @@ mod tests {
         let mut ml = MemLine::closed();
         ml.cache_replacement(b"one two\0".to_vec(), LineNr::ONE);
         ml.cached_bytes_mut()[3] = b'_';
-        ml.set_cached_len(4);
+        ml.set_cached_len(ColNr::new(4));
         assert_eq!(ml.cached_bytes(), b"one");
         ml.swap_cached_text(b"two\0".to_vec());
         assert_eq!(ml.cached_bytes(), b"two");
@@ -896,7 +896,7 @@ mod tests {
         let mut ml = MemLine::closed();
         ml.cache_placeholder(c"???", LineNr::new(9));
         assert_eq!(ml.cached_bytes(), b"???");
-        assert_eq!(ml.cached_len(), 4);
+        assert_eq!(ml.cached_len(), ColNr::new(4));
         assert!(!ml.line_is_dirty());
         assert!(ml.cached_bytes_mut().is_empty());
     }

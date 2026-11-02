@@ -54,7 +54,7 @@ impl RegMatch {
             regprog,
             starts: [None; RE_GROUPS],
             ends: [None; RE_GROUPS],
-            rm_matchcol: 0,
+            rm_matchcol: ColNr::ZERO,
             rm_ic: ignore_case,
         }
     }

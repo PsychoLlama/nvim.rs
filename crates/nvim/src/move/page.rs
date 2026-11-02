@@ -197,7 +197,7 @@ pub fn do_check_cursorbind() {
     static PREV_CURWIN: GlobalCell<Option<WinId>> = GlobalCell::new(None);
     static PREV_CURSOR: GlobalCell<Pos> = GlobalCell::new(Pos {
         lnum: LineNr::ZERO,
-        col: 0,
+        col: ColNr::ZERO,
         coladd: 0,
     });
 

@@ -220,9 +220,9 @@ fn qf_jump_goto_line(position: &Position) {
     }
     Win::current().w_cursor.coladd = 0;
     if c_int::from(position.viscol) == 1 {
-        coladvance(Win::current(), position.col - 1);
+        coladvance(Win::current(), ColNr::new(position.col - 1));
     } else {
-        Win::current().w_cursor.col = position.col - 1;
+        Win::current().w_cursor.col = ColNr::new(position.col - 1);
     }
     Win::current().w_set_curswant = true;
     check_cursor(Win::current());

@@ -102,7 +102,7 @@ pub(crate) fn ins_left() {
         }
         // Only the characters 'revins' itself put there are legal to go
         // back over.
-        if revins_scol.get() != -1 && Win::current().w_cursor.col >= revins_scol.get() {
+        if revins_scol.get() != -1 && Win::current().w_cursor.col >= ColNr::new(revins_scol.get()) {
             revins_legal.set(revins_legal.get() + 1);
         }
         revins_chars.set(revins_chars.get() + 1);
@@ -112,7 +112,7 @@ pub(crate) fn ins_left() {
         // 'whichwrap' allows the motion to leave the line.
         start_arrow_at(InsertEnd::At(tpos));
         Win::current().w_cursor.lnum -= 1;
-        coladvance_to(MAXCOL as c_int);
+        coladvance_to(MAXCOL);
         Win::current().w_set_curswant = true;
     } else {
         beep_cursor();
@@ -129,9 +129,9 @@ pub(crate) fn ins_home(c: c_int) {
     if c == Key::CHome.code() {
         Win::current().w_cursor.lnum = LineNr::ONE;
     }
-    Win::current().w_cursor.col = 0;
+    Win::current().w_cursor.col = ColNr::ZERO;
     Win::current().w_cursor.coladd = 0;
-    Win::current().w_curswant = 0;
+    Win::current().w_curswant = ColNr::ZERO;
     start_arrow_at(InsertEnd::At(tpos));
 }
 
@@ -144,8 +144,8 @@ pub(crate) fn ins_end(c: c_int) {
     if c == Key::CEnd.code() {
         Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
     }
-    coladvance_to(MAXCOL as c_int);
-    Win::current().w_curswant = MAXCOL as ColNr;
+    coladvance_to(MAXCOL);
+    Win::current().w_curswant = ColNr::MAX;
     start_arrow_at(InsertEnd::At(tpos));
 }
 
@@ -155,7 +155,7 @@ pub(crate) fn ins_s_left() {
     may_open_fold_hor();
     hide_dollar();
 
-    if Win::current().w_cursor.lnum > LineNr::ONE || Win::current().w_cursor.col > 0 {
+    if Win::current().w_cursor.lnum > LineNr::ONE || Win::current().w_cursor.col > ColNr::ZERO {
         start_arrow_changing(InsertEnd::cursor(), end_change);
         if !end_change {
             append_to_redobuff_char(Key::SLeft.code());
@@ -193,7 +193,7 @@ pub(crate) fn ins_right() {
                         .min(line.len())..],
                 )
             };
-            Win::current().w_cursor.col += ColNr::try_from(step).unwrap_or(ColNr::MAX);
+            Win::current().w_cursor.col += ColNr::try_from(step).unwrap_or(ColNr::MAX).get();
         }
 
         revins_legal.set(revins_legal.get() + 1);
@@ -207,7 +207,7 @@ pub(crate) fn ins_right() {
         start_arrow_at(InsertEnd::cursor());
         Win::current().w_set_curswant = true;
         Win::current().w_cursor.lnum += 1;
-        Win::current().w_cursor.col = 0;
+        Win::current().w_cursor.col = ColNr::ZERO;
     } else {
         beep_cursor();
     }
@@ -256,7 +256,7 @@ pub(crate) fn ins_updown(up: bool, startcol: bool) {
         if startcol {
             // `getvcol_nolist` only reads: a copy keeps the global out
             // of the call's reach.
-            coladvance_to(getvcol_nolist(&mut Insstart.get()));
+            coladvance_to(getvcol_nolist(&mut Insstart.get()).get());
         }
         if old_topline != Win::current().w_topline || old_topfill != Win::current().w_topfill {
             redraw_later(Win::current(), UPD_VALID);
@@ -321,5 +321,5 @@ fn start_arrow_changing(pos: InsertEnd, end_change: bool) {
 /// Move the cursor to virtual column `vcol` of its line.
 #[inline(always)]
 fn coladvance_to(vcol: c_int) {
-    coladvance(Win::current(), vcol);
+    coladvance(Win::current(), ColNr::new(vcol));
 }

@@ -34,7 +34,7 @@ use crate::pos::MAXCOL;
 use crate::search::FORWARD;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    ApiString, Boolean, ColNr, Error, FAIL, Float, Integer, LineNr, OK, Pos, SwitchWin, TryState,
+    ApiString, Boolean, Error, FAIL, Float, Integer, LineNr, OK, Pos, SwitchWin, TryState,
     WinConfig, WinStyle, WindowHandle, int64_t, kErrorTypeException, kFloatAnchorEast,
     kFloatAnchorSouth, kFloatRelativeLaststatus, kFloatRelativeTabline, kFloatRelativeWindow,
     size_t,
@@ -298,7 +298,7 @@ fn anchor_to_window(
     let mut pos = Pos {
         lnum: number_as_lnum(lnum),
         col: c.bufpos.col,
-        coladd: 0 as ColNr,
+        coladd: 0,
     };
     let (trow, tcol, _, _) = textpos2screenpos(parent, &mut pos, true);
     *row += (trow - 1) as Float;
@@ -326,18 +326,18 @@ fn ext_win_viewport(window: Win) {
     let mut last_topline = window.w_viewport_last_topline;
     let mut last_botline = window.w_viewport_last_botline;
     let mut last_topfill = window.w_viewport_last_topfill as c_int;
-    let mut last_skipcol = window.w_viewport_last_skipcol as int64_t;
+    let mut last_skipcol = i64::from(window.w_viewport_last_skipcol);
     // Lines were removed below the last known top line.
     if last_topline > line_count {
         delta -= (last_topline - line_count) as int64_t;
         last_topline = line_count;
         last_topfill = 0;
-        last_skipcol = MAXCOL as c_int as int64_t;
+        last_skipcol = MAXCOL as int64_t;
     }
     last_botline = last_botline.min(line_count);
 
     if cur_topline < last_topline
-        || (cur_topline == last_topline && (window.w_skipcol as int64_t) < last_skipcol)
+        || (cur_topline == last_topline && i64::from(window.w_skipcol) < last_skipcol)
     {
         // Scrolled up: measure the text between the two positions.
         let mut vcole = last_skipcol;
@@ -350,15 +350,15 @@ fn ext_win_viewport(window: Win) {
         delta -= text_height(
             window,
             cur_topline,
-            window.w_skipcol as int64_t,
+            i64::from(window.w_skipcol),
             &mut lnume,
             &mut vcole,
         );
     } else if cur_topline > last_topline
-        || (cur_topline == last_topline && window.w_skipcol as int64_t > last_skipcol)
+        || (cur_topline == last_topline && i64::from(window.w_skipcol) > last_skipcol)
     {
         // Scrolled down.
-        let mut vcole = window.w_skipcol as int64_t;
+        let mut vcole = i64::from(window.w_skipcol);
         let mut lnume = cur_topline;
         if last_botline > LineNr::ZERO && cur_topline > last_botline {
             delta += (cur_topline - last_botline) as int64_t;
@@ -383,7 +383,7 @@ fn ext_win_viewport(window: Win) {
             i64::from(window.w_topline - 1),
             i64::from(ev_botline),
             i64::from(window.w_cursor.lnum - 1),
-            window.w_cursor.col as Integer,
+            i64::from(window.w_cursor.col),
             i64::from(line_count),
             delta as Integer,
         );

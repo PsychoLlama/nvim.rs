@@ -18,6 +18,7 @@ use crate::eval::typval::{DictRef, NumBuf, dict_get_string_buf, list_iter};
 use crate::guard::Allow;
 use crate::keycodes::{Ctrl_E, Ctrl_N, Ctrl_Y, Key};
 use crate::memline::Lines;
+use crate::narrow::number_as_col;
 use crate::types::ListRef;
 use crate::types::{
     FAIL, OK, VAR_DICT, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock, kListLenMayKnow,
@@ -277,7 +278,7 @@ pub(crate) fn set_completion(mut startcol: ColNr, list: Option<&ListRef>) {
 
     // Lazily show the popup menu, unless we got interrupted.
     if !compl_interrupted.get() {
-        show_pum(save_w_wrow, save_w_leftcol);
+        show_pum(save_w_wrow, save_w_leftcol.get());
     }
 
     may_trigger_modechanged();
@@ -301,8 +302,8 @@ pub fn f_complete(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     if args[1].v_type() != VAR_LIST {
         emsg(gettext(e_invarg));
     } else {
-        let startcol = tv_get_number_chk(&args[0]).unwrap_or(-1) as ColNr;
-        if startcol > 0 {
+        let startcol = number_as_col(tv_get_number_chk(&args[0]).unwrap_or(-1));
+        if startcol > ColNr::ZERO {
             // A handle of its own, for the length of the completion.
             set_completion(startcol - 1, args[1].list_handle().as_ref());
         }
@@ -387,7 +388,7 @@ pub(crate) fn get_complete_info(what_list: Option<&List>, retdict: &mut Dict) {
         let text = if len > 0 {
             let mut lines = Lines::current();
             let line = lines.line(cursor.lnum);
-            let col = (cursor.col as usize).min(line.len());
+            let col = cursor.col.as_usize().min(line.len());
             line[col..(col + len).min(line.len())].to_vec()
         } else {
             Vec::new()

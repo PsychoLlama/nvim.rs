@@ -252,7 +252,7 @@ pub(crate) struct SynPat {
     pub sp_ic: ::core::ffi::c_int,
     pub sp_sync_idx: ::core::ffi::c_int,
     pub sp_line_id: ::core::ffi::c_int,
-    pub sp_startcol: ::core::ffi::c_int,
+    pub sp_startcol: ColNr,
     pub sp_cont_list: IdList,
     pub sp_next_list: IdList,
     /// `containedin=`. Upstream kept this inside `sp_syn` so that
@@ -303,7 +303,7 @@ pub(crate) const EMPTY_SYNPAT: SynPat = SynPat {
     sp_ic: 0,
     sp_sync_idx: 0,
     sp_line_id: 0,
-    sp_startcol: 0,
+    sp_startcol: ColNr::ZERO,
     sp_cont_list: IdList::NONE,
     sp_next_list: IdList::NONE,
     sp_cont_in_list: IdList::NONE,
@@ -500,19 +500,19 @@ const EMPTY_STATE_ITEM: StateItem = StateItem {
     si_m_startcol: 0,
     si_m_endpos: LPos {
         lnum: LineNr::ZERO,
-        col: 0,
+        col: ColNr::ZERO,
     },
     si_h_startpos: LPos {
         lnum: LineNr::ZERO,
-        col: 0,
+        col: ColNr::ZERO,
     },
     si_h_endpos: LPos {
         lnum: LineNr::ZERO,
-        col: 0,
+        col: ColNr::ZERO,
     },
     si_eoe_pos: LPos {
         lnum: LineNr::ZERO,
-        col: 0,
+        col: ColNr::ZERO,
     },
     si_end_idx: 0,
     si_ends: 0,

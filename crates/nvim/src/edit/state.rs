@@ -25,6 +25,7 @@
 use crate::cstr::byte_at;
 use crate::keycodes::Key;
 use crate::mbyte::{c_cluster_len, char_at};
+use crate::narrow::len_as_int;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -64,14 +65,16 @@ fn insert_enter(s: &mut InsertState) {
     } else {
         Insstart.set(Win::current().w_cursor);
         if s.startln != 0 {
-            Insstart.set(Insstart.get().with_col(0));
+            Insstart.set(Insstart.get().with_col(ColNr::ZERO));
         }
     }
     let mut lines = Lines::current();
-    Insstart_textlen.set(linetabsize_str(lines.line(Win::current().w_cursor.lnum)) as ColNr);
-    Insstart_blank_vcol.set(MAXCOL as ColNr);
+    Insstart_textlen.set(ColNr::new(linetabsize_str(
+        lines.line(Win::current().w_cursor.lnum),
+    )));
+    Insstart_blank_vcol.set(ColNr::MAX);
     if !did_ai.get() {
-        ai_col.set(0);
+        ai_col.set(ColNr::ZERO);
     }
 
     // Record the command that started the insert, so `.` repeats it.
@@ -253,7 +256,7 @@ fn restore_ctrl_o_column() {
     let step = {
         let mut lines = Lines::current();
         let line = lines.line(cursor.lnum);
-        let tail = &line[(cursor.col as usize).min(line.len())..];
+        let tail = &line[cursor.col.as_usize().min(line.len())..];
         if tail.is_empty() {
             return;
         }
@@ -268,7 +271,7 @@ fn restore_ctrl_o_column() {
             }
         }
     };
-    Win::current().w_cursor.col += step as ColNr;
+    Win::current().w_cursor.col += len_as_int(step);
 }
 
 /// The state loop's `check` callback: everything that happens before the
@@ -365,7 +368,10 @@ pub(crate) fn insert_check(s: &mut InsertState) -> c_int {
         s.ins_just_started = false;
         // Autocomplete: with a word character already before the cursor,
         // start completing without waiting for another key.
-        if ins_compl_has_autocomplete() && !key_available() && Win::current().w_cursor.col > 0 {
+        if ins_compl_has_autocomplete()
+            && !key_available()
+            && Win::current().w_cursor.col > ColNr::ZERO
+        {
             s.c = char_before_cursor();
             if vim_isprintc(s.c) {
                 ins_compl_enable_autocomplete();

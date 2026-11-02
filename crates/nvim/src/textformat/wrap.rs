@@ -59,7 +59,7 @@ struct BreakSearch {
     /// at: reaching it ends the search.
     wantcol: c_int,
     /// Bytes of comment leader that must not be broken inside.
-    leader_len: ColNr,
+    leader_len: i32,
     /// The character about to be inserted, or NUL. It is not in the buffer
     /// yet, so at `startcol` the walk substitutes it.
     c: c_int,
@@ -94,7 +94,7 @@ impl BreakSearch {
         let mut wcc = 0;
         // The first test is the caller's, and is not asked again.
         let mut known_white = true;
-        while Win::current().w_cursor.col > 0
+        while Win::current().w_cursor.col > ColNr::ZERO
             && (::core::mem::take(&mut known_white) || whitechar(cc))
         {
             cc = dec_cursor_gchar().1;
@@ -102,7 +102,7 @@ impl BreakSearch {
                 wcc += 1;
             }
         }
-        if Win::current().w_cursor.col == 0 && whitechar(cc) {
+        if Win::current().w_cursor.col == ColNr::ZERO && whitechar(cc) {
             return Step::Stop; // only spaces in front of the text
         }
         // 'formatoptions' `p`: don't break after a period followed by
@@ -112,16 +112,16 @@ impl BreakSearch {
             return Step::Again;
         }
         // Don't break inside the comment leader.
-        if Win::current().w_cursor.col < self.leader_len {
+        if Win::current().w_cursor.col < ColNr::new(self.leader_len) {
             return Step::Stop;
         }
         if has_format_option(FoFlag::ONE_LETTER) {
             // Don't break after a one-letter word.
-            if Win::current().w_cursor.col == 0 {
+            if Win::current().w_cursor.col == ColNr::ZERO {
                 return Step::Stop; // a one-letter word at the start
             }
             // Don't break `#a b` when 'textwidth' is 2.
-            if Win::current().w_cursor.col <= self.leader_len {
+            if Win::current().w_cursor.col <= ColNr::new(self.leader_len) {
                 return Step::Stop;
             }
             let col = Win::current().w_cursor.col;
@@ -132,9 +132,9 @@ impl BreakSearch {
             Win::current().w_cursor.col = col;
         }
         inc_cursor();
-        self.end_foundcol = end_col as c_int + 1;
-        self.foundcol = Win::current().w_cursor.col as c_int;
-        if Win::current().w_cursor.col <= self.wantcol {
+        self.end_foundcol = end_col.get() + 1;
+        self.foundcol = Win::current().w_cursor.col.get();
+        if Win::current().w_cursor.col <= ColNr::new(self.wantcol) {
             return Step::Stop;
         }
         Step::Back
@@ -145,24 +145,24 @@ impl BreakSearch {
     fn at_multibyte(&mut self, mut cc: c_int) -> Step {
         let mut col;
         // First try breaking *after* this character.
-        if Win::current().w_cursor.col != self.startcol {
+        if Win::current().w_cursor.col != ColNr::new(self.startcol) {
             // Don't break inside the comment leader.
-            if Win::current().w_cursor.col < self.leader_len {
+            if Win::current().w_cursor.col < ColNr::new(self.leader_len) {
                 return Step::Stop;
             }
             col = Win::current().w_cursor.col;
             let ncc = inc_cursor_gchar().1;
             let allow_break = utf_allow_break(cc, ncc);
-            if Win::current().w_cursor.col != self.skip_pos && allow_break {
-                self.foundcol = Win::current().w_cursor.col as c_int;
+            if Win::current().w_cursor.col != ColNr::new(self.skip_pos) && allow_break {
+                self.foundcol = Win::current().w_cursor.col.get();
                 self.end_foundcol = self.foundcol;
-                if Win::current().w_cursor.col <= self.wantcol {
+                if Win::current().w_cursor.col <= ColNr::new(self.wantcol) {
                     return Step::Stop;
                 }
             }
             Win::current().w_cursor.col = col;
         }
-        if Win::current().w_cursor.col == 0 {
+        if Win::current().w_cursor.col == ColNr::ZERO {
             return Step::Stop;
         }
 
@@ -174,19 +174,19 @@ impl BreakSearch {
             return Step::Again; // break with a space instead
         }
         // Don't break inside the comment leader.
-        if Win::current().w_cursor.col < self.leader_len {
+        if Win::current().w_cursor.col < ColNr::new(self.leader_len) {
             return Step::Stop;
         }
         Win::current().w_cursor.col = col;
-        self.skip_pos = Win::current().w_cursor.col as c_int;
+        self.skip_pos = Win::current().w_cursor.col.get();
 
         let mut allow_break = utf_allow_break(cc, ncc);
         // Honour the line-break prohibition classes even here.
         if allow_break {
-            self.foundcol = Win::current().w_cursor.col as c_int;
+            self.foundcol = Win::current().w_cursor.col.get();
             self.end_foundcol = self.foundcol;
         }
-        if Win::current().w_cursor.col <= self.wantcol {
+        if Win::current().w_cursor.col <= ColNr::new(self.wantcol) {
             let ncc_allow_break = utf_allow_break_before(ncc);
             if allow_break {
                 return Step::Stop;
@@ -194,7 +194,7 @@ impl BreakSearch {
             if !ncc_allow_break && !self.fo_rigor_tw {
                 // Let at most one punctuation character hang past
                 // 'textwidth'.
-                if Win::current().w_cursor.col == self.startcol {
+                if Win::current().w_cursor.col == ColNr::new(self.startcol) {
                     // The character being inserted is itself unbreakable:
                     // put the check off until the next one.
                     self.foundcol = 0;
@@ -214,7 +214,7 @@ impl BreakSearch {
                     self.foundcol = if ncc == NUL {
                         0
                     } else {
-                        Win::current().w_cursor.col as c_int
+                        Win::current().w_cursor.col.get()
                     };
                     self.end_foundcol = self.foundcol;
                     return Step::Stop;
@@ -240,7 +240,7 @@ impl BreakSearch {
             || Win::current().w_cursor.col >= Insstart.get().col
         {
             let under = landed.take();
-            let cc = if Win::current().w_cursor.col == self.startcol as ColNr && self.c != NUL {
+            let cc = if Win::current().w_cursor.col == ColNr::new(self.startcol) && self.c != NUL {
                 self.c
             } else {
                 under.unwrap_or_else(gchar_cursor)
@@ -257,7 +257,7 @@ impl BreakSearch {
                 Step::Again => continue,
                 Step::Back => {}
             }
-            if Win::current().w_cursor.col == 0 {
+            if Win::current().w_cursor.col == ColNr::ZERO {
                 return;
             }
             landed = Some(dec_cursor_gchar().1);
@@ -270,7 +270,7 @@ impl BreakSearch {
 ///
 /// With 'cindent', a leader that is not at the start of the line still counts
 /// -- a line comment after code -- which is what the second lookup is for.
-fn wrap_leader_len() -> ColNr {
+fn wrap_leader_len() -> i32 {
     let mut lines = Lines::current();
     let line = lines.line(Win::current().w_cursor.lnum);
     let mut leader_len = get_leader_len(line, false, true).0;
@@ -333,7 +333,7 @@ pub fn internal_format(
         let mut did_do_comment = false;
 
         let virtcol = get_nolist_virtcol() + char2cells(if c != NUL { c } else { gchar_cursor() });
-        if virtcol <= textwidth {
+        if virtcol <= ColNr::new(textwidth) {
             break;
         }
 
@@ -356,15 +356,15 @@ pub fn internal_format(
         {
             break;
         }
-        let mut startcol = win.w_cursor.col as c_int;
+        let mut startcol = win.w_cursor.col.get();
         if startcol == 0 {
             break;
         }
 
         // Find the column 'textwidth' falls at.
-        win.coladvance(textwidth);
-        let wantcol = win.w_cursor.col as c_int;
-        win.w_cursor.col = startcol as ColNr;
+        win.coladvance(ColNr::new(textwidth));
+        let wantcol = win.w_cursor.col.get();
+        win.w_cursor.col = ColNr::new(startcol);
 
         let mut search = BreakSearch {
             startcol,
@@ -380,7 +380,7 @@ pub fn internal_format(
         search.run(flags, fo_ins_blank);
         if search.foundcol == 0 {
             // No break column: the line has to stay long.
-            win.w_cursor.col = startcol as ColNr;
+            win.w_cursor.col = ColNr::new(startcol);
             break;
         }
         let foundcol = search.foundcol;
@@ -399,14 +399,14 @@ pub fn internal_format(
 
         // Move `startcol` past the spaces that are about to be deleted
         // and the characters that stay on the top line.
-        win.w_cursor.col = foundcol as ColNr;
+        win.w_cursor.col = ColNr::new(foundcol);
         while {
             let cc = gchar_cursor();
-            (whitechar(cc)) && (!fo_white_par || win.w_cursor.col < startcol as ColNr)
+            (whitechar(cc)) && (!fo_white_par || win.w_cursor.col < ColNr::new(startcol))
         } {
             inc_cursor();
         }
-        startcol -= win.w_cursor.col as c_int;
+        startcol -= win.w_cursor.col.get();
         startcol = startcol.max(0);
 
         let mut saved_text = Vec::new();
@@ -421,13 +421,13 @@ pub fn internal_format(
                 let rest = &line[usize::try_from(cursor.col).unwrap_or(0).min(line.len())..];
                 rest[..usize::try_from(startcol).unwrap_or(0).min(rest.len())].to_vec()
             };
-            win.w_cursor.col = orig_col as ColNr;
+            win.w_cursor.col = ColNr::new(orig_col);
             if !fo_white_par {
                 backspace_until_column(foundcol);
             }
         } else if !fo_white_par {
             // Put the cursor after the position to break at.
-            win.w_cursor.col = foundcol as ColNr;
+            win.w_cursor.col = ColNr::new(foundcol);
         }
 
         // Split the line just before the margin. Only insert and delete
@@ -496,7 +496,7 @@ pub fn internal_format(
         } else {
             // Keep the cursor off the NUL past the end: cindent may have
             // added or removed indent.
-            win.w_cursor.col += startcol as ColNr;
+            win.w_cursor.col += startcol;
             let len = get_cursor_line_len();
             win.w_cursor.col = win.w_cursor.col.min(len);
         }

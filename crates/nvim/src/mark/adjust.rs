@@ -46,7 +46,7 @@ use crate::types::CmdModFlags;
 /// "`'"` has never really been set" looks like to the adjuster.
 const INIT_POS: Pos = Pos {
     lnum: LineNr::ONE,
-    col: 0,
+    col: ColNr::ZERO,
     coladd: 0,
 };
 
@@ -99,7 +99,7 @@ impl LineShift {
         if posp.lnum >= self.line1 && posp.lnum <= self.line2 {
             if self.amount == MAXLNUM.get() {
                 posp.lnum = (self.line1 - 1).max(LineNr::ONE);
-                posp.col = 0;
+                posp.col = ColNr::ZERO;
             } else {
                 posp.lnum += self.amount;
             }
@@ -138,7 +138,7 @@ struct ColShift {
     lnum: LineNr,
     mincol: ColNr,
     lnum_amount: i32,
-    col_amount: ColNr,
+    col_amount: i32,
     spaces_removed: c_int,
 }
 
@@ -149,10 +149,10 @@ impl ColShift {
             return;
         }
         posp.lnum += self.lnum_amount;
-        if self.col_amount < 0 && posp.col <= -self.col_amount {
-            posp.col = 0;
-        } else if posp.col < self.spaces_removed {
-            posp.col = self.col_amount + self.spaces_removed;
+        if self.col_amount < 0 && posp.col <= ColNr::new(-self.col_amount) {
+            posp.col = ColNr::ZERO;
+        } else if posp.col < ColNr::new(self.spaces_removed) {
+            posp.col = ColNr::new(self.col_amount + self.spaces_removed);
         } else {
             posp.col += self.col_amount;
         }
@@ -416,13 +416,13 @@ pub fn mark_col_adjust(
     lnum: LineNr,
     mincol: ColNr,
     lnum_amount: i32,
-    col_amount: ColNr,
+    col_amount: i32,
     spaces_removed: c_int,
 ) {
     // Upstream asserts this once per adjusted mark; `col_amount` does not
     // change, and the upper half is vacuous for a `ColNr`. What it really
     // guards is `-col_amount` below.
-    debug_assert!(col_amount > ColNr::MIN, "col_amount > INT_MIN");
+    debug_assert!(col_amount > i32::MIN, "col_amount > INT_MIN");
     // `mark_adjust_buf`'s `:lockmarks` guard is a DIFFERENT one, in a
     // different function: a line operation never reaches here and a column
     // one never reaches that. `1787242636-jmarkmutate.py`'s
@@ -515,7 +515,7 @@ mod tests {
     fn at(lnum: LineNr) -> Pos {
         Pos {
             lnum,
-            col: 7,
+            col: ColNr::new(7),
             coladd: 0,
         }
     }
@@ -538,7 +538,7 @@ mod tests {
     fn a_deleted_cursor_moves_to_the_line_above_the_range() {
         let mut pos = at(LineNr::new(57));
         DELETE_56_57.cursor(&mut pos);
-        assert_eq!((pos.lnum.get(), pos.col), (55, 0));
+        assert_eq!((pos.lnum.get(), pos.col.get()), (55, 0));
     }
 
     /// Deleting from line 1 leaves the cursor on line 1, not line 0.
@@ -552,7 +552,7 @@ mod tests {
         };
         let mut pos = at(LineNr::new(2));
         shift.cursor(&mut pos);
-        assert_eq!((pos.lnum.get(), pos.col), (1, 0));
+        assert_eq!((pos.lnum.get(), pos.col.get()), (1, 0));
     }
 
     #[test]
@@ -564,7 +564,10 @@ mod tests {
 
             let mut pos = at(LineNr::new(100));
             shift.cursor(&mut pos);
-            assert_eq!((pos.lnum.get(), pos.col), (100 + shift.amount_after, 7));
+            assert_eq!(
+                (pos.lnum.get(), pos.col.get()),
+                (100 + shift.amount_after, 7)
+            );
         }
     }
 
@@ -618,10 +621,10 @@ mod tests {
         }
     }
 
-    fn col_shift(col_amount: ColNr, spaces_removed: c_int) -> ColShift {
+    fn col_shift(col_amount: i32, spaces_removed: c_int) -> ColShift {
         ColShift {
             lnum: LineNr::new(5),
-            mincol: 4,
+            mincol: ColNr::new(4),
             lnum_amount: 0,
             col_amount,
             spaces_removed,
@@ -632,29 +635,29 @@ mod tests {
     fn a_column_before_mincol_is_untouched() {
         let mut pos = Pos {
             lnum: LineNr::new(5),
-            col: 3,
+            col: ColNr::new(3),
             coladd: 0,
         };
         col_shift(10, 0).col(&mut pos);
-        assert_eq!(pos.col, 3);
+        assert_eq!(pos.col, ColNr::new(3));
     }
 
     #[test]
     fn a_column_on_another_line_is_untouched() {
         let mut pos = Pos {
             lnum: LineNr::new(6),
-            col: 40,
+            col: ColNr::new(40),
             coladd: 0,
         };
         col_shift(10, 0).col(&mut pos);
-        assert_eq!(pos.col, 40);
+        assert_eq!(pos.col, ColNr::new(40));
     }
 
     #[test]
     fn a_column_shifted_off_the_start_of_the_line_lands_on_column_zero() {
         let mut pos = at(LineNr::new(5));
         col_shift(-9, 0).col(&mut pos);
-        assert_eq!(pos.col, 0);
+        assert_eq!(pos.col, ColNr::ZERO);
     }
 
     /// A mark inside the run of removed whitespace lands where that run
@@ -664,7 +667,7 @@ mod tests {
     fn a_column_inside_removed_whitespace_is_rebased_on_the_change() {
         let mut pos = at(LineNr::new(5));
         col_shift(-3, 9).col(&mut pos);
-        assert_eq!(pos.col, 6);
+        assert_eq!(pos.col, ColNr::new(6));
     }
 
     #[test]
@@ -672,12 +675,12 @@ mod tests {
         let mut pos = at(LineNr::new(5));
         ColShift {
             lnum: LineNr::new(5),
-            mincol: 4,
+            mincol: ColNr::new(4),
             lnum_amount: 3,
             col_amount: 11,
             spaces_removed: 0,
         }
         .col(&mut pos);
-        assert_eq!((pos.lnum.get(), pos.col), (8, 18));
+        assert_eq!((pos.lnum.get(), pos.col.get()), (8, 18));
     }
 }

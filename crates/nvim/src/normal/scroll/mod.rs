@@ -54,7 +54,7 @@ pub(crate) fn do_check_scrollbind(check: bool) {
     static OLD_CURWIN: GlobalCell<Option<WinId>> = GlobalCell::new(None);
     static OLD_VTOPLINE: GlobalCell<LineNr> = GlobalCell::new(LineNr::ZERO);
     static OLD_BUF: GlobalCell<Option<BufId>> = GlobalCell::new(None);
-    static OLD_LEFTCOL: GlobalCell<ColNr> = GlobalCell::new(0);
+    static OLD_LEFTCOL: GlobalCell<ColNr> = GlobalCell::new(ColNr::ZERO);
 
     let mut win = Win::current();
     let vtopline = get_vtopline(win);

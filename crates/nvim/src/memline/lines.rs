@@ -41,7 +41,6 @@ use super::*;
 use crate::cstr;
 use crate::fileio::ReadFlags;
 use crate::memory::XString;
-use crate::pos::MAXCOL;
 use crate::types::{Failed, NUL};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
@@ -255,7 +254,7 @@ pub fn ml_get_len(lnum: LineNr) -> ColNr {
 /// Length of line `lnum` of `buffer`, excluding the NUL.
 pub fn ml_get_buf_len(buffer: Buf, lnum: LineNr) -> ColNr {
     fetch_line(buffer, lnum, false);
-    (buffer.b_ml.cached_len() - 1).max(0)
+    (buffer.b_ml.cached_len() - 1).max(ColNr::ZERO)
 }
 
 /// The codepoint at `pos`, which must either be valid or have `col` set to
@@ -265,7 +264,7 @@ pub fn ml_get_buf_len(buffer: Buf, lnum: LineNr) -> ColNr {
 /// column at `MAXCOL` are asking about.
 pub fn gchar_pos(pos: &Pos) -> c_int {
     // While searching, the column is sometimes put at the end of a line.
-    if pos.col == MAXCOL as c_int {
+    if pos.col == ColNr::MAX {
         return NUL;
     }
     let mut lines = Lines::current();
@@ -568,7 +567,7 @@ pub fn ml_flush_deleted_bytes(mut buffer: Buf) -> (size_t, size_t, size_t) {
 /// the end of a line, -1 at the end of the file, and 0 otherwise.
 pub fn inc(pos: &mut Pos) -> c_int {
     // While searching, the position may be set to the end of a line.
-    if pos.col != MAXCOL as c_int {
+    if pos.col != ColNr::MAX {
         let mut lines = Lines::current();
         let line = lines.line(pos.lnum);
         let at = usize::try_from(pos.col).unwrap_or(0);
@@ -576,13 +575,13 @@ pub fn inc(pos: &mut Pos) -> c_int {
             // Still within the line; move to the next char, which may be
             // the one past the end.
             let l = cluster_len(&line[at..]);
-            pos.col += ColNr::try_from(l).unwrap_or(0);
+            pos.col += ColNr::try_from(l).unwrap_or(ColNr::ZERO).get();
             return if at + l < line.len() { 0 } else { 2 };
         }
     }
     if pos.lnum != Buf::current().b_ml.ml_line_count {
         // There is a next line.
-        pos.col = 0;
+        pos.col = ColNr::ZERO;
         pos.lnum += 1;
         pos.coladd = 0;
         return 1;
@@ -593,7 +592,7 @@ pub fn inc(pos: &mut Pos) -> c_int {
 /// [`inc`], but skipping the NUL at the end of a non-empty line.
 pub fn incl(pos: &mut Pos) -> c_int {
     let mut r = inc(pos);
-    if r >= 1 && pos.col != 0 {
+    if r >= 1 && pos.col != ColNr::ZERO {
         r = inc(pos);
     }
     r
@@ -615,14 +614,16 @@ pub fn dec(pos: &mut Pos) -> c_int {
             pos.col = ColNr::try_from(line.len()).unwrap_or(ColNr::MAX);
         }
         let at = usize::try_from(pos.col).unwrap_or(0);
-        pos.col -= ColNr::try_from(head_off(line, at)).unwrap_or(0);
+        pos.col -= ColNr::try_from(head_off(line, at))
+            .unwrap_or(ColNr::ZERO)
+            .get();
     };
-    if pos.col == MAXCOL as c_int {
+    if pos.col == ColNr::MAX {
         // Past the end of the line.
         snap(pos, true);
         return 0;
     }
-    if pos.col > 0 {
+    if pos.col > ColNr::ZERO {
         // Still within the line.
         pos.col -= 1;
         snap(pos, false);
@@ -640,7 +641,7 @@ pub fn dec(pos: &mut Pos) -> c_int {
 /// [`dec`], but skipping the NUL at the end of a non-empty line.
 pub fn decl(pos: &mut Pos) -> c_int {
     let mut r = dec(pos);
-    if r == 1 && pos.col != 0 {
+    if r == 1 && pos.col != ColNr::ZERO {
         r = dec(pos);
     }
     r

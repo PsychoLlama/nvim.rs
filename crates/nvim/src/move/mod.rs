@@ -428,15 +428,15 @@ impl Win {
     /// The `w_skipcol` that hides `plines_off` screen lines of the top line.
     pub(super) fn skipcol_from_plines(self, plines_off: c_int) -> ColNr {
         let (width1, width2) = self.text_widths();
-        arith::skipcol_from_plines(plines_off, width1, width2)
+        ColNr::new(arith::skipcol_from_plines(plines_off, width1, width2))
     }
 
     /// Set `w_skipcol` back to zero, redrawing if it was not already.
     pub(super) fn reset_skipcol(mut self) {
-        if self.w_skipcol == 0 {
+        if self.w_skipcol == ColNr::ZERO {
             return;
         }
-        self.w_skipcol = 0;
+        self.w_skipcol = ColNr::ZERO;
         // The cheapest redraw that shows everything that changed:
         // UPD_NOT_VALID is too expensive and UPD_REDRAW_TOP redraws too
         // little when the top line gains a screen line.
@@ -572,7 +572,8 @@ fn curs_rows(mut win: Win) {
             }
         }
         if !skipped {
-            if valid && (lnum != win.w_topline || (win.w_skipcol == 0 && !win.may_fill())) {
+            if valid && (lnum != win.w_topline || (win.w_skipcol == ColNr::ZERO && !win.may_fill()))
+            {
                 let wl = win.remembered_line(i);
                 lnum = wl.wl_lastlnum + 1;
                 // The cursor is inside folded or concealed lines; this row

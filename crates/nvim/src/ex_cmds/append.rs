@@ -29,6 +29,7 @@ use crate::os::cshim::gettext;
 use crate::state::mode::State;
 use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL};
 use crate::types::CmdIdx;
+use crate::types::ColNr;
 use crate::types::{ExArg, LineNr, NUL, OptInt, int64_t};
 use crate::ui::state::{Columns, Rows};
 use crate::ui::ui_cursor_shape;
@@ -341,7 +342,7 @@ pub fn ex_z(excmd: &mut ExArg) {
 
     if Win::current().w_cursor.lnum != curs {
         Win::current().w_cursor.lnum = curs;
-        Win::current().w_cursor.col = 0;
+        Win::current().w_cursor.col = ColNr::ZERO;
     }
     ex_no_reprint.set(true);
 }

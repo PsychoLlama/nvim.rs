@@ -157,7 +157,7 @@ fn align_with_unclosed_paren(
             && trypos.lnum == our_paren_pos.lnum
             && trypos.col < our_paren_pos.col
         {
-            ignore_paren_col = trypos.col + 1;
+            ignore_paren_col = (trypos.col + 1).get();
         }
         Win::current().w_cursor.lnum = save_lnum;
     }
@@ -188,7 +188,7 @@ fn align_with_unclosed_paren(
                 // The paren is the last non-white character of its line:
                 // indent one `W` level per nesting level instead.
                 let mut n = 1;
-                for col in 0..our_paren_pos.col {
+                for col in 0..our_paren_pos.col.get() {
                     // `col` is below `our_paren_pos.col`, the column of a
                     // `(` found on this line, so it indexes inside it.
                     match byte_at(l, usize::try_from(col).unwrap_or(usize::MAX)) {
@@ -199,7 +199,7 @@ fn align_with_unclosed_paren(
                         _ => {}
                     }
                 }
-                our_paren_pos.col = 0;
+                our_paren_pos.col = ColNr::ZERO;
                 amount += n * Buf::current().b_ind_unclosed_wrapped;
             } else if Buf::current().b_ind_unclosed_whiteok != 0 {
                 our_paren_pos.col += 1;
@@ -223,7 +223,7 @@ fn align_with_unclosed_paren(
         }
         // How indented the paren is, or the character after it if the
         // block above moved onto one.
-        if our_paren_pos.col > 0 {
+        if our_paren_pos.col > ColNr::ZERO {
             let vcol = line_vcol(our_paren_pos.lnum, our_paren_pos.col);
             *cur_amount = (*cur_amount).min(vcol);
         }
@@ -240,7 +240,7 @@ fn align_with_unclosed_paren(
         // Add `u` for each '(' before our matching one, ignoring a
         // `(void)` before the line (`ignore_paren_col`).
         let mut col = our_paren_pos.col;
-        while our_paren_pos.col > ignore_paren_col {
+        while our_paren_pos.col > ColNr::new(ignore_paren_col) {
             our_paren_pos.col -= 1;
             // `our_paren_pos` is a position in the current buffer, its
             // column only walked back towards column 0, so the cache answers
@@ -256,14 +256,14 @@ fn align_with_unclosed_paren(
                 }
                 b')' => {
                     amount -= Buf::current().b_ind_unclosed2;
-                    col = MAXCOL;
+                    col = ColNr::MAX;
                 }
                 _ => {}
             }
         }
 
         // Use `(` once, when the first '(' is not inside braces.
-        if col == MAXCOL {
+        if col == ColNr::MAX {
             amount += Buf::current().b_ind_unclosed;
         } else {
             Win::current().w_cursor.lnum = our_paren_pos.lnum;

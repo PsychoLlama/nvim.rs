@@ -680,15 +680,15 @@ pub fn build_stl_str_hl(
     let mut lines = buf.lines();
     let line = lines.line(lnum);
     let empty_line = line.is_empty();
-    let len = line.len() as ColNr;
+    let len = ColNr::from_index(line.len());
     let byteval = if win.w_cursor.col > len {
         // The line may have changed since the cursor column was checked, or
         // the line number was adjusted above.
         win.w_cursor.col = len;
-        win.w_cursor.coladd = 0 as ColNr;
+        win.w_cursor.coladd = 0;
         0
     } else {
-        char_at(&line[win.w_cursor.col as usize..])
+        char_at(&line[win.w_cursor.col.as_usize()..])
     };
 
     let env = Env {

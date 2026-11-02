@@ -44,13 +44,13 @@ use crate::message::e_interr;
 use crate::message::{emsg, msg};
 use crate::message_fmt::msg_bytes;
 use crate::r#move::changed_window_setting;
+use crate::narrow::len_as_int;
 use crate::narrow::number_as_int;
 use crate::option::set_option_direct;
 use crate::option::vars::{p_ch, p_cwh, p_icm};
 use crate::options::kOptInccommand;
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
-use crate::pos::MAXCOL;
 use crate::profile::profile_passed_limit;
 use crate::regexp::vim_regexec_multi;
 use crate::search::get_search_pat;
@@ -261,13 +261,13 @@ fn match_one(st: &mut Sub, args: &SubArgs, current_match: &mut SubResult) {
         && st.matchcol == st.regmatch.endpos[0].col
     {
         let old = st.old_line().bytes();
-        if st.matchcol as usize >= old.len() {
+        if st.matchcol.as_usize() >= old.len() {
             // Already at the end of the line: don't look for a match in this
             // line again.
             st.skip_match = true;
         } else {
             // Search for a match at the next column.
-            st.matchcol += cluster_len(&old[st.matchcol as usize..]) as ColNr;
+            st.matchcol += len_as_int(cluster_len(&old[st.matchcol.as_usize()..]));
         }
         // The match will be pushed to preview_lines: bring it into a proper
         // state first.
@@ -287,7 +287,7 @@ fn match_one(st: &mut Sub, args: &SubArgs, current_match: &mut SubResult) {
         // line and set nmatch to one, so that we continue looking for a match
         // on the next line.  Avoids that ":s/\nB\@=//gc" gets stuck.
         if st.nmatch > 1 as c_int {
-            st.matchcol = st.old_line().len() as ColNr;
+            st.matchcol = ColNr::from_index(st.old_line().len());
             st.nmatch = 1 as c_int;
             st.skip_match = true;
         }
@@ -363,7 +363,7 @@ fn is_last_match(st: &Sub) -> bool {
     // column of a *different* line and can be past this one's end -- which
     // here answers "at the end of the line" rather than reading out of
     // bounds, and is why the answer is a length comparison.
-    st.matchcol as usize >= st.old_line().len()
+    st.matchcol.as_usize() >= st.old_line().len()
         && st.nmatch <= 1 as c_int
         && !st.regmatch.is_multiline()
 }
@@ -374,11 +374,11 @@ fn match_loop(st: &mut Sub, args: &SubArgs) {
         let mut current_match = SubResult {
             start: LPos {
                 lnum: LineNr::ZERO,
-                col: 0 as ColNr,
+                col: ColNr::ZERO,
             },
             end: LPos {
                 lnum: LineNr::ZERO,
-                col: 0 as ColNr,
+                col: ColNr::ZERO,
             },
             pre_match: LineNr::ZERO,
         };
@@ -462,7 +462,7 @@ fn match_loop(st: &mut Sub, args: &SubArgs) {
 
 /// Everything that happens for one line of the range that has a match.
 fn substitute_line(st: &mut Sub, args: &SubArgs) {
-    st.prev_matchcol = MAXCOL as ColNr;
+    st.prev_matchcol = ColNr::MAX;
     st.new_line = None;
     st.did_sub = false;
     st.nmatch_tl = 0;
@@ -471,7 +471,7 @@ fn substitute_line(st: &mut Sub, args: &SubArgs) {
     st.line_matches.clear();
     st.sub_firstlnum = st.lnum;
     st.copied = 0;
-    st.matchcol = 0 as ColNr;
+    st.matchcol = ColNr::ZERO;
 
     // At the first match, remember the current cursor position.
     if !st.got_match {
@@ -504,7 +504,7 @@ fn substitute_range(st: &mut Sub, args: &SubArgs) {
         {
             break;
         }
-        st.nmatch = st.regexec_at(st.lnum, 0 as ColNr, args.timeout);
+        st.nmatch = st.regexec_at(st.lnum, ColNr::ZERO, args.timeout);
         if st.nmatch != 0 {
             substitute_line(st, args);
         }
@@ -529,7 +529,7 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
         changed_lines(
             Buf::current(),
             st.first_line,
-            0 as ColNr,
+            ColNr::ZERO,
             st.last_line - added,
             added,
             false,
@@ -553,7 +553,7 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
             // Set the '[ and '] marks.
             Buf::current().b_op_start.lnum = args.range.0;
             Buf::current().b_op_end.lnum = st.line2;
-            Buf::current().b_op_end.col = 0 as ColNr;
+            Buf::current().b_op_end.col = ColNr::ZERO;
             Buf::current().b_op_start.col = Buf::current().b_op_end.col;
         }
 
@@ -561,7 +561,7 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
             // When interactive, leave the cursor on the match.
             if !SUB_FLAGS.with(|flags| flags.do_ask) {
                 if args.endcolumn {
-                    coladvance(Win::current(), MAXCOL as c_int);
+                    coladvance(Win::current(), ColNr::MAX);
                 } else {
                     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
                 }
@@ -711,8 +711,8 @@ pub(crate) fn do_sub(
         old_line: None,
         sub_firstlnum: LineNr::ZERO,
         copied: 0,
-        matchcol: 0 as ColNr,
-        prev_matchcol: 0 as ColNr,
+        matchcol: ColNr::ZERO,
+        prev_matchcol: ColNr::ZERO,
         new_line: None,
         sublen: 0 as c_int,
         did_sub: false,

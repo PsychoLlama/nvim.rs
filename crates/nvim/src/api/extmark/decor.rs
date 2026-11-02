@@ -56,7 +56,7 @@ pub fn nvim_buf_clear_namespace(
     let ns = if ns_id < 0 { 0 } else { number_as_u32(ns_id) };
     let start = number_as_int(line_start);
     let end = number_as_int(line_end) - 1;
-    extmark_clear(b, ns, start, 0, end, MAXCOL);
+    extmark_clear(b, ns, start, ColNr::ZERO, end, ColNr::MAX);
     Ok(())
 }
 

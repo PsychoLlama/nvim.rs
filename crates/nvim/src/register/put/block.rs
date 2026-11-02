@@ -46,36 +46,36 @@ fn land_block(line: &[u8], col: ColNr) -> Landing {
     let mut at = 0;
     let mut chr = c_char_info(line, 0);
     let (mut vcol, mut incr) = (0, 0);
-    while vcol < col && !(chr.value == 0 && cstr::byte_at(line, at) == 0) {
+    while vcol < col.get() && !(chr.value == 0 && cstr::byte_at(line, at) == 0) {
         incr = win_charsize(cstype, vcol, at, chr.value, &mut csarg).width;
         vcol += incr;
         (at, chr) = c_next_cluster(line, at, chr);
     }
 
     let textcol = ColNr::try_from(at).expect("a column of the line");
-    let ends_here = vcol == col && cstr::byte_at(line, at) == 0;
+    let ends_here = vcol == col.get() && cstr::byte_at(line, at) == 0;
     let mut land = Landing {
         textcol,
         startspaces: 0,
         endspaces: 0,
         delcount: 0,
-        shortline: vcol < col || ends_here,
+        shortline: vcol < col.get() || ends_here,
     };
 
-    if vcol < col {
+    if vcol < col.get() {
         // The line stops short of the block: pad it out.
-        land.startspaces = col - vcol;
-    } else if vcol > col {
+        land.startspaces = col.get() - vcol;
+    } else if vcol > col.get() {
         // The block lands inside a character. Only a tab can be split
         // into spaces; anything else has to be pushed past the block,
         // which misaligns it, so it is left alone.
-        land.endspaces = vcol - col;
+        land.endspaces = vcol - col.get();
         land.startspaces = incr - land.endspaces;
         land.textcol -= 1;
         land.delcount = 1;
-        let back = head_off(line, land.textcol as usize);
-        land.textcol -= ColNr::try_from(back).expect("a column of the line");
-        if c_int::from(cstr::byte_at(line, land.textcol as usize)) != TAB {
+        let back = head_off(line, land.textcol.as_usize());
+        land.textcol -= ColNr::try_from(back).expect("a column of the line").get();
+        if c_int::from(cstr::byte_at(line, land.textcol.as_usize())) != TAB {
             land.delcount = 0;
             land.endspaces = 0;
         }
@@ -105,7 +105,7 @@ impl Put {
     fn block_start_col(&self) -> ColNr {
         let c = gchar_cursor();
         let mut col: ColNr;
-        let mut endcol2: ColNr = 0;
+        let mut endcol2: ColNr = ColNr::ZERO;
 
         if self.dir == FORWARD && c != NUL {
             if self.ve_flags == kOptVeFlagAll as ::core::ffi::c_uint {
@@ -115,7 +115,7 @@ impl Put {
             }
             // Move to the start of the next character: `c` is not the NUL
             // that ends the line, so there is one to step over.
-            Win::current().w_cursor.col += super::cursor_char_len();
+            Win::current().w_cursor.col += super::cursor_char_len().get();
             col += 1;
         } else {
             (col, endcol2) = Win::current().vcol_span(Win::current().cursor());
@@ -132,7 +132,7 @@ impl Put {
                 Win::current().w_cursor.col += 1;
             }
             if c == TAB {
-                if self.dir == BACKWARD && Win::current().w_cursor.col != 0 {
+                if self.dir == BACKWARD && Win::current().w_cursor.col != ColNr::ZERO {
                     Win::current().w_cursor.col -= 1;
                 }
                 if self.dir == FORWARD && col - 1 == endcol2 {
@@ -203,7 +203,7 @@ impl Put {
         // padding, `count` copies of the block's line each with its own right
         // padding, the spaces replacing the back half of a split tab, and
         // finally the rest of the old line.
-        let textcol = pad(land.textcol);
+        let textcol = pad(land.textcol.get());
         let mut newline = Vec::with_capacity(*totlen + old.len() + 1);
         newline.extend_from_slice(&old[..textcol]);
         newline.resize(newline.len() + pad(land.startspaces), b' ');
@@ -230,8 +230,8 @@ impl Put {
             buf,
             at.get(),
             land.textcol,
-            land.delcount,
-            inserted,
+            ColNr::new(land.delcount),
+            ColNr::new(inserted),
             kExtmarkUndo,
         );
 
@@ -249,7 +249,7 @@ impl Put {
     pub(crate) fn blockwise(&mut self, lnum: LineNr) {
         let col = self.block_start_col();
 
-        let mut textcol: ColNr = 0;
+        let mut textcol: ColNr = ColNr::ZERO;
         let mut totlen: size_t = 0;
         for i in 0..self.lines.len() {
             if !self.blockwise_line(i, col, &mut textcol, &mut totlen) {
@@ -259,13 +259,13 @@ impl Put {
 
         let to = Buf::current().b_op_start.lnum + len_as_int(self.lines.len()) - self.nr_lines;
         // The range is the lines the put rewrote.
-        changed_lines(Buf::current(), lnum, 0, to, self.nr_lines, true);
+        changed_lines(Buf::current(), lnum, ColNr::ZERO, to, self.nr_lines, true);
 
         Buf::current().b_op_start = Win::current().w_cursor;
         Buf::current().b_op_start.lnum = lnum;
 
         Buf::current().b_op_end.lnum = Win::current().w_cursor.lnum - 1;
-        Buf::current().b_op_end.col = (textcol + totlen as ColNr - 1).max(0);
+        Buf::current().b_op_end.col = (textcol + len_as_int(totlen) - 1).max(ColNr::ZERO);
         Buf::current().b_op_end.coladd = 0;
 
         if self.flags & PUT_CURSEND as c_int != 0 {

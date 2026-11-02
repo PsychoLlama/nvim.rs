@@ -167,7 +167,7 @@ pub fn f_prompt_setprompt(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFunc
         rewrite_prompt_line(buf, new_prompt.as_bytes());
     }
     set_buf_prompt_text(buf, new_prompt);
-    buf.b_prompt_start.mark.col = new_prompt_len;
+    buf.b_prompt_start.mark.col = ColNr::new(new_prompt_len);
 }
 
 /// Put `new_prompt` in place of the old one on the buffer's prompt line;
@@ -203,9 +203,9 @@ fn rewrite_prompt_line(mut buffer: Buf, new_prompt: &[u8]) {
     // Does the line still start with the prompt it was given? When it
     // does, only the prompt itself is swapped; when it does not — the
     // user has edited it away — the whole line goes.
-    let fits = prompt_col >= old_prompt_len && prompt_col <= old_line_len;
+    let fits = prompt_col >= ColNr::new(old_prompt_len) && prompt_col <= ColNr::new(old_line_len);
     let intact = fits && {
-        let from = offset(prompt_col - old_prompt_len);
+        let from = offset((prompt_col - old_prompt_len).get());
         old_line[from..from + old_prompt.len()] == *old_prompt
     };
     // The splice both arms report is the same shape: the whole of what was
@@ -215,27 +215,27 @@ fn rewrite_prompt_line(mut buffer: Buf, new_prompt: &[u8]) {
         extmark_splice_cols(
             buffer,
             row.get(),
-            0,
-            old_len,
-            new_prompt_len,
+            ColNr::ZERO,
+            ColNr::new(old_len),
+            ColNr::new(new_prompt_len),
             kExtmarkNoUndo,
         );
     };
     if intact {
-        let new_line = [new_prompt, &old_line[offset(prompt_col)..]].concat();
+        let new_line = [new_prompt, &old_line[offset(prompt_col.get())..]].concat();
         let _ = ml_replace_buf_text(buffer, prompt_lno, &new_line);
-        splice(prompt_col);
-        cursor_col += new_prompt_len - prompt_col;
+        splice(prompt_col.get());
+        cursor_col += new_prompt_len - prompt_col.get();
     } else {
         let _ = ml_replace_buf_text(buffer, prompt_lno, new_prompt);
         splice(old_line_len);
-        cursor_col = new_prompt_len;
+        cursor_col = ColNr::new(new_prompt_len);
     }
     let mut win = Win::current();
     if win.w_buffer == buffer && win.w_cursor.lnum == prompt_lno {
         win.w_cursor.col = cursor_col;
         check_cursor_col(win);
     }
-    changed_lines(buffer, prompt_lno, 0, prompt_lno + 1, 0, true);
+    changed_lines(buffer, prompt_lno, ColNr::ZERO, prompt_lno + 1, 0, true);
     u_clearallandblockfree(buffer);
 }

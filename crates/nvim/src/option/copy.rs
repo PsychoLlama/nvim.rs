@@ -227,9 +227,9 @@ pub(crate) fn didset_window_options(window: Win, valid_cursor: bool) {
     // 'wrap' and 'smoothscroll' scroll in different directions, and only
     // one of the two offsets can be non-zero.
     if w.w_onebuf_opt.wo_wrap != 0 {
-        w.w_leftcol = 0 as ColNr;
+        w.w_leftcol = ColNr::ZERO;
     } else {
-        w.w_skipcol = 0 as ColNr;
+        w.w_skipcol = ColNr::ZERO;
     }
     let _ = check_window_colorcolumn(window);
     check_window_briopt(window);

@@ -28,8 +28,8 @@ pub struct BlockDef {
     pub is_one_char: ::core::ffi::c_int,
     pub pre_whitesp: ::core::ffi::c_int,
     pub pre_whitesp_c: ::core::ffi::c_int,
-    pub end_char_vcols: ColNr,
-    pub start_char_vcols: ColNr,
+    pub end_char_vcols: i32,
+    pub start_char_vcols: i32,
 }
 
 impl BlockDef {
@@ -41,9 +41,9 @@ impl BlockDef {
         startspaces: 0,
         endspaces: 0,
         textlen: 0,
-        textcol: 0,
-        start_vcol: 0,
-        end_vcol: 0,
+        textcol: ColNr::ZERO,
+        start_vcol: ColNr::ZERO,
+        end_vcol: ColNr::ZERO,
         is_short: 0,
         is_max: 0,
         is_one_char: 0,
@@ -128,7 +128,7 @@ pub struct YankReg {
     /// write is still deciding.
     pub kind: MotionType,
     /// A blockwise register's width in cells, less one.
-    pub width: ColNr,
+    pub width: i32,
     pub timestamp: Timestamp,
     pub(crate) extra: Option<ShadaExtra>,
 }

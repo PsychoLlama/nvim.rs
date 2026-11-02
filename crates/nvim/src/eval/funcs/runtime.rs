@@ -22,6 +22,7 @@ use crate::memline::Lines;
 use crate::memory::ThinCString;
 use crate::menu::{cmd_modes, menu_get};
 use crate::message::state::msg_scrolled;
+use crate::narrow::number_as_col;
 use crate::normal::op_pending;
 use crate::ops::cursor_pos_info;
 use crate::os::cshim::cstr_ncasecmp;
@@ -440,10 +441,10 @@ pub fn f_pumvisible(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 pub fn f_shiftwidth(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(0);
     if !args.is_empty() {
-        let col = arg_number_chk(&args[0], None) as ColNr;
+        let col = number_as_col(arg_number_chk(&args[0], None));
         // A coercion failure answers 0, which passes; a negative column
         // leaves the 0 already in place.
-        if col < 0 {
+        if col < ColNr::ZERO {
             return;
         }
         result.write_number(get_sw_value_col(Buf::current(), col, false) as VarNumber);

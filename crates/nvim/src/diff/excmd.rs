@@ -252,7 +252,7 @@ pub fn diff_win_options(mut window: Win, addbuf: bool) {
             window.w_onebuf_opt.wo_wrap_save = window.w_onebuf_opt.wo_wrap;
         }
         window.w_onebuf_opt.wo_wrap = 0;
-        window.w_skipcol = 0 as ColNr;
+        window.w_skipcol = ColNr::ZERO;
     }
     if first_time {
         window.w_onebuf_opt.wo_fdm_save = window.w_onebuf_opt.wo_fdm.clone();
@@ -321,7 +321,7 @@ pub fn ex_diffoff(excmd: &mut ExArg) {
                     && wp.w_onebuf_opt.wo_wrap_save != 0
                 {
                     wp.w_onebuf_opt.wo_wrap = 1;
-                    wp.w_leftcol = 0 as ColNr;
+                    wp.w_leftcol = ColNr::ZERO;
                 }
                 wp.w_onebuf_opt.wo_fdm = saved_or(&wp.w_onebuf_opt.wo_fdm_save, c"manual");
                 wp.w_onebuf_opt.wo_fdc = saved_or(&wp.w_onebuf_opt.wo_fdc_save, c"0");

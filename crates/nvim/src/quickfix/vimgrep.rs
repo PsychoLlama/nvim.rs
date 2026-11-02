@@ -203,10 +203,10 @@ fn match_buflines(
     let mut lnum: LineNr = LineNr::ONE;
     while lnum <= buffer.b_ml.ml_line_count && search.tomatch > 0 {
         if search.flags & VGR_FUZZY.cast_signed() == 0 {
-            let mut col: ColNr = 0;
+            let mut col: ColNr = ColNr::ZERO;
             let mut regmatch = RegMMatch {
                 rmm_ic: c_int::from(search.ignore_case),
-                rmm_maxcol: 0,
+                rmm_maxcol: ColNr::ZERO,
                 ..RegMMatch::default()
             };
             while search
@@ -226,8 +226,8 @@ fn match_buflines(
                         bufnum: bufnum.get(),
                         lnum: start.lnum + lnum.get(),
                         end_lnum: end.lnum + lnum.get(),
-                        col: start.col + 1,
-                        end_col: end.col + 1,
+                        col: (start.col + 1).get(),
+                        end_col: (end.col + 1).get(),
                         ..NewEntry::new(text.as_cstr())
                     },
                 );
@@ -245,7 +245,7 @@ fn match_buflines(
                 }
                 // Move past the match, and past one more column when the
                 // match was empty, so that the scan makes progress.
-                col = end.col + ColNr::from(col == end.col);
+                col = end.col + i32::from(col == end.col);
                 if col > ml_get_buf_len(buffer, lnum) {
                     break;
                 }
@@ -258,7 +258,7 @@ fn match_buflines(
             // position read below is one the matcher never wrote. It has
             // to be zero, which is why the array is cleared every line.
             let pat_len = search.spat.len().min(FUZZY_MATCH_MAX_LEN);
-            let mut col: ColNr = 0;
+            let mut col: ColNr = ColNr::ZERO;
             // Cleared once per line, not once per match: a second match
             // on the same line reads whatever the first one left in the
             // positions past its own length, which is what upstream does.
@@ -279,7 +279,7 @@ fn match_buflines(
                         fname: Some(fname),
                         bufnum: bufnum.get(),
                         lnum,
-                        col: first + col + 1,
+                        col: first + col.get() + 1,
                         ..NewEntry::new(line.as_cstr())
                     },
                 );
@@ -291,7 +291,7 @@ fn match_buflines(
                 }
                 // `pat_len` is at least 1 here: an empty pattern fills
                 // no position and so never passes the test above.
-                col = ColNr::try_from(positions[pat_len - 1]).unwrap_or(ColNr::MAX) + col + 1;
+                col = col + c_int::try_from(positions[pat_len - 1]).unwrap_or(c_int::MAX) + 1;
                 if col > linelen {
                     break;
                 }

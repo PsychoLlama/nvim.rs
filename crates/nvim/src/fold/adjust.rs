@@ -126,7 +126,7 @@ pub fn fold_move_to(updown: bool, dir: c_int, count: c_int) -> c_int {
             setpcmark();
         }
         Win::current().w_cursor.lnum = lnum_found;
-        Win::current().w_cursor.col = 0;
+        Win::current().w_cursor.col = ColNr::ZERO;
         retval = OK;
     }
     retval
@@ -150,7 +150,7 @@ pub fn fold_adjust_visual() {
         // The earlier end stretches back to the first line of its fold.
         let mut start = if anchor_first { *anchor } else { *cursor };
         if has_folding(win, start.lnum, Some(&mut start.lnum), None) {
-            start.col = 0;
+            start.col = ColNr::ZERO;
         }
         if anchor_first {
             *anchor = start;
@@ -164,7 +164,7 @@ pub fn fold_adjust_visual() {
             return false;
         }
         end.col = win.buffer().lines().line_len(end.lnum);
-        if end.col > 0 && P_SEL.first_byte() == b'o' {
+        if end.col > ColNr::ZERO && P_SEL.first_byte() == b'o' {
             end.col -= 1;
         }
         if anchor_first {

@@ -17,6 +17,7 @@ use crate::message::e_invarg;
 use crate::message::emsg;
 use crate::message_fmt::msg_cstr;
 use crate::r#move::{WinValid, update_curswant};
+use crate::narrow::number_as_col;
 use crate::option::vars::P_SPK;
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
@@ -36,12 +37,12 @@ use core::ffi::c_int;
 
 /// "End of line", the column sentinel. `MAXCOL` is spelled as an unsigned
 /// constant but every column it is compared against is a `ColNr`.
-const END_OF_LINE: ColNr = MAXCOL as ColNr;
+const END_OF_LINE: ColNr = ColNr::MAX;
 
 /// The zeroed position both the getters and the setters start from.
 const NOWHERE: Pos = Pos {
     lnum: LineNr::ZERO,
-    col: 0,
+    col: ColNr::ZERO,
     coladd: 0,
 };
 
@@ -108,7 +109,7 @@ fn get_col(args: &[TypVal], result: &mut TypVal, charcol: bool) {
     let bp = wp.buffer();
     let mut fnum = bp.handle.get();
     let fp = var2fpos(&args[0], false, &mut fnum, charcol, wp);
-    let mut col: ColNr = 0;
+    let mut col: ColNr = ColNr::ZERO;
     if let Some(fp) = fp
         && fnum == bp.handle.get()
     {
@@ -130,13 +131,13 @@ fn get_col(args: &[TypVal], result: &mut TypVal, charcol: bool) {
             col = fp.col + 1;
         }
     }
-    result.write_number(col as VarNumber);
+    result.write_number(i64::from(col));
 }
 
 /// `virtcol({expr} [, {list} [, {winid}]])`.
 pub fn f_virtcol(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let mut vcol_start: ColNr = 0;
-    let mut vcol_end: ColNr = 0;
+    let mut vcol_start: ColNr = ColNr::ZERO;
+    let mut vcol_end: ColNr = ColNr::ZERO;
     // The window argument is only honoured when the `{list}` argument
     // was given too, because it is the third.
     let wp = if args.len() > 1 && args.len() > 2 {
@@ -154,8 +155,8 @@ pub fn f_virtcol(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         {
             // Clamped before it is measured, as upstream clamps the
             // shared position it answered out of.
-            if fp.col < 0 {
-                fp.col = 0;
+            if fp.col < ColNr::ZERO {
+                fp.col = ColNr::ZERO;
             } else {
                 let len = ml_get_buf_len(bp, fp.lnum);
                 if fp.col > len {
@@ -169,10 +170,10 @@ pub fn f_virtcol(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
     if args.len() > 1 && arg_bool(&args[1]) != 0 {
         let l = tv_list_alloc_ret(result, 2);
-        l.push_number(vcol_start as VarNumber);
-        l.push_number(vcol_end as VarNumber);
+        l.push_number(i64::from(vcol_start));
+        l.push_number(i64::from(vcol_end));
     } else {
-        result.write_number(vcol_end as VarNumber);
+        result.write_number(i64::from(vcol_end));
     }
 }
 
@@ -246,7 +247,7 @@ fn getpos_both(args: &[TypVal], result: &mut TypVal, getcurpos: bool, charcol: b
             && charcol
         {
             let buffer = wp.and_then(Win::buffer_or_none);
-            pos.col = buf_byteidx_to_charidx(buffer, pos.lnum, pos.col) as ColNr;
+            pos.col = ColNr::new(buf_byteidx_to_charidx(buffer, pos.lnum, pos.col.get()));
         }
         fp
     };
@@ -260,7 +261,7 @@ fn getpos_both(args: &[TypVal], result: &mut TypVal, getcurpos: bool, charcol: b
         } else {
             fp.col + 1
         };
-        (i64::from(fp.lnum), col as VarNumber, fp.coladd as VarNumber)
+        (i64::from(fp.lnum), i64::from(col), fp.coladd as VarNumber)
     });
     l.push_number(lnum);
     l.push_number(col);
@@ -285,7 +286,7 @@ fn append_curswant(l: &mut List, window: Option<Win>) {
     let curswant = match window.map(|w| w.w_curswant) {
         None => 0,
         Some(END_OF_LINE) => MAXCOL as VarNumber,
-        Some(want) => want as VarNumber + 1,
+        Some(want) => i64::from(want) + 1,
     };
     l.push_number(curswant);
     // Only restored when 'curswant' was due to be recomputed anyway:
@@ -314,13 +315,13 @@ fn set_cursorpos(args: &[TypVal], result: &mut TypVal, charcol: bool) {
     let mut set_curswant = true;
     let (lnum, mut col, coladd) = if args.first().is_some_and(|arg| arg.v_type() == VAR_LIST) {
         let mut pos = NOWHERE;
-        let mut curswant: ColNr = -1;
+        let mut curswant: ColNr = ColNr::NONE;
         let read = list2fpos(&args[0], &mut pos, None, Some(&mut curswant), charcol);
         if read.is_err() {
             emsg(gettext(e_invarg));
             return;
         }
-        if curswant >= 0 {
+        if curswant >= ColNr::ZERO {
             Win::current().w_curswant = curswant - 1;
             set_curswant = false;
         }
@@ -339,12 +340,12 @@ fn set_cursorpos(args: &[TypVal], result: &mut TypVal, charcol: bool) {
         } else if lnum == LineNr::ZERO {
             lnum = Win::current().w_cursor.lnum;
         }
-        let mut col = arg_number_chk(&args[1], None) as ColNr;
+        let mut col = number_as_col(arg_number_chk(&args[1], None));
         if charcol {
-            col = buf_charidx_to_byteidx(Buf::current_or_none(), lnum, col) + 1;
+            col = ColNr::new(buf_charidx_to_byteidx(Buf::current_or_none(), lnum, col.get()) + 1);
         }
         let coladd = if args.len() > 2 {
-            arg_number_chk(&args[2], None) as ColNr
+            crate::narrow::number_as_int(arg_number_chk(&args[2], None))
         } else {
             0
         };
@@ -354,7 +355,7 @@ fn set_cursorpos(args: &[TypVal], result: &mut TypVal, charcol: bool) {
         return;
     };
 
-    if lnum < LineNr::ZERO || col < 0 || coladd < 0 {
+    if lnum < LineNr::ZERO || col < ColNr::ZERO || coladd < 0 {
         return;
     }
     if lnum > LineNr::ZERO {
@@ -363,7 +364,7 @@ fn set_cursorpos(args: &[TypVal], result: &mut TypVal, charcol: bool) {
     // The column is one-based on the way in, except for MAXCOL which
     // means "end of line" and is passed through.
     if col != END_OF_LINE {
-        col = (col - 1).max(0);
+        col = (col - 1).max(ColNr::ZERO);
     }
     Win::current().w_cursor.col = col;
     Win::current().w_cursor.coladd = coladd;
@@ -391,18 +392,18 @@ fn set_position(args: &[TypVal], result: &mut TypVal, charpos: bool) {
     };
     let mut pos = NOWHERE;
     let mut fnum: c_int = 0;
-    let mut curswant: ColNr = -1;
+    let mut curswant: ColNr = ColNr::NONE;
     let want = Some(&mut curswant);
     if list2fpos(&args[1], &mut pos, Some(&mut fnum), want, charpos).is_err() {
         return;
     }
     if pos.col != END_OF_LINE {
-        pos.col = (pos.col - 1).max(0);
+        pos.col = (pos.col - 1).max(ColNr::ZERO);
     }
     match name {
         b"." => {
             Win::current().w_cursor = pos;
-            if curswant >= 0 {
+            if curswant >= ColNr::ZERO {
                 Win::current().w_curswant = curswant - 1;
                 Win::current().w_set_curswant = false;
             }

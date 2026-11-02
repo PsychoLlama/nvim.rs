@@ -24,6 +24,7 @@ pub(crate) mod state;
 
 use crate::global_cell::GlobalCell;
 use crate::memory::XString;
+use crate::types::ColNr;
 use crate::types::LineNr;
 use crate::types::{Expand, Pos, PumItem};
 use core::ffi::c_int;
@@ -173,7 +174,7 @@ static cmd_showtail: GlobalCell<bool> = GlobalCell::new(false);
 static may_expand_pattern: GlobalCell<bool> = GlobalCell::new(false);
 static pre_incsearch_pos: GlobalCell<Pos> = GlobalCell::new(Pos {
     lnum: LineNr::ZERO,
-    col: 0,
+    col: ColNr::ZERO,
     coladd: 0,
 });
 /// The popup menu's rows for the matches; `None` while there is no menu.

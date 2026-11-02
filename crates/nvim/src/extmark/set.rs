@@ -71,13 +71,13 @@ pub fn extmark_set(
                 del_id(buffer, ns_id, id);
             } else {
                 debug_assert!(iter.is_positioned(), "marktree_itr_valid(iter)");
-                if old_mark.pos.row == row && old_mark.pos.col == col {
+                if old_mark.pos.row == row && old_mark.pos.col == col.get() {
                     // Not paired: the key can be revised where it lies.
                     if !mt_invalid(old_mark) && mt_decor_any(old_mark) {
                         itr_rawkey(buffer.marktree(), &iter)
                             .flags
                             .clear(MtFlags::EXTERNAL_MASK);
-                        decor_remove(buffer, row, row, col, mt_decor(old_mark), true);
+                        decor_remove(buffer, row, row, col.get(), mt_decor(old_mark), true);
                     }
                     itr_rawkey(buffer.marktree(), &iter).flags |= flags;
                     itr_rawkey(buffer.marktree(), &iter).decor_data = decor;
@@ -105,20 +105,29 @@ pub fn extmark_set(
 
     if !revised {
         let mark = MTKey {
-            pos: MTPos { row, col },
+            pos: MTPos {
+                row,
+                col: col.get(),
+            },
             ns: ns_id,
             id,
             flags,
             decor_data: decor,
         };
-        tree_put(buffer.marktree(), mark, end_row, end_col, end_right_gravity);
+        tree_put(
+            buffer.marktree(),
+            mark,
+            end_row,
+            end_col.get(),
+            end_right_gravity,
+        );
         invalidate_decor_state(buffer);
     }
 
     if !decor_flags.is_empty() || decor.is_ext() {
         let last_row = if end_row > -1 { end_row } else { row };
         put_decor(buffer, decor, row, last_row);
-        redraw_decor(buffer, row, last_row, col, decor);
+        redraw_decor(buffer, row, last_row, col.get(), decor);
     }
 
     if let Some(idp) = idp {
@@ -139,7 +148,7 @@ pub(crate) fn extmark_setraw(
 ) {
     let mut iter = MarkTreeIter::default();
     let key = tree_lookup(buffer.marktree(), mark, Some(&mut iter));
-    let move_0 = key.pos.row != row || key.pos.col != col;
+    let move_0 = key.pos.row != row || key.pos.col != col.get();
     if key.pos.row < 0 || (!move_0 && !invalid) {
         // The mark was deleted, or nothing has to change.
         return;
@@ -183,7 +192,7 @@ pub(crate) fn extmark_setraw(
     }
 
     if move_0 {
-        tree_move(buffer.marktree(), &mut iter, row, col);
+        tree_move(buffer.marktree(), &mut iter, row, col.get());
     }
 
     if invalid {

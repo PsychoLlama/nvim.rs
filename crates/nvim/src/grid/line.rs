@@ -178,7 +178,7 @@ pub fn grid_line_put_schar(col: c_int, schar: ScreenChar, attr: c_int) {
         return;
     }
 
-    with_linebuf(|buf| buf.put(col as size_t, schar, attr, -1));
+    with_linebuf(|buf| buf.put(col as size_t, schar, attr, ColNr::NONE));
 
     b.first = b.first.min(col);
     // TODO(bfredl): Y U NO DOUBLEWIDTH?
@@ -229,11 +229,11 @@ pub fn grid_line_puts(col: c_int, text: &[u8], attr: c_int) -> c_int {
 
             chars[col as size_t] = schar;
             attrs[col as size_t] = attr;
-            vcols[col as size_t] = -1;
+            vcols[col as size_t] = ColNr::NONE;
             if mbyte_cells == 2 {
                 chars[(col + 1) as size_t] = 0;
                 attrs[(col + 1) as size_t] = attr;
-                vcols[(col + 1) as size_t] = -1;
+                vcols[(col + 1) as size_t] = ColNr::NONE;
             }
 
             col += mbyte_cells;
@@ -282,7 +282,7 @@ pub fn grid_line_fill(start_col: c_int, mut end_col: c_int, sc: ScreenChar, attr
         let span = at(start_col)..at(end_col);
         chars[span.clone()].fill(sc);
         attrs[span.clone()].fill(attr);
-        vcols[span].fill(-1);
+        vcols[span].fill(ColNr::NONE);
     });
 
     b.first = b.first.min(start_col);
@@ -370,7 +370,7 @@ pub fn grid_line_flush() {
             bg: b.bg_attr,
             clear: b.clear_attr,
         },
-        -1,
+        ColNr::NONE,
         b.flags,
     );
 }

@@ -26,9 +26,9 @@ impl Cells {
     pub(super) fn draw_precedes(&mut self, wlv: &mut WinLineVars, window: Win) {
         let scrolled = if window.w_onebuf_opt.wo_wrap != 0 {
             let skipcol = window.w_skipcol;
-            skipcol > 0 && wlv.row == 0
+            skipcol > ColNr::ZERO && wlv.row == 0
         } else {
-            window.w_leftcol > 0
+            window.w_leftcol > ColNr::ZERO
         };
         if self.lcs_prec_todo == NUL as ScreenChar
             || window.w_onebuf_opt.wo_list == 0
@@ -155,10 +155,10 @@ impl Cells {
             return;
         }
         // Does the previous column start a search match?
-        let prevcol_hl_flag = get_prevcol_hl_flag(window, self.byte_col() - 1);
+        let prevcol_hl_flag = get_prevcol_hl_flag(window, ColNr::new(self.byte_col() - 1));
         let want = self.lcs_eol_todo
             && ((self.area_attr != 0
-                && wlv.vcol == wlv.fromcol
+                && wlv.vcol == ColNr::new(wlv.fromcol)
                 && (!visual_mode().is_block()
                     || wlv.lnum == visual_anchor().lnum
                     || wlv.lnum == Win::current().w_cursor.lnum))
@@ -177,7 +177,7 @@ impl Cells {
         }
         if self.area_attr == 0 && !self.has_fold {
             // Use the attributes of the highest-priority match.
-            get_search_match_hl(window, self.byte_col(), &mut wlv.char_attr);
+            get_search_match_hl(window, ColNr::new(self.byte_col()), &mut wlv.char_attr);
         }
         let eol_attr = if wlv.cursorline_attr != 0 {
             hl_combine_attr(wlv.cursorline_attr, wlv.char_attr)
@@ -208,8 +208,8 @@ impl Cells {
         } else if visual_active()
             && (visual_mode().is_block() || visual_mode().is_char())
             && virtual_active(window)
-            && wlv.tocol != MAXCOL as ::core::ffi::c_int
-            && wlv.vcol < wlv.tocol
+            && wlv.tocol != MAXCOL
+            && wlv.vcol < ColNr::new(wlv.tocol)
             && wlv.col < self.view_width
         {
             // With 'virtualedit' the selection can run past the end of the
@@ -227,7 +227,7 @@ impl Cells {
         let (mut lcs_tab1, mut lcs_tab2, mut lcs_tab3) = (lcs.tab1, lcs.tab2, lcs.tab3);
         if window.w_onebuf_opt.wo_list != 0
             && lcs.leadtab1 != NUL as ScreenChar
-            && self.byte_col() < self.leadcol
+            && self.byte_col() < self.leadcol.get()
         {
             lcs_tab1 = lcs.leadtab1;
             lcs_tab2 = lcs.leadtab2;
@@ -288,7 +288,7 @@ impl Cells {
                         break;
                     }
                     // The last cell takes "tab3" when there is one.
-                    let lcs_here = if lcs_tab3 != 0 && i == tab_len - 1 {
+                    let lcs_here = if lcs_tab3 != 0 && i == (tab_len - 1) {
                         lcs_tab3
                     } else {
                         lcs_tab2
@@ -313,7 +313,7 @@ impl Cells {
             wlv.fix_for_boguscols();
             // Put back what the line below needs to get the Tab's own
             // highlight right.
-            if wlv.extra_todo == tab_len + vc_saved
+            if wlv.extra_todo == (tab_len + vc_saved)
                 && window.w_onebuf_opt.wo_list != 0
                 && window.w_p_lcs_chars.tab1 != 0
             {
@@ -389,7 +389,7 @@ impl Cells {
     pub(super) fn wants_eol_cell(&self, wlv: &WinLineVars, window: Win) -> bool {
         (window.w_onebuf_opt.wo_list != 0
             || ((wlv.fromcol >= 0 || self.fromcol_prev >= 0)
-                && wlv.tocol > wlv.vcol
+                && wlv.tocol > wlv.vcol.get()
                 && !visual_mode().is_block()
                 && wlv.col < self.view_width
                 && !(self.noinvcur
@@ -406,8 +406,8 @@ impl Cells {
         if wlv.diff_hlf == HLF_NONE && wlv.line_attr == 0 && wlv.line_attr_lowprio == 0 {
             if !(self.area_highlighting
                 && virtual_active(window)
-                && wlv.tocol != MAXCOL as ::core::ffi::c_int
-                && wlv.vcol < wlv.tocol)
+                && wlv.tocol != MAXCOL
+                && wlv.vcol < ColNr::new(wlv.tocol))
             {
                 // Under 'virtualedit' a Visual selection may extend past
                 // the end of the line, and then the run has to survive.

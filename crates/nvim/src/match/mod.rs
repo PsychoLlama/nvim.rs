@@ -13,6 +13,7 @@
 #![forbid(unsafe_code)]
 
 use crate::cstr;
+use crate::narrow::number_as_col;
 use crate::narrow::number_as_lnum;
 use crate::regexp::{char_delim, skip_regexp_at};
 use crate::semsg;
@@ -179,7 +180,7 @@ fn fill_pos_array(positions: &mut [LLPos], pos_list: &List) -> Option<(LineNr, L
         let at = index_of(at);
         let tv = &li.li_tv;
         let mut lnum: LineNr = LineNr::ZERO;
-        let mut col: ColNr = 0;
+        let mut col: ColNr = ColNr::ZERO;
         let mut len: c_int = 1;
         let mut skip = false;
 
@@ -201,12 +202,12 @@ fn fill_pos_array(positions: &mut [LLPos], pos_list: &List) -> Option<(LineNr, L
                     let Ok(second) = tv_get_number_chk(&second.li_tv) else {
                         return None;
                     };
-                    col = second as ColNr;
-                    if col < 0 {
+                    col = number_as_col(second);
+                    if col < ColNr::ZERO {
                         skip = true;
                     } else if let Some(third) = sub.get(2) {
                         let read = tv_get_number_chk(&third.li_tv);
-                        len = read.unwrap_or(0) as ColNr;
+                        len = number_as_col(read.unwrap_or(0)).get();
                         // Note the order: a negative length is skipped
                         // before the failure is even looked at.
                         if len < 0 {
@@ -228,7 +229,7 @@ fn fill_pos_array(positions: &mut [LLPos], pos_list: &List) -> Option<(LineNr, L
                 lnum = number_as_lnum(tv.number_or_zero());
                 positions[i] = LLPos {
                     lnum,
-                    col: 0,
+                    col: ColNr::ZERO,
                     len: 0,
                 };
             }

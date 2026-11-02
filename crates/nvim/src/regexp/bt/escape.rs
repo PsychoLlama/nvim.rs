@@ -337,8 +337,8 @@ fn cursor_value(kind: u8) -> uint32_t {
     let win = Win::current();
     match kind {
         b'l' => win.w_cursor.lnum.get() as u32,
-        b'c' => win.w_cursor.col as uint32_t + 1,
+        b'c' => win.w_cursor.col.get() as u32 + 1,
         // The last screen column of the character under the cursor.
-        _ => win.virtual_vcol_span_at(win.w_cursor).1 as uint32_t + 1,
+        _ => win.virtual_vcol_span_at(win.w_cursor).1.get() as u32 + 1,
     }
 }

@@ -260,7 +260,7 @@ pub(super) fn build_replacement(
     // by hand here, to `strlen(new_start)` plus the text up to the match,
     // the replacement, the text after the match and a NUL; the `Vec` does
     // that growth, and the tail after the match is `commit_line`'s to add.
-    let copy_len = st.regmatch.startpos[0].col as usize - st.copied;
+    let copy_len = st.regmatch.startpos[0].col.as_usize() - st.copied;
     {
         let (old, line) = (&st.old_line, &mut st.new_line);
         let old = old.as_ref().expect("caller's contract -- a live match");
@@ -271,7 +271,7 @@ pub(super) fn build_replacement(
     // Only now can we know where the match will actually start in the new
     // text.
     let start_col = st.new_line().len() as c_int;
-    current_match.start.col = start_col as ColNr;
+    current_match.start.col = ColNr::new(start_col);
 
     {
         let _locked = Lock::text();
@@ -291,10 +291,10 @@ pub(super) fn build_replacement(
 
     // Move the cursor to the start of the line, to avoid it being beyond the
     // end of the line after the substitution.
-    Win::current().w_cursor.col = 0 as ColNr;
+    Win::current().w_cursor.col = ColNr::ZERO;
 
     // Remember the next character to be copied.
-    st.copied = st.regmatch.endpos[0].col as usize;
+    st.copied = st.regmatch.endpos[0].col.as_usize();
 
     st.adjust_sub_firstlnum();
 
@@ -304,7 +304,7 @@ pub(super) fn build_replacement(
     let mut replaced_bytes = 0 as BCount;
     let mut i = 0 as c_int;
     while i < st.nmatch - 1 as c_int {
-        replaced_bytes += ml_get_len(st.lnum_start + i) as BCount + 1 as BCount;
+        replaced_bytes += ml_get_len(st.lnum_start + i).get() as isize + 1 as BCount;
         i += 1;
     }
     replaced_bytes += (end.col - start.col) as BCount;
@@ -313,7 +313,7 @@ pub(super) fn build_replacement(
     let lnum_before_newlines = st.lnum;
     split_carriage_returns(st, start_col as usize);
 
-    let new_endcol = st.new_line().len() as ColNr;
+    let new_endcol = ColNr::from_index(st.new_line().len());
     current_match.end.col = new_endcol;
     current_match.end.lnum = st.lnum;
 
@@ -321,7 +321,7 @@ pub(super) fn build_replacement(
         - if end.lnum == start.lnum {
             start.col
         } else {
-            0 as ColNr
+            ColNr::ZERO
         };
     let subcols = new_endcol
         - if st.lnum == st.lnum_start {
@@ -339,7 +339,7 @@ pub(super) fn build_replacement(
         end,
         matchcols,
         matchbytes: replaced_bytes,
-        subcols,
+        subcols: subcols.get(),
         subbytes: (st.sublen - 1 as c_int) as BCount,
         lnum_before: lnum_before_newlines,
         lnum_after: st.lnum,
@@ -390,10 +390,10 @@ pub(super) fn commit_line(st: &mut Sub) -> bool {
         let old = old.as_ref().expect("caller's contract -- an old line");
         let line = line.as_mut().expect("caller's contract -- a rebuilt line");
         line.push_bytes(&old.bytes()[st.copied..]);
-        old.len() as ColNr
+        ColNr::from_index(old.len())
     };
-    st.matchcol = old_len - st.matchcol;
-    st.prev_matchcol = old_len - st.prev_matchcol;
+    st.matchcol = ColNr::new(old_len - st.matchcol);
+    st.prev_matchcol = ColNr::new(old_len - st.prev_matchcol);
 
     if u_savesub(st.lnum).is_err() {
         return false;
@@ -406,12 +406,12 @@ pub(super) fn commit_line(st: &mut Sub) -> bool {
         extmark_splice(
             Buf::current(),
             m.lnum_before.get() - 1 as c_int,
-            m.start_col as ColNr,
+            ColNr::new(m.start_col),
             m.end.lnum.get() - m.start.lnum.get(),
-            m.matchcols as ColNr,
+            ColNr::new(m.matchcols),
             m.matchbytes,
             m.lnum_after.get() - m.lnum_before.get(),
-            m.subcols as ColNr,
+            ColNr::new(m.subcols),
             m.subbytes,
             kExtmarkUndo,
         );
@@ -426,7 +426,7 @@ pub(super) fn commit_line(st: &mut Sub) -> bool {
     // When asking, undo is saved each time, so the changed flag must be set
     // each time too.
     if SUB_FLAGS.with(|flags| flags.do_ask) {
-        changed_bytes(st.lnum, 0 as ColNr);
+        changed_bytes(st.lnum, ColNr::ZERO);
     } else {
         if st.first_line == LineNr::ZERO {
             st.first_line = st.lnum;
@@ -440,9 +440,9 @@ pub(super) fn commit_line(st: &mut Sub) -> bool {
     // dropped with it.  Upstream's `xfree` and pointer assignment are this
     // one move.
     st.old_line = st.new_line.take();
-    let new_len = st.old_line().len() as ColNr;
-    st.matchcol = new_len - st.matchcol;
-    st.prev_matchcol = new_len - st.prev_matchcol;
+    let new_len = ColNr::from_index(st.old_line().len());
+    st.matchcol = ColNr::new(new_len - st.matchcol);
+    st.prev_matchcol = ColNr::new(new_len - st.prev_matchcol);
     st.copied = 0;
     true
 }

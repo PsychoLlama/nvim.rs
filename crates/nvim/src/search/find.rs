@@ -12,6 +12,7 @@ use super::*;
 use crate::cstr;
 use crate::mbyte::{strcmp_ic_in, strnicmp_in};
 use crate::message_fmt::{emsg_text, msg_bytes};
+use crate::narrow::len_as_int;
 use crate::option::cpo_has;
 use crate::pos::MAXCOL;
 use crate::regexp::{LineMatcher, RE_SEARCH, walk_lines};
@@ -140,7 +141,9 @@ impl Searcher<'_, '_> {
         let mut lines = self.lines();
         let line = lines.line(lnum);
         if at < line.len() {
-            col + ColNr::try_from(cluster_len(&line[at..])).unwrap_or(0)
+            col + ColNr::try_from(cluster_len(&line[at..]))
+                .unwrap_or(ColNr::ZERO)
+                .get()
         } else {
             col
         }
@@ -192,7 +195,7 @@ impl Searcher<'_, '_> {
                 // ignoring `\zs`.
                 self.step_over(lnum, self.matcher.matchcol())
             };
-            if matchcol == 0 && self.opt(SEARCH_START) {
+            if matchcol == ColNr::ZERO && self.opt(SEARCH_START) {
                 return true;
             }
             if self.byte_at(lnum, matchcol) == NUL as u8 {
@@ -309,11 +312,11 @@ impl Searcher<'_, '_> {
             // When a match at the start position is not acceptable,
             // `extra_col` is non-zero. Not at MAXCOL though, where
             // MAXCOL + 1 is zero.
-            let start_char_len = if pos.col == MAXCOL as c_int {
+            let start_char_len = if pos.col == ColNr::MAX {
                 0
             } else if pos.lnum >= LineNr::ONE
                 && pos.lnum <= self.buf.b_ml.ml_line_count
-                && pos.col < MAXCOL - 2
+                && pos.col < ColNr::new(MAXCOL - 2)
             {
                 // Watch out for "col" being MAXCOL - 2, used in a closed fold.
                 let (lnum, col) = (pos.lnum, usize::try_from(pos.col).unwrap_or(0));
@@ -345,14 +348,14 @@ impl Searcher<'_, '_> {
             if pos.lnum == LineNr::ZERO {
                 // Correct lnum for when starting in line 0.
                 pos.lnum = LineNr::ONE;
-                pos.col = 0;
+                pos.col = ColNr::ZERO;
                 at_first_line = false;
             }
 
             // Start in the current line, unless searching backwards from
             // column 0 without accepting a match there — skipping back a
             // line is then free.
-            if dir == BACKWARD && start.pos.col == 0 && !accept_at_start {
+            if dir == BACKWARD && start.pos.col == ColNr::ZERO && !accept_at_start {
                 lnum = pos.lnum - 1;
                 at_first_line = false;
             } else {
@@ -381,7 +384,7 @@ impl Searcher<'_, '_> {
                     let col = if at_first_line && self.opt(SEARCH_COL) {
                         pos.col
                     } else {
-                        0
+                        ColNr::ZERO
                     };
                     let mut nmatched = self.exec(lnum, col);
                     // Abort searching on an error (e.g., out of stack).
@@ -509,7 +512,7 @@ impl Searcher<'_, '_> {
         let (at, other) = if self.opt(SEARCH_END) && !self.opt(SEARCH_NOOF) && !empty {
             pos.lnum = lnum + found.end.lnum.get();
             pos.col = found.end.col;
-            if found.end.col == 0 {
+            if found.end.col == ColNr::ZERO {
                 // A match in the first column ends on the NUL of the
                 // line before.
                 if pos.lnum > LineNr::ONE {
@@ -523,7 +526,7 @@ impl Searcher<'_, '_> {
                     // first byte.
                     let col = usize::try_from(pos.col).unwrap_or(0);
                     let back = head_off(self.lines().line(pos.lnum), col);
-                    pos.col -= back as ColNr;
+                    pos.col -= len_as_int(back);
                 }
             }
             (pos, found.start)
@@ -657,7 +660,7 @@ pub fn searchit(
     if pos.lnum > buffer.b_ml.ml_line_count {
         pos.lnum = buffer.b_ml.ml_line_count;
         pos.col = buffer.lines().line_len(pos.lnum);
-        if pos.col > 0 {
+        if pos.col > ColNr::ZERO {
             pos.col -= 1;
         }
     }
@@ -785,7 +788,7 @@ pub fn search_for_exact_line(
         let mut lines = buffer.lines();
         let line = lines.line(pos.lnum);
         let at = skip::white(line);
-        pos.col = at as ColNr;
+        pos.col = ColNr::from_index(at);
         let text = cstr::until_nul(&line[at..]);
 
         if compl_status_adding() && !compl_status_sol() {

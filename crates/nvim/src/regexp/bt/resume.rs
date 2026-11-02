@@ -8,6 +8,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::narrow::len_as_int;
 use crate::types::LineNr;
 use core::ffi::c_int;
 
@@ -263,7 +264,7 @@ fn step_back_lines(
     if limit > 0 && (end_col - was.col) as i64 >= limit {
         return false;
     }
-    if was.col == 0 {
+    if was.col == ColNr::ZERO {
         // At the start of a line: continue on the line before it. The
         // decrement is deliberately inside the short circuit.
         if was.lnum < stop.lnum || {
@@ -283,8 +284,8 @@ fn step_back_lines(
         } else {
             reg_getline(rex, was.lnum).unwrap_or(b"\0")
         };
-        let head = head_off_at(line, was.col as usize - 1) as ColNr;
-        start.pos.pos_mut().col -= head + 1;
+        let head = ColNr::from_index(head_off_at(line, was.col.as_usize() - 1));
+        start.pos.pos_mut().col -= (head + 1).get();
     }
     true
 }
@@ -297,12 +298,12 @@ fn line_len(line: &[u8]) -> ColNr {
 /// [`step_back_lines`] for a string match, where there is one line.
 fn step_back_string(rex: Rex, start: &mut SavedInput, stop: MatchPos, limit: int64_t) -> bool {
     let was = start.pos.as_pos().col;
-    if was <= 0 {
+    if was <= ColNr::ZERO {
         return false;
     }
     // `was` is not the string's first byte, so the character before it is
     // there to measure.
-    let back = head_off_at(rex.line(), was as usize - 1) as ColNr + 1;
+    let back = len_as_int(head_off_at(rex.line(), was.as_usize() - 1)) + 1;
     start.pos.pos_mut().col = was - back;
     limit <= 0 || i64::from(stop.as_pos().col - start.pos.as_pos().col) <= limit
 }

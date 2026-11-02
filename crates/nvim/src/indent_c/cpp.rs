@@ -154,7 +154,7 @@ pub(crate) fn in_baseclass_list(cached: &mut CppBaseclassCache) -> bool {
     if cached.lpos.lnum <= lnum {
         return cached.found != 0; // use the cached result
     }
-    cached.lpos.col = 0;
+    cached.lpos.col = ColNr::ZERO;
 
     let mut lines = Lines::current();
     {
@@ -249,7 +249,7 @@ pub(crate) fn in_baseclass_list(cached: &mut CppBaseclassCache) -> bool {
                         cpp_base_class = true;
                         lookfor_ctor_init = false;
                         class_or_struct = false;
-                        cached.lpos.col = 0;
+                        cached.lpos.col = ColNr::ZERO;
                     }
                     at = code_at(line, at + 1);
                 }
@@ -276,7 +276,7 @@ pub(crate) fn in_baseclass_list(cached: &mut CppBaseclassCache) -> bool {
                     // Not an identifier: we are wrong.
                     class_or_struct = false;
                     lookfor_ctor_init = false;
-                } else if cached.lpos.col == 0 {
+                } else if cached.lpos.col == ColNr::ZERO {
                     lookfor_ctor_init = false;
                     // The first statement starts here; line up with it.
                     if cpp_base_class {
@@ -289,7 +289,7 @@ pub(crate) fn in_baseclass_list(cached: &mut CppBaseclassCache) -> bool {
                     && c == b','
                     && only_comment_left(line, at + 1)
                 {
-                    cached.lpos.col = 0;
+                    cached.lpos.col = ColNr::ZERO;
                 }
                 at = code_at(line, at + 1);
             }
@@ -325,8 +325,8 @@ pub(crate) fn get_baseclass_amount(col: c_int) -> c_int {
         amount
     } else {
         let mut win = Win::current();
-        win.w_cursor.col = col;
-        win.vcol(win.cursor())
+        win.w_cursor.col = ColNr::new(col);
+        win.vcol(win.cursor()).get()
     };
     if amount < Buf::current().b_ind_cpp_baseclass {
         amount = Buf::current().b_ind_cpp_baseclass;

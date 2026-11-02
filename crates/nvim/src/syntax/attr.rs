@@ -12,12 +12,12 @@
 
 #![forbid(unsafe_code)]
 
+use crate::narrow::number_as_col;
 use core::ffi::c_int;
 
 use super::*;
 use crate::charset::{is_word_at, vim_iswordc_buf};
 use crate::mbyte::head_off;
-use crate::pos::MAXCOL;
 
 /// Highlight attributes for the character at `col`.
 ///
@@ -93,7 +93,7 @@ impl SynState {
 
         // After 'synmaxcol' the attribute is always zero.
         let synmaxcol = self.buffer.b_p_smc;
-        if synmaxcol > 0 && col >= synmaxcol as ColNr {
+        if synmaxcol > 0 && col >= number_as_col(synmaxcol) {
             self.clear_current_state();
             self.current.id = 0;
             self.current.trans_id = 0;
@@ -135,11 +135,11 @@ impl SynState {
         // empty line, which could be the start of a region.
         self.sync_line();
         let (at_end, next_at_end) = self.line_ends_at(self.col);
-        if at_end && self.col != 0 {
+        if at_end && self.col != ColNr::ZERO {
             // If we found a match after the last column, use it.
             if self.next_match.idx >= 0
                 && self.next_match.col >= self.col
-                && self.next_match.col != MAXCOL as c_int
+                && self.next_match.col != ColNr::MAX
             {
                 self.push_next_match();
             }
@@ -233,7 +233,8 @@ impl SynState {
                 if !found_match {
                     let white = self.next_flags.has(SynFlags::SKIPWHITE)
                         && ascii_iswhite(c_int::from(self.curline_byte(self.col)));
-                    let empty = self.next_flags.has(SynFlags::SKIPEMPTY) && self.curline_len() == 0;
+                    let empty = self.next_flags.has(SynFlags::SKIPEMPTY)
+                        && self.curline_len() == ColNr::ZERO;
                     if white || empty {
                         break;
                     }
@@ -297,7 +298,7 @@ impl SynState {
         self.curline();
         let buffer = self.buffer;
         let line = self.line_bytes();
-        let col = self.col as usize;
+        let col = self.col.as_usize();
         if !word_char_at(line, col, buffer) {
             return None;
         }
@@ -313,7 +314,7 @@ impl SynState {
                 return None;
             }
         }
-        let kw = self.check_keyword_id(line, self.col, cur_si)?;
+        let kw = self.check_keyword_id(line, self.col.get(), cur_si)?;
 
         self.push_current_state(KEYWORD_IDX);
         let top = self.top();
@@ -324,13 +325,13 @@ impl SynState {
             (outer.si_flags, outer.si_attr, outer.si_trans_id)
         });
         let si = self.item_mut(top);
-        si.si_m_startcol = col;
+        si.si_m_startcol = col.get();
         si.si_h_startpos.lnum = lnum;
-        si.si_h_startpos.col = 0; // starts right away
+        si.si_h_startpos.col = ColNr::ZERO; // starts right away
         si.si_m_endpos.lnum = lnum;
-        si.si_m_endpos.col = kw.endcol;
+        si.si_m_endpos.col = ColNr::new(kw.endcol);
         si.si_h_endpos.lnum = lnum;
-        si.si_h_endpos.col = kw.endcol;
+        si.si_h_endpos.col = ColNr::new(kw.endcol);
         si.si_ends = 1;
         si.si_end_idx = 0;
         si.si_flags = kw.flags;
@@ -371,7 +372,7 @@ impl SynState {
     ) {
         let mut block = self.block();
         self.next_match.idx = 0; // no match in this line yet
-        self.next_match.col = MAXCOL as c_int;
+        self.next_match.col = ColNr::MAX;
 
         let mut idx = block.patterns().len() as c_int;
         while idx > 0 {
@@ -385,16 +386,16 @@ impl SynState {
             }
             // Already tried in this line, and it cannot match before the
             // best match so far.
-            if scan.line_id == self.line_id && scan.startcol >= self.next_match.col {
+            if scan.line_id == self.line_id && scan.startcol >= self.next_match.col.get() {
                 continue;
             }
             block.pattern_mut(idx).sp_line_id = self.line_id;
 
-            let lc_col = (self.col - scan.offsets.offsets[SPO_LC_OFF as usize]).max(0);
+            let lc_col = (self.col - scan.offsets.offsets[SPO_LC_OFF as usize]).max(ColNr::ZERO);
             let (matched, regmatch, captures) = self.run_pattern(idx, self.lnum, lc_col, None);
             if !matched {
                 // No match in this line; try another pattern.
-                block.pattern_mut(idx).sp_startcol = MAXCOL as c_int;
+                block.pattern_mut(idx).sp_startcol = ColNr::MAX;
                 continue;
             }
 
@@ -403,7 +404,7 @@ impl SynState {
             if pos.lnum > self.lnum {
                 // Must have used the end of the match in a following line,
                 // which we cannot handle.
-                block.pattern_mut(idx).sp_startcol = MAXCOL as c_int;
+                block.pattern_mut(idx).sp_startcol = ColNr::MAX;
                 continue;
             }
             let startcol = pos.col;
@@ -429,12 +430,12 @@ impl SynState {
             let mut flags = SynFlags::NONE;
             let mut eoe_pos = LPos {
                 lnum: LineNr::ZERO,
-                col: 0,
+                col: ColNr::ZERO,
             };
             let mut end_idx = 0;
             let mut hl_endpos = LPos {
                 lnum: LineNr::ZERO,
-                col: 0,
+                col: ColNr::ZERO,
             };
 
             if scan.ty == SPTYPE_START && scan.flags.has(SynFlags::ONELINE) {
@@ -614,11 +615,9 @@ impl SynState {
     /// this column.
     fn did_match_already(&self, idx: c_int, gap: &[c_int]) -> bool {
         let (lnum, col) = (self.lnum, self.col);
-        self.stack
-            .iter()
-            .rev()
-            .any(|si| si.si_m_startcol == col && si.si_m_lnum == lnum.get() && si.si_idx == idx)
-            || gap.contains(&idx)
+        self.stack.iter().rev().any(|si| {
+            si.si_m_startcol == col.get() && si.si_m_lnum == lnum.get() && si.si_idx == idx
+        }) || gap.contains(&idx)
     }
 }
 
@@ -666,7 +665,7 @@ impl PatScan {
             flags: spp.sp_flags,
             ty: spp.sp_type as c_int,
             line_id: spp.sp_line_id,
-            startcol: spp.sp_startcol,
+            startcol: spp.sp_startcol.get(),
             syn: spp.sp_syn,
             offsets: spp.offsets(),
         }

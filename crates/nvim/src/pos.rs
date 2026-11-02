@@ -14,7 +14,7 @@
 //! had these as `static inline`s next to the struct, so the transpiler left a
 //! copy in every module that compared two positions.
 
-use crate::types::{LineNr, Pos};
+use crate::types::{ColNr, LineNr, Pos};
 
 /// One past the last addressable line: the line number `$` and an open-ended
 /// range resolve to, and the sentinel a "no line" mark carries.
@@ -22,7 +22,7 @@ pub const MAXLNUM: LineNr = LineNr::MAX;
 
 /// One past the last addressable column: the sentinel meaning "to the end of
 /// the line", which is `INT_MAX` because `ColNr` is `int`.
-pub const MAXCOL: ::core::ffi::c_int = ::core::ffi::c_int::MAX;
+pub const MAXCOL: ::core::ffi::c_int = ColNr::MAX.get();
 
 /// Whether two positions name the same place, `coladd` included.
 pub fn equalpos(a: Pos, b: Pos) -> bool {
@@ -48,7 +48,7 @@ pub fn ltoreq(a: Pos, b: Pos) -> bool {
 /// Reset a position to line 0, column 0 — the "no position" the editor uses.
 pub fn clearpos(a: &mut Pos) {
     a.lnum = LineNr::ZERO;
-    a.col = 0;
+    a.col = ColNr::ZERO;
     a.coladd = 0;
 }
 
@@ -59,7 +59,7 @@ mod tests {
     const fn pos(lnum: i32, col: i32, coladd: i32) -> Pos {
         Pos {
             lnum: LineNr::new(lnum),
-            col,
+            col: ColNr::new(col),
             coladd,
         }
     }

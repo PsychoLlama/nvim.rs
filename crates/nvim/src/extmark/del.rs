@@ -105,15 +105,15 @@ pub fn extmark_clear(
     }
 
     let mut marks_cleared_any = false;
-    let mut marks_cleared_all = l_row == 0 && l_col == 0;
+    let mut marks_cleared_all = l_row == 0 && l_col == ColNr::ZERO;
 
     let mut iter = MarkTreeIter::default();
-    itr_get(buffer.marktree(), l_row, l_col, &mut iter);
+    itr_get(buffer.marktree(), l_row, l_col.get(), &mut iter);
     loop {
         let mark = itr_current(buffer.marktree(), &iter);
         if mark.pos.row < 0
             || mark.pos.row > u_row
-            || (mark.pos.row == u_row && mark.pos.col > u_col)
+            || (mark.pos.row == u_row && mark.pos.col > u_col.get())
         {
             if mark.pos.row >= 0 {
                 marks_cleared_all = false;

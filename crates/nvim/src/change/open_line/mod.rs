@@ -33,6 +33,7 @@ use crate::cstr::byte_at;
 use crate::guard::Suppress;
 use crate::memline::{Lines, ml_append_terminated};
 use crate::memory::XString;
+use crate::narrow::len_as_int;
 use crate::types::Indenter;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
@@ -122,7 +123,7 @@ fn append_new_line(text: &XString, old_cursor: Pos) -> Option<bool> {
         vr_lines_changed.set(vr_lines_changed.get() + 1);
     }
     let _ = ml_replace_buf_text(Buf::current(), Win::current().w_cursor.lnum, text);
-    changed_bytes(Win::current().w_cursor.lnum, 0);
+    changed_bytes(Win::current().w_cursor.lnum, ColNr::ZERO);
     Win::current().w_cursor.lnum -= 1;
     Some(false)
 }
@@ -135,7 +136,7 @@ fn append_new_line(text: &XString, old_cursor: Pos) -> Option<bool> {
 fn apply_new_indent(
     mut newindent: c_int,
     saved_line: &[u8],
-    less_cols: &mut ColNr,
+    less_cols: &mut i32,
     newcol: &mut ColNr,
     no_si: bool,
 ) {
@@ -156,17 +157,17 @@ fn apply_new_indent(
     } else {
         set_indent(newindent, SIN_INSERT | SIN_NOMARK);
     }
-    *less_cols -= Win::current().w_cursor.col;
+    *less_cols -= Win::current().w_cursor.col.get();
     ai_col.set(Win::current().w_cursor.col);
 
     // In Replace mode every character of the new indent needs a NUL on
     // the replace stack, for when BS deletes it.
     if replace_normal(State.get()) {
-        for _ in 0..Win::current().w_cursor.col {
+        for _ in 0..Win::current().w_cursor.col.get() {
             replace_push_nul();
         }
     }
-    *newcol += Win::current().w_cursor.col;
+    *newcol += Win::current().w_cursor.col.get();
     if no_si {
         did_si.set(false);
     }
@@ -177,8 +178,8 @@ fn apply_new_indent(
 struct Split {
     lnum: LineNr,
     mincol: ColNr,
-    less_cols: ColNr,
-    less_cols_off: ColNr,
+    less_cols: i32,
+    less_cols_off: i32,
 }
 
 /// Cut the old line off at the cursor and tell the extmark tree about both
@@ -193,7 +194,7 @@ fn truncate_old_line(
     split: Split,
     did_append: bool,
 ) {
-    saved_line.truncate(Win::current().w_cursor.col as usize);
+    saved_line.truncate(Win::current().w_cursor.col.as_usize());
     // Remove trailing white space, unless the caller asked to keep it --
     // and only when the line being left was auto-indented, so that white
     // space the user typed on purpose survives.
@@ -204,13 +205,20 @@ fn truncate_old_line(
     let _ = ml_replace_owned(Win::current().w_cursor.lnum, XString::from_vec(saved_line));
 
     let mut cols_spliced = 0;
-    if new_len < Win::current().w_cursor.col {
+    if new_len < Win::current().w_cursor.col.get() {
         // Trailing white space went as well as the split.
         let cb = Buf::current();
         let row = Win::current().w_cursor.lnum - 1;
         let gone = Win::current().w_cursor.col - new_len;
-        extmark_splice_cols(cb, row.get(), new_len, gone, 0, kExtmarkUndo);
-        cols_spliced = gone;
+        extmark_splice_cols(
+            cb,
+            row.get(),
+            ColNr::new(new_len),
+            gone,
+            ColNr::ZERO,
+            kExtmarkUndo,
+        );
+        cols_spliced = gone.get();
     }
 
     if did_append {
@@ -228,10 +236,21 @@ fn truncate_old_line(
         let at = mincol - 1 - cols_spliced;
         let off = less_cols_off;
         let old_b = off as BCount;
-        let new_b = (1 + added) as BCount;
+        let new_b = (added.get() + 1) as BCount;
         let undo = kExtmarkUndo;
         let (cur_lnum, cur_col) = (Win::current().w_cursor.lnum, Win::current().w_cursor.col);
-        extmark_splice(cb, row.get(), at, 0, off, old_b, 1, added, new_b, undo);
+        extmark_splice(
+            cb,
+            row.get(),
+            at,
+            0,
+            ColNr::new(off),
+            old_b,
+            1,
+            added,
+            new_b,
+            undo,
+        );
         changed_lines(cb, cur_lnum, cur_col, cur_lnum + 1, 1, true);
         // Move marks that were after the break onto the new line.
         if flags & OPENLINE_MARKFIX != 0 {
@@ -264,10 +283,10 @@ fn reindent_new_line(has_leader: bool, do_cindent: bool) {
             && Buf::current().b_p_ai != 0
         {
             fixthisline(Indenter::Lisp);
-            ai_col.set(getwhitecols_curline() as ColNr);
+            ai_col.set(getwhitecols_curline());
         } else if do_cindent || (Buf::current().b_p_ai != 0 && use_indentexpr_for_lisp()) {
             do_c_expr_indent();
-            ai_col.set(getwhitecols_curline() as ColNr);
+            ai_col.set(getwhitecols_curline());
         }
     }
 
@@ -301,7 +320,7 @@ pub fn open_line(
     let mincol = Win::current().w_cursor.col + 1;
     // A copy of the current line, so that it can be cut in two.
     let mut saved_line = Lines::current().line(lnum).to_vec();
-    let col = (Win::current().w_cursor.col as usize).min(saved_line.len());
+    let col = Win::current().w_cursor.col.as_usize().min(saved_line.len());
     let mut next_line = None;
 
     if State.get() & VREPLACE_FLAG != 0 {
@@ -344,7 +363,7 @@ pub fn open_line(
 
     u_clearline(Buf::current()); // "U" cannot undo added lines
     did_si.set(false);
-    ai_col.set(0);
+    ai_col.set(ColNr::ZERO);
 
     // An auto-indent means nothing was typed on the line being left, so
     // it should be truncated. Also true when only a comment leader was
@@ -424,7 +443,7 @@ pub fn open_line(
     }
 
     let mut leader = None;
-    let mut newcol: ColNr = 0;
+    let mut newcol: ColNr = ColNr::ZERO;
     if let Some(lead_flags) = lead_flags.filter(|_| lead_len > 0) {
         let head = &saved_line[..cut];
         let plan = plan_leader(dir, lead_len, lead_flags, head, extra.is_some());
@@ -447,8 +466,8 @@ pub fn open_line(
     let has_leader = leader.is_some();
 
     // Only reached with dir == FORWARD, in Insert or Replace state.
-    let mut less_cols: ColNr = 0;
-    let mut less_cols_off: ColNr = 0;
+    let mut less_cols: i32 = 0;
+    let mut less_cols_off: i32 = 0;
     let mut tail = &saved_line[saved_line.len()..];
     if let Some(mut from) = extra {
         // With 'autoindent' or OPENLINE_DELSPACES, skip to the first
@@ -470,7 +489,7 @@ pub fn open_line(
             }
         }
         // Columns for the marks, adjusted for the ones just removed.
-        less_cols = from as ColNr;
+        less_cols = len_as_int(from);
         tail = &saved_line[from..];
     }
 
@@ -551,20 +570,20 @@ pub fn open_line(
         if did_append {
             let cb = Buf::current();
             let at = Win::current().w_cursor.lnum;
-            let extra = BCount::try_from(cb.lines().line_len(at)).unwrap_or(0);
+            let extra = BCount::try_from(cb.lines().line_len(at).get()).unwrap_or(0);
             extmark_splice(
                 cb,
                 (at - 1).get(),
+                ColNr::ZERO,
                 0,
-                0,
-                0,
+                ColNr::ZERO,
                 0,
                 1,
-                0,
+                ColNr::ZERO,
                 1 + extra,
                 kExtmarkUndo,
             );
-            changed_lines(cb, at, 0, at, 1, true);
+            changed_lines(cb, at, ColNr::ZERO, at, 1, true);
         }
         drop(splice);
 
@@ -583,7 +602,7 @@ pub fn open_line(
             if let Some(next_line) = next_line.take() {
                 let _ = ml_replace_owned(at, next_line);
             }
-            Win::current().w_cursor.col = 0;
+            Win::current().w_cursor.col = ColNr::ZERO;
             Win::current().w_cursor.coladd = 0;
             ins_bytes(&new_text); // calls changed_bytes()
         }

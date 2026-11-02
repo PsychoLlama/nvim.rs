@@ -174,7 +174,7 @@ pub(crate) fn serialize_header(bi: &mut BufInfo, hash: &[u8; UNDO_HASH_SIZE as u
         return false;
     }
     bi.write_int(buf.b_u_line_lnum.get(), 4);
-    bi.write_int(buf.b_u_line_colnr, 4);
+    bi.write_int(buf.b_u_line_colnr.get(), 4);
 
     bi.put_header_link(buf.b_u_oldhead);
     bi.put_header_link(buf.b_u_newhead);
@@ -200,7 +200,7 @@ pub(crate) fn serialize_uhp(bi: &mut BufInfo, uh: &UndoHeader) -> bool {
     bi.put_header_link(uh.alt_prev);
     bi.write_int(uh.seq, 4);
     serialize_pos(bi, uh.cursor);
-    bi.write_int(uh.cursor_vcol, 4);
+    bi.write_int(uh.cursor_vcol.get(), 4);
     bi.write_int(uh.flags, 2);
     for mark in &uh.named_marks {
         serialize_pos(bi, mark.mark);
@@ -249,7 +249,7 @@ pub(crate) fn unserialize_uhp(bi: &mut BufInfo, file_name: &CStr) -> Option<Undo
         return None;
     }
     uh.cursor = unserialize_pos(bi);
-    uh.cursor_vcol = bi.read_4c();
+    uh.cursor_vcol = ColNr::new(bi.read_4c());
     uh.flags = bi.read_2c();
     let now: Timestamp = os_time();
     for mark in &mut uh.named_marks {
@@ -454,7 +454,7 @@ pub(crate) fn unserialize_uep(bi: &mut BufInfo, file_name: &CStr) -> Option<Undo
 /// Writes a position as three four-byte fields.
 pub(crate) fn serialize_pos(bi: &mut BufInfo, pos: Pos) {
     bi.write_int(pos.lnum.get(), 4);
-    bi.write_int(pos.col, 4);
+    bi.write_int(pos.col.get(), 4);
     bi.write_int(pos.coladd, 4);
 }
 
@@ -463,7 +463,7 @@ pub(crate) fn serialize_pos(bi: &mut BufInfo, pos: Pos) {
 pub(crate) fn unserialize_pos(bi: &mut BufInfo) -> Pos {
     Pos {
         lnum: LineNr::new(bi.read_4c().max(0)),
-        col: bi.read_4c().max(0),
+        col: ColNr::new(bi.read_4c().max(0)),
         coladd: bi.read_4c().max(0),
     }
 }
@@ -473,7 +473,7 @@ pub(crate) fn serialize_visualinfo(bi: &mut BufInfo, info: &VisualInfo) {
     serialize_pos(bi, info.vi_start);
     serialize_pos(bi, info.vi_end);
     bi.write_int(info.vi_mode, 4);
-    bi.write_int(info.vi_curswant, 4);
+    bi.write_int(info.vi_curswant.get(), 4);
 }
 
 /// Reads a Visual selection back.
@@ -486,7 +486,7 @@ pub(crate) fn unserialize_visualinfo(bi: &mut BufInfo) -> VisualInfo {
         vi_start,
         vi_end,
         vi_mode,
-        vi_curswant,
+        vi_curswant: ColNr::new(vi_curswant),
     }
 }
 
@@ -533,11 +533,11 @@ mod tests {
     fn splice(n: c_int) -> ExtmarkSplice {
         ExtmarkSplice {
             start_row: n,
-            start_col: 1,
+            start_col: ColNr::new(1),
             old_row: 0,
-            old_col: 2,
+            old_col: ColNr::new(2),
             new_row: 1,
-            new_col: 0,
+            new_col: ColNr::ZERO,
             start_byte: 10,
             old_byte: 2,
             new_byte: 1,
@@ -562,17 +562,17 @@ mod tests {
             seq: 5,
             cursor: Pos {
                 lnum: LineNr::new(4),
-                col: 2,
+                col: ColNr::new(2),
                 coladd: 0,
             },
-            cursor_vcol: -1,
+            cursor_vcol: ColNr::NONE,
             flags: UH_CHANGED | UH_RELOAD,
             save_nr: 2,
             time: 1_700_000_000,
             ..Default::default()
         };
         uh.named_marks[0].mark.lnum = LineNr::new(9);
-        uh.named_marks[25].mark.col = 3;
+        uh.named_marks[25].mark.col = ColNr::new(3);
         uh.visual.vi_start.lnum = LineNr::ONE;
         uh.visual.vi_mode = c_int::from(b'V');
         uh.entries.push(UndoEntry {
@@ -591,7 +591,7 @@ mod tests {
         uh.extmarks.push(ExtmarkUndoObject::SavePos(ExtmarkSavePos {
             mark: 0,
             old_row: 1,
-            old_col: 1,
+            old_col: ColNr::new(1),
             invalidated: false,
         }));
         uh.extmarks.push(ExtmarkUndoObject::Move(ExtmarkMove {
@@ -620,10 +620,10 @@ mod tests {
             (uh.next, uh.prev, uh.alt_next, uh.alt_prev)
         );
         assert!(back.cursor == uh.cursor);
-        assert_eq!((back.cursor_vcol, back.flags), (-1, uh.flags));
+        assert_eq!((back.cursor_vcol, back.flags), (ColNr::NONE, uh.flags));
         assert_eq!((back.save_nr, back.time), (2, 1_700_000_000));
         assert_eq!(back.named_marks[0].mark.lnum, LineNr::new(9));
-        assert_eq!(back.named_marks[25].mark.col, 3);
+        assert_eq!(back.named_marks[25].mark.col, ColNr::new(3));
         assert_eq!(
             (back.visual.vi_start.lnum.get(), back.visual.vi_mode),
             (1, c_int::from(b'V'))

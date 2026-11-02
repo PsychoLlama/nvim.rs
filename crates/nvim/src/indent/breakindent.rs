@@ -194,13 +194,7 @@ static CACHE: GlobalCell<BreakindentCache> = GlobalCell::new(BreakindentCache {
 impl BreakindentCache {
     /// Whether the cached indent still answers for this line under these
     /// options.
-    fn answers(
-        &self,
-        key: &BreakindentKey,
-        line: &[u8],
-        vts: Option<&[ColNr]>,
-        flp: &[u8],
-    ) -> bool {
+    fn answers(&self, key: &BreakindentKey, line: &[u8], vts: Option<&[i32]>, flp: &[u8]) -> bool {
         self.key == *key
             && self.flp.as_deref() == Some(flp)
             && self.line.as_deref() == Some(line)
@@ -259,7 +253,7 @@ impl BreakindentCache {
                 let mut at = span.start;
                 let mut indent = 0;
                 while at < span.end {
-                    indent += win_chartabsize(window, &bytes[at..], indent as ColNr);
+                    indent += win_chartabsize(window, &bytes[at..], ColNr::new(indent));
                     at += c_cluster_len(&bytes[at..]);
                 }
                 self.indent = indent;

@@ -58,14 +58,14 @@ use crate::winlayer::{Buf, TabPage, Win, defer_free_buffer, forget_buffer, tab_w
 const ZERO_FMARK: FileMark = FileMark {
     mark: Pos {
         lnum: LineNr::ZERO,
-        col: 0 as ColNr,
-        coladd: 0 as ColNr,
+        col: ColNr::ZERO,
+        coladd: 0,
     },
     fnum: 0,
     timestamp: 0 as Timestamp,
     view: FileMarkView {
         topline_offset: 0,
-        skipcol: 0 as ColNr,
+        skipcol: ColNr::ZERO,
     },
     extra: None,
 };

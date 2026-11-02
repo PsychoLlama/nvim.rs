@@ -118,16 +118,16 @@ pub fn ins_compl_col_range_attr(lnum: LineNr, col: c_int) -> c_int {
 
     let start_col = compl_col.get() + ins_compl_leader_len() as c_int;
     if !ins_compl_has_multiple() {
-        return if col >= start_col && col < compl_ins_end_col.get() {
+        return if col >= start_col.get() && col < compl_ins_end_col.get().get() {
             attr
         } else {
             -1
         };
     }
     let cursor_lnum = Win::current().w_cursor.lnum;
-    let inside = (lnum == compl_lnum.get() && col >= start_col && col < MAXCOL)
+    let inside = (lnum == compl_lnum.get() && col >= start_col.get() && col < MAXCOL)
         || (lnum > compl_lnum.get() && lnum < cursor_lnum)
-        || (lnum == cursor_lnum && col <= compl_ins_end_col.get());
+        || (lnum == cursor_lnum && col <= compl_ins_end_col.get().get());
     if inside { attr } else { -1 }
 }
 
@@ -253,20 +253,20 @@ pub(crate) fn get_leader_for_startcol(match_0: MatchId, cached: bool) -> ComplSt
             // *before* it carry pre-`compl_col` text that must not be
             // compared with the original text, so the empty
             // `compl_leader` is returned to mean "no prefix filter".
-            if startcol < 0 || startcol >= compl_col.get() {
+            if startcol < 0 || startcol >= compl_col.get().get() {
                 return compl_orig_text();
             }
             return compl_leader();
         }
 
-        if compl_col.get() <= 0 {
+        if compl_col.get() <= ColNr::ZERO {
             break 'theend;
         }
-        if startcol >= 0 && startcol < compl_col.get() {
+        if startcol >= 0 && startcol < compl_col.get().get() {
             let prepend_len = compl_col.get() - startcol;
             let new_length = prepend_len + compl_leader().len() as c_int;
             if cached
-                && new_length as size_t == adjusted_leader().len()
+                && new_length.as_usize() == adjusted_leader().len()
                 && !adjusted_leader().is_unset()
             {
                 return adjusted_leader();
@@ -491,7 +491,7 @@ pub fn ins_compl_show_pum() {
     }
 
     // Avoid a wait_return() when the message is cleared.
-    dollar_vcol.set(-1);
+    dollar_vcol.set(ColNr::NONE);
 
     // Move the cursor to the start of the match for the popup menu's sake,
     // then put it back.
@@ -623,7 +623,7 @@ pub(crate) fn ins_compl_show_statusmsg() {
                 let msg = match_position_message(number, compl_matches.get());
                 edit_submode_extra.set(Some(msg));
                 edit_submode_highl.set(HLF_R);
-                if dollar_vcol.get() >= 0 {
+                if dollar_vcol.get() >= ColNr::ZERO {
                     curs_columns(Win::current(), 0);
                 }
             }
@@ -661,7 +661,7 @@ pub(crate) fn show_pum(prev_w_wrow: c_int, prev_w_leftcol: c_int) {
     // If the cursor moved or the display scrolled, the menu has to be
     // rebuilt rather than only redrawn.
     setcursor();
-    if prev_w_wrow != Win::current().w_wrow || prev_w_leftcol != Win::current().w_leftcol {
+    if prev_w_wrow != Win::current().w_wrow || prev_w_leftcol != Win::current().w_leftcol.get() {
         ins_compl_del_pum();
     }
     ins_compl_show_pum();

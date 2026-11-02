@@ -50,11 +50,11 @@ pub fn extmark_splice_delete(
 ) {
     let lo = MTPos {
         row: l_row,
-        col: l_col,
+        col: l_col.get(),
     };
     let hi = MTPos {
         row: u_row,
-        col: u_col,
+        col: u_col.get(),
     };
     splice_delete(buffer, lo, hi, saved, only_copy, op);
 }
@@ -133,7 +133,7 @@ pub(crate) fn splice_delete(
             let pos = ExtmarkSavePos {
                 mark: mt_lookup_key(mark),
                 old_row: mark.pos.row,
-                old_col: mark.pos.col,
+                old_col: ColNr::new(mark.pos.col),
                 invalidated,
             };
             saved.push(ExtmarkUndoObject::SavePos(pos));
@@ -176,17 +176,17 @@ pub fn extmark_apply_undo(undo_info: ExtmarkUndoObject, undo: bool) {
     } else if let ExtmarkUndoObject::Move(move_0) = undo_info {
         let start = Extent {
             row: move_0.start_row,
-            col: move_0.start_col,
+            col: ColNr::new(move_0.start_col),
             byte: move_0.start_byte,
         };
         let extent = Extent {
             row: move_0.extent_row,
-            col: move_0.extent_col,
+            col: ColNr::new(move_0.extent_col),
             byte: move_0.extent_byte,
         };
         let new = Extent {
             row: move_0.new_row,
-            col: move_0.new_col,
+            col: ColNr::new(move_0.new_col),
             byte: move_0.new_byte,
         };
         if undo {

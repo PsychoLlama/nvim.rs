@@ -25,6 +25,7 @@ use crate::narrow::len_as_int;
 use crate::narrow::number_as_int;
 use crate::narrow::number_as_lnum;
 use crate::os::cshim::cstr_ncasecmp;
+use crate::types::ColNr;
 use crate::types::Handle;
 use crate::types::LineNr;
 use crate::winfloat::WIN_CONFIG_INIT;
@@ -144,7 +145,7 @@ fn float_bufpos(bufpos: &Array) -> Option<LPos> {
     };
     Some(LPos {
         lnum: number_as_lnum(lnum.as_integer()?),
-        col: number_as_int(col.as_integer()?),
+        col: ColNr::new(number_as_int(col.as_integer()?)),
     })
 }
 
@@ -738,7 +739,7 @@ mod tests {
             Object::Integer(7 as Integer),
         ]))
         .expect("a pair");
-        assert_eq!((at.lnum.get(), at.col), (3, 7));
+        assert_eq!((at.lnum.get(), at.col.get()), (3, 7));
         assert!(float_bufpos(&Array::new()).is_none());
         assert!(float_bufpos(&Array::from(vec![Object::Integer(3)])).is_none());
         assert!(

@@ -42,7 +42,7 @@ use crate::option::get_ve_flags;
 use crate::option::vars::{P_SEL, p_slm, p_smd};
 use crate::options::kOptVeFlagBlock;
 use crate::plines::{getvcol, getvcols};
-use crate::pos::{MAXCOL, equalpos, lt};
+use crate::pos::{equalpos, lt};
 use crate::state::mode::{
     VIsual_reselect, VIsual_select_exclu_adj, VIsual_select_reg, finish_op, motion_force,
     resel_VIsual_line_count, resel_VIsual_mode, resel_VIsual_vcol,
@@ -155,7 +155,7 @@ static VISUAL: GlobalCell<VisualState> = GlobalCell::new(VisualState {
     sel: VisualSelection {
         anchor: Pos {
             lnum: LineNr::ZERO,
-            col: 0,
+            col: ColNr::ZERO,
             coladd: 0,
         },
         mode: VisualMode::CHAR,
@@ -355,7 +355,7 @@ pub(crate) fn get_visual_text(cmd_arg: Option<&mut CmdArg>) -> Option<VisualText
     // The earlier of the two ends is the start; the length is the column
     // difference, inclusive.
     let (at, mut len) = if visual_mode().is_line() {
-        (0, line.len())
+        (ColNr::ZERO, line.len())
     } else if lt(cursor, anchor) {
         (
             cursor.col,
@@ -471,7 +471,7 @@ pub(crate) fn v_visop(cmd_arg: &mut CmdArg) {
             VIsual_mode_orig.set(visual_mode());
             set_visual_mode(VisualMode::LINE);
         } else if cmd_arg.cmdchar == 'C' as c_int || cmd_arg.cmdchar == 'D' as c_int {
-            Win::current().w_curswant = MAXCOL as ColNr;
+            Win::current().w_curswant = ColNr::MAX;
         }
     }
     let typed = cmd_arg.cmdchar.to_le_bytes()[0];
@@ -524,8 +524,9 @@ fn reselect_scaled(cmd_arg: &mut CmdArg) {
         if resel_VIsual_line_count.get() <= 1 {
             update_curswant_force();
             let count0 = cmd_arg.count0;
-            let extra = resel_VIsual_vcol.get().wrapping_mul(count0) as ColNr;
-            Win::current().w_curswant = Win::current().w_curswant.wrapping_add(extra);
+            let extra = resel_VIsual_vcol.get().get().wrapping_mul(count0);
+            Win::current().w_curswant =
+                ColNr::new(Win::current().w_curswant.get().wrapping_add(extra));
             if !sel_exclusive() {
                 Win::current().w_curswant -= 1;
             }
@@ -535,20 +536,23 @@ fn reselect_scaled(cmd_arg: &mut CmdArg) {
         coladvance(Win::current(), Win::current().w_curswant);
     }
 
-    if resel_VIsual_vcol.get() == MAXCOL as c_int {
-        Win::current().w_curswant = MAXCOL as ColNr;
-        coladvance(Win::current(), MAXCOL as c_int);
+    if resel_VIsual_vcol.get() == ColNr::MAX {
+        Win::current().w_curswant = ColNr::MAX;
+        coladvance(Win::current(), ColNr::MAX);
     } else if visual_mode().is_block() {
         // The width is measured from the *start* line, so the cursor goes
         // there while 'curswant' is recomputed and comes back after.
         let lnum = Win::current().w_cursor.lnum;
         Win::current().w_cursor.lnum = visual_anchor().lnum;
         update_curswant_force();
-        Win::current().w_curswant = Win::current().w_curswant.wrapping_add(
-            resel_VIsual_vcol
-                .get()
-                .wrapping_mul(cmd_arg.count0)
-                .wrapping_sub(1) as ColNr,
+        Win::current().w_curswant = ColNr::new(
+            Win::current().w_curswant.get().wrapping_add(
+                resel_VIsual_vcol
+                    .get()
+                    .get()
+                    .wrapping_mul(cmd_arg.count0)
+                    .wrapping_sub(1),
+            ),
         );
         Win::current().w_cursor.lnum = lnum;
         if sel_exclusive() {
@@ -752,7 +756,7 @@ pub(crate) fn unadjust_for_sel_inner(pos: &mut Pos) -> bool {
     VIsual_select_exclu_adj.set(false);
     if pos.coladd > 0 {
         pos.coladd -= 1;
-    } else if pos.col > 0 {
+    } else if pos.col > ColNr::ZERO {
         pos.col -= 1;
         mark_mb_adjustpos(Buf::current(), pos);
         // Inside a TAB, stepping back a byte means stepping to the last

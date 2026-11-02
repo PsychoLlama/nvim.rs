@@ -273,7 +273,7 @@ pub fn ex_copen(excmd: &mut ExArg) {
 
     let mut win = Win::current();
     win.w_cursor.lnum = LineNr::new(lnum);
-    win.w_cursor.col = 0;
+    win.w_cursor.col = ColNr::ZERO;
     check_cursor(win);
     win.update_topline(); // scroll to show the line
 }
@@ -316,9 +316,9 @@ pub fn ex_cclose(excmd: &mut ExArg) {
 fn win_goto_line(mut win: Win, lnum: LineNr) {
     let saved = switch_to(win);
     win.w_cursor.lnum = lnum;
-    win.w_cursor.col = 0;
+    win.w_cursor.col = ColNr::ZERO;
     win.w_cursor.coladd = 0;
-    win.w_curswant = 0;
+    win.w_curswant = ColNr::ZERO;
     win.update_topline(); // scroll to show the line
     win.redraw_later(UPD_VALID);
     win.w_redr_status = true; // update ruler

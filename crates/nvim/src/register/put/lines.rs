@@ -17,6 +17,7 @@
 use crate::cursor::getvpos;
 use crate::mbyte::head_off;
 use crate::memory::XString;
+use crate::narrow::len_as_int;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -34,7 +35,7 @@ impl Put {
         let start_lnum = lnum;
         let mut end_lnum = 0;
         let mut first_byte_off = 0;
-        let mut vcol: ColNr = 0;
+        let mut vcol: ColNr = ColNr::ZERO;
         let mut totlen: size_t = 0;
 
         if visual_active() {
@@ -64,11 +65,11 @@ impl Put {
                 if lnum > start_lnum {
                     let mut pos = Pos {
                         lnum,
-                        col: 0,
+                        col: ColNr::ZERO,
                         coladd: 0,
                     };
                     let found = getvpos(Win::current(), &mut pos, vcol);
-                    col = if found { pos.col } else { MAXCOL };
+                    col = if found { pos.col } else { ColNr::MAX };
                 }
                 // A Visual line too short to reach the column is skipped
                 // -- upstream's `continue`, which in its do-while jumps
@@ -85,21 +86,23 @@ impl Put {
                 // copies of the register's line, then the rest of the old
                 // one.
                 let put: &[u8] = &self.lines[0];
-                let mut newline = XString::with_capacity(totlen + oldlen as usize);
+                let mut newline = XString::with_capacity(totlen + oldlen.as_usize());
                 {
                     let mut lines = Buf::current().lines();
                     let old = lines.line(lnum);
-                    newline.push_bytes(&old[..col as usize]);
+                    newline.push_bytes(&old[..col.as_usize()]);
                     for _ in 0..self.count {
                         newline.push_bytes(put);
                     }
-                    newline.push_bytes(&old[col as usize..]);
+                    newline.push_bytes(&old[col.as_usize()..]);
                 }
 
                 // Where the last character of the put text starts: the byte
                 // before the old line's tail.
-                let end = col as usize + totlen;
-                first_byte_off = ColNr::try_from(head_off(&newline, end - 1)).unwrap_or(0);
+                let end = col.as_usize() + totlen;
+                first_byte_off = ColNr::try_from(head_off(&newline, end - 1))
+                    .unwrap_or(ColNr::ZERO)
+                    .get();
 
                 let _ = ml_replace_owned(lnum, newline);
 
@@ -108,12 +111,19 @@ impl Put {
                     // w_virtcol right.
                     changed_cline_bef_curs(Win::current());
                     invalidate_botline_win(Win::current());
-                    Win::current().w_cursor.col += (totlen - 1) as ColNr;
+                    Win::current().w_cursor.col += len_as_int(totlen - 1);
                 }
                 changed_bytes(lnum, col);
                 let inserted = totlen as c_int;
                 let buffer = Buf::current();
-                extmark_splice_cols(buffer, (lnum - 1).get(), col, 0, inserted, kExtmarkUndo);
+                extmark_splice_cols(
+                    buffer,
+                    (lnum - 1).get(),
+                    col,
+                    ColNr::ZERO,
+                    ColNr::new(inserted),
+                    kExtmarkUndo,
+                );
                 if visual_active() {
                     lnum += 1;
                 }
@@ -146,14 +156,14 @@ impl Put {
         // front of it, becomes a new line below.
         let last = self.lines.last().expect("a charwise register holds a line");
         let mut appended = XString::from_bytes(last);
-        appended.push_bytes(&Buf::current().lines().line(lnum)[col as usize..]);
+        appended.push_bytes(&Buf::current().lines().line(lnum)[col.as_usize()..]);
         let _ = ml_append_terminated(lnum, appended.as_bytes_with_nul(), false);
 
         // The head of the cursor line keeps the register's *first* line. The
         // line is read again rather than held: `ml_append` above flushed and
         // relocked the block the first read answered out of.
         let mut replacement =
-            XString::from_bytes(&Buf::current().lines().line(lnum)[..col as usize]);
+            XString::from_bytes(&Buf::current().lines().line(lnum)[..col.as_usize()]);
         replacement.push_bytes(&self.lines[0]);
         let _ = ml_replace_owned(lnum, replacement);
     }
@@ -190,7 +200,7 @@ impl Put {
         lendiff: c_int,
     ) {
         if self.kind == kMTLineWise {
-            Buf::current().b_op_start.col = 0;
+            Buf::current().b_op_start.col = ColNr::ZERO;
             if self.dir == FORWARD {
                 Buf::current().b_op_start.lnum += 1;
             }
@@ -212,22 +222,22 @@ impl Put {
             changed_lines(Buf::current(), at, col, at + 1, self.nr_lines, true);
         } else {
             let at = Buf::current().b_op_start.lnum;
-            changed_lines(Buf::current(), at, 0, at, self.nr_lines, true);
+            changed_lines(Buf::current(), at, ColNr::ZERO, at, self.nr_lines, true);
         }
 
         // `']` goes on the first byte of the last character put, its
         // column corrected for whatever the reindent above removed.
         Buf::current().b_op_end.lnum = new_lnum;
         let last = self.lines.last().expect("a register holds a line");
-        let col = (last.len() as ColNr - lendiff).max(0);
-        if col > 1 {
+        let col = (ColNr::from_index(last.len()) - lendiff).max(ColNr::ZERO);
+        if col > ColNr::new(1) {
             Buf::current().b_op_end.col = col - 1;
             if !last.is_empty() {
                 let head = head_off(last, last.len() - 1);
-                Buf::current().b_op_end.col -= ColNr::try_from(head).unwrap_or(0);
+                Buf::current().b_op_end.col -= ColNr::try_from(head).unwrap_or(ColNr::ZERO).get();
             }
         } else {
-            Buf::current().b_op_end.col = 0;
+            Buf::current().b_op_end.col = ColNr::ZERO;
         }
 
         if self.flags & PUT_CURSLINE as c_int != 0 {
@@ -242,18 +252,18 @@ impl Put {
                 } else {
                     lnum + 1
                 };
-                Win::current().w_cursor.col = 0;
+                Win::current().w_cursor.col = ColNr::ZERO;
             } else {
                 Win::current().w_cursor.lnum = new_lnum;
                 Win::current().w_cursor.col = col;
                 Buf::current().b_op_end = Win::current().w_cursor;
-                if col > 1 {
+                if col > ColNr::new(1) {
                     Buf::current().b_op_end.col = col - 1;
                 }
             }
         } else if self.kind == kMTLineWise {
             // The cursor goes on the first non-blank of the first line.
-            Win::current().w_cursor.col = 0;
+            Win::current().w_cursor.col = ColNr::ZERO;
             if self.dir == FORWARD {
                 Win::current().w_cursor.lnum += 1;
             }
@@ -309,11 +319,11 @@ impl Put {
                         // what the reindent took off it.
                         let measured = cnt == self.count && i == y_size - 1;
                         if measured {
-                            lendiff = Buf::current().lines().line_len(lnum);
+                            lendiff = Buf::current().lines().line_len(lnum).get();
                         }
                         self.fix_indent(lnum, &mut indent_state);
                         if measured {
-                            lendiff -= Buf::current().lines().line_len(lnum);
+                            lendiff -= Buf::current().lines().line_len(lnum).get();
                         }
                     }
                     i = i.wrapping_add(1);
@@ -348,10 +358,10 @@ impl Put {
                         at.get(),
                         start,
                         0,
-                        0,
+                        ColNr::ZERO,
                         0,
                         rows,
-                        cols,
+                        ColNr::new(cols),
                         bytes,
                         kExtmarkUndo,
                     );

@@ -40,14 +40,21 @@ pub(crate) fn pbyte(mut pos: Pos, c: c_int) {
     // written; no caller gets here on an empty line.)
     let len = ColNr::try_from(line.len()).unwrap_or(ColNr::MAX);
     if pos.col >= len {
-        pos.col = (len - 1).max(0);
+        pos.col = (len - 1).max(ColNr::ZERO);
     }
-    if let Some(byte) = line.get_mut(pos.col as usize) {
+    if let Some(byte) = line.get_mut(pos.col.as_usize()) {
         *byte = c as u8;
     }
     if curbuf_splice_pending.get() == 0 {
         let row = pos.lnum.get() - 1;
-        extmark_splice_cols(Buf::current(), row, pos.col, 1, 1, kExtmarkUndo);
+        extmark_splice_cols(
+            Buf::current(),
+            row,
+            pos.col,
+            ColNr::new(1),
+            ColNr::new(1),
+            kExtmarkUndo,
+        );
     }
 }
 
@@ -112,10 +119,10 @@ pub(crate) fn op_replace(op: &mut OpArg, mut c: c_int) -> Result<(), Failed> {
 /// `op` must be blockwise.
 fn replace_block(op: &mut OpArg, c: c_int, had_ctrl_v_cr: bool) {
     let mut bd = BlockDef::ZERO;
-    bd.is_max = c_int::from(Win::current().w_curswant == MAXCOL);
+    bd.is_max = c_int::from(Win::current().w_curswant == ColNr::MAX);
     while Win::current().w_cursor.lnum <= op.end.lnum {
         // Make sure the cursor position is valid for `block_prep`.
-        Win::current().w_cursor.col = 0;
+        Win::current().w_cursor.col = ColNr::ZERO;
         // The cursor walks the region, so its line is the buffer's.
         let lnum = Win::current().w_cursor.lnum;
         block_prep(&mut bd, op, lnum, true);
@@ -145,11 +152,11 @@ fn replace_block_line(op: &mut OpArg, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr
     // so only this side effect on `startspaces` is carried over.)
     if op_virtual()
         && bd.is_short != 0
-        && byte_at(Lines::current().line(baselnum), bd.textcol as usize) == 0
+        && byte_at(Lines::current().line(baselnum), bd.textcol.as_usize()) == 0
     {
         let mut vpos = Pos {
             lnum: baselnum,
-            col: 0,
+            col: ColNr::ZERO,
             coladd: 0,
         };
         getvpos(Win::current(), &mut vpos, op.start_vcol);
@@ -230,10 +237,10 @@ fn replace_block_line(op: &mut OpArg, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr
         row,
         col,
         0,
-        len,
+        ColNr::new(len),
         old_bytes,
         newrows,
-        newcols,
+        ColNr::new(newcols),
         new_bytes,
         op,
     );
@@ -246,10 +253,10 @@ fn replace_chars(op: &mut OpArg, c: c_int) {
     // The cursor walks the region, so it names a position of the current
     // buffer at every step, which is what each of these asks for.
     if op.motion_type == kMTLineWise {
-        op.start.col = 0;
-        Win::current().w_cursor.col = 0;
+        op.start.col = ColNr::ZERO;
+        Win::current().w_cursor.col = ColNr::ZERO;
         op.end.col = Lines::current().line_len(op.end.lnum);
-        if op.end.col != 0 {
+        if op.end.col != ColNr::ZERO {
             op.end.col -= 1;
         }
     } else if !op.inclusive {
@@ -284,11 +291,11 @@ fn replace_chars(op: &mut OpArg, c: c_int) {
                     // was in columns first.
                     let mut end_vcol = 0;
                     if Win::current().w_cursor.lnum == op.end.lnum {
-                        end_vcol = getviscol2(op.end.col, op.end.coladd);
+                        end_vcol = getviscol2(op.end.col, op.end.coladd).get();
                     }
                     coladvance_force(getviscol());
                     if Win::current().w_cursor.lnum == op.end.lnum {
-                        getvpos(Win::current(), &mut op.end, end_vcol);
+                        getvpos(Win::current(), &mut op.end, ColNr::new(end_vcol));
                     }
                 }
                 // With `coladd` set the cursor may now be just past a TAB.

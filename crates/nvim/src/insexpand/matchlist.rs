@@ -640,7 +640,7 @@ pub fn ins_compl_clear() {
     compl_started.set(false);
     compl_matches.set(0);
     compl_selected_item.set(-1);
-    compl_ins_end_col.set(0);
+    compl_ins_end_col.set(ColNr::ZERO);
     compl_curr_win.set(None);
     compl_curr_buf.set(None);
     compl_pattern().clear();

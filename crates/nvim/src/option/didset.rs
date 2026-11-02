@@ -523,7 +523,7 @@ pub(crate) fn did_set_showtabline(_args: &mut OptSet) -> Result<(), OptError> {
 pub(crate) fn did_set_smoothscroll(args: &mut OptSet) -> Result<(), OptError> {
     let mut win = Frame::read(args).win;
     if win.w_onebuf_opt.wo_sms == 0 {
-        win.w_skipcol = 0 as ColNr;
+        win.w_skipcol = ColNr::ZERO;
     }
     Ok(())
 }
@@ -673,9 +673,9 @@ pub(crate) fn did_set_winwidth(_args: &mut OptSet) -> Result<(), OptError> {
 pub(crate) fn did_set_wrap(args: &mut OptSet) -> Result<(), OptError> {
     let mut win = Frame::read(args).win;
     if win.w_onebuf_opt.wo_wrap != 0 {
-        win.w_leftcol = 0 as ColNr;
+        win.w_leftcol = ColNr::ZERO;
     } else {
-        win.w_skipcol = 0 as ColNr;
+        win.w_skipcol = ColNr::ZERO;
     }
     Ok(())
 }

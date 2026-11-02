@@ -198,7 +198,7 @@ enum Attempt {
 /// The shortcuts, and the match itself.
 fn try_match(rex: Rex, prog: &NfaRegProg, col: &mut ColNr) -> Attempt {
     // An anchored pattern can only match at the start of the line.
-    if prog.reganch && *col > 0 {
+    if prog.reganch && *col > ColNr::ZERO {
         return Attempt::Done(0);
     }
     rex.set_need_clear_subexpr(true);
@@ -224,7 +224,7 @@ fn try_match(rex: Rex, prog: &NfaRegProg, col: &mut ColNr) -> Attempt {
             return Attempt::Done(retval);
         }
     }
-    if rex.reg_maxcol() > 0 && *col >= rex.reg_maxcol() {
+    if rex.reg_maxcol() > ColNr::ZERO && *col >= rex.reg_maxcol() {
         return Attempt::Ran(0);
     }
 

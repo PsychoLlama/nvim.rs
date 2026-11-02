@@ -245,8 +245,8 @@ fn scan_windows(what: &mut Scan) {
             wp.w_height - wp.w_last_height,
             wp.w_topline.get() - wp.w_last_topline.get(),
             wp.w_topfill - wp.w_last_topfill,
-            wp.w_leftcol as c_int - wp.w_last_leftcol as c_int,
-            wp.w_skipcol as c_int - wp.w_last_skipcol as c_int,
+            wp.w_leftcol.get() - wp.w_last_leftcol.get(),
+            wp.w_skipcol.get() - wp.w_last_skipcol.get(),
         ];
         let d = win_info_dict(deltas);
         let winid = wp.handle.to_string();

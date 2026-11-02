@@ -173,7 +173,7 @@ fn refine_inline_word(
                 // unchanged word and splitting there is the point.
                 let mut lines = buf.lines();
                 let line = lines.line(start_lnum + entry1.lineoff);
-                let from = (gap_start as usize).min(line.len());
+                let from = gap_start.as_usize().min(line.len());
                 let gap_len = (gap_size as usize).min(line.len() - from);
                 // Each character is classed as the line holds it, so one that
                 // runs past the gap's end still decodes whole.
@@ -293,7 +293,7 @@ fn tokenize_line(
         }
         if !new_in_keyword || !in_keyword {
             map.push(LinemapEntry {
-                byte_start: i as ColNr,
+                byte_start: ColNr::from_index(i),
                 num_bytes: tok_len,
                 lineoff: off,
             });
@@ -319,12 +319,12 @@ fn tokenize_line(
         // highlight.
         out.push(NL as u8);
         map.push(LinemapEntry {
-            byte_start: bytes.len() as ColNr,
+            byte_start: ColNr::from_index(bytes.len()),
             // Upstream writes `sizeof(NL)`, and `NL` is a *character
             // constant*, so this is 4 rather than 1.  Reproduced: the
             // width lands in `dc_end` and so in what gets highlighted.
             // See O-B15-16.
-            num_bytes: ::core::mem::size_of::<c_int>() as ColNr,
+            num_bytes: len_as_int(::core::mem::size_of::<c_int>()),
             lineoff: off,
         });
     }
@@ -339,8 +339,8 @@ fn tokenize_line(
 /// decide a line is an addition.
 fn change_for(new_diff: &DiffBlock, linemap: &LineMap) -> DiffLineChange {
     let mut change = DiffLineChange {
-        dc_start: [0; 8],
-        dc_end: [0; 8],
+        dc_start: [ColNr::ZERO; 8],
+        dc_end: [ColNr::ZERO; 8],
         dc_start_lnum_off: [0; 8],
         dc_end_lnum_off: [0; 8],
     };
@@ -357,7 +357,7 @@ fn change_for(new_diff: &DiffBlock, linemap: &LineMap) -> DiffLineChange {
                 change.dc_start_lnum_off[i] = e.lineoff;
             }
             None => {
-                change.dc_start[i] = MAXCOL as ColNr;
+                change.dc_start[i] = ColNr::MAX;
                 change.dc_start_lnum_off[i] = c_int::MAX;
             }
         }
@@ -371,7 +371,7 @@ fn change_for(new_diff: &DiffBlock, linemap: &LineMap) -> DiffLineChange {
                     change.dc_end_lnum_off[i] = e.lineoff;
                 }
                 None => {
-                    change.dc_end[i] = MAXCOL as ColNr;
+                    change.dc_end[i] = ColNr::MAX;
                     change.dc_end_lnum_off[i] = c_int::MAX;
                 }
             }

@@ -54,7 +54,7 @@ pub(crate) fn beginline(flags: BeginlineOpts) {
         let want = win.w_curswant;
         coladvance_win(win, want);
     } else {
-        win.w_cursor.col = 0;
+        win.w_cursor.col = ColNr::ZERO;
         win.w_cursor.coladd = 0;
 
         if flags.has(BeginlineOpts::WHITE | BeginlineOpts::SOL) {
@@ -114,7 +114,7 @@ pub(crate) fn oneright() -> Result<(), Failed> {
     if last && get_ve_flags(win) & kOptVeFlagOnemore == 0 {
         return Err(Failed);
     }
-    win.w_cursor.col += ColNr::try_from(l).unwrap_or(ColNr::MAX);
+    win.w_cursor.col += ColNr::try_from(l).unwrap_or(ColNr::MAX).get();
 
     win.w_set_curswant = true;
     adjust_skipcol_now();
@@ -127,7 +127,7 @@ pub(crate) fn oneleft() -> Result<(), Failed> {
 
     if virtual_edit(win) {
         let v = viscol();
-        if v == 0 {
+        if v == ColNr::ZERO {
             return Err(Failed);
         }
 
@@ -136,7 +136,7 @@ pub(crate) fn oneleft() -> Result<(), Failed> {
         // cannot occupy -- so widen the step until it actually moves.
         let mut width = 1;
         loop {
-            coladvance_win(win, v as ColNr - width as ColNr);
+            coladvance_win(win, v - width);
             if viscol() < v {
                 break;
             }
@@ -156,7 +156,7 @@ pub(crate) fn oneleft() -> Result<(), Failed> {
         return Ok(());
     }
 
-    if win.w_cursor.col == 0 {
+    if win.w_cursor.col == ColNr::ZERO {
         return Err(Failed);
     }
 

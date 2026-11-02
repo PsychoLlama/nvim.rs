@@ -10,6 +10,7 @@
 use super::wrappers::arg_number_chk;
 use crate::narrow::number_as_lnum;
 use crate::option::SavedCpo;
+use crate::types::ColNr;
 
 use crate::cursor::check_cursor;
 use crate::eval::typval::{NumBuf, tv_list_alloc_ret};
@@ -181,7 +182,7 @@ fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut c_int) 
     let mut pos = save_cursor;
     let mut firstpos = Pos {
         lnum: LineNr::ZERO,
-        col: 0,
+        col: ColNr::ZERO,
         coladd: 0,
     };
 
@@ -254,14 +255,14 @@ pub fn f_search(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_searchpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut match_pos = Pos {
         lnum: LineNr::ZERO,
-        col: 0,
+        col: ColNr::ZERO,
         coladd: 0,
     };
     let mut flags = 0;
     let n = search_cmn(args, Some(&mut match_pos), &mut flags);
     let list = tv_list_alloc_ret(result, 2 + (flags & SP_SUBPAT != 0) as isize);
     let (lnum, col) = if n > 0 {
-        (match_pos.lnum.get(), match_pos.col as c_int)
+        (match_pos.lnum.get(), match_pos.col.get())
     } else {
         (0, 0)
     };
@@ -378,7 +379,7 @@ pub fn f_searchpair(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_searchpairpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut match_pos = Pos {
         lnum: LineNr::ZERO,
-        col: 0,
+        col: ColNr::ZERO,
         coladd: 0,
     };
     let (mut lnum, mut col) = (0, 0);
@@ -386,7 +387,7 @@ pub fn f_searchpairpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     // the return value is not yet anything it could reach either way.
     if searchpair_cmn(args, Some(&mut match_pos)) > 0 {
         lnum = match_pos.lnum.get();
-        col = match_pos.col as c_int;
+        col = match_pos.col.get();
     }
     let list = tv_list_alloc_ret(result, 2);
     list.push_number(lnum as VarNumber);
@@ -455,7 +456,7 @@ pub fn do_searchpair(
     let mut pos = save_cursor;
     let mut firstpos = Pos {
         lnum: LineNr::ZERO,
-        col: 0,
+        col: ColNr::ZERO,
         coladd: 0,
     };
     let mut foundpos = firstpos;

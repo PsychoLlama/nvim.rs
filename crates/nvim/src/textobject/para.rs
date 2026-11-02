@@ -95,14 +95,14 @@ pub fn findpar(dir: c_int, mut count: c_int, what: c_int, both: bool) -> Option<
         let mut lines = Lines::current();
         let line = lines.line(curr);
         Win::current().w_cursor.col = ColNr::try_from(line.len()).unwrap_or(ColNr::MAX);
-        if Win::current().w_cursor.col != 0 {
+        if Win::current().w_cursor.col != ColNr::ZERO {
             let col = Win::current().w_cursor.col - 1;
             let back = head_off(line, usize::try_from(col).unwrap_or(usize::MAX));
-            Win::current().w_cursor.col = col - ColNr::try_from(back).unwrap_or(0);
+            Win::current().w_cursor.col = col - c_int::try_from(back).unwrap_or(0);
             inclusive = true;
         }
     } else {
-        Win::current().w_cursor.col = 0;
+        Win::current().w_cursor.col = ColNr::ZERO;
     }
     Some(inclusive)
 }
@@ -215,7 +215,7 @@ fn extend_paragraphs(mut start_lnum: LineNr, count: c_int, include: bool) -> c_i
         }
     }
     Win::current().w_cursor.lnum = start_lnum;
-    Win::current().w_cursor.col = 0;
+    Win::current().w_cursor.col = ColNr::ZERO;
     retval
 }
 
@@ -311,18 +311,18 @@ pub fn current_par(op: &mut OpArg, count: c_int, include: bool, type_0: c_int) -
             return extend_paragraphs(start_lnum, count, include);
         }
         if visual_anchor().lnum != start_lnum {
-            set_visual_anchor(visual_anchor().with_lnum(start_lnum).with_col(0));
+            set_visual_anchor(visual_anchor().with_lnum(start_lnum).with_col(ColNr::ZERO));
         }
         set_visual_mode(VisualMode::LINE);
         redraw_curbuf_later(UPD_INVERTED); // update the inversion
         showmode();
     } else {
         op.start.lnum = start_lnum;
-        op.start.col = 0;
+        op.start.col = ColNr::ZERO;
         op.motion_type = kMTLineWise;
     }
     Win::current().w_cursor.lnum = end_lnum;
-    Win::current().w_cursor.col = 0;
+    Win::current().w_cursor.col = ColNr::ZERO;
     OK
 }
 

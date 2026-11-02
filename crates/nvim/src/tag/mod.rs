@@ -185,14 +185,14 @@ static PREVIEW_ENTRY: GlobalCell<Taggy> = GlobalCell::new(Taggy {
     fmark: FileMark {
         mark: Pos {
             lnum: LineNr::ZERO,
-            col: 0 as ColNr,
-            coladd: 0 as ColNr,
+            col: ColNr::ZERO,
+            coladd: 0,
         },
         fnum: 0 as ::core::ffi::c_int,
         timestamp: 0 as Timestamp,
         view: FileMarkView {
             topline_offset: MAXLNUM.get(),
-            skipcol: 0 as ColNr,
+            skipcol: ColNr::ZERO,
         },
         extra: None,
     },

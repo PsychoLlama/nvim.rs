@@ -372,7 +372,7 @@ impl Cells {
             char_code: 0,
             char_len: 1,
 
-            prev_vcol: -1,
+            prev_vcol: ColNr::NONE,
             attr_before_run: 0,
             prec_attr_todo: 0,
             attr_before_prec: 0,
@@ -478,15 +478,18 @@ impl Cells {
 
                 if self.cul_screenline
                     && wlv.filler_todo <= 0
-                    && wlv.vcol >= self.left_curline_col
-                    && wlv.vcol < self.right_curline_col
+                    && wlv.vcol >= ColNr::new(self.left_curline_col)
+                    && wlv.vcol < ColNr::new(self.right_curline_col)
                 {
                     wlv.apply_cursorline_highlight(window);
                 }
 
                 // Still showing the '$' of a change command: stop at the
                 // cursor.
-                if dollar_vcol.get() >= 0 && self.in_curline && wlv.vcol >= window.w_virtcol {
+                if dollar_vcol.get() >= ColNr::ZERO
+                    && self.in_curline
+                    && wlv.vcol >= window.w_virtcol
+                {
                     wlv.col = draw_virt_text(window, buffer, self.text_start_col, wlv.col, wlv);
                     // Nothing after `col` is ours to clear.
                     wlv_put_linebuf(window, wlv, wlv.col, false, self.bg_attr, 0);
@@ -572,7 +575,7 @@ impl Cells {
             return;
         }
         let at = self.byte_col();
-        self.decor_provider_end_col = invoke_range_next(window, lnum, at, 100);
+        self.decor_provider_end_col = invoke_range_next(window, lnum, ColNr::new(at), 100);
         self.recopy_line(window, lnum);
         if !self.has_decor && decor_has_more_decorations(window, (lnum - 1).get()) {
             self.has_decor = true;
@@ -633,7 +636,7 @@ impl Cells {
                 put_cell(wlv.off, 0, attr, wlv.vcol);
                 // When "tocol" is halfway through a character, put it at
                 // the end of it, or highlighting would not stop.
-                if wlv.tocol == wlv.vcol {
+                if wlv.tocol == wlv.vcol.get() {
                     wlv.tocol += 1;
                 }
             }
@@ -736,13 +739,7 @@ impl Cells {
             // Without wrapping, "right_align" and "win_col" virtual texts
             // for the whole line still have to be placed.
             decor_recheck_draw_col(-1, true);
-            decor_redraw_col(
-                window,
-                MAXCOL as ::core::ffi::c_int,
-                -1,
-                true,
-                self.decor_provider_end_col - 1,
-            );
+            decor_redraw_col(window, MAXCOL, -1, true, self.decor_provider_end_col - 1);
         }
     }
 }

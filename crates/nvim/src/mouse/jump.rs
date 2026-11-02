@@ -509,7 +509,7 @@ fn move_cursor_there(
 
     // Use the virtual column the screen recorded, which is accurate also
     // after concealed characters.
-    let col = col_from_screen.unwrap_or(pos.col);
+    let col = col_from_screen.unwrap_or(ColNr::new(pos.col));
     win.w_curswant = col;
     win.w_set_curswant = false; // May still have been true
     let past_eol = !win.coladvance(col);

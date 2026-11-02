@@ -228,7 +228,7 @@ fn read_buffer(
     // Put the cursor on the first line.
     let mut cursor = Win::current().cursor();
     cursor.lnum = LineNr::ONE;
-    cursor.col = 0 as ColNr;
+    cursor.col = ColNr::ZERO;
 
     if read_stdin {
         // Set or reset 'modified' before executing autocommands, so that it

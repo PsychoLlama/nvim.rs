@@ -56,7 +56,7 @@ pub(crate) fn print_tag_list(new_tag: bool, use_tagstack: bool, matches: &[TagMa
     let mut taglen = name_width.max(MIN_TAG_WIDTH);
     if taglen > Columns.get() - 25 {
         // Too wide to line up: every file name goes on its own line.
-        taglen = MAXCOL as c_int;
+        taglen = MAXCOL;
     }
 
     if msg_col.get() == 0 {
@@ -290,7 +290,7 @@ fn command_text_end(line: &[u8], command: usize) -> usize {
 /// A `taglen` of `MAXCOL` means the names were too wide to line up, so the
 /// file goes on a line of its own.
 fn advance_to_files(taglen: c_int) {
-    if taglen == MAXCOL as c_int {
+    if taglen == MAXCOL {
         msg_putchar('\n' as c_int);
         msg_advance(24);
     } else {

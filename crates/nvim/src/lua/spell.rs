@@ -9,6 +9,7 @@
 
 //! `vim.spell`: the Lua binding over the spell checker.
 
+use crate::types::ColNr;
 use core::ffi::{CStr, c_int};
 
 use crate::highlight_group::{HLF_COUNT, HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
@@ -70,7 +71,7 @@ fn spell_check_text(stack: &mut Stack) -> Result<c_int, Raise> {
             .to_bytes_with_nul();
         let mut found = Vec::new();
         let mut pos = 0;
-        let mut capcol: c_int = -1;
+        let mut capcol = ColNr::NONE;
         // `spell_check` never steps past the terminator, so `pos` stays
         // inside the text.
         while text[pos] != 0 {

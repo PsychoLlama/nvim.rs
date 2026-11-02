@@ -455,15 +455,15 @@ pub(crate) const CMDLINE_INFO_INIT: CmdlineInfo = CmdlineInfo {
 /// An all-zero [`Pos`].
 pub(crate) const POS_INIT: Pos = Pos {
     lnum: LineNr::ZERO,
-    col: 0,
+    col: ColNr::ZERO,
     coladd: 0,
 };
 
 /// An all-zero [`ViewState`], which `save_viewstate` fills.
 pub(crate) const VIEWSTATE_INIT: ViewState = ViewState {
-    vs_curswant: 0,
-    vs_leftcol: 0,
-    vs_skipcol: 0,
+    vs_curswant: ColNr::ZERO,
+    vs_leftcol: ColNr::ZERO,
+    vs_skipcol: ColNr::ZERO,
     vs_topline: LineNr::ZERO,
     vs_topfill: 0,
     vs_botline: LineNr::ZERO,
@@ -555,7 +555,7 @@ pub(crate) const CP_UNDO_INFO_INIT: CpUndoInfo = CpUndoInfo {
     save_b_u_save_nr_cur: 0,
     save_b_u_line: None,
     save_b_u_line_lnum: LineNr::ZERO,
-    save_b_u_line_colnr: 0,
+    save_b_u_line_colnr: ColNr::ZERO,
 };
 
 /// An all-zero [`CpBufInfo`]; every field is assigned before it is pushed.

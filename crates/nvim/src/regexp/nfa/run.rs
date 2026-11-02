@@ -6,6 +6,7 @@
 
 use super::program::{NfaRegProg, NfaState, StateId};
 use super::step::Run;
+use crate::narrow::len_as_int;
 use crate::regexp::NfaOp;
 use crate::siemsg;
 use crate::types::LineNr;
@@ -240,7 +241,7 @@ fn start_lookbehind(rex: Rex, val: c_int) {
         return;
     }
     // The width reaches back past the start of this line.
-    if rex.multi() && rex.col() < val {
+    if rex.multi() && rex.col() < ColNr::new(val) {
         rex.set_lnum(rex.lnum() - 1);
         match reg_getline(rex, rex.lnum()) {
             Some(line) => {
@@ -254,7 +255,7 @@ fn start_lookbehind(rex: Rex, val: c_int) {
             }
         }
     }
-    if rex.col() >= val {
+    if rex.col() >= ColNr::new(val) {
         rex.advance(-val);
         // Land on a character boundary, not inside one.
         let at = rex.input();
@@ -339,7 +340,7 @@ pub(crate) fn skip_to_start(rex: Rex, c: c_int, colp: &mut ColNr) -> Result<(), 
     let line = rex.line();
     let rest = line.get(from..).unwrap_or(&line[line.len() - 1..]);
     let found = cstrchr_line(rex, rest, c).ok_or(Failed)?;
-    *colp += found as ColNr;
+    *colp += len_as_int(found);
     Ok(())
 }
 
@@ -398,7 +399,7 @@ pub(crate) fn find_match_text(
             rex.start(0).set(MatchPos::from_pos(LPos { lnum, col }));
             rex.end(0).set(MatchPos::from_pos(LPos {
                 lnum,
-                col: s2 as ColNr,
+                col: ColNr::from_index(s2),
             }));
             *startcol = col;
             return 1;

@@ -60,7 +60,7 @@ pub(crate) fn prepare_line(
         } else {
             NO_COLOR_COL
         };
-        wlv.advance_color_col(window, wlv.vcol - wlv.vcol_off_co);
+        wlv.advance_color_col(window, (wlv.vcol - wlv.vcol_off_co).get());
 
         if window.w_buffer == Win::current().w_buffer
             && let Some(sel) = visual_selection()
@@ -101,15 +101,15 @@ pub(crate) fn prepare_line(
     // first character that is on screen.
     s.start_vcol = if window.w_onebuf_opt.wo_wrap != 0 {
         if wlv.startrow == 0 {
-            window.w_skipcol
+            window.w_skipcol.get()
         } else {
             0
         }
     } else {
-        window.w_leftcol
+        window.w_leftcol.get()
     };
     if s.has_foldtext {
-        wlv.vcol = s.start_vcol;
+        wlv.vcol = ColNr::new(s.start_vcol);
     } else if s.start_vcol > 0 && col_rows == 0 {
         s.skip_to_start_vcol(wlv, window, spv);
     }
@@ -191,8 +191,8 @@ impl LineSetup {
 
             line: HeldLine::take(),
             pos: 0,
-            trailcol: MAXCOL as ColNr,
-            leadcol: 0,
+            trailcol: ColNr::MAX,
+            leadcol: ColNr::ZERO,
             lcs_eol: 0,
             lcs_prec_todo: 0,
             in_multispace: false,
@@ -216,7 +216,7 @@ impl LineSetup {
 
             line_changes: DiffLine::default(),
             change_index: -1,
-            change_start: MAXCOL as ::core::ffi::c_int,
+            change_start: MAXCOL,
             change_end: -1,
 
             statuscol: StatusCol::default(),
@@ -274,8 +274,8 @@ impl LineSetup {
             // Blockwise: the columns were worked out for the whole
             // selection when it last moved.
             if self.lnum_in_visual_area {
-                wlv.fromcol = window.w_old_cursor_fcol;
-                wlv.tocol = window.w_old_cursor_lcol;
+                wlv.fromcol = window.w_old_cursor_fcol.get();
+                wlv.tocol = window.w_old_cursor_lcol.get();
             }
         } else {
             if lnum > top.lnum && lnum <= bot.lnum {
@@ -284,7 +284,7 @@ impl LineSetup {
                 if sel.mode.is_line() {
                     wlv.fromcol = 0;
                 } else {
-                    wlv.fromcol = getvvcol(window, &mut top).0;
+                    wlv.fromcol = getvvcol(window, &mut top).0.get();
                     if gchar_pos(&top) == NUL {
                         // Empty line: invert the one cell past its end.
                         wlv.tocol = wlv.fromcol + 1;
@@ -292,19 +292,19 @@ impl LineSetup {
                 }
             }
             if !sel.mode.is_line() && lnum == bot.lnum {
-                if P_SEL.first_byte() == b'e' && bot.col == 0 && bot.coladd == 0 {
+                if P_SEL.first_byte() == b'e' && bot.col == ColNr::ZERO && bot.coladd == 0 {
                     // 'selection' "exclusive" and the selection stops at
                     // the start of this line: none of it is here.
                     wlv.fromcol = -10;
-                    wlv.tocol = MAXCOL as ::core::ffi::c_int;
-                } else if bot.col == MAXCOL as ColNr {
-                    wlv.tocol = MAXCOL as ::core::ffi::c_int;
+                    wlv.tocol = MAXCOL;
+                } else if bot.col == ColNr::MAX {
+                    wlv.tocol = MAXCOL;
                 } else {
                     let mut pos = bot;
                     if P_SEL.first_byte() == b'e' {
-                        wlv.tocol = getvvcol(window, &mut pos).0;
+                        wlv.tocol = getvvcol(window, &mut pos).0.get();
                     } else {
-                        wlv.tocol = getvvcol(window, &mut pos).2 + 1;
+                        wlv.tocol = (getvvcol(window, &mut pos).2 + 1).get();
                     }
                 }
             }
@@ -330,7 +330,7 @@ impl LineSetup {
         let lnum = wlv.lnum;
         if lnum == Win::current().w_cursor.lnum {
             let win = Win::current();
-            wlv.fromcol = win.vcol_triple(win.cursor()).0;
+            wlv.fromcol = win.vcol_triple(win.cursor()).0.get();
         } else {
             wlv.fromcol = 0;
         }
@@ -340,11 +340,11 @@ impl LineSetup {
                 col: search_match_endcol.get(),
                 coladd: 0,
             };
-            wlv.tocol = getvcol(Win::current(), &mut pos).0;
+            wlv.tocol = getvcol(Win::current(), &mut pos).0.get();
         }
         // Do at least one character; the match can be past the end of the
         // line.
-        if wlv.fromcol == wlv.tocol && search_match_endcol.get() != 0 {
+        if wlv.fromcol == wlv.tocol && search_match_endcol.get() != ColNr::ZERO {
             wlv.tocol = wlv.fromcol + 1;
         }
         self.area_highlighting = true;
@@ -501,10 +501,10 @@ impl LineSetup {
         // The previous line was not spell checked — the first line of an
         // updated region, or the line after a closed fold — so this one
         // has to decide for itself whether a capital is required.
-        if spv.spv_capcol_lnum == LineNr::ZERO && check_need_cap(window, lnum, 0) {
-            spv.spv_cap_col = 0;
+        if spv.spv_capcol_lnum == LineNr::ZERO && check_need_cap(window, lnum, ColNr::ZERO) {
+            spv.spv_cap_col = ColNr::ZERO;
         } else if lnum != spv.spv_capcol_lnum {
-            spv.spv_cap_col = -1;
+            spv.spv_cap_col = ColNr::NONE;
         }
         spv.spv_checked_lnum = LineNr::ZERO;
 
@@ -525,16 +525,16 @@ impl LineSetup {
             .take_while(|&&c| c == b' ' || c == b'\t')
             .count();
         if first == line.len() {
-            spv.spv_cap_col = 0;
+            spv.spv_cap_col = ColNr::ZERO;
             spv.spv_capcol_lnum = lnum + 1;
-        } else if spv.spv_cap_col == 0 {
+        } else if spv.spv_cap_col == ColNr::ZERO {
             spv.spv_cap_col =
-                ::core::ffi::c_int::try_from(first).unwrap_or(::core::ffi::c_int::MAX);
+                ColNr::new(::core::ffi::c_int::try_from(first).unwrap_or(::core::ffi::c_int::MAX));
         }
 
         if nextline[SPELL_LOOKAHEAD] == 0 {
             // No next line, or it is empty.
-            self.nextlinecol = MAXCOL as ::core::ffi::c_int;
+            self.nextlinecol = MAXCOL;
             self.nextline_idx = 0;
             return;
         }
@@ -593,7 +593,7 @@ impl LineSetup {
             self.leadcol = if rest.get(leadcol).is_none_or(|&c| c == 0) {
                 // In a line of nothing but spaces they all count as
                 // trailing.
-                0
+                ColNr::ZERO
             } else {
                 // The first column not filled with spaces.
                 ColNr::try_from(leadcol + self.pos + 1).unwrap_or(ColNr::MAX)
@@ -614,8 +614,8 @@ impl LineSetup {
         let mut prev_at = at;
         let mut ci = c_char_info(line, at);
         let mut multispace = (self.in_multispace, self.multispace_pos);
-        while vcol < start_vcol {
-            cs = win_charsize(cstype, vcol, at, ci.value, &mut csarg);
+        while vcol < ColNr::new(start_vcol) {
+            cs = win_charsize(cstype, vcol.get(), at, ci.value, &mut csarg);
             vcol += cs.width;
             prev_at = at;
             if line.get(prev_at).is_none_or(|&c| c == 0) {
@@ -635,31 +635,31 @@ impl LineSetup {
         // when 'cursorcolumn' or 'colorcolumn' is set, when 'virtualedit'
         // or Visual mode is active, or when a fold is being drawn — all of
         // which still have something to draw out there.
-        if wlv.vcol < start_vcol
+        if wlv.vcol < ColNr::new(start_vcol)
             && (window.w_onebuf_opt.wo_cuc != 0
                 || wlv.color_col != NO_COLOR_COL
                 || virtual_active(window)
                 || (visual_active() && window.w_buffer == Win::current().w_buffer)
                 || self.has_fold)
         {
-            wlv.vcol = start_vcol;
+            wlv.vcol = ColNr::new(start_vcol);
         }
 
         // A character that is only partly on screen: stand on it, and skip
         // the cells of it that are not.
-        if wlv.vcol > start_vcol {
+        if wlv.vcol > ColNr::new(start_vcol) {
             wlv.vcol -= cs.width;
             self.pos = prev_at;
         }
-        if start_vcol > wlv.vcol {
-            wlv.skip_cells = start_vcol - wlv.vcol - cs.head;
+        if start_vcol > wlv.vcol.get() {
+            wlv.skip_cells = start_vcol - wlv.vcol.get() - cs.head;
         }
 
         // Adjust for inverted text that is, or starts, left of the screen.
-        if wlv.tocol <= wlv.vcol {
+        if wlv.tocol <= wlv.vcol.get() {
             wlv.fromcol = 0;
-        } else if wlv.fromcol >= 0 && wlv.fromcol < wlv.vcol {
-            wlv.fromcol = wlv.vcol;
+        } else if wlv.fromcol >= 0 && wlv.fromcol < wlv.vcol.get() {
+            wlv.fromcol = wlv.vcol.get();
         }
 
         // With a non-zero `w_skipcol` the first row still owes a
@@ -691,11 +691,11 @@ impl LineSetup {
             // end of a word.
             let end =
                 spell_to_word_end(self.line.text().get(self.pos..).unwrap_or_default(), window);
-            self.word_end = (linecol as usize + end + 1) as ::core::ffi::c_int;
+            self.word_end = (linecol.as_usize() + end + 1) as ::core::ffi::c_int;
         } else {
             // Bad word found: its attribute applies to the end of it.
             debug_assert!(len <= ::core::ffi::c_int::MAX as size_t);
-            self.word_end = window.w_cursor.col + len as ::core::ffi::c_int + 1;
+            self.word_end = (window.w_cursor.col + len as ::core::ffi::c_int + 1).get();
             if spell_hlf != HLF_COUNT {
                 self.spell_attr = default_hl_attr(spell_hlf as usize);
             }
@@ -717,13 +717,13 @@ impl LineSetup {
             return;
         }
         if self.noinvcur {
-            if wlv.fromcol == window.w_virtcol {
+            if wlv.fromcol == window.w_virtcol.get() {
                 // Inverting starts at the cursor; start just after it.
                 self.fromcol_prev = wlv.fromcol;
                 wlv.fromcol = -1;
-            } else if wlv.fromcol < window.w_virtcol {
+            } else if wlv.fromcol < window.w_virtcol.get() {
                 // Resume inverting after the cursor.
-                self.fromcol_prev = window.w_virtcol;
+                self.fromcol_prev = window.w_virtcol.get();
             }
         }
         if wlv.fromcol >= wlv.tocol {

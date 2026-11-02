@@ -335,8 +335,8 @@ pub(crate) fn enter_buffer(mut buffer: Buf) {
     // Cursor on first line by default.
     let mut cursor = win.cursor();
     cursor.lnum = LineNr::ONE;
-    cursor.col = 0 as ColNr;
-    cursor.coladd = 0 as ColNr;
+    cursor.col = ColNr::ZERO;
+    cursor.coladd = 0;
     win.w_set_curswant = true;
     win.w_topline_was_set = false;
 

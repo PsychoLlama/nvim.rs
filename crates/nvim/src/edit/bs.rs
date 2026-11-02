@@ -121,15 +121,15 @@ fn bs_blocked() -> bool {
     }
     let cursor = Win::current().w_cursor;
     let start = Insstart_orig.get();
-    (cursor.lnum == LineNr::ONE && cursor.col == 0)
+    (cursor.lnum == LineNr::ONE && cursor.col == ColNr::ZERO)
         || (!can_bs(BsFlag::START)
             && ((arrow_used.get() && !buf_is_prompt(current_buf()))
                 || (cursor.lnum == start.lnum && cursor.col <= start.col)))
         || (!can_bs(BsFlag::INDENT)
             && !arrow_used.get()
-            && ai_col.get() > 0
+            && ai_col.get() > ColNr::ZERO
             && cursor.col <= ai_col.get())
-        || (!can_bs(BsFlag::EOL) && cursor.col == 0)
+        || (!can_bs(BsFlag::EOL) && cursor.col == ColNr::ZERO)
 }
 
 /// Handle Backspace, delete-word and delete-line in Insert mode.
@@ -176,7 +176,7 @@ pub(crate) fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: &mut c_int) ->
     let mut did_backspace = false;
     let mut call_fix_indent = false;
 
-    if Win::current().w_cursor.col == 0 {
+    if Win::current().w_cursor.col == ColNr::ZERO {
         if !bs_join_line() {
             return false;
         }
@@ -188,7 +188,7 @@ pub(crate) fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: &mut c_int) ->
 
         // Keep the indent: CTRL-U stops at the first non-blank if there
         // is one before the cursor.
-        let mut mincol: ColNr = 0;
+        let mut mincol: ColNr = ColNr::ZERO;
         if mode == Backspace::Line
             && (Buf::current().b_p_ai != 0 || cindent_on())
             && !revins_on.get()
@@ -211,7 +211,7 @@ pub(crate) fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: &mut c_int) ->
         // 'smarttab' has had its say and the column has been checked.
         let soft_tab = || {
             (get_sts_value() != 0 || Buf::current().stop_count(StopList::SoftTab) != 0)
-                && Win::current().w_cursor.col > 0
+                && Win::current().w_cursor.col > ColNr::ZERO
                 && {
                     // The cursor is past column 0, so the byte before it is
                     // a byte of the cursor's own line.
@@ -233,7 +233,7 @@ pub(crate) fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: &mut c_int) ->
     did_si.set(false);
     can_si.set(false);
     can_si_back.set(false);
-    if Win::current().w_cursor.col <= 1 {
+    if Win::current().w_cursor.col <= ColNr::new(1) {
         did_ai.set(false);
     }
     if call_fix_indent {
@@ -251,7 +251,7 @@ pub(crate) fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: &mut c_int) ->
     // Vim erases it.  The vi behaviour is emulated by pretending a
     // dollar is displayed even when there is not one.
     //  --pkv Sun Jan 19 01:56:40 EST 2003
-    if cpo_has(CpoFlag::BACKSPACE) && dollar_vcol.get() == -1 {
+    if cpo_has(CpoFlag::BACKSPACE) && dollar_vcol.get() == ColNr::NONE {
         dollar_vcol.set(Win::current().w_virtcol);
     }
 
@@ -362,8 +362,8 @@ fn bs_one_shiftwidth(in_indent: bool) {
     let (want_vcol, want_col, mut space_vcol) = with_cursor_line(|line, cursor_at| {
         // The cursor's virtual column, and the last white space before it
         // that is preceded by non-white space.
-        let mut vcol: ColNr = 0;
-        let mut space_vcol: ColNr = 0;
+        let mut vcol: ColNr = ColNr::ZERO;
+        let mut space_vcol: ColNr = ColNr::ZERO;
         let (mut at, mut chr) = (0, c_char_info(line, 0));
         let (mut space_at, mut space_chr) = (at, chr);
         let mut prev_space = false;
@@ -379,9 +379,13 @@ fn bs_one_shiftwidth(in_indent: bool) {
         }
 
         // The virtual column to end up at.
-        let mut want_vcol = if vcol > 0 { vcol - 1 } else { 0 };
+        let mut want_vcol = if vcol > ColNr::ZERO {
+            vcol - 1
+        } else {
+            ColNr::ZERO
+        };
         if p_sta() && in_indent {
-            want_vcol -= want_vcol % get_sw_value(Buf::current());
+            want_vcol -= want_vcol.get() % get_sw_value(Buf::current());
         } else {
             let sts = get_sts_value();
             want_vcol = Buf::current().stop_start(StopList::SoftTab, want_vcol, sts);

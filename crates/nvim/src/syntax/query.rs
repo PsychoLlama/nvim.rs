@@ -11,7 +11,6 @@ use crate::charset::skip;
 use core::ffi::{CStr, c_int};
 
 use super::*;
-use crate::pos::MAXCOL;
 use crate::types::{Candidate, ExpandContext};
 use std::ffi::CString;
 
@@ -215,7 +214,7 @@ pub(crate) fn syn_get_stack_item(i: c_int) -> c_int {
             // The state was not properly finished for the last character
             // (`keep_state` was true), so it has to be invalidated.
             parser.invalidate_current_state();
-            parser.col = MAXCOL as ColNr;
+            parser.col = ColNr::MAX;
             return -1;
         }
         parser.item(i).si_id

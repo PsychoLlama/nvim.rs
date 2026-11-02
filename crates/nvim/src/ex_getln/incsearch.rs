@@ -94,7 +94,7 @@ pub(crate) fn set_search_match(t: &mut Pos) {
     t.col = search_match_endcol.get();
     if t.lnum > Buf::current().b_ml.ml_line_count {
         t.lnum = Buf::current().b_ml.ml_line_count;
-        coladvance(Win::current(), MAXCOL);
+        coladvance(Win::current(), ColNr::MAX);
     }
 }
 
@@ -350,11 +350,11 @@ pub(crate) fn may_do_incsearch_highlighting(
     } else if search_first_line.get() > Buf::current().b_ml.ml_line_count {
         // Start after the last line.
         Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
-        Win::current().w_cursor.col = MAXCOL;
+        Win::current().w_cursor.col = ColNr::MAX;
     } else {
         // Start at the first line in the range.
         Win::current().w_cursor.lnum = search_first_line.get();
-        Win::current().w_cursor.col = 0;
+        Win::current().w_cursor.col = ColNr::ZERO;
     }
 
     // The do_search() result.
@@ -766,7 +766,7 @@ fn set_cursor_to_search_match() {
     }
     Win::current().w_cursor = t;
     if past_end {
-        coladvance(Win::current(), MAXCOL);
+        coladvance(Win::current(), ColNr::MAX);
     }
 }
 

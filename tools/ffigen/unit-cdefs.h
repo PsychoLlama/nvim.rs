@@ -711,7 +711,7 @@ struct ParserScratch {
 struct Pos {
   LineNr lnum;
   ColNr col;
-  ColNr coladd;
+  int32_t coladd;
 };
 struct VTermColor_indexed {
   uint8_t type;

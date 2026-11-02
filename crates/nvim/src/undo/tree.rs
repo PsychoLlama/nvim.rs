@@ -209,7 +209,7 @@ pub(crate) fn u_saveline(mut buffer: Buf, lnum: LineNr) {
     buffer.b_u_line_colnr = if win.w_buffer == buffer && win.w_cursor.lnum == lnum {
         win.w_cursor.col
     } else {
-        0
+        ColNr::ZERO
     };
     buffer.b_u_line = Some(line_copy(buffer, lnum));
 }
@@ -245,12 +245,12 @@ pub fn u_undoline() {
     extmark_splice_cols(
         buf,
         (lnum - 1).get(),
-        0,
-        len_as_int(old_len),
-        len_as_int(new_len),
+        ColNr::ZERO,
+        ColNr::new(len_as_int(old_len)),
+        ColNr::new(len_as_int(new_len)),
         kExtmarkUndo,
     );
-    changed_bytes(lnum, 0);
+    changed_bytes(lnum, ColNr::ZERO);
     let mut win = Win::current();
     let col: ColNr = buf.b_u_line_colnr;
     if win.w_cursor.lnum == buf.b_u_line_lnum {

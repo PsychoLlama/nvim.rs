@@ -25,6 +25,7 @@
 
 #![cfg(not(miri))]
 
+use neovim::types::ColNr;
 use std::ffi::{CString, c_int, c_long};
 use std::mem::offset_of;
 
@@ -428,7 +429,7 @@ fn the_line_handle_reads_and_writes_the_line_the_memline_holds() {
         let len = unsafe { neovim::memline::ml_get_buf_len(Buf::new(swapped.buf), lnum) };
         assert_eq!(
             lines.line(lnum).len(),
-            len as usize,
+            len.as_usize(),
             "length of line {lnum}"
         );
     }
@@ -467,7 +468,7 @@ fn an_out_of_range_line_reads_as_the_placeholder() {
 
     let past_the_end = LineNr::try_from(LINES.len()).expect("a short list") + 1;
     assert_eq!(lines.line(past_the_end), b"???");
-    assert_eq!(lines.line_len(past_the_end), 3);
+    assert_eq!(lines.line_len(past_the_end), ColNr::new(3));
     // Reading it twice answers the same thing -- it is not a buffer that
     // one read empties.
     assert_eq!(lines.line(past_the_end), b"???");

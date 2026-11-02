@@ -26,7 +26,7 @@ use crate::guard::{Allow, Suppress};
 use crate::message::emsg;
 use crate::option::boolean_optval;
 use crate::optionstr::OptString;
-use crate::pos::MAXCOL;
+use crate::types::ColNr;
 use crate::types::OptionSetFlags;
 use crate::winlayer::Win;
 use crate::winlayer::{Buf, TabId, TabPage, WinId};
@@ -72,7 +72,7 @@ fn pum_preview_set_text(mut win: Win, info: &[u8]) -> (LineNr, c_int) {
         // inflate the answer in a narrow window.
         let save_wrap = win.w_onebuf_opt.wo_wrap;
         win.w_onebuf_opt.wo_wrap = 0;
-        max_width = max_width.max(win_linetabsize(win, LineNr::ZERO, line, MAXCOL as c_int));
+        max_width = max_width.max(win_linetabsize(win, LineNr::ZERO, line, ColNr::MAX));
         win.w_onebuf_opt.wo_wrap = save_wrap;
 
         lines.push(Object::string(ApiString::from_bytes(line)));
@@ -341,7 +341,7 @@ fn pum_fill_info(
         Win::current().w_topline = Buf::current().b_ml.ml_line_count;
     }
     Win::current().w_cursor.lnum = LineNr::ONE;
-    Win::current().w_cursor.col = 0;
+    Win::current().w_cursor.col = ColNr::ZERO;
 
     if use_float
         && !pum_adjust_info_position(Win::current(), max_info_width)

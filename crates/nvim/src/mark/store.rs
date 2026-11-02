@@ -38,6 +38,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::types::ColNr;
 use crate::types::LineNr;
 use core::ffi::{c_char, c_int};
 
@@ -50,7 +51,7 @@ use crate::winlayer::Buf;
 /// [`FileMark::clear`] puts back.
 pub(super) const UNSET_POS: Pos = Pos {
     lnum: LineNr::ZERO,
-    col: 0,
+    col: ColNr::ZERO,
     coladd: 0,
 };
 
@@ -177,7 +178,7 @@ mod tests {
     fn at(lnum: i32, col: i32) -> Pos {
         Pos {
             lnum: LineNr::new(lnum),
-            col,
+            col: ColNr::new(col),
             coladd: 0,
         }
     }
@@ -200,7 +201,7 @@ mod tests {
             timestamp: 1,
             view: FileMarkView {
                 topline_offset: 4,
-                skipcol: 2,
+                skipcol: ColNr::new(2),
             },
             extra: Some(Box::new(ShadaExtra::from_parts(1, vec![0xa1, b'k', 7]))),
         };

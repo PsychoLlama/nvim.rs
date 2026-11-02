@@ -116,13 +116,15 @@ pub(crate) fn stop_arrow() -> Result<(), Failed> {
             update_Insstart_orig.set(false);
         }
         let mut lines = Lines::current();
-        Insstart_textlen.set(linetabsize_str(lines.line(Win::current().w_cursor.lnum)) as ColNr);
+        Insstart_textlen.set(ColNr::new(linetabsize_str(
+            lines.line(Win::current().w_cursor.lnum),
+        )));
 
         if save_cursor_line().is_ok() {
             arrow_used.set(false);
             ins_need_undo.set(false);
         }
-        ai_col.set(0);
+        ai_col.set(ColNr::ZERO);
         if State.get() & VREPLACE_FLAG != 0 {
             orig_line_count.set(Buf::current().b_ml.ml_line_count);
             vr_lines_changed.set(1);
@@ -186,7 +188,7 @@ pub(crate) fn stop_insert(end_insert_pos: Option<InsertEnd>, esc: c_int, nomove:
             // the cursor to the following word; move it onto the space
             // first so it does not.
             cc = 'x' as c_int;
-            if Win::current().w_cursor.col > 0 && char_at_cursor() == NUL {
+            if Win::current().w_cursor.col > ColNr::ZERO && char_at_cursor() == NUL {
                 dec_cursor();
                 cc = char_at_cursor();
                 if !ascii_iswhite(cc) {
@@ -231,7 +233,7 @@ pub(crate) fn stop_insert(end_insert_pos: Option<InsertEnd>, esc: c_int, nomove:
             Win::current().w_cursor = end_insert_pos.pos();
             check_cursor_col(Win::current()); // make sure it is not past the line
             loop {
-                if char_at_cursor() == NUL && Win::current().w_cursor.col > 0 {
+                if char_at_cursor() == NUL && Win::current().w_cursor.col > ColNr::ZERO {
                     Win::current().w_cursor.col -= 1;
                 }
                 cc = char_at_cursor();

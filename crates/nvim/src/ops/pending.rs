@@ -58,7 +58,7 @@ use crate::types::{CpoFlag, FoFlag, NUL, Outcome};
 static REDO_VISUAL: GlobalCell<RedoVisual> = GlobalCell::new(RedoVisual {
     rv_mode: NUL,
     rv_line_count: 0,
-    rv_vcol: 0,
+    rv_vcol: ColNr::ZERO,
     rv_count: 0,
     rv_arg: 0,
 });
@@ -169,7 +169,7 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
         // 'startofline' is off: go back to the column the command started
         // in.
         reset_lbr();
-        Win::current().w_curswant = old_col;
+        Win::current().w_curswant = ColNr::new(old_col);
         Win::current().coladvance(Win::current().w_curswant);
     }
     clear_op(op);
@@ -279,14 +279,14 @@ fn resume_redo_visual(cmd_arg: &mut CmdArg, mut op: Op) {
         .min(Buf::current().line_count());
     set_visual_mode(VisualMode::from_raw(redo.rv_mode));
 
-    if redo.rv_vcol == MAXCOL || visual_mode().is_char() {
+    if redo.rv_vcol == ColNr::MAX || visual_mode().is_char() {
         if !visual_mode().is_char() {
-            Win::current().w_curswant = MAXCOL;
+            Win::current().w_curswant = ColNr::MAX;
         } else if redo.rv_line_count <= 1 {
             // A one-line charwise region is that many columns *from the
             // cursor*, not to a fixed column.
             validate_virtcol(Win::current());
-            Win::current().w_curswant = Win::current().w_virtcol + redo.rv_vcol - 1;
+            Win::current().w_curswant = Win::current().w_virtcol + redo.rv_vcol.get() - 1;
         } else {
             Win::current().w_curswant = redo.rv_vcol;
         }
@@ -325,11 +325,11 @@ fn start_visual_region(mut op: Op, gui_yank: bool) -> bool {
     // the other the Visual anchor. `unadjust_for_sel` only moves the cursor.
     if visual_select() && visual_mode().is_line() && op.op_type != OpType::Delete {
         if lt(visual_anchor(), Win::current().w_cursor) {
-            set_visual_anchor(visual_anchor().with_col(0));
+            set_visual_anchor(visual_anchor().with_col(ColNr::ZERO));
             let lnum = Win::current().w_cursor.lnum;
             Win::current().w_cursor.col = Lines::current().line_len(lnum);
         } else {
-            Win::current().w_cursor.col = 0;
+            Win::current().w_cursor.col = ColNr::ZERO;
             let end = Lines::current().line_len(visual_anchor().lnum);
             set_visual_anchor(visual_anchor().with_col(end));
         }
@@ -341,7 +341,7 @@ fn start_visual_region(mut op: Op, gui_yank: bool) -> bool {
 
     op.start = visual_anchor();
     if visual_mode().is_line() {
-        op.start.col = 0;
+        op.start.col = ColNr::ZERO;
         op.start.coladd = 0;
     }
     include_line_break
@@ -358,10 +358,11 @@ fn order_region(mut op: Op) {
         if !visual_active() {
             if let Some(first) = win.fold_first(op.start.lnum) {
                 op.start.lnum = first;
-                op.start.col = 0;
+                op.start.col = ColNr::ZERO;
             }
-            let past_start =
-                Win::current().w_cursor.col > 0 || op.inclusive || op.motion_type == kMTLineWise;
+            let past_start = Win::current().w_cursor.col > ColNr::ZERO
+                || op.inclusive
+                || op.motion_type == kMTLineWise;
             if past_start && let Some(last) = win.fold_end(Win::current().w_cursor.lnum) {
                 Win::current().w_cursor.lnum = last;
                 // The cursor line is a line of the buffer.
@@ -377,7 +378,7 @@ fn order_region(mut op: Op) {
         if !visual_active() && op.motion_type == kMTLineWise {
             if let Some(first) = win.fold_first(Win::current().w_cursor.lnum) {
                 Win::current().w_cursor.lnum = first;
-                Win::current().w_cursor.col = 0;
+                Win::current().w_cursor.col = ColNr::ZERO;
             }
             if let Some(last) = win.fold_end(op.start.lnum) {
                 op.start.lnum = last;
@@ -396,8 +397,8 @@ fn order_region(mut op: Op) {
 fn prepare_visual_redo(cmd_arg: &CmdArg, mut op: Op, gui_yank: bool, redo_yank: bool) {
     if !redo_VIsual_busy.get() && !gui_yank {
         resel_VIsual_mode.set(visual_mode());
-        if Win::current().w_curswant == MAXCOL {
-            resel_VIsual_vcol.set(MAXCOL);
+        if Win::current().w_curswant == ColNr::MAX {
+            resel_VIsual_vcol.set(ColNr::MAX);
         } else {
             if !visual_mode().is_block() {
                 op.end_vcol = getvvcol(Win::current(), &mut op.end).2;
@@ -407,7 +408,7 @@ fn prepare_visual_redo(cmd_arg: &CmdArg, mut op: Op, gui_yank: bool, redo_yank: 
                 if !visual_mode().is_block() {
                     op.start_vcol = getvvcol(Win::current(), &mut op.start).0;
                 }
-                resel_VIsual_vcol.set(op.end_vcol - op.start_vcol + 1);
+                resel_VIsual_vcol.set(ColNr::new(op.end_vcol - op.start_vcol + 1));
             } else {
                 // Several lines: the size is the end column.
                 resel_VIsual_vcol.set(op.end_vcol);
@@ -533,7 +534,7 @@ fn finish_visual_region(mut op: Op, include_line_break: bool, gui_yank: bool, lb
                 && op.end.lnum < Buf::current().line_count()
             {
                 op.end.lnum += 1;
-                op.end.col = 0;
+                op.end.col = ColNr::ZERO;
                 op.end.coladd = 0;
                 op.line_count += 1;
             }
@@ -567,7 +568,7 @@ fn adjust_region_end(cmd_arg: &CmdArg, mut op: Op) {
     if !(op.motion_type == kMTCharWise
         && !op.inclusive
         && !cmd_arg.outcome.has(Outcome::NO_ADJ_OP_END)
-        && op.end.col == 0
+        && op.end.col == ColNr::ZERO
         && (!op.is_visual || P_SEL.first_byte() == b'o')
         && op.line_count > 1)
     {
@@ -584,7 +585,7 @@ fn adjust_region_end(cmd_arg: &CmdArg, mut op: Op) {
         op.motion_type = kMTLineWise;
     } else {
         op.end.col = Lines::current().line_len(op.end.lnum);
-        if op.end.col != 0 {
+        if op.end.col != ColNr::ZERO {
             op.end.col -= 1;
             op.inclusive = true;
         }

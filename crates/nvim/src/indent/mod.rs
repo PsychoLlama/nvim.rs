@@ -94,12 +94,12 @@ impl Indenter {
 }
 
 /// How many stops a tab-stop array names, or zero when it names none.
-fn stop_count(vts: Option<&[ColNr]>) -> c_int {
+fn stop_count(vts: Option<&[i32]>) -> c_int {
     tabstops(vts).map_or(0, tabstop::TabStops::count)
 }
 
 /// A tab-stop array's first width, or the default of eight.
-fn first_stop(vts: Option<&[ColNr]>) -> c_int {
+fn first_stop(vts: Option<&[i32]>) -> c_int {
     tabstops(vts).map_or(8, tabstop::TabStops::first)
 }
 
@@ -114,20 +114,20 @@ pub(crate) fn line_vcol(lnum: LineNr, col: ColNr) -> c_int {
         col,
         coladd: 0,
     };
-    getvcol(Win::current(), &mut fp).0
+    getvcol(Win::current(), &mut fp).0.get()
 }
 
 /// A 'vartabstop' array as a list of stops. `None` when the option is unset
 /// or names no stops, which is every caller's "use the uniform width" case.
 ///
 /// The array is count-prefixed: `vts[0]` stops follow it.
-fn tabstops(vts: Option<&[ColNr]>) -> Option<tabstop::TabStops<'_>> {
+fn tabstops(vts: Option<&[i32]>) -> Option<tabstop::TabStops<'_>> {
     vts.and_then(tabstop::TabStops::new)
 }
 
 /// A buffer's 'vartabstop' or 'varsofttabstop' array: its count first, the
 /// widths after it; `None` for a value that names no stops.
-pub type TabStopArray = Option<Box<[ColNr]>>;
+pub type TabStopArray = Option<Box<[i32]>>;
 
 /// Parse a 'vartabstop'-style option value into a fresh tab-stop array,
 /// reporting the message the option code expects when it is malformed.
@@ -192,14 +192,14 @@ impl Buf {
     /// How many columns from `col` to this buffer's next tabstop, by its
     /// `'tabstop'` and `'vartabstop'`.
     #[inline]
-    pub fn tab_padding(self, col: ColNr) -> ColNr {
+    pub fn tab_padding(self, col: ColNr) -> i32 {
         self.stop_padding(StopList::Tab, col, self.b_p_ts)
     }
 
     /// How many columns from `col` to the next stop of `which`, the uniform
     /// width `ts` standing in when the list names none.
     #[inline]
-    pub(crate) fn stop_padding(self, which: StopList, col: ColNr, ts: OptInt) -> ColNr {
+    pub(crate) fn stop_padding(self, which: StopList, col: ColNr, ts: OptInt) -> i32 {
         self.with_stops(which, |stops| match stops {
             Some(stops) => stops.padding(col),
             None => tabstop::uniform_padding(col, ts),
@@ -232,7 +232,7 @@ impl Buf {
     pub(crate) fn stop_start(self, which: StopList, col: ColNr, ts: c_int) -> ColNr {
         self.with_stops(which, |stops| match stops {
             Some(stops) => stops.start(col),
-            None => col - col % ts,
+            None => col - col.get() % ts,
         })
     }
 
@@ -248,7 +248,7 @@ impl Buf {
 
     /// A copy of this buffer's 'vartabstop' list, its count first; `None`
     /// when it names no stops.
-    pub(crate) fn tab_stop_list(self) -> Option<Vec<ColNr>> {
+    pub(crate) fn tab_stop_list(self) -> Option<Vec<i32>> {
         self.with_stops(StopList::Tab, |stops| {
             stops.map(|stops| {
                 let mut list = Vec::with_capacity(stops.widths().len() + 1);
@@ -272,7 +272,7 @@ impl Buf {
 /// `buffer`'s 'shiftwidth': the option, or the width of the tabstop at column
 /// zero when the option is 0.
 pub fn get_sw_value(buffer: Buf) -> c_int {
-    get_sw_value_col(buffer, 0, false)
+    get_sw_value_col(buffer, ColNr::ZERO, false)
 }
 
 /// `buffer`'s 'shiftwidth' as seen from `pos`, which only differs from
@@ -291,7 +291,7 @@ fn get_sw_value_pos(buffer: Buf, pos: Pos, left: bool) -> c_int {
 /// `buffer`'s 'shiftwidth' as seen from the end of the current line's indent.
 pub fn get_sw_value_indent(buffer: Buf, left: bool) -> c_int {
     let mut pos = Win::current().w_cursor;
-    pos.col = getwhitecols_curline() as ColNr;
+    pos.col = getwhitecols_curline();
     get_sw_value_pos(buffer, pos, left)
 }
 
@@ -374,7 +374,7 @@ pub fn indent_size_no_ts(text: &[u8]) -> c_int {
 /// NUL and ends the indent — which is how a pointer into a NUL-terminated
 /// line behaves, and what makes this the whole arithmetic with none of the
 /// pointer.
-fn indent_width(text: &[u8], stops: Option<&[ColNr]>, ts: OptInt) -> c_int {
+fn indent_width(text: &[u8], stops: Option<&[i32]>, ts: OptInt) -> c_int {
     let mut at = 0;
     let mut next = || {
         let c = byte_at(text, at);
@@ -432,7 +432,7 @@ fn indent_width(text: &[u8], stops: Option<&[ColNr]>, ts: OptInt) -> c_int {
 
 /// The screen width of the indent at `text` under 'tabstop' `ts` and
 /// 'vartabstop' `vts`, a count-prefixed array.
-pub fn indent_size_ts(text: &[u8], ts: OptInt, vts: Option<&[ColNr]>) -> c_int {
+pub fn indent_size_ts(text: &[u8], ts: OptInt, vts: Option<&[i32]>) -> c_int {
     debug_assert!(char2cells(' ' as c_int) == 1);
     indent_width(text, tabstops(vts).map(tabstop::TabStops::widths), ts)
 }
@@ -465,7 +465,7 @@ struct IndentPlan {
 fn plan_indent(size: c_int, flags: c_int, oldline: &[u8]) -> IndentPlan {
     let buf = Buf::current();
     let preserve = flags & SIN_INSERT as c_int == 0 && buf.b_p_pi != 0;
-    let pad = |col: c_int| buf.tab_padding(col as ColNr);
+    let pad = |col: c_int| buf.tab_padding(ColNr::new(col));
     let at = |i: usize| c_int::from(byte_at(oldline, i));
     let mut plan = IndentPlan {
         doit: false,
@@ -549,7 +549,7 @@ struct Reindented {
     /// The new indent's length in bytes, which is where the cursor goes.
     ind_len: c_int,
     /// Bytes of the old indent kept in place, which extmarks must not move by.
-    skipcols: ColNr,
+    skipcols: i32,
     /// Where the kept text starts in the old line and in the new one.
     old_offset: ColNr,
     new_offset: ColNr,
@@ -561,7 +561,7 @@ fn reindent_line(size: c_int, flags: c_int, oldline: &[u8]) -> Option<Reindented
     let buf = Buf::current();
     // The size of the line, including the NUL.
     let mut line_len = oldline.len() as c_int + 1;
-    let pad = |col: c_int| buf.tab_padding(col as ColNr);
+    let pad = |col: c_int| buf.tab_padding(ColNr::new(col));
     let at = |i: usize| c_int::from(byte_at(oldline, i));
     // `STRICT_ADD`/`STRICT_SUB` (`macros.h`): the arithmetic sizing the
     // replacement line must not wrap, and upstream logs and aborts rather
@@ -598,7 +598,7 @@ fn reindent_line(size: c_int, flags: c_int, oldline: &[u8]) -> Option<Reindented
 
     // Columns (in bytes) of the old indent that were preserved, and so
     // that an extmark inside them must not be moved by.
-    let mut skipcols: ColNr = 0;
+    let mut skipcols: i32 = 0;
     // What is left to emit, in screen columns.
     let mut todo;
     let newline_size: usize;
@@ -676,14 +676,14 @@ fn reindent_line(size: c_int, flags: c_int, oldline: &[u8]) -> Option<Reindented
             ind_done += tab_pad;
         }
     }
-    let new_offset = (out.len() + todo.max(0) as usize) as ColNr;
-    out.resize(new_offset as usize, b' ');
+    let new_offset = ColNr::from_index(out.len() + todo.max(0) as usize);
+    out.resize(new_offset.as_usize(), b' ');
     out.extend_from_slice(oldline.get(p..).unwrap_or_default());
     Some(Reindented {
         line: out,
         ind_len,
         skipcols,
-        old_offset: p as ColNr,
+        old_offset: ColNr::from_index(p),
         new_offset,
     })
 }
@@ -719,21 +719,21 @@ pub fn set_indent(size: c_int, flags: c_int) -> bool {
             extmark_splice_cols(
                 buf,
                 lnum.get() - 1,
-                skipcols,
+                ColNr::new(skipcols),
                 old_offset - skipcols,
                 new_offset - skipcols,
                 kExtmarkUndo,
             );
         }
         if flags & SIN_CHANGED as c_int != 0 {
-            changed_bytes(lnum, 0);
+            changed_bytes(lnum, ColNr::ZERO);
         }
         // Correct the saved cursor position if it is on this line.
         let saved = saved_cursor.get();
         if saved.lnum == lnum {
             if saved.col >= old_offset {
                 // It was after the indent: shift it by the byte delta.
-                saved_cursor.set(saved.with_col(saved.col + ind_len - old_offset));
+                saved_cursor.set(saved.with_col(ColNr::new(saved.col + ind_len - old_offset)));
             } else if saved.col >= new_offset {
                 // It was inside the indent and is now past it (spaces
                 // replaced by a tab): put it back at the indent's end.
@@ -742,7 +742,7 @@ pub fn set_indent(size: c_int, flags: c_int) -> bool {
         }
         retval = true;
     }
-    Win::current().w_cursor.col = ind_len as ColNr;
+    Win::current().w_cursor.col = ColNr::new(ind_len);
     retval
 }
 
@@ -758,7 +758,7 @@ pub fn get_number_indent(lnum: LineNr) -> c_int {
     }
     let mut pos = Pos {
         lnum: LineNr::ZERO,
-        col: 0,
+        col: ColNr::ZERO,
         coladd: 0,
     };
     // In `format_lines` -- that is, outside Insert mode -- 'formatoptions'
@@ -779,12 +779,13 @@ pub fn get_number_indent(lnum: LineNr) -> c_int {
         let lead_len = lead_len as usize;
         if vim_regexec(&mut regmatch, cstr::suffix(line.as_cstr(), lead_len), 0) {
             pos.lnum = lnum;
-            pos.col = (lead_len + regmatch.ends[0].unwrap_or(0)) as ColNr;
+            pos.col = ColNr::from_index(lead_len + regmatch.ends[0].unwrap_or(0));
             pos.coladd = 0;
         }
     }
     // The match may have ended at the line's NUL, which is not an indent.
-    if pos.lnum == LineNr::ZERO || byte_at(Lines::current().line(pos.lnum), pos.col as usize) == 0 {
+    if pos.lnum == LineNr::ZERO || byte_at(Lines::current().line(pos.lnum), pos.col.as_usize()) == 0
+    {
         return -1;
     }
     line_vcol(pos.lnum, pos.col)
@@ -796,7 +797,7 @@ mod tests {
 
     /// Ask [`indent_width`] about a line, the way a NUL-terminated one is
     /// read: the bytes, then the terminator forever.
-    fn width(line: &[u8], stops: Option<&[ColNr]>, ts: OptInt) -> c_int {
+    fn width(line: &[u8], stops: Option<&[i32]>, ts: OptInt) -> c_int {
         indent_width(line, stops, ts)
     }
 
@@ -821,7 +822,7 @@ mod tests {
 
     #[test]
     fn vartabstop_walks_the_stops() {
-        let stops: &[ColNr] = &[3, 5, 7];
+        let stops: &[i32] = &[3, 5, 7];
         // A tab jumps to the end of the stop it is inside.
         assert_eq!(width(b"\tx", Some(stops), 8), 3);
         assert_eq!(width(b"\t\tx", Some(stops), 8), 8);
@@ -836,7 +837,7 @@ mod tests {
     fn a_stop_left_part_filled_answers_the_column_reached() {
         // The inner loop's `cur_vcol`: three stops of 3, 5, 7, and the indent
         // ends four columns in -- inside the second stop, not at its end.
-        let stops: &[ColNr] = &[3, 5, 7];
+        let stops: &[i32] = &[3, 5, 7];
         assert_eq!(width(b"    x", Some(stops), 8), 4);
         assert_eq!(width(b"x", Some(stops), 8), 0);
     }
@@ -845,7 +846,7 @@ mod tests {
     fn one_vartabstop_is_a_uniform_width() {
         // The single stop is the "last" one, so nothing is walked and it
         // becomes the repeating width.
-        let stops: &[ColNr] = &[4];
+        let stops: &[i32] = &[4];
         assert_eq!(width(b"\tx", Some(stops), 8), 4);
         assert_eq!(width(b"\t\tx", Some(stops), 8), 8);
         assert_eq!(width(b"  \tx", Some(stops), 8), 4);

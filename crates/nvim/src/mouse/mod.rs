@@ -362,10 +362,10 @@ fn find_start_of_word(pos: &mut Pos) {
 }
 
 fn start_of_word(pos: &mut Pos, line: &[u8]) {
-    let cclass = mouse_class(line, pos.col as usize);
-    while pos.col > 0 {
-        let col = pos.col - 1 - head_off(line, pos.col as usize - 1);
-        if mouse_class(line, col as usize) != cclass {
+    let cclass = mouse_class(line, pos.col.as_usize());
+    while pos.col > ColNr::ZERO {
+        let col = pos.col - 1 - head_off(line, pos.col.as_usize() - 1);
+        if mouse_class(line, col.as_usize()) != cclass {
             break;
         }
         pos.col = col;
@@ -380,13 +380,13 @@ fn find_end_of_word(pos: &mut Pos) {
 
 fn end_of_word(pos: &mut Pos, line: &[u8]) {
     let exclusive = sel_exclusive();
-    if exclusive && pos.col > 0 {
-        pos.col = pos.col - 1 - head_off(line, pos.col as usize - 1);
+    if exclusive && pos.col > ColNr::ZERO {
+        pos.col = pos.col - 1 - head_off(line, pos.col.as_usize() - 1);
     }
-    let cclass = mouse_class(line, pos.col as usize);
-    while line[pos.col as usize] != 0 {
-        let col = pos.col + char_len(line, pos.col as usize);
-        if mouse_class(line, col as usize) != cclass {
+    let cclass = mouse_class(line, pos.col.as_usize());
+    while line[pos.col.as_usize()] != 0 {
+        let col = pos.col + char_len(line, pos.col.as_usize());
+        if mouse_class(line, col.as_usize()) != cclass {
             if exclusive {
                 pos.col = col;
             }
@@ -443,7 +443,7 @@ fn scroll_line_len(win: Win, lnum: LineNr) -> ColNr {
     let mut lines = win.buffer().lines();
     let line = lines.line(lnum);
     let mut at = 0;
-    let mut col: ColNr = 0;
+    let mut col: ColNr = ColNr::ZERO;
     while at < line.len() {
         let numchar = win_chartabsize(win, &line[at..], col);
         at += cluster_len(&line[at..]);
@@ -469,7 +469,7 @@ fn find_longest_lnum(win: Win) -> LineNr {
     }
 
     let mut ret: LineNr = LineNr::ZERO;
-    let mut max: ColNr = 0;
+    let mut max: ColNr = ColNr::ZERO;
     for lnum in win.w_topline.up_to(win.w_botline) {
         let len = scroll_line_len(win, lnum);
         if len > max {
@@ -495,7 +495,7 @@ fn do_mousescroll_horiz(mut win: Win, leftcol: ColNr) -> bool {
     // longest visible line.
     if !virtual_active(win) && leftcol > scroll_line_len(win, win.w_cursor.lnum) {
         win.w_cursor.lnum = find_longest_lnum(win);
-        win.w_cursor.col = 0;
+        win.w_cursor.col = ColNr::ZERO;
     }
 
     set_leftcol(leftcol)
@@ -529,12 +529,14 @@ fn mouse_check_grid() -> (Option<ColNr>, c_int) {
     let vcol = gp.vcol_at(gp.cell_offset(row, col));
     // Use the virtual column from vcols[], it is accurate also after
     // concealed characters.  -2 and -3 are the fold column's markers.
+    const FOLD_OPEN: ColNr = ColNr::new(-2);
+    const FOLD_CLOSE: ColNr = ColNr::new(-3);
     let flags = match vcol {
-        -2 => MOUSE_FOLD_OPEN,
-        -3 => MOUSE_FOLD_CLOSE,
+        FOLD_OPEN => MOUSE_FOLD_OPEN,
+        FOLD_CLOSE => MOUSE_FOLD_CLOSE,
         _ => 0,
     };
-    ((vcol >= 0).then_some(vcol), flags)
+    ((vcol >= ColNr::ZERO).then_some(vcol), flags)
 }
 
 // ---------------------------------------------------------------------------
@@ -595,7 +597,7 @@ pub(crate) fn f_getmousepos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
     let mut wincol: VarNumber = 0;
     let mut lnum: LineNr = LineNr::ZERO;
     let mut column: VarNumber = 0;
-    let mut coladd: ColNr = 0;
+    let mut coladd: i32 = 0;
 
     if let Some(win) = find_win_inner(&mut pos) {
         // `w_height` / `w_width` here, where the rest of the family reads
@@ -616,8 +618,8 @@ pub(crate) fn f_getmousepos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
             if pos.row >= 0 && pos.row < win.w_height && pos.col >= 0 && pos.col < win.w_width {
                 (lnum, _) = comp_pos(win, &mut pos.row, &mut pos.col);
                 let col;
-                (col, coladd) = vcol_to_col(win, lnum, pos.col);
-                column = col as VarNumber + 1;
+                (col, coladd) = vcol_to_col(win, lnum, ColNr::new(pos.col));
+                column = i64::from(col) + 1;
             }
         }
     }

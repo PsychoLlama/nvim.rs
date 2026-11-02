@@ -175,7 +175,7 @@ fn plan_start_or_middle(
         let after_leader = at(saved_line, lead_len);
         let last_of_leader = at(saved_line, lead_len - 1);
         if !ascii_iswhite(last_of_leader)
-            && (has_extra && Win::current().w_cursor.col == plan.lead_len
+            && (has_extra && Win::current().w_cursor.col == ColNr::new(plan.lead_len)
                 || !has_extra && after_leader == NUL
                 || require_blank)
         {
@@ -533,7 +533,7 @@ pub(crate) fn build_leader(
         buf[lead_len] = NUL as u8;
     }
 
-    let mut newcol = lead_len as ColNr;
+    let mut newcol = ColNr::from_index(lead_len);
 
     // An indent is about to be set below, so drop the one the leader
     // carries -- starting past it rather than moving the text.
@@ -574,7 +574,7 @@ pub(crate) fn indent_after_comment_end(
         return newindent;
     }
     let old_cursor = Win::current().w_cursor;
-    Win::current().w_cursor.col = comment_end as ColNr;
+    Win::current().w_cursor.col = ColNr::from_index(comment_end);
     let newindent = match findmatch(None, NUL) {
         None => newindent,
         Some(pos) => {

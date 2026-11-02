@@ -141,7 +141,7 @@ impl Adjacent<'_> {
         let cols = if self.linewise {
             (0, 0)
         } else {
-            (entry.col, self.pos.col)
+            (entry.col, self.pos.col.get())
         };
         (entry.lnum, cols.0).cmp(&(self.pos.lnum, cols.1))
     }

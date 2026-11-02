@@ -20,6 +20,7 @@
 
 use super::*;
 use crate::optionstr::OptString;
+use crate::types::ColNr;
 
 /// Report what was read, and leave the cursor and the `'[`/`']` marks on the
 /// new lines.
@@ -60,9 +61,9 @@ pub(crate) fn report_and_place(
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
         // Set the '[ and '] marks to the newly read lines.
         Buf::current().b_op_start.lnum = from + 1;
-        Buf::current().b_op_start.col = 0;
+        Buf::current().b_op_start.col = ColNr::ZERO;
         Buf::current().b_op_end.lnum = from + out.linecnt;
-        Buf::current().b_op_end.col = 0;
+        Buf::current().b_op_end.col = ColNr::ZERO;
     }
 }
 

@@ -15,6 +15,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::types::ColNr;
 use crate::types::Handle;
 use crate::types::LineNr;
 use core::ffi::{CStr, c_int};
@@ -53,7 +54,7 @@ const WIN_EXECUTE_INIT: WinExecute = WinExecute {
     wp: None,
     curpos: Pos {
         lnum: LineNr::ZERO,
-        col: 0,
+        col: ColNr::ZERO,
         coladd: 0,
     },
     cwd: None,
