@@ -32,7 +32,7 @@ use core::ffi::CStr;
 use crate::memory::XString;
 use crate::option::vars::{P_CPO, p_cpo};
 use crate::options::kOptCpoptions;
-use crate::types::{OptVal, OptionSetFlags, String_0};
+use crate::types::{ApiString, OptVal, OptionSetFlags};
 
 use super::set_option_value_give_err;
 
@@ -83,7 +83,7 @@ impl Drop for SavedCpo {
         if p_cpo(CStr::is_empty) {
             set_option_value_give_err(
                 kOptCpoptions,
-                OptVal::string(String_0::from_xstring(saved.unwrap_or_default())),
+                OptVal::string(ApiString::from_xstring(saved.unwrap_or_default())),
                 OptionSetFlags::NONE,
             );
         }

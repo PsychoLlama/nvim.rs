@@ -129,7 +129,7 @@ pub fn paste_repeat(count: c_int) {
     }
     drop(unmapped);
 
-    let str = String_0::from_bytes(&pasted);
+    let str = ApiString::from_bytes(&pasted);
     let mut err = Error::none();
     let mut i = 0;
     while !aborted && i < count {

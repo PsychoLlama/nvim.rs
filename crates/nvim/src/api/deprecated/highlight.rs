@@ -25,7 +25,7 @@ pub fn nvim_get_hl_by_id(hl_id: Integer, rgb: Boolean) -> Result<ApiDict, Error>
     hl_get_attr_by_id(Integer::from(attrcode), rgb)
 }
 
-pub fn nvim_get_hl_by_name(name: String_0, rgb: Boolean) -> Result<ApiDict, Error> {
+pub fn nvim_get_hl_by_name(name: ApiString, rgb: Boolean) -> Result<ApiDict, Error> {
     let id = syn_name2id(name.as_cstr());
     if id == 0 {
         return Err(err_bad_value(c"highlight name", name.as_cstr()));

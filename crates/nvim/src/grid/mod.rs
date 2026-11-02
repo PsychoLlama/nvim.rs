@@ -233,7 +233,7 @@ pub fn win_grid_alloc(mut window: Win) {
     if (resizing_screen.get() || was_resized) && want_allocation {
         let grid = &window.w_grid_alloc;
         ui_call_grid_resize(
-            grid.handle as Integer,
+            Integer::from(grid.handle),
             grid.cols as Integer,
             grid.rows as Integer,
         );
@@ -244,9 +244,9 @@ pub fn win_grid_alloc(mut window: Win) {
 /// Give `grid` a handle if it has none. The grid need not be allocated.
 pub fn grid_assign_handle(grid: &mut ScreenGrid) {
     static LAST_GRID_HANDLE: GlobalCell<c_int> = GlobalCell::new(DEFAULT_GRID_HANDLE);
-    if grid.handle == 0 {
+    if grid.handle == Handle::NONE {
         LAST_GRID_HANDLE.set(LAST_GRID_HANDLE.get() + 1);
-        grid.handle = LAST_GRID_HANDLE.get() as Handle;
+        grid.handle = Handle::new(LAST_GRID_HANDLE.get());
     }
 }
 
@@ -304,7 +304,7 @@ pub fn grid_ins_lines(
 
     if !grid.throttled {
         ui_call_grid_scroll(
-            grid.handle as Integer,
+            Integer::from(grid.handle),
             row as Integer,
             end as Integer,
             col as Integer,
@@ -364,7 +364,7 @@ pub fn grid_del_lines(
 
     if !grid.throttled {
         ui_call_grid_scroll(
-            grid.handle as Integer,
+            Integer::from(grid.handle),
             row as Integer,
             end as Integer,
             col as Integer,

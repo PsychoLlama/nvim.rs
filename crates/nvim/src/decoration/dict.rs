@@ -34,7 +34,7 @@ use crate::highlight::dict::put;
 use crate::highlight_group::syn_id2name;
 use crate::sign::sign_text_bytes;
 use crate::types::{
-    ApiDict, Array, DecorInline, DecorSignHighlight, DecorVirtText, Object, String_0, uint16_t,
+    ApiDict, ApiString, Array, DecorInline, DecorSignHighlight, DecorVirtText, Object, uint16_t,
 };
 use core::ffi::{CStr, c_int};
 
@@ -145,7 +145,7 @@ fn put_highlight(
 
     if flags & kSHConceal != 0 {
         let text = schar_bytes(sh_hl.text[0]);
-        let value = Object::string(String_0::from_bytes(crate::cstr::until_nul(&text)));
+        let value = Object::string(ApiString::from_bytes(crate::cstr::until_nul(&text)));
         put(dict, c"conceal", value);
     }
 
@@ -167,7 +167,7 @@ fn put_highlight(
         put(
             dict,
             c"url",
-            Object::string(String_0::from_bytes(url.to_bytes())),
+            Object::string(ApiString::from_bytes(url.to_bytes())),
         );
     }
 }
@@ -177,7 +177,7 @@ fn put_highlight(
 fn put_virt_text(dict: &mut ApiDict, vt: &DecorVirtText, hl_name: bool) {
     if vt.hl_mode != 0 {
         let mode = HL_MODE_STR[vt.hl_mode as usize];
-        let value = Object::string(String_0::from_cstr(mode));
+        let value = Object::string(ApiString::from_cstr(mode));
         put(dict, c"hl_mode", value);
     }
 
@@ -191,7 +191,7 @@ fn put_virt_text(dict: &mut ApiDict, vt: &DecorVirtText, hl_name: bool) {
         put(dict, c"virt_text_win_col", Object::integer(vt.col.into()));
     }
     let pos = VIRT_TEXT_POS_STR[vt.pos as usize];
-    let value = Object::string(String_0::from_cstr(pos));
+    let value = Object::string(ApiString::from_cstr(pos));
     put(dict, c"virt_text_pos", value);
 }
 
@@ -221,14 +221,14 @@ fn put_virt_lines(dict: &mut ApiDict, vt: &DecorVirtText, hl_name: bool) {
     } else {
         c"trunc"
     };
-    let value = Object::string(String_0::from_cstr(overflow));
+    let value = Object::string(ApiString::from_cstr(overflow));
     put(dict, c"virt_lines_overflow", value);
 }
 
 /// The sign half of [`decor_to_dict_legacy`].
 fn put_sign(dict: &mut ApiDict, sh: &DecorSignHighlight, hl_name: bool) {
     if sh.text[0] != 0 {
-        let value = Object::string(String_0::from_bytes(&sign_text_bytes(&sh.text)));
+        let value = Object::string(ApiString::from_bytes(&sign_text_bytes(&sh.text)));
         put(dict, c"sign_text", value);
     }
 
@@ -236,7 +236,7 @@ fn put_sign(dict: &mut ApiDict, sh: &DecorSignHighlight, hl_name: bool) {
         put(
             dict,
             c"sign_name",
-            Object::string(String_0::from_bytes(name.to_bytes())),
+            Object::string(ApiString::from_bytes(name.to_bytes())),
         );
     }
 
@@ -288,7 +288,7 @@ pub fn decor_type_flags(decor: DecorInline) -> uint16_t {
 /// for names, otherwise its id.
 pub fn hl_group_name(hl_id: c_int, hl_name: bool) -> Object {
     if hl_name {
-        Object::string(String_0::from_cstr(syn_id2name(hl_id)))
+        Object::string(ApiString::from_cstr(syn_id2name(hl_id)))
     } else {
         Object::integer(hl_id.into())
     }

@@ -110,7 +110,7 @@ pub(crate) struct ParsedLine {
 impl ParsedLine {
     const fn none() -> ParsedLine {
         ParsedLine {
-            buffer: 0,
+            buffer: Handle::NONE,
             lnum: 0,
             changedtick: 0,
             bytes: Vec::new(),

@@ -61,6 +61,7 @@
 )]
 
 use core::borrow::Borrow;
+use core::ffi::c_int;
 use core::hash::{BuildHasherDefault, Hash, Hasher};
 use std::collections::{HashMap, HashSet};
 
@@ -88,7 +89,7 @@ pub(crate) const fn id_set<K>() -> IdSet<K> {
 
 /// The key an interned-*name* table stores: the name's bytes plus a NUL.
 ///
-/// khash keyed those tables by `String_0` or `cstr_t`, hashing and comparing
+/// khash keyed those tables by `ApiString` or `cstr_t`, hashing and comparing
 /// over `(length, bytes)` -- interior NULs included -- and their callers hand
 /// out a `*const c_char` into the key (`describe_ns`, `augroup_name`,
 /// `:augroup`'s listing). Appending the same terminator to every key is the
@@ -248,17 +249,18 @@ impl<K: Eq + Hash, V: Copy> SlotTable<K, V> {
 struct HandleMap<V> {
     /// `slots[h - base]` is what handle `h` names, `None` for a hole.
     slots: Vec<Option<V>>,
-    /// The handle `slots[0]` stands for. Meaningless while `slots` is empty.
-    base: Handle,
+    /// The id of the handle `slots[0]` stands for. Meaningless while `slots`
+    /// is empty.
+    base: c_int,
 }
 
 /// An index into a [`HandleMap`]'s slots as the handle difference it is.
 ///
-/// The vector is indexed by `handle - base`, both of which are `Handle`,
+/// The vector is indexed by `handle - base`, both of which are handle ids,
 /// so its length can never exceed the handle range and the conversion back
 /// is total.
-fn offset(index: usize) -> Handle {
-    Handle::try_from(index).expect("a handle-indexed vector is handle-sized")
+fn offset(index: usize) -> c_int {
+    c_int::try_from(index).expect("a handle-indexed vector is handle-sized")
 }
 
 impl<V> HandleMap<V> {
@@ -276,7 +278,7 @@ impl<V> HandleMap<V> {
     /// whole point of this type.
     #[inline]
     fn at(&self, handle: Handle) -> usize {
-        handle.wrapping_sub(self.base).cast_unsigned() as usize
+        handle.get().wrapping_sub(self.base).cast_unsigned() as usize
     }
 
     /// The value `handle` names, borrowed.
@@ -291,19 +293,19 @@ impl<V> HandleMap<V> {
     /// File `value` under `handle`, replacing whatever was there.
     fn insert(&mut self, handle: Handle, value: V) {
         if self.slots.is_empty() {
-            self.base = handle;
-        } else if handle < self.base {
+            self.base = handle.get();
+        } else if handle.get() < self.base {
             // A handle below the window the vector covers. The three
             // counters are monotone, so this is the wrap-around
             // `top_file_num` warns about with `W14`; rebuild rather than
             // grow downwards without bound.
             let old = core::mem::take(&mut self.slots);
             let old_base = self.base;
-            self.base = handle;
+            self.base = handle.get();
             self.slots.push(Some(value));
             for (i, slot) in old.into_iter().enumerate() {
                 let Some(slot) = slot else { continue };
-                let h = old_base.wrapping_add(offset(i));
+                let h = Handle::new(old_base.wrapping_add(offset(i)));
                 self.insert(h, slot);
             }
             return;
@@ -566,6 +568,7 @@ mod tests {
     use core::cell::Cell;
 
     use super::{HandleMap, HandleRegistry, Owned, OwnedRegistry, PendingFree, SlotTable};
+    use crate::types::Handle;
 
     /// The table's own view of itself, checked after every mutation: the
     /// index agrees with the slots, and every key is findable.
@@ -721,7 +724,7 @@ mod tests {
     #[test]
     fn an_empty_registry_finds_nothing() {
         let reg: HandleRegistry<Object> = HandleRegistry::new();
-        assert_eq!(reg.get(1), None);
+        assert_eq!(reg.get(Handle::new(1)), None);
     }
 
     #[test]
@@ -729,11 +732,11 @@ mod tests {
         let (mut a, mut b) = (Object, Object);
         let (pa, pb) = (&raw mut a, &raw mut b);
         let mut reg: HandleRegistry<Object> = HandleRegistry::new();
-        reg.register(7, pa);
-        reg.register(9, pb);
-        assert_eq!(reg.get(7), Some(pa));
-        assert_eq!(reg.get(9), Some(pb));
-        assert_eq!(reg.get(8), None);
+        reg.register(Handle::new(7), pa);
+        reg.register(Handle::new(9), pb);
+        assert_eq!(reg.get(Handle::new(7)), Some(pa));
+        assert_eq!(reg.get(Handle::new(9)), Some(pb));
+        assert_eq!(reg.get(Handle::new(8)), None);
     }
 
     /// The free path calls `forget` and the object stops being findable —
@@ -742,9 +745,9 @@ mod tests {
     fn a_forgotten_handle_is_gone() {
         let mut a = Object;
         let mut reg: HandleRegistry<Object> = HandleRegistry::new();
-        reg.register(7, &raw mut a);
-        reg.forget(7);
-        assert_eq!(reg.get(7), None);
+        reg.register(Handle::new(7), &raw mut a);
+        reg.forget(Handle::new(7));
+        assert_eq!(reg.get(Handle::new(7)), None);
     }
 
     /// `map_del` on an absent key is a no-op upstream, and the autocommand
@@ -754,10 +757,10 @@ mod tests {
     fn forgetting_an_unregistered_handle_is_a_no_op() {
         let mut a = Object;
         let mut reg: HandleRegistry<Object> = HandleRegistry::new();
-        reg.register(7, &raw mut a);
-        reg.forget(8);
-        reg.forget(8);
-        assert_eq!(reg.get(7), Some(&raw mut a));
+        reg.register(Handle::new(7), &raw mut a);
+        reg.forget(Handle::new(8));
+        reg.forget(Handle::new(8));
+        assert_eq!(reg.get(Handle::new(7)), Some(&raw mut a));
     }
 
     /// The autocommand window's cycle: registered at allocation, taken out
@@ -769,10 +772,10 @@ mod tests {
         let pa = &raw mut a;
         let mut reg: HandleRegistry<Object> = HandleRegistry::new();
         for _ in 0..3 {
-            reg.register(7, pa);
-            assert_eq!(reg.get(7), Some(pa));
-            reg.forget(7);
-            assert_eq!(reg.get(7), None);
+            reg.register(Handle::new(7), pa);
+            assert_eq!(reg.get(Handle::new(7)), Some(pa));
+            reg.forget(Handle::new(7));
+            assert_eq!(reg.get(Handle::new(7)), None);
         }
     }
 
@@ -784,11 +787,11 @@ mod tests {
         let mut a = Object;
         let pa = &raw mut a;
         let mut reg: HandleRegistry<Object> = HandleRegistry::new();
-        reg.register(7, pa);
-        reg.forget(7);
-        reg.register(8, pa);
-        assert_eq!(reg.get(7), None);
-        assert_eq!(reg.get(8), Some(pa));
+        reg.register(Handle::new(7), pa);
+        reg.forget(Handle::new(7));
+        reg.register(Handle::new(8), pa);
+        assert_eq!(reg.get(Handle::new(7)), None);
+        assert_eq!(reg.get(Handle::new(8)), Some(pa));
     }
 
     // -- OwnedRegistry -----------------------------------------------------
@@ -814,7 +817,7 @@ mod tests {
     #[test]
     fn an_empty_owned_registry_finds_nothing() {
         let reg: OwnedRegistry<Tracked<'_>> = OwnedRegistry::new();
-        assert_eq!(reg.get(1), None);
+        assert_eq!(reg.get(Handle::new(1)), None);
     }
 
     #[test]
@@ -823,9 +826,9 @@ mod tests {
         let mut reg = OwnedRegistry::new();
         let object = tracked(&drops);
         let address = object.address();
-        assert_eq!(reg.register(7, object), address);
-        assert_eq!(reg.get(7), Some(address));
-        assert_eq!(reg.get(8), None);
+        assert_eq!(reg.register(Handle::new(7), object), address);
+        assert_eq!(reg.get(Handle::new(7)), Some(address));
+        assert_eq!(reg.get(Handle::new(8)), None);
         assert_eq!(drops.get(), 0, "the registry holds it");
         drop(reg);
         assert_eq!(drops.get(), 1, "and releases it");
@@ -837,9 +840,9 @@ mod tests {
     fn forgetting_hands_the_allocation_over_without_freeing_it() {
         let drops = Cell::new(0);
         let mut reg = OwnedRegistry::new();
-        let address = reg.register(7, tracked(&drops));
-        let owned = reg.forget(7).expect("registered");
-        assert_eq!(reg.get(7), None, "unfindable at once");
+        let address = reg.register(Handle::new(7), tracked(&drops));
+        let owned = reg.forget(Handle::new(7)).expect("registered");
+        assert_eq!(reg.get(Handle::new(7)), None, "unfindable at once");
         assert_eq!(owned.address(), address, "the same allocation");
         assert_eq!(drops.get(), 0, "not yet freed");
         drop(owned);
@@ -850,8 +853,8 @@ mod tests {
     fn forgetting_an_unregistered_handle_answers_nothing() {
         let drops = Cell::new(0);
         let mut reg = OwnedRegistry::new();
-        reg.register(7, tracked(&drops));
-        assert!(reg.forget(8).is_none());
+        reg.register(Handle::new(7), tracked(&drops));
+        assert!(reg.forget(Handle::new(8)).is_none());
         assert_eq!(drops.get(), 0);
     }
 
@@ -862,9 +865,9 @@ mod tests {
         let drops = Cell::new(0);
         let mut reg = OwnedRegistry::new();
         for handle in 1..4 {
-            reg.register(handle, tracked(&drops));
+            reg.register(Handle::new(handle), tracked(&drops));
         }
-        drop(reg.forget(2).expect("registered"));
+        drop(reg.forget(Handle::new(2)).expect("registered"));
         assert_eq!(drops.get(), 1);
         drop(reg);
         assert_eq!(drops.get(), 3);
@@ -949,25 +952,25 @@ mod tests {
     fn a_handle_map_gives_the_front_back() {
         let mut map: HandleMap<i32> = HandleMap::new();
         for h in 1..=8 {
-            map.insert(h, h * 10);
+            map.insert(Handle::new(h), h * 10);
         }
         assert_eq!(map.slots.len(), 8);
         for h in 1..=6 {
-            assert_eq!(map.remove(h), Some(h * 10));
+            assert_eq!(map.remove(Handle::new(h)), Some(h * 10));
         }
         // Only 7 and 8 are left, and the vector is two slots long.
         assert_eq!(map.slots.len(), 2);
         assert_eq!(map.base, 7);
-        assert_eq!(map.get(7).copied(), Some(70));
-        assert_eq!(map.get(8).copied(), Some(80));
-        assert_eq!(map.get(1), None);
-        assert_eq!(map.get(6), None);
+        assert_eq!(map.get(Handle::new(7)).copied(), Some(70));
+        assert_eq!(map.get(Handle::new(8)).copied(), Some(80));
+        assert_eq!(map.get(Handle::new(1)), None);
+        assert_eq!(map.get(Handle::new(6)), None);
         // Emptied completely, it starts over wherever the next handle lands.
-        assert_eq!(map.remove(7), Some(70));
-        assert_eq!(map.remove(8), Some(80));
+        assert_eq!(map.remove(Handle::new(7)), Some(70));
+        assert_eq!(map.remove(Handle::new(8)), Some(80));
         assert!(map.slots.is_empty());
-        map.insert(9000, 1);
-        assert_eq!(map.get(9000).copied(), Some(1));
+        map.insert(Handle::new(9000), 1);
+        assert_eq!(map.get(Handle::new(9000)).copied(), Some(1));
         assert_eq!(map.slots.len(), 1);
     }
 
@@ -977,15 +980,15 @@ mod tests {
     #[test]
     fn a_handle_map_rebuilds_when_a_handle_wraps() {
         let mut map: HandleMap<i32> = HandleMap::new();
-        map.insert(100, 1);
-        map.insert(102, 3);
-        map.insert(1, 42);
+        map.insert(Handle::new(100), 1);
+        map.insert(Handle::new(102), 3);
+        map.insert(Handle::new(1), 42);
         assert_eq!(map.base, 1);
-        assert_eq!(map.get(1).copied(), Some(42));
-        assert_eq!(map.get(100).copied(), Some(1));
-        assert_eq!(map.get(102).copied(), Some(3));
-        assert_eq!(map.get(101), None);
-        assert_eq!(map.get(0), None);
+        assert_eq!(map.get(Handle::new(1)).copied(), Some(42));
+        assert_eq!(map.get(Handle::new(100)).copied(), Some(1));
+        assert_eq!(map.get(Handle::new(102)).copied(), Some(3));
+        assert_eq!(map.get(Handle::new(101)), None);
+        assert_eq!(map.get(Handle::NONE), None);
     }
 
     /// A hole in the middle stays a hole, and an absent handle is a miss
@@ -994,15 +997,15 @@ mod tests {
     #[test]
     fn a_handle_map_holes_are_misses() {
         let mut map: HandleMap<i32> = HandleMap::new();
-        map.insert(4, 1);
-        map.insert(5, 2);
-        map.insert(6, 3);
-        assert_eq!(map.remove(5), Some(2));
-        assert_eq!(map.get(5), None);
-        assert_eq!(map.remove(5), None);
-        assert_eq!(map.remove(999), None);
+        map.insert(Handle::new(4), 1);
+        map.insert(Handle::new(5), 2);
+        map.insert(Handle::new(6), 3);
+        assert_eq!(map.remove(Handle::new(5)), Some(2));
+        assert_eq!(map.get(Handle::new(5)), None);
+        assert_eq!(map.remove(Handle::new(5)), None);
+        assert_eq!(map.remove(Handle::new(999)), None);
         assert_eq!(map.base, 4);
-        assert_eq!(map.get(4).copied(), Some(1));
-        assert_eq!(map.get(6).copied(), Some(3));
+        assert_eq!(map.get(Handle::new(4)).copied(), Some(1));
+        assert_eq!(map.get(Handle::new(6)).copied(), Some(3));
     }
 }

@@ -21,8 +21,8 @@ use crate::option::vars::{p_sb, p_spr, p_winborder};
 use crate::types::AutoEvent;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    AlignTextPos, Array, Boolean, BorderTextType, BufferHandle, ColNr, Error, FloatAnchor,
-    FloatRelative, Integer, KeyDict_win_config, LPos, LineNr, Object, String_0, SwitchWin,
+    AlignTextPos, ApiString, Array, Boolean, BorderTextType, BufferHandle, ColNr, Error,
+    FloatAnchor, FloatRelative, Integer, KeyDict_win_config, LPos, LineNr, Object, SwitchWin,
     TryState, VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle, WindowHandle,
     kErrorTypeException, kErrorTypeValidation, kFloatAnchorEast, kFloatAnchorSouth,
     kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus, kFloatRelativeMouse,

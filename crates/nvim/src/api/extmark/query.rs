@@ -39,7 +39,7 @@ pub fn virt_text_to_array(items: &[VirtTextChunk], hl_name: bool) -> Array {
         let last = &items[stack_end];
         let mut chunk = Array::with_capacity(2);
         let text = last.text.as_deref().map_or(&b""[..], CStr::to_bytes);
-        chunk.push(Object::string(String_0::from_bytes(text)));
+        chunk.push(Object::string(ApiString::from_bytes(text)));
         if groups.is_empty() {
             if last.hl_id >= 0 {
                 chunk.push(hl_group_name(last.hl_id, hl_name));
@@ -245,9 +245,9 @@ pub fn nvim__buf_debug_extmarks(
     buf: BufferHandle,
     keys: Boolean,
     dot: Boolean,
-) -> Result<String_0, Error> {
+) -> Result<ApiString, Error> {
     let Some(b) = find_buffer_by_handle(buf)? else {
-        return Ok(String_0::NULL);
+        return Ok(ApiString::NULL);
     };
     Ok(mt_inspect(&b.b_marktree, keys, dot))
 }

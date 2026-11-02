@@ -15,6 +15,7 @@
 use super::*;
 use crate::api::private::validate::{Bad, err_conflict, err_expected, err_invalid, err_required};
 use crate::os::cshim::cstr_ncasecmp;
+use crate::types::Handle;
 use crate::winfloat::WIN_CONFIG_INIT;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
@@ -45,7 +46,7 @@ pub(crate) enum Parsed {
 ///
 /// The null string has no bytes to quote, and upstream's `%s` over a null
 /// pointer is why it reads back as a number instead.
-fn err_invalid_str(name: &CStr, value: &String_0) -> Error {
+fn err_invalid_str(name: &CStr, value: &ApiString) -> Error {
     let bad = if value.is_null() {
         Bad::Number(0)
     } else {
@@ -227,7 +228,7 @@ fn set_border_text(
 }
 
 /// One border text holding `string` and no highlight of its own.
-fn one_chunk(string: &String_0) -> VirtText {
+fn one_chunk(string: &ApiString) -> VirtText {
     let text = crate::cstr::until_nul(string.as_bytes());
     vec![VirtTextChunk {
         text: Some(::std::ffi::CString::new(text).expect("cut at the first NUL")),
@@ -474,7 +475,8 @@ impl Decode<'_> {
         if !(self.relative_is_win || win_is_target) {
             return self.split_target();
         }
-        let Some(target) = find_window_by_handle(self.config.win.unwrap_or(0))? else {
+        let Some(target) = find_window_by_handle(self.config.win.unwrap_or(Handle::CURRENT))?
+        else {
             return Ok(Parsed::Refused);
         };
         if Some(target) == self.window {
@@ -496,7 +498,7 @@ impl Decode<'_> {
             }
             self.fconfig.window = win_handle;
         }
-        if self.fconfig.window == 0 {
+        if self.fconfig.window == Handle::NONE {
             self.fconfig.window = Win::current().handle;
         }
         Ok(Parsed::Done)

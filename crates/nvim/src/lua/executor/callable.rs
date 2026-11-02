@@ -28,7 +28,7 @@ use crate::keycodes::{special_key_bytes, unescape_ks_in};
 use crate::lua::ffi::LUA_NOREF;
 use crate::lua::stack::{At, Kind};
 use crate::memory::ThinCString;
-use crate::types::{Array, LuaRef, Object, String_0, TypVal, VAR_DICT, VAR_LIST};
+use crate::types::{ApiString, Array, LuaRef, Object, TypVal, VAR_DICT, VAR_LIST};
 
 /// The Lua table `arg` came from, if it came from one at all.
 fn lua_table_ref(arg: &TypVal) -> LuaRef {
@@ -171,7 +171,7 @@ pub fn nlua_func_exists(lua_funcname: &CStr) -> bool {
     // The name is evaluated as an expression rather than looked up, so
     // `v:lua.pkg.fn` works.
     let expr = [b"return ".as_slice(), lua_funcname.to_bytes()].concat();
-    let args = Array::from(vec![Object::string(String_0::from_bytes(&expr))]);
+    let args = Array::from(vec![Object::string(ApiString::from_bytes(&expr))]);
     let result = nlua_exec(
         b"return type(loadstring(...)()) == 'function'",
         None,

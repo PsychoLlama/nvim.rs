@@ -10,6 +10,7 @@
 mod vim_patches;
 
 use crate::env::{DEFAULT_VIM_DIR, DEFAULT_VIMRUNTIME_DIR};
+use crate::types::Handle;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
@@ -347,8 +348,8 @@ pub(crate) fn may_show_intro() -> bool {
     let empty = buf_is_empty(Buf::current());
     empty
         && Buf::current().name.is_unnamed()
-        && Buf::current().handle == 1
-        && Win::current().handle == LOWEST_WIN_ID as c_int
+        && Buf::current().handle == Handle::new(1)
+        && Win::current().handle == Handle::new(LOWEST_WIN_ID as c_int)
         && one_window(Win::current(), None)
         && !P_SHM.has_byte(ShmFlag::INTRO.byte())
 }

@@ -24,7 +24,7 @@ use crate::message_fmt::msg_cstr;
 use crate::os::fs::file_info;
 use crate::semsg;
 use crate::smsg;
-use crate::types::String_0;
+use crate::types::ApiString;
 use core::ffi::{CStr, c_int, c_long, c_uint};
 use std::ffi::CString;
 
@@ -195,7 +195,7 @@ pub fn ml_recover(checkext: bool) {
         if let Some(fenc) = &recorded.fileencoding {
             set_option_value_give_err(
                 kOptFileencoding,
-                OptVal::string(String_0::from_bytes(fenc)),
+                OptVal::string(ApiString::from_bytes(fenc)),
                 OptionSetFlags::LOCAL,
             );
         }

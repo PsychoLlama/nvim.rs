@@ -43,7 +43,7 @@ use crate::options::kOptFiletype;
 
 use crate::runtime::RuntimeOpts;
 
-use crate::types::{Array, ExArg, Object, OptVal, OptionSetFlags, String_0};
+use crate::types::{ApiString, Array, ExArg, Object, OptVal, OptionSetFlags};
 use crate::winlayer::Buf;
 
 /// `:autocmd` and `:augroup`.
@@ -195,7 +195,7 @@ pub(crate) fn ex_setfiletype(excmd: &mut ExArg) {
     let at = excmd.line.arg + if fallback { 9 } else { 0 };
     set_option_value_give_err(
         kOptFiletype,
-        OptVal::string(String_0::from_bytes(excmd.line.rest_of(at))),
+        OptVal::string(ApiString::from_bytes(excmd.line.rest_of(at))),
         OptionSetFlags::LOCAL,
     );
     if fallback {
@@ -215,8 +215,8 @@ pub(crate) fn ex_checkhealth(excmd: &mut ExArg) {
         Vec::new()
     };
     let argv = Array::from(vec![
-        Object::string(String_0::from_bytes(&mods)),
-        Object::string(String_0::from_bytes(excmd.line.arg())),
+        Object::string(ApiString::from_bytes(&mods)),
+        Object::string(ApiString::from_bytes(excmd.line.arg())),
     ]);
 
     let ran = nlua_exec_cstr(c"vim.health._check(...)", argv, kRetNilBool);

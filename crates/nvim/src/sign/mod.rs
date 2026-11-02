@@ -60,8 +60,8 @@ use crate::message::{e_argreq, e_dictreq, e_invarg, e_listreq};
 use crate::message::{emsg, msg_putchar, msg_str, msg_title};
 use crate::os::cshim::gettext;
 use crate::types::{
-    DecorExt, DecorInline, DecorPriority, DecorSignHighlight, Dict, EvalFuncData, ExArg, Expand,
-    FAIL, Integer, LineNr, List, MTKey, MarkTreeIter, OK, ScreenChar, Sign, String_0, TypVal,
+    ApiString, DecorExt, DecorInline, DecorPriority, DecorSignHighlight, Dict, EvalFuncData, ExArg,
+    Expand, FAIL, Integer, LineNr, List, MTKey, MarkTreeIter, OK, ScreenChar, Sign, TypVal,
     VarNumber, int32_t, int64_t, ptrdiff_t, uint32_t,
 };
 use crate::window::buf_jump_open_win;

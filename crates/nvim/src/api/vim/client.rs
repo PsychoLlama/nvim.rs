@@ -30,9 +30,9 @@ pub fn nvim_get_api_info(channel_id: uint64_t) -> Array {
 
 pub fn nvim_set_client_info(
     channel_id: uint64_t,
-    name: String_0,
+    name: ApiString,
     mut version: ApiDict,
-    type_0: String_0,
+    type_0: ApiString,
     methods: ApiDict,
     attributes: ApiDict,
 ) {

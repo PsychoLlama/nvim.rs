@@ -38,7 +38,7 @@ use crate::normal::showcmd_buf;
 use crate::path::shorten_dir;
 use crate::statusline::state::tab_page_click_defs;
 use crate::types::ui::kUITabline;
-use crate::types::{BufferHandle, Object, StlClickDefinition_type_0, String_0, TabpageHandle};
+use crate::types::{ApiString, BufferHandle, Object, StlClickDefinition_type_0, TabpageHandle};
 use crate::ui::state::{Columns, t_colors};
 use crate::ui::{ui_call_tabline_update, ui_has};
 use crate::undo::buf_is_changed;
@@ -73,7 +73,7 @@ fn ui_ext_tabline_update() {
         put(
             &mut info,
             c"name",
-            Object::string(String_0::from_bytes(&name)),
+            Object::string(ApiString::from_bytes(&name)),
         );
         push(&mut tab_infos, Object::dict(info));
     }
@@ -88,7 +88,7 @@ fn ui_ext_tabline_update() {
         put(
             &mut info,
             c"name",
-            Object::string(String_0::from_bytes(&name)),
+            Object::string(ApiString::from_bytes(&name)),
         );
         push(&mut bufs, Object::dict(info));
     }

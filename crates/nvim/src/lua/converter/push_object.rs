@@ -14,9 +14,10 @@
 use super::{TYPE_IDX_VALUE, VAL_IDX_VALUE};
 use crate::lua::stack::{At, Stack};
 use crate::types::{
-    ApiDict, Array, Boolean, Float, Handle, Integer, Object, ObjectType, String_0,
+    ApiDict, ApiString, Array, Boolean, Float, Handle, Integer, Object, ObjectType,
     kObjectTypeFloat, lua_Number,
 };
+use core::ffi::c_int;
 
 /// Push the key a special table's type tag is stored under.
 #[inline]
@@ -41,7 +42,7 @@ pub(crate) fn create_typed_table(stack: &mut Stack, narr: usize, nrec: usize, ty
 }
 
 /// Push an api string as a Lua string, NULs and all.
-pub fn push_string(stack: &mut Stack, s: &String_0) {
+pub fn push_string(stack: &mut Stack, s: &ApiString) {
     stack.push_bytes(s.as_bytes());
 }
 
@@ -87,7 +88,7 @@ pub fn push_array(stack: &mut Stack, array: &Array, special: bool) {
     stack.new_table(array.len(), 0);
     for (i, item) in array.iter().enumerate() {
         push_object(stack, item, special);
-        stack.raw_set_index(At::from_top(2), i as core::ffi::c_int + 1);
+        stack.raw_set_index(At::from_top(2), i as c_int + 1);
     }
 }
 
@@ -111,7 +112,7 @@ pub fn push_object(stack: &mut Stack, obj: &Object, special: bool) {
         Object::Array(a) => push_array(stack, a, special),
         Object::Dict(d) => push_dict(stack, d, special),
         Object::Buffer(h) | Object::Window(h) | Object::Tabpage(h) => {
-            push_handle(stack, *h as Handle);
+            push_handle(stack, Handle::new((*h) as c_int));
         }
     }
 }

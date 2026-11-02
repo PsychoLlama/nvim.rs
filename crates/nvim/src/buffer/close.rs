@@ -548,7 +548,7 @@ fn unlink_and_free(mut buffer: Buf, clear_w_buf: Option<Win>) {
     if let Some(mut wp) = clear_w_buf {
         wp.w_buffer = Buf::NULL;
     }
-    let fnum = buffer.handle as c_int;
+    let fnum = buffer.handle.get();
     for wp in tab_windows() {
         forget_file(wp, fnum);
     }

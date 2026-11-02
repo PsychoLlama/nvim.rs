@@ -31,7 +31,7 @@ use crate::winlayer::Buf;
 /// and every later chunk is dropped until the next `-1` or `1`.
 pub fn nvim_paste(
     channel_id: uint64_t,
-    data: String_0,
+    data: ApiString,
     crlf: Boolean,
     phase: Integer,
 ) -> Result<Boolean, Error> {
@@ -96,7 +96,7 @@ pub fn nvim_paste(
 /// naming the motion type (`""`, `"v"`, `"V"` or `"b"`).
 pub fn nvim_put(
     lines: Array,
-    type_0: String_0,
+    type_0: ApiString,
     after: Boolean,
     follow: Boolean,
 ) -> Result<(), Error> {

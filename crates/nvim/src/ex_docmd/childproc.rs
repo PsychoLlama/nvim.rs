@@ -25,7 +25,7 @@ use crate::option::vars::p_sh;
 use crate::message::{emsg, emsg_multiline};
 use crate::os::cshim::gettext;
 
-use crate::types::{Array, ExArg, Object, String_0};
+use crate::types::{ApiString, Array, ExArg, Object};
 
 /// `:terminal` — spelled as a command line, not as a call.
 ///
@@ -77,7 +77,9 @@ pub(crate) fn ex_terminal(excmd: &mut ExArg) {
 
 /// `:lsp` — a Lua entry point that takes the whole argument as one string.
 pub(crate) fn ex_lsp(excmd: &mut ExArg) {
-    let excmd = Array::from(vec![Object::string(String_0::from_bytes(excmd.line.arg()))]);
+    let excmd = Array::from(vec![Object::string(ApiString::from_bytes(
+        excmd.line.arg(),
+    ))]);
     const CHUNK: &CStr = c"require'vim._core.ex_cmd'.ex_lsp(...)";
     let ran = nlua_exec_cstr(CHUNK, excmd, kRetNilBool);
     if let Err(e) = ran {

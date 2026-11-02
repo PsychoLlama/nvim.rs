@@ -18,7 +18,7 @@ use crate::memory::XString;
 use crate::registry::{IdMap, IdSet, id_map, id_set};
 use crate::types::Buffer;
 use crate::types::{
-    ApiDict, KeyDict__shada_search_pat, MotionType, Pos, String_0, Timestamp, TypVal,
+    ApiDict, ApiString, KeyDict__shada_search_pat, MotionType, Pos, Timestamp, TypVal,
 };
 use core::ffi::{CStr, c_char};
 use std::collections::VecDeque;
@@ -295,7 +295,7 @@ pub struct ShadaGlobalVar {
 pub struct ShadaRegister {
     pub(crate) name: c_char,
     pub(crate) motion: MotionType,
-    pub(crate) contents: Vec<String_0>,
+    pub(crate) contents: Vec<ApiString>,
     pub(crate) is_unnamed: bool,
     /// The width of a blockwise register; 0 for the other two.
     pub(crate) width: usize,

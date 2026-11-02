@@ -15,6 +15,7 @@
 use crate::global_cell::field;
 use crate::memory::XString;
 use crate::strings::has_char;
+use crate::types::Handle;
 use core::ffi::{CStr, c_int, c_uint};
 
 use crate::api::win_config::parse_winborder;
@@ -366,7 +367,7 @@ pub fn did_set_winbar(args: &mut OptSet) -> Result<(), OptError> {
 /// write into and an error slot to report through; both are discarded.
 pub(crate) fn parse_border_opt(border_opt: &CStr) -> bool {
     let mut fconfig = WinConfig {
-        window: 0,
+        window: Handle::NONE,
         bufpos: LPos {
             lnum: -1 as LineNr,
             col: 0 as ColNr,

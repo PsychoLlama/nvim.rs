@@ -264,7 +264,7 @@ pub(crate) fn show_sub(
         // every use below it sits behind `if (cmdpreview_buf)`, so a release
         // build that somehow lost the buffer *skips the preview* rather than
         // faulting. Keep both halves: the debug assertion, and the skip.
-        let buf = find_buf(cmdpreview_bufnr as c_int);
+        let buf = find_buf(cmdpreview_bufnr.get());
         debug_assert!(buf.is_some(), "cmdpreview_buf != NULL");
         buf.map(|buf| {
             // Width of the "|lnum|..." column, from the highest line number
@@ -318,7 +318,7 @@ pub(crate) fn show_sub(
 
 /// The `:substitute` command.
 pub fn ex_substitute(excmd: &mut ExArg) {
-    do_sub(excmd, profile_zero(), 0 as c_int, 0 as Handle);
+    do_sub(excmd, profile_zero(), 0 as c_int, Handle::NONE);
 }
 
 /// The `:substitute` command's `'inccommand'` preview callback.

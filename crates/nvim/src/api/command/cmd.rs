@@ -93,7 +93,7 @@ pub fn nvim_cmd(
     channel_id: uint64_t,
     cmd: &mut KeyDict_cmd,
     opts: &mut KeyDict_cmd_opts,
-) -> Result<String_0, Error> {
+) -> Result<ApiString, Error> {
     let (cmd, opts) = (&*cmd, &*opts);
     let output = opts.output.unwrap_or(false);
 
@@ -106,7 +106,7 @@ pub fn nvim_cmd(
         // SAFETY: `prepare_cmd` answering true means `excmd`/`cmdinfo`
         // describe a resolved, validated command.
         true => run_cmd(channel_id, &mut excmd, &mut cmdinfo, output),
-        false => Ok(String_0::NULL),
+        false => Ok(ApiString::NULL),
     })
 }
 
@@ -301,18 +301,18 @@ fn collect_args(given: &Array, excmd: &mut ExArg, args: &mut Array) -> Result<bo
             // A boolean argument is spelled to the command as "0" or "1".
             Object::Boolean(b) => {
                 let digit = if *b { c"1" } else { c"0" };
-                args.push(Object::string(String_0::from_cstr(digit)));
+                args.push(Object::string(ApiString::from_cstr(digit)));
             }
             // A handle is its id, like any integer.
             Object::Buffer(n) | Object::Window(n) | Object::Tabpage(n) | Object::Integer(n) => {
-                args.push(Object::string(String_0::from(format!("{n}").as_str())));
+                args.push(Object::string(ApiString::from(format!("{n}").as_str())));
             }
             Object::String(s) => {
                 // An all-whitespace argument would vanish into the separators.
                 if string_iswhite(s) {
                     return Err(err_expected(c"command arg", c"non-whitespace", None));
                 }
-                args.push(Object::string(String_0::clone(s)));
+                args.push(Object::string(ApiString::clone(s)));
             }
             _ => {
                 let got = api_typename(elem.kind());
@@ -627,7 +627,7 @@ fn run_cmd(
     excmd: &mut ExArg,
     cmdinfo: &mut CmdParseInfo,
     capture: bool,
-) -> Result<String_0, Error> {
+) -> Result<ApiString, Error> {
     let save_redir_off = redir_off.get();
     let save_msg_col = msg_col.get();
     let outer_capture = capture.then(capture_start);
@@ -653,13 +653,13 @@ fn run_cmd(
     }
     let caught = try_leave(&tstate);
 
-    let mut retv = String_0::NULL;
+    let mut retv = ApiString::NULL;
     if let Some(captured) = captured.filter(|captured| captured.len() > 1)
         && caught.is_ok()
     {
         // Messages open with a newline the caller did not ask for.
         let skip = usize::from(captured[0] == b'\n');
-        retv = String_0::from_bytes(&captured[skip..]);
+        retv = ApiString::from_bytes(&captured[skip..]);
     }
     caught.map(|()| retv)
 }

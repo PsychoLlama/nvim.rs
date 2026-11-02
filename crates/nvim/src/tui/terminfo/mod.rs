@@ -28,7 +28,7 @@ use crate::tui::terminfo::caps::{
     TerminfoDef, kTerm_reset_cursor_style,
 };
 use crate::tui::unibi;
-use crate::types::{String_0, TerminfoEntry};
+use crate::types::{ApiString, TerminfoEntry};
 use core::ffi::CStr;
 use std::borrow::Cow;
 
@@ -143,7 +143,7 @@ impl TerminfoEntry {
 /// their second entry, so `key_backspace` and `key_f1` never appear.
 ///
 /// The returned string is allocated for the caller to free.
-pub fn terminfo_info_msg(entry: &TerminfoEntry, termname: &CStr, from_db: bool) -> String_0 {
+pub fn terminfo_info_msg(entry: &TerminfoEntry, termname: &CStr, from_db: bool) -> ApiString {
     let mut msg = Vec::new();
     msg.extend_from_slice(b"&term: ");
     msg.extend_from_slice(termname.to_bytes());
@@ -216,7 +216,7 @@ pub fn terminfo_info_msg(entry: &TerminfoEntry, termname: &CStr, from_db: bool) 
         }
     }
 
-    String_0::from_bytes(&msg)
+    ApiString::from_bytes(&msg)
 }
 
 /// Expand a parameterised capability into `buf`.

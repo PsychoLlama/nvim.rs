@@ -13,12 +13,13 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::types::Handle;
 use core::ffi::{CStr, c_int};
 
 use crate::highlight::dict::put;
 use crate::highlight::{HLATTRS_DICT_SIZE, HlAttrFlags, hlattrs2dict, ns_get_hl, syn_attr2entry};
 use crate::narrow::number_as_int;
-use crate::types::{ApiDict, Error, KeyDict_get_highlight, NS, Object, String_0};
+use crate::types::{ApiDict, ApiString, Error, KeyDict_get_highlight, NS, Object};
 use crate::ui::ui_rgb_attached;
 
 use super::{
@@ -37,7 +38,7 @@ const NO_DICT: ApiDict = ApiDict::EMPTY;
 fn hlgroup2dict(hl: &mut ApiDict, ns_id: NS, hl_id: c_int) -> bool {
     let entry = group(hl_id);
     let mut ns = ns_id;
-    let link = if ns_id == 0 {
+    let link = if ns_id == Handle::NONE {
         entry.link
     } else {
         ns_get_hl(&mut ns, hl_id, true, entry.set != 0)
@@ -45,13 +46,13 @@ fn hlgroup2dict(hl: &mut ApiDict, ns_id: NS, hl_id: c_int) -> bool {
     if link == -1 {
         return false;
     }
-    if ns_id == 0 && entry.cleared && entry.set == 0 {
+    if ns_id == Handle::NONE && entry.cleared && entry.set == 0 {
         // The table entry was created but never set.
         return false;
     }
 
     ns = ns_id;
-    let attr = syn_attr2entry(if ns_id == 0 {
+    let attr = syn_attr2entry(if ns_id == Handle::NONE {
         entry.attr
     } else {
         ns_get_hl(&mut ns, hl_id, false, entry.set != 0)
@@ -65,7 +66,7 @@ fn hlgroup2dict(hl: &mut ApiDict, ns_id: NS, hl_id: c_int) -> bool {
     }
     if link > 0 {
         assert!(link <= highlight_num_groups(), "link out of bounds");
-        let value = Object::string(String_0::from_cstr(group(link).name));
+        let value = Object::string(ApiString::from_cstr(group(link).name));
         put(hl, c"link", value);
     }
     let mut cterm = ApiDict::with_capacity(HLATTRS_DICT_SIZE);

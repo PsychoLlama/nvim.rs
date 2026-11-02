@@ -20,6 +20,7 @@
 
 use super::*;
 use crate::ex_docmd::{cmdmod_split, cmdmod_tab};
+use crate::types::Handle;
 use crate::types::{Failed, QfId};
 use crate::window::{WSP_ABOVE, WSP_HELP, WSP_NEWLOC, WSP_TOP};
 use crate::winlayer::{Win, last_window, tabs, windows, windows_in_tab};
@@ -90,7 +91,7 @@ pub(crate) fn jump_to_help_window(
 fn qf_goto_tabwin_with_file(fnum: c_int) -> bool {
     for tp in tabs() {
         for wp in windows_in_tab(tp) {
-            if wp.buffer().handle == fnum {
+            if wp.buffer().handle == Handle::new(fnum) {
                 goto_tabpage_win(tp, wp);
                 return true;
             }
@@ -130,7 +131,7 @@ fn qf_open_new_file_win(ll_ref: Option<QfId>) -> Result<(), Failed> {
 /// buffer.
 fn qf_goto_win_with_ll_file(use_win: Option<Win>, qf_fnum: c_int, ll_ref: Option<QfId>) {
     let win = use_win
-        .or_else(|| find_win(|wp| wp.buffer().handle == qf_fnum))
+        .or_else(|| find_win(|wp| wp.buffer().handle == Handle::new(qf_fnum)))
         .unwrap_or_else(|| {
             // Walk backwards from here, wrapping at the top, for a window
             // holding an ordinary buffer.
@@ -172,7 +173,7 @@ fn prev_window(window: Win) -> Win {
 fn qf_goto_win_with_qfl_file(qf_fnum: c_int) {
     let mut win = Win::current();
     let mut altwin: Option<Win> = None;
-    while win.buffer().handle != qf_fnum {
+    while win.buffer().handle != Handle::new(qf_fnum) {
         win = prev_window(win);
         if win.is_quickfix_window() {
             let last = crate::winlayer::prev_window()

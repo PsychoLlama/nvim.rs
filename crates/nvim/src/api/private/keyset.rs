@@ -25,7 +25,7 @@
 use core::ffi::CStr;
 
 use crate::types::{
-    ApiDict, Array, Boolean, Float, Handle, Integer, LuaRef, Object, ObjectType, String_0,
+    ApiDict, ApiString, Array, Boolean, Float, Handle, Integer, LuaRef, Object, ObjectType,
     StringArray, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict,
     kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString,
     kObjectTypeWindow,
@@ -89,7 +89,7 @@ pub(crate) enum Slot<'a> {
     /// An [`FieldKind::Integer`] or [`FieldKind::HlGroup`] field.
     Integer(&'a mut Option<Integer>),
     Float(&'a mut Option<Float>),
-    String(&'a mut Option<String_0>),
+    String(&'a mut Option<ApiString>),
     Array(&'a mut Option<Array>),
     Dict(&'a mut Option<ApiDict>),
     LuaRef(&'a mut Option<LuaRef>),

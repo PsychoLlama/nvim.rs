@@ -469,7 +469,7 @@ fn insert_window(flags: c_int, new_wp: Option<Win>, oldwin: Win, _vertical: bool
         wp.w_pos_changed = true;
     } else {
         // No longer a float: a non-multigrid UI shouldn't draw it as such.
-        ui_call_win_hide(wp.w_grid_alloc.handle as Integer);
+        ui_call_win_hide(Integer::from(wp.w_grid_alloc.handle));
         free_grid(wp, true);
     }
     // External windows are independent of tab pages, and may have been the

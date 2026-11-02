@@ -28,6 +28,7 @@ use super::*;
 use crate::lua::executor::nlua_call_ref_quiet;
 use crate::memory::XString;
 use crate::smsg;
+use crate::types::Handle;
 use crate::types::{AutoHandler, EstackInfo, FrameName, PatId};
 
 /// The buffer number `apc`'s `<buffer=N>` patterns match: its own until
@@ -36,8 +37,8 @@ use crate::types::{AutoHandler, EstackInfo, FrameName, PatId};
 /// goes.
 fn walk_bufnr(apc: &AutoPatCmd) -> BufferHandle {
     match apc.walk {
-        Some(at) => active_walk_bufnrs.with(|nrs| nrs.get(at).copied().unwrap_or(0)),
-        None => apc.arg_bufnr,
+        Some(at) => Handle::new(active_walk_bufnrs.with(|nrs| nrs.get(at).copied().unwrap_or(0))),
+        None => Handle::new(apc.arg_bufnr),
     }
 }
 
@@ -116,7 +117,7 @@ fn step_at(apc: &AutoPatCmd, names: &Names<'_>, idx: usize) -> Step {
         // ...or the pattern, or the buffer number.
         if pat.buflocal_nr == 0 {
             Probe::File(id, pat.reg_prog.take(), pat.allow_dirs)
-        } else if pat.buflocal_nr == names.bufnr {
+        } else if pat.buflocal_nr == names.bufnr.get() {
             Probe::Matched(id)
         } else {
             Probe::Skip
@@ -255,21 +256,21 @@ fn au_callback(
     data.insert(c"id", Object::integer(id));
     data.insert(
         c"event",
-        Object::string(String_0::from_cstr(event_nr2name(apc.event))),
+        Object::string(ApiString::from_cstr(event_nr2name(apc.event))),
     );
     data.insert(
         c"file",
         Object::string(
             apc.afile_orig
                 .as_ref()
-                .map_or(String_0::NULL, |file| String_0::from_bytes(file)),
+                .map_or(ApiString::NULL, |file| ApiString::from_bytes(file)),
         ),
     );
     data.insert(
         c"match",
         Object::string(autocmd_match.with(|name| {
             name.as_ref()
-                .map_or(String_0::NULL, |name| String_0::from_bytes(name))
+                .map_or(ApiString::NULL, |name| ApiString::from_bytes(name))
         })),
     );
     data.insert(c"buf", Object::integer(Integer::from(autocmd_bufnr.get())));

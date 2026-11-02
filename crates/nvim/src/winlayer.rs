@@ -371,7 +371,7 @@ impl Win {
     pub unsafe fn new(raw: *mut Window) -> Self {
         // SAFETY: the caller's promise, and the null test that precedes it.
         let id = if raw.is_null() {
-            0
+            Handle::NONE
         } else {
             unsafe { (*raw).handle }
         };
@@ -390,7 +390,7 @@ impl Win {
     }
 
     /// The null window. [`Buf::NULL`].
-    pub(crate) const NULL: Self = Self::at(ptr::null_mut(), 0);
+    pub(crate) const NULL: Self = Self::at(ptr::null_mut(), Handle::NONE);
 
     /// The window at `raw` with `handle` already known — a registry entry —
     /// so **nothing is read**.
@@ -471,7 +471,7 @@ impl Win {
     pub(crate) fn id(self) -> WinId {
         // A live window's handle is `last_win_id`, which is incremented
         // before it is read, so it is never zero.
-        WinId(NonZero::new(self.id).expect("a live window has a handle"))
+        WinId(NonZero::new(self.id.get()).expect("a live window has a handle"))
     }
 
     /// Give this window its handle, at the one moment it has none: the
@@ -587,7 +587,7 @@ impl Buf {
     pub unsafe fn new(raw: *mut Buffer) -> Self {
         // SAFETY: the caller's promise, and the null test that precedes it.
         let id = if raw.is_null() {
-            0
+            Handle::NONE
         } else {
             unsafe { (*raw).handle }
         };
@@ -616,7 +616,7 @@ impl Buf {
 
     /// The null buffer: the initial value of a context field that a caller
     /// fills in before anything reads it.
-    pub(crate) const NULL: Self = Self::at(ptr::null_mut(), 0);
+    pub(crate) const NULL: Self = Self::at(ptr::null_mut(), Handle::NONE);
 
     /// [`Win::at`] for a buffer.
     #[inline(always)]
@@ -703,7 +703,7 @@ impl Buf {
     pub fn id(self) -> BufId {
         // A live buffer's number is `top_file_num`, which is incremented
         // before it is read, so it is never zero.
-        BufId(NonZero::new(self.id).expect("a live buffer has a number"))
+        BufId(NonZero::new(self.id.get()).expect("a live buffer has a number"))
     }
 
     /// This buffer's identity, `None` for one that has no number: the null
@@ -712,7 +712,7 @@ impl Buf {
     /// this and treats `None` as "never the same".
     #[inline(always)]
     pub(crate) fn try_id(self) -> Option<BufId> {
-        NonZero::new(self.id).map(BufId)
+        NonZero::new(self.id.get()).map(BufId)
     }
 
     /// Give this buffer its number. [`Win::set_handle`].
@@ -766,7 +766,7 @@ impl TabPage {
     pub unsafe fn new(raw: *mut Tabpage) -> Self {
         // SAFETY: the caller's promise, and the null test that precedes it.
         let id = if raw.is_null() {
-            0
+            Handle::NONE
         } else {
             unsafe { (*raw).handle }
         };
@@ -844,7 +844,7 @@ impl TabPage {
     pub(crate) fn id(self) -> TabId {
         // A live tab page's handle is `LAST_TP_HANDLE`, which is incremented
         // before it is read, so it is never zero.
-        TabId(NonZero::new(self.id).expect("a live tab page has a handle"))
+        TabId(NonZero::new(self.id.get()).expect("a live tab page has a handle"))
     }
 
     /// Give this tab page its handle. [`Win::set_handle`].

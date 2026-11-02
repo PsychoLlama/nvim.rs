@@ -25,7 +25,8 @@ use crate::os::time::os_time;
 use crate::search::{search_was_last_used, state::no_hlsearch};
 use crate::types::builders::DictBuf;
 use crate::types::{
-    Integer, Object, String_0, TypVal, VAR_DICT, VAR_FLAVOUR_SHADA, VAR_FUNC, VAR_LIST, VAR_PARTIAL,
+    ApiString, Integer, Object, TypVal, VAR_DICT, VAR_FLAVOUR_SHADA, VAR_FUNC, VAR_LIST,
+    VAR_PARTIAL,
 };
 use crate::version::LONG_VERSION;
 use crate::winlayer::{Buf, Win, buffers, tab_windows};
@@ -259,10 +260,10 @@ impl Writing<'_> {
     fn write_header(&mut self) -> WriteStatus {
         let mut header = DictBuf::<5>::new();
         header
-            .insert(c"generator", Object::string(String_0::from_cstr(c"nvim")))
+            .insert(c"generator", Object::string(ApiString::from_cstr(c"nvim")))
             .insert(
                 c"version",
-                Object::string(String_0::from_cstr(LONG_VERSION)),
+                Object::string(ApiString::from_cstr(LONG_VERSION)),
             )
             .insert(
                 c"max_kbyte",
@@ -271,7 +272,7 @@ impl Writing<'_> {
             .insert(c"pid", Object::integer(process_id()))
             .insert(
                 c"encoding",
-                Object::string(p_enc(|value| String_0::from_bytes(value.to_bytes()))),
+                Object::string(p_enc(|value| ApiString::from_bytes(value.to_bytes()))),
             );
         let entry = ShadaEntry::new(os_time(), ShadaEntryData::Header(header.dict()));
         self.pack(&entry, 0)

@@ -35,7 +35,7 @@ pub fn nvim_get_context(opts: &mut KeyDict_context) -> Result<ApiDict, Error> {
         let mut i: size_t = 0 as size_t;
         while i < types.len() {
             let item = &types[i];
-            if let Some(s) = item.as_string().map(String_0::as_cstr) {
+            if let Some(s) = item.as_string().map(ApiString::as_cstr) {
                 let which = NAMES.iter().position(|n| s == *n);
                 if let Some(which) = which {
                     int_types |= FLAGS[which];
@@ -77,7 +77,7 @@ pub fn nvim_get_mode() -> ApiDict {
         .position(|&c| c == 0)
         .unwrap_or(modestr.len());
     let blocked: bool = input_blocking();
-    let mode = String_0::from_bytes(&modestr[..len]);
+    let mode = ApiString::from_bytes(&modestr[..len]);
     rv.insert(c"mode", Object::string(mode));
     rv.insert(c"blocking", Object::boolean(blocked));
     rv

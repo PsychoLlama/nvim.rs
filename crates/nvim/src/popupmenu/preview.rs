@@ -75,7 +75,7 @@ fn pum_preview_set_text(mut win: Win, info: &[u8]) -> (LineNr, c_int) {
         max_width = max_width.max(win_linetabsize(win, 0, line, MAXCOL as c_int));
         win.w_onebuf_opt.wo_wrap = save_wrap;
 
-        lines.push(Object::string(String_0::from_bytes(line)));
+        lines.push(Object::string(ApiString::from_bytes(line)));
     }
 
     let lnum = LineNr::try_from(lines.len()).unwrap_or(LineNr::MAX);

@@ -3,7 +3,7 @@
 //!
 //! [`event_name2nr`] is the one parse -- it measures a name up to the first
 //! whitespace, comma or bar and binary searches [`EVENT_NAMES`] for it, and
-//! every other spelling of a lookup goes through it or its `String_0`
+//! every other spelling of a lookup goes through it or its `ApiString`
 //! twin.  [`event_ignored`] and [`check_ei`] are the 'eventignore' half:
 //! whether an event is currently suppressed, and whether an option value
 //! is a list of real event names.  [`au_event_disable`]/[`au_event_restore`]
@@ -54,7 +54,7 @@ pub fn event_name2nr(text: &[u8]) -> (Option<AutoEvent>, usize) {
 }
 
 /// [`event_name2nr`] over a counted string, which is the whole name.
-pub fn event_name2nr_str(str: &String_0) -> Option<AutoEvent> {
+pub fn event_name2nr_str(str: &ApiString) -> Option<AutoEvent> {
     event_name_index(str.as_bytes()).map(|at| EVENT_NAMES[at].event)
 }
 
@@ -169,7 +169,7 @@ pub(crate) fn au_event_restore(old_ignored: Option<XString>) {
 
 /// Set 'eventignore', which copies what it is given.
 fn set_option_eventignore(value: &CStr) {
-    let string = String_0::from_bytes(value.to_bytes());
+    let string = ApiString::from_bytes(value.to_bytes());
     set_option_direct(
         kOptEventignore,
         OptVal::string(string),

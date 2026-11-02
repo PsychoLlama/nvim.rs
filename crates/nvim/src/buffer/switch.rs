@@ -23,6 +23,7 @@ use crate::ex_cmds::newlnum;
 use crate::semsg;
 use crate::tr_plural;
 use crate::types::CmdIdx;
+use crate::types::Handle;
 use core::ffi::{CStr, c_int, c_ulong};
 use std::ffi::CString;
 
@@ -311,7 +312,7 @@ pub fn do_bufdel(
         // delete the current buffer last, otherwise when the current buffer is
         // deleted, the next buffer becomes the current one and will be loaded,
         // which may then also be deleted, etc.
-        if bnr == Buf::current().handle {
+        if bnr == Buf::current().handle.get() {
             do_current = bnr;
         } else if delete_one(command, bnr, forceit) {
             deleted += 1;
@@ -602,7 +603,7 @@ fn locate_arm(start: c_int, dir: c_int, count: c_int, flags: c_int, unload: bool
         // find specified buffer number
         let mut buf = from;
         while let Some(b) = buf {
-            if b.handle == count {
+            if b.handle == Handle::new(count) {
                 break;
             }
             buf = b.next();
@@ -693,7 +694,7 @@ fn unload_buffer(buffer: Buf, action: c_int, flags: c_int, update_jumplist: &mut
         return Unloaded::Done(rc);
     }
 
-    let buf_fnum = buffer.handle as c_int;
+    let buf_fnum = buffer.handle.get();
 
     // When closing the current buffer stop Visual mode.
     if buffer.raw() == Buf::current_raw() && visual_active() {
@@ -758,7 +759,7 @@ fn refuse_unload(buffer: Buf, bufref: BufRef, flags: c_int) -> Option<Result<(),
                 return Some(Err(Failed));
             }
         } else {
-            let nr = buffer.handle as c_int;
+            let nr = buffer.handle.get();
             semsg!("E89: No write since last change for buffer {nr} (add ! to override)");
             return Some(Err(Failed));
         }

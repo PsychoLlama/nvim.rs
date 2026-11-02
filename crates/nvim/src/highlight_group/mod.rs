@@ -3,6 +3,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
+use crate::types::Handle;
 use core::ffi::{CStr, c_int, c_uint};
 
 use crate::decoration_provider::decor_provider_invalidate_hl;
@@ -12,7 +13,7 @@ use crate::highlight::state::{
 };
 use crate::highlight::{HlAttrFlags, hl_get_ui_attr, syn_attr2entry};
 use crate::message::msg_grid_ref;
-use crate::types::{Integer, String_0};
+use crate::types::{ApiString, Integer};
 use crate::ui::ui_call_hl_group_set;
 mod hlf;
 
@@ -162,7 +163,7 @@ pub(crate) fn highlight_changed() {
         let id = syn_check_group(name.to_bytes());
         assert!(id != 0, "builtin highlight group {hlf} could not be added");
 
-        let mut ns_id = -1;
+        let mut ns_id = Handle::new(-1);
         let mut final_id = id;
         syn_ns_get_final_id(&mut ns_id, &mut final_id);
         if hlf == HLF_SNC {
@@ -171,7 +172,7 @@ pub(crate) fn highlight_changed() {
             id_s = final_id;
         }
 
-        let attr = hl_get_ui_attr(ns_id, hlf, final_id, hlf == HLF_INACTIVE);
+        let attr = hl_get_ui_attr(ns_id.get(), hlf, final_id, hlf == HLF_INACTIVE);
         highlight_attr.with_mut(|attrs| attrs[hlf as usize] = attr);
         if attr == highlight_attr_last.with(|last| last[hlf as usize]) {
             continue;
@@ -180,7 +181,7 @@ pub(crate) fn highlight_changed() {
             clear_cmdline.set(true);
             msg_grid.blending = syn_attr2entry(attr).hl_blend > -1;
         }
-        ui_call_hl_group_set(String_0::from_cstr(name), Integer::from(attr));
+        ui_call_hl_group_set(ApiString::from_cstr(name), Integer::from(attr));
         highlight_attr_last.with_mut(|last| last[hlf as usize] = attr);
     }
 

@@ -33,7 +33,7 @@ use crate::option::vars::{P_SBR, P_SEL, p_ch, p_sc, p_sloc};
 use crate::plines::getvcols;
 use crate::pos::lt;
 use crate::statusline::{draw_tabline, hl_attr, win_redr_status};
-use crate::types::{Array, LineNr, Object, OptInt, String_0};
+use crate::types::{ApiString, Array, LineNr, Object, OptInt};
 use crate::ui::state::Rows;
 use crate::ui::{ui_call_msg_showcmd, ui_has};
 use core::ffi::{CStr, c_int};
@@ -412,7 +412,7 @@ fn show_through_ui(clear: bool) {
         let sc = showcmd_buf.get();
         let mut chunk = Array::with_capacity(3);
         chunk.push(Object::integer(0));
-        chunk.push(Object::string(String_0::from_cstr(sc.as_cstr())));
+        chunk.push(Object::string(ApiString::from_cstr(sc.as_cstr())));
         chunk.push(Object::integer(0));
         content.push(Object::array(chunk));
     }

@@ -79,7 +79,7 @@ pub fn setpcmark() {
     let view = mark_view_make_at(win, win.w_pcmark);
     let newest = slot(win.w_jumplistlen - 1);
     win.w_jumplist[newest] = XFileMark {
-        fmark: fresh_mark(win.w_pcmark, buf.handle, view),
+        fmark: fresh_mark(win.w_pcmark, buf.handle.get(), view),
         fname: None,
     };
 }
@@ -138,7 +138,7 @@ pub fn get_jumplist(mut win: Win, mut count: c_int) -> Option<FileMark> {
         let fnum = win.w_jumplist[at].fmark.fnum;
         // An entry whose buffer no longer exists is skipped rather than
         // jumped to, and the step continues in the same direction.
-        if fnum == Buf::current().handle || find_buf(fnum).is_some() {
+        if fnum == Buf::current().handle.get() || find_buf(fnum).is_some() {
             return Some(win.w_jumplist[at].fmark.clone());
         }
         count += if count < 0 { -1 } else { 1 };
@@ -178,7 +178,7 @@ pub fn get_changelist(mut buffer: Buf, win: Win, count: c_int) -> Option<FileMar
     // The entries carry no buffer of their own, so the entry is stamped with
     // the CURRENT buffer rather than with `buffer`, in place.
     let change = &mut buffer.b_changelist[slot(n)];
-    change.fnum = Buf::current().handle;
+    change.fnum = Buf::current().handle.get();
     Some(change.clone())
 }
 
@@ -278,7 +278,7 @@ pub fn cleanup_jumplist(mut window: Win, loadfiles: bool) {
     }
     let last = slot(w.w_jumplistlen - 1);
     let here = Buf::current().handle;
-    if w.w_jumplist[last].fmark.fnum == here
+    if w.w_jumplist[last].fmark.fnum == here.get()
         && w.w_jumplist[last].fmark.mark.lnum == w.w_cursor.lnum
     {
         w.w_jumplist[last] = XFileMark::UNSET;
@@ -349,7 +349,7 @@ pub fn ex_jumps(_excmd: &mut ExArg) {
                     fmark.mark,
                 );
                 msg_display_bytes(row.bytes(), 0, false);
-                let attr = if fmark.fnum == here { HLF_D } else { 0 };
+                let attr = if fmark.fnum == here.get() { HLF_D } else { 0 };
                 msg_display(name.as_cstr(), attr, false);
                 os_breakcheck();
             }

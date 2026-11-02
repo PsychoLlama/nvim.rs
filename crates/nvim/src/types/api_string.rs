@@ -4,7 +4,7 @@
 //! [`super::api`]. This one has behaviour -- owning, reading and releasing
 //! its bytes -- so it gets its own file.
 //!
-//! **The string owns its bytes.** It is the [`NULL` string](String_0::NULL)
+//! **The string owns its bytes.** It is the [`NULL` string](ApiString::NULL)
 //! -- a value in its own right, which encodes as msgpack `nil` -- or a boxed
 //! run of `len() + 1` bytes whose last is a NUL, which the string frees when
 //! it drops. There is no borrowing spelling: a view of somebody else's bytes
@@ -12,7 +12,7 @@
 //! borrowing `String` copy.
 //!
 //! The trailing NUL is not decoration. The msgpack packer and the Lua push
-//! take [`as_bytes`](String_0::as_bytes), but the editor's own consumers --
+//! take [`as_bytes`](ApiString::as_bytes), but the editor's own consumers --
 //! the option table, the hashtables a dict key ends up in, `os_*` -- read the
 //! string as a C string, so every string this type makes terminates.
 //! Interior NULs are still allowed and still counted in `len()`.
@@ -35,17 +35,13 @@ use core::ffi::{CStr, c_char};
 use core::{fmt, ptr};
 
 /// A byte string as the API layer passes one: bytes it owns, NUL-terminated.
-#[allow(
-    non_camel_case_types,
-    reason = "c2rust's spelling of C's `String`, which `repr(C)` used to exempt; the rename is a sweep of its own"
-)]
 #[derive(Default, PartialEq, Eq)]
-pub struct String_0 {
+pub struct ApiString {
     /// The bytes and the NUL after them; `None` for the null string.
     bytes: Option<Box<[u8]>>,
 }
 
-impl String_0 {
+impl ApiString {
     /// The null string -- upstream's `STRING_INIT`.
     ///
     /// It is *not* the same as a zero-length string;
@@ -142,8 +138,8 @@ impl String_0 {
     }
 }
 
-impl Clone for String_0 {
-    /// A copy with its own allocation. [`String_0::NULL`] stays null rather
+impl Clone for ApiString {
+    /// A copy with its own allocation. [`ApiString::NULL`] stays null rather
     /// than becoming the empty string.
     fn clone(&self) -> Self {
         Self {
@@ -152,30 +148,30 @@ impl Clone for String_0 {
     }
 }
 
-impl From<&CStr> for String_0 {
-    /// [`from_cstr`](String_0::from_cstr): a copy of `s`'s bytes.
+impl From<&CStr> for ApiString {
+    /// [`from_cstr`](ApiString::from_cstr): a copy of `s`'s bytes.
     fn from(s: &CStr) -> Self {
         Self::from_cstr(s)
     }
 }
 
-impl From<&[u8]> for String_0 {
+impl From<&[u8]> for ApiString {
     fn from(bytes: &[u8]) -> Self {
         Self::from_bytes(bytes)
     }
 }
 
-impl From<&str> for String_0 {
+impl From<&str> for ApiString {
     fn from(text: &str) -> Self {
         Self::from_bytes(text.as_bytes())
     }
 }
 
-impl fmt::Debug for String_0 {
+impl fmt::Debug for ApiString {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.bytes {
-            None => f.write_str("String_0(NULL)"),
-            Some(_) => write!(f, "String_0({:?})", self.as_cstr()),
+            None => f.write_str("ApiString(NULL)"),
+            Some(_) => write!(f, "ApiString({:?})", self.as_cstr()),
         }
     }
 }

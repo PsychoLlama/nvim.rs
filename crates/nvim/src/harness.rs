@@ -25,7 +25,7 @@
 use crate::global_cell::GlobalCell;
 use crate::grid::{SCHAR_BUF_SIZE, SCharBuf, schar_copy};
 use crate::mbyte::{char_at, char_len, lead_byte_lengths, sequence_value};
-use crate::types::String_0;
+use crate::types::ApiString;
 use crate::types::{DispTick, MB_MAXCHAR, ScreenChar, int32_t, size_t, uint8_t, uintptr_t};
 use core::ffi::{c_char, c_int};
 use core::slice;
@@ -86,13 +86,13 @@ pub struct HarnessString {
 
 impl HarnessString {
     /// A copy of the bytes, as an API string.
-    fn to_api(&self) -> String_0 {
+    fn to_api(&self) -> ApiString {
         if self.data.is_null() {
-            return String_0::NULL;
+            return ApiString::NULL;
         }
         // SAFETY: only the spec builds one, over `size` bytes it owns for
         // the length of the call.
-        String_0::from_bytes(unsafe { slice::from_raw_parts(self.data.cast::<u8>(), self.size) })
+        ApiString::from_bytes(unsafe { slice::from_raw_parts(self.data.cast::<u8>(), self.size) })
     }
 }
 

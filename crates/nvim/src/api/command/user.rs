@@ -23,26 +23,27 @@ use crate::api::private::validate::{
 use crate::api_error;
 use crate::cstr;
 use crate::message_fmt::msg_cstr;
+use crate::types::Handle;
 use crate::types::{ExArgt, ExpandContext};
 use crate::winlayer::graph::switch_buffer;
 
 pub fn nvim_create_user_command(
     channel_id: uint64_t,
-    name: String_0,
+    name: ApiString,
     cmd: Object,
     opts: &mut KeyDict_user_command,
 ) -> Result<(), Error> {
     create_user_command(channel_id, name, cmd, opts, false)
 }
 
-pub fn nvim_del_user_command(name: String_0) -> Result<(), Error> {
-    nvim_buf_del_user_command(-1, name)
+pub fn nvim_del_user_command(name: ApiString) -> Result<(), Error> {
+    nvim_buf_del_user_command(Handle::new(-1), name)
 }
 
 pub fn nvim_buf_create_user_command(
     channel_id: uint64_t,
     buf: BufferHandle,
-    name: String_0,
+    name: ApiString,
     cmd: Object,
     opts: &mut KeyDict_user_command,
 ) -> Result<(), Error> {
@@ -57,8 +58,8 @@ pub fn nvim_buf_create_user_command(
     made
 }
 
-pub fn nvim_buf_del_user_command(buf: BufferHandle, name: String_0) -> Result<(), Error> {
-    let table = if buf == -1 {
+pub fn nvim_buf_del_user_command(buf: BufferHandle, name: ApiString) -> Result<(), Error> {
+    let table = if buf == Handle::new(-1) {
         Table::Global
     } else {
         let Some(b) = find_buffer_by_handle(buf)? else {
@@ -78,7 +79,7 @@ pub fn nvim_buf_del_user_command(buf: BufferHandle, name: String_0) -> Result<()
 
 pub fn create_user_command(
     channel_id: uint64_t,
-    name: String_0,
+    name: ApiString,
     cmd: Object,
     opts: &mut KeyDict_user_command,
     buffer_local: bool,
@@ -320,7 +321,7 @@ pub fn create_user_command(
 }
 
 pub fn nvim_get_commands(opts: &mut KeyDict_get_commands) -> Result<ApiDict, Error> {
-    nvim_buf_get_commands(-1, opts)
+    nvim_buf_get_commands(Handle::new(-1), opts)
 }
 
 pub fn nvim_buf_get_commands(
@@ -328,7 +329,7 @@ pub fn nvim_buf_get_commands(
     opts: &mut KeyDict_get_commands,
 ) -> Result<ApiDict, Error> {
     let builtin = opts.builtin.unwrap_or(false);
-    if buf == -1 {
+    if buf == Handle::new(-1) {
         if builtin {
             return Err(Error::validation(c"builtin=true not implemented"));
         }

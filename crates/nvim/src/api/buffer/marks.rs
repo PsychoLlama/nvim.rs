@@ -17,7 +17,7 @@ use super::*;
 use crate::api::private::validate::err_bad_value;
 use crate::winlayer::Win;
 
-pub fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boolean, Error> {
+pub fn nvim_buf_del_mark(buf: BufferHandle, name: ApiString) -> Result<Boolean, Error> {
     let mut res: bool = false;
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(res as Boolean);
@@ -31,7 +31,7 @@ pub fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boolean, E
     let Some(fm) = mark_get(b, Win::current(), kMarkAllNoResolve, mark) else {
         return Err(err_bad_value(c"mark name", name.as_cstr()));
     };
-    if fm.mark.lnum != 0 as LineNr && fm.fnum == b.handle {
+    if fm.mark.lnum != 0 as LineNr && fm.fnum == b.handle.get() {
         set_mark(Some(b), name, 0 as Integer, 0 as Integer)?;
         res = true;
     }
@@ -40,7 +40,7 @@ pub fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boolean, E
 
 pub fn nvim_buf_set_mark(
     buf: BufferHandle,
-    name: String_0,
+    name: ApiString,
     line: Integer,
     col: Integer,
     _opts: &mut KeyDict_empty,
@@ -58,7 +58,7 @@ pub fn nvim_buf_set_mark(
     Ok(res as Boolean)
 }
 
-pub fn nvim_buf_get_mark(buf: BufferHandle, name: String_0) -> Result<Array, Error> {
+pub fn nvim_buf_get_mark(buf: BufferHandle, name: ApiString) -> Result<Array, Error> {
     let mut rv: Array = Array::EMPTY;
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(rv);
@@ -81,7 +81,7 @@ pub fn nvim_buf_get_mark(buf: BufferHandle, name: String_0) -> Result<Array, Err
     ) else {
         return Err(err_bad_value(c"mark name", name.as_cstr()));
     };
-    if fm.fnum != b.handle {
+    if fm.fnum != b.handle.get() {
         pos.lnum = 0 as ::core::ffi::c_int as LineNr;
         pos.col = 0 as ::core::ffi::c_int as ColNr;
     } else {

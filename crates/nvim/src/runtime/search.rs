@@ -351,7 +351,7 @@ pub(crate) fn integer_obj(value: Integer) -> Object {
     Object::Integer(value)
 }
 
-fn string_obj(string: String_0) -> Object {
+fn string_obj(string: ApiString) -> Object {
     Object::string(string)
 }
 
@@ -374,7 +374,7 @@ pub fn runtime_inspect() -> Array {
         let mut entry = ApiDict::with_capacity(5);
         entry.insert(
             c"path",
-            string_obj(String_0::from_cstr(item.path.as_cstr())),
+            string_obj(ApiString::from_cstr(item.path.as_cstr())),
         );
         if item.after {
             entry.insert(c"after", boolean_obj(true));
@@ -452,7 +452,7 @@ fn runtime_get_named_common(lua: bool, pat: &Array, all: bool, path: &[SearchPat
             if !os_file_is_readable(found) {
                 continue;
             }
-            rv.push(string_obj(String_0::from_cstr(found)));
+            rv.push(string_obj(ApiString::from_cstr(found)));
             if !all {
                 return rv;
             }

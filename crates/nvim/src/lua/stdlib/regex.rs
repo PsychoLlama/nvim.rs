@@ -113,7 +113,7 @@ fn regex_match_str(stack: &mut Stack) -> Result<c_int, Raise> {
 
 /// The buffer `bufnr` names, `0` for the current one, if it is loaded.
 fn loaded_buffer(bufnr: Handle) -> Option<Buf> {
-    let buf = if bufnr != 0 {
+    let buf = if bufnr != Handle::NONE {
         winlayer::buffer(bufnr)
     } else {
         Buf::current_or_none()
@@ -144,7 +144,7 @@ fn regex_match_line(stack: &mut Stack) -> Result<c_int, Raise> {
         return Err(Raise::message("not enough args"));
     }
 
-    let bufnr: Handle = check_int(stack, 2)?;
+    let bufnr: Handle = Handle::new(check_int(stack, 2)?);
     let rownr: LineNr = check_int(stack, 3)?;
     let mut start: c_int = 0;
     let mut end: c_int = -1;

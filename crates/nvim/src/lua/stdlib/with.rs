@@ -15,6 +15,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::types::Handle;
 use core::ffi::{CStr, c_int};
 
 use super::TRY_STATE_INIT;
@@ -88,9 +89,9 @@ pub(crate) fn with(stack: &mut Stack) -> Result<c_int, Raise> {
         if stack.kind(At::from_top(2)) == Kind::String {
             let key: &CStr = stack.c_string(At::from_top(2)).unwrap_or_default();
             if key == c"buf" {
-                buf = winlayer::buffer(int_value(stack)?);
+                buf = winlayer::buffer(Handle::new(int_value(stack)?));
             } else if key == c"win" {
-                win = winlayer::window(int_value(stack)?);
+                win = winlayer::window(Handle::new(int_value(stack)?));
             } else if key == c"log_level" {
                 log_level = int_value(stack)?;
             } else if stack.to_boolean(At::TOP) {

@@ -94,7 +94,7 @@ fn add_scored(text: &str, score: c_int) -> c_int {
 /// Start a completion over `text`: the original-text match every completion
 /// begins with.
 fn start(text: &str) {
-    compl_orig_text().set(String_0::from_bytes(text.as_bytes()));
+    compl_orig_text().set(ApiString::from_bytes(text.as_bytes()));
     ins_compl_add_orig_text(CP_ORIGINAL_TEXT | CP_FAST).expect("an empty list takes the original");
 }
 
@@ -386,7 +386,7 @@ fn ctrl_p_walks_the_ring_the_other_way() {
 fn the_leader_hides_what_it_does_not_start() {
     let _f = Fixture::new(0);
     ring("", &["apple", "banana", "blueberry", "cherry"]);
-    compl_leader().set(String_0::from_bytes(b"b"));
+    compl_leader().set(ApiString::from_bytes(b"b"));
     set_shown(0);
     step(1);
     assert_eq!(shown_at(), Some(2));
@@ -463,7 +463,7 @@ fn fuzzy_scores_sort_the_matches_and_leave_the_original() {
     assert_cyclic();
 
     // A leader scores in place of the original text.
-    compl_leader().set(String_0::from_bytes(b"pa"));
+    compl_leader().set(ApiString::from_bytes(b"pa"));
     set_fuzzy_score();
     let before = texts()[1..].to_vec();
     sort_fuzzy();
@@ -614,8 +614,8 @@ fn the_free_takes_every_match_and_what_it_owns() {
     ins_compl_make_cyclic();
     set_shown(2);
     compl_old_match.set(Some(nth(1)));
-    compl_leader().set(String_0::from_bytes(b"fo"));
-    compl_pattern().set(String_0::from_bytes(b"\\<fo"));
+    compl_leader().set(ApiString::from_bytes(b"fo"));
+    compl_pattern().set(ApiString::from_bytes(b"\\<fo"));
     ins_compl_free();
     assert!(first_match().is_none());
     assert!(curr_match().is_none());

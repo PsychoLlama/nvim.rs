@@ -23,6 +23,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::global_cell::GlobalCell;
+use crate::types::Handle;
 use crate::types::{NS, RgbValue};
 use core::ffi::c_int;
 
@@ -39,10 +40,10 @@ pub(crate) static cterm_normal_bg_color: GlobalCell<c_int> = GlobalCell::new(0 a
 pub(crate) static normal_fg: GlobalCell<RgbValue> = GlobalCell::new(-1 as RgbValue);
 pub(crate) static normal_bg: GlobalCell<RgbValue> = GlobalCell::new(-1 as RgbValue);
 pub(crate) static normal_sp: GlobalCell<RgbValue> = GlobalCell::new(-1 as RgbValue);
-pub(crate) static ns_hl_global: GlobalCell<NS> = GlobalCell::new(0 as NS);
-pub(crate) static ns_hl_win: GlobalCell<NS> = GlobalCell::new(-1 as NS);
-pub(crate) static ns_hl_fast: GlobalCell<NS> = GlobalCell::new(-1 as NS);
-pub(crate) static ns_hl_active: GlobalCell<NS> = GlobalCell::new(0 as NS);
+pub(crate) static ns_hl_global: GlobalCell<NS> = GlobalCell::new(Handle::NONE);
+pub(crate) static ns_hl_win: GlobalCell<NS> = GlobalCell::new(Handle::new(-1));
+pub(crate) static ns_hl_fast: GlobalCell<NS> = GlobalCell::new(Handle::new(-1));
+pub(crate) static ns_hl_active: GlobalCell<NS> = GlobalCell::new(Handle::NONE);
 /// One `HLF_*` attribute table: the built-in [`highlight_attr`] or a
 /// namespace's. None is ever freed, which is what lets them be `'static`.
 pub(crate) type HlAttrTable = GlobalCell<[c_int; 76]>;

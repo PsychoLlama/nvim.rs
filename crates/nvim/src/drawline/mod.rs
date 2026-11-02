@@ -69,7 +69,7 @@ use crate::terminal::terminal_get_line_attributes;
 use crate::types::TAB;
 use crate::types::{
     CharSize, CharsizeArg, ColNr, DecorRange, DiffLine, FoldInfo, GridView, HlMode, Hlf, LineNr,
-    NS, NUL, Pos, RgbValue, ScreenAttr, ScreenChar, SignTextAttrs, SpellVars, StatusCol, VarNumber,
+    NUL, Pos, RgbValue, ScreenAttr, ScreenChar, SignTextAttrs, SpellVars, StatusCol, VarNumber,
     VirtText, VirtTextPos, WinExtmark, ptrdiff_t, size_t, uint8_t, uint32_t, uint64_t,
 };
 use crate::ui::ui_rgb_attached;

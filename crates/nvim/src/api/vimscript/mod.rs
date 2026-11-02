@@ -12,9 +12,9 @@ use crate::message::state::{did_emsg, msg_col, redir_off};
 use crate::message::{capture_finish, capture_start};
 use crate::runtime::do_source_str;
 use crate::types::{
-    ApiDict, Array, Boolean, Error, ExprAST, ExprASTNode, ExprASTNodeType, ExprAssignmentType,
-    ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, Integer,
-    KeyDict_exec_opts, Object, ParserState, String_0, TypVal, UVarNumber, VAR_FUNC, VAR_PARTIAL,
+    ApiDict, ApiString, Array, Boolean, Error, ExprAST, ExprASTNode, ExprASTNodeType,
+    ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags,
+    Integer, KeyDict_exec_opts, Object, ParserState, TypVal, UVarNumber, VAR_FUNC, VAR_PARTIAL,
     kErrorTypeException, kErrorTypeValidation, size_t, uint64_t,
 };
 use crate::viml::parser::expressions::{

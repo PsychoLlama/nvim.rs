@@ -41,6 +41,7 @@ use crate::quickfix::{ex_cc, ex_cnext, qf_get_cur_idx, qf_get_valid_size};
 use crate::search::FORWARD;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
+use crate::types::Handle;
 use crate::types::{ExArg, LineNr, size_t};
 use crate::window::{goto_tab, valid_tab, valid_win, win_goto, win_split, win_valid};
 use crate::winlayer::prev_window;
@@ -196,9 +197,9 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
         ListDo::Buffers => {
             // Advance to the first listed buffer after "eap->line1".
             let mut cur = first_buffer();
-            let unlisted = |b: &Buf| (b.handle as LineNr) < excmd.line1 || b.b_p_bl == 0;
+            let unlisted = |b: &Buf| (b.handle.get() as LineNr) < excmd.line1 || b.b_p_bl == 0;
             while let Some(b) = cur.filter(unlisted) {
-                if b.handle as LineNr > excmd.line2 {
+                if b.handle.get() as LineNr > excmd.line2 {
                     cur = None;
                     break;
                 }
@@ -210,7 +211,7 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
                     excmd,
                     DOBUF_FIRST as c_int,
                     FORWARD as c_int,
-                    first.handle as c_int,
+                    first.handle.get(),
                 );
             }
         }
@@ -285,7 +286,7 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
                 let mut bp = Buf::current().next();
                 while let Some(b) = bp {
                     if b.b_p_bl != 0 {
-                        next_fnum = b.handle as c_int;
+                        next_fnum = b.handle.get();
                         break;
                     }
                     bp = b.next();
@@ -308,12 +309,12 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
                     break;
                 }
                 // Does the buffer still exist?
-                if !buffers().any(|bp| bp.handle == next_fnum) {
+                if !buffers().any(|bp| bp.handle == Handle::new(next_fnum)) {
                     break;
                 }
                 goto_buffer(excmd, DOBUF_FIRST as c_int, FORWARD as c_int, next_fnum);
                 // If autocommands took us elsewhere, quit here.
-                if Buf::current().handle != next_fnum {
+                if Buf::current().handle != Handle::new(next_fnum) {
                     break;
                 }
             }

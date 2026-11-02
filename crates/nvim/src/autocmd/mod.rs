@@ -67,9 +67,9 @@ use crate::state::mode::last_mode;
 use crate::state::{MODE_INSERT, MODE_NORMAL_BUSY, get_mode, get_real_state};
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
-    AcoSave, AutoCmd, AutoPat, AutoPatCmd, BufferHandle, Callback, EStackType, Error, EventCmds,
-    ExArg, Expand, Integer, LuaRef, LuaRetMode, Object, OptVal, ProfTime, SaveRedo, SaveVEvent,
-    ScriptCtx, String_0, Timestamp, VarNumber, Vv, int64_t, uint64_t,
+    AcoSave, ApiString, AutoCmd, AutoPat, AutoPatCmd, BufferHandle, Callback, EStackType, Error,
+    EventCmds, ExArg, Expand, Integer, LuaRef, LuaRetMode, Object, OptVal, ProfTime, SaveRedo,
+    SaveVEvent, ScriptCtx, Timestamp, VarNumber, Vv, int64_t, uint64_t,
 };
 use crate::ui::ui_call_win_hide;
 use crate::ui_compositor::ui_comp_remove_grid;

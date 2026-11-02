@@ -20,21 +20,25 @@ use crate::api::private::validate::err_expected;
 use crate::api::vim::nvim_exec_lua;
 use crate::api::vimscript::exec_impl;
 
-pub fn nvim_exec(channel_id: uint64_t, src: String_0, output: Boolean) -> Result<String_0, Error> {
+pub fn nvim_exec(
+    channel_id: uint64_t,
+    src: ApiString,
+    output: Boolean,
+) -> Result<ApiString, Error> {
     let mut opts = KeyDict_exec_opts {
         output: Some(output),
     };
     exec_impl(channel_id, src, &mut opts)
 }
 
-pub fn nvim_command_output(channel_id: uint64_t, command: String_0) -> Result<String_0, Error> {
+pub fn nvim_command_output(channel_id: uint64_t, command: ApiString) -> Result<ApiString, Error> {
     let mut opts = KeyDict_exec_opts { output: Some(true) };
     exec_impl(channel_id, command, &mut opts)
 }
 
 /// The old name of [`nvim_exec_lua`], and nothing else: the two had the same
 /// transpiled body.
-pub fn nvim_execute_lua(code: String_0, args: Array) -> Result<Object, Error> {
+pub fn nvim_execute_lua(code: ApiString, args: Array) -> Result<Object, Error> {
     nvim_exec_lua(code, args)
 }
 
@@ -97,7 +101,7 @@ pub fn nvim_call_atomic(channel_id: uint64_t, calls: Array) -> Result<Array, Err
         let failed_at = Integer::try_from(i).expect("a call index fits an Integer");
         errval.push(Object::integer(failed_at));
         errval.push(Object::integer(nested_error.kind().into()));
-        let msg = String_0::from_cstr(nested_error.message_or_empty());
+        let msg = ApiString::from_cstr(nested_error.message_or_empty());
         errval.push(Object::string(msg));
         rv.push(Object::array(errval));
     } else {

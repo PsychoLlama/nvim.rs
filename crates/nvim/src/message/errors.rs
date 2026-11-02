@@ -334,7 +334,7 @@ pub fn give_warning(message: &CStr, hl: bool, hist: bool) {
     keep_msg.set(None);
     keep_msg_hl_id.set(if hl { HLF_W } else { 0 });
 
-    if msg_ext_kind.with(String_0::is_null) {
+    if msg_ext_kind.with(ApiString::is_null) {
         msg_ext_set_kind(c"wmsg");
     }
     if msg(message, keep_msg_hl_id.get()) && msg_scrolled.get() == 0 {

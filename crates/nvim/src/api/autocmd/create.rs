@@ -22,6 +22,7 @@ use crate::api::private::validate::{
 use crate::cstr;
 use crate::memory::ThinCString;
 use crate::types::Failed;
+use crate::types::Handle;
 
 pub fn nvim_create_autocmd(
     channel_id: uint64_t,
@@ -80,7 +81,7 @@ fn create_autocmd(
     }
     let au_group = get_augroup_from_object(opts.group.as_ref())?;
     let has_buf = opts.buf.is_some() || opts.buffer.is_some();
-    let buf: BufferHandle = opts.buf.or(opts.buffer).unwrap_or(0);
+    let buf: BufferHandle = opts.buf.or(opts.buffer).unwrap_or(Handle::CURRENT);
     if opts.buf.is_some() && opts.buffer.is_some() {
         return Err(err_conflict(c"buf", c"buffer"));
     }
@@ -138,7 +139,7 @@ pub fn nvim_del_autocmd(id: Integer) -> Result<(), Error> {
 pub fn nvim_clear_autocmds(opts: &mut KeyDict_clear_autocmds) -> Result<(), Error> {
     let event_array: Array = unpack_string_or_array(opts.event.take(), c"event", false)?;
     let has_buf: bool = opts.buf.is_some() || opts.buffer.is_some();
-    let buf = opts.buf.or(opts.buffer).unwrap_or(0) as ::core::ffi::c_int;
+    let buf = (opts.buf.or(opts.buffer).unwrap_or(Handle::CURRENT)).get();
     if opts.buf.is_some() && opts.buffer.is_some() {
         return Err(err_conflict(c"buf", c"buffer"));
     }
@@ -149,7 +150,7 @@ pub fn nvim_clear_autocmds(opts: &mut KeyDict_clear_autocmds) -> Result<(), Erro
     let patterns: Array = get_patterns_from_pattern_or_buf(
         opts.pattern.as_ref(),
         has_buf,
-        buf as BufferHandle,
+        Handle::new(buf),
         Some(c""),
     )?;
     if event_array.len() == 0 as size_t {

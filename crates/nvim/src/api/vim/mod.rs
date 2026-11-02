@@ -93,13 +93,13 @@ use crate::terminal::{
 };
 use crate::types::AutoEvent;
 use crate::types::{
-    ApiDict, Array, BlnFlags, Boolean, BufferHandle, Context, DoBufAction, DoBufStart, Error,
-    Float, FoldInfo, Handle, HlAttrs, Integer, KeyDict_complete_set, KeyDict_context,
+    ApiDict, ApiString, Array, BlnFlags, Boolean, BufferHandle, Context, DoBufAction, DoBufStart,
+    Error, Float, FoldInfo, Handle, HlAttrs, Integer, KeyDict_complete_set, KeyDict_context,
     KeyDict_echo_opts, KeyDict_empty, KeyDict_eval_statusline, KeyDict_get_highlight,
     KeyDict_get_ns, KeyDict_highlight, KeyDict_keymap, KeyDict_open_term, KeyDict_redraw,
-    KeyDict_runtime, LineNr, LuaRef, LuaRetMode, MessageData, MessageType, MotionType, NS, Object,
-    OptScope, OptVal, RemapValues, ScreenChar, ScriptId, SignTextAttrs, StatusCol, String_0,
-    TabpageHandle, TerminalOptions, VarNumber, Vv, WindowHandle, YankReg, int64_t, kCdScopeGlobal,
+    KeyDict_runtime, LineNr, LuaRef, LuaRetMode, MessageData, MessageType, MotionType, Object,
+    OptScope, OptVal, RemapValues, ScreenChar, ScriptId, SignTextAttrs, StatusCol, TabpageHandle,
+    TerminalOptions, VarNumber, Vv, WindowHandle, YankReg, int64_t, kCdScopeGlobal,
     kErrorTypeException, kErrorTypeValidation, kObjectTypeString, mpack_token_type_t, size_t,
     uint8_t, uint16_t, uint64_t,
 };
@@ -177,10 +177,10 @@ fn is_internal_call(channel_id: uint64_t) -> bool {
     channel_id & INTERNAL_CALL_MASK != 0
 }
 pub const CONTEXT_INIT: Context = Context {
-    regs: String_0::NULL,
-    jumps: String_0::NULL,
-    bufs: String_0::NULL,
-    gvars: String_0::NULL,
+    regs: ApiString::NULL,
+    jumps: ApiString::NULL,
+    bufs: ApiString::NULL,
+    gvars: ApiString::NULL,
     funcs: Array::EMPTY,
 };
 pub const MODE_MAX_LENGTH: ::core::ffi::c_int = 4 as ::core::ffi::c_int;

@@ -61,9 +61,9 @@ use crate::strings::reversed_text;
 use crate::tag::state::g_do_tagpreview;
 use crate::types::ui::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};
 use crate::types::{
-    AlignTextPos, Array, BufferHandle, Dict, Float, Handle, Hlf, Integer, LPos, LineNr, Object,
-    OptInt, OptVal, PumItem, ScreenAttr, ScreenChar, String_0, VarNumber, VimMenu, VirtText,
-    WinConfig, WinSplit, WinStyle, WindowHandle, kBoolVarFalse, kBoolVarTrue, uint32_t,
+    AlignTextPos, ApiString, Array, BufferHandle, Dict, Float, Handle, Hlf, Integer, LPos, LineNr,
+    Object, OptInt, OptVal, PumItem, ScreenAttr, ScreenChar, VarNumber, VimMenu, VirtText,
+    WinConfig, WinSplit, WinStyle, kBoolVarFalse, kBoolVarTrue, uint32_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{
@@ -244,7 +244,7 @@ fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
     }
 
     if let Some(target) = target_win {
-        pum_anchor_grid.set(grid_of_view(target.w_grid).handle as c_int);
+        pum_anchor_grid.set(grid_of_view(target.w_grid).handle.get());
         win_row += target.w_grid.row_offset;
         cursor_col += target.w_grid.col_offset;
         if target.w_grid.target != default_grid_ref().raw() {
@@ -282,7 +282,7 @@ fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
 /// Hand the whole item list to a UI that draws the menu itself.
 fn pum_publish_external(items: &[PumItem], selected: c_int, anchor: &PumAnchor) {
     let text = |text: Option<&XString>| {
-        Object::string(text.map_or(String_0::NULL, |text| String_0::from_bytes(text)))
+        Object::string(text.map_or(ApiString::NULL, |text| ApiString::from_bytes(text)))
     };
     let mut arr = Array::with_capacity(items.len());
     for src in items {
@@ -423,8 +423,8 @@ pub fn pum_check_clear() {
     } else {
         ui_comp_remove_grid(grid);
         if ui_has(kUIMultigrid) {
-            ui_call_win_close(grid.handle as Integer);
-            ui_call_grid_destroy(grid.handle as Integer);
+            ui_call_win_close(Integer::from(grid.handle));
+            ui_call_grid_destroy(Integer::from(grid.handle));
         }
         // TODO(bfredl): consider keeping float grids allocated.
         grid.free();
@@ -533,10 +533,10 @@ fn pum_send_float_pos() {
     let above = pum_above.get();
     let anchor = if above { c"SW" } else { c"NW" };
     let row_off = if above { -pum_height.get() } else { 0 };
-    let anchor = String_0::from_cstr(anchor);
+    let anchor = ApiString::from_cstr(anchor);
     ui_call_win_float_pos(
-        grid.handle as Integer,
-        -1 as WindowHandle,
+        Integer::from(grid.handle),
+        Handle::new(-1),
         anchor,
         pum_anchor_grid.get() as Integer,
         (pum_row.get() - row_off - pum_win_row_offset.get()) as Float,
@@ -556,7 +556,7 @@ pub fn pum_ui_flush() {
     if ui_has(kUIMultigrid)
         && pum_is_drawn.get()
         && !pum_external.get()
-        && grid.handle != 0
+        && grid.handle != Handle::NONE
         && grid.pending_comp_index_update
     {
         pum_send_float_pos();

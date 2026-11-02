@@ -7,7 +7,7 @@ use super::{CAR, NL};
 use crate::api::private::validate::err_out_of_range;
 
 use crate::pos::MAXLNUM;
-use crate::types::{Array, Error, LineNr, NUL, Object, String_0, int64_t};
+use crate::types::{ApiString, Array, Error, LineNr, NUL, Object, int64_t};
 use crate::winlayer::Buf;
 
 // -- Strings ---------------------------------------------------------------
@@ -18,7 +18,7 @@ use crate::winlayer::Buf;
 /// the text stands for a newline, as it does everywhere a buffer line is
 /// passed as a C string, and is turned back into one. Text that ends *with*
 /// a break gets a trailing empty item, so that the array round-trips.
-pub(crate) fn string_to_array(input: &String_0, crlf: bool) -> Array {
+pub(crate) fn string_to_array(input: &ApiString, crlf: bool) -> Array {
     let bytes = input.as_bytes();
     let is_break = |byte: u8| byte == NL as u8 || (crlf && byte == CAR as u8);
     let mut items: Vec<Object> = Vec::new();
@@ -33,7 +33,7 @@ pub(crate) fn string_to_array(input: &String_0, crlf: bool) -> Array {
         let line: Vec<u8> = line
             .map(|&b| if b == NUL as u8 { NL as u8 } else { b })
             .collect();
-        items.push(Object::string(String_0::from_vec(line)));
+        items.push(Object::string(ApiString::from_vec(line)));
 
         at += line_len;
         let ends_line = at < bytes.len();
@@ -44,7 +44,7 @@ pub(crate) fn string_to_array(input: &String_0, crlf: bool) -> Array {
         if at + 1 == bytes.len() && ends_line {
             // Text that ends with a break round-trips through a trailing
             // empty item.
-            items.push(Object::string(String_0::NULL));
+            items.push(Object::string(ApiString::NULL));
         }
         at += 1;
     }
@@ -90,7 +90,7 @@ pub(crate) fn buf_get_text(
     lnum: int64_t,
     start_col: int64_t,
     end_col: int64_t,
-) -> Result<String_0, Error> {
+) -> Result<ApiString, Error> {
     if lnum >= i64::from(MAXLNUM) {
         return Err(err_out_of_range(c"line index"));
     }
@@ -107,5 +107,5 @@ pub(crate) fn buf_get_text(
     }
     // `start_col` and `end_col` were clamped into the line.
     let (from, to) = (start_col as usize, end_col as usize);
-    Ok(String_0::from_bytes(&bufstr[from..to]))
+    Ok(ApiString::from_bytes(&bufstr[from..to]))
 }

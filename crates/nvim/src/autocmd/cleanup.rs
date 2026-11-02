@@ -21,6 +21,7 @@ use super::*;
 use crate::memory::XString;
 use crate::message_fmt::msg_cstr;
 use crate::smsg;
+use crate::types::Handle;
 use crate::types::{AutoPat, EventCmds};
 use crate::winlayer::Buf;
 
@@ -106,7 +107,7 @@ pub fn aubuflocal_remove(buffer: Buf) {
     // A walk in progress may be about to match on this buffer number;
     // clear it rather than let it match a freed buffer.
     active_walk_bufnrs.with_mut(|nrs| {
-        for nr in nrs.iter_mut().filter(|nr| **nr == buffer.handle) {
+        for nr in nrs.iter_mut().filter(|nr| **nr == buffer.handle.get()) {
             *nr = 0;
         }
     });
@@ -120,7 +121,7 @@ pub fn aubuflocal_remove(buffer: Buf) {
             for idx in 0..cmds.len() {
                 if cmds.cmds[idx]
                     .pat
-                    .is_some_and(|id| cmds.pat(id).buflocal_nr == buffer.handle)
+                    .is_some_and(|id| cmds.pat(id).buflocal_nr == buffer.handle.get())
                 {
                     cmds.delete(idx);
                     count += 1;
@@ -164,7 +165,7 @@ pub fn aupat_get_buflocal_nr(pat: &[u8]) -> ::core::ffi::c_int {
 
     // "<buffer>"
     if pat.len() == 8 {
-        return Buf::current().handle;
+        return Buf::current().handle.get();
     }
 
     if pat.len() > 9 && pat[7] == b'=' {
@@ -201,7 +202,7 @@ pub fn aupat_normalize_buflocal_pat(pat: &[u8], buflocal_nr: ::core::ffi::c_int)
     let nr = if buflocal_nr == 0 {
         Buf::current().handle
     } else {
-        buflocal_nr
+        Handle::new(buflocal_nr)
     };
     XString::from_bytes(format!("<buffer={nr}>").as_bytes())
 }

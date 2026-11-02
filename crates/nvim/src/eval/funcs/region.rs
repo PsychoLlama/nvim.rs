@@ -456,7 +456,7 @@ fn add_regionpos_range(result: &mut TypVal, p1: Pos, p2: Pos) {
     for p in [p1, p2] {
         let mut pos = tv_list_alloc(4);
         let l = &mut *pos;
-        l.push_number(Buf::current().handle as VarNumber);
+        l.push_number(Buf::current().handle.get() as VarNumber);
         l.push_number(p.lnum as VarNumber);
         l.push_number(p.col as VarNumber);
         l.push_number(p.coladd as VarNumber);

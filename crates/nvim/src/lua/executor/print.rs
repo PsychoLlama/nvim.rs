@@ -30,7 +30,7 @@ use crate::os::cshim::gettext;
 use crate::profile::startup_timing;
 use crate::profile::{time_msg, time_pop, time_push};
 use crate::types::ui::kUICmdline;
-use crate::types::{HlMessageChunk, IOSIZE, Object, String_0, TypVal};
+use crate::types::{ApiString, HlMessageChunk, IOSIZE, Object, TypVal};
 use crate::ui::ui_has;
 
 lua_functions! {
@@ -71,7 +71,7 @@ const LUA_PRINT_KIND: &CStr = c"lua_print";
 /// Show one `print()`'s worth of text.
 fn show_printed(text: Vec<u8>) {
     let chunk = HlMessageChunk {
-        text: String_0::from_bytes(&text),
+        text: ApiString::from_bytes(&text),
         hl_id: 0,
     };
     let mut needs_clear = false;

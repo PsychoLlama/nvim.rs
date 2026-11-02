@@ -22,8 +22,8 @@
 )]
 
 use super::{
-    ApiDict, Array, BufferHandle, DictKey, Float, Integer, LuaRef, Object, String_0, TabpageHandle,
-    WindowHandle,
+    ApiDict, ApiString, Array, BufferHandle, DictKey, Float, Integer, LuaRef, Object,
+    TabpageHandle, WindowHandle,
 };
 use core::ffi::CStr;
 use core::mem::ManuallyDrop;
@@ -42,7 +42,7 @@ impl Object {
     }
 
     /// An API string, whose bytes the object takes over.
-    pub const fn string(value: String_0) -> Self {
+    pub const fn string(value: ApiString) -> Self {
         Self::String(ManuallyDrop::new(value))
     }
 
@@ -50,7 +50,7 @@ impl Object {
     /// object owns its string, and the binary's read-only data is not
     /// something it can own.
     pub fn literal(text: &'static str) -> Self {
-        Self::string(String_0::from(text))
+        Self::string(ApiString::from(text))
     }
 
     /// An array, whose elements the object takes over.
@@ -72,17 +72,17 @@ impl Object {
     /// A window handle. Handles are `Handle`; the variant carries the
     /// widened [`Integer`] the wire and the payload always did.
     pub const fn window(value: WindowHandle) -> Self {
-        Self::Window(value as Integer)
+        Self::Window(value.to_integer())
     }
 
     /// A buffer handle. See [`Object::window`].
     pub const fn buffer(value: BufferHandle) -> Self {
-        Self::Buffer(value as Integer)
+        Self::Buffer(value.to_integer())
     }
 
     /// A tabpage handle. See [`Object::window`].
     pub const fn tabpage(value: TabpageHandle) -> Self {
-        Self::Tabpage(value as Integer)
+        Self::Tabpage(value.to_integer())
     }
 }
 
@@ -193,7 +193,7 @@ mod tests {
         args.push(entry);
         let array = args.array();
         assert_eq!(
-            array[0].as_string().map(String_0::as_bytes),
+            array[0].as_string().map(ApiString::as_bytes),
             Some(&b"hello"[..])
         );
         assert_eq!(

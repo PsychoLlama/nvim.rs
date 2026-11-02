@@ -21,20 +21,20 @@ use crate::option::OptionTarget;
 use crate::types::OptionSetFlags;
 use crate::winlayer::{Buf, Win};
 
-pub fn nvim_get_option_info(name: String_0) -> Result<ApiDict, Error> {
+pub fn nvim_get_option_info(name: ApiString) -> Result<ApiDict, Error> {
     let (buf, win) = (Buf::current(), Win::current());
     get_vimoption(name, OptionSetFlags::GLOBAL, buf, win)
 }
 
-pub fn nvim_set_option(channel_id: uint64_t, name: String_0, value: Object) -> Result<(), Error> {
+pub fn nvim_set_option(channel_id: uint64_t, name: ApiString, value: Object) -> Result<(), Error> {
     set_option_to(channel_id, None, name, value)
 }
 
-pub fn nvim_get_option(name: String_0) -> Result<Object, Error> {
+pub fn nvim_get_option(name: ApiString) -> Result<Object, Error> {
     get_option_from(None, name)
 }
 
-pub fn nvim_buf_get_option(buffer: BufferHandle, name: String_0) -> Result<Object, Error> {
+pub fn nvim_buf_get_option(buffer: BufferHandle, name: ApiString) -> Result<Object, Error> {
     let Some(buf) = find_buffer_by_handle(buffer)? else {
         return Ok(Object::Nil);
     };
@@ -44,7 +44,7 @@ pub fn nvim_buf_get_option(buffer: BufferHandle, name: String_0) -> Result<Objec
 pub fn nvim_buf_set_option(
     channel_id: uint64_t,
     buffer: BufferHandle,
-    name: String_0,
+    name: ApiString,
     value: Object,
 ) -> Result<(), Error> {
     let Some(buf) = find_buffer_by_handle(buffer)? else {
@@ -53,7 +53,7 @@ pub fn nvim_buf_set_option(
     set_option_to(channel_id, Some(OptionTarget::Buf(buf)), name, value)
 }
 
-pub fn nvim_win_get_option(window: WindowHandle, name: String_0) -> Result<Object, Error> {
+pub fn nvim_win_get_option(window: WindowHandle, name: ApiString) -> Result<Object, Error> {
     let Some(win) = find_window_by_handle(window)? else {
         return Ok(Object::Nil);
     };
@@ -63,7 +63,7 @@ pub fn nvim_win_get_option(window: WindowHandle, name: String_0) -> Result<Objec
 pub fn nvim_win_set_option(
     channel_id: uint64_t,
     window: WindowHandle,
-    name: String_0,
+    name: ApiString,
     value: Object,
 ) -> Result<(), Error> {
     let Some(win) = find_window_by_handle(window)? else {
@@ -78,7 +78,7 @@ pub fn nvim_win_set_option(
 /// `name` is borrowed: the caller goes on to report it. Taking it by value
 /// freed it here while the caller still held a pointer to its bytes -- an
 /// error naming a scope the option lacks read freed memory.
-fn resolve_option(name: &String_0) -> Result<OptIndex, Error> {
+fn resolve_option(name: &ApiString) -> Result<OptIndex, Error> {
     if name.is_empty() {
         return Err(err_bad_value(c"option name", c"<empty>"));
     }
@@ -90,7 +90,7 @@ fn resolve_option(name: &String_0) -> Result<OptIndex, Error> {
 }
 
 /// The value of `name` as `from` sees it; `None` is the global scope.
-fn get_option_from(from: Option<OptionTarget>, name: String_0) -> Result<Object, Error> {
+fn get_option_from(from: Option<OptionTarget>, name: ApiString) -> Result<Object, Error> {
     let opt_idx = resolve_option(&name)?;
     let scope = OptionTarget::scope_of(from);
     let mut value: OptVal = OptVal::Nil;
@@ -114,7 +114,7 @@ fn get_option_from(from: Option<OptionTarget>, name: String_0) -> Result<Object,
 fn set_option_to(
     channel_id: uint64_t,
     to: Option<OptionTarget>,
-    name: String_0,
+    name: ApiString,
     value: Object,
 ) -> Result<(), Error> {
     let opt_idx = resolve_option(&name)?;

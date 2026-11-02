@@ -16,6 +16,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::types::Handle;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 use std::collections::HashMap;
@@ -430,7 +431,7 @@ fn syn_add_group(name: &[u8]) -> c_int {
 /// The attribute-table id for the group with id `hl_id`, following links.
 pub(crate) fn syn_id2attr(hl_id: c_int) -> c_int {
     let mut optional = false;
-    syn_ns_id2attr(-1, hl_id, &mut optional)
+    syn_ns_id2attr(Handle::new(-1), hl_id, &mut optional)
 }
 
 /// [`syn_id2attr`] against a particular namespace.
@@ -454,7 +455,7 @@ pub(crate) fn syn_ns_id2attr(mut ns_id: NS, mut hl_id: c_int, optional: &mut boo
     let group = group(hl_id);
     let attr = ns_get_hl(&mut ns_id, hl_id, false, group.set != 0);
     // An optional group falls through to nothing rather than to the global.
-    if attr >= 0 || (*optional && ns_id > 0) {
+    if attr >= 0 || (*optional && ns_id > Handle::NONE) {
         return attr;
     }
     group.attr

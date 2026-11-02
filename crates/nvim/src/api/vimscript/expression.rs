@@ -21,8 +21,8 @@ use crate::types::NodeId;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 
 pub fn nvim_parse_expression(
-    expr: String_0,
-    flags: String_0,
+    expr: ApiString,
+    flags: ApiString,
     hl: Boolean,
 ) -> Result<ApiDict, Error> {
     let pflags = parse_flags(&flags)?;
@@ -47,8 +47,8 @@ pub fn nvim_parse_expression(
 
     if let Some(err) = &east.err {
         let mut err_dict: ApiDict = ApiDict::with_capacity(2);
-        let arg = err.arg.map_or(String_0::NULL, String_0::from_bytes);
-        err_dict.insert(c"message", Object::string(String_0::from_cstr(err.msg)));
+        let arg = err.arg.map_or(ApiString::NULL, ApiString::from_bytes);
+        err_dict.insert(c"message", Object::string(ApiString::from_cstr(err.msg)));
         err_dict.insert(c"arg", Object::string(arg));
         ret.insert(c"error", Object::dict(err_dict));
     }
@@ -61,7 +61,7 @@ pub fn nvim_parse_expression(
             chunk_arr.push(Object::integer(chunk.start.line as Integer));
             chunk_arr.push(Object::integer(chunk.start.col as Integer));
             chunk_arr.push(Object::integer(chunk.end_col as Integer));
-            chunk_arr.push(Object::string(String_0::from_cstr(chunk.group)));
+            chunk_arr.push(Object::string(ApiString::from_cstr(chunk.group)));
             hl_arr.push(Object::array(chunk_arr));
         }
         ret.insert(c"highlight", Object::array(hl_arr));
@@ -73,7 +73,7 @@ pub fn nvim_parse_expression(
 }
 
 /// The `flags` argument as `ExprParserFlags`, or which character was not one.
-fn parse_flags(flags: &String_0) -> Result<c_int, Error> {
+fn parse_flags(flags: &ApiString) -> Result<c_int, Error> {
     let mut pflags: c_int = 0;
     for &ch in flags.as_bytes() {
         match ch {
@@ -179,8 +179,8 @@ fn finish_node(node: &ExprASTNode<'_>, ret_node: &mut ApiDict) {
         dict.insert(key, value);
     };
     // The three name tables hold static C strings.
-    let table_name = |name: &CStr| Object::string(String_0::from_cstr(name));
-    let bytes = |value: &[u8]| Object::string(String_0::from_bytes(value));
+    let table_name = |name: &CStr| Object::string(ApiString::from_cstr(name));
+    let bytes = |value: &[u8]| Object::string(ApiString::from_bytes(value));
 
     let type_name = NODE_TYPE_NAMES[type_0 as usize];
     put(ret_node, c"type", table_name(type_name));
@@ -196,7 +196,7 @@ fn finish_node(node: &ExprASTNode<'_>, ret_node: &mut ApiDict) {
         kExprNodeDoubleQuotedString | kExprNodeSingleQuotedString => {
             // An unterminated or empty literal may have no body at all.
             let value = data.string().value.as_deref();
-            let str = value.map_or(Object::string(String_0::NULL), bytes);
+            let str = value.map_or(Object::string(ApiString::NULL), bytes);
             put(ret_node, c"svalue", str);
         }
         kExprNodeOption => {
@@ -235,7 +235,7 @@ fn finish_node(node: &ExprASTNode<'_>, ret_node: &mut ApiDict) {
             put(
                 ret_node,
                 c"ccs_strategy",
-                ccs.map_or(Object::string(String_0::NULL), table_name),
+                ccs.map_or(Object::string(ApiString::NULL), table_name),
             );
             put(ret_node, c"invert", Object::boolean(data.comparison().inv));
         }
@@ -252,7 +252,7 @@ fn finish_node(node: &ExprASTNode<'_>, ret_node: &mut ApiDict) {
             // Plain "=" has no augmentation, and the table's slot for it is
             // the empty string rather than a name.
             let augmentation = if asgn_type == kExprAsgnPlain {
-                Object::string(String_0::NULL)
+                Object::string(ApiString::NULL)
             } else {
                 table_name(ASSIGNMENT_NAMES[asgn_type as usize])
             };

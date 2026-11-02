@@ -23,7 +23,7 @@ use core::fmt::Write as _;
 
 use crate::marktree::key::{mt_end, mt_paired, mt_start, unrelative};
 use crate::marktree::node::NodeId;
-use crate::types::{MTPos, MarkTree, String_0, uint64_t};
+use crate::types::{ApiString, MTPos, MarkTree, uint64_t};
 
 /// Nested to keep the name out of the flat cdef namespace `ffigen` builds,
 /// the same reason node.rs nests its own sizes.
@@ -39,11 +39,11 @@ use sizes::DOT_NAME_MAX;
 /// Dump the whole tree, as text or as a Graphviz digraph.
 ///
 /// The result is an `xmalloc`'d block the caller owns.
-pub(crate) fn mt_inspect(tree: &MarkTree, keys: bool, dot: bool) -> String_0 {
+pub(crate) fn mt_inspect(tree: &MarkTree, keys: bool, dot: bool) -> ApiString {
     let Some(root) = tree.root else {
         // An empty tree renders as nothing at all: the C handed back its
         // untouched growarray, which is a null string.
-        return String_0::NULL;
+        return ApiString::NULL;
     };
     let mut out = String::new();
     if dot {
@@ -53,7 +53,7 @@ pub(crate) fn mt_inspect(tree: &MarkTree, keys: bool, dot: bool) -> String_0 {
     } else {
         inspect_node(&mut out, tree, keys, root, MTPos::default());
     }
-    String_0::from_vec(out.into_bytes())
+    ApiString::from_vec(out.into_bytes())
 }
 
 /// The id a paired mark is known by in the dump: the `(ns, id)` handle with

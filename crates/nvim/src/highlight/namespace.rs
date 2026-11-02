@@ -53,10 +53,11 @@ use crate::option::check_blending;
 use crate::option::vars::p_pb;
 use crate::popupmenu::pum_drawn;
 use crate::popupmenu::state::must_redraw_pum;
+use crate::types::Handle;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
-    ColorItem, ColorKey, DecorProvider, HlAttrs, HlEntry, KeyDict_highlight, LuaRetMode, NS,
-    Object, String_0,
+    ApiString, ColorItem, ColorKey, DecorProvider, HlAttrs, HlEntry, KeyDict_highlight, LuaRetMode,
+    NS, Object,
 };
 use crate::winlayer::Win;
 use core::ffi::c_int;
@@ -94,7 +95,7 @@ static NS_HLS: GlobalCell<Table<ColorKey, ColorItem>> =
 
 /// The resolved `HLF_*` table per namespace. See the module docs for why the
 /// entries are leaked cells.
-static NS_HL_ATTR: GlobalCell<Table<c_int, NsHlTable>> =
+static NS_HL_ATTR: GlobalCell<Table<NS, NsHlTable>> =
     GlobalCell::new(HashMap::with_hasher(BuildHasherDefault::new()));
 
 /// One namespace's builtin-group table: `HLF_COUNT` attribute ids.
@@ -148,13 +149,13 @@ pub fn ns_hl_def(
     link_id: c_int,
     dict: Option<&KeyDict_highlight>,
 ) {
-    if ns_id == 0 {
+    if ns_id == Handle::NONE {
         let dict = dict.expect("the global table needs the caller's dict");
         set_hl_group(hl_id, attrs, dict, link_id);
         return;
     }
     let key = ColorKey {
-        ns_id,
+        ns_id: ns_id.get(),
         syn_id: hl_id,
     };
     let is_default = attrs.rgb_ae_attr.has(HlAttrFlags::DEFAULT);
@@ -168,7 +169,7 @@ pub fn ns_hl_def(
     let attr_id = if link_id > 0 {
         -1
     } else {
-        hl_get_syn_attr(ns_id, hl_id, attrs)
+        hl_get_syn_attr(ns_id.get(), hl_id, attrs)
     };
     let item = ColorItem {
         attr_id,
@@ -199,19 +200,19 @@ pub fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: bool) -> c
     // Guards the `hl_def` callback against asking about itself.
     static RECURSIVE: GlobalCell<c_int> = GlobalCell::new(0);
 
-    if *ns_hl == 0 {
+    if *ns_hl == Handle::NONE {
         // The default namespace has no provider, so stop here.
         return -1;
     }
-    if *ns_hl < 0 {
-        if ns_hl_active.get() <= 0 {
+    if *ns_hl < Handle::NONE {
+        if ns_hl_active.get() <= Handle::NONE {
             return -1;
         }
         *ns_hl = ns_hl_active.get();
     }
     let ns_id = *ns_hl;
     let key = ColorKey {
-        ns_id,
+        ns_id: ns_id.get(),
         syn_id: hl_id,
     };
 
@@ -222,7 +223,7 @@ pub fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: bool) -> c
     if !valid && hl_def != LUA_NOREF && RECURSIVE.get() == 0 {
         let mut args = ArrayBuf::<3>::new();
         args.push(Object::integer(ns_id.into()));
-        args.push(Object::string(String_0::from_cstr(syn_id2name(hl_id))));
+        args.push(Object::string(ApiString::from_cstr(syn_id2name(hl_id))));
         args.push(Object::boolean(link));
 
         let recursing = Depth::of(&RECURSIVE);
@@ -256,7 +257,7 @@ pub fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: bool) -> c
         item.attr_id = if fallback {
             -1
         } else {
-            hl_get_syn_attr(ns_id, hl_id, attrs)
+            hl_get_syn_attr(ns_id.get(), hl_id, attrs)
         };
         // The callback and `hl_get_syn_attr` both pump, so the provider
         // is resolved again rather than read through a stale pointer.
@@ -278,7 +279,7 @@ pub fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: bool) -> c
         return 0;
     }
     if item.link_global {
-        *ns_hl = 0;
+        *ns_hl = Handle::NONE;
     }
     item.link_id
 }
@@ -295,9 +296,9 @@ const UNSET: ColorItem = ColorItem {
 /// Re-resolves which namespace is active and makes its table the one
 /// [`hl_attr`] reads. Answers whether it changed, which is the caller's cue to redraw.
 pub fn hl_check_ns() -> bool {
-    let ns = if ns_hl_fast.get() > 0 {
+    let ns = if ns_hl_fast.get() > Handle::NONE {
         ns_hl_fast.get()
-    } else if ns_hl_win.get() >= 0 {
+    } else if ns_hl_win.get() >= Handle::NONE {
         ns_hl_win.get()
     } else {
         ns_hl_global.get()
@@ -308,8 +309,8 @@ pub fn hl_check_ns() -> bool {
 
     ns_hl_active.set(ns);
     hl_attr_active.set(&highlight_attr);
-    if ns > 0 {
-        update_ns_hl(ns);
+    if ns > Handle::NONE {
+        update_ns_hl(ns.get());
         if let Some(table) = NS_HL_ATTR.with(|tables| tables.get(&ns).map(|table| table.0)) {
             hl_attr_active.set(table);
         }
@@ -321,7 +322,7 @@ pub fn hl_check_ns() -> bool {
 /// [`hl_check_ns`] for the window about to be drawn, or for the global
 /// elements when there is none.
 pub fn win_check_ns_hl(window: Option<Win>) -> bool {
-    ns_hl_win.set(window.map_or(-1, |window| window.w_ns_hl));
+    ns_hl_win.set(window.map_or(Handle::new(-1), |window| window.w_ns_hl));
     hl_check_ns()
 }
 
@@ -333,7 +334,7 @@ pub fn win_check_ns_hl(window: Option<Win>) -> bool {
 /// what `syn_ns_id2attr` found.
 pub fn hl_ns_get_attrs(ns_id: c_int, hl_id: c_int, optional: Option<&mut bool>) -> Option<HlAttrs> {
     let mut opt = optional.as_deref().copied().unwrap_or(true);
-    let syn_attr = syn_ns_id2attr(ns_id, hl_id, &mut opt);
+    let syn_attr = syn_ns_id2attr(Handle::new(ns_id), hl_id, &mut opt);
     if let Some(optional) = optional {
         *optional = opt;
     }
@@ -390,7 +391,7 @@ pub fn hl_get_ui_attr(ns_id: c_int, idx: c_int, final_id: c_int, optional: bool)
 /// `invalid` forces the work even when the window has not asked for it.
 pub fn update_window_hl(mut window: Win, invalid: bool) {
     let ns_id = window.w_ns_hl;
-    update_ns_hl(ns_id);
+    update_ns_hl(ns_id.get());
     let hl_def = match window.w_ns_hl_attr {
         Some(table) if ns_id == window.w_ns_hl_active => table,
         _ => {
@@ -412,7 +413,7 @@ pub fn update_window_hl(mut window: Win, invalid: bool) {
     // A blending float always has a *named* normal group, because
     // `NormalFloat` always is one.
     let float_win = window.w_floating && !window.w_config.external;
-    window.w_hl_attr_normal = if float_win && hl_def(HLF_NFLOAT) != 0 && ns_id > 0 {
+    window.w_hl_attr_normal = if float_win && hl_def(HLF_NFLOAT) != 0 && ns_id > Handle::NONE {
         hl_def(HLF_NFLOAT)
     } else if hl_def(HLF_NONE) > 0 {
         hl_def(HLF_NONE)
@@ -437,7 +438,7 @@ pub fn update_window_hl(mut window: Win, invalid: bool) {
         for i in 0..8 {
             let id = window.w_config.border_hl_ids[i];
             let mut attr = if id != 0 {
-                hl_get_ui_attr(ns_id, HLF_BORDER, id, false)
+                hl_get_ui_attr(ns_id.get(), HLF_BORDER, id, false)
             } else {
                 hl_def(HLF_BORDER)
             };
@@ -472,14 +473,14 @@ pub fn update_ns_hl(ns_id: c_int) {
     if ns_id <= 0 {
         return;
     }
-    if provider_field(ns_id, |p| p.hl_cached) {
+    if provider_field(Handle::new(ns_id), |p| p.hl_cached) {
         return;
     }
 
     // The table, not a borrow of the map: resolving a group below can
     // re-enter and insert into the map, and the table does not move. Each
     // entry is resolved before the table is written.
-    let table = NS_HL_ATTR.with_mut(|tables| tables.entry(ns_id).or_default().0);
+    let table = NS_HL_ATTR.with_mut(|tables| tables.entry(Handle::new(ns_id)).or_default().0);
     for hlf in 1..HLF_COUNT {
         let id = syn_check_group(hlf_names[usize::try_from(hlf).unwrap_or(usize::MAX)].to_bytes());
         // These two are the groups where "undefined" is meaningful.
@@ -497,13 +498,13 @@ pub fn update_ns_hl(ns_id: c_int) {
     table.with_mut(|attrs| attrs[HLF_NONE as usize] = attr);
 
     // hl_get_ui_attr might have invalidated the decor provider.
-    provider_field(ns_id, |p| p.hl_cached = true);
+    provider_field(Handle::new(ns_id), |p| p.hl_cached = true);
 }
 
 /// The attribute a window's background cells are drawn with.
 pub fn win_bg_attr(window: Win) -> c_int {
     // A fast callback's namespace overrides the window's own cache.
-    if ns_hl_fast.get() < 0 {
+    if ns_hl_fast.get() < Handle::NONE {
         let local = if window.raw() == Win::current_raw() {
             window.w_hl_attr_normal
         } else {
@@ -528,7 +529,7 @@ pub(crate) fn win_hl_attr(window: Win, hlf: c_int) -> c_int {
     // `w_ns_hl_attr` is still `None` if highlights are checked before the
     // first redraw.
     let table = match window.w_ns_hl_attr {
-        Some(table) if ns_hl_fast.get() < 0 => table,
+        Some(table) if ns_hl_fast.get() < Handle::NONE => table,
         _ => hl_attr_active.get(),
     };
     table_attr(table, hlf)

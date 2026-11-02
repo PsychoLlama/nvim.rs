@@ -35,7 +35,7 @@ use crate::tui::terminfo::caps::{
     kTerm_parm_insert_line, kTerm_parm_left_cursor, kTerm_parm_right_cursor, kTerm_parm_up_cursor,
     kTerm_set_lr_margin,
 };
-use crate::types::{Integer, LineFlags, Rect, ScreenAttr, ScreenChar, String_0, TUIData, UCell};
+use crate::types::{ApiString, Integer, LineFlags, Rect, ScreenAttr, ScreenChar, TUIData, UCell};
 use core::ffi::c_int;
 use std::io::Write;
 use std::os::unix::ffi::OsStrExt;
@@ -608,7 +608,7 @@ fn repaint_row(tui: &mut TUIData, row: c_int, left: c_int, right: c_int) {
 /// The whole grid is printed unconditionally with the write path pointed at
 /// the file, so the result is the sequences a terminal would have received,
 /// not a rendering of them.
-pub fn tui_screenshot(tui: &mut TUIData, path: String_0) {
+pub fn tui_screenshot(tui: &mut TUIData, path: ApiString) {
     let path = std::ffi::OsStr::from_bytes(path.as_cstr().to_bytes());
     let Ok(mut file) = std::fs::File::create(path) else {
         return;

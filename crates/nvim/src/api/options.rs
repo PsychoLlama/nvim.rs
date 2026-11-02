@@ -39,8 +39,8 @@ use crate::option::{
     object_as_optval, option_has_scope, optval_as_object, set_option_direct, set_option_value_for,
 };
 use crate::types::{
-    AcoSave, ApiDict, Error, KeyDict_option, LineNr, Object, OptIndex, OptScope, OptVal,
-    OptionSetFlags, String_0, kErrorTypeValidation, uint64_t,
+    AcoSave, ApiDict, ApiString, Error, KeyDict_option, LineNr, Object, OptIndex, OptScope, OptVal,
+    OptionSetFlags, kErrorTypeValidation, uint64_t,
 };
 use crate::window::close_windows;
 use crate::winlayer::Buf;
@@ -149,7 +149,7 @@ fn option_target<'a>(opts: &'a KeyDict_option, name: &CStr) -> Result<OptionRequ
     // The key borrows `opts`' own bytes.
     let filetype = given_filetype
         .filter(|ft| !ft.is_null())
-        .map(String_0::as_cstr);
+        .map(ApiString::as_cstr);
     Ok(OptionRequest {
         opt_idx,
         opt_flags,
@@ -242,7 +242,7 @@ fn do_ft_buf(
 /// An `OptVal` borrowing the static string `text`, for the two option writes
 /// `do_ft_buf` makes: `set_option_direct` copies what it is given.
 fn static_option(text: &'static CStr) -> OptVal {
-    OptVal::string(String_0::from_cstr(text))
+    OptVal::string(ApiString::from_cstr(text))
 }
 
 /// Take the scratch buffer `do_ft_buf` made back out of existence.
@@ -260,7 +260,7 @@ fn wipe_ft_buf(mut buffer: Buf) {
 }
 
 /// The value of option `name`, at whatever scope `opts` names.
-pub fn nvim_get_option_value(name: String_0, opts: &mut KeyDict_option) -> Result<Object, Error> {
+pub fn nvim_get_option_value(name: ApiString, opts: &mut KeyDict_option) -> Result<Object, Error> {
     let target = option_target(opts, name.as_cstr())?;
 
     let mut aco: AcoSave = AcoSave::default();
@@ -304,7 +304,7 @@ pub fn nvim_get_option_value(name: String_0, opts: &mut KeyDict_option) -> Resul
 /// Set option `name` to `value`, at whatever scope `opts` names.
 pub fn nvim_set_option_value(
     channel_id: uint64_t,
-    name: String_0,
+    name: ApiString,
     value: Object,
     opts: &mut KeyDict_option,
 ) -> Result<(), Error> {
@@ -335,7 +335,7 @@ pub fn nvim_get_all_options_info() -> ApiDict {
 }
 
 /// Option `name`'s metadata, as seen at whatever scope `opts` names.
-pub fn nvim_get_option_info2(name: String_0, opts: &mut KeyDict_option) -> Result<ApiDict, Error> {
+pub fn nvim_get_option_info2(name: ApiString, opts: &mut KeyDict_option) -> Result<ApiDict, Error> {
     let target = option_target(opts, name.as_cstr())?;
     // The metadata is read off a buffer and a window whatever the scope, so
     // the two the caller did not name default to the current ones.

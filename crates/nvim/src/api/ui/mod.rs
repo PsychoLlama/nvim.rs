@@ -46,7 +46,7 @@ use crate::types::ui::{
     kUICmdline, kUIExtCount, kUIHlState, kUILinegrid, kUIMessages, kUIMultigrid, kUIPopupmenu,
 };
 use crate::types::{
-    ApiDict, Boolean, Error, Float, Handle, Integer, Object, ObjectType, RemoteUI, String_0,
+    ApiDict, ApiString, Boolean, Error, Float, Handle, Integer, Object, ObjectType, RemoteUI,
     UIExtension, kErrorTypeException, kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeString,
 };
 use crate::ui::state::{current_ui, t_colors, ui_ext_names};
@@ -122,7 +122,7 @@ pub fn nvim_ui_attach(
     // half-configured UI is simply dropped.
     let mut ui = RemoteUI::new(channel_id, width, height);
     for option in &options {
-        let name = String_0::from_bytes(option.key.bytes());
+        let name = ApiString::from_bytes(option.key.bytes());
         ui_set_option(&mut ui, true, name, option.value.clone())?;
     }
 
@@ -162,7 +162,7 @@ impl RemoteUI {
             pum_col: -1.0,
             pum_height: 0.0,
             pum_width: 0.0,
-            term_name: String_0::NULL,
+            term_name: ApiString::NULL,
             term_colors: 0,
             stdin_tty: false,
             stdout_tty: false,
@@ -223,7 +223,7 @@ pub fn nvim_ui_detach(channel_id: u64) -> Result<(), Error> {
 pub fn remote_ui_connect(channel_id: u64, server_addr: &CStr) -> Result<(), Error> {
     on_ui(channel_id, |ui| {
         let mut args = ArrayBuf::<1>::new();
-        args.push(Object::string(String_0::from_cstr(server_addr)));
+        args.push(Object::string(ApiString::from_cstr(server_addr)));
         packer::push_call(ui, c"connect", args.array());
     })
 }
@@ -245,7 +245,7 @@ pub fn nvim_ui_try_resize(channel_id: u64, width: Integer, height: Integer) -> R
 }
 
 /// Changes one negotiated option after attaching.
-pub fn nvim_ui_set_option(channel_id: u64, name: String_0, value: Object) -> Result<(), Error> {
+pub fn nvim_ui_set_option(channel_id: u64, name: ApiString, value: Object) -> Result<(), Error> {
     // Applied to the table's copy; what it means for the screen is
     // published afterwards, with the table no longer lent out.
     let publish = on_ui(channel_id, |ui| ui_set_option(ui, false, name, value))??;
@@ -274,7 +274,7 @@ enum Publish {
 fn ui_set_option(
     ui: &mut RemoteUI,
     init: bool,
-    name: String_0,
+    name: ApiString,
     value: Object,
 ) -> Result<Publish, Error> {
     // `name.data` can be null, which `as_cstr` answers as `c""` -- no
@@ -394,7 +394,7 @@ fn want_integer(name: &CStr, value: Object) -> Result<Integer, Error> {
 }
 
 /// [`want_boolean`] for a string.
-fn want_string(name: &CStr, value: Object) -> Result<String_0, Error> {
+fn want_string(name: &CStr, value: Object) -> Result<ApiString, Error> {
     if value.as_string().is_none() {
         return Err(wrong_type(name, kObjectTypeString, value));
     }
@@ -421,7 +421,7 @@ pub fn nvim_ui_try_resize_grid(
         // resize like any other.
         return nvim_ui_try_resize(channel_id, width, height);
     }
-    let (grid, width, height) = (grid as Handle, width as c_int, height as c_int);
+    let (grid, width, height) = (Handle::new(grid as c_int), width as c_int, height as c_int);
     ui_grid_resize(grid, width, height)
 }
 
@@ -473,6 +473,6 @@ pub fn nvim_ui_pum_set_bounds(
 }
 
 /// Forwards `content` to every UI that owns a terminal, as `ui_send`.
-pub fn nvim_ui_send(_channel_id: u64, content: String_0) {
+pub fn nvim_ui_send(_channel_id: u64, content: ApiString) {
     ui_call_ui_send(content);
 }

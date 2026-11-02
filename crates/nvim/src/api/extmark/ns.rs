@@ -23,6 +23,7 @@ use crate::global_cell::GlobalCell;
 use crate::registry::{IdSet, SlotTable, id_set, interned_key};
 use crate::types::{Handle, uint32_t};
 use crate::winlayer::{Win, tab_windows};
+use core::ffi::c_int;
 
 /// Namespace name -> id, in creation order.
 ///
@@ -34,7 +35,7 @@ pub(crate) static namespace_ids: GlobalCell<SlotTable<Box<[u8]>, Handle>> =
 /// The namespaces that are window-local rather than visible everywhere.
 /// Membership only; never walked.
 pub(crate) static namespace_localscope: GlobalCell<IdSet<uint32_t>> = GlobalCell::new(id_set());
-pub(crate) static next_namespace_id: GlobalCell<Handle> = GlobalCell::new(1 as Handle);
+pub(crate) static next_namespace_id: GlobalCell<Handle> = GlobalCell::new(Handle::new(1));
 
 /// The id `name` is registered under, if any.
 pub(crate) fn namespace_id_for(name: &[u8]) -> Option<Handle> {
@@ -67,21 +68,21 @@ fn hide_ns_in_window(mut win: Win, ns_id: uint32_t) {
     win.w_ns_set.remove(&ns_id);
 }
 
-pub fn nvim_create_namespace(name: String_0) -> Integer {
+pub fn nvim_create_namespace(name: ApiString) -> Integer {
     let bytes = name.as_bytes();
     if let Some(id) = namespace_id_for(bytes)
-        && id > 0
+        && id > Handle::NONE
     {
-        return id as Integer;
+        return Integer::from(id);
     }
     let id = next_namespace_id.get();
-    next_namespace_id.set(id + 1);
+    next_namespace_id.set(id.next());
     // The nameless namespaces -- one per anonymous `nvim_create_namespace("")`
     // -- are never interned, so each call answers a fresh id.
     if !bytes.is_empty() {
         namespace_ids.with_mut(|ids| ids.insert(interned_key(bytes), id));
     }
-    id as Integer
+    Integer::from(id)
 }
 
 pub fn nvim_get_namespaces() -> ApiDict {
@@ -90,9 +91,9 @@ pub fn nvim_get_namespaces() -> ApiDict {
         for (name, id) in ids.entries() {
             // `ns_key` terminated the key, and it is re-measured -- so a name
             // with an interior NUL is answered truncated, as it was when the
-            // key was a `String_0`.
+            // key was a `ApiString`.
             let key = crate::cstr::until_nul(name);
-            let value = Object::integer(*id as Integer);
+            let value = Object::integer(Integer::from(*id));
             retval.insert(key, value);
         }
         retval
@@ -119,7 +120,7 @@ pub fn ns_initialized(ns: uint32_t) -> bool {
     if ns < 1 as uint32_t {
         return false;
     }
-    ns < next_namespace_id.get() as uint32_t
+    ns < next_namespace_id.get().get() as uint32_t
 }
 
 // `nvim__ns_set` is an API method's own name, published over msgpack-RPC.
@@ -141,7 +142,7 @@ pub fn nvim__ns_set(ns_id: Integer, opts: &mut KeyDict_ns_opts) -> Result<(), Er
             // refuses it -- the transpile read its bytes as an integer.
             let item = &wins[i];
             let win: Integer = item.as_handle().or_else(|| item.as_integer()).unwrap_or(-1);
-            let Some(wp) = find_window_by_handle(win as WindowHandle)? else {
+            let Some(wp) = find_window_by_handle(Handle::new(win as c_int))? else {
                 return Ok(());
             };
             windows.insert(wp.raw());
@@ -202,7 +203,7 @@ pub fn nvim__ns_get(ns_id: Integer) -> Result<KeyDict_ns_opts, Error> {
     windows = Array::with_capacity(count);
     for win in tab_windows() {
         if window_shows_ns(win, ns_id as uint32_t) {
-            windows.push(Object::integer(win.handle() as Integer));
+            windows.push(Object::integer(Integer::from(win.handle())));
         }
     }
     opts.wins = Some(windows);

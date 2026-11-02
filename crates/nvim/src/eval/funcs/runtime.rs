@@ -469,7 +469,7 @@ pub fn f_tabpagebuflist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
     // `firstwin` rather than in the tab page record, which is only
     // updated on the way out.
     for wp in windows_in_tab(tab) {
-        list.push_number(wp.w_buffer.handle() as VarNumber);
+        list.push_number(wp.w_buffer.handle().get() as VarNumber);
     }
 }
 

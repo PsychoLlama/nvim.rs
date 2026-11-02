@@ -157,7 +157,7 @@ pub fn setaltfname(ffname: Option<&CStr>, sfname: Option<&CStr>, lnum: LineNr) -
     if let Some(buf) = buf
         && !cmdmod_has(CmdModFlags::KEEPALT)
     {
-        current_win().w_alt_fnum = buf.handle as c_int;
+        current_win().w_alt_fnum = buf.handle.get();
     }
     buf
 }

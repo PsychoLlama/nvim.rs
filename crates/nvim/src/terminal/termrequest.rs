@@ -34,7 +34,7 @@ use crate::event_queue::{self, ParkingQueue, QueueId};
 use crate::highlight::hl_add_url;
 use crate::types::AutoEvent;
 use crate::types::builders::{ArrayBuf, DictBuf};
-use crate::types::{Event, Handle, Object, RefcountSize, String_0, VTermTerminator, Vv};
+use crate::types::{ApiString, Event, Handle, Object, RefcountSize, VTermTerminator, Vv};
 use crate::vterm::host::{Fallbacks, Fragment, Value};
 use crate::vterm::pen::set_pen_attr;
 use crate::vterm::state::StateCx;
@@ -118,7 +118,7 @@ fn emit_termrequest(mut request: TermRequest) {
 
 /// The body of [`emit_termrequest`] once the terminal is known to be alive.
 fn report(request: &mut TermRequest, mut term: Term, buffer: Buf) {
-    let sequence = String_0::from_bytes(&request.sequence);
+    let sequence = ApiString::from_bytes(&request.sequence);
     set_vim_var_string(Vv::Termrequest, Some(sequence.as_bytes()));
 
     // Rows evicted since the sequence arrived have shifted every buffer
@@ -168,7 +168,7 @@ fn report(request: &mut TermRequest, mut term: Term, buffer: Buf) {
         term.pending.send = Some(held);
     }
 
-    if term.buf_handle == 0 && term.refcount == RefcountSize::ZERO {
+    if term.buf_handle == Handle::NONE && term.refcount == RefcountSize::ZERO {
         term.destroy = true;
         // Read out before the call: the channel's close callback is free to
         // free the terminal.

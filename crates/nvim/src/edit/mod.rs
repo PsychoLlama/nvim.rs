@@ -174,8 +174,8 @@ use crate::textobject::{bck_word, fwd_word};
 use crate::types::AutoEvent;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    AcoSave, CharsizeArg, CmdModFlags, ColNr, INSCHAR_CTRLV, INSCHAR_FORMAT, INSCHAR_NO_FEX,
-    LineNr, MB_MAXBYTES, OptInt, PUT_CURSEND, PUT_FIXINDENT, Pos, ScreenChar, String_0, Vv,
+    AcoSave, ApiString, CharsizeArg, CmdModFlags, ColNr, INSCHAR_CTRLV, INSCHAR_FORMAT,
+    INSCHAR_NO_FEX, LineNr, MB_MAXBYTES, OptInt, PUT_CURSEND, PUT_FIXINDENT, Pos, ScreenChar, Vv,
     int32_t, int64_t, size_t,
 };
 use crate::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
@@ -297,7 +297,7 @@ state_record! {
     update_Insstart_orig: bool = true;
     /// The text of the last insert, the redo-buffer spelling, with the
     /// command that started it on the front -- see [`lastins`].
-    last_insert: String_0 = String_0::NULL;
+    last_insert: ApiString = ApiString::NULL;
     last_insert_skip: ::core::ffi::c_int = 0;
     new_insert_skip: ::core::ffi::c_int = 0;
     did_restart_edit: ::core::ffi::c_int = 0;

@@ -61,7 +61,7 @@ use crate::types::builders::ArrayBuf;
 use crate::types::libc::STDIN_FILENO;
 use crate::types::termios;
 use crate::types::{
-    Array, Integer, KEY_BUFFER_SIZE, KeyEncoding, Object, RStream, String_0, TermInput,
+    ApiString, Array, Integer, KEY_BUFFER_SIZE, KeyEncoding, Object, RStream, TermInput,
     TermInputCallbacks, TermKeyKey, TerminfoEntry, size_t, uv_handle_t, uv_timer_t,
 };
 use ::libc::tcgetattr;
@@ -238,7 +238,7 @@ pub fn tinput_stop(input: &mut TermInput) {
 
 /// Send everything staged to the editor, as a paste or as typed keys.
 fn tinput_flush(input: &mut TermInput) {
-    let keys = String_0::from_bytes(&input.key_buffer[..input.key_buffer_len]);
+    let keys = ApiString::from_bytes(&input.key_buffer[..input.key_buffer_len]);
     if input.paste != PASTE_NONE {
         let mut args = ArrayBuf::<3>::new();
         args.push(Object::string(keys));
@@ -286,7 +286,7 @@ fn send(name: &CStr, args: Array) {
 fn send_term_event(response: &mut [u8]) {
     let mut args = ArrayBuf::<2>::new();
     args.push(Object::literal("termresponse"));
-    args.push(Object::string(String_0::from_bytes(response)));
+    args.push(Object::string(ApiString::from_bytes(response)));
     send(c"nvim_ui_term_event", args.array());
 }
 

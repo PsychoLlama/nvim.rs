@@ -506,7 +506,7 @@ pub fn buf_contents_changed(buffer: Buf) -> bool {
 pub fn buf_open_scratch(bufnr: Handle, bufname: Option<&CStr>) -> Result<(), Failed> {
     let one = newlnum::ONE as LineNr;
     let hide = EcmdFlags::HIDE;
-    edit_file(bufnr, None, one, hide, Win::current())?;
+    edit_file(bufnr.get(), None, one, hide, Win::current())?;
     if let Some(bufname) = bufname {
         fire(AutoEvent::BufFilePre, Buf::current());
         let _ = setfname(Buf::current(), Some(bufname), None, true);

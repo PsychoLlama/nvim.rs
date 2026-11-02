@@ -43,7 +43,7 @@ use crate::options::{kOptRdbFlagCompositor, kOptRdbFlagInvalid};
 use crate::os::time::os_sleep;
 use crate::types::ui::{kLineFlagInvalid, kLineFlagWrap, kUIMultigrid};
 use crate::types::{
-    Boolean, Handle, Integer, LineFlags, NUL, RemoteUI, ScreenAttr, ScreenChar, String_0,
+    ApiString, Boolean, Handle, Integer, LineFlags, NUL, RemoteUI, ScreenAttr, ScreenChar,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{
@@ -333,7 +333,7 @@ fn raise_grid(mut grid: GridRef, new_index: usize) {
 }
 
 pub fn ui_comp_grid_cursor_goto(grid_handle: Integer, r: Integer, c: Integer) {
-    if !ui_comp_set_grid(grid_handle as Handle) {
+    if !ui_comp_set_grid(Handle::new(grid_handle as c_int)) {
         return;
     }
     let cursor_row = cur_layer().comp_row + r as c_int;
@@ -641,7 +641,7 @@ pub fn ui_comp_raw_line(
     chunk: &[ScreenChar],
     attrs: &[ScreenAttr],
 ) {
-    if !ui_comp_should_draw() || !ui_comp_set_grid(grid as Handle) {
+    if !ui_comp_should_draw() || !ui_comp_set_grid(Handle::new(grid as c_int)) {
         return;
     }
     let cur = cur_layer();
@@ -709,7 +709,7 @@ pub fn ui_comp_msg_set_pos(
     _grid: Integer,
     row: Integer,
     scrolled: Boolean,
-    sep_char: &String_0,
+    sep_char: &ApiString,
     _zindex: Integer,
     _compindex: Integer,
 ) {
@@ -770,7 +770,7 @@ pub fn ui_comp_grid_scroll(
     rows: Integer,
     cols: Integer,
 ) {
-    if !ui_comp_should_draw() || !ui_comp_set_grid(grid as Handle) {
+    if !ui_comp_should_draw() || !ui_comp_set_grid(Handle::new(grid as c_int)) {
         return;
     }
     let cur = cur_layer();

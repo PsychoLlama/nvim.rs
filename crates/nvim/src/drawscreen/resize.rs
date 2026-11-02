@@ -68,7 +68,7 @@ pub fn default_grid_alloc() -> bool {
 
     grid.comp_height = Rows.get();
     grid.comp_width = Columns.get();
-    grid.handle = DEFAULT_GRID_HANDLE as Handle;
+    grid.handle = Handle::new(DEFAULT_GRID_HANDLE);
 
     RESIZING.set(false);
     true
@@ -90,7 +90,7 @@ pub fn screenclear() {
     ui_call_grid_clear(1);
     ui_comp_set_screen_valid(true);
 
-    ns_hl_fast.set(-1);
+    ns_hl_fast.set(Handle::new(-1));
 
     clear_cmdline.set(false);
     mode_displayed.set(false);

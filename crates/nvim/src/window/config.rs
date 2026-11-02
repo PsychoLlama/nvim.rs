@@ -33,7 +33,7 @@ use crate::pos::MAXCOL;
 use crate::search::FORWARD;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    Boolean, ColNr, Error, FAIL, Float, Integer, LineNr, OK, Pos, String_0, SwitchWin, TryState,
+    ApiString, Boolean, ColNr, Error, FAIL, Float, Integer, LineNr, OK, Pos, SwitchWin, TryState,
     WinConfig, WinStyle, WindowHandle, int64_t, kErrorTypeException, kFloatAnchorEast,
     kFloatAnchorSouth, kFloatRelativeLaststatus, kFloatRelativeTabline, kFloatRelativeWindow,
     size_t,
@@ -80,7 +80,7 @@ fn set_buf(win: Win, buffer: Buf) -> Result<(), Error> {
         }
         let (goto, first, fwd) = (DOBUF_GOTO as c_int, DOBUF_FIRST as c_int, FORWARD as c_int);
         let nr = buffer.handle();
-        let _ = do_buffer(goto, first, fwd, nr, 0);
+        let _ = do_buffer(goto, first, fwd, nr.get(), 0);
         if !switchwin.sw_same_win {
             P_ACD.set(save_acd);
         }
@@ -160,7 +160,7 @@ fn ext_win_position(window: Win, validate: bool) {
         // Tell the UI where the window is.
         {
             ui_call_win_pos(
-                wp.w_grid_alloc.handle as Integer,
+                Integer::from(wp.w_grid_alloc.handle),
                 wp.handle as WindowHandle,
                 wp.w_winrow as Integer,
                 wp.w_wincol as Integer,
@@ -172,7 +172,10 @@ fn ext_win_position(window: Win, validate: bool) {
     }
     let c = wp.w_config.clone();
     if c.external {
-        ui_call_win_external_pos(wp.w_grid_alloc.handle as Integer, wp.handle as WindowHandle);
+        ui_call_win_external_pos(
+            Integer::from(wp.w_grid_alloc.handle),
+            wp.handle as WindowHandle,
+        );
         return;
     }
 
@@ -228,7 +231,7 @@ fn ext_win_position(window: Win, validate: bool) {
 
     if c.hide {
         if ui_has(kUIMultigrid) {
-            ui_call_win_hide(wp.w_grid_alloc.handle as Integer);
+            ui_call_win_hide(Integer::from(wp.w_grid_alloc.handle));
         }
         ui_comp_remove_grid(wp.grid_alloc());
         return;
@@ -236,13 +239,13 @@ fn ext_win_position(window: Win, validate: bool) {
     let (h, w) = (wp.w_height_outer, wp.w_width_outer);
     ui_comp_put_grid(wp.grid_alloc(), comp_row, comp_col, h, w, valid, false);
     if ui_has(kUIMultigrid) {
-        let anchor = String_0::from_cstr(FLOAT_ANCHOR_STR[c.anchor as usize]);
+        let anchor = ApiString::from_cstr(FLOAT_ANCHOR_STR[c.anchor as usize]);
         let anchor_grid = grid.handle;
         ui_call_win_float_pos(
-            wp.w_grid_alloc.handle as Integer,
+            Integer::from(wp.w_grid_alloc.handle),
             wp.handle as WindowHandle,
             anchor,
-            anchor_grid as Integer,
+            Integer::from(anchor_grid),
             row,
             col,
             c.mouse as Boolean,
@@ -374,7 +377,7 @@ fn ext_win_viewport(window: Win) {
     }
     {
         ui_call_win_viewport(
-            window.w_grid_alloc.handle as Integer,
+            Integer::from(window.w_grid_alloc.handle),
             window.handle as WindowHandle,
             (window.w_topline - 1) as Integer,
             ev_botline as Integer,

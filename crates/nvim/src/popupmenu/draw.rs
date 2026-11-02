@@ -26,7 +26,7 @@ use crate::winlayer::Win;
 /// Only the border half is used here, but `grid_draw_border` also reads the
 /// title and footer fields, so the whole thing has to start out empty.
 const WIN_CONFIG_INIT: WinConfig = WinConfig {
-    window: 0,
+    window: Handle::NONE,
     bufpos: LPos { lnum: -1, col: 0 },
     height: 0,
     width: 0,
@@ -723,7 +723,7 @@ pub fn pum_redraw() {
     if !grid.is_allocated() || grid.rows != rows || grid.cols != cols {
         grid_alloc(&mut grid, rows, cols, !invalid_grid, false);
         ui_call_grid_resize(
-            grid.handle as Integer,
+            Integer::from(grid.handle),
             grid.cols as Integer,
             grid.rows as Integer,
         );

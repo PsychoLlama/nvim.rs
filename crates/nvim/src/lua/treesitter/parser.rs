@@ -17,6 +17,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::types::Handle;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr::NonNull;
 use std::rc::Rc;
@@ -203,7 +204,7 @@ fn parser_parse(stack: &mut Stack) -> Result<c_int, Raise> {
             let handle = wrap_u32(stack.to_integer(At::arg(3))).cast_signed();
             // The parse runs no editor code, so the buffer the registry
             // answers stays live for all of it.
-            match winlayer::buffer(handle) {
+            match winlayer::buffer(Handle::new(handle)) {
                 Some(buffer) => Source::Buffer(buffer),
                 None => {
                     return Err(Raise::argument(

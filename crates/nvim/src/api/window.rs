@@ -18,6 +18,7 @@ use crate::cursor::check_cursor_col;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID};
 use crate::eval::window::{restore_win, switch_win, win_execute_after, win_execute_before};
 use crate::ex_docmd::ex_win_close;
+use crate::types::Handle;
 use crate::winlayer::TabPage;
 
 use crate::api::private::validate::{Bad, err_expected, err_invalid, err_out_of_range};
@@ -30,8 +31,8 @@ use crate::os::cshim::gettext;
 use crate::plines::{win_get_fill, win_text_height};
 use crate::pos::MAXCOL;
 use crate::types::{
-    ApiDict, Array, Boolean, BufferHandle, Error, Integer, KeyDict_win_text_height, LineNr, LuaRef,
-    Object, String_0, SwitchWin, TabpageHandle, WinExecute, WindowHandle, int64_t, size_t,
+    ApiDict, ApiString, Array, Boolean, BufferHandle, Error, Integer, KeyDict_win_text_height,
+    LineNr, LuaRef, Object, SwitchWin, TabpageHandle, WinExecute, WindowHandle, int64_t, size_t,
 };
 use crate::window::{
     can_close_in_cmdwin, win_close, win_close_othertab, win_find_tabpage, win_get_tabwin,
@@ -43,7 +44,7 @@ use crate::winlayer::graph::{cmdwin_buf, cmdwin_old_curwin, cmdwin_win};
 /// The buffer `win` is showing.
 pub fn nvim_win_get_buf(win: WindowHandle) -> Result<BufferHandle, Error> {
     let Some(w) = find_window_by_handle(win)? else {
-        return Ok(0 as BufferHandle);
+        return Ok(Handle::NONE);
     };
     Ok(w.buffer().handle as BufferHandle)
 }
@@ -149,7 +150,7 @@ pub fn nvim_win_set_width(win: WindowHandle, width: Integer) -> Result<(), Error
 }
 
 /// The window-scoped variable `name`.
-pub fn nvim_win_get_var(win: WindowHandle, name: String_0) -> Result<Object, Error> {
+pub fn nvim_win_get_var(win: WindowHandle, name: ApiString) -> Result<Object, Error> {
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(Object::Nil);
     };
@@ -157,7 +158,7 @@ pub fn nvim_win_get_var(win: WindowHandle, name: String_0) -> Result<Object, Err
 }
 
 /// Set the window-scoped variable `name`.
-pub fn nvim_win_set_var(win: WindowHandle, name: String_0, value: Object) -> Result<(), Error> {
+pub fn nvim_win_set_var(win: WindowHandle, name: ApiString, value: Object) -> Result<(), Error> {
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(());
     };
@@ -165,7 +166,7 @@ pub fn nvim_win_set_var(win: WindowHandle, name: String_0, value: Object) -> Res
 }
 
 /// Remove the window-scoped variable `name`.
-pub fn nvim_win_del_var(win: WindowHandle, name: String_0) -> Result<(), Error> {
+pub fn nvim_win_del_var(win: WindowHandle, name: ApiString) -> Result<(), Error> {
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(());
     };
@@ -193,7 +194,7 @@ fn tab_of(win: Win) -> TabPage {
 /// The tab page `win` is on.
 pub fn nvim_win_get_tabpage(win: WindowHandle) -> Result<TabpageHandle, Error> {
     let Some(w) = find_window_by_handle(win)? else {
-        return Ok(0 as TabpageHandle);
+        return Ok(Handle::NONE);
     };
     let handle = tab_of(w).handle;
     Ok(handle as TabpageHandle)
@@ -282,7 +283,7 @@ pub fn nvim_win_set_hl_ns(win: WindowHandle, ns_id: Integer) -> Result<(), Error
     if ns_id < -1 {
         return Err(err_invalid(c"namespace", Bad::Unsaid));
     }
-    w.w_ns_hl = number_as_int(ns_id);
+    w.w_ns_hl = Handle::new(number_as_int(ns_id));
     w.w_hl_needs_update = true;
     w.redraw_later(UPD_NOT_VALID);
     Ok(())

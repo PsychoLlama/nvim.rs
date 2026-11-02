@@ -141,7 +141,7 @@ fn buf_win_common(args: &[TypVal], result: &mut TypVal, get_nr: bool) {
         Some(wp.buffer()) == buf && (!get_nr || wp.has_winnr(tp))
     });
     result.write_number(match found {
-        Some(wp) => VarNumber::from(if get_nr { winnr } else { wp.handle }),
+        Some(wp) => VarNumber::from(if get_nr { winnr } else { wp.handle.get() }),
         None => -1,
     });
 }

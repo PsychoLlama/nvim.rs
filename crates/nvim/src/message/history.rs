@@ -36,9 +36,9 @@ pub(crate) struct Entry {
     seq: u64,
     msg: HlMessage,
     /// The `ext_messages` kind this message was shown under.
-    /// [`String_0::NULL`] is "no kind", which is not the empty kind: a UI
+    /// [`ApiString::NULL`] is "no kind", which is not the empty kind: a UI
     /// reading the history sees the difference.
-    kind: String_0,
+    kind: ApiString,
     /// Only `g<` shows it; the next real message displaces it.
     temp: bool,
     append: bool,
@@ -123,7 +123,7 @@ pub(crate) fn msg_hist_add(bytes: &[u8], hl_id: c_int) {
         return;
     }
 
-    let text = String_0::from_bytes(text);
+    let text = ApiString::from_bytes(text);
     msg_hist_add_chunks([HlMessageChunk { text, hl_id }], false);
 }
 
@@ -145,7 +145,7 @@ pub(crate) fn msg_hist_add_multihl(msg: HlMessage, temp: bool) {
         return;
     }
 
-    let kind = msg_ext_kind.with(String_0::clone);
+    let kind = msg_ext_kind.with(ApiString::clone);
     // NOTE: this does not encode whether the message was actually appended
     // to the previous history entry. `append` is currently only true for
     // `:echon`, which is stored as a temporary entry for `g<`, where it is
@@ -257,7 +257,7 @@ struct Shown {
     seq: u64,
     /// Deep: the chunks' strings are the copy's own.
     chunks: Vec<HlMessageChunk>,
-    kind: String_0,
+    kind: ApiString,
     temp: bool,
     append: bool,
 }
@@ -393,7 +393,7 @@ mod tests {
             history.entries.push_back(Entry {
                 seq,
                 msg: Vec::new(),
-                kind: String_0::NULL,
+                kind: ApiString::NULL,
                 temp,
                 append: false,
             });

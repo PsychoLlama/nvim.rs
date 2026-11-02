@@ -49,7 +49,7 @@ use crate::state::mode::restart_edit;
 use crate::statusline::state::stl_syntax;
 use crate::statusline::{FmtSource, build_stl_text};
 use crate::terminal::buf_terminal_running;
-use crate::types::String_0;
+use crate::types::ApiString;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     ExArg, IOSIZE, LineNr, MAXPATHL, OptIndex, OptInt, OptionSetFlags, ShmFlag, StlSyntax, int64_t,
@@ -174,7 +174,8 @@ fn skip(buffer: Buf, arg: &CStr, forceit: c_int) -> bool {
         || has_flag(arg, b'=') && buffer.b_p_ro == 0
         || has_flag(arg, b'x') && !buffer.b_flags.has(BufFlags::READERR)
         || has_flag(arg, b'%') && buffer.raw() != Buf::current_raw()
-        || has_flag(arg, b'#') && (buffer.raw() == Buf::current_raw() || alt_fnum != buffer.handle)
+        || has_flag(arg, b'#')
+            && (buffer.raw() == Buf::current_raw() || alt_fnum != buffer.handle.get())
 }
 
 /// The name to show for `buffer`, as upstream cut it into `NameBuff`.
@@ -219,7 +220,7 @@ fn show(buffer: Buf, by_time: bool, name: &XString) {
     let listed = if buffer.b_p_bl != 0 { b' ' } else { b'u' };
     let current = if buffer.raw() == Buf::current_raw() {
         b'%'
-    } else if current_win().w_alt_fnum == buffer.handle {
+    } else if current_win().w_alt_fnum == buffer.handle.get() {
         b'#'
     } else {
         b' '
@@ -510,9 +511,9 @@ fn value_change(now: Option<&[u8]>, last: &GlobalCell<Option<XString>>) -> bool 
 pub fn resettitle() {
     // A title the UI has never been told is upstream's null pointer, which
     // `cstr_to_string` answered the empty string for.
-    let icon = lasticon.with(|value| String_0::from_bytes(value.as_deref().unwrap_or_default()));
+    let icon = lasticon.with(|value| ApiString::from_bytes(value.as_deref().unwrap_or_default()));
     ui_call_set_icon(icon);
-    let title = lasttitle.with(|value| String_0::from_bytes(value.as_deref().unwrap_or_default()));
+    let title = lasttitle.with(|value| ApiString::from_bytes(value.as_deref().unwrap_or_default()));
     ui_call_set_title(title);
 }
 

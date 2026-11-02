@@ -45,10 +45,11 @@ use crate::eval::userfunc::FuncFlags;
 use crate::eval::userfunc::{find_func, register_luafunc};
 use crate::lua::executor::api_new_luaref;
 use crate::types::{
-    ApiDict, Array, BoolVarValue, DictItem, DictKey, Error, Float, Integer, KeyValuePair, ListItem,
-    Object, String_0, TypVal, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeBoolean,
-    kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef,
-    kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, kSpecialVarNull,
+    ApiDict, ApiString, Array, BoolVarValue, DictItem, DictKey, Error, Float, Integer,
+    KeyValuePair, ListItem, Object, TypVal, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray,
+    kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger,
+    kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow,
+    kSpecialVarNull,
 };
 
 /// The `From<&TypVal> for Object` sink: upstream's `EncodedData`.
@@ -134,7 +135,7 @@ impl TypvalSink for ObjectSink {
     }
 
     fn conv_string(&mut self, bytes: &[u8]) -> Flow {
-        self.emit(Object::string(String_0::from_bytes(bytes)));
+        self.emit(Object::string(ApiString::from_bytes(bytes)));
         Flow::Go
     }
 
@@ -146,7 +147,7 @@ impl TypvalSink for ObjectSink {
 
     /// A blob is bytes, and so is a `String` object.
     fn conv_blob(&mut self, bytes: &[u8]) {
-        self.emit(Object::string(String_0::from_bytes(bytes)));
+        self.emit(Object::string(ApiString::from_bytes(bytes)));
     }
 
     /// A funcref that is really a Lua function goes back as a `LuaRef`;
@@ -204,7 +205,7 @@ impl TypvalSink for ObjectSink {
     ///
     /// The key never becomes an `Object`: a [`DictKey`] copies a short one --
     /// which an API key almost always is -- into the entry itself, where a
-    /// `String_0` would be an `xmalloc` and an `xfree` per key, and half of
+    /// `ApiString` would be an `xmalloc` and an `xfree` per key, and half of
     /// the allocations a conversion makes are keys.
     ///
     fn conv_dict_key(&mut self, key: &[u8]) -> Flow {

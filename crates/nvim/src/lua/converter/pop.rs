@@ -19,7 +19,7 @@ use crate::lua::stack::{At, Kind, Stack};
 use crate::memory::memchr_in;
 use crate::message_fmt::msg_cstr;
 use crate::types::{
-    ApiDict, Array, Boolean, DictKey, Error, Float, Handle, Integer, LuaRef, ObjectType, String_0,
+    ApiDict, ApiString, Array, Boolean, DictKey, Error, Float, Handle, Integer, LuaRef, ObjectType,
     kErrorTypeValidation, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat, kObjectTypeNil,
     lua_Number, size_t,
 };
@@ -146,10 +146,10 @@ pub(crate) fn classify_table(stack: &mut Stack) -> LuaTableProps {
 }
 
 /// Pop a Lua string, copied out of the Lua state.
-pub fn pop_string(stack: &mut Stack) -> Result<String_0, Error> {
+pub fn pop_string(stack: &mut Stack) -> Result<ApiString, Error> {
     // The copy has to happen before the pop: the bytes are the Lua string's
     // own and the collector may take them afterwards.
-    let popped = stack.string(At::TOP).map(String_0::from_bytes);
+    let popped = stack.string(At::TOP).map(ApiString::from_bytes);
     stack.pop(1);
     popped.ok_or_else(|| Error::validation(c"Expected Lua string"))
 }
@@ -342,7 +342,7 @@ pub fn pop_handle(stack: &mut Stack) -> Result<Handle, Error> {
     let ret = if stack.kind(At::TOP) != Kind::Number {
         Err(Error::validation(c"Expected Lua number"))
     } else {
-        Ok(stack.to_number(At::TOP) as Handle)
+        Ok(Handle::new((stack.to_number(At::TOP)) as c_int))
     };
     stack.pop(1);
     ret

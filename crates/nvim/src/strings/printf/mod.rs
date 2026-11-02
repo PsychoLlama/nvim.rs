@@ -88,6 +88,13 @@ fmt_arg_from!(
     f64 => Float as f64,
 );
 
+impl From<crate::types::Handle> for FmtArg<'_> {
+    #[inline(always)]
+    fn from(value: crate::types::Handle) -> Self {
+        FmtArg::Int(i64::from(value))
+    }
+}
+
 impl From<isize> for FmtArg<'_> {
     #[inline(always)]
     fn from(value: isize) -> Self {

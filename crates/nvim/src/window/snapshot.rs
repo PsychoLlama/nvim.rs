@@ -391,7 +391,7 @@ pub fn win_ui_flush(validate: bool) {
                     ui_ext_win_position(wp, validate);
                 } else {
                     // A window of another tab page is not on the screen.
-                    ui_call_win_hide(wp.w_grid_alloc.handle as Integer);
+                    ui_call_win_hide(Integer::from(wp.w_grid_alloc.handle));
                     wp.w_pos_changed = false;
                 }
                 wp.w_grid_alloc.pending_comp_index_update = false;

@@ -450,8 +450,12 @@ pub(crate) fn get_complete_info(what_list: Option<&List>, retdict: &mut Dict) {
     if ret.is_ok() && what_flag & CI_WHAT_SELECTED != 0 {
         ret = add_nr(retdict, "selected", selected_idx as VarNumber);
         if let Some(wp) = win_float_find_preview() {
-            let _ = add_nr(retdict, "preview_winid", wp.handle as VarNumber);
-            let _ = add_nr(retdict, "preview_bufnr", wp.buffer().handle as VarNumber);
+            let _ = add_nr(retdict, "preview_winid", wp.handle.get() as VarNumber);
+            let _ = add_nr(
+                retdict,
+                "preview_bufnr",
+                wp.buffer().handle.get() as VarNumber,
+            );
         }
     }
     if ret.is_ok() && selected_idx != -1 && has_completed {

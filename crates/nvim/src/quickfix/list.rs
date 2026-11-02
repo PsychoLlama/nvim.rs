@@ -356,7 +356,7 @@ fn adjust_entries(
             if got_int.get() {
                 break;
             }
-            if entry.fnum != buffer.handle {
+            if entry.fnum != buffer.handle.get() {
                 continue;
             }
             found_one = true;

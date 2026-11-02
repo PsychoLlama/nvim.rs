@@ -28,7 +28,7 @@ pub fn nvim_buf_set_text(
     if replacement.is_empty() {
         // An empty replacement deletes the range, which is the same as
         // replacing it with one empty line.
-        replacement.push(Object::string(String_0::from_cstr(c"")));
+        replacement.push(Object::string(ApiString::from_cstr(c"")));
     }
     let Some(b) = api_buf_ensure_loaded(buf)? else {
         return Ok(());
@@ -89,9 +89,9 @@ pub fn nvim_buf_set_text(
     // Every item is a String: `check_string_array` above turned anything else
     // into an error.
     let only_strings = "check_string_array accepted only Strings";
-    let first_item: String_0 = replacement[0].as_string().expect(only_strings).clone();
+    let first_item: ApiString = replacement[0].as_string().expect(only_strings).clone();
     // SAFETY: as above.
-    let last_item: String_0 = replacement[last_index]
+    let last_item: ApiString = replacement[last_index]
         .as_string()
         .expect(only_strings)
         .clone();

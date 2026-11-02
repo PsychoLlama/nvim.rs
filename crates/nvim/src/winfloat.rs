@@ -23,6 +23,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::types::Handle;
 use crate::winlayer::cmdwin_window;
 use crate::winlayer::prev_window;
 use core::ffi::{CStr, c_int};
@@ -77,7 +78,7 @@ const NO_VIRT_TEXT: VirtText = VirtText::new();
 /// the fields it cares about. (`popupmenu/draw.rs` keeps its own copy of the
 /// same C macro, for the border it draws without a window.)
 pub(crate) const WIN_CONFIG_INIT: WinConfig = WinConfig {
-    window: 0,
+    window: Handle::NONE,
     bufpos: LPos { lnum: -1, col: 0 },
     height: 0,
     width: 0,
@@ -309,7 +310,7 @@ fn alloc_new_float(last: bool, fconfig: &WinConfig) -> Result<Option<Win>, Error
     } else {
         last_nofloat(None)
     };
-    if fconfig.window != 0 {
+    if fconfig.window != Handle::NONE {
         debug_assert!(!last, "!last");
         let Some(parent) = find_window_by_handle(fconfig.window)? else {
             return Ok(None);

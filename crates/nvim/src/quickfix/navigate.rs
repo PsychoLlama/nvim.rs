@@ -335,7 +335,7 @@ pub fn ex_cbelow(excmd: &mut ExArg) {
     let n = if excmd.addr_count > 0 { excmd.line2 } else { 0 };
     let errornr = Adjacent {
         entries: &qi.current_list().entries,
-        bnr: Buf::current().handle,
+        bnr: Buf::current().handle.get(),
         pos,
         linewise,
     }

@@ -172,7 +172,7 @@ impl DoTag {
             old_idx: idx,
             prev_idx: idx,
             cur_match: 0,
-            cur_fnum: Buf::current().handle,
+            cur_fnum: Buf::current().handle.get(),
             error_cur_match: 0,
             new_tag: false,
             no_regexp: help,
@@ -352,7 +352,7 @@ impl DoTag {
             return false;
         };
         self.saved_fmark = mark.clone();
-        if mark.fnum != Buf::current().handle {
+        if mark.fnum != Buf::current().handle.get() {
             // Another file. If it cannot be opened (it may have
             // changed) keep the original position on the stack.
             if buflist_getfile(
@@ -445,7 +445,7 @@ impl DoTag {
             tag_emsg(c"E425: Cannot go before first matching tag");
             self.skip_msg = true;
             self.cur_match = 0;
-            self.cur_fnum = Buf::current().handle;
+            self.cur_fnum = Buf::current().handle.get();
         }
     }
 
@@ -461,7 +461,7 @@ impl DoTag {
             let saved = entry.fmark.clone();
             if save_pos {
                 entry.fmark.mark = cursor;
-                entry.fmark.fnum = handle;
+                entry.fmark.fnum = handle.get();
                 entry.fmark.view = view;
             }
             if !selecting {
@@ -484,7 +484,7 @@ impl DoTag {
     /// Using a remembered `cur_match` only makes sense if the order the
     /// matches came out in is the same as it was then.
     fn set_priority_buffer(&mut self) {
-        if self.cur_fnum == Buf::current().handle {
+        if self.cur_fnum == Buf::current().handle.get() {
             return;
         }
         if let Some(buf) = find_buf(self.cur_fnum) {

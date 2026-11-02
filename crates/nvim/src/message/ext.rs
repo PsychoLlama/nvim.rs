@@ -27,7 +27,7 @@ pub fn msg_ext_set_kind(msg_kind: &CStr) {
 
 /// [`msg_ext_set_kind`] for the two callers that may have no kind at all.
 ///
-/// "No kind" is [`String_0::NULL`], which is a *different* state from the
+/// "No kind" is [`ApiString::NULL`], which is a *different* state from the
 /// empty kind: `emsg_core` asks `msg_ext_kind.is_null()` to decide whether to
 /// stamp a message as a warning, so the absence has to survive the round
 /// trip.
@@ -35,7 +35,7 @@ pub(crate) fn msg_ext_set_kind_opt(msg_kind: Option<&CStr>) {
     // Flush before setting the kind, so the previous message is emitted
     // under the kind it was written with.
     msg_ext_ui_flush();
-    msg_ext_kind.set(msg_kind.map_or(String_0::NULL, String_0::from_cstr));
+    msg_ext_kind.set(msg_kind.map_or(ApiString::NULL, ApiString::from_cstr));
     // An appended message continues the previous one's column run.
     if !msg_ext_append.get() {
         redir_col.set(0);
@@ -73,7 +73,7 @@ pub(crate) fn msg_ext_emit_chunk() {
 
     chunk.push(Object::integer(msg_ext_last_attr.get().into()));
     msg_ext_last_attr.set(-1);
-    let text = String_0::from_bytes(&accumulated);
+    let text = ApiString::from_bytes(&accumulated);
     chunk.push(Object::string(text));
     chunk.push(Object::integer(msg_ext_last_hl_id.get().into()));
     msg_ext_chunks.update(|chunks| {
@@ -102,7 +102,7 @@ pub(crate) fn msg_ext_init_chunks() -> Array {
 /// the grid as it was written.
 pub fn msg_ext_ui_flush() {
     if !ui_has(kUIMessages) {
-        msg_ext_kind.set(String_0::NULL);
+        msg_ext_kind.set(ApiString::NULL);
         return;
     }
     if msg_ext_skip_flush.get() {
@@ -125,7 +125,7 @@ pub fn msg_ext_ui_flush() {
     };
     ui_call_msg_show(
         // SAFETY: both are null or NUL-terminated protocol names.
-        msg_ext_kind.with(String_0::clone),
+        msg_ext_kind.with(ApiString::clone),
         shown,
         msg_ext_overwrite.get(),
         to_ui_history,
@@ -133,8 +133,8 @@ pub fn msg_ext_ui_flush() {
         msg_ext_id.with(Object::clone),
         msg_ext_trigger
             .get()
-            .map_or_else(String_0::default, |trigger| {
-                String_0::from_bytes(trigger.to_bytes())
+            .map_or_else(ApiString::default, |trigger| {
+                ApiString::from_bytes(trigger.to_bytes())
             }),
     );
 
@@ -165,7 +165,7 @@ pub fn msg_ext_ui_flush() {
     msg_ext_overwrite.set(false);
     msg_ext_history.set(false);
     msg_ext_append.set(false);
-    msg_ext_kind.set(String_0::NULL);
+    msg_ext_kind.set(ApiString::NULL);
     // Only claim the next id if nothing else took it in the meantime. An id
     // the caller supplied is a `String`, not an `Integer`, and never matches.
     if msg_ext_id.with(|id| id.as_integer()) == Some(msg_id_next.get()) {

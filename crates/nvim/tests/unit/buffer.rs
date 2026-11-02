@@ -83,7 +83,7 @@ impl Buffers {
     /// The handle of a live buffer.
     fn handle(&self, buffer: *mut Buffer) -> c_int {
         // SAFETY: a buffer this case opened and has not wiped.
-        unsafe { (*buffer).handle }
+        unsafe { ((*buffer).handle).get() }
     }
 
     /// `buf_valid`, which is the whole of the first `describe` block. It

@@ -40,7 +40,7 @@ pub(crate) fn set_last_insert(c: c_int) {
     }
     push_char_escaped(c, &mut text);
     text.push(0x1b); // ESC
-    last_insert.set(String_0::from_bytes(&text));
+    last_insert.set(ApiString::from_bytes(&text));
     last_insert_skip.set(0);
 }
 
@@ -71,7 +71,7 @@ pub(crate) fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -> Resul
         .iter()
         .rposition(|&b| c_int::from(b) == ESC)
     {
-        insert = String_0::from_bytes(&insert.as_bytes()[..i]);
+        insert = ApiString::from_bytes(&insert.as_bytes()[..i]);
     }
 
     // A trailing `0` or `^` has to be quoted, because either would be
@@ -85,7 +85,7 @@ pub(crate) fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -> Resul
     {
         last = end;
         let shorter = insert.len() - 1;
-        insert = String_0::from_bytes(&insert.as_bytes()[..shorter]);
+        insert = ApiString::from_bytes(&insert.as_bytes()[..shorter]);
     }
 
     loop {
@@ -113,15 +113,15 @@ pub(crate) fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -> Resul
 ///
 /// A copy: both callers shorten what they get, and the stored text is not
 /// theirs to shorten.
-pub(crate) fn get_last_insert() -> String_0 {
+pub(crate) fn get_last_insert() -> ApiString {
     // `last_insert_skip` counts bytes this module put on the front, so it
     // never runs past the buffer.
     let skip = size_t::try_from(last_insert_skip.get()).unwrap_or(0);
     last_insert.with(|all| {
         if all.is_null() {
-            String_0::NULL
+            ApiString::NULL
         } else {
-            String_0::from_bytes(&all.as_bytes()[skip..])
+            ApiString::from_bytes(&all.as_bytes()[skip..])
         }
     })
 }

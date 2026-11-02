@@ -14,6 +14,7 @@ use crate::autocmd::fire_autocmds;
 use crate::buffer::BufRef;
 use crate::guard::Suppress;
 use crate::types::CmdIdx;
+use crate::types::Handle;
 use crate::winfloat::WIN_CONFIG_INIT;
 use crate::winlayer::Buf;
 use crate::winlayer::{TabPage, Win, WinId};
@@ -60,7 +61,7 @@ impl Opening {
         raised: &mut Option<Error>,
     ) -> Result<WindowHandle, Error> {
         if !self.resolve_parent(keys)? {
-            return Ok(0);
+            return Ok(Handle::NONE);
         }
         let Some(window) = self.make(keys, raised)? else {
             let why = Error::exception(c"Failed to create window");
@@ -105,7 +106,7 @@ impl Opening {
     /// `false` says a handle resolved to no window at all, which upstream
     /// answers by making none and reporting nothing.
     fn resolve_parent(&mut self, keys: &KeyDict_win_config) -> Result<bool, Error> {
-        if keys.win.unwrap_or(0) <= 0 {
+        if keys.win.unwrap_or(Handle::CURRENT) <= Handle::CURRENT {
             return Ok(true);
         }
         let Some(found) = find_window_by_handle(self.config.window)? else {
@@ -238,7 +239,7 @@ pub fn nvim_open_win(
     let keys = &*config;
     // The lookup answers a live buffer or a null.
     let Some(buffer) = find_buffer_by_handle(buf)? else {
-        return Ok(0 as WindowHandle);
+        return Ok(Handle::NONE);
     };
     if cmdwin_type.get() != 0 && enter || cmdwin_buf.get() == Some(buffer.id()) {
         return Err(Error::exception(e_cmdwin));
@@ -250,7 +251,7 @@ pub fn nvim_open_win(
     ) {
         // The config named a window that is not there. Upstream makes no
         // window for it and reports nothing.
-        return Ok(0 as WindowHandle);
+        return Ok(Handle::NONE);
     }
 
     debug_assert!(Win::current_or_none().is_some(), "curwin != NULL");
@@ -261,7 +262,11 @@ pub fn nvim_open_win(
         style: fconfig.style,
         cmdline_offset: fconfig._cmdline_offset,
         is_split: keys.split.is_some() || keys.vertical.is_some(),
-        parent: (keys.win.unwrap_or(0) == 0).then(Win::current),
+        parent: keys
+            .win
+            .unwrap_or(Handle::CURRENT)
+            .is_current()
+            .then(Win::current),
         tabpage: Some(TabPage::current()),
         config: fconfig,
     };

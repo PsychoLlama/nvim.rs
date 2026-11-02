@@ -30,7 +30,7 @@ use crate::os::cshim::gettext;
 use crate::os::proc::os_kill;
 use crate::semsg;
 use crate::types::ui::kUIMessages;
-use crate::types::{EvalFuncData, FAIL, String_0, TypVal, TypeaheadSave, VAR_LIST, VarNumber};
+use crate::types::{ApiString, EvalFuncData, FAIL, TypVal, TypeaheadSave, VAR_LIST, VarNumber};
 use crate::ui::state::Rows;
 use crate::ui::ui_has;
 use crate::winlayer::Buf;
@@ -115,10 +115,10 @@ pub fn f_feedkeys(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if check_secure() {
         return;
     }
-    let keys = String_0::from_cstr(numbuf.string(&args[0]));
+    let keys = ApiString::from_cstr(numbuf.string(&args[0]));
     // A missing {mode} is spelled as a null string, not as "".
-    let mode = args.get(1).map_or(String_0::NULL, |mode| {
-        String_0::from_cstr(mode_buf.string(mode))
+    let mode = args.get(1).map_or(ApiString::NULL, |mode| {
+        ApiString::from_cstr(mode_buf.string(mode))
     });
     nvim_feedkeys(keys, mode, true);
 }

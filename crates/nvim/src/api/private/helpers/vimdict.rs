@@ -22,7 +22,7 @@ use crate::eval::typval::{
 };
 use crate::eval::vars::{VvarStore, before_set_vvar, vimvar_dict};
 use crate::types::{
-    DictItem, Error, Object, String_0, kErrorTypeException, kErrorTypeValidation, size_t,
+    ApiString, DictItem, Error, Object, kErrorTypeException, kErrorTypeValidation, size_t,
 };
 use crate::types::{ScopeDictItem, TypVal};
 use core::ffi::c_int;
@@ -39,7 +39,7 @@ pub(crate) fn scope_vars(entry: &ScopeDictItem) -> DictRef {
 
 /// The value `key` has in `dict`, as an API object; an error when the key is
 /// absent.
-pub(crate) fn dict_get_value(dict: &DictRef, key: &String_0) -> Result<Object, Error> {
+pub(crate) fn dict_get_value(dict: &DictRef, key: &ApiString) -> Result<Object, Error> {
     let Some(di) = dict_find(Some(dict), key.as_bytes()) else {
         let key = key.as_cstr().to_string_lossy();
         return Err(api_error!(kErrorTypeValidation, "Key not found: {key}"));
@@ -51,7 +51,7 @@ pub(crate) fn dict_get_value(dict: &DictRef, key: &String_0) -> Result<Object, E
 /// with `del`, removed). An absent key is fine for an assignment.
 pub(crate) fn dict_check_writable(
     dict: &DictRef,
-    key: &String_0,
+    key: &ApiString,
     del: bool,
 ) -> Result<bool, Error> {
     match dict.find(key.as_bytes()) {
@@ -62,7 +62,7 @@ pub(crate) fn dict_check_writable(
 
 /// Why the existing `item` under `key` could not be assigned to (or, with
 /// `del`, removed), if anything stops it.
-fn item_writable(item: &DictItem, key: &String_0, del: bool) -> Result<(), Error> {
+fn item_writable(item: &DictItem, key: &ApiString, del: bool) -> Result<(), Error> {
     let flags = c_int::from(item.di_flags);
     let refused = if flags & DI_FLAGS_RO != 0 {
         Some("read-only")
@@ -84,7 +84,7 @@ fn item_writable(item: &DictItem, key: &String_0, del: bool) -> Result<(), Error
 
 /// Why `key`, absent from `dict`, could not be added to it, if anything
 /// stops it.
-fn absent_writable(dict: &DictRef, key: &String_0) -> Result<(), Error> {
+fn absent_writable(dict: &DictRef, key: &ApiString) -> Result<(), Error> {
     let refused = if dict.dv_lock.is_locked() {
         Some((kErrorTypeException, c"Dict is locked"))
     } else if key.is_empty() {
@@ -110,7 +110,7 @@ fn absent_writable(dict: &DictRef, key: &String_0) -> Result<(), Error> {
 /// is removal and `v:`, whose typed keys and hooks need the item re-found.
 pub(crate) fn dict_set_var(
     dict: &DictRef,
-    key: &String_0,
+    key: &ApiString,
     value: Object,
     del: bool,
     retval: bool,
@@ -203,7 +203,7 @@ pub(crate) fn dict_set_var(
 /// with no item held. With `retval` the previous value comes back.
 fn dict_assign(
     dict: &DictRef,
-    key: &String_0,
+    key: &ApiString,
     value: Object,
     retval: bool,
 ) -> Result<Object, Error> {

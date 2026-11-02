@@ -606,7 +606,7 @@ pub(crate) fn qf_free_stack(window: Option<Win>, mut qi: Qi) {
     wp.free_location_lists();
     if let Some(mut qfwin) = qfwin {
         let fresh = new_location_stack(QFLT_LOCATION, wp.w_onebuf_opt.wo_lhi);
-        fresh.stack().bufnr = qfwin.buffer().handle;
+        fresh.stack().bufnr = qfwin.buffer().handle.get();
         let shown = qfwin.w_llist_ref.take();
         drop_stack_ref(shown);
         qfwin.w_llist_ref = Some(fresh);

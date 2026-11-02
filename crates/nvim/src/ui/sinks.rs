@@ -56,8 +56,8 @@ use crate::log::logmsg_tagged;
 use crate::message_fmt::msg_cstr;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
-    Array, Boolean, BufferHandle, Float, HlAttrs, Integer, LineFlags, Object, RemoteUI, ScreenAttr,
-    ScreenChar, String_0, TabpageHandle, WindowHandle,
+    ApiString, Array, Boolean, BufferHandle, Float, HlAttrs, Integer, LineFlags, Object, RemoteUI,
+    ScreenAttr, ScreenChar, TabpageHandle, WindowHandle,
 };
 use crate::ui_compositor::{
     ui_comp_grid_cursor_goto, ui_comp_grid_resize, ui_comp_grid_scroll, ui_comp_msg_set_pos,
@@ -88,7 +88,7 @@ macro_rules! wire {
     (Float, $v:expr) => {
         Object::float($v)
     };
-    (String_0, $v:expr) => {
+    (ApiString, $v:expr) => {
         Object::string($v)
     };
     (Array, $v:expr) => {
@@ -118,7 +118,7 @@ macro_rules! dup {
     (Array, $v:expr) => {
         $v.clone()
     };
-    (String_0, $v:expr) => {
+    (ApiString, $v:expr) => {
         $v.clone()
     };
     (Object, $v:expr) => {
@@ -243,18 +243,18 @@ broadcast! {
     fn ui_call_busy_stop() => remote_ui_busy_stop, All, c"busy_stop";
     fn ui_call_mouse_on() => remote_ui_mouse_on, All, c"mouse_on";
     fn ui_call_mouse_off() => remote_ui_mouse_off, All, c"mouse_off";
-    fn ui_call_mode_change(mode: String_0, mode_idx: Integer)
+    fn ui_call_mode_change(mode: ApiString, mode_idx: Integer)
         => remote_ui_mode_change, All, c"mode_change";
     fn ui_call_bell() => remote_ui_bell, All, c"bell";
     fn ui_call_visual_bell() => remote_ui_visual_bell, All, c"visual_bell";
     fn ui_call_flush() => remote_ui_flush, All, c"flush";
     fn ui_call_suspend() => remote_ui_suspend, All, c"suspend";
-    fn ui_call_set_icon(icon: String_0) => remote_ui_set_icon, All, c"set_icon";
-    fn ui_call_screenshot(path: String_0) => remote_ui_screenshot, All, c"screenshot";
-    fn ui_call_option_set(name: String_0, value: Object)
+    fn ui_call_set_icon(icon: ApiString) => remote_ui_set_icon, All, c"set_icon";
+    fn ui_call_screenshot(path: ApiString) => remote_ui_screenshot, All, c"screenshot";
+    fn ui_call_option_set(name: ApiString, value: Object)
         => remote_ui_option_set, All, c"option_set";
     fn ui_call_stop() => remote_ui_stop, All, c"stop";
-    fn ui_call_ui_send(content: String_0) => remote_ui_ui_send, All, c"ui_send";
+    fn ui_call_ui_send(content: ApiString) => remote_ui_ui_send, All, c"ui_send";
     fn ui_call_default_colors_set(
         rgb_fg: Integer,
         rgb_bg: Integer,
@@ -268,7 +268,7 @@ broadcast! {
         cterm_attrs: HlAttrs,
         info: Array,
     ) => remote_ui_hl_attr_define, All, c"hl_attr_define";
-    fn ui_call_hl_group_set(name: String_0, id: Integer)
+    fn ui_call_hl_group_set(name: ApiString, id: Integer)
         => remote_ui_hl_group_set, All, c"hl_group_set";
     fn ui_call_grid_clear(grid: Integer) => remote_ui_grid_clear, All, c"grid_clear";
     fn ui_call_win_viewport(
@@ -326,7 +326,7 @@ broadcast! {
         grid: Integer,
         row: Integer,
         scrolled: Boolean,
-        sep_char: String_0,
+        sep_char: ApiString,
         zindex: Integer,
         compindex: Integer,
     ) => remote_ui_msg_set_pos, Uncomposed, c"msg_set_pos",
@@ -334,7 +334,7 @@ broadcast! {
 }
 
 event! {
-    fn ui_call_restart(listen_addr: String_0) => c"restart";
+    fn ui_call_restart(listen_addr: ApiString) => c"restart";
     fn ui_call_grid_destroy(grid: Integer) => c"grid_destroy";
     fn ui_call_win_pos(
         grid: Integer,
@@ -347,7 +347,7 @@ event! {
     fn ui_call_win_float_pos(
         grid: Integer,
         win: WindowHandle,
-        anchor: String_0,
+        anchor: ApiString,
         anchor_grid: Integer,
         anchor_row: Float,
         anchor_col: Float,
@@ -386,27 +386,27 @@ event! {
     fn ui_call_cmdline_show(
         content: Array,
         pos: Integer,
-        firstc: String_0,
-        prompt: String_0,
+        firstc: ApiString,
+        prompt: ApiString,
         indent: Integer,
         level: Integer,
         hl_id: Integer,
     ) => c"cmdline_show";
     fn ui_call_cmdline_pos(pos: Integer, level: Integer) => c"cmdline_pos";
-    fn ui_call_cmdline_special_char(c: String_0, shift: Boolean, level: Integer)
+    fn ui_call_cmdline_special_char(c: ApiString, shift: Boolean, level: Integer)
         => c"cmdline_special_char";
     fn ui_call_cmdline_hide(level: Integer, abort: Boolean) => c"cmdline_hide";
     fn ui_call_cmdline_block_show(lines: Array) => c"cmdline_block_show";
     fn ui_call_cmdline_block_append(lines: Array) => c"cmdline_block_append";
     fn ui_call_cmdline_block_hide() => c"cmdline_block_hide";
     fn ui_call_msg_show(
-        kind: String_0,
+        kind: ApiString,
         content: Array,
         replace_last: Boolean,
         history: Boolean,
         append: Boolean,
         id: Object,
-        trigger: String_0,
+        trigger: ApiString,
     ) => c"msg_show";
     fn ui_call_msg_clear() => c"msg_clear";
     fn ui_call_msg_showcmd(content: Array) => c"msg_showcmd";
@@ -484,7 +484,7 @@ fn raw_line_to(
 
 /// The window title changed. `crate::harness` exports a front over this
 /// for `tui_spec.lua`.
-pub fn ui_call_set_title(title: String_0) {
+pub fn ui_call_set_title(title: ApiString) {
     broadcast_to(Reach::All, c"set_title", |ui| {
         remote_ui_set_title(ui, title.clone());
     });
@@ -492,7 +492,7 @@ pub fn ui_call_set_title(title: String_0) {
 
 /// The server's working directory changed. As [`ui_call_set_title`], the
 /// harness exports a front over it.
-pub fn ui_call_chdir(path: String_0) {
+pub fn ui_call_chdir(path: ApiString) {
     broadcast_to(Reach::All, c"chdir", |ui| {
         remote_ui_chdir(ui, path.clone());
     });

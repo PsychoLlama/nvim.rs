@@ -54,7 +54,7 @@ impl Drop for RecursionGuard {
     }
 }
 
-pub fn nvim_eval(expr: String_0) -> Result<Object, Error> {
+pub fn nvim_eval(expr: ApiString) -> Result<Object, Error> {
     static recursive: GlobalCell<c_int> = GlobalCell::new(0);
     let _nesting = enter_recursive(&recursive);
     let mut rettv: TypVal = TV_INITIAL_VALUE;
@@ -86,7 +86,7 @@ pub fn nvim_eval(expr: String_0) -> Result<Object, Error> {
 
 /// Call `fn_0` with `args`, optionally as a method of `self_dict`.
 fn call_function_with(
-    fn_0: &String_0,
+    fn_0: &ApiString,
     args: Array,
     self_dict: Option<&DictRef>,
 ) -> Result<Object, Error> {
@@ -119,13 +119,13 @@ fn call_function_with(
     rv
 }
 
-pub fn nvim_call_function(fn_0: String_0, args: Array) -> Result<Object, Error> {
+pub fn nvim_call_function(fn_0: ApiString, args: Array) -> Result<Object, Error> {
     call_function_with(&fn_0, args, None)
 }
 
 pub fn nvim_call_dict_function(
     dict: Object,
-    mut fn_0: String_0,
+    mut fn_0: ApiString,
     args: Array,
 ) -> Result<Object, Error> {
     let mut rettv: TypVal = TV_INITIAL_VALUE;
@@ -159,7 +159,7 @@ pub fn nvim_call_dict_function(
 /// dictionary `result` holds when it was named rather than given, then call
 /// it.
 fn call_in_dict(
-    fn_0: &mut String_0,
+    fn_0: &mut ApiString,
     dict_given: bool,
     args: Array,
     result: &TypVal,
@@ -187,7 +187,7 @@ fn call_in_dict(
             return Err(api_error!(kErrorTypeValidation, "Not a function: {name}"));
         }
         let name = di.di_tv.callable_name().map_or(&[][..], CStr::to_bytes);
-        *fn_0 = String_0::from_bytes(name);
+        *fn_0 = ApiString::from_bytes(name);
     }
     if fn_0.data().is_null() || fn_0.is_empty() {
         return Err(Error::validation(c"Invalid function name: (empty)"));

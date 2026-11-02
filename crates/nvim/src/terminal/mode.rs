@@ -46,6 +46,7 @@ use crate::state::{
     MODE_TERMINAL, ModeState, may_trigger_modechanged, state_enter, state_handle_k_event,
 };
 use crate::types::AutoEvent;
+use crate::types::Handle;
 use crate::types::{ColNr, LineNr, OptInt, Pos, WinOpt, uint8_t};
 use crate::ui::{ui_busy_stop, ui_cursor_shape, ui_flush};
 use crate::window::{may_trigger_win_scrolled_resized, win_valid};
@@ -278,7 +279,7 @@ pub(crate) fn terminal_enter() -> bool {
     apply_autocmds(AutoEvent::TermEnter, None, None, false, Some(buf));
     may_trigger_modechanged();
     s.term.refcount.release();
-    if s.term.buf_handle == 0 {
+    if s.term.buf_handle == Handle::NONE {
         s.close = true;
     }
 
@@ -324,8 +325,8 @@ pub(crate) fn terminal_enter() -> bool {
         // free the terminal.
         let (close_cb, owner) = (s.term.opts.close_cb, s.term.opts.owner);
         close_cb.expect("non-null function pointer")(owner);
-        if buf_handle != 0 {
-            let _ = do_buffer(DOBUF_WIPE, DOBUF_FIRST, FORWARD, buf_handle, 1);
+        if buf_handle != Handle::NONE {
+            let _ = do_buffer(DOBUF_WIPE, DOBUF_FIRST, FORWARD, buf_handle.get(), 1);
         }
     }
     s.got_bsl_o
@@ -408,7 +409,7 @@ fn terminal_check_focus(s: &mut TerminalState) -> bool {
 /// cursor. Returning zero leaves terminal mode.
 pub(crate) fn terminal_check(s: &mut TerminalState) -> c_int {
     debug_assert!(
-        !s.close || (s.term.buf_handle == 0 && s.term.raw() != current_buf().terminal),
+        !s.close || (s.term.buf_handle == Handle::NONE && s.term.raw() != current_buf().terminal),
         "a terminal marked closed is still the current buffer's"
     );
     if stop_insert_mode.get() || !terminal_check_focus(s) {
@@ -434,7 +435,7 @@ pub(crate) fn terminal_check(s: &mut TerminalState) -> c_int {
     }
     may_trigger_win_scrolled_resized();
     s.term.refcount.release();
-    if s.term.buf_handle == 0 {
+    if s.term.buf_handle == Handle::NONE {
         s.close = true;
     }
 
@@ -490,7 +491,7 @@ pub(crate) fn terminal_execute(s: &mut TerminalState, key: c_int) -> c_int {
             s.term.refcount.retain();
             state_handle_k_event();
             s.term.refcount.release();
-            if s.term.buf_handle == 0 {
+            if s.term.buf_handle == Handle::NONE {
                 s.close = true;
             }
             return 1;

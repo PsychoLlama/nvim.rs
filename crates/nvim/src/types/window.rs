@@ -156,9 +156,9 @@ pub struct Window {
     /// The block `:ownsyntax` gave the window, which `w_s` then names; `None`
     /// while the window uses its buffer's. Dropped by `reset_synblock`.
     pub(crate) w_own_syntax: Option<Box<SynBlock>>,
-    pub w_ns_hl: ::core::ffi::c_int,
+    pub w_ns_hl: NS,
     pub w_ns_hl_winhl: ::core::ffi::c_int,
-    pub w_ns_hl_active: ::core::ffi::c_int,
+    pub w_ns_hl_active: NS,
     /// The `HLF_*` table the window draws with: its namespace's, or the
     /// global one. `None` until `update_window_hl` first resolves it.
     pub w_ns_hl_attr: Option<&'static crate::highlight::state::HlAttrTable>,

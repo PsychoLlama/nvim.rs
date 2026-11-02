@@ -25,8 +25,10 @@ use crate::decoration::{
     set_decor_eol_col, set_decor_range_draw_col, with_decor_virt,
 };
 use crate::grid::with_linebuf;
+use crate::types::Handle;
 use crate::types::NUL;
 use crate::winlayer::Buf;
+use core::ffi::c_int;
 
 /// Put the character at the start of `text` into `dest`, and answer how many
 /// cells it used and how many bytes of `text` it took.
@@ -198,7 +200,7 @@ pub(crate) fn draw_virt_text(
         if item.kind == kDecorKindUIWatched {
             let ui = item.data.ui_watched();
             push_win_extmark(WinExtmark {
-                ns_id: ui.ns_id as NS,
+                ns_id: Handle::new(ui.ns_id as c_int),
                 mark_id: ui.mark_id as uint64_t,
                 win_row,
                 win_col: item.draw_col,

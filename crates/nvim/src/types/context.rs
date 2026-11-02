@@ -12,9 +12,9 @@
 use super::*;
 
 pub struct Context {
-    pub regs: String_0,
-    pub jumps: String_0,
-    pub bufs: String_0,
-    pub gvars: String_0,
+    pub regs: ApiString,
+    pub jumps: ApiString,
+    pub bufs: ApiString,
+    pub gvars: ApiString,
     pub funcs: Array,
 }

@@ -53,7 +53,7 @@ pub(crate) fn pum_select_mouse_pos() {
         find_win_outer(&mut pos);
     }
 
-    if pos.grid == pum_grid_ref().handle {
+    if pos.grid == pum_grid_ref().handle.get() {
         // On the menu itself. A box border (width 2) takes the top row.
         let border_offset = c_int::from(pum_border_width() == 2);
         let item = pos.row - border_offset;
@@ -278,7 +278,7 @@ pub(crate) fn pum_show_popupmenu(menu: MenuId) {
 
 /// Tell the UI whether to send mouse-move events.
 fn set_mousemoveevent(on: bool) {
-    ui_call_option_set(String_0::from_cstr(c"mousemoveevent"), Object::Boolean(on));
+    ui_call_option_set(ApiString::from_cstr(c"mousemoveevent"), Object::Boolean(on));
 }
 
 /// `:popup` -- show the menu at `path_name`, at the mouse or at the cursor.
@@ -299,7 +299,7 @@ pub fn pum_make_popup(path_name: &CStr, use_mouse_pos: c_int) {
             // Only under multigrid is the window's own grid guaranteed to
             // have been allocated -- headless it can still be null, which is
             // why this read stays inside the branch.
-            mouse_grid.set(grid_of_view(win.w_grid).handle as c_int);
+            mouse_grid.set(grid_of_view(win.w_grid).handle.get());
         } else if !ptr::eq(win.w_grid.target, default_grid_ref().raw()) {
             // Without multigrid the window's own grid is composed onto the
             // screen, so the position has to be screen-relative.

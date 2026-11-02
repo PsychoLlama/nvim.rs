@@ -28,7 +28,7 @@ use crate::lua::executor::{api_new_luaref, release_luaref};
 use crate::msgpack_rpc::unpacker::unpack;
 use crate::narrow::number_as_int;
 use crate::types::{
-    ApiDict, Array, Error, HlMessage, HlMessageChunk, LuaRef, Object, ObjectType, String_0,
+    ApiDict, ApiString, Array, Error, HlMessage, HlMessageChunk, LuaRef, Object, ObjectType,
     kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat,
     kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage,
     kObjectTypeWindow,
@@ -115,7 +115,7 @@ impl Clone for Object {
             Object::Boolean(on) => Object::Boolean(*on),
             Object::Integer(number) => Object::Integer(*number),
             Object::Float(number) => Object::Float(*number),
-            Object::String(str) => Object::string(String_0::clone(str)),
+            Object::String(str) => Object::string(ApiString::clone(str)),
             Object::Array(array) => Object::array(Array::clone(array)),
             Object::Dict(dict) => Object::dict(ApiDict::clone(dict)),
             Object::LuaRef(reference) => Object::LuaRef(api_new_luaref(*reference)),
@@ -134,7 +134,7 @@ impl Clone for Object {
 impl Object {
     /// The string, if this is one. Anything else answers `None` and is
     /// released.
-    pub fn into_string(self) -> Option<String_0> {
+    pub fn into_string(self) -> Option<ApiString> {
         let mut this = ManuallyDrop::new(self);
         match &mut *this {
             Object::String(str) => Some(take_payload(str)),
@@ -205,8 +205,8 @@ pub(crate) fn api_metadata() -> Object {
 
 /// [`api_metadata`] still packed, for a caller that is going to forward it
 /// over the wire unchanged.
-pub(crate) fn api_metadata_raw() -> String_0 {
-    String_0::from_bytes(PACKED_API_METADATA)
+pub(crate) fn api_metadata_raw() -> ApiString {
+    ApiString::from_bytes(PACKED_API_METADATA)
 }
 
 // -- Object conversion -----------------------------------------------------

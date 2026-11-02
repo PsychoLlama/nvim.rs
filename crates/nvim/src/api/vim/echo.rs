@@ -34,7 +34,7 @@ pub fn nvim_echo(
 ) -> Result<Object, Error> {
     // The keys, with every one the caller left out reading as its default:
     // no text, no percentage, no dictionary.
-    let no_string = String_0::NULL;
+    let no_string = ApiString::NULL;
     let (err, verbose, truncate) = (
         opts.err.unwrap_or(false),
         opts.verbose.unwrap_or(false),
@@ -145,6 +145,6 @@ pub fn nvim_echo(
 
 /// Whether `status` is one of the four a progress message may carry. The
 /// empty string is not one of them.
-fn status_named(status: String_0) -> bool {
+fn status_named(status: ApiString) -> bool {
     PROGRESS_STATUS.iter().any(|name| status.as_cstr() == *name)
 }

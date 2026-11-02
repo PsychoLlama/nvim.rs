@@ -17,6 +17,7 @@
 
 use super::*;
 use crate::api_error;
+use crate::types::Handle;
 use crate::winlayer::{FrameId, FrameRef, TabPage, Win, WinId};
 use core::ffi::c_int;
 
@@ -110,10 +111,10 @@ impl Relayout {
         fconfig: &WinConfig,
         was_split: bool,
     ) -> Result<Option<Self>, Error> {
-        let parent_handle = config.win.unwrap_or(0);
-        let (parent, parent_tp) = if parent_handle == 0 {
+        let parent_handle = config.win.unwrap_or(Handle::CURRENT);
+        let (parent, parent_tp) = if parent_handle.is_current() {
             (Some(Win::current()), Some(TabPage::current()))
-        } else if parent_handle > 0 {
+        } else if parent_handle > Handle::CURRENT {
             let Some(found) = find_window_by_handle(fconfig.window)? else {
                 return Ok(None);
             };

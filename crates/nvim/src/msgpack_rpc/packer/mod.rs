@@ -326,7 +326,7 @@ pub fn mpack_ext(bytes: &[u8], ext_type: int8_t, packer: &mut PackerBuffer) {
 /// [`Object::Buffer`], so the three are 0, 1 and 2.
 #[inline]
 pub fn mpack_handle(ext_type: int8_t, handle: Handle, packer: &mut PackerBuffer) {
-    emit(packer, format::handle(ext_type, handle).bytes());
+    emit(packer, format::handle(ext_type, handle.get()).bytes());
 }
 
 /// The three extension types, spelled once so the packer's arms and the
@@ -408,15 +408,27 @@ fn mpack_object_inner(root: &mut Object, packer: &mut PackerBuffer) {
                 None
             }
             Object::Buffer(handle) => {
-                mpack_handle(EXT_BUFFER, crate::narrow::number_as_int(*handle), packer);
+                mpack_handle(
+                    EXT_BUFFER,
+                    Handle::new(crate::narrow::number_as_int(*handle)),
+                    packer,
+                );
                 None
             }
             Object::Window(handle) => {
-                mpack_handle(EXT_WINDOW, crate::narrow::number_as_int(*handle), packer);
+                mpack_handle(
+                    EXT_WINDOW,
+                    Handle::new(crate::narrow::number_as_int(*handle)),
+                    packer,
+                );
                 None
             }
             Object::Tabpage(handle) => {
-                mpack_handle(EXT_TABPAGE, crate::narrow::number_as_int(*handle), packer);
+                mpack_handle(
+                    EXT_TABPAGE,
+                    Handle::new(crate::narrow::number_as_int(*handle)),
+                    packer,
+                );
                 None
             }
             Object::Array(array) => {

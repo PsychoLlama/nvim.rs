@@ -48,7 +48,7 @@ pub fn nvim_set_current_buf(buf: BufferHandle) -> Result<(), Error> {
             DOBUF_GOTO as ::core::ffi::c_int,
             DOBUF_FIRST as ::core::ffi::c_int,
             FORWARD as ::core::ffi::c_int,
-            handle,
+            handle.get(),
             0 as ::core::ffi::c_int,
         );
     })?;
@@ -89,7 +89,7 @@ pub fn nvim_set_current_win(win: WindowHandle) -> Result<(), Error> {
 /// `'buftype'` `nofile`, `'bufhidden'` `hide` and no swap file.
 pub fn nvim_create_buf(listed: Boolean, scratch: Boolean) -> Result<BufferHandle, Error> {
     let ret = api_try(|| create_buf(listed, scratch))?;
-    if ret == 0 {
+    if ret == Handle::NONE {
         return Err(Error::exception(c"Failed to create buffer"));
     }
     Ok(ret)
@@ -110,7 +110,7 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
     let opened = buf.is_some() && ml_open(buf.expect("a live handle")).is_ok();
     if !opened {
         unblock_autocmds();
-        return 0;
+        return Handle::NONE;
     }
     let mut b = buf.expect("`buflist_new` answered a buffer");
     let tick = buf_get_changedtick(b);
@@ -136,15 +136,15 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
     let event = AutoEvent::BufNew;
     let wiped = apply_autocmds(event, None, None, false, buf) && !bufref.valid();
     if wiped {
-        return 0;
+        return Handle::NONE;
     }
     let event = AutoEvent::BufAdd;
     let wiped = listed && apply_autocmds(event, None, None, false, buf) && !bufref.valid();
     if wiped {
-        return 0;
+        return Handle::NONE;
     }
     // The autocommands above left the buffer alive.
-    buf.map_or(0, |b| b.handle)
+    buf.map_or(Handle::NONE, |b| b.handle)
 }
 
 /// Every tab page's handle, in order.

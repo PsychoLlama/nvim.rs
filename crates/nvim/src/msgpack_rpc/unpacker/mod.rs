@@ -33,8 +33,8 @@ use crate::mpack::token::{self, Kind, Tok};
 use crate::msgpack_rpc::packer::{EXT_BUFFER, EXT_TABPAGE, EXT_WINDOW};
 use crate::narrow::msgpack_uint_as_u32;
 use crate::types::{
-    ApiDict, ApiDispatchFn, Array, DictKey, Error, GridLineEvent, Integer, KeyValuePair,
-    MessageType, MsgpackRpcRequestHandler, Object, String_0, UIClientHandler,
+    ApiDict, ApiDispatchFn, ApiString, Array, DictKey, Error, GridLineEvent, Integer, KeyValuePair,
+    MessageType, MsgpackRpcRequestHandler, Object, UIClientHandler,
 };
 use crate::ui_client::handle_ui_client_redraw;
 
@@ -481,7 +481,7 @@ fn finished(data: Building) -> Option<Object> {
     match data {
         Building::Value(value) => Some(value),
         Building::Ext(ext) => Some(ext.value),
-        Building::Text(text) => Some(Object::string(String_0::from_xstring(text))),
+        Building::Text(text) => Some(Object::string(ApiString::from_xstring(text))),
         Building::Key(_) | Building::Nothing => None,
     }
 }

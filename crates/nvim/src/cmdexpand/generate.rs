@@ -38,8 +38,8 @@ use crate::runtime::{script_display_name, script_id_valid};
 use crate::sign::get_sign_name;
 use crate::syntax::{EXPAND_BUF_LEN, get_syntax_name, get_syntime_arg};
 use crate::types::{
-    Array, ArrayBuf, BackslashEscape, Candidate, CompleteListItemGetter, ExpandContext, Failed,
-    Object, RegMatch, String_0,
+    ApiString, Array, ArrayBuf, BackslashEscape, Candidate, CompleteListItemGetter, ExpandContext,
+    Failed, Object, RegMatch,
 };
 use crate::usercmd::{
     get_user_cmd_addr_type, get_user_cmd_complete, get_user_cmd_flags, get_user_cmd_nargs,
@@ -237,7 +237,7 @@ pub(crate) fn get_lsp_arg(expand: &Expand, idx: usize) -> Option<Candidate> {
         last_xp_line.set(Some(XString::from_cstr(line)));
         // The current command line, as the Lua function's one argument.
         let mut args = ArrayBuf::<1>::new();
-        args.push(Object::string(String_0::from_bytes(line.to_bytes())));
+        args.push(Object::string(ApiString::from_bytes(line.to_bytes())));
         cache_lua_answer(
             &names,
             c"return require'vim._core.ex_cmd'.lsp_complete(...)",

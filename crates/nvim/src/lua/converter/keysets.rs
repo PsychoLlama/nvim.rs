@@ -151,7 +151,7 @@ pub(crate) fn push_keydict(stack: &mut Stack, value: &mut dyn KeySet) {
         match slot {
             Slot::Any(Some(object)) => push_object(stack, object, false),
             Slot::Integer(Some(n)) => stack.push_integer(*n as lua_Integer),
-            Slot::Handle(Some(h)) => stack.push_integer(*h as lua_Integer),
+            Slot::Handle(Some(h)) => stack.push_integer((*h).get() as lua_Integer),
             Slot::Float(Some(f)) => stack.push_number(*f),
             Slot::Boolean(Some(b)) => stack.push_boolean(*b),
             Slot::String(Some(s)) => push_string(stack, s),

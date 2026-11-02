@@ -17,10 +17,10 @@ use crate::autocmd::do_termresponse_autocmd;
 use crate::eval::vars::set_vim_var_string;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::message_fmt::msg_cstr;
-use crate::types::{Error, Integer, Object, String_0, Vv, kObjectTypeString, uint64_t};
+use crate::types::{ApiString, Error, Integer, Object, Vv, kObjectTypeString, uint64_t};
 
 /// Log the failure a client reported for a request it had sent us.
-pub fn nvim_error_event(channel_id: uint64_t, _type_0: Integer, msg: String_0) {
+pub fn nvim_error_event(channel_id: uint64_t, _type_0: Integer, msg: ApiString) {
     let text = msg_cstr(msg.as_cstr());
     logmsg!(
         LOGLVL_ERR,
@@ -35,7 +35,7 @@ pub fn nvim_error_event(channel_id: uint64_t, _type_0: Integer, msg: String_0) {
 /// this build has never heard of.
 pub fn nvim_ui_term_event(
     _channel_id: uint64_t,
-    event: String_0,
+    event: ApiString,
     value: Object,
 ) -> Result<(), Error> {
     if event.as_cstr() != c"termresponse" {

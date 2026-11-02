@@ -329,7 +329,7 @@ pub(crate) fn dialog_changed(mut buffer: Buf, checkall: bool) {
     if ret == VIM_YES as c_int {
         let empty_bufname = buffer.name.is_unnamed();
         if empty_bufname {
-            buf_set_name(buffer.handle as c_int, c"Untitled");
+            buf_set_name(buffer.handle.get(), c"Untitled");
         }
         let target = buffer;
         if check_overwrite_own(&mut ea, target).is_ok()
@@ -405,19 +405,19 @@ fn changed_check_order() -> Vec<c_int> {
     }
 
     let mut nrs = Vec::new();
-    nrs.push(Buf::current().handle as c_int);
+    nrs.push(Buf::current().handle.get());
     for wp in windows() {
         if !wp.w_buffer.is_current() {
-            push_unique(&mut nrs, wp.w_buffer.handle() as c_int);
+            push_unique(&mut nrs, wp.w_buffer.handle().get());
         }
     }
     for (tp, wp) in tab_windows() {
         if !tp.is_current() {
-            push_unique(&mut nrs, wp.buffer().handle as c_int);
+            push_unique(&mut nrs, wp.buffer().handle.get());
         }
     }
     for buf in buffers() {
-        push_unique(&mut nrs, buf.handle as c_int);
+        push_unique(&mut nrs, buf.handle.get());
     }
     nrs
 }

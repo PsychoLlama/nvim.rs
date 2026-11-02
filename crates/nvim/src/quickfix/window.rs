@@ -153,7 +153,7 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
     match qf_buf {
         // Use the existing quickfix buffer.
         Some(bufnr) => {
-            if edit_buffer_number(bufnr, 1, hide | EcmdFlags::OLDBUF, oldwin).is_err() {
+            if edit_buffer_number(bufnr.get(), 1, hide | EcmdFlags::OLDBUF, oldwin).is_err() {
                 return false;
             }
         }
@@ -162,7 +162,7 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
             if edit_buffer_number(0, 1, hide, oldwin).is_err() {
                 return false;
             }
-            qi.bufnr = Buf::current().handle;
+            qi.bufnr = Buf::current().handle.get();
         }
     }
 
@@ -264,7 +264,7 @@ pub fn ex_copen(excmd: &mut ExArg) {
         qi.current_slot(),
         Buf::current(),
         None,
-        Win::current().handle,
+        Win::current().handle.get(),
     );
 
     drop(busy);

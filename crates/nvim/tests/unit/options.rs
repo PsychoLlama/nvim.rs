@@ -21,16 +21,13 @@
 
 use neovim::api::options::{nvim_get_option_value, nvim_set_option_value};
 use neovim::ex_docmd::do_cmdline_cmd;
-use neovim::types::{Error, KeyDict_option, Object, String_0};
+use neovim::types::{ApiString, Error, Handle, KeyDict_option, Object};
 
 use crate::support::{Editor, check_emsg, cstr, editor_lock};
 
 /// The channel id an API call is attributed to. Zero is "the editor
 /// itself", which is what `:set` would report too.
 const SELF: u64 = 0;
-
-/// The handle that stands for the current buffer or window.
-const CURRENT: i32 = 0;
 
 /// `opts` for a call that names no scope, buffer or window.
 fn any() -> KeyDict_option {
@@ -40,7 +37,7 @@ fn any() -> KeyDict_option {
 /// `opts` naming an explicit scope: `"global"` or `"local"`.
 fn scoped(scope: &str) -> KeyDict_option {
     KeyDict_option {
-        scope: Some(String_0::from(scope)),
+        scope: Some(ApiString::from(scope)),
         ..KeyDict_option::default()
     }
 }
@@ -50,7 +47,7 @@ fn scoped(scope: &str) -> KeyDict_option {
 /// API's spelling of "the current one".
 fn on_current_buf() -> KeyDict_option {
     KeyDict_option {
-        buf: Some(CURRENT),
+        buf: Some(Handle::CURRENT),
         ..KeyDict_option::default()
     }
 }
@@ -58,19 +55,19 @@ fn on_current_buf() -> KeyDict_option {
 /// `opts` naming the current window. See [`on_current_buf`].
 fn on_current_win() -> KeyDict_option {
     KeyDict_option {
-        win: Some(CURRENT),
+        win: Some(Handle::CURRENT),
         ..KeyDict_option::default()
     }
 }
 
 /// Read option `name` at whatever scope `opts` names.
 fn get(_editor: &Editor, name: &str, mut opts: KeyDict_option) -> Result<Object, Error> {
-    nvim_get_option_value(String_0::from(name), &mut opts)
+    nvim_get_option_value(ApiString::from(name), &mut opts)
 }
 
 /// Write option `name` at whatever scope `opts` names.
 fn set(_editor: &Editor, name: &str, value: Object, mut opts: KeyDict_option) -> Result<(), Error> {
-    nvim_set_option_value(SELF, String_0::from(name), value, &mut opts)
+    nvim_set_option_value(SELF, ApiString::from(name), value, &mut opts)
 }
 
 /// The text of a string option, or a panic naming what came back instead.

@@ -147,13 +147,13 @@ fn zeroed_window() -> Win {
     Win::alloc(Box::write(
         Box::new_uninit(),
         Window {
-            handle: 0,
+            handle: Handle::NONE,
             w_buffer: Buf::NULL,
             w_s: ::core::ptr::null_mut(),
             w_own_syntax: None,
-            w_ns_hl: 0,
+            w_ns_hl: Handle::NONE,
             w_ns_hl_winhl: 0,
-            w_ns_hl_active: 0,
+            w_ns_hl_active: Handle::NONE,
             w_ns_hl_attr: None,
             w_ns_set: id_set(),
             w_hl_id_normal: 0,
@@ -326,7 +326,7 @@ fn zeroed_window() -> Win {
 pub(crate) fn bare_window() -> Win {
     let mut win = zeroed_window();
     last_win_id.set(last_win_id.get() + 1);
-    win.set_handle(last_win_id.get() as Handle);
+    win.set_handle(Handle::new(last_win_id.get()));
     register_window(win);
     win
 }
@@ -447,7 +447,7 @@ fn first_win() -> Win {
 pub(crate) fn win_alloc(after: Option<Win>, hidden: bool) -> Win {
     let mut new_wp = zeroed_window();
     last_win_id.set(last_win_id.get() + 1);
-    new_wp.set_handle(last_win_id.get() as Handle);
+    new_wp.set_handle(Handle::new(last_win_id.get()));
     register_window(new_wp);
     new_wp.w_grid_alloc.mouse_enabled = true;
     grid_assign_handle(&mut new_wp.w_grid_alloc);
@@ -470,7 +470,7 @@ pub(crate) fn win_alloc(after: Option<Win>, hidden: bool) -> Win {
     new_wp.w_config = WIN_CONFIG_INIT;
     new_wp.w_viewport_invalid = true;
     new_wp.w_viewport_last_topline = 1 as LineNr;
-    new_wp.w_ns_hl = -1;
+    new_wp.w_ns_hl = Handle::new(-1);
     new_wp.w_onebuf_opt.wo_so = -1 as OptInt;
     new_wp.w_allbuf_opt.wo_so = new_wp.w_onebuf_opt.wo_so;
     new_wp.w_onebuf_opt.wo_siso = -1 as OptInt;
@@ -609,7 +609,7 @@ pub fn win_free_grid(window: Win, reinit: bool) {
 /// Give up the window's own grid, optionally leaving it zeroed for reuse.
 pub(crate) fn free_grid(window: Win, reinit: bool) {
     let mut window = window;
-    if window.w_grid_alloc.handle != 0 && ui_has(kUIMultigrid) {
+    if window.w_grid_alloc.handle != Handle::NONE && ui_has(kUIMultigrid) {
         ui_call_grid_destroy(Integer::from(window.w_grid_alloc.handle));
     }
     window.w_grid_alloc.free();

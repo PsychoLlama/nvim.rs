@@ -453,7 +453,7 @@ fn resolve_target(
     flags: EcmdFlags,
 ) -> Target {
     if fnum != 0 {
-        if fnum == Buf::current().handle {
+        if fnum == Buf::current().handle.get() {
             // file is already being edited, nothing to do
             return Target::AlreadyHere;
         }

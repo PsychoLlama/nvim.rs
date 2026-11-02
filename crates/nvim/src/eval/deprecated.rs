@@ -20,6 +20,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::types::Handle;
 use core::ffi::{CStr, c_int};
 
 use crate::channel::channel_job_running;
@@ -112,11 +113,11 @@ pub fn f_rpcstop(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
 /// Not the same answer as `bufnr("$")` once the highest-numbered buffer has
 /// been wiped, which is the only reason it still exists.
 pub fn f_last_buffer_nr(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let mut n = 0;
+    let mut n = Handle::NONE;
     for buf in buffers() {
         n = n.max(buf.handle());
     }
-    result.write_number(n as VarNumber);
+    result.write_number(n.get() as VarNumber);
 }
 
 /// `termopen(cmd[, opts])`: `jobstart()` with `term` forced on.

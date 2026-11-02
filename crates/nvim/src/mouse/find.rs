@@ -101,11 +101,11 @@ pub(crate) fn find_win_outer(pos: &mut MousePos) -> Option<Win> {
 /// The `ext_multigrid` half: map a grid handle plus coordinates onto the
 /// window that drew them, rewriting `pos` for the grid it settled on.
 fn find_grid_win(pos: &mut MousePos) -> Option<Win> {
-    if pos.grid == msg_grid.with(|grid| grid.handle) {
+    if pos.grid == (msg_grid.with(|grid| grid.handle)).get() {
         pos.row += msg_grid_pos.get();
         pos.grid = DEFAULT_GRID_HANDLE;
     } else if pos.grid > 1 {
-        let wp = get_win_by_grid_handle(pos.grid as Handle)?;
+        let wp = get_win_by_grid_handle(Handle::new(pos.grid))?;
         if wp.w_grid_alloc.is_allocated() && !(wp.w_floating && !wp.w_config.mouse) {
             pos.row = (pos.row - wp.w_grid.row_offset).min(wp.w_view_height - 1);
             pos.col = (pos.col - wp.w_grid.col_offset).min(wp.w_view_width - 1);
@@ -114,7 +114,7 @@ fn find_grid_win(pos: &mut MousePos) -> Option<Win> {
     } else if pos.grid == 0 {
         let grid = ui_comp_mouse_focus(pos.row, pos.col);
         if let Some(grid) = grid.filter(|grid| grid.same(pum_grid_ref())) {
-            pos.grid = grid.handle as c_int;
+            pos.grid = grid.handle.get();
             (pos.row, pos.col) = (pos.row - grid.comp_row, pos.col - grid.comp_col);
             // The popup menu doesn't have a window, so answer None.
             return None;
@@ -123,7 +123,7 @@ fn find_grid_win(pos: &mut MousePos) -> Option<Win> {
             let Some(grid) = grid.filter(|grid| grid.same(wp.grid_alloc())) else {
                 continue;
             };
-            pos.grid = grid.handle as c_int;
+            pos.grid = grid.handle.get();
             pos.row -= wp.w_winrow + wp.w_grid.row_offset;
             pos.col -= wp.w_wincol + wp.w_grid.col_offset;
             return Some(wp);

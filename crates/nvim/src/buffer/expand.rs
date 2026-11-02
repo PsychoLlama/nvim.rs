@@ -22,6 +22,7 @@ use crate::cmdexpand::{BUF_DIFF_FILTER, WildOpts};
 use crate::cstr;
 use crate::env::home_to_tilde;
 use crate::memory::XString;
+use crate::types::Handle;
 use core::ffi::c_int;
 
 use super::*;
@@ -226,7 +227,7 @@ pub(crate) fn find_buf(nr: c_int) -> Option<Buf> {
     } else {
         nr
     };
-    winlayer::buffer(nr)
+    winlayer::buffer(Handle::new(nr))
 }
 
 /// The name of buffer `n`, shortened with `home_replace`; `None` when there

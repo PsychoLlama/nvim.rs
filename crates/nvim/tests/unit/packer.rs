@@ -7,7 +7,7 @@
 //! it, and the object walker is checked end to end through a string buffer.
 
 use neovim::msgpack_rpc::packer::{format, mpack_object, pack_to_bytes};
-use neovim::types::{ApiDict, Array, DictKey, KeyValuePair, Object, String_0};
+use neovim::types::{ApiDict, ApiString, Array, DictKey, KeyValuePair, Object};
 
 #[test]
 fn booleans_are_one_byte() {
@@ -198,7 +198,7 @@ fn pack(object: &mut Object) -> Vec<u8> {
 }
 
 fn string(text: &[u8]) -> Object {
-    Object::string(String_0::from_bytes(text))
+    Object::string(ApiString::from_bytes(text))
 }
 
 fn array(items: Vec<Object>) -> Object {

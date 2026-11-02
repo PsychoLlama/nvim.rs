@@ -48,8 +48,8 @@ use crate::state::mode::{State, edit_submode};
 use crate::strings::{FmtArg, formatted};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    Array, ColNr, Hlf, Integer, MAXPATHL, NUL, Object, OptIndex, OptInt, OptionSetFlags,
-    ScreenChar, StlHlRun, StlOpt, String_0, int64_t,
+    ApiString, Array, ColNr, Hlf, Integer, MAXPATHL, NUL, Object, OptIndex, OptInt, OptionSetFlags,
+    ScreenChar, StlHlRun, StlOpt, int64_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_msg_ruler, ui_has};
@@ -383,7 +383,7 @@ fn push_chunk(content: &mut Array, attr: c_int, text: &[u8], group: c_int) {
     let mut chunk = Array::with_capacity(3);
     // The text is copied: the event outlives the buffer it was built in.
     chunk.push(Object::integer(attr as Integer));
-    chunk.push(Object::string(String_0::from_bytes(text)));
+    chunk.push(Object::string(ApiString::from_bytes(text)));
     chunk.push(Object::integer(group as Integer));
     content.push(Object::array(chunk));
 }
@@ -653,7 +653,7 @@ fn show_ext_ruler(buffer: &[u8], attr: c_int) {
         "attr == HL_ATTR(HLF_MSG)"
     );
     chunk.push(Object::integer(attr as Integer));
-    chunk.push(Object::string(String_0::from_bytes(buffer)));
+    chunk.push(Object::string(ApiString::from_bytes(buffer)));
     chunk.push(Object::integer(HLF_MSG as Integer));
     content.push(Object::array(chunk));
     ui_call_msg_ruler(content);

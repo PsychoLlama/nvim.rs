@@ -18,14 +18,14 @@ pub fn nvim_buf_get_number(buffer: BufferHandle) -> Result<Integer, Error> {
     let Some(buf) = find_buffer_by_handle(buffer)? else {
         return Ok(0 as Integer);
     };
-    Ok(buf.handle as Integer)
+    Ok(Integer::from(buf.handle))
 }
 
 /// The namespace `src_id` names, allocating one for the 0 every pre-namespace
 /// caller passed and answering the reserved "no namespace" id for a negative.
 fn src2ns(src_id: &mut Integer) -> uint32_t {
     if *src_id == 0 {
-        *src_id = nvim_create_namespace(String_0::NULL);
+        *src_id = nvim_create_namespace(ApiString::NULL);
     }
     if *src_id < 0 {
         return (1u32 << 31).wrapping_sub(1);
@@ -65,7 +65,7 @@ pub fn nvim_buf_clear_highlight(
 pub fn nvim_buf_add_highlight(
     buffer: BufferHandle,
     mut ns_id: Integer,
-    hl_group: String_0,
+    hl_group: ApiString,
     line: Integer,
     col_start: Integer,
     mut col_end: Integer,

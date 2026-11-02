@@ -34,7 +34,7 @@ use crate::lua::executor::until_nul;
 use crate::lua::stack::{At, Raise, Stack};
 use crate::narrow::number_as_int;
 use crate::runtime::script_autoload_named;
-use crate::types::{DictItem, Error, Handle, ScopeDictItem, String_0};
+use crate::types::{ApiString, DictItem, Error, Handle, ScopeDictItem};
 
 /// The dictionary a scope entry holds, if it holds one yet.
 fn scope_dict(entry: &ScopeDictItem) -> Option<DictRef> {
@@ -49,8 +49,9 @@ fn scope_dict(entry: &ScopeDictItem) -> Option<DictRef> {
 fn var_scope(stack: &mut Stack) -> Result<Option<DictRef>, Raise> {
     // `luaL_checkstring`'s C string.
     let scope = until_nul(stack.check_bytes(At::arg(1))?).to_vec();
-    let handle: Handle =
-        number_as_int(i64::try_from(stack.check_integer(At::arg(2))?).unwrap_or_default());
+    let handle: Handle = Handle::new(number_as_int(
+        i64::try_from(stack.check_integer(At::arg(2))?).unwrap_or_default(),
+    ));
     let found: Result<Option<DictRef>, Error> =
         match scope.as_slice() {
             b"g" => Ok(Some(globvar_dict())),
@@ -74,7 +75,7 @@ fn var_scope(stack: &mut Stack) -> Result<Option<DictRef>, Raise> {
 pub(crate) fn setvar(stack: &mut Stack) -> Result<c_int, Raise> {
     let dict = var_scope(stack)?.expect("a live scope holds its dictionary");
     // Copied out of the Lua state: the key outlives the value below.
-    let key = String_0::from_bytes(stack.check_bytes(At::arg(3))?);
+    let key = ApiString::from_bytes(stack.check_bytes(At::arg(3))?);
 
     let del = stack.top().index() < 4 || stack.is_nil(At::arg(4));
 

@@ -387,7 +387,7 @@ fn value_type(ty: &syn::Type) -> Option<ApiType> {
         "Boolean" => ApiType::Boolean,
         "Integer" => ApiType::Integer,
         "Float" => ApiType::Float,
-        "String_0" => ApiType::String,
+        "ApiString" => ApiType::String,
         "Array" => ApiType::Array,
         "ApiDict" => ApiType::Dict,
         "Object" => ApiType::Object,
@@ -450,7 +450,7 @@ fn value_ret(ty: &syn::Type) -> Option<RetType> {
         "Boolean" => RetType::Boolean,
         "Integer" => RetType::Integer,
         "Float" => RetType::Float,
-        "String_0" => RetType::String,
+        "ApiString" => RetType::String,
         "Array" => RetType::Array,
         "ApiDict" => RetType::Dict,
         "Object" => RetType::Object,
@@ -623,7 +623,7 @@ fn key_kind(ty: &str) -> Option<(&'static str, &'static str)> {
         "Boolean" => ("Boolean", "Boolean"),
         "Integer" => ("Integer", "Integer"),
         "Float" => ("Float", "Float"),
-        "String_0" => ("String", "String"),
+        "ApiString" => ("String", "String"),
         "Array" => ("Array", "Array"),
         "ApiDict" => ("Dict", "Dict"),
         "LuaRef" => ("LuaRef", "LuaRef"),
@@ -1231,7 +1231,8 @@ const HEADER: &str = r#"//! Dispatch wrappers for the msgpack-RPC API.
 //! arity, converts each element to the parameter type the API function
 //! declares — refusing with an `Error` if a tag does not match — calls the
 //! function, and boxes whatever came back into an `Object`. A wrapper that
-//! refuses returns nil and leaves the reason in `*error`.
+//! refuses answers `Err`, and so does one whose API function did: this is
+//! the one place an `Err` becomes the RPC error object.
 //!
 //! This module holds the shared support code and the imports; the wrappers
 //! themselves live in one child module per API source file, re-exported here
@@ -1239,6 +1240,13 @@ const HEADER: &str = r#"//! Dispatch wrappers for the msgpack-RPC API.
 //! overflow the tree's 1,000-line file cap is split into numbered parts.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 "#;
 
 /// The cast family's deny, as the tree spells it in a finished module.
@@ -1267,8 +1275,7 @@ fn child_header(module: &str, part: usize, parts: usize, body: &str) -> String {
         "#![forbid(unsafe_code)]"
     };
     // The wrappers convert between integer widths only through `From`/
-    // `TryFrom`, so every child takes the cast deny; the support code in the
-    // parent still narrows an `Integer` to a `Handle` with `as`.
+    // `TryFrom`, so every child takes the cast deny, as the parent does.
     format!(
         "//! Dispatch wrappers for `crate::api::{module}`{of}.\n\
          //!\n\
@@ -1337,12 +1344,13 @@ const READERS: &[(&str, &str)] = &[
     (
         "as_boolean",
         r#"
-/// A nonnegative integer is accepted as a boolean, truncated to C `int`
-/// first as the C dispatcher did.
+/// A nonnegative integer is accepted as a boolean. The C dispatcher
+/// truncated it to C `int` first, so 2^32 read as false; one past `int` is
+/// refused here instead, as it is for a handle.
 fn as_boolean(o: Object) -> Option<Boolean> {
     match o {
         Object::Boolean(b) => Some(b),
-        Object::Integer(n) if n >= 0 => Some(n as Handle != 0),
+        Object::Integer(n) if (0..=Integer::from(i32::MAX)).contains(&n) => Some(n != 0),
         _ => None,
     }
 }
@@ -1372,7 +1380,7 @@ fn as_float(o: Object) -> Option<Float> {
     (
         "as_string",
         r#"
-fn as_string(o: Object) -> Option<String_0> {
+fn as_string(o: Object) -> Option<ApiString> {
     o.into_string()
 }
 "#,
@@ -1413,7 +1421,8 @@ fn as_luaref(o: Object) -> Option<LuaRef> {
         r#"
 /// Buffer, Window and Tabpage each have a variant of their own, and a bare
 /// nonnegative integer is accepted as any of them. `tag` names the one the
-/// parameter declares: a window handle is not a buffer.
+/// parameter declares: a window handle is not a buffer. One past C `int`
+/// names no handle at all, where the C dispatcher wrapped it onto another.
 fn as_handle(o: Object, tag: ObjectType) -> Option<Handle> {
     let n = match &o {
         Object::Integer(n) => *n,
@@ -1425,7 +1434,7 @@ fn as_handle(o: Object, tag: ObjectType) -> Option<Handle> {
         }
         _ => return None,
     };
-    (n >= 0).then_some(n as Handle)
+    Handle::try_from(n).ok().filter(|_| n >= 0)
 }
 "#,
     ),
@@ -1524,7 +1533,7 @@ const TYPE_NAMES: &[&str] = &[
     "LuaRef",
     "Object",
     "ObjectType",
-    "String_0",
+    "ApiString",
     "Handle",
     "size_t",
     "uint64_t",

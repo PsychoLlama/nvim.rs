@@ -384,7 +384,7 @@ pub(crate) fn set_inner_size(window: Win, valid_cursor: bool) {
     if ui_has(kUIMultigrid) {
         {
             ui_call_win_viewport_margins(
-                window.w_grid_alloc.handle as Integer,
+                Integer::from(window.w_grid_alloc.handle),
                 window.handle as WindowHandle,
                 window.w_winrow_off as Integer,
                 window.w_border_adj[2] as Integer,

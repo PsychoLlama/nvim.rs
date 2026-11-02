@@ -233,7 +233,7 @@ plus these whole-tree metrics, which are not per-file:
                     the ratcheted total covers instead.
 
   cell_copy_owner   `.get()` reads of a global whose `T` derives `Copy` *and*
-                    transitively owns a raw pointer — a `String_0`, a
+                    transitively owns a raw pointer — a `ApiString`, a
                     `GArray`, a `regbehind_T`. `get` copies the struct out
                     of the cell, so the copy and the global now hold the same
                     pointer: whoever frees or reallocates through one leaves
@@ -1041,7 +1041,7 @@ CELL_COPY_OWNER = (
     "provider_caller_scope",
     "counted",
     # The `Object` cells, from phase 22's F-P22-53 audit at the close: every
-    # `GlobalCell<String_0>` and `GlobalCell<Object>` in the tree, listed
+    # `GlobalCell<ApiString>` and `GlobalCell<Object>` in the tree, listed
     # whether or not the value it happens to hold owns anything today, so the
     # register can be re-derived by grepping for those two types. `names`
     # carries no site now -- `nth_lua_string` reads it through `with` and

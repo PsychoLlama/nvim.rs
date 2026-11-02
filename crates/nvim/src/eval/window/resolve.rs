@@ -54,7 +54,7 @@ pub fn win_by_id(id: c_int) -> Option<Win> {
 pub fn win_and_tab_by_id(id: c_int) -> Option<(Win, TabPage)> {
     tabs().find_map(|tp| {
         windows_in_tab(tp)
-            .find(|wp| wp.handle == id)
+            .find(|wp| wp.handle == Handle::new(id))
             .map(|wp| (wp, tp))
     })
 }
@@ -77,7 +77,7 @@ pub fn find_win_by_nr(vp: &TypVal, tabpage: Option<TabPage>) -> Option<Win> {
     }
     let tabpage = tabpage.unwrap_or_else(TabPage::current);
     if nr >= LOWEST_WIN_ID {
-        return windows_in_tab(tabpage).find(|wp| wp.handle == nr);
+        return windows_in_tab(tabpage).find(|wp| wp.handle == Handle::new(nr));
     }
     // Window numbers count from one, and this counting does *not* skip the
     // windows `winnr()` has no number for.
@@ -259,7 +259,7 @@ fn nth_numbered_win(tabpage: TabPage, winnr: c_int) -> Option<Win> {
 
 /// `win_id2tabwin({winid})` — `[tabnr, winnr]`, `[0, 0]` for an unknown id.
 pub fn f_win_id2tabwin(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let id: Handle = number_as_int(arg_number(args, 0));
+    let id: Handle = Handle::new(number_as_int(arg_number(args, 0)));
     let (tabnr, winnr) = win_get_tabwin(id);
     let list = tv_list_alloc_ret(result, 2);
     (*list).push_number(VarNumber::from(tabnr));
@@ -272,7 +272,7 @@ pub fn f_win_id2win(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let id = number_as_int(tv_get_number(&args[0]));
     let mut nr = 0;
     for wp in windows_in_tab(tp) {
-        if wp.handle == id {
+        if wp.handle == Handle::new(id) {
             // A window the numbering skips (a hidden float) answers 0.
             result.write_number(if wp.has_winnr(tp) {
                 VarNumber::from(nr + 1)
@@ -290,7 +290,7 @@ pub fn f_win_id2win(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_win_findbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let list = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
     let bufnr = number_as_int(arg_number(args, 0));
-    for wp in tab_windows().filter(|wp| wp.buffer().handle == bufnr) {
+    for wp in tab_windows().filter(|wp| wp.buffer().handle == Handle::new(bufnr)) {
         (*list).push_number(VarNumber::from(wp.handle));
     }
 }
@@ -298,7 +298,7 @@ pub fn f_win_findbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 /// `win_gotoid({winid})` — 1 when the window was reached, 0 otherwise.
 pub fn f_win_gotoid(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let id = number_as_int(tv_get_number(&args[0]));
-    if Win::current().handle == id {
+    if Win::current().handle == Handle::new(id) {
         result.write_number(1);
         return;
     }

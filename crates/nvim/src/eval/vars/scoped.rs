@@ -14,7 +14,7 @@ use crate::guard::Suppress;
 use crate::message_fmt::msg_bytes;
 use crate::option::set_option_value_handle_tty;
 use crate::semsg;
-use crate::types::String_0;
+use crate::types::ApiString;
 use core::ffi::c_int;
 
 use super::*;
@@ -148,7 +148,7 @@ pub(crate) fn tv_to_optval(tv: &TypVal, opt_idx: OptIndex, name: &[u8]) -> (OptV
         {
             // An option that takes a function reference or a lambda stores
             // the name of one.
-            OptVal::string(String_0::from_bytes(encode_tv2string(tv).as_bytes()))
+            OptVal::string(ApiString::from_bytes(encode_tv2string(tv).as_bytes()))
         } else if option_has_bool || option_has_num {
             let read = if option_has_num {
                 tv_get_number_chk(tv)
@@ -180,9 +180,9 @@ pub(crate) fn tv_to_optval(tv: &TypVal, opt_idx: OptIndex, name: &[u8]) -> (OptV
             if tv.v_type() != VAR_BOOL && tv.v_type() != VAR_SPECIAL {
                 let strval = nbuf.string_chk(tv);
                 err = strval.is_none();
-                OptVal::string(
-                    strval.map_or(String_0::NULL, |text| String_0::from_bytes(text.to_bytes())),
-                )
+                OptVal::string(strval.map_or(ApiString::NULL, |text| {
+                    ApiString::from_bytes(text.to_bytes())
+                }))
             } else {
                 if !is_tty_opt {
                     err = true;

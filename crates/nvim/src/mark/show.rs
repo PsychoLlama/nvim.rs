@@ -96,7 +96,7 @@ pub fn ex_marks(excmd: &mut ExArg) {
         let Some(file) = file else {
             continue;
         };
-        let current = fnum == buf.handle;
+        let current = fnum == buf.handle.get();
         show_one_mark(
             c_int::from(name),
             arg,
@@ -446,7 +446,7 @@ pub(super) fn mark_line(pos: Pos, lead_len: c_int) -> XString {
 /// The name of the file a filemark is in — or, when it is in the current
 /// buffer, the text at the mark. `None` when its buffer is gone.
 pub fn fm_getname(fm: &FileMark, lead_len: c_int) -> Option<XString> {
-    if fm.fnum == Buf::current().handle {
+    if fm.fnum == Buf::current().handle.get() {
         return Some(mark_line(fm.mark, lead_len));
     }
     buflist_nr2name(fm.fnum, 0, 1)

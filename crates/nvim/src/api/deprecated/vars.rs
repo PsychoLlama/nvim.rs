@@ -20,7 +20,7 @@ use crate::api::private::helpers::{
 
 pub fn buffer_set_var(
     buffer: BufferHandle,
-    name: String_0,
+    name: ApiString,
     value: Object,
 ) -> Result<Object, Error> {
     let Some(buf) = find_buffer_by_handle(buffer)? else {
@@ -30,7 +30,7 @@ pub fn buffer_set_var(
     dict_set_var(&vars, &name, value, false, true)
 }
 
-pub fn buffer_del_var(buffer: BufferHandle, name: String_0) -> Result<Object, Error> {
+pub fn buffer_del_var(buffer: BufferHandle, name: ApiString) -> Result<Object, Error> {
     let Some(buf) = find_buffer_by_handle(buffer)? else {
         return Ok(Object::Nil);
     };
@@ -40,7 +40,7 @@ pub fn buffer_del_var(buffer: BufferHandle, name: String_0) -> Result<Object, Er
 
 pub fn window_set_var(
     window: WindowHandle,
-    name: String_0,
+    name: ApiString,
     value: Object,
 ) -> Result<Object, Error> {
     let Some(win) = find_window_by_handle(window)? else {
@@ -50,7 +50,7 @@ pub fn window_set_var(
     dict_set_var(&vars, &name, value, false, true)
 }
 
-pub fn window_del_var(window: WindowHandle, name: String_0) -> Result<Object, Error> {
+pub fn window_del_var(window: WindowHandle, name: ApiString) -> Result<Object, Error> {
     let Some(win) = find_window_by_handle(window)? else {
         return Ok(Object::Nil);
     };
@@ -60,7 +60,7 @@ pub fn window_del_var(window: WindowHandle, name: String_0) -> Result<Object, Er
 
 pub fn tabpage_set_var(
     tabpage: TabpageHandle,
-    name: String_0,
+    name: ApiString,
     value: Object,
 ) -> Result<Object, Error> {
     let Some(tab) = find_tab_by_handle(tabpage)? else {
@@ -70,7 +70,7 @@ pub fn tabpage_set_var(
     dict_set_var(&vars, &name, value, false, true)
 }
 
-pub fn tabpage_del_var(tabpage: TabpageHandle, name: String_0) -> Result<Object, Error> {
+pub fn tabpage_del_var(tabpage: TabpageHandle, name: ApiString) -> Result<Object, Error> {
     let Some(tab) = find_tab_by_handle(tabpage)? else {
         return Ok(Object::Nil);
     };
@@ -78,12 +78,12 @@ pub fn tabpage_del_var(tabpage: TabpageHandle, name: String_0) -> Result<Object,
     dict_set_var(&vars, &name, Object::Nil, true, true)
 }
 
-pub fn vim_set_var(name: String_0, value: Object) -> Result<Object, Error> {
+pub fn vim_set_var(name: ApiString, value: Object) -> Result<Object, Error> {
     let vars = globvar_dict();
     dict_set_var(&vars, &name, value, false, true)
 }
 
-pub fn vim_del_var(name: String_0) -> Result<Object, Error> {
+pub fn vim_del_var(name: ApiString) -> Result<Object, Error> {
     let vars = globvar_dict();
     dict_set_var(&vars, &name, Object::Nil, true, true)
 }

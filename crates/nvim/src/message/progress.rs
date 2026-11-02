@@ -22,7 +22,7 @@ use core::ffi::{CStr, c_int};
 /// The highlight group a progress message's title takes from its status.
 ///
 /// An unrecognised status -- and a null one -- leaves the title unhighlighted.
-fn status_hl_id(status: &String_0) -> c_int {
+fn status_hl_id(status: &ApiString) -> c_int {
     let group: &CStr = match status.as_bytes() {
         _ if status.is_null() => return 0,
         b"success" => c"OkMsg",
@@ -48,7 +48,7 @@ pub(crate) fn format_progress_message(
             hl_id: status_hl_id(&msg_data.status),
         });
         updated.push(HlMessageChunk {
-            text: String_0::from_cstr(c": "),
+            text: ApiString::from_cstr(c": "),
             hl_id: 0,
         });
     }
@@ -58,7 +58,7 @@ pub(crate) fn format_progress_message(
         // seven digits is cut there.
         let text = crate::formatted!(10, b"%3ld%% ", msg_data.percent);
         updated.push(HlMessageChunk {
-            text: String_0::from_bytes(&text),
+            text: ApiString::from_bytes(&text),
             hl_id: syn_check_group(b"WarningMsg"),
         });
     }
@@ -83,13 +83,13 @@ pub fn msg_progress<'t>(
     trunc: bool,
 ) -> Cow<'t, [u8]> {
     let mut opts = KeyDict_echo_opts {
-        kind: Some(String_0::from_cstr(c"progress")),
-        id: Some(Object::string(String_0::from_cstr(id))),
+        kind: Some(ApiString::from_cstr(c"progress")),
+        id: Some(Object::string(ApiString::from_cstr(id))),
         // Not `static_cstring(c"")`: upstream leaves this field zeroed,
         // so `title.data` is null rather than a pointer to "".
-        title: Some(String_0::NULL),
-        status: Some(String_0::from_cstr(status)),
-        source: Some(String_0::from_cstr(c"nvim")),
+        title: Some(ApiString::NULL),
+        status: Some(ApiString::from_cstr(status)),
+        source: Some(ApiString::from_cstr(c"nvim")),
         ..KeyDict_echo_opts::default()
     };
 
@@ -105,7 +105,7 @@ pub fn msg_progress<'t>(
     };
 
     let mut chunk = ArrayBuf::<2>::new();
-    chunk.push(Object::string(String_0::from_bytes(&shown)));
+    chunk.push(Object::string(ApiString::from_bytes(&shown)));
     chunk.push(Object::integer(hl_id.into()));
     let mut chunks = ArrayBuf::<1>::new();
     chunks.push(chunk.object());

@@ -44,7 +44,7 @@ struct Context {
 }
 
 pub fn nvim_eval_statusline(
-    str: String_0,
+    str: ApiString,
     opts: &mut KeyDict_eval_statusline,
 ) -> Result<ApiDict, Error> {
     // `%!` is an expression producing the real format, so there is nothing
@@ -109,7 +109,7 @@ pub fn nvim_eval_statusline(
     put(
         &mut result,
         c"str",
-        Object::string(String_0::from_bytes(&built.text)),
+        Object::string(ApiString::from_bytes(&built.text)),
     );
     Ok(result)
 }
@@ -140,7 +140,7 @@ impl Context {
         }
 
         let mut use_bools = c_int::from(use_winbar) + c_int::from(use_tabline);
-        let winid = opts.winid.unwrap_or(0);
+        let winid = opts.winid.unwrap_or(Handle::CURRENT);
         let win = if use_tabline {
             Win::current_or_none()
         } else {
@@ -272,10 +272,10 @@ fn highlight_dicts(
         put(
             &mut info,
             c"group",
-            Object::string(String_0::from_cstr(dfltname)),
+            Object::string(ApiString::from_cstr(dfltname)),
         );
         let mut groups = Array::with_capacity(1);
-        push(&mut groups, Object::string(String_0::from_cstr(dfltname)));
+        push(&mut groups, Object::string(ApiString::from_cstr(dfltname)));
         put(&mut info, c"groups", Object::array(groups));
         push(&mut values, Object::dict(info));
     }
@@ -306,7 +306,7 @@ fn highlight_dicts(
 
         let mut info = ApiDict::with_capacity(3);
         put(&mut info, c"start", Object::integer(run.start as Integer));
-        let (grp, comb) = (String_0::from_cstr(grpname), String_0::from_cstr(combine));
+        let (grp, comb) = (ApiString::from_cstr(grpname), ApiString::from_cstr(combine));
         put(&mut info, c"group", Object::string(grp.clone()));
         let mut groups = Array::with_capacity(1 + size_t::from(!ptr::eq(combine, grpname)));
         if !ptr::eq(combine, grpname) {

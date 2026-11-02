@@ -519,7 +519,7 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: StlOpt, pos: usize, text: &mut V
         }
         // The page number, which only printing ever sets.
         StlOpt::PageNum => v.num = 0,
-        StlOpt::BufNo => v.num = env.buf.handle,
+        StlOpt::BufNo => v.num = env.buf.handle.get(),
         StlOpt::Offset | StlOpt::OffsetX => {
             if opt == StlOpt::OffsetX {
                 v.base = kNumBaseHexadecimal;

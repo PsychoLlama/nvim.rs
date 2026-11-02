@@ -63,7 +63,7 @@ pub(crate) fn compute_buffer_local_count(addr_type: CmdAddr, lnum: LineNr, offse
     let loaded_only = addr_type == CmdAddr::LoadedBuffers;
     let mut count = offset;
     let mut buf = head();
-    while (buf.handle as LineNr) < lnum {
+    while (buf.handle.get() as LineNr) < lnum {
         let Some(next) = buf.next() else { break };
         buf = next;
     }
@@ -89,7 +89,7 @@ pub(crate) fn compute_buffer_local_count(addr_type: CmdAddr, lnum: LineNr, offse
             buf = next;
         }
     }
-    buf.handle as c_int
+    buf.handle.get()
 }
 
 /// The head of the buffer list, which upstream dereferences here without
@@ -241,8 +241,8 @@ fn whole_range(excmd: &mut ExArg, errormsg: &mut Option<CString>) -> bool {
             excmd.line2 = last;
         }
         CmdAddr::Buffers => {
-            excmd.line1 = head().handle as LineNr;
-            excmd.line2 = tail().handle as LineNr;
+            excmd.line1 = head().handle.get() as LineNr;
+            excmd.line2 = tail().handle.get() as LineNr;
         }
         CmdAddr::Windows | CmdAddr::Tabs => {
             // Only a *user* command may say `%` over windows or tab
@@ -443,7 +443,7 @@ pub fn get_address(
                     let found = mark_get(Buf::current(), Win::current(), flag, name);
                     cmd += 1;
                     match &found {
-                        Some(fm) if fm.fnum != Buf::current().handle => {
+                        Some(fm) if fm.fnum != Buf::current().handle.get() => {
                             mark_move_to(Some(fm), 0 as MarkMove);
                             lnum = Win::current().w_cursor.lnum;
                         }
@@ -648,7 +648,7 @@ fn dot_lnum(cmdidx: Option<CmdIdx>, addr_type: CmdAddr) -> Addr {
         CmdAddr::Lines | CmdAddr::Other => Win::current().w_cursor.lnum,
         CmdAddr::Windows => current_win_nr(Win::current_or_none()) as LineNr,
         CmdAddr::Arguments => (Win::current().w_arg_idx + 1) as LineNr,
-        CmdAddr::LoadedBuffers | CmdAddr::Buffers => Buf::current().handle as LineNr,
+        CmdAddr::LoadedBuffers | CmdAddr::Buffers => Buf::current().handle.get() as LineNr,
         CmdAddr::Tabs => current_tab_nr(TabPage::current_or_none()) as LineNr,
         CmdAddr::Quickfix => qf_get_cur_idx(quickfix()) as LineNr,
         CmdAddr::QuickfixValid => qf_get_cur_valid_idx(quickfix()) as LineNr,
@@ -668,7 +668,7 @@ fn last_lnum(cmdidx: Option<CmdIdx>, addr_type: CmdAddr) -> Addr {
         CmdAddr::Windows => current_win_nr(None) as LineNr,
         CmdAddr::Arguments => arglist_len() as LineNr,
         CmdAddr::LoadedBuffers => loaded_buffer_range().1,
-        CmdAddr::Buffers => tail().handle as LineNr,
+        CmdAddr::Buffers => tail().handle.get() as LineNr,
         CmdAddr::Tabs => current_tab_nr(None) as LineNr,
         // An empty quickfix list still has a last entry, numbered 1.
         CmdAddr::Quickfix => (qf_get_size(quickfix()) as LineNr).max(1),
@@ -731,7 +731,7 @@ pub(crate) fn invalid_range(excmd: &mut ExArg) -> Option<CString> {
                 };
                 buf = next;
             }
-            if excmd.line1 < buf.handle as LineNr {
+            if excmd.line1 < buf.handle.get() as LineNr {
                 return invrange();
             }
             let mut buf = tail();
@@ -741,7 +741,7 @@ pub(crate) fn invalid_range(excmd: &mut ExArg) -> Option<CString> {
                 };
                 buf = prev;
             }
-            if excmd.line2 > buf.handle as LineNr {
+            if excmd.line2 > buf.handle.get() as LineNr {
                 return invrange();
             }
         }

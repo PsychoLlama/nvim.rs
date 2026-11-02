@@ -800,9 +800,9 @@ fn send_win_extmarks(window: Win) {
     win_extmark_arr.with(|marks| {
         for m in marks {
             ui_call_win_extmark(
-                window.w_grid_alloc.handle as Integer,
+                Integer::from(window.w_grid_alloc.handle),
                 window.handle as WindowHandle,
-                m.ns_id as Integer,
+                Integer::from(m.ns_id),
                 m.mark_id as Integer,
                 m.win_row as Integer,
                 m.win_col as Integer,

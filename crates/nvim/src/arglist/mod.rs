@@ -213,7 +213,7 @@ fn same_file(name: &CStr, fname: Option<&CStr>) -> bool {
 /// Is `buffer` the file `entry` names -- by number, or by resolving both
 /// names?
 fn holds_entry(buffer: Buf, entry: &ArgEntry) -> bool {
-    buffer.handle == entry.fnum
+    buffer.handle == Handle::new(entry.fnum)
         || with_entry_name(entry, |name| same_file(name, buffer.name.full()))
 }
 
@@ -315,7 +315,7 @@ pub(crate) fn alist_add(id: ArgListId, name: XString, set_fnum: c_int) {
     wp.w_locked = true;
     let fnum = if set_fnum > 0 {
         let flags = BLN_LISTED as c_int | flag_if(set_fnum == 2, BLN_CURBUF);
-        buflist_add_name(Some(name.as_cstr()), 0, flags).map_or(0, |buf| buf.handle)
+        buflist_add_name(Some(name.as_cstr()), 0, flags).map_or(0, |buf| buf.handle.get())
     } else {
         0
     };
@@ -442,7 +442,8 @@ fn alist_add_list(files: Vec<XString>, after: c_int, will_edit: bool) {
     let added: Vec<ArgEntry> = files
         .into_iter()
         .map(|name| {
-            let fnum = buflist_add_name(Some(name.as_cstr()), 0, flags).map_or(0, |buf| buf.handle);
+            let fnum =
+                buflist_add_name(Some(name.as_cstr()), 0, flags).map_or(0, |buf| buf.handle.get());
             ArgEntry { name, fnum }
         })
         .collect();

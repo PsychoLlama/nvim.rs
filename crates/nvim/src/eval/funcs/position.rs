@@ -105,11 +105,11 @@ fn get_col(args: &[TypVal], result: &mut TypVal, charcol: bool) {
     };
     let wp = wp.expect("a window for the column lookup");
     let bp = wp.buffer();
-    let mut fnum = bp.handle as c_int;
+    let mut fnum = bp.handle.get();
     let fp = var2fpos(&args[0], false, &mut fnum, charcol, wp);
     let mut col: ColNr = 0;
     if let Some(fp) = fp
-        && fnum == bp.handle
+        && fnum == bp.handle.get()
     {
         if fp.col == END_OF_LINE {
             // MAXCOL means "end of line"; past the last line there is
@@ -145,11 +145,11 @@ pub fn f_virtcol(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     };
     if let Some(Some(wp)) = wp {
         let bp = wp.buffer();
-        let mut fnum = bp.handle as c_int;
+        let mut fnum = bp.handle.get();
         let fp = var2fpos(&args[0], false, &mut fnum, false, wp);
         if let Some(mut fp) = fp
             && fp.lnum <= bp.b_ml.ml_line_count
-            && fnum == bp.handle
+            && fnum == bp.handle.get()
         {
             // Clamped before it is measured, as upstream clamps the
             // shared position it answered out of.

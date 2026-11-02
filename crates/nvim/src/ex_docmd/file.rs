@@ -79,7 +79,7 @@ use crate::winlayer::{Buf, Win};
 /// that no longer exists.
 pub(crate) fn is_other_file(fnum: c_int, ffname: Option<&CStr>) -> bool {
     if fnum != 0 {
-        return fnum != Buf::current().handle;
+        return fnum != Buf::current().handle.get();
     }
     let Some(ffname) = ffname else {
         return true;
@@ -390,7 +390,7 @@ pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
         && !old.w_buffer.is_current()
         && !cmdmod_has(CmdModFlags::KEEPALT)
     {
-        old.w_alt_fnum = Buf::current().handle as c_int;
+        old.w_alt_fnum = Buf::current().handle.get();
     }
     ex_no_reprint.set(true);
 }

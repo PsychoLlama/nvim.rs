@@ -181,7 +181,7 @@ pub fn putcmdline(c: ::core::ffi::c_char, shift: bool) {
         msg_no_more.set(false);
     } else if cc.redraw_state != kCmdRedrawAll {
         ui_call_cmdline_special_char(
-            String_0::from_bytes(cstr::until_nul(&[c.cast_unsigned()])),
+            ApiString::from_bytes(cstr::until_nul(&[c.cast_unsigned()])),
             shift as Boolean,
             Integer::from(cc.level),
         );

@@ -33,7 +33,7 @@ use crate::message::{
 use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
-use crate::types::String_0;
+use crate::types::ApiString;
 use crate::types::{
     ApiDict, CmdAddr, ExArgt, ExpandContext, LuaRef, Object, ScriptCtx, UserCmd, int64_t,
 };
@@ -309,39 +309,39 @@ pub(crate) fn commands_array(buffer: Option<Buf>) -> ApiDict {
 fn describe(cmd: &Row) -> ApiDict {
     let a = cmd.argt;
     let luaref = |r: LuaRef| (r != LUA_NOREF).then(|| Object::luaref(api_new_luaref(r)));
-    let name = String_0::from_cstr(&cmd.name);
-    let definition = String_0::from_cstr(&cmd.replacement);
+    let name = ApiString::from_cstr(&cmd.name);
+    let definition = ApiString::from_cstr(&cmd.replacement);
     let complete_arg = cmd
         .complete_arg
         .as_deref()
-        .map_or(Object::Nil, |arg| Object::string(String_0::from_cstr(arg)));
+        .map_or(Object::Nil, |arg| Object::string(ApiString::from_cstr(arg)));
     // The completion is a Lua reference when the command was given one,
     // and the `-complete=` name otherwise.
     let complete = match luaref(cmd.complete_luaref) {
         Some(callback) => callback,
         None => match command_complete_name(cmd.complete) {
-            Some(text) => Object::string(String_0::from_cstr(text)),
+            Some(text) => Object::string(ApiString::from_cstr(text)),
             None => Object::Nil,
         },
     };
-    let number = |n: int64_t| Object::string(String_0::from_bytes(n.to_string().as_bytes()));
+    let number = |n: int64_t| Object::string(ApiString::from_bytes(n.to_string().as_bytes()));
     let count = (a.has(ExArgt::COUNT)).then(|| {
         if cmd.default_count >= 0 {
             number(cmd.default_count)
         } else {
-            Object::string(String_0::from_cstr(c"0"))
+            Object::string(ApiString::from_cstr(c"0"))
         }
     });
     let range = (a.has(ExArgt::RANGE)).then(|| {
         if a.has(ExArgt::DFLALL) {
-            Object::string(String_0::from_cstr(c"%"))
+            Object::string(ApiString::from_cstr(c"%"))
         } else if cmd.default_count >= 0 {
             number(cmd.default_count)
         } else {
-            Object::string(String_0::from_cstr(c"."))
+            Object::string(ApiString::from_cstr(c"."))
         }
     });
-    let nargs = String_0::from_cstr(nargs_str(a));
+    let nargs = ApiString::from_cstr(nargs_str(a));
 
     dict_of(
         16,
@@ -375,7 +375,7 @@ fn describe(cmd: &Row) -> ApiDict {
 /// one that is not the default.
 fn addr_object(cmd: &Row) -> Object {
     match named_addr_type(cmd.addr_type) {
-        Some(row) => Object::string(String_0::from_cstr(row.name)),
+        Some(row) => Object::string(ApiString::from_cstr(row.name)),
         None => Object::Nil,
     }
 }

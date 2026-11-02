@@ -349,7 +349,7 @@ pub fn apply_autocmds_group(
         autocmd_fname_full.set(false);
 
         // `<abuf>`.
-        autocmd_bufnr.set(buffer.map_or(0, |b| b.handle));
+        autocmd_bufnr.set(buffer.map_or(0, |b| b.handle.get()));
 
         // The name to match the patterns against.  Always a full path,
         // in case a pattern has `allow_dirs` set.

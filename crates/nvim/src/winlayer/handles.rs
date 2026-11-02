@@ -34,6 +34,7 @@
     clippy::ptr_as_ptr
 )]
 
+use core::ffi::c_int;
 use core::num::NonZero;
 
 use crate::allocator::Owned;
@@ -259,15 +260,15 @@ pub(crate) fn free_deferred() {
 /// and its links have to read as "no neighbour" before anyone writes them.
 /// The test at the bottom of this file pins that.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) struct WinId(pub(super) NonZero<Handle>);
+pub(crate) struct WinId(pub(super) NonZero<c_int>);
 
 /// A buffer's identity, taken from a live buffer: its number. [`WinId`].
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct BufId(pub(super) NonZero<Handle>);
+pub struct BufId(pub(super) NonZero<c_int>);
 
 /// A tab page's identity, taken from a live tab page. [`WinId`].
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) struct TabId(pub(super) NonZero<Handle>);
+pub(crate) struct TabId(pub(super) NonZero<c_int>);
 
 /// A frame's identity, taken from a live frame. [`WinId`].
 ///
@@ -278,7 +279,7 @@ pub(crate) struct TabId(pub(super) NonZero<Handle>);
 /// identity, and a walk that arrives at a freed one reads `None` rather than
 /// whatever the allocator has since put there.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) struct FrameId(pub(super) NonZero<Handle>);
+pub(crate) struct FrameId(pub(super) NonZero<c_int>);
 
 impl WinId {
     /// The window again, `None` once it has been freed.
@@ -307,13 +308,13 @@ impl WinId {
     /// that caller's answer.
     #[inline(always)]
     pub(crate) fn get(self) -> Option<Win> {
-        window(self.0.get())
+        window(Handle::new(self.0.get()))
     }
 
     /// The bare handle, for the API and RPC edges that speak in numbers.
     #[inline(always)]
     pub(crate) fn handle(self) -> Handle {
-        self.0.get()
+        Handle::new(self.0.get())
     }
 }
 
@@ -321,7 +322,7 @@ impl BufId {
     /// The buffer again, `None` once it has been wiped. [`WinId::get`].
     #[inline(always)]
     pub(crate) fn get(self) -> Option<Buf> {
-        buffer(self.0.get())
+        buffer(Handle::new(self.0.get()))
     }
 
     /// Whether the buffer is still registered — [`WinId::get`]'s question,
@@ -338,7 +339,7 @@ impl TabId {
     /// The tab page again, `None` once it has been closed. [`WinId::get`].
     #[inline(always)]
     pub(crate) fn get(self) -> Option<TabPage> {
-        tabpage(self.0.get())
+        tabpage(Handle::new(self.0.get()))
     }
 }
 
@@ -346,7 +347,7 @@ impl FrameId {
     /// The frame again, `None` once it has been freed. [`WinId::get`].
     #[inline(always)]
     pub(crate) fn get(self) -> Option<FrameRef> {
-        frame(self.0.get())
+        frame(Handle::new(self.0.get()))
     }
 }
 

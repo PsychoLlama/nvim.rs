@@ -14,7 +14,7 @@
 use std::ffi::CStr;
 
 use neovim::api::extmark::{describe_ns, nvim_create_namespace, nvim_get_namespaces};
-use neovim::types::String_0;
+use neovim::types::{ApiString, Handle};
 
 use super::support::{Sandbox, editor_lock};
 
@@ -32,17 +32,17 @@ unsafe fn namespace_names() -> Vec<Vec<u8>> {
 #[test]
 fn a_name_keeps_its_id() {
     let _sandbox = Sandbox::globals();
-    let first = nvim_create_namespace(String_0::from_cstr(c"unit-keeps-1"));
-    let second = nvim_create_namespace(String_0::from_cstr(c"unit-keeps-2"));
+    let first = nvim_create_namespace(ApiString::from_cstr(c"unit-keeps-1"));
+    let second = nvim_create_namespace(ApiString::from_cstr(c"unit-keeps-2"));
     assert!(first > 0 && second > first);
     assert_eq!(
-        nvim_create_namespace(String_0::from_cstr(c"unit-keeps-1")),
+        nvim_create_namespace(ApiString::from_cstr(c"unit-keeps-1")),
         first
     );
     // An empty name is never interned: every call is a fresh id.
-    let anon = nvim_create_namespace(String_0::NULL);
+    let anon = nvim_create_namespace(ApiString::NULL);
     assert!(anon > second);
-    assert!(nvim_create_namespace(String_0::NULL) > anon);
+    assert!(nvim_create_namespace(ApiString::NULL) > anon);
 }
 
 /// The listing order is creation order — the khash property this table's
@@ -55,7 +55,7 @@ fn namespaces_are_listed_in_creation_order() {
     // SAFETY: the sandbox holds the editor lock, and the names are live.
     let names = unsafe {
         for name in created {
-            nvim_create_namespace(String_0::from_cstr(name));
+            nvim_create_namespace(ApiString::from_cstr(name));
         }
         namespace_names()
     };
@@ -73,9 +73,9 @@ fn namespaces_are_listed_in_creation_order() {
 #[test]
 fn describe_ns_answers_the_interned_name() {
     let _editor = editor_lock();
-    let id = nvim_create_namespace(String_0::from_cstr(c"unit-describe"));
+    let id = nvim_create_namespace(ApiString::from_cstr(c"unit-describe"));
     let name = describe_ns(id.try_into().unwrap(), b"(none)");
     assert_eq!(name, b"unit-describe");
-    let missing = describe_ns(1 << 30, b"(none)");
+    let missing = describe_ns(Handle::new(1 << 30), b"(none)");
     assert_eq!(missing, b"(none)");
 }

@@ -9,6 +9,7 @@
 use super::*;
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_conflict, err_expected};
 use crate::memory::XString;
+use crate::types::Handle;
 use crate::types::OptionSetFlags;
 use crate::winlayer::Buf;
 
@@ -48,7 +49,7 @@ pub fn nvim_exec_autocmds(event: Object, opts: &mut KeyDict_exec_autocmds) -> Re
         }
     }
     let has_buf: bool = opts.buf.is_some() || opts.buffer.is_some();
-    let buf: BufferHandle = opts.buf.or(opts.buffer).unwrap_or(0);
+    let buf: BufferHandle = opts.buf.or(opts.buffer).unwrap_or(Handle::CURRENT);
     if opts.buf.is_some() && opts.buffer.is_some() {
         return Err(err_conflict(c"buf", c"buffer"));
     }

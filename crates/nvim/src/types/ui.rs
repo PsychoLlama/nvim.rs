@@ -35,7 +35,7 @@ pub struct RemoteUI {
     pub pum_height: ::core::ffi::c_double,
     pub pum_width: ::core::ffi::c_double,
     /// The `term_name` option, as `nvim_list_uis` reports it.
-    pub term_name: String_0,
+    pub term_name: ApiString,
     pub term_colors: ::core::ffi::c_int,
     pub stdin_tty: bool,
     pub stdout_tty: bool,

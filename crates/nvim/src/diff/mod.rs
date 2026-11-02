@@ -85,9 +85,9 @@ use crate::strings::shellescape;
 use crate::types::AutoEvent;
 use crate::types::NL;
 use crate::types::{
-    AcoSave, CmdAddr, CmdModFlags, ColNr, DiffBlock, DiffLine, DiffLineChange, EvalFuncData, ExArg,
-    ExtmarkOp, Hlf, LineNr, OptInt, OptScope, OptVal, ScriptId, String_0, TypVal, VarNumber,
-    size_t, uint64_t,
+    AcoSave, ApiString, CmdAddr, CmdModFlags, ColNr, DiffBlock, DiffLine, DiffLineChange,
+    EvalFuncData, ExArg, ExtmarkOp, Hlf, LineNr, OptInt, OptScope, OptVal, ScriptId, TypVal,
+    VarNumber, size_t, uint64_t,
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_save, u_sync};

@@ -70,10 +70,9 @@ use crate::state::{
     MODE_TERMINAL, MODE_VISUAL,
 };
 use crate::types::{
-    ApiDict, Array, BufferHandle, Dict, Error, EvalFuncData, ExArg, Expand, Integer,
+    ApiDict, ApiString, Array, BufferHandle, Dict, Error, EvalFuncData, ExArg, Expand, Integer,
     KeyDict_keymap, LineNr, LuaRef, LuaRetMode, MapBlock, MapCallback, MapRhs, MapStr, Object,
-    OptSet, RegMatch, RemapValues, ScriptId, String_0, TypVal, VarNumber, ptrdiff_t, size_t,
-    uint64_t,
+    OptSet, RegMatch, RemapValues, ScriptId, TypVal, VarNumber, ptrdiff_t, size_t, uint64_t,
 };
 use std::rc::Rc;
 

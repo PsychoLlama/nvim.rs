@@ -127,7 +127,7 @@ pub(crate) static namedfm: GlobalCell<[XFileMark; 36]> = GlobalCell::new([XFileM
 pub fn setmark(c: c_int) -> Result<(), Failed> {
     let (win, buf) = (Win::current(), Buf::current());
     let view = mark_view_make_at(win, win.w_cursor);
-    setmark_pos(c, win.w_cursor, true, buf.handle, view)
+    setmark_pos(c, win.w_cursor, true, buf.handle.get(), view)
 }
 
 /// Schedules "MarkSet" event.
@@ -143,7 +143,7 @@ fn do_markset_autocmd(c: c_char, pos: Pos, buffer: Buf) {
     let items: Vec<KeyValuePair> = vec![
         key_value_pair {
             key: c"name".into(),
-            value: Object::string(String_0::from_bytes(&mark_str[..1])),
+            value: Object::string(ApiString::from_bytes(&mark_str[..1])),
         },
         key_value_pair {
             key: c"line".into(),
@@ -217,12 +217,12 @@ fn setmark_pos(
             buf.b_visual.vi_mode = 'v' as c_int;
         }
     } else if c == '"' as c_int {
-        buf.b_last_cursor = fresh_mark(at, handle, view);
+        buf.b_last_cursor = fresh_mark(at, handle.get(), view);
     } else if c == ':' as c_int {
         if !buf_is_prompt(Some(buf)) {
             return Err(Failed);
         }
-        buf.b_prompt_start = fresh_mark(at, handle, view);
+        buf.b_prompt_start = fresh_mark(at, handle.get(), view);
         // The prompt mark is the one store that does NOT announce itself:
         // it moves on every prompt redraw, and a MarkSet per keystroke is
         // not what the event is for.
@@ -288,7 +288,7 @@ pub fn mark_forget_file(mut window: Win, fnum: c_int) {
 pub fn pos_to_mark(buffer: Buf, pos: Pos) -> FileMark {
     FileMark {
         mark: pos,
-        fnum: buffer.handle,
+        fnum: buffer.handle.get(),
         ..FileMark::UNSET
     }
 }
@@ -386,7 +386,7 @@ pub fn fmarks_check_names(buffer: Buf) {
     let (name, handle) = (name.to_bytes(), buffer.handle);
     namedfm.with_mut(|table| {
         for mark in table.iter_mut() {
-            fmarks_check_one(mark, name, handle);
+            fmarks_check_one(mark, name, handle.get());
         }
     });
     // The current tab page's windows only, as upstream: a mark in another
@@ -394,7 +394,7 @@ pub fn fmarks_check_names(buffer: Buf) {
     for mut win in windows() {
         let len = slot(win.w_jumplistlen);
         for jump in &mut win.w_jumplist[..len] {
-            fmarks_check_one(jump, name, handle);
+            fmarks_check_one(jump, name, handle.get());
         }
     }
 }
@@ -436,7 +436,7 @@ pub(crate) fn mark_check(fm: Option<&FileMark>, errormsg: &mut Option<CString>) 
         return false;
     }
     let buf = Buf::current();
-    fm.fnum != buf.handle || mark_check_line_bounds(Some(buf), fm, errormsg)
+    fm.fnum != buf.handle.get() || mark_check_line_bounds(Some(buf), fm, errormsg)
 }
 
 /// Check if a mark line number is greater than the buffer line count, and set e_markinval.

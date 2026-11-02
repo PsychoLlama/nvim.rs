@@ -102,7 +102,7 @@ pub fn get_cmd_default_range(excmd: &mut ExArg) -> LineNr {
                 len as LineNr
             }
         }
-        CmdAddr::LoadedBuffers | CmdAddr::Buffers => Buf::current().handle as LineNr,
+        CmdAddr::LoadedBuffers | CmdAddr::Buffers => Buf::current().handle.get() as LineNr,
         CmdAddr::Tabs => current_tab_nr(TabPage::current_or_none()) as LineNr,
         CmdAddr::TabsRelative | CmdAddr::Unsigned => 1,
         CmdAddr::Quickfix => qf_get_cur_idx(excmd.cmdidx) as LineNr,
@@ -124,8 +124,8 @@ pub fn set_cmd_dflall_range(excmd: &mut ExArg) {
             excmd.line2 = last;
         }
         CmdAddr::Buffers => {
-            excmd.line1 = head().handle as LineNr;
-            excmd.line2 = tail().handle as LineNr;
+            excmd.line1 = head().handle.get() as LineNr;
+            excmd.line2 = tail().handle.get() as LineNr;
         }
         CmdAddr::Windows => {
             excmd.line2 = current_win_nr(None) as LineNr;
@@ -168,11 +168,11 @@ pub(super) fn loaded_buffer_range() -> (LineNr, LineNr) {
         let Some(next) = buf.next() else { break };
         buf = next;
     }
-    let first = buf.handle as LineNr;
+    let first = buf.handle.get() as LineNr;
     let mut buf = tail();
     while buf.b_ml.ml_mfp.is_none() {
         let Some(prev) = buf.prev() else { break };
         buf = prev;
     }
-    (first, buf.handle as LineNr)
+    (first, buf.handle.get() as LineNr)
 }

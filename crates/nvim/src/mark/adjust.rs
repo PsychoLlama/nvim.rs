@@ -260,7 +260,7 @@ pub fn mark_adjust_buf(
         // slots naming *this* buffer are touched.
         namedfm.with_mut(|table| {
             for mark in table.iter_mut() {
-                shift.mark_nodel_in(&mut mark.fmark, fnum);
+                shift.mark_nodel_in(&mut mark.fmark, fnum.get());
             }
         });
         let prompt = buf_is_prompt(Some(buffer));
@@ -328,7 +328,7 @@ pub fn mark_adjust_buf(
         if !cmdmod_has(CmdModFlags::LOCKMARKS) {
             let len = slot(win.w_jumplistlen);
             for jump in &mut win.w_jumplist[..len] {
-                shift.mark_nodel_in(&mut jump.fmark, fnum);
+                shift.mark_nodel_in(&mut jump.fmark, fnum.get());
             }
         }
         if win.w_buffer != buffer {
@@ -337,7 +337,7 @@ pub fn mark_adjust_buf(
         if !cmdmod_has(CmdModFlags::LOCKMARKS) {
             let len = slot(win.w_tagstacklen);
             for tag in &mut win.w_tagstack[..len] {
-                shift.mark_nodel_in(&mut tag.fmark, fnum);
+                shift.mark_nodel_in(&mut tag.fmark, fnum.get());
             }
         }
         // The remembered Visual range of a window that is not the current
@@ -449,7 +449,7 @@ pub fn mark_col_adjust(
 
     namedfm.with_mut(|table| {
         for mark in table.iter_mut() {
-            shift.mark_in(&mut mark.fmark, fnum);
+            shift.mark_in(&mut mark.fmark, fnum.get());
         }
     });
     let prompt = buf_is_prompt(Some(buf));
@@ -480,14 +480,14 @@ pub fn mark_col_adjust(
     for mut win in windows() {
         let len = slot(win.w_jumplistlen);
         for jump in &mut win.w_jumplist[..len] {
-            shift.mark_in(&mut jump.fmark, fnum);
+            shift.mark_in(&mut jump.fmark, fnum.get());
         }
         if win.w_buffer != buf {
             continue;
         }
         let len = slot(win.w_tagstacklen);
         for tag in &mut win.w_tagstack[..len] {
-            shift.mark_in(&mut tag.fmark, fnum);
+            shift.mark_in(&mut tag.fmark, fnum.get());
         }
         if !win.is_current() {
             let mut cursor = win.w_cursor;

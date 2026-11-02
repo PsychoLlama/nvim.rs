@@ -49,7 +49,7 @@ use crate::os::cshim::gettext;
 use crate::os::input::os_breakcheck;
 use crate::startup::silent_mode;
 use crate::types::{
-    Failed, MAXPATHL, NL, OptIndex, OptInt, OptVal, OptionSetFlags, String_0, WinOpt, uint32_t,
+    ApiString, Failed, MAXPATHL, NL, OptIndex, OptInt, OptVal, OptionSetFlags, WinOpt, uint32_t,
 };
 use crate::ui::state::Columns;
 use crate::ui::ui_call_option_set;
@@ -170,7 +170,7 @@ pub(crate) fn ui_refresh_options() {
         if opt.flags & kOptFlagUIOption as uint32_t == 0 {
             continue;
         }
-        let name = String_0::from_cstr(opt.fullname);
+        let name = ApiString::from_cstr(opt.fullname);
         let value = optval_as_object(slot_value(opt_idx, option_var(opt_idx)));
         ui_call_option_set(name, value);
     }

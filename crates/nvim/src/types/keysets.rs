@@ -39,7 +39,7 @@ use super::*;
 pub struct KeyDict__shada_buflist_item {
     pub l: Option<Integer>,
     pub c: Option<Integer>,
-    pub f: Option<String_0>,
+    pub f: Option<ApiString>,
 }
 #[derive(Default)]
 #[repr(C)]
@@ -47,7 +47,7 @@ pub struct KeyDict__shada_mark {
     pub n: Option<Integer>,
     pub l: Option<Integer>,
     pub c: Option<Integer>,
-    pub f: Option<String_0>,
+    pub f: Option<ApiString>,
 }
 #[derive(Default)]
 #[repr(C)]
@@ -82,7 +82,7 @@ pub struct KeyDict__shada_search_pat {
     /// Wire key: `so`.
     pub offset: Option<Integer>,
     /// Wire key: `sp`.
-    pub pat: Option<String_0>,
+    pub pat: Option<ApiString>,
 }
 #[derive(Default)]
 #[repr(C)]
@@ -113,17 +113,17 @@ pub struct KeyDict_clear_autocmds {
 #[derive(Default)]
 #[repr(C)]
 pub struct KeyDict_cmd {
-    pub cmd: Option<String_0>,
+    pub cmd: Option<ApiString>,
     pub range: Option<Array>,
     pub count: Option<Integer>,
-    pub reg: Option<String_0>,
+    pub reg: Option<ApiString>,
     pub bang: Option<Boolean>,
     pub args: Option<Array>,
     pub magic: Option<ApiDict>,
     pub mods: Option<ApiDict>,
     pub nargs: Option<Object>,
-    pub addr: Option<String_0>,
-    pub nextcmd: Option<String_0>,
+    pub addr: Option<ApiString>,
+    pub nextcmd: Option<ApiString>,
 }
 #[derive(Default)]
 #[repr(C)]
@@ -153,12 +153,12 @@ pub struct KeyDict_cmd_mods {
     pub tab: Option<Integer>,
     pub verbose: Option<Integer>,
     pub vertical: Option<Boolean>,
-    pub split: Option<String_0>,
+    pub split: Option<ApiString>,
 }
 #[derive(Default)]
 #[repr(C)]
 pub struct KeyDict_cmd_mods_filter {
-    pub pattern: Option<String_0>,
+    pub pattern: Option<ApiString>,
     pub force: Option<Boolean>,
 }
 #[derive(Default)]
@@ -169,7 +169,7 @@ pub struct KeyDict_cmd_opts {
 #[derive(Default)]
 #[repr(C)]
 pub struct KeyDict_complete_set {
-    pub info: Option<String_0>,
+    pub info: Option<ApiString>,
 }
 #[derive(Default)]
 #[repr(C)]
@@ -187,8 +187,8 @@ pub struct KeyDict_create_autocmd {
     pub buffer: Option<BufferHandle>,
     pub buf: Option<BufferHandle>,
     pub callback: Option<Object>,
-    pub command: Option<String_0>,
-    pub desc: Option<String_0>,
+    pub command: Option<ApiString>,
+    pub desc: Option<ApiString>,
     pub group: Option<Object>,
     pub nested: Option<Boolean>,
     pub once: Option<Boolean>,
@@ -200,12 +200,12 @@ pub struct KeyDict_echo_opts {
     pub err: Option<Boolean>,
     pub verbose: Option<Boolean>,
     pub _truncate: Option<Boolean>,
-    pub kind: Option<String_0>,
+    pub kind: Option<ApiString>,
     pub id: Option<Object>,
-    pub title: Option<String_0>,
-    pub status: Option<String_0>,
+    pub title: Option<ApiString>,
+    pub status: Option<ApiString>,
     pub percent: Option<Integer>,
-    pub source: Option<String_0>,
+    pub source: Option<ApiString>,
     pub data: Option<ApiDict>,
 }
 #[derive(Default)]
@@ -216,7 +216,7 @@ pub struct KeyDict_empty {}
 pub struct KeyDict_eval_statusline {
     pub winid: Option<WindowHandle>,
     pub maxwidth: Option<Integer>,
-    pub fillchar: Option<String_0>,
+    pub fillchar: Option<ApiString>,
     pub highlights: Option<Boolean>,
     pub use_winbar: Option<Boolean>,
     pub use_tabline: Option<Boolean>,
@@ -266,13 +266,13 @@ pub struct KeyDict_get_extmarks {
     pub hl_name: Option<Boolean>,
     pub overlap: Option<Boolean>,
     /// Wire key: `type`.
-    pub type_0: Option<String_0>,
+    pub type_0: Option<ApiString>,
 }
 #[derive(Default)]
 #[repr(C)]
 pub struct KeyDict_get_highlight {
     pub id: Option<Integer>,
-    pub name: Option<String_0>,
+    pub name: Option<ApiString>,
     pub link: Option<Boolean>,
     pub create: Option<Boolean>,
 }
@@ -319,7 +319,7 @@ pub struct KeyDict_highlight {
     pub bg_indexed: Option<Boolean>,
     pub force: Option<Boolean>,
     pub update: Option<Boolean>,
-    pub url: Option<String_0>,
+    pub url: Option<ApiString>,
 }
 /// The `cterm` sub-dict of a highlight definition. An unset attribute reads
 /// as false, like every other attribute here that the caller left out.
@@ -354,7 +354,7 @@ pub struct KeyDict_keymap {
     pub expr: Option<Boolean>,
     pub unique: Option<Boolean>,
     pub callback: Option<LuaRef>,
-    pub desc: Option<String_0>,
+    pub desc: Option<ApiString>,
     pub replace_keycodes: Option<Boolean>,
 }
 #[derive(Default)]
@@ -371,10 +371,10 @@ pub struct KeyDict_open_term {
 #[derive(Default)]
 #[repr(C)]
 pub struct KeyDict_option {
-    pub scope: Option<String_0>,
+    pub scope: Option<ApiString>,
     pub win: Option<WindowHandle>,
     pub buf: Option<BufferHandle>,
-    pub filetype: Option<String_0>,
+    pub filetype: Option<ApiString>,
 }
 #[derive(Default)]
 #[repr(C)]
@@ -418,12 +418,12 @@ pub struct KeyDict_set_extmark {
     pub end_col: Option<Integer>,
     pub hl_group: Option<Object>,
     pub virt_text: Option<Array>,
-    pub virt_text_pos: Option<String_0>,
+    pub virt_text_pos: Option<ApiString>,
     pub virt_text_win_col: Option<Integer>,
     pub virt_text_hide: Option<Boolean>,
     pub virt_text_repeat_linebreak: Option<Boolean>,
     pub hl_eol: Option<Boolean>,
-    pub hl_mode: Option<String_0>,
+    pub hl_mode: Option<ApiString>,
     pub invalidate: Option<Boolean>,
     pub ephemeral: Option<Boolean>,
     pub priority: Option<Integer>,
@@ -432,19 +432,19 @@ pub struct KeyDict_set_extmark {
     pub virt_lines: Option<Array>,
     pub virt_lines_above: Option<Boolean>,
     pub virt_lines_leftcol: Option<Boolean>,
-    pub virt_lines_overflow: Option<String_0>,
+    pub virt_lines_overflow: Option<ApiString>,
     pub strict: Option<Boolean>,
-    pub sign_text: Option<String_0>,
+    pub sign_text: Option<ApiString>,
     pub sign_hl_group: Option<HLGroupID>,
     pub number_hl_group: Option<HLGroupID>,
     pub line_hl_group: Option<HLGroupID>,
     pub cursorline_hl_group: Option<HLGroupID>,
-    pub conceal: Option<String_0>,
-    pub conceal_lines: Option<String_0>,
+    pub conceal: Option<ApiString>,
+    pub conceal_lines: Option<ApiString>,
     pub spell: Option<Boolean>,
     pub ui_watched: Option<Boolean>,
     pub undo_restore: Option<Boolean>,
-    pub url: Option<String_0>,
+    pub url: Option<ApiString>,
     pub scoped: Option<Boolean>,
     pub _subpriority: Option<Integer>,
 }
@@ -477,25 +477,25 @@ pub struct KeyDict_win_config {
     pub fixed: Option<Boolean>,
     pub focusable: Option<Boolean>,
     pub footer: Option<Object>,
-    pub footer_pos: Option<String_0>,
+    pub footer_pos: Option<ApiString>,
     pub hide: Option<Boolean>,
     pub height: Option<Integer>,
     pub mouse: Option<Boolean>,
-    pub relative: Option<String_0>,
+    pub relative: Option<ApiString>,
     pub row: Option<Float>,
-    pub style: Option<String_0>,
+    pub style: Option<ApiString>,
     pub noautocmd: Option<Boolean>,
     pub vertical: Option<Boolean>,
     pub win: Option<WindowHandle>,
     pub width: Option<Integer>,
     pub zindex: Option<Integer>,
-    pub anchor: Option<String_0>,
+    pub anchor: Option<ApiString>,
     pub border: Option<Object>,
     pub bufpos: Option<Array>,
     pub col: Option<Float>,
-    pub split: Option<String_0>,
+    pub split: Option<ApiString>,
     pub title: Option<Object>,
-    pub title_pos: Option<String_0>,
+    pub title_pos: Option<ApiString>,
     pub _cmdline_offset: Option<Integer>,
 }
 #[derive(Default)]
@@ -511,8 +511,8 @@ pub struct KeyDict_win_text_height {
 #[repr(C)]
 pub struct KeyDict_xdl_diff {
     pub on_hunk: Option<LuaRef>,
-    pub result_type: Option<String_0>,
-    pub algorithm: Option<String_0>,
+    pub result_type: Option<ApiString>,
+    pub algorithm: Option<ApiString>,
     pub ctxlen: Option<Integer>,
     pub interhunkctxlen: Option<Integer>,
     pub linematch: Option<Object>,

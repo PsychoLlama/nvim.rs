@@ -139,7 +139,7 @@ fn widths_the_writer_keeps() {
     let reg = ShadaRegister {
         name: b'q'.cast_signed(),
         motion: MOTION_BLOCKWISE,
-        contents: vec![String_0::from_bytes(&[b'y'; 255])],
+        contents: vec![ApiString::from_bytes(&[b'y'; 255])],
         is_unnamed: true,
         width: 300_000_000,
     };

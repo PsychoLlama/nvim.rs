@@ -2,6 +2,7 @@
 // C declarations for the unit tests' ffi.cdef, derived from the Rust crate.
 typedef struct lua_State lua_State;
 typedef struct ApiDict ApiDict;
+typedef struct ApiString ApiString;
 typedef struct Array Array;
 typedef struct Blob Blob;
 typedef struct DecorRange_data DecorRange_data;
@@ -14,7 +15,6 @@ typedef struct Partial Partial;
 typedef struct ScreenOwned ScreenOwned;
 typedef struct Scrollback Scrollback;
 typedef struct StateOwned StateOwned;
-typedef struct String String;
 typedef struct TerminalOptions TerminalOptions;
 typedef struct VTermInner VTermInner;
 typedef struct Window Window;

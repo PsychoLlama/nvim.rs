@@ -226,8 +226,8 @@ pub type TabpageHandle = Handle;
 pub type WindowHandle = Handle;
 /// One entry of an [`ApiDict`]: an owned key and an owned value.
 ///
-/// The key is a [`DictKey`], not a [`String_0`]: an API key is a short
-/// identifier almost without exception, and a `String_0` is an `xmalloc` and
+/// The key is a [`DictKey`], not a [`ApiString`]: an API key is a short
+/// identifier almost without exception, and a `ApiString` is an `xmalloc` and
 /// an `xfree` for every one of them. The same inline-or-boxed shape a
 /// Vimscript dictionary item's key has, for the same reason, and the type is
 /// free to differ because `key_value_pair` has no C image -- `tools/ffigen`
@@ -266,7 +266,7 @@ pub enum Object {
     Boolean(Boolean) = 1,
     Integer(Integer) = 2,
     Float(Float) = 3,
-    String(ManuallyDrop<String_0>) = 4,
+    String(ManuallyDrop<ApiString>) = 4,
     Array(ManuallyDrop<Array>) = 5,
     Dict(ManuallyDrop<ApiDict>) = 6,
     /// A reference to a Lua value, held in that state's registry. Owned:
@@ -327,7 +327,7 @@ impl Object {
     }
 
     /// A borrow of the string the object owns.
-    pub fn as_string(&self) -> Option<&String_0> {
+    pub fn as_string(&self) -> Option<&ApiString> {
         match self {
             Object::String(v) => Some(v),
             _ => None,

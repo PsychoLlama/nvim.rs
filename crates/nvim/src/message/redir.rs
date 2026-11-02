@@ -156,7 +156,7 @@ pub fn verbose_enter() {
     // last_set_msg().
     if !msg_ext_skip_verbose.get() {
         if msg_ext_kind.with(|kind| kind.as_bytes() != VERBOSE_KIND.to_bytes()) {
-            pre_verbose_kind.set(msg_ext_kind.with(String_0::clone));
+            pre_verbose_kind.set(msg_ext_kind.with(ApiString::clone));
         }
         msg_ext_set_kind(VERBOSE_KIND);
     }

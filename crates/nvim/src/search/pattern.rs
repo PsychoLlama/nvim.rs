@@ -23,7 +23,7 @@ use crate::optionstr::OptString;
 use crate::regexp::{RE_BOTH, RE_LAST, RE_MAGIC, RE_SEARCH, RE_SUBST};
 use crate::search::{SEARCH_HIS, SEARCH_KEEP, SEARCH_START};
 use crate::shada::ShadaExtra;
-use crate::types::{CmdModFlags, FAIL, Failed, NUL, String_0, Timestamp, Vv};
+use crate::types::{ApiString, CmdModFlags, FAIL, Failed, NUL, Timestamp, Vv};
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
 use core::ffi::{c_char, c_int};
@@ -605,7 +605,7 @@ pub(crate) fn is_zero_width(
 
 /// One remembered pattern as ShaDa reads and writes it, owned.
 pub(crate) struct ShadaPattern {
-    pub(crate) pat: String_0,
+    pub(crate) pat: ApiString,
     pub(crate) magic: bool,
     pub(crate) no_scs: bool,
     pub(crate) timestamp: Timestamp,
@@ -625,7 +625,7 @@ pub(crate) fn shada_pattern(is_substitute: bool) -> Option<ShadaPattern> {
     with_spat(shada_slot(is_substitute), |slot| {
         let text = slot.pat.as_ref()?;
         Some(ShadaPattern {
-            pat: String_0::from_bytes(text),
+            pat: ApiString::from_bytes(text),
             magic: slot.magic,
             no_scs: slot.no_scs,
             timestamp: slot.timestamp,

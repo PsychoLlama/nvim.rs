@@ -48,7 +48,9 @@ use crate::highlight_group::{
 };
 use crate::message::emsg;
 use crate::os::cshim::gettext;
-use crate::types::{ApiDict, Array, HlAttrs, HlEntry, HlKind, Integer, Object, String_0, uint32_t};
+use crate::types::{
+    ApiDict, ApiString, Array, HlAttrs, HlEntry, HlKind, Integer, Object, uint32_t,
+};
 use crate::ui::ui_call_hl_attr_define;
 use cache::AttrCache;
 use core::ffi::{CStr, c_int};
@@ -342,7 +344,7 @@ pub(crate) fn get_attr_entry(mut entry: HlEntry) -> c_int {
 /// attribute table its body reads (`just state-exports`).
 pub fn ui_send_all_hls(
     define: &mut dyn FnMut(Integer, HlAttrs, Array),
-    group_set: &mut dyn FnMut(String_0, Integer),
+    group_set: &mut dyn FnMut(ApiString, Integer),
 ) {
     // The bound is re-read each time round, as upstream's `for` did:
     // sending an event is not supposed to touch the table, and if one
@@ -356,7 +358,7 @@ pub fn ui_send_all_hls(
     }
     for (hlf, name) in hlf_names.iter().enumerate() {
         group_set(
-            String_0::from_cstr(name),
+            ApiString::from_cstr(name),
             Integer::from(default_hl_attr(hlf)),
         );
     }
@@ -436,8 +438,8 @@ pub fn hl_add_url(attr: c_int, url: &CStr) -> c_int {
 /// asserted the table was allocated and then read it unchecked).
 ///
 /// A copy: the table is emptied by [`clear_hl_tables`].
-pub fn hl_get_url(index: uint32_t) -> String_0 {
-    URLS.with(|urls| String_0::from_cstr(&urls.urls[index as usize]))
+pub fn hl_get_url(index: uint32_t) -> ApiString {
+    URLS.with(|urls| ApiString::from_cstr(&urls.urls[index as usize]))
 }
 
 /// The id for attributes a `:terminal` program asked for directly.
@@ -656,7 +658,7 @@ fn hl_inspect_impl(arr: &mut Array, attr: c_int) {
 
 /// A group name, copied into the object that carries it.
 fn name_object(name: &CStr) -> Object {
-    Object::string(String_0::from_cstr(name))
+    Object::string(ApiString::from_cstr(name))
 }
 
 /// Appends `key: value`, with the key copied out of the literal.

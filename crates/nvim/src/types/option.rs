@@ -86,7 +86,7 @@ pub enum OptVal {
 
 /// A string option's value: a literal it borrows, or bytes of its own.
 ///
-/// **Deliberately not [`String_0`]**: the option table names its defaults
+/// **Deliberately not [`ApiString`]**: the option table names its defaults
 /// as `.rodata` literals, and a value set from one (`:set opt&`, the names
 /// the editor sets itself) need not copy it until a variable takes it
 /// over. Either way the bytes are what an option variable holds, so the

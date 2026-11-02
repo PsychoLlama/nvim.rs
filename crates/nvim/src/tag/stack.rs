@@ -231,7 +231,7 @@ pub fn do_tags(_excmd: &mut ExArg) {
         );
         row.push(0);
         msg_display(cstr::in_bytes(&row), 0, false);
-        let hl = if item.fmark.fnum == Buf::current().handle {
+        let hl = if item.fmark.fnum == Buf::current().handle.get() {
             HLF_D
         } else {
             0

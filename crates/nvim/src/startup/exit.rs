@@ -12,7 +12,7 @@
 
 use crate::autocmd::{fire_autocmds, fire_autocmds_for};
 use crate::memory::XString;
-use crate::types::{AutoEvent, String_0};
+use crate::types::{ApiString, AutoEvent};
 use core::ffi::CStr;
 use core::ffi::c_int;
 
@@ -200,7 +200,7 @@ pub fn getout(mut exitval: c_int) -> ! {
     }
 
     if p_title() && P_TITLEOLD.first_byte() != 0 {
-        ui_call_set_title(p_titleold(String_0::from_cstr));
+        ui_call_set_title(p_titleold(ApiString::from_cstr));
     }
 
     if garbage_collect_at_exit.get() {

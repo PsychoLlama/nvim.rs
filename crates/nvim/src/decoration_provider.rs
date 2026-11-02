@@ -44,6 +44,7 @@ use crate::message_fmt::msg_bytes;
 use crate::r#move::validate_botline_win;
 use crate::msg_schedule_semsg_multiline;
 use crate::narrow::number_as_int;
+use crate::types::Handle;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
     Array, DecorProvider, DecorProvider_state, Error, Integer, LineNr, LuaRef, LuaRetMode, NS,
@@ -463,8 +464,8 @@ pub(crate) fn decor_provider_invalidate_hl() {
         }
     });
 
-    if ns_hl_active.get() != 0 {
-        ns_hl_active.set(-1);
+    if ns_hl_active.get() != Handle::NONE {
+        ns_hl_active.set(Handle::new(-1));
         hl_check_ns();
     }
 }
@@ -488,7 +489,7 @@ pub(crate) fn with_decor_provider<R>(
     force: bool,
     f: impl FnOnce(&mut DecorProvider) -> R,
 ) -> Option<R> {
-    debug_assert!(ns_id > 0);
+    debug_assert!(ns_id > Handle::NONE);
     let idx = provider_index(ns_id, force)?;
     Some(with_provider(idx, f))
 }

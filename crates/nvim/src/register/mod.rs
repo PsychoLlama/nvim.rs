@@ -90,9 +90,9 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    BCount, BlockDef, CharsizeArg, CmdModFlags, ColNr, ExArg, ExtmarkOp, GRegFlags, HashTab,
-    LineNr, MotionType, NUL, OpArg, PUT_BLOCK_INNER, PUT_CURSEND, PUT_CURSLINE, PUT_FIXINDENT,
-    PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, Pos, RemapValues, SaveVEvent, String_0,
+    ApiString, BCount, BlockDef, CharsizeArg, CmdModFlags, ColNr, ExArg, ExtmarkOp, GRegFlags,
+    HashTab, LineNr, MotionType, NUL, OpArg, PUT_BLOCK_INNER, PUT_CURSEND, PUT_CURSLINE,
+    PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, Pos, RemapValues, SaveVEvent,
     UndoObjectType, VarLock, YankReg, int64_t, kBoolVarFalse, kBoolVarTrue, ptrdiff_t, size_t,
 };
 use crate::ui::state::Columns;

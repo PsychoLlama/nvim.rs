@@ -18,6 +18,7 @@
 use super::*;
 use crate::eval::typval::{DictRef, ListRef, NumBuf, list_items};
 use crate::narrow::number_as_int;
+use crate::types::Handle;
 use crate::types::{VAR_DICT, VAR_LIST, kListLenMayKnow};
 
 /// The four highlight keys a sign definition carries, in the order every
@@ -123,7 +124,11 @@ pub(crate) fn sign_get_placed_info_dict(mark: MTKey) -> DictRef {
     let sh = sign_of(mark);
     put_str(d, "name", placed_sign_name(&sh));
     put_nr(d, "id", VarNumber::from(mark.id.cast_signed()));
-    put_str(d, "group", &describe_ns(mark.ns.cast_signed(), b""));
+    put_str(
+        d,
+        "group",
+        &describe_ns(Handle::new(mark.ns.cast_signed()), b""),
+    );
     put_nr(d, "lnum", VarNumber::from(mark.pos.row + 1));
     put_nr(d, "priority", VarNumber::from(sh.priority));
     held

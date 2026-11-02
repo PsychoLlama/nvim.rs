@@ -53,7 +53,8 @@ use crate::semsg;
 use crate::smsg;
 use crate::state::mode::restart_edit;
 use crate::tag::{HelpTagMatch, do_tag, find_help_tag_matches};
-use crate::types::String_0;
+use crate::types::ApiString;
+use crate::types::Handle;
 use crate::types::{
     Array, ArrayBuf, CmdModFlags, ExArg, Failed, FileComparison, IOSIZE, LuaRetMode, Object,
     OptInt, OptVal, OptionSetFlags,
@@ -189,7 +190,7 @@ pub(crate) fn open_help(excmd: Option<&mut ExArg>) {
         // autocommands may have jumped to another window, so check that
         // the buffer is not in one.
         if opened.empty_fnum != 0
-            && Buf::current().handle != opened.empty_fnum
+            && Buf::current().handle != Handle::new(opened.empty_fnum)
             && let Some(buf) = find_buf(opened.empty_fnum).filter(|b| b.b_nwindows == 0)
         {
             wipe_buffer(buf, true);
@@ -313,13 +314,13 @@ fn enter_help_window() -> Option<HelpWindow> {
 
     // Open the help file. `do_ecmd` sets `b_help` and `readfile` sets
     // 'readonly'. The buffer is still open, so don't store info.
-    opened.alt_fnum = Buf::current().handle;
+    opened.alt_fnum = Buf::current().handle.get();
     let (lnum, flags) = (newlnum::LASTL, EcmdFlags::HIDE | EcmdFlags::SET_HELP);
     let _ = do_ecmd(0, None, None, None, lnum, flags, None);
     if keepalt_is_off() {
         Win::current().w_alt_fnum = opened.alt_fnum;
     }
-    opened.empty_fnum = Buf::current().handle;
+    opened.empty_fnum = Buf::current().handle.get();
     Some(opened)
 }
 
@@ -406,7 +407,7 @@ fn help_compare(a: &HelpTagMatch, b: &HelpTagMatch) -> Ordering {
 /// current buffer.
 fn find_help_tags(subject: &[u8], keep_lang: bool) -> Result<Vec<Vec<u8>>, Failed> {
     let mut args = ArrayBuf::<1>::new();
-    args.push(Object::string(String_0::from_bytes(subject)));
+    args.push(Object::string(ApiString::from_bytes(subject)));
     let chunk = c"return require'vim._core.help'.escape_subject(...)";
     let res = match nlua_exec_cstr(chunk, args.array(), kRetObject) {
         Ok(value) => value,

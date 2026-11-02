@@ -46,7 +46,7 @@ pub fn mark_get(buffer: Buf, win: Win, flag: MarkGet, name: c_int) -> Option<Fil
         // A global mark that names another buffer is *not* this buffer's
         // mark: `kMarkBufLocal` answers an unset record rather than a
         // position the caller would then apply to the wrong file.
-        if flag as c_uint == kMarkBufLocal as c_uint && xfm.fmark.fnum != handle {
+        if flag as c_uint == kMarkBufLocal as c_uint && xfm.fmark.fnum != handle.get() {
             return Some(pos_to_mark(buffer, UNSET_POS));
         }
         return Some(xfm.fmark);
@@ -116,7 +116,7 @@ pub fn mark_get_local(buffer: Buf, win: Win, name: c_int) -> Option<FileMark> {
         .filter(|store| *store != LocalMark::PromptStart || buf_is_prompt(Some(buffer)));
     if let Some(store) = store {
         return Some(store.with(buffer, |mark| {
-            mark.fnum = handle;
+            mark.fnum = handle.get();
             mark.clone()
         }));
     }
@@ -133,7 +133,7 @@ pub fn mark_get_local(buffer: Buf, win: Win, name: c_int) -> Option<FileMark> {
     } else {
         mark_get_motion(buffer, win, name)?
     };
-    mark.fnum = handle;
+    mark.fnum = handle.get();
     Some(mark)
 }
 
@@ -285,7 +285,7 @@ pub fn mark_move_to(fm: Option<&FileMark>, flags: MarkMove) -> MarkMoveRes {
     };
 
     let mut res: MarkMoveRes = kMarkMoveSuccess;
-    if fm.fnum != Buf::current().handle {
+    if fm.fnum != Buf::current().handle.get() {
         res |= switch_to_mark_buf(fm, flags as c_uint & kMarkJumpList as c_uint == 0);
         if res & kMarkMoveFailed != 0 {
             return res;
@@ -330,7 +330,7 @@ pub fn mark_move_to(fm: Option<&FileMark>, flags: MarkMove) -> MarkMoveRes {
 /// `pcmark_on_switch` — leave a context mark when switching buffer.
 /// Returns whether the buffer was switched or not.
 fn switch_to_mark_buf(fm: &FileMark, pcmark_on_switch: bool) -> MarkMoveRes {
-    if fm.fnum == Buf::current().handle {
+    if fm.fnum == Buf::current().handle.get() {
         return 0;
     }
     let getfile_flag = if pcmark_on_switch { GETF_SETMARK } else { 0 };

@@ -23,7 +23,7 @@ use core::ffi::{CStr, c_char, c_int};
 /// uppercase letter, or a digit for one of the numbered file marks.
 ///
 /// Refuses when it is neither, or is not one character.
-fn global_mark_name(name: &String_0) -> Result<c_char, Error> {
+fn global_mark_name(name: &ApiString) -> Result<c_char, Error> {
     if name.len() != 1 {
         return Err(reject(c"mark name (must be a single char)", name.clone()));
     }
@@ -36,12 +36,12 @@ fn global_mark_name(name: &String_0) -> Result<c_char, Error> {
 }
 
 /// "Invalid `what`: '`name`'".
-fn reject(what: &CStr, name: String_0) -> Error {
+fn reject(what: &CStr, name: ApiString) -> Error {
     err_bad_value(what, name.as_cstr())
 }
 
 /// Remove the global mark `name`.
-pub fn nvim_del_mark(name: String_0) -> Result<Boolean, Error> {
+pub fn nvim_del_mark(name: ApiString) -> Result<Boolean, Error> {
     global_mark_name(&name)?;
     set_mark(None, name, 0, 0)?;
     Ok(true)
@@ -51,7 +51,7 @@ pub fn nvim_del_mark(name: String_0) -> Result<Boolean, Error> {
 ///
 /// A mark that names nothing, or names a line that is gone, answers
 /// `[0, 0, 0, ""]` rather than an error.
-pub fn nvim_get_mark(name: String_0, _opts: &mut KeyDict_empty) -> Result<Array, Error> {
+pub fn nvim_get_mark(name: ApiString, _opts: &mut KeyDict_empty) -> Result<Array, Error> {
     let mark = global_mark_name(&name)?;
     // A copy of the slot, which exists whether or not it is set.
     let mark = mark_get_global(false, c_int::from(mark));
@@ -78,7 +78,7 @@ pub fn nvim_get_mark(name: String_0, _opts: &mut KeyDict_empty) -> Result<Array,
         }
     };
     let mut rv = Array::with_capacity(4 as size_t);
-    let path = Object::string(String_0::from_bytes(filename.as_cstr().to_bytes()));
+    let path = Object::string(ApiString::from_bytes(filename.as_cstr().to_bytes()));
     rv.push(Object::integer(row));
     rv.push(Object::integer(col));
     rv.push(Object::integer(Integer::from(bufnr)));

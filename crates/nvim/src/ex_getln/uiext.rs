@@ -31,7 +31,7 @@ pub(crate) fn ui_ext_cmdline_show(line: Cc) {
 
         let mut item = Array::with_capacity(3);
         item.push(Object::integer(0));
-        item.push(Object::string(String_0::from_bytes(&stars)));
+        item.push(Object::string(ApiString::from_bytes(&stars)));
         item.push(Object::integer(0));
         content.push(Object::array(item));
     } else if !line.last_colors.chunks().is_empty() {
@@ -52,7 +52,7 @@ pub(crate) fn ui_ext_cmdline_show(line: Cc) {
             let to = usize::try_from(chunk.end)
                 .unwrap_or(0)
                 .clamp(from, text.len());
-            item.push(Object::string(String_0::from_bytes(&text[from..to])));
+            item.push(Object::string(ApiString::from_bytes(&text[from..to])));
             item.push(Object::integer(chunk.hl_id as Integer));
             content.push(Object::array(item));
             i += 1;
@@ -60,7 +60,7 @@ pub(crate) fn ui_ext_cmdline_show(line: Cc) {
     } else {
         let mut item = Array::with_capacity(3);
         item.push(Object::integer(0));
-        item.push(Object::string(String_0::from_bytes(cstr::until_nul(
+        item.push(Object::string(ApiString::from_bytes(cstr::until_nul(
             line.bytes(),
         ))));
         item.push(Object::integer(0));
@@ -70,13 +70,13 @@ pub(crate) fn ui_ext_cmdline_show(line: Cc) {
 
     let firstc = [line.cmdfirstc as u8];
     // C's `cstr_to_string`: the null string when there is no prompt.
-    let prompt = line.cmdprompt.as_ref().map_or(String_0::NULL, |prompt| {
-        String_0::from_bytes(prompt.as_cstr().to_bytes())
+    let prompt = line.cmdprompt.as_ref().map_or(ApiString::NULL, |prompt| {
+        ApiString::from_bytes(prompt.as_cstr().to_bytes())
     });
     ui_call_cmdline_show(
         content,
         line.cmdpos as Integer,
-        String_0::from_bytes(cstr::until_nul(&firstc)),
+        ApiString::from_bytes(cstr::until_nul(&firstc)),
         prompt,
         line.cmdindent as Integer,
         line.level as Integer,
@@ -84,7 +84,7 @@ pub(crate) fn ui_ext_cmdline_show(line: Cc) {
     );
     if line.special_char != 0 {
         ui_call_cmdline_special_char(
-            String_0::from_bytes(&[line.special_char as u8]),
+            ApiString::from_bytes(&[line.special_char as u8]),
             line.special_shift as Boolean,
             line.level as Integer,
         );
@@ -132,7 +132,7 @@ pub fn ui_ext_cmdline_block_append(indent: size_t, line: &[u8]) {
 
     let mut item = Array::with_capacity(3);
     item.push(Object::integer(0));
-    item.push(Object::string(String_0::from_bytes(&text)));
+    item.push(Object::string(ApiString::from_bytes(&text)));
     item.push(Object::integer(0));
 
     let mut content = Array::with_capacity(1);

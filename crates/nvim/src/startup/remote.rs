@@ -19,7 +19,7 @@ use crate::os::cshim::{write_c_stderr, write_c_stdout};
 use crate::os::env::{ENV_NVIM, env_get_bounded};
 use crate::startup::exit::os_exit;
 use crate::startup::{MainParams, WIN_TABS, ui_client_channel_id};
-use crate::types::{ApiDict, Array, CallbackReader, Integer, Object, String_0, size_t, uint64_t};
+use crate::types::{ApiDict, ApiString, Array, CallbackReader, Integer, Object, size_t, uint64_t};
 
 /// How long to wait for the server to answer the connection, in ms.
 const CONNECT_TIMEOUT_MS: c_int = 500;
@@ -56,7 +56,7 @@ fn field(dict: &ApiDict, index: size_t) -> (&CStr, &Object) {
 }
 
 /// An API string's text, up to its first NUL -- what `printf("%s")` wrote.
-fn text_of(text: &String_0) -> &[u8] {
+fn text_of(text: &ApiString) -> &[u8] {
     cstr::until_nul(text.as_bytes())
 }
 
@@ -101,13 +101,13 @@ pub(crate) fn remote_request(parm: &mut MainParams, remote_args: usize, ui_only:
     let forwarded = &parm.argv[remote_args..];
     let mut args = Array::with_capacity(forwarded.len());
     for word in forwarded {
-        args.push(Object::string(String_0::from_cstr(word)));
+        args.push(Object::string(ApiString::from_cstr(word)));
     }
 
     // `vim._cs_remote(channel, address, connect_error, args)`. A missing
     // address or error is a null string, as upstream's NULL `char *` was.
     let string =
-        |text: Option<&CStr>| Object::string(text.map_or(String_0::NULL, String_0::from_cstr));
+        |text: Option<&CStr>| Object::string(text.map_or(ApiString::NULL, ApiString::from_cstr));
     let (chan, connect_error) = match connected {
         Ok(chan) => (chan, None),
         Err(why) => (0, Some(why)),

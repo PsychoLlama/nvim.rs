@@ -18,6 +18,7 @@
 
 use super::*;
 use crate::memory::XString;
+use crate::types::Handle;
 use crate::types::{AutoHandler, ExpandContext, PatId, ScriptCtx};
 use crate::winlayer::Buf;
 
@@ -224,7 +225,7 @@ pub fn has_autocmd(event: AutoEvent, name: &::core::ffi::CStr, buffer: Option<Bu
         let matched = if buflocal_nr == 0 {
             match_file_pat(&mut prog, fname.as_cstr(), Some(name), tail, allow_dirs)
         } else {
-            buffer.is_some_and(|b| buflocal_nr == b.handle)
+            buffer.is_some_and(|b| buflocal_nr == b.handle.get())
         };
         with_event_cmds_mut(event, |cmds| cmds.pat_mut(id).reg_prog = prog);
         if matched {
@@ -330,13 +331,17 @@ pub fn au_exists(arg: &::core::ffi::CStr) -> bool {
     // `<buffer>` means curbuf; `<buffer=N>` is already normalised, so
     // `path_fnamecmp` handles it.
     let buflocal = pattern.is_some_and(|pattern| pattern.eq_ignore_ascii_case(b"<buffer>"));
-    let current = if buflocal { Buf::current().handle } else { 0 };
+    let current = if buflocal {
+        Buf::current().handle
+    } else {
+        Handle::NONE
+    };
     with_event_cmds(event, |cmds| {
         cmds.live().any(|(_, pat)| {
             (group == AUGROUP_ALL || pat.group == group)
                 && pattern.is_none_or(|pattern| {
                     if buflocal {
-                        pat.buflocal_nr == current
+                        pat.buflocal_nr == current.get()
                     } else {
                         path_fnamecmp(&pat.pat, pattern) == 0
                     }

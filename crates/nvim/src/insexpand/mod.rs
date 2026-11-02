@@ -98,9 +98,9 @@ use crate::tag::find_tag_names;
 use crate::tag::state::g_tag_at_cursor;
 use crate::textformat::auto_format;
 use crate::types::{
-    BoolVarValue, Callback, ColNr, Dict, Direction, EvalFuncData, Expand, ExtmarkOp,
+    ApiString, BoolVarValue, Callback, ColNr, Dict, Direction, EvalFuncData, Expand, ExtmarkOp,
     ExtmarkUndoObject, HashTab, LineNr, List, MB_MAXCHAR, OptInt, OptSet, Pos, PumItem, RegMatch,
-    SaveVEvent, String_0, TypVal, VarNumber, Vv, ptrdiff_t, size_t, uint64_t,
+    SaveVEvent, TypVal, VarNumber, Vv, ptrdiff_t, size_t, uint64_t,
 };
 use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;
@@ -399,12 +399,12 @@ pub(crate) fn ctrl_x_msg(mode: c_int) -> Option<&'static CStr> {
 /// lent to a closure ([`with_bytes`](ComplStr::with_bytes),
 /// [`with_cstr`](ComplStr::with_cstr)) or copied out.
 #[derive(Clone, Copy)]
-pub(crate) struct ComplStr(ComplField<String_0>);
+pub(crate) struct ComplStr(ComplField<ApiString>);
 
 impl ComplStr {
     /// The byte count.
     pub(crate) fn len(self) -> size_t {
-        self.0.with(String_0::len)
+        self.0.with(ApiString::len)
     }
 
     /// Look at the bytes (empty while unset). `f` must not reach back into
@@ -425,20 +425,20 @@ impl ComplStr {
     }
 
     /// A copy of the string, with its own allocation.
-    pub(crate) fn to_owned(self) -> String_0 {
-        self.0.with(String_0::clone)
+    pub(crate) fn to_owned(self) -> ApiString {
+        self.0.with(ApiString::clone)
     }
 
     /// Whether the string has no buffer at all — upstream's
     /// `if (compl_leader.data == NULL)`, which asks something different from
     /// [`is_empty`](Self::is_empty).
     pub(crate) fn is_unset(self) -> bool {
-        self.0.with(String_0::is_null)
+        self.0.with(ApiString::is_null)
     }
 
     /// Whether the string has no bytes.
     pub(crate) fn is_empty(self) -> bool {
-        self.0.with(String_0::is_empty)
+        self.0.with(ApiString::is_empty)
     }
 
     /// Take `s`, releasing what was there.
@@ -446,28 +446,28 @@ impl ComplStr {
     /// Upstream has two spellings of this — one that frees first and one
     /// that assumes the string was already cleared — and an owning string
     /// makes them the same operation.
-    pub(crate) fn set(self, s: String_0) {
+    pub(crate) fn set(self, s: ApiString) {
         self.0.set(s);
     }
 
     /// C's `XFREE_CLEAR(x.data); x = s`. See [`set`](Self::set).
-    pub(crate) fn replace(self, s: String_0) {
+    pub(crate) fn replace(self, s: ApiString) {
         self.0.set(s);
     }
 
     /// C's `XFREE_CLEAR(s->data); s->size = 0`.
     pub(crate) fn clear(self) {
-        self.0.set(String_0::NULL);
+        self.0.set(ApiString::NULL);
     }
 
     /// Take over an [`XString`]'s block.
     pub(crate) fn set_string(self, pattern: XString) {
-        self.0.set(String_0::from_xstring(pattern));
+        self.0.set(ApiString::from_xstring(pattern));
     }
 
     /// Shorten the string to `len` bytes. Panics past the current length.
     pub(crate) fn truncate(self, len: size_t) {
-        let shorter = self.0.with(|s| String_0::from_bytes(&s.as_bytes()[..len]));
+        let shorter = self.0.with(|s| ApiString::from_bytes(&s.as_bytes()[..len]));
         self.0.set(shorter);
     }
 }
@@ -700,9 +700,9 @@ state_record! {
     /// Enter selects the shown match rather than inserting a line break.
     compl_enter_selects: bool = false;
     /// See [`compl_leader`].
-    COMPL_LEADER: String_0 = String_0::NULL;
+    COMPL_LEADER: ApiString = ApiString::NULL;
     /// See [`adjusted_leader`].
-    ADJUSTED_LEADER: String_0 = String_0::NULL;
+    ADJUSTED_LEADER: ApiString = ApiString::NULL;
     /// Still finding the longest common text (`'completeopt'` `longest`).
     compl_get_longest: bool = false;
     /// The selected match is in the buffer.
@@ -721,9 +721,9 @@ state_record! {
     /// The number of matches, once known.
     compl_matches: c_int = 0;
     /// See [`compl_pattern`].
-    COMPL_PATTERN: String_0 = String_0::NULL;
+    COMPL_PATTERN: ApiString = ApiString::NULL;
     /// See [`cpt_compl_pattern`].
-    CPT_COMPL_PATTERN: String_0 = String_0::NULL;
+    CPT_COMPL_PATTERN: ApiString = ApiString::NULL;
     /// The direction matches are collected in.
     compl_direction: Direction = FORWARD;
     /// The direction the shown matches run in.
@@ -741,7 +741,7 @@ state_record! {
     /// Where the inserted completion text ends.
     compl_ins_end_col: ColNr = 0;
     /// See [`compl_orig_text`].
-    COMPL_ORIG_TEXT: String_0 = String_0::NULL;
+    COMPL_ORIG_TEXT: ApiString = ApiString::NULL;
     /// See [`ComplOrigExtmarks`].
     COMPL_ORIG_EXTMARKS: Vec<ExtmarkUndoObject> = Vec::new();
     /// The CTRL-X mode a continued completion continues.

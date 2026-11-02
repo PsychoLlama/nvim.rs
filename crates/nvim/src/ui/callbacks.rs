@@ -34,6 +34,7 @@ use crate::lua::executor::{nlua_call_ref_ctx, release_luaref};
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::msg_schedule_semsg;
 use crate::msg_schedule_semsg_multiline;
+use crate::types::Handle;
 use crate::types::ui::{kUICmdline, kUILinegrid, kUIMessages};
 use crate::types::{Array, LuaRef, LuaRetMode};
 use crate::ui::state::ui_event_ns_id;
@@ -119,7 +120,7 @@ pub fn ui_remove_cb(ns_id: u32, checkerr: bool) {
     update_ext();
     ui_refresh();
     if checkerr {
-        let ns = describe_ns(ns_id.cast_signed(), b"(UNKNOWN PLUGIN)");
+        let ns = describe_ns(Handle::new(ns_id.cast_signed()), b"(UNKNOWN PLUGIN)");
         let ns = msg_bytes(&ns);
         msg_schedule_semsg!("Excessive errors in vim.ui_attach() callback (ns={ns})");
     }
@@ -229,7 +230,7 @@ fn is_fast(name: &CStr, args: &Array) -> bool {
 
 /// Reports that `ns_id`'s handler for `name` raised `msg`.
 fn report_error(ns_id: u32, name: &CStr, msg: &CStr) {
-    let ns = describe_ns(ns_id.cast_signed(), b"(UNKNOWN PLUGIN)");
+    let ns = describe_ns(Handle::new(ns_id.cast_signed()), b"(UNKNOWN PLUGIN)");
     let shown_ns = msg_bytes(&ns);
     let (shown_name, shown_msg) = (msg_cstr(name), msg_cstr(msg));
     logmsg!(

@@ -293,7 +293,7 @@ fn new_buffer() -> Owned<Buffer> {
 #[cfg(test)]
 pub(crate) fn bare_buffer() -> Buf {
     // One at a time: a test holds the editor lock while it has one.
-    const HANDLE: Handle = 1 << 24;
+    const HANDLE: Handle = Handle::new(1 << 24);
     let owned = alloc_unregistered_buffer();
     Buf::owned_by(&owned).handle = HANDLE;
     register_buffer(HANDLE, owned)
@@ -319,7 +319,7 @@ fn append_to_list(mut buffer: Buf, owned: Owned<Buffer>) -> Buf {
     // The number and the registry entry come first, ahead of upstream's
     // order: from here on `buffer.id()` names the buffer, and the list links
     // are made of exactly that. Nothing between the two reads either.
-    buffer.set_handle(top_file_num.get() as Handle);
+    buffer.set_handle(Handle::new(top_file_num.get()));
     top_file_num.set(top_file_num.get() + 1);
     register_buffer(buffer.handle(), owned);
 
@@ -514,7 +514,7 @@ pub fn buflist_getfile(
     }
 
     let redraw_off = Suppress::redraw();
-    let (handle, setmark) = (buf.handle as c_int, options & GETF_SETMARK as c_int != 0);
+    let (handle, setmark) = (buf.handle.get(), options & GETF_SETMARK as c_int != 0);
     // A live buffer's handle, and no file name to load under it.
     let failed = getfile(handle, None, None, setmark, lnum, forceit != 0) > 0;
     drop(redraw_off);
@@ -661,7 +661,7 @@ pub fn buflist_findpat(
 /// the regexp.
 fn match_shorthand(head: u8, diffmode: bool) -> c_int {
     let matched = if head == b'%' {
-        Buf::current().handle as c_int
+        Buf::current().handle.get()
     } else {
         current_win().w_alt_fnum
     };
@@ -728,7 +728,7 @@ fn match_pattern(
                     break;
                 }
                 // Remember the first match.
-                matched = b.handle as c_int;
+                matched = b.handle.get();
             }
 
             drop(regmatch);

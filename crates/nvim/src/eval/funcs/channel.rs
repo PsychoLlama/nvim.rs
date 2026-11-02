@@ -33,7 +33,7 @@ use crate::runtime::state::current_sctx;
 use crate::semsg;
 use crate::semsg_multiline;
 use crate::types::{
-    Array, CallbackReader, ChannelPart, EvalFuncData, Object, ScriptCtx, String_0, TypVal,
+    ApiString, Array, CallbackReader, ChannelPart, EvalFuncData, Object, ScriptCtx, TypVal,
     VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING, VarNumber, uint64_t,
 };
 use core::ffi::{CStr, c_int};
@@ -290,7 +290,7 @@ pub fn f_serverlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut addrs_arr = Array::with_capacity(addrs.len());
     for addr in &addrs {
         list.edit().push_str(Some(addr));
-        addrs_arr.push(Object::string(String_0::from_cstr(addr)));
+        addrs_arr.push(Object::string(ApiString::from_cstr(addr)));
     }
 
     if args.first().is_some_and(|arg| arg.v_type() == VAR_DICT)

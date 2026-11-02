@@ -72,7 +72,7 @@ pub(super) fn switch_to_other_buffer(
 
     if !flags.has(EcmdFlags::ADDBUF | EcmdFlags::ALTBUF) {
         if !cmdmod_has(CmdModFlags::KEEPALT) {
-            Win::current().w_alt_fnum = Buf::current().handle;
+            Win::current().w_alt_fnum = Buf::current().handle.get();
         }
         if let Some(old) = oldwin.and_then(WinId::get) {
             buflist_altfpos(old);
@@ -100,7 +100,7 @@ pub(super) fn switch_to_other_buffer(
             BLN_LISTED as c_int | BLN_NOCURWIN as c_int,
         );
         if let Some(newbuf) = newbuf.filter(|_| flags.has(EcmdFlags::ALTBUF)) {
-            Win::current().w_alt_fnum = newbuf.handle;
+            Win::current().w_alt_fnum = newbuf.handle.get();
         }
         return Switch::Abandon;
     } else {
@@ -141,7 +141,7 @@ pub(super) fn switch_to_other_buffer(
         return Switch::Abandon;
     }
 
-    if Win::current().w_alt_fnum == buffer.handle && prev_alt_fnum != 0 {
+    if Win::current().w_alt_fnum == buffer.handle.get() && prev_alt_fnum != 0 {
         // reusing the buffer, keep the old alternate file
         Win::current().w_alt_fnum = prev_alt_fnum;
     }

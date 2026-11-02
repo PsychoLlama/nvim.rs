@@ -26,7 +26,7 @@ use crate::register::{op_reg_index, shada_registers};
 use crate::search::shada_pattern;
 use crate::siemsg;
 use crate::types::{
-    KeyDict__shada_search_pat, String_0, TypVal, VAR_FLAVOUR_DEFAULT, VAR_FLAVOUR_SESSION,
+    ApiString, KeyDict__shada_search_pat, TypVal, VAR_FLAVOUR_DEFAULT, VAR_FLAVOUR_SESSION,
     VAR_FLAVOUR_SHADA, VAR_FUNC, VAR_PARTIAL, VarFlavour,
 };
 use crate::winlayer::{Buf, Win, buffers};
@@ -304,12 +304,12 @@ fn jump_target(fm: &ShadaMark, removable_bufs: &RemovableBufs) -> Option<XString
 }
 
 /// The packed entries as the API string the context stack keeps.
-fn packed_string(out: &Packer) -> String_0 {
-    String_0::from_bytes(out.bytes())
+fn packed_string(out: &Packer) -> ApiString {
+    ApiString::from_bytes(out.bytes())
 }
 
 /// Every register, as msgpack.
-pub fn shada_encode_regs() -> String_0 {
+pub fn shada_encode_regs() -> ApiString {
     let mut wms = WriteMergerState::new();
     shada_initialize_registers(&mut wms, -1);
     let mut out = Packer::default();
@@ -324,7 +324,7 @@ pub fn shada_encode_regs() -> String_0 {
 }
 
 /// The jump list, as msgpack.
-pub fn shada_encode_jumps() -> String_0 {
+pub fn shada_encode_jumps() -> ApiString {
     let mut removable_bufs = crate::registry::id_set();
     find_removable_bufs(&mut removable_bufs);
     let mut jumps = [const { ShadaEntry::MISSING }; JUMPLISTSIZE];
@@ -338,7 +338,7 @@ pub fn shada_encode_jumps() -> String_0 {
 }
 
 /// The buffer list, as msgpack.
-pub fn shada_encode_buflist() -> String_0 {
+pub fn shada_encode_buflist() -> ApiString {
     let mut removable_bufs = crate::registry::id_set();
     find_removable_bufs(&mut removable_bufs);
     let buflist_entry = shada_get_buflist(&removable_bufs);
@@ -352,7 +352,7 @@ pub fn shada_encode_buflist() -> String_0 {
 }
 
 /// Every global variable `'shada'` says to remember, as msgpack.
-pub fn shada_encode_gvars() -> String_0 {
+pub fn shada_encode_gvars() -> ApiString {
     let mut out = Packer::default();
     let cur_timestamp = os_time();
     let flavour = VAR_FLAVOUR_DEFAULT | VAR_FLAVOUR_SESSION | VAR_FLAVOUR_SHADA;

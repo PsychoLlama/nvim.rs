@@ -29,7 +29,7 @@ use crate::highlight::{HLATTRS_DICT_SIZE, hlattrs2dict, syn_attr2entry};
 use crate::option::vars::P_BG;
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::ui::{kUILinegrid, kUITermColors};
-use crate::types::{Array, Boolean, Integer, Object, RemoteUI, String_0, WindowHandle};
+use crate::types::{ApiString, Array, Boolean, Integer, Object, RemoteUI, WindowHandle};
 use core::ffi::c_int;
 
 /// Queues `name(args...)` on `ui`'s buffer, with the argument array built
@@ -60,7 +60,7 @@ macro_rules! wire {
     (Boolean, $v:expr) => {
         Object::boolean($v)
     };
-    (String_0, $v:expr) => {
+    (ApiString, $v:expr) => {
         Object::string($v)
     };
     (Array, $v:expr) => {
@@ -105,28 +105,28 @@ serialize! {
     fn remote_ui_mouse_off() => c"mouse_off";
     /// The mode changed to the `mode_idx`th entry of the last
     /// `mode_info_set`.
-    fn remote_ui_mode_change(mode: String_0, mode_idx: Integer) => c"mode_change";
+    fn remote_ui_mode_change(mode: ApiString, mode_idx: Integer) => c"mode_change";
     fn remote_ui_bell() => c"bell";
     fn remote_ui_visual_bell() => c"visual_bell";
     /// The user asked to suspend; a UI that can should background itself.
     fn remote_ui_suspend() => c"suspend";
-    fn remote_ui_set_title(title: String_0) => c"set_title";
-    fn remote_ui_set_icon(icon: String_0) => c"set_icon";
+    fn remote_ui_set_title(title: ApiString) => c"set_title";
+    fn remote_ui_set_icon(icon: ApiString) => c"set_icon";
     /// Write a screenshot to `path`, for the screen tests.
-    fn remote_ui_screenshot(path: String_0) => c"screenshot";
+    fn remote_ui_screenshot(path: ApiString) => c"screenshot";
     /// A UI option changed. `value` keeps whatever type the option has.
-    fn remote_ui_option_set(name: String_0, value: Object) => c"option_set";
+    fn remote_ui_option_set(name: ApiString, value: Object) => c"option_set";
     /// The server's working directory changed, so that a UI can resolve the
     /// relative paths the server sends.
-    fn remote_ui_chdir(path: String_0) => c"chdir";
+    fn remote_ui_chdir(path: ApiString) => c"chdir";
     /// A highlight group's id, for UIs that want to name what they draw.
-    fn remote_ui_hl_group_set(name: String_0, id: Integer) => c"hl_group_set";
+    fn remote_ui_hl_group_set(name: ApiString, id: Integer) => c"hl_group_set";
     /// Where the message grid sits, for UIs compositing it themselves.
     fn remote_ui_msg_set_pos(
         grid: Integer,
         row: Integer,
         scrolled: Boolean,
-        sep_char: String_0,
+        sep_char: ApiString,
         zindex: Integer,
         compindex: Integer,
     ) => c"msg_set_pos";
@@ -236,7 +236,7 @@ pub(super) fn remote_ui_cursor_goto(ui: &mut RemoteUI, row: Integer, col: Intege
 /// Writes one cell at the legacy cursor, which then advances.
 pub(super) fn remote_ui_put(ui: &mut RemoteUI, cell: &[u8]) {
     ui.client_col += 1;
-    send!(ui, c"put", Object::string(String_0::from_bytes(cell)));
+    send!(ui, c"put", Object::string(ApiString::from_bytes(cell)));
 }
 
 /// Sets the highlight subsequent [`remote_ui_put`]s draw with.
@@ -370,7 +370,7 @@ pub fn remote_ui_flush(ui: &mut RemoteUI) {
 }
 
 /// Forwards a terminal control sequence the editor produced.
-pub fn remote_ui_ui_send(ui: &mut RemoteUI, content: String_0) {
+pub fn remote_ui_ui_send(ui: &mut RemoteUI, content: ApiString) {
     // Only meaningful to a UI that owns a terminal to write it to.
     if !ui.stdout_tty {
         return;

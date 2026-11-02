@@ -43,7 +43,7 @@ use crate::options::{kOptFoldexpr, kOptFoldtext, kWinOptFoldexpr};
 use crate::optionstr::OptString;
 use crate::runtime::state::current_sctx;
 use crate::types::{
-    ExArg, Failed, NUL, Object, OptionSetFlags, ScriptCtx, String_0, TypVal, VAR_DICT, VAR_FUNC,
+    ApiString, ExArg, Failed, NUL, Object, OptionSetFlags, ScriptCtx, TypVal, VAR_DICT, VAR_FUNC,
     VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, ptrdiff_t,
 };
 
@@ -463,12 +463,12 @@ pub fn eval_foldtext(window: Win) -> Object {
 
     let mut tv = UNSET_TV;
     let retval = if eval0_simple_funccal(&expr, &mut tv).is_err() {
-        Object::string(String_0::NULL)
+        Object::string(ApiString::NULL)
     } else {
         let obj = if tv.v_type() == VAR_LIST {
             Object::from(&tv)
         } else {
-            Object::string(String_0::from_bytes(numbuf.string(&tv).to_bytes()))
+            Object::string(ApiString::from_bytes(numbuf.string(&tv).to_bytes()))
         };
         clear_local(&mut tv);
         obj

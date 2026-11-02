@@ -151,7 +151,7 @@ pub fn do_argfile(excmd: &mut ExArg, argn: c_int) {
     }
     let entry_fnum = entry_fnum(cur_alist(), argn).unwrap_or(0);
     let refused = !is_split_cmd
-        && entry_fnum != Buf::current().handle
+        && entry_fnum != Buf::current().handle.get()
         && !check_can_set_curbuf_forceit(c_int::from(excmd.forceit));
     if refused {
         return;

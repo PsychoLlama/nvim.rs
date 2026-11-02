@@ -184,7 +184,7 @@ pub(crate) fn ins_compl_files(
     let leader = cot_fuzzy().then(|| ins_compl_leader_str().to_owned());
     let leader = leader
         .as_ref()
-        .map(String_0::as_cstr)
+        .map(ApiString::as_cstr)
         .filter(|l| !l.is_empty());
     // One line at a time, with the terminator `vim_regexec` wants.
     let mut raw: Vec<u8> = Vec::with_capacity(LSIZE as usize);

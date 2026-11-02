@@ -91,7 +91,7 @@ pub(crate) fn qf_get_fnum(qfl: Qfl, directory: Option<&CStr>, fname: Option<&CSt
         return 0;
     };
     buf.b_has_qf_entry = has_entry_flag(kind);
-    buf.handle as c_int
+    buf.handle.get()
 }
 
 impl DirStack {

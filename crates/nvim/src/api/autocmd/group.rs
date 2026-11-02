@@ -21,7 +21,7 @@ use crate::narrow::number_as_int;
 
 pub fn nvim_create_augroup(
     channel_id: uint64_t,
-    name: String_0,
+    name: ApiString,
     opts: &mut KeyDict_create_augroup,
 ) -> Result<Integer, Error> {
     // An augroup the caller says nothing about is cleared.
@@ -56,7 +56,7 @@ pub fn nvim_del_augroup_by_id(id: Integer) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn nvim_del_augroup_by_name(name: String_0) -> Result<(), Error> {
+pub fn nvim_del_augroup_by_name(name: ApiString) -> Result<(), Error> {
     let mut tstate: TryState = TryState::INIT;
     try_enter(&mut tstate);
     augroup_del(Some(crate::cstr::until_nul(name.as_bytes())), false);

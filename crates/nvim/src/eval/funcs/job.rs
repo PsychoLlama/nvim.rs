@@ -38,10 +38,11 @@ use crate::path::vim_full_name;
 use crate::semsg;
 use crate::terminal::{Term, buf_terminal_running, terminal_buf, terminal_open};
 use crate::types::AutoEvent;
+use crate::types::Handle;
 use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
-    Callback, CallbackReader, ChannelStdinMode, Dict, EvalFuncData, IOSIZE, Integer, JobProc,
-    MAXPATHL, Object, String_0, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING,
+    ApiString, Callback, CallbackReader, ChannelStdinMode, Dict, EvalFuncData, IOSIZE, Integer,
+    JobProc, MAXPATHL, Object, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING,
     VarNumber, Vv, uint16_t, uint64_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
@@ -609,7 +610,7 @@ fn attach_terminal(id: uint64_t, cwd: &CStr, cmd: &CStr) {
 fn live_terminal(id: uint64_t) -> Option<Term> {
     with_channel(id, |channel| channel.term)
         .flatten()
-        .filter(|&term| terminal_buf(term) != 0)
+        .filter(|&term| terminal_buf(term) != Handle::NONE)
 }
 
 /// Whether channel `id` still has a terminal attached to a real buffer.
@@ -621,6 +622,6 @@ fn terminal_live(id: uint64_t) -> bool {
 fn set_buf_var(buffer: Buf, name: &CStr, value: Integer) {
     let value = Object::Integer(value);
     let vars = scope_vars(&buffer.b_bufvar);
-    let name = String_0::from_cstr(name);
+    let name = ApiString::from_cstr(name);
     drop(dict_set_var(&vars, &name, value, false, false));
 }

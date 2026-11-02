@@ -32,7 +32,7 @@ use crate::global_cell::GlobalCell;
 use crate::lua::stack::{At, Kind, Stack};
 use crate::narrow::{float_as_i64, len_as_int};
 use crate::types::{
-    ApiDict, Array, DictKey, Error, Object, String_0, kObjectTypeArray, kObjectTypeDict,
+    ApiDict, ApiString, Array, DictKey, Error, Object, kObjectTypeArray, kObjectTypeDict,
     kObjectTypeFloat, kObjectTypeNil, lua_Number, size_t,
 };
 
@@ -149,7 +149,7 @@ fn convert_top(
         Kind::Boolean => Ok(Converted::Value(Object::boolean(stack.to_boolean(At::TOP)))),
         Kind::String => {
             let bytes = stack.to_bytes(At::TOP).unwrap_or_default();
-            Ok(Converted::Value(Object::string(String_0::from_bytes(
+            Ok(Converted::Value(Object::string(ApiString::from_bytes(
                 bytes,
             ))))
         }

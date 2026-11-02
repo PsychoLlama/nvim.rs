@@ -22,11 +22,11 @@ use core::ffi::{CStr, c_int};
 fn parse_map_cmd(arg: &[u8]) -> Array {
     let mut args: Array = Array::with_capacity(2);
     let lhs_len = skip::to_white(arg);
-    args.push(Object::string(String_0::from_bytes(&arg[..lhs_len])));
+    args.push(Object::string(ApiString::from_bytes(&arg[..lhs_len])));
     let rhs = &arg[lhs_len + skip::white(&arg[lhs_len..])..];
     if !rhs.is_empty() {
         // The rest of the line is one opaque argument.
-        args.push(Object::string(String_0::from_bytes(rhs)));
+        args.push(Object::string(ApiString::from_bytes(rhs)));
     }
     args
 }
@@ -52,7 +52,7 @@ fn parse_args(excmd: &mut ExArg) -> Array {
             return Array::EMPTY;
         }
         let mut args: Array = Array::with_capacity(1);
-        args.push(Object::string(String_0::from_bytes(excmd.line.arg())));
+        args.push(Object::string(ApiString::from_bytes(excmd.line.arg())));
         return args;
     }
 
@@ -66,7 +66,7 @@ fn parse_args(excmd: &mut ExArg) -> Array {
     while !done {
         done = uc_split_args_iter(arg, &mut end, &mut word);
         if !word.is_empty() {
-            args.push(Object::string(String_0::from_bytes(&word)));
+            args.push(Object::string(ApiString::from_bytes(&word)));
         }
     }
     args
@@ -75,15 +75,15 @@ fn parse_args(excmd: &mut ExArg) -> Array {
 /// The name of the command `excmd` names: a user command's own spelling
 /// (`user`), the built-in table's, or the empty string where the line named
 /// no command.
-fn command_name(excmd: &ExArg, user: Option<&CStr>) -> String_0 {
+fn command_name(excmd: &ExArg, user: Option<&CStr>) -> ApiString {
     if excmd.cmdidx == CmdIdx::SIZE {
-        return String_0::from_cstr(c"");
+        return ApiString::from_cstr(c"");
     }
     if let Some(name) = user {
-        return String_0::from_cstr(name);
+        return ApiString::from_cstr(name);
     }
     // `cmdidx` is a built-in index, checked against `CmdIdx::SIZE` above.
-    String_0::from_cstr(builtin_command_cstr(excmd.cmdidx))
+    ApiString::from_cstr(builtin_command_cstr(excmd.cmdidx))
 }
 
 /// How the command's range is counted, as the `addr` field's string.
@@ -119,7 +119,7 @@ fn parse_mods(cmdmod: &CmdMod) -> ApiDict {
     let pattern = cmdmod
         .cmod_filter
         .as_ref()
-        .map_or(String_0::NULL, |filter| String_0::from_cstr(&filter.pat));
+        .map_or(ApiString::NULL, |filter| ApiString::from_cstr(&filter.pat));
     let filter = dict_of([
         (c"pattern", Object::string(pattern)),
         (c"force", Object::boolean(cmdmod.cmod_filter_force)),
@@ -165,11 +165,11 @@ fn parse_mods(cmdmod: &CmdMod) -> ApiDict {
         (c"noswapfile", flag(CmdModFlags::NOSWAPFILE)),
         (c"vertical", split_flag(WSP_VERT as c_int)),
         (c"horizontal", split_flag(WSP_HOR as c_int)),
-        (c"split", Object::string(String_0::from_cstr(split))),
+        (c"split", Object::string(ApiString::from_cstr(split))),
     ])
 }
 
-pub fn nvim_parse_cmd(str: String_0, _opts: &mut KeyDict_empty) -> Result<KeyDict_cmd, Error> {
+pub fn nvim_parse_cmd(str: ApiString, _opts: &mut KeyDict_empty) -> Result<KeyDict_cmd, Error> {
     // Every key unset; the answer names only what the parse found.
     let mut result = KeyDict_cmd::default();
     let mut excmd = ExArg::default();
@@ -240,7 +240,7 @@ pub fn nvim_parse_cmd(str: String_0, _opts: &mut KeyDict_empty) -> Result<KeyDic
         } else {
             core::slice::from_ref(&byte)
         };
-        result.reg = Some(String_0::from_bytes(reg));
+        result.reg = Some(ApiString::from_bytes(reg));
     }
 
     result.bang = Some(excmd.forceit);
@@ -260,11 +260,11 @@ pub fn nvim_parse_cmd(str: String_0, _opts: &mut KeyDict_empty) -> Result<KeyDic
     } else {
         c"*"
     };
-    let nargs = String_0::from_cstr(nargs);
+    let nargs = ApiString::from_cstr(nargs);
     result.nargs = Some(Object::string(nargs));
-    result.addr = Some(String_0::from_cstr(addr_type_name(excmd.addr_type)));
+    result.addr = Some(ApiString::from_cstr(addr_type_name(excmd.addr_type)));
     let next = excmd.line.next_cmd().unwrap_or_default();
-    result.nextcmd = Some(String_0::from_bytes(next));
+    result.nextcmd = Some(ApiString::from_bytes(next));
     result.mods = Some(parse_mods(&cmdinfo.cmdmod));
     result.magic = Some(dict_of([
         (c"file", Object::boolean(cmdinfo.magic.file)),

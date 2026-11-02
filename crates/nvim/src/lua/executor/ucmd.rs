@@ -222,8 +222,8 @@ pub(crate) fn nlua_do_ucmd(cmd: &LuaCommand, excmd: &ExArg, preview: bool) -> c_
         if preview {
             stack.push_integer(cmdpreview_get_ns() as lua_Integer);
             let cmdpreview_bufnr: Handle = cmdpreview_get_bufnr();
-            if cmdpreview_bufnr != 0 {
-                stack.push_integer(cmdpreview_bufnr as lua_Integer);
+            if cmdpreview_bufnr != Handle::NONE {
+                stack.push_integer(cmdpreview_bufnr.get() as lua_Integer);
             } else {
                 stack.push_nil();
             }

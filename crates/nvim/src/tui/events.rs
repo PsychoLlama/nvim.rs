@@ -37,7 +37,7 @@ use crate::tui::paint::invalidate;
 use crate::tui::terminfo::caps::{kTerm_from_status_line, kTerm_to_status_line};
 use crate::tui::terminfo::terminfo_info_msg;
 use crate::types::{
-    Array, ArrayBuf, DictBuf, Integer, Object, String_0, TUIData, uv_buf_t, uv_stream_t,
+    ApiString, Array, ArrayBuf, DictBuf, Integer, Object, TUIData, uv_buf_t, uv_stream_t,
     uv_tty_mode_t, uv_write_t,
 };
 
@@ -113,7 +113,7 @@ pub fn tui_mode_info_set(tui: &mut TUIData, guicursor_enabled: bool, args: Array
 /// This is also where startup ends, because it is the first event that
 /// arrives after the editor has finished reading its configuration.
 ///
-pub fn tui_mode_change(tui: &mut TUIData, _mode: String_0, mode_idx: Integer) {
+pub fn tui_mode_change(tui: &mut TUIData, _mode: ApiString, mode_idx: Integer) {
     // Reading from a pipe while writing to a tty leaves libuv's idea of the
     // terminal mode stale; setting it twice re-applies it.
     if tui.out_isatty && tui.is_starting && !stdin_isatty.get() {
@@ -171,7 +171,7 @@ const VISUAL_BELL_MS: core::ffi::c_uint = 100;
 ///
 /// This is `ui_send`: whatever the editor wrote goes out as it stands,
 /// synchronously, without the TUI interpreting any of it.
-pub fn tui_ui_send(tui: &mut TUIData, content: String_0) {
+pub fn tui_ui_send(tui: &mut TUIData, content: ApiString) {
     // SAFETY: an API string owns `len()` readable bytes; `uv_write` fills in
     // the request, which lives until the loop below has run it.
     unsafe {
@@ -206,7 +206,7 @@ pub fn tui_ui_send(tui: &mut TUIData, content: String_0) {
 /// and restored when the editor asks for an empty one — which is what stops
 /// a terminal being left titled `nvim` after the editor exits.
 ///
-pub fn tui_set_title(tui: &mut TUIData, title: String_0) {
+pub fn tui_set_title(tui: &mut TUIData, title: ApiString) {
     if !tui.can_set_title {
         return;
     }
@@ -241,14 +241,14 @@ pub fn tui_set_title(tui: &mut TUIData, title: String_0) {
 /// The icon name, which no terminal this runs on distinguishes from the
 /// title.
 ///
-pub fn tui_set_icon(_tui: &mut TUIData, _icon: String_0) {}
+pub fn tui_set_icon(_tui: &mut TUIData, _icon: ApiString) {}
 
 /// An option the TUI acts on changed.
 ///
 /// `value` should hold the type that option's name implies; a value that
 /// arrives as something else leaves the option alone rather than
 /// reinterpreting its bytes, which is what the transpiled union read did.
-pub fn tui_option_set(tui: &mut TUIData, name: String_0, value: Object) {
+pub fn tui_option_set(tui: &mut TUIData, name: ApiString, value: Object) {
     let is = |option: &core::ffi::CStr| name.as_cstr() == option;
     let boolean = || value.as_boolean().unwrap_or_default();
     let integer = || value.as_integer().unwrap_or_default();
@@ -296,7 +296,7 @@ pub fn tui_option_set(tui: &mut TUIData, name: String_0, value: Object) {
 
 /// Follow the editor into its new working directory, so that relative paths
 /// in what the terminal is told mean the same thing.
-pub fn tui_chdir(_tui: &mut TUIData, path: String_0) {
+pub fn tui_chdir(_tui: &mut TUIData, path: ApiString) {
     // SAFETY: an API string is NUL-terminated (null only for the null
     // string, which `uv_chdir` refuses), and `uv_strerror` answers a static
     // string.

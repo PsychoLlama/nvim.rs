@@ -29,8 +29,8 @@ use crate::message_fmt::msg_cstr;
 use crate::registry::SlotTable;
 use crate::terminal::terminal_buf;
 use crate::types::{
-    ApiDict, Array, AutoEvent, ChannelStream, ChannelStreamType, Integer, Object, SaveVEvent,
-    String_0, TypVal, VAR_DICT, uint64_t,
+    ApiDict, ApiString, Array, AutoEvent, ChannelStream, ChannelStreamType, Integer, Object,
+    SaveVEvent, TypVal, VAR_DICT, uint64_t,
 };
 use crate::winlayer::Buf;
 
@@ -38,7 +38,7 @@ use super::{ChannelRef, channel_decref, with_channel};
 
 /// A string object holding a copy of a `'static` C literal.
 fn literal_obj(text: &'static CStr) -> Object {
-    Object::string(String_0::from_cstr(text))
+    Object::string(ApiString::from_cstr(text))
 }
 
 /// Channel `id`'s info dict, as the `TypVal` the Vimscript layer wants.
@@ -152,7 +152,9 @@ fn channel_info_of(channel: &mut crate::types::Channel) -> ApiDict {
         if job.pty().is_some() {
             // A closed master has no name, which reads as a null string.
             let name = job.as_mut().tty_name();
-            let name = name.as_deref().map_or(String_0::NULL, String_0::from_cstr);
+            let name = name
+                .as_deref()
+                .map_or(ApiString::NULL, ApiString::from_cstr);
             push(c"pty", Object::string(name));
         }
         push(c"argv", Object::array(argv_array(&job.argv())));
@@ -194,7 +196,7 @@ fn channel_info_of(channel: &mut crate::types::Channel) -> ApiDict {
 /// The child's command line, as an array of strings copied out of it.
 fn argv_array(args: &[&CStr]) -> Array {
     args.iter()
-        .map(|arg| Object::string(String_0::from_cstr(arg)))
+        .map(|arg| Object::string(ApiString::from_cstr(arg)))
         .collect()
 }
 

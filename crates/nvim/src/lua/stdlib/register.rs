@@ -15,6 +15,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::types::Handle;
 use core::ffi::{CStr, c_int};
 
 use super::{
@@ -70,7 +71,7 @@ fn int_arg(stack: &Stack, at: c_int) -> Result<c_int, Raise> {
 /// evaluating 'foldexpr') over a zero-based end-exclusive line range, without
 /// any of `zx`'s other side effects.
 fn foldupdate(stack: &mut Stack) -> Result<c_int, Raise> {
-    let Some(win) = winlayer::window(int_arg(stack, 1)?) else {
+    let Some(win) = winlayer::window(Handle::new(int_arg(stack, 1)?)) else {
         return Err(Raise::message("invalid window"));
     };
     let top: LineNr = int_arg(stack, 2)? + 1;

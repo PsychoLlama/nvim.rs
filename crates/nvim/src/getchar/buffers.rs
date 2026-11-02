@@ -379,13 +379,13 @@ pub fn get_recorded() -> Vec<u8> {
 }
 
 /// The contents of the redo buffer, with `K_SPECIAL` escaped:
-/// [`String_0::NULL`] when it is empty.
-pub fn get_inserted() -> String_0 {
+/// [`ApiString::NULL`] when it is empty.
+pub fn get_inserted() -> ApiString {
     let bytes = redobuff().bytes();
     if bytes.is_empty() {
-        return String_0::NULL;
+        return ApiString::NULL;
     }
-    String_0::from_bytes(&bytes)
+    ApiString::from_bytes(&bytes)
 }
 
 /// Write `n` into `out` as decimal digits and answer how many there are.

@@ -21,8 +21,8 @@ use crate::msgpack_rpc::packer::{
     Addressees, mpack_array, mpack_integer, mpack_object, mpack_object_array, mpack_str, mpack_uint,
 };
 use crate::types::{
-    ApiDispatchFn, Array, Error, Integer, MessageType, MsgpackRpcRequestHandler, Object,
-    PackerBuffer, String_0, kErrorTypeNone, uint32_t, uint64_t,
+    ApiDispatchFn, ApiString, Array, Error, Integer, MessageType, MsgpackRpcRequestHandler, Object,
+    PackerBuffer, kErrorTypeNone, uint32_t, uint64_t,
 };
 
 use super::known::*;
@@ -112,7 +112,7 @@ fn report_failed_notification(
 
     let args = Array::from(vec![
         Object::Integer(Integer::from(err.kind())),
-        Object::string(String_0::from_cstr(err.message_or_empty())),
+        Object::string(ApiString::from_cstr(err.message_or_empty())),
     ]);
     serialize_request(Addressees::One(channel_id), 0, b"nvim_error_event", args);
 }

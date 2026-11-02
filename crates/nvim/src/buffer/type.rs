@@ -20,6 +20,7 @@
 
 use crate::autocmd::fire_autocmds;
 use crate::types::AutoEvent;
+use crate::types::Handle;
 use core::ffi::{CStr, c_int};
 
 use super::*;
@@ -162,7 +163,7 @@ pub(crate) fn buf_spname_owned(buffer: Buf) -> Option<XString> {
 pub fn buf_spname(buffer: &Buf) -> Option<&CStr> {
     let b = buffer;
     if buf_is_quickfix(Some(*b)) {
-        if b.handle == qf_stack_get_bufnr() {
+        if b.handle == Handle::new(qf_stack_get_bufnr()) {
             return Some(gettext(msg_qflist));
         }
         return Some(gettext(msg_loclist));

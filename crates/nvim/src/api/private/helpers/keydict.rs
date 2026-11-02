@@ -20,6 +20,7 @@ use crate::api::private::keyset::{FieldKind, KeySet, Slot};
 use crate::api::private::validate::err_expected;
 use crate::api_error;
 use crate::narrow::number_as_int;
+use crate::types::Handle;
 use crate::types::{ApiDict, Error, Float, KeyValuePair, Object, kErrorTypeValidation};
 
 /// Fill the keyset `retval` from `dict`, type-checking each value against
@@ -87,7 +88,7 @@ pub(crate) fn api_dict_to_keydict(retval: &mut dyn KeySet, dict: ApiDict) -> Res
                     }
                     None => return Err(wrong_type()),
                 };
-                *slot = Some(number_as_int(handle));
+                *slot = Some(Handle::new(number_as_int(handle)));
             }
             Slot::LuaRef(_) => {
                 let name = key.as_c_str().to_string_lossy();

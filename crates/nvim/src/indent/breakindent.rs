@@ -278,7 +278,7 @@ pub fn get_breakindent_win(window: Win, line: &[u8]) -> c_int {
     let win = window;
     let buf = win.buffer();
     let key = BreakindentKey {
-        fnum: buf.handle,
+        fnum: buf.handle.get(),
         ts: buf.b_p_ts,
         tick: buf_get_changedtick(buf),
         listopt: win.w_briopt_list,

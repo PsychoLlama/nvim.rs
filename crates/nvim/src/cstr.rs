@@ -22,7 +22,7 @@
 //! - **`&[u8]`** — bytes with an *explicit* length, and therefore the type
 //!   for text that may hold an interior NUL or is not terminated at all: a
 //!   buffer line (`memline` stores a NUL as an `NL`, so a line's bytes can
-//!   hold either), a slice of a command line, the `String_0` the API layer
+//!   hold either), a slice of a command line, the `ApiString` the API layer
 //!   passes, anything measured by a separate `len` parameter. Prefer this
 //!   whenever the caller already knows the length: `&CStr` would make it
 //!   re-scan for a terminator that may not be there.

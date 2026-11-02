@@ -24,6 +24,7 @@ use crate::charset::backslash_halved;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::Failed;
+use crate::types::Handle;
 use std::rc::Rc;
 
 /// Every defined sign, in definition order.
@@ -82,8 +83,8 @@ pub(crate) fn sign_nth_group(idx: usize) -> Option<Integer> {
 /// The namespace `group` names, creating it — and remembering it for
 /// completion — the first time a sign is placed in it.
 pub(super) fn namespace_of(group: &[u8]) -> Integer {
-    let known = namespace_id_for(group).unwrap_or(0) != 0;
-    let ns = nvim_create_namespace(String_0::from_bytes(group));
+    let known = namespace_id_for(group).unwrap_or(Handle::NONE) != Handle::NONE;
+    let ns = nvim_create_namespace(ApiString::from_bytes(group));
     if !known {
         SIGN_GROUPS.with_mut(|groups| groups.push(ns));
     }
@@ -100,8 +101,8 @@ pub(crate) fn group_get_ns(group: Option<&[u8]>) -> int64_t {
     if group == b"*" {
         return ALL_GROUPS;
     }
-    match namespace_id_for(group).unwrap_or(0) {
-        0 => NO_SUCH_GROUP,
+    match namespace_id_for(group).unwrap_or(Handle::NONE) {
+        Handle::NONE => NO_SUCH_GROUP,
         ns => int64_t::from(ns),
     }
 }

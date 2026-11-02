@@ -226,9 +226,9 @@ impl Default for AcoSave {
     fn default() -> Self {
         AcoSave {
             use_aucmd_win_idx: 0,
-            save_curwin_handle: 0,
-            new_curwin_handle: 0,
-            save_prevwin_handle: 0,
+            save_curwin_handle: Handle::NONE,
+            new_curwin_handle: Handle::NONE,
+            save_prevwin_handle: Handle::NONE,
             new_curbuf: BufferRef::new(),
             tp_localdir: None,
             globaldir: None,

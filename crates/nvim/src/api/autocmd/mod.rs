@@ -18,9 +18,9 @@ use crate::global_cell::GlobalCell;
 use crate::lua::executor::{api_new_luaref, nlua_ref_is_function};
 use crate::types::AutoEvent;
 use crate::types::{
-    ApiDict, Array, AutoCmd, AutoHandler, AutoPat, BufferHandle, Callback, Error, Integer,
-    KeyDict_clear_autocmds, KeyDict_create_augroup, KeyDict_create_autocmd, KeyDict_exec_autocmds,
-    KeyDict_get_autocmds, Object, String_0, TryState, int64_t, kErrorTypeValidation,
+    ApiDict, ApiString, Array, AutoCmd, AutoHandler, AutoPat, BufferHandle, Callback, Error,
+    Integer, KeyDict_clear_autocmds, KeyDict_create_augroup, KeyDict_create_autocmd,
+    KeyDict_exec_autocmds, KeyDict_get_autocmds, Object, TryState, int64_t, kErrorTypeValidation,
     kObjectTypeString, size_t, uint64_t,
 };
 

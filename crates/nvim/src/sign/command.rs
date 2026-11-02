@@ -27,6 +27,7 @@ use crate::message_fmt::msg_bytes as shown;
 use crate::semsg;
 use crate::smsg;
 use crate::types::FAIL;
+use crate::types::Handle;
 use crate::winlayer::Win;
 
 /// The translated `$fmt` formatted with the arguments, cut to what a
@@ -111,7 +112,10 @@ fn report_signs(signs: &[MTKey]) {
         let groupbuf = if mark.ns == 0 {
             Vec::new()
         } else {
-            msg_buf!(c"  group=%s", &describe_ns(mark.ns.cast_signed(), b"")[..])
+            msg_buf!(
+                c"  group=%s",
+                &describe_ns(Handle::new(mark.ns.cast_signed()), b"")[..]
+            )
         };
         let lbuf = msg_buf!(
             c"    line=%d  id=%u%s%s  priority=%d",

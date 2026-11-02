@@ -56,7 +56,6 @@ use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::{
     CmdModFlags, CpoFlag, ExArg, Failed, LineNr, MAXPATHL, NUL, OptionSetFlags, ShmFlag, int32_t,
-    int64_t,
 };
 use crate::undo::{buf_is_changed, curbuf_is_changed};
 use crate::window::check_can_set_curbuf_forceit;
@@ -607,7 +606,7 @@ fn write_one_buffer(
     }
     let mut deleted = false;
     if buffer.name.full().is_none() {
-        semsg!("E141: No file name for buffer {}", buffer.handle as int64_t);
+        semsg!("E141: No file name for buffer {}", buffer.handle);
         *error += 1;
     } else if check_readonly(&mut args.forceit, buffer)
         || check_overwrite_own(args, buffer).is_err()
@@ -721,7 +720,7 @@ pub fn getfile(
         }
         otherfile(full.as_ref().map_or(c"", XString::as_cstr))
     } else {
-        fnum != Buf::current().handle
+        fnum != Buf::current().handle.get()
     };
 
     // Don't wait for the autowrite message. Released at two exits.

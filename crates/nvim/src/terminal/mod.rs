@@ -59,8 +59,8 @@ use crate::option::set_option_value;
 use crate::options::kOptBuftype;
 use crate::startup::exiting;
 use crate::state::mode::State;
+use crate::types::ApiString;
 use crate::types::AutoEvent;
-use crate::types::String_0;
 use crate::types::builders::DictBuf;
 use crate::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::types::{
@@ -255,7 +255,7 @@ pub(crate) fn terminal_open(mut term: Term, mut buffer: Buf, attached: &dyn Fn()
     aucmd_restbuf(&mut aco);
     // TermOpen may have closed and freed the terminal; it is only reached
     // again once its driver says it still holds it.
-    if !attached() || term.buf_handle == 0 {
+    if !attached() || term.buf_handle == Handle::NONE {
         return;
     }
     if !term_may_alloc_scrollback(term, Some(buffer)) {
@@ -322,7 +322,7 @@ pub(crate) fn terminal_close(mut term: Term, status: c_int) {
     let mut pos = buf.map_or(0, |buf| buf.line_count() as c_int - 1);
     if status == -1 || exiting.get() {
         // Nothing to report on: detach from the buffer straight away.
-        term.buf_handle = 0 as Handle;
+        term.buf_handle = Handle::NONE;
         if let Some(mut buf) = buf {
             buf.terminal = ::core::ptr::null_mut();
         }
@@ -372,14 +372,16 @@ pub(crate) fn terminal_close(mut term: Term, status: c_int) {
 ///
 /// A buffer handle as an id event's word.
 fn handle_word(handle: Handle) -> u64 {
-    u64::from(handle.cast_unsigned())
+    u64::from(handle.get().cast_unsigned())
 }
 
 /// The buffer handle [`handle_word`] packed.
 fn handle_of(word: u64) -> Handle {
-    u32::try_from(word)
-        .expect("`handle_word` packs a handle")
-        .cast_signed()
+    Handle::new(
+        u32::try_from(word)
+            .expect("`handle_word` packs a handle")
+            .cast_signed(),
+    )
 }
 
 /// The child behind buffer `handle`'s terminal was stopped or resumed:
@@ -467,7 +469,7 @@ pub(crate) fn terminal_check_size(mut term: Term) {
 /// it freed the terminal, after which the caller drops its handle.
 pub(crate) fn terminal_destroy(mut term: Term) -> bool {
     if let Some(mut buf) = term_buf(term) {
-        term.buf_handle = 0 as Handle;
+        term.buf_handle = Handle::NONE;
         buf.terminal = ::core::ptr::null_mut();
     }
     if term.refcount != RefcountSize::ZERO {
@@ -735,11 +737,11 @@ fn is_focused(term: Term) -> bool {
 ///
 /// A key that is not there answers nil rather than a refusal.
 fn dict_lookup(dict: &DictRef, key: &CStr) -> Object {
-    dict_get_value(dict, &String_0::from_cstr(key)).unwrap_or(Object::Nil)
+    dict_get_value(dict, &ApiString::from_cstr(key)).unwrap_or(Object::Nil)
 }
 
 /// `b:<key>`, falling back to `g:<key>`, if it is a string.
-fn get_config_string(buffer: Buf, key: &CStr) -> Option<String_0> {
+fn get_config_string(buffer: Buf, key: &CStr) -> Option<ApiString> {
     let mut obj = dict_lookup(&scope_vars(&buffer.b_bufvar), key);
     if obj.is_nil() {
         obj = dict_lookup(&globvar_dict(), key);

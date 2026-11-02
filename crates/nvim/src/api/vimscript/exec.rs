@@ -20,10 +20,10 @@ use crate::guard::Suppress;
 
 pub fn nvim_exec2(
     channel_id: uint64_t,
-    src: String_0,
+    src: ApiString,
     opts: &mut KeyDict_exec_opts,
 ) -> Result<ApiDict, Error> {
-    let output: String_0 = (exec_impl(channel_id, src, opts))?;
+    let output: ApiString = (exec_impl(channel_id, src, opts))?;
     if !opts.output.unwrap_or(false) {
         return Ok(ApiDict::EMPTY);
     }
@@ -38,9 +38,9 @@ pub fn nvim_exec2(
 /// `opts.output` asked for it (and the empty string otherwise, or on error).
 pub fn exec_impl(
     channel_id: uint64_t,
-    src: String_0,
+    src: ApiString,
     opts: &mut KeyDict_exec_opts,
-) -> Result<String_0, Error> {
+) -> Result<ApiString, Error> {
     // Read once: `opts` is the dispatcher's own copy of the keyword
     // arguments, which nothing the sourced script can do reaches.
     let capture = opts.output.unwrap_or(false);
@@ -73,12 +73,12 @@ pub fn exec_impl(
     if let Some(captured) = captured.filter(|captured| captured.len() > 1) {
         // Messages open with a newline the caller did not ask for.
         let skip = usize::from(captured[0] == b'\n');
-        return Ok(String_0::from_bytes(&captured[skip..]));
+        return Ok(ApiString::from_bytes(&captured[skip..]));
     }
-    Ok(String_0::NULL)
+    Ok(ApiString::NULL)
 }
 
-pub fn nvim_command(cmd: String_0) -> Result<(), Error> {
+pub fn nvim_command(cmd: ApiString) -> Result<(), Error> {
     api_try(|| {
         let _ = do_cmdline_cmd(cmd.as_cstr());
     })?;

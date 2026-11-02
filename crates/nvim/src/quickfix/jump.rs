@@ -28,6 +28,7 @@ use crate::ex_docmd::cmdmod_tab;
 use crate::message::msg_keep_text;
 use crate::search::search_forward_keep;
 use crate::tr;
+use crate::types::Handle;
 use crate::types::ShmFlag;
 use crate::winlayer::prev_window;
 use core::ffi::{CStr, c_char, c_int, c_uint};
@@ -98,7 +99,7 @@ fn qf_jump_edit_buffer(
             no_write_message();
             return Jumped::Restore;
         }
-        let oldwin = (prev_winid == Win::current().handle).then(|| Win::current().id());
+        let oldwin = (prev_winid == Win::current().handle.get()).then(|| Win::current().id());
         edit_buffer_number(fnum, 1, EcmdFlags::HIDE | EcmdFlags::SET_HELP, oldwin).is_ok()
     } else {
         match escape_winfixbuf(qi, fnum, forceit, opened_window) {
@@ -146,7 +147,10 @@ fn qf_jump_edit_buffer(
 /// autocommands that got us here may have changed the list, and the caller
 /// has to notice that.
 fn escape_winfixbuf(qi: Qi, fnum: c_int, forceit: bool, opened_window: &mut bool) -> Option<bool> {
-    if forceit || Win::current().w_onebuf_opt.wo_wfb == 0 || Buf::current().handle == fnum {
+    if forceit
+        || Win::current().w_onebuf_opt.wo_wfb == 0
+        || Buf::current().handle == Handle::new(fnum)
+    {
         return Some(true);
     }
     if qi.kind == QFLT_LOCATION {
@@ -419,7 +423,7 @@ pub(crate) fn qf_jump_newwin(qi: Qi, dir: c_int, errornr: c_int, forceit: bool, 
                     qf_index,
                     at,
                     forceit,
-                    prev_winid,
+                    prev_winid.get(),
                     &mut opened_window,
                     old_key_typed,
                     print_message,

@@ -18,7 +18,7 @@ use core::ffi::CStr;
 
 use crate::options::*;
 use crate::types::{
-    ApiDict, Error, Integer, Object, OptIndex, OptionSetFlags, ScriptCtx, String_0, size_t,
+    ApiDict, ApiString, Error, Integer, Object, OptIndex, OptionSetFlags, ScriptCtx, size_t,
 };
 
 use crate::api::private::validate::err_bad_value;
@@ -39,7 +39,7 @@ fn push(dict: &mut ApiDict, key: &'static CStr, value: Object) {
 /// nil's string -- the API's `NULL` string -- for an option with no
 /// abbreviation.
 fn name_value(name: Option<&CStr>) -> Object {
-    Object::string(name.map_or(String_0::NULL, String_0::from_cstr))
+    Object::string(name.map_or(ApiString::NULL, ApiString::from_cstr))
 }
 
 /// A `Boolean` value.
@@ -54,7 +54,7 @@ fn int_value(n: Integer) -> Object {
 
 /// The info dictionary for one option, looked up by name.
 pub(crate) fn get_vimoption(
-    name: String_0,
+    name: ApiString,
     opt_flags: OptionSetFlags,
     buffer: Buf,
     win: Win,

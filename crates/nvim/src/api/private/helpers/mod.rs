@@ -36,8 +36,8 @@ use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
 use crate::runtime::state::current_sctx;
 use crate::types::{
-    BufferHandle, ColNr, Error, Integer, LineNr, Pos, ScriptId, String_0, TabpageHandle, TryState,
-    WindowHandle, int64_t, kErrorTypeException, uint64_t,
+    ApiString, BufferHandle, ColNr, Error, Integer, LineNr, Pos, ScriptId, TabpageHandle, TryState,
+    WindowHandle, kErrorTypeException, uint64_t,
 };
 use crate::winlayer::{self, Buf, TabPage, Win};
 
@@ -92,34 +92,34 @@ use crate::message_fmt::{msg_bytes, msg_cstr};
 /// The buffer `buffer` names, or the current one for 0. `Ok(None)` when 0
 /// names nothing; `Err` when a named handle does.
 pub(crate) fn find_buffer_by_handle(buffer: BufferHandle) -> Result<Option<Buf>, Error> {
-    if buffer == 0 {
+    if buffer.is_current() {
         return Ok(Buf::current_or_none());
     }
     match winlayer::buffer(buffer) {
         Some(buf) => Ok(Some(buf)),
-        None => Err(err_bad_number(c"buffer id", buffer as int64_t)),
+        None => Err(err_bad_number(c"buffer id", Integer::from(buffer))),
     }
 }
 
 /// [`find_buffer_by_handle`] for a window.
 pub(crate) fn find_window_by_handle(window: WindowHandle) -> Result<Option<Win>, Error> {
-    if window == 0 {
+    if window.is_current() {
         return Ok(Win::current_or_none());
     }
     match winlayer::window(window) {
         Some(win) => Ok(Some(win)),
-        None => Err(err_bad_number(c"window id", window as int64_t)),
+        None => Err(err_bad_number(c"window id", Integer::from(window))),
     }
 }
 
 /// [`find_buffer_by_handle`] for a tab page.
 pub(crate) fn find_tab_by_handle(tabpage: TabpageHandle) -> Result<Option<TabPage>, Error> {
-    if tabpage == 0 {
+    if tabpage.is_current() {
         return Ok(TabPage::current_or_none());
     }
     match winlayer::tabpage(tabpage) {
         Some(tp) => Ok(Some(tp)),
-        None => Err(err_bad_number(c"tabpage id", tabpage as int64_t)),
+        None => Err(err_bad_number(c"tabpage id", Integer::from(tabpage))),
     }
 }
 
@@ -233,7 +233,7 @@ pub(crate) fn api_try<T>(body: impl FnOnce() -> T) -> Result<T, Error> {
 /// that can be set.
 pub(crate) fn set_mark(
     buffer: Option<Buf>,
-    name: String_0,
+    name: ApiString,
     line: Integer,
     col: Integer,
 ) -> Result<(), Error> {
@@ -267,7 +267,7 @@ pub(crate) fn set_mark(
     let first = name.as_bytes().first().copied().unwrap_or(0);
     let mark = c_int::from(c_char::from_ne_bytes([first]));
     let handle = buffer.handle;
-    if setmark_at(mark, pos, handle).is_ok() {
+    if setmark_at(mark, pos, handle.get()).is_ok() {
         return Ok(());
     }
     // `%c` wrote the one byte, whatever it was.

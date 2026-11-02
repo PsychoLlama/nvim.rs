@@ -72,7 +72,7 @@ use crate::tui::terminfo::caps::{
 use crate::tui::terminfo::{terminfo_from_builtin, terminfo_from_database};
 use crate::types::libc::STDOUT_FILENO;
 use crate::types::{
-    HlAttrs, SignalWatcher, Staging, String_0, TUIData, TermInput, TerminfoEntry, TerminfoExt,
+    ApiString, HlAttrs, SignalWatcher, Staging, TUIData, TermInput, TerminfoEntry, TerminfoExt,
     uv_file, uv_handle_t, uv_timer_t, uv_tty_mode_t,
 };
 use crate::ui::state::t_colors;
@@ -463,7 +463,7 @@ fn terminfo_disable(tui: &mut TUIData) {
     if tui.modes.theme_updates() {
         tui_set_term_mode(tui, THEME_UPDATES, false);
     }
-    tui_mode_change(tui, String_0::NULL, 0);
+    tui_mode_change(tui, ApiString::NULL, 0);
     tui_mouse_off(tui);
     terminfo_out(tui, kTerm_exit_attribute_mode);
     terminfo_out(tui, kTerm_cursor_normal);
@@ -476,7 +476,7 @@ fn terminfo_disable(tui: &mut TUIData) {
     if tui.modes.grapheme_clusters() {
         tui_set_term_mode(tui, GRAPHEME_CLUSTERS, false);
     }
-    tui_set_title(tui, String_0::NULL);
+    tui_set_title(tui, ApiString::NULL);
     if tui.cursor_has_color {
         terminfo_out(tui, kTerm_reset_cursor_color);
     }

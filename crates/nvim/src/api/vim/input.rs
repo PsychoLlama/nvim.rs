@@ -20,7 +20,7 @@ use crate::keycodes::{
 };
 use crate::message_fmt::msg_bytes;
 
-pub fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean) {
+pub fn nvim_feedkeys(keys: ApiString, mode: ApiString, escape_ks: Boolean) {
     let mut remap: bool = true;
     let mut insert: bool = false;
     let mut typed: bool = false;
@@ -94,15 +94,15 @@ pub fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean) {
     }
 }
 
-pub fn nvim_input(channel_id: uint64_t, keys: String_0) -> Integer {
+pub fn nvim_input(channel_id: uint64_t, keys: ApiString) -> Integer {
     may_trigger_vim_suspend_resume(false);
     input_enqueue(channel_id, keys) as Integer
 }
 
 pub fn nvim_input_mouse(
-    button: String_0,
-    action: String_0,
-    modifier: String_0,
+    button: ApiString,
+    action: ApiString,
+    modifier: ApiString,
     grid: Integer,
     row: Integer,
     col: Integer,
@@ -164,13 +164,13 @@ pub fn nvim_input_mouse(
 }
 
 pub fn nvim_replace_termcodes(
-    str: String_0,
+    str: ApiString,
     from_part: Boolean,
     do_lt: Boolean,
     special: Boolean,
-) -> String_0 {
+) -> ApiString {
     if str.len() == 0 as size_t {
-        return String_0::NULL;
+        return ApiString::NULL;
     }
     let mut flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if from_part {
@@ -193,27 +193,27 @@ pub fn nvim_replace_termcodes(
             .position(|&b| b == 0)
             .unwrap_or(replaced.len()),
     );
-    String_0::from_xstring(crate::memory::XString::from_vec(replaced))
+    ApiString::from_xstring(crate::memory::XString::from_vec(replaced))
 }
 
-pub fn nvim_get_keymap(mode: String_0) -> Array {
+pub fn nvim_get_keymap(mode: ApiString) -> Array {
     keymap_array(mode, None)
 }
 
 pub fn nvim_set_keymap(
     channel_id: uint64_t,
-    mode: String_0,
-    lhs: String_0,
-    rhs: String_0,
+    mode: ApiString,
+    lhs: ApiString,
+    rhs: ApiString,
     opts: &mut KeyDict_keymap,
 ) -> Result<(), Error> {
     // `-1` is the API's "every buffer" spelling of the buffer argument.
-    let all_buffers: BufferHandle = -1;
+    let all_buffers: BufferHandle = Handle::new(-1);
     modify_keymap(channel_id, all_buffers, false, mode, lhs, rhs, Some(opts))
 }
 
-pub fn nvim_del_keymap(channel_id: uint64_t, mode: String_0, lhs: String_0) -> Result<(), Error> {
-    nvim_buf_del_keymap(channel_id, -1 as BufferHandle, mode, lhs)
+pub fn nvim_del_keymap(channel_id: uint64_t, mode: ApiString, lhs: ApiString) -> Result<(), Error> {
+    nvim_buf_del_keymap(channel_id, Handle::new(-1), mode, lhs)
 }
 
 pub fn nvim_select_popupmenu_item(

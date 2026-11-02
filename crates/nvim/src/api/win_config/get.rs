@@ -59,7 +59,7 @@ fn config_put_bordertext(
         (&fconfig.title_chunks, fconfig.title_pos)
     };
     let bordertext = Object::array(virt_text_to_array(vt, true));
-    let pos = String_0::from_cstr(ALIGN_TEXT_STR[align as usize]);
+    let pos = ApiString::from_cstr(ALIGN_TEXT_STR[align as usize]);
     if footer {
         config.footer = Some(bordertext);
         config.footer_pos = Some(pos);
@@ -76,13 +76,13 @@ fn border_array(fconfig: &WinConfig) -> Array {
     for (i, chars) in fconfig.border_chars.iter().enumerate() {
         // Up to the cell's NUL, or all of it.
         let text: Vec<u8> = chars.iter().take_while(|&&c| c != 0).copied().collect();
-        let cell = String_0::from_bytes(&text);
+        let cell = ApiString::from_bytes(&text);
         let name = syn_id2name(fconfig.border_hl_ids[i]);
         let highlighted = !name.is_empty();
         if highlighted {
             let mut tuple = Array::with_capacity(2);
             tuple.push(Object::string(cell));
-            tuple.push(Object::string(String_0::from_cstr(name)));
+            tuple.push(Object::string(ApiString::from_cstr(name)));
             border.push(Object::array(tuple));
         } else {
             border.push(Object::string(cell));
@@ -103,7 +103,7 @@ pub fn nvim_win_get_config(win: WindowHandle) -> Result<KeyDict_win_config, Erro
     rv.external = Some(config.external);
     rv.hide = Some(config.hide);
     rv.mouse = Some(config.mouse);
-    rv.style = Some(String_0::from_cstr(WIN_STYLE_STR[config.style as usize]));
+    rv.style = Some(ApiString::from_cstr(WIN_STYLE_STR[config.style as usize]));
 
     if wp.w_floating {
         rv.width = Some(Integer::from(config.width));
@@ -120,7 +120,7 @@ pub fn nvim_win_get_config(win: WindowHandle) -> Result<KeyDict_win_config, Erro
                 }
             }
             let anchor = usize::try_from(config.anchor).expect("an anchor is one of four");
-            rv.anchor = Some(String_0::from_cstr(FLOAT_ANCHOR_STR[anchor]));
+            rv.anchor = Some(ApiString::from_cstr(FLOAT_ANCHOR_STR[anchor]));
             rv.row = Some(config.row);
             rv.col = Some(config.col);
             rv.zindex = Some(Integer::from(config.zindex));
@@ -134,13 +134,13 @@ pub fn nvim_win_get_config(win: WindowHandle) -> Result<KeyDict_win_config, Erro
                 config_put_bordertext(&mut rv, config, kBorderTextFooter);
             }
         } else {
-            rv.border = Some(Object::string(String_0::from_cstr(c"none")));
+            rv.border = Some(Object::string(ApiString::from_cstr(c"none")));
         }
     } else if !config.external {
         rv.width = Some(Integer::from(wp.w_width));
         rv.height = Some(Integer::from(wp.w_height));
         let split = win_split_dir(wp);
-        rv.split = Some(String_0::from_cstr(WIN_SPLIT_STR[split as usize]));
+        rv.split = Some(ApiString::from_cstr(WIN_SPLIT_STR[split as usize]));
     }
 
     let rel = if wp.w_floating && !config.external {
@@ -148,7 +148,7 @@ pub fn nvim_win_get_config(win: WindowHandle) -> Result<KeyDict_win_config, Erro
     } else {
         c""
     };
-    rv.relative = Some(String_0::from_cstr(rel));
+    rv.relative = Some(ApiString::from_cstr(rel));
     if config._cmdline_offset < INT_MAX {
         rv._cmdline_offset = Some(Integer::from(config._cmdline_offset));
     }

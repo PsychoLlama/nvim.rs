@@ -57,7 +57,7 @@ pub fn msg_id_exists(id: int64_t) -> bool {
 pub(crate) fn ui_ext_msg_set_pos(row: c_int, scrolled: bool) {
     let mut grid = msg_grid_ref();
     let mut sep = [0; SCHAR_BUF_SIZE];
-    let sep = String_0::from_bytes(schar_text(Win::current().w_p_fcs_chars.msgsep, &mut sep));
+    let sep = ApiString::from_bytes(schar_text(Win::current().w_p_fcs_chars.msgsep, &mut sep));
     ui_call_msg_set_pos(
         grid.handle.into(),
         row.into(),

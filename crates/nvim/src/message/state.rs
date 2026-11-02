@@ -53,7 +53,7 @@ use crate::options::{
     OptMoptFlags, kOptMoptFlagHistory, kOptMoptFlagHitEnter, kOptMoptFlagProgress,
 };
 use crate::os::fs::CFile;
-use crate::types::{Array, Callback, Object, ScreenAttr, ScreenGrid, String_0, int64_t};
+use crate::types::{ApiString, Array, Callback, Object, ScreenAttr, ScreenGrid, int64_t};
 use core::ffi::{CStr, c_int, c_long};
 
 pub(crate) static on_print: GlobalCell<Callback> = GlobalCell::new(Callback::None);
@@ -228,7 +228,7 @@ state_record! {
     /// The line the last error was reported from.
     pub(super) last_sourcing_lnum: c_int = 0;
     /// The message kind in force when the current verbose section started.
-    pub(super) pre_verbose_kind: String_0 = String_0::NULL;
+    pub(super) pre_verbose_kind: ApiString = ApiString::NULL;
     /// Whether opening `'verbosefile'` has been attempted, so the failure
     /// is reported once rather than on every message.
     pub(super) verbose_did_open: bool = false;
@@ -244,7 +244,7 @@ state_record! {
     /// keeps its own copy rather than the caller's pointer. `nvim_echo`'s
     /// `kind` lives in a keyset that dies with the call, which is how a
     /// borrowed kind became a use-after-free.
-    pub(super) msg_ext_kind: String_0 = String_0::NULL;
+    pub(super) msg_ext_kind: ApiString = ApiString::NULL;
     /// What caused the message being built, for a UI that groups by it.
     /// Both callers name a compiled-in kind, so the field holds the literal
     /// rather than a pointer whose lifetime it would have to answer for.

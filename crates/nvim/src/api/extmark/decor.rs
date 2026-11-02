@@ -13,6 +13,8 @@ use super::*;
 use crate::api::private::validate::{err_bad_number, err_expected, err_out_of_range};
 use crate::charset::transstr_owned;
 use crate::mbyte::c_string_cells;
+use crate::types::Handle;
+use core::ffi::c_int;
 
 pub fn nvim_buf_del_extmark(
     buf: BufferHandle,
@@ -52,7 +54,7 @@ pub fn nvim_buf_clear_namespace(
 }
 
 pub fn nvim_set_decoration_provider(ns_id: Integer, opts: &mut KeyDict_set_decoration_provider) {
-    let ns = ns_id as NS;
+    let ns = Handle::new(ns_id as c_int);
     with_decor_provider(ns, true, decor_provider_clear);
     redraw_all_later(UPD_NOT_VALID);
     // Each callback the caller named moves into the provider, and the

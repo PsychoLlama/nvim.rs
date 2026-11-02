@@ -22,7 +22,7 @@ use crate::tui::terminfo::caps::{
     kTerm_set_cursor_style,
 };
 use crate::types::{
-    ApiDict, CursorEntry, CursorShape, HlAttrs, Object, RgbValue, String_0, TUIData, int32_t,
+    ApiDict, ApiString, CursorEntry, CursorShape, HlAttrs, Object, RgbValue, TUIData, int32_t,
 };
 use core::ffi::{CStr, c_int};
 
@@ -52,7 +52,7 @@ fn decscusr_code(entry: &CursorEntry) -> c_int {
 }
 
 /// The shape `'guicursor'` names, falling back to a block.
-fn decode_shape(shape: &String_0) -> CursorShape {
+fn decode_shape(shape: &ApiString) -> CursorShape {
     match shape.as_bytes() {
         b"block" => SHAPE_BLOCK,
         b"vertical" => SHAPE_VER,

@@ -28,6 +28,7 @@
 
 pub(crate) mod state;
 use crate::strings::has_char;
+use crate::types::Handle;
 use crate::window::tab_index;
 use crate::winlayer::{TabPage, WinId};
 use core::ffi::{CStr, c_int};
@@ -521,7 +522,8 @@ fn mouse_check_grid() -> (Option<ColNr>, c_int) {
     let gp = grid_adjust(win.w_grid, &mut start_row, &mut start_col);
     let (handle, drawn, rows, cols) = (gp.handle, gp.is_allocated(), gp.rows, gp.cols);
     let (row, col) = (pos.row + start_row, pos.col + start_col);
-    if handle != pos.grid || !drawn || row < 0 || row >= rows || col < 0 || col >= cols {
+    if handle != Handle::new(pos.grid) || !drawn || row < 0 || row >= rows || col < 0 || col >= cols
+    {
         return (None, 0);
     }
     let vcol = gp.vcol_at(gp.cell_offset(row, col));
@@ -603,7 +605,7 @@ pub(crate) fn f_getmousepos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
         // not necessary for a top border since `row` starts at -1 in that
         // case.
         if pos.row < height + win.w_border_adj[2] {
-            winid = win.handle as VarNumber;
+            winid = win.handle.get() as VarNumber;
             // Adjust by 1 for a top/left border.  Summed in the answer's own
             // width rather than in the C's `int`: `nvim_input_mouse` accepts
             // a column up to INT_MAX, and the C's sum then overflows -- which

@@ -10,6 +10,9 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use core::ffi::c_int;
+use core::fmt;
+use core::num::TryFromIntError;
 
 /// A one-argument float operation, as `float_op_wrapper` calls it. The
 /// implementations are `eval::funcs::math`'s, wrapping `f64`'s methods.
@@ -54,7 +57,96 @@ pub type NS = Handle;
 pub type OptInt = int64_t;
 pub type Terminal = terminal;
 pub type Float = ::core::ffi::c_double;
-pub type Handle = ::core::ffi::c_int;
+/// `handle_T`: the id a buffer, window, tab page, grid or namespace is known
+/// by, on the wire and in the editor's own tables.
+///
+/// A newtype rather than C's `int` so an id cannot be mistaken for a count,
+/// a line or a column, and so the one place an `Integer` off the wire
+/// narrows to one is [`TryFrom`]: an id past C `int` names nothing, where
+/// upstream's `(handle_T)` cast wrapped it onto another object.
+///
+/// `#[repr(transparent)]` over `c_int`, so `tools/ffigen` still renders it as
+/// `typedef int Handle` and the structs that carry one keep their layout.
+#[repr(transparent)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Debug)]
+pub struct Handle(c_int);
+
+impl Handle {
+    /// 0, which no object is given: what a field holds when it names
+    /// nothing.
+    pub const NONE: Self = Self(0);
+
+    /// The same 0, as an API function reads it: "the current one".
+    pub const CURRENT: Self = Self(0);
+
+    /// The handle whose id is `id`.
+    pub const fn new(id: c_int) -> Self {
+        Self(id)
+    }
+
+    /// The id, as C's `int`.
+    pub const fn get(self) -> c_int {
+        self.0
+    }
+
+    /// Whether this is 0, the id that names the current object.
+    pub const fn is_current(self) -> bool {
+        self.0 == 0
+    }
+
+    /// The id, widened to the wire's `Integer`: `From`, for a `const fn`.
+    #[allow(
+        clippy::cast_lossless,
+        reason = "`From` is not callable in a `const fn`"
+    )]
+    pub const fn to_integer(self) -> Integer {
+        self.0 as Integer
+    }
+
+    /// The handle the next counter value names: this one plus 1.
+    pub const fn next(self) -> Self {
+        Self(self.0 + 1)
+    }
+}
+
+impl From<Handle> for Integer {
+    fn from(handle: Handle) -> Self {
+        Self::from(handle.0)
+    }
+}
+
+impl From<Handle> for f64 {
+    fn from(handle: Handle) -> Self {
+        Self::from(handle.0)
+    }
+}
+
+impl From<Handle> for c_int {
+    fn from(handle: Handle) -> Self {
+        handle.0
+    }
+}
+
+impl From<c_int> for Handle {
+    fn from(id: c_int) -> Self {
+        Self(id)
+    }
+}
+
+/// The wire's `Integer` narrowed to an id: one past C `int` is no handle.
+impl TryFrom<Integer> for Handle {
+    type Error = TryFromIntError;
+
+    fn try_from(id: Integer) -> Result<Self, Self::Error> {
+        c_int::try_from(id).map(Self)
+    }
+}
+
+impl fmt::Display for Handle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
 pub type ProfTime = uint64_t;
 pub type ScreenAttr = int32_t;
 pub type ScreenChar = uint32_t;

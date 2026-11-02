@@ -75,8 +75,8 @@ use crate::types::ui::{
     kUIMessages, kUIMultigrid, kUITermColors,
 };
 use crate::types::{
-    ApiDict, Array, Boolean, Error, Handle, Integer, LineFlags, Object, OptVal, OptionSetFlags,
-    RemoteUI, String_0, UIExtension,
+    ApiDict, ApiString, Array, Boolean, Error, Handle, Integer, LineFlags, Object, OptVal,
+    OptionSetFlags, RemoteUI, UIExtension,
 };
 use crate::ui::state::{called_vim_beep, resize_events, ui_ext_names, ui_refresh_cmdheight};
 use crate::ui_compositor::{
@@ -89,7 +89,7 @@ use core::ffi::c_int;
 use crate::api::private::validate::err_bad_number;
 use crate::winlayer::{Win, tabs};
 /// The screen the editor draws into when nothing else claims a grid.
-const DEFAULT_GRID_HANDLE: Handle = 1;
+const DEFAULT_GRID_HANDLE: Handle = Handle::new(1);
 
 /// How many UIs may be attached at once.
 ///
@@ -297,7 +297,7 @@ pub fn ui_refresh() {
         // screen expressed rather than who draws what, and are not options
         // a UI can be told about.
         if widget < kUILinegrid as usize {
-            let name = String_0::from_cstr(ui_ext_names[widget]);
+            let name = ApiString::from_cstr(ui_ext_names[widget]);
             ui_call_option_set(name, Object::boolean(enabled));
         }
     }
@@ -468,7 +468,7 @@ pub fn ui_attach_impl(mut ui: RemoteUI) {
     // Tell it where the server is, so that a UI on another machine can
     // resolve the paths the server sends.
     if let Some(cwd) = current_dir() {
-        ui_call_chdir(String_0::from_xstring(cwd));
+        ui_call_chdir(ApiString::from_xstring(cwd));
     }
 
     for widget in kUILinegrid as usize..kUIExtCount as usize {
@@ -534,7 +534,7 @@ pub fn ui_set_ext_option(chanid: u64, ext: UIExtension, active: bool) {
     let private = name.to_bytes().first() == Some(&b'_');
     if !private || active {
         with_ui(chanid, |ui| {
-            remote_ui_option_set(ui, String_0::from_cstr(name), Object::boolean(active));
+            remote_ui_option_set(ui, ApiString::from_cstr(name), Object::boolean(active));
         });
     }
     if ext == kUITermColors {
@@ -565,7 +565,7 @@ pub fn ui_line(
 
     let off = grid.cell_offset(row, startcol);
     let (chars, attrs) = grid.cells(off, (grid.cols - startcol) as usize);
-    let handle = grid.handle as Integer;
+    let handle = Integer::from(grid.handle);
     let (at_row, from) = (row as Integer, startcol as Integer);
     let (to, clear_from) = (endcol as Integer, clearcol as Integer);
     let clear_attr = clearattr as Integer;
@@ -577,7 +577,7 @@ pub fn ui_line(
     // the line just drawn and pause, so the draw order is watchable.
     if p_wd() != 0 && rdb_flags.get() & kOptRdbFlagLine as core::ffi::c_uint != 0 {
         ui_call_grid_cursor_goto(
-            grid.handle as Integer,
+            Integer::from(grid.handle),
             row as Integer,
             clearcol.min(grid.cols - 1) as Integer,
         );
@@ -671,7 +671,7 @@ pub fn ui_flush() {
 
     if pending_cursor_update.get() {
         ui_call_grid_cursor_goto(
-            cursor_grid_handle.get() as Integer,
+            Integer::from(cursor_grid_handle.get()),
             cursor_row.get() as Integer,
             cursor_col.get() as Integer,
         );
@@ -700,7 +700,7 @@ pub fn ui_flush() {
             ui_mode_idx.get()
         };
         let full_name = shape_entry(idx).full_name;
-        ui_call_mode_change(String_0::from_cstr(full_name), idx as Integer);
+        ui_call_mode_change(ApiString::from_cstr(full_name), idx as Integer);
         pending_mode_update.set(false);
         cursor_was_obscured.set(cursor_obscured);
     }
@@ -814,7 +814,7 @@ pub fn ui_grid_resize(grid_handle: Handle, width: c_int, height: c_int) -> Resul
         return Ok(());
     }
     let Some(mut wp) = get_win_by_grid_handle(grid_handle) else {
-        return Err(err_bad_number(c"window handle", grid_handle as i64));
+        return Err(err_bad_number(c"window handle", Integer::from(grid_handle)));
     };
     if wp.w_floating {
         if width != wp.w_width || height != wp.w_height {

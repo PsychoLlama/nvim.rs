@@ -31,7 +31,7 @@ pub fn unblock_autocmds() {
     autocmd_blocked.set(autocmd_blocked.get() - 1);
     if !is_autocmd_blocked() && termresponse_changed.get() && has_event(AutoEvent::TermResponse) {
         // The autocommand takes the copy over.
-        let sequence = String_0::from_bytes(&vim_var_bytes(Vv::Termresponse));
+        let sequence = ApiString::from_bytes(&vim_var_bytes(Vv::Termresponse));
         do_termresponse_autocmd(sequence);
     }
 }

@@ -56,12 +56,12 @@ pub(crate) fn get_patterns_from_pattern_or_buf(
 ) -> Result<Array, Error> {
     /// One pattern string per `,`-separated span of `text`, which is what
     /// `aucmd_span_pattern` walks.
-    fn push_spans(patterns: &mut Array, text: &String_0) {
+    fn push_spans(patterns: &mut Array, text: &ApiString) {
         let text = text.as_bytes();
         let (mut start, mut len) = aucmd_span_pattern(text);
         while len != 0 {
             let end = start + len;
-            patterns.push(Object::string(String_0::from_bytes(&text[start..end])));
+            patterns.push(Object::string(ApiString::from_bytes(&text[start..end])));
             (start, len) = aucmd_span_pattern(&text[end..]);
             start += end;
         }
@@ -85,15 +85,15 @@ pub(crate) fn get_patterns_from_pattern_or_buf(
         return Err(err_expected(c"pattern", want, Some(got)));
     } else if has_buf {
         let b = find_buffer_by_handle(buffer)?;
-        let number = b.map_or(0, |b| b.handle);
-        patterns.push(Object::string(String_0::from(
+        let number = b.map_or(0, |b| b.handle.get());
+        patterns.push(Object::string(ApiString::from(
             format!("<buffer={number}>").as_str(),
         )));
     }
     if patterns.is_empty()
         && let Some(fallback) = fallback
     {
-        patterns.push(Object::string(String_0::from_cstr(fallback)));
+        patterns.push(Object::string(ApiString::from_cstr(fallback)));
     }
     Ok(patterns)
 }

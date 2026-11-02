@@ -13,18 +13,18 @@ use crate::api::private::validate::err_bad_value;
 use core::ffi::CStr;
 
 /// Run `code` as a Lua chunk with `args` as its `...`.
-pub fn nvim_exec_lua(code: String_0, args: Array) -> Result<Object, Error> {
+pub fn nvim_exec_lua(code: ApiString, args: Array) -> Result<Object, Error> {
     nlua_exec(code.as_bytes(), None, args, kRetObject)
 }
 
 /// [`nvim_exec_lua`], marked fast for the RPC dispatcher.
 // `nvim__exec_lua_fast` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
-pub fn nvim__exec_lua_fast(code: String_0, args: Array) -> Result<Object, Error> {
+pub fn nvim__exec_lua_fast(code: ApiString, args: Array) -> Result<Object, Error> {
     nvim_exec_lua(code, args)
 }
 
-pub fn nvim_strwidth(text: String_0) -> Result<Integer, Error> {
+pub fn nvim_strwidth(text: ApiString) -> Result<Integer, Error> {
     if text.len() > ::core::ffi::c_int::MAX as size_t {
         return Err(too_long(c"text length"));
     }
@@ -33,7 +33,7 @@ pub fn nvim_strwidth(text: String_0) -> Result<Integer, Error> {
 
 /// Every directory of 'runtimepath'.
 pub fn nvim_list_runtime_paths() -> Result<Array, Error> {
-    nvim_get_runtime_file(String_0::NULL, true)
+    nvim_get_runtime_file(ApiString::NULL, true)
 }
 
 // `nvim__runtime_inspect` is an API method's own name, published over msgpack-RPC.
@@ -44,7 +44,7 @@ pub fn nvim__runtime_inspect() -> Array {
 
 /// The files matching `name` under 'runtimepath': the first, or with `all`
 /// every one.
-pub fn nvim_get_runtime_file(name: String_0, all: Boolean) -> Result<Array, Error> {
+pub fn nvim_get_runtime_file(name: ApiString, all: Boolean) -> Result<Array, Error> {
     let mut rv = Array::EMPTY;
     let flags = RuntimeOpts::DIRFILE | RuntimeOpts::ALL.when(all);
     api_try(|| {
@@ -52,7 +52,7 @@ pub fn nvim_get_runtime_file(name: String_0, all: Boolean) -> Result<Array, Erro
         // reach.
         let _ = do_in_runtimepath_visit(name.as_cstr(), flags, &mut |fnames, all| {
             for fname in fnames {
-                rv.push(Object::string(String_0::from_cstr(fname)));
+                rv.push(Object::string(ApiString::from_cstr(fname)));
                 if !all {
                     return true;
                 }
@@ -65,8 +65,8 @@ pub fn nvim_get_runtime_file(name: String_0, all: Boolean) -> Result<Array, Erro
 
 // `nvim__get_lib_dir` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
-pub fn nvim__get_lib_dir() -> String_0 {
-    get_lib_dir().map_or(String_0::NULL, |dir| String_0::from_cstr(dir.as_cstr()))
+pub fn nvim__get_lib_dir() -> ApiString {
+    get_lib_dir().map_or(ApiString::NULL, |dir| ApiString::from_cstr(dir.as_cstr()))
 }
 
 // `nvim__get_runtime` is an API method's own name, published over msgpack-RPC.
@@ -101,7 +101,7 @@ fn too_long(name: &CStr) -> Error {
     err_bad_value(name, c"(too long)")
 }
 
-pub fn nvim_set_current_dir(dir: String_0) -> Result<(), Error> {
+pub fn nvim_set_current_dir(dir: ApiString) -> Result<(), Error> {
     if dir.len() >= 4096 as size_t {
         return Err(too_long(c"directory name"));
     }

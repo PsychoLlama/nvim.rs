@@ -86,7 +86,7 @@ pub(crate) fn alloc_tabpage() -> TabPage {
     static LAST_TP_HANDLE: GlobalCell<c_int> = GlobalCell::new(0);
     // What upstream's `xcalloc(1, sizeof(tabpage_T))` zero bytes stand for.
     let owned = Owned::new(Box::new(Tabpage {
-        handle: 0,
+        handle: Handle::NONE,
         tp_next: None,
         tp_topframe: None,
         tp_curwin: None,
@@ -111,7 +111,7 @@ pub(crate) fn alloc_tabpage() -> TabPage {
     // below.
     let mut tp = TabPage::owned_by(&owned);
     LAST_TP_HANDLE.set(LAST_TP_HANDLE.get() + 1);
-    tp.set_handle(LAST_TP_HANDLE.get() as Handle);
+    tp.set_handle(Handle::new(LAST_TP_HANDLE.get()));
     let mut tp = register_tabpage(tp.handle(), owned);
 
     // Init t: variables.

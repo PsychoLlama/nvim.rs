@@ -52,7 +52,7 @@ use crate::options::{
 use crate::optionstr::check_illegal_path_names;
 use crate::os::cshim::{gettext, gettext_owned};
 use crate::types::{
-    OptError, OptIndex, OptSet, OptVal, OptionSetFlags, ScriptCtx, ScriptId, String_0, VimOption,
+    ApiString, OptError, OptIndex, OptSet, OptVal, OptionSetFlags, ScriptCtx, ScriptId, VimOption,
     Vv, uint32_t,
 };
 use crate::ui::ui_call_option_set;
@@ -572,7 +572,7 @@ pub(crate) fn set_option(
         }
         if let Some(new_value) = for_ui {
             ui_call_option_set(
-                String_0::from_cstr(opt.fullname),
+                ApiString::from_cstr(opt.fullname),
                 super::optval_as_object(new_value),
             );
         }

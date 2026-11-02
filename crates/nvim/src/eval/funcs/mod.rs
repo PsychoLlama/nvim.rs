@@ -8,8 +8,8 @@
 #![allow(non_upper_case_globals)]
 
 use crate::types::{
-    Array, ChannelPart, Context, GRegFlags, LuaRetMode, MotionType, ProcType, String_0, XDGVarType,
-    uint64_t,
+    ApiString, Array, ChannelPart, Context, GRegFlags, LuaRetMode, MotionType, ProcType,
+    XDGVarType, uint64_t,
 };
 
 /// The generated builtin table: one row per builtin, plus the perfect-hash
@@ -144,10 +144,10 @@ pub const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
 pub const VARNUMBER_MAX: ::core::ffi::c_long = INT64_MAX;
 pub const VARNUMBER_MIN: ::core::ffi::c_long = INT64_MIN;
 pub const CONTEXT_INIT: Context = Context {
-    regs: String_0::NULL,
-    jumps: String_0::NULL,
-    bufs: String_0::NULL,
-    gvars: String_0::NULL,
+    regs: ApiString::NULL,
+    jumps: ApiString::NULL,
+    bufs: ApiString::NULL,
+    gvars: ApiString::NULL,
     funcs: ARRAY_DICT_INIT,
 };
 static e_string_list_or_blob_required: &::core::ffi::CStr = c"E1098: String, List or Blob required";

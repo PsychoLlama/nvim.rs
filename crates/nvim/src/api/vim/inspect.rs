@@ -14,6 +14,7 @@ use crate::api_error;
 use crate::grid::default_grid_ref;
 use crate::log::logmsg;
 use crate::popupmenu::pum_grid_ref;
+use core::ffi::c_int;
 
 // `nvim__id` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
@@ -125,10 +126,11 @@ pub fn nvim_get_proc(pid: Integer) -> Result<Object, Error> {
 pub fn nvim__inspect_cell(grid: Integer, row: Integer, col: Integer) -> Result<Array, Error> {
     let mut ret: Array = Array::EMPTY;
     let mut g: GridRef = default_grid_ref();
-    if grid == pum_grid_ref().handle as Integer {
+    if grid == Integer::from(pum_grid_ref().handle) {
         g = pum_grid_ref();
     } else if grid > 1 as Integer {
-        let wp = get_win_by_grid_handle(grid as Handle).filter(|wp| wp.w_grid_alloc.is_allocated());
+        let wp = get_win_by_grid_handle(Handle::new(grid as c_int))
+            .filter(|wp| wp.w_grid_alloc.is_allocated());
         let Some(wp) = wp else {
             return Err(err_bad_number(c"grid handle", grid));
         };
@@ -144,7 +146,7 @@ pub fn nvim__inspect_cell(grid: Integer, row: Integer, col: Integer) -> Result<A
     ret = Array::with_capacity(3 as size_t);
     let off: size_t = g.cell_offset(row as ::core::ffi::c_int, col as ::core::ffi::c_int);
     let mut sc_buf: SCharBuf = [0; SCHAR_BUF_SIZE];
-    ret.push(Object::string(String_0::from_bytes(schar_text(
+    ret.push(Object::string(ApiString::from_bytes(schar_text(
         g.char_at(off),
         &mut sc_buf,
     ))));
@@ -159,7 +161,7 @@ pub fn nvim__inspect_cell(grid: Integer, row: Integer, col: Integer) -> Result<A
 
 // `nvim__screenshot` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
-pub fn nvim__screenshot(path: String_0) {
+pub fn nvim__screenshot(path: ApiString) {
     ui_call_screenshot(path);
 }
 
@@ -172,6 +174,6 @@ pub fn nvim__invalidate_glyph_cache() {
 
 // `nvim__unpack` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
-pub fn nvim__unpack(str: String_0) -> Result<Object, Error> {
+pub fn nvim__unpack(str: ApiString) -> Result<Object, Error> {
     unpack(str.as_bytes())
 }

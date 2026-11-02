@@ -172,7 +172,7 @@ fn style_slots(style: &BorderStyle) -> Slots {
 }
 
 /// One entry of a `border = { ... }` array: a cell and its highlight group.
-fn parse_border_item(item: &Object) -> Result<(String_0, c_int), Error> {
+fn parse_border_item(item: &Object) -> Result<(ApiString, c_int), Error> {
     if let Object::Array(arr) = item {
         if arr.is_empty() || arr.len() > 2 {
             return Err(err_border(c"1 or 2-item Array", None));
@@ -196,8 +196,8 @@ fn parse_border_item(item: &Object) -> Result<(String_0, c_int), Error> {
     ))
 }
 
-/// A `String_0` as one border cell, truncated to what a slot holds.
-fn cell_of(string: String_0) -> BorderChar {
+/// A `ApiString` as one border cell, truncated to what a slot holds.
+fn cell_of(string: ApiString) -> BorderChar {
     let mut out = BLANK_CHAR;
     // The last byte stays the NUL already there.
     let room = MAX_SCHAR_SIZE as usize - 1;
@@ -314,7 +314,7 @@ pub(crate) fn parse_winborder(fconfig: &mut WinConfig, border_opt: &CStr) -> Res
             None => return Ok(false),
         }
     } else {
-        Object::string(String_0::from_cstr(border_opt))
+        Object::string(ApiString::from_cstr(border_opt))
     };
     parse_border_style(&style, fconfig).map(|()| true)
 }
@@ -340,7 +340,7 @@ fn border_cell_list(border_opt: &[u8]) -> Option<Array> {
             return None;
         }
         rest = after;
-        cells.push(Object::string(String_0::from_bytes(&part)));
+        cells.push(Object::string(ApiString::from_bytes(&part)));
     }
     (cells.len() == 8).then_some(cells)
 }

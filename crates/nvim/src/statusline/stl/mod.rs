@@ -161,8 +161,8 @@ impl Env<'_> {
         // `g:actual_curbuf`/`g:actual_curwin`, because the two below are
         // about to be swapped out from under the expression.
         let (real_buf, real_win) = (Buf::current(), Win::current());
-        set_str_var(c"g:actual_curbuf", real_buf.handle);
-        set_str_var(c"g:actual_curwin", real_win.handle);
+        set_str_var(c"g:actual_curbuf", real_buf.handle.get());
+        set_str_var(c"g:actual_curwin", real_win.handle.get());
 
         let save_visual = visual_active();
         // Asked before the switch, because after it the answer is always yes.
@@ -656,7 +656,7 @@ pub fn build_stl_str_hl(
     // the format actually used. Evaluating it can fail, in which case the
     // literal text is what gets rendered.
     let usefmt = if fmt_bytes.starts_with(b"%!") {
-        let mut winid = TypVal::Number(win.handle as VarNumber);
+        let mut winid = TypVal::Number(win.handle.get() as VarNumber);
         let name = c"g:statusline_winid";
         set_var(name.to_bytes(), &mut winid, false);
         let expanded = eval_to_string_safe(&fmt_bytes[2..], sandbox, false);

@@ -133,7 +133,7 @@ pub fn get_default_register_name() -> c_int {
 /// One register as ShaDa reads and writes it: its lines, how it is put
 /// back, when it was set, and the extra data the file gave it.
 pub(crate) struct ShadaYank {
-    pub(crate) contents: Vec<String_0>,
+    pub(crate) contents: Vec<ApiString>,
     pub(crate) motion: MotionType,
     pub(crate) width: ColNr,
     pub(crate) timestamp: Timestamp,
@@ -156,7 +156,7 @@ pub(crate) fn shada_registers(max_lines: Option<usize>) -> Vec<(c_char, bool, Sh
                     contents: reg
                         .lines
                         .iter()
-                        .map(|line| String_0::from_bytes(line))
+                        .map(|line| ApiString::from_bytes(line))
                         .collect(),
                     motion: reg.kind,
                     width: reg.width,

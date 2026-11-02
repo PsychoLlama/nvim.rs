@@ -21,7 +21,7 @@ use crate::types::Failed;
 
 use crate::winlayer::Buf;
 
-pub fn nvim_buf_get_var(buf: BufferHandle, name: String_0) -> Result<Object, Error> {
+pub fn nvim_buf_get_var(buf: BufferHandle, name: ApiString) -> Result<Object, Error> {
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(Object::Nil);
     };
@@ -35,7 +35,7 @@ pub fn nvim_buf_get_changedtick(buf: BufferHandle) -> Result<Integer, Error> {
     Ok(buf_get_changedtick(b))
 }
 
-pub fn nvim_buf_get_keymap(buf: BufferHandle, mode: String_0) -> Result<Array, Error> {
+pub fn nvim_buf_get_keymap(buf: BufferHandle, mode: ApiString) -> Result<Array, Error> {
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(Array::EMPTY);
     };
@@ -45,9 +45,9 @@ pub fn nvim_buf_get_keymap(buf: BufferHandle, mode: String_0) -> Result<Array, E
 pub fn nvim_buf_set_keymap(
     channel_id: uint64_t,
     buf: BufferHandle,
-    mode: String_0,
-    lhs: String_0,
-    rhs: String_0,
+    mode: ApiString,
+    lhs: ApiString,
+    rhs: ApiString,
     opts: &mut KeyDict_keymap,
 ) -> Result<(), Error> {
     modify_keymap(channel_id, buf, false, mode, lhs, rhs, Some(opts))
@@ -56,14 +56,14 @@ pub fn nvim_buf_set_keymap(
 pub fn nvim_buf_del_keymap(
     channel_id: uint64_t,
     buf: BufferHandle,
-    mode: String_0,
-    lhs: String_0,
+    mode: ApiString,
+    lhs: ApiString,
 ) -> Result<(), Error> {
-    let rhs: String_0 = String_0::from_cstr(c"");
+    let rhs: ApiString = ApiString::from_cstr(c"");
     modify_keymap(channel_id, buf, true, mode, lhs, rhs, None)
 }
 
-pub fn nvim_buf_set_var(buf: BufferHandle, name: String_0, value: Object) -> Result<(), Error> {
+pub fn nvim_buf_set_var(buf: BufferHandle, name: ApiString, value: Object) -> Result<(), Error> {
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(());
     };
@@ -71,7 +71,7 @@ pub fn nvim_buf_set_var(buf: BufferHandle, name: String_0, value: Object) -> Res
     dict_set_var(&vars, &name, value, false, false).map(|_| ())
 }
 
-pub fn nvim_buf_del_var(buf: BufferHandle, name: String_0) -> Result<(), Error> {
+pub fn nvim_buf_del_var(buf: BufferHandle, name: ApiString) -> Result<(), Error> {
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(());
     };
@@ -79,15 +79,15 @@ pub fn nvim_buf_del_var(buf: BufferHandle, name: String_0) -> Result<(), Error> 
     dict_set_var(&vars, &name, Object::Nil, true, false).map(|_| ())
 }
 
-pub fn nvim_buf_get_name(buf: BufferHandle) -> Result<String_0, Error> {
-    let rv: String_0 = String_0::NULL;
+pub fn nvim_buf_get_name(buf: BufferHandle) -> Result<ApiString, Error> {
+    let rv: ApiString = ApiString::NULL;
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(rv);
     };
-    Ok(b.name.full().map_or(rv, String_0::from_cstr))
+    Ok(b.name.full().map_or(rv, ApiString::from_cstr))
 }
 
-pub fn nvim_buf_set_name(buf: BufferHandle, name: String_0) -> Result<(), Error> {
+pub fn nvim_buf_set_name(buf: BufferHandle, name: ApiString) -> Result<(), Error> {
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(());
     };
@@ -130,7 +130,7 @@ pub fn nvim_buf_delete(buf: BufferHandle, opts: &mut KeyDict_buf_delete) -> Resu
         },
         DOBUF_FIRST.cast_signed(),
         FORWARD as ::core::ffi::c_int,
-        b.handle as ::core::ffi::c_int,
+        b.handle.get(),
         ::core::ffi::c_int::from(force),
     );
     if result.is_err() {

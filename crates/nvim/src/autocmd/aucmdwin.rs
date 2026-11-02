@@ -30,6 +30,7 @@ use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::normal::{set_visual_active, visual_active, with_visual_anchor};
 use crate::types::AucmdWin;
+use crate::types::Handle;
 use crate::winlayer::TabPage;
 use crate::winlayer::WinId;
 use crate::winlayer::{Buf, Win, first_window, last_window, tabs, windows, windows_in_tab};
@@ -129,7 +130,7 @@ pub fn aucmd_prepbuf(aco: &mut AcoSave, mut buffer: Buf) {
     }
 
     aco.save_curwin_handle = Win::current().handle;
-    aco.save_prevwin_handle = prevwin.get().map_or(0, WinId::handle);
+    aco.save_prevwin_handle = prevwin.get().map_or(Handle::NONE, WinId::handle);
     if buf_is_prompt(current_buf()) {
         aco.save_prompt_insert = Buf::current().b_prompt_insert;
     }

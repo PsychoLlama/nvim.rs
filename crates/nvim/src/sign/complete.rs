@@ -20,6 +20,7 @@
 use super::*;
 use crate::charset::skip;
 use crate::narrow::number_as_int;
+use crate::types::Handle;
 use crate::types::{Candidate, ExpandContext};
 
 /// What [`get_sign_name`] should enumerate.
@@ -90,7 +91,7 @@ pub(crate) fn get_sign_name(_expand: &Expand, idx: usize) -> Option<Candidate> {
         ExpandWhat::SignNames => sign_nth_name(idx).map(Candidate::Owned),
         ExpandWhat::SignGroups => {
             let ns = number_as_int(sign_nth_group(idx)?);
-            let name = describe_ns(ns, b"");
+            let name = describe_ns(Handle::new(ns), b"");
             Some(Candidate::Owned(
                 CString::new(name).expect("a namespace name is a C string's bytes"),
             ))

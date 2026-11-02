@@ -20,19 +20,19 @@ pub fn buffer_insert(buffer: BufferHandle, lnum: Integer, lines: Array) -> Resul
     nvim_buf_set_lines(0, buffer, lnum, lnum, true, lines)
 }
 
-pub fn buffer_get_line(buffer: BufferHandle, index: Integer) -> Result<String_0, Error> {
+pub fn buffer_get_line(buffer: BufferHandle, index: Integer) -> Result<ApiString, Error> {
     let index = convert_index(index as int64_t) as Integer;
     // No Lua stack: the API representation rather than a Lua one.
     let slice: Array = nvim_buf_get_lines(0, buffer, index, index + 1, true, None)?;
     if slice.is_empty() {
-        return Ok(String_0::NULL);
+        return Ok(ApiString::NULL);
     }
     let first = &slice[0];
-    Ok(first.as_string().unwrap_or(&String_0::NULL).clone())
+    Ok(first.as_string().unwrap_or(&ApiString::NULL).clone())
 }
 
 /// Replace line `index` (the 0.1 API's numbering) with `line`.
-pub fn buffer_set_line(buffer: BufferHandle, index: Integer, line: String_0) -> Result<(), Error> {
+pub fn buffer_set_line(buffer: BufferHandle, index: Integer, line: ApiString) -> Result<(), Error> {
     let mut array = Array::with_capacity(1);
     array.push(Object::string(line));
     let index = convert_index(index as int64_t) as Integer;

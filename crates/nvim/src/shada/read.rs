@@ -29,7 +29,9 @@ use crate::registry::{IdMap, IdSet, id_map, id_set};
 use crate::search::{
     ShadaPattern, set_last_used_pattern, shada_pattern_timestamp, shada_set_pattern,
 };
-use crate::types::{BlnFlags, ColNr, ListRef, SearchOffset, String_0, TypVal, Vv, kListLenUnknown};
+use crate::types::{
+    ApiString, BlnFlags, ColNr, ListRef, SearchOffset, TypVal, Vv, kListLenUnknown,
+};
 use crate::winlayer::{Buf, BufId, Win, buffers, tab_windows};
 use core::ffi::{c_char, c_int};
 
@@ -241,7 +243,7 @@ impl Reading {
             return;
         }
         let pattern = ShadaPattern {
-            pat: pat.pat.take().unwrap_or(String_0::NULL),
+            pat: pat.pat.take().unwrap_or(ApiString::NULL),
             magic: flag(pat.magic, default.magic),
             no_scs: !flag(pat.smartcase, default.smartcase),
             timestamp,
@@ -287,7 +289,7 @@ impl Reading {
         let buf = buffer_for_fname(&mut self.fname_bufs, mark.fname.as_cstr().to_bytes());
         let fm = ShadaMark {
             mark: mark.mark,
-            fnum: buf.map_or(0, |b| b.handle),
+            fnum: buf.map_or(0, |b| b.handle.get()),
             timestamp,
             fname: buf.is_none().then_some(mark.fname),
             extra,
@@ -325,7 +327,7 @@ impl Reading {
         };
         let fm = ShadaMark {
             mark: mark.mark,
-            fnum: buffer.handle,
+            fnum: buffer.handle.get(),
             timestamp,
             fname: None,
             extra,
@@ -400,7 +402,7 @@ fn buffer_for_fname(fname_bufs: &mut FnameBufs, fname: &[u8]) -> Option<Buf> {
 
 /// Apply a ShaDa file held in memory rather than on disk. The context stack
 /// keeps its registers, jumps, buffer list and variables in this format.
-pub fn shada_read_string(string: String_0, flags: c_int) {
+pub fn shada_read_string(string: ApiString, flags: c_int) {
     if string.is_empty() {
         return;
     }

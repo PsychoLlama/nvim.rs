@@ -165,7 +165,7 @@ fn set_mouse_vars() {
     // in it" arm upstream walks into a null pointer on is unreachable.
     let winnr = windows().take_while(|wp| wp.raw() != win.raw()).count() + 1;
     set_vim_var_nr(Vv::MouseWin, winnr as VarNumber);
-    set_vim_var_nr(Vv::MouseWinid, win.handle as VarNumber);
+    set_vim_var_nr(Vv::MouseWinid, win.handle.get() as VarNumber);
     set_vim_var_nr(Vv::MouseLnum, lnum as VarNumber);
     set_vim_var_nr(Vv::MouseCol, (pos.col + 1) as VarNumber);
 }

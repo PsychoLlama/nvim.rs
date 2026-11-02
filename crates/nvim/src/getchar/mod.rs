@@ -71,8 +71,8 @@ use crate::types::ESC;
 use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
-    Array, ColNr, Error, EvalFuncData, FlushBuffers, Integer, LuaRef, LuaRetMode, MotionType,
-    OpArg, OptInt, RemapValues, SaveRedo, String_0, TypVal, TypeaheadSave, VarNumber, Vv,
+    ApiString, Array, ColNr, Error, EvalFuncData, FlushBuffers, Integer, LuaRef, LuaRetMode,
+    MotionType, OpArg, OptInt, RemapValues, SaveRedo, TypVal, TypeaheadSave, VarNumber, Vv,
     ptrdiff_t, size_t, uint8_t, uint64_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};

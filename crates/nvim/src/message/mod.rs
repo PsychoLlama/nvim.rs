@@ -150,8 +150,8 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::ui::{kUIMessages, kUIMultigrid};
 use crate::types::{
-    Array, EStackArg, ExArg, FlushBuffers, GridView, HlMessage, HlMessageChunk, IOSIZE, Integer,
-    KeyDict_echo_opts, MessageData, Object, OptInt, ScreenAttr, ScreenChar, ShmFlag, String_0,
+    ApiString, Array, EStackArg, ExArg, FlushBuffers, GridView, HlMessage, HlMessageChunk, IOSIZE,
+    Integer, KeyDict_echo_opts, MessageData, Object, OptInt, ScreenAttr, ScreenChar, ShmFlag,
     TypVal, Vv, int64_t, size_t, uint64_t,
 };
 use crate::ui::state::{Columns, Rows, resize_events};

@@ -23,7 +23,7 @@
 #![forbid(unsafe_code)]
 
 use crate::types::ApiDict;
-use crate::types::String_0;
+use crate::types::ApiString;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::charset::getdigits_int_at;
@@ -172,8 +172,8 @@ pub(crate) fn mode_style_array() -> Array {
         // cursor-only entry ("sm", "t") leaves one slot unused.
         let mut dic = ApiDict::with_capacity(if for_cursor { 12 } else { 3 });
         let mut put = |key, value| dic.insert(key, value);
-        let full_name = String_0::from_cstr(cur.full_name);
-        let short_name = String_0::from_cstr(cur.name);
+        let full_name = ApiString::from_cstr(cur.full_name);
+        let short_name = ApiString::from_cstr(cur.name);
         put(c"name", Object::string(full_name));
         put(c"short_name", Object::string(short_name));
         if for_mouse {
@@ -186,7 +186,7 @@ pub(crate) fn mode_style_array() -> Array {
                 SHAPE_HOR => c"horizontal",
                 _ => c"unknown",
             };
-            put(c"cursor_shape", Object::string(String_0::from_cstr(shape)));
+            put(c"cursor_shape", Object::string(ApiString::from_cstr(shape)));
             put(c"cell_percentage", Object::integer(cur.percentage.into()));
             put(c"blinkwait", Object::integer(cur.blinkwait.into()));
             put(c"blinkon", Object::integer(cur.blinkon.into()));

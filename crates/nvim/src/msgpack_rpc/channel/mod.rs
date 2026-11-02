@@ -47,8 +47,8 @@ use crate::msgpack_rpc::packer::Addressees;
 use crate::msgpack_rpc::unpacker::Unpacker;
 use crate::startup::{ui_client_channel_id, ui_client_error_exit};
 use crate::types::{
-    ApiDict, Array, Channel, ChannelCallFrame, ChannelPart, ClientType, Error, Integer,
-    MessageType, Object, String_0, kErrorTypeException, kErrorTypeValidation, uint64_t,
+    ApiDict, ApiString, Array, Channel, ChannelCallFrame, ChannelPart, ClientType, Error, Integer,
+    MessageType, Object, kErrorTypeException, kErrorTypeValidation, uint64_t,
 };
 use crate::ui_client::ui_client_attach_to_restarted_server;
 
@@ -196,7 +196,7 @@ fn chan_close_on_err(id: uint64_t, msg: &[u8], loglevel: c_int) {
             if !frame.returned {
                 frame.returned = true;
                 frame.errored = true;
-                frame.result = Object::string(String_0::from_bytes(msg));
+                frame.result = Object::string(ApiString::from_bytes(msg));
             }
         }
     });

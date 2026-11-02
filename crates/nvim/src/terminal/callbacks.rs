@@ -22,7 +22,7 @@ use crate::event_queue::put_job_on_main_loop;
 use crate::option::vars::p_bg;
 use crate::options::kOptBoFlagTerm;
 use crate::types::{
-    Error, Object, String_0, VTermPos, VTermProp, VTermRect, VTermScreenCell, VTermSelectionMask,
+    ApiString, Error, Object, VTermPos, VTermProp, VTermRect, VTermScreenCell, VTermSelectionMask,
     kListLenMayKnow, ptrdiff_t,
 };
 use crate::ui::vim_beep;
@@ -115,10 +115,10 @@ pub(crate) fn buf_set_term_title(buffer: Option<Buf>, title: &[u8]) {
         return;
     };
     let mut err = Error::none();
-    let title = Object::string(String_0::from_bytes(title));
+    let title = Object::string(ApiString::from_bytes(title));
     let (vars, key) = (
         scope_vars(&buf.b_bufvar),
-        String_0::from_cstr(c"term_title"),
+        ApiString::from_cstr(c"term_title"),
     );
     // Setting a variable can run `BufModified`-ish machinery; the lock
     // keeps that from touching the buffer's lines mid-update.

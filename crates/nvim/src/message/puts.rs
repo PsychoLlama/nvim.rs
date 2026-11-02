@@ -153,13 +153,13 @@ fn put_bytes(bytes: &[u8], hl_id: c_int, hist: bool, whole_message: bool) {
         if bytes.is_empty() && whole_message && ui_has(kUIMessages) {
             msg_ext_ui_flush(); // ensure messages until now are emitted
             ui_call_msg_show(
-                String_0::from_cstr(c"empty"),
+                ApiString::from_cstr(c"empty"),
                 EMPTY_ARRAY,
                 false,
                 false,
                 false,
                 Object::integer(-1),
-                String_0::NULL,
+                ApiString::NULL,
             );
             cmdline_was_last_drawn.set(false);
         }

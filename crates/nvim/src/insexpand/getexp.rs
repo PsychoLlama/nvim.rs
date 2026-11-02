@@ -362,7 +362,7 @@ pub(crate) fn get_next_filename_completion() {
         let last_sep = leader.iter().rposition(|&b| c_int::from(b) == PATHSEP);
         match last_sep {
             // No path separator: match everything in the current dir.
-            None => compl_pattern().replace(String_0::from_bytes(b"*")),
+            None => compl_pattern().replace(ApiString::from_bytes(b"*")),
             // The leader ends in a separator: nothing to fuzzy-match.
             Some(sep) if sep + 1 == leader.len() => in_fuzzy_collect = false,
             Some(sep) => {

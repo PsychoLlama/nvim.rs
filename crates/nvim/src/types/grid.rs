@@ -88,7 +88,7 @@ impl ScreenGrid {
     /// [`alloc`](ScreenGrid::alloc), and what it falls back to when freed.
     pub(crate) const fn empty() -> ScreenGrid {
         ScreenGrid {
-            handle: 0,
+            handle: Handle::NONE,
             chars: Vec::new(),
             attrs: Vec::new(),
             vcols: Vec::new(),

@@ -186,7 +186,7 @@ pub fn set_curbuf(buffer: Buf, action: c_int, update_jumplist: bool) {
 
     let mut win = Win::current();
     if !cmdmod_has(CmdModFlags::KEEPALT) {
-        win.w_alt_fnum = Buf::current().handle as c_int; // remember alternate file
+        win.w_alt_fnum = Buf::current().handle.get(); // remember alternate file
     }
     remember_altfpos(win); // remember curpos
 
@@ -427,7 +427,7 @@ pub fn no_write_message_buf(buffer: Buf) {
     if !buffer.terminal.is_null() && job_running(buffer) {
         err_static(e_job_still_running_add_bang_to_end_the_job);
     } else {
-        let nr = buffer.handle as c_int;
+        let nr = buffer.handle.get();
         semsg!("E89: No write since last change for buffer {nr} (add ! to override)");
     }
 }

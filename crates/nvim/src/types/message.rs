@@ -14,13 +14,13 @@ use super::*;
 /// Not `Copy`: `text` is an owned string.
 #[derive(Clone)]
 pub struct HlMessageChunk {
-    pub text: String_0,
+    pub text: ApiString,
     pub hl_id: ::core::ffi::c_int,
 }
 pub struct MessageData {
-    pub source: String_0,
+    pub source: ApiString,
     pub percent: Integer,
-    pub title: String_0,
-    pub status: String_0,
+    pub title: ApiString,
+    pub status: ApiString,
     pub data: ApiDict,
 }

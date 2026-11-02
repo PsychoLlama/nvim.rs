@@ -139,14 +139,14 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::ui::{kUICmdline, kUIMessages};
 use crate::types::{
-    AcoSave, Array, Boolean, Buffer, Callback, CmdAddr, CmdBuff, CmdLine, CmdMod, CmdParseInfo,
-    CmdParseMagic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr, ColoredCmdline, Direction,
-    DispTick, DoBufAction, DoBufStart, Error, EvalFuncData, ExArg, ExArgt, Expand, ExpandContext,
-    ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope,
-    ExprParserFlags, Handle, HashTab, HistoryType, Integer, LineNr, Magic, MotionType, Object,
-    OptInt, OptMagic, OptSet, OptVal, ParserState, Pos, ProfTime, RemapValues, SaveVEvent,
-    SearchItArg, String_0, TryState, TypVal, UndoLink, UndoObjectType, VarNumber, size_t, time_t,
-    uint8_t,
+    AcoSave, ApiString, Array, Boolean, Buffer, Callback, CmdAddr, CmdBuff, CmdLine, CmdMod,
+    CmdParseInfo, CmdParseMagic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr, ColoredCmdline,
+    Direction, DispTick, DoBufAction, DoBufStart, Error, EvalFuncData, ExArg, ExArgt, Expand,
+    ExpandContext, ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy,
+    ExprComparisonType, ExprOptScope, ExprParserFlags, Handle, HashTab, HistoryType, Integer,
+    LineNr, Magic, MotionType, Object, OptInt, OptMagic, OptSet, OptVal, ParserState, Pos,
+    ProfTime, RemapValues, SaveVEvent, SearchItArg, TryState, TypVal, UndoLink, UndoObjectType,
+    VarNumber, size_t, time_t, uint8_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{
@@ -475,7 +475,7 @@ pub(crate) const VIEWSTATE_INIT: ViewState = ViewState {
 pub(crate) const INCSEARCH_STATE_INIT: IncsearchState = IncsearchState {
     search_start: POS_INIT,
     save_cursor: POS_INIT,
-    winid: 0,
+    winid: Handle::NONE,
     init_viewstate: VIEWSTATE_INIT,
     old_viewstate: VIEWSTATE_INIT,
     match_start: POS_INIT,
@@ -614,7 +614,7 @@ static new_cmdpos: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static cmdline_block: GlobalCell<CmdlineBlock> = GlobalCell::new(CmdlineBlock::EMPTY);
 static getln_interrupted_highlight: GlobalCell<bool> = GlobalCell::new(false);
 static cedit_key: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
-static cmdpreview_bufnr: GlobalCell<Handle> = GlobalCell::new(0 as Handle);
+static cmdpreview_bufnr: GlobalCell<Handle> = GlobalCell::new(Handle::NONE);
 static cmdpreview_ns: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static e_active_window_or_buffer_changed_or_deleted: &::core::ffi::CStr =
     c"E199: Active window or buffer changed or deleted";

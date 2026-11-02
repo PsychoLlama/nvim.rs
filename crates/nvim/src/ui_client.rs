@@ -60,8 +60,8 @@ use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::libc::{STDERR_FILENO, STDOUT_FILENO};
 use crate::types::ui::kLineFlagWrap;
 use crate::types::{
-    ApiDict, Array, CallbackReader, Error, GridLineEvent, HlAttrs, Integer, KeyDict_highlight,
-    Object, ObjectType, String_0, TUIData, UIClientHandler, Unpacker, kObjectTypeArray,
+    ApiDict, ApiString, Array, CallbackReader, Error, GridLineEvent, HlAttrs, Integer,
+    KeyDict_highlight, Object, ObjectType, TUIData, UIClientHandler, Unpacker, kObjectTypeArray,
     kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
 };
 use crate::ui::state::t_colors;
@@ -98,7 +98,7 @@ static tui_height: GlobalCell<c_int> = GlobalCell::new(0);
 /// the TUI's own arena, which `tui_terminal_stop` frees; a re-attach can
 /// run after that (a `:restart` that fails, or a close event during
 /// shutdown), so this keeps a copy rather than the TUI's pointer.
-static tui_term: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
+static tui_term: GlobalCell<ApiString> = GlobalCell::new(ApiString::NULL);
 static tui_rgb: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Spawns the server this client will talk to, returning its channel.
@@ -154,7 +154,7 @@ pub(crate) fn ui_client_attach(width: c_int, height: c_int, term: Option<&CStr>,
     tui_rgb.set(rgb);
     // A copy, not a borrow: `term` names the TUI's own arena, which
     // stopping the terminal frees, and a re-attach can run after that.
-    tui_term.set(term.map_or(String_0::NULL, String_0::from_cstr));
+    tui_term.set(term.map_or(ApiString::NULL, ApiString::from_cstr));
     ui_client_reattach();
 }
 
@@ -163,7 +163,7 @@ pub(crate) fn ui_client_reattach() {
     let (width, height, term, rgb) = (
         tui_width.get(),
         tui_height.get(),
-        tui_term.with(String_0::clone),
+        tui_term.with(ApiString::clone),
         tui_rgb.get(),
     );
     let mut opts = DictBuf::<8>::new();
@@ -201,15 +201,18 @@ pub(crate) fn ui_client_reattach() {
     let mut info = DictBuf::<3>::new();
     info.insert(
         c"website",
-        Object::string(String_0::from_cstr(c"https://neovim.io")),
+        Object::string(ApiString::from_cstr(c"https://neovim.io")),
     );
-    info.insert(c"license", Object::string(String_0::from_cstr(c"Apache 2")));
+    info.insert(
+        c"license",
+        Object::string(ApiString::from_cstr(c"Apache 2")),
+    );
     info.insert(c"pid", Object::integer(process_id()));
 
     let mut client = ArrayBuf::<5>::new();
-    client.push(Object::string(String_0::from_cstr(c"nvim-tui")));
+    client.push(Object::string(ApiString::from_cstr(c"nvim-tui")));
     client.push(Object::dict(api_version()));
-    client.push(Object::string(String_0::from_cstr(c"ui")));
+    client.push(Object::string(ApiString::from_cstr(c"ui")));
     // A UI exposes no methods of its own.
     client.push(Object::array(Array::EMPTY));
     client.push(info.object());
@@ -428,7 +431,7 @@ macro_rules! tag {
     (Integer) => {
         Some(kObjectTypeInteger)
     };
-    (String_0) => {
+    (ApiString) => {
         Some(kObjectTypeString)
     };
     (Array) => {
@@ -452,7 +455,7 @@ macro_rules! payload {
     (Integer, $v:expr) => {
         $v.as_integer().expect("`take_arg` checked the tag")
     };
-    (String_0, $v:expr) => {
+    (ApiString, $v:expr) => {
         $v.into_string().expect("`take_arg` checked the tag")
     };
     (Array, $v:expr) => {
@@ -509,24 +512,24 @@ forward! {
     fn ui_client_event_busy_stop() => tui_busy_stop, c"busy_stop";
     fn ui_client_event_mouse_on() => tui_mouse_on, c"mouse_on";
     fn ui_client_event_mouse_off() => tui_mouse_off, c"mouse_off";
-    fn ui_client_event_mode_change(mode: String_0, mode_idx: Integer)
+    fn ui_client_event_mode_change(mode: ApiString, mode_idx: Integer)
         => tui_mode_change, c"mode_change";
     fn ui_client_event_bell() => tui_bell, c"bell";
     fn ui_client_event_visual_bell() => tui_visual_bell, c"visual_bell";
     /// Everything since the last flush may now be shown.
     fn ui_client_event_flush() => tui_flush, c"flush";
     fn ui_client_event_suspend() => tui_suspend, c"suspend";
-    fn ui_client_event_set_title(title: String_0) => tui_set_title, c"set_title";
-    fn ui_client_event_set_icon(icon: String_0) => tui_set_icon, c"set_icon";
+    fn ui_client_event_set_title(title: ApiString) => tui_set_title, c"set_title";
+    fn ui_client_event_set_icon(icon: ApiString) => tui_set_icon, c"set_icon";
     /// Write the screen to a file, for the screen tests.
-    fn ui_client_event_screenshot(path: String_0) => tui_screenshot, c"screenshot";
+    fn ui_client_event_screenshot(path: ApiString) => tui_screenshot, c"screenshot";
     /// A UI option changed. Its value keeps whatever type the option has,
     /// so it is the one argument that is not type-checked here.
-    fn ui_client_event_option_set(name: String_0, value: Object) => tui_option_set, c"option_set";
+    fn ui_client_event_option_set(name: ApiString, value: Object) => tui_option_set, c"option_set";
     /// The server's working directory changed.
-    fn ui_client_event_chdir(path: String_0) => tui_chdir, c"chdir";
+    fn ui_client_event_chdir(path: ApiString) => tui_chdir, c"chdir";
     /// A control sequence the server produced, to be written through.
-    fn ui_client_event_ui_send(content: String_0) => tui_ui_send, c"ui_send";
+    fn ui_client_event_ui_send(content: ApiString) => tui_ui_send, c"ui_send";
     /// The colours `Normal` resolves to.
     fn ui_client_event_default_colors_set(
         rgb_fg: Integer,

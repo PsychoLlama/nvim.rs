@@ -242,7 +242,7 @@ pub(crate) fn pum_position_at_mouse(min_width: c_int) {
     }
     let (grid, mut row, mut col) = (pos.grid, pos.row, pos.col);
     if grid > 1
-        && let Some(wp) = get_win_by_grid_handle(grid as Handle)
+        && let Some(wp) = get_win_by_grid_handle(Handle::new(grid))
     {
         row += wp.w_winrow;
         col += wp.w_wincol;
@@ -257,7 +257,7 @@ pub(crate) fn pum_position_at_mouse(min_width: c_int) {
             max_col = (Columns.get() - wincol).max(wincol + wp.w_view_width);
         }
     }
-    if pum_handle != 0 && grid == pum_handle {
+    if pum_handle != Handle::NONE && grid == pum_handle.get() {
         // Repositioning the menu by right-clicking on itself.
         row += pum_row.get();
         col += pum_left_col.get();

@@ -32,8 +32,8 @@ use crate::shada::{
 };
 use crate::types::TypVal;
 use crate::types::{
-    ApiDict, Array, Context, Error, KeyDict_exec_opts, KeyValuePair, Object, OptVal,
-    OptionSetFlags, String_0, VAR_LIST, size_t, uint8_t,
+    ApiDict, ApiString, Array, Context, Error, KeyDict_exec_opts, KeyValuePair, Object, OptVal,
+    OptionSetFlags, VAR_LIST, size_t, uint8_t,
 };
 use core::ffi::{CStr, c_int};
 
@@ -65,10 +65,10 @@ pub const CTX_ALL: c_int = kCtxRegs as c_int
 
 const ARRAY_INIT: Array = Array::EMPTY;
 const CONTEXT_INIT: Context = Context {
-    regs: String_0::NULL,
-    jumps: String_0::NULL,
-    bufs: String_0::NULL,
-    gvars: String_0::NULL,
+    regs: ApiString::NULL,
+    jumps: ApiString::NULL,
+    bufs: ApiString::NULL,
+    gvars: ApiString::NULL,
     funcs: ARRAY_INIT,
 };
 
@@ -203,7 +203,7 @@ fn ctx_save_funcs(ctx: &mut Context, scriptonly: bool) {
         cmd.extend_from_slice(b"func! ");
         cmd.extend_from_slice(bytes);
         let mut opts = KeyDict_exec_opts { output: Some(true) };
-        let src = String_0::from_bytes(&cmd);
+        let src = ApiString::from_bytes(&cmd);
         if let Ok(func_body) = exec_impl(VIML_INTERNAL_CALL, src, &mut opts) {
             ctx.funcs.push(Object::string(func_body));
         }
@@ -225,7 +225,7 @@ fn ctx_restore_funcs(ctx: &Context) {
 }
 
 /// Convert a `readfile()`-style array back to the msgpack blob it encodes.
-fn array_to_string(array: Array) -> Result<String_0, Error> {
+fn array_to_string(array: Array) -> Result<ApiString, Error> {
     let list_tv = TypVal::from(Object::array(array));
     debug_assert!(
         list_tv.v_type() as ::core::ffi::c_uint == VAR_LIST as ::core::ffi::c_uint,
@@ -233,8 +233,8 @@ fn array_to_string(array: Array) -> Result<String_0, Error> {
     );
     match encode_vim_list_to_buf(list_tv.list_ref()) {
         // An empty list is the NULL string, as upstream's buffer was.
-        Some(bytes) if bytes.is_empty() => Ok(String_0::NULL),
-        Some(bytes) => Ok(String_0::from_bytes(&bytes)),
+        Some(bytes) if bytes.is_empty() => Ok(ApiString::NULL),
+        Some(bytes) => Ok(ApiString::from_bytes(&bytes)),
         None => Err(Error::exception(
             c"E474: Failed to convert list to msgpack string buffer",
         )),

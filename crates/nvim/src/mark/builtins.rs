@@ -70,7 +70,7 @@ fn add_mark(
 /// `l` — List to store marks
 pub fn get_buf_local_marks(buffer: Buf, l: &mut List) {
     let (buf, win, cur) = (buffer, Win::current(), Buf::current());
-    let handle = buf.handle as c_int;
+    let handle = buf.handle.get();
     let mut mname: [u8; 3] = *b"' \0";
     for i in 0..NMARKS {
         mname[1] = u8::try_from('a' as c_int + i).expect("mark name is one ASCII byte");
@@ -79,7 +79,7 @@ pub fn get_buf_local_marks(buffer: Buf, l: &mut List) {
     }
     // The context mark is the WINDOW's and is reported against the CURRENT
     // buffer, which is why it is the one row here that does not use `handle`.
-    let _ = add_mark(l, c"''", win.w_pcmark, cur.handle as c_int, None);
+    let _ = add_mark(l, c"''", win.w_pcmark, cur.handle.get(), None);
     let positions: [(&CStr, Pos); 7] = [
         (c"'\"", buf.b_last_cursor.mark),
         (c"'[", buf.b_op_start),

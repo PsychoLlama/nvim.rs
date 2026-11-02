@@ -9,6 +9,8 @@
 use super::*;
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_conflict, err_expected};
 use crate::api_error;
+use crate::types::Handle;
+use core::ffi::c_int;
 
 /// The keyset this call was handed, with checked field access.
 type Opts = KeyDict_get_autocmds;
@@ -132,9 +134,9 @@ fn buffer_patterns(opts: &Opts, has_buf: bool) -> Result<Array, Error> {
         return Ok(Array::EMPTY);
     };
     let buflocal = |handle: Integer| -> Result<Object, Error> {
-        let b = find_buffer_by_handle(handle as BufferHandle)?;
-        let pat = format!("<buffer={}>", b.map_or(0, |b| b.handle));
-        Ok(Object::string(String_0::from_bytes(pat.as_bytes())))
+        let b = find_buffer_by_handle(Handle::new(handle as c_int))?;
+        let pat = format!("<buffer={}>", b.map_or(Handle::NONE, |b| b.handle));
+        Ok(Object::string(ApiString::from_bytes(pat.as_bytes())))
     };
     if let Object::Integer(handle) | Object::Buffer(handle) = given {
         let mut buffers = Array::with_capacity(1);
@@ -235,18 +237,18 @@ fn autocmd_dict(event: AutoEvent, ac: &AutoCmd, ap: &AutoPat) -> ApiDict {
     if ap.group != AUGROUP_DEFAULT {
         info.insert(c"group", Object::integer(ap.group as Integer));
         let name =
-            augroup_name(ap.group).map_or(String_0::NULL, |name| String_0::from_bytes(&name));
+            augroup_name(ap.group).map_or(ApiString::NULL, |name| ApiString::from_bytes(&name));
         info.insert(c"group_name", Object::string(name));
     }
     if ac.id > 0 {
         info.insert(c"id", Object::integer(ac.id));
     }
     if let Some(desc) = &ac.desc {
-        info.insert(c"desc", Object::string(String_0::from_bytes(desc)));
+        info.insert(c"desc", Object::string(ApiString::from_bytes(desc)));
     }
     match &ac.handler {
         AutoHandler::Fn(handler) => {
-            info.insert(c"command", Object::string(String_0::NULL));
+            info.insert(c"command", Object::string(ApiString::NULL));
             match handler {
                 Callback::Lua(luaref) => {
                     if nlua_ref_is_function(*luaref) {
@@ -254,7 +256,7 @@ fn autocmd_dict(event: AutoEvent, ac: &AutoCmd, ap: &AutoPat) -> ApiDict {
                     }
                 }
                 Callback::Funcref(_) | Callback::Partial(_) => {
-                    let name = String_0::from(callback_to_string(handler).as_cstr());
+                    let name = ApiString::from(callback_to_string(handler).as_cstr());
                     info.insert(c"callback", Object::string(name));
                 }
                 // A live row with neither a command nor a handler cannot
@@ -263,11 +265,11 @@ fn autocmd_dict(event: AutoEvent, ac: &AutoCmd, ap: &AutoPat) -> ApiDict {
             }
         }
         AutoHandler::Cmd(command) => {
-            info.insert(c"command", Object::string(String_0::from_bytes(command)));
+            info.insert(c"command", Object::string(ApiString::from_bytes(command)));
         }
     }
-    info.insert(c"pattern", Object::string(String_0::from_bytes(&ap.pat)));
-    let event = String_0::from_cstr(event_nr2name(event));
+    info.insert(c"pattern", Object::string(ApiString::from_bytes(&ap.pat)));
+    let event = ApiString::from_cstr(event_nr2name(event));
     info.insert(c"event", Object::string(event));
     info.insert(c"once", Object::boolean(ac.once));
     if ap.buflocal_nr == 0 {

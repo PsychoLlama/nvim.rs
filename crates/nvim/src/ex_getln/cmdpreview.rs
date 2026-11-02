@@ -36,8 +36,8 @@ pub fn cmdpreview_get_ns() -> ::core::ffi::c_int {
 ///
 /// Answers NULL if the buffer could not be made ready.
 pub(crate) fn cmdpreview_open_buf() -> Option<Buf> {
-    let existing = (cmdpreview_bufnr.get() != 0)
-        .then(|| find_buf(cmdpreview_bufnr.get()))
+    let existing = (cmdpreview_bufnr.get() != Handle::NONE)
+        .then(|| find_buf(cmdpreview_bufnr.get().get()))
         .flatten();
 
     // If the preview buffer doesn't exist, open one.
@@ -47,7 +47,7 @@ pub(crate) fn cmdpreview_open_buf() -> Option<Buf> {
             let Ok(bufnr) = nvim_create_buf(false, true) else {
                 return None;
             };
-            find_buf(bufnr)?
+            find_buf(bufnr.get())?
         }
     };
 
@@ -105,7 +105,7 @@ pub(crate) fn cmdpreview_open_win(cmdpreview_buf: Buf) -> Option<Win> {
         DOBUF_GOTO.cast_signed(),
         DOBUF_FIRST.cast_signed(),
         FORWARD as ::core::ffi::c_int,
-        cmdpreview_buf.handle,
+        cmdpreview_buf.handle.get(),
         0,
     );
     err.absorb(try_leave(&tstate));
@@ -126,8 +126,8 @@ pub(crate) fn cmdpreview_open_win(cmdpreview_buf: Buf) -> Option<Win> {
 
 /// Close any open command preview windows.
 pub(crate) fn cmdpreview_close_win() {
-    if cmdpreview_bufnr.get() != 0
-        && let Some(buffer) = find_buf(cmdpreview_bufnr.get())
+    if cmdpreview_bufnr.get() != Handle::NONE
+        && let Some(buffer) = find_buf(cmdpreview_bufnr.get().get())
     {
         close_windows(buffer, false);
     }
@@ -394,7 +394,7 @@ pub(crate) fn cmdpreview_may_show() -> bool {
         }
         // Set up the preview namespace if it is not already set.
         if cmdpreview_ns.get() == 0 {
-            let ns = nvim_create_namespace(String_0::NULL);
+            let ns = nvim_create_namespace(ApiString::NULL);
             cmdpreview_ns.set(::core::ffi::c_int::try_from(ns).unwrap_or(0));
         }
 

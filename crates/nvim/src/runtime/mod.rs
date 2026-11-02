@@ -87,9 +87,9 @@ use crate::registry::{IdMap, IdSet, id_map, id_set};
 use crate::runtime::state::{current_sctx, did_source_packages};
 use crate::types::AutoEvent;
 use crate::types::{
-    ApiDict, Array, CONV_NONE, EStack, EStackArg, EStackType, EstackInfo, EvalFuncData, ExArg,
-    Expand, FrameName, Integer, LineNr, LuaRetMode, Object, OptSet, OptVal, ProfTime, ScriptCtx,
-    ScriptId, ScriptItem, String_0, TypVal, UserFunc, VAR_DICT, VarLock, VarNumber, VimConv,
+    ApiDict, ApiString, Array, CONV_NONE, EStack, EStackArg, EStackType, EstackInfo, EvalFuncData,
+    ExArg, Expand, FrameName, Integer, LineNr, LuaRetMode, Object, OptSet, OptVal, ProfTime,
+    ScriptCtx, ScriptId, ScriptItem, TypVal, UserFunc, VAR_DICT, VarLock, VarNumber, VimConv,
     XDGVarType, int64_t, kBoolVarFalse, ptrdiff_t,
 };
 use core::cell::Cell;

@@ -95,8 +95,8 @@ fn term_write(bytes: &[u8], id: uint64_t) {
     }
     let mut args: Array = Array::with_capacity(3);
     args.push(Object::integer(id as Integer));
-    args.push(Object::buffer(term.map_or(0, terminal_buf)));
-    args.push(Object::string(String_0::from_bytes(bytes)));
+    args.push(Object::buffer(term.map_or(Handle::NONE, terminal_buf)));
+    args.push(Object::string(ApiString::from_bytes(bytes)));
     let _locked = Lock::text();
     // The handler reports nothing, so it is given no error slot.
     nlua_call_ref_quiet(cb, Some(c"input"), args, kRetNilBool);
@@ -124,7 +124,7 @@ fn term_close(id: uint64_t) {
     channel_decref(id);
 }
 
-pub fn nvim_chan_send(chan: Integer, data: String_0) -> Result<(), Error> {
+pub fn nvim_chan_send(chan: Integer, data: ApiString) -> Result<(), Error> {
     if data.is_empty() {
         return Ok(());
     }

@@ -230,7 +230,7 @@ pub(crate) fn leave_curwin() {
 pub(super) fn current_win() -> Option<Win> {
     CURRENT_WIN
         .get()
-        .map(|id| Win::at(curwin.get(), id.0.get()))
+        .map(|id| Win::at(curwin.get(), Handle::new(id.0.get())))
 }
 
 /// [`current_win`] for the buffer. `None` where [`leave_curbuf`] left it.
@@ -238,7 +238,7 @@ pub(super) fn current_win() -> Option<Win> {
 pub(super) fn current_buf() -> Option<Buf> {
     CURRENT_BUF
         .get()
-        .map(|id| Buf::at(curbuf.get(), id.0.get()))
+        .map(|id| Buf::at(curbuf.get(), Handle::new(id.0.get())))
 }
 
 /// [`current_win`] for the tab page.
@@ -246,7 +246,7 @@ pub(super) fn current_buf() -> Option<Buf> {
 pub(super) fn current_tab() -> Option<TabPage> {
     CURRENT_TAB
         .get()
-        .map(|id| TabPage::at(curtab.get(), id.0.get()))
+        .map(|id| TabPage::at(curtab.get(), Handle::new(id.0.get())))
 }
 
 /// The window the mirror names, whatever its identity.
@@ -257,13 +257,13 @@ pub(super) fn current_tab() -> Option<TabPage> {
 /// the editor between windows, which `Saved::restore` puts back as it found.
 #[inline(always)]
 fn current_window() -> Win {
-    current_win().unwrap_or(Win::at(::core::ptr::null_mut::<Window>(), 0))
+    current_win().unwrap_or(Win::at(::core::ptr::null_mut::<Window>(), Handle::NONE))
 }
 
 /// [`current_window`] for the buffer mirror.
 #[inline(always)]
 fn current_buffer() -> Buf {
-    current_buf().unwrap_or(Buf::at(::core::ptr::null_mut::<Buffer>(), 0))
+    current_buf().unwrap_or(Buf::at(::core::ptr::null_mut::<Buffer>(), Handle::NONE))
 }
 
 /// Stand in `win` and the buffer it shows, until [`Saved::restore`].
@@ -392,7 +392,7 @@ impl Win {
     /// [`Win::set_handle`]. The block is the window list's from here on:
     /// [`forget_window`] gives it back, without running its destructor.
     pub(crate) fn alloc(window: Box<Window>) -> Self {
-        Self::at(Box::into_raw(window), 0)
+        Self::at(Box::into_raw(window), Handle::NONE)
     }
 }
 

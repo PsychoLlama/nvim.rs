@@ -14,6 +14,7 @@ use crate::api::private::helpers::{
     find_window_by_handle, scope_vars,
 };
 use crate::api::vim::nvim_get_current_win;
+use crate::types::Handle;
 use crate::window::tab_index;
 
 use crate::api_error;
@@ -21,7 +22,7 @@ use crate::guard::Suppress;
 use crate::message::e_cmdwin;
 use crate::narrow::number_as_int;
 use crate::types::{
-    Array, Boolean, BufferHandle, Error, Integer, KeyDict_tabpage_config, Object, String_0,
+    ApiString, Array, Boolean, BufferHandle, Error, Integer, KeyDict_tabpage_config, Object,
     TabpageHandle, WindowHandle, kErrorTypeException, size_t,
 };
 use crate::window::{
@@ -46,7 +47,7 @@ pub fn nvim_tabpage_list_wins(tabpage: TabpageHandle) -> Result<Array, Error> {
 }
 
 /// The tab-scoped variable `name`.
-pub fn nvim_tabpage_get_var(tabpage: TabpageHandle, name: String_0) -> Result<Object, Error> {
+pub fn nvim_tabpage_get_var(tabpage: TabpageHandle, name: ApiString) -> Result<Object, Error> {
     let Some(tab) = find_tab_by_handle(tabpage)? else {
         return Ok(Object::Nil);
     };
@@ -56,7 +57,7 @@ pub fn nvim_tabpage_get_var(tabpage: TabpageHandle, name: String_0) -> Result<Ob
 /// Set the tab-scoped variable `name`.
 pub fn nvim_tabpage_set_var(
     tabpage: TabpageHandle,
-    name: String_0,
+    name: ApiString,
     value: Object,
 ) -> Result<(), Error> {
     let Some(tab) = find_tab_by_handle(tabpage)? else {
@@ -67,7 +68,7 @@ pub fn nvim_tabpage_set_var(
 }
 
 /// Remove the tab-scoped variable `name`.
-pub fn nvim_tabpage_del_var(tabpage: TabpageHandle, name: String_0) -> Result<(), Error> {
+pub fn nvim_tabpage_del_var(tabpage: TabpageHandle, name: ApiString) -> Result<(), Error> {
     let Some(tab) = find_tab_by_handle(tabpage)? else {
         return Ok(());
     };
@@ -78,7 +79,7 @@ pub fn nvim_tabpage_del_var(tabpage: TabpageHandle, name: String_0) -> Result<()
 /// The window `tabpage` is showing.
 pub fn nvim_tabpage_get_win(tabpage: TabpageHandle) -> Result<WindowHandle, Error> {
     let Some(tab) = find_tab_by_handle(tabpage)?.filter(|&t| valid_tabpage(t.id())) else {
-        return Ok(0 as WindowHandle);
+        return Ok(Handle::NONE);
     };
     if tab.is_current() {
         return Ok(nvim_get_current_win());
@@ -139,7 +140,7 @@ pub fn nvim_open_tabpage(
     config: &mut KeyDict_tabpage_config,
 ) -> Result<TabpageHandle, Error> {
     let Some(b) = find_buffer_by_handle(buf)? else {
-        return Ok(0 as TabpageHandle);
+        return Ok(Handle::NONE);
     };
     if cmdwin_type.get() != 0 && enter || cmdwin_buf.get() == Some(b.id()) {
         return Err(Error::exception(e_cmdwin));

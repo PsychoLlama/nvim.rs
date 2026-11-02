@@ -15,12 +15,12 @@ use crate::types::{OK, VarLock};
 use crate::winlayer::{Buf, Win};
 
 /// The bytes `from .. to` of the cursor line, as a completion string.
-pub(crate) fn cursor_line_part(from: ColNr, to: ColNr) -> String_0 {
+pub(crate) fn cursor_line_part(from: ColNr, to: ColNr) -> ApiString {
     let mut lines = Lines::current();
     let line = lines.line(Win::current().w_cursor.lnum);
     let to = usize::try_from(to).unwrap_or(0).min(line.len());
     let from = usize::try_from(from).unwrap_or(0).min(to);
-    String_0::from_bytes(&line[from..to])
+    ApiString::from_bytes(&line[from..to])
 }
 
 /// Insert `text` at the cursor.

@@ -14,6 +14,7 @@ use crate::lua::executor::release_luaref;
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::option::vars::P_CPO;
 use crate::semsg;
+use crate::types::Handle;
 use crate::types::{MapTwin, VAR_DICT, VAR_FUNC, kErrorTypeException, kErrorTypeValidation};
 use crate::winlayer::Buf;
 use core::ffi::CStr;
@@ -176,15 +177,15 @@ pub fn modify_keymap(
     channel_id: uint64_t,
     mut buffer: BufferHandle,
     is_unmap: bool,
-    mode: String_0,
-    lhs: String_0,
-    rhs: String_0,
+    mode: ApiString,
+    lhs: ApiString,
+    rhs: ApiString,
     opts: Option<&mut KeyDict_keymap>,
 ) -> Result<(), Error> {
     let mut lua_funcref = LUA_NOREF;
-    let global = buffer == -1;
+    let global = buffer == Handle::new(-1);
     if global {
-        buffer = 0;
+        buffer = Handle::NONE;
     }
     let Some(target_buf) = find_buffer_by_handle(buffer)? else {
         return Ok(());

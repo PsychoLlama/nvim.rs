@@ -737,7 +737,7 @@ fn goto_match(
                     return After::Stop;
                 };
                 // GETFILE_SUCCESS: anything but a positive answer.
-                let handle = saved.buffer().handle as c_int;
+                let handle = saved.buffer().handle.get();
                 // Jumping to a buffer named by its own handle.
                 let failed = getfile(handle, None, None, true, walk.lnum, forceit);
                 if failed > 0 {

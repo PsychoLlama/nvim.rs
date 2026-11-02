@@ -51,7 +51,7 @@ use crate::state::{MODE_INSERT, get_real_state};
 use crate::types::AutoEvent;
 use crate::types::libc::STDIN_FILENO;
 use crate::types::{
-    Event, KeyExtra, RStream, Stream, String_0, size_t, uint8_t, uint64_t, uv_handle_type,
+    ApiString, Event, KeyExtra, RStream, Stream, size_t, uint8_t, uint64_t, uv_handle_type,
 };
 use crate::ui::state::{Columns, Rows, current_ui};
 use crate::winlayer::Buf;
@@ -417,7 +417,7 @@ const MAX_TRANS_SPECIAL: usize = 19;
 ///
 /// Returns how many bytes of `keys` were consumed; an incomplete trailing
 /// `<...>` is left for the next call.
-pub fn input_enqueue(chan_id: uint64_t, keys: String_0) -> size_t {
+pub fn input_enqueue(chan_id: uint64_t, keys: ApiString) -> size_t {
     current_ui.set(chan_id);
 
     let keys = keys.as_bytes();

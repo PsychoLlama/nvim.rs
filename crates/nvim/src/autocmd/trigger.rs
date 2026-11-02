@@ -232,7 +232,7 @@ fn deferred_event(
 }
 
 /// Fire `TermResponse` with the terminal's reply in `v:event.sequence`.
-pub fn do_termresponse_autocmd(sequence: String_0) {
+pub fn do_termresponse_autocmd(sequence: ApiString) {
     let mut data = DictBuf::<1>::new();
     let event_data = data.insert(c"sequence", Object::string(sequence)).object();
     apply_autocmds_group(

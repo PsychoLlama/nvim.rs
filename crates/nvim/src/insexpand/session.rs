@@ -91,7 +91,7 @@ pub(crate) fn get_normal_compl_info(mut startcol: c_int, curs_col: ColNr) -> Res
         startcol -= 1;
         if startcol < 0 || !is_word(prev(startcol + 1)) {
             // Match any word of at least two chars.
-            compl_pattern().set(String_0::from_bytes(b"\\<\\k\\k"));
+            compl_pattern().set(ApiString::from_bytes(b"\\<\\k\\k"));
             compl_col.set(compl_col.get() + curs_col);
             compl_length.set(0);
             compl_from_nonkeyword.set(true);
@@ -179,7 +179,7 @@ pub(crate) fn get_filename_compl_info(mut startcol: c_int, curs_col: ColNr) -> R
     let start = (compl_col.get() as usize).min(line.len());
     let end = (start + compl_length.get().max(0) as usize).min(line.len());
     let typed = &line[start..end];
-    compl_pattern().set(String_0::from_bytes(&addstar(typed, ExpandContext::Files)));
+    compl_pattern().set(ApiString::from_bytes(&addstar(typed, ExpandContext::Files)));
     Ok(())
 }
 
@@ -192,7 +192,7 @@ pub(crate) fn get_cmdline_compl_info(curs_col: ColNr) -> Result<(), Failed> {
         let mut lines = Lines::current();
         let line = lines.line(Win::current().w_cursor.lnum);
         let to = usize::try_from(curs_col).unwrap_or(0).min(line.len());
-        String_0::from_bytes(&line[..to])
+        ApiString::from_bytes(&line[..to])
     };
     compl_pattern().set(pattern);
     let line = compl_pattern().to_vec();
@@ -682,21 +682,21 @@ pub(crate) fn spell_back_to_badword() {
 /// The `compl_length` bytes of the cursor line at `compl_col`, case-folded
 /// when `'ignorecase'` is on: what every caller here wants for
 /// `compl_pattern`.
-pub(crate) fn compl_pattern_from_line() -> String_0 {
+pub(crate) fn compl_pattern_from_line() -> ApiString {
     let mut lines = Lines::current();
     let text = compl_range(lines.line(Win::current().w_cursor.lnum));
     if p_ic() {
-        String_0::from_bytes(&foldcase(text, None))
+        ApiString::from_bytes(&foldcase(text, None))
     } else {
-        String_0::from_bytes(text)
+        ApiString::from_bytes(text)
     }
 }
 
 /// The same bytes, copied verbatim -- what `compl_orig_text` and the
 /// command-line pattern want.
-pub(crate) fn compl_text_from_line() -> String_0 {
+pub(crate) fn compl_text_from_line() -> ApiString {
     let mut lines = Lines::current();
-    String_0::from_bytes(compl_range(lines.line(Win::current().w_cursor.lnum)))
+    ApiString::from_bytes(compl_range(lines.line(Win::current().w_cursor.lnum)))
 }
 
 /// `compl_col .. compl_col + compl_length` of `line`, clamped to it.

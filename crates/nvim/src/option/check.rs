@@ -18,6 +18,7 @@
 )]
 
 use crate::global_cell::field;
+use crate::types::Handle;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 
@@ -45,7 +46,7 @@ use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 use crate::startup::starting;
 use crate::types::{
-    Buffer, HlAttrs, NS, OptIndex, OptInt, OptionSetFlags, String_0, WinOpt, uint32_t,
+    ApiString, Buffer, HlAttrs, OptIndex, OptInt, OptionSetFlags, WinOpt, uint32_t,
 };
 use crate::winlayer::Win;
 
@@ -318,9 +319,10 @@ pub(crate) fn parse_winhl_opt(winhl: Option<&[u8]>, window: Option<Win>) -> bool
     if value.is_empty() {
         // An empty value drops the window's namespace, but only while it
         // is still the one 'winhighlight' made.
-        if let Some(mut w) = window.filter(|w| w.w_ns_hl_winhl > 0 && w.w_ns_hl == w.w_ns_hl_winhl)
+        if let Some(mut w) =
+            window.filter(|w| w.w_ns_hl_winhl > 0 && w.w_ns_hl == Handle::new(w.w_ns_hl_winhl))
         {
-            w.w_ns_hl = 0;
+            w.w_ns_hl = Handle::NONE;
             w.w_hl_needs_update = true;
         }
         return true;
@@ -329,16 +331,16 @@ pub(crate) fn parse_winhl_opt(winhl: Option<&[u8]>, window: Option<Win>) -> bool
     let mut ns_hl: c_int = 0;
     if let Some(mut w) = window {
         if w.w_ns_hl_winhl == 0 {
-            let ns = nvim_create_namespace(String_0::NULL);
+            let ns = nvim_create_namespace(ApiString::NULL);
             w.w_ns_hl_winhl = c_int::try_from(ns).expect("a namespace id fits an int");
         } else {
             // Reusing the namespace: bump the generation so attributes
             // cached against it are re-resolved.
-            with_decor_provider(w.w_ns_hl_winhl as NS, true, |dp| dp.hl_valid += 1);
+            with_decor_provider(Handle::new(w.w_ns_hl_winhl), true, |dp| dp.hl_valid += 1);
         }
         ns_hl = w.w_ns_hl_winhl;
-        if w.w_ns_hl <= 0 {
-            w.w_ns_hl = w.w_ns_hl_winhl;
+        if w.w_ns_hl <= Handle::NONE {
+            w.w_ns_hl = Handle::new(w.w_ns_hl_winhl);
         }
     }
 
@@ -373,7 +375,7 @@ pub(crate) fn parse_winhl_opt(winhl: Option<&[u8]>, window: Option<Win>) -> bool
         if window.is_some() {
             let mut attrs: HlAttrs = HLATTRS_INIT;
             attrs.rgb_ae_attr |= HlAttrFlags::GLOBAL;
-            ns_hl_def(ns_hl as NS, hl_id_link, attrs, hl_id, None);
+            ns_hl_def(Handle::new(ns_hl), hl_id_link, attrs, hl_id, None);
         }
         rest = after.get(comma + 1..).unwrap_or_default();
     }

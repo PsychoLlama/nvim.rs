@@ -3,7 +3,7 @@
 //! `nvim_buf_get_lines`/`nvim_buf_set_lines` are the line-granular half of
 //! the buffer API, and `nvim_buf_get_text` the read that takes a byte range
 //! but still hands back whole lines.  `push_linestr` is the shared
-//! line-to-`String_0` step every one of them ends in, and
+//! line-to-`ApiString` step every one of them ends in, and
 //! `buf_collect_lines` the loop over a range that `buffer_updates.rs`
 //! reaches too, to build the `nvim_buf_attach` change notifications.
 
@@ -266,7 +266,7 @@ pub fn nvim_buf_get_text(
     let first = start_row as int64_t;
     if start_row == end_row {
         let (from, to) = (start_col as int64_t, end_col as int64_t);
-        let line: String_0 = buf_get_text(b, first, from, to)?;
+        let line: ApiString = buf_get_text(b, first, from, to)?;
         lines.push(line.as_bytes(), 0, replace_nl);
         return Ok(rv);
     }
@@ -349,9 +349,9 @@ impl<'a> LineSink<'a> {
                 // An empty line is the null string, as upstream's
                 // `STRING_INIT` is.
                 let line = if line.is_empty() {
-                    String_0::NULL
+                    ApiString::NULL
                 } else {
-                    String_0::from_bytes(line)
+                    ApiString::from_bytes(line)
                 };
                 array.push(Object::string(line));
             }

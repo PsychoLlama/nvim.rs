@@ -104,9 +104,9 @@ pub(crate) fn mapblock_fill_dict(
         out.put(c"callback", Object::LuaRef(luaref));
     } else {
         let text = if compatible {
-            String_0::from_cstr(rhs.orig_str.as_cstr())
+            ApiString::from_cstr(rhs.orig_str.as_cstr())
         } else {
-            String_0::from_bytes(&special_keys_text(
+            ApiString::from_bytes(&special_keys_text(
                 rhs.str.as_cstr().to_bytes(),
                 false,
                 true,
@@ -115,18 +115,18 @@ pub(crate) fn mapblock_fill_dict(
         out.put(c"rhs", Object::string(text));
     }
     if let Some(desc) = &rhs.desc {
-        let desc = String_0::from_cstr(desc.as_cstr());
+        let desc = ApiString::from_cstr(desc.as_cstr());
         out.put(c"desc", Object::string(desc));
     }
     let (lhs, lhsraw) = (
-        String_0::from_bytes(&lhs),
-        String_0::from_cstr(mp.m_keys.as_cstr()),
+        ApiString::from_bytes(&lhs),
+        ApiString::from_cstr(mp.m_keys.as_cstr()),
     );
     out.put(c"lhs", Object::string(lhs));
     out.put(c"lhsraw", Object::string(lhsraw));
     if let Some(alt) = lhsrawalt {
         // Also add the value for the simplified entry.
-        let alt = String_0::from_cstr(alt.as_cstr());
+        let alt = ApiString::from_cstr(alt.as_cstr());
         out.put(c"lhsrawalt", Object::string(alt));
     }
     out.put(c"noremap", Object::integer(noremap_value.into()));
@@ -148,7 +148,7 @@ pub(crate) fn mapblock_fill_dict(
         c"replace_keycodes",
         Object::integer(Integer::from(mp.m_replace_keycodes)),
     );
-    let mode = String_0::from_cstr(mapmode.as_cstr());
+    let mode = ApiString::from_cstr(mapmode.as_cstr());
     out.put(c"mode", Object::string(mode));
     out.put(c"abbr", Object::integer(Integer::from(abbr)));
     out.put(c"mode_bits", Object::integer(mp.m_mode.into()));
@@ -302,7 +302,7 @@ pub fn f_mapcheck(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `nvim_get_keymap` and `nvim_set_keymap` take the same shortnames as
 /// `:map`'s command names, optionally with a `!` in front and an `a` after
 /// for the abbreviation form.  The `a` is not counted as consumed.
-pub(crate) fn parse_shortname_mode(mode: &String_0) -> (c_int, bool, usize) {
+pub(crate) fn parse_shortname_mode(mode: &ApiString) -> (c_int, bool, usize) {
     let text: &[u8] = if mode.is_empty() {
         b"m"
     } else {
@@ -323,9 +323,9 @@ pub(crate) fn parse_shortname_mode(mode: &String_0) -> (c_int, bool, usize) {
 ///
 /// `buf` is the buffer whose local mappings to report, or `None` for the
 /// global ones.
-pub fn keymap_array(mode: String_0, buffer: Option<Buf>) -> Array {
+pub fn keymap_array(mode: ApiString, buffer: Option<Buf>) -> Array {
     let (int_mode, is_abbrev, _) = parse_shortname_mode(&mode);
-    let buffer_value = buffer.map_or(0, |buf| buf.handle as c_int);
+    let buffer_value = buffer.map_or(0, |buf| buf.handle.get());
     let table = match buffer {
         Some(buf) => MapTable::Buffer(buf),
         None => MapTable::Global,

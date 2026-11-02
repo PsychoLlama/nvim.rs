@@ -27,13 +27,13 @@ fn cursor_line() -> (BufferHandle, Integer) {
 }
 
 /// The line the cursor is on.
-pub fn nvim_get_current_line() -> Result<String_0, Error> {
+pub fn nvim_get_current_line() -> Result<ApiString, Error> {
     let (buf, lnum) = cursor_line();
     buffer_get_line(buf, lnum)
 }
 
 /// Replace the line the cursor is on with `line`.
-pub fn nvim_set_current_line(line: String_0) -> Result<(), Error> {
+pub fn nvim_set_current_line(line: ApiString) -> Result<(), Error> {
     let (buf, lnum) = cursor_line();
     buffer_set_line(buf, lnum, line)
 }
@@ -46,7 +46,7 @@ pub fn nvim_del_current_line() -> Result<(), Error> {
 
 /// The global variable `name`, autoloading the script that defines it if it
 /// is not there yet.
-pub fn nvim_get_var(name: String_0) -> Result<Object, Error> {
+pub fn nvim_get_var(name: ApiString) -> Result<Object, Error> {
     let mut value = globvar_object(&name);
     if value.is_none() {
         let loaded = script_autoload_named(name.as_bytes(), false);
@@ -62,7 +62,7 @@ pub fn nvim_get_var(name: String_0) -> Result<Object, Error> {
 }
 
 /// `g:name`'s value, converted -- `None` when there is no such variable.
-fn globvar_object(name: &String_0) -> Option<Object> {
+fn globvar_object(name: &ApiString) -> Option<Object> {
     // The borrow ends with the conversion, which runs no user code.
     globvar_dict()
         .find(name.as_bytes())
@@ -70,31 +70,31 @@ fn globvar_object(name: &String_0) -> Option<Object> {
 }
 
 /// "Key not found: `name`".
-fn key_not_found(name: &String_0) -> Error {
+fn key_not_found(name: &ApiString) -> Error {
     let name = msg_cstr(name.as_cstr());
     api_error!(kErrorTypeValidation, "Key not found: {name}")
 }
 
 /// Set the global variable `name` to `value`.
-pub fn nvim_set_var(name: String_0, value: Object) -> Result<(), Error> {
+pub fn nvim_set_var(name: ApiString, value: Object) -> Result<(), Error> {
     let dict = globvar_dict();
     dict_set_var(&dict, &name, value, false, false).map(|_| ())
 }
 
 /// Remove the global variable `name`.
-pub fn nvim_del_var(name: String_0) -> Result<(), Error> {
+pub fn nvim_del_var(name: ApiString) -> Result<(), Error> {
     let dict = globvar_dict();
     dict_set_var(&dict, &name, Object::Nil, true, false).map(|_| ())
 }
 
 /// The `v:` variable `name`.
-pub fn nvim_get_vvar(name: String_0) -> Result<Object, Error> {
+pub fn nvim_get_vvar(name: ApiString) -> Result<Object, Error> {
     let dict = vimvar_dict();
     dict_get_value(&dict, &name)
 }
 
 /// Set the `v:` variable `name` to `value`.
-pub fn nvim_set_vvar(name: String_0, value: Object) -> Result<(), Error> {
+pub fn nvim_set_vvar(name: ApiString, value: Object) -> Result<(), Error> {
     let dict = vimvar_dict();
     dict_set_var(&dict, &name, value, false, false).map(|_| ())
 }

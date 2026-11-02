@@ -27,11 +27,11 @@
 use core::ffi::{CStr, c_int};
 
 use crate::memory::{ThinCString, XString};
-use crate::types::{BoolVarValue, TypVal, VarNumber, kSpecialVarNull};
 use crate::types::{
-    Object, OptIndex, OptStr, OptVal, OptValType, String_0, kObjectTypeBoolean, kObjectTypeInteger,
-    kObjectTypeNil, kObjectTypeString,
+    ApiString, Object, OptIndex, OptStr, OptVal, OptValType, kObjectTypeBoolean,
+    kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
 };
+use crate::types::{BoolVarValue, TypVal, VarNumber, kSpecialVarNull};
 use crate::undo::curbuf_is_changed;
 
 use super::{
@@ -71,7 +71,7 @@ pub(crate) fn optval_type_name(type_0: OptValType) -> &'static CStr {
 
 impl OptVal {
     /// A string value copying an API string, up to its first NUL.
-    pub(crate) fn string(string: String_0) -> Self {
+    pub(crate) fn string(string: ApiString) -> Self {
         OptVal::from_bytes(string.as_bytes())
     }
 }
@@ -253,7 +253,7 @@ pub(crate) fn optval_as_object(value: OptVal) -> Object {
             None => Object::Nil,
         },
         OptVal::Number(n) => Object::Integer(n),
-        OptVal::String(text) => Object::string(String_0::from_xstring(text.into_xstring())),
+        OptVal::String(text) => Object::string(ApiString::from_xstring(text.into_xstring())),
     }
 }
 

@@ -20,6 +20,7 @@
 use super::*;
 use crate::eval::list::string_tv;
 use crate::option::vars::P_EFM;
+use crate::types::Handle;
 use crate::types::{QfId, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow};
 use core::ffi::{c_int, c_uint};
 
@@ -180,7 +181,7 @@ fn qf_get_list_from_lines(what: &Dict, lines: &TypVal, retdict: &mut Dict) -> Re
 
 /// The window id of the quickfix window showing this stack, or 0.
 fn qf_winid(qi: Option<Qi>) -> c_int {
-    qi.and_then(qf_find_win).map_or(0, |win| win.handle)
+    qi.and_then(qf_find_win).map_or(0, |win| win.handle.get())
 }
 
 /// The number of the buffer holding the quickfix window's contents, or 0
@@ -332,7 +333,7 @@ fn qf_getprop_filewinid(window: Option<Win>, id: QfId, retdict: &mut Dict) -> Re
     let winid = window
         .filter(|&wp| wp.is_location_list_window())
         .and_then(|_| qf_find_win_with_loclist(id))
-        .map_or(0, |ll_wp| ll_wp.handle);
+        .map_or(Handle::NONE, |ll_wp| ll_wp.handle);
     add_nr(retdict, "filewinid", VarNumber::from(winid))
 }
 

@@ -50,7 +50,7 @@ use crate::os::env::{ENV_SEPCHAR, getenv_owned};
 use crate::path::{append_path, gettail_dir, save_abs_path};
 use crate::smsg;
 use crate::startup::stdin_fd;
-use crate::types::String_0;
+use crate::types::ApiString;
 use crate::types::{
     FAIL, FILE, OK, OptInt, ptrdiff_t, size_t, uv__queue, uv__work, uv_buf_t, uv_fs_t, uv_fs_type,
     uv_loop_s, uv_loop_t, uv_req_type, uv_stat_t, uv_timespec_t,
@@ -255,7 +255,7 @@ pub fn os_chdir(path: &CStr) -> c_int {
     // `uv_chdir` is `chdir(2)`, which is what std calls.
     match std::env::set_current_dir(OsStr::from_bytes(path.to_bytes())) {
         Ok(()) => {
-            ui_call_chdir(String_0::from_cstr(path));
+            ui_call_chdir(ApiString::from_cstr(path));
             0
         }
         Err(error) => uv_code(&error),

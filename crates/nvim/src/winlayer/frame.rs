@@ -46,8 +46,8 @@ use crate::winlayer::{FrameId, FrameRef, Win, WinId, forget_frame, frames, regis
 pub(crate) fn new_frame() -> FrameRef {
     /// The frame handles issued so far. Incremented before it is read, as
     /// `last_win_id` is, so no frame carries handle zero.
-    static LAST_FRAME_ID: GlobalCell<Handle> = GlobalCell::new(0);
-    LAST_FRAME_ID.set(LAST_FRAME_ID.get() + 1);
+    static LAST_FRAME_ID: GlobalCell<Handle> = GlobalCell::new(Handle::NONE);
+    LAST_FRAME_ID.set(LAST_FRAME_ID.get().next());
     let handle = LAST_FRAME_ID.get();
     let frame = Owned::new(Box::new(Frame {
         handle,
@@ -117,7 +117,7 @@ impl FrameRef {
     /// When the handle is zero, which no registered frame has.
     #[inline(always)]
     pub(crate) fn id(self) -> FrameId {
-        FrameId(NonZero::new(self.id).expect("a live frame has a handle"))
+        FrameId(NonZero::new(self.id.get()).expect("a live frame has a handle"))
     }
 
     /// The window this frame holds — `Some` exactly for a leaf.

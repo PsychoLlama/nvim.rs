@@ -10,19 +10,20 @@
 
 use super::*;
 use crate::api::private::validate::{err_bad_number, err_bad_value};
+use core::ffi::c_int;
 
-pub fn nvim_get_hl_id_by_name(name: String_0) -> Integer {
+pub fn nvim_get_hl_id_by_name(name: ApiString) -> Integer {
     syn_check_group(name.as_bytes()) as Integer
 }
 
 pub fn nvim_get_hl(ns_id: Integer, opts: &mut KeyDict_get_highlight) -> Result<ApiDict, Error> {
-    ns_get_hl_defs(ns_id as NS, opts)
+    ns_get_hl_defs(Handle::new(ns_id as c_int), opts)
 }
 
 pub fn nvim_set_hl(
     channel_id: uint64_t,
     ns_id: Integer,
-    name: String_0,
+    name: ApiString,
     val: &mut KeyDict_highlight,
 ) -> Result<(), Error> {
     let hl_id: ::core::ffi::c_int = syn_check_group(name.as_bytes());
@@ -42,37 +43,43 @@ pub fn nvim_set_hl(
     }
     let attrs: HlAttrs = dict2hlattrs(&*val, true, Some(&mut link_id), base)?;
     let _sctx = api_set_sctx(channel_id);
-    ns_hl_def(ns_id as NS, hl_id, attrs, link_id, Some(&*val));
+    ns_hl_def(
+        Handle::new(ns_id as c_int),
+        hl_id,
+        attrs,
+        link_id,
+        Some(&*val),
+    );
     Ok(())
 }
 
 pub fn nvim_get_hl_ns(opts: &mut KeyDict_get_ns) -> Result<Integer, Error> {
     let winid = opts.winid;
     let Some(winid) = winid else {
-        return Ok(ns_hl_global.get() as Integer);
+        return Ok(Integer::from(ns_hl_global.get()));
     };
     let Some(win) = find_window_by_handle(winid)? else {
         return Ok(0 as Integer);
     };
-    Ok(win.w_ns_hl as Integer)
+    Ok(Integer::from(win.w_ns_hl))
 }
 
 pub fn nvim_set_hl_ns(ns_id: Integer) -> Result<(), Error> {
     if !(ns_id >= 0 as Integer) {
         return Err(err_bad_number(c"namespace", ns_id));
     }
-    ns_hl_global.set(ns_id as NS);
+    ns_hl_global.set(Handle::new(ns_id as c_int));
     hl_check_ns();
     redraw_all_later(UPD_NOT_VALID);
     Ok(())
 }
 
 pub fn nvim_set_hl_ns_fast(ns_id: Integer) {
-    ns_hl_fast.set(ns_id as NS);
+    ns_hl_fast.set(Handle::new(ns_id as c_int));
     hl_check_ns();
 }
 
-pub fn nvim_get_color_by_name(name: String_0) -> Integer {
+pub fn nvim_get_color_by_name(name: ApiString) -> Integer {
     // An API string is NUL-terminated.
     name_to_color(name.as_cstr()).0 as Integer
 }

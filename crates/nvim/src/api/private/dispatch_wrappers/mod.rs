@@ -8,7 +8,8 @@
 //! arity, converts each element to the parameter type the API function
 //! declares — refusing with an `Error` if a tag does not match — calls the
 //! function, and boxes whatever came back into an `Object`. A wrapper that
-//! refuses returns nil and leaves the reason in `*error`.
+//! refuses answers `Err`, and so does one whose API function did: this is
+//! the one place an `Err` becomes the RPC error object.
 //!
 //! This module holds the shared support code and the imports; the wrappers
 //! themselves live in one child module per API source file, re-exported here
@@ -16,6 +17,13 @@
 //! overflow the tree's 1,000-line file cap is split into numbered parts.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 mod autocmd;
 mod buffer;
@@ -131,15 +139,15 @@ use crate::log::logmsg;
 use crate::message::e_textlock;
 use crate::message_fmt::msg_cstr;
 use crate::types::{
-    ApiDict, Array, Boolean, Error, Float, Handle, Integer, KeyDict_buf_attach, KeyDict_buf_delete,
-    KeyDict_clear_autocmds, KeyDict_cmd, KeyDict_cmd_opts, KeyDict_complete_set, KeyDict_context,
-    KeyDict_create_augroup, KeyDict_create_autocmd, KeyDict_echo_opts, KeyDict_empty,
-    KeyDict_eval_statusline, KeyDict_exec_autocmds, KeyDict_exec_opts, KeyDict_get_autocmds,
-    KeyDict_get_commands, KeyDict_get_extmark, KeyDict_get_extmarks, KeyDict_get_highlight,
-    KeyDict_get_ns, KeyDict_highlight, KeyDict_keymap, KeyDict_ns_opts, KeyDict_open_term,
-    KeyDict_option, KeyDict_redraw, KeyDict_runtime, KeyDict_set_extmark, KeyDict_tabpage_config,
-    KeyDict_user_command, KeyDict_win_config, KeyDict_win_text_height, Object, ObjectType,
-    String_0, uint64_t,
+    ApiDict, ApiString, Array, Boolean, Error, Float, Handle, Integer, KeyDict_buf_attach,
+    KeyDict_buf_delete, KeyDict_clear_autocmds, KeyDict_cmd, KeyDict_cmd_opts,
+    KeyDict_complete_set, KeyDict_context, KeyDict_create_augroup, KeyDict_create_autocmd,
+    KeyDict_echo_opts, KeyDict_empty, KeyDict_eval_statusline, KeyDict_exec_autocmds,
+    KeyDict_exec_opts, KeyDict_get_autocmds, KeyDict_get_commands, KeyDict_get_extmark,
+    KeyDict_get_extmarks, KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight, KeyDict_keymap,
+    KeyDict_ns_opts, KeyDict_open_term, KeyDict_option, KeyDict_redraw, KeyDict_runtime,
+    KeyDict_set_extmark, KeyDict_tabpage_config, KeyDict_user_command, KeyDict_win_config,
+    KeyDict_win_text_height, Object, ObjectType, uint64_t,
 };
 use core::ffi::CStr;
 
@@ -189,12 +197,13 @@ fn wrong_type(slot: usize, func: &CStr, expected: &CStr) -> Error {
     )
 }
 
-/// A nonnegative integer is accepted as a boolean, truncated to C `int`
-/// first as the C dispatcher did.
+/// A nonnegative integer is accepted as a boolean. The C dispatcher
+/// truncated it to C `int` first, so 2^32 read as false; one past `int` is
+/// refused here instead, as it is for a handle.
 fn as_boolean(o: Object) -> Option<Boolean> {
     match o {
         Object::Boolean(b) => Some(b),
-        Object::Integer(n) if n >= 0 => Some(n as Handle != 0),
+        Object::Integer(n) if (0..=Integer::from(i32::MAX)).contains(&n) => Some(n != 0),
         _ => None,
     }
 }
@@ -212,7 +221,7 @@ fn as_float(o: Object) -> Option<Float> {
     }
 }
 
-fn as_string(o: Object) -> Option<String_0> {
+fn as_string(o: Object) -> Option<ApiString> {
     o.into_string()
 }
 
@@ -233,7 +242,8 @@ fn as_dict(o: Object) -> Option<ApiDict> {
 
 /// Buffer, Window and Tabpage each have a variant of their own, and a bare
 /// nonnegative integer is accepted as any of them. `tag` names the one the
-/// parameter declares: a window handle is not a buffer.
+/// parameter declares: a window handle is not a buffer. One past C `int`
+/// names no handle at all, where the C dispatcher wrapped it onto another.
 fn as_handle(o: Object, tag: ObjectType) -> Option<Handle> {
     let n = match &o {
         Object::Integer(n) => *n,
@@ -245,7 +255,7 @@ fn as_handle(o: Object, tag: ObjectType) -> Option<Handle> {
         }
         _ => return None,
     };
-    (n >= 0).then_some(n as Handle)
+    Handle::try_from(n).ok().filter(|_| n >= 0)
 }
 
 fn is_empty_array(o: &Object) -> bool {

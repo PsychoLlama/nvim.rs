@@ -290,7 +290,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
     if !cmdmod_has(CmdModFlags::KEEPJUMPS) {
         let view = mark_view_make(Win::current(), Win::current().w_cursor);
         let mut buf = Buf::current();
-        buf.b_last_insert = fresh_mark(Win::current().w_cursor, buf.handle, view);
+        buf.b_last_insert = fresh_mark(Win::current().w_cursor, buf.handle.get(), view);
     }
 
     // The cursor should end up on the last inserted character.  Not for

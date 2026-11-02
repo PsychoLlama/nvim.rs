@@ -415,7 +415,7 @@ fn fire_winclosed(win: Win) {
         return;
     }
     RECURSIVE.set(true);
-    let winid = number_name(win.handle);
+    let winid = number_name(win.handle.get());
     fire_named(AutoEvent::WinClosed, Some(&winid), win.buffer_or_none());
     RECURSIVE.set(false);
 }

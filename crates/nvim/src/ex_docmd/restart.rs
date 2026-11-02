@@ -37,14 +37,14 @@ use crate::msgpack_rpc::server::{server_start, server_stop};
 
 use crate::strings::has_bytes;
 use crate::types::{
-    ApiDict, Array, Callback, CallbackReader, CmdModFlags, Error, ExArg, KeyValuePair, Object,
-    String_0, Vv, key_value_pair,
+    ApiDict, ApiString, Array, Callback, CallbackReader, CmdModFlags, Error, ExArg, KeyValuePair,
+    Object, Vv, key_value_pair,
 };
 use crate::ui::{ui_active, ui_call_restart, ui_flush};
 
 /// An `Object` holding a copy of a string.
 fn obj_str(s: &CStr) -> Object {
-    Object::string(String_0::from_cstr(s))
+    Object::string(ApiString::from_cstr(s))
 }
 
 /// An `Object` holding a boolean.
@@ -84,7 +84,7 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
     }
     let quit_cmd = excmd.do_ecmd_cmd.cstr(&excmd.line).unwrap_or(c"");
     let args = Array::from(vec![
-        Object::string(String_0::from_bytes(excmd.line.arg())),
+        Object::string(ApiString::from_bytes(excmd.line.arg())),
         obj_str(quit_cmd),
     ]);
     const CHUNK: &CStr = c"require'vim._core.server'.ex_session_restart(...)";
@@ -171,7 +171,10 @@ fn restart_server(excmd: &mut ExArg) {
                 let opt_items = [
                     entry(c"once", obj_bool(true)),
                     entry(c"nested", obj_bool(true)),
-                    entry(c"command", Object::string(String_0::from_bytes(&after_cmd))),
+                    entry(
+                        c"command",
+                        Object::string(ApiString::from_bytes(&after_cmd)),
+                    ),
                 ];
                 let autocmd_items = [obj_str(c"UIEnter"), Object::dict(dict_of(opt_items))];
                 if let Err(e) =
@@ -208,7 +211,7 @@ fn restart_server(excmd: &mut ExArg) {
             } else {
                 quit_cmd
             };
-            if let Err(e) = nvim_command(String_0::from_bytes(&quit_cmd)) {
+            if let Err(e) = nvim_command(ApiString::from_bytes(&quit_cmd)) {
                 err = e;
             }
 

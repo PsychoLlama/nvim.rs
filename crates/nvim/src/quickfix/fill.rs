@@ -33,6 +33,7 @@ use crate::memline::{MlFlags, ml_append_bytes};
 use crate::memory::XString;
 use crate::os::fs::current_dir;
 use crate::path::tail_index;
+use crate::types::Handle;
 use crate::types::{BCount, ListRef, OptionSetFlags, VarLock};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
@@ -71,7 +72,7 @@ pub(crate) fn qf_update_buffer(qi: Qi, old_last: Option<usize>) {
 
     // A location list's window id goes to 'quickfixtextfunc'; it is the
     // window the list belongs to, not the one showing it.
-    let mut qf_winid = 0;
+    let mut qf_winid = Handle::NONE;
     if qi.kind == QFLT_LOCATION {
         let win = if Win::current().w_llist == Some(qi.id()) {
             Win::current()
@@ -92,7 +93,7 @@ pub(crate) fn qf_update_buffer(qi: Qi, old_last: Option<usize>) {
     // Set curwin/curbuf to buf and save a few things.
     let aco = old_last.is_none().then(|| AucmdBuf::enter(buf));
     qf_update_win_titlevar(qi);
-    qf_fill_buffer(qi.current_slot(), buf, old_last, qf_winid);
+    qf_fill_buffer(qi.current_slot(), buf, old_last, qf_winid.get());
 
     let new_line_count = buf.b_ml.ml_line_count;
     let new_endcol = ml_get_buf_len(buf, new_line_count);

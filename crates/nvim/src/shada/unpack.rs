@@ -19,7 +19,7 @@ use crate::message_fmt::{emsg_text, msg_cstr};
 use crate::mpack::token::{self, Kind, Read, Tok};
 use crate::os::cshim::gettext;
 use crate::os::fs::os_strerror;
-use crate::types::{Integer, String_0, StringArray, TypVal};
+use crate::types::{ApiString, Integer, StringArray, TypVal};
 use crate::{semsg, tr_c};
 use core::ffi::{CStr, c_int};
 use std::borrow::Cow;
@@ -294,7 +294,7 @@ impl<'a> Cursor<'a> {
                 let Some(val) = self.string() else {
                     return Err(b"has %.*s key value which is not a binary");
                 };
-                *slot = Some(String_0::from_bytes(val));
+                *slot = Some(ApiString::from_bytes(val));
             }
             Slot::StringArray(slot) => {
                 let Some(len) = self.array() else {
@@ -309,7 +309,7 @@ impl<'a> Cursor<'a> {
                         read = Err(&b"has %.*s array with non-binary value"[..]);
                         break;
                     };
-                    array.push(String_0::from_bytes(item));
+                    array.push(ApiString::from_bytes(item));
                 }
                 *slot = Some(array);
                 return read;

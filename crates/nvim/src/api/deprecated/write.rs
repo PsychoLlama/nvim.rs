@@ -23,16 +23,16 @@ use crate::message::{emsg, msg};
 use crate::types::builders::ArrayBuf;
 use core::ffi::CStr;
 
-pub fn nvim_subscribe(_channel_id: uint64_t, _event: String_0) {}
+pub fn nvim_subscribe(_channel_id: uint64_t, _event: ApiString) {}
 
-pub fn nvim_unsubscribe(_channel_id: uint64_t, _event: String_0) {}
+pub fn nvim_unsubscribe(_channel_id: uint64_t, _event: ApiString) {}
 
 /// The line `nvim_out_write` is accumulating, up to its newline.
 static OUT_LINE: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
 /// The same for the two `nvim_err_write` spellings.
 static ERR_LINE: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
 
-fn write_msg(message: String_0, to_err: bool, writeln: bool) {
+fn write_msg(message: ApiString, to_err: bool, writeln: bool) {
     let line_buf = if to_err { &ERR_LINE } else { &OUT_LINE };
     let push = |byte: u8| line_buf.with_mut(|line| line.push(byte));
     // Publish the line the buffer holds and empty it. The line is out of
@@ -76,20 +76,20 @@ fn write_msg(message: String_0, to_err: bool, writeln: bool) {
     msg_end();
 }
 
-pub fn nvim_out_write(str: String_0) {
+pub fn nvim_out_write(str: ApiString) {
     write_msg(str, false, false);
 }
 
-pub fn nvim_err_write(str: String_0) {
+pub fn nvim_err_write(str: ApiString) {
     write_msg(str, true, false);
 }
 
-pub fn nvim_err_writeln(str: String_0) {
+pub fn nvim_err_writeln(str: ApiString) {
     write_msg(str, true, true);
 }
 
 /// Hand the message to `vim.notify`.
-pub fn nvim_notify(msg_0: String_0, log_level: Integer, opts: ApiDict) -> Result<Object, Error> {
+pub fn nvim_notify(msg_0: ApiString, log_level: Integer, opts: ApiDict) -> Result<Object, Error> {
     let mut args = ArrayBuf::<3>::new();
     args.push(Object::string(msg_0));
     args.push(Object::integer(log_level));
