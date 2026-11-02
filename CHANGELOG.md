@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2026.11.02-732b23427e]
+
 ### Changed
 
 - Confined unsafe code to a short list of modules where the editor meets C libraries, the operating system or raw memory, and made the build's checks refuse it anywhere else; [docs/unsafe-audit.md](docs/unsafe-audit.md) says what each holds and why. The terminal emulator, the TUI's terminfo description and key parser, the event queue, the editor's hash tables and growable arrays, and the extmark tree are safe Rust, and a channel's transport can no longer be moved while libuv holds it.
@@ -471,7 +473,8 @@ Safety foundation: make undefined behavior observable, then structurally shrink 
 
 First tagged release (unstable). The c2rust transpile of Neovim from C to Rust, made to build and pass the functional, old, and unit suites, with the CalVer release pipeline in place. The starting point: ~1.21M lines of mostly `unsafe` Rust with no user-visible change from upstream.
 
-[Unreleased]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.30-9049d0284d...HEAD
+[Unreleased]: https://github.com/PsychoLlama/nvim.rs/compare/2026.11.02-732b23427e...HEAD
+[2026.11.02-732b23427e]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.30-9049d0284d...2026.11.02-732b23427e
 [2026.10.30-9049d0284d]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.28-6da68164b8...2026.10.30-9049d0284d
 [2026.10.28-6da68164b8]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.20-391bd79481...2026.10.28-6da68164b8
 [2026.10.20-391bd79481]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.19-d6234e9235...2026.10.20-391bd79481
