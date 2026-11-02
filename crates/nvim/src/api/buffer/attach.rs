@@ -7,8 +7,16 @@
 //! load-on-demand every accessor in the family funnels through.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
+use crate::narrow::len_as_integer;
 use crate::winlayer::Buf;
 
 pub(crate) fn api_buf_ensure_loaded(buffer: BufferHandle) -> Result<Option<Buf>, Error> {
@@ -88,25 +96,25 @@ pub fn nvim__buf_stats(buf: BufferHandle) -> Result<ApiDict, Error> {
     };
     let buffer = b;
     let mut rv: ApiDict = ApiDict::with_capacity(7 as size_t);
-    let d_flush_count = Object::integer(b.flush_count as Integer);
+    let d_flush_count = Object::integer(Integer::from(b.flush_count));
     rv.insert(c"flush_count", d_flush_count);
-    let d_current_lnum = Object::integer(b.b_ml.cached_lnum() as Integer);
+    let d_current_lnum = Object::integer(Integer::from(b.b_ml.cached_lnum()));
     rv.insert(c"current_lnum", d_current_lnum);
     let d_line_dirty = Object::boolean(b.b_ml.line_is_dirty());
     rv.insert(c"line_dirty", d_line_dirty);
-    let d_dirty_bytes = Object::integer(b.deleted_bytes as Integer);
+    let d_dirty_bytes = Object::integer(len_as_integer(b.deleted_bytes));
     rv.insert(c"dirty_bytes", d_dirty_bytes);
-    let d_dirty_bytes2 = Object::integer(b.deleted_bytes2 as Integer);
+    let d_dirty_bytes2 = Object::integer(len_as_integer(b.deleted_bytes2));
     rv.insert(c"dirty_bytes2", d_dirty_bytes2);
     let total = buf_meta_total(buffer, kMTMetaLines);
-    let d_virt_blocks = Object::integer(total as Integer);
+    let d_virt_blocks = Object::integer(Integer::from(total));
     rv.insert(c"virt_blocks", d_virt_blocks);
     let tip = buffer;
     if let Some(uhp) = tip
         .header(tip.b_u_curhead)
         .or_else(|| tip.header(tip.b_u_newhead))
     {
-        let d_uhp_extmark_size = Object::integer(uhp.extmarks.len() as Integer);
+        let d_uhp_extmark_size = Object::integer(len_as_integer(uhp.extmarks.len()));
         rv.insert(c"uhp_extmark_size", d_uhp_extmark_size);
     }
     Ok(rv)

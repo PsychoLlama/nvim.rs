@@ -21,6 +21,13 @@
 //! `tools/apigen` recognises an API function; nothing else here does.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -39,6 +46,7 @@ use crate::api_error;
 use crate::autocmd::{do_autocmd_focusgained, may_trigger_vim_suspend_resume};
 use crate::event::r#loop::{Drain, wait_on_main_loop};
 use crate::memory::XString;
+use crate::narrow::number_as_int;
 use crate::option::set_tty_option;
 use crate::startup::{starting, stdin_fd, stdin_isatty, stdout_isatty};
 use crate::types::builders::{ArrayBuf, DictBuf};
@@ -54,7 +62,7 @@ use crate::ui::{
     ui_active, ui_attach_impl, ui_call_ui_send, ui_can_attach_more, ui_detach_impl, ui_grid_resize,
     ui_is_attached, ui_refresh, ui_set_ext_option, with_ui,
 };
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
 
 /// The channel id `--embed` and `nvim -` use, which is the only one whose
 /// tty-ness is the editor's own.
@@ -152,8 +160,8 @@ impl RemoteUI {
             override_0: false,
             composed: false,
             ui_ext: [false; kUIExtCount as usize],
-            width: width as c_int,
-            height: height as c_int,
+            width: number_as_int(width),
+            height: number_as_int(height),
             pum_nlines: 0,
             pum_pos: false,
             // Negative means the UI has not reported where its popupmenu
@@ -235,8 +243,8 @@ pub fn nvim_ui_try_resize(channel_id: u64, width: Integer, height: Integer) -> R
         return Err(Error::validation(c"Expected width > 0 and height > 0"));
     }
     on_ui(channel_id, |ui| {
-        ui.width = width as c_int;
-        ui.height = height as c_int;
+        ui.width = number_as_int(width);
+        ui.height = number_as_int(height);
     })?;
     // The screen is the smallest attached UI, so one UI resizing can
     // change what every other one is sent.
@@ -311,8 +319,8 @@ fn ui_set_option(
 
     if named(c"term_colors") {
         let colors = want_integer(c"term_colors", value)?;
-        t_colors.set(colors as c_int);
-        ui.term_colors = colors as c_int;
+        t_colors.set(number_as_int(colors));
+        ui.term_colors = number_as_int(colors);
         return Ok(Publish::Nothing);
     }
 
@@ -327,7 +335,7 @@ fn ui_set_option(
             let why = c"stdin_fd can only be used with first attached UI";
             return Err(Error::validation(why));
         }
-        stdin_fd.set(fd as c_int);
+        stdin_fd.set(number_as_int(fd));
         return Ok(Publish::Nothing);
     }
 
@@ -370,7 +378,8 @@ fn ui_set_option(
         }
         ui.ui_ext[ext] = active;
         if !init {
-            return Ok(Publish::Extension(ext as UIExtension, active));
+            let ext = UIExtension::try_from(ext).expect("`ui_ext` is indexed by extension");
+            return Ok(Publish::Extension(ext, active));
         }
         return Ok(Publish::Nothing);
     }
@@ -421,7 +430,11 @@ pub fn nvim_ui_try_resize_grid(
         // resize like any other.
         return nvim_ui_try_resize(channel_id, width, height);
     }
-    let (grid, width, height) = (Handle::new(grid as c_int), width as c_int, height as c_int);
+    let (grid, width, height) = (
+        Handle::new(number_as_int(grid)),
+        number_as_int(width),
+        number_as_int(height),
+    );
     ui_grid_resize(grid, width, height)
 }
 
@@ -437,7 +450,7 @@ pub fn nvim_ui_pum_set_height(channel_id: u64, height: Integer) -> Result<(), Er
                 c"UI must support the ext_popupmenu option",
             ));
         }
-        ui.pum_nlines = height as c_int;
+        ui.pum_nlines = number_as_int(height);
         Ok(())
     })?
 }

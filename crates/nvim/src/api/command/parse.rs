@@ -7,6 +7,13 @@
 //! case, whose arguments the generic splitter would mangle.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api_error;
@@ -128,13 +135,13 @@ fn parse_mods(cmdmod: &CmdMod) -> ApiDict {
     let flag = |mask: CmdModFlags| Object::boolean(cmdmod.cmod_flags.has(mask));
     let split_flag = |mask: c_int| Object::boolean(cmdmod.cmod_split & mask != 0);
     // The four placements are mutually exclusive; no modifier is "".
-    let split: &CStr = if cmdmod.cmod_split & WSP_BOT as c_int != 0 {
+    let split: &CStr = if cmdmod.cmod_split & WSP_BOT.cast_signed() != 0 {
         c"botright"
-    } else if cmdmod.cmod_split & WSP_TOP as c_int != 0 {
+    } else if cmdmod.cmod_split & WSP_TOP.cast_signed() != 0 {
         c"topleft"
-    } else if cmdmod.cmod_split & WSP_BELOW as c_int != 0 {
+    } else if cmdmod.cmod_split & WSP_BELOW.cast_signed() != 0 {
         c"belowright"
-    } else if cmdmod.cmod_split & WSP_ABOVE as c_int != 0 {
+    } else if cmdmod.cmod_split & WSP_ABOVE.cast_signed() != 0 {
         c"aboveleft"
     } else {
         c""
@@ -149,10 +156,10 @@ fn parse_mods(cmdmod: &CmdMod) -> ApiDict {
         (c"noautocmd", flag(CmdModFlags::NOAUTOCMD)),
         // Both counts are stored one higher than they read, so that zero
         // means "not given".
-        (c"tab", Object::integer((cmdmod.cmod_tab - 1) as Integer)),
+        (c"tab", Object::integer(Integer::from(cmdmod.cmod_tab - 1))),
         (
             c"verbose",
-            Object::integer((cmdmod.cmod_verbose - 1) as Integer),
+            Object::integer(Integer::from(cmdmod.cmod_verbose - 1)),
         ),
         (c"browse", flag(CmdModFlags::BROWSE)),
         (c"confirm", flag(CmdModFlags::CONFIRM)),
@@ -163,8 +170,8 @@ fn parse_mods(cmdmod: &CmdMod) -> ApiDict {
         (c"keeppatterns", flag(CmdModFlags::KEEPPATTERNS)),
         (c"lockmarks", flag(CmdModFlags::LOCKMARKS)),
         (c"noswapfile", flag(CmdModFlags::NOSWAPFILE)),
-        (c"vertical", split_flag(WSP_VERT as c_int)),
-        (c"horizontal", split_flag(WSP_HOR as c_int)),
+        (c"vertical", split_flag(WSP_VERT.cast_signed())),
+        (c"horizontal", split_flag(WSP_HOR.cast_signed())),
         (c"split", Object::string(ApiString::from_cstr(split))),
     ])
 }
@@ -214,15 +221,15 @@ pub fn nvim_parse_cmd(str: ApiString, _opts: &mut KeyDict_empty) -> Result<KeyDi
         // Two addresses give both bounds, one gives only `line2`.
         let mut range: Array = Array::with_capacity(2);
         if excmd.addr_count > 1 {
-            range.push(Object::integer(excmd.line1 as Integer));
+            range.push(Object::integer(Integer::from(excmd.line1)));
         }
-        range.push(Object::integer(excmd.line2 as Integer));
+        range.push(Object::integer(Integer::from(excmd.line2)));
         result.range = Some(range);
     }
 
     if excmd.argt.has(ExArgt::COUNT) {
         let count: Integer = if excmd.addr_count > 0 {
-            excmd.line2 as Integer
+            Integer::from(excmd.line2)
         } else {
             default_count.unwrap_or(0) as Integer
         };
@@ -234,7 +241,7 @@ pub fn nvim_parse_cmd(str: ApiString, _opts: &mut KeyDict_empty) -> Result<KeyDi
 
     if excmd.argt.has(ExArgt::REGSTR) {
         // `%c` of the low byte, read back as a C string: nothing for NUL.
-        let byte = excmd.regname as u8;
+        let byte = excmd.regname.to_le_bytes()[0];
         let reg = if byte == 0 {
             &[][..]
         } else {

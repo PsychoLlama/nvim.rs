@@ -44,6 +44,13 @@ pub(crate) const fn number_as_int(n: i64) -> c_int {
     n as c_int
 }
 
+/// An API `Integer` narrowed to the `uint32_t` a namespace or extmark id is,
+/// exactly as upstream's `(uint32_t)` casts do: the low 32 bits, so a
+/// negative id reads as a huge one that names nothing.
+pub(crate) const fn number_as_u32(n: i64) -> u32 {
+    n as u32
+}
+
 /// A msgpack unsigned integer narrowed to the 32 bits an RPC envelope carries
 /// its message type and request id in, wrapping exactly as upstream's
 /// `(uint32_t)` casts do.
@@ -72,6 +79,16 @@ pub(crate) const fn msgpack_uint_as_u32(n: u64) -> u32 {
 /// reaching an interface that measures it in `int`.
 pub(crate) fn len_as_int(len: usize) -> c_int {
     c_int::try_from(len).unwrap_or_else(|_| panic!("length {len} does not fit in a C int"))
+}
+
+/// A count or length widened to the API's `Integer`, as upstream's
+/// `(Integer)` casts do -- but checked, for the same reason as `len_as_int`:
+/// no count reaches 2^63, and one that did would come out negative.
+///
+/// # Panics
+/// If `len` does not fit in an `i64`.
+pub(crate) fn len_as_integer(len: usize) -> i64 {
+    i64::try_from(len).unwrap_or_else(|_| panic!("length {len} does not fit in an Integer"))
 }
 
 /// A floating-point number narrowed to an `i64`, saturating.
@@ -121,6 +138,20 @@ mod tests {
         // is a *request*. Rejecting it would be a different protocol.
         assert_eq!(msgpack_uint_as_u32(0x1_0000_0000), 0);
         assert_eq!(msgpack_uint_as_u32(u64::MAX), u32::MAX);
+    }
+
+    #[test]
+    fn a_number_narrows_to_a_u32_by_wrapping() {
+        assert_eq!(number_as_u32(7), 7);
+        // A negative namespace id reads as a huge one, which names nothing.
+        assert_eq!(number_as_u32(-1), u32::MAX);
+        assert_eq!(number_as_u32(0x1_0000_0002), 2);
+    }
+
+    #[test]
+    fn a_length_widens_to_an_integer() {
+        assert_eq!(len_as_integer(0), 0);
+        assert_eq!(len_as_integer(12), 12);
     }
 
     #[test]

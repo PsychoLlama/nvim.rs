@@ -18,7 +18,15 @@
 //! did.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use crate::narrow::number_as_int;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::ex_eval::state::{
@@ -36,8 +44,8 @@ use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
 use crate::runtime::state::current_sctx;
 use crate::types::{
-    ApiString, BufferHandle, ColNr, Error, Integer, LineNr, Pos, ScriptId, TabpageHandle, TryState,
-    WindowHandle, kErrorTypeException, uint64_t,
+    ApiString, BufferHandle, Error, Integer, Pos, ScriptId, TabpageHandle, TryState, WindowHandle,
+    kErrorTypeException, uint64_t,
 };
 use crate::winlayer::{self, Buf, TabPage, Win};
 
@@ -59,8 +67,8 @@ const DI_FLAGS_RO: c_int = 1;
 const DI_FLAGS_FIX: c_int = 4;
 const DI_FLAGS_LOCK: c_int = 8;
 
-const NL: c_char = b'\n' as c_char;
-const CAR: c_char = b'\r' as c_char;
+const NL: u8 = b'\n';
+const CAR: u8 = b'\r';
 
 /// `current_sctx.sc_sid` for a call that came from Lua, and for one that came
 /// from an RPC client.
@@ -130,9 +138,9 @@ pub(crate) fn find_tab_by_handle(tabpage: TabpageHandle) -> Result<Option<TabPag
 pub(crate) fn try_enter(tstate: &mut TryState) {
     let saved = TryState {
         current_exception: current_exception.get(),
-        got_int: got_int.get() as c_int,
+        got_int: c_int::from(got_int.get()),
         did_throw: did_throw.get(),
-        need_rethrow: need_rethrow.get() as c_int,
+        need_rethrow: c_int::from(need_rethrow.get()),
         did_emsg: did_emsg.get(),
     };
     *tstate = saved;
@@ -245,7 +253,7 @@ pub(crate) fn set_mark(
         col = 0;
         deleting = true;
     } else {
-        if col > MAXCOL as Integer {
+        if col > Integer::from(MAXCOL) {
             let why = Bad::Bare(out_of_range);
             return Err(err_invalid(c"column", why));
         }
@@ -255,11 +263,11 @@ pub(crate) fn set_mark(
             return Err(err_invalid(c"line", why));
         }
     }
-    debug_assert!((i32::MIN as Integer..=i32::MAX as Integer).contains(&line));
+    debug_assert!((Integer::from(i32::MIN)..=Integer::from(i32::MAX)).contains(&line));
 
     let pos = Pos {
-        lnum: line as LineNr,
-        col: col as ColNr,
+        lnum: number_as_int(line),
+        col: number_as_int(col),
         coladd: 0,
     };
     // As C read it: a `char`, so a byte past ASCII is negative. A name that
@@ -271,7 +279,7 @@ pub(crate) fn set_mark(
         return Ok(());
     }
     // `%c` wrote the one byte, whatever it was.
-    let byte = mark as u8;
+    let byte = first;
     let mark = msg_bytes(core::slice::from_ref(&byte));
     Err(match deleting {
         true => api_error!(kErrorTypeException, "Failed to delete named mark: {mark}"),

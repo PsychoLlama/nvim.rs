@@ -7,6 +7,13 @@
 //! current mode and whether input is blocked.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api::private::validate::err_bad_value;
@@ -16,12 +23,12 @@ const NAMES: [&::core::ffi::CStr; 6] = [c"regs", c"jumps", c"bufs", c"gvars", c"
 
 /// [`NAMES`]' bits, in the same order.
 const FLAGS: [::core::ffi::c_int; 6] = [
-    kCtxRegs as ::core::ffi::c_int,
-    kCtxJumps as ::core::ffi::c_int,
-    kCtxBufs as ::core::ffi::c_int,
-    kCtxGVars as ::core::ffi::c_int,
-    kCtxSFuncs as ::core::ffi::c_int,
-    kCtxFuncs as ::core::ffi::c_int,
+    kCtxRegs.cast_signed(),
+    kCtxJumps.cast_signed(),
+    kCtxBufs.cast_signed(),
+    kCtxGVars.cast_signed(),
+    kCtxSFuncs.cast_signed(),
+    kCtxFuncs.cast_signed(),
 ];
 
 pub fn nvim_get_context(opts: &mut KeyDict_context) -> Result<ApiDict, Error> {

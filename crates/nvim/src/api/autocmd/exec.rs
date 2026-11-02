@@ -5,10 +5,18 @@
 //! the caller's `data` published as `v:event` for the duration.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_conflict, err_expected};
 use crate::memory::XString;
+use crate::narrow::number_as_int;
 use crate::types::Handle;
 use crate::types::OptionSetFlags;
 use crate::winlayer::Buf;
@@ -29,7 +37,7 @@ pub fn nvim_exec_autocmds(event: Object, opts: &mut KeyDict_exec_autocmds) -> Re
         }
         Object::Integer(group) => {
             let group = *group;
-            au_group = group as ::core::ffi::c_int;
+            au_group = number_as_int(group);
             // No name is the empty one, as a null `char *` was.
             let name = if au_group == 0 as ::core::ffi::c_int {
                 None
@@ -37,7 +45,7 @@ pub fn nvim_exec_autocmds(event: Object, opts: &mut KeyDict_exec_autocmds) -> Re
                 augroup_name(au_group)
             };
             if !augroup_exists(name.as_deref().unwrap_or_default()) {
-                return Err(err_bad_number(c"group", au_group as int64_t));
+                return Err(err_bad_number(c"group", int64_t::from(au_group)));
             }
         }
         _ => {
@@ -85,8 +93,8 @@ pub fn nvim_exec_autocmds(event: Object, opts: &mut KeyDict_exec_autocmds) -> Re
             } else {
                 None
             };
-            did_aucmd = did_aucmd as ::core::ffi::c_int
-                | apply_autocmds_group(
+            did_aucmd = ::core::ffi::c_int::from(did_aucmd)
+                | ::core::ffi::c_int::from(apply_autocmds_group(
                     event_nr,
                     pattern,
                     None,
@@ -95,13 +103,13 @@ pub fn nvim_exec_autocmds(event: Object, opts: &mut KeyDict_exec_autocmds) -> Re
                     buffer,
                     None,
                     event_data.as_ref(),
-                ) as ::core::ffi::c_int
+                ))
                 != 0;
             pat_index = pat_index.wrapping_add(1);
         }
         event_str_index = event_str_index.wrapping_add(1);
     }
-    if did_aucmd as ::core::ffi::c_int != 0 && modeline as ::core::ffi::c_int != 0 {
+    if ::core::ffi::c_int::from(did_aucmd) != 0 && ::core::ffi::c_int::from(modeline) != 0 {
         do_modelines(OptionSetFlags::NONE);
     }
     Ok(())

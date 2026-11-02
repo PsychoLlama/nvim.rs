@@ -2,12 +2,20 @@
 //! line-index arithmetic the buffer API shares.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::{CAR, NL};
 use crate::api::private::validate::err_out_of_range;
+use crate::narrow::number_as_int;
 
 use crate::pos::MAXLNUM;
-use crate::types::{ApiString, Array, Error, LineNr, NUL, Object, int64_t};
+use crate::types::{ApiString, Array, Error, LineNr, Object, int64_t};
 use crate::winlayer::Buf;
 
 // -- Strings ---------------------------------------------------------------
@@ -20,7 +28,7 @@ use crate::winlayer::Buf;
 /// a break gets a trailing empty item, so that the array round-trips.
 pub(crate) fn string_to_array(input: &ApiString, crlf: bool) -> Array {
     let bytes = input.as_bytes();
-    let is_break = |byte: u8| byte == NL as u8 || (crlf && byte == CAR as u8);
+    let is_break = |byte: u8| byte == NL || (crlf && byte == CAR);
     let mut items: Vec<Object> = Vec::new();
     let mut at = 0;
     while at < bytes.len() {
@@ -30,15 +38,13 @@ pub(crate) fn string_to_array(input: &ApiString, crlf: bool) -> Array {
             .unwrap_or(bytes.len() - at);
         // A NUL in the line stands for the newline it was read as.
         let line = bytes[at..at + line_len].iter();
-        let line: Vec<u8> = line
-            .map(|&b| if b == NUL as u8 { NL as u8 } else { b })
-            .collect();
+        let line: Vec<u8> = line.map(|&b| if b == 0 { NL } else { b }).collect();
         items.push(Object::string(ApiString::from_vec(line)));
 
         at += line_len;
         let ends_line = at < bytes.len();
         // A CRLF counts as one break, so the LF is stepped over as well.
-        if crlf && ends_line && bytes[at] == CAR as u8 && bytes.get(at + 1) == Some(&(NL as u8)) {
+        if crlf && ends_line && bytes[at] == CAR && bytes.get(at + 1) == Some(&(NL)) {
             at += 1;
         }
         if at + 1 == bytes.len() && ends_line {
@@ -67,7 +73,7 @@ pub(crate) fn normalize_index(
     // The callers have checked that `buffer` is loaded.
     let line_count = buffer.b_ml.ml_line_count;
     debug_assert!(line_count > 0);
-    let max_index = (line_count + end_exclusive as LineNr - 1) as int64_t;
+    let max_index = int64_t::from(line_count + LineNr::from(end_exclusive) - 1);
     let mut index = if index < 0 {
         max_index + index + 1
     } else {
@@ -95,7 +101,7 @@ pub(crate) fn buf_get_text(
         return Err(err_out_of_range(c"line index"));
     }
     let mut lines = buffer.lines();
-    let bufstr = lines.line(lnum as LineNr);
+    let bufstr = lines.line(number_as_int(lnum));
     let line_length = int64_t::try_from(bufstr.len()).unwrap_or(0);
 
     let relative = |col: int64_t| if col < 0 { line_length + col + 1 } else { col };
@@ -106,6 +112,7 @@ pub(crate) fn buf_get_text(
         return Err(Error::validation(why));
     }
     // `start_col` and `end_col` were clamped into the line.
-    let (from, to) = (start_col as usize, end_col as usize);
+    let in_line = |col: int64_t| usize::try_from(col).expect("clamped into the line");
+    let (from, to) = (in_line(start_col), in_line(end_col));
     Ok(ApiString::from_bytes(&bufstr[from..to]))
 }

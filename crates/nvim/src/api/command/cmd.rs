@@ -31,6 +31,13 @@
 //!
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api::private::validate::{err_bad_value, err_expected, err_required};
@@ -39,6 +46,7 @@ use crate::ex_docmd::is_user_cmd;
 use crate::guard::Suppress;
 use crate::memory::XString;
 use crate::message_fmt::{msg_bytes, msg_cstr};
+use crate::narrow::{len_as_int, number_as_int};
 use crate::types::CmdIdx;
 use crate::types::{CmdFilter, CmdLine, ExArgt, NUL};
 use crate::usercmd::user_command_name;
@@ -207,7 +215,7 @@ fn resolve_command(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<Option<bool>,
             true,
             None,
         );
-        found = if ret as c_int != 0 && !aborting() {
+        found = if c_int::from(ret) != 0 && !aborting() {
             find_ex_command(excmd, None)
         } else {
             Some(excmd.line.cmd)
@@ -288,7 +296,7 @@ fn collect_args(given: &Array, excmd: &mut ExArg, args: &mut Array) -> Result<bo
             && count >= 0
         {
             excmd.addr_count = 1;
-            excmd.line2 = count as LineNr;
+            excmd.line2 = number_as_int(count);
             excmd.line1 = excmd.line2;
             *args = Array::with_capacity(0);
             return Ok(true);
@@ -346,7 +354,7 @@ fn apply_range(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<(), Error> {
             return Err(err_expected(c"range", c"<=2 elements", None));
         }
 
-        excmd.addr_count = range.len() as c_int;
+        excmd.addr_count = len_as_int(range.len());
         for i in 0..range.len() {
             let bound = &range[i];
             if bound.as_integer().is_none_or(|n| n < 0) {
@@ -367,8 +375,8 @@ fn apply_range(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<(), Error> {
                 first.as_integer().expect(expect),
                 last.as_integer().expect(expect),
             );
-            excmd.line1 = first as LineNr;
-            excmd.line2 = last as LineNr;
+            excmd.line1 = number_as_int(first);
+            excmd.line2 = number_as_int(last);
         }
         if invalid_range(excmd).is_some() {
             return Err(err_bad_value(c"range", c""));
@@ -409,7 +417,7 @@ fn apply_count(
     if count < 0 as Integer {
         return Err(err_expected(c"count", c"non-negative Integer", None));
     }
-    set_cmd_count(excmd, count as LineNr, true);
+    set_cmd_count(excmd, number_as_int(count), true);
     Ok(())
 }
 
@@ -431,22 +439,22 @@ fn apply_register(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<(), Error> {
 
     // As C read it: a `char`, so a byte past ASCII is negative.
     let regname = c_char::from_ne_bytes([reg.as_bytes()[0]]);
-    if regname as c_int == '=' as c_int {
+    if c_int::from(regname) == '=' as c_int {
         return Err(Error::validation(c"Cannot use register \"="));
     }
     // `:put`/`:iput` read the register, everything else writes it.
     let writing =
         !is_user_cmd(excmd.cmdidx) && excmd.cmdidx != CmdIdx::put && excmd.cmdidx != CmdIdx::iput;
-    if !valid_yank_reg(regname as c_int, writing) {
+    if !valid_yank_reg(c_int::from(regname), writing) {
         // `%c` wrote the one byte, whatever it was.
-        let byte = regname as u8;
+        let byte = regname.cast_unsigned();
         let reg = msg_bytes(core::slice::from_ref(&byte));
         return Err(api_error!(
             kErrorTypeValidation,
             "Invalid register: \"{reg}"
         ));
     }
-    excmd.regname = regname as uint8_t as c_int;
+    excmd.regname = c_int::from(regname.cast_unsigned());
     Ok(())
 }
 
@@ -516,17 +524,17 @@ fn apply_mods(cmd: &KeyDict_cmd, excmd: &ExArg, cmdinfo: &mut CmdParseInfo) -> R
     // Saturating: both are caller Integers, so INT_MAX would otherwise end
     // the process here. C wraps.
     if let Some(tab) = mods.tab.filter(|&tab| tab >= 0) {
-        cmdinfo.cmdmod.cmod_tab = (tab as c_int).saturating_add(1);
+        cmdinfo.cmdmod.cmod_tab = number_as_int(tab).saturating_add(1);
     }
     if let Some(verbose) = mods.verbose.filter(|&verbose| verbose >= 0) {
-        cmdinfo.cmdmod.cmod_verbose = (verbose as c_int).saturating_add(1);
+        cmdinfo.cmdmod.cmod_verbose = number_as_int(verbose).saturating_add(1);
     }
 
     if mods.vertical.unwrap_or(false) {
-        cmdinfo.cmdmod.cmod_split |= WSP_VERT as c_int;
+        cmdinfo.cmdmod.cmod_split |= WSP_VERT.cast_signed();
     }
     if mods.horizontal.unwrap_or(false) {
-        cmdinfo.cmdmod.cmod_split |= WSP_HOR as c_int;
+        cmdinfo.cmdmod.cmod_split |= WSP_HOR.cast_signed();
     }
     if let Some(named) = mods.split.as_ref() {
         let split = named.as_cstr();
@@ -582,7 +590,7 @@ fn split_direction(name: &CStr) -> Option<Option<c_int>> {
         b"botright" => WSP_BOT,
         _ => return None,
     };
-    Some(Some(bit as c_int))
+    Some(Some(bit.cast_signed()))
 }
 
 /// Unpack `mods.filter` and compile its pattern.

@@ -7,11 +7,19 @@
 //! before handles *were* numbers.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api::private::helpers::find_buffer_by_handle;
 use crate::api::private::validate::{Bad, err_invalid};
 use crate::marktree::key::MtFlags;
+use crate::narrow::{number_as_int, number_as_u32};
 use crate::winlayer::Buf;
 
 pub fn nvim_buf_get_number(buffer: BufferHandle) -> Result<Integer, Error> {
@@ -30,7 +38,7 @@ fn src2ns(src_id: &mut Integer) -> uint32_t {
     if *src_id < 0 {
         return (1u32 << 31).wrapping_sub(1);
     }
-    *src_id as uint32_t
+    number_as_u32(*src_id)
 }
 
 /// `extmark_set` as the three shims here use it: one decoration over one
@@ -74,17 +82,17 @@ pub fn nvim_buf_add_highlight(
         return Ok(0 as Integer);
     };
     let out_of_range = c"out of range";
-    if line < 0 as Integer || line >= MAXLNUM as Integer {
+    if line < 0 as Integer || line >= Integer::from(MAXLNUM) {
         return Err(err_invalid(c"line number", Bad::Bare(out_of_range)));
     }
-    if col_start < 0 as Integer || col_start > MAXCOL as ::core::ffi::c_int as Integer {
+    if col_start < 0 as Integer || col_start > Integer::from(MAXCOL as ::core::ffi::c_int) {
         return Err(err_invalid(c"column", Bad::Bare(out_of_range)));
     }
-    if col_end < 0 as Integer || col_end > MAXCOL as ::core::ffi::c_int as Integer {
-        col_end = MAXCOL as ::core::ffi::c_int as Integer;
+    if col_end < 0 as Integer || col_end > Integer::from(MAXCOL as ::core::ffi::c_int) {
+        col_end = Integer::from(MAXCOL as ::core::ffi::c_int);
     }
     let ns = src2ns(&mut ns_id);
-    if line >= buf.b_ml.ml_line_count as Integer {
+    if line >= Integer::from(buf.b_ml.ml_line_count) {
         return Ok(ns_id);
     }
     if hl_group.is_empty() {
@@ -94,18 +102,18 @@ pub fn nvim_buf_add_highlight(
 
     // A highlight that runs to the end of the line is one that ends at
     // column zero of the next.
-    let mut end_line = line as ::core::ffi::c_int;
-    if col_end == MAXCOL as ::core::ffi::c_int as Integer {
+    let mut end_line = number_as_int(line);
+    if col_end == Integer::from(MAXCOL as ::core::ffi::c_int) {
         col_end = 0 as Integer;
         end_line += 1;
     }
     set_decor(
         buf,
         ns,
-        line as ::core::ffi::c_int,
-        col_start as ColNr,
+        number_as_int(line),
+        number_as_int(col_start),
         end_line,
-        col_end as ColNr,
+        number_as_int(col_end),
         decor_inline_hl(hl_id),
         MtFlags::DECOR_HL,
     );
@@ -122,15 +130,15 @@ pub fn nvim_buf_set_virtual_text(
     let Some(buf) = find_buffer_by_handle(buffer)? else {
         return Ok(0 as Integer);
     };
-    if line < 0 as Integer || line >= MAXLNUM as Integer {
+    if line < 0 as Integer || line >= Integer::from(MAXLNUM) {
         return Err(Error::validation(c"Line number outside range"));
     }
     let ns_id = src2ns(&mut src_id);
     let mut width: ::core::ffi::c_int = 0;
     let virt_text: VirtText = parse_virt_text(&chunks, Some(&mut width))?;
 
-    let lnum = line as ::core::ffi::c_int;
-    if let Some(existing) = decor_find_virttext(buf, lnum, ns_id as uint64_t) {
+    let lnum = number_as_int(line);
+    if let Some(existing) = decor_find_virttext(buf, lnum, uint64_t::from(ns_id)) {
         // Replacing what this namespace already put on the line, rather than
         // stacking a second decoration on it.
         with_decor_virt_mut(existing, |vt| {
@@ -142,7 +150,7 @@ pub fn nvim_buf_set_virtual_text(
 
     let vt = DecorVirtText {
         flags: 0 as uint8_t,
-        hl_mode: kHlModeUnknown as ::core::ffi::c_int as uint8_t,
+        hl_mode: u8::try_from(kHlModeUnknown).expect("a highlight mode fits its byte"),
         priority: 0 as DecorPriority,
         width,
         col: 0 as ::core::ffi::c_int,

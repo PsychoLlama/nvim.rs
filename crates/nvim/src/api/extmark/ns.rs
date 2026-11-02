@@ -14,16 +14,23 @@
 //! `w_ns_set`, a khash still embedded in `Window`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::api::private::validate::err_bad_number;
 use crate::global_cell::GlobalCell;
+use crate::narrow::{number_as_int, number_as_u32};
 use crate::registry::{IdSet, SlotTable, id_set, interned_key};
 use crate::types::{Handle, uint32_t};
 use crate::winlayer::{Win, tab_windows};
-use core::ffi::c_int;
 
 /// Namespace name -> id, in creation order.
 ///
@@ -120,13 +127,13 @@ pub fn ns_initialized(ns: uint32_t) -> bool {
     if ns < 1 as uint32_t {
         return false;
     }
-    ns < next_namespace_id.get().get() as uint32_t
+    ns < next_namespace_id.get().get().cast_unsigned()
 }
 
 // `nvim__ns_set` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub fn nvim__ns_set(ns_id: Integer, opts: &mut KeyDict_ns_opts) -> Result<(), Error> {
-    if !ns_initialized(ns_id as uint32_t) {
+    if !ns_initialized(number_as_u32(ns_id)) {
         return Err(err_bad_number(c"ns_id", ns_id));
     }
     let mut set_scoped: bool = true;
@@ -142,7 +149,7 @@ pub fn nvim__ns_set(ns_id: Integer, opts: &mut KeyDict_ns_opts) -> Result<(), Er
             // refuses it -- the transpile read its bytes as an integer.
             let item = &wins[i];
             let win: Integer = item.as_handle().or_else(|| item.as_integer()).unwrap_or(-1);
-            let Some(wp) = find_window_by_handle(Handle::new(win as c_int))? else {
+            let Some(wp) = find_window_by_handle(Handle::new(number_as_int(win)))? else {
                 return Ok(());
             };
             windows.insert(wp.raw());
@@ -150,31 +157,31 @@ pub fn nvim__ns_set(ns_id: Integer, opts: &mut KeyDict_ns_opts) -> Result<(), Er
         }
         for win in tab_windows() {
             let wp_0 = win.raw();
-            if windows.contains(&wp_0) && !window_shows_ns(win, ns_id as uint32_t) {
-                show_ns_in_window(win, ns_id as uint32_t);
-                if buffer_uses_ns(win, ns_id as uint32_t) {
+            if windows.contains(&wp_0) && !window_shows_ns(win, number_as_u32(ns_id)) {
+                show_ns_in_window(win, number_as_u32(ns_id));
+                if buffer_uses_ns(win, number_as_u32(ns_id)) {
                     changed_window_setting(win);
                 }
             }
-            if window_shows_ns(win, ns_id as uint32_t) && !windows.contains(&wp_0) {
-                hide_ns_in_window(win, ns_id as uint32_t);
-                if buffer_uses_ns(win, ns_id as uint32_t) {
+            if window_shows_ns(win, number_as_u32(ns_id)) && !windows.contains(&wp_0) {
+                hide_ns_in_window(win, number_as_u32(ns_id));
+                if buffer_uses_ns(win, number_as_u32(ns_id)) {
                     changed_window_setting(win);
                 }
             }
         }
     }
-    if set_scoped && !ns_is_local(ns_id as uint32_t) {
-        namespace_localscope.with_mut(|scoped| scoped.insert(ns_id as uint32_t));
+    if set_scoped && !ns_is_local(number_as_u32(ns_id)) {
+        namespace_localscope.with_mut(|scoped| scoped.insert(number_as_u32(ns_id)));
         for win in tab_windows() {
-            if buffer_uses_ns(win, ns_id as uint32_t) {
+            if buffer_uses_ns(win, number_as_u32(ns_id)) {
                 changed_window_setting(win);
             }
         }
-    } else if !set_scoped && ns_is_local(ns_id as uint32_t) {
-        namespace_localscope.with_mut(|scoped| scoped.remove(&(ns_id as uint32_t)));
+    } else if !set_scoped && ns_is_local(number_as_u32(ns_id)) {
+        namespace_localscope.with_mut(|scoped| scoped.remove(&(number_as_u32(ns_id))));
         for win in tab_windows() {
-            if buffer_uses_ns(win, ns_id as uint32_t) {
+            if buffer_uses_ns(win, number_as_u32(ns_id)) {
                 changed_window_setting(win);
             }
         }
@@ -188,21 +195,21 @@ pub fn nvim__ns_get(ns_id: Integer) -> Result<KeyDict_ns_opts, Error> {
     let mut opts = KeyDict_ns_opts::default();
     let mut windows: Array = Array::EMPTY;
     opts.wins = Some(windows);
-    if !ns_initialized(ns_id as uint32_t) {
+    if !ns_initialized(number_as_u32(ns_id)) {
         return Err(err_bad_number(c"ns_id", ns_id));
     }
-    if !ns_is_local(ns_id as uint32_t) {
+    if !ns_is_local(number_as_u32(ns_id)) {
         return Ok(opts);
     }
     let mut count: size_t = 0 as size_t;
     for win in tab_windows() {
-        if window_shows_ns(win, ns_id as uint32_t) {
+        if window_shows_ns(win, number_as_u32(ns_id)) {
             count = count.wrapping_add(1);
         }
     }
     windows = Array::with_capacity(count);
     for win in tab_windows() {
-        if window_shows_ns(win, ns_id as uint32_t) {
+        if window_shows_ns(win, number_as_u32(ns_id)) {
             windows.push(Object::integer(Integer::from(win.handle())));
         }
     }

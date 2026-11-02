@@ -5,12 +5,19 @@
 //! matching command rendered into a Dict of its own.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_conflict, err_expected};
 use crate::api_error;
+use crate::narrow::number_as_int;
 use crate::types::Handle;
-use core::ffi::c_int;
 
 /// The keyset this call was handed, with checked field access.
 type Opts = KeyDict_get_autocmds;
@@ -24,7 +31,7 @@ const DICT_KEYS: size_t = 12;
 
 pub fn nvim_get_autocmds(opts: &mut KeyDict_get_autocmds) -> Result<Array, Error> {
     let group = group_filter(opts)?;
-    let id = opts.id.map_or(-1, |id| id as ::core::ffi::c_int);
+    let id = opts.id.map_or(-1, number_as_int);
     let events = event_filter(opts)?;
 
     let has_buf = opts.buf.is_some() || opts.buffer.is_some();
@@ -75,7 +82,7 @@ fn group_filter(opts: &Opts) -> Result<::core::ffi::c_int, Error> {
             Ok(group)
         }
         Object::Integer(group_id) => {
-            let group = *group_id as ::core::ffi::c_int;
+            let group = number_as_int(*group_id);
             // No name is the empty one, as a null `char *` was.
             let name = if group == 0 {
                 None
@@ -134,7 +141,7 @@ fn buffer_patterns(opts: &Opts, has_buf: bool) -> Result<Array, Error> {
         return Ok(Array::EMPTY);
     };
     let buflocal = |handle: Integer| -> Result<Object, Error> {
-        let b = find_buffer_by_handle(Handle::new(handle as c_int))?;
+        let b = find_buffer_by_handle(Handle::new(number_as_int(handle)))?;
         let pat = format!("<buffer={}>", b.map_or(Handle::NONE, |b| b.handle));
         Ok(Object::string(ApiString::from_bytes(pat.as_bytes())))
     };
@@ -235,7 +242,7 @@ fn matches_pattern(ap: &AutoPat, filters: &[&::core::ffi::CStr]) -> bool {
 fn autocmd_dict(event: AutoEvent, ac: &AutoCmd, ap: &AutoPat) -> ApiDict {
     let mut info = ApiDict::with_capacity(DICT_KEYS);
     if ap.group != AUGROUP_DEFAULT {
-        info.insert(c"group", Object::integer(ap.group as Integer));
+        info.insert(c"group", Object::integer(Integer::from(ap.group)));
         let name =
             augroup_name(ap.group).map_or(ApiString::NULL, |name| ApiString::from_bytes(&name));
         info.insert(c"group_name", Object::string(name));
@@ -276,8 +283,8 @@ fn autocmd_dict(event: AutoEvent, ac: &AutoCmd, ap: &AutoPat) -> ApiDict {
         info.insert(c"buflocal", Object::boolean(false));
     } else {
         info.insert(c"buflocal", Object::boolean(true));
-        info.insert(c"buf", Object::integer(ap.buflocal_nr as Integer));
-        info.insert(c"buffer", Object::integer(ap.buflocal_nr as Integer));
+        info.insert(c"buf", Object::integer(Integer::from(ap.buflocal_nr)));
+        info.insert(c"buffer", Object::integer(Integer::from(ap.buflocal_nr)));
     }
     info
 }

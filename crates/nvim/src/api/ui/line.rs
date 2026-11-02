@@ -26,6 +26,13 @@
 //! explicitly. See [`events`](super::events).
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::events::{linegrid, remote_ui_cursor_goto, remote_ui_highlight_set, remote_ui_put};
 use super::packer::{MAX_CELLS_PENDING, UI_BUF_SIZE, prepare_call, push_call, ui_flush_buf};
@@ -34,6 +41,7 @@ use crate::mbyte::ambiguous_width_at;
 use crate::msgpack_rpc::packer::{
     mpack_array, mpack_array_dyn16, mpack_bool, mpack_str_small, mpack_uint,
 };
+use crate::narrow::{len_as_integer, number_as_int, number_as_u32};
 use crate::types::builders::ArrayBuf;
 use crate::types::ui::kLineFlagWrap;
 use crate::types::{Integer, LineFlags, RemoteUI, ScreenAttr, ScreenChar};
@@ -145,7 +153,7 @@ fn raw_line_linegrid(
             mpack_bool(&mut ui.packer, false);
             ui_flush_buf(ui);
             prepare_call(ui, GRID_LINE);
-            let reached = startcol + (i - (repeat as usize - 1)) as Integer;
+            let reached = startcol + len_as_integer(i - (repeat as usize - 1));
             lenpos = open_line(ui, grid, row, reached);
             nelem = 0;
             last_hl = -1;
@@ -165,10 +173,11 @@ fn raw_line_linegrid(
         // copied out first and goes down after it.
         let mut glyph = [0u8; MAX_SCHAR_SIZE];
         let len = schar_get_adv(&mut &mut glyph[..], text);
-        ui.packer.push_byte((0xa0 | len) as u8);
+        ui.packer
+            .push_byte(u8::try_from(0xa0 | len).expect("a cell's text fits a fixstr"));
         ui.packer.push(&glyph[..len]);
         if fields >= 2 {
-            mpack_uint(&mut ui.packer, hl as u32);
+            mpack_uint(&mut ui.packer, hl.cast_unsigned());
             if fields >= 3 {
                 mpack_uint(&mut ui.packer, repeat);
             }
@@ -180,7 +189,7 @@ fn raw_line_linegrid(
         ui.ncells_pending += repeat.min(2) as usize;
         last_hl = hl as c_int;
         repeat = 0;
-        was_space = text == b' ' as ScreenChar;
+        was_space = text == ScreenChar::from(b' ');
     }
 
     if endcol < clearcol || was_space {
@@ -190,7 +199,7 @@ fn raw_line_linegrid(
         nelem += 1;
         ui.ncells_pending += 1;
         // The reserve covers one more cell.
-        push_clear(ui, clearattr, (clearcol - endcol) as u32);
+        push_clear(ui, clearattr, number_as_u32(clearcol - endcol));
     }
     // `lenpos` is the last event's placeholder, and the reserve covers the
     // closing byte.
@@ -204,7 +213,7 @@ fn raw_line_linegrid(
 fn open_line(ui: &mut RemoteUI, grid: Integer, row: Integer, startcol: Integer) -> usize {
     mpack_array(&mut ui.packer, 5);
     for value in [grid, row, startcol] {
-        mpack_uint(&mut ui.packer, value as u32);
+        mpack_uint(&mut ui.packer, number_as_u32(value));
     }
     mpack_array_dyn16(&mut ui.packer)
 }
@@ -214,7 +223,7 @@ fn open_line(ui: &mut RemoteUI, grid: Integer, row: Integer, startcol: Integer) 
 fn push_clear(ui: &mut RemoteUI, attr: Integer, repeat: u32) {
     mpack_array(&mut ui.packer, 3);
     mpack_str_small(&mut ui.packer, b" ");
-    mpack_uint(&mut ui.packer, attr as u32);
+    mpack_uint(&mut ui.packer, number_as_u32(attr));
     mpack_uint(&mut ui.packer, repeat);
 }
 
@@ -247,7 +256,7 @@ fn raw_line_legacy(
         return;
     }
     remote_ui_cursor_goto(ui, row, endcol);
-    remote_ui_highlight_set(ui, clearattr as c_int);
+    remote_ui_highlight_set(ui, number_as_int(clearattr));
     if clearattr == 0 && clearcol == Integer::from(Columns.get()) {
         // Clearing the rest of the line with the default highlight has
         // its own call; anything else has to be spelled out cell by

@@ -11,14 +11,22 @@
 //! check.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::api_error;
 use crate::message_fmt::msg_bytes;
+use crate::narrow::len_as_integer;
 use crate::types::NodeId;
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{CStr, c_int, c_uint};
 
 pub fn nvim_parse_expression(
     expr: ApiString,
@@ -43,7 +51,7 @@ pub fn nvim_parse_expression(
     } else {
         pstate.pos.col
     };
-    ret.insert(c"len", Object::integer(consumed as Integer));
+    ret.insert(c"len", Object::integer(len_as_integer(consumed)));
 
     if let Some(err) = &east.err {
         let mut err_dict: ApiDict = ApiDict::with_capacity(2);
@@ -58,9 +66,9 @@ pub fn nvim_parse_expression(
         let mut hl_arr: Array = Array::with_capacity(colors.len());
         for chunk in &colors {
             let mut chunk_arr: Array = Array::with_capacity(4);
-            chunk_arr.push(Object::integer(chunk.start.line as Integer));
-            chunk_arr.push(Object::integer(chunk.start.col as Integer));
-            chunk_arr.push(Object::integer(chunk.end_col as Integer));
+            chunk_arr.push(Object::integer(len_as_integer(chunk.start.line)));
+            chunk_arr.push(Object::integer(len_as_integer(chunk.start.col)));
+            chunk_arr.push(Object::integer(len_as_integer(chunk.end_col)));
             chunk_arr.push(Object::string(ApiString::from_cstr(chunk.group)));
             hl_arr.push(Object::array(chunk_arr));
         }
@@ -77,9 +85,9 @@ fn parse_flags(flags: &ApiString) -> Result<c_int, Error> {
     let mut pflags: c_int = 0;
     for &ch in flags.as_bytes() {
         match ch {
-            b'm' => pflags |= kExprFlagsMulti as c_int,
-            b'E' => pflags |= kExprFlagsDisallowEOC as c_int,
-            b'l' => pflags |= kExprFlagsParseLet as c_int,
+            b'm' => pflags |= kExprFlagsMulti.cast_signed(),
+            b'E' => pflags |= kExprFlagsDisallowEOC.cast_signed(),
+            b'l' => pflags |= kExprFlagsParseLet.cast_signed(),
             // A NUL has no `%c` spelling worth printing.
             0 => {
                 let code = c_uint::from(ch);
@@ -90,7 +98,7 @@ fn parse_flags(flags: &ApiString) -> Result<c_int, Error> {
             }
             _ => {
                 // The C prints the flag as a `char`'s `%u`.
-                let code = ch as c_char as c_uint;
+                let code = c_int::from(ch.cast_signed()).cast_unsigned();
                 let shown = msg_bytes(core::slice::from_ref(&ch));
                 return Err(api_error!(
                     kErrorTypeValidation,
@@ -186,10 +194,10 @@ fn finish_node(node: &ExprASTNode<'_>, ret_node: &mut ApiDict) {
     put(ret_node, c"type", table_name(type_name));
 
     let mut start_array: Array = Array::with_capacity(2);
-    start_array.push(Object::integer(node.start.line as Integer));
-    start_array.push(Object::integer(node.start.col as Integer));
+    start_array.push(Object::integer(len_as_integer(node.start.line)));
+    start_array.push(Object::integer(len_as_integer(node.start.col)));
     put(ret_node, c"start", Object::array(start_array));
-    put(ret_node, c"len", Object::integer(node.len as Integer));
+    put(ret_node, c"len", Object::integer(len_as_integer(node.len)));
 
     let data = &node.data;
     match type_0 {
@@ -203,7 +211,7 @@ fn finish_node(node: &ExprASTNode<'_>, ret_node: &mut ApiDict) {
             put(
                 ret_node,
                 c"scope",
-                Object::integer(data.option().scope as Integer),
+                Object::integer(Integer::from(data.option().scope)),
             );
             put(ret_node, c"ident", bytes(data.option().ident));
         }
@@ -211,7 +219,7 @@ fn finish_node(node: &ExprASTNode<'_>, ret_node: &mut ApiDict) {
             put(
                 ret_node,
                 c"scope",
-                Object::integer(data.variable().scope as Integer),
+                Object::integer(Integer::from(data.variable().scope)),
             );
             put(ret_node, c"ident", bytes(data.variable().ident));
         }
@@ -225,7 +233,7 @@ fn finish_node(node: &ExprASTNode<'_>, ret_node: &mut ApiDict) {
             put(
                 ret_node,
                 c"name",
-                Object::integer(data.register().name as Integer),
+                Object::integer(Integer::from(data.register().name)),
             );
         }
         kExprNodeComparison => {
@@ -244,8 +252,8 @@ fn finish_node(node: &ExprASTNode<'_>, ret_node: &mut ApiDict) {
         }
         kExprNodeInteger => {
             // The lexer's value is unsigned; the wire's is not.
-            let value = data.integer().value.min(Integer::MAX as UVarNumber);
-            put(ret_node, c"ivalue", Object::integer(value as Integer));
+            let value = Integer::try_from(data.integer().value).unwrap_or(Integer::MAX);
+            put(ret_node, c"ivalue", Object::integer(value));
         }
         kExprNodeAssignment => {
             let asgn_type = data.assignment().type_0;

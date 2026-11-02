@@ -1,4 +1,11 @@
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -21,12 +28,12 @@ use crate::option::vars::{p_sb, p_spr, p_winborder};
 use crate::types::AutoEvent;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    AlignTextPos, ApiString, Array, Boolean, BorderTextType, BufferHandle, ColNr, Error,
-    FloatAnchor, FloatRelative, Integer, KeyDict_win_config, LPos, LineNr, Object, SwitchWin,
-    TryState, VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle, WindowHandle,
-    kErrorTypeException, kErrorTypeValidation, kFloatAnchorEast, kFloatAnchorSouth,
-    kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus, kFloatRelativeMouse,
-    kFloatRelativeTabline, kFloatRelativeWindow,
+    AlignTextPos, ApiString, Array, Boolean, BorderTextType, BufferHandle, Error, FloatAnchor,
+    FloatRelative, Integer, KeyDict_win_config, LPos, Object, SwitchWin, TryState, VirtText,
+    VirtTextChunk, WinConfig, WinSplit, WinStyle, WindowHandle, kErrorTypeException,
+    kErrorTypeValidation, kFloatAnchorEast, kFloatAnchorSouth, kFloatRelativeCursor,
+    kFloatRelativeEditor, kFloatRelativeLaststatus, kFloatRelativeMouse, kFloatRelativeTabline,
+    kFloatRelativeWindow,
 };
 use crate::ui::ui_has;
 use crate::ui_compositor::ui_comp_remove_grid;

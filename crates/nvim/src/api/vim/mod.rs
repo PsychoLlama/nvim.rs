@@ -1,4 +1,11 @@
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -101,7 +108,7 @@ use crate::types::{
     OptScope, OptVal, RemapValues, ScreenChar, ScriptId, SignTextAttrs, StatusCol, TabpageHandle,
     TerminalOptions, VarNumber, Vv, WindowHandle, YankReg, int64_t, kCdScopeGlobal,
     kErrorTypeException, kErrorTypeValidation, kObjectTypeString, mpack_token_type_t, size_t,
-    uint8_t, uint16_t, uint64_t,
+    uint16_t, uint64_t,
 };
 use crate::ui::state::Columns;
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};

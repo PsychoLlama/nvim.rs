@@ -7,6 +7,13 @@
 //! direction, and shares nothing but the channel.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api_error;
@@ -48,8 +55,8 @@ pub fn nvim_open_term(buf: BufferHandle, opts: &mut KeyDict_open_term) -> Result
     );
     let topts: TerminalOptions = TerminalOptions {
         owner: id,
-        width: (view_width - col_off).max(0) as uint16_t,
-        height: view_height as uint16_t,
+        width: u16::try_from((view_width - col_off).max(0)).unwrap_or(u16::MAX),
+        height: u16::try_from(view_height).unwrap_or(u16::MAX),
         read_pause_cb: Some(term_read_pause),
         write_cb: Some(term_write),
         resize_cb: Some(term_resize),
@@ -74,7 +81,7 @@ pub fn nvim_open_term(buf: BufferHandle, opts: &mut KeyDict_open_term) -> Result
     if !contents.is_empty() {
         channel_send(id, contents).map_err(Error::validation)?;
     }
-    Ok(id as Integer)
+    Ok(id.cast_signed())
 }
 
 fn term_read_pause(_pause: bool, _owner: uint64_t) {}
@@ -94,7 +101,7 @@ fn term_write(bytes: &[u8], id: uint64_t) {
         return;
     }
     let mut args: Array = Array::with_capacity(3);
-    args.push(Object::integer(id as Integer));
+    args.push(Object::integer(id.cast_signed()));
     args.push(Object::buffer(term.map_or(Handle::NONE, terminal_buf)));
     args.push(Object::string(ApiString::from_bytes(bytes)));
     let _locked = Lock::text();
@@ -128,6 +135,6 @@ pub fn nvim_chan_send(chan: Integer, data: ApiString) -> Result<(), Error> {
     if data.is_empty() {
         return Ok(());
     }
-    channel_send(chan as uint64_t, data.as_bytes().to_vec()).map_err(Error::validation)?;
+    channel_send(chan.cast_unsigned(), data.as_bytes().to_vec()).map_err(Error::validation)?;
     Ok(())
 }

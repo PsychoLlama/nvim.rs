@@ -1,4 +1,11 @@
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -24,8 +31,8 @@ use crate::types::{
     ApiDict, ApiString, Array, BufferHandle, CmdAddr, CmdMod, CmdModFlags, CmdParseInfo, Direction,
     Error, ExArg, Integer, KeyDict_cmd, KeyDict_cmd_magic, KeyDict_cmd_mods,
     KeyDict_cmd_mods_filter, KeyDict_cmd_opts, KeyDict_empty, KeyDict_get_commands,
-    KeyDict_user_command, LineNr, LuaRef, Object, TryState, int64_t, kErrorTypeException,
-    kErrorTypeValidation, kObjectTypeLuaRef, kObjectTypeString, size_t, uint8_t, uint64_t,
+    KeyDict_user_command, LuaRef, Object, TryState, int64_t, kErrorTypeException,
+    kErrorTypeValidation, kObjectTypeLuaRef, kObjectTypeString, size_t, uint64_t,
 };
 use crate::usercmd::{
     Definition, Table, commands_array, parse_addr_type_arg, parse_compl_arg, uc_add_command,

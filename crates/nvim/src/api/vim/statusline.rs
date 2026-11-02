@@ -13,7 +13,15 @@
 //! here.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use crate::narrow::{len_as_integer, number_as_int};
 use core::ffi::{CStr, c_int};
 use core::ptr;
 use std::ffi::CString;
@@ -98,7 +106,7 @@ pub fn nvim_eval_statusline(
     put(
         &mut result,
         c"width",
-        Object::integer(built.width as Integer),
+        Object::integer(Integer::from(built.width)),
     );
     win.w_onebuf_opt.wo_crb = crb_save;
 
@@ -154,7 +162,7 @@ impl Context {
 
         let mut statuscol_lnum = 0;
         if let Some(lnum) = opts.use_statuscol_lnum {
-            statuscol_lnum = lnum as c_int;
+            statuscol_lnum = number_as_int(lnum);
             if !(statuscol_lnum > 0 && statuscol_lnum as LineNr <= win.buffer().line_count()) {
                 let why = Bad::Bare(c"out of range");
                 return Err(err_invalid(c"use_statuscol_lnum", why));
@@ -179,7 +187,7 @@ impl Context {
         }
 
         let maxwidth = if let Some(given) = opts.maxwidth {
-            given as c_int
+            number_as_int(given)
         } else if statuscol_lnum != 0 {
             win.col_off()
         } else if use_tabline || (!use_winbar && stl_is_global()) {
@@ -244,7 +252,7 @@ fn statuscol_state(
     } else {
         HLF_N
     };
-    set_vim_var_nr(Vv::Lnum, lnum as VarNumber);
+    set_vim_var_nr(Vv::Lnum, VarNumber::from(lnum));
     let rel = i64::from(get_cursor_rel_lnum(win, lnum)).abs();
     set_vim_var_nr(Vv::Relnum, rel as VarNumber);
     set_vim_var_nr(Vv::Virtnum, 0 as VarNumber);
@@ -305,7 +313,11 @@ fn highlight_dicts(
         };
 
         let mut info = ApiDict::with_capacity(3);
-        put(&mut info, c"start", Object::integer(run.start as Integer));
+        put(
+            &mut info,
+            c"start",
+            Object::integer(len_as_integer(run.start)),
+        );
         let (grp, comb) = (ApiString::from_cstr(grpname), ApiString::from_cstr(combine));
         put(&mut info, c"group", Object::string(grp.clone()));
         let mut groups = Array::with_capacity(1 + size_t::from(!ptr::eq(combine, grpname)));
@@ -327,13 +339,13 @@ pub fn nvim__complete_set(
 ) -> Result<ApiDict, Error> {
     let mut rv = ApiDict::with_capacity(2);
     let opts = &*opts;
-    if get_cot_flags() & kOptCotFlagPopup as c_int as ::core::ffi::c_uint == 0 {
+    if get_cot_flags() & kOptCotFlagPopup == 0 {
         return Err(Error::exception(
             c"completeopt option does not include popup",
         ));
     }
     if let Some(info) = opts.info.as_ref() {
-        let win = pum_set_info(index as c_int, info.as_bytes());
+        let win = pum_set_info(number_as_int(index), info.as_bytes());
         if let Some(win) = win {
             put(&mut rv, c"winid", Object::window(win.handle));
             put(&mut rv, c"bufnr", Object::buffer(win.buffer().handle));

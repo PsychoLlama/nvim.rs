@@ -11,9 +11,18 @@
 //! ([`CfgKeys`] and [`WinCfg`]).
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api::private::validate::{Bad, err_conflict, err_expected, err_invalid, err_required};
+use crate::narrow::len_as_int;
+use crate::narrow::number_as_int;
 use crate::os::cshim::cstr_ncasecmp;
 use crate::types::Handle;
 use crate::winfloat::WIN_CONFIG_INIT;
@@ -132,8 +141,8 @@ fn float_bufpos(bufpos: &Array) -> Option<LPos> {
         return None;
     };
     Some(LPos {
-        lnum: lnum.as_integer()? as LineNr,
-        col: col.as_integer()? as ColNr,
+        lnum: number_as_int(lnum.as_integer()?),
+        col: number_as_int(col.as_integer()?),
     })
 }
 
@@ -203,7 +212,7 @@ fn set_border_text(
         Object::String(string) => BorderText {
             present: true,
             chunks: Some(one_chunk(string)),
-            width: Some(c_string_cells(string.as_bytes()) as c_int),
+            width: Some(len_as_int(c_string_cells(string.as_bytes()))),
         },
         Object::Array(array) => {
             let mut cells = 0;
@@ -447,7 +456,7 @@ impl Decode<'_> {
     fn one_size(&self, given: Option<Integer>, name: &CStr, had: c_int) -> Result<c_int, Error> {
         match given {
             Some(size) if size <= 0 => Err(err_expected(name, c"positive Integer", None)),
-            Some(size) => Ok(size as c_int),
+            Some(size) => Ok(number_as_int(size)),
             None if !self.reconf && !self.is_split => Err(err_required(name)),
             None => Ok(had),
         }
@@ -527,7 +536,7 @@ impl Decode<'_> {
         if zindex <= 0 {
             return Err(err_expected(c"zindex", c"positive Integer", None));
         }
-        self.fconfig.zindex = zindex as c_int;
+        self.fconfig.zindex = number_as_int(zindex);
         Ok(())
     }
 
@@ -642,7 +651,7 @@ impl Decode<'_> {
             self.fconfig.hide = hide;
         }
         if let Some(offset) = self.config._cmdline_offset {
-            self.fconfig._cmdline_offset = offset as c_int;
+            self.fconfig._cmdline_offset = number_as_int(offset);
         }
         Ok(())
     }

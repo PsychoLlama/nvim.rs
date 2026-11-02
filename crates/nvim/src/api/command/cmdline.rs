@@ -7,6 +7,13 @@
 //! finished buffer.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::ascii::ascii_iswhite;
@@ -49,10 +56,10 @@ fn concat_cmdmods(cmdline: &mut Vec<u8>, cmdmod: &CmdMod) {
     }
     // A switch over the *masked* value, so two placement bits at once
     // spell no modifier at all rather than the first of them.
-    const ABOVE: c_int = WSP_ABOVE as c_int;
-    const BELOW: c_int = WSP_BELOW as c_int;
-    const TOP: c_int = WSP_TOP as c_int;
-    const BOT: c_int = WSP_BOT as c_int;
+    const ABOVE: c_int = WSP_ABOVE.cast_signed();
+    const BELOW: c_int = WSP_BELOW.cast_signed();
+    const TOP: c_int = WSP_TOP.cast_signed();
+    const BOT: c_int = WSP_BOT.cast_signed();
     match cmdmod.cmod_split & (ABOVE | BELOW | TOP | BOT) {
         ABOVE => cmdline_concat_str(cmdline, c"aboveleft "),
         BELOW => cmdline_concat_str(cmdline, c"belowright "),
@@ -60,10 +67,10 @@ fn concat_cmdmods(cmdline: &mut Vec<u8>, cmdmod: &CmdMod) {
         BOT => cmdline_concat_str(cmdline, c"botright "),
         _ => {}
     }
-    if cmdmod.cmod_split & WSP_VERT as c_int != 0 {
+    if cmdmod.cmod_split & WSP_VERT.cast_signed() != 0 {
         cmdline_concat_str(cmdline, c"vertical ");
     }
-    if cmdmod.cmod_split & WSP_HOR as c_int != 0 {
+    if cmdmod.cmod_split & WSP_HOR.cast_signed() != 0 {
         cmdline_concat_str(cmdline, c"horizontal ");
     }
     for (mask, text) in [
@@ -115,7 +122,7 @@ pub(crate) fn build_cmdline_str(excmd: &mut ExArg, cmdinfo: &CmdParseInfo, args:
     if excmd.argt.has(ExArgt::REGSTR) && excmd.regname != 0 {
         // `%c`: the low byte of the register name, not its UTF-8 encoding.
         cmdline.push(b' ');
-        cmdline.push(excmd.regname as u8);
+        cmdline.push(excmd.regname.to_le_bytes()[0]);
     }
 
     let mut spans: Vec<(usize, usize)> = Vec::with_capacity(argc);

@@ -8,9 +8,17 @@
 //! spellings a range endpoint may take.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api::private::validate::{err_bad_number, err_expected};
+use crate::narrow::{number_as_int, number_as_u32};
 use crate::winlayer::Buf;
 use core::ffi::CStr;
 
@@ -62,20 +70,20 @@ fn extmark_to_array(extmark: MTPair, id: bool, add_dict: bool, hl_name: bool) ->
     let start: MTKey = extmark.start;
     let mut rv = Array::with_capacity(4);
     if id {
-        rv.push(Object::integer(start.id as Integer));
+        rv.push(Object::integer(Integer::from(start.id)));
     }
-    rv.push(Object::integer(start.pos.row as Integer));
-    rv.push(Object::integer(start.pos.col as Integer));
+    rv.push(Object::integer(Integer::from(start.pos.row)));
+    rv.push(Object::integer(Integer::from(start.pos.col)));
     if add_dict {
         // As many keys as `decor_to_dict_legacy` and the block above can add.
         let mut dict = ApiDict::with_capacity(DETAILS_KEYS);
-        dict.insert(c"ns_id", Object::integer(start.ns as Integer));
+        dict.insert(c"ns_id", Object::integer(Integer::from(start.ns)));
         let d_right_gravity = Object::boolean(mt_right(start));
         dict.insert(c"right_gravity", d_right_gravity);
         if mt_paired(start) {
-            let d_end_row = Object::integer(extmark.end_pos.row as Integer);
+            let d_end_row = Object::integer(Integer::from(extmark.end_pos.row));
             dict.insert(c"end_row", d_end_row);
-            let d_end_col = Object::integer(extmark.end_pos.col as Integer);
+            let d_end_col = Object::integer(Integer::from(extmark.end_pos.col));
             dict.insert(c"end_col", d_end_col);
             let gravity = Object::boolean(extmark.end_right_gravity);
             dict.insert(c"end_right_gravity", gravity);
@@ -105,12 +113,12 @@ pub fn nvim_buf_get_extmark_by_id(
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(rv);
     };
-    if !ns_initialized(ns_id as uint32_t) {
+    if !ns_initialized(number_as_u32(ns_id)) {
         return Err(err_bad_number(c"ns_id", ns_id));
     }
     let details: bool = opts.details.unwrap_or(false);
     let hl_name: bool = opts.hl_name.unwrap_or(true);
-    let extmark: MTPair = extmark_from_id(b, ns_id as uint32_t, id as uint32_t);
+    let extmark: MTPair = extmark_from_id(b, number_as_u32(ns_id), number_as_u32(id));
     if extmark.start.pos.row < 0 as int32_t {
         return Ok(rv);
     }
@@ -128,7 +136,7 @@ pub fn nvim_buf_get_extmarks(
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(rv);
     };
-    if !(ns_id == -1 || ns_initialized(ns_id as uint32_t)) {
+    if !(ns_id == -1 || ns_initialized(number_as_u32(ns_id))) {
         return Err(err_bad_number(c"ns_id", ns_id));
     }
     let details: bool = opts.details.unwrap_or(false);
@@ -155,7 +163,7 @@ pub fn nvim_buf_get_extmarks(
     }
     let (mut l_row, mut l_col) = extmark_index_from_obj(b, ns_id, start)?;
     let (mut u_row, mut u_col) = extmark_index_from_obj(b, ns_id, end)?;
-    let rv_limit: size_t = limit as size_t;
+    let rv_limit: size_t = usize::try_from(limit).unwrap_or(usize::MAX);
     let reverse: bool = l_row > u_row || l_row == u_row && l_col > u_col;
     if reverse {
         limit = Integer::MAX;
@@ -164,7 +172,7 @@ pub fn nvim_buf_get_extmarks(
     }
     let found: Vec<MTPair> = extmark_get(
         b,
-        ns_id as uint32_t,
+        number_as_u32(ns_id),
         l_row,
         l_col,
         u_row,
@@ -210,7 +218,7 @@ fn extmark_index_from_obj(
         if id < 0 {
             return Err(err_bad_number(c"mark id", id));
         }
-        let extmark: MTPair = extmark_from_id(buffer, ns_id as uint32_t, id as uint32_t);
+        let extmark: MTPair = extmark_from_id(buffer, number_as_u32(ns_id), number_as_u32(id));
         if extmark.start.pos.row < 0 as int32_t {
             return Err(err_bad_number(c"mark id (not found)", id));
         }
@@ -231,11 +239,11 @@ fn extmark_index_from_obj(
     // A negative half means "as far as the buffer goes" in that dimension.
     Ok((
         if row >= 0 {
-            row as ::core::ffi::c_int
+            number_as_int(row)
         } else {
             MAXLNUM
         },
-        if col >= 0 { col as ColNr } else { MAXCOL },
+        if col >= 0 { number_as_int(col) } else { MAXCOL },
     ))
 }
 

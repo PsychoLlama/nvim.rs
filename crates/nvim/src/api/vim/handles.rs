@@ -6,6 +6,13 @@
 //! only one that builds something.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api::private::helpers::{
@@ -45,8 +52,8 @@ pub fn nvim_set_current_buf(buf: BufferHandle) -> Result<(), Error> {
     let handle = b.handle;
     api_try(|| {
         let _ = do_buffer(
-            DOBUF_GOTO as ::core::ffi::c_int,
-            DOBUF_FIRST as ::core::ffi::c_int,
+            DOBUF_GOTO.cast_signed(),
+            DOBUF_FIRST.cast_signed(),
             FORWARD as ::core::ffi::c_int,
             handle.get(),
             0 as ::core::ffi::c_int,
@@ -98,13 +105,9 @@ pub fn nvim_create_buf(listed: Boolean, scratch: Boolean) -> Result<BufferHandle
 /// [`nvim_create_buf`]'s body, inside the try/catch bracket.
 fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
     block_autocmds();
-    let flags = BLN_NOOPT as ::core::ffi::c_int
-        | BLN_NEW as ::core::ffi::c_int
-        | if listed {
-            BLN_LISTED as ::core::ffi::c_int
-        } else {
-            0
-        };
+    let flags = BLN_NOOPT.cast_signed()
+        | BLN_NEW.cast_signed()
+        | if listed { BLN_LISTED.cast_signed() } else { 0 };
     // A new buffer with neither a file name nor a short name.
     let buf = buflist_new(None, None, 0 as LineNr, flags);
     let opened = buf.is_some() && ml_open(buf.expect("a live handle")).is_ok();
@@ -119,7 +122,7 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
     b.b_last_changedtick_pum = tick;
     buf_copy_options(
         buf.expect("a live handle"),
-        BCO_ENTER as ::core::ffi::c_int | BCO_NOHELP as ::core::ffi::c_int,
+        BCO_ENTER.cast_signed() | BCO_NOHELP.cast_signed(),
     );
     if scratch {
         let local = OptionSetFlags::LOCAL;

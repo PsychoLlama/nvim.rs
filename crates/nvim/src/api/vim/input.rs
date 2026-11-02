@@ -8,6 +8,13 @@
 //! is resolved against.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api_error;
@@ -19,6 +26,7 @@ use crate::keycodes::{
     KE_MOUSEMOVE, KE_MOUSERIGHT, KE_MOUSEUP, KE_RIGHTMOUSE, KE_X1MOUSE, KE_X2MOUSE,
 };
 use crate::message_fmt::msg_bytes;
+use crate::narrow::{len_as_integer, number_as_int};
 
 pub fn nvim_feedkeys(keys: ApiString, mode: ApiString, escape_ks: Boolean) {
     let mut remap: bool = true;
@@ -96,7 +104,7 @@ pub fn nvim_feedkeys(keys: ApiString, mode: ApiString, escape_ks: Boolean) {
 
 pub fn nvim_input(channel_id: uint64_t, keys: ApiString) -> Integer {
     may_trigger_vim_suspend_resume(false);
-    input_enqueue(channel_id, keys) as Integer
+    len_as_integer(input_enqueue(channel_id, keys))
 }
 
 pub fn nvim_input_mouse(
@@ -121,9 +129,10 @@ pub fn nvim_input_mouse(
         b"x2" => KE_X2MOUSE,
         b"move" => KE_MOUSEMOVE,
         _ => return Err(invalid()),
-    } as ::core::ffi::c_int;
+    }
+    .cast_signed();
     let action = action.as_cstr().to_bytes();
-    if code == KE_MOUSEDOWN as ::core::ffi::c_int {
+    if code == KE_MOUSEDOWN.cast_signed() {
         // The wheel's "action" is its direction.
         code = match action {
             b"down" => KE_MOUSEUP,
@@ -131,11 +140,12 @@ pub fn nvim_input_mouse(
             b"left" => KE_MOUSERIGHT,
             b"right" => KE_MOUSELEFT,
             _ => return Err(invalid()),
-        } as ::core::ffi::c_int;
-    } else if code != KE_MOUSEMOVE as ::core::ffi::c_int && action != b"press" {
+        }
+        .cast_signed();
+    } else if code != KE_MOUSEMOVE.cast_signed() && action != b"press" {
         code += match action {
-            b"drag" => KE_LEFTDRAG as ::core::ffi::c_int - KE_LEFTMOUSE as ::core::ffi::c_int,
-            b"release" => KE_LEFTRELEASE as ::core::ffi::c_int - KE_LEFTMOUSE as ::core::ffi::c_int,
+            b"drag" => KE_LEFTDRAG.cast_signed() - KE_LEFTMOUSE.cast_signed(),
+            b"release" => KE_LEFTRELEASE.cast_signed() - KE_LEFTMOUSE.cast_signed(),
             _ => return Err(invalid()),
         };
     }
@@ -143,7 +153,7 @@ pub fn nvim_input_mouse(
     for &raw in modifier.as_bytes() {
         let byte = ::core::ffi::c_char::from_ne_bytes([raw]);
         if raw != b'-' {
-            let mod_0 = name_to_mod_mask(byte as ::core::ffi::c_int);
+            let mod_0 = name_to_mod_mask(::core::ffi::c_int::from(byte));
             if mod_0.is_empty() {
                 // `%c` wrote the one byte, whatever it was; the adaptor keeps
                 // it rather than widening it to a char.
@@ -155,10 +165,10 @@ pub fn nvim_input_mouse(
     }
     input_enqueue_mouse(
         code,
-        modmask.bits() as uint8_t,
-        grid as ::core::ffi::c_int,
-        row as ::core::ffi::c_int,
-        col as ::core::ffi::c_int,
+        u8::try_from(modmask.bits()).expect("the modifiers fit a byte"),
+        number_as_int(grid),
+        number_as_int(row),
+        number_as_int(col),
     );
     Ok(())
 }
@@ -174,13 +184,13 @@ pub fn nvim_replace_termcodes(
     }
     let mut flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if from_part {
-        flags |= REPTERM_FROM_PART as ::core::ffi::c_int;
+        flags |= REPTERM_FROM_PART.cast_signed();
     }
     if do_lt {
-        flags |= REPTERM_DO_LT as ::core::ffi::c_int;
+        flags |= REPTERM_DO_LT.cast_signed();
     }
     if !special {
-        flags |= REPTERM_NO_SPECIAL as ::core::ffi::c_int;
+        flags |= REPTERM_NO_SPECIAL.cast_signed();
     }
     let text = str.as_bytes();
     let replaced = p_cpo(|cpo| replace_termcodes(text, 0 as ScriptId, flags, None, cpo, None));
@@ -225,5 +235,5 @@ pub fn nvim_select_popupmenu_item(
     if finish {
         insert = true;
     }
-    pum_ext_select_item(item as ::core::ffi::c_int, insert, finish);
+    pum_ext_select_item(number_as_int(item), insert, finish);
 }

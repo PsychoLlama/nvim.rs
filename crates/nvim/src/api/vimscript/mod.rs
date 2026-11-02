@@ -1,4 +1,11 @@
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -14,7 +21,7 @@ use crate::runtime::do_source_str;
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, Error, ExprAST, ExprASTNode, ExprASTNodeType,
     ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags,
-    Integer, KeyDict_exec_opts, Object, ParserState, TypVal, UVarNumber, VAR_FUNC, VAR_PARTIAL,
+    Integer, KeyDict_exec_opts, Object, ParserState, TypVal, VAR_FUNC, VAR_PARTIAL,
     kErrorTypeException, kErrorTypeValidation, size_t, uint64_t,
 };
 use crate::viml::parser::expressions::{

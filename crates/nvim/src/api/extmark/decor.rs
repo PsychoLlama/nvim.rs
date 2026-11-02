@@ -8,13 +8,20 @@
 //! decoder every virtual-text entry point uses.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api::private::validate::{err_bad_number, err_expected, err_out_of_range};
 use crate::charset::transstr_owned;
 use crate::mbyte::c_string_cells;
+use crate::narrow::{len_as_int, number_as_int, number_as_u32};
 use crate::types::Handle;
-use core::ffi::c_int;
 
 pub fn nvim_buf_del_extmark(
     buf: BufferHandle,
@@ -24,10 +31,10 @@ pub fn nvim_buf_del_extmark(
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(false);
     };
-    if !ns_initialized(ns_id as uint32_t) {
+    if !ns_initialized(number_as_u32(ns_id)) {
         return Err(err_bad_number(c"ns_id", ns_id));
     }
-    Ok(extmark_del_id(b, ns_id as uint32_t, id as uint32_t))
+    Ok(extmark_del_id(b, number_as_u32(ns_id), number_as_u32(id)))
 }
 
 pub fn nvim_buf_clear_namespace(
@@ -46,15 +53,15 @@ pub fn nvim_buf_clear_namespace(
         line_end = Integer::from(MAXLNUM);
     }
     // A negative namespace means every one of them.
-    let ns = if ns_id < 0 { 0 } else { ns_id as uint32_t };
-    let start = line_start as ::core::ffi::c_int;
-    let end = line_end as ::core::ffi::c_int - 1;
+    let ns = if ns_id < 0 { 0 } else { number_as_u32(ns_id) };
+    let start = number_as_int(line_start);
+    let end = number_as_int(line_end) - 1;
     extmark_clear(b, ns, start, 0, end, MAXCOL);
     Ok(())
 }
 
 pub fn nvim_set_decoration_provider(ns_id: Integer, opts: &mut KeyDict_set_decoration_provider) {
-    let ns = Handle::new(ns_id as c_int);
+    let ns = Handle::new(number_as_int(ns_id));
     with_decor_provider(ns, true, decor_provider_clear);
     redraw_all_later(UPD_NOT_VALID);
     // Each callback the caller named moves into the provider, and the
@@ -139,7 +146,7 @@ fn push_chunk(
         }
     }
     let text = printable_text(str.as_bytes());
-    *cells += c_string_cells(text.to_bytes()) as ::core::ffi::c_int;
+    *cells += len_as_int(c_string_cells(text.to_bytes()));
     into.push(VirtTextChunk {
         text: Some(text),
         hl_id,

@@ -8,6 +8,13 @@
 //! moved to another tabpage.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::autocmd::fire_autocmds;
@@ -306,7 +313,7 @@ pub(crate) fn win_split_dir(win: Win) -> WinSplit {
     // A window in a column was split off the one below it when it still has a
     // sibling ahead of it, and off the one above it otherwise; in a row the
     // same test reads left/right.
-    let column = parent.fr_layout as ::core::ffi::c_int == FR_COL;
+    let column = ::core::ffi::c_int::from(parent.fr_layout) == FR_COL;
     match (frame.next().is_none(), column) {
         (false, true) => kWinSplitAbove,
         (true, true) => kWinSplitBelow,
@@ -317,28 +324,22 @@ pub(crate) fn win_split_dir(win: Win) -> WinSplit {
 
 pub(crate) fn win_split_flags(split: WinSplit, toplevel: bool) -> ::core::ffi::c_int {
     let mut flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if split as ::core::ffi::c_uint == kWinSplitAbove as ::core::ffi::c_int as ::core::ffi::c_uint
-        || split as ::core::ffi::c_uint
-            == kWinSplitBelow as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        flags |= WSP_HOR as ::core::ffi::c_int;
+    if split == kWinSplitAbove || split == kWinSplitBelow {
+        flags |= WSP_HOR.cast_signed();
     } else {
-        flags |= WSP_VERT as ::core::ffi::c_int;
+        flags |= WSP_VERT.cast_signed();
     }
-    if split as ::core::ffi::c_uint == kWinSplitAbove as ::core::ffi::c_int as ::core::ffi::c_uint
-        || split as ::core::ffi::c_uint
-            == kWinSplitLeft as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        flags |= if toplevel as ::core::ffi::c_int != 0 {
-            WSP_TOP as ::core::ffi::c_int
+    if split == kWinSplitAbove || split == kWinSplitLeft {
+        flags |= if ::core::ffi::c_int::from(toplevel) != 0 {
+            WSP_TOP.cast_signed()
         } else {
-            WSP_ABOVE as ::core::ffi::c_int
+            WSP_ABOVE.cast_signed()
         };
     } else {
-        flags |= if toplevel as ::core::ffi::c_int != 0 {
-            WSP_BOT as ::core::ffi::c_int
+        flags |= if ::core::ffi::c_int::from(toplevel) != 0 {
+            WSP_BOT.cast_signed()
         } else {
-            WSP_BELOW as ::core::ffi::c_int
+            WSP_BELOW.cast_signed()
         };
     }
     flags

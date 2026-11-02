@@ -6,10 +6,18 @@
 //! the Lua bridge because it is the runtime's entry point from the API.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api::private::helpers::api_try;
 use crate::api::private::validate::err_bad_value;
+use crate::narrow::len_as_integer;
 use core::ffi::CStr;
 
 /// Run `code` as a Lua chunk with `args` as its `...`.
@@ -28,7 +36,7 @@ pub fn nvim_strwidth(text: ApiString) -> Result<Integer, Error> {
     if text.len() > ::core::ffi::c_int::MAX as size_t {
         return Err(too_long(c"text length"));
     }
-    Ok(c_string_cells(text.as_bytes()) as Integer)
+    Ok(len_as_integer(c_string_cells(text.as_bytes())))
 }
 
 /// Every directory of 'runtimepath'.
@@ -88,7 +96,7 @@ pub fn nvim__get_runtime(
             let name = &res[i]
                 .as_string()
                 .expect("`runtime_get_named` answers an array of Strings");
-            let none = DOSO_NONE as ::core::ffi::c_int;
+            let none = DOSO_NONE.cast_signed();
             // Sourcing a file frees nothing the array holds.
             do_source(name.as_cstr(), false, none, None);
         }
