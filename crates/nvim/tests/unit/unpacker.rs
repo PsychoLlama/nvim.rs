@@ -5,6 +5,7 @@
 //! takes msgpack goes through, with an emphasis on inputs that are not valid
 //! msgpack at all.
 
+use neovim::msgpack_rpc::packer::{mpack_object, pack_to_bytes};
 use neovim::msgpack_rpc::unpacker::unpack;
 use neovim::types::{Error, Object};
 
@@ -184,4 +185,41 @@ fn rejects_a_container_longer_than_its_contents() {
             .as_deref(),
         Some("incomplete msgpack string")
     );
+}
+
+/// A tree of containers inside containers -- arrays in a dictionary's
+/// values, dictionaries in an array, empty ones of both kinds, and widths
+/// past the fixed forms -- decodes to the shape it was sent as: packing the
+/// decoded object gives back the exact bytes.
+#[test]
+fn a_nested_tree_round_trips_through_the_packer() {
+    let mut wire = vec![0x83]; // map of 3
+    // "a" -> [1, [{"b": "xy"}, []], {}]
+    wire.extend([
+        0xa1, b'a', 0x93, 0x01, 0x92, 0x81, 0xa1, b'b', 0xa2, b'x', b'y',
+    ]);
+    wire.extend([0x90, 0x80]);
+    // "c" -> {"d": [nil, true, 1.5]}
+    wire.extend([0xa1, b'c', 0x81, 0xa1, b'd', 0x93, 0xc0, 0xc3]);
+    wire.extend([0xcb, 0x3f, 0xf8, 0, 0, 0, 0, 0, 0]);
+    // "w" -> [[0], [1], ... [19]] (array16), then a map16 of 17 entries
+    wire.extend([0xa1, b'w', 0x92, 0xdc, 0x00, 20]);
+    for i in 0..20 {
+        wire.extend([0x91, i]);
+    }
+    wire.extend([0xde, 0x00, 17]);
+    for i in 0..17 {
+        wire.extend([0xa2, b'k', b'a' + i, 0x91, 0x81, 0xa1, b'z', i]);
+    }
+
+    let mut decoded = decode(&wire);
+    assert_eq!(decoded.message().as_deref(), None);
+    let entries = decoded.object.as_dict().expect("decoded a dict");
+    assert_eq!(entries.len(), 3);
+    let wide = entries[2].value.as_array().expect("an array");
+    assert_eq!(wide[0].as_array().map(|a| a.len()), Some(20));
+    assert_eq!(wide[1].as_dict().map(|d| d.len()), Some(17));
+
+    let packed = pack_to_bytes(|buffer| mpack_object(&mut decoded.object, buffer));
+    assert_eq!(packed, wire);
 }

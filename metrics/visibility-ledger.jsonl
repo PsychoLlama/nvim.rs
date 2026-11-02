@@ -312,8 +312,8 @@
 {"path":"neovim::message::fit_head","kind":"fn","file":"crates/nvim/src/message/mod.rs","tests":["crates/nvim/tests/unit/message_oracle.rs"]}
 {"path":"neovim::message::last_message","kind":"fn","file":"crates/nvim/src/message/history.rs","tests":["crates/nvim/tests/unit/support.rs"]}
 {"path":"neovim::message::special_keys_text","kind":"fn","file":"crates/nvim/src/message/outtrans.rs","tests":["crates/nvim/tests/unit/message_oracle.rs"]}
-{"path":"neovim::msgpack_rpc::packer::mpack_object","kind":"fn","file":"crates/nvim/src/msgpack_rpc/packer/mod.rs","tests":["crates/nvim/tests/unit/packer.rs"]}
-{"path":"neovim::msgpack_rpc::packer::pack_to_bytes","kind":"fn","file":"crates/nvim/src/msgpack_rpc/packer/mod.rs","tests":["crates/nvim/tests/unit/encode_sinks.rs","crates/nvim/tests/unit/packer.rs"]}
+{"path":"neovim::msgpack_rpc::packer::mpack_object","kind":"fn","file":"crates/nvim/src/msgpack_rpc/packer/mod.rs","tests":["crates/nvim/tests/unit/packer.rs","crates/nvim/tests/unit/unpacker.rs"]}
+{"path":"neovim::msgpack_rpc::packer::pack_to_bytes","kind":"fn","file":"crates/nvim/src/msgpack_rpc/packer/mod.rs","tests":["crates/nvim/tests/unit/encode_sinks.rs","crates/nvim/tests/unit/packer.rs","crates/nvim/tests/unit/unpacker.rs"]}
 {"path":"neovim::msgpack_rpc::packer::format","kind":"mod","file":"crates/nvim/src/msgpack_rpc/packer/format.rs","tests":["crates/nvim/tests/unit/packer.rs"]}
 {"path":"neovim::msgpack_rpc::unpacker::unpack","kind":"fn","file":"crates/nvim/src/msgpack_rpc/unpacker/mod.rs","tests":["crates/nvim/tests/unit/unpacker.rs"]}
 {"path":"neovim::option::vars::P_AMBW","kind":"use","file":"crates/nvim/src/option/vars.rs","tests":["crates/nvim/tests/unit/mbyte_oracle.rs"]}
