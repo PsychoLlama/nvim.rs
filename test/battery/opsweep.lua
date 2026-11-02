@@ -105,10 +105,12 @@ local function scrub(text)
   if runtime ~= '' then
     text = text:gsub(vim.pesc(runtime), '<RUNTIME>')
   end
-  text = text:gsub('0x%x+', '<ADDR>')
   -- A filter's temp files live in a per-process directory with a random
-  -- name, which an error about one of them quotes.
+  -- name, which an error about one of them quotes. Before `<ADDR>`: a
+  -- random name can hold `0x` and a hex digit, and scrubbing that first
+  -- leaves a path this pattern no longer matches.
   text = text:gsub('/tmp/nvim%.[^/]+/%w+/%d+', '<TEMPFILE>')
+  text = text:gsub('0x%x+', '<ADDR>')
   text = text:gsub('<lambda>%d+', '<lambda>')
   text = text:gsub('<SNR>%d+_', '<SNR>_')
   text = text:gsub('%S*/target/debug/nvim', '<NVIM>')
