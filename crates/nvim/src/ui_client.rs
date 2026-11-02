@@ -22,6 +22,13 @@
 //! the protocol.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -36,6 +43,7 @@ use crate::highlight::{HLATTRS_INIT, dict2hlattrs};
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, logmsg};
 use crate::message_fmt::msg_cstr;
 use crate::msgpack_rpc::channel::rpc_send_event;
+use crate::narrow::number_as_int;
 use crate::os::env::{ENV_TEST_LOG, env_exists, process_id};
 use crate::os::proc::os_dup2;
 use crate::profile::{time_finish, time_msg_at};
@@ -571,7 +579,7 @@ pub(crate) fn ui_client_event_grid_resize(mut args: Array) {
 
     // The decoder writes cells straight into these rather than
     // building an array, so they have to hold the widest grid.
-    Unpacker::widen_grid_line_buf(width as usize);
+    Unpacker::widen_grid_line_buf(usize::try_from(width).unwrap_or(0));
 }
 
 /// Never called: the decoder recognises `grid_line` by this function's
@@ -660,7 +668,7 @@ pub(crate) fn ui_client_event_error_exit(mut args: Array) {
         return bad_event(c"error_exit", c"ui_client_event_error_exit");
     };
     let status = status.as_integer().expect("`arg` checked the tag");
-    ui_client_error_exit.set(status as c_int);
+    ui_client_error_exit.set(number_as_int(status));
 }
 
 /// Moves this client to the server listening at the given address.

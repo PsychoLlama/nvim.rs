@@ -6,6 +6,13 @@
 //! the command line gets these instead of anything [`super::draw`] writes.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::cstr;
@@ -44,7 +51,7 @@ pub(crate) fn ui_ext_cmdline_show(line: Cc) {
             item.push(Object::integer(if chunk.hl_id == 0 {
                 0
             } else {
-                syn_id2attr(chunk.hl_id) as Integer
+                Integer::from(syn_id2attr(chunk.hl_id))
             }));
 
             debug_assert!(chunk.end >= chunk.start);
@@ -54,7 +61,7 @@ pub(crate) fn ui_ext_cmdline_show(line: Cc) {
                 .unwrap_or(0)
                 .clamp(from, text.len());
             item.push(Object::string(ApiString::from_bytes(&text[from..to])));
-            item.push(Object::integer(chunk.hl_id as Integer));
+            item.push(Object::integer(Integer::from(chunk.hl_id)));
             content.push(Object::array(item));
             i += 1;
         }
@@ -67,25 +74,26 @@ pub(crate) fn ui_ext_cmdline_show(line: Cc) {
         content = vec![Object::array(item)];
     }
 
-    let firstc = [line.cmdfirstc as u8];
+    // The low byte, as C's `(char)` cast took it.
+    let firstc = [line.cmdfirstc.to_le_bytes()[0]];
     // C's `cstr_to_string`: the null string when there is no prompt.
     let prompt = line.cmdprompt.as_ref().map_or(ApiString::NULL, |prompt| {
         ApiString::from_bytes(prompt.as_cstr().to_bytes())
     });
     ui_call_cmdline_show(
         content.into(),
-        line.cmdpos as Integer,
+        Integer::from(line.cmdpos),
         ApiString::from_bytes(cstr::until_nul(&firstc)),
         prompt,
-        line.cmdindent as Integer,
-        line.level as Integer,
-        line.hl_id as Integer,
+        Integer::from(line.cmdindent),
+        Integer::from(line.level),
+        Integer::from(line.hl_id),
     );
     if line.special_char != 0 {
         ui_call_cmdline_special_char(
-            ApiString::from_bytes(&[line.special_char as u8]),
+            ApiString::from_bytes(&[line.special_char.cast_unsigned()]),
             line.special_shift as Boolean,
-            line.level as Integer,
+            Integer::from(line.level),
         );
     }
 }
@@ -205,7 +213,7 @@ pub fn cmdline_ui_flush() {
                 cmdline_was_last_drawn.set(true);
                 ui_ext_cmdline_show(line);
             } else if redraw_state == kCmdRedrawPos && cmdline_was_last_drawn.get() {
-                ui_call_cmdline_pos(line.cmdpos as Integer, line.level as Integer);
+                ui_call_cmdline_pos(Integer::from(line.cmdpos), Integer::from(line.level));
             }
             level -= 1;
         }

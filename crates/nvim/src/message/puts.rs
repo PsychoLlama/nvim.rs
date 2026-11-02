@@ -7,6 +7,13 @@
 //! with no UI at all.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::eval::typval::TV_INITIAL_VALUE;
@@ -498,6 +505,6 @@ pub fn msg_advance(col: c_int) {
     }
     let col = col.min(Columns.get() - 1); // not enough room
     while msg_col.get() < col {
-        msg_putchar(b' ' as c_int);
+        msg_putchar(c_int::from(b' '));
     }
 }

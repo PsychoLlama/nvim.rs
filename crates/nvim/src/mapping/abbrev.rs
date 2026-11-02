@@ -7,6 +7,13 @@
 //! need.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::charset::is_word_at;
@@ -17,10 +24,14 @@ use crate::lua::executor::nlua_call_ref_reporting;
 use crate::mbyte::head_off;
 use crate::message_fmt::msg_cstr;
 use crate::semsg_multiline;
-use crate::types::NUL;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
+
+/// `K_SPECIAL` and `Ctrl_V` as the bytes a typed sequence carries.
+const KS_BYTE: u8 = 0x80;
+const CTRL_V_BYTE: u8 = 0x16;
+const _: () = assert!(KS_BYTE as c_int == K_SPECIAL && CTRL_V_BYTE as c_int == Ctrl_V);
 
 /// Whether `mp`'s LHS is exactly `word`, in a mode that is current.
 ///
@@ -31,7 +42,7 @@ fn abbr_matches(mp: &MapBlock, word: &[u8]) -> bool {
         return false;
     }
     let keys = mp.keys();
-    if !keys.contains(&(K_SPECIAL as u8)) {
+    if !keys.contains(&KS_BYTE) {
         return keys == word;
     }
     unescape_ks(keys) == word
@@ -171,7 +182,7 @@ pub fn check_abbr(c: c_int, text: Vec<u8>, mincol: c_int) -> bool {
         } else {
             let mut c = c;
             if c < ABBR_OFF && !(c_int::from(b' ')..=c_int::from(b'~')).contains(&c) {
-                typed.push(Ctrl_V as u8); // a special char needs CTRL-V
+                typed.push(CTRL_V_BYTE); // a special char needs CTRL-V
             }
             if c >= ABBR_OFF {
                 c -= ABBR_OFF; // remove the ABBR_OFF added by the caller
@@ -179,7 +190,7 @@ pub fn check_abbr(c: c_int, text: Vec<u8>, mincol: c_int) -> bool {
             // The character, with K_SPECIAL escaped.
             push_char_escaped(c, &mut typed);
         }
-        typed.push(NUL as u8);
+        typed.push(0);
         // Insert the last typed char.
         let keys = CStr::from_bytes_until_nul(&typed).expect("terminated just above");
         let _ = ins_typebuf(keys.to_bytes(), 1, 0, true, found.silent);

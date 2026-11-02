@@ -16,6 +16,13 @@
 //! Original: `src/nvim/usercmd.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::attr::named_addr_type;
 use super::complete::command_complete_name;
@@ -30,6 +37,7 @@ use crate::message::{
     message_filtered, msg, msg_display, msg_display_keys, msg_ext_set_kind, msg_putchar, msg_str,
     msg_str_hl, msg_title,
 };
+use crate::narrow::len_as_integer;
 use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
@@ -132,7 +140,7 @@ impl Cols {
     fn pad_to(&mut self, col: int64_t, over: int64_t) {
         loop {
             self.push(b' ');
-            if self.buf.len() as int64_t >= col - over {
+            if len_as_integer(self.buf.len()) >= col - over {
                 return;
             }
         }
@@ -216,7 +224,7 @@ fn list_one(cmd: &Row, scope: Scope, name_len: usize) {
     }
     msg_putchar(c_int::from(b' '));
     len += 1;
-    let over = len as int64_t - 22;
+    let over = len_as_integer(len) - 22;
 
     // The middle columns are assembled in one buffer and printed once.
     // Upstream uses `IObuff`; the columns are a few dozen bytes.

@@ -7,7 +7,15 @@
 //! exit.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use crate::narrow::number_as_int;
 use core::ffi::{CStr, c_int};
 
 use crate::channel::channel_connect;
@@ -113,7 +121,7 @@ pub(crate) fn remote_request(parm: &mut MainParams, remote_args: usize, ui_only:
         Err(why) => (0, Some(why)),
     };
     let call_args = Array::from(vec![
-        Object::Integer(Integer::from(chan as c_int)),
+        Object::Integer(Integer::from(number_as_int(chan.cast_signed()))),
         string(server_addr),
         string(connect_error),
         Object::array(args),
@@ -177,6 +185,6 @@ pub(crate) fn remote_request(parm: &mut MainParams, remote_args: usize, ui_only:
         // `--remote*` argument itself.
         let files = parm.argv.len() - remote_args - 1;
         parm.window_count = c_int::try_from(files).expect("an argv count");
-        parm.window_layout = WIN_TABS as c_int;
+        parm.window_layout = WIN_TABS.cast_signed();
     }
 }
