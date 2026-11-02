@@ -4,6 +4,13 @@
 //! run `just apigen`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 
@@ -17,7 +24,7 @@ pub fn handle_nvim_ui_attach(channel_id: uint64_t, args: Array) -> Result<Object
     log_invoke(
         c"handle_nvim_ui_attach",
         c"nvim_ui_attach",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 3 {
@@ -45,7 +52,7 @@ pub fn handle_nvim_ui_detach(channel_id: uint64_t, args: Array) -> Result<Object
     log_invoke(
         c"handle_nvim_ui_detach",
         c"nvim_ui_detach",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if !args.is_empty() {
@@ -65,7 +72,7 @@ pub fn handle_nvim_ui_pum_set_bounds(channel_id: uint64_t, args: Array) -> Resul
     log_invoke(
         c"handle_nvim_ui_pum_set_bounds",
         c"nvim_ui_pum_set_bounds",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 4 {
@@ -97,7 +104,7 @@ pub fn handle_nvim_ui_pum_set_height(channel_id: uint64_t, args: Array) -> Resul
     log_invoke(
         c"handle_nvim_ui_pum_set_height",
         c"nvim_ui_pum_set_height",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -117,12 +124,7 @@ pub fn handle_nvim_ui_pum_set_height(channel_id: uint64_t, args: Array) -> Resul
 /// `Object`.
 pub fn handle_nvim_ui_send(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
-    log_invoke(
-        c"handle_nvim_ui_send",
-        c"nvim_ui_send",
-        line!() as c_int,
-        channel_id,
-    );
+    log_invoke(c"handle_nvim_ui_send", c"nvim_ui_send", line!(), channel_id);
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
@@ -143,7 +145,7 @@ pub fn handle_nvim_ui_set_focus(channel_id: uint64_t, args: Array) -> Result<Obj
     log_invoke(
         c"handle_nvim_ui_set_focus",
         c"nvim_ui_set_focus",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -166,7 +168,7 @@ pub fn handle_nvim_ui_set_option(channel_id: uint64_t, args: Array) -> Result<Ob
     log_invoke(
         c"handle_nvim_ui_set_option",
         c"nvim_ui_set_option",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -190,7 +192,7 @@ pub fn handle_nvim_ui_try_resize(channel_id: uint64_t, args: Array) -> Result<Ob
     log_invoke(
         c"handle_nvim_ui_try_resize",
         c"nvim_ui_try_resize",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -216,7 +218,7 @@ pub fn handle_nvim_ui_try_resize_grid(channel_id: uint64_t, args: Array) -> Resu
     log_invoke(
         c"handle_nvim_ui_try_resize_grid",
         c"nvim_ui_try_resize_grid",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 3 {
@@ -242,12 +244,7 @@ pub fn handle_nvim_ui_try_resize_grid(channel_id: uint64_t, args: Array) -> Resu
 /// `Object`.
 pub fn handle_ui_attach(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
-    log_invoke(
-        c"handle_ui_attach",
-        c"ui_attach",
-        line!() as c_int,
-        channel_id,
-    );
+    log_invoke(c"handle_ui_attach", c"ui_attach", line!(), channel_id);
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }

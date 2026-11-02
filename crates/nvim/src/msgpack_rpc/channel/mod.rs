@@ -208,7 +208,7 @@ fn chan_close_on_err(id: uint64_t, msg: &[u8], loglevel: c_int) {
         loglevel,
         None,
         Some(c"chan_close_on_err"),
-        545,
+        Some(545),
         true,
         || format!("RPC: {msg}"),
     );

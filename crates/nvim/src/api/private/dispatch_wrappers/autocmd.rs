@@ -4,6 +4,13 @@
 //! run `just apigen`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 
@@ -17,7 +24,7 @@ pub fn handle_nvim_clear_autocmds(channel_id: uint64_t, args: Array) -> Result<O
     log_invoke(
         c"handle_nvim_clear_autocmds",
         c"nvim_clear_autocmds",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -48,7 +55,7 @@ pub fn handle_nvim_create_augroup(channel_id: uint64_t, args: Array) -> Result<O
     log_invoke(
         c"handle_nvim_create_augroup",
         c"nvim_create_augroup",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -82,7 +89,7 @@ pub fn handle_nvim_create_autocmd(channel_id: uint64_t, args: Array) -> Result<O
     log_invoke(
         c"handle_nvim_create_autocmd",
         c"nvim_create_autocmd",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -114,7 +121,7 @@ pub fn handle_nvim_del_augroup_by_id(channel_id: uint64_t, args: Array) -> Resul
     log_invoke(
         c"handle_nvim_del_augroup_by_id",
         c"nvim_del_augroup_by_id",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -137,7 +144,7 @@ pub fn handle_nvim_del_augroup_by_name(channel_id: uint64_t, args: Array) -> Res
     log_invoke(
         c"handle_nvim_del_augroup_by_name",
         c"nvim_del_augroup_by_name",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -160,7 +167,7 @@ pub fn handle_nvim_del_autocmd(channel_id: uint64_t, args: Array) -> Result<Obje
     log_invoke(
         c"handle_nvim_del_autocmd",
         c"nvim_del_autocmd",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -183,7 +190,7 @@ pub fn handle_nvim_exec_autocmds(channel_id: uint64_t, args: Array) -> Result<Ob
     log_invoke(
         c"handle_nvim_exec_autocmds",
         c"nvim_exec_autocmds",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -215,7 +222,7 @@ pub fn handle_nvim_get_autocmds(channel_id: uint64_t, args: Array) -> Result<Obj
     log_invoke(
         c"handle_nvim_get_autocmds",
         c"nvim_get_autocmds",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {

@@ -4,6 +4,13 @@
 //! run `just apigen`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 
@@ -19,7 +26,7 @@ pub fn handle_nvim__buf_debug_extmarks(channel_id: uint64_t, args: Array) -> Res
     log_invoke(
         c"handle_nvim__buf_debug_extmarks",
         c"nvim__buf_debug_extmarks",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 3 {
@@ -47,12 +54,7 @@ pub fn handle_nvim__buf_debug_extmarks(channel_id: uint64_t, args: Array) -> Res
 #[allow(non_snake_case)]
 pub fn handle_nvim__ns_get(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
-    log_invoke(
-        c"handle_nvim__ns_get",
-        c"nvim__ns_get",
-        line!() as c_int,
-        channel_id,
-    );
+    log_invoke(c"handle_nvim__ns_get", c"nvim__ns_get", line!(), channel_id);
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
@@ -72,12 +74,7 @@ pub fn handle_nvim__ns_get(channel_id: uint64_t, args: Array) -> Result<Object, 
 #[allow(non_snake_case)]
 pub fn handle_nvim__ns_set(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
-    log_invoke(
-        c"handle_nvim__ns_set",
-        c"nvim__ns_set",
-        line!() as c_int,
-        channel_id,
-    );
+    log_invoke(c"handle_nvim__ns_set", c"nvim__ns_set", line!(), channel_id);
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
@@ -105,7 +102,7 @@ pub fn handle_nvim_buf_clear_namespace(channel_id: uint64_t, args: Array) -> Res
     log_invoke(
         c"handle_nvim_buf_clear_namespace",
         c"nvim_buf_clear_namespace",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 4 {
@@ -137,7 +134,7 @@ pub fn handle_nvim_buf_del_extmark(channel_id: uint64_t, args: Array) -> Result<
     log_invoke(
         c"handle_nvim_buf_del_extmark",
         c"nvim_buf_del_extmark",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 3 {
@@ -169,7 +166,7 @@ pub fn handle_nvim_buf_get_extmark_by_id(
     log_invoke(
         c"handle_nvim_buf_get_extmark_by_id",
         c"nvim_buf_get_extmark_by_id",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 4 {
@@ -209,7 +206,7 @@ pub fn handle_nvim_buf_get_extmarks(channel_id: uint64_t, args: Array) -> Result
     log_invoke(
         c"handle_nvim_buf_get_extmarks",
         c"nvim_buf_get_extmarks",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 5 {
@@ -248,7 +245,7 @@ pub fn handle_nvim_buf_set_extmark(channel_id: uint64_t, args: Array) -> Result<
     log_invoke(
         c"handle_nvim_buf_set_extmark",
         c"nvim_buf_set_extmark",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 5 {
@@ -291,7 +288,7 @@ pub fn handle_nvim_create_namespace(channel_id: uint64_t, args: Array) -> Result
     log_invoke(
         c"handle_nvim_create_namespace",
         c"nvim_create_namespace",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -313,7 +310,7 @@ pub fn handle_nvim_get_namespaces(channel_id: uint64_t, args: Array) -> Result<O
     log_invoke(
         c"handle_nvim_get_namespaces",
         c"nvim_get_namespaces",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if !args.is_empty() {

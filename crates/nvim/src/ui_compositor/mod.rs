@@ -617,7 +617,7 @@ fn compose_under(grid: GridRef) {
 }
 
 /// C's `DLOG`, for the two geometry complaints below.
-fn dlog(line: c_int, what: &str, value: Integer, grid: Integer) {
+fn dlog(line: u32, what: &str, value: Integer, grid: Integer) {
     logmsg!(
         LOGLVL_DBG,
         c"ui_comp_raw_line",

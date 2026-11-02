@@ -235,7 +235,7 @@ fn report_error(ns_id: u32, name: &CStr, msg: &CStr) {
     logmsg!(
         LOGLVL_ERR,
         c"report_error",
-        line!().cast_signed(),
+        line!(),
         "Error in \"{shown_name}\" UI event handler (ns={shown_ns}):\n{shown_msg}"
     );
     msg_schedule_semsg_multiline!(

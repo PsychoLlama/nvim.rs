@@ -592,7 +592,7 @@ pub fn set_cloexec(fd: BorrowedFd<'_>) -> Result<(), c_int> {
 
 /// Log why [`set_cloexec`] failed and answer the libuv code. The line
 /// numbers are the sites in `v0.12.4:os/fs.c`.
-fn cloexec_failure(line: c_int, what: &str, fd: c_int) -> c_int {
+fn cloexec_failure(line: u32, what: &str, fd: c_int) -> c_int {
     let error = io::Error::last_os_error();
     let why = errno_text(error.raw_os_error().unwrap_or(0));
     logmsg!(

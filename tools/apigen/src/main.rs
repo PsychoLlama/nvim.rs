@@ -1080,7 +1080,7 @@ fn emit_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
     }
     writeln!(
         out,
-        "    log_invoke(c\"{handler}\", c\"{name}\", line!() as c_int, channel_id);"
+        "    log_invoke(c\"{handler}\", c\"{name}\", line!(), channel_id);"
     )
     .unwrap();
     // `len() != 0` is `clippy::len_zero`, and a nullary API function is common
@@ -1212,7 +1212,7 @@ fn emit_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         RetType::Array => "Object::array(rv)".into(),
         RetType::Dict => "Object::dict(rv)".into(),
         RetType::Handle(tag) => {
-            format!("Object::{tag}(rv as Integer)")
+            format!("Object::{tag}(Integer::from(rv))")
         }
         RetType::KeyDict(_) => "Object::dict(api_keydict_to_dict(&mut rv))".into(),
     };
@@ -1241,6 +1241,15 @@ const HEADER: &str = r#"//! Dispatch wrappers for the msgpack-RPC API.
 #![deny(unsafe_op_in_unsafe_fn)]
 "#;
 
+/// The cast family's deny, as the tree spells it in a finished module.
+const CAST_DENY: &str = "#![deny(\n    \
+    clippy::cast_lossless,\n    \
+    clippy::cast_possible_truncation,\n    \
+    clippy::cast_possible_wrap,\n    \
+    clippy::cast_sign_loss,\n    \
+    clippy::ptr_as_ptr\n\
+)]";
+
 /// Header for a child module. Children pull the support code in wholesale:
 /// a glob import cannot go stale as the batch changes, and rustc does not
 /// lint an unused one.
@@ -1257,6 +1266,9 @@ fn child_header(module: &str, part: usize, parts: usize, body: &str) -> String {
     } else {
         "#![forbid(unsafe_code)]"
     };
+    // The wrappers convert between integer widths only through `From`/
+    // `TryFrom`, so every child takes the cast deny; the support code in the
+    // parent still narrows an `Integer` to a `Handle` with `as`.
     format!(
         "//! Dispatch wrappers for `crate::api::{module}`{of}.\n\
          //!\n\
@@ -1264,6 +1276,7 @@ fn child_header(module: &str, part: usize, parts: usize, body: &str) -> String {
          //! run `just apigen`.\n\
          \n\
          {attr}\n\
+         {CAST_DENY}\n\
          \n\
          use super::*;\n\
          \n"
@@ -1286,7 +1299,7 @@ struct Emitted {
 const SUPPORT: &str = r#"
 /// One "RPC: ch N: invoke nvim_foo" debug line: upstream's `DLOG` under
 /// `#ifdef NVIM_LOG_DEBUG`, so a release build compiles it out.
-fn log_invoke(handler: &'static CStr, method: &CStr, line: c_int, channel_id: uint64_t) {
+fn log_invoke(handler: &'static CStr, method: &CStr, line: u32, channel_id: uint64_t) {
     let method = msg_cstr(method);
     logmsg!(LOGLVL_DBG, handler, line, "RPC: ch {channel_id}: invoke {method}");
 }
@@ -1681,7 +1694,7 @@ fn generate(
     }
 
     let mut uses: Vec<String> = Vec::new();
-    uses.push("use core::ffi::{CStr, c_int};".into());
+    uses.push("use core::ffi::CStr;".into());
     for (module, names) in &api_imports {
         uses.push(format!(
             "use crate::api::{module}::{{{}}};",

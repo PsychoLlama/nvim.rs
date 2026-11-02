@@ -21,7 +21,6 @@ mod autocmd;
 mod buffer;
 mod command;
 mod deprecated;
-mod deprecated_2;
 mod events;
 mod extmark;
 mod options;
@@ -37,7 +36,6 @@ pub use self::autocmd::*;
 pub use self::buffer::*;
 pub use self::command::*;
 pub use self::deprecated::*;
-pub use self::deprecated_2::*;
 pub use self::events::*;
 pub use self::extmark::*;
 pub use self::options::*;
@@ -143,7 +141,7 @@ use crate::types::{
     KeyDict_user_command, KeyDict_win_config, KeyDict_win_text_height, Object, ObjectType,
     String_0, uint64_t,
 };
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
 
 /// Values that belong to other modules; nested so they stay out of the flat
 /// namespace the unit-test header generator collects constants into.
@@ -163,7 +161,7 @@ use known::*;
 
 /// One "RPC: ch N: invoke nvim_foo" debug line: upstream's `DLOG` under
 /// `#ifdef NVIM_LOG_DEBUG`, so a release build compiles it out.
-fn log_invoke(handler: &'static CStr, method: &CStr, line: c_int, channel_id: uint64_t) {
+fn log_invoke(handler: &'static CStr, method: &CStr, line: u32, channel_id: uint64_t) {
     let method = msg_cstr(method);
     logmsg!(
         LOGLVL_DBG,

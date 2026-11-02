@@ -4,6 +4,13 @@
 //! run `just apigen`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 
@@ -17,7 +24,7 @@ pub fn handle_nvim_open_tabpage(channel_id: uint64_t, args: Array) -> Result<Obj
     log_invoke(
         c"handle_nvim_open_tabpage",
         c"nvim_open_tabpage",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 3 {
@@ -44,7 +51,7 @@ pub fn handle_nvim_open_tabpage(channel_id: uint64_t, args: Array) -> Result<Obj
         return Err(expr_map_locked_error());
     }
     let rv = nvim_open_tabpage(arg_1, arg_2, &mut arg_3)?;
-    Ok(Object::Tabpage(rv as Integer))
+    Ok(Object::Tabpage(Integer::from(rv)))
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_tabpage_del_var`.
@@ -57,7 +64,7 @@ pub fn handle_nvim_tabpage_del_var(channel_id: uint64_t, args: Array) -> Result<
     log_invoke(
         c"handle_nvim_tabpage_del_var",
         c"nvim_tabpage_del_var",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -83,7 +90,7 @@ pub fn handle_nvim_tabpage_get_number(channel_id: uint64_t, args: Array) -> Resu
     log_invoke(
         c"handle_nvim_tabpage_get_number",
         c"nvim_tabpage_get_number",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -106,7 +113,7 @@ pub fn handle_nvim_tabpage_get_var(channel_id: uint64_t, args: Array) -> Result<
     log_invoke(
         c"handle_nvim_tabpage_get_var",
         c"nvim_tabpage_get_var",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -131,7 +138,7 @@ pub fn handle_nvim_tabpage_get_win(channel_id: uint64_t, args: Array) -> Result<
     log_invoke(
         c"handle_nvim_tabpage_get_win",
         c"nvim_tabpage_get_win",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -141,7 +148,7 @@ pub fn handle_nvim_tabpage_get_win(channel_id: uint64_t, args: Array) -> Result<
         return Err(wrong_type(1, c"nvim_tabpage_get_win", c"Tabpage"));
     };
     let rv = nvim_tabpage_get_win(arg_1)?;
-    Ok(Object::Window(rv as Integer))
+    Ok(Object::Window(Integer::from(rv)))
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_tabpage_is_valid`.
@@ -154,7 +161,7 @@ pub fn handle_nvim_tabpage_is_valid(channel_id: uint64_t, args: Array) -> Result
     log_invoke(
         c"handle_nvim_tabpage_is_valid",
         c"nvim_tabpage_is_valid",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -177,7 +184,7 @@ pub fn handle_nvim_tabpage_list_wins(channel_id: uint64_t, args: Array) -> Resul
     log_invoke(
         c"handle_nvim_tabpage_list_wins",
         c"nvim_tabpage_list_wins",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -200,7 +207,7 @@ pub fn handle_nvim_tabpage_set_var(channel_id: uint64_t, args: Array) -> Result<
     log_invoke(
         c"handle_nvim_tabpage_set_var",
         c"nvim_tabpage_set_var",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 3 {
@@ -227,7 +234,7 @@ pub fn handle_nvim_tabpage_set_win(channel_id: uint64_t, args: Array) -> Result<
     log_invoke(
         c"handle_nvim_tabpage_set_win",
         c"nvim_tabpage_set_win",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {

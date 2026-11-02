@@ -262,12 +262,7 @@ pub(crate) fn ui_client_run() -> ! {
     // The test harness waits for a line in the log before it starts
     // driving the terminal, so that it is not racing startup.
     if env_exists(ENV_TEST_LOG, true) {
-        logmsg!(
-            LOGLVL_ERR,
-            c"ui_client_run",
-            line!() as c_int,
-            "test log message"
-        );
+        logmsg!(LOGLVL_ERR, c"ui_client_run", line!(), "test log message");
     }
     time_finish();
 
@@ -410,7 +405,7 @@ fn bad_event(event: &'static CStr, wrapper: &'static CStr) {
     logmsg!(
         LOGLVL_ERR,
         wrapper,
-        line!() as c_int,
+        line!(),
         "Error handling ui event '{name}'"
     );
 }
@@ -695,7 +690,7 @@ fn connect_and_reattach(address: &CStr) {
     let chan = match connected {
         Ok(chan) => chan,
         Err(err) => {
-            let line = line!() as c_int;
+            let line = line!();
             logmsg!(
                 LOGLVL_ERR,
                 c"channel_connect_event",
@@ -710,7 +705,7 @@ fn connect_and_reattach(address: &CStr) {
     };
     ui_client_channel_id.set(chan);
     ui_client_reattach();
-    let line = line!() as c_int;
+    let line = line!();
     logmsg!(
         LOGLVL_INF,
         c"channel_connect_event",
@@ -785,7 +780,7 @@ pub(crate) fn ui_client_attach_to_restarted_server() {
             );
             match connected {
                 Err(err) => {
-                    let line = line!() as c_int;
+                    let line = line!();
                     logmsg!(
                         LOGLVL_ERR,
                         c"ui_client_attach_to_restarted_server",
@@ -798,7 +793,7 @@ pub(crate) fn ui_client_attach_to_restarted_server() {
                 Ok(chan_id) => {
                     ui_client_channel_id.set(chan_id);
                     ui_client_reattach();
-                    let line = line!() as c_int;
+                    let line = line!();
                     logmsg!(
                         LOGLVL_INF,
                         c"ui_client_attach_to_restarted_server",

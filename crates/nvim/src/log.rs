@@ -348,7 +348,7 @@ fn report_no_log_file(reason: &str, path: Option<CString>) {
     let path = path.unwrap_or_default();
     let path = path.to_string_lossy();
     let mut sink = Sink::Stderr;
-    let Some(mut line) = line_prefix(LOGLVL_ERR, None, Some(c"open_log_file"), 234) else {
+    let Some(mut line) = line_prefix(LOGLVL_ERR, None, Some(c"open_log_file"), Some(234)) else {
         return;
     };
     // The trailing newline stands in for the eol=true of upstream's call.
@@ -358,7 +358,8 @@ fn report_no_log_file(reason: &str, path: Option<CString>) {
 
 /// Write one line to the log at `log_level`, tagged with
 /// `context`/`func_name`/`line_num` and terminated by a newline when `eol`.
-/// Answers whether the line landed.
+/// Answers whether the line landed. The source location (`func_name:line_num:`)
+/// is printed only when both halves are present.
 ///
 /// `text` renders the payload; the prefix and it are written together, so a
 /// line either lands whole or not at all.
@@ -379,7 +380,7 @@ pub fn logmsg_line(
     log_level: c_int,
     context: Option<&'static CStr>,
     func_name: Option<&'static CStr>,
-    line_num: c_int,
+    line_num: Option<u32>,
     eol: bool,
     text: impl FnOnce() -> String,
 ) -> bool {
@@ -397,7 +398,8 @@ pub fn logmsg_line(
         if !DID_RECURSION_MSG.get() {
             DID_RECURSION_MSG.set(true);
             let who = msg_cstr(func_name.or(context).unwrap_or(c""));
-            msg_schedule_semsg!("E5430: {who}:{}: recursive log!", line_num);
+            let line = line_num.map_or(-1, i64::from);
+            msg_schedule_semsg!("E5430: {who}:{line}: recursive log!");
         }
         g_stats.with_mut(|s| s.log_skip = s.log_skip.wrapping_add(1));
         return false;
@@ -445,7 +447,7 @@ macro_rules! logmsg {
                 $level,
                 ::core::option::Option::None,
                 ::core::option::Option::Some($who),
-                $line,
+                ::core::option::Option::Some($line),
                 true,
                 || ::std::format!($($fmt)*),
             )
@@ -469,7 +471,7 @@ macro_rules! logmsg_tagged {
                 $level,
                 ::core::option::Option::Some($tag),
                 ::core::option::Option::None,
-                -1,
+                ::core::option::Option::None,
                 $eol,
                 || ::std::format!($($fmt)*),
             )
@@ -555,7 +557,7 @@ fn line_prefix(
     log_level: c_int,
     context: Option<&CStr>,
     func_name: Option<&CStr>,
-    line_num: c_int,
+    line_num: Option<u32>,
 ) -> Option<Vec<u8>> {
     debug_assert!(
         (LOGLVL_DBG..=LOGLVL_ERR).contains(&log_level),
@@ -571,10 +573,10 @@ fn line_prefix(
 
     // Without a source location the context stands in for it, and an absent
     // context prints as the "unknown location" marker instead of nothing.
-    let located = line_num != -1 && func_name.is_some();
+    let location = func_name.zip(line_num);
     let ctx: &[u8] = match context {
         Some(context) => context.to_bytes(),
-        None if located => b"",
+        None if location.is_some() => b"",
         None => b"?:",
     };
 
@@ -589,7 +591,7 @@ fn line_prefix(
     });
     prefix.push(b' ');
     prefix.extend_from_slice(ctx);
-    if let Some(func_name) = func_name.filter(|_| located) {
+    if let Some((func_name, line_num)) = location {
         prefix.extend_from_slice(func_name.to_bytes());
         let _ = write!(prefix, ":{line_num}: ");
     }

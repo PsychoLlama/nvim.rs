@@ -135,7 +135,7 @@ fn a_line_carries_its_level_time_name_and_source_location() {
             LOGLVL_ERR,
             None,
             Some(c"server_init"),
-            58,
+            Some(58),
             true,
             || "test log message".to_string(),
         ));
@@ -166,7 +166,14 @@ fn each_level_prints_its_own_three_letter_tag() {
     ];
     for (level, tag) in levels {
         let text = logged(&at, || {
-            assert!(logmsg_line(level, None, Some(c"who"), 1, true, || "x".into()));
+            assert!(logmsg_line(
+                level,
+                None,
+                Some(c"who"),
+                Some(1),
+                true,
+                || "x".into()
+            ));
         });
         assert_eq!(Line::parse(&text).level, tag);
     }
@@ -186,7 +193,7 @@ fn a_tagged_line_carries_no_source_location() {
             LOGLVL_INF,
             Some(c"RPC: "),
             None,
-            -1,
+            None,
             true,
             || "nvim_get_mode".to_string(),
         ));
@@ -204,7 +211,7 @@ fn a_line_with_neither_context_nor_location_is_marked_unknown() {
     let _logging = Logging::to(&mut sandbox, &at);
 
     let text = logged(&at, || {
-        assert!(logmsg_line(LOGLVL_WRN, None, None, -1, true, || "orphan".into()));
+        assert!(logmsg_line(LOGLVL_WRN, None, None, None, true, || "orphan".into()));
     });
     assert_eq!(Line::parse(text.trim_end_matches('\n')).rest, "?:orphan");
 }
@@ -222,7 +229,7 @@ fn an_eol_free_line_supplies_its_own_terminator() {
             LOGLVL_DBG,
             Some(c"RPC: "),
             None,
-            -1,
+            None,
             false,
             || { "<- 1: [request] id=2: nvim_get_mode\n".to_string() }
         ));
@@ -238,7 +245,7 @@ fn an_eol_free_line_supplies_its_own_terminator() {
             LOGLVL_DBG,
             Some(c"RPC: "),
             None,
-            -1,
+            None,
             false,
             || "head ".into()
         ));
@@ -246,7 +253,7 @@ fn an_eol_free_line_supplies_its_own_terminator() {
             LOGLVL_DBG,
             Some(c"RPC: "),
             None,
-            -1,
+            None,
             true,
             || "tail".into()
         ));
@@ -267,9 +274,14 @@ fn a_payload_keeps_the_newlines_it_carries() {
     // Nothing escapes or splits the payload: a message with newlines in it
     // lands as several lines of which only the first carries a prefix.
     let text = logged(&at, || {
-        assert!(logmsg_line(LOGLVL_ERR, None, Some(c"f"), 7, true, || {
-            "first\nsecond\nthird".to_string()
-        }));
+        assert!(logmsg_line(
+            LOGLVL_ERR,
+            None,
+            Some(c"f"),
+            Some(7),
+            true,
+            || { "first\nsecond\nthird".to_string() }
+        ));
     });
     let lines: Vec<&str> = text.trim_end_matches('\n').split('\n').collect();
     assert_eq!(lines.len(), 3);
@@ -286,12 +298,22 @@ fn a_line_below_the_minimum_level_is_not_written() {
     let saved = g_min_log_level.get();
     g_min_log_level.set(LOGLVL_WRN);
     let text = logged(&at, || {
-        assert!(!logmsg_line(LOGLVL_INF, None, Some(c"f"), 1, true, || {
-            panic!("the payload of a filtered line is never rendered")
-        }));
-        assert!(logmsg_line(LOGLVL_WRN, None, Some(c"f"), 1, true, || {
-            "kept".into()
-        }));
+        assert!(!logmsg_line(
+            LOGLVL_INF,
+            None,
+            Some(c"f"),
+            Some(1),
+            true,
+            || { panic!("the payload of a filtered line is never rendered") }
+        ));
+        assert!(logmsg_line(
+            LOGLVL_WRN,
+            None,
+            Some(c"f"),
+            Some(1),
+            true,
+            || { "kept".into() }
+        ));
     });
     g_min_log_level.set(saved);
     assert_eq!(Line::parse(text.trim_end_matches('\n')).rest, "f:1: kept");
@@ -301,7 +323,7 @@ fn a_line_below_the_minimum_level_is_not_written() {
 /// `$__NVIM_LOG_FILE_WANT` say about it, after one `log_init`.
 fn resolve(_sandbox: &mut Sandbox) -> (Option<PathBuf>, Option<PathBuf>) {
     log_init();
-    logmsg_line(LOGLVL_ERR, None, Some(c"resolve"), 1, true, || {
+    logmsg_line(LOGLVL_ERR, None, Some(c"resolve"), Some(1), true, || {
         "probe".into()
     });
     let var = |name: &str| std::env::var_os(name).map(PathBuf::from);

@@ -403,7 +403,7 @@ pub fn open_spellbuf() -> SpellBuf {
         logmsg!(
             LOGLVL_ERR,
             c"open_spellbuf",
-            line!() as c_int,
+            line!(),
             "Error opening a new memline"
         );
     }

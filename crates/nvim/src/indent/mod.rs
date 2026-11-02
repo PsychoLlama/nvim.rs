@@ -567,7 +567,7 @@ fn reindent_line(size: c_int, flags: c_int, oldline: &[u8]) -> Option<Reindented
     // replacement line must not wrap, and upstream logs and aborts rather
     // than trusting a wrapped answer. `line` is the site in
     // `v0.12.4:indent.c`.
-    let strict = |v: Option<c_int>, line: c_int, what: &CStr| -> c_int {
+    let strict = |v: Option<c_int>, line: u32, what: &CStr| -> c_int {
         v.unwrap_or_else(|| {
             let what = msg_cstr(what);
             logmsg!(LOGLVL_ERR, c"set_indent", line, "{what}");

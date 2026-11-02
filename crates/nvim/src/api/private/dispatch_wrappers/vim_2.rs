@@ -4,61 +4,15 @@
 //! run `just apigen`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
-
-/// The msgpack-RPC dispatch wrapper for `nvim_get_keymap`.
-///
-/// Decodes the argument array against the signature, answers `Err` if
-/// the arity or a type is wrong, and encodes the answer as an
-/// `Object`.
-pub fn handle_nvim_get_keymap(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
-    let mut args = args;
-    log_invoke(
-        c"handle_nvim_get_keymap",
-        c"nvim_get_keymap",
-        line!() as c_int,
-        channel_id,
-    );
-    if args.len() != 1 {
-        return Err(wrong_arity(1, args.len()));
-    }
-    let Some(arg_1) = as_string(args[0].take()) else {
-        return Err(wrong_type(1, c"nvim_get_keymap", c"String"));
-    };
-    let rv = nvim_get_keymap(arg_1);
-    Ok(Object::array(rv))
-}
-
-/// The msgpack-RPC dispatch wrapper for `nvim_get_mark`.
-///
-/// Decodes the argument array against the signature, answers `Err` if
-/// the arity or a type is wrong, and encodes the answer as an
-/// `Object`.
-pub fn handle_nvim_get_mark(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
-    let mut args = args;
-    log_invoke(
-        c"handle_nvim_get_mark",
-        c"nvim_get_mark",
-        line!() as c_int,
-        channel_id,
-    );
-    if args.len() != 2 {
-        return Err(wrong_arity(2, args.len()));
-    }
-    let Some(arg_1) = as_string(args[0].take()) else {
-        return Err(wrong_type(1, c"nvim_get_mark", c"String"));
-    };
-    let mut arg_2: KeyDict_empty = match read_keydict(args[1].take()) {
-        KeySetArg::Read(v) => v,
-        KeySetArg::Refused(e) => return Err(e),
-        KeySetArg::WrongType => {
-            return Err(wrong_type(2, c"nvim_get_mark", c"Dict(empty) *"));
-        }
-    };
-    let rv = nvim_get_mark(arg_1, &mut arg_2)?;
-    Ok(Object::array(rv))
-}
 
 /// The msgpack-RPC dispatch wrapper for `nvim_get_mode`.
 ///
@@ -69,7 +23,7 @@ pub fn handle_nvim_get_mode(channel_id: uint64_t, args: Array) -> Result<Object,
     log_invoke(
         c"handle_nvim_get_mode",
         c"nvim_get_mode",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if !args.is_empty() {
@@ -89,7 +43,7 @@ pub fn handle_nvim_get_proc(channel_id: uint64_t, args: Array) -> Result<Object,
     log_invoke(
         c"handle_nvim_get_proc",
         c"nvim_get_proc",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -111,7 +65,7 @@ pub fn handle_nvim_get_proc_children(channel_id: uint64_t, args: Array) -> Resul
     log_invoke(
         c"handle_nvim_get_proc_children",
         c"nvim_get_proc_children",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -134,7 +88,7 @@ pub fn handle_nvim_get_runtime_file(channel_id: uint64_t, args: Array) -> Result
     log_invoke(
         c"handle_nvim_get_runtime_file",
         c"nvim_get_runtime_file",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -157,12 +111,7 @@ pub fn handle_nvim_get_runtime_file(channel_id: uint64_t, args: Array) -> Result
 /// `Object`.
 pub fn handle_nvim_get_var(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
-    log_invoke(
-        c"handle_nvim_get_var",
-        c"nvim_get_var",
-        line!() as c_int,
-        channel_id,
-    );
+    log_invoke(c"handle_nvim_get_var", c"nvim_get_var", line!(), channel_id);
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
@@ -182,7 +131,7 @@ pub fn handle_nvim_get_vvar(channel_id: uint64_t, args: Array) -> Result<Object,
     log_invoke(
         c"handle_nvim_get_vvar",
         c"nvim_get_vvar",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -201,12 +150,7 @@ pub fn handle_nvim_get_vvar(channel_id: uint64_t, args: Array) -> Result<Object,
 /// `Object`.
 pub fn handle_nvim_input(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
-    log_invoke(
-        c"handle_nvim_input",
-        c"nvim_input",
-        line!() as c_int,
-        channel_id,
-    );
+    log_invoke(c"handle_nvim_input", c"nvim_input", line!(), channel_id);
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
@@ -227,7 +171,7 @@ pub fn handle_nvim_input_mouse(channel_id: uint64_t, args: Array) -> Result<Obje
     log_invoke(
         c"handle_nvim_input_mouse",
         c"nvim_input_mouse",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 6 {
@@ -264,7 +208,7 @@ pub fn handle_nvim_list_bufs(channel_id: uint64_t, args: Array) -> Result<Object
     log_invoke(
         c"handle_nvim_list_bufs",
         c"nvim_list_bufs",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if !args.is_empty() {
@@ -283,7 +227,7 @@ pub fn handle_nvim_list_chans(channel_id: uint64_t, args: Array) -> Result<Objec
     log_invoke(
         c"handle_nvim_list_chans",
         c"nvim_list_chans",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if !args.is_empty() {
@@ -302,7 +246,7 @@ pub fn handle_nvim_list_runtime_paths(channel_id: uint64_t, args: Array) -> Resu
     log_invoke(
         c"handle_nvim_list_runtime_paths",
         c"nvim_list_runtime_paths",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if !args.is_empty() {
@@ -321,7 +265,7 @@ pub fn handle_nvim_list_tabpages(channel_id: uint64_t, args: Array) -> Result<Ob
     log_invoke(
         c"handle_nvim_list_tabpages",
         c"nvim_list_tabpages",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if !args.is_empty() {
@@ -340,7 +284,7 @@ pub fn handle_nvim_list_uis(channel_id: uint64_t, args: Array) -> Result<Object,
     log_invoke(
         c"handle_nvim_list_uis",
         c"nvim_list_uis",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if !args.is_empty() {
@@ -359,7 +303,7 @@ pub fn handle_nvim_list_wins(channel_id: uint64_t, args: Array) -> Result<Object
     log_invoke(
         c"handle_nvim_list_wins",
         c"nvim_list_wins",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if !args.is_empty() {
@@ -379,7 +323,7 @@ pub fn handle_nvim_load_context(channel_id: uint64_t, args: Array) -> Result<Obj
     log_invoke(
         c"handle_nvim_load_context",
         c"nvim_load_context",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -401,7 +345,7 @@ pub fn handle_nvim_open_term(channel_id: uint64_t, args: Array) -> Result<Object
     log_invoke(
         c"handle_nvim_open_term",
         c"nvim_open_term",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -431,12 +375,7 @@ pub fn handle_nvim_open_term(channel_id: uint64_t, args: Array) -> Result<Object
 /// `Object`.
 pub fn handle_nvim_paste(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
-    log_invoke(
-        c"handle_nvim_paste",
-        c"nvim_paste",
-        line!() as c_int,
-        channel_id,
-    );
+    log_invoke(c"handle_nvim_paste", c"nvim_paste", line!(), channel_id);
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
@@ -463,12 +402,7 @@ pub fn handle_nvim_paste(channel_id: uint64_t, args: Array) -> Result<Object, Er
 /// `Object`.
 pub fn handle_nvim_put(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
-    log_invoke(
-        c"handle_nvim_put",
-        c"nvim_put",
-        line!() as c_int,
-        channel_id,
-    );
+    log_invoke(c"handle_nvim_put", c"nvim_put", line!(), channel_id);
     if args.len() != 4 {
         return Err(wrong_arity(4, args.len()));
     }
@@ -501,7 +435,7 @@ pub fn handle_nvim_replace_termcodes(channel_id: uint64_t, args: Array) -> Resul
     log_invoke(
         c"handle_nvim_replace_termcodes",
         c"nvim_replace_termcodes",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 4 {
@@ -536,7 +470,7 @@ pub fn handle_nvim_select_popupmenu_item(
     log_invoke(
         c"handle_nvim_select_popupmenu_item",
         c"nvim_select_popupmenu_item",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 4 {
@@ -576,7 +510,7 @@ pub fn handle_nvim_set_client_info(channel_id: uint64_t, args: Array) -> Result<
     log_invoke(
         c"handle_nvim_set_client_info",
         c"nvim_set_client_info",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 5 {
@@ -611,7 +545,7 @@ pub fn handle_nvim_set_current_buf(channel_id: uint64_t, args: Array) -> Result<
     log_invoke(
         c"handle_nvim_set_current_buf",
         c"nvim_set_current_buf",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -637,7 +571,7 @@ pub fn handle_nvim_set_current_dir(channel_id: uint64_t, args: Array) -> Result<
     log_invoke(
         c"handle_nvim_set_current_dir",
         c"nvim_set_current_dir",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -660,7 +594,7 @@ pub fn handle_nvim_set_current_line(channel_id: uint64_t, args: Array) -> Result
     log_invoke(
         c"handle_nvim_set_current_line",
         c"nvim_set_current_line",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -686,7 +620,7 @@ pub fn handle_nvim_set_current_tabpage(channel_id: uint64_t, args: Array) -> Res
     log_invoke(
         c"handle_nvim_set_current_tabpage",
         c"nvim_set_current_tabpage",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -712,7 +646,7 @@ pub fn handle_nvim_set_current_win(channel_id: uint64_t, args: Array) -> Result<
     log_invoke(
         c"handle_nvim_set_current_win",
         c"nvim_set_current_win",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -735,12 +669,7 @@ pub fn handle_nvim_set_current_win(channel_id: uint64_t, args: Array) -> Result<
 /// `Object`.
 pub fn handle_nvim_set_hl(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
-    log_invoke(
-        c"handle_nvim_set_hl",
-        c"nvim_set_hl",
-        line!() as c_int,
-        channel_id,
-    );
+    log_invoke(c"handle_nvim_set_hl", c"nvim_set_hl", line!(), channel_id);
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
@@ -771,7 +700,7 @@ pub fn handle_nvim_set_hl_ns(channel_id: uint64_t, args: Array) -> Result<Object
     log_invoke(
         c"handle_nvim_set_hl_ns",
         c"nvim_set_hl_ns",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -794,7 +723,7 @@ pub fn handle_nvim_set_hl_ns_fast(channel_id: uint64_t, args: Array) -> Result<O
     log_invoke(
         c"handle_nvim_set_hl_ns_fast",
         c"nvim_set_hl_ns_fast",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -817,7 +746,7 @@ pub fn handle_nvim_set_keymap(channel_id: uint64_t, args: Array) -> Result<Objec
     log_invoke(
         c"handle_nvim_set_keymap",
         c"nvim_set_keymap",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 4 {
@@ -850,12 +779,7 @@ pub fn handle_nvim_set_keymap(channel_id: uint64_t, args: Array) -> Result<Objec
 /// `Object`.
 pub fn handle_nvim_set_var(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
-    log_invoke(
-        c"handle_nvim_set_var",
-        c"nvim_set_var",
-        line!() as c_int,
-        channel_id,
-    );
+    log_invoke(c"handle_nvim_set_var", c"nvim_set_var", line!(), channel_id);
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
@@ -877,7 +801,7 @@ pub fn handle_nvim_set_vvar(channel_id: uint64_t, args: Array) -> Result<Object,
     log_invoke(
         c"handle_nvim_set_vvar",
         c"nvim_set_vvar",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -901,7 +825,7 @@ pub fn handle_nvim_strwidth(channel_id: uint64_t, args: Array) -> Result<Object,
     log_invoke(
         c"handle_nvim_strwidth",
         c"nvim_strwidth",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {

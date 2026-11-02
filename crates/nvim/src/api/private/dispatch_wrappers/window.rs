@@ -4,6 +4,13 @@
 //! run `just apigen`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 
@@ -17,7 +24,7 @@ pub fn handle_nvim_win_close(channel_id: uint64_t, args: Array) -> Result<Object
     log_invoke(
         c"handle_nvim_win_close",
         c"nvim_win_close",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -46,7 +53,7 @@ pub fn handle_nvim_win_del_var(channel_id: uint64_t, args: Array) -> Result<Obje
     log_invoke(
         c"handle_nvim_win_del_var",
         c"nvim_win_del_var",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -72,7 +79,7 @@ pub fn handle_nvim_win_get_buf(channel_id: uint64_t, args: Array) -> Result<Obje
     log_invoke(
         c"handle_nvim_win_get_buf",
         c"nvim_win_get_buf",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -82,7 +89,7 @@ pub fn handle_nvim_win_get_buf(channel_id: uint64_t, args: Array) -> Result<Obje
         return Err(wrong_type(1, c"nvim_win_get_buf", c"Window"));
     };
     let rv = nvim_win_get_buf(arg_1)?;
-    Ok(Object::Buffer(rv as Integer))
+    Ok(Object::Buffer(Integer::from(rv)))
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_get_cursor`.
@@ -95,7 +102,7 @@ pub fn handle_nvim_win_get_cursor(channel_id: uint64_t, args: Array) -> Result<O
     log_invoke(
         c"handle_nvim_win_get_cursor",
         c"nvim_win_get_cursor",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -118,7 +125,7 @@ pub fn handle_nvim_win_get_height(channel_id: uint64_t, args: Array) -> Result<O
     log_invoke(
         c"handle_nvim_win_get_height",
         c"nvim_win_get_height",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -141,7 +148,7 @@ pub fn handle_nvim_win_get_number(channel_id: uint64_t, args: Array) -> Result<O
     log_invoke(
         c"handle_nvim_win_get_number",
         c"nvim_win_get_number",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -164,7 +171,7 @@ pub fn handle_nvim_win_get_position(channel_id: uint64_t, args: Array) -> Result
     log_invoke(
         c"handle_nvim_win_get_position",
         c"nvim_win_get_position",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -187,7 +194,7 @@ pub fn handle_nvim_win_get_tabpage(channel_id: uint64_t, args: Array) -> Result<
     log_invoke(
         c"handle_nvim_win_get_tabpage",
         c"nvim_win_get_tabpage",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -197,7 +204,7 @@ pub fn handle_nvim_win_get_tabpage(channel_id: uint64_t, args: Array) -> Result<
         return Err(wrong_type(1, c"nvim_win_get_tabpage", c"Window"));
     };
     let rv = nvim_win_get_tabpage(arg_1)?;
-    Ok(Object::Tabpage(rv as Integer))
+    Ok(Object::Tabpage(Integer::from(rv)))
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_get_var`.
@@ -210,7 +217,7 @@ pub fn handle_nvim_win_get_var(channel_id: uint64_t, args: Array) -> Result<Obje
     log_invoke(
         c"handle_nvim_win_get_var",
         c"nvim_win_get_var",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -235,7 +242,7 @@ pub fn handle_nvim_win_get_width(channel_id: uint64_t, args: Array) -> Result<Ob
     log_invoke(
         c"handle_nvim_win_get_width",
         c"nvim_win_get_width",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -258,7 +265,7 @@ pub fn handle_nvim_win_hide(channel_id: uint64_t, args: Array) -> Result<Object,
     log_invoke(
         c"handle_nvim_win_hide",
         c"nvim_win_hide",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -284,7 +291,7 @@ pub fn handle_nvim_win_is_valid(channel_id: uint64_t, args: Array) -> Result<Obj
     log_invoke(
         c"handle_nvim_win_is_valid",
         c"nvim_win_is_valid",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -307,7 +314,7 @@ pub fn handle_nvim_win_set_buf(channel_id: uint64_t, args: Array) -> Result<Obje
     log_invoke(
         c"handle_nvim_win_set_buf",
         c"nvim_win_set_buf",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -336,7 +343,7 @@ pub fn handle_nvim_win_set_cursor(channel_id: uint64_t, args: Array) -> Result<O
     log_invoke(
         c"handle_nvim_win_set_cursor",
         c"nvim_win_set_cursor",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -366,7 +373,7 @@ pub fn handle_nvim_win_set_height(channel_id: uint64_t, args: Array) -> Result<O
     log_invoke(
         c"handle_nvim_win_set_height",
         c"nvim_win_set_height",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -392,7 +399,7 @@ pub fn handle_nvim_win_set_hl_ns(channel_id: uint64_t, args: Array) -> Result<Ob
     log_invoke(
         c"handle_nvim_win_set_hl_ns",
         c"nvim_win_set_hl_ns",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -418,7 +425,7 @@ pub fn handle_nvim_win_set_var(channel_id: uint64_t, args: Array) -> Result<Obje
     log_invoke(
         c"handle_nvim_win_set_var",
         c"nvim_win_set_var",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 3 {
@@ -445,7 +452,7 @@ pub fn handle_nvim_win_set_width(channel_id: uint64_t, args: Array) -> Result<Ob
     log_invoke(
         c"handle_nvim_win_set_width",
         c"nvim_win_set_width",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -471,7 +478,7 @@ pub fn handle_nvim_win_text_height(channel_id: uint64_t, args: Array) -> Result<
     log_invoke(
         c"handle_nvim_win_text_height",
         c"nvim_win_text_height",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {

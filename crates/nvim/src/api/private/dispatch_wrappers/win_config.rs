@@ -4,6 +4,13 @@
 //! run `just apigen`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 
@@ -17,7 +24,7 @@ pub fn handle_nvim_open_win(channel_id: uint64_t, args: Array) -> Result<Object,
     log_invoke(
         c"handle_nvim_open_win",
         c"nvim_open_win",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 3 {
@@ -40,7 +47,7 @@ pub fn handle_nvim_open_win(channel_id: uint64_t, args: Array) -> Result<Object,
         return Err(expr_map_locked_error());
     }
     let rv = nvim_open_win(arg_1, arg_2, &mut arg_3)?;
-    Ok(Object::Window(rv as Integer))
+    Ok(Object::Window(Integer::from(rv)))
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_get_config`.
@@ -53,7 +60,7 @@ pub fn handle_nvim_win_get_config(channel_id: uint64_t, args: Array) -> Result<O
     log_invoke(
         c"handle_nvim_win_get_config",
         c"nvim_win_get_config",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -76,7 +83,7 @@ pub fn handle_nvim_win_set_config(channel_id: uint64_t, args: Array) -> Result<O
     log_invoke(
         c"handle_nvim_win_set_config",
         c"nvim_win_set_config",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {

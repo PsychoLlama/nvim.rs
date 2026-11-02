@@ -4,6 +4,13 @@
 //! run `just apigen`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 
@@ -17,7 +24,7 @@ pub fn handle_nvim_error_event(channel_id: uint64_t, args: Array) -> Result<Obje
     log_invoke(
         c"handle_nvim_error_event",
         c"nvim_error_event",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -43,7 +50,7 @@ pub fn handle_nvim_ui_term_event(channel_id: uint64_t, args: Array) -> Result<Ob
     log_invoke(
         c"handle_nvim_ui_term_event",
         c"nvim_ui_term_event",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {

@@ -4,6 +4,13 @@
 //! run `just apigen`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 
@@ -17,7 +24,7 @@ pub fn handle_nvim_call_dict_function(channel_id: uint64_t, args: Array) -> Resu
     log_invoke(
         c"handle_nvim_call_dict_function",
         c"nvim_call_dict_function",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 3 {
@@ -43,7 +50,7 @@ pub fn handle_nvim_call_function(channel_id: uint64_t, args: Array) -> Result<Ob
     log_invoke(
         c"handle_nvim_call_function",
         c"nvim_call_function",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -65,12 +72,7 @@ pub fn handle_nvim_call_function(channel_id: uint64_t, args: Array) -> Result<Ob
 /// `Object`.
 pub fn handle_nvim_command(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
-    log_invoke(
-        c"handle_nvim_command",
-        c"nvim_command",
-        line!() as c_int,
-        channel_id,
-    );
+    log_invoke(c"handle_nvim_command", c"nvim_command", line!(), channel_id);
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
@@ -88,12 +90,7 @@ pub fn handle_nvim_command(channel_id: uint64_t, args: Array) -> Result<Object, 
 /// `Object`.
 pub fn handle_nvim_eval(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
-    log_invoke(
-        c"handle_nvim_eval",
-        c"nvim_eval",
-        line!() as c_int,
-        channel_id,
-    );
+    log_invoke(c"handle_nvim_eval", c"nvim_eval", line!(), channel_id);
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
@@ -110,12 +107,7 @@ pub fn handle_nvim_eval(channel_id: uint64_t, args: Array) -> Result<Object, Err
 /// `Object`.
 pub fn handle_nvim_exec2(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
-    log_invoke(
-        c"handle_nvim_exec2",
-        c"nvim_exec2",
-        line!() as c_int,
-        channel_id,
-    );
+    log_invoke(c"handle_nvim_exec2", c"nvim_exec2", line!(), channel_id);
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
@@ -143,7 +135,7 @@ pub fn handle_nvim_parse_expression(channel_id: uint64_t, args: Array) -> Result
     log_invoke(
         c"handle_nvim_parse_expression",
         c"nvim_parse_expression",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 3 {

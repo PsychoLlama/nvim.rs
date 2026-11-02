@@ -94,12 +94,12 @@ fn why() -> CString {
 /// A helper rather than a `logmsg!` per site because most of these sit
 /// inside a body-wide `unsafe` block, where the seven lines rustfmt wraps
 /// the call over are seven *unchecked* lines. One call, one line.
-fn warn_errno(who: &'static CStr, line: c_int, what: &str) {
+fn warn_errno(who: &'static CStr, line: u32, what: &str) {
     logmsg!(LOGLVL_ERR, who, line, "{what}: {}", msg_cstr(&why()));
 }
 
 /// [`warn_errno`] for a failure that carries no errno.
-fn warn(who: &'static CStr, line: c_int, what: &str) {
+fn warn(who: &'static CStr, line: u32, what: &str) {
     logmsg!(LOGLVL_ERR, who, line, "{what}");
 }
 

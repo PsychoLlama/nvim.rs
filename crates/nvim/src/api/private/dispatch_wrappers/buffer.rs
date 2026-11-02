@@ -4,6 +4,13 @@
 //! run `just apigen`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 
@@ -19,7 +26,7 @@ pub fn handle_nvim__buf_stats(channel_id: uint64_t, args: Array) -> Result<Objec
     log_invoke(
         c"handle_nvim__buf_stats",
         c"nvim__buf_stats",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -42,7 +49,7 @@ pub fn handle_nvim_buf_attach(channel_id: uint64_t, args: Array) -> Result<Objec
     log_invoke(
         c"handle_nvim_buf_attach",
         c"nvim_buf_attach",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 3 {
@@ -75,7 +82,7 @@ pub fn handle_nvim_buf_del_keymap(channel_id: uint64_t, args: Array) -> Result<O
     log_invoke(
         c"handle_nvim_buf_del_keymap",
         c"nvim_buf_del_keymap",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 3 {
@@ -104,7 +111,7 @@ pub fn handle_nvim_buf_del_mark(channel_id: uint64_t, args: Array) -> Result<Obj
     log_invoke(
         c"handle_nvim_buf_del_mark",
         c"nvim_buf_del_mark",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -130,7 +137,7 @@ pub fn handle_nvim_buf_del_var(channel_id: uint64_t, args: Array) -> Result<Obje
     log_invoke(
         c"handle_nvim_buf_del_var",
         c"nvim_buf_del_var",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -156,7 +163,7 @@ pub fn handle_nvim_buf_delete(channel_id: uint64_t, args: Array) -> Result<Objec
     log_invoke(
         c"handle_nvim_buf_delete",
         c"nvim_buf_delete",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -189,7 +196,7 @@ pub fn handle_nvim_buf_detach(channel_id: uint64_t, args: Array) -> Result<Objec
     log_invoke(
         c"handle_nvim_buf_detach",
         c"nvim_buf_detach",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -212,7 +219,7 @@ pub fn handle_nvim_buf_get_changedtick(channel_id: uint64_t, args: Array) -> Res
     log_invoke(
         c"handle_nvim_buf_get_changedtick",
         c"nvim_buf_get_changedtick",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -235,7 +242,7 @@ pub fn handle_nvim_buf_get_keymap(channel_id: uint64_t, args: Array) -> Result<O
     log_invoke(
         c"handle_nvim_buf_get_keymap",
         c"nvim_buf_get_keymap",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -261,7 +268,7 @@ pub fn handle_nvim_buf_get_lines(channel_id: uint64_t, args: Array) -> Result<Ob
     log_invoke(
         c"handle_nvim_buf_get_lines",
         c"nvim_buf_get_lines",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 4 {
@@ -293,7 +300,7 @@ pub fn handle_nvim_buf_get_mark(channel_id: uint64_t, args: Array) -> Result<Obj
     log_invoke(
         c"handle_nvim_buf_get_mark",
         c"nvim_buf_get_mark",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -319,7 +326,7 @@ pub fn handle_nvim_buf_get_name(channel_id: uint64_t, args: Array) -> Result<Obj
     log_invoke(
         c"handle_nvim_buf_get_name",
         c"nvim_buf_get_name",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -342,7 +349,7 @@ pub fn handle_nvim_buf_get_offset(channel_id: uint64_t, args: Array) -> Result<O
     log_invoke(
         c"handle_nvim_buf_get_offset",
         c"nvim_buf_get_offset",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -368,7 +375,7 @@ pub fn handle_nvim_buf_get_text(channel_id: uint64_t, args: Array) -> Result<Obj
     log_invoke(
         c"handle_nvim_buf_get_text",
         c"nvim_buf_get_text",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 6 {
@@ -412,7 +419,7 @@ pub fn handle_nvim_buf_get_var(channel_id: uint64_t, args: Array) -> Result<Obje
     log_invoke(
         c"handle_nvim_buf_get_var",
         c"nvim_buf_get_var",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -437,7 +444,7 @@ pub fn handle_nvim_buf_is_loaded(channel_id: uint64_t, args: Array) -> Result<Ob
     log_invoke(
         c"handle_nvim_buf_is_loaded",
         c"nvim_buf_is_loaded",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -460,7 +467,7 @@ pub fn handle_nvim_buf_is_valid(channel_id: uint64_t, args: Array) -> Result<Obj
     log_invoke(
         c"handle_nvim_buf_is_valid",
         c"nvim_buf_is_valid",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -483,7 +490,7 @@ pub fn handle_nvim_buf_line_count(channel_id: uint64_t, args: Array) -> Result<O
     log_invoke(
         c"handle_nvim_buf_line_count",
         c"nvim_buf_line_count",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -506,7 +513,7 @@ pub fn handle_nvim_buf_set_keymap(channel_id: uint64_t, args: Array) -> Result<O
     log_invoke(
         c"handle_nvim_buf_set_keymap",
         c"nvim_buf_set_keymap",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 5 {
@@ -545,7 +552,7 @@ pub fn handle_nvim_buf_set_lines(channel_id: uint64_t, args: Array) -> Result<Ob
     log_invoke(
         c"handle_nvim_buf_set_lines",
         c"nvim_buf_set_lines",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 5 {
@@ -583,7 +590,7 @@ pub fn handle_nvim_buf_set_mark(channel_id: uint64_t, args: Array) -> Result<Obj
     log_invoke(
         c"handle_nvim_buf_set_mark",
         c"nvim_buf_set_mark",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 5 {
@@ -622,7 +629,7 @@ pub fn handle_nvim_buf_set_name(channel_id: uint64_t, args: Array) -> Result<Obj
     log_invoke(
         c"handle_nvim_buf_set_name",
         c"nvim_buf_set_name",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -648,7 +655,7 @@ pub fn handle_nvim_buf_set_text(channel_id: uint64_t, args: Array) -> Result<Obj
     log_invoke(
         c"handle_nvim_buf_set_text",
         c"nvim_buf_set_text",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 6 {
@@ -689,7 +696,7 @@ pub fn handle_nvim_buf_set_var(channel_id: uint64_t, args: Array) -> Result<Obje
     log_invoke(
         c"handle_nvim_buf_set_var",
         c"nvim_buf_set_var",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 3 {

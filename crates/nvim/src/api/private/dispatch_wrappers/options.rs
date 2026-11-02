@@ -4,6 +4,13 @@
 //! run `just apigen`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 
@@ -19,7 +26,7 @@ pub fn handle_nvim_get_all_options_info(
     log_invoke(
         c"handle_nvim_get_all_options_info",
         c"nvim_get_all_options_info",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if !args.is_empty() {
@@ -39,7 +46,7 @@ pub fn handle_nvim_get_option_info2(channel_id: uint64_t, args: Array) -> Result
     log_invoke(
         c"handle_nvim_get_option_info2",
         c"nvim_get_option_info2",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -69,7 +76,7 @@ pub fn handle_nvim_get_option_value(channel_id: uint64_t, args: Array) -> Result
     log_invoke(
         c"handle_nvim_get_option_value",
         c"nvim_get_option_value",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -98,7 +105,7 @@ pub fn handle_nvim_set_option_value(channel_id: uint64_t, args: Array) -> Result
     log_invoke(
         c"handle_nvim_set_option_value",
         c"nvim_set_option_value",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 3 {

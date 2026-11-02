@@ -628,7 +628,7 @@ pub fn grid_put_linebuf(
         logmsg!(
             LOGLVL_DBG,
             c"grid_put_linebuf",
-            line!() as c_int,
+            line!(),
             "invalid state, skipped"
         );
         return;

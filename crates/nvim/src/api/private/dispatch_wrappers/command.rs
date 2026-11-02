@@ -4,6 +4,13 @@
 //! run `just apigen`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 
@@ -20,7 +27,7 @@ pub fn handle_nvim_buf_create_user_command(
     log_invoke(
         c"handle_nvim_buf_create_user_command",
         c"nvim_buf_create_user_command",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 4 {
@@ -61,7 +68,7 @@ pub fn handle_nvim_buf_del_user_command(
     log_invoke(
         c"handle_nvim_buf_del_user_command",
         c"nvim_buf_del_user_command",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -87,7 +94,7 @@ pub fn handle_nvim_buf_get_commands(channel_id: uint64_t, args: Array) -> Result
     log_invoke(
         c"handle_nvim_buf_get_commands",
         c"nvim_buf_get_commands",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
@@ -118,12 +125,7 @@ pub fn handle_nvim_buf_get_commands(channel_id: uint64_t, args: Array) -> Result
 /// `Object`.
 pub fn handle_nvim_cmd(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
-    log_invoke(
-        c"handle_nvim_cmd",
-        c"nvim_cmd",
-        line!() as c_int,
-        channel_id,
-    );
+    log_invoke(c"handle_nvim_cmd", c"nvim_cmd", line!(), channel_id);
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
@@ -155,7 +157,7 @@ pub fn handle_nvim_create_user_command(channel_id: uint64_t, args: Array) -> Res
     log_invoke(
         c"handle_nvim_create_user_command",
         c"nvim_create_user_command",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 3 {
@@ -190,7 +192,7 @@ pub fn handle_nvim_del_user_command(channel_id: uint64_t, args: Array) -> Result
     log_invoke(
         c"handle_nvim_del_user_command",
         c"nvim_del_user_command",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -213,7 +215,7 @@ pub fn handle_nvim_get_commands(channel_id: uint64_t, args: Array) -> Result<Obj
     log_invoke(
         c"handle_nvim_get_commands",
         c"nvim_get_commands",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 1 {
@@ -240,7 +242,7 @@ pub fn handle_nvim_parse_cmd(channel_id: uint64_t, args: Array) -> Result<Object
     log_invoke(
         c"handle_nvim_parse_cmd",
         c"nvim_parse_cmd",
-        line!() as c_int,
+        line!(),
         channel_id,
     );
     if args.len() != 2 {
