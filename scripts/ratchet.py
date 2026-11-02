@@ -812,7 +812,8 @@ plus these whole-tree metrics, which are not per-file:
                         directory of their name in crates/nvim/tests/unit.
                         A module's `X.rs` beside its `X/` is beneath it, and a
                         unit file that drives two modules names the second in
-                        UNIT_TEST_ALSO_COVERS.
+                        UNIT_TEST_ALSO_COVERS. A directory that is not a
+                        library module (`bin/`) is in UNTESTED_EXEMPT.
                         The ground rule is oracle-first, and this is the list
                         of families that have no oracle at all. It shrinks
                         every slice, by construction: a slice that touches a
@@ -942,6 +943,10 @@ UNIT_TESTS = ROOT / "crates" / "nvim" / "tests" / "unit"
 # table *and* `option/`'s scopes and setters (both `pub(crate)`, so it reaches
 # them through the API and `:set`). unit file stem -> the other modules.
 UNIT_TEST_ALSO_COVERS = {"options": ("option",)}
+# Directories under the crate's `src/` that are not modules of the library and
+# so have no family to test: `bin/` is the binary's `main`, which hands its
+# arguments to the library's entry point and nothing else.
+UNTESTED_EXEMPT = {"bin": "the binary's entry point, not a module"}
 
 LINE_CAP = 1000
 # name -> needles counted in the masked source, summed.
@@ -3524,7 +3529,7 @@ def instrument_sites(tree, sources, wrappers=None):
     for unit, others in UNIT_TEST_ALSO_COVERS.items():
         if (UNIT_TESTS / f"{unit}.rs").exists():
             tested.update(others)
-    for top in tops - tested:
+    for top in tops - tested - UNTESTED_EXEMPT.keys():
         if not (UNIT_TESTS / f"{top}.rs").exists() and not (UNIT_TESTS / top).is_dir():
             sites["untested_dirs"][top] = 1
     return sites
@@ -4838,6 +4843,7 @@ SELF_TEST_INSTRUMENTS = [
             "crates/nvim/src/covered/mod.rs": "#[cfg(test)]\nmod tests {\n"
             "    #[test]\n    fn t() {}\n}\n",
             "crates/nvim/src/alone.rs": "fn h() {\n}\n",
+            "crates/nvim/src/bin/nvim.rs": "fn main() {\n}\n",
         },
         {"untested_dirs": 1},
     ),
