@@ -25,7 +25,6 @@
 use super::*;
 use crate::decoration::kHlModeReplace;
 use crate::highlight::HlAttrFlags;
-use crate::pos::MAXCOL;
 
 /// Whether `attr` draws an underline (of any style), a strikethrough or an
 /// overline: a line tied to the glyphs, which looks broken drawn over blank
@@ -63,8 +62,7 @@ impl Cells {
             area = self.vi_attr;
             self.area_active = true;
         } else if area != 0
-            && (wlv.vcol == ColNr::new(wlv.tocol)
-                || (self.noinvcur && wlv.vcol == window.w_virtcol))
+            && (wlv.inverted.ends_at(wlv.vcol) || (self.noinvcur && wlv.vcol == window.w_virtcol))
         {
             area = 0;
             self.area_active = false;
@@ -95,10 +93,9 @@ impl Cells {
         } else if self.search_attr != 0 {
             hl_combine_attr(wlv.line_attr, self.search_attr)
         } else if wlv.line_attr != 0
-            && ((wlv.fromcol == -10 && wlv.tocol == MAXCOL)
-                || wlv.vcol < ColNr::new(wlv.fromcol)
-                || self.prev_vcol < ColNr::new(self.fromcol_prev)
-                || wlv.vcol >= ColNr::new(wlv.tocol))
+            && wlv
+                .inverted
+                .line_attr_shows(resume_col(self.fromcol_prev), self.prev_vcol, wlv.vcol)
         {
             // `area_attr` may be 0 here even inside the range, when
             // "noinvcur" made it skip the cursor.
@@ -117,13 +114,13 @@ impl Cells {
     /// or resuming after the cursor that "noinvcur" skipped, which is what
     /// `prev_vcol == fromcol_prev` says.
     pub(super) fn area_starts_here(&self, wlv: &WinLineVars) -> bool {
-        wlv.vcol == ColNr::new(wlv.fromcol)
-            || (wlv.vcol + 1 == ColNr::new(wlv.fromcol)
+        wlv.inverted.starts_at(wlv.vcol)
+            || (wlv.inverted.starts_at(wlv.vcol + 1)
                 && ((wlv.extra_todo == 0 && c_cells_at(self.rest()) > 1)
                     || (wlv.extra_todo > 0 && c_cells_at(wlv.extra.rest()) > 1)))
-            || (self.prev_vcol == ColNr::new(self.fromcol_prev)
-                && self.prev_vcol < wlv.vcol
-                && wlv.vcol < ColNr::new(wlv.tocol))
+            || wlv
+                .inverted
+                .resumes_at(resume_col(self.fromcol_prev), self.prev_vcol, wlv.vcol)
     }
 
     /// Run the decoration walk for this cell and feed the loop whatever inline
@@ -131,18 +128,17 @@ impl Cells {
     pub(super) fn decorations_at(&mut self, wlv: &mut WinLineVars, window: Win) {
         // The Visual-area test below is repeated here rather than shared,
         // because this one may not look inside the run's text.
-        if wlv.vcol == ColNr::new(wlv.fromcol)
-            || (wlv.vcol + 1 == ColNr::new(wlv.fromcol)
+        if wlv.inverted.starts_at(wlv.vcol)
+            || (wlv.inverted.starts_at(wlv.vcol + 1)
                 && wlv.extra_todo == 0
                 && c_cells_at(self.rest()) > 1)
-            || (self.prev_vcol == ColNr::new(self.fromcol_prev)
-                && self.prev_vcol < wlv.vcol
-                && wlv.vcol < ColNr::new(wlv.tocol))
+            || wlv
+                .inverted
+                .resumes_at(resume_col(self.fromcol_prev), self.prev_vcol, wlv.vcol)
         {
             self.area_active = true;
         } else if self.area_active
-            && (wlv.vcol == ColNr::new(wlv.tocol)
-                || (self.noinvcur && wlv.vcol == window.w_virtcol))
+            && (wlv.inverted.ends_at(wlv.vcol) || (self.noinvcur && wlv.vcol == window.w_virtcol))
         {
             self.area_active = false;
         }

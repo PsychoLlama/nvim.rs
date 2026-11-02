@@ -146,10 +146,7 @@ pub fn win_line(
         sign_num_attr: 0,
         prev_num_attr: -1,
         sign_cul_attr: 0,
-        // `fromcol` -10 and `tocol` MAXCOL mean "no inverted range at
-        // all", which is a different thing from an empty one.
-        fromcol: -10,
-        tocol: MAXCOL,
+        inverted: Inversion::NONE,
         showbreak_vcol: ColNr::NONE,
         need_showbreak: false,
         char_attr: 0,

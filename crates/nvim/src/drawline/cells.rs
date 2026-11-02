@@ -636,9 +636,7 @@ impl Cells {
                 put_cell(wlv.off, 0, attr, wlv.vcol);
                 // When "tocol" is halfway through a character, put it at
                 // the end of it, or highlighting would not stop.
-                if wlv.tocol == wlv.vcol.get() {
-                    wlv.tocol += 1;
-                }
+                wlv.inverted.widen_end(wlv.vcol);
             }
             wlv.off += 1;
             wlv.col += 1;

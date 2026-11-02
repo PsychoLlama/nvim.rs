@@ -678,12 +678,7 @@ impl WinLineVars {
 
             // Move the start and end of the highlighted area past the
             // indent. The end needs it when 'linebreak' is also set.
-            if self.fromcol >= vcol_before.get() && self.fromcol < self.vcol.get() {
-                self.fromcol = self.vcol.get();
-            }
-            if self.tocol == vcol_before.get() {
-                self.tocol = self.vcol.get();
-            }
+            self.inverted.skip_padding(vcol_before, self.vcol);
         }
 
         if window.w_skipcol > ColNr::ZERO
@@ -731,12 +726,7 @@ impl WinLineVars {
 
             // As in `handle_breakindent`: move the highlighted area past
             // what was just drawn.
-            if self.fromcol >= vcol_before.get() && self.fromcol < self.vcol.get() {
-                self.fromcol = self.vcol.get();
-            }
-            if self.tocol == vcol_before.get() {
-                self.tocol = self.vcol.get();
-            }
+            self.inverted.skip_padding(vcol_before, self.vcol);
         }
 
         if window.w_skipcol == ColNr::ZERO

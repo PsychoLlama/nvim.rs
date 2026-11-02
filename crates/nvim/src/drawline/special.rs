@@ -16,7 +16,6 @@ use super::*;
 use crate::grid::with_linebuf;
 use crate::normal::{visual_active, visual_anchor, visual_mode};
 use crate::optionstr::OptStringRef;
-use crate::pos::MAXCOL;
 use crate::strings::has_char;
 use crate::types::NUL;
 
@@ -158,7 +157,7 @@ impl Cells {
         let prevcol_hl_flag = get_prevcol_hl_flag(window, ColNr::new(self.byte_col() - 1));
         let want = self.lcs_eol_todo
             && ((self.area_attr != 0
-                && wlv.vcol == ColNr::new(wlv.fromcol)
+                && wlv.inverted.starts_at(wlv.vcol)
                 && (!visual_mode().is_block()
                     || wlv.lnum == visual_anchor().lnum
                     || wlv.lnum == Win::current().w_cursor.lnum))
@@ -208,8 +207,7 @@ impl Cells {
         } else if visual_active()
             && (visual_mode().is_block() || visual_mode().is_char())
             && virtual_active(window)
-            && wlv.tocol != MAXCOL
-            && wlv.vcol < ColNr::new(wlv.tocol)
+            && wlv.inverted.runs_past(wlv.vcol)
             && wlv.col < self.view_width
         {
             // With 'virtualedit' the selection can run past the end of the
@@ -388,8 +386,9 @@ impl Cells {
     /// `'incsearch'` range includes the break and needs somewhere to show it.
     pub(super) fn wants_eol_cell(&self, wlv: &WinLineVars, window: Win) -> bool {
         (window.w_onebuf_opt.wo_list != 0
-            || ((wlv.fromcol >= 0 || self.fromcol_prev >= 0)
-                && wlv.tocol > wlv.vcol.get()
+            || (wlv
+                .inverted
+                .reaches_eol(resume_col(self.fromcol_prev), wlv.vcol)
                 && !visual_mode().is_block()
                 && wlv.col < self.view_width
                 && !(self.noinvcur
@@ -406,8 +405,7 @@ impl Cells {
         if wlv.diff_hlf == HLF_NONE && wlv.line_attr == 0 && wlv.line_attr_lowprio == 0 {
             if !(self.area_highlighting
                 && virtual_active(window)
-                && wlv.tocol != MAXCOL
-                && wlv.vcol < ColNr::new(wlv.tocol))
+                && wlv.inverted.runs_past(wlv.vcol))
             {
                 // Under 'virtualedit' a Visual selection may extend past
                 // the end of the line, and then the run has to survive.

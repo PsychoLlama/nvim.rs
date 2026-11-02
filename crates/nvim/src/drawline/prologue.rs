@@ -274,38 +274,40 @@ impl LineSetup {
             // Blockwise: the columns were worked out for the whole
             // selection when it last moved.
             if self.lnum_in_visual_area {
-                wlv.fromcol = window.w_old_cursor_fcol.get();
-                wlv.tocol = window.w_old_cursor_lcol.get();
+                wlv.inverted = Inversion::new(window.w_old_cursor_fcol, window.w_old_cursor_lcol);
             }
         } else {
             if lnum > top.lnum && lnum <= bot.lnum {
-                wlv.fromcol = 0;
+                wlv.inverted = Inversion::new(ColNr::ZERO, ColNr::MAX);
             } else if lnum == top.lnum {
-                if sel.mode.is_line() {
-                    wlv.fromcol = 0;
+                wlv.inverted = if sel.mode.is_line() {
+                    Inversion::new(ColNr::ZERO, ColNr::MAX)
                 } else {
-                    wlv.fromcol = getvvcol(window, &mut top).0.get();
-                    if gchar_pos(&top) == NUL {
-                        // Empty line: invert the one cell past its end.
-                        wlv.tocol = wlv.fromcol + 1;
-                    }
-                }
+                    let from = getvvcol(window, &mut top).0;
+                    // On an empty line, invert the one cell past its end.
+                    let to = if gchar_pos(&top) == NUL {
+                        from + 1
+                    } else {
+                        ColNr::MAX
+                    };
+                    Inversion::new(from, to)
+                };
             }
             if !sel.mode.is_line() && lnum == bot.lnum {
                 if P_SEL.first_byte() == b'e' && bot.col == ColNr::ZERO && bot.coladd == 0 {
                     // 'selection' "exclusive" and the selection stops at
                     // the start of this line: none of it is here.
-                    wlv.fromcol = -10;
-                    wlv.tocol = MAXCOL;
+                    wlv.inverted = Inversion::NONE;
                 } else if bot.col == ColNr::MAX {
-                    wlv.tocol = MAXCOL;
+                    wlv.inverted.set_to(ColNr::MAX);
                 } else {
                     let mut pos = bot;
-                    if P_SEL.first_byte() == b'e' {
-                        wlv.tocol = getvvcol(window, &mut pos).0.get();
+                    let to = if P_SEL.first_byte() == b'e' {
+                        getvvcol(window, &mut pos).0
                     } else {
-                        wlv.tocol = (getvvcol(window, &mut pos).2 + 1).get();
-                    }
+                        getvvcol(window, &mut pos).2 + 1
+                    };
+                    wlv.inverted.set_to(to);
                 }
             }
         }
@@ -319,7 +321,7 @@ impl LineSetup {
             self.noinvcur = true;
         }
 
-        if wlv.fromcol >= 0 {
+        if wlv.inverted.from().is_some() {
             self.area_highlighting = true;
             self.vi_attr = win_hl_attr(window, HLF_V);
         }
@@ -328,25 +330,28 @@ impl LineSetup {
     /// The inverted range for `'incsearch'` and `:s///c`.
     fn incsearch_area(&mut self, wlv: &mut WinLineVars, window: Win) {
         let lnum = wlv.lnum;
-        if lnum == Win::current().w_cursor.lnum {
+        let from = if lnum == Win::current().w_cursor.lnum {
             let win = Win::current();
-            wlv.fromcol = win.vcol_triple(win.cursor()).0.get();
+            win.vcol_triple(win.cursor()).0
         } else {
-            wlv.fromcol = 0;
-        }
-        if lnum == Win::current().w_cursor.lnum + search_match_lines.get() {
+            ColNr::ZERO
+        };
+        let mut to = if lnum == Win::current().w_cursor.lnum + search_match_lines.get() {
             let mut pos = Pos {
                 lnum,
                 col: search_match_endcol.get(),
                 coladd: 0,
             };
-            wlv.tocol = getvcol(Win::current(), &mut pos).0.get();
-        }
+            getvcol(Win::current(), &mut pos).0
+        } else {
+            ColNr::MAX
+        };
         // Do at least one character; the match can be past the end of the
         // line.
-        if wlv.fromcol == wlv.tocol && search_match_endcol.get() != ColNr::ZERO {
-            wlv.tocol = wlv.fromcol + 1;
+        if from == to && search_match_endcol.get() != ColNr::ZERO {
+            to = from + 1;
         }
+        wlv.inverted = Inversion::new(from, to);
         self.area_highlighting = true;
         self.vi_attr = win_hl_attr(window, HLF_I);
     }
@@ -656,11 +661,7 @@ impl LineSetup {
         }
 
         // Adjust for inverted text that is, or starts, left of the screen.
-        if wlv.tocol <= wlv.vcol.get() {
-            wlv.fromcol = 0;
-        } else if wlv.fromcol >= 0 && wlv.fromcol < wlv.vcol.get() {
-            wlv.fromcol = wlv.vcol.get();
-        }
+        wlv.inverted.clip_left(wlv.vcol);
 
         // With a non-zero `w_skipcol` the first row still owes a
         // 'showbreak'.
@@ -713,21 +714,11 @@ impl LineSetup {
     ///
     /// Doing it once here saves testing for it on every character.
     fn keep_cursor_visible(&mut self, wlv: &mut WinLineVars, window: Win) {
-        if wlv.fromcol < 0 {
-            return;
-        }
-        if self.noinvcur {
-            if wlv.fromcol == window.w_virtcol.get() {
-                // Inverting starts at the cursor; start just after it.
-                self.fromcol_prev = wlv.fromcol;
-                wlv.fromcol = -1;
-            } else if wlv.fromcol < window.w_virtcol.get() {
-                // Resume inverting after the cursor.
-                self.fromcol_prev = window.w_virtcol.get();
-            }
-        }
-        if wlv.fromcol >= wlv.tocol {
-            wlv.fromcol = -1;
+        if let Some(resume) = wlv
+            .inverted
+            .keep_cursor_visible(self.noinvcur, window.w_virtcol)
+        {
+            self.fromcol_prev = resume.get();
         }
     }
 }
