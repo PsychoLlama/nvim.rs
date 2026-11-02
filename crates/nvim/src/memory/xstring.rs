@@ -32,13 +32,6 @@
 //!
 //! # Interior NULs
 //!
-//! The first NUL's position is cached: [`as_cstr`](XString::as_cstr) measures
-//! once and every later call answers in constant time, until a `&mut` path
-//! (an append, a truncation, a C callee writing through
-//! [`as_mut_ptr`](XString::as_mut_ptr)) forgets the measurement. A C
-//! callee may plant a NUL anywhere, so the position is measured, never
-//! assumed to be the terminator.
-//!
 //! Storage keeps every byte it is given, terminator included, so `len()` and
 //! the [`Deref`] slice are exact. A C consumer reading
 //! [`as_ptr`](XString::as_ptr) stops at the first NUL, and
@@ -61,7 +54,6 @@
     clippy::ptr_as_ptr
 )]
 
-use core::cell::Cell;
 use core::ffi::{CStr, c_char};
 use core::ops::Deref;
 use core::{fmt, slice};
@@ -70,39 +62,12 @@ use core::{fmt, slice};
 ///
 /// The buffer always ends with a NUL and is therefore never empty; the bytes
 /// this derefs to are everything before it.
-pub struct XString {
-    bytes: Vec<u8>,
-    /// Where the first NUL in `bytes` is, once [`XString::as_cstr`] has
-    /// looked; [`UNMEASURED`] until then and after any `&mut` path.
-    nul_at: Cell<usize>,
-}
-
-/// [`XString::nul_at`] before anything has measured it.
-const UNMEASURED: usize = usize::MAX;
+pub struct XString(Vec<u8>);
 
 impl XString {
-    /// `bytes`, which end in a NUL, with nothing measured yet.
-    fn adopt(bytes: Vec<u8>) -> Self {
-        Self::measured(bytes, UNMEASURED)
-    }
-
-    /// `bytes`, whose first NUL is at `nul_at` (or [`UNMEASURED`]).
-    fn measured(bytes: Vec<u8>, nul_at: usize) -> Self {
-        debug_assert!(bytes.last() == Some(&0));
-        Self {
-            bytes,
-            nul_at: Cell::new(nul_at),
-        }
-    }
-
-    /// Forget where the first NUL was: the bytes are about to change.
-    fn unmeasure(&mut self) {
-        self.nul_at.set(UNMEASURED);
-    }
-
     /// The empty string: a buffer holding just the terminator.
     pub fn new() -> Self {
-        Self::measured(vec![0], 0)
+        Self(vec![0])
     }
 
     /// An empty string with room for `payload` bytes before it has to grow
@@ -111,7 +76,7 @@ impl XString {
     pub fn with_capacity(payload: usize) -> Self {
         let mut bytes = Vec::with_capacity(payload + 1);
         bytes.push(0);
-        Self::measured(bytes, 0)
+        Self(bytes)
     }
 
     /// A copy of `bytes`, terminated.
@@ -128,7 +93,7 @@ impl XString {
         let mut buffer = Vec::with_capacity(bytes.len() + 1);
         buffer.extend_from_slice(bytes);
         buffer.push(0);
-        Self::adopt(buffer)
+        Self(buffer)
     }
 
     /// `bytes` as a string, keeping its allocation: the terminator is
@@ -140,7 +105,7 @@ impl XString {
             "XString::from_vec: interior NUL -- measured text wants a Vec<u8>"
         );
         bytes.push(0);
-        Self::adopt(bytes)
+        Self(bytes)
     }
 
     /// A string a C callee writes.
@@ -164,22 +129,22 @@ impl XString {
             .position(|&byte| byte == 0)
             .expect("the last byte is the terminator the callee could not overwrite");
         buffer.truncate(used + 1);
-        Self::measured(buffer, used)
+        Self(buffer)
     }
 
     /// A copy of a C string, terminator and all. The `xstrdup` of this type.
     pub fn from_cstr(string: &CStr) -> Self {
-        Self::measured(string.to_bytes_with_nul().to_vec(), string.count_bytes())
+        Self(string.to_bytes_with_nul().to_vec())
     }
 
     /// The payload's length in bytes, terminator excluded.
     pub fn len(&self) -> usize {
-        self.bytes.len() - 1
+        self.0.len() - 1
     }
 
     /// Whether the string has no payload.
     pub fn is_empty(&self) -> bool {
-        self.bytes.len() == 1
+        self.0.len() == 1
     }
 
     /// The buffer back as a `Vec<u8>`, terminator included.
@@ -188,35 +153,23 @@ impl XString {
     /// the command line, which holds several NUL-terminated strings at once
     /// and so is not an `XString` at all.
     pub fn into_vec(self) -> Vec<u8> {
-        self.bytes
+        self.0
     }
 
     /// The whole buffer, terminator included: the payload and the NUL after
     /// it, for a callee that takes a terminated slice. Measured by the
     /// vector, not by a scan.
     pub fn as_bytes_with_nul(&self) -> &[u8] {
-        &self.bytes
+        &self.0
     }
 
     /// The string as a C string, stopping at the first NUL.
     ///
     /// Never fails: the buffer always ends with a terminator. With an
     /// interior NUL the answer is the prefix a C consumer would read, which
-    /// is what [`as_ptr`](Self::as_ptr) hands out. The first call after a
-    /// change scans for that NUL; the ones after it reuse the position.
+    /// is what [`as_ptr`](Self::as_ptr) hands out.
     pub fn as_cstr(&self) -> &CStr {
-        let mut nul_at = self.nul_at.get();
-        if nul_at == UNMEASURED {
-            nul_at = CStr::from_bytes_until_nul(&self.bytes)
-                .expect("an XString always ends with a NUL")
-                .count_bytes();
-            self.nul_at.set(nul_at);
-        }
-        let bytes = &self.bytes[..=nul_at];
-        debug_assert!(bytes.iter().position(|&b| b == 0) == Some(nul_at));
-        // SAFETY: `nul_at` is the first NUL in `bytes`: measured above, or
-        // by a constructor, and forgotten by every `&mut` path since.
-        unsafe { CStr::from_bytes_with_nul_unchecked(bytes) }
+        CStr::from_bytes_until_nul(&self.0).expect("an XString always ends with a NUL")
     }
 
     /// The C string at byte `at`: from there to the next NUL. Past the end
@@ -225,7 +178,7 @@ impl XString {
     /// For a string that packs several, as a tag completion keeps a tag's
     /// name, kind and file.
     pub fn cstr_at(&self, at: usize) -> &CStr {
-        let tail = self.bytes.get(at..).unwrap_or(&[0]);
+        let tail = self.0.get(at..).unwrap_or(&[0]);
         CStr::from_bytes_until_nul(tail).expect("an XString always ends with a NUL")
     }
 
@@ -235,7 +188,7 @@ impl XString {
     /// grown; a callee that keeps it past that point wants
     /// [`into_raw`](Self::into_raw) instead.
     pub fn as_ptr(&self) -> *const c_char {
-        self.bytes.as_ptr().cast::<c_char>()
+        self.0.as_ptr().cast::<c_char>()
     }
 
     /// The buffer's address for a C callee that writes through it.
@@ -243,18 +196,16 @@ impl XString {
     /// The callee may overwrite the payload but must leave a NUL within the
     /// buffer, and must not write past it: the length stays this string's.
     pub fn as_mut_ptr(&mut self) -> *mut c_char {
-        self.unmeasure();
-        self.bytes.as_mut_ptr().cast::<c_char>()
+        self.0.as_mut_ptr().cast::<c_char>()
     }
 
     /// Append `bytes` before the terminator.
     pub fn push_bytes(&mut self, bytes: &[u8]) {
         // Off, extend, back on: the invariant is restored before the
         // method returns and the append stays a single `extend_from_slice`.
-        self.unmeasure();
-        self.bytes.pop();
-        self.bytes.extend_from_slice(bytes);
-        self.bytes.push(0);
+        self.0.pop();
+        self.0.extend_from_slice(bytes);
+        self.0.push(0);
     }
 
     /// Append a `&str`'s bytes. The convenience the `strcat` sites want,
@@ -277,9 +228,8 @@ impl XString {
     /// payload is a no-op, as [`Vec::truncate`]'s is.
     pub fn truncate(&mut self, len: usize) {
         if len < self.len() {
-            self.unmeasure();
-            self.bytes.truncate(len);
-            self.bytes.push(0);
+            self.0.truncate(len);
+            self.0.push(0);
         }
     }
 
@@ -301,7 +251,7 @@ impl XString {
     pub fn into_raw(self) -> *mut c_char {
         // Never empty -- the terminator is always there -- so this is a heap
         // address, not a dangling one.
-        let mut bytes = core::mem::ManuallyDrop::new(self.bytes);
+        let mut bytes = core::mem::ManuallyDrop::new(self.0);
         bytes.as_mut_ptr().cast::<c_char>()
     }
 
@@ -321,10 +271,7 @@ impl XString {
         // stated capacity is the string's own extent; a block `malloc` made
         // larger is still released and reallocated correctly, which is the
         // adoption rule `allocator.rs` writes down.
-        Self::measured(
-            unsafe { Vec::from_raw_parts(raw.cast::<u8>(), size, size) },
-            size - 1,
-        )
+        Self(unsafe { Vec::from_raw_parts(raw.cast::<u8>(), size, size) })
     }
 }
 
@@ -339,13 +286,13 @@ impl Deref for XString {
 
     /// The payload, terminator excluded.
     fn deref(&self) -> &[u8] {
-        &self.bytes[..self.bytes.len() - 1]
+        &self.0[..self.0.len() - 1]
     }
 }
 
 impl Clone for XString {
     fn clone(&self) -> Self {
-        Self::measured(self.bytes.clone(), self.nul_at.get())
+        Self(self.0.clone())
     }
 }
 
@@ -362,7 +309,7 @@ impl fmt::Debug for XString {
 
 impl PartialEq for XString {
     fn eq(&self, other: &Self) -> bool {
-        self.bytes == other.bytes
+        self.0 == other.0
     }
 }
 
@@ -560,35 +507,5 @@ mod tests {
         assert_eq!(string.len(), 12);
         assert_eq!(&*string, b"before\0after");
         assert_eq!(string.as_cstr(), c"before");
-    }
-
-    /// The cached first-NUL position is forgotten by every path that can
-    /// move it: an append, a truncation, and a C callee's write.
-    #[test]
-    fn the_measured_c_view_follows_every_change() {
-        let mut string = XString::from_bytes(b"abc");
-        assert_eq!(string.as_cstr(), c"abc");
-        assert_eq!(string.as_cstr(), c"abc");
-        string.push_bytes(b"de");
-        assert_eq!(string.as_cstr(), c"abcde");
-        string.truncate(2);
-        assert_eq!(string.as_cstr(), c"ab");
-        string.push_bytes(b"xyz");
-        assert_eq!(string.as_cstr(), c"abxyz");
-        let raw = string.as_mut_ptr();
-        // SAFETY: index 1 is inside the five-byte payload.
-        unsafe { *raw.add(1) = 0 };
-        assert_eq!(string.as_cstr(), c"a");
-        let copy = string.clone();
-        assert_eq!(copy.as_cstr(), c"a");
-        string.as_mut_ptr();
-        assert_eq!(&*string, b"a\0xyz");
-    }
-
-    /// The cache costs a word and keeps the vector's niche.
-    #[test]
-    fn the_cache_keeps_the_option_niche() {
-        assert_eq!(size_of::<XString>(), 32);
-        assert_eq!(size_of::<Option<XString>>(), size_of::<XString>());
     }
 }

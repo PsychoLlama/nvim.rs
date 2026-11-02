@@ -15,7 +15,7 @@ unsafe code anywhere off this list (see "How the ratchet enforces it").
 reader who is not a specialist: what each row holds, the contract that keeps
 it sound, and what would retire it.
 
-Today: **1,617** unchecked statements inside the perimeter (64 files),
+Today: **1,615** unchecked statements inside the perimeter (64 files),
 **0** outside it (0 files, of 1,389 measured). It was 138,877 when this
 file was written, at the end of phase 23's slice 15 — in _lines_, which is what
 this metric counted until phase 31 changed the unit to statements.
