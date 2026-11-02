@@ -95,7 +95,7 @@ impl Cells {
         } else if wlv.line_attr != 0
             && wlv
                 .inverted
-                .line_attr_shows(resume_col(self.fromcol_prev), self.prev_vcol, wlv.vcol)
+                .line_attr_shows(self.invert_resume, self.prev_vcol, wlv.vcol)
         {
             // `area_attr` may be 0 here even inside the range, when
             // "noinvcur" made it skip the cursor.
@@ -112,7 +112,7 @@ impl Cells {
     /// Three ways in: exactly at the start; one column before it when the
     /// character is double-width, so that inverting starts on its first half;
     /// or resuming after the cursor that "noinvcur" skipped, which is what
-    /// `prev_vcol == fromcol_prev` says.
+    /// `prev_vcol == invert_resume` says.
     pub(super) fn area_starts_here(&self, wlv: &WinLineVars) -> bool {
         wlv.inverted.starts_at(wlv.vcol)
             || (wlv.inverted.starts_at(wlv.vcol + 1)
@@ -120,7 +120,7 @@ impl Cells {
                     || (wlv.extra_todo > 0 && c_cells_at(wlv.extra.rest()) > 1)))
             || wlv
                 .inverted
-                .resumes_at(resume_col(self.fromcol_prev), self.prev_vcol, wlv.vcol)
+                .resumes_at(self.invert_resume, self.prev_vcol, wlv.vcol)
     }
 
     /// Run the decoration walk for this cell and feed the loop whatever inline
@@ -134,7 +134,7 @@ impl Cells {
                 && c_cells_at(self.rest()) > 1)
             || wlv
                 .inverted
-                .resumes_at(resume_col(self.fromcol_prev), self.prev_vcol, wlv.vcol)
+                .resumes_at(self.invert_resume, self.prev_vcol, wlv.vcol)
         {
             self.area_active = true;
         } else if self.area_active
@@ -224,15 +224,18 @@ impl Cells {
         let at = self.byte_col();
         let num_changes = self.line_changes.num_changes();
         if num_changes > 0
-            && self.change_index >= 0
-            && self.change_index < num_changes - 1
-            && at >= self.line_changes.raw_start(self.change_index + 1)
+            && let Some(index) = self.change_index
+            && index < num_changes - 1
+            && at >= self.line_changes.raw_start(index + 1)
         {
-            self.change_index += 1;
+            self.change_index = Some(index + 1);
         }
         let mut added = false;
-        if num_changes > 0 && self.change_index >= 0 && self.change_index < num_changes {
-            let (start, end, is_added) = self.line_changes.change(self.change_index);
+        if num_changes > 0
+            && let Some(index) = self.change_index
+            && index < num_changes
+        {
+            let (start, end, is_added) = self.line_changes.change(index);
             self.change_start = start;
             self.change_end = end;
             added = is_added;
@@ -262,9 +265,8 @@ impl Cells {
             return;
         }
         wlv.reset_extra_attr = false;
-        if self.extra_attr_next >= 0 {
-            wlv.extra_attr = self.extra_attr_next;
-            self.extra_attr_next = -1;
+        if let Some(attr) = self.extra_attr_next.take() {
+            wlv.extra_attr = attr;
         } else {
             wlv.extra_attr = 0;
             // The extra attribute has been applied, so a `:match` may take
@@ -276,7 +278,7 @@ impl Cells {
     /// Overlay `'cursorcolumn'` or `'colorcolumn'` on this cell, remembering
     /// what to put back afterwards.
     pub(super) fn column_highlight(&mut self, wlv: &mut WinLineVars, window: Win) {
-        self.attr_before_vcol_hl = -1;
+        self.attr_before_vcol_hl = None;
         if self.lnum_in_visual_area
             || self.search_attr != 0
             || self.area_attr != 0
@@ -288,10 +290,10 @@ impl Cells {
             && wlv.hl_vcol() == window.w_virtcol.get()
             && wlv.lnum != window.w_cursor.lnum
         {
-            self.attr_before_vcol_hl = wlv.char_attr;
+            self.attr_before_vcol_hl = Some(wlv.char_attr);
             wlv.char_attr = hl_combine_attr(win_hl_attr(window, HLF_CUC), wlv.char_attr);
         } else if wlv.is_color_col(window, wlv.hl_vcol()) {
-            self.attr_before_vcol_hl = wlv.char_attr;
+            self.attr_before_vcol_hl = Some(wlv.char_attr);
             wlv.char_attr = hl_combine_attr(win_hl_attr(window, HLF_MC), wlv.char_attr);
         }
     }

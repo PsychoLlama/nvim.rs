@@ -206,7 +206,7 @@ impl LineSetup {
             search_attr: 0,
             search_attr_from_match: false,
             noinvcur: false,
-            fromcol_prev: -2,
+            invert_resume: None,
             lnum_in_visual_area: false,
             cul_screenline: false,
             left_curline_col: 0,
@@ -215,7 +215,7 @@ impl LineSetup {
             line_attr_lowprio_save: 0,
 
             line_changes: DiffLine::default(),
-            change_index: -1,
+            change_index: None,
             change_start: MAXCOL,
             change_end: -1,
 
@@ -379,10 +379,10 @@ impl LineSetup {
             } else {
                 HLF_TXD // changed text on a changed line
             };
-            self.change_index = 0;
+            self.change_index = Some(0);
         } else {
             wlv.diff_hlf = HLF_CHD; // changed line
-            self.change_index = 0;
+            self.change_index = Some(0);
         }
         self.area_highlighting = true;
     }
@@ -718,7 +718,7 @@ impl LineSetup {
             .inverted
             .keep_cursor_visible(self.noinvcur, window.w_virtcol)
         {
-            self.fromcol_prev = resume.get();
+            self.invert_resume = Some(resume);
         }
     }
 }

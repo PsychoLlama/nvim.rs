@@ -119,8 +119,8 @@ fn read_state<R>(f: impl FnOnce(&DecorState) -> R) -> R {
 /// is known") or to [`DRAW_COL_NEVER`].
 const DRAW_COL_NEW: c_int = -10;
 const DRAW_COL_PENDING: c_int = -3;
-const DRAW_COL_LATER: c_int = -1;
-const DRAW_COL_NEVER: c_int = c_int::MIN;
+pub(crate) const DRAW_COL_LATER: c_int = -1;
+pub(crate) const DRAW_COL_NEVER: c_int = c_int::MIN;
 
 // ---------------------------------------------------------------------------
 // The state's walk, and its slab

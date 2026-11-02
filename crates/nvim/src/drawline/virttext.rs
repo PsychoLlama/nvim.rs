@@ -19,10 +19,10 @@
 
 use super::*;
 use crate::decoration::{
-    DECOR_ID_INVALID, VirtChunks, decor_inline_virt_from, decor_lists, decor_range,
-    kDecorKindUIWatched, kDecorKindVirtText, kHlModeBlend, kHlModeCombine, kVPosEndOfLine,
-    kVPosEndOfLineRightAlign, kVPosInline, kVPosRightAlign, kVPosWinCol, kVTRepeatLinebreak,
-    set_decor_eol_col, set_decor_range_draw_col, with_decor_virt,
+    DECOR_ID_INVALID, DRAW_COL_LATER, DRAW_COL_NEVER, VirtChunks, decor_inline_virt_from,
+    decor_lists, decor_range, kDecorKindUIWatched, kDecorKindVirtText, kHlModeBlend,
+    kHlModeCombine, kVPosEndOfLine, kVPosEndOfLineRightAlign, kVPosInline, kVPosRightAlign,
+    kVPosWinCol, kVTRepeatLinebreak, set_decor_eol_col, set_decor_range_draw_col, with_decor_virt,
 };
 use crate::grid::with_linebuf;
 use crate::types::Handle;
@@ -139,7 +139,7 @@ pub(crate) fn draw_virt_text(
             })
         });
 
-        if item.draw_col == -1 {
+        if item.draw_col == DRAW_COL_LATER {
             let placed = match decor_virt_pos_kind(&item) {
                 kVPosEndOfLineRightAlign if do_eol => {
                     let mut eol_offset = 0;
@@ -148,7 +148,7 @@ pub(crate) fn draw_virt_text(
                             let ahead = decor_range(j);
                             if ahead.start_row != row
                                 || !decor_virt_pos(&ahead)
-                                || ahead.draw_col != -1
+                                || ahead.draw_col != DRAW_COL_LATER
                             {
                                 continue;
                             }
@@ -185,7 +185,7 @@ pub(crate) fn draw_virt_text(
             if let Some(col) = placed {
                 // Out of the window: do not draw it at all.
                 item.draw_col = if col < 0 || col >= window.w_view_width {
-                    INT_MIN
+                    DRAW_COL_NEVER
                 } else {
                     col
                 };
@@ -228,7 +228,7 @@ pub(crate) fn draw_virt_text(
         // Deactivate, unless it is to be repeated on every screen row of
         // a wrapped line.
         if vt.is_none_or(|vt| vt.flags & kVTRepeatLinebreak == 0) {
-            set_decor_range_draw_col(i, INT_MIN);
+            set_decor_range_draw_col(i, DRAW_COL_NEVER);
         }
     }
     end_col
@@ -369,7 +369,7 @@ fn inline_virt_at(item: &DecorRange, row: ::core::ffi::c_int) -> bool {
         && with_decor_virt(item.data.virt(), |vt| {
             vt.pos == kVPosInline && vt.width != 0
         })
-        && item.draw_col >= -1
+        && item.draw_col >= DRAW_COL_LATER
 }
 
 impl WinLineVars {
@@ -414,7 +414,7 @@ impl WinLineVars {
                         self.virt_inline = link;
                         self.virt_inline_len = len;
                         self.virt_inline_hl_mode = hl_mode as HlMode;
-                        set_decor_range_draw_col(i, INT_MIN);
+                        set_decor_range_draw_col(i, DRAW_COL_NEVER);
                         break;
                     }
                 }

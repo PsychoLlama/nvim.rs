@@ -95,7 +95,7 @@ impl Cells {
                 // edge: show a `<` for the half that is on screen.
                 if wlv.extra_todo > 0 {
                     self.extra_todo_next = wlv.extra_todo;
-                    self.extra_attr_next = wlv.extra_attr;
+                    self.extra_attr_next = Some(wlv.extra_attr);
                 }
                 wlv.extra_todo = 1;
                 wlv.extra_fill = schar_from_ascii(MB_FILLER_CHAR);
@@ -129,7 +129,7 @@ impl Cells {
             if wlv.extra_is_virt_text {
                 // `extra_attr` applies at this position but no further.
                 wlv.reset_extra_attr = true;
-                self.extra_attr_next = -1;
+                self.extra_attr_next = None;
             }
             wlv.extra_is_virt_text = false;
         } else {
@@ -144,7 +144,7 @@ impl Cells {
             // `extra_attr` applies at this position; `extra_attr_next`
             // after it.
             wlv.reset_extra_attr = true;
-            debug_assert!(self.extra_attr_next >= 0);
+            debug_assert!(self.extra_attr_next.is_some());
         }
     }
 

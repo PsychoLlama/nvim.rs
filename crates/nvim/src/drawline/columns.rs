@@ -388,21 +388,31 @@ impl WinLineVars {
         if self.n_virt_lines - self.filler_todo < self.n_virt_below {
             // A virtual line belonging to the line above takes *its* sign
             // numhl. Looked up once and cached: this runs per row.
-            if self.prev_num_attr == -1 {
-                decor_redraw_signs(
-                    window,
-                    window.buffer(),
-                    (self.lnum - 2).get(),
-                    None,
-                    None,
-                    None,
-                    Some(&mut self.prev_num_attr),
-                );
-                if self.prev_num_attr > 0 {
-                    self.prev_num_attr = syn_id2attr(self.prev_num_attr);
+            numhl_attr = match self.prev_num_attr {
+                Some(attr) => attr,
+                None => {
+                    // `decor_redraw_signs` fills in the first sign's
+                    // `numhl`; with no sign it leaves upstream's -1, which
+                    // is looked up again on the next row.
+                    let mut attr = -1;
+                    decor_redraw_signs(
+                        window,
+                        window.buffer(),
+                        (self.lnum - 2).get(),
+                        None,
+                        None,
+                        None,
+                        Some(&mut attr),
+                    );
+                    if attr > 0 {
+                        attr = syn_id2attr(attr);
+                    }
+                    if attr != -1 {
+                        self.prev_num_attr = Some(attr);
+                    }
+                    attr
                 }
-            }
-            numhl_attr = self.prev_num_attr;
+            };
         }
 
         let hlf = if self.use_cursor_line_nr(window) {

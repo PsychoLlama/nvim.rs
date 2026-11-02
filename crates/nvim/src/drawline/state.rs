@@ -76,8 +76,8 @@ pub struct WinLineVars {
     /// Number-column attribute from a sign's `numhl`.
     pub sign_num_attr: ::core::ffi::c_int,
     /// The previous line's `sign_num_attr`, for virtual lines that belong to
-    /// it. `-1` until [`WinLineVars::line_number_attr`] looks it up.
-    pub prev_num_attr: ::core::ffi::c_int,
+    /// it, once [`WinLineVars::line_number_attr`] has found a sign there.
+    pub prev_num_attr: Option<::core::ffi::c_int>,
     /// Sign attribute from a sign's `culhl`.
     pub sign_cul_attr: ::core::ffi::c_int,
 
@@ -252,8 +252,9 @@ pub(crate) struct LineSetup {
     pub(crate) search_attr_from_match: bool,
     /// The cursor has to stay visible, so inverting skips over it.
     pub(crate) noinvcur: bool,
-    /// Virtual column inverting resumes at after the skipped cursor, or `-2`.
-    pub(crate) fromcol_prev: ::core::ffi::c_int,
+    /// Virtual column inverting resumes at after the cursor `noinvcur`
+    /// skipped, if it does.
+    pub(crate) invert_resume: Option<ColNr>,
     /// The line is between the two ends of the Visual selection.
     pub(crate) lnum_in_visual_area: bool,
     /// `'cursorlineopt'` is "screenline", so `'cursorline'` applies to the
@@ -272,8 +273,8 @@ pub(crate) struct LineSetup {
     // -- diff mode -----------------------------------------------------------
     /// The changed byte ranges of this line, in diff mode.
     pub(crate) line_changes: DiffLine,
-    /// Which of them the loop is at, or `-1` when there are none.
-    pub(crate) change_index: ::core::ffi::c_int,
+    /// Which of them the loop is at, when there are any.
+    pub(crate) change_index: Option<::core::ffi::c_int>,
     /// First byte of the change the loop is at.
     pub(crate) change_start: ::core::ffi::c_int,
     /// Last byte of it.
@@ -593,68 +594,84 @@ impl Win {
 /// The Visual or `'incsearch'` range on the line being drawn, in virtual
 /// columns: where inverting starts, and where it stops.
 ///
-/// Upstream's `fromcol`/`tocol` pair. Three states, and the line attribute
-/// tells two of them apart: there may be no range at all
-/// ([`Inversion::NONE`]); a range whose start has been given up — the cursor
-/// that `noinvcur` keeps visible sits on it, or it is empty — but whose end
-/// still binds; and a range from a column. A start given up can still be
-/// resumed after the cursor, at the column the setup half keeps beside it.
+/// Upstream's `fromcol`/`tocol` pair, which spelled its states with
+/// sentinels (`-10` with `MAXCOL`, `-1`). There are three, and the line
+/// attribute tells two of them apart: there may be no range at all
+/// ([`Inversion::NONE`]); a range whose start has been given up — the
+/// cursor that `noinvcur` keeps visible sits on it, or it is empty — but
+/// whose end still binds; and a range from a column. A start given up can
+/// still be resumed after the cursor, at the column the setup half keeps
+/// beside it ([`LineSetup::invert_resume`]).
+///
+/// Not a `Range<ColNr>`: the middle state is a range with no start, which a
+/// `Range` would have to spell with a sentinel again.
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub(crate) struct Inversion {
-    fromcol: ::core::ffi::c_int,
-    tocol: ::core::ffi::c_int,
+pub(crate) struct Inversion(Option<Span>);
+
+/// A range [`Inversion`] holds.
+#[derive(Clone, PartialEq, Eq, Debug)]
+struct Span {
+    /// The first inverted column, or `None` once the start is given up.
+    from: Option<ColNr>,
+    /// The first column past it; [`ColNr::MAX`] for "to the end of the
+    /// line".
+    to: ColNr,
 }
 
 impl Inversion {
     /// Nothing on the line is inverted, which is a different thing from an
     /// empty range.
-    pub(crate) const NONE: Self = Self {
-        fromcol: -10,
-        tocol: MAXCOL,
-    };
+    pub(crate) const NONE: Self = Self(None);
 
     /// Inverting from `from` up to, not including, `to`; [`ColNr::MAX`] for
     /// "to the end of the line".
     pub(crate) const fn new(from: ColNr, to: ColNr) -> Self {
-        Self {
-            fromcol: from.get(),
-            tocol: to.get(),
-        }
-    }
-
-    /// Whether there is no range at all.
-    pub(crate) fn is_none(&self) -> bool {
-        self.fromcol == -10 && self.tocol == MAXCOL
+        Self(Some(Span {
+            from: Some(from),
+            to,
+        }))
     }
 
     /// The column inverting starts at, unless there is no range or its start
     /// has been given up.
+    #[inline]
     pub(crate) fn from(&self) -> Option<ColNr> {
-        (self.fromcol >= 0).then_some(ColNr::new(self.fromcol))
+        self.0.as_ref().and_then(|span| span.from)
+    }
+
+    /// The first column past the range: [`ColNr::MAX`] when it runs to the
+    /// end of the line, or when there is none.
+    #[inline]
+    fn to(&self) -> ColNr {
+        self.0.as_ref().map_or(ColNr::MAX, |span| span.to)
     }
 
     /// Move the end of the range to `to`.
     pub(crate) fn set_to(&mut self, to: ColNr) {
-        self.tocol = to.get();
+        debug_assert!(self.0.is_some(), "an end for no range");
+        if let Some(span) = &mut self.0 {
+            span.to = to;
+        }
     }
 
     /// Whether inverting starts at `vcol`.
+    #[inline]
     pub(crate) fn starts_at(&self, vcol: ColNr) -> bool {
-        vcol == ColNr::new(self.fromcol)
+        self.from() == Some(vcol)
     }
 
     /// Whether inverting stops at `vcol`.
+    #[inline]
     pub(crate) fn ends_at(&self, vcol: ColNr) -> bool {
-        vcol == ColNr::new(self.tocol)
+        self.to() == vcol
     }
 
     /// Whether inverting resumes at `vcol`, after the cursor that `noinvcur`
     /// skipped: the previous cell was the cursor's (`resume`, the column
     /// [`Inversion::keep_cursor_visible`] answered) and the range goes on.
+    #[inline]
     pub(crate) fn resumes_at(&self, resume: Option<ColNr>, prev_vcol: ColNr, vcol: ColNr) -> bool {
-        prev_vcol == resume.unwrap_or(ColNr::new(-2))
-            && prev_vcol < vcol
-            && vcol < ColNr::new(self.tocol)
+        resume == Some(prev_vcol) && prev_vcol < vcol && vcol < self.to()
     }
 
     /// Whether the line's own attribute shows at `vcol`: there is no range,
@@ -668,32 +685,40 @@ impl Inversion {
         prev_vcol: ColNr,
         vcol: ColNr,
     ) -> bool {
-        self.is_none()
-            || vcol < ColNr::new(self.fromcol)
-            || prev_vcol < resume.unwrap_or(ColNr::new(-2))
-            || vcol >= ColNr::new(self.tocol)
+        let Some(span) = &self.0 else {
+            return true;
+        };
+        span.from.is_some_and(|from| vcol < from)
+            || resume.is_some_and(|resume| prev_vcol < resume)
+            || vcol >= span.to
     }
 
     /// Whether the range takes in the line break at `vcol`, so that a cell
     /// has to be drawn for it.
     pub(crate) fn reaches_eol(&self, resume: Option<ColNr>, vcol: ColNr) -> bool {
-        (self.fromcol >= 0 || resume.is_some()) && self.tocol > vcol.get()
+        (self.from().is_some() || resume.is_some()) && self.to() > vcol
     }
 
     /// Whether the range ends at a column past `vcol` rather than at the end
     /// of the line — a Visual selection that 'virtualedit' lets run past it.
     pub(crate) fn runs_past(&self, vcol: ColNr) -> bool {
-        self.tocol != MAXCOL && vcol < ColNr::new(self.tocol)
+        let to = self.to();
+        to != ColNr::MAX && vcol < to
     }
 
     /// Adjust the range for the first `vcol` columns being scrolled off the
     /// left: a range wholly off screen starts at 0 (and so never starts), one
     /// that starts off screen starts at `vcol`.
     pub(crate) fn clip_left(&mut self, vcol: ColNr) {
-        if self.tocol <= vcol.get() {
-            self.fromcol = 0;
-        } else if self.fromcol >= 0 && self.fromcol < vcol.get() {
-            self.fromcol = vcol.get();
+        let Some(span) = &mut self.0 else {
+            return;
+        };
+        if span.to <= vcol {
+            span.from = Some(ColNr::ZERO);
+        } else if let Some(from) = span.from
+            && from < vcol
+        {
+            span.from = Some(vcol);
         }
     }
 
@@ -707,22 +732,21 @@ impl Inversion {
         noinvcur: bool,
         cursor_vcol: ColNr,
     ) -> Option<ColNr> {
-        if self.fromcol < 0 {
-            return None;
-        }
+        let span = self.0.as_mut()?;
+        let from = span.from?;
         let mut resume = None;
         if noinvcur {
-            if self.fromcol == cursor_vcol.get() {
+            if from == cursor_vcol {
                 // Inverting starts at the cursor; start just after it.
-                resume = Some(ColNr::new(self.fromcol));
-                self.fromcol = -1;
-            } else if self.fromcol < cursor_vcol.get() {
+                resume = Some(from);
+                span.from = None;
+            } else if from < cursor_vcol {
                 // Resume inverting after the cursor.
                 resume = Some(cursor_vcol);
             }
         }
-        if self.fromcol >= self.tocol {
-            self.fromcol = -1;
+        if span.from.is_some_and(|from| from >= span.to) {
+            span.from = None;
         }
         resume
     }
@@ -731,26 +755,29 @@ impl Inversion {
     /// (`'breakindent'`, `'showbreak'`): a start inside it moves to its end,
     /// and so does an end at its start.
     pub(crate) fn skip_padding(&mut self, before: ColNr, after: ColNr) {
-        if self.fromcol >= before.get() && self.fromcol < after.get() {
-            self.fromcol = after.get();
+        let Some(span) = &mut self.0 else {
+            return;
+        };
+        if let Some(from) = span.from
+            && from >= before
+            && from < after
+        {
+            span.from = Some(after);
         }
-        if self.tocol == before.get() {
-            self.tocol = after.get();
+        if span.to == before {
+            span.to = after;
         }
     }
 
     /// Put an end that falls on the second half of a double-width character
     /// at `vcol` past it, or the highlighting would not stop.
     pub(crate) fn widen_end(&mut self, vcol: ColNr) {
-        if self.tocol == vcol.get() {
-            self.tocol += 1;
+        if let Some(span) = &mut self.0
+            && span.to == vcol
+        {
+            span.to = vcol + 1;
         }
     }
-}
-
-/// [`LineSetup::fromcol_prev`] as the column inverting resumes at, if any.
-pub(crate) fn resume_col(fromcol_prev: ::core::ffi::c_int) -> Option<ColNr> {
-    (fromcol_prev >= 0).then_some(ColNr::new(fromcol_prev))
 }
 
 // ---------------------------------------------------------------------------
@@ -917,7 +944,6 @@ mod tests {
     #[test]
     fn no_range_starts_nowhere_and_ends_at_no_column() {
         let none = Inversion::NONE;
-        assert!(none.is_none());
         assert_eq!(none.from(), None);
         for vcol in [0, 1, 79, i32::MAX - 1] {
             assert!(!none.starts_at(c(vcol)));
@@ -933,7 +959,7 @@ mod tests {
     #[test]
     fn a_range_starts_at_its_start_and_ends_at_its_end() {
         let inv = Inversion::new(c(4), c(9));
-        assert!(!inv.is_none());
+        assert_ne!(inv, Inversion::NONE);
         assert_eq!(inv.from(), Some(c(4)));
         assert!(inv.starts_at(c(4)));
         assert!(!inv.starts_at(c(3)) && !inv.starts_at(c(5)));
@@ -958,7 +984,7 @@ mod tests {
         let mut inv = Inversion::new(c(5), c(5));
         assert_eq!(inv.keep_cursor_visible(false, c(0)), None);
         assert_eq!(inv.from(), None, "an empty range's start is given up");
-        assert!(!inv.is_none());
+        assert_ne!(inv, Inversion::NONE);
         assert!(!inv.starts_at(c(5)));
         // Before its end nothing is "outside" it: the line attribute stays
         // off, where with no range at all it would show.

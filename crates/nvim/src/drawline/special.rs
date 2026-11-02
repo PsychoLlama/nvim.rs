@@ -46,7 +46,7 @@ impl Cells {
             wlv.extra_last = NUL as ScreenChar;
             if wlv.extra_todo > 0 {
                 self.extra_todo_next = wlv.extra_todo;
-                self.extra_attr_next = wlv.extra_attr;
+                self.extra_attr_next = Some(wlv.extra_attr);
                 wlv.n_attr = (wlv.n_attr + 1).max(2);
             } else {
                 wlv.n_attr = 2;
@@ -386,9 +386,7 @@ impl Cells {
     /// `'incsearch'` range includes the break and needs somewhere to show it.
     pub(super) fn wants_eol_cell(&self, wlv: &WinLineVars, window: Win) -> bool {
         (window.w_onebuf_opt.wo_list != 0
-            || (wlv
-                .inverted
-                .reaches_eol(resume_col(self.fromcol_prev), wlv.vcol)
+            || (wlv.inverted.reaches_eol(self.invert_resume, wlv.vcol)
                 && !visual_mode().is_block()
                 && wlv.col < self.view_width
                 && !(self.noinvcur

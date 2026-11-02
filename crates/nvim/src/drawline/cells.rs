@@ -155,8 +155,9 @@ pub(crate) struct Cells {
     pub(super) search_attr_from_match: bool,
     /// The cursor has to stay visible, so inverting skips over it.
     pub(super) noinvcur: bool,
-    /// Virtual column inverting resumes at after the skipped cursor, or `-2`.
-    pub(super) fromcol_prev: ::core::ffi::c_int,
+    /// Virtual column inverting resumes at after the cursor `noinvcur`
+    /// skipped, if it does.
+    pub(super) invert_resume: Option<ColNr>,
     /// The line is between the two ends of the Visual selection.
     pub(super) lnum_in_visual_area: bool,
     /// `'cursorlineopt'` is "screenline".
@@ -173,8 +174,8 @@ pub(crate) struct Cells {
     // -- diff mode -----------------------------------------------------------
     /// The changed byte ranges of this line.
     pub(super) line_changes: DiffLine,
-    /// Which of them the loop is at, or `-1` when there are none.
-    pub(super) change_index: ::core::ffi::c_int,
+    /// Which of them the loop is at, when there are any.
+    pub(super) change_index: Option<::core::ffi::c_int>,
     /// First byte of the change the loop is at.
     pub(super) change_start: ::core::ffi::c_int,
     /// Last byte of it.
@@ -211,9 +212,9 @@ pub(crate) struct Cells {
     pub(super) left_columns_width: ::core::ffi::c_int,
     /// The `'listchars'` "eol" for this line has not been drawn yet.
     pub(super) lcs_eol_todo: bool,
-    /// Index into [`Cells::virt_lines`] of the virtual line this row is, or
-    /// `-1` when the row is not one.
-    pub(super) virt_line_index: ::core::ffi::c_int,
+    /// Index into [`Cells::virt_lines`] of the virtual line this row is,
+    /// when it is one.
+    pub(super) virt_line_index: Option<usize>,
     /// `kVL*` flags of that virtual line.
     pub(super) virt_line_flags: ::core::ffi::c_int,
     /// This row is the one that shows a closed fold.
@@ -247,8 +248,8 @@ pub(crate) struct Cells {
     /// Visual or `'incsearch'` attribute while inside that range.
     pub(super) area_attr: ::core::ffi::c_int,
     /// Attribute to restore after the `'cursorcolumn'`/`'colorcolumn'`
-    /// overlay, or `-1` when there was none.
-    pub(super) attr_before_vcol_hl: ::core::ffi::c_int,
+    /// overlay, when there was one.
+    pub(super) attr_before_vcol_hl: Option<::core::ffi::c_int>,
     /// Syntax and decoration attribute for this cell.
     pub(super) decor_attr: ::core::ffi::c_int,
     /// [`Cells::decor_attr`] of the last buffer character, taken before
@@ -275,8 +276,8 @@ pub(crate) struct Cells {
     /// The rest of a run interrupted to draw a `<` filler, and the attribute
     /// to give it.
     pub(super) extra_todo_next: ::core::ffi::c_int,
-    /// See [`Cells::extra_todo_next`]; `-1` for none.
-    pub(super) extra_attr_next: ::core::ffi::c_int,
+    /// See [`Cells::extra_todo_next`].
+    pub(super) extra_attr_next: Option<::core::ffi::c_int>,
 
     /// The cell is inside the Visual or `'incsearch'` range.
     pub(super) area_active: bool,
@@ -338,7 +339,7 @@ impl Cells {
             search_attr: s.search_attr,
             search_attr_from_match: s.search_attr_from_match,
             noinvcur: s.noinvcur,
-            fromcol_prev: s.fromcol_prev,
+            invert_resume: s.invert_resume,
             lnum_in_visual_area: s.lnum_in_visual_area,
             cul_screenline: s.cul_screenline,
             left_curline_col: s.left_curline_col,
@@ -362,7 +363,7 @@ impl Cells {
             text_start_col: 0,
             left_columns_width: 0,
             lcs_eol_todo: true,
-            virt_line_index: -1,
+            virt_line_index: None,
             virt_line_flags: 0,
             draw_folded: false,
             fold_vt: ManuallyDrop::new(VIRTTEXT_EMPTY),
@@ -379,7 +380,7 @@ impl Cells {
             attr_pri: 0,
             attr_base: 0,
             area_attr: 0,
-            attr_before_vcol_hl: 0,
+            attr_before_vcol_hl: Some(0),
             decor_attr: 0,
             gap_decor_attr: 0,
             overflow_attr: 0,
@@ -391,7 +392,7 @@ impl Cells {
             saved_decor_attr: 0,
             saved_search_attr_from_match: false,
             extra_todo_next: 0,
-            extra_attr_next: -1,
+            extra_attr_next: None,
 
             area_active: false,
             decor_need_recheck: false,
@@ -700,8 +701,8 @@ impl Cells {
         if wlv.filler_todo <= 0 {
             wlv.vcol += 1;
         }
-        if self.attr_before_vcol_hl >= 0 {
-            wlv.char_attr = self.attr_before_vcol_hl;
+        if let Some(attr) = self.attr_before_vcol_hl {
+            wlv.char_attr = attr;
         }
         if self.prec_attr_todo > 0 {
             self.prec_attr_todo -= 1;

@@ -56,7 +56,7 @@ use crate::options::{
     kOptSpoFlagNoplainbuffer,
 };
 use crate::plines::{getvcol, getvvcol, win_charsize};
-use crate::pos::{MAXCOL, ltoreq};
+use crate::pos::ltoreq;
 use crate::search::FORWARD;
 use crate::search::state::{highlight_match, search_match_endcol, search_match_lines};
 use crate::spell::spell_redraw_lnum;
@@ -100,10 +100,6 @@ mod special;
 /// The scratch array is that many entries; past it a terminal cell just takes
 /// the window's own attributes.
 pub const TERM_ATTRS_MAX: ::core::ffi::c_int = 1024;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-/// The most negative `int`, which `draw_virt_text` uses as "this virtual
-/// text has no column yet".
-pub const INT_MIN: ::core::ffi::c_int = ::core::ffi::c_int::MIN;
 pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 /// Draw one buffer line, and answer the window row after it.
 ///
@@ -144,7 +140,7 @@ pub fn win_line(
         line_attr: 0,
         line_attr_lowprio: 0,
         sign_num_attr: 0,
-        prev_num_attr: -1,
+        prev_num_attr: None,
         sign_cul_attr: 0,
         inverted: Inversion::NONE,
         showbreak_vcol: ColNr::NONE,

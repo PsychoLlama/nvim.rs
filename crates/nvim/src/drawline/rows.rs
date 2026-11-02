@@ -49,15 +49,17 @@ impl Cells {
             // rather than diff filler: the virtual ones come last.
             let index = wlv.filler_todo - (wlv.filler_lines - wlv.n_virt_lines);
             if index > 0 {
-                self.virt_line_index = self.virt_lines.len() as ::core::ffi::c_int - index;
-                debug_assert!(self.virt_line_index >= 0);
-                let at = self.virt_lines[self.virt_line_index as usize];
+                let line =
+                    self.virt_lines.len() - usize::try_from(index).expect("a positive index");
+                self.virt_line_index = Some(line);
+                let at = self.virt_lines[line];
                 self.virt_line_flags =
                     with_decor_virt(at.link, |vt| vt.data.lines()[at.line as usize].flags);
             }
         }
 
-        if self.virt_line_index >= 0 && self.virt_line_flags & kVLLeftcol as ::core::ffi::c_int != 0
+        if self.virt_line_index.is_some()
+            && self.virt_line_flags & kVLLeftcol as ::core::ffi::c_int != 0
         {
             // A virtual line pinned to the left edge covers the columns.
         } else if f.statuscol.draw {
@@ -160,7 +162,7 @@ impl Cells {
             return Step::Done;
         }
         wlv.filler_todo -= 1;
-        self.virt_line_index = -1;
+        self.virt_line_index = None;
         if wlv.filler_todo == 0 && (window.w_botfill || !self.draw_text) {
             return Step::Done;
         }
@@ -223,7 +225,7 @@ impl Cells {
             });
         }
 
-        if self.virt_line_index >= 0 {
+        if let Some(line) = self.virt_line_index {
             draw_virt_text_item(
                 buffer,
                 if self.virt_line_flags & kVLLeftcol as ::core::ffi::c_int != 0 {
@@ -231,7 +233,7 @@ impl Cells {
                 } else {
                     self.text_start_col
                 },
-                VirtChunks::Line(self.virt_lines[self.virt_line_index as usize]),
+                VirtChunks::Line(self.virt_lines[line]),
                 kHlModeReplace,
                 self.view_width,
                 0,
@@ -306,7 +308,7 @@ impl Cells {
             f.statuscol.draw = false;
         }
         wlv.filler_todo -= 1;
-        self.virt_line_index = -1;
+        self.virt_line_index = None;
         self.virt_line_flags = 0;
         // The filler lines are below the last line of the file, or there
         // is no text to draw for this line.
