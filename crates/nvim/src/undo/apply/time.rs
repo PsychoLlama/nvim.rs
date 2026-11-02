@@ -10,11 +10,19 @@
 //! that trail up and back down.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::super::store::{Marks, header_chain};
 use super::super::*;
 use super::{u_undo_end, u_undoredo};
 use crate::memline::MlFlags;
+use crate::os::time::os_time_raw;
 use crate::semsg;
 use crate::winlayer::Buf;
 
@@ -26,10 +34,13 @@ use crate::winlayer::Buf;
 /// The two flags are not one enum because either may be *dropped* during the
 /// arithmetic: a target that falls off the end of the timestamp or
 /// file-write scale is met by a plain sequence number instead.
+///
+/// The values are `time_t` wide because a timestamp is one of them; upstream
+/// narrows the clock to `int` here, which stops fitting in January 2038.
 #[derive(Clone, Copy)]
 struct Aim {
     /// The value to reach, in the unit the flags select.
-    target: c_int,
+    target: time_t,
     /// Measure in seconds — `:earlier 10s`.
     sec: bool,
     /// Measure in file writes — `:earlier 1f`.
@@ -38,13 +49,13 @@ struct Aim {
 
 impl Aim {
     /// The header's value in the unit this aim measures in.
-    fn value_of(self, uh: &UndoHeader) -> c_int {
+    fn value_of(self, uh: &UndoHeader) -> time_t {
         if self.sec {
-            uh.time as c_int
+            uh.time
         } else if self.file {
-            uh.save_nr
+            time_t::from(uh.save_nr)
         } else {
-            uh.seq
+            time_t::from(uh.seq)
         }
     }
 }
@@ -52,12 +63,12 @@ impl Aim {
 /// The nearest approach to the target the search has seen.
 struct Closest {
     /// Its value, in the aim's unit.
-    val: c_int,
+    val: time_t,
     /// The sequence number of the header that had it.
     seq: c_int,
     /// The out-of-reach value `val` started at. While `val` still holds it
     /// nothing has been seen at all, so any header is an improvement.
-    start: c_int,
+    start: time_t,
 }
 
 impl Closest {
@@ -67,7 +78,7 @@ impl Closest {
     /// A header only counts when it lies in the direction of travel, which
     /// `seq_cur` measures; and when two carry the same timestamp, the one
     /// furthest along that direction wins.
-    fn consider(&mut self, aim: Aim, val: c_int, seq: c_int, step: c_int, seq_cur: c_int) {
+    fn consider(&mut self, aim: Aim, val: time_t, seq: c_int, step: c_int, seq_cur: c_int) {
         // A header that was never written has no place on the file-write
         // scale.
         if aim.file && val == 0 {
@@ -100,7 +111,7 @@ impl Closest {
 /// Whether `val` is at least as near `target` as `closest` is —
 /// `|val - target| <= |closest - target|`, spelled in differences that are
 /// known non-negative rather than through `abs`, as the C spells it.
-fn approaches(val: c_int, target: c_int, closest: c_int) -> bool {
+fn approaches(val: time_t, target: time_t, closest: time_t) -> bool {
     let from_val = if val > target {
         val - target
     } else {
@@ -186,7 +197,7 @@ fn above_current(buffer: Buf) -> UndoLink {
 }
 
 /// Reads the counters off the buffer and turns `step` into an aim.
-fn undo_aim(buffer: Buf, step: c_int, sec: bool, file: bool, absolute: bool) -> (Aim, c_int) {
+fn undo_aim(buffer: Buf, step: c_int, sec: bool, file: bool, absolute: bool) -> (Aim, time_t) {
     let counters = UndoCounters {
         time_cur: buffer.b_u_time_cur,
         seq_cur: buffer.b_u_seq_cur,
@@ -215,7 +226,7 @@ fn aim_for(
     file: bool,
     absolute: bool,
     saved_above: bool,
-) -> (Aim, c_int) {
+) -> (Aim, time_t) {
     let mut aim = Aim {
         target: 0,
         sec,
@@ -223,11 +234,11 @@ fn aim_for(
     };
     if absolute {
         // ":undo N" names the sequence number outright.
-        aim.target = step;
+        aim.target = time_t::from(step);
         return (aim, -1);
     }
     aim.target = if sec {
-        (counters.time_cur as c_int).wrapping_add(step)
+        counters.time_cur.saturating_add(time_t::from(step))
     } else if file && step < 0 {
         // Back to a previous write. Changes made since the last one count as
         // a file write of their own, so that ":earlier 1f" undoes them.
@@ -240,23 +251,23 @@ fn aim_for(
             // sequence number can name that.
             aim.file = false;
         }
-        target
+        time_t::from(target)
     } else if file {
         // Forward to a newer write.
         let target = counters.save_nr_cur.wrapping_add(step);
         if target > counters.save_nr_last {
             // After the last write is after the newest change; likewise.
             aim.file = false;
-            counters.seq_last + 1
+            time_t::from(counters.seq_last + 1)
         } else {
-            target
+            time_t::from(target)
         }
     } else {
         // `step` is a user count, so this is `int` arithmetic that wraps, as
         // it does in the C. `:later 2147483647` runs past `INT_MAX` and
         // lands below zero, where the clamp below has nothing to say; what
         // catches it is the search's own fallback to the nearest header.
-        counters.seq_cur.wrapping_add(step)
+        time_t::from(counters.seq_cur.wrapping_add(step))
     };
     if step < 0 {
         aim.target = aim.target.max(0);
@@ -265,11 +276,11 @@ fn aim_for(
     // One past anything the tree can hold, so that the first header seen in
     // the right direction is an improvement on it.
     let closest = if aim.sec {
-        os_time().wrapping_add(1) as c_int
+        os_time_raw().saturating_add(1)
     } else if aim.file {
-        counters.save_nr_last + 2
+        time_t::from(counters.save_nr_last + 2)
     } else {
-        counters.seq_last + 2
+        time_t::from(counters.seq_last + 2)
     };
     aim.target = aim.target.min(closest - 1);
     (aim, closest)
@@ -288,7 +299,7 @@ fn undo_search(
     step: c_int,
     absolute: bool,
     mut aim: Aim,
-    closest_start: c_int,
+    closest_start: time_t,
 ) -> Option<UndoDest> {
     if aim.target == 0 {
         // Back to the origin. Nothing to search for: no header carries
@@ -319,17 +330,10 @@ fn undo_search(
         } else {
             buffer.b_u_newhead // at a leaf of the tree
         };
-        if walk_to_target(
-            buffer,
-            start,
-            step,
-            round == 1,
-            &mut aim,
-            &mut closest,
-            marks,
-        ) {
+        if let Some(seq) = walk_to_target(buffer, start, step, round == 1, aim, &mut closest, marks)
+        {
             return Some(UndoDest {
-                target: aim.target,
+                target: seq,
                 marks,
                 above,
                 found: true,
@@ -350,7 +354,7 @@ fn undo_search(
         }
         // Aim at the nearest header instead, by sequence number; and when we
         // were going backwards, stop above it rather than on it.
-        aim.target = closest.seq;
+        aim.target = time_t::from(closest.seq);
         aim.sec = false;
         aim.file = false;
         above = step < 0;
@@ -358,7 +362,7 @@ fn undo_search(
     // Round two aims at a sequence number a header in the tree carried, so it
     // finds it. The C is defensive here all the same, and so is this.
     Some(UndoDest {
-        target: aim.target,
+        target: closest.seq,
         marks,
         above,
         found: false,
@@ -374,18 +378,18 @@ fn undo_search(
 /// the buffer already sits on, because that change is not one the move goes
 /// through.
 ///
-/// Answers whether the target was reached; when it was, `aim.target` has been
-/// rewritten to the target's *sequence number*, which is a different number
-/// whenever the aim was a timestamp or a file write.
+/// Answers the target's *sequence number* when it was reached, which is a
+/// different number from `aim.target` whenever the aim was a timestamp or a
+/// file write.
 fn walk_to_target(
     buffer: Buf,
     start: UndoLink,
     step: c_int,
     scoring: bool,
-    aim: &mut Aim,
+    aim: Aim,
     closest: &mut Closest,
     marks: Marks,
-) -> bool {
+) -> Option<c_int> {
     for visit in buffer
         .tree_walk(start, marks)
         .stopping_above(buffer.b_u_curhead)
@@ -397,16 +401,15 @@ fn walk_to_target(
             continue;
         };
         if scoring {
-            closest.consider(*aim, val, seq, step, buffer.b_u_seq_cur);
+            closest.consider(aim, val, seq, step, buffer.b_u_seq_cur);
         }
         // Stop on a match — but a timestamp match keeps looking, because the
         // best sequence number carrying that timestamp may be further on.
         if aim.target == val && !aim.sec {
-            aim.target = seq;
-            return true;
+            return Some(seq);
         }
     }
-    false
+    None
 }
 
 /// Undoes up the tree until the destination is reached, or CTRL-C.
@@ -589,7 +592,10 @@ mod tests {
         // the tree carries that number, so the search's second round falls
         // back to the header nearest it, which is the newest one.
         let (aim, _) = aim_for(counters(), c_int::MAX, false, false, false, false);
-        assert_eq!(aim.target, counters().seq_cur.wrapping_add(c_int::MAX));
+        assert_eq!(
+            aim.target,
+            time_t::from(counters().seq_cur.wrapping_add(c_int::MAX))
+        );
         assert!(aim.target < 0);
     }
 
@@ -637,8 +643,8 @@ mod tests {
         // And after the last write is after the newest change.
         let (aim, closest) = aim_for(counters, 9, false, true, false, false);
         assert!(!aim.file);
-        assert_eq!(aim.target, counters.seq_last + 1);
-        assert_eq!(closest, counters.seq_last + 2);
+        assert_eq!(aim.target, time_t::from(counters.seq_last + 1));
+        assert_eq!(closest, time_t::from(counters.seq_last + 2));
     }
 
     #[test]
