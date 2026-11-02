@@ -12,7 +12,7 @@
 #![forbid(unsafe_code)]
 
 use crate::cstr;
-use crate::narrow::number_as_int;
+use crate::narrow::number_as_lnum;
 use core::ffi::c_int;
 
 use super::*;
@@ -318,7 +318,7 @@ pub fn f_screenpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // The builtin table checks for three arguments.
     let (lnum, col) = (tv_get_number(&args[1]), tv_get_number(&args[2]));
     let mut pos = Pos {
-        lnum: LineNr::new(number_as_int(lnum)),
+        lnum: number_as_lnum(lnum),
         col: (col as ColNr - 1).max(0),
         coladd: 0,
     };
@@ -369,7 +369,7 @@ pub fn f_virtcol2col(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     let Ok(lnum) = tv_get_number_chk(&args[1]) else {
         return;
     };
-    let lnum = LineNr::new(number_as_int(lnum));
+    let lnum = number_as_lnum(lnum);
     if lnum < LineNr::ZERO || lnum > win.buffer().line_count() {
         return;
     }

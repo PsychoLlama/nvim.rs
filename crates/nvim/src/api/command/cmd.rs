@@ -46,6 +46,7 @@ use crate::ex_docmd::is_user_cmd;
 use crate::guard::Suppress;
 use crate::memory::XString;
 use crate::message_fmt::{msg_bytes, msg_cstr};
+use crate::narrow::number_as_lnum;
 use crate::narrow::{len_as_int, number_as_int};
 use crate::types::CmdIdx;
 use crate::types::LineNr;
@@ -296,7 +297,7 @@ fn collect_args(given: &Array, excmd: &mut ExArg, args: &mut Vec<Object>) -> Res
             && count >= 0
         {
             excmd.addr_count = 1;
-            excmd.line2 = LineNr::new(number_as_int(count));
+            excmd.line2 = number_as_lnum(count);
             excmd.line1 = excmd.line2;
             *args = Vec::new();
             return Ok(true);
@@ -375,8 +376,8 @@ fn apply_range(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<(), Error> {
                 first.as_integer().expect(expect),
                 last.as_integer().expect(expect),
             );
-            excmd.line1 = LineNr::new(number_as_int(first));
-            excmd.line2 = LineNr::new(number_as_int(last));
+            excmd.line1 = number_as_lnum(first);
+            excmd.line2 = number_as_lnum(last);
         }
         if invalid_range(excmd).is_some() {
             return Err(err_bad_value(c"range", c""));

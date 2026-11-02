@@ -24,7 +24,7 @@ use crate::mbyte::{c_cluster_len, head_off};
 use crate::memline::Lines;
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
-use crate::narrow::number_as_int;
+use crate::narrow::number_as_lnum;
 use crate::normal::visual_active;
 use crate::optionstr::OptString;
 use crate::semsg;
@@ -236,7 +236,7 @@ fn name_in_line(
     if let Some(file_lnum) = file_lnum
         && let Some(lnum) = trailing_line_number(&name[len..])
     {
-        *file_lnum = LineNr::new(number_as_int(lnum));
+        *file_lnum = number_as_lnum(lnum);
     }
     Some(name[..len].to_vec())
 }

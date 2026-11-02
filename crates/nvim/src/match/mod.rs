@@ -13,7 +13,7 @@
 #![forbid(unsafe_code)]
 
 use crate::cstr;
-use crate::narrow::number_as_int;
+use crate::narrow::number_as_lnum;
 use crate::regexp::{char_delim, skip_regexp_at};
 use crate::semsg;
 use core::ffi::{CStr, c_int};
@@ -192,7 +192,7 @@ fn fill_pos_array(positions: &mut [LLPos], pos_list: &List) -> Option<(LineNr, L
             let Ok(first) = tv_get_number_chk(&sub[0].li_tv) else {
                 return None;
             };
-            lnum = LineNr::new(number_as_int(first));
+            lnum = number_as_lnum(first);
             if lnum <= LineNr::ZERO {
                 skip = true;
             } else {
@@ -225,7 +225,7 @@ fn fill_pos_array(positions: &mut [LLPos], pos_list: &List) -> Option<(LineNr, L
             if tv.number_or_zero() <= 0 {
                 skip = true;
             } else {
-                lnum = LineNr::new(number_as_int(tv.number_or_zero()));
+                lnum = number_as_lnum(tv.number_or_zero());
                 positions[i] = LLPos {
                     lnum,
                     col: 0,

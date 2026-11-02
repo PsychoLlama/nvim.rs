@@ -23,6 +23,7 @@ use super::*;
 use crate::api::private::validate::{Bad, err_conflict, err_expected, err_invalid, err_required};
 use crate::narrow::len_as_int;
 use crate::narrow::number_as_int;
+use crate::narrow::number_as_lnum;
 use crate::os::cshim::cstr_ncasecmp;
 use crate::types::Handle;
 use crate::types::LineNr;
@@ -142,7 +143,7 @@ fn float_bufpos(bufpos: &Array) -> Option<LPos> {
         return None;
     };
     Some(LPos {
-        lnum: LineNr::new(number_as_int(lnum.as_integer()?)),
+        lnum: number_as_lnum(lnum.as_integer()?),
         col: number_as_int(col.as_integer()?),
     })
 }

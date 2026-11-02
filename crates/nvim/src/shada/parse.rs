@@ -12,7 +12,7 @@ use crate::eval::decode::decode_string;
 use crate::memory::XString;
 use crate::message_fmt::{emsg_text, msg_cstr_opt};
 use crate::mpack::mpack_core::MPACK_OK;
-use crate::narrow::number_as_int;
+use crate::narrow::number_as_lnum;
 use crate::tr_c;
 use crate::types::{
     ApiDict, ColNr, Integer, KeyDict__shada_buflist_item, KeyDict__shada_mark,
@@ -146,7 +146,7 @@ fn parse_mark(header: &Header, cursor: &mut Cursor, extra: &mut Option<ShadaExtr
     }
     let mut mark = DEFAULT_POS;
     if let Some(lnum) = it.l {
-        mark.lnum = LineNr::new(number_as_int(lnum));
+        mark.lnum = number_as_lnum(lnum);
     }
     if let Some(col) = it.c {
         mark.col = col as ColNr;
@@ -321,7 +321,7 @@ fn parse_buffer_list(pos: u64, cursor: &mut Cursor) -> Parsed2 {
         }
         let mut at = DEFAULT_POS;
         if let Some(lnum) = it.l {
-            at.lnum = LineNr::new(number_as_int(lnum));
+            at.lnum = number_as_lnum(lnum);
         }
         if let Some(col) = it.c {
             at.col = col as ColNr;

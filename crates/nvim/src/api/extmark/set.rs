@@ -14,7 +14,7 @@ use crate::api::private::validate::{
     Bad, err_bad_number, err_bad_value, err_expected, err_invalid, err_out_of_range,
 };
 use crate::decoration::decor_drawing_window;
-use crate::narrow::number_as_int;
+use crate::narrow::number_as_lnum;
 use crate::winlayer::Buf;
 
 /// The keyset this call was handed.
@@ -588,7 +588,7 @@ fn clamp(
         }
         line = i64::from(b.line_count());
     } else if line < i64::from(b.line_count()) {
-        len = line_len(LineNr::new(number_as_int(line)) + 1);
+        len = line_len(number_as_lnum(line) + 1);
     }
     if col == -1 {
         col = Integer::from(len);

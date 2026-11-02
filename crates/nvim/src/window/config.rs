@@ -14,7 +14,7 @@
 
 #![forbid(unsafe_code)]
 
-use crate::narrow::number_as_int;
+use crate::narrow::number_as_lnum;
 use core::ffi::{c_int, c_uint};
 
 use super::*;
@@ -296,7 +296,7 @@ fn anchor_to_window(
     // `bufpos={INT_MAX, ...}` reaches here, and the C's `lnum + 1` wraps.
     let lnum = (i64::from(c.bufpos.lnum) + 1).min(i64::from(parent.buffer().line_count()));
     let mut pos = Pos {
-        lnum: LineNr::new(number_as_int(lnum)),
+        lnum: number_as_lnum(lnum),
         col: c.bufpos.col,
         coladd: 0 as ColNr,
     };

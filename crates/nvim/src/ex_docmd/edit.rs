@@ -6,7 +6,7 @@ use crate::getchar::ins_typebuf;
 use crate::memline::MlFlags;
 use crate::message::emsg;
 use crate::message_fmt::msg_bytes;
-use crate::narrow::number_as_int;
+use crate::narrow::number_as_lnum;
 use crate::ops::run_ex_operator;
 use crate::os::cshim::gettext;
 use crate::os::time::sleep_serving_events;
@@ -114,7 +114,7 @@ pub(crate) fn ex_syncbind(_excmd: &mut ExArg) {
                     wp,
                     LineNr::ONE,
                     wp.w_buffer.b_ml.ml_line_count,
-                )) - LineNr::new(number_as_int(get_scrolloff_value(Win::current())));
+                )) - number_as_lnum(get_scrolloff_value(Win::current()));
                 vtopline = vtopline.min(LineNr::new(limit));
             }
         }

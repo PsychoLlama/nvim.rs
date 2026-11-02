@@ -23,7 +23,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::narrow::number_as_int;
+use crate::narrow::number_as_lnum;
 use crate::types::Handle;
 use crate::winlayer::cmdwin_window;
 use crate::winlayer::prev_window;
@@ -575,7 +575,7 @@ fn anchored_position(win: Win) -> (c_int, c_int) {
             let lnum = (i64::from(win.w_config.bufpos.lnum) + 1)
                 .min(i64::from(parent.buffer().line_count()));
             let mut pos = Pos {
-                lnum: LineNr::new(number_as_int(lnum)),
+                lnum: number_as_lnum(lnum),
                 col: win.w_config.bufpos.col,
                 coladd: 0 as ColNr,
             };

@@ -41,7 +41,7 @@
 #![forbid(unsafe_code)]
 
 use crate::env::home_to_tilde;
-use crate::narrow::number_as_int;
+use crate::narrow::number_as_lnum;
 use crate::normal::{set_visual_active, showcmd_buf, visual_active};
 use core::cell::Cell;
 use core::ffi::{CStr, c_int};
@@ -315,7 +315,7 @@ impl Env<'_> {
     pub(super) fn fold_glyphs(&self, fdc: c_int, text: &mut Vec<u8>) -> c_int {
         let mut glyphs = [0 as ScreenChar; 9];
         // The line the fold item describes is `v:lnum`, not the cursor line.
-        let lnum = LineNr::new(number_as_int(vim_var(Vv::Lnum)));
+        let lnum = number_as_lnum(vim_var(Vv::Lnum));
         let stc = self.stc();
         let mut fold_vcol = stc.fold_vcol.get();
         fill_foldcolumn(

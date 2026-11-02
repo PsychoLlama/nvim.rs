@@ -34,6 +34,8 @@
 
 use core::ffi::c_int;
 
+use crate::types::LineNr;
+
 /// A 64-bit editor number narrowed to a C `int`, exactly as upstream's
 /// `(int)` casts do: the low 32 bits, wrapping.
 ///
@@ -42,6 +44,14 @@ use core::ffi::c_int;
 /// same `i64`, and they narrow the same way.
 pub(crate) const fn number_as_int(n: i64) -> c_int {
     n as c_int
+}
+
+/// A 64-bit editor number narrowed to a line number, exactly as upstream's
+/// `(linenr_T)` casts do: [`number_as_int`]'s low 32 bits, so
+/// `cursor(0x1_0000_0002, 1)` lands on line 2. A line number past `MAXLNUM`
+/// is not refused here; the callers clamp it as upstream does.
+pub(crate) const fn number_as_lnum(n: i64) -> LineNr {
+    LineNr::new(number_as_int(n))
 }
 
 /// An API `Integer` narrowed to the `uint32_t` a namespace or extmark id is,
@@ -126,6 +136,13 @@ mod tests {
         // And the sign wraps rather than saturating.
         assert_eq!(number_as_int(VarNumber::from(c_int::MAX) + 1), c_int::MIN);
         assert_eq!(number_as_int(VarNumber::MAX), -1);
+    }
+
+    #[test]
+    fn a_number_narrows_to_a_line_by_wrapping() {
+        assert_eq!(number_as_lnum(7), LineNr::new(7));
+        assert_eq!(number_as_lnum(0x1_0000_0002), LineNr::new(2));
+        assert_eq!(number_as_lnum(-1), LineNr::new(-1));
     }
 
     #[test]

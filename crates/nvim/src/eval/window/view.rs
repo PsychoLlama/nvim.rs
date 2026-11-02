@@ -12,6 +12,7 @@
 
 use super::*;
 use crate::narrow::number_as_int;
+use crate::narrow::number_as_lnum;
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_VERT};
 
 /// `getwinpos([{timeout}])` — the GUI's window position, which a terminal
@@ -201,7 +202,7 @@ pub fn f_winrestview(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData)
     let entry = |key: &CStr| dict_find(dict, key.to_bytes()).map(|di| tv_get_number(&di.di_tv));
 
     if let Some(v) = entry(c"lnum") {
-        win.w_cursor.lnum = LineNr::new(number_as_int(v));
+        win.w_cursor.lnum = number_as_lnum(v);
     }
     if let Some(v) = entry(c"col") {
         win.w_cursor.col = number_as_int(v);
@@ -216,7 +217,7 @@ pub fn f_winrestview(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData)
     if let Some(v) = entry(c"topline") {
         // Not a plain assignment: 'scrolloff' and folds decide where the
         // window can actually start.
-        set_topline(win, LineNr::new(number_as_int(v)));
+        set_topline(win, number_as_lnum(v));
     }
     if let Some(v) = entry(c"topfill") {
         win.w_topfill = number_as_int(v);

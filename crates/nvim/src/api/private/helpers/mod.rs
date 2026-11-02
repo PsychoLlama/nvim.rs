@@ -27,6 +27,7 @@
 )]
 
 use crate::narrow::number_as_int;
+use crate::narrow::number_as_lnum;
 use crate::types::LineNr;
 use core::ffi::{CStr, c_char, c_int};
 
@@ -267,7 +268,7 @@ pub(crate) fn set_mark(
     debug_assert!((Integer::from(i32::MIN)..=Integer::from(i32::MAX)).contains(&line));
 
     let pos = Pos {
-        lnum: LineNr::new(number_as_int(line)),
+        lnum: number_as_lnum(line),
         col: number_as_int(col),
         coladd: 0,
     };

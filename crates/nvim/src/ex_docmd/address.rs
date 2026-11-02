@@ -19,7 +19,7 @@ use crate::ex_docmd::ex_msg;
 use crate::ex_docmd::is_user_cmd;
 use crate::mark::{mark_check, mark_get, mark_get_visual, mark_move_to};
 use crate::narrow::len_as_int;
-use crate::narrow::number_as_int;
+use crate::narrow::number_as_lnum;
 use crate::search::do_search_in;
 use crate::search::search_last_pattern;
 use crate::strings::has_char;
@@ -549,7 +549,7 @@ pub fn get_address(
             }
             digit if digit.is_ascii_digit() => {
                 let (number, past) = getdigits_at(text, cmd, false, 0);
-                lnum = LineNr::new(number_as_int(number));
+                lnum = number_as_lnum(number);
                 cmd = past;
             }
             _ => {}

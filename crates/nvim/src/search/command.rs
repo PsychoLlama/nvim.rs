@@ -18,7 +18,7 @@ use crate::ex_docmd::cmdmod_has;
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::memory::XString;
 use crate::message::msg_display_bytes;
-use crate::narrow::number_as_int;
+use crate::narrow::number_as_lnum;
 use crate::option::{ScrollMargin, ScrollOff, cpo_has};
 use crate::optionstr::{OptString, OptStringRef};
 use crate::plines::getvcol;
@@ -333,7 +333,7 @@ fn add_offset(pos: &mut Pos, off: SearchOffset) -> c_int {
         } else if lnum > i64::from(last) {
             last
         } else {
-            LineNr::new(number_as_int(lnum))
+            number_as_lnum(lnum)
         };
         pos.col = 0;
         return 2; // pattern found, line offset added

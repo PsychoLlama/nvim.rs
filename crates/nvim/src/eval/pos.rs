@@ -2,7 +2,7 @@
 
 #![forbid(unsafe_code)]
 
-use crate::narrow::number_as_int;
+use crate::narrow::number_as_lnum;
 use crate::winlayer::Buf;
 use core::ffi::c_int;
 
@@ -106,7 +106,7 @@ pub fn var2fpos(
     if tv.v_type() == VAR_LIST {
         let l = tv.list_ref()?;
         let mut error = false;
-        pos.lnum = LineNr::new(number_as_int(list_find_nr(Some(l), 0, Some(&mut error))));
+        pos.lnum = number_as_lnum(list_find_nr(Some(l), 0, Some(&mut error)));
         if error || pos.lnum <= LineNr::ZERO || pos.lnum > bp.line_count() {
             return None;
         }

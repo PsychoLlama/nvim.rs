@@ -8,7 +8,7 @@
 #![forbid(unsafe_code)]
 
 use super::wrappers::arg_number_chk;
-use crate::narrow::number_as_int;
+use crate::narrow::number_as_lnum;
 use crate::option::SavedCpo;
 
 use crate::cursor::check_cursor;
@@ -153,7 +153,7 @@ fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut c_int) 
     // only read when the one before it was supplied, so a {skip} passed
     // without a {flags} is silently ignored.
     if args.len() > 1 && args.len() > 2 {
-        lnum_stop = LineNr::new(number_as_int(arg_number_chk(&args[2], None)));
+        lnum_stop = number_as_lnum(arg_number_chk(&args[2], None));
         if lnum_stop < LineNr::ZERO {
             return 0;
         }
@@ -342,7 +342,7 @@ fn searchpair_cmn(args: &[TypVal], match_pos: Option<&mut Pos>) -> c_int {
     } else {
         // The type is checked later, when the expression is evaluated.
         if args.len() > 5 {
-            lnum_stop = LineNr::new(number_as_int(arg_number_chk(&args[5], None)));
+            lnum_stop = number_as_lnum(arg_number_chk(&args[5], None));
             if lnum_stop < LineNr::ZERO {
                 let what = msg_cstr(numbuf3.string(&args[5]));
                 semsg!("E475: Invalid argument: {what}");
