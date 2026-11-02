@@ -15,7 +15,7 @@
 )]
 
 use super::*;
-use crate::api::private::helpers::{Reported, scope_vars};
+use crate::api::private::helpers::{api_try, scope_vars};
 use crate::guard::Suppress;
 use crate::types::Failed;
 
@@ -88,35 +88,28 @@ pub fn nvim_buf_get_name(buf: BufferHandle) -> Result<String_0, Error> {
 }
 
 pub fn nvim_buf_set_name(buf: BufferHandle, name: String_0) -> Result<(), Error> {
-    let mut error = Error::none();
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(());
     };
-    let mut tstate: TryState = TryState::INIT;
-    try_enter(&mut tstate);
-    let is_curbuf: bool = b == Buf::current();
-    let save_acd = p_acd();
-    let redraw_off = (!is_curbuf).then(Suppress::redraw);
-    if !is_curbuf {
-        P_ACD.set(false);
-    }
-    let mut aco: AcoSave = AcoSave::default();
-    aucmd_prepbuf(&mut aco, b);
-    let ren_ret = rename_buffer(name.as_cstr());
-    aucmd_restbuf(&mut aco);
-    drop(redraw_off);
-    if !is_curbuf {
-        P_ACD.set(save_acd);
-    }
-    error.absorb(try_leave(&tstate));
-    if error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-        return ().reported(error);
-    }
-    if ren_ret.is_err() {
-        let why = c"Failed to rename buffer";
-        error = Error::exception(why);
-    }
-    ().reported(error)
+    // What the bracket caught outranks the rename's own failure.
+    let renamed = api_try(|| {
+        let is_curbuf: bool = b == Buf::current();
+        let save_acd = p_acd();
+        let redraw_off = (!is_curbuf).then(Suppress::redraw);
+        if !is_curbuf {
+            P_ACD.set(false);
+        }
+        let mut aco: AcoSave = AcoSave::default();
+        aucmd_prepbuf(&mut aco, b);
+        let ren_ret = rename_buffer(name.as_cstr());
+        aucmd_restbuf(&mut aco);
+        drop(redraw_off);
+        if !is_curbuf {
+            P_ACD.set(save_acd);
+        }
+        ren_ret
+    })?;
+    renamed.map_err(|Failed| Error::exception(c"Failed to rename buffer"))
 }
 
 pub fn nvim_buf_is_loaded(buf: BufferHandle) -> Boolean {
@@ -126,7 +119,6 @@ pub fn nvim_buf_is_loaded(buf: BufferHandle) -> Boolean {
 }
 
 pub fn nvim_buf_delete(buf: BufferHandle, opts: &mut KeyDict_buf_delete) -> Result<(), Error> {
-    let mut error = Error::none();
     let b = find_buffer_by_handle(buf)?.expect("a resolved handle names a live buffer");
     let force: bool = opts.force.unwrap_or(false);
     let unload: bool = opts.unload.unwrap_or(false);
@@ -142,11 +134,9 @@ pub fn nvim_buf_delete(buf: BufferHandle, opts: &mut KeyDict_buf_delete) -> Resu
         ::core::ffi::c_int::from(force),
     );
     if result.is_err() {
-        let why = c"Failed to unload buffer.";
-        error = Error::exception(why);
-        return ().reported(error);
+        return Err(Error::exception(c"Failed to unload buffer."));
     }
-    ().reported(error)
+    Ok(())
 }
 
 pub fn nvim_buf_is_valid(buf: BufferHandle) -> Boolean {

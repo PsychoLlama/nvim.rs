@@ -9,7 +9,7 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::{Reported, find_buffer_by_handle};
+use crate::api::private::helpers::find_buffer_by_handle;
 use crate::api::private::validate::{Bad, err_invalid};
 use crate::marktree::key::MtFlags;
 use crate::winlayer::Buf;
@@ -70,28 +70,25 @@ pub fn nvim_buf_add_highlight(
     col_start: Integer,
     mut col_end: Integer,
 ) -> Result<Integer, Error> {
-    let mut error = Error::none();
     let Some(buf) = find_buffer_by_handle(buffer)? else {
         return Ok(0 as Integer);
     };
     let out_of_range = c"out of range";
     if line < 0 as Integer || line >= MAXLNUM as Integer {
-        error = err_invalid(c"line number", Bad::Bare(out_of_range));
-        return (0 as Integer).reported(error);
+        return Err(err_invalid(c"line number", Bad::Bare(out_of_range)));
     }
     if col_start < 0 as Integer || col_start > MAXCOL as ::core::ffi::c_int as Integer {
-        error = err_invalid(c"column", Bad::Bare(out_of_range));
-        return (0 as Integer).reported(error);
+        return Err(err_invalid(c"column", Bad::Bare(out_of_range)));
     }
     if col_end < 0 as Integer || col_end > MAXCOL as ::core::ffi::c_int as Integer {
         col_end = MAXCOL as ::core::ffi::c_int as Integer;
     }
     let ns = src2ns(&mut ns_id);
     if line >= buf.b_ml.ml_line_count as Integer {
-        return ns_id.reported(error);
+        return Ok(ns_id);
     }
     if hl_group.is_empty() {
-        return ns_id.reported(error);
+        return Ok(ns_id);
     }
     let hl_id = syn_check_group(hl_group.as_bytes());
 
@@ -112,7 +109,7 @@ pub fn nvim_buf_add_highlight(
         decor_inline_hl(hl_id),
         MtFlags::DECOR_HL,
     );
-    ns_id.reported(error)
+    Ok(ns_id)
 }
 
 pub fn nvim_buf_set_virtual_text(
@@ -122,13 +119,11 @@ pub fn nvim_buf_set_virtual_text(
     chunks: Array,
     _opts: &mut KeyDict_empty,
 ) -> Result<Integer, Error> {
-    let mut error = Error::none();
     let Some(buf) = find_buffer_by_handle(buffer)? else {
         return Ok(0 as Integer);
     };
     if line < 0 as Integer || line >= MAXLNUM as Integer {
-        error = Error::validation(c"Line number outside range");
-        return (0 as Integer).reported(error);
+        return Err(Error::validation(c"Line number outside range"));
     }
     let ns_id = src2ns(&mut src_id);
     let mut width: ::core::ffi::c_int = 0;
@@ -142,7 +137,7 @@ pub fn nvim_buf_set_virtual_text(
             *vt.data.text_mut() = virt_text;
             vt.width = width;
         });
-        return src_id.reported(error);
+        return Ok(src_id);
     }
 
     let vt = DecorVirtText {
@@ -169,5 +164,5 @@ pub fn nvim_buf_set_virtual_text(
         decor,
         MtFlags::NONE,
     );
-    src_id.reported(error)
+    Ok(src_id)
 }

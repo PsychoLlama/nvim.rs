@@ -8,7 +8,7 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::{Reported, api_try};
+use crate::api::private::helpers::api_try;
 use crate::api::private::validate::err_bad_value;
 use core::ffi::CStr;
 
@@ -76,13 +76,11 @@ pub fn nvim__get_runtime(
     all: Boolean,
     opts: &mut KeyDict_runtime,
 ) -> Result<Array, Error> {
-    let mut error = Error::none();
     let should_source = opts.do_source.unwrap_or(false);
     let is_lua = opts.is_lua.unwrap_or(false);
     let deferred_safe = nlua_is_deferred_safe();
     if should_source && !deferred_safe {
-        error = Error::validation(c"'do_source' used in fast callback");
-        return Array::EMPTY.reported(error);
+        return Err(Error::validation(c"'do_source' used in fast callback"));
     }
     let res: Array = runtime_get_named(is_lua, &pat, all);
     if should_source {
@@ -95,7 +93,7 @@ pub fn nvim__get_runtime(
             do_source(name.as_cstr(), false, none, None);
         }
     }
-    res.reported(error)
+    Ok(res)
 }
 
 /// "Invalid `name`: '(too long)'", the one message this file shares.
@@ -104,7 +102,6 @@ fn too_long(name: &CStr) -> Error {
 }
 
 pub fn nvim_set_current_dir(dir: String_0) -> Result<(), Error> {
-    let error = Error::none();
     if dir.len() >= 4096 as size_t {
         return Err(too_long(c"directory name"));
     }
@@ -112,6 +109,5 @@ pub fn nvim_set_current_dir(dir: String_0) -> Result<(), Error> {
     let dir = crate::cstr::owned(dir.as_cstr().to_bytes());
     api_try(|| {
         change_dir(&dir, kCdScopeGlobal);
-    })?;
-    ().reported(error)
+    })
 }

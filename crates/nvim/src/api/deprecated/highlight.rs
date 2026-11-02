@@ -13,7 +13,6 @@
 )]
 
 use super::*;
-use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_bad_number, err_bad_value};
 use crate::narrow::number_as_int;
 
@@ -27,11 +26,9 @@ pub fn nvim_get_hl_by_id(hl_id: Integer, rgb: Boolean) -> Result<ApiDict, Error>
 }
 
 pub fn nvim_get_hl_by_name(name: String_0, rgb: Boolean) -> Result<ApiDict, Error> {
-    let error;
     let id = syn_name2id(name.as_cstr());
     if id == 0 {
-        error = err_bad_value(c"highlight name", name.as_cstr());
-        return ApiDict::EMPTY.reported(error);
+        return Err(err_bad_value(c"highlight name", name.as_cstr()));
     }
     nvim_get_hl_by_id(Integer::from(id), rgb)
 }

@@ -100,8 +100,8 @@ use crate::types::{
     KeyDict_runtime, LineNr, LuaRef, LuaRetMode, MessageData, MessageType, MotionType, NS, Object,
     OptScope, OptVal, RemapValues, ScreenChar, ScriptId, SignTextAttrs, StatusCol, String_0,
     TabpageHandle, TerminalOptions, VarNumber, Vv, WindowHandle, YankReg, int64_t, kCdScopeGlobal,
-    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeString,
-    mpack_token_type_t, size_t, uint8_t, uint16_t, uint64_t,
+    kErrorTypeException, kErrorTypeValidation, kObjectTypeString, mpack_token_type_t, size_t,
+    uint8_t, uint16_t, uint64_t,
 };
 use crate::ui::state::Columns;
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};

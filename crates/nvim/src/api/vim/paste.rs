@@ -14,7 +14,7 @@
     clippy::ptr_as_ptr
 )]
 use super::*;
-use crate::api::private::helpers::{Reported, api_try};
+use crate::api::private::helpers::api_try;
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_expected};
 use crate::getchar::PastePhase;
 use crate::guard::Suppress;
@@ -35,13 +35,14 @@ pub fn nvim_paste(
     crlf: Boolean,
     phase: Integer,
 ) -> Result<Boolean, Error> {
-    let mut error = Error::none();
+    // A handler that throws still ends the paste, and answers its error
+    // once the bookkeeping below is done.
+    let mut failure: Option<Error> = None;
     /// Whether the handler declined this paste: set until the next one
     /// starts, and what makes a later chunk a no-op.
     static CANCELLED: GlobalCell<bool> = GlobalCell::new(false);
     if !(-1..=3).contains(&phase) {
-        error = err_bad_number(c"phase", phase);
-        return false.reported(error);
+        return Err(err_bad_number(c"phase", phase));
     }
     let whole = phase == -1;
     let starting = whole || phase == 1;
@@ -58,12 +59,12 @@ pub fn nvim_paste(
         let rv = match nlua_exec(b"return vim.paste(...)", None, args, kRetNilBool) {
             Ok(value) => value,
             Err(e) => {
-                error = e;
+                failure = Some(e);
                 Object::Nil
             }
         };
         let refused = rv.as_boolean() == Some(false);
-        if error.is_set() || refused {
+        if failure.is_some() || refused {
             CANCELLED.set(true);
         }
         if whole || phase == 3 || CANCELLED.get() {
@@ -85,7 +86,10 @@ pub fn nvim_paste(
     if whole || phase == 3 {
         CANCELLED.set(false);
     }
-    retval.reported(error)
+    match failure {
+        Some(error) => Err(error),
+        None => Ok(retval),
+    }
 }
 
 /// Insert `lines` at the cursor the way a register paste would, `type_0`
@@ -96,22 +100,19 @@ pub fn nvim_put(
     after: Boolean,
     follow: Boolean,
 ) -> Result<(), Error> {
-    let mut error = Error::none();
     let mut reg = YankReg::EMPTY;
     if !prepare_yankreg_from_object(&mut reg, type_0.as_bytes()) {
-        error = err_bad_value(c"type", type_0.as_cstr());
-        return ().reported(error);
+        return Err(err_bad_value(c"type", type_0.as_cstr()));
     }
     if lines.is_empty() {
-        return ().reported(error);
+        return Ok(());
     }
     let mut owned: Vec<XString> = Vec::with_capacity(lines.len());
     for i in 0..lines.len() {
         let item = &lines[i];
         let Some(line) = item.as_string() else {
             let (want, got) = (api_typename(kObjectTypeString), api_typename(item.kind()));
-            error = err_expected(c"line", want, Some(got));
-            return ().reported(error);
+            return Err(err_expected(c"line", want, Some(got)));
         };
         // A NUL in an API string stands for a newline, as it does in every
         // buffer line.
@@ -133,6 +134,5 @@ pub fn nvim_put(
         do_put(0, Some(&reg), dir, 1, flags);
         drop(silenced);
         set_visual_active(visual_was_active);
-    })?;
-    ().reported(error)
+    })
 }

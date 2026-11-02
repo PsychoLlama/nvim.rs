@@ -9,7 +9,6 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::Reported;
 use crate::api::private::validate::err_bad_value;
 
 /// The `types` key's spellings, and the `kCtx*` bit each one names.
@@ -26,7 +25,6 @@ const FLAGS: [::core::ffi::c_int; 6] = [
 ];
 
 pub fn nvim_get_context(opts: &mut KeyDict_context) -> Result<ApiDict, Error> {
-    let mut error = Error::none();
     let types: Array = opts.types.as_ref().unwrap_or(&Array::EMPTY).clone();
     let mut int_types: ::core::ffi::c_int = if types.len() > 0 as size_t {
         0 as ::core::ffi::c_int
@@ -42,8 +40,7 @@ pub fn nvim_get_context(opts: &mut KeyDict_context) -> Result<ApiDict, Error> {
                 if let Some(which) = which {
                     int_types |= FLAGS[which];
                 } else {
-                    error = err_bad_value(c"type", s);
-                    return ApiDict::EMPTY.reported(error);
+                    return Err(err_bad_value(c"type", s));
                 }
             }
             i = i.wrapping_add(1);
@@ -53,7 +50,7 @@ pub fn nvim_get_context(opts: &mut KeyDict_context) -> Result<ApiDict, Error> {
     ctx_save(Some(&mut ctx), int_types);
     let dict: ApiDict = ctx_to_dict(&ctx);
     ctx_free(&mut ctx);
-    dict.reported(error)
+    Ok(dict)
 }
 
 pub fn nvim_load_context(dict: ApiDict) -> Result<Object, Error> {

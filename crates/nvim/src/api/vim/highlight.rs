@@ -9,7 +9,6 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_bad_number, err_bad_value};
 
 pub fn nvim_get_hl_id_by_name(name: String_0) -> Integer {
@@ -59,15 +58,13 @@ pub fn nvim_get_hl_ns(opts: &mut KeyDict_get_ns) -> Result<Integer, Error> {
 }
 
 pub fn nvim_set_hl_ns(ns_id: Integer) -> Result<(), Error> {
-    let mut error = Error::none();
     if !(ns_id >= 0 as Integer) {
-        error = err_bad_number(c"namespace", ns_id);
-        return ().reported(error);
+        return Err(err_bad_number(c"namespace", ns_id));
     }
     ns_hl_global.set(ns_id as NS);
     hl_check_ns();
     redraw_all_later(UPD_NOT_VALID);
-    ().reported(error)
+    Ok(())
 }
 
 pub fn nvim_set_hl_ns_fast(ns_id: Integer) {

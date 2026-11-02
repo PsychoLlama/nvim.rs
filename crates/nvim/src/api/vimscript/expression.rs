@@ -15,7 +15,6 @@
 #![allow(non_upper_case_globals)]
 
 use super::*;
-use crate::api::private::helpers::Reported;
 use crate::api_error;
 use crate::message_fmt::msg_bytes;
 use crate::types::NodeId;
@@ -26,7 +25,6 @@ pub fn nvim_parse_expression(
     flags: String_0,
     hl: Boolean,
 ) -> Result<ApiDict, Error> {
-    let error = Error::none();
     let pflags = parse_flags(&flags)?;
 
     // One line; a null string is no line at all, as a null `data` ended
@@ -71,7 +69,7 @@ pub fn nvim_parse_expression(
 
     ret.insert(c"ast", convert_ast(&east));
     debug_assert!(ret.len() == ret.capacity(), "ret.len() == ret.capacity()");
-    ret.reported(error)
+    Ok(ret)
 }
 
 /// The `flags` argument as `ExprParserFlags`, or which character was not one.

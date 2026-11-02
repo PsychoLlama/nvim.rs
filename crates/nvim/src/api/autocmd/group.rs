@@ -16,7 +16,6 @@
 )]
 
 use super::*;
-use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_expected};
 use crate::narrow::number_as_int;
 
@@ -25,7 +24,6 @@ pub fn nvim_create_augroup(
     name: String_0,
     opts: &mut KeyDict_create_augroup,
 ) -> Result<Integer, Error> {
-    let mut error = Error::none();
     // An augroup the caller says nothing about is cleared.
     let clear_autocmds: bool = opts.clear.unwrap_or(true);
     let _sctx = api_set_sctx(channel_id);
@@ -35,15 +33,14 @@ pub fn nvim_create_augroup(
         // The guard restores on the way out regardless -- upstream's
         // `WITH_SCRIPT_CONTEXT` puts the restore *after* the block, so
         // this `return` skips it there.
-        error = Error::exception(c"Failed to set augroup");
-        return (-1 as Integer).reported(error);
+        return Err(Error::exception(c"Failed to set augroup"));
     }
     if clear_autocmds {
         for event in AutoEvent::all() {
             aucmd_del_for_event_and_group(event, augroup);
         }
     }
-    Integer::from(augroup).reported(error)
+    Ok(Integer::from(augroup))
 }
 
 pub fn nvim_del_augroup_by_id(id: Integer) -> Result<(), Error> {

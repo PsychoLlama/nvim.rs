@@ -10,7 +10,6 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_bad_number, err_expected, err_out_of_range};
 use crate::charset::transstr_owned;
 use crate::mbyte::c_string_cells;
@@ -20,15 +19,13 @@ pub fn nvim_buf_del_extmark(
     ns_id: Integer,
     id: Integer,
 ) -> Result<Boolean, Error> {
-    let mut error = Error::none();
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(false);
     };
     if !ns_initialized(ns_id as uint32_t) {
-        error = err_bad_number(c"ns_id", ns_id);
-        return false.reported(error);
+        return Err(err_bad_number(c"ns_id", ns_id));
     }
-    extmark_del_id(b, ns_id as uint32_t, id as uint32_t).reported(error)
+    Ok(extmark_del_id(b, ns_id as uint32_t, id as uint32_t))
 }
 
 pub fn nvim_buf_clear_namespace(
@@ -37,13 +34,11 @@ pub fn nvim_buf_clear_namespace(
     line_start: Integer,
     mut line_end: Integer,
 ) -> Result<(), Error> {
-    let mut error = Error::none();
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(());
     };
     if !(line_start >= 0 && line_start < Integer::from(MAXLNUM)) {
-        error = err_out_of_range(c"line number");
-        return ().reported(error);
+        return Err(err_out_of_range(c"line number"));
     }
     if line_end < 0 || line_end > Integer::from(MAXLNUM) {
         line_end = Integer::from(MAXLNUM);
@@ -53,7 +48,7 @@ pub fn nvim_buf_clear_namespace(
     let start = line_start as ::core::ffi::c_int;
     let end = line_end as ::core::ffi::c_int - 1;
     extmark_clear(b, ns, start, 0, end, MAXCOL);
-    ().reported(error)
+    Ok(())
 }
 
 pub fn nvim_set_decoration_provider(ns_id: Integer, opts: &mut KeyDict_set_decoration_provider) {

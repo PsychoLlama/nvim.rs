@@ -11,7 +11,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::api::private::helpers::{Reported, api_typename};
+use crate::api::private::helpers::api_typename;
 use crate::api::private::validate::err_expected;
 use crate::autocmd::do_termresponse_autocmd;
 use crate::eval::vars::set_vim_var_string;
@@ -38,17 +38,15 @@ pub fn nvim_ui_term_event(
     event: String_0,
     value: Object,
 ) -> Result<(), Error> {
-    let mut err = Error::none();
     if event.as_cstr() != c"termresponse" {
         return Ok(());
     }
     let Some(termresponse) = value.as_string() else {
         let (want, got) = (api_typename(kObjectTypeString), api_typename(value.kind()));
-        err = err_expected(c"termresponse", want, Some(got));
-        return Err(err);
+        return Err(err_expected(c"termresponse", want, Some(got)));
     };
     let text = (!termresponse.is_null()).then(|| termresponse.as_bytes());
     set_vim_var_string(Vv::Termresponse, text);
     do_termresponse_autocmd(termresponse.clone());
-    ().reported(err)
+    Ok(())
 }

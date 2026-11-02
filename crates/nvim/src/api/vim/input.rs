@@ -10,7 +10,6 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::Reported;
 use crate::api_error;
 use crate::getchar::typeahead;
 use crate::guard::Depth;
@@ -108,81 +107,60 @@ pub fn nvim_input_mouse(
     row: Integer,
     col: Integer,
 ) -> Result<(), Error> {
-    let mut error = Error::none();
-    let mut code: ::core::ffi::c_int;
-    let mut modmask;
+    let invalid = || Error::validation(c"invalid button or action");
     may_trigger_vim_suspend_resume(false);
-    '_error: {
-        if !(button.data().is_null() || action.data().is_null()) {
-            if button.as_cstr() == c"left" {
-                code = KE_LEFTMOUSE as ::core::ffi::c_int;
-            } else if button.as_cstr() == c"middle" {
-                code = KE_MIDDLEMOUSE as ::core::ffi::c_int;
-            } else if button.as_cstr() == c"right" {
-                code = KE_RIGHTMOUSE as ::core::ffi::c_int;
-            } else if button.as_cstr() == c"wheel" {
-                code = KE_MOUSEDOWN as ::core::ffi::c_int;
-            } else if button.as_cstr() == c"x1" {
-                code = KE_X1MOUSE as ::core::ffi::c_int;
-            } else if button.as_cstr() == c"x2" {
-                code = KE_X2MOUSE as ::core::ffi::c_int;
-            } else if button.as_cstr() == c"move" {
-                code = KE_MOUSEMOVE as ::core::ffi::c_int;
-            } else {
-                break '_error;
+    if button.data().is_null() || action.data().is_null() {
+        return Err(invalid());
+    }
+    let mut code = match button.as_cstr().to_bytes() {
+        b"left" => KE_LEFTMOUSE,
+        b"middle" => KE_MIDDLEMOUSE,
+        b"right" => KE_RIGHTMOUSE,
+        b"wheel" => KE_MOUSEDOWN,
+        b"x1" => KE_X1MOUSE,
+        b"x2" => KE_X2MOUSE,
+        b"move" => KE_MOUSEMOVE,
+        _ => return Err(invalid()),
+    } as ::core::ffi::c_int;
+    let action = action.as_cstr().to_bytes();
+    if code == KE_MOUSEDOWN as ::core::ffi::c_int {
+        // The wheel's "action" is its direction.
+        code = match action {
+            b"down" => KE_MOUSEUP,
+            b"up" => KE_MOUSEDOWN,
+            b"left" => KE_MOUSERIGHT,
+            b"right" => KE_MOUSELEFT,
+            _ => return Err(invalid()),
+        } as ::core::ffi::c_int;
+    } else if code != KE_MOUSEMOVE as ::core::ffi::c_int && action != b"press" {
+        code += match action {
+            b"drag" => KE_LEFTDRAG as ::core::ffi::c_int - KE_LEFTMOUSE as ::core::ffi::c_int,
+            b"release" => KE_LEFTRELEASE as ::core::ffi::c_int - KE_LEFTMOUSE as ::core::ffi::c_int,
+            _ => return Err(invalid()),
+        };
+    }
+    let mut modmask = ModMask::NONE;
+    for &raw in modifier.as_bytes() {
+        let byte = ::core::ffi::c_char::from_ne_bytes([raw]);
+        if raw != b'-' {
+            let mod_0 = name_to_mod_mask(byte as ::core::ffi::c_int);
+            if mod_0.is_empty() {
+                // `%c` wrote the one byte, whatever it was; the adaptor keeps
+                // it rather than widening it to a char.
+                let byte = msg_bytes(core::slice::from_ref(&raw));
+                return Err(api_error!(kErrorTypeValidation, "Invalid modifier: {byte}"));
             }
-            if code == KE_MOUSEDOWN as ::core::ffi::c_int {
-                if action.as_cstr() == c"down" {
-                    code = KE_MOUSEUP as ::core::ffi::c_int;
-                } else if action.as_cstr() != c"up" {
-                    if action.as_cstr() == c"left" {
-                        code = KE_MOUSERIGHT as ::core::ffi::c_int;
-                    } else if action.as_cstr() == c"right" {
-                        code = KE_MOUSELEFT as ::core::ffi::c_int;
-                    } else {
-                        break '_error;
-                    }
-                }
-            } else if code != KE_MOUSEMOVE as ::core::ffi::c_int && action.as_cstr() != c"press" {
-                if action.as_cstr() == c"drag" {
-                    code += KE_LEFTDRAG as ::core::ffi::c_int - KE_LEFTMOUSE as ::core::ffi::c_int;
-                } else if action.as_cstr() == c"release" {
-                    code +=
-                        KE_LEFTRELEASE as ::core::ffi::c_int - KE_LEFTMOUSE as ::core::ffi::c_int;
-                } else {
-                    break '_error;
-                }
-            }
-            modmask = ModMask::NONE;
-            let mut i: size_t = 0 as size_t;
-            while i < modifier.len() {
-                let byte = ::core::ffi::c_char::from_ne_bytes([modifier.as_bytes()[i]]);
-                if byte as ::core::ffi::c_int != '-' as ::core::ffi::c_int {
-                    let mod_0 = name_to_mod_mask(byte as ::core::ffi::c_int);
-                    if mod_0.is_empty() {
-                        // `%c` wrote the one byte, whatever it was; the
-                        // adaptor keeps it rather than widening it to a char.
-                        let raw = byte as u8;
-                        let byte = msg_bytes(core::slice::from_ref(&raw));
-                        error = api_error!(kErrorTypeValidation, "Invalid modifier: {byte}");
-                        return ().reported(error);
-                    }
-                    modmask |= mod_0;
-                }
-                i = i.wrapping_add(1);
-            }
-            input_enqueue_mouse(
-                code,
-                modmask.bits() as uint8_t,
-                grid as ::core::ffi::c_int,
-                row as ::core::ffi::c_int,
-                col as ::core::ffi::c_int,
-            );
-            return ().reported(error);
+            modmask |= mod_0;
         }
     }
-    error = Error::validation(c"invalid button or action");
-    ().reported(error)
+    input_enqueue_mouse(
+        code,
+        modmask.bits() as uint8_t,
+        grid as ::core::ffi::c_int,
+        row as ::core::ffi::c_int,
+        col as ::core::ffi::c_int,
+    );
+    Ok(())
 }
 
 pub fn nvim_replace_termcodes(

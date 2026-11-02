@@ -10,7 +10,6 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_bad_number, err_expected};
 use crate::winlayer::Buf;
 use core::ffi::CStr;
@@ -102,22 +101,20 @@ pub fn nvim_buf_get_extmark_by_id(
     id: Integer,
     opts: &mut KeyDict_get_extmark,
 ) -> Result<Array, Error> {
-    let mut error = Error::none();
     let rv: Array = Array::EMPTY;
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(rv);
     };
     if !ns_initialized(ns_id as uint32_t) {
-        error = err_bad_number(c"ns_id", ns_id);
-        return rv.reported(error);
+        return Err(err_bad_number(c"ns_id", ns_id));
     }
     let details: bool = opts.details.unwrap_or(false);
     let hl_name: bool = opts.hl_name.unwrap_or(true);
     let extmark: MTPair = extmark_from_id(b, ns_id as uint32_t, id as uint32_t);
     if extmark.start.pos.row < 0 as int32_t {
-        return rv.reported(error);
+        return Ok(rv);
     }
-    extmark_to_array(extmark, false, details, hl_name).reported(error)
+    Ok(extmark_to_array(extmark, false, details, hl_name))
 }
 
 pub fn nvim_buf_get_extmarks(
@@ -127,14 +124,12 @@ pub fn nvim_buf_get_extmarks(
     end: Object,
     opts: &mut KeyDict_get_extmarks,
 ) -> Result<Array, Error> {
-    let mut error = Error::none();
     let mut rv: Array = Array::EMPTY;
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(rv);
     };
     if !(ns_id == -1 || ns_initialized(ns_id as uint32_t)) {
-        error = err_bad_number(c"ns_id", ns_id);
-        return rv.reported(error);
+        return Err(err_bad_number(c"ns_id", ns_id));
     }
     let details: bool = opts.details.unwrap_or(false);
     let hl_name: bool = opts.hl_name.unwrap_or(true);
@@ -148,14 +143,13 @@ pub fn nvim_buf_get_extmarks(
             Some(b"highlight") => kExtmarkHighlight,
             _ => {
                 let want = c"sign, virt_text, virt_lines or highlight";
-                error = err_expected(c"type", want, name);
-                return rv.reported(error);
+                return Err(err_expected(c"type", want, name));
             }
         };
     }
     let mut limit: Integer = opts.limit.unwrap_or(-1);
     if limit == 0 {
-        return rv.reported(error);
+        return Ok(rv);
     } else if limit < 0 {
         limit = Integer::MAX;
     }
@@ -196,7 +190,7 @@ pub fn nvim_buf_get_extmarks(
             )));
         }
     }
-    rv.reported(error)
+    Ok(rv)
 }
 
 /// A range endpoint, in the spellings one may take: a mark id, `0` for the

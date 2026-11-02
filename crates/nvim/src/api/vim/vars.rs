@@ -15,7 +15,6 @@
 )]
 
 use super::*;
-use crate::api::private::helpers::Reported;
 use crate::api_error;
 use crate::message_fmt::msg_cstr;
 use crate::winlayer::{Buf, Win};
@@ -52,13 +51,13 @@ pub fn nvim_get_var(name: String_0) -> Result<Object, Error> {
     if value.is_none() {
         let loaded = script_autoload_named(name.as_bytes(), false);
         if !loaded || aborting() {
-            return Object::Nil.reported(key_not_found(&name));
+            return Err(key_not_found(&name));
         }
         value = globvar_object(&name);
     }
     match value {
-        Some(value) => value.reported(Error::none()),
-        None => Object::Nil.reported(key_not_found(&name)),
+        Some(value) => Ok(value),
+        None => Err(key_not_found(&name)),
     }
 }
 

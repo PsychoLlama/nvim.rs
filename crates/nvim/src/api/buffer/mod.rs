@@ -35,8 +35,8 @@ use crate::types::{
     AcoSave, AlignTextPos, ApiDict, Array, BCount, Boolean, BufUpdateCallbacks, BufferHandle,
     ColNr, DoBufAction, DoBufStart, Error, ExtmarkOp, Integer, KeyDict_buf_attach,
     KeyDict_buf_delete, KeyDict_empty, KeyDict_keymap, LineNr, LuaRef, MarkAdjustMode, MarkGet,
-    Object, Pos, String_0, TryState, UndoObjectType, WinSplit, WinStyle, int64_t, kErrorTypeNone,
-    ptrdiff_t, size_t, uint64_t,
+    Object, Pos, String_0, TryState, UndoObjectType, WinSplit, WinStyle, int64_t, ptrdiff_t,
+    size_t, uint64_t,
 };
 use crate::undo::u_save_buf;
 

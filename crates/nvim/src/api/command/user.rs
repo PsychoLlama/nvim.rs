@@ -17,7 +17,6 @@
 )]
 
 use super::*;
-use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{
     Bad, err_bad_number, err_bad_value, err_expected, err_invalid,
 };
@@ -59,7 +58,6 @@ pub fn nvim_buf_create_user_command(
 }
 
 pub fn nvim_buf_del_user_command(buf: BufferHandle, name: String_0) -> Result<(), Error> {
-    let mut error = Error::none();
     let table = if buf == -1 {
         Table::Global
     } else {
@@ -69,11 +67,13 @@ pub fn nvim_buf_del_user_command(buf: BufferHandle, name: String_0) -> Result<()
         Table::Buffer(b)
     };
     if uc_del_named(table, name.as_cstr()) {
-        return ().reported(error);
+        return Ok(());
     }
     let name = msg_cstr(name.as_cstr());
-    error = api_error!(kErrorTypeException, "Invalid command (not found): {name}");
-    ().reported(error)
+    Err(api_error!(
+        kErrorTypeException,
+        "Invalid command (not found): {name}"
+    ))
 }
 
 pub fn create_user_command(
@@ -327,18 +327,16 @@ pub fn nvim_buf_get_commands(
     buf: BufferHandle,
     opts: &mut KeyDict_get_commands,
 ) -> Result<ApiDict, Error> {
-    let mut error = Error::none();
     let builtin = opts.builtin.unwrap_or(false);
     if buf == -1 {
         if builtin {
-            error = Error::validation(c"builtin=true not implemented");
-            return ApiDict::EMPTY.reported(error);
+            return Err(Error::validation(c"builtin=true not implemented"));
         }
-        return commands_array(None).reported(error);
+        return Ok(commands_array(None));
     }
     let b = find_buffer_by_handle(buf)?;
     let (false, Some(b)) = (builtin, b) else {
         return Ok(ApiDict::EMPTY);
     };
-    commands_array(Some(b)).reported(error)
+    Ok(commands_array(Some(b)))
 }

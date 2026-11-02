@@ -10,7 +10,7 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::Reported;
+use crate::api::private::helpers::api_try;
 use crate::lua::stack::{At, Stack};
 use crate::memory::memchr_in;
 use crate::normal::{visual_active, visual_anchor, with_visual_anchor};
@@ -31,37 +31,33 @@ pub fn nvim_buf_line_count(buf: BufferHandle) -> Result<Integer, Error> {
 pub fn nvim_buf_get_lines(
     channel_id: uint64_t,
     buf: BufferHandle,
-    mut start: Integer,
-    mut end: Integer,
+    start: Integer,
+    end: Integer,
     strict_indexing: Boolean,
     stack: Option<&mut Stack>,
 ) -> Result<Array, Error> {
-    let mut error = Error::none();
     let mut rv: Array = Array::EMPTY;
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(rv);
     };
-    // SAFETY: non-null, so the handle named a live buffer.
     if b.b_ml.ml_mfp.is_none() {
-        return rv.reported(error);
+        return Ok(rv);
     }
     let mut oob: bool = false;
-    start = normalize_index(b, start as int64_t, true, &mut oob) as Integer;
-    end = normalize_index(b, end as int64_t, true, &mut oob) as Integer;
-    if !(!strict_indexing || !oob) {
-        let why = c"Index out of bounds";
-        error = Error::validation(why);
-        return rv.reported(error);
+    let start = normalize_index(b, start, true, &mut oob);
+    let end = normalize_index(b, end, true, &mut oob);
+    if strict_indexing && oob {
+        return Err(Error::validation(c"Index out of bounds"));
     }
     if start >= end {
-        return rv.reported(error);
+        return Ok(rv);
     }
     let size: size_t = (end - start) as size_t;
     let at = start as LineNr;
     let nl = channel_id != VIML_INTERNAL_CALL;
     let mut lines = LineSink::new(stack, &mut rv, size);
     buf_collect_lines(b, size, at, 0, nl, &mut lines);
-    rv.reported(error)
+    Ok(rv)
 }
 
 /// An API string as a buffer line: NUL-terminated, with each NUL it holds
@@ -88,22 +84,17 @@ pub fn nvim_buf_set_lines(
     strict_indexing: Boolean,
     replacement: Array,
 ) -> Result<(), Error> {
-    let mut error = Error::none();
     let Some(buffer) = api_buf_ensure_loaded(buf)? else {
         return Ok(());
     };
     let mut oob: bool = false;
-    start = normalize_index(buffer, start as int64_t, true, &mut oob) as Integer;
-    end = normalize_index(buffer, end as int64_t, true, &mut oob) as Integer;
-    if !(!strict_indexing || !oob) {
-        let why = c"Index out of bounds";
-        error = Error::validation(why);
-        return ().reported(error);
+    start = normalize_index(buffer, start, true, &mut oob);
+    end = normalize_index(buffer, end, true, &mut oob);
+    if strict_indexing && oob {
+        return Err(Error::validation(c"Index out of bounds"));
     }
-    if !(start <= end) {
-        let why = c"'start' is higher than 'end'";
-        error = Error::validation(why);
-        return ().reported(error);
+    if start > end {
+        return Err(Error::validation(c"'start' is higher than 'end'"));
     }
     let disallow_nl: bool = channel_id != VIML_INTERNAL_CALL;
     check_string_array(&replacement, c"replacement string", disallow_nl)?;
@@ -123,132 +114,120 @@ pub fn nvim_buf_set_lines(
             )
         })
         .collect();
-    let mut tstate: TryState = TryState::INIT;
-    try_enter(&mut tstate);
-    let buf = buffer;
-    's_382: {
-        if buf.b_p_ma == 0 {
-            let why = c"Buffer is not 'modifiable'";
-            error = Error::exception(why);
-        } else if u_save_buf(buf, (start - 1 as Integer) as LineNr, end as LineNr).is_err() {
-            let why = c"Failed to save undo information";
-            error = Error::exception(why);
+    // What the bracket caught outranks the body's own refusal.
+    api_try(|| -> Result<(), Error> {
+        if buffer.b_p_ma == 0 {
+            return Err(Error::exception(c"Buffer is not 'modifiable'"));
+        }
+        if u_save_buf(buffer, (start - 1) as LineNr, end as LineNr).is_err() {
+            return Err(Error::exception(c"Failed to save undo information"));
+        }
+        let deleted_bytes: BCount = get_region_bytecount(
+            buffer,
+            start as LineNr,
+            end as LineNr,
+            0 as ColNr,
+            0 as ColNr,
+        );
+        let to_delete: size_t = if new_len < old_len {
+            old_len.wrapping_sub(new_len)
         } else {
-            let deleted_bytes: BCount =
-                get_region_bytecount(buf, start as LineNr, end as LineNr, 0 as ColNr, 0 as ColNr);
-            let to_delete: size_t = if new_len < old_len {
-                old_len.wrapping_sub(new_len)
+            0 as size_t
+        };
+        let mut i_0: size_t = 0 as size_t;
+        while i_0 < to_delete {
+            if ml_delete_buf(buffer, start as LineNr, false).is_err() {
+                return Err(Error::exception(c"Failed to delete line"));
             } else {
-                0 as size_t
-            };
-            let mut i_0: size_t = 0 as size_t;
-            while i_0 < to_delete {
-                if ml_delete_buf(buffer, start as LineNr, false).is_err() {
-                    let why = c"Failed to delete line";
-                    error = Error::exception(why);
-                    break 's_382;
-                } else {
-                    i_0 = i_0.wrapping_add(1);
-                }
-            }
-            if to_delete > 0 as size_t {
-                extra -= to_delete as ptrdiff_t;
-            }
-            let to_replace: size_t = if old_len < new_len { old_len } else { new_len };
-            let mut inserted_bytes: BCount = 0 as BCount;
-            let mut i_1: size_t = 0 as size_t;
-            while i_1 < to_replace {
-                let lnum: int64_t = start as int64_t + i_1 as int64_t;
-                if !(lnum < MAXLNUM as int64_t) {
-                    let why = c"Index out of bounds";
-                    error = Error::validation(why);
-                    break 's_382;
-                } else if ml_replace_buf_now(buffer, lnum as LineNr, &lines[i_1]).is_err() {
-                    let why = c"Failed to replace line";
-                    error = Error::exception(why);
-                    break 's_382;
-                } else {
-                    // The line and its NUL.
-                    inserted_bytes += lines[i_1].len() as BCount;
-                    i_1 = i_1.wrapping_add(1);
-                }
-            }
-            let mut i_2: size_t = to_replace;
-            while i_2 < new_len {
-                let lnum_0: int64_t = start as int64_t + i_2 as int64_t - 1 as int64_t;
-                if !(lnum_0 < MAXLNUM as int64_t) {
-                    let why = c"Index out of bounds";
-                    error = Error::validation(why);
-                    break 's_382;
-                } else if ml_append_buf_terminated(buffer, lnum_0 as LineNr, &lines[i_2], false)
-                    .is_err()
-                {
-                    let why = c"Failed to insert line";
-                    error = Error::exception(why);
-                    break 's_382;
-                } else {
-                    // The line and its NUL.
-                    inserted_bytes += lines[i_2].len() as BCount;
-                    extra += 1;
-                    i_2 = i_2.wrapping_add(1);
-                }
-            }
-            let adjust: LineNr = if end > start {
-                MAXLNUM as LineNr
-            } else {
-                0 as LineNr
-            };
-            mark_adjust_buf(
-                buffer,
-                start as LineNr,
-                (end - 1 as Integer) as LineNr,
-                adjust,
-                extra as LineNr,
-                true,
-                kMarkAdjustApi,
-                kExtmarkNOOP,
-            );
-            if visual_active() as ::core::ffi::c_int != 0
-                && Some(buffer) == Buf::current_or_none()
-                && visual_anchor().lnum >= start as LineNr
-            {
-                if visual_anchor().lnum >= end as LineNr {
-                    with_visual_anchor(|a| a.lnum += extra as LineNr);
-                }
-                check_visual_pos();
-            }
-            extmark_splice(
-                buffer,
-                start as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                0 as ColNr,
-                (end - start) as ::core::ffi::c_int,
-                0 as ColNr,
-                deleted_bytes,
-                new_len as ::core::ffi::c_int,
-                0 as ColNr,
-                inserted_bytes,
-                kExtmarkUndo,
-            );
-            changed_lines(
-                buffer,
-                start as LineNr,
-                0 as ColNr,
-                end as LineNr,
-                extra as LineNr,
-                true,
-            );
-            for win in tab_windows() {
-                if win.w_buffer == buffer {
-                    let (lo, hi) = (start as LineNr, end as LineNr);
-                    fix_cursor(win, lo, hi, extra as LineNr);
-                }
+                i_0 = i_0.wrapping_add(1);
             }
         }
-    }
-    // The bracket outranks whatever the body wrote into `error`, which is
-    // the order the two had when both went through one slot.
-    try_leave(&tstate)?;
-    ().reported(error)
+        if to_delete > 0 as size_t {
+            extra -= to_delete as ptrdiff_t;
+        }
+        let to_replace: size_t = if old_len < new_len { old_len } else { new_len };
+        let mut inserted_bytes: BCount = 0 as BCount;
+        let mut i_1: size_t = 0 as size_t;
+        while i_1 < to_replace {
+            let lnum: int64_t = start as int64_t + i_1 as int64_t;
+            if !(lnum < MAXLNUM as int64_t) {
+                return Err(Error::validation(c"Index out of bounds"));
+            } else if ml_replace_buf_now(buffer, lnum as LineNr, &lines[i_1]).is_err() {
+                return Err(Error::exception(c"Failed to replace line"));
+            } else {
+                // The line and its NUL.
+                inserted_bytes += lines[i_1].len() as BCount;
+                i_1 = i_1.wrapping_add(1);
+            }
+        }
+        let mut i_2: size_t = to_replace;
+        while i_2 < new_len {
+            let lnum_0: int64_t = start as int64_t + i_2 as int64_t - 1 as int64_t;
+            if !(lnum_0 < MAXLNUM as int64_t) {
+                return Err(Error::validation(c"Index out of bounds"));
+            } else if ml_append_buf_terminated(buffer, lnum_0 as LineNr, &lines[i_2], false)
+                .is_err()
+            {
+                return Err(Error::exception(c"Failed to insert line"));
+            } else {
+                // The line and its NUL.
+                inserted_bytes += lines[i_2].len() as BCount;
+                extra += 1;
+                i_2 = i_2.wrapping_add(1);
+            }
+        }
+        let adjust: LineNr = if end > start {
+            MAXLNUM as LineNr
+        } else {
+            0 as LineNr
+        };
+        mark_adjust_buf(
+            buffer,
+            start as LineNr,
+            (end - 1 as Integer) as LineNr,
+            adjust,
+            extra as LineNr,
+            true,
+            kMarkAdjustApi,
+            kExtmarkNOOP,
+        );
+        if visual_active() as ::core::ffi::c_int != 0
+            && Some(buffer) == Buf::current_or_none()
+            && visual_anchor().lnum >= start as LineNr
+        {
+            if visual_anchor().lnum >= end as LineNr {
+                with_visual_anchor(|a| a.lnum += extra as LineNr);
+            }
+            check_visual_pos();
+        }
+        extmark_splice(
+            buffer,
+            start as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
+            0 as ColNr,
+            (end - start) as ::core::ffi::c_int,
+            0 as ColNr,
+            deleted_bytes,
+            new_len as ::core::ffi::c_int,
+            0 as ColNr,
+            inserted_bytes,
+            kExtmarkUndo,
+        );
+        changed_lines(
+            buffer,
+            start as LineNr,
+            0 as ColNr,
+            end as LineNr,
+            extra as LineNr,
+            true,
+        );
+        for win in tab_windows() {
+            if win.w_buffer == buffer {
+                let (lo, hi) = (start as LineNr, end as LineNr);
+                fix_cursor(win, lo, hi, extra as LineNr);
+            }
+        }
+        Ok(())
+    })?
 }
 
 /// The text from `(start_row, start_col)` to `(end_row, end_col)`, a line
@@ -264,27 +243,22 @@ pub fn nvim_buf_get_text(
     _opts: &mut KeyDict_empty,
     stack: Option<&mut Stack>,
 ) -> Result<Array, Error> {
-    let mut error = Error::none();
     let mut rv: Array = Array::EMPTY;
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(rv);
     };
     // SAFETY: non-null, so the handle named a live buffer.
     if b.b_ml.ml_mfp.is_none() {
-        return rv.reported(error);
+        return Ok(rv);
     }
     let mut oob: bool = false;
     start_row = normalize_index(b, start_row as int64_t, false, &mut oob) as Integer;
     end_row = normalize_index(b, end_row as int64_t, false, &mut oob) as Integer;
     if oob {
-        let why = c"Index out of bounds";
-        error = Error::validation(why);
-        return rv.reported(error);
+        return Err(Error::validation(c"Index out of bounds"));
     }
     if !(start_row <= end_row) {
-        let why = c"'start' is higher than 'end'";
-        error = Error::validation(why);
-        return rv.reported(error);
+        return Err(Error::validation(c"'start' is higher than 'end'"));
     }
     let replace_nl: bool = channel_id != VIML_INTERNAL_CALL;
     let size: size_t = ((end_row - start_row) as size_t).wrapping_add(1 as size_t);
@@ -314,21 +288,18 @@ pub fn nvim_buf_get_text(
 }
 
 pub fn nvim_buf_get_offset(buf: BufferHandle, index: Integer) -> Result<Integer, Error> {
-    let mut error = Error::none();
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(0 as Integer);
     };
     if b.b_ml.ml_mfp.is_none() {
-        return (-1 as Integer).reported(error);
+        return Ok(-1 as Integer);
     }
     if !(index >= 0 as Integer && index <= b.line_count() as Integer) {
-        let why = c"Index out of bounds";
-        error = Error::validation(why);
-        return (0 as Integer).reported(error);
+        return Err(Error::validation(c"Index out of bounds"));
     }
     let lnum = index as LineNr + 1 as LineNr;
     let offset = ml_find_line_or_offset(b, lnum, None, true);
-    (offset as Integer).reported(error)
+    Ok(offset as Integer)
 }
 
 /// Where collected lines go: straight into the Lua table on top of the

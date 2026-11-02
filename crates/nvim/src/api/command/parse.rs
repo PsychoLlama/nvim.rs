@@ -9,7 +9,6 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::Reported;
 use crate::api_error;
 use crate::charset::skip;
 use crate::message_fmt::msg_cstr;
@@ -171,7 +170,6 @@ fn parse_mods(cmdmod: &CmdMod) -> ApiDict {
 }
 
 pub fn nvim_parse_cmd(str: String_0, _opts: &mut KeyDict_empty) -> Result<KeyDict_cmd, Error> {
-    let mut error = Error::none();
     // Every key unset; the answer names only what the parse found.
     let mut result = KeyDict_cmd::default();
     let mut excmd = ExArg::default();
@@ -183,17 +181,13 @@ pub fn nvim_parse_cmd(str: String_0, _opts: &mut KeyDict_empty) -> Result<KeyDic
     let line = CmdLine::from_bytes(str.as_bytes());
     let parsed = parse_cmdline(line, &mut excmd, &mut cmdinfo, &mut errormsg);
     if !parsed {
-        match &errormsg {
-            // SAFETY: `err` is live; the message takes no argument.
-            None => {
-                error = Error::exception(c"Parsing command-line");
-            }
+        return Err(match &errormsg {
+            None => Error::exception(c"Parsing command-line"),
             Some(msg) => {
                 let msg = msg_cstr(msg);
-                error = api_error!(kErrorTypeException, "Parsing command-line: {msg}");
+                api_error!(kErrorTypeException, "Parsing command-line: {msg}")
             }
-        }
-        return Err(error);
+        });
     }
 
     // The `useridx`th entry of one of the two user-command tables: its
@@ -278,5 +272,5 @@ pub fn nvim_parse_cmd(str: String_0, _opts: &mut KeyDict_empty) -> Result<KeyDic
     ]));
     // The `:filter` pattern `parse_mods` copied out is freed here, not before.
     undo_cmdmod(&mut cmdinfo.cmdmod);
-    result.reported(error)
+    Ok(result)
 }

@@ -226,39 +226,6 @@ pub(crate) fn api_try<T>(body: impl FnOnce() -> T) -> Result<T, Error> {
     Ok(value)
 }
 
-/// Answering with what a helper that still reports through an error
-/// out-parameter produced.
-pub(crate) trait Reported: Sized {
-    /// `self`, unless the lent [`Error`] slot `err` says why the call that
-    /// produced it could not answer.
-    ///
-    /// This is deliberately more forgiving than `?`. A `find_*_by_handle`
-    /// miss answers null *without* setting the error when the handle is `0`
-    /// and there is no current buffer/window/tabpage, and upstream answers
-    /// that with a default value rather than a failure; reading "null means
-    /// `Err`" would show the client nil where it used to see `0`. Handing
-    /// the value on keeps a converted function exactly as forgiving as the
-    /// one it replaced.
-    ///
-    /// It is postfix, not `reported(value, err)`, for two reasons. Order:
-    /// the receiver is evaluated before the argument, so
-    /// `f(err).reported(error)` reads the slot *after* the call that
-    /// fills it — the prefix spelling reads it before, and silently throws
-    /// the failure away. Shape: the value is usually the transpiled body's
-    /// existing multi-line call, and a suffix leaves its formatting alone
-    /// where a wrapper would re-indent and re-wrap the whole thing.
-    fn reported(self, err: Error) -> Result<Self, Error>;
-}
-
-impl<T> Reported for T {
-    fn reported(self, mut err: Error) -> Result<Self, Error> {
-        match err.take() {
-            Some(err) => Err(err),
-            None => Ok(self),
-        }
-    }
-}
-
 // -- Odds and ends ---------------------------------------------------------
 
 /// Set the mark `name` in `buffer` to line/column, or delete it when `line` is

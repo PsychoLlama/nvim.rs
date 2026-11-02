@@ -18,7 +18,6 @@
 #![allow(non_upper_case_globals)]
 
 use super::*;
-use crate::api::private::helpers::Reported;
 use crate::api::private::validate::err_bad_number;
 use crate::global_cell::GlobalCell;
 use crate::registry::{IdSet, SlotTable, id_set, interned_key};
@@ -126,10 +125,8 @@ pub fn ns_initialized(ns: uint32_t) -> bool {
 // `nvim__ns_set` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub fn nvim__ns_set(ns_id: Integer, opts: &mut KeyDict_ns_opts) -> Result<(), Error> {
-    let mut error = Error::none();
     if !ns_initialized(ns_id as uint32_t) {
-        error = err_bad_number(c"ns_id", ns_id);
-        return ().reported(error);
+        return Err(err_bad_number(c"ns_id", ns_id));
     }
     let mut set_scoped: bool = true;
     if let Some(wins) = opts.wins.as_ref() {
@@ -181,22 +178,20 @@ pub fn nvim__ns_set(ns_id: Integer, opts: &mut KeyDict_ns_opts) -> Result<(), Er
             }
         }
     }
-    ().reported(error)
+    Ok(())
 }
 
 // `nvim__ns_get` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub fn nvim__ns_get(ns_id: Integer) -> Result<KeyDict_ns_opts, Error> {
-    let mut error = Error::none();
     let mut opts = KeyDict_ns_opts::default();
     let mut windows: Array = Array::EMPTY;
     opts.wins = Some(windows);
     if !ns_initialized(ns_id as uint32_t) {
-        error = err_bad_number(c"ns_id", ns_id);
-        return opts.reported(error);
+        return Err(err_bad_number(c"ns_id", ns_id));
     }
     if !ns_is_local(ns_id as uint32_t) {
-        return opts.reported(error);
+        return Ok(opts);
     }
     let mut count: size_t = 0 as size_t;
     for win in tab_windows() {
@@ -211,5 +206,5 @@ pub fn nvim__ns_get(ns_id: Integer) -> Result<KeyDict_ns_opts, Error> {
         }
     }
     opts.wins = Some(windows);
-    opts.reported(error)
+    Ok(opts)
 }

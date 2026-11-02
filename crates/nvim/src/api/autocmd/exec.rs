@@ -7,14 +7,12 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_conflict, err_expected};
 use crate::memory::XString;
 use crate::types::OptionSetFlags;
 use crate::winlayer::Buf;
 
 pub fn nvim_exec_autocmds(event: Object, opts: &mut KeyDict_exec_autocmds) -> Result<(), Error> {
-    let mut error = Error::none();
     let mut au_group: ::core::ffi::c_int = AUGROUP_ALL as ::core::ffi::c_int;
     let mut buffer: Option<Buf> = Buf::current_or_none();
     // The event data is handed on by address; the keyset's own `Option` has
@@ -25,8 +23,7 @@ pub fn nvim_exec_autocmds(event: Object, opts: &mut KeyDict_exec_autocmds) -> Re
         Object::String(group) => {
             au_group = augroup_find(crate::cstr::until_nul(group.as_bytes()));
             if !(au_group != AUGROUP_ERROR as ::core::ffi::c_int) {
-                error = err_bad_value(c"group", group.as_cstr());
-                return ().reported(error);
+                return Err(err_bad_value(c"group", group.as_cstr()));
             }
         }
         Object::Integer(group) => {
@@ -39,29 +36,25 @@ pub fn nvim_exec_autocmds(event: Object, opts: &mut KeyDict_exec_autocmds) -> Re
                 augroup_name(au_group)
             };
             if !augroup_exists(name.as_deref().unwrap_or_default()) {
-                error = err_bad_number(c"group", au_group as int64_t);
-                return ().reported(error);
+                return Err(err_bad_number(c"group", au_group as int64_t));
             }
         }
         _ => {
             if true {
                 let want = c"String or Integer";
                 let got = api_typename(opts.group.as_ref().unwrap_or(&Object::Nil).kind());
-                error = err_expected(c"group", want, Some(got));
-                return ().reported(error);
+                return Err(err_expected(c"group", want, Some(got)));
             }
         }
     }
     let has_buf: bool = opts.buf.is_some() || opts.buffer.is_some();
     let buf: BufferHandle = opts.buf.or(opts.buffer).unwrap_or(0);
     if opts.buf.is_some() && opts.buffer.is_some() {
-        error = err_conflict(c"buf", c"buffer");
-        return ().reported(error);
+        return Err(err_conflict(c"buf", c"buffer"));
     }
     if has_buf {
         if opts.pattern.is_some() {
-            error = err_conflict(c"pattern", c"buf");
-            return ().reported(error);
+            return Err(err_conflict(c"pattern", c"buf"));
         }
         buffer = find_buffer_by_handle(buf)?;
     }
@@ -77,8 +70,7 @@ pub fn nvim_exec_autocmds(event: Object, opts: &mut KeyDict_exec_autocmds) -> Re
             .as_string()
             .expect("`unpack_string_or_array` answers Strings only");
         let Some(event_nr) = event_name2nr_str(event_str) else {
-            error = err_bad_value(c"event", event_str.as_cstr());
-            return ().reported(error);
+            return Err(err_bad_value(c"event", event_str.as_cstr()));
         };
         let mut pat_index: size_t = 0 as size_t;
         while pat_index < patterns.len() {
@@ -111,5 +103,5 @@ pub fn nvim_exec_autocmds(event: Object, opts: &mut KeyDict_exec_autocmds) -> Re
     if did_aucmd as ::core::ffi::c_int != 0 && modeline as ::core::ffi::c_int != 0 {
         do_modelines(OptionSetFlags::NONE);
     }
-    ().reported(error)
+    Ok(())
 }

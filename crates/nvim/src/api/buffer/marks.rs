@@ -14,32 +14,28 @@
 )]
 
 use super::*;
-use crate::api::private::helpers::Reported;
 use crate::api::private::validate::err_bad_value;
 use crate::winlayer::Win;
 
 pub fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boolean, Error> {
-    let mut error = Error::none();
     let mut res: bool = false;
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(res as Boolean);
     };
     if !(name.len() == 1 as size_t) {
         let name = name.as_cstr();
-        error = err_bad_value(c"mark name (must be a single char)", name);
-        return (res as Boolean).reported(error);
+        return Err(err_bad_value(c"mark name (must be a single char)", name));
     }
     // As C read it: a `char`, so a byte past ASCII is negative.
     let mark = ::core::ffi::c_int::from(::core::ffi::c_char::from_ne_bytes([name.as_bytes()[0]]));
     let Some(fm) = mark_get(b, Win::current(), kMarkAllNoResolve, mark) else {
-        error = err_bad_value(c"mark name", name.as_cstr());
-        return (res as Boolean).reported(error);
+        return Err(err_bad_value(c"mark name", name.as_cstr()));
     };
     if fm.mark.lnum != 0 as LineNr && fm.fnum == b.handle {
         set_mark(Some(b), name, 0 as Integer, 0 as Integer)?;
         res = true;
     }
-    (res as Boolean).reported(error)
+    Ok(res as Boolean)
 }
 
 pub fn nvim_buf_set_mark(
@@ -49,31 +45,27 @@ pub fn nvim_buf_set_mark(
     col: Integer,
     _opts: &mut KeyDict_empty,
 ) -> Result<Boolean, Error> {
-    let mut error = Error::none();
     let mut res: bool = false;
     let Some(b) = api_buf_ensure_loaded(buf)? else {
         return Ok(res as Boolean);
     };
     if !(name.len() == 1 as size_t) {
         let name = name.as_cstr();
-        error = err_bad_value(c"mark name (must be a single char)", name);
-        return (res as Boolean).reported(error);
+        return Err(err_bad_value(c"mark name (must be a single char)", name));
     }
     set_mark(Some(b), name, line, col)?;
     res = true;
-    (res as Boolean).reported(error)
+    Ok(res as Boolean)
 }
 
 pub fn nvim_buf_get_mark(buf: BufferHandle, name: String_0) -> Result<Array, Error> {
-    let mut error = Error::none();
     let mut rv: Array = Array::EMPTY;
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(rv);
     };
     if !(name.len() == 1 as size_t) {
         let name = name.as_cstr();
-        error = err_bad_value(c"mark name (must be a single char)", name);
-        return rv.reported(error);
+        return Err(err_bad_value(c"mark name (must be a single char)", name));
     }
     let mut pos: Pos = Pos {
         lnum: 0,
@@ -87,8 +79,7 @@ pub fn nvim_buf_get_mark(buf: BufferHandle, name: String_0) -> Result<Array, Err
         kMarkAllNoResolve,
         ::core::ffi::c_int::from(mark),
     ) else {
-        error = err_bad_value(c"mark name", name.as_cstr());
-        return rv.reported(error);
+        return Err(err_bad_value(c"mark name", name.as_cstr()));
     };
     if fm.fnum != b.handle {
         pos.lnum = 0 as ::core::ffi::c_int as LineNr;
@@ -99,5 +90,5 @@ pub fn nvim_buf_get_mark(buf: BufferHandle, name: String_0) -> Result<Array, Err
     rv = Array::with_capacity(2 as size_t);
     rv.push(Object::integer(Integer::from(pos.lnum)));
     rv.push(Object::integer(Integer::from(pos.col)));
-    rv.reported(error)
+    Ok(rv)
 }

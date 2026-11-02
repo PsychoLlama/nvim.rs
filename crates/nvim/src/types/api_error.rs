@@ -137,15 +137,6 @@ impl Error {
             *self = e;
         }
     }
-
-    /// Move the failure out of a slot, leaving it unset. `None` when the slot
-    /// carried none.
-    ///
-    /// This is how a function that still lends an out-parameter to a callee
-    /// turns what the callee left there into its own `Err`.
-    pub(crate) fn take(&mut self) -> Option<Self> {
-        self.is_set().then(|| core::mem::take(self))
-    }
 }
 
 /// Build an [`Error`] from a checked format literal.
@@ -203,15 +194,6 @@ mod tests {
         let err = api_error!(kErrorTypeValidation, "Invalid file: {name}");
         assert_eq!(err.kind(), kErrorTypeValidation);
         assert_eq!(err.message_or_empty().to_bytes(), b"Invalid file: caf\xe9");
-    }
-
-    #[test]
-    fn take_empties_the_slot() {
-        let mut slot = api_error!(kErrorTypeException, "boom");
-        let taken = slot.take().expect("set");
-        assert_eq!(taken.message_or_empty(), c"boom");
-        assert!(!slot.is_set());
-        assert!(slot.take().is_none());
     }
 
     #[test]

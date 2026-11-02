@@ -9,7 +9,6 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::Reported;
 use crate::api::private::validate::err_bad_number;
 use crate::api_error;
 use crate::grid::default_grid_ref;
@@ -70,85 +69,60 @@ pub fn nvim__stats() -> ApiDict {
 
 /// The pids of `pid`'s child processes.
 pub fn nvim_get_proc_children(pid: Integer) -> Result<Array, Error> {
-    let mut error = Error::none();
-    let mut rv: ::core::ffi::c_int = 0;
-    let mut rvobj: Array = Array::EMPTY;
-    let mut children: Vec<::core::ffi::c_int> = Vec::new();
-    if !(pid > 0 as Integer && pid <= 2147483647 as Integer) {
-        error = err_bad_number(c"pid", pid);
-    } else {
-        match os_proc_children(pid as ::core::ffi::c_int) {
-            Some(pids) => children = pids,
-            // Only "could not inspect" is reachable on this platform.
-            None => rv = 2 as ::core::ffi::c_int,
-        }
-        if rv == 2 as ::core::ffi::c_int {
-            logmsg!(
-                LOGLVL_DBG,
-                c"nvim_get_proc_children",
-                1924,
-                "fallback to vim._os_proc_children()"
-            );
-            let mut a: Array = Array::with_capacity(1);
-            a.push(Object::integer(pid));
-            let o = match nlua_exec(b"return vim._os_proc_children(...)", None, a, kRetObject) {
-                Ok(value) => value,
-                Err(e) => {
-                    error = e;
-                    Object::Nil
-                }
-            };
-            if let Some(array) = o.into_array() {
-                rvobj = array;
-            } else if !(error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int)
-            {
-                error = api_error!(
-                    kErrorTypeException,
-                    "Failed to get process children. pid={pid} error={rv}"
-                );
-            }
-        } else {
-            rvobj = Array::with_capacity(children.len() as size_t);
-            for pid in children {
-                rvobj.push(Object::integer(pid as Integer));
-            }
-        }
+    let Some(pid) = ::core::ffi::c_int::try_from(pid)
+        .ok()
+        .filter(|&pid| pid > 0)
+    else {
+        return Err(err_bad_number(c"pid", pid));
+    };
+    // Only "could not inspect" (2) is reachable on this platform.
+    if let Some(children) = os_proc_children(pid) {
+        return Ok(children
+            .into_iter()
+            .map(|pid| Object::integer(pid.into()))
+            .collect());
     }
-    rvobj.reported(error)
+    logmsg!(
+        LOGLVL_DBG,
+        c"nvim_get_proc_children",
+        1924,
+        "fallback to vim._os_proc_children()"
+    );
+    let mut a: Array = Array::with_capacity(1);
+    a.push(Object::integer(pid.into()));
+    let o = nlua_exec(b"return vim._os_proc_children(...)", None, a, kRetObject)?;
+    o.into_array().ok_or_else(|| {
+        api_error!(
+            kErrorTypeException,
+            "Failed to get process children. pid={pid} error=2"
+        )
+    })
 }
 
 /// What the OS says about process `pid`, or nil when there is none.
 pub fn nvim_get_proc(pid: Integer) -> Result<Object, Error> {
-    let mut error = Error::none();
-    let mut rvobj: Object = Object::Nil;
-    if !(pid > 0 as Integer && pid <= 2147483647 as Integer) {
-        error = err_bad_number(c"pid", pid);
-        return Object::Nil.reported(error);
+    if !(pid > 0 && pid <= Integer::from(::core::ffi::c_int::MAX)) {
+        return Err(err_bad_number(c"pid", pid));
     }
     let mut a: Array = Array::with_capacity(1);
     a.push(Object::integer(pid));
-    let o = match nlua_exec(b"return vim._os_proc_info(...)", None, a, kRetObject) {
-        Ok(value) => value,
-        Err(e) => {
-            error = e;
-            Object::Nil
-        }
-    };
-    if o.as_array().is_some_and(|array| array.len() == 0 as size_t) {
-        return Object::Nil.reported(error);
-    } else if matches!(o, Object::Dict(_)) {
-        rvobj = o;
-    } else if !(error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
-        error = api_error!(kErrorTypeException, "Failed to get process info. pid={pid}");
+    let o = nlua_exec(b"return vim._os_proc_info(...)", None, a, kRetObject)?;
+    if o.as_array().is_some_and(|array| array.is_empty()) {
+        return Ok(Object::Nil);
     }
-    rvobj.reported(error)
+    if !matches!(o, Object::Dict(_)) {
+        return Err(api_error!(
+            kErrorTypeException,
+            "Failed to get process info. pid={pid}"
+        ));
+    }
+    Ok(o)
 }
 
 /// The text, attributes and highlight of one screen cell.
 // `nvim__inspect_cell` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub fn nvim__inspect_cell(grid: Integer, row: Integer, col: Integer) -> Result<Array, Error> {
-    let mut error = Error::none();
     let mut ret: Array = Array::EMPTY;
     let mut g: GridRef = default_grid_ref();
     if grid == pum_grid_ref().handle as Integer {
@@ -156,8 +130,7 @@ pub fn nvim__inspect_cell(grid: Integer, row: Integer, col: Integer) -> Result<A
     } else if grid > 1 as Integer {
         let wp = get_win_by_grid_handle(grid as Handle).filter(|wp| wp.w_grid_alloc.is_allocated());
         let Some(wp) = wp else {
-            error = err_bad_number(c"grid handle", grid);
-            return ret.reported(error);
+            return Err(err_bad_number(c"grid handle", grid));
         };
         g = wp.grid_alloc();
     }
@@ -166,7 +139,7 @@ pub fn nvim__inspect_cell(grid: Integer, row: Integer, col: Integer) -> Result<A
         || col < 0 as Integer
         || col >= g.cols as Integer
     {
-        return ret.reported(error);
+        return Ok(ret);
     }
     ret = Array::with_capacity(3 as size_t);
     let off: size_t = g.cell_offset(row as ::core::ffi::c_int, col as ::core::ffi::c_int);
@@ -181,7 +154,7 @@ pub fn nvim__inspect_cell(grid: Integer, row: Integer, col: Integer) -> Result<A
     if !highlight_use_hlstate() {
         ret.push(Object::array(hl_inspect(attr)));
     }
-    ret.reported(error)
+    Ok(ret)
 }
 
 // `nvim__screenshot` is an API method's own name, published over msgpack-RPC.

@@ -22,7 +22,7 @@
 #![allow(non_upper_case_globals)]
 
 use super::*;
-use crate::api::private::helpers::{Reported, api_try};
+use crate::api::private::helpers::api_try;
 use crate::api::private::validate::err_expected;
 use crate::api_error;
 use crate::eval::typval::DictRef;
@@ -146,7 +146,7 @@ pub fn nvim_call_dict_function(
         rettv = TypVal::from(dict);
     } else {
         let want = c"String or Dict";
-        return Object::Nil.reported(err_expected(c"dict argument", want, None));
+        return Err(err_expected(c"dict argument", want, None));
     }
     let rv = call_in_dict(&mut fn_0, dict_given, args, &rettv);
     if mustfree {

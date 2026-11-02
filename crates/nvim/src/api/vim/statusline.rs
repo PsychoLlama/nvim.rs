@@ -19,7 +19,6 @@ use core::ptr;
 use std::ffi::CString;
 
 use super::*;
-use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{Bad, err_expected, err_invalid};
 use crate::api_error;
 use crate::statusline::{
@@ -48,8 +47,6 @@ pub fn nvim_eval_statusline(
     str: String_0,
     opts: &mut KeyDict_eval_statusline,
 ) -> Result<ApiDict, Error> {
-    let mut error = Error::none();
-    let empty = ApiDict::EMPTY;
     // `%!` is an expression producing the real format, so there is nothing
     // to check until it has been evaluated.
     let named_expr = str.as_bytes().starts_with(b"%!");
@@ -58,8 +55,7 @@ pub fn nvim_eval_statusline(
         let format = str.as_bytes();
         let format = &format[..format.iter().position(|&b| b == 0).unwrap_or(format.len())];
         if let Err(errmsg) = check_stl_option(format) {
-            error = Error::validation(errmsg.as_cstr());
-            return empty.reported(error);
+            return Err(Error::validation(errmsg.as_cstr()));
         }
     }
 
@@ -115,7 +111,7 @@ pub fn nvim_eval_statusline(
         c"str",
         Object::string(String_0::from_bytes(&built.text)),
     );
-    result.reported(error)
+    Ok(result)
 }
 
 impl Context {
@@ -329,12 +325,12 @@ pub fn nvim__complete_set(
     index: Integer,
     opts: &mut KeyDict_complete_set,
 ) -> Result<ApiDict, Error> {
-    let mut error = Error::none();
     let mut rv = ApiDict::with_capacity(2);
     let opts = &*opts;
     if get_cot_flags() & kOptCotFlagPopup as c_int as ::core::ffi::c_uint == 0 {
-        error = Error::exception(c"completeopt option does not include popup");
-        return rv.reported(error);
+        return Err(Error::exception(
+            c"completeopt option does not include popup",
+        ));
     }
     if let Some(info) = opts.info.as_ref() {
         let win = pum_set_info(index as c_int, info.as_bytes());
@@ -343,5 +339,5 @@ pub fn nvim__complete_set(
             put(&mut rv, c"bufnr", Object::buffer(win.buffer().handle));
         }
     }
-    rv.reported(error)
+    Ok(rv)
 }

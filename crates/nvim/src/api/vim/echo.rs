@@ -15,7 +15,6 @@
 )]
 
 use super::*;
-use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_expected, err_out_of_range, err_required};
 use crate::api_error;
 use crate::guard::Suppress;
@@ -33,7 +32,6 @@ pub fn nvim_echo(
     history: Boolean,
     opts: &mut KeyDict_echo_opts,
 ) -> Result<Object, Error> {
-    let mut error = Error::none();
     // The keys, with every one the caller left out reading as its default:
     // no text, no percentage, no dictionary.
     let no_string = String_0::NULL;
@@ -51,7 +49,6 @@ pub fn nvim_echo(
     let (no_dict, nil) = (ApiDict::EMPTY, Object::Nil);
     let data = opts.data.as_ref().unwrap_or(&no_dict);
     let given_id = opts.id.as_ref().unwrap_or(&nil);
-    let mut id = Object::integer(-1);
     let mut hl_msg = HlMessage::new();
     parse_hl_msg(&mut hl_msg, &chunks, err)?;
 
@@ -80,75 +77,70 @@ pub fn nvim_echo(
         || !data.is_empty()
         || !source.is_empty();
     let echo_id = given_id.as_integer();
-    let rejected = {
+    let rejection = {
         if !is_progress && has_progress_keys {
             let kind = msg_cstr_opt(kind);
-            error = api_error!(
+            Some(api_error!(
                 kErrorTypeValidation,
                 "Conflict: title/source/status/percent/data not allowed with kind='{kind}'"
-            );
-            true
+            ))
         } else if is_progress && !status_named(status.clone()) {
             let names = c"success|failed|running|cancel";
             let got = (!status.is_null()).then(|| status.as_cstr());
-            error = err_expected(c"status", names, got);
-            true
+            Some(err_expected(c"status", names, got))
         } else if is_progress && !(0..=100).contains(&percent) {
-            error = err_out_of_range(c"percent");
-            true
+            Some(err_out_of_range(c"percent"))
         } else if is_progress && source.is_empty() {
-            error = err_required(c"opts.source");
-            true
-        } else if let Some(id) = echo_id.filter(|&id| !msg_id_exists(id)) {
-            error = api_error!(kErrorTypeValidation, "Invalid 'id': {id}");
-            true
+            Some(err_required(c"opts.source"))
         } else {
-            false
+            let unknown = echo_id.filter(|&id| !msg_id_exists(id));
+            unknown.map(|id| api_error!(kErrorTypeValidation, "Invalid 'id': {id}"))
         }
     };
-
-    if !rejected {
-        let msg_data = MessageData {
-            source: source.clone(),
-            percent,
-            title: title.clone(),
-            status: status.clone(),
-            data: data.clone(),
-        };
-        let save_nwr = need_wait_return.get();
-        let save_lines_left = lines_left.get();
-        let save_msg_didany = msg_didany.get();
-        let no_prompt = truncate.then(Suppress::wait_return);
-        if truncate {
-            lines_left.set(0 as ::core::ffi::c_int);
-            msg_didany.set(true);
-            msg_no_more.set(true);
-        }
-        id = msg_multihl(
-            given_id.clone(),
-            &hl_msg,
-            kind,
-            history,
-            err,
-            Some(&msg_data),
-            &mut needs_clear,
-        );
-        if truncate {
-            msg_no_more.set(false);
-            msg_didany.set(save_msg_didany);
-            lines_left.set(save_lines_left);
-            drop(no_prompt);
-            need_wait_return.set(save_nwr);
-        }
-        if verbose {
-            verbose_leave();
-            verbose_stop();
-        }
-        if is_progress {
-            do_autocmd_progress(id.clone(), &hl_msg, Some(&msg_data));
-        }
+    if let Some(error) = rejection {
+        return Err(error);
     }
-    id.reported(error)
+
+    let msg_data = MessageData {
+        source: source.clone(),
+        percent,
+        title: title.clone(),
+        status: status.clone(),
+        data: data.clone(),
+    };
+    let save_nwr = need_wait_return.get();
+    let save_lines_left = lines_left.get();
+    let save_msg_didany = msg_didany.get();
+    let no_prompt = truncate.then(Suppress::wait_return);
+    if truncate {
+        lines_left.set(0 as ::core::ffi::c_int);
+        msg_didany.set(true);
+        msg_no_more.set(true);
+    }
+    let id = msg_multihl(
+        given_id.clone(),
+        &hl_msg,
+        kind,
+        history,
+        err,
+        Some(&msg_data),
+        &mut needs_clear,
+    );
+    if truncate {
+        msg_no_more.set(false);
+        msg_didany.set(save_msg_didany);
+        lines_left.set(save_lines_left);
+        drop(no_prompt);
+        need_wait_return.set(save_nwr);
+    }
+    if verbose {
+        verbose_leave();
+        verbose_stop();
+    }
+    if is_progress {
+        do_autocmd_progress(id.clone(), &hl_msg, Some(&msg_data));
+    }
+    Ok(id)
 }
 
 /// Whether `status` is one of the four a progress message may carry. The

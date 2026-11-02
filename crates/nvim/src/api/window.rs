@@ -10,7 +10,7 @@
 )]
 
 use crate::api::private::helpers::{
-    Reported, api_try, dict_get_value, dict_set_var, find_buffer_by_handle, find_window_by_handle,
+    api_try, dict_get_value, dict_set_var, find_buffer_by_handle, find_window_by_handle,
     normalize_index, scope_vars,
 };
 use crate::autocmd::is_aucmd_win;
@@ -81,7 +81,6 @@ pub fn nvim_win_get_cursor(win: WindowHandle) -> Result<Array, Error> {
 
 /// Move `win`'s cursor to the `[line, column]` `pos` names.
 pub fn nvim_win_set_cursor(win: WindowHandle, pos: Array) -> Result<(), Error> {
-    let mut err = Error::none();
     let Some(mut w) = find_window_by_handle(win)? else {
         return Ok(());
     };
@@ -90,8 +89,7 @@ pub fn nvim_win_set_cursor(win: WindowHandle, pos: Array) -> Result<(), Error> {
         .and_then(|(row, col)| row.as_integer().zip(col.as_integer()))
         .map(|(row, col)| (row as int64_t, col as int64_t));
     let Some((row, col)) = rowcol else {
-        err = err_expected(c"pos", c"[row, col] array", None);
-        return ().reported(err);
+        return Err(err_expected(c"pos", c"[row, col] array", None));
     };
     if row <= 0 || row > int64_t::from(w.buffer().line_count()) {
         return Err(err_out_of_range(c"cursor line"));
@@ -112,7 +110,7 @@ pub fn nvim_win_set_cursor(win: WindowHandle, pos: Array) -> Result<(), Error> {
     restore_win(&mut switchwin, true);
     w.redraw_later(UPD_VALID);
     w.w_redr_status = true;
-    ().reported(err)
+    Ok(())
 }
 
 /// `win`'s height in text lines.
@@ -278,18 +276,16 @@ pub fn nvim_win_call(win: WindowHandle, fun: LuaRef) -> Result<Object, Error> {
 
 /// Point `win` at highlight namespace `ns_id`, or at the global one for -1.
 pub fn nvim_win_set_hl_ns(win: WindowHandle, ns_id: Integer) -> Result<(), Error> {
-    let mut err = Error::none();
     let Some(mut w) = find_window_by_handle(win)? else {
         return Ok(());
     };
     if ns_id < -1 {
-        err = err_invalid(c"namespace", Bad::Unsaid);
-        return ().reported(err);
+        return Err(err_invalid(c"namespace", Bad::Unsaid));
     }
     w.w_ns_hl = number_as_int(ns_id);
     w.w_hl_needs_update = true;
     w.redraw_later(UPD_NOT_VALID);
-    ().reported(err)
+    Ok(())
 }
 
 /// How many screen lines a range of `win`'s buffer occupies once wrapping,

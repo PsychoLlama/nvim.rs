@@ -9,7 +9,6 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::Reported;
 use crate::api_error;
 use crate::guard::Lock;
 use crate::lua::executor::nlua_call_ref_quiet;
@@ -18,23 +17,20 @@ use crate::types::{ChannelStream, InternalState};
 use crate::winlayer::Win;
 
 pub fn nvim_open_term(buf: BufferHandle, opts: &mut KeyDict_open_term) -> Result<Integer, Error> {
-    let mut slot = Error::none();
     let Some(buffer) = api_buf_ensure_loaded(buf)? else {
         return Ok(0 as Integer);
     };
     if cmdwin_buf.get() == Some(buffer.id()) {
-        slot = Error::from_message(kErrorTypeException, e_cmdwin);
-        return (0 as Integer).reported(slot);
+        return Err(Error::exception(e_cmdwin));
     }
     let mut may_read_buffer: bool = true;
     if !buffer.terminal.is_null() {
         if buf_terminal_running(buffer) {
             let handle = buffer.handle;
-            slot = api_error!(
+            return Err(api_error!(
                 kErrorTypeException,
                 "Terminal already connected to buffer {handle}"
-            );
-            return (0 as Integer).reported(slot);
+            ));
         }
         buf_close_terminal(buffer);
         may_read_buffer = false;
@@ -75,12 +71,10 @@ pub fn nvim_open_term(buf: BufferHandle, opts: &mut KeyDict_open_term) -> Result
         terminal_check_size(term);
     }
     drop(held);
-    if !contents.is_empty()
-        && let Err(why) = channel_send(id, contents)
-    {
-        slot = Error::from_message(kErrorTypeValidation, why);
+    if !contents.is_empty() {
+        channel_send(id, contents).map_err(Error::validation)?;
     }
-    (id as Integer).reported(slot)
+    Ok(id as Integer)
 }
 
 fn term_read_pause(_pause: bool, _owner: uint64_t) {}
@@ -131,12 +125,9 @@ fn term_close(id: uint64_t) {
 }
 
 pub fn nvim_chan_send(chan: Integer, data: String_0) -> Result<(), Error> {
-    let mut slot = Error::none();
     if data.is_empty() {
-        return ().reported(slot);
+        return Ok(());
     }
-    if let Err(why) = channel_send(chan as uint64_t, data.as_bytes().to_vec()) {
-        slot = Error::from_message(kErrorTypeValidation, why);
-    }
-    ().reported(slot)
+    channel_send(chan as uint64_t, data.as_bytes().to_vec()).map_err(Error::validation)?;
+    Ok(())
 }
