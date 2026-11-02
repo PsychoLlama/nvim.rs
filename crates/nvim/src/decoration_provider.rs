@@ -190,6 +190,7 @@ fn decor_provider_invoke(
 
 /// Tell every provider with an `_on_spell_nav` callback that the spell
 /// checker is looking at this span.
+#[inline(never)]
 pub(crate) fn decor_providers_invoke_spell(
     window: Win,
     start_row: c_int,
@@ -217,6 +218,7 @@ pub(crate) fn decor_providers_invoke_spell(
 }
 
 /// Ask every `_on_conceal_line` callback about `row`.
+#[inline(never)]
 pub(crate) fn decor_providers_invoke_conceal_line(window: Win, row: c_int) -> bool {
     let keys = window.buffer().b_marktree.n_keys;
     for idx in 0..provider_count() {
@@ -332,6 +334,11 @@ pub(crate) fn decor_providers_invoke_win(window: Win) {
 }
 
 /// Run every `on_line` callback for one window row.
+// Out of line, with `_conceal_line` and `_spell` below: `win_line` calls the
+// three, and each holds an inline argument builder (`ArrayBuf`) whose
+// elements, inlined into `win_line`, cost it +0.48 % scrbench Ir in spills
+// even with no provider registered.
+#[inline(never)]
 pub(crate) fn decor_providers_invoke_line(window: Win, row: c_int) {
     // the caller's window; the callbacks re-enter the editor and may
     // place ephemeral decorations, which is what the flag below announces.
