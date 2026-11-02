@@ -1,5 +1,12 @@
 //! Serialisation: the `msgpack*()` and `json_*()` families.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::wrappers::blob_alloc_ret;
 use super::{ARENA_BLOCK_SIZE, MPACK_EOF, MPACK_ERROR, MPACK_OK};
@@ -186,6 +193,7 @@ mod tests {
     use crate::eval::list::string_tv;
     use crate::eval::typval::{ListRef, tv_dict_alloc, tv_list_alloc};
     use crate::global_cell::editor_state_lock;
+    use core::ffi::c_uint;
 
     fn list(items: Vec<TypVal>) -> ListRef {
         let mut l = tv_list_alloc(-1);
@@ -266,12 +274,15 @@ mod tests {
             if cut == 0 {
                 continue;
             }
-            assert_eq!(status, MPACK_EOF as c_int, "cut at {cut}");
+            assert_eq!(c_uint::try_from(status), Ok(MPACK_EOF), "cut at {cut}");
             assert_eq!(tv.v_type(), VAR_UNKNOWN, "cut at {cut}");
         }
         let mut data = &bytes[..];
         let mut tv = TypVal::Number(0);
-        assert_eq!(unpack_typval(&mut data, &mut tv), MPACK_OK as c_int);
+        assert_eq!(
+            c_uint::try_from(unpack_typval(&mut data, &mut tv)),
+            Ok(MPACK_OK)
+        );
         assert!(data.is_empty());
         assert_eq!(
             crate::eval::encode::tv2string_bytes(&tv),

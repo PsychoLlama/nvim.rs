@@ -17,6 +17,13 @@
 //! licenses/LGPL-2.1.txt).
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // Unsafe perimeter: the `xdiff/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
 
