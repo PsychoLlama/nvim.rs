@@ -16,8 +16,8 @@
 )]
 
 use super::*;
+use crate::api::private::validate::handle_arg;
 use crate::api::private::validate::{err_bad_number, err_bad_value};
-use crate::narrow::number_as_int;
 use crate::types::DictBuilder;
 
 pub fn nvim_get_hl_id_by_name(name: ApiString) -> Integer {
@@ -25,7 +25,7 @@ pub fn nvim_get_hl_id_by_name(name: ApiString) -> Integer {
 }
 
 pub fn nvim_get_hl(ns_id: Integer, opts: &mut KeyDict_get_highlight) -> Result<ApiDict, Error> {
-    ns_get_hl_defs(Handle::new(number_as_int(ns_id)), opts)
+    ns_get_hl_defs(handle_arg(c"namespace", ns_id)?, opts)
 }
 
 pub fn nvim_set_hl(
@@ -34,6 +34,7 @@ pub fn nvim_set_hl(
     name: ApiString,
     val: &mut KeyDict_highlight,
 ) -> Result<(), Error> {
+    let ns = handle_arg(c"namespace", ns_id)?;
     let hl_id: ::core::ffi::c_int = syn_check_group(name.as_bytes());
     if !(hl_id != 0 as ::core::ffi::c_int) {
         return Err(err_bad_value(c"highlight name", name.as_cstr()));
@@ -45,19 +46,13 @@ pub fn nvim_set_hl(
     let update: bool = val.update.unwrap_or(false);
     let mut base: Option<&HlAttrs> = None;
     let base_attrs: HlAttrs;
-    if update && let Some(attrs) = hl_ns_get_attrs(number_as_int(ns_id), hl_id, None) {
+    if update && let Some(attrs) = hl_ns_get_attrs(ns.get(), hl_id, None) {
         base_attrs = attrs;
         base = Some(&base_attrs);
     }
     let attrs: HlAttrs = dict2hlattrs(&*val, true, Some(&mut link_id), base)?;
     let _sctx = api_set_sctx(channel_id);
-    ns_hl_def(
-        Handle::new(number_as_int(ns_id)),
-        hl_id,
-        attrs,
-        link_id,
-        Some(&*val),
-    );
+    ns_hl_def(ns, hl_id, attrs, link_id, Some(&*val));
     Ok(())
 }
 
@@ -76,15 +71,16 @@ pub fn nvim_set_hl_ns(ns_id: Integer) -> Result<(), Error> {
     if !(ns_id >= 0 as Integer) {
         return Err(err_bad_number(c"namespace", ns_id));
     }
-    ns_hl_global.set(Handle::new(number_as_int(ns_id)));
+    ns_hl_global.set(handle_arg(c"namespace", ns_id)?);
     hl_check_ns();
     redraw_all_later(UPD_NOT_VALID);
     Ok(())
 }
 
-pub fn nvim_set_hl_ns_fast(ns_id: Integer) {
-    ns_hl_fast.set(Handle::new(number_as_int(ns_id)));
+pub fn nvim_set_hl_ns_fast(ns_id: Integer) -> Result<(), Error> {
+    ns_hl_fast.set(handle_arg(c"namespace", ns_id)?);
     hl_check_ns();
+    Ok(())
 }
 
 pub fn nvim_get_color_by_name(name: ApiString) -> Integer {

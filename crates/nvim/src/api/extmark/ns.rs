@@ -26,8 +26,9 @@
 
 use super::*;
 use crate::api::private::validate::err_bad_number;
+use crate::api::private::validate::handle_arg;
 use crate::global_cell::GlobalCell;
-use crate::narrow::{number_as_int, number_as_u32};
+use crate::narrow::number_as_u32;
 use crate::registry::{IdSet, SlotTable, id_set, interned_key};
 use crate::types::DictBuilder;
 use crate::types::{Handle, uint32_t};
@@ -150,7 +151,7 @@ pub fn nvim__ns_set(ns_id: Integer, opts: &mut KeyDict_ns_opts) -> Result<(), Er
             // refuses it -- the transpile read its bytes as an integer.
             let item = &wins[i];
             let win: Integer = item.as_handle().or_else(|| item.as_integer()).unwrap_or(-1);
-            let Some(wp) = find_window_by_handle(Handle::new(number_as_int(win)))? else {
+            let Some(wp) = find_window_by_handle(handle_arg(c"window handle", win)?)? else {
                 return Ok(());
             };
             windows.insert(wp.raw());

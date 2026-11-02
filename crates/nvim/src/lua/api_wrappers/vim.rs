@@ -794,7 +794,7 @@ pub(super) fn convert_nvim_set_hl_ns_fast(
 ) -> Result<(), Error> {
     let arg_1 = pop_integer(stack).inspect_err(|_| *blame = Some(c"ns_id"))?;
     let _active = ActiveState::enter(stack);
-    nvim_set_hl_ns_fast(arg_1);
+    nvim_set_hl_ns_fast(arg_1)?;
     Ok(())
 }
 

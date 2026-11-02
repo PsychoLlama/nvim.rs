@@ -14,6 +14,7 @@
 )]
 
 use super::*;
+use crate::api::private::validate::handle_arg;
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_conflict, err_expected};
 use crate::api_error;
 use crate::narrow::number_as_int;
@@ -142,7 +143,7 @@ fn buffer_patterns(opts: &Opts, has_buf: bool) -> Result<Array, Error> {
         return Ok(Array::new());
     };
     let buflocal = |handle: Integer| -> Result<Object, Error> {
-        let b = find_buffer_by_handle(Handle::new(number_as_int(handle)))?;
+        let b = find_buffer_by_handle(handle_arg(c"buffer", handle)?)?;
         let pat = format!("<buffer={}>", b.map_or(Handle::NONE, |b| b.handle));
         Ok(Object::string(ApiString::from_bytes(pat.as_bytes())))
     };

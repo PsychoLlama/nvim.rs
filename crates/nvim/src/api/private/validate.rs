@@ -28,7 +28,7 @@
 use crate::api::private::helpers::api_typename;
 use crate::api_error;
 use crate::message_fmt::msg_cstr;
-use crate::types::{Array, Error, int64_t, kErrorTypeValidation, kObjectTypeString};
+use crate::types::{Array, Error, Handle, int64_t, kErrorTypeValidation, kObjectTypeString};
 use core::ffi::CStr;
 
 /// Whether `name` is a phrase rather than a single name, which is what
@@ -93,6 +93,13 @@ pub(crate) fn err_bad_value(name: &CStr, val: &CStr) -> Error {
 /// "Invalid `name`: `n`", for a number outside what the key accepts.
 pub(crate) fn err_bad_number(name: &CStr, n: int64_t) -> Error {
     err_invalid(name, Bad::Number(n))
+}
+
+/// `n` as a handle, through the checked narrowing the dispatch wrappers
+/// use: an id past C `int` names no handle, so it is refused as "Invalid
+/// `name`: `n`" rather than wrapped onto one that may exist.
+pub(crate) fn handle_arg(name: &CStr, n: int64_t) -> Result<Handle, Error> {
+    Handle::try_from(n).map_err(|_| err_bad_number(name, n))
 }
 
 /// "Invalid `name`: out of range".

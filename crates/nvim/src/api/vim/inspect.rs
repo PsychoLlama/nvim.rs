@@ -17,6 +17,7 @@
 
 use super::*;
 use crate::api::private::validate::err_bad_number;
+use crate::api::private::validate::handle_arg;
 use crate::api_error;
 use crate::grid::default_grid_ref;
 use crate::log::logmsg;
@@ -143,7 +144,7 @@ pub fn nvim__inspect_cell(grid: Integer, row: Integer, col: Integer) -> Result<A
     if grid == Integer::from(pum_grid_ref().handle) {
         g = pum_grid_ref();
     } else if grid > 1 as Integer {
-        let wp = get_win_by_grid_handle(Handle::new(number_as_int(grid)))
+        let wp = get_win_by_grid_handle(handle_arg(c"grid handle", grid)?)
             .filter(|wp| wp.w_grid_alloc.is_allocated());
         let Some(wp) = wp else {
             return Err(err_bad_number(c"grid handle", grid));

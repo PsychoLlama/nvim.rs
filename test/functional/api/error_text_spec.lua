@@ -106,4 +106,17 @@ describe('API error text', function()
     -- The rest of that paste is dropped without calling the handler again.
     eq(false, api.nvim_paste('b', false, 2))
   end)
+
+  -- An id past C `int` names no handle: refused, not wrapped onto one that
+  -- may exist (upstream's `(NS)ns_id` cast made 2^32 + 1 namespace 1).
+  it('a handle argument past C int', function()
+    local big = 2 ^ 32 + 1
+    eq("Invalid 'namespace': 4294967297", pcall_err(api.nvim_set_hl_ns, big))
+    eq("Invalid 'namespace': 4294967297", pcall_err(api.nvim_win_set_hl_ns, 0, big))
+    eq('Invalid grid handle: 4294967297', pcall_err(api.nvim__inspect_cell, big, 0, 0))
+    eq(
+      "Invalid 'buffer': 4294967297",
+      pcall_err(api.nvim_get_autocmds, { event = 'BufEnter', buffer = big })
+    )
+  end)
 end)

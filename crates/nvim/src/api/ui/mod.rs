@@ -41,6 +41,7 @@ pub use line::remote_ui_raw_line;
 pub use redraw::{remote_ui_event, remote_ui_hl_attr_define};
 
 use crate::api::private::helpers::api_typename;
+use crate::api::private::validate::handle_arg;
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_expected};
 use crate::api_error;
 use crate::autocmd::{do_autocmd_focusgained, may_trigger_vim_suspend_resume};
@@ -54,8 +55,8 @@ use crate::types::ui::{
     kUICmdline, kUIExtCount, kUIHlState, kUILinegrid, kUIMessages, kUIMultigrid, kUIPopupmenu,
 };
 use crate::types::{
-    ApiDict, ApiString, Boolean, Error, Float, Handle, Integer, Object, ObjectType, RemoteUI,
-    UIExtension, kErrorTypeException, kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeString,
+    ApiDict, ApiString, Boolean, Error, Float, Integer, Object, ObjectType, RemoteUI, UIExtension,
+    kErrorTypeException, kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeString,
 };
 use crate::ui::state::{current_ui, t_colors, ui_ext_names};
 use crate::ui::{
@@ -431,7 +432,7 @@ pub fn nvim_ui_try_resize_grid(
         return nvim_ui_try_resize(channel_id, width, height);
     }
     let (grid, width, height) = (
-        Handle::new(number_as_int(grid)),
+        handle_arg(c"grid handle", grid)?,
         number_as_int(width),
         number_as_int(height),
     );

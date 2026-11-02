@@ -732,7 +732,7 @@ pub fn handle_nvim_set_hl_ns_fast(channel_id: uint64_t, args: Array) -> Result<O
     let Some(arg_1) = as_integer(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_set_hl_ns_fast", c"Integer"));
     };
-    nvim_set_hl_ns_fast(arg_1);
+    nvim_set_hl_ns_fast(arg_1)?;
     Ok(Object::Nil)
 }
 

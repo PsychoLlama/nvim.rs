@@ -13,6 +13,7 @@ use crate::api::private::helpers::{
     api_try, dict_get_value, dict_set_var, find_buffer_by_handle, find_window_by_handle,
     normalize_index, scope_vars,
 };
+use crate::api::private::validate::handle_arg;
 use crate::autocmd::is_aucmd_win;
 use crate::cursor::check_cursor_col;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID};
@@ -284,7 +285,7 @@ pub fn nvim_win_set_hl_ns(win: WindowHandle, ns_id: Integer) -> Result<(), Error
     if ns_id < -1 {
         return Err(err_invalid(c"namespace", Bad::Unsaid));
     }
-    w.w_ns_hl = Handle::new(number_as_int(ns_id));
+    w.w_ns_hl = handle_arg(c"namespace", ns_id)?;
     w.w_hl_needs_update = true;
     w.redraw_later(UPD_NOT_VALID);
     Ok(())
