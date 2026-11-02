@@ -68,12 +68,14 @@ pub fn nvim_buf_get_lines(
 }
 
 /// How many lines `start..end` holds: `end` is not before `start`.
+#[inline]
 pub(super) fn line_span(start: LineNr, end: LineNr) -> usize {
     usize::try_from(end - start).expect("the range runs forwards")
 }
 
 /// A length in bytes as the extmark code's byte count. Nothing in memory
 /// holds more than `isize::MAX` bytes, so this cannot fail.
+#[inline]
 pub(super) fn byte_count(len: usize) -> BCount {
     BCount::try_from(len).expect("an allocation fits in isize")
 }
@@ -94,6 +96,7 @@ pub(crate) fn api_text_into(line: &mut Vec<u8>, text: &[u8]) {
 }
 
 /// The line `offset` lines below `start`, if it is before `MAXLNUM`.
+#[inline]
 pub(super) fn line_below(start: LineNr, offset: usize) -> Result<LineNr, Error> {
     let lnum = i64::from(start) + len_as_integer(offset);
     LineNr::try_from(lnum)

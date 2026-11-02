@@ -296,12 +296,8 @@ pub fn ml_find_line_or_offset(
         let page = buffer.b_ml.page(id);
         let data = DataBlock(page);
         let starts = data.index_entries(count as usize);
-        let start_of = |idx: LineNr| {
-            Wide::from(
-                u32::from_ne_bytes(starts[usize::try_from(idx).expect("an index into the block")])
-                    & DB_INDEX_MASK,
-            )
-        };
+        let start_of =
+            |idx: c_int| Wide::from(u32::from_ne_bytes(starts[idx as usize]) & DB_INDEX_MASK);
         // First line in the block has its text at the end of it.
         let text_end = Wide::from(data.line_end(idx as usize));
 
@@ -314,7 +310,7 @@ pub fn ml_find_line_or_offset(
             }
         } else {
             extra = 0;
-            while offset >= size + text_end - start_of(LineNr::new(idx)) + ffdos {
+            while offset >= size + text_end - start_of(idx) + ffdos {
                 if ffdos != 0 {
                     size += 1;
                 }
@@ -327,7 +323,7 @@ pub fn ml_find_line_or_offset(
             }
         }
 
-        let len = text_end - start_of(LineNr::new(idx));
+        let len = text_end - start_of(idx);
         size += len;
         if offset != 0 && size >= offset {
             // A non-zero offset was read through `offp`, so it is there.
@@ -338,7 +334,7 @@ pub fn ml_find_line_or_offset(
             } else if idx == start_idx {
                 (offset - size + len) as c_int
             } else {
-                (offset - size + len - (text_end - start_of(LineNr::new(idx - 1)))) as c_int
+                (offset - size + len - (text_end - start_of(idx - 1))) as c_int
             };
             curline += idx - start_idx + extra;
             if curline > b.b_ml.ml_line_count {
