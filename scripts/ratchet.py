@@ -756,9 +756,20 @@ plus these whole-tree metrics, which are not per-file:
                         and all; the `as` it captured is checked against the
                         masked copy, so a cast written inside a comment or a
                         string still costs nothing. Phase 32.
-                      failed_uses  `Failed`, the OK/FAIL sentinel wearing a
-                        Rust type. Retires with `ok_fail`, into a real error.
-                        Phase 32.
+                      emit_sentinel  a message emitted, then a sentinel
+                        returned: an EMIT_CALL (`emsg`, `semsg!`, `iemsg`,
+                        `smsg!`, `give_warning`, `msg_puts*`, `api_error!`,
+                        ...) whose statement is followed directly by a
+                        `return`/tail of `false`, `None`, `-1`, `0` or
+                        `FAIL`. The caller learns that something failed and
+                        not what, and the integer or `bool` it reads is
+                        indistinguishable from a real answer. `Err(Failed)`
+                        and `Err(e)` after a message are not counted: `Failed`
+                        is the crate's "a message is already out" error, and
+                        Vim's `emsg` channel (`v:errmsg`, `:try`,
+                        `emsg_silent`) is the boundary that reports it.
+                        Replaced `failed_uses` (every `Failed`, which counted
+                        the honest form of the same thing as debt). Phase 41.
                       labeled_blocks  `'label: {`/`loop`/`while`/`for` — the
                         transpiler's rendering of C's `goto`. A lifetime bound
                         (`'a: 'b`) cannot match: what follows the colon has to
@@ -1729,7 +1740,6 @@ INSTRUMENTS = {
         r"\bstatic\s+[A-Za-z_][A-Za-z0-9_]*\s*:\s*GlobalCell\s*<"
     ),
     "cell_raw_ptr": re.compile(r"\bGlobalCell\s*<\s*\*(?:mut|const)\b"),
-    "failed_uses": re.compile(r"\bFailed\b"),
     # The transpiler's `goto` residue: c2rust renders a jump as a labelled
     # block or loop it can `break` out of. `'a: 'b` (a lifetime bound) cannot
     # match -- what follows the colon has to open a block.
@@ -1822,6 +1832,33 @@ CHAR_AS_C_INT = re.compile(
 )
 
 
+# The message entry points `emit_sentinel` follows, and the sentinel answer
+# that may come straight after one. The emitter is a call (or a macro call):
+# its argument list is skipped with `balanced`, so a nested call or a masked
+# format string cannot end it early. The sentinel is the *next* statement --
+# a `return x;` or a tail `x }` -- after the `;` that ends the emitting one,
+# so a message that is followed by bookkeeping first is not counted: the
+# needle is the shape, not every path that reaches a sentinel.
+EMIT_CALL = re.compile(
+    r"\b(?:emsg|semsg!|iemsg|siemsg!|emsg_multiline|emsg_invreg|internal_error"
+    r"|give_warning|smsg!|swmsg!|msg_warn\w*|api_error!|nlua_error"
+    r"|report_emsg_multiline|msg_puts\w*|msg_outtrans\w*|msg_\w*hl|msg_bytes"
+    r"|msg_cstr)\s*\("
+)
+EMIT_SENTINEL = re.compile(r"\s*(?:return\s+)?(?:false|None|-1|0|FAIL)\s*[;}]")
+
+
+def emit_sentinels(masked):
+    """How many EMIT_CALLs in `masked` are followed by a sentinel answer."""
+    found = 0
+    for match in EMIT_CALL.finditer(masked):
+        close = balanced(masked, match.end() - 1, "(", ")")
+        end = masked.find(";", close)
+        if end != -1 and EMIT_SENTINEL.match(masked, end + 1):
+            found += 1
+    return found
+
+
 # A function long enough that nobody reads it: c2rust translated a C function
 # whole, and a 700-line body is a family of operations sharing one stack
 # frame. Phase 34 splits them along the seams their arguments already draw.
@@ -1872,7 +1909,7 @@ INSTRUMENT_KEYS = (
     "cell_raw_ptr",
     "api_err_params",
     "char_as_c_int",
-    "failed_uses",
+    "emit_sentinel",
     "labeled_blocks",
     "long_fns",
     "dup_consts",
@@ -3458,6 +3495,8 @@ def instrument_sites(tree, sources, wrappers=None):
             1 for m in CHAR_AS_C_INT.finditer(source) if masked[m.start(1)] == "a"
         ):
             sites["char_as_c_int"][file] = found
+        if found := emit_sentinels(masked):
+            sites["emit_sentinel"][file] = found
         if in_home(file, TYPES_HOME):
             sites["types_files"][file] = 1
         if not GENERATED_MARKER.search(source[:GENERATED_HEAD]):
@@ -3699,7 +3738,7 @@ WHOLE_TREE_LABEL = {
     "cell_raw_ptr": "GlobalCells holding a raw pointer",
     "api_err_params": "`&mut Error` out-parameters",
     "char_as_c_int": "character literals cast to C's int",
-    "failed_uses": "`Failed`, the sentinel wearing a Rust type",
+    "emit_sentinel": "a message emitted, then a sentinel returned",
     "labeled_blocks": "labelled blocks and loops (the transpiled goto)",
     "long_fns": f"functions over {LONG_FN_LINES} lines outside generated files",
     "safety_on_safe_fns": "safe fns whose doc comment still has a `# Safety` section",
@@ -4810,6 +4849,20 @@ SELF_TEST_INSTRUMENTS = [
             "    #[test]\n    fn t() {}\n}\n",
         },
         {"untested_dirs": 0},
+    ),
+    # A message then a sentinel, as a `return` or as a tail; a message that
+    # bookkeeping follows first, an `Err` after one, a sentinel that follows
+    # no message, and a format string holding a `;` are not.
+    (
+        {
+            "crates/nvim/src/a.rs": "fn f() -> bool {\n    emsg(e_x);\n    return false;\n}\n"
+            'fn g() -> Option<u8> {\n    if x {\n        semsg!("E1: {};", a);\n        None\n    } else {\n        Some(1)\n    }\n}\n'
+            "fn h() -> c_int {\n    emsg(e_x);\n    did = true;\n    return -1;\n}\n"
+            "fn k() -> Result<(), Failed> {\n    emsg(e_x);\n    return Err(Failed);\n}\n"
+            "fn m() -> c_int {\n    let n = f(g(1));\n    0\n}\n"
+            'fn n() -> c_int {\n    let v = match k {\n        _ => {\n            siemsg!("bad", k);\n            0\n        }\n    };\n    v\n}\n',
+        },
+        {"emit_sentinel": 3},
     ),
     # `types/` is counted by the file.
     (

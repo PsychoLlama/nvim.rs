@@ -18,20 +18,23 @@ pub const OK: ::core::ffi::c_int = 1;
 /// The failing half of the [`OK`] convention.
 pub const FAIL: ::core::ffi::c_int = 0;
 
-/// What `FAIL` said, as an error type: *it did not work*, and nothing more.
+/// A failure whose message is already out: the call that failed reported it
+/// through Vim's `emsg` channel, and the caller's only decision is whether to
+/// keep going.
 ///
-/// The overwhelming majority of the editor's status-code functions carry no
-/// error information at all -- the message, if there is one, was already
-/// shown by whichever call actually failed, and the caller's only decision is
-/// whether to keep going. `Result<(), Failed>` says exactly that, and says it
-/// in a type the `?` operator can thread, which `c_int` cannot.
+/// `emsg` is the editor's reporting boundary, not a stage on the way to one.
+/// It sets `v:errmsg`, raises the exception `:try` catches, and honours
+/// `emsg_silent` and `'debug'` *where the failure happened*, so carrying the
+/// message up to a caller and reporting it there would change when that
+/// state is set. `Err(Failed)` is therefore the honest answer after an
+/// `emsg`, where a `false`, `-1` or `None` would be indistinguishable from a
+/// real result (the ratchet's `emit_sentinel` counts those).
 ///
-/// `Result<(), ()>` would be the same shape and a worse one: the error half
-/// would have no name, no `Display`, and no place to hang a variant when a
-/// caller does eventually need to tell two failures apart. When a domain
-/// *does* have something to say -- `quickfix::QfError`, `indent::ParseError`,
-/// `channel::CloseError` -- it gets its own enum with a `From<Failed>` where
-/// the two meet, rather than another unit type.
+/// It is not a place to put a message that has *not* been shown. A family
+/// whose callers need to tell failures apart, or that has one reporting
+/// boundary of its own -- `quickfix::QfError`, `indent::ParseError`,
+/// `channel::CloseError` -- gets its own error enum with a `From<Failed>`
+/// where the two meet, rather than another unit type.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
 #[error("the operation failed")]
 pub struct Failed;
