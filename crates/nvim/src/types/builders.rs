@@ -60,7 +60,7 @@ impl Object {
     }
 
     /// A dictionary, whose entries the object takes over: an [`ApiDict`],
-    /// or the [`DictBuilder`] it was built in, frozen here.
+    /// or the [`DictBuilder`](super::DictBuilder) it was built in, frozen here.
     pub fn dict(value: impl Into<ApiDict>) -> Self {
         Self::Dict(ManuallyDrop::new(value.into()))
     }
