@@ -42,6 +42,13 @@
 //! reads through a pointer.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use core::ffi::{CStr, c_int};
@@ -154,8 +161,8 @@ pub fn iscomposing(c1: c_int, c2: c_int, state: Option<&mut GraphemeState>) -> b
 /// The pre-grapheme-cluster test, kept for the regexp engine, which matches
 /// composing characters one at a time rather than as clusters.
 pub fn utf_iscomposing_legacy(c: c_int) -> bool {
-    let category = utf8proc_get_property(c).category as c_int;
-    category == UTF8PROC_CATEGORY_MN as c_int || category == UTF8PROC_CATEGORY_ME as c_int
+    let category = utf8proc_get_property(c).category;
+    category == UTF8PROC_CATEGORY_MN || category == UTF8PROC_CATEGORY_ME
 }
 
 /// The whole grapheme cluster at the start of `bytes`, the bytes of a C
@@ -248,8 +255,8 @@ pub fn c_next_cluster(bytes: &[u8], at: usize, cur: CharInfo) -> (usize, CharInf
 }
 
 /// How many bytes the sequence introduced by byte `b` occupies.
-pub fn utf_byte2len(b: c_int) -> c_int {
-    utf8len_tab[b as usize] as c_int
+pub fn utf_byte2len(b: u8) -> c_int {
+    c_int::from(utf8len_tab[usize::from(b)])
 }
 
 /// How many bytes the grapheme cluster at the start of `bytes` occupies --
@@ -320,6 +327,20 @@ impl Iterator for Clusters<'_> {
 
 /// How many bytes `c` encodes to.
 pub fn utf_char2len(c: c_int) -> c_int {
+    match utf8_len(c) {
+        1 => 1,
+        2 => 2,
+        3 => 3,
+        4 => 4,
+        5 => 5,
+        _ => 6,
+    }
+}
+
+/// [`utf_char2len`] as the length it is: how many bytes `c` takes in the
+/// original six-byte UTF-8, one for anything below 0x80 (a negative key
+/// code included).
+pub(crate) const fn utf8_len(c: c_int) -> usize {
     if c < 0x80 {
         1
     } else if c < 0x800 {
@@ -485,7 +506,7 @@ mod tests {
     #[test]
     fn lead_masking_matches_the_corrections() {
         for len in 2..=6usize {
-            let shift = 6 * (len - 1) as u32;
+            let shift = u32::try_from(6 * (len - 1)).expect("a small shift");
             for first in 0u32..256 {
                 if utf8len_tab[first as usize] as usize != len {
                     continue;
@@ -536,7 +557,7 @@ mod tests {
         let mut buf = [0u8; MB_MAXCHAR + 1];
         let mut check = |c: c_int| {
             let len = encode_char(c, &mut buf);
-            assert_eq!(len as c_int, utf_char2len(c), "{c:#x} length");
+            assert_eq!(len, utf8_len(c), "{c:#x} length");
             assert_eq!(char_at(&buf[..len]), c, "{c:#x}");
             assert_eq!(char_len(&buf[..len]), len, "{c:#x} char_len");
         };

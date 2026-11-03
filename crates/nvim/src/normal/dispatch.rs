@@ -193,7 +193,7 @@ pub(crate) fn langmap_adjust(c: &mut c_int, condition: bool) {
         *c = if *c < 256 {
             langmap_mapchar.with(|map| map[*c as usize] as c_int)
         } else {
-            langmap_adjust_mb(*c)
+            langmap_adjust_mb(Key::from_code(*c)).code()
         };
     }
 }

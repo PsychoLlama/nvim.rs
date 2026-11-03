@@ -24,6 +24,13 @@
 //! delete -- holds a [`MapAt`], an id the table re-finds.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -98,7 +105,7 @@ mod abbrev;
 pub use self::abbrev::*;
 mod langmap;
 pub use self::langmap::*;
-pub const MAXMAPLEN: ::core::ffi::c_uint = 50;
+pub use crate::getchar::MAXMAPLEN;
 pub const FUZZY_SCORE_NONE: ::core::ffi::c_int = -2147483648;
 pub use crate::keycodes::{REPTERM_DO_LT, REPTERM_FROM_PART, REPTERM_NO_SIMPLIFY};
 pub const kRetObject: LuaRetMode = 0;

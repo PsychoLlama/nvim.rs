@@ -139,14 +139,7 @@ impl Key {
     /// key, which is upstream's answer for a negative number.
     #[inline]
     pub fn utf8_len(self) -> usize {
-        match self.0 {
-            ..0x80 => 1,
-            0x80..0x800 => 2,
-            0x800..0x1_0000 => 3,
-            0x1_0000..0x20_0000 => 4,
-            0x20_0000..0x400_0000 => 5,
-            _ => 6,
-        }
+        crate::mbyte::utf8_len(self.0)
     }
 }
 

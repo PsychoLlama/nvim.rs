@@ -11,6 +11,13 @@
 //! [`did_set_langmap`] parses the option into both.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::formatted;
@@ -19,13 +26,12 @@ use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
 use crate::option::vars::P_LANGMAP;
 use crate::swmsg;
-use crate::types::{NUL, OptError};
-use core::ffi::c_int;
+use crate::types::{Key, OptError};
 
 /// One `'langmap'` pair for a character that does not fit `langmap_mapchar`.
 struct LangmapEntry {
-    from: c_int,
-    to: c_int,
+    from: Key,
+    to: Key,
 }
 
 /// `'langmap'` pairs for characters >= 256, sorted ascending by `from`.
@@ -35,9 +41,9 @@ struct LangmapEntry {
 static LANGMAP_MULTIBYTE: GlobalCell<Vec<LangmapEntry>> = GlobalCell::new(Vec::new());
 
 /// Point `from` at `to`, replacing any existing pair for `from`.
-fn langmap_set_entry(from: c_int, to: c_int) {
+fn langmap_set_entry(from: Key, to: Key) {
     LANGMAP_MULTIBYTE.with_mut(|entries| {
-        match entries.binary_search_by_key(&from, |entry| entry.from) {
+        match entries.binary_search_by_key(&from.code(), |entry| entry.from.code()) {
             Ok(at) => entries[at].to = to,
             Err(at) => entries.insert(at, LangmapEntry { from, to }),
         }
@@ -45,9 +51,9 @@ fn langmap_set_entry(from: c_int, to: c_int) {
 }
 
 /// Apply `'langmap'` to multi-byte character `c` and return the result.
-pub(crate) fn langmap_adjust_mb(c: c_int) -> c_int {
+pub(crate) fn langmap_adjust_mb(c: Key) -> Key {
     LANGMAP_MULTIBYTE.with(|entries| {
-        match entries.binary_search_by_key(&c, |entry| entry.from) {
+        match entries.binary_search_by_key(&c.code(), |entry| entry.from.code()) {
             Ok(at) => entries[at].to,
             // No entry: the character maps to itself.
             Err(_) => c,
@@ -62,8 +68,8 @@ pub(crate) fn langmap_adjust_mb(c: c_int) -> c_int {
 /// container.
 pub(crate) fn langmap_init() {
     let mut identity = [0u8; 256];
-    for (i, slot) in identity.iter_mut().enumerate() {
-        *slot = i as u8;
+    for (slot, byte) in identity.iter_mut().zip(0..=u8::MAX) {
+        *slot = byte;
     }
     langmap_mapchar.set(identity);
     LANGMAP_MULTIBYTE.with_mut(Vec::clear);
@@ -86,7 +92,7 @@ pub fn did_set_langmap(_args: &mut OptSet) -> Result<(), OptError> {
     // The byte at `at`, with the option's own NUL past the end.
     let byte = |at: usize| opt.get(at).copied().unwrap_or(0);
     let tail = |at: usize| opt.get(at..).unwrap_or_default();
-    let char_at = |at: usize| char_at(tail(at));
+    let char_at = |at: usize| Key::from_code(char_at(tail(at)));
     let len_at = |at: usize| cluster_len(tail(at));
     // Advance past one character, honouring a `\` escape.
     let skip = |at: usize| {
@@ -126,7 +132,7 @@ pub fn did_set_langmap(_args: &mut OptSet) -> Result<(), OptError> {
                 at += 1;
             }
             let (from, from_at) = (char_at(at), at);
-            let mut to = NUL;
+            let mut to = Key::NUL;
             let mut to_at = None;
             match alt {
                 None => {
@@ -149,15 +155,16 @@ pub fn did_set_langmap(_args: &mut OptSet) -> Result<(), OptError> {
                 }
                 Some(_) => {}
             }
-            if to == NUL {
+            if to.is_nul() {
                 let missing = c"E357: 'langmap': Matching character missing for %s";
-                return fail(missing, crate::cstr::in_bytes(&transchar(from)).to_bytes());
+                return fail(
+                    missing,
+                    crate::cstr::in_bytes(&transchar(from.code())).to_bytes(),
+                );
             }
 
-            if from >= 256 {
-                langmap_set_entry(from, to);
-            } else {
-                if to > UCHAR_MAX {
+            if let Some(from) = from.as_byte() {
+                if to.as_byte().is_none() {
                     let to_at = to_at.unwrap_or(from_at);
                     // Each `%.*s` is the one character at its offset.
                     let one = |at: usize| &tail(at)[..char_len(tail(at))];
@@ -169,7 +176,11 @@ pub fn did_set_langmap(_args: &mut OptSet) -> Result<(), OptError> {
                     );
                 }
                 // The closure is a store; it cannot re-enter the cell.
-                langmap_mapchar.with_mut(|map| map[(from & 255) as usize] = to as u8);
+                // Upstream's `(uint8_t)`: a wider `to` keeps its low byte.
+                let to = to.code().to_le_bytes()[0];
+                langmap_mapchar.with_mut(|map| map[usize::from(from)] = to);
+            } else {
+                langmap_set_entry(from, to);
             }
 
             // Advance to the next pair.

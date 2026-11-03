@@ -8,6 +8,13 @@
 //! out-arguments.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::c_int;
 
@@ -133,12 +140,12 @@ pub fn signed(magnitude: UVarNumber, negative: bool) -> (VarNumber, bool) {
         if negative {
             (VARNUMBER_MIN, true)
         } else {
-            (VARNUMBER_MAX as VarNumber, true)
+            (VarNumber::MAX, true)
         }
-    } else if negative {
-        (-(magnitude as VarNumber), false)
     } else {
-        (magnitude as VarNumber, false)
+        // At most `VARNUMBER_MAX`, so the bits are the same number.
+        let magnitude = magnitude.cast_signed();
+        (if negative { -magnitude } else { magnitude }, false)
     }
 }
 
@@ -165,7 +172,7 @@ fn forced_radix(what_without_force: Str2NrBases) -> Option<Radix> {
 /// `prep` out-argument, the magnitude the digits add up to, and whether
 /// accumulating them saturated.
 pub(super) struct Scanned {
-    pub pre: c_int,
+    pub pre: u8,
     pub magnitude: UVarNumber,
     pub overflowed: bool,
 }
@@ -179,7 +186,7 @@ pub(super) fn scan(scan: &mut Scan, what: Str2NrBases) -> Option<Scanned> {
     // `pre` is the prefix letter the caller is told about: `0`, `b`, `B`,
     // `o`, `O`, `x` or `X`, and zero for a plain decimal number or a forced
     // base.
-    let mut pre: c_int = 0;
+    let mut pre = 0;
     let radix = if what.has(Str2NrBases::FORCE) {
         // When forcing, the only question is whether there is a prefix to
         // skip; decimal has none.
@@ -199,7 +206,7 @@ pub(super) fn scan(scan: &mut Scan, what: Str2NrBases) -> Option<Scanned> {
         && scan.at(1) != b'8'
         && scan.at(1) != b'9'
     {
-        pre = scan.at(1) as c_int;
+        pre = scan.at(1);
         let prefixed = [
             (Str2NrBases::HEX, Radix::Hexadecimal, b'x', b'X'),
             (Str2NrBases::BIN, Radix::Binary, b'b', b'B'),
@@ -209,7 +216,7 @@ pub(super) fn scan(scan: &mut Scan, what: Str2NrBases) -> Option<Scanned> {
         .find(|&(flag, base, lower, upper)| {
             what.has(flag)
                 && scan.within(2)
-                && (pre == upper as c_int || pre == lower as c_int)
+                && (pre == upper || pre == lower)
                 && base.digit(scan.at(2)).is_some()
         });
         if let Some((_, base, _, _)) = prefixed {
@@ -231,7 +238,7 @@ pub(super) fn scan(scan: &mut Scan, what: Str2NrBases) -> Option<Scanned> {
                 }
             }
             if octal {
-                pre = '0' as c_int;
+                pre = b'0';
                 Radix::Octal
             } else {
                 Radix::Decimal
@@ -354,14 +361,8 @@ mod tests {
     fn signed_conversion_clamps_at_both_ends() {
         assert_eq!(signed(42, false), (42, false));
         assert_eq!(signed(42, true), (-42, false));
-        assert_eq!(
-            signed(VARNUMBER_MAX, false),
-            (VARNUMBER_MAX as VarNumber, false)
-        );
-        assert_eq!(
-            signed(VARNUMBER_MAX + 1, false),
-            (VARNUMBER_MAX as VarNumber, true)
-        );
+        assert_eq!(signed(VARNUMBER_MAX, false), (VarNumber::MAX, false));
+        assert_eq!(signed(VARNUMBER_MAX + 1, false), (VarNumber::MAX, true));
         // -(2^63) is representable, but the magnitude is not, so it clamps.
         assert_eq!(signed(VARNUMBER_MAX + 1, true), (VARNUMBER_MIN, true));
     }

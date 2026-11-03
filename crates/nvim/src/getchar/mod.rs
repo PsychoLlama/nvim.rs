@@ -1,4 +1,11 @@
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -97,7 +104,8 @@ mod cmdkey;
 pub use self::cmdkey::*;
 mod paste;
 pub use self::paste::*;
-pub const MAXMAPLEN: ::core::ffi::c_uint = 50;
+/// The longest LHS a mapping can have, in bytes.
+pub const MAXMAPLEN: usize = 50;
 /// How much of the text going into the typeahead may be mapped again
 /// (upstream's `REMAP_*` values and the positive count beside them).
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -147,11 +155,18 @@ pub(crate) struct GotcharsState {
 }
 pub const KEYLEN_PART_KEY: ::core::ffi::c_int = -1;
 pub const SHOWCMD_COLS: ::core::ffi::c_uint = 10;
-pub const map_result_get: MapResult = 1;
-pub type MapResult = ::core::ffi::c_uint;
-pub const map_result_nomatch: MapResult = 3;
-pub const map_result_retry: MapResult = 2;
-pub const map_result_fail: MapResult = 0;
+/// What [`handle_mapping`] did with the front of the typeahead.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub(crate) enum MapResult {
+    /// It failed; the caller starts over.
+    Fail,
+    /// Nothing mapped: the typeahead has a byte to hand out.
+    Get,
+    /// Something was mapped or simplified; match the result again.
+    Retry,
+    /// More input is needed to decide.
+    NoMatch,
+}
 pub const KEYLEN_PART_MAP: ::core::ffi::c_int = -2;
 pub const kMTCharWise: MotionType = 0;
 pub const kFileReadOnly: FileOpenFlags = 1;

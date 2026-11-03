@@ -2164,7 +2164,6 @@ static const int HASLOOKBH = 16;
 static const int HASNL = 8;
 static const int HASWIDTH = 1;
 static const int HAS_HOTKEY_LEN = 30;
-static const int HEAD_ROOM = 54;
 static const int HIST_CMD = 0;
 static const int HIST_COUNT = 5;
 static const int HIST_DEBUG = 4;
@@ -5309,10 +5308,6 @@ static const int kZIndexCmdlinePopupMenu = 250;
 static const int kZIndexFloatDefault = 50;
 static const int kZIndexMessages = 200;
 static const int kZIndexPopupMenu = 100;
-static const int map_result_fail = 0;
-static const int map_result_get = 1;
-static const int map_result_nomatch = 3;
-static const int map_result_retry = 2;
 
 extern Window *curwin;
 extern DispTick display_tick;

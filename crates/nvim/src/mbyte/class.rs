@@ -17,9 +17,15 @@
 //! control, a surrogate half, or a non-character.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
-use crate::types::NUL;
 use crate::utf8proc::{
     UTF8PROC_BOUNDCLASS_EXTENDED_PICTOGRAPHIC, UTF8PROC_BOUNDCLASS_REGIONAL_INDICATOR,
 };
@@ -165,7 +171,10 @@ const _: () = {
     let mut bounds = [(0u32, 0u32); NONPRINTABLE.len()];
     let mut i = 0;
     while i < NONPRINTABLE.len() {
-        bounds[i] = (NONPRINTABLE[i].0 as u32, NONPRINTABLE[i].1 as u32);
+        bounds[i] = (
+            NONPRINTABLE[i].0.cast_unsigned(),
+            NONPRINTABLE[i].1.cast_unsigned(),
+        );
         i += 1;
     }
     assert!(
@@ -197,8 +206,9 @@ fn table_class(c: u32) -> Option<c_int> {
 /// split. Takes the property by reference, which is what
 /// `utf8proc_get_property` hands back, so the whole test is safe code.
 pub(crate) fn prop_is_emojilike(prop: &utf8proc_property_t) -> bool {
-    prop.boundclass as c_int == UTF8PROC_BOUNDCLASS_EXTENDED_PICTOGRAPHIC as c_int
-        || prop.boundclass as c_int == UTF8PROC_BOUNDCLASS_REGIONAL_INDICATOR as c_int
+    let class = i32::from(prop.boundclass);
+    class == UTF8PROC_BOUNDCLASS_EXTENDED_PICTOGRAPHIC
+        || class == UTF8PROC_BOUNDCLASS_REGIONAL_INDICATOR
 }
 
 /// Does `c` have a visible glyph?
@@ -228,7 +238,7 @@ pub fn utf_printable(c: c_int) -> bool {
 pub fn utf_class_tab(c: c_int, chartab: &[uint64_t; 4]) -> c_int {
     if c < 0x100 {
         // NBSP is a blank here even though 'iskeyword' could claim it.
-        if c == ' ' as c_int || c == TAB || c == NUL || c == 0xa0 {
+        if matches!(u8::try_from(c), Ok(b' ' | b'\t' | 0 | 0xa0)) {
             return CLASS_BLANK;
         }
         return if vim_iswordc_tab(c, chartab) {
@@ -245,7 +255,7 @@ pub fn utf_class_tab(c: c_int, chartab: &[uint64_t; 4]) -> c_int {
     // `c` is above 0x100 here, so the unsigned comparison the C spells out is
     // the signed one; most characters are in no range at all, and those are
     // word characters.
-    table_class(c as u32).unwrap_or(CLASS_WORD)
+    table_class(c.cast_unsigned()).unwrap_or(CLASS_WORD)
 }
 
 /// [`utf_class_tab`] against the current buffer's `'iskeyword'`.
@@ -295,7 +305,7 @@ pub fn f_charclass(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let Some(text) = args[0].string_ref() else {
         return;
     };
-    result.write_number(class_in(text.to_bytes(), Buf::current()) as VarNumber);
+    result.write_number(VarNumber::from(class_in(text.to_bytes(), Buf::current())));
 }
 
 #[cfg(test)]
@@ -342,7 +352,7 @@ mod tests {
                 assert!(utf_printable(last + 1), "{:#x}", last + 1);
             }
         }
-        assert!(utf_printable('a' as c_int));
+        assert!(utf_printable(c_int::from(b'a')));
         assert!(utf_printable(0x10000)); // past the table
         assert!(utf_printable(0)); // NUL is "printable"; callers filter it
     }

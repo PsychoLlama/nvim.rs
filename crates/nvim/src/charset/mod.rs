@@ -14,12 +14,19 @@
 //! they read is a `&[u8]`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_int, c_uint};
+use core::ffi::{CStr, c_int};
 
 use crate::global_cell::GlobalCell;
 use crate::mbyte::{char_at, mb_islower, mb_isupper, utf_class_tab, utf_printable, utf8len_tab};
@@ -153,8 +160,7 @@ pub fn buf_init_chartab(mut buffer: Buf, global: bool) -> bool {
         for c in b' '..=b'~' {
             set_chartab(c, 1 + CT_PRINT_CHAR);
         }
-        for c in b'~' as u16 + 1..256 {
-            let c = c as uint8_t;
+        for c in b'~' + 1..=u8::MAX {
             let entry = if c >= 0xa0 {
                 (CT_PRINT_CHAR | CT_FNAME_CHAR) + 1
             } else {
@@ -167,7 +173,7 @@ pub fn buf_init_chartab(mut buffer: Buf, global: bool) -> bool {
     buffer.b_chartab = [0; 4];
     if buffer.b_p_lisp != 0 {
         // In Lisp, `-` belongs to a word even when 'iskeyword' omits it.
-        set_buf_chartab(buffer, b'-' as c_int, true);
+        set_buf_chartab(buffer, b'-', true);
     }
 
     // The first three are the global options; the last is the buffer's own
@@ -198,8 +204,8 @@ pub fn check_isopt(var: &[u8]) -> Result<(), Failed> {
 
 /// Set or clear `c`'s bit in `buffer`'s keyword set.
 #[inline(always)]
-fn set_buf_chartab(mut buffer: Buf, c: c_int, on: bool) {
-    let word = (c as c_uint >> 6) as usize;
+fn set_buf_chartab(mut buffer: Buf, c: u8, on: bool) {
+    let word = usize::from(c >> 6);
     let bit = 1u64 << (c & 0x3f);
     buffer.b_chartab[word] = (buffer.b_chartab[word] & !bit) | if on { bit } else { 0 };
 }
@@ -220,8 +226,8 @@ struct IsoptEntry {
     /// A lone `@` stands for "every alphabetic character in the locale",
     /// which is the whole 1-255 range filtered by the `mb_is*` predicates.
     alpha_only: bool,
-    first: c_int,
-    last: c_int,
+    first: u8,
+    last: u8,
 }
 
 /// The character an entry begins with: either a decimal number naming a
@@ -256,9 +262,18 @@ fn next_isopt_entry(var: &[u8], at: &mut usize) -> Option<IsoptEntry> {
         last = isopt_char(var, at);
     }
 
-    if first <= 0 || first >= 256 || (last < first && last != -1) || last >= 256 {
+    // Both ends are bytes, the first not NUL; `last` is -1 for no range.
+    let Ok(first @ 1..) = u8::try_from(first) else {
         return None;
-    }
+    };
+    let last = if last == -1 {
+        None
+    } else {
+        match u8::try_from(last) {
+            Ok(last) if last >= first => Some(last),
+            _ => return None,
+        }
+    };
     let separator = byte(*at);
     if separator != 0 && separator != b',' {
         return None;
@@ -275,10 +290,10 @@ fn next_isopt_entry(var: &[u8], at: &mut usize) -> Option<IsoptEntry> {
         return None;
     }
 
-    let (alpha_only, first, last) = match (last, first) {
-        (-1, c) if c == '@' as c_int => (true, 1, 255),
-        (-1, c) => (false, c, c),
-        (last, c) => (false, c, last),
+    let (alpha_only, first, last) = match last {
+        None if first == b'@' => (true, 1, u8::MAX),
+        None => (false, first, first),
+        Some(last) => (false, first, last),
     };
     Some(IsoptEntry {
         tilde,
@@ -290,24 +305,24 @@ fn next_isopt_entry(var: &[u8], at: &mut usize) -> Option<IsoptEntry> {
 
 /// Apply one entry to the table it belongs to.
 fn apply_isopt_entry(table: IsoptTable, entry: &IsoptEntry, buffer: Buf) {
-    for c in entry.first..=entry.last {
+    for byte in entry.first..=entry.last {
         // The `mb_` predicates rather than `isalpha`, which misreads the
         // Latin-1 upper half under the C locale.
+        let c = c_int::from(byte);
         if entry.alpha_only && !mb_islower(c) && !mb_isupper(c) {
             continue;
         }
-        let byte = c as uint8_t;
         match table {
             IsoptTable::Ident => set_chartab_flag(byte, CT_ID_CHAR, !entry.tilde),
             IsoptTable::Fname => set_chartab_flag(byte, CT_FNAME_CHAR, !entry.tilde),
             // 'isprint' cannot demote printable ASCII.
-            IsoptTable::Print if c < ' ' as c_int || c > '~' as c_int => {
+            IsoptTable::Print if !(b' '..=b'~').contains(&byte) => {
                 let width = if entry.tilde { unprintable_width() } else { 1 };
                 set_chartab(byte, (chartab(byte) & !CT_CELL_MASK) + width);
                 set_chartab_flag(byte, CT_PRINT_CHAR, !entry.tilde);
             }
             IsoptTable::Print => {}
-            IsoptTable::Keyword => set_buf_chartab(buffer, c, !entry.tilde),
+            IsoptTable::Keyword => set_buf_chartab(buffer, byte, !entry.tilde),
         }
     }
 }
@@ -336,7 +351,7 @@ fn parse_isopt(
 
 /// Whether `c` may appear in an identifier ('isident').
 pub fn vim_is_ident_char(c: c_int) -> bool {
-    c > 0 && c < 0x100 && chartab(c as uint8_t) & CT_ID_CHAR != 0
+    u8::try_from(c).is_ok_and(|byte| byte > 0 && chartab(byte) & CT_ID_CHAR != 0)
 }
 
 /// Whether `c` belongs to a word in the current buffer ('iskeyword').
@@ -360,10 +375,10 @@ pub fn is_word_char(c: c_int) -> bool {
 /// Whether `c` belongs to a word according to the 256-bit set `chartab`.
 /// Characters past U+00FF are decided by their Unicode class instead.
 pub fn vim_iswordc_tab(c: c_int, chartab: &[uint64_t; 4]) -> bool {
-    if c >= 0x100 {
-        return utf_class_tab(c, chartab) >= 2;
+    match u8::try_from(c) {
+        Ok(byte) => byte > 0 && chartab[usize::from(byte >> 6)] & (1u64 << (byte & 0x3f)) != 0,
+        Err(_) => c >= 0x100 && utf_class_tab(c, chartab) >= 2,
     }
-    c > 0 && chartab[(c as c_uint >> 6) as usize] & (1u64 << (c & 0x3f)) != 0
 }
 
 /// Whether `c` belongs to a word in `buffer`.
@@ -387,31 +402,32 @@ pub fn is_word_at(bytes: &[u8], buffer: Buf) -> bool {
 /// Whether `c` may appear in a file name ('isfname'). Everything past
 /// U+00FF is allowed.
 pub fn vim_isfilec(c: c_int) -> bool {
-    c >= 0x100 || (c > 0 && chartab(c as uint8_t) & CT_FNAME_CHAR != 0)
+    match u8::try_from(c) {
+        Ok(byte) => byte > 0 && chartab(byte) & CT_FNAME_CHAR != 0,
+        Err(_) => c >= 0x100,
+    }
 }
 
 /// Like [`vim_isfilec`], but also accepts the separators that may appear in
 /// a file name given on a command line.
 pub fn vim_is_fname_char(c: c_int) -> bool {
-    (vim_isfilec(c))
-        || c == ',' as c_int
-        || c == ' ' as c_int
-        || c == '@' as c_int
-        || c == ':' as c_int
+    vim_isfilec(c) || matches!(u8::try_from(c), Ok(b',' | b' ' | b'@' | b':'))
 }
 
 /// Like [`vim_isfilec`], but also accepts the wildcards a file name pattern
 /// may contain.
 pub fn vim_isfilec_or_wc(c: c_int) -> bool {
-    vim_isfilec(c) || c == ']' as c_int || has_wildcard(&[c as u8][..usize::from(c as u8 != 0)])
+    // Upstream's `(char)c`: the wildcard test sees the low byte.
+    let low = c.to_le_bytes()[0];
+    vim_isfilec(c) || c == c_int::from(b']') || has_wildcard(&[low][..usize::from(low != 0)])
 }
 
 /// Whether `c` displays as itself ('isprint').
 pub fn vim_isprintc(c: c_int) -> bool {
-    if c >= 0x100 {
-        return utf_printable(c);
+    match u8::try_from(c) {
+        Ok(byte) => byte > 0 && chartab(byte) & CT_PRINT_CHAR != 0,
+        Err(_) => c >= 0x100 && utf_printable(c),
     }
-    c > 0 && chartab(c as uint8_t) & CT_PRINT_CHAR != 0
 }
 /// A lazy cursor over the digits of a number, bounded either by `maxlen`
 /// bytes or by the first byte that is not a digit. The end of `text` reads
@@ -431,14 +447,14 @@ impl Scan<'_> {
     /// Whether `offset` more bytes are still within `maxlen`. A `maxlen` of
     /// zero means "to the end of the text".
     #[inline(always)]
-    fn within(&self, offset: c_int) -> bool {
-        self.maxlen == 0 || self.consumed() + offset < self.maxlen
+    fn within(&self, offset: usize) -> bool {
+        self.maxlen == 0 || usize::try_from(self.maxlen).is_ok_and(|max| self.at + offset < max)
     }
 
     /// The byte `offset` further on.
     #[inline(always)]
-    fn at(&self, offset: c_int) -> uint8_t {
-        cstr::byte_at(self.text, self.at + offset as usize)
+    fn at(&self, offset: usize) -> uint8_t {
+        cstr::byte_at(self.text, self.at + offset)
     }
 
     #[inline(always)]
@@ -505,7 +521,7 @@ pub fn str2nr_scan(
     }
     ParsedNumber {
         len: scan.at,
-        prefix: parsed.pre,
+        prefix: c_int::from(parsed.pre),
         value,
         magnitude: parsed.magnitude,
         overflow,
@@ -546,13 +562,11 @@ pub(crate) fn string2float_in(text: &[u8]) -> (crate::types::Float, usize) {
 
 /// The value of the hexadecimal digit `c`. Anything else is nonsense.
 pub fn hex2nr(c: c_int) -> c_int {
-    if (b'a' as c_int..=b'f' as c_int).contains(&c) {
-        return c - 'a' as c_int + 10;
+    match u8::try_from(c) {
+        Ok(digit @ b'a'..=b'f') => c_int::from(digit - b'a') + 10,
+        Ok(digit @ b'A'..=b'F') => c_int::from(digit - b'A') + 10,
+        _ => c - c_int::from(b'0'),
     }
-    if (b'A' as c_int..=b'F' as c_int).contains(&c) {
-        return c - 'A' as c_int + 10;
-    }
-    c - '0' as c_int
 }
 
 /// The byte the two hexadecimal digits `text` starts with spell, or -1. The
@@ -562,7 +576,7 @@ pub fn hexhex_at(text: &[u8]) -> c_int {
     if !is_xdigit(high) || !is_xdigit(low) {
         return -1;
     }
-    (hex2nr(high as c_int) << 4) + hex2nr(low as c_int)
+    (hex2nr(c_int::from(high)) << 4) + hex2nr(c_int::from(low))
 }
 
 /// Whether the backslash `text` starts with escapes the byte after it, i.e.
@@ -605,7 +619,9 @@ pub fn backslash_halved(text: &[u8]) -> Vec<u8> {
 
 /// Whether a line may be broken before `c`, per the 'breakat' option.
 pub fn vim_isbreak(c: c_int) -> bool {
-    breakat_flags.get().has(c as uint8_t)
+    // Upstream indexes with `(uint8_t)c`: a wider character reads the slot
+    // of its low byte.
+    breakat_flags.get().has(c.to_le_bytes()[0])
 }
 
 /// Fill `g_chartab` with the classification a freshly started editor has, for
@@ -632,8 +648,7 @@ pub(crate) fn init_chartab_for_tests() {
         for c in b' '..=b'~' {
             set_chartab(c, 1 + CT_PRINT_CHAR);
         }
-        for c in b'~' as u16 + 1..256 {
-            let c = c as uint8_t;
+        for c in b'~' + 1..=u8::MAX {
             let entry = if c >= 0xa0 {
                 (CT_PRINT_CHAR | CT_FNAME_CHAR) + 1
             } else {

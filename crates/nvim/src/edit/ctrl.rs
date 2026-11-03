@@ -84,7 +84,7 @@ pub(crate) fn ins_reg() {
             if c < 256 {
                 langmap_mapchar.with(|map| c_int::from(map[usize::try_from(c).unwrap_or(0)]))
             } else {
-                langmap_adjust_mb(c)
+                langmap_adjust_mb(Key::from_code(c)).code()
             }
         } else {
             c

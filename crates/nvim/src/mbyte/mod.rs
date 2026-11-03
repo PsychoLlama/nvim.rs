@@ -74,6 +74,13 @@
 //! fronts in `harness.rs` that read the C string's bytes there.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::keycodes::KS_SPECIAL;
 use core::fmt::Write as _;
@@ -103,8 +110,7 @@ use crate::os::cshim::gettext;
 use crate::types::{
     CONV_9_TO_UTF8, CONV_ICONV, CONV_NONE, CONV_NONE_INIT, CONV_TO_LATIN1, CONV_TO_LATIN9,
     CONV_TO_UTF8, CharBoundsOff, CharInfo, ColNr, EvalFuncData, Expand, GraphemeState, IOSIZE,
-    List, MB_MAXCHAR, ScreenChar, TypVal, VarNumber, VimConv, int8_t, ptrdiff_t, size_t, uint64_t,
-    utf8proc_int32_t,
+    List, MB_MAXCHAR, ScreenChar, TypVal, VarNumber, VimConv, int8_t, uint64_t, utf8proc_int32_t,
 };
 use crate::utf8proc::{
     UTF8PROC_CASEFOLD, UTF8PROC_CATEGORY_ME, UTF8PROC_CATEGORY_MN, utf8proc_decompose_char,

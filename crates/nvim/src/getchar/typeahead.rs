@@ -23,9 +23,17 @@
 //! caller that waited tells.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::keycodes::ModMask;
+use crate::narrow::const_len_as_int;
 use crate::types::{Failed, Key};
 use core::ffi::c_int;
 
@@ -33,11 +41,16 @@ use core::ffi::c_int;
 ///
 /// The storage has three parts: room in front for the result of mappings, the
 /// middle for typeahead, and room at the end for new characters.
-const TYPELEN_INIT: usize = 5 * (MAXMAPLEN as usize + 3);
+const TYPELEN_INIT: usize = 5 * (MAXMAPLEN + 3);
+
+/// [`MAXMAPLEN`] and [`TYPELEN_INIT`] as the `int`s the geometry below is
+/// counted in.
+pub(crate) const MAPLEN: c_int = const_len_as_int(MAXMAPLEN);
+const TYPELEN_INIT_INT: c_int = const_len_as_int(TYPELEN_INIT);
 
 /// Where the valid bytes start in a freshly allocated buffer: enough room in
 /// front that a mapping's RHS can be inserted without moving anything.
-const HEAD_ROOM: c_int = MAXMAPLEN as c_int + 4;
+const HEAD_ROOM: c_int = MAPLEN + 4;
 
 /// The queue `vgetc` reads from.
 ///
@@ -107,7 +120,7 @@ impl TypeAhead {
     fn fresh_storage(&mut self) {
         self.buf = vec![0; TYPELEN_INIT];
         self.noremap = vec![0; TYPELEN_INIT];
-        self.buflen = TYPELEN_INIT as c_int;
+        self.buflen = TYPELEN_INIT_INT;
         self.off = HEAD_ROOM;
         self.len = 0;
     }
@@ -415,7 +428,7 @@ impl TypeAhead {
     fn delete(&mut self, len: c_int, offset: c_int) {
         self.len -= len;
 
-        if offset == 0 && self.buflen - (self.off + len) >= 3 * MAXMAPLEN as c_int + 3 {
+        if offset == 0 && self.buflen - (self.off + len) >= 3 * MAPLEN + 3 {
             // Easy case: just leave the bytes in front and step over them.
             self.off += len;
         } else {
@@ -443,12 +456,12 @@ impl TypeAhead {
     fn move_down(&mut self, len: c_int, offset: c_int) {
         let from = self.index(offset);
         let head = usize::try_from(offset).expect("an offset inside the typeahead");
-        if self.off > MAXMAPLEN as c_int {
+        if self.off > MAPLEN {
             // Leave some extra room at the end to avoid a reallocation.
-            let (old, keep) = (self.index(0), MAXMAPLEN as usize);
+            let (old, keep) = (self.index(0), MAXMAPLEN);
             self.buf.copy_within(old..old + head, keep);
             self.noremap.copy_within(old..old + head, keep);
-            self.off = MAXMAPLEN as c_int;
+            self.off = MAPLEN;
         }
         // `from` is where the deleted run started *before* the move above,
         // which is upstream's arithmetic too.
@@ -468,14 +481,14 @@ impl TypeAhead {
             // Remove the mapped characters at the start only, and only when
             // that leaves enough room in the buffer.
             if self.off + self.maplen >= self.buflen {
-                self.off = MAXMAPLEN as c_int;
+                self.off = MAPLEN;
                 self.len = 0;
             } else {
                 self.off += self.maplen;
                 self.len -= self.maplen;
             }
         } else {
-            self.off = MAXMAPLEN as c_int;
+            self.off = MAPLEN;
             self.len = 0;
         }
         self.maplen = 0;

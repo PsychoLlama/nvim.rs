@@ -19,9 +19,16 @@
 //! encode to different numbers of bytes.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
-use crate::os::cshim::{byte_tolower, byte_toupper, wide_tolower, wide_toupper, wint_t};
+use crate::os::cshim::{byte_tolower, byte_toupper, wide_tolower, wide_toupper};
 use core::ffi::{c_int, c_uint};
 
 /// The case-folded form of `a`, for matching.
@@ -60,14 +67,15 @@ fn casemap_has(flag: c_uint) -> bool {
 /// The uppercase of `a`, honouring `'casemap'`.
 pub fn mb_toupper(a: c_int) -> c_int {
     if a < 128 && casemap_has(kOptCmpFlagKeepascii as c_uint) {
-        return if (b'a' as c_int..=b'z' as c_int).contains(&a) {
+        return if u8::try_from(a).is_ok_and(|b| b.is_ascii_lowercase()) {
             a - 32
         } else {
             a
         };
     }
     if !casemap_has(kOptCmpFlagInternal as c_uint) {
-        return wide_toupper(a as wint_t) as c_int;
+        // `towupper` takes and answers the `wint_t` reinterpretation.
+        return wide_toupper(a.cast_unsigned()).cast_signed();
     }
     if a < 128 {
         // Locale-sensitive, which is the point: the locale may map ASCII
@@ -80,14 +88,14 @@ pub fn mb_toupper(a: c_int) -> c_int {
 /// The lowercase of `a`, honouring `'casemap'`. The mirror of [`mb_toupper`].
 pub fn mb_tolower(a: c_int) -> c_int {
     if a < 128 && casemap_has(kOptCmpFlagKeepascii as c_uint) {
-        return if (b'A' as c_int..=b'Z' as c_int).contains(&a) {
+        return if u8::try_from(a).is_ok_and(|b| b.is_ascii_uppercase()) {
             a + 32
         } else {
             a
         };
     }
     if !casemap_has(kOptCmpFlagInternal as c_uint) {
-        return wide_tolower(a as wint_t) as c_int;
+        return wide_tolower(a.cast_unsigned()).cast_signed();
     }
     if a < 128 {
         return byte_tolower(a);

@@ -237,7 +237,7 @@ pub(crate) fn buf_do_map(
 
             // Check arguments and translate function keys.
             if has_lhs {
-                if lhs_len > MAXMAPLEN as size_t {
+                if lhs_len > MAXMAPLEN {
                     retval = 1;
                     break 'theend;
                 }

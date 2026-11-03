@@ -519,7 +519,7 @@ impl Conv {
                 while t > start && w.bytes[t] & 0xc0 == 0x80 {
                     t -= 1;
                 }
-                if t + utf_byte2len(c_int::from(w.bytes[t])) as usize > data_end {
+                if t + utf_byte2len(w.bytes[t]) as usize > data_end {
                     tail = Some(t);
                     p = t;
                 }

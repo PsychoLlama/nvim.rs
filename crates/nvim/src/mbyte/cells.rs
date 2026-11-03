@@ -16,6 +16,13 @@
 //! and fonts that disagree with Unicode.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::eval::typval::{index_of, list_iter};
@@ -49,7 +56,7 @@ static CELL_WIDTHS: GlobalCell<Vec<CellWidthRange>> = GlobalCell::new(Vec::new()
 
 /// The width `setcellwidths()` was told to give `c`, or 0 for "not overridden".
 fn cw_value(c: c_int) -> c_int {
-    let c = c as VarNumber;
+    let c = VarNumber::from(c);
     CELL_WIDTHS.with(|table| {
         table
             .binary_search_by(|r| {
@@ -86,7 +93,7 @@ pub fn utf_char2cells(c: c_int) -> c_int {
     }
 
     let prop = utf8proc_get_property(c);
-    if prop.charwidth as c_int == 2 {
+    if prop.charwidth == 2 {
         return 2;
     }
     if P_AMBW.first_byte() == b'd' && prop.ambiguous_width {
@@ -161,10 +168,7 @@ fn parse_cell_widths(list: &List) -> Option<Vec<CellWidthRange>> {
     rows.sort_by_key(|r| r.first);
     for i in 1..rows.len() {
         if rows[i].first <= rows[i - 1].last {
-            semsg!(
-                "E1113: Overlapping ranges for 0x{:x}",
-                rows[i].first as size_t
-            );
+            semsg!("E1113: Overlapping ranges for 0x{:x}", rows[i].first);
             return None;
         }
     }
@@ -213,7 +217,7 @@ fn parse_cell_width_row(row: &List, item: c_int) -> Option<CellWidthRange> {
     Some(CellWidthRange {
         first: numbers[0],
         last: numbers[1],
-        width: numbers[2] as c_int,
+        width: c_int::try_from(numbers[2]).expect("checked to be 1 or 2"),
     })
 }
 
@@ -221,13 +225,13 @@ fn parse_cell_width_row(row: &List, item: c_int) -> Option<CellWidthRange> {
 /// `[first, last, width]`.
 pub fn f_getcellwidths(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let rows = CELL_WIDTHS.with(|t| t.clone());
-    let list = tv_list_alloc_ret(result, rows.len() as ptrdiff_t);
+    let list = tv_list_alloc_ret(result, isize::try_from(rows.len()).expect("a short table"));
     for row in &rows {
         let mut entry = tv_list_alloc(3);
         let into = &mut *entry;
         into.push_number(row.first);
         into.push_number(row.last);
-        into.push_number(row.width as VarNumber);
+        into.push_number(VarNumber::from(row.width));
         list.push_list(Some(entry));
     }
 }

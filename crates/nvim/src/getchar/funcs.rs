@@ -5,6 +5,13 @@
 //! renders it as a number, a string or a modifier mask.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::eval::typval::{NumBuf, Unconvertible};
@@ -13,6 +20,7 @@ use crate::keycodes::{SpecialKey, key_escape};
 use crate::mbyte::encode_char;
 use crate::memory::ThinCString;
 use crate::message_fmt::msg_cstr;
+use crate::narrow::len_as_integer;
 use crate::os::input::{InputEvents, main_loop_has_events};
 use crate::semsg;
 use crate::types::{Key, VAR_DICT, VAR_STRING};
@@ -166,10 +174,10 @@ fn set_mouse_vars() {
     // before it. `win` came out of a walk of the same list, so the "not
     // in it" arm upstream walks into a null pointer on is unreachable.
     let winnr = windows().take_while(|wp| wp.raw() != win.raw()).count() + 1;
-    set_vim_var_nr(Vv::MouseWin, winnr as VarNumber);
-    set_vim_var_nr(Vv::MouseWinid, win.handle.get() as VarNumber);
+    set_vim_var_nr(Vv::MouseWin, len_as_integer(winnr));
+    set_vim_var_nr(Vv::MouseWinid, VarNumber::from(win.handle.get()));
     set_vim_var_nr(Vv::MouseLnum, i64::from(lnum));
-    set_vim_var_nr(Vv::MouseCol, (pos.col + 1) as VarNumber);
+    set_vim_var_nr(Vv::MouseCol, VarNumber::from(pos.col + 1));
 }
 
 /// `getchar()` and `getcharstr()`.

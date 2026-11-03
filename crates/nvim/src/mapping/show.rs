@@ -5,6 +5,13 @@
 //! [`expand_mappings`] runs over the whole table for `:map <Tab>`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::cmdexpand::Scored;
@@ -61,7 +68,8 @@ pub(crate) fn showmap(mp: &MapBlock, local: bool) {
     }
 
     // Display the LHS, and pad to at least twelve columns.
-    len = msg_display_keys(mp.m_keys.as_cstr(), true, 0) as size_t;
+    // A width, never negative.
+    len = usize::try_from(msg_display_keys(mp.m_keys.as_cstr(), true, 0)).unwrap_or(0);
     loop {
         msg_putchar(c_int::from(b' '));
         len += 1;

@@ -21,6 +21,7 @@ use crate::keycodes::{
     Ctrl_X, Ctrl_Z, NotAKey, SpecialKey,
 };
 use crate::types::AutoEvent;
+use crate::types::Key;
 use crate::winlayer::prev_window;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
@@ -665,7 +666,7 @@ fn langmap_adjust(c: c_int) -> c_int {
     if c < 256 {
         return langmap_mapchar.with(|map| map[c as usize] as c_int);
     }
-    langmap_adjust_mb(c)
+    langmap_adjust_mb(Key::from_code(c)).code()
 }
 
 /// Read one character with no mapping applied.

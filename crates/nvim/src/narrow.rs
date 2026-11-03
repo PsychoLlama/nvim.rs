@@ -80,6 +80,15 @@ pub(crate) const fn msgpack_uint_as_u32(n: u64) -> u32 {
     n as u32
 }
 
+/// A compile-time length narrowed to a C `int`, for the `const`s that count
+/// in `int` what a `usize` const defines: `TryFrom` is not `const`, so the
+/// range is asserted instead, and a constant that did not fit fails the
+/// build.
+pub(crate) const fn const_len_as_int(len: usize) -> c_int {
+    assert!(len <= c_int::MAX as usize, "a constant length past a C int");
+    len as c_int
+}
+
 /// A byte length narrowed to the C `int` that carries it, as upstream's
 /// `(int)strlen(...)` casts do -- but checked.
 ///

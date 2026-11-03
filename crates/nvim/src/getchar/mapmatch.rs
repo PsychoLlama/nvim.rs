@@ -7,11 +7,19 @@
 //! in the typeahead.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::keycodes::ModMask;
 use crate::keycodes::{KE_IGNORE, KE_PLUG, KE_SNR, key_escape};
 use crate::mbyte::{char_len, encode_char, unescape_at};
+use crate::narrow::len_as_int;
 use crate::normal::{set_visual_select, visual_active, visual_select};
 use crate::option::vars::P_LANGMAP;
 use crate::types::MapStr;
@@ -287,7 +295,7 @@ fn search_maphash(
                         }
                         at += 1;
                     }
-                    let mut mlen = at as c_int;
+                    let mut mlen = len_as_int(at);
 
                     // Don't allow mapping the first byte(s) of a multibyte
                     // character, which happens after mapping <M-a> and then
@@ -414,11 +422,11 @@ impl Applied {
 
 /// Replace a matched mapping's LHS in the typeahead with its RHS.
 ///
-/// Answers `map_result_retry` so that the RHS is matched against the mapping
-/// table in turn, or `map_result_fail`. `at` names a mapping that matched
+/// Answers [`MapResult::Retry`] so that the RHS is matched against the
+/// mapping table in turn, or [`MapResult::Fail`]. `at` names a mapping that matched
 /// `keylen` bytes of the typeahead, and `mapdepth` is the caller's count of
 /// the mappings applied since the last typed key.
-fn apply_mapping(at: MapAt, keylen: c_int, mapdepth: &mut c_int) -> c_int {
+fn apply_mapping(at: MapAt, keylen: c_int, mapdepth: &mut c_int) -> MapResult {
     let applied = at.with(|tables, mp| {
         // Upstream compares `keylen` bytes, which is never more than the LHS
         // it matched. Only a `:map` asks, so a `:noremap` copies nothing.
@@ -435,7 +443,7 @@ fn apply_mapping(at: MapAt, keylen: c_int, mapdepth: &mut c_int) -> c_int {
                 mp.m_rhs.str.clone()
             },
             keys: if compares {
-                keys[..keys.len().min(keylen as usize)].to_vec()
+                keys[..keys.len().min(usize::try_from(keylen).unwrap_or(0))].to_vec()
             } else {
                 Vec::new()
             },
@@ -447,7 +455,7 @@ fn apply_mapping(at: MapAt, keylen: c_int, mapdepth: &mut c_int) -> c_int {
     });
     // The match ran no user code, so the mapping is still there.
     let Some(applied) = applied else {
-        return map_result_fail as c_int;
+        return MapResult::Fail;
     };
     let tb = typeahead();
 
@@ -464,7 +472,7 @@ fn apply_mapping(at: MapAt, keylen: c_int, mapdepth: &mut c_int) -> c_int {
 
     // The depth check catches `:map x y` plus `:map y x`.
     *mapdepth += 1;
-    if *mapdepth >= p_mmd() as c_int {
+    if OptInt::from(*mapdepth) >= p_mmd() {
         emsg(gettext(e_recursive_mapping));
         if State.get() & MODE_CMDLINE != 0 {
             redrawcmdline();
@@ -473,7 +481,7 @@ fn apply_mapping(at: MapAt, keylen: c_int, mapdepth: &mut c_int) -> c_int {
         }
         flush_buffers(FLUSH_MINIMAL);
         *mapdepth = 0; // for the next one
-        return map_result_fail as c_int;
+        return MapResult::Fail;
     }
 
     // In Select mode with a Visual-mode mapping: switch to Visual mode
@@ -559,23 +567,28 @@ fn apply_mapping(at: MapAt, keylen: c_int, mapdepth: &mut c_int) -> c_int {
     };
 
     if inserted.is_err() {
-        map_result_fail as c_int
+        MapResult::Fail
     } else {
-        map_result_retry as c_int
+        MapResult::Retry
     }
 }
 
 /// Handle mappings at the front of the typeahead buffer.
 ///
-/// Answers `map_result_retry` when something was mapped (the RHS has to be
-/// matched again, for a recursive mapping), `map_result_get` when nothing
-/// mapped and the typeahead has a character to hand out, `map_result_nomatch`
-/// when more input is needed to decide, and `map_result_fail` on failure.
+/// Answers [`MapResult::Retry`] when something was mapped (the RHS has to be
+/// matched again, for a recursive mapping), [`MapResult::Get`] when nothing
+/// mapped and the typeahead has a character to hand out,
+/// [`MapResult::NoMatch`] when more input is needed to decide, and
+/// [`MapResult::Fail`] on failure.
 ///
 /// `keylenp` is the match length, in and out; `timedout` is whether the wait
 /// for more input timed out; `mapdepth` counts the mappings applied since
 /// the last typed key.
-pub(crate) fn handle_mapping(keylenp: &mut c_int, timedout: bool, mapdepth: &mut c_int) -> c_int {
+pub(crate) fn handle_mapping(
+    keylenp: &mut c_int,
+    timedout: bool,
+    mapdepth: &mut c_int,
+) -> MapResult {
     let mut keylen = *keylenp;
     let local_state = get_real_state();
     let tb = typeahead();
@@ -624,7 +637,7 @@ pub(crate) fn handle_mapping(keylenp: &mut c_int, timedout: bool, mapdepth: &mut
                 keylen = KEYLEN_PART_KEY;
             } else {
                 let Ok(len) = check_simplify_modifier(max_mlen + 1) else {
-                    return map_result_fail as c_int; // ins_typebuf() failed
+                    return MapResult::Fail; // ins_typebuf() failed
                 };
                 keylen = c_int::try_from(len).expect("a key is a few bytes");
             }
@@ -636,12 +649,12 @@ pub(crate) fn handle_mapping(keylenp: &mut c_int, timedout: bool, mapdepth: &mut
             // No simplification and no mapping at all: hand out the
             // character in the typeahead as it stands.
             *keylenp = keylen;
-            return map_result_get as c_int;
+            return MapResult::Get;
         }
         if keylen > 0 {
             // Keys were simplified; match the result again.
             *keylenp = keylen;
-            return map_result_retry as c_int;
+            return MapResult::Retry;
         }
         if keylen < 0 {
             // An incomplete key sequence: get some more characters.
@@ -657,6 +670,6 @@ pub(crate) fn handle_mapping(keylenp: &mut c_int, timedout: bool, mapdepth: &mut
         // A non-negative `keylen` only survives the block above with a
         // mapping to apply; the `else` is the `KEYLEN_PART_*` cases.
         Some(mp) if keylen >= 0 && keylen <= tb.len() => apply_mapping(mp.at, keylen, mapdepth),
-        _ => map_result_nomatch as c_int,
+        _ => MapResult::NoMatch,
     }
 }

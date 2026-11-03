@@ -5,6 +5,13 @@
 //! end in [`buf_do_map`] or [`map_add`].
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api_error;
@@ -13,7 +20,7 @@ use crate::eval::userfunc::FuncFlags;
 use crate::getchar::Remap;
 use crate::lua::executor::release_luaref;
 use crate::message_fmt::{msg_bytes, msg_cstr};
-use crate::narrow::number_as_lnum;
+use crate::narrow::{number_as_int, number_as_lnum};
 use crate::option::vars::P_CPO;
 use crate::semsg;
 use crate::types::Handle;
@@ -130,7 +137,7 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
         ..MapArguments::default()
     };
 
-    let sid = number(c"sid") as ScriptId;
+    let sid: ScriptId = number_as_int(number(c"sid"));
     let lnum = number_as_lnum(number(c"lnum"));
     let buffer = number(c"buffer") != 0;
     // The dict's "mode" is not used past get_map_mode_string.
@@ -238,10 +245,7 @@ pub fn modify_keymap(
                 &mut parsed_args,
             )
         });
-        if !ok
-            || parsed_args.lhs_len > MAXMAPLEN as size_t
-            || parsed_args.alt_lhs_len > MAXMAPLEN as size_t
-        {
+        if !ok || parsed_args.lhs_len > MAXMAPLEN || parsed_args.alt_lhs_len > MAXMAPLEN {
             let lhs = msg_cstr(lhs.as_cstr());
             failed = Some(api_error!(
                 kErrorTypeValidation,

@@ -8,6 +8,13 @@
 //! set of modes is spelled back.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::keycodes::{Ctrl_V, KE_LUA};
@@ -117,14 +124,14 @@ pub(crate) fn set_maparg_lhs_rhs(
     };
     let replaced = c_prefix(&replaced);
     args.lhs_len = replaced.len();
-    args.lhs = MapStr::new(&replaced[..replaced.len().min(MAXMAPLEN as size_t)]);
+    args.lhs = MapStr::new(&replaced[..replaced.len().min(MAXMAPLEN)]);
     if did_simplify {
         let Some(alt) = replace_termcodes(lhs, 0, nosimp, None, cpo, Some(LHS_ROOM)) else {
             return false;
         };
         let alt = c_prefix(&alt);
         args.alt_lhs_len = alt.len();
-        args.alt_lhs = MapStr::new(&alt[..alt.len().min(MAXMAPLEN as size_t)]);
+        args.alt_lhs = MapStr::new(&alt[..alt.len().min(MAXMAPLEN)]);
     } else {
         args.alt_lhs_len = 0;
     }
@@ -269,7 +276,7 @@ pub(crate) fn str_to_mapargs(strargs: &[u8], is_unmap: bool, args: &mut MapArgum
     if !ok {
         return 1;
     }
-    if args.lhs_len > MAXMAPLEN as size_t {
+    if args.lhs_len > MAXMAPLEN {
         return 1;
     }
     0

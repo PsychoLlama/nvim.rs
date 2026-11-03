@@ -12,6 +12,13 @@
 //! `vc_fail` asks for an error instead.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::eval::typval::NumBuf;
@@ -280,7 +287,7 @@ fn latin9_to_utf8(src: &[u8]) -> Vec<u8> {
         let c = LATIN9_REPLACEMENTS
             .iter()
             .find(|&&(byte, _)| byte == b)
-            .map_or(b as c_int, |&(_, code)| code);
+            .map_or(c_int::from(b), |&(_, code)| code);
         let n = encode_char(c, &mut buf);
         out.extend_from_slice(&buf[..n]);
     }
@@ -322,8 +329,8 @@ fn utf8_to_latin(src: &[u8], to_latin9: bool, fail: bool) -> Option<Vec<u8>> {
             c = to_latin9_byte(c);
         }
         if !utf_iscomposing_legacy(c) {
-            if c < 0x100 {
-                out.push(c as u8);
+            if let Ok(byte) = u8::try_from(c) {
+                out.push(byte);
             } else if fail {
                 return None;
             } else {
@@ -346,11 +353,11 @@ fn utf8_to_latin(src: &[u8], to_latin9: bool, fail: bool) -> Option<Vec<u8>> {
 /// must become `¿` rather than silently turning into the wrong glyph.
 fn to_latin9_byte(c: c_int) -> c_int {
     if let Some(&(byte, _)) = LATIN9_REPLACEMENTS.iter().find(|&&(_, code)| code == c) {
-        return byte as c_int;
+        return c_int::from(byte);
     }
     if LATIN9_REPLACEMENTS
         .iter()
-        .any(|&(byte, _)| byte as c_int == c)
+        .any(|&(byte, _)| c_int::from(byte) == c)
     {
         return 0x100;
     }
@@ -392,13 +399,13 @@ mod tests {
     #[test]
     fn latin9_map_is_a_bijection() {
         for &(byte, code) in &LATIN9_REPLACEMENTS {
-            assert_eq!(to_latin9_byte(code), byte as c_int);
+            assert_eq!(to_latin9_byte(code), c_int::from(byte));
             // The Latin-1 character this position displaced has no Latin-9
             // spelling, and must be pushed out of byte range.
-            assert_eq!(to_latin9_byte(byte as c_int), 0x100);
+            assert_eq!(to_latin9_byte(c_int::from(byte)), 0x100);
         }
         // Everything else passes through.
-        assert_eq!(to_latin9_byte('a' as c_int), 'a' as c_int);
+        assert_eq!(to_latin9_byte(c_int::from(b'a')), c_int::from(b'a'));
         assert_eq!(to_latin9_byte(0xe9), 0xe9); // é, same in both
     }
 

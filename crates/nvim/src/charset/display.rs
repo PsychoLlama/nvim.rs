@@ -9,6 +9,13 @@
 //! all.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use core::ffi::CStr;
@@ -16,7 +23,7 @@ use core::ffi::c_int;
 
 use crate::mbyte::{
     c_cluster_len, char_at, char_len, cluster_len, encode_char, mb_tolower, utf_char2cells,
-    utf_char2len,
+    utf8_len,
 };
 use crate::memory::XString;
 use crate::option::get_fileformat;
@@ -107,7 +114,7 @@ impl<'a> Chars<'a> {
 /// The display width of the byte `b` from the global table.
 #[inline(always)]
 fn table_cells(b: uint8_t) -> c_int {
-    (chartab(b) & CT_CELL_MASK) as c_int
+    c_int::from(chartab(b) & CT_CELL_MASK)
 }
 
 /// The display width of a byte, zero for a multibyte lead byte.
@@ -116,7 +123,8 @@ fn byte_cells(b: c_int) -> c_int {
     if b >= 0x80 {
         return 0;
     }
-    table_cells(b as uint8_t)
+    // Upstream's `(uint8_t)b` for anything below 0x80, a negative `b` too.
+    table_cells(b.to_le_bytes()[0])
 }
 
 /// Replace every unprintable byte in `buf` with its display form, in place.
@@ -129,7 +137,9 @@ pub fn trans_characters_in(bytes: &mut [u8]) {
     // Bytes of the string still to be translated, and bytes left over after
     // it. Both are counted from the cursor, so their sum is invariant.
     let mut len = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    let mut room = bufsize as isize - len as isize;
+    // Signed: an expansion can take it past zero, which is where the walk
+    // stops.
+    let mut room = isize::try_from(bufsize - len).expect("a buffer's length");
     let mut at = 0usize;
     while bytes[at] != 0 {
         // The bytes past the terminator are the buffer's, not the string's,
@@ -140,10 +150,10 @@ pub fn trans_characters_in(bytes: &mut [u8]) {
             // A multibyte character is left alone.
             len -= step;
         } else {
-            let trs = render_byte(Buf::current_or_none(), bytes[at] as c_int);
+            let trs = render_byte(Buf::current_or_none(), c_int::from(bytes[at]));
             step = trs.len;
             if step > 1 {
-                room -= step as isize - 1;
+                room -= isize::try_from(step - 1).expect("a short expansion");
                 if room <= 0 {
                     return;
                 }
@@ -181,14 +191,17 @@ fn transstr_len_in(s: &[u8], untab: bool) -> usize {
                 }
             }
             cursor.advance(l);
-        } else if byte as c_int == TAB && !untab {
+        } else if c_int::from(byte) == TAB && !untab {
             len += 1;
             cursor.advance(1);
         } else {
-            let cells = byte_cells(byte as c_int);
+            let cells = byte_cells(c_int::from(byte));
             cursor.advance(1);
             // A zero width means the table has no entry: `<xx>` is four.
-            len += if cells > 0 { cells } else { 4 } as usize;
+            len += usize::try_from(cells)
+                .ok()
+                .filter(|&cells| cells > 0)
+                .unwrap_or(4);
         }
     }
 }
@@ -230,13 +243,13 @@ pub fn transstr_into(s: &[u8], slen: Option<usize>, out: &mut [u8], untab: bool)
             }
             cursor.advance(l);
             read += l;
-        } else if cursor.byte() as c_int == TAB && !untab {
+        } else if c_int::from(cursor.byte()) == TAB && !untab {
             out[written] = cursor.byte();
             written += 1;
             cursor.advance(1);
             read += 1;
         } else {
-            let tb = render_byte(Buf::current_or_none(), cursor.byte() as c_int);
+            let tb = render_byte(Buf::current_or_none(), c_int::from(cursor.byte()));
             cursor.advance(1);
             read += 1;
             if written + tb.len > limit {
@@ -247,7 +260,7 @@ pub fn transstr_into(s: &[u8], slen: Option<usize>, out: &mut [u8], untab: bool)
         }
     }
     debug_assert!(written <= limit, "buf_p <= buf_e");
-    out[written] = NUL as uint8_t;
+    out[written] = 0;
     written
 }
 
@@ -283,7 +296,7 @@ pub fn foldcase(text: &[u8], room: Option<usize>) -> Vec<u8> {
         // Only ASCII and real multibyte characters fold; a lone Latin-1 byte
         // has no case in this encoding.
         if (c < 0x80 || olen > 1) && c != lc {
-            let mut nlen = utf_char2len(lc) as usize;
+            let mut nlen = utf8_len(lc);
             if nlen > olen && room.is_some_and(|room| len + nlen - olen >= room) {
                 // No room to grow: keep the original character.
                 lc = c;
@@ -359,10 +372,11 @@ fn render_char(buffer: Option<Buf>, c: c_int) -> render::Rendered {
         (None, c)
     };
     // Before the tables exist, printable ASCII is all that can be trusted.
-    let body = if (!chartab_initialized.get() && (' ' as c_int..='~' as c_int).contains(&c))
-        || (c <= 0xff && vim_isprintc(c))
-    {
-        render::Rendered::literal(c as uint8_t)
+    let byte = u8::try_from(c).ok();
+    let body = if let Some(byte) = byte.filter(|&b| {
+        (!chartab_initialized.get() && (b' '..=b'~').contains(&b)) || vim_isprintc(c_int::from(b))
+    }) {
+        render::Rendered::literal(byte)
     } else if c <= 0xff {
         render_nonprint(buffer, c)
     } else {
@@ -444,7 +458,7 @@ pub fn char2cells(c: c_int) -> c_int {
     if c >= 0x80 {
         return utf_char2cells(c);
     }
-    table_cells((c & 0xff) as uint8_t)
+    table_cells(c.to_le_bytes()[0])
 }
 
 /// Upstream's `ptr2cells` over a slice: the cells the character at the start of

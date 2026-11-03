@@ -22,6 +22,13 @@
 //!   batch mode, not a tty-dependent accident.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -311,10 +318,10 @@ fn read_from_typeahead(
             return Some(interrupted(advance));
         } else if !typeahead().is_empty() {
             // Check for a mapping in the typeahead.
-            match handle_mapping(&mut keylen, *timedout, mapdepth) as MapResult {
-                map_result_retry => continue,   // try mapping again
-                map_result_fail => return None, // failed; use the outer loop
-                map_result_get => {
+            match handle_mapping(&mut keylen, *timedout, mapdepth) {
+                MapResult::Retry => continue,   // try mapping again
+                MapResult::Fail => return None, // failed; use the outer loop
+                MapResult::Get => {
                     // Take the character from the typeahead.
                     let tb = typeahead();
                     let c = tb.byte(0);
@@ -379,7 +386,7 @@ fn read_from_typeahead(
             tb.append_typed(&peeked[..extra]);
         }
 
-        if tb.len() >= tb.maplen() + MAXMAPLEN as c_int {
+        if tb.len() >= tb.maplen() + MAPLEN {
             // The buffer is full, so don't map.
             *timedout = true;
             continue;
@@ -648,7 +655,7 @@ pub(crate) fn inchar(buf: &mut [u8], wait_time: c_long) -> Option<usize> {
         // On an interrupt, skip everything typed so far and answer
         // whether reading a script file was quit.
         if got_int.get() {
-            const DUM_LEN: usize = MAXMAPLEN as usize * 3 + 3;
+            const DUM_LEN: usize = MAXMAPLEN * 3 + 3;
             let mut dum = [0u8; DUM_LEN];
             loop {
                 let got = input_get(&mut dum, 0, 0, InputEvents::None);
