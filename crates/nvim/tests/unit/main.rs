@@ -25,6 +25,7 @@ mod cmdhist;
 mod cursor;
 mod diff;
 mod digraph;
+mod edit;
 mod encode_sinks;
 
 mod env;
