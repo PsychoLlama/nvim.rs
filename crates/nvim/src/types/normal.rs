@@ -35,7 +35,7 @@ pub struct CmdArg {
     /// `nchar` and its combining characters, encoded, NUL-terminated
     /// (`nchar_len` bytes); empty when `nchar` has none.
     pub nchar_composing: [u8; 32],
-    pub nchar_len: ::core::ffi::c_int,
+    pub nchar_len: usize,
     pub extra_char: Key,
     pub opcount: ::core::ffi::c_int,
     pub count0: ::core::ffi::c_int,

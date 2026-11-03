@@ -10,6 +10,13 @@
 //! code.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -19,7 +26,7 @@ use crate::keycodes::SpecialKey;
 use crate::mouse::{nv_mouse, nv_mousescroll};
 use crate::types::{
     CmdArg, Direction, GetFileFlags, Key, MarkGet, MarkMove, MarkMoveRes, MotionType, Pos,
-    SpellAddType, SpellMoveType, int16_t, uint16_t,
+    SpellAddType, SpellMoveType, uint16_t,
 };
 use core::ffi::{CStr, c_int, c_uint};
 
@@ -68,10 +75,8 @@ pub(crate) const kMarkBeginLine: MarkMove = 1;
 pub(crate) const kMarkAll: MarkGet = 1;
 pub(crate) const GETF_ALT: GetFileFlags = 2;
 pub(crate) const GETF_SETMARK: GetFileFlags = 1;
-pub(crate) const OPENLINE_DO_COM: c_uint = 2;
 pub(crate) const HIST_SEARCH: c_int = 1;
 pub(crate) const VSE_NONE: c_uint = 0;
-pub(crate) const ML_DEL_MESSAGE: c_uint = 1;
 pub(crate) const kMTLineWise: MotionType = 1;
 pub(crate) const kMTCharWise: MotionType = 0;
 pub(crate) const SHOWCMD_COLS: c_uint = 10;
@@ -87,7 +92,7 @@ pub(crate) struct NvCmd {
     pub cmd_char: Key,
     pub cmd_func: NvFunc,
     pub cmd_flags: NvFlags,
-    pub cmd_arg: int16_t,
+    pub cmd_arg: c_int,
 }
 /// What a row of [`nv_cmds`] runs.
 ///
@@ -184,14 +189,14 @@ crate::flag_set! {
 
 /// One row of [`nv_cmds`].
 ///
-/// The argument is written as the `c_int` constant that names it and narrowed
-/// here, so a row reads as the four things it is rather than as a cast.
+/// The argument is written as the `c_int` constant that names it, so a row
+/// reads as the four things it is rather than as a cast.
 const fn cmd(cmd_char: Key, cmd_func: NvFunc, cmd_flags: NvFlags, cmd_arg: c_int) -> NvCmd {
     NvCmd {
         cmd_char,
         cmd_func,
         cmd_flags,
-        cmd_arg: cmd_arg as int16_t,
+        cmd_arg,
     }
 }
 
@@ -736,12 +741,7 @@ pub(crate) const NV_CMDS: [NvCmd; 188] = [
     ),
 ];
 static nv_cmds: [NvCmd; 188] = NV_CMDS;
-pub(crate) const NV_CMDS_SIZE: usize = ::core::mem::size_of::<[NvCmd; 188]>()
-    .wrapping_div(::core::mem::size_of::<NvCmd>())
-    .wrapping_div(
-        (::core::mem::size_of::<[NvCmd; 188]>().wrapping_rem(::core::mem::size_of::<NvCmd>()) == 0)
-            as c_int as usize,
-    );
+pub(crate) const NV_CMDS_SIZE: usize = NV_CMDS.len();
 static showcmd_is_clear: GlobalCell<bool> = GlobalCell::new(true);
 static showcmd_visual: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) const INT_MAX: c_int = __INT_MAX__;

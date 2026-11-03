@@ -23,11 +23,19 @@
 //! inserted.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr::{self, byte_at};
 use crate::mbyte::encode_char;
 use crate::memline::Lines;
 use crate::memory::XString;
+use crate::narrow::len_as_int;
 use crate::option::split_option_part;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
@@ -36,7 +44,7 @@ use core::ffi::c_int;
 use super::*;
 use crate::guard::Lock;
 use crate::optionstr::{OptString, OptStringRef};
-use crate::types::{FoFlag, MB_MAXCHAR, NUL};
+use crate::types::{FoFlag, MB_MAXCHAR};
 
 /// Upstream's `ISSPECIAL`: a key that needs processing other than the
 /// simple insert this file can do -- a special key, a control character,
@@ -59,7 +67,7 @@ const fn needs_processing(c: Key) -> bool {
 /// `INSCHAR_DO_COM` and `INSCHAR_COM_LIST`.  `second_indent` is the indent
 /// for a second line, if not negative.
 pub(crate) fn insertchar(c: Key, flags: c_int, second_indent: c_int) {
-    let textwidth = comp_textwidth(flags & INSCHAR_FORMAT as c_int != 0);
+    let textwidth = comp_textwidth(flags & INSCHAR_FORMAT.cast_signed() != 0);
     wrap_before_insert(c, flags, second_indent, textwidth);
 
     if c.is_nul() {
@@ -128,7 +136,7 @@ pub(crate) fn insertchar(c: Key, flags: c_int, second_indent: c_int) {
 
         // After CTRL-V the first character is recorded literally, and
         // the rest as themselves.
-        let redo_from = if flags & INSCHAR_CTRLV as c_int != 0 {
+        let redo_from = if flags & INSCHAR_CTRLV.cast_signed() != 0 {
             redo_literal(Key::byte(typed[0]));
             1
         } else {
@@ -146,7 +154,7 @@ pub(crate) fn insertchar(c: Key, flags: c_int, second_indent: c_int) {
             append_to_redobuff_char(c);
         } else {
             ins_char(c);
-            if flags & INSCHAR_CTRLV as c_int != 0 {
+            if flags & INSCHAR_CTRLV.cast_signed() != 0 {
                 redo_literal(c);
             } else {
                 append_to_redobuff_char(c);
@@ -166,7 +174,7 @@ pub(crate) fn insertchar(c: Key, flags: c_int, second_indent: c_int) {
 /// already too long, and lacks `b` or a blank was inserted at or before
 /// 'textwidth'.
 fn wrap_before_insert(c: Key, flags: c_int, second_indent: c_int, textwidth: c_int) {
-    let force_format = flags & INSCHAR_FORMAT as c_int;
+    let force_format = flags & INSCHAR_FORMAT.cast_signed();
     let fo_ins_blank = has_format_option(FoFlag::INS_BLANK);
     let fo_ins_long = has_format_option(FoFlag::INS_LONG);
 
@@ -177,7 +185,7 @@ fn wrap_before_insert(c: Key, flags: c_int, second_indent: c_int, textwidth: c_i
         || (!ascii_iswhite(c.code())
             && !(State.get() & REPLACE_FLAG != 0
                 && State.get() & VREPLACE_FLAG == 0
-                && cursor_byte() != NUL as u8)
+                && cursor_byte() != 0)
             && (Win::current().w_cursor.lnum != Insstart.get().lnum
                 || ((!fo_ins_long || Insstart_textlen.get() <= ColNr::new(textwidth))
                     && (!fo_ins_blank || Insstart_blank_vcol.get() <= ColNr::new(textwidth)))));
@@ -191,8 +199,8 @@ fn wrap_before_insert(c: Key, flags: c_int, second_indent: c_int, textwidth: c_i
     let virtcol =
         get_nolist_virtcol() + char2cells(if c.is_nul() { gchar_cursor() } else { c.code() });
 
-    if Buf::current().b_p_fex.first_byte() as c_int != NUL
-        && flags & INSCHAR_NO_FEX as c_int == 0
+    if Buf::current().b_p_fex.first_byte() != 0
+        && flags & INSCHAR_NO_FEX.cast_signed() == 0
         && (force_format != 0 || virtcol > ColNr::new(textwidth))
     {
         do_internal = fex_format(Win::current().w_cursor.lnum, 1, c.code()) != 0;
@@ -230,7 +238,7 @@ fn end_pending_comment(c: Key) {
     let (middle_len, lead_end) = {
         let buffer = Buf::current();
         let com = buffer.b_p_com.bytes();
-        let before = |p: usize| p.checked_sub(1).map_or(NUL as u8, |prev| com[prev]);
+        let before = |p: usize| p.checked_sub(1).map_or(0, |prev| com[prev]);
         let mut p = flags.offset();
         // Skip the middle-comment string.
         while byte_at(com, p) != 0 && before(p) != b':' {
@@ -249,7 +257,7 @@ fn end_pending_comment(c: Key) {
             p += 1; // find the end of the end flags
         }
         let (lead_end, _) = split_option_part(&com[p..], COM_MAX_LEN, b",");
-        (middle_len as c_int, lead_end)
+        (len_as_int(middle_len), lead_end)
     };
 
     // Skip the white space before the cursor, then back over the middle

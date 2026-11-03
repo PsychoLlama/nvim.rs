@@ -8,6 +8,13 @@
 //! a borrow of it across the redraw the display functions run.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -334,12 +341,12 @@ pub(crate) fn add_to_showcmd_c(c: Key) {
 }
 
 /// Drop the last `len` bytes of the partial command.
-pub(crate) fn del_from_showcmd(len: c_int) {
+pub(crate) fn del_from_showcmd(len: usize) {
     if !p_sc() {
         return;
     }
     let mut sc = showcmd_buf.get();
-    sc.truncate(sc.len.saturating_sub(len as usize));
+    sc.truncate(sc.len.saturating_sub(len));
     showcmd_buf.set(sc);
     if !char_avail() {
         display_showcmd();

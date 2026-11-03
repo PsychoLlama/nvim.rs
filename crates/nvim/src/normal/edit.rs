@@ -2,6 +2,13 @@
 //! ones whose whole job is to enter it.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use crate::keycodes::SpecialKey;
@@ -12,6 +19,7 @@ use crate::winlayer::{Buf, Win};
 
 use crate::ascii::ascii_isdigit;
 use crate::buffer::{buf_get_changedtick, buf_is_prompt, current_buf};
+use crate::change::OPENLINE_DO_COM;
 use crate::change::{changed_lines, del_chars, deleted_lines, ins_char, ins_char_bytes, open_line};
 use crate::cursor::{
     check_cursor, coladvance, coladvance_force, gchar_cursor, get_cursor_pos_len, getviscol,
@@ -31,14 +39,15 @@ use crate::getchar::{
 };
 use crate::guard::Suppress;
 use crate::mbyte::{char_count, mb_adjust_cursor};
+use crate::memline::ML_DEL_MESSAGE;
 use crate::memline::{inc, ml_delete_flags};
 use crate::message::e_modifiable;
 use crate::message::emsg;
 use crate::r#move::WinValid;
 use crate::normal::{
-    ML_DEL_MESSAGE, OPENLINE_DO_COM, TAB, VIsual_mode_orig, VisualMode, check_clear_op,
-    check_clear_op_quit, clear_op, clear_op_beep, nv_object, nv_operator, prep_redo, prep_redo_cmd,
-    set_visual_active, set_visual_mode, v_swap_corners, v_visop, visual_active, visual_mode,
+    TAB, VIsual_mode_orig, VisualMode, check_clear_op, check_clear_op_quit, clear_op,
+    clear_op_beep, nv_object, nv_operator, prep_redo, prep_redo_cmd, set_visual_active,
+    set_visual_mode, v_swap_corners, v_visop, visual_active, visual_mode,
 };
 use crate::ops::{
     REPLACE_CR_NCHAR, REPLACE_NL_NCHAR, do_join, do_pending_operator, op_addsub, swapchar,
@@ -54,7 +63,7 @@ use crate::state::{MODE_INSERT, MODE_REPLACE, virtual_active};
 use crate::textformat::{auto_format, has_format_option};
 use crate::types::{
     CmdArg, ColNr, FoFlag, LineNr, NUL, OpType, Outcome, PUT_BLOCK_INNER, PUT_CURSEND,
-    PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, YankReg, size_t,
+    PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, YankReg,
 };
 use crate::undo::{u_clearline, u_save, u_save_cursor, u_savesub};
 use core::ffi::{CStr, c_int, c_uint};
@@ -143,8 +152,11 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
     }
     // There have to be `count1` characters left on the line, counted both
     // ways: the byte length rules out a short line cheaply.
-    if (get_cursor_pos_len() as usize) < cmd_arg.count1 as c_uint as size_t
-        || with_cursor_rest(char_count) < cmd_arg.count1 as usize
+    // A negative length or count reads as huge, as upstream's unsigned
+    // comparison does.
+    let want = usize::try_from(cmd_arg.count1).unwrap_or(usize::MAX);
+    if usize::try_from(get_cursor_pos_len()).unwrap_or(usize::MAX) < want
+        || with_cursor_rest(char_count) < want
     {
         clear_op_beep(cmd_arg.op());
         return;
@@ -205,7 +217,7 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
             }
         } else if cmd_arg.nchar_len != 0 {
             let bytes = cstr::until_nul(&cmd_arg.nchar_composing);
-            ins_char_bytes(&bytes[..cmd_arg.nchar_len as usize]);
+            ins_char_bytes(&bytes[..cmd_arg.nchar_len]);
         } else {
             ins_char(cmd_arg.nchar);
         }
@@ -425,7 +437,7 @@ pub(crate) fn n_opencmd(cmd_arg: &mut CmdArg) {
         FORWARD as c_int
     };
     let flags = if has_format_option(FoFlag::OPEN_COMS) {
-        OPENLINE_DO_COM as c_int
+        OPENLINE_DO_COM
     } else {
         0
     };
@@ -582,7 +594,7 @@ pub(crate) fn nv_join(cmd_arg: &mut CmdArg) {
     );
     // `gJ` arrives with `nchar` set and does not insert or remove spaces.
     let _ = do_join(
-        cmd_arg.count0 as size_t,
+        usize::try_from(cmd_arg.count0).unwrap_or(0),
         cmd_arg.nchar.is_nul(),
         true,
         true,
@@ -605,7 +617,7 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
         if cmd_arg.op().op_type == OpType::Delete && cmd_arg.cmdchar.is('p') {
             clear_op(cmd_arg.op());
             debug_assert!(cmd_arg.opcount >= 0);
-            nv_diffgetput(true, cmd_arg.opcount as size_t);
+            nv_diffgetput(true, usize::try_from(cmd_arg.opcount).unwrap_or(0));
         } else {
             clear_op_beep(cmd_arg.op());
         }
@@ -631,7 +643,7 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
         } else {
             BACKWARD as c_int
         };
-        flags |= PUT_FIXINDENT as c_int;
+        flags |= PUT_FIXINDENT.cast_signed();
     } else {
         dir = if cmd_arg.cmdchar.is('P')
             || ((cmd_arg.cmdchar.is('g') || cmd_arg.cmdchar.is('z')) && cmd_arg.nchar.is('P'))
@@ -645,9 +657,9 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
     // `gp` leaves the cursor after the new text; `zp` puts a blockwise
     // register without widening the lines it lands on.
     if cmd_arg.cmdchar.is('g') {
-        flags |= PUT_CURSEND as c_int;
+        flags |= PUT_CURSEND.cast_signed();
     } else if cmd_arg.cmdchar.is('z') {
-        flags |= PUT_BLOCK_INNER as c_int;
+        flags |= PUT_BLOCK_INNER.cast_signed();
     }
 
     let was_visual = visual_active();
@@ -659,9 +671,7 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
         // Putting over a selection deletes it first, and that delete would
         // otherwise overwrite the very register being put.
         let clipoverwrite = (regname == c_int::from(b'+') || regname == c_int::from(b'*'))
-            && cb_flags.get()
-                & (kOptCbFlagUnnamed as c_int | kOptCbFlagUnnamedplus as c_int) as c_uint
-                != 0;
+            && cb_flags.get() & (kOptCbFlagUnnamed | kOptCbFlagUnnamedplus) != 0;
         if regname == 0
             || regname == c_int::from(b'"')
             || clipoverwrite
@@ -692,12 +702,12 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
             cmd_arg.op().regname = regname;
         }
         if visual_mode().is_line() {
-            flags |= PUT_LINE as c_int;
+            flags |= PUT_LINE.cast_signed();
         } else if visual_mode().is_char() {
-            flags |= PUT_LINE_SPLIT as c_int;
+            flags |= PUT_LINE_SPLIT.cast_signed();
         }
         if visual_mode().is_block() && dir == FORWARD as c_int {
-            flags |= PUT_LINE_FORWARD as c_int;
+            flags |= PUT_LINE_FORWARD.cast_signed();
         }
         // Put where the selection was, which is where the delete left the
         // cursor -- forwards only when it left it before the start.
@@ -733,7 +743,7 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
     }
     let last = Buf::current().b_ml.ml_line_count;
     if emptied && Buf::current().lines().line(last).is_empty() {
-        let _ = ml_delete_flags(Buf::current().b_ml.ml_line_count, ML_DEL_MESSAGE as c_int);
+        let _ = ml_delete_flags(Buf::current().b_ml.ml_line_count, ML_DEL_MESSAGE);
         deleted_lines(Buf::current().b_ml.ml_line_count + 1, 1);
         if win.w_cursor.lnum > Buf::current().b_ml.ml_line_count {
             win.w_cursor.lnum = Buf::current().b_ml.ml_line_count;
@@ -750,7 +760,7 @@ pub(crate) fn nv_open(cmd_arg: &mut CmdArg) {
         // `do` is `:diffget`, not "delete, then open".
         clear_op(cmd_arg.op());
         debug_assert!(cmd_arg.opcount >= 0);
-        nv_diffgetput(false, cmd_arg.opcount as size_t);
+        nv_diffgetput(false, usize::try_from(cmd_arg.opcount).unwrap_or(0));
     } else if visual_active() {
         v_swap_corners(cmd_arg.cmdchar);
     } else if buf_is_prompt(current_buf())

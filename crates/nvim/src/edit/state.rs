@@ -21,6 +21,13 @@
 //! `do_pending_operator` to run one Normal-mode command and come back.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr::byte_at;
 use crate::keycodes::SpecialKey;
@@ -34,7 +41,6 @@ use core::ffi::c_int;
 use super::*;
 use crate::guard::{Keys, Suppress};
 use crate::r#move::WinValid;
-use crate::types::NUL;
 
 /// Set Insert mode up, run the state loop until it really ends, and tear it
 /// down again.
@@ -121,7 +127,7 @@ fn insert_enter(s: &mut InsertState) {
             .w_valid
             .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
     }
-    if Buf::current().b_p_iminsert == B_IMODE_LMAP as OptInt {
+    if Buf::current().b_p_iminsert == OptInt::from(B_IMODE_LMAP) {
         State.set(State.get() | MODE_LANGMAP);
     }
 
@@ -174,7 +180,7 @@ fn insert_enter(s: &mut InsertState) {
     // Everything in the redo buffer up to here belongs to the command,
     // not to the text that was typed.
     let inserted = get_inserted();
-    new_insert_skip.set(inserted.len() as c_int);
+    new_insert_skip.set(len_as_int(inserted.len()));
     old_indent.set(0);
 
     // The mode ends when `ins_esc` says so: a count means the whole
@@ -262,15 +268,11 @@ fn restore_ctrl_o_column() {
         if tail.is_empty() {
             return;
         }
-        if byte_at(tail, 1) == NUL as u8 {
+        if byte_at(tail, 1) == 0 {
             1
         } else {
             let len = c_cluster_len(tail);
-            if byte_at(tail, len) == NUL as u8 {
-                len
-            } else {
-                0
-            }
+            if byte_at(tail, len) == 0 { len } else { 0 }
         }
     };
     Win::current().w_cursor.col += len_as_int(step);
@@ -411,8 +413,8 @@ fn may_scroll_for_wrap(s: &mut InsertState) {
     let vcol = get_nolist_virtcol();
     let tabstop = Buf::current().tab_width_at(vcol, false);
     if Win::current().w_wcol < s.mincol - tabstop
-        && Win::current().w_wrow as int64_t
-            == (Win::current().w_view_height - 1) as int64_t - get_scrolloff_value(Win::current())
+        && int64_t::from(Win::current().w_wrow)
+            == int64_t::from(Win::current().w_view_height - 1) - get_scrolloff_value(Win::current())
         && (Win::current().w_cursor.lnum != Win::current().w_topline
             || Win::current().w_topfill > 0)
     {

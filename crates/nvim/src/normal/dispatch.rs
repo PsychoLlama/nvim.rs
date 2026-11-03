@@ -12,6 +12,13 @@
 //! but `#[inline(always)]`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::autocmd::state::did_cursorhold;
 use crate::charset::vim_isprintc;
@@ -35,7 +42,7 @@ use crate::keycodes::ModMask;
 use crate::keycodes::{SpecialKey, simplify_mod_mask};
 use crate::mapping::langmap_adjust_mb;
 use crate::mark::checkpcmark;
-use crate::mbyte::{encode_char, iscomposing, utf_char2len, utf8len_tab};
+use crate::mbyte::{encode_char, iscomposing, utf8len_tab};
 use crate::message::state::{msg_col, msg_didout, msg_nowait};
 use crate::normal::{
     B_IMODE_LMAP, GRAPHEME_STATE_INIT, NV_CMDS, NV_CMDS_SIZE, NormalState, NvFlags, add_to_showcmd,
@@ -57,9 +64,7 @@ use crate::state::{
     get_real_state, may_trigger_modechanged,
 };
 use crate::types::Key;
-use crate::types::{
-    CmdArg, CpoFlag, GraphemeState, NUL, OpType, OptInt, Outcome, int16_t, int64_t,
-};
+use crate::types::{CmdArg, CpoFlag, GraphemeState, NUL, OpType, OptInt, Outcome, int64_t};
 use crate::ui::{ui_cursor_shape, ui_cursor_shape_no_check_conceal, ui_flush};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_int, c_uint};
@@ -70,11 +75,13 @@ use crate::getchar::{
 use crate::r#move::{do_check_cursorbind, validate_cursor};
 use crate::option::cpo_has;
 
-/// `find_command` returns a row index that has to fit an `int16_t`.
-const _: () = assert!(NV_CMDS_SIZE <= i16::MAX as usize);
+/// Where a row sorts: the magnitude of its character, so that a special key
+/// (stored negative) sorts after every character and `find_command` can
+/// search for `-cmdchar`.
+const fn rank(key: Key) -> usize {
+    key.code().unsigned_abs() as usize
+}
 
-/// Order two `nv_cmds` rows by the character they answer to.
-///
 /// `nv_cmds` in ascending `|cmd_char|` order, and how far a direct index
 /// works.
 ///
@@ -85,14 +92,11 @@ const _: () = assert!(NV_CMDS_SIZE <= i16::MAX as usize);
 /// `const`, so both answers are: an insertion sort over 188 rows is nothing
 /// to a `const fn`, and there is no startup pass and no `qsort` comparator
 /// left to keep an `extern "C"` signature for.
-///
-/// A special key is stored as a negative character and sorts by magnitude,
-/// which is what lets `find_command` search for `-cmdchar`.
-const fn sorted_nv_cmds() -> ([int16_t; NV_CMDS_SIZE], c_int) {
-    let mut idx = [0 as int16_t; NV_CMDS_SIZE];
+const fn sorted_nv_cmds() -> ([usize; NV_CMDS_SIZE], usize) {
+    let mut idx = [0; NV_CMDS_SIZE];
     let mut i = 0;
     while i < NV_CMDS_SIZE {
-        idx[i] = i as int16_t;
+        idx[i] = i;
         i += 1;
     }
     // Insertion sort: `qsort` is not stable, so this leans on no two rows
@@ -100,10 +104,7 @@ const fn sorted_nv_cmds() -> ([int16_t; NV_CMDS_SIZE], c_int) {
     let mut i = 1;
     while i < NV_CMDS_SIZE {
         let mut j = i;
-        while j > 0
-            && NV_CMDS[idx[j - 1] as usize].cmd_char.code().abs()
-                > NV_CMDS[idx[j] as usize].cmd_char.code().abs()
-        {
+        while j > 0 && rank(NV_CMDS[idx[j - 1]].cmd_char) > rank(NV_CMDS[idx[j]].cmd_char) {
             let swap = idx[j - 1];
             idx[j - 1] = idx[j];
             idx[j] = swap;
@@ -111,9 +112,12 @@ const fn sorted_nv_cmds() -> ([int16_t; NV_CMDS_SIZE], c_int) {
         }
         i += 1;
     }
+    // The run where the `i`th row answers to the character `i` (NUL first,
+    // so there is always one).
     let mut linear = 0;
-    while linear < NV_CMDS_SIZE as c_int
-        && linear == NV_CMDS[idx[linear as usize] as usize].cmd_char.code()
+    while linear < NV_CMDS_SIZE
+        && !NV_CMDS[idx[linear]].cmd_char.is_special()
+        && linear == rank(NV_CMDS[idx[linear]].cmd_char)
     {
         linear += 1;
     }
@@ -121,9 +125,9 @@ const fn sorted_nv_cmds() -> ([int16_t; NV_CMDS_SIZE], c_int) {
 }
 
 /// [`sorted_nv_cmds`]'s two answers.
-const NV_SORTED: ([int16_t; NV_CMDS_SIZE], c_int) = sorted_nv_cmds();
-const NV_CMD_IDX: [int16_t; NV_CMDS_SIZE] = NV_SORTED.0;
-const NV_MAX_LINEAR: c_int = NV_SORTED.1;
+const NV_SORTED: ([usize; NV_CMDS_SIZE], usize) = sorted_nv_cmds();
+const NV_CMD_IDX: [usize; NV_CMDS_SIZE] = NV_SORTED.0;
+const NV_MAX_LINEAR: usize = NV_SORTED.1;
 
 /// No two rows share a character: the sort above is stable and `find_command`
 /// answers with the first match, so a duplicate would make which row wins
@@ -132,8 +136,7 @@ const _: () = {
     let mut i = 1;
     while i < NV_CMDS_SIZE {
         assert!(
-            NV_CMDS[NV_CMD_IDX[i - 1] as usize].cmd_char.code().abs()
-                < NV_CMDS[NV_CMD_IDX[i] as usize].cmd_char.code().abs(),
+            rank(NV_CMDS[NV_CMD_IDX[i - 1]].cmd_char) < rank(NV_CMDS[NV_CMD_IDX[i]].cmd_char),
             "two nv_cmds rows share a command character"
         );
         i += 1;
@@ -142,27 +145,24 @@ const _: () = {
 
 /// The row of `nv_cmds` that answers to `cmdchar`, if there is one.
 pub(crate) fn find_command(cmdchar: Key) -> Option<usize> {
-    let code = cmdchar.code();
-    if code >= 0x100 {
+    if cmdchar.code() >= 0x100 {
         return None;
     }
     // A special key is stored negative and searched for by magnitude.
-    let code = code.abs();
-    const _: () = assert!(NV_MAX_LINEAR < NV_CMDS_SIZE as c_int);
+    let code = rank(cmdchar);
+    const _: () = assert!(NV_MAX_LINEAR < NV_CMDS_SIZE);
 
     if code <= NV_MAX_LINEAR {
-        return Some(NV_CMD_IDX[code as usize] as usize);
+        return Some(NV_CMD_IDX[code]);
     }
+    // `bot` starts past the linear run, so `i` is never 0.
     let mut bot = NV_MAX_LINEAR + 1;
-    let mut top = NV_CMDS_SIZE as c_int - 1;
+    let mut top = NV_CMDS_SIZE - 1;
     while bot <= top {
         let i = (top + bot) / 2;
-        let c = NV_CMDS[NV_CMD_IDX[i as usize] as usize]
-            .cmd_char
-            .code()
-            .abs();
+        let c = rank(NV_CMDS[NV_CMD_IDX[i]].cmd_char);
         if code == c {
-            return Some(NV_CMD_IDX[i as usize] as usize);
+            return Some(NV_CMD_IDX[i]);
         } else if code > c {
             bot = i + 1;
         } else {
@@ -245,17 +245,13 @@ fn additional_char_slot(ns: &mut NormalState) -> (Slot, bool, bool) {
 /// `CTRL-\ CTRL-N` and `CTRL-\ CTRL-G` are commands of their own; anything
 /// else is put back for the next command to read.
 fn resolve_ctrl_backslash(ns: &mut NormalState) {
-    let mut towait = if p_ttm() >= 0 {
-        p_ttm() as c_int
-    } else {
-        p_tm() as c_int
-    };
+    let mut towait = if p_ttm() >= 0 { p_ttm() } else { p_tm() };
     loop {
         ns.c = vpeekc();
         if ns.c.is_char() || towait <= 0 {
             break;
         }
-        do_sleep(towait.min(50) as int64_t, false);
+        do_sleep(towait.min(50), false);
         towait -= 50;
     }
     if ns.c.is_char() {
@@ -297,16 +293,16 @@ fn read_composing_tail(ns: &mut NormalState) {
         }
         // The base character is only encoded once a tail turns up.
         if ns.ca.nchar_len == 0 {
-            ns.ca.nchar_len = encode_char(ns.ca.nchar.code(), &mut ns.ca.nchar_composing) as c_int;
+            ns.ca.nchar_len = encode_char(ns.ca.nchar.code(), &mut ns.ca.nchar_composing);
         }
-        if ns.ca.nchar_len + utf_char2len(ns.c.code()) < size_of::<[u8; 32]>() as c_int {
-            let at = ns.ca.nchar_len as usize;
-            ns.ca.nchar_len += encode_char(ns.c.code(), &mut ns.ca.nchar_composing[at..]) as c_int;
+        if ns.ca.nchar_len + ns.c.utf8_len() < ns.ca.nchar_composing.len() {
+            let at = ns.ca.nchar_len;
+            ns.ca.nchar_len += encode_char(ns.c.code(), &mut ns.ca.nchar_composing[at..]);
         }
         prev_code = ns.c.code();
     }
-    let at = ns.ca.nchar_len as usize;
-    ns.ca.nchar_composing[at] = NUL as u8;
+    let at = ns.ca.nchar_len;
+    ns.ca.nchar_composing[at] = 0;
     drop(mapped);
     // The keys are recorded for a redo, not fed through undo syncing.
     let _no_sync = Suppress::undo_sync();
@@ -328,7 +324,7 @@ pub(crate) fn normal_get_additional_char(ns: &mut NormalState) {
         }
         // A language-mapped argument is read *with* mappings on, which is
         // the whole point of 'iminsert' being lmap.
-        let langmap_active = lang && Buf::current().b_p_iminsert == B_IMODE_LMAP as OptInt;
+        let langmap_active = lang && Buf::current().b_p_iminsert == OptInt::from(B_IMODE_LMAP);
         let mapped = langmap_active.then(Allow::mapping_with_codes);
         if langmap_active {
             State.set(if repl { MODE_LREPLACE } else { MODE_LANGMAP });
@@ -610,7 +606,7 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: Key) -> Step {
     ns.ca.opcount = ns.ca.count0;
     ns.ca.count1 = if ns.ca.count0 == 0 { 1 } else { ns.ca.count0 };
     if ns.toplevel && readbuf1_empty() {
-        let (n0, n1) = (ns.ca.count0 as int64_t, ns.ca.count1 as int64_t);
+        let (n0, n1) = (int64_t::from(ns.ca.count0), int64_t::from(ns.ca.count1));
         set_vcount(n0, n1, ns.set_prevcount);
     }
 
@@ -673,7 +669,7 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: Key) -> Step {
                 }
             }
 
-            ns.ca.arg = ns.row().cmd_arg as c_int;
+            ns.ca.arg = ns.row().cmd_arg;
             (ns.row().cmd_func)(&mut ns.ca);
         }
     }

@@ -2,8 +2,16 @@
 //! commands and the spellfile additions.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::keycodes::SpecialKey;
+use crate::narrow::number_as_int;
 use crate::strings::has_char;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win, windows};
@@ -150,7 +158,7 @@ pub(crate) fn nv_zg_zw(cmd_arg: &mut CmdArg, mut nchar: Key) -> Result<(), Faile
     let word = match word {
         Some(word) => word,
         None => {
-            let found = ident_under_cursor(FIND_IDENT as c_int);
+            let found = ident_under_cursor(FIND_IDENT.cast_signed());
             if found.is_empty() {
                 return Err(Failed);
             }
@@ -205,16 +213,19 @@ fn scroll_cursor_to_edge(to_left: bool) {
     }
     if to_left {
         col = if i64::from(col) > siso {
-            col - siso as c_int
+            // Below `col`, so it fits.
+            col - number_as_int(siso)
         } else {
             ColNr::ZERO
         };
     } else {
         let width = win.w_view_width - win.col_off();
-        col = if (i64::from(col) + siso) < width as int64_t {
+        let width = int64_t::from(width);
+        col = if (i64::from(col) + siso) < width {
             ColNr::ZERO
-        } else if (siso - width as int64_t) < i64::from(INT_MAX - col.get()) {
-            ColNr::new((i64::from(col) + siso - width as int64_t + 1) as c_int)
+        } else if (siso - width) < i64::from(INT_MAX - col.get()) {
+            // Bounded by `INT_MAX` just above.
+            ColNr::new(number_as_int(i64::from(col) + siso - width + 1))
         } else {
             ColNr::new(INT_MAX)
         };
@@ -226,7 +237,7 @@ fn scroll_cursor_to_edge(to_left: bool) {
 }
 
 /// The fold half of the `z` tree. Answers whether the key was one of them.
-fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: Key, old_fdl: &mut c_int) -> bool {
+fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: Key, old_fdl: &mut Option<OptInt>) -> bool {
     let mut win = Win::current();
     // Whether the cursor is inside a fold, which is what decides between
     // opening and closing for the toggles.
@@ -254,7 +265,7 @@ fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: Key, old_fdl: &mut c_int) -> bool {
                     nv_operator(cmd_arg);
                 } else {
                     let lnum = win.w_cursor.lnum;
-                    let deep = (nchar.is('D')) as c_int;
+                    let deep = c_int::from(nchar.is('D'));
                     delete_fold(win, lnum, lnum, deep, false);
                 }
             }
@@ -280,7 +291,7 @@ fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: Key, old_fdl: &mut c_int) -> bool {
         // `zn`/`zN`/`zi`: 'foldenable' off, on, toggled.
         Some(b'n') => win.w_onebuf_opt.wo_fen = 0,
         Some(b'N') => win.w_onebuf_opt.wo_fen = 1,
-        Some(b'i') => win.w_onebuf_opt.wo_fen = (win.w_onebuf_opt.wo_fen == 0) as c_int,
+        Some(b'i') => win.w_onebuf_opt.wo_fen = c_int::from(win.w_onebuf_opt.wo_fen == 0),
         // `za`/`zA`: toggle this fold, recursively for `zA`.
         Some(b'a') => {
             if in_fold() {
@@ -344,31 +355,31 @@ fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: Key, old_fdl: &mut c_int) -> bool {
             win.w_onebuf_opt.wo_fen = 1;
             win.w_foldinvalid = true;
             // Force the tail's `new_fold_level`.
-            *old_fdl = -1;
+            *old_fdl = None;
         }
         // `zm`/`zM`: fold more, or all the way.
         Some(b'm') => {
             if win.w_onebuf_opt.wo_fdl > 0 {
-                win.w_onebuf_opt.wo_fdl -= cmd_arg.count1 as OptInt;
+                win.w_onebuf_opt.wo_fdl -= OptInt::from(cmd_arg.count1);
                 win.w_onebuf_opt.wo_fdl = win.w_onebuf_opt.wo_fdl.max(0);
             }
-            *old_fdl = -1;
+            *old_fdl = None;
             win.w_onebuf_opt.wo_fen = 1;
         }
         Some(b'M') => {
             win.w_onebuf_opt.wo_fdl = 0;
-            *old_fdl = -1;
+            *old_fdl = None;
             win.w_onebuf_opt.wo_fen = 1;
         }
         // `zr`/`zR`: reduce the folding, or open everything.
         Some(b'r') => {
-            win.w_onebuf_opt.wo_fdl += cmd_arg.count1 as OptInt;
+            win.w_onebuf_opt.wo_fdl += OptInt::from(cmd_arg.count1);
             let deepest = deepest_fold_nesting(win);
-            win.w_onebuf_opt.wo_fdl = win.w_onebuf_opt.wo_fdl.min(deepest as OptInt);
+            win.w_onebuf_opt.wo_fdl = win.w_onebuf_opt.wo_fdl.min(OptInt::from(deepest));
         }
         Some(b'R') => {
-            win.w_onebuf_opt.wo_fdl = deepest_fold_nesting(win) as OptInt;
-            *old_fdl = -1;
+            win.w_onebuf_opt.wo_fdl = OptInt::from(deepest_fold_nesting(win));
+            *old_fdl = None;
         }
         // `zj`/`zk`: to the next or previous fold's edge.
         Some(b'j' | b'k') => {
@@ -391,7 +402,9 @@ fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: Key, old_fdl: &mut c_int) -> bool {
 pub(crate) fn nv_zet(cmd_arg: &mut CmdArg) {
     let mut win = Win::current();
     let mut nchar = cmd_arg.nchar;
-    let mut old_fdl = win.w_onebuf_opt.wo_fdl as c_int;
+    // The 'foldlevel' to compare against at the end; `None` when a command
+    // set it and the folds must be updated regardless.
+    let mut old_fdl = Some(win.w_onebuf_opt.wo_fdl);
     let old_fen = win.w_onebuf_opt.wo_fen;
 
     // `z` may take a count of its own between the `z` and the command.
@@ -552,7 +565,7 @@ pub(crate) fn nv_zet(cmd_arg: &mut CmdArg) {
         }
         changed_window_setting(win);
     }
-    if old_fdl as OptInt != win.w_onebuf_opt.wo_fdl {
+    if old_fdl != Some(win.w_onebuf_opt.wo_fdl) {
         new_fold_level();
     }
 }

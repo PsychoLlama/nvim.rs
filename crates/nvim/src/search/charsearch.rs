@@ -12,6 +12,7 @@ use super::*;
 use crate::cstr;
 use crate::mbyte::MAX_SCHAR_SIZE;
 use crate::mbyte::{c_cluster_len, char_len, encode_char};
+use crate::narrow::len_as_int;
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, Failed, NUL};
 use crate::winlayer::Win;
@@ -109,10 +110,10 @@ pub fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), Failed> {
             set_csearch_until(c_int::from(t_cmd));
             let mut bytes = lastc_bytes.get();
             if cmd_arg.nchar_len != 0 {
-                lastc_bytelen.set(cmd_arg.nchar_len);
+                lastc_bytelen.set(len_as_int(cmd_arg.nchar_len));
                 // `nchar_composing` holds `nchar_len` bytes; the store holds
                 // one cell's worth, and upstream copies them all.
-                let len = usize::try_from(cmd_arg.nchar_len).unwrap_or(0);
+                let len = cmd_arg.nchar_len;
                 for (to, &from) in bytes.iter_mut().zip(&cmd_arg.nchar_composing[..len]) {
                     *to = from;
                 }
