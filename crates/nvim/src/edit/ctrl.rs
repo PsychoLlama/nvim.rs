@@ -28,7 +28,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::keycodes::Key;
+use crate::keycodes::SpecialKey;
 use crate::option::vars::P_LANGMAP;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
@@ -183,10 +183,10 @@ pub(crate) fn ins_ctrl_g() {
 
     match c {
         // CTRL-G k and CTRL-G <Up>: cursor up to Insstart.col.
-        _ if c == Key::Up.code() => ins_updown(true, true),
+        _ if c == SpecialKey::Up.code() => ins_updown(true, true),
         Ctrl_K | CTRL_G_UP => ins_updown(true, true),
         // CTRL-G j and CTRL-G <Down>: cursor down to Insstart.col.
-        _ if c == Key::Down.code() => ins_updown(false, true),
+        _ if c == SpecialKey::Down.code() => ins_updown(false, true),
         Ctrl_J | CTRL_G_DOWN => ins_updown(false, true),
         // CTRL-G u: start a new undoable edit.
         CTRL_G_UNDO => {
@@ -395,7 +395,7 @@ pub(crate) fn ins_insert(replace_state: c_int) {
         State.set(replace_state | State.get() & MODE_LANGMAP);
     }
     may_trigger_modechanged();
-    append_to_redobuff_char(Key::Ins.code());
+    append_to_redobuff_char(SpecialKey::Ins.code());
     show_mode();
     ui_cursor_shape();
 }

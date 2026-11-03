@@ -17,7 +17,7 @@
 use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
 use crate::cstr;
-use crate::keycodes::{Ctrl_Z, Key};
+use crate::keycodes::{Ctrl_Z, SpecialKey};
 use crate::option::vars::P_WIM;
 use crate::options::OptWimFlags;
 use crate::types::{ExpandContext, Failed, OK};
@@ -36,7 +36,7 @@ pub(crate) fn command_line_wildchar_complete(s: &mut CommandLineState) -> KeyOut
     let cc = Cc::current();
     let res;
     let mut options = WildOpts::NO_BEEP;
-    let redraw_if_menu_empty = s.c == Key::Wild.code();
+    let redraw_if_menu_empty = s.c == SpecialKey::Wild.code();
     let wim_noselect = p_wmnu() && wim_has(0, kOptWimFlagNoselect);
 
     if wim_has(s.wim_index, kOptWimFlagLastused) {
@@ -67,11 +67,11 @@ pub(crate) fn command_line_wildchar_complete(s: &mut CommandLineState) -> KeyOut
         s.wim_index = 0;
         if OptInt::from(s.c) == p_wc()
             || OptInt::from(s.c) == p_wcm()
-            || s.c == Key::Wild.code()
+            || s.c == SpecialKey::Wild.code()
             || s.c == Ctrl_Z
         {
             options |= WildOpts::MAY_EXPAND_PATTERN;
-            if s.c == Key::Wild.code() {
+            if s.c == SpecialKey::Wild.code() {
                 options |= WildOpts::FUNC_TRIGGER;
             }
             let start = s.is_state.search_start;

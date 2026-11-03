@@ -27,8 +27,8 @@
 #![forbid(unsafe_code)]
 
 use crate::cstr::{self, byte_at};
-use crate::keycodes::Key;
 use crate::keycodes::ModMask;
+use crate::keycodes::SpecialKey;
 use crate::mbyte::{c_char_info, c_next_cluster};
 use crate::os::cshim::ctype_bits;
 use crate::winlayer::{Buf, Win};
@@ -156,7 +156,7 @@ pub(crate) fn get_literal(no_simplify: bool) -> c_int {
     if i == 0 {
         // No number was entered: the key itself is the answer.  NUL is
         // stored as NL.
-        cc = if nc == Key::Zero.code() {
+        cc = if nc == SpecialKey::Zero.code() {
             '\n' as c_int
         } else {
             nc

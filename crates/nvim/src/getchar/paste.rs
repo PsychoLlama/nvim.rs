@@ -9,7 +9,7 @@
 
 use super::*;
 use crate::guard::Keys;
-use crate::keycodes::{Key, key_unescape};
+use crate::keycodes::{SpecialKey, key_unescape};
 use crate::types::NUL;
 use core::ffi::c_int;
 
@@ -43,9 +43,9 @@ pub fn paste_store(channel_id: uint64_t, phase: PastePhase, text: &[u8], crlf: b
 
     if phase != PastePhase::Chunk {
         let c = if phase == PastePhase::Start {
-            Key::PasteStart.code()
+            SpecialKey::PasteStart.code()
         } else {
-            Key::PasteEnd.code()
+            SpecialKey::PasteEnd.code()
         };
         if need_redo {
             if phase == PastePhase::Start && State.get() & MODE_INSERT == 0 {
@@ -116,9 +116,9 @@ pub fn paste_repeat(count: c_int) {
             let second = vgetorpeek(true) as u8;
             let third = vgetorpeek(true) as u8;
             let key = key_unescape(second, third);
-            match Key::try_from(key) {
-                Ok(Key::PasteEnd) => break,
-                Ok(Key::Zero) => pasted.push(NUL as u8),
+            match SpecialKey::try_from(key) {
+                Ok(SpecialKey::PasteEnd) => break,
+                Ok(SpecialKey::Zero) => pasted.push(NUL as u8),
                 _ if key == K_SPECIAL => pasted.push(K_SPECIAL as u8),
                 _ => pasted.extend_from_slice(&[K_SPECIAL as u8, second, third]),
             }

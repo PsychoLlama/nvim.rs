@@ -9,7 +9,7 @@
 use super::*;
 use crate::eval::typval::{NumBuf, Unconvertible};
 use crate::guard::{Keys, Suppress};
-use crate::keycodes::{Key, key_escape};
+use crate::keycodes::{SpecialKey, key_escape};
 use crate::mbyte::encode_char;
 use crate::memory::ThinCString;
 use crate::message_fmt::msg_cstr;
@@ -134,10 +134,10 @@ fn getchar_read(args: &[TypVal], cursor: CursorFlag) -> VarNumber {
         };
 
         let n = n as c_int;
-        if n != Key::Ignore.code()
-            && n != Key::Mousemove.code()
-            && n != Key::VerScrollbar.code()
-            && n != Key::HorScrollbar.code()
+        if n != SpecialKey::Ignore.code()
+            && n != SpecialKey::Mousemove.code()
+            && n != SpecialKey::VerScrollbar.code()
+            && n != SpecialKey::HorScrollbar.code()
         {
             return n as VarNumber;
         }

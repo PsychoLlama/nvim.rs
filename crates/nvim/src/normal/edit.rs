@@ -4,7 +4,7 @@
 #![forbid(unsafe_code)]
 
 use crate::cstr;
-use crate::keycodes::{Ctrl_A, Ctrl_E, Ctrl_Q, Ctrl_V, Ctrl_Y, Key};
+use crate::keycodes::{Ctrl_A, Ctrl_E, Ctrl_Q, Ctrl_V, Ctrl_Y, SpecialKey};
 use crate::memline::MlFlags;
 use crate::narrow::len_as_int;
 use crate::strings::has_char;
@@ -361,7 +361,7 @@ pub(crate) fn nv_subst(cmd_arg: &mut CmdArg) {
 
 /// `x`, `X`, `D`, `C`, `Y`: the one-key spellings of an operator and a motion.
 pub(crate) fn nv_abbrev(cmd_arg: &mut CmdArg) {
-    if cmd_arg.cmdchar == Key::Del.code() || cmd_arg.cmdchar == Key::Kdel.code() {
+    if cmd_arg.cmdchar == SpecialKey::Del.code() || cmd_arg.cmdchar == SpecialKey::Kdel.code() {
         cmd_arg.cmdchar = 'x' as c_int;
     }
     if visual_active() {
@@ -474,7 +474,7 @@ pub(crate) fn set_cursor_for_append_to_line() {
 
 /// `a`, `A`, `i` and `I`: enter insert mode.
 pub(crate) fn nv_edit(cmd_arg: &mut CmdArg) {
-    if cmd_arg.cmdchar == Key::Ins.code() || cmd_arg.cmdchar == Key::Kins.code() {
+    if cmd_arg.cmdchar == SpecialKey::Ins.code() || cmd_arg.cmdchar == SpecialKey::Kins.code() {
         cmd_arg.cmdchar = 'i' as c_int;
     }
     // With a selection up, `A` and `I` insert at every line's end or

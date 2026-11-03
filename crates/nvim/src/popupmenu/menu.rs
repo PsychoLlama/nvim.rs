@@ -26,7 +26,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::keycodes::{Ctrl_C, Key};
+use crate::keycodes::{Ctrl_C, SpecialKey};
 use core::ffi::CStr;
 use core::ptr;
 use std::ffi::CString;
@@ -153,7 +153,7 @@ fn pum_menu_key(c: c_int, items: &[CString]) -> MenuStep {
     match c {
         ESC | Ctrl_C => MenuStep::Close,
         CAR | NL => MenuStep::Execute,
-        _ if c == 'k' as c_int || c == Key::Up.code() || c == Key::Mouseup.code() => {
+        _ if c == 'k' as c_int || c == SpecialKey::Up.code() || c == SpecialKey::Mouseup.code() => {
             // Previous selectable item; separators are skipped over.
             while pum_selected.get() > 0 {
                 pum_selected.set(pum_selected.get() - 1);
@@ -166,7 +166,10 @@ fn pum_menu_key(c: c_int, items: &[CString]) -> MenuStep {
             }
             MenuStep::Continue
         }
-        _ if c == 'j' as c_int || c == Key::Down.code() || c == Key::Mousedown.code() => {
+        _ if c == 'j' as c_int
+            || c == SpecialKey::Down.code()
+            || c == SpecialKey::Mousedown.code() =>
+        {
             while pum_selected.get() < pum_size.get() - 1 {
                 pum_selected.set(pum_selected.get() + 1);
                 if !items[usize::try_from(pum_selected.get()).unwrap_or(usize::MAX)]
@@ -178,28 +181,28 @@ fn pum_menu_key(c: c_int, items: &[CString]) -> MenuStep {
             }
             MenuStep::Continue
         }
-        _ if c == Key::Rightmouse.code() => {
+        _ if c == SpecialKey::Rightmouse.code() => {
             // Reposition the menu: hand the click back to the caller.
             vungetc(c);
             MenuStep::Close
         }
-        _ if c == Key::Leftdrag.code()
-            || c == Key::Rightdrag.code()
-            || c == Key::Mousemove.code() =>
+        _ if c == SpecialKey::Leftdrag.code()
+            || c == SpecialKey::Rightdrag.code()
+            || c == SpecialKey::Mousemove.code() =>
         {
             pum_select_mouse_pos();
             MenuStep::Continue
         }
-        _ if c == Key::Leftmouse.code()
-            || c == Key::LeftmouseNm.code()
-            || c == Key::Rightrelease.code() =>
+        _ if c == SpecialKey::Leftmouse.code()
+            || c == SpecialKey::LeftmouseNm.code()
+            || c == SpecialKey::Rightrelease.code() =>
         {
             // A left click always closes; a right release only closes when
             // it landed on an item.
             pum_select_mouse_pos();
             if pum_selected.get() >= 0 {
                 MenuStep::Execute
-            } else if c == Key::Rightrelease.code() {
+            } else if c == SpecialKey::Rightrelease.code() {
                 MenuStep::Continue
             } else {
                 MenuStep::Close

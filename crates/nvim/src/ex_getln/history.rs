@@ -17,7 +17,7 @@
 use super::*;
 use crate::charset::{Str2NrBases, skip, str2nr_scan};
 use crate::cstr;
-use crate::keycodes::{Ctrl_N, Key};
+use crate::keycodes::{Ctrl_N, SpecialKey};
 use crate::types::{ExpandContext, Failed, NUL};
 
 /// Step `s->hiscnt` one entry back (or forward, with `next_match`) through
@@ -55,7 +55,7 @@ pub(crate) fn command_line_next_histidx(s: &mut CommandLineState, next_match: bo
             s.hiscnt = s.save_hiscnt;
             break;
         };
-        if (s.c != Key::Up.code() && s.c != Key::Down.code())
+        if (s.c != SpecialKey::Up.code() && s.c != SpecialKey::Down.code())
             || s.hiscnt == s.save_hiscnt
             || entry
                 .text
@@ -84,11 +84,11 @@ pub(crate) fn command_line_browse_history(s: &mut CommandLineState) -> KeyOutcom
         s.lookfor = Some(cstr::until_nul(&line[..upto]).to_vec());
     }
 
-    let next_match = s.c == Key::Down.code()
-        || s.c == Key::SDown.code()
+    let next_match = s.c == SpecialKey::Down.code()
+        || s.c == SpecialKey::SDown.code()
         || s.c == Ctrl_N
-        || s.c == Key::Pagedown.code()
-        || s.c == Key::Kpagedown.code();
+        || s.c == SpecialKey::Pagedown.code()
+        || s.c == SpecialKey::Kpagedown.code();
     command_line_next_histidx(s, next_match);
 
     if s.hiscnt == s.save_hiscnt {

@@ -22,7 +22,7 @@ use crate::ex_docmd::set_no_hlsearch;
 use crate::ex_getln::{put_on_cmdline, redrawcmd};
 use crate::getchar::state::KeyTyped;
 use crate::guard::Allow;
-use crate::keycodes::{Ctrl_N, Ctrl_P, Key};
+use crate::keycodes::{Ctrl_N, Ctrl_P, SpecialKey};
 use crate::mbyte::head_off;
 use crate::option::vars::{P_LS, P_WMH, p_wc, p_wmnu};
 use crate::path::{PATHSEP, vim_ispathsep};
@@ -63,9 +63,9 @@ pub(crate) fn wildmenu_translate_key(
 ) -> c_int {
     let mut c = key;
     if cmdline_pum_active() || did_wild_list || wild_menu_showing.get() != 0 {
-        if c == Key::Left.code() {
+        if c == SpecialKey::Left.code() {
             c = Ctrl_P;
-        } else if c == Key::Right.code() {
+        } else if c == SpecialKey::Right.code() {
             c = Ctrl_N;
         }
     }
@@ -75,9 +75,9 @@ pub(crate) fn wildmenu_translate_key(
         && cclp.cmdpos > 1
         && line_byte(cclp, cclp.cmdpos - 1) == b'.'
         && line_byte(cclp, cclp.cmdpos - 2) != b'\\'
-        && (c == c_int::from(b'\n') || c == c_int::from(b'\r') || c == Key::Kenter.code())
+        && (c == c_int::from(b'\n') || c == c_int::from(b'\r') || c == SpecialKey::Kenter.code())
     {
-        c = Key::Down.code();
+        c = SpecialKey::Down.code();
     }
     c
 }
@@ -99,17 +99,17 @@ fn cmdline_del(mut cclp: Cc, from: c_int) {
 /// `<Ignore>` rather than the truncated key upstream's `(int)p_wc` made of it.
 fn recomplete() -> c_int {
     KeyTyped.set(true);
-    c_int::try_from(p_wc()).unwrap_or(Key::Ignore.code())
+    c_int::try_from(p_wc()).unwrap_or(SpecialKey::Ignore.code())
 }
 
 /// A key pressed while the wildmenu for menu names (`ExpandContext::Menunames`) is up.
 fn wildmenu_process_key_menunames(cclp: Cc, key: c_int, expand: &mut Expand) -> c_int {
     let at = |k: c_int| line_byte(cclp, k);
-    if key == Key::Down.code() && cclp.cmdpos > 0 && at(cclp.cmdpos - 1) == b'.' {
+    if key == SpecialKey::Down.code() && cclp.cmdpos > 0 && at(cclp.cmdpos - 1) == b'.' {
         // Hitting <Down> after "emenu Name.": complete the submenu.
         return recomplete();
     }
-    if key != Key::Up.code() {
+    if key != SpecialKey::Up.code() {
         return key;
     }
 
@@ -164,7 +164,7 @@ fn wildmenu_process_key_filenames(cclp: Cc, key: c_int, expand: &Expand) -> c_in
             .is_some_and(|rest| rest.starts_with(what))
     };
 
-    if key == Key::Down.code()
+    if key == SpecialKey::Down.code()
         && cclp.cmdpos > 0
         && c_int::from(at(cclp.cmdpos - 1)) == PATHSEP
         && (cclp.cmdpos < 3 || at(cclp.cmdpos - 2) != b'.' || at(cclp.cmdpos - 3) != b'.')
@@ -176,7 +176,7 @@ fn wildmenu_process_key_filenames(cclp: Cc, key: c_int, expand: &Expand) -> c_in
     // The command line as it stands, with the match inserted, is what the
     // pattern's offset is read against: upstream's `xp_pattern` followed
     // the insertion.
-    if key == Key::Down.code() && starts_with_at(start, UPSEG_TAIL) {
+    if key == SpecialKey::Down.code() && starts_with_at(start, UPSEG_TAIL) {
         // In a direct ancestor: strip off one "../" to go down.  Walk
         // back to the separator that ends the "..".
         let mut found = false;
@@ -203,7 +203,7 @@ fn wildmenu_process_key_filenames(cclp: Cc, key: c_int, expand: &Expand) -> c_in
         return key;
     }
 
-    if key != Key::Up.code() {
+    if key != SpecialKey::Up.code() {
         return key;
     }
 

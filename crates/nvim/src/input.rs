@@ -17,7 +17,7 @@ use crate::global_cell::GlobalCell;
 use crate::guard::{Keys, Suppress};
 use crate::highlight_group::HLF_R;
 use crate::keycodes::ModMask;
-use crate::keycodes::{Ctrl_C, K_SPECIAL, KS_MODIFIER, Key, key_unescape};
+use crate::keycodes::{Ctrl_C, K_SPECIAL, KS_MODIFIER, SpecialKey, key_unescape};
 use crate::mbyte::{char_at, utf8len_tab};
 use crate::message::state::{keep_msg, keep_msg_hl_id, msg_row, msg_scrolled, need_wait_return};
 use crate::message::{msg_putchar, set_keep_msg};
@@ -73,8 +73,8 @@ pub(crate) fn ask_yesno(question: &CStr) -> c_int {
 /// (which the "more" prompt uses).
 fn is_swallowed_key(first: u8, key: c_int) -> bool {
     c_int::from(first) == KS_MODIFIER
-        || key == Key::Ignore.code()
-        || (is_mouse_key(key) && key != Key::Leftmouse.code())
+        || key == SpecialKey::Ignore.code()
+        || (is_mouse_key(key) && key != SpecialKey::Leftmouse.code())
 }
 
 /// Read one keystroke straight from the user, ignoring mouse clicks and

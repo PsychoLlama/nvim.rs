@@ -32,7 +32,7 @@ use crate::getchar::{
 };
 use crate::guard::{Allow, Keys, Suppress};
 use crate::keycodes::ModMask;
-use crate::keycodes::{Ctrl_BSL, Ctrl_G, Ctrl_K, Ctrl_N, Ctrl_W, Key, simplify_mod_mask};
+use crate::keycodes::{Ctrl_BSL, Ctrl_G, Ctrl_K, Ctrl_N, Ctrl_W, SpecialKey, simplify_mod_mask};
 use crate::mapping::langmap_adjust_mb;
 use crate::mark::checkpcmark;
 use crate::mbyte::{encode_char, iscomposing, utf_char2len, utf8len_tab};
@@ -375,13 +375,13 @@ pub(crate) fn normal_get_additional_char(ns: &mut NormalState) {
 
 /// Mirror a horizontal command for a right-to-left window.
 pub(crate) fn normal_invert_horizontal(ns: &mut NormalState) {
-    ns.ca.cmdchar = match Key::try_from(ns.ca.cmdchar) {
-        Ok(Key::Right) => Key::Left.code(),
-        Ok(Key::SRight) => Key::SLeft.code(),
-        Ok(Key::CRight) => Key::CLeft.code(),
-        Ok(Key::Left) => Key::Right.code(),
-        Ok(Key::SLeft) => Key::SRight.code(),
-        Ok(Key::CLeft) => Key::CRight.code(),
+    ns.ca.cmdchar = match SpecialKey::try_from(ns.ca.cmdchar) {
+        Ok(SpecialKey::Right) => SpecialKey::Left.code(),
+        Ok(SpecialKey::SRight) => SpecialKey::SLeft.code(),
+        Ok(SpecialKey::CRight) => SpecialKey::CLeft.code(),
+        Ok(SpecialKey::Left) => SpecialKey::Right.code(),
+        Ok(SpecialKey::SLeft) => SpecialKey::SRight.code(),
+        Ok(SpecialKey::CLeft) => SpecialKey::CRight.code(),
         _ => match ns.ca.cmdchar {
             c if c == 'l' as c_int => 'h' as c_int,
             c if c == 'h' as c_int => 'l' as c_int,
@@ -404,9 +404,11 @@ pub(crate) fn normal_get_command_count(ns: &mut NormalState) -> bool {
     }
     while (ns.c >= '1' as c_int && ns.c <= '9' as c_int)
         || (ns.ca.count0 != 0
-            && (ns.c == Key::Del.code() || ns.c == Key::Kdel.code() || ns.c == '0' as c_int))
+            && (ns.c == SpecialKey::Del.code()
+                || ns.c == SpecialKey::Kdel.code()
+                || ns.c == '0' as c_int))
     {
-        if ns.c == Key::Del.code() || ns.c == Key::Kdel.code() {
+        if ns.c == SpecialKey::Del.code() || ns.c == SpecialKey::Kdel.code() {
             ns.ca.count0 /= 10;
             // Four columns: <Del> is echoed as its key name.
             del_from_showcmd(4);
@@ -464,7 +466,9 @@ pub(crate) fn normal_finish_command(ns: &mut NormalState) {
         if ns.old_mapped_len > 0 {
             ns.old_mapped_len = typeahead().maplen();
         }
-        if ns.ca.cmdchar != Key::Ignore.code() && ns.ca.cmdchar != Key::Mousemove.code() {
+        if ns.ca.cmdchar != SpecialKey::Ignore.code()
+            && ns.ca.cmdchar != SpecialKey::Mousemove.code()
+        {
             did_visual_op =
                 visual_active() && ns.oa.op_type != OpType::Nop && ns.oa.op_type != OpType::Colon;
             let old_col = ns.old_col;
@@ -492,7 +496,10 @@ pub(crate) fn normal_finish_command(ns: &mut NormalState) {
     {
         ui_cursor_shape();
     }
-    if ns.oa.op_type == OpType::Nop && ns.oa.regname == 0 && ns.ca.cmdchar != Key::Event.code() {
+    if ns.oa.op_type == OpType::Nop
+        && ns.oa.regname == 0
+        && ns.ca.cmdchar != SpecialKey::Event.code()
+    {
         clear_showcmd();
     }
     checkpcmark();
@@ -552,14 +559,14 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: c_int) -> c_int {
     }
 
     if ns.c == NUL {
-        ns.c = Key::Zero.code();
+        ns.c = SpecialKey::Zero.code();
     }
 
     // In Select mode a printable key replaces the selection: the key is
     // put back for insert mode to read and the command becomes a change.
     if visual_active()
         && visual_select()
-        && (vim_isprintc(ns.c) || ns.c == NL || ns.c == CAR || ns.c == Key::Kenter.code())
+        && (vim_isprintc(ns.c) || ns.c == NL || ns.c == CAR || ns.c == SpecialKey::Kenter.code())
     {
         let len = ins_char_typebuf(vgetc_char.get(), vgetc_mod_mask.get(), true);
         if KeyTyped.get() {
@@ -577,7 +584,7 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: c_int) -> c_int {
     ns.need_flushbuf = add_to_showcmd(ns.c);
     while normal_get_command_count(ns) {}
 
-    if ns.c == Key::Event.code() {
+    if ns.c == SpecialKey::Event.code() {
         // An event is not a command: the count it interrupted is stashed
         // for the real command that follows.
         ns.oa.prev_opcount = ns.ca.opcount;
@@ -631,7 +638,7 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: c_int) -> c_int {
         if ns.need_flushbuf {
             ui_flush();
         }
-        if ns.ca.cmdchar != Key::Ignore.code() && ns.ca.cmdchar != Key::Event.code() {
+        if ns.ca.cmdchar != SpecialKey::Ignore.code() && ns.ca.cmdchar != SpecialKey::Event.code() {
             did_cursorhold.set(false);
         }
         State.set(MODE_NORMAL);
@@ -640,7 +647,7 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: c_int) -> c_int {
             clear_op(ns.op());
             ns.command_finished = true;
         } else {
-            if ns.ca.cmdchar != Key::Ignore.code() {
+            if ns.ca.cmdchar != SpecialKey::Ignore.code() {
                 msg_didout.set(false);
                 msg_col.set(0);
             }
@@ -804,13 +811,13 @@ pub(crate) fn may_fold_open(cmd_arg: &mut CmdArg, fdo_flag: c_uint) {
 
 /// Turn a shifted special key into its unshifted self.
 pub(crate) fn unshift_special(cmd_arg: &mut CmdArg) {
-    cmd_arg.cmdchar = match Key::try_from(cmd_arg.cmdchar) {
-        Ok(Key::SRight) => Key::Right.code(),
-        Ok(Key::SLeft) => Key::Left.code(),
-        Ok(Key::SUp) => Key::Up.code(),
-        Ok(Key::SDown) => Key::Down.code(),
-        Ok(Key::SHome) => Key::Home.code(),
-        Ok(Key::SEnd) => Key::End.code(),
+    cmd_arg.cmdchar = match SpecialKey::try_from(cmd_arg.cmdchar) {
+        Ok(SpecialKey::SRight) => SpecialKey::Right.code(),
+        Ok(SpecialKey::SLeft) => SpecialKey::Left.code(),
+        Ok(SpecialKey::SUp) => SpecialKey::Up.code(),
+        Ok(SpecialKey::SDown) => SpecialKey::Down.code(),
+        Ok(SpecialKey::SHome) => SpecialKey::Home.code(),
+        Ok(SpecialKey::SEnd) => SpecialKey::End.code(),
         _ => cmd_arg.cmdchar,
     };
     cmd_arg.cmdchar = simplify_mod_mask(cmd_arg.cmdchar);

@@ -24,8 +24,8 @@ position and which this file therefore cannot carry.
 
 Column 1 is upstream's C spelling in every row, recovered from the Rust
 expression: a bare macro name (`K_BS`), a C character literal with its quotes
-(`' '`), `extra(KE_FOO)` for `K_FOO`, or a `Key` variant, whose name is the C
-one with each underscore-separated word capitalised (`K_S_F1` is `Key::SF1`)
+(`' '`), `extra(KE_FOO)` for `K_FOO`, or a `SpecialKey` variant, whose name is the C
+one with each underscore-separated word capitalised (`K_S_F1` is `SpecialKey::SF1`)
 and so inverts by splitting on the capitals again.
 
 Usage: gen-keycodes-lua.py [--check]
@@ -65,8 +65,9 @@ def key_to_lua(key: str) -> str:
     key = key.removesuffix(" as c_int").removesuffix(".code()")
     if key.startswith("extra(KE_") and key.endswith(")"):
         return "K_" + key[len("extra(KE_") : -1]
-    if key.startswith("Key::"):
-        return "K_" + "_".join(w.upper() for w in re.findall(r"[A-Z][^A-Z]*", key[5:]))
+    if key.startswith("SpecialKey::"):
+        name = key[len("SpecialKey::") :]
+        return "K_" + "_".join(w.upper() for w in re.findall(r"[A-Z][^A-Z]*", name))
     return key
 
 

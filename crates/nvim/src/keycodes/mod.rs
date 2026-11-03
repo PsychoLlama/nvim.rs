@@ -78,7 +78,7 @@ pub fn simplify_key(key: c_int, modifiers: &mut ModMask) -> c_int {
     // TAB is the one key with a shifted code but no unshifted termcap row.
     if key == TAB && modifiers.has(ModMask::SHIFT) {
         modifiers.clear(ModMask::SHIFT);
-        return Key::STab.code();
+        return SpecialKey::STab.code();
     }
     match simplify(key, *modifiers) {
         Some((simplified, left)) => {
@@ -112,21 +112,21 @@ pub(crate) fn simplify_mod_mask(key: c_int) -> c_int {
 /// `<xKey>` to `<Key>`: the DEC and vt100 spellings of keys that also have an
 /// ordinary termcap name.
 fn handle_x_keys(key: c_int) -> c_int {
-    match Key::try_from(key) {
-        Ok(Key::Xup) => Key::Up.code(),
-        Ok(Key::Xdown) => Key::Down.code(),
-        Ok(Key::Xleft) => Key::Left.code(),
-        Ok(Key::Xright) => Key::Right.code(),
-        Ok(Key::Xhome | Key::Zhome) => Key::Home.code(),
-        Ok(Key::Xend | Key::Zend) => Key::End.code(),
-        Ok(Key::Xf1) => Key::F1.code(),
-        Ok(Key::Xf2) => Key::F2.code(),
-        Ok(Key::Xf3) => Key::F3.code(),
-        Ok(Key::Xf4) => Key::F4.code(),
-        Ok(Key::SXf1) => Key::SF1.code(),
-        Ok(Key::SXf2) => Key::SF2.code(),
-        Ok(Key::SXf3) => Key::SF3.code(),
-        Ok(Key::SXf4) => Key::SF4.code(),
+    match SpecialKey::try_from(key) {
+        Ok(SpecialKey::Xup) => SpecialKey::Up.code(),
+        Ok(SpecialKey::Xdown) => SpecialKey::Down.code(),
+        Ok(SpecialKey::Xleft) => SpecialKey::Left.code(),
+        Ok(SpecialKey::Xright) => SpecialKey::Right.code(),
+        Ok(SpecialKey::Xhome | SpecialKey::Zhome) => SpecialKey::Home.code(),
+        Ok(SpecialKey::Xend | SpecialKey::Zend) => SpecialKey::End.code(),
+        Ok(SpecialKey::Xf1) => SpecialKey::F1.code(),
+        Ok(SpecialKey::Xf2) => SpecialKey::F2.code(),
+        Ok(SpecialKey::Xf3) => SpecialKey::F3.code(),
+        Ok(SpecialKey::Xf4) => SpecialKey::F4.code(),
+        Ok(SpecialKey::SXf1) => SpecialKey::SF1.code(),
+        Ok(SpecialKey::SXf2) => SpecialKey::SF2.code(),
+        Ok(SpecialKey::SXf3) => SpecialKey::SF3.code(),
+        Ok(SpecialKey::SXf4) => SpecialKey::SF4.code(),
         _ => key,
     }
 }
@@ -401,9 +401,9 @@ pub fn special_key_at(
     key = simplify_key(key, &mut modifiers);
     if flags & FSK_KEYCODE == 0 {
         // No key code wanted: answer with the single-byte code.
-        if key == Key::Bs.code() {
+        if key == SpecialKey::Bs.code() {
             key = BS;
-        } else if key == Key::Del.code() || key == Key::Kdel.code() {
+        } else if key == SpecialKey::Del.code() || key == SpecialKey::Kdel.code() {
             key = DEL;
         }
     }
@@ -462,7 +462,7 @@ fn extract_modifiers(
         key = to_upper_ascii(key) ^ 0x40;
         modifiers.clear(ModMask::CTRL);
         if key == NUL {
-            key = Key::Zero.code(); // <C-@> is <Nul>
+            key = SpecialKey::Zero.code(); // <C-@> is <Nul>
         }
         if let Some(did_simplify) = did_simplify {
             *did_simplify = true;

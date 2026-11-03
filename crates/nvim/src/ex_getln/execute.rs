@@ -23,7 +23,7 @@ use crate::ex_docmd::{DoCmdOpts, LineSource, do_cmdline};
 use crate::guard::{Keys, Lock, Suppress};
 use crate::keycodes::{
     Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_E, Ctrl_G, Ctrl_H, Ctrl_L, Ctrl_N, Ctrl_P, Ctrl_U, Ctrl_W,
-    Ctrl_Y, Ctrl_Z, Key,
+    Ctrl_Y, Ctrl_Z, SpecialKey,
 };
 use crate::option::cpo_has;
 use crate::option::vars::P_ICM;
@@ -134,10 +134,10 @@ pub(crate) fn command_line_end_wildmenu(
                 && !key_is_wc
                 && !ascii_iswhite(c)
                 && (vim_isprintc(c)
-                    || c == Key::Bs.code()
+                    || c == SpecialKey::Bs.code()
                     || c == Ctrl_H
-                    || c == Key::Del.code()
-                    || c == Key::Kdel.code()
+                    || c == SpecialKey::Del.code()
+                    || c == SpecialKey::Kdel.code()
                     || c == Ctrl_W
                     || c == Ctrl_U);
         }
@@ -147,7 +147,7 @@ pub(crate) fn command_line_end_wildmenu(
         expand_completion(WildOpts::NONE, WildMode::Free);
     }
     s.did_wild_list = false;
-    if !p_wmnu() || (c != Key::Up.code() && c != Key::Down.code()) {
+    if !p_wmnu() || (c != SpecialKey::Up.code() && c != SpecialKey::Down.code()) {
         completion_mut(|xpc| xpc.context = ExpandContext::Nothing);
     }
     s.wim_index = 0;
@@ -160,7 +160,7 @@ pub(crate) fn command_line_execute(
     s: &mut CommandLineState,
     key: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    if key == Key::Ignore.code() || key == Key::Nop.code() {
+    if key == SpecialKey::Ignore.code() || key == SpecialKey::Nop.code() {
         return -1; // get another key
     }
 
@@ -177,15 +177,18 @@ pub(crate) fn command_line_execute(
     cc.cmdbuff_replaced = false;
 
     // Skip the wildmenu during history navigation with Up/Down.
-    if s.c == Key::Wild.code() && s.did_hist_navigate {
+    if s.c == SpecialKey::Wild.code() && s.did_hist_navigate {
         s.did_hist_navigate = false;
         return 1;
     }
 
-    if s.c == Key::Event.code() || s.c == Key::Command.code() || s.c == Key::Lua.code() {
-        if s.c == Key::Event.code() {
+    if s.c == SpecialKey::Event.code()
+        || s.c == SpecialKey::Command.code()
+        || s.c == SpecialKey::Lua.code()
+    {
+        if s.c == SpecialKey::Event.code() {
             state_handle_k_event();
-        } else if s.c == Key::Command.code() {
+        } else if s.c == SpecialKey::Command.code() {
             let _ = do_cmdline(None, Some(&mut LineSource::CmdKey), DoCmdOpts::NOWAIT);
         } else {
             map_execute_lua(false, false);
@@ -228,13 +231,13 @@ pub(crate) fn command_line_execute(
         if cmdmsg_rl.get() && KeyStuffed.get() == 0 {
             // Invert horizontal movements and operations. Only when typed
             // by the user directly, not as the result of a mapping.
-            match Key::try_from(s.c) {
-                Ok(Key::Right) => s.c = Key::Left.code(),
-                Ok(Key::SRight) => s.c = Key::SLeft.code(),
-                Ok(Key::CRight) => s.c = Key::CLeft.code(),
-                Ok(Key::Left) => s.c = Key::Right.code(),
-                Ok(Key::SLeft) => s.c = Key::SRight.code(),
-                Ok(Key::CLeft) => s.c = Key::CRight.code(),
+            match SpecialKey::try_from(s.c) {
+                Ok(SpecialKey::Right) => s.c = SpecialKey::Left.code(),
+                Ok(SpecialKey::SRight) => s.c = SpecialKey::SLeft.code(),
+                Ok(SpecialKey::CRight) => s.c = SpecialKey::CLeft.code(),
+                Ok(SpecialKey::Left) => s.c = SpecialKey::Right.code(),
+                Ok(SpecialKey::SLeft) => s.c = SpecialKey::SRight.code(),
+                Ok(SpecialKey::CLeft) => s.c = SpecialKey::CRight.code(),
                 _ => {}
             }
         }
@@ -255,16 +258,16 @@ pub(crate) fn command_line_execute(
     // Free the old command line when finished moving around in the
     // history list.
     if s.lookfor.is_some()
-        && s.c != Key::SDown.code()
-        && s.c != Key::SUp.code()
-        && s.c != Key::Down.code()
-        && s.c != Key::Up.code()
-        && s.c != Key::Pagedown.code()
-        && s.c != Key::Pageup.code()
-        && s.c != Key::Kpagedown.code()
-        && s.c != Key::Kpageup.code()
-        && s.c != Key::Left.code()
-        && s.c != Key::Right.code()
+        && s.c != SpecialKey::SDown.code()
+        && s.c != SpecialKey::SUp.code()
+        && s.c != SpecialKey::Down.code()
+        && s.c != SpecialKey::Up.code()
+        && s.c != SpecialKey::Pagedown.code()
+        && s.c != SpecialKey::Pageup.code()
+        && s.c != SpecialKey::Kpagedown.code()
+        && s.c != SpecialKey::Kpageup.code()
+        && s.c != SpecialKey::Left.code()
+        && s.c != SpecialKey::Right.code()
         && (match_count() > 0 || (s.c != Ctrl_P && s.c != Ctrl_N))
     {
         s.lookfor = None;
@@ -272,7 +275,7 @@ pub(crate) fn command_line_execute(
 
     // When there are matching completions to select, <S-Tab> works like
     // CTRL-P (unless 'wildchar' is <S-Tab>).
-    if OptInt::from(s.c) != p_wc() && s.c == Key::STab.code() && match_count() > 0 {
+    if OptInt::from(s.c) != p_wc() && s.c == SpecialKey::STab.code() && match_count() > 0 {
         s.c = Ctrl_P;
     }
 
@@ -297,7 +300,7 @@ pub(crate) fn command_line_execute(
     if (KeyTyped.get()
         && (s.c == '\n' as ::core::ffi::c_int
             || s.c == '\r' as ::core::ffi::c_int
-            || s.c == Key::Kenter.code()
+            || s.c == SpecialKey::Kenter.code()
             || s.c == ESC))
         || s.c == Ctrl_C
     {
@@ -320,10 +323,10 @@ pub(crate) fn command_line_execute(
         && s.c != Ctrl_A
         && s.c != Ctrl_L
         && (!cmdline_pum_active()
-            || (s.c != Key::Pagedown.code()
-                && s.c != Key::Pageup.code()
-                && s.c != Key::Kpagedown.code()
-                && s.c != Key::Kpageup.code()));
+            || (s.c != SpecialKey::Pagedown.code()
+                && s.c != SpecialKey::Pageup.code()
+                && s.c != SpecialKey::Kpagedown.code()
+                && s.c != SpecialKey::Kpageup.code()));
 
     // Free the expanded names when finished walking through the matches.
     if end_wildmenu {
@@ -348,9 +351,9 @@ pub(crate) fn command_line_execute(
         }
     }
 
-    if s.c == cedit_key.get() || s.c == Key::Cmdwin.code() {
+    if s.c == cedit_key.get() || s.c == SpecialKey::Cmdwin.code() {
         // TODO(vim): why is ex_normal_busy checked here?
-        if (s.c == Key::Cmdwin.code() || ex_normal_busy.get() == 0) && !got_int.get() {
+        if (s.c == SpecialKey::Cmdwin.code() || ex_normal_busy.get() == 0) && !got_int.get() {
             // Open a window to edit the command line (and history).
             s.c = open_cmdwin();
             s.some_key_typed = true;
@@ -361,7 +364,7 @@ pub(crate) fn command_line_execute(
 
     if s.c == '\n' as ::core::ffi::c_int
         || s.c == '\r' as ::core::ffi::c_int
-        || s.c == Key::Kenter.code()
+        || s.c == SpecialKey::Kenter.code()
         || (s.c == ESC && (!KeyTyped.get() || cpo_has(CpoFlag::ESC)))
     {
         // In Ex mode a backslash escapes a newline.
@@ -371,7 +374,7 @@ pub(crate) fn command_line_execute(
             && cc.cmdpos > 0
             && cc.byte_at(cc.cmdpos - 1) == b'\\'
         {
-            if s.c == Key::Kenter.code() {
+            if s.c == SpecialKey::Kenter.code() {
                 s.c = '\n' as ::core::ffi::c_int;
             }
         } else {
@@ -395,17 +398,17 @@ pub(crate) fn command_line_execute(
     // Completion for 'wildchar', 'wildcharm' and wildtrigger().
     if (OptInt::from(s.c) == p_wc() && !s.gotesc && KeyTyped.get())
         || OptInt::from(s.c) == p_wcm()
-        || s.c == Key::Wild.code()
+        || s.c == SpecialKey::Wild.code()
         || s.c == Ctrl_Z
     {
         // Silence the bell.
-        let quiet_bell = (s.c == Key::Wild.code()).then(Suppress::emsg_silent);
+        let quiet_bell = (s.c == SpecialKey::Wild.code()).then(Suppress::emsg_silent);
         let res = command_line_wildchar_complete(s);
         drop(quiet_bell);
         if res == KeyOutcome::Changed {
             return command_line_changed(s);
         }
-        if s.c == Key::Wild.code() {
+        if s.c == SpecialKey::Wild.code() {
             return command_line_not_changed(s);
         }
     }
@@ -413,7 +416,7 @@ pub(crate) fn command_line_execute(
     s.gotesc = false;
 
     // <S-Tab> goes to the last match, in a clumsy way.
-    if s.c == Key::STab.code()
+    if s.c == SpecialKey::STab.code()
         && KeyTyped.get()
         && s.next_wild(WildMode::ExpandKeep, WildOpts::NONE) == OK
     {
@@ -432,7 +435,7 @@ pub(crate) fn command_line_execute(
         return command_line_changed(s);
     }
 
-    if s.c == NUL || s.c == Key::Zero.code() {
+    if s.c == NUL || s.c == SpecialKey::Zero.code() {
         s.c = NL; // NUL is stored as NL
     }
 

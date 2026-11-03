@@ -16,7 +16,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::autocmd::{fire_autocmds, fire_autocmds_for};
-use crate::keycodes::{Ctrl_C, Key};
+use crate::keycodes::{Ctrl_C, SpecialKey};
 use crate::types::AutoEvent;
 use crate::winlayer::TabPage;
 use core::ffi::{CStr, c_int};
@@ -624,7 +624,7 @@ pub(crate) fn did_set_wildchar(args: &mut OptSet) -> Result<(), OptError> {
     if c == Ctrl_C as OptInt
         || c == '\n' as OptInt
         || c == '\r' as OptInt
-        || c == Key::Kenter.code() as OptInt
+        || c == SpecialKey::Kenter.code() as OptInt
     {
         return Err((e_invarg).into());
     }

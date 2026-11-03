@@ -10,7 +10,7 @@
 )]
 #![forbid(unsafe_code)]
 
-use crate::keycodes::Key;
+use crate::keycodes::SpecialKey;
 use crate::strings::has_char;
 use crate::types::ColNr;
 use crate::types::LineNr;
@@ -322,7 +322,7 @@ pub(crate) fn nv_brackets(cmd_arg: &mut CmdArg) {
         nv_put_opt(cmd_arg, true);
     } else if nchar == '\'' as c_int || nchar == '`' as c_int {
         nv_bracket_mark(cmd_arg);
-    } else if (Key::Rightrelease.code()..=Key::Leftmouse.code()).contains(&nchar) {
+    } else if (SpecialKey::Rightrelease.code()..=SpecialKey::Leftmouse.code()).contains(&nchar) {
         // A mouse click after `[` or `]` pastes at the click, reindenting.
         let (dir, n) = (direction(cmd_arg), cmd_arg.count1);
         do_mouse(

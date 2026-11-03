@@ -37,7 +37,7 @@ use crate::ex_docmd::{DoCmdOpts, LineSource, do_cmdline};
 use crate::getchar::state::{got_int, mapped_ctrl_c, mod_mask};
 use crate::getchar::{map_execute_lua, merge_modifiers, paste_repeat};
 use crate::guard::Allow;
-use crate::keycodes::{Ctrl_BSL, Ctrl_C, Ctrl_N, Ctrl_O, Key};
+use crate::keycodes::{Ctrl_BSL, Ctrl_C, Ctrl_N, Ctrl_O, SpecialKey};
 use crate::memory::XString;
 use crate::r#move::{set_topline, validate_cursor};
 use crate::options::kOptCuloptFlagNumber;
@@ -481,12 +481,12 @@ pub(crate) fn terminal_execute(s: &mut TerminalState, key: c_int) -> c_int {
         }
         return 1;
     }
-    match Key::try_from(mod_key) {
-        Ok(Key::PasteStart) => {
+    match SpecialKey::try_from(mod_key) {
+        Ok(SpecialKey::PasteStart) => {
             paste_repeat(1);
             return 1;
         }
-        Ok(Key::Event) => {
+        Ok(SpecialKey::Event) => {
             // An event handler can close the terminal.
             s.term.refcount.retain();
             state_handle_k_event();
@@ -496,17 +496,17 @@ pub(crate) fn terminal_execute(s: &mut TerminalState, key: c_int) -> c_int {
             }
             return 1;
         }
-        Ok(Key::Command) => {
+        Ok(SpecialKey::Command) => {
             // Runs the command the key carries, which is read back out of
             // the typeahead rather than passed here.
             let _ = do_cmdline(None, Some(&mut LineSource::CmdKey), DoCmdOpts::NONE);
             return 1;
         }
-        Ok(Key::Lua) => {
+        Ok(SpecialKey::Lua) => {
             map_execute_lua(false, false);
             return 1;
         }
-        Ok(Key::Ignore | Key::Nop) => return 1,
+        Ok(SpecialKey::Ignore | SpecialKey::Nop) => return 1,
         _ => {}
     }
     // CTRL-\ CTRL-N leaves for normal mode; CTRL-\ CTRL-O leaves for one

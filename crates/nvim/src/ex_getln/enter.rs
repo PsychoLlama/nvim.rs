@@ -16,7 +16,7 @@ use crate::cstr;
 use crate::eval::typval::DictRef;
 use crate::getchar::typeahead;
 use crate::guard::{Allow, Depth};
-use crate::keycodes::Key;
+use crate::keycodes::SpecialKey;
 use crate::memory::XString;
 use crate::message::emsg;
 use crate::option::vars::{P_STL, P_TAL, P_WBR};
@@ -536,7 +536,7 @@ pub(crate) fn command_line_check(s: &mut CommandLineState) -> ::core::ffi::c_int
     }
 
     // Defer the screen update to avoid pum flicker during wildtrigger().
-    if s.c == Key::Wild.code() && s.firstc != '@' as ::core::ffi::c_int {
+    if s.c == SpecialKey::Wild.code() && s.firstc != '@' as ::core::ffi::c_int {
         s.skip_pum_redraw = true;
     }
 

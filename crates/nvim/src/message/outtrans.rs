@@ -11,7 +11,7 @@ use crate::charset::{CharDisplay, skip};
 use crate::cstr;
 use crate::env::home_to_tilde;
 use crate::keycodes::ModMask;
-use crate::keycodes::{Key, termcap_key, termcap_name};
+use crate::keycodes::{SpecialKey, termcap_key, termcap_name};
 use crate::mbyte::{cells_at, char_at, cluster_len, encode_char, unescape_at};
 use crate::types::MB_MAXCHAR;
 use core::ffi::{CStr, c_int};
@@ -390,7 +390,7 @@ pub(crate) fn special_key_into(
 fn to_special(second: u8, third: u8) -> c_int {
     match second as c_int {
         KS_SPECIAL => K_SPECIAL,
-        KS_ZERO => Key::Zero.code(),
+        KS_ZERO => SpecialKey::Zero.code(),
         _ => termcap_key([second, third]),
     }
 }

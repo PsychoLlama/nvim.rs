@@ -19,7 +19,7 @@ use super::*;
 use crate::guard::Suppress;
 use crate::keycodes::{
     Ctrl_D, Ctrl_E, Ctrl_F, Ctrl_I, Ctrl_K, Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R,
-    Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_U, Ctrl_V, Ctrl_X, Ctrl_Y, Ctrl_Z, Key, NotAKey,
+    Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_U, Ctrl_V, Ctrl_X, Ctrl_Y, Ctrl_Z, NotAKey, SpecialKey,
 };
 use crate::optionstr::OptStringRef;
 use crate::winlayer::{Buf, Win};
@@ -455,7 +455,7 @@ pub(crate) fn get_compl_len() -> c_int {
 pub(crate) fn set_ctrl_x_mode(c: c_int) -> bool {
     let mut retval = false;
     'chord: {
-        match Key::try_from(c) {
+        match SpecialKey::try_from(c) {
             // Scroll the window one line up or down.
             Err(NotAKey(Ctrl_E | Ctrl_Y)) => {
                 ctrl_x_mode.set(CTRL_X_SCROLL);
@@ -520,7 +520,7 @@ pub(crate) fn set_ctrl_x_mode(c: c_int) -> bool {
                 break 'chord;
             }
             // Complete keywords from included files.
-            Ok(Key::STab) | Err(NotAKey(Ctrl_I)) => {
+            Ok(SpecialKey::STab) | Err(NotAKey(Ctrl_I)) => {
                 ctrl_x_mode.set(CTRL_X_PATH_PATTERNS);
                 break 'chord;
             }
@@ -595,7 +595,10 @@ pub(crate) fn ins_compl_mode() -> Option<&'static CStr> {
 
 /// Which way the key typed moves through the matches: BACKWARD or FORWARD.
 pub(crate) fn ins_compl_key2dir(c: c_int) -> Direction {
-    if c == Key::Event.code() || c == Key::Command.code() || c == Key::Lua.code() {
+    if c == SpecialKey::Event.code()
+        || c == SpecialKey::Command.code()
+        || c == SpecialKey::Lua.code()
+    {
         return if pum_want.get().item < compl_selected_item.get() {
             BACKWARD
         } else {
@@ -604,10 +607,10 @@ pub(crate) fn ins_compl_key2dir(c: c_int) -> Direction {
     }
     if c == Ctrl_P
         || c == Ctrl_L
-        || c == Key::Pageup.code()
-        || c == Key::Kpageup.code()
-        || c == Key::SUp.code()
-        || c == Key::Up.code()
+        || c == SpecialKey::Pageup.code()
+        || c == SpecialKey::Kpageup.code()
+        || c == SpecialKey::SUp.code()
+        || c == SpecialKey::Up.code()
     {
         return BACKWARD;
     }
@@ -617,23 +620,26 @@ pub(crate) fn ins_compl_key2dir(c: c_int) -> Direction {
 /// `c` is a completion key only while the popup menu is shown.
 pub(crate) fn ins_compl_pum_key(c: c_int) -> bool {
     pum_visible()
-        && (c == Key::Pageup.code()
-            || c == Key::Kpageup.code()
-            || c == Key::SUp.code()
-            || c == Key::Pagedown.code()
-            || c == Key::Kpagedown.code()
-            || c == Key::SDown.code()
-            || c == Key::Up.code()
-            || c == Key::Down.code())
+        && (c == SpecialKey::Pageup.code()
+            || c == SpecialKey::Kpageup.code()
+            || c == SpecialKey::SUp.code()
+            || c == SpecialKey::Pagedown.code()
+            || c == SpecialKey::Kpagedown.code()
+            || c == SpecialKey::SDown.code()
+            || c == SpecialKey::Up.code()
+            || c == SpecialKey::Down.code())
 }
 
 /// How many matches the key typed moves: one for most keys, a menu's height
 /// for the page keys.
 pub(crate) fn ins_compl_key2count(c: c_int) -> c_int {
-    if c == Key::Event.code() || c == Key::Command.code() || c == Key::Lua.code() {
+    if c == SpecialKey::Event.code()
+        || c == SpecialKey::Command.code()
+        || c == SpecialKey::Lua.code()
+    {
         return (pum_want.get().item - compl_selected_item.get()).abs();
     }
-    if ins_compl_pum_key(c) && c != Key::Up.code() && c != Key::Down.code() {
+    if ins_compl_pum_key(c) && c != SpecialKey::Up.code() && c != SpecialKey::Down.code() {
         let h = pum_get_height();
         return if h > 3 { h - 2 } else { h }; // keep some context
     }
@@ -643,18 +649,18 @@ pub(crate) fn ins_compl_key2count(c: c_int) -> c_int {
 /// True when completing with `c` should insert the match, false when it only
 /// changes which match is selected.
 pub(crate) fn ins_compl_use_match(c: c_int) -> bool {
-    match Key::try_from(c) {
+    match SpecialKey::try_from(c) {
         Ok(
-            Key::Up
-            | Key::Down
-            | Key::Pagedown
-            | Key::Kpagedown
-            | Key::SDown
-            | Key::Pageup
-            | Key::Kpageup
-            | Key::SUp,
+            SpecialKey::Up
+            | SpecialKey::Down
+            | SpecialKey::Pagedown
+            | SpecialKey::Kpagedown
+            | SpecialKey::SDown
+            | SpecialKey::Pageup
+            | SpecialKey::Kpageup
+            | SpecialKey::SUp,
         ) => false,
-        Ok(Key::Event | Key::Command | Key::Lua) => {
+        Ok(SpecialKey::Event | SpecialKey::Command | SpecialKey::Lua) => {
             let want = pum_want.get();
             want.active && want.insert
         }

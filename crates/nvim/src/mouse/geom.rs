@@ -17,8 +17,8 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::keycodes::Key;
 use crate::keycodes::ModMask;
+use crate::keycodes::SpecialKey;
 use core::ffi::{CStr, c_int};
 
 use super::{MOUSE_LEFT, MOUSE_MIDDLE, MOUSE_RIGHT, MOUSE_X1, MOUSE_X2, MSCR_RIGHT};
@@ -53,29 +53,29 @@ impl MousePos {
 /// Whether `c` is a mouse key.
 pub(crate) fn is_mouse_key(c: c_int) -> bool {
     matches!(
-        Key::try_from(c),
-        Ok(Key::Leftmouse
-            | Key::LeftmouseNm
-            | Key::Leftdrag
-            | Key::Leftrelease
-            | Key::LeftreleaseNm
-            | Key::Mousemove
-            | Key::Middlemouse
-            | Key::Middledrag
-            | Key::Middlerelease
-            | Key::Rightmouse
-            | Key::Rightdrag
-            | Key::Rightrelease
-            | Key::Mousedown
-            | Key::Mouseup
-            | Key::Mouseleft
-            | Key::Mouseright
-            | Key::X1mouse
-            | Key::X1drag
-            | Key::X1release
-            | Key::X2mouse
-            | Key::X2drag
-            | Key::X2release)
+        SpecialKey::try_from(c),
+        Ok(SpecialKey::Leftmouse
+            | SpecialKey::LeftmouseNm
+            | SpecialKey::Leftdrag
+            | SpecialKey::Leftrelease
+            | SpecialKey::LeftreleaseNm
+            | SpecialKey::Mousemove
+            | SpecialKey::Middlemouse
+            | SpecialKey::Middledrag
+            | SpecialKey::Middlerelease
+            | SpecialKey::Rightmouse
+            | SpecialKey::Rightdrag
+            | SpecialKey::Rightrelease
+            | SpecialKey::Mousedown
+            | SpecialKey::Mouseup
+            | SpecialKey::Mouseleft
+            | SpecialKey::Mouseright
+            | SpecialKey::X1mouse
+            | SpecialKey::X1drag
+            | SpecialKey::X1release
+            | SpecialKey::X2mouse
+            | SpecialKey::X2drag
+            | SpecialKey::X2release)
     )
 }
 

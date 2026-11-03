@@ -17,8 +17,8 @@ use crate::guard::Keys;
 use crate::keycodes::ModMask;
 use crate::keycodes::{
     Ctrl__, Ctrl_A, Ctrl_B, Ctrl_C, Ctrl_D, Ctrl_E, Ctrl_G, Ctrl_H, Ctrl_HAT, Ctrl_K, Ctrl_L,
-    Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_T, Ctrl_U, Ctrl_V, Ctrl_W, Key, NotAKey,
-    is_special,
+    Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_T, Ctrl_U, Ctrl_V, Ctrl_W, NotAKey,
+    SpecialKey, is_special,
 };
 use crate::types::{ExpandContext, FAIL, MB_MAXCHAR, NUL};
 use crate::winlayer::Buf;
@@ -39,16 +39,16 @@ fn prev_char(line: &[u8], at: usize) -> usize {
 /// line, which leaves the command line altogether.
 pub(crate) fn command_line_erase_chars(s: &mut CommandLineState) -> KeyOutcome {
     let mut cc = Cc::current();
-    if s.c == Key::Kdel.code() {
-        s.c = Key::Del.code();
+    if s.c == SpecialKey::Kdel.code() {
+        s.c = SpecialKey::Del.code();
     }
 
     // Deleting the current character is the same as a backspace on the
     // next character, except at the end of the line.
-    if s.c == Key::Del.code() && cc.cmdpos != cc.len() {
+    if s.c == SpecialKey::Del.code() && cc.cmdpos != cc.len() {
         cc.cmdpos += 1;
     }
-    if s.c == Key::Del.code() {
+    if s.c == SpecialKey::Del.code() {
         // C's `mb_off_next`: forward to the start of the next character
         // when the cursor is inside one.
         let line = cc.bytes();
@@ -210,7 +210,8 @@ pub(crate) fn command_line_insert_reg(s: &mut CommandLineState) -> KeyOutcome {
 /// Handle a left or right mouse click: put the cursor where it landed.
 pub(crate) fn command_line_left_right_mouse(s: &mut CommandLineState) {
     let mut cc = Cc::current();
-    s.ignore_drag_release = s.c == Key::Leftrelease.code() || s.c == Key::Rightrelease.code();
+    s.ignore_drag_release =
+        s.c == SpecialKey::Leftrelease.code() || s.c == SpecialKey::Rightrelease.code();
 
     cc.cmdspos = cmd_startcol();
     cc.cmdpos = 0;
@@ -238,8 +239,8 @@ pub(crate) fn command_line_left_right_mouse(s: &mut CommandLineState) {
 /// the abbreviation check and then to inserting it into the line.
 fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<::core::ffi::c_int> {
     let mut cc = Cc::current();
-    match Key::try_from(s.c) {
-        Ok(Key::Bs | Key::Del | Key::Kdel) | Err(NotAKey(Ctrl_H | Ctrl_W)) => {
+    match SpecialKey::try_from(s.c) {
+        Ok(SpecialKey::Bs | SpecialKey::Del | SpecialKey::Kdel) | Err(NotAKey(Ctrl_H | Ctrl_W)) => {
             Some(match command_line_erase_chars(s) {
                 KeyOutcome::NotChanged => command_line_not_changed(s),
                 KeyOutcome::GotoNormalMode => 0, // back to cmd mode
@@ -247,7 +248,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<::core::ffi::c_
             })
         }
 
-        Ok(Key::Ins | Key::Kins) => {
+        Ok(SpecialKey::Ins | SpecialKey::Kins) => {
             cc.overstrike = (cc.overstrike == 0) as ::core::ffi::c_int;
             ui_cursor_shape(); // may show a different cursor shape
             may_trigger_modechanged();
@@ -306,7 +307,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<::core::ffi::c_
             Some(1) // don't do incremental search now
         }
 
-        Ok(Key::Right | Key::SRight | Key::CRight) => {
+        Ok(SpecialKey::Right | SpecialKey::SRight | SpecialKey::CRight) => {
             while cc.cmdpos < cc.len() {
                 let cells = cmdline_charsize(cc.cmdpos);
                 if KeyTyped.get() && cc.cmdspos + cells >= Columns.get() * Rows.get() {
@@ -314,8 +315,8 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<::core::ffi::c_
                 }
                 cc.cmdspos += cells;
                 cc.cmdpos += cluster_len_at(cc, cc.cmdpos);
-                if !((s.c == Key::SRight.code()
-                    || s.c == Key::CRight.code()
+                if !((s.c == SpecialKey::SRight.code()
+                    || s.c == SpecialKey::CRight.code()
                     || mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL))
                     && cc.cmdbuff.raw_byte_at(cc.cmdpos as usize) != b' ')
                 {
@@ -326,7 +327,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<::core::ffi::c_
             Some(command_line_not_changed(s))
         }
 
-        Ok(Key::Left | Key::SLeft | Key::CLeft) => {
+        Ok(SpecialKey::Left | SpecialKey::SLeft | SpecialKey::CLeft) => {
             if cc.cmdpos == 0 {
                 return Some(command_line_not_changed(s));
             }
@@ -336,8 +337,8 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<::core::ffi::c_
                 cc.cmdpos -= head_off(cc.bytes(), cc.cmdpos as usize) as ::core::ffi::c_int;
                 cc.cmdspos -= cmdline_charsize(cc.cmdpos);
                 if !(cc.cmdpos > 0
-                    && (s.c == Key::SLeft.code()
-                        || s.c == Key::CLeft.code()
+                    && (s.c == SpecialKey::SLeft.code()
+                        || s.c == SpecialKey::CLeft.code()
                         || mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL))
                     && cc.byte_at(cc.cmdpos - 1) != b' ')
                 {
@@ -353,12 +354,12 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<::core::ffi::c_
         }
 
         // Ignore a mouse event or an open_cmdwin() result.
-        Ok(Key::Ignore) => Some(command_line_not_changed(s)),
+        Ok(SpecialKey::Ignore) => Some(command_line_not_changed(s)),
 
         // Ignore the mouse.
-        Ok(Key::Middledrag | Key::Middlerelease) => Some(command_line_not_changed(s)),
+        Ok(SpecialKey::Middledrag | SpecialKey::Middlerelease) => Some(command_line_not_changed(s)),
 
-        Ok(Key::Middlemouse) => {
+        Ok(SpecialKey::Middlemouse) => {
             cmdline_paste(
                 if eval_has_provider(c"clipboard", false) {
                     '*' as ::core::ffi::c_int
@@ -376,23 +377,23 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<::core::ffi::c_
         // drag/release group falls into K_LEFTMOUSE, which falls into
         // K_RIGHTMOUSE.
         Ok(
-            Key::Leftdrag
-            | Key::Leftrelease
-            | Key::Rightdrag
-            | Key::Rightrelease
-            | Key::Leftmouse
-            | Key::Rightmouse,
+            SpecialKey::Leftdrag
+            | SpecialKey::Leftrelease
+            | SpecialKey::Rightdrag
+            | SpecialKey::Rightrelease
+            | SpecialKey::Leftmouse
+            | SpecialKey::Rightmouse,
         ) => {
             // Ignore drag and release events when the button-down wasn't
             // seen before.
-            if s.c != Key::Leftmouse.code()
-                && s.c != Key::Rightmouse.code()
+            if s.c != SpecialKey::Leftmouse.code()
+                && s.c != SpecialKey::Rightmouse.code()
                 && s.ignore_drag_release
             {
                 return Some(command_line_not_changed(s));
             }
             // Return on a left click above a number prompt.
-            if s.c != Key::Rightmouse.code()
+            if s.c != SpecialKey::Rightmouse.code()
                 && cc.mouse_prompt
                 && mouse_row.get() < cmdline_row.get()
             {
@@ -406,29 +407,31 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<::core::ffi::c_
         // The mouse scroll wheel and the alternate buttons are ignored
         // here, as is the end of a Select-mode mapping.
         Ok(
-            Key::Mousedown
-            | Key::Mouseup
-            | Key::Mouseleft
-            | Key::Mouseright
-            | Key::X1mouse
-            | Key::X1drag
-            | Key::X1release
-            | Key::X2mouse
-            | Key::X2drag
-            | Key::X2release
-            | Key::Mousemove
-            | Key::Select,
+            SpecialKey::Mousedown
+            | SpecialKey::Mouseup
+            | SpecialKey::Mouseleft
+            | SpecialKey::Mouseright
+            | SpecialKey::X1mouse
+            | SpecialKey::X1drag
+            | SpecialKey::X1release
+            | SpecialKey::X2mouse
+            | SpecialKey::X2drag
+            | SpecialKey::X2release
+            | SpecialKey::Mousemove
+            | SpecialKey::Select,
         ) => Some(command_line_not_changed(s)),
 
         // Beginning of the command line.
-        Ok(Key::Home | Key::Khome | Key::SHome | Key::CHome) | Err(NotAKey(Ctrl_B)) => {
+        Ok(SpecialKey::Home | SpecialKey::Khome | SpecialKey::SHome | SpecialKey::CHome)
+        | Err(NotAKey(Ctrl_B)) => {
             cc.cmdpos = 0;
             cc.cmdspos = cmd_startcol();
             Some(command_line_not_changed(s))
         }
 
         // End of the command line.
-        Ok(Key::End | Key::Kend | Key::SEnd | Key::CEnd) | Err(NotAKey(Ctrl_E)) => {
+        Ok(SpecialKey::End | SpecialKey::Kend | SpecialKey::SEnd | SpecialKey::CEnd)
+        | Err(NotAKey(Ctrl_E)) => {
             cc.cmdpos = cc.len();
             cc.cmdspos = cmd_screencol(cc.cmdpos);
             Some(command_line_not_changed(s))
@@ -463,14 +466,14 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<::core::ffi::c_
         // Ctrl_N/Ctrl_P are the next/previous match while completing, and
         // FALL THROUGH into the history keys otherwise.
         Ok(
-            Key::Up
-            | Key::Down
-            | Key::SUp
-            | Key::SDown
-            | Key::Pageup
-            | Key::Kpageup
-            | Key::Pagedown
-            | Key::Kpagedown,
+            SpecialKey::Up
+            | SpecialKey::Down
+            | SpecialKey::SUp
+            | SpecialKey::SDown
+            | SpecialKey::Pageup
+            | SpecialKey::Kpageup
+            | SpecialKey::Pagedown
+            | SpecialKey::Kpagedown,
         )
         | Err(NotAKey(Ctrl_N | Ctrl_P)) => {
             if (s.c == Ctrl_N || s.c == Ctrl_P) && match_count() > 0 {
@@ -486,18 +489,19 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<::core::ffi::c_
             }
 
             if cmdline_pum_active()
-                && (s.c == Key::Pageup.code()
-                    || s.c == Key::Pagedown.code()
-                    || s.c == Key::Kpageup.code()
-                    || s.c == Key::Kpagedown.code())
+                && (s.c == SpecialKey::Pageup.code()
+                    || s.c == SpecialKey::Pagedown.code()
+                    || s.c == SpecialKey::Kpageup.code()
+                    || s.c == SpecialKey::Kpagedown.code())
             {
                 // If the popup menu is displayed, PageUp and PageDown
                 // scroll the menu.
-                let wild_type = if s.c == Key::Pagedown.code() || s.c == Key::Kpagedown.code() {
-                    WildMode::PageDown
-                } else {
-                    WildMode::PageUp
-                };
+                let wild_type =
+                    if s.c == SpecialKey::Pagedown.code() || s.c == SpecialKey::Kpagedown.code() {
+                        WildMode::PageDown
+                    } else {
+                        WildMode::PageUp
+                    };
                 if s.next_wild(wild_type, WildOpts::NONE) == FAIL {
                     return None;
                 }

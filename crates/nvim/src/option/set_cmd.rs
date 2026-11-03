@@ -23,7 +23,7 @@ use crate::charset::Str2NrBases;
 use crate::charset::{str2nr_in, trans_characters_in};
 use crate::cstr;
 use crate::keycodes::Ctrl_V;
-use crate::keycodes::Key;
+use crate::keycodes::SpecialKey;
 use crate::keycodes::special_key_at;
 use crate::optionstr::OptString;
 use crate::types::CmdIdx;
@@ -619,7 +619,11 @@ pub(crate) fn string_to_key(arg: &[u8]) -> c_int {
     if at(arg, 0) == b'^' && at(arg, 1) != 0 {
         // CTRL-x, where NUL would be ambiguous with "no key".
         let key = c_int::from(at(arg, 1).to_ascii_uppercase()) ^ 0x40;
-        return if key == 0 { Key::Zero.code() } else { key };
+        return if key == 0 {
+            SpecialKey::Zero.code()
+        } else {
+            key
+        };
     }
     c_int::from(at(arg, 0))
 }

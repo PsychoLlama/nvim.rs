@@ -707,7 +707,7 @@ mod tests {
 
     use super::*;
     use crate::global_cell::{editor_state::Held, editor_state_lock};
-    use crate::keycodes::{K_SPECIAL, KS_MODIFIER, Key, key_escape};
+    use crate::keycodes::{K_SPECIAL, KS_MODIFIER, SpecialKey, key_escape};
     use crate::types::NUL;
 
     /// The typeahead is process-wide; hold the lock and start from an
@@ -756,7 +756,7 @@ mod tests {
     #[test]
     fn a_special_key_is_escaped_with_its_modifiers() {
         let _fresh = Fresh::new();
-        let left = Key::Left.code();
+        let left = SpecialKey::Left.code();
         assert_eq!(ins_char_typebuf(left, ModMask::NONE, false), 3);
         assert_eq!(bytes(), key_escape(left));
         flush_typebuf(false);

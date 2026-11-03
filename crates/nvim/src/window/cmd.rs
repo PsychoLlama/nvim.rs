@@ -18,7 +18,7 @@ use crate::ex_cmds::newlnum;
 use crate::keycodes::{
     Ctrl__, Ctrl_B, Ctrl_C, Ctrl_D, Ctrl_F, Ctrl_G, Ctrl_H, Ctrl_HAT, Ctrl_I, Ctrl_J, Ctrl_K,
     Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_V, Ctrl_W,
-    Ctrl_X, Ctrl_Z, Key, NotAKey,
+    Ctrl_X, Ctrl_Z, NotAKey, SpecialKey,
 };
 use crate::types::AutoEvent;
 use crate::winlayer::prev_window;
@@ -122,7 +122,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
         }
         locked
     };
-    match Key::try_from(nchar) {
+    match SpecialKey::try_from(nchar) {
         // split the current window in two parts, horizontally
         Err(NotAKey(SPLIT | SPLIT_ALT | Ctrl_S)) => {
             if in_cmdwin() {
@@ -193,22 +193,22 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             }
         }
         // cursor to the window below, above, left or right
-        Ok(Key::Down) | Err(NotAKey(DOWN | Ctrl_J)) => {
+        Ok(SpecialKey::Down) | Err(NotAKey(DOWN | Ctrl_J)) => {
             if !in_cmdwin() {
                 goto_ver(false, prenum1);
             }
         }
-        Ok(Key::Up) | Err(NotAKey(UP | Ctrl_K)) => {
+        Ok(SpecialKey::Up) | Err(NotAKey(UP | Ctrl_K)) => {
             if !in_cmdwin() {
                 goto_ver(true, prenum1);
             }
         }
-        Ok(Key::Left | Key::Bs) | Err(NotAKey(LEFT | Ctrl_H)) => {
+        Ok(SpecialKey::Left | SpecialKey::Bs) | Err(NotAKey(LEFT | Ctrl_H)) => {
             if !in_cmdwin() {
                 goto_hor(true, prenum1);
             }
         }
-        Ok(Key::Right) | Err(NotAKey(RIGHT | Ctrl_L)) => {
+        Ok(SpecialKey::Right) | Err(NotAKey(RIGHT | Ctrl_L)) => {
             if !in_cmdwin() {
                 goto_hor(false, prenum1);
             }
@@ -323,7 +323,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             }
         }
         // quickfix window only: view the result under the cursor in a new split
-        Ok(Key::Kenter) | Err(NotAKey(CAR)) => {
+        Ok(SpecialKey::Kenter) | Err(NotAKey(CAR)) => {
             if buf_is_quickfix(Some(Buf::current())) {
                 view_quickfix_result();
             }

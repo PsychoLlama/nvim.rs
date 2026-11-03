@@ -9,7 +9,7 @@
 use super::*;
 use crate::charset::atoi;
 use crate::guard::Keys;
-use crate::keycodes::{Key, key_escape, key_unescape};
+use crate::keycodes::{SpecialKey, key_escape, key_unescape};
 use crate::lua::executor::nlua_call_ref_reporting;
 use crate::memory::XString;
 use crate::message_fmt::msg_cstr;
@@ -57,11 +57,11 @@ pub fn read_cmd_key_line() -> Option<XString> {
             c1 = NUL; // end of the line
         } else if c1 == ESC {
             aborted = true;
-        } else if c1 == Key::Command.code() {
+        } else if c1 == SpecialKey::Command.code() {
             // A nicer error message for this special case.
             emsg(gettext(e_cmd_mapping_must_end_with_cr_before_second_cmd));
             aborted = true;
-        } else if c1 == Key::Snr.code() {
+        } else if c1 == SpecialKey::Snr.code() {
             line.extend_from_slice(b"<SNR>");
         } else {
             if cmod != 0 {

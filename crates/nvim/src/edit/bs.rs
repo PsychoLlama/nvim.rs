@@ -31,7 +31,7 @@
 
 use crate::cstr::byte_at;
 use crate::indent::StopList;
-use crate::keycodes::Key;
+use crate::keycodes::SpecialKey;
 use crate::mbyte::{c_char_info, c_next_cluster, char_at, char_len, class_in, iscomposing};
 use crate::types::CharInfo;
 use crate::winlayer::{Buf, Win};
@@ -102,7 +102,7 @@ pub(crate) fn ins_del() {
     did_si.set(false);
     can_si.set(false);
     can_si_back.set(false);
-    append_to_redobuff_char(Key::Del.code());
+    append_to_redobuff_char(SpecialKey::Del.code());
 }
 
 /// Everything a backspace is not allowed to delete.

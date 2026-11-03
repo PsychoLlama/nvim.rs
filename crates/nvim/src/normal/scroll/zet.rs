@@ -3,7 +3,7 @@
 
 #![forbid(unsafe_code)]
 
-use crate::keycodes::Key;
+use crate::keycodes::SpecialKey;
 use crate::strings::has_char;
 use crate::winlayer::{Buf, Win, windows};
 
@@ -62,7 +62,7 @@ pub(crate) fn nv_z_get_count(cmd_arg: &mut CmdArg, nchar_arg: &mut c_int) -> boo
     let mut n = *nchar_arg - '0' as c_int;
     loop {
         let nchar = read_command_char();
-        if nchar == Key::Del.code() || nchar == Key::Kdel.code() {
+        if nchar == SpecialKey::Del.code() || nchar == SpecialKey::Kdel.code() {
             // Rubbing out a digit.
             n /= 10;
         } else if ascii_isdigit(nchar) {
@@ -76,8 +76,8 @@ pub(crate) fn nv_z_get_count(cmd_arg: &mut CmdArg, nchar_arg: &mut c_int) -> boo
             break;
         } else if nchar == 'l' as c_int
             || nchar == 'h' as c_int
-            || nchar == Key::Left.code()
-            || nchar == Key::Right.code()
+            || nchar == SpecialKey::Left.code()
+            || nchar == SpecialKey::Right.code()
         {
             // Both counts came from the user, so this can overflow -- the
             // C wraps, and `set_leftcol` clamps whatever comes out.
@@ -422,14 +422,14 @@ pub(crate) fn nv_zet(cmd_arg: &mut CmdArg) {
 
     // Where the cursor line ends up, and whether the cursor also moves to
     // the first non-blank of it. `None` means the key did its own work.
-    let place: Option<(Place, bool)> = match Key::try_from(nchar) {
+    let place: Option<(Place, bool)> = match SpecialKey::try_from(nchar) {
         // The three keys that are not bytes.
-        Ok(Key::Kenter) => Some((Place::Top, true)),
-        Ok(Key::Left) => {
+        Ok(SpecialKey::Kenter) => Some((Place::Top, true)),
+        Ok(SpecialKey::Left) => {
             scroll_sideways(cmd_arg, false);
             None
         }
-        Ok(Key::Right) => {
+        Ok(SpecialKey::Right) => {
             scroll_sideways(cmd_arg, true);
             None
         }

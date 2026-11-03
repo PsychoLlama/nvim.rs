@@ -25,8 +25,8 @@
 )]
 #![forbid(unsafe_code)]
 
-use crate::keycodes::Key;
 use crate::keycodes::ModMask;
+use crate::keycodes::SpecialKey;
 use crate::mbyte::c_cluster_len;
 use crate::strings::has_char;
 use crate::winlayer::{Buf, Win, first_tab};
@@ -45,11 +45,23 @@ pub(crate) fn ins_start_select(c: c_int) -> bool {
     if !km_startsel.get() {
         return false;
     }
-    let starts = match Key::try_from(c) {
+    let starts = match SpecialKey::try_from(c) {
         Ok(
-            Key::Khome | Key::Kend | Key::Pageup | Key::Kpageup | Key::Pagedown | Key::Kpagedown,
+            SpecialKey::Khome
+            | SpecialKey::Kend
+            | SpecialKey::Pageup
+            | SpecialKey::Kpageup
+            | SpecialKey::Pagedown
+            | SpecialKey::Kpagedown,
         ) => mod_mask.get().has(ModMask::SHIFT),
-        Ok(Key::SLeft | Key::SRight | Key::SUp | Key::SDown | Key::SEnd | Key::SHome) => true,
+        Ok(
+            SpecialKey::SLeft
+            | SpecialKey::SRight
+            | SpecialKey::SUp
+            | SpecialKey::SDown
+            | SpecialKey::SEnd
+            | SpecialKey::SHome,
+        ) => true,
         _ => false,
     };
     if !starts {
@@ -98,7 +110,7 @@ pub(crate) fn ins_left() {
     if oneleft().is_ok() {
         start_arrow_changing(InsertEnd::At(tpos), end_change);
         if !end_change {
-            append_to_redobuff_char(Key::Left.code());
+            append_to_redobuff_char(SpecialKey::Left.code());
         }
         // Only the characters 'revins' itself put there are legal to go
         // back over.
@@ -126,7 +138,7 @@ pub(crate) fn ins_home(c: c_int) {
     hide_dollar();
 
     let tpos = Win::current().w_cursor;
-    if c == Key::CHome.code() {
+    if c == SpecialKey::CHome.code() {
         Win::current().w_cursor.lnum = LineNr::ONE;
     }
     Win::current().w_cursor.col = ColNr::ZERO;
@@ -141,7 +153,7 @@ pub(crate) fn ins_end(c: c_int) {
     hide_dollar();
 
     let tpos = Win::current().w_cursor;
-    if c == Key::CEnd.code() {
+    if c == SpecialKey::CEnd.code() {
         Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
     }
     coladvance_to(MAXCOL);
@@ -158,7 +170,7 @@ pub(crate) fn ins_s_left() {
     if Win::current().w_cursor.lnum > LineNr::ONE || Win::current().w_cursor.col > ColNr::ZERO {
         start_arrow_changing(InsertEnd::cursor(), end_change);
         if !end_change {
-            append_to_redobuff_char(Key::SLeft.code());
+            append_to_redobuff_char(SpecialKey::SLeft.code());
         }
         let _ = bck_word(1, false, false);
         Win::current().w_set_curswant = true;
@@ -177,7 +189,7 @@ pub(crate) fn ins_right() {
     if gchar_cursor() != NUL || virtual_active(Win::current()) {
         start_arrow_changing(InsertEnd::cursor(), end_change);
         if !end_change {
-            append_to_redobuff_char(Key::Right.code());
+            append_to_redobuff_char(SpecialKey::Right.code());
         }
         Win::current().w_set_curswant = true;
         if virtual_active(Win::current()) {
@@ -225,7 +237,7 @@ pub(crate) fn ins_s_right() {
     if Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count || gchar_cursor() != NUL {
         start_arrow_changing(InsertEnd::cursor(), end_change);
         if !end_change {
-            append_to_redobuff_char(Key::SRight.code());
+            append_to_redobuff_char(SpecialKey::SRight.code());
         }
         let _ = fwd_word(1, false, false);
         Win::current().w_set_curswant = true;

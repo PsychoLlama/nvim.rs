@@ -368,7 +368,7 @@ mod tests {
 
     use super::*;
     use crate::global_cell::{editor_state::Held, editor_state_lock};
-    use crate::keycodes::{Key, key_escape};
+    use crate::keycodes::{SpecialKey, key_escape};
 
     /// The editor's key buffers are process-wide; hold the lock and start
     /// from empty ones. Dropping the answer leaves them empty again.
@@ -464,8 +464,8 @@ mod tests {
         expected.push(0xC2);
         expected.extend_from_slice(&key_escape(K_SPECIAL));
         // A special key: one character, three bytes.
-        append_to_redobuff_char(Key::Left.code());
-        expected.extend_from_slice(&key_escape(Key::Left.code()));
+        append_to_redobuff_char(SpecialKey::Left.code());
+        expected.extend_from_slice(&key_escape(SpecialKey::Left.code()));
         for _ in 0..30 {
             redo("€x");
             expected.extend_from_slice("€x".as_bytes());

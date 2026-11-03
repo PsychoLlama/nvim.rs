@@ -35,7 +35,7 @@
 )]
 #![forbid(unsafe_code)]
 
-use crate::keycodes::Key;
+use crate::keycodes::SpecialKey;
 use crate::option::vars::{P_FP, P_SEL};
 use crate::types::Indenter;
 use crate::winlayer::{Buf, Win};
@@ -67,7 +67,7 @@ static REDO_VISUAL: GlobalCell<RedoVisual> = GlobalCell::new(RedoVisual {
 ///
 /// `:` and `<Cmd>` both arrive here as an operator over the Visual area.
 fn is_ex_cmdchar(cmd_arg: &CmdArg) -> bool {
-    cmd_arg.cmdchar == ':' as c_int || cmd_arg.cmdchar == Key::Command.code()
+    cmd_arg.cmdchar == ':' as c_int || cmd_arg.cmdchar == SpecialKey::Command.code()
 }
 
 /// Run the operator that a motion (or a Visual selection) has just completed.
@@ -223,7 +223,7 @@ fn record_operator_redo(cmd_arg: &CmdArg, op: Op, redo_yank: bool) {
         && (!visual_active()
             || op.motion_force != 0
             // Also redo Operator-pending Visual mode mappings.
-            || ((is_ex_cmdchar(cmd_arg) || cmd_arg.cmdchar == Key::Lua.code()) && op.op_type != OpType::Colon))
+            || ((is_ex_cmdchar(cmd_arg) || cmd_arg.cmdchar == SpecialKey::Lua.code()) && op.op_type != OpType::Colon))
         && cmd_arg.cmdchar != 'D' as c_int
         && !is_fold_op;
     if !replayable {
@@ -261,7 +261,7 @@ fn record_operator_redo(cmd_arg: &CmdArg, op: Op, redo_yank: bool) {
                 append_to_redobuff(b"\n");
             }
         }
-    } else if cmd_arg.cmdchar == Key::Lua.code() {
+    } else if cmd_arg.cmdchar == SpecialKey::Lua.code() {
         append_to_redobuff_number(repeat_luaref.get() as c_int);
         append_to_redobuff(b"\n");
     }
@@ -450,7 +450,7 @@ fn prepare_visual_redo(cmd_arg: &CmdArg, mut op: Op, gui_yank: bool, redo_yank: 
             cmd_arg.cmdchar,
             cmd_arg.nchar,
         );
-    } else if !is_ex_cmdchar(cmd_arg) && cmd_arg.cmdchar != Key::Lua.code() {
+    } else if !is_ex_cmdchar(cmd_arg) && cmd_arg.cmdchar != SpecialKey::Lua.code() {
         let opchar = get_op_char(op.op_type);
         let extra_opchar = get_extra_op_char(op.op_type);
         // Only `r` uses `nchar`; for anything else it would be the

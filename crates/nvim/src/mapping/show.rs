@@ -11,7 +11,7 @@ use crate::cmdexpand::Scored;
 use crate::cmdexpand::fuzzy_sorted;
 use crate::cstr;
 use crate::keycodes::ModMask;
-use crate::keycodes::{Ctrl_J, Ctrl_V, Key, key_unescape};
+use crate::keycodes::{Ctrl_J, Ctrl_V, SpecialKey, key_unescape};
 use crate::lua::executor::funcref_description;
 use crate::memory::XString;
 use crate::strings::has_char;
@@ -128,7 +128,7 @@ pub(crate) fn translate_mapping(str_in: &[u8], cpo: &CStr) -> Vec<u8> {
 
                 if c == K_SPECIAL && three_at(at) {
                     c = key_unescape(str_in[at + 1], str_in[at + 2]);
-                    if c == Key::Zero.code() {
+                    if c == SpecialKey::Zero.code() {
                         c = NUL; // display <Nul> as ^@
                     }
                     at += 2;

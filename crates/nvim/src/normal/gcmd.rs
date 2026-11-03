@@ -10,7 +10,7 @@
 )]
 
 use crate::keycodes::ModMask;
-use crate::keycodes::{Ctrl_H, Key};
+use crate::keycodes::{Ctrl_H, SpecialKey};
 use crate::winlayer::{Buf, Win};
 
 use crate::ascii::{ascii_iswhite, ascii_iswhite_or_nul};
@@ -148,7 +148,8 @@ pub(crate) fn nv_g_dollar_cmd(cmd_arg: &mut CmdArg) {
     let mut op = cmd_arg.op();
     let col_off = win.col_off();
     // `<End>` also skips back over trailing white space.
-    let to_last_non_blank = cmd_arg.nchar == Key::End.code() || cmd_arg.nchar == Key::Kend.code();
+    let to_last_non_blank =
+        cmd_arg.nchar == SpecialKey::End.code() || cmd_arg.nchar == SpecialKey::Kend.code();
     op.motion_type = kMTCharWise;
     op.inclusive = true;
     if win.w_onebuf_opt.wo_wrap != 0 && win.w_view_width != 0 {
@@ -248,34 +249,34 @@ fn nv_g_screen_line(cmd_arg: &mut CmdArg, dir: c_int) {
 /// Answers `false` for anything else, which sends the caller on to the byte
 /// half of the tree.
 fn nv_g_key(cmd_arg: &mut CmdArg, nchar: c_int) -> bool {
-    match Key::try_from(nchar) {
+    match SpecialKey::try_from(nchar) {
         // `g<BS>` is `g CTRL-H`.
-        Ok(Key::Bs) => {
+        Ok(SpecialKey::Bs) => {
             cmd_arg.nchar = Ctrl_H;
             nv_g_select(cmd_arg);
         }
-        Ok(Key::Down) => nv_g_screen_line(cmd_arg, FORWARD as c_int),
-        Ok(Key::Up) => nv_g_screen_line(cmd_arg, BACKWARD as c_int),
-        Ok(Key::Home | Key::Khome) => nv_g_home_m_cmd(cmd_arg),
-        Ok(Key::End | Key::Kend) => nv_g_dollar_cmd(cmd_arg),
+        Ok(SpecialKey::Down) => nv_g_screen_line(cmd_arg, FORWARD as c_int),
+        Ok(SpecialKey::Up) => nv_g_screen_line(cmd_arg, BACKWARD as c_int),
+        Ok(SpecialKey::Home | SpecialKey::Khome) => nv_g_home_m_cmd(cmd_arg),
+        Ok(SpecialKey::End | SpecialKey::Kend) => nv_g_dollar_cmd(cmd_arg),
         // A mouse click after `g` acts as the CTRL-modified click.
         Ok(
-            Key::Middlemouse
-            | Key::Middledrag
-            | Key::Middlerelease
-            | Key::Leftmouse
-            | Key::Leftdrag
-            | Key::Leftrelease
-            | Key::Mousemove
-            | Key::Rightmouse
-            | Key::Rightdrag
-            | Key::Rightrelease
-            | Key::X1mouse
-            | Key::X1drag
-            | Key::X1release
-            | Key::X2mouse
-            | Key::X2drag
-            | Key::X2release,
+            SpecialKey::Middlemouse
+            | SpecialKey::Middledrag
+            | SpecialKey::Middlerelease
+            | SpecialKey::Leftmouse
+            | SpecialKey::Leftdrag
+            | SpecialKey::Leftrelease
+            | SpecialKey::Mousemove
+            | SpecialKey::Rightmouse
+            | SpecialKey::Rightdrag
+            | SpecialKey::Rightrelease
+            | SpecialKey::X1mouse
+            | SpecialKey::X1drag
+            | SpecialKey::X1release
+            | SpecialKey::X2mouse
+            | SpecialKey::X2drag
+            | SpecialKey::X2release,
         ) => {
             mod_mask.set(ModMask::CTRL);
             do_mouse(
@@ -286,7 +287,7 @@ fn nv_g_key(cmd_arg: &mut CmdArg, nchar: c_int) -> bool {
                 false,
             );
         }
-        Ok(Key::Ignore) => {}
+        Ok(SpecialKey::Ignore) => {}
         _ => return false,
     }
     true

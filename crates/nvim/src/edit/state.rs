@@ -23,7 +23,7 @@
 #![forbid(unsafe_code)]
 
 use crate::cstr::byte_at;
-use crate::keycodes::Key;
+use crate::keycodes::SpecialKey;
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::narrow::len_as_int;
 use crate::winlayer::{Buf, Win};
@@ -297,7 +297,7 @@ pub(crate) fn insert_check(s: &mut InsertState) -> c_int {
         // the loop wakes up and sees `stop_insert_mode`.
         stop_insert_mode.set(true);
         restart_edit.set('I' as c_int);
-        stuff_readbuf_char(Key::Nop.code());
+        stuff_readbuf_char(SpecialKey::Nop.code());
     }
     if stop_insert_mode.get() && !ins_compl_active() {
         // `:stopinsert` was used, or a terminal buffer was entered.
@@ -353,7 +353,7 @@ pub(crate) fn insert_check(s: &mut InsertState) -> c_int {
     s.old_topfill = Win::current().w_topfill;
 
     // `lastc` is the previous *real* key: a K_EVENT is not one.
-    if s.c != Key::Event.code() {
+    if s.c != SpecialKey::Event.code() {
         s.lastc = s.c;
     }
 
@@ -438,7 +438,7 @@ pub(crate) fn insert_execute(s: &mut InsertState, key: c_int) -> c_int {
     if stop_insert_mode.get() {
         // Insert mode ended while the key was being read; give it back so
         // Normal mode sees it.
-        if key != Key::Ignore.code() && key != Key::Nop.code() {
+        if key != SpecialKey::Ignore.code() && key != SpecialKey::Nop.code() {
             vungetc(key);
         }
         s.count = 0;
@@ -446,13 +446,13 @@ pub(crate) fn insert_execute(s: &mut InsertState, key: c_int) -> c_int {
         ins_compl_prep(ESC);
         return 0;
     }
-    if key == Key::Ignore.code() || key == Key::Nop.code() {
+    if key == SpecialKey::Ignore.code() || key == SpecialKey::Nop.code() {
         return -1; // get another key
     }
     s.c = key;
 
     // Any key but a K_EVENT resets the CursorHold timer.
-    if key != Key::Event.code() {
+    if key != SpecialKey::Event.code() {
         did_cursorhold.set(true);
     }
 
@@ -488,7 +488,7 @@ pub(crate) fn insert_execute(s: &mut InsertState, key: c_int) -> c_int {
         }
     }
 
-    if s.c != Key::Event.code() {
+    if s.c != SpecialKey::Event.code() {
         s.c = do_digraph(s.c);
     }
 
@@ -529,20 +529,20 @@ pub(crate) fn insert_execute(s: &mut InsertState, key: c_int) -> c_int {
 
 /// In a 'rightleft' window, left and right swap over.
 const fn mirror_arrow_key(c: c_int) -> c_int {
-    // An `if` chain rather than a `match Key::try_from(c)`: this is a `const
+    // An `if` chain rather than a `match SpecialKey::try_from(c)`: this is a `const
     // fn`, where a trait call is not available.
-    if c == Key::Left.code() {
-        Key::Right.code()
-    } else if c == Key::SLeft.code() {
-        Key::SRight.code()
-    } else if c == Key::CLeft.code() {
-        Key::CRight.code()
-    } else if c == Key::Right.code() {
-        Key::Left.code()
-    } else if c == Key::SRight.code() {
-        Key::SLeft.code()
-    } else if c == Key::CRight.code() {
-        Key::CLeft.code()
+    if c == SpecialKey::Left.code() {
+        SpecialKey::Right.code()
+    } else if c == SpecialKey::SLeft.code() {
+        SpecialKey::SRight.code()
+    } else if c == SpecialKey::CLeft.code() {
+        SpecialKey::CRight.code()
+    } else if c == SpecialKey::Right.code() {
+        SpecialKey::Left.code()
+    } else if c == SpecialKey::SRight.code() {
+        SpecialKey::SLeft.code()
+    } else if c == SpecialKey::CRight.code() {
+        SpecialKey::CLeft.code()
     } else {
         c
     }
@@ -565,7 +565,9 @@ fn compl_takes_key(s: &mut InsertState) -> bool {
     }
 
     // Backspace inside the leader: shrink it rather than deleting text.
-    if (s.c == Key::Bs.code() || s.c == Ctrl_H) && Win::current().w_cursor.col > ins_compl_col() {
+    if (s.c == SpecialKey::Bs.code() || s.c == Ctrl_H)
+        && Win::current().w_cursor.col > ins_compl_col()
+    {
         s.c = ins_compl_bs();
         if s.c == NUL {
             return true;
@@ -602,7 +604,8 @@ fn compl_takes_key(s: &mut InsertState) -> bool {
     // CTRL-Y accepts the match; so does <CR> under 'completeopt'
     // `noinsert`.
     if (s.c == Ctrl_Y
-        || (ins_compl_enter_selects() && (s.c == CAR || s.c == Key::Kenter.code() || s.c == NL)))
+        || (ins_compl_enter_selects()
+            && (s.c == CAR || s.c == SpecialKey::Kenter.code() || s.c == NL)))
         && stop_arrow_ok()
     {
         ins_compl_delete(false);
@@ -633,7 +636,7 @@ pub(crate) fn insert_do_complete(s: &mut InsertState) {
 
 /// The tail every key runs after [`insert_handle_key`].
 pub(crate) fn insert_handle_key_post(s: &mut InsertState) {
-    if s.c != Key::Event.code() && ctrl_x_mode_normal() {
+    if s.c != SpecialKey::Event.code() && ctrl_x_mode_normal() {
         did_cursorhold.set(false);
     }
     // The completion popup belongs to the window it was started in.

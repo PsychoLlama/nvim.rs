@@ -23,7 +23,7 @@
 use super::*;
 use crate::event_queue::process_events_in;
 use crate::guard::Keys;
-use crate::keycodes::{Ctrl_B, Ctrl_C, Ctrl_F, Key, NotAKey};
+use crate::keycodes::{Ctrl_B, Ctrl_C, Ctrl_F, NotAKey, SpecialKey};
 use crate::log::logmsg;
 use crate::strings::has_char;
 use crate::types::NUL;
@@ -156,8 +156,8 @@ pub fn wait_return(redraw: c_int) {
                     // scroll-down commands when messages fill the screen,
                     // so one 'j' too many does not make them disappear.
                     if matches!(
-                        Key::try_from(c),
-                        Ok(Key::Up | Key::Pageup)
+                        SpecialKey::try_from(c),
+                        Ok(SpecialKey::Up | SpecialKey::Pageup)
                             | Err(NotAKey(KEY_B | Ctrl_B | KEY_K | KEY_U | KEY_G))
                     ) {
                         if msg_scrolled.get() > Rows.get() {
@@ -165,42 +165,42 @@ pub fn wait_return(redraw: c_int) {
                             do_more_prompt(c);
                         } else {
                             msg_didout.set(false);
-                            c = Key::Ignore.code();
+                            c = SpecialKey::Ignore.code();
                             msg_col.set(0);
                         }
                         if quit_more.get() {
                             c = CAR; // just pretend CR was hit
                             quit_more.set(false);
                             got_int.set(false);
-                        } else if c != Key::Ignore.code() {
-                            c = Key::Ignore.code();
+                        } else if c != SpecialKey::Ignore.code() {
+                            c = SpecialKey::Ignore.code();
                             hit_return_msg(false);
                         }
                     } else if msg_scrolled.get() > Rows.get() - 2
                         && matches!(
-                            Key::try_from(c),
-                            Ok(Key::Down | Key::Pagedown)
+                            SpecialKey::try_from(c),
+                            Ok(SpecialKey::Down | SpecialKey::Pagedown)
                                 | Err(NotAKey(KEY_J | KEY_D | KEY_F | Ctrl_F))
                         )
                     {
-                        c = Key::Ignore.code();
+                        c = SpecialKey::Ignore.code();
                     }
                 }
 
                 let ignored = matches!(
-                    Key::try_from(c),
-                    Ok(Key::Ignore
-                        | Key::Leftdrag
-                        | Key::Leftrelease
-                        | Key::Middledrag
-                        | Key::Middlerelease
-                        | Key::Rightdrag
-                        | Key::Rightrelease
-                        | Key::Mouseleft
-                        | Key::Mouseright
-                        | Key::Mousedown
-                        | Key::Mouseup
-                        | Key::Mousemove)
+                    SpecialKey::try_from(c),
+                    Ok(SpecialKey::Ignore
+                        | SpecialKey::Leftdrag
+                        | SpecialKey::Leftrelease
+                        | SpecialKey::Middledrag
+                        | SpecialKey::Middlerelease
+                        | SpecialKey::Rightdrag
+                        | SpecialKey::Rightrelease
+                        | SpecialKey::Mouseleft
+                        | SpecialKey::Mouseright
+                        | SpecialKey::Mousedown
+                        | SpecialKey::Mouseup
+                        | SpecialKey::Mousemove)
                 );
                 if !((had_got_int && c == Ctrl_C) || ignored) {
                     break;
@@ -210,12 +210,12 @@ pub fn wait_return(redraw: c_int) {
 
             // Avoid that the mouse-up event causes Visual mode to start.
             if matches!(
-                Key::try_from(c),
-                Ok(Key::Leftmouse
-                    | Key::Middlemouse
-                    | Key::Rightmouse
-                    | Key::X1mouse
-                    | Key::X2mouse)
+                SpecialKey::try_from(c),
+                Ok(SpecialKey::Leftmouse
+                    | SpecialKey::Middlemouse
+                    | SpecialKey::Rightmouse
+                    | SpecialKey::X1mouse
+                    | SpecialKey::X2mouse)
             ) {
                 jump_to_mouse(MOUSE_SETPOS as c_int, None, 0);
             } else if !has_char(c"\r\n ", c) && c != Ctrl_C && c != KEY_Q {
@@ -349,12 +349,12 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
 
         let mut toscroll = 0;
         'scroll: {
-            match Key::try_from(c) {
-                Ok(Key::Bs | Key::Up) | Err(NotAKey(BS | KEY_K)) => {
+            match SpecialKey::try_from(c) {
+                Ok(SpecialKey::Bs | SpecialKey::Up) | Err(NotAKey(BS | KEY_K)) => {
                     toscroll = -1;
                     break 'scroll;
                 }
-                Ok(Key::Down) | Err(NotAKey(CAR | NL | KEY_J)) => {
+                Ok(SpecialKey::Down) | Err(NotAKey(CAR | NL | KEY_J)) => {
                     toscroll = 1;
                     break 'scroll;
                 }
@@ -366,11 +366,12 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
                     toscroll = Rows.get() / 2;
                     break 'scroll;
                 }
-                Ok(Key::Pageup) | Err(NotAKey(KEY_B | Ctrl_B)) => {
+                Ok(SpecialKey::Pageup) | Err(NotAKey(KEY_B | Ctrl_B)) => {
                     toscroll = -(Rows.get() - 1);
                     break 'scroll;
                 }
-                Ok(Key::Pagedown | Key::Leftmouse) | Err(NotAKey(KEY_SPACE | KEY_F | Ctrl_F)) => {
+                Ok(SpecialKey::Pagedown | SpecialKey::Leftmouse)
+                | Err(NotAKey(KEY_SPACE | KEY_F | Ctrl_F)) => {
                     toscroll = Rows.get() - 1;
                     break 'scroll;
                 }
@@ -396,7 +397,7 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
                 Err(NotAKey(KEY_Q | Ctrl_C | ESC)) => {
                     // falls through to the quit tail
                 }
-                Ok(Key::Event) => {
+                Ok(SpecialKey::Event) => {
                     // Process the event on the main loop's queue.
                     process_events_in(&resize_events);
                     to_redraw = true;

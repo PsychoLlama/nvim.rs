@@ -43,7 +43,7 @@ use crate::getchar::{
     vpeekc, vungetc,
 };
 use crate::global_cell::GlobalCell;
-use crate::keycodes::{Ctrl_G, Ctrl_O, Ctrl_P, Ctrl_R, Ctrl_RSB, Ctrl_T, Ctrl_V, Key};
+use crate::keycodes::{Ctrl_G, Ctrl_O, Ctrl_P, Ctrl_R, Ctrl_RSB, Ctrl_T, Ctrl_V, SpecialKey};
 use crate::keycodes::{ModMask, mouse_button};
 use crate::memline::{gchar_pos, inc};
 use crate::message::state::msg_silent;
@@ -134,7 +134,7 @@ pub(crate) fn do_mouse(
 ) -> bool {
     let (mut which_button, is_click, is_drag) = coalesce_drags(c);
 
-    if c == Key::Mousemove.code() {
+    if c == SpecialKey::Mousemove.code() {
         return false; // Mouse moved without a button pressed.
     }
     if let Some(answer) = ignore_stray_event(is_click, is_drag) {
@@ -447,7 +447,7 @@ fn middle_button_insert(op: Option<Op>, mut regname: c_int, fixindent: bool) -> 
                 stuff_readbuf(b"\"+p");
             } else {
                 stuff_char('y' as c_int);
-                stuff_char(Key::Middlemouse.code());
+                stuff_char(SpecialKey::Middlemouse.code());
             }
             return Some(false);
         }

@@ -16,7 +16,7 @@
 use super::*;
 use crate::eval::typval::{DictRef, NumBuf, dict_get_string_buf, list_iter};
 use crate::guard::Allow;
-use crate::keycodes::{Ctrl_E, Ctrl_N, Ctrl_Y, Key};
+use crate::keycodes::{Ctrl_E, Ctrl_N, Ctrl_Y, SpecialKey};
 use crate::memline::Lines;
 use crate::narrow::number_as_col;
 use crate::types::ListRef;
@@ -267,9 +267,9 @@ pub(crate) fn set_completion(mut startcol: ColNr, list: Option<&ListRef>) {
     compl_curr_match.set(compl_first_match.get());
     let no_select = compl_no_select || compl_longest;
     if compl_no_insert || no_select {
-        let _ = ins_complete(Key::Down.code(), false);
+        let _ = ins_complete(SpecialKey::Down.code(), false);
         if no_select {
-            let _ = ins_complete(Key::Up.code(), false);
+            let _ = ins_complete(SpecialKey::Up.code(), false);
         }
     } else {
         let _ = ins_complete(Ctrl_N, false);

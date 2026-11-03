@@ -20,7 +20,7 @@
 
 pub(crate) mod mode;
 use crate::cstr;
-use crate::keycodes::{Ctrl_V, Key, get_special_key_name};
+use crate::keycodes::{Ctrl_V, SpecialKey, get_special_key_name};
 use crate::memory::XString;
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;
@@ -177,7 +177,7 @@ pub(crate) fn state_enter(mut s: ModeState<'_>) {
         }
         loop {
             let key = next_key();
-            if key == Key::Event.code() {
+            if key == SpecialKey::Event.code() {
                 // The queue is about to run arbitrary code, so anything the
                 // key-reading side was in the middle of has to be settled.
                 check_end_reg_executing(true);
@@ -187,7 +187,7 @@ pub(crate) fn state_enter(mut s: ModeState<'_>) {
             // only for a build that logs it.
             if LOG_DEBUG {
                 let keyname_buf;
-                let keyname = if key == Key::Event.code() {
+                let keyname = if key == SpecialKey::Event.code() {
                     c"K_EVENT"
                 } else {
                     keyname_buf = get_special_key_name(key, mod_mask.get());
@@ -219,7 +219,7 @@ fn next_key() -> c_int {
         }
         if main_loop_has_events() {
             ui_flush();
-            return Key::Event.code();
+            return SpecialKey::Event.code();
         }
         // Nothing to do but wait, so show what has been decided first.
         if must_redraw.get() != 0 && !need_wait_return.get() && State.get() & MODE_CMDLINE == 0 {
@@ -232,7 +232,7 @@ fn next_key() -> c_int {
         if input_available() != 0 || !main_loop_has_events() {
             continue;
         }
-        return Key::Event.code();
+        return SpecialKey::Event.code();
     }
 }
 

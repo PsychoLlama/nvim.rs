@@ -12,7 +12,7 @@
 
 use crate::cstr;
 use crate::keycodes::ModMask;
-use crate::keycodes::{Ctrl_H, Key};
+use crate::keycodes::{Ctrl_H, SpecialKey};
 use crate::ops::Op;
 use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
@@ -305,7 +305,7 @@ pub(crate) fn nv_right(cmd_arg: &mut CmdArg) {
         's' as c_int
     } else if cmdchar == 'l' as c_int {
         'l' as c_int
-    } else if cmdchar == Key::Right.code() {
+    } else if cmdchar == SpecialKey::Right.code() {
         '>' as c_int
     } else {
         NUL
@@ -381,11 +381,11 @@ pub(crate) fn nv_left(cmd_arg: &mut CmdArg) {
     cmd_arg.op().inclusive = false;
 
     // Which 'whichwrap' flag lets this key wrap to the previous line.
-    let wrap_flag = if cmd_arg.cmdchar == Key::Bs.code() || cmd_arg.cmdchar == Ctrl_H {
+    let wrap_flag = if cmd_arg.cmdchar == SpecialKey::Bs.code() || cmd_arg.cmdchar == Ctrl_H {
         'b' as c_int
     } else if cmd_arg.cmdchar == 'h' as c_int {
         'h' as c_int
-    } else if cmd_arg.cmdchar == Key::Left.code() {
+    } else if cmd_arg.cmdchar == SpecialKey::Left.code() {
         '<' as c_int
     } else {
         NUL

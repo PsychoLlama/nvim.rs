@@ -10,7 +10,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::keycodes::{Ctrl_C, Ctrl_G, Ctrl_N, Key};
+use crate::keycodes::{Ctrl_C, Ctrl_G, Ctrl_N, SpecialKey};
 use crate::winlayer::{Buf, Win, windows};
 
 use crate::buffer::{buflist_getfile, fileinfo};
@@ -70,8 +70,8 @@ pub(crate) fn nv_help(cmd_arg: &mut CmdArg) {
 /// `:`, and the two synthetic keys that carry a command or a Lua callback in
 /// from a mapping.
 pub(crate) fn nv_colon(cmd_arg: &mut CmdArg) {
-    let is_cmdkey = cmd_arg.cmdchar == Key::Command.code();
-    let is_lua = cmd_arg.cmdchar == Key::Lua.code();
+    let is_cmdkey = cmd_arg.cmdchar == SpecialKey::Command.code();
+    let is_lua = cmd_arg.cmdchar == SpecialKey::Lua.code();
     // A plain `:` during a selection is the `:` *operator*, which puts the
     // selection's range on the command line. The synthetic keys are not.
     if visual_active() && !is_cmdkey && !is_lua {
@@ -253,14 +253,14 @@ pub(crate) fn nv_esc(cmd_arg: &mut CmdArg) {
         }
         restart_edit.set(0);
         if cmdwin_type.get() != 0 {
-            cmdwin_result.set(Key::Ignore.code());
+            cmdwin_result.set(SpecialKey::Ignore.code());
             got_int.set(false);
             return;
         }
     } else if cmdwin_type.get() != 0 && ex_normal_busy.get() != 0 && typebuf_was_empty.get() {
         // `:normal` in the command-line window ran out of keys: leave the
         // window open rather than acting on the <Esc> it synthesised.
-        cmdwin_result.set(Key::Ignore.code());
+        cmdwin_result.set(SpecialKey::Ignore.code());
         return;
     }
     if visual_active() {

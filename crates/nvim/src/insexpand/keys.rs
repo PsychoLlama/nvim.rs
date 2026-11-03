@@ -16,7 +16,7 @@
 
 use super::*;
 use crate::keycodes::{
-    Ctrl_C, Ctrl_E, Ctrl_N, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_V, Ctrl_X, Ctrl_Y, Ctrl_Z, Key,
+    Ctrl_C, Ctrl_E, Ctrl_N, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_V, Ctrl_X, Ctrl_Y, Ctrl_Z, SpecialKey,
 };
 use crate::mbyte::head_off;
 use crate::mbyte::{char_at, cluster_len, encode_char};
@@ -59,7 +59,7 @@ pub fn ins_compl_bs() -> c_int {
         || ctrl_x_mode_eval()
         || (!can_bs(BsFlag::START) && from_start - compl_length.get() < 0)
     {
-        return Key::Bs.code();
+        return SpecialKey::Bs.code();
     }
 
     // Deleted more than what was used to find matches, or didn't finish
@@ -299,7 +299,7 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
     // set the Enter key does the same.
     let mut word: Option<XString> = None;
     if (c == Ctrl_Y
-        || (compl_enter_selects.get() && (c == CAR || c == Key::Kenter.code() || c == NL)))
+        || (compl_enter_selects.get() && (c == CAR || c == SpecialKey::Kenter.code() || c == NL)))
         && pum_visible()
     {
         word = shown_match().map(MatchId::text_copy);
@@ -400,16 +400,16 @@ pub fn ins_compl_prep(c: c_int) -> bool {
 
     // Ignore end of Select mode mapping and mouse scroll/movement.
     if matches!(
-        Key::try_from(c),
-        Ok(Key::Select
-            | Key::Mousedown
-            | Key::Mouseup
-            | Key::Mouseleft
-            | Key::Mouseright
-            | Key::Mousemove
-            | Key::Event
-            | Key::Command
-            | Key::Lua)
+        SpecialKey::try_from(c),
+        Ok(SpecialKey::Select
+            | SpecialKey::Mousedown
+            | SpecialKey::Mouseup
+            | SpecialKey::Mouseleft
+            | SpecialKey::Mouseright
+            | SpecialKey::Mousemove
+            | SpecialKey::Event
+            | SpecialKey::Command
+            | SpecialKey::Lua)
     ) {
         return retval;
     }
@@ -523,7 +523,7 @@ pub(crate) fn ins_compl_fix_redo_buf_for_leader(known: Option<&CStr>) {
         // A backspace for each remaining character of the original text.
         let mut p = len;
         while p < orig.len() {
-            append_to_redobuff_char(Key::Bs.code());
+            append_to_redobuff_char(SpecialKey::Bs.code());
             p += cluster_len(&orig[p..]);
         }
     }
@@ -565,14 +565,17 @@ pub fn ins_compl_check_keys(frequency: c_int, in_compl_func: bool) {
             compl_shows_dir.set(ins_compl_key2dir(c));
             let (repeat, allow_get) = (
                 ins_compl_key2count(c),
-                !matches!(Key::try_from(c), Ok(Key::Up | Key::Down)),
+                !matches!(
+                    SpecialKey::try_from(c),
+                    Ok(SpecialKey::Up | SpecialKey::Down)
+                ),
             );
             ins_compl_next(false, repeat, allow_get);
         } else {
             // Need to get the character to have KeyTyped set.  We'll put it
             // back with vungetc() below.  But skip K_IGNORE.
             c = safe_vgetc();
-            if c != Key::Ignore.code() {
+            if c != SpecialKey::Ignore.code() {
                 // Don't interrupt completion when the character wasn't
                 // typed, e.g. when doing @q to replay keys.
                 if c != Ctrl_R && KeyTyped.get() {

@@ -19,7 +19,7 @@ use crate::buffer::{BufRef, current_buf};
 use crate::cstr;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_set_tab};
 use crate::guard::Allow;
-use crate::keycodes::{Ctrl_C, Key};
+use crate::keycodes::{Ctrl_C, SpecialKey};
 use crate::types::{CmdModFlags, NUL, OptError, OptionSetFlags};
 use crate::window::valid_win;
 use crate::winlayer::{Buf, Win};
@@ -128,7 +128,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
     // recursively, and can't do it when typing a password.
     if text_or_buf_locked() || cmdwin_type.get() != 0 || cmdline_star.get() > 0 {
         beep_flush();
-        return Key::Ignore.code();
+        return SpecialKey::Ignore.code();
     }
 
     let old_curbuf = BufRef::of_opt(current_buf());
@@ -152,7 +152,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
     .is_err()
     {
         beep_flush();
-        return Key::Ignore.code();
+        return SpecialKey::Ignore.code();
     }
     // win_split() autocommands may have messed with the old window or
     // buffer. Treat it as abandoning this command line.
@@ -292,7 +292,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
     trigger_cmd_autocmd(cmdwin_type.get(), AutoEvent::CmdwinEnter);
     if restart_edit.get() != 0 {
         // An autocmd ran ":startinsert".
-        stuff_readbuf_char(Key::Nop.code());
+        stuff_readbuf_char(SpecialKey::Nop.code());
     }
 
     let redraw = Allow::redraw();
@@ -326,15 +326,17 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
         emsg(gettext(e_active_window_or_buffer_changed_or_deleted));
     } else {
         // Autocmds may abort script processing.
-        if aborting() && cmdwin_result.get() != Key::Ignore.code() {
+        if aborting() && cmdwin_result.get() != SpecialKey::Ignore.code() {
             cmdwin_result.set(Ctrl_C);
         }
         // Set the new command line from the cmdline buffer.
         dealloc_cmdbuff();
 
-        if cmdwin_result.get() == Key::Xf1.code() || cmdwin_result.get() == Key::Xf2.code() {
+        if cmdwin_result.get() == SpecialKey::Xf1.code()
+            || cmdwin_result.get() == SpecialKey::Xf2.code()
+        {
             // ":qa[!]" was typed.
-            let p = if cmdwin_result.get() == Key::Xf2.code() {
+            let p = if cmdwin_result.get() == SpecialKey::Xf2.code() {
                 c"qa"
             } else {
                 c"qa!"
@@ -371,7 +373,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
             if cc.cmdpos == cc.len() - 1 || cc.cmdpos > cc.len() {
                 cc.cmdpos = cc.len();
             }
-            if cmdwin_result.get() == Key::Ignore.code() {
+            if cmdwin_result.get() == SpecialKey::Ignore.code() {
                 cc.cmdspos = cmd_screencol(cc.cmdpos);
                 redrawcmd();
             }
