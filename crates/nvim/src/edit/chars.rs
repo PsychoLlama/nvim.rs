@@ -352,3 +352,29 @@ fn cursor_byte() -> u8 {
     let cursor = Win::current().w_cursor;
     byte_at(Lines::current().line(cursor.lnum), cursor.col.as_usize())
 }
+
+#[cfg(test)]
+mod tests {
+    //! Which keys the batch path in [`insertchar`] may take: one printable
+    //! ASCII byte that cannot start `0 CTRL-D`/`^ CTRL-D`.
+
+    use super::needs_processing;
+    use crate::keycodes::SpecialKey;
+    use crate::types::Key;
+
+    #[test]
+    fn only_printable_ascii_but_zero_and_caret_is_batched() {
+        for b in 0u8..=0xff {
+            let batched = (0x20..0x7f).contains(&b) && b != b'0' && b != b'^';
+            assert_eq!(needs_processing(Key::byte(b)), !batched, "{b:#04x}");
+        }
+        for key in [
+            Key::from_char('\u{e9}'),
+            Key::from_char('\u{65e5}'),
+            Key::from(SpecialKey::Left),
+            Key::from(SpecialKey::Kenter),
+        ] {
+            assert!(needs_processing(key), "{key:?}");
+        }
+    }
+}

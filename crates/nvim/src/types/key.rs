@@ -265,3 +265,49 @@ impl fmt::Display for Key {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Key;
+    use crate::keycodes::SpecialKey;
+
+    #[test]
+    fn the_control_consts_are_the_control_characters() {
+        let letters = [
+            (Key::CTRL_A, b'A'),
+            (Key::CTRL_H, b'H'),
+            (Key::CTRL_O, b'O'),
+            (Key::CTRL_V, b'V'),
+            (Key::CTRL_Z, b'Z'),
+            (Key::CTRL_BSL, b'\\'),
+            (Key::CTRL_RSB, b']'),
+            (Key::CTRL_HAT, b'^'),
+            (Key::CTRL_UNDERSCORE, b'_'),
+        ];
+        for (key, letter) in letters {
+            assert_eq!(key, Key::ctrl(letter), "{}", char::from(letter));
+        }
+        assert_eq!(Key::CTRL_I, Key::TAB);
+        assert_eq!(Key::CTRL_M, Key::CAR);
+        assert_eq!(Key::SPACE, Key::ascii(b' '));
+    }
+
+    #[test]
+    fn a_char_is_neither_nul_nor_special_and_a_digit_is_ascii() {
+        assert!(Key::ascii(b'a').is_char());
+        assert!(Key::from_char('\u{e9}').is_char());
+        assert!(!Key::NUL.is_char());
+        assert!(!Key::from(SpecialKey::Left).is_char());
+        for (b, d) in (b'0'..=b'9').zip(0..) {
+            assert_eq!(Key::byte(b).digit(), Some(d));
+        }
+        for key in [
+            Key::ascii(b'a'),
+            Key::NUL,
+            Key::from_char('\u{661}'),
+            Key::from(SpecialKey::K0),
+        ] {
+            assert_eq!(key.digit(), None, "{key:?}");
+        }
+    }
+}

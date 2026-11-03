@@ -744,3 +744,34 @@ fn cinkeys(c: Key, when: u8, line_is_white: bool) -> bool {
 fn c_expr_indent() {
     do_c_expr_indent()
 }
+
+#[cfg(test)]
+mod tests {
+    //! 'rightleft' swaps the horizontal arrows and nothing else.
+
+    use super::mirror_arrow_key;
+    use crate::keycodes::SpecialKey;
+    use crate::types::Key;
+
+    #[test]
+    fn rightleft_swaps_the_horizontal_arrows() {
+        let pairs = [
+            (SpecialKey::Left, SpecialKey::Right),
+            (SpecialKey::SLeft, SpecialKey::SRight),
+            (SpecialKey::CLeft, SpecialKey::CRight),
+        ];
+        for (a, b) in pairs {
+            assert_eq!(mirror_arrow_key(Key::from(a)), b);
+            assert_eq!(mirror_arrow_key(Key::from(b)), a);
+        }
+        for key in [
+            Key::from(SpecialKey::Up),
+            Key::from(SpecialKey::Home),
+            Key::ascii(b'h'),
+            Key::ascii(b'l'),
+            Key::NUL,
+        ] {
+            assert_eq!(mirror_arrow_key(key), key);
+        }
+    }
+}
