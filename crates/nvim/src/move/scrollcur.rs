@@ -11,6 +11,13 @@
 //!
 //! Original: `src/nvim/move.c`, Vim/Neovim, Vim license.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::c_int;
@@ -18,6 +25,7 @@ use core::ffi::c_int;
 use super::*;
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::mouse::state::mouse_dragging;
+use crate::narrow::number_as_int;
 use crate::pos::MAXCOL;
 use crate::search::{BACKWARD, FORWARD};
 use crate::types::{ColNr, Direction, LineNr, int64_t};
@@ -26,7 +34,7 @@ use crate::types::{ColNr, Direction, LineNr, int64_t};
 /// slows scrolling down by standing in for the option.
 fn scrolloff_or_drag(win: Win) -> int64_t {
     if mouse_dragging.get() > 0 {
-        (mouse_dragging.get() - 1) as int64_t
+        int64_t::from(mouse_dragging.get() - 1)
     } else {
         win.scrolloff()
     }
@@ -90,12 +98,14 @@ impl Win {
             }
 
             // If scrolling is needed, scroll at least 'scrolljump' lines.
-            if (new_topline >= self.w_topline || scrolled > min_scroll) && extra as int64_t >= off {
+            if (new_topline >= self.w_topline || scrolled > min_scroll)
+                && int64_t::from(extra) >= off
+            {
                 break;
             }
 
             used += i;
-            if (extra + i) as int64_t <= off && bot < self.buffer().line_count() {
+            if int64_t::from(extra + i) <= off && bot < self.buffer().line_count() {
                 let (height, next, _) = self.plines_full(bot, true, true);
                 bot = next;
                 used += height;
@@ -125,8 +135,8 @@ impl Win {
         let cursor_lnum = self.w_cursor.lnum;
         self.w_topline = self.w_topline.min(cursor_lnum);
         self.w_topfill = self.fill_above(self.w_topline);
-        if self.w_topfill > 0 && extra as int64_t > off {
-            self.w_topfill -= extra - off as c_int;
+        if self.w_topfill > 0 && int64_t::from(extra) > off {
+            self.w_topfill -= extra - number_as_int(off);
             self.w_topfill = self.w_topfill.max(0);
         }
         self.check_topfill(false);
@@ -333,7 +343,7 @@ impl Win {
         let mut extra = 0;
         let so = scrolloff_or_drag(self);
         while loff.lnum > LineNr::ONE {
-            if ((scrolled <= 0 || scrolled >= min_scroll) && extra as int64_t >= so
+            if ((scrolled <= 0 || scrolled >= min_scroll) && int64_t::from(extra) >= so
                 || boff.lnum + 1 > self.buffer().line_count())
                 && loff.lnum <= self.w_botline
                 && (loff.lnum < self.w_botline || loff.fill >= fill_below_window)
@@ -376,7 +386,7 @@ impl Win {
             if used > self.w_view_height {
                 break;
             }
-            if (extra as int64_t) < so || scrolled < min_scroll {
+            if int64_t::from(extra) < so || scrolled < min_scroll {
                 extra += boff.height;
                 if boff.lnum >= self.w_botline
                     || boff.lnum + 1 == self.w_botline && boff.fill > self.w_filler_rows
@@ -590,12 +600,12 @@ impl Win {
         let mut below_wanted = above_wanted;
         if self.w_topline == LineNr::ONE {
             above_wanted = 0;
-            below_wanted = below_wanted.min((self.w_view_height / 2) as int64_t);
+            below_wanted = below_wanted.min(int64_t::from(self.w_view_height / 2));
         }
         self.validate_botline();
         if self.w_botline == self.buffer().line_count() + 1 && mouse_dragging.get() == 0 {
             below_wanted = 0;
-            above_wanted = above_wanted.min(((self.w_view_height - 1) / 2) as int64_t);
+            above_wanted = above_wanted.min(int64_t::from((self.w_view_height - 1) / 2));
         }
 
         // Enough file lines above and below the cursor: nothing to do.
@@ -626,18 +636,18 @@ impl Win {
         // Filler lines count as context.
         let mut above = self.w_topfill;
         let mut below = self.w_filler_rows;
-        while ((above as int64_t) < above_wanted || (below as int64_t) < below_wanted)
+        while (int64_t::from(above) < above_wanted || int64_t::from(below) < below_wanted)
             && topline < botline
         {
-            if (below as int64_t) < below_wanted
-                && (below <= above || above as int64_t >= above_wanted)
+            if int64_t::from(below) < below_wanted
+                && (below <= above || int64_t::from(above) >= above_wanted)
             {
                 below += self.plines_full(botline, true, true).0;
                 botline = self.fold_first(botline).unwrap_or(botline);
                 botline -= 1;
             }
-            if (above as int64_t) < above_wanted
-                && (above < below || below as int64_t >= below_wanted)
+            if int64_t::from(above) < above_wanted
+                && (above < below || int64_t::from(below) >= below_wanted)
             {
                 above += self.plines_nofill(topline, true);
                 topline = self.fold_last(topline);

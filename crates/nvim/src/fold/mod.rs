@@ -30,6 +30,13 @@
 //! [`session`], and the Vimscript builtins in [`builtins`].
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -262,9 +269,11 @@ impl Win {
 /// A window on screen always shows a buffer, which is what reading
 /// `terminal` through [`Win::buffer`] leans on -- as the C does.
 pub fn has_any_folding(win: Win) -> c_int {
-    (win.buffer().terminal.is_null()
-        && win.w_onebuf_opt.wo_fen != 0
-        && (!foldmethod_is_manual(win) || !win.w_folds.is_empty())) as c_int
+    c_int::from(
+        win.buffer().terminal.is_null()
+            && win.w_onebuf_opt.wo_fen != 0
+            && (!foldmethod_is_manual(win) || !win.w_folds.is_empty()),
+    )
 }
 
 /// When returning true, `firstp` and `lastp` are set to the first and last

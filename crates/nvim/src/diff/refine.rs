@@ -20,6 +20,13 @@
 //! trailing run at end of line by truncating both arrays.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::mbyte::{c_cluster_len, char_at, class_in, class_of, encode_char};
@@ -174,7 +181,9 @@ fn refine_inline_word(
                 let mut lines = buf.lines();
                 let line = lines.line(start_lnum + entry1.lineoff);
                 let from = gap_start.as_usize().min(line.len());
-                let gap_len = (gap_size as usize).min(line.len() - from);
+                let gap_len = usize::try_from(gap_size)
+                    .unwrap_or(0)
+                    .min(line.len() - from);
                 // Each character is classed as the line holds it, so one that
                 // runs past the gap's end still decodes whole.
                 if gap_len == 0
@@ -195,12 +204,12 @@ fn refine_inline_word(
                             if let Ok(at) = usize::try_from(at)
                                 && let Some(e) = map.get(at)
                             {
-                                changed += e.num_bytes as i64;
+                                changed += i64::from(e.num_bytes);
                             }
                         }
                     }
                 }
-                if changed >= (gap_size * 2) as i64 {
+                if changed >= i64::from(gap_size * 2) {
                     Gap::Merge
                 } else {
                     Gap::Keep(false)
@@ -243,10 +252,10 @@ fn tokenize_line(
         let rest = &bytes[i..];
         let new_in_keyword = word && class_of(rest[0], || char_at(rest), chartab) == CLASS_WORD;
         if in_keyword && !new_in_keyword {
-            out.push(NL as u8);
+            out.push(b'\n');
         }
 
-        if ascii_iswhite(bytes[i] as c_int) {
+        if ascii_iswhite(c_int::from(bytes[i])) {
             if flags & DIFF_IWHITEALL != 0 {
                 in_keyword = false;
                 i = bytes.len() - skip_white(&bytes[i..]).len();
@@ -261,53 +270,53 @@ fn tokenize_line(
             eol = None;
         }
 
-        let mut tok_len = 1;
-        if bytes[i] == NL as u8 {
+        let mut tok_len: usize = 1;
+        if bytes[i] == b'\n' {
             // NL is the internal stand-in for NUL.
             out.push(0);
         } else {
-            tok_len = c_cluster_len(rest) as c_int;
-            if ascii_iswhite(bytes[i] as c_int) && flags & DIFF_IWHITE != 0 {
+            tok_len = c_cluster_len(rest);
+            if ascii_iswhite(c_int::from(bytes[i])) && flags & DIFF_IWHITE != 0 {
                 // The whole run of white space is one token.
-                tok_len = (bytes.len() - skip_white(&bytes[i..]).len() - i) as c_int;
+                tok_len = bytes.len() - skip_white(&bytes[i..]).len() - i;
             }
             if flags & DIFF_ICASE != 0 {
                 // xdiff cannot ignore case, so fold the text instead.
                 let c = char_at(rest);
-                let c_len = utf_char2len(c);
+                let c_len = usize::try_from(utf_char2len(c)).expect("a character's length");
                 // MB_MAXBYTES + 1.
                 let mut cbuf = [0u8; 22];
                 let folded = encode_char(utf_fold(c), &mut cbuf);
                 out.extend_from_slice(&cbuf[..folded]);
                 if tok_len > c_len {
                     // Composing characters follow, and are not folded.
-                    out.extend_from_slice(&bytes[i + c_len as usize..i + tok_len as usize]);
+                    out.extend_from_slice(&bytes[i + c_len..i + tok_len]);
                 }
             } else {
-                out.extend_from_slice(&bytes[i..i + tok_len as usize]);
+                out.extend_from_slice(&bytes[i..i + tok_len]);
             }
         }
 
         if !new_in_keyword {
-            out.push(NL as u8);
+            out.push(b'\n');
         }
         if !new_in_keyword || !in_keyword {
             map.push(LinemapEntry {
                 byte_start: ColNr::from_index(i),
-                num_bytes: tok_len,
+                num_bytes: len_as_int(tok_len),
                 lineoff: off,
             });
         } else {
             // Still inside a keyword: grow the entry rather than add one.
             map.last_mut()
                 .expect("a keyword has a first character")
-                .num_bytes += tok_len;
+                .num_bytes += len_as_int(tok_len);
         }
         in_keyword = new_in_keyword;
-        i += tok_len as usize;
+        i += tok_len;
     }
     if in_keyword {
-        out.push(NL as u8);
+        out.push(b'\n');
     }
     if let (true, Some((out_len, map_len))) = (trim_eol, eol) {
         out.truncate(out_len);
@@ -317,7 +326,7 @@ fn tokenize_line(
         // An empty token for the line ending, so that a difference in
         // newlines is visible -- with `'list'` the eol listchar takes the
         // highlight.
-        out.push(NL as u8);
+        out.push(b'\n');
         map.push(LinemapEntry {
             byte_start: ColNr::from_index(bytes.len()),
             // Upstream writes `sizeof(NL)`, and `NL` is a *character
@@ -350,7 +359,7 @@ fn change_for(new_diff: &DiffBlock, linemap: &LineMap) -> DiffLineChange {
             continue;
         }
         let start = new_diff.df_lnum[i].index();
-        let end = start + new_diff.df_count[i] as usize;
+        let end = start + usize::try_from(new_diff.df_count[i]).expect("non-negative");
         match map.get(start) {
             Some(e) => {
                 change.dc_start[i] = e.byte_start;

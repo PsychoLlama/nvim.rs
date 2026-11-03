@@ -15,6 +15,13 @@
 //! forbids unsafe outright and is what `tests/unit/cursor.rs` drives.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::narrow::len_as_int;
 use crate::narrow::number_as_col;
@@ -265,10 +272,10 @@ fn coladvance2(win: Win, pos: &mut Pos, addspaces: bool, finetune: bool, wcol_ar
 
     // MAXCOL is i32::MAX, so '>=' in the C was an equality test.
     if wcol == ColNr::MAX {
-        idx = buf.line_len_raw(lnum) - 1 + one_more as c_int;
+        idx = buf.line_len_raw(lnum) - 1 + c_int::from(one_more);
         col = wcol;
         if (addspaces || finetune) && !visual_active() {
-            let want = win.linetabsize(lnum) + one_more as c_int;
+            let want = win.linetabsize(lnum) + c_int::from(one_more);
             win.set_curswant(if want > 0 {
                 ColNr::new(want - 1)
             } else {
@@ -322,9 +329,10 @@ fn coladvance2(win: Win, pos: &mut Pos, addspaces: bool, finetune: bool, wcol_ar
             if cstr::byte_at(line, idx.as_usize()) == 0 {
                 // Past the end of the line: pad it out with spaces.
                 let correct = wcol - col;
-                let size = i64::from(idx) + correct as i64;
-                assert!(size >= 0, "STRICT_ADD overflow");
-                let newline = padded(line, size as usize, idx.get(), correct, 0, 0);
+                let size = i64::from(idx) + i64::from(correct);
+                let size = usize::try_from(size).expect("STRICT_ADD overflow");
+                let spaces = usize::try_from(correct).expect("a column past the cursor");
+                let newline = padded(line, size, idx.as_usize(), spaces, 0, 0);
                 replace_padded(lnum, newline, idx.get(), 0, correct);
                 idx += correct;
                 col = wcol;
@@ -336,10 +344,10 @@ fn coladvance2(win: Win, pos: &mut Pos, addspaces: bool, finetune: bool, wcol_ar
                     return false;
                 }
                 let size = i64::from(linelen) - 1 + i64::from(csize);
-                assert!(size >= 0, "STRICT_ADD overflow");
-                assert!(linelen - idx >= 1, "STRICT_SUB overflow");
-                let tail = linelen - idx - 1;
-                let newline = padded(line, size as usize, idx.get(), csize, 1, tail);
+                let size = usize::try_from(size).expect("STRICT_ADD overflow");
+                let tail = usize::try_from(linelen - idx - 1).expect("STRICT_SUB overflow");
+                let spaces = usize::try_from(csize).expect("a character's width");
+                let newline = padded(line, size, idx.as_usize(), spaces, 1, tail);
                 replace_padded(lnum, newline, idx.get(), 1, csize);
                 idx += csize - 1 + correct;
                 col += correct;
@@ -375,17 +383,16 @@ fn coladvance2(win: Win, pos: &mut Pos, addspaces: bool, finetune: bool, wcol_ar
 fn padded(
     line: &[u8],
     size: usize,
-    idx: c_int,
-    spaces: c_int,
-    skipped: c_int,
-    tail: c_int,
+    idx: usize,
+    spaces: usize,
+    skipped: usize,
+    tail: usize,
 ) -> XString {
-    let (idx, spaces) = (idx as usize, spaces as usize);
-    let from = idx + skipped as usize;
+    let from = idx + skipped;
     let mut bytes = Vec::with_capacity(size + 1);
     bytes.extend_from_slice(&line[..idx]);
     bytes.resize(idx + spaces, b' ');
-    bytes.extend_from_slice(&line[from..from + tail as usize]);
+    bytes.extend_from_slice(&line[from..from + tail]);
     debug_assert_eq!(bytes.len(), size, "the caller sized the padded line");
     XString::from_vec(bytes)
 }
@@ -671,7 +678,7 @@ pub fn pchar_cursor(c: c_char) {
     let cursor = Win::current().w_cursor;
     let mut lines = Lines::current();
     if let Some(byte) = lines.line_mut(cursor.lnum).get_mut(cursor.col.as_usize()) {
-        *byte = c as u8;
+        *byte = u8::from_ne_bytes(c.to_ne_bytes());
     }
 }
 

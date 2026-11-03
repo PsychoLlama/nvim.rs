@@ -16,7 +16,7 @@ use super::*;
 use crate::grid::{SLF_INC_VCOL, SLF_RIGHTLEFT, SLF_WRAP};
 use crate::log::logmsg;
 use crate::mbyte::{c_cells_at, c_cluster_schar};
-use crate::types::{LineBuf, NUL};
+use crate::types::LineBuf;
 
 /// The one line under construction. See [`LineBuf`].
 static LINEBUF: GlobalCell<LineBuf> = GlobalCell::new(LineBuf::empty());
@@ -202,7 +202,7 @@ pub fn grid_line_puts(col: c_int, text: &[u8], attr: c_int) -> c_int {
         let mut col = col;
         let mut at = 0;
 
-        while col < max_col && at < text.len() && text[at] != NUL as u8 {
+        while col < max_col && at < text.len() && text[at] != b'\0' {
             let rest = &text[at..];
             let first = rest[0];
             let (mut schar, mut mbyte_cells, mbyte_blen) =

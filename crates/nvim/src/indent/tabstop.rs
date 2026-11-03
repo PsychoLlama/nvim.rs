@@ -7,8 +7,15 @@
 //! is about.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
-use crate::narrow::number_as_col;
+use crate::narrow::{number_as_col, number_as_int};
 use core::ffi::c_int;
 
 use crate::types::{ColNr, OptInt};
@@ -20,6 +27,12 @@ mod limit {
     pub const TABSTOP_MAX: ::core::ffi::c_int = 9999;
 }
 pub use limit::TABSTOP_MAX;
+
+/// A stop number (or the count, which is the last one's) as an index into
+/// the list; the list never names a negative one.
+fn stop_index(n: c_int) -> usize {
+    usize::try_from(n).expect("a tabstop index")
+}
 
 /// A list of tabstops: `stops[0]` is the count, `stops[1..=count]` the
 /// widths.
@@ -39,7 +52,7 @@ impl<'a> TabStops<'a> {
 
     /// The widths, without the count in front of them.
     pub fn widths(self) -> &'a [i32] {
-        &self.stops[1..=self.count() as usize]
+        &self.stops[1..=stop_index(self.count())]
     }
 
     /// How many stops the list names.
@@ -49,7 +62,7 @@ impl<'a> TabStops<'a> {
 
     /// The width of stop `t`, counting from one.
     fn width(self, t: c_int) -> i32 {
-        self.stops[t as usize]
+        self.stops[stop_index(t)]
     }
 
     /// The first stop's width, which is what 'shiftwidth' falls back to.
@@ -73,7 +86,7 @@ impl<'a> TabStops<'a> {
     /// The column where the repeating tail begins, and the width it repeats
     /// with — used once `col` is past the last named stop.
     fn tail(self) -> (ColNr, c_int) {
-        let total: i32 = self.stops[1..=self.count() as usize].iter().sum();
+        let total: i32 = self.widths().iter().sum();
         (ColNr::new(total), self.width(self.count()))
     }
 
@@ -146,7 +159,7 @@ impl<'a> TabStops<'a> {
 pub fn eq(a: Option<&[i32]>, b: Option<&[i32]>) -> bool {
     match (a, b) {
         (None, None) => true,
-        (Some(a), Some(b)) => a[0] == b[0] && a[1..=a[0] as usize] == b[1..=b[0] as usize],
+        (Some(a), Some(b)) => a[0] == b[0] && a[1..=stop_index(a[0])] == b[1..=stop_index(b[0])],
         _ => false,
     }
 }
@@ -155,7 +168,7 @@ pub fn eq(a: Option<&[i32]>, b: Option<&[i32]>) -> bool {
 /// default of eight.
 pub fn uniform_padding(col: ColNr, ts: OptInt) -> c_int {
     let ts = if ts == 0 { 8 } else { ts };
-    (ts - i64::from(col) % ts) as c_int
+    number_as_int(ts - i64::from(col) % ts)
 }
 
 /// [`TabStops::from_to`] for a uniform 'tabstop' of `ts`.
@@ -213,13 +226,13 @@ pub fn parse(var: &[u8]) -> Result<Option<Vec<i32>>, ParseError> {
         }
     }
 
-    let mut array = Vec::with_capacity(valcount as usize + 1);
+    let mut array = Vec::with_capacity(usize::try_from(valcount).unwrap_or(0) + 1);
     array.push(valcount);
     let mut at = 0;
     for part in var.split(|&b| b == b',') {
         // `atoi` here, so anything after the digits is simply ignored.
         let n = leading_number(part).unwrap_or(0);
-        if n <= 0 || n > TABSTOP_MAX as i64 {
+        if n <= 0 || n > i64::from(TABSTOP_MAX) {
             return Err(ParseError::OutOfRange(at));
         }
         array.push(number_as_col(n).get());
@@ -245,7 +258,7 @@ fn leading_number(s: &[u8]) -> Option<i64> {
     while i < s.len() && s[i].is_ascii_digit() {
         value = value
             .saturating_mul(10)
-            .saturating_add((s[i] - b'0') as i64);
+            .saturating_add(i64::from(s[i] - b'0'));
         i += 1;
     }
     (i > digits).then_some(if negative { -value } else { value })

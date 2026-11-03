@@ -15,9 +15,17 @@
 //! Original: `src/nvim/move.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::c_int;
 
+use crate::narrow::number_as_int;
 use crate::types::{ColNr, OptInt, int64_t};
 
 /// Screen lines of the top line that `w_skipcol` scrolls out of sight.
@@ -76,7 +84,7 @@ pub fn top_skipped_plines(skipcol: ColNr, width1: c_int, width2: c_int) -> c_int
     if skipcol > ColNr::new(width1) {
         (skipcol - width1).get() / width2 + 1
     } else {
-        (skipcol > ColNr::ZERO) as c_int
+        c_int::from(skipcol > ColNr::ZERO)
     }
 }
 
@@ -87,7 +95,7 @@ pub fn scrolloff_cols(so: int64_t, width1: c_int, width2: c_int) -> int64_t {
     if so == 0 {
         0
     } else {
-        width1 as int64_t + (so - 1) * width2 as int64_t
+        int64_t::from(width1) + (so - 1) * int64_t::from(width2)
     }
 }
 
@@ -96,14 +104,14 @@ pub fn scrolloff_cols(so: int64_t, width1: c_int, width2: c_int) -> int64_t {
 pub fn fit_scrolloff_cols(so_cols: int64_t, size: c_int, width1: c_int, width2: c_int) -> int64_t {
     let mut so_cols = so_cols;
     // Not enough screen lines in the top line: ignore 'scrolloff'.
-    while so_cols > size as int64_t
-        && so_cols - width2 as int64_t >= width1 as int64_t
+    while so_cols > int64_t::from(size)
+        && so_cols - int64_t::from(width2) >= int64_t::from(width1)
         && width1 > 0
     {
-        so_cols -= width2 as int64_t;
+        so_cols -= int64_t::from(width2);
     }
-    if so_cols >= width1 as int64_t && so_cols > size as int64_t {
-        so_cols -= width1 as int64_t;
+    if so_cols >= int64_t::from(width1) && so_cols > int64_t::from(size) {
+        so_cols -= int64_t::from(width1);
     }
     so_cols
 }
@@ -180,19 +188,19 @@ pub fn sms_cursor_row(
     if scrolloff_cols > 0 {
         // The width of the line rounded up to a whole screen line.
         let size = width1 + width2 * ((size - width1 + width2 - 1) / width2);
-        while col > size as int64_t {
-            col -= width2 as int64_t;
+        while col > int64_t::from(size) {
+            col -= int64_t::from(width2);
         }
     }
     col -= i64::from(skipcol);
-    if col >= width1 as int64_t {
-        col -= width1 as int64_t;
+    if col >= int64_t::from(width1) {
+        col -= int64_t::from(width1);
         row += 1;
     }
     // Upstream's second test is `>` where the first is `>=`, so a column
     // landing exactly on `width2` stays on this row.
-    if col > width2 as int64_t {
-        row += (col / width2 as int64_t) as c_int;
+    if col > int64_t::from(width2) {
+        row += number_as_int(col / int64_t::from(width2));
     }
     row
 }
@@ -214,9 +222,9 @@ pub fn sms_fixup_count_forw(skipcol: ColNr, size: c_int, width1: c_int, width2: 
 /// as a percentage of the window height when negative.
 pub fn scrolljump_lines(scrolljump: OptInt, view_height: c_int) -> c_int {
     if scrolljump >= 0 {
-        scrolljump as c_int
+        number_as_int(scrolljump)
     } else {
-        view_height * (-scrolljump) as c_int / 100
+        view_height * number_as_int(-scrolljump) / 100
     }
 }
 
@@ -311,29 +319,29 @@ pub fn sidescroll_leftcol(
     siso: int64_t,
     sidescroll: OptInt,
 ) -> Option<c_int> {
-    let off_left = (startcol - leftcol) as int64_t - siso;
-    let off_right = (endcol - leftcol) as int64_t - (view_width as int64_t - siso) + 1;
+    let off_left = int64_t::from(startcol - leftcol) - siso;
+    let off_right = int64_t::from(endcol - leftcol) - (int64_t::from(view_width) - siso) + 1;
     if off_left >= 0 && off_right <= 0 {
         return None;
     }
     let mut diff = if off_left < 0 { -off_left } else { off_right };
     // Far off, or not enough room on either side: put the cursor in the
     // middle of the window.
-    let new_leftcol = if sidescroll == 0 || diff >= (width1 / 2) as int64_t || off_right >= off_left
-    {
-        wcol - extra - width1 / 2
-    } else {
-        if diff < sidescroll {
-            debug_assert!(sidescroll <= c_int::MAX as OptInt, "p_ss <= INT_MAX");
-            diff = sidescroll;
-        }
-        (if off_left < 0 {
-            leftcol - diff as c_int
+    let new_leftcol =
+        if sidescroll == 0 || diff >= int64_t::from(width1 / 2) || off_right >= off_left {
+            wcol - extra - width1 / 2
         } else {
-            leftcol + diff as c_int
-        })
-        .get()
-    };
+            if diff < sidescroll {
+                debug_assert!(sidescroll <= OptInt::from(c_int::MAX), "p_ss <= INT_MAX");
+                diff = sidescroll;
+            }
+            (if off_left < 0 {
+                leftcol - number_as_int(diff)
+            } else {
+                leftcol + number_as_int(diff)
+            })
+            .get()
+        };
     Some(if new_leftcol > 0 { new_leftcol } else { 0 })
 }
 
@@ -355,25 +363,25 @@ pub fn skipcol_for_tall_line(
     // 1: less than 'scrolloff' lines above; 2: less than 'scrolloff' below;
     // 3: both.
     let mut extra = 0;
-    if i64::from(skipcol) + so * width2 as int64_t > i64::from(virtcol) {
+    if i64::from(skipcol) + so * int64_t::from(width2) > i64::from(virtcol) {
         extra = 1;
     }
     let plines = plines - 1;
     // The last display line of the buffer line we want at the bottom.
-    let n = if plines as int64_t > wrow as int64_t + so {
+    let n = if int64_t::from(plines) > int64_t::from(wrow) + so {
         debug_assert!(
-            wrow as int64_t + so <= c_int::MAX as int64_t,
+            int64_t::from(wrow) + so <= int64_t::from(c_int::MAX),
             "wp->w_wrow + so <= INT_MAX"
         );
-        (wrow as int64_t + so) as c_int
+        number_as_int(int64_t::from(wrow) + so)
     } else {
         plines
     };
-    if n as int64_t >= (view_height + skipcol.get() / width2) as int64_t - so {
+    if int64_t::from(n) >= int64_t::from(view_height + skipcol.get() / width2) - so {
         extra += 2;
     }
 
-    if extra == 3 || view_height as int64_t <= so * 2 {
+    if extra == 3 || int64_t::from(view_height) <= so * 2 {
         // Not enough room for 'scrolloff' either way: centre the cursor.
         let mut n = virtcol.get() / width2;
         if n > view_height / 2 {
@@ -391,11 +399,13 @@ pub fn skipcol_for_tall_line(
             ColNr::ZERO
         }
     } else if extra == 1 {
-        debug_assert!(so <= c_int::MAX as int64_t, "so <= INT_MAX");
-        let mut back = ((i64::from(skipcol) + so * width2 as int64_t - i64::from(virtcol)
-            + width2 as int64_t
-            - 1)
-            / width2 as int64_t) as c_int;
+        debug_assert!(so <= int64_t::from(c_int::MAX), "so <= INT_MAX");
+        let mut back = number_as_int(
+            (i64::from(skipcol) + so * int64_t::from(width2) - i64::from(virtcol)
+                + int64_t::from(width2)
+                - 1)
+                / int64_t::from(width2),
+        );
         if back > 0 {
             if back * width2 > skipcol.get() {
                 back = skipcol.get() / width2;

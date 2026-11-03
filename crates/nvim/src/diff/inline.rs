@@ -133,8 +133,8 @@ fn common_prefix(org: &[u8], new: &[u8]) -> (usize, usize) {
     let flags = diff_flags.get();
     let (mut si_org, mut si_new) = (0usize, 0usize);
     while si_org < org.len() {
-        let w_org = ascii_iswhite(byte_at(org, si_org) as c_int);
-        let w_new = ascii_iswhite(byte_at(new, si_new) as c_int);
+        let w_org = ascii_iswhite(c_int::from(byte_at(org, si_org)));
+        let w_new = ascii_iswhite(c_int::from(byte_at(new, si_new)));
         if flags & DIFF_IWHITE != 0 && w_org && w_new
             || flags & DIFF_IWHITEALL != 0 && (w_org || w_new)
         {
@@ -163,15 +163,15 @@ fn common_suffix(org: &[u8], new: &[u8], start: c_int, si_new: c_int) -> c_int {
     let flags = diff_flags.get();
     let (mut ei_org, mut ei_new) = (org.len() as c_int, new.len() as c_int);
     while ei_org >= start && ei_new >= si_new && ei_org >= 0 && ei_new >= 0 {
-        let w_org = ascii_iswhite(byte_at(org, ei_org as usize) as c_int);
-        let w_new = ascii_iswhite(byte_at(new, ei_new as usize) as c_int);
+        let w_org = ascii_iswhite(c_int::from(byte_at(org, ei_org as usize)));
+        let w_new = ascii_iswhite(c_int::from(byte_at(new, ei_new as usize)));
         if flags & DIFF_IWHITE != 0 && w_org && w_new
             || flags & DIFF_IWHITEALL != 0 && (w_org || w_new)
         {
-            while ei_org >= start && ascii_iswhite(byte_at(org, ei_org as usize) as c_int) {
+            while ei_org >= start && ascii_iswhite(c_int::from(byte_at(org, ei_org as usize))) {
                 ei_org -= 1;
             }
-            while ei_new >= si_new && ascii_iswhite(byte_at(new, ei_new as usize) as c_int) {
+            while ei_new >= si_new && ascii_iswhite(c_int::from(byte_at(new, ei_new as usize))) {
                 ei_new -= 1;
             }
         } else {
@@ -407,6 +407,6 @@ pub fn f_diff_hl_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             }
         }
     }
-    let id = hlID.get() as VarNumber;
+    let id = VarNumber::from(hlID.get());
     result.write_number(id);
 }

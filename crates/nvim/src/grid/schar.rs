@@ -1,4 +1,11 @@
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 //! `ScreenChar`: the glyph in a screen cell.
 //!
@@ -145,7 +152,7 @@ pub fn schar_cache_clear() {
 pub(crate) fn schar_copy(buf: &mut SCharBuf, sc: ScreenChar) -> size_t {
     let mut rest: &mut [u8] = buf;
     let len = schar_get_adv(&mut rest, sc);
-    rest[0] = NUL as u8;
+    rest[0] = b'\0';
     len
 }
 
@@ -280,7 +287,7 @@ fn schar_get_first_byte(sc: ScreenChar) -> u8 {
 pub fn schar_get_first_codepoint(sc: ScreenChar) -> c_int {
     // Hot path: an inline ASCII glyph is its own codepoint.
     if sc < 0x80 {
-        return sc as c_int;
+        return c_int::try_from(sc).unwrap_or_default();
     }
     if schar_high(sc) {
         glyph_first_codepoint(schar_idx(sc))
@@ -292,11 +299,8 @@ pub fn schar_get_first_codepoint(sc: ScreenChar) -> c_int {
 
 /// The ASCII character `sc` is, or NUL when it is not ASCII.
 pub fn schar_get_ascii(sc: ScreenChar) -> c_char {
-    if sc < 0x80 {
-        sc as c_char
-    } else {
-        NUL as c_char
-    }
+    // An ASCII glyph fits a `c_char` whichever sign it has.
+    c_char::try_from(sc).unwrap_or_default()
 }
 
 /// Whether `sc` starts in the Arabic block, i.e. its lead byte is 0xD8 or
@@ -372,13 +376,15 @@ fn reshape(sc: ScreenChar, c0: c_int, c1: c_int, c0new: c_int, c1new: c_int) -> 
 
     // Whatever followed the one or two codepoints just replaced.
     let off = utf_char2len(c0) + if c1 != 0 { utf_char2len(c1) } else { 0 };
-    let tail = old.get(off as usize..).unwrap_or(&[]);
+    let tail = old
+        .get(usize::try_from(off).unwrap_or(usize::MAX)..)
+        .unwrap_or(&[]);
     let mut rest = tail.len();
     if rest + len + 1 > MAX_SCHAR_SIZE as size_t {
         // Too bigly: discard one codepoint. That is always enough,
         // because c0 cannot grow by more than two bytes (base Arabic to
         // extended Arabic).
-        rest -= cp_bounds(tail, rest - 1).begin_off as size_t + 1;
+        rest -= usize::from(cp_bounds(tail, rest - 1).begin_off.unsigned_abs()) + 1;
     }
     new[len..len + rest].copy_from_slice(&tail[..rest]);
     schar_from_buf(&new[..len + rest])

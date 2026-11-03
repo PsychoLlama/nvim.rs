@@ -28,6 +28,13 @@
 //! starting a *new* comment.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr::byte_at;
 use crate::guard::Suppress;
@@ -153,7 +160,7 @@ fn apply_new_indent(
         copy_indent(newindent, saved_line);
         // Keep 'preserveindent' on so that later fiddling with the line
         // does not undo the copy; restored at the end of `open_line`.
-        Buf::current().b_p_pi = true as c_int;
+        Buf::current().b_p_pi = c_int::from(true);
     } else {
         set_indent(newindent, SIN_INSERT | SIN_NOMARK);
     }
@@ -201,11 +208,11 @@ fn truncate_old_line(
     if trunc_line && flags & OPENLINE_KEEPTRAIL == 0 {
         truncate_spaces(&mut saved_line);
     }
-    let new_len = saved_line.len() as c_int;
+    let new_len = ColNr::from_index(saved_line.len());
     let _ = ml_replace_owned(Win::current().w_cursor.lnum, XString::from_vec(saved_line));
 
     let mut cols_spliced = 0;
-    if new_len < Win::current().w_cursor.col.get() {
+    if new_len < Win::current().w_cursor.col {
         // Trailing white space went as well as the split.
         let cb = Buf::current();
         let row = Win::current().w_cursor.lnum - 1;
@@ -213,12 +220,12 @@ fn truncate_old_line(
         extmark_splice_cols(
             cb,
             row.get(),
-            ColNr::new(new_len),
-            gone,
+            new_len,
+            ColNr::new(gone),
             ColNr::ZERO,
             kExtmarkUndo,
         );
-        cols_spliced = gone.get();
+        cols_spliced = gone;
     }
 
     if did_append {
@@ -357,7 +364,7 @@ pub fn open_line(
             // 'smartindent' wants the first character after the break.
             first_char = c_int::from(byte_at(tail, white_run(tail)));
         }
-        extra_len = tail.len() as c_int;
+        extra_len = tail.len();
     }
     let cut = extra.unwrap_or(saved_line.len());
 
@@ -427,7 +434,8 @@ pub fn open_line(
             // A line comment after code: `code(); // why`.
             comment_start = check_linecomment(head);
             if comment_start != MAXCOL {
-                let (len, tried) = get_leader_len(&head[comment_start as usize..], false, true);
+                let from = usize::try_from(comment_start).unwrap_or(0);
+                let (len, tried) = get_leader_len(&head[from..], false, true);
                 // One out-parameter for both scans upstream: a scan that
                 // tried nothing leaves the first one's answer.
                 lead_flags = tried.or(lead_flags);
@@ -499,9 +507,11 @@ pub fn open_line(
                 // 'formatlistpat': pad after the comment leader so that the
                 // text lines up with the first line's. The white space
                 // *before* the leader is `set_indent`'s job below.
-                let padding = second_line_indent - (newindent + text.len() as c_int);
-                if padding > 0 {
-                    text.resize(text.len() + padding as usize, b' ');
+                let padding = second_line_indent - (newindent + len_as_int(text.len()));
+                if let Ok(pad) = usize::try_from(padding)
+                    && pad > 0
+                {
+                    text.resize(text.len() + pad, b' ');
                     less_cols -= padding;
                     newcol += padding;
                 }

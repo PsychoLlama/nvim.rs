@@ -17,10 +17,18 @@
 //! it, and the zeros answer what the C reads there.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::charset::ptr2cells_at;
 use crate::cstr::{byte_at, until_nul};
 use crate::mbyte::{c_cluster_len, c_display_width, head_off};
+use crate::narrow::len_as_int;
 use core::ffi::c_int;
 
 use crate::change::*;
@@ -153,7 +161,7 @@ fn plan_start_or_middle(
         end_comment_pending.set(c_int::from(lead_end.last().copied().unwrap_or(0)));
     }
 
-    let lead_len = plan.lead_len as usize;
+    let lead_len = usize::try_from(plan.lead_len).expect("non-negative");
 
     // The comment already ends on this line, so it needs no leader.
     if dir == FORWARD {
@@ -323,7 +331,7 @@ fn right_adjust(buf: &mut [u8], mut lead_len: usize, repl: &[u8]) -> usize {
     p += 1;
 
     // Walk back over as many *cells* as the replacement takes.
-    let repl_size = c_display_width(repl, repl_len as c_int);
+    let repl_size = c_display_width(repl, len_as_int(repl_len));
     let mut old_size = 0;
     let endp = p;
     while old_size < repl_size && p > 0 {
@@ -337,7 +345,7 @@ fn right_adjust(buf: &mut [u8], mut lead_len: usize, repl: &[u8]) -> usize {
     lead_len = lead_len + repl_len - gap;
     buf[p..p + repl_len].copy_from_slice(repl);
     if p + repl_len > lead_len {
-        buf[p + repl_len] = NUL as u8;
+        buf[p + repl_len] = b'\0';
     }
 
     // Blank out whatever is left of the old leader in front of it, a
@@ -373,11 +381,11 @@ fn left_adjust(buf: &mut [u8], mut lead_len: usize, repl: &[u8]) -> usize {
 
     // How many bytes of the old leader take as many cells as the
     // replacement; move the rest out of the way.
-    let repl_size = c_display_width(repl, repl_len as c_int);
+    let repl_size = c_display_width(repl, len_as_int(repl_len));
     let mut i = 0;
-    while i < lead_len && buf[p + i] != NUL as u8 {
+    while i < lead_len && buf[p + i] != b'\0' {
         let l = c_cluster_len(&buf[p + i..]);
-        if c_display_width(&buf[p..], (i + l) as c_int) > repl_size {
+        if c_display_width(&buf[p..], len_as_int(i + l)) > repl_size {
             break;
         }
         i += l;
@@ -419,7 +427,7 @@ fn left_adjust(buf: &mut [u8], mut lead_len: usize, repl: &[u8]) -> usize {
         }
         p += 1;
     }
-    buf[p] = NUL as u8;
+    buf[p] = b'\0';
     lead_len
 }
 
@@ -439,7 +447,7 @@ pub(crate) struct LeaderContext {
     /// the new line still lines up under the comment.
     pub(crate) comment_start: c_int,
     /// Bytes of the old line that will be appended after the leader.
-    pub(crate) extra_len: c_int,
+    pub(crate) extra_len: usize,
     /// The 'formatlistpat' padding the caller may add.
     pub(crate) second_line_indent: c_int,
 }
@@ -463,7 +471,7 @@ pub(crate) fn build_leader(
     } = ctx;
     let repl = plan.repl.text();
     let repl_len = repl.map_or(0, <[u8]>::len);
-    let mut lead_len = plan.lead_len as usize;
+    let mut lead_len = usize::try_from(plan.lead_len).expect("non-negative");
     let mut extra_space = plan.extra_space;
 
     // Upstream's allocation: the leader, its replacement, the space, what
@@ -472,8 +480,8 @@ pub(crate) fn build_leader(
     let bytes = lead_len
         + repl_len
         + usize::from(extra_space)
-        + extra_len as usize
-        + second_line_indent.max(0) as usize
+        + extra_len
+        + usize::try_from(second_line_indent).unwrap_or(0)
         + 1;
     let mut buf = vec![0u8; bytes];
     buf[..lead_len].copy_from_slice(&saved_line[..lead_len]);
@@ -481,7 +489,7 @@ pub(crate) fn build_leader(
     // A leader found *after* code (`code(); // why`) keeps only its white
     // space, so that the new line lines up under the comment.
     // TODO(vim): handle multi-byte and double width chars
-    for byte in &mut buf[..comment_start as usize] {
+    for byte in &mut buf[..usize::try_from(comment_start).expect("a comment column")] {
         if !ascii_iswhite(c_int::from(*byte)) {
             *byte = b' ';
         }
@@ -524,13 +532,13 @@ pub(crate) fn build_leader(
         if lead_len > 0 && ascii_iswhite(c_int::from(buf[lead_len - 1])) {
             extra_space = false;
         }
-        buf[lead_len] = NUL as u8;
+        buf[lead_len] = b'\0';
     }
 
     if extra_space {
         buf[lead_len] = b' ';
         lead_len += 1;
-        buf[lead_len] = NUL as u8;
+        buf[lead_len] = b'\0';
     }
 
     let mut newcol = ColNr::from_index(lead_len);
@@ -550,7 +558,7 @@ pub(crate) fn build_leader(
 
     BuiltLeader {
         text: until_nul(&buf[start..]).to_vec(),
-        lead_len: lead_len as c_int,
+        lead_len: len_as_int(lead_len),
         newcol,
         newindent,
     }

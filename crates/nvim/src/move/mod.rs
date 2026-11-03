@@ -30,6 +30,13 @@
 //! Original: `src/nvim/move.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -60,7 +67,7 @@ use crate::drawscreen::{
 use crate::fold::fold_adjust_cursor;
 use crate::normal::visual_active;
 use crate::option::{cpo_has, get_scrolloff_value, get_sidescrolloff_value};
-use crate::options::kOptCuloptFlagScreenline;
+use crate::options::{OptCuloptFlags, kOptCuloptFlagScreenline};
 use crate::optionstr::OptString;
 use crate::plines::{
     linetabsize_eol, plines_m_win, plines_win, plines_win_full, plines_win_nofill, win_get_fill,
@@ -129,7 +136,7 @@ impl Win {
     #[inline(never)]
     pub(crate) fn col_off(self) -> c_int {
         self.number_col()
-            + (cmdwin_win.get() == Some(self.id())) as c_int
+            + c_int::from(cmdwin_win.get() == Some(self.id()))
             + self.fdccol_count()
             + self.w_scwidth * SIGN_WIDTH
     }
@@ -167,7 +174,7 @@ impl Win {
         if self.w_onebuf_opt.wo_nu == 0 && self.w_onebuf_opt.wo_rnu == 0 && stc_empty {
             return 0;
         }
-        number_width(self) + stc_empty as c_int
+        number_width(self) + c_int::from(stc_empty)
     }
 
     pub(super) fn fdccol_count(self) -> c_int {
@@ -285,7 +292,7 @@ impl Win {
     /// calls back into the fold and decoration layers between reads.
     pub(super) fn remembered_line(self, i: c_int) -> WLine {
         debug_assert!(i >= 0 && i < self.w_lines_valid, "i < wp->w_lines_valid");
-        self.w_lines[i as usize]
+        self.w_lines[usize::try_from(i).expect("a valid w_lines index")]
     }
 }
 
@@ -385,7 +392,7 @@ fn redraw_for_cursorcolumn(win: Win) {
     if win.w_onebuf_opt.wo_cuc != 0 {
         win.redraw_later(UPD_SOME_VALID);
     } else if win.w_onebuf_opt.wo_cul != 0
-        && win.w_p_culopt_flags as c_int & kOptCuloptFlagScreenline as c_int != 0
+        && OptCuloptFlags::from(win.w_p_culopt_flags) & kOptCuloptFlagScreenline != 0
     {
         win.redraw_later(UPD_VALID);
     }
@@ -532,7 +539,7 @@ pub fn approximate_botline_win(mut win: Win) {
 /// Whether `w_wrow` and `w_wcol` are both right.
 pub fn cursor_valid(win: Win) -> c_int {
     win.check_cursor_moved();
-    win.w_valid.has_all(WinValid::WROW | WinValid::WCOL) as c_int
+    c_int::from(win.w_valid.has_all(WinValid::WROW | WinValid::WCOL))
 }
 
 /// Make sure `w_wrow` and `w_wcol` are right. `w_topline` must already be --
@@ -581,7 +588,7 @@ fn curs_rows(mut win: Win) {
                 if lnum > win.w_cursor.lnum {
                     break;
                 }
-                win.w_cline_row += wl.wl_size as c_int;
+                win.w_cline_row += c_int::from(wl.wl_size);
             } else {
                 let (n, last, _) = win.corrected_plines(lnum, true);
                 lnum = last + 1;
@@ -613,7 +620,7 @@ fn curs_rows(mut win: Win) {
             win.w_cline_folded = win.fold_span(win.w_cursor.lnum).0;
         } else {
             let wl = win.remembered_line(i);
-            win.w_cline_height = wl.wl_size as c_int;
+            win.w_cline_height = c_int::from(wl.wl_size);
             win.w_cline_folded = wl.wl_folded;
         }
     }

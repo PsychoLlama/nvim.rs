@@ -93,7 +93,7 @@ pub fn op_reindent(op: &OpArg, how: Indenter) {
                 win.w_cursor.lnum = start_lnum;
                 indent_progress(
                     gettext(c"%ld lines to indent... "),
-                    i as int64_t,
+                    int64_t::from(i),
                     c"running",
                 );
                 win.w_cursor.lnum = save_lnum;
@@ -145,7 +145,7 @@ pub fn op_reindent(op: &OpArg, how: Indenter) {
                 c"%ld lines indented ",
                 done as ::core::ffi::c_ulong,
             ),
-            done as int64_t,
+            int64_t::from(done),
             c"success",
         );
     }
@@ -323,7 +323,7 @@ fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
     // No character starts at that column, so make one: insert the spaces
     // the cursor needs to sit where it was asked to.
     win.w_cursor.col = ColNr::new(new_cursor_col);
-    let ptrlen = (win.w_virtcol.get() - vcol) as size_t;
+    let ptrlen = usize::try_from(win.w_virtcol.get() - vcol).expect("non-negative");
     ins_str(&vec![b' '; ptrlen]);
     new_cursor_col + ptrlen as c_int
 }
@@ -741,8 +741,8 @@ impl Retab {
             if byte(&scan) == 0 {
                 break;
             }
-            scan.vcol += width(&scan) as int64_t;
-            if scan.vcol >= MAXCOL as int64_t {
+            scan.vcol += int64_t::from(width(&scan));
+            if scan.vcol >= int64_t::from(MAXCOL) {
                 emsg_text_too_long();
                 break;
             }
@@ -767,7 +767,7 @@ fn set_retab_tabstop(vts: TabStopArray, ts_str: &XString) {
         buf.b_p_vts_array = vts;
     } else {
         // A single stop with 'vartabstop' unused is 'tabstop'.
-        buf.b_p_ts = first_stop(vts.as_deref()) as OptInt;
+        buf.b_p_ts = OptInt::from(first_stop(vts.as_deref()));
     }
 }
 
@@ -805,9 +805,10 @@ pub fn ex_retab(excmd: &mut ExArg) {
     // A single value given is equal to either 'tabstop' or 'vartabstop',
     // and then nothing on screen changed.
     let (own, given) = (buf.b_p_vts_array.as_deref(), tabs.vts.as_deref());
-    let unchanged =
-        stop_count(own) == 0 && stop_count(given) == 1 && buf.b_p_ts == first_stop(given) as OptInt
-            || stop_count(own) > 0 && tabstop::eq(own, given);
+    let unchanged = stop_count(own) == 0
+        && stop_count(given) == 1
+        && buf.b_p_ts == OptInt::from(first_stop(given))
+        || stop_count(own) > 0 && tabstop::eq(own, given);
     if !unchanged {
         redraw_curbuf_later(UPD_NOT_VALID);
     }

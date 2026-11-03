@@ -1,4 +1,11 @@
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 //! How much room text takes up in a window.
 //!
@@ -339,7 +346,7 @@ fn showbreak_head(
                 head += (max_head_vcol - (vcol + head_prev + prev_rem).get() + width2 - 1) / width2
                     * head_mid;
             } else if max_head_vcol < 0 {
-                let on_nul = byte_at(csarg.line, at) == NUL as u8;
+                let on_nul = byte_at(csarg.line, at) == b'\0';
                 let off = mb_added + virt_text_cursor_off(csarg, on_nul);
                 if off >= prev_rem {
                     head += if size > off {
@@ -395,8 +402,8 @@ fn add_inline_virt_text(
         if mark.pos.col == col && !mt_invalid(mark) && ns_in_win(mark.ns, wp) {
             let inline = mark_virt_chain(mark).filter_map(|link| {
                 with_decor_virt(link, |vt| {
-                    let inline =
-                        vt.flags as c_int & VT_IS_LINES == 0 && vt.pos as uint32_t == VPOS_INLINE;
+                    let inline = c_int::from(vt.flags) & VT_IS_LINES == 0
+                        && vt.pos as uint32_t == VPOS_INLINE;
                     inline.then_some(vt.width)
                 })
             });
@@ -503,7 +510,7 @@ pub(crate) fn charsize_regular(
     let buf = wp.buffer();
     let expand_tab = cur_char == TAB && csarg.use_tabstop;
     let has_lcs_eol = wp.w_onebuf_opt.wo_list != 0 && wp.w_p_lcs_chars.eol != 0;
-    let at_nul = byte_at(csarg.line, at) == NUL as u8;
+    let at_nul = byte_at(csarg.line, at) == b'\0';
 
     // First the plain size, without 'linebreak' or inline virtual text.
     let mut size;
@@ -656,7 +663,7 @@ fn in_win_border(window: Win, vcol: ColNr) -> bool {
 /// -- so the byte is only read for that one.
 #[inline(always)]
 fn ends_at(line: &[u8], at: usize, chr: CharInfo) -> bool {
-    chr.value == 0 && byte_at(line, at) == NUL as u8
+    chr.value == 0 && byte_at(line, at) == b'\0'
 }
 
 /// How far a walk over `line` may go: `len` bytes, or the whole line for a
@@ -677,29 +684,25 @@ pub(crate) fn linesize_regular(
 ) -> c_int {
     let line = csarg.line;
     let end = walk_end(line, len);
-    let mut vcol = vcol_arg as int64_t;
+    let mut vcol = int64_t::from(vcol_arg);
 
     let mut at = 0;
     let mut chr: CharInfo = c_char_info(line, 0);
     while at < end && !ends_at(line, at, chr) {
-        vcol += charsize_regular(csarg, at, ColNr::new(vcol_arg), chr.value).width as int64_t;
+        vcol += int64_t::from(charsize_regular(csarg, at, ColNr::new(vcol_arg), chr.value).width);
         (at, chr) = c_next_cluster(line, at, chr);
-        if vcol > MAXCOL as int64_t {
+        let Ok(next) = c_int::try_from(vcol) else {
             vcol_arg = MAXCOL;
             break;
-        }
-        vcol_arg = vcol as c_int;
+        };
+        vcol_arg = next;
     }
 
     // Inline virtual text after the end of the line.
-    if len == ColNr::MAX && csarg.virt_row >= 0 && byte_at(line, at) == NUL as u8 {
+    if len == ColNr::MAX && csarg.virt_row >= 0 && byte_at(line, at) == b'\0' {
         let head = charsize_regular(csarg, at, ColNr::new(vcol_arg), chr.value).head;
-        vcol += (csarg.cur_text_width_left + csarg.cur_text_width_right + head) as int64_t;
-        vcol_arg = if vcol > MAXCOL as int64_t {
-            MAXCOL
-        } else {
-            vcol as c_int
-        };
+        vcol += int64_t::from(csarg.cur_text_width_left + csarg.cur_text_width_right + head);
+        vcol_arg = c_int::try_from(vcol).unwrap_or(MAXCOL);
     }
 
     vcol_arg
@@ -712,19 +715,20 @@ pub(crate) fn linesize_fast(csarg: &CharsizeArg<'_>, mut vcol_arg: c_int, len: C
     let line = csarg.line;
     let end = walk_end(line, len);
     let wp = csarg.win;
-    let mut vcol = vcol_arg as int64_t;
+    let mut vcol = int64_t::from(vcol_arg);
 
     let mut at = 0;
     let mut chr: CharInfo = c_char_info(line, 0);
     while at < end && !ends_at(line, at, chr) {
-        vcol += charsize_fast_impl(wp, line, at, use_tabstop, ColNr::new(vcol_arg), chr.value).width
-            as int64_t;
+        vcol += int64_t::from(
+            charsize_fast_impl(wp, line, at, use_tabstop, ColNr::new(vcol_arg), chr.value).width,
+        );
         (at, chr) = c_next_cluster(line, at, chr);
-        if vcol > MAXCOL as int64_t {
+        let Ok(next) = c_int::try_from(vcol) else {
             vcol_arg = MAXCOL;
             break;
-        }
-        vcol_arg = vcol as c_int;
+        };
+        vcol_arg = next;
     }
 
     vcol_arg

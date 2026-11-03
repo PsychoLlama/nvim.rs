@@ -7,6 +7,13 @@
 //! requires to have run.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::ascii::ascii_isdigit;
 use crate::buffer_updates::buf_updates_send_changes;
@@ -91,7 +98,7 @@ pub(super) fn fold_add_marker(buffer: Buf, pos: Pos, marker: &[u8]) {
             marker.len()
         }
     };
-    new.push(NUL as u8);
+    new.push(b'\0');
     let _ = ml_replace_buf_text(buffer, lnum, &new[..new.len() - 1]);
     if added != 0 {
         extmark_splice_cols(
@@ -183,7 +190,7 @@ pub(super) fn fold_del_marker(buffer: Buf, lnum: LineNr, marker: &[u8]) {
     let mut new = Vec::with_capacity(text.len() - len + 1);
     new.extend_from_slice(&text[..start]);
     new.extend_from_slice(&text[start + len..]);
-    new.push(NUL as u8);
+    new.push(b'\0');
     let _ = ml_replace_buf_text(buffer, lnum, &new[..new.len() - 1]);
     extmark_splice_cols(
         buffer,

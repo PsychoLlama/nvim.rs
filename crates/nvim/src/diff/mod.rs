@@ -83,7 +83,6 @@ use crate::search::{BACKWARD, FORWARD};
 use crate::shell::ShellOpts;
 use crate::strings::shellescape;
 use crate::types::AutoEvent;
-use crate::types::NL;
 use crate::types::{
     AcoSave, ApiString, CmdAddr, CmdModFlags, ColNr, DiffBlock, DiffLine, DiffLineChange,
     EvalFuncData, ExArg, ExtmarkOp, Hlf, LineNr, OptInt, OptScope, OptVal, ScriptId, TypVal,

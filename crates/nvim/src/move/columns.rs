@@ -10,10 +10,17 @@
 //! Original: `src/nvim/move.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
-use crate::narrow::number_as_col;
 use crate::narrow::number_as_lnum;
+use crate::narrow::{len_as_int, number_as_col, number_as_int};
 use core::ffi::c_int;
 
 use super::*;
@@ -156,7 +163,7 @@ fn curs_columns_win(mut win: Win, may_scroll: bool) {
     // shows the text around the cursor, without scrolling all the time.
     let too_tall = win.w_wrow >= win.w_view_height
         || (prev_skipcol > ColNr::ZERO
-            || win.w_wrow as int64_t + so >= win.w_view_height as int64_t)
+            || int64_t::from(win.w_wrow) + so >= int64_t::from(win.w_view_height))
             && {
                 plines = win.plines_nofill(win.w_cursor.lnum, false);
                 // The C spells this `plines - 1 >= w_view_height`; `plines` is a
@@ -351,7 +358,7 @@ pub fn f_screenpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         (c"curscol", ccol),
         (c"endcol", ecol),
     ] {
-        let _ = dict.add_number(name.to_bytes(), value as VarNumber);
+        let _ = dict.add_number(name.to_bytes(), VarNumber::from(value));
     }
 }
 
@@ -370,7 +377,7 @@ fn virtcol2col(win: Win, lnum: LineNr, vcol: c_int) -> c_int {
         return 0;
     }
     // Move back onto the first byte of the last character.
-    (offset - head_off(line, (offset - 1).as_usize()) as c_int).get()
+    (offset - len_as_int(head_off(line, (offset - 1).as_usize()))).get()
 }
 
 /// `virtcol2col({winid}, {lnum}, {col})`.
@@ -393,10 +400,10 @@ pub fn f_virtcol2col(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     let Ok(screencol) = tv_get_number_chk(&args[2]) else {
         return;
     };
-    let screencol = screencol as c_int;
+    let screencol = number_as_int(screencol);
     if screencol < 0 {
         return;
     }
     let col = virtcol2col(win, lnum, screencol);
-    result.write_number(col as VarNumber);
+    result.write_number(VarNumber::from(col));
 }

@@ -13,6 +13,13 @@
 //! into an extmark splice and a buffer-update event.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use crate::mbyte::{char_at, char_len, cluster_len, encode_char, head_off, iscomposing};
@@ -24,7 +31,7 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, Failed, NUL};
+use crate::types::{CpoFlag, Failed};
 use crate::winlayer::{Buf, Win};
 
 /// Insert `bytes` at the cursor, one character at a time, so that Replace
@@ -66,7 +73,7 @@ fn vreplace_extent(new: &[u8], col: usize) -> (usize, usize) {
     // changes how wide a TAB looks.
     let old_list = Win::current().w_onebuf_opt.wo_list;
     if old_list != 0 && !cpo_has(CpoFlag::LISTWM) {
-        Win::current().w_onebuf_opt.wo_list = false as c_int;
+        Win::current().w_onebuf_opt.wo_list = c_int::from(false);
     }
 
     let mut oldlen = 0;
@@ -89,7 +96,7 @@ fn vreplace_extent(new: &[u8], col: usize) -> (usize, usize) {
         oldlen += cluster_len(at);
         // Took off a bit too much: pad with spaces.
         if vcol > new_vcol {
-            newlen += (vcol - new_vcol) as usize;
+            newlen += usize::try_from(vcol - new_vcol).expect("non-negative");
         }
     }
 
@@ -158,8 +165,8 @@ pub fn ins_char_bytes(new: &[u8]) {
     inserted_bytes(
         lnum,
         ColNr::from_index(col),
-        oldlen as c_int,
-        newlen as c_int,
+        len_as_int(oldlen),
+        len_as_int(newlen),
     );
 
     // In Insert or Replace mode with 'showmatch', briefly show the match
@@ -197,7 +204,7 @@ pub fn ins_str(text: &[u8]) {
         newline
     };
     let _ = ml_replace_owned(lnum, newline);
-    inserted_bytes(lnum, ColNr::from_index(col), 0, text.len() as c_int);
+    inserted_bytes(lnum, ColNr::from_index(col), 0, len_as_int(text.len()));
     Win::current().w_cursor.col += len_as_int(text.len());
 }
 
@@ -209,10 +216,10 @@ pub fn del_char(fixpos: bool) -> Result<(), Failed> {
     mb_adjust_cursor();
     let cursor = Win::current().w_cursor;
     let mut lines = Buf::current().lines();
-    if cstr::byte_at(lines.line(cursor.lnum), cursor.col.as_usize()) == NUL as u8 {
+    if cstr::byte_at(lines.line(cursor.lnum), cursor.col.as_usize()) == b'\0' {
         return Err(Failed);
     }
-    del_chars(1, fixpos as c_int)
+    del_chars(1, c_int::from(fixpos))
 }
 
 /// [`del_bytes`] counted in characters rather than bytes.
@@ -279,7 +286,7 @@ pub fn del_bytes(mut count: i32, fixpos_arg: bool, use_delcombine: bool) -> Resu
         let mut lines = Buf::current().lines();
         let line = lines.line(lnum);
         let at = col.as_usize();
-        if cluster_len(&line[at..]) >= count as usize {
+        if cluster_len(&line[at..]) >= usize::try_from(count).expect("non-negative") {
             let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
             if composes_with(line, at, at + char_len(&line[at..]), &mut state) {
                 // Walk to the last composing character; there can be several.
@@ -287,7 +294,7 @@ pub fn del_bytes(mut count: i32, fixpos_arg: bool, use_delcombine: bool) -> Resu
                 loop {
                     col = ColNr::from_index(n);
                     count = len_as_int(char_len(&line[n..]));
-                    n += count as usize;
+                    n += usize::try_from(count).expect("non-negative");
                     if !composes_with(line, col.as_usize(), n, &mut state) {
                         break;
                     }
@@ -331,7 +338,11 @@ pub fn del_bytes(mut count: i32, fixpos_arg: bool, use_delcombine: bool) -> Resu
             .b_ml
             .owned_bytes_with_nul_mut()
             .expect("an allocated line is owned");
-        let (col, count, movelen) = (col.as_usize(), count as usize, movelen as usize);
+        let (col, count, movelen) = (
+            col.as_usize(),
+            usize::try_from(count).expect("non-negative"),
+            usize::try_from(movelen).expect("non-negative"),
+        );
         line.copy_within(col + count..col + count + movelen, col);
         buffer.b_ml.set_cached_len(newlen + 1);
     } else {

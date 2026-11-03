@@ -1,4 +1,11 @@
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 //! Vertical size: how many window lines a buffer line occupies.
 //!
@@ -66,10 +73,10 @@ pub(crate) fn plines_win_nofold(window: Win, lnum: LineNr) -> c_int {
         return 1;
     }
 
-    let mut col = match cstype {
+    let mut col = int64_t::from(match cstype {
         CharsizeKind::Fast => linesize_fast(&csarg, 0, ColNr::MAX),
         CharsizeKind::Regular => linesize_regular(&mut csarg, 0, ColNr::MAX),
-    } as int64_t;
+    });
 
     // In 'list' mode the trailing '$' may take one more column.
     if window.w_onebuf_opt.wo_list != 0 && window.w_p_lcs_chars.eol != 0 {
@@ -82,16 +89,15 @@ pub(crate) fn plines_win_nofold(window: Win, lnum: LineNr) -> c_int {
         // Bigger than the number of screen lines.
         return 32000;
     }
-    if col <= width as int64_t {
+    if col <= int64_t::from(width) {
         return 1;
     }
-    col -= width as int64_t;
+    col -= int64_t::from(width);
     width += win_col_off2(window);
-    let lines = (col + (width - 1) as int64_t) / width as int64_t + 1;
-    if lines > 0 && lines <= c_int::MAX as int64_t {
-        lines as c_int
-    } else {
-        c_int::MAX
+    let lines = (col + int64_t::from(width - 1)) / int64_t::from(width) + 1;
+    match c_int::try_from(lines) {
+        Ok(lines) if lines > 0 => lines,
+        _ => c_int::MAX,
     }
 }
 
@@ -255,12 +261,12 @@ pub(crate) fn win_text_height(
     if start_vcol >= 0 {
         let mut lnum_next = lnum;
         cur_folded = has_folding(window, lnum, Some(&mut lnum), Some(&mut lnum_next));
-        height_cur_nofill = plines_win_nofill(window, lnum, false) as int64_t;
+        height_cur_nofill = int64_t::from(plines_win_nofill(window, lnum, false));
         height_sum_nofill += height_cur_nofill;
-        let row_off = if start_vcol < width1 as int64_t || width2 <= 0 {
+        let row_off = if start_vcol < int64_t::from(width1) || width2 <= 0 {
             0
         } else {
-            1 + (start_vcol - width1 as int64_t) / width2 as int64_t
+            1 + (start_vcol - int64_t::from(width1)) / int64_t::from(width2)
         };
         height_sum_nofill -= row_off.min(height_cur_nofill);
         lnum = lnum_next + 1;
@@ -269,8 +275,8 @@ pub(crate) fn win_text_height(
     while lnum <= *end_lnum && height_sum_nofill + height_sum_fill < max {
         let mut lnum_next = lnum;
         cur_folded = has_folding(window, lnum, Some(&mut lnum), Some(&mut lnum_next));
-        height_sum_fill += win_get_fill(window, lnum) as int64_t;
-        height_cur_nofill = plines_win_nofill(window, lnum, false) as int64_t;
+        height_sum_fill += int64_t::from(win_get_fill(window, lnum));
+        height_cur_nofill = int64_t::from(plines_win_nofill(window, lnum, false));
         height_sum_nofill += height_cur_nofill;
         cur_lnum = lnum;
         lnum = lnum_next + 1;
@@ -282,10 +288,11 @@ pub(crate) fn win_text_height(
         height_sum_nofill -= height_cur_nofill;
         let row_off = if vcol_end == 0 {
             0
-        } else if vcol_end <= width1 as int64_t || width2 <= 0 {
+        } else if vcol_end <= int64_t::from(width1) || width2 <= 0 {
             1
         } else {
-            1 + (vcol_end - width1 as int64_t + width2 as int64_t - 1) / width2 as int64_t
+            1 + (vcol_end - int64_t::from(width1) + int64_t::from(width2) - 1)
+                / int64_t::from(width2)
         };
         height_sum_nofill += row_off.min(height_cur_nofill);
     }
@@ -293,15 +300,15 @@ pub(crate) fn win_text_height(
     if cur_folded {
         vcol_end = 0;
     } else {
-        let linesize = linetabsize_eol(window, cur_lnum) as int64_t;
+        let linesize = int64_t::from(linetabsize_eol(window, cur_lnum));
         let asked = if use_vcol { vcol_end } else { int64_t::MAX };
         vcol_end = asked.min(linesize);
     }
 
     let overflow = height_sum_nofill + height_sum_fill - max;
-    if overflow > 0 && width2 > 0 && vcol_end > width2 as int64_t {
-        vcol_end -=
-            (vcol_end - width1 as int64_t) % width2 as int64_t + (overflow - 1) * width2 as int64_t;
+    if overflow > 0 && width2 > 0 && vcol_end > int64_t::from(width2) {
+        vcol_end -= (vcol_end - int64_t::from(width1)) % int64_t::from(width2)
+            + (overflow - 1) * int64_t::from(width2);
     }
 
     *end_lnum = cur_lnum;

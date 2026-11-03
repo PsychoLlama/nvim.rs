@@ -11,6 +11,13 @@
 //!
 //! Original: `src/nvim/move.c`, Vim/Neovim, Vim license.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::c_int;
@@ -62,9 +69,9 @@ impl Win {
         if self.w_topline == LineNr::ONE && self.w_skipcol == ColNr::ZERO {
             // Ignore 'scrolloff' at the top of the buffer.
             so_cols = 0;
-        } else if so_cols > (space_cols / 2) as int64_t {
+        } else if so_cols > int64_t::from(space_cols / 2) {
             // Not enough room: put the cursor in the middle.
-            so_cols = (space_cols / 2) as int64_t;
+            so_cols = int64_t::from(space_cols / 2);
         }
         so_cols = arith::fit_scrolloff_cols(so_cols, size, width1, width2);
 
@@ -78,7 +85,7 @@ impl Win {
             + if so_cols != 0 {
                 so_cols
             } else {
-                overlap as int64_t
+                int64_t::from(overlap)
             };
         let bot = i64::from(self.w_skipcol + width1 + (self.w_view_height - 1) * width2) - so_cols;
 
@@ -229,7 +236,7 @@ impl Win {
                 self.w_topfill = 0;
                 if let Some(first) = self.fold_first(self.w_topline) {
                     // A sequence of folded lines counts as one logical line.
-                    done += !self.conceals_line((first - 1).get(), false) as c_int;
+                    done += c_int::from(!self.conceals_line((first - 1).get(), false));
                     let span = self.w_topline - first;
                     if !byfold {
                         todo -= span - 1;
@@ -284,7 +291,7 @@ impl Win {
         let mut moved = false;
         while wrow >= self.w_view_height && self.w_cursor.lnum > LineNr::ONE {
             if let Some(first) = self.fold_first(self.w_cursor.lnum) {
-                wrow -= !self.conceals_line((self.w_cursor.lnum - 1).get(), false) as c_int;
+                wrow -= c_int::from(!self.conceals_line((self.w_cursor.lnum - 1).get(), false));
                 self.w_cursor.lnum = (first - 1).max(LineNr::ONE);
             } else {
                 let lnum = self.w_cursor.lnum;
@@ -334,7 +341,7 @@ impl Win {
             // as one logical line.
             let mut todo = line_count;
             while todo > 0 {
-                todo += self.conceals_line((self.w_topline - 1).get(), false) as c_int;
+                todo += c_int::from(self.conceals_line((self.w_topline - 1).get(), false));
                 if self.w_topfill > 0 {
                     self.w_topfill -= 1;
                 } else {
@@ -539,7 +546,7 @@ pub fn scrolldown_clamp() {
         win.validate_virtcol();
         end_row += win.w_cline_height - 1 - win.w_virtcol.get() / win.w_view_width;
     }
-    if (end_row as int64_t) < win.w_view_height as int64_t - win.scrolloff() {
+    if int64_t::from(end_row) < int64_t::from(win.w_view_height) - win.scrolloff() {
         if can_fill {
             win.w_topfill += 1;
             win.check_topfill(true);
@@ -574,7 +581,7 @@ pub fn scrollup_clamp() {
         win.validate_virtcol();
         start_row -= win.w_virtcol.get() / win.w_view_width;
     }
-    if start_row as int64_t >= win.scrolloff() {
+    if int64_t::from(start_row) >= win.scrolloff() {
         if win.w_topfill > 0 {
             win.w_topfill -= 1;
         } else {
@@ -606,7 +613,7 @@ pub(super) fn topline_back_winheight(win: Win, line: &mut LineOff, winheight: bo
         } else if let Some(first) = win.fold_first(line.lnum) {
             // Add a closed fold, unless it is concealed.
             line.lnum = first;
-            line.height = !win.conceals_line((line.lnum - 1).get(), false) as c_int;
+            line.height = c_int::from(!win.conceals_line((line.lnum - 1).get(), false));
         } else {
             line.height = win.plines_nofill(line.lnum, winheight);
         }
@@ -637,7 +644,7 @@ pub(super) fn botline_forw(win: Win, line: &mut LineOff) {
         if folded {
             // Add a closed fold, unless it is concealed.
             line.lnum = last;
-            line.height = !win.conceals_line((line.lnum - 1).get(), false) as c_int;
+            line.height = c_int::from(!win.conceals_line((line.lnum - 1).get(), false));
         } else {
             line.height = win.plines_nofill(line.lnum, true);
         }

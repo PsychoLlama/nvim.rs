@@ -169,7 +169,7 @@ pub fn grid_alloc(grid: &mut ScreenGrid, rows: c_int, columns: c_int, copy: bool
 
     // One line buffer is shared by every grid, so keep it as wide as the
     // widest of them.
-    with_linebuf(|buf| buf.widen(columns as size_t));
+    with_linebuf(|buf| buf.widen(usize::try_from(columns).unwrap_or(0)));
 }
 
 /// (Re)allocate a window's own grid if its size changed while in
@@ -234,8 +234,8 @@ pub fn win_grid_alloc(mut window: Win) {
         let grid = &window.w_grid_alloc;
         ui_call_grid_resize(
             Integer::from(grid.handle),
-            grid.cols as Integer,
-            grid.rows as Integer,
+            Integer::from(grid.cols),
+            Integer::from(grid.rows),
         );
         ui_check_cursor_grid(window.w_grid_alloc.handle);
     }
@@ -269,6 +269,7 @@ pub fn grid_ins_lines(
     if line_count <= 0 {
         return;
     }
+    let col_off = usize::try_from(col).expect("a column of the grid");
 
     // Shift the row offsets down by line_count and clear the new lines.
     for i in 0..line_count {
@@ -281,10 +282,10 @@ pub fn grid_ins_lines(
                     break;
                 }
                 let (to, from) = (grid.row_start(j + line_count), grid.row_start(j));
-                grid.copy_cells(to + col as size_t, from + col as size_t, width);
+                grid.copy_cells(to + col_off, from + col_off, width);
             }
             j += line_count;
-            let off = grid.row_start(j) + col as size_t;
+            let off = grid.row_start(j) + col_off;
             grid.clear_line(off, width, false);
         } else {
             let temp = grid.row_start(j);
@@ -305,11 +306,11 @@ pub fn grid_ins_lines(
     if !grid.throttled {
         ui_call_grid_scroll(
             Integer::from(grid.handle),
-            row as Integer,
-            end as Integer,
-            col as Integer,
-            (col + width) as Integer,
-            -line_count as Integer,
+            Integer::from(row),
+            Integer::from(end),
+            Integer::from(col),
+            Integer::from(col + width),
+            Integer::from(-line_count),
             0,
         );
     }
@@ -329,6 +330,7 @@ pub fn grid_del_lines(
     if line_count <= 0 {
         return;
     }
+    let col_off = usize::try_from(col).expect("a column of the grid");
 
     // Shift the row offsets up by line_count and clear the vacated lines.
     for i in 0..line_count {
@@ -341,10 +343,10 @@ pub fn grid_del_lines(
                     break;
                 }
                 let (to, from) = (grid.row_start(j - line_count), grid.row_start(j));
-                grid.copy_cells(to + col as size_t, from + col as size_t, width);
+                grid.copy_cells(to + col_off, from + col_off, width);
             }
             j -= line_count;
-            let off = grid.row_start(j) + col as size_t;
+            let off = grid.row_start(j) + col_off;
             grid.clear_line(off, width, false);
         } else {
             let temp = grid.row_start(j);
@@ -365,11 +367,11 @@ pub fn grid_del_lines(
     if !grid.throttled {
         ui_call_grid_scroll(
             Integer::from(grid.handle),
-            row as Integer,
-            end as Integer,
-            col as Integer,
-            (col + width) as Integer,
-            line_count as Integer,
+            Integer::from(row),
+            Integer::from(end),
+            Integer::from(col),
+            Integer::from(col + width),
+            Integer::from(line_count),
             0,
         );
     }

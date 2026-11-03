@@ -11,6 +11,13 @@
 //! Original: `src/nvim/move.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::c_int;
 
@@ -68,7 +75,7 @@ fn update_topline_win(mut win: Win) {
     // the option value itself and restores it on the way out, so a window
     // reading `&l:scrolloff` from inside a drag sees the slowed-down one.
     if mouse_dragging.get() > 0 {
-        so.set((mouse_dragging.get() - 1) as OptInt);
+        so.set(OptInt::from(mouse_dragging.get() - 1));
     }
 
     let old_topline = win.w_topline;
@@ -96,7 +103,7 @@ fn update_topline_win(mut win: Win) {
         };
         // Far out to begin with: put the cursor in the middle of the window.
         // Close: put it near the top.
-        if n >= halfheight as int64_t {
+        if n >= int64_t::from(halfheight) {
             win.scroll_cursor_halfway(false, false);
         } else {
             scroll_cursor_top(win, arith::scrolljump_lines(p_sj(), win.w_view_height), 0);
@@ -124,9 +131,9 @@ fn update_topline_win(mut win: Win) {
                 let n = if win.lines_concealed() {
                     unconcealed_below(win, so.get())
                 } else {
-                    ((win.w_cursor.lnum - win.w_botline + 1) as OptInt + so.get()) as int64_t
+                    (OptInt::from(win.w_cursor.lnum - win.w_botline + 1) + so.get()) as int64_t
                 };
-                if n <= (win.w_view_height + 1) as int64_t {
+                if n <= int64_t::from(win.w_view_height + 1) {
                     scroll_cursor_bot(
                         win,
                         arith::scrolljump_lines(p_sj(), win.w_view_height),
@@ -199,8 +206,8 @@ fn unconcealed_above(win: Win, halfheight: c_int, so: OptInt) -> int64_t {
     while i64::from(lnum) < i64::from(win.w_topline) + so {
         // Stop at the end of the file, or once we know we are far off.
         if lnum >= win.buffer().line_count() || {
-            n += !win.conceals_line(lnum.get(), false) as int64_t;
-            n >= halfheight as int64_t
+            n += int64_t::from(!win.conceals_line(lnum.get(), false));
+            n >= int64_t::from(halfheight)
         } {
             break;
         }
@@ -218,8 +225,8 @@ fn unconcealed_below(win: Win, so: OptInt) -> int64_t {
     let mut lnum = win.w_cursor.lnum;
     while i64::from(lnum) >= i64::from(win.w_botline) - so {
         if lnum <= LineNr::ZERO || {
-            n += !win.conceals_line((lnum - 1).get(), false) as int64_t;
-            n > (win.w_view_height + 1) as int64_t
+            n += int64_t::from(!win.conceals_line((lnum - 1).get(), false));
+            n > int64_t::from(win.w_view_height + 1)
         } {
             break;
         }
@@ -243,12 +250,12 @@ fn enough_below(win: Win, so: OptInt) -> bool {
     let mut n = win.w_empty_rows + win.w_filler_rows;
     while loff.lnum < win.w_botline && (loff.lnum + 1 < win.w_botline || loff.fill == 0) {
         n += loff.height;
-        if n as OptInt >= so {
+        if OptInt::from(n) >= so {
             break;
         }
         botline_forw(win, &mut loff);
     }
-    n as OptInt >= so
+    OptInt::from(n) >= so
 }
 
 /// Whether there are fewer than 'scrolloff' visible screen lines above the
@@ -268,7 +275,7 @@ fn check_top_offset(win: Win) -> bool {
         };
         // The filler lines above the top line are always context.
         let mut n = win.w_topfill;
-        while (n as int64_t) < so {
+        while int64_t::from(n) < so {
             topline_back(win, &mut loff);
             // Stop once a line above the window has been counted.
             if loff.lnum < win.w_topline || (loff.lnum == win.w_topline && loff.fill > 0) {
@@ -276,7 +283,7 @@ fn check_top_offset(win: Win) -> bool {
             }
             n += loff.height;
         }
-        if (n as int64_t) < so {
+        if int64_t::from(n) < so {
             return true;
         }
     }
