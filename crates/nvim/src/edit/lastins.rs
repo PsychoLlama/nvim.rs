@@ -26,20 +26,20 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::memory::XString;
-use crate::types::{Failed, NUL};
+use crate::types::Failed;
 
 /// Set the last inserted text to the single character `c`.
 ///
 /// Used by `r`.  What is stored is the *redo buffer* spelling: a CTRL-V in
 /// front of a control character, then the character, then the `<Esc>` that
 /// ends an insert.
-pub(crate) fn set_last_insert(c: c_int) {
+pub(crate) fn set_last_insert(c: Key) {
     let mut text = Vec::with_capacity(MB_MAXBYTES * 3 + 4);
     // The CTRL-V is only needed to enter a special character.
-    if c < ' ' as c_int || c == DEL {
+    if c.code() < 0x20 || c == Key::DEL {
         text.push(0x16); // Ctrl_V
     }
-    push_char_escaped(Key::from_code(c), &mut text);
+    push_char_escaped(c, &mut text);
     text.push(0x1b); // ESC
     last_insert.set(ApiString::from_bytes(&text));
     last_insert_skip.set(0);
@@ -53,7 +53,7 @@ pub(crate) fn set_last_insert(c: c_int) {
 /// end.
 ///
 /// `Err` -- with `E29` -- when there is nothing to insert.
-pub(crate) fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -> Result<(), Failed> {
+pub(crate) fn stuff_inserted(c: Key, mut count: c_int, no_esc: bool) -> Result<(), Failed> {
     let mut insert = get_last_insert(); // text to be inserted
     if insert.is_null() {
         emsg(gettext(e_noinstext));
@@ -61,17 +61,13 @@ pub(crate) fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -> Resul
     }
 
     // May want to stuff the command character, to start Insert mode.
-    if c != NUL {
-        stuff_readbuf_char(Key::from_code(c));
+    if !c.is_nul() {
+        stuff_readbuf_char(c);
     }
 
     // Cut the text at the last ESC: what follows it is not part of the
     // insert.
-    if let Some(i) = insert
-        .as_bytes()
-        .iter()
-        .rposition(|&b| c_int::from(b) == ESC)
-    {
+    if let Some(i) = insert.as_bytes().iter().rposition(|&b| b == 0x1b) {
         insert = ApiString::from_bytes(&insert.as_bytes()[..i]);
     }
 
@@ -82,7 +78,7 @@ pub(crate) fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -> Resul
     let mut last = b'\0';
     if let (Some(&first), Some(&end)) = (insert.as_bytes().first(), insert.as_bytes().last())
         && matches!(end, b'0' | b'^')
-        && (no_esc != 0 || (c_int::from(first) == Ctrl_D && count > 1))
+        && (no_esc || (Key::byte(first) == Key::CTRL_D && count > 1))
     {
         last = end;
         let shorter = insert.len() - 1;
@@ -104,7 +100,7 @@ pub(crate) fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -> Resul
     }
 
     // May want to stuff a trailing ESC, to get out of Insert mode.
-    if no_esc == 0 {
+    if !no_esc {
         stuff_readbuf_char(Key::ESC);
     }
     Ok(())
@@ -137,7 +133,7 @@ pub(crate) fn get_last_insert_save() -> Option<XString> {
     }
     let mut text = insert.as_bytes();
     // The copy is shortened, not the string it came from.
-    if text.last().is_some_and(|&last| c_int::from(last) == ESC) {
+    if text.last() == Some(&0x1b) {
         text = &text[..text.len() - 1];
     }
     Some(XString::from_bytes(cstr::until_nul(text)))

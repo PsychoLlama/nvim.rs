@@ -37,7 +37,6 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::guard::Keys;
-use crate::types::NUL;
 
 /// Handle a CTRL-V or CTRL-Q typed in Insert mode.
 pub(crate) fn ins_ctrl_v() {
@@ -45,7 +44,7 @@ pub(crate) fn ins_ctrl_v() {
 
     let mut did_putchar = false;
     if redrawing() && !char_avail() {
-        edit_putchar('^' as c_int, true);
+        edit_putchar(Key::ascii(b'^'), true);
         did_putchar = true;
     }
     append_to_redobuff(CTRL_V_STR.to_bytes());
@@ -59,7 +58,7 @@ pub(crate) fn ins_ctrl_v() {
         edit_unputchar();
     }
     clear_showcmd();
-    insert_special(c, 1, 1);
+    insert_special(c, true, true);
     revins_chars.set(revins_chars.get() + 1);
     revins_legal.set(revins_legal.get() + 1);
 }
@@ -77,9 +76,9 @@ pub(crate) fn ins_ctrl_v() {
 /// The three mode flags are deliberately *not* exclusive: `CTRL-V x o 7`
 /// sets both `hex` and `octal`, and every test below asks about `hex` first,
 /// so hex wins.  An enum here would be a behaviour change.
-pub(crate) fn get_literal(no_simplify: bool) -> c_int {
+pub(crate) fn get_literal(no_simplify: bool) -> Key {
     if got_int.get() {
-        return Ctrl_C;
+        return Key::CTRL_C;
     }
 
     let mut hex = false;
@@ -87,13 +86,14 @@ pub(crate) fn get_literal(no_simplify: bool) -> c_int {
     let mut unicode = 0;
 
     let unmapped = Keys::unmapped(); // don't map the next key hits
-    let mut cc = 0;
+    // The number spelled so far: at most eight hex digits, so it fits.
+    let mut cc: c_int = 0;
     let mut i = 0;
     let mut nc;
     loop {
-        nc = plain_vgetc().code();
+        nc = plain_vgetc();
         if !no_simplify {
-            nc = merge_mod_mask(Key::from_code(nc)).code();
+            nc = merge_mod_mask(nc);
         }
         if !mod_mask.get().without(ModMask::SHIFT).is_empty() {
             // A character with a non-Shift modifier cannot be part of
@@ -101,37 +101,35 @@ pub(crate) fn get_literal(no_simplify: bool) -> c_int {
             break;
         }
         // MB_BYTE2LEN_CHECK
-        let byte_len = if !(0..=255).contains(&nc) {
-            1
-        } else {
-            c_int::from(utf8len_tab[usize::try_from(nc).unwrap_or(0)])
-        };
+        let byte_len = nc.as_byte().map_or(1, |b| utf8len_tab[usize::from(b)]);
         if State.get() & MODE_CMDLINE == 0 && byte_len == 1 {
-            add_to_showcmd(nc);
+            add_to_showcmd(nc.code());
         }
 
-        if nc == 'x' as c_int || nc == 'X' as c_int {
+        // The digit `nc` is, in the base the spelling has chosen.
+        let digit = nc.as_byte().filter(u8::is_ascii_digit).map(|b| b - b'0');
+        if nc.is('x') || nc.is('X') {
             hex = true;
-        } else if nc == 'o' as c_int || nc == 'O' as c_int {
+        } else if nc.is('o') || nc.is('O') {
             octal = true;
-        } else if nc == 'u' as c_int || nc == 'U' as c_int {
-            unicode = nc;
+        } else if nc.is('u') || nc.is('U') {
+            unicode = nc.as_byte().unwrap_or(0);
         } else {
             if hex || unicode != 0 {
-                if !ascii_isxdigit(nc) {
+                if !ascii_isxdigit(nc.code()) {
                     break;
                 }
-                cc = cc * 16 + hex2nr(nc);
+                cc = cc * 16 + hex2nr(nc.code());
             } else if octal {
-                if nc < '0' as c_int || nc > '7' as c_int {
+                let Some(d) = digit.filter(|&d| d < 8) else {
                     break;
-                }
-                cc = cc * 8 + nc - '0' as c_int;
+                };
+                cc = cc * 8 + c_int::from(d);
             } else {
-                if !ascii_isdigit(nc) {
+                let Some(d) = digit else {
                     break;
-                }
-                cc = cc * 10 + nc - '0' as c_int;
+                };
+                cc = cc * 10 + c_int::from(d);
             }
             i += 1;
         }
@@ -139,13 +137,13 @@ pub(crate) fn get_literal(no_simplify: bool) -> c_int {
         if cc > 255 && unicode == 0 {
             cc = 255; // limit the range to 0-255
         }
-        nc = 0;
+        nc = Key::NUL;
 
         // How many digits this spelling takes.
         let enough = if hex {
             i >= 2
         } else if unicode != 0 {
-            (unicode == 'u' as c_int && i >= 4) || (unicode == 'U' as c_int && i >= 8)
+            (unicode == b'u' && i >= 4) || (unicode == b'U' && i >= 8)
         } else {
             i >= 3
         };
@@ -154,28 +152,25 @@ pub(crate) fn get_literal(no_simplify: bool) -> c_int {
         }
     }
 
+    let mut key = Key::from_code(cc);
     if i == 0 {
         // No number was entered: the key itself is the answer.  NUL is
         // stored as NL.
-        cc = if nc == SpecialKey::Zero.code() {
-            '\n' as c_int
-        } else {
-            nc
-        };
-        nc = 0;
+        key = if nc == SpecialKey::Zero { Key::NL } else { nc };
+        nc = Key::NUL;
     }
-    if cc == 0 {
-        cc = '\n' as c_int; // NUL is stored as NL
+    if key.is_nul() {
+        key = Key::NL; // NUL is stored as NL
     }
 
     drop(unmapped);
-    if nc != 0 {
-        vungetc(Key::from_code(nc));
+    if !nc.is_nul() {
+        vungetc(nc);
         // A character typed with i_CTRL-V_digit cannot have modifiers.
         mod_mask.set(ModMask::NONE);
     }
     got_int.set(false); // CTRL-C after CTRL-V is not an interrupt
-    cc
+    key
 }
 
 /// Insert a character, taking care of special keys and `mod_mask`.
@@ -188,27 +183,27 @@ pub(crate) fn get_literal(no_simplify: bool) -> c_int {
 /// Command key always does.
 ///
 /// `ctrlv` says `c` was typed just after CTRL-V.
-pub(crate) fn insert_special(mut c: c_int, mut allow_modmask: c_int, mut ctrlv: c_int) {
+pub(crate) fn insert_special(mut c: Key, mut allow_modmask: bool, mut ctrlv: bool) {
     if mod_mask.get().has(ModMask::CMD) {
         // The Command key never produces a normal key.
-        allow_modmask = 1;
+        allow_modmask = true;
     }
-    if c < 0 || (!mod_mask.get().is_empty() && allow_modmask != 0) {
-        let name = get_special_key_name(Key::from_code(c), mod_mask.get());
+    if c.is_special() || (!mod_mask.get().is_empty() && allow_modmask) {
+        let name = get_special_key_name(c, mod_mask.get());
         let name = cstr::until_nul(&name);
         let (&last, head) = name.split_last().expect("a key name is never empty");
-        c = c_int::from(last);
+        c = Key::byte(last);
         if name.len() > 2 {
             if stop_arrow().is_err() {
                 return;
             }
             ins_str(head);
             append_to_redobuff_literally(head);
-            ctrlv = 0;
+            ctrlv = false;
         }
     }
     if stop_arrow().is_ok() {
-        let flags = if ctrlv != 0 {
+        let flags = if ctrlv {
             INSCHAR_CTRLV.cast_signed()
         } else {
             0
@@ -221,11 +216,11 @@ pub(crate) fn insert_special(mut c: c_int, mut allow_modmask: c_int, mut ctrlv: 
 ///
 /// A digit has to go in as three digits, or the redo would read it as the
 /// start of a longer `i_CTRL-V_digit` sequence.
-pub(crate) fn redo_literal(c: c_int) {
-    if ascii_isdigit(c) {
-        append_to_redobuff(format!("{c:03}").as_bytes());
-    } else {
-        append_to_redobuff_char(Key::from_code(c));
+pub(crate) fn redo_literal(c: Key) {
+    // The digit's own number: `5` is recorded as `053`.
+    match c.as_byte().filter(u8::is_ascii_digit) {
+        Some(digit) => append_to_redobuff(format!("{digit:03}").as_bytes()),
+        None => append_to_redobuff_char(c),
     }
 }
 
@@ -235,19 +230,19 @@ pub(crate) fn redo_literal(c: c_int) {
 /// left to do -- which is the case when either key was `<Esc>`, and when the
 /// first key was a special key (which [`insert_special`] has then already
 /// inserted).
-pub(crate) fn ins_digraph() -> c_int {
+pub(crate) fn ins_digraph() -> Key {
     let mut did_putchar = false;
     pc_status.set(PutChar::Unset);
     if redrawing() && !char_avail() {
         ins_redraw(false);
-        edit_putchar('?' as c_int, true);
+        edit_putchar(Key::ascii(b'?'), true);
         did_putchar = true;
         add_to_showcmd_c(Ctrl_K);
     }
 
-    let mut c = {
+    let c = {
         let _raw_key = Keys::unmapped_with_codes();
-        plain_vgetc().code()
+        plain_vgetc()
     };
     if did_putchar {
         // If the line fits in 'columns' the `?` is at the start of the
@@ -255,42 +250,42 @@ pub(crate) fn ins_digraph() -> c_int {
         edit_unputchar();
     }
 
-    if c < 0 || !mod_mask.get().is_empty() {
+    if c.is_special() || !mod_mask.get().is_empty() {
         clear_showcmd();
-        insert_special(c, 1, 0);
-        return NUL;
+        insert_special(c, true, false);
+        return Key::NUL;
     }
 
-    if c != ESC {
+    if c != Key::ESC {
         did_putchar = false;
         if redrawing() && !char_avail() {
             ins_redraw(false);
-            if char2cells(c) == 1 {
+            if char2cells(c.code()) == 1 {
                 ins_redraw(false);
                 edit_putchar(c, true);
                 did_putchar = true;
             }
-            add_to_showcmd_c(c);
+            add_to_showcmd_c(c.code());
         }
 
         let cc = {
             let _raw_key = Keys::unmapped_with_codes();
-            plain_vgetc().code()
+            plain_vgetc()
         };
         if did_putchar {
             edit_unputchar();
         }
 
-        if cc != ESC {
+        if cc != Key::ESC {
             append_to_redobuff(CTRL_V_STR.to_bytes());
-            c = digraph_get(Key::from_code(c), Key::from_code(cc), true).code();
+            let c = digraph_get(c, cc, true);
             clear_showcmd();
             return c;
         }
     }
 
     clear_showcmd();
-    NUL
+    Key::NUL
 }
 
 /// The character in line `lnum` at the cursor's *screen* column.
@@ -299,10 +294,10 @@ pub(crate) fn ins_digraph() -> c_int {
 /// is found by walking that line's characters, adding widths, until the
 /// cursor's virtual column is reached.  Answers NUL -- and beeps -- when the
 /// line does not exist or is too short.
-pub(crate) fn ins_copychar(lnum: LineNr) -> c_int {
+pub(crate) fn ins_copychar(lnum: LineNr) -> Key {
     if lnum < LineNr::ONE || lnum > Buf::current().b_ml.ml_line_count {
         vim_beep(kOptBoFlagCopy as ::core::ffi::c_uint);
-        return NUL;
+        return Key::NUL;
     }
 
     // Try to advance to the cursor column.
@@ -323,12 +318,13 @@ pub(crate) fn ins_copychar(lnum: LineNr) -> c_int {
         (at, chr) = c_next_cluster(&line, at, chr);
     }
 
+    // An illegal byte is copied as itself.
     let c = if chr.value < 0 {
-        c_int::from(byte_at(&line, at))
+        Key::byte(byte_at(&line, at))
     } else {
-        chr.value as c_int
+        Key::from_code(chr.value)
     };
-    if c == NUL {
+    if c.is_nul() {
         vim_beep(kOptBoFlagCopy as ::core::ffi::c_uint);
     }
     c
@@ -342,10 +338,10 @@ pub(crate) fn ins_copychar(lnum: LineNr) -> c_int {
 ///
 /// Answers the key to be recorded: the character itself when nothing was
 /// inserted, and CTRL-V when it was.
-pub(crate) fn ins_ctrl_ey(tc: c_int) -> c_int {
+pub(crate) fn ins_ctrl_ey(tc: Key) -> Key {
     let mut c = tc;
     if ctrl_x_mode_scroll() {
-        if c == Ctrl_Y {
+        if c == Key::CTRL_Y {
             scrolldown_clamp();
         } else {
             scrollup_clamp();
@@ -354,22 +350,22 @@ pub(crate) fn ins_ctrl_ey(tc: c_int) -> c_int {
         return c;
     }
 
-    c = ins_copychar(Win::current().w_cursor.lnum + if c == Ctrl_Y { -1 } else { 1 });
-    if c == NUL {
+    c = ins_copychar(Win::current().w_cursor.lnum + if c == Key::CTRL_Y { -1 } else { 1 });
+    if c.is_nul() {
         return c;
     }
 
     // A non-alphanumeric byte has to be recorded literally, or the redo
     // would read it as a command.
-    if c < 256 && ctype_bits(c.to_le_bytes()[0]) & _ISalnum == 0 {
+    if c.as_byte().is_some_and(|b| ctype_bits(b) & _ISalnum == 0) {
         append_to_redobuff(CTRL_V_STR.to_bytes());
     }
     let tw_save = Buf::current().b_p_tw;
     Buf::current().b_p_tw = -1;
-    insert_special(c, 1, 0);
+    insert_special(c, true, false);
     Buf::current().b_p_tw = tw_save;
     revins_chars.set(revins_chars.get() + 1);
     revins_legal.set(revins_legal.get() + 1);
     auto_format(false, true);
-    Ctrl_V
+    Key::CTRL_V
 }

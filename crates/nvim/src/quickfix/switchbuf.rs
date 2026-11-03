@@ -21,6 +21,7 @@
 use super::*;
 use crate::ex_docmd::{cmdmod_split, cmdmod_tab};
 use crate::types::Handle;
+use crate::types::Key;
 use crate::types::{Failed, QfId};
 use crate::window::{WSP_ABOVE, WSP_HELP, WSP_NEWLOC, WSP_TOP};
 use crate::winlayer::{Win, last_window, tabs, windows, windows_in_tab};
@@ -57,7 +58,7 @@ pub(crate) fn jump_to_help_window(
     };
     if let Some(wp) = wp.filter(|wp| wp.w_buffer.b_nwindows > 0) {
         win_enter(wp, true);
-        restart_edit.set(0);
+        restart_edit.set(Key::NUL);
         return Ok(());
     }
 
@@ -83,7 +84,7 @@ pub(crate) fn jump_to_help_window(
         Win::current().set_location_list(qi);
     }
     // Do not want insert mode in a help file.
-    restart_edit.set(0);
+    restart_edit.set(Key::NUL);
     Ok(())
 }
 

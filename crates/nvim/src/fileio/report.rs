@@ -200,7 +200,7 @@ pub(crate) fn report_read(sfname: Option<&CStr>, how: How, out: &Outcome) {
     // scrolled but there is no wait-return prompt.
     if how.stdin
         || how.buffer
-        || restart_edit.get() != 0
+        || !restart_edit.get().is_nul()
         || (msg_scrolled.get() != 0 && !need_wait_return.get())
     {
         set_keep_msg(shown.as_ref().map(XString::as_cstr), 0);

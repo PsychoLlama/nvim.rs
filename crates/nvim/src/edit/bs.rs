@@ -136,12 +136,12 @@ fn bs_blocked() -> bool {
 /// Handle Backspace, delete-word and delete-line in Insert mode.
 ///
 /// `c` is the character that was typed (it goes into the redo buffer),
-/// `mode` says which of the three keys it is, and `inserted_space_p` is the
+/// `mode` says which of the three keys it is, and `inserted_space` is the
 /// caller's "the last thing inserted was a space" flag, which
 /// [`bs_one_shiftwidth`] both reads and clears.
 ///
 /// Answers whether a backspace actually happened.
-pub(crate) fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: &mut c_int) -> bool {
+pub(crate) fn ins_bs(c: Key, mode: Backspace, inserted_space: &mut bool) -> bool {
     if bs_blocked() {
         beep_backspace();
         return false;
@@ -154,7 +154,7 @@ pub(crate) fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: &mut c_int) ->
     if in_indent {
         can_cindent.set(false);
     }
-    end_comment_pending.set(NUL); // after BS, don't auto-end a comment
+    end_comment_pending.set(None); // after BS, don't auto-end a comment
     if revins_on.get() {
         cursor_forward(); // put the cursor after the last inserted character
     }
@@ -216,14 +216,13 @@ pub(crate) fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: &mut c_int) ->
                 && {
                     // The cursor is past column 0, so the byte before it is
                     // a byte of the cursor's own line.
-                    let before = with_cursor_line(|line, col| c_int::from(byte_at(line, col - 1)));
-                    before == TAB
-                        || (before == ' ' as c_int && (*inserted_space_p == 0 || arrow_used.get()))
+                    let before = with_cursor_line(|line, col| byte_at(line, col - 1));
+                    before == b'\t' || (before == b' ' && (!*inserted_space || arrow_used.get()))
                 }
         };
         let one_step = mode == Backspace::Char && ((p_sta() && in_indent) || soft_tab());
         if one_step {
-            *inserted_space_p = 0;
+            *inserted_space = false;
             bs_one_shiftwidth(in_indent);
         } else {
             bs_delete_chars(mode, mincol);
@@ -243,7 +242,7 @@ pub(crate) fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: &mut c_int) ->
 
     // It is a little strange to put backspaces into the redo buffer, but
     // it makes auto-indent much easier to deal with.
-    append_to_redobuff_char(Key::from_code(c));
+    append_to_redobuff_char(c);
 
     // If the deletion went before the insertion point, move that too.
     pull_insstart_orig_to_cursor();
@@ -429,7 +428,7 @@ fn bs_one_shiftwidth(in_indent: bool) {
         pull_insstart_orig_to_cursor();
 
         if State.get() & VREPLACE_FLAG != 0 {
-            ins_char(' ' as c_int);
+            ins_char(Key::SPACE);
         } else {
             ins_str(b" ");
             if State.get() & REPLACE_FLAG != 0 {

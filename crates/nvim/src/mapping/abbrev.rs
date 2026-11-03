@@ -33,16 +33,6 @@ use core::ffi::{CStr, c_int};
 /// `Ctrl_V` as the byte a typed sequence carries.
 const CTRL_V_BYTE: u8 = 0x16;
 
-/// The callers' spelling of a key that needs no CTRL-V -- the key plus
-/// `ABBR_OFF` -- as the key and that flag.
-pub(crate) fn abbr_key(c: c_int) -> (Key, bool) {
-    if c >= ABBR_OFF {
-        (Key::from_code(c - ABBR_OFF), true)
-    } else {
-        (Key::from_code(c), false)
-    }
-}
-
 /// Whether `mp`'s LHS is exactly `word`, in a mode that is current.
 ///
 /// The stored LHS may carry `K_SPECIAL` escapes, which the text in the buffer
@@ -181,8 +171,7 @@ pub fn check_abbr(c: Key, literal: bool, text: Vec<u8>, mincol: c_int) -> bool {
     //
     // Characters 0x00-0xff are normal and may need a CTRL-V, except
     // K_SPECIAL, which becomes K_SPECIAL KS_SPECIAL KE_FILLER; a key code
-    // needs its K_SPECIAL escape; anything carrying ABBR_OFF wants no
-    // CTRL-V. CTRL-] is special: it completes the abbreviation but is not
+    // needs its K_SPECIAL escape; a `literal` one wants no CTRL-V. CTRL-] is special: it completes the abbreviation but is not
     // inserted into the input stream.
     let mut typed = Vec::new();
     if c != Key::ctrl(b']') {

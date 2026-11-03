@@ -21,6 +21,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::types::Key;
 use crate::winlayer::WinId;
 use core::ffi::c_int;
 
@@ -242,7 +243,7 @@ pub fn do_check_cursorbind() {
             // Make sure the cursor is in a valid position. `restart_edit` is
             // set for the duration so that it may sit beyond the end of line.
             let restart_edit_save = restart_edit.get();
-            restart_edit.set(1);
+            restart_edit.set(Key::from_code(1));
             check_cursor(win);
             // Avoid a scroll here for the cursor position: 'scrollbind' is
             // more important.

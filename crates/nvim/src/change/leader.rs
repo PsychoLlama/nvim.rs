@@ -30,7 +30,6 @@ use core::ffi::c_int;
 use super::*;
 use crate::option::split_option_part_with;
 use crate::optionstr::OptStringRef;
-use crate::types::NUL;
 use crate::winlayer::Buf;
 
 /// A 'comments' item of the current buffer, by the byte offset in the option
@@ -63,12 +62,8 @@ impl ComFlags {
 
     /// Whether the item's flag letters contain `flag`; only the current item
     /// is searched -- its `:` ends the letters.
-    pub(crate) fn has(self, flag: c_int) -> bool {
-        self.with_rest(|rest| {
-            rest.iter()
-                .take_while(|&&b| b != b':')
-                .any(|&b| c_int::from(b) == flag)
-        })
+    pub(crate) fn has(self, flag: u8) -> bool {
+        self.with_rest(|rest| rest.iter().take_while(|&&b| b != b':').any(|&b| b == flag))
     }
 
     /// The first byte from the item's start that is one of `stops`, or NUL
@@ -88,7 +83,7 @@ impl ComFlags {
 /// `COM_MAX_LEN` bytes is upstream's `part_buf`, and the copy is cut to fit
 /// it the way `copy_option_part` cuts it: at most `COM_MAX_LEN - 1` bytes.
 struct ComItem {
-    buf: [u8; COM_MAX_LEN as usize],
+    buf: [u8; COM_MAX_LEN],
     len: usize,
     /// Where the first `:` is, or `None` for an item with no `:` at all.
     colon: Option<usize>,
@@ -97,7 +92,7 @@ struct ComItem {
 impl ComItem {
     fn new() -> ComItem {
         ComItem {
-            buf: [0; COM_MAX_LEN as usize],
+            buf: [0; COM_MAX_LEN],
             len: 0,
             colon: None,
         }
@@ -110,7 +105,7 @@ impl ComItem {
     fn take(&mut self, list: &mut &[u8]) -> bool {
         let (buf, len) = (&mut self.buf, &mut self.len);
         *len = 0;
-        *list = split_option_part_with(list, COM_MAX_LEN as usize, b",", |run| {
+        *list = split_option_part_with(list, COM_MAX_LEN, b",", |run| {
             buf[*len..*len + run.len()].copy_from_slice(run);
             *len += run.len();
         });
@@ -130,20 +125,20 @@ impl ComItem {
     }
 
     /// Whether the item's flag letters contain `flag`.
-    fn has(&self, flag: c_int) -> bool {
-        self.flags().iter().any(|&b| c_int::from(b) == flag)
+    fn has(&self, flag: u8) -> bool {
+        self.flags().contains(&flag)
     }
 }
 
 /// The byte at `at` of `text` as the C's `int`, NUL past its end.
-fn at(text: &[u8], at: usize) -> c_int {
-    c_int::from(byte_at(text, at))
+fn at(text: &[u8], at: usize) -> u8 {
+    byte_at(text, at)
 }
 
 /// How many bytes of white space start at `from`.
 fn white_run(text: &[u8], from: usize) -> usize {
     let mut n = 0;
-    while ascii_iswhite(at(text, from + n)) {
+    while ascii_iswhite(c_int::from(at(text, from + n))) {
         n += 1;
     }
     n
@@ -156,17 +151,17 @@ fn white_run(text: &[u8], from: usize) -> usize {
 /// not match, since a line may mix tabs and spaces.
 fn leader_match(line: &[u8], i: usize, leader: &[u8]) -> Option<usize> {
     let mut skip = 0;
-    if ascii_iswhite(at(leader, 0)) {
-        if i == 0 || !ascii_iswhite(at(line, i - 1)) {
+    if ascii_iswhite(c_int::from(at(leader, 0))) {
+        if i == 0 || !ascii_iswhite(c_int::from(at(line, i - 1))) {
             return None; // missing white space
         }
         skip = white_run(leader, 0);
     }
     let mut j = 0;
-    while at(leader, skip + j) != NUL && at(leader, skip + j) == at(line, i + j) {
+    while at(leader, skip + j) != 0 && at(leader, skip + j) == at(line, i + j) {
         j += 1;
     }
-    if at(leader, skip + j) != NUL {
+    if at(leader, skip + j) != 0 {
         return None; // the leader ran past what the line has
     }
     Some(j)
@@ -175,7 +170,7 @@ fn leader_match(line: &[u8], i: usize, leader: &[u8]) -> Option<usize> {
 /// Whether the `b` flag is satisfied at `i`: there must be white space or the
 /// end of the line after the leader.
 fn blank_after(line: &[u8], i: usize) -> bool {
-    ascii_iswhite(at(line, i)) || at(line, i) == NUL
+    ascii_iswhite(c_int::from(at(line, i))) || at(line, i) == 0
 }
 
 /// [`get_leader_len`] when only the length is wanted.
@@ -215,7 +210,7 @@ pub fn get_leader_len(
     let mut i = white_run(line, 0); // leading white space is ignored
 
     // Repeat to match several nested comment strings.
-    while at(line, i) != NUL {
+    while at(line, i) != 0 {
         let mut found_one = false;
         let mut list = com;
         while !list.is_empty() {
@@ -352,7 +347,7 @@ pub fn get_last_leader_offset(line: &[u8]) -> (c_int, Option<ComFlags>) {
                 // is white space: otherwise C's `*` would look like the
                 // middle of a comment wherever it appears.
                 let mut k = 0;
-                while k <= i && ascii_iswhite(at(line, k)) {
+                while k <= i && ascii_iswhite(c_int::from(at(line, k))) {
                     k += 1;
                 }
                 if k < i {

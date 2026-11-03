@@ -19,6 +19,7 @@ use crate::memline::Lines;
 use crate::memory::XString;
 use crate::narrow::number_as_col;
 use crate::semsg;
+use crate::types::Key;
 use crate::types::{ExpandContext, Failed, IOSIZE, ShmFlag};
 use crate::winlayer::{Buf, Win};
 
@@ -492,7 +493,7 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
             // Insert a new line, keep indentation but ignore 'comments'.
             let old = Buf::current().b_p_com.replace(XString::new());
             set_compl_startpos_here(compl_col.get());
-            ins_eol('\r' as c_int);
+            ins_eol(Key::CAR);
             Buf::current().b_p_com = old;
             compl_length.set(0);
             compl_col.set(Win::current().w_cursor.col);

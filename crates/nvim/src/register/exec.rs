@@ -178,28 +178,28 @@ fn put_in_typebuf(s: &[u8], esc: bool, colon: bool, silent: c_int) -> Result<(),
 /// `restart_edit` holds the mode as a key: `i`/`a`/`R`, or `V` for Virtual
 /// Replace, which is two keys.
 fn put_reedit_in_typebuf(silent: c_int) {
-    if restart_edit.get() == NUL {
+    if restart_edit.get().is_nul() {
         return;
     }
     let mut buf: [u8; 3] = [0; 3];
-    if restart_edit.get() == 'V' as c_int {
+    if restart_edit.get().is('V') {
         buf[0] = b'g';
         buf[1] = b'R';
         buf[2] = NUL as u8;
     } else {
         // `I` means "insert at the first non-blank", which as a key is a
         // plain `i` -- the column has already been set.
-        buf[0] = if restart_edit.get() == 'I' as c_int {
+        buf[0] = if restart_edit.get().is('I') {
             b'i'
         } else {
-            restart_edit.get() as u8
+            restart_edit.get().as_byte().unwrap_or(0)
         };
         buf[1] = NUL as u8;
     }
     // `ins_typebuf` reads `buf` up to the NUL the branches above left.
     let queued = ins_typebuf(&buf, Remap::No, 0, true, silent != 0);
     if queued.is_ok() {
-        restart_edit.set(NUL);
+        restart_edit.set(Key::NUL);
     }
 }
 
@@ -393,7 +393,7 @@ pub fn insert_reg(
     if regname == '.' as c_int {
         // The last insert is re-inserted rather than stuffed, so that it
         // can be repeated.
-        return stuff_inserted(NUL, 1, 1);
+        return stuff_inserted(Key::NUL, 1, true);
     }
 
     // Reading a special register may run Vimscript, which the caller allows.

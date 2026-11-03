@@ -102,7 +102,7 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
     let mut literal = NUL;
     if cmd_arg.nchar == Ctrl_V || cmd_arg.nchar == Ctrl_Q {
         literal = Ctrl_V;
-        cmd_arg.nchar = get_literal(false);
+        cmd_arg.nchar = get_literal(false).code();
         if cmd_arg.nchar > DEL {
             literal = NUL;
         }
@@ -201,7 +201,7 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
             // `r CTRL-E` and `r CTRL-Y` copy from the line below or above.
             let from = Win::current().w_cursor.lnum + if cmd_arg.nchar == Ctrl_Y { -1 } else { 1 };
             let c = ins_copychar(from);
-            if c != NUL {
+            if !c.is_nul() {
                 ins_char(c);
             } else {
                 // Nothing there to copy: leave the character alone and
@@ -212,7 +212,7 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
             let bytes = cstr::until_nul(&cmd_arg.nchar_composing);
             ins_char_bytes(&bytes[..cmd_arg.nchar_len as usize]);
         } else {
-            ins_char(cmd_arg.nchar);
+            ins_char(Key::from_code(cmd_arg.nchar));
         }
         State.set(old_state);
     }
@@ -220,7 +220,7 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
     mb_adjust_cursor();
     Buf::current().b_op_end = Win::current().w_cursor;
     Win::current().w_set_curswant = true;
-    set_last_insert(cmd_arg.nchar);
+    set_last_insert(Key::from_code(cmd_arg.nchar));
     fold_update_after_insert();
 }
 
@@ -269,7 +269,7 @@ pub(crate) fn nv_vreplace(cmd_arg: &mut CmdArg) {
         return;
     }
     if cmd_arg.extra_char == Ctrl_V || cmd_arg.extra_char == Ctrl_Q {
-        cmd_arg.extra_char = get_literal(false);
+        cmd_arg.extra_char = get_literal(false).code();
     }
     // Replay the character through virtual replace mode. A control
     // character needs its own CTRL-V to survive the replay.
@@ -539,17 +539,17 @@ pub(crate) fn invoke_edit(cmd_arg: &mut CmdArg, repl: c_int, cmd: c_int, startln
     let restart_edit_save = if repl != 0 || !stuff_empty() {
         restart_edit.get()
     } else {
-        0
+        Key::NUL
     };
-    restart_edit.set(0);
+    restart_edit.set(Key::NUL);
     // `o` and `O` already recorded the tick before opening the line.
     if cmd_arg.cmdchar != 'O' as c_int && cmd_arg.cmdchar != 'o' as c_int {
         Buf::current().b_last_changedtick_i = buf_get_changedtick(Buf::current());
     }
-    if edit(cmd, startln != 0, cmd_arg.count1) {
+    if edit(Key::from_code(cmd), startln != 0, cmd_arg.count1) {
         cmd_arg.outcome |= Outcome::COMMAND_BUSY;
     }
-    if restart_edit.get() == 0 {
+    if restart_edit.get().is_nul() {
         restart_edit.set(restart_edit_save);
     }
 }

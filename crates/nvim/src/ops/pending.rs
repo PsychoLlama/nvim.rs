@@ -38,6 +38,7 @@
 use crate::keycodes::SpecialKey;
 use crate::option::vars::{P_FP, P_SEL};
 use crate::types::Indenter;
+use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -821,11 +822,11 @@ fn run_change(cmd_arg: &mut CmdArg, op: Op, lbr_saved: c_int) {
     // `i_CTRL-O` work with a mapping for Visual mode -- but only when the
     // key was not typed.
     let restart_edit_save = if KeyTyped.get() {
-        0
+        Key::NUL
     } else {
         restart_edit.get()
     };
-    restart_edit.set(0);
+    restart_edit.set(Key::NUL);
 
     // The user is about to edit: 'linebreak' has to look as it did.
     restore_lbr(lbr_saved != 0);
@@ -836,7 +837,7 @@ fn run_change(cmd_arg: &mut CmdArg, op: Op, lbr_saved: c_int) {
         // `edit()` returned because of a CTRL-O command.
         cmd_arg.outcome |= Outcome::COMMAND_BUSY;
     }
-    if restart_edit.get() == 0 {
+    if restart_edit.get().is_nul() {
         restart_edit.set(restart_edit_save);
     }
 }
@@ -844,7 +845,7 @@ fn run_change(cmd_arg: &mut CmdArg, op: Op, lbr_saved: c_int) {
 /// The `I`/`A` arm: run `op_insert`, which enters Insert mode.
 fn run_block_insert(cmd_arg: &mut CmdArg, op: Op, lbr_saved: c_int) {
     let restart_edit_save = restart_edit.get();
-    restart_edit.set(0);
+    restart_edit.set(Key::NUL);
 
     restore_lbr(lbr_saved != 0);
     Buf::current().b_last_changedtick_i = buf_get_changedtick(Buf::current());
@@ -855,7 +856,7 @@ fn run_block_insert(cmd_arg: &mut CmdArg, op: Op, lbr_saved: c_int) {
     reset_lbr();
     auto_format(false, true);
 
-    if restart_edit.get() == 0 {
+    if restart_edit.get().is_nul() {
         restart_edit.set(restart_edit_save);
     } else {
         cmd_arg.outcome |= Outcome::COMMAND_BUSY;

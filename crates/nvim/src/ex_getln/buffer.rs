@@ -427,7 +427,8 @@ pub fn cmdline_paste_str(s: &CStr, literally: bool) {
 }
 
 /// Check whether typing `c` completes an abbreviation on the command line.
-pub(crate) fn ccheck_abbr(c: ::core::ffi::c_int) -> bool {
+/// `literal` says `c` goes back after the expansion without a CTRL-V.
+pub(crate) fn ccheck_abbr(c: Key, literal: bool) -> bool {
     if p_paste() || no_abbr.get() {
         // no abbreviations, or in paste mode
         return false;
@@ -457,9 +458,8 @@ pub(crate) fn ccheck_abbr(c: ::core::ffi::c_int) -> bool {
     let col = usize::try_from(cc.cmdpos).unwrap_or(0);
     let text = cc.text_bytes();
     let text = text[..col.min(text.len())].to_vec();
-    let (key, literal) = abbr_key(c);
     check_abbr(
-        key,
+        c,
         literal,
         text,
         ::core::ffi::c_int::try_from(spos).unwrap_or(::core::ffi::c_int::MAX),

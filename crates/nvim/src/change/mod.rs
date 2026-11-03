@@ -27,7 +27,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::ascii::{ascii_isdigit, ascii_iswhite};
+use crate::ascii::ascii_iswhite;
 use crate::autocmd::state::{autocmd_busy, last_cursormoved, last_cursormoved_win};
 use crate::buffer::{
     buf_inc_changedtick, buf_is_dontwrite, buf_is_prompt, buf_meta_total, current_buf,
@@ -146,15 +146,15 @@ pub const SIN_INSERT: ::core::ffi::c_int = 2;
 pub const ML_DEL_MESSAGE: ::core::ffi::c_int = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const JUMPLISTSIZE: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
-pub const COM_NEST: ::core::ffi::c_int = 'n' as ::core::ffi::c_int;
-pub const COM_BLANK: ::core::ffi::c_int = 'b' as ::core::ffi::c_int;
-pub const COM_START: ::core::ffi::c_int = 's' as ::core::ffi::c_int;
-pub const COM_MIDDLE: ::core::ffi::c_int = 'm' as ::core::ffi::c_int;
-pub const COM_END: ::core::ffi::c_int = 'e' as ::core::ffi::c_int;
-pub const COM_AUTO_END: ::core::ffi::c_int = 'x' as ::core::ffi::c_int;
-pub const COM_FIRST: ::core::ffi::c_int = 'f' as ::core::ffi::c_int;
-pub const COM_LEFT: ::core::ffi::c_int = 'l' as ::core::ffi::c_int;
-pub const COM_RIGHT: ::core::ffi::c_int = 'r' as ::core::ffi::c_int;
-pub const COM_NOBACK: ::core::ffi::c_int = 'O' as ::core::ffi::c_int;
-pub const COM_MAX_LEN: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
+pub const COM_NEST: u8 = b'n';
+pub const COM_BLANK: u8 = b'b';
+pub const COM_START: u8 = b's';
+pub const COM_MIDDLE: u8 = b'm';
+pub const COM_END: u8 = b'e';
+pub const COM_AUTO_END: u8 = b'x';
+pub const COM_FIRST: u8 = b'f';
+pub const COM_LEFT: u8 = b'l';
+pub const COM_RIGHT: u8 = b'r';
+pub const COM_NOBACK: u8 = b'O';
+pub const COM_MAX_LEN: usize = 50;
 pub const GRAPHEME_STATE_INIT: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

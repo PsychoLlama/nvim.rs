@@ -376,7 +376,7 @@ pub fn get_recorded() -> Vec<u8> {
     }
     // Stopping a recording from Insert mode with CTRL-O q also leaves the
     // CTRL-O behind.
-    if len > 0 && restart_edit.get() != 0 && Key::byte(recorded[len - 1]) == Key::ctrl(b'O') {
+    if len > 0 && !restart_edit.get().is_nul() && Key::byte(recorded[len - 1]) == Key::ctrl(b'O') {
         len -= 1;
     }
     recorded.truncate(len);

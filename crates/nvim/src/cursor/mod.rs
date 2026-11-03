@@ -260,7 +260,7 @@ fn coladvance2(win: Win, pos: &mut Pos, addspaces: bool, finetune: bool, wcol_ar
     let mut wcol = wcol_arg;
     let one_more = State.get() & MODE_INSERT != 0
         || State.get() & MODE_TERMINAL != 0
-        || restart_edit.get() != NUL
+        || !restart_edit.get().is_nul()
         || (visual_active() && !selection_is_old())
         || (win.ve_flags() & kOptVeFlagOnemore != 0 && wcol < ColNr::MAX);
     let buf = win.buffer();
@@ -529,7 +529,7 @@ pub fn check_cursor_col(win: Win) {
 
     let (col, snap) = checked_col(oldcol, len, || {
         State.get() & MODE_INSERT != 0
-            || restart_edit.get() != 0
+            || !restart_edit.get().is_nul()
             || State.get() & MODE_TERMINAL != 0
             || (visual_active() && !selection_is_old())
             || cur_ve_flags & kOptVeFlagOnemore != 0

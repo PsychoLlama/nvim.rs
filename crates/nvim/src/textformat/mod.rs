@@ -54,12 +54,6 @@ pub const SIN_CHANGED: c_uint = 1;
 // The 'formatoptions' flag letters this family reads. Each is the option's
 // own spelling, so a flag test is `has_format_option(FoFlag::WRAP)`.
 
-// The 'comments' item flag letters: `s`tart, `m`iddle, `e`nd, `f`irst.
-pub const COM_START: c_int = 's' as c_int;
-pub const COM_MIDDLE: c_int = 'm' as c_int;
-pub const COM_END: c_int = 'e' as c_int;
-pub const COM_FIRST: c_int = 'f' as c_int;
-
 /// Whether 'formatoptions' flag `x` is in effect. Always false under 'paste',
 /// which turns formatting off wholesale.
 ///

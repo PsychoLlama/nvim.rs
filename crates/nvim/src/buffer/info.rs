@@ -379,7 +379,7 @@ pub fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
         // Repeat the message after redrawing when 'restart_edit' is set
         // (otherwise there is a delay before redrawing), or when the screen
         // scrolled but there is no wait-return prompt.
-        if restart_edit.get() != 0 || msg_scrolled.get() != 0 && !need_wait_return.get() {
+        if !restart_edit.get().is_nul() || msg_scrolled.get() != 0 && !need_wait_return.get() {
             set_keep_msg(p.as_ref().map(XString::as_cstr), 0);
         }
     }

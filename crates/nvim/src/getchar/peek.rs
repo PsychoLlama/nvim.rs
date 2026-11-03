@@ -185,7 +185,7 @@ fn show_partial_key(at: CursorAt) -> Partial {
         // NUL follows it.
         if State.get() & MODE_INSERT != 0 && last_byte_is_one_cell(last) {
             // This looks nice when typing a dead-character mapping.
-            edit_putchar(c_int::from(last), false);
+            edit_putchar(Key::byte(last), false);
             setcursor(); // put the cursor back where it belongs
             partial.showing = true;
         }

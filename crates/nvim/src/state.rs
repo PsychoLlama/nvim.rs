@@ -60,7 +60,7 @@ use crate::state::mode::{
     virtual_op,
 };
 use crate::terminal::{TerminalState, terminal_check, terminal_execute};
-use crate::types::{Direction, HashTab, NUL, ProcType, SaveVEvent};
+use crate::types::{Direction, HashTab, ProcType, SaveVEvent};
 use crate::ui::ui_flush;
 use crate::winlayer::{Cc, Win};
 
@@ -156,9 +156,9 @@ impl<'a> ModeState<'a> {
     }
 
     /// The key, answered the same three ways as [`Self::check`].
-    fn execute(&mut self, key: c_int) -> c_int {
+    fn execute(&mut self, key: Key) -> c_int {
         match &mut self.0 {
-            Machine::Normal(s) => normal_execute(s, key),
+            Machine::Normal(s) => normal_execute(s, key.code()),
             Machine::Insert(s) => insert_execute(s, key),
             Machine::CommandLine(s) => command_line_execute(s, key),
             Machine::Terminal(s) => terminal_execute(s, key),
@@ -178,7 +178,7 @@ pub(crate) fn state_enter(mut s: ModeState<'_>) {
         }
         loop {
             let key = next_key();
-            if key == SpecialKey::Event.code() {
+            if key == SpecialKey::Event {
                 // The queue is about to run arbitrary code, so anything the
                 // key-reading side was in the middle of has to be settled.
                 check_end_reg_executing(true);
@@ -188,10 +188,10 @@ pub(crate) fn state_enter(mut s: ModeState<'_>) {
             // only for a build that logs it.
             if LOG_DEBUG {
                 let keyname_buf;
-                let keyname = if key == SpecialKey::Event.code() {
+                let keyname = if key == SpecialKey::Event {
                     c"K_EVENT"
                 } else {
-                    keyname_buf = get_special_key_name(Key::from_code(key), mod_mask.get());
+                    keyname_buf = get_special_key_name(key, mod_mask.get());
                     cstr::in_bytes(&keyname_buf)
                 };
                 let keyname = msg_cstr(keyname);
@@ -211,16 +211,14 @@ pub(crate) fn state_enter(mut s: ModeState<'_>) {
 /// The next key for [`state_enter`], which may be the pseudo-key `K_EVENT`:
 /// either the queue already has work, or waiting for input woke us with
 /// work and no key.
-fn next_key() -> c_int {
+fn next_key() -> Key {
     loop {
-        // SAFETY: the editor is initialized, so the typeahead buffer and the
-        // main loop's queue are live.
-        if vpeekc().code() != NUL || !typeahead().is_empty() {
-            return safe_vgetc().code();
+        if !vpeekc().is_nul() || !typeahead().is_empty() {
+            return safe_vgetc();
         }
         if main_loop_has_events() {
             ui_flush();
-            return SpecialKey::Event.code();
+            return Key::from(SpecialKey::Event);
         }
         // Nothing to do but wait, so show what has been decided first.
         if must_redraw.get() != 0 && !need_wait_return.get() && State.get() & MODE_CMDLINE == 0 {
@@ -233,7 +231,7 @@ fn next_key() -> c_int {
         if input_available() != 0 || !main_loop_has_events() {
             continue;
         }
-        return SpecialKey::Event.code();
+        return Key::from(SpecialKey::Event);
     }
 }
 
@@ -346,8 +344,8 @@ impl ModeWriter {
 
 /// The `restart_edit` values that report as insert mode: the three
 /// `:startinsert`-family letters.
-fn is_restart_key(key: c_int) -> bool {
-    b"IRV".map(c_int::from).contains(&key)
+fn is_restart_key(key: Key) -> bool {
+    key.is('I') || key.is('R') || key.is('V')
 }
 
 /// Everything [`mode_name`]'s decision tree reads, snapshotted from the
@@ -377,8 +375,8 @@ struct ModeInputs {
     finish_op: bool,
     /// The `v`/`V`/`CTRL-V` that forced the pending operator's motion kind.
     motion_force: c_int,
-    /// The `:startinsert`-family letter insert mode will resume with, or 0.
-    restart_edit: c_int,
+    /// The `:startinsert`-family letter insert mode will resume with, or NUL.
+    restart_edit: Key,
 }
 
 /// The mode `m` describes, as `mode(1)` spells it.
@@ -447,12 +445,12 @@ fn mode_name(m: &ModeInputs) -> ModeName {
             out.push_key(m.motion_force);
         } else if m.terminal_buffer {
             out.push(b't');
-            if m.restart_edit == c_int::from(b'I') {
+            if m.restart_edit.is('I') {
                 out.push(b'T');
             }
         } else if is_restart_key(m.restart_edit) {
             out.push(b'i');
-            out.push_key(m.restart_edit);
+            out.push_key(m.restart_edit.code());
         }
     }
     out.name
@@ -619,7 +617,7 @@ mod tests {
             terminal_buffer: false,
             finish_op: false,
             motion_force: 0,
-            restart_edit: 0,
+            restart_edit: Key::NUL,
         }
     }
 
@@ -652,9 +650,14 @@ mod tests {
     #[test]
     fn only_irv_restart_insert_mode() {
         for key in *b"IRV" {
-            assert!(is_restart_key(c_int::from(key)));
+            assert!(is_restart_key(Key::byte(key)));
         }
-        for key in [0, c_int::from(b'i'), c_int::from(b'n'), c_int::from(b'T')] {
+        for key in [
+            Key::NUL,
+            Key::ascii(b'i'),
+            Key::ascii(b'n'),
+            Key::ascii(b'T'),
+        ] {
             assert!(!is_restart_key(key));
         }
     }
@@ -861,14 +864,14 @@ mod tests {
         };
         assert_eq!(text(&mode_name(&terminal)), "nt");
         let terminal_insert = ModeInputs {
-            restart_edit: c_int::from(b'I'),
+            restart_edit: Key::ascii(b'I'),
             ..terminal
         };
         assert_eq!(text(&mode_name(&terminal_insert)), "ntT");
 
         for key in *b"IRV" {
             let restarting = ModeInputs {
-                restart_edit: c_int::from(key),
+                restart_edit: Key::byte(key),
                 ..quiet(MODE_NORMAL)
             };
             // `CTRL-O`'s mode: normal mode, inside the insert it resumes.
@@ -877,7 +880,7 @@ mod tests {
         }
         // Anything else in `restart_edit` is not a restart at all.
         let idle = ModeInputs {
-            restart_edit: c_int::from(b'i'),
+            restart_edit: Key::ascii(b'i'),
             ..quiet(MODE_NORMAL)
         };
         assert_eq!(text(&mode_name(&idle)), "n");
@@ -937,7 +940,7 @@ mod tests {
                                 terminal_buffer: finish,
                                 finish_op: finish,
                                 motion_force: c_int::from(b'V'),
-                                restart_edit: c_int::from(b'I'),
+                                restart_edit: Key::ascii(b'I'),
                                 ..quiet(state)
                             };
                             let mode = mode_name(&inputs);

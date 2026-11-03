@@ -696,7 +696,7 @@ fn dispatch_action(a: Action, win: Win) {
 
         // Remember where the paste started, so in edit() Insstart can be set
         // to this position.
-        if restart_edit.get() != 0 {
+        if !restart_edit.get().is_nul() {
             where_paste_started.set(win.w_cursor);
         }
         let flags = (if fixindent { PUT_FIXINDENT } else { 0 } | PUT_CURSEND).cast_signed();

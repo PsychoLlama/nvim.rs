@@ -19,7 +19,7 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::ascii::ascii_iswhite;
-use crate::change::{ComFlags, get_leader_len};
+use crate::change::{COM_END, COM_FIRST, COM_MIDDLE, COM_START, ComFlags, get_leader_len};
 use crate::charset::skip;
 use crate::cstr::byte_at;
 use crate::indent::get_number_indent;
@@ -51,7 +51,7 @@ impl Leader {
 
     /// Whether the item's flag letters contain `flag`, searching only the
     /// current item -- `:` starts the next one.
-    fn has_flag(self, flag: c_int) -> bool {
+    fn has_flag(self, flag: u8) -> bool {
         self.flags.is_some_and(|flags| flags.has(flag))
     }
 }
@@ -119,7 +119,7 @@ pub(crate) fn same_leader(lnum: LineNr, first: Leader, second: Leader) -> bool {
     }
     if let Some(flags) = first.flags {
         for flag in flags.letters() {
-            match c_int::from(flag) {
+            match flag {
                 COM_FIRST => return second.len == 0,
                 COM_END => return false,
                 COM_START => {

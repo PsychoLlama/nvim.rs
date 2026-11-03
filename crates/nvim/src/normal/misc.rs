@@ -218,10 +218,10 @@ pub(crate) fn nv_normal(cmd_arg: &mut CmdArg) {
         return;
     }
     clear_op(cmd_arg.op());
-    if restart_edit.get() != 0 && mode_displayed.get() {
+    if !restart_edit.get().is_nul() && mode_displayed.get() {
         clear_cmdline.set(true);
     }
-    restart_edit.set(0);
+    restart_edit.set(Key::NUL);
     if cmdwin_type.get() != 0 {
         cmdwin_result.set(Ctrl_C);
     }
@@ -241,7 +241,7 @@ pub(crate) fn nv_esc(cmd_arg: &mut CmdArg) {
         && cmd_arg.count0 == 0
         && cmd_arg.op().regname == 0;
     if cmd_arg.arg != 0 {
-        if restart_edit.get() == 0 && cmdwin_type.get() == 0 && !visual_active() && no_reason {
+        if restart_edit.get().is_nul() && cmdwin_type.get() == 0 && !visual_active() && no_reason {
             let hint = if any_buf_is_changed() {
                 c"Type  :qa!  and press <Enter> to abandon all changes and exit Nvim"
             } else {
@@ -249,10 +249,10 @@ pub(crate) fn nv_esc(cmd_arg: &mut CmdArg) {
             };
             msg(gettext(hint), 0);
         }
-        if restart_edit.get() != 0 {
+        if !restart_edit.get().is_nul() {
             redraw_mode.set(true);
         }
-        restart_edit.set(0);
+        restart_edit.set(Key::NUL);
         if cmdwin_type.get() != 0 {
             cmdwin_result.set(SpecialKey::Ignore.code());
             got_int.set(false);
@@ -286,7 +286,7 @@ pub(crate) fn nv_event(cmd_arg: &mut CmdArg) {
     // An event's callback is not a safe point for a collection: it may be
     // holding values the marker cannot see.
     may_garbage_collect.set(false);
-    let may_restart = restart_edit.get() != 0 || restart_VIsual_select.get() != 0;
+    let may_restart = !restart_edit.get().is_nul() || restart_VIsual_select.get() != 0;
     state_handle_k_event();
     finish_op.set(false);
     if may_restart {

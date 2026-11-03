@@ -205,7 +205,6 @@ pub const MAPTYPE_UNMAP_LHS: c_int = 3;
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 /// How many hash buckets the mapping table has.
 pub const MAX_MAPHASH: usize = 256;
-pub const ABBR_OFF: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;
 /// The error texts `mapping` raises for itself; the rest come from the
 /// shared table in `message`.
 pub const E_GLOBAL_ABBREVIATION_ALREADY_EXISTS_FOR_STR: &CStr =

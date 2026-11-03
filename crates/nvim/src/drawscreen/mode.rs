@@ -27,7 +27,7 @@ use std::ffi::CString;
 use super::*;
 use crate::normal::{visual_active, visual_mode, visual_select};
 use crate::os::cshim::gettext;
-use crate::types::{MAXPATHL, NUL, ShmFlag, Vv};
+use crate::types::{MAXPATHL, ShmFlag, Vv};
 
 /// Whether to postpone the mode message: not redrawing, or inside a mapping.
 ///
@@ -60,7 +60,7 @@ pub fn showmode() -> c_int {
         && msg_silent.get() == 0
         && (State.get() & MODE_TERMINAL != 0
             || State.get() & MODE_INSERT != 0
-            || restart_edit.get() != NUL
+            || !restart_edit.get().is_nul()
             || visual_active());
     let can_show_mode = p_ch() != 0 || ui_has(kUIMessages);
 
@@ -148,17 +148,17 @@ pub fn showmode() -> c_int {
                     }
                     put_translated(c" INSERT");
                 } else if matches!(
-                    u8::try_from(restart_edit.get()),
-                    Ok(b'I' | b'i' | b'a' | b'A')
+                    restart_edit.get().as_byte(),
+                    Some(b'I' | b'i' | b'a' | b'A')
                 ) {
                     if Buf::current().terminal.is_null() {
                         put_translated(c" (insert)");
                     } else {
                         put_translated(c" (terminal)");
                     }
-                } else if restart_edit.get() == 'R' as c_int {
+                } else if restart_edit.get().is('R') {
                     put_translated(c" (replace)");
-                } else if restart_edit.get() == 'V' as c_int {
+                } else if restart_edit.get().is('V') {
                     put_translated(c" (vreplace)");
                 }
 

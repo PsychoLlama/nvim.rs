@@ -48,7 +48,7 @@ pub(crate) fn buf_prompt_text_owned(buffer: Buf) -> ThinCString {
 /// `cmdchar_todo` is the command that started the insert, so that an `A`
 /// still means "at the end of the line" once the cursor has been moved onto
 /// the prompt line.
-pub(crate) fn init_prompt(cmdchar_todo: c_int) {
+pub(crate) fn init_prompt(cmdchar_todo: Key) {
     let mut win = Win::current();
     let prompt = buf_prompt_text_owned(Buf::current());
     let prompt = prompt.as_bytes();
@@ -115,7 +115,7 @@ pub(crate) fn init_prompt(cmdchar_todo: c_int) {
         arrow_used.set(false);
     }
 
-    if cmdchar_todo == 'A' as c_int {
+    if cmdchar_todo.is('A') {
         coladvance_win(win, MAXCOL);
     }
     if start().lnum == win.w_cursor.lnum {

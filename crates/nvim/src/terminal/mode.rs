@@ -287,7 +287,7 @@ pub(crate) fn terminal_enter() -> bool {
     state_enter(ModeState::terminal(s));
 
     if !s.got_bsl_o {
-        restart_edit.set(0);
+        restart_edit.set(Key::NUL);
     }
     State.set(save_state);
     drop(redraw);
@@ -302,7 +302,7 @@ pub(crate) fn terminal_enter() -> bool {
     if buf.terminal == s.term.raw() && !s.close {
         terminal_check_cursor(s.term);
     }
-    if restart_edit.get() != 0 {
+    if !restart_edit.get().is_nul() {
         showmode();
     } else {
         unshowmode(true);
@@ -467,17 +467,17 @@ pub(crate) fn terminal_check(s: &mut TerminalState) -> c_int {
 }
 
 /// Dispatch one key. Returning zero leaves terminal mode.
-pub(crate) fn terminal_execute(s: &mut TerminalState, key: c_int) -> c_int {
+pub(crate) fn terminal_execute(s: &mut TerminalState, key: Key) -> c_int {
     // `merge_modifiers` folds a pending modifier into the key so that e.g.
     // `<C-\>` is one code to compare against.
     let mut mods = mod_mask.get();
-    let mod_key = merge_modifiers(Key::from_code(key), &mut mods).code();
+    let mod_key = merge_modifiers(key, &mut mods).code();
 
     // Keys the editor handles itself. Everything but CTRL-N/CTRL-O is dealt
     // with here and done; those two continue below because they are what a
     // preceding CTRL-\ was waiting for.
     if is_mouse_key(mod_key) {
-        if send_mouse_event(s.term, key) {
+        if send_mouse_event(s.term, key.code()) {
             return 0;
         }
         return 1;
@@ -517,7 +517,7 @@ pub(crate) fn terminal_execute(s: &mut TerminalState, key: c_int) -> c_int {
             return 0;
         }
         s.got_bsl_o = true;
-        restart_edit.set(b'I' as c_int);
+        restart_edit.set(Key::ascii(b'I'));
         return 0;
     }
 
@@ -542,7 +542,7 @@ pub(crate) fn terminal_execute(s: &mut TerminalState, key: c_int) -> c_int {
             return 0;
         }
         s.got_bsl = false;
-        terminal_send_key(s.term, key);
+        terminal_send_key(s.term, key.code());
     }
     1
 }

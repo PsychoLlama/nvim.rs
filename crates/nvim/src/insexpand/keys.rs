@@ -167,7 +167,7 @@ pub fn ins_compl_addleader(c: c_int) {
         let len = encode_char(c, &mut buf);
         insert_chars(&buf[..len]);
     } else {
-        ins_char(c);
+        ins_char(Key::from_code(c));
     }
 
     // If we didn't complete finding matches we must search again.
@@ -288,7 +288,7 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
         }
         // Only format when something was inserted.
         if !arrow_used.get() && !ins_need_undo_get() && c != Ctrl_E {
-            insertchar(NUL, 0, -1);
+            insertchar(Key::NUL, 0, -1);
         }
         if prev_col > ColNr::ZERO && Win::current().w_cursor.col < get_cursor_line_len() {
             inc_cursor();

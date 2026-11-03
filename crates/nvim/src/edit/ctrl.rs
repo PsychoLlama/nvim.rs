@@ -44,10 +44,10 @@ use crate::option::cpo_has;
 use crate::types::{CpoFlag, NUL};
 
 /// The three CTRL-G commands that are spelled with a letter.
-const CTRL_G_UP: c_int = b'k' as c_int;
-const CTRL_G_DOWN: c_int = b'j' as c_int;
-const CTRL_G_UNDO: c_int = b'u' as c_int;
-const CTRL_G_KEEP_UNDO: c_int = b'U' as c_int;
+const CTRL_G_UP: Key = Key::ascii(b'k');
+const CTRL_G_DOWN: Key = Key::ascii(b'j');
+const CTRL_G_UNDO: Key = Key::ascii(b'u');
+const CTRL_G_KEEP_UNDO: Key = Key::ascii(b'U');
 
 /// CTRL-R: insert the contents of a register.
 ///
@@ -58,7 +58,7 @@ const CTRL_G_KEEP_UNDO: c_int = b'U' as c_int;
 /// assumed to have inserted something.
 pub(crate) fn ins_reg() {
     let mut need_redraw = false;
-    let mut literally = 0;
+    let mut literally = Key::NUL;
     let vis_active = visual_active();
 
     // A character is about to be waited for: show a `"`.
@@ -66,13 +66,13 @@ pub(crate) fn ins_reg() {
     if redrawing() && !char_avail() {
         // May need to redraw now that no more characters are available.
         ins_redraw(false);
-        edit_putchar('"' as c_int, true);
+        edit_putchar(Key::ascii(b'"'), true);
         add_to_showcmd_c(Ctrl_R);
     }
 
     // `LANGMAP_ADJUST(c, true)`: apply 'langmap' to a *typed* key only,
     // and only when it was not produced by a mapping.
-    let langmap_adjust = |c: c_int| -> c_int {
+    let langmap_adjust = |c: Key| -> Key {
         let typed = if vgetc_busy.get() != 0 {
             typeahead().maplen() == 0
         } else {
@@ -80,11 +80,11 @@ pub(crate) fn ins_reg() {
         };
         // `first_byte` is upstream's `*p_langmap`; the projecting reader
         // would walk the value to hand out a `&CStr`.
-        if P_LANGMAP.first_byte() != 0 && (p_lrm() || typed) && !KeyStuffed.get() && c >= 0 {
-            if c < 256 {
-                langmap_mapchar.with(|map| c_int::from(map[usize::try_from(c).unwrap_or(0)]))
-            } else {
-                langmap_adjust_mb(Key::from_code(c)).code()
+        if P_LANGMAP.first_byte() != 0 && (p_lrm() || typed) && !KeyStuffed.get() && !c.is_special()
+        {
+            match c.as_byte() {
+                Some(b) => Key::byte(langmap_mapchar.with(|map| map[usize::from(b)])),
+                None => langmap_adjust_mb(c),
             }
         } else {
             c
@@ -95,18 +95,20 @@ pub(crate) fn ins_reg() {
     // from being deleted when ESC is hit.
     let raw_key = Keys::unmapped_with_codes();
     let mut regname = langmap_adjust(get_key());
-    if regname == Ctrl_R || regname == Ctrl_O || regname == Ctrl_P {
+    if regname == Key::CTRL_R || regname == Key::CTRL_O || regname == Key::CTRL_P {
         // A third key follows, for a literal register insertion.
         literally = regname;
-        add_to_showcmd_c(literally);
+        add_to_showcmd_c(literally.code());
         regname = langmap_adjust(get_key());
     }
+    // A register is named by its character.
+    let mut regname = regname.code();
     drop(raw_key);
 
     // Don't `u_sync()` while typing the expression, or while giving an
     // error message for it; only explicitly.
     let no_sync = Suppress::undo_sync();
-    if regname == '=' as c_int {
+    if regname == c_int::from(b'=') {
         let curpos = Win::current().w_cursor;
         // Sync undo if the expression calls setline() or append(), so
         // that can be undone separately.
@@ -123,12 +125,12 @@ pub(crate) fn ins_reg() {
     } else {
         let reg = get_yank_register(regname, YREG_PASTE);
 
-        if literally == Ctrl_O || literally == Ctrl_P {
+        if literally == Key::CTRL_O || literally == Key::CTRL_P {
             // Append the command to the redo buffer.
-            append_to_redobuff_char(Key::ctrl(b'R'));
-            append_to_redobuff_char(Key::from_code(literally));
+            append_to_redobuff_char(Key::CTRL_R);
+            append_to_redobuff_char(literally);
             append_to_redobuff_char(Key::from_code(regname));
-            let fix = if literally == Ctrl_P {
+            let fix = if literally == Key::CTRL_P {
                 PUT_FIXINDENT.cast_signed()
             } else {
                 0
@@ -136,11 +138,11 @@ pub(crate) fn ins_reg() {
             let flags = fix | PUT_CURSEND.cast_signed();
             do_put(regname, None, BACKWARD, 1, flags);
         } else if reg.read(|reg| reg.lines.len()) > 1 && is_literal_register(regname) {
-            append_to_redobuff_char(Key::ctrl(b'R'));
+            append_to_redobuff_char(Key::CTRL_R);
             append_to_redobuff_char(Key::from_code(regname));
             let flags = PUT_CURSEND.cast_signed();
             do_put(regname, None, BACKWARD, 1, flags);
-        } else if insert_reg(regname, None, literally != 0).is_err() {
+        } else if insert_reg(regname, None, !literally.is_nul()).is_err() {
             beep(kOptBoFlagRegister as ::core::ffi::c_uint);
             need_redraw = true; // remove the `"`
         } else if stop_insert_mode.get() {
@@ -184,11 +186,11 @@ pub(crate) fn ins_ctrl_g() {
 
     match c {
         // CTRL-G k and CTRL-G <Up>: cursor up to Insstart.col.
-        _ if c == SpecialKey::Up.code() => ins_updown(true, true),
-        Ctrl_K | CTRL_G_UP => ins_updown(true, true),
+        _ if c == SpecialKey::Up => ins_updown(true, true),
+        Key::CTRL_K | CTRL_G_UP => ins_updown(true, true),
         // CTRL-G j and CTRL-G <Down>: cursor down to Insstart.col.
-        _ if c == SpecialKey::Down.code() => ins_updown(false, true),
-        Ctrl_J | CTRL_G_DOWN => ins_updown(false, true),
+        _ if c == SpecialKey::Down => ins_updown(false, true),
+        Key::CTRL_J | CTRL_G_DOWN => ins_updown(false, true),
         // CTRL-G u: start a new undoable edit.
         CTRL_G_UNDO => {
             u_sync(true);
@@ -202,7 +204,7 @@ pub(crate) fn ins_ctrl_g() {
         // key without breaking undo.
         CTRL_G_KEEP_UNDO => dont_sync_undo.set(KeepUndo::Armed),
         // Esc after CTRL-G cancels it.
-        ESC => {}
+        Key::ESC => {}
         // Unknown; reserved for future expansion.
         _ => beep(kOptBoFlagCtrlg as ::core::ffi::c_uint),
     }
@@ -234,7 +236,7 @@ pub(crate) fn ins_ctrl_hat() {
 /// command that started the insert (`r` and `v` are the single-character
 /// forms, which must not put an ESC in the redo buffer), and `nomove` is
 /// `i_CTRL-\_CTRL-O`.
-pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
+pub(crate) fn ins_esc(count: &mut c_int, cmdchar: Key, nomove: bool) -> bool {
     check_spell_redraw();
 
     let temp = Win::current().w_cursor.col;
@@ -243,7 +245,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
         disabled_redraw.set(false);
     }
 
-    let single_char_insert = cmdchar == 'r' as c_int || cmdchar == 'v' as c_int;
+    let single_char_insert = cmdchar.is('r') || cmdchar.is('v');
     if !arrow_used.get() {
         // Don't append the ESC for `r<CR>` and `grx`.
         if !single_char_insert {
@@ -274,7 +276,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
             disabled_redraw.set(true);
             return false;
         }
-        stop_insert(Some(InsertEnd::cursor()), 1, c_int::from(nomove));
+        stop_insert(Some(InsertEnd::cursor()), true, nomove);
         undisplay_dollar();
     }
 
@@ -283,7 +285,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
     }
 
     // When an auto-indent was removed, curswant stays after the indent.
-    if restart_edit.get() == NUL && temp == Win::current().w_cursor.col {
+    if restart_edit.get().is_nul() && temp == Win::current().w_cursor.col {
         Win::current().w_set_curswant = true;
     }
 
@@ -298,14 +300,14 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
     // CTRL-O, unless it is past the end of the line.
     if !nomove
         && (Win::current().w_cursor.col != ColNr::ZERO || Win::current().w_cursor.coladd > 0)
-        && (restart_edit.get() == NUL || (char_at_cursor() == NUL && !visual_active()))
+        && (restart_edit.get().is_nul() || (char_at_cursor() == NUL && !visual_active()))
         && !revins_on.get()
     {
         if Win::current().w_cursor.coladd > 0
             || get_ve_flags(Win::current()) == kOptVeFlagAll as ::core::ffi::c_uint
         {
             let _ = oneleft();
-            if restart_edit.get() != NUL {
+            if !restart_edit.get().is_nul() {
                 Win::current().w_cursor.coladd += 1;
             }
         } else {
@@ -322,7 +324,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
     may_trigger_modechanged();
     // The cursor needs positioning again when it is on a TAB, and when
     // the line carries inline virtual text.
-    if char_at_cursor() == TAB || buf_meta_total(Buf::current(), kMTMetaInline) > 0 {
+    if char_at_cursor() == c_int::from(b'\t') || buf_meta_total(Buf::current(), kMTMetaInline) > 0 {
         Win::current()
             .w_valid
             .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
@@ -333,7 +335,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
 
     // While recording, and for CTRL-O, the new mode has to be displayed;
     // otherwise the mode message is removed.
-    if reg_recording.get() != 0 || restart_edit.get() != NUL {
+    if reg_recording.get() != 0 || !restart_edit.get().is_nul() {
         show_mode();
     } else if p_smd()
         && (got_int.get() || !skip_showmode())
@@ -409,11 +411,11 @@ pub(crate) fn ins_insert(replace_state: c_int) {
 pub(crate) fn ins_ctrl_o() {
     restart_VIsual_select.set(0);
     restart_edit.set(if State.get() & VREPLACE_FLAG != 0 {
-        'V' as c_int
+        Key::ascii(b'V')
     } else if State.get() & REPLACE_FLAG != 0 {
-        'R' as c_int
+        Key::ascii(b'R')
     } else {
-        'I' as c_int
+        Key::ascii(b'I')
     });
     ins_at_eol.set(if virtual_active(Win::current()) {
         false
@@ -446,8 +448,8 @@ fn char_at_cursor() -> c_int {
 
 /// Read the next key, waiting for it if need be.
 #[inline(always)]
-fn get_key() -> c_int {
-    plain_vgetc().code()
+fn get_key() -> Key {
+    plain_vgetc()
 }
 
 /// Beep, or flash, for the 'belloff' reason `flag`.

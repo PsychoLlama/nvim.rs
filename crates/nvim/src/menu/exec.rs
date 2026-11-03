@@ -63,7 +63,9 @@ pub(crate) fn execute_menu(range: Range, menu: MenuId, mode_idx: c_int) {
             // Really in Visual mode: no guessing needed, the selection is
             // whatever is selected.
             MENU_INDEX_VISUAL
-        } else if (State.get() & MODE_INSERT != 0 || restart_edit.get() != 0) && script_id() == 0 {
+        } else if (State.get() & MODE_INSERT != 0 || !restart_edit.get().is_nul())
+            && script_id() == 0
+        {
             // Use the Insert mode entry when returning to Insert mode. A
             // non-zero script id means this came through a script or an API
             // call, which is not "returning" to anything.

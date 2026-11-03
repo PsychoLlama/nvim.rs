@@ -7,6 +7,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::types::Key;
 use crate::winlayer::{Buf, Win, windows};
 use core::ffi::{c_int, c_long};
 
@@ -355,7 +356,7 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
                 let smd_save = p_smd();
                 P_SMD.set(false);
                 insertchar(
-                    NUL,
+                    Key::NUL,
                     INSCHAR_FORMAT as c_int
                         + if do_comments {
                             INSCHAR_DO_COM as c_int

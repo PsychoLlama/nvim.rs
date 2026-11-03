@@ -23,6 +23,7 @@
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::ColNr;
+use crate::types::Key;
 use core::ffi::c_int;
 
 use super::*;
@@ -40,7 +41,7 @@ use crate::r#move::WinValid;
 use crate::option::vars::{p_confirm, p_write};
 use crate::state::MODE_INSERT;
 use crate::state::mode::{State, restart_edit, stop_insert_mode};
-use crate::types::{CmdModFlags, Error, FAIL, LineNr, NUL};
+use crate::types::{CmdModFlags, Error, FAIL, LineNr};
 use crate::winlayer::graph::{
     cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win, leave_curbuf,
 };
@@ -58,18 +59,18 @@ pub(crate) fn leave_window(win: Win) {
         return;
     }
     win.buffer().b_prompt_insert = restart_edit.get();
-    if restart_edit.get() != NUL && mode_displayed.get() {
+    if !restart_edit.get().is_nul() && mode_displayed.get() {
         clear_cmdline.set(true); // unshow mode later
     }
-    restart_edit.set(NUL);
+    restart_edit.set(Key::NUL);
 
     // When leaving (or closing) the window was done from a callback we need to
     // break out of the Insert mode loop and restart Insert mode on the way
     // back in.
     if State.get() & MODE_INSERT != 0 && !stop_insert_mode.get() {
         stop_insert_mode.set(true);
-        if win.buffer().b_prompt_insert == NUL {
-            win.buffer().b_prompt_insert = 'A' as c_int;
+        if win.buffer().b_prompt_insert.is_nul() {
+            win.buffer().b_prompt_insert = Key::ascii(b'A');
         }
     }
 }
@@ -82,7 +83,7 @@ pub(crate) fn enter_window(win: Win) {
     }
     // Switching to a prompt buffer that was in Insert mode must not stop Insert
     // mode: `leave_window` may have set it.
-    if win.buffer().b_prompt_insert != NUL {
+    if !win.buffer().b_prompt_insert.is_nul() {
         stop_insert_mode.set(false);
     }
     if State.get() & MODE_INSERT == 0 {

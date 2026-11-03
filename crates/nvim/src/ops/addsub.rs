@@ -31,6 +31,7 @@ use crate::guard::Suppress;
 use crate::message_fmt::report_msg;
 use crate::os::cshim::ctype_bits;
 use crate::tr_plural;
+use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_int, c_ulong};
 
@@ -445,7 +446,7 @@ fn bump_alpha_char(mut firstdigit: c_int, op_type: OpType, prenum1: i32, col: Co
     Win::current().w_cursor.col = col;
     let startpos = Win::current().w_cursor;
     let _ = del_char(false);
-    ins_char(firstdigit);
+    ins_char(Key::from_code(firstdigit));
     let endpos = Win::current().w_cursor;
     Win::current().w_cursor.col = col;
     (startpos, endpos)

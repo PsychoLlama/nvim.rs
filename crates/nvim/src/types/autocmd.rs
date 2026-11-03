@@ -217,7 +217,7 @@ pub struct AcoSave {
     pub tp_localdir: Option<XString>,
     pub globaldir: Option<XString>,
     pub save_visual_active: bool,
-    pub save_prompt_insert: ::core::ffi::c_int,
+    pub save_prompt_insert: Key,
 }
 
 impl Default for AcoSave {
@@ -233,7 +233,7 @@ impl Default for AcoSave {
             tp_localdir: None,
             globaldir: None,
             save_visual_active: false,
-            save_prompt_insert: 0,
+            save_prompt_insert: Key::NUL,
         }
     }
 }

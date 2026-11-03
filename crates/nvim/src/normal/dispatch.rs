@@ -518,7 +518,7 @@ pub(crate) fn normal_finish_command(ns: &mut NormalState) {
 
     // A command may have asked for insert mode or for Select mode to be
     // resumed; neither happens until the command is completely done.
-    let want_insert = restart_edit.get() != 0 && !visual_active() && ns.old_mapped_len == 0;
+    let want_insert = !restart_edit.get().is_nul() && !visual_active() && ns.old_mapped_len == 0;
     if ns.oa.op_type == OpType::Nop
         && (want_insert || restart_VIsual_select.get() == 1)
         && !ns.ca.outcome.has(Outcome::COMMAND_BUSY)
@@ -551,7 +551,7 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: c_int) -> c_int {
     ns.c = key;
     langmap_adjust(&mut ns.c, get_real_state() != MODE_SELECT);
 
-    if restart_edit.get() == 0 {
+    if restart_edit.get().is_nul() {
         ns.old_mapped_len = 0;
     } else if ns.old_mapped_len != 0
         || (visual_active() && ns.mapped_len == 0 && typeahead().maplen() > 0)
@@ -573,7 +573,7 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: c_int) -> c_int {
         if KeyTyped.get() {
             ungetchars(len);
         }
-        ns.c = if restart_edit.get() != 0 {
+        ns.c = if !restart_edit.get().is_nul() {
             'd' as c_int
         } else {
             'c' as c_int

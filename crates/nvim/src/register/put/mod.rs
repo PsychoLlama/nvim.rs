@@ -95,7 +95,7 @@ fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: c_uint)
 
         stuff_readbuf_char(Key::from_code(command_start_char));
         while count > 0 {
-            let _ = stuff_inserted(NUL, 1, (count != 1) as c_int);
+            let _ = stuff_inserted(Key::NUL, 1, count != 1);
             if count != 1 {
                 // `<CR>` then CTRL-U, to take off the indent 'autoindent'
                 // would add. CTRL-U on its own would go back to the
@@ -107,7 +107,7 @@ fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: c_uint)
             count -= 1;
         }
     } else {
-        let _ = stuff_inserted(command_start_char, count, false as c_int);
+        let _ = stuff_inserted(Key::from_code(command_start_char), count, false);
     }
 
     // The text goes in later, so the cursor cannot be moved past it here;

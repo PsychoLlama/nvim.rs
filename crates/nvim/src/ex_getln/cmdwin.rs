@@ -291,7 +291,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
     cmdwin_result.set(0);
 
     trigger_cmd_autocmd(cmdwin_type.get(), AutoEvent::CmdwinEnter);
-    if restart_edit.get() != 0 {
+    if !restart_edit.get().is_nul() {
         // An autocmd ran ":startinsert".
         stuff_readbuf_char(Key::from(SpecialKey::Nop));
     }

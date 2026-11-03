@@ -27,8 +27,10 @@ use core::fmt;
 use crate::keycodes::SpecialKey;
 
 /// One key of input: a character, a control character, or a special key.
+///
+/// The default is [`Key::NUL`], no key.
 #[repr(transparent)]
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Default)]
 pub struct Key(c_int);
 
 impl Key {
@@ -46,6 +48,71 @@ impl Key {
     pub const BS: Key = Key(0x08);
     /// `<Del>` as the byte, 0x7f (not [`SpecialKey::Del`]).
     pub const DEL: Key = Key(0x7f);
+    /// `<Space>`.
+    pub const SPACE: Key = Key(0x20);
+
+    // The control characters by the letter that types them, upstream's
+    // `Ctrl_*`: named so that a `match` can test for them.
+    /// CTRL-A.
+    pub const CTRL_A: Key = Key::ctrl(b'A');
+    /// CTRL-B.
+    pub const CTRL_B: Key = Key::ctrl(b'B');
+    /// CTRL-C.
+    pub const CTRL_C: Key = Key::ctrl(b'C');
+    /// CTRL-D.
+    pub const CTRL_D: Key = Key::ctrl(b'D');
+    /// CTRL-E.
+    pub const CTRL_E: Key = Key::ctrl(b'E');
+    /// CTRL-F.
+    pub const CTRL_F: Key = Key::ctrl(b'F');
+    /// CTRL-G.
+    pub const CTRL_G: Key = Key::ctrl(b'G');
+    /// CTRL-H.
+    pub const CTRL_H: Key = Key::ctrl(b'H');
+    /// CTRL-I.
+    pub const CTRL_I: Key = Key::ctrl(b'I');
+    /// CTRL-J.
+    pub const CTRL_J: Key = Key::ctrl(b'J');
+    /// CTRL-K.
+    pub const CTRL_K: Key = Key::ctrl(b'K');
+    /// CTRL-L.
+    pub const CTRL_L: Key = Key::ctrl(b'L');
+    /// CTRL-M.
+    pub const CTRL_M: Key = Key::ctrl(b'M');
+    /// CTRL-N.
+    pub const CTRL_N: Key = Key::ctrl(b'N');
+    /// CTRL-O.
+    pub const CTRL_O: Key = Key::ctrl(b'O');
+    /// CTRL-P.
+    pub const CTRL_P: Key = Key::ctrl(b'P');
+    /// CTRL-Q.
+    pub const CTRL_Q: Key = Key::ctrl(b'Q');
+    /// CTRL-R.
+    pub const CTRL_R: Key = Key::ctrl(b'R');
+    /// CTRL-S.
+    pub const CTRL_S: Key = Key::ctrl(b'S');
+    /// CTRL-T.
+    pub const CTRL_T: Key = Key::ctrl(b'T');
+    /// CTRL-U.
+    pub const CTRL_U: Key = Key::ctrl(b'U');
+    /// CTRL-V.
+    pub const CTRL_V: Key = Key::ctrl(b'V');
+    /// CTRL-W.
+    pub const CTRL_W: Key = Key::ctrl(b'W');
+    /// CTRL-X.
+    pub const CTRL_X: Key = Key::ctrl(b'X');
+    /// CTRL-Y.
+    pub const CTRL_Y: Key = Key::ctrl(b'Y');
+    /// CTRL-Z.
+    pub const CTRL_Z: Key = Key::ctrl(b'Z');
+    /// CTRL-\\.
+    pub const CTRL_BSL: Key = Key(0x1c);
+    /// CTRL-].
+    pub const CTRL_RSB: Key = Key(0x1d);
+    /// CTRL-^.
+    pub const CTRL_HAT: Key = Key(0x1e);
+    /// CTRL-_.
+    pub const CTRL_UNDERSCORE: Key = Key(0x1f);
 
     /// The key that types `c`.
     #[inline]

@@ -26,7 +26,6 @@ use crate::memory::XString;
 use core::ffi::c_int;
 
 use crate::change::*;
-use crate::types::NUL;
 use crate::winlayer::{Buf, Win};
 
 /// The byte at `at` of `text`, or NUL at and past its end.
@@ -34,8 +33,8 @@ use crate::winlayer::{Buf, Win};
 /// Every walk below tests the byte it is on before stepping, so the offset
 /// stays inside the line; the one place it can run off is the end, which is
 /// what upstream's terminating NUL answered and what this answers too.
-fn byte(text: &[u8], at: usize) -> c_int {
-    c_int::from(cstr::byte_at(text, at))
+fn byte(text: &[u8], at: usize) -> u8 {
+    cstr::byte_at(text, at)
 }
 
 /// The indent of the line the cursor is on.
@@ -53,8 +52,8 @@ fn line_copy(lnum: LineNr) -> XString {
 }
 
 /// `findmatch` from the cursor, for `initc`.
-fn find_match(initc: c_int) -> Option<Pos> {
-    findmatch(None, initc)
+fn find_match(initc: u8) -> Option<Pos> {
+    findmatch(None, c_int::from(initc))
 }
 
 /// [`get_leader_len`] when only the length is wanted.
@@ -87,19 +86,19 @@ fn indent_of_comment_start(line: &XString) -> Option<c_int> {
     // Owned, because `findmatch` below can leave the walk on another line.
     let mut text = XString::from_bytes(line);
     let mut at = skip_white_at(&text);
-    if byte(&text, at) == '/' as c_int && byte(&text, at + 1) == '*' as c_int {
+    if byte(&text, at) == b'/' && byte(&text, at + 1) == b'*' {
         at += 1;
     }
-    if byte(&text, at) != '*' as c_int {
+    if byte(&text, at) != b'*' {
         return None;
     }
     at += 1;
     while byte(&text, at) != 0 {
-        if byte(&text, at) == '/' as c_int && byte(&text, at - 1) == '*' as c_int {
+        if byte(&text, at) == b'/' && byte(&text, at - 1) == b'*' {
             // End of a C comment: line the indent up with the line
             // holding the start of it.
             Win::current().w_cursor.col = ColNr::try_from(at).unwrap_or(ColNr::MAX);
-            if let Some(pos) = find_match(NUL) {
+            if let Some(pos) = find_match(0) {
                 Win::current().w_cursor.lnum = pos.lnum;
                 return Some(indent_here());
             }
@@ -128,8 +127,8 @@ fn smart_indent_forward(
     // Owned: the walk moves to other lines and calls back into the editor.
     let mut text = XString::from_bytes(line);
     // Skip preprocessor directives, unless they are comments.
-    if lead_len == 0 && byte(&text, 0) == '#' as c_int {
-        while byte(&text, 0) == '#' as c_int && Win::current().w_cursor.lnum > LineNr::ONE {
+    if lead_len == 0 && byte(&text, 0) == b'#' {
+        while byte(&text, 0) == b'#' && Win::current().w_cursor.lnum > LineNr::ONE {
             Win::current().w_cursor.lnum -= 1;
             text = line_copy(Win::current().w_cursor.lnum);
         }
@@ -157,15 +156,15 @@ fn smart_indent_forward(
     // left in front of the copy. There is no last character there, so this
     // answers NUL, which is none of the three bytes tested below.
     let mut at = text.len().saturating_sub(1);
-    while at > 0 && ascii_iswhite(byte(&text, at)) {
+    while at > 0 && ascii_iswhite(c_int::from(byte(&text, at))) {
         at -= 1;
     }
     let last_char = byte(&text, at);
 
     // Step back over the `{` or `;` to whatever came before it.
-    if last_char == '{' as c_int || last_char == ';' as c_int {
+    if last_char == b'{' || last_char == b';' {
         at = at.saturating_sub(1);
-        while at > 0 && ascii_iswhite(byte(&text, at)) {
+        while at > 0 && ascii_iswhite(c_int::from(byte(&text, at))) {
             at -= 1;
         }
     }
@@ -176,9 +175,9 @@ fn smart_indent_forward(
     //             condition) {
     //         Should line up here!
     //     }
-    if byte(&text, at) == ')' as c_int {
+    if byte(&text, at) == b')' {
         Win::current().w_cursor.col = ColNr::try_from(at).unwrap_or(ColNr::MAX);
-        if let Some(pos) = find_match('(' as c_int) {
+        if let Some(pos) = find_match(b'(') {
             Win::current().w_cursor.lnum = pos.lnum;
             newindent = indent_here();
             text = line_copy(Win::current().w_cursor.lnum);
@@ -186,11 +185,11 @@ fn smart_indent_forward(
     }
 
     let mut no_si = false;
-    if last_char == '{' as c_int {
+    if last_char == b'{' {
         // A trailing `{` indents, with no need to look for an `if`.
         did_si.set(true);
         no_si = true; // ... and typing `{` must not un-indent it again
-    } else if last_char != ';' as c_int && last_char != '}' as c_int && starts_with_cinword(&text) {
+    } else if last_char != b';' && last_char != b'}' && starts_with_cinword(&text) {
         // One of 'cinwords', and the line before did not finish a
         // statement.
         did_si.set(true);
@@ -206,9 +205,9 @@ fn smart_indent_backward(line: &XString, lead_len: c_int, mut newindent: c_int) 
     let mut text = XString::from_bytes(line);
     // Skip preprocessor directives, unless they are comments. A `\`
     // continuation carries the directive onto the next line.
-    if lead_len == 0 && byte(&text, 0) == '#' as c_int {
+    if lead_len == 0 && byte(&text, 0) == b'#' {
         let mut was_backslashed = false;
-        while (byte(&text, 0) == '#' as c_int || was_backslashed)
+        while (byte(&text, 0) == b'#' || was_backslashed)
             && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count
         {
             was_backslashed = text.last() == Some(&b'\\');
@@ -222,7 +221,7 @@ fn smart_indent_backward(line: &XString, lead_len: c_int, mut newindent: c_int) 
         };
     }
 
-    if byte(&text, skip_white_at(&text)) == '}' as c_int {
+    if byte(&text, skip_white_at(&text)) == b'}' {
         did_si.set(true); // a line starting with `}` indents
     } else {
         can_si_back.set(true); // a `{` typed next can delete the indent

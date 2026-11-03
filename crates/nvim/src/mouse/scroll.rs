@@ -19,6 +19,7 @@
 
 use crate::keycodes::ModMask;
 use crate::keycodes::SpecialKey;
+use crate::types::Key;
 
 use super::*;
 use crate::buffer::buf_is_prompt;
@@ -55,7 +56,7 @@ pub(crate) fn ins_mouse(c: c_int) {
             old_curwin.buffer().make_current();
             if buf_is_prompt(old_curwin.buffer_or_none()) {
                 // Restart Insert mode when re-entering the prompt buffer.
-                old_curwin.buffer().b_prompt_insert = 'A' as c_int;
+                old_curwin.buffer().b_prompt_insert = Key::ascii(b'A');
             }
         }
         // No end means "the cursor moved to another window".

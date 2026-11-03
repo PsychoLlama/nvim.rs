@@ -458,7 +458,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
         time_msg_at(c"diff scrollbinding");
     }
 
-    if restart_edit.get() != 0 {
+    if !restart_edit.get().is_nul() {
         // A `-c startinsert` and friends: push the key that gets there.
         stuff_readbuf_char(Key::from_code(-(253 + ((KE_NOP as c_int) << 8))));
     }

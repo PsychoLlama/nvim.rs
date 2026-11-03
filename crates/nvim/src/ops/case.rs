@@ -25,6 +25,7 @@
 use crate::ex_docmd::cmdmod_has;
 use crate::message_fmt::report_msg;
 use crate::tr_plural;
+use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -190,7 +191,7 @@ pub fn swapchar(op_type: OpType, pos: Pos) -> bool {
             ColNr::try_from(char_len(&line[col..])).unwrap_or(ColNr::new(1))
         };
         let _ = del_bytes(len.get(), false, false);
-        ins_char(nc);
+        ins_char(Key::from_code(nc));
         Win::current().w_cursor = saved;
     } else {
         pbyte(pos, nc);

@@ -17,6 +17,7 @@
 
 use crate::guard::Suppress;
 use crate::memline::MlFlags;
+use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -65,7 +66,7 @@ pub(crate) fn pbyte(mut pos: Pos, c: c_int) {
 fn replace_character(c: c_int) {
     let saved = State.get();
     State.set(MODE_REPLACE);
-    ins_char(c);
+    ins_char(Key::from_code(c));
     State.set(saved);
     // Back up onto the character just replaced.
     dec_cursor();

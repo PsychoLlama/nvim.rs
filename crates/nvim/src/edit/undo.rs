@@ -87,7 +87,7 @@ fn start_arrow_common(end_insert_pos: Option<InsertEnd>, end_change: bool) {
     if !arrow_used.get() && end_change {
         // Something has been inserted: close the block.
         append_to_redobuff(ESC_STR.to_bytes());
-        stop_insert(end_insert_pos, 0, 0);
+        stop_insert(end_insert_pos, false, false);
         arrow_used.set(true);
     }
     check_spell_redraw();
@@ -154,7 +154,7 @@ pub(crate) fn stop_arrow() -> Result<(), Failed> {
 /// trimming nor the `'[`/`']` marks happen.  `esc` says the caller is
 /// `ins_esc`, and `nomove` is `i_CTRL-\_CTRL-O`, which must not move the
 /// cursor.
-pub(crate) fn stop_insert(end_insert_pos: Option<InsertEnd>, esc: c_int, nomove: c_int) {
+pub(crate) fn stop_insert(end_insert_pos: Option<InsertEnd>, esc: bool, nomove: bool) {
     stop_redo_ins();
 
     // Abandon the replace stack (this reinitialises it).
@@ -170,7 +170,7 @@ pub(crate) fn stop_insert(end_insert_pos: Option<InsertEnd>, esc: c_int, nomove:
         c_int::try_from(inserted.len()).expect("inserted text is never longer than an int")
             - new_insert_skip.get()
     };
-    if did_restart_edit.get() == 0 || added > 0 {
+    if did_restart_edit.get().is_nul() || added > 0 {
         last_insert.set(inserted);
         last_insert_skip.set(if added < 0 { 0 } else { new_insert_skip.get() });
     }
@@ -188,7 +188,7 @@ pub(crate) fn stop_insert(end_insert_pos: Option<InsertEnd>, esc: c_int, nomove:
             // At the end of a line after a space, formatting would move
             // the cursor to the following word; move it onto the space
             // first so it does not.
-            cc = 'x' as c_int;
+            cc = c_int::from(b'x');
             if Win::current().w_cursor.col > ColNr::ZERO && char_at_cursor() == NUL {
                 dec_cursor();
                 cc = char_at_cursor();
@@ -221,9 +221,9 @@ pub(crate) fn stop_insert(end_insert_pos: Option<InsertEnd>, esc: c_int, nomove:
         // Only when ESC was used or the cursor moved to another line, and
         // only if the remembered position is still in the buffer -- the
         // text may have changed unexpectedly.
-        if nomove == 0
+        if !nomove
             && did_ai.get()
-            && (esc != 0
+            && (esc
                 || (!cpo_has(CpoFlag::INDENT)
                     && Win::current().w_cursor.lnum != end_insert_pos.pos().lnum))
             && end_insert_pos.pos().lnum <= Buf::current().b_ml.ml_line_count

@@ -11,6 +11,7 @@ use crate::mbyte::cluster_len;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::CmdIdx;
+use crate::types::Key;
 use crate::types::LineNr;
 use core::ffi::CStr;
 use core::ffi::c_int;
@@ -58,7 +59,7 @@ pub fn save_current_state(s: &mut SaveState) -> bool {
     s.save_pending_end_reg_executing = pending_end_reg_executing.get();
     msg_scroll.set(0);
     // Not entering Insert mode from here.
-    restart_edit.set(0);
+    restart_edit.set(Key::NUL);
     save_typeahead(&mut s.tabuf);
     s.tabuf.typebuf_valid
 }
@@ -184,15 +185,15 @@ pub(crate) fn ex_startinsert(excmd: &mut ExArg) {
     // The upper-case forms are what `edit()` reads as "started from
     // here" rather than "restarted".
     restart_edit.set(if idx == CmdIdx::startinsert {
-        'a' as c_int
+        Key::ascii(b'a')
     } else if idx == CmdIdx::startreplace {
-        'R' as c_int
+        Key::ascii(b'R')
     } else {
-        'V' as c_int
+        Key::ascii(b'V')
     });
     if !excmd.forceit {
         if idx == CmdIdx::startinsert {
-            restart_edit.set('i' as c_int);
+            restart_edit.set(Key::ascii(b'i'));
         }
         Win::current().w_curswant = ColNr::ZERO;
     }
@@ -203,7 +204,7 @@ pub(crate) fn ex_startinsert(excmd: &mut ExArg) {
 
 /// `:stopinsert`.
 pub(crate) fn ex_stopinsert(_excmd: &mut ExArg) {
-    restart_edit.set(0);
+    restart_edit.set(Key::NUL);
     stop_insert_mode.set(true);
     clearmode();
 }

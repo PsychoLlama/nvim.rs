@@ -55,6 +55,7 @@ use crate::state::mode::restart_edit;
 use crate::tag::{HelpTagMatch, do_tag, find_help_tag_matches};
 use crate::types::ApiString;
 use crate::types::Handle;
+use crate::types::Key;
 use crate::types::{
     Array, ArrayBuf, CmdModFlags, ExArg, Failed, FileComparison, IOSIZE, LuaRetMode, Object,
     OptInt, OptVal, OptionSetFlags,
@@ -179,7 +180,7 @@ pub(crate) fn open_help(excmd: Option<&mut ExArg>) {
     drop(found);
 
     if let Some(opened) = enter_help_window() {
-        restart_edit.set(0);
+        restart_edit.set(Key::NUL);
         // Restore KeyTyped: setting 'filetype=help' may have reset it,
         // and `do_tag` needs it to open folds under the cursor.
         KeyTyped.set(old_key_typed);

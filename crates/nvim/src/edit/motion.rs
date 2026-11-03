@@ -28,7 +28,6 @@
 use crate::keycodes::ModMask;
 use crate::keycodes::SpecialKey;
 use crate::mbyte::c_cluster_len;
-use crate::strings::has_char;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win, first_tab};
 use core::ffi::c_int;
@@ -42,12 +41,12 @@ use crate::types::{NUL, OK};
 /// Only the shifted keys do this, plus the un-shifted `<Home>`/`<End>`/page
 /// keys when Shift is in `mod_mask`.  Answers whether a CTRL-O and the key
 /// were stuffed.
-pub(crate) fn ins_start_select(c: c_int) -> bool {
+pub(crate) fn ins_start_select(c: Key) -> bool {
     if !km_startsel.get() {
         return false;
     }
-    let starts = match SpecialKey::try_from(c) {
-        Ok(
+    let starts = match c.special() {
+        Some(
             SpecialKey::Khome
             | SpecialKey::Kend
             | SpecialKey::Pageup
@@ -55,7 +54,7 @@ pub(crate) fn ins_start_select(c: c_int) -> bool {
             | SpecialKey::Pagedown
             | SpecialKey::Kpagedown,
         ) => mod_mask.get().has(ModMask::SHIFT),
-        Ok(
+        Some(
             SpecialKey::SLeft
             | SpecialKey::SRight
             | SpecialKey::SUp
@@ -81,7 +80,7 @@ pub(crate) fn ins_start_select(c: c_int) -> bool {
         ];
         stuff_readbuf_len(&buf);
     }
-    stuff_readbuf_char(Key::from_code(c));
+    stuff_readbuf_char(c);
     true
 }
 
@@ -119,7 +118,7 @@ pub(crate) fn ins_left() {
             revins_legal.set(revins_legal.get() + 1);
         }
         revins_chars.set(revins_chars.get() + 1);
-    } else if p_ww(|value| has_char(value, '[' as c_int))
+    } else if p_ww(|value| value.to_bytes().contains(&b'['))
         && Win::current().w_cursor.lnum > LineNr::ONE
     {
         // 'whichwrap' allows the motion to leave the line.
@@ -134,12 +133,12 @@ pub(crate) fn ins_left() {
 }
 
 /// `<Home>`, and `<C-Home>` -- which goes to the first line first.
-pub(crate) fn ins_home(c: c_int) {
+pub(crate) fn ins_home(c: Key) {
     may_open_fold_hor();
     hide_dollar();
 
     let tpos = Win::current().w_cursor;
-    if c == SpecialKey::CHome.code() {
+    if c == SpecialKey::CHome {
         Win::current().w_cursor.lnum = LineNr::ONE;
     }
     Win::current().w_cursor.col = ColNr::ZERO;
@@ -149,12 +148,12 @@ pub(crate) fn ins_home(c: c_int) {
 }
 
 /// `<End>`, and `<C-End>` -- which goes to the last line first.
-pub(crate) fn ins_end(c: c_int) {
+pub(crate) fn ins_end(c: Key) {
     may_open_fold_hor();
     hide_dollar();
 
     let tpos = Win::current().w_cursor;
-    if c == SpecialKey::CEnd.code() {
+    if c == SpecialKey::CEnd {
         Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
     }
     coladvance_to(MAXCOL);
@@ -213,7 +212,7 @@ pub(crate) fn ins_right() {
         if revins_chars.get() != 0 {
             revins_chars.set(revins_chars.get() - 1);
         }
-    } else if p_ww(|value| has_char(value, ']' as c_int))
+    } else if p_ww(|value| value.to_bytes().contains(&b']'))
         && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count
     {
         // 'whichwrap' allows the motion to leave the line.

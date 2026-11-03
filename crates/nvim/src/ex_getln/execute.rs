@@ -157,17 +157,14 @@ pub(crate) fn command_line_end_wildmenu(
 
 /// One key, dispatched. Answers -1 to fetch another key, 0 to leave the
 /// command line and 1 to keep going.
-pub(crate) fn command_line_execute(
-    s: &mut CommandLineState,
-    key: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    if key == SpecialKey::Ignore.code() || key == SpecialKey::Nop.code() {
+pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> ::core::ffi::c_int {
+    if key == SpecialKey::Ignore || key == SpecialKey::Nop {
         return -1; // get another key
     }
 
     let display_tick_saved: DispTick = Win::current().w_display_tick;
     let mut cc = Cc::current();
-    s.c = key;
+    s.c = key.code();
 
     // If the cmdline was replaced externally (e.g. by setcmdline() during
     // an <expr> mapping), clean up the wildmenu completion state so that
@@ -382,7 +379,7 @@ pub(crate) fn command_line_execute(
             // Might have typed ESC previously; don't truncate the cmdline
             // now.
             s.gotesc = false;
-            if ccheck_abbr(s.c + ABBR_OFF) {
+            if ccheck_abbr(Key::from_code(s.c), true) {
                 return command_line_changed(s);
             }
 

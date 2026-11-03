@@ -37,16 +37,16 @@ use crate::types::{CpoFlag, FoFlag};
 /// `lastc` is the character typed before this one: `0 CTRL-D` deletes all
 /// indent and `^ CTRL-D` deletes it for this line only, restoring it on the
 /// next -- which is what saving `old_indent` is for.
-pub(crate) fn ins_shift(c: c_int, lastc: c_int) {
+pub(crate) fn ins_shift(c: Key, lastc: Key) {
     if stop_arrow_failed() {
         return;
     }
-    append_to_redobuff_char(Key::from_code(c));
+    append_to_redobuff_char(c);
 
     // `0 CTRL-D` and `^ CTRL-D`: the `0`/`^` was inserted as an ordinary
     // character and has to come off again.
-    if c == Ctrl_D
-        && (lastc == '0' as c_int || lastc == '^' as c_int)
+    if c == Key::CTRL_D
+        && (lastc.is('0') || lastc.is('^'))
         && Win::current().w_cursor.col > ColNr::ZERO
     {
         Win::current().w_cursor.col -= 1;
@@ -54,12 +54,16 @@ pub(crate) fn ins_shift(c: c_int, lastc: c_int) {
         if State.get() & REPLACE_FLAG != 0 {
             replace_pop_ins();
         }
-        if lastc == '^' as c_int {
+        if lastc.is('^') {
             old_indent.set(get_indent()); // remember the indent
         }
         change_indent(INDENT_SET, 0, 1, true);
     } else {
-        let dir = if c == Ctrl_D { INDENT_DEC } else { INDENT_INC };
+        let dir = if c == Key::CTRL_D {
+            INDENT_DEC
+        } else {
+            INDENT_INC
+        };
         change_indent(dir, 0, 1, true);
     }
 
@@ -87,7 +91,7 @@ pub(crate) fn ins_tab() -> bool {
     {
         Insstart_blank_vcol.set(nolist_virtcol());
     }
-    if echeck_abbr(TAB + ABBR_OFF) {
+    if echeck_abbr(Key::TAB, true) {
         return false;
     }
 
@@ -223,16 +227,16 @@ fn tab_spaces_to_tabs() {
     // lands.
     let (mut csarg, cstype) = CharsizeArg::new(Win::current(), LineNr::ZERO, b"\t");
     loop {
-        let byte = c_int::from(byte_at(&line, at));
-        if !ascii_iswhite(byte) {
+        let byte = byte_at(&line, at);
+        if !ascii_iswhite(c_int::from(byte)) {
             break;
         }
-        let i = win_charsize(cstype, vcol.get(), 0, TAB, &mut csarg).width;
+        let i = win_charsize(cstype, vcol.get(), 0, c_int::from(b'\t'), &mut csarg).width;
         if vcol + i > want_vcol {
             break;
         }
-        if byte != TAB {
-            line[at] = TAB as u8;
+        if byte != b'\t' {
+            line[at] = b'\t';
             if change_col < 0 {
                 change_col = fpos.col.get(); // remember the first changed column
                 if fpos.lnum == Insstart.get().lnum && fpos.col < Insstart.get().col {
@@ -322,8 +326,8 @@ fn tab_spaces_to_tabs() {
 ///
 /// Answers false when undo could not be saved -- but *true* when an
 /// abbreviation swallowed the key, which is not the same thing.
-pub(crate) fn ins_eol(c: c_int) -> bool {
-    if echeck_abbr(c + ABBR_OFF) {
+pub(crate) fn ins_eol(c: Key) -> bool {
+    if echeck_abbr(c, true) {
         return true;
     }
     if stop_arrow_failed() {
@@ -409,5 +413,5 @@ fn tabstops(which: StopList) -> c_int {
 /// Insert one space at the cursor, replacing a character in Replace mode.
 #[inline(always)]
 fn insert_space() {
-    ins_char(' ' as c_int)
+    ins_char(Key::SPACE)
 }

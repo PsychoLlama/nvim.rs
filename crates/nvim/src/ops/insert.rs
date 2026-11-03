@@ -27,6 +27,7 @@
 #![forbid(unsafe_code)]
 
 use crate::memline::MlFlags;
+use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_int, c_uint};
 
@@ -79,7 +80,7 @@ pub(crate) fn op_insert(op: &mut OpArg, count1: c_int) {
 
     let t1 = op.start;
     let start_insert = Win::current().w_cursor;
-    edit(NUL, false, count1);
+    edit(Key::NUL, false, count1);
 
     // When a TAB was inserted and the characters in front of it were
     // folded into it too, the cursor's column may have been *reduced*.
@@ -155,7 +156,7 @@ fn move_cursor_for_append(op: &OpArg, bd: &mut BlockDef) -> bool {
                 return false;
             }
             for _ in 0..bd.endspaces {
-                ins_char(' ' as c_int);
+                ins_char(Key::SPACE);
             }
             bd.textlen += bd.endspaces;
         }
@@ -347,7 +348,7 @@ pub(crate) fn op_change(op: &mut OpArg) -> c_int {
     // Reset `finish_op` now: it must not be set inside `edit()`.
     let save_finish_op = finish_op.get();
     finish_op.set(false);
-    let retval = c_int::from(edit(NUL, false, 1));
+    let retval = c_int::from(edit(Key::NUL, false, 1));
     finish_op.set(save_finish_op);
 
     // Copy the new text to the rest of a Visual block. Not when Insert
@@ -451,7 +452,7 @@ pub fn adjust_cursor_eol() {
         && gchar_cursor() == NUL
         && cur_ve_flags & kOptVeFlagOnemore as c_uint == 0
         && cur_ve_flags & kOptVeFlagAll as c_uint == 0
-        && !(restart_edit.get() != 0 || State.get() & MODE_INSERT != 0);
+        && !(!restart_edit.get().is_nul() || State.get() & MODE_INSERT != 0);
     if !adj_cursor {
         return;
     }

@@ -362,7 +362,7 @@ pub(crate) fn normal_need_additional_char(ns: &mut NormalState) -> bool {
 pub(crate) fn normal_need_redraw_mode_message(ns: &mut NormalState) -> bool {
     let showing_mode = p_smd()
         && msg_silent.get() == 0
-        && (restart_edit.get() != 0
+        && (!restart_edit.get().is_nul()
             || visual_active()
                 && ns.old_pos.lnum == Win::current().w_cursor.lnum
                 && ns.old_pos.col == Win::current().w_cursor.col)
@@ -372,7 +372,7 @@ pub(crate) fn normal_need_redraw_mode_message(ns: &mut NormalState) -> bool {
         && KeyTyped.get();
     // The other way in: an error is on display and insert mode is
     // pending, with no Visual selection to describe instead.
-    let error_on_display = restart_edit.get() != 0
+    let error_on_display = !restart_edit.get().is_nul()
         && !visual_active()
         && msg_scroll.get() != 0
         && emsg_on_display.get();
@@ -392,7 +392,7 @@ pub(crate) fn normal_need_redraw_mode_message(ns: &mut NormalState) -> bool {
 /// and pause long enough for it to be read.
 pub(crate) fn normal_redraw_mode_message() {
     let save_state = State.get();
-    if restart_edit.get() != 0 {
+    if !restart_edit.get().is_nul() {
         State.set(MODE_INSERT);
     }
     if must_redraw.get() != 0 && has_keep_msg() && !emsg_on_display.get() {
@@ -492,7 +492,7 @@ fn normal_check_buffer_modified() {
 }
 
 fn normal_check_safe_state() {
-    may_trigger_safestate(!op_pending() && restart_edit.get() == 0);
+    may_trigger_safestate(!op_pending() && restart_edit.get().is_nul());
 }
 
 fn normal_check_folds() {

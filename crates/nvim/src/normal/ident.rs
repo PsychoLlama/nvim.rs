@@ -18,6 +18,7 @@ use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
 use crate::option::vars::P_KP;
 use crate::strings::has_char;
+use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 
 use crate::buffer::buf_hide;
@@ -344,7 +345,7 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
         g_tag_at_cursor.set(false);
         if cmdchar == 'K' as c_int && !kp_ex && !kp_help {
             // The terminal 'keywordprg' opened above: let <Esc> close it.
-            restart_edit.set('i' as c_int);
+            restart_edit.set(Key::ascii(b'i'));
             add_map(b"<esc>", b"<Cmd>bdelete!<CR>", MODE_TERMINAL, true);
         }
     }

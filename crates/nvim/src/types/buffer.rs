@@ -651,7 +651,7 @@ pub struct Buffer {
     pub b_prompt_callback: Callback,
     pub b_prompt_interrupt: Callback,
     pub b_prompt_append_new_line: bool,
-    pub b_prompt_insert: ::core::ffi::c_int,
+    pub b_prompt_insert: Key,
     pub b_prompt_start: FileMark,
     pub b_s: SynBlock,
     pub b_signcols: file_buffer_b_signcols,

@@ -22,6 +22,7 @@ use crate::fileio::buffered::ReadFile;
 use crate::message_fmt::msg_cstr;
 use crate::os::fs::os_strerror;
 use crate::semsg;
+use crate::types::Key;
 use crate::types::MAXPATHL;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
@@ -91,7 +92,7 @@ pub fn openscript(name: &CStr, directly: bool) {
 
     State.set(MODE_NORMAL);
     msg_scroll.set(0); // no message scrolling in Normal mode
-    restart_edit.set(0); // don't go to Insert mode
+    restart_edit.set(Key::NUL); // don't go to Insert mode
     finish_op.set(false);
 
     let started_at = curscript.get();

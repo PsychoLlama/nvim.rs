@@ -36,17 +36,16 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::ascii::{
-    ascii_isdigit, ascii_isspace, ascii_iswhite, ascii_iswhite_nl_or_nul, ascii_isxdigit,
-};
+use crate::ascii::{ascii_isspace, ascii_iswhite, ascii_iswhite_nl_or_nul, ascii_isxdigit};
 use crate::autocmd::state::{did_cursorhold, last_cursormoved, last_cursormoved_win};
 use crate::autocmd::{apply_autocmds, aucmd_prepbuf, aucmd_restbuf, has_event};
 use crate::buffer::{
     buf_get_changedtick, buf_is_empty, buf_is_prompt, buf_is_quickfix, buf_meta_total, current_buf,
 };
 use crate::change::{
-    appended_lines_mark, change_warning, changed_bytes, del_bytes, del_char, get_leader_len,
-    ins_bytes, ins_char, ins_char_bytes, ins_str, inserted_bytes, open_line,
+    COM_MAX_LEN, COM_MIDDLE, appended_lines_mark, change_warning, changed_bytes, del_bytes,
+    del_char, get_leader_len, ins_bytes, ins_char, ins_char_bytes, ins_str, inserted_bytes,
+    open_line,
 };
 use crate::charset::{byte2cells, char2cells, hex2nr, vim_isprintc, vim_iswordc};
 use crate::cstr;
@@ -111,13 +110,11 @@ use crate::insexpand::{
 };
 use crate::keycodes::KS_MODIFIER;
 use crate::keycodes::{
-    Ctrl__, Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_D, Ctrl_E, Ctrl_F, Ctrl_G, Ctrl_H, Ctrl_HAT, Ctrl_J,
-    Ctrl_K, Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_U,
-    Ctrl_V, Ctrl_W, Ctrl_X, Ctrl_Y, K_SPECIAL, get_special_key_name, push_char_escaped,
+    Ctrl_K, Ctrl_R, Ctrl_V, Ctrl_Y, K_SPECIAL, get_special_key_name, push_char_escaped,
 };
-use crate::mapping::{abbr_key, check_abbr, langmap_adjust_mb, map_to_exists_mode};
+use crate::mapping::{check_abbr, langmap_adjust_mb, map_to_exists_mode};
 use crate::mark::{fresh_mark, mark_view_make};
-use crate::mbyte::{mb_adjust_cursor, utf_char2len, utf8len_tab};
+use crate::mbyte::{mb_adjust_cursor, utf8len_tab};
 use crate::memline::{Lines, gchar_pos, ml_append_text, ml_get_len, ml_replace_buf_text};
 use crate::message::state::{emsg_on_display, msg_scroll, msg_silent};
 use crate::message::{e_noinstext, e_sandbox, e_textlock};
@@ -173,6 +170,7 @@ use crate::textformat::{
 };
 use crate::textobject::{bck_word, fwd_word};
 use crate::types::AutoEvent;
+use crate::types::Key;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     AcoSave, ApiString, CharsizeArg, CmdModFlags, ColNr, INSCHAR_CTRLV, INSCHAR_FORMAT,
@@ -225,19 +223,19 @@ pub(crate) const INDENT_INC: ::core::ffi::c_int = 2;
 pub(crate) const INDENT_SET: ::core::ffi::c_int = 1;
 pub(crate) struct InsertState {
     pub mincol: ::core::ffi::c_int,
-    pub cmdchar: ::core::ffi::c_int,
-    pub cmdchar_todo: ::core::ffi::c_int,
+    pub cmdchar: Key,
+    pub cmdchar_todo: Key,
     pub ins_just_started: bool,
-    pub startln: ::core::ffi::c_int,
+    pub startln: bool,
     pub count: ::core::ffi::c_int,
-    pub c: ::core::ffi::c_int,
-    pub lastc: ::core::ffi::c_int,
+    pub c: Key,
+    pub lastc: Key,
     pub i: ::core::ffi::c_int,
     pub did_backspace: bool,
     pub line_is_white: bool,
     pub old_topline: LineNr,
     pub old_topfill: ::core::ffi::c_int,
-    pub inserted_space: ::core::ffi::c_int,
+    pub inserted_space: bool,
     pub replace_state: ::core::ffi::c_int,
     pub nomove: bool,
 }
@@ -248,16 +246,9 @@ pub(crate) const MSCR_DOWN: ::core::ffi::c_int = 0;
 pub(crate) const YREG_PASTE: ::core::ffi::c_int = 0;
 pub(crate) const B_IMODE_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub(crate) const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub(crate) const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
-pub(crate) const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub(crate) const NL_STR: &::core::ffi::CStr = c"\n";
-pub(crate) const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
-pub(crate) const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
 pub(crate) const ESC_STR: &::core::ffi::CStr = c"\x1B";
-pub(crate) const DEL: ::core::ffi::c_int = 0x7f as ::core::ffi::c_int;
 pub(crate) const CTRL_V_STR: &::core::ffi::CStr = c"\x16";
-pub(crate) const COM_MIDDLE: ::core::ffi::c_int = 'm' as ::core::ffi::c_int;
-pub(crate) const COM_MAX_LEN: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
 /// Whether `i_CTRL-G_U` is holding the undoable change open across the
 /// key being handled — upstream's `dont_sync_undo`.
 ///
@@ -301,7 +292,7 @@ state_record! {
     last_insert: ApiString = ApiString::NULL;
     last_insert_skip: ::core::ffi::c_int = 0;
     new_insert_skip: ::core::ffi::c_int = 0;
-    did_restart_edit: ::core::ffi::c_int = 0;
+    did_restart_edit: Key = Key::NUL;
     can_cindent: bool = false;
     revins_on: bool = false;
     revins_chars: ::core::ffi::c_int = 0;
@@ -326,4 +317,3 @@ state_record! {
     disabled_redraw: bool = false;
 }
 pub(crate) const INPUT_BUFLEN: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
-pub(crate) const ABBR_OFF: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;

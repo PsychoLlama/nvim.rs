@@ -57,7 +57,7 @@ fn insert_enter(s: &mut InsertState) {
     ins_compl_clear(); // clear stuff for CTRL-X mode
 
     // Trigger InsertEnter -- but not for `r<CR>` or `grx`.
-    if s.cmdchar != 'r' as c_int && s.cmdchar != 'v' as c_int {
+    if !s.cmdchar.is('r') && !s.cmdchar.is('v') {
         trigger_insert_enter(s.cmdchar);
     }
 
@@ -65,7 +65,7 @@ fn insert_enter(s: &mut InsertState) {
         Insstart.set(where_paste_started.get());
     } else {
         Insstart.set(Win::current().w_cursor);
-        if s.startln != 0 {
+        if s.startln {
             Insstart.set(Insstart.get().with_col(ColNr::ZERO));
         }
     }
@@ -79,30 +79,30 @@ fn insert_enter(s: &mut InsertState) {
     }
 
     // Record the command that started the insert, so `.` repeats it.
-    if s.cmdchar != NUL && restart_edit.get() == 0 {
+    if !s.cmdchar.is_nul() && restart_edit.get().is_nul() {
         reset_redobuff();
         append_to_redobuff_number(s.count);
-        if s.cmdchar == 'V' as c_int || s.cmdchar == 'v' as c_int {
+        if s.cmdchar.is('V') || s.cmdchar.is('v') {
             // `gR` and `gr`.
             append_to_redobuff_char(Key::ascii(b'g'));
-            append_to_redobuff_char(if s.cmdchar == 'v' as c_int {
+            append_to_redobuff_char(if s.cmdchar.is('v') {
                 Key::ascii(b'r')
             } else {
                 Key::ascii(b'R')
             });
         } else {
-            append_to_redobuff_char(Key::from_code(s.cmdchar));
-            if s.cmdchar == 'g' as c_int {
+            append_to_redobuff_char(s.cmdchar);
+            if s.cmdchar.is('g') {
                 append_to_redobuff_char(Key::ascii(b'I')); // `gI` means "insert in column 1"
-            } else if s.cmdchar == 'r' as c_int {
+            } else if s.cmdchar.is('r') {
                 s.count = 1; // `r<CR>` inserts one <CR> however big the count
             }
         }
     }
 
-    if s.cmdchar == 'R' as c_int {
+    if s.cmdchar.is('R') {
         State.set(MODE_REPLACE);
-    } else if s.cmdchar == 'V' as c_int || s.cmdchar == 'v' as c_int {
+    } else if s.cmdchar.is('V') || s.cmdchar.is('v') {
         State.set(MODE_VREPLACE);
         s.replace_state = MODE_VREPLACE;
         orig_line_count.set(Buf::current().b_ml.ml_line_count);
@@ -115,7 +115,7 @@ fn insert_enter(s: &mut InsertState) {
 
     // The cursor needs positioning again when it is on a TAB, and when
     // the line carries inline virtual text.
-    if gchar_cursor() == TAB || buf_meta_total(Buf::current(), kMTMetaInline) > 0 {
+    if gchar_cursor() == c_int::from(b'\t') || buf_meta_total(Buf::current(), kMTMetaInline) > 0 {
         Win::current()
             .w_valid
             .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
@@ -136,9 +136,9 @@ fn insert_enter(s: &mut InsertState) {
 
     // Handle restarting Insert mode: put the cursor back where CTRL-O
     // took it from.
-    if restart_edit.get() != 0 && stuff_empty() {
+    if !restart_edit.get().is_nul() && stuff_empty() {
         arrow_used.set(where_paste_started.get().lnum == LineNr::ZERO);
-        restart_edit.set(0);
+        restart_edit.set(Key::NUL);
         validate_virtcol(Win::current());
         update_curswant();
         restore_ctrl_o_column();
@@ -151,7 +151,7 @@ fn insert_enter(s: &mut InsertState) {
     ins_need_undo.set(true);
     where_paste_started.set(where_paste_started.get().with_lnum(LineNr::ZERO));
     can_cindent.set(true);
-    if did_restart_edit.get() == 0 {
+    if did_restart_edit.get().is_nul() {
         // Open a fold at the cursor line, unless it was already open when
         // CTRL-O left.
         fold_open_cursor();
@@ -163,7 +163,7 @@ fn insert_enter(s: &mut InsertState) {
     if p_smd() && msg_silent.get() == 0 {
         s.i = showmode();
     }
-    if did_restart_edit.get() == 0 {
+    if did_restart_edit.get().is_nul() {
         change_warning(Buf::current(), if s.i == 0 { 0 } else { s.i + 1 });
     }
 
@@ -190,7 +190,7 @@ fn insert_enter(s: &mut InsertState) {
     }
     pum_check_clear();
     fold_update_after_insert();
-    if s.cmdchar != 'r' as c_int && s.cmdchar != 'v' as c_int && s.c != Ctrl_C {
+    if !s.cmdchar.is('r') && !s.cmdchar.is('v') && s.c != Key::CTRL_C {
         ins_apply_autocmds(AutoEvent::InsertLeave);
     }
     did_cursorhold.set(false);
@@ -209,12 +209,12 @@ fn insert_enter(s: &mut InsertState) {
 ///
 /// It is allowed to move the cursor deliberately by setting `v:char`; the
 /// restore only happens when `v:char` is still empty.
-fn trigger_insert_enter(cmdchar: c_int) {
+fn trigger_insert_enter(cmdchar: Key) {
     let save_cursor = Win::current().w_cursor;
 
-    let mode: &[u8] = if cmdchar == 'R' as c_int {
+    let mode: &[u8] = if cmdchar.is('R') {
         b"r"
-    } else if cmdchar == 'V' as c_int {
+    } else if cmdchar.is('V') {
         b"v"
     } else {
         b"i"
@@ -297,7 +297,7 @@ pub(crate) fn insert_check(s: &mut InsertState) -> c_int {
         // Exiting a terminal buffer's Insert mode: a K_NOP is stuffed so
         // the loop wakes up and sees `stop_insert_mode`.
         stop_insert_mode.set(true);
-        restart_edit.set('I' as c_int);
+        restart_edit.set(Key::ascii(b'I'));
         stuff_readbuf_char(Key::from(SpecialKey::Nop));
     }
     if stop_insert_mode.get() && !ins_compl_active() {
@@ -326,7 +326,7 @@ pub(crate) fn insert_check(s: &mut InsertState) -> c_int {
     }
     if buf_is_prompt(current_buf()) {
         init_prompt(s.cmdchar_todo);
-        s.cmdchar_todo = NUL;
+        s.cmdchar_todo = Key::NUL;
     }
 
     may_scroll_for_wrap(s);
@@ -354,7 +354,7 @@ pub(crate) fn insert_check(s: &mut InsertState) -> c_int {
     s.old_topfill = Win::current().w_topfill;
 
     // `lastc` is the previous *real* key: a K_EVENT is not one.
-    if s.c != SpecialKey::Event.code() {
+    if s.c != SpecialKey::Event {
         s.lastc = s.c;
     }
 
@@ -373,8 +373,8 @@ pub(crate) fn insert_check(s: &mut InsertState) -> c_int {
             && !key_available()
             && Win::current().w_cursor.col > ColNr::ZERO
         {
-            s.c = char_before_cursor();
-            if vim_isprintc(s.c) {
+            s.c = Key::from_code(char_before_cursor());
+            if vim_isprintc(s.c.code()) {
                 ins_compl_enable_autocomplete();
                 ins_compl_init_get_longest();
                 insert_do_complete(s);
@@ -435,25 +435,25 @@ fn may_scroll_for_wrap(s: &mut InsertState) {
 ///
 /// Answers 0 to leave Insert mode, -1 to ignore the key entirely, and 1 to
 /// go on.
-pub(crate) fn insert_execute(s: &mut InsertState, key: c_int) -> c_int {
+pub(crate) fn insert_execute(s: &mut InsertState, key: Key) -> c_int {
     if stop_insert_mode.get() {
         // Insert mode ended while the key was being read; give it back so
         // Normal mode sees it.
-        if key != SpecialKey::Ignore.code() && key != SpecialKey::Nop.code() {
-            vungetc(Key::from_code(key));
+        if key != SpecialKey::Ignore && key != SpecialKey::Nop {
+            vungetc(key);
         }
         s.count = 0;
         s.nomove = true;
-        ins_compl_prep(ESC);
+        ins_compl_prep(Key::ESC.code());
         return 0;
     }
-    if key == SpecialKey::Ignore.code() || key == SpecialKey::Nop.code() {
+    if key == SpecialKey::Ignore || key == SpecialKey::Nop {
         return -1; // get another key
     }
     s.c = key;
 
     // Any key but a K_EVENT resets the CursorHold timer.
-    if key != SpecialKey::Event.code() {
+    if key != SpecialKey::Event {
         did_cursorhold.set(true);
     }
 
@@ -462,24 +462,24 @@ pub(crate) fn insert_execute(s: &mut InsertState, key: c_int) -> c_int {
     }
 
     ins_compl_init_get_longest();
-    if ins_compl_prep(s.c) {
+    if ins_compl_prep(s.c.code()) {
         return 1;
     }
 
     // CTRL-\ CTRL-N goes to Normal mode, CTRL-\ CTRL-G to the "insert
     // mode" the buffer wants, and CTRL-\ CTRL-O is a one-shot CTRL-O.
     // Anything else after CTRL-\ is put back and the CTRL-\ inserted.
-    if s.c == Ctrl_BSL {
+    if s.c == Key::CTRL_BSL {
         ins_redraw(false);
         s.c = {
             let _raw_key = Keys::unmapped_with_codes();
-            plain_vgetc().code()
+            plain_vgetc()
         };
-        if s.c != Ctrl_N && s.c != Ctrl_G && s.c != Ctrl_O {
-            vungetc(Key::from_code(s.c));
-            s.c = Ctrl_BSL;
+        if s.c != Key::CTRL_N && s.c != Key::CTRL_G && s.c != Key::CTRL_O {
+            vungetc(s.c);
+            s.c = Key::CTRL_BSL;
         } else {
-            if s.c == Ctrl_O {
+            if s.c == Key::CTRL_O {
                 ins_ctrl_o();
                 ins_at_eol.set(false); // don't move the cursor afterwards
                 s.nomove = true;
@@ -489,18 +489,18 @@ pub(crate) fn insert_execute(s: &mut InsertState, key: c_int) -> c_int {
         }
     }
 
-    if s.c != SpecialKey::Event.code() {
-        s.c = do_digraph(Key::from_code(s.c)).code();
+    if s.c != SpecialKey::Event {
+        s.c = do_digraph(s.c);
     }
 
-    if (s.c == Ctrl_V || s.c == Ctrl_Q) && ctrl_x_mode_cmdline() {
+    if (s.c == Key::CTRL_V || s.c == Key::CTRL_Q) && ctrl_x_mode_cmdline() {
         insert_do_complete(s);
         insert_handle_key_post(s);
         return 1;
     }
-    if s.c == Ctrl_V || s.c == Ctrl_Q {
+    if s.c == Key::CTRL_V || s.c == Key::CTRL_Q {
         ins_ctrl_v();
-        s.c = Ctrl_V;
+        s.c = Key::CTRL_V;
         return 1;
     }
 
@@ -508,11 +508,11 @@ pub(crate) fn insert_execute(s: &mut InsertState, key: c_int) -> c_int {
     // inserted.
     if cindent_on() && ctrl_x_mode_none() {
         s.line_is_white = inindent(0);
-        if cinkeys(s.c, '!' as c_int, s.line_is_white) && stop_arrow_ok() {
+        if cinkeys(s.c, b'!', s.line_is_white) && stop_arrow_ok() {
             c_expr_indent();
             return 1; // don't insert the key
         }
-        if can_cindent.get() && cinkeys(s.c, '*' as c_int, s.line_is_white) && stop_arrow_ok() {
+        if can_cindent.get() && cinkeys(s.c, b'*', s.line_is_white) && stop_arrow_ok() {
             c_expr_indent();
         }
     }
@@ -529,24 +529,17 @@ pub(crate) fn insert_execute(s: &mut InsertState, key: c_int) -> c_int {
 }
 
 /// In a 'rightleft' window, left and right swap over.
-const fn mirror_arrow_key(c: c_int) -> c_int {
-    // An `if` chain rather than a `match SpecialKey::try_from(c)`: this is a `const
-    // fn`, where a trait call is not available.
-    if c == SpecialKey::Left.code() {
-        SpecialKey::Right.code()
-    } else if c == SpecialKey::SLeft.code() {
-        SpecialKey::SRight.code()
-    } else if c == SpecialKey::CLeft.code() {
-        SpecialKey::CRight.code()
-    } else if c == SpecialKey::Right.code() {
-        SpecialKey::Left.code()
-    } else if c == SpecialKey::SRight.code() {
-        SpecialKey::SLeft.code()
-    } else if c == SpecialKey::CRight.code() {
-        SpecialKey::CLeft.code()
-    } else {
-        c
-    }
+fn mirror_arrow_key(c: Key) -> Key {
+    let mirrored = match c.special() {
+        Some(SpecialKey::Left) => SpecialKey::Right,
+        Some(SpecialKey::SLeft) => SpecialKey::SRight,
+        Some(SpecialKey::CLeft) => SpecialKey::CRight,
+        Some(SpecialKey::Right) => SpecialKey::Left,
+        Some(SpecialKey::SRight) => SpecialKey::SLeft,
+        Some(SpecialKey::CRight) => SpecialKey::CLeft,
+        _ => return c,
+    };
+    Key::from(mirrored)
 }
 
 /// Does the completion machine want this key for itself?
@@ -566,11 +559,11 @@ fn compl_takes_key(s: &mut InsertState) -> bool {
     }
 
     // Backspace inside the leader: shrink it rather than deleting text.
-    if (s.c == SpecialKey::Bs.code() || s.c == Ctrl_H)
+    if (s.c == SpecialKey::Bs || s.c == Key::CTRL_H)
         && Win::current().w_cursor.col > ins_compl_col()
     {
-        s.c = ins_compl_bs();
-        if s.c == NUL {
+        s.c = Key::from_code(ins_compl_bs());
+        if s.c.is_nul() {
             return true;
         }
     }
@@ -580,7 +573,7 @@ fn compl_takes_key(s: &mut InsertState) -> bool {
     }
 
     // CTRL-L: take the rest of the shown match.
-    if s.c == Ctrl_L && (!ctrl_x_mode_line_or_eval() || ins_compl_long_shown_match()) {
+    if s.c == Key::CTRL_L && (!ctrl_x_mode_line_or_eval() || ins_compl_long_shown_match()) {
         ins_compl_addfrommatch();
         return true;
     }
@@ -588,9 +581,9 @@ fn compl_takes_key(s: &mut InsertState) -> bool {
     // An ordinary character extends the leader.  `InsertCharPre` may
     // replace it with a whole string, which goes in a character at a
     // time.
-    if ins_compl_accept_char(s.c) {
+    if ins_compl_accept_char(s.c.code()) {
         match do_insert_char_pre(s.c) {
-            None => ins_compl_addleader(s.c),
+            None => ins_compl_addleader(s.c.code()),
             Some(text) => {
                 let mut at = 0;
                 while at < text.len() {
@@ -604,9 +597,9 @@ fn compl_takes_key(s: &mut InsertState) -> bool {
 
     // CTRL-Y accepts the match; so does <CR> under 'completeopt'
     // `noinsert`.
-    if (s.c == Ctrl_Y
+    if (s.c == Key::CTRL_Y
         || (ins_compl_enter_selects()
-            && (s.c == CAR || s.c == SpecialKey::Kenter.code() || s.c == NL)))
+            && (s.c == Key::CAR || s.c == SpecialKey::Kenter || s.c == Key::NL)))
         && stop_arrow_ok()
     {
         ins_compl_delete(false);
@@ -616,7 +609,7 @@ fn compl_takes_key(s: &mut InsertState) -> bool {
             return true;
         }
         ins_compl_insert(false, false);
-    } else if ascii_iswhite_nl_or_nul(s.c) && ins_compl_preinsert_effect() {
+    } else if ascii_iswhite_nl_or_nul(s.c.code()) && ins_compl_preinsert_effect() {
         ins_compl_delete(false);
     }
     false
@@ -627,7 +620,7 @@ pub(crate) fn insert_do_complete(s: &mut InsertState) {
     compl_busy.set(true);
     // Folds must not be updated while the popup menu is being built.
     let folds_frozen = Suppress::fold_update();
-    if ins_complete(s.c, true).is_err() {
+    if ins_complete(s.c.code(), true).is_err() {
         compl_status_clear();
     }
     drop(folds_frozen);
@@ -637,7 +630,7 @@ pub(crate) fn insert_do_complete(s: &mut InsertState) {
 
 /// The tail every key runs after [`insert_handle_key`].
 pub(crate) fn insert_handle_key_post(s: &mut InsertState) {
-    if s.c != SpecialKey::Event.code() && ctrl_x_mode_normal() {
+    if s.c != SpecialKey::Event && ctrl_x_mode_normal() {
         did_cursorhold.set(false);
     }
     // The completion popup belongs to the window it was started in.
@@ -645,13 +638,13 @@ pub(crate) fn insert_handle_key_post(s: &mut InsertState) {
         ins_compl_cancel();
     }
     if arrow_used.get() {
-        s.inserted_space = 0;
+        s.inserted_space = false;
     }
     // 'cindent': re-indent now that the character is in.
     if can_cindent.get()
         && cindent_on()
         && ctrl_x_mode_normal()
-        && cinkeys(s.c, ' ' as c_int, s.line_is_white)
+        && cinkeys(s.c, b' ', s.line_is_white)
         && stop_arrow_ok()
     {
         c_expr_indent();
@@ -668,12 +661,12 @@ pub(crate) fn insert_handle_key_post(s: &mut InsertState) {
 ///
 /// Not called recursively: for `i_CTRL-O` it returns and lets the caller
 /// handle the Normal-mode command, which is what the answer means.
-pub(crate) fn edit(cmdchar: c_int, startln: bool, count: c_int) -> bool {
+pub(crate) fn edit(cmdchar: Key, startln: bool, count: c_int) -> bool {
     if !Buf::current().terminal.is_null() {
         if ex_normal_busy.get() != 0 {
             // Do not enter terminal mode from `:normal`; ask for Insert
             // mode again after it finishes.
-            restart_edit.set('i' as c_int);
+            restart_edit.set(Key::ascii(b'i'));
             force_restart_edit.set(true);
             return false;
         }
@@ -698,23 +691,23 @@ pub(crate) fn edit(cmdchar: c_int, startln: bool, count: c_int) -> bool {
     let mut s = InsertState {
         mincol: 0,
         cmdchar,
-        cmdchar_todo: 0,
+        cmdchar_todo: Key::NUL,
         ins_just_started: false,
-        startln: startln as c_int,
+        startln,
         count,
-        c: 0,
-        lastc: 0,
+        c: Key::NUL,
+        lastc: Key::NUL,
         i: 0,
         did_backspace: false,
         line_is_white: false,
         old_topline: LineNr::ZERO,
         old_topfill: 0,
-        inserted_space: 0,
+        inserted_space: false,
         replace_state: 0,
         nomove: false,
     };
     insert_enter(&mut s);
-    s.c == Ctrl_O
+    s.c == Key::CTRL_O
 }
 
 /// Does the next change still owe a `u_save`?
@@ -737,8 +730,8 @@ fn stop_arrow_ok() -> bool {
 /// Does 'cinkeys' list `c` for `when`?  `line_is_white` says whether the
 /// line held nothing but white space before the key arrived.
 #[inline(always)]
-fn cinkeys(c: c_int, when: c_int, line_is_white: bool) -> bool {
-    in_cinkeys(c, when, line_is_white)
+fn cinkeys(c: Key, when: u8, line_is_white: bool) -> bool {
+    in_cinkeys(c.code(), c_int::from(when), line_is_white)
 }
 
 /// Re-indent the current line the way 'cindent'/'indentexpr' wants it.

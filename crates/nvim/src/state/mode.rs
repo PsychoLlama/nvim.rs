@@ -46,7 +46,7 @@ use crate::global_cell::state_record;
 use crate::highlight_group::HLF_NONE;
 use crate::memory::XString;
 use crate::normal::VisualMode;
-use crate::types::{ColNr, Hlf, LineNr, Pos};
+use crate::types::{ColNr, Hlf, Key, LineNr, Pos};
 use core::ffi::{CStr, c_int};
 
 /// The origin, which every position here starts at.
@@ -109,7 +109,7 @@ state_record! {
     /// Where 'paste' was switched on during the insert.
     pub(crate) where_paste_started: Pos = POS_ZERO;
     /// Restart the insert when the current command is done: `i`, `a`, `R`, `V`.
-    pub(crate) restart_edit: c_int = 0;
+    pub(crate) restart_edit: Key = Key::NUL;
     /// Honour `restart_edit` even where a finished command would drop it
     /// (`:normal` into a terminal buffer).
     pub(crate) force_restart_edit: bool = false;
@@ -141,8 +141,9 @@ state_record! {
     pub(crate) did_ai: bool = false;
     /// The column the autoindent reached.
     pub(crate) ai_col: ColNr = ColNr::ZERO;
-    /// The end character of a three-part comment leader just inserted.
-    pub(crate) end_comment_pending: c_int = 0;
+    /// The last byte of the end of a three-part comment leader just
+    /// inserted, which typed closes the comment.
+    pub(crate) end_comment_pending: Option<u8> = None;
     /// Smartindent was done.
     pub(crate) did_si: bool = false;
     /// Smartindent may indent after this line.

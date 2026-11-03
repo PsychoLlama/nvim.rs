@@ -18,7 +18,7 @@ use crate::keycodes::ModMask;
 use crate::keycodes::{
     Ctrl__, Ctrl_A, Ctrl_B, Ctrl_C, Ctrl_D, Ctrl_E, Ctrl_G, Ctrl_H, Ctrl_HAT, Ctrl_K, Ctrl_L,
     Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_T, Ctrl_U, Ctrl_V, Ctrl_W, NotAKey,
-    SpecialKey, is_special,
+    SpecialKey,
 };
 use crate::types::Key;
 use crate::types::{ExpandContext, FAIL, MB_MAXCHAR, NUL};
@@ -535,7 +535,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<::core::ffi::c_
 
             // Get the next (two) characters. Do not include the modifiers
             // in the key, for CTRL-SHIFT-V.
-            s.c = get_literal(mod_mask.get().has(ModMask::SHIFT));
+            s.c = get_literal(mod_mask.get().has(ModMask::SHIFT)).code();
 
             s.do_abbr = false; // don't do abbreviation now
             cc.special_char = NUL as ::core::ffi::c_char;
@@ -587,7 +587,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<::core::ffi::c_
             // mod_mask to 0x0, so that typing Shift-Space in the GUI
             // doesn't enter the string <S-Space>. This should only happen
             // after ^V.
-            if !is_special(c) {
+            if !Key::from_code(c).is_special() {
                 mod_mask.set(ModMask::NONE);
             }
             None
@@ -607,21 +607,16 @@ pub(crate) fn command_line_handle_key(s: &mut CommandLineState) -> ::core::ffi::
 
         // We come here if we have a normal character.
         if s.do_abbr
-            && (is_special(s.c) || !vim_iswordc(s.c))
-            // Add ABBR_OFF for characters above 0x100; this is what
-            // check_abbr() expects.
-            && (ccheck_abbr(if s.c >= 0x100 {
-                s.c + ABBR_OFF
-            } else {
-                s.c
-            }) || s.c == Ctrl_RSB)
+            && (Key::from_code(s.c).is_special() || !vim_iswordc(s.c))
+            // A character above 0x100 needs no CTRL-V in front of it.
+            && (ccheck_abbr(Key::from_code(s.c), s.c >= 0x100) || s.c == Ctrl_RSB)
         {
             return command_line_changed(s);
         }
     }
 
     // C's `end:` — put the character in the command line.
-    if is_special(s.c) || !mod_mask.get().is_empty() {
+    if Key::from_code(s.c).is_special() || !mod_mask.get().is_empty() {
         let name = get_special_key_name(Key::from_code(s.c), mod_mask.get());
         put_on_cmdline(cstr::in_bytes(&name).to_bytes(), true);
     } else {

@@ -31,7 +31,7 @@
 )]
 
 use crate::keycodes::ModMask;
-use crate::keycodes::{NotAKey, SpecialKey};
+use crate::keycodes::SpecialKey;
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
@@ -42,11 +42,8 @@ use crate::ex_docmd::{DoCmdOpts, LineSource, do_cmdline};
 use crate::optionstr::OptString;
 use crate::types::NUL;
 
-/// `<Space>`, which is only a command when CTRL is held (`i_CTRL-@`'s
-/// spelling on some terminals).
-const SPACE: c_int = b' ' as c_int;
 /// `CTRL-X s`, the second spelling of `CTRL-X CTRL-S`.
-const SPELL_S: c_int = b's' as c_int;
+const SPELL_S: Key = Key::ascii(b's');
 
 /// What the dispatcher does after an arm has run.
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -68,23 +65,23 @@ enum Next {
 pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
     // TODO(tarruda, upstream): this could look better with a lookup
     // table, the way Normal mode's `nv_cmds[]` does it.
-    let mut next = match SpecialKey::try_from(s.c) {
+    let mut next = match s.c.special().ok_or(s.c) {
         // End input mode.
-        Err(NotAKey(ESC)) => {
-            if check_abbr(ESC + ABBR_OFF) {
+        Err(Key::ESC) => {
+            if check_abbr(Key::ESC, true) {
                 Next::Continue
             } else {
                 key_end_insert(s)
             }
         }
-        Err(NotAKey(Ctrl_C)) => key_end_insert(s),
+        Err(Key::CTRL_C) => key_end_insert(s),
 
-        Err(NotAKey(Ctrl_O)) => {
+        Err(Key::CTRL_O) => {
             // CTRL-X CTRL-O completes with 'omnifunc'.
             if ctrl_x_mode_omni() {
                 insert_do_complete(s);
                 Next::Continue
-            } else if check_abbr(Ctrl_O + ABBR_OFF) {
+            } else if check_abbr(Key::CTRL_O, true) {
                 Next::Continue
             } else {
                 ins_ctrl_o();
@@ -112,30 +109,30 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
         }
 
         // CTRL-@ arrives as a CTRL-modified space on some terminals.
-        Err(NotAKey(SPACE)) if mod_mask.get() != ModMask::CTRL => Next::Normal,
-        Ok(SpecialKey::Zero) | Err(NotAKey(SPACE | NUL | Ctrl_A)) => key_stuff_last_insert(s),
+        Err(Key::SPACE) if mod_mask.get() != ModMask::CTRL => Next::Normal,
+        Ok(SpecialKey::Zero) | Err(Key::SPACE | Key::NUL | Key::CTRL_A) => key_stuff_last_insert(s),
 
-        Err(NotAKey(Ctrl_R)) => {
+        Err(Key::CTRL_R) => {
             // CTRL-X CTRL-R completes with the registers.
             if ctrl_x_mode_register() && !ins_compl_active() {
                 insert_do_complete(s);
             } else {
                 ins_reg();
                 autoformat(true);
-                s.inserted_space = 0;
+                s.inserted_space = false;
             }
             Next::Continue
         }
-        Err(NotAKey(Ctrl_G)) => {
+        Err(Key::CTRL_G) => {
             ins_ctrl_g();
             Next::Continue
         }
-        Err(NotAKey(Ctrl_HAT)) => {
+        Err(Key::CTRL_HAT) => {
             ins_ctrl_hat();
             Next::Continue
         }
         // CTRL-_ toggles 'revins', but only with 'allowrevins'.
-        Err(NotAKey(Ctrl__)) => {
+        Err(Key::CTRL_UNDERSCORE) => {
             if !p_ari() {
                 Next::Normal
             } else {
@@ -144,7 +141,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
             }
         }
 
-        Err(NotAKey(Ctrl_D)) => {
+        Err(Key::CTRL_D) => {
             // CTRL-X CTRL-D completes with the defined identifiers.
             if ctrl_x_mode_path_defines() {
                 insert_do_complete(s);
@@ -153,23 +150,23 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
                 key_shift(s)
             }
         }
-        Err(NotAKey(Ctrl_T)) => key_shift(s),
+        Err(Key::CTRL_T) => key_shift(s),
 
         Ok(SpecialKey::Del | SpecialKey::Kdel) => {
             ins_del();
             autoformat(true);
             Next::Continue
         }
-        Ok(SpecialKey::Bs) | Err(NotAKey(Ctrl_H)) => {
+        Ok(SpecialKey::Bs) | Err(Key::CTRL_H) => {
             do_backspace(s, Backspace::Char);
             Next::Continue
         }
-        Err(NotAKey(Ctrl_W)) => {
+        Err(Key::CTRL_W) => {
             // In a prompt buffer plain CTRL-W is the window prefix, so
             // Shift-CTRL-W is what deletes a word.
             if in_prompt_buf() && !mod_mask.get().has(ModMask::SHIFT) {
                 stuff_readbuf_char(Key::ctrl(b'W'));
-                restart_edit.set('A' as c_int);
+                restart_edit.set(Key::ascii(b'A'));
                 s.nomove = true;
                 s.count = 0;
                 return 0;
@@ -177,7 +174,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
             do_backspace(s, Backspace::Word);
             Next::Continue
         }
-        Err(NotAKey(Ctrl_U)) => {
+        Err(Key::CTRL_U) => {
             // CTRL-X CTRL-U completes with 'completefunc'.
             if ctrl_x_mode_function() {
                 insert_do_complete(s);
@@ -187,7 +184,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
                 // to 'completefunc'.
                 s.did_backspace = ins_bs(s.c, Backspace::Line, &mut s.inserted_space);
                 autoformat(true);
-                s.inserted_space = 0;
+                s.inserted_space = false;
                 if s.did_backspace {
                     may_autocomplete_before_cursor(s);
                 }
@@ -215,7 +212,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
             | SpecialKey::X2drag
             | SpecialKey::X2release,
         ) => {
-            ins_mouse(s.c);
+            ins_mouse(s.c.code());
             Next::Continue
         }
         Ok(SpecialKey::Mousedown) => {
@@ -333,18 +330,18 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
 
         // Shift-TAB is a TAB in Insert mode.
         Ok(SpecialKey::STab) => {
-            s.c = TAB;
+            s.c = Key::TAB;
             key_tab(s)
         }
-        Err(NotAKey(TAB)) => key_tab(s),
+        Err(Key::TAB) => key_tab(s),
 
         Ok(SpecialKey::Kenter) => {
-            s.c = CAR;
+            s.c = Key::CAR;
             key_eol(s)
         }
-        Err(NotAKey(CAR | NL)) => key_eol(s),
+        Err(Key::CAR | Key::NL) => key_eol(s),
 
-        Err(NotAKey(Ctrl_K)) => {
+        Err(Key::CTRL_K) => {
             // CTRL-X CTRL-K completes with the 'dictionary'.
             if ctrl_x_mode_dictionary() {
                 if compl_option_ok(true) {
@@ -355,33 +352,33 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
                 // Otherwise it is a digraph, which produces a character
                 // to insert -- or nothing, if it was cancelled.
                 s.c = ins_digraph();
-                if s.c == NUL {
+                if s.c.is_nul() {
                     Next::Continue
                 } else {
                     Next::Normal
                 }
             }
         }
-        Err(NotAKey(Ctrl_X)) => {
+        Err(Key::CTRL_X) => {
             ins_ctrl_x();
             Next::Continue
         }
 
         // The CTRL-X submodes that reuse an ordinary key: each is only a
         // command while its submode is active.
-        Err(NotAKey(Ctrl_RSB)) if !ctrl_x_mode_tags() => Next::Normal,
-        Err(NotAKey(Ctrl_F)) if !ctrl_x_mode_files() => Next::Normal,
-        Err(NotAKey(SPELL_S | Ctrl_S)) if !ctrl_x_mode_spell() => Next::Normal,
-        Err(NotAKey(Ctrl_RSB | Ctrl_F | SPELL_S | Ctrl_S)) => {
+        Err(Key::CTRL_RSB) if !ctrl_x_mode_tags() => Next::Normal,
+        Err(Key::CTRL_F) if !ctrl_x_mode_files() => Next::Normal,
+        Err(SPELL_S | Key::CTRL_S) if !ctrl_x_mode_spell() => Next::Normal,
+        Err(Key::CTRL_RSB | Key::CTRL_F | SPELL_S | Key::CTRL_S) => {
             insert_do_complete(s);
             Next::Continue
         }
 
-        Err(NotAKey(Ctrl_L)) if !ctrl_x_mode_whole_line() => Next::Normal,
-        Err(NotAKey(Ctrl_L | Ctrl_P | Ctrl_N)) => key_complete(s),
+        Err(Key::CTRL_L) if !ctrl_x_mode_whole_line() => Next::Normal,
+        Err(Key::CTRL_L | Key::CTRL_P | Key::CTRL_N) => key_complete(s),
 
         // Copy from the line above or below, or scroll.
-        Err(NotAKey(Ctrl_Y | Ctrl_E)) => {
+        Err(Key::CTRL_Y | Key::CTRL_E) => {
             s.c = ins_ctrl_ey(s.c);
             Next::Continue
         }
@@ -409,14 +406,14 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
 
 /// `<Esc>` and CTRL-C: end input mode -- unless a window here wants them.
 fn key_end_insert(s: &mut InsertState) -> Next {
-    if s.c == Ctrl_C && cmdwin_type.get() != 0 {
+    if s.c == Key::CTRL_C && cmdwin_type.get() != 0 {
         // Close the command-line window.
         cmdwin_result.set(SpecialKey::Ignore.code());
         got_int.set(false); // don't stop executing autocommands et al
         s.nomove = true;
         return Next::Leave;
     }
-    if s.c == Ctrl_C && in_prompt_buf() && invoke_prompt_interrupt() {
+    if s.c == Key::CTRL_C && in_prompt_buf() && invoke_prompt_interrupt() {
         if !in_prompt_buf() {
             // The buffer changed to a non-prompt one; leave Insert mode.
             return Next::Leave;
@@ -429,17 +426,17 @@ fn key_end_insert(s: &mut InsertState) -> Next {
 /// CTRL-A and CTRL-@: insert the previously inserted text, and for CTRL-@
 /// leave the mode afterwards.
 fn key_stuff_last_insert(s: &mut InsertState) -> Next {
-    if stuff_inserted(NUL, 1, c_int::from(s.c == Ctrl_A)).is_err() && s.c != Ctrl_A {
+    if stuff_inserted(Key::NUL, 1, s.c == Key::CTRL_A).is_err() && s.c != Key::CTRL_A {
         return Next::Leave;
     }
-    s.inserted_space = 0;
+    s.inserted_space = false;
     Next::Continue
 }
 
 /// CTRL-D and CTRL-T: one 'shiftwidth' less or more indent -- unless CTRL-T
 /// is the 'thesaurus' completion.
 fn key_shift(s: &mut InsertState) -> Next {
-    if s.c == Ctrl_T && ctrl_x_mode_thesaurus() {
+    if s.c == Key::CTRL_T && ctrl_x_mode_thesaurus() {
         if compl_option_ok(false) {
             insert_do_complete(s);
         }
@@ -447,7 +444,7 @@ fn key_shift(s: &mut InsertState) -> Next {
     }
     ins_shift(s.c, s.lastc);
     autoformat(true);
-    s.inserted_space = 0;
+    s.inserted_space = false;
     Next::Continue
 }
 
@@ -461,7 +458,7 @@ fn key_tab(s: &mut InsertState) -> Next {
         insert_do_complete(s);
         return Next::Continue;
     }
-    s.inserted_space = 0;
+    s.inserted_space = false;
     if ins_tab() {
         return Next::Normal;
     }
@@ -473,7 +470,7 @@ fn key_tab(s: &mut InsertState) -> Next {
 /// something else, do that instead.
 fn key_eol(s: &mut InsertState) -> Next {
     // In a quickfix or location-list window, `<CR>` jumps to the entry.
-    if buf_is_quickfix(current_buf()) && s.c == CAR {
+    if buf_is_quickfix(current_buf()) && s.c == Key::CAR {
         if Win::current().w_llist_ref.is_none() {
             let _ = do_cmdline_cmd(c".cc");
         } else {
@@ -483,7 +480,7 @@ fn key_eol(s: &mut InsertState) -> Next {
     }
     // In the command-line window it accepts the line.
     if cmdwin_type.get() != 0 {
-        cmdwin_result.set(CAR);
+        cmdwin_result.set(Key::CAR.code());
         return Next::Leave;
     }
     // In a prompt buffer it submits, unless Shift is held.
@@ -500,7 +497,7 @@ fn key_eol(s: &mut InsertState) -> Next {
         return Next::Leave;
     }
     autoformat(false);
-    s.inserted_space = 0;
+    s.inserted_space = false;
     Next::Continue
 }
 
@@ -538,7 +535,7 @@ fn may_autocomplete_before_cursor(s: &mut InsertState) {
     {
         return;
     }
-    s.c = char_before_cursor();
+    s.c = Key::from_code(char_before_cursor());
     if printable(s.c) {
         start_autocomplete(s);
     }
@@ -586,8 +583,8 @@ fn insert_normal_char(s: &mut InsertState) {
                 // Insert the new value of v:char literally.
                 let mut at = 0;
                 while at < text.len() {
-                    s.c = char_at(&text[at..]);
-                    if s.c == CAR || s.c == SpecialKey::Kenter.code() || s.c == NL {
+                    s.c = Key::from_code(char_at(&text[at..]));
+                    if s.c == Key::CAR || s.c == SpecialKey::Kenter || s.c == Key::NL {
                         ins_eol(s.c);
                     } else {
                         ins_char(s.c);
@@ -596,18 +593,18 @@ fn insert_normal_char(s: &mut InsertState) {
                 }
                 append_to_redobuff_literally(&text);
             }
-            s.c = NUL;
+            s.c = Key::NUL;
         }
         // The new value is already in, or was an empty string.
-        if s.c == NUL {
+        if s.c.is_nul() {
             return;
         }
     }
 
-    ins_try_si(s.c);
+    ins_try_si(s.c.code());
 
-    if s.c == ' ' as c_int {
-        s.inserted_space = 1;
+    if s.c.is(' ') {
+        s.inserted_space = true;
         if inindent(0) {
             can_cindent.set(false);
         }
@@ -620,11 +617,9 @@ fn insert_normal_char(s: &mut InsertState) {
 
     // Insert the character, checking for an abbreviation on a special
     // one.  `CTRL-]` expands an abbreviation without being inserted
-    // itself.  `check_abbr` wants ABBR_OFF added above 0x100.
-    if vim_iswordc(s.c)
-        || (!check_abbr(if s.c >= 0x100 { s.c + ABBR_OFF } else { s.c }) && s.c != Ctrl_RSB)
-    {
-        insert_special(s.c, 0, 0);
+    // itself.  A character above 0x100 needs no CTRL-V in front of it.
+    if vim_iswordc(s.c.code()) || (!check_abbr(s.c, s.c.code() >= 0x100) && s.c != Key::CTRL_RSB) {
+        insert_special(s.c, false, false);
         revins_legal.set(revins_legal.get() + 1);
         revins_chars.set(revins_chars.get() + 1);
     }
@@ -664,10 +659,11 @@ fn in_prompt_buf() -> bool {
 }
 
 /// Did `c` end an abbreviation?  If so it has been stuffed back along with
-/// the expansion, and the key must not be inserted here.
+/// the expansion, and the key must not be inserted here.  `literal` says it
+/// goes back without a CTRL-V in front.
 #[inline(always)]
-fn check_abbr(c: c_int) -> bool {
-    echeck_abbr(c)
+fn check_abbr(c: Key, literal: bool) -> bool {
+    echeck_abbr(c, literal)
 }
 
 /// Is 'complete' set to something this completion mode can use?
@@ -678,6 +674,6 @@ fn compl_option_ok(cpt_only: bool) -> bool {
 
 /// Is `c` a character that can be shown on the screen?
 #[inline(always)]
-fn printable(c: c_int) -> bool {
-    vim_isprintc(c)
+fn printable(c: Key) -> bool {
+    vim_isprintc(c.code())
 }

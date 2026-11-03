@@ -39,15 +39,14 @@ use crate::types::NUL;
 use crate::winlayer::{Buf, Win};
 
 /// The byte at `at` of `text` as the C's `int`, NUL past its end.
-fn at(text: &[u8], at: usize) -> c_int {
-    c_int::from(byte_at(text, at))
+fn at(text: &[u8], at: usize) -> u8 {
+    byte_at(text, at)
 }
 
 /// The byte before `at`, which at the very start of 'comments' is none --
 /// upstream reads the byte in front of the option there.
-fn before(text: &[u8], at: usize) -> c_int {
-    at.checked_sub(1)
-        .map_or(NUL, |prev| c_int::from(text[prev]))
+fn before(text: &[u8], at: usize) -> u8 {
+    at.checked_sub(1).map_or(0, |prev| text[prev])
 }
 
 /// How many bytes of white space start `text`.
@@ -60,7 +59,7 @@ fn white_run(text: &[u8]) -> usize {
 /// `copy_option_part` one item of `com` from byte `*p`, stepping `*p` past
 /// it: the item, cut to `COM_MAX_LEN - 1` bytes.
 fn copy_part(com: &[u8], p: &mut usize) -> Vec<u8> {
-    let (part, rest) = split_option_part(&com[(*p).min(com.len())..], COM_MAX_LEN as usize, b",");
+    let (part, rest) = split_option_part(&com[(*p).min(com.len())..], COM_MAX_LEN, b",");
     *p = com.len() - rest.len();
     part
 }
@@ -101,7 +100,7 @@ impl Repl {
 /// Step `p` to just past the next `:` of the 'comments' value, noting the `b`
 /// flag on the way.
 fn skip_flags(com: &[u8], p: &mut usize, require_blank: &mut bool) {
-    while at(com, *p) != 0 && before(com, *p) != ':' as c_int {
+    while at(com, *p) != 0 && before(com, *p) != b':' {
         if at(com, *p) == COM_BLANK {
             *require_blank = true;
         }
@@ -111,16 +110,18 @@ fn skip_flags(com: &[u8], p: &mut usize, require_blank: &mut bool) {
 
 /// Step `p` to just past the next `:`, noting the `x` flag on the way.
 ///
-/// The `x` flag means "closing this comment automatically is allowed", and is
-/// recorded by setting `end_comment_pending` to -1 -- the "we want to set it"
-/// marker the caller then replaces with the last character of the end leader.
-fn skip_flags_noting_auto_end(com: &[u8], p: &mut usize) {
-    while at(com, *p) != 0 && before(com, *p) != ':' as c_int {
+/// The `x` flag means "closing this comment automatically is allowed": the
+/// answer says whether it was there, and the caller then records the last
+/// character of the end leader in `end_comment_pending`.
+fn skip_flags_noting_auto_end(com: &[u8], p: &mut usize) -> bool {
+    let mut auto_end = false;
+    while at(com, *p) != 0 && before(com, *p) != b':' {
         if at(com, *p) == COM_AUTO_END {
-            end_comment_pending.set(-1);
+            auto_end = true;
         }
         *p += 1;
     }
+    auto_end
 }
 
 /// The `s`/`m` arm: the old line carries the *start* or the *middle* of a
@@ -153,12 +154,12 @@ fn plan_start_or_middle(
     skip_flags(com, &mut p, &mut require_blank);
     let middle = copy_part(com, &mut p);
 
-    skip_flags_noting_auto_end(com, &mut p);
+    let auto_end = skip_flags_noting_auto_end(com, &mut p);
     let lead_end = copy_part(com, &mut p);
-    if end_comment_pending.get() == -1 {
+    if auto_end {
         // An empty end part has no last character; upstream reads the byte
         // in front of its buffer.
-        end_comment_pending.set(c_int::from(lead_end.last().copied().unwrap_or(0)));
+        end_comment_pending.set(lead_end.last().copied().filter(|&b| b != 0));
     }
 
     let lead_len = usize::try_from(plan.lead_len).expect("non-negative");
@@ -182,9 +183,9 @@ fn plan_start_or_middle(
         // middle leader on the new line -- as does the `b` flag.
         let after_leader = at(saved_line, lead_len);
         let last_of_leader = at(saved_line, lead_len - 1);
-        if !ascii_iswhite(last_of_leader)
+        if !ascii_iswhite(c_int::from(last_of_leader))
             && (has_extra && Win::current().w_cursor.col == ColNr::new(plan.lead_len)
-                || !has_extra && after_leader == NUL
+                || !has_extra && after_leader == 0
                 || require_blank)
         {
             plan.extra_space = true;
@@ -208,11 +209,11 @@ fn plan_end(plan: &mut LeaderPlan, com: &[u8], mut p: usize, dir: c_int, saved_l
 
     // `O` on the end of a comment inserts the middle leader, which is the
     // item before this one -- so search backwards for it.
-    while p > 0 && at(com, p) != ',' as c_int {
+    while p > 0 && at(com, p) != b',' {
         p -= 1;
     }
     let mut repl = p;
-    while repl > 0 && before(com, repl) != ':' as c_int {
+    while repl > 0 && before(com, repl) != b':' {
         repl -= 1;
     }
     plan.repl = Repl::Text(com[repl..p].to_vec());
@@ -222,18 +223,19 @@ fn plan_end(plan: &mut LeaderPlan, com: &[u8], mut p: usize, dir: c_int, saved_l
 
     // Is automatic ending of the comment allowed?
     let mut p2 = p;
-    while at(com, p2) != 0 && at(com, p2) != ':' as c_int {
+    let mut auto_end = false;
+    while at(com, p2) != 0 && at(com, p2) != b':' {
         if at(com, p2) == COM_AUTO_END {
-            end_comment_pending.set(-1);
+            auto_end = true;
         }
         p2 += 1;
     }
-    if end_comment_pending.get() == -1 {
+    if auto_end {
         // The last character of the end leader is what will close it.
-        while at(com, p2) != 0 && at(com, p2) != ',' as c_int {
+        while at(com, p2) != 0 && at(com, p2) != b',' {
             p2 += 1;
         }
-        end_comment_pending.set(before(com, p2));
+        end_comment_pending.set(Some(before(com, p2)).filter(|&b| b != 0));
     }
 }
 
@@ -265,7 +267,7 @@ pub(crate) fn plan_leader(
     let buffer = Buf::current();
     let com = buffer.b_p_com.bytes();
     let mut p = lead_flags.offset();
-    while at(com, p) != 0 && at(com, p) != ':' as c_int {
+    while at(com, p) != 0 && at(com, p) != b':' {
         let flag = at(com, p);
         if flag == COM_BLANK {
             require_blank = true;
@@ -292,17 +294,17 @@ pub(crate) fn plan_leader(
 
 /// The `l`/`r` alignment letter and the numeric indent offset of a 'comments'
 /// item.
-fn leader_alignment(lead_flags: ComFlags) -> (c_int, c_int) {
+fn leader_alignment(lead_flags: ComFlags) -> (u8, c_int) {
     let mut align = 0;
     let mut off = 0;
     lead_flags.with_rest(|com| {
         let mut p = 0;
-        while at(com, p) != NUL && at(com, p) != ':' as c_int {
+        while at(com, p) != 0 && at(com, p) != b':' {
             let c = at(com, p);
             if c == COM_RIGHT || c == COM_LEFT {
                 align = c;
                 p += 1;
-            } else if ascii_isdigit(c) || c == '-' as c_int {
+            } else if c.is_ascii_digit() || c == b'-' {
                 let (n, past) = getdigits_int_at(com, p, true, 0);
                 off = n;
                 // A `-` with no digits after it is no number: upstream reads
@@ -575,8 +577,8 @@ pub(crate) fn indent_after_comment_end(
     do_si: bool,
     newindent: c_int,
 ) -> c_int {
-    if at(saved_line, comment_end) != '*' as c_int
-        || at(saved_line, comment_end + 1) != '/' as c_int
+    if at(saved_line, comment_end) != b'*'
+        || at(saved_line, comment_end + 1) != b'/'
         || (Buf::current().b_p_ai == 0 && !do_si)
     {
         return newindent;

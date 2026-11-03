@@ -61,7 +61,7 @@ use crate::guard::{allbuf_lock, textlock};
 use crate::highlight_group::{HLF_E, syn_id2attr, syn_name2id};
 use crate::keycodes::KS_EXTRA;
 use crate::keycodes::{K_SPECIAL, get_special_key_name};
-use crate::mapping::{abbr_key, add_map, check_abbr, map_to_exists_mode};
+use crate::mapping::{add_map, check_abbr, map_to_exists_mode};
 use crate::mark::setpcmark;
 use crate::mbyte::{
     c_cells_at, c_char_info, c_cluster_len, class_in, encode_char, head_off, mb_tolower,
@@ -621,7 +621,6 @@ pub const PATH_ESC_CHARS: &::core::ffi::CStr = c" \t\n*?[{`$\\%#'\"|!<";
 pub const SHELL_ESC_CHARS: &::core::ffi::CStr = c" \t\n*?[{`$\\%#'\"|!<>();&";
 pub const BUFFER_ESC_CHARS: &::core::ffi::CStr = c" \t\n*?[`$\\%#'\"|!<";
 pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;
-pub const ABBR_OFF: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const UINT_MAX: ::core::ffi::c_uint = (INT_MAX as ::core::ffi::c_uint)
     .wrapping_mul(2 as ::core::ffi::c_uint)

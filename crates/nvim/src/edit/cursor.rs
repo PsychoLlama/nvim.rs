@@ -312,7 +312,7 @@ fn with_cursor_tail<R>(f: impl FnOnce(&[u8]) -> R) -> R {
 /// the one a 'virtualedit' cursor may not sit inside.
 #[inline(always)]
 fn printable_not_tab(tail: &[u8]) -> bool {
-    c_int::from(byte_at(tail, 0)) != TAB && vim_isprintc(char_at(tail))
+    byte_at(tail, 0) != b'\t' && vim_isprintc(char_at(tail))
 }
 
 /// The cursor's virtual column.

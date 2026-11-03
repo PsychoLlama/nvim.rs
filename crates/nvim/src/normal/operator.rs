@@ -138,7 +138,7 @@ pub(crate) fn nv_dot(cmd_arg: &mut CmdArg) {
     }
     // The insert half is only replayed when insert mode was left by a
     // command rather than by an arrow key, which ends the change.
-    let repeat_insert = restart_edit.get() != 0 && !arrow_used.get();
+    let repeat_insert = !restart_edit.get().is_nul() && !arrow_used.get();
     if start_redo(cmd_arg.count0, repeat_insert).is_err() {
         clear_op_beep(cmd_arg.op());
     }

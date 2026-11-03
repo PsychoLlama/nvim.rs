@@ -25,13 +25,6 @@ use crate::types::{Key, KeyExtra};
 
 use super::{extra, termcap};
 
-/// C's `IS_SPECIAL`: whether `c` is a key code rather than a character.
-/// Every key that is not a printable character travels as a *negative*
-/// `c_int`, which is the whole of the test.
-pub const fn is_special(c: c_int) -> bool {
-    c < 0
-}
-
 /// The ASCII characters the `<>` notation has names for.
 pub const CSI: c_int = 0x9b;
 
@@ -228,8 +221,8 @@ pub const KE_WILD: KeyExtra = 108;
 /// The discriminants are the key codes themselves, written the way
 /// upstream writes them -- a `KS_EXTRA` byte plus a [`KeyExtra`] code, or a
 /// two-character termcap name -- so the enum *is* the definition and not a
-/// second copy of it. They are all negative, which is what [`is_special`]
-/// tests and what lets a key and a character share one `c_int`: `vgetc` and
+/// second copy of it. They are all negative, which is what
+/// [`Key::is_special`] tests and what lets a key and a character share one `c_int`: `vgetc` and
 /// the typeahead carry either, and [`SpecialKey::try_from`] is the seam between
 /// them. Raw bytes stay bytes; only the *named* codes are in here.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]

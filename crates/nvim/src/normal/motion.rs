@@ -15,6 +15,7 @@ use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_H, SpecialKey};
 use crate::ops::Op;
 use crate::strings::has_char;
+use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 
 use crate::ascii::ascii_iswhite;
@@ -466,8 +467,8 @@ pub(crate) fn nv_down(cmd_arg: &mut CmdArg) {
             && Win::current().w_cursor.lnum == Buf::current().b_ml.ml_line_count
         {
             prompt_invoke_callback();
-            if restart_edit.get() == 0 {
-                restart_edit.set('a' as c_int);
+            if restart_edit.get().is_nul() {
+                restart_edit.set(Key::ascii(b'a'));
             }
             return;
         }

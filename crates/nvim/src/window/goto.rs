@@ -339,7 +339,7 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
     maketitle();
     Win::current().w_redr_status = true;
     redraw_tabline.set(true);
-    if restart_edit.get() != 0 {
+    if !restart_edit.get().is_nul() {
         Win::current().redraw_later(UPD_VALID); // causes status line redraw
     }
     // Change background colour according to NormalNC, but only if actually

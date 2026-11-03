@@ -392,7 +392,7 @@ pub fn open_line(
         if !trunc_line
             && do_si
             && !head.is_empty()
-            && (extra.is_none() || first_char != '{' as c_int)
+            && (extra.is_none() || first_char != c_int::from(b'{'))
         {
             (newindent, no_si) = smart_indent(dir, flags, head, newindent);
         }
@@ -413,12 +413,16 @@ pub fn open_line(
     let do_cindent = !p_paste()
         && (Buf::current().b_p_cin != 0
             || c_int::from(Buf::current().b_p_inde.first_byte()) != NUL)
-        && in_cinkeys(key, ' ' as c_int, linewhite(Win::current().w_cursor.lnum))
+        && in_cinkeys(
+            key,
+            c_int::from(b' '),
+            linewhite(Win::current().w_cursor.lnum),
+        )
         && flags & OPENLINE_FORCE_INDENT == 0;
 
     // Does the current line start with a comment leader that should be
     // repeated in front of the new line?
-    end_comment_pending.set(NUL);
+    end_comment_pending.set(None);
     let mut lead_flags = None;
     let mut comment_start = 0;
     let mut lead_len = 0;
@@ -522,7 +526,7 @@ pub fn open_line(
             XString::from_vec(text)
         }
         None => {
-            end_comment_pending.set(NUL); // there was no leader after all
+            end_comment_pending.set(None); // there was no leader after all
             XString::from_bytes(tail) // an empty line when nothing moves
         }
     };
