@@ -12,7 +12,6 @@ use super::*;
 use crate::cstr;
 use crate::mbyte::{strcmp_ic_in, strnicmp_in};
 use crate::message_fmt::{emsg_text, msg_bytes};
-use crate::narrow::len_as_int;
 use crate::option::cpo_has;
 use crate::pos::MAXCOL;
 use crate::regexp::{LineMatcher, RE_SEARCH, walk_lines};
@@ -526,7 +525,7 @@ impl Searcher<'_, '_> {
                     // first byte.
                     let col = usize::try_from(pos.col).unwrap_or(0);
                     let back = head_off(self.lines().line(pos.lnum), col);
-                    pos.col -= len_as_int(back);
+                    pos.col -= back as c_int;
                 }
             }
             (pos, found.start)

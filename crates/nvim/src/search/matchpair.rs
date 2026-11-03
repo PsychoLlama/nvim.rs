@@ -14,7 +14,6 @@ use super::*;
 use crate::charset::skip;
 use crate::cstr::byte_at;
 use crate::mbyte::{c_cluster_len, char_at};
-use crate::narrow::len_as_int;
 use crate::option::cpo_has;
 use crate::optionstr::OptStringRef;
 use crate::strings::has_char;
@@ -292,7 +291,7 @@ fn make_plan(
                 if target.findc != 0 {
                     break;
                 }
-                pos.col += len_as_int(cluster_len(rest));
+                pos.col += cluster_len(rest) as c_int;
             }
             if target.findc == 0 {
                 // No brace in the line; maybe use "  #if" then.
@@ -444,7 +443,7 @@ impl Walk {
         if self.pos.col != ColNr::ZERO {
             self.pos.col -= 1;
             let back = head_off(self.lines.line(self.pos.lnum), self.pos.col.as_usize());
-            self.pos.col -= len_as_int(back);
+            self.pos.col -= back as c_int;
             return true;
         }
         // At the start of the line, go to the previous one.
@@ -478,7 +477,9 @@ impl Walk {
             // For Lisp don't look for a match inside a comment.
             || (self.lisp && self.comment_col != ColNr::MAX && self.pos.col == self.comment_col);
         if !at_end {
-            self.pos.col += len_as_int(cluster_len(&line[col..]));
+            // A character is a few bytes: the unchecked narrow is exact, and
+            // this is the walk's per-character step.
+            self.pos.col += cluster_len(&line[col..]) as c_int;
             return true;
         }
         // End of file, or the line is exhausted and the comment with
