@@ -220,7 +220,7 @@ pub(crate) fn ins_compl_expand_multiple(text: &[u8]) {
     for next in lines {
         insert_chars(line);
         let flags = OPENLINE_KEEPTRAIL | OPENLINE_FORCE_INDENT;
-        open_line(FORWARD, flags, base_indent, None);
+        let _ = open_line(FORWARD, flags, base_indent, None);
         line = next;
     }
     // Handle remaining text after the last newline (if any).

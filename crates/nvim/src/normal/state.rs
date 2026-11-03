@@ -24,6 +24,7 @@ use crate::global_cell::GlobalCell;
 use crate::id_table::{IdTable, TableId};
 use crate::keycodes::ModMask;
 use crate::ops::Op;
+use crate::state::Step;
 use crate::types::AutoEvent;
 use crate::types::ColNr;
 use crate::types::Key;
@@ -84,7 +85,6 @@ use crate::types::{CmdArg, NUL, OpArg, OpType, Outcome, Pos, ShmFlag, int64_t};
 use crate::ui::{ui_cursor_shape, ui_flush};
 use crate::window::{may_make_initial_scroll_size_snapshot, may_trigger_win_scrolled_resized};
 use crate::winlayer::graph::cmdwin_result;
-use core::ffi::c_int;
 
 use crate::r#move::{update_curswant, update_topline, validate_cursor};
 
@@ -547,9 +547,10 @@ fn normal_redraw() {
 
 /// One iteration of the state loop's check half.
 ///
-/// Answers 1 to go on and read a command, 0 to leave normal mode, and -1 to
-/// leave it because Ex mode ran instead.
-pub(crate) fn normal_check(ns: &mut NormalState) -> c_int {
+/// Answers [`Step::Go`] to go on and read a command, [`Step::Leave`] to
+/// leave normal mode, and [`Step::Again`] to be asked again because Ex mode
+/// ran instead.
+pub(crate) fn normal_check(ns: &mut NormalState) -> Step {
     normal_check_stuff_buffer();
     normal_check_interrupt(ns);
     if did_throw.get() && ex_normal_busy.get() == 0 {
@@ -599,16 +600,16 @@ pub(crate) fn normal_check(ns: &mut NormalState) -> c_int {
 
     if exmode_active.get() {
         if ns.noexmode {
-            return 0;
+            return Step::Leave;
         }
         do_exmode();
-        return -1;
+        return Step::Again;
     }
     if ns.cmdwin && cmdwin_result.get() != 0 {
-        return 0;
+        return Step::Leave;
     }
     normal_prepare(ns);
-    1
+    Step::Go
 }
 
 /// Publish the count the command was given as `v:count` and `v:count1`.

@@ -50,7 +50,7 @@ use crate::state::mode::restart_edit;
 use crate::strings::shellescape;
 use crate::tag::do_tag;
 use crate::tag::state::g_tag_at_cursor;
-use crate::types::{CmdArg, ColNr, LineNr, int64_t};
+use crate::types::{CmdArg, ColNr, Failed, LineNr, int64_t};
 use crate::undo::curbuf_is_changed;
 use crate::window::check_can_set_curbuf_disabled;
 use core::ffi::{CStr, c_int};
@@ -66,7 +66,8 @@ pub(crate) fn do_nv_ident(c1: Key, c2: Key) {
 }
 
 /// Add the command `K` should run to `out`. Answers the length of the
-/// identifier still to be appended, or 0 when there is nothing to look up.
+/// identifier still to be appended; `Err` (reported) when only dashes are
+/// left of it for a shell 'keywordprg' to look up.
 ///
 /// `text` is the identifier and the rest of its line, and `start` the offset
 /// in it the identifier's `n` bytes begin at -- advanced past the leading
@@ -81,11 +82,11 @@ fn build_keywordprg_cmd(
     start: &mut usize,
     mut n: usize,
     out: &mut Vec<u8>,
-) -> usize {
+) -> Result<usize, Failed> {
     if kp_help {
         out.clear();
         out.extend_from_slice(b"help! ");
-        return n;
+        return Ok(n);
     }
     if kp_ex {
         // An Ex 'keywordprg' takes the word as its argument, after an
@@ -95,7 +96,7 @@ fn build_keywordprg_cmd(
         if count0 != 0 {
             out.extend_from_slice(format!("{count0} ").as_bytes());
         }
-        return n;
+        return Ok(n);
     }
 
     // A shell 'keywordprg' runs in a terminal in a new tab. Leading
@@ -106,7 +107,7 @@ fn build_keywordprg_cmd(
     }
     if n == 0 {
         emsg(gettext(e_noident));
-        return 0;
+        return Err(Failed);
     }
     // `man` and `man -s` take the count as a section number, which goes
     // in front of the word rather than becoming a line range.
@@ -127,7 +128,7 @@ fn build_keywordprg_cmd(
     if count0 != 0 && (isman || isman_s) {
         out.extend_from_slice(format!("{count0} ").as_bytes());
     }
-    n
+    Ok(n)
 }
 
 /// The characters that have to be backslash-escaped for the command being
@@ -275,10 +276,12 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
         }
         Some(b'K') => {
             let count0 = cmd_arg.count0;
-            n = build_keywordprg_cmd(count0, kp, kp_help, kp_ex, &text, &mut start, n, &mut out);
-            if n == 0 {
+            let Ok(len) =
+                build_keywordprg_cmd(count0, kp, kp_help, kp_ex, &text, &mut start, n, &mut out)
+            else {
                 return;
-            }
+            };
+            n = len;
         }
         Some(b']') => {
             tag_cmd = true;

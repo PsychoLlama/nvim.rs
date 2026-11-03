@@ -52,7 +52,7 @@ use crate::edit::buf_prompt_text_owned;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_flags, cmdmod_set_flags};
 use crate::mbyte::char_at;
 use crate::optionstr::OptString;
-use crate::types::{FoFlag, NUL};
+use crate::types::{Failed, FoFlag, NUL};
 
 mod comment;
 mod smart;
@@ -314,13 +314,13 @@ fn reindent_new_line(has_leader: bool, do_cindent: bool) {
 /// lines, so this calls `u_save_cursor()` again itself when it starts on a
 /// new one. The cursor must be on a valid line of the current buffer.
 ///
-/// Answers false only when `ml_append` failed.
+/// `Err` only when `ml_append` failed.
 pub fn open_line(
     dir: c_int,
     flags: c_int,
     second_line_indent: c_int,
     did_do_comment: Option<&mut bool>,
-) -> bool {
+) -> Result<(), Failed> {
     let do_si = may_do_si();
     let saved_pi = Buf::current().b_p_pi;
     let lnum = Win::current().w_cursor.lnum;
@@ -541,7 +541,7 @@ pub fn open_line(
         Win::current().w_cursor.lnum -= 1;
     }
 
-    let mut retval = false;
+    let mut retval = Err(Failed);
     'theend: {
         let found = append_new_line(&new_text, old_cursor);
         let Some(mut did_append) = found else {
@@ -620,7 +620,7 @@ pub fn open_line(
             Win::current().w_cursor.coladd = 0;
             ins_bytes(&new_text); // calls changed_bytes()
         }
-        retval = true;
+        retval = Ok(());
     }
 
     Buf::current().b_p_pi = saved_pi;

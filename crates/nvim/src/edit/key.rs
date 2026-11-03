@@ -33,6 +33,7 @@
 use crate::keycodes::ModMask;
 use crate::keycodes::SpecialKey;
 use crate::mbyte::{c_cluster_len, char_at};
+use crate::state::Step;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
@@ -60,9 +61,9 @@ enum Next {
 
 /// Handle a character in Insert mode.
 ///
-/// Answers 0 to leave the mode and 1 to go on, which is the state loop's
-/// contract.
-pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
+/// Answers [`Step::Leave`] to leave the mode and [`Step::Go`] to go on,
+/// which is the state loop's contract.
+pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
     // TODO(tarruda, upstream): this could look better with a lookup
     // table, the way Normal mode's `nv_cmds[]` does it.
     let mut next = match s.c.special().ok_or(s.c) {
@@ -169,7 +170,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
                 restart_edit.set(Key::ascii(b'A'));
                 s.nomove = true;
                 s.count = 0;
-                return 0;
+                return Step::Leave;
             }
             do_backspace(s, Backspace::Word);
             Next::Continue
@@ -397,11 +398,11 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
         next = Next::Continue;
     }
     if next == Next::Leave {
-        return 0;
+        return Step::Leave;
     }
 
     insert_handle_key_post(s);
-    1 // continue
+    Step::Go // continue
 }
 
 /// `<Esc>` and CTRL-C: end input mode -- unless a window here wants them.
@@ -493,7 +494,7 @@ fn key_eol(s: &mut InsertState) -> Next {
         return Next::Continue;
     }
 
-    if !ins_eol(s.c) {
+    if ins_eol(s.c).is_err() {
         return Next::Leave;
     }
     autoformat(false);
@@ -585,7 +586,7 @@ fn insert_normal_char(s: &mut InsertState) {
                 while at < text.len() {
                     s.c = Key::from_code(char_at(&text[at..]));
                     if s.c == Key::CAR || s.c == SpecialKey::Kenter || s.c == Key::NL {
-                        ins_eol(s.c);
+                        let _ = ins_eol(s.c);
                     } else {
                         ins_char(s.c);
                     }

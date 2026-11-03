@@ -21,6 +21,7 @@ use crate::memory::XString;
 use crate::message::emsg;
 use crate::option::vars::{P_STL, P_TAL, P_WBR};
 use crate::optionstr::OptString;
+use crate::state::Step;
 use crate::types::{
     BackslashEscape, ExpandContext, NUL, OptionSetFlags, kBoolVarFalse, kBoolVarTrue,
 };
@@ -501,7 +502,7 @@ pub(crate) fn command_line_enter(
 }
 
 /// The key loop's check, run before every key is fetched.
-pub(crate) fn command_line_check(s: &mut CommandLineState) -> ::core::ffi::c_int {
+pub(crate) fn command_line_check(s: &mut CommandLineState) -> Step {
     let cc = Cc::current();
 
     s.prev_cmdpos = cc.cmdpos;
@@ -542,7 +543,7 @@ pub(crate) fn command_line_check(s: &mut CommandLineState) -> ::core::ffi::c_int
 
     cursorcmd(); // set the cursor on the right spot
     ui_cursor_shape();
-    1
+    Step::Go
 }
 
 pub(crate) fn abandon_cmdline() {

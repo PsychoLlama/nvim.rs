@@ -80,7 +80,7 @@ pub(crate) fn op_insert(op: &mut OpArg, count1: c_int) {
 
     let t1 = op.start;
     let start_insert = Win::current().w_cursor;
-    edit(Key::NUL, false, count1);
+    let _ = edit(Key::NUL, false, count1);
 
     // When a TAB was inserted and the characters in front of it were
     // folded into it too, the cursor's column may have been *reduced*.
@@ -348,7 +348,7 @@ pub(crate) fn op_change(op: &mut OpArg) -> c_int {
     // Reset `finish_op` now: it must not be set inside `edit()`.
     let save_finish_op = finish_op.get();
     finish_op.set(false);
-    let retval = c_int::from(edit(Key::NUL, false, 1));
+    let retval = c_int::from(edit(Key::NUL, false, 1) == Ok(true));
     finish_op.set(save_finish_op);
 
     // Copy the new text to the rest of a Visual block. Not when Insert

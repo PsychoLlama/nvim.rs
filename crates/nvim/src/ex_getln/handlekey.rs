@@ -20,6 +20,7 @@ use crate::keycodes::{
     Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_T, Ctrl_U, Ctrl_V, Ctrl_W, NotAKey,
     SpecialKey,
 };
+use crate::state::Step;
 use crate::types::Key;
 use crate::types::{ExpandContext, FAIL, MB_MAXCHAR, NUL};
 use crate::winlayer::Buf;
@@ -238,13 +239,13 @@ pub(crate) fn command_line_left_right_mouse(s: &mut CommandLineState) {
 /// C's `break` out of that switch: the key was not handled specially — or its
 /// handler asked for it to be treated as ordinary text — and falls through to
 /// the abbreviation check and then to inserting it into the line.
-fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<::core::ffi::c_int> {
+fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
     let mut cc = Cc::current();
     match SpecialKey::try_from(s.c) {
         Ok(SpecialKey::Bs | SpecialKey::Del | SpecialKey::Kdel) | Err(NotAKey(Ctrl_H | Ctrl_W)) => {
             Some(match command_line_erase_chars(s) {
                 KeyOutcome::NotChanged => command_line_not_changed(s),
-                KeyOutcome::GotoNormalMode => 0, // back to cmd mode
+                KeyOutcome::GotoNormalMode => Step::Leave, // back to cmd mode
                 KeyOutcome::Changed => command_line_changed(s),
             })
         }
@@ -291,11 +292,11 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<::core::ffi::c_
 
             // Will drop the command line after putting it in the history.
             s.gotesc = true;
-            Some(0) // back to cmd mode
+            Some(Step::Leave) // back to cmd mode
         }
 
         Err(NotAKey(Ctrl_R)) => Some(match command_line_insert_reg(s) {
-            KeyOutcome::GotoNormalMode => 0, // back to cmd mode
+            KeyOutcome::GotoNormalMode => Step::Leave, // back to cmd mode
             KeyOutcome::Changed => command_line_changed(s),
             KeyOutcome::NotChanged => command_line_not_changed(s),
         }),
@@ -305,7 +306,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<::core::ffi::c_
                 return None; // use ^D as a normal character instead
             }
             redrawcmd();
-            Some(1) // don't do incremental search now
+            Some(Step::Go) // don't do incremental search now
         }
 
         Ok(SpecialKey::Right | SpecialKey::SRight | SpecialKey::CRight) => {
@@ -399,7 +400,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<::core::ffi::c_
                 && mouse_row.get() < cmdline_row.get()
             {
                 cc.mouse_used = true;
-                return Some(0);
+                return Some(Step::Leave);
             }
             command_line_left_right_mouse(s);
             Some(command_line_not_changed(s))
@@ -513,7 +514,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<::core::ffi::c_
                         s.did_hist_navigate = true;
                         command_line_changed(s)
                     }
-                    KeyOutcome::GotoNormalMode => 0,
+                    KeyOutcome::GotoNormalMode => Step::Leave,
                     KeyOutcome::NotChanged => command_line_not_changed(s),
                 })
             }
@@ -581,7 +582,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<::core::ffi::c_
             // otherwise 'q' FALLS THROUGH to the default arm.
             if c == 'q' as ::core::ffi::c_int && cc.mouse_prompt {
                 cc.cmdbuff.set_byte(0, 0);
-                return Some(0);
+                return Some(Step::Leave);
             }
             // A normal character with no special meaning. Just set
             // mod_mask to 0x0, so that typing Shift-Space in the GUI
@@ -595,7 +596,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<::core::ffi::c_
     }
 }
 
-pub(crate) fn command_line_handle_key(s: &mut CommandLineState) -> ::core::ffi::c_int {
+pub(crate) fn command_line_handle_key(s: &mut CommandLineState) -> Step {
     let cc = Cc::current();
     // For a one-key prompt, avoid putting ESC and Ctrl-C onto the cmdline.
     // For all other keys, just put it onto the cmdline and exit — which is
@@ -626,7 +627,7 @@ pub(crate) fn command_line_handle_key(s: &mut CommandLineState) -> ::core::ffi::
         put_on_cmdline(&ch[..j], true);
     }
     if Cc::current().one_key {
-        0
+        Step::Leave
     } else {
         command_line_changed(s)
     }

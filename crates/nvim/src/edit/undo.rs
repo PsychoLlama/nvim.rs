@@ -280,15 +280,11 @@ pub(crate) fn stop_insert(end_insert_pos: Option<InsertEnd>, esc: bool, nomove: 
 ///
 /// Any change an autocommand makes belongs to an undo block of its own --
 /// except for `InsertLeave`, whose change is still part of the insert.
-pub(crate) fn ins_apply_autocmds(event: AutoEvent) -> c_int {
+///
+/// Answers whether any autocommand ran.
+pub(crate) fn ins_apply_autocmds(event: AutoEvent) -> bool {
     let tick = buf_get_changedtick(Buf::current());
-    let r = c_int::from(apply_autocmds(
-        event,
-        None,
-        None,
-        false,
-        Buf::current_or_none(),
-    ));
+    let r = apply_autocmds(event, None, None, false, Buf::current_or_none());
 
     if event != AutoEvent::InsertLeave && tick != buf_get_changedtick(Buf::current()) {
         let _ = u_save(

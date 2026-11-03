@@ -47,6 +47,7 @@ use crate::normal::{
 use crate::ops::{Op, do_pending_operator, get_op_type};
 use crate::option::vars::{P_LANGMAP, fdo_flags, p_lrm, p_tm, p_ttm};
 use crate::register::get_default_register_name;
+use crate::state::Step;
 use crate::state::mode::{
     State, VIsual_select_reg, finish_op, km_startsel, motion_force, opcount, restart_VIsual_select,
     restart_edit,
@@ -534,7 +535,7 @@ pub(crate) fn normal_finish_command(ns: &mut NormalState) {
             restart_VIsual_select.set(0);
         }
         if want_insert {
-            edit(restart_edit.get(), false, 1);
+            let _ = edit(restart_edit.get(), false, 1);
         }
     }
     // 2 means "next command", 1 means "this one"; the countdown is here.
@@ -545,7 +546,7 @@ pub(crate) fn normal_finish_command(ns: &mut NormalState) {
 }
 
 /// One normal-mode command, from its first key to the end of its effects.
-pub(crate) fn normal_execute(ns: &mut NormalState, key: Key) -> c_int {
+pub(crate) fn normal_execute(ns: &mut NormalState, key: Key) -> Step {
     ns.command_finished = false;
     ns.ctrl_w = false;
     ns.old_col = Win::current().w_curswant.get();
@@ -677,7 +678,7 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: Key) -> c_int {
         }
     }
     normal_finish_command(ns);
-    1
+    Step::Go
 }
 
 /// Record a command for `.`, taking its second character from `cmd_arg`.

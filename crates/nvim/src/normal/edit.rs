@@ -429,8 +429,8 @@ pub(crate) fn n_opencmd(cmd_arg: &mut CmdArg) {
     } else {
         0
     };
-    let opened =
-        u_save(LineNr::new(undo_first.get()), undo_last).is_ok() && open_line(dir, flags, 0, None);
+    let opened = u_save(LineNr::new(undo_first.get()), undo_last).is_ok()
+        && open_line(dir, flags, 0, None).is_ok();
     if opened {
         if win_cursorline_standout(win) {
             // The cursor line moved, so its highlight has to be redrawn.
@@ -541,7 +541,7 @@ pub(crate) fn invoke_edit(cmd_arg: &mut CmdArg, repl: bool, cmd: Key, startln: b
     if !cmd_arg.cmdchar.is('O') && !cmd_arg.cmdchar.is('o') {
         Buf::current().b_last_changedtick_i = buf_get_changedtick(Buf::current());
     }
-    if edit(cmd, startln, cmd_arg.count1) {
+    if edit(cmd, startln, cmd_arg.count1) == Ok(true) {
         cmd_arg.outcome |= Outcome::COMMAND_BUSY;
     }
     if restart_edit.get().is_nul() {

@@ -41,6 +41,7 @@ use crate::keycodes::{Ctrl_BSL, Ctrl_C, Ctrl_N, Ctrl_O, SpecialKey};
 use crate::memory::XString;
 use crate::r#move::{set_topline, validate_cursor};
 use crate::options::kOptCuloptFlagNumber;
+use crate::state::Step;
 use crate::state::mode::{State, restart_edit, stop_insert_mode};
 use crate::state::{
     MODE_TERMINAL, ModeState, may_trigger_modechanged, state_enter, state_handle_k_event,
@@ -408,13 +409,13 @@ fn terminal_check_focus(s: &mut TerminalState) -> bool {
 
 /// The mode loop's per-iteration work: refresh, redraw, and place the
 /// cursor. Returning zero leaves terminal mode.
-pub(crate) fn terminal_check(s: &mut TerminalState) -> c_int {
+pub(crate) fn terminal_check(s: &mut TerminalState) -> Step {
     debug_assert!(
         !s.close || (s.term.buf_handle == Handle::NONE && s.term.raw() != current_buf().terminal),
         "a terminal marked closed is still the current buffer's"
     );
     if stop_insert_mode.get() || !terminal_check_focus(s) {
-        return 0;
+        return Step::Leave;
     }
     terminal_check_refresh();
     terminal_check_cursor(s.term);
@@ -442,7 +443,7 @@ pub(crate) fn terminal_check(s: &mut TerminalState) -> c_int {
 
     // Those autocommands could have moved the user somewhere else.
     if !terminal_check_focus(s) {
-        return 0;
+        return Step::Leave;
     }
     terminal_check_cursor(s.term);
     // SAFETY: a live window.
@@ -463,11 +464,11 @@ pub(crate) fn terminal_check(s: &mut TerminalState) -> c_int {
     refresh_cursor(s.term, &mut cursor_visible);
     s.cursor_visible = cursor_visible;
     ui_flush();
-    1
+    Step::Go
 }
 
 /// Dispatch one key. Returning zero leaves terminal mode.
-pub(crate) fn terminal_execute(s: &mut TerminalState, key: Key) -> c_int {
+pub(crate) fn terminal_execute(s: &mut TerminalState, key: Key) -> Step {
     // `merge_modifiers` folds a pending modifier into the key so that e.g.
     // `<C-\>` is one code to compare against.
     let mut mods = mod_mask.get();
@@ -478,14 +479,14 @@ pub(crate) fn terminal_execute(s: &mut TerminalState, key: Key) -> c_int {
     // preceding CTRL-\ was waiting for.
     if is_mouse_key(mod_key) {
         if send_mouse_event(s.term, key.code()) {
-            return 0;
+            return Step::Leave;
         }
-        return 1;
+        return Step::Go;
     }
     match SpecialKey::try_from(mod_key) {
         Ok(SpecialKey::PasteStart) => {
             paste_repeat(1);
-            return 1;
+            return Step::Go;
         }
         Ok(SpecialKey::Event) => {
             // An event handler can close the terminal.
@@ -495,30 +496,30 @@ pub(crate) fn terminal_execute(s: &mut TerminalState, key: Key) -> c_int {
             if s.term.buf_handle == Handle::NONE {
                 s.close = true;
             }
-            return 1;
+            return Step::Go;
         }
         Ok(SpecialKey::Command) => {
             // Runs the command the key carries, which is read back out of
             // the typeahead rather than passed here.
             let _ = do_cmdline(None, Some(&mut LineSource::CmdKey), DoCmdOpts::NONE);
-            return 1;
+            return Step::Go;
         }
         Ok(SpecialKey::Lua) => {
             map_execute_lua(false, false);
-            return 1;
+            return Step::Go;
         }
-        Ok(SpecialKey::Ignore | SpecialKey::Nop) => return 1,
+        Ok(SpecialKey::Ignore | SpecialKey::Nop) => return Step::Go,
         _ => {}
     }
     // CTRL-\ CTRL-N leaves for normal mode; CTRL-\ CTRL-O leaves for one
     // command and comes back.
     if s.got_bsl && matches!(mod_key, Ctrl_N | Ctrl_O) {
         if mod_key == Ctrl_N {
-            return 0;
+            return Step::Leave;
         }
         s.got_bsl_o = true;
         restart_edit.set(Key::ascii(b'I'));
-        return 0;
+        return Step::Leave;
     }
 
     // CTRL-C in terminal mode belongs to the child, so the interrupt the
@@ -539,10 +540,10 @@ pub(crate) fn terminal_execute(s: &mut TerminalState, key: Key) -> c_int {
     } else {
         if s.term.closed {
             s.close = true;
-            return 0;
+            return Step::Leave;
         }
         s.got_bsl = false;
         terminal_send_key(s.term, key.code());
     }
-    1
+    Step::Go
 }

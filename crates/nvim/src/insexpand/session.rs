@@ -493,7 +493,7 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
             // Insert a new line, keep indentation but ignore 'comments'.
             let old = Buf::current().b_p_com.replace(XString::new());
             set_compl_startpos_here(compl_col.get());
-            ins_eol(Key::CAR);
+            let _ = ins_eol(Key::CAR);
             Buf::current().b_p_com = old;
             compl_length.set(0);
             compl_col.set(Win::current().w_cursor.col);

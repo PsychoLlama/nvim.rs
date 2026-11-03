@@ -30,7 +30,7 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, FoFlag};
+use crate::types::{CpoFlag, Failed, FoFlag};
 
 /// `i_CTRL-T` and `i_CTRL-D`: add or remove one 'shiftwidth' of indent.
 ///
@@ -324,15 +324,14 @@ fn tab_spaces_to_tabs() {
 
 /// Handle CR or NL in Insert mode.
 ///
-/// Answers false when undo could not be saved -- but *true* when an
-/// abbreviation swallowed the key, which is not the same thing.
-pub(crate) fn ins_eol(c: Key) -> bool {
+/// `Err` when undo could not be saved or the line could not be added --
+/// but `Ok` when an abbreviation swallowed the key, which is not the same
+/// thing.
+pub(crate) fn ins_eol(c: Key) -> Result<(), Failed> {
     if echeck_abbr(c, true) {
-        return true;
+        return Ok(());
     }
-    if stop_arrow_failed() {
-        return false;
-    }
+    stop_arrow()?;
     undisplay_dollar();
 
     // Strange, but this is what the NL replaces in Replace mode.
@@ -360,12 +359,12 @@ pub(crate) fn ins_eol(c: Key) -> bool {
         0
     };
     let indent = old_indent.get();
-    let ok = open_line(FORWARD, comments, indent, None);
+    let opened = open_line(FORWARD, comments, indent, None);
     old_indent.set(0);
     can_cindent.set(true);
     // The new line may be in a closed fold.
     fold_open_cursor();
-    ok
+    opened
 }
 
 /// The column [`tab_spaces_to_tabs`] measures against: the real cursor's, or

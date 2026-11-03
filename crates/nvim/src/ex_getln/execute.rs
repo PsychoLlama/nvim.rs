@@ -27,6 +27,7 @@ use crate::keycodes::{
 };
 use crate::option::cpo_has;
 use crate::option::vars::P_ICM;
+use crate::state::Step;
 use crate::types::Key;
 use crate::types::{CpoFlag, ExpandContext, NUL, OK};
 use crate::winlayer::Win;
@@ -155,11 +156,11 @@ pub(crate) fn command_line_end_wildmenu(
     wildmenu_cleanup(Cc::current());
 }
 
-/// One key, dispatched. Answers -1 to fetch another key, 0 to leave the
-/// command line and 1 to keep going.
-pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> ::core::ffi::c_int {
+/// One key, dispatched. Answers [`Step::Again`] to fetch another key,
+/// [`Step::Leave`] to leave the command line and [`Step::Go`] to keep going.
+pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
     if key == SpecialKey::Ignore || key == SpecialKey::Nop {
-        return -1; // get another key
+        return Step::Again; // get another key
     }
 
     let display_tick_saved: DispTick = Win::current().w_display_tick;
@@ -177,7 +178,7 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> ::core
     // Skip the wildmenu during history navigation with Up/Down.
     if s.c == SpecialKey::Wild.code() && s.did_hist_navigate {
         s.did_hist_navigate = false;
-        return 1;
+        return Step::Go;
     }
 
     if s.c == SpecialKey::Event.code()
@@ -220,7 +221,7 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> ::core
         if !cmdline_was_last_drawn.get() {
             redrawcmdline();
         }
-        return 1;
+        return Step::Go;
     }
 
     if KeyTyped.get() {
@@ -342,7 +343,7 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> ::core
         match command_line_handle_ctrl_bsl(s) {
             CtrlBsl::Changed => return command_line_changed(s),
             CtrlBsl::NotChanged => return command_line_not_changed(s),
-            CtrlBsl::GotoNormalMode => return 0, // back to cmd mode
+            CtrlBsl::GotoNormalMode => return Step::Leave, // back to cmd mode
             // The backslash key was not processed by
             // command_line_handle_ctrl_bsl().
             CtrlBsl::ProcessNextKey => s.c = Ctrl_BSL,
@@ -389,7 +390,7 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> ::core
                 }
                 ui_flush();
             }
-            return 0;
+            return Step::Leave;
         }
     }
 
@@ -468,11 +469,11 @@ pub(crate) fn may_trigger_cursormovedc(s: &CommandLineState) {
 /// Incremental searches for `/` and `?` only search and redraw here if
 /// something changed in the past; [`command_line_changed`] is what runs when
 /// the line itself did change.
-pub(crate) fn command_line_not_changed(s: &mut CommandLineState) -> ::core::ffi::c_int {
+pub(crate) fn command_line_not_changed(s: &mut CommandLineState) -> Step {
     may_trigger_cursormovedc(s);
     s.prev_cmdpos = Cc::current().cmdpos;
     if !s.is_state.incsearch_postponed {
-        return 1;
+        return Step::Go;
     }
     command_line_changed(s)
 }
@@ -508,7 +509,7 @@ pub(crate) fn do_autocmd_cmdlinechanged(firstc: ::core::ffi::c_int) {
 
 /// A key changed the command line: show the `'inccommand'` preview or the
 /// `'incsearch'` highlighting, and fire `CmdlineChanged`.
-pub(crate) fn command_line_changed(s: &mut CommandLineState) -> ::core::ffi::c_int {
+pub(crate) fn command_line_changed(s: &mut CommandLineState) -> Step {
     let cc = Cc::current();
     let prev_cmdpreview = cmdpreview.get();
     let preview_shown = s.firstc == ':' as ::core::ffi::c_int
@@ -558,5 +559,5 @@ pub(crate) fn command_line_changed(s: &mut CommandLineState) -> ::core::ffi::c_i
         }
     }
 
-    1
+    Step::Go
 }

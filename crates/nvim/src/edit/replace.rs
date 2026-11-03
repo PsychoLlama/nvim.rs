@@ -138,17 +138,22 @@ pub(crate) fn replace_push_nul() {
 
 /// Look at the top of the stack, popping it if it is a NUL.
 ///
-/// Answers -1 for an empty stack, and otherwise the last byte -- so a
-/// positive answer means "an entry is open, take a whole character off it
+/// Answers `None` for an empty stack, and otherwise the last byte -- so a
+/// non-NUL answer means "an entry is open, take a whole character off it
 /// with [`mb_replace_pop_ins`]".
-pub(crate) fn replace_pop_if_nul() -> c_int {
+pub(crate) fn replace_pop_if_nul() -> Option<u8> {
     replace_stack.with_mut(|stack| {
-        let ch = stack.last().map_or(-1, |&byte| c_int::from(byte));
-        if ch == NUL {
+        let top = stack.last().copied();
+        if top == Some(0) {
             stack.pop();
         }
-        ch
+        top
     })
+}
+
+/// Whether [`replace_pop_if_nul`]'s answer is an open entry.
+pub(crate) fn is_open(top: Option<u8>) -> bool {
+    top.is_some_and(|byte| byte != 0)
 }
 
 /// Join the top two entries by removing the `off`'th NUL from the top.
@@ -178,7 +183,7 @@ pub(crate) fn replace_join(mut off: c_int) {
 pub(crate) fn replace_pop_ins() {
     let old_state = State.get();
     State.set(MODE_NORMAL); // don't want MODE_REPLACE here
-    while replace_pop_if_nul() > 0 {
+    while is_open(replace_pop_if_nul()) {
         mb_replace_pop_ins();
         dec_cursor();
     }
@@ -214,7 +219,7 @@ pub(crate) fn mb_replace_pop_ins() {
 pub(crate) fn replace_do_bs(limit_col: c_int) {
     let l_state = State.get();
     let cc = replace_pop_if_nul();
-    if cc > 0 {
+    if is_open(cc) {
         let mut start_vcol: ColNr = ColNr::ZERO;
         let mut orig_vcols = 0;
         if l_state & VREPLACE_FLAG != 0 {
@@ -265,7 +270,7 @@ pub(crate) fn replace_do_bs(limit_col: c_int) {
 
         // Mark the buffer changed and prepare for displaying.
         changed_bytes(Win::current().w_cursor.lnum, Win::current().w_cursor.col);
-    } else if cc == 0 {
+    } else if cc == Some(0) {
         del_char_after_col(limit_col);
     }
 }

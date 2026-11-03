@@ -326,7 +326,7 @@ pub(crate) fn do_insert_char_pre(c: Key) -> Option<XString> {
     set_vim_var_string(Vv::Char, Some(typed));
 
     let mut res = None;
-    if ins_apply_autocmds(AutoEvent::InsertCharPre) != 0 {
+    if ins_apply_autocmds(AutoEvent::InsertCharPre) {
         let now = vim_var_bytes(Vv::Char);
         if now != typed {
             res = Some(XString::from_bytes(cstr::until_nul(&now)));

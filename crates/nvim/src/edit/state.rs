@@ -14,7 +14,7 @@
 //!   key, 'rightleft' mirrors the arrows -- before [`insert_handle_key`]
 //!   decides what it means.
 //!
-//! Either callback answers 0 to leave the mode.  `insert_enter` then asks
+//! Either callback answers [`Step::Leave`] to leave the mode.  `insert_enter` then asks
 //! `ins_esc` whether that really was the end, because a count means the whole
 //! insert repeats and the loop runs again.  [`edit`]'s own answer says
 //! whether the mode was left by `i_CTRL-O`, which is what tells
@@ -26,7 +26,8 @@ use crate::cstr::byte_at;
 use crate::keycodes::SpecialKey;
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::narrow::len_as_int;
-use crate::types::Key;
+use crate::state::Step;
+use crate::types::{Failed, Key};
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -278,8 +279,8 @@ fn restore_ctrl_o_column() {
 /// The state loop's `check` callback: everything that happens before the
 /// next key is asked for.
 ///
-/// Answers 0 to leave Insert mode, and 1 to go on.
-pub(crate) fn insert_check(s: &mut InsertState) -> c_int {
+/// Answers [`Step::Leave`] to leave Insert mode, and [`Step::Go`] to go on.
+pub(crate) fn insert_check(s: &mut InsertState) -> Step {
     if revins_legal.get() == 0 {
         revins_scol.set(-1); // reset on an illegal motion
     } else {
@@ -303,7 +304,7 @@ pub(crate) fn insert_check(s: &mut InsertState) -> c_int {
     if stop_insert_mode.get() && !ins_compl_active() {
         // `:stopinsert` was used, or a terminal buffer was entered.
         s.count = 0;
-        return 0;
+        return Step::Leave;
     }
 
     if !arrow_used.get() {
@@ -379,11 +380,11 @@ pub(crate) fn insert_check(s: &mut InsertState) -> c_int {
                 ins_compl_init_get_longest();
                 insert_do_complete(s);
                 insert_handle_key_post(s);
-                return 1;
+                return Step::Go;
             }
         }
     }
-    1
+    Step::Go
 }
 
 /// Scroll up one line so the cursor's wrapped line stays visible.
@@ -433,9 +434,9 @@ fn may_scroll_for_wrap(s: &mut InsertState) {
 /// The state loop's `execute` callback: pre-process `key`, then hand it to
 /// [`insert_handle_key`].
 ///
-/// Answers 0 to leave Insert mode, -1 to ignore the key entirely, and 1 to
-/// go on.
-pub(crate) fn insert_execute(s: &mut InsertState, key: Key) -> c_int {
+/// Answers [`Step::Leave`] to leave Insert mode, [`Step::Again`] to ignore
+/// the key entirely, and [`Step::Go`] to go on.
+pub(crate) fn insert_execute(s: &mut InsertState, key: Key) -> Step {
     if stop_insert_mode.get() {
         // Insert mode ended while the key was being read; give it back so
         // Normal mode sees it.
@@ -445,10 +446,10 @@ pub(crate) fn insert_execute(s: &mut InsertState, key: Key) -> c_int {
         s.count = 0;
         s.nomove = true;
         ins_compl_prep(Key::ESC.code());
-        return 0;
+        return Step::Leave;
     }
     if key == SpecialKey::Ignore || key == SpecialKey::Nop {
-        return -1; // get another key
+        return Step::Again; // get another key
     }
     s.c = key;
 
@@ -458,12 +459,12 @@ pub(crate) fn insert_execute(s: &mut InsertState, key: Key) -> c_int {
     }
 
     if compl_takes_key(s) {
-        return 1;
+        return Step::Go;
     }
 
     ins_compl_init_get_longest();
     if ins_compl_prep(s.c.code()) {
-        return 1;
+        return Step::Go;
     }
 
     // CTRL-\ CTRL-N goes to Normal mode, CTRL-\ CTRL-G to the "insert
@@ -485,7 +486,7 @@ pub(crate) fn insert_execute(s: &mut InsertState, key: Key) -> c_int {
                 s.nomove = true;
             }
             s.count = 0;
-            return 0;
+            return Step::Leave;
         }
     }
 
@@ -496,12 +497,12 @@ pub(crate) fn insert_execute(s: &mut InsertState, key: Key) -> c_int {
     if (s.c == Key::CTRL_V || s.c == Key::CTRL_Q) && ctrl_x_mode_cmdline() {
         insert_do_complete(s);
         insert_handle_key_post(s);
-        return 1;
+        return Step::Go;
     }
     if s.c == Key::CTRL_V || s.c == Key::CTRL_Q {
         ins_ctrl_v();
         s.c = Key::CTRL_V;
-        return 1;
+        return Step::Go;
     }
 
     // 'cindent' may want to re-indent on this character before it is even
@@ -510,7 +511,7 @@ pub(crate) fn insert_execute(s: &mut InsertState, key: Key) -> c_int {
         s.line_is_white = inindent(0);
         if cinkeys(s.c, b'!', s.line_is_white) && stop_arrow_ok() {
             c_expr_indent();
-            return 1; // don't insert the key
+            return Step::Go; // don't insert the key
         }
         if can_cindent.get() && cinkeys(s.c, b'*', s.line_is_white) && stop_arrow_ok() {
             c_expr_indent();
@@ -522,7 +523,7 @@ pub(crate) fn insert_execute(s: &mut InsertState, key: Key) -> c_int {
     }
 
     if ins_start_select(s.c) {
-        return 1;
+        return Step::Go;
     }
 
     insert_handle_key(s)
@@ -660,23 +661,25 @@ pub(crate) fn insert_handle_key_post(s: &mut InsertState) {
 /// Virtual Replace).  `startln` inserts at the start of the line.
 ///
 /// Not called recursively: for `i_CTRL-O` it returns and lets the caller
-/// handle the Normal-mode command, which is what the answer means.
-pub(crate) fn edit(cmdchar: Key, startln: bool, count: c_int) -> bool {
+/// handle the Normal-mode command, which is what `Ok(true)` means.  `Err`
+/// when inserting is not allowed here (the sandbox, textlock), which has
+/// been reported.
+pub(crate) fn edit(cmdchar: Key, startln: bool, count: c_int) -> Result<bool, Failed> {
     if !Buf::current().terminal.is_null() {
         if ex_normal_busy.get() != 0 {
             // Do not enter terminal mode from `:normal`; ask for Insert
             // mode again after it finishes.
             restart_edit.set(Key::ascii(b'i'));
             force_restart_edit.set(true);
-            return false;
+            return Ok(false);
         }
-        return terminal_enter();
+        return Ok(terminal_enter());
     }
 
     // Don't allow inserting in the sandbox, or while textlock is set.
     if sandbox.get() != 0 {
         emsg(gettext(e_sandbox));
-        return false;
+        return Err(Failed);
     }
     if textlock.get() != 0
         || ins_compl_active()
@@ -685,7 +688,7 @@ pub(crate) fn edit(cmdchar: Key, startln: bool, count: c_int) -> bool {
         || expr_map_locked()
     {
         emsg(gettext(e_textlock));
-        return false;
+        return Err(Failed);
     }
 
     let mut s = InsertState {
@@ -707,7 +710,7 @@ pub(crate) fn edit(cmdchar: Key, startln: bool, count: c_int) -> bool {
         nomove: false,
     };
     insert_enter(&mut s);
-    s.c == Key::CTRL_O
+    Ok(s.c == Key::CTRL_O)
 }
 
 /// Does the next change still owe a `u_save`?

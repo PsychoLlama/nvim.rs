@@ -290,9 +290,10 @@ fn bs_join_line() -> bool {
 
     // In Replace mode: below zero the NL was inserted, so delete it; at
     // or above zero it replaced characters, which go back.
-    let mut cc = -1;
+    let mut open = false;
     if State.get() & REPLACE_FLAG != 0 {
-        cc = replace_pop_if_nul(); // -1 if the NL was inserted
+        // Nothing open if the NL was inserted.
+        open = is_open(replace_pop_if_nul());
     }
 
     // In Replace mode, on the line the replacing started on, only the
@@ -337,11 +338,11 @@ fn bs_join_line() -> bool {
         State.set(MODE_NORMAL);
         // Restore the characters (blanks) that were deleted after the
         // cursor...
-        while cc > 0 {
+        while open {
             let save_col = Win::current().w_cursor.col;
             mb_replace_pop_ins();
             Win::current().w_cursor.col = save_col;
-            cc = replace_pop_if_nul();
+            open = is_open(replace_pop_if_nul());
         }
         // ... and then the ones the NL replaced.
         replace_pop_ins();

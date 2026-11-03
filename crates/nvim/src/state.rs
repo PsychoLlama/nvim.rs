@@ -110,6 +110,21 @@ pub const MODE_NORMAL: ModeFlags = 1;
 /// line rather than to its key loop.
 pub(crate) struct ModeState<'a>(Machine<'a>);
 
+/// What a mode's `check` or `execute` asks [`state_enter`] to do next --
+/// upstream's `0`/`-1`/`1` answers.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub(crate) enum Step {
+    /// End the state: the mode is left.
+    Leave,
+    /// Run the same half again: `check` once more (something it did
+    /// invalidated what came after), or `execute` with the next key (this
+    /// one is ignored).
+    Again,
+    /// Go on to the other half: read a key after `check`, run `check`
+    /// again after `execute`.
+    Go,
+}
+
 /// [`ModeState`]'s arms. Private, so the only way to make one is through
 /// one of its constructors.
 enum Machine<'a> {
@@ -143,10 +158,8 @@ impl<'a> ModeState<'a> {
         Self(Machine::Terminal(s))
     }
 
-    /// Before each key: 0 ends the state, -1 asks for the check to be run
-    /// again (something it did invalidated what came after), anything else
-    /// goes on to read a key.
-    fn check(&mut self) -> c_int {
+    /// Before each key.
+    fn check(&mut self) -> Step {
         match &mut self.0 {
             Machine::Normal(s) => normal_check(s),
             Machine::Insert(s) => insert_check(s),
@@ -156,7 +169,7 @@ impl<'a> ModeState<'a> {
     }
 
     /// The key, answered the same three ways as [`Self::check`].
-    fn execute(&mut self, key: Key) -> c_int {
+    fn execute(&mut self, key: Key) -> Step {
         match &mut self.0 {
             Machine::Normal(s) => normal_execute(s, key),
             Machine::Insert(s) => insert_execute(s, key),
@@ -169,12 +182,10 @@ impl<'a> ModeState<'a> {
 /// Run `s` until its `execute` says to stop.
 pub(crate) fn state_enter(mut s: ModeState<'_>) {
     'state: loop {
-        let check_result = s.check();
-        if check_result == 0 {
-            break;
-        }
-        if check_result == -1 {
-            continue;
+        match s.check() {
+            Step::Leave => break,
+            Step::Again => continue,
+            Step::Go => {}
         }
         loop {
             let key = next_key();
@@ -197,12 +208,10 @@ pub(crate) fn state_enter(mut s: ModeState<'_>) {
                 let keyname = msg_cstr(keyname);
                 logmsg!(LOGLVL_DBG, c"state_enter", 97, "input: {keyname}");
             }
-            let execute_result = s.execute(key);
-            if execute_result == 0 {
-                break 'state;
-            }
-            if execute_result != -1 {
-                break;
+            match s.execute(key) {
+                Step::Leave => break 'state,
+                Step::Again => {}
+                Step::Go => break,
             }
         }
     }
