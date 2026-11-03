@@ -38,6 +38,7 @@ use crate::marktree::key::{kMTFilterSelect, mt_invalid, mt_right};
 use crate::marktree::meta::MetaCount;
 use crate::mbyte::{c_cells_in, c_char_info, c_cluster_len, c_next_cluster, char_at};
 use crate::r#move::win_col_off2;
+use crate::narrow::number_as_int;
 use crate::pos::{MAXCOL, lt, ltoreq};
 use crate::state::mode::State;
 use crate::state::{MODE_NORMAL, virtual_active};
@@ -691,11 +692,13 @@ pub(crate) fn linesize_regular(
     while at < end && !ends_at(line, at, chr) {
         vcol += int64_t::from(charsize_regular(csarg, at, ColNr::new(vcol_arg), chr.value).width);
         (at, chr) = c_next_cluster(line, at, chr);
-        let Ok(next) = c_int::try_from(vcol) else {
+        if vcol > int64_t::from(MAXCOL) {
             vcol_arg = MAXCOL;
             break;
-        };
-        vcol_arg = next;
+        }
+        // Bounded just above, and never negative: the wrapping narrow is
+        // exact, and cheaper in this loop than a checked one.
+        vcol_arg = number_as_int(vcol);
     }
 
     // Inline virtual text after the end of the line.
@@ -724,11 +727,13 @@ pub(crate) fn linesize_fast(csarg: &CharsizeArg<'_>, mut vcol_arg: c_int, len: C
             charsize_fast_impl(wp, line, at, use_tabstop, ColNr::new(vcol_arg), chr.value).width,
         );
         (at, chr) = c_next_cluster(line, at, chr);
-        let Ok(next) = c_int::try_from(vcol) else {
+        if vcol > int64_t::from(MAXCOL) {
             vcol_arg = MAXCOL;
             break;
-        };
-        vcol_arg = next;
+        }
+        // Bounded just above, and never negative: the wrapping narrow is
+        // exact, and cheaper in this loop than a checked one.
+        vcol_arg = number_as_int(vcol);
     }
 
     vcol_arg
