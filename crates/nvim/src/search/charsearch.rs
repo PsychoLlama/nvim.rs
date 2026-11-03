@@ -94,7 +94,7 @@ pub fn set_csearch_until(t_cmd: c_int) {
 /// it. A NUL `cmd_arg.nchar` repeats the last character search instead of
 /// starting a new one — that is `;` and `,`.
 pub fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), Failed> {
-    let mut c = cmd_arg.nchar; // char to search for
+    let mut c = cmd_arg.nchar.code(); // char to search for
     let mut dir = cmd_arg.arg; // true for searching forward
     let mut t_cmd = t_cmd;
     let mut count = cmd_arg.count1; // repeat count

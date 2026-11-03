@@ -10,7 +10,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::keycodes::{Ctrl_C, Ctrl_G, Ctrl_N, SpecialKey};
+use crate::keycodes::{Ctrl_C, SpecialKey};
 use crate::types::Key;
 use crate::winlayer::{Buf, Win, windows};
 
@@ -44,7 +44,7 @@ use crate::ui::vim_beep;
 use crate::undo::any_buf_is_changed;
 use crate::window::do_window;
 use crate::winlayer::graph::{cmdwin_result, cmdwin_type};
-use core::ffi::{c_int, c_uint};
+use core::ffi::c_uint;
 
 /// A key the command loop must swallow without doing anything: it marks the
 /// command busy so nothing else acts on it.
@@ -71,8 +71,8 @@ pub(crate) fn nv_help(cmd_arg: &mut CmdArg) {
 /// `:`, and the two synthetic keys that carry a command or a Lua callback in
 /// from a mapping.
 pub(crate) fn nv_colon(cmd_arg: &mut CmdArg) {
-    let is_cmdkey = cmd_arg.cmdchar == SpecialKey::Command.code();
-    let is_lua = cmd_arg.cmdchar == SpecialKey::Lua.code();
+    let is_cmdkey = cmd_arg.cmdchar == SpecialKey::Command;
+    let is_lua = cmd_arg.cmdchar == SpecialKey::Lua;
     // A plain `:` during a selection is the `:` *operator*, which puts the
     // selection's range on the command line. The synthetic keys are not.
     if visual_active() && !is_cmdkey && !is_lua {
@@ -141,7 +141,7 @@ pub(crate) fn nv_ctrlg(cmd_arg: &mut CmdArg) {
 /// `CTRL-H`: one character left -- or delete the selection in Select mode.
 pub(crate) fn nv_ctrlh(cmd_arg: &mut CmdArg) {
     if visual_active() && visual_select() {
-        cmd_arg.cmdchar = 'x' as c_int;
+        cmd_arg.cmdchar = Key::ascii(b'x');
         v_visop(cmd_arg);
     } else {
         nv_left(cmd_arg);
@@ -191,12 +191,12 @@ pub(crate) fn nv_hat(cmd_arg: &mut CmdArg) {
 /// `CTRL-W`: a window command. `CTRL-W :` is `:` with the window prefix
 /// dropped.
 pub(crate) fn nv_window(cmd_arg: &mut CmdArg) {
-    if cmd_arg.nchar == ':' as c_int {
-        cmd_arg.cmdchar = ':' as c_int;
-        cmd_arg.nchar = NUL;
+    if cmd_arg.nchar.is(':') {
+        cmd_arg.cmdchar = Key::ascii(b':');
+        cmd_arg.nchar = Key::NUL;
         nv_colon(cmd_arg);
     } else if !check_clear_op(cmd_arg.op()) {
-        do_window(cmd_arg.nchar, cmd_arg.count0, NUL);
+        do_window(cmd_arg.nchar.code(), cmd_arg.count0, NUL);
     }
 }
 
@@ -213,7 +213,7 @@ pub(crate) fn nv_suspend(cmd_arg: &mut CmdArg) {
 /// `CTRL-\`: only `CTRL-\ CTRL-N` and `CTRL-\ CTRL-G` exist, and both mean
 /// "back to Normal mode".
 pub(crate) fn nv_normal(cmd_arg: &mut CmdArg) {
-    if cmd_arg.nchar != Ctrl_N && cmd_arg.nchar != Ctrl_G {
+    if cmd_arg.nchar != Key::CTRL_N && cmd_arg.nchar != Key::CTRL_G {
         clear_op_beep(cmd_arg.op());
         return;
     }

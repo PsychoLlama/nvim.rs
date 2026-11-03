@@ -48,7 +48,7 @@ pub(crate) fn ins_ctrl_v() {
         did_putchar = true;
     }
     append_to_redobuff(CTRL_V_STR.to_bytes());
-    add_to_showcmd_c(Ctrl_V);
+    add_to_showcmd_c(Key::CTRL_V);
 
     // Do not fold the modifiers into the key for CTRL-SHIFT-V.
     let c = get_literal(mod_mask.get().has(ModMask::SHIFT));
@@ -103,7 +103,7 @@ pub(crate) fn get_literal(no_simplify: bool) -> Key {
         // MB_BYTE2LEN_CHECK
         let byte_len = nc.as_byte().map_or(1, |b| utf8len_tab[usize::from(b)]);
         if State.get() & MODE_CMDLINE == 0 && byte_len == 1 {
-            add_to_showcmd(nc.code());
+            add_to_showcmd(nc);
         }
 
         // The digit `nc` is, in the base the spelling has chosen.
@@ -237,7 +237,7 @@ pub(crate) fn ins_digraph() -> Key {
         ins_redraw(false);
         edit_putchar(Key::ascii(b'?'), true);
         did_putchar = true;
-        add_to_showcmd_c(Ctrl_K);
+        add_to_showcmd_c(Key::CTRL_K);
     }
 
     let c = {
@@ -265,7 +265,7 @@ pub(crate) fn ins_digraph() -> Key {
                 edit_putchar(c, true);
                 did_putchar = true;
             }
-            add_to_showcmd_c(c.code());
+            add_to_showcmd_c(c);
         }
 
         let cc = {

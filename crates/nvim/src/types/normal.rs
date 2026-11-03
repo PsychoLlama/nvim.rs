@@ -30,13 +30,13 @@ pub struct CmdArg {
     /// held in the frame table so `op_pending` can read it from inside
     /// whatever the handler re-enters.
     pub(crate) oap: crate::winlayer::Live<OpArg>,
-    pub cmdchar: ::core::ffi::c_int,
-    pub nchar: ::core::ffi::c_int,
+    pub cmdchar: Key,
+    pub nchar: Key,
     /// `nchar` and its combining characters, encoded, NUL-terminated
     /// (`nchar_len` bytes); empty when `nchar` has none.
     pub nchar_composing: [u8; 32],
     pub nchar_len: ::core::ffi::c_int,
-    pub extra_char: ::core::ffi::c_int,
+    pub extra_char: Key,
     pub opcount: ::core::ffi::c_int,
     pub count0: ::core::ffi::c_int,
     pub count1: ::core::ffi::c_int,
@@ -52,11 +52,11 @@ impl CmdArg {
     /// building a whole new value to move over this one costs a copy and a
     /// drop.
     pub(crate) fn reset(&mut self) {
-        self.cmdchar = 0;
-        self.nchar = 0;
+        self.cmdchar = Key::NUL;
+        self.nchar = Key::NUL;
         self.nchar_composing = [0; 32];
         self.nchar_len = 0;
-        self.extra_char = 0;
+        self.extra_char = Key::NUL;
         self.opcount = 0;
         self.count0 = 0;
         self.count1 = 0;
@@ -69,11 +69,11 @@ impl CmdArg {
     pub(crate) fn new(op: crate::winlayer::Live<OpArg>) -> Self {
         CmdArg {
             oap: op,
-            cmdchar: 0,
-            nchar: 0,
+            cmdchar: Key::NUL,
+            nchar: Key::NUL,
             nchar_composing: [0; 32],
             nchar_len: 0,
-            extra_char: 0,
+            extra_char: Key::NUL,
             opcount: 0,
             count0: 0,
             count1: 0,

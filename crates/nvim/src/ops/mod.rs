@@ -153,8 +153,9 @@ pub const CA_COMMAND_BUSY: ::core::ffi::c_int = 1;
 pub const CA_NO_ADJ_OP_END: ::core::ffi::c_int = 2;
 
 /// `r CTRL-V <CR>` and `r CTRL-V <NL>`: the literal byte, not a line split.
-pub const REPLACE_CR_NCHAR: ::core::ffi::c_int = -1;
-pub const REPLACE_NL_NCHAR: ::core::ffi::c_int = -2;
+/// They travel in `CmdArg::nchar` as codes no key has.
+pub const REPLACE_CR_NCHAR: crate::types::Key = crate::types::Key::from_code(-1);
+pub const REPLACE_NL_NCHAR: crate::types::Key = crate::types::Key::from_code(-2);
 
 /// `get_yank_register` mode: the register is about to be written.
 pub const YREG_YANK: ::core::ffi::c_int = 1;

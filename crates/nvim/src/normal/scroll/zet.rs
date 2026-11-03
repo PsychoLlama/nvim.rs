@@ -5,6 +5,7 @@
 
 use crate::keycodes::SpecialKey;
 use crate::strings::has_char;
+use crate::types::Key;
 use crate::winlayer::{Buf, Win, windows};
 
 use crate::ascii::ascii_isdigit;
@@ -21,7 +22,7 @@ use crate::mark::setpcmark;
 use crate::memory::XString;
 use crate::message::emsg;
 use crate::normal::{
-    CAR, FIND_IDENT, INT_MAX, SPELL_ADD_BAD, SPELL_ADD_GOOD, check_clear_op, clear_op_beep,
+    FIND_IDENT, INT_MAX, SPELL_ADD_BAD, SPELL_ADD_GOOD, check_clear_op, clear_op_beep,
     get_visual_text, ident_under_cursor, nv_operator, nv_put, read_command_char, visual_active,
 };
 use crate::option::get_sidescrolloff_value;
@@ -55,29 +56,29 @@ enum Place {
 /// `z<n><CR>` sets the window height and is finished here. `z<n>l` and its
 /// three friends multiply the command's own count by this one and hand the
 /// key back to the caller through `nchar_arg`; everything else is an error.
-pub(crate) fn nv_z_get_count(cmd_arg: &mut CmdArg, nchar_arg: &mut c_int) -> bool {
+pub(crate) fn nv_z_get_count(cmd_arg: &mut CmdArg, nchar_arg: &mut Key) -> bool {
     if check_clear_op(cmd_arg.op()) {
         return false;
     }
-    let mut n = *nchar_arg - '0' as c_int;
+    let mut n = c_int::from(nchar_arg.digit().unwrap_or(0));
     loop {
         let nchar = read_command_char();
-        if nchar == SpecialKey::Del.code() || nchar == SpecialKey::Kdel.code() {
+        if nchar == SpecialKey::Del || nchar == SpecialKey::Kdel {
             // Rubbing out a digit.
             n /= 10;
-        } else if ascii_isdigit(nchar) {
-            if crate::math::vim_append_digit_int(&mut n, nchar - '0' as c_int) {
+        } else if let Some(digit) = nchar.digit() {
+            if crate::math::vim_append_digit_int(&mut n, c_int::from(digit)) {
                 continue;
             }
             clear_op_beep(cmd_arg.op());
             break;
-        } else if nchar == CAR {
+        } else if nchar == Key::CAR {
             win_setheight(n);
             break;
-        } else if nchar == 'l' as c_int
-            || nchar == 'h' as c_int
-            || nchar == SpecialKey::Left.code()
-            || nchar == SpecialKey::Right.code()
+        } else if nchar.is('l')
+            || nchar.is('h')
+            || nchar == SpecialKey::Left
+            || nchar == SpecialKey::Right
         {
             // Both counts came from the user, so this can overflow -- the
             // C wraps, and `set_leftcol` clamps whatever comes out.
@@ -100,12 +101,12 @@ pub(crate) fn nv_z_get_count(cmd_arg: &mut CmdArg, nchar_arg: &mut c_int) -> boo
 ///
 /// Answers `Err` when there was no word to act on, which stops `nv_zet`
 /// running its tail.
-pub(crate) fn nv_zg_zw(cmd_arg: &mut CmdArg, mut nchar: c_int) -> Result<(), Failed> {
+pub(crate) fn nv_zg_zw(cmd_arg: &mut CmdArg, mut nchar: Key) -> Result<(), Failed> {
     // `zu` is the undo prefix: `zug` takes back what `zg` added.
     let mut undo = false;
-    if nchar == 'u' as c_int {
+    if nchar.is('u') {
         nchar = read_command_char();
-        if !has_char(c"gGwW", nchar) {
+        if !has_char(c"gGwW", nchar.code()) {
             clear_op_beep(cmd_arg.op());
             return Ok(());
         }
@@ -160,12 +161,12 @@ pub(crate) fn nv_zg_zw(cmd_arg: &mut CmdArg, mut nchar: c_int) -> Result<(), Fai
     // Lower case adds to the file 'spellfile' names, upper case to the
     // internal list that lasts for this session only -- which is why the
     // upper-case forms pass no index.
-    let what = if nchar == 'w' as c_int || nchar == 'W' as c_int {
+    let what = if nchar.is('w') || nchar.is('W') {
         SPELL_ADD_BAD as SpellAddType
     } else {
         SPELL_ADD_GOOD as SpellAddType
     };
-    let index = if nchar == 'G' as c_int || nchar == 'W' as c_int {
+    let index = if nchar.is('G') || nchar.is('W') {
         0
     } else {
         cmd_arg.count1
@@ -225,20 +226,20 @@ fn scroll_cursor_to_edge(to_left: bool) {
 }
 
 /// The fold half of the `z` tree. Answers whether the key was one of them.
-fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -> bool {
+fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: Key, old_fdl: &mut c_int) -> bool {
     let mut win = Win::current();
     // Whether the cursor is inside a fold, which is what decides between
     // opening and closing for the toggles.
     let in_fold = || folded(win.w_cursor.lnum);
-    match u8::try_from(nchar) {
+    match nchar.as_byte() {
         // `zf`/`zF`: create a fold. `zF` folds `count1` lines, which is
         // the operator applied to itself.
-        Ok(b'F' | b'f') => {
+        Some(b'F' | b'f') => {
             if fold_manual_allowed(true) != 0 {
-                cmd_arg.nchar = 'f' as c_int;
+                cmd_arg.nchar = Key::ascii(b'f');
                 nv_operator(cmd_arg);
                 win.w_onebuf_opt.wo_fen = 1;
-                if nchar == 'F' as c_int && cmd_arg.op().op_type == OpType::Fold {
+                if nchar.is('F') && cmd_arg.op().op_type == OpType::Fold {
                     nv_operator(cmd_arg);
                     finish_op.set(true);
                 }
@@ -247,19 +248,19 @@ fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -> bool 
             }
         }
         // `zd`/`zD`: delete a fold, recursively for `zD`.
-        Ok(b'd' | b'D') => {
+        Some(b'd' | b'D') => {
             if fold_manual_allowed(false) != 0 {
                 if visual_active() {
                     nv_operator(cmd_arg);
                 } else {
                     let lnum = win.w_cursor.lnum;
-                    let deep = (nchar == 'D' as c_int) as c_int;
+                    let deep = (nchar.is('D')) as c_int;
                     delete_fold(win, lnum, lnum, deep, false);
                 }
             }
         }
         // `zE`: delete every fold.
-        Ok(b'E') => {
+        Some(b'E') => {
             if foldmethod_is_manual(win) {
                 clear_folding(win);
                 changed_window_setting(win);
@@ -277,11 +278,11 @@ fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -> bool 
             }
         }
         // `zn`/`zN`/`zi`: 'foldenable' off, on, toggled.
-        Ok(b'n') => win.w_onebuf_opt.wo_fen = 0,
-        Ok(b'N') => win.w_onebuf_opt.wo_fen = 1,
-        Ok(b'i') => win.w_onebuf_opt.wo_fen = (win.w_onebuf_opt.wo_fen == 0) as c_int,
+        Some(b'n') => win.w_onebuf_opt.wo_fen = 0,
+        Some(b'N') => win.w_onebuf_opt.wo_fen = 1,
+        Some(b'i') => win.w_onebuf_opt.wo_fen = (win.w_onebuf_opt.wo_fen == 0) as c_int,
         // `za`/`zA`: toggle this fold, recursively for `zA`.
-        Ok(b'a') => {
+        Some(b'a') => {
             if in_fold() {
                 open_fold(win.w_cursor, cmd_arg.count1);
             } else {
@@ -289,7 +290,7 @@ fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -> bool 
                 win.w_onebuf_opt.wo_fen = 1;
             }
         }
-        Ok(b'A') => {
+        Some(b'A') => {
             if in_fold() {
                 open_fold_recurse(win.w_cursor);
             } else {
@@ -298,14 +299,14 @@ fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -> bool 
             }
         }
         // `zo`/`zO`: open. With a selection they are the operator form.
-        Ok(b'o') => {
+        Some(b'o') => {
             if visual_active() {
                 nv_operator(cmd_arg);
             } else {
                 open_fold(win.w_cursor, cmd_arg.count1);
             }
         }
-        Ok(b'O') => {
+        Some(b'O') => {
             if visual_active() {
                 nv_operator(cmd_arg);
             } else {
@@ -314,7 +315,7 @@ fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -> bool 
         }
         // `zc`/`zC`: close. Closing always turns 'foldenable' back on --
         // there would be nothing to see otherwise.
-        Ok(b'c') => {
+        Some(b'c') => {
             if visual_active() {
                 nv_operator(cmd_arg);
             } else {
@@ -322,7 +323,7 @@ fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -> bool 
             }
             win.w_onebuf_opt.wo_fen = 1;
         }
-        Ok(b'C') => {
+        Some(b'C') => {
             if visual_active() {
                 nv_operator(cmd_arg);
             } else {
@@ -331,22 +332,22 @@ fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -> bool 
             win.w_onebuf_opt.wo_fen = 1;
         }
         // `zv`: open just enough to see the cursor line.
-        Ok(b'v') => fold_open_cursor(),
+        Some(b'v') => fold_open_cursor(),
         // `zx`/`zX`: recompute the folds. `zx` also reopens to the cursor.
-        Ok(b'x') => {
+        Some(b'x') => {
             win.w_onebuf_opt.wo_fen = 1;
             win.w_foldinvalid = true;
             new_fold_level();
             fold_open_cursor();
         }
-        Ok(b'X') => {
+        Some(b'X') => {
             win.w_onebuf_opt.wo_fen = 1;
             win.w_foldinvalid = true;
             // Force the tail's `new_fold_level`.
             *old_fdl = -1;
         }
         // `zm`/`zM`: fold more, or all the way.
-        Ok(b'm') => {
+        Some(b'm') => {
             if win.w_onebuf_opt.wo_fdl > 0 {
                 win.w_onebuf_opt.wo_fdl -= cmd_arg.count1 as OptInt;
                 win.w_onebuf_opt.wo_fdl = win.w_onebuf_opt.wo_fdl.max(0);
@@ -354,24 +355,24 @@ fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -> bool 
             *old_fdl = -1;
             win.w_onebuf_opt.wo_fen = 1;
         }
-        Ok(b'M') => {
+        Some(b'M') => {
             win.w_onebuf_opt.wo_fdl = 0;
             *old_fdl = -1;
             win.w_onebuf_opt.wo_fen = 1;
         }
         // `zr`/`zR`: reduce the folding, or open everything.
-        Ok(b'r') => {
+        Some(b'r') => {
             win.w_onebuf_opt.wo_fdl += cmd_arg.count1 as OptInt;
             let deepest = deepest_fold_nesting(win);
             win.w_onebuf_opt.wo_fdl = win.w_onebuf_opt.wo_fdl.min(deepest as OptInt);
         }
-        Ok(b'R') => {
+        Some(b'R') => {
             win.w_onebuf_opt.wo_fdl = deepest_fold_nesting(win) as OptInt;
             *old_fdl = -1;
         }
         // `zj`/`zk`: to the next or previous fold's edge.
-        Ok(b'j' | b'k') => {
-            let dir = if nchar == 'j' as c_int {
+        Some(b'j' | b'k') => {
+            let dir = if nchar.is('j') {
                 FORWARD as c_int
             } else {
                 BACKWARD as c_int
@@ -394,23 +395,23 @@ pub(crate) fn nv_zet(cmd_arg: &mut CmdArg) {
     let old_fen = win.w_onebuf_opt.wo_fen;
 
     // `z` may take a count of its own between the `z` and the command.
-    if ascii_isdigit(nchar) && !nv_z_get_count(cmd_arg, &mut nchar) {
+    if ascii_isdigit(nchar.code()) && !nv_z_get_count(cmd_arg, &mut nchar) {
         return;
     }
     // The commands that are operators or motions of their own answer for
     // a pending operator themselves; the rest refuse one.
-    if cmd_arg.nchar != 'f' as c_int
-        && cmd_arg.nchar != 'F' as c_int
-        && !(visual_active() && has_char(c"dcCoO", cmd_arg.nchar))
-        && cmd_arg.nchar != 'j' as c_int
-        && cmd_arg.nchar != 'k' as c_int
+    if !cmd_arg.nchar.is('f')
+        && !cmd_arg.nchar.is('F')
+        && !(visual_active() && has_char(c"dcCoO", cmd_arg.nchar.code()))
+        && !cmd_arg.nchar.is('j')
+        && !cmd_arg.nchar.is('k')
         && check_clear_op(cmd_arg.op())
     {
         return;
     }
     // For the positioning commands a count names the line to position,
     // not how many of anything.
-    if has_char(c"+\r\nt.z^-b", nchar)
+    if has_char(c"+\r\nt.z^-b", nchar.code())
         && cmd_arg.count0 != 0
         && LineNr::new(cmd_arg.count0) != win.w_cursor.lnum
     {
@@ -422,20 +423,20 @@ pub(crate) fn nv_zet(cmd_arg: &mut CmdArg) {
 
     // Where the cursor line ends up, and whether the cursor also moves to
     // the first non-blank of it. `None` means the key did its own work.
-    let place: Option<(Place, bool)> = match SpecialKey::try_from(nchar) {
+    let place: Option<(Place, bool)> = match nchar.special() {
         // The three keys that are not bytes.
-        Ok(SpecialKey::Kenter) => Some((Place::Top, true)),
-        Ok(SpecialKey::Left) => {
+        Some(SpecialKey::Kenter) => Some((Place::Top, true)),
+        Some(SpecialKey::Left) => {
             scroll_sideways(cmd_arg, false);
             None
         }
-        Ok(SpecialKey::Right) => {
+        Some(SpecialKey::Right) => {
             scroll_sideways(cmd_arg, true);
             None
         }
-        _ => match u8::try_from(nchar) {
-            Ok(b'\r' | b'\n') => Some((Place::Top, true)),
-            Ok(b'+') => {
+        _ => match nchar.as_byte() {
+            Some(b'\r' | b'\n') => Some((Place::Top, true)),
+            Some(b'+') => {
                 // Without a count, `z+` starts from the line below the
                 // window rather than from the cursor.
                 if cmd_arg.count0 == 0 {
@@ -444,10 +445,10 @@ pub(crate) fn nv_zet(cmd_arg: &mut CmdArg) {
                 }
                 Some((Place::Top, true))
             }
-            Ok(b't') => Some((Place::Top, false)),
-            Ok(b'.') => Some((Place::Middle, true)),
-            Ok(b'z') => Some((Place::Middle, false)),
-            Ok(b'^') => {
+            Some(b't') => Some((Place::Top, false)),
+            Some(b'.') => Some((Place::Middle, true)),
+            Some(b'z') => Some((Place::Middle, false)),
+            Some(b'^') => {
                 // `z^` positions the line *above* the window, so with no
                 // count it first scrolls the current top out of sight.
                 if cmd_arg.count0 != 0 {
@@ -460,57 +461,57 @@ pub(crate) fn nv_zet(cmd_arg: &mut CmdArg) {
                 }
                 Some((Place::Bottom, true))
             }
-            Ok(b'-') => Some((Place::Bottom, true)),
-            Ok(b'b') => Some((Place::Bottom, false)),
+            Some(b'-') => Some((Place::Bottom, true)),
+            Some(b'b') => Some((Place::Bottom, false)),
             // `zH`/`zL` scroll half a screen each, so the count and the
             // width multiply -- and the count is the user's. The C wraps;
             // `set_leftcol` clamps whatever comes out.
-            Ok(b'H') => {
+            Some(b'H') => {
                 cmd_arg.count1 = cmd_arg.count1.wrapping_mul(win.w_view_width / 2);
                 scroll_sideways(cmd_arg, false);
                 None
             }
-            Ok(b'h') => {
+            Some(b'h') => {
                 scroll_sideways(cmd_arg, false);
                 None
             }
-            Ok(b'L') => {
+            Some(b'L') => {
                 cmd_arg.count1 = cmd_arg.count1.wrapping_mul(win.w_view_width / 2);
                 scroll_sideways(cmd_arg, true);
                 None
             }
-            Ok(b'l') => {
+            Some(b'l') => {
                 scroll_sideways(cmd_arg, true);
                 None
             }
-            Ok(b's') => {
+            Some(b's') => {
                 scroll_cursor_to_edge(true);
                 None
             }
-            Ok(b'e') => {
+            Some(b'e') => {
                 scroll_cursor_to_edge(false);
                 None
             }
             // `zp`/`zP`: put a blockwise register without widening the
             // lines it lands on.
-            Ok(b'P' | b'p') => {
+            Some(b'P' | b'p') => {
                 nv_put(cmd_arg);
                 None
             }
             // `zy`: yank without a trailing newline.
-            Ok(b'y') => {
+            Some(b'y') => {
                 nv_operator(cmd_arg);
                 None
             }
             // `zg`/`zG`/`zw`/`zW`/`zu…`: the spellfile.
-            Ok(b'u' | b'g' | b'w' | b'G' | b'W') => {
+            Some(b'u' | b'g' | b'w' | b'G' | b'W') => {
                 if nv_zg_zw(cmd_arg, nchar).is_err() {
                     return;
                 }
                 None
             }
             // `z=`: suggest corrections.
-            Ok(b'=') => {
+            Some(b'=') => {
                 if !check_clear_op(cmd_arg.op()) {
                     spell_suggest(cmd_arg.count0);
                 }

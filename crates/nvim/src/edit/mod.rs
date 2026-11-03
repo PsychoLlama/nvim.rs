@@ -109,9 +109,7 @@ use crate::insexpand::{
     pum_wanted,
 };
 use crate::keycodes::KS_MODIFIER;
-use crate::keycodes::{
-    Ctrl_K, Ctrl_R, Ctrl_V, Ctrl_Y, K_SPECIAL, get_special_key_name, push_char_escaped,
-};
+use crate::keycodes::{Ctrl_Y, K_SPECIAL, get_special_key_name, push_char_escaped};
 use crate::mapping::{check_abbr, langmap_adjust_mb, map_to_exists_mode};
 use crate::mark::{fresh_mark, mark_view_make};
 use crate::mbyte::{mb_adjust_cursor, utf8len_tab};

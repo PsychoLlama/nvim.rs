@@ -676,12 +676,12 @@ fn read_char() -> c_int {
 
 /// Show `c` in the pending-command display.
 fn show_command_char(c: c_int) {
-    add_to_showcmd(c);
+    add_to_showcmd(Key::from_code(c));
 }
 
 /// `do_nv_ident()`: run the Normal-mode command `first` `second` right here.
 fn do_ident(first: c_int, second: c_int) {
-    do_nv_ident(first, second);
+    do_nv_ident(Key::from_code(first), Key::from_code(second));
 }
 
 /// Buffer `fnum`, if there is one.

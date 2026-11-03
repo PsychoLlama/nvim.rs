@@ -358,7 +358,7 @@ fn scroll_window(mouse_win: Win, key: c_int, direction: c_int) {
     let saved = switch_to(mouse_win);
 
     with_scratch_cmd(|cap| {
-        cap.cmdchar = key;
+        cap.cmdchar = Key::from_code(key);
         cap.arg = direction;
         do_mousescroll(cap);
     });

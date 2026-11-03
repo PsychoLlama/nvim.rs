@@ -158,7 +158,7 @@ impl<'a> ModeState<'a> {
     /// The key, answered the same three ways as [`Self::check`].
     fn execute(&mut self, key: Key) -> c_int {
         match &mut self.0 {
-            Machine::Normal(s) => normal_execute(s, key.code()),
+            Machine::Normal(s) => normal_execute(s, key),
             Machine::Insert(s) => insert_execute(s, key),
             Machine::CommandLine(s) => command_line_execute(s, key),
             Machine::Terminal(s) => terminal_execute(s, key),

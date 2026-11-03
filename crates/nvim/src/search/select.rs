@@ -23,6 +23,7 @@ use crate::option::vars::P_SEL;
 use crate::regexp::RE_SEARCH;
 use crate::search::{SEARCH_END, SEARCH_KEEP};
 use crate::types::Failed;
+use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -198,7 +199,7 @@ pub fn current_search(count: c_int, forward: bool) -> Result<(), Failed> {
         fold_open_cursor();
     }
 
-    may_start_select('c' as c_int);
+    may_start_select(Key::ascii(b'c'));
     setmouse();
     redraw_curbuf_later(UPD_INVERTED);
     showmode();

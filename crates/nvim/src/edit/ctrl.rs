@@ -67,7 +67,7 @@ pub(crate) fn ins_reg() {
         // May need to redraw now that no more characters are available.
         ins_redraw(false);
         edit_putchar(Key::ascii(b'"'), true);
-        add_to_showcmd_c(Ctrl_R);
+        add_to_showcmd_c(Key::CTRL_R);
     }
 
     // `LANGMAP_ADJUST(c, true)`: apply 'langmap' to a *typed* key only,
@@ -98,7 +98,7 @@ pub(crate) fn ins_reg() {
     if regname == Key::CTRL_R || regname == Key::CTRL_O || regname == Key::CTRL_P {
         // A third key follows, for a literal register insertion.
         literally = regname;
-        add_to_showcmd_c(literally.code());
+        add_to_showcmd_c(literally);
         regname = langmap_adjust(get_key());
     }
     // A register is named by its character.

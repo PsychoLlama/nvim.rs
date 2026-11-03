@@ -13,6 +13,7 @@
 use crate::keycodes::SpecialKey;
 use crate::strings::has_char;
 use crate::types::ColNr;
+use crate::types::Key;
 use crate::types::LineNr;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
@@ -39,7 +40,7 @@ use core::ffi::{CStr, c_int, c_uint};
 
 /// Which way a `[` or `]` command searches.
 fn direction(cmd_arg: &mut CmdArg) -> c_int {
-    if cmd_arg.cmdchar == ']' as c_int {
+    if cmd_arg.cmdchar.is(']') {
         FORWARD as c_int
     } else {
         BACKWARD as c_int
@@ -49,7 +50,7 @@ fn direction(cmd_arg: &mut CmdArg) -> c_int {
 /// The same choice spelled in `findmatchlimit`'s own flags, which are not the
 /// `Direction` constants.
 fn match_direction(cmd_arg: &mut CmdArg) -> c_int {
-    if cmd_arg.cmdchar == '[' as c_int {
+    if cmd_arg.cmdchar.is('[') {
         FM_BACKWARD.cast_signed()
     } else {
         FM_FORWARD.cast_signed()
@@ -79,18 +80,18 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
     let mut pos: Option<Pos> = None;
 
     // `[*` and `]*` are spelled `[/` and `]/` to findmatchlimit.
-    if cmd_arg.nchar == '*' as c_int {
-        cmd_arg.nchar = '/' as c_int;
+    if cmd_arg.nchar.is('*') {
+        cmd_arg.nchar = Key::ascii(b'/');
     }
-    let method = cmd_arg.nchar == 'm' as c_int || cmd_arg.nchar == 'M' as c_int;
+    let method = cmd_arg.nchar.is('m') || cmd_arg.nchar.is('M');
     let findc = if method {
-        if cmd_arg.cmdchar == '[' as c_int {
-            '{' as c_int
+        if cmd_arg.cmdchar.is('[') {
+            c_int::from(b'{')
         } else {
-            '}' as c_int
+            c_int::from(b'}')
         }
     } else {
-        cmd_arg.nchar
+        cmd_arg.nchar.code()
     };
     let mut n = if method { 9999 } else { cmd_arg.count1 };
 
@@ -119,7 +120,7 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
     if method {
         // `[m` and `]M` want the brace itself; `[M` and `]m` want the one
         // before it. `norm` is true for the first pair.
-        let norm = (findc == '{' as c_int) == (cmd_arg.nchar == 'm' as c_int);
+        let norm = (findc == c_int::from(b'{')) == (cmd_arg.nchar.is('m'));
         n = cmd_arg.count1;
         if prev_pos.lnum != LineNr::ZERO {
             pos = Some(prev_pos);
@@ -132,7 +133,7 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
         }
         while n > 0 {
             loop {
-                let stepped = if findc == '{' as c_int {
+                let stepped = if findc == c_int::from(b'{') {
                     dec_cursor()
                 } else {
                     inc_cursor()
@@ -146,7 +147,7 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
                     break;
                 }
                 let c = gchar_cursor();
-                if c != '{' as c_int && c != '}' as c_int {
+                if c != c_int::from(b'{') && c != c_int::from(b'}') {
                     continue;
                 }
                 if (c == findc && norm) || (n == 1 && !norm) {
@@ -201,7 +202,7 @@ fn nv_bracket_ident(cmd_arg: &mut CmdArg) {
     }
     let nchar = cmd_arg.nchar;
     // Only `i`, `I`, `d`, `D` and their control characters reach here.
-    let key = u8::try_from(nchar).unwrap_or(0);
+    let key = nchar.as_byte().unwrap_or(0);
     let (is_upper, is_lower) = (key.is_ascii_uppercase(), key.is_ascii_lowercase());
     // Without a count, a lower-case key searches case-insensitively.
     let fold_case = if cmd_arg.count0 == 0 {
@@ -209,7 +210,7 @@ fn nv_bracket_ident(cmd_arg: &mut CmdArg) {
     } else {
         false
     };
-    let what = if nchar & 0xf == 'd' as c_int & 0xf {
+    let what = if nchar.code() & 0xf == c_int::from(b'd') & 0xf {
         FIND_DEFINE.cast_signed()
     } else {
         FIND_ANY.cast_signed()
@@ -222,7 +223,7 @@ fn nv_bracket_ident(cmd_arg: &mut CmdArg) {
         ACTION_GOTO.cast_signed()
     };
     // `]` starts below the cursor line, `[` at the top of the file.
-    let from = if cmd_arg.cmdchar == ']' as c_int {
+    let from = if cmd_arg.cmdchar.is(']') {
         Win::current().w_cursor.lnum + 1
     } else {
         LineNr::ONE
@@ -242,7 +243,7 @@ fn nv_bracket_mark(cmd_arg: &mut CmdArg) {
     // later one is a copy of a buffer mark. Running out of marks stops at the
     // last one found rather than failing.
     let mut fm = pos_to_mark(Buf::current(), Win::current().w_cursor);
-    let linewise = cmd_arg.nchar == '\'' as c_int;
+    let linewise = cmd_arg.nchar == Key::ascii(b'\'');
     for _ in 0..cmd_arg.count1 {
         match getnextmark(fm.mark, direction(cmd_arg), linewise) {
             Some(next) => fm = next,
@@ -259,9 +260,9 @@ fn nv_bracket_mark(cmd_arg: &mut CmdArg) {
 /// `[s`, `[r`, `[S`, `]s`, `]r` and `]S`: jump to a misspelled word.
 fn nv_bracket_spell(cmd_arg: &mut CmdArg) {
     setpcmark();
-    let what = match u8::try_from(cmd_arg.nchar) {
-        Ok(b's') => SMT_ALL as SpellMoveType,
-        Ok(b'r') => SMT_RARE as SpellMoveType,
+    let what = match cmd_arg.nchar.as_byte() {
+        Some(b's') => SMT_ALL as SpellMoveType,
+        Some(b'r') => SMT_RARE as SpellMoveType,
         _ => SMT_BAD as SpellMoveType,
     };
     for _ in 0..cmd_arg.count1 {
@@ -282,29 +283,29 @@ pub(crate) fn nv_brackets(cmd_arg: &mut CmdArg) {
     Win::current().w_cursor.coladd = 0;
 
     let nchar = cmd_arg.nchar;
-    let opening = cmd_arg.cmdchar == '[' as c_int;
+    let opening = cmd_arg.cmdchar.is('[');
     // The bracket forms that name a block: `[{ [( [* [/ [# [m [M` and the
     // closing halves of each.
     let block_chars: &CStr = if opening { c"{(*/#mM" } else { c"})*/#mM" };
 
-    if nchar == 'f' as c_int {
+    if nchar.is('f') {
         nv_gotofile(cmd_arg);
-    } else if has_char(c"iI\tdD\x04", nchar) {
+    } else if has_char(c"iI\tdD\x04", nchar.code()) {
         nv_bracket_ident(cmd_arg);
-    } else if has_char(block_chars, nchar) {
+    } else if has_char(block_chars, nchar.code()) {
         nv_bracket_block(cmd_arg, old_pos);
-    } else if nchar == '[' as c_int || nchar == ']' as c_int {
+    } else if nchar.is('[') || nchar.is(']') {
         // `[[` and `]]` look for a section start, `[]` and `][` for its
         // end.
         let flag = if nchar == cmd_arg.cmdchar {
-            '{' as c_int
+            c_int::from(b'{')
         } else {
-            '}' as c_int
+            c_int::from(b'}')
         };
         Win::current().w_set_curswant = true;
         let both_ways = cmd_arg.op().op_type != OpType::Nop
             && cmd_arg.arg == FORWARD as c_int
-            && flag == '{' as c_int;
+            && flag == c_int::from(b'{');
         let (dir, n) = (cmd_arg.arg, cmd_arg.count1);
         if let Some(inclusive) = findpar(dir, n, flag, both_ways) {
             if inclusive {
@@ -317,30 +318,32 @@ pub(crate) fn nv_brackets(cmd_arg: &mut CmdArg) {
         } else {
             clear_op_beep(cmd_arg.op());
         }
-    } else if nchar == 'p' as c_int || nchar == 'P' as c_int {
+    } else if nchar.is('p') || nchar.is('P') {
         // The put that reindents to the current line.
         nv_put_opt(cmd_arg, true);
-    } else if nchar == '\'' as c_int || nchar == '`' as c_int {
+    } else if nchar.is('\'') || nchar.is('`') {
         nv_bracket_mark(cmd_arg);
-    } else if (SpecialKey::Rightrelease.code()..=SpecialKey::Leftmouse.code()).contains(&nchar) {
+    } else if (SpecialKey::Rightrelease.code()..=SpecialKey::Leftmouse.code())
+        .contains(&nchar.code())
+    {
         // A mouse click after `[` or `]` pastes at the click, reindenting.
         let (dir, n) = (direction(cmd_arg), cmd_arg.count1);
         do_mouse(
             Some(cmd_arg.op()),
-            nchar,
+            nchar.code(),
             dir,
             n,
             PUT_FIXINDENT.cast_signed() != 0,
         );
-    } else if nchar == 'z' as c_int {
+    } else if nchar.is('z') {
         if fold_move_to(false, direction(cmd_arg), cmd_arg.count1) == 0 {
             clear_op_beep(cmd_arg.op());
         }
-    } else if nchar == 'c' as c_int {
+    } else if nchar.is('c') {
         if diff_move_to(direction(cmd_arg), cmd_arg.count1).is_err() {
             clear_op_beep(cmd_arg.op());
         }
-    } else if nchar == 'r' as c_int || nchar == 's' as c_int || nchar == 'S' as c_int {
+    } else if nchar.is('r') || nchar.is('s') || nchar.is('S') {
         nv_bracket_spell(cmd_arg);
     } else {
         clear_op_beep(cmd_arg.op());

@@ -8,7 +8,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::keycodes::ModMask;
-use crate::strings::has_char;
+use crate::types::Key;
 use crate::winlayer::BufId;
 use crate::winlayer::WinId;
 use crate::winlayer::{Buf, Win, windows};
@@ -30,7 +30,6 @@ use crate::types::{CmdArg, ColNr, Direction, LineNr};
 use crate::window::goto_tabpage;
 use core::ffi::c_int;
 
-use crate::keycodes::Ctrl_D;
 use crate::r#move::{cursor_correct, pagescroll, scroll_redraw, scrolldown, scrollup};
 use crate::search::{BACKWARD, FORWARD};
 
@@ -70,7 +69,7 @@ pub(crate) fn do_check_scrollbind(check: bool) {
                 let down = LineNr::new(vtopline) - OLD_VTOPLINE.get();
                 check_scrollbind(down, win.w_leftcol - OLD_LEFTCOL.get());
             }
-        } else if p_sbo(|value| has_char(value, 'j' as c_int)) {
+        } else if p_sbo(|value| value.to_bytes().contains(&b'j')) {
             // Just moved into this window, and 'scrollopt' has "jump":
             // bring it back to where the binding says it should be.
             check_scrollbind((LineNr::new(vtopline) - win.w_scbind_pos).get(), 0);
@@ -97,9 +96,9 @@ pub(crate) fn check_scrollbind(vtopline_diff: i32, leftcol_diff: c_int) {
     // Two windows in diff mode are always bound vertically; otherwise
     // 'scrollopt' says so.
     let want_ver = old_curwin.w_onebuf_opt.wo_diff != 0
-        || (p_sbo(|value| has_char(value, 'v' as c_int)) && vtopline_diff != 0);
-    let want_hor =
-        p_sbo(|value| has_char(value, 'h' as c_int)) && (leftcol_diff != 0 || vtopline_diff != 0);
+        || (p_sbo(|value| value.to_bytes().contains(&b'v')) && vtopline_diff != 0);
+    let want_hor = p_sbo(|value| value.to_bytes().contains(&b'h'))
+        && (leftcol_diff != 0 || vtopline_diff != 0);
     set_visual_active(false);
     set_visual_select(visual_active());
 
@@ -174,7 +173,7 @@ pub(crate) fn nv_scroll_line(cmd_arg: &mut CmdArg) {
 /// `CTRL-D` and `CTRL-U`: half a page.
 pub(crate) fn nv_halfpage(cmd_arg: &mut CmdArg) {
     if !check_clear_op(cmd_arg.op()) {
-        let dir = if cmd_arg.cmdchar == Ctrl_D {
+        let dir = if cmd_arg.cmdchar == Key::CTRL_D {
             FORWARD as c_int
         } else {
             BACKWARD as c_int
@@ -189,16 +188,16 @@ pub(crate) fn nv_exit_command(cmd_arg: &mut CmdArg) {
     if check_clear_op_quit(cmd_arg.op()) {
         return;
     }
-    let cmd = match u8::try_from(cmd_arg.nchar) {
+    let cmd = match cmd_arg.nchar.as_byte() {
         // Write this file if it changed, then quit.
-        Ok(b'Z') => c"x",
+        Some(b'Z') => c"x",
         // Quit without writing.
-        Ok(b'Q') => c"q!",
+        Some(b'Q') => c"q!",
         // Restart, restoring the session. A count skips the session; a
         // count of 9 also abandons unsaved changes.
-        Ok(b'R') if (1..=8).contains(&cmd_arg.count0) => c"restart!",
-        Ok(b'R') if cmd_arg.count0 == 9 => c"restart! +qall!",
-        Ok(b'R') => c"restart",
+        Some(b'R') if (1..=8).contains(&cmd_arg.count0) => c"restart!",
+        Some(b'R') if cmd_arg.count0 == 9 => c"restart! +qall!",
+        Some(b'R') => c"restart",
         _ => {
             clear_op_beep(cmd_arg.op());
             return;

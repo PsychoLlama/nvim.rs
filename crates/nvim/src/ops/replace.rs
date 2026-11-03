@@ -84,10 +84,10 @@ pub(crate) fn op_replace(op: &mut OpArg, mut c: c_int) -> Result<(), Failed> {
 
     // CTRL-V CR / CTRL-V NL: put the byte in, do not split the line.
     let mut had_ctrl_v_cr = false;
-    if c == REPLACE_CR_NCHAR {
+    if c == REPLACE_CR_NCHAR.code() {
         had_ctrl_v_cr = true;
         c = CAR;
-    } else if c == REPLACE_NL_NCHAR {
+    } else if c == REPLACE_NL_NCHAR.code() {
         had_ctrl_v_cr = true;
         c = NL;
     }

@@ -17,6 +17,7 @@ const CLASS_PUNCT: c_int = 1;
 const CLASS_WORD: c_int = 2;
 
 use crate::ops::Op;
+use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 
 use crate::ascii::ascii_iswhite;
@@ -41,7 +42,7 @@ use crate::pos::clearpos;
 use crate::regexp::RE_LAST;
 use crate::search::{BACKWARD, FORWARD, SEARCH_START, findmatchlimit, reset_search_dir, searchit};
 use crate::textobject::findpar;
-use crate::types::{ColNr, LineNr, NUL, OpType, Pos, ShmFlag, int64_t};
+use crate::types::{ColNr, LineNr, OpType, Pos, ShmFlag, int64_t};
 use core::ffi::{CStr, c_int, c_uint};
 
 /// Whether the character at `col` of `line` continues a `FIND_EVAL`
@@ -113,8 +114,8 @@ struct ScanLine<'a>(&'a [u8]);
 
 impl<'a> ScanLine<'a> {
     /// The byte at `col`, or NUL at and past the end of the line.
-    fn at(self, col: c_int) -> c_int {
-        c_int::from(cstr::byte_at(self.0, Self::index(col)))
+    fn at(self, col: c_int) -> u8 {
+        cstr::byte_at(self.0, Self::index(col))
     }
     /// The rest of the line from `col` on.
     fn from(self, col: c_int) -> Self {
@@ -170,10 +171,10 @@ pub(crate) fn find_ident_at_pos(
     let mut pass = c_int::from(find_type & FIND_IDENT.cast_signed() == 0);
     while pass < 2 {
         col = startcol.get();
-        while line.at(col) != NUL {
+        while line.at(col) != 0 {
             // A `]` ends an expression, and is where the backwards walk
             // has to start from.
-            if eval && line.at(col) == ']' as c_int {
+            if eval && line.at(col) == b']' {
                 break;
             }
             this_class = line.class(col);
@@ -183,8 +184,8 @@ pub(crate) fn find_ident_at_pos(
             col += line.char_len(col);
         }
         // The bracket depth the backwards walk starts with.
-        let mut bn = c_int::from(line.at(col) == ']' as c_int);
-        if eval && line.at(col) == ']' as c_int {
+        let mut bn = c_int::from(line.at(col) == b']');
+        if eval && line.at(col) == b']' {
             // A subscript belongs to the name in front of it, so pretend
             // the `]` is a word character.
             this_class = class_in(b"a", Buf::current());
@@ -214,7 +215,7 @@ pub(crate) fn find_ident_at_pos(
         pass += 1;
     }
 
-    if line.at(col) == NUL || (pass == 0 && this_class != CLASS_WORD) {
+    if line.at(col) == 0 || (pass == 0 && this_class != CLASS_WORD) {
         if find_type & FIND_STRING.cast_signed() != 0 {
             emsg(gettext(c"E348: No string under cursor"));
         } else {
@@ -232,7 +233,7 @@ pub(crate) fn find_ident_at_pos(
     startcol -= col;
     col = 0;
     this_class = line.class(0);
-    while line.at(col) != NUL
+    while line.at(col) != 0
         && (if pass == 0 {
             line.class(col) == this_class
         } else {
@@ -249,11 +250,10 @@ pub(crate) fn find_ident_at_pos(
 
 /// `gd` and `gD`: jump to the local or global declaration of the identifier
 /// under the cursor.
-pub(crate) fn nv_gd(op: Op, nchar: c_int, thisblock: c_int) {
+pub(crate) fn nv_gd(op: Op, nchar: Key, thisblock: bool) {
     let word = ident_under_cursor(FIND_IDENT.cast_signed());
-    let locally = nchar == 'd' as c_int;
-    let found =
-        !word.is_empty() && find_decl(&word, locally, thisblock != 0, SEARCH_START as c_int);
+    let locally = nchar.is('d');
+    let found = !word.is_empty() && find_decl(&word, locally, thisblock, SEARCH_START as c_int);
     if !found {
         clear_op_beep(op);
         return;
@@ -333,7 +333,7 @@ pub(crate) fn find_decl(word: &[u8], locally: bool, thisblock: bool, flags_arg: 
     // Where the enclosing block starts, which is as far back as a local
     // declaration may be.
     let par_pos;
-    let in_block = locally && findpar(BACKWARD as c_int, 1, '{' as c_int, false).is_some();
+    let in_block = locally && findpar(BACKWARD as c_int, 1, c_int::from(b'{'), false).is_some();
     if !in_block {
         setpcmark();
         Win::current().w_cursor.lnum = LineNr::ONE;
@@ -381,7 +381,7 @@ pub(crate) fn find_decl(word: &[u8], locally: bool, thisblock: bool, flags_arg: 
             // Refuse a match whose enclosing block closes before the
             // cursor: it is a different scope.
             let travel = int64_t::from(old_pos.lnum - Win::current().w_cursor.lnum + 1);
-            let brace = '}' as c_int;
+            let brace = c_int::from(b'}');
             let close = findmatchlimit(None, brace, FM_FORWARD.cast_signed(), travel);
             if let Some(close) = close
                 && close.lnum < old_pos.lnum

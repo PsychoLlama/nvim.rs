@@ -11,6 +11,8 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::keycodes::SpecialKey;
+use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 
 use crate::charset::{transchar, vim_isprintc};
@@ -39,12 +41,6 @@ use crate::ui::{ui_call_msg_showcmd, ui_has};
 use core::ffi::{CStr, c_int};
 
 use crate::highlight_group::HLF_MSG;
-use crate::keycodes::{
-    KE_EVENT, KE_IGNORE, KE_LEFTDRAG, KE_LEFTMOUSE, KE_LEFTRELEASE, KE_MIDDLEDRAG, KE_MIDDLEMOUSE,
-    KE_MIDDLERELEASE, KE_MOUSEDOWN, KE_MOUSELEFT, KE_MOUSEMOVE, KE_MOUSERIGHT, KE_MOUSEUP,
-    KE_RIGHTDRAG, KE_RIGHTMOUSE, KE_RIGHTRELEASE, KE_X1DRAG, KE_X1MOUSE, KE_X1RELEASE, KE_X2DRAG,
-    KE_X2MOUSE, KE_X2RELEASE,
-};
 use crate::types::ui::kUIMessages;
 
 /// The 'showcmd' text: at most `SHOWCMD_BUFLEN - 1` bytes and the
@@ -141,29 +137,29 @@ fn showcmd_limit() -> usize {
 /// Keys that never appear in the 'showcmd' area: the mouse events and the
 /// two internal no-ops. Upstream spells this as a NUL-terminated array and
 /// walks it; the terminator is not a member, so it is not here either.
-const IGNORED: [c_int; 22] = [
-    -(253 + ((KE_IGNORE as c_int) << 8)),
-    -(253 + ((KE_LEFTMOUSE as c_int) << 8)),
-    -(253 + ((KE_LEFTDRAG as c_int) << 8)),
-    -(253 + ((KE_LEFTRELEASE as c_int) << 8)),
-    -(253 + ((KE_MOUSEMOVE as c_int) << 8)),
-    -(253 + ((KE_MIDDLEMOUSE as c_int) << 8)),
-    -(253 + ((KE_MIDDLEDRAG as c_int) << 8)),
-    -(253 + ((KE_MIDDLERELEASE as c_int) << 8)),
-    -(253 + ((KE_RIGHTMOUSE as c_int) << 8)),
-    -(253 + ((KE_RIGHTDRAG as c_int) << 8)),
-    -(253 + ((KE_RIGHTRELEASE as c_int) << 8)),
-    -(253 + ((KE_MOUSEDOWN as c_int) << 8)),
-    -(253 + ((KE_MOUSEUP as c_int) << 8)),
-    -(253 + ((KE_MOUSELEFT as c_int) << 8)),
-    -(253 + ((KE_MOUSERIGHT as c_int) << 8)),
-    -(253 + ((KE_X1MOUSE as c_int) << 8)),
-    -(253 + ((KE_X1DRAG as c_int) << 8)),
-    -(253 + ((KE_X1RELEASE as c_int) << 8)),
-    -(253 + ((KE_X2MOUSE as c_int) << 8)),
-    -(253 + ((KE_X2DRAG as c_int) << 8)),
-    -(253 + ((KE_X2RELEASE as c_int) << 8)),
-    -(253 + ((KE_EVENT as c_int) << 8)),
+const IGNORED: [SpecialKey; 22] = [
+    SpecialKey::Ignore,
+    SpecialKey::Leftmouse,
+    SpecialKey::Leftdrag,
+    SpecialKey::Leftrelease,
+    SpecialKey::Mousemove,
+    SpecialKey::Middlemouse,
+    SpecialKey::Middledrag,
+    SpecialKey::Middlerelease,
+    SpecialKey::Rightmouse,
+    SpecialKey::Rightdrag,
+    SpecialKey::Rightrelease,
+    SpecialKey::Mousedown,
+    SpecialKey::Mouseup,
+    SpecialKey::Mouseleft,
+    SpecialKey::Mouseright,
+    SpecialKey::X1mouse,
+    SpecialKey::X1drag,
+    SpecialKey::X1release,
+    SpecialKey::X2mouse,
+    SpecialKey::X2drag,
+    SpecialKey::X2release,
+    SpecialKey::Event,
 ];
 
 /// The two lines the Visual selection spans, with any fold at either end
@@ -291,7 +287,7 @@ pub(crate) fn clear_showcmd() {
 ///
 /// Answers whether the area was redrawn: the caller uses that to decide
 /// whether it must put the cursor back.
-pub(crate) fn add_to_showcmd(c: c_int) -> bool {
+pub(crate) fn add_to_showcmd(c: Key) -> bool {
     if !p_sc() || msg_silent.get() != 0 || ex_normal_busy.get() != 0 {
         return false;
     }
@@ -300,23 +296,23 @@ pub(crate) fn add_to_showcmd(c: c_int) -> bool {
         showcmd_buf.set(ShowCmd::new());
         showcmd_visual.set(false);
     }
-    if c < 0 && IGNORED.contains(&c) {
+    if c.special().is_some_and(|key| IGNORED.contains(&key)) {
         return false;
     }
 
     let mut mbyte_buf = [0u8; 7];
     let display;
-    let extra: &[u8] = if c <= 0x7f || !vim_isprintc(c) {
-        display = transchar(c);
+    let extra: &[u8] = if c.code() <= 0x7f || !vim_isprintc(c.code()) {
+        display = transchar(c.code());
         // A space is shown as its byte value, so it is not lost in the
         // padding the area is drawn with.
-        if display[0] as c_int == ' ' as c_int {
+        if display[0] == b' ' {
             b"<20>"
         } else {
             cstr::in_bytes(&display).to_bytes()
         }
     } else {
-        let n = encode_char(c, &mut mbyte_buf);
+        let n = encode_char(c.code(), &mut mbyte_buf);
         &mbyte_buf[..n]
     };
 
@@ -332,7 +328,7 @@ pub(crate) fn add_to_showcmd(c: c_int) -> bool {
 }
 
 /// `add_to_showcmd`, for a caller that always wants the cursor put back.
-pub(crate) fn add_to_showcmd_c(c: c_int) {
+pub(crate) fn add_to_showcmd_c(c: Key) {
     add_to_showcmd(c);
     setcursor();
 }
@@ -372,8 +368,8 @@ pub(crate) fn display_showcmd() {
     let clear = showcmd_buf.get().is_empty();
     showcmd_is_clear.set(clear);
 
-    let loc = p_sloc(|value| c_int::from(cstr::first(value)));
-    if loc == 's' as c_int {
+    let loc = p_sloc(cstr::first);
+    if loc == b's' {
         if clear {
             Win::current().w_redr_status = true;
         } else {
@@ -382,7 +378,7 @@ pub(crate) fn display_showcmd() {
         }
         return;
     }
-    if loc == 't' as c_int {
+    if loc == b't' {
         if clear {
             redraw_tabline.set(true);
         } else {

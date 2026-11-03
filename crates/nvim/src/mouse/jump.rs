@@ -27,6 +27,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::types::Key;
 use crate::winlayer::cmdwin_window;
 use core::ffi::c_int;
 
@@ -499,7 +500,7 @@ fn move_cursor_there(
         set_visual_active(true);
         VIsual_reselect.set(1);
         // If 'selectmode' contains "mouse", start Select mode.
-        may_start_select('o' as c_int);
+        may_start_select(Key::ascii(b'o'));
         setmouse();
 
         if p_smd() && msg_silent.get() == 0 {

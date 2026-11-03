@@ -687,12 +687,26 @@ fn dispatch_action(a: Action, win: Win) {
 
         let (c1, c2) = if fixindent {
             let open = dir == BACKWARD as c_int;
-            (if open { '[' as c_int } else { ']' as c_int }, 'p' as c_int)
+            (
+                if open {
+                    Key::ascii(b'[')
+                } else {
+                    Key::ascii(b']')
+                },
+                Key::ascii(b'p'),
+            )
         } else {
             let after = dir == FORWARD as c_int;
-            (if after { 'p' as c_int } else { 'P' as c_int }, NUL)
+            (
+                if after {
+                    Key::ascii(b'p')
+                } else {
+                    Key::ascii(b'P')
+                },
+                Key::NUL,
+            )
         };
-        prep_redo(regname, count, NUL, c1, NUL, c2, NUL);
+        prep_redo(regname, count, Key::NUL, c1, Key::NUL, c2, Key::NUL);
 
         // Remember where the paste started, so in edit() Insstart can be set
         // to this position.
@@ -781,7 +795,7 @@ fn multi_click(mut win: Win, op: Option<Op>, is_click: bool, is_drag: bool, mods
             set_visual_active(true);
             VIsual_reselect.set(1);
             // Start Select mode if 'selectmode' contains "mouse".
-            may_start_select('o' as c_int);
+            may_start_select(Key::ascii(b'o'));
             setmouse();
         }
         set_visual_mode(match mods.masked(ModMask::MULTI_CLICK) {

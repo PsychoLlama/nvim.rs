@@ -42,8 +42,8 @@ use core::ffi::c_int;
 
 /// Re-run this command as the two-character `g<nchar>` operator instead.
 fn as_g_operator(cmd_arg: &mut CmdArg, nchar: u8) {
-    cmd_arg.cmdchar = 'g' as c_int;
-    cmd_arg.nchar = c_int::from(nchar);
+    cmd_arg.cmdchar = Key::ascii(b'g');
+    cmd_arg.nchar = Key::byte(nchar);
     nv_operator(cmd_arg);
 }
 
@@ -74,10 +74,10 @@ pub(crate) fn nv_at(cmd_arg: &mut CmdArg) {
         return;
     }
     // `@=` prompts for an expression; a cancelled prompt does nothing.
-    if cmd_arg.nchar == '=' as c_int && get_expr_register() == NUL {
+    if cmd_arg.nchar.is('=') && get_expr_register() == NUL {
         return;
     }
-    replay(cmd_arg, cmd_arg.nchar);
+    replay(cmd_arg, cmd_arg.nchar.code());
 }
 
 /// `u`: undo, or the `gu` operator when one is already pending or a Visual
@@ -118,11 +118,11 @@ pub(crate) fn nv_regname(cmd_arg: &mut CmdArg) {
         return;
     }
     // `"=` prompts for the expression register's contents up front.
-    if cmd_arg.nchar == '=' as c_int {
-        cmd_arg.nchar = get_expr_register();
+    if cmd_arg.nchar.is('=') {
+        cmd_arg.nchar = Key::from_code(get_expr_register());
     }
-    if cmd_arg.nchar != NUL && valid_yank_reg(cmd_arg.nchar, false) {
-        cmd_arg.op().regname = cmd_arg.nchar;
+    if !cmd_arg.nchar.is_nul() && valid_yank_reg(cmd_arg.nchar.code(), false) {
+        cmd_arg.op().regname = cmd_arg.nchar.code();
         // The count so far belongs to the command, not to the `"`.
         cmd_arg.opcount = cmd_arg.count0;
         set_reg_var(cmd_arg.op().regname);
@@ -149,14 +149,18 @@ pub(crate) fn nv_dot(cmd_arg: &mut CmdArg) {
 pub(crate) fn nv_redo_or_register(cmd_arg: &mut CmdArg) {
     if visual_select() && visual_active() {
         let unmapped = Keys::unmapped();
-        let mut reg = plain_vgetc().code();
+        let mut reg = plain_vgetc();
         langmap_adjust(&mut reg, true);
         drop(unmapped);
         // `"` names the unnamed register, which is spelled 0 here.
-        if reg == '"' as c_int {
-            reg = 0;
+        if reg.is('"') {
+            reg = Key::NUL;
         }
-        VIsual_select_reg.set(if valid_yank_reg(reg, true) { reg } else { 0 });
+        VIsual_select_reg.set(if valid_yank_reg(reg.code(), true) {
+            reg.code()
+        } else {
+            0
+        });
         return;
     }
     if check_clear_op_quit(cmd_arg.op()) {
@@ -169,7 +173,7 @@ pub(crate) fn nv_redo_or_register(cmd_arg: &mut CmdArg) {
 /// Start an operator, or apply the pending one to whole lines when it is the
 /// same one again (`dd`, `yy`, `gugu`).
 pub(crate) fn nv_operator(cmd_arg: &mut CmdArg) {
-    let op_type = get_op_type(cmd_arg.cmdchar, cmd_arg.nchar);
+    let op_type = get_op_type(cmd_arg.cmdchar.code(), cmd_arg.nchar.code());
     // A prompt buffer only lets its own last line be changed.
     if buf_is_prompt(current_buf()) && op_is_change(op_type) && !prompt_curpos_editable() {
         clear_op_beep(cmd_arg.op());
@@ -204,7 +208,7 @@ pub(crate) fn nv_lineop(cmd_arg: &mut CmdArg) {
     if cursor_down(cmd_arg.count1 - 1, op.op_type == OpType::Nop).is_err() {
         clear_op_beep(op);
     } else if (op.op_type == OpType::Delete
-        && op.motion_force != 'v' as c_int
+        && op.motion_force != c_int::from(b'v')
         && op.motion_force != Ctrl_V)
         || op.op_type == OpType::Lshift
         || op.op_type == OpType::Rshift
@@ -228,17 +232,14 @@ pub(crate) fn nv_record(cmd_arg: &mut CmdArg) {
         return;
     }
     // `q:`, `q/` and `q?` open the command-line window instead.
-    if cmd_arg.nchar == ':' as c_int
-        || cmd_arg.nchar == '/' as c_int
-        || cmd_arg.nchar == '?' as c_int
-    {
+    if cmd_arg.nchar.is(':') || cmd_arg.nchar.is('/') || cmd_arg.nchar.is('?') {
         if cmdwin_type.get() != 0 {
             emsg(gettext(e_cmdline_window_already_open));
             return;
         }
-        stuff_readbuf_char(Key::from_code(cmd_arg.nchar));
+        stuff_readbuf_char(cmd_arg.nchar);
         stuff_readbuf_char(SpecialKey::Cmdwin.into());
-    } else if reg_executing.get() == 0 && do_record(cmd_arg.nchar).is_err() {
+    } else if reg_executing.get() == 0 && do_record(cmd_arg.nchar.code()).is_err() {
         clear_op_beep(cmd_arg.op());
     }
 }

@@ -171,6 +171,13 @@ impl Key {
         self.0 == 0
     }
 
+    /// Whether this is a character other than NUL -- neither "no key" nor a
+    /// special key (upstream's `c > 0`).
+    #[inline]
+    pub const fn is_char(self) -> bool {
+        self.0 > 0
+    }
+
     /// Whether this is a special key rather than a character (upstream's
     /// `IS_SPECIAL`).
     #[inline]
@@ -188,6 +195,12 @@ impl Key {
     #[inline]
     pub fn as_char(self) -> Option<char> {
         u32::try_from(self.0).ok().and_then(char::from_u32)
+    }
+
+    /// The value of an ASCII decimal digit, when this is one.
+    #[inline]
+    pub fn digit(self) -> Option<u8> {
+        self.as_byte().filter(u8::is_ascii_digit).map(|b| b - b'0')
     }
 
     /// The character as one byte, when it is below 0x100.

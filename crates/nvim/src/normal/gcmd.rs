@@ -10,7 +10,8 @@
 )]
 
 use crate::keycodes::ModMask;
-use crate::keycodes::{Ctrl_H, SpecialKey};
+use crate::keycodes::SpecialKey;
+use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 
 use crate::ascii::{ascii_iswhite, ascii_iswhite_or_nul};
@@ -67,7 +68,7 @@ const POUND_BYTE: u8 = 0xa3;
 /// Also called from `move.rs` for a mouse click landing left of the text.
 pub(crate) fn nv_g_home_m_cmd(cmd_arg: &mut CmdArg) {
     let mut win = Win::current();
-    let to_first_non_blank = cmd_arg.nchar == '^' as c_int;
+    let to_first_non_blank = cmd_arg.nchar.is('^');
     cmd_arg.op().motion_type = kMTCharWise;
     cmd_arg.op().inclusive = false;
     let mut i;
@@ -92,7 +93,7 @@ pub(crate) fn nv_g_home_m_cmd(cmd_arg: &mut CmdArg) {
     } else {
         i = win.w_leftcol.get();
     }
-    if cmd_arg.nchar == 'm' as c_int {
+    if cmd_arg.nchar.is('m') {
         i += (win.w_view_width - win.col_off()
             + if win.w_onebuf_opt.wo_wrap != 0 && i > 0 {
                 win_col_off2(win)
@@ -148,8 +149,7 @@ pub(crate) fn nv_g_dollar_cmd(cmd_arg: &mut CmdArg) {
     let mut op = cmd_arg.op();
     let col_off = win.col_off();
     // `<End>` also skips back over trailing white space.
-    let to_last_non_blank =
-        cmd_arg.nchar == SpecialKey::End.code() || cmd_arg.nchar == SpecialKey::Kend.code();
+    let to_last_non_blank = cmd_arg.nchar == SpecialKey::End || cmd_arg.nchar == SpecialKey::Kend;
     op.motion_type = kMTCharWise;
     op.inclusive = true;
     if win.w_onebuf_opt.wo_wrap != 0 && win.w_view_width != 0 {
@@ -212,14 +212,14 @@ pub(crate) fn nv_gi_cmd(cmd_arg: &mut CmdArg) {
             win.w_cursor.col = len;
         }
     }
-    cmd_arg.cmdchar = 'i' as c_int;
+    cmd_arg.cmdchar = Key::ascii(b'i');
     nv_edit(cmd_arg);
 }
 
 /// `gh`, `gH` and `g CTRL-H`: start Select mode in the matching Visual kind.
 /// `v`, `V` and CTRL-V sit exactly `'v' - 'h'` above `h`, `H` and CTRL-H.
 fn nv_g_select(cmd_arg: &mut CmdArg) {
-    cmd_arg.cmdchar = cmd_arg.nchar + ('v' as c_int - 'h' as c_int);
+    cmd_arg.cmdchar = Key::from_code(cmd_arg.nchar.code() + c_int::from(b'v' - b'h'));
     cmd_arg.arg = 1;
     nv_visual(cmd_arg);
 }
@@ -248,19 +248,19 @@ fn nv_g_screen_line(cmd_arg: &mut CmdArg, dir: c_int) {
 ///
 /// Answers `false` for anything else, which sends the caller on to the byte
 /// half of the tree.
-fn nv_g_key(cmd_arg: &mut CmdArg, nchar: c_int) -> bool {
-    match SpecialKey::try_from(nchar) {
+fn nv_g_key(cmd_arg: &mut CmdArg, nchar: Key) -> bool {
+    match nchar.special() {
         // `g<BS>` is `g CTRL-H`.
-        Ok(SpecialKey::Bs) => {
-            cmd_arg.nchar = Ctrl_H;
+        Some(SpecialKey::Bs) => {
+            cmd_arg.nchar = Key::CTRL_H;
             nv_g_select(cmd_arg);
         }
-        Ok(SpecialKey::Down) => nv_g_screen_line(cmd_arg, FORWARD as c_int),
-        Ok(SpecialKey::Up) => nv_g_screen_line(cmd_arg, BACKWARD as c_int),
-        Ok(SpecialKey::Home | SpecialKey::Khome) => nv_g_home_m_cmd(cmd_arg),
-        Ok(SpecialKey::End | SpecialKey::Kend) => nv_g_dollar_cmd(cmd_arg),
+        Some(SpecialKey::Down) => nv_g_screen_line(cmd_arg, FORWARD as c_int),
+        Some(SpecialKey::Up) => nv_g_screen_line(cmd_arg, BACKWARD as c_int),
+        Some(SpecialKey::Home | SpecialKey::Khome) => nv_g_home_m_cmd(cmd_arg),
+        Some(SpecialKey::End | SpecialKey::Kend) => nv_g_dollar_cmd(cmd_arg),
         // A mouse click after `g` acts as the CTRL-modified click.
-        Ok(
+        Some(
             SpecialKey::Middlemouse
             | SpecialKey::Middledrag
             | SpecialKey::Middlerelease
@@ -281,13 +281,13 @@ fn nv_g_key(cmd_arg: &mut CmdArg, nchar: c_int) -> bool {
             mod_mask.set(ModMask::CTRL);
             do_mouse(
                 Some(cmd_arg.op()),
-                nchar,
+                nchar.code(),
                 BACKWARD as c_int,
                 cmd_arg.count1,
                 false,
             );
         }
-        Ok(SpecialKey::Ignore) => {}
+        Some(SpecialKey::Ignore) => {}
         _ => return false,
     }
     true
@@ -302,51 +302,51 @@ pub(crate) fn nv_g_cmd(cmd_arg: &mut CmdArg) {
     }
     // `u8::try_from` rather than `as u8`: a multibyte character after `g`
     // must reach the default arm rather than alias one of these bytes.
-    match u8::try_from(nchar) {
+    match nchar.as_byte() {
         // `g CTRL-A` and `g CTRL-X`: increment each line of the selection
         // by a growing multiple of the count. Only meaningful in Visual
         // mode.
-        Ok(CTRL_A | CTRL_X) => {
+        Some(CTRL_A | CTRL_X) => {
             if visual_active() {
                 cmd_arg.arg = 1;
                 cmd_arg.cmdchar = nchar;
-                cmd_arg.nchar = NUL;
+                cmd_arg.nchar = Key::NUL;
                 nv_addsub(cmd_arg);
             } else {
                 clear_op_beep(op);
             }
         }
         // `gR`: virtual replace mode.
-        Ok(b'R') => {
+        Some(b'R') => {
             cmd_arg.arg = 1;
             nv_replace_mode(cmd_arg);
         }
         // `gr`: replace one character virtually.
-        Ok(b'r') => nv_vreplace(cmd_arg),
+        Some(b'r') => nv_vreplace(cmd_arg),
         // `g&`: repeat the last `:substitute` over the whole file, keeping
         // the flags.
-        Ok(b'&') => {
+        Some(b'&') => {
             let _ = do_cmdline_cmd(c"%s//~/&");
         }
         // `gv`: reselect the previous selection.
-        Ok(b'v') => nv_gv_cmd(cmd_arg),
+        Some(b'v') => nv_gv_cmd(cmd_arg),
         // `gV`: do not reselect it after the next Select-mode edit.
-        Ok(b'V') => VIsual_reselect.set(0),
-        Ok(b'h' | b'H' | CTRL_H) => nv_g_select(cmd_arg),
+        Some(b'V') => VIsual_reselect.set(0),
+        Some(b'h' | b'H' | CTRL_H) => nv_g_select(cmd_arg),
         // `gn`/`gN`: select the next/previous match of the last search.
-        Ok(b'N' | b'n') => {
-            if current_search(cmd_arg.count1, nchar == 'n' as c_int).is_err() {
+        Some(b'N' | b'n') => {
+            if current_search(cmd_arg.count1, nchar.is('n')).is_err() {
                 clear_op_beep(op);
             }
         }
-        Ok(b'j') => nv_g_screen_line(cmd_arg, FORWARD as c_int),
-        Ok(b'k') => nv_g_screen_line(cmd_arg, BACKWARD as c_int),
+        Some(b'j') => nv_g_screen_line(cmd_arg, FORWARD as c_int),
+        Some(b'k') => nv_g_screen_line(cmd_arg, BACKWARD as c_int),
         // `gJ`: join without inserting or removing spaces.
-        Ok(b'J') => nv_join(cmd_arg),
-        Ok(b'^' | b'0' | b'm') => nv_g_home_m_cmd(cmd_arg),
+        Some(b'J') => nv_join(cmd_arg),
+        Some(b'^' | b'0' | b'm') => nv_g_home_m_cmd(cmd_arg),
         // `gM`: the middle of the line by *text* width, or the count'th
         // percentage of it.
-        Ok(b'M') => {
+        Some(b'M') => {
             op.motion_type = kMTCharWise;
             op.inclusive = false;
             let width = linetabsize(Win::current(), Win::current().w_cursor.lnum);
@@ -357,44 +357,44 @@ pub(crate) fn nv_g_cmd(cmd_arg: &mut CmdArg) {
             }
             Win::current().w_set_curswant = true;
         }
-        Ok(b'_') => nv_g_underscore_cmd(cmd_arg),
-        Ok(b'$') => nv_g_dollar_cmd(cmd_arg),
+        Some(b'_') => nv_g_underscore_cmd(cmd_arg),
+        Some(b'$') => nv_g_dollar_cmd(cmd_arg),
         // `g*`, `g#`, `g]` and `g CTRL-]`: the identifier searches that do
         // not anchor at a word boundary.
-        Ok(b'*' | b'#' | POUND_BYTE | CTRL_RSB | b']') => nv_ident(cmd_arg),
+        Some(b'*' | b'#' | POUND_BYTE | CTRL_RSB | b']') => nv_ident(cmd_arg),
         // `ge`/`gE`: back to the end of the previous word.
-        Ok(b'e' | b'E') => {
+        Some(b'e' | b'E') => {
             op.motion_type = kMTCharWise;
             Win::current().w_set_curswant = true;
             op.inclusive = true;
-            if bckend_word(cmd_arg.count1, nchar == 'E' as c_int, false).is_err() {
+            if bckend_word(cmd_arg.count1, nchar.is('E'), false).is_err() {
                 clear_op_beep(op);
             }
         }
         // `g CTRL-G`: count the words, lines and bytes.
-        Ok(CTRL_G) => cursor_pos_info(None),
-        Ok(b'i') => nv_gi_cmd(cmd_arg),
+        Some(CTRL_G) => cursor_pos_info(None),
+        Some(b'i') => nv_gi_cmd(cmd_arg),
         // `gI`: insert in column 1 regardless of indent.
-        Ok(b'I') => {
+        Some(b'I') => {
             beginline(BeginlineOpts::NONE);
             if !check_clear_op_quit(op) {
-                invoke_edit(cmd_arg, 0, 'g' as c_int, 0);
+                invoke_edit(cmd_arg, false, Key::ascii(b'g'), false);
             }
         }
         // `gf`/`gF`: edit the file named under the cursor.
-        Ok(b'f' | b'F') => nv_gotofile(cmd_arg),
+        Some(b'f' | b'F') => nv_gotofile(cmd_arg),
         // `g'` and `` g` ``: jump to a mark without touching the jump
         // list. The argument is what tells `nv_gomark` it is linewise.
-        Ok(b'\'') => {
+        Some(b'\'') => {
             cmd_arg.arg = 1;
             nv_gomark(cmd_arg);
         }
-        Ok(b'`') => nv_gomark(cmd_arg),
-        Ok(b's') => do_sleep(int64_t::from(cmd_arg.count1 * 1000), false),
+        Some(b'`') => nv_gomark(cmd_arg),
+        Some(b's') => do_sleep(int64_t::from(cmd_arg.count1 * 1000), false),
         // `ga`: describe the character under the cursor.
-        Ok(b'a') => describe_cursor_char(),
+        Some(b'a') => describe_cursor_char(),
         // `g8` shows the byte sequence; `8g8` finds an illegal one.
-        Ok(b'8') => {
+        Some(b'8') => {
             if cmd_arg.count0 == 8 {
                 utf_find_illegal();
             } else {
@@ -402,62 +402,62 @@ pub(crate) fn nv_g_cmd(cmd_arg: &mut CmdArg) {
             }
         }
         // `g<`: show the previous message screen again.
-        Ok(b'<') => show_sb_text(),
+        Some(b'<') => show_sb_text(),
         // `gg`: to the first line, or the count'th.
-        Ok(b'g') => {
+        Some(b'g') => {
             cmd_arg.arg = 0;
             nv_goto(cmd_arg);
         }
         // `gq` and `gw` both format; `gw` returns the cursor to where it
         // was, which is what the remembered position is for.
-        Ok(b'q' | b'w') => {
+        Some(b'q' | b'w') => {
             op.cursor_start = Win::current().w_cursor;
             nv_operator(cmd_arg);
         }
         // The rest of the two-character operators: `g~ gu gU g? g@`.
-        Ok(b'~' | b'u' | b'U' | b'?' | b'@') => nv_operator(cmd_arg),
+        Some(b'~' | b'u' | b'U' | b'?' | b'@') => nv_operator(cmd_arg),
         // `gd`/`gD`: jump to the local or global declaration.
-        Ok(b'd' | b'D') => nv_gd(op, nchar, cmd_arg.count0),
+        Some(b'd' | b'D') => nv_gd(op, nchar, cmd_arg.count0 != 0),
         // `gp`/`gP`: put and leave the cursor after the new text.
-        Ok(b'p' | b'P') => nv_put(cmd_arg),
+        Some(b'p' | b'P') => nv_put(cmd_arg),
         // `go`: to a byte offset in the buffer.
-        Ok(b'o') => {
+        Some(b'o') => {
             op.inclusive = false;
             goto_byte(cmd_arg.count0);
         }
         // `gQ`: Ex mode.
-        Ok(b'Q') => {
+        Some(b'Q') => {
             if !check_text_locked(Some(op)) && !check_clear_op_quit(op) {
                 do_exmode();
             }
         }
         // `g,` and `g;`: forwards and backwards through the change list.
-        Ok(b',') => nv_pcmark(cmd_arg),
-        Ok(b';') => {
+        Some(b',') => nv_pcmark(cmd_arg),
+        Some(b';') => {
             cmd_arg.count1 = -cmd_arg.count1;
             nv_pcmark(cmd_arg);
         }
         // `gt`/`gT`: the next or previous tab page.
-        Ok(b't') => {
+        Some(b't') => {
             if !check_clear_op(op) {
                 goto_tabpage(cmd_arg.count0);
             }
         }
-        Ok(b'T') => {
+        Some(b'T') => {
             if !check_clear_op(op) {
                 goto_tabpage(-cmd_arg.count1);
             }
         }
         // `g<Tab>`: the tab page used before this one.
-        Ok(HTAB) => {
+        Some(HTAB) => {
             if !check_clear_op(op) && !goto_tabpage_lastused() {
                 clear_op_beep(op);
             }
         }
         // `g+`/`g-`: forwards and backwards through the undo tree by time.
-        Ok(b'+' | b'-') => {
+        Some(b'+' | b'-') => {
             if !check_clear_op_quit(op) {
-                let count = if nchar == '-' as c_int {
+                let count = if nchar.is('-') {
                     -cmd_arg.count1
                 } else {
                     cmd_arg.count1

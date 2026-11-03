@@ -15,6 +15,7 @@
 #![forbid(unsafe_code)]
 
 use crate::keycodes::ModMask;
+use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 
 use crate::cursor::check_cursor;
@@ -27,7 +28,7 @@ use crate::highlight_group::{HLF_L, HLF_LC};
 use crate::mark::{get_changelist, get_jumplist, mark_get, mark_move_to, setmark};
 use crate::message::emsg;
 use crate::normal::{
-    KMarkNoContext, TAB, check_clear_op, check_clear_op_quit, clear_op, clear_op_beep,
+    KMarkNoContext, check_clear_op, check_clear_op_quit, clear_op, clear_op_beep,
     e_changelist_is_empty, kMTCharWise, kMTLineWise, kMarkAll, kMarkBeginLine, kMarkChangedCursor,
     kMarkChangedLine, kMarkContext, kMarkJumpList, kMarkMoveFailed, kMarkMoveSuccess, kMarkSetView,
     kMarkSwitchedBuf, nv_operator,
@@ -59,13 +60,13 @@ pub(crate) fn nv_search(cmd_arg: &mut CmdArg) {
     let op = cmd_arg.op();
     let save_cursor = Win::current().w_cursor;
     // `g?` is rot13; `?` after it is the operator, not a search.
-    if cmd_arg.cmdchar == '?' as c_int && op.op_type == OpType::Rot13 {
-        cmd_arg.cmdchar = 'g' as c_int;
-        cmd_arg.nchar = '?' as c_int;
+    if cmd_arg.cmdchar.is('?') && op.op_type == OpType::Rot13 {
+        cmd_arg.cmdchar = Key::ascii(b'g');
+        cmd_arg.nchar = Key::ascii(b'?');
         nv_operator(cmd_arg);
         return;
     }
-    cmd_arg.searchbuf = search_cmdline(cmd_arg.cmdchar, cmd_arg.count1);
+    cmd_arg.searchbuf = search_cmdline(cmd_arg.cmdchar.code(), cmd_arg.count1);
     if cmd_arg.searchbuf.is_none() {
         clear_op(op);
         return;
@@ -80,7 +81,7 @@ pub(crate) fn nv_search(cmd_arg: &mut CmdArg) {
     };
     // A copy: the command keeps its buffer for the redo.
     let pat = cmd_arg.search_text().to_vec();
-    normal_search(cmd_arg, cmd_arg.cmdchar, &pat, mark, None);
+    normal_search(cmd_arg, cmd_arg.cmdchar.code(), &pat, mark, None);
 }
 
 impl CmdArg {
@@ -163,7 +164,7 @@ pub(crate) fn nv_mark(cmd_arg: &mut CmdArg) {
     if check_clear_op(cmd_arg.op()) {
         return;
     }
-    if setmark(cmd_arg.nchar).is_err() {
+    if setmark(cmd_arg.nchar.code()).is_err() {
         clear_op_beep(cmd_arg.op());
     }
 }
@@ -187,7 +188,7 @@ pub(crate) fn nv_mark_move_to(
     } else {
         kMTCharWise
     };
-    if cmd_arg.cmdchar == '`' as c_int {
+    if cmd_arg.cmdchar.is('`') {
         cmd_arg.op().use_reg_one = true;
     }
     cmd_arg.op().inclusive = false;
@@ -230,7 +231,7 @@ pub(crate) fn nv_gomark(cmd_arg: &mut CmdArg) {
     let old_key_typed = KeyTyped.get();
 
     // `g'` and ``g` `` jump without touching the previous-context mark.
-    let name = if cmd_arg.cmdchar == 'g' as c_int {
+    let name = if cmd_arg.cmdchar.is('g') {
         flags |= KMarkNoContext as MarkMove;
         cmd_arg.extra_char
     } else {
@@ -246,7 +247,7 @@ pub(crate) fn nv_gomark(cmd_arg: &mut CmdArg) {
     }
 
     // A copy of the mark, which outlives the jump below.
-    let fm = mark_get(Buf::current(), Win::current(), kMarkAll, name);
+    let fm = mark_get(Buf::current(), Win::current(), kMarkAll, name.code());
     let move_res = nv_mark_move_to(cmd_arg, flags, fm.as_ref());
     if !virtual_active(Win::current()) {
         Win::current().w_cursor.coladd = 0;
@@ -267,14 +268,14 @@ pub(crate) fn nv_pcmark(cmd_arg: &mut CmdArg) {
         return;
     }
     // CTRL-TAB is the last-used tab page, not a jump.
-    if cmd_arg.cmdchar == TAB && mod_mask.get() == ModMask::CTRL {
+    if cmd_arg.cmdchar == Key::TAB && mod_mask.get() == ModMask::CTRL {
         if !goto_tabpage_lastused() {
             clear_op_beep(cmd_arg.op());
         }
         return;
     }
 
-    let fm = if cmd_arg.cmdchar == 'g' as c_int {
+    let fm = if cmd_arg.cmdchar.is('g') {
         get_changelist(Buf::current(), Win::current(), cmd_arg.count1)
     } else {
         flags |= KMarkNoContext | kMarkJumpList;
@@ -283,7 +284,7 @@ pub(crate) fn nv_pcmark(cmd_arg: &mut CmdArg) {
 
     if let Some(fm) = &fm {
         move_res = nv_mark_move_to(cmd_arg, flags, Some(fm));
-    } else if cmd_arg.cmdchar == 'g' as c_int {
+    } else if cmd_arg.cmdchar.is('g') {
         // Three different reasons the change list had nothing.
         if Buf::current().b_changelistlen == 0 {
             emsg(gettext(e_changelist_is_empty));

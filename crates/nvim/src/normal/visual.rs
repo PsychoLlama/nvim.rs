@@ -17,6 +17,7 @@
 
 use crate::ops::Op;
 use crate::strings::has_char;
+use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
 
@@ -54,7 +55,7 @@ use crate::textobject::{
 use crate::types::{CmdArg, ColNr, LineNr, NUL, OpType, Outcome, Pos};
 use core::ffi::c_int;
 
-use crate::keycodes::{Ctrl_Q, Ctrl_V};
+use crate::keycodes::Ctrl_V;
 use crate::memory::XString;
 use crate::r#move::{update_curswant_force, update_topline, validate_virtcol};
 
@@ -81,9 +82,9 @@ pub(crate) struct VisualMode(c_int);
 
 impl VisualMode {
     /// Charwise, entered with `v`.
-    pub(crate) const CHAR: Self = Self(b'v' as c_int);
+    pub(crate) const CHAR: Self = Self(Key::ascii(b'v').code());
     /// Linewise, entered with `V`.
-    pub(crate) const LINE: Self = Self(b'V' as c_int);
+    pub(crate) const LINE: Self = Self(Key::ascii(b'V').code());
     /// Blockwise, entered with CTRL-V.
     pub(crate) const BLOCK: Self = Self(Ctrl_V);
     /// The `NUL` that `resel_VIsual_mode` and `VIsual_mode_orig` use to mean
@@ -403,11 +404,11 @@ pub(crate) fn get_visual_text(cmd_arg: Option<&mut CmdArg>) -> Option<VisualText
 /// which means moving both ends -- and the second half of this only runs when
 /// the first attempt left the cursor where it started, which happens when the
 /// two columns are the same width.
-pub(crate) fn v_swap_corners(cmdchar: c_int) {
+pub(crate) fn v_swap_corners(cmdchar: Key) {
     // Only the blockwise `O` path below reads this; the charwise path returns
     // first, having set the anchor itself.
     let mut anchor = visual_anchor();
-    if cmdchar != 'O' as c_int || !visual_mode().is_block() {
+    if !cmdchar.is('O') || !visual_mode().is_block() {
         let old_cursor = Win::current().w_cursor;
         Win::current().w_cursor = visual_anchor();
         set_visual_anchor(old_cursor);
@@ -466,16 +467,20 @@ const VISUAL_OPS: [(u8, u8); 8] = [
 /// An uppercase one forces the selection linewise -- except in blockwise
 /// mode, where `C` and `D` instead extend every line to its end.
 pub(crate) fn v_visop(cmd_arg: &mut CmdArg) {
-    if cmd_arg.cmdchar >= 'A' as c_int && cmd_arg.cmdchar <= 'Z' as c_int {
+    if cmd_arg
+        .cmdchar
+        .as_byte()
+        .is_some_and(|b| b.is_ascii_uppercase())
+    {
         if !visual_mode().is_block() {
             VIsual_mode_orig.set(visual_mode());
             set_visual_mode(VisualMode::LINE);
-        } else if cmd_arg.cmdchar == 'C' as c_int || cmd_arg.cmdchar == 'D' as c_int {
+        } else if cmd_arg.cmdchar.is('C') || cmd_arg.cmdchar.is('D') {
             Win::current().w_curswant = ColNr::MAX;
         }
     }
-    let typed = cmd_arg.cmdchar.to_le_bytes()[0];
-    cmd_arg.cmdchar = c_int::from(
+    let typed = cmd_arg.cmdchar.as_byte().unwrap_or(0);
+    cmd_arg.cmdchar = Key::byte(
         VISUAL_OPS
             .iter()
             .find(|(from, _)| *from == typed)
@@ -495,7 +500,7 @@ fn reselect_scaled(cmd_arg: &mut CmdArg) {
     set_visual_active(true);
     VIsual_reselect.set(1);
     if cmd_arg.arg == 0 {
-        may_start_select('c' as c_int);
+        may_start_select(Key::ascii(b'c'));
     }
     setmouse();
     if p_smd() && msg_silent.get() == 0 {
@@ -570,13 +575,13 @@ fn reselect_scaled(cmd_arg: &mut CmdArg) {
 /// Keeps the raw signature: this is an `nv_cmds` row's handler, so `NvFunc`
 /// fixes it.
 pub(crate) fn nv_visual(cmd_arg: &mut CmdArg) {
-    if cmd_arg.cmdchar == Ctrl_Q {
-        cmd_arg.cmdchar = Ctrl_V;
+    if cmd_arg.cmdchar == Key::CTRL_Q {
+        cmd_arg.cmdchar = Key::CTRL_V;
     }
     // After an operator these are not commands but a forced motion kind:
     // `dv`, `dV`, `d CTRL-V`.
     if cmd_arg.op().op_type != OpType::Nop {
-        cmd_arg.op().motion_force = cmd_arg.cmdchar;
+        cmd_arg.op().motion_force = cmd_arg.cmdchar.code();
         motion_force.set(cmd_arg.op().motion_force);
         finish_op.set(false);
         return;
@@ -586,10 +591,10 @@ pub(crate) fn nv_visual(cmd_arg: &mut CmdArg) {
     if visual_active() {
         // The same key again leaves Visual mode; a different one switches
         // to that kind of selection.
-        if visual_mode() == VisualMode::from_raw(cmd_arg.cmdchar) {
+        if visual_mode() == VisualMode::from_raw(cmd_arg.cmdchar.code()) {
             end_visual_mode();
         } else {
-            set_visual_mode(VisualMode::from_raw(cmd_arg.cmdchar));
+            set_visual_mode(VisualMode::from_raw(cmd_arg.cmdchar.code()));
             showmode();
             may_trigger_modechanged();
         }
@@ -598,7 +603,7 @@ pub(crate) fn nv_visual(cmd_arg: &mut CmdArg) {
         reselect_scaled(cmd_arg);
     } else {
         if cmd_arg.arg == 0 {
-            may_start_select('c' as c_int);
+            may_start_select(Key::ascii(b'c'));
         }
         n_start_visual_mode(cmd_arg.cmdchar);
         // An exclusive selection needs one more character to cover the
@@ -624,8 +629,8 @@ pub(crate) fn nv_visual(cmd_arg: &mut CmdArg) {
 
 /// Start a charwise selection because a shifted key was pressed.
 pub(crate) fn start_selection() {
-    may_start_select('k' as c_int);
-    n_start_visual_mode('v' as c_int);
+    may_start_select(Key::ascii(b'k'));
+    n_start_visual_mode(Key::ascii(b'v'));
 }
 
 /// Decide between Visual and Select mode for a selection about to start.
@@ -633,20 +638,23 @@ pub(crate) fn start_selection() {
 /// `c` says how it is starting -- 'k'ey, 'm'ouse or 'c'ommand -- and
 /// 'selectmode' says which of those mean Select. A command-started selection
 /// only counts as typed when nothing is being replayed.
-pub(crate) fn may_start_select(c: c_int) {
-    let by_selectmode = p_slm(|value| has_char(value, c));
-    let typed = c == 'o' as c_int || (stuff_empty() && typeahead().maplen() == 0);
+pub(crate) fn may_start_select(c: Key) {
+    let by_selectmode = p_slm(|value| has_char(value, c.code()));
+    let typed = c.is('o') || (stuff_empty() && typeahead().maplen() == 0);
     set_visual_select(typed && by_selectmode);
 }
 
 /// Enter Visual mode of kind `c` at the cursor.
-pub(crate) fn n_start_visual_mode(c: c_int) {
-    set_visual_mode(VisualMode::from_raw(c));
+pub(crate) fn n_start_visual_mode(c: Key) {
+    set_visual_mode(VisualMode::from_raw(c.code()));
     set_visual_active(true);
     VIsual_reselect.set(1);
     // A block selection starting inside a TAB starts at the column the
     // cursor is displayed at, not at the TAB's first column.
-    if c == Ctrl_V && get_ve_flags(Win::current()) & kOptVeFlagBlock != 0 && gchar_cursor() == TAB {
+    if c == Key::CTRL_V
+        && get_ve_flags(Win::current()) & kOptVeFlagBlock != 0
+        && gchar_cursor() == TAB
+    {
         validate_virtcol(Win::current());
         coladvance(Win::current(), Win::current().w_virtcol);
     }
@@ -713,7 +721,7 @@ pub(crate) fn nv_gv_cmd(cmd_arg: &mut CmdArg) {
         set_visual_select(true);
         VIsual_select_reg.set(0);
     } else {
-        may_start_select('c' as c_int);
+        may_start_select(Key::ascii(b'c'));
     }
     setmouse();
     redraw_curbuf_later(UPD_INVERTED);
@@ -780,7 +788,7 @@ pub(crate) fn nv_select(cmd_arg: &mut CmdArg) {
         VIsual_select_reg.set(0);
     } else if VIsual_reselect.get() != 0 {
         // Re-enter through `gv`, which is where the reselection lives.
-        cmd_arg.nchar = 'v' as c_int;
+        cmd_arg.nchar = Key::ascii(b'v');
         cmd_arg.arg = 1;
         nv_g_cmd(cmd_arg);
     }
@@ -791,14 +799,14 @@ pub(crate) fn nv_select(cmd_arg: &mut CmdArg) {
 /// 'matchpairs' is forced to the four bracket pairs for the duration, because
 /// a text object's idea of a block is fixed and must not follow the option.
 pub(crate) fn nv_object(cmd_arg: &mut CmdArg) {
-    let include = cmd_arg.cmdchar != 'i' as c_int;
+    let include = !cmd_arg.cmdchar.is('i');
     let mps_save = Buf::current()
         .b_p_mps
         .replace(XString::from_cstr(c"(:),{:},[:],<:>"));
 
     let op = cmd_arg.op();
     let n = cmd_arg.count1;
-    let found = match u8::try_from(cmd_arg.nchar).unwrap_or(0) {
+    let found = match cmd_arg.nchar.as_byte().unwrap_or(0) {
         b'w' => op.on_copy(|op| current_word(op, n, include, false).is_ok()),
         b'W' => op.on_copy(|op| current_word(op, n, include, true).is_ok()),
         b'b' | b'(' | b')' => block(op, n, include, '(', ')'),
@@ -811,11 +819,11 @@ pub(crate) fn nv_object(cmd_arg: &mut CmdArg) {
             cmd_arg.outcome |= Outcome::NO_ADJ_OP_END;
             op.on_copy(|op| current_tagblock(op, n, include) != 0)
         }
-        b'p' => op.on_copy(|op| current_par(op, n, include, 'p' as c_int) != 0),
+        b'p' => op.on_copy(|op| current_par(op, n, include, c_int::from(b'p')) != 0),
         b's' => op.on_copy(|op| current_sent(op, n, include).is_ok()),
         b'"' | b'\'' | b'`' => {
             let quote = cmd_arg.nchar;
-            op.on_copy(|op| current_quote(op, n, include, quote))
+            op.on_copy(|op| current_quote(op, n, include, quote.code()))
         }
         _ => false,
     };

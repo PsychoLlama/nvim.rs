@@ -12,9 +12,8 @@
 
 use crate::cstr;
 use crate::keycodes::ModMask;
-use crate::keycodes::{Ctrl_H, SpecialKey};
+use crate::keycodes::SpecialKey;
 use crate::ops::Op;
-use crate::strings::has_char;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 
@@ -34,7 +33,7 @@ use crate::getchar::state::mod_mask;
 use crate::mark::setpcmark;
 use crate::mbyte::{cluster_len, mb_adjust_cursor};
 use crate::normal::{
-    CAR, TAB, adjust_for_sel, clear_op_beep, kMTCharWise, kMTLineWise, may_fold_open, nv_page,
+    TAB, adjust_for_sel, clear_op_beep, kMTCharWise, kMTLineWise, may_fold_open, nv_page,
     unadjust_for_sel, visual_active, visual_mode,
 };
 use crate::option::vars::{P_SEL, p_sel, p_ww};
@@ -205,7 +204,7 @@ pub(crate) fn nv_scroll(cmd_arg: &mut CmdArg) {
     let wp = win;
     op.motion_type = kMTLineWise;
     setpcmark();
-    if cmdchar == 'L' as c_int {
+    if cmdchar.is('L') {
         validate_botline_win(wp);
         win.w_cursor.lnum = win.w_botline - 1;
         if LineNr::new(count1) > win.w_cursor.lnum {
@@ -228,7 +227,7 @@ pub(crate) fn nv_scroll(cmd_arg: &mut CmdArg) {
         }
     } else {
         let mut n;
-        if cmdchar == 'M' as c_int {
+        if cmdchar.is('M') {
             // Walk down counting screen rows until half the window's are
             // used up. Filler lines above the top line count against it.
             let mut used = -(win_get_fill(wp, win.w_topline) - win.w_topfill);
@@ -298,18 +297,18 @@ pub(crate) fn nv_right(cmd_arg: &mut CmdArg) {
     op.inclusive = false;
     // With an inclusive selection the cursor may sit one past the last
     // character; 'virtualedit' handles that itself.
-    let sel = p_sel(|value| c_int::from(cstr::first(value)));
-    let past_line = visual_active() && sel != 'o' as c_int && !virtual_active(win);
+    let sel = p_sel(cstr::first);
+    let past_line = visual_active() && sel != b'o' && !virtual_active(win);
 
     // Which 'whichwrap' flag lets this key wrap to the next line.
-    let wrap_flag = if cmdchar == ' ' as c_int {
-        's' as c_int
-    } else if cmdchar == 'l' as c_int {
-        'l' as c_int
-    } else if cmdchar == SpecialKey::Right.code() {
-        '>' as c_int
+    let wrap_flag = if cmdchar.is(' ') {
+        b's'
+    } else if cmdchar.is('l') {
+        b'l'
+    } else if cmdchar == SpecialKey::Right {
+        b'>'
     } else {
-        NUL
+        0
     };
 
     let mut n = count1;
@@ -320,8 +319,8 @@ pub(crate) fn nv_right(cmd_arg: &mut CmdArg) {
             oneright().is_err()
         };
         if at_end {
-            if wrap_flag != NUL
-                && p_ww(|value| has_char(value, wrap_flag))
+            if wrap_flag != 0
+                && p_ww(|value| value.to_bytes().contains(&wrap_flag))
                 && win.w_cursor.lnum < Buf::current().b_ml.ml_line_count
             {
                 // A pending exclusive operator eats the line break by
@@ -382,21 +381,21 @@ pub(crate) fn nv_left(cmd_arg: &mut CmdArg) {
     cmd_arg.op().inclusive = false;
 
     // Which 'whichwrap' flag lets this key wrap to the previous line.
-    let wrap_flag = if cmd_arg.cmdchar == SpecialKey::Bs.code() || cmd_arg.cmdchar == Ctrl_H {
-        'b' as c_int
-    } else if cmd_arg.cmdchar == 'h' as c_int {
-        'h' as c_int
-    } else if cmd_arg.cmdchar == SpecialKey::Left.code() {
-        '<' as c_int
+    let wrap_flag = if cmd_arg.cmdchar == SpecialKey::Bs || cmd_arg.cmdchar == Key::CTRL_H {
+        b'b'
+    } else if cmd_arg.cmdchar.is('h') {
+        b'h'
+    } else if cmd_arg.cmdchar == SpecialKey::Left {
+        b'<'
     } else {
-        NUL
+        0
     };
 
     let mut n = cmd_arg.count1;
     while n > 0 {
         if oneleft().is_err() {
-            if wrap_flag != NUL
-                && p_ww(|value| has_char(value, wrap_flag))
+            if wrap_flag != 0
+                && p_ww(|value| value.to_bytes().contains(&wrap_flag))
                 && win.w_cursor.lnum > LineNr::ONE
             {
                 win.w_cursor.lnum -= 1;
@@ -454,13 +453,13 @@ pub(crate) fn nv_down(cmd_arg: &mut CmdArg) {
     }
     // In three kinds of window `<CR>` means "act on this line" rather
     // than "move down".
-    if cmd_arg.cmdchar == CAR {
+    if cmd_arg.cmdchar == Key::CAR {
         if buf_is_quickfix(current_buf()) {
             qf_view_result(false);
             return;
         }
         if cmdwin_type.get() != 0 {
-            cmdwin_result.set(CAR);
+            cmdwin_result.set(Key::CAR.code());
             return;
         }
         if buf_is_prompt(current_buf())
@@ -528,9 +527,9 @@ pub(crate) fn nv_csearch(cmd_arg: &mut CmdArg) {
         cursor_dec = true;
     }
     // `t` and `T` stop *before* the character.
-    let t_cmd = cmd_arg.cmdchar == 't' as c_int || cmd_arg.cmdchar == 'T' as c_int;
+    let t_cmd = cmd_arg.cmdchar.is('t') || cmd_arg.cmdchar.is('T');
     cmd_arg.op().motion_type = kMTCharWise;
-    if cmd_arg.nchar < 0 || searchc(cmd_arg, t_cmd).is_err() {
+    if cmd_arg.nchar.is_special() || searchc(cmd_arg, t_cmd).is_err() {
         clear_op_beep(cmd_arg.op());
         if cursor_dec {
             adjust_for_sel(cmd_arg);
@@ -674,7 +673,7 @@ pub(crate) fn nv_bck_word(cmd_arg: &mut CmdArg) {
 /// `w`, `W`, `e` and `E`: forward a word, or to a word's end.
 pub(crate) fn nv_wordcmd(cmd_arg: &mut CmdArg) {
     let startpos = Win::current().w_cursor;
-    let mut word_end = cmd_arg.cmdchar == 'e' as c_int || cmd_arg.cmdchar == 'E' as c_int;
+    let mut word_end = cmd_arg.cmdchar.is('e') || cmd_arg.cmdchar.is('E');
     cmd_arg.op().inclusive = word_end;
 
     // `cw` on a non-blank is `ce`: it changes the word, not up to the next

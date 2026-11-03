@@ -32,15 +32,15 @@ use crate::getchar::{
 };
 use crate::guard::{Allow, Keys, Suppress};
 use crate::keycodes::ModMask;
-use crate::keycodes::{Ctrl_BSL, Ctrl_G, Ctrl_K, Ctrl_N, Ctrl_W, SpecialKey, simplify_mod_mask};
+use crate::keycodes::{SpecialKey, simplify_mod_mask};
 use crate::mapping::langmap_adjust_mb;
 use crate::mark::checkpcmark;
 use crate::mbyte::{encode_char, iscomposing, utf_char2len, utf8len_tab};
 use crate::message::state::{msg_col, msg_didout, msg_nowait};
 use crate::normal::{
-    B_IMODE_LMAP, CAR, ESC, GRAPHEME_STATE_INIT, NL, NV_CMDS, NV_CMDS_SIZE, NormalState, NvFlags,
-    add_to_showcmd, check_text_or_curbuf_locked, clear_showcmd, del_from_showcmd,
-    do_check_scrollbind, normal_handle_special_visual_command, normal_need_additional_char,
+    B_IMODE_LMAP, GRAPHEME_STATE_INIT, NV_CMDS, NV_CMDS_SIZE, NormalState, NvFlags, add_to_showcmd,
+    check_text_or_curbuf_locked, clear_showcmd, del_from_showcmd, do_check_scrollbind,
+    normal_handle_special_visual_command, normal_need_additional_char,
     normal_need_redraw_mode_message, normal_redraw_mode_message, nv_cmds, set_vcount_ca,
     set_visual_select, start_selection, visual_active, visual_select,
 };
@@ -100,7 +100,8 @@ const fn sorted_nv_cmds() -> ([int16_t; NV_CMDS_SIZE], c_int) {
     while i < NV_CMDS_SIZE {
         let mut j = i;
         while j > 0
-            && NV_CMDS[idx[j - 1] as usize].cmd_char.abs() > NV_CMDS[idx[j] as usize].cmd_char.abs()
+            && NV_CMDS[idx[j - 1] as usize].cmd_char.code().abs()
+                > NV_CMDS[idx[j] as usize].cmd_char.code().abs()
         {
             let swap = idx[j - 1];
             idx[j - 1] = idx[j];
@@ -111,7 +112,7 @@ const fn sorted_nv_cmds() -> ([int16_t; NV_CMDS_SIZE], c_int) {
     }
     let mut linear = 0;
     while linear < NV_CMDS_SIZE as c_int
-        && linear == NV_CMDS[idx[linear as usize] as usize].cmd_char
+        && linear == NV_CMDS[idx[linear as usize] as usize].cmd_char.code()
     {
         linear += 1;
     }
@@ -130,42 +131,44 @@ const _: () = {
     let mut i = 1;
     while i < NV_CMDS_SIZE {
         assert!(
-            NV_CMDS[NV_CMD_IDX[i - 1] as usize].cmd_char.abs()
-                < NV_CMDS[NV_CMD_IDX[i] as usize].cmd_char.abs(),
+            NV_CMDS[NV_CMD_IDX[i - 1] as usize].cmd_char.code().abs()
+                < NV_CMDS[NV_CMD_IDX[i] as usize].cmd_char.code().abs(),
             "two nv_cmds rows share a command character"
         );
         i += 1;
     }
 };
 
-/// The row of `nv_cmds` that answers to `cmdchar`, or -1.
-pub(crate) fn find_command(cmdchar: c_int) -> c_int {
-    if cmdchar >= 0x100 {
-        return -1;
+/// The row of `nv_cmds` that answers to `cmdchar`, if there is one.
+pub(crate) fn find_command(cmdchar: Key) -> Option<usize> {
+    let code = cmdchar.code();
+    if code >= 0x100 {
+        return None;
     }
     // A special key is stored negative and searched for by magnitude.
-    let cmdchar = cmdchar.abs();
+    let code = code.abs();
     const _: () = assert!(NV_MAX_LINEAR < NV_CMDS_SIZE as c_int);
 
-    {
-        if cmdchar <= NV_MAX_LINEAR {
-            return NV_CMD_IDX[cmdchar as usize] as c_int;
-        }
-        let mut bot = NV_MAX_LINEAR + 1;
-        let mut top = NV_CMDS_SIZE as c_int - 1;
-        while bot <= top {
-            let i = (top + bot) / 2;
-            let c = NV_CMDS[NV_CMD_IDX[i as usize] as usize].cmd_char.abs();
-            if cmdchar == c {
-                return NV_CMD_IDX[i as usize] as c_int;
-            } else if cmdchar > c {
-                bot = i + 1;
-            } else {
-                top = i - 1;
-            }
-        }
-        -1
+    if code <= NV_MAX_LINEAR {
+        return Some(NV_CMD_IDX[code as usize] as usize);
     }
+    let mut bot = NV_MAX_LINEAR + 1;
+    let mut top = NV_CMDS_SIZE as c_int - 1;
+    while bot <= top {
+        let i = (top + bot) / 2;
+        let c = NV_CMDS[NV_CMD_IDX[i as usize] as usize]
+            .cmd_char
+            .code()
+            .abs();
+        if code == c {
+            return Some(NV_CMD_IDX[i as usize] as usize);
+        } else if code > c {
+            bot = i + 1;
+        } else {
+            top = i - 1;
+        }
+    }
+    None
 }
 
 /// Whether a key just read should be put through 'langmap'.
@@ -188,12 +191,11 @@ fn langmap_wanted(condition: bool) -> bool {
 /// Translate one key through 'langmap', if this key and this moment call for
 /// it.
 #[inline(always)]
-pub(crate) fn langmap_adjust(c: &mut c_int, condition: bool) {
-    if *c >= 0 && langmap_wanted(condition) {
-        *c = if *c < 256 {
-            langmap_mapchar.with(|map| map[*c as usize] as c_int)
-        } else {
-            langmap_adjust_mb(Key::from_code(*c)).code()
+pub(crate) fn langmap_adjust(c: &mut Key, condition: bool) {
+    if !c.is_special() && langmap_wanted(condition) {
+        *c = match c.as_byte() {
+            Some(b) => Key::byte(langmap_mapchar.with(|map| map[usize::from(b)])),
+            None => langmap_adjust_mb(*c),
         };
     }
 }
@@ -220,17 +222,19 @@ enum Slot {
 /// 'langmap'; `replace` puts the editor in Replace mode while waiting, so the
 /// cursor shape says what is about to happen.
 fn additional_char_slot(ns: &mut NormalState) -> (Slot, bool, bool) {
-    if ns.ca.cmdchar != 'g' as c_int {
-        return (Slot::NChar, false, ns.ca.cmdchar == 'r' as c_int);
+    if !ns.ca.cmdchar.is('g') {
+        return (Slot::NChar, false, ns.ca.cmdchar.is('r'));
     }
     // `g` reads its own second character first, and only some of them
     // take a third.
-    ns.ca.nchar = plain_vgetc().code();
+    ns.ca.nchar = plain_vgetc();
     langmap_adjust(&mut ns.ca.nchar, true);
     ns.need_flushbuf |= add_to_showcmd(ns.ca.nchar);
     match ns.ca.nchar {
-        c if c == 'r' as c_int => (Slot::Extra, false, true),
-        c if c == '\'' as c_int || c == '`' as c_int || c == Ctrl_BSL => (Slot::Extra, true, false),
+        c if c.is('r') => (Slot::Extra, false, true),
+        c if c == Key::ascii(b'\'') || c.is('`') || c == Key::CTRL_BSL => {
+            (Slot::Extra, true, false)
+        }
         _ => (Slot::None, false, false),
     }
 }
@@ -246,22 +250,22 @@ fn resolve_ctrl_backslash(ns: &mut NormalState) {
         p_tm() as c_int
     };
     loop {
-        ns.c = vpeekc().code();
-        if !(ns.c <= 0 && towait > 0) {
+        ns.c = vpeekc();
+        if ns.c.is_char() || towait <= 0 {
             break;
         }
         do_sleep(towait.min(50) as int64_t, false);
         towait -= 50;
     }
-    if ns.c > 0 {
-        ns.c = plain_vgetc().code();
-        if ns.c != Ctrl_N && ns.c != Ctrl_G {
-            vungetc(Key::from_code(ns.c));
+    if ns.c.is_char() {
+        ns.c = plain_vgetc();
+        if ns.c != Key::CTRL_N && ns.c != Key::CTRL_G {
+            vungetc(ns.c);
         } else {
-            ns.ca.cmdchar = Ctrl_BSL;
+            ns.ca.cmdchar = Key::CTRL_BSL;
             ns.ca.nchar = ns.c;
             ns.idx = find_command(ns.ca.cmdchar);
-            debug_assert!(ns.idx >= 0);
+            debug_assert!(ns.idx.is_some());
         }
     }
 }
@@ -273,26 +277,32 @@ fn resolve_ctrl_backslash(ns: &mut NormalState) {
 fn read_composing_tail(ns: &mut NormalState) {
     let mapped = Allow::mapping();
     let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
-    let mut prev_code = ns.ca.nchar;
+    let mut prev_code = ns.ca.nchar.code();
     loop {
-        ns.c = vpeekc().code();
-        if !(ns.c > 0 && (ns.c >= 0x100 || utf8len_tab[vpeekc().code() as usize] as c_int > 1)) {
+        ns.c = vpeekc();
+        // Only a character that is not a lone byte can be composing.
+        let multibyte = ns.c.code() >= 0x100
+            || ns
+                .c
+                .as_byte()
+                .is_some_and(|b| b != 0 && utf8len_tab[usize::from(b)] > 1);
+        if !multibyte {
             break;
         }
-        ns.c = plain_vgetc().code();
-        if !iscomposing(prev_code, ns.c, Some(&mut state)) {
-            vungetc(Key::from_code(ns.c));
+        ns.c = plain_vgetc();
+        if !iscomposing(prev_code, ns.c.code(), Some(&mut state)) {
+            vungetc(ns.c);
             break;
         }
         // The base character is only encoded once a tail turns up.
         if ns.ca.nchar_len == 0 {
-            ns.ca.nchar_len = encode_char(ns.ca.nchar, &mut ns.ca.nchar_composing) as c_int;
+            ns.ca.nchar_len = encode_char(ns.ca.nchar.code(), &mut ns.ca.nchar_composing) as c_int;
         }
-        if ns.ca.nchar_len + utf_char2len(ns.c) < size_of::<[u8; 32]>() as c_int {
+        if ns.ca.nchar_len + utf_char2len(ns.c.code()) < size_of::<[u8; 32]>() as c_int {
             let at = ns.ca.nchar_len as usize;
-            ns.ca.nchar_len += encode_char(ns.c, &mut ns.ca.nchar_composing[at..]) as c_int;
+            ns.ca.nchar_len += encode_char(ns.c.code(), &mut ns.ca.nchar_composing[at..]) as c_int;
         }
-        prev_code = ns.c;
+        prev_code = ns.c.code();
     }
     let at = ns.ca.nchar_len as usize;
     ns.ca.nchar_composing[at] = NUL as u8;
@@ -308,7 +318,7 @@ pub(crate) fn normal_get_additional_char(ns: &mut NormalState) {
     did_cursorhold.set(true);
 
     let (slot, lit, repl) = additional_char_slot(ns);
-    let lang = repl || nv_cmds[ns.idx as usize].cmd_flags.has(NvFlags::LANG);
+    let lang = repl || ns.row().cmd_flags.has(NvFlags::LANG);
 
     if slot != Slot::None {
         if repl {
@@ -322,20 +332,20 @@ pub(crate) fn normal_get_additional_char(ns: &mut NormalState) {
         if langmap_active {
             State.set(if repl { MODE_LREPLACE } else { MODE_LANGMAP });
         }
-        let mut cp = plain_vgetc().code();
+        let mut cp = plain_vgetc();
         drop(mapped);
         State.set(MODE_NORMAL_BUSY);
         ns.need_flushbuf |= add_to_showcmd(cp);
 
         if !lit {
             // CTRL-K starts a digraph, unless 'cpoptions' says otherwise.
-            if cp == Ctrl_K
-                && (nv_cmds[ns.idx as usize].cmd_flags.has(NvFlags::LANG) || slot == Slot::Extra)
+            if cp == Key::CTRL_K
+                && (ns.row().cmd_flags.has(NvFlags::LANG) || slot == Slot::Extra)
                 && !cpo_has(CpoFlag::DIGRAPH)
             {
-                ns.c = get_digraph(false).code();
-                if ns.c > 0 {
-                    cp = Key::from_code(ns.c).code();
+                ns.c = get_digraph(false);
+                if ns.c.is_char() {
+                    cp = ns.c;
                     // Take the CTRL-K and its two characters back out of
                     // the echoed command before showing the result.
                     del_from_showcmd(3);
@@ -352,19 +362,17 @@ pub(crate) fn normal_get_additional_char(ns: &mut NormalState) {
         }
 
         if slot == Slot::Extra
-            && ns.ca.nchar == Ctrl_BSL
-            && (ns.ca.extra_char == Ctrl_N || ns.ca.extra_char == Ctrl_G)
+            && ns.ca.nchar == Key::CTRL_BSL
+            && (ns.ca.extra_char == Key::CTRL_N || ns.ca.extra_char == Key::CTRL_G)
         {
             // `g CTRL-\ CTRL-N` is really `CTRL-\ CTRL-N`.
-            ns.ca.cmdchar = Ctrl_BSL;
+            ns.ca.cmdchar = Key::CTRL_BSL;
             ns.ca.nchar = ns.ca.extra_char;
             ns.idx = find_command(ns.ca.cmdchar);
-        } else if (ns.ca.nchar == 'n' as c_int || ns.ca.nchar == 'N' as c_int)
-            && ns.ca.cmdchar == 'g' as c_int
-        {
+        } else if (ns.ca.nchar.is('n') || ns.ca.nchar.is('N')) && ns.ca.cmdchar.is('g') {
             // `gn`/`gN` take the operator from the character after them.
-            ns.ca.op().op_type = get_op_type(cp, NUL);
-        } else if cp == Ctrl_BSL {
+            ns.ca.op().op_type = get_op_type(cp.code(), NUL);
+        } else if cp == Key::CTRL_BSL {
             resolve_ctrl_backslash(ns);
         }
 
@@ -376,19 +384,20 @@ pub(crate) fn normal_get_additional_char(ns: &mut NormalState) {
 
 /// Mirror a horizontal command for a right-to-left window.
 pub(crate) fn normal_invert_horizontal(ns: &mut NormalState) {
-    ns.ca.cmdchar = match SpecialKey::try_from(ns.ca.cmdchar) {
-        Ok(SpecialKey::Right) => SpecialKey::Left.code(),
-        Ok(SpecialKey::SRight) => SpecialKey::SLeft.code(),
-        Ok(SpecialKey::CRight) => SpecialKey::CLeft.code(),
-        Ok(SpecialKey::Left) => SpecialKey::Right.code(),
-        Ok(SpecialKey::SLeft) => SpecialKey::SRight.code(),
-        Ok(SpecialKey::CLeft) => SpecialKey::CRight.code(),
-        _ => match ns.ca.cmdchar {
-            c if c == 'l' as c_int => 'h' as c_int,
-            c if c == 'h' as c_int => 'l' as c_int,
-            c if c == '>' as c_int => '<' as c_int,
-            c if c == '<' as c_int => '>' as c_int,
-            other => other,
+    let c = ns.ca.cmdchar;
+    ns.ca.cmdchar = match c.special() {
+        Some(SpecialKey::Right) => Key::from(SpecialKey::Left),
+        Some(SpecialKey::SRight) => Key::from(SpecialKey::SLeft),
+        Some(SpecialKey::CRight) => Key::from(SpecialKey::CLeft),
+        Some(SpecialKey::Left) => Key::from(SpecialKey::Right),
+        Some(SpecialKey::SLeft) => Key::from(SpecialKey::SRight),
+        Some(SpecialKey::CLeft) => Key::from(SpecialKey::CRight),
+        _ => match c.as_byte() {
+            Some(b'l') => Key::ascii(b'h'),
+            Some(b'h') => Key::ascii(b'l'),
+            Some(b'>') => Key::ascii(b'<'),
+            Some(b'<') => Key::ascii(b'>'),
+            _ => c,
         },
     };
     ns.idx = find_command(ns.ca.cmdchar);
@@ -403,13 +412,11 @@ pub(crate) fn normal_get_command_count(ns: &mut NormalState) -> bool {
     if visual_active() && visual_select() {
         return false;
     }
-    while (ns.c >= '1' as c_int && ns.c <= '9' as c_int)
+    while ns.c.as_byte().is_some_and(|b| (b'1'..=b'9').contains(&b))
         || (ns.ca.count0 != 0
-            && (ns.c == SpecialKey::Del.code()
-                || ns.c == SpecialKey::Kdel.code()
-                || ns.c == '0' as c_int))
+            && (ns.c == SpecialKey::Del || ns.c == SpecialKey::Kdel || ns.c.is('0')))
     {
-        if ns.c == SpecialKey::Del.code() || ns.c == SpecialKey::Kdel.code() {
+        if ns.c == SpecialKey::Del || ns.c == SpecialKey::Kdel {
             ns.ca.count0 /= 10;
             // Four columns: <Del> is echoed as its key name.
             del_from_showcmd(4);
@@ -418,7 +425,7 @@ pub(crate) fn normal_get_command_count(ns: &mut NormalState) -> bool {
             // count is ever allowed to be.
             ns.ca.count0 = 999999999;
         } else {
-            ns.ca.count0 = ns.ca.count0 * 10 + (ns.c - '0' as c_int);
+            ns.ca.count0 = ns.ca.count0 * 10 + c_int::from(ns.c.digit().unwrap_or(0));
         }
         if ns.toplevel && readbuf1_empty() {
             set_vcount_ca(&ns.ca, ns.set_prevcount);
@@ -428,7 +435,7 @@ pub(crate) fn normal_get_command_count(ns: &mut NormalState) -> bool {
         // A '0' here is a count digit, not the "go to column 0" command,
         // so it must not be mapped.
         let count_digit = Suppress::zero_mapping();
-        ns.c = plain_vgetc().code();
+        ns.c = plain_vgetc();
         langmap_adjust(&mut ns.c, true);
         drop(count_digit);
         drop(raw_key);
@@ -437,12 +444,12 @@ pub(crate) fn normal_get_command_count(ns: &mut NormalState) -> bool {
 
     // CTRL-W takes the count read so far as its own, then a second count
     // for the window command after it.
-    if ns.c == Ctrl_W && !ns.ctrl_w && ns.oa.op_type == OpType::Nop {
+    if ns.c == Key::CTRL_W && !ns.ctrl_w && ns.oa.op_type == OpType::Nop {
         ns.ctrl_w = true;
         ns.ca.opcount = ns.ca.count0;
         ns.ca.count0 = 0;
         let raw_key = Keys::unmapped_with_codes();
-        ns.c = plain_vgetc().code();
+        ns.c = plain_vgetc();
         langmap_adjust(&mut ns.c, true);
         drop(raw_key);
         ns.need_flushbuf |= add_to_showcmd(ns.c);
@@ -459,7 +466,9 @@ pub(crate) fn normal_finish_command(ns: &mut NormalState) {
         // releases the register it was given.
         if !finish_op.get()
             && ns.oa.op_type == OpType::Nop
-            && (ns.idx < 0 || !nv_cmds[ns.idx as usize].cmd_flags.has(NvFlags::KEEPREG))
+            && ns
+                .idx
+                .is_none_or(|i| !nv_cmds[i].cmd_flags.has(NvFlags::KEEPREG))
         {
             clear_op(ns.op());
             set_reg_var(get_default_register_name());
@@ -467,9 +476,7 @@ pub(crate) fn normal_finish_command(ns: &mut NormalState) {
         if ns.old_mapped_len > 0 {
             ns.old_mapped_len = typeahead().maplen();
         }
-        if ns.ca.cmdchar != SpecialKey::Ignore.code()
-            && ns.ca.cmdchar != SpecialKey::Mousemove.code()
-        {
+        if ns.ca.cmdchar != SpecialKey::Ignore && ns.ca.cmdchar != SpecialKey::Mousemove {
             did_visual_op =
                 visual_active() && ns.oa.op_type != OpType::Nop && ns.oa.op_type != OpType::Colon;
             let old_col = ns.old_col;
@@ -491,16 +498,10 @@ pub(crate) fn normal_finish_command(ns: &mut NormalState) {
     }
     // The cursor shape says whether an operator is pending, and `r`/`gr`
     // change it while they wait.
-    if prev_finish_op
-        || ns.ca.cmdchar == 'r' as c_int
-        || (ns.ca.cmdchar == 'g' as c_int && ns.ca.nchar == 'r' as c_int)
-    {
+    if prev_finish_op || ns.ca.cmdchar.is('r') || (ns.ca.cmdchar.is('g') && ns.ca.nchar.is('r')) {
         ui_cursor_shape();
     }
-    if ns.oa.op_type == OpType::Nop
-        && ns.oa.regname == 0
-        && ns.ca.cmdchar != SpecialKey::Event.code()
-    {
+    if ns.oa.op_type == OpType::Nop && ns.oa.regname == 0 && ns.ca.cmdchar != SpecialKey::Event {
         clear_showcmd();
     }
     checkpcmark();
@@ -544,7 +545,7 @@ pub(crate) fn normal_finish_command(ns: &mut NormalState) {
 }
 
 /// One normal-mode command, from its first key to the end of its effects.
-pub(crate) fn normal_execute(ns: &mut NormalState, key: c_int) -> c_int {
+pub(crate) fn normal_execute(ns: &mut NormalState, key: Key) -> c_int {
     ns.command_finished = false;
     ns.ctrl_w = false;
     ns.old_col = Win::current().w_curswant.get();
@@ -559,24 +560,27 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: c_int) -> c_int {
         ns.old_mapped_len = typeahead().maplen();
     }
 
-    if ns.c == NUL {
-        ns.c = SpecialKey::Zero.code();
+    if ns.c.is_nul() {
+        ns.c = Key::from(SpecialKey::Zero);
     }
 
     // In Select mode a printable key replaces the selection: the key is
     // put back for insert mode to read and the command becomes a change.
     if visual_active()
         && visual_select()
-        && (vim_isprintc(ns.c) || ns.c == NL || ns.c == CAR || ns.c == SpecialKey::Kenter.code())
+        && (vim_isprintc(ns.c.code())
+            || ns.c == Key::NL
+            || ns.c == Key::CAR
+            || ns.c == SpecialKey::Kenter)
     {
         let len = ins_char_typebuf(vgetc_char.get(), vgetc_mod_mask.get(), true);
         if KeyTyped.get() {
             ungetchars(len);
         }
         ns.c = if !restart_edit.get().is_nul() {
-            'd' as c_int
+            Key::ascii(b'd')
         } else {
-            'c' as c_int
+            Key::ascii(b'c')
         };
         msg_nowait.set(true);
         ns.old_mapped_len = 0;
@@ -585,7 +589,7 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: c_int) -> c_int {
     ns.need_flushbuf = add_to_showcmd(ns.c);
     while normal_get_command_count(ns) {}
 
-    if ns.c == SpecialKey::Event.code() {
+    if ns.c == SpecialKey::Event {
         // An event is not a command: the count it interrupted is stashed
         // for the real command that follows.
         ns.oa.prev_opcount = ns.ca.opcount;
@@ -611,17 +615,16 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: c_int) -> c_int {
 
     if ns.ctrl_w {
         ns.ca.nchar = ns.c;
-        ns.ca.cmdchar = Ctrl_W;
+        ns.ca.cmdchar = Key::CTRL_W;
     } else {
         ns.ca.cmdchar = ns.c;
     }
     ns.idx = find_command(ns.ca.cmdchar);
 
-    if ns.idx < 0 {
+    if ns.idx.is_none() {
         clear_op_beep(ns.op());
         ns.command_finished = true;
-    } else if (nv_cmds[ns.idx as usize].cmd_flags.has(NvFlags::NCW)
-        && check_text_or_curbuf_locked(Some(ns.op())))
+    } else if (ns.row().cmd_flags.has(NvFlags::NCW) && check_text_or_curbuf_locked(Some(ns.op())))
         || (visual_active() && normal_handle_special_visual_command(ns))
     {
         ns.command_finished = true;
@@ -629,7 +632,7 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: c_int) -> c_int {
         if Win::current().w_onebuf_opt.wo_rl != 0
             && KeyTyped.get()
             && !KeyStuffed.get()
-            && nv_cmds[ns.idx as usize].cmd_flags.has(NvFlags::RL)
+            && ns.row().cmd_flags.has(NvFlags::RL)
         {
             normal_invert_horizontal(ns);
         }
@@ -639,16 +642,16 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: c_int) -> c_int {
         if ns.need_flushbuf {
             ui_flush();
         }
-        if ns.ca.cmdchar != SpecialKey::Ignore.code() && ns.ca.cmdchar != SpecialKey::Event.code() {
+        if ns.ca.cmdchar != SpecialKey::Ignore && ns.ca.cmdchar != SpecialKey::Event {
             did_cursorhold.set(false);
         }
         State.set(MODE_NORMAL);
 
-        if ns.ca.nchar == ESC || ns.ca.extra_char == ESC {
+        if ns.ca.nchar == Key::ESC || ns.ca.extra_char == Key::ESC {
             clear_op(ns.op());
             ns.command_finished = true;
         } else {
-            if ns.ca.cmdchar != SpecialKey::Ignore.code() {
+            if ns.ca.cmdchar != SpecialKey::Ignore {
                 msg_didout.set(false);
                 msg_col.set(0);
             }
@@ -657,20 +660,20 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: c_int) -> c_int {
             // 'keymodel' startsel: a shifted special key starts a
             // selection and then acts as its unshifted self.
             if !visual_active() && km_startsel.get() {
-                let flags = nv_cmds[ns.idx as usize].cmd_flags;
+                let flags = ns.row().cmd_flags;
                 if flags.has(NvFlags::SS) {
                     start_selection();
                     unshift_special(&mut ns.ca);
                     ns.idx = find_command(ns.ca.cmdchar);
-                    debug_assert!(ns.idx >= 0);
+                    debug_assert!(ns.idx.is_some());
                 } else if flags.has(NvFlags::SSS) && mod_mask.get().has(ModMask::SHIFT) {
                     start_selection();
                     mod_mask.set(mod_mask.get().without(ModMask::SHIFT));
                 }
             }
 
-            ns.ca.arg = nv_cmds[ns.idx as usize].cmd_arg as c_int;
-            (nv_cmds[ns.idx as usize].cmd_func)(&mut ns.ca);
+            ns.ca.arg = ns.row().cmd_arg as c_int;
+            (ns.row().cmd_func)(&mut ns.ca);
         }
     }
     normal_finish_command(ns);
@@ -682,17 +685,17 @@ pub(crate) fn prep_redo_cmd(cmd_arg: &mut CmdArg) {
     prep_redo(
         cmd_arg.op().regname,
         cmd_arg.count0,
-        NUL,
+        Key::NUL,
         cmd_arg.cmdchar,
-        NUL,
-        NUL,
-        NUL,
+        Key::NUL,
+        Key::NUL,
+        Key::NUL,
     );
     // A character with a combining tail is replayed as its whole encoding.
     if cmd_arg.nchar_len > 0 {
         append_to_redobuff(cstr::until_nul(&cmd_arg.nchar_composing));
     } else {
-        append_to_redobuff_char(Key::from_code(cmd_arg.nchar));
+        append_to_redobuff_char(cmd_arg.nchar);
     }
 }
 
@@ -701,11 +704,11 @@ pub(crate) fn prep_redo_cmd(cmd_arg: &mut CmdArg) {
 pub(crate) fn prep_redo(
     regname: c_int,
     num: c_int,
-    cmd1: c_int,
-    cmd2: c_int,
-    cmd3: c_int,
-    cmd4: c_int,
-    cmd5: c_int,
+    cmd1: Key,
+    cmd2: Key,
+    cmd3: Key,
+    cmd4: Key,
+    cmd5: Key,
 ) {
     prep_redo_num2(regname, num, cmd1, cmd2, 0, cmd3, cmd4, cmd5);
 }
@@ -717,12 +720,12 @@ pub(crate) fn prep_redo(
 pub(crate) fn prep_redo_num2(
     regname: c_int,
     num1: c_int,
-    cmd1: c_int,
-    cmd2: c_int,
+    cmd1: Key,
+    cmd2: Key,
     num2: c_int,
-    cmd3: c_int,
-    cmd4: c_int,
-    cmd5: c_int,
+    cmd3: Key,
+    cmd4: Key,
+    cmd5: Key,
 ) {
     reset_redobuff();
     if regname != 0 {
@@ -733,16 +736,16 @@ pub(crate) fn prep_redo_num2(
         append_to_redobuff_number(num1);
     }
     for cmd in [cmd1, cmd2] {
-        if cmd != NUL {
-            append_to_redobuff_char(Key::from_code(cmd));
+        if !cmd.is_nul() {
+            append_to_redobuff_char(cmd);
         }
     }
     if num2 != 0 {
         append_to_redobuff_number(num2);
     }
     for cmd in [cmd3, cmd4, cmd5] {
-        if cmd != NUL {
-            append_to_redobuff_char(Key::from_code(cmd));
+        if !cmd.is_nul() {
+            append_to_redobuff_char(cmd);
         }
     }
 }
@@ -792,9 +795,9 @@ pub(crate) fn clear_op_beep(op: Op) {
 /// Read one more key for a command that takes several, with mappings and
 /// 'langmap' handled the way a command character wants them, and show it in
 /// the 'showcmd' area.
-pub(crate) fn read_command_char() -> c_int {
+pub(crate) fn read_command_char() -> Key {
     let raw_key = Keys::unmapped_with_codes();
-    let mut c = plain_vgetc().code();
+    let mut c = plain_vgetc();
     langmap_adjust(&mut c, true);
     drop(raw_key);
     add_to_showcmd(c);
@@ -812,16 +815,16 @@ pub(crate) fn may_fold_open(cmd_arg: &mut CmdArg, fdo_flag: c_uint) {
 
 /// Turn a shifted special key into its unshifted self.
 pub(crate) fn unshift_special(cmd_arg: &mut CmdArg) {
-    cmd_arg.cmdchar = match SpecialKey::try_from(cmd_arg.cmdchar) {
-        Ok(SpecialKey::SRight) => SpecialKey::Right.code(),
-        Ok(SpecialKey::SLeft) => SpecialKey::Left.code(),
-        Ok(SpecialKey::SUp) => SpecialKey::Up.code(),
-        Ok(SpecialKey::SDown) => SpecialKey::Down.code(),
-        Ok(SpecialKey::SHome) => SpecialKey::Home.code(),
-        Ok(SpecialKey::SEnd) => SpecialKey::End.code(),
+    let unshifted = match cmd_arg.cmdchar.special() {
+        Some(SpecialKey::SRight) => Key::from(SpecialKey::Right),
+        Some(SpecialKey::SLeft) => Key::from(SpecialKey::Left),
+        Some(SpecialKey::SUp) => Key::from(SpecialKey::Up),
+        Some(SpecialKey::SDown) => Key::from(SpecialKey::Down),
+        Some(SpecialKey::SHome) => Key::from(SpecialKey::Home),
+        Some(SpecialKey::SEnd) => Key::from(SpecialKey::End),
         _ => cmd_arg.cmdchar,
     };
-    cmd_arg.cmdchar = simplify_mod_mask(Key::from_code(cmd_arg.cmdchar)).code();
+    cmd_arg.cmdchar = simplify_mod_mask(unshifted);
 }
 
 /// Make room on the command line for whatever is about to be shown there.

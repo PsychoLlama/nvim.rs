@@ -130,13 +130,13 @@ pub(crate) fn ins_mousescroll(dir: c_int) {
 fn ins_mousescroll_with(cmd_arg: &mut CmdArg, dir: c_int) {
     cmd_arg.arg = dir;
     cmd_arg.cmdchar = match dir {
-        MSCR_UP => SpecialKey::Mouseup.code(),
-        MSCR_DOWN => SpecialKey::Mousedown.code(),
-        MSCR_LEFT => SpecialKey::Mouseleft.code(),
-        MSCR_RIGHT => SpecialKey::Mouseright.code(),
+        MSCR_UP => Key::from(SpecialKey::Mouseup),
+        MSCR_DOWN => Key::from(SpecialKey::Mousedown),
+        MSCR_LEFT => Key::from(SpecialKey::Mouseleft),
+        MSCR_RIGHT => Key::from(SpecialKey::Mouseright),
         _ => {
             siemsg!("Invalid ins_mousescroll() argument: {}", dir);
-            0
+            Key::NUL
         }
     };
 

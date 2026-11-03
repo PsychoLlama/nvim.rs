@@ -68,7 +68,7 @@ static REDO_VISUAL: GlobalCell<RedoVisual> = GlobalCell::new(RedoVisual {
 ///
 /// `:` and `<Cmd>` both arrive here as an operator over the Visual area.
 fn is_ex_cmdchar(cmd_arg: &CmdArg) -> bool {
-    cmd_arg.cmdchar == ':' as c_int || cmd_arg.cmdchar == SpecialKey::Command.code()
+    cmd_arg.cmdchar.is(':') || cmd_arg.cmdchar == SpecialKey::Command
 }
 
 /// Run the operator that a motion (or a Visual selection) has just completed.
@@ -224,8 +224,8 @@ fn record_operator_redo(cmd_arg: &CmdArg, op: Op, redo_yank: bool) {
         && (!visual_active()
             || op.motion_force != 0
             // Also redo Operator-pending Visual mode mappings.
-            || ((is_ex_cmdchar(cmd_arg) || cmd_arg.cmdchar == SpecialKey::Lua.code()) && op.op_type != OpType::Colon))
-        && cmd_arg.cmdchar != 'D' as c_int
+            || ((is_ex_cmdchar(cmd_arg) || cmd_arg.cmdchar == SpecialKey::Lua) && op.op_type != OpType::Colon))
+        && !cmd_arg.cmdchar.is('D')
         && !is_fold_op;
     if !replayable {
         return;
@@ -234,14 +234,14 @@ fn record_operator_redo(cmd_arg: &CmdArg, op: Op, redo_yank: bool) {
     prep_redo(
         op.regname,
         cmd_arg.count0,
-        get_op_char(op.op_type),
-        get_extra_op_char(op.op_type),
-        op.motion_force,
+        Key::from_code(get_op_char(op.op_type)),
+        Key::from_code(get_extra_op_char(op.op_type)),
+        Key::from_code(op.motion_force),
         cmd_arg.cmdchar,
         cmd_arg.nchar,
     );
 
-    if cmd_arg.cmdchar == '/' as c_int || cmd_arg.cmdchar == '?' as c_int {
+    if cmd_arg.cmdchar.is('/') || cmd_arg.cmdchar.is('?') {
         // A search: without 'cpoptions' `r` the pattern goes in too, so
         // that the repeat really is the same command.
         if !cpo_has(CpoFlag::REDO) {
@@ -254,7 +254,7 @@ fn record_operator_redo(cmd_arg: &CmdArg, op: Op, redo_yank: bool) {
         match repeat_cmdline.take() {
             None => reset_redobuff(),
             Some(line) => {
-                if cmd_arg.cmdchar == ':' as c_int {
+                if cmd_arg.cmdchar.is(':') {
                     append_to_redobuff_literally(line.as_cstr().to_bytes());
                 } else {
                     append_to_redobuff_keys(line.as_cstr().to_bytes());
@@ -262,7 +262,7 @@ fn record_operator_redo(cmd_arg: &CmdArg, op: Op, redo_yank: bool) {
                 append_to_redobuff(b"\n");
             }
         }
-    } else if cmd_arg.cmdchar == SpecialKey::Lua.code() {
+    } else if cmd_arg.cmdchar == SpecialKey::Lua {
         append_to_redobuff_number(repeat_luaref.get() as c_int);
         append_to_redobuff(b"\n");
     }
@@ -438,43 +438,41 @@ fn prepare_visual_redo(cmd_arg: &CmdArg, mut op: Op, gui_yank: bool, redo_yank: 
         return;
     }
 
-    if cmd_arg.cmdchar == 'g' as c_int
-        && (cmd_arg.nchar == 'n' as c_int || cmd_arg.nchar == 'N' as c_int)
-    {
+    if cmd_arg.cmdchar.is('g') && (cmd_arg.nchar.is('n') || cmd_arg.nchar.is('N')) {
         // `gn`/`gN` carry their own region, so the whole command repeats.
         prep_redo(
             op.regname,
             cmd_arg.count0,
-            get_op_char(op.op_type),
-            get_extra_op_char(op.op_type),
-            op.motion_force,
+            Key::from_code(get_op_char(op.op_type)),
+            Key::from_code(get_extra_op_char(op.op_type)),
+            Key::from_code(op.motion_force),
             cmd_arg.cmdchar,
             cmd_arg.nchar,
         );
-    } else if !is_ex_cmdchar(cmd_arg) && cmd_arg.cmdchar != SpecialKey::Lua.code() {
-        let opchar = get_op_char(op.op_type);
-        let extra_opchar = get_extra_op_char(op.op_type);
+    } else if !is_ex_cmdchar(cmd_arg) && cmd_arg.cmdchar != SpecialKey::Lua {
+        let opchar = Key::from_code(get_op_char(op.op_type));
+        let extra_opchar = Key::from_code(get_extra_op_char(op.op_type));
         // Only `r` uses `nchar`; for anything else it would be the
         // operator's own second character.
         let mut nchar = if op.op_type == OpType::Replace {
             cmd_arg.nchar
         } else {
-            NUL
+            Key::NUL
         };
         // Undo what `nv_replace` did.
         if nchar == REPLACE_CR_NCHAR {
-            nchar = CAR;
+            nchar = Key::CAR;
         } else if nchar == REPLACE_NL_NCHAR {
-            nchar = NL;
+            nchar = Key::NL;
         }
 
-        if opchar == 'g' as c_int && extra_opchar == '@' as c_int {
+        if opchar.is('g') && extra_opchar.is('@') {
             // `g@` also repeats the count, for 'operatorfunc'.
             prep_redo_num2(
                 op.regname,
                 0,
-                NUL,
-                'v' as c_int,
+                Key::NUL,
+                Key::ascii(b'v'),
                 cmd_arg.count0,
                 opchar,
                 extra_opchar,
@@ -484,8 +482,8 @@ fn prepare_visual_redo(cmd_arg: &CmdArg, mut op: Op, gui_yank: bool, redo_yank: 
             prep_redo(
                 op.regname,
                 0,
-                NUL,
-                'v' as c_int,
+                Key::NUL,
+                Key::ascii(b'v'),
                 opchar,
                 extra_opchar,
                 nchar,
@@ -660,7 +658,7 @@ fn run_operator(
             } else {
                 restore_lbr(lbr_saved != 0);
                 // `zy` yanks without the trailing white space.
-                op.excl_tr_ws = cmd_arg.cmdchar == 'z' as c_int;
+                op.excl_tr_ws = cmd_arg.cmdchar.is('z');
                 // A copy: TextYankPost runs user code.
                 let arg: OpArg = *op;
                 op_yank(&arg, !gui_yank);
@@ -745,7 +743,7 @@ fn run_operator(
                 refuse();
             } else {
                 restore_lbr(lbr_saved != 0);
-                let _ = op.on_copy(|arg| op_replace(arg, cmd_arg.nchar));
+                let _ = op.on_copy(|arg| op_replace(arg, cmd_arg.nchar.code()));
             }
         }
 

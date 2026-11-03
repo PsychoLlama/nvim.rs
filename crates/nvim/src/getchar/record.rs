@@ -27,7 +27,6 @@ use crate::keycodes::ModMask;
 use crate::keycodes::{KE_IGNORE, KS_EXTRA, key_unescape};
 use crate::mbyte::{char_at, unescape_at};
 use crate::types::{Key, MB_MAXBYTES};
-use core::ffi::c_int;
 
 impl Default for GotcharsState {
     fn default() -> Self {
@@ -220,14 +219,14 @@ pub(crate) fn add_byte_to_showcmd(byte: u8) {
     // TODO(zeertzjq): is there a more readable and yet compact
     // representation of modifiers and special keys?
     if !modifiers.is_empty() {
-        add_to_showcmd(c_int::from(K_SPECIAL));
-        add_to_showcmd(c_int::from(KS_MODIFIER));
-        add_to_showcmd(modifiers.bits());
+        add_to_showcmd(Key::byte(K_SPECIAL));
+        add_to_showcmd(Key::byte(KS_MODIFIER));
+        add_to_showcmd(Key::byte(modifiers.byte()));
     }
     if !c.is_nul() {
-        add_to_showcmd(c.code());
+        add_to_showcmd(c);
     }
     for &byte in key {
-        add_to_showcmd(c_int::from(byte));
+        add_to_showcmd(Key::byte(byte));
     }
 }

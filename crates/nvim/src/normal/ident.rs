@@ -31,7 +31,6 @@ use crate::ex_cmds2::autowrite;
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_getln::fnameescape;
 use crate::file_search::grab_file_name;
-use crate::keycodes::Ctrl_RSB;
 use crate::mapping::add_map;
 use crate::mark::setpcmark;
 use crate::mbyte::{cluster_len, head_off};
@@ -39,7 +38,7 @@ use crate::memline::Lines;
 use crate::message::e_noident;
 use crate::message::emsg;
 use crate::normal::{
-    DT_POP, FIND_IDENT, FIND_STRING, HIST_SEARCH, POUND, VSE_NONE, check_clear_op_quit,
+    DT_POP, FIND_IDENT, FIND_STRING, HIST_SEARCH, VSE_NONE, check_clear_op_quit,
     check_text_or_curbuf_locked, clear_op, get_visual_text, normal_search, visual_active,
 };
 use crate::option::magic_isset;
@@ -58,7 +57,7 @@ use core::ffi::{CStr, c_int};
 
 /// Run one of the identifier commands from outside the command loop, with a
 /// command argument built for it. `CTRL-W ]` and friends use this.
-pub(crate) fn do_nv_ident(c1: c_int, c2: c_int) {
+pub(crate) fn do_nv_ident(c1: Key, c2: Key) {
     with_scratch_cmd(|ca| {
         ca.cmdchar = c1;
         ca.nchar = c2;
@@ -133,15 +132,15 @@ fn build_keywordprg_cmd(
 
 /// The characters that have to be backslash-escaped for the command being
 /// built, given what it is.
-fn ident_escapes(cmdchar: c_int, tag_cmd: bool) -> &'static CStr {
-    if cmdchar == '*' as c_int {
+fn ident_escapes(cmdchar: Key, tag_cmd: bool) -> &'static CStr {
+    if cmdchar.is('*') {
         return if magic_isset() {
             c"/.*~[^$\\"
         } else {
             c"/^$\\"
         };
     }
-    if cmdchar == '#' as c_int {
+    if cmdchar.is('#') {
         return if magic_isset() {
             c"/?.*~[^$\\"
         } else {
@@ -192,10 +191,10 @@ fn append_escaped(out: &mut Vec<u8>, text: &[u8], start: usize, mut n: usize, es
 pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
     let (typed, nchar) = (cmd_arg.cmdchar, cmd_arg.nchar);
     // The `g` forms carry the real command in `nchar`.
-    let g_cmd = typed == 'g' as c_int;
+    let g_cmd = typed.is('g');
     let mut cmdchar = if g_cmd { nchar } else { typed };
-    if cmdchar == POUND {
-        cmdchar = '#' as c_int;
+    if cmdchar.is('\u{a3}') {
+        cmdchar = Key::ascii(b'#');
     }
 
     // The identifier and the rest of its line, copied: three of the commands
@@ -206,7 +205,7 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
     let mut n: usize = 0;
     let mut word_col: ColNr = ColNr::ZERO;
     let mut visual_sel = false;
-    if cmdchar == ']' as c_int || cmdchar == Ctrl_RSB || cmdchar == 'K' as c_int {
+    if cmdchar.is(']') || cmdchar == Key::CTRL_RSB || cmdchar.is('K') {
         if visual_active() {
             let Some(selection) = get_visual_text(Some(cmd_arg)) else {
                 return;
@@ -224,7 +223,7 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
         None => {
             // `*` and `#` fall back to the string under the cursor when
             // there is no identifier there.
-            let searchy = cmdchar == '*' as c_int || cmdchar == '#' as c_int;
+            let searchy = cmdchar.is('*') || cmdchar.is('#');
             let find_type = FIND_IDENT.cast_signed()
                 | if searchy {
                     FIND_STRING.cast_signed()
@@ -262,8 +261,8 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
     // Whether the command being built is a tag lookup, which decides the
     // escaping below.
     let mut tag_cmd = false;
-    match u8::try_from(cmdchar) {
-        Ok(b'*' | b'#') => {
+    match cmdchar.as_byte() {
+        Some(b'*' | b'#') => {
             // These become a search, so the cursor moves to the start of
             // the word first.
             setpcmark();
@@ -274,14 +273,14 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
             }
             no_smartcase.set(true);
         }
-        Ok(b'K') => {
+        Some(b'K') => {
             let count0 = cmd_arg.count0;
             n = build_keywordprg_cmd(count0, kp, kp_help, kp_ex, &text, &mut start, n, &mut out);
             if n == 0 {
                 return;
             }
         }
-        Ok(b']') => {
+        Some(b']') => {
             tag_cmd = true;
             out.clear();
             out.extend_from_slice(b"tselect ");
@@ -308,12 +307,12 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
         }
     }
 
-    if cmdchar == 'K' as c_int && kp_helpbang && !visual_sel {
+    if cmdchar.is('K') && kp_helpbang && !visual_sel {
         // `:help!` with no selection opens the help index rather than
         // looking anything up.
         out.clear();
         out.extend_from_slice(b"help!");
-    } else if cmdchar == 'K' as c_int && !kp_help {
+    } else if cmdchar.is('K') && !kp_help {
         // A shell or Ex command takes the word quoted, not escaped
         // character by character.
         let word = cstr::until_nul(text.get(start..).unwrap_or_default());
@@ -328,14 +327,14 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
         append_escaped(&mut out, &text, start, n, ident_escapes(cmdchar, tag_cmd));
     }
 
-    if cmdchar == '*' as c_int || cmdchar == '#' as c_int {
+    if cmdchar.is('*') || cmdchar.is('#') {
         if !g_cmd && word_end_is_word(word_col, n) {
             out.extend_from_slice(b"\\>");
         }
         // The search goes into the history as if it had been typed.
         init_history();
         add_to_history(HIST_SEARCH as c_int, &out, true, b'\0');
-        let dir = if cmdchar == '*' as c_int { '/' } else { '?' } as c_int;
+        let dir = if cmdchar.is('*') { '/' } else { '?' } as c_int;
         normal_search(cmd_arg, dir, &out, 0, None);
     } else {
         // `taglist()` and friends need to know the tag came from under
@@ -343,7 +342,7 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
         g_tag_at_cursor.set(true);
         let _ = do_cmdline_cmd(&cstr::owned(&out));
         g_tag_at_cursor.set(false);
-        if cmdchar == 'K' as c_int && !kp_ex && !kp_help {
+        if cmdchar.is('K') && !kp_ex && !kp_help {
             // The terminal 'keywordprg' opened above: let <Esc> close it.
             restart_edit.set(Key::ascii(b'i'));
             add_map(b"<esc>", b"<Cmd>bdelete!<CR>", MODE_TERMINAL, true);
@@ -399,7 +398,7 @@ pub(crate) fn nv_gotofile(cmd_arg: &mut CmdArg) {
     let last = newlnum::LAST as LineNr;
     let win = Some(Win::current().id());
     let opened = do_ecmd(0, Some(name.as_cstr()), None, None, last, hide, win);
-    if opened.is_ok() && cmd_arg.nchar == 'F' as c_int && lnum >= LineNr::ZERO {
+    if opened.is_ok() && cmd_arg.nchar.is('F') && lnum >= LineNr::ZERO {
         Win::current().w_cursor.lnum = lnum;
         check_cursor_lnum(Win::current());
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);

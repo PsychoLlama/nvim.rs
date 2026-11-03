@@ -217,7 +217,7 @@ pub fn get_digraph(cmdline: bool) -> Key {
             putcmdline(byte.cast_signed(), true);
         }
     } else {
-        add_to_showcmd(c.code());
+        add_to_showcmd(c);
     }
     let raw_key = Keys::unmapped_with_codes();
     let cc = plain_vgetc();

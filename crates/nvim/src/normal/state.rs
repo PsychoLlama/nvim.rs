@@ -26,6 +26,7 @@ use crate::keycodes::ModMask;
 use crate::ops::Op;
 use crate::types::AutoEvent;
 use crate::types::ColNr;
+use crate::types::Key;
 use crate::types::LineNr;
 use crate::winlayer::TabPage;
 use crate::winlayer::{Buf, Win};
@@ -61,8 +62,8 @@ use crate::message::state::{
 };
 use crate::message::{has_keep_msg, may_clear_sb_text, msg, msg_delay, wait_return};
 use crate::normal::{
-    NormalState, NvFlags, check_scrollbind, clear_op, clear_op_beep, end_visual_mode, find_command,
-    normal_execute, nv_cmds, unshift_special, visual_active,
+    NormalState, NvCmd, NvFlags, check_scrollbind, clear_op, clear_op_beep, end_visual_mode,
+    find_command, normal_execute, nv_cmds, unshift_special, visual_active,
 };
 use crate::option::shortmess;
 use crate::option::vars::{fdo_flags, p_smd};
@@ -182,8 +183,8 @@ fn new_state(oa: Op) -> NormalState {
         ca: CmdArg::new(oa),
         mapped_len: 0,
         old_mapped_len: 0,
-        idx: 0,
-        c: 0,
+        idx: None,
+        c: Key::NUL,
         old_col: 0,
         old_pos: Pos {
             lnum: LineNr::ZERO,
@@ -198,6 +199,13 @@ impl NormalState {
     #[inline(always)]
     pub(crate) fn op(&self) -> Op {
         self.oa
+    }
+
+    /// The row of [`nv_cmds`] the command resolved to; only asked once it
+    /// has resolved to one.
+    #[inline(always)]
+    pub(crate) fn row(&self) -> &'static NvCmd {
+        &nv_cmds[self.idx.expect("the command has a row")]
     }
 }
 
@@ -312,7 +320,7 @@ pub(crate) fn normal_prepare(ns: &mut NormalState) {
 /// Answers whether the command was rejected outright, which happens when
 /// unshifting a special key leaves a character no table row claims.
 pub(crate) fn normal_handle_special_visual_command(ns: &mut NormalState) -> bool {
-    let flags = nv_cmds[usize::try_from(ns.idx).unwrap_or(usize::MAX)].cmd_flags;
+    let flags = ns.row().cmd_flags;
     // "stopsel": an unshifted movement ends the selection.
     if km_stopsel.get() && flags.has(NvFlags::STS) && !mod_mask.get().has(ModMask::SHIFT) {
         end_visual_mode();
@@ -324,7 +332,7 @@ pub(crate) fn normal_handle_special_visual_command(ns: &mut NormalState) -> bool
             // table has to be consulted again for the new character.
             unshift_special(&mut ns.ca);
             ns.idx = find_command(ns.ca.cmdchar);
-            if ns.idx < 0 {
+            if ns.idx.is_none() {
                 clear_op_beep(ns.op());
                 return true;
             }
@@ -343,18 +351,17 @@ pub(crate) fn normal_handle_special_visual_command(ns: &mut NormalState) -> bool
 /// running, and `a`/`i` are text objects rather than insert commands only
 /// while an operator or Visual mode is waiting for them.
 pub(crate) fn normal_need_additional_char(ns: &mut NormalState) -> bool {
-    let flags = nv_cmds[usize::try_from(ns.idx).unwrap_or(usize::MAX)].cmd_flags;
+    let flags = ns.row().cmd_flags;
     let pending_op = ns.oa.op_type != OpType::Nop;
     let cmdchar = ns.ca.cmdchar;
     flags.has(NvFlags::NCH)
         && (flags.has_all(NvFlags::NCH_NOP) && !pending_op
             || flags.has_all(NvFlags::NCH_ALW)
-            || cmdchar == 'q' as c_int
+            || cmdchar.is('q')
                 && !pending_op
                 && reg_recording.get() == 0
                 && reg_executing.get() == 0
-            || (cmdchar == 'a' as c_int || cmdchar == 'i' as c_int)
-                && (pending_op || visual_active()))
+            || (cmdchar.is('a') || cmdchar.is('i')) && (pending_op || visual_active()))
 }
 
 /// Whether the mode message the last command scrolled away has to be put
@@ -448,7 +455,7 @@ fn normal_check_interrupt(ns: &mut NormalState) {
         State.set(MODE_NORMAL);
     } else if global_busy.get() == 0 || !exmode_active.get() {
         if !quit_more.get() {
-            vgetc().code();
+            vgetc();
         }
         got_int.set(false);
     }
@@ -631,7 +638,7 @@ pub(crate) fn normal_cmd(op: Op, toplevel: bool) {
     let mut s = new_state(op);
     s.toplevel = toplevel;
     normal_prepare(&mut s);
-    normal_execute(&mut s, safe_vgetc().code());
+    normal_execute(&mut s, safe_vgetc());
 }
 
 /// Fire `event` on the current buffer, with no file name to match against.
