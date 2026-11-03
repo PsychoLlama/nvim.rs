@@ -118,7 +118,7 @@ fn run(s: &str, what: c_int, exp: Exp, maxlen: c_int, strict: bool, masks: std::
         if !parsed.rejected {
             num = parsed.value;
             unum = parsed.magnitude;
-            pre = parsed.prefix;
+            pre = c_int::from(parsed.prefix);
         }
 
         let ctx = format!("(s={s:?}, w={what}, m={maxlen}, strict={strict}, mask={mask:b})");

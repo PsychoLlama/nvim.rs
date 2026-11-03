@@ -45,7 +45,7 @@ fn first_char_len(line: &[u8]) -> size_t {
 
 /// The number at the start of `bytes`: its unsigned value, the prefix letter
 /// that named its base and how many bytes it took.
-fn str2nr(bytes: &[u8], what: Str2NrBases) -> (UVarNumber, c_int, size_t) {
+fn str2nr(bytes: &[u8], what: Str2NrBases) -> (UVarNumber, u8, size_t) {
     debug_assert!(!bytes.is_empty(), "vim_str2nr reads the first byte eagerly");
     let parsed = str2nr_in(bytes, what, false);
     (parsed.magnitude, parsed.prefix, parsed.len)
@@ -110,8 +110,8 @@ fn scan_while(line: &[u8], from: size_t, accept: impl Fn(u8) -> bool) -> size_t 
 /// and `b`/`B`, so an `0o…` literal answers **zero** rather than eight. Kept:
 /// the only reader is `values.rs`'s `base_to_prefix_length`, where zero and
 /// ten mean the same thing (no prefix to highlight).
-fn base_for_prefix(prefix: c_int) -> uint8_t {
-    match u8::try_from(prefix).unwrap_or(0) {
+fn base_for_prefix(prefix: u8) -> uint8_t {
+    match prefix {
         0 => 10,
         b'0' => 8,
         b'x' | b'X' => 16,

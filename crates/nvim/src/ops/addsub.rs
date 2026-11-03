@@ -638,7 +638,7 @@ fn add_or_subtract(
 #[allow(clippy::too_many_arguments)]
 fn render_number(
     n: UVarNumber,
-    pre: c_int,
+    pre: u8,
     mut length: c_int,
     firstdigit: c_int,
     negative: bool,
@@ -656,17 +656,17 @@ fn render_number(
         buf.push(b'0');
         length -= 1;
     }
-    if pre == 'b' as c_int || pre == 'B' as c_int || pre == 'x' as c_int || pre == 'X' as c_int {
-        buf.push(pre as u8);
+    if pre == b'b' || pre == b'B' || pre == b'x' || pre == b'X' {
+        buf.push(pre);
         length -= 1;
     }
 
     // The digits themselves.
-    let digits = if pre == 'b' as c_int || pre == 'B' as c_int {
+    let digits = if pre == b'b' || pre == b'B' {
         format_binary(n)
     } else if pre == 0 {
         format!("{n}").into_bytes()
-    } else if pre == '0' as c_int {
+    } else if pre == b'0' {
         format!("{n:o}").into_bytes()
     } else if HEX_UPPER.get() {
         format!("{n:X}").into_bytes()

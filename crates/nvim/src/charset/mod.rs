@@ -476,7 +476,7 @@ pub struct ParsedNumber {
     pub len: usize,
     /// The prefix letter that named the base (`x`, `b`, `o`, ...), `0` for a
     /// leading-zero octal, or zero for none.
-    pub prefix: c_int,
+    pub prefix: u8,
     pub value: VarNumber,
     pub magnitude: UVarNumber,
     pub overflow: bool,
@@ -526,7 +526,7 @@ pub fn str2nr_scan(
     }
     ParsedNumber {
         len: scan.at,
-        prefix: c_int::from(parsed.pre),
+        prefix: parsed.pre,
         value,
         magnitude: parsed.magnitude,
         overflow,

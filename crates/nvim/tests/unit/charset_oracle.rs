@@ -176,7 +176,7 @@ fn the_digit_readers() {
                         let len = c_int::try_from(parsed.len).unwrap_or(c_int::MAX);
                         let overflow = parsed.overflow;
                         if !parsed.rejected {
-                            pre = parsed.prefix;
+                            pre = c_int::from(parsed.prefix);
                             n = parsed.value;
                             un = parsed.magnitude;
                         }
