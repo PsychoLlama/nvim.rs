@@ -22,30 +22,34 @@ use crate::keycodes::ModMask;
 use crate::keycodes::{SpecialKey, key_unescape};
 use crate::mbyte::char_at;
 use crate::types::{Key, MB_MAXBYTES};
+use core::ffi::c_int;
 
 /// Fold `modifiers` into `c` where a single code stands for the combination.
 ///
 /// Only Ctrl has such codes: `CTRL-A` is 0x01 rather than `<C-> A`. The
 /// modifier is cleared out of `*modifiers` when it was folded in.
 pub fn merge_modifiers(key: Key, modifiers: &mut ModMask) -> Key {
-    let mut merged = key;
-    if modifiers.has(ModMask::CTRL) {
-        match key.as_byte() {
-            Some(byte @ b'@'..=0x7f) => {
-                merged = Key::ctrl(byte);
-                if merged.is_nul() {
-                    merged = SpecialKey::Zero.into();
-                }
-            }
-            // CTRL-6 is equivalent to CTRL-^.
-            Some(b'6') => merged = Key::ctrl(b'^'),
-            _ => {}
-        }
-        if merged != key {
-            modifiers.clear(ModMask::CTRL);
-        }
+    if !modifiers.has(ModMask::CTRL) {
+        return key;
     }
-    merged
+    // On the code rather than through `as_byte`: the mapping walk asks this
+    // for every typeahead byte it compares under CTRL.
+    let c = key.code();
+    let merged = if (c_int::from(b'@')..=0x7f).contains(&c) {
+        match c & 0x1f {
+            0 => SpecialKey::Zero.code(),
+            ctrl => ctrl,
+        }
+    } else if c == c_int::from(b'6') {
+        // CTRL-6 is equivalent to CTRL-^.
+        0x1e
+    } else {
+        c
+    };
+    if merged != c {
+        modifiers.clear(ModMask::CTRL);
+    }
+    Key::from_code(merged)
 }
 
 /// [`merge_modifiers`] applied to the global `mod_mask`, which is where the

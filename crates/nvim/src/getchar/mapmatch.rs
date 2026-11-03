@@ -19,7 +19,6 @@ use super::*;
 use crate::keycodes::ModMask;
 use crate::keycodes::{KE_IGNORE, KE_PLUG, KE_SNR, key_escape};
 use crate::mbyte::{char_len, encode_char, unescape_at};
-use crate::narrow::len_as_int;
 use crate::normal::{set_visual_select, visual_active, visual_select};
 use crate::option::vars::P_LANGMAP;
 use crate::types::MapStr;
@@ -259,7 +258,10 @@ fn search_maphash(
                     // neither index is bounds-checked per byte.
                     let limit = tb.len().min(lhs.len());
                     let (typed_bytes, lhs_bytes) = (&tb[..limit], &lhs[..limit]);
+                    // `matched` counts alongside `at` in the `int` the match
+                    // length is kept in: no conversion per candidate.
                     let mut at = 1;
+                    let mut matched: c_int = 1;
                     while at < limit {
                         let (typed, key) = (typed_bytes[at], lhs_bytes[at]);
                         let mut c2 = typed;
@@ -294,8 +296,9 @@ fn search_maphash(
                             break;
                         }
                         at += 1;
+                        matched += 1;
                     }
-                    let mut mlen = len_as_int(at);
+                    let mut mlen = matched;
 
                     // Don't allow mapping the first byte(s) of a multibyte
                     // character, which happens after mapping <M-a> and then

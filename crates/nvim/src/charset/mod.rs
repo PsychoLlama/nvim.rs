@@ -374,11 +374,16 @@ pub fn is_word_char(c: c_int) -> bool {
 
 /// Whether `c` belongs to a word according to the 256-bit set `chartab`.
 /// Characters past U+00FF are decided by their Unicode class instead.
+#[inline]
 pub fn vim_iswordc_tab(c: c_int, chartab: &[uint64_t; 4]) -> bool {
-    match u8::try_from(c) {
-        Ok(byte) => byte > 0 && chartab[usize::from(byte >> 6)] & (1u64 << (byte & 0x3f)) != 0,
-        Err(_) => c >= 0x100 && utf_class_tab(c, chartab) >= 2,
+    if c >= 0x100 {
+        return utf_class_tab(c, chartab) >= 2;
     }
+    // Below 0x100 here; a negative `c` is not a word character.
+    let Ok(byte) = u8::try_from(c) else {
+        return false;
+    };
+    byte > 0 && chartab[usize::from(byte >> 6)] & (1u64 << (byte & 0x3f)) != 0
 }
 
 /// Whether `c` belongs to a word in `buffer`.
