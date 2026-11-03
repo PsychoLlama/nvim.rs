@@ -152,7 +152,7 @@ pub fn in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> bool {
                 if b"<>!*oOe0:".contains(&named) && keytyped == c_int::from(named) {
                     return true;
                 }
-                if keytyped == special_key_code(&look[i + 1..]) {
+                if keytyped == special_key_code(&look[i + 1..]).code() {
                     return true;
                 }
             }

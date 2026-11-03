@@ -27,7 +27,8 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::types::{NL, ScriptCtx};
+use crate::keycodes::{KS_EXTRA, KS_MODIFIER};
+use crate::types::ScriptCtx;
 use core::ffi::{CStr, c_int};
 
 use crate::api::private::helpers::{api_set_sctx, find_buffer_by_handle};
@@ -72,7 +73,7 @@ use crate::state::{
 use crate::types::{
     ApiDict, ApiString, Array, BufferHandle, Dict, Error, EvalFuncData, ExArg, Expand, Integer,
     KeyDict_keymap, LineNr, LuaRef, LuaRetMode, MapBlock, MapCallback, MapRhs, MapStr, Object,
-    OptSet, RegMatch, RemapValues, ScriptId, TypVal, VarNumber, ptrdiff_t, size_t, uint64_t,
+    OptSet, RegMatch, ScriptId, TypVal, VarNumber, ptrdiff_t, size_t, uint64_t,
 };
 use std::rc::Rc;
 
@@ -99,9 +100,6 @@ mod langmap;
 pub use self::langmap::*;
 pub const MAXMAPLEN: ::core::ffi::c_uint = 50;
 pub const FUZZY_SCORE_NONE: ::core::ffi::c_int = -2147483648;
-pub const REMAP_SCRIPT: RemapValues = -2;
-pub const REMAP_NONE: RemapValues = -1;
-pub const REMAP_YES: RemapValues = 0;
 pub use crate::keycodes::{REPTERM_DO_LT, REPTERM_FROM_PART, REPTERM_NO_SIMPLIFY};
 pub const kRetObject: LuaRetMode = 0;
 /// The `:map` arguments being parsed, and the owner of everything a parse
@@ -201,9 +199,6 @@ pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 /// How many hash buckets the mapping table has.
 pub const MAX_MAPHASH: usize = 256;
 pub const ABBR_OFF: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;
-pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
-pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;
-pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
 /// The error texts `mapping` raises for itself; the rest come from the
 /// shared table in `message`.
 pub const E_GLOBAL_ABBREVIATION_ALREADY_EXISTS_FOR_STR: &CStr =

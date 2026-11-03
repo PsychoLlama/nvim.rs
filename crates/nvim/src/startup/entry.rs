@@ -13,6 +13,7 @@ use crate::event_queue::ChildQueue;
 use crate::memory::ThinCString;
 use crate::types::ArgListId;
 use crate::types::AutoEvent;
+use crate::types::Key;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int, c_uint};
 use std::ffi::CString;
@@ -459,7 +460,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
 
     if restart_edit.get() != 0 {
         // A `-c startinsert` and friends: push the key that gets there.
-        stuff_readbuf_char(-(253 + ((KE_NOP as c_int) << 8)));
+        stuff_readbuf_char(Key::from_code(-(253 + ((KE_NOP as c_int) << 8))));
     }
 
     if cb_flags.get() & (kOptCbFlagUnnamed as c_int | kOptCbFlagUnnamedplus as c_int) as c_uint != 0

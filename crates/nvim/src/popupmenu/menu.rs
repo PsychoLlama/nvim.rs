@@ -27,6 +27,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::keycodes::{Ctrl_C, SpecialKey};
+use crate::types::Key;
 use core::ffi::CStr;
 use core::ptr;
 use std::ffi::CString;
@@ -183,7 +184,7 @@ fn pum_menu_key(c: c_int, items: &[CString]) -> MenuStep {
         }
         _ if c == SpecialKey::Rightmouse.code() => {
             // Reposition the menu: hand the click back to the caller.
-            vungetc(c);
+            vungetc(Key::from_code(c));
             MenuStep::Close
         }
         _ if c == SpecialKey::Leftdrag.code()
@@ -257,7 +258,7 @@ pub(crate) fn pum_show_popupmenu(menu: MenuId) {
         grid.zindex = kZIndexCmdlinePopupMenu.cast_signed();
         pum_redraw();
         setcursor_mayforce(Win::current(), true);
-        let c = vgetc();
+        let c = vgetc().code();
         // A callback or <expr> mapping run from `vgetc` may have taken the
         // menu down under us.
         if pum_array.with(Option::is_none) {

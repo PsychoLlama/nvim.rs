@@ -16,11 +16,10 @@
 )]
 
 use super::*;
-use crate::keycodes::{Ctrl_V, key_unescape};
+use crate::keycodes::key_unescape;
 use crate::mbyte::{char_at, char_len};
 use crate::normal::{set_visual_active, set_visual_anchor, set_visual_select};
-use crate::strings::has_char;
-use crate::types::{Failed, MB_MAXBYTES, NL, NUL};
+use crate::types::{Failed, Key, MB_MAXBYTES};
 use crate::winlayer::Win;
 use core::ffi::c_int;
 
@@ -43,7 +42,7 @@ pub fn cancel_redo() {
     redobuff().free();
     redobuff().set(old_redobuff().take());
     start_stuff();
-    while read_readbuffers(true) != NUL {}
+    while read_readbuffers(true) != 0 {}
 }
 
 /// Move both redo buffers into `save_redo`, leaving a *copy* of the current
@@ -108,16 +107,13 @@ pub fn append_to_redobuff_literally(s: &[u8]) {
         // Then the special or multibyte character that stopped the run.
         // Composing characters are handled separately, one at a time.
         let rest = &s[at..];
-        let c = char_at(rest);
+        let c = Key::from_code(char_at(rest));
         at += char_len(rest);
         let last = at == s.len();
-        if c < c_int::from(b' ')
-            || c == DEL
-            || (last && (c == c_int::from(b'0') || c == c_int::from(b'^')))
-        {
-            redobuff().add_char(Ctrl_V);
+        if c.code() < c_int::from(b' ') || c == Key::DEL || (last && (c.is('0') || c.is('^'))) {
+            redobuff().add_char(Key::ctrl(b'V'));
         }
-        if last && c == c_int::from(b'0') {
+        if last && c.is('0') {
             // CTRL-V '0' must be inserted as CTRL-V 048.
             redobuff().add_bytes(b"048");
         } else {
@@ -137,12 +133,12 @@ pub fn append_to_redobuff_keys(s: &[u8]) {
     }
     let mut s = up_to_nul(s);
     while let Some(&first) = s.first() {
-        if c_int::from(first) == K_SPECIAL && s.len() >= 3 {
+        if first == K_SPECIAL && s.len() >= 3 {
             // Insert the special key literally.
             redobuff().add_bytes(&s[..3]);
             s = &s[3..];
         } else {
-            let c = char_at(s);
+            let c = Key::from_code(char_at(s));
             s = &s[char_len(s)..];
             redobuff().add_char(c);
         }
@@ -151,7 +147,7 @@ pub fn append_to_redobuff_keys(s: &[u8]) {
 
 /// Append one character to the redo buffer, escaping special keys, NUL and
 /// `K_SPECIAL` and splitting a codepoint into its UTF-8 bytes.
-pub fn append_to_redobuff_char(c: c_int) {
+pub fn append_to_redobuff_char(c: Key) {
     if !block_redo.get() {
         redobuff().add_char(c);
     }
@@ -199,48 +195,51 @@ impl RedoReader {
     }
 
     /// The next character, or `NUL` at the end.
-    fn next_char(&mut self) -> c_int {
-        let mut c = c_int::from(self.byte(0));
-        if c == NUL {
-            return c;
+    fn next_char(&mut self) -> Key {
+        let first = self.byte(0);
+        if first == 0 {
+            return Key::NUL;
         }
 
         // How many bytes this character occupies. An escaped K_SPECIAL is
         // three bytes that stand for one, so only a byte that is *not* the
         // start of an escape can begin a multibyte sequence.
-        let n = if c != K_SPECIAL || c_int::from(self.byte(1)) == KS_SPECIAL {
-            mb_byte2len_check(c)
+        let n = if first != K_SPECIAL || self.byte(1) == KS_SPECIAL {
+            usize::from(utf8len_tab[usize::from(first)])
         } else {
             1
         };
 
         let mut buf = [0u8; MB_MAXBYTES + 1];
-        let mut i = 0;
-        loop {
-            if c == K_SPECIAL {
+        let mut byte = first;
+        for i in 0..n {
+            let c = if byte == K_SPECIAL {
                 // Special key or escaped K_SPECIAL: three bytes, one key.
-                c = key_unescape(self.byte(1), self.byte(2));
+                let key = key_unescape(self.byte(1), self.byte(2));
                 self.at += 2;
-            }
+                key
+            } else {
+                Key::byte(byte)
+            };
             self.at += 1;
 
             // Upstream's `(uint8_t)c`: a key code wider than a byte truncates
             // here, and the bytes are read back as one character below.
-            buf[i] = c.to_le_bytes()[0];
+            buf[i] = c.code().to_le_bytes()[0];
             if i == n - 1 {
                 // Last byte of the character.
-                if n != 1 {
-                    c = char_at(&buf);
-                }
-                break;
+                return if n == 1 {
+                    c
+                } else {
+                    Key::from_code(char_at(&buf))
+                };
             }
-            c = c_int::from(self.byte(0));
-            if c == NUL {
+            byte = self.byte(0);
+            if byte == 0 {
                 break; // cannot happen?
             }
-            i += 1;
         }
-        c
+        Key::NUL
     }
 
     /// Copy the rest of the walk into `readbuf2`, one character at a time.
@@ -251,22 +250,11 @@ impl RedoReader {
     fn copy_rest(&mut self) {
         loop {
             let c = self.next_char();
-            if c == NUL {
+            if c.is_nul() {
                 break;
             }
             readbuf2().add_char(c);
         }
-    }
-}
-
-/// C's `MB_BYTE2LEN_CHECK`: how many bytes a UTF-8 sequence starting with `b`
-/// occupies, and 1 for anything that is not a byte at all.
-pub(crate) fn mb_byte2len_check(b: c_int) -> usize {
-    if !(0..=255).contains(&b) {
-        1
-    } else {
-        let b = usize::try_from(b).expect("the guard above bounds `b` to a byte");
-        utf8len_tab[b] as usize
     }
 }
 
@@ -281,27 +269,27 @@ pub fn start_redo(count: c_int, old_redo: bool) -> Result<(), Failed> {
     let mut c = redo.next_char();
 
     // Copy the register name, if there is one.
-    if c == c_int::from(b'"') {
-        readbuf2().add_byte(c_int::from(b'"'));
+    if c.is('"') {
+        readbuf2().add_byte(c);
         c = redo.next_char();
 
         // A numbered register shifts up: the redo of `"1p` is `"2p`.
-        if c >= '1' as c_int && c < '9' as c_int {
-            c += 1;
+        if let Some(digit @ b'1'..=b'8') = c.as_byte() {
+            c = Key::byte(digit + 1);
         }
         readbuf2().add_char(c);
 
         // The expression register has to be re-evaluated, so its CR --
         // which ends the expression -- goes in too.
-        if c == '=' as c_int {
-            readbuf2().add_char(CAR);
+        if c.is('=') {
+            readbuf2().add_char(Key::CAR);
             cmd_silent.set(true);
         }
 
         c = redo.next_char();
     }
 
-    if c == 'v' as c_int {
+    if c.is('v') {
         // Redo a Visual-mode operator over the same area.
         set_visual_anchor(Win::current().w_cursor);
         set_visual_active(true);
@@ -313,7 +301,7 @@ pub fn start_redo(count: c_int, old_redo: bool) -> Result<(), Failed> {
 
     // Enter the new count in place of the old one.
     if count != 0 {
-        while ascii_isdigit(c) {
+        while c.as_byte().is_some_and(|b| b.is_ascii_digit()) {
             c = redo.next_char();
         }
         readbuf2().add_num(count);
@@ -336,14 +324,14 @@ pub fn start_redo_ins() -> Result<(), Failed> {
     // Skip the count and the command character.
     loop {
         let c = redo.next_char();
-        if c == NUL {
+        if c.is_nul() {
             break;
         }
-        if has_char(c"AaIiRrOo", c) {
-            if c == 'O' as c_int || c == 'o' as c_int {
+        if c.as_byte().is_some_and(|b| b"AaIiRrOo".contains(&b)) {
+            if c.is('O') || c.is('o') {
                 // `o`/`O` opened the line; repeating the insert alone
                 // needs the newline put back.
-                readbuf2().add_byte(NL);
+                readbuf2().add_byte(Key::NL);
             }
             break;
         }
@@ -401,17 +389,17 @@ mod tests {
         let mut out = Vec::new();
         loop {
             let c = read_readbuffers(true);
-            if c == NUL {
+            if c == 0 {
                 return out;
             }
-            out.push(u8::try_from(c).expect("a read buffer holds bytes"));
+            out.push(c);
         }
     }
 
     /// Append `keys` to the redo buffer one character at a time.
     fn redo(keys: &str) {
         for ch in keys.chars() {
-            append_to_redobuff_char(c_int::try_from(u32::from(ch)).expect("a code point"));
+            append_to_redobuff_char(Key::from_char(ch));
         }
     }
 
@@ -462,10 +450,10 @@ mod tests {
         // U+0080, whose second UTF-8 byte is the escape byte itself.
         redo("\u{80}");
         expected.push(0xC2);
-        expected.extend_from_slice(&key_escape(K_SPECIAL));
+        expected.extend_from_slice(&key_escape(Key::byte(K_SPECIAL)));
         // A special key: one character, three bytes.
-        append_to_redobuff_char(SpecialKey::Left.code());
-        expected.extend_from_slice(&key_escape(SpecialKey::Left.code()));
+        append_to_redobuff_char(SpecialKey::Left.into());
+        expected.extend_from_slice(&key_escape(SpecialKey::Left.into()));
         for _ in 0..30 {
             redo("€x");
             expected.extend_from_slice("€x".as_bytes());

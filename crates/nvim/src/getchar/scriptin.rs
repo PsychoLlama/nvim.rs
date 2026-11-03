@@ -185,10 +185,9 @@ pub fn before_blocking() {
 /// `c == 0` means "we have been waiting a while", which syncs unconditionally
 /// and is where the idle fsync happens; otherwise the sync waits until
 /// `'updatecount'` characters have been typed.
-pub(crate) fn updatescript(c: c_int) {
+pub(crate) fn updatescript(c: u8) {
     if c != 0 {
-        // `putc`'s `(unsigned char)c`: every caller passes a byte.
-        scriptout.with(|file| file.as_ref().map(|file| file.putc(c.to_le_bytes()[0])));
+        scriptout.with(|file| file.as_ref().map(|file| file.putc(c)));
     }
     let idle = c == 0;
     if idle

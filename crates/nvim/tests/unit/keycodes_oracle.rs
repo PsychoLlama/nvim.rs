@@ -12,6 +12,7 @@ use neovim::keycodes::{
     REPTERM_FROM_PART, REPTERM_NO_SIMPLIFY, REPTERM_NO_SPECIAL, escape_ks_bytes, push_char_escaped,
     push_special_key, replace_termcodes, special_key_at, trans_special_into, unescape_ks_in,
 };
+use neovim::types::Key;
 
 use crate::support::corpus::{Digest, corpus};
 use crate::support::editor_lock;
@@ -111,8 +112,8 @@ fn reading_one_key_name() {
                     let name = &text[at..at + len];
                     let mut simplified = false;
                     let found = special_key_at(name, flags, Some(&mut simplified));
-                    let (key, modifiers, used) = found.unwrap_or((0, ModMask::NONE, 0));
-                    d.add(i64::from(key));
+                    let (key, modifiers, used) = found.unwrap_or((Key::NUL, ModMask::NONE, 0));
+                    d.add(i64::from(key.code()));
                     d.add(i64::from(modifiers.bits()));
                     d.add(i64::from(simplified));
                     d.add((at + used) as i64);
@@ -182,13 +183,13 @@ fn escaping_k_special() {
     }
     for c in (0..0x900).chain([0x10000, 0x10ffff, 0x7fff_ffff, -1, -0x6b80]) {
         let mut out = Vec::new();
-        push_char_escaped(c, &mut out);
+        push_char_escaped(Key::from_code(c), &mut out);
         d.add(out.len() as i64);
         for modifiers in [ModMask::NONE, ModMask::CTRL | ModMask::SHIFT] {
             for escape_ks in [false, true] {
                 if c >= 0 || !escape_ks {
                     let mut out = Vec::new();
-                    push_special_key(c, modifiers, escape_ks, &mut out);
+                    push_special_key(Key::from_code(c), modifiers, escape_ks, &mut out);
                     d.add(out.len() as i64);
                     d.bytes(&out);
                 }

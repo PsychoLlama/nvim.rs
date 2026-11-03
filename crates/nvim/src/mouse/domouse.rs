@@ -43,7 +43,7 @@ use crate::getchar::{
     vpeekc, vungetc,
 };
 use crate::global_cell::GlobalCell;
-use crate::keycodes::{Ctrl_G, Ctrl_O, Ctrl_P, Ctrl_R, Ctrl_RSB, Ctrl_T, Ctrl_V, SpecialKey};
+use crate::keycodes::{Ctrl_G, Ctrl_O, Ctrl_RSB, Ctrl_T, Ctrl_V, SpecialKey};
 use crate::keycodes::{ModMask, mouse_button};
 use crate::memline::{gchar_pos, inc};
 use crate::message::state::msg_silent;
@@ -66,6 +66,7 @@ use crate::state::{MODE_INSERT, MODE_NORMAL, REPLACE_FLAG};
 use crate::statusline::{
     kStlClickDisabled, kStlClickFuncRun, kStlClickTabClose, kStlClickTabSwitch,
 };
+use crate::types::Key;
 use crate::types::{NUL, PUT_CURSEND, PUT_FIXINDENT};
 use crate::ui::state::Columns;
 use crate::ui::ui_mouse_has;
@@ -341,19 +342,19 @@ pub(crate) fn do_mouse(
 /// done when the current character was stuffed.
 fn coalesce_drags(c: c_int) -> (c_int, bool, bool) {
     loop {
-        let (which_button, is_click, is_drag) = mouse_button(key_extra(c));
-        if !is_drag || KeyStuffed.get() != 0 || vpeekc() == NUL {
+        let (which_button, is_click, is_drag) = mouse_button(Key::from_code(c));
+        if !is_drag || KeyStuffed.get() || vpeekc().code() == NUL {
             return (which_button, is_click, is_drag);
         }
 
         let saved = MousePos::current();
         // Need to get the character, peeking doesn't get the actual one.
-        let nc = safe_vgetc();
+        let nc = safe_vgetc().code();
         if c == nc {
             // The next character is the same mouse event: use that one.
             continue;
         }
-        vungetc(nc);
+        vungetc(Key::from_code(nc));
         mouse_grid.set(saved.grid);
         mouse_row.set(saved.row);
         mouse_col.set(saved.col);
@@ -489,9 +490,17 @@ fn middle_button_insert(op: Option<Op>, mut regname: c_int, fixindent: bool) -> 
     let flags = (if fixindent { PUT_FIXINDENT } else { 0 } | PUT_CURSEND).cast_signed();
     do_put(regname, reg.as_ref(), BACKWARD as c_int, 1, flags);
     // Repeat it with CTRL-R CTRL-O r or CTRL-R CTRL-P r
-    append_to_redobuff_char(Ctrl_R);
-    append_to_redobuff_char(if fixindent { Ctrl_P } else { Ctrl_O });
-    append_to_redobuff_char(if regname == 0 { '"' as c_int } else { regname });
+    append_to_redobuff_char(Key::ctrl(b'R'));
+    append_to_redobuff_char(if fixindent {
+        Key::ctrl(b'P')
+    } else {
+        Key::ctrl(b'O')
+    });
+    append_to_redobuff_char(if regname == 0 {
+        Key::ascii(b'"')
+    } else {
+        Key::from_code(regname)
+    });
     Some(false)
 }
 
@@ -861,7 +870,7 @@ fn select_matching_block(mut win: Win, op: Option<Op>) -> bool {
 
 /// Push `c` back onto the input, so it is read as the next key.
 fn stuff_char(c: c_int) {
-    stuff_readbuf_char(c);
+    stuff_readbuf_char(Key::from_code(c));
 }
 
 /// Whether a clipboard provider is loaded, so that an unnamed register should

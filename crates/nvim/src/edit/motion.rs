@@ -29,6 +29,7 @@ use crate::keycodes::ModMask;
 use crate::keycodes::SpecialKey;
 use crate::mbyte::c_cluster_len;
 use crate::strings::has_char;
+use crate::types::Key;
 use crate::winlayer::{Buf, Win, first_tab};
 use core::ffi::c_int;
 
@@ -69,7 +70,7 @@ pub(crate) fn ins_start_select(c: c_int) -> bool {
     }
 
     start_selection();
-    stuff_readbuf_char(Ctrl_O);
+    stuff_readbuf_char(Key::ctrl(b'O'));
     if !mod_mask.get().is_empty() {
         // The modifiers have to be stuffed back too, as the three-byte
         // K_SPECIAL sequence that carries them.
@@ -80,7 +81,7 @@ pub(crate) fn ins_start_select(c: c_int) -> bool {
         ];
         stuff_readbuf_len(&buf);
     }
-    stuff_readbuf_char(c);
+    stuff_readbuf_char(Key::from_code(c));
     true
 }
 
@@ -110,7 +111,7 @@ pub(crate) fn ins_left() {
     if oneleft().is_ok() {
         start_arrow_changing(InsertEnd::At(tpos), end_change);
         if !end_change {
-            append_to_redobuff_char(SpecialKey::Left.code());
+            append_to_redobuff_char(Key::from(SpecialKey::Left));
         }
         // Only the characters 'revins' itself put there are legal to go
         // back over.
@@ -170,7 +171,7 @@ pub(crate) fn ins_s_left() {
     if Win::current().w_cursor.lnum > LineNr::ONE || Win::current().w_cursor.col > ColNr::ZERO {
         start_arrow_changing(InsertEnd::cursor(), end_change);
         if !end_change {
-            append_to_redobuff_char(SpecialKey::SLeft.code());
+            append_to_redobuff_char(Key::from(SpecialKey::SLeft));
         }
         let _ = bck_word(1, false, false);
         Win::current().w_set_curswant = true;
@@ -189,7 +190,7 @@ pub(crate) fn ins_right() {
     if gchar_cursor() != NUL || virtual_active(Win::current()) {
         start_arrow_changing(InsertEnd::cursor(), end_change);
         if !end_change {
-            append_to_redobuff_char(SpecialKey::Right.code());
+            append_to_redobuff_char(Key::from(SpecialKey::Right));
         }
         Win::current().w_set_curswant = true;
         if virtual_active(Win::current()) {
@@ -237,7 +238,7 @@ pub(crate) fn ins_s_right() {
     if Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count || gchar_cursor() != NUL {
         start_arrow_changing(InsertEnd::cursor(), end_change);
         if !end_change {
-            append_to_redobuff_char(SpecialKey::SRight.code());
+            append_to_redobuff_char(Key::from(SpecialKey::SRight));
         }
         let _ = fwd_word(1, false, false);
         Win::current().w_set_curswant = true;

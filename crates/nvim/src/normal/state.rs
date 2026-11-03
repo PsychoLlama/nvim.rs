@@ -448,7 +448,7 @@ fn normal_check_interrupt(ns: &mut NormalState) {
         State.set(MODE_NORMAL);
     } else if global_busy.get() == 0 || !exmode_active.get() {
         if !quit_more.get() {
-            vgetc();
+            vgetc().code();
         }
         got_int.set(false);
     }
@@ -631,7 +631,7 @@ pub(crate) fn normal_cmd(op: Op, toplevel: bool) {
     let mut s = new_state(op);
     s.toplevel = toplevel;
     normal_prepare(&mut s);
-    normal_execute(&mut s, safe_vgetc());
+    normal_execute(&mut s, safe_vgetc().code());
 }
 
 /// Fire `event` on the current buffer, with no file name to match against.

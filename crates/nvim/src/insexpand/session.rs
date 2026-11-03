@@ -597,10 +597,10 @@ pub fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
     compl_curr_match.set(compl_shown_match.get());
     compl_direction.set(compl_shows_dir.get());
 
-    // Eat the ESC that vgetc() returns after a CTRL-C, to avoid leaving
+    // Eat the ESC that vgetc().code() returns after a CTRL-C, to avoid leaving
     // Insert mode.
     if got_int.get() && global_busy.get() == 0 {
-        vgetc();
+        vgetc().code();
         got_int.set(false);
     }
 

@@ -11,6 +11,7 @@ use crate::guard::{Allow, Suppress};
 use crate::keycodes::Ctrl_C;
 use crate::keycodes::ModMask;
 use crate::mbyte::{char_at, cluster_len};
+use crate::types::Key;
 use crate::types::NUL;
 use core::ffi::{CStr, c_int};
 
@@ -86,7 +87,7 @@ pub fn do_dialog(
             }
             _ if c == b':' as c_int && ex_cmd => {
                 retval = dfltbutton;
-                ins_char_typebuf(b':' as c_int, ModMask::NONE, false);
+                ins_char_typebuf(Key::ascii(b':'), ModMask::NONE, false);
                 break;
             }
             _ => {

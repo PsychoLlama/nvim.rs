@@ -548,7 +548,7 @@ impl Definition<'_, '_> {
 /// number and is refused rather than wrapping into some other class.
 fn reads_as_identifier(name: &[u8]) -> bool {
     let mut bytes = name;
-    if bytes.first().map(|&b| c_int::from(b)) == Some(K_SPECIAL) {
+    if bytes.first() == Some(&K_SPECIAL) {
         // Skip the mangling: `<SNR>`, a script number, and an underscore.
         // Upstream steps three bytes in when there is no underscore, which
         // is off the end of a name that short; an empty tail refuses.

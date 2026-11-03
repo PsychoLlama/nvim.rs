@@ -98,6 +98,7 @@ use crate::highlight_group::{
     syn_check_group, syn_id2attr,
 };
 use crate::input::{get_keystroke, prompt_for_input};
+use crate::keycodes::KS_MODIFIER;
 use crate::keycodes::{K_SPECIAL, get_special_key_name};
 use crate::log::{LOGLVL_DBG, LOGLVL_INF};
 use crate::mbyte::{
@@ -213,9 +214,6 @@ pub const BELL: ::core::ffi::c_int = '\u{7}' as ::core::ffi::c_int;
 pub const PROGRESS_TARGET_CMD: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 
 pub const MSG_BUF_LEN: ::core::ffi::c_int = 480 as ::core::ffi::c_int;
-pub const KS_ZERO: ::core::ffi::c_int = 255 as ::core::ffi::c_int;
-pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
-pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 

@@ -28,12 +28,9 @@ use super::{
     CT_CELL_MASK, EOL_MAC, NL, TAB, chartab, chartab_initialized, kOptDyFlagUhex,
     transchar as render, vim_isprintc,
 };
-use crate::keycodes::K_SPECIAL;
 use crate::pos::MAXCOL;
 
 const CAR: c_int = 13;
-const KS_ZERO: c_int = 255;
-const KS_SPECIAL: c_int = 254;
 
 /// A cursor over the characters of a C string's bytes.
 ///
@@ -439,14 +436,10 @@ pub fn byte2cells(b: c_int) -> c_int {
 /// for its `~@` prefix.
 pub fn char2cells(c: c_int) -> c_int {
     if c < 0 {
-        let escaped = if c == K_SPECIAL {
-            KS_SPECIAL
-        } else if c == NUL {
-            KS_ZERO
-        } else {
-            -c & 0xff
-        };
-        return char2cells(escaped) + 2;
+        // Upstream's `K_SECOND(c)`; its `K_SPECIAL` and NUL arms are for
+        // codes that are not negative, so only the termcap byte is left.
+        let second = c.wrapping_neg().to_le_bytes()[0];
+        return char2cells(c_int::from(second)) + 2;
     }
     if c >= 0x80 {
         return utf_char2cells(c);

@@ -455,8 +455,8 @@ pub fn input_enqueue(chan_id: uint64_t, keys: ApiString) -> size_t {
         }
 
         // Copy the character across, escaping K_SPECIAL.
-        if c_int::from(byte) == K_SPECIAL {
-            input_enqueue_raw(&[K_SPECIAL as u8, KS_SPECIAL as u8, KE_FILLER as u8]);
+        if byte == K_SPECIAL {
+            input_enqueue_raw(&[K_SPECIAL, KS_SPECIAL, KE_FILLER]);
         } else {
             input_enqueue_raw(&[byte]);
         }
@@ -598,8 +598,8 @@ fn handle_mouse_event(
 ) -> (c_uint, usize) {
     // A modifier prefix, if there is one, pushes the event three bytes along.
     let (mouse_code, kind) = match bufsize {
-        3 => (buf[2] as c_int, buf[1] as c_int),
-        6 => (buf[5] as c_int, buf[4] as c_int),
+        3 => (buf[2] as c_int, buf[1]),
+        6 => (buf[5] as c_int, buf[4]),
         _ => (0, 0),
     };
 
@@ -637,15 +637,15 @@ fn handle_mouse_event(
     if modifiers == 0 {
         return (bufsize, advance);
     }
-    if buf[1] as c_int == KS_MODIFIER {
+    if buf[1] == KS_MODIFIER {
         buf[2] |= modifiers;
         return (bufsize, advance);
     }
     // No modifiers in the buffer yet: shift the event three bytes along and
     // write the modifier sequence in front of it.
     buf.copy_within(0..3, 3);
-    buf[0] = K_SPECIAL as u8;
-    buf[1] = KS_MODIFIER as u8;
+    buf[0] = K_SPECIAL;
+    buf[1] = KS_MODIFIER;
     buf[2] = modifiers;
     (bufsize + 3, advance)
 }
@@ -660,12 +660,12 @@ pub fn input_enqueue_mouse(code: c_int, modifier: uint8_t, grid: c_int, row: c_i
 
     let mut buf = [0u8; 6];
     let at = if modifier != 0 {
-        buf[..3].copy_from_slice(&[K_SPECIAL as u8, KS_MODIFIER as u8, modifier]);
+        buf[..3].copy_from_slice(&[K_SPECIAL, KS_MODIFIER, modifier]);
         3
     } else {
         0
     };
-    buf[at..at + 3].copy_from_slice(&[K_SPECIAL as u8, KS_EXTRA as u8, code as u8]);
+    buf[at..at + 3].copy_from_slice(&[K_SPECIAL, KS_EXTRA, code as u8]);
 
     mouse_grid.set(grid);
     mouse_row.set(row);
@@ -780,8 +780,8 @@ fn process_ctrl_c() {
             unread[i] == Ctrl_C as u8
                 || (unread[i] == b'C'
                     && i >= 3
-                    && unread[i - 3] == K_SPECIAL as u8
-                    && unread[i - 2] == KS_MODIFIER as u8
+                    && unread[i - 3] == K_SPECIAL
+                    && unread[i - 2] == KS_MODIFIER
                     && unread[i - 1] == ModMask::CTRL.bits() as u8)
         })?;
         unread[at] = Ctrl_C as u8;
@@ -799,11 +799,7 @@ fn process_ctrl_c() {
 /// Push bytes of the `KE_EVENT` key sequence, a partial one at a time when
 /// `buf` holds fewer than three. `buf` must not be empty.
 fn push_event_key(buf: &mut [u8]) -> usize {
-    const KEY: [uint8_t; 3] = [
-        K_SPECIAL as uint8_t,
-        KS_EXTRA as uint8_t,
-        KE_EVENT as uint8_t,
-    ];
+    const KEY: [uint8_t; 3] = [K_SPECIAL, KS_EXTRA, KE_EVENT];
     static key_idx: GlobalCell<usize> = GlobalCell::new(0);
 
     let mut buf_idx = 0;

@@ -25,7 +25,7 @@ use crate::cmdhist::{
     add_to_history, get_hisidx, get_hislen, hist_char2type, hist_entry_text, init_history,
 };
 use crate::cursor::{coladvance, gchar_cursor, with_cursor_rest};
-use crate::digraph::{do_digraph, get_digraph};
+use crate::digraph::{do_digraph, get_digraph, reset_digraph};
 use crate::drawscreen::state::{cmdline_row, redraw_cmdline, redraw_tabline, skip_redraw};
 use crate::drawscreen::{
     UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID, redraw_all_later, redraw_custom_title_later,
@@ -59,8 +59,9 @@ use crate::getchar::{
 use crate::global_cell::GlobalCell;
 use crate::guard::{allbuf_lock, textlock};
 use crate::highlight_group::{HLF_E, syn_id2attr, syn_name2id};
+use crate::keycodes::KS_EXTRA;
 use crate::keycodes::{K_SPECIAL, get_special_key_name};
-use crate::mapping::{add_map, check_abbr, map_to_exists_mode};
+use crate::mapping::{abbr_key, add_map, check_abbr, map_to_exists_mode};
 use crate::mark::setpcmark;
 use crate::mbyte::{
     c_cells_at, c_char_info, c_cluster_len, class_in, encode_char, head_off, mb_tolower,
@@ -145,8 +146,8 @@ use crate::types::{
     ExpandContext, ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy,
     ExprComparisonType, ExprOptScope, ExprParserFlags, Handle, HashTab, HistoryType, Integer,
     LineNr, Magic, MotionType, Object, OptInt, OptMagic, OptSet, OptVal, ParserState, Pos,
-    ProfTime, RemapValues, SaveVEvent, SearchItArg, TryState, TypVal, UndoLink, UndoObjectType,
-    VarNumber, size_t, time_t, uint8_t,
+    ProfTime, SaveVEvent, SearchItArg, TryState, TypVal, UndoLink, UndoObjectType, VarNumber,
+    size_t, time_t, uint8_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{
@@ -219,7 +220,6 @@ pub const HIST_DEBUG: HistoryType = 4;
 pub const HIST_SEARCH: HistoryType = 1;
 pub const HIST_CMD: HistoryType = 0;
 pub const HIST_INVALID: HistoryType = -1;
-pub const REMAP_NONE: RemapValues = -1;
 pub const VSE_NONE: ::core::ffi::c_int = 0;
 pub const VSE_BUFFER: ::core::ffi::c_int = 2;
 pub const VSE_SHELL: ::core::ffi::c_int = 1;
@@ -622,7 +622,6 @@ pub const SHELL_ESC_CHARS: &::core::ffi::CStr = c" \t\n*?[{`$\\%#'\"|!<>();&";
 pub const BUFFER_ESC_CHARS: &::core::ffi::CStr = c" \t\n*?[`$\\%#'\"|!<";
 pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;
 pub const ABBR_OFF: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;
-pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const UINT_MAX: ::core::ffi::c_uint = (INT_MAX as ::core::ffi::c_uint)
     .wrapping_mul(2 as ::core::ffi::c_uint)

@@ -41,19 +41,17 @@ use crate::os::cshim::gettext;
 use crate::os::input::fast_breakcheck;
 use crate::runtime::{RuntimeOpts, source_runtime};
 use crate::state::MODE_LANGMAP;
+use crate::types::Key;
 use crate::types::{
-    BoolVarValue, EvalFuncData, ExArg, KeymapEntry, List, NUL, OptError, OptInt, TypVal, VAR_LIST,
-    VarNumber, int16_t,
+    BoolVarValue, EvalFuncData, ExArg, KeymapEntry, List, OptError, OptInt, TypVal, VAR_LIST,
+    int16_t,
 };
 use crate::ui::state::Columns;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use crate::winlayer::graph::switch_to;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
-
-const ESC: c_int = 27;
-const CTRL_H: c_int = 8;
 
 const K_BOOL_VAR_FALSE: BoolVarValue = 0;
 const K_BOOL_VAR_TRUE: BoolVarValue = 1;
@@ -61,7 +59,7 @@ const K_BOOL_VAR_TRUE: BoolVarValue = 1;
 const E_DIGRAPH_SETLIST: &str =
     "E1216: digraph_setlist() argument must be a list of lists with two items";
 
-/// A digraph mapping: two input characters and the resulting codepoint.
+/// A digraph mapping: two input characters and the key they produce.
 ///
 /// The input characters are single bytes, as in Vim: multibyte characters
 /// given to `digraph_set()` are truncated when stored.
@@ -69,7 +67,14 @@ const E_DIGRAPH_SETLIST: &str =
 pub struct Digraph {
     pub char1: u8,
     pub char2: u8,
-    pub result: c_int,
+    pub result: Key,
+}
+
+impl Digraph {
+    /// Whether this digraph is typed as `char1` `char2`.
+    fn is_typed_as(&self, char1: Key, char2: Key) -> bool {
+        Key::byte(self.char1) == char1 && Key::byte(self.char2) == char2
+    }
 }
 
 /// User-defined digraphs, in insertion order. Shadows [`tables::DEFAULT_DIGRAPHS`].
@@ -81,40 +86,42 @@ pub fn default_digraphs() -> &'static [Digraph] {
 }
 
 /// Look up `char1`/`char2` in the default table only.
-pub fn lookup_default(char1: c_int, char2: c_int) -> Option<c_int> {
+pub fn lookup_default(char1: u8, char2: u8) -> Option<Key> {
     tables::DEFAULT_DIGRAPHS
         .iter()
-        .find(|d| d.char1 as c_int == char1 && d.char2 as c_int == char2)
+        .find(|d| d.char1 == char1 && d.char2 == char2)
         .map(|d| d.result)
 }
 
 /// Look up `char1`/`char2` in the user list, then the default table. When
 /// nothing matches, the result is `char2` itself — with the eighth bit set
 /// if `meta_char` is given and `char1` is a space.
-fn get_exact_digraph(char1: c_int, char2: c_int, meta_char: bool) -> c_int {
-    if char1 < 0 || char2 < 0 {
+fn get_exact_digraph(char1: Key, char2: Key, meta_char: bool) -> Key {
+    if char1.is_special() || char2.is_special() {
         return char2;
     }
-    let mut retval = USER_DIGRAPHS.with(|user| {
+    let user = USER_DIGRAPHS.with(|user| {
         user.iter()
-            .find(|d| d.char1 as c_int == char1 && d.char2 as c_int == char2)
-            .map_or(0, |d| d.result)
+            .find(|d| d.is_typed_as(char1, char2))
+            .map(|d| d.result)
     });
-    if retval == 0 {
-        retval = lookup_default(char1, char2).unwrap_or(0);
+    let found = user
+        .filter(|result| !result.is_nul())
+        .or_else(|| {
+            let (char1, char2) = (char1.as_byte()?, char2.as_byte()?);
+            lookup_default(char1, char2)
+        })
+        .filter(|result| !result.is_nul());
+    match found {
+        Some(result) => result,
+        None if char1.is(' ') && meta_char => Key::from_code(char2.code() | 0x80),
+        None => char2,
     }
-    if retval == 0 {
-        if char1 == ' ' as c_int && meta_char {
-            return char2 | 0x80;
-        }
-        return char2;
-    }
-    retval
 }
 
 /// Get the digraph for `char1` and `char2`, trying the reversed pair too.
 /// Falls back to `char2` when no digraph is defined.
-pub fn digraph_get(char1: c_int, char2: c_int, meta_char: bool) -> c_int {
+pub fn digraph_get(char1: Key, char2: Key, meta_char: bool) -> Key {
     let mut retval = get_exact_digraph(char1, char2, meta_char);
     if retval == char2 && char1 != char2 {
         retval = get_exact_digraph(char2, char1, meta_char);
@@ -125,34 +132,51 @@ pub fn digraph_get(char1: c_int, char2: c_int, meta_char: bool) -> c_int {
     retval
 }
 
-/// Handle typed characters for the 'digraph' option: entering
-/// char1-BS-char2 produces the digraph. Called with -1 to reset the state
-/// (e.g. when entering insert mode).
-pub fn do_digraph(c: c_int) -> c_int {
-    /// Character typed before the last BS, or -1.
-    static BACKSPACED: GlobalCell<c_int> = GlobalCell::new(0);
-    /// Last typed character.
-    static LASTCHAR: GlobalCell<c_int> = GlobalCell::new(0);
+/// What 'digraph' is in the middle of: the character typed before the last
+/// backspace, and the last character typed. `None` is upstream's `-1`.
+struct Typed {
+    backspaced: Option<Key>,
+    last: Option<Key>,
+}
 
+static TYPED: GlobalCell<Typed> = GlobalCell::new(Typed {
+    backspaced: Some(Key::NUL),
+    last: Some(Key::NUL),
+});
+
+/// Forget a half-typed 'digraph' char1-BS-char2 sequence, as entering Insert
+/// mode does.
+pub(crate) fn reset_digraph() {
+    TYPED.set(Typed {
+        backspaced: None,
+        last: None,
+    });
+}
+
+/// Handle typed characters for the 'digraph' option: entering
+/// char1-BS-char2 produces the digraph.
+pub fn do_digraph(c: Key) -> Key {
     let mut c = c;
-    if c == -1 {
-        BACKSPACED.set(-1);
-    } else if p_dg() {
-        if BACKSPACED.get() >= 0 {
-            c = digraph_get(BACKSPACED.get(), c, false);
+    if p_dg() {
+        let (backspaced, last) = TYPED.with(|typed| (typed.backspaced, typed.last));
+        // Upstream tests `>= 0`: a special key never starts one.
+        if let Some(char1) = backspaced.filter(|k| !k.is_special()) {
+            c = digraph_get(char1, c, false);
         }
-        BACKSPACED.set(-1);
-        if (c == SpecialKey::Bs.code() || c == CTRL_H) && LASTCHAR.get() >= 0 {
-            BACKSPACED.set(LASTCHAR.get());
-        }
+        let backspaced = last.filter(|k| !k.is_special() && (c == SpecialKey::Bs || c == Key::BS));
+        TYPED.set(Typed {
+            backspaced,
+            last: Some(c),
+        });
+    } else {
+        TYPED.with_mut(|typed| typed.last = Some(c));
     }
-    LASTCHAR.set(c);
     c
 }
 
-/// Find a digraph that produces codepoint `val`, preferring user-defined
-/// ones. Returns the two characters NUL-terminated, ready for `%s`.
-pub fn get_digraph_for_char(val: c_int) -> Option<[u8; 3]> {
+/// Find a digraph that produces `val`, preferring user-defined ones.
+/// Returns the two characters NUL-terminated, ready for `%s`.
+pub fn get_digraph_for_char(val: Key) -> Option<[u8; 3]> {
     USER_DIGRAPHS
         .with(|user| user.iter().find(|d| d.result == val).copied())
         .or_else(|| {
@@ -167,48 +191,49 @@ pub fn get_digraph_for_char(val: c_int) -> Option<[u8; 3]> {
 /// Read the two characters of a digraph from the user (after CTRL-K, or
 /// CTRL-R CTRL-K on the cmdline) and return the resulting character.
 /// Returns NUL when ESC cancels the sequence.
-pub fn get_digraph(cmdline: bool) -> c_int {
+pub fn get_digraph(cmdline: bool) -> Key {
     let raw_key = Keys::unmapped_with_codes();
-    // SAFETY: transpiled input machinery; no digraph state is borrowed.
     let c = plain_vgetc();
     drop(raw_key);
-    if c == ESC {
+    if c == Key::ESC {
         // Special keys or ESC cancel CTRL-K.
-        return NUL;
+        return Key::NUL;
     }
-    if c < 0 {
+    if c.is_special() {
         return c;
     }
     if cmdline {
-        if char2cells(c) == 1 && c < 128 && cmdline_star.get() == 0 {
-            putcmdline(c as c_char, true);
+        if let Some(byte) = c.as_byte().filter(|&b| b < 128)
+            && char2cells(c.code()) == 1
+            && cmdline_star.get() == 0
+        {
+            putcmdline(byte.cast_signed(), true);
         }
     } else {
-        // SAFETY: same as above.
-        add_to_showcmd(c);
+        add_to_showcmd(c.code());
     }
     let raw_key = Keys::unmapped_with_codes();
-    // SAFETY: as for the first read.
     let cc = plain_vgetc();
     drop(raw_key);
-    if cc != ESC {
+    if cc != Key::ESC {
         return digraph_get(c, cc, true);
     }
-    NUL
+    Key::NUL
 }
 
 /// Add (or overwrite) a user digraph.
-fn register_digraph(char1: c_int, char2: c_int, n: c_int) {
+fn register_digraph(char1: Key, char2: Key, n: Key) {
     USER_DIGRAPHS.with_mut(|user| {
         for d in user.iter_mut() {
-            if d.char1 as c_int == char1 && d.char2 as c_int == char2 {
+            if d.is_typed_as(char1, char2) {
                 d.result = n;
                 return;
             }
         }
+        // Upstream's `(char)`: a multibyte character keeps its low byte.
         user.push(Digraph {
-            char1: char1 as u8,
-            char2: char2 as u8,
+            char1: char1.code().to_le_bytes()[0],
+            char2: char2.code().to_le_bytes()[0],
             result: n,
         });
     });
@@ -216,15 +241,15 @@ fn register_digraph(char1: c_int, char2: c_int, n: c_int) {
 
 /// Check the characters of a prospective digraph: there must be exactly
 /// two, and ESC is not allowed. Emits the error message itself.
-fn check_digraph_chars_valid(char1: c_int, char2: c_int) -> bool {
-    if char2 == 0 {
+fn check_digraph_chars_valid(char1: Key, char2: Key) -> bool {
+    if char2.is_nul() {
         let mut msg = [0u8; 7];
-        let len = encode_char(char1, &mut msg);
+        let len = encode_char(char1.code(), &mut msg);
         let msg = String::from_utf8_lossy(&msg[..len]);
         crate::semsg!("E1214: Digraph must be just two characters: {msg}");
         return false;
     }
-    if char1 == ESC || char2 == ESC {
+    if char1 == Key::ESC || char2 == Key::ESC {
         crate::semsg!("E104: Escape not allowed in digraph");
         return false;
     }
@@ -253,11 +278,13 @@ fn split_at_white(s: &[u8]) -> (&[u8], &[u8]) {
 fn parse_digits(s: &[u8]) -> (c_int, &[u8]) {
     let n = s.iter().take_while(|b| b.is_ascii_digit()).count();
     let (digits, rest) = s.split_at(n);
-    let mut value: i64 = 0;
+    let mut value: c_int = 0;
     for &d in digits {
-        value = value.saturating_mul(10).saturating_add((d - b'0') as i64);
+        value = value
+            .saturating_mul(10)
+            .saturating_add(c_int::from(d - b'0'));
     }
-    (value.min(c_int::MAX as i64) as c_int, rest)
+    (value, rest)
 }
 
 /// Add digraphs from a `:digraph {char1}{char2} {number} ...` argument.
@@ -270,7 +297,7 @@ pub fn putdigraph(mut s: &[u8]) {
         let char1 = s[0];
         let char2 = s.get(1).copied().unwrap_or(0);
         s = &s[s.len().min(2)..];
-        if !check_digraph_chars_valid(char1 as c_int, char2 as c_int) {
+        if !check_digraph_chars_valid(Key::byte(char1), Key::byte(char2)) {
             return;
         }
         s = skip_white(s);
@@ -280,7 +307,7 @@ pub fn putdigraph(mut s: &[u8]) {
         }
         let (n, rest) = parse_digits(s);
         s = rest;
-        register_digraph(char1 as c_int, char2 as c_int, n);
+        register_digraph(Key::byte(char1), Key::byte(char2), Key::from_code(n));
     }
 }
 
@@ -303,14 +330,15 @@ fn digraph_header(name: &'static [u8]) {
 
 /// `msg_putchar('\n')`: end the current message line.
 fn newline() {
-    msg_putchar('\n' as c_int);
+    msg_putchar(c_int::from(b'\n'));
 }
 
 /// Print one digraph. With `previous`, print a section header when this
 /// digraph starts a new Unicode block (`:digraphs!`).
 fn printdigraph(dp: &Digraph, previous: Option<&mut c_int>) {
     const LIST_WIDTH: c_int = 13;
-    if dp.result == 0 {
+    let result = dp.result.code();
+    if result == 0 {
         return;
     }
     if let Some(previous) = previous {
@@ -318,12 +346,12 @@ fn printdigraph(dp: &Digraph, previous: Option<&mut c_int>) {
             let next_start = tables::BLOCK_HEADERS
                 .get(i + 1)
                 .map_or(tables::BLOCK_END, |h| h.start);
-            if *previous < header.start && dp.result >= header.start && dp.result < next_start {
+            if *previous < header.start && result >= header.start && result < next_start {
                 digraph_header(header.name);
                 break;
             }
         }
-        *previous = dp.result;
+        *previous = result;
     }
     if msg_col.get() > Columns.get() - LIST_WIDTH {
         newline();
@@ -335,18 +363,18 @@ fn printdigraph(dp: &Digraph, previous: Option<&mut c_int>) {
     let mut buf = [0u8; 12];
     let mut len = 0;
     // buf has room for the longest UTF-8 sequence plus the leading space.
-    if utf_iscomposing_first(dp.result) {
+    if utf_iscomposing_first(result) {
         buf[0] = b' ';
         len = 1;
     }
     // `buf` has room for the longest sequence after the space.
-    len += encode_char(dp.result, &mut buf[len..]);
+    len += encode_char(result, &mut buf[len..]);
     outtrans(&buf[..len], HLF_8);
     let mut num = Vec::with_capacity(8);
-    if char2cells(dp.result) == 1 {
+    if char2cells(result) == 1 {
         num.push(b' ');
     }
-    num.extend_from_slice(format!(" {:3}", dp.result).as_bytes());
+    num.extend_from_slice(format!(" {result:3}").as_bytes());
     outtrans(&num, 0);
 }
 
@@ -363,8 +391,8 @@ pub fn listdigraphs(use_headers: bool) {
         }
         // getexactdigraph() so that user-defined digraphs override the
         // default; the entry is skipped if the user removed it.
-        let result = get_exact_digraph(dp.char1 as c_int, dp.char2 as c_int, false);
-        if result != 0 && result != dp.char2 as c_int {
+        let result = get_exact_digraph(Key::byte(dp.char1), Key::byte(dp.char2), false);
+        if !result.is_nul() && result != Key::byte(dp.char2) {
             let tmp = Digraph { result, ..*dp };
             let previous = use_headers.then_some(&mut previous);
             printdigraph(&tmp, previous);
@@ -391,7 +419,7 @@ pub fn listdigraphs(use_headers: bool) {
 fn getlist_append_pair(dp: &Digraph, list: &mut List) {
     let chars = [dp.char1, dp.char2, 0];
     let mut buf = [0u8; 7];
-    encode_char(dp.result, &mut buf);
+    encode_char(dp.result.code(), &mut buf);
     let pair = tv_list_alloc(2);
     pair.edit().push_str(Some(cstr::in_bytes(&chars)));
     pair.edit().push_str(Some(cstr::in_bytes(&buf)));
@@ -402,7 +430,8 @@ fn getlist_append_pair(dp: &Digraph, list: &mut List) {
 /// defaults when `list_all` is given.
 fn digraph_getlist_common(list_all: bool, result: &mut TypVal) {
     let user_len = USER_DIGRAPHS.with(|user| user.len());
-    let capacity = (tables::DEFAULT_DIGRAPHS.len() + user_len) as isize;
+    let capacity =
+        isize::try_from(tables::DEFAULT_DIGRAPHS.len() + user_len).expect("a short table");
     // SAFETY: `result` is a valid return slot, so the list it is given owns
     // itself from here on.
     let list = tv_list_alloc_ret(result, capacity);
@@ -411,8 +440,8 @@ fn digraph_getlist_common(list_all: bool, result: &mut TypVal) {
             if got_int.get() {
                 break;
             }
-            let result = get_exact_digraph(dp.char1 as c_int, dp.char2 as c_int, false);
-            if result != 0 && result != dp.char2 as c_int {
+            let result = get_exact_digraph(Key::byte(dp.char1), Key::byte(dp.char2), false);
+            if !result.is_nul() && result != Key::byte(dp.char2) {
                 getlist_append_pair(&Digraph { result, ..*dp }, list);
             }
         }
@@ -429,11 +458,11 @@ fn digraph_getlist_common(list_all: bool, result: &mut TypVal) {
 /// Decode the leading character of `s`, and answer it with what follows,
 /// stepping over the base character only. A NUL first byte decodes to 0 and
 /// consumes nothing, as the C did.
-fn next_char(s: &[u8]) -> (c_int, &[u8]) {
+fn next_char(s: &[u8]) -> (Key, &[u8]) {
     if s.first().is_none_or(|&b| b == 0) {
-        return (0, s);
+        return (Key::NUL, s);
     }
-    (char_at(s), &s[char_len(s)..])
+    (Key::from_code(char_at(s)), &s[char_len(s)..])
 }
 
 /// The string value of `arg`, `None` when the typval is not one (which is
@@ -445,7 +474,7 @@ fn tv_string<'a>(arg: &'a TypVal, buf: &'a mut NumBuf) -> Option<&'a [u8]> {
 /// The two digraph characters of `chars`. Reports E1214 on anything but
 /// exactly two characters, `None` included: a non-string argument reads as
 /// the string "[NULL]", which is what the C `%s` format path printed.
-fn digraph_chars(chars: Option<&[u8]>) -> Option<(c_int, c_int)> {
+fn digraph_chars(chars: Option<&[u8]>) -> Option<(Key, Key)> {
     if let Some(bytes) = chars.filter(|b| !b.is_empty()) {
         let (char1, rest) = next_char(bytes);
         if !rest.is_empty() {
@@ -507,9 +536,10 @@ pub fn f_digraph_get(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         return;
     }
     // The chars go through `char` in C, hence the sign extension.
-    let code = digraph_get(bytes[0] as i8 as c_int, bytes[1] as i8 as c_int, false);
+    let sign_extended = |b: u8| Key::from_code(c_int::from(b.cast_signed()));
+    let code = digraph_get(sign_extended(bytes[0]), sign_extended(bytes[1]), false);
     let mut buf = [0u8; 7];
-    let len = encode_char(code, &mut buf);
+    let len = encode_char(code.code(), &mut buf);
     result.write_string(Some(ThinCString::from_bytes(&buf[..len])));
 }
 
@@ -518,7 +548,7 @@ pub fn f_digraph_getlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
     if tv_check_for_opt_bool_arg(args, 0).is_err() {
         return;
     }
-    let list_all = !args.is_empty() && tv_get_bool(&args[0]) != 0 as VarNumber;
+    let list_all = !args.is_empty() && tv_get_bool(&args[0]) != 0;
     digraph_getlist_common(list_all, result);
 }
 
@@ -563,8 +593,8 @@ fn digraph_setlist_common(arg: &TypVal) -> bool {
 // ---------------------------------------------------------------------------
 // 'keymap' option: language mappings loaded from a keymap file.
 
-const KEYMAP_INIT: c_int = 1;
-const KEYMAP_LOADED: c_int = 2;
+const KEYMAP_INIT: int16_t = 1;
+const KEYMAP_LOADED: int16_t = 2;
 const B_IMODE_LMAP: OptInt = 1;
 /// Maximum length of `from` plus `to` in one keymap entry.
 const KMAP_LLEN: usize = 200;
@@ -573,7 +603,7 @@ const KMAP_LLEN: usize = 200;
 /// language mappings when it is empty). Answers an error message.
 pub fn keymap_init() -> Result<(), OptError> {
     let mut buf = Buf::current();
-    buf.b_kmap_state &= !(KEYMAP_INIT as int16_t);
+    buf.b_kmap_state &= !KEYMAP_INIT;
     let keymap = buf.b_p_keymap.bytes().to_vec();
     if keymap.is_empty() {
         // Stop any active keymap and clear the b:keymap_name variable.
@@ -623,7 +653,7 @@ pub fn ex_loadkeymap(excmd: &mut ExArg) {
     // sourcing one, and `buf`'s entry list was just emptied.
     read_keymap_entries(excmd, buf);
     apply_keymap_entries(buf);
-    buf.b_kmap_state |= KEYMAP_LOADED as int16_t;
+    buf.b_kmap_state |= KEYMAP_LOADED;
     status_redraw_curbuf();
 }
 
@@ -681,7 +711,7 @@ fn keymap_map_cmd(from: &[u8], to: Option<&[u8]>) -> Vec<u8> {
 /// Stop using 'keymap': remove the language mappings and free the entries.
 fn keymap_unload() {
     let mut buf = Buf::current();
-    if buf.b_kmap_state as c_int & KEYMAP_LOADED == 0 {
+    if buf.b_kmap_state & KEYMAP_LOADED == 0 {
         return;
     }
     // Set 'cpoptions' to "C" to avoid line continuation.
@@ -698,7 +728,7 @@ fn keymap_unload() {
     }
     // The entries own their two strings.
     buf.b_kmap_ga = Vec::new();
-    buf.b_kmap_state &= !(KEYMAP_LOADED as int16_t);
+    buf.b_kmap_state &= !(KEYMAP_LOADED);
     status_redraw_curbuf();
 }
 
@@ -719,7 +749,7 @@ pub fn keymap_str(window: Win) -> Option<CString> {
     saved.restore();
     let name = match s {
         Some(s) if !s.is_empty() => s.as_cstr().to_owned(),
-        _ if buf.b_kmap_state as c_int & KEYMAP_LOADED != 0 => buf.b_p_keymap.cstr().to_owned(),
+        _ if buf.b_kmap_state & KEYMAP_LOADED != 0 => buf.b_p_keymap.cstr().to_owned(),
         _ => CString::new("lang").expect("no interior NUL"),
     };
     Some(name)

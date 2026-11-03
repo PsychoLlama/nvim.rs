@@ -14,7 +14,7 @@
 
 use core::ffi::c_int;
 
-use crate::types::KeyExtra;
+use crate::types::{Key, KeyExtra};
 
 use super::{extra, termcap};
 
@@ -68,17 +68,19 @@ pub const Ctrl__: c_int = 31;
 
 /// The byte that introduces a special key in a byte stream. A literal 0x80
 /// in text is escaped as `K_SPECIAL KS_SPECIAL KE_FILLER`.
-pub const K_SPECIAL: c_int = 0x80;
-/// Termcap-name bytes that are not termcap names.
-pub const KS_SPECIAL: c_int = 254;
-pub const KS_EXTRA: c_int = 253;
-pub const KS_MODIFIER: c_int = 252;
-pub const KS_KEY: c_int = 242;
+pub const K_SPECIAL: u8 = 0x80;
+/// Termcap-name bytes that are not termcap names: the second byte of an
+/// escape that says what the third one means.
+pub const KS_SPECIAL: u8 = 254;
+pub const KS_EXTRA: u8 = 253;
+pub const KS_MODIFIER: u8 = 252;
+pub const KS_KEY: u8 = 242;
 /// The second byte of a key whose first byte already says everything.
-pub const KE_FILLER: c_int = 'X' as c_int;
+pub const KE_FILLER: u8 = b'X';
 
 /// First bytes used by keys that are neither `KS_EXTRA` nor a termcap name.
-const KS_ZERO: u8 = 255;
+/// `KS_ZERO` is the escaped NUL.
+pub(crate) const KS_ZERO: u8 = 255;
 const KS_MOUSE: u8 = 251;
 const KS_VER_SCROLLBAR: u8 = 249;
 const KS_HOR_SCROLLBAR: u8 = 248;
@@ -90,16 +92,16 @@ const KS_SELECT: u8 = 245;
 /// Only these three need escaping; every other byte stands for itself. A NUL
 /// cannot be stored literally because the streams are NUL-terminated, and a
 /// literal 0x80 cannot because it is the escape byte.
-pub fn key_escape(c: c_int) -> [u8; 3] {
-    let (second, third) = if c == K_SPECIAL {
-        (KS_SPECIAL as u8, KE_FILLER as u8)
-    } else if c == 0 {
-        (KS_ZERO, KE_FILLER as u8)
+pub fn key_escape(key: Key) -> [u8; 3] {
+    let (second, third) = if key == Key::byte(K_SPECIAL) {
+        (KS_SPECIAL, KE_FILLER)
+    } else if key.is_nul() {
+        (KS_ZERO, KE_FILLER)
     } else {
-        let name = super::tables::termcap_name(c);
+        let name = super::tables::termcap_name(key);
         (name[0], name[1])
     };
-    [K_SPECIAL as u8, second, third]
+    [K_SPECIAL, second, third]
 }
 
 /// The key an escape's two trailing bytes stand for: upstream's `TO_SPECIAL`.
@@ -107,11 +109,11 @@ pub fn key_escape(c: c_int) -> [u8; 3] {
 /// The inverse of [`key_escape`], except that a NUL comes back as the key
 /// code `K_ZERO` rather than as 0 — the streams cannot carry a bare NUL, so
 /// callers that want the byte back test for `K_ZERO` themselves.
-pub fn key_unescape(second: u8, third: u8) -> c_int {
-    if c_int::from(second) == KS_SPECIAL {
-        K_SPECIAL
+pub fn key_unescape(second: u8, third: u8) -> Key {
+    if second == KS_SPECIAL {
+        Key::byte(K_SPECIAL)
     } else if second == KS_ZERO {
-        SpecialKey::Zero.code()
+        Key::from_special(SpecialKey::Zero)
     } else {
         super::tables::termcap_key([second, third])
     }
@@ -369,7 +371,7 @@ pub enum SpecialKey {
     Find = termcap(b'@', b'0'),
     Help = termcap(b'%', b'1'),
     Home = termcap(b'k', b'h'),
-    HorScrollbar = termcap(KS_HOR_SCROLLBAR, KE_FILLER as u8),
+    HorScrollbar = termcap(KS_HOR_SCROLLBAR, KE_FILLER),
     Ins = termcap(b'k', b'I'),
     K0 = termcap(b'K', b'C'),
     K1 = termcap(b'K', b'D'),
@@ -400,13 +402,13 @@ pub enum SpecialKey {
     Kselect = termcap(b'*', b'6'),
     Kup = termcap(b'K', b'u'),
     Left = termcap(b'k', b'l'),
-    Mouse = termcap(KS_MOUSE, KE_FILLER as u8),
+    Mouse = termcap(KS_MOUSE, KE_FILLER),
     Pagedown = termcap(b'k', b'N'),
     Pageup = termcap(b'k', b'P'),
     PasteEnd = termcap(b'P', b'E'),
     PasteStart = termcap(b'P', b'S'),
     Right = termcap(b'k', b'r'),
-    Select = termcap(KS_SELECT, KE_FILLER as u8),
+    Select = termcap(KS_SELECT, KE_FILLER),
     SEnd = termcap(b'*', b'7'),
     SHome = termcap(b'#', b'2'),
     SLeft = termcap(b'#', b'4'),
@@ -414,8 +416,8 @@ pub enum SpecialKey {
     STab = termcap(b'k', b'B'),
     Undo = termcap(b'&', b'8'),
     Up = termcap(b'k', b'u'),
-    VerScrollbar = termcap(KS_VER_SCROLLBAR, KE_FILLER as u8),
-    Zero = termcap(KS_ZERO, KE_FILLER as u8),
+    VerScrollbar = termcap(KS_VER_SCROLLBAR, KE_FILLER),
+    Zero = termcap(KS_ZERO, KE_FILLER),
 }
 
 impl SpecialKey {
@@ -424,7 +426,7 @@ impl SpecialKey {
     /// highest `KE_*` byte, and nothing else about the order means anything.
     /// It is the table [`SpecialKey::try_from`] binary searches, and the `const`
     /// block below fails the build if it ever stops being sorted.
-    const ALL: [SpecialKey; 185] = [
+    pub const ALL: [SpecialKey; 185] = [
         SpecialKey::Up,
         SpecialKey::Kup,
         SpecialKey::Right,
@@ -678,6 +680,21 @@ crate::flag_set! {
     const MULTI_CLICK = Self::TWO_CLICK.bits() | Self::THREE_CLICK.bits();
 }
 
+impl ModMask {
+    /// The modifiers as the one byte they travel as after `KS_MODIFIER`.
+    /// Every flag lives in the low byte, so nothing is lost.
+    #[inline]
+    pub const fn byte(self) -> u8 {
+        self.bits().to_le_bytes()[0]
+    }
+
+    /// The modifiers a `KS_MODIFIER` byte carries.
+    #[inline]
+    pub const fn from_byte(byte: u8) -> Self {
+        Self::from_bits(c_int::from_le_bytes([byte, 0, 0, 0]))
+    }
+}
+
 /// Which mouse button an event is about.
 pub const MOUSE_LEFT: c_int = 0x00;
 pub const MOUSE_MIDDLE: c_int = 0x01;
@@ -717,4 +734,4 @@ pub const REPTERM_NO_SIMPLIFY: c_int = 8;
 
 /// The longest `<...>` a key can print as, `<` and `>` included. Adding a
 /// longer key name, or another modifier letter, means raising this.
-pub const MAX_KEY_NAME_LEN: c_int = 32;
+pub const MAX_KEY_NAME_LEN: usize = 32;

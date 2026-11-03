@@ -17,21 +17,31 @@
 
 use super::*;
 use crate::charset::is_word_at;
+use crate::getchar::Remap;
 use crate::getchar::{ins_typebuf, typeahead};
 use crate::guard::Lock;
-use crate::keycodes::{Ctrl_RSB, Ctrl_V, key_escape};
+use crate::keycodes::key_escape;
 use crate::lua::executor::nlua_call_ref_reporting;
 use crate::mbyte::head_off;
 use crate::message_fmt::msg_cstr;
 use crate::semsg_multiline;
+use crate::types::Key;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 
-/// `K_SPECIAL` and `Ctrl_V` as the bytes a typed sequence carries.
-const KS_BYTE: u8 = 0x80;
+/// `Ctrl_V` as the byte a typed sequence carries.
 const CTRL_V_BYTE: u8 = 0x16;
-const _: () = assert!(KS_BYTE as c_int == K_SPECIAL && CTRL_V_BYTE as c_int == Ctrl_V);
+
+/// The callers' spelling of a key that needs no CTRL-V -- the key plus
+/// `ABBR_OFF` -- as the key and that flag.
+pub(crate) fn abbr_key(c: c_int) -> (Key, bool) {
+    if c >= ABBR_OFF {
+        (Key::from_code(c - ABBR_OFF), true)
+    } else {
+        (Key::from_code(c), false)
+    }
+}
 
 /// Whether `mp`'s LHS is exactly `word`, in a mode that is current.
 ///
@@ -42,7 +52,7 @@ fn abbr_matches(mp: &MapBlock, word: &[u8]) -> bool {
         return false;
     }
     let keys = mp.keys();
-    if !keys.contains(&KS_BYTE) {
+    if !keys.contains(&K_SPECIAL) {
         return keys == word;
     }
     unescape_ks(keys) == word
@@ -77,7 +87,7 @@ impl MapExpr {
 /// What [`check_abbr`] needs of the abbreviation it found, copied out of the
 /// table: an `<expr>` one can delete itself.
 struct Found {
-    noremap: c_int,
+    noremap: Remap,
     silent: bool,
     /// The expression of an `<expr>` abbreviation, or else the RHS.
     expr: Option<MapExpr>,
@@ -96,20 +106,20 @@ fn prev(text: &[u8], at: usize) -> usize {
 /// `text` is a copy of the line up to the cursor: the expansion can run user
 /// code, which may change the line it came from.  When inserting, `mincol`
 /// is where the insert started; on the command line it is what is to be
-/// skipped over.  `c` is the character typed just before the call, possibly
-/// with `ABBR_OFF` added to say that it needs no CTRL-V.
+/// skipped over.  `c` is the character typed just before the call, and
+/// `literal` says it needs no CTRL-V in front of it.
 ///
 /// Historic vi practice: the last character of an abbreviation must be an id
 /// character, and the ones in front of it must be all id characters or all
 /// non-id characters, which is what lets `#i` stand for `#include`.  Vim adds
 /// abbreviations ending in a non-keyword character, which instead need white
 /// space in front.
-pub fn check_abbr(c: c_int, text: Vec<u8>, mincol: c_int) -> bool {
+pub fn check_abbr(c: Key, literal: bool, text: Vec<u8>, mincol: c_int) -> bool {
     if typeahead().no_abbr_cnt() != 0 {
         return false; // abbreviations are not recursive
     }
     // No remapping implies no abbreviation, except for CTRL-].
-    if noremap_keys() && c != Ctrl_RSB {
+    if noremap_keys() && c != Key::ctrl(b']') {
         return false;
     }
     let col = text.len();
@@ -175,17 +185,14 @@ pub fn check_abbr(c: c_int, text: Vec<u8>, mincol: c_int) -> bool {
     // CTRL-V. CTRL-] is special: it completes the abbreviation but is not
     // inserted into the input stream.
     let mut typed = Vec::new();
-    if c != Ctrl_RSB {
-        if c < 0 || c == K_SPECIAL {
+    if c != Key::ctrl(b']') {
+        if c.is_special() || c == Key::byte(K_SPECIAL) {
             // A special key code, split up.
             typed.extend_from_slice(&key_escape(c));
         } else {
-            let mut c = c;
-            if c < ABBR_OFF && !(c_int::from(b' ')..=c_int::from(b'~')).contains(&c) {
+            let printable = c.as_byte().is_some_and(|b| (b' '..=b'~').contains(&b));
+            if !literal && !printable {
                 typed.push(CTRL_V_BYTE); // a special char needs CTRL-V
-            }
-            if c >= ABBR_OFF {
-                c -= ABBR_OFF; // remove the ABBR_OFF added by the caller
             }
             // The character, with K_SPECIAL escaped.
             push_char_escaped(c, &mut typed);
@@ -193,7 +200,7 @@ pub fn check_abbr(c: c_int, text: Vec<u8>, mincol: c_int) -> bool {
         typed.push(0);
         // Insert the last typed char.
         let keys = CStr::from_bytes_until_nul(&typed).expect("terminated just above");
-        let _ = ins_typebuf(keys.to_bytes(), 1, 0, true, found.silent);
+        let _ = ins_typebuf(keys.to_bytes(), Remap::First(1), 0, true, found.silent);
         typed.pop();
     }
 
@@ -214,7 +221,7 @@ pub fn check_abbr(c: c_int, text: Vec<u8>, mincol: c_int) -> bool {
 
     // Delete the "from" string: characters, not bytes.
     for _ in 0..clen {
-        let _ = ins_typebuf(b"\x08", 1, 0, true, found.silent); // CTRL-H
+        let _ = ins_typebuf(b"\x08", Remap::First(1), 0, true, found.silent); // CTRL-H
     }
     true
 }
@@ -223,11 +230,11 @@ pub fn check_abbr(c: c_int, text: Vec<u8>, mincol: c_int) -> bool {
 /// result so it can be used as typeahead.
 ///
 /// `c` is NUL, or the typed character for an abbreviation.
-pub(crate) fn eval_map_expr(expr: &MapExpr, c: c_int) -> Option<MapStr> {
+pub(crate) fn eval_map_expr(expr: &MapExpr, c: Key) -> Option<MapStr> {
     // Forbid changing text or using ":normal", which rules out most of the bad
     // side effects, and restore the cursor position afterwards.
     let locked = Lock::expr_map();
-    set_vim_var_char(c); // set v:char to the typed character
+    set_vim_var_char(c.code()); // set v:char to the typed character
     let save_cursor = Win::current().w_cursor;
     let save_msg_col = msg_col.get();
     let save_msg_row = msg_row.get();

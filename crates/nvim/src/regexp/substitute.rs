@@ -600,11 +600,11 @@ fn expand_replacement(rex: Expanding<'_>, source: &[u8], flags: c_int, out: &mut
         }
 
         // A special key travels as its own three bytes.
-        if c == K_SPECIAL && at(src) != NUL as u8 && at(src + 1) != NUL as u8 {
+        if c == c_int::from(K_SPECIAL) && at(src) != NUL as u8 && at(src + 1) != NUL as u8 {
             if !out.room(3) {
                 return Outcome::NoSpace;
             }
-            out.push(K_SPECIAL as u8);
+            out.push(K_SPECIAL);
             out.push(at(src));
             out.push(at(src + 1));
             src += 2;

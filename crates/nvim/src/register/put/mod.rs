@@ -30,6 +30,7 @@ use crate::mbyte::c_cluster_len;
 use crate::message_fmt::msg_cstr;
 use crate::narrow::len_as_int;
 use crate::semsg;
+use crate::types::Key;
 use crate::types::RegLines;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_int, c_uint};
@@ -92,7 +93,7 @@ fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: c_uint)
         // does not reach the text.
         do_put('_' as c_int, None, dir, 1, PUT_LINE as c_int);
 
-        stuff_readbuf_char(command_start_char);
+        stuff_readbuf_char(Key::from_code(command_start_char));
         while count > 0 {
             let _ = stuff_inserted(NUL, 1, (count != 1) as c_int);
             if count != 1 {
@@ -101,7 +102,7 @@ fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: c_uint)
                 // previous line under 'nobackspace'-`eol`, so it is given
                 // a space to consume.
                 stuff_readbuf(b"\n ");
-                stuff_readbuf_char(Ctrl_U);
+                stuff_readbuf_char(Key::ctrl(b'U'));
             }
             count -= 1;
         }
@@ -131,7 +132,7 @@ fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: c_uint)
             let eof =
                 Buf::current().b_ml.ml_line_count == Win::current().w_cursor.lnum && one_past_line;
             if ve_allows || !(eol || eof) {
-                stuff_readbuf_char('l' as c_int);
+                stuff_readbuf_char(Key::ascii(b'l'));
             }
         }
     } else if flags & PUT_LINE as c_int != 0 {

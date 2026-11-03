@@ -18,6 +18,7 @@
 
 use super::*;
 use crate::api_error;
+use crate::getchar::Remap;
 use crate::getchar::typeahead;
 use crate::guard::Depth;
 use crate::keycodes::ModMask;
@@ -79,11 +80,7 @@ pub fn nvim_feedkeys(keys: ApiString, mode: ApiString, escape_ks: Boolean) {
     if lowlevel {
         input_enqueue_raw(keys_esc);
     } else {
-        let remap_flag = if remap {
-            REMAP_YES as ::core::ffi::c_int
-        } else {
-            REMAP_NONE as ::core::ffi::c_int
-        };
+        let remap_flag = if remap { Remap::Yes } else { Remap::No };
         // `insert` puts the keys at the front of the typeahead; without it
         // they go after whatever is already queued.
         let offset = if insert { 0 } else { typeahead().len() };
@@ -120,7 +117,7 @@ pub fn nvim_input_mouse(
     if button.data().is_null() || action.data().is_null() {
         return Err(invalid());
     }
-    let mut code = match button.as_cstr().to_bytes() {
+    let mut code: ::core::ffi::c_int = match button.as_cstr().to_bytes() {
         b"left" => KE_LEFTMOUSE,
         b"middle" => KE_MIDDLEMOUSE,
         b"right" => KE_RIGHTMOUSE,
@@ -130,9 +127,9 @@ pub fn nvim_input_mouse(
         b"move" => KE_MOUSEMOVE,
         _ => return Err(invalid()),
     }
-    .cast_signed();
+    .into();
     let action = action.as_cstr().to_bytes();
-    if code == KE_MOUSEDOWN.cast_signed() {
+    if code == ::core::ffi::c_int::from(KE_MOUSEDOWN) {
         // The wheel's "action" is its direction.
         code = match action {
             b"down" => KE_MOUSEUP,
@@ -141,19 +138,22 @@ pub fn nvim_input_mouse(
             b"right" => KE_MOUSELEFT,
             _ => return Err(invalid()),
         }
-        .cast_signed();
-    } else if code != KE_MOUSEMOVE.cast_signed() && action != b"press" {
+        .into();
+    } else if code != ::core::ffi::c_int::from(KE_MOUSEMOVE) && action != b"press" {
         code += match action {
-            b"drag" => KE_LEFTDRAG.cast_signed() - KE_LEFTMOUSE.cast_signed(),
-            b"release" => KE_LEFTRELEASE.cast_signed() - KE_LEFTMOUSE.cast_signed(),
+            b"drag" => {
+                ::core::ffi::c_int::from(KE_LEFTDRAG) - ::core::ffi::c_int::from(KE_LEFTMOUSE)
+            }
+            b"release" => {
+                ::core::ffi::c_int::from(KE_LEFTRELEASE) - ::core::ffi::c_int::from(KE_LEFTMOUSE)
+            }
             _ => return Err(invalid()),
         };
     }
     let mut modmask = ModMask::NONE;
     for &raw in modifier.as_bytes() {
-        let byte = ::core::ffi::c_char::from_ne_bytes([raw]);
         if raw != b'-' {
-            let mod_0 = name_to_mod_mask(::core::ffi::c_int::from(byte));
+            let mod_0 = name_to_mod_mask(raw);
             if mod_0.is_empty() {
                 // `%c` wrote the one byte, whatever it was; the adaptor keeps
                 // it rather than widening it to a char.

@@ -19,6 +19,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::getchar::Remap;
 use core::ffi::{CStr, c_int};
 
 use super::*;
@@ -188,12 +189,12 @@ fn menu_get_recursive(menu: &VimMenu, modes: c_int) -> Option<DictRef> {
             let _ = mapping.add_number(b"silent", VarNumber::from(menu.silent[bit]));
             let enabled = menu.enabled & (1 << bit) != 0;
             let _ = mapping.add_number(b"enabled", VarNumber::from(enabled));
-            // `noremap` holds 0, REMAP_NONE (-1) or REMAP_SCRIPT (-2): one
+            // `noremap` holds 0, Remap::No (-1) or Remap::Script (-2): one
             // value, not flags, so each key compares for equality, as
             // `menu_info()` does.
             let noremap = menu.noremap[bit];
-            let _ = mapping.add_number(b"noremap", VarNumber::from(noremap == REMAP_NONE));
-            let _ = mapping.add_number(b"sid", VarNumber::from(noremap == REMAP_SCRIPT));
+            let _ = mapping.add_number(b"noremap", VarNumber::from(noremap == Remap::No));
+            let _ = mapping.add_number(b"sid", VarNumber::from(noremap == Remap::Script));
             // One byte of the mode letters, so `tl` files under `t`.
             let _ = commands.add_dict(&mode.to_bytes()[..1], Some(mapping_held));
         }
@@ -330,8 +331,8 @@ fn show_menus_recursive(node: &VimMenu, modes: c_int, depth: c_int) {
         }
         put(mode);
         put_char(match node.noremap[bit] {
-            REMAP_NONE => b'*',
-            REMAP_SCRIPT => b'&',
+            Remap::No => b'*',
+            Remap::Script => b'&',
             _ => b' ',
         });
         put_char(if node.silent[bit] { b's' } else { b' ' });

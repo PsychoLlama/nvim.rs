@@ -10,12 +10,12 @@
 
 use super::*;
 use crate::keycodes::ModMask;
-use crate::keycodes::{Ctrl_N, Ctrl_P, KE_IGNORE, KE_PLUG, KE_SNR, key_escape};
+use crate::keycodes::{KE_IGNORE, KE_PLUG, KE_SNR, key_escape};
 use crate::mbyte::{char_len, encode_char, unescape_at};
 use crate::normal::{set_visual_select, visual_active, visual_select};
 use crate::option::vars::P_LANGMAP;
 use crate::types::MapStr;
-use crate::types::{Failed, MB_MAXBYTES, NUL};
+use crate::types::{Failed, Key, MB_MAXBYTES};
 use core::ffi::c_int;
 
 /// Whether C's `LANGMAP_ADJUST` maps keys through `'langmap'` now: the
@@ -38,18 +38,15 @@ fn langmap_applies(maplen: c_int) -> bool {
             } else {
                 KeyTyped.get()
             })
-        && KeyStuffed.get() == 0
+        && !KeyStuffed.get()
 }
 
-/// The other half of `LANGMAP_ADJUST`: `c` through `'langmap'`, for a key
-/// [`langmap_applies`] said it applies to.
+/// The other half of `LANGMAP_ADJUST`: typeahead byte `byte` through
+/// `'langmap'`, for a key [`langmap_applies`] said it applies to. A byte is
+/// always below 256, so this is the table and never the multibyte search.
 #[inline(always)]
-fn langmap_map(c: c_int) -> c_int {
-    match usize::try_from(c) {
-        Ok(byte) if byte < 256 => langmap_mapchar.with(|map| c_int::from(map[byte])),
-        Ok(_) => langmap_adjust_mb(c),
-        Err(_) => c,
-    }
+fn langmap_map(byte: u8) -> u8 {
+    langmap_mapchar.with(|map| map[usize::from(byte)])
 }
 
 /// Replace `slen` bytes at `offset` in the typeahead with `string`.
@@ -68,7 +65,7 @@ pub(crate) fn put_string_in_typebuf(
     } else if extra > 0 {
         // Insert the extra space we need.
         let from = usize::try_from(slen).expect("a positive length");
-        ins_typebuf(&string[from..], REMAP_YES, offset, false, false)?;
+        ins_typebuf(&string[from..], Remap::Yes, offset, false, false)?;
     }
     // The storage may have moved under the delete or the insert; the copy
     // goes to wherever the bytes are now.
@@ -80,29 +77,30 @@ pub(crate) fn put_string_in_typebuf(
 /// including the form with a Ctrl modifier.
 pub(crate) fn at_ins_compl_key() -> bool {
     let tb = typeahead();
-    let mut c = tb.byte(0);
+    let mut c = Key::byte(tb.byte(0));
 
     if tb.len() > 3
-        && c == K_SPECIAL
+        && tb.byte(0) == K_SPECIAL
         && tb.byte(1) == KS_MODIFIER
-        && ModMask::from_bits(tb.byte(2)).has(ModMask::CTRL)
+        && ModMask::from_byte(tb.byte(2)).has(ModMask::CTRL)
     {
-        c = tb.byte(3) & 0x1f;
+        c = Key::ctrl(tb.byte(3));
     }
-    (ctrl_x_mode_not_default() && vim_is_ctrl_x_key(c))
-        || (compl_status_local() && (c == Ctrl_N || c == Ctrl_P))
+    (ctrl_x_mode_not_default() && vim_is_ctrl_x_key(c.code()))
+        || (compl_status_local() && (c == Key::ctrl(b'N') || c == Key::ctrl(b'P')))
 }
 
 /// Fold a modifier at the front of the typeahead into the key it modifies,
 /// where a single code stands for the combination.
 ///
 /// Looks at offsets 0 through `max_offset - 1`. Answers how many bytes the
-/// replacement occupies, 0 when nothing changed, or -1 on failure.
-pub(crate) fn check_simplify_modifier(max_offset: c_int) -> c_int {
+/// replacement occupies, 0 when nothing changed, or `Err` when it did not
+/// fit (the message is out).
+pub(crate) fn check_simplify_modifier(max_offset: c_int) -> Result<usize, Failed> {
     // Terminal mode wants the full modifiers, so that the key can be
     // encoded for the child process.
     if State.get() & MODE_TERMINAL != 0 || no_reduce_keys.get() > 0 {
-        return 0;
+        return Ok(0);
     }
 
     for offset in 0..max_offset {
@@ -116,8 +114,8 @@ pub(crate) fn check_simplify_modifier(max_offset: c_int) -> c_int {
 
         // A modifier that was not used for a mapping: apply it to the
         // ASCII key. Shift would already have been applied.
-        let mut modifier = ModMask::from_bits(tb.byte(offset + 2));
-        let c = tb.byte(offset + 3);
+        let mut modifier = ModMask::from_byte(tb.byte(offset + 2));
+        let c = Key::byte(tb.byte(offset + 3));
         let new_c = merge_modifiers(c, &mut modifier);
         if new_c == c {
             continue;
@@ -128,15 +126,15 @@ pub(crate) fn check_simplify_modifier(max_offset: c_int) -> c_int {
             // before the merge. In some cases -- at the hit-return
             // prompt, say -- they are put back into the typeahead.
             vgetc_char.set(c);
-            vgetc_mod_mask.set(ModMask::from_bits(tb.byte(2)));
+            vgetc_mod_mask.set(ModMask::from_byte(tb.byte(2)));
         }
 
         let mut new_string = [0u8; MB_MAXBYTES];
-        let len = if new_c < 0 {
+        let len = if new_c.is_special() {
             new_string[..3].copy_from_slice(&key_escape(new_c));
             3
         } else {
-            encode_char(new_c, &mut new_string)
+            encode_char(new_c.code(), &mut new_string)
         };
         let new_string = &new_string[..len];
 
@@ -147,15 +145,12 @@ pub(crate) fn check_simplify_modifier(max_offset: c_int) -> c_int {
             put_string_in_typebuf(offset, 4, new_string)
         } else {
             // Some of the modifier is left over; keep the prefix.
-            tb.set_byte(offset + 2, modifier.bits() as u8);
+            tb.set_byte(offset + 2, modifier.byte());
             put_string_in_typebuf(offset + 3, 1, new_string)
         };
-        if ok.is_err() {
-            return -1;
-        }
-        return c_int::try_from(len).expect("a key is a few bytes");
+        return ok.map(|()| len);
     }
-    0
+    Ok(0)
 }
 
 /// A mapping the walk is considering: where it is, and the two flags the
@@ -192,7 +187,7 @@ fn search_maphash(
     waited: bool,
     local_state: c_int,
     is_plug_map: bool,
-    mut tb_c1: c_int,
+    mut tb_c1: u8,
 ) -> MapSearch {
     let mut found = MapSearch {
         mp: None,
@@ -235,7 +230,7 @@ fn search_maphash(
                     // Only consider an entry whose first character matches
                     // and that is for the current state. Skip `:lmap`
                     // mappings when keys were mapped.
-                    if c_int::from(lhs[0]) != tb_c1
+                    if lhs[0] != tb_c1
                         || mp.m_mode & local_state == 0
                         || (mp.m_mode & MODE_LANGMAP != 0 && maplen != 0)
                     {
@@ -259,12 +254,12 @@ fn search_maphash(
                     let mut at = 1;
                     while at < limit {
                         let (typed, key) = (typed_bytes[at], lhs_bytes[at]);
-                        let mut c2 = c_int::from(typed);
+                        let mut c2 = typed;
                         if nomap > 0 {
                             if nomap == 2 && c2 == KS_MODIFIER {
                                 modifier_next = true;
                             } else if nomap == 1 && modifier_next {
-                                modifiers = ModMask::from_bits(c2);
+                                modifiers = ModMask::from_byte(c2);
                             }
                             nomap -= 1;
                         } else {
@@ -272,7 +267,8 @@ fn search_maphash(
                                 nomap = 2;
                             } else if langmap
                                 && (!modifiers.has(ModMask::CTRL)
-                                    || merge_modifiers(c2, &mut modifiers) == c2)
+                                    || merge_modifiers(Key::byte(c2), &mut modifiers)
+                                        == Key::byte(c2))
                             {
                                 // Only apply 'langmap' when merging the
                                 // modifiers into the key would not produce
@@ -286,9 +282,7 @@ fn search_maphash(
                             modifiers = ModMask::NONE;
                             modifier_next = false;
                         }
-                        // Upstream's `(uint8_t)c2`: a 'langmap' result
-                        // wider than a byte compares by its low byte.
-                        if key != c2.to_le_bytes()[0] {
+                        if key != c2 {
                             break;
                         }
                         at += 1;
@@ -317,21 +311,17 @@ fn search_maphash(
 
                     // When only script-local mappings are allowed, the
                     // mapping has to start with K_SNR.
-                    let snr = || {
-                        matches!(mp.keys(), [a, b, c, ..] if c_int::from(*a) == K_SPECIAL
-                            && c_int::from(*b) == KS_EXTRA
-                            && c_int::from(*c) == KE_SNR as c_int)
-                    };
-                    if c_int::from(noremaps[0]) == RM_SCRIPT as c_int && !snr() {
+                    let snr = || matches!(mp.keys(), [K_SPECIAL, KS_EXTRA, KE_SNR, ..]);
+                    if noremaps[0] == RM_SCRIPT && !snr() {
                         continue;
                     }
 
                     // Skip the entry when one of the typed keys may not be
                     // remapped.
                     let matched = usize::try_from(mlen).expect("a positive length");
-                    let blocked = noremaps[..matched].iter().any(|&flags| {
-                        c_int::from(flags) & (RM_NONE as c_int | RM_ABBR as c_int) != 0
-                    });
+                    let blocked = noremaps[..matched]
+                        .iter()
+                        .any(|&flags| flags & (RM_NONE | RM_ABBR) != 0);
                     if !is_plug_map && blocked {
                         continue;
                     }
@@ -400,7 +390,7 @@ fn finish_search(mut found: MapSearch, mp_match: Option<Candidate>) -> MapSearch
 /// that redefines the mapping, which deletes it.
 struct Applied {
     mode: c_int,
-    noremap: c_int,
+    noremap: Remap,
     silent: bool,
     /// The expression of an `<expr>` mapping.
     expr: Option<MapExpr>,
@@ -432,7 +422,7 @@ fn apply_mapping(at: MapAt, keylen: c_int, mapdepth: &mut c_int) -> c_int {
     let applied = at.with(|tables, mp| {
         // Upstream compares `keylen` bytes, which is never more than the LHS
         // it matched. Only a `:map` asks, so a `:noremap` copies nothing.
-        let compares = mp.m_noremap == REMAP_YES;
+        let compares = mp.m_noremap == Remap::Yes;
         let keys = mp.keys();
         Applied {
             mode: mp.m_mode,
@@ -490,7 +480,7 @@ fn apply_mapping(at: MapAt, keylen: c_int, mapdepth: &mut c_int) -> c_int {
     // for the duration, and append K_SELECT to switch back.
     if visual_active() && visual_select() && applied.mode & MODE_VISUAL != 0 {
         set_visual_select(false);
-        let _ = ins_typebuf(K_SELECT_STRING.to_bytes(), REMAP_NONE, 0, true, false);
+        let _ = ins_typebuf(K_SELECT_STRING.to_bytes(), Remap::No, 0, true, false);
     }
 
     // `:map <expr>`: the RHS is an expression to evaluate.
@@ -502,13 +492,13 @@ fn apply_mapping(at: MapAt, keylen: c_int, mapdepth: &mut c_int) -> c_int {
         vgetc_busy.set(0);
         may_garbage_collect.set(false);
 
-        let mut map_str = eval_map_expr(expr, NUL);
+        let mut map_str = eval_map_expr(expr, Key::NUL);
 
         if map_str.as_ref().is_none_or(MapStr::is_empty) {
             if prev_did_emsg != did_emsg.get() {
                 // An error was displayed and the expression answered
                 // nothing: generate a <Nop> so that a redraw can happen.
-                let nop = [K_SPECIAL as u8, KS_EXTRA as u8, KE_IGNORE as u8];
+                let nop = [K_SPECIAL, KS_EXTRA, KE_IGNORE];
                 map_str = Some(MapStr::new(&nop));
                 if State.get() & MODE_CMDLINE != 0 {
                     // Redraw the command below the error.
@@ -549,12 +539,12 @@ fn apply_mapping(at: MapAt, keylen: c_int, mapdepth: &mut c_int) -> c_int {
         // between remapping all of it and skipping the first byte; upstream
         // only asks for a `:map` -- for a `:noremap` the two `strncmp`s are
         // skipped, and `mapresolve` notices.
-        let noremap = if applied.noremap != REMAP_YES {
+        let noremap = if applied.noremap != Remap::Yes {
             applied.noremap
         } else if applied.starts_with_lhs(map_str) {
-            REMAP_SKIP
+            Remap::Skip
         } else {
-            REMAP_YES
+            Remap::Yes
         };
 
         ins_typebuf(
@@ -592,10 +582,8 @@ pub(crate) fn handle_mapping(keylenp: &mut c_int, timedout: bool, mapdepth: &mut
 
     // Typeahead starting with <Plug> is remapped even by a `noremap`
     // mapping: it can only have come from a mapping in the first place.
-    let is_plug_map = tb.len() >= 3
-        && tb.byte(0) == K_SPECIAL
-        && tb.byte(1) == KS_EXTRA
-        && tb.byte(2) == KE_PLUG as c_int;
+    let is_plug_map =
+        tb.len() >= 3 && tb.byte(0) == K_SPECIAL && tb.byte(1) == KS_EXTRA && tb.byte(2) == KE_PLUG;
 
     let tb_c1 = tb.byte(0);
 
@@ -607,12 +595,10 @@ pub(crate) fn handle_mapping(keylenp: &mut c_int, timedout: bool, mapdepth: &mut
     // - a --More-- prompt is up;
     // - we are in CTRL-X mode and this is a key that mode uses.
     let mappable = no_mapping.get() == 0
-        && (no_zero_mapping.get() == 0 || tb_c1 != '0' as c_int)
-        && (tb.maplen() == 0
-            || is_plug_map
-            || tb.noremap(0) & (RM_NONE as c_int | RM_ABBR as c_int) == 0)
+        && (no_zero_mapping.get() == 0 || tb_c1 != b'0')
+        && (tb.maplen() == 0 || is_plug_map || tb.noremap(0) & (RM_NONE | RM_ABBR) == 0)
         && !(p_paste() && State.get() & (MODE_INSERT | MODE_CMDLINE) != 0)
-        && !(State.get() == MODE_HITRETURN && (tb_c1 == CAR || tb_c1 == ' ' as c_int))
+        && !(State.get() == MODE_HITRETURN && (tb_c1 == b'\r' || tb_c1 == b' '))
         && State.get() != MODE_ASKMORE
         && !at_ins_compl_key();
 
@@ -637,10 +623,10 @@ pub(crate) fn handle_mapping(keylenp: &mut c_int, timedout: bool, mapdepth: &mut
                 // to decide whether to simplify.
                 keylen = KEYLEN_PART_KEY;
             } else {
-                keylen = check_simplify_modifier(max_mlen + 1);
-                if keylen < 0 {
+                let Ok(len) = check_simplify_modifier(max_mlen + 1) else {
                     return map_result_fail as c_int; // ins_typebuf() failed
-                }
+                };
+                keylen = c_int::try_from(len).expect("a key is a few bytes");
             }
         } else {
             keylen = 0;

@@ -48,7 +48,7 @@ pub struct VimMenu {
     /// The right-hand side per mode index. Several modes commonly share one
     /// string, which is why it is counted.
     pub strings: [Option<Rc<CStr>>; 8],
-    pub noremap: [c_int; 8],
+    pub noremap: [crate::getchar::Remap; 8],
     pub silent: [bool; 8],
     pub children: Vec<VimMenu>,
 }

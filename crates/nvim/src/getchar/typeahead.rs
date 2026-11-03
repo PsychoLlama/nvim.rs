@@ -26,7 +26,7 @@
 
 use super::*;
 use crate::keycodes::ModMask;
-use crate::types::Failed;
+use crate::types::{Failed, Key};
 use core::ffi::c_int;
 
 /// Size of the initial storage, upstream's `TYPELEN_INIT`.
@@ -215,8 +215,8 @@ impl TypeAheadRef {
     // -- the bytes ---------------------------------------------------------
 
     /// The valid byte at `offset`.
-    pub(crate) fn byte(self, offset: c_int) -> c_int {
-        self.0.with(|tb| c_int::from(tb.buf[tb.index(offset)]))
+    pub(crate) fn byte(self, offset: c_int) -> u8 {
+        self.0.with(|tb| tb.buf[tb.index(offset)])
     }
 
     /// Say what the valid byte at `offset` is.
@@ -282,14 +282,14 @@ impl TypeAheadRef {
                 tb.buflen = c_int::try_from(tb.buf.len()).expect("a typeahead shorter than an int");
             }
             tb.buf[at..at + bytes.len()].copy_from_slice(bytes);
-            tb.noremap[at..at + bytes.len()].fill(RM_YES as u8);
+            tb.noremap[at..at + bytes.len()].fill(RM_YES);
             tb.len += c_int::try_from(bytes.len()).expect("a read fits an int");
         });
     }
 
     /// How much remapping the valid byte at `offset` is still allowed.
-    pub(crate) fn noremap(self, offset: c_int) -> c_int {
-        self.0.with(|tb| c_int::from(tb.noremap[tb.index(offset)]))
+    pub(crate) fn noremap(self, offset: c_int) -> u8 {
+        self.0.with(|tb| tb.noremap[tb.index(offset)])
     }
 
     // -- the whole buffer --------------------------------------------------
@@ -318,7 +318,7 @@ pub(crate) fn init_typebuf() {
 
 /// Whether the keys being read now may not be remapped.
 pub fn noremap_keys() -> bool {
-    KeyNoremap.get() & (RM_NONE as c_int | RM_SCRIPT as c_int) != 0
+    KeyNoremap.get() & (RM_NONE | RM_SCRIPT) != 0
 }
 
 impl TypeAhead {
@@ -332,7 +332,7 @@ impl TypeAhead {
         &mut self,
         s: &[u8],
         offset: c_int,
-        noremap: c_int,
+        noremap: Remap,
         nottyped: bool,
         silent: bool,
     ) -> bool {
@@ -386,23 +386,10 @@ impl TypeAhead {
 
         // What the characters that may not be remapped are marked with,
         // and how many of them there are.
-        let val = if noremap == REMAP_SCRIPT {
-            RM_SCRIPT
-        } else if noremap == REMAP_SKIP {
-            RM_ABBR
-        } else {
-            RM_NONE
-        } as u8;
-        let noremapped = if noremap == REMAP_SKIP {
-            1
-        } else if noremap < 0 {
-            s.len()
-        } else {
-            usize::try_from(noremap).expect("a positive count")
-        };
+        let (val, noremapped) = noremap.marks(s.len());
         let at = self.index(offset);
         for (i, flags) in self.noremap[at..at + s.len()].iter_mut().enumerate() {
-            *flags = if i < noremapped { val } else { RM_YES as u8 };
+            *flags = if i < noremapped { val } else { RM_YES };
         }
 
         // `maplen` and `silent` only remember the length of the mapped
@@ -500,10 +487,7 @@ impl TypeAhead {
 
 /// Insert `text` into the typeahead buffer at `offset`.
 ///
-/// `noremap` says how much of it may be mapped again: `REMAP_YES` all of it,
-/// `REMAP_NONE` none, `REMAP_SCRIPT` only script-local mappings,
-/// `REMAP_SKIP` only the first character (but abbreviations still apply), and
-/// a positive count that many characters.
+/// `noremap` says how much of it may be mapped again; see [`Remap`].
 ///
 /// With `nottyped` the string does not set `KeyTyped` — do not use it with a
 /// non-zero `offset`. With `silent`, `cmd_silent` is set when the characters
@@ -512,7 +496,7 @@ impl TypeAhead {
 /// the buffer would overflow an `int`.
 pub fn ins_typebuf(
     text: &[u8],
-    noremap: c_int,
+    noremap: Remap,
     offset: c_int,
     nottyped: bool,
     silent: bool,
@@ -539,13 +523,19 @@ pub fn ins_typebuf(
 /// Used for a character `vgetc` handed out and the caller then decided not to
 /// consume. With `on_key_ignore` the bytes are not reported to `vim.on_key()`.
 /// Answers how many bytes went in.
-pub fn ins_char_typebuf(c: c_int, modifiers: ModMask, on_key_ignore: bool) -> c_int {
+pub fn ins_char_typebuf(c: Key, modifiers: ModMask, on_key_ignore: bool) -> usize {
     // The modifier prefix plus a K_SPECIAL-escaped character.
     let key = special_key_bytes(c, modifiers, true);
     let len = key.as_bytes().len();
+    // Upstream hands `KeyNoremap`'s flag value on as a count of bytes not to
+    // remap.
+    let noremap = match KeyNoremap.get() {
+        RM_YES => Remap::Yes,
+        flags => Remap::First(usize::from(flags)),
+    };
     let _ = ins_typebuf(
         key.as_bytes(),
-        KeyNoremap.get(),
+        noremap,
         0,
         !KeyTyped.get(),
         cmd_silent.get(),
@@ -553,7 +543,7 @@ pub fn ins_char_typebuf(c: c_int, modifiers: ModMask, on_key_ignore: bool) -> c_
     if KeyTyped.get() && on_key_ignore {
         on_key_ignore_len.set(on_key_ignore_len.get() + len);
     }
-    c_int::try_from(len).expect("a key is a few bytes")
+    len
 }
 
 /// Whether the typeahead buffer changed while waiting for a character —
@@ -598,7 +588,7 @@ pub(crate) fn flush_typebuf(minimal: bool) {
 ///
 /// Only the recording is affected. `len` is expected to be at most what the
 /// last `gotchars` recorded.
-pub fn ungetchars(len: c_int) {
+pub fn ungetchars(len: usize) {
     if reg_recording.get() == 0 {
         return;
     }
@@ -606,11 +596,7 @@ pub fn ungetchars(len: c_int) {
     // Wrapping, as the C's `size_t -=` is: `delete_tail` gives up when the
     // bytes are not all in the last block, and the counter then goes below
     // zero rather than tracking what was really removed.
-    last_recorded_len.set(
-        last_recorded_len
-            .get()
-            .wrapping_sub(len.unsigned_abs() as usize),
-    );
+    last_recorded_len.set(last_recorded_len.get().wrapping_sub(len));
 }
 
 /// Sync undo, as reading typed characters out of the typeahead should.
@@ -708,7 +694,6 @@ mod tests {
     use super::*;
     use crate::global_cell::{editor_state::Held, editor_state_lock};
     use crate::keycodes::{K_SPECIAL, KS_MODIFIER, SpecialKey, key_escape};
-    use crate::types::NUL;
 
     /// The typeahead is process-wide; hold the lock and start from an
     /// empty one. Dropping the answer empties it again.
@@ -732,21 +717,21 @@ mod tests {
         init_typebuf();
         flush_typebuf(false);
         ungot.set(None);
-        while read_readbuffers(true) != NUL {}
+        while read_readbuffers(true) != 0 {}
     }
 
     /// The valid bytes, front first.
     fn bytes() -> Vec<u8> {
         (0..typeahead().len())
-            .map(|i| u8::try_from(typeahead().byte(i)).expect("the typeahead holds bytes"))
+            .map(|i| typeahead().byte(i))
             .collect()
     }
 
     #[test]
     fn a_put_back_key_goes_in_front() {
         let _fresh = Fresh::new();
-        assert_eq!(ins_char_typebuf(c_int::from(b'a'), ModMask::NONE, false), 1);
-        assert_eq!(ins_char_typebuf(c_int::from(b'b'), ModMask::NONE, false), 1);
+        assert_eq!(ins_char_typebuf(Key::byte(b'a'), ModMask::NONE, false), 1);
+        assert_eq!(ins_char_typebuf(Key::byte(b'b'), ModMask::NONE, false), 1);
         assert_eq!(bytes(), b"ba");
         // Remappable: `KeyNoremap` was clear.
         assert_eq!(typeahead().noremap(0), 0);
@@ -756,17 +741,12 @@ mod tests {
     #[test]
     fn a_special_key_is_escaped_with_its_modifiers() {
         let _fresh = Fresh::new();
-        let left = SpecialKey::Left.code();
+        let left = Key::from(SpecialKey::Left);
         assert_eq!(ins_char_typebuf(left, ModMask::NONE, false), 3);
         assert_eq!(bytes(), key_escape(left));
         flush_typebuf(false);
         assert_eq!(ins_char_typebuf(left, ModMask::SHIFT, false), 6);
-        let byte = |c: c_int| u8::try_from(c).expect("a byte");
-        let mut expected = vec![
-            byte(K_SPECIAL),
-            byte(KS_MODIFIER),
-            byte(ModMask::SHIFT.bits()),
-        ];
+        let mut expected = vec![K_SPECIAL, KS_MODIFIER, ModMask::SHIFT.byte()];
         expected.extend_from_slice(&key_escape(left));
         assert_eq!(bytes(), expected);
     }
@@ -779,7 +759,7 @@ mod tests {
         let mut expected = Vec::new();
         for i in 0..1000u16 {
             let c = b'a' + u8::try_from(i % 26).expect("a letter");
-            ins_char_typebuf(c_int::from(c), ModMask::NONE, false);
+            ins_char_typebuf(Key::byte(c), ModMask::NONE, false);
             expected.insert(0, c);
         }
         assert_eq!(bytes(), expected);
@@ -797,12 +777,13 @@ mod tests {
 
     /// What `noremap` marks the first `count` inserted bytes with, and how
     /// many it marks.
-    fn marks(noremap: c_int, len: usize) -> (u8, usize) {
+    fn marks(noremap: Remap, len: usize) -> (u8, usize) {
         match noremap {
-            REMAP_SCRIPT => (RM_SCRIPT as u8, len),
-            REMAP_SKIP => (RM_ABBR as u8, 1),
-            REMAP_NONE => (RM_NONE as u8, len),
-            n => (RM_NONE as u8, usize::try_from(n).expect("a count")),
+            Remap::Script => (RM_SCRIPT, len),
+            Remap::Skip => (RM_ABBR, 1),
+            Remap::No => (RM_NONE, len),
+            Remap::First(n) => (RM_NONE, n),
+            Remap::Yes => (RM_NONE, 0),
         }
     }
 
@@ -826,23 +807,24 @@ mod tests {
         };
         let delete_step = if cfg!(miri) { 29 } else { 3 };
         for insert in [&b"XYZ"[..], &long] {
-            for noremap in [REMAP_YES, REMAP_NONE, REMAP_SCRIPT, REMAP_SKIP, 2] {
+            for noremap in [
+                Remap::Yes,
+                Remap::No,
+                Remap::Script,
+                Remap::Skip,
+                Remap::First(2),
+            ] {
                 for &offset in &offsets {
                     flush_typebuf(false);
-                    ins_typebuf(base, REMAP_YES, 0, false, false).unwrap();
+                    ins_typebuf(base, Remap::Yes, 0, false, false).unwrap();
                     let at = c_int::try_from(offset).expect("small");
                     ins_typebuf(insert, noremap, at, false, false).unwrap();
-                    let mut model: Vec<(u8, u8)> =
-                        base.iter().map(|&b| (b, RM_YES as u8)).collect();
-                    let (flag, count) = if noremap == REMAP_YES {
-                        (0, 0)
-                    } else {
-                        marks(noremap, insert.len())
-                    };
+                    let mut model: Vec<(u8, u8)> = base.iter().map(|&b| (b, RM_YES)).collect();
+                    let (flag, count) = marks(noremap, insert.len());
                     for (i, &b) in insert.iter().enumerate() {
-                        model.insert(offset + i, (b, if i < count { flag } else { RM_YES as u8 }));
+                        model.insert(offset + i, (b, if i < count { flag } else { RM_YES }));
                     }
-                    assert_eq!(flagged(), model, "insert at {offset}, noremap {noremap}");
+                    assert_eq!(flagged(), model, "insert at {offset}, noremap {noremap:?}");
 
                     // Delete two bytes at every offset in turn, front to back.
                     let mut from = 0;
@@ -861,14 +843,14 @@ mod tests {
     fn the_mapped_run_tracks_inserts_and_deletes() {
         let _fresh = Fresh::new();
         // Typed keys, then a mapping's RHS in front of them.
-        ins_typebuf(b"typed", REMAP_YES, 0, false, false).unwrap();
-        ins_typebuf(b"rhs", REMAP_YES, 0, true, true).unwrap();
+        ins_typebuf(b"typed", Remap::Yes, 0, false, false).unwrap();
+        ins_typebuf(b"rhs", Remap::Yes, 0, true, true).unwrap();
         assert_eq!((typeahead().maplen(), typeahead().silent()), (3, 3));
         // Inside the run: it grows.
-        ins_typebuf(b"in", REMAP_YES, 1, false, false).unwrap();
+        ins_typebuf(b"in", Remap::Yes, 1, false, false).unwrap();
         assert_eq!(typeahead().maplen(), 5);
         // Past it: it does not.
-        ins_typebuf(b"out", REMAP_YES, 7, false, false).unwrap();
+        ins_typebuf(b"out", Remap::Yes, 7, false, false).unwrap();
         assert_eq!(typeahead().maplen(), 5);
         // A delete straddling its end cuts it at the delete's start.
         del_typebuf(3, 4);
@@ -883,17 +865,17 @@ mod tests {
     #[test]
     fn an_ungotten_key_is_peeked_before_the_typeahead() {
         let _fresh = Fresh::new();
-        ins_char_typebuf(c_int::from(b't'), ModMask::NONE, false);
-        vungetc(c_int::from(b'u'));
+        ins_char_typebuf(Key::byte(b't'), ModMask::NONE, false);
+        vungetc(Key::ascii(b'u'));
         assert!(ungot_key_ready());
-        assert_eq!(vpeekc(), c_int::from(b'u'));
+        assert_eq!(vpeekc(), Key::ascii(b'u'));
         // A typed key waits for the stuff buffer to empty; a stuffed one
         // does not.
         stuff_readbuf(b"s");
         assert!(!ungot_key_ready());
-        KeyStuffed.set(1);
-        vungetc(c_int::from(b'u'));
-        KeyStuffed.set(0);
+        KeyStuffed.set(true);
+        vungetc(Key::ascii(b'u'));
+        KeyStuffed.set(false);
         assert!(ungot_key_ready());
     }
 }

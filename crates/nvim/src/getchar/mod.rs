@@ -4,7 +4,7 @@
 
 pub mod state;
 use crate::api::vim::nvim_paste;
-use crate::ascii::{ascii_isdigit, ascii_iswhite};
+use crate::ascii::ascii_iswhite;
 use crate::debugger::state::debug_did_msg;
 use crate::drawscreen::state::{cmdline_row, mode_displayed, must_redraw, redraw_cmdline};
 use crate::drawscreen::{setcursor, showmode, unshowmode, update_screen};
@@ -33,9 +33,9 @@ use crate::getchar::state::{
 use crate::global_cell::GlobalCell;
 use crate::input::get_keystroke;
 use crate::insexpand::{compl_status_local, ctrl_x_mode_not_default, vim_is_ctrl_x_key};
-use crate::keycodes::{K_SPECIAL, special_key_bytes};
+use crate::keycodes::{K_SPECIAL, KS_EXTRA, KS_MODIFIER, KS_SPECIAL, special_key_bytes};
 use crate::lua::executor::nlua_execute_on_key;
-use crate::mapping::{MapAt, MapExpr, eval_map_expr, langmap_adjust_mb, with_maphash_lists};
+use crate::mapping::{MapAt, MapExpr, eval_map_expr, with_maphash_lists};
 use crate::mbyte::utf8len_tab;
 use crate::memfile::did_swapwrite_msg;
 use crate::memline::ml_sync_all;
@@ -65,15 +65,10 @@ use crate::state::{
     MODE_SELECT, MODE_TERMINAL, MODE_VISUAL, get_real_state, state_handle_k_event,
     state_no_longer_safe,
 };
-use crate::types::CAR;
-use crate::types::DEL;
-use crate::types::ESC;
-use crate::types::NL;
-use crate::types::TAB;
 use crate::types::{
     ApiString, Array, ColNr, Error, EvalFuncData, FlushBuffers, Integer, LuaRef, LuaRetMode,
-    MotionType, OpArg, OptInt, RemapValues, SaveRedo, TypVal, TypeaheadSave, VarNumber, Vv,
-    ptrdiff_t, size_t, uint8_t, uint64_t,
+    MotionType, OpArg, OptInt, SaveRedo, TypVal, TypeaheadSave, VarNumber, Vv, ptrdiff_t, size_t,
+    uint8_t, uint64_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
 use crate::undo::u_sync;
@@ -103,24 +98,52 @@ pub use self::cmdkey::*;
 mod paste;
 pub use self::paste::*;
 pub const MAXMAPLEN: ::core::ffi::c_uint = 50;
-pub const REMAP_SKIP: RemapValues = -3;
-pub const REMAP_SCRIPT: RemapValues = -2;
-pub const REMAP_NONE: RemapValues = -1;
-pub const REMAP_YES: RemapValues = 0;
+/// How much of the text going into the typeahead may be mapped again
+/// (upstream's `REMAP_*` values and the positive count beside them).
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum Remap {
+    /// All of it: `Remap::Yes`.
+    Yes,
+    /// None of it: `Remap::No`.
+    No,
+    /// Only through script-local mappings (`<script>`): `Remap::Script`.
+    Script,
+    /// Not the first byte, but abbreviations still apply: `Remap::Skip`.
+    Skip,
+    /// Not the first `n` bytes; the rest may be.
+    First(usize),
+}
+
+impl Remap {
+    /// The flag the bytes that may not be remapped are marked with, and how
+    /// many of `len` inserted bytes get it.
+    fn marks(self, len: usize) -> (u8, usize) {
+        match self {
+            Remap::Yes => (RM_NONE, 0),
+            Remap::No => (RM_NONE, len),
+            Remap::Script => (RM_SCRIPT, len),
+            Remap::Skip => (RM_ABBR, 1),
+            Remap::First(n) => (RM_NONE, n),
+        }
+    }
+}
 pub const FLUSH_INPUT: FlushBuffers = 2;
 pub const FLUSH_MINIMAL: FlushBuffers = 0;
 pub const NSCRIPT: ::core::ffi::c_uint = 15;
-pub const RM_SCRIPT: ::core::ffi::c_uint = 2;
-pub const RM_NONE: ::core::ffi::c_uint = 1;
-pub const RM_YES: ::core::ffi::c_uint = 0;
-pub const RM_ABBR: ::core::ffi::c_uint = 4;
+/// What each typeahead byte may still be remapped through (its `noremap`
+/// flags, and `KeyNoremap` for the key last read).
+pub const RM_YES: u8 = 0;
+pub const RM_NONE: u8 = 1;
+pub const RM_SCRIPT: u8 = 2;
+pub const RM_ABBR: u8 = 4;
 #[derive(Copy, Clone)]
 pub(crate) struct GotcharsState {
     pub buf: [uint8_t; 67],
-    pub prev_c: ::core::ffi::c_int,
+    /// The byte before this one: inside a key escape, its second byte.
+    pub prev_byte: u8,
     pub buflen: size_t,
-    pub pending_special: ::core::ffi::c_uint,
-    pub pending_mbyte: ::core::ffi::c_uint,
+    pub pending_special: usize,
+    pub pending_mbyte: usize,
 }
 pub const KEYLEN_PART_KEY: ::core::ffi::c_int = -1;
 pub const SHOWCMD_COLS: ::core::ffi::c_uint = 10;
@@ -167,7 +190,4 @@ static e_cmd_mapping_must_end_with_cr: &::core::ffi::CStr =
     c"E1255: <Cmd> mapping must end with <CR>";
 static e_cmd_mapping_must_end_with_cr_before_second_cmd: &::core::ffi::CStr =
     c"E1136: <Cmd> mapping must end with <CR> before second <Cmd>";
-pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
-pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;
-pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
 pub const K_SELECT_STRING: &::core::ffi::CStr = c"\x80\xF5X";

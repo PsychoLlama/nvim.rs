@@ -20,6 +20,7 @@ use crate::keycodes::{
     Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_T, Ctrl_U, Ctrl_V, Ctrl_W, NotAKey,
     SpecialKey, is_special,
 };
+use crate::types::Key;
 use crate::types::{ExpandContext, FAIL, MB_MAXCHAR, NUL};
 use crate::winlayer::Buf;
 
@@ -151,13 +152,13 @@ pub(crate) fn command_line_insert_reg(s: &mut CommandLineState) -> KeyOutcome {
 
     putcmdline('"' as ::core::ffi::c_char, true);
     let raw_key = Keys::unmapped_with_codes();
-    s.c = plain_vgetc(); // CTRL-R <char>
+    s.c = plain_vgetc().code(); // CTRL-R <char>
     let mut i = s.c;
     if i == Ctrl_O {
         i = Ctrl_R; // CTRL-R CTRL-O == CTRL-R CTRL-R
     }
     if i == Ctrl_R {
-        s.c = plain_vgetc(); // CTRL-R CTRL-R <char>
+        s.c = plain_vgetc().code(); // CTRL-R CTRL-R <char>
     }
     drop(raw_key);
 
@@ -556,7 +557,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<::core::ffi::c_
         Err(NotAKey(Ctrl_K)) => {
             s.ignore_drag_release = true;
             putcmdline('?' as ::core::ffi::c_char, true);
-            s.c = get_digraph(true);
+            s.c = get_digraph(true).code();
             cc.special_char = NUL as ::core::ffi::c_char;
 
             if s.c != NUL {
@@ -621,7 +622,7 @@ pub(crate) fn command_line_handle_key(s: &mut CommandLineState) -> ::core::ffi::
 
     // C's `end:` — put the character in the command line.
     if is_special(s.c) || !mod_mask.get().is_empty() {
-        let name = get_special_key_name(s.c, mod_mask.get());
+        let name = get_special_key_name(Key::from_code(s.c), mod_mask.get());
         put_on_cmdline(cstr::in_bytes(&name).to_bytes(), true);
     } else {
         // One character, its own buffer, without its composing characters.

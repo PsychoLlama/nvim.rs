@@ -29,6 +29,7 @@ use crate::mbyte::encode_char;
 use crate::memline::Lines;
 use crate::memory::XString;
 use crate::option::split_option_part;
+use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -82,7 +83,7 @@ pub(crate) fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
         && utf_char2len(c) == 1
         && !has_event(AutoEvent::InsertCharPre)
         && !test_disable_char_avail.get()
-        && vpeekc() != NUL
+        && vpeekc().code() != NUL
         && State.get() & REPLACE_FLAG == 0
         && !cindent_on()
         && !p_ri()
@@ -100,7 +101,7 @@ pub(crate) fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
         // 'textwidth' boundary, or where an abbreviation may need
         // checking -- a non-word character after a word character.
         loop {
-            let next = vpeekc();
+            let next = vpeekc().code();
             let take = next != NUL
                 && !is_special(next)
                 && utf8len_tab[next as usize] as c_int == 1
@@ -115,12 +116,12 @@ pub(crate) fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
             if !take {
                 break;
             }
-            buf[i as usize] = vgetc() as u8;
+            buf[i as usize] = vgetc().code() as u8;
             i += 1;
         }
 
-        do_digraph(-1); // clear digraphs
-        do_digraph(c_int::from(buf[i as usize - 1])); // may start one
+        reset_digraph(); // clear digraphs
+        do_digraph(Key::from_code(c_int::from(buf[i as usize - 1]))); // may start one
         let typed = &buf[..i as usize];
         ins_str(typed);
 
@@ -141,13 +142,13 @@ pub(crate) fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
             let mut buf = [0u8; MB_MAXCHAR];
             let len = encode_char(c, &mut buf);
             ins_char_bytes(&buf[..len]);
-            append_to_redobuff_char(c);
+            append_to_redobuff_char(Key::from_code(c));
         } else {
             ins_char(c);
             if flags & INSCHAR_CTRLV as c_int != 0 {
                 redo_literal(c);
             } else {
-                append_to_redobuff_char(c);
+                append_to_redobuff_char(Key::from_code(c));
             }
         }
     }
@@ -299,7 +300,8 @@ pub(crate) fn echeck_abbr(c: c_int) -> bool {
     let mut lines = Lines::current();
     let line = lines.line(cursor.lnum);
     let line = line[..col.min(line.len())].to_vec();
-    check_abbr(c, line, start_col.get())
+    let (key, literal) = abbr_key(c);
+    check_abbr(key, literal, line, start_col.get())
 }
 
 /// Run the `InsertCharPre` autocommand for `c`.

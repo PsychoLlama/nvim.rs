@@ -43,7 +43,7 @@ use super::GotcharsState;
 use crate::global_cell::{GlobalCell, state_record};
 use crate::keycodes::ModMask;
 use crate::os::fs::CFile;
-use crate::types::{LuaRef, size_t, uint8_t};
+use crate::types::{Key, LuaRef, size_t, uint8_t};
 use core::ffi::c_int;
 
 pub use crate::harness::test_disable_char_avail;
@@ -55,7 +55,7 @@ pub(crate) static langmap_mapchar: GlobalCell<[uint8_t; 256]> = GlobalCell::new(
 /// position -- instead of reading the typeahead; a typed key waits for the
 /// stuff buffer to empty first, a stuffed one does not.
 pub(crate) struct UngotKey {
-    pub(crate) c: c_int,
+    pub(crate) c: Key,
     pub(crate) mod_mask: ModMask,
     pub(crate) mouse_grid: c_int,
     pub(crate) mouse_row: c_int,
@@ -75,15 +75,15 @@ state_record! {
     /// modifiers were folded into the key: what a terminal or a hit-enter
     /// prompt puts back to be read again.
     pub(crate) vgetc_mod_mask: ModMask = ModMask::NONE;
-    pub(crate) vgetc_char: c_int = 0;
+    pub(crate) vgetc_char: Key = Key::NUL;
     /// Nesting depth of `vgetc`.
     pub(crate) vgetc_busy: c_int = 0;
     /// The key was typed, not mapped or stuffed.
     pub(crate) KeyTyped: bool = false;
     /// Nonzero: the key came from the stuff buffer.
-    pub(crate) KeyStuffed: c_int = 0;
+    pub(crate) KeyStuffed: bool = false;
     /// What remapping the key is still allowed (`RM_*`).
-    pub(crate) KeyNoremap: c_int = 0;
+    pub(crate) KeyNoremap: u8 = 0;
     /// CTRL-C was typed, or an operation was interrupted.
     pub(crate) got_int: bool = false;
 
@@ -114,7 +114,7 @@ state_record! {
     /// "was this typed since" tests.
     pub(crate) maptick: c_int = 0;
     /// A character `flush_buffers` must not throw away.
-    pub(super) typeahead_char: c_int = 0;
+    pub(super) typeahead_char: u8 = 0;
     /// Bytes `ins_char_typebuf` put back that `vim.on_key()` must not see
     /// again.
     pub(super) on_key_ignore_len: size_t = 0;
@@ -122,7 +122,7 @@ state_record! {
     pub(super) ungot: Option<UngotKey> = None;
     /// The key the previous forced answer to `:normal` used, so that the
     /// cmdline window alternates between ESC and CTRL-C.
-    pub(super) normal_busy_last_key: c_int = 0;
+    pub(super) normal_busy_last_key: u8 = 0;
 
     // -- recording and replaying --
     /// The register `q` is recording into, or 0.

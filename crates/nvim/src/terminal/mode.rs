@@ -47,6 +47,7 @@ use crate::state::{
 };
 use crate::types::AutoEvent;
 use crate::types::Handle;
+use crate::types::Key;
 use crate::types::{ColNr, LineNr, OptInt, Pos, WinOpt, uint8_t};
 use crate::ui::{ui_busy_stop, ui_cursor_shape, ui_flush};
 use crate::window::{may_trigger_win_scrolled_resized, win_valid};
@@ -470,7 +471,7 @@ pub(crate) fn terminal_execute(s: &mut TerminalState, key: c_int) -> c_int {
     // `merge_modifiers` folds a pending modifier into the key so that e.g.
     // `<C-\>` is one code to compare against.
     let mut mods = mod_mask.get();
-    let mod_key = merge_modifiers(key, &mut mods);
+    let mod_key = merge_modifiers(Key::from_code(key), &mut mods).code();
 
     // Keys the editor handles itself. Everything but CTRL-N/CTRL-O is dealt
     // with here and done; those two continue below because they are what a

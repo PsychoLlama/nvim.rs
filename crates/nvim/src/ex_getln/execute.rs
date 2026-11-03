@@ -27,6 +27,7 @@ use crate::keycodes::{
 };
 use crate::option::cpo_has;
 use crate::option::vars::P_ICM;
+use crate::types::Key;
 use crate::types::{CpoFlag, ExpandContext, NUL, OK};
 use crate::winlayer::Win;
 
@@ -60,7 +61,7 @@ fn command_line_handle_ctrl_bsl(s: &mut CommandLineState) -> CtrlBsl {
     let mut cc = Cc::current();
     s.c = {
         let _raw = Keys::unmapped_with_codes();
-        plain_vgetc()
+        plain_vgetc().code()
     };
 
     // CTRL-\ e doesn't work when obtaining an expression, unless it is
@@ -71,7 +72,7 @@ fn command_line_handle_ctrl_bsl(s: &mut CommandLineState) -> CtrlBsl {
             || (cc.cmdfirstc == '=' as ::core::ffi::c_int && KeyTyped.get())
             || cmdline_star.get() > 0)
     {
-        vungetc(s.c);
+        vungetc(Key::from_code(s.c));
         return CtrlBsl::ProcessNextKey;
     }
 
@@ -228,7 +229,7 @@ pub(crate) fn command_line_execute(
     if KeyTyped.get() {
         s.some_key_typed = true;
 
-        if cmdmsg_rl.get() && KeyStuffed.get() == 0 {
+        if cmdmsg_rl.get() && !KeyStuffed.get() {
             // Invert horizontal movements and operations. Only when typed
             // by the user directly, not as the result of a mapping.
             match SpecialKey::try_from(s.c) {
@@ -359,7 +360,7 @@ pub(crate) fn command_line_execute(
             s.some_key_typed = true;
         }
     } else {
-        s.c = do_digraph(s.c);
+        s.c = do_digraph(Key::from_code(s.c)).code();
     }
 
     if s.c == '\n' as ::core::ffi::c_int
@@ -448,7 +449,7 @@ pub(crate) fn command_line_execute(
         if s.is_state.winid != Win::current().handle {
             init_incsearch_state(&mut s.is_state);
         }
-        if KeyTyped.get() || vpeekc() == NUL {
+        if KeyTyped.get() || vpeekc().code() == NUL {
             may_do_incsearch_highlighting(s.firstc, s.count, &mut s.is_state);
         }
         return command_line_not_changed(s);
@@ -518,7 +519,7 @@ pub(crate) fn command_line_changed(s: &mut CommandLineState) -> ::core::ffi::c_i
         && P_ICM.first_byte() != 0 // 'inccommand' is set
         && !exmode_active.get() // not in ex mode
         && cmdline_star.get() == 0 // not typing a password
-        && vpeekc_any() == 0
+        && vpeekc_any().code() == 0
         && cmdpreview_may_show();
     if !preview_shown {
         cmdpreview.set(false);
@@ -528,7 +529,7 @@ pub(crate) fn command_line_changed(s: &mut CommandLineState) -> ::core::ffi::c_i
             let _ = update_screen(); // clear the 'inccommand' preview
         }
         if completion(|xpc| xpc.context) == ExpandContext::Nothing
-            && (KeyTyped.get() || vpeekc() == NUL)
+            && (KeyTyped.get() || vpeekc().code() == NUL)
         {
             may_do_incsearch_highlighting(s.firstc, s.count, &mut s.is_state);
         }
@@ -555,7 +556,7 @@ pub(crate) fn command_line_changed(s: &mut CommandLineState) -> ::core::ffi::c_i
         // there are no characters left to read, to avoid useless
         // intermediate redraws. If the cmdline is external the UI handles
         // shaping and no redraw is needed.
-        if !ui_has(kUICmdline) && vpeekc() == NUL {
+        if !ui_has(kUICmdline) && vpeekc().code() == NUL {
             redrawcmd();
         }
     }

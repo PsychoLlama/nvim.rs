@@ -12,6 +12,7 @@ use super::*;
 use crate::charset::skip;
 use crate::cstr;
 use crate::strings::has_char;
+use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 
 use crate::guard::Suppress;
@@ -399,7 +400,7 @@ pub(crate) fn may_do_incsearch_highlighting(
         // Interrupted while searching: behave as if it failed.
         if got_int.get() {
             // Remove <C-C> from the input stream.
-            vpeekc();
+            vpeekc().code();
             // Don't abandon the command line.
             got_int.set(false);
             found = 0;
@@ -509,7 +510,7 @@ pub(crate) fn may_add_char_to_search(
             let magics = if magic_isset() { c"\\~^$.*[" } else { c"\\^$" };
             if *c == search_delim || has_char(magics, *c) {
                 // Put a backslash before the special characters.
-                stuff_readbuf_char(*c);
+                stuff_readbuf_char(Key::from_code(*c));
                 *c = '\\' as ::core::ffi::c_int;
             }
             // Add any composing characters.
@@ -519,7 +520,7 @@ pub(crate) fn may_add_char_to_search(
                 while utf_char2len(*c) != cursor_len() {
                     Win::current().w_cursor.col += utf_char2len(*c);
                     *c = gchar_cursor();
-                    stuff_readbuf_char(*c);
+                    stuff_readbuf_char(Key::from_code(*c));
                 }
                 *c = save_c;
             }

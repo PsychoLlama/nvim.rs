@@ -30,6 +30,7 @@
 
 use crate::keycodes::SpecialKey;
 use crate::option::vars::P_LANGMAP;
+use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -79,7 +80,7 @@ pub(crate) fn ins_reg() {
         };
         // `first_byte` is upstream's `*p_langmap`; the projecting reader
         // would walk the value to hand out a `&CStr`.
-        if P_LANGMAP.first_byte() != 0 && (p_lrm() || typed) && KeyStuffed.get() == 0 && c >= 0 {
+        if P_LANGMAP.first_byte() != 0 && (p_lrm() || typed) && !KeyStuffed.get() && c >= 0 {
             if c < 256 {
                 langmap_mapchar.with(|map| c_int::from(map[usize::try_from(c).unwrap_or(0)]))
             } else {
@@ -124,9 +125,9 @@ pub(crate) fn ins_reg() {
 
         if literally == Ctrl_O || literally == Ctrl_P {
             // Append the command to the redo buffer.
-            append_to_redobuff_char(Ctrl_R);
-            append_to_redobuff_char(literally);
-            append_to_redobuff_char(regname);
+            append_to_redobuff_char(Key::ctrl(b'R'));
+            append_to_redobuff_char(Key::from_code(literally));
+            append_to_redobuff_char(Key::from_code(regname));
             let fix = if literally == Ctrl_P {
                 PUT_FIXINDENT.cast_signed()
             } else {
@@ -135,8 +136,8 @@ pub(crate) fn ins_reg() {
             let flags = fix | PUT_CURSEND.cast_signed();
             do_put(regname, None, BACKWARD, 1, flags);
         } else if reg.read(|reg| reg.lines.len()) > 1 && is_literal_register(regname) {
-            append_to_redobuff_char(Ctrl_R);
-            append_to_redobuff_char(regname);
+            append_to_redobuff_char(Key::ctrl(b'R'));
+            append_to_redobuff_char(Key::from_code(regname));
             let flags = PUT_CURSEND.cast_signed();
             do_put(regname, None, BACKWARD, 1, flags);
         } else if insert_reg(regname, None, literally != 0).is_err() {
@@ -395,7 +396,7 @@ pub(crate) fn ins_insert(replace_state: c_int) {
         State.set(replace_state | State.get() & MODE_LANGMAP);
     }
     may_trigger_modechanged();
-    append_to_redobuff_char(SpecialKey::Ins.code());
+    append_to_redobuff_char(Key::from(SpecialKey::Ins));
     show_mode();
     ui_cursor_shape();
 }
@@ -446,7 +447,7 @@ fn char_at_cursor() -> c_int {
 /// Read the next key, waiting for it if need be.
 #[inline(always)]
 fn get_key() -> c_int {
-    plain_vgetc()
+    plain_vgetc().code()
 }
 
 /// Beep, or flash, for the 'belloff' reason `flag`.

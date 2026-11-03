@@ -564,7 +564,7 @@ fn spell_suggest_intern(su: &mut SugInfo, interactive: bool) {
     // only cleared for a command, not for `spellsuggest()`.
     os_breakcheck();
     if interactive && got_int.get() {
-        vgetc();
+        vgetc().code();
         got_int.set(false);
     }
 

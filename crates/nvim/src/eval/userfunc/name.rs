@@ -35,8 +35,8 @@ use crate::keycodes::KE_SNR;
 /// The bytes a script-local name is stored behind: `K_SPECIAL KS_EXTRA
 /// KE_SNR`, which a listing shows as `<SNR>`.
 const SNR: [u8; 3] = [0x80, 253, 82];
-const _: () = assert!(SNR[0] as c_int == K_SPECIAL);
-const _: () = assert!(SNR[1] as c_int == KS_EXTRA);
+const _: () = assert!(SNR[0] == K_SPECIAL);
+const _: () = assert!(SNR[1] == KS_EXTRA);
 const _: () = assert!(SNR[2] == 82 && KE_SNR == 82);
 
 /// The byte at `i`, or a NUL past the end -- how the C read its string.
@@ -105,7 +105,7 @@ pub(crate) fn deref_func_name_owned(
 /// something a user can read. `errmsg` is untranslated and has one `%s`.
 pub(crate) fn emsg_funcname(errmsg: &'static CStr, name: &[u8]) {
     let shown: Cow<'_, [u8]> =
-        if c_int::from(byte(name, 0)) == K_SPECIAL && byte(name, 1) != 0 && byte(name, 2) != 0 {
+        if byte(name, 0) == K_SPECIAL && byte(name, 1) != 0 && byte(name, 2) != 0 {
             let mut shown = b"<SNR>".to_vec();
             shown.extend_from_slice(&name[3..]);
             Cow::Owned(shown)

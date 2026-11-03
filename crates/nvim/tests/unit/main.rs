@@ -49,6 +49,7 @@ mod hashtab;
 mod help;
 mod help_oracle;
 mod indent;
+mod key_oracle;
 mod keycodes;
 mod keycodes_oracle;
 mod linematch;

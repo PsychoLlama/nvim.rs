@@ -103,7 +103,7 @@ pub fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), Failed> {
     if c != NUL {
         // Normal search: remember the arguments for a later repeat,
         // but not while redoing (the remembered ones are in play).
-        if KeyStuffed.get() == 0 {
+        if !KeyStuffed.get() {
             lastc.set(c as u8);
             set_csearch_direction(dir as Direction);
             set_csearch_until(c_int::from(t_cmd));

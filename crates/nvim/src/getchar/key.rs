@@ -14,35 +14,36 @@ use crate::guard::{Allow, Keys};
 use crate::keycodes::ModMask;
 use crate::keycodes::{SpecialKey, key_unescape};
 use crate::mbyte::char_at;
-use crate::types::{MB_MAXBYTES, NUL};
-use core::ffi::c_int;
+use crate::types::{Key, MB_MAXBYTES};
 
 /// Fold `modifiers` into `c` where a single code stands for the combination.
 ///
 /// Only Ctrl has such codes: `CTRL-A` is 0x01 rather than `<C-> A`. The
 /// modifier is cleared out of `*modifiers` when it was folded in.
-pub fn merge_modifiers(c_arg: c_int, modifiers: &mut ModMask) -> c_int {
-    let mut c = c_arg;
+pub fn merge_modifiers(key: Key, modifiers: &mut ModMask) -> Key {
+    let mut merged = key;
     if modifiers.has(ModMask::CTRL) {
-        if c >= '@' as c_int && c <= 0x7f {
-            c &= 0x1f;
-            if c == NUL {
-                c = SpecialKey::Zero.code();
+        match key.as_byte() {
+            Some(byte @ b'@'..=0x7f) => {
+                merged = Key::ctrl(byte);
+                if merged.is_nul() {
+                    merged = SpecialKey::Zero.into();
+                }
             }
-        } else if c == '6' as c_int {
             // CTRL-6 is equivalent to CTRL-^.
-            c = 0x1e;
+            Some(b'6') => merged = Key::ctrl(b'^'),
+            _ => {}
         }
-        if c != c_arg {
+        if merged != key {
             modifiers.clear(ModMask::CTRL);
         }
     }
-    c
+    merged
 }
 
 /// [`merge_modifiers`] applied to the global `mod_mask`, which is where the
 /// editor's own key handling keeps the pending modifiers.
-pub(crate) fn merge_mod_mask(c: c_int) -> c_int {
+pub(crate) fn merge_mod_mask(c: Key) -> Key {
     let mut modifiers = mod_mask.get();
     let merged = merge_modifiers(c, &mut modifiers);
     mod_mask.set(modifiers);
@@ -59,7 +60,7 @@ pub(crate) fn merge_mod_mask(c: c_int) -> c_int {
 /// Safe: it only reads the editor's own globals, and may block waiting for
 /// input. Re-entry into mappings and Lua callbacks is what the function is
 /// for, so it guards against that itself rather than asking the caller to.
-pub fn vgetc() -> c_int {
+pub fn vgetc() -> Key {
     // Garbage collection was requested by a previous `garbagecollect()`
     // and we are back at the top level.
     if may_garbage_collect.get() && want_garbage_collect.get() {
@@ -95,19 +96,19 @@ pub fn vgetc() -> c_int {
     if discarded {
         // Keys following K_COMMAND/K_LUA/K_PASTE_START are not normally
         // seen by vim.on_key() callbacks, so drop them with this one.
-        if c == SpecialKey::Command.code() {
+        if c == SpecialKey::Command {
             drop(read_cmd_key_line());
-        } else if c == SpecialKey::Lua.code() {
+        } else if c == SpecialKey::Lua {
             map_execute_lua(false, true);
-        } else if c == SpecialKey::PasteStart.code() {
+        } else if c == SpecialKey::PasteStart {
             paste_repeat(0);
         }
-        c = SpecialKey::Ignore.code();
+        c = SpecialKey::Ignore.into();
     }
     on_key_buf.with_mut(Vec::clear);
 
     // The character has to be processed before anything else is safe.
-    if c != SpecialKey::Ignore.code() {
+    if c != SpecialKey::Ignore {
         // SAFETY: a NUL-terminated string literal.
         state_no_longer_safe(Some(c"key typed"));
     }
@@ -119,18 +120,15 @@ pub fn vgetc() -> c_int {
 ///
 /// Safe: everything it touches is the editor's own typeahead state; it may
 /// block waiting for input.
-fn vgetc_from_typeahead() -> c_int {
+fn vgetc_from_typeahead() -> Key {
     /// One byte out of the typeahead.
-    ///
-    /// SAFETY: `vgetorpeek` is callable at any time; it reads the editor's
-    /// own typeahead and needs nothing from this caller.
-    fn next_byte() -> c_int {
+    fn next_byte() -> u8 {
         vgetorpeek(true)
     }
 
     mod_mask.set(ModMask::NONE);
     vgetc_mod_mask.set(ModMask::NONE);
-    vgetc_char.set(0);
+    vgetc_char.set(Key::NUL);
     // `wrapping_sub` and not `-`: upstream's comment says
     // `last_recorded_len` can be *larger* than what the last `vgetc`
     // recorded, but it can also be smaller -- `ungetchars` shrinks it --
@@ -147,33 +145,37 @@ fn vgetc_from_typeahead() -> c_int {
     let c = loop {
         // No mapping once a modifier has been read.
         let raw_key = (!mod_mask.get().is_empty()).then(Keys::unmapped_with_codes);
-        let mut c = next_byte();
+        let lead = next_byte();
         drop(raw_key);
 
-        // A special key is three bytes; get the other two.
-        if c == K_SPECIAL {
+        let mut c = if lead == K_SPECIAL {
+            // A special key is three bytes; get the other two.
             let unmapped = Keys::unmapped();
             let no_codes = Allow::no_key_codes(); // make sure BS is not found
             let second = next_byte();
-            c = next_byte();
+            let third = next_byte();
             drop((unmapped, no_codes));
             if second == KS_MODIFIER {
-                mod_mask.set(ModMask::from_bits(c));
+                mod_mask.set(ModMask::from_byte(third));
                 continue;
             }
-            c = key_unescape(second as u8, c as u8);
-        }
+            key_unescape(second, third)
+        } else {
+            Key::byte(lead)
+        };
 
         // A multibyte character is as many bytes as its lead byte says.
         // This loops until every one of them has arrived.
-        let n = mb_byte2len_check(c);
+        let n = c
+            .as_byte()
+            .map_or(1, |lead| usize::from(utf8len_tab[usize::from(lead)]));
         if n > 1 {
             let unmapped = Keys::unmapped();
             let mut buf = [0u8; MB_MAXBYTES + 1];
-            buf[0] = c as u8;
+            buf[0] = lead;
             for byte in &mut buf[1..n] {
-                *byte = next_byte() as u8;
-                if c_int::from(*byte) == K_SPECIAL {
+                *byte = next_byte();
+                if *byte == K_SPECIAL {
                     // Must be K_SPECIAL KS_SPECIAL KE_FILLER, which
                     // stands for a literal 0x80.
                     next_byte(); // skip KS_SPECIAL
@@ -182,7 +184,7 @@ fn vgetc_from_typeahead() -> c_int {
             }
             drop(unmapped);
             // The bytes are followed by the rest of the zeroed buffer.
-            c = char_at(&buf);
+            c = Key::from_code(char_at(&buf));
         }
 
         // When mappings are enabled (so not after i_CTRL-V) and the user
@@ -194,19 +196,19 @@ fn vgetc_from_typeahead() -> c_int {
             && KeyTyped.get()
             && mod_mask.get() == ModMask::ALT
             && State.get() & MODE_TERMINAL == 0
-            && !is_mouse_key(c)
+            && !is_mouse_key(c.code())
         {
             mod_mask.set(ModMask::NONE);
             let len = ins_char_typebuf(c, ModMask::NONE, false);
-            ins_char_typebuf(ESC, ModMask::NONE, false);
+            ins_char_typebuf(Key::ESC, ModMask::NONE, false);
             // K_SPECIAL KS_MODIFIER ModMask::ALT takes three more bytes.
             let old_len = len + 3;
             ungetchars(old_len);
-            unsee_keys(old_len as usize);
+            unsee_keys(old_len);
             continue;
         }
 
-        if vgetc_char.get() == 0 {
+        if vgetc_char.get().is_nul() {
             vgetc_mod_mask.set(mod_mask.get());
             vgetc_char.set(c);
         }
@@ -225,49 +227,46 @@ fn vgetc_from_typeahead() -> c_int {
 /// the shift is folded into the key rather than left in the mask.
 ///
 /// Safe: it only reads and writes the editor's own `mod_mask`.
-fn keypad_equivalent(c: c_int) -> c_int {
-    match SpecialKey::try_from(c) {
-        Ok(SpecialKey::Kplus) => '+' as c_int,
-        Ok(SpecialKey::Kminus) => '-' as c_int,
-        Ok(SpecialKey::Kdivide) => '/' as c_int,
-        Ok(SpecialKey::Kmultiply) => '*' as c_int,
-        Ok(SpecialKey::Kenter) => CAR,
-        Ok(SpecialKey::Kpoint) => '.' as c_int,
-        Ok(SpecialKey::Kcomma) => ',' as c_int,
-        Ok(SpecialKey::Kequal) => '=' as c_int,
-        Ok(SpecialKey::K0) => '0' as c_int,
-        Ok(SpecialKey::K1) => '1' as c_int,
-        Ok(SpecialKey::K2) => '2' as c_int,
-        Ok(SpecialKey::K3) => '3' as c_int,
-        Ok(SpecialKey::K4) => '4' as c_int,
-        Ok(SpecialKey::K5) => '5' as c_int,
-        Ok(SpecialKey::K6) => '6' as c_int,
-        Ok(SpecialKey::K7) => '7' as c_int,
-        Ok(SpecialKey::K8) => '8' as c_int,
-        Ok(SpecialKey::K9) => '9' as c_int,
-        Ok(SpecialKey::Xhome | SpecialKey::Zhome) => modified_key(
-            SpecialKey::SHome.code(),
-            SpecialKey::CHome.code(),
-            SpecialKey::Home.code(),
-        ),
-        Ok(SpecialKey::Xend | SpecialKey::Zend) => modified_key(
-            SpecialKey::SEnd.code(),
-            SpecialKey::CEnd.code(),
-            SpecialKey::End.code(),
-        ),
-        Ok(SpecialKey::Kup | SpecialKey::Xup) => SpecialKey::Up.code(),
-        Ok(SpecialKey::Kdown | SpecialKey::Xdown) => SpecialKey::Down.code(),
-        Ok(SpecialKey::Kleft | SpecialKey::Xleft) => SpecialKey::Left.code(),
-        Ok(SpecialKey::Kright | SpecialKey::Xright) => SpecialKey::Right.code(),
-        _ => c,
-    }
+fn keypad_equivalent(c: Key) -> Key {
+    let plain = match c.special() {
+        Some(SpecialKey::Kplus) => return Key::ascii(b'+'),
+        Some(SpecialKey::Kminus) => return Key::ascii(b'-'),
+        Some(SpecialKey::Kdivide) => return Key::ascii(b'/'),
+        Some(SpecialKey::Kmultiply) => return Key::ascii(b'*'),
+        Some(SpecialKey::Kenter) => return Key::CAR,
+        Some(SpecialKey::Kpoint) => return Key::ascii(b'.'),
+        Some(SpecialKey::Kcomma) => return Key::ascii(b','),
+        Some(SpecialKey::Kequal) => return Key::ascii(b'='),
+        Some(SpecialKey::K0) => return Key::ascii(b'0'),
+        Some(SpecialKey::K1) => return Key::ascii(b'1'),
+        Some(SpecialKey::K2) => return Key::ascii(b'2'),
+        Some(SpecialKey::K3) => return Key::ascii(b'3'),
+        Some(SpecialKey::K4) => return Key::ascii(b'4'),
+        Some(SpecialKey::K5) => return Key::ascii(b'5'),
+        Some(SpecialKey::K6) => return Key::ascii(b'6'),
+        Some(SpecialKey::K7) => return Key::ascii(b'7'),
+        Some(SpecialKey::K8) => return Key::ascii(b'8'),
+        Some(SpecialKey::K9) => return Key::ascii(b'9'),
+        Some(SpecialKey::Xhome | SpecialKey::Zhome) => {
+            modified_key(SpecialKey::SHome, SpecialKey::CHome, SpecialKey::Home)
+        }
+        Some(SpecialKey::Xend | SpecialKey::Zend) => {
+            modified_key(SpecialKey::SEnd, SpecialKey::CEnd, SpecialKey::End)
+        }
+        Some(SpecialKey::Kup | SpecialKey::Xup) => SpecialKey::Up,
+        Some(SpecialKey::Kdown | SpecialKey::Xdown) => SpecialKey::Down,
+        Some(SpecialKey::Kleft | SpecialKey::Xleft) => SpecialKey::Left,
+        Some(SpecialKey::Kright | SpecialKey::Xright) => SpecialKey::Right,
+        _ => return c,
+    };
+    plain.into()
 }
 
 /// Pick the shifted, control or plain code for a key that has all three, and
 /// take the modifier out of `mod_mask` when one was used.
 ///
 /// Safe: it only reads and writes the editor's own `mod_mask`.
-fn modified_key(shifted: c_int, control: c_int, plain: c_int) -> c_int {
+fn modified_key(shifted: SpecialKey, control: SpecialKey, plain: SpecialKey) -> SpecialKey {
     if mod_mask.get() == ModMask::SHIFT {
         mod_mask.set(ModMask::NONE);
         shifted
@@ -284,22 +283,30 @@ fn modified_key(shifted: c_int, control: c_int, plain: c_int) -> c_int {
 ///
 /// Safe: like [`vgetc`], it needs nothing of its caller but a running
 /// editor; it may block waiting for input.
-pub fn safe_vgetc() -> c_int {
+pub fn safe_vgetc() -> Key {
     let c = vgetc();
-    if c == NUL { get_keystroke(None) } else { c }
+    if c.is_nul() {
+        Key::from_code(get_keystroke(None))
+    } else {
+        c
+    }
 }
 
 /// Like [`safe_vgetc`], but loops past `K_IGNORE` and scrollbar events.
 ///
 /// Safe: it is a loop around [`safe_vgetc`]; it may block waiting for input.
-pub fn plain_vgetc() -> c_int {
+pub fn plain_vgetc() -> Key {
     loop {
         let c = safe_vgetc();
-        if c != SpecialKey::Ignore.code()
-            && c != SpecialKey::VerScrollbar.code()
-            && c != SpecialKey::HorScrollbar.code()
-            && c != SpecialKey::Mousemove.code()
-        {
+        if !matches!(
+            c.special(),
+            Some(
+                SpecialKey::Ignore
+                    | SpecialKey::VerScrollbar
+                    | SpecialKey::HorScrollbar
+                    | SpecialKey::Mousemove
+            )
+        ) {
             return c;
         }
     }
@@ -311,10 +318,10 @@ pub fn plain_vgetc() -> c_int {
 /// multibyte one the answer is only its first byte, which is not a valid key.
 ///
 /// Safe: it only looks at the editor's own typeahead, and never blocks.
-pub fn vpeekc() -> c_int {
+pub fn vpeekc() -> Key {
     match ungot.with(|key| key.as_ref().map(|key| key.c)) {
         Some(c) if ungot_key_ready() => c,
-        _ => vgetorpeek(false),
+        _ => Key::byte(vgetorpeek(false)),
     }
 }
 
@@ -325,10 +332,10 @@ pub fn vpeekc() -> c_int {
 /// code.
 ///
 /// Safe: [`vpeekc`] plus a look at the typeahead buffer's length.
-pub fn vpeekc_any() -> c_int {
+pub fn vpeekc_any() -> Key {
     let c = vpeekc();
-    if c == NUL && !typeahead().is_empty() {
-        ESC
+    if c.is_nul() && !typeahead().is_empty() {
+        Key::ESC
     } else {
         c
     }
@@ -344,7 +351,7 @@ pub fn char_avail() -> bool {
     let unmapped = Keys::unmapped();
     let c = vpeekc();
     drop(unmapped);
-    c != NUL
+    !c.is_nul()
 }
 
 /// Put one character back, to be answered by the next [`vgetc`]. Can only be
@@ -352,14 +359,14 @@ pub fn char_avail() -> bool {
 ///
 /// A stuffed character comes back immediately; anything else waits until the
 /// stuff buffer is empty.
-pub(crate) fn vungetc(c: c_int) {
+pub(crate) fn vungetc(c: Key) {
     ungot.set(Some(UngotKey {
         c,
         mod_mask: mod_mask.get(),
         mouse_grid: mouse_grid.get(),
         mouse_row: mouse_row.get(),
         mouse_col: mouse_col.get(),
-        stuffed: KeyStuffed.get() != 0,
+        stuffed: KeyStuffed.get(),
     }));
 }
 

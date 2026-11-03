@@ -2,6 +2,7 @@
 //! `:normal`, which re-enters the normal-mode state machine.
 #![forbid(unsafe_code)]
 
+use crate::getchar::Remap;
 use crate::getchar::ins_typebuf;
 use crate::memline::MlFlags;
 use crate::message::emsg;
@@ -28,7 +29,7 @@ use crate::ex_docmd::cmdline::do_cmdline;
 use crate::ex_docmd::scan::get_flags;
 use crate::ex_docmd::source::LineSource;
 use crate::ex_docmd::{
-    DoCmdOpts, EXFLAG_LIST, EXFLAG_NR, OPTION_MAGIC_OFF, OPTION_MAGIC_ON, REMAP_NONE, kMTLineWise,
+    DoCmdOpts, EXFLAG_LIST, EXFLAG_NR, OPTION_MAGIC_OFF, OPTION_MAGIC_ON, kMTLineWise,
 };
 use crate::fold::{fold_create, fold_manual_allowed, has_folding, op_fold_range};
 use crate::getchar::{beep_flush, stuff_empty, typeahead, vpeekc};
@@ -141,7 +142,7 @@ pub(crate) fn ex_syncbind(_excmd: &mut ExArg) {
         checkpcmark();
         // The cursor moved with the scroll; CTRL-O puts it back.
         if old_linenr != Win::current().w_cursor.lnum {
-            let _ = ins_typebuf(b"\x0f", REMAP_NONE as c_int, 0, true, false);
+            let _ = ins_typebuf(b"\x0f", Remap::No, 0, true, false);
         }
     }
 }
@@ -188,7 +189,7 @@ pub fn do_sleep(msec: int64_t, hide_cursor: bool) {
     sleep_serving_events(msec);
     if got_int.get() {
         // Take the interrupt out of the typeahead.
-        vpeekc();
+        vpeekc().code();
     }
     if hide_cursor {
         ui_busy_stop();

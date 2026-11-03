@@ -178,7 +178,7 @@ pub(crate) fn function_exists(name: &[u8], no_deref: bool) -> bool {
 fn cat_func_name(func: &UserFunc) -> Vec<u8> {
     let name = func.name().as_bytes();
     debug_assert!(!name.is_empty());
-    let global = name.first().map(|&b| c_int::from(b)) != Some(K_SPECIAL);
+    let global = name.first() != Some(&K_SPECIAL);
     if !global && name.len() > 3 {
         let mut text = b"<SNR>".to_vec();
         text.extend_from_slice(&name[3..]);

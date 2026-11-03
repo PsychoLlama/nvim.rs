@@ -16,7 +16,7 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
 use std::ffi::CString;
 
 use super::{kRetNilBool, nlua_error, nlua_exec, with_main_stack};
@@ -28,7 +28,7 @@ use crate::keycodes::{special_key_bytes, unescape_ks_in};
 use crate::lua::ffi::LUA_NOREF;
 use crate::lua::stack::{At, Kind};
 use crate::memory::ThinCString;
-use crate::types::{ApiString, Array, LuaRef, Object, TypVal, VAR_DICT, VAR_LIST};
+use crate::types::{ApiString, Array, Key, LuaRef, Object, TypVal, VAR_DICT, VAR_LIST};
 
 /// The Lua table `arg` came from, if it came from one at all.
 fn lua_table_ref(arg: &TypVal) -> LuaRef {
@@ -92,7 +92,7 @@ pub(crate) fn register_table_as_callable(arg: &TypVal) -> Option<ThinCString> {
 /// `typed` is the bytes that were typed for the key, still escaped; they are
 /// unescaped in place, and read up to the first NUL as upstream's string
 /// is. The main state exists whenever a key is being read.
-pub fn nlua_execute_on_key(c: c_int, typed: &mut Vec<u8>) -> bool {
+pub fn nlua_execute_on_key(c: Key, typed: &mut Vec<u8>) -> bool {
     static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
     if RECURSIVE.get() {
         return false;

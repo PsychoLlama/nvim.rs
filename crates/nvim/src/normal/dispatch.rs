@@ -55,6 +55,7 @@ use crate::state::{
     MODE_LANGMAP, MODE_LREPLACE, MODE_NORMAL, MODE_NORMAL_BUSY, MODE_REPLACE, MODE_SELECT,
     get_real_state, may_trigger_modechanged,
 };
+use crate::types::Key;
 use crate::types::{
     CmdArg, CpoFlag, GraphemeState, NUL, OpType, OptInt, Outcome, int16_t, int64_t,
 };
@@ -181,7 +182,7 @@ fn langmap_wanted(condition: bool) -> bool {
     } else {
         KeyTyped.get()
     };
-    have_langmap && condition && (p_lrm() || from_a_map) && KeyStuffed.get() == 0
+    have_langmap && condition && (p_lrm() || from_a_map) && !KeyStuffed.get()
 }
 
 /// Translate one key through 'langmap', if this key and this moment call for
@@ -224,7 +225,7 @@ fn additional_char_slot(ns: &mut NormalState) -> (Slot, bool, bool) {
     }
     // `g` reads its own second character first, and only some of them
     // take a third.
-    ns.ca.nchar = plain_vgetc();
+    ns.ca.nchar = plain_vgetc().code();
     langmap_adjust(&mut ns.ca.nchar, true);
     ns.need_flushbuf |= add_to_showcmd(ns.ca.nchar);
     match ns.ca.nchar {
@@ -245,7 +246,7 @@ fn resolve_ctrl_backslash(ns: &mut NormalState) {
         p_tm() as c_int
     };
     loop {
-        ns.c = vpeekc();
+        ns.c = vpeekc().code();
         if !(ns.c <= 0 && towait > 0) {
             break;
         }
@@ -253,9 +254,9 @@ fn resolve_ctrl_backslash(ns: &mut NormalState) {
         towait -= 50;
     }
     if ns.c > 0 {
-        ns.c = plain_vgetc();
+        ns.c = plain_vgetc().code();
         if ns.c != Ctrl_N && ns.c != Ctrl_G {
-            vungetc(ns.c);
+            vungetc(Key::from_code(ns.c));
         } else {
             ns.ca.cmdchar = Ctrl_BSL;
             ns.ca.nchar = ns.c;
@@ -274,13 +275,13 @@ fn read_composing_tail(ns: &mut NormalState) {
     let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
     let mut prev_code = ns.ca.nchar;
     loop {
-        ns.c = vpeekc();
-        if !(ns.c > 0 && (ns.c >= 0x100 || utf8len_tab[vpeekc() as usize] as c_int > 1)) {
+        ns.c = vpeekc().code();
+        if !(ns.c > 0 && (ns.c >= 0x100 || utf8len_tab[vpeekc().code() as usize] as c_int > 1)) {
             break;
         }
-        ns.c = plain_vgetc();
+        ns.c = plain_vgetc().code();
         if !iscomposing(prev_code, ns.c, Some(&mut state)) {
-            vungetc(ns.c);
+            vungetc(Key::from_code(ns.c));
             break;
         }
         // The base character is only encoded once a tail turns up.
@@ -321,7 +322,7 @@ pub(crate) fn normal_get_additional_char(ns: &mut NormalState) {
         if langmap_active {
             State.set(if repl { MODE_LREPLACE } else { MODE_LANGMAP });
         }
-        let mut cp = plain_vgetc();
+        let mut cp = plain_vgetc().code();
         drop(mapped);
         State.set(MODE_NORMAL_BUSY);
         ns.need_flushbuf |= add_to_showcmd(cp);
@@ -332,9 +333,9 @@ pub(crate) fn normal_get_additional_char(ns: &mut NormalState) {
                 && (nv_cmds[ns.idx as usize].cmd_flags.has(NvFlags::LANG) || slot == Slot::Extra)
                 && !cpo_has(CpoFlag::DIGRAPH)
             {
-                ns.c = get_digraph(false);
+                ns.c = get_digraph(false).code();
                 if ns.c > 0 {
-                    cp = ns.c;
+                    cp = Key::from_code(ns.c).code();
                     // Take the CTRL-K and its two characters back out of
                     // the echoed command before showing the result.
                     del_from_showcmd(3);
@@ -427,7 +428,7 @@ pub(crate) fn normal_get_command_count(ns: &mut NormalState) -> bool {
         // A '0' here is a count digit, not the "go to column 0" command,
         // so it must not be mapped.
         let count_digit = Suppress::zero_mapping();
-        ns.c = plain_vgetc();
+        ns.c = plain_vgetc().code();
         langmap_adjust(&mut ns.c, true);
         drop(count_digit);
         drop(raw_key);
@@ -441,7 +442,7 @@ pub(crate) fn normal_get_command_count(ns: &mut NormalState) -> bool {
         ns.ca.opcount = ns.ca.count0;
         ns.ca.count0 = 0;
         let raw_key = Keys::unmapped_with_codes();
-        ns.c = plain_vgetc();
+        ns.c = plain_vgetc().code();
         langmap_adjust(&mut ns.c, true);
         drop(raw_key);
         ns.need_flushbuf |= add_to_showcmd(ns.c);
@@ -627,7 +628,7 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: c_int) -> c_int {
     } else {
         if Win::current().w_onebuf_opt.wo_rl != 0
             && KeyTyped.get()
-            && KeyStuffed.get() == 0
+            && !KeyStuffed.get()
             && nv_cmds[ns.idx as usize].cmd_flags.has(NvFlags::RL)
         {
             normal_invert_horizontal(ns);
@@ -691,7 +692,7 @@ pub(crate) fn prep_redo_cmd(cmd_arg: &mut CmdArg) {
     if cmd_arg.nchar_len > 0 {
         append_to_redobuff(cstr::until_nul(&cmd_arg.nchar_composing));
     } else {
-        append_to_redobuff_char(cmd_arg.nchar);
+        append_to_redobuff_char(Key::from_code(cmd_arg.nchar));
     }
 }
 
@@ -725,15 +726,15 @@ pub(crate) fn prep_redo_num2(
 ) {
     reset_redobuff();
     if regname != 0 {
-        append_to_redobuff_char('"' as c_int);
-        append_to_redobuff_char(regname);
+        append_to_redobuff_char(Key::ascii(b'"'));
+        append_to_redobuff_char(Key::from_code(regname));
     }
     if num1 != 0 {
         append_to_redobuff_number(num1);
     }
     for cmd in [cmd1, cmd2] {
         if cmd != NUL {
-            append_to_redobuff_char(cmd);
+            append_to_redobuff_char(Key::from_code(cmd));
         }
     }
     if num2 != 0 {
@@ -741,7 +742,7 @@ pub(crate) fn prep_redo_num2(
     }
     for cmd in [cmd3, cmd4, cmd5] {
         if cmd != NUL {
-            append_to_redobuff_char(cmd);
+            append_to_redobuff_char(Key::from_code(cmd));
         }
     }
 }
@@ -793,7 +794,7 @@ pub(crate) fn clear_op_beep(op: Op) {
 /// the 'showcmd' area.
 pub(crate) fn read_command_char() -> c_int {
     let raw_key = Keys::unmapped_with_codes();
-    let mut c = plain_vgetc();
+    let mut c = plain_vgetc().code();
     langmap_adjust(&mut c, true);
     drop(raw_key);
     add_to_showcmd(c);
@@ -820,7 +821,7 @@ pub(crate) fn unshift_special(cmd_arg: &mut CmdArg) {
         Ok(SpecialKey::SEnd) => SpecialKey::End.code(),
         _ => cmd_arg.cmdchar,
     };
-    cmd_arg.cmdchar = simplify_mod_mask(cmd_arg.cmdchar);
+    cmd_arg.cmdchar = simplify_mod_mask(Key::from_code(cmd_arg.cmdchar)).code();
 }
 
 /// Make room on the command line for whatever is about to be shown there.

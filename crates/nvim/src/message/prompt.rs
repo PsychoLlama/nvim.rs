@@ -78,7 +78,7 @@ pub fn wait_return(redraw: c_int) {
     if headless_mode.get() && ui_active() == 0 {
         return;
     }
-    // Inside vgetc() we can't wait for a typed character at all.
+    // Inside vgetc().code() we can't wait for a typed character at all.
     if vgetc_busy.get() > 0 {
         return;
     }
@@ -131,7 +131,7 @@ pub fn wait_return(redraw: c_int) {
         if msg_flags.get() & kOptMoptFlagHitEnter != 0 {
             hit_return_msg(true);
             loop {
-                // Remember "got_int": if it is set vgetc() probably
+                // Remember "got_int": if it is set vgetc().code() probably
                 // answers CTRL-C, and we need to loop then.
                 let had_got_int = got_int.get();
 
@@ -143,7 +143,7 @@ pub fn wait_return(redraw: c_int) {
                 let save_reg_recording = reg_recording.get();
                 let save_scriptout = scriptout.take();
                 reg_recording.set(0);
-                c = safe_vgetc();
+                c = safe_vgetc().code();
                 if had_got_int && global_busy.get() == 0 {
                     got_int.set(false);
                 }
@@ -265,7 +265,7 @@ pub fn wait_return(redraw: c_int) {
     }
 
     if tmp_state == MODE_SETWSIZE {
-        // got resize event while in vgetc()
+        // got resize event while in vgetc().code()
         ui_refresh();
     } else if !skip_redraw.get() && (redraw == 1 || (msg_scrolled.get() != 0 && redraw != -1)) {
         redraw_later(Win::current(), UPD_VALID);
@@ -387,7 +387,7 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
                 Err(NotAKey(KEY_COLON)) => {
                     // Start an Ex command on the next line.
                     if confirm_msg_used.get() == 0 {
-                        typeahead_noflush(KEY_COLON);
+                        typeahead_noflush(b':');
                         cmdline_row.set(Rows.get() - 1);
                         skip_redraw.set(true);
                         need_wait_return.set(false);

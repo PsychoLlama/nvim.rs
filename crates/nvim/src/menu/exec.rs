@@ -18,6 +18,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::getchar::Remap;
 use crate::guard::Depth;
 use crate::message_fmt::msg_bytes;
 use crate::option::vars::P_SEL;
@@ -150,7 +151,7 @@ fn select_range(line1: LineNr, line2: LineNr) {
 }
 
 /// Run the rhs immediately, inside a saved editor state.
-fn run_now(rhs: &Rc<CStr>, noremap: c_int, silent: bool) {
+fn run_now(rhs: &Rc<CStr>, noremap: Remap, silent: bool) {
     let mut state = SaveState::default();
     let _busy = Depth::of(ex_normal_busy);
     if save_current_state(&mut state) {
@@ -160,7 +161,7 @@ fn run_now(rhs: &Rc<CStr>, noremap: c_int, silent: bool) {
 }
 
 /// Put the rhs into the typeahead, as if the user had typed it.
-fn feed_typeahead(rhs: &Rc<CStr>, noremap: c_int, silent: bool) {
+fn feed_typeahead(rhs: &Rc<CStr>, noremap: Remap, silent: bool) {
     let _ = ins_typebuf(rhs.to_bytes(), noremap, 0, true, silent);
 }
 

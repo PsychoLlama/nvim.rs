@@ -10,7 +10,7 @@
 use super::*;
 use crate::guard::Keys;
 use crate::keycodes::{SpecialKey, key_unescape};
-use crate::types::NUL;
+use crate::types::Key;
 use core::ffi::c_int;
 
 /// Which part of a paste stream a [`paste_store`] call is carrying.
@@ -42,11 +42,11 @@ pub fn paste_store(channel_id: uint64_t, phase: PastePhase, text: &[u8], crlf: b
     }
 
     if phase != PastePhase::Chunk {
-        let c = if phase == PastePhase::Start {
-            SpecialKey::PasteStart.code()
+        let c = Key::from(if phase == PastePhase::Start {
+            SpecialKey::PasteStart
         } else {
-            SpecialKey::PasteEnd.code()
-        };
+            SpecialKey::PasteEnd
+        });
         if need_redo {
             if phase == PastePhase::Start && State.get() & MODE_INSERT == 0 {
                 reset_redobuff();
@@ -64,10 +64,7 @@ pub fn paste_store(channel_id: uint64_t, phase: PastePhase, text: &[u8], crlf: b
         // A run of bytes that need no escaping goes in one piece.
         let run = s
             .iter()
-            .position(|&b| {
-                let b = c_int::from(b);
-                b == K_SPECIAL || b == NUL || b == NL || (crlf && b == CAR)
-            })
+            .position(|&b| b == K_SPECIAL || b == 0 || b == b'\n' || (crlf && b == b'\r'))
             .unwrap_or(s.len());
         if run > 0 {
             if need_redo {
@@ -81,14 +78,14 @@ pub fn paste_store(channel_id: uint64_t, phase: PastePhase, text: &[u8], crlf: b
 
         // Then the byte that stopped it, escaped as one key.
         if let Some((&first, rest)) = s.split_first() {
-            let mut c = c_int::from(first);
+            let mut c = Key::byte(first);
             s = rest;
-            if crlf && c == CAR {
+            if crlf && c == Key::CAR {
                 // A CRLF pair counts as one newline.
-                if s.first().is_some_and(|&b| c_int::from(b) == NL) {
+                if s.first() == Some(&b'\n') {
                     s = &s[1..];
                 }
-                c = NL;
+                c = Key::NL;
             }
             if need_redo {
                 redobuff().add_byte(c);
@@ -109,18 +106,18 @@ pub fn paste_repeat(count: c_int) {
     let unmapped = Keys::unmapped();
     got_int.set(false);
     while !aborted {
-        let first = vgetorpeek(true) as u8;
-        if c_int::from(first) == K_SPECIAL {
+        let first = vgetorpeek(true);
+        if first == K_SPECIAL {
             // Undo the escaping `paste_store` applied, except that the
             // bytes of a real key code go back in as they came out.
-            let second = vgetorpeek(true) as u8;
-            let third = vgetorpeek(true) as u8;
+            let second = vgetorpeek(true);
+            let third = vgetorpeek(true);
             let key = key_unescape(second, third);
-            match SpecialKey::try_from(key) {
-                Ok(SpecialKey::PasteEnd) => break,
-                Ok(SpecialKey::Zero) => pasted.push(NUL as u8),
-                _ if key == K_SPECIAL => pasted.push(K_SPECIAL as u8),
-                _ => pasted.extend_from_slice(&[K_SPECIAL as u8, second, third]),
+            match key.special() {
+                Some(SpecialKey::PasteEnd) => break,
+                Some(SpecialKey::Zero) => pasted.push(0),
+                _ if key == Key::byte(K_SPECIAL) => pasted.push(K_SPECIAL),
+                _ => pasted.extend_from_slice(&[K_SPECIAL, second, third]),
             }
         } else {
             pasted.push(first);

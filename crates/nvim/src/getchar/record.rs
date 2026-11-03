@@ -19,8 +19,8 @@ use super::*;
 use crate::keycodes::ModMask;
 use crate::keycodes::{KE_IGNORE, KS_EXTRA, key_unescape};
 use crate::mbyte::{char_at, unescape_at};
-use crate::types::{MB_MAXBYTES, NUL};
-use core::ffi::{c_int, c_uint};
+use crate::types::{Key, MB_MAXBYTES};
+use core::ffi::c_int;
 
 impl Default for GotcharsState {
     fn default() -> Self {
@@ -33,7 +33,7 @@ impl GotcharsState {
     pub(crate) const fn new() -> Self {
         GotcharsState {
             buf: [0; MB_MAXBYTES * 3 + 4],
-            prev_c: 0,
+            prev_byte: 0,
             buflen: 0,
             pending_special: 0,
             pending_mbyte: 0,
@@ -48,14 +48,23 @@ impl GotcharsState {
 pub(crate) fn gotchars_add_byte(state: &mut GotcharsState, byte: u8) -> bool {
     state.buf[state.buflen] = byte;
     state.buflen += 1;
-    let mut c = c_int::from(byte);
+    if state.buflen == state.buf.len() {
+        // No key is this long: modifier prefixes with no key after them
+        // (`'showcmd'` re-reads a waiting one every time round) never
+        // complete. Upstream writes past its buffer here; the bytes are
+        // handed on as they are and the state starts afresh.
+        state.pending_special = 0;
+        state.pending_mbyte = 0;
+        state.prev_byte = 0;
+        return true;
+    }
 
     let in_special = state.pending_special > 0;
     let in_mbyte = state.pending_mbyte > 0;
 
     if in_special {
         state.pending_special -= 1;
-    } else if c == K_SPECIAL {
+    } else if byte == K_SPECIAL {
         // A special key sequence is held until all three bytes are in and
         // it is clear what they stand for.
         state.pending_special = 2;
@@ -66,23 +75,28 @@ pub(crate) fn gotchars_add_byte(state: &mut GotcharsState, byte: u8) -> bool {
         if in_mbyte {
             state.pending_mbyte -= 1;
         } else {
-            if in_special {
-                if state.prev_c == KS_MODIFIER {
+            let key = if in_special {
+                if state.prev_byte == KS_MODIFIER {
                     // A modifier prefix: wait for the key it modifies.
-                    state.prev_c = c;
+                    state.prev_byte = byte;
                     return false;
                 }
-                c = key_unescape(state.prev_c as u8, c as u8);
-            }
+                key_unescape(state.prev_byte, byte)
+            } else {
+                Key::byte(byte)
+            };
             // A multibyte character is held until all its bytes are in,
             // so that it cannot be split between two buffer blocks --
             // `delete_tail` would not be able to undo half of one.
-            state.pending_mbyte = mb_byte2len_check(c) as c_uint - 1;
+            let len = key
+                .as_byte()
+                .map_or(1, |b| usize::from(utf8len_tab[usize::from(b)]));
+            state.pending_mbyte = len - 1;
         }
         whole = state.pending_mbyte == 0;
     }
 
-    state.prev_c = c;
+    state.prev_byte = byte;
     whole
 }
 
@@ -104,7 +118,7 @@ pub(crate) fn gotchars(chars: &[u8]) {
 
         // One byte at a time; no translation to be done.
         for i in 0..buflen {
-            updatescript(c_int::from(key.buf[i]));
+            updatescript(key.buf[i]);
         }
 
         // `ins_char_typebuf` can ask for the bytes it puts back to be
@@ -142,7 +156,7 @@ pub(crate) fn gotchars(chars: &[u8]) {
 /// Used after a timed-out `<Esc>` so that the ESC cannot combine with
 /// whatever is typed next into a key code.
 pub fn gotchars_ignore() {
-    let nop = [K_SPECIAL as u8, KS_EXTRA as u8, KE_IGNORE as u8];
+    let nop = [K_SPECIAL, KS_EXTRA, KE_IGNORE];
     on_key_ignore_len.set(on_key_ignore_len.get() + 3);
     gotchars(&nop);
 }
@@ -167,26 +181,24 @@ pub(crate) fn add_byte_to_showcmd(byte: u8) {
     let key = &pending.buf[..buflen];
     let mut key = &key[..key.iter().position(|&b| b == 0).unwrap_or(key.len())];
     let mut modifiers = ModMask::NONE;
-    if let [first, KS_MODIFIER_U8, bits, rest @ ..] = key
-        && c_int::from(*first) == K_SPECIAL
-    {
-        modifiers = ModMask::from_bits(c_int::from(*bits));
+    if let [K_SPECIAL, KS_MODIFIER, bits, rest @ ..] = key {
+        modifiers = ModMask::from_byte(*bits);
         key = rest;
     }
 
-    let mut c = NUL;
+    let mut c = Key::NUL;
     if let Some(&first) = key.first() {
         c = match unescape_at(key).filter(|_| first >= 0x80) {
             Some((ch, used)) => {
                 key = &key[used..];
-                char_at(&ch)
+                Key::from_code(char_at(&ch))
             }
             None => {
                 key = &key[1..];
-                c_int::from(first)
+                Key::byte(first)
             }
         };
-        if c <= 0x7f {
+        if c.code() <= 0x7f {
             // Fold the modifiers into the key where that has a spelling,
             // which reads better: CTRL-A rather than <C-> then A.
             let mut left = modifiers;
@@ -201,17 +213,14 @@ pub(crate) fn add_byte_to_showcmd(byte: u8) {
     // TODO(zeertzjq): is there a more readable and yet compact
     // representation of modifiers and special keys?
     if !modifiers.is_empty() {
-        add_to_showcmd(K_SPECIAL);
-        add_to_showcmd(KS_MODIFIER);
+        add_to_showcmd(c_int::from(K_SPECIAL));
+        add_to_showcmd(c_int::from(KS_MODIFIER));
         add_to_showcmd(modifiers.bits());
     }
-    if c != NUL {
-        add_to_showcmd(c);
+    if !c.is_nul() {
+        add_to_showcmd(c.code());
     }
     for &byte in key {
         add_to_showcmd(c_int::from(byte));
     }
 }
-
-/// `KS_MODIFIER` as the byte a key escape carries.
-const KS_MODIFIER_U8: u8 = KS_MODIFIER as u8;

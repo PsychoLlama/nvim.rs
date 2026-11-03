@@ -171,8 +171,8 @@ pub struct MapBlock {
     pub(crate) m_mode: ::core::ffi::c_int,
     /// Whether this is the `<C-H>`-style simplified half of a pair.
     pub(crate) m_simplified: bool,
-    /// `REMAP_YES`, `REMAP_NONE` or `REMAP_SCRIPT`.
-    pub(crate) m_noremap: ::core::ffi::c_int,
+    /// `Remap::Yes`, `Remap::No` or `Remap::Script`.
+    pub(crate) m_noremap: crate::getchar::Remap,
     pub(crate) m_silent: bool,
     pub(crate) m_nowait: bool,
     pub(crate) m_expr: bool,

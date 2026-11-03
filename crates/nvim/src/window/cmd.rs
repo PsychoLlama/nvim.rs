@@ -659,7 +659,7 @@ fn langmap_adjust(c: c_int) -> c_int {
     } else {
         KeyTyped.get()
     };
-    if !(mapping && (p_lrm() || typed) && KeyStuffed.get() == 0 && c >= 0) {
+    if !(mapping && (p_lrm() || typed) && !KeyStuffed.get() && c >= 0) {
         return c;
     }
     if c < 256 {
@@ -670,7 +670,7 @@ fn langmap_adjust(c: c_int) -> c_int {
 
 /// Read one character with no mapping applied.
 fn read_char() -> c_int {
-    plain_vgetc()
+    plain_vgetc().code()
 }
 
 /// Show `c` in the pending-command display.

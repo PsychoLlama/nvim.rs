@@ -15,10 +15,7 @@
 #![forbid(unsafe_code)]
 
 use crate::keycodes::ModMask;
-use crate::types::CAR;
-use crate::types::ESC;
-use crate::types::NL;
-use crate::types::TAB;
+use crate::types::Key;
 use core::ffi::c_int;
 use core::iter;
 
@@ -69,12 +66,12 @@ static ALT_MOD_MASK: ModPrefix = mod_prefix(ModMask::ALT, ModMask::ALT, b'A');
 
 /// The modifier bit a `<X-Key>` prefix letter names — `S` for shift, `C` for
 /// ctrl — or 0 when it names no modifier. ASCII case is folded.
-pub fn name_to_mod_mask(c: c_int) -> ModMask {
-    let c = to_upper_ascii(c);
+pub fn name_to_mod_mask(c: u8) -> ModMask {
+    let c = c.to_ascii_uppercase();
     PRINTED_MOD_MASKS
         .iter()
         .chain(iter::once(&ALT_MOD_MASK))
-        .find(|m| c == c_int::from(m.name))
+        .find(|m| c == m.name)
         .map_or(ModMask::NONE, |m| m.flag)
 }
 
@@ -109,7 +106,7 @@ const fn mod_key(modifier: ModMask, with: [u8; 2], without: [u8; 2]) -> Modifier
 /// [`MODIFIER_KEYS`] stores. Upstream's table is a flat `uint8_t[]`.
 const SHIFT: ModMask = ModMask::SHIFT;
 const CTRL: ModMask = ModMask::CTRL;
-const EXTRA: u8 = KS_EXTRA as u8;
+const EXTRA: u8 = KS_EXTRA;
 
 /// Shifted and ctrl'ed terminal codes, and the unmodified code each stands
 /// for. Terminals send `<S-Up>` as a code of its own rather than as `Up` plus
@@ -123,15 +120,15 @@ static MODIFIER_KEYS: [ModifierKey; 75] = [
     mod_key(SHIFT, *b"*4", *b"kD"),
     mod_key(SHIFT, *b"*5", *b"kL"),
     mod_key(SHIFT, *b"*7", *b"@7"),
-    mod_key(CTRL, [EXTRA, KE_C_END as u8], *b"@7"),
+    mod_key(CTRL, [EXTRA, KE_C_END], *b"@7"),
     mod_key(SHIFT, *b"*9", *b"@9"),
     mod_key(SHIFT, *b"*0", *b"@0"),
     mod_key(SHIFT, *b"#1", *b"%1"),
     mod_key(SHIFT, *b"#2", *b"kh"),
-    mod_key(CTRL, [EXTRA, KE_C_HOME as u8], *b"kh"),
+    mod_key(CTRL, [EXTRA, KE_C_HOME], *b"kh"),
     mod_key(SHIFT, *b"#3", *b"kI"),
     mod_key(SHIFT, *b"#4", *b"kl"),
-    mod_key(CTRL, [EXTRA, KE_C_LEFT as u8], *b"kl"),
+    mod_key(CTRL, [EXTRA, KE_C_LEFT], *b"kl"),
     mod_key(SHIFT, *b"%a", *b"%3"),
     mod_key(SHIFT, *b"%b", *b"%4"),
     mod_key(SHIFT, *b"%c", *b"%5"),
@@ -141,68 +138,68 @@ static MODIFIER_KEYS: [ModifierKey; 75] = [
     mod_key(SHIFT, *b"%g", *b"%0"),
     mod_key(SHIFT, *b"%h", *b"&3"),
     mod_key(SHIFT, *b"%i", *b"kr"),
-    mod_key(CTRL, [EXTRA, KE_C_RIGHT as u8], *b"kr"),
+    mod_key(CTRL, [EXTRA, KE_C_RIGHT], *b"kr"),
     mod_key(SHIFT, *b"%j", *b"&5"),
     mod_key(SHIFT, *b"!1", *b"&6"),
     mod_key(SHIFT, *b"!2", *b"&7"),
     mod_key(SHIFT, *b"!3", *b"&8"),
-    mod_key(SHIFT, [EXTRA, KE_S_UP as u8], *b"ku"),
-    mod_key(SHIFT, [EXTRA, KE_S_DOWN as u8], *b"kd"),
-    mod_key(SHIFT, [EXTRA, KE_S_XF1 as u8], [EXTRA, KE_XF1 as u8]),
-    mod_key(SHIFT, [EXTRA, KE_S_XF2 as u8], [EXTRA, KE_XF2 as u8]),
-    mod_key(SHIFT, [EXTRA, KE_S_XF3 as u8], [EXTRA, KE_XF3 as u8]),
-    mod_key(SHIFT, [EXTRA, KE_S_XF4 as u8], [EXTRA, KE_XF4 as u8]),
-    mod_key(SHIFT, [EXTRA, KE_S_F1 as u8], *b"k1"),
-    mod_key(SHIFT, [EXTRA, KE_S_F2 as u8], *b"k2"),
-    mod_key(SHIFT, [EXTRA, KE_S_F3 as u8], *b"k3"),
-    mod_key(SHIFT, [EXTRA, KE_S_F4 as u8], *b"k4"),
-    mod_key(SHIFT, [EXTRA, KE_S_F5 as u8], *b"k5"),
-    mod_key(SHIFT, [EXTRA, KE_S_F6 as u8], *b"k6"),
-    mod_key(SHIFT, [EXTRA, KE_S_F7 as u8], *b"k7"),
-    mod_key(SHIFT, [EXTRA, KE_S_F8 as u8], *b"k8"),
-    mod_key(SHIFT, [EXTRA, KE_S_F9 as u8], *b"k9"),
-    mod_key(SHIFT, [EXTRA, KE_S_F10 as u8], *b"k;"),
-    mod_key(SHIFT, [EXTRA, KE_S_F11 as u8], *b"F1"),
-    mod_key(SHIFT, [EXTRA, KE_S_F12 as u8], *b"F2"),
-    mod_key(SHIFT, [EXTRA, KE_S_F13 as u8], *b"F3"),
-    mod_key(SHIFT, [EXTRA, KE_S_F14 as u8], *b"F4"),
-    mod_key(SHIFT, [EXTRA, KE_S_F15 as u8], *b"F5"),
-    mod_key(SHIFT, [EXTRA, KE_S_F16 as u8], *b"F6"),
-    mod_key(SHIFT, [EXTRA, KE_S_F17 as u8], *b"F7"),
-    mod_key(SHIFT, [EXTRA, KE_S_F18 as u8], *b"F8"),
-    mod_key(SHIFT, [EXTRA, KE_S_F19 as u8], *b"F9"),
-    mod_key(SHIFT, [EXTRA, KE_S_F20 as u8], *b"FA"),
-    mod_key(SHIFT, [EXTRA, KE_S_F21 as u8], *b"FB"),
-    mod_key(SHIFT, [EXTRA, KE_S_F22 as u8], *b"FC"),
-    mod_key(SHIFT, [EXTRA, KE_S_F23 as u8], *b"FD"),
-    mod_key(SHIFT, [EXTRA, KE_S_F24 as u8], *b"FE"),
-    mod_key(SHIFT, [EXTRA, KE_S_F25 as u8], *b"FF"),
-    mod_key(SHIFT, [EXTRA, KE_S_F26 as u8], *b"FG"),
-    mod_key(SHIFT, [EXTRA, KE_S_F27 as u8], *b"FH"),
-    mod_key(SHIFT, [EXTRA, KE_S_F28 as u8], *b"FI"),
-    mod_key(SHIFT, [EXTRA, KE_S_F29 as u8], *b"FJ"),
-    mod_key(SHIFT, [EXTRA, KE_S_F30 as u8], *b"FK"),
-    mod_key(SHIFT, [EXTRA, KE_S_F31 as u8], *b"FL"),
-    mod_key(SHIFT, [EXTRA, KE_S_F32 as u8], *b"FM"),
-    mod_key(SHIFT, [EXTRA, KE_S_F33 as u8], *b"FN"),
-    mod_key(SHIFT, [EXTRA, KE_S_F34 as u8], *b"FO"),
-    mod_key(SHIFT, [EXTRA, KE_S_F35 as u8], *b"FP"),
-    mod_key(SHIFT, [EXTRA, KE_S_F36 as u8], *b"FQ"),
-    mod_key(SHIFT, [EXTRA, KE_S_F37 as u8], *b"FR"),
-    mod_key(SHIFT, *b"kB", [EXTRA, KE_TAB as u8]),
+    mod_key(SHIFT, [EXTRA, KE_S_UP], *b"ku"),
+    mod_key(SHIFT, [EXTRA, KE_S_DOWN], *b"kd"),
+    mod_key(SHIFT, [EXTRA, KE_S_XF1], [EXTRA, KE_XF1]),
+    mod_key(SHIFT, [EXTRA, KE_S_XF2], [EXTRA, KE_XF2]),
+    mod_key(SHIFT, [EXTRA, KE_S_XF3], [EXTRA, KE_XF3]),
+    mod_key(SHIFT, [EXTRA, KE_S_XF4], [EXTRA, KE_XF4]),
+    mod_key(SHIFT, [EXTRA, KE_S_F1], *b"k1"),
+    mod_key(SHIFT, [EXTRA, KE_S_F2], *b"k2"),
+    mod_key(SHIFT, [EXTRA, KE_S_F3], *b"k3"),
+    mod_key(SHIFT, [EXTRA, KE_S_F4], *b"k4"),
+    mod_key(SHIFT, [EXTRA, KE_S_F5], *b"k5"),
+    mod_key(SHIFT, [EXTRA, KE_S_F6], *b"k6"),
+    mod_key(SHIFT, [EXTRA, KE_S_F7], *b"k7"),
+    mod_key(SHIFT, [EXTRA, KE_S_F8], *b"k8"),
+    mod_key(SHIFT, [EXTRA, KE_S_F9], *b"k9"),
+    mod_key(SHIFT, [EXTRA, KE_S_F10], *b"k;"),
+    mod_key(SHIFT, [EXTRA, KE_S_F11], *b"F1"),
+    mod_key(SHIFT, [EXTRA, KE_S_F12], *b"F2"),
+    mod_key(SHIFT, [EXTRA, KE_S_F13], *b"F3"),
+    mod_key(SHIFT, [EXTRA, KE_S_F14], *b"F4"),
+    mod_key(SHIFT, [EXTRA, KE_S_F15], *b"F5"),
+    mod_key(SHIFT, [EXTRA, KE_S_F16], *b"F6"),
+    mod_key(SHIFT, [EXTRA, KE_S_F17], *b"F7"),
+    mod_key(SHIFT, [EXTRA, KE_S_F18], *b"F8"),
+    mod_key(SHIFT, [EXTRA, KE_S_F19], *b"F9"),
+    mod_key(SHIFT, [EXTRA, KE_S_F20], *b"FA"),
+    mod_key(SHIFT, [EXTRA, KE_S_F21], *b"FB"),
+    mod_key(SHIFT, [EXTRA, KE_S_F22], *b"FC"),
+    mod_key(SHIFT, [EXTRA, KE_S_F23], *b"FD"),
+    mod_key(SHIFT, [EXTRA, KE_S_F24], *b"FE"),
+    mod_key(SHIFT, [EXTRA, KE_S_F25], *b"FF"),
+    mod_key(SHIFT, [EXTRA, KE_S_F26], *b"FG"),
+    mod_key(SHIFT, [EXTRA, KE_S_F27], *b"FH"),
+    mod_key(SHIFT, [EXTRA, KE_S_F28], *b"FI"),
+    mod_key(SHIFT, [EXTRA, KE_S_F29], *b"FJ"),
+    mod_key(SHIFT, [EXTRA, KE_S_F30], *b"FK"),
+    mod_key(SHIFT, [EXTRA, KE_S_F31], *b"FL"),
+    mod_key(SHIFT, [EXTRA, KE_S_F32], *b"FM"),
+    mod_key(SHIFT, [EXTRA, KE_S_F33], *b"FN"),
+    mod_key(SHIFT, [EXTRA, KE_S_F34], *b"FO"),
+    mod_key(SHIFT, [EXTRA, KE_S_F35], *b"FP"),
+    mod_key(SHIFT, [EXTRA, KE_S_F36], *b"FQ"),
+    mod_key(SHIFT, [EXTRA, KE_S_F37], *b"FR"),
+    mod_key(SHIFT, *b"kB", [EXTRA, KE_TAB]),
 ];
 
 /// The two termcap-name bytes of a key code, read the way C's `KEY2TERMCAP*`
 /// macros read them: the low two bytes of the code's negation. Nothing checks
 /// that `key` is negative — see [`simplify`].
-pub(crate) fn termcap_name(key: c_int) -> [u8; 2] {
-    let bits = -key as u32;
-    [(bits & 0xff) as u8, ((bits >> 8) & 0xff) as u8]
+pub(crate) fn termcap_name(key: Key) -> [u8; 2] {
+    let bits = key.code().wrapping_neg().to_le_bytes();
+    [bits[0], bits[1]]
 }
 
 /// The key code a two-byte termcap name stands for (C's `TERMCAP2KEY`).
-pub(crate) const fn termcap_key(name: [u8; 2]) -> c_int {
-    -((name[0] as c_int) + ((name[1] as c_int) << 8))
+pub(crate) const fn termcap_key(name: [u8; 2]) -> Key {
+    Key::from_code(termcap(name[0], name[1]))
 }
 
 /// The single code that stands for `key` with one of `modifiers` held down,
@@ -212,7 +209,7 @@ pub(crate) const fn termcap_key(name: [u8; 2]) -> c_int {
 /// itself, exactly as the C is. A large *positive* key congruent to one of the
 /// table's codes modulo 65536 therefore matches: `<S-U+8A95>` comes out as
 /// `<S-Up>`. Faithful to upstream, and left that way deliberately.
-pub(crate) fn simplify(key: c_int, modifiers: ModMask) -> Option<(c_int, ModMask)> {
+pub(crate) fn simplify(key: Key, modifiers: ModMask) -> Option<(Key, ModMask)> {
     let name = termcap_name(key);
     let row = MODIFIER_KEYS
         .iter()
@@ -222,7 +219,7 @@ pub(crate) fn simplify(key: c_int, modifiers: ModMask) -> Option<(c_int, ModMask
 
 /// The unmodified key a shifted terminal code stands for, and the modifier it
 /// carries — the reverse of [`simplify`], used when a code is printed.
-pub(crate) fn unshift(key: c_int) -> Option<(c_int, ModMask)> {
+pub(crate) fn unshift(key: Key) -> Option<(Key, ModMask)> {
     let name = termcap_name(key);
     let row = MODIFIER_KEYS.iter().find(|m| name == m.with)?;
     Some((termcap_key(row.without), row.modifier))
@@ -230,8 +227,8 @@ pub(crate) fn unshift(key: c_int) -> Option<(c_int, ModMask)> {
 
 /// One name of one key code.
 struct KeyName {
-    /// The code this name spells.
-    key: c_int,
+    /// The key this name spells.
+    key: Key,
     /// Set when the name is an alternative spelling — `Return` for `CR`, say.
     /// Exactly one row per code has it clear, and that is the name the code is
     /// printed as.
@@ -240,8 +237,13 @@ struct KeyName {
     name: &'static str,
 }
 
-const fn key_name(key: c_int, is_alt: bool, name: &'static str) -> KeyName {
+const fn key_name(key: Key, is_alt: bool, name: &'static str) -> KeyName {
     KeyName { key, is_alt, name }
+}
+
+/// [`key_name`] for a named special key.
+const fn special(key: SpecialKey, is_alt: bool, name: &'static str) -> KeyName {
+    key_name(Key::from_special(key), is_alt, name)
 }
 
 /// Every name the `<>` notation knows, **sorted by lower-cased name** — the
@@ -255,193 +257,193 @@ static KEY_NAMES: [KeyName; 187] = KEY_NAME_ROWS;
 /// The rows of [`KEY_NAMES`], separately, and as a `const` so that the order
 /// can be asserted below: a `static` cannot be read from a `const` context.
 const KEY_NAME_ROWS: [KeyName; 187] = [
-    key_name(SpecialKey::Bs.code(), true, "BackSpace"),
-    key_name('|' as c_int, false, "Bar"),
-    key_name(SpecialKey::Bs.code(), false, "BS"),
-    key_name('\\' as c_int, false, "Bslash"),
-    key_name(SpecialKey::Command.code(), false, "Cmd"),
-    key_name(CAR, false, "CR"),
-    key_name(CSI, false, "CSI"),
-    key_name(SpecialKey::Del.code(), false, "Del"),
-    key_name(SpecialKey::Del.code(), true, "Delete"),
-    key_name(SpecialKey::Down.code(), false, "Down"),
-    key_name(extra(KE_DROP), false, "Drop"),
-    key_name(SpecialKey::End.code(), false, "End"),
-    key_name(CAR, true, "Enter"),
-    key_name(ESC, false, "Esc"),
-    key_name(ESC, true, "Escape"),
-    key_name(SpecialKey::F1.code(), false, "F1"),
-    key_name(SpecialKey::F10.code(), false, "F10"),
-    key_name(SpecialKey::F11.code(), false, "F11"),
-    key_name(SpecialKey::F12.code(), false, "F12"),
-    key_name(SpecialKey::F13.code(), false, "F13"),
-    key_name(SpecialKey::F14.code(), false, "F14"),
-    key_name(SpecialKey::F15.code(), false, "F15"),
-    key_name(SpecialKey::F16.code(), false, "F16"),
-    key_name(SpecialKey::F17.code(), false, "F17"),
-    key_name(SpecialKey::F18.code(), false, "F18"),
-    key_name(SpecialKey::F19.code(), false, "F19"),
-    key_name(SpecialKey::F2.code(), false, "F2"),
-    key_name(SpecialKey::F20.code(), false, "F20"),
-    key_name(SpecialKey::F21.code(), false, "F21"),
-    key_name(SpecialKey::F22.code(), false, "F22"),
-    key_name(SpecialKey::F23.code(), false, "F23"),
-    key_name(SpecialKey::F24.code(), false, "F24"),
-    key_name(SpecialKey::F25.code(), false, "F25"),
-    key_name(SpecialKey::F26.code(), false, "F26"),
-    key_name(SpecialKey::F27.code(), false, "F27"),
-    key_name(SpecialKey::F28.code(), false, "F28"),
-    key_name(SpecialKey::F29.code(), false, "F29"),
-    key_name(SpecialKey::F3.code(), false, "F3"),
-    key_name(SpecialKey::F30.code(), false, "F30"),
-    key_name(SpecialKey::F31.code(), false, "F31"),
-    key_name(SpecialKey::F32.code(), false, "F32"),
-    key_name(SpecialKey::F33.code(), false, "F33"),
-    key_name(SpecialKey::F34.code(), false, "F34"),
-    key_name(SpecialKey::F35.code(), false, "F35"),
-    key_name(SpecialKey::F36.code(), false, "F36"),
-    key_name(SpecialKey::F37.code(), false, "F37"),
-    key_name(SpecialKey::F38.code(), false, "F38"),
-    key_name(SpecialKey::F39.code(), false, "F39"),
-    key_name(SpecialKey::F4.code(), false, "F4"),
-    key_name(SpecialKey::F40.code(), false, "F40"),
-    key_name(SpecialKey::F41.code(), false, "F41"),
-    key_name(SpecialKey::F42.code(), false, "F42"),
-    key_name(SpecialKey::F43.code(), false, "F43"),
-    key_name(SpecialKey::F44.code(), false, "F44"),
-    key_name(SpecialKey::F45.code(), false, "F45"),
-    key_name(SpecialKey::F46.code(), false, "F46"),
-    key_name(SpecialKey::F47.code(), false, "F47"),
-    key_name(SpecialKey::F48.code(), false, "F48"),
-    key_name(SpecialKey::F49.code(), false, "F49"),
-    key_name(SpecialKey::F5.code(), false, "F5"),
-    key_name(SpecialKey::F50.code(), false, "F50"),
-    key_name(SpecialKey::F51.code(), false, "F51"),
-    key_name(SpecialKey::F52.code(), false, "F52"),
-    key_name(SpecialKey::F53.code(), false, "F53"),
-    key_name(SpecialKey::F54.code(), false, "F54"),
-    key_name(SpecialKey::F55.code(), false, "F55"),
-    key_name(SpecialKey::F56.code(), false, "F56"),
-    key_name(SpecialKey::F57.code(), false, "F57"),
-    key_name(SpecialKey::F58.code(), false, "F58"),
-    key_name(SpecialKey::F59.code(), false, "F59"),
-    key_name(SpecialKey::F6.code(), false, "F6"),
-    key_name(SpecialKey::F60.code(), false, "F60"),
-    key_name(SpecialKey::F61.code(), false, "F61"),
-    key_name(SpecialKey::F62.code(), false, "F62"),
-    key_name(SpecialKey::F63.code(), false, "F63"),
-    key_name(SpecialKey::F7.code(), false, "F7"),
-    key_name(SpecialKey::F8.code(), false, "F8"),
-    key_name(SpecialKey::F9.code(), false, "F9"),
-    key_name(SpecialKey::Find.code(), false, "Find"),
-    key_name(SpecialKey::Help.code(), false, "Help"),
-    key_name(SpecialKey::Home.code(), false, "Home"),
-    key_name(SpecialKey::Ignore.code(), false, "Ignore"),
-    key_name(SpecialKey::Ins.code(), true, "Ins"),
-    key_name(SpecialKey::Ins.code(), false, "Insert"),
-    key_name(SpecialKey::K0.code(), false, "k0"),
-    key_name(SpecialKey::K1.code(), false, "k1"),
-    key_name(SpecialKey::K2.code(), false, "k2"),
-    key_name(SpecialKey::K3.code(), false, "k3"),
-    key_name(SpecialKey::K4.code(), false, "k4"),
-    key_name(SpecialKey::K5.code(), false, "k5"),
-    key_name(SpecialKey::K6.code(), false, "k6"),
-    key_name(SpecialKey::K7.code(), false, "k7"),
-    key_name(SpecialKey::K8.code(), false, "k8"),
-    key_name(SpecialKey::K9.code(), false, "k9"),
-    key_name(SpecialKey::Kcomma.code(), false, "kComma"),
-    key_name(SpecialKey::Kdel.code(), false, "kDel"),
-    key_name(SpecialKey::Kdivide.code(), false, "kDivide"),
-    key_name(SpecialKey::Kdown.code(), false, "kDown"),
-    key_name(SpecialKey::Kend.code(), false, "kEnd"),
-    key_name(SpecialKey::Kenter.code(), false, "kEnter"),
-    key_name(SpecialKey::Kequal.code(), false, "kEqual"),
-    key_name(SpecialKey::Khome.code(), false, "kHome"),
-    key_name(SpecialKey::Kins.code(), false, "kInsert"),
-    key_name(SpecialKey::Kleft.code(), false, "kLeft"),
-    key_name(SpecialKey::Kminus.code(), false, "kMinus"),
-    key_name(SpecialKey::Kmultiply.code(), false, "kMultiply"),
-    key_name(SpecialKey::Korigin.code(), false, "kOrigin"),
-    key_name(SpecialKey::Kins.code(), true, "KP0"),
-    key_name(SpecialKey::Kend.code(), true, "KP1"),
-    key_name(SpecialKey::Kdown.code(), true, "KP2"),
-    key_name(SpecialKey::Kpagedown.code(), true, "KP3"),
-    key_name(SpecialKey::Kleft.code(), true, "KP4"),
-    key_name(SpecialKey::Korigin.code(), true, "KP5"),
-    key_name(SpecialKey::Kright.code(), true, "KP6"),
-    key_name(SpecialKey::Khome.code(), true, "KP7"),
-    key_name(SpecialKey::Kup.code(), true, "KP8"),
-    key_name(SpecialKey::Kpageup.code(), true, "KP9"),
-    key_name(SpecialKey::Kpagedown.code(), false, "kPageDown"),
-    key_name(SpecialKey::Kpageup.code(), false, "kPageUp"),
-    key_name(SpecialKey::Kcomma.code(), true, "KPComma"),
-    key_name(SpecialKey::Kdivide.code(), true, "KPDiv"),
-    key_name(SpecialKey::Kenter.code(), true, "KPEnter"),
-    key_name(SpecialKey::Kequal.code(), true, "KPEquals"),
-    key_name(SpecialKey::Kplus.code(), false, "kPlus"),
-    key_name(SpecialKey::Kminus.code(), true, "KPMinus"),
-    key_name(SpecialKey::Kmultiply.code(), true, "KPMult"),
-    key_name(SpecialKey::Kpoint.code(), false, "kPoint"),
-    key_name(SpecialKey::Kdel.code(), true, "KPPeriod"),
-    key_name(SpecialKey::Kplus.code(), true, "KPPlus"),
-    key_name(SpecialKey::Kright.code(), false, "kRight"),
-    key_name(SpecialKey::Kup.code(), false, "kUp"),
-    key_name(SpecialKey::Left.code(), false, "Left"),
-    key_name(SpecialKey::Leftdrag.code(), false, "LeftDrag"),
-    key_name(SpecialKey::Leftmouse.code(), false, "LeftMouse"),
-    key_name(SpecialKey::LeftmouseNm.code(), false, "LeftMouseNM"),
-    key_name(SpecialKey::Leftrelease.code(), false, "LeftRelease"),
-    key_name(SpecialKey::LeftreleaseNm.code(), false, "LeftReleaseNM"),
-    key_name(NL, true, "LF"),
-    key_name(NL, true, "LineFeed"),
-    key_name('<' as c_int, false, "lt"),
-    key_name(SpecialKey::Middledrag.code(), false, "MiddleDrag"),
-    key_name(SpecialKey::Middlemouse.code(), false, "MiddleMouse"),
-    key_name(SpecialKey::Middlerelease.code(), false, "MiddleRelease"),
-    key_name(SpecialKey::Mouse.code(), false, "Mouse"),
-    key_name(SpecialKey::Mousedown.code(), true, "MouseDown"),
-    key_name(SpecialKey::Mousemove.code(), false, "MouseMove"),
-    key_name(SpecialKey::Mouseup.code(), true, "MouseUp"),
-    key_name(NL, true, "NewLine"),
-    key_name(NL, false, "NL"),
-    key_name(SpecialKey::Zero.code(), false, "Nul"),
-    key_name(SpecialKey::Pagedown.code(), false, "PageDown"),
-    key_name(SpecialKey::Pageup.code(), false, "PageUp"),
-    key_name(extra(KE_PLUG), false, "Plug"),
-    key_name(CAR, true, "Return"),
-    key_name(SpecialKey::Right.code(), false, "Right"),
-    key_name(SpecialKey::Rightdrag.code(), false, "RightDrag"),
-    key_name(SpecialKey::Rightmouse.code(), false, "RightMouse"),
-    key_name(SpecialKey::Rightrelease.code(), false, "RightRelease"),
-    key_name(SpecialKey::Mouseup.code(), false, "ScrollWheelDown"),
-    key_name(SpecialKey::Mouseright.code(), false, "ScrollWheelLeft"),
-    key_name(SpecialKey::Mouseleft.code(), false, "ScrollWheelRight"),
-    key_name(SpecialKey::Mousedown.code(), false, "ScrollWheelUp"),
-    key_name(SpecialKey::Kselect.code(), false, "Select"),
-    key_name(extra(KE_SNR), false, "SNR"),
-    key_name(' ' as c_int, false, "Space"),
-    key_name(TAB, false, "Tab"),
-    key_name(extra(KE_TAB), false, "Tab"),
-    key_name(SpecialKey::Undo.code(), false, "Undo"),
-    key_name(SpecialKey::Up.code(), false, "Up"),
-    key_name(SpecialKey::X1drag.code(), false, "X1Drag"),
-    key_name(SpecialKey::X1mouse.code(), false, "X1Mouse"),
-    key_name(SpecialKey::X1release.code(), false, "X1Release"),
-    key_name(SpecialKey::X2drag.code(), false, "X2Drag"),
-    key_name(SpecialKey::X2mouse.code(), false, "X2Mouse"),
-    key_name(SpecialKey::X2release.code(), false, "X2Release"),
-    key_name(SpecialKey::Xdown.code(), false, "xDown"),
-    key_name(SpecialKey::Xend.code(), false, "xEnd"),
-    key_name(SpecialKey::Xf1.code(), false, "xF1"),
-    key_name(extra(KE_XF2), false, "xF2"),
-    key_name(extra(KE_XF3), false, "xF3"),
-    key_name(extra(KE_XF4), false, "xF4"),
-    key_name(SpecialKey::Xhome.code(), false, "xHome"),
-    key_name(SpecialKey::Xleft.code(), false, "xLeft"),
-    key_name(SpecialKey::Xright.code(), false, "xRight"),
-    key_name(SpecialKey::Xup.code(), false, "xUp"),
-    key_name(SpecialKey::Zend.code(), false, "zEnd"),
-    key_name(SpecialKey::Zhome.code(), false, "zHome"),
+    special(SpecialKey::Bs, true, "BackSpace"),
+    key_name(Key::ascii(b'|'), false, "Bar"),
+    special(SpecialKey::Bs, false, "BS"),
+    key_name(Key::ascii(b'\\'), false, "Bslash"),
+    special(SpecialKey::Command, false, "Cmd"),
+    key_name(Key::CAR, false, "CR"),
+    key_name(Key::from_code(CSI), false, "CSI"),
+    special(SpecialKey::Del, false, "Del"),
+    special(SpecialKey::Del, true, "Delete"),
+    special(SpecialKey::Down, false, "Down"),
+    key_name(Key::from_code(extra(KE_DROP)), false, "Drop"),
+    special(SpecialKey::End, false, "End"),
+    key_name(Key::CAR, true, "Enter"),
+    key_name(Key::ESC, false, "Esc"),
+    key_name(Key::ESC, true, "Escape"),
+    special(SpecialKey::F1, false, "F1"),
+    special(SpecialKey::F10, false, "F10"),
+    special(SpecialKey::F11, false, "F11"),
+    special(SpecialKey::F12, false, "F12"),
+    special(SpecialKey::F13, false, "F13"),
+    special(SpecialKey::F14, false, "F14"),
+    special(SpecialKey::F15, false, "F15"),
+    special(SpecialKey::F16, false, "F16"),
+    special(SpecialKey::F17, false, "F17"),
+    special(SpecialKey::F18, false, "F18"),
+    special(SpecialKey::F19, false, "F19"),
+    special(SpecialKey::F2, false, "F2"),
+    special(SpecialKey::F20, false, "F20"),
+    special(SpecialKey::F21, false, "F21"),
+    special(SpecialKey::F22, false, "F22"),
+    special(SpecialKey::F23, false, "F23"),
+    special(SpecialKey::F24, false, "F24"),
+    special(SpecialKey::F25, false, "F25"),
+    special(SpecialKey::F26, false, "F26"),
+    special(SpecialKey::F27, false, "F27"),
+    special(SpecialKey::F28, false, "F28"),
+    special(SpecialKey::F29, false, "F29"),
+    special(SpecialKey::F3, false, "F3"),
+    special(SpecialKey::F30, false, "F30"),
+    special(SpecialKey::F31, false, "F31"),
+    special(SpecialKey::F32, false, "F32"),
+    special(SpecialKey::F33, false, "F33"),
+    special(SpecialKey::F34, false, "F34"),
+    special(SpecialKey::F35, false, "F35"),
+    special(SpecialKey::F36, false, "F36"),
+    special(SpecialKey::F37, false, "F37"),
+    special(SpecialKey::F38, false, "F38"),
+    special(SpecialKey::F39, false, "F39"),
+    special(SpecialKey::F4, false, "F4"),
+    special(SpecialKey::F40, false, "F40"),
+    special(SpecialKey::F41, false, "F41"),
+    special(SpecialKey::F42, false, "F42"),
+    special(SpecialKey::F43, false, "F43"),
+    special(SpecialKey::F44, false, "F44"),
+    special(SpecialKey::F45, false, "F45"),
+    special(SpecialKey::F46, false, "F46"),
+    special(SpecialKey::F47, false, "F47"),
+    special(SpecialKey::F48, false, "F48"),
+    special(SpecialKey::F49, false, "F49"),
+    special(SpecialKey::F5, false, "F5"),
+    special(SpecialKey::F50, false, "F50"),
+    special(SpecialKey::F51, false, "F51"),
+    special(SpecialKey::F52, false, "F52"),
+    special(SpecialKey::F53, false, "F53"),
+    special(SpecialKey::F54, false, "F54"),
+    special(SpecialKey::F55, false, "F55"),
+    special(SpecialKey::F56, false, "F56"),
+    special(SpecialKey::F57, false, "F57"),
+    special(SpecialKey::F58, false, "F58"),
+    special(SpecialKey::F59, false, "F59"),
+    special(SpecialKey::F6, false, "F6"),
+    special(SpecialKey::F60, false, "F60"),
+    special(SpecialKey::F61, false, "F61"),
+    special(SpecialKey::F62, false, "F62"),
+    special(SpecialKey::F63, false, "F63"),
+    special(SpecialKey::F7, false, "F7"),
+    special(SpecialKey::F8, false, "F8"),
+    special(SpecialKey::F9, false, "F9"),
+    special(SpecialKey::Find, false, "Find"),
+    special(SpecialKey::Help, false, "Help"),
+    special(SpecialKey::Home, false, "Home"),
+    special(SpecialKey::Ignore, false, "Ignore"),
+    special(SpecialKey::Ins, true, "Ins"),
+    special(SpecialKey::Ins, false, "Insert"),
+    special(SpecialKey::K0, false, "k0"),
+    special(SpecialKey::K1, false, "k1"),
+    special(SpecialKey::K2, false, "k2"),
+    special(SpecialKey::K3, false, "k3"),
+    special(SpecialKey::K4, false, "k4"),
+    special(SpecialKey::K5, false, "k5"),
+    special(SpecialKey::K6, false, "k6"),
+    special(SpecialKey::K7, false, "k7"),
+    special(SpecialKey::K8, false, "k8"),
+    special(SpecialKey::K9, false, "k9"),
+    special(SpecialKey::Kcomma, false, "kComma"),
+    special(SpecialKey::Kdel, false, "kDel"),
+    special(SpecialKey::Kdivide, false, "kDivide"),
+    special(SpecialKey::Kdown, false, "kDown"),
+    special(SpecialKey::Kend, false, "kEnd"),
+    special(SpecialKey::Kenter, false, "kEnter"),
+    special(SpecialKey::Kequal, false, "kEqual"),
+    special(SpecialKey::Khome, false, "kHome"),
+    special(SpecialKey::Kins, false, "kInsert"),
+    special(SpecialKey::Kleft, false, "kLeft"),
+    special(SpecialKey::Kminus, false, "kMinus"),
+    special(SpecialKey::Kmultiply, false, "kMultiply"),
+    special(SpecialKey::Korigin, false, "kOrigin"),
+    special(SpecialKey::Kins, true, "KP0"),
+    special(SpecialKey::Kend, true, "KP1"),
+    special(SpecialKey::Kdown, true, "KP2"),
+    special(SpecialKey::Kpagedown, true, "KP3"),
+    special(SpecialKey::Kleft, true, "KP4"),
+    special(SpecialKey::Korigin, true, "KP5"),
+    special(SpecialKey::Kright, true, "KP6"),
+    special(SpecialKey::Khome, true, "KP7"),
+    special(SpecialKey::Kup, true, "KP8"),
+    special(SpecialKey::Kpageup, true, "KP9"),
+    special(SpecialKey::Kpagedown, false, "kPageDown"),
+    special(SpecialKey::Kpageup, false, "kPageUp"),
+    special(SpecialKey::Kcomma, true, "KPComma"),
+    special(SpecialKey::Kdivide, true, "KPDiv"),
+    special(SpecialKey::Kenter, true, "KPEnter"),
+    special(SpecialKey::Kequal, true, "KPEquals"),
+    special(SpecialKey::Kplus, false, "kPlus"),
+    special(SpecialKey::Kminus, true, "KPMinus"),
+    special(SpecialKey::Kmultiply, true, "KPMult"),
+    special(SpecialKey::Kpoint, false, "kPoint"),
+    special(SpecialKey::Kdel, true, "KPPeriod"),
+    special(SpecialKey::Kplus, true, "KPPlus"),
+    special(SpecialKey::Kright, false, "kRight"),
+    special(SpecialKey::Kup, false, "kUp"),
+    special(SpecialKey::Left, false, "Left"),
+    special(SpecialKey::Leftdrag, false, "LeftDrag"),
+    special(SpecialKey::Leftmouse, false, "LeftMouse"),
+    special(SpecialKey::LeftmouseNm, false, "LeftMouseNM"),
+    special(SpecialKey::Leftrelease, false, "LeftRelease"),
+    special(SpecialKey::LeftreleaseNm, false, "LeftReleaseNM"),
+    key_name(Key::NL, true, "LF"),
+    key_name(Key::NL, true, "LineFeed"),
+    key_name(Key::ascii(b'<'), false, "lt"),
+    special(SpecialKey::Middledrag, false, "MiddleDrag"),
+    special(SpecialKey::Middlemouse, false, "MiddleMouse"),
+    special(SpecialKey::Middlerelease, false, "MiddleRelease"),
+    special(SpecialKey::Mouse, false, "Mouse"),
+    special(SpecialKey::Mousedown, true, "MouseDown"),
+    special(SpecialKey::Mousemove, false, "MouseMove"),
+    special(SpecialKey::Mouseup, true, "MouseUp"),
+    key_name(Key::NL, true, "NewLine"),
+    key_name(Key::NL, false, "NL"),
+    special(SpecialKey::Zero, false, "Nul"),
+    special(SpecialKey::Pagedown, false, "PageDown"),
+    special(SpecialKey::Pageup, false, "PageUp"),
+    key_name(Key::from_code(extra(KE_PLUG)), false, "Plug"),
+    key_name(Key::CAR, true, "Return"),
+    special(SpecialKey::Right, false, "Right"),
+    special(SpecialKey::Rightdrag, false, "RightDrag"),
+    special(SpecialKey::Rightmouse, false, "RightMouse"),
+    special(SpecialKey::Rightrelease, false, "RightRelease"),
+    special(SpecialKey::Mouseup, false, "ScrollWheelDown"),
+    special(SpecialKey::Mouseright, false, "ScrollWheelLeft"),
+    special(SpecialKey::Mouseleft, false, "ScrollWheelRight"),
+    special(SpecialKey::Mousedown, false, "ScrollWheelUp"),
+    special(SpecialKey::Kselect, false, "Select"),
+    key_name(Key::from_code(extra(KE_SNR)), false, "SNR"),
+    key_name(Key::ascii(b' '), false, "Space"),
+    key_name(Key::TAB, false, "Tab"),
+    key_name(Key::from_code(extra(KE_TAB)), false, "Tab"),
+    special(SpecialKey::Undo, false, "Undo"),
+    special(SpecialKey::Up, false, "Up"),
+    special(SpecialKey::X1drag, false, "X1Drag"),
+    special(SpecialKey::X1mouse, false, "X1Mouse"),
+    special(SpecialKey::X1release, false, "X1Release"),
+    special(SpecialKey::X2drag, false, "X2Drag"),
+    special(SpecialKey::X2mouse, false, "X2Mouse"),
+    special(SpecialKey::X2release, false, "X2Release"),
+    special(SpecialKey::Xdown, false, "xDown"),
+    special(SpecialKey::Xend, false, "xEnd"),
+    special(SpecialKey::Xf1, false, "xF1"),
+    key_name(Key::from_code(extra(KE_XF2)), false, "xF2"),
+    key_name(Key::from_code(extra(KE_XF3)), false, "xF3"),
+    key_name(Key::from_code(extra(KE_XF4)), false, "xF4"),
+    special(SpecialKey::Xhome, false, "xHome"),
+    special(SpecialKey::Xleft, false, "xLeft"),
+    special(SpecialKey::Xright, false, "xRight"),
+    special(SpecialKey::Xup, false, "xUp"),
+    special(SpecialKey::Zend, false, "zEnd"),
+    special(SpecialKey::Zhome, false, "zHome"),
 ];
 
 /// `true` when `a` sorts before `b` with ASCII case folded — the order
@@ -477,17 +479,17 @@ const _SORTED: () = {
 /// The code `name` spells, or 0 when the table has no such name. ASCII case is
 /// folded, and `name` must be the whole name: `Esc` and `Escape` are separate
 /// rows, and `Esc` does not match `Escape`.
-pub(crate) fn code_for_name(name: &[u8]) -> c_int {
+pub(crate) fn code_for_name(name: &[u8]) -> Key {
     let at = KEY_NAMES.partition_point(|e| before_ignore_case(e.name.as_bytes(), name));
     match KEY_NAMES.get(at) {
         Some(e) if e.name.as_bytes().eq_ignore_ascii_case(name) => e.key,
-        _ => 0,
+        _ => Key::NUL,
     }
 }
 
 /// The name `key` is printed as: the one row for `key` that is not an
 /// alternative spelling.
-pub(crate) fn name_of_code(key: c_int) -> Option<&'static str> {
+pub(crate) fn name_of_code(key: Key) -> Option<&'static str> {
     KEY_NAMES
         .iter()
         .find(|e| e.key == key && !e.is_alt)
@@ -495,7 +497,7 @@ pub(crate) fn name_of_code(key: c_int) -> Option<&'static str> {
 }
 
 /// Whether the table has a name for `key`.
-pub fn has_key_name(key: c_int) -> bool {
+pub fn has_key_name(key: Key) -> bool {
     name_of_code(key).is_some()
 }
 
@@ -511,13 +513,13 @@ pub(crate) struct MouseEvent {
 
 /// A mouse pseudo-code and what it means.
 struct MouseCode {
-    code: c_int,
+    code: KeyExtra,
     event: MouseEvent,
 }
 
 const fn mouse_code(code: KeyExtra, button: c_int, is_click: bool, is_drag: bool) -> MouseCode {
     MouseCode {
-        code: code as c_int,
+        code,
         event: MouseEvent {
             button,
             is_click,
@@ -549,8 +551,9 @@ static MOUSE_CODES: [MouseCode; 17] = [
     mouse_code(KE_IGNORE, MOUSE_RELEASE, false, false),
 ];
 
-/// What `code` means as a mouse event, or `None` when it is not one.
-pub(crate) fn mouse_event(code: c_int) -> Option<&'static MouseEvent> {
+/// What the `KE_*` byte `code` means as a mouse event, or `None` when it is
+/// not one.
+pub(crate) fn mouse_event(code: KeyExtra) -> Option<&'static MouseEvent> {
     MOUSE_CODES
         .iter()
         .find(|m| m.code == code)

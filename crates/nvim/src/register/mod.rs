@@ -55,7 +55,7 @@ use crate::highlight_group::HLF_8;
 use crate::indent::{get_indent, preprocs_left, set_indent};
 use crate::insexpand::{ins_compl_delete, ins_compl_preinsert_effect};
 use crate::keycodes::{
-    Ctrl_A, Ctrl_F, Ctrl_L, Ctrl_P, Ctrl_R, Ctrl_U, Ctrl_V, Ctrl_W, escape_ks_bytes, unescape_ks_in,
+    Ctrl_A, Ctrl_F, Ctrl_L, Ctrl_P, Ctrl_V, Ctrl_W, escape_ks_bytes, unescape_ks_in,
 };
 use crate::mark::mark_adjust;
 use crate::mbyte::mb_tolower;
@@ -92,8 +92,8 @@ use crate::types::ui::kUIMessages;
 use crate::types::{
     ApiString, BCount, BlockDef, CharsizeArg, CmdModFlags, ColNr, ExArg, ExtmarkOp, GRegFlags,
     HashTab, LineNr, MotionType, NUL, OpArg, PUT_BLOCK_INNER, PUT_CURSEND, PUT_CURSLINE,
-    PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, Pos, RemapValues, SaveVEvent,
-    UndoObjectType, VarLock, YankReg, int64_t, kBoolVarFalse, kBoolVarTrue, ptrdiff_t, size_t,
+    PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, Pos, SaveVEvent, UndoObjectType,
+    VarLock, YankReg, int64_t, kBoolVarFalse, kBoolVarTrue, ptrdiff_t, size_t,
 };
 use crate::ui::state::Columns;
 use crate::ui::ui_has;
@@ -150,8 +150,6 @@ pub const YREG_YANK: ::core::ffi::c_int = 1;
 pub const YREG_PASTE: ::core::ffi::c_int = 0;
 
 /// `ins_typebuf` remap mode: what the inserted keys may be remapped by.
-pub const REMAP_NONE: RemapValues = -1;
-pub const REMAP_YES: RemapValues = 0;
 /// `set_indent()` flags: leave the marks alone, save for undo, this is an
 /// Insert-mode indent, mark the buffer changed.
 pub const SIN_NOMARK: ::core::ffi::c_int = 8;

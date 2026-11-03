@@ -13,6 +13,7 @@ use super::*;
 use crate::cstr;
 use crate::eval::list::string_tv;
 use crate::eval::typval::NumBuf;
+use crate::getchar::Remap;
 use crate::keycodes::KE_WILD;
 use crate::memory::{ThinCString, XString};
 use crate::types::{ExpandContext, NUL};
@@ -264,11 +265,7 @@ pub fn f_wildtrigger(_args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData
         || cmd_type == '?' as ::core::ffi::c_int
     {
         // K_WILD as a single special key, pushed into the typeahead.
-        let key_string = [
-            K_SPECIAL as uint8_t,
-            KS_EXTRA as uint8_t,
-            KE_WILD as uint8_t,
-        ];
-        let _ = ins_typebuf(&key_string, REMAP_NONE, 0, true, false);
+        let key_string = [K_SPECIAL, KS_EXTRA, KE_WILD];
+        let _ = ins_typebuf(&key_string, Remap::No, 0, true, false);
     }
 }

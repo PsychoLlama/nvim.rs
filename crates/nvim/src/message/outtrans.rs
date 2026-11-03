@@ -11,8 +11,9 @@ use crate::charset::{CharDisplay, skip};
 use crate::cstr;
 use crate::env::home_to_tilde;
 use crate::keycodes::ModMask;
-use crate::keycodes::{SpecialKey, termcap_key, termcap_name};
+use crate::keycodes::{key_unescape, termcap_name};
 use crate::mbyte::{cells_at, char_at, cluster_len, encode_char, unescape_at};
+use crate::types::Key;
 use crate::types::MB_MAXCHAR;
 use core::ffi::{CStr, c_int};
 
@@ -36,8 +37,8 @@ pub fn msg_putchar_hl(c: c_int, hl_id: c_int) {
         // `K_SECOND`/`K_THIRD`, less their `c == K_SPECIAL`/`c == NUL`
         // arms: both of those codes are positive, so neither is reachable
         // here.
-        let name = termcap_name(c);
-        buf[0] = K_SPECIAL as u8;
+        let name = termcap_name(Key::from_code(c));
+        buf[0] = K_SPECIAL;
         buf[1] = name[0];
         buf[2] = name[1];
     } else {
@@ -341,13 +342,14 @@ pub(crate) fn special_key_into(
     let mut c = c_int::from(byte(str));
     let mut modifiers = ModMask::NONE;
     let mut special = false;
-    if c == K_SPECIAL && byte(str + 1) != 0 && byte(str + 2) != 0 {
-        if c_int::from(byte(str + 1)) == KS_MODIFIER {
-            modifiers = ModMask::from_bits(c_int::from(byte(str + 2)));
+    let k_special = c_int::from(K_SPECIAL);
+    if c == k_special && byte(str + 1) != 0 && byte(str + 2) != 0 {
+        if byte(str + 1) == KS_MODIFIER {
+            modifiers = ModMask::from_byte(byte(str + 2));
             str += 3;
             c = c_int::from(byte(str));
         }
-        if c == K_SPECIAL && byte(str + 1) != 0 && byte(str + 2) != 0 {
+        if c == k_special && byte(str + 1) != 0 && byte(str + 2) != 0 {
             c = to_special(byte(str + 1), byte(str + 2));
             str += 2;
         }
@@ -377,7 +379,7 @@ pub(crate) fn special_key_into(
         || (replace_spaces && c == b' ' as c_int)
         || (replace_lt && c == b'<' as c_int)
     {
-        let name = get_special_key_name(c, modifiers);
+        let name = get_special_key_name(Key::from_code(c), modifiers);
         out.extend_from_slice(cstr::in_bytes(&name).to_bytes());
         return;
     }
@@ -388,11 +390,7 @@ pub(crate) fn special_key_into(
 
 /// The key code a two-byte termcap name stands for (C's `TO_SPECIAL`).
 fn to_special(second: u8, third: u8) -> c_int {
-    match second as c_int {
-        KS_SPECIAL => K_SPECIAL,
-        KS_ZERO => SpecialKey::Zero.code(),
-        _ => termcap_key([second, third]),
-    }
+    key_unescape(second, third).code()
 }
 
 /// Show a string, cutting the middle out with `...` if it would not fit on the

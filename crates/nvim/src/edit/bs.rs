@@ -34,6 +34,7 @@ use crate::indent::StopList;
 use crate::keycodes::SpecialKey;
 use crate::mbyte::{c_char_info, c_next_cluster, char_at, char_len, class_in, iscomposing};
 use crate::types::CharInfo;
+use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -102,7 +103,7 @@ pub(crate) fn ins_del() {
     did_si.set(false);
     can_si.set(false);
     can_si_back.set(false);
-    append_to_redobuff_char(SpecialKey::Del.code());
+    append_to_redobuff_char(Key::from(SpecialKey::Del));
 }
 
 /// Everything a backspace is not allowed to delete.
@@ -242,7 +243,7 @@ pub(crate) fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: &mut c_int) ->
 
     // It is a little strange to put backspaces into the redo buffer, but
     // it makes auto-indent much easier to deal with.
-    append_to_redobuff_char(c);
+    append_to_redobuff_char(Key::from_code(c));
 
     // If the deletion went before the insertion point, move that too.
     pull_insstart_orig_to_cursor();

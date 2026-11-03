@@ -57,7 +57,7 @@ fn get_lambda_name() -> Vec<u8> {
 /// flags, no counted holder. A script-local (mangled) name gets the
 /// printable `<SNR>123_name` beside it.
 pub(crate) fn alloc_ufunc(name: &[u8]) -> UserFunc {
-    let name_exp = (name.first().map(|&b| c_int::from(b)) == Some(K_SPECIAL)).then(|| {
+    let name_exp = (name.first() == Some(&K_SPECIAL)).then(|| {
         let mut text = b"<SNR>".to_vec();
         text.extend_from_slice(name.get(3..).unwrap_or_default());
         ThinCString::from_vec(text)

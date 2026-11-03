@@ -31,6 +31,7 @@ use crate::keycodes::ModMask;
 use crate::keycodes::SpecialKey;
 use crate::mbyte::{c_char_info, c_next_cluster};
 use crate::os::cshim::ctype_bits;
+use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -90,9 +91,9 @@ pub(crate) fn get_literal(no_simplify: bool) -> c_int {
     let mut i = 0;
     let mut nc;
     loop {
-        nc = plain_vgetc();
+        nc = plain_vgetc().code();
         if !no_simplify {
-            nc = merge_mod_mask(nc);
+            nc = merge_mod_mask(Key::from_code(nc)).code();
         }
         if !mod_mask.get().without(ModMask::SHIFT).is_empty() {
             // A character with a non-Shift modifier cannot be part of
@@ -169,7 +170,7 @@ pub(crate) fn get_literal(no_simplify: bool) -> c_int {
 
     drop(unmapped);
     if nc != 0 {
-        vungetc(nc);
+        vungetc(Key::from_code(nc));
         // A character typed with i_CTRL-V_digit cannot have modifiers.
         mod_mask.set(ModMask::NONE);
     }
@@ -193,7 +194,7 @@ pub(crate) fn insert_special(mut c: c_int, mut allow_modmask: c_int, mut ctrlv: 
         allow_modmask = 1;
     }
     if c < 0 || (!mod_mask.get().is_empty() && allow_modmask != 0) {
-        let name = get_special_key_name(c, mod_mask.get());
+        let name = get_special_key_name(Key::from_code(c), mod_mask.get());
         let name = cstr::until_nul(&name);
         let (&last, head) = name.split_last().expect("a key name is never empty");
         c = c_int::from(last);
@@ -224,7 +225,7 @@ pub(crate) fn redo_literal(c: c_int) {
     if ascii_isdigit(c) {
         append_to_redobuff(format!("{c:03}").as_bytes());
     } else {
-        append_to_redobuff_char(c);
+        append_to_redobuff_char(Key::from_code(c));
     }
 }
 
@@ -246,7 +247,7 @@ pub(crate) fn ins_digraph() -> c_int {
 
     let mut c = {
         let _raw_key = Keys::unmapped_with_codes();
-        plain_vgetc()
+        plain_vgetc().code()
     };
     if did_putchar {
         // If the line fits in 'columns' the `?` is at the start of the
@@ -274,7 +275,7 @@ pub(crate) fn ins_digraph() -> c_int {
 
         let cc = {
             let _raw_key = Keys::unmapped_with_codes();
-            plain_vgetc()
+            plain_vgetc().code()
         };
         if did_putchar {
             edit_unputchar();
@@ -282,7 +283,7 @@ pub(crate) fn ins_digraph() -> c_int {
 
         if cc != ESC {
             append_to_redobuff(CTRL_V_STR.to_bytes());
-            c = digraph_get(c, cc, true);
+            c = digraph_get(Key::from_code(c), Key::from_code(cc), true).code();
             clear_showcmd();
             return c;
         }

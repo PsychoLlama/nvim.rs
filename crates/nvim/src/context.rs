@@ -34,7 +34,7 @@ use crate::types::DictBuilder;
 use crate::types::TypVal;
 use crate::types::{
     ApiDict, ApiString, Array, Context, Error, KeyDict_exec_opts, KeyValuePair, Object, OptVal,
-    OptionSetFlags, VAR_LIST, size_t, uint8_t,
+    OptionSetFlags, VAR_LIST, size_t,
 };
 use core::ffi::{CStr, c_int};
 
@@ -187,7 +187,7 @@ fn ctx_save_funcs(ctx: &mut Context, scriptonly: bool) {
     for func in all_funcs() {
         let bytes = func.name().as_bytes();
         let islambda = bytes.starts_with(b"<lambda>");
-        let isscript = bytes.first() == Some(&(K_SPECIAL as uint8_t));
+        let isscript = bytes.first() == Some(&K_SPECIAL);
         if islambda || (scriptonly && !isscript) {
             continue;
         }

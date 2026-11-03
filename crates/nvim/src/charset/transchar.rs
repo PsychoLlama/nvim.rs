@@ -114,13 +114,11 @@ pub fn control_form(c: c_int) -> Rendered {
 /// and neither 0x80 nor 0 is negative. Kept, and pinned, as it stands.
 #[inline(always)]
 pub fn negative_form(c: c_int) -> (&'static [u8; 2], c_int) {
-    const K_SPECIAL: c_int = 0x80;
-    const KS_SPECIAL: c_int = 254;
-    const KS_ZERO: c_int = 255;
-    let byte = if c == K_SPECIAL {
-        KS_SPECIAL
+    use crate::keycodes::{K_SPECIAL, KS_SPECIAL, KS_ZERO};
+    let byte = if c == c_int::from(K_SPECIAL) {
+        c_int::from(KS_SPECIAL)
     } else if c == 0 {
-        KS_ZERO
+        c_int::from(KS_ZERO)
     } else {
         -c & 0xff
     };

@@ -84,7 +84,7 @@ pub fn f_wait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         result.write_number(-3);
     } else if got_int.get() {
         got_int.set(false);
-        vgetc();
+        vgetc().code();
         result.write_number(-2);
     } else if tv_get_number_chk(&exprval).is_ok_and(|n| n != 0) {
         result.write_number(0);

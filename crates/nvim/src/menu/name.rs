@@ -21,6 +21,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::getchar::Remap;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
@@ -100,7 +101,7 @@ fn namecmp(name: &[u8], mname: &[u8]) -> bool {
 /// The command name is read one letter at a time; whatever is left after the
 /// mode prefix decides the other two, so `nnoremenu` is Normal mode and
 /// no-remap while `noremenu` is the default modes and no-remap.
-pub(crate) fn cmd_modes(cmd: &[u8], forceit: bool) -> (c_int, c_int, bool) {
+pub(crate) fn cmd_modes(cmd: &[u8], forceit: bool) -> (c_int, Remap, bool) {
     let (modes, tail) = match at(cmd, 0) {
         b'v' => (MENU_VISUAL_MODE | MENU_SELECT_MODE, 1),
         b'x' => (MENU_VISUAL_MODE, 1),
@@ -117,9 +118,9 @@ pub(crate) fn cmd_modes(cmd: &[u8], forceit: bool) -> (c_int, c_int, bool) {
         _ => (MENU_PLAIN_MODES, 0),
     };
     let noremap = if at(cmd, tail) == b'n' {
-        REMAP_NONE
+        Remap::No
     } else {
-        REMAP_YES
+        Remap::Yes
     };
     (modes, noremap, at(cmd, tail) == b'u')
 }

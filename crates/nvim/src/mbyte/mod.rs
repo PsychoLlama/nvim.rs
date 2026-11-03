@@ -75,6 +75,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::keycodes::KS_SPECIAL;
 use core::fmt::Write as _;
 
 use crate::cstr;
@@ -141,7 +142,6 @@ pub const INT_MAX: c_int = c_int::MAX;
 /// How many bytes a `ScreenChar` can hold, NUL included.
 pub const MAX_SCHAR_SIZE: c_int = 32;
 /// The second byte of an escaped literal `K_SPECIAL`; see [`unescape_at`].
-pub const KS_SPECIAL: c_int = 254;
 use crate::cursor::with_cursor_rest;
 /// `g8`: show the bytes of the character under the cursor, in hex.
 ///
@@ -294,11 +294,11 @@ pub(crate) fn unescape_at(text: &[u8]) -> Option<([u8; MB_MAXCHAR], usize)> {
     let mut len = 0;
     let mut used = 0;
     while at(used) != 0 && len < 4 {
-        if c_int::from(at(used)) == K_SPECIAL {
-            if c_int::from(at(used + 1)) != KS_SPECIAL || c_int::from(at(used + 2)) != KE_FILLER {
+        if at(used) == K_SPECIAL {
+            if at(used + 1) != KS_SPECIAL || at(used + 2) != KE_FILLER {
                 break; // a real special key, which is never multibyte
             }
-            out[len] = K_SPECIAL as u8;
+            out[len] = K_SPECIAL;
             used += 2;
         } else {
             out[len] = at(used);

@@ -20,21 +20,20 @@
 
 use crate::charset::Str2NrBases;
 use crate::cstr;
+use crate::narrow::number_as_int;
 use crate::strings::has_char;
-use crate::types::BS;
-use crate::types::DEL;
-use crate::types::TAB;
+use crate::types::Key;
 use core::ffi::{CStr, c_int};
 
 use crate::ascii::{ascii_isdigit, ascii_isident};
 use crate::charset::{str2nr_in, transchar, vim_isprintc};
 use crate::eval::vars::var_string_value;
-use crate::mbyte::{char_at, char_len, cluster_len, encode_char, utf_char2len};
+use crate::mbyte::{char_at, char_len, cluster_len, encode_char};
 use crate::message::emsg;
 use crate::message::{e_invarg, e_usingsid};
 use crate::os::cshim::gettext;
 use crate::runtime::state::current_sctx;
-use crate::types::{CpoFlag, KeyExtra, MB_MAXBYTES, NUL, ScriptId};
+use crate::types::{CpoFlag, KeyExtra, MB_MAXBYTES, ScriptId};
 
 mod codes;
 pub use self::codes::*;
@@ -44,41 +43,40 @@ pub use self::tables::*;
 /// The key code of a `KS_EXTRA` key — everything with no termcap name of its
 /// own, which is most of what a modern terminal sends.
 const fn extra(ke: KeyExtra) -> c_int {
-    -(KS_EXTRA + ((ke as c_int) << 8))
+    termcap(KS_EXTRA, ke)
 }
 
 /// The key code of a two-character termcap name (C's `TERMCAP2KEY`).
 const fn termcap(first: u8, second: u8) -> c_int {
-    -((first as c_int) + ((second as c_int) << 8))
+    -c_int::from_le_bytes([first, second, 0, 0])
 }
 
 /// C's `TOUPPER_ASC`: upper-case an ASCII letter and leave everything else —
 /// a byte above 0x7f included — alone.
-const fn to_upper_ascii(c: c_int) -> c_int {
-    if c < 'a' as c_int || c > 'z' as c_int {
-        c
-    } else {
-        c - ('a' as c_int - 'A' as c_int)
+fn to_upper_ascii(key: Key) -> Key {
+    match key.as_byte() {
+        Some(b) if b.is_ascii_lowercase() => Key::byte(b.to_ascii_uppercase()),
+        _ => key,
     }
 }
 
 /// C's `ASCII_ISALPHA`, which tests the *unsigned* value and so says no to
 /// anything outside 7-bit ASCII.
-const fn is_ascii_alpha(key: c_int) -> bool {
-    (key >= 'A' as c_int && key <= 'Z' as c_int) || (key >= 'a' as c_int && key <= 'z' as c_int)
+fn is_ascii_alpha(key: Key) -> bool {
+    key.as_byte().is_some_and(|b| b.is_ascii_alphabetic())
 }
 
 /// Fold `modifiers` into `key` where the terminal has a code for the
 /// combination: `<S-Up>` is a key of its own, not `Up` plus a shift bit.
 /// `modifiers` is left holding whatever could not be folded in.
-pub fn simplify_key(key: c_int, modifiers: &mut ModMask) -> c_int {
+pub fn simplify_key(key: Key, modifiers: &mut ModMask) -> Key {
     if !modifiers.has(ModMask::SHIFT | ModMask::CTRL) {
         return key;
     }
     // TAB is the one key with a shifted code but no unshifted termcap row.
-    if key == TAB && modifiers.has(ModMask::SHIFT) {
+    if key == Key::TAB && modifiers.has(ModMask::SHIFT) {
         modifiers.clear(ModMask::SHIFT);
-        return SpecialKey::STab.code();
+        return SpecialKey::STab.into();
     }
     match simplify(key, *modifiers) {
         Some((simplified, left)) => {
@@ -92,8 +90,8 @@ pub fn simplify_key(key: c_int, modifiers: &mut ModMask) -> c_int {
 /// The inverse of [`simplify_key`]: a special key that is itself a shifted or
 /// ctrl'ed code (`<S-Del>`, `<C-Left>`) becomes the plain key, with the
 /// modifier it carried added to `modifiers`. Anything else comes back as is.
-pub(crate) fn unsimplify_key(key: c_int, modifiers: ModMask) -> (c_int, ModMask) {
-    if key < 0
+pub(crate) fn unsimplify_key(key: Key, modifiers: ModMask) -> (Key, ModMask) {
+    if key.is_special()
         && let Some((plain, bit)) = unshift(key)
     {
         return (plain, modifiers | bit);
@@ -102,7 +100,7 @@ pub(crate) fn unsimplify_key(key: c_int, modifiers: ModMask) -> (c_int, ModMask)
 }
 
 /// [`simplify_key`] applied to the global `mod_mask`.
-pub(crate) fn simplify_mod_mask(key: c_int) -> c_int {
+pub(crate) fn simplify_mod_mask(key: Key) -> Key {
     let mut modifiers = crate::getchar::state::mod_mask.get();
     let simplified = simplify_key(key, &mut modifiers);
     crate::getchar::state::mod_mask.set(modifiers);
@@ -111,24 +109,25 @@ pub(crate) fn simplify_mod_mask(key: c_int) -> c_int {
 
 /// `<xKey>` to `<Key>`: the DEC and vt100 spellings of keys that also have an
 /// ordinary termcap name.
-fn handle_x_keys(key: c_int) -> c_int {
-    match SpecialKey::try_from(key) {
-        Ok(SpecialKey::Xup) => SpecialKey::Up.code(),
-        Ok(SpecialKey::Xdown) => SpecialKey::Down.code(),
-        Ok(SpecialKey::Xleft) => SpecialKey::Left.code(),
-        Ok(SpecialKey::Xright) => SpecialKey::Right.code(),
-        Ok(SpecialKey::Xhome | SpecialKey::Zhome) => SpecialKey::Home.code(),
-        Ok(SpecialKey::Xend | SpecialKey::Zend) => SpecialKey::End.code(),
-        Ok(SpecialKey::Xf1) => SpecialKey::F1.code(),
-        Ok(SpecialKey::Xf2) => SpecialKey::F2.code(),
-        Ok(SpecialKey::Xf3) => SpecialKey::F3.code(),
-        Ok(SpecialKey::Xf4) => SpecialKey::F4.code(),
-        Ok(SpecialKey::SXf1) => SpecialKey::SF1.code(),
-        Ok(SpecialKey::SXf2) => SpecialKey::SF2.code(),
-        Ok(SpecialKey::SXf3) => SpecialKey::SF3.code(),
-        Ok(SpecialKey::SXf4) => SpecialKey::SF4.code(),
-        _ => key,
-    }
+fn handle_x_keys(key: Key) -> Key {
+    let plain = match key.special() {
+        Some(SpecialKey::Xup) => SpecialKey::Up,
+        Some(SpecialKey::Xdown) => SpecialKey::Down,
+        Some(SpecialKey::Xleft) => SpecialKey::Left,
+        Some(SpecialKey::Xright) => SpecialKey::Right,
+        Some(SpecialKey::Xhome | SpecialKey::Zhome) => SpecialKey::Home,
+        Some(SpecialKey::Xend | SpecialKey::Zend) => SpecialKey::End,
+        Some(SpecialKey::Xf1) => SpecialKey::F1,
+        Some(SpecialKey::Xf2) => SpecialKey::F2,
+        Some(SpecialKey::Xf3) => SpecialKey::F3,
+        Some(SpecialKey::Xf4) => SpecialKey::F4,
+        Some(SpecialKey::SXf1) => SpecialKey::SF1,
+        Some(SpecialKey::SXf2) => SpecialKey::SF2,
+        Some(SpecialKey::SXf3) => SpecialKey::SF3,
+        Some(SpecialKey::SXf4) => SpecialKey::SF4,
+        _ => return key,
+    };
+    plain.into()
 }
 
 /// A `<...>` key spelling, NUL-terminated within its own storage.
@@ -136,34 +135,40 @@ fn handle_x_keys(key: c_int) -> c_int {
 /// Upstream answers a pointer into one static buffer, valid only until the
 /// next call, which is why `str2special_arena` has to measure and copy in
 /// two passes and why two callers in one test tread on each other.
-pub(crate) type SpecialKeyName = [u8; MAX_KEY_NAME_LEN as usize + 1];
+pub(crate) type SpecialKeyName = [u8; MAX_KEY_NAME_LEN + 1];
 
 /// The `<...>` spelling of `key` with `modifiers` held down.
-pub fn get_special_key_name(key: c_int, modifiers: ModMask) -> SpecialKeyName {
+pub fn get_special_key_name(key: Key, modifiers: ModMask) -> SpecialKeyName {
     let mut key = key;
     let mut modifiers = modifiers;
     // A key that stands for a normal character.
-    if key < 0 && c_int::from(termcap_name(key)[0]) == KS_KEY {
-        key = c_int::from(termcap_name(key)[1]);
+    if key.is_special() && termcap_name(key)[0] == KS_KEY {
+        key = Key::byte(termcap_name(key)[1]);
     }
     // A shifted or ctrl'ed special key becomes the plain key and a bit.
     (key, modifiers) = unsimplify_key(key, modifiers);
 
     let mut name = name_of_code(key);
     // Not a known key and not printable: try to read modifiers off the byte.
-    if key > 0 && utf_char2len(key) == 1 {
-        if name.is_none() && (!vim_isprintc(key) || key & 0x7f == ' ' as c_int) && key & 0x80 != 0 {
-            key &= 0x7f;
+    // (A one-byte character is below 0x80, so the Alt half never applies; it
+    // is upstream's, kept as it reads.)
+    if let Some(mut byte) = key.as_byte().filter(|&b| b > 0 && key.utf8_len() == 1) {
+        if name.is_none()
+            && (!vim_isprintc(c_int::from(byte)) || byte & 0x7f == b' ')
+            && byte & 0x80 != 0
+        {
+            byte &= 0x7f;
             modifiers |= ModMask::ALT;
-            name = name_of_code(key);
+            name = name_of_code(Key::byte(byte));
         }
-        if name.is_none() && !vim_isprintc(key) && key < ' ' as c_int {
-            key += '@' as c_int;
+        if name.is_none() && !vim_isprintc(c_int::from(byte)) && byte < b' ' {
+            byte += b'@';
             modifiers |= ModMask::CTRL;
         }
+        key = Key::byte(byte);
     }
 
-    let mut out: SpecialKeyName = [0; MAX_KEY_NAME_LEN as usize + 1];
+    let mut out: SpecialKeyName = [0; MAX_KEY_NAME_LEN + 1];
     out[0] = b'<';
     let mut at = 1;
     for letter in printed_modifiers(modifiers) {
@@ -173,32 +178,36 @@ pub fn get_special_key_name(key: c_int, modifiers: ModMask) -> SpecialKeyName {
     }
     match name {
         // An unnamed special key prints as its termcap name.
-        None if key < 0 => {
+        None if key.is_special() => {
             let code = termcap_name(key);
             out[at..at + 4].copy_from_slice(&[b't', b'_', code[0], code[1]]);
             at += 4;
         }
         // Not a special key at all: only modifiers, printed directly.
         None => {
-            let len = utf_char2len(key);
-            if len == 1 && vim_isprintc(key) {
-                out[at] = key as u8;
-                at += 1;
-            } else if len > 1 {
-                let mut wide = [0u8; MB_MAXBYTES + 1];
-                let len = encode_char(key, &mut wide);
-                out[at..at + len].copy_from_slice(&wide[..len]);
-                at += len;
-            } else {
-                let display = transchar(key);
-                let shown = cstr::in_bytes(&display).to_bytes();
-                out[at..at + shown.len()].copy_from_slice(shown);
-                at += shown.len();
+            let len = key.utf8_len();
+            match key.as_byte() {
+                Some(byte) if len == 1 && vim_isprintc(key.code()) => {
+                    out[at] = byte;
+                    at += 1;
+                }
+                _ if len > 1 => {
+                    let mut wide = [0u8; MB_MAXBYTES + 1];
+                    let len = encode_char(key.code(), &mut wide);
+                    out[at..at + len].copy_from_slice(&wide[..len]);
+                    at += len;
+                }
+                _ => {
+                    let display = transchar(key.code());
+                    let shown = cstr::in_bytes(&display).to_bytes();
+                    out[at..at + shown.len()].copy_from_slice(shown);
+                    at += shown.len();
+                }
             }
         }
         // A named key, as long as the name fits.
         Some(name) => {
-            if (name.len() + at + 2) as c_int <= MAX_KEY_NAME_LEN {
+            if name.len() + at + 2 <= MAX_KEY_NAME_LEN {
                 out[at..at + name.len()].copy_from_slice(name.as_bytes());
                 at += name.len();
             }
@@ -242,26 +251,26 @@ impl KeyBytes {
 ///
 /// With `escape_ks` set, a literal 0x80 byte inside the character is escaped
 /// the way the typeahead buffer needs.
-pub fn special_key_bytes(key: c_int, modifiers: ModMask, escape_ks: bool) -> KeyBytes {
+pub fn special_key_bytes(key: Key, modifiers: ModMask, escape_ks: bool) -> KeyBytes {
     let mut out = KeyBytes::new();
     if !modifiers.is_empty() {
-        out.extend(&[K_SPECIAL as u8, KS_MODIFIER as u8, modifiers.bits() as u8]);
+        out.extend(&[K_SPECIAL, KS_MODIFIER, modifiers.byte()]);
     }
-    if key < 0 {
+    if key.is_special() {
         let code = termcap_name(key);
-        out.extend(&[K_SPECIAL as u8, code[0], code[1]]);
+        out.extend(&[K_SPECIAL, code[0], code[1]]);
     } else if escape_ks {
         escape_char_into(key, &mut out);
     } else {
         let mut encoded = [0u8; MB_MAXBYTES + 1];
-        let len = encode_char(key, &mut encoded);
+        let len = encode_char(key.code(), &mut encoded);
         out.extend(&encoded[..len]);
     }
     out
 }
 
 /// [`special_key_bytes`], appended to `out`.
-pub fn push_special_key(key: c_int, modifiers: ModMask, escape_ks: bool, out: &mut Vec<u8>) {
+pub fn push_special_key(key: Key, modifiers: ModMask, escape_ks: bool, out: &mut Vec<u8>) {
     out.extend_from_slice(special_key_bytes(key, modifiers, escape_ks).as_bytes());
 }
 
@@ -269,7 +278,7 @@ pub fn push_special_key(key: c_int, modifiers: ModMask, escape_ks: bool, out: &m
 /// zero on a NUL or at the end -- `utfc_ptr2len`'s answer for a NUL.
 fn cluster_len_at(text: &[u8], i: usize) -> usize {
     match text.get(i..) {
-        Some(rest @ [first, ..]) if *first != NUL as u8 => cluster_len(rest),
+        Some(rest @ [first, ..]) if *first != 0 => cluster_len(rest),
         _ => 0,
     }
 }
@@ -292,7 +301,7 @@ pub fn special_key_at(
     text: &[u8],
     flags: c_int,
     did_simplify: Option<&mut bool>,
-) -> Option<(c_int, ModMask, usize)> {
+) -> Option<(Key, ModMask, usize)> {
     let at = |i: usize| cstr::byte_at(text, i);
     // The offset of the last byte; the walk below never steps past it.
     let end = text.len().checked_sub(1)?;
@@ -353,7 +362,7 @@ pub fn special_key_at(
     let mut modifiers = ModMask::NONE;
     for &byte in &text[src + 1..last_dash.max(src + 1)] {
         if byte != b'-' {
-            let bit = name_to_mod_mask(c_int::from(byte));
+            let bit = name_to_mod_mask(byte);
             if bit.is_empty() {
                 return None; // illegal modifier name
             }
@@ -371,7 +380,8 @@ pub fn special_key_at(
             emsg(gettext(e_invarg));
             return None;
         }
-        number.magnitude as c_int
+        // Upstream's `(int)` of the number: the low 32 bits.
+        Key::from_code(number_as_int(number.magnitude.cast_signed()))
     } else {
         // A single-letter modifier, or a special key name.
         let (len, off) = if in_string && at(last_dash + 1) == b'\\' && at(last_dash + 2) == b'"' {
@@ -382,7 +392,7 @@ pub fn special_key_at(
         };
         let name = &text[last_dash + off..];
         if !modifiers.is_empty() && at(last_dash + len + 1) == b'>' {
-            char_at(name)
+            Key::from_code(char_at(name))
         } else {
             let code = special_key_code(name);
             if flags & FSK_KEEP_X_KEY == 0 {
@@ -394,22 +404,22 @@ pub fn special_key_at(
     };
 
     // The name lookup answers NUL for a name it does not know.
-    if key == NUL {
+    if key.is_nul() {
         return None;
     }
     // Only keep a modifier that no key code already includes.
     key = simplify_key(key, &mut modifiers);
     if flags & FSK_KEYCODE == 0 {
         // No key code wanted: answer with the single-byte code.
-        if key == SpecialKey::Bs.code() {
-            key = BS;
-        } else if key == SpecialKey::Del.code() || key == SpecialKey::Kdel.code() {
-            key = DEL;
+        if key == SpecialKey::Bs {
+            key = Key::BS;
+        } else if key == SpecialKey::Del || key == SpecialKey::Kdel {
+            key = Key::DEL;
         }
     }
     // A normal character with a modifier: try to make one byte of the two,
     // Alt and Meta excepted.
-    if key >= 0 {
+    if !key.is_special() {
         let simplify = flags & FSK_SIMPLIFY != 0;
         key = extract_modifiers(key, &mut modifiers, simplify, did_simplify);
     }
@@ -437,11 +447,11 @@ pub fn trans_special_into(
 /// keeps both spellings of `<C-H>`; `did_simplify` says whether it happened.
 ///
 fn extract_modifiers(
-    key: c_int,
+    key: Key,
     modifiers: &mut ModMask,
     simplify: bool,
     did_simplify: Option<&mut bool>,
-) -> c_int {
+) -> Key {
     let mut key = key;
 
     if modifiers.has(ModMask::SHIFT) && is_ascii_alpha(key) {
@@ -455,14 +465,13 @@ fn extract_modifiers(
     if modifiers.has(ModMask::CTRL) && is_ascii_alpha(key) {
         key = to_upper_ascii(key);
     }
-    if simplify
-        && modifiers.has(ModMask::CTRL)
-        && ((key >= '?' as c_int && key <= '_' as c_int) || is_ascii_alpha(key))
-    {
-        key = to_upper_ascii(key) ^ 0x40;
+    let ctrl_able = |key: Key| key.as_byte().is_some_and(|b| (b'?'..=b'_').contains(&b));
+    if simplify && modifiers.has(ModMask::CTRL) && (ctrl_able(key) || is_ascii_alpha(key)) {
+        let upper = to_upper_ascii(key).as_byte().expect("an ASCII character");
+        key = Key::byte(upper ^ 0x40);
         modifiers.clear(ModMask::CTRL);
-        if key == NUL {
-            key = SpecialKey::Zero.code(); // <C-@> is <Nul>
+        if key.is_nul() {
+            key = SpecialKey::Zero.into(); // <C-@> is <Nul>
         }
         if let Some(did_simplify) = did_simplify {
             *did_simplify = true;
@@ -477,9 +486,9 @@ fn extract_modifiers(
 /// The name ends at the first non-identifier byte or at the end of `text`,
 /// so a caller may hand this the middle of a larger string. A `t_xx` name is
 /// a raw termcap code and never reaches the table.
-pub fn special_key_code(text: &[u8]) -> c_int {
+pub fn special_key_code(text: &[u8]) -> Key {
     let at = |i: usize| cstr::byte_at(text, i);
-    if at(0) == b't' && at(1) == b'_' && at(2) != NUL as u8 && at(3) != NUL as u8 {
+    if at(0) == b't' && at(1) == b'_' && at(2) != 0 && at(3) != 0 {
         return termcap_key([at(2), at(3)]);
     }
     let len = text
@@ -489,9 +498,12 @@ pub fn special_key_code(text: &[u8]) -> c_int {
     code_for_name(&text[..len])
 }
 
-/// Which button a mouse pseudo-code is about, and whether it was a click or a
-/// drag. A code that is not a mouse event answers button 0, neither.
-pub(crate) fn mouse_button(code: c_int) -> (c_int, bool, bool) {
+/// Which button a mouse key is about, and whether it was a click or a drag.
+/// Read off the key's second termcap byte alone, as upstream's
+/// `KEY2TERMCAP1` is; a key that is not a mouse event answers button 0,
+/// neither.
+pub(crate) fn mouse_button(key: Key) -> (c_int, bool, bool) {
+    let code = termcap_name(key)[1];
     match mouse_event(code) {
         Some(event) => (event.button, event.is_click, event.is_drag),
         None => (0, false, false),
@@ -564,7 +576,7 @@ pub fn replace_termcodes(
                         current_sctx.get().sc_sid
                     };
                     src += 5;
-                    out.extend_from_slice(&[K_SPECIAL as u8, KS_EXTRA as u8, KE_SNR as u8]);
+                    out.extend_from_slice(&[K_SPECIAL, KS_EXTRA, KE_SNR]);
                     out.extend_from_slice(sid.to_string().as_bytes());
                     out.push(b'_');
                     continue;
@@ -613,7 +625,7 @@ pub fn replace_termcodes(
         // that ":map xx ^V" maps xx to nothing. Without 'B' in 'cpoptions' a
         // backslash does the same job.
         let quoted = at(src);
-        if c_int::from(quoted) == Ctrl_V || (do_backslash && quoted == b'\\') {
+        if Key::byte(quoted) == Key::ctrl(b'V') || (do_backslash && quoted == b'\\') {
             src += 1;
             if src >= from.len() {
                 if flags & REPTERM_FROM_PART != 0 {
@@ -627,8 +639,8 @@ pub fn replace_termcodes(
         // is a byte of its own, copied like any other.
         let len = cluster_len(&from[src..]);
         for &byte in &from[src..src + len] {
-            if c_int::from(byte) == K_SPECIAL {
-                out.extend_from_slice(&[K_SPECIAL as u8, KS_SPECIAL as u8, KE_FILLER as u8]);
+            if byte == K_SPECIAL {
+                out.extend_from_slice(&[K_SPECIAL, KS_SPECIAL, KE_FILLER]);
             } else {
                 out.push(byte);
             }
@@ -640,12 +652,12 @@ pub fn replace_termcodes(
 
 /// `c`'s UTF-8 bytes, with a literal `K_SPECIAL` byte escaped the way the
 /// typeahead buffer needs.
-fn escape_char_into(c: c_int, out: &mut KeyBytes) {
+fn escape_char_into(c: Key, out: &mut KeyBytes) {
     let mut encoded = [0u8; MB_MAXBYTES + 1];
-    let len = encode_char(c, &mut encoded);
+    let len = encode_char(c.code(), &mut encoded);
     for &byte in &encoded[..len] {
-        if c_int::from(byte) == K_SPECIAL {
-            out.extend(&[K_SPECIAL as u8, KS_SPECIAL as u8, KE_FILLER as u8]);
+        if byte == K_SPECIAL {
+            out.extend(&[K_SPECIAL, KS_SPECIAL, KE_FILLER]);
         } else {
             out.extend(&[byte]);
         }
@@ -654,7 +666,7 @@ fn escape_char_into(c: c_int, out: &mut KeyBytes) {
 
 /// Append `c` to `out`, escaping a literal `K_SPECIAL` byte the way the
 /// typeahead buffer needs.
-pub fn push_char_escaped(c: c_int, out: &mut Vec<u8>) {
+pub fn push_char_escaped(c: Key, out: &mut Vec<u8>) {
     let mut escaped = KeyBytes::new();
     escape_char_into(c, &mut escaped);
     out.extend_from_slice(escaped.as_bytes());
@@ -679,13 +691,13 @@ pub fn escape_ks_bytes(text: &[u8]) -> Vec<u8> {
             src += 1;
             continue;
         }
-        if c_int::from(rest[0]) == K_SPECIAL && rest.len() > 2 {
+        if rest[0] == K_SPECIAL && rest.len() > 2 {
             // Copy a special key unchanged.
             out.extend_from_slice(&rest[..3]);
             src += 3;
         } else {
             // Add the character, possibly multi-byte, escaping K_SPECIAL.
-            push_char_escaped(char_at(rest), &mut out);
+            push_char_escaped(Key::from_code(char_at(rest)), &mut out);
             src += char_len(rest);
         }
     }
@@ -703,12 +715,12 @@ pub fn unescape_ks_in(text: &mut [u8]) -> usize {
     let end = text.len();
     let (mut src, mut dst) = (0, 0);
     while src < end {
-        if c_int::from(text[src]) == K_SPECIAL
+        if text[src] == K_SPECIAL
             && src + 2 < end
-            && c_int::from(text[src + 1]) == KS_SPECIAL
-            && c_int::from(text[src + 2]) == KE_FILLER
+            && text[src + 1] == KS_SPECIAL
+            && text[src + 2] == KE_FILLER
         {
-            text[dst] = K_SPECIAL as u8;
+            text[dst] = K_SPECIAL;
             src += 3;
         } else {
             text[dst] = text[src];

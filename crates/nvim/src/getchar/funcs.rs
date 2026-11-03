@@ -15,9 +15,8 @@ use crate::memory::ThinCString;
 use crate::message_fmt::msg_cstr;
 use crate::os::input::{InputEvents, main_loop_has_events};
 use crate::semsg;
-use crate::types::{NUL, VAR_DICT, VAR_STRING};
+use crate::types::{Key, VAR_DICT, VAR_STRING};
 use crate::winlayer::windows;
-use core::ffi::c_int;
 
 /// What the `cursor` option asked for while the key is awaited.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -97,7 +96,7 @@ fn getchar_opts(args: &[TypVal], allow_number: bool) -> Option<GetcharOpts> {
 ///
 /// `argvars[0]` decides how: absent or -1 blocks, 1 only peeks, 0 takes a key
 /// if one is there. Keys nothing can act on are skipped.
-fn getchar_read(args: &[TypVal], cursor: CursorFlag) -> VarNumber {
+fn getchar_read(args: &[TypVal], cursor: CursorFlag) -> Key {
     loop {
         if cursor == CursorFlag::Msg || (cursor == CursorFlag::Default && msg_col.get() > 0) {
             ui_cursor_goto(msg_row.get(), msg_col.get());
@@ -109,7 +108,7 @@ fn getchar_read(args: &[TypVal], cursor: CursorFlag) -> VarNumber {
         // Read once: the coercion reports its own message, and asking twice
         // would report it twice.
         let how = (!blocking).then(|| tv_get_number_chk(&args[0]));
-        let n: VarNumber = if blocking {
+        let n = if blocking {
             // getchar(): blocking wait.
             // TODO(bfredl): deduplicate the shared logic with state_enter?
             if !char_avail() {
@@ -120,26 +119,29 @@ fn getchar_read(args: &[TypVal], cursor: CursorFlag) -> VarNumber {
                     continue;
                 }
             }
-            safe_vgetc() as VarNumber
+            safe_vgetc()
         } else if how == Some(Ok(1)) {
             // getchar(1): only check whether a character is available.
-            vpeekc_any() as VarNumber
-        } else if how == Some(Err(Unconvertible)) || vpeekc_any() == NUL {
+            vpeekc_any()
+        } else if how == Some(Err(Unconvertible)) || vpeekc_any().is_nul() {
             // An illegal argument, or getchar(0) with nothing there.
-            0
+            Key::NUL
         } else {
             // getchar(0) with something there. Note that `vpeekc_any`
             // answers K_SPECIAL for K_IGNORE.
-            safe_vgetc() as VarNumber
+            safe_vgetc()
         };
 
-        let n = n as c_int;
-        if n != SpecialKey::Ignore.code()
-            && n != SpecialKey::Mousemove.code()
-            && n != SpecialKey::VerScrollbar.code()
-            && n != SpecialKey::HorScrollbar.code()
-        {
-            return n as VarNumber;
+        if !matches!(
+            n.special(),
+            Some(
+                SpecialKey::Ignore
+                    | SpecialKey::Mousemove
+                    | SpecialKey::VerScrollbar
+                    | SpecialKey::HorScrollbar
+            )
+        ) {
+            return n;
         }
     }
 }
@@ -195,34 +197,34 @@ pub(crate) fn getchar_common(args: &[TypVal], result: &mut TypVal, allow_number:
     set_vim_var_nr(Vv::MouseLnum, 0);
     set_vim_var_nr(Vv::MouseCol, 0);
 
-    if n != 0 && (!opts.allow_number || n < 0 || !mod_mask.get().is_empty()) {
+    if !n.is_nul() && (!opts.allow_number || n.is_special() || !mod_mask.get().is_empty()) {
         // Render the key as a string: modifier prefix, then either the
         // key code's three bytes or the character's UTF-8 ones.
         let mut temp = [0u8; 10]; // modifier 3 + mbyte char 6 + NUL
         let mut i = 0;
         if !mod_mask.get().is_empty() {
-            temp[0] = K_SPECIAL as u8;
-            temp[1] = KS_MODIFIER as u8;
-            temp[2] = mod_mask.get().bits() as u8;
+            temp[0] = K_SPECIAL;
+            temp[1] = KS_MODIFIER;
+            temp[2] = mod_mask.get().byte();
             i = 3;
         }
-        if n < 0 {
-            temp[i..i + 3].copy_from_slice(&key_escape(n as c_int));
+        if n.is_special() {
+            temp[i..i + 3].copy_from_slice(&key_escape(n));
             i += 3;
         } else {
-            i += encode_char(n as c_int, &mut temp[i..]);
+            i += encode_char(n.code(), &mut temp[i..]);
         }
         debug_assert!(i < temp.len());
 
         (*result).write_string(Some(ThinCString::from_bytes(&temp[..i])));
 
-        if is_mouse_key(n as c_int) {
+        if is_mouse_key(n.code()) {
             set_mouse_vars();
         }
     } else if !opts.allow_number {
         (*result).write_empty(VAR_STRING);
     } else {
-        (*result).write_number(n);
+        (*result).write_number(VarNumber::from(n.code()));
     }
 }
 

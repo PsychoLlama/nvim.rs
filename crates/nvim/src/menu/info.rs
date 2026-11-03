@@ -20,6 +20,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::getchar::Remap;
 use core::ffi::c_int;
 use std::ffi::CString;
 
@@ -221,8 +222,8 @@ fn menuitem_getinfo(
             let _ = dict.add_allocated_str(b"rhs", Some(text));
         }
         let flag = |on: bool| crate::types::BoolVarValue::from(on);
-        let _ = dict.add_bool(b"noremenu", flag(menu.noremap[bit] == REMAP_NONE));
-        let _ = dict.add_bool(b"script", flag(menu.noremap[bit] == REMAP_SCRIPT));
+        let _ = dict.add_bool(b"noremenu", flag(menu.noremap[bit] == Remap::No));
+        let _ = dict.add_bool(b"script", flag(menu.noremap[bit] == Remap::Script));
         let _ = dict.add_bool(b"silent", flag(menu.silent[bit]));
         let _ = dict.add_bool(b"enabled", flag(menu.enabled & (1 << bit) != 0));
         return;

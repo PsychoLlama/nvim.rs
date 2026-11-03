@@ -84,8 +84,8 @@ pub(crate) fn get_name_len(
     verbose: bool,
 ) -> (c_int, Option<XString>) {
     // A `<SNR>` prefix arrives as the three-byte key encoding.
-    let snr = [K_SPECIAL, KS_EXTRA, KE_SNR as c_int];
-    if (0..3).all(|i| c_int::from(cursor.at(i)) == snr[i]) {
+    let snr = [K_SPECIAL, KS_EXTRA, KE_SNR];
+    if (0..3).all(|i| cursor.at(i) == snr[i]) {
         cursor.bump(3);
         return (name_len(take_id(cursor) + 3), None);
     }

@@ -26,6 +26,7 @@ use crate::cstr::byte_at;
 use crate::keycodes::SpecialKey;
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::narrow::len_as_int;
+use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -83,16 +84,16 @@ fn insert_enter(s: &mut InsertState) {
         append_to_redobuff_number(s.count);
         if s.cmdchar == 'V' as c_int || s.cmdchar == 'v' as c_int {
             // `gR` and `gr`.
-            append_to_redobuff_char('g' as c_int);
+            append_to_redobuff_char(Key::ascii(b'g'));
             append_to_redobuff_char(if s.cmdchar == 'v' as c_int {
-                'r' as c_int
+                Key::ascii(b'r')
             } else {
-                'R' as c_int
+                Key::ascii(b'R')
             });
         } else {
-            append_to_redobuff_char(s.cmdchar);
+            append_to_redobuff_char(Key::from_code(s.cmdchar));
             if s.cmdchar == 'g' as c_int {
-                append_to_redobuff_char('I' as c_int); // `gI` means "insert in column 1"
+                append_to_redobuff_char(Key::ascii(b'I')); // `gI` means "insert in column 1"
             } else if s.cmdchar == 'r' as c_int {
                 s.count = 1; // `r<CR>` inserts one <CR> however big the count
             }
@@ -167,7 +168,7 @@ fn insert_enter(s: &mut InsertState) {
     }
 
     ui_cursor_shape();
-    do_digraph(-1); // clear digraphs
+    reset_digraph(); // clear digraphs
 
     // Everything in the redo buffer up to here belongs to the command,
     // not to the text that was typed.
@@ -297,7 +298,7 @@ pub(crate) fn insert_check(s: &mut InsertState) -> c_int {
         // the loop wakes up and sees `stop_insert_mode`.
         stop_insert_mode.set(true);
         restart_edit.set('I' as c_int);
-        stuff_readbuf_char(SpecialKey::Nop.code());
+        stuff_readbuf_char(Key::from(SpecialKey::Nop));
     }
     if stop_insert_mode.get() && !ins_compl_active() {
         // `:stopinsert` was used, or a terminal buffer was entered.
@@ -439,7 +440,7 @@ pub(crate) fn insert_execute(s: &mut InsertState, key: c_int) -> c_int {
         // Insert mode ended while the key was being read; give it back so
         // Normal mode sees it.
         if key != SpecialKey::Ignore.code() && key != SpecialKey::Nop.code() {
-            vungetc(key);
+            vungetc(Key::from_code(key));
         }
         s.count = 0;
         s.nomove = true;
@@ -472,10 +473,10 @@ pub(crate) fn insert_execute(s: &mut InsertState, key: c_int) -> c_int {
         ins_redraw(false);
         s.c = {
             let _raw_key = Keys::unmapped_with_codes();
-            plain_vgetc()
+            plain_vgetc().code()
         };
         if s.c != Ctrl_N && s.c != Ctrl_G && s.c != Ctrl_O {
-            vungetc(s.c);
+            vungetc(Key::from_code(s.c));
             s.c = Ctrl_BSL;
         } else {
             if s.c == Ctrl_O {
@@ -489,7 +490,7 @@ pub(crate) fn insert_execute(s: &mut InsertState, key: c_int) -> c_int {
     }
 
     if s.c != SpecialKey::Event.code() {
-        s.c = do_digraph(s.c);
+        s.c = do_digraph(Key::from_code(s.c)).code();
     }
 
     if (s.c == Ctrl_V || s.c == Ctrl_Q) && ctrl_x_mode_cmdline() {

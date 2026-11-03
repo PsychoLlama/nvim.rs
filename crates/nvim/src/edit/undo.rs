@@ -28,6 +28,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -77,8 +78,8 @@ pub(crate) fn start_arrow(end_insert_pos: Option<InsertEnd>) {
 pub(crate) fn start_arrow_with_change(end_insert_pos: Option<InsertEnd>, end_change: bool) {
     start_arrow_common(end_insert_pos, end_change);
     if !end_change {
-        append_to_redobuff_char(Ctrl_G);
-        append_to_redobuff_char('U' as c_int);
+        append_to_redobuff_char(Key::ctrl(b'G'));
+        append_to_redobuff_char(Key::ascii(b'U'));
     }
 }
 

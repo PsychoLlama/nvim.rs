@@ -61,6 +61,7 @@ use crate::spellsuggest::{
     MAXWLEN, SPS_BEST, SPS_DOUBLE, SugInfo, Suggest, spell_find_suggest, spell_suggest_timeout,
     sps_flags, sps_limit,
 };
+use crate::types::Key;
 use crate::types::ui::kUIMessages;
 use crate::types::{ColNr, IOSIZE, NUL, Pos, int64_t};
 use crate::ui::state::Rows;
@@ -69,9 +70,6 @@ use crate::undo::u_save_cursor;
 use crate::winlayer::Win;
 use crate::{smsg, tr};
 use core::ffi::c_int;
-
-/// The escape the redo buffer ends the change-word command with.
-const ESC: c_int = 0x1b;
 
 /// `z=`: suggest replacements for the badly spelled word under or after
 /// the cursor.
@@ -360,7 +358,7 @@ fn apply_suggestion(sug: &SugInfo, stp: &Suggest, line: &[u8], col: usize) {
     append_to_redobuff(b"ciw");
     let replaced_len = (stp.st_wordlen + sug.su_badlen - stp.st_orglen).max(0) as usize;
     append_to_redobuff_literally(&newline[col..(col + replaced_len).min(newline.len())]);
-    append_to_redobuff_char(ESC);
+    append_to_redobuff_char(Key::ESC);
 
     let lnum = Win::current().w_cursor.lnum;
     let _ = ml_replace_owned(lnum, XString::from_vec(newline));

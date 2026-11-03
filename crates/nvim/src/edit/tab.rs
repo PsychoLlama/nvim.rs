@@ -24,6 +24,7 @@
 use crate::charset::skip;
 use crate::cstr::byte_at;
 use crate::indent::StopList;
+use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -40,7 +41,7 @@ pub(crate) fn ins_shift(c: c_int, lastc: c_int) {
     if stop_arrow_failed() {
         return;
     }
-    append_to_redobuff_char(c);
+    append_to_redobuff_char(Key::from_code(c));
 
     // `0 CTRL-D` and `^ CTRL-D`: the `0`/`^` was inserted as an ordinary
     // character and has to come off again.

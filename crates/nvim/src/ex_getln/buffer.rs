@@ -25,6 +25,7 @@ use crate::cstr;
 use crate::guard::Lock;
 use crate::keycodes::{Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_F, Ctrl_L, Ctrl_P, Ctrl_V, Ctrl_W};
 use crate::memory::XString;
+use crate::types::Key;
 use core::ffi::CStr;
 
 // ---------------------------------------------------------------------------
@@ -190,7 +191,7 @@ fn is_word_char(c: ::core::ffi::c_int) -> bool {
 }
 
 fn stuff_char(c: ::core::ffi::c_int) {
-    stuff_readbuf_char(c);
+    stuff_readbuf_char(Key::from_code(c));
 }
 
 // ---------------------------------------------------------------------------
@@ -207,8 +208,8 @@ pub fn getexline(
     do_concat: bool,
 ) -> Option<XString> {
     // When executing a register, remove the ':' in front of each line.
-    if exec_from_reg.get() && vpeekc() == ':' as ::core::ffi::c_int {
-        vgetc();
+    if exec_from_reg.get() && vpeekc().code() == ':' as ::core::ffi::c_int {
+        vgetc().code();
     }
     getcmdline(c, 1, indent, do_concat)
 }
@@ -456,8 +457,10 @@ pub(crate) fn ccheck_abbr(c: ::core::ffi::c_int) -> bool {
     let col = usize::try_from(cc.cmdpos).unwrap_or(0);
     let text = cc.text_bytes();
     let text = text[..col.min(text.len())].to_vec();
+    let (key, literal) = abbr_key(c);
     check_abbr(
-        c,
+        key,
+        literal,
         text,
         ::core::ffi::c_int::try_from(spos).unwrap_or(::core::ffi::c_int::MAX),
     )

@@ -17,14 +17,14 @@
 use crate::env::expand_env_escaped;
 use crate::optionstr::OptString;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{CStr, c_uint};
+use core::ffi::CStr;
 use std::ffi::CString;
 
 use crate::cmdexpand::{Scored, cmdline_fuzzy_complete, fuzzy_sorted};
 use crate::ex_docmd::state::ESCAPE_CHARS;
 use crate::fuzzy::fuzzy_match_str;
 use crate::global_cell::GlobalCell;
-use crate::keycodes::special_key_code;
+use crate::keycodes::{special_key_code, termcap_name};
 use crate::memory::XString;
 use crate::options::{
     kOptAleph, kOptBackupdir, kOptCdpath, kOptCount, kOptDirectory, kOptFiletype, kOptInvalid,
@@ -253,15 +253,14 @@ fn take_option_name(
         }
         let name = CString::new(&line[arg + 1..*p]).unwrap_or_default();
         let key = special_key_code(name.as_bytes());
-        if key == 0 {
+        if key.is_nul() {
             expand.context = ExpandContext::Nothing;
             return None;
         }
         *p += 1;
         let nextchar = at(*p);
         // The two termcap bytes the key code packs.
-        let lo = (-key & 0xff) as u8;
-        let hi = ((-key) as c_uint >> 8 & 0xff) as u8;
+        let [lo, hi] = termcap_name(key);
         NAME.set([b't', b'_', lo, hi]);
         return Some((nextchar, kOptAleph, 0, true));
     }

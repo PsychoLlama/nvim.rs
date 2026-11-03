@@ -21,6 +21,7 @@ use crate::keycodes::{
 use crate::mbyte::head_off;
 use crate::mbyte::{char_at, cluster_len, encode_char};
 use crate::memline::Lines;
+use crate::types::Key;
 use crate::types::{BsFlag, NUL, ShmFlag};
 use crate::winlayer::Win;
 
@@ -523,7 +524,7 @@ pub(crate) fn ins_compl_fix_redo_buf_for_leader(known: Option<&CStr>) {
         // A backspace for each remaining character of the original text.
         let mut p = len;
         while p < orig.len() {
-            append_to_redobuff_char(SpecialKey::Bs.code());
+            append_to_redobuff_char(Key::from(SpecialKey::Bs));
             p += cluster_len(&orig[p..]);
         }
     }
@@ -558,10 +559,10 @@ pub fn ins_compl_check_keys(frequency: c_int, in_compl_func: bool) {
 
     // Check for a typed key.  Do use mappings, otherwise
     // vim_is_ctrl_x_key() can't do its work correctly.
-    let mut c = vpeekc_any();
+    let mut c = vpeekc_any().code();
     if c != NUL && !test_disable_char_avail.get() {
         if vim_is_ctrl_x_key(c) && c != Ctrl_X && c != Ctrl_R {
-            c = safe_vgetc(); // Eat the character
+            c = safe_vgetc().code(); // Eat the character
             compl_shows_dir.set(ins_compl_key2dir(c));
             let (repeat, allow_get) = (
                 ins_compl_key2count(c),
@@ -574,14 +575,14 @@ pub fn ins_compl_check_keys(frequency: c_int, in_compl_func: bool) {
         } else {
             // Need to get the character to have KeyTyped set.  We'll put it
             // back with vungetc() below.  But skip K_IGNORE.
-            c = safe_vgetc();
+            c = safe_vgetc().code();
             if c != SpecialKey::Ignore.code() {
                 // Don't interrupt completion when the character wasn't
                 // typed, e.g. when doing @q to replay keys.
                 if c != Ctrl_R && KeyTyped.get() {
                     compl_interrupted.set(true);
                 }
-                vungetc(c);
+                vungetc(Key::from_code(c));
             }
         }
     } else {

@@ -24,7 +24,7 @@ position and which this file therefore cannot carry.
 
 Column 1 is upstream's C spelling in every row, recovered from the Rust
 expression: a bare macro name (`K_BS`), a C character literal with its quotes
-(`' '`), `extra(KE_FOO)` for `K_FOO`, or a `SpecialKey` variant, whose name is the C
+(`' '`, spelled `Key::ascii(b' ')`), `extra(KE_FOO)` for `K_FOO`, or a `SpecialKey` variant, whose name is the C
 one with each underscore-separated word capitalised (`K_S_F1` is `SpecialKey::SF1`)
 and so inverts by splitting on the capitals again.
 
@@ -47,7 +47,8 @@ OUT = ROOT / "crates/nvim/src/keycodes.lua"
 # parenthesised `extra(KE_FOO)` form needs no bracket counting.
 ROWS = re.compile(r"^const KEY_NAME_ROWS[^=]*= \[$(.*?)^\];$", re.M | re.S)
 ROW = re.compile(
-    r'^\s*key_name\((?P<key>.*?), (?:true|false), "(?P<name>[^"]*)"\),$', re.M
+    r'^\s*(?:key_name|special)\((?P<key>.*?), (?:true|false), "(?P<name>[^"]*)"\),$',
+    re.M,
 )
 
 HEADER = """\
@@ -61,8 +62,13 @@ HEADER = """\
 
 
 def key_to_lua(key: str) -> str:
-    """The Lua spelling of a `key_name` first argument."""
+    """The Lua spelling of a `key_name`/`special` first argument."""
     key = key.removesuffix(" as c_int").removesuffix(".code()")
+    if m := re.fullmatch(r"Key::ascii\(b('.*')\)", key):
+        return m.group(1)
+    if key.startswith("Key::from_code(") and key.endswith(")"):
+        key = key[len("Key::from_code(") : -1]
+    key = key.removeprefix("Key::")
     if key.startswith("extra(KE_") and key.endswith(")"):
         return "K_" + key[len("extra(KE_") : -1]
     if key.startswith("SpecialKey::"):

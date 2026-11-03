@@ -16,6 +16,7 @@
 
 use super::*;
 use crate::eval::typval::NumBuf;
+use crate::getchar::Remap;
 use crate::lua::executor::funcref_description;
 use crate::memory::ThinCString;
 use crate::option::vars::P_CPO;
@@ -93,11 +94,11 @@ pub(crate) fn mapblock_fill_dict(
     let noremap_value = if compatible {
         // Keep the old compatible behaviour, which cannot tell a
         // <script> mapping apart.
-        c_int::from(mp.m_noremap != 0)
-    } else if mp.m_noremap == REMAP_SCRIPT {
+        c_int::from(mp.m_noremap != Remap::Yes)
+    } else if mp.m_noremap == Remap::Script {
         2
     } else {
-        c_int::from(mp.m_noremap != 0)
+        c_int::from(mp.m_noremap != Remap::Yes)
     };
 
     if rhs.luaref() != LUA_NOREF {
@@ -133,7 +134,7 @@ pub(crate) fn mapblock_fill_dict(
     out.put(c"noremap", Object::integer(noremap_value.into()));
     out.put(
         c"script",
-        Object::integer(Integer::from(mp.m_noremap == REMAP_SCRIPT)),
+        Object::integer(Integer::from(mp.m_noremap == Remap::Script)),
     );
     out.put(c"expr", Object::integer(Integer::from(mp.m_expr)));
     out.put(c"silent", Object::integer(Integer::from(mp.m_silent)));

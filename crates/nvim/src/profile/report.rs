@@ -53,7 +53,7 @@ pub fn profile_dump() {
 /// `"name()"` with a newline, decoding the `<SNR>` mangling.
 fn write_func_name(fd: &mut dyn Write, func: &UserFunc) -> io::Result<()> {
     let name = func.name().as_bytes();
-    if name.first().is_some_and(|&b| c_int::from(b) == K_SPECIAL) {
+    if name.first().is_some_and(|&b| b == K_SPECIAL) {
         write!(fd, "<SNR>")?;
         fd.write_all(name.get(3..).unwrap_or_default())?;
     } else {

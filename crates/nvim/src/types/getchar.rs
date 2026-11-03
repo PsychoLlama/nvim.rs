@@ -11,7 +11,6 @@
 // emitted. One definition per logical type; every module re-exports here.
 use crate::getchar::{KeyBuffer, TypeAhead};
 
-pub type RemapValues = ::core::ffi::c_int;
 pub type FlushBuffers = ::core::ffi::c_uint;
 /// The redo pair a user function or autocommand set aside. Not `Copy`: each
 /// field owns a block chain, and `save_redobuff` *moves* them here.

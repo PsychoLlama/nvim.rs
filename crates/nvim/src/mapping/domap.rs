@@ -17,6 +17,7 @@
 use super::*;
 use crate::charset::is_word_at;
 use crate::ex_docmd::sourcing_lnum;
+use crate::getchar::Remap;
 use crate::keycodes::Ctrl_C;
 use crate::lua::executor::nlua_set_sctx;
 use crate::message_fmt::{emsg_text, msg_bytes};
@@ -125,7 +126,7 @@ fn reuse_mapblock(
     tables: &mut MapTables,
     (hash, abbr, at): (usize, bool, usize),
     args: &MapArguments,
-    noremap: c_int,
+    noremap: Remap,
     mode: c_int,
     simplified: bool,
     sctx: ScriptCtx,
@@ -186,11 +187,11 @@ pub(crate) fn buf_do_map(
 
     // For ":noremap" don't remap, otherwise do remap.
     let noremap = if args.script {
-        REMAP_SCRIPT
+        Remap::Script
     } else if maptype == MAPTYPE_NOREMAP {
-        REMAP_NONE
+        Remap::No
     } else {
-        REMAP_YES
+        Remap::Yes
     };
 
     let has_lhs = !args.lhs.is_empty();
@@ -279,7 +280,7 @@ pub(crate) fn buf_do_map(
             if do_print {
                 // A listing: every entry in the mode, or every one whose LHS
                 // agrees with `lhs` in the one bucket it hashes to.
-                let hash = map_hash(mode, c_int::from(lhs.first().copied().unwrap_or(0)));
+                let hash = map_hash(mode, lhs.first().copied().unwrap_or(0));
                 let entries = if got_int.get() {
                     Vec::new()
                 } else if has_lhs {
@@ -316,7 +317,7 @@ pub(crate) fn buf_do_map(
                         let start = if is_abbrev {
                             0
                         } else {
-                            map_hash(mode, c_int::from(lhs.first().copied().unwrap_or(0)))
+                            map_hash(mode, lhs.first().copied().unwrap_or(0))
                         };
                         (start, start + 1)
                     } else {
@@ -417,7 +418,7 @@ struct Step<'a> {
     lhs: &'a [u8],
     args: &'a MapArguments,
     mode: c_int,
-    noremap: c_int,
+    noremap: Remap,
     is_abbrev: bool,
     is_unmap: bool,
     keyround1_simplified: bool,
@@ -534,7 +535,7 @@ impl Step<'_> {
 
             // May need to put this entry into another hash list.
             let first = entry.keys().first().copied().unwrap_or(0);
-            let new_hash = map_hash(entry.m_mode, c_int::from(first));
+            let new_hash = map_hash(entry.m_mode, first);
             if !abbr && new_hash != hash {
                 tables.relink(hash, at, new_hash);
             }

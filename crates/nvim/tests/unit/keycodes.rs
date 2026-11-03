@@ -20,6 +20,7 @@ use neovim::keycodes::{
     FSK_IN_STRING, ModMask, REPTERM_DO_LT, REPTERM_FROM_PART, REPTERM_NO_SPECIAL,
     get_special_key_name, replace_termcodes, special_key_at, special_key_code,
 };
+use neovim::types::Key;
 
 /// `'cpoptions'` as `keysweep` set it — the default, which contains `B`, so
 /// `replace_termcodes` does *not* treat a backslash as CTRL-V.
@@ -361,11 +362,11 @@ fn termcodes(src: &str, from_part: bool, do_lt: bool, special: bool) -> Vec<u8> 
 
 /// The code `name` resolves to, and the name that code prints as.
 fn key_code(name: &str) -> c_int {
-    special_key_code(name.as_bytes())
+    special_key_code(name.as_bytes()).code()
 }
 
 fn key_name(code: c_int, modifiers: ModMask) -> String {
-    let name = get_special_key_name(code, modifiers);
+    let name = get_special_key_name(Key::from_code(code), modifiers);
     CStr::from_bytes_until_nul(&name)
         .expect("the name is NUL-terminated")
         .to_string_lossy()
@@ -376,7 +377,7 @@ fn key_name(code: c_int, modifiers: ModMask) -> String {
 /// mask it reported.
 fn special_key(src: &str, flags: c_int) -> (c_int, ModMask) {
     special_key_at(src.as_bytes(), flags, None)
-        .map_or((0, ModMask::NONE), |(key, mods, _)| (key, mods))
+        .map_or((0, ModMask::NONE), |(key, mods, _)| (key.code(), mods))
 }
 
 #[test]

@@ -79,12 +79,6 @@ pub(crate) fn is_mouse_key(c: c_int) -> bool {
     )
 }
 
-/// The `KE_*` half of a key code, as C's `KEY2TERMCAP1` reads it: the low byte
-/// of `-c` shifted down.  Nothing checks that `c` is a key code.
-pub(crate) fn key_extra(c: c_int) -> c_int {
-    c_int::try_from(((-c).cast_unsigned() >> 8) & 0xff).expect("masked to a byte")
-}
-
 /// How many clicks in a row `mod_mask` records.
 ///
 /// The bits are cumulative -- `ModMask::FOUR_CLICK` *is* 2CLICK|3CLICK -- so the

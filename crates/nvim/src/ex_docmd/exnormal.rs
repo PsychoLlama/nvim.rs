@@ -4,6 +4,7 @@
 #![forbid(unsafe_code)]
 
 use super::edit::{ui_cursor_shape, update_topline_cursor};
+use crate::getchar::Remap;
 use crate::getchar::ins_typebuf;
 use crate::guard::Depth;
 use crate::mbyte::cluster_len;
@@ -17,8 +18,8 @@ use std::ffi::CString;
 
 use crate::drawscreen::{clearmode, showmode};
 
+use crate::ex_docmd::KS_SPECIAL;
 use crate::ex_docmd::modifier::expr_map_locked;
-use crate::ex_docmd::{KS_SPECIAL, REMAP_NONE, REMAP_YES};
 use crate::getchar::{restore_typeahead, save_typeahead, stuff_empty, typeahead, vpeekc};
 
 use crate::ex_docmd::state::ex_normal_busy;
@@ -103,11 +104,7 @@ pub(crate) fn ex_normal(excmd: &mut ExArg) {
     let escaped = escape_k_special(arg.to_bytes())
         .map(|keys| CString::new(keys).expect("a command line argument ends at its NUL"));
     let keys = escaped.as_deref().unwrap_or(arg);
-    let remap = if excmd.forceit {
-        REMAP_NONE as c_int
-    } else {
-        REMAP_YES as c_int
-    };
+    let remap = if excmd.forceit { Remap::No } else { Remap::Yes };
     let busy = Depth::of(ex_normal_busy);
     let mut save_state = SaveState::default();
     if save_current_state(&mut save_state) {
@@ -140,7 +137,7 @@ pub(crate) fn ex_normal(excmd: &mut ExArg) {
 /// the common case; the caller then uses the original.
 fn escape_k_special(src: &[u8]) -> Option<Vec<u8>> {
     // Only a 0x80 byte can need it.
-    if !src.contains(&(K_SPECIAL as u8)) {
+    if !src.contains(&(K_SPECIAL)) {
         return None;
     }
     // The bytes after the first of each character, which are the ones a
@@ -150,10 +147,7 @@ fn escape_k_special(src: &[u8]) -> Option<Vec<u8>> {
     let mut at = 0;
     while at < src.len() {
         let tail = trailing(at);
-        extra += 2 * tail
-            .iter()
-            .filter(|&&b| c_int::from(b) == K_SPECIAL)
-            .count();
+        extra += 2 * tail.iter().filter(|&&b| b == K_SPECIAL).count();
         at += 1 + tail.len();
     }
     if extra == 0 {
@@ -166,8 +160,8 @@ fn escape_k_special(src: &[u8]) -> Option<Vec<u8>> {
         let tail = trailing(at);
         for &byte in tail {
             out.push(byte);
-            if c_int::from(byte) == K_SPECIAL {
-                out.extend_from_slice(&[KS_SPECIAL as u8, KE_FILLER as u8]);
+            if byte == K_SPECIAL {
+                out.extend_from_slice(&[KS_SPECIAL, KE_FILLER]);
             }
         }
         at += 1 + tail.len();
@@ -215,7 +209,7 @@ pub(crate) fn ex_stopinsert(_excmd: &mut ExArg) {
 }
 
 /// Put `cmd` into the typeahead and run it as normal-mode keys.
-pub fn exec_normal_cmd(cmd: &CStr, remap: c_int, silent: bool) {
+pub fn exec_normal_cmd(cmd: &CStr, remap: Remap, silent: bool) {
     let _ = ins_typebuf(cmd.to_bytes(), remap, 0, true, silent);
     exec_normal(false, false);
 }
@@ -236,7 +230,7 @@ fn exec_normal_on(op: Op, was_typed: bool, use_vpeekc: bool) {
         // `use_vpeekc` also runs whatever the *user* has typed, but
         // stops at a CTRL-C rather than swallowing it.
         || use_vpeekc && {
-            c = vpeekc();
+            c = vpeekc().code();
             c != NUL
         } && c != Ctrl_C)
         && !got_int.get()

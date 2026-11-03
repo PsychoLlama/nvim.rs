@@ -10,6 +10,7 @@ use super::*;
 use crate::api_error;
 use crate::eval::typval::NumBuf;
 use crate::eval::userfunc::FuncFlags;
+use crate::getchar::Remap;
 use crate::lua::executor::release_luaref;
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::narrow::number_as_lnum;
@@ -109,12 +110,12 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     let number = |key: &CStr| dict_get_number(d, key.to_bytes());
 
     let mut noremap = if number(c"noremap") != 0 {
-        REMAP_NONE
+        Remap::No
     } else {
-        0
+        Remap::Yes
     };
     if number(c"script") != 0 {
-        noremap = REMAP_SCRIPT;
+        noremap = Remap::Script;
     }
 
     let mut desc_buf = NumBuf::new();

@@ -12,6 +12,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::getchar::Remap;
 use crate::message_fmt::msg_bytes;
 use crate::tr;
 use crate::types::LineNr;
@@ -49,7 +50,7 @@ enum Enable {
 /// The mode-independent half of a `:menu` definition.
 struct MenuArg {
     modes: c_int,
-    noremap: c_int,
+    noremap: Remap,
     silent: bool,
 }
 
@@ -71,12 +72,12 @@ fn at(bytes: &[u8], i: usize) -> u8 {
 }
 
 /// The body of [`ex_menu`], once the command name has been read.
-fn do_menu(arg: &[u8], modes: c_int, mut noremap: c_int, unmenu: bool, ranged: Option<c_int>) {
+fn do_menu(arg: &[u8], modes: c_int, mut noremap: Remap, unmenu: bool, ranged: Option<c_int>) {
     let mut arg = arg;
     let mut silent = false;
     loop {
         if arg.starts_with(b"<script>") {
-            noremap = REMAP_SCRIPT;
+            noremap = Remap::Script;
             arg = skip_white(&arg[8..]);
         } else if arg.starts_with(b"<silent>") {
             silent = true;
@@ -468,7 +469,7 @@ fn add_into(
                         actext: text.actext,
                         priority: pri_tab[pri_idx],
                         strings: Default::default(),
-                        noremap: [0; MENU_MODES],
+                        noremap: [Remap::Yes; MENU_MODES],
                         silent: [false; MENU_MODES],
                         children: Vec::new(),
                     },

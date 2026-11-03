@@ -26,9 +26,9 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::keycodes::{Ctrl_O, Ctrl_V, key_escape};
+use crate::keycodes::{K_SPECIAL, key_escape};
 use crate::mbyte::{char_at, char_len, encode_char};
-use crate::types::{MB_MAXBYTES, NUL};
+use crate::types::{Key, MB_MAXBYTES};
 use core::ffi::{c_int, c_uint};
 use std::collections::VecDeque;
 
@@ -181,12 +181,9 @@ impl KeyBuffer {
     /// Delete `slen` bytes from the end. Only works when they were just
     /// added: a block boundary in between and nothing happens, which is how
     /// `ungetchars` can fail to take back a key longer than the last one.
-    fn delete_tail(&mut self, slen: c_int) {
+    fn delete_tail(&mut self, slen: usize) {
         let InsertPoint::Block(curr) = self.at else {
             return; // nothing to delete from
-        };
-        let Ok(slen) = usize::try_from(slen) else {
-            return;
         };
         let block = &mut self.blocks[curr];
         if block.len() < slen {
@@ -197,9 +194,9 @@ impl KeyBuffer {
     }
 
     /// One byte from the front, advancing past it when `advance` is set.
-    fn read(&mut self, advance: bool) -> c_int {
+    fn read(&mut self, advance: bool) -> u8 {
         let Some(head) = self.blocks.front() else {
-            return NUL; // buffer is empty
+            return 0; // buffer is empty
         };
         let at = |i: usize| head.get(i).copied().unwrap_or(0);
         let c = at(self.index);
@@ -224,7 +221,7 @@ impl KeyBuffer {
                 self.index = 0;
             }
         }
-        c_int::from(c)
+        c
     }
 
     /// Prepare the buffer for reading, if it holds anything.
@@ -292,31 +289,32 @@ impl KeyBufferRef {
 
     /// Append byte or special key `c`, escaping special keys, NUL and
     /// `K_SPECIAL`.
-    pub(crate) fn add_byte(self, c: c_int) {
-        if c < 0 || c == K_SPECIAL || c == NUL {
+    pub(crate) fn add_byte(self, c: Key) {
+        if c.is_special() || c == Key::byte(K_SPECIAL) || c.is_nul() {
             self.add_bytes(&key_escape(c));
         } else {
-            self.add_bytes(&[c.to_le_bytes()[0]]);
+            // The low byte, as upstream's `char` store keeps it.
+            self.add_bytes(&[c.code().to_le_bytes()[0]]);
         }
     }
 
     /// Append character `c`, escaping special keys, NUL and `K_SPECIAL` and
     /// splitting a codepoint into its UTF-8 bytes.
-    pub(crate) fn add_char(self, c: c_int) {
-        if c < 0 {
+    pub(crate) fn add_char(self, c: Key) {
+        if c.is_special() {
             // A special key is one unit; it has no UTF-8 spelling.
             self.add_byte(c);
             return;
         }
         let mut bytes = [0u8; MB_MAXBYTES + 1];
-        let len = encode_char(c, &mut bytes);
+        let len = encode_char(c.code(), &mut bytes);
         for &byte in &bytes[..len] {
-            self.add_byte(c_int::from(byte));
+            self.add_byte(Key::byte(byte));
         }
     }
 
     /// Delete `slen` bytes from the end; see [`KeyBuffer::delete_tail`].
-    pub(crate) fn delete_tail(self, slen: c_int) {
+    pub(crate) fn delete_tail(self, slen: usize) {
         self.0.with_mut(|buf| buf.delete_tail(slen));
     }
 
@@ -326,7 +324,7 @@ impl KeyBufferRef {
     }
 
     /// One byte from the front; see [`KeyBuffer::read`].
-    pub(crate) fn read(self, advance: bool) -> c_int {
+    pub(crate) fn read(self, advance: bool) -> u8 {
         self.0.with_mut(|buf| buf.read(advance))
     }
 
@@ -371,7 +369,7 @@ pub fn get_recorded() -> Vec<u8> {
     }
     // Stopping a recording from Insert mode with CTRL-O q also leaves the
     // CTRL-O behind.
-    if len > 0 && restart_edit.get() != 0 && c_int::from(recorded[len - 1]) == Ctrl_O {
+    if len > 0 && restart_edit.get() != 0 && Key::byte(recorded[len - 1]) == Key::ctrl(b'O') {
         len -= 1;
     }
     recorded.truncate(len);
@@ -416,13 +414,9 @@ fn write_int(out: &mut [u8; 32], n: c_int) -> usize {
 
 /// One byte from the read buffers, `readbuf1` first. No translation is done,
 /// so `K_SPECIAL` is still escaped.
-pub(crate) fn read_readbuffers(advance: bool) -> c_int {
+pub(crate) fn read_readbuffers(advance: bool) -> u8 {
     let c = readbuf1().read(advance);
-    if c == NUL {
-        readbuf2().read(advance)
-    } else {
-        c
-    }
+    if c == 0 { readbuf2().read(advance) } else { c }
 }
 
 /// Prepare the read buffers for reading, if they hold anything.
@@ -443,7 +437,7 @@ pub fn readbuf1_empty() -> bool {
 }
 
 /// Set a typeahead character that `flush_buffers` will not throw away.
-pub fn typeahead_noflush(c: c_int) {
+pub fn typeahead_noflush(c: u8) {
     typeahead_char.set(c);
 }
 
@@ -457,13 +451,13 @@ pub fn flush_buffers(flush_typeahead: FlushBuffers) {
     init_typebuf();
 
     start_stuff();
-    while read_readbuffers(true) != NUL {}
+    while read_readbuffers(true) != 0 {}
 
     if flush_typeahead == FLUSH_INPUT {
         // Drain what the OS has for us as well, into a buffer as long as
         // the typeahead's storage, which is what upstream reads into.
         let mut drain = vec![0; typeahead().buflen()];
-        while inchar(&mut drain, 10) != 0 {}
+        while inchar(&mut drain, 10) != Some(0) {}
     }
     flush_typebuf(flush_typeahead == FLUSH_MINIMAL);
 }
@@ -502,15 +496,15 @@ pub fn stuff_readbuf_len(s: &[u8]) {
 pub fn stuff_readbuf_one_line(s: &[u8]) {
     let mut s = up_to_nul(s);
     while let Some(&first) = s.first() {
-        if c_int::from(first) == K_SPECIAL && s.len() >= 3 {
+        if first == K_SPECIAL && s.len() >= 3 {
             // Copy an escaped key code through untouched.
             stuff_readbuf_len(&s[..3]);
             s = &s[3..];
         } else {
-            let c = char_at(s);
+            let c = Key::from_code(char_at(s));
             s = &s[char_len(s)..];
-            stuff_readbuf_char(if c == CAR || c == NL || c == ESC {
-                c_int::from(b' ')
+            stuff_readbuf_char(if c == Key::CAR || c == Key::NL || c == Key::ESC {
+                Key::ascii(b' ')
             } else {
                 c
             });
@@ -519,7 +513,7 @@ pub fn stuff_readbuf_one_line(s: &[u8]) {
 }
 
 /// Stuff one character into `readbuf1`.
-pub fn stuff_readbuf_char(c: c_int) {
+pub fn stuff_readbuf_char(c: Key) {
     readbuf1().add_char(c);
 }
 
@@ -540,9 +534,7 @@ pub fn stuffescaped(arg: &[u8], literally: bool) {
         // Stuff a run of ordinary characters in one go.
         let run = arg
             .iter()
-            .position(|&b| {
-                !((b' '..DEL as u8).contains(&b) || (c_int::from(b) == K_SPECIAL && !literally))
-            })
+            .position(|&b| !((b' '..0x7f).contains(&b) || (b == K_SPECIAL && !literally)))
             .unwrap_or(arg.len());
         if run > 0 {
             stuff_readbuf_len(&arg[..run]);
@@ -551,10 +543,10 @@ pub fn stuffescaped(arg: &[u8], literally: bool) {
 
         // Then the character that stopped it, one at a time.
         if !arg.is_empty() {
-            let c = char_at(arg);
+            let c = Key::from_code(char_at(arg));
             arg = &arg[char_len(arg)..];
-            if literally && ((c < c_int::from(b' ') && c != TAB) || c == DEL) {
-                stuff_readbuf_char(Ctrl_V);
+            if literally && ((c.code() < c_int::from(b' ') && c != Key::TAB) || c == Key::DEL) {
+                stuff_readbuf_char(Key::ctrl(b'V'));
             }
             stuff_readbuf_char(c);
         }
@@ -587,7 +579,7 @@ mod tests {
 
     fn clear() {
         start_stuff();
-        while read_readbuffers(true) != NUL {}
+        while read_readbuffers(true) != 0 {}
         recordbuff().free();
         recordbuff().set(KeyBuffer::EMPTY);
     }
@@ -596,10 +588,10 @@ mod tests {
         let mut out = Vec::new();
         loop {
             let c = read_readbuffers(true);
-            if c == NUL {
+            if c == 0 {
                 return out;
             }
-            out.push(u8::try_from(c).expect("a read buffer holds bytes"));
+            out.push(c);
         }
     }
 
@@ -608,11 +600,11 @@ mod tests {
         let _fresh = Fresh::new();
         stuff_readbuf(b"abc");
         start_stuff();
-        assert_eq!(read_readbuffers(true), c_int::from(b'a'));
+        assert_eq!(read_readbuffers(true), b'a');
         // Stuffed while reading: in front of what is left, in order.
         stuff_readbuf(b"XY");
         stuff_readbuf(b"Z");
-        assert_eq!(read_readbuffers(false), c_int::from(b'X'));
+        assert_eq!(read_readbuffers(false), b'X');
         assert_eq!(drain(), b"XYZbc");
     }
 

@@ -307,7 +307,7 @@ pub(crate) fn command_line_enter(
         init_history();
         s.hiscnt = get_hislen(); // an impossible history value
         s.histype = hist_char2type(s.firstc) as ::core::ffi::c_int;
-        do_digraph(-1); // init digraph typeahead
+        reset_digraph(); // init digraph typeahead
 
         // If something above caused an error, reset the flags: we do
         // want to type and execute commands. The display may be messed

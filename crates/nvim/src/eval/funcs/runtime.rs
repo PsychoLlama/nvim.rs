@@ -289,7 +289,7 @@ pub fn f_did_filetype(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     result.write_number(Buf::current().b_did_filetype as VarNumber);
 }
 
-/// `eventhandler()` — whether we are inside a `vgetc()` from an event.
+/// `eventhandler()` — whether we are inside a `vgetc().code()` from an event.
 pub fn f_eventhandler(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(vgetc_busy.get() as VarNumber);
 }

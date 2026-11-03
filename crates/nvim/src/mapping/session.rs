@@ -16,10 +16,12 @@
 
 use super::*;
 use crate::cstr;
+use crate::getchar::Remap;
 use crate::keycodes::ModMask;
-use crate::keycodes::{Ctrl_V, KE_SNR, key_unescape};
+use crate::keycodes::{KE_SNR, key_unescape};
 use crate::mbyte::{char_at, unescape_at};
 use crate::types::Failed;
+use crate::types::Key;
 use crate::winlayer::Buf;
 use core::ffi::c_int;
 use std::io::Write;
@@ -63,7 +65,7 @@ const MODE_COMMANDS: [(c_int, &[u8]); 20] = [
 /// mappings: `K_SPECIAL` and a newline both read back differently under a
 /// non-default `'cpo'`.
 fn is_cpo_forcing(b: u8) -> bool {
-    c_int::from(b) == K_SPECIAL || c_int::from(b) == NL
+    b == K_SPECIAL || b == b'\n'
 }
 
 /// Whether `mp` is a mapping `:mkexrc` can write out at all.
@@ -71,17 +73,15 @@ fn is_cpo_forcing(b: u8) -> bool {
 /// Script-local and Lua mappings are skipped, as is anything whose RHS
 /// mentions `<SNR>`: none of the three would work when read back.
 fn is_writable_map(mp: &MapBlock) -> bool {
-    if mp.m_noremap == REMAP_SCRIPT || mp.luaref() != LUA_NOREF {
+    if mp.m_noremap == Remap::Script || mp.luaref() != LUA_NOREF {
         return false;
     }
     // A `<SNR>` in the RHS is the three-byte escape `K_SPECIAL KS_EXTRA
     // KE_SNR`; the pointer form read past the end of a two-byte tail, which
     // the windows below simply do not produce.
-    !mp.rhs().windows(3).any(|at| {
-        c_int::from(at[0]) == K_SPECIAL
-            && c_int::from(at[1]) == KS_EXTRA
-            && c_int::from(at[2].cast_signed()) == KE_SNR.cast_signed()
-    })
+    !mp.rhs()
+        .windows(3)
+        .any(|at| at == [K_SPECIAL, KS_EXTRA, KE_SNR])
 }
 
 /// The `:map` commands that recreate `mp`, appended to `out` a line each.
@@ -127,7 +127,7 @@ fn put_map(
         if c1 != 0 {
             line.push(c1);
         }
-        if mp.m_noremap != REMAP_YES {
+        if mp.m_noremap != Remap::Yes {
             line.extend_from_slice(b"nore");
         }
         line.extend_from_slice(cmd);
@@ -234,32 +234,32 @@ pub(crate) fn put_escstr(out: &mut Vec<u8>, text: &[u8], what: EscTarget) {
             continue;
         }
 
-        let mut c = c_int::from(text[i]);
+        let mut c = Key::byte(text[i]);
         // Special key codes have to be translated to make sense when they
         // are read back.
-        if c == K_SPECIAL && what != EscTarget::SetValue {
+        if text[i] == K_SPECIAL && what != EscTarget::SetValue {
             let mut modifiers = ModMask::NONE;
             // A `K_SPECIAL` escape is three bytes long.
-            if c_int::from(at(i + 1)) == KS_MODIFIER {
-                modifiers = ModMask::from_bits(c_int::from(at(i + 2)));
+            if at(i + 1) == KS_MODIFIER {
+                modifiers = ModMask::from_byte(at(i + 2));
                 i += 3;
 
                 // Modifiers can apply to multi-byte characters too.
                 match unescape_at(&text[i.min(text.len())..]) {
-                    None => c = c_int::from(at(i)),
+                    None => c = Key::byte(at(i)),
                     Some((bytes, used)) => {
                         // Retrieve the codepoint from the unescaped text.
-                        c = char_at(cstr::in_bytes(&bytes).to_bytes());
+                        c = Key::from_code(char_at(cstr::in_bytes(&bytes).to_bytes()));
                         i += used - 1;
                     }
                 }
             }
-            if c == K_SPECIAL {
+            if c == Key::byte(K_SPECIAL) {
                 // The escape's two trailing bytes.
                 c = key_unescape(at(i + 1), at(i + 2));
                 i += 2;
             }
-            if c < 0 || !modifiers.is_empty() {
+            if c.is_special() || !modifiers.is_empty() {
                 // A special key.
                 let name = get_special_key_name(c, modifiers);
                 out.extend_from_slice(cstr::in_bytes(&name).to_bytes());
@@ -270,7 +270,7 @@ pub(crate) fn put_escstr(out: &mut Vec<u8>, text: &[u8], what: EscTarget) {
 
         // A '\n' in a map command is written as <NL>; in a set command as
         // \^V^J.
-        if c == NL {
+        if c == Key::NL {
             out.extend_from_slice(if what == EscTarget::SetValue {
                 b"\\\x16\n"
             } else {
@@ -285,20 +285,18 @@ pub(crate) fn put_escstr(out: &mut Vec<u8>, text: &[u8], what: EscTarget) {
         // backslash to keep do_set() from misreading it. A '<' needs a
         // CTRL-V or it starts a special key name, a space needs one in a
         // :map lhs, and in a :map rhs one does only at the very start.
-        if what == EscTarget::SetValue
-            && (ascii_iswhite(c) || c == c_int::from(b'"') || c == c_int::from(b'\\'))
-        {
+        if what == EscTarget::SetValue && (c.is(' ') || c.is('\t') || c.is('"') || c.is('\\')) {
             out.push(b'\\');
-        } else if !(c_int::from(b' ')..=c_int::from(b'~')).contains(&c)
-            || c == c_int::from(b'|')
-            || (what == EscTarget::MapLhs && c == c_int::from(b' '))
-            || (what == EscTarget::MapRhs && i == 0 && c == c_int::from(b' '))
-            || (what != EscTarget::SetValue && c == c_int::from(b'<'))
+        } else if !c.as_byte().is_some_and(|b| (b' '..=b'~').contains(&b))
+            || c.is('|')
+            || (what == EscTarget::MapLhs && c.is(' '))
+            || (what == EscTarget::MapRhs && i == 0 && c.is(' '))
+            || (what != EscTarget::SetValue && c.is('<'))
         {
-            out.push(Ctrl_V.to_le_bytes()[0]);
+            out.push(0x16); // CTRL-V
         }
         // `putc` writes the low byte.
-        out.push(c.to_le_bytes()[0]);
+        out.push(c.code().to_le_bytes()[0]);
         i += 1;
     }
 }

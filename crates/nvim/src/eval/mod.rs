@@ -167,6 +167,5 @@ static timers: GlobalCell<SlotTable<uint64_t, Timer>> = GlobalCell::new(SlotTabl
 static callback_depth: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub const TV_CSTRING: c_ulong = SIZE_MAX.wrapping_sub(1 as c_ulong);
 pub const PROF_YES: c_int = 1 as c_int;
-pub const KS_EXTRA: c_int = 253 as c_int;
 pub const INT_MAX: c_int = __INT_MAX__;
 pub const __INT_MAX__: c_int = 2147483647 as c_int;

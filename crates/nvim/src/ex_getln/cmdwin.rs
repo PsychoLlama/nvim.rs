@@ -20,6 +20,7 @@ use crate::cstr;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_set_tab};
 use crate::guard::Allow;
 use crate::keycodes::{Ctrl_C, SpecialKey};
+use crate::types::Key;
 use crate::types::{CmdModFlags, NUL, OptError, OptionSetFlags};
 use crate::window::valid_win;
 use crate::winlayer::{Buf, Win};
@@ -292,7 +293,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
     trigger_cmd_autocmd(cmdwin_type.get(), AutoEvent::CmdwinEnter);
     if restart_edit.get() != 0 {
         // An autocmd ran ":startinsert".
-        stuff_readbuf_char(SpecialKey::Nop.code());
+        stuff_readbuf_char(Key::from(SpecialKey::Nop));
     }
 
     let redraw = Allow::redraw();
@@ -348,9 +349,9 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
                 cmdwin_result.set(CAR);
             } else {
                 // First need to cancel what we were doing.
-                stuff_readbuf_char(':' as ::core::ffi::c_int);
+                stuff_readbuf_char(Key::ascii(b':'));
                 stuff_readbuf(p.to_bytes());
-                stuff_readbuf_char(CAR);
+                stuff_readbuf_char(Key::CAR);
             }
         } else if cmdwin_result.get() == Ctrl_C {
             // ":q" or ":close": don't execute any command and don't

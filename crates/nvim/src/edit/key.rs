@@ -33,6 +33,7 @@
 use crate::keycodes::ModMask;
 use crate::keycodes::{NotAKey, SpecialKey};
 use crate::mbyte::{c_cluster_len, char_at};
+use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -106,7 +107,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
 
         // Help key works like CTRL-O.
         Ok(SpecialKey::Help | SpecialKey::F1 | SpecialKey::Xf1) => {
-            stuff_readbuf_char(SpecialKey::Help.code());
+            stuff_readbuf_char(Key::from(SpecialKey::Help));
             Next::Leave
         }
 
@@ -167,7 +168,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
             // In a prompt buffer plain CTRL-W is the window prefix, so
             // Shift-CTRL-W is what deletes a word.
             if in_prompt_buf() && !mod_mask.get().has(ModMask::SHIFT) {
-                stuff_readbuf_char(Ctrl_W);
+                stuff_readbuf_char(Key::ctrl(b'W'));
                 restart_edit.set('A' as c_int);
                 s.nomove = true;
                 s.count = 0;

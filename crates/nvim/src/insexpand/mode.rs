@@ -486,7 +486,7 @@ pub(crate) fn set_ctrl_x_mode(c: c_int) -> bool {
             Err(NotAKey(Ctrl_R)) => {
                 // CTRL-R followed by '=' is an expression register, not
                 // register completion: leave the mode alone.
-                if vpeekc() != '=' as c_int {
+                if vpeekc().code() != '=' as c_int {
                     ctrl_x_mode.set(CTRL_X_REGISTER);
                 }
                 break 'chord;

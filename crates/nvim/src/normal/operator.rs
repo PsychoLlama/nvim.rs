@@ -15,6 +15,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::types::Key;
 use crate::winlayer::Win;
 
 use crate::buffer::{buf_is_prompt, current_buf};
@@ -23,7 +24,7 @@ use crate::eval::vars::{set_reg_var, set_vim_var_string};
 use crate::getchar::state::{got_int, reg_executing, reg_recorded};
 use crate::getchar::{plain_vgetc, start_redo, stuff_readbuf_char};
 use crate::guard::Keys;
-use crate::keycodes::{Ctrl_V, KE_CMDWIN};
+use crate::keycodes::{Ctrl_V, SpecialKey};
 use crate::message::emsg;
 use crate::normal::{
     check_clear_op, check_clear_op_quit, clear_op_beep, e_cmdline_window_already_open, kMTLineWise,
@@ -148,7 +149,7 @@ pub(crate) fn nv_dot(cmd_arg: &mut CmdArg) {
 pub(crate) fn nv_redo_or_register(cmd_arg: &mut CmdArg) {
     if visual_select() && visual_active() {
         let unmapped = Keys::unmapped();
-        let mut reg = plain_vgetc();
+        let mut reg = plain_vgetc().code();
         langmap_adjust(&mut reg, true);
         drop(unmapped);
         // `"` names the unnamed register, which is spelled 0 here.
@@ -235,8 +236,8 @@ pub(crate) fn nv_record(cmd_arg: &mut CmdArg) {
             emsg(gettext(e_cmdline_window_already_open));
             return;
         }
-        stuff_readbuf_char(cmd_arg.nchar);
-        stuff_readbuf_char(-(253 + (KE_CMDWIN.cast_signed() << 8)));
+        stuff_readbuf_char(Key::from_code(cmd_arg.nchar));
+        stuff_readbuf_char(SpecialKey::Cmdwin.into());
     } else if reg_executing.get() == 0 && do_record(cmd_arg.nchar).is_err() {
         clear_op_beep(cmd_arg.op());
     }

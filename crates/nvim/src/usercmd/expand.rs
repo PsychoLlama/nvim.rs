@@ -574,14 +574,14 @@ fn unescape_k_special(
     let at = |i: usize| cstr::byte_at(rep, i);
     let Some(ksp) = rep[*p..]
         .iter()
-        .position(|&b| c_int::from(b) == K_SPECIAL)
+        .position(|&b| b == K_SPECIAL)
         .map(|at| *p + at)
     else {
         return false;
     };
     if !(start.is_none_or(|start| ksp < start) || end.is_none())
         || at(ksp + 1) != KS_SPECIAL
-        || c_int::from(at(ksp + 2)) != KE_FILLER
+        || at(ksp + 2) != KE_FILLER
     {
         return false;
     }

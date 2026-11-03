@@ -18,7 +18,9 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr::{self, until_nul};
+use crate::getchar::Remap;
 use crate::mbyte::char_count;
+use crate::types::Key;
 use crate::types::RegLines;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
@@ -150,7 +152,7 @@ fn put_in_typebuf(s: &[u8], esc: bool, colon: bool, silent: c_int) -> Result<(),
 
     // Pushed backwards: the `<CR>` first, then the text, then the `:`.
     if colon {
-        retval = ins_typebuf(b"\n", REMAP_NONE, 0, true, silent != 0);
+        retval = ins_typebuf(b"\n", Remap::No, 0, true, silent != 0);
     }
     if retval.is_ok() {
         let text = until_nul(s);
@@ -161,11 +163,11 @@ fn put_in_typebuf(s: &[u8], esc: bool, colon: bool, silent: c_int) -> Result<(),
         } else {
             text
         };
-        let remap = if esc { REMAP_NONE } else { REMAP_YES };
+        let remap = if esc { Remap::No } else { Remap::Yes };
         retval = ins_typebuf(p, remap, 0, true, silent != 0);
     }
     if colon && retval.is_ok() {
-        retval = ins_typebuf(b":", REMAP_NONE, 0, true, silent != 0);
+        retval = ins_typebuf(b":", Remap::No, 0, true, silent != 0);
     }
     retval
 }
@@ -195,7 +197,7 @@ fn put_reedit_in_typebuf(silent: c_int) {
         buf[1] = NUL as u8;
     }
     // `ins_typebuf` reads `buf` up to the NUL the branches above left.
-    let queued = ins_typebuf(&buf, REMAP_NONE, 0, true, silent != 0);
+    let queued = ins_typebuf(&buf, Remap::No, 0, true, silent != 0);
     if queued.is_ok() {
         restart_edit.set(NUL);
     }
@@ -324,7 +326,7 @@ pub fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_int) -> 
         return Err(Failed);
     }
     let lines = reg.lines.as_slice();
-    let remap = if colon != 0 { REMAP_NONE } else { REMAP_YES };
+    let remap = if colon != 0 { Remap::No } else { Remap::Yes };
     put_reedit_in_typebuf(silent);
 
     // The typeahead buffer is a stack, so the register goes in last line
@@ -431,15 +433,15 @@ pub fn insert_reg(
                 }
                 Win::current().w_cursor = curpos;
             }
-            append_to_redobuff_char(Ctrl_R);
-            append_to_redobuff_char(regname);
+            append_to_redobuff_char(Key::ctrl(b'R'));
+            append_to_redobuff_char(Key::from_code(regname));
             // `do_put` takes the text from the register `regname` names; it
             // may run Vimscript, which the caller allows.
             do_put(regname, None, dir, 1, PUT_CURSEND as c_int);
         } else {
             stuffescaped(line, literally);
             if reg.kind == kMTLineWise || i < lines.len() - 1 {
-                stuff_readbuf_char('\n' as c_int);
+                stuff_readbuf_char(Key::ascii(b'\n'));
             }
         }
     }

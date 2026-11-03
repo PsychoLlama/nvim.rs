@@ -55,7 +55,7 @@ use crate::cursor::{
     gchar_cursor, get_cursor_pos_len, getviscol, inc_cursor,
 };
 use crate::decoration::{decor_conceal_line, kMTMetaInline, win_lines_concealed};
-use crate::digraph::{digraph_get, do_digraph};
+use crate::digraph::{digraph_get, do_digraph, reset_digraph};
 use crate::drawscreen::state::{
     RedrawingDisabled, clear_cmdline, dollar_vcol, must_redraw, redraw_cmdline, redraw_mode,
 };
@@ -109,12 +109,13 @@ use crate::insexpand::{
     ins_compl_prep, ins_compl_used_match, ins_compl_win_active, ins_complete, ins_ctrl_x,
     pum_wanted,
 };
+use crate::keycodes::KS_MODIFIER;
 use crate::keycodes::{
     Ctrl__, Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_D, Ctrl_E, Ctrl_F, Ctrl_G, Ctrl_H, Ctrl_HAT, Ctrl_J,
     Ctrl_K, Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_U,
     Ctrl_V, Ctrl_W, Ctrl_X, Ctrl_Y, K_SPECIAL, get_special_key_name, push_char_escaped,
 };
-use crate::mapping::{check_abbr, langmap_adjust_mb, map_to_exists_mode};
+use crate::mapping::{abbr_key, check_abbr, langmap_adjust_mb, map_to_exists_mode};
 use crate::mark::{fresh_mark, mark_view_make};
 use crate::mbyte::{mb_adjust_cursor, utf_char2len, utf8len_tab};
 use crate::memline::{Lines, gchar_pos, ml_append_text, ml_get_len, ml_replace_buf_text};
@@ -326,4 +327,3 @@ state_record! {
 }
 pub(crate) const INPUT_BUFLEN: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 pub(crate) const ABBR_OFF: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;
-pub(crate) const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;

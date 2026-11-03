@@ -8,6 +8,7 @@ use crate::keycodes::{Ctrl_A, Ctrl_E, Ctrl_Q, Ctrl_V, Ctrl_Y, SpecialKey};
 use crate::memline::MlFlags;
 use crate::narrow::len_as_int;
 use crate::strings::has_char;
+use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 
 use crate::ascii::ascii_isdigit;
@@ -36,7 +37,7 @@ use crate::message::e_modifiable;
 use crate::message::emsg;
 use crate::r#move::WinValid;
 use crate::normal::{
-    CAR, DEL, ESC, ML_DEL_MESSAGE, NL, OPENLINE_DO_COM, REPLACE_CR_NCHAR, REPLACE_NL_NCHAR, TAB,
+    CAR, DEL, ML_DEL_MESSAGE, NL, OPENLINE_DO_COM, REPLACE_CR_NCHAR, REPLACE_NL_NCHAR, TAB,
     VIsual_mode_orig, VisualMode, check_clear_op, check_clear_op_quit, clear_op, clear_op_beep,
     nv_object, nv_operator, prep_redo, prep_redo_cmd, set_visual_active, set_visual_mode,
     v_swap_corners, v_visop, visual_active, visual_mode,
@@ -158,9 +159,9 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
         && (Buf::current().b_p_et != 0 || p_sta())
     {
         stuff_readbuf_number(cmd_arg.count1);
-        stuff_readbuf_char('R' as c_int);
-        stuff_readbuf_char('\t' as c_int);
-        stuff_readbuf_char(ESC);
+        stuff_readbuf_char(Key::ascii(b'R'));
+        stuff_readbuf_char(Key::ascii(b'\t'));
+        stuff_readbuf_char(Key::ESC);
         return;
     }
     if u_save_cursor().is_err() {
@@ -169,8 +170,8 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
     if literal != Ctrl_V && (cmd_arg.nchar == '\r' as c_int || cmd_arg.nchar == '\n' as c_int) {
         // Replacing with a line break splits the line, which is an insert.
         let _ = del_chars(cmd_arg.count1, 0);
-        stuff_readbuf_char('\r' as c_int);
-        stuff_readbuf_char(ESC);
+        stuff_readbuf_char(Key::ascii(b'\r'));
+        stuff_readbuf_char(Key::ESC);
         invoke_edit(cmd_arg, 1, 'r' as c_int, 0);
         fold_update_after_insert();
         return;
@@ -190,7 +191,7 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
     if cmd_arg.nchar_len > 0 {
         append_to_redobuff(cstr::until_nul(&cmd_arg.nchar_composing));
     } else {
-        append_to_redobuff_char(cmd_arg.nchar);
+        append_to_redobuff_char(Key::from_code(cmd_arg.nchar));
     }
     for _ in 0..cmd_arg.count1 {
         // `ins_char` looks at 'State' to decide it is overwriting rather
@@ -273,10 +274,10 @@ pub(crate) fn nv_vreplace(cmd_arg: &mut CmdArg) {
     // Replay the character through virtual replace mode. A control
     // character needs its own CTRL-V to survive the replay.
     if cmd_arg.extra_char < ' ' as c_int {
-        stuff_readbuf_char(Ctrl_V);
+        stuff_readbuf_char(Key::ctrl(b'V'));
     }
-    stuff_readbuf_char(cmd_arg.extra_char);
-    stuff_readbuf_char(ESC);
+    stuff_readbuf_char(Key::from_code(cmd_arg.extra_char));
+    stuff_readbuf_char(Key::ESC);
     if virtual_active(Win::current()) {
         coladvance(Win::current(), getviscol());
     }

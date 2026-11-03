@@ -42,6 +42,7 @@ use crate::ex_session::{ex_loadview, ex_mkrc};
 use crate::global_cell::GlobalCell;
 use crate::help::{ex_exusage, ex_help, ex_helpclose, ex_helptags, ex_viusage};
 use crate::indent::ex_retab;
+use crate::keycodes::KS_SPECIAL;
 use crate::lua::executor::{ex_lua, ex_luado, ex_luafile};
 use crate::lua::secure::ex_trust;
 use crate::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
@@ -75,8 +76,8 @@ use crate::tag::do_tags;
 use crate::types::ExcId;
 use crate::types::{
     Callback, CdCause, ChannelPart, CmdAddr, Direction, DoBufAction, DoBufStart, EStackArg,
-    EStackType, ExArg, ExArgt, Handle, LineNr, LuaRetMode, MarkGet, MotionType, OptMagic,
-    RemapValues, uint8_t, uint16_t,
+    EStackType, ExArg, ExArgt, Handle, LineNr, LuaRetMode, MarkGet, MotionType, OptMagic, uint8_t,
+    uint16_t,
 };
 use crate::undo::{ex_undojoin, ex_undolist};
 use crate::usercmd::{ex_comclear, ex_command, ex_delcommand};
@@ -208,8 +209,6 @@ pub const CCGD_EXCMD: c_uint = 16;
 pub const CCGD_FORCEIT: c_uint = 4;
 pub const CCGD_MULTWIN: c_uint = 2;
 pub const CCGD_AW: c_uint = 1;
-pub const REMAP_NONE: RemapValues = -1;
-pub const REMAP_YES: RemapValues = 0;
 pub const VALID_HEAD: c_uint = 2;
 pub const VALID_PATH: c_uint = 1;
 pub const DIALOG_MSG_SIZE: c_uint = 1000;
@@ -296,4 +295,3 @@ pub const FTPLUGOF_FILE: &CStr = c"ftplugof.vim";
 pub const INDOFF_FILE: &CStr = c"indoff.vim";
 pub const PROF_YES: c_int = 1 as c_int;
 pub const SID_NONE: c_int = -6 as c_int;
-pub const KS_SPECIAL: c_int = 254 as c_int;

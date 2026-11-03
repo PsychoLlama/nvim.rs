@@ -97,7 +97,7 @@ pub(crate) fn command_line_wildchar_complete(s: &mut CommandLineState) -> KeyOut
 
         // If interrupted while completing, behave as if it failed.
         if got_int.get() {
-            vpeekc(); // remove <C-C> from the input stream
+            vpeekc().code(); // remove <C-C> from the input stream
             got_int.set(false); // don't abandon the command line
             expand_completion(WildOpts::NONE, WildMode::Free);
             completion_mut(|xpc| xpc.context = ExpandContext::Nothing);

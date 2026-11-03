@@ -10,13 +10,14 @@ use super::*;
 use crate::cmdexpand::Scored;
 use crate::cmdexpand::fuzzy_sorted;
 use crate::cstr;
+use crate::getchar::Remap;
 use crate::keycodes::ModMask;
-use crate::keycodes::{Ctrl_J, Ctrl_V, SpecialKey, key_unescape};
+use crate::keycodes::{SpecialKey, key_unescape};
 use crate::lua::executor::funcref_description;
 use crate::memory::XString;
 use crate::strings::has_char;
 use crate::types::CmdIdx;
-use crate::types::{CpoFlag, ExpandContext, Failed, NUL};
+use crate::types::{CpoFlag, ExpandContext, Failed, Key};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 
@@ -69,9 +70,9 @@ pub(crate) fn showmap(mp: &MapBlock, local: bool) {
         }
     }
 
-    if mp.m_noremap == REMAP_NONE {
+    if mp.m_noremap == Remap::No {
         msg_str_hl(c"*", HLF_8, false);
-    } else if mp.m_noremap == REMAP_SCRIPT {
+    } else if mp.m_noremap == Remap::Script {
         msg_str_hl(c"&", HLF_8, false);
     } else {
         msg_putchar(c_int::from(b' '));
@@ -111,29 +112,29 @@ pub(crate) fn translate_mapping(str_in: &[u8], cpo: &CStr) -> Vec<u8> {
     let cpo_bslash = has_char(cpo, CpoFlag::BSLASH.as_c_int());
     let mut at = 0;
     while at < str_in.len() {
-        let mut c = c_int::from(str_in[at]);
+        let mut c = Key::byte(str_in[at]);
         // A `K_SPECIAL` escape is three bytes; upstream's tests spell that as
         // "the two bytes after this one are not the NUL".
         let three_at =
             |at: usize| matches!(str_in.get(at + 1..at + 3), Some([a, b]) if *a != 0 && *b != 0);
         'next: {
-            if c == K_SPECIAL && three_at(at) {
+            if str_in[at] == K_SPECIAL && three_at(at) {
                 let mut modifiers = ModMask::NONE;
-                if c_int::from(str_in[at + 1]) == KS_MODIFIER {
+                if str_in[at + 1] == KS_MODIFIER {
                     at += 2;
-                    modifiers = ModMask::from_bits(c_int::from(str_in[at]));
+                    modifiers = ModMask::from_byte(str_in[at]);
                     at += 1;
-                    c = c_int::from(str_in[at]);
+                    c = Key::byte(str_in[at]);
                 }
 
-                if c == K_SPECIAL && three_at(at) {
+                if c == Key::byte(K_SPECIAL) && three_at(at) {
                     c = key_unescape(str_in[at + 1], str_in[at + 2]);
-                    if c == SpecialKey::Zero.code() {
-                        c = NUL; // display <Nul> as ^@
+                    if c == SpecialKey::Zero {
+                        c = Key::NUL; // display <Nul> as ^@
                     }
                     at += 2;
                 }
-                if c < 0 || !modifiers.is_empty() {
+                if c.is_special() || !modifiers.is_empty() {
                     // A special key.
                     let name = get_special_key_name(c, modifiers);
                     out.extend_from_slice(cstr::in_bytes(&name).to_bytes());
@@ -141,18 +142,18 @@ pub(crate) fn translate_mapping(str_in: &[u8], cpo: &CStr) -> Vec<u8> {
                 }
             }
 
-            if c == c_int::from(b' ')
-                || c == c_int::from(b'\t')
-                || c == Ctrl_J
-                || c == Ctrl_V
-                || c == c_int::from(b'<')
-                || (c == c_int::from(b'\\') && !cpo_bslash)
+            if c.is(' ')
+                || c.is('\t')
+                || c == Key::ctrl(b'J')
+                || c == Key::ctrl(b'V')
+                || c.is('<')
+                || (c.is('\\') && !cpo_bslash)
             {
-                let escape = if cpo_bslash { Ctrl_V } else { b'\\'.into() } as u8;
-                out.push(escape);
+                out.push(if cpo_bslash { 0x16 } else { b'\\' });
             }
-            if c != 0 {
-                out.push(c as u8);
+            if !c.is_nul() {
+                // Below 0x100 here: a wider key was printed by name above.
+                out.push(c.code().to_le_bytes()[0]);
             }
         }
         at += 1;

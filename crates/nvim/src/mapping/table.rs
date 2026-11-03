@@ -27,6 +27,7 @@
 
 use super::*;
 use crate::ex_docmd::sourcing_lnum;
+use crate::getchar::Remap;
 use crate::keycodes::Ctrl_C;
 use crate::lua::executor::{nlua_set_sctx, release_luaref};
 use crate::types::{MapId, MapTables, MapTwin};
@@ -67,13 +68,12 @@ const NORMAL_SIDE: c_int =
 /// Insert- and Cmdline-side mappings hash on the byte with its top bit
 /// flipped, which keeps them mostly out of the Normal-side buckets.  `c1` is
 /// always a single byte at every call site, so both answers are in range.
-pub(crate) fn map_hash(mode: c_int, c1: c_int) -> usize {
-    let bucket = if mode & NORMAL_SIDE != 0 {
+pub(crate) fn map_hash(mode: c_int, c1: u8) -> usize {
+    usize::from(if mode & NORMAL_SIDE != 0 {
         c1
     } else {
         c1 ^ 0x80
-    };
-    usize::try_from(bucket).expect("a mapping's first byte is in range")
+    })
 }
 
 impl MapTables {
@@ -288,7 +288,7 @@ impl MapAt {
 #[inline(always)]
 pub(crate) fn with_maphash_lists<R>(
     state: c_int,
-    c: c_int,
+    c: u8,
     f: impl FnOnce(usize, [(MapTable, &[Box<MapBlock>]); 2]) -> R,
 ) -> R {
     let hash = map_hash(state, c);
@@ -316,7 +316,7 @@ pub(crate) fn map_add(
     table: MapTable,
     keys: &[u8],
     args: &MapArguments,
-    noremap: c_int,
+    noremap: Remap,
     mode: c_int,
     is_abbr: bool,
     sid: ScriptId,
@@ -363,7 +363,7 @@ pub(crate) fn map_add(
 
     // Add the new entry in front of the abbrlist or of its maphash bucket.
     let first = keys.first().copied().unwrap_or(0);
-    let hash = map_hash(mode, c_int::from(first));
+    let hash = map_hash(mode, first);
     table.with_mut(|tables| tables.list_mut(hash, is_abbr).push(Box::new(mp)));
     twin
 }
@@ -396,7 +396,7 @@ pub fn map_clear_mode(buffer: Buf, mode: c_int, local: bool, abbr: bool) {
                 }
                 // May need to put this entry into another hash list.
                 let first = mp.keys().first().copied().unwrap_or(0);
-                let new_hash = map_hash(left, c_int::from(first));
+                let new_hash = map_hash(left, first);
                 if !abbr && new_hash != hash {
                     tables.relink(hash, at, new_hash);
                 }
@@ -491,7 +491,7 @@ pub(crate) fn check_map<R>(
         // A three-byte modifier escape at the front of the stored LHS is
         // skipped when the caller asked for it.
         let modifier = matches!(lhs, [a, b, _, ..]
-            if c_int::from(*a) == K_SPECIAL && c_int::from(*b) == KS_MODIFIER);
+            if *a == K_SPECIAL && *b == KS_MODIFIER);
         if ign_mod && modifier {
             lhs = &lhs[3..];
         }

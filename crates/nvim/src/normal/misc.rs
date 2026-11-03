@@ -11,6 +11,7 @@
 )]
 
 use crate::keycodes::{Ctrl_C, Ctrl_G, Ctrl_N, SpecialKey};
+use crate::types::Key;
 use crate::winlayer::{Buf, Win, windows};
 
 use crate::buffer::{buflist_getfile, fileinfo};
@@ -84,7 +85,7 @@ pub(crate) fn nv_colon(cmd_arg: &mut CmdArg) {
         op.inclusive = false;
     } else if cmd_arg.count0 != 0 && !is_cmdkey && !is_lua {
         // A count in front of `:` becomes a range: `3:` is `:.,.+2`.
-        stuff_readbuf_char('.' as c_int);
+        stuff_readbuf_char(Key::ascii(b'.'));
         if cmd_arg.count0 > 1 {
             stuff_readbuf(b",.+");
             stuff_readbuf_number(cmd_arg.count0 - 1);

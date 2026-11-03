@@ -26,6 +26,7 @@ use crate::keycodes::{Ctrl_V, ModMask};
 use crate::mbyte::unescape_at;
 use crate::option::vars::P_MOUSE;
 use crate::optionstr::OptString;
+use crate::types::Key;
 use crate::winlayer::Win;
 use core::ffi::c_int;
 use std::io::Write;
@@ -413,7 +414,7 @@ pub(crate) fn put_set(
             let mut wc: OptInt = 0;
             if wc_use_keyname(opt_idx, varp, &mut wc) {
                 let key = c_int::try_from(wc).expect("a key code fits an int");
-                let key_name = get_special_key_name(key, ModMask::NONE);
+                let key_name = get_special_key_name(Key::from_code(key), ModMask::NONE);
                 line.extend_from_slice(cstr::until_nul(&key_name));
             } else {
                 line.extend_from_slice(number.to_string().as_bytes());
@@ -535,7 +536,7 @@ pub(crate) fn option_value_text(opt_idx: OptIndex, opt_flags: OptionSetFlags) ->
         let mut wc: OptInt = 0;
         let shown = if wc_use_keyname(opt_idx, varp, &mut wc) {
             let key = c_int::try_from(wc).expect("a key code fits an int");
-            cstr::in_bytes(&get_special_key_name(key, ModMask::NONE))
+            cstr::in_bytes(&get_special_key_name(Key::from_code(key), ModMask::NONE))
                 .to_bytes()
                 .to_vec()
         } else if wc != 0 {
@@ -568,5 +569,5 @@ pub(crate) fn wc_use_keyname(opt_idx: OptIndex, slot: OptSlot, wcp: &mut OptInt)
     *wcp = slot.number_var().get();
     // A negative value is a special key code; a positive one may still be a
     // named key such as <Tab>.
-    *wcp < 0 || has_key_name(*wcp as c_int)
+    *wcp < 0 || has_key_name(Key::from_code(*wcp as c_int))
 }

@@ -35,6 +35,7 @@ use crate::options::{
     kOptTpfFlagBS, kOptTpfFlagC0, kOptTpfFlagC1, kOptTpfFlagDEL, kOptTpfFlagESC, kOptTpfFlagFF,
     kOptTpfFlagHT,
 };
+use crate::types::Key;
 use crate::types::{VTermKey, VTermModifier};
 use crate::winlayer::graph::switch_to;
 use crate::winlayer::{Buf, Win};
@@ -108,8 +109,8 @@ fn convert_modifiers(key: &mut c_int, mods: ModMask, state: &mut VTermModifier) 
 /// back into the plain key and its modifier first, so every such code the
 /// editor has reaches the child, not only a hand-picked few.
 fn convert_key(key: &mut c_int, mods: ModMask, state: &mut VTermModifier) -> VTermKey {
-    let (unsimplified, mods) = unsimplify_key(*key, mods);
-    *key = unsimplified;
+    let (unsimplified, mods) = unsimplify_key(Key::from_code(*key), mods);
+    *key = unsimplified.code();
     convert_modifiers(key, mods, state);
     match SpecialKey::try_from(*key) {
         Ok(SpecialKey::Bs) => VTERM_KEY_BACKSPACE,

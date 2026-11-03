@@ -21,6 +21,7 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::types::Key;
 use core::ffi::c_int;
 
 use super::*;
@@ -38,7 +39,7 @@ pub(crate) fn set_last_insert(c: c_int) {
     if c < ' ' as c_int || c == DEL {
         text.push(0x16); // Ctrl_V
     }
-    push_char_escaped(c, &mut text);
+    push_char_escaped(Key::from_code(c), &mut text);
     text.push(0x1b); // ESC
     last_insert.set(ApiString::from_bytes(&text));
     last_insert_skip.set(0);
@@ -61,7 +62,7 @@ pub(crate) fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -> Resul
 
     // May want to stuff the command character, to start Insert mode.
     if c != NUL {
-        stuff_readbuf_char(c);
+        stuff_readbuf_char(Key::from_code(c));
     }
 
     // Cut the text at the last ESC: what follows it is not part of the
@@ -104,7 +105,7 @@ pub(crate) fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -> Resul
 
     // May want to stuff a trailing ESC, to get out of Insert mode.
     if no_esc == 0 {
-        stuff_readbuf_char(ESC);
+        stuff_readbuf_char(Key::ESC);
     }
     Ok(())
 }

@@ -254,7 +254,7 @@ pub(crate) fn expand_pattern_in_buf(pat: &CStr, dir: Direction) -> Result<Vec<XS
         // Abort if the user typed a character or interrupted.
         if char_avail() || got_int.get() {
             if got_int.get() {
-                vpeekc(); // Remove <C-C> from input stream
+                vpeekc().code(); // Remove <C-C> from input stream
                 got_int.set(false); // Don't abandon the command line
             }
             return Err(Failed);

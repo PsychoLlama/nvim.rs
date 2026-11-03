@@ -59,6 +59,7 @@ use crate::getchar::state::{got_int, ignore_script};
 use crate::getchar::{restore_typeahead, save_typeahead};
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
+use crate::keycodes::KS_EXTRA;
 use crate::keycodes::{K_SPECIAL, KE_SNR};
 use crate::memory::XString;
 use crate::message::msg_starthere;
@@ -82,7 +83,6 @@ use std::ffi::CString;
 
 pub const ESTACK_NONE: EStackArg = 0;
 pub const EXPR_IS: crate::types::ExprType = 9;
-pub const KS_EXTRA: c_int = 253;
 
 // Debug mode itself: entered from `dbg_check_breakpoint` below.
 mod mode;
@@ -569,7 +569,7 @@ fn debuggy_find(file: bool, fname: &CStr, after: LineNr, list: BreakList) -> (Li
     // patterns are written against the `<SNR>` spelling.
     let respelled;
     let name = match fname.to_bytes() {
-        [first, _, _, tail @ ..] if !file && i32::from(*first) == K_SPECIAL => {
+        [first, _, _, tail @ ..] if !file && *first == K_SPECIAL => {
             let mut spelled = b"<SNR>".to_vec();
             spelled.extend_from_slice(tail);
             respelled = CString::new(spelled).expect("a name holds no NUL");

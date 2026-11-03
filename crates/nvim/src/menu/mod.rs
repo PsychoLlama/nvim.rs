@@ -191,11 +191,6 @@ pub(crate) const MENU_PLAIN_MODES: c_int =
 pub(crate) const MODE_CHARS: [&CStr; MENU_MODES] =
     [c"n", c"v", c"s", c"o", c"i", c"c", c"tl", c"t"];
 
-/// `noremap` values stored per mode in a `VimMenu`.
-pub(crate) const REMAP_SCRIPT: c_int = -2;
-pub(crate) const REMAP_NONE: c_int = -1;
-pub(crate) const REMAP_YES: c_int = 0;
-
 /// `replace_termcodes()`: also translate `<lt>`.
 pub(crate) const REPTERM_DO_LT: c_int = 2;
 

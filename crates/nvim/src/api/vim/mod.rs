@@ -105,7 +105,7 @@ use crate::types::{
     KeyDict_echo_opts, KeyDict_empty, KeyDict_eval_statusline, KeyDict_get_highlight,
     KeyDict_get_ns, KeyDict_highlight, KeyDict_keymap, KeyDict_open_term, KeyDict_redraw,
     KeyDict_runtime, LineNr, LuaRef, LuaRetMode, MessageData, MessageType, MotionType, Object,
-    OptScope, OptVal, RemapValues, ScreenChar, ScriptId, SignTextAttrs, StatusCol, TabpageHandle,
+    OptScope, OptVal, ScreenChar, ScriptId, SignTextAttrs, StatusCol, TabpageHandle,
     TerminalOptions, VarNumber, Vv, WindowHandle, YankReg, int64_t, kCdScopeGlobal,
     kErrorTypeException, kErrorTypeValidation, kObjectTypeString, mpack_token_type_t, size_t,
     uint16_t, uint64_t,
@@ -147,8 +147,6 @@ pub use self::term::*;
 pub use self::vars::*;
 pub const kMessageTypeNotification: MessageType = 2;
 pub const kOptScopeBuf: OptScope = 2;
-pub const REMAP_NONE: RemapValues = -1;
-pub const REMAP_YES: RemapValues = 0;
 pub const REPTERM_NO_SPECIAL: ::core::ffi::c_uint = 4;
 pub const REPTERM_DO_LT: ::core::ffi::c_uint = 2;
 pub const REPTERM_FROM_PART: ::core::ffi::c_uint = 1;

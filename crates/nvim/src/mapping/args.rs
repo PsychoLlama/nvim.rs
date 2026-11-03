@@ -153,7 +153,7 @@ pub(crate) fn set_maparg_rhs(
     if rhs_lua != LUA_NOREF {
         // orig_rhs is not used for Lua mappings, but still has to be a
         // string; the rhs stores <Lua>ref_no<CR> for the key loop.
-        let mut text = vec![K_SPECIAL as u8, KS_EXTRA as u8, KE_LUA as u8];
+        let mut text = vec![K_SPECIAL, KS_EXTRA, KE_LUA];
         text.extend_from_slice(rhs_lua.to_string().as_bytes());
         text.push(b'\r');
         let str = MapStr::new(&text);

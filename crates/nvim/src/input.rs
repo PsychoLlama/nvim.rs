@@ -3,7 +3,7 @@
 //! ([`get_keystroke`]), and the cmdline prompt the other two are built on
 //! ([`prompt_for_input`]).
 //!
-//! None of these goes through `vgetc()`, which would sync undo and consume
+//! None of these goes through `vgetc().code()`, which would sync undo and consume
 //! mapped characters; the price is that typeahead is ignored.
 
 #![forbid(unsafe_code)]
@@ -25,6 +25,7 @@ use crate::mouse::{is_mouse_key, setmouse};
 use crate::os::cshim::gettext;
 use crate::os::input::{InputEvents, input_get};
 use crate::state::mode::State;
+use crate::types::Key;
 use crate::types::ui::kUIMessages;
 use crate::types::{Callback, ExpandContext, IOSIZE};
 use crate::ui::{ui_flush, ui_has};
@@ -72,7 +73,7 @@ pub(crate) fn ask_yesno(question: &CStr) -> c_int {
 /// modifier, the ignore key, or any mouse event other than a left click
 /// (which the "more" prompt uses).
 fn is_swallowed_key(first: u8, key: c_int) -> bool {
-    c_int::from(first) == KS_MODIFIER
+    first == KS_MODIFIER
         || key == SpecialKey::Ignore.code()
         || (is_mouse_key(key) && key != SpecialKey::Leftmouse.code())
 }
@@ -120,7 +121,7 @@ pub(crate) fn get_keystroke(events: Option<&'static GlobalCell<Option<ChildQueue
         let mut n = input_get(read, timeout, 0, events) as c_int;
         if n > 0 {
             // Replace zero and K_SPECIAL by a special key code.
-            n = fix_input_buffer(&mut buf[at..], n);
+            n = fix_input_buffer(&mut buf[at..], n as usize) as c_int;
             len += n;
         }
         if n > 0 {
@@ -135,7 +136,7 @@ pub(crate) fn get_keystroke(events: Option<&'static GlobalCell<Option<ChildQueue
 
         // Handle a modifier and/or special key code.
         let first = buf[0];
-        if c_int::from(first) != K_SPECIAL {
+        if first != K_SPECIAL {
             if c_int::from(utf8len_tab[first as usize]) > len {
                 continue; // More bytes to get.
             }
@@ -143,12 +144,12 @@ pub(crate) fn get_keystroke(events: Option<&'static GlobalCell<Option<ChildQueue
             break char_at(&buf[..end as usize]);
         }
 
-        let key = key_unescape(buf[1], buf[2]);
+        let key = key_unescape(buf[1], buf[2]).code();
         if !is_swallowed_key(buf[1], key) {
             break key;
         }
-        if c_int::from(buf[1]) == KS_MODIFIER {
-            mod_mask.set(ModMask::from_bits(c_int::from(buf[2])));
+        if buf[1] == KS_MODIFIER {
+            mod_mask.set(ModMask::from_byte(buf[2]));
         }
         len -= 3;
         if len > 0 {
@@ -161,9 +162,9 @@ pub(crate) fn get_keystroke(events: Option<&'static GlobalCell<Option<ChildQueue
     // to be written back.
     let mut modifiers = mod_mask.get();
     // SAFETY: `modifiers` is a live local the callee reads and writes.
-    let key = merge_modifiers(key, &mut modifiers);
+    let key = merge_modifiers(Key::from_code(key), &mut modifiers);
     mod_mask.set(modifiers);
-    key
+    key.code()
 }
 
 /// Ask the user for input through a cmdline prompt.

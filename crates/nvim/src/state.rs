@@ -23,6 +23,7 @@ use crate::cstr;
 use crate::keycodes::{Ctrl_V, SpecialKey, get_special_key_name};
 use crate::memory::XString;
 use crate::types::AutoEvent;
+use crate::types::Key;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 
@@ -190,7 +191,7 @@ pub(crate) fn state_enter(mut s: ModeState<'_>) {
                 let keyname = if key == SpecialKey::Event.code() {
                     c"K_EVENT"
                 } else {
-                    keyname_buf = get_special_key_name(key, mod_mask.get());
+                    keyname_buf = get_special_key_name(Key::from_code(key), mod_mask.get());
                     cstr::in_bytes(&keyname_buf)
                 };
                 let keyname = msg_cstr(keyname);
@@ -214,8 +215,8 @@ fn next_key() -> c_int {
     loop {
         // SAFETY: the editor is initialized, so the typeahead buffer and the
         // main loop's queue are live.
-        if vpeekc() != NUL || !typeahead().is_empty() {
-            return safe_vgetc();
+        if vpeekc().code() != NUL || !typeahead().is_empty() {
+            return safe_vgetc().code();
         }
         if main_loop_has_events() {
             ui_flush();

@@ -28,21 +28,22 @@
 use super::*;
 use crate::charset::display::ptr2cells_at;
 use crate::guard::Depth;
-use crate::keycodes::{Ctrl_C, key_escape};
+use crate::keycodes::{K_SPECIAL, KS_EXTRA, key_escape};
 use crate::mbyte::{cells_at, head_off};
 use crate::memline::Lines;
 use crate::os::input::InputEvents;
 use crate::plines::win_line_prefix_cells;
-use crate::types::NUL;
+use crate::types::Key;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int, c_long};
+use core::ffi::{c_int, c_long};
 
 /// Longest partial mapping `'showcmd'` will display.
 const SHOWCMD_COLS: c_int = 10;
 
-/// `KS_EXTRA` as the byte it is compared against inside a key escape.
-const KS_EXTRA_U8: u8 = KS_EXTRA as u8;
+/// `<Esc>` and CTRL-C as the typeahead bytes they are.
+const ESC_BYTE: u8 = 0x1b;
+const CTRL_C_BYTE: u8 = 0x03;
 
 /// Where the cursor was left after the `<Esc>`-in-Insert peek, which is where
 /// `'showcmd'` has to draw the partially matched keys.
@@ -177,7 +178,7 @@ fn show_partial_key(at: CursorAt) -> Partial {
         // NUL follows it.
         if State.get() & MODE_INSERT != 0 && last_byte_is_one_cell(last) {
             // This looks nice when typing a dead-character mapping.
-            edit_putchar(last, false);
+            edit_putchar(c_int::from(last), false);
             setcursor(); // put the cursor back where it belongs
             partial.showing = true;
         }
@@ -193,8 +194,7 @@ fn show_partial_key(at: CursorAt) -> Partial {
             partial.showcmd_idx = tb.len() - SHOWCMD_COLS;
         }
         while partial.showcmd_idx < tb.len() {
-            let byte = tb.byte(partial.showcmd_idx) as u8;
-            add_byte_to_showcmd(byte);
+            add_byte_to_showcmd(tb.byte(partial.showcmd_idx));
             partial.showcmd_idx += 1;
         }
         win.w_wcol = old_wcol;
@@ -205,7 +205,7 @@ fn show_partial_key(at: CursorAt) -> Partial {
     if State.get() & MODE_CMDLINE != 0 && cmdline_in_use() && cmdline_star.get() == 0 {
         let byte = tb.byte(tb.len() - 1);
         if last_byte_is_one_cell(byte) && byte < 128 {
-            putcmdline(byte as c_char, false);
+            putcmdline(byte.cast_signed(), false);
             partial.showing = true;
         }
     }
@@ -214,8 +214,8 @@ fn show_partial_key(at: CursorAt) -> Partial {
 
 /// Whether the typeahead's last byte takes one cell as the start of a
 /// character, with the end of the typeahead after it.
-fn last_byte_is_one_cell(byte: c_int) -> bool {
-    ptr2cells_at(&[u8::try_from(byte).expect("the typeahead holds bytes")]) == 1
+fn last_byte_is_one_cell(byte: u8) -> bool {
+    ptr2cells_at(&[byte]) == 1
 }
 
 /// Take back what [`show_partial_key`] drew.
@@ -250,7 +250,7 @@ fn wait_time_for(advance: bool, keylen: c_int) -> c_long {
 }
 
 /// Everything that got read after a CTRL-C, and the key to answer with.
-fn interrupted(advance: bool) -> c_int {
+fn interrupted(advance: bool) -> u8 {
     let tb = typeahead();
     // Flush all input, into a buffer as long as the typeahead's storage,
     // which is what upstream reads into.
@@ -260,18 +260,21 @@ fn interrupted(advance: bool) -> c_int {
     // If `inchar` answered true (a script file was active) or we are
     // inside a mapping, get out of Insert mode; otherwise behave as if a
     // CTRL-C had been typed, so that typing CTRL-C in Insert mode really
-    // inserts one.
-    let c = if (got != 0 || tb.maplen() != 0) && State.get() & (MODE_INSERT | MODE_CMDLINE) != 0 {
-        ESC
+    // inserts one. (An ended script, `None`, counts as true, as upstream's
+    // `-1` does.)
+    let c = if (got != Some(0) || tb.maplen() != 0)
+        && State.get() & (MODE_INSERT | MODE_CMDLINE) != 0
+    {
+        ESC_BYTE
     } else {
-        Ctrl_C
+        CTRL_C_BYTE
     };
     flush_buffers(FLUSH_INPUT); // flush all typeahead
 
     if advance {
         // Record this character too; it may be needed to get out of
         // Insert mode.
-        gotchars(&[u8::try_from(c).expect("ESC or CTRL-C")]);
+        gotchars(&[c]);
     }
     cmd_silent.set(false);
     c
@@ -279,14 +282,14 @@ fn interrupted(advance: bool) -> c_int {
 
 /// The loop that fills the typeahead and matches mappings against it.
 ///
-/// Answers the byte to hand out, or a negative value when the input script
-/// ended and the caller should start over.
+/// Answers the byte to hand out, or `None` when a mapping failed and the
+/// caller should start over.
 fn read_from_typeahead(
     advance: bool,
     timedout: &mut bool,
     mapdepth: &mut c_int,
     mode_deleted: &mut bool,
-) -> c_int {
+) -> Option<u8> {
     loop {
         check_end_reg_executing(advance);
 
@@ -305,12 +308,12 @@ fn read_from_typeahead(
 
         let mut keylen = 0;
         if got_int.get() {
-            return interrupted(advance);
+            return Some(interrupted(advance));
         } else if !typeahead().is_empty() {
             // Check for a mapping in the typeahead.
             match handle_mapping(&mut keylen, *timedout, mapdepth) as MapResult {
-                map_result_retry => continue, // try mapping again
-                map_result_fail => return -1, // failed; use the outer loop
+                map_result_retry => continue,   // try mapping again
+                map_result_fail => return None, // failed; use the outer loop
                 map_result_get => {
                     // Take the character from the typeahead.
                     let tb = typeahead();
@@ -322,12 +325,12 @@ fn read_from_typeahead(
                         } else {
                             KeyTyped.set(true);
                             // Write the character to the script file(s).
-                            gotchars(&[u8::try_from(c).expect("the typeahead holds bytes")]);
+                            gotchars(&[c]);
                         }
                         KeyNoremap.set(tb.noremap(0));
                         del_typebuf(1, 0);
                     }
-                    return c;
+                    return Some(c);
                 }
                 _ => {} // not enough characters; get more
             }
@@ -341,7 +344,7 @@ fn read_from_typeahead(
         // something does arrive after all the mode may have to be
         // redisplayed; that the cursor is in the wrong place until then
         // does not matter.
-        let mut c = 0;
+        let mut got = Some(0);
         let win = Win::current();
         let mut at = CursorAt {
             wcol: win.w_wcol,
@@ -352,28 +355,28 @@ fn read_from_typeahead(
         let mut peeked = [0u8; 4];
         if advance
             && tb.len() == 1
-            && tb.byte(0) == ESC
+            && tb.byte(0) == ESC_BYTE
             && no_mapping.get() == 0
             && ex_normal_busy.get() == 0
             && tb.maplen() == 0
             && State.get() & MODE_INSERT != 0
             && (p_timeout() || (keylen == KEYLEN_PART_KEY && p_ttimeout()))
             && {
-                c = inchar(&mut peeked, 25);
-                c == 0
+                got = inchar(&mut peeked, 25);
+                got == Some(0)
             }
             && esc_leaves_insert(&mut at)
         {
             *mode_deleted = true;
         }
-        if c < 0 {
+        let Some(extra) = got else {
             continue; // end of the input script reached
-        }
+        };
 
-        // Allow mapping for the characters just typed. `c` is the number
-        // of extra bytes and `tb_len` is 1.
-        if c > 0 {
-            tb.append_typed(&peeked[..read_len(c)]);
+        // Allow mapping for the characters just typed. `extra` is the
+        // number of extra bytes and `tb_len` is 1.
+        if extra > 0 {
+            tb.append_typed(&peeked[..extra]);
         }
 
         if tb.len() >= tb.maplen() + MAXMAPLEN as c_int {
@@ -395,11 +398,11 @@ fn read_from_typeahead(
             // window alternate between ESC (for most situations) and
             // CTRL-C (which closes the window).
             let c = if State.get() & MODE_CMDLINE != 0
-                || (cmdwin_type.get() > 0 && normal_busy_last_key.get() == ESC)
+                || (cmdwin_type.get() > 0 && normal_busy_last_key.get() == ESC_BYTE)
             {
-                Ctrl_C
+                CTRL_C_BYTE
             } else {
-                ESC
+                ESC_BYTE
             };
             normal_busy_last_key.set(c);
 
@@ -413,7 +416,7 @@ fn read_from_typeahead(
             }
             // No characters to block abbreviations for.
             tb.set_no_abbr_cnt(0);
-            return c;
+            return Some(c);
         }
 
         // In Insert mode a screen update is skipped while characters are
@@ -451,27 +454,27 @@ fn read_from_typeahead(
         // behind its valid bytes: `inchar` waits, and what runs meanwhile
         // can move the storage.
         let mut read = READ_BUF.take();
-        read.resize(read_len(tb.room()) + 1, 0);
-        c = inchar(&mut read, wait_time_for(advance, keylen));
+        read.resize(usize::try_from(tb.room()).unwrap_or(0) + 1, 0);
+        let got = inchar(&mut read, wait_time_for(advance, keylen));
 
         unshow_partial_key(&partial);
 
-        if c > 0 {
+        if let Some(n) = got.filter(|&n| n > 0) {
             // Allow mapping for the characters just typed -- up to the
             // first NUL, as upstream's walk over them stops there.
-            let got = &read[..read_len(c)];
+            let got = &read[..n];
             let end = got.iter().position(|&b| b == 0).unwrap_or(got.len());
             tb.append_typed(&got[..end]);
         }
         READ_BUF.set(read);
-        if c < 0 {
+        let Some(n) = got else {
             continue; // end of the input script reached
-        }
-        if c == NUL && !advance {
+        };
+        if n == 0 && !advance {
             // No character is available.
-            return NUL;
+            return Some(0);
         }
-        if c == NUL && wait_tb_len > 0 {
+        if n == 0 && wait_tb_len > 0 {
             *timedout = true; // timed out
             continue;
         }
@@ -483,11 +486,6 @@ fn read_from_typeahead(
 /// read: a nested one (a timer's `getchar()`) gets a buffer of its own.
 static READ_BUF: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
 
-/// A byte count `inchar` answered (or a room it was given), as a length.
-fn read_len(n: c_int) -> usize {
-    usize::try_from(n).unwrap_or(0)
-}
-
 /// Get a byte from the stuff buffer, the typeahead buffer, or the user.
 ///
 /// With `advance` (what `vgetc` wants) the byte is really consumed, `KeyTyped`
@@ -498,19 +496,19 @@ fn read_len(n: c_int) -> usize {
 /// Mappings are checked when the global `no_mapping` is zero. Only one byte of
 /// a multibyte character comes back, and a `K_SPECIAL` may be escaped — two
 /// more bytes have to be fetched then.
-pub(crate) fn vgetorpeek(advance: bool) -> c_int {
+pub(crate) fn vgetorpeek(advance: bool) -> u8 {
     // This function does not work well when called recursively, which can
     // happen because `add_to_showcmd` uses `char_avail`, and because a UI
     // callback that writes to the screen can raise a `wait_return`. Using
     // `:normal` can do it too, but that saves the typeahead buffer, so it
     // is allowed -- it just must not read a key from the user.
     if vgetc_busy.get() > 0 && ex_normal_busy.get() == 0 {
-        return NUL;
+        return 0;
     }
     let _busy = Depth::of(vgetc_busy);
 
     if advance {
-        KeyStuffed.set(0);
+        KeyStuffed.set(false);
         typebuf_was_empty.set(false);
     }
 
@@ -535,25 +533,27 @@ pub(crate) fn vgetorpeek(advance: bool) -> c_int {
             read_readbuffers(advance)
         };
 
-        let c = if c != NUL && !got_int.get() {
+        let c = if c != 0 && !got_int.get() {
             if advance {
                 // KeyTyped is deliberately left alone: when the command
                 // that stuffed something was typed, behave as if the
                 // stuffed command was typed. Needed for CTRL-W CTRL-] to
                 // open a fold, for example.
-                KeyStuffed.set(1);
+                KeyStuffed.set(true);
             }
             if typeahead().no_abbr_cnt() == 0 {
                 typeahead().set_no_abbr_cnt(1); // no abbreviations now
             }
-            c
+            Some(c)
         } else {
             read_from_typeahead(advance, &mut timedout, &mut mapdepth, &mut mode_deleted)
         };
 
         // With `advance` false, don't loop on NULs.
-        if !(c < 0 || (advance && c == NUL)) {
-            break c;
+        match c {
+            Some(0) if advance => {}
+            Some(c) => break c,
+            None => {}
         }
     };
 
@@ -561,13 +561,13 @@ pub(crate) fn vgetorpeek(advance: bool) -> c_int {
     // to leave Insert mode the message is deleted, and if we do not
     // answer an ESC but deleted the message before, it is redisplayed.
     if advance && p_smd() && msg_silent.get() == 0 && State.get() & MODE_INSERT != 0 {
-        if c == ESC && !mode_deleted && no_mapping.get() == 0 && mode_displayed.get() {
+        if c == ESC_BYTE && !mode_deleted && no_mapping.get() == 0 && mode_displayed.get() {
             if !typeahead().is_empty() && !KeyTyped.get() {
                 redraw_cmdline.set(true); // delete the mode later
             } else {
                 unshowmode(false);
             }
-        } else if c != ESC && mode_deleted {
+        } else if c != ESC_BYTE && mode_deleted {
             if !typeahead().is_empty() && !KeyTyped.get() {
                 redraw_cmdline.set(true); // show the mode later
             } else {
@@ -576,7 +576,7 @@ pub(crate) fn vgetorpeek(advance: bool) -> c_int {
         }
     }
 
-    if timedout && c == ESC {
+    if timedout && c == ESC_BYTE {
         // When recording there is no timeout. Add an <Ignore> after the
         // ESC so that it cannot form a key code with what follows.
         gotchars_ignore();
@@ -591,11 +591,12 @@ pub(crate) fn vgetorpeek(advance: bool) -> c_int {
 /// `buf` must be at least 4 long, because `fix_input_buffer` can triple a
 /// byte. `wait_time` is in milliseconds: 0 does not wait, -1 waits forever.
 ///
-/// Answers the number of bytes obtained, or -1 at the end of an input script
-/// — which is a distinct answer because closing the script puts back the
-/// typeahead it displaced, and the caller has to start over with that one.
-pub(crate) fn inchar(buf: &mut [u8], wait_time: c_long) -> c_int {
-    let maxlen = c_int::try_from(buf.len() - 1).unwrap_or(c_int::MAX);
+/// Answers the number of bytes obtained, or `None` at the end of an input
+/// script — which is a distinct answer because closing the script puts back
+/// the typeahead it displaced, and the caller has to start over with that
+/// one.
+pub(crate) fn inchar(buf: &mut [u8], wait_time: c_long) -> Option<usize> {
+    let maxlen = buf.len() - 1;
     let mut len = 0;
     let mut retesc = false; // answer ESC with got_int
     let tb_change_cnt = typeahead().change_cnt();
@@ -632,8 +633,8 @@ pub(crate) fn inchar(buf: &mut [u8], wait_time: c_long) -> c_int {
                 // get back to Normal mode.
                 retesc = true;
             } else {
-                // Otherwise -1, because the typeahead has changed.
-                return -1;
+                // Otherwise `None`, because the typeahead has changed.
+                return None;
             }
         } else {
             buf[0] = script_char[0];
@@ -651,11 +652,11 @@ pub(crate) fn inchar(buf: &mut [u8], wait_time: c_long) -> c_int {
             let mut dum = [0u8; DUM_LEN];
             loop {
                 let got = input_get(&mut dum, 0, 0, InputEvents::None);
-                if got == 0 || (got == 1 && c_int::from(dum[0]) == Ctrl_C) {
+                if got == 0 || (got == 1 && dum[0] == CTRL_C_BYTE) {
                     break;
                 }
             }
-            return c_int::from(retesc);
+            return Some(usize::from(retesc));
         }
 
         // Always flush the output when reading input from the user, as
@@ -666,21 +667,15 @@ pub(crate) fn inchar(buf: &mut [u8], wait_time: c_long) -> c_int {
 
         // Fill up to a third of the buffer: `fix_input_buffer` can triple
         // each character.
-        let third = usize::try_from(maxlen / 3).unwrap_or(0);
+        let third = maxlen / 3;
         let wait = c_int::try_from(wait_time).unwrap_or(c_int::MAX);
-        len = c_int::try_from(input_get(
-            &mut buf[..third],
-            wait,
-            tb_change_cnt,
-            InputEvents::None,
-        ))
-        .expect("a read shorter than the buffer");
+        len = input_get(&mut buf[..third], wait, tb_change_cnt, InputEvents::None);
     }
 
     // If the typeahead was changed further down it is as if nothing was
     // added by this call.
     if typebuf_changed(tb_change_cnt) {
-        return 0;
+        return Some(0);
     }
 
     // Note the change in the typeahead buffer; this matters for when
@@ -689,7 +684,7 @@ pub(crate) fn inchar(buf: &mut [u8], wait_time: c_long) -> c_int {
         typeahead().note_change();
     }
 
-    fix_input_buffer(buf, len)
+    Some(fix_input_buffer(buf, len))
 }
 
 /// Escape the bytes that cannot appear literally in the typeahead, and answer
@@ -698,13 +693,13 @@ pub(crate) fn inchar(buf: &mut [u8], wait_time: c_long) -> c_int {
 /// Only input read from a *script* needs this: keys from the user have
 /// already been through `input_enqueue`, which escapes them. `buf` holds
 /// `len` bytes read and must have room to triple them, plus the NUL.
-pub fn fix_input_buffer(buf: &mut [u8], len: c_int) -> c_int {
-    let mut len = usize::try_from(len).unwrap_or(0);
+pub fn fix_input_buffer(buf: &mut [u8], len: usize) -> usize {
+    let mut len = len;
     if using_script() == 0 {
         // K_SPECIAL should not be escaped for input from the user: the
         // key codes are processed in input.c/input_enqueue.
         buf[len] = 0;
-        return c_int::try_from(len).expect("a read fits an int");
+        return len;
     }
 
     // Two bytes are special: NUL and K_SPECIAL. Both are replaced by
@@ -713,16 +708,16 @@ pub fn fix_input_buffer(buf: &mut [u8], len: c_int) -> c_int {
     let mut i = len;
     while i > 0 {
         i -= 1;
-        let c = c_int::from(buf[p]);
-        let escaped = c == NUL || (c == K_SPECIAL && (i < 2 || buf[p + 1] != KS_EXTRA_U8));
+        let c = buf[p];
+        let escaped = c == 0 || (c == K_SPECIAL && (i < 2 || buf[p + 1] != KS_EXTRA));
         if escaped {
             buf.copy_within(p + 1..p + 1 + i, p + 3);
-            buf[p..p + 3].copy_from_slice(&key_escape(c));
+            buf[p..p + 3].copy_from_slice(&key_escape(Key::byte(c)));
             p += 2;
             len += 2;
         }
         p += 1;
     }
     buf[p] = 0; // add the trailing NUL
-    c_int::try_from(len).expect("a read fits an int")
+    len
 }
