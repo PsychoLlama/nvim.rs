@@ -40,6 +40,7 @@ use crate::mbyte::{char_at, char_len, encode_char, utf_iscomposing_first};
 use crate::memory::ThinCString;
 use crate::message::state::msg_col;
 use crate::message::{msg_advance, msg_display, msg_ext_set_kind, msg_putchar};
+use crate::message_fmt::emsg_text;
 use crate::normal::add_to_showcmd;
 use crate::option::SavedCpo;
 use crate::option::vars::{p_dg, p_enc};
@@ -48,10 +49,11 @@ use crate::os::cshim::gettext;
 use crate::os::input::fast_breakcheck;
 use crate::runtime::{RuntimeOpts, source_runtime};
 use crate::state::MODE_LANGMAP;
+use crate::tr;
 use crate::types::Key;
 use crate::types::{
-    BoolVarValue, EvalFuncData, ExArg, KeymapEntry, List, OptError, OptInt, TypVal, VAR_LIST,
-    int16_t,
+    BoolVarValue, EvalFuncData, ExArg, Failed, KeymapEntry, List, OptError, OptInt, TypVal,
+    VAR_LIST, int16_t,
 };
 use crate::ui::state::Columns;
 use crate::winlayer::Buf;
@@ -63,8 +65,39 @@ use std::ffi::CString;
 const K_BOOL_VAR_FALSE: BoolVarValue = 0;
 const K_BOOL_VAR_TRUE: BoolVarValue = 1;
 
-const E_DIGRAPH_SETLIST: &str =
-    "E1216: digraph_setlist() argument must be a list of lists with two items";
+/// Why a digraph could not be defined, and the message that says so --
+/// upstream's texts. Reported once, by `:digraphs` or the builtin.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum DigraphError {
+    /// What was given for the pair, decoded lossily as upstream's `%s`
+    /// showed it -- `[NULL]` for a value that is not a string.
+    #[error("{}", tr!("E1214: Digraph must be just two characters: {}", String::from_utf8_lossy(.0.as_bytes())))]
+    NotTwoChars(ThinCString),
+    #[error("{}", tr!("E104: Escape not allowed in digraph"))]
+    Escape,
+    #[error("{}", tr!("E39: Number expected"))]
+    NumberExpected,
+    /// What was given for the result, which is not one character.
+    #[error("{}", tr!("E1215: Digraph must be one character: {}", String::from_utf8_lossy(.0.as_bytes())))]
+    NotOneChar(ThinCString),
+    #[error("{}", tr!("E1216: digraph_setlist() argument must be a list of lists with two items"))]
+    NotAListOfPairs,
+    /// A string argument that did not read as one: its message is out.
+    #[error(transparent)]
+    Reported(#[from] Failed),
+}
+
+// Two words, so a `Result` carrying one is no wider than it has to be.
+const _: () = assert!(size_of::<DigraphError>() <= 16);
+
+impl DigraphError {
+    /// Puts the message out, unless it is already out.
+    pub(crate) fn report(&self) {
+        if !matches!(self, Self::Reported(_)) {
+            emsg_text(self.to_string());
+        }
+    }
+}
 
 /// A digraph mapping: two input characters and the key they produce.
 ///
@@ -247,20 +280,17 @@ fn register_digraph(char1: Key, char2: Key, n: Key) {
 }
 
 /// Check the characters of a prospective digraph: there must be exactly
-/// two, and ESC is not allowed. Emits the error message itself.
-fn check_digraph_chars_valid(char1: Key, char2: Key) -> bool {
+/// two, and ESC is not allowed.
+fn check_digraph_chars(char1: Key, char2: Key) -> Result<(), DigraphError> {
     if char2.is_nul() {
         let mut msg = [0u8; 7];
         let len = encode_char(char1.code(), &mut msg);
-        let msg = String::from_utf8_lossy(&msg[..len]);
-        crate::semsg!("E1214: Digraph must be just two characters: {msg}");
-        return false;
+        return Err(DigraphError::NotTwoChars(msg[..len].into()));
     }
     if char1 == Key::ESC || char2 == Key::ESC {
-        crate::semsg!("E104: Escape not allowed in digraph");
-        return false;
+        return Err(DigraphError::Escape);
     }
-    true
+    Ok(())
 }
 
 /// Skip over ' ' and '\t', like `skipwhite`.
@@ -295,22 +325,27 @@ fn parse_digits(s: &[u8]) -> (c_int, &[u8]) {
 }
 
 /// Add digraphs from a `:digraph {char1}{char2} {number} ...` argument.
-pub fn putdigraph(mut s: &[u8]) {
+pub fn putdigraph(s: &[u8]) {
+    if let Err(refused) = put_digraphs(s) {
+        refused.report();
+    }
+}
+
+/// Every `{char1}{char2} {number}` of `:digraphs`' argument, defined in
+/// turn up to the first that is refused.
+fn put_digraphs(mut s: &[u8]) -> Result<(), DigraphError> {
     loop {
         s = skip_white(s);
         if s.is_empty() {
-            return;
+            return Ok(());
         }
         let char1 = s[0];
         let char2 = s.get(1).copied().unwrap_or(0);
         s = &s[s.len().min(2)..];
-        if !check_digraph_chars_valid(Key::byte(char1), Key::byte(char2)) {
-            return;
-        }
+        check_digraph_chars(Key::byte(char1), Key::byte(char2))?;
         s = skip_white(s);
         if !s.first().is_some_and(u8::is_ascii_digit) {
-            crate::semsg!("E39: Number expected");
-            return;
+            return Err(DigraphError::NumberExpected);
         }
         let (n, rest) = parse_digits(s);
         s = rest;
@@ -478,45 +513,43 @@ fn tv_string<'a>(arg: &'a TypVal, buf: &'a mut NumBuf) -> Option<&'a [u8]> {
     buf.string_chk(arg).map(CStr::to_bytes)
 }
 
-/// The two digraph characters of `chars`. Reports E1214 on anything but
-/// exactly two characters, `None` included: a non-string argument reads as
-/// the string "[NULL]", which is what the C `%s` format path printed.
-fn digraph_chars(chars: Option<&[u8]>) -> Option<(Key, Key)> {
+/// The two digraph characters of `chars`: E1214 on anything but exactly
+/// two characters, `None` included -- a non-string argument reads as the
+/// string "[NULL]", which is what the C `%s` format path printed.
+fn digraph_chars(chars: Option<&[u8]>) -> Result<(Key, Key), DigraphError> {
     if let Some(bytes) = chars.filter(|b| !b.is_empty()) {
         let (char1, rest) = next_char(bytes);
         if !rest.is_empty() {
             let (char2, rest) = next_char(rest);
             if rest.is_empty() {
-                return check_digraph_chars_valid(char1, char2).then_some((char1, char2));
+                check_digraph_chars(char1, char2)?;
+                return Ok((char1, char2));
             }
         }
     }
-    let text = chars.map_or("[NULL]".into(), String::from_utf8_lossy);
-    crate::semsg!("E1214: Digraph must be just two characters: {text}");
-    None
+    Err(DigraphError::NotTwoChars(chars.unwrap_or(b"[NULL]").into()))
 }
 
 /// Shared body of `digraph_set()` and `digraph_setlist()`. The digraph
 /// argument is only read once the characters check out, so a bad pair
 /// reports its own error and nothing else.
-fn digraph_set_common(argchars: &TypVal, argdigraph: &TypVal) -> bool {
+fn digraph_set_common(argchars: &TypVal, argdigraph: &TypVal) -> Result<(), DigraphError> {
     let mut buf_chars = NumBuf::new();
     let chars = tv_string(argchars, &mut buf_chars);
-    let Some((char1, char2)) = digraph_chars(chars) else {
-        return false;
-    };
+    let (char1, char2) = digraph_chars(chars)?;
     let mut buf_digraph = NumBuf::new();
-    let Some(digraph) = tv_string(argdigraph, &mut buf_digraph) else {
-        return false;
-    };
+    let digraph = tv_string(argdigraph, &mut buf_digraph).ok_or(Failed)?;
     let (n, rest) = next_char(digraph);
     if !rest.is_empty() {
-        let text = String::from_utf8_lossy(digraph);
-        crate::semsg!("E1215: Digraph must be one character: {text}");
-        return false;
+        return Err(DigraphError::NotOneChar(digraph.into()));
     }
     register_digraph(char1, char2, n);
-    true
+    Ok(())
+}
+
+/// A builtin's `v:true`, or its refusal reported and `v:false`.
+fn set_or_report(set: Result<(), DigraphError>) -> bool {
+    set.inspect_err(DigraphError::report).is_ok()
 }
 
 /// Store a `v:true`/`v:false` result.
@@ -536,10 +569,7 @@ pub fn f_digraph_get(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         return;
     };
     if bytes.len() != 2 {
-        crate::semsg!(
-            "E1214: Digraph must be just two characters: {}",
-            String::from_utf8_lossy(bytes)
-        );
+        DigraphError::NotTwoChars(bytes.into()).report();
         return;
     }
     // The chars go through `char` in C, hence the sign extension.
@@ -562,39 +592,35 @@ pub fn f_digraph_getlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
 /// `digraph_set()`.
 pub fn f_digraph_set(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let set = digraph_set_common(&args[0], &args[1]);
-    set_bool_ret(result, set);
+    set_bool_ret(result, set_or_report(set));
 }
 
 /// `digraph_setlist()`.
 pub fn f_digraph_setlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let set = digraph_setlist_common(&args[0]);
-    set_bool_ret(result, set);
+    set_bool_ret(result, set_or_report(set));
 }
 
 /// Body of `digraph_setlist()`: the argument must be a list of two-item
 /// `[chars, digraph]` lists. Stops at the first bad entry, keeping the
 /// digraphs registered before it.
-fn digraph_setlist_common(arg: &TypVal) -> bool {
+fn digraph_setlist_common(arg: &TypVal) -> Result<(), DigraphError> {
     if arg.v_type() != VAR_LIST {
-        crate::semsg!("{E_DIGRAPH_SETLIST}");
-        return false;
+        return Err(DigraphError::NotAListOfPairs);
     }
     let Some(pl) = arg.list_ref() else {
-        return true;
+        return Ok(());
     };
     // `digraph_set_common` does not touch the list it is reading from.
     for pli in list_iter(Some(pl)) {
         if pli.li_tv.list_ref().is_none() || list_len(pli.li_tv.list_ref()) != 2 {
-            crate::semsg!("{E_DIGRAPH_SETLIST}");
-            return false;
+            return Err(DigraphError::NotAListOfPairs);
         }
         // SAFETY: a live list of exactly two items.
         let pair = list_items(pli.li_tv.list_ref());
-        if !digraph_set_common(&pair[0].li_tv, &pair[1].li_tv) {
-            return false;
-        }
+        digraph_set_common(&pair[0].li_tv, &pair[1].li_tv)?;
     }
-    true
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
