@@ -101,47 +101,44 @@ pub(crate) fn ins_reg() {
         add_to_showcmd_c(literally);
         regname = langmap_adjust(get_key());
     }
-    // A register is named by its character.
-    let mut regname = regname.code();
+    // A register is named by its character; a key that is not a byte
+    // names none.
+    let mut regname = register_name(regname);
     drop(raw_key);
 
     // Don't `u_sync()` while typing the expression, or while giving an
     // error message for it; only explicitly.
     let no_sync = Suppress::undo_sync();
-    if regname == c_int::from(b'=') {
+    if regname == Some(b'=') {
         let curpos = Win::current().w_cursor;
         // Sync undo if the expression calls setline() or append(), so
         // that can be undone separately.
         u_sync_once.set(2);
-        regname = get_expr_register();
+        regname = get_expr_register().then_some(b'=');
         // The cursor may have been moved back a column.
         Win::current().w_cursor = curpos;
         check_cursor(Win::current());
     }
 
-    if regname == NUL || !valid_yank_reg(regname, false) {
-        beep(kOptBoFlagRegister as ::core::ffi::c_uint);
-        need_redraw = true; // remove the `"`
-    } else {
+    let regname = regname.filter(|&name| name != 0 && valid_yank_reg(name, false));
+    if let Some(regname) = regname {
         let reg = get_yank_register(regname, YREG_PASTE);
 
         if literally == Key::CTRL_O || literally == Key::CTRL_P {
             // Append the command to the redo buffer.
             append_to_redobuff_char(Key::CTRL_R);
             append_to_redobuff_char(literally);
-            append_to_redobuff_char(Key::from_code(regname));
+            append_to_redobuff_char(register_key(regname));
             let fix = if literally == Key::CTRL_P {
-                PUT_FIXINDENT.cast_signed()
+                PUT_FIXINDENT
             } else {
                 0
             };
-            let flags = fix | PUT_CURSEND.cast_signed();
-            do_put(regname, None, BACKWARD, 1, flags);
+            do_put(regname, None, BACKWARD, 1, fix | PUT_CURSEND);
         } else if reg.read(|reg| reg.lines.len()) > 1 && is_literal_register(regname) {
             append_to_redobuff_char(Key::CTRL_R);
-            append_to_redobuff_char(Key::from_code(regname));
-            let flags = PUT_CURSEND.cast_signed();
-            do_put(regname, None, BACKWARD, 1, flags);
+            append_to_redobuff_char(register_key(regname));
+            do_put(regname, None, BACKWARD, 1, PUT_CURSEND);
         } else if insert_reg(regname, None, !literally.is_nul()).is_err() {
             beep(kOptBoFlagRegister as ::core::ffi::c_uint);
             need_redraw = true; // remove the `"`
@@ -151,6 +148,9 @@ pub(crate) fn ins_reg() {
             // will be inserted, so the `"` still has to go.
             need_redraw = true;
         }
+    } else {
+        beep(kOptBoFlagRegister as ::core::ffi::c_uint);
+        need_redraw = true; // remove the `"`
     }
 
     drop(no_sync);

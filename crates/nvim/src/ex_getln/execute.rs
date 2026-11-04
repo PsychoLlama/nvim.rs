@@ -85,7 +85,11 @@ fn command_line_handle_ctrl_bsl(s: &mut CommandLineState) -> CtrlBsl {
         cc.cmdpos
     });
 
-    s.c = Key::from_code(get_expr_register());
+    s.c = if get_expr_register() {
+        Key::ascii(b'=')
+    } else {
+        Key::NUL
+    };
     if s.c.is('=') {
         // Evaluate the expression. "textlock" avoids nasty things like
         // going to another buffer.

@@ -23,7 +23,7 @@ use crate::eval::typval::PartialRef;
 use crate::memory::ThinCString;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use core::mem;
 
 use super::*;
@@ -379,22 +379,16 @@ pub(crate) fn set_vim_var_partial(idx: Vv, val: PartialRef) {
 }
 
 /// Set `v:register` to `c`, or to `"` for the unnamed register.
-pub fn set_reg_var(c: c_int) {
-    let regname = if c == 0 || c == b' ' as c_int {
-        b'"' as c_char
-    } else {
-        c as c_char
-    };
+pub fn set_reg_var(c: u8) {
+    let regname = if c == 0 || c == b' ' { b'"' } else { c };
     // Only write when it changed, to avoid the reallocation. The test
     // is against `c`, not against the name that would be stored, so
     // `set_reg_var(0)` always rewrites -- upstream's.
     let unchanged = with_vimvar_ref(Vv::Register, |item| {
-        item.di_tv
-            .string_ref()
-            .is_some_and(|cur| cur.first() == c as u8)
+        item.di_tv.string_ref().is_some_and(|cur| cur.first() == c)
     });
     if !unchanged {
-        set_vim_var_string(Vv::Register, Some(&[regname as u8]));
+        set_vim_var_string(Vv::Register, Some(&[regname]));
     }
 }
 

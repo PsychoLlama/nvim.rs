@@ -60,7 +60,7 @@ use crate::register::do_execreg;
 use crate::search::{BACKWARD, FORWARD};
 use crate::types::{
     ColNr, CpoFlag, ExArg, Handle, LineNr, NUL, OpArg, OpType, OptMagic, PUT_CURSLINE,
-    PUT_FIXINDENT, PUT_LINE, Pos, int64_t, size_t,
+    PUT_FIXINDENT, PUT_LINE, Pos, PutFlags, int64_t, size_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 
@@ -251,30 +251,23 @@ pub(crate) fn ex_operators(excmd: &mut ExArg) {
 
 /// `:put`.
 pub(crate) fn ex_put(excmd: &mut ExArg) {
-    put_lines(excmd, PUT_LINE as c_int | PUT_CURSLINE as c_int);
+    put_lines(excmd, PUT_LINE | PUT_CURSLINE);
 }
 
 /// `:iput` — the same, re-indenting what is put.
 pub(crate) fn ex_iput(excmd: &mut ExArg) {
-    put_lines(
-        excmd,
-        PUT_LINE as c_int | PUT_CURSLINE as c_int | PUT_FIXINDENT as c_int,
-    );
+    put_lines(excmd, PUT_LINE | PUT_CURSLINE | PUT_FIXINDENT);
 }
 
 /// `:0put` puts *above* line 1, which is spelled as a forced put at line 1.
-fn put_lines(excmd: &mut ExArg, flags: c_int) {
+fn put_lines(excmd: &mut ExArg, flags: PutFlags) {
     if excmd.line2 == LineNr::ZERO {
         excmd.line2 = LineNr::ONE;
         excmd.forceit = true;
     }
     Win::current().w_cursor.lnum = excmd.line2;
     check_cursor_col(Win::current());
-    let dir = if excmd.forceit {
-        BACKWARD as c_int
-    } else {
-        FORWARD as c_int
-    };
+    let dir = if excmd.forceit { BACKWARD } else { FORWARD };
     put_at_cursor(excmd.regname, dir, 1, flags);
 }
 
@@ -405,13 +398,13 @@ pub(crate) fn ex_at(excmd: &mut ExArg) {
     Win::current().w_cursor.lnum = excmd.line2;
     check_cursor_col(Win::current());
 
-    let mut c = excmd.line.byte_at(excmd.line.arg) as c_int;
-    if c == NUL {
-        c = '@' as c_int;
+    let mut c = excmd.line.byte_at(excmd.line.arg);
+    if c == 0 {
+        c = b'@';
     }
     // 'cpoptions' `e` makes `:@` run the register's last line
     // immediately rather than leaving it on the command line.
-    if do_execreg(c, 1, cpo_has(CpoFlag::EXECBUF) as c_int, 1).is_err() {
+    if do_execreg(c, true, cpo_has(CpoFlag::EXECBUF), true).is_err() {
         beep_flush();
         return;
     }

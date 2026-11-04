@@ -155,8 +155,8 @@ pub(crate) fn shada_initialize_registers(wms: &mut WriteMergerState, max_reg_lin
             }),
             extra: yank.extra,
         };
-        let idx = usize::try_from(op_reg_index(c_int::from(name)))
-            .expect("a register the store answered has a slot");
+        let idx =
+            op_reg_index(name.cast_unsigned()).expect("a register the store answered has a slot");
         wms.registers[idx] = entry;
     }
 }

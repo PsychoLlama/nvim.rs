@@ -63,14 +63,14 @@ pub(crate) fn parse_register(excmd: &mut ExArg) {
     // `:put` and `:iput` are the two commands that may name a write-only
     // register; every other one is writing to whichever it names.
     let writing = !is_user_command && excmd.cmdidx != CmdIdx::put && excmd.cmdidx != CmdIdx::iput;
-    if !valid_yank_reg(c_int::from(excmd.line.byte_at(excmd.line.arg)), writing) {
+    if !valid_yank_reg(excmd.line.byte_at(excmd.line.arg), writing) {
         return;
     }
-    excmd.regname = excmd.line.byte_at(excmd.line.arg) as c_int;
+    excmd.regname = excmd.line.byte_at(excmd.line.arg);
     excmd.line.arg += 1;
     // The expression register swallows the rest of the line: it *is* the
     // expression, and evaluating it is deferred until the register is read.
-    if excmd.regname == '=' as c_int && excmd.line.byte_at(excmd.line.arg) != 0 {
+    if excmd.regname == b'=' && excmd.line.byte_at(excmd.line.arg) != 0 {
         if !excmd.skip {
             set_expr_line(XString::from_cstr(excmd.line.cstr_from(excmd.line.arg)));
         }

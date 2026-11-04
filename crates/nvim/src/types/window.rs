@@ -286,7 +286,8 @@ pub struct Window {
     /// Whether the last line drawn in the window was empty, as the status
     /// line last saw it.
     pub w_stl_empty: bool,
-    pub w_stl_recording: ::core::ffi::c_int,
+    /// The register the status line last showed being recorded, 0 for none.
+    pub w_stl_recording: u8,
     pub w_stl_state: ::core::ffi::c_int,
     pub w_stl_visual_mode: ::core::ffi::c_int,
     pub w_stl_visual_pos: Pos,

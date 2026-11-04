@@ -83,7 +83,7 @@ use crate::popupmenu::{
 };
 use crate::pos::{MAXCOL, MAXLNUM, equalpos};
 use crate::regexp::{RE_LAST, RE_MAGIC, vim_regcomp, vim_regexec};
-use crate::register::{copy_register, get_register_name, valid_yank_reg};
+use crate::register::{NUM_REGISTERS, copy_register, get_register_name, valid_yank_reg};
 use crate::search::{
     BACKWARD, FORWARD, SEARCH_KEEP, SEARCH_NFMSG, find_pattern_in_path, ignorecase,
     search_for_exact_line, searchit,
@@ -282,7 +282,6 @@ pub(crate) struct InsComplNextState {
     /// kept so its allocation serves the whole scan.
     pub(crate) found: Vec<u8>,
 }
-pub const NUM_REGISTERS: ::core::ffi::c_int = 39;
 pub const TAG_MANY: ::core::ffi::c_int = 300;
 pub const TAG_VERBOSE: ::core::ffi::c_int = 32;
 pub const TAG_INS_COMP: ::core::ffi::c_int = 64;

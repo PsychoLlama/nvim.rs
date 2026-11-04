@@ -81,7 +81,7 @@ use crate::state::{
     may_trigger_safestate, state_enter, state_no_longer_safe,
 };
 use crate::terminal::terminal_check_refresh;
-use crate::types::{CmdArg, NUL, OpArg, OpType, Outcome, Pos, ShmFlag, int64_t};
+use crate::types::{CmdArg, OpArg, OpType, Outcome, Pos, ShmFlag, int64_t};
 use crate::ui::{ui_cursor_shape, ui_flush};
 use crate::window::{may_make_initial_scroll_size_snapshot, may_trigger_win_scrolled_resized};
 use crate::winlayer::graph::cmdwin_result;
@@ -252,7 +252,7 @@ pub(crate) fn op_pending() -> bool {
         && prev_opcount == 0
         && prev_count0 == 0
         && op_type == OpType::Nop
-        && regname == NUL)
+        && regname == 0)
 }
 
 /// Run normal mode until something asks to leave it.

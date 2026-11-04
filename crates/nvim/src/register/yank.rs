@@ -31,7 +31,7 @@ use core::ffi::{c_int, c_ulong};
 
 use super::*;
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, NUL};
+use crate::types::CpoFlag;
 
 /// One line of a block, as `bd` measured it on `line`: the text with the
 /// spaces `block_prep` counted on both ends.
@@ -93,10 +93,10 @@ fn append_to_register(curr: &mut YankReg, new: Vec<XString>, yank_type: MotionTy
 /// The "N lines yanked" message.
 fn report_yank(op: &OpArg, yank_type: MotionType, yanklines: size_t) {
     let regname = op.regname;
-    let name = if regname == NUL {
+    let name = if regname == 0 {
         Vec::new()
     } else {
-        formatted!(100, gettext(c" into \"%c").to_bytes(), regname)
+        formatted!(100, gettext(c" into \"%c").to_bytes(), c_int::from(regname))
     };
 
     // The message may be the first thing that scrolls, so make sure the
@@ -269,13 +269,13 @@ pub fn do_autocmd_textyankpost(op: &OpArg, reg: Reg) {
     let _ = dict.edit().add_list(b"regcontents", Some(list));
     let _ = dict.edit().add_str(b"regtype", Some(&regtype));
 
-    let name = [op.regname as u8, NUL as u8];
+    let name = [op.regname, 0];
     let _ = dict.edit().add_str(b"regname", Some(cstr::in_bytes(&name)));
 
     let flag = |set| if set { kBoolVarTrue } else { kBoolVarFalse };
     let _ = dict.edit().add_bool(b"inclusive", flag(op.inclusive));
 
-    let operator = [get_op_char(op.op_type) as u8, NUL as u8];
+    let operator = [get_op_char(op.op_type), 0];
     let _ = dict
         .edit()
         .add_str(b"operator", Some(cstr::in_bytes(&operator)));
@@ -309,7 +309,7 @@ pub fn op_yank(op: &OpArg, message: bool) -> bool {
         beep_flush();
         return false;
     }
-    if regname == '_' as c_int {
+    if regname == b'_' {
         return true; // black hole: nothing to do
     }
 

@@ -104,10 +104,7 @@ fn parse(_editor: &Editor, line: &str) -> Result<Parsed, String> {
         line2: args.line2,
         addr_count: args.addr_count,
         forceit: args.forceit,
-        regname: u8::try_from(args.regname)
-            .ok()
-            .filter(|&r| r != 0)
-            .map(char::from),
+        regname: Some(args.regname).filter(|&r| r != 0).map(char::from),
         arg: text(args.line.arg()),
         nextcmd: args.line.next_cmd().map(text),
     })

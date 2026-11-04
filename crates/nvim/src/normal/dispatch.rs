@@ -64,7 +64,7 @@ use crate::state::{
     get_real_state, may_trigger_modechanged,
 };
 use crate::types::Key;
-use crate::types::{CmdArg, CpoFlag, GraphemeState, NUL, OpType, OptInt, Outcome, int64_t};
+use crate::types::{CmdArg, CpoFlag, GraphemeState, OpType, OptInt, Outcome, int64_t};
 use crate::ui::{ui_cursor_shape, ui_cursor_shape_no_check_conceal, ui_flush};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_int, c_uint};
@@ -368,7 +368,7 @@ pub(crate) fn normal_get_additional_char(ns: &mut NormalState) {
             ns.idx = find_command(ns.ca.cmdchar);
         } else if (ns.ca.nchar.is('n') || ns.ca.nchar.is('N')) && ns.ca.cmdchar.is('g') {
             // `gn`/`gN` take the operator from the character after them.
-            ns.ca.op().op_type = get_op_type(cp.code(), NUL);
+            ns.ca.op().op_type = get_op_type(cp, Key::NUL);
         } else if cp == Key::CTRL_BSL {
             resolve_ctrl_backslash(ns);
         }
@@ -699,7 +699,7 @@ pub(crate) fn prep_redo_cmd(cmd_arg: &mut CmdArg) {
 /// Record a command for `.`: an optional register, a count, and up to five
 /// command characters.
 pub(crate) fn prep_redo(
-    regname: c_int,
+    regname: u8,
     num: c_int,
     cmd1: Key,
     cmd2: Key,
@@ -715,7 +715,7 @@ pub(crate) fn prep_redo(
 /// the `Z` commands need.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn prep_redo_num2(
-    regname: c_int,
+    regname: u8,
     num1: c_int,
     cmd1: Key,
     cmd2: Key,
@@ -727,7 +727,7 @@ pub(crate) fn prep_redo_num2(
     reset_redobuff();
     if regname != 0 {
         append_to_redobuff_char(Key::ascii(b'"'));
-        append_to_redobuff_char(Key::from_code(regname));
+        append_to_redobuff_char(Key::byte(regname));
     }
     if num1 != 0 {
         append_to_redobuff_number(num1);
@@ -775,9 +775,9 @@ pub(crate) fn check_clear_op_quit(op: Op) -> bool {
 pub(crate) fn clear_op(mut op: Op) {
     op.op_type = OpType::Nop;
     op.regname = 0;
-    op.motion_force = NUL;
+    op.motion_force = Key::NUL;
     op.use_reg_one = false;
-    motion_force.set(NUL);
+    motion_force.set(Key::NUL);
 }
 
 /// [`clear_op`], and say so.

@@ -539,11 +539,11 @@ fn ex_let_register(
     }
 
     // A bare "@" is the unnamed register.
+    // The byte; an invalid one's message shows it sign-extended, as the
+    // C's `char` was (see `init_write_reg`).
     let regname = match byte_at(text, 1) {
-        b'@' => c_int::from(b'"'),
-        // Sign-extended, as the C's `*arg` is: a register name is ASCII, but
-        // the byte is what upstream passes on.
-        c => c_int::from(c.cast_signed()),
+        b'@' => b'"',
+        c => c,
     };
     let value = numbuf.string_chk(tv)?.to_bytes();
     let joined;

@@ -154,8 +154,7 @@ pub(crate) fn nlua_do_ucmd(cmd: &LuaCommand, excmd: &ExArg, preview: bool) -> c_
         set(stack, c"fargs");
 
         // The register as a one-letter string; none is the empty string.
-        let reg = u8::try_from(excmd.regname).unwrap_or_default();
-        let reg = [reg];
+        let reg = [excmd.regname];
         stack.push_bytes(until_nul(&reg));
         set(stack, c"reg");
         stack.push_integer(excmd.addr_count as lua_Integer);

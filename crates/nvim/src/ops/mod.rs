@@ -46,7 +46,6 @@ use crate::indent::{
     change_indent, fix_indent, get_indent, get_sw_value_indent, inindent, may_do_si, op_reindent,
     preprocs_left, set_indent, use_indentexpr_for_lisp,
 };
-use crate::keycodes::Ctrl_V;
 use crate::mark::mark_col_adjust;
 use crate::mbyte::{
     bomb_size, cluster_len, head_off, mb_islower, mb_isupper, mb_tolower, mb_toupper,

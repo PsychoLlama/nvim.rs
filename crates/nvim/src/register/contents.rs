@@ -42,24 +42,26 @@ use crate::types::NUL;
 ///
 /// `kMTUnknown` for an invalid or empty register. May run the clipboard
 /// provider.
-pub fn get_reg_type(regname: c_int) -> (MotionType, i32) {
+pub fn get_reg_type(regname: RegName) -> (MotionType, i32) {
     // Every computed register reads as charwise.
-    match regname {
-        Ctrl_F | Ctrl_P | Ctrl_W | Ctrl_A => return (kMTCharWise, 0),
-        c if c == '#' as c_int
-            || c == '=' as c_int
-            || c == ':' as c_int
-            || c == '/' as c_int
-            || c == '.' as c_int
-            || c == '%' as c_int
-            || c == '_' as c_int =>
-        {
-            return (kMTCharWise, 0);
-        }
-        _ => {}
+    if matches!(
+        regname,
+        REG_CTRL_F
+            | REG_CTRL_P
+            | REG_CTRL_W
+            | REG_CTRL_A
+            | b'#'
+            | b'='
+            | b':'
+            | b'/'
+            | b'.'
+            | b'%'
+            | b'_'
+    ) {
+        return (kMTCharWise, 0);
     }
 
-    if regname != NUL && !valid_yank_reg(regname, false) {
+    if regname != 0 && !valid_yank_reg(regname, false) {
         return (kMTUnknown, 0);
     }
     get_yank_register(regname, YREG_PASTE).read(|reg| {
@@ -88,7 +90,7 @@ enum RegContents {
 /// `kGRegNoExpr` refuses `"=` outright and `kGRegExprSrc` answers its source
 /// rather than evaluating it, which is what `getreg('=', 1, ...)` wants.
 /// `"=` may run arbitrary Vimscript, and `"*`/`"+` the clipboard provider.
-fn get_reg_contents(regname: c_int, flags: c_int) -> Option<RegContents> {
+fn get_reg_contents(regname: RegName, flags: c_int) -> Option<RegContents> {
     let as_list = flags & kGRegList.cast_signed() != 0;
     // A computed register's one string, as a one-item list when lines were
     // asked for -- where even a missing string is an item.
@@ -102,7 +104,7 @@ fn get_reg_contents(regname: c_int, flags: c_int) -> Option<RegContents> {
         Some(RegContents::Lines(list))
     };
     let mut regname = regname;
-    if regname == '=' as c_int {
+    if regname == b'=' {
         if flags & kGRegNoExpr.cast_signed() != 0 {
             return None;
         }
@@ -113,10 +115,10 @@ fn get_reg_contents(regname: c_int, flags: c_int) -> Option<RegContents> {
         // function's own caller already allows for.
         return one_line(get_expr_line());
     }
-    if regname == '@' as c_int {
-        regname = '"' as c_int; // `getreg('@')` means the unnamed register
+    if regname == b'@' {
+        regname = b'"'; // `getreg('@')` means the unnamed register
     }
-    if regname != NUL && !valid_yank_reg(regname, false) {
+    if regname != 0 && !valid_yank_reg(regname, false) {
         return None;
     }
 
@@ -153,7 +155,7 @@ fn get_reg_contents(regname: c_int, flags: c_int) -> Option<RegContents> {
 
 /// [`get_reg_contents`] as one owned string, `None` when the register is
 /// empty or cannot be read. `flags` must not ask for a list.
-pub(crate) fn get_reg_contents_owned(regname: c_int, flags: c_int) -> Option<XString> {
+pub(crate) fn get_reg_contents_owned(regname: RegName, flags: c_int) -> Option<XString> {
     debug_assert!(
         flags & kGRegList.cast_signed() == 0,
         "a list is not a string"
@@ -166,7 +168,7 @@ pub(crate) fn get_reg_contents_owned(regname: c_int, flags: c_int) -> Option<XSt
 
 /// [`get_reg_contents`] as a List of lines, `None` when the register is
 /// empty or cannot be read.
-pub(crate) fn get_reg_contents_list(regname: c_int, flags: c_int) -> Option<ListRef> {
+pub(crate) fn get_reg_contents_list(regname: RegName, flags: c_int) -> Option<ListRef> {
     match get_reg_contents(regname, flags | kGRegList.cast_signed())? {
         RegContents::Lines(list) => Some(list),
         RegContents::Text(_) => unreachable!("lines were asked for"),
@@ -178,12 +180,14 @@ pub(crate) fn get_reg_contents_list(regname: c_int, flags: c_int) -> Option<List
 ///
 /// Answers `None` for an invalid name, having given E354.
 fn init_write_reg(
-    name: c_int,
-    old_y_previous: &mut Option<c_int>,
+    name: RegName,
+    old_y_previous: &mut Option<usize>,
     must_append: bool,
 ) -> Option<Reg> {
     if !valid_yank_reg(name, true) {
-        emsg_invreg(name);
+        // Every writer's name is a byte of a string, which upstream's
+        // `char` sign-extended into the `int` the message shows.
+        emsg_invreg(c_int::from(name.cast_signed()));
         return None;
     }
     // `get_yank_register` moves `""`, which a write to a *named* register
@@ -330,16 +334,16 @@ fn str_to_reg(reg: &mut YankReg, mut yank_type: MotionType, text: RegText<'_>, b
 }
 
 /// Push the write out to the clipboard and put `""` back where it was.
-fn finish_write_reg(name: c_int, reg: Reg, old_y_previous: Option<c_int>) {
+fn finish_write_reg(name: RegName, reg: Reg, old_y_previous: Option<usize>) {
     clipboard::set_clipboard(name, reg);
     // Only an explicit write to `""` moves it.
-    if name != '"' as c_int {
+    if name != b'"' {
         y_previous.set(old_y_previous);
     }
 }
 
 /// Write `text` to register `name`, working out the motion type from it.
-pub fn write_reg_contents(name: c_int, text: &[u8], must_append: bool) {
+pub fn write_reg_contents(name: RegName, text: &[u8], must_append: bool) {
     write_reg_contents_ex(name, text, must_append, kMTUnknown, 0);
 }
 
@@ -347,13 +351,13 @@ pub fn write_reg_contents(name: c_int, text: &[u8], must_append: bool) {
 ///
 /// Writing a `"*`/`"+` register runs the clipboard provider.
 pub fn write_reg_contents_lst(
-    name: c_int,
+    name: RegName,
     lines: &[&CStr],
     must_append: bool,
     yank_type: MotionType,
     block_len: i32,
 ) {
-    if name == '/' as c_int || name == '=' as c_int {
+    if name == b'/' || name == b'=' {
         // Neither register can hold more than one line.
         let line = match lines {
             [] => c"",
@@ -368,7 +372,7 @@ pub fn write_reg_contents_lst(
         write_reg_contents_cstr(name, line, must_append, yank_type, block_len);
         return;
     }
-    if name == '_' as c_int {
+    if name == b'_' {
         return; // black hole
     }
 
@@ -382,7 +386,7 @@ pub fn write_reg_contents_lst(
 
 /// [`write_reg_contents_ex`] of `text`.
 pub(crate) fn write_reg_contents_cstr(
-    name: c_int,
+    name: RegName,
     text: &CStr,
     must_append: bool,
     yank_type: MotionType,
@@ -398,19 +402,19 @@ pub(crate) fn write_reg_contents_cstr(
 /// the expression source. The first two read `text` as the C string it was,
 /// up to a NUL.
 pub fn write_reg_contents_ex(
-    name: c_int,
+    name: RegName,
     text: &[u8],
     must_append: bool,
     yank_type: MotionType,
     block_len: i32,
 ) {
-    if name == '/' as c_int {
+    if name == b'/' {
         // The pattern is copied, not kept.
         set_last_search_pat(text, RE_SEARCH as c_int, true, true);
         return;
     }
 
-    if name == '#' as c_int {
+    if name == b'#' {
         // The alternate file, by number or by name.
         let text = cstr::until_nul(text);
         let buf = if text.first().is_some_and(|&b| ascii_isdigit(c_int::from(b))) {
@@ -436,7 +440,7 @@ pub fn write_reg_contents_ex(
         return;
     }
 
-    if name == '=' as c_int {
+    if name == b'=' {
         // The expression register keeps its source, not a yankreg.
         expr_line.with_mut(|line| {
             if !must_append {
@@ -447,7 +451,7 @@ pub fn write_reg_contents_ex(
         return;
     }
 
-    if name == '_' as c_int {
+    if name == b'_' {
         return; // black hole
     }
 

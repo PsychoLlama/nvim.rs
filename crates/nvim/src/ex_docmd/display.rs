@@ -104,8 +104,8 @@ pub(crate) fn ex_redir(excmd: &mut ExArg) {
         close_redir();
         at += 1;
         let name = excmd.line.byte_at(at);
-        if valid_yank_reg(c_int::from(name), true) && name != b'_' {
-            redir_reg.set(c_int::from(name));
+        if valid_yank_reg(name, true) && name != b'_' {
+            redir_reg.set(name);
             at += 1;
             if excmd.line.byte_at(at) == b'>' && excmd.line.byte_at(at + 1) == b'>' {
                 // `:redir @a>>` appends.
@@ -116,7 +116,7 @@ pub(crate) fn ex_redir(excmd: &mut ExArg) {
                 }
                 // A lower-case register name overwrites, so empty it
                 // now; an upper-case one always appends.
-                if excmd.line.byte_at(at) == 0 && !(redir_reg.get() as u8).is_ascii_uppercase() {
+                if excmd.line.byte_at(at) == 0 && !redir_reg.get().is_ascii_uppercase() {
                     write_reg_contents(redir_reg.get(), b"", false);
                 }
             }

@@ -87,9 +87,11 @@ impl CmdArg {
 #[derive(Copy, Clone)]
 pub struct OpArg {
     pub op_type: OpType,
-    pub regname: ::core::ffi::c_int,
+    /// The register the operator reads or writes, 0 for the default.
+    pub regname: u8,
     pub motion_type: MotionType,
-    pub motion_force: ::core::ffi::c_int,
+    /// The `v`/`V`/CTRL-V typed between the operator and its motion, or NUL.
+    pub motion_force: Key,
     pub use_reg_one: bool,
     pub inclusive: bool,
     pub end_adjusted: bool,
@@ -116,7 +118,7 @@ impl OpArg {
         op_type: OpType::Nop,
         regname: 0,
         motion_type: 0,
-        motion_force: 0,
+        motion_force: Key::NUL,
         use_reg_one: false,
         inclusive: false,
         end_adjusted: false,

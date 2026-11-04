@@ -174,16 +174,16 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
         Win::current().coladvance(Win::current().w_curswant);
     }
     clear_op(op);
-    motion_force.set(NUL);
+    motion_force.set(Key::NUL);
 
     restore_lbr(lbr_saved != 0);
 }
 
 /// `v`, `V` or CTRL-V typed between the operator and its motion.
 fn apply_motion_force(mut op: Op) {
-    if op.motion_force == 'V' as c_int {
+    if op.motion_force.is('V') {
         op.motion_type = kMTLineWise;
-    } else if op.motion_force == 'v' as c_int {
+    } else if op.motion_force.is('v') {
         if op.motion_type == kMTLineWise {
             // A linewise motion never set `inclusive`; "exclusive" is the
             // consistent reading, and makes `dvj` behave.
@@ -192,7 +192,7 @@ fn apply_motion_force(mut op: Op) {
             op.inclusive = !op.inclusive;
         }
         op.motion_type = kMTCharWise;
-    } else if op.motion_force == Ctrl_V {
+    } else if op.motion_force == Key::CTRL_V {
         // Turn a line- or charwise motion into a Visual block.
         if !visual_active() {
             set_visual_active(true);
@@ -222,7 +222,7 @@ fn record_operator_redo(cmd_arg: &CmdArg, op: Op, redo_yank: bool) {
     );
     let replayable = (redo_yank || op.op_type != OpType::Yank)
         && (!visual_active()
-            || op.motion_force != 0
+            || !op.motion_force.is_nul()
             // Also redo Operator-pending Visual mode mappings.
             || ((is_ex_cmdchar(cmd_arg) || cmd_arg.cmdchar == SpecialKey::Lua) && op.op_type != OpType::Colon))
         && !cmd_arg.cmdchar.is('D')
@@ -234,9 +234,9 @@ fn record_operator_redo(cmd_arg: &CmdArg, op: Op, redo_yank: bool) {
     prep_redo(
         op.regname,
         cmd_arg.count0,
-        Key::from_code(get_op_char(op.op_type)),
-        Key::from_code(get_extra_op_char(op.op_type)),
-        Key::from_code(op.motion_force),
+        Key::byte(get_op_char(op.op_type)),
+        Key::byte(get_extra_op_char(op.op_type)),
+        op.motion_force,
         cmd_arg.cmdchar,
         cmd_arg.nchar,
     );
@@ -433,7 +433,7 @@ fn prepare_visual_redo(cmd_arg: &CmdArg, mut op: Op, gui_yank: bool, redo_yank: 
     if !((redo_yank || op.op_type != OpType::Yank)
         && op.op_type != OpType::Colon
         && !is_fold_op
-        && op.motion_force == NUL)
+        && op.motion_force.is_nul())
     {
         return;
     }
@@ -443,15 +443,15 @@ fn prepare_visual_redo(cmd_arg: &CmdArg, mut op: Op, gui_yank: bool, redo_yank: 
         prep_redo(
             op.regname,
             cmd_arg.count0,
-            Key::from_code(get_op_char(op.op_type)),
-            Key::from_code(get_extra_op_char(op.op_type)),
-            Key::from_code(op.motion_force),
+            Key::byte(get_op_char(op.op_type)),
+            Key::byte(get_extra_op_char(op.op_type)),
+            op.motion_force,
             cmd_arg.cmdchar,
             cmd_arg.nchar,
         );
     } else if !is_ex_cmdchar(cmd_arg) && cmd_arg.cmdchar != SpecialKey::Lua {
-        let opchar = Key::from_code(get_op_char(op.op_type));
-        let extra_opchar = Key::from_code(get_extra_op_char(op.op_type));
+        let opchar = Key::byte(get_op_char(op.op_type));
+        let extra_opchar = Key::byte(get_extra_op_char(op.op_type));
         // Only `r` uses `nchar`; for anything else it would be the
         // operator's own second character.
         let mut nchar = if op.op_type == OpType::Replace {
@@ -510,7 +510,7 @@ fn prepare_visual_redo(cmd_arg: &CmdArg, mut op: Op, gui_yank: bool, redo_yank: 
 fn finish_visual_region(mut op: Op, include_line_break: bool, gui_yank: bool, lbr_saved: c_int) {
     // `inclusive` defaults to true; an end on a NUL (an empty line) makes
     // it false, which is what makes `d}P` and `v}dP` behave the same.
-    if op.motion_force == NUL || op.motion_type == kMTLineWise {
+    if op.motion_force.is_nul() || op.motion_type == kMTLineWise {
         op.inclusive = true;
     }
     if visual_mode().is_line() {
@@ -551,7 +551,7 @@ fn finish_visual_region(mut op: Op, include_line_break: bool, gui_yank: bool, lb
             || op.op_type == OpType::Colon
             || op.op_type == OpType::Function
             || op.op_type == OpType::Filter)
-            && op.motion_force == NUL
+            && op.motion_force.is_nul()
         {
             restore_lbr(lbr_saved != 0);
             redraw_curbuf_later(UPD_INVERTED);

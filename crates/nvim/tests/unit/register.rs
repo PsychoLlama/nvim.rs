@@ -16,8 +16,6 @@
 
 #![cfg(not(miri))]
 
-use std::ffi::c_int;
-
 use crate::support::{Probe, Sandbox};
 use neovim::register::get_spec_reg;
 
@@ -220,7 +218,8 @@ fn get_spec_reg_answers_the_computed_registers_only() {
 
     // `None`: not computed; `Some(None)`: computed, and nothing in it.
     let ask = |name: char, errmsg: bool| -> Option<Option<Vec<u8>>> {
-        get_spec_reg(name as c_int, errmsg).map(|value| value.map(|text| text.to_vec()))
+        let name = u8::try_from(name).expect("a register name is a byte");
+        get_spec_reg(name, errmsg).map(|value| value.map(|text| text.to_vec()))
     };
 
     assert_eq!(ask('%', false), Some(Some(b"spec.txt".to_vec())));

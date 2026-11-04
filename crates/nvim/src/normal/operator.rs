@@ -24,8 +24,8 @@ use crate::eval::vars::{set_reg_var, set_vim_var_string};
 use crate::getchar::state::{got_int, reg_executing, reg_recorded};
 use crate::getchar::{plain_vgetc, start_redo, stuff_readbuf_char};
 use crate::guard::Keys;
-use crate::keycodes::{Ctrl_V, SpecialKey};
-use crate::message::emsg;
+use crate::keycodes::SpecialKey;
+use crate::message::{emsg, emsg_invreg};
 use crate::normal::{
     check_clear_op, check_clear_op_quit, clear_op_beep, e_cmdline_window_already_open, kMTLineWise,
     langmap_adjust, visual_active, visual_select,
@@ -33,12 +33,13 @@ use crate::normal::{
 use crate::ops::{get_extra_op_char, get_op_char, get_op_type, op_is_change};
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
-use crate::register::{do_execreg, do_record, get_expr_register, valid_yank_reg};
+use crate::register::{
+    RegName, do_execreg, do_record, get_expr_register, register_name, valid_yank_reg,
+};
 use crate::state::mode::{VIsual_select_reg, arrow_used, restart_edit};
-use crate::types::{CmdArg, NUL, OpType, Vv};
+use crate::types::{CmdArg, OpType, Vv};
 use crate::undo::{u_redo, u_undo, u_undoline};
 use crate::winlayer::graph::cmdwin_type;
-use core::ffi::c_int;
 
 /// Re-run this command as the two-character `g<nchar>` operator instead.
 fn as_g_operator(cmd_arg: &mut CmdArg, nchar: u8) {
@@ -49,10 +50,10 @@ fn as_g_operator(cmd_arg: &mut CmdArg, nchar: u8) {
 
 /// Play a register back `count1` times, stopping at the first failure or
 /// interrupt.
-fn replay(cmd_arg: &mut CmdArg, regname: c_int) {
+fn replay(cmd_arg: &mut CmdArg, regname: RegName) {
     while cmd_arg.count1 != 0 && !got_int.get() {
         cmd_arg.count1 -= 1;
-        if do_execreg(regname, 0, 0, 0).is_err() {
+        if do_execreg(regname, false, false, false).is_err() {
             clear_op_beep(cmd_arg.op());
             break;
         }
@@ -74,10 +75,17 @@ pub(crate) fn nv_at(cmd_arg: &mut CmdArg) {
         return;
     }
     // `@=` prompts for an expression; a cancelled prompt does nothing.
-    if cmd_arg.nchar.is('=') && get_expr_register() == NUL {
+    if cmd_arg.nchar.is('=') && !get_expr_register() {
         return;
     }
-    replay(cmd_arg, cmd_arg.nchar.code());
+    let Some(regname) = register_name(cmd_arg.nchar) else {
+        // A key that is not even a byte names no register: what replaying
+        // it would have said.
+        emsg_invreg(cmd_arg.nchar.code());
+        clear_op_beep(cmd_arg.op());
+        return;
+    };
+    replay(cmd_arg, regname);
 }
 
 /// `u`: undo, or the `gu` operator when one is already pending or a Visual
@@ -118,11 +126,13 @@ pub(crate) fn nv_regname(cmd_arg: &mut CmdArg) {
         return;
     }
     // `"=` prompts for the expression register's contents up front.
-    if cmd_arg.nchar.is('=') {
-        cmd_arg.nchar = Key::from_code(get_expr_register());
+    if cmd_arg.nchar.is('=') && !get_expr_register() {
+        cmd_arg.nchar = Key::NUL;
     }
-    if !cmd_arg.nchar.is_nul() && valid_yank_reg(cmd_arg.nchar.code(), false) {
-        cmd_arg.op().regname = cmd_arg.nchar.code();
+    if let Some(regname) =
+        register_name(cmd_arg.nchar).filter(|&name| name != 0 && valid_yank_reg(name, false))
+    {
+        cmd_arg.op().regname = regname;
         // The count so far belongs to the command, not to the `"`.
         cmd_arg.opcount = cmd_arg.count0;
         set_reg_var(cmd_arg.op().regname);
@@ -156,11 +166,11 @@ pub(crate) fn nv_redo_or_register(cmd_arg: &mut CmdArg) {
         if reg.is('"') {
             reg = Key::NUL;
         }
-        VIsual_select_reg.set(if valid_yank_reg(reg.code(), true) {
-            reg.code()
-        } else {
-            0
-        });
+        VIsual_select_reg.set(
+            register_name(reg)
+                .filter(|&name| valid_yank_reg(name, true))
+                .unwrap_or(0),
+        );
         return;
     }
     if check_clear_op_quit(cmd_arg.op()) {
@@ -173,7 +183,7 @@ pub(crate) fn nv_redo_or_register(cmd_arg: &mut CmdArg) {
 /// Start an operator, or apply the pending one to whole lines when it is the
 /// same one again (`dd`, `yy`, `gugu`).
 pub(crate) fn nv_operator(cmd_arg: &mut CmdArg) {
-    let op_type = get_op_type(cmd_arg.cmdchar.code(), cmd_arg.nchar.code());
+    let op_type = get_op_type(cmd_arg.cmdchar, cmd_arg.nchar);
     // A prompt buffer only lets its own last line be changed.
     if buf_is_prompt(current_buf()) && op_is_change(op_type) && !prompt_curpos_editable() {
         clear_op_beep(cmd_arg.op());
@@ -196,9 +206,10 @@ pub(crate) fn set_op_var(optype: OpType) {
     }
     // Always two bytes and a terminator: a one-character operator has NUL as
     // its second, and the length handed over is 2 either way.
-    let opchar0 = u8::try_from(get_op_char(optype)).expect("an operator's char is one byte");
-    let opchar1 = u8::try_from(get_extra_op_char(optype)).expect("an operator's char is one byte");
-    set_vim_var_string(Vv::Operator, Some(&[opchar0, opchar1]));
+    set_vim_var_string(
+        Vv::Operator,
+        Some(&[get_op_char(optype), get_extra_op_char(optype)]),
+    );
 }
 
 /// The linewise form of an operator: `count1` lines from this one.
@@ -208,8 +219,8 @@ pub(crate) fn nv_lineop(cmd_arg: &mut CmdArg) {
     if cursor_down(cmd_arg.count1 - 1, op.op_type == OpType::Nop).is_err() {
         clear_op_beep(op);
     } else if (op.op_type == OpType::Delete
-        && op.motion_force != c_int::from(b'v')
-        && op.motion_force != Ctrl_V)
+        && !op.motion_force.is('v')
+        && op.motion_force != Key::CTRL_V)
         || op.op_type == OpType::Lshift
         || op.op_type == OpType::Rshift
     {
@@ -239,7 +250,7 @@ pub(crate) fn nv_record(cmd_arg: &mut CmdArg) {
         }
         stuff_readbuf_char(cmd_arg.nchar);
         stuff_readbuf_char(SpecialKey::Cmdwin.into());
-    } else if reg_executing.get() == 0 && do_record(cmd_arg.nchar.code()).is_err() {
+    } else if reg_executing.get() == 0 && do_record(cmd_arg.nchar).is_err() {
         clear_op_beep(cmd_arg.op());
     }
 }

@@ -124,7 +124,7 @@ pub fn nvim_put(
     reg.lines = RegLines::new(owned);
     finish_yankreg_from_object(&mut reg, false);
     let dir = if after { FORWARD } else { BACKWARD };
-    let flags = if follow { PUT_CURSEND.cast_signed() } else { 0 };
+    let flags = if follow { PUT_CURSEND } else { 0 };
     api_try(|| {
         // `do_put` can leave Visual mode; the caller's is put back.
         let visual_was_active = visual_active();

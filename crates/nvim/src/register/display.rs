@@ -24,7 +24,6 @@ use crate::charset::byte2cells;
 use crate::cstr;
 use crate::mbyte::{c_cells_at, c_cluster_len};
 use crate::memory::XString;
-use crate::strings::has_char;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 
@@ -66,11 +65,17 @@ fn dis_msg(p: &[u8], skip_esc: bool) {
 
 /// Print one computed register's line, if it has content and the `:registers`
 /// argument asked for it.
-fn dis_special(arg: Option<&CStr>, name: c_int, label: &CStr, text: Option<&CStr>, skip_esc: bool) {
+fn dis_special(
+    arg: Option<&CStr>,
+    name: RegName,
+    label: &CStr,
+    text: Option<&CStr>,
+    skip_esc: bool,
+) {
     let Some(text) = text else {
         return;
     };
-    if arg.is_some_and(|arg| !has_char(arg, name)) {
+    if arg.is_some_and(|arg| !arg.to_bytes().contains(&name)) {
         return;
     }
     if got_int.get() || message_filtered(text) {
@@ -81,7 +86,7 @@ fn dis_special(arg: Option<&CStr>, name: c_int, label: &CStr, text: Option<&CStr
 }
 
 /// Print one slot of `y_regs`, as it was when the listing reached it.
-fn dis_register(yb: &YankReg, name: c_int, type_0: c_int, hl_id: c_int) {
+fn dis_register(yb: &YankReg, name: RegName, type_0: u8, hl_id: c_int) {
     let lines = yb.lines.as_slice();
 
     // 'msgfilter': show the register if any of its lines survives.
@@ -90,12 +95,12 @@ fn dis_register(yb: &YankReg, name: c_int, type_0: c_int, hl_id: c_int) {
         return;
     }
 
-    msg_putchar('\n' as c_int);
+    msg_putchar(c_int::from(b'\n'));
     msg_str(c"  ");
-    msg_putchar(type_0);
+    msg_putchar(c_int::from(type_0));
     msg_str(c"  ");
-    msg_putchar('"' as c_int);
-    msg_putchar(name);
+    msg_putchar(c_int::from(b'"'));
+    msg_putchar(c_int::from(name));
     msg_str(c"   ");
 
     // The content, cut off at the window width. A line break inside the
@@ -131,25 +136,23 @@ pub fn ex_display(excmd: &mut ExArg) {
     msg_ext_skip_flush.set(true);
     msg_title(gettext(c"\nType Name Content"));
 
-    // -1 is the unnamed register, which aliases whichever slot was
+    // `None` is the unnamed register, which aliases whichever slot was
     // written last.
-    let mut i = -1;
-    while i < NUM_REGISTERS && !got_int.get() {
+    for i in ::core::iter::once(None).chain((0..NUM_REGISTERS).map(Some)) {
+        if got_int.get() {
+            break;
+        }
         let name = get_register_name(i);
-        if arg.is_none_or(|arg| has_char(arg, name)) {
+        if arg.is_none_or(|arg| arg.to_bytes().contains(&name)) {
             // Before `get_clipboard` below, because for `"*`/`"+` this
             // queries the provider itself, and upstream's order of the
             // two queries is what the messages depend on.
             let type_0 = match get_reg_type(name).0 {
-                kMTLineWise => 'l' as c_int,
-                kMTCharWise => 'c' as c_int,
-                _ => 'b' as c_int,
+                kMTLineWise => b'l',
+                kMTCharWise => b'c',
+                _ => b'b',
             };
-            let mut yb = if i == -1 {
-                get_y_register(y_previous.get().unwrap_or(0))
-            } else {
-                get_y_register(i)
-            };
+            let mut yb = get_y_register(i.unwrap_or_else(|| y_previous.get().unwrap_or(0)));
             // This is the call that may run the clipboard provider's Lua.
             if let Some((slot, _)) = clipboard::get_clipboard(name, true) {
                 yb = Reg::Slot(slot);
@@ -157,8 +160,8 @@ pub fn ex_display(excmd: &mut ExArg) {
 
             // Don't show the register `:redir` is writing into: it would
             // record its own listing.
-            let redir_target = name == mb_tolower(redir_reg.get())
-                || redir_reg.get() == '"' as c_int && Some(yb) == get_y_previous();
+            let redir_target = name == redir_reg.get().to_ascii_lowercase()
+                || redir_reg.get() == b'"' && Some(yb) == get_y_previous();
             // A share of the lines: printing can run `:redir`, which writes
             // a register.
             let reg = yb.snapshot();
@@ -167,7 +170,6 @@ pub fn ex_display(excmd: &mut ExArg) {
                 os_breakcheck();
             }
         }
-        i += 1;
     }
 
     // The registers with no slot, in the order `:registers` documents.
@@ -178,7 +180,7 @@ pub fn ex_display(excmd: &mut ExArg) {
     let insert =
         (!insert.is_null()).then(|| XString::from_bytes(cstr::until_nul(insert.as_bytes())));
     special(
-        '.' as c_int,
+        b'.',
         c"\n  c  \".   ",
         insert.as_ref().map(XString::as_cstr),
         true,
@@ -186,21 +188,21 @@ pub fn ex_display(excmd: &mut ExArg) {
     // A copy: listing it runs the message machinery.
     let last = last_cmdline.with(Clone::clone);
     special(
-        ':' as c_int,
+        b':',
         c"\n  c  \":   ",
         last.as_ref().map(XString::as_cstr),
         false,
     );
     let current = Buf::current().name.shown().map(XString::from_cstr);
     special(
-        '%' as c_int,
+        b'%',
         c"\n  c  \"%   ",
         current.as_ref().map(XString::as_cstr),
         false,
     );
 
     // `"#` is listed under the `%` argument, as upstream has it.
-    let want_alt = arg.is_none_or(|arg| has_char(arg, '%' as c_int));
+    let want_alt = arg.is_none_or(|arg| arg.to_bytes().contains(&b'%'));
     if want_alt && !got_int.get() {
         // A copy: the filter runs a regexp and the display the message
         // machinery.
@@ -216,7 +218,7 @@ pub fn ex_display(excmd: &mut ExArg) {
     // A copy, as the expression below.
     let last = last_search_pat();
     special(
-        '/' as c_int,
+        b'/',
         c"\n  c  \"/   ",
         last.as_ref().map(XString::as_cstr),
         false,
@@ -224,7 +226,7 @@ pub fn ex_display(excmd: &mut ExArg) {
     // A copy: listing a register may run a message callback that sets it.
     let expr = expr_line.with(Clone::clone);
     special(
-        '=' as c_int,
+        b'=',
         c"\n  c  \"=   ",
         expr.as_ref().map(XString::as_cstr),
         false,

@@ -54,11 +54,8 @@ use crate::global_cell::GlobalCell;
 use crate::highlight_group::HLF_8;
 use crate::indent::{get_indent, preprocs_left, set_indent};
 use crate::insexpand::{ins_compl_delete, ins_compl_preinsert_effect};
-use crate::keycodes::{
-    Ctrl_A, Ctrl_F, Ctrl_L, Ctrl_P, Ctrl_V, Ctrl_W, escape_ks_bytes, unescape_ks_in,
-};
+use crate::keycodes::{Ctrl_V, escape_ks_bytes, unescape_ks_in};
 use crate::mark::mark_adjust;
-use crate::mbyte::mb_tolower;
 use crate::memline::{decl, ml_append_cstr, ml_append_terminated, ml_replace_owned};
 use crate::memory::XString;
 use crate::message::state::{msg_ext_skip_flush, redir_reg};
@@ -90,15 +87,14 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    ApiString, BCount, BlockDef, CharsizeArg, CmdModFlags, ColNr, ExArg, ExtmarkOp, GRegFlags,
-    HashTab, LineNr, MotionType, NUL, OpArg, PUT_BLOCK_INNER, PUT_CURSEND, PUT_CURSLINE,
-    PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, Pos, SaveVEvent, UndoObjectType,
-    VarLock, YankReg, int64_t, kBoolVarFalse, kBoolVarTrue, ptrdiff_t, size_t,
+    ApiString, BCount, BlockDef, CharsizeArg, CmdModFlags, ColNr, Direction, ExArg, ExtmarkOp,
+    GRegFlags, HashTab, LineNr, MotionType, OpArg, PUT_BLOCK_INNER, PUT_CURSEND, PUT_CURSLINE,
+    PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, Pos, PutFlags, SaveVEvent,
+    UndoObjectType, VarLock, YankReg, int64_t, kBoolVarFalse, kBoolVarTrue, ptrdiff_t, size_t,
 };
 use crate::ui::state::Columns;
 use crate::ui::ui_has;
 use crate::undo::{u_save, u_save_cursor};
-use core::ffi::c_int;
 
 // The carve of the transpiled module; see each child's docs.
 mod contents;
@@ -126,18 +122,17 @@ pub const kMTUnknown: MotionType = -1;
 pub const kMTBlockWise: MotionType = 2;
 pub const kMTLineWise: MotionType = 1;
 pub const kMTCharWise: MotionType = 0;
-/// The layout of `y_regs`, and the slots with a fixed meaning.  Upstream's
-/// anonymous enum in `register_defs.h`; `c_int` because every use is an
-/// index compared against or assigned to one.
-pub const NUM_REGISTERS: ::core::ffi::c_int = 39;
+/// The layout of `y_regs`, and the slots with a fixed meaning: upstream's
+/// anonymous enum in `register_defs.h`, as indices into the array.
+pub const NUM_REGISTERS: usize = 39;
 /// `"+`, the system clipboard.
-pub const PLUS_REGISTER: ::core::ffi::c_int = 38;
+pub const PLUS_REGISTER: usize = 38;
 /// `"*`, the X11 primary selection.
-pub const STAR_REGISTER: ::core::ffi::c_int = 37;
+pub const STAR_REGISTER: usize = 37;
 /// How many of the slots shada saves: everything below `"*`.
-pub const NUM_SAVED_REGISTERS: ::core::ffi::c_int = 37;
+pub const NUM_SAVED_REGISTERS: usize = 37;
 /// `"-`, the small-delete register.
-pub const DELETION_REGISTER: ::core::ffi::c_int = 36;
+pub const DELETION_REGISTER: usize = 36;
 pub const kGRegList: GRegFlags = 4;
 pub const kGRegExprSrc: GRegFlags = 2;
 pub const kGRegNoExpr: GRegFlags = 1;
@@ -164,12 +159,14 @@ pub const FIND_IDENT: ::core::ffi::c_int = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 static expr_line: GlobalCell<Option<XString>> = GlobalCell::new(None);
-static execreg_lastc: GlobalCell<::core::ffi::c_int> = GlobalCell::new(NUL);
+/// The register `@@` replays: the last one `@` ran, 0 for none yet.
+static execreg_lastc: GlobalCell<RegName> = GlobalCell::new(0);
 /// The 39 register slots, laid out as [`op_reg_index`] says; reached only
 /// through [`Reg`]'s closures.
-static y_regs: GlobalCell<[YankReg; 39]> = GlobalCell::new([YankReg::EMPTY; 39]);
+static y_regs: GlobalCell<[YankReg; NUM_REGISTERS]> =
+    GlobalCell::new([YankReg::EMPTY; NUM_REGISTERS]);
 /// The slot of `y_regs` that `""` reads: the last register written.
-static y_previous: GlobalCell<Option<c_int>> = GlobalCell::new(None);
+static y_previous: GlobalCell<Option<usize>> = GlobalCell::new(None);
 static e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines:
     &::core::ffi::CStr =
     c"E883: Search pattern and expression register may not contain two or more lines";

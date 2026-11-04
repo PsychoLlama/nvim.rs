@@ -176,15 +176,23 @@ pub(crate) fn command_line_insert_reg(s: &mut CommandLineState) -> KeyOutcome {
             beep_flush();
             s.c = Key::ESC;
         } else {
-            s.c = Key::from_code(get_expr_register());
+            s.c = if get_expr_register() {
+                Key::ascii(b'=')
+            } else {
+                Key::NUL
+            };
         }
     }
 
     let mut literally = false;
     if s.c != Key::ESC {
         // ESC cancels inserting the register.
-        literally = i == Key::CTRL_R || is_literal_register(s.c.code());
-        cmdline_paste(s.c.code(), literally, false);
+        // A key that is not a byte names no register, and pastes nothing.
+        let regname = register_name(s.c);
+        literally = i == Key::CTRL_R || regname.is_some_and(is_literal_register);
+        if let Some(regname) = regname {
+            cmdline_paste(regname, literally, false);
+        }
 
         // When there was a serious error, abort getting the command line.
         if aborting() {
@@ -372,11 +380,11 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
 
         Ok(SpecialKey::Middlemouse) => {
             cmdline_paste(
-                ::core::ffi::c_int::from(if eval_has_provider(c"clipboard", false) {
+                if eval_has_provider(c"clipboard", false) {
                     b'*'
                 } else {
                     0
-                }),
+                },
                 true,
                 true,
             );

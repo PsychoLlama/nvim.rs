@@ -175,7 +175,7 @@ impl Put {
         let lnum = Win::current().w_cursor.lnum;
         let put = &self.lines[i];
         let yanklen = c_int::try_from(put.len()).unwrap_or(c_int::MAX);
-        let spaces = if self.flags & PUT_BLOCK_INNER as c_int == 0 {
+        let spaces = if self.flags & PUT_BLOCK_INNER == 0 {
             right_padding(put, self.width)
         } else {
             0
@@ -268,7 +268,7 @@ impl Put {
         Buf::current().b_op_end.col = (textcol + len_as_int(totlen) - 1).max(ColNr::ZERO);
         Buf::current().b_op_end.coladd = 0;
 
-        if self.flags & PUT_CURSEND as c_int != 0 {
+        if self.flags & PUT_CURSEND != 0 {
             Win::current().w_cursor = Buf::current().b_op_end;
             Win::current().w_cursor.col += 1;
             // In Insert mode the cursor may be past the NUL.

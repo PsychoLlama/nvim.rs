@@ -23,7 +23,7 @@
 use super::*;
 use crate::cstr;
 use crate::guard::Lock;
-use crate::keycodes::{Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_F, Ctrl_L, Ctrl_P, Ctrl_V, Ctrl_W};
+use crate::keycodes::{Ctrl_BSL, Ctrl_C, Ctrl_L, Ctrl_V};
 use crate::memory::XString;
 use core::ffi::CStr;
 
@@ -299,15 +299,13 @@ pub(crate) fn cmdline_at(depth: usize) -> Option<Cc> {
 /// register contents would be interpreted as commands.  `literally` inserts
 /// the text as-is rather than as typed; `remcr` removes a trailing CR.
 /// Answers false for failure.
-pub(crate) fn cmdline_paste(regname: ::core::ffi::c_int, literally: bool, remcr: bool) -> bool {
+pub(crate) fn cmdline_paste(regname: RegName, literally: bool, remcr: bool) -> bool {
     // Check for a valid regname; also accept the special characters
     // CTRL-R takes on the command line.
-    if regname != Ctrl_F
-        && regname != Ctrl_P
-        && regname != Ctrl_W
-        && regname != Ctrl_A
-        && regname != Ctrl_L
-        && !is_yank_reg(regname)
+    if !matches!(
+        regname,
+        REG_CTRL_F | REG_CTRL_P | REG_CTRL_W | REG_CTRL_A | REG_CTRL_L
+    ) && !valid_yank_reg(regname, false)
     {
         return false;
     }
@@ -337,7 +335,7 @@ pub(crate) fn cmdline_paste(regname: ::core::ffi::c_int, literally: bool, remcr:
     let mut skip = 0;
     // With 'incsearch' set and CTRL-R CTRL-W used: skip the duplicate
     // part of the word.
-    if p_is() && regname == Ctrl_W {
+    if p_is() && regname == REG_CTRL_W {
         skip = duplicate_word_len(&arg);
     }
 
@@ -372,16 +370,12 @@ fn duplicate_word_len(arg: &[u8]) -> usize {
     if same { len } else { 0 }
 }
 
-fn is_yank_reg(regname: ::core::ffi::c_int) -> bool {
-    valid_yank_reg(regname, false)
-}
-
 /// `get_spec_reg()` for reading: `None` when `regname` is not a computed
 /// register, `Some(None)` when it has nothing in it.
 ///
 /// Runs user code -- `'` and `=` evaluate an expression -- which is why the
 /// caller raises `textlock` around it and holds no command line across it.
-fn special_reg(regname: ::core::ffi::c_int) -> Option<Option<XString>> {
+fn special_reg(regname: RegName) -> Option<Option<XString>> {
     get_spec_reg(regname, true)
 }
 

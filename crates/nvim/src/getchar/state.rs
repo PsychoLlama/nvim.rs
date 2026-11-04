@@ -126,13 +126,13 @@ state_record! {
 
     // -- recording and replaying --
     /// The register `q` is recording into, or 0.
-    pub(crate) reg_recording: c_int = 0;
+    pub(crate) reg_recording: u8 = 0;
     /// The register `@` is executing, or 0.
-    pub(crate) reg_executing: c_int = 0;
+    pub(crate) reg_executing: u8 = 0;
     /// Clear `reg_executing` at the next advancing read.
     pub(crate) pending_end_reg_executing: bool = false;
     /// The register last recorded into.
-    pub(crate) reg_recorded: c_int = 0;
+    pub(crate) reg_recorded: u8 = 0;
     /// How many bytes the last `gotchars` recorded, so that `get_recorded`
     /// can drop the keys that stopped the recording.
     ///

@@ -296,7 +296,7 @@ pub(crate) fn recording_mode(hl_id: c_int) {
     msg_str_hl(gettext(c"recording"), hl_id, false);
     // Upstream formats this with `snprintf(s, 4, " @%c", reg_recording)`,
     // which is exactly three bytes and the terminator.
-    let reg = u8::try_from(reg_recording.get()).expect("a register name is a single byte");
+    let reg = reg_recording.get();
     let suffix = [b' ', b'@', reg, 0];
     msg_str_hl(cstr::in_bytes(&suffix), hl_id, false);
 }

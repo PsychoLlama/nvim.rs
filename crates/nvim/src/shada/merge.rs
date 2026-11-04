@@ -465,7 +465,7 @@ pub(crate) fn read_when_writing(
                 }
             }
             ShadaEntryData::Register(reg) => {
-                match usize::try_from(op_reg_index(c_int::from(reg.name))) {
+                match op_reg_index(reg.name.cast_unsigned()).ok_or(()) {
                     // Likewise a register this session emptied.
                     Ok(idx)
                         if wms.registers[idx].is_missing()

@@ -20,11 +20,11 @@ use crate::message::{emsg, msg, redirecting};
 use crate::option::vars::cb_flags;
 use crate::options::{kOptCbFlagUnnamed, kOptCbFlagUnnamedplus};
 use crate::register::{
-    PLUS_REGISTER, Reg, STAR_REGISTER, get_y_previous, get_y_register, kMTBlockWise, kMTCharWise,
-    kMTLineWise, kMTUnknown,
+    PLUS_REGISTER, Reg, RegName, STAR_REGISTER, get_y_previous, get_y_register, kMTBlockWise,
+    kMTCharWise, kMTLineWise, kMTUnknown,
 };
-use crate::types::{NUL, RegLines, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, YankReg, ptrdiff_t};
-use core::ffi::{c_char, c_int};
+use crate::types::{RegLines, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, YankReg, ptrdiff_t};
+use core::ffi::c_int;
 
 /// The message shown once when a clipboard register is used and no provider
 /// answers.
@@ -56,10 +56,14 @@ static CLIPBOARD: GlobalCell<ClipboardState> = GlobalCell::new(ClipboardState {
 /// the access is deferred/satisfied by a pending update).
 ///
 /// May run the provider-detection Vimscript.
-pub(crate) fn adjust_clipboard_name(name: &mut c_int, quiet: bool, writing: bool) -> Option<usize> {
-    let explicit_cb_reg = *name == '*' as c_int || *name == '+' as c_int;
+pub(crate) fn adjust_clipboard_name(
+    name: &mut RegName,
+    quiet: bool,
+    writing: bool,
+) -> Option<usize> {
+    let explicit_cb_reg = *name == b'*' || *name == b'+';
     let implicit_cb_reg =
-        *name == NUL && cb_flags.get() & (kOptCbFlagUnnamed | kOptCbFlagUnnamedplus) != 0;
+        *name == 0 && cb_flags.get() & (kOptCbFlagUnnamed | kOptCbFlagUnnamedplus) != 0;
     if !explicit_cb_reg && !implicit_cb_reg {
         return None;
     }
@@ -82,7 +86,7 @@ pub(crate) fn adjust_clipboard_name(name: &mut c_int, quiet: bool, writing: bool
     }
 
     if explicit_cb_reg {
-        let star = *name == '*' as c_int;
+        let star = *name == b'*';
         let (reg, flag) = if star {
             (STAR_REGISTER, kOptCbFlagUnnamed)
         } else {
@@ -91,7 +95,7 @@ pub(crate) fn adjust_clipboard_name(name: &mut c_int, quiet: bool, writing: bool
         if writing && cb_flags.get() & flag != 0 {
             CLIPBOARD.with_mut(|st| st.needs_update = false);
         }
-        return Some(reg as usize);
+        return Some(reg);
     }
 
     // Unnamed register with clipboard= routing to "* or "+.
@@ -108,16 +112,16 @@ pub(crate) fn adjust_clipboard_name(name: &mut c_int, quiet: bool, writing: bool
     }
     let reg = if cb_flags.get() & kOptCbFlagUnnamedplus != 0 {
         *name = if cb_flags.get() & kOptCbFlagUnnamed != 0 && writing {
-            '"' as c_int
+            b'"'
         } else {
-            '+' as c_int
+            b'+'
         };
         PLUS_REGISTER
     } else {
-        *name = '*' as c_int;
+        *name = b'*';
         STAR_REGISTER
     };
-    Some(reg as usize)
+    Some(reg)
 }
 
 /// The register type a provider's one-character `regtype` names, or `None`
@@ -208,23 +212,22 @@ fn register_from_provider(result: &TypVal) -> Result<YankReg, bool> {
 /// then left unset.
 ///
 /// Runs the clipboard provider.
-pub(crate) fn get_clipboard(mut name: c_int, quiet: bool) -> Option<(usize, bool)> {
+pub(crate) fn get_clipboard(mut name: RegName, quiet: bool) -> Option<(usize, bool)> {
     let slot = adjust_clipboard_name(&mut name, quiet, false)?;
-    get_y_register(slot as c_int).write(YankReg::clear);
+    get_y_register(slot).write(YankReg::clear);
 
     let args = tv_list_alloc(1);
-    let regname = name as c_char;
-    args.edit().push_bytes(Some(&[regname.cast_unsigned()]));
+    args.edit().push_bytes(Some(&[name]));
     let result = eval_call_provider(c"clipboard", c"get", Some(args), false);
 
     match register_from_provider(&result) {
         Ok(reg) => {
-            get_y_register(slot as c_int).write(|slot| *slot = reg);
+            get_y_register(slot).write(|slot| *slot = reg);
             Some((slot, true))
         }
         Err(errmsg) => {
             // Leave the register empty.
-            get_y_register(slot as c_int).write(|reg| {
+            get_y_register(slot).write(|reg| {
                 reg.clear();
                 reg.timestamp = 0;
             });
@@ -239,7 +242,7 @@ pub(crate) fn get_clipboard(mut name: c_int, quiet: bool) -> Option<(usize, bool
 /// Send register `reg` to the provider as register `name`.
 ///
 /// Runs the clipboard provider. `reg`'s type must be known.
-pub(crate) fn set_clipboard(mut name: c_int, reg: Reg) {
+pub(crate) fn set_clipboard(mut name: RegName, reg: Reg) {
     if adjust_clipboard_name(&mut name, false, true).is_none() {
         return;
     }
@@ -270,8 +273,7 @@ pub(crate) fn set_clipboard(mut name: c_int, reg: Reg) {
     let args = tv_list_alloc(3);
     args.edit().push_list(Some(lines));
     args.edit().push_bytes(Some(&[regtype]));
-    let regname = name as c_char;
-    args.edit().push_bytes(Some(&[regname.cast_unsigned()]));
+    args.edit().push_bytes(Some(&[name]));
     eval_call_provider(c"clipboard", c"set", Some(args), true);
 }
 
@@ -279,7 +281,7 @@ pub(crate) fn set_clipboard(mut name: c_int, reg: Reg) {
 fn flush_unnamed() {
     // A pending update means something was written, so `""` points at it.
     if let Some(reg) = get_y_previous() {
-        set_clipboard(NUL, reg);
+        set_clipboard(0, reg);
     }
 }
 

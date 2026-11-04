@@ -621,9 +621,9 @@ pub(crate) fn get_register_completion() {
     let adding_mode = compl_status_adding();
 
     for i in 0..NUM_REGISTERS {
-        let regname = get_register_name(i);
+        let regname = get_register_name(Some(i));
         // Skip an invalid or black hole register.
-        if !valid_yank_reg(regname, false) || regname == '_' as c_int {
+        if !valid_yank_reg(regname, false) || regname == b'_' {
             continue;
         }
 

@@ -59,7 +59,7 @@ use crate::normal::{
 use crate::ops::Op;
 use crate::option::vars::p_smd;
 use crate::pos::{equalpos, lt};
-use crate::register::{do_put, insert_reg, yank_register_mline};
+use crate::register::{RegName, do_put, insert_reg, register_key, yank_register_mline};
 use crate::search::{FORWARD, findmatch};
 use crate::state::mode::{State, VIsual_reselect, restart_edit, where_paste_started};
 use crate::state::{MODE_INSERT, MODE_NORMAL, REPLACE_FLAG};
@@ -431,7 +431,7 @@ fn modifier_shortcuts(is_click: bool, which_button: c_int, count: c_int) -> Opti
 ///
 /// Answers `None` only in Normal mode with nothing selected and no operator
 /// pending -- the rest is below `jump_to_mouse()`.
-fn middle_button_insert(op: Option<Op>, mut regname: c_int, fixindent: bool) -> Option<bool> {
+fn middle_button_insert(op: Option<Op>, mut regname: RegName, fixindent: bool) -> Option<bool> {
     if State.get() == MODE_NORMAL {
         // If an operator was pending, we don't know what the user wanted to
         // do.  Go back to normal mode: Clear the operator and beep().
@@ -466,12 +466,12 @@ fn middle_button_insert(op: Option<Op>, mut regname: c_int, fixindent: bool) -> 
         return None;
     }
 
-    if regname == '.' as c_int {
+    if regname == b'.' {
         let _ = insert_reg(regname, None, true);
         return Some(false);
     }
     if regname == 0 && has_clipboard_provider() {
-        regname = '*' as c_int;
+        regname = b'*';
     }
 
     // The register is looked up only in Replace mode, as the C's `&&` has it;
@@ -487,7 +487,7 @@ fn middle_button_insert(op: Option<Op>, mut regname: c_int, fixindent: bool) -> 
         return Some(false);
     }
 
-    let flags = (if fixindent { PUT_FIXINDENT } else { 0 } | PUT_CURSEND).cast_signed();
+    let flags = if fixindent { PUT_FIXINDENT } else { 0 } | PUT_CURSEND;
     do_put(regname, reg.as_ref(), BACKWARD, 1, flags);
     // Repeat it with CTRL-R CTRL-O r or CTRL-R CTRL-P r
     append_to_redobuff_char(Key::ctrl(b'R'));
@@ -496,11 +496,7 @@ fn middle_button_insert(op: Option<Op>, mut regname: c_int, fixindent: bool) -> 
     } else {
         Key::ctrl(b'O')
     });
-    append_to_redobuff_char(if regname == 0 {
-        Key::ascii(b'"')
-    } else {
-        Key::from_code(regname)
-    });
+    append_to_redobuff_char(register_key(if regname == 0 { b'"' } else { regname }));
     Some(false)
 }
 
@@ -649,7 +645,7 @@ struct Action {
     dir: Direction,
     count: c_int,
     fixindent: bool,
-    regname: c_int,
+    regname: RegName,
     old_active: bool,
     mouse_can_visual: bool,
     landed: Landed,
@@ -674,7 +670,7 @@ fn dispatch_action(a: Action, win: Win) {
     if which_button == MOUSE_MIDDLE {
         // Middle mouse click: Put text before cursor.
         if regname == 0 && has_clipboard_provider() {
-            regname = '*' as c_int;
+            regname = b'*';
         }
         let (mline, reg) = yank_register_mline(regname);
         if if mline {
@@ -713,7 +709,7 @@ fn dispatch_action(a: Action, win: Win) {
         if !restart_edit.get().is_nul() {
             where_paste_started.set(win.w_cursor);
         }
-        let flags = (if fixindent { PUT_FIXINDENT } else { 0 } | PUT_CURSEND).cast_signed();
+        let flags = if fixindent { PUT_FIXINDENT } else { 0 } | PUT_CURSEND;
         do_put(regname, reg.as_ref(), dir, count, flags);
         return;
     }

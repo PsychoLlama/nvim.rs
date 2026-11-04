@@ -657,7 +657,8 @@ pub struct ExArg<'s> {
     pub append: bool,
     pub usefilter: bool,
     pub amount: ::core::ffi::c_int,
-    pub regname: ::core::ffi::c_int,
+    /// The register the command names, 0 for none.
+    pub regname: u8,
     pub force_bin: ::core::ffi::c_int,
     pub read_edit: bool,
     pub mkdir_p: bool,

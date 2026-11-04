@@ -383,7 +383,7 @@ struct ModeInputs {
     /// An operator is waiting for its motion.
     finish_op: bool,
     /// The `v`/`V`/`CTRL-V` that forced the pending operator's motion kind.
-    motion_force: c_int,
+    motion_force: Key,
     /// The `:startinsert`-family letter insert mode will resume with, or NUL.
     restart_edit: Key,
 }
@@ -451,7 +451,8 @@ fn mode_name(m: &ModeInputs) -> ModeName {
         out.push(b'n');
         if m.finish_op {
             out.push(b'o');
-            out.push_key(m.motion_force);
+            // `v`, `V`, CTRL-V or NUL: a byte each.
+            out.push(m.motion_force.as_byte().unwrap_or(0));
         } else if m.terminal_buffer {
             out.push(b't');
             if m.restart_edit.is('I') {
@@ -625,7 +626,7 @@ mod tests {
             restart_visual_select: false,
             terminal_buffer: false,
             finish_op: false,
-            motion_force: 0,
+            motion_force: Key::NUL,
             restart_edit: Key::NUL,
         }
     }
@@ -854,14 +855,14 @@ mod tests {
         assert_eq!(text(&mode_name(&quiet(MODE_NORMAL))), "n");
         let pending = ModeInputs {
             finish_op: true,
-            motion_force: c_int::from(b'v'),
+            motion_force: Key::ascii(b'v'),
             ..quiet(MODE_NORMAL)
         };
         assert_eq!(text(&mode_name(&pending)), "nov");
         // An unforced motion pads with the NUL `motion_force` holds, so the
         // name is the two letters `no`.
         let unforced = ModeInputs {
-            motion_force: 0,
+            motion_force: Key::NUL,
             ..pending
         };
         assert_eq!(text(&mode_name(&unforced)), "no");
@@ -948,7 +949,7 @@ mod tests {
                                 restart_visual_select: true,
                                 terminal_buffer: finish,
                                 finish_op: finish,
-                                motion_force: c_int::from(b'V'),
+                                motion_force: Key::ascii(b'V'),
                                 restart_edit: Key::ascii(b'I'),
                                 ..quiet(state)
                             };

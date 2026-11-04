@@ -394,7 +394,7 @@ fn uc_check_code(
         }
         Code::Mods => cmdmod.with(|cmod| uc_mods_into(out, cmod, quote != Quote::None)),
         Code::Register => {
-            let register = [u8::try_from(args.regname).unwrap_or_default()];
+            let register = [args.regname];
             let body: &[u8] = if args.regname != 0 { &register } else { b"" };
             put_quoted(out, quotes(b'\''), body);
         }

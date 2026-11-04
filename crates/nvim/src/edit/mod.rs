@@ -155,7 +155,8 @@ use crate::popupmenu::state::pum_want;
 use crate::popupmenu::{pum_check_clear, pum_ext_want_done, pum_visible};
 use crate::pos::{MAXCOL, equalpos};
 use crate::register::{
-    do_put, get_expr_register, get_yank_register, insert_reg, is_literal_register, valid_yank_reg,
+    do_put, get_expr_register, get_yank_register, insert_reg, is_literal_register, register_key,
+    register_name, valid_yank_reg,
 };
 use crate::search::{BACKWARD, FORWARD};
 use crate::spell::spell_redraw_lnum;

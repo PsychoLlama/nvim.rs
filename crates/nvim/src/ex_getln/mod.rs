@@ -118,7 +118,8 @@ use crate::pos::{MAXCOL, MAXLNUM, clearpos, equalpos, lt};
 use crate::profile::profile_setlimit;
 use crate::regexp::{RE_SEARCH, skip_regexp_magic};
 use crate::register::{
-    cmdline_paste_reg, get_expr_line, get_expr_register, get_spec_reg, is_literal_register,
+    REG_CTRL_A, REG_CTRL_F, REG_CTRL_L, REG_CTRL_P, REG_CTRL_W, RegName, cmdline_paste_reg,
+    get_expr_line, get_expr_register, get_spec_reg, is_literal_register, register_name,
     valid_yank_reg,
 };
 use crate::registry::{IdSet, id_set};

@@ -139,7 +139,7 @@ impl Put {
 
         // `CTRL-O p` in Insert mode leaves the cursor after the last
         // character rather than on it.
-        if totlen != 0 && (!restart_edit.get().is_nul() || self.flags & PUT_CURSEND as c_int != 0) {
+        if totlen != 0 && (!restart_edit.get().is_nul() || self.flags & PUT_CURSEND != 0) {
             Win::current().w_cursor.col += 1;
         } else {
             Win::current().w_cursor.col -= first_byte_off;
@@ -208,7 +208,7 @@ impl Put {
 
         // Only a plain linewise put moves the marks itself; a split put
         // has already spliced them.
-        let kind = if self.kind == kMTLineWise && self.flags & PUT_LINE_SPLIT as c_int == 0 {
+        let kind = if self.kind == kMTLineWise && self.flags & PUT_LINE_SPLIT == 0 {
             kExtmarkUndo
         } else {
             kExtmarkNOOP
@@ -240,11 +240,11 @@ impl Put {
             Buf::current().b_op_end.col = ColNr::ZERO;
         }
 
-        if self.flags & PUT_CURSLINE as c_int != 0 {
+        if self.flags & PUT_CURSLINE != 0 {
             // `:put`: the cursor goes on the last inserted line.
             Win::current().w_cursor.lnum = lnum;
             beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
-        } else if self.flags & PUT_CURSEND as c_int != 0 {
+        } else if self.flags & PUT_CURSEND != 0 {
             // The cursor goes after the inserted text.
             if self.kind == kMTLineWise {
                 Win::current().w_cursor.lnum = if lnum >= Buf::current().b_ml.ml_line_count {
@@ -279,7 +279,7 @@ impl Put {
         let mut new_lnum = new_cursor.lnum;
         let mut lendiff = 0;
         let mut indent_state = FixIndent {
-            orig_indent: if self.flags & PUT_FIXINDENT as c_int != 0 {
+            orig_indent: if self.flags & PUT_FIXINDENT != 0 {
                 get_indent()
             } else {
                 0
@@ -314,7 +314,7 @@ impl Put {
                     }
                     lnum += 1;
                     self.nr_lines += 1;
-                    if self.flags & PUT_FIXINDENT as c_int != 0 {
+                    if self.flags & PUT_FIXINDENT != 0 {
                         // Only the very last line's length is wanted, to see
                         // what the reindent took off it.
                         let measured = cnt == self.count && i == y_size - 1;
@@ -332,8 +332,7 @@ impl Put {
                 // Splice the extmarks for what was inserted. A linewise
                 // put that did *not* split a line has its marks moved by
                 // `mark_adjust` below instead.
-                let splits_a_line =
-                    self.kind == kMTLineWise && self.flags & PUT_LINE_SPLIT as c_int != 0;
+                let splits_a_line = self.kind == kMTLineWise && self.flags & PUT_LINE_SPLIT != 0;
                 if self.kind == kMTCharWise || splits_a_line {
                     let (last, init) = self.lines.split_last().expect("a register holds a line");
                     let mut totsize: BCount = 0;

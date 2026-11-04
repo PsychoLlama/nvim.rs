@@ -33,22 +33,31 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::file_search::FileNameOpts;
-use crate::types::NUL;
+
+/// The computed registers that read the buffer around the cursor, named by
+/// the control character typed after CTRL-R: the file name (CTRL-F), the
+/// same expanded to a full path (CTRL-P), the word (CTRL-W), the WORD
+/// (CTRL-A) and the line (CTRL-L).
+pub(crate) const REG_CTRL_A: RegName = 0x01;
+pub(crate) const REG_CTRL_F: RegName = 0x06;
+pub(crate) const REG_CTRL_L: RegName = 0x0c;
+pub(crate) const REG_CTRL_P: RegName = 0x10;
+pub(crate) const REG_CTRL_W: RegName = 0x17;
 
 /// Prompt for the `"=` expression on the command line.
 ///
-/// Answers `'='` once it is stored, or `NUL` if the prompt was abandoned. An
-/// empty answer leaves the previous expression in place, so that `"=<CR>`
-/// repeats it.
-pub fn get_expr_register() -> c_int {
+/// Answers whether an expression is stored, `false` when the prompt was
+/// abandoned. An empty answer leaves the previous expression in place, so
+/// that `"=<CR>` repeats it.
+pub fn get_expr_register() -> bool {
     let Some(new_line) = cmdline_input(Some(b'='), 0, true) else {
-        return NUL; // cancelled
+        return false; // cancelled
     };
     // An empty answer keeps the previous expression.
     if !new_line.is_empty() {
         set_expr_line(new_line);
     }
-    '=' as c_int
+    true
 }
 
 /// Set the `"=` expression.
@@ -91,17 +100,17 @@ pub fn get_expr_line_src() -> Option<XString> {
 /// `errmsg` also turns on the error messages for a register that has nothing
 /// in it -- E29 for `".`, E30 for `":`, E35 for `"/`. `"=` runs arbitrary
 /// Vimscript.
-pub fn get_spec_reg(regname: c_int, errmsg: bool) -> Option<Option<XString>> {
+pub fn get_spec_reg(regname: RegName, errmsg: bool) -> Option<Option<XString>> {
     let value = match regname {
         // `"%` -- the current file name.
-        c if c == '%' as c_int => {
+        b'%' => {
             if errmsg {
                 let _ = check_fname(); // will give an error message
             }
             Buf::current().name.shown().map(XString::from_cstr)
         }
         // `"#` -- the alternate file name.
-        c if c == '#' as c_int => match buflist_name_nr(0) {
+        b'#' => match buflist_name_nr(0) {
             Some((alt, _)) => alt.name.shown().map(XString::from_cstr),
             None => {
                 if errmsg {
@@ -111,9 +120,9 @@ pub fn get_spec_reg(regname: c_int, errmsg: bool) -> Option<Option<XString>> {
             }
         },
         // `"=` -- the expression, evaluated.
-        c if c == '=' as c_int => get_expr_line(),
+        b'=' => get_expr_line(),
         // `":` -- the last command line.
-        c if c == ':' as c_int => {
+        b':' => {
             // A copy: the caller may run commands while it holds it.
             let line = last_cmdline.with(Clone::clone);
             if line.is_none() && errmsg {
@@ -122,7 +131,7 @@ pub fn get_spec_reg(regname: c_int, errmsg: bool) -> Option<Option<XString>> {
             line
         }
         // `"/` -- the last search pattern.
-        c if c == '/' as c_int => {
+        b'/' => {
             let pat = last_search_pat();
             if pat.is_none() && errmsg {
                 emsg(gettext(e_noprevre));
@@ -130,7 +139,7 @@ pub fn get_spec_reg(regname: c_int, errmsg: bool) -> Option<Option<XString>> {
             pat
         }
         // `".` -- the last inserted text.
-        c if c == '.' as c_int => {
+        b'.' => {
             let text = get_last_insert_save();
             if text.is_none() && errmsg {
                 emsg(gettext(e_noinstext));
@@ -140,14 +149,15 @@ pub fn get_spec_reg(regname: c_int, errmsg: bool) -> Option<Option<XString>> {
         // CTRL-R CTRL-F / CTRL-P -- the file name under the cursor, the
         // second form expanded to a full path.  Reading the buffer is a side
         // effect, so it only happens for a caller that asked for messages.
-        Ctrl_F | Ctrl_P if errmsg => {
-            let opts =
-                FileNameOpts::MESS | FileNameOpts::HYP | FileNameOpts::EXP.when(regname == Ctrl_P);
+        REG_CTRL_F | REG_CTRL_P if errmsg => {
+            let opts = FileNameOpts::MESS
+                | FileNameOpts::HYP
+                | FileNameOpts::EXP.when(regname == REG_CTRL_P);
             file_name_at_cursor(opts, 1, None)
         }
         // CTRL-R CTRL-W / CTRL-A -- the word, or the WORD, under the cursor.
-        Ctrl_W | Ctrl_A if errmsg => {
-            let find = if regname == Ctrl_W {
+        REG_CTRL_W | REG_CTRL_A if errmsg => {
+            let find = if regname == REG_CTRL_W {
                 FIND_IDENT | FIND_STRING
             } else {
                 FIND_STRING
@@ -157,7 +167,7 @@ pub fn get_spec_reg(regname: c_int, errmsg: bool) -> Option<Option<XString>> {
             (!ident.is_empty()).then(|| XString::from_vec(ident))
         }
         // CTRL-R CTRL-L -- the whole cursor line.
-        Ctrl_L if errmsg => {
+        REG_CTRL_L if errmsg => {
             // Copied rather than lent: every caller here goes on to insert
             // the text, and inserting re-enters the editor, which may move
             // or free the block the line was read out of.
@@ -167,7 +177,7 @@ pub fn get_spec_reg(regname: c_int, errmsg: bool) -> Option<Option<XString>> {
             ))
         }
         // `"_` -- the black hole, which reads as empty.
-        c if c == '_' as c_int => Some(XString::new()),
+        b'_' => Some(XString::new()),
         _ => return None,
     };
     Some(value)

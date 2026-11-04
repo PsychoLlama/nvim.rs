@@ -521,9 +521,8 @@ pub(crate) fn eval7(
             cursor.bump(1);
             if evaluate {
                 result.write_empty(VAR_STRING);
-                // Sign-extended, as the C is: `**arg` is a `char`.
-                let name = c_int::from(cursor.byte().cast_signed());
-                let text = get_reg_contents_owned(name, kGRegExprSrc as c_int);
+                let name = cursor.byte();
+                let text = get_reg_contents_owned(name, kGRegExprSrc.cast_signed());
                 result.write_string(text.map(ThinCString::from));
             }
             // `@` at the very end of the line names no register.

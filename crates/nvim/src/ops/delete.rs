@@ -102,7 +102,7 @@ pub fn op_delete(op: &mut OpArg) -> Result<(), NotDeleted> {
     if op.motion_type == kMTCharWise
         && !op.is_visual
         && op.line_count > 1
-        && op.motion_force == NUL
+        && op.motion_force.is_nul()
         && op.op_type == OpType::Delete
     {
         let blank = {
@@ -128,7 +128,7 @@ pub fn op_delete(op: &mut OpArg) -> Result<(), NotDeleted> {
 
     if !empty_region {
         // Yank whatever is about to be deleted. `"_` takes nothing.
-        if op.regname != '_' as c_int && !save_deleted_text(op) {
+        if op.regname != b'_' && !save_deleted_text(op) {
             return Ok(());
         }
 
@@ -209,7 +209,7 @@ fn save_deleted_text(op: &OpArg) -> bool {
     // Into the small-delete register when no register was named and the
     // delete is within one line.
     if op.regname == 0 && op.motion_type != kMTLineWise && op.line_count == 1 {
-        let small = get_yank_register('-' as c_int, YREG_YANK as c_int);
+        let small = get_yank_register(b'-', YREG_YANK);
         op_yank_reg(op, false, small, false);
         reg = Some(small);
         did_yank = true;

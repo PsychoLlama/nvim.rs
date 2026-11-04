@@ -77,13 +77,13 @@ state_record! {
     /// The count typed before the operator.
     pub(crate) opcount: c_int = 0;
     /// `v`, `V` or CTRL-V typed after the operator, forcing its motion type.
-    pub(crate) motion_force: c_int = 0;
+    pub(crate) motion_force: Key = Key::NUL;
     /// 'virtualedit' forced for one operator: `None` follows the option.
     pub(crate) virtual_op: Option<bool> = None;
 
     // -- Visual mode --
     /// The register Select mode puts replaced text in.
-    pub(crate) VIsual_select_reg: c_int = 0;
+    pub(crate) VIsual_select_reg: u8 = 0;
     /// An exclusive Select-mode selection was adjusted by one.
     pub(crate) VIsual_select_exclu_adj: bool = false;
     /// Go back to Select mode when the CTRL-O command is done.

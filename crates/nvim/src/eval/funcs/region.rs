@@ -27,8 +27,8 @@ use crate::semsg;
 use crate::state::mode::virtual_op;
 use crate::state::virtual_active;
 use crate::types::{
-    BlockDef, ColNr, EvalFuncData, LineNr, MotionType, NUL, OpArg, OpType, Pos, TypVal, VAR_DICT,
-    VarNumber, kListLenMayKnow,
+    BlockDef, ColNr, EvalFuncData, Key, LineNr, MotionType, NUL, OpArg, OpType, Pos, TypVal,
+    VAR_DICT, VarNumber, kListLenMayKnow,
 };
 use core::ffi::{CStr, c_int};
 
@@ -45,7 +45,7 @@ const NO_OPARG: OpArg = OpArg {
     op_type: OpType::Nop,
     regname: 0,
     motion_type: kMTCharWise,
-    motion_force: 0,
+    motion_force: Key::NUL,
     use_reg_one: false,
     inclusive: false,
     end_adjusted: false,

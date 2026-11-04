@@ -581,7 +581,7 @@ pub(crate) fn nv_visual(cmd_arg: &mut CmdArg) {
     // After an operator these are not commands but a forced motion kind:
     // `dv`, `dV`, `d CTRL-V`.
     if cmd_arg.op().op_type != OpType::Nop {
-        cmd_arg.op().motion_force = cmd_arg.cmdchar.code();
+        cmd_arg.op().motion_force = cmd_arg.cmdchar;
         motion_force.set(cmd_arg.op().motion_force);
         finish_op.set(false);
         return;

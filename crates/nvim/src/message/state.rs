@@ -180,7 +180,7 @@ state_record! {
     /// `'verbosefile'`, opened on the first message that goes to it.
     pub(super) verbose_fd: Option<CFile> = None;
     /// The register `:redir @x` writes to, or 0.
-    pub(crate) redir_reg: c_int = 0;
+    pub(crate) redir_reg: u8 = 0;
     /// `:redir => var` is active.
     pub(crate) redir_vname: bool = false;
     /// What `execute()`, `nvim_exec2()` and `nvim_cmd()` are collecting,

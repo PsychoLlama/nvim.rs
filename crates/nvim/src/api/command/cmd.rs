@@ -446,7 +446,7 @@ fn apply_register(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<(), Error> {
     // `:put`/`:iput` read the register, everything else writes it.
     let writing =
         !is_user_cmd(excmd.cmdidx) && excmd.cmdidx != CmdIdx::put && excmd.cmdidx != CmdIdx::iput;
-    if !valid_yank_reg(c_int::from(regname), writing) {
+    if !valid_yank_reg(regname.cast_unsigned(), writing) {
         // `%c` wrote the one byte, whatever it was.
         let byte = regname.cast_unsigned();
         let reg = msg_bytes(core::slice::from_ref(&byte));
@@ -455,7 +455,7 @@ fn apply_register(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<(), Error> {
             "Invalid register: \"{reg}"
         ));
     }
-    excmd.regname = c_int::from(regname.cast_unsigned());
+    excmd.regname = regname.cast_unsigned();
     Ok(())
 }
 

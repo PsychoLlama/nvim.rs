@@ -23,17 +23,13 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::keycodes::{Ctrl_A, Ctrl_X};
 use crate::message::internal_error;
-use crate::types::OpType;
+use crate::types::{Key, OpType};
 
-use core::ffi::c_int;
-
-/// [`Ctrl_A`] and [`Ctrl_X`] as the single bytes the table stores them as.
-/// The keycode constants are `int`s, and `to_le_bytes` takes the low byte a
-/// `(char)` cast would, in a form a `const` can evaluate.
-const CTRL_A: u8 = Ctrl_A.to_le_bytes()[0];
-const CTRL_X: u8 = Ctrl_X.to_le_bytes()[0];
+/// CTRL-A and CTRL-X as the single bytes the table stores them as (the
+/// [`Key`] constants of the same name are the keys).
+const CTRL_A: u8 = b'A' ^ 0x40;
+const CTRL_X: u8 = b'X' ^ 0x40;
 
 /// The operator always works on whole lines, whatever the motion said.
 const OPF_LINES: u8 = 1;
@@ -113,19 +109,19 @@ static OPCHARS: [OpChar; 30] = {
 ///
 /// A pair that names nothing is a bug in the caller; upstream reports it and
 /// answers the last row, and so does this.
-pub fn get_op_type(char1: c_int, char2: c_int) -> OpType {
-    // A key outside 0..=255 matches none of these, and none of the operators
-    // below is spelled with one either.
-    match u8::try_from(char1).ok() {
+pub fn get_op_type(char1: Key, char2: Key) -> OpType {
+    // A key that is not a byte matches none of these, and none of the
+    // operators below is spelled with one either.
+    match char1.as_byte() {
         Some(b'r') => return OpType::Replace,
         Some(b'~') => return OpType::Tilde,
-        Some(b'g') if char2 == Ctrl_A => return OpType::NrAdd,
-        Some(b'g') if char2 == Ctrl_X => return OpType::NrSub,
-        Some(b'z') if char2 == c_int::from(b'y') => return OpType::Yank,
+        Some(b'g') if char2 == Key::CTRL_A => return OpType::NrAdd,
+        Some(b'g') if char2 == Key::CTRL_X => return OpType::NrSub,
+        Some(b'z') if char2.is('y') => return OpType::Yank,
         _ => {}
     }
     for (op, row) in OPCHARS.iter().enumerate() {
-        if c_int::from(row.first) == char1 && c_int::from(row.second) == char2 {
+        if Key::byte(row.first) == char1 && Key::byte(row.second) == char2 {
             return OpType::ALL[op];
         }
     }
@@ -144,14 +140,14 @@ pub fn op_is_change(op: OpType) -> bool {
 }
 
 /// First character of the keys that name this operator.
-pub fn get_op_char(op: OpType) -> c_int {
-    c_int::from(OPCHARS[op as usize].first)
+pub fn get_op_char(op: OpType) -> u8 {
+    OPCHARS[op as usize].first
 }
 
 /// Second character of the keys that name this operator, `NUL` if there is
 /// only one.
-pub fn get_extra_op_char(op: OpType) -> c_int {
-    c_int::from(OPCHARS[op as usize].second)
+pub fn get_extra_op_char(op: OpType) -> u8 {
+    OPCHARS[op as usize].second
 }
 
 #[cfg(test)]
@@ -206,13 +202,16 @@ mod tests {
         for &op in &OpType::ALL[1..] {
             // `r` and `~` are the two rows the special cases shadow: `r`
             // answers `Replace` either way, and `~` is not in the table.
-            let found = get_op_type(get_op_char(op), get_extra_op_char(op));
+            let found = get_op_type(Key::byte(get_op_char(op)), Key::byte(get_extra_op_char(op)));
             assert_eq!(found, op, "row {op:?}");
         }
-        assert_eq!(get_op_type(b'~'.into(), 0), OpType::Tilde);
-        assert_eq!(get_op_type(b'g'.into(), Ctrl_A), OpType::NrAdd);
-        assert_eq!(get_op_type(b'g'.into(), Ctrl_X), OpType::NrSub);
-        assert_eq!(get_op_type(b'z'.into(), b'y'.into()), OpType::Yank);
+        assert_eq!(get_op_type(Key::ascii(b'~'), Key::NUL), OpType::Tilde);
+        assert_eq!(get_op_type(Key::ascii(b'g'), Key::CTRL_A), OpType::NrAdd);
+        assert_eq!(get_op_type(Key::ascii(b'g'), Key::CTRL_X), OpType::NrSub);
+        assert_eq!(
+            get_op_type(Key::ascii(b'z'), Key::ascii(b'y')),
+            OpType::Yank
+        );
     }
 
     #[test]

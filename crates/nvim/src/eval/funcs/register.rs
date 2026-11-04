@@ -10,34 +10,30 @@ use crate::cstr;
 use crate::eval::typval::{NumBuf, dict_get_number, dict_len, list_iter, tv_list_alloc};
 use crate::eval::vars::with_vim_var_str;
 use crate::getchar::state::{reg_executing, reg_recorded, reg_recording};
-use crate::keycodes::Ctrl_V;
 use crate::memory::ThinCString;
 use crate::register::{
-    format_reg_type, get_reg_contents_list, get_reg_contents_owned, get_reg_type,
+    RegName, format_reg_type, get_reg_contents_list, get_reg_contents_owned, get_reg_type,
     get_register_name, get_unname_register, op_reg_set_previous, point_unnamed_at,
     write_reg_contents_cstr, write_reg_contents_lst,
 };
 use crate::semsg;
 use crate::types::{
-    BoolVarValue, Dict, EvalFuncData, Failed, MotionType, NUL, TypVal, VAR_DICT, VAR_LIST, Vv,
+    BoolVarValue, Dict, EvalFuncData, Failed, Key, MotionType, NUL, TypVal, VAR_DICT, VAR_LIST, Vv,
     kBoolVarFalse, kBoolVarTrue,
 };
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 /// Which register a builtin was asked about, or `None` if the argument was
 /// not a String. An omitted argument means `v:register`, and an empty name
 /// means the unnamed register.
-fn regname(args: &[TypVal]) -> Option<c_int> {
+fn regname(args: &[TypVal]) -> Option<RegName> {
     let mut numbuf = NumBuf::new();
     let first = if let Some(arg) = args.first() {
         numbuf.bytes_chk(arg)?.first().copied().unwrap_or(0)
     } else {
         with_vim_var_str(Vv::Register, cstr::first)
     };
-    Some(match first {
-        0 => b'"' as c_int,
-        c => c_int::from(c),
-    })
+    Some(if first == 0 { b'"' } else { first })
 }
 
 /// `getreg([{regname} [, 1 [, {list}]]])`.
@@ -58,9 +54,13 @@ pub fn f_getreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             return;
         }
     }
-    let mut flags = if expr_src { kGRegExprSrc as c_int } else { 0 };
+    let mut flags = if expr_src {
+        kGRegExprSrc.cast_signed()
+    } else {
+        0
+    };
     if return_list {
-        flags |= kGRegList as c_int;
+        flags |= kGRegList.cast_signed();
         result.write_empty(VAR_LIST);
         // An unset register gets a fresh empty list.
         let held = get_reg_contents_list(regname, flags).unwrap_or_else(|| tv_list_alloc(0));
@@ -85,13 +85,13 @@ pub fn f_getreginfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let Some(mut regname) = regname(args) else {
         return;
     };
-    if regname == b'@' as c_int {
-        regname = b'"' as c_int;
+    if regname == b'@' {
+        regname = b'"';
     }
     dict_alloc_ret(result);
     // Reading `"*`/`"+` runs the provider, so the answer's dictionary is
     // only borrowed between the reads.
-    let list = get_reg_contents_list(regname, kGRegExprSrc as c_int);
+    let list = get_reg_contents_list(regname, kGRegExprSrc.cast_signed());
     // An unset register has no `regcontents`, and no other key either.
     let Some(list) = list else {
         return;
@@ -108,8 +108,8 @@ pub fn f_getreginfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // The unnamed register reports what it points at; every other one
     // reports whether it is what the unnamed register points at.
     let unnamed = get_register_name(get_unname_register());
-    if regname == b'"' as c_int {
-        let name = ThinCString::from_bytes(&[unnamed as c_char as u8]);
+    if regname == b'"' {
+        let name = ThinCString::from_bytes(&[unnamed]);
         let _ = dict(result).add_str(b"points_to", Some(&name));
     } else {
         let flag = if regname == unnamed {
@@ -127,9 +127,9 @@ fn dict(result: &mut TypVal) -> &mut Dict {
 }
 
 /// The single-character String the three recording-state builtins return.
-fn return_register(regname: c_int, result: &mut TypVal) {
+fn return_register(regname: RegName, result: &mut TypVal) {
     // A NUL register name answers the empty string.
-    result.write_string(Some(ThinCString::from_bytes(&[regname as c_char as u8])));
+    result.write_string(Some(ThinCString::from_bytes(&[regname])));
 }
 
 /// `reg_executing()` — the register a macro is being played from.
@@ -162,7 +162,7 @@ fn get_yank_type(
         b'v' | b'c' => *yank_type = kMTCharWise,
         b'V' | b'l' => *yank_type = kMTLineWise,
         b'b' => *yank_type = kMTBlockWise,
-        c if c_int::from(c) == Ctrl_V => *yank_type = kMTBlockWise,
+        c if Key::byte(c) == Key::CTRL_V => *yank_type = kMTBlockWise,
         _ => return Err(Failed),
     }
     let digits = &text[(*at + 1).min(text.len())..];
@@ -193,20 +193,20 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     };
     let mut regname = match strregname.first().copied().unwrap_or(0) {
-        0 | b'@' => b'"' as c_char,
-        c => c as c_char,
+        0 | b'@' => b'"',
+        c => c,
     };
 
     let mut yank_type: MotionType = kMTUnknown;
     let mut block_len: c_int = -1;
     let regcontents: Option<&TypVal>;
-    let mut pointreg: c_char = 0;
+    let mut pointreg: RegName = 0;
 
     if args[1].v_type() == VAR_DICT {
         let d_ref = args[1].dict_ref();
         // An empty dict clears the register outright.
         if dict_len(d_ref) == 0 {
-            write_reg_contents_lst(regname as c_int, &[], false, kMTUnknown, -1);
+            write_reg_contents_lst(regname, &[], false, kMTUnknown, -1);
             return;
         }
         // The value is copied out before the register writer runs, which
@@ -228,9 +228,9 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                 return;
             }
         }
-        if regname == b'"' as c_char {
+        if regname == b'"' {
             if let Some(stropt) = numbuf3.dict_string(d_ref, b"points_to") {
-                pointreg = cstr::byte_at(stropt.to_bytes(), 0) as c_char;
+                pointreg = cstr::byte_at(stropt.to_bytes(), 0);
                 regname = pointreg;
             }
         } else if dict_get_number(d_ref, b"isunnamed") != 0 {
@@ -275,17 +275,17 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // only leaves the register alone.
         if let Some(lines) = list_lines(contents) {
             let lines: Vec<&CStr> = lines.iter().map(|line| line.as_cstr()).collect();
-            write_reg_contents_lst(regname as c_int, &lines, append, yank_type, block_len);
+            write_reg_contents_lst(regname, &lines, append, yank_type, block_len);
         }
     } else if let Some(contents) = regcontents {
         let Some(strval) = numbuf5.string_chk(contents) else {
             return;
         };
         let text = ThinCString::from_cstr(strval);
-        write_reg_contents_cstr(regname as c_int, &text, append, yank_type, block_len);
+        write_reg_contents_cstr(regname, &text, append, yank_type, block_len);
     }
     if pointreg != 0 {
-        point_unnamed_at(c_int::from(pointreg));
+        point_unnamed_at(pointreg);
     }
     result.write_number(0);
     if set_unnamed {

@@ -52,7 +52,7 @@ pub(crate) struct Put {
     dir: c_int,
     count: c_int,
     /// The `PUT_*` set.
-    flags: c_int,
+    flags: PutFlags,
     /// 'virtualedit', read once because it does not change under the put.
     ve_flags: c_uint,
 
@@ -73,27 +73,27 @@ pub(crate) struct Put {
 /// newlines and all, so the only way to reproduce it is to re-enter Insert
 /// mode and replay them: this stuffs a command into the read buffer and
 /// returns, and the main loop does the work.
-fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: c_uint) {
+fn put_last_insert(dir: Direction, mut count: c_int, flags: PutFlags, ve_flags: c_uint) {
     let non_linewise_vis = visual_active() && !visual_mode().is_line();
 
     // A Visual selection is replaced (`c`); `PUT_LINE` opens its own line
     // below, so it inserts at the start of it.
-    let command_start_char = if non_linewise_vis {
-        'c' as c_int
-    } else if flags & PUT_LINE as c_int != 0 {
-        'i' as c_int
+    let command_start_char = Key::ascii(if non_linewise_vis {
+        b'c'
+    } else if flags & PUT_LINE != 0 {
+        b'i'
     } else if dir == FORWARD {
-        'a' as c_int
+        b'a'
     } else {
-        'i' as c_int
-    };
+        b'i'
+    });
 
-    if flags & PUT_LINE as c_int != 0 {
+    if flags & PUT_LINE != 0 {
         // Open the line with a black-hole `:put _`, so that 'autoindent'
         // does not reach the text.
-        do_put('_' as c_int, None, dir, 1, PUT_LINE as c_int);
+        do_put(b'_', None, dir, 1, PUT_LINE);
 
-        stuff_readbuf_char(Key::from_code(command_start_char));
+        stuff_readbuf_char(command_start_char);
         while count > 0 {
             let _ = stuff_inserted(Key::NUL, 1, count != 1);
             if count != 1 {
@@ -107,13 +107,13 @@ fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: c_uint)
             count -= 1;
         }
     } else {
-        let _ = stuff_inserted(Key::from_code(command_start_char), count, false);
+        let _ = stuff_inserted(command_start_char, count, false);
     }
 
     // The text goes in later, so the cursor cannot be moved past it here;
     // motion commands stuffed after the insert do it instead.
-    if flags & PUT_CURSEND as c_int != 0 {
-        if flags & PUT_LINE as c_int != 0 {
+    if flags & PUT_CURSEND != 0 {
+        if flags & PUT_LINE != 0 {
             stuff_readbuf(b"j0");
         } else {
             // Stuffing `l` would ring the bell at the end of a line, so
@@ -135,13 +135,13 @@ fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: c_uint)
                 stuff_readbuf_char(Key::ascii(b'l'));
             }
         }
-    } else if flags & PUT_LINE as c_int != 0 {
+    } else if flags & PUT_LINE != 0 {
         stuff_readbuf(b"g'[");
     }
 
     // Save the cursor position now (though no text), so that `u` after
     // `".p` restores it.
-    if command_start_char == 'a' as c_int {
+    if command_start_char.is('a') {
         let lnum = Win::current().w_cursor.lnum;
         let _ = u_save(lnum, lnum + 1);
     }
@@ -306,7 +306,7 @@ impl Put {
 
 /// [`do_put`] of register `regname` at the cursor, which is first put back
 /// on a line of the current buffer if it is not on one.
-pub(crate) fn put_at_cursor(regname: c_int, dir: c_int, count: c_int, flags: c_int) {
+pub(crate) fn put_at_cursor(regname: RegName, dir: Direction, count: c_int, flags: PutFlags) {
     crate::cursor::check_cursor_lnum(Win::current());
     do_put(regname, None, dir, count, flags);
 }
@@ -324,7 +324,13 @@ pub(crate) fn put_at_cursor(regname: c_int, dir: c_int, count: c_int, flags: c_i
 /// `PUT_BLOCK_INNER` leaves a block's trailing spaces off.
 ///
 /// May run the clipboard provider and, by way of `"=`, arbitrary Vimscript.
-pub fn do_put(regname: c_int, reg: Option<&YankReg>, dir: c_int, count: c_int, flags: c_int) {
+pub fn do_put(
+    regname: RegName,
+    reg: Option<&YankReg>,
+    dir: Direction,
+    count: c_int,
+    flags: PutFlags,
+) {
     let orig_start = Buf::current().b_op_start;
     let orig_end = Buf::current().b_op_end;
     let ve_flags = get_ve_flags(Win::current());
@@ -338,7 +344,7 @@ pub fn do_put(regname: c_int, reg: Option<&YankReg>, dir: c_int, count: c_int, f
     Buf::current().b_op_start = Win::current().w_cursor;
     Buf::current().b_op_end = Win::current().w_cursor;
 
-    if regname == '.' as c_int && reg.is_none() {
+    if regname == b'.' && reg.is_none() {
         put_last_insert(dir, count, flags, ve_flags);
         return;
     }
@@ -383,7 +389,7 @@ pub fn do_put(regname: c_int, reg: Option<&YankReg>, dir: c_int, count: c_int, f
     };
 
     if let Some(text) = insert_string {
-        if regname == '=' as c_int {
+        if regname == b'=' {
             // Only `"=` can produce more than one line.
             let (lines, kind) = split_expr_result(&text);
             put.kind = kind;
@@ -408,12 +414,11 @@ pub fn do_put(regname: c_int, reg: Option<&YankReg>, dir: c_int, count: c_int, f
         }
 
         if put.kind == kMTLineWise {
-            let split_failed =
-                put.flags & PUT_LINE_SPLIT as c_int != 0 && !put.split_current_line();
+            let split_failed = put.flags & PUT_LINE_SPLIT != 0 && !put.split_current_line();
             if split_failed {
                 break 'end;
             }
-            if put.flags & PUT_LINE_FORWARD as c_int != 0 {
+            if put.flags & PUT_LINE_FORWARD != 0 {
                 // `p` over a Visual block puts the lines below the block.
                 Win::current().w_cursor = Buf::current().b_visual.vi_end;
                 put.dir = FORWARD;
@@ -422,13 +427,13 @@ pub fn do_put(regname: c_int, reg: Option<&YankReg>, dir: c_int, count: c_int, f
             Buf::current().b_op_end = Win::current().w_cursor;
         }
 
-        if put.flags & PUT_LINE as c_int != 0 {
+        if put.flags & PUT_LINE != 0 {
             // `:put`, or `p` in Visual line mode.
             put.kind = kMTLineWise;
         }
 
         if put.lines.is_empty() {
-            let display = transchar(regname);
+            let display = transchar(c_int::from(regname));
             let name = if regname != 0 {
                 cstr::in_bytes(&display)
             } else {

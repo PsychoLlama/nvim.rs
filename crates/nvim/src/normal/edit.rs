@@ -17,7 +17,6 @@ use crate::narrow::len_as_int;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 
-use crate::ascii::ascii_isdigit;
 use crate::buffer::{buf_get_changedtick, buf_is_prompt, current_buf};
 use crate::change::OPENLINE_DO_COM;
 use crate::change::{changed_lines, del_chars, deleted_lines, ins_char, ins_char_bytes, open_line};
@@ -639,27 +638,27 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
     let mut dir;
     if fix_indent {
         dir = if cmd_arg.cmdchar.is(']') && cmd_arg.nchar.is('p') {
-            FORWARD as c_int
+            FORWARD
         } else {
-            BACKWARD as c_int
+            BACKWARD
         };
-        flags |= PUT_FIXINDENT.cast_signed();
+        flags |= PUT_FIXINDENT;
     } else {
         dir = if cmd_arg.cmdchar.is('P')
             || ((cmd_arg.cmdchar.is('g') || cmd_arg.cmdchar.is('z')) && cmd_arg.nchar.is('P'))
         {
-            BACKWARD as c_int
+            BACKWARD
         } else {
-            FORWARD as c_int
+            FORWARD
         };
     }
     prep_redo_cmd(cmd_arg);
     // `gp` leaves the cursor after the new text; `zp` puts a blockwise
     // register without widening the lines it lands on.
     if cmd_arg.cmdchar.is('g') {
-        flags |= PUT_CURSEND.cast_signed();
+        flags |= PUT_CURSEND;
     } else if cmd_arg.cmdchar.is('z') {
-        flags |= PUT_BLOCK_INNER.cast_signed();
+        flags |= PUT_BLOCK_INNER;
     }
 
     let was_visual = visual_active();
@@ -670,13 +669,13 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
         let keep_registers = cmd_arg.cmdchar.is('P');
         // Putting over a selection deletes it first, and that delete would
         // otherwise overwrite the very register being put.
-        let clipoverwrite = (regname == c_int::from(b'+') || regname == c_int::from(b'*'))
+        let clipoverwrite = (regname == b'+' || regname == b'*')
             && cb_flags.get() & (kOptCbFlagUnnamed | kOptCbFlagUnnamedplus) != 0;
         if regname == 0
-            || regname == c_int::from(b'"')
+            || regname == b'"'
             || clipoverwrite
-            || ascii_isdigit(regname)
-            || regname == c_int::from(b'-')
+            || regname.is_ascii_digit()
+            || regname == b'-'
         {
             savereg = Some(copy_register(regname));
         }
@@ -684,14 +683,10 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
         win.w_onebuf_opt.wo_fen = 0;
         // The condition is upstream's; only the `.` register on a
         // charwise selection skips the delete.
-        if !visual_active() || visual_mode().is_line() || regname != c_int::from(b'.') {
+        if !visual_active() || visual_mode().is_line() || regname != b'.' {
             cmd_arg.cmdchar = Key::ascii(b'd');
             cmd_arg.nchar = Key::NUL;
-            cmd_arg.op().regname = if keep_registers {
-                c_int::from(b'_')
-            } else {
-                NUL
-            };
+            cmd_arg.op().regname = if keep_registers { b'_' } else { 0 };
             let silenced = Suppress::messages();
             nv_operator(cmd_arg);
             do_pending_operator(cmd_arg, 0, false);
@@ -702,20 +697,20 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
             cmd_arg.op().regname = regname;
         }
         if visual_mode().is_line() {
-            flags |= PUT_LINE.cast_signed();
+            flags |= PUT_LINE;
         } else if visual_mode().is_char() {
-            flags |= PUT_LINE_SPLIT.cast_signed();
+            flags |= PUT_LINE_SPLIT;
         }
-        if visual_mode().is_block() && dir == FORWARD as c_int {
-            flags |= PUT_LINE_FORWARD.cast_signed();
+        if visual_mode().is_block() && dir == FORWARD {
+            flags |= PUT_LINE_FORWARD;
         }
         // Put where the selection was, which is where the delete left the
         // cursor -- forwards only when it left it before the start.
-        dir = BACKWARD as c_int;
+        dir = BACKWARD;
         if (!visual_mode().is_line() && win.w_cursor.col < Buf::current().b_op_start.col)
             || (visual_mode().is_line() && win.w_cursor.lnum < Buf::current().b_op_start.lnum)
         {
-            dir = FORWARD as c_int;
+            dir = FORWARD;
         }
         set_visual_active(true);
     }
