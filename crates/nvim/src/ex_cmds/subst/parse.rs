@@ -11,6 +11,13 @@
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::do_sub_msg;
 use crate::cmdhist::add_to_history;
@@ -32,7 +39,7 @@ use crate::os::time::os_time;
 use crate::regexp::{RE_LAST, RE_SUBST, regtilde_owned};
 use crate::search::save_re_pat;
 use crate::shada::ShadaExtra;
-use crate::types::{CmdLine, ExArg, Failed, Timestamp, size_t};
+use crate::types::{CmdLine, ExArg, Failed, Timestamp};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::c_int;
@@ -168,7 +175,8 @@ pub(crate) fn sub_joining_lines(
     let joined_lines_count =
         args.line2 - args.line1 + 1 + i32::from(args.line2 < Buf::current().b_ml.ml_line_count);
     if joined_lines_count > 1 {
-        let _ = do_join(joined_lines_count as size_t, false, true, false, true);
+        let joined = usize::try_from(joined_lines_count).expect("more than one line");
+        let _ = do_join(joined, false, true, false, true);
         SUB_NSUBS.set(joined_lines_count - 1);
         SUB_NLINES.set(1);
         do_sub_msg(false);
@@ -271,7 +279,8 @@ pub(crate) fn skip_substitute(
 /// `c` is a `char` value (`-128..=255`), sign-extended from the command
 /// line's byte, which is how the ctype table upstream indexes is read.
 pub(crate) fn check_regexp_delim(c: c_int) -> Result<(), Failed> {
-    let isalpha = c_int::from(ctype_bits(c as u8)) & _ISalpha as c_int;
+    // The table is indexed by the `char`'s byte: its low eight bits.
+    let isalpha = c_int::from(ctype_bits(c.to_le_bytes()[0])) & _ISalpha.cast_signed();
     if isalpha != 0 {
         emsg(gettext(
             c"E146: Regular expressions can't be delimited by letters",

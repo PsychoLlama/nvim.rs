@@ -10,9 +10,16 @@
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::say;
-use super::{CAR, EOL_MAC, NL, TAB};
+use super::{CAR, EOL_MAC, NL};
 use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
 use crate::charset::{transchar, transchar_nonprint_form, vim_isprintc};
@@ -23,6 +30,7 @@ use crate::indent::{get_indent, set_indent};
 use crate::mbyte::{char_at, char_len, cluster_len, encode_char, utf_iscomposing_first};
 use crate::memline::Lines;
 use crate::message::{msg, msg_multiline, msg_sb_eol};
+use crate::narrow::number_as_int;
 use crate::option::get_fileformat;
 use crate::os::cshim::gettext;
 use crate::plines::linetabsize_text;
@@ -195,7 +203,7 @@ pub fn ex_align(excmd: &mut ExArg) {
     }
 
     // `atoi`: `strtol` cut to an `int`.
-    let arg_width = crate::charset::skip::decimal(excmd.line.arg()).0 as c_int;
+    let arg_width = number_as_int(crate::charset::skip::decimal(excmd.line.arg()).0);
     let mut indent = 0;
     let mut width = 0;
     if cmdidx == CmdIdx::left {
@@ -207,10 +215,10 @@ pub fn ex_align(excmd: &mut ExArg) {
         width = if arg_width > 0 {
             arg_width
         } else {
-            Buf::current().b_p_tw as c_int
+            number_as_int(Buf::current().b_p_tw)
         };
         if width == 0 && Buf::current().b_p_wm > 0 {
-            width = Win::current().w_view_width - Buf::current().b_p_wm as c_int;
+            width = Win::current().w_view_width - number_as_int(Buf::current().b_p_wm);
         }
         if width <= 0 {
             width = 80;
@@ -297,19 +305,19 @@ fn linelen() -> (c_int, bool) {
     // The first non-blank, and the character after the last non-blank.
     let first = text
         .iter()
-        .position(|&b| !ascii_iswhite(b as c_int))
+        .position(|&b| !ascii_iswhite(c_int::from(b)))
         .unwrap_or(text.len());
     let last = text
         .iter()
-        .rposition(|&b| !ascii_iswhite(b as c_int))
+        .rposition(|&b| !ascii_iswhite(c_int::from(b)))
         .map_or(first, |i| i + 1);
-    let has_tab = text[first..last].contains(&(TAB as u8));
+    let has_tab = text[first..last].contains(&b'\t');
 
     // Measure with the trailing white space cut off. Upstream writes a NUL
     // into the buffer line for that and puts the byte back; a copy of the
     // head is measured instead.
     let mut head = text[..last].to_vec();
-    head.push(NUL as u8);
+    head.push(0);
     let head = CStr::from_bytes_until_nul(&head).expect("just terminated");
     let len = linetabsize_text(0, head);
     (len, has_tab)

@@ -19,6 +19,13 @@
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::args::{SubSetup, parse_sub};
 use super::confirm::{Confirm, ask_confirm};
@@ -534,8 +541,8 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
             added,
             false,
         );
-        let num_added = (st.last_line - st.first_line) as int64_t;
-        let num_removed = num_added - added as int64_t;
+        let num_added = int64_t::from(st.last_line - st.first_line);
+        let num_removed = num_added - int64_t::from(added);
         let buffer = Buf::current();
         buf_updates_send_changes(buffer, st.first_line, num_added, num_removed);
     }

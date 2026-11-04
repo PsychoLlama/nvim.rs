@@ -10,6 +10,13 @@
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::ascii::ascii_isdigit;
 use crate::buffer::{buf_ensure_loaded, find_buf};
@@ -76,7 +83,7 @@ pub fn do_sub_msg(count_only: bool) -> bool {
     // Only report substitutions when there were more than 'report' of them,
     // the command was typed by the user or more than one line changed, and
     // messages are not disabled.
-    let worth_reporting = SUB_NSUBS.get() as OptInt > p_report()
+    let worth_reporting = OptInt::from(SUB_NSUBS.get()) > p_report()
         && (KeyTyped.get() || SUB_NLINES.get() > 1 || p_report() < 1 as OptInt);
     if (worth_reporting || count_only) && messaging() {
         let forms = report_forms(count_only);
@@ -91,11 +98,24 @@ pub fn do_sub_msg(count_only: bool) -> bool {
             Vec::new()
         };
         report.truncate(room - 1);
-        let single = ngettext(forms[0][0], forms[0][1], nsubs as c_ulong);
-        let plural = ngettext(forms[1][0], forms[1][1], nsubs as c_ulong);
-        let fmt = ngettext(single, plural, nlines as c_ulong);
+        let single = ngettext(
+            forms[0][0],
+            forms[0][1],
+            c_ulong::from(nsubs.unsigned_abs()),
+        );
+        let plural = ngettext(
+            forms[1][0],
+            forms[1][1],
+            c_ulong::from(nsubs.unsigned_abs()),
+        );
+        let fmt = ngettext(single, plural, c_ulong::from(nlines.unsigned_abs()));
         let left = room - report.len();
-        let counts = crate::formatted!(left, fmt.to_bytes(), nsubs as int64_t, nlines as int64_t);
+        let counts = crate::formatted!(
+            left,
+            fmt.to_bytes(),
+            int64_t::from(nsubs),
+            int64_t::from(nlines)
+        );
         report.extend_from_slice(&counts);
         let report = XString::from_bytes(&report);
         if msg(report.as_cstr(), 0) {
@@ -179,7 +199,7 @@ impl PreviewBuf {
             Vec::new()
         } else {
             let line = Lines::in_buffer(orig_buf).line(lnum).to_vec();
-            self.line_size = line.len() + self.col_width as usize + 1;
+            self.line_size = line.len() + usize::try_from(self.col_width).expect("a width") + 1;
             // Grow the scratch if the line is longer than any before it.
             if self.line_size > self.scratch.len() {
                 self.scratch.resize(self.line_size, 0);
@@ -273,7 +293,13 @@ pub(crate) fn show_sub(
             if let Some(last) = preview_lines.subresults.last() {
                 let highest_lnum = last.start.lnum.max(last.end.lnum);
                 debug_assert!(highest_lnum > LineNr::ZERO, "highest_lnum > 0");
-                col_width = f64::from(highest_lnum).log10() as c_int + 1 as c_int + 3 as c_int;
+                // The digits of the highest line number, and " | " after them.
+                col_width = highest_lnum
+                    .get()
+                    .checked_ilog10()
+                    .map_or(0, u32::cast_signed)
+                    + 1
+                    + 3;
             }
             PreviewBuf {
                 buf,
@@ -329,7 +355,7 @@ pub fn ex_substitute_preview(
 ) -> c_int {
     // Only preview once the pattern delimiter has been typed.
     let first = excmd.line.byte_at(excmd.line.arg);
-    if first == 0 || first.is_ascii_alphabetic() || ascii_isdigit(first as c_int) {
+    if first == 0 || first.is_ascii_alphabetic() || ascii_isdigit(c_int::from(first)) {
         return 0 as c_int;
     }
     // `do_sub` may move `args.arg`, which the caller still needs where it was.

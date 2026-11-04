@@ -16,6 +16,13 @@
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::SUB_FLAGS;
 use super::exec::{Sub, SubArgs, save_undo_once};
@@ -28,10 +35,11 @@ use crate::guard::Lock;
 use crate::mark::mark_adjust;
 use crate::mbyte::cluster_len;
 use crate::memline::{Lines, ml_append_cstr, ml_delete, ml_get_len, ml_replace_buf_text};
+use crate::narrow::len_as_int;
 use crate::option::magic_isset;
 use crate::pos::MAXLNUM;
 use crate::regexp::{regsub_multi_into, regsub_multi_len};
-use crate::types::{BCount, ColNr, LPos, LineNr, NUL};
+use crate::types::{BCount, ColNr, LPos, LineNr};
 use crate::undo::{u_inssub, u_savedel, u_savesub};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
@@ -59,7 +67,7 @@ pub(super) struct SubLine(Vec<u8>);
 impl Default for SubLine {
     /// The empty line, which is upstream's `xstrdup("")`.
     fn default() -> SubLine {
-        SubLine(vec![NUL as u8])
+        SubLine(vec![0])
     }
 }
 
@@ -71,7 +79,7 @@ impl SubLine {
         let text = lines.line(lnum);
         let mut bytes = Vec::with_capacity(text.len() + 1);
         bytes.extend_from_slice(text);
-        bytes.push(NUL as u8);
+        bytes.push(0);
         SubLine(bytes)
     }
 
@@ -96,7 +104,7 @@ impl SubLine {
         let end = self.0.len() - 1;
         self.0.truncate(end);
         self.0.extend_from_slice(bytes);
-        self.0.push(NUL as u8);
+        self.0.push(0);
     }
 
     /// Append what `write` writes past the end.
@@ -111,11 +119,11 @@ impl SubLine {
     /// of room or walks into a changed line leaves the text *unterminated*.
     fn append_written(&mut self, room: usize, write: impl FnOnce(&mut [u8])) {
         let base = self.0.len() - 1;
-        self.0.resize(base + room + 1, NUL as u8);
+        self.0.resize(base + room + 1, 0);
         write(&mut self.0[base..base + room]);
         let written = self.0[base..]
             .iter()
-            .position(|&byte| byte == NUL as u8)
+            .position(|&byte| byte == 0)
             .expect("the reserved bytes were zeroed, so one of them terminates");
         self.0.truncate(base + written + 1);
     }
@@ -132,7 +140,7 @@ impl SubLine {
     /// line is only that head, and the tail past the terminator is text this
     /// type's invariant says is not there.
     fn terminate_at(&mut self, at: usize) {
-        self.0[at] = NUL as u8;
+        self.0[at] = 0;
     }
 
     /// Drop the first `n` bytes, keeping what follows as the whole text.
@@ -143,9 +151,9 @@ impl SubLine {
 
 /// The `regsub_multi_*` flags this command uses, without the copy bit.
 fn regsub_flags() -> c_int {
-    REGSUB_BACKSLASH as c_int
+    REGSUB_BACKSLASH.cast_signed()
         | if magic_isset() {
-            REGSUB_MAGIC as c_int
+            REGSUB_MAGIC.cast_signed()
         } else {
             0 as c_int
         }
@@ -173,7 +181,7 @@ fn split_carriage_returns(st: &mut Sub, at: usize) {
             st.sublen -= 1;
             line.remove(at);
             at += 1;
-        } else if here as c_int == CAR {
+        } else if c_int::from(here) == CAR {
             // Prepare for undo of the line about to be split.
             if u_inssub(st.lnum).is_ok() {
                 // The text up to the CR becomes a line of its own, and is
@@ -270,13 +278,14 @@ pub(super) fn build_replacement(
 
     // Only now can we know where the match will actually start in the new
     // text.
-    let start_col = st.new_line().len() as c_int;
-    current_match.start.col = ColNr::new(start_col);
+    let start_at = st.new_line().len();
+    let start_col = len_as_int(start_at);
+    current_match.start.col = ColNr::from_index(start_at);
 
     {
         let _locked = Lock::text();
         let lnum = st.sub_firstlnum - st.regmatch.startpos[0].lnum;
-        let sublen = st.sublen as usize;
+        let sublen = usize::try_from(st.sublen).expect("a length");
         let (regmatch, sub, line) = (&st.regmatch, &st.sub, &mut st.new_line);
         let line = line
             .as_mut()
@@ -311,7 +320,7 @@ pub(super) fn build_replacement(
 
     // Save the line number before processing newlines.
     let lnum_before_newlines = st.lnum;
-    split_carriage_returns(st, start_col as usize);
+    split_carriage_returns(st, start_at);
 
     let new_endcol = ColNr::from_index(st.new_line().len());
     current_match.end.col = new_endcol;

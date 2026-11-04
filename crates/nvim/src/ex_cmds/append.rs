@@ -9,6 +9,13 @@
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::lines::set_op_range;
 use super::say;
@@ -30,7 +37,7 @@ use crate::state::mode::State;
 use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL};
 use crate::types::CmdIdx;
 use crate::types::ColNr;
-use crate::types::{ExArg, LineNr, NUL, OptInt, int64_t};
+use crate::types::{ExArg, LineNr, OptInt, int64_t};
 use crate::ui::state::{Columns, Rows};
 use crate::ui::ui_cursor_shape;
 use crate::undo::u_save;
@@ -71,7 +78,7 @@ pub fn ex_append(excmd: &mut ExArg) {
 
     // Behave like in Insert mode.
     State.set(MODE_INSERT);
-    if Buf::current().b_p_iminsert == B_IMODE_LMAP as OptInt {
+    if Buf::current().b_p_iminsert == OptInt::from(B_IMODE_LMAP) {
         State.set(State.get() | MODE_LANGMAP);
     }
 
@@ -120,7 +127,7 @@ pub fn ex_append(excmd: &mut ExArg) {
         }
 
         did_undo = true;
-        theline.push(NUL as u8);
+        theline.push(0);
         let theline = CStr::from_bytes_until_nul(&theline).expect("just terminated");
         let _ = ml_append_cstr(lnum, theline);
         if empty {
@@ -192,7 +199,7 @@ fn next_append_line(args: &mut ExArg, indent: c_int) -> Option<Option<Vec<u8>>> 
         // when there is no more.
         let next = args.line.next?;
         let rest = args.line.rest_of(next);
-        let (line, rest) = match rest.iter().position(|&byte| byte == NL as u8) {
+        let (line, rest) = match rest.iter().position(|&byte| byte == b'\n') {
             Some(end) => (rest[..end].to_vec(), Some(next + end + 1)),
             None => (rest.to_vec(), None),
         };
@@ -278,7 +285,7 @@ pub fn ex_z(excmd: &mut ExArg) {
         if bigness > cap || bigness < 0 {
             bigness = cap;
         }
-        P_WINDOW.set(bigness as c_int as OptInt);
+        P_WINDOW.set(bigness);
         if kind == b'=' {
             bigness += 2;
         }

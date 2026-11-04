@@ -12,6 +12,13 @@
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::say;
 use super::{buf_autocmd, check_secure, kExtmarkNOOP};
@@ -61,7 +68,7 @@ use crate::startup::silent_mode;
 use crate::strings::escaped_bytes;
 use crate::tr;
 use crate::types::ui::kUIMessages;
-use crate::types::{CmdModFlags, CpoFlag, ExArg, Failed, LineNr, NUL, OptInt};
+use crate::types::{CmdModFlags, CpoFlag, ExArg, Failed, LineNr, OptInt};
 use crate::ui::state::Rows;
 use crate::ui::{ui_cursor_goto, ui_has};
 use crate::undo::{buf_is_changed, u_save};
@@ -141,7 +148,7 @@ pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, 
         PREVCMD.set(assembled.clone());
     }
     let mut newcmd = assembled;
-    newcmd.push(NUL as u8);
+    newcmd.push(0);
 
     'theend: {
         if bangredo.get() {
@@ -164,7 +171,7 @@ pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, 
             let mut quoted = shq.to_vec();
             PREVCMD.with(|cmd| quoted.extend_from_slice(cmd));
             quoted.extend_from_slice(shq);
-            quoted.push(NUL as u8);
+            quoted.push(0);
             newcmd = quoted;
         }
 
@@ -461,7 +468,7 @@ fn do_filter(
             beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
             drop(no_prompt.take());
 
-            if linecount as OptInt > p_report() {
+            if OptInt::from(linecount) > p_report() {
                 if do_in {
                     report_filtered(linecount);
                 } else {
@@ -495,7 +502,7 @@ fn do_filter(
 /// `:range!cmd`'s "N lines filtered". `set_keep_msg` takes a copy, so it
 /// survives the redraw without a buffer outliving this call.
 fn report_filtered(linecount: i32) {
-    let count = linecount as i64;
+    let count = i64::from(linecount);
     // `MSG_BUF_LEN` is where upstream's scratch buffer truncated this.
     let shown = to_message(tr!("{count} lines filtered"), MSG_BUF_LEN as usize);
     if msg(&shown, 0) && msg_scroll.get() == 0 {
@@ -692,7 +699,7 @@ fn has_percent_s(opt: &[u8]) -> bool {
 pub fn print_line_no_prefix(lnum: LineNr, use_number: bool, list: bool) {
     if Win::current().w_onebuf_opt.wo_nu != 0 || use_number {
         // Highlight line nrs, right-aligned in 'numberwidth' columns.
-        let width = number_width(Win::current()).max(0) as usize;
+        let width = usize::try_from(number_width(Win::current())).unwrap_or(0);
         msg_bytes(format!("{lnum:>width$} ").as_bytes(), HLF_N + 1, false);
     }
     // The message path re-enters the editor (`msg_putchar` can reach the

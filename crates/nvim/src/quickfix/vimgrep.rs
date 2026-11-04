@@ -197,12 +197,12 @@ fn match_buflines(
     } else {
         buffer.handle
     };
-    let global = search.flags & VGR_GLOBAL.cast_signed() != 0;
+    let global = search.flags & VGR_GLOBAL != 0;
     let mut found_match = false;
 
     let mut lnum: LineNr = LineNr::ONE;
     while lnum <= buffer.b_ml.ml_line_count && search.tomatch > 0 {
-        if search.flags & VGR_FUZZY.cast_signed() == 0 {
+        if search.flags & VGR_FUZZY == 0 {
             let mut col: ColNr = ColNr::ZERO;
             let mut regmatch = RegMMatch {
                 rmm_ic: c_int::from(search.ignore_case),
@@ -442,7 +442,7 @@ fn keep_or_drop_dummy(
             return;
         }
         if out.first_match_buf != Some(buffer)
-            || search.flags & VGR_NOJUMP.cast_signed() != 0
+            || search.flags & VGR_NOJUMP != 0
             || existing_swapfile(buffer)
         {
             unload_dummy_buffer(buffer, dirname_start);
@@ -566,7 +566,7 @@ pub fn ex_vimgrep(excmd: &mut ExArg) {
     if qi.current_list().is_empty() {
         let spat = msg_bytes(&search.spat);
         semsg!("E480: No match: {spat}");
-    } else if search.flags & VGR_NOJUMP.cast_signed() == 0 {
+    } else if search.flags & VGR_NOJUMP == 0 {
         jump_to_match(qi, excmd.forceit, &mut out);
     }
 

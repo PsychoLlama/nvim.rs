@@ -11,6 +11,13 @@
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::{Ecmd, EcmdArgs};
 use crate::ex_cmds::EcmdFlags;
@@ -44,7 +51,6 @@ use crate::undo::u_sync;
 use crate::window::win_valid_any_tab;
 use crate::winlayer::graph::{cmdwin_buf, cmdwin_old_curwin, cmdwin_type, cmdwin_win};
 use crate::winlayer::{Buf, Win};
-use core::ffi::c_int;
 
 /// What the "edit another file" stage decided.
 pub(super) enum Switch {
@@ -98,7 +104,7 @@ pub(super) fn switch_to_other_buffer(
             ffname,
             sfname,
             LineNr::new(tlnum),
-            BLN_LISTED as c_int | BLN_NOCURWIN as c_int,
+            BLN_LISTED.cast_signed() | BLN_NOCURWIN.cast_signed(),
         );
         if let Some(newbuf) = newbuf.filter(|_| flags.has(EcmdFlags::ALTBUF)) {
             Win::current().w_alt_fnum = newbuf.handle.get();
@@ -109,11 +115,11 @@ pub(super) fn switch_to_other_buffer(
             ffname,
             sfname,
             LineNr::ZERO,
-            BLN_CURBUF as c_int
+            BLN_CURBUF.cast_signed()
                 | (if flags.has(EcmdFlags::SET_HELP) {
                     0
                 } else {
-                    BLN_LISTED as c_int
+                    BLN_LISTED.cast_signed()
                 }),
         );
         // Autocmds may change curwin and curbuf.
@@ -256,7 +262,7 @@ fn leave_for_buffer(
     buffer.b_locked += 1;
 
     if old_curbuf.is(Buf::current_or_none()) {
-        buf_copy_options(buffer, BCO_ENTER as c_int);
+        buf_copy_options(buffer, BCO_ENTER.cast_signed());
     }
 
     // A terminal buffer that is still running is hidden, never unloaded.
@@ -265,7 +271,11 @@ fn leave_for_buffer(
     // Close the link to the current buffer.  This will set
     // oldwin->w_buffer to NULL.
     u_sync(false);
-    let mode = if unload { DOBUF_UNLOAD as c_int } else { 0 };
+    let mode = if unload {
+        DOBUF_UNLOAD.cast_signed()
+    } else {
+        0
+    };
     let win = oldwin.and_then(WinId::get);
     let did_decrement = close_buffer(win, Buf::current(), mode, false, false);
 

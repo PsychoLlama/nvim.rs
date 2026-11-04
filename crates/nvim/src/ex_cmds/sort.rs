@@ -15,6 +15,13 @@
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::LineCopy;
 use super::say;
@@ -40,7 +47,7 @@ use crate::search::last_search_pat;
 use crate::tr;
 use crate::types::Failed;
 use crate::types::RegMatch;
-use crate::types::{BCount, ColNr, ExArg, ExtmarkOp, Float, LineNr, NUL, VarNumber, size_t};
+use crate::types::{BCount, ColNr, ExArg, ExtmarkOp, Float, LineNr, VarNumber, size_t};
 use crate::undo::u_save;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
@@ -94,7 +101,7 @@ impl Key {
     fn new(bytes: &[u8]) -> Key {
         let mut owned = Vec::with_capacity(bytes.len() + 1);
         owned.extend_from_slice(bytes);
-        owned.push(NUL as u8);
+        owned.push(0);
         Key(owned.into_boxed_slice())
     }
 }
@@ -240,7 +247,7 @@ impl SortSpec {
 }
 
 /// The NUL that ends the command's argument.
-const NUL_BYTE: u8 = NUL as u8;
+const NUL_BYTE: u8 = 0;
 
 /// What one byte of a `:sort`/`:uniq` argument turned out to be.  Both
 /// commands share the text-order letters and the `r` flag; the rest is each
@@ -278,7 +285,7 @@ fn shared_flag(byte: u8, order: &mut StringOrder, use_match: &mut bool) -> Flag 
             *use_match = true;
             Flag::Shared
         }
-        _ if ascii_iswhite(byte as c_int) => Flag::Shared,
+        _ if ascii_iswhite(c_int::from(byte)) => Flag::Shared,
         _ => Flag::Other,
     }
 }
@@ -473,7 +480,7 @@ fn collect_sort_keys(
     spec: &SortSpec,
     regmatch: &mut Option<RegMatch>,
 ) -> Option<Vec<SortLine>> {
-    let mut sorted = Vec::with_capacity((line2 - line1 + 1) as usize);
+    let mut sorted = Vec::with_capacity(usize::try_from(line2 - line1 + 1).unwrap_or(0));
     let mut lines = Lines::current();
 
     for lnum in line1.through(line2) {
@@ -549,7 +556,7 @@ fn append_sorted(
 
         // Copy the line out of the memline: `ml_append` may invalidate it,
         // and "unique" needs it next time round.
-        let bytelen = current.fill_line(get_lnum) as BCount + 1;
+        let bytelen = current.fill_line(get_lnum).cast_signed() + 1;
         placed.old_bytes += bytelen;
 
         let duplicate = unique
@@ -594,7 +601,7 @@ fn sort_range(args: &mut ExArg) {
 
     let mut regmatch = None;
     let mut spec = SortSpec::new();
-    let mut count = (line2 - line1) as size_t + 1;
+    let mut count = usize::try_from(line2 - line1).expect("a range of two lines or more") + 1;
 
     'sortend: {
         let order = match parse_sort_flags(args, &mut spec, &mut regmatch) {
@@ -658,7 +665,7 @@ fn finish_sort(line1: LineNr, line2: LineNr, count: size_t, placed: &Placed) {
             Buf::current(),
             (line1 - 1).get(),
             ColNr::ZERO,
-            count as c_int,
+            len_as_int(count),
             ColNr::ZERO,
             placed.old_bytes,
             lnum - line2,

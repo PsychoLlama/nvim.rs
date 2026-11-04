@@ -18,6 +18,13 @@
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 // The buffer-swap machinery, carved out so that neither half is over the
 // line cap; see its own docs.
@@ -293,16 +300,16 @@ pub(crate) fn do_ecmd(
         // arithmetic, so it belongs outside the call's region.
         let mut ccgd = 0;
         if p_awa() {
-            ccgd |= CCGD_AW as c_int;
+            ccgd |= CCGD_AW.cast_signed();
         }
         if !other_file {
-            ccgd |= CCGD_MULTWIN as c_int;
+            ccgd |= CCGD_MULTWIN.cast_signed();
         }
         if flags.has(EcmdFlags::FORCEIT) {
-            ccgd |= CCGD_FORCEIT as c_int;
+            ccgd |= CCGD_FORCEIT.cast_signed();
         }
         if has_command {
-            ccgd |= CCGD_EXCMD as c_int;
+            ccgd |= CCGD_EXCMD.cast_signed();
         }
         if must_ask && check_changed(Buf::current(), ccgd) {
             if fnum == 0 && other_file && ecmd.ffname.is_some() {
@@ -398,7 +405,7 @@ pub(crate) fn do_ecmd(
         // language.  Can only be done once the buffer is properly set up.
         if state.did_get_winopts
             && Win::current().w_onebuf_opt.wo_spell != 0
-            && Win::current().syntax().b_p_spl.first_byte() as c_int != NUL
+            && c_int::from(Win::current().syntax().b_p_spl.first_byte()) != NUL
         {
             let _ = parse_spelllang(Win::current());
         }
@@ -420,7 +427,7 @@ pub(crate) fn do_ecmd(
         if let Some(command) = &command_text {
             let _ = do_cmdline(Some(command.to_bytes()), None, DoCmdOpts::VERBOSE);
         }
-        if Buf::current().b_kmap_state as c_int & KEYMAP_INIT != 0 {
+        if c_int::from(Buf::current().b_kmap_state) & KEYMAP_INIT != 0 {
             let _ = keymap_init();
         }
 
@@ -528,9 +535,9 @@ fn reuse_current_buffer(state: &mut Ecmd) -> bool {
             return false;
         }
         u_unchanged(Buf::current());
-        buf_freeall(Buf::current(), BFA_KEEP_UNDO as c_int);
+        buf_freeall(Buf::current(), BFA_KEEP_UNDO.cast_signed());
         // Tell readfile() not to clear or reload undo info.
-        state.readfile_flags = READ_KEEP_UNDO as c_int;
+        state.readfile_flags = READ_KEEP_UNDO.cast_signed();
     } else {
         // Free all things for buffer.
         buf_freeall(Buf::current(), 0);
@@ -593,7 +600,7 @@ fn enter_new_buffer(
         Buf::current().b_flags |= BufFlags::CHECK_RO;
         // Open the buffer and read the file.
         if flags.has(EcmdFlags::NOWINENTER) {
-            state.readfile_flags |= READ_NOWINENTER as c_int;
+            state.readfile_flags |= READ_NOWINENTER.cast_signed();
         }
         let opened = open_buffer(
             false,
@@ -624,8 +631,8 @@ fn enter_new_buffer(
     // first non-blank.
     if !equalpos(Win::current().w_cursor, orig_pos) {
         let cursor = Win::current().w_cursor;
-        let first_nonblank = skip::white(Lines::current().line(cursor.lnum)) as c_int;
-        if cursor.lnum != orig_pos.lnum || cursor.col != ColNr::new(first_nonblank) {
+        let first_nonblank = skip::white(Lines::current().line(cursor.lnum));
+        if cursor.lnum != orig_pos.lnum || cursor.col != ColNr::from_index(first_nonblank) {
             state.newlnum = Win::current().w_cursor.lnum;
             state.newcol = Win::current().w_cursor.col.get();
         }

@@ -8,6 +8,13 @@
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::LineCopy;
 use super::say;
@@ -33,7 +40,7 @@ use crate::types::{BCount, Failed, LineNr, OptInt, int64_t};
 use crate::undo::u_save;
 use crate::winlayer::Buf;
 use crate::winlayer::{Win, tab_windows};
-use core::ffi::{c_int, c_ulong};
+use core::ffi::c_ulong;
 
 /// `:move` -- move lines `line1`..`line2` to sit after line `dest`.
 ///
@@ -134,17 +141,21 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
     });
 
     // Send an update regarding the new lines that were added.
-    buf_updates_send_changes(Buf::current(), dest + 1, num_lines as int64_t, 0);
+    buf_updates_send_changes(Buf::current(), dest + 1, int64_t::from(num_lines), 0);
 
     // Now we delete the original text -- webb
     u_save(line1 + extra - 1, line2 + extra + 1)?;
     for _ in line1.through(line2) {
-        let _ = ml_delete_flags(line1 + extra, ML_DEL_MESSAGE as c_int);
+        let _ = ml_delete_flags(line1 + extra, ML_DEL_MESSAGE.cast_signed());
     }
 
-    if global_busy.get() == 0 && num_lines as OptInt > p_report() {
-        let moved = ngettext(c"%ld line moved", c"%ld lines moved", num_lines as c_ulong);
-        let _: bool = report_msg(0, || tr_plural!(moved, num_lines as int64_t));
+    if global_busy.get() == 0 && OptInt::from(num_lines) > p_report() {
+        let moved = ngettext(
+            c"%ld line moved",
+            c"%ld lines moved",
+            c_ulong::from(num_lines.unsigned_abs()),
+        );
+        let _: bool = report_msg(0, || tr_plural!(moved, int64_t::from(num_lines)));
     }
 
     extmark_move_region(
@@ -178,7 +189,7 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
         );
     }
     // Send nvim_buf_lines_event regarding lines that were deleted.
-    buf_updates_send_changes(Buf::current(), line1 + extra, 0, num_lines as int64_t);
+    buf_updates_send_changes(Buf::current(), line1 + extra, 0, int64_t::from(num_lines));
 
     Ok(())
 }

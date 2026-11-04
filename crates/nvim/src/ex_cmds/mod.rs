@@ -26,6 +26,13 @@
 //! read from outside their own child.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -58,10 +65,9 @@ use crate::types::CAR;
 use crate::types::CmdIdx;
 use crate::types::ESC;
 use crate::types::NL;
-use crate::types::TAB;
 use crate::types::{
     BCount, BfaFlags, BlnFlags, CmdModFlags, DoBufAction, ExArg, ExtmarkOp, GetFileRet, LPos,
-    LineNr, List, NUL, OptVal, OptionSetFlags, UndoObjectType, Vv,
+    LineNr, List, OptVal, OptionSetFlags, UndoObjectType, Vv,
 };
 use crate::window::{win_enter, win_split};
 use crate::winlayer::{Buf, Win, windows};
@@ -142,7 +148,7 @@ fn vimgrep_pat(text: &[u8]) -> Option<VimgrepPat<'_>> {
             b'j' => VGR_NOJUMP,
             b'f' => VGR_FUZZY,
             _ => break,
-        } as ::core::ffi::c_int;
+        };
         n += 1;
     }
     let end = close + 1 + n;
@@ -234,9 +240,9 @@ pub struct LineData {
     pub lnum_before: LineNr,
     pub lnum_after: LineNr,
 }
-pub const VGR_FUZZY: ::core::ffi::c_uint = 4;
-pub const VGR_NOJUMP: ::core::ffi::c_uint = 2;
-pub const VGR_GLOBAL: ::core::ffi::c_uint = 1;
+pub const VGR_FUZZY: ::core::ffi::c_int = 4;
+pub const VGR_NOJUMP: ::core::ffi::c_int = 2;
+pub const VGR_GLOBAL: ::core::ffi::c_int = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
@@ -384,14 +390,14 @@ pub(crate) struct LineCopy(Vec<u8>);
 
 impl LineCopy {
     pub(crate) fn new() -> LineCopy {
-        LineCopy(vec![NUL as u8])
+        LineCopy(vec![0])
     }
 
     /// Replace the contents with `bytes` and a NUL.
     pub(crate) fn fill(&mut self, bytes: &[u8]) {
         self.0.clear();
         self.0.extend_from_slice(bytes);
-        self.0.push(NUL as u8);
+        self.0.push(0);
     }
 
     /// Replace the contents with line `lnum` of the current buffer, and
@@ -402,7 +408,7 @@ impl LineCopy {
         let len = text.len();
         self.0.clear();
         self.0.extend_from_slice(text);
-        self.0.push(NUL as u8);
+        self.0.push(0);
         len
     }
 

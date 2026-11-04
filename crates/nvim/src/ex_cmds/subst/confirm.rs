@@ -10,6 +10,13 @@
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::SUB_FLAGS;
 use super::exec::Sub;
@@ -31,6 +38,7 @@ use crate::mouse::setmouse;
 use crate::r#move::{
     do_check_cursorbind, scrolldown_clamp, scrollup_clamp, update_topline, validate_cursor,
 };
+use crate::narrow::len_as_int;
 use crate::option::cpo_has;
 use crate::option::vars::{P_LZ, p_lz};
 use crate::os::cshim::gettext;
@@ -148,7 +156,7 @@ fn prompt_visual(st: &Sub) -> c_int {
         // Position the cursor relative to the end of the line: the
         // previous substitute may have inserted or deleted characters
         // before it.
-        len_change = shown.len() as c_int - saved.len() as c_int;
+        len_change = len_as_int(shown.len()) - len_as_int(saved.len());
         Win::current().w_cursor.col += len_change;
         let _ = ml_replace_buf_text(Buf::current(), st.lnum, &shown);
         orig_line = Some(saved);

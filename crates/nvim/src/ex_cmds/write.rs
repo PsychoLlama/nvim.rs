@@ -13,6 +13,13 @@
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::{
     GETFILE_ERROR, GETFILE_NOT_WRITTEN, GETFILE_OPEN_OTHER, GETFILE_SAME_FILE, NODE_OTHER,
@@ -74,7 +81,8 @@ fn confirming() -> bool {
 /// Put `name` into the one-`%s` message `fmt` and ask the user to confirm it.
 fn dialog_yesno_about(fmt: &CStr, name: Option<&CStr>) -> bool {
     let question = dialog_msg(fmt, name);
-    vim_dialog_yesno(VIM_QUESTION as c_int, None, question.as_cstr(), 2) == VIM_YES as c_int
+    vim_dialog_yesno(VIM_QUESTION.cast_signed(), None, question.as_cstr(), 2)
+        == VIM_YES.cast_signed()
 }
 
 /// Give the current buffer the name `new_fname`, moving the old name into a
@@ -355,11 +363,11 @@ fn confirm_partial_write(args: &mut ExArg) -> Result<(), Failed> {
         return Err(Failed);
     }
     if vim_dialog_yesno(
-        VIM_QUESTION as c_int,
+        VIM_QUESTION.cast_signed(),
         None,
         gettext(c"Write partial file?"),
         2,
-    ) != VIM_YES as c_int
+    ) != VIM_YES.cast_signed()
     {
         return Err(Failed);
     }
@@ -408,7 +416,7 @@ fn saveas_exchange_names(mut alt_buf: Buf) -> bool {
     }
 
     // If 'filetype' was empty try detecting it now.
-    if Buf::current().b_p_ft.first_byte() as c_int == NUL {
+    if c_int::from(Buf::current().b_p_ft.first_byte()) == NUL {
         if augroup_exists_of(c"filetypedetect") {
             let _ = do_doautocmd(c"filetypedetect BufRead", true, None);
         }
@@ -583,7 +591,7 @@ fn write_one_buffer(
     if exiting.get()
         && !args.forceit
         && !buffer.terminal.is_null()
-        && channel_job_running(buffer.b_p_channel as u64)
+        && channel_job_running(buffer.b_p_channel.cast_unsigned())
     {
         // A running terminal is not written: going on to write it would
         // add E676 to the message.
@@ -700,7 +708,7 @@ pub fn getfile(
     lnum: LineNr,
     forceit: bool,
 ) -> c_int {
-    if !check_can_set_curbuf_forceit(forceit as c_int) {
+    if !check_can_set_curbuf_forceit(c_int::from(forceit)) {
         return GETFILE_ERROR;
     }
     if text_locked() || curbuf_locked() {
