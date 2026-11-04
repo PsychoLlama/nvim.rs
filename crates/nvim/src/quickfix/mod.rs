@@ -66,16 +66,18 @@ use crate::global_cell::GlobalCell;
 use crate::highlight_group::syn_name2id;
 use crate::mark::setpcmark;
 use crate::memline::{check_need_swap, ml_delete, ml_get_buf_len, ml_open};
+use crate::memory::ThinCString;
 use crate::message::state::{msg_col, msg_didout, msg_nowait, msg_scroll, msg_scrolled};
 use crate::message::{
     e_au_recursive, e_buffer_is_not_loaded, e_dictreq, e_invalpat, e_invarg, e_invrange, e_listreq,
-    e_loclist, e_no_errors, e_nomatch, e_noprevre, e_notmp, e_readerrf, e_string_required,
+    e_loclist, e_no_errors, e_nomatch, e_noprevre, e_notmp, e_string_required,
     e_winfixbuf_cannot_go_to_buffer,
 };
 use crate::message::{
     emsg, internal_error, message_filtered, msg, msg_clr_eos, msg_display, msg_ext_set_kind,
     msg_prt_line, msg_putchar, msg_start, msg_str, msg_str_hl,
 };
+use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::r#move::update_topline;
 use crate::normal::reset_visual_and_resel;
 use crate::ops::get_region_bytecount;
@@ -95,7 +97,9 @@ use crate::path::{PATHSEP, path_fnamecmp, path_is_absolute, vim_is_abs_name};
 use crate::pos::MAXLNUM;
 use crate::search::{BACKWARD, BACKWARD_FILE, FORWARD, FORWARD_FILE};
 use crate::state::mode::restart_edit;
+use crate::tr;
 use crate::types::AutoEvent;
+use crate::types::Failed;
 use crate::types::TAB;
 use crate::types::{
     Callback, ColNr, Dict, DirStack, Direction, EvalFuncData, ExArg, LineNr, List, ListRef, OptInt,
@@ -114,6 +118,7 @@ use core::ffi::{CStr, c_int, c_uint};
 
 // The carve of the transpiled module; see each child's docs.
 mod efm;
+pub(crate) use self::efm::EfmError;
 pub(crate) use self::efm::*;
 mod parse;
 pub(crate) use self::parse::*;
@@ -151,7 +156,7 @@ pub use self::cmds::*;
 mod getprops;
 pub(crate) use self::getprops::*;
 mod setprops;
-pub use self::setprops::*;
+pub(crate) use self::setprops::*;
 mod eval;
 pub use self::eval::*;
 #[cfg(test)]
@@ -162,36 +167,74 @@ mod tests;
 pub(crate) static msg_loclist: &CStr = c"[Location List]";
 pub(crate) static msg_qflist: &CStr = c"[Quickfix List]";
 
-/// Why a `getqflist()`/`setqflist()` request could not be carried out.
+/// Why a quickfix list could not be read, or a `getqflist()`/`setqflist()`
+/// request carried out.
 ///
-/// Vimscript sees one answer for all of these — the function returns `-1` and
-/// says nothing more — which is why upstream never distinguished them and why
-/// this type has no `Display`. The variants are for the code: `qf_*` used to
-/// be a chain of functions whose only vocabulary was `FAIL`, so the reason a
-/// request was refused stopped existing the moment it was returned.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum QfError {
+/// Most of these Vimscript sees only as the function's `-1`: upstream says
+/// nothing more, and [`QfError::report`] puts nothing out for them. The
+/// variants are for the code: `qf_*` used to be a chain of functions whose
+/// only vocabulary was `FAIL`, so the reason a request was refused stopped
+/// existing the moment it was returned. The ones that do carry a message
+/// -- an errorfile that would not open, a bad `'errorformat'`, a read
+/// error -- are reported once, by [`qf_init_ext`], before the list buffer
+/// is updated (as upstream reported them).
+#[derive(Clone, PartialEq, Eq, Debug, thiserror::Error)]
+pub(crate) enum QfError {
     /// The request named a list that is not on the stack: an `nr` or `id`
     /// that matches nothing, or no stack at all.
+    #[error("no such quickfix list")]
     NoSuchList,
     /// A key of the `what` dictionary was given a value of a type it cannot
     /// take — an `idx` that is not a Number, a `title` that is not a String,
     /// `lines` that is not a List.
+    #[error("a value of the wrong type")]
     BadValue,
     /// `lines` could not be turned into entries with the `'errorformat'` in
-    /// force.
+    /// force. Said by the read that failed, if by anyone.
+    #[error("the lines could not be read")]
     Unparsable,
     /// The `what` dictionary named nothing this understands, so there was
     /// nothing to do. `setqflist()` reports that as a failure.
+    #[error("nothing to set")]
     NothingToSet,
     /// `'secure'` or the sandbox forbids setting a callback. The message has
     /// already been reported.
+    #[error("not allowed here")]
     Forbidden,
     /// A key could not be written into the answer dictionary. Unreachable in
     /// practice — the answer is built fresh and each key is written once —
     /// but the dictionary layer is entitled to refuse and this is where its
     /// refusal lands.
+    #[error("a key could not be written")]
     KeyTaken,
+    /// The errorfile would not open.
+    #[error("{}", tr!("E40: Can't open errorfile {}", msg_bytes(.0.as_bytes())))]
+    CannotOpen(ThinCString),
+    /// A part of `'errorformat'` that does not compile.
+    #[error(transparent)]
+    Format(#[from] EfmError),
+    /// The errorfile could not be read to its end.
+    #[error("{}", tr!("E47: Error while reading errorfile"))]
+    ReadError,
+    /// A message already out: the regexp engine's for a format's pattern,
+    /// or a `%D` with no directory (E379).
+    #[error(transparent)]
+    Reported(#[from] Failed),
+}
+
+// Two words, so a `Result` carrying one is no wider than it has to be.
+const _: () = assert!(size_of::<QfError>() <= 16);
+
+impl QfError {
+    /// Puts the message out, for the variants that have one Vimscript sees.
+    pub(crate) fn report(&self) {
+        if matches!(
+            self,
+            Self::CannotOpen(_) | Self::Format(_) | Self::ReadError
+        ) {
+            emsg_text(self.to_string());
+        }
+    }
 }
 
 impl From<KeyTaken> for QfError {

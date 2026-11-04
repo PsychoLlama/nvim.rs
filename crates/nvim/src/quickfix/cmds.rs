@@ -88,7 +88,7 @@ pub fn ex_cfile(excmd: &mut ExArg) {
         drop(busy);
         return;
     };
-    if res >= 0 {
+    if res.is_ok() {
         qi.current_slot().changed();
     }
     // Remember the current list, so that an autocommand replacing it is
@@ -99,7 +99,7 @@ pub fn ex_cfile(excmd: &mut ExArg) {
     }
 
     let jumps = matches!(excmd.cmdidx, CmdIdx::cfile | CmdIdx::lfile);
-    if res > 0 && jumps && qflist_valid(wp, save_qfid) {
+    if res.is_ok_and(|n| n > 0) && jumps && qflist_valid(wp, save_qfid) {
         qf_jump_first(qi, save_qfid, excmd.forceit);
     }
     drop(busy);
@@ -216,7 +216,7 @@ pub fn ex_cbuffer(excmd: &mut ExArg) {
         drop(busy);
         return;
     }
-    if res >= 0 {
+    if res.is_ok() {
         qi.current_slot().changed();
     }
     let save_qfid = qi.current_list().id;
@@ -226,12 +226,12 @@ pub fn ex_cbuffer(excmd: &mut ExArg) {
         // The autocommand switched buffers: do not jump away from
         // wherever it left the user.
         if Buf::current_or_none() != curbuf_old {
-            res = 0;
+            res = Ok(0);
         }
     }
 
     let jumps = matches!(excmd.cmdidx, CmdIdx::cbuffer | CmdIdx::lbuffer);
-    if res > 0 && jumps && qflist_valid(wp, save_qfid) {
+    if res.is_ok_and(|n| n > 0) && jumps && qflist_valid(wp, save_qfid) {
         qf_jump_first(qi, save_qfid, excmd.forceit);
     }
     drop(busy);
@@ -302,7 +302,7 @@ fn cexpr_core(excmd: &mut ExArg, tv: &TypVal) -> Result<(), Failed> {
         drop(busy);
         return Err(Failed);
     }
-    if res >= 0 {
+    if res.is_ok() {
         qi.current_slot().changed();
     }
     let save_qfid = qi.current_list().id;
@@ -311,7 +311,7 @@ fn cexpr_core(excmd: &mut ExArg, tv: &TypVal) -> Result<(), Failed> {
     }
 
     let jumps = matches!(excmd.cmdidx, CmdIdx::cexpr | CmdIdx::lexpr);
-    if res > 0 && jumps && qflist_valid(wp, save_qfid) {
+    if res.is_ok_and(|n| n > 0) && jumps && qflist_valid(wp, save_qfid) {
         qf_jump_first(qi, save_qfid, excmd.forceit);
     }
     drop(busy);

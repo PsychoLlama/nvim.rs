@@ -113,7 +113,7 @@ pub(crate) fn handle_quickfix(parm: &MainParams) {
     // Copies: `qf_init` reads a file and fires autocommands.
     let (ef, efm, enc) = (P_EF.get(), P_EFM.get(), P_MENC.get());
     let (ef, efm, enc) = (ef.as_cstr(), efm.as_cstr(), enc.as_cstr());
-    if qf_init(None, ef, efm, true, true, Some(&title), Some(enc)) < 0 {
+    if qf_init(None, ef, efm, true, true, Some(&title), Some(enc)).is_err() {
         msg_putchar('\n' as c_int);
         os_exit(3);
     }

@@ -455,8 +455,8 @@ fn qf_setprop_items_from_lines(
         false,
         None,
         None,
-    ) >= 0;
-    parsed.then_some(()).ok_or(QfError::Unparsable)
+    );
+    parsed.map(|_| ()).map_err(|Failed| QfError::Unparsable)
 }
 
 /// Attach an arbitrary value to the list, which `getqflist({'context': 1})`
@@ -567,7 +567,7 @@ fn qf_set_properties(mut qi: Qi, what: &What, action: u8, title: &CStr) -> Resul
 /// `setqflist()` and `setloclist()`. `None` means the quickfix stack. An
 /// `action` of `'f'` frees the whole stack; otherwise either `list` or
 /// `what` says what to write, never both.
-pub fn set_errorlist(
+pub(crate) fn set_errorlist(
     window: Option<Win>,
     list: Option<ListRef>,
     action: u8,

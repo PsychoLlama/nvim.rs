@@ -438,7 +438,6 @@ pub(crate) static e_listblobarg: &CStr = c"E899: Argument of %s must be a List o
 pub(crate) static e_listdictarg: &CStr = c"E712: Argument of %s must be a List or Dictionary";
 pub(crate) static e_listdictblobarg: &CStr =
     c"E896: Argument of %s must be a List, Dictionary or Blob";
-pub(crate) static e_readerrf: &CStr = c"E47: Error while reading errorfile";
 pub(crate) static e_sandbox: &CStr = c"E48: Not allowed in sandbox";
 pub(crate) static e_secure: &CStr = c"E523: Not allowed here";
 pub(crate) static e_textlock: &CStr = c"E565: Not allowed to change text or change window";

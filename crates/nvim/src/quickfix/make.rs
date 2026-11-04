@@ -148,7 +148,7 @@ pub fn ex_make(excmd: &mut ExArg) {
     // A location list command may have found no list to add to, in
     // which case there is nothing left to do but clean up.
     if let Some(qi) = stack_of(wp) {
-        if res >= 0 {
+        if res.is_ok() {
             qi.current_slot().changed();
         }
         // Remember the current quickfix list identifier, so that a
@@ -157,7 +157,7 @@ pub fn ex_make(excmd: &mut ExArg) {
         if let Some(name) = au_name {
             fire_qf_autocmd(AutoEvent::QuickFixCmdPost, name, true);
         }
-        if res > 0 && !excmd.forceit && qflist_valid(wp, save_qfid) {
+        if res.is_ok_and(|n| n > 0) && !excmd.forceit && qflist_valid(wp, save_qfid) {
             // Display the first error.
             qf_jump_first(qi, save_qfid, false);
         }

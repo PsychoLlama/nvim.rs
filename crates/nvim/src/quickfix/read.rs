@@ -28,10 +28,8 @@ use crate::eval::typval::list_items;
 use crate::fileio::Fgets;
 use crate::mbyte::Converter;
 use crate::memory::XString;
-use crate::message_fmt::msg_bytes;
 use crate::optionstr::OptString;
 use crate::os::fs::stdin_file;
-use crate::semsg;
 use crate::types::{IOSIZE, ListRef, VAR_LIST, VAR_STRING};
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
@@ -111,9 +109,9 @@ pub(crate) struct Reader {
 }
 
 impl Reader {
-    /// Open the source the caller named. Answers `None` — after reporting
-    /// it — when the error file cannot be opened.
-    fn open(enc: Option<&CStr>, input: Input) -> Option<Reader> {
+    /// Open the source the caller named: E40 when the error file cannot be
+    /// opened.
+    fn open(enc: Option<&CStr>, input: Input) -> Result<Reader, QfError> {
         let conv = enc
             .filter(|enc| !enc.is_empty())
             .and_then(|enc| Converter::new(enc, P_ENC.get().as_cstr()));
@@ -130,9 +128,7 @@ impl Reader {
                     File::open(std::ffi::OsStr::from_bytes(efile.to_bytes())).ok()
                 };
                 let Some(file) = file else {
-                    let efile = msg_bytes(efile.to_bytes());
-                    semsg!("E40: Can't open errorfile {efile}");
-                    return None;
+                    return Err(QfError::CannotOpen(efile.into()));
                 };
                 Source::File(Fgets::new(file))
             }
@@ -149,7 +145,7 @@ impl Reader {
                 }
             }
         };
-        Some(Reader {
+        Ok(Reader {
             source,
             line: vec![0; READ_CHUNK],
             len: 0,
@@ -397,6 +393,7 @@ impl Reader {
 /// list, and set its title to `qf_title`.
 ///
 /// `window` is `None` for the quickfix stack, which belongs to no window.
+/// Answers the number of entries; see [`qf_init_ext`] for a refusal.
 pub fn qf_init(
     window: Option<Win>,
     efile: &CStr,
@@ -405,7 +402,7 @@ pub fn qf_init(
     newlist: bool,
     qf_title: Option<&CStr>,
     enc: Option<&CStr>,
-) -> c_int {
+) -> Result<c_int, Failed> {
     let qi = match window {
         Some(wp) => wp.location_list_or_new(),
         None => Qi::global(),
@@ -434,7 +431,15 @@ static EFM_CACHE: GlobalCell<Option<(Vec<u8>, Efm)>> = GlobalCell::new(None);
 /// `newlist` starts a new list rather than adding to list `qf_idx`.
 /// `efm_buf` is the buffer whose own `'errorformat'` replaces
 /// `errorformat` when `global_efm` says that is the global value. Answers
-/// the number of entries, or −1 on failure.
+/// the number of entries.
+///
+/// The reason a list could not be read is reported here, once, where
+/// upstream reported it: before an empty new list is freed and before the
+/// list's window is updated (which sets `'filetype'` and so runs
+/// autocommands that would otherwise see the error after the fact). So
+/// the answer is `Err(Failed)` -- including upstream's two silent
+/// refusals, a continuation line with no entry to continue and a value
+/// that is no text, which have nothing to say.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn qf_init_ext(
     mut qi: Qi,
@@ -446,83 +451,94 @@ pub(crate) fn qf_init_ext(
     newlist: bool,
     qf_title: Option<&CStr>,
     enc: Option<&CStr>,
-) -> c_int {
+) -> Result<c_int, Failed> {
     // Do not use the cached buffer, it may have been wiped out.
     forget_last_buffer();
 
     let mut old_last = None;
-    let mut retval = -1;
     let from_value = matches!(input, Input::Value(_));
-    let reader = Reader::open(enc, input);
-
-    if let Some(mut reader) = reader {
-        let mut adding = false;
-        let qfl = if newlist || qf_idx == qi.list_count {
-            // Make place for a new list.
-            qf_new_list(qi, qf_title);
-            qf_idx = qi.current;
-            qi.slot(qf_idx)
-        } else {
-            // Adding to an existing list; remember its last entry.
-            adding = true;
-            let qfl = qi.slot(qf_idx);
-            if !qfl.is_empty() {
-                old_last = Some(qfl.entries.len() - 1);
-            }
-            qfl
-        };
-
-        // Use the buffer-local 'errorformat' when the caller asked for the
-        // global one and the buffer has its own.
-        let local_efm = if global_efm && !from_value {
-            efm_buf
-                .map(|buf| buf.b_p_efm.get())
-                .filter(|efm| !efm.is_empty())
-        } else {
-            None
-        };
-        let efm: &CStr = local_efm.as_ref().map_or(errorformat, XString::as_cstr);
-
-        // Take the compiled option out of the cache for the length of
-        // this read and put it back at the end. Adding an entry can
-        // fire `BufNew`, an autocommand can run another `:cexpr`, and
-        // upstream — which keeps the compiled option in a bare static
-        // and frees it whenever the option text changes — would then
-        // free what this loop is still walking. Owning it here costs
-        // the re-entrant call a recompile and nothing otherwise.
-        let mut compiled = EFM_CACHE.take();
-        let text = efm.to_bytes();
-        if !compiled.as_ref().is_some_and(|(had, _)| had == text) {
-            compiled = Efm::compile(efm).map(|parsed| (text.to_vec(), parsed));
+    let read = match Reader::open(enc, input) {
+        Err(refused) => {
+            refused.report();
+            Err(Failed)
         }
-        let built = match compiled.as_mut() {
-            Some((_, parsed)) => read_lines(qfl, &mut reader, parsed),
-            None => false,
-        };
-        EFM_CACHE.set(compiled);
+        Ok(mut reader) => {
+            let mut adding = false;
+            let qfl = if newlist || qf_idx == qi.list_count {
+                // Make place for a new list.
+                qf_new_list(qi, qf_title);
+                qf_idx = qi.current;
+                qi.slot(qf_idx)
+            } else {
+                // Adding to an existing list; remember its last entry.
+                adding = true;
+                let qfl = qi.slot(qf_idx);
+                if !qfl.is_empty() {
+                    old_last = Some(qfl.entries.len() - 1);
+                }
+                qfl
+            };
 
-        if built {
-            retval = qfl.count();
-        } else if !adding {
-            // The new list came to nothing; free it again.
-            qf_free(qfl);
-            qi.list_count -= 1;
-            if qi.current > 0 {
-                qi.current -= 1;
+            // Use the buffer-local 'errorformat' when the caller asked for
+            // the global one and the buffer has its own.
+            let local_efm = if global_efm && !from_value {
+                efm_buf
+                    .map(|buf| buf.b_p_efm.get())
+                    .filter(|efm| !efm.is_empty())
+            } else {
+                None
+            };
+            let efm: &CStr = local_efm.as_ref().map_or(errorformat, XString::as_cstr);
+
+            // Take the compiled option out of the cache for the length of
+            // this read and put it back at the end. Adding an entry can
+            // fire `BufNew`, an autocommand can run another `:cexpr`, and
+            // upstream — which keeps the compiled option in a bare static
+            // and frees it whenever the option text changes — would then
+            // free what this loop is still walking. Owning it here costs
+            // the re-entrant call a recompile and nothing otherwise.
+            let text = efm.to_bytes();
+            let mut compiled = EFM_CACHE.take().filter(|(had, _)| had == text);
+            let built = match compiled.as_mut() {
+                Some((_, parsed)) => read_lines(qfl, &mut reader, parsed),
+                None => match Efm::compile(efm) {
+                    Ok(parsed) => {
+                        let (_, parsed) = compiled.insert((text.to_vec(), parsed));
+                        read_lines(qfl, &mut reader, parsed)
+                    }
+                    Err(refused) => Err(refused),
+                },
+            };
+            EFM_CACHE.set(compiled);
+
+            match built {
+                Ok(()) => Ok(qfl.count()),
+                Err(refused) => {
+                    refused.report();
+                    if !adding {
+                        // The new list came to nothing; free it again.
+                        qf_free(qfl);
+                        qi.list_count -= 1;
+                        if qi.current > 0 {
+                            qi.current -= 1;
+                        }
+                    }
+                    Err(Failed)
+                }
             }
         }
-    }
+    };
 
     if qf_idx == qi.current {
         qf_update_buffer(qi, old_last);
     }
-    retval
+    read
 }
 
 /// Read every line the reader has and add an entry for each one the parser
-/// accepts. Answers whether the list was built: a read error, or a line the
-/// parser rejected outright, means it was not.
-fn read_lines(mut qfl: Qfl, reader: &mut Reader, efm: &mut Efm) -> bool {
+/// accepts. A read error, or a line the parser rejected outright, means
+/// the list was not built.
+fn read_lines(mut qfl: Qfl, reader: &mut Reader, efm: &mut Efm) -> Result<(), QfError> {
     let mut fields = Fields::new();
     // `got_int` is reset here because it was probably set when killing the
     // ":make" command, and the error file should still be read.
@@ -531,11 +547,13 @@ fn read_lines(mut qfl: Qfl, reader: &mut Reader, efm: &mut Efm) -> bool {
         match reader.next_line() {
             Status::EndOfInput => break,
             Status::Ok => {}
-            _ => return false,
+            // A value that is no text, which no caller passes.
+            _ => return Err(QfError::Unparsable),
         }
         let parsed = parse_line(qfl, reader.line(), reader.len, efm, &mut fields);
         if parsed == Status::Fail {
-            return false;
+            // E379 is out, or a continuation line had nothing to continue.
+            return Err(QfError::Unparsable);
         }
         if parsed == Status::Ok {
             let entry = fields.entry(qfl);
@@ -545,8 +563,7 @@ fn read_lines(mut qfl: Qfl, reader: &mut Reader, efm: &mut Efm) -> bool {
     }
 
     if reader.had_error() {
-        emsg(gettext(e_readerrf));
-        return false;
+        return Err(QfError::ReadError);
     }
     if qfl.index == 0 {
         // No valid entry was found.
@@ -556,7 +573,7 @@ fn read_lines(mut qfl: Qfl, reader: &mut Reader, efm: &mut Efm) -> bool {
     } else {
         qfl.no_valid = false;
     }
-    true
+    Ok(())
 }
 
 /// A list's default title is the command that created it, with a `:` in

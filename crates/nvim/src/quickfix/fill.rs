@@ -268,16 +268,16 @@ fn call_qftf_func(qfl: Qfl, qf_winid: c_int, start_idx: c_int, end_idx: c_int) -
 
 /// Empty the quickfix buffer, which must be the current one.
 ///
-/// Answers false if a line would not delete, which would otherwise loop
-/// forever.
-fn clear_qf_buffer() -> bool {
+/// Refuses, after an internal error, if a line would not delete -- which
+/// would otherwise loop forever.
+fn clear_qf_buffer() -> Result<(), Failed> {
     // No undo information is stored — the quickfix buffer is usually
     // not modifiable — so the undo stack is cleaned up instead, or an
     // autocommand could invalidate it.
     while !Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
         if ml_delete(LineNr::ONE).is_err() {
             internal_error(c"qf_fill_buffer()");
-            return false;
+            return Err(Failed);
         }
     }
     find_tab_win(|mut wp| {
@@ -287,7 +287,7 @@ fn clear_qf_buffer() -> bool {
         false
     });
     u_clearallandblockfree(Buf::current());
-    true
+    Ok(())
 }
 
 /// Set the options a freshly filled quickfix buffer wants, and tell the
@@ -368,7 +368,7 @@ pub(crate) fn qf_fill_buffer(qfl: Qfl, buffer: Buf, old_last: Option<usize>, qf_
             internal_error(c"qf_fill_buffer()");
             return;
         }
-        if !clear_qf_buffer() {
+        if clear_qf_buffer().is_err() {
             return;
         }
     }

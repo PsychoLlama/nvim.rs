@@ -167,7 +167,8 @@ fn qf_get_list_from_lines(what: &Dict, lines: &TypVal, retdict: &mut Dict) -> Re
         false,
         None,
         None,
-    ) > 0;
+    )
+    .is_ok_and(|n| n > 0);
     if parsed {
         // Whether the throwaway list had entries is not this answer:
         // parsing nothing out of the lines is still a successful read.

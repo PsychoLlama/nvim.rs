@@ -23,8 +23,28 @@
 use super::*;
 use crate::cstr;
 use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRING};
-use crate::semsg;
 use core::ffi::CStr;
+
+/// A part of `'errorformat'` that does not compile, and the message that
+/// says so: E372–E378, upstream's texts. Each names the conversion letter
+/// it stopped at.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, thiserror::Error)]
+pub(crate) enum EfmError {
+    #[error("{}", tr!("E372: Too many %{} in format string", char::from(*.0)))]
+    TooMany(u8),
+    #[error("{}", tr!("E373: Unexpected %{} in format string", char::from(*.0)))]
+    Unexpected(u8),
+    #[error("{}", tr!("E374: Missing ] in format string"))]
+    MissingBracket,
+    #[error("{}", tr!("E375: Unsupported %{} in format string", char::from(*.0)))]
+    Unsupported(u8),
+    #[error("{}", tr!("E376: Invalid %{} in format string prefix", char::from(*.0)))]
+    InvalidPrefix(u8),
+    #[error("{}", tr!("E377: Invalid %{} in format string", char::from(*.0)))]
+    Invalid(u8),
+    #[error("{}", tr!("E378: 'errorformat' contains no pattern"))]
+    NoPattern,
+}
 
 /// How many `%` conversions there are. Each may appear at most once in one
 /// format, and [`Format::addr`] has a slot per conversion.
@@ -123,8 +143,8 @@ pub(crate) struct Efm {
 }
 
 impl Efm {
-    /// Compile `'errorformat'`, or answer `None` if any part is bad.
-    pub(crate) fn compile(efm: &CStr) -> Option<Efm> {
+    /// Compile `'errorformat'`, or answer why a part of it would not.
+    pub(crate) fn compile(efm: &CStr) -> Result<Efm, QfError> {
         // Everything from a part's start through the option's terminating
         // NUL: the walk reads one byte past the part in several places,
         // exactly as upstream does.
@@ -137,11 +157,10 @@ impl Efm {
             let len = option_part_len(part);
             let mut fmt = Format::new();
             let pat = fmt.compile_regpat(part, len)?;
-            // `compile_regpat` NUL-terminates what it builds.
-            fmt.prog = Some(OwnedProg::compile(
-                cstr::in_bytes(&pat),
-                RE_MAGIC + RE_STRING,
-            )?);
+            // `compile_regpat` NUL-terminates what it builds. The regexp
+            // engine reports its own refusal.
+            fmt.prog =
+                Some(OwnedProg::compile(cstr::in_bytes(&pat), RE_MAGIC + RE_STRING).ok_or(Failed)?);
             formats.push(fmt);
             // Step over the separator and any padding before the next part.
             at += len;
@@ -154,11 +173,10 @@ impl Efm {
         }
 
         if formats.is_empty() {
-            emsg(gettext(c"E378: 'errorformat' contains no pattern"));
-            return None;
+            return Err(EfmError::NoPattern.into());
         }
 
-        Some(Efm {
+        Ok(Efm {
             formats,
             resume: None,
         })
@@ -207,7 +225,7 @@ impl Format {
     /// terminating NUL, which is included; `len` is the part's own length.
     /// Several of the reads below look one byte past `len` — at the comma,
     /// or at the NUL — which is why the slice is not trimmed.
-    fn compile_regpat(&mut self, part: &[u8], len: usize) -> Option<Vec<u8>> {
+    fn compile_regpat(&mut self, part: &[u8], len: usize) -> Result<Vec<u8>, EfmError> {
         let mut pat = Vec::with_capacity(len * 4 + 32);
         pat.push(b'^');
         let mut round = 0;
@@ -244,14 +262,13 @@ impl Format {
                 // A prefix is allowed only at the start of the part.
                 i = self.analyze_prefix(part, i)?;
             } else {
-                semsg!("E377: Invalid %{} in format string", char::from(conv));
-                return None;
+                return Err(EfmError::Invalid(conv));
             }
             i += 1;
         }
         pat.push(b'$');
         pat.push(0);
-        Some(pat)
+        Ok(pat)
     }
 
     /// Append the capture group for the `%` conversion `idx`, whose letter
@@ -263,10 +280,9 @@ impl Format {
         at: usize,
         idx: usize,
         round: u8,
-    ) -> Option<()> {
+    ) -> Result<(), EfmError> {
         if self.addr[idx] != 0 {
-            semsg!("E372: Too many %{} in format string", char::from(part[at]));
-            return None;
+            return Err(EfmError::TooMany(part[at]));
         }
         // Only `%r` may appear under `%O`/`%P`/`%Q`, and it may appear
         // nowhere else; the other conversions are barred from the
@@ -275,11 +291,7 @@ impl Format {
         if (idx != 0 && idx < FMT_PATTERN_R && (file_prefix || b"DX".contains(&self.prefix)))
             || (idx == FMT_PATTERN_R && !file_prefix)
         {
-            semsg!(
-                "E373: Unexpected %{} in format string",
-                char::from(part[at])
-            );
-            return None;
+            return Err(EfmError::Unexpected(part[at]));
         }
         self.addr[idx] = round + 1;
         pat.extend_from_slice(b"\\(");
@@ -299,12 +311,12 @@ impl Format {
             pat.extend_from_slice(FMT_PAT[idx].1);
         }
         pat.extend_from_slice(b"\\)");
-        Some(())
+        Ok(())
     }
 
     /// Record the `%D`/`%E`/… prefix, and the `+`/`-` flag that may precede
     /// it, starting at `part[at]`. Answers the index of the prefix letter.
-    fn analyze_prefix(&mut self, part: &[u8], at: usize) -> Option<usize> {
+    fn analyze_prefix(&mut self, part: &[u8], at: usize) -> Result<usize, EfmError> {
         let mut at = at;
         if b"+-".contains(&part[at]) {
             self.flags = part[at];
@@ -312,13 +324,9 @@ impl Format {
         }
         if b"DXAEWINCZGOPQ".contains(&part[at]) {
             self.prefix = part[at];
-            Some(at)
+            Ok(at)
         } else {
-            semsg!(
-                "E376: Invalid %{} in format string prefix",
-                char::from(part[at])
-            );
-            None
+            Err(EfmError::InvalidPrefix(part[at]))
         }
     }
 }
@@ -329,14 +337,10 @@ impl Format {
 /// Only the two conversions upstream accepts are supported: a `[…]` set and
 /// a single `\`-escaped class such as `%*\D`. Both are followed by `\+`, so
 /// `%*[^:]` means "one or more characters that are not a colon".
-fn push_scanf(pat: &mut Vec<u8>, part: &[u8], at: usize, len: usize) -> Option<usize> {
+fn push_scanf(pat: &mut Vec<u8>, part: &[u8], at: usize, len: usize) -> Result<usize, EfmError> {
     let mut at = at;
     if part[at] != b'[' && part[at] != b'\\' {
-        semsg!(
-            "E375: Unsupported %{} in format string",
-            char::from(part[at])
-        );
-        return None;
+        return Err(EfmError::Unsupported(part[at]));
     }
     pat.push(part[at]);
     if part[at] == b'[' {
@@ -356,8 +360,7 @@ fn push_scanf(pat: &mut Vec<u8>, part: &[u8], at: usize, len: usize) -> Option<u
                 }
             }
             if at == len {
-                emsg(gettext(c"E374: Missing ] in format string"));
-                return None;
+                return Err(EfmError::MissingBracket);
             }
         }
     } else if at < len {
@@ -366,5 +369,5 @@ fn push_scanf(pat: &mut Vec<u8>, part: &[u8], at: usize, len: usize) -> Option<u
         pat.push(part[at]);
     }
     pat.extend_from_slice(b"\\+");
-    Some(at)
+    Ok(at)
 }
