@@ -15,6 +15,13 @@
 //! between words and a join must not invent one.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::guard::Suppress;
 use crate::narrow::len_as_int;
@@ -38,9 +45,8 @@ pub fn skip_comment(line: &[u8], process: bool, include_space: bool) -> (usize, 
     let (leader_offset, comment_flags) = get_last_leader_offset(line);
     // A flag string walked to its `COM_END`, its colon, or its end, whichever
     // comes first.
-    let end_or_colon = |flags: Option<ComFlags>| {
-        c_int::from(flags.map_or(NUL as u8, |flags| flags.first_of(&[COM_END as u8, b':'])))
-    };
+    let end_or_colon =
+        |flags: Option<ComFlags>| flags.map_or(0, |flags| flags.first_of(&[COM_END, b':']));
 
     // Does the line end with an unclosed comment? It does unless the last
     // leader's flags carry COM_END.
@@ -57,7 +63,7 @@ pub fn skip_comment(line: &[u8], process: bool, include_space: bool) -> (usize, 
     // A colon means this is not the closing part of a three-part comment.
     // Those are left alone: removing them would be annoying.
     let flag = end_or_colon(flags.or(comment_flags));
-    if flag == ':' as c_int || flag == NUL {
+    if flag == b':' || flag == 0 {
         return (usize::try_from(lead_len).unwrap_or(0), is_comment);
     }
     (0, is_comment)
@@ -169,7 +175,7 @@ fn measure_join(
             let at = c_int::from(byte_at(line, curr));
             let first = || char_at(&line[curr..]);
             if at != NUL
-                && at != ')' as c_int
+                && at != c_int::from(b')')
                 && plan.sumsize != 0
                 && endcurr1 != TAB
                 // 'formatoptions' M: no space between two multi-byte
@@ -180,7 +186,7 @@ fn measure_join(
                     || (first() < 0x100 && !utf_eat_space(endcurr1))
                     || (endcurr1 < 0x100 && !utf_eat_space(first())))
             {
-                if endcurr1 == ' ' as c_int {
+                if endcurr1 == c_int::from(b' ') {
                     // The line already ends in a space; look one further
                     // back for the 'joinspaces' test below.
                     endcurr1 = endcurr2;
@@ -189,9 +195,9 @@ fn measure_join(
                 }
                 // 'joinspaces': two spaces after the end of a sentence.
                 if p_js()
-                    && (endcurr1 == '.' as c_int
-                        || endcurr1 == '?' as c_int
-                        || endcurr1 == '!' as c_int)
+                    && (endcurr1 == c_int::from(b'.')
+                        || endcurr1 == c_int::from(b'?')
+                        || endcurr1 == c_int::from(b'!'))
                 {
                     spaces += 1;
                 }
@@ -226,12 +232,12 @@ fn measure_join(
             plan.joined = Vec::with_capacity((text.len() + 2) * count + 1);
         }
         // Where this line's marks go: its spaces start at `sumsize`.
-        let removed = curr as c_int - added;
+        let removed = len_as_int(curr) - added;
         plan.landed
             .push((ColNr::new(plan.sumsize - removed), removed));
-        plan.joined.resize(plan.joined.len() + added as usize, b' ');
+        plan.joined.resize(plan.joined.len() + width(added), b' ');
         plan.joined.extend_from_slice(text);
-        plan.currsize = text.len() as c_int;
+        plan.currsize = len_as_int(text.len());
         if t == 0 {
             plan.first_size = plan.currsize;
         }

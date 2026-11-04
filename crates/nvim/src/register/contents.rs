@@ -468,11 +468,12 @@ pub fn write_reg_contents_ex(
 ///
 /// Answers false for a `regtype` that does not parse.
 pub fn prepare_yankreg_from_object(reg: &mut YankReg, regtype: &[u8]) -> bool {
-    let kind = match regtype.first().map_or(NUL, |&b| c_int::from(b)) {
+    let kind = match regtype.first().copied().unwrap_or(0) {
         0 => kMTUnknown, // "" means "work it out from the text"
-        c if c == 'v' as c_int || c == 'c' as c_int => kMTCharWise,
-        c if c == 'V' as c_int || c == 'l' as c_int => kMTLineWise,
-        c if c == 'b' as c_int || c == Ctrl_V => kMTBlockWise,
+        b'v' | b'c' => kMTCharWise,
+        b'V' | b'l' => kMTLineWise,
+        // CTRL-V.
+        b'b' | 0x16 => kMTBlockWise,
         _ => return false,
     };
     // As upstream, both fields are settled before the width is parsed, so a

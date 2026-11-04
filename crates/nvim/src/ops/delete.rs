@@ -188,7 +188,7 @@ fn save_deleted_text(op: &OpArg) -> bool {
             beep_flush();
             return false;
         }
-        let named = get_yank_register(op.regname, YREG_YANK as c_int);
+        let named = get_yank_register(op.regname, YREG_YANK);
         // Yank without a message.
         let append = is_append_register(op.regname);
         op_yank_reg(op, false, named, append);
@@ -366,7 +366,7 @@ fn delete_chars(op: &mut OpArg) -> Result<(), UndoFailed> {
 fn break_tabs_at_edges(op: &mut OpArg) -> Result<(), UndoFailed> {
     // Both ends name positions of the current buffer, and the cursor is put
     // on one of them before each column is measured.
-    if gchar_pos(&op.start) == '\t' as c_int {
+    if gchar_pos(&op.start) == c_int::from(b'\t') {
         // Save the first line for undo.
         u_save_cursor()?;
         // Breaking the start TAB moves the end too, so remember where the
@@ -387,7 +387,7 @@ fn break_tabs_at_edges(op: &mut OpArg) -> Result<(), UndoFailed> {
     }
 
     // Break the end TAB only when it is inside the region.
-    if gchar_pos(&op.end) == '\t' as c_int && op.end.coladd == 0 && op.inclusive {
+    if gchar_pos(&op.end) == c_int::from(b'\t') && op.end.coladd == 0 && op.inclusive {
         // Save the last line for undo.
         u_save(op.end.lnum - 1, op.end.lnum + 1)?;
         Win::current().w_cursor = op.end;

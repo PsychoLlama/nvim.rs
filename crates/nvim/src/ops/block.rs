@@ -28,6 +28,13 @@
 //! with it off.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::narrow::len_as_int;
 use crate::winlayer::{Buf, Win};
@@ -113,19 +120,19 @@ pub(crate) fn block_insert(op: &OpArg, s: &[u8], b_insert: bool, bdp: &mut Block
             debug_assert!(count >= 0);
 
             let at = usize::try_from(offset).unwrap_or(0).min(oldp.len());
-            let mut line = Vec::with_capacity(oldp.len() + spaces as usize + s.len() + 1);
+            let mut line = Vec::with_capacity(oldp.len() + width(spaces) + s.len() + 1);
             line.extend_from_slice(&oldp[..at]);
-            line.resize(line.len() + spaces as usize, b' ');
+            line.resize(line.len() + width(spaces), b' ');
             line.extend_from_slice(s);
 
             let startcol = offset;
             offset += len_as_int(s.len());
             let mut tail = at;
             if spaces > 0 && bdp.is_short == 0 {
-                if byte_at(oldp, at) == TAB as u8 {
+                if byte_at(oldp, at) == b'\t' {
                     // Post-padding: the rest of the TAB being split, which
                     // is then dropped rather than copied.
-                    line.resize(line.len() + (ts_val - spaces) as usize, b' ');
+                    line.resize(line.len() + width(ts_val - spaces), b' ');
                     tail = at + 1;
                     count += 1;
                     skipped = 1;
@@ -349,7 +356,7 @@ pub(crate) fn block_prep_line(
         if is_del && bd.startspaces != 0 {
             pstart = prev_pstart;
         }
-        bd.textlen = (pend - pstart) as c_int;
+        bd.textlen = len_as_int(pend - pstart);
     }
 
     bd.textcol = ColNr::from_index(pstart);

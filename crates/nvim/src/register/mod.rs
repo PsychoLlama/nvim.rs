@@ -22,6 +22,13 @@
 //! | `display` | `:registers` |
 //! | `contents` | a register as text: `getreg()`, `setreg()`, the clipboard, shada |
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -54,7 +61,7 @@ use crate::global_cell::GlobalCell;
 use crate::highlight_group::HLF_8;
 use crate::indent::{get_indent, preprocs_left, set_indent};
 use crate::insexpand::{ins_compl_delete, ins_compl_preinsert_effect};
-use crate::keycodes::{Ctrl_V, escape_ks_bytes, unescape_ks_in};
+use crate::keycodes::{escape_ks_bytes, unescape_ks_in};
 use crate::mark::mark_adjust;
 use crate::memline::{decl, ml_append_cstr, ml_append_terminated, ml_replace_owned};
 use crate::memory::XString;

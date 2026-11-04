@@ -25,8 +25,16 @@
 //! legal column afterwards.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::memline::MlFlags;
+use crate::narrow::len_as_int;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_int, c_uint};
@@ -337,7 +345,7 @@ pub(crate) fn op_change(op: &mut OpArg) -> c_int {
         let mut lines = Lines::current();
         let firstline = lines.line(op.start.lnum);
         pre_textlen = ColNr::try_from(firstline.len()).unwrap_or(ColNr::MAX).get();
-        pre_indent = skip::white(firstline) as c_int;
+        pre_indent = len_as_int(skip::white(firstline));
         bd.textcol = Win::current().w_cursor.col;
     }
 
@@ -375,11 +383,11 @@ fn replay_change(op: &OpArg, bd: &mut BlockDef, mut pre_textlen: c_int, pre_inde
         // Auto-indenting may have changed the indent. If the cursor was past
         // the indent, that change is not part of the inserted text.
         if bd.textcol > ColNr::new(pre_indent) {
-            let new_indent = skip::white(firstline) as c_int;
+            let new_indent = len_as_int(skip::white(firstline));
             pre_textlen += new_indent - pre_indent;
             bd.textcol += new_indent - pre_indent;
         }
-        let ins_len = firstline.len() as c_int - pre_textlen;
+        let ins_len = len_as_int(firstline.len()) - pre_textlen;
         if ins_len <= 0 {
             return;
         }
@@ -388,9 +396,9 @@ fn replay_change(op: &OpArg, bd: &mut BlockDef, mut pre_textlen: c_int, pre_inde
         let at = usize::try_from(bd.textcol)
             .unwrap_or(0)
             .min(firstline.len());
-        let end = (at + ins_len as usize).min(firstline.len());
+        let end = (at + width(ins_len)).min(firstline.len());
         let text = firstline[at..end].to_vec();
-        (text.len() as c_int, text)
+        (len_as_int(text.len()), text)
     };
 
     let mut linenr = op.start.lnum + 1;
@@ -416,9 +424,9 @@ fn replay_change(op: &OpArg, bd: &mut BlockDef, mut pre_textlen: c_int, pre_inde
                 let oldp = lines.line(linenr);
                 let at = usize::try_from(bd.textcol).unwrap_or(0).min(oldp.len());
                 let mut line =
-                    Vec::with_capacity(oldp.len() + vpos.coladd as usize + ins_len as usize + 1);
+                    Vec::with_capacity(oldp.len() + width(vpos.coladd) + width(ins_len) + 1);
                 line.extend_from_slice(&oldp[..at]);
-                line.resize(line.len() + vpos.coladd as usize, b' ');
+                line.resize(line.len() + width(vpos.coladd), b' ');
                 line.extend_from_slice(&ins_text);
                 line.extend_from_slice(&oldp[at..]);
                 line

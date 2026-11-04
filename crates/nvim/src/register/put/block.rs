@@ -9,6 +9,13 @@
 //! empty ones are appended.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use crate::mbyte::{c_char_info, c_next_cluster, head_off};
@@ -194,10 +201,10 @@ impl Put {
             return false;
         }
         let pad = |n: c_int| usize::try_from(n).expect("a count of spaces");
-        *totlen = (self.count as size_t)
-            .wrapping_mul((yanklen + spaces) as size_t)
-            .wrapping_add(land.startspaces as size_t)
-            .wrapping_add(land.endspaces as size_t);
+        // The check above keeps the sum inside a `c_int`, and every term is
+        // a count.
+        *totlen =
+            pad(self.count) * pad(yanklen + spaces) + pad(land.startspaces) + pad(land.endspaces);
 
         // Lay the new line out: the head of the old line, the block's left
         // padding, `count` copies of the block's line each with its own right
@@ -214,7 +221,7 @@ impl Put {
             if (j < self.count - 1 || !land.shortline) && spaces > 0 {
                 newline.resize(newline.len() + pad(spaces), b' ');
             } else {
-                *totlen -= spaces as size_t;
+                *totlen -= pad(spaces);
             }
         }
         newline.resize(newline.len() + pad(land.endspaces), b' ');
@@ -225,7 +232,7 @@ impl Put {
 
         let buf = Buf::current();
         let at = Win::current().w_cursor.lnum - 1;
-        let inserted = *totlen as c_int + lines_appended;
+        let inserted = len_as_int(*totlen) + lines_appended;
         extmark_splice_cols(
             buf,
             at.get(),

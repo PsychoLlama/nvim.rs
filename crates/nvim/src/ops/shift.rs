@@ -16,8 +16,16 @@
 //!   that the driver can do the one `ml_replace` and the one extmark splice.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::memory::XString;
+use crate::narrow::{len_as_int, number_as_int};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_int, c_ulong};
 
@@ -53,7 +61,7 @@ pub fn op_shift(op: &OpArg, curs_top: bool, amount: c_int) {
             Win::current().w_cursor.col = ColNr::ZERO;
         } else if op.motion_type == kMTBlockWise {
             shift_block(op, amount);
-        } else if first_char != '#' as c_int || !preprocs_left() {
+        } else if first_char != c_int::from(b'#') || !preprocs_left() {
             // A line starting with '#' stays put when 'smartindent' or
             // 'cindent' says preprocessor lines keep column 0.
             let left = op.op_type == OpType::Lshift;
@@ -84,17 +92,11 @@ pub fn op_shift(op: &OpArg, curs_top: bool, amount: c_int) {
         } else {
             c"<"
         };
-        let lines = op.line_count as u64;
-        let single = ngettext(
-            c"%ld line %sed %d time",
-            c"%ld line %sed %d times",
-            amount as c_ulong,
-        );
-        let plural = ngettext(
-            c"%ld lines %sed %d time",
-            c"%ld lines %sed %d times",
-            amount as c_ulong,
-        );
+        // Both counts are positive here.
+        let lines = u64::try_from(op.line_count).unwrap_or(0);
+        let times = c_ulong::try_from(amount).unwrap_or(0);
+        let single = ngettext(c"%ld line %sed %d time", c"%ld line %sed %d times", times);
+        let plural = ngettext(c"%ld lines %sed %d time", c"%ld lines %sed %d times", times);
         let fmt = ngettext(single, plural, lines);
         // The "N lines >ed M times" report, cut where upstream's shared
         // `IObuff` would cut it.
@@ -130,9 +132,9 @@ fn get_vts(vts: &[c_int], index: c_int) -> c_int {
     if index < 1 {
         0
     } else if index <= count {
-        vts[index as usize]
+        vts[width(index)]
     } else {
-        vts[count as usize]
+        vts[width(count)]
     }
 }
 
@@ -143,12 +145,12 @@ fn get_vts_sum(vts: &[c_int], index: c_int) -> c_int {
     let mut sum = 0;
     let mut i = 1;
     while i <= index && i <= count {
-        sum += vts[i as usize];
+        sum += vts[width(i)];
         i += 1;
     }
     // Stops beyond the array all have the last stop's width.
     if i <= index {
-        sum += vts[count as usize] * (index - count);
+        sum += vts[width(count)] * (index - count);
     }
     sum
 }
@@ -259,19 +261,15 @@ pub fn shift_line(left: bool, round: bool, amount: c_int, call_changed_bytes: bo
     } else {
         match Buf::current().tab_stop_list() {
             None => get_new_sw_indent(left, round, amount, ts_val, now),
-            Some(vts) => get_new_vts_indent(left, round, amount as c_int, &vts, now),
+            Some(vts) => get_new_vts_indent(left, round, number_as_int(amount), &vts, now),
         }
     };
 
     let indent = crate::math::trim_to_int(count);
     if State.get() & VREPLACE_FLAG != 0 {
-        change_indent(INDENT_SET as c_int, indent, 0, call_changed_bytes);
+        change_indent(INDENT_SET, indent, 0, call_changed_bytes);
     } else {
-        let flags = if call_changed_bytes {
-            SIN_CHANGED as c_int
-        } else {
-            0
-        };
+        let flags = if call_changed_bytes { SIN_CHANGED } else { 0 };
         set_indent(indent, flags);
     }
 }
@@ -317,7 +315,7 @@ fn shift_block(op: &OpArg, amount: c_int) {
 
     // Screen columns to insert or remove. `sw_val` is at least 1, so the
     // division is the multiplication's overflow check and nothing else.
-    let total = (amount as u32).wrapping_mul(sw_val as u32) as c_int;
+    let total = amount.wrapping_mul(sw_val);
     if total / sw_val != amount {
         return;
     }
@@ -407,20 +405,20 @@ fn shift_block_right(bd: &mut BlockDef, old: &[u8], mut total: c_int) -> Shifted
     bd.textcol -= col_pre;
 
     let keep = bd.textcol.as_usize().min(old.len());
-    let mut line = Vec::with_capacity(keep + (tabs + spaces) as usize + old.len() - rest + 1);
+    let mut line = Vec::with_capacity(keep + width(tabs + spaces) + old.len() - rest + 1);
     line.extend_from_slice(&old[..keep]);
-    line.resize(line.len() + tabs as usize, TAB as u8);
-    line.resize(line.len() + spaces as usize, b' ');
+    line.resize(line.len() + width(tabs), b'\t');
+    line.resize(line.len() + width(spaces), b' ');
     line.extend_from_slice(&old[rest..]);
 
     let shifted = ShiftedLine {
         start_col: bd.textcol.get(),
-        old_len: (rest - block_at) as c_int + col_pre,
+        old_len: len_as_int(rest - block_at) + col_pre,
         new_len: tabs + spaces,
         line,
     };
     debug_assert!(
-        shifted.new_len - shifted.old_len == shifted.line.len() as c_int - old.len() as c_int
+        shifted.new_len - shifted.old_len == len_as_int(shifted.line.len()) - len_as_int(old.len())
     );
     shifted
 }
@@ -489,19 +487,19 @@ fn shift_block_left(op: &OpArg, bd: &mut BlockDef, old: &[u8], total: c_int) -> 
     // then `fill` spaces, then the rest of the line from `non_white`.
     let fixedlen = (block_at + at).min(old.len());
     let rest = (block_at + non_white).min(old.len());
-    let mut line = Vec::with_capacity(fixedlen + fill as usize + old.len() - rest + 1);
+    let mut line = Vec::with_capacity(fixedlen + width(fill) + old.len() - rest + 1);
     line.extend_from_slice(&old[..fixedlen]);
-    line.resize(line.len() + fill as usize, b' ');
+    line.resize(line.len() + width(fill), b' ');
     line.extend_from_slice(&old[rest..]);
 
     let shifted = ShiftedLine {
-        start_col: fixedlen as c_int,
-        old_len: (bd.textcol + non_white as c_int - fixedlen as c_int).get(),
+        start_col: len_as_int(fixedlen),
+        old_len: (bd.textcol + len_as_int(non_white) - len_as_int(fixedlen)).get(),
         new_len: fill,
         line,
     };
     debug_assert!(
-        shifted.new_len - shifted.old_len == shifted.line.len() as c_int - old.len() as c_int
+        shifted.new_len - shifted.old_len == len_as_int(shifted.line.len()) - len_as_int(old.len())
     );
     shifted
 }

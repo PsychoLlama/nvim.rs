@@ -13,6 +13,13 @@
 //! is `]p`) and the `'[`/`']` marks are settled.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cursor::getvpos;
 use crate::mbyte::head_off;
@@ -31,7 +38,7 @@ impl Put {
     /// `col`, once per line of a Visual selection.
     pub(crate) fn charwise_one_line(&mut self, mut lnum: LineNr, mut col: ColNr) {
         // A charwise register holds at least one line.
-        let yanklen = self.lines[0].len() as c_int;
+        let yanklen = len_as_int(self.lines[0].len());
         let start_lnum = lnum;
         let mut end_lnum = 0;
         let mut first_byte_off = 0;
@@ -59,7 +66,9 @@ impl Put {
         } else if self.count > c_int::MAX / yanklen {
             emsg(gettext(e_resulting_text_too_long));
         } else {
-            totlen = (self.count as size_t).wrapping_mul(yanklen as size_t);
+            // Both are counts, and the check above keeps the product in a
+            // `c_int`.
+            totlen = usize::try_from(self.count * yanklen).expect("a count of bytes");
             loop {
                 let oldlen = Buf::current().lines().line_len(lnum);
                 if lnum > start_lnum {
@@ -114,7 +123,7 @@ impl Put {
                     Win::current().w_cursor.col += len_as_int(totlen - 1);
                 }
                 changed_bytes(lnum, col);
-                let inserted = totlen as c_int;
+                let inserted = len_as_int(totlen);
                 let buffer = Buf::current();
                 extmark_splice_cols(
                     buffer,
@@ -336,15 +345,17 @@ impl Put {
                 if self.kind == kMTCharWise || splits_a_line {
                     let (last, init) = self.lines.split_last().expect("a register holds a line");
                     let mut totsize: BCount = 0;
+                    // A register's lines are shorter than `BCount` counts.
+                    let bytes = |n: usize| BCount::try_from(n).expect("a line's length");
                     for line in init {
-                        totsize += line.len() as BCount + 1;
+                        totsize += bytes(line.len()) + 1;
                     }
-                    let lastsize = last.len() as c_int;
-                    totsize += lastsize as BCount;
+                    let lastsize = len_as_int(last.len());
+                    totsize += bytes(last.len());
 
                     let buf = Buf::current();
                     let at = new_cursor.lnum - 1;
-                    let y_size = self.lines.len() as c_int;
+                    let y_size = len_as_int(self.lines.len());
                     let (start, rows, cols, bytes) = if self.kind == kMTCharWise {
                         (col, y_size - 1, lastsize, totsize)
                     } else {

@@ -24,16 +24,24 @@
 //! short-circuits all of the above.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::charset::{Str2NrBases, str2nr_scan};
 use crate::ex_docmd::cmdmod_has;
 use crate::guard::Suppress;
 use crate::message_fmt::report_msg;
+use crate::narrow::len_as_int;
 use crate::os::cshim::ctype_bits;
 use crate::tr_plural;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_int, c_ulong};
+use core::ffi::c_int;
 
 use super::*;
 use crate::normal::{visual_active, visual_mode};
@@ -155,13 +163,15 @@ pub fn op_addsub(op: &mut OpArg, prenum1: i32, g_cmd: bool) {
     if change_cnt > 0 && !cmdmod_has(CmdModFlags::LOCKMARKS) {
         Buf::current().b_op_start = startpos;
     }
-    if change_cnt > p_report() as ssize_t {
+    // A count of lines, which no buffer takes past `i64`.
+    let changed = i64::try_from(change_cnt).unwrap_or(i64::MAX);
+    if changed > p_report() {
         let fmt = ngettext(
             c"%ld lines changed",
             c"%ld lines changed",
-            change_cnt as c_ulong,
+            changed.cast_unsigned(),
         );
-        let _: bool = report_msg(0, || tr_plural!(fmt, change_cnt as int64_t));
+        let _: bool = report_msg(0, || tr_plural!(fmt, changed));
     }
 }
 
@@ -252,9 +262,9 @@ pub fn do_addsub(op_type: OpType, pos: &mut Pos, mut length: c_int, prenum1: i32
             }
         }
 
-        let firstdigit = c_int::from(byte_at(&text, col.as_usize()));
-        let is_alpha = fmt.alpha && ascii_isalpha(firstdigit);
-        if !ascii_isdigit(firstdigit) && !is_alpha {
+        let firstdigit = byte_at(&text, col.as_usize());
+        let is_alpha = fmt.alpha && firstdigit.is_ascii_alphabetic();
+        if !firstdigit.is_ascii_digit() && !is_alpha {
             beep_flush();
         } else {
             let (startpos, endpos) = if is_alpha {
@@ -322,7 +332,7 @@ fn find_number_start(text: &[u8], start_col: ColNr, fmt: &NrFormats) -> ColNr {
     let prefixed_at = |c: ColNr, upper: u8, lower: u8, digit: fn(c_int) -> bool| {
         c > ColNr::ZERO
             && (byte(c) == c_int::from(upper) || byte(c) == c_int::from(lower))
-            && byte(c - 1) == '0' as c_int
+            && byte(c - 1) == c_int::from(b'0')
             && head_off(text, (c - 1).as_usize()) == 0
             && digit(byte(c + 1))
     };
@@ -386,7 +396,7 @@ fn visual_skip_to_number(
         && !ascii_isdigit(byte(col))
         && !(fmt.alpha && ascii_isalpha(byte(col)))
     {
-        let mb_len = cluster_len(&text[col.as_usize().min(text.len())..]) as c_int;
+        let mb_len = len_as_int(cluster_len(&text[col.as_usize().min(text.len())..]));
         col += mb_len;
         length -= mb_len;
     }
@@ -421,32 +431,30 @@ fn minus_before(text: &[u8], col: ColNr, min_col: ColNr, fmt: &NrFormats) -> Min
 /// and `z`/`Z`.
 ///
 /// Answers the `'[`/`']` positions.
-fn bump_alpha_char(mut firstdigit: c_int, op_type: OpType, prenum1: i32, col: ColNr) -> (Pos, Pos) {
+fn bump_alpha_char(firstdigit: u8, op_type: OpType, prenum1: i32, col: ColNr) -> (Pos, Pos) {
     // The letter's ordinal within its own case.
-    let ord = if firstdigit < 'a' as c_int {
-        firstdigit - 'A' as c_int
-    } else {
-        firstdigit - 'a' as c_int
-    };
+    let base = if firstdigit < b'a' { b'A' } else { b'a' };
+    let ord = i32::from(firstdigit - base);
     // The C library's own locale table: `firstdigit` is an ASCII letter.
-    let class = c_int::from(ctype_bits(firstdigit as u8));
-    let upper = class & _ISupper as ::core::ffi::c_ushort as c_int != 0;
-    if op_type == OpType::NrSub {
+    let upper = ctype_bits(firstdigit) & _ISupper != 0;
+    // A letter `ord` places from `base`, which the clamps keep in 0..=25.
+    let letter = |ord: i32| base + u8::try_from(ord).expect("a letter's ordinal");
+    let bumped = if op_type == OpType::NrSub {
         if ord < prenum1 {
-            firstdigit = if upper { 'A' as c_int } else { 'a' as c_int };
+            if upper { b'A' } else { b'a' }
         } else {
-            firstdigit -= prenum1 as c_int;
+            letter(ord - prenum1)
         }
     } else if 26 - ord - 1 < prenum1 {
-        firstdigit = if upper { 'Z' as c_int } else { 'z' as c_int };
+        if upper { b'Z' } else { b'z' }
     } else {
-        firstdigit += prenum1 as c_int;
-    }
+        letter(ord + prenum1)
+    };
 
     Win::current().w_cursor.col = col;
     let startpos = Win::current().w_cursor;
     let _ = del_char(false);
-    ins_char(Key::from_code(firstdigit));
+    ins_char(Key::ascii(bumped));
     let endpos = Win::current().w_cursor;
     Win::current().w_cursor.col = col;
     (startpos, endpos)
@@ -461,7 +469,7 @@ struct Scan<'a> {
     /// Column the number starts at.
     col: ColNr,
     /// First byte of the number, which decides whether leading zeros are kept.
-    firstdigit: c_int,
+    firstdigit: u8,
     /// A Visual selection is active.
     visual: bool,
     /// A `-` in front of the number belongs to it.
@@ -564,15 +572,15 @@ fn replace_number(
     let mut c = gchar_cursor();
     // The `-` is not part of the length: only the part after it keeps its
     // width.
-    if c == '-' as c_int {
+    if c == c_int::from(b'-') {
         *length -= 1;
     }
     while todel > 0 {
         todel -= 1;
         // The C library's own locale table, indexed by a byte value.
-        let class = u8::try_from(c).map_or(0, |c| c_int::from(ctype_bits(c)));
-        if class & _ISalpha as ::core::ffi::c_ushort as c_int != 0 {
-            HEX_UPPER.set(class & _ISupper as ::core::ffi::c_ushort as c_int != 0);
+        let class = u8::try_from(c).map_or(0, ctype_bits);
+        if class & _ISalpha != 0 {
+            HEX_UPPER.set(class & _ISupper != 0);
         }
         let _ = del_char(false);
         c = gchar_cursor();
@@ -607,9 +615,9 @@ fn add_or_subtract(
     let oldn = n;
     if !overflow {
         n = if subtract {
-            n.wrapping_sub(prenum1 as UVarNumber)
+            n.wrapping_sub(i64::from(prenum1).cast_unsigned())
         } else {
-            n.wrapping_add(prenum1 as UVarNumber)
+            n.wrapping_add(i64::from(prenum1).cast_unsigned())
         };
     }
 
@@ -640,7 +648,7 @@ fn render_number(
     n: UVarNumber,
     pre: u8,
     mut length: c_int,
-    firstdigit: c_int,
+    firstdigit: u8,
     negative: bool,
     visual: bool,
     was_positive: bool,
@@ -648,7 +656,7 @@ fn render_number(
 ) {
     // Sized as upstream does, before the decrements below: with many
     // leading zeros the prefix can be long.
-    let mut buf = Vec::with_capacity(length.max(0) as usize + NUMBUFLEN as usize);
+    let mut buf = Vec::with_capacity(usize::try_from(length).unwrap_or(0) + NUMBUFLEN);
     if negative && (!visual || was_positive) {
         buf.push(b'-');
     }
@@ -673,11 +681,11 @@ fn render_number(
     } else {
         format!("{n:x}").into_bytes()
     };
-    length -= digits.len() as c_int;
+    length -= len_as_int(digits.len());
 
     // Keep the total width by padding with zeros -- unless the result
     // would then look like an octal number.
-    if firstdigit == '0' as c_int && !(fmt.oct && pre == 0) {
+    if firstdigit == b'0' && !(fmt.oct && pre == 0) {
         while length > 0 {
             length -= 1;
             buf.push(b'0');
@@ -698,7 +706,7 @@ fn format_binary(n: UVarNumber) -> Vec<u8> {
     }
 
     let mut out = Vec::with_capacity(bits);
-    while bits > 0 && out.len() < NUMBUFLEN as usize - 1 {
+    while bits > 0 && out.len() < NUMBUFLEN - 1 {
         bits -= 1;
         out.push(if (n >> bits) & 0x1 != 0 { b'1' } else { b'0' });
     }

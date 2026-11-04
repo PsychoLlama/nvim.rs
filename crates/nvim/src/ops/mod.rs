@@ -10,6 +10,13 @@
 //! headers, and the `RedoVisual` that `pending.rs` keeps one of.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -49,7 +56,7 @@ use crate::indent::{
 use crate::mark::mark_col_adjust;
 use crate::mbyte::{
     bomb_size, cluster_len, head_off, mb_islower, mb_isupper, mb_tolower, mb_toupper,
-    utf_char2cells, utf_char2len, utf_eat_space,
+    utf_char2cells, utf_eat_space,
 };
 use crate::memline::{
     Lines, dec, decl, gchar_pos, inc, ml_append_terminated, ml_get_len, ml_replace_buf_text,
@@ -88,8 +95,6 @@ use crate::state::mode::{
 };
 use crate::state::{MODE_INSERT, MODE_REPLACE, VREPLACE_FLAG, virtual_active};
 use crate::textformat::{auto_format, has_format_option, op_format, op_formatexpr};
-use crate::types::CAR;
-use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
     BCount, BlockDef, Callback, CharsizeArg, CmdArg, CmdModFlags, ColNr, Dict, ExtmarkOp, LineNr,
@@ -136,7 +141,7 @@ pub const _ISalpha: ::core::ffi::c_ushort = 1024;
 pub const _ISupper: ::core::ffi::c_ushort = 256;
 
 /// Enough for any number this module formats, plus its NUL.
-pub const NUMBUFLEN: ::core::ffi::c_int = 65;
+pub const NUMBUFLEN: usize = 65;
 
 /// `ExtmarkOp`: the edit is undoable, so extmarks move with it.
 pub const kExtmarkUndo: ExtmarkOp = 1;
@@ -227,4 +232,11 @@ pub(crate) fn op_virtual() -> bool {
 pub const EOL_DOS: ::core::ffi::c_int = 1;
 
 /// 'comments' flag: this leader ends a three-part comment.
-pub const COM_END: ::core::ffi::c_int = 'e' as ::core::ffi::c_int;
+pub(crate) use crate::change::COM_END;
+
+/// A width or count the region arithmetic keeps from going negative (a
+/// block's pad, a column offset) as the length it is; a negative one, which
+/// upstream's `(size_t)` would have made huge, as none.
+pub(crate) fn width(n: ::core::ffi::c_int) -> usize {
+    usize::try_from(n).unwrap_or(0)
+}

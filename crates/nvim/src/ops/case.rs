@@ -163,13 +163,13 @@ pub fn swapchar(op_type: OpType, pos: Pos) -> bool {
     let mut nc = c;
     if mb_islower(c) {
         if op_type == OpType::Rot13 {
-            nc = rot13(c, 'a' as c_int);
+            nc = rot13(c, c_int::from(b'a'));
         } else if op_type != OpType::Lower {
             nc = mb_toupper(c);
         }
     } else if mb_isupper(c) {
         if op_type == OpType::Rot13 {
-            nc = rot13(c, 'A' as c_int);
+            nc = rot13(c, c_int::from(b'A'));
         } else if op_type != OpType::Upper {
             nc = mb_tolower(c);
         }
@@ -191,10 +191,12 @@ pub fn swapchar(op_type: OpType, pos: Pos) -> bool {
             ColNr::try_from(char_len(&line[col..])).unwrap_or(ColNr::new(1))
         };
         let _ = del_bytes(len.get(), false, false);
+        // The new character, from the case tables, as the key that types it.
         ins_char(Key::from_code(nc));
         Win::current().w_cursor = saved;
     } else {
-        pbyte(pos, nc);
+        // Both are below 0x80 here.
+        pbyte(pos, u8::try_from(nc).expect("an ASCII character"));
     }
     true
 }

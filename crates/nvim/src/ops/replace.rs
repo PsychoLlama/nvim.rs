@@ -14,9 +14,17 @@
 //!   return instead -- which is the whole job of the `had_ctrl_v_cr` flag.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::guard::Suppress;
 use crate::memline::MlFlags;
+use crate::narrow::len_as_int;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
@@ -32,8 +40,7 @@ use crate::types::{Failed, NUL};
 ///
 /// Only for a one-byte character replacing a one-byte character; anything else
 /// changes the line's length and has to go through [`replace_character`].
-pub(crate) fn pbyte(mut pos: Pos, c: c_int) {
-    debug_assert!(c <= c_int::from(u8::MAX));
+pub(crate) fn pbyte(mut pos: Pos, c: u8) {
     let mut lines = Lines::current();
     let line = lines.line_mut(pos.lnum);
     // The caller's column may be past the line: the last character then.
@@ -44,7 +51,7 @@ pub(crate) fn pbyte(mut pos: Pos, c: c_int) {
         pos.col = (len - 1).max(ColNr::ZERO);
     }
     if let Some(byte) = line.get_mut(pos.col.as_usize()) {
-        *byte = c as u8;
+        *byte = c;
     }
     if curbuf_splice_pending.get() == 0 {
         let row = pos.lnum.get() - 1;
@@ -63,10 +70,10 @@ pub(crate) fn pbyte(mut pos: Pos, c: c_int) {
 ///
 /// Goes through Replace mode's own insert so that a multi-byte character on
 /// either side is handled; leaves the cursor back on the replaced character.
-fn replace_character(c: c_int) {
+fn replace_character(c: Key) {
     let saved = State.get();
     State.set(MODE_REPLACE);
-    ins_char(Key::from_code(c));
+    ins_char(c);
     State.set(saved);
     // Back up onto the character just replaced.
     dec_cursor();
@@ -77,19 +84,19 @@ fn replace_character(c: c_int) {
 /// `c` is the replacement, or `REPLACE_CR_NCHAR`/`REPLACE_NL_NCHAR` for the
 /// `CTRL-V <CR>`/`CTRL-V <NL>` spellings that mean the literal byte rather
 /// than a line split. `op` describes a region of the current buffer.
-pub(crate) fn op_replace(op: &mut OpArg, mut c: c_int) -> Result<(), Failed> {
+pub(crate) fn op_replace(op: &mut OpArg, mut c: Key) -> Result<(), Failed> {
     if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) || op.empty {
         return Ok(());
     }
 
     // CTRL-V CR / CTRL-V NL: put the byte in, do not split the line.
     let mut had_ctrl_v_cr = false;
-    if c == REPLACE_CR_NCHAR.code() {
+    if c == REPLACE_CR_NCHAR {
         had_ctrl_v_cr = true;
-        c = CAR;
-    } else if c == REPLACE_NL_NCHAR.code() {
+        c = Key::CAR;
+    } else if c == REPLACE_NL_NCHAR {
         had_ctrl_v_cr = true;
-        c = NL;
+        c = Key::NL;
     }
 
     mb_adjust_opend(op);
@@ -118,7 +125,7 @@ pub(crate) fn op_replace(op: &mut OpArg, mut c: c_int) -> Result<(), Failed> {
 /// The blockwise arm: one rebuilt line per line the block reaches.
 ///
 /// `op` must be blockwise.
-fn replace_block(op: &mut OpArg, c: c_int, had_ctrl_v_cr: bool) {
+fn replace_block(op: &mut OpArg, c: Key, had_ctrl_v_cr: bool) {
     let mut bd = BlockDef::ZERO;
     bd.is_max = c_int::from(Win::current().w_curswant == ColNr::MAX);
     while Win::current().w_cursor.lnum <= op.end.lnum {
@@ -142,9 +149,9 @@ fn replace_block(op: &mut OpArg, c: c_int, had_ctrl_v_cr: bool) {
 /// `\n` and no CTRL-V there is no "after": the tail becomes a new line.
 ///
 /// `op` and `bd` must describe the cursor line, as [`block_prep`] left them.
-fn replace_block_line(op: &mut OpArg, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr: bool) {
+fn replace_block_line(op: &mut OpArg, bd: &mut BlockDef, c: Key, had_ctrl_v_cr: bool) {
     // Replacing with `\r`/`\n` splits the line rather than overwriting.
-    let splits_line = !had_ctrl_v_cr && (c == '\r' as c_int || c == '\n' as c_int);
+    let splits_line = !had_ctrl_v_cr && (c == Key::CAR || c == Key::NL);
     let baselnum = Win::current().w_cursor.lnum;
 
     // When the block starts in virtual space, that offset counts as
@@ -170,14 +177,14 @@ fn replace_block_line(op: &mut OpArg, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr
         numc -= (op.end_vcol - bd.end_vcol) + 1;
     }
     // A double-wide character only fits half as many times.
-    if utf_char2cells(c) > 1 {
+    if utf_char2cells(c.code()) > 1 {
         if numc & 1 != 0 && bd.is_short == 0 {
             bd.endspaces += 1;
         }
         numc /= 2;
     }
     let mut char_bytes = [0u8; MB_MAXCHAR];
-    let encoded_len = encode_char(c, &mut char_bytes);
+    let encoded_len = encode_char(c.code(), &mut char_bytes);
     let encoded = &char_bytes[..encoded_len];
 
     // Up to the replaced part, then the pre-spaces; then, unless the line
@@ -188,17 +195,17 @@ fn replace_block_line(op: &mut OpArg, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr
         let mut lines = Lines::current();
         let oldp = lines.line(baselnum);
         let textcol = usize::try_from(bd.textcol).unwrap_or(0).min(oldp.len());
-        let tail = &oldp[(textcol + bd.textlen as usize).min(oldp.len())..];
+        let tail = &oldp[(textcol + width(bd.textlen)).min(oldp.len())..];
         let mut line = Vec::with_capacity(
             textcol
-                + bd.startspaces as usize
-                + numc.max(0) as usize * encoded.len()
-                + bd.endspaces.max(0) as usize
+                + width(bd.startspaces)
+                + width(numc) * encoded.len()
+                + width(bd.endspaces)
                 + tail.len()
                 + 1,
         );
         line.extend_from_slice(&oldp[..textcol]);
-        line.resize(line.len() + bd.startspaces as usize, b' ');
+        line.resize(line.len() + width(bd.startspaces), b' ');
         if splits_line {
             let mut after = Vec::with_capacity(tail.len() + 1);
             after.extend_from_slice(tail);
@@ -210,11 +217,11 @@ fn replace_block_line(op: &mut OpArg, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr
             }
             let mut newcols = line.len() - textcol;
             if bd.is_short == 0 {
-                line.resize(line.len() + bd.endspaces as usize, b' ');
-                newcols += bd.endspaces as usize;
+                line.resize(line.len() + width(bd.endspaces), b' ');
+                newcols += width(bd.endspaces);
                 line.extend_from_slice(tail);
             }
-            (line, None, newcols as c_int)
+            (line, None, len_as_int(newcols))
         }
     };
     let newrows = c_int::from(after.is_some());
@@ -250,7 +257,7 @@ fn replace_block_line(op: &mut OpArg, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr
 /// The charwise and linewise arm: walk the region a character at a time.
 ///
 /// `op` must be charwise or linewise.
-fn replace_chars(op: &mut OpArg, c: c_int) {
+fn replace_chars(op: &mut OpArg, c: Key) {
     // The cursor walks the region, so it names a position of the current
     // buffer at every step, which is what each of these asks for.
     if op.motion_type == kMTLineWise {
@@ -269,13 +276,13 @@ fn replace_chars(op: &mut OpArg, c: c_int) {
 
         let under_cursor = gchar_cursor();
         if under_cursor != NUL {
-            let new_byte_len = utf_char2len(c);
+            let new_byte_len = len_as_int(c.utf8_len());
             let old_byte_len = {
                 let cursor = Win::current().w_cursor;
                 let mut lines = Lines::current();
                 let line = lines.line(cursor.lnum);
                 let col = usize::try_from(cursor.col).unwrap_or(0).min(line.len());
-                c_cluster_len(&line[col..]) as c_int
+                len_as_int(c_cluster_len(&line[col..]))
             };
 
             if new_byte_len > 1 || old_byte_len > 1 {
@@ -301,7 +308,11 @@ fn replace_chars(op: &mut OpArg, c: c_int) {
                 }
                 // With `coladd` set the cursor may now be just past a TAB.
                 if gchar_cursor() != NUL {
-                    pbyte(Win::current().w_cursor, c);
+                    // Both sides are one byte, so the key is one.
+                    pbyte(
+                        Win::current().w_cursor,
+                        c.as_byte().expect("a one-byte character"),
+                    );
                     done = true;
                 }
             }
@@ -325,7 +336,7 @@ fn replace_chars(op: &mut OpArg, c: c_int) {
 /// first and those are then replaced.
 ///
 /// The cursor must be on `op.end.lnum`.
-fn replace_virtual_tail(op: &OpArg, c: c_int) {
+fn replace_virtual_tail(op: &OpArg, c: Key) {
     let mut virtcols = op.end.coladd;
     if Win::current().w_cursor.lnum == op.start.lnum
         && op.start.col == op.end.col
@@ -340,10 +351,9 @@ fn replace_virtual_tail(op: &OpArg, c: c_int) {
     coladvance_force(endcol + 1);
     Win::current().w_cursor.col -= virtcols + 1;
     while virtcols >= 0 {
-        if utf_char2len(c) > 1 {
-            replace_character(c);
-        } else {
-            pbyte(Win::current().w_cursor, c);
+        match c.as_byte().filter(|_| c.utf8_len() == 1) {
+            Some(byte) => pbyte(Win::current().w_cursor, byte),
+            None => replace_character(c),
         }
         if inc(&mut Win::current().w_cursor) == -1 {
             break;

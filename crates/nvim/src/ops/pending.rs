@@ -743,7 +743,7 @@ fn run_operator(
                 refuse();
             } else {
                 restore_lbr(lbr_saved != 0);
-                let _ = op.on_copy(|arg| op_replace(arg, cmd_arg.nchar.code()));
+                let _ = op.on_copy(|arg| op_replace(arg, cmd_arg.nchar));
             }
         }
 

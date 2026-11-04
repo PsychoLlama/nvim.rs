@@ -12,6 +12,13 @@
 //! `v:event` dictionary TextYankPost sees.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -22,6 +29,7 @@ use crate::guard::Lock;
 use crate::mbyte::head_off;
 use crate::memory::{ThinCString, XString};
 use crate::message_fmt::{msg_bytes, report_msg};
+use crate::narrow::len_as_integer;
 use crate::ops::{block_def_of, charwise_block_def};
 use crate::option::vars::P_SEL;
 use crate::tr_plural;
@@ -116,7 +124,7 @@ fn report_yank(op: &OpArg, yank_type: MotionType, yanklines: size_t) {
     };
     let fmt = ngettext(one, many, yanklines as c_ulong);
     let name = msg_bytes(&name);
-    let _: bool = report_msg(0, || tr_plural!(fmt, yanklines as int64_t, name));
+    let _: bool = report_msg(0, || tr_plural!(fmt, len_as_integer(yanklines), name));
 }
 
 /// Yank the operator's region into `reg`.
@@ -204,7 +212,7 @@ pub fn op_yank_reg(op: &OpArg, message: bool, reg: Reg, append: bool) {
         if yank_type == kMTCharWise && yanklines == 1 {
             yanklines = 0;
         }
-        if yanklines > p_report() as size_t {
+        if len_as_integer(yanklines) > p_report() {
             report_yank(op, yank_type, yanklines);
         }
     }
@@ -259,7 +267,7 @@ pub fn do_autocmd_textyankpost(op: &OpArg, reg: Reg) {
 
     // `regcontents`: the register's lines, as a locked list.
     let (list, regtype) = reg.read(|reg| {
-        let list = tv_list_alloc(reg.lines.len() as ptrdiff_t);
+        let list = tv_list_alloc(ptrdiff_t::try_from(reg.lines.len()).unwrap_or(ptrdiff_t::MAX));
         for line in reg.lines.iter() {
             list.edit().push_bytes(Some(line));
         }
