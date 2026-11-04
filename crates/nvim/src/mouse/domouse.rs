@@ -43,7 +43,7 @@ use crate::getchar::{
     vpeekc, vungetc,
 };
 use crate::global_cell::GlobalCell;
-use crate::keycodes::{Ctrl_G, Ctrl_O, Ctrl_RSB, Ctrl_T, Ctrl_V, SpecialKey};
+use crate::keycodes::SpecialKey;
 use crate::keycodes::{ModMask, mouse_button};
 use crate::memline::{gchar_pos, inc};
 use crate::message::state::msg_silent;
@@ -67,7 +67,7 @@ use crate::statusline::{
     kStlClickDisabled, kStlClickFuncRun, kStlClickTabClose, kStlClickTabSwitch,
 };
 use crate::types::Key;
-use crate::types::{NUL, PUT_CURSEND, PUT_FIXINDENT};
+use crate::types::{Direction, NUL, PUT_CURSEND, PUT_FIXINDENT};
 use crate::ui::state::Columns;
 use crate::ui::ui_mouse_has;
 use crate::window::{goto_tabpage, tabpage_move};
@@ -128,14 +128,14 @@ static orig_cursor: GlobalCell<Pos> = GlobalCell::new(Pos {
 /// @return           true if `start_arrow()` should be called for edit mode.
 pub(crate) fn do_mouse(
     op: Option<Op>,
-    c: c_int,
-    dir: c_int,
+    c: Key,
+    dir: Direction,
     count: c_int,
     fixindent: bool,
 ) -> bool {
     let (mut which_button, is_click, is_drag) = coalesce_drags(c);
 
-    if c == SpecialKey::Mousemove.code() {
+    if c == SpecialKey::Mousemove {
         return false; // Mouse moved without a button pressed.
     }
     if let Some(answer) = ignore_stray_event(is_click, is_drag) {
@@ -202,7 +202,7 @@ pub(crate) fn do_mouse(
         }
     }
 
-    let mouse_can_visual = ui_mouse_has(MOUSE_VISUAL);
+    let mouse_can_visual = ui_mouse_has(c_int::from(MOUSE_VISUAL));
     let visual_corner = visual_jump_flags(
         &mut jump_flags,
         is_click,
@@ -298,7 +298,7 @@ pub(crate) fn do_mouse(
         extend_visual_block(win, start_visual, end_visual);
     } else if State.get() & MODE_INSERT != 0 && visual_active() {
         // If Visual mode started in insert mode, execute "CTRL-O".
-        stuff_char(Ctrl_O);
+        stuff_char(Key::CTRL_O);
     }
 
     dispatch_action(
@@ -340,21 +340,21 @@ pub(crate) fn do_mouse(
 /// Speeds up dragging the status line.  Since characters added to the stuff
 /// buffer further down need to come before the next character, this is not
 /// done when the current character was stuffed.
-fn coalesce_drags(c: c_int) -> (c_int, bool, bool) {
+fn coalesce_drags(c: Key) -> (c_int, bool, bool) {
     loop {
-        let (which_button, is_click, is_drag) = mouse_button(Key::from_code(c));
-        if !is_drag || KeyStuffed.get() || vpeekc().code() == NUL {
+        let (which_button, is_click, is_drag) = mouse_button(c);
+        if !is_drag || KeyStuffed.get() || vpeekc().is_nul() {
             return (which_button, is_click, is_drag);
         }
 
         let saved = MousePos::current();
         // Need to get the character, peeking doesn't get the actual one.
-        let nc = safe_vgetc().code();
+        let nc = safe_vgetc();
         if c == nc {
             // The next character is the same mouse event: use that one.
             continue;
         }
-        vungetc(Key::from_code(nc));
+        vungetc(nc);
         mouse_grid.set(saved.grid);
         mouse_row.set(saved.row);
         mouse_col.set(saved.col);
@@ -388,12 +388,12 @@ fn modifier_shortcuts(is_click: bool, which_button: c_int, count: c_int) -> Opti
     // CTRL right mouse button does CTRL-T.
     if is_click && mods.has(ModMask::CTRL) && which_button == MOUSE_RIGHT {
         if State.get() & MODE_INSERT != 0 {
-            stuff_char(Ctrl_O);
+            stuff_char(Key::CTRL_O);
         }
         if count > 1 {
             stuff_readbuf_number(count);
         }
-        stuff_char(Ctrl_T);
+        stuff_char(Key::CTRL_T);
         got_click.set(false); // ignore drag&release now
         return Some(false);
     }
@@ -444,11 +444,11 @@ fn middle_button_insert(op: Option<Op>, mut regname: c_int, fixindent: bool) -> 
         // text with the clipboard.
         if visual_active() {
             if visual_select() {
-                stuff_char(Ctrl_G);
+                stuff_char(Key::CTRL_G);
                 stuff_readbuf(b"\"+p");
             } else {
-                stuff_char('y' as c_int);
-                stuff_char(SpecialKey::Middlemouse.code());
+                stuff_char(Key::ascii(b'y'));
+                stuff_char(SpecialKey::Middlemouse.into());
             }
             return Some(false);
         }
@@ -488,7 +488,7 @@ fn middle_button_insert(op: Option<Op>, mut regname: c_int, fixindent: bool) -> 
     }
 
     let flags = (if fixindent { PUT_FIXINDENT } else { 0 } | PUT_CURSEND).cast_signed();
-    do_put(regname, reg.as_ref(), BACKWARD as c_int, 1, flags);
+    do_put(regname, reg.as_ref(), BACKWARD, 1, flags);
     // Repeat it with CTRL-R CTRL-O r or CTRL-R CTRL-P r
     append_to_redobuff_char(Key::ctrl(b'R'));
     append_to_redobuff_char(if fixindent {
@@ -646,7 +646,7 @@ struct Action {
     which_button: c_int,
     is_click: bool,
     is_drag: bool,
-    dir: c_int,
+    dir: Direction,
     count: c_int,
     fixindent: bool,
     regname: c_int,
@@ -682,11 +682,11 @@ fn dispatch_action(a: Action, win: Win) {
         } else {
             mouse_past_eol.get()
         } {
-            dir = FORWARD as c_int;
+            dir = FORWARD;
         }
 
         let (c1, c2) = if fixindent {
-            let open = dir == BACKWARD as c_int;
+            let open = dir == BACKWARD;
             (
                 if open {
                     Key::ascii(b'[')
@@ -696,7 +696,7 @@ fn dispatch_action(a: Action, win: Win) {
                 Key::ascii(b'p'),
             )
         } else {
-            let after = dir == FORWARD as c_int;
+            let after = dir == FORWARD;
             (
                 if after {
                     Key::ascii(b'p')
@@ -739,9 +739,9 @@ fn dispatch_action(a: Action, win: Win) {
         // Ctrl-Mouse click (or double click in a help window) jumps to the
         // tag under the mouse pointer.
         if State.get() & MODE_INSERT != 0 {
-            stuff_char(Ctrl_O);
+            stuff_char(Key::CTRL_O);
         }
-        stuff_char(Ctrl_RSB);
+        stuff_char(Key::CTRL_RSB);
         got_click.set(false); // ignore drag&release now
         return;
     }
@@ -750,13 +750,13 @@ fn dispatch_action(a: Action, win: Win) {
         // Shift-Mouse click searches for the next occurrence of the word
         // under the mouse pointer.
         if State.get() & MODE_INSERT != 0 || (visual_active() && visual_select()) {
-            stuff_char(Ctrl_O);
+            stuff_char(Key::CTRL_O);
         }
-        stuff_char(if which_button == MOUSE_LEFT {
-            '*' as c_int
+        stuff_char(Key::ascii(if which_button == MOUSE_LEFT {
+            b'*'
         } else {
-            '#' as c_int
-        });
+            b'#'
+        }));
         return;
     }
 
@@ -775,11 +775,11 @@ fn dispatch_action(a: Action, win: Win) {
     }
 
     if visual_active() && !old_active {
-        set_visual_mode(VisualMode::from_raw(if mods.has(ModMask::ALT) {
-            Ctrl_V
+        set_visual_mode(if mods.has(ModMask::ALT) {
+            VisualMode::BLOCK
         } else {
-            'v' as c_int
-        }));
+            VisualMode::CHAR
+        });
     }
 }
 
@@ -883,8 +883,8 @@ fn select_matching_block(mut win: Win, op: Option<Op>) -> bool {
 // One wrapper per neighbouring entry point
 
 /// Push `c` back onto the input, so it is read as the next key.
-fn stuff_char(c: c_int) {
-    stuff_readbuf_char(Key::from_code(c));
+fn stuff_char(c: Key) {
+    stuff_readbuf_char(c);
 }
 
 /// Whether a clipboard provider is loaded, so that an unnamed register should

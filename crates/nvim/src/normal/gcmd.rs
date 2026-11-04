@@ -279,13 +279,7 @@ fn nv_g_key(cmd_arg: &mut CmdArg, nchar: Key) -> bool {
             | SpecialKey::X2release,
         ) => {
             mod_mask.set(ModMask::CTRL);
-            do_mouse(
-                Some(cmd_arg.op()),
-                nchar.code(),
-                BACKWARD as c_int,
-                cmd_arg.count1,
-                false,
-            );
+            do_mouse(Some(cmd_arg.op()), nchar, BACKWARD, cmd_arg.count1, false);
         }
         Some(SpecialKey::Ignore) => {}
         _ => return false,

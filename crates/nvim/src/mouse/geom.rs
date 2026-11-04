@@ -19,6 +19,7 @@
 
 use crate::keycodes::ModMask;
 use crate::keycodes::SpecialKey;
+use crate::types::Key;
 use core::ffi::{CStr, c_int};
 
 use super::{MOUSE_LEFT, MOUSE_MIDDLE, MOUSE_RIGHT, MOUSE_X1, MOUSE_X2, MSCR_RIGHT};
@@ -51,31 +52,33 @@ impl MousePos {
 }
 
 /// Whether `c` is a mouse key.
-pub(crate) fn is_mouse_key(c: c_int) -> bool {
+pub(crate) fn is_mouse_key(c: Key) -> bool {
     matches!(
-        SpecialKey::try_from(c),
-        Ok(SpecialKey::Leftmouse
-            | SpecialKey::LeftmouseNm
-            | SpecialKey::Leftdrag
-            | SpecialKey::Leftrelease
-            | SpecialKey::LeftreleaseNm
-            | SpecialKey::Mousemove
-            | SpecialKey::Middlemouse
-            | SpecialKey::Middledrag
-            | SpecialKey::Middlerelease
-            | SpecialKey::Rightmouse
-            | SpecialKey::Rightdrag
-            | SpecialKey::Rightrelease
-            | SpecialKey::Mousedown
-            | SpecialKey::Mouseup
-            | SpecialKey::Mouseleft
-            | SpecialKey::Mouseright
-            | SpecialKey::X1mouse
-            | SpecialKey::X1drag
-            | SpecialKey::X1release
-            | SpecialKey::X2mouse
-            | SpecialKey::X2drag
-            | SpecialKey::X2release)
+        c.special(),
+        Some(
+            SpecialKey::Leftmouse
+                | SpecialKey::LeftmouseNm
+                | SpecialKey::Leftdrag
+                | SpecialKey::Leftrelease
+                | SpecialKey::LeftreleaseNm
+                | SpecialKey::Mousemove
+                | SpecialKey::Middlemouse
+                | SpecialKey::Middledrag
+                | SpecialKey::Middlerelease
+                | SpecialKey::Rightmouse
+                | SpecialKey::Rightdrag
+                | SpecialKey::Rightrelease
+                | SpecialKey::Mousedown
+                | SpecialKey::Mouseup
+                | SpecialKey::Mouseleft
+                | SpecialKey::Mouseright
+                | SpecialKey::X1mouse
+                | SpecialKey::X1drag
+                | SpecialKey::X1release
+                | SpecialKey::X2mouse
+                | SpecialKey::X2drag
+                | SpecialKey::X2release
+        )
     )
 }
 
@@ -147,7 +150,6 @@ mod tests {
 
     use super::*;
     use crate::keycodes::mouse_button;
-    use crate::types::Key;
 
     const MOUSE_KEYS: [(SpecialKey, c_int, bool, bool); 18] = [
         (SpecialKey::Leftmouse, MOUSE_LEFT, true, false),
@@ -175,7 +177,7 @@ mod tests {
     #[test]
     fn a_mouse_key_names_its_button_and_phase() {
         for (key, button, click, drag) in MOUSE_KEYS {
-            assert!(is_mouse_key(key.code()), "{key:?}");
+            assert!(is_mouse_key(Key::from(key)), "{key:?}");
             assert_eq!(
                 mouse_button(Key::from(key)),
                 (button, click, drag),
@@ -188,20 +190,20 @@ mod tests {
             SpecialKey::LeftmouseNm,
             SpecialKey::LeftreleaseNm,
         ] {
-            assert!(is_mouse_key(key.code()), "{key:?}");
+            assert!(is_mouse_key(Key::from(key)), "{key:?}");
         }
         let mouse = SpecialKey::ALL
             .iter()
-            .filter(|key| is_mouse_key(key.code()))
+            .filter(|key| is_mouse_key(Key::from(**key)))
             .count();
         assert_eq!(mouse, 22);
         for key in [Key::ascii(b'a'), Key::NUL, Key::from(SpecialKey::Up)] {
-            assert!(!is_mouse_key(key.code()));
+            assert!(!is_mouse_key(key));
             assert_eq!(mouse_button(key), (0, false, false));
         }
         // `<Ignore>` is not a mouse key, but decodes as a release with no
         // button: what a stray release is turned into.
-        assert!(!is_mouse_key(SpecialKey::Ignore.code()));
+        assert!(!is_mouse_key(Key::from(SpecialKey::Ignore)));
         assert_eq!(
             mouse_button(Key::from(SpecialKey::Ignore)),
             (3, false, false)

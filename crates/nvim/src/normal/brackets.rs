@@ -330,7 +330,7 @@ pub(crate) fn nv_brackets(cmd_arg: &mut CmdArg) {
         let (dir, n) = (direction(cmd_arg), cmd_arg.count1);
         do_mouse(
             Some(cmd_arg.op()),
-            nchar.code(),
+            nchar,
             dir,
             n,
             PUT_FIXINDENT.cast_signed() != 0,

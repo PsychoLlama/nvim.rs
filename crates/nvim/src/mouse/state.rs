@@ -23,4 +23,4 @@ pub(crate) static mouse_row: GlobalCell<c_int> = GlobalCell::new(0);
 pub(crate) static mouse_col: GlobalCell<c_int> = GlobalCell::new(0);
 pub(crate) static mouse_past_bottom: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static mouse_past_eol: GlobalCell<bool> = GlobalCell::new(false);
-pub(crate) static mouse_dragging: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static mouse_dragging: GlobalCell<c_int> = GlobalCell::new(0);

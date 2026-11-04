@@ -75,7 +75,7 @@ pub(crate) fn ask_yesno(question: &CStr) -> c_int {
 fn is_swallowed_key(first: u8, key: c_int) -> bool {
     first == KS_MODIFIER
         || key == SpecialKey::Ignore.code()
-        || (is_mouse_key(key) && key != SpecialKey::Leftmouse.code())
+        || (is_mouse_key(Key::from_code(key)) && key != SpecialKey::Leftmouse.code())
 }
 
 /// Read one keystroke straight from the user, ignoring mouse clicks and

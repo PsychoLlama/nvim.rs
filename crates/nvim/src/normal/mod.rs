@@ -23,7 +23,7 @@
 use crate::edit::BeginlineOpts;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::SpecialKey;
-use crate::mouse::{nv_mouse, nv_mousescroll};
+use crate::mouse::{MSCR_DOWN, MSCR_LEFT, MSCR_RIGHT, MSCR_UP, nv_mouse, nv_mousescroll};
 use crate::types::{
     CmdArg, Direction, GetFileFlags, Key, MarkGet, MarkMove, MarkMoveRes, MotionType, Pos,
     SpellAddType, SpellMoveType, uint16_t,
@@ -81,10 +81,6 @@ pub(crate) const kMTLineWise: MotionType = 1;
 pub(crate) const kMTCharWise: MotionType = 0;
 pub(crate) const SHOWCMD_COLS: c_uint = 10;
 pub(crate) const SHOWCMD_BUFLEN: c_uint = 41;
-pub(crate) const MSCR_RIGHT: c_int = -2;
-pub(crate) const MSCR_LEFT: c_int = -1;
-pub(crate) const MSCR_UP: c_int = 1;
-pub(crate) const MSCR_DOWN: c_int = 0;
 pub(crate) const FIND_EVAL: c_uint = 4;
 pub(crate) const FIND_STRING: c_uint = 2;
 pub(crate) const FIND_IDENT: c_uint = 1;
@@ -403,25 +399,25 @@ pub(crate) const NV_CMDS: [NvCmd; 188] = [
         Key::from_special(SpecialKey::Mouseup),
         nv_mousescroll,
         NvFlags::NONE,
-        MSCR_UP as c_int,
+        MSCR_UP,
     ),
     cmd(
         Key::from_special(SpecialKey::Mousedown),
         nv_mousescroll,
         NvFlags::NONE,
-        MSCR_DOWN as c_int,
+        MSCR_DOWN,
     ),
     cmd(
         Key::from_special(SpecialKey::Mouseleft),
         nv_mousescroll,
         NvFlags::NONE,
-        MSCR_LEFT as c_int,
+        MSCR_LEFT,
     ),
     cmd(
         Key::from_special(SpecialKey::Mouseright),
         nv_mousescroll,
         NvFlags::NONE,
-        MSCR_RIGHT as c_int,
+        MSCR_RIGHT,
     ),
     cmd(
         Key::from_special(SpecialKey::Leftmouse),

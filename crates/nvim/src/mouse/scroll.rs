@@ -41,13 +41,13 @@ use crate::types::{CmdArg, Direction};
 
 /// A mouse click in Insert mode: place the cursor, then get Insert mode's own
 /// bookkeeping back in order around the move.
-pub(crate) fn ins_mouse(c: c_int) {
+pub(crate) fn ins_mouse(c: Key) {
     let old_curwin = Win::current();
 
     undisplay_dollar();
     let tpos = old_curwin.w_cursor;
 
-    if do_mouse(None, c, BACKWARD as c_int, 1, false) {
+    if do_mouse(None, c, BACKWARD, 1, false) {
         let new_curwin = Win::current();
         if new_curwin != old_curwin && old_curwin.is_valid() {
             // Mouse took us to another window.  We need to go back to the

@@ -28,7 +28,9 @@ use crate::keycodes::{Ctrl_AT, Ctrl_M, NotAKey, SpecialKey};
 use crate::keycodes::{ModMask, unsimplify_key};
 use crate::mbyte::{char_at, char_len};
 use crate::memory::XString;
-use crate::mouse::{MousePos, do_mousescroll, find_win_inner};
+use crate::mouse::{
+    MSCR_DOWN, MSCR_LEFT, MSCR_RIGHT, MSCR_UP, MousePos, do_mousescroll, find_win_inner,
+};
 use crate::normal::with_scratch_cmd;
 use crate::option::vars::tpf_flags;
 use crate::options::{
@@ -62,12 +64,6 @@ const ESC: c_int = 27;
 const fn function_key(n: c_int) -> VTermKey {
     VTERM_KEY_FUNCTION_0 + n as VTermKey
 }
-
-/// `do_mousescroll`'s directions.
-const MSCR_DOWN: c_int = 0;
-const MSCR_UP: c_int = 1;
-const MSCR_LEFT: c_int = -1;
-const MSCR_RIGHT: c_int = -2;
 
 /// vterm's button numbers: 1-3 are the real buttons, 4-7 are the wheel's
 /// four directions, and 8-9 are the side buttons.

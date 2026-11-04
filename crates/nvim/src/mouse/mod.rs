@@ -23,6 +23,13 @@
 //! Original: `src/nvim/mouse.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -42,6 +49,7 @@ use crate::global_cell::GlobalCell;
 use crate::grid::grid_adjust;
 use crate::mbyte::{c_cluster_len, char_at, class_of, cluster_len, utf8len_tab};
 use crate::mouse::state::{mouse_col, mouse_row};
+use crate::narrow::len_as_int;
 use crate::normal::sel_exclusive;
 use crate::optionstr::OptString;
 use crate::plines::{getvcols, win_chartabsize};
@@ -104,15 +112,13 @@ pub(crate) const MOUSE_SETPOS: c_int = 8;
 pub(crate) const MOUSE_MAY_STOP_VIS: c_int = 16;
 pub(crate) const MOUSE_RELEASED: c_int = 32;
 
-/// Which button the event carries.  `MOUSE_X1`/`MOUSE_X2` sit above the mask
-/// the modifiers use, which is why they are not 3 and 4.
-pub(crate) const MOUSE_LEFT: c_int = 0;
-pub(crate) const MOUSE_MIDDLE: c_int = 1;
-pub(crate) const MOUSE_RIGHT: c_int = 2;
-pub(crate) const MOUSE_X1: c_int = 768;
-pub(crate) const MOUSE_X2: c_int = 1024;
+/// Which button the event carries, as [`mouse_button`](crate::keycodes::mouse_button)
+/// decodes it from the key.
+pub(crate) use crate::keycodes::{MOUSE_LEFT, MOUSE_MIDDLE, MOUSE_RIGHT, MOUSE_X1, MOUSE_X2};
 
-/// A wheel event's direction, as `CmdArg::arg` carries it.
+/// A wheel event's direction, as `CmdArg::arg` carries it: the one home of
+/// these, which Normal mode's command table, Insert mode and the terminal
+/// all name.
 pub(crate) const MSCR_DOWN: c_int = 0;
 pub(crate) const MSCR_UP: c_int = 1;
 pub(crate) const MSCR_LEFT: c_int = -1;
@@ -121,7 +127,7 @@ pub(crate) const MSCR_RIGHT: c_int = -2;
 const FR_LEAF: c_int = 0;
 const FR_ROW: c_int = 1;
 /// The `'mouse'` flag a drag needs before it may start Visual mode.
-const MOUSE_VISUAL: c_int = 'v' as c_int;
+const MOUSE_VISUAL: u8 = b'v';
 /// The handle of the screen-wide grid every window draws on without
 /// `ext_multigrid`.
 const DEFAULT_GRID_HANDLE: c_int = 1;
@@ -315,7 +321,7 @@ impl ClickDefs {
 /// and [`mouse_class`] answers for the NUL there.
 fn with_line<R>(lnum: LineNr, f: impl FnOnce(&[u8]) -> R) -> R {
     let mut line = Buf::current().lines().line(lnum).to_vec();
-    line.push(NUL as u8);
+    line.push(0);
     f(&line)
 }
 
@@ -324,14 +330,15 @@ fn with_line<R>(lnum: LineNr, f: impl FnOnce(&[u8]) -> R) -> R {
 /// anything above that a multi-byte word character.
 fn mouse_class(line: &[u8], idx: usize) -> c_int {
     let rest = &line[idx..];
-    if utf8len_tab[rest[0] as usize] > 1 {
-        return class_of(rest[0], || char_at(rest), &Buf::current().b_chartab);
+    let byte = rest[0];
+    if utf8len_tab[usize::from(byte)] > 1 {
+        return class_of(byte, || char_at(rest), &Buf::current().b_chartab);
     }
 
-    let c = rest[0] as c_int;
-    if c == ' ' as c_int || c == '\t' as c_int {
+    if byte == b' ' || byte == b'\t' {
         return 0;
     }
+    let c = c_int::from(byte);
     if vim_iswordc(c) {
         return 2;
     }
@@ -348,12 +355,12 @@ fn mouse_class(line: &[u8], idx: usize) -> c_int {
 
 /// Bytes the character at `idx` takes, composing characters included.
 fn char_len(line: &[u8], idx: usize) -> c_int {
-    c_cluster_len(&line[idx..]) as c_int
+    len_as_int(c_cluster_len(&line[idx..]))
 }
 
 /// Bytes `idx` sits past the start of the character it is inside.
 fn head_off(line: &[u8], idx: usize) -> c_int {
-    crate::mbyte::head_off(line, idx) as c_int
+    len_as_int(crate::mbyte::head_off(line, idx))
 }
 
 /// Move `pos` back to the start of the word it is in.
@@ -426,10 +433,10 @@ fn mouse_tab_close(c1: c_int) {
     match tp {
         Some(tp) if tp.is_current() => {
             if first_tab().is_some_and(|tp| tp.next().is_some()) {
-                tabpage_close(false as c_int);
+                tabpage_close(c_int::from(false));
             }
         }
-        Some(tp) => tabpage_close_other(tp, false as c_int),
+        Some(tp) => tabpage_close_other(tp, c_int::from(false)),
         None => {}
     }
 }
@@ -569,7 +576,7 @@ pub(crate) fn nv_mousescroll(cmd_arg: &mut CmdArg) {
 /// Mouse clicks and drags.
 pub(crate) fn nv_mouse(cmd_arg: &mut CmdArg) {
     let (op, cmdchar, count1) = (cmd_arg.op(), cmd_arg.cmdchar, cmd_arg.count1);
-    do_mouse(Some(op), cmdchar.code(), BACKWARD as c_int, count1, false);
+    do_mouse(Some(op), cmdchar, BACKWARD, count1, false);
 }
 
 /// Set UI mouse depending on current mode and `'mouse'`.
@@ -588,8 +595,8 @@ pub(crate) fn f_getmousepos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
     let mut add = |key: &CStr, value: VarNumber| {
         let _ = d.add_number(key.to_bytes(), value);
     };
-    add(c"screenrow", mouse_row.get() as VarNumber + 1);
-    add(c"screencol", mouse_col.get() as VarNumber + 1);
+    add(c"screenrow", VarNumber::from(mouse_row.get()) + 1);
+    add(c"screencol", VarNumber::from(mouse_col.get()) + 1);
 
     let mut pos = MousePos::current();
     let mut winid: VarNumber = 0;
@@ -607,14 +614,14 @@ pub(crate) fn f_getmousepos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
         // not necessary for a top border since `row` starts at -1 in that
         // case.
         if pos.row < height + win.w_border_adj[2] {
-            winid = win.handle.get() as VarNumber;
+            winid = VarNumber::from(win.handle.get());
             // Adjust by 1 for a top/left border.  Summed in the answer's own
             // width rather than in the C's `int`: `nvim_input_mouse` accepts
             // a column up to INT_MAX, and the C's sum then overflows -- which
             // the C wraps on and a checked build of this port traps on.  Both
             // fields are `VarNumber` at the end of it either way.
-            winrow = pos.row as VarNumber + 1 + win.w_winrow_off as VarNumber;
-            wincol = pos.col as VarNumber + 1 + win.w_wincol_off as VarNumber;
+            winrow = VarNumber::from(pos.row) + 1 + VarNumber::from(win.w_winrow_off);
+            wincol = VarNumber::from(pos.col) + 1 + VarNumber::from(win.w_wincol_off);
             if pos.row >= 0 && pos.row < win.w_height && pos.col >= 0 && pos.col < win.w_width {
                 (lnum, _) = comp_pos(win, &mut pos.row, &mut pos.col);
                 let col;
@@ -629,5 +636,5 @@ pub(crate) fn f_getmousepos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
     add(c"wincol", wincol);
     add(c"line", i64::from(lnum));
     add(c"column", column);
-    add(c"coladd", coladd as VarNumber);
+    add(c"coladd", VarNumber::from(coladd));
 }

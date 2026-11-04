@@ -2,7 +2,7 @@
 //! (`insexpand.rs`) and the wrapping (`textformat.rs`).
 //!
 //! The parent keeps no functions.  It holds the vocabulary the children
-//! share -- the `BL_*`/`INDENT_*`/`MSCR_*` arguments they pass out of the
+//! share -- the `BL_*`/`INDENT_*` arguments they pass out of the
 //! family, the `FO_*`/`CPO_*` option letters they test, and `InsertState`,
 //! which is the *only* per-insert state that is not global -- plus the
 //! nineteen `GlobalCell`s the mode runs on.
@@ -124,7 +124,9 @@ use crate::memline::{Lines, gchar_pos, ml_append_text, ml_get_len, ml_replace_bu
 use crate::message::state::{emsg_on_display, msg_scroll, msg_silent};
 use crate::message::{e_noinstext, e_sandbox, e_textlock};
 use crate::message::{emsg, msg_check_for_delay};
-use crate::mouse::{ins_mouse, ins_mousescroll, setmouse};
+use crate::mouse::{
+    MSCR_DOWN, MSCR_LEFT, MSCR_RIGHT, MSCR_UP, ins_mouse, ins_mousescroll, setmouse,
+};
 use crate::r#move::{
     adjust_skipcol, curs_columns, do_check_cursorbind, pagescroll, scrolldown_clamp,
     scrollup_clamp, set_topline, update_curswant, update_topline, validate_cursor,
@@ -243,10 +245,6 @@ pub(crate) struct InsertState {
     pub replace_state: ::core::ffi::c_int,
     pub nomove: bool,
 }
-pub(crate) const MSCR_RIGHT: ::core::ffi::c_int = -2;
-pub(crate) const MSCR_LEFT: ::core::ffi::c_int = -1;
-pub(crate) const MSCR_UP: ::core::ffi::c_int = 1;
-pub(crate) const MSCR_DOWN: ::core::ffi::c_int = 0;
 pub(crate) const YREG_PASTE: ::core::ffi::c_int = 0;
 pub(crate) const B_IMODE_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub(crate) const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

@@ -207,7 +207,7 @@ fn vgetc_from_typeahead() -> Key {
             && KeyTyped.get()
             && mod_mask.get() == ModMask::ALT
             && State.get() & MODE_TERMINAL == 0
-            && !is_mouse_key(c.code())
+            && !is_mouse_key(c)
         {
             mod_mask.set(ModMask::NONE);
             let len = ins_char_typebuf(c, ModMask::NONE, false);

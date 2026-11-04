@@ -226,7 +226,7 @@ pub(crate) fn getchar_common(args: &[TypVal], result: &mut TypVal, allow_number:
 
         (*result).write_string(Some(ThinCString::from_bytes(&temp[..i])));
 
-        if is_mouse_key(n.code()) {
+        if is_mouse_key(n) {
             set_mouse_vars();
         }
     } else if !opts.allow_number {

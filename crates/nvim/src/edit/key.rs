@@ -213,7 +213,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
             | SpecialKey::X2drag
             | SpecialKey::X2release,
         ) => {
-            ins_mouse(s.c.code());
+            ins_mouse(s.c);
             Next::Continue
         }
         Ok(SpecialKey::Mousedown) => {
