@@ -63,19 +63,23 @@ fn hl_name(id: c_int) -> &'static CStr {
 }
 
 /// Runs `one` over every dictionary in `l`, appending what it answers to
-/// `retlist`. An entry that is not a dictionary is E715 and answers -1.
+/// `retlist` -- a refusal reported, and `-1`. An entry that is not a
+/// dictionary is E715.
 ///
 /// Nothing `one` does here runs user code, so the list is walked as
 /// borrowed.
-fn each_dict(retlist: &mut List, l: Option<&List>, mut one: impl FnMut(Option<&Dict>) -> c_int) {
+fn each_dict(
+    retlist: &mut List,
+    l: Option<&List>,
+    mut one: impl FnMut(Option<&Dict>) -> Result<c_int, SignError>,
+) {
     for item in list_items(l) {
         let retval = if item.li_tv.v_type() == VAR_DICT {
             one(item.li_tv.dict_ref())
         } else {
-            emsg(gettext(e_dictreq));
-            -1
+            Err(SignError::DictionaryRequired)
         };
-        retlist.push_number(VarNumber::from(retval));
+        retlist.push_number(VarNumber::from(answer_or_report(retval)));
     }
 }
 
@@ -84,13 +88,15 @@ fn each_dict(retlist: &mut List, l: Option<&List>, mut one: impl FnMut(Option<&D
 ///
 /// The return list is allocated *before* the type check, so a non-list
 /// argument still answers `[]` and not `0`.
-fn each_dict_arg(args: &[TypVal], result: &mut TypVal, one: impl FnMut(Option<&Dict>) -> c_int) {
+fn each_dict_arg(
+    args: &[TypVal],
+    result: &mut TypVal,
+    one: impl FnMut(Option<&Dict>) -> Result<c_int, SignError>,
+) {
     let retlist = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
     match args.first() {
         Some(arg) if arg.v_type() == VAR_LIST => each_dict(retlist, arg.list_ref(), one),
-        _ => {
-            emsg(gettext(e_listreq));
-        }
+        _ => SignError::ListRequired.report(),
     }
 }
 
@@ -221,17 +227,17 @@ fn dict_bytes(dict: Option<&Dict>, key: &[u8]) -> Option<Vec<u8>> {
     numbuf.dict_string(dict, key).map(|s| s.to_bytes().to_vec())
 }
 
-/// Defines one sign from a dictionary; 0 on success, −1 on failure.
+/// Defines one sign from a dictionary; the builtins answer 0 for it.
 ///
 /// `name` is `None` for the list form, where the name is the dictionary's
 /// own `name` key. Every value is copied out of the dictionary, which is the
 /// caller's: unescaping the text happens in a buffer of the definition's own.
-fn sign_define_from_dict(name: Option<&[u8]>, dict: Option<&Dict>) -> c_int {
+fn sign_define_from_dict(name: Option<&[u8]>, dict: Option<&Dict>) -> Result<c_int, SignError> {
     let name = match name {
         Some(name) => name.to_vec(),
         None => match dict_bytes(dict, b"name") {
             Some(name) if !name.is_empty() => name,
-            _ => return -1,
+            _ => return Err(SignError::Quiet),
         },
     };
     let mut attrs = SignAttrs {
@@ -247,11 +253,7 @@ fn sign_define_from_dict(name: Option<&[u8]>, dict: Option<&Dict>) -> c_int {
         attrs.numhl = dict_bytes(dict, b"numhl");
         attrs.prio = number_as_int(dict_get_number_def(dict, b"priority", -1));
     }
-    if sign_define_by_name(&name, attrs).is_ok() {
-        0
-    } else {
-        -1
-    }
+    sign_define_by_name(&name, attrs).map(|()| 0)
 }
 
 /// `sign_define()`.
@@ -276,7 +278,7 @@ pub(crate) fn f_sign_define(args: &[TypVal], result: &mut TypVal, _fptr: EvalFun
         return;
     }
     let defined = sign_define_from_dict(Some(&name), dict_arg(args, 1));
-    result.write_number(VarNumber::from(defined));
+    result.write_number(VarNumber::from(answer_or_report(defined)));
 }
 
 /// `sign_getdefined()`.
@@ -346,25 +348,20 @@ pub(crate) fn f_sign_getplaced(args: &[TypVal], result: &mut TypVal, _fptr: Eval
 pub(crate) fn f_sign_jump(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(-1);
 
-    let Ok(given) = tv_get_number_chk(&args[0]) else {
-        return;
-    };
-    let id = number_as_int(given);
+    let jumped = sign_jump_from_args(args).map(LineNr::get);
+    result.write_number(VarNumber::from(answer_or_report(jumped)));
+}
+
+/// `sign_jump()`'s arguments, and the jump.
+fn sign_jump_from_args(args: &[TypVal]) -> Result<LineNr, SignError> {
+    let id = number_as_int(tv_get_number_chk(&args[0])?);
     if id <= 0 {
-        emsg(gettext(e_invarg));
-        return;
+        return Err(SignError::InvalidArgument);
     }
-
     // A copy: the jump runs autocommands.
-    let Some(group) = group_arg(&args[1]) else {
-        return;
-    };
-    let Some(buf) = get_buf_arg(&args[2]) else {
-        return;
-    };
-
-    let jumped = sign_jump(id, group.as_deref(), buf);
-    result.write_number(VarNumber::from(jumped));
+    let group = group_arg(&args[1]).ok_or(Failed)?;
+    let buf = get_buf_arg(&args[2]).ok_or(Failed)?;
+    sign_jump(id, group.as_deref(), buf)
 }
 
 /// The named key's value, or the positional typval when there is one.
@@ -382,70 +379,51 @@ struct PlaceArgs<'a> {
     buffer: Option<&'a TypVal>,
 }
 
-/// Places one sign described by a dictionary; answers its id, or −1.
-fn sign_place_from_dict(given: PlaceArgs<'_>, dict: Option<&Dict>) -> c_int {
+/// Places one sign described by a dictionary; answers its id.
+///
+/// A key that does not read as its type has been reported by the reader
+/// ([`SignError::Reported`]); a missing name or buffer is a quiet refusal.
+fn sign_place_from_dict(given: PlaceArgs<'_>, dict: Option<&Dict>) -> Result<c_int, SignError> {
     let mut id = 0;
     if let Some(tv) = slot(given.id, dict, "id") {
-        let Ok(given) = tv_get_number_chk(tv) else {
-            return -1;
-        };
-        id = number_as_int(given);
+        id = number_as_int(tv_get_number_chk(tv)?);
         if id < 0 {
-            emsg(gettext(e_invarg));
-            return -1;
+            return Err(SignError::InvalidArgument);
         }
     }
 
     let mut group = None;
     if let Some(tv) = slot(given.group, dict, "group") {
-        match group_arg(tv) {
-            Some(named) => group = named,
-            None => return -1,
-        }
+        group = group_arg(tv).ok_or(Failed)?;
     }
 
-    let Some(name_tv) = slot(given.name, dict, "name") else {
-        return -1;
-    };
+    let name_tv = slot(given.name, dict, "name").ok_or(SignError::Quiet)?;
     let mut numbuf = NumBuf::new();
-    let Some(name) = numbuf
+    let name = numbuf
         .string_chk(name_tv)
         .map(|name| name.to_bytes().to_vec())
-    else {
-        return -1;
-    };
+        .ok_or(Failed)?;
 
-    let Some(buf_tv) = slot(given.buffer, dict, "buffer") else {
-        return -1;
-    };
-    let Some(buf) = get_buf_arg(buf_tv) else {
-        return -1;
-    };
+    let buf_tv = slot(given.buffer, dict, "buffer").ok_or(SignError::Quiet)?;
+    let buf = get_buf_arg(buf_tv).ok_or(Failed)?;
 
     let mut lnum: LineNr = LineNr::ZERO;
     if let Some(tv) = key(dict, "lnum") {
         lnum = tv_get_lnum(tv);
         if lnum <= LineNr::ZERO {
-            emsg(gettext(e_invarg));
-            return -1;
+            return Err(SignError::InvalidArgument);
         }
     }
 
     let mut prio = -1;
     if let Some(tv) = key(dict, "priority") {
-        let Ok(given) = tv_get_number_chk(tv) else {
-            return -1;
-        };
-        prio = number_as_int(given);
+        prio = number_as_int(tv_get_number_chk(tv)?);
     }
 
     // `sign_place` writes the id back when it was zero (auto-allocate).
     let mut uid = id.cast_unsigned();
-    if sign_place(&mut uid, group.as_deref(), &name, buf, lnum, prio).is_ok() {
-        uid.cast_signed()
-    } else {
-        -1
-    }
+    sign_place(&mut uid, group.as_deref(), &name, buf, lnum, prio)?;
+    Ok(uid.cast_signed())
 }
 
 /// `sign_place()`.
@@ -465,7 +443,7 @@ pub(crate) fn f_sign_place(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
         buffer: Some(&args[3]),
     };
     let id = sign_place_from_dict(given, dict);
-    result.write_number(VarNumber::from(id));
+    result.write_number(VarNumber::from(answer_or_report(id)));
 }
 
 /// `sign_placelist()`.
@@ -481,9 +459,11 @@ pub(crate) fn f_sign_undefine(args: &[TypVal], result: &mut TypVal, _fptr: EvalF
     if args.first().is_some_and(|arg| arg.v_type() == VAR_LIST) && args.len() <= 1 {
         let retlist = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
         for item in list_items(args[0].list_ref()) {
-            let name = numbuf.string_chk(&item.li_tv);
-            let ok = name.is_some_and(|name| sign_undefine_by_name(name.to_bytes()).is_ok());
-            retlist.push_number(if ok { 0 } else { -1 });
+            let undefined = match numbuf.string_chk(&item.li_tv) {
+                Some(name) => sign_undefine_by_name(name.to_bytes()).map(|()| 0),
+                None => Err(SignError::Reported(Failed)),
+            };
+            retlist.push_number(VarNumber::from(answer_or_report(undefined)));
         }
         return;
     }
@@ -494,17 +474,20 @@ pub(crate) fn f_sign_undefine(args: &[TypVal], result: &mut TypVal, _fptr: EvalF
         result.write_number(0);
         return;
     }
-    let name = numbuf.string_chk(&args[0]);
-    if name.is_some_and(|name| sign_undefine_by_name(name.to_bytes()).is_ok()) {
-        result.write_number(0);
+    if let Some(name) = numbuf.string_chk(&args[0]) {
+        let undefined = sign_undefine_by_name(name.to_bytes()).map(|()| 0);
+        result.write_number(VarNumber::from(answer_or_report(undefined)));
     }
 }
 
-/// Removes the signs a dictionary describes; 0 on success, −1 on failure.
+/// Removes the signs a dictionary describes; the builtins answer 0 for it.
 ///
 /// `group_tv` is `sign_unplace()`'s positional group and is `None` for
 /// `sign_unplacelist()`, where the dictionary carries it.
-fn sign_unplace_from_dict(group_tv: Option<&TypVal>, dict: Option<&Dict>) -> c_int {
+fn sign_unplace_from_dict(
+    group_tv: Option<&TypVal>,
+    dict: Option<&Dict>,
+) -> Result<c_int, SignError> {
     let mut numbuf = NumBuf::new();
     let group = match group_tv {
         Some(tv) => Some(numbuf.string(tv).to_bytes().to_vec()),
@@ -517,21 +500,17 @@ fn sign_unplace_from_dict(group_tv: Option<&TypVal>, dict: Option<&Dict>) -> c_i
     let mut buf = None;
     if dict.is_some() {
         if let Some(tv) = key(dict, "buffer") {
-            buf = get_buf_arg(tv);
-            if buf.is_none() {
-                return -1;
-            }
+            buf = Some(get_buf_arg(tv).ok_or(Failed)?);
         }
         if key(dict, "id").is_some() {
             id = number_as_int(dict_get_number(dict, b"id"));
             if id <= 0 {
-                emsg(gettext(e_invarg));
-                return -1;
+                return Err(SignError::InvalidArgument);
             }
         }
     }
 
-    sign_unplace(buf, id, group.as_deref(), LineNr::ZERO) - 1
+    sign_unplace(buf, id, group.as_deref(), LineNr::ZERO).map(|()| 0)
 }
 
 /// `sign_unplace()`.
@@ -541,7 +520,7 @@ pub(crate) fn f_sign_unplace(args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
         return;
     }
     let unplaced = sign_unplace_from_dict(Some(&args[0]), dict_arg(args, 1));
-    result.write_number(VarNumber::from(unplaced));
+    result.write_number(VarNumber::from(answer_or_report(unplaced)));
 }
 
 /// `sign_unplacelist()`.

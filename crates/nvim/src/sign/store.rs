@@ -21,9 +21,6 @@
 
 use super::*;
 use crate::charset::backslash_halved;
-use crate::message_fmt::msg_bytes;
-use crate::semsg;
-use crate::types::Failed;
 use crate::types::Handle;
 use std::rc::Rc;
 
@@ -139,14 +136,14 @@ pub(crate) struct SignAttrs {
 /// A new sign is in the table before its text is parsed, so a `text=` that
 /// fails (E239) still leaves it defined -- with the cells it got through and
 /// nothing after them, as upstream's does.
-pub(crate) fn sign_define_by_name(name: &[u8], attrs: SignAttrs) -> Result<(), Failed> {
+pub(crate) fn sign_define_by_name(name: &[u8], attrs: SignAttrs) -> Result<(), SignError> {
     // Everything up to the highlight groups is this module's own work, done
     // in one visit of the table; the groups go through `syn_check_group`
     // outside it and land in a second.
     let icon = attrs.icon.map(|icon| backslash_halved(&icon));
     let text = attrs.text.map(|text| unescape(&text));
     let mut new_sign = false;
-    let parsed = SIGNS.with_mut(|signs| {
+    let parsed: Result<(), SignError> = SIGNS.with_mut(|signs| {
         let at = match signs.iter().position(|s| s.name.as_bytes() == name) {
             Some(at) => at,
             None => {
@@ -163,21 +160,13 @@ pub(crate) fn sign_define_by_name(name: &[u8], attrs: SignAttrs) -> Result<(), F
         if let Some(icon) = icon {
             s.icon = Some(icon);
         }
-        if let Some(text) = &text
-            && let Err(failed) = init_sign_text(text, &mut s.text)
-        {
-            return Err(failed);
+        if let Some(text) = &text {
+            init_sign_text(text, &mut s.text)?;
         }
         s.priority = attrs.prio;
         Ok(())
     });
-    if let Err(failed) = parsed {
-        semsg!(
-            "E239: Invalid sign text: {}",
-            msg_bytes(text.as_deref().unwrap_or_default())
-        );
-        return Err(failed);
-    }
+    parsed?;
 
     let groups = [attrs.linehl, attrs.texthl, attrs.culhl, attrs.numhl];
     let ids = groups.map(|group| {
@@ -234,11 +223,11 @@ fn update_placements(def: &Sign) {
     }
 }
 
-/// Forgets the definition named `name`, or answers `Err` with E155.
+/// Forgets the definition named `name`, or answers E155.
 ///
 /// Placements survive: they carry their own copy, and [`placed_sign_name`]
 /// starts reporting them as `[Deleted]`.
-pub(crate) fn sign_undefine_by_name(name: &[u8]) -> Result<(), Failed> {
+pub(crate) fn sign_undefine_by_name(name: &[u8]) -> Result<(), SignError> {
     let removed = SIGNS.with_mut(|signs| {
         signs
             .iter()
@@ -248,8 +237,7 @@ pub(crate) fn sign_undefine_by_name(name: &[u8]) -> Result<(), Failed> {
             .map(|i| signs.swap_remove(i))
     });
     if removed.is_none() {
-        semsg!("E155: Unknown sign: {}", msg_bytes(name));
-        return Err(Failed);
+        return Err(SignError::UnknownSign(name.into()));
     }
     Ok(())
 }

@@ -24,9 +24,7 @@ use crate::charset::getdigits_int_at;
 use crate::charset::skip;
 use crate::message::{msg_bytes, msg_display_bytes};
 use crate::message_fmt::msg_bytes as shown;
-use crate::semsg;
 use crate::smsg;
-use crate::types::FAIL;
 use crate::types::Handle;
 use crate::winlayer::Win;
 
@@ -169,13 +167,10 @@ pub(crate) fn sign_list_defined(sign: &Sign) {
 }
 
 /// `:sign list {name}`.
-fn sign_list_by_name(name: &[u8]) {
-    match sign_find(name) {
-        Some(sign) => sign_list_defined(&sign),
-        None => {
-            semsg!("E155: Unknown sign: {}", shown(name));
-        }
-    }
+fn sign_list_by_name(name: &[u8]) -> Result<(), SignError> {
+    let sign = sign_find(name).ok_or_else(|| SignError::UnknownSign(name.into()))?;
+    sign_list_defined(&sign);
+    Ok(())
 }
 
 /// `:sign define {name} {args}...`.
@@ -183,7 +178,7 @@ fn sign_list_by_name(name: &[u8]) {
 /// The arguments are `key=value` pairs in any order, each running to the
 /// next white space a backslash does not escape. An unrecognised key is
 /// E475 and defines nothing.
-fn sign_define_cmd(name: &[u8], args: &[u8]) {
+fn sign_define_cmd(name: &[u8], args: &[u8]) -> Result<(), SignError> {
     let mut attrs = SignAttrs {
         prio: -1,
         ..Default::default()
@@ -215,43 +210,40 @@ fn sign_define_cmd(name: &[u8], args: &[u8]) {
         } else {
             // Upstream quotes the argument before cutting it off, so the
             // message runs to the end of the line.
-            semsg!("E475: Invalid argument: {}", shown(arg));
-            return;
+            return Err(SignError::BadDefineArgument(arg.into()));
         }
         // The next argument starts after the one white byte that ended this
         // one; skipping white space at the top of the loop covers it.
         rest = &arg[end..];
     }
 
-    let _ = sign_define_by_name(name, attrs);
+    sign_define_by_name(name, attrs)
 }
 
 /// `:sign place`, which both places a sign and — with no id — lists them.
-fn sign_place_cmd(args: &SignCmdArgs) {
+fn sign_place_cmd(args: &SignCmdArgs) -> Result<(), SignError> {
     let empty_group = args.group.as_deref().is_some_and(<[u8]>::is_empty);
     if args.id <= 0 {
         // The listing forms: `:sign place [group=X] [file=Y|buffer=N]`.
         // A `line=` or a `name=` means a placement was intended.
         if args.lnum >= LineNr::ZERO || args.name.is_some() || empty_group {
-            emsg(gettext(e_invarg));
-        } else {
-            sign_list_placed(args.buf, args.group.as_deref());
+            return Err(SignError::InvalidArgument);
         }
-        return;
+        sign_list_placed(args.buf, args.group.as_deref());
+        return Ok(());
     }
     let (Some(name), Some(buffer), false) = (&args.name, args.buf, empty_group) else {
-        emsg(gettext(e_invarg));
-        return;
+        return Err(SignError::InvalidArgument);
     };
     let mut uid = args.id.cast_unsigned();
-    let _ = sign_place(
+    sign_place(
         &mut uid,
         args.group.as_deref(),
         name,
         buffer,
         args.lnum,
         args.prio,
-    );
+    )
 }
 
 /// `:sign unplace`.
@@ -259,11 +251,10 @@ fn sign_place_cmd(args: &SignCmdArgs) {
 /// With no id at all it removes the highest-priority sign on the *cursor*
 /// line of the current buffer — the only spelling that reaches
 /// `buf_delete_signs`' single-line form, since an explicit `line=` is E474.
-fn sign_unplace_cmd(args: &SignCmdArgs) {
+fn sign_unplace_cmd(args: &SignCmdArgs) -> Result<(), SignError> {
     let empty_group = args.group.as_deref().is_some_and(<[u8]>::is_empty);
     if args.lnum >= LineNr::ZERO || args.name.is_some() || empty_group {
-        emsg(gettext(e_invarg));
-        return;
+        return Err(SignError::InvalidArgument);
     }
 
     let (buf, lnum) = if args.id == -1 {
@@ -272,27 +263,26 @@ fn sign_unplace_cmd(args: &SignCmdArgs) {
         (args.buf, args.lnum)
     };
 
-    if sign_unplace(buf, args.id.max(0), args.group.as_deref(), lnum) == FAIL && lnum > LineNr::ZERO
-    {
-        emsg(gettext(c"E159: Missing sign number"));
+    // Only the cursor-line form says that it removed nothing.
+    match sign_unplace(buf, args.id.max(0), args.group.as_deref(), lnum) {
+        Err(_) if lnum > LineNr::ZERO => Err(SignError::MissingNumber),
+        _ => Ok(()),
     }
 }
 
 /// `:sign jump {id} [group={group}] file={fname}|buffer={nr}`.
-fn sign_jump_cmd(args: &SignCmdArgs) {
+fn sign_jump_cmd(args: &SignCmdArgs) -> Result<(), SignError> {
     if args.name.is_none() && args.group.is_none() && args.id == -1 {
-        emsg(gettext(e_argreq));
-        return;
+        return Err(SignError::ArgumentRequired);
     }
     // No buffer, an empty group, or a `line=`/`name=` that jumping has
     // no use for.
     let empty_group = args.group.as_deref().is_some_and(<[u8]>::is_empty);
     let bad = empty_group || args.lnum >= LineNr::ZERO || args.name.is_some();
     let (Some(buffer), false) = (args.buf, bad) else {
-        emsg(gettext(e_invarg));
-        return;
+        return Err(SignError::InvalidArgument);
     };
-    sign_jump(args.id, args.group.as_deref(), buffer);
+    sign_jump(args.id, args.group.as_deref(), buffer).map(|_| ())
 }
 
 /// What [`parse_sign_cmd_args`] read off a `:sign place`/`unplace`/`jump`
@@ -330,9 +320,8 @@ impl Default for SignCmdArgs {
 /// share: an optional leading id, then `line=`, `name=`, `group=`,
 /// `priority=` and one of `file=`/`buffer=`, which ends the line.
 ///
-/// Answers `None` after diagnosing; `Some` otherwise, including when
-/// nothing was given.
-fn parse_sign_cmd_args(cmd: c_int, line: &[u8]) -> Option<SignCmdArgs> {
+/// Answers the refusal, or the arguments -- which may be none at all.
+fn parse_sign_cmd_args(cmd: c_int, line: &[u8]) -> Result<SignCmdArgs, SignError> {
     let mut out = SignCmdArgs::default();
     let mut arg = line;
     // Whether a `file=` or `buffer=` was given.
@@ -362,8 +351,7 @@ fn parse_sign_cmd_args(cmd: c_int, line: &[u8]) -> Option<SignCmdArgs> {
         } else if cmd == SIGNCMD_UNPLACE && arg[0] == b'*' {
             // `:sign unplace *`: every sign, and not with an id too.
             if out.id != -1 {
-                emsg(gettext(e_invarg));
-                return None;
+                return Err(SignError::InvalidArgument);
             }
             out.id = -2;
             arg = split_white(&arg[1..]).1;
@@ -392,12 +380,11 @@ fn parse_sign_cmd_args(cmd: c_int, line: &[u8]) -> Option<SignCmdArgs> {
             // Diagnosed but not fatal, which is why this still breaks
             // out with whatever buffer it found.
             if !skip_white(&v[past..]).is_empty() {
-                semsg!("E488: Trailing characters: {}", shown(&v[past..]));
+                crate::semsg!("E488: Trailing characters: {}", shown(&v[past..]));
             }
             break;
         } else {
-            emsg(gettext(e_invarg));
-            return None;
+            return Err(SignError::InvalidArgument);
         }
         arg = skip_white(arg);
     }
@@ -405,8 +392,7 @@ fn parse_sign_cmd_args(cmd: c_int, line: &[u8]) -> Option<SignCmdArgs> {
     if let Some(filename) = filename
         && out.buf.is_none()
     {
-        semsg!("E158: Invalid buffer name: {}", shown(filename));
-        return None;
+        return Err(SignError::InvalidBuffer(filename.into()));
     }
 
     // `:sign place line=N` and `:sign jump` default to the current
@@ -414,34 +400,37 @@ fn parse_sign_cmd_args(cmd: c_int, line: &[u8]) -> Option<SignCmdArgs> {
     if filename.is_none() && ((cmd == SIGNCMD_PLACE && lnum_arg) || cmd == SIGNCMD_JUMP) {
         out.buf = Win::current().buffer_or_none();
     }
-    Some(out)
+    Ok(out)
 }
 
-/// `:sign`.
+/// `:sign`: the one place its refusals are reported.
 pub(crate) fn ex_sign(excmd: &mut ExArg) {
-    // Borrowed: what `:sign jump` keeps across its autocommands is the
-    // parser's own copy.
-    let line = excmd.line.arg();
+    if let Err(err) = sign_command(excmd.line.arg()) {
+        err.report();
+    }
+}
+
+/// The `:sign` command line `line`, past the command name.
+///
+/// Borrowed: what `:sign jump` keeps across its autocommands is the
+/// parser's own copy.
+fn sign_command(line: &[u8]) -> Result<(), SignError> {
     let (word, after) = split_white(line);
     let idx = sign_cmd_idx(word);
     if idx == SIGNCMD_LAST {
-        semsg!("E160: Unknown sign command: {}", shown(line));
-        return;
+        return Err(SignError::UnknownCommand(line.into()));
     }
     let arg = skip_white(after);
 
     if idx > SIGNCMD_LIST {
         // Place, unplace or jump: a shared argument parser first.
-        let Some(args) = parse_sign_cmd_args(idx, arg) else {
-            return;
-        };
-        match idx {
+        let args = parse_sign_cmd_args(idx, arg)?;
+        return match idx {
             SIGNCMD_PLACE => sign_place_cmd(&args),
             SIGNCMD_UNPLACE => sign_unplace_cmd(&args),
             SIGNCMD_JUMP => sign_jump_cmd(&args),
-            _ => {}
-        }
-        return;
+            _ => Ok(()),
+        };
     }
 
     // Define, undefine or list.
@@ -449,11 +438,10 @@ pub(crate) fn ex_sign(excmd: &mut ExArg) {
         for sign in sign_defs() {
             sign_list_defined(&sign);
         }
-        return;
+        return Ok(());
     }
     if arg.is_empty() {
-        emsg(gettext(c"E156: Missing sign name"));
-        return;
+        return Err(SignError::MissingName);
     }
 
     // Isolate the sign name; the arguments start after the white byte that
@@ -463,8 +451,6 @@ pub(crate) fn ex_sign(excmd: &mut ExArg) {
     match idx {
         SIGNCMD_DEFINE => sign_define_cmd(name, rest.get(1..).unwrap_or_default()),
         SIGNCMD_LIST => sign_list_by_name(name),
-        _ => {
-            let _ = sign_undefine_by_name(name);
-        }
+        _ => sign_undefine_by_name(name),
     }
 }

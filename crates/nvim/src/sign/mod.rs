@@ -43,6 +43,7 @@ use crate::decoration::{
 use crate::drawscreen::{UPD_NOT_VALID, redraw_buf_later};
 use crate::edit::{BeginlineOpts, beginline};
 use crate::eval::funcs::get_buf_arg;
+use crate::eval::typval::Unconvertible;
 use crate::eval::typval::{
     dict_find, dict_get_number, dict_get_number_def, tv_check_for_nonnull_dict_arg,
     tv_check_for_opt_dict_arg, tv_check_for_string_arg, tv_dict_alloc, tv_get_lnum,
@@ -56,12 +57,14 @@ use crate::global_cell::GlobalCell;
 use crate::highlight_group::{HLF_D, get_highlight_name_ext, syn_check_group};
 use crate::marktree::cursor::{Cursor, lookup_ns};
 use crate::marktree::key::{MtFlags, mt_decor, mt_decor_sign, mt_end};
-use crate::message::{e_argreq, e_dictreq, e_invarg, e_listreq};
-use crate::message::{emsg, msg_putchar, msg_str, msg_title};
+use crate::memory::ThinCString;
+use crate::message::{msg_putchar, msg_str, msg_title};
+use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::os::cshim::gettext;
+use crate::tr;
 use crate::types::{
     ApiString, DecorExt, DecorInline, DecorPriority, DecorSignHighlight, Dict, EvalFuncData, ExArg,
-    Expand, FAIL, Integer, LineNr, List, MTKey, MarkTreeIter, OK, ScreenChar, Sign, TypVal,
+    Expand, Failed, Integer, LineNr, List, MTKey, MarkTreeIter, ScreenChar, Sign, TypVal,
     VarNumber, int32_t, int64_t, ptrdiff_t, uint32_t,
 };
 use crate::window::buf_jump_open_win;
@@ -81,6 +84,81 @@ pub(crate) use self::text::*;
 mod tests;
 mod vimscript;
 pub(crate) use self::vimscript::*;
+
+/// Why `:sign` or a `sign_*()` function refused.
+///
+/// The code below the command and the builtins answers one of these; the
+/// command ([`ex_sign`]) or the builtin reports it, once, with
+/// [`SignError::report`]. The texts are upstream's, byte for byte.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum SignError {
+    #[error("{}", tr!("E474: Invalid argument"))]
+    InvalidArgument,
+    #[error("{}", tr!("E471: Argument required"))]
+    ArgumentRequired,
+    #[error("{}", tr!("E715: Dictionary required"))]
+    DictionaryRequired,
+    #[error("{}", tr!("E714: List required"))]
+    ListRequired,
+    #[error("{}", tr!("E155: Unknown sign: {}", msg_bytes(.0.as_bytes())))]
+    UnknownSign(ThinCString),
+    #[error("{}", tr!("E156: Missing sign name"))]
+    MissingName,
+    #[error("{}", tr!("E157: Invalid sign ID: {}", .0))]
+    InvalidId(c_int),
+    #[error("{}", tr!("E158: Invalid buffer name: {}", msg_bytes(.0.as_bytes())))]
+    InvalidBuffer(ThinCString),
+    #[error("{}", tr!("E159: Missing sign number"))]
+    MissingNumber,
+    #[error("{}", tr!("E160: Unknown sign command: {}", msg_bytes(.0.as_bytes())))]
+    UnknownCommand(ThinCString),
+    /// A `:sign define` argument that is not one of the keys; the text
+    /// runs to the end of the line, as upstream quotes it.
+    #[error("{}", tr!("E475: Invalid argument: {}", msg_bytes(.0.as_bytes())))]
+    BadDefineArgument(ThinCString),
+    /// The text as unescaped, which is what did not fit.
+    #[error("{}", tr!("E239: Invalid sign text: {}", msg_bytes(.0.as_bytes())))]
+    BadText(ThinCString),
+    #[error("{}", tr!("E885: Not possible to change sign {}", msg_bytes(.0.as_bytes())))]
+    CannotChange(ThinCString),
+    #[error("{}", tr!("E934: Cannot jump to a buffer that does not have a name"))]
+    NoBufferName,
+    /// Refused without a word, as upstream does: nothing matched to
+    /// remove, a required key is missing, or a sign cannot be placed in
+    /// the group `"*"`. The builtins answer `-1` and say nothing.
+    #[error("refused without a message")]
+    Quiet,
+    /// What the argument checks or the buffer lookup reported themselves.
+    #[error(transparent)]
+    Reported(#[from] Failed),
+}
+
+// Two words, so a `Result` carrying one is no wider than it has to be.
+const _: () = assert!(size_of::<SignError>() <= 16);
+
+impl From<Unconvertible> for SignError {
+    /// A value that would not read as a number: its message is out.
+    fn from(_: Unconvertible) -> Self {
+        Self::Reported(Failed)
+    }
+}
+
+impl SignError {
+    /// Puts the message out, unless it is already out or there is none.
+    pub(crate) fn report(&self) {
+        if !matches!(self, Self::Quiet | Self::Reported(_)) {
+            emsg_text(self.to_string());
+        }
+    }
+}
+
+/// A builtin's answer: `ok` as it is, a refusal reported and `-1`.
+pub(crate) fn answer_or_report(result: Result<c_int, SignError>) -> c_int {
+    result.unwrap_or_else(|err| {
+        err.report();
+        -1
+    })
+}
 
 /// The priority a placement gets when neither the definition nor the
 /// `:sign place` / `sign_place()` call names one.

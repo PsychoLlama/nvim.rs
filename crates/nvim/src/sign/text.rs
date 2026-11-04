@@ -17,7 +17,6 @@
 use super::*;
 use crate::grid::{SCHAR_BUF_SIZE, schar_text};
 use crate::mbyte::{c_cells_at, c_cluster_len, c_cluster_schar};
-use crate::types::Failed;
 
 /// Appends the bytes `cells` render as to `out`: each cell's glyph, up to
 /// the first empty one -- `:sign list`, `sign_getdefined()`, an extmark's
@@ -65,17 +64,16 @@ pub(crate) fn unescape(text: &[u8]) -> Vec<u8> {
     out
 }
 
-/// Parses a sign's text into `cells`; `Err` when it does not fit.
+/// Parses a sign's text into `cells`; E239 when it does not fit.
 ///
 /// `text` is the string's bytes, already unescaped where the caller wants
-/// that (`:sign define` and `sign_define()` do, `nvim_buf_set_extmark` does
-/// not), and diagnosing a bad value is the caller's too.
+/// that (`:sign define` and `sign_define()` do).
 ///
 /// A one-cell text is padded to two with a space, and a two-cell character
 /// blanks the second cell so the drawing code knows not to emit it. A text
 /// that fails leaves whatever cells it had already written, as upstream's
 /// does: a redefinition with a bad `text=` keeps the good part.
-pub(crate) fn init_sign_text(text: &[u8], cells: &mut [ScreenChar; 2]) -> Result<(), Failed> {
+pub(crate) fn init_sign_text(text: &[u8], cells: &mut [ScreenChar; 2]) -> Result<(), SignError> {
     let width_limit = cells.len();
     let mut used = 0usize;
     let mut at = 0;
@@ -106,7 +104,7 @@ pub(crate) fn init_sign_text(text: &[u8], cells: &mut [ScreenChar; 2]) -> Result
     // Must be empty, one cell or two; stopping short of the end means the
     // walk met an unprintable character.
     if at != text.len() || used > width_limit {
-        return Err(Failed);
+        return Err(SignError::BadText(text.into()));
     }
     if used < 1 {
         cells[0] = 0;

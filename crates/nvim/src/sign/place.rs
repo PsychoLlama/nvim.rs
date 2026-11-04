@@ -17,10 +17,7 @@
 
 use super::*;
 use crate::decoration::decor_sign;
-use crate::message_fmt::msg_bytes;
-use crate::semsg;
 use crate::types::ColNr;
-use crate::types::Failed;
 
 /// Places or replaces the sign extmark `*id` in `buffer` at `lnum`.
 ///
@@ -195,10 +192,17 @@ pub(super) enum Keep {
 /// `id` of zero means any id and `group` selects a namespace (see
 /// [`group_get_ns`]). `atlnum` above zero narrows to one line — where,
 /// unlike every other combination, only the **highest priority** sign goes.
-fn buf_delete_signs(buffer: Buf, group: Option<&[u8]>, id: c_int, atlnum: LineNr) -> c_int {
+/// [`SignError::Quiet`] when the group names nothing, or when the one-line
+/// form found nothing to remove.
+fn buf_delete_signs(
+    buffer: Buf,
+    group: Option<&[u8]>,
+    id: c_int,
+    atlnum: LineNr,
+) -> Result<(), SignError> {
     let ns = group_get_ns(group);
     if ns < 0 {
-        return FAIL;
+        return Err(SignError::Quiet);
     }
 
     let mut itr = MarkTreeIter::default();
@@ -214,7 +218,7 @@ fn buf_delete_signs(buffer: Buf, group: Option<&[u8]>, id: c_int, atlnum: LineNr
         if atlnum > LineNr::ZERO {
             // Signs that *started* above this row but still cover it.
             if !walk.seek_overlap(row, 0) {
-                return FAIL;
+                return Err(SignError::Quiet);
             }
             while let Some(pair) = walk.step_overlap() {
                 if (ns == ALL_GROUPS || int64_t::from(pair.start.ns) == ns)
@@ -250,11 +254,15 @@ fn buf_delete_signs(buffer: Buf, group: Option<&[u8]>, id: c_int, atlnum: LineNr
     if signs.is_empty() {
         // Only the single-line form treats "nothing matched" as failure; the
         // sweeping forms are content to have deleted nothing.
-        return if atlnum > LineNr::ZERO { FAIL } else { OK };
+        return if atlnum > LineNr::ZERO {
+            Err(SignError::Quiet)
+        } else {
+            Ok(())
+        };
     }
     sort_signs(&mut signs);
     extmark_del_id(buffer, signs[0].ns, signs[0].id);
-    OK
+    Ok(())
 }
 
 /// Whether `buffer` carries any sign at all — text or highlight.
@@ -274,15 +282,14 @@ pub(crate) fn sign_place(
     buffer: Buf,
     lnum: LineNr,
     prio: c_int,
-) -> Result<(), Failed> {
+) -> Result<(), SignError> {
     // `*` is the "all groups" filter, not a group one can place into.
     if group.is_some_and(|group| matches!(group.first(), None | Some(b'*'))) {
-        return Err(Failed);
+        return Err(SignError::Quiet);
     }
 
     let Some(def) = sign_find(name) else {
-        semsg!("E155: Unknown sign: {}", msg_bytes(name));
-        return Err(Failed);
+        return Err(SignError::UnknownSign(name.into()));
     };
     let prio = match (prio, def.priority) {
         (-1, -1) => SIGN_DEF_PRIO,
@@ -297,16 +304,20 @@ pub(crate) fn sign_place(
         buf_mod_sign(buffer, id, group, prio, &def)
     };
     if lnum <= LineNr::ZERO {
-        semsg!("E885: Not possible to change sign {}", msg_bytes(name));
-        return Err(Failed);
+        return Err(SignError::CannotChange(name.into()));
     }
     Ok(())
 }
 
 /// [`sign_unplace`] for one buffer.
-fn sign_unplace_inner(buffer: Buf, id: c_int, group: Option<&[u8]>, atlnum: LineNr) -> c_int {
+fn sign_unplace_inner(
+    buffer: Buf,
+    id: c_int,
+    group: Option<&[u8]>,
+    atlnum: LineNr,
+) -> Result<(), SignError> {
     if !buf_has_signs(buffer) {
-        return FAIL;
+        return Err(SignError::Quiet);
     }
     let all_groups = group.is_some_and(|group| group.first() == Some(&b'*'));
     if id == 0 || atlnum > LineNr::ZERO || all_groups {
@@ -314,29 +325,32 @@ fn sign_unplace_inner(buffer: Buf, id: c_int, group: Option<&[u8]>, atlnum: Line
     }
     let ns = group_get_ns(group);
     if ns < 0 {
-        return FAIL;
+        return Err(SignError::Quiet);
     }
     let ns = u32::try_from(ns).expect("a namespace id fits its own handle type");
     if !extmark_del_id(buffer, ns, id.cast_unsigned()) {
-        return FAIL;
+        return Err(SignError::Quiet);
     }
-    OK
+    Ok(())
 }
 
 /// Removes signs from `buffer`, or from every buffer when it is `None`.
+///
+/// [`SignError::Quiet`] when one of them had nothing to remove: every buffer
+/// is still tried.
 pub(crate) fn sign_unplace(
     buffer: Option<Buf>,
     id: c_int,
     group: Option<&[u8]>,
     atlnum: LineNr,
-) -> c_int {
+) -> Result<(), SignError> {
     if let Some(buffer) = buffer {
         return sign_unplace_inner(buffer, id, group, atlnum);
     }
-    let mut retval = OK;
+    let mut retval = Ok(());
     for cbuf in buffers() {
-        if sign_unplace_inner(cbuf, id, group, atlnum) == FAIL {
-            retval = FAIL;
+        if let Err(quiet) = sign_unplace_inner(cbuf, id, group, atlnum) {
+            retval = Err(quiet);
         }
     }
     retval
@@ -344,13 +358,12 @@ pub(crate) fn sign_unplace(
 
 /// Moves the cursor to the sign `id`, opening `buffer` if no window shows it.
 ///
-/// Answers the line jumped to, or `-1`. Runs autocommands -- the window
-/// change, or the `:edit` -- so it holds nothing of the caller's across them.
-pub(crate) fn sign_jump(id: c_int, group: Option<&[u8]>, buffer: Buf) -> LineNr {
+/// Answers the line jumped to. Runs autocommands -- the window change, or
+/// the `:edit` -- so it holds nothing of the caller's across them.
+pub(crate) fn sign_jump(id: c_int, group: Option<&[u8]>, buffer: Buf) -> Result<LineNr, SignError> {
     let lnum = buf_findsign(buffer, id, group);
     if lnum <= 0 {
-        semsg!("E157: Invalid sign ID: {}", id);
-        return LineNr::new(-1);
+        return Err(SignError::InvalidId(id));
     }
     if buf_jump_open_win(buffer).is_some() {
         let mut win = Win::current();
@@ -359,10 +372,7 @@ pub(crate) fn sign_jump(id: c_int, group: Option<&[u8]>, buffer: Buf) -> LineNr 
         beginline(BeginlineOpts::WHITE);
     } else {
         let Some(name) = buffer.name.shown() else {
-            emsg(gettext(
-                c"E934: Cannot jump to a buffer that does not have a name",
-            ));
-            return LineNr::new(-1);
+            return Err(SignError::NoBufferName);
         };
         let mut cmd = format!("e +{lnum} ").into_bytes();
         cmd.extend_from_slice(name.to_bytes());
@@ -371,5 +381,5 @@ pub(crate) fn sign_jump(id: c_int, group: Option<&[u8]>, buffer: Buf) -> LineNr 
     }
 
     fold_open_cursor();
-    LineNr::new(lnum)
+    Ok(LineNr::new(lnum))
 }
