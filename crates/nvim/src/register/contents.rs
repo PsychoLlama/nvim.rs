@@ -30,7 +30,7 @@ use crate::mbyte::{c_partial_cells_in, c_string_cells, promised_char_len};
 use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::semsg;
-use crate::types::{ListRef, RegLines, TypVal};
+use crate::types::{Failed, ListRef, RegLines, TypVal};
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 
@@ -178,17 +178,17 @@ pub(crate) fn get_reg_contents_list(regname: RegName, flags: c_int) -> Option<Li
 /// Prepare register `name` to be written: check the name, remember `""`, and
 /// empty the register unless the write is an append.
 ///
-/// Answers `None` for an invalid name, having given E354.
+/// Fails for an invalid name, having given E354.
 fn init_write_reg(
     name: RegName,
     old_y_previous: &mut Option<usize>,
     must_append: bool,
-) -> Option<Reg> {
+) -> Result<Reg, Failed> {
     if !valid_yank_reg(name, true) {
         // Every writer's name is a byte of a string, which upstream's
         // `char` sign-extended into the `int` the message shows.
         emsg_invreg(c_int::from(name.cast_signed()));
-        return None;
+        return Err(Failed);
     }
     // `get_yank_register` moves `""`, which a write to a *named* register
     // must not do; `finish_write_reg` puts it back.
@@ -197,7 +197,7 @@ fn init_write_reg(
     if !is_append_register(name) && !must_append {
         reg.write(YankReg::clear);
     }
-    Some(reg)
+    Ok(reg)
 }
 
 /// What [`str_to_reg`] splits into lines: text with newlines in it, or
@@ -377,7 +377,7 @@ pub fn write_reg_contents_lst(
     }
 
     let mut old_y_previous = None;
-    let Some(reg) = init_write_reg(name, &mut old_y_previous, must_append) else {
+    let Ok(reg) = init_write_reg(name, &mut old_y_previous, must_append) else {
         return;
     };
     reg.write(|reg| str_to_reg(reg, yank_type, RegText::Lines(lines), block_len));
@@ -456,7 +456,7 @@ pub fn write_reg_contents_ex(
     }
 
     let mut old_y_previous = None;
-    let Some(reg) = init_write_reg(name, &mut old_y_previous, must_append) else {
+    let Ok(reg) = init_write_reg(name, &mut old_y_previous, must_append) else {
         return;
     };
     reg.write(|reg| str_to_reg(reg, yank_type, RegText::Text(text), block_len));
