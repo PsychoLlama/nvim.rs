@@ -294,9 +294,11 @@ fn ns_destroy(map: &mut ExtmarkNs) {
 }
 
 /// `ml_find_line_or_offset(buf, lnum, NULL, true)`: the byte offset of a
-/// line, counted with the file format's line endings ignored.
+/// line, counted with the file format's line endings ignored. Upstream's -1
+/// for an offset it cannot answer goes into the splice arithmetic as it did
+/// there.
 fn line_offset(buffer: Buf, lnum: LineNr) -> c_int {
-    ml_find_line_or_offset(buffer, lnum, None, true)
+    ml_find_line_or_offset(buffer, lnum, None, true).unwrap_or(-1)
 }
 
 /// The undo header a change to `buffer` is recorded against, made if need

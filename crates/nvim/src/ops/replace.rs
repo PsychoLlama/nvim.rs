@@ -323,7 +323,7 @@ fn replace_chars(op: &mut OpArg, c: Key) {
         }
 
         // On to the next character; stop at the end of the file.
-        if inc_cursor() == -1 {
+        if inc_cursor().is_stuck() {
             break;
         }
     }
@@ -355,7 +355,7 @@ fn replace_virtual_tail(op: &OpArg, c: Key) {
             Some(byte) => pbyte(Win::current().w_cursor, byte),
             None => replace_character(c),
         }
-        if inc(&mut Win::current().w_cursor) == -1 {
+        if inc(&mut Win::current().w_cursor).is_stuck() {
             break;
         }
         virtcols -= 1;

@@ -29,7 +29,7 @@ use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::edit::oneleft;
 use crate::global_cell::GlobalCell;
 use crate::mbyte::utf_class;
-use crate::memline::{Lines, decl, incl};
+use crate::memline::{Lines, Moved, decl, incl};
 use crate::r#move::adjust_skipcol;
 use crate::normal::{
     VisualMode, set_visual_anchor, set_visual_mode, unadjust_for_sel, visual_active, visual_anchor,
@@ -71,7 +71,7 @@ fn skip_chars(cclass: c_int, dir: c_int) -> bool {
         } else {
             dec_cursor()
         };
-        if step == -1 {
+        if step.is_stuck() {
             return true;
         }
     }
@@ -116,10 +116,10 @@ pub fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), Failed
         // in the buffer.
         let last_line = Win::current().w_cursor.lnum == Buf::current().b_ml.ml_line_count;
         let mut i = inc_cursor();
-        if i == -1 || (i >= 1 && last_line) {
+        if i.is_stuck() || (i.left_the_line() && last_line) {
             return Err(Failed); // started on the last character of the file
         }
-        if i >= 1 && eol && count == 0 {
+        if i.left_the_line() && eol && count == 0 {
             return Ok(()); // started on the last character of the line
         }
 
@@ -127,7 +127,7 @@ pub fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), Failed
         if sclass != 0 {
             while cls() == sclass {
                 i = inc_cursor();
-                if i == -1 || (i >= 1 && eol && count == 0) {
+                if i.is_stuck() || (i.left_the_line() && eol && count == 0) {
                     return Ok(());
                 }
             }
@@ -139,7 +139,7 @@ pub fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), Failed
                 break;
             }
             i = inc_cursor();
-            if i == -1 || (i >= 1 && eol && count == 0) {
+            if i.is_stuck() || (i.left_the_line() && eol && count == 0) {
                 return Ok(());
             }
         }
@@ -166,7 +166,7 @@ pub fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> Result<(), F
             Win::current().w_cursor.col = ColNr::ZERO;
         }
         let sclass = cls();
-        if dec_cursor() == -1 {
+        if dec_cursor().is_stuck() {
             return Err(Failed); // started at the start of the file
         }
         'finished: {
@@ -181,7 +181,7 @@ pub fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> Result<(), F
                     {
                         break 'finished;
                     }
-                    if dec_cursor() == -1 {
+                    if dec_cursor().is_stuck() {
                         return Ok(()); // hit the start of the file
                     }
                 }
@@ -238,7 +238,7 @@ pub fn end_word(
             coladvance(Win::current(), ColNr::MAX);
         }
         let sclass = cls();
-        if inc_cursor() == -1 {
+        if inc_cursor().is_stuck() {
             return Err(Failed);
         }
         'finished: {
@@ -259,7 +259,7 @@ pub fn end_word(
                     {
                         break 'finished;
                     }
-                    if inc_cursor() == -1 {
+                    if inc_cursor().is_stuck() {
                         return Err(Failed); // hit the end of the file
                     }
                 }
@@ -288,17 +288,17 @@ pub fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), Fai
         }
         let sclass = cls();
         let mut i = dec_cursor();
-        if i == -1 {
+        if i.is_stuck() {
             return Err(Failed);
         }
-        if eol && i == 1 {
+        if eol && i == Moved::NewLine {
             return Ok(());
         }
         // Back to before the start of this word.
         if sclass != 0 {
             while cls() == sclass {
                 i = dec_cursor();
-                if i == -1 || (eol && i == 1) {
+                if i.is_stuck() || (eol && i == Moved::NewLine) {
                     return Ok(());
                 }
             }
@@ -313,7 +313,7 @@ pub fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), Fai
                 break;
             }
             i = dec_cursor();
-            if i == -1 || (eol && i == 1) {
+            if i.is_stuck() || (eol && i == Moved::NewLine) {
                 return Ok(());
             }
         }
@@ -394,7 +394,7 @@ pub fn current_word(
         inclusive = true;
         if visual_active() && lt(Win::current().w_cursor, visual_anchor()) {
             // In Visual mode with the cursor at the start: move it back.
-            if decl(&mut Win::current().cursor()) == -1 {
+            if decl(&mut Win::current().cursor()).is_stuck() {
                 return Err(Failed);
             }
             if include != (cls() != 0) {
@@ -405,7 +405,7 @@ pub fn current_word(
             }
         } else {
             // Move the cursor forward one word and/or run of white space.
-            if incl(&mut Win::current().cursor()) == -1 {
+            if incl(&mut Win::current().cursor()).is_stuck() {
                 return Err(Failed);
             }
             if include != (cls() == 0) {

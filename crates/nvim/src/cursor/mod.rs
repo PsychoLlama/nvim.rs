@@ -39,7 +39,7 @@ use crate::drawscreen::UPD_NOT_VALID;
 use crate::mark::mark_mb_adjustpos;
 use crate::mbyte::{c_char_info, c_next_cluster, char_at, cluster_len, head_off};
 use crate::memline::ml_replace_owned;
-use crate::memline::{Lines, dec, inc, ml_get_len};
+use crate::memline::{Lines, Moved, dec, inc, ml_get_len};
 use crate::memory::XString;
 use crate::r#move::{WinValid, changed_cline_bef_curs, set_valid_virtcol};
 use crate::normal::{set_visual_anchor, visual_active, visual_anchor};
@@ -413,7 +413,7 @@ pub fn getvpos(win: Win, pos: &mut Pos, wcol: ColNr) -> bool {
 ///
 /// Safe: the only promise is that the editor exists, which `Win::current()`
 /// carries; `inc` clamps the line it walks.
-pub fn inc_cursor() -> c_int {
+pub(crate) fn inc_cursor() -> Moved {
     let mut win = Win::current();
     let mut at = win.w_cursor;
     let moved = inc(&mut at);
@@ -424,7 +424,7 @@ pub fn inc_cursor() -> c_int {
 /// Move the cursor one character back; see `dec`.
 ///
 /// Safe: as [`inc_cursor`].
-pub fn dec_cursor() -> c_int {
+pub(crate) fn dec_cursor() -> Moved {
     let mut win = Win::current();
     let mut at = win.w_cursor;
     let moved = dec(&mut at);
@@ -436,7 +436,7 @@ pub fn dec_cursor() -> c_int {
 /// and the character the cursor lands on, reading the line once when the
 /// step stays inside it (a walk that does both per character paid for two
 /// reads).
-pub(crate) fn dec_cursor_gchar() -> (c_int, c_int) {
+pub(crate) fn dec_cursor_gchar() -> (Moved, c_int) {
     let mut win = Win::current();
     let mut pos = win.w_cursor;
     if pos.col > ColNr::ZERO && pos.col != ColNr::MAX {
@@ -452,14 +452,14 @@ pub(crate) fn dec_cursor_gchar() -> (c_int, c_int) {
                 .unwrap_or_default(),
         );
         win.w_cursor = pos;
-        return (0, c);
+        return (Moved::InLine, c);
     }
     let moved = dec_cursor();
     (moved, gchar_cursor())
 }
 
 /// [`inc_cursor`] and then [`gchar_cursor`], as [`dec_cursor_gchar`].
-pub(crate) fn inc_cursor_gchar() -> (c_int, c_int) {
+pub(crate) fn inc_cursor_gchar() -> (Moved, c_int) {
     let mut win = Win::current();
     let pos = win.w_cursor;
     if pos.col != ColNr::MAX {
@@ -471,7 +471,12 @@ pub(crate) fn inc_cursor_gchar() -> (c_int, c_int) {
             let next = at + cluster_len(&line[at..]);
             let c = char_at(line.get(next..).unwrap_or_default());
             win.w_cursor.col = ColNr::try_from(next).unwrap_or(ColNr::MAX);
-            return (if next < line.len() { 0 } else { 2 }, c);
+            let moved = if next < line.len() {
+                Moved::InLine
+            } else {
+                Moved::OntoNul
+            };
+            return (moved, c);
         }
     }
     let moved = inc_cursor();

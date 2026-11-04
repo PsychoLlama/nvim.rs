@@ -21,7 +21,7 @@ use crate::cursor::{dec_cursor, inc_cursor};
 use crate::drawscreen::state::redraw_cmdline;
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::mbyte::{c_cluster_len, head_off};
-use crate::memline::dec;
+use crate::memline::{Moved, dec};
 use crate::normal::{
     VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor, visual_mode,
     with_visual_anchor,
@@ -333,7 +333,7 @@ pub fn current_quote(op: &mut OpArg, count: c_int, include: bool, quotechar: c_i
 
     // The end position.
     Win::current().w_cursor.col = ColNr::new(col_end);
-    if (include || count > 1 || (!vis_empty && inside_quotes)) && inc_cursor() == 2 {
+    if (include || count > 1 || (!vis_empty && inside_quotes)) && inc_cursor() == Moved::OntoNul {
         inclusive = true;
     }
     if visual_active() {

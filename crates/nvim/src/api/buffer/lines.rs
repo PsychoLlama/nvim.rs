@@ -284,7 +284,8 @@ pub fn nvim_buf_get_offset(buf: BufferHandle, index: Integer) -> Result<Integer,
     else {
         return Err(Error::validation(c"Index out of bounds"));
     };
-    let offset = ml_find_line_or_offset(b, lnum + 1, None, true);
+    // -1 is the API's answer for "no offset".
+    let offset = ml_find_line_or_offset(b, lnum + 1, None, true).unwrap_or(-1);
     Ok(Integer::from(offset))
 }
 

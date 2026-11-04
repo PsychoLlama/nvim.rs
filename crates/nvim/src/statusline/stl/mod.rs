@@ -217,7 +217,7 @@ impl Env<'_> {
     }
 
     /// The byte offset of the cursor line, for `%o`/`%O`.
-    pub(super) fn line_offset(&self) -> c_int {
+    pub(super) fn line_offset(&self) -> Option<c_int> {
         ml_find_line_or_offset(self.buf, self.win.w_cursor.lnum, None, false)
     }
 

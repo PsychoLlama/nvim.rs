@@ -59,11 +59,12 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
         return Ok(());
     }
 
-    let (start_byte, end_byte, dest_byte) = (
-        ml_find_line_or_offset(Buf::current(), line1, None, true) as BCount,
-        ml_find_line_or_offset(Buf::current(), line2 + 1, None, true) as BCount,
-        ml_find_line_or_offset(Buf::current(), dest + 1, None, true) as BCount,
-    );
+    // Upstream's -1 for an offset it cannot answer goes into the
+    // extmark arithmetic as it did there.
+    let offset = |lnum| {
+        ml_find_line_or_offset(Buf::current(), lnum, None, true).map_or(-1, |at| at as BCount)
+    };
+    let (start_byte, end_byte, dest_byte) = (offset(line1), offset(line2 + 1), offset(dest + 1));
     let extent_byte = end_byte - start_byte;
     let num_lines = line2 - line1 + 1;
 

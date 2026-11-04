@@ -55,6 +55,16 @@ pub(crate) const DB_MARKED: c_uint = 1 << (c_uint::BITS - 1);
 pub(crate) const DB_INDEX_MASK: c_uint = !DB_MARKED;
 /// One index entry.
 pub(crate) const INDEX_SIZE: usize = size_of::<c_uint>();
+/// [`INDEX_SIZE`] in the block's own unit, for the free-space arithmetic.
+pub(crate) const INDEX_BYTES: c_uint = c_uint::BITS / 8;
+const _: () = assert!(INDEX_SIZE == 4 && INDEX_BYTES == 4);
+
+/// The low 32 bits of `n`: what C keeps when it stores a wider integer in an
+/// `int` or `unsigned`. Free -- the same truncating move the cast was.
+pub(crate) fn low32(n: i64) -> c_uint {
+    let [a, b, c, d, ..] = n.to_le_bytes();
+    c_uint::from_le_bytes([a, b, c, d])
+}
 /// The data block header: where the index starts.
 pub(crate) const HEADER_SIZE: usize = offset_of!(DataBlockLayout, db_index);
 

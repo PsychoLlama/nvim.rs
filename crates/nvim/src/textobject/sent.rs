@@ -27,7 +27,7 @@ use crate::cursor::gchar_cursor;
 use crate::drawscreen::state::redraw_cmdline;
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::mark::setpcmark;
-use crate::memline::{Lines, decl, gchar_pos, inc, incl};
+use crate::memline::{Lines, Moved, decl, gchar_pos, inc, incl};
 use crate::normal::{VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor};
 use crate::option::cpo_has;
 use crate::pos::{equalpos, lt};
@@ -35,7 +35,7 @@ use crate::search::{BACKWARD, FORWARD};
 use crate::types::{CpoFlag, Direction, Failed, NUL, OpArg, Pos};
 
 /// One step of a position walk: [`incl`] going forward, [`decl`] going back.
-type StepFn = fn(&mut Pos) -> c_int;
+type StepFn = fn(&mut Pos) -> Moved;
 
 /// Move to the start of the `count`th next sentence in `dir`, leaving the
 /// cursor there. Answers `Ok` when one was found.
@@ -66,7 +66,7 @@ pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
             // of the current buffer the caller guarantees.
             if gchar_pos(&pos) == NUL {
                 // On an empty line: skip up to a non-empty one.
-                while step(&mut pos) != -1 {
+                while !step(&mut pos).is_stuck() {
                     if gchar_pos(&pos) != NUL {
                         break;
                     }
@@ -100,7 +100,9 @@ pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
                 let moved = decl(&mut tpos);
                 // The line is read only once `decl` has answered that `tpos`
                 // moved, so it is still in the buffer.
-                if moved == -1 || (dir == FORWARD && Lines::current().line(tpos.lnum).is_empty()) {
+                if moved.is_stuck()
+                    || (dir == FORWARD && Lines::current().line(tpos.lnum).is_empty())
+                {
                     break;
                 }
                 if found_dot {
@@ -135,9 +137,12 @@ pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
                 }
                 if c == '.' as c_int || c == '!' as c_int || c == '?' as c_int {
                     let mut tpos = pos;
+                    // Whether the end of the buffer came before anything
+                    // but closing punctuation.
+                    let mut at_end = false;
                     loop {
-                        c = inc(&mut tpos);
-                        if c == -1 {
+                        if inc(&mut tpos).is_stuck() {
+                            at_end = true;
                             break;
                         }
                         c = gchar_pos(&tpos);
@@ -145,12 +150,12 @@ pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
                             break;
                         }
                     }
-                    if c == -1
+                    if at_end
                         || (!cpo_j && (c == ' ' as c_int || c == '\t' as c_int))
                         || c == NUL
                         || (cpo_j
                             && c == ' ' as c_int
-                            && inc(&mut tpos) >= 0
+                            && !inc(&mut tpos).is_stuck()
                             && gchar_pos(&tpos) == ' ' as c_int)
                     {
                         pos = tpos;
@@ -160,7 +165,7 @@ pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
                         break;
                     }
                 }
-                if step(&mut pos) == -1 {
+                if step(&mut pos).is_stuck() {
                     if count != 0 {
                         return Err(Failed);
                     }
@@ -175,14 +180,14 @@ pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
             let c = gchar_pos(&pos);
             c == ' ' as c_int || c == '\t' as c_int
         } {
-            if incl(&mut pos) == -1 {
+            if incl(&mut pos).is_stuck() {
                 break;
             }
         }
 
         if equalpos(prev_pos, pos) {
             // Nothing moved: step one character and try again.
-            if step(&mut pos) == -1 {
+            if step(&mut pos).is_stuck() {
                 if count != 0 {
                     return Err(Failed);
                 }
@@ -201,7 +206,7 @@ pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
 /// in, or leave it alone when it is not preceded by any. `pos` names a
 /// position in the current buffer, and `decl`/`incl` leave it as one.
 fn find_first_blank(pos: &mut Pos) {
-    while decl(pos) != -1 {
+    while !decl(pos).is_stuck() {
         if !ascii_iswhite(gchar_pos(pos)) {
             incl(pos);
             break;
@@ -386,7 +391,7 @@ pub fn current_sent(op: &mut OpArg, count: c_int, include: bool) -> Result<(), F
         redraw_curbuf_later(UPD_INVERTED); // update the inversion
     } else {
         // Include the newline after the sentence, if there is one.
-        let inclusive = incl(&mut Win::current().cursor()) == -1;
+        let inclusive = incl(&mut Win::current().cursor()).is_stuck();
         op.inclusive = inclusive;
         op.start = start_pos;
         op.motion_type = kMTCharWise;

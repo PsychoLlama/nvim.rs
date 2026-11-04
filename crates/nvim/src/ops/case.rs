@@ -82,7 +82,7 @@ pub(crate) fn op_tilde(op: &mut OpArg) {
                 did_change |= swapchars(op.op_type, &mut pos, len);
                 // `inc` answers -1 at the end of the buffer; either exit
                 // leaves `pos` where the walk stopped.
-                if ltoreq(op.end, pos) || inc(&mut pos) == -1 {
+                if ltoreq(op.end, pos) || inc(&mut pos).is_stuck() {
                     break;
                 }
             }
@@ -138,7 +138,7 @@ fn swapchars(op_type: OpType, pos: &mut Pos, length: c_int) -> bool {
             todo -= len - 1;
         }
         did_change |= swapchar(op_type, *pos);
-        if inc(pos) == -1 {
+        if inc(pos).is_stuck() {
             // At the end of the buffer; do not run the decrement.
             break;
         }

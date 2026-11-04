@@ -29,7 +29,7 @@ use crate::eval::funcs::do_searchpair;
 use crate::indent::inindent;
 use crate::mark::setpcmark;
 use crate::mbyte::{c_cluster_len, head_off};
-use crate::memline::{Lines, decl, inc, incl};
+use crate::memline::{Lines, Moved, decl, inc, incl};
 use crate::option::vars::{P_SEL, P_WS, p_ws};
 use crate::option::{SavedCpo, cpo_has};
 use crate::pos::{equalpos, lt, ltoreq};
@@ -81,7 +81,7 @@ pub fn current_block(
         if what == '{' as c_int {
             // Ignore the indent.
             while inindent(1) {
-                if inc_cursor() != 0 {
+                if inc_cursor() != Moved::InLine {
                     break;
                 }
             }
@@ -153,7 +153,7 @@ pub fn current_block(
             decl(&mut Win::current().cursor());
             while inindent(1) {
                 sol = true;
-                if decl(&mut Win::current().cursor()) != 0 {
+                if decl(&mut Win::current().cursor()) != Moved::InLine {
                     break;
                 }
             }
@@ -262,7 +262,7 @@ fn in_html_tag(end_tag: bool) -> bool {
     };
     // The matching `>` must not be preceded by a `/`.
     loop {
-        if inc(&mut pos) < 0 {
+        if inc(&mut pos).is_stuck() {
             return false;
         }
         // `inc` left `pos` on a character of the current buffer.
@@ -307,7 +307,7 @@ pub fn current_tagblock(op: &mut OpArg, count_arg: c_int, include: bool) -> c_in
         setpcmark();
         // Ignore the indent.
         while inindent(1) {
-            if inc_cursor() != 0 {
+            if inc_cursor() != Moved::InLine {
                 break;
             }
         }
@@ -316,14 +316,14 @@ pub fn current_tagblock(op: &mut OpArg, count_arg: c_int, include: bool) -> c_in
         if in_html_tag(false) {
             // On a start tag: move to its `>`.
             while gchar_cursor() != '>' as c_int {
-                if inc_cursor() < 0 {
+                if inc_cursor().is_stuck() {
                     break;
                 }
             }
         } else if in_html_tag(true) {
             // On an end tag: move to just before it.
             while gchar_cursor() != '<' as c_int {
-                if dec_cursor() < 0 {
+                if dec_cursor().is_stuck() {
                     break;
                 }
             }
@@ -390,7 +390,7 @@ pub fn current_tagblock(op: &mut OpArg, count_arg: c_int, include: bool) -> c_in
             // Include up to the `>`; `inc_cursor` reports the end of the
             // line itself.
             while gchar_cursor() != '>' as c_int {
-                if inc_cursor() < 0 {
+                if inc_cursor().is_stuck() {
                     break;
                 }
             }
@@ -413,7 +413,7 @@ pub fn current_tagblock(op: &mut OpArg, count_arg: c_int, include: bool) -> c_in
             Win::current().w_cursor = start_pos;
             // `inc_cursor` reports running off the buffer itself, so the
             // cursor is on a character whenever the body runs.
-            while inc_cursor() >= 0 {
+            while !inc_cursor().is_stuck() {
                 let q = gchar_cursor();
                 if q == '>' as c_int && !in_quotes {
                     inc_cursor();

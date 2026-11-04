@@ -39,6 +39,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
+use crate::memline::Moved;
 use crate::option::cpo_has;
 use crate::types::{BsFlag, CpoFlag, Failed, FoFlag, NUL};
 
@@ -533,13 +534,13 @@ fn beep_backspace() {
 
 /// Step the cursor one character forward, over a line break if need be.
 #[inline(always)]
-fn cursor_forward() -> c_int {
+fn cursor_forward() -> Moved {
     inc_cursor()
 }
 
 /// Step the cursor one character back, over a line break if need be.
 #[inline(always)]
-fn cursor_back() -> c_int {
+fn cursor_back() -> Moved {
     dec_cursor()
 }
 

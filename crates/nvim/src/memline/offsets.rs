@@ -9,6 +9,13 @@
 //! the run the answer falls in.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -138,10 +145,11 @@ fn ml_chunk_addline(mut b: Buf, line: LineNr, curline: LineNr, curix: usize) -> 
             };
             let data = DataBlock(b.b_ml.page(id));
             let rest = if data.line_count() == 1 {
-                data.txt_end().wrapping_sub(data.txt_start()) as c_int
+                data.txt_end().wrapping_sub(data.txt_start()).cast_signed()
             } else {
-                let last_but_one = (data.line_count() - 2) as usize;
-                data.line_start(last_but_one) as c_int - data.txt_start() as c_int
+                let last_but_one =
+                    usize::try_from(data.line_count() - 2).expect("two lines or more");
+                data.line_start(last_but_one).cast_signed() - data.txt_start().cast_signed()
             };
             b.b_ml.ml_chunks.set(curix + 1, 1, rest);
             b.b_ml.ml_chunks.add_size(curix, -rest);
@@ -189,8 +197,11 @@ fn ml_chunk_split(mut b: Buf, curix: usize, curline_arg: LineNr) -> bool {
 
         // First line in the block has its text at the end of it.
         let data = DataBlock(b.b_ml.page(id));
-        let text_end = data.line_end(idx as usize) as c_int;
-        size += text_end - data.line_start(end_idx as usize) as c_int;
+        let text_end = data.line_end(idx.cast_unsigned() as usize).cast_signed();
+        size += text_end
+            - data
+                .line_start(end_idx.cast_unsigned() as usize)
+                .cast_signed();
     }
 
     b.b_ml.ml_chunks.add_lines(curix + 1, -linecnt);
@@ -211,7 +222,8 @@ fn ml_chunk_split(mut b: Buf, curix: usize, curline_arg: LineNr) -> bool {
 /// `no_ff` counts one byte per line break whatever `'fileformat'` says, which
 /// is what byte tracking wants.
 ///
-/// Returns -1 when there is nothing to answer from.
+/// `None` when there is nothing to answer from: no memline, a line past
+/// the end, or an offset one byte beyond it.
 ///
 /// The running byte count is 64 bits wide. Upstream's is an `int`, which a
 /// buffer past 2 GiB overflows: C wraps (by accident of the compiler) and a
@@ -224,7 +236,7 @@ pub fn ml_find_line_or_offset(
     lnum: LineNr,
     mut offp: Option<&mut c_int>,
     no_ff: bool,
-) -> c_int {
+) -> Option<c_int> {
     let mut b = buffer;
     let ffdos = Wide::from(!no_ff && get_fileformat(b) == EOL_DOS);
     let mut extra: i32 = 0;
@@ -241,22 +253,25 @@ pub fn ml_find_line_or_offset(
     if lnum == LineNr::ZERO || b.b_ml.cached_lnum() < lnum || !no_ff {
         ml_flush_line(Buf::current());
     } else if can_cache && b.b_ml.cached_offset() > 0 {
-        return b.b_ml.cached_offset() as c_int;
+        // Cut to the callers' `int`, as below.
+        return Some(
+            low32(i64::try_from(b.b_ml.cached_offset()).unwrap_or(i64::MAX)).cast_signed(),
+        );
     }
 
     if b.b_ml.ml_chunks.is_off() || !b.b_ml.ml_chunks.is_built() || lnum < LineNr::ZERO {
         // The memline is empty. If it is open at all it still behaves as
         // though it held one empty line.
         if no_ff && b.b_ml.is_open() && (lnum == LineNr::ONE || lnum == LineNr::new(2)) {
-            return (lnum - 1).get();
+            return Some((lnum - 1).get());
         }
-        return -1;
+        return None;
     }
 
     let offset = Wide::from(offp.as_deref().copied().unwrap_or(0));
     if lnum == LineNr::ZERO && offset <= 0 {
         // Not a "find offset", and offset 0 must be in line 1.
-        return 1;
+        return Some(1);
     }
 
     // Skip whole chunks, up to but not including the one the answer is
@@ -284,21 +299,20 @@ pub fn ml_find_line_or_offset(
         // The bounds test has to come first: ml_find_line complains about
         // a line past the end.
         if curline > b.b_ml.ml_line_count {
-            return -1;
+            return None;
         }
-        let Some(id) = ml_find_line(buffer, curline, ML_FIND) else {
-            return -1;
-        };
+        let id = ml_find_line(buffer, curline, ML_FIND)?;
         let count = b.b_ml.locked_high() - b.b_ml.locked_low() + 1;
         let start_idx = curline - b.b_ml.locked_low();
         let mut idx = start_idx;
         let page = buffer.b_ml.page(id);
         let data = DataBlock(page);
-        let starts = data.index_entries(count as usize);
-        let start_of =
-            |idx: c_int| Wide::from(u32::from_ne_bytes(starts[idx as usize]) & DB_INDEX_MASK);
+        let starts = data.index_entries(count.cast_unsigned() as usize);
+        let start_of = |idx: c_int| {
+            Wide::from(u32::from_ne_bytes(starts[idx.cast_unsigned() as usize]) & DB_INDEX_MASK)
+        };
         // First line in the block has its text at the end of it.
-        let text_end = Wide::from(data.line_end(idx as usize));
+        let text_end = Wide::from(data.line_end(idx.cast_unsigned() as usize));
 
         // Index of the last line of this block to account for.
         if lnum != LineNr::ZERO {
@@ -331,15 +345,15 @@ pub fn ml_find_line_or_offset(
             *offp = if size + ffdos == offset {
                 0
             } else if idx == start_idx {
-                (offset - size + len) as c_int
+                low32(offset - size + len).cast_signed()
             } else {
-                (offset - size + len - (text_end - start_of(idx - 1))) as c_int
+                low32(offset - size + len - (text_end - start_of(idx - 1))).cast_signed()
             };
             curline += idx - start_idx + extra;
             if curline > b.b_ml.ml_line_count {
-                return -1; // exactly one byte beyond the end
+                return None; // exactly one byte beyond the end
             }
-            return curline.get();
+            return Some(curline.get());
         }
         curline = b.b_ml.locked_high() + 1;
     }
@@ -357,10 +371,11 @@ pub fn ml_find_line_or_offset(
     }
 
     if can_cache && size > 0 {
-        b.b_ml.set_cached_offset(size as size_t);
+        b.b_ml
+            .set_cached_offset(usize::try_from(size).expect("checked positive"));
     }
     // Cut to the callers' `int`, wrapping as upstream's arithmetic did.
-    size as c_int
+    Some(low32(size).cast_signed())
 }
 
 /// The byte count [`ml_find_line_or_offset`] keeps while it walks.
@@ -374,17 +389,17 @@ pub fn goto_byte(cnt: c_int) {
     if boff != 0 {
         boff -= 1;
     }
-    let lnum = ml_find_line_or_offset(Buf::current(), LineNr::ZERO, Some(&mut boff), false);
-    if lnum < 1 {
-        // Past the end.
-        Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
-        Win::current().w_curswant = ColNr::MAX;
-        coladvance(Win::current(), ColNr::MAX);
-    } else {
+    let found = ml_find_line_or_offset(Buf::current(), LineNr::ZERO, Some(&mut boff), false);
+    if let Some(lnum) = found.filter(|&lnum| lnum >= 1) {
         Win::current().w_cursor.lnum = LineNr::new(lnum);
         Win::current().w_cursor.col = ColNr::new(boff);
         Win::current().w_cursor.coladd = 0;
         Win::current().w_set_curswant = true;
+    } else {
+        // Past the end.
+        Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
+        Win::current().w_curswant = ColNr::MAX;
+        coladvance(Win::current(), ColNr::MAX);
     }
     check_cursor(Win::current());
 

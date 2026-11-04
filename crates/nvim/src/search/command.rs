@@ -294,7 +294,7 @@ fn back_off_start(pos: &mut Pos, off: i64) {
     let mut c = off;
     if off > 0 {
         while c != 0 {
-            if decl(pos) == -1 {
+            if decl(pos).is_stuck() {
                 break;
             }
             c -= 1;
@@ -306,7 +306,7 @@ fn back_off_start(pos: &mut Pos, off: i64) {
         }
     } else {
         while c != 0 {
-            if incl(pos) == -1 {
+            if incl(pos).is_stuck() {
                 break;
             }
             c += 1;
@@ -345,7 +345,7 @@ fn add_offset(pos: &mut Pos, off: SearchOffset) -> c_int {
             // To the right, checking for the end of the file.
             while c > 0 {
                 c -= 1;
-                if incl(pos) == -1 {
+                if incl(pos).is_stuck() {
                     break;
                 }
             }
@@ -353,7 +353,7 @@ fn add_offset(pos: &mut Pos, off: SearchOffset) -> c_int {
             // To the left, checking for the start of the file.
             while c < 0 {
                 c += 1;
-                if decl(pos) == -1 {
+                if decl(pos).is_stuck() {
                     break;
                 }
             }

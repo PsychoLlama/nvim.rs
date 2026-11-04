@@ -10,6 +10,13 @@
 //! [`blocks`] is the three block layouts, as views over a memfile page.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -42,9 +49,8 @@ use crate::message::state::{
     msg_ext_skip_flush, msg_row, msg_silent, need_wait_return, no_lines_msg,
 };
 use crate::message::{
-    do_dialog, emsg, iemsg, msg, msg_display, msg_end, msg_ext_set_kind, msg_home_replace,
-    msg_multiline, msg_outnum, msg_putchar, msg_reset_scroll, msg_start, msg_str, msg_str_hl,
-    set_keep_msg, verb_msg,
+    do_dialog, emsg, iemsg, msg, msg_ext_set_kind, msg_home_replace, msg_multiline, msg_outnum,
+    msg_putchar, msg_reset_scroll, msg_str, msg_str_hl, set_keep_msg, verb_msg,
 };
 use crate::message_fmt::msg_cstr_opt;
 use crate::option::vars::{P_DIR, P_SHM, p_uc, p_verbose};
@@ -68,8 +74,7 @@ use crate::startup::{getout, recoverymode};
 use crate::types::ui::kUIMessages;
 use crate::types::{
     BlockNr, Buffer, CmdModFlags, ColNr, Dict, Failed, FileComparison, FileOffset, FlushBuffers,
-    InfoPtr, LineNr, List, OptVal, Pos, Timestamp, VarNumber, int64_t, size_t, time_t, uint8_t,
-    uint64_t, uv_uid_t,
+    InfoPtr, LineNr, List, OptVal, Pos, Timestamp, VarNumber, int64_t, size_t, time_t, uint64_t,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::buf_is_changed;
@@ -78,6 +83,8 @@ use crate::winlayer::{Buf, buffers};
 use core::ffi::c_int;
 
 // The carve of the transpiled module; see each child's docs.
+mod error;
+pub(crate) use self::error::MemlineError;
 mod blocks;
 pub use self::blocks::*;
 mod block0;
@@ -303,7 +310,7 @@ fn ml_open_blocks(mut buffer: Buf) -> Result<(), Failed> {
     let start = data.txt_start() - 1; // at the end of the block
     data.set_txt_start(start);
     data.set_index(0, start);
-    data.set_free(data.free() - 1 - INDEX_SIZE as ::core::ffi::c_uint);
+    data.set_free(data.free() - 1 - INDEX_BYTES);
     data.set_line_count(1);
     data.write(start as usize, &[0]);
     Ok(())
@@ -430,7 +437,7 @@ pub fn ml_close(mut buffer: Buf, del_file: ::core::ffi::c_int) {
 /// Close every memline and memfile. Only used when exiting.
 pub fn ml_close_all(del_file: bool) {
     for buf in buffers() {
-        ml_close(buf, del_file as ::core::ffi::c_int);
+        ml_close(buf, ::core::ffi::c_int::from(del_file));
     }
     spell_delete_wordlist(); // delete the internal wordlist
     vim_deltempdir(); // delete the temp directory that was created

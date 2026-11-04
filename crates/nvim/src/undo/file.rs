@@ -54,7 +54,11 @@ pub fn u_compute_hash(buffer: Buf, hash: &mut [u8; UNDO_HASH_SIZE as usize]) {
 /// the last directory in the list if it has to.
 pub fn u_get_undo_file_name(buf_ffname: Option<&CStr>, reading: bool) -> Option<XString> {
     let buf_ffname = buf_ffname?;
-    let resolved = resolve_symlink(buf_ffname);
+    // A loop of links is said, and the undo file goes with the link.
+    let resolved = resolve_symlink(buf_ffname).unwrap_or_else(|err| {
+        err.report();
+        None
+    });
     let ffname: &[u8] = resolved.as_deref().unwrap_or(buf_ffname.to_bytes());
 
     // The name under a directory in 'undodir': the whole path with its

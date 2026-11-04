@@ -11,7 +11,15 @@
 //! read through views made after the last such call.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use crate::narrow::len_as_int;
 use core::ffi::{c_int, c_long, c_uint};
 
 use super::*;
@@ -98,7 +106,7 @@ pub(crate) fn ml_append_int(
 
     let new = NewLine::new(line, flags);
     // Space needed for the text, and then for its index entry too.
-    let space_needed = int64_t::from(new.len()) + INDEX_SIZE as int64_t;
+    let space_needed = int64_t::from(new.len()) + int64_t::from(INDEX_BYTES);
 
     if !append_to_locked(&mut buffer.b_ml, lnum, &new, space_needed) {
         return append_by_walk(buffer, lnum, &new, space_needed);
@@ -106,7 +114,7 @@ pub(crate) fn ml_append_int(
     buffer.b_ml.ml_flags.clear(MlFlags::EMPTY);
     count_new_line(buffer);
     // The line was inserted below `lnum`.
-    buffer.update_line_chunks(lnum + 1, new.len() as c_int, ML_CHNK_ADDLINE);
+    buffer.update_line_chunks(lnum + 1, new.len().cast_signed(), ML_CHNK_ADDLINE);
     Ok(())
 }
 
@@ -234,7 +242,7 @@ fn append_by_walk(
     }
 
     // The line was inserted below `lnum`.
-    buffer.update_line_chunks(lnum + 1, new.len() as c_int, ML_CHNK_ADDLINE);
+    buffer.update_line_chunks(lnum + 1, new.len().cast_signed(), ML_CHNK_ADDLINE);
     Ok(())
 }
 
@@ -253,13 +261,13 @@ fn insert_line(
     let len = new.len();
     let old_start = header.txt_start;
     header.txt_start = old_start.wrapping_sub(len);
-    header.free = header.free.wrapping_sub(space_needed as c_uint);
+    header.free = header.free.wrapping_sub(low32(space_needed));
     header.line_count += 1;
     data.set_header(&header);
 
     // The lines after the new one, whose text moves to the front and whose
     // index entries shift up one slot.
-    let following = (line_count - db_idx - 1).max(0) as usize;
+    let following = (line_count - db_idx - 1).max(0).cast_unsigned() as usize;
     // The new line ends where the line it follows starts — the end of the
     // text for the block's first line — or, with no line after it, at the
     // old start of the text.
@@ -268,7 +276,7 @@ fn insert_line(
     } else if db_idx < 0 {
         header.txt_end
     } else {
-        data.line_start(db_idx as usize)
+        data.line_start(db_idx.cast_unsigned() as usize)
     };
     data.insert_text(header.txt_start as usize, end as usize, new.text);
     let start = end.wrapping_sub(len);
@@ -277,7 +285,12 @@ fn insert_line(
     } else {
         start
     };
-    data.insert_index((db_idx + 1) as usize, following, len.wrapping_neg(), entry);
+    data.insert_index(
+        (db_idx + 1).cast_unsigned() as usize,
+        following,
+        len.wrapping_neg(),
+        entry,
+    );
 }
 
 /// Put `new` into the data block `data` as its line `slot`, at the front of
@@ -285,7 +298,7 @@ fn insert_line(
 fn add_new_line(data: &mut DataBlock<&mut [u8]>, slot: usize, new: &NewLine) {
     let start = data.txt_start().wrapping_sub(new.len());
     data.set_txt_start(start);
-    let room = data.free().wrapping_sub(new.len() + INDEX_SIZE as c_uint);
+    let room = data.free().wrapping_sub(new.len() + INDEX_BYTES);
     data.set_free(room);
     data.set_index(slot, start);
     if new.marked() {
@@ -335,9 +348,10 @@ fn ml_split_data_block(
         } else {
             let data = DataBlock(buffer.b_ml.page(id));
             data_moved = data
-                .line_start(db_idx as usize)
-                .wrapping_sub(data.txt_start()) as c_int;
-            total_moved = data_moved + lines_moved * INDEX_SIZE as c_int;
+                .line_start(db_idx.cast_unsigned() as usize)
+                .wrapping_sub(data.txt_start())
+                .cast_signed();
+            total_moved = data_moved + lines_moved * INDEX_BYTES.cast_signed();
             if int64_t::from(data.free()) + int64_t::from(total_moved) >= space_needed {
                 in_left = true;
                 space_needed = int64_t::from(total_moved);
@@ -348,7 +362,8 @@ fn ml_split_data_block(
         }
     }
 
-    let page_count = (space_needed + HEADER_SIZE as int64_t + page_size - 1) / page_size;
+    let header = int64_t::try_from(HEADER_SIZE).expect("a block header is small");
+    let page_count = (space_needed + header + page_size - 1) / page_size;
     let negative = new.flags & ML_APPEND_NEW != 0;
     let new_id = ml_new_data(buffer.b_ml.memfile(), negative, page_count);
 
@@ -359,8 +374,8 @@ fn ml_split_data_block(
     };
     let memfile = buffer.b_ml.memfile();
     let (bnum_left, bnum_right) = (memfile.block_nr(id_left), memfile.block_nr(id_right));
-    let page_count_left = memfile.page_count(id_left) as c_int;
-    let page_count_right = memfile.page_count(id_right) as c_int;
+    let page_count_left = memfile.page_count(id_left).cast_signed();
+    let page_count_right = memfile.page_count(id_right).cast_signed();
 
     {
         let (left_page, right_page) = memfile.pages_mut(id_left, id_right);
@@ -375,27 +390,36 @@ fn ml_split_data_block(
         // Lines after the insertion point move from the left/old block to
         // the right/new one.
         if lines_moved != 0 {
-            let room = right.txt_start().wrapping_sub(data_moved as c_uint);
+            let room = right.txt_start().wrapping_sub(data_moved.cast_unsigned());
             right.set_txt_start(room);
-            right.set_free(right.free().wrapping_sub(total_moved as c_uint));
+            right.set_free(right.free().wrapping_sub(total_moved.cast_unsigned()));
             let (from, to) = (left.txt_start() as usize, right.txt_start() as usize);
-            let n = data_moved as usize;
+            let n = data_moved.cast_unsigned() as usize;
             right.raw_mut()[to..to + n].copy_from_slice(&left.raw_mut()[from..from + n]);
             // How far the text shifted, and so how much every index entry
             // that came with it has to shift.
             let offset = right.txt_start().wrapping_sub(left.txt_start());
-            left.set_txt_start(left.txt_start().wrapping_add(data_moved as c_uint));
-            left.set_free(left.free().wrapping_add(total_moved as c_uint));
+            left.set_txt_start(left.txt_start().wrapping_add(data_moved.cast_unsigned()));
+            left.set_free(left.free().wrapping_add(total_moved.cast_unsigned()));
 
-            let (from, to) = ((db_idx + 1) as usize, line_count_right as usize);
-            right.copy_index_from(&left, from, to, lines_moved as usize, offset);
+            let (from, to) = (
+                (db_idx + 1).cast_unsigned() as usize,
+                line_count_right.cast_unsigned() as usize,
+            );
+            right.copy_index_from(
+                &left,
+                from,
+                to,
+                lines_moved.cast_unsigned() as usize,
+                offset,
+            );
             line_count_right += lines_moved;
             line_count_left -= lines_moved;
         }
 
         // The new line may go into the left (old or new) block.
         if in_left {
-            add_new_line(&mut left, line_count_left as usize, new);
+            add_new_line(&mut left, line_count_left.cast_unsigned() as usize, new);
             line_count_left += 1;
         }
 
@@ -448,9 +472,9 @@ fn ml_split_data_block(
 /// Returns false if a block could not be read, in which case `ml_append_int`
 /// fails.
 fn ml_insert_pointer(mut buffer: Buf, split: &mut SplitBlocks) -> bool {
-    let mut stack_idx = buffer.b_ml.stack_len() as c_int - 1;
+    let mut stack_idx = len_as_int(buffer.b_ml.stack_len()) - 1;
     while stack_idx >= 0 {
-        let ip = buffer.b_ml.stack_at(stack_idx as usize);
+        let ip = buffer.b_ml.stack_at(stack_idx.cast_unsigned() as usize);
         let pb_idx = ip.ip_index;
         let Some(mut id) = buffer.b_ml.memfile().get(ip.ip_bnum, 1) else {
             return false;
@@ -463,7 +487,13 @@ fn ml_insert_pointer(mut buffer: Buf, split: &mut SplitBlocks) -> bool {
         }
 
         if pointers.count() < pointers.count_max() {
-            ml_pointer_add_entry(buffer, id, pb_idx as usize, split, stack_idx as usize);
+            ml_pointer_add_entry(
+                buffer,
+                id,
+                pb_idx.cast_unsigned() as usize,
+                split,
+                stack_idx.cast_unsigned() as usize,
+            );
             return true;
         }
 
@@ -473,15 +503,16 @@ fn ml_insert_pointer(mut buffer: Buf, split: &mut SplitBlocks) -> bool {
 
         // Move the entries after the current one into the new block; if
         // there are none, the new entry itself goes there.
-        let pb_idx = pb_idx as usize;
+        let pb_idx = pb_idx.cast_unsigned() as usize;
         let memfile = buffer.b_ml.memfile();
         let (page, page_new) = memfile.pages_mut(id, new_id);
         let (mut pointers, mut new_pointers) = (PointerBlock(page), PointerBlock(page_new));
         let total_moved = usize::from(pointers.count()) - pb_idx - 1;
         if total_moved != 0 {
             new_pointers.write_entries(0, pointers.entry_bytes(pb_idx + 1, total_moved));
-            new_pointers.set_count(total_moved as u16);
-            pointers.set_count(pointers.count() - (total_moved as u16 - 1));
+            let moved = u16::try_from(total_moved).expect("entries of one block");
+            new_pointers.set_count(moved);
+            pointers.set_count(pointers.count() - (moved - 1));
             let (bnum, lines, pages) = (
                 split.bnum_right,
                 split.line_count_right,
@@ -577,7 +608,7 @@ fn ml_pointer_add_entry(
 /// loop comes back to block 1 afterwards.
 fn ml_split_pointer_block(mut buffer: Buf, id: &mut BlockId, stack_idx: &mut c_int) -> BlockId {
     // Where `*id`'s own stack entry is; `stack_idx` moves below.
-    let ip = *stack_idx as usize;
+    let ip = (*stack_idx).cast_unsigned() as usize;
     loop {
         let new_id = ml_new_ptr(buffer.b_ml.memfile());
         let memfile = buffer.b_ml.memfile();
@@ -639,8 +670,8 @@ pub(crate) fn ml_delete_int(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Resu
 
     // Number of index entries in the block before the delete. The +2 (not
     // +1) is because ML_DELETE already took one off the block's `high`.
-    let count = (buffer.b_ml.locked_high() - buffer.b_ml.locked_low() + 2) as usize;
-    let idx = (lnum - buffer.b_ml.locked_low()) as usize;
+    let count = (buffer.b_ml.locked_high() - buffer.b_ml.locked_low() + 2).cast_unsigned() as usize;
+    let idx = (lnum - buffer.b_ml.locked_low()).cast_unsigned() as usize;
 
     if buffer.b_prev_line_count == 0 {
         buffer.b_prev_line_count = buffer.b_ml.ml_line_count.get();
@@ -651,14 +682,14 @@ pub(crate) fn ml_delete_int(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Resu
     let line_start = data.line_start(idx);
     // The text runs to where the line before it in the block starts, or
     // to the end of the block for its first line.
-    let line_size = data.line_end(idx).wrapping_sub(line_start) as c_int;
+    let line_size = data.line_end(idx).wrapping_sub(line_start).cast_signed();
 
     // A line always holds its terminating NL internally, as a NUL, even
     // with 'noeol'.
     debug_assert!(line_size >= 1);
     let text = data.text(
         line_start as usize,
-        (line_start as usize + line_size as usize) - 1,
+        (line_start as usize + line_size.cast_unsigned() as usize) - 1,
     );
     ml_add_deleted_len_buf(buffer, text, text.len());
 
@@ -675,7 +706,7 @@ pub(crate) fn ml_delete_int(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Resu
         let mut data = DataBlock(buffer.b_ml.page_mut(id));
         let mut header = data.header();
         let text_start = header.txt_start;
-        let size = line_size as c_uint;
+        let size = line_size.cast_unsigned();
         data.move_bytes(
             text_start as usize,
             (text_start + size) as usize,
@@ -683,7 +714,7 @@ pub(crate) fn ml_delete_int(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Resu
         );
         data.move_index(idx + 1, idx, count - 1 - idx, size);
 
-        header.free = header.free.wrapping_add(size + INDEX_SIZE as c_uint);
+        header.free = header.free.wrapping_add(size + INDEX_BYTES);
         header.txt_start = text_start.wrapping_add(size);
         header.line_count -= 1;
         data.set_header(&header);
@@ -716,7 +747,7 @@ fn ml_free_data_block(mut buffer: Buf, id: BlockId) -> bool {
     while stack_idx > 0 {
         stack_idx -= 1;
         let ip = buffer.b_ml.stack_at(stack_idx);
-        let idx = ip.ip_index as usize;
+        let idx = ip.ip_index.cast_unsigned() as usize;
         let Some(id) = buffer.b_ml.memfile().get(ip.ip_bnum, 1) else {
             buffer.b_ml.stack_clear();
             return false;

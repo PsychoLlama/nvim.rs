@@ -43,4 +43,20 @@ impl FileInfo {
     pub fn same_file_as(&self, other: &FileInfo) -> bool {
         self.id() == other.id()
     }
+
+    /// The mode, as the `int` upstream keeps it: the type and permission
+    /// bits are all in the low sixteen, which is all a mode holds.
+    pub fn mode(&self) -> ::core::ffi::c_int {
+        ::core::ffi::c_int::from(u16::try_from(self.stat.st_mode & 0xffff).unwrap_or_default())
+    }
+
+    /// The owner, as the system's id type holds it.
+    pub fn uid(&self) -> Option<uv_uid_t> {
+        uv_uid_t::try_from(self.stat.st_uid).ok()
+    }
+
+    /// The group, as the system's id type holds it.
+    pub fn gid(&self) -> Option<uv_gid_t> {
+        uv_gid_t::try_from(self.stat.st_gid).ok()
+    }
 }

@@ -11,6 +11,13 @@
 //! the ATTENTION message.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::autocmd::fire_autocmds_for;
 use crate::buffer::BufFlags;
@@ -32,7 +39,7 @@ use ::libc::{EINVAL, ENOENT};
 use core::ffi::{CStr, c_int, c_uint};
 
 use super::*;
-use crate::types::{CmdModFlags, Failed, IOSIZE, MAXPATHL, NUL, ShmFlag, Vv};
+use crate::types::{CmdModFlags, Failed, IOSIZE, MAXPATHL, ShmFlag, Vv};
 
 /// One entry of `'directory'` after another: the entry, and whether it is
 /// the last.
@@ -143,8 +150,9 @@ pub(crate) fn percent_swname(dir: &[u8], name: Option<&CStr>) -> XString {
 /// `resolve()` in Vimscript does this for every part of the path; this does
 /// not. `None` when the caller should keep the name it already has: not a
 /// link, a link that could not be read, or a resolved name that could not be
-/// made full.
-pub fn resolve_symlink(fname: &CStr) -> Option<Vec<u8>> {
+/// made full. A loop of links is an error, which the caller reports and
+/// then keeps its name too.
+pub(crate) fn resolve_symlink(fname: &CStr) -> Result<Option<Vec<u8>>, MemlineError> {
     use std::os::unix::ffi::{OsStrExt, OsStringExt};
 
     // The result so far, starting with the original name.
@@ -157,8 +165,7 @@ pub fn resolve_symlink(fname: &CStr) -> Option<Vec<u8>> {
         // other.
         depth += 1;
         if depth == 100 {
-            semsg!("E773: Symlink loop for \"{}\"", msg_cstr(fname));
-            return None;
+            return Err(MemlineError::SymlinkLoop(ThinCString::from_cstr(fname)));
         }
 
         let path = std::path::Path::new(std::ffi::OsStr::from_bytes(&tmp));
@@ -168,14 +175,14 @@ pub fn resolve_symlink(fname: &CStr) -> Option<Vec<u8>> {
                 let errno = err.raw_os_error().unwrap_or(0);
                 if errno != EINVAL && errno != ENOENT {
                     // Some other error reading the link: keep the original.
-                    return None;
+                    return Ok(None);
                 }
                 // Not a symlink, or it does not exist, so `tmp` is as
                 // resolved as it gets. At the first level that means
                 // nothing was resolved at all, and the caller keeps its
                 // own name.
                 if depth == 1 {
-                    return None;
+                    return Ok(None);
                 }
                 break;
             }
@@ -184,7 +191,7 @@ pub fn resolve_symlink(fname: &CStr) -> Option<Vec<u8>> {
         let target = &target[..target.len().min(room - 1)];
         if target.is_empty() {
             if depth == 1 {
-                return None;
+                return Ok(None);
             }
             break;
         }
@@ -197,7 +204,7 @@ pub fn resolve_symlink(fname: &CStr) -> Option<Vec<u8>> {
         } else {
             let tail = tail_index(&tmp);
             if tmp.len() - tail + target.len() >= room {
-                return None;
+                return Ok(None);
             }
             tmp.truncate(tail);
             tmp.extend_from_slice(target);
@@ -206,7 +213,16 @@ pub fn resolve_symlink(fname: &CStr) -> Option<Vec<u8>> {
 
     // Resolve the full name too, so that opening the same relative
     // symlink from two working directories still picks one swap file.
-    vim_full_name(&cstr::owned(&tmp), room, true).ok()
+    Ok(vim_full_name(&cstr::owned(&tmp), room, true).ok())
+}
+
+/// [`resolve_symlink`] for a swap file's name: a loop is said, and the
+/// name stays as given -- the swap file then goes with the link.
+fn resolved_or_reported(fname: &CStr) -> Option<Vec<u8>> {
+    resolve_symlink(fname).unwrap_or_else(|err| {
+        err.report();
+        None
+    })
 }
 
 /// Whether a `'directory'` entry ends in *two* path separators, which is
@@ -225,7 +241,7 @@ pub(crate) fn makeswapname(fname: Option<&CStr>, dir_name: &[u8]) -> Option<XStr
     // Expand a symlink, so that the swap file goes with the actual file
     // rather than with the link.
     let resolved = fname
-        .and_then(resolve_symlink)
+        .and_then(resolved_or_reported)
         .map(|name| cstr::owned(&name));
     let fname_res = resolved.as_deref().or(fname);
 
@@ -450,16 +466,13 @@ fn ask_about_swapfile(buffer: Buf, fname: &CStr) -> SwapExistsChoice {
         let but = gettext(c"&Open Read-Only\n&Edit anyway\n&Recover\n&Delete it\n&Quit\n&Abort");
         let running = proc_running.get() != 0;
         let buttons = if running { run_but } else { but };
-        let (title, warn) = (gettext(c"VIM - ATTENTION"), VIM_WARNING as c_int);
+        let (title, warn) = (gettext(c"VIM - ATTENTION"), VIM_WARNING.cast_signed());
         // `do_dialog` reads the message as a C string, which ends at the
         // first NUL, as the `vsnprintf` behind `kv_printf` left it.
-        let end = msg
-            .iter()
-            .position(|&byte| byte == NUL as u8)
-            .unwrap_or(msg.len());
+        let end = msg.iter().position(|&byte| byte == 0).unwrap_or(msg.len());
         let text = XString::from_bytes(&msg[..end]);
         let text = text.as_cstr();
-        choice = do_dialog(warn, Some(title), text, buttons, 1, None, false) as SwapExistsChoice;
+        choice = do_dialog(warn, Some(title), text, buttons, 1, None, false).cast_unsigned();
         // Compensate for the missing "Delete it" button.
         choice = choice.wrapping_add(SwapExistsChoice::from(running && choice >= 4));
         // Pretend the screen did not scroll; it needs a redraw anyway.
@@ -618,7 +631,7 @@ pub fn recover_names(
     // Expand a symlink, because the swap file was created against the
     // actual file rather than the link.
     let resolved = fname
-        .and_then(resolve_symlink)
+        .and_then(resolved_or_reported)
         .map(|name| cstr::owned(&name));
     let fname_res: Option<&CStr> = resolved.as_deref().or(fname);
 
@@ -708,7 +721,7 @@ pub fn recover_names(
         if nr > 0 {
             file_count += num_files;
             if nr <= file_count {
-                let at = (nr - 1 + num_files - file_count) as usize;
+                let at = (nr - 1 + num_files - file_count).cast_unsigned() as usize;
                 wanted = Some(found.swap_remove(at));
                 break; // stop searching
             }

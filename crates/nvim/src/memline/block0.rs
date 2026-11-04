@@ -13,6 +13,13 @@
 //! in block zero takes.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use crate::env::{expand_env_within, home_to_tilde};
@@ -28,7 +35,7 @@ use crate::os::env::hostname_into;
 use crate::os::fs::file_info;
 use crate::os::time::{ctime_text, uptime};
 use crate::os::users::{uname_within, username_named_within};
-use crate::types::{MAXPATHL, NUL};
+use crate::types::MAXPATHL;
 
 /// Why a swap file yielded no block zero.
 pub(crate) enum NoBlock {
@@ -132,7 +139,7 @@ pub(crate) fn set_b0_fname(mut buffer: Buf, id: BlockId) {
         let name = b0_name(&full);
         let info = file_info(&full);
         let (mtime, ino) = match &info {
-            Some(info) => (info.stat.st_mtim.tv_sec, info.stat.st_ino as c_long),
+            Some(info) => (info.stat.st_mtim.tv_sec, info.stat.st_ino.cast_signed()),
             None => (0, 0),
         };
         let mut b0 = ZeroBlock(buffer.b_ml.page_mut(id));
@@ -198,7 +205,7 @@ pub(crate) fn add_b0_fenc(b0: &mut ZeroBlock<&mut [u8]>, fenc: &[u8]) {
     if fits {
         let at = size - n;
         name[at..size].copy_from_slice(fenc);
-        name[at - 1] = NUL as u8;
+        name[at - 1] = 0;
     }
     b0.set_flag(B0_HAS_FENC, fits);
 }
@@ -213,11 +220,11 @@ pub(crate) fn swapfile_proc_running<P: AsRef<[u8]>>(b0: &ZeroBlock<P>, swap_fnam
     if let (Some(st), Some(uptime)) = (file_info(swap_fname), uptime())
         // Unsigned, and upstream lets it wrap: on a machine whose clock
         // predates its uptime the subtraction is meant to come out huge.
-        && (st.stat.st_mtim.tv_sec as Timestamp) < os_time().wrapping_sub(uptime as Timestamp)
+        && st.stat.st_mtim.tv_sec.cast_unsigned() < os_time().wrapping_sub(whole_seconds(uptime))
     {
         return 0;
     }
-    let pid = b0.pid() as c_int;
+    let pid = low32(b0.pid()).cast_signed();
     if os_proc_running(pid) { pid } else { 0 }
 }
 
@@ -242,9 +249,9 @@ pub fn swapfile_dict(fname: &CStr, d: &mut Dict) {
             let _ = d.add_str_len(b"host", Some(&b0.hname()[..]));
             let _ = d.add_str_len(b"fname", Some(&b0.fname()[..]));
             let pid = swapfile_proc_running(&b0, fname);
-            let _ = d.add_number(b"pid", pid as VarNumber);
+            let _ = d.add_number(b"pid", VarNumber::from(pid));
             let _ = d.add_number(b"mtime", b0.mtime() as VarNumber);
-            let _ = d.add_number(b"dirty", b0.dirty() as VarNumber);
+            let _ = d.add_number(b"dirty", VarNumber::from(b0.dirty()));
             let _ = d.add_number(b"inode", b0.ino() as VarNumber);
         }
     }
@@ -258,7 +265,9 @@ pub(crate) fn swapfile_info(fname: &CStr, msg: &mut Vec<u8>) -> time_t {
 
     // The swap file's date, and on unix the name of whoever owns it.
     if let Some(info) = file_info(fname) {
-        if let Ok(owner) = uname_within(info.stat.st_uid as uv_uid_t, B0_UNAME_SIZE as usize) {
+        if let Some(uid) = info.uid()
+            && let Ok(owner) = uname_within(uid, B0_UNAME_SIZE as usize)
+        {
             push_tr(msg, c"          owned by: ");
             msg.extend_from_slice(&owner);
             push_tr(msg, c"   dated: ");
@@ -314,7 +323,8 @@ pub(crate) fn swapfile_info(fname: &CStr, msg: &mut Vec<u8>) -> time_t {
             if b0.pid() != 0 {
                 push_tr(msg, c"\n        process ID: ");
                 // `%d`, so the same 32-bit truncation upstream printed.
-                msg.extend_from_slice((b0.pid() as c_int).to_string().as_bytes());
+                let pid = low32(b0.pid()).cast_signed();
+                msg.extend_from_slice(pid.to_string().as_bytes());
                 // Read back by `findswapname` to decide whether this
                 // is a crash to recover from or a live second editor.
                 proc_running.set(swapfile_proc_running(&b0, fname));
@@ -418,11 +428,23 @@ pub(crate) fn swapfile_is_for_other_file(buffer: Buf, fname: &CStr) -> bool {
 /// Whether the four magic numbers say this swap file was written by a
 /// different build: they are one value per width, so a change of
 /// endianness or of a type's size shows up as a mismatch.
+/// The whole seconds of an uptime, as C's conversion to an integer type
+/// cuts them; a negative or unreadable one is no time at all.
+fn whole_seconds(uptime: f64) -> Timestamp {
+    std::time::Duration::try_from_secs_f64(uptime).map_or(0, |d| d.as_secs())
+}
+
+/// [`B0_MAGIC_SHORT`] as block zero holds it: the low sixteen bits.
+const B0_MAGIC_SHORT_STORED: i16 = {
+    let [low, high, ..] = B0_MAGIC_SHORT.to_le_bytes();
+    i16::from_le_bytes([low, high])
+};
+
 pub(crate) fn b0_magic_wrong<P: AsRef<[u8]>>(b0: &ZeroBlock<P>) -> bool {
     b0.magic_long() != c_long::from(B0_MAGIC_LONG)
-        || b0.magic_int() != B0_MAGIC_INT as c_int
+        || b0.magic_int() != B0_MAGIC_INT.cast_signed()
         // Truncated to 16 bits on the way in, so compare it truncated.
-        || b0.magic_short() != B0_MAGIC_SHORT as i16
+        || b0.magic_short() != B0_MAGIC_SHORT_STORED
         || b0.magic_char() != B0_MAGIC_CHAR
 }
 
@@ -445,7 +467,7 @@ pub(crate) fn files_differ(
 ) -> bool {
     let inode = |name: Option<&CStr>| name.and_then(file_info).map(|info| info.stat.st_ino);
     let ino_c: uint64_t = inode(fname_c).unwrap_or(0);
-    let ino_s: uint64_t = inode(fname_s).unwrap_or(ino_block0 as uint64_t);
+    let ino_s: uint64_t = inode(fname_s).unwrap_or(ino_block0.cast_unsigned());
     if ino_c != 0 && ino_s != 0 {
         return ino_c != ino_s;
     }
@@ -488,7 +510,8 @@ pub fn ml_setflags(mut buffer: Buf) {
     };
 
     let changed = buffer.b_changed != 0;
-    let fileformat = c_int::from((get_fileformat(buffer) + 1) as uint8_t);
+    // 'fileformat' + 1: zero to three.
+    let fileformat = get_fileformat(buffer) + 1;
     let fenc = buffer.b_p_fenc.bytes().to_vec();
     let mut b0 = ZeroBlock(buffer.b_ml.page_mut(id));
     b0.set_dirty(changed);

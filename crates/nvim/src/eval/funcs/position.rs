@@ -52,7 +52,8 @@ pub fn f_byte2line(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(if boff < 0 {
         -1
     } else {
-        ml_find_line_or_offset(Buf::current(), LineNr::ZERO, Some(&mut boff), false) as VarNumber
+        ml_find_line_or_offset(Buf::current(), LineNr::ZERO, Some(&mut boff), false)
+            .map_or(-1, VarNumber::from)
     });
 }
 
@@ -63,7 +64,7 @@ pub fn f_line2byte(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let offset = if lnum < LineNr::ONE || lnum > Buf::current().b_ml.ml_line_count + 1 {
         -1
     } else {
-        ml_find_line_or_offset(Buf::current(), lnum, None, false) as VarNumber
+        ml_find_line_or_offset(Buf::current(), lnum, None, false).map_or(-1, VarNumber::from)
     };
     result.write_number(offset);
     // The offset is zero-based inside memline and one-based here; -1

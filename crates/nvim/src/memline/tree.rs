@@ -12,12 +12,20 @@
 //! nothing holds one across a `get`, a `new_block` or a split.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
 use crate::memfile::BlockId;
 use crate::message_fmt::msg_cstr;
+use crate::narrow::len_as_int;
 use crate::siemsg;
 use crate::statusline::trans_bufname;
 use crate::types::MemLine;
@@ -98,7 +106,7 @@ pub(crate) fn fetch_line(mut buffer: Buf, lnum: LineNr, will_change: bool) {
             if buffer.b_ml.cached_lnum() != LineNr::ZERO {
                 buffer.b_ml.clear_cache();
             }
-            let idx = (lnum - buffer.b_ml.locked_low()) as usize;
+            let idx = (lnum - buffer.b_ml.locked_low()).cast_unsigned() as usize;
             buffer.b_ml.cache_block_line(id, idx, lnum);
             if will_change {
                 buffer.b_ml.locked_has_moved();
@@ -116,7 +124,7 @@ pub(crate) fn fetch_line(mut buffer: Buf, lnum: LineNr, will_change: bool) {
             line_not_found(buffer, lnum);
             return;
         };
-        let idx = (lnum - buffer.b_ml.locked_low()) as usize;
+        let idx = (lnum - buffer.b_ml.locked_low()).cast_unsigned() as usize;
         buffer.b_ml.cache_block_line(id, idx, lnum);
     }
 
@@ -198,18 +206,18 @@ fn ml_write_line(buffer: Buf, lnum: LineNr, new_line: &[u8]) {
 /// The body of [`ml_flush_line`] once the block is found: overwrite line
 /// `lnum` in block `id` with `new_line`, in place if the new text fits.
 fn ml_store_line(mut buffer: Buf, id: BlockId, lnum: LineNr, new_line: &[u8]) {
-    let idx = (lnum - buffer.b_ml.locked_low()) as usize;
-    let count = (buffer.b_ml.locked_high() - buffer.b_ml.locked_low() + 1) as usize;
+    let idx = (lnum - buffer.b_ml.locked_low()).cast_unsigned() as usize;
+    let count = (buffer.b_ml.locked_high() - buffer.b_ml.locked_low() + 1).cast_unsigned() as usize;
     let data = DataBlock(buffer.b_ml.page(id));
     let start = data.line_start(idx);
     // The text of the previous line follows it, or the block ends.
-    let old_len = data.line_end(idx) as c_int - start as c_int;
+    let old_len = data.line_end(idx).cast_signed() - start.cast_signed();
     let (free, txt_start, marked) = (data.free(), data.txt_start(), data.is_marked(idx));
     let new_len = c_int::try_from(new_line.len()).expect("a line shorter than INT_MAX");
     // Negative if the line got smaller.
     let extra = new_len - old_len;
 
-    if (free as c_int) < extra {
+    if free.cast_signed() < extra {
         // It does not fit: delete and append instead. Append first,
         // because ml_delete_int cannot delete the last line of a
         // buffer, which is trouble for a buffer that has only one. The
@@ -220,20 +228,20 @@ fn ml_store_line(mut buffer: Buf, id: BlockId, lnum: LineNr, new_line: &[u8]) {
         return;
     }
 
-    let shift = extra as c_uint;
+    let shift = extra.cast_unsigned();
     let mut data = DataBlock(buffer.b_ml.page_mut(id));
     if extra != 0 && idx + 1 < count {
         // Move the text of the lines that follow, and adjust their
         // offsets. (Lines are stored back to front, so "following"
         // lines sit at *lower* offsets.)
-        let to = (txt_start as isize - extra as isize) as usize;
+        let to = txt_start.wrapping_sub(shift) as usize;
         data.move_bytes(txt_start as usize, to, (start - txt_start) as usize);
         data.shift_index(idx + 1, count, shift.wrapping_neg());
     }
     data.set_index(idx, data.index(idx).wrapping_sub(shift));
     data.set_free(free.wrapping_sub(shift));
     data.set_txt_start(txt_start.wrapping_sub(shift));
-    data.write((start as isize - extra as isize) as usize, new_line);
+    data.write(start.wrapping_sub(shift) as usize, new_line);
 
     buffer.b_ml.locked_has_moved();
     // The `extra == 0` case is already covered by the insert and delete.
@@ -248,7 +256,10 @@ fn ml_store_line(mut buffer: Buf, id: BlockId, lnum: LineNr, new_line: &[u8]) {
 /// as-yet-unwritten block gets.
 pub(crate) fn ml_new_data(memfile: &mut MemFile, negative: bool, page_count: int64_t) -> BlockId {
     debug_assert!(page_count >= 0);
-    let id = memfile.new_block(negative, page_count as c_uint);
+    let id = memfile.new_block(
+        negative,
+        c_uint::try_from(page_count).expect("a block's pages"),
+    );
     DataBlock(memfile.page_mut(id)).init();
     id
 }
@@ -341,7 +352,7 @@ pub(crate) fn ml_find_line(mut buffer: Buf, lnum: LineNr, action: c_int) -> Opti
     }
 
     // Search downwards until a data block is found.
-    while let Some(id) = buffer.b_ml.memfile().get(bnum, page_count as c_uint) {
+    while let Some(id) = buffer.b_ml.memfile().get(bnum, page_count.cast_unsigned()) {
         if action == ML_INSERT {
             high += 1;
         } else if action == ML_DELETE {
@@ -396,7 +407,7 @@ pub(crate) fn ml_find_line(mut buffer: Buf, lnum: LineNr, action: c_int) -> Opti
         }
 
         let entry = pointers.entry(idx);
-        buffer.b_ml.stack_set_index(top, idx as c_int);
+        buffer.b_ml.stack_set_index(top, len_as_int(idx));
         bnum = entry.pe_bnum;
         page_count = entry.pe_page_count;
         high = low - 1;
@@ -475,7 +486,7 @@ pub(crate) fn ml_lineadd_depth(mut b: Buf, count: c_int, depth: usize) {
             iemsg(gettext(c"E317: Pointer block id wrong 2"));
             break;
         }
-        pointers.add_line_count(ip.ip_index as usize, count);
+        pointers.add_line_count(ip.ip_index.cast_unsigned() as usize, count);
         b.b_ml.stack_add_high(idx, count);
         b.b_ml.put(id, true);
     }

@@ -525,16 +525,17 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: StlOpt, pos: usize, text: &mut V
             if opt == StlOpt::OffsetX {
                 v.base = kNumBaseHexadecimal;
             }
-            let l = env.line_offset();
-            v.num = if env.buf.b_ml.ml_flags.has(MlFlags::EMPTY) || l < 0 {
-                0
-            } else {
-                l + 1
-                    + if !in_insert_mode() && env.empty_line {
-                        0
-                    } else {
-                        env.win.w_cursor.col.get()
-                    }
+            let offset = env.line_offset().filter(|&l| l >= 0);
+            v.num = match offset {
+                Some(l) if !env.buf.b_ml.ml_flags.has(MlFlags::EMPTY) => {
+                    l + 1
+                        + if !in_insert_mode() && env.empty_line {
+                            0
+                        } else {
+                            env.win.w_cursor.col.get()
+                        }
+                }
+                _ => 0,
             };
         }
         StlOpt::ByteVal | StlOpt::ByteValX => {

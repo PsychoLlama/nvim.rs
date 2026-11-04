@@ -138,7 +138,7 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
                 } else {
                     inc_cursor()
                 };
-                if stepped < 0 {
+                if stepped.is_stuck() {
                     // Hit the end of the buffer with nothing found.
                     if pos.is_none() {
                         clear_op_beep(cmd_arg.op());

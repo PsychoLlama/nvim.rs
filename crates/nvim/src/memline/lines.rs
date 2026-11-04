@@ -36,6 +36,13 @@
 //! [`Lines::line_copy`].
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::cstr;
@@ -136,7 +143,7 @@ impl Lines {
         fetch_line(self.0, lnum, false);
         match self.0.b_ml.cached_bytes_mut().get_mut(at) {
             Some(slot) => core::mem::replace(slot, byte),
-            None => NUL as u8,
+            None => 0,
         }
     }
 
@@ -177,7 +184,7 @@ impl Lines {
         let line = self.line(lnum);
         let mut bytes = Vec::with_capacity(line.len() + 1);
         bytes.extend_from_slice(line);
-        bytes.push(NUL as u8);
+        bytes.push(0);
         LineCopy(bytes)
     }
 }
@@ -483,7 +490,7 @@ pub fn ml_setmarked(lnum: LineNr) {
     let Some(id) = ml_find_line(buffer, lnum, ML_FIND) else {
         return;
     };
-    let idx = (lnum - buffer.b_ml.locked_low()) as usize;
+    let idx = (lnum - buffer.b_ml.locked_low()).cast_unsigned() as usize;
     DataBlock(buffer.b_ml.page_mut(id)).set_marked(idx, true);
     buffer.b_ml.locked_is_dirty();
 }
@@ -506,7 +513,7 @@ fn clear_marks(first: bool) -> LineNr {
         let mut data = DataBlock(buffer.b_ml.page_mut(id));
         let mut found = None;
         while lnum <= high {
-            let idx = (lnum - low) as usize;
+            let idx = (lnum - low).cast_unsigned() as usize;
             if data.is_marked(idx) {
                 data.set_marked(idx, false);
                 found = Some(lnum);
@@ -561,11 +568,38 @@ pub fn ml_flush_deleted_bytes(mut buffer: Buf) -> (size_t, size_t, size_t) {
     taken
 }
 
+/// Where a one-character step ([`inc`], [`dec`] and their cursor forms) left
+/// a position. Upstream answered `0`, `1`, `2` and `-1`.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub(crate) enum Moved {
+    /// Onto another character of the same line.
+    InLine,
+    /// Onto the next line, or the previous one.
+    NewLine,
+    /// Onto the NUL past the end of the line (forward only).
+    OntoNul,
+    /// Nowhere: the position was already at the end of the buffer, or
+    /// its start.
+    Stuck,
+}
+
+impl Moved {
+    /// Whether the step went nowhere.
+    #[inline]
+    pub(crate) fn is_stuck(self) -> bool {
+        self == Moved::Stuck
+    }
+
+    /// Whether the step left the character's line, or got to its end:
+    /// upstream's `>= 1`.
+    #[inline]
+    pub(crate) fn left_the_line(self) -> bool {
+        matches!(self, Moved::NewLine | Moved::OntoNul)
+    }
+}
+
 /// Advance `pos` by one character, crossing line boundaries as needed.
-///
-/// Returns 1 when it moved to the next line, 2 when it moved onto the NUL at
-/// the end of a line, -1 at the end of the file, and 0 otherwise.
-pub fn inc(pos: &mut Pos) -> c_int {
+pub(crate) fn inc(pos: &mut Pos) -> Moved {
     // While searching, the position may be set to the end of a line.
     if pos.col != ColNr::MAX {
         let mut lines = Lines::current();
@@ -576,7 +610,11 @@ pub fn inc(pos: &mut Pos) -> c_int {
             // the one past the end.
             let l = cluster_len(&line[at..]);
             pos.col += ColNr::try_from(l).unwrap_or(ColNr::ZERO).get();
-            return if at + l < line.len() { 0 } else { 2 };
+            return if at + l < line.len() {
+                Moved::InLine
+            } else {
+                Moved::OntoNul
+            };
         }
     }
     if pos.lnum != Buf::current().b_ml.ml_line_count {
@@ -584,25 +622,23 @@ pub fn inc(pos: &mut Pos) -> c_int {
         pos.col = ColNr::ZERO;
         pos.lnum += 1;
         pos.coladd = 0;
-        return 1;
+        return Moved::NewLine;
     }
-    -1
+    Moved::Stuck
 }
 
 /// [`inc`], but skipping the NUL at the end of a non-empty line.
-pub fn incl(pos: &mut Pos) -> c_int {
+pub(crate) fn incl(pos: &mut Pos) -> Moved {
     let mut r = inc(pos);
-    if r >= 1 && pos.col != ColNr::ZERO {
+    if r.left_the_line() && pos.col != ColNr::ZERO {
         r = inc(pos);
     }
     r
 }
 
 /// Move `pos` back by one character, crossing line boundaries as needed.
-///
-/// Returns 1 when it moved to the previous line, -1 at the start of the file,
-/// and 0 otherwise.
-pub fn dec(pos: &mut Pos) -> c_int {
+/// Never [`Moved::OntoNul`].
+pub(crate) fn dec(pos: &mut Pos) -> Moved {
     pos.coladd = 0;
     // Step `pos.col` back off a trail byte, and -- when `to_end` is set --
     // onto the last character of the line first. One read of the line does
@@ -621,27 +657,27 @@ pub fn dec(pos: &mut Pos) -> c_int {
     if pos.col == ColNr::MAX {
         // Past the end of the line.
         snap(pos, true);
-        return 0;
+        return Moved::InLine;
     }
     if pos.col > ColNr::ZERO {
         // Still within the line.
         pos.col -= 1;
         snap(pos, false);
-        return 0;
+        return Moved::InLine;
     }
     if pos.lnum > LineNr::ONE {
         // There is a previous line.
         pos.lnum -= 1;
         snap(pos, true);
-        return 1;
+        return Moved::NewLine;
     }
-    -1 // at the start of the file
+    Moved::Stuck // at the start of the file
 }
 
 /// [`dec`], but skipping the NUL at the end of a non-empty line.
-pub fn decl(pos: &mut Pos) -> c_int {
+pub(crate) fn decl(pos: &mut Pos) -> Moved {
     let mut r = dec(pos);
-    if r == 1 && pos.col != ColNr::ZERO {
+    if r == Moved::NewLine && pos.col != ColNr::ZERO {
         r = dec(pos);
     }
     r

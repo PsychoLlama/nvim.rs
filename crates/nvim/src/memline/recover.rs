@@ -11,6 +11,13 @@
 //! *most* of the buffer back is the whole point.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::allocator::Owned;
 use crate::autocmd::fire_autocmds_for;
@@ -21,16 +28,16 @@ use crate::fileio::{Loaded, ReadFlags};
 use crate::guard::Suppress;
 use crate::memfile::{BlockId, MemFile};
 use crate::message_fmt::msg_cstr;
+use crate::narrow::len_as_int;
 use crate::os::fs::file_info;
-use crate::semsg;
 use crate::smsg;
 use crate::types::ApiString;
 use core::ffi::{CStr, c_int, c_long, c_uint};
 use std::ffi::CString;
 
 use super::*;
-use crate::highlight_group::HLF_E;
-use crate::types::{FAIL, Failed, MAXPATHL, OK, OptionSetFlags};
+use crate::memory::ThinCString;
+use crate::types::{Failed, MAXPATHL, OptionSetFlags};
 use crate::winlayer::{Buf, Win};
 
 /// Read the original file into `curbuf`, starting after line `from`.
@@ -85,7 +92,7 @@ pub fn ml_recover(checkext: bool) {
     // no memline at all.
     let mut serious_error = true;
 
-    'theend: {
+    let outcome: Result<(), MemlineError> = 'theend: {
         // A copy: the autocommands below may rename the buffer.
         let fname: CString = if Buf::current().name.is_unnamed() {
             CString::default()
@@ -98,10 +105,10 @@ pub fn ml_recover(checkext: bool) {
         let fname_used: CString = if directly {
             fname.clone()
         } else {
-            let Some(chosen) = choose_swapfile(&fname) else {
-                break 'theend;
-            };
-            chosen.as_cstr().to_owned()
+            match choose_swapfile(&fname) {
+                Ok(chosen) => chosen.as_cstr().to_owned(),
+                Err(err) => break 'theend Err(err),
+            }
         };
         // When called from main() the storage structure still needs
         // initialising.
@@ -121,13 +128,15 @@ pub fn ml_recover(checkext: bool) {
 
         // Open the memfile on the old swap file.
         let Some(memfile) = MemFile::open(fname_used.clone(), O_RDONLY) else {
-            semsg!("E306: Cannot open {}", shown(&fname_used));
-            break 'theend;
+            break 'theend Err(MemlineError::CannotOpen(ThinCString::from_cstr(
+                &fname_used,
+            )));
         };
         buf.b_ml.ml_mfp = Some(memfile);
 
-        let Some(recorded) = read_block_zero(buf, directly) else {
-            break 'theend;
+        let recorded = match read_block_zero(buf, directly) {
+            Ok(recorded) => recorded,
+            Err(err) => break 'theend Err(err),
         };
 
         // Given the swap file's name directly, the buffer takes its name
@@ -135,8 +144,8 @@ pub fn ml_recover(checkext: bool) {
         if directly {
             let name = cstr::owned(&recorded.fname);
             let path = expand_env_within(&name, MAXPATHL as usize);
-            if setfname(Buf::current(), Some(&cstr::owned(&path)), None, true).is_err() {
-                break 'theend;
+            if let Err(err) = setfname(Buf::current(), Some(&cstr::owned(&path)), None, true) {
+                break 'theend Err(err.into());
             }
         }
 
@@ -158,13 +167,14 @@ pub fn ml_recover(checkext: bool) {
         msg_ext_skip_flush.set(false);
 
         // Compare the dates of the swap file and the original.
-        let mtime = recorded.mtime as c_int;
+        // Block zero keeps the low 32 bits; so does this.
+        let mtime = low32(recorded.mtime).cast_signed();
         let original = Buf::current().name.full().and_then(file_info);
         if let Some(original) = original {
             let swap = file_info(&swap_name);
             let newer =
                 swap.is_some_and(|swap| original.stat.st_mtim.tv_sec > swap.stat.st_mtim.tv_sec);
-            if newer || original.stat.st_mtim.tv_sec != mtime as _ {
+            if newer || original.stat.st_mtim.tv_sec != mtime.into() {
                 complain(c"E308: Warning: Original file may have been changed");
             }
         }
@@ -180,7 +190,8 @@ pub fn ml_recover(checkext: bool) {
         // used — except as the "unchanged?" comparison below.
         let mut orig_file_status = Err(Failed);
         if Buf::current().name.full().is_some() {
-            orig_file_status = read_original(LineNr::ZERO, 0, MAXLNUM.get(), READ_NEW as c_int);
+            orig_file_status =
+                read_original(LineNr::ZERO, 0, MAXLNUM.get(), READ_NEW.cast_signed());
         }
 
         // What the swap file recorded wins over what the file suggests.
@@ -197,8 +208,9 @@ pub fn ml_recover(checkext: bool) {
         unchanged(Buf::current(), true, true);
 
         serious_error = false;
-        let Ok((lnum, error)) = recover_lines(buf) else {
-            break 'theend;
+        let (lnum, error) = match recover_lines(buf) {
+            Ok(found) => found,
+            Err(err) => break 'theend Err(err),
         };
 
         // Compare the recovered contents with the original file's.
@@ -244,6 +256,12 @@ pub fn ml_recover(checkext: bool) {
         recoverymode.set(false);
         report_recovery(error, &recorded, &fname_used);
         redraw_curbuf_later(UPD_NOT_VALID);
+        Ok(())
+    };
+    // Said before anything is put back: the cleanup below fires
+    // autocommands.
+    if let Err(err) = outcome {
+        err.report();
     }
 
     msg_ext_skip_flush.set(false);
@@ -275,12 +293,12 @@ pub fn ml_recover(checkext: bool) {
 }
 
 /// Read and check block zero of the swap file `buf`'s memfile is open on,
-/// fixing the memfile's page size from it, and answer what it records.
-/// `None`, with the reason said, when the file cannot be recovered from.
+/// fixing the memfile's page size from it, and answer what it records, or
+/// why the file cannot be recovered from.
 ///
 /// `directly`: the user named the swap file itself, so its recorded file
 /// name is wanted.
-fn read_block_zero(mut recovery: Buf, directly: bool) -> Option<Recorded> {
+fn read_block_zero(mut recovery: Buf, directly: bool) -> Result<Recorded, MemlineError> {
     let swap_name = recovery.b_ml.memfile().fname().unwrap_or(c"").to_owned();
 
     // The page size `MemFile::open` picked need not be the one the swap
@@ -289,18 +307,11 @@ fn read_block_zero(mut recovery: Buf, directly: bool) -> Option<Recorded> {
     // file can have, and correct it below.
     recovery.b_ml.memfile().mf_page_size = MIN_SWAP_PAGE_SIZE;
 
-    let hl_id = HLF_E;
     msg_ext_set_kind(c"emsg");
     let Some(id) = recovery.b_ml.memfile().get(0, 1) else {
-        msg_start();
-        note(c"Unable to read block 0 from ", hl_id);
-        msg_display(&swap_name, hl_id, true);
-        note(
-            c"\nMaybe no changes were made or Nvim did not update the swap file.",
-            hl_id,
-        );
-        msg_end();
-        return None;
+        return Err(MemlineError::NoBlockZero(ThinCString::from_cstr(
+            &swap_name,
+        )));
     };
     let recorded = check_block_zero(recovery, id, &swap_name, directly);
     // Release block zero.
@@ -314,55 +325,32 @@ fn check_block_zero(
     id: BlockId,
     swap_name: &CStr,
     directly: bool,
-) -> Option<Recorded> {
-    let hl_id = HLF_E;
+) -> Result<Recorded, MemlineError> {
+    let swap = || ThinCString::from_cstr(swap_name);
     let b0 = ZeroBlock(recovery.b_ml.page(id));
     if b0.version().starts_with(b"VIM 3.0") {
-        msg_start();
-        msg_display(swap_name, 0, true);
-        note(c" cannot be used with this version of Nvim.\n", 0);
-        note(c"Use Vim version 3.0.\n", 0);
-        msg_end();
-        return None;
+        return Err(MemlineError::Vim3(swap()));
     }
     if !ml_check_b0_id(&b0) {
-        semsg!(
-            "E307: {} does not look like a Nvim swap file",
-            shown(swap_name)
-        );
-        return None;
+        return Err(MemlineError::NotSwapFile(swap()));
     }
     if b0_magic_wrong(&b0) {
         // Only the host name is wanted, and it is terminated inside its own
         // field so that printing it cannot run off the end of a corrupted
         // one.
-        let host = cstr::owned(cstr::until_nul(b0.hname()));
-        msg_start();
-        msg_display(swap_name, hl_id, true);
-        note(c" cannot be used on this computer.\n", hl_id);
-        note(c"The file was created on ", hl_id);
-        msg_str_hl(&host, hl_id, true);
-        note(c",\nor the file has been damaged.", hl_id);
-        msg_end();
-        return None;
+        let host = ThinCString::from_bytes(cstr::until_nul(b0.hname()));
+        return Err(MemlineError::OtherComputer(Box::new([swap(), host])));
     }
 
     // The guessed page size was wrong, so the highest block number
     // in the file has to be worked out again.
-    let recorded_page_size = b0.page_size() as c_uint;
+    let recorded_page_size = low32(b0.page_size());
     let memfile = recovery.b_ml.memfile();
     if memfile.mf_page_size != recorded_page_size {
         let previous_page_size = memfile.mf_page_size;
         memfile.set_page_size(recorded_page_size);
         if memfile.mf_page_size < previous_page_size {
-            msg_start();
-            msg_display(swap_name, hl_id, true);
-            note(
-                c" has been damaged (page size is smaller than minimum value).\n",
-                hl_id,
-            );
-            msg_end();
-            return None;
+            return Err(MemlineError::PageTooSmall(swap()));
         }
         let size = memfile.file_size();
         // Zero means no file, or an empty one.
@@ -386,7 +374,7 @@ fn check_block_zero(
         let from = field.iter().rposition(|&b| b == 0).map_or(0, |at| at + 1);
         field[from..].to_vec()
     });
-    Some(Recorded {
+    Ok(Recorded {
         fname: if directly {
             cstr::until_nul(b0.fname()).to_vec()
         } else {
@@ -414,12 +402,11 @@ fn looks_like_swapfile(fname: &[u8]) -> bool {
 /// Pick which of `fname`'s swap files to recover from: the only one there is,
 /// or the one the user names out of a listing.
 ///
-/// Returns the name, or `None` to give up.
-fn choose_swapfile(fname: &CStr) -> Option<XString> {
+/// Returns the name, or why there is none.
+fn choose_swapfile(fname: &CStr) -> Result<XString, MemlineError> {
     let (count, _) = recover_names(Some(fname), false, None, 0);
     if count == 0 {
-        semsg!("E305: No swap file found for {}", shown(fname));
-        return None;
+        return Err(MemlineError::NoSwapFile(ThinCString::from_cstr(fname)));
     }
     let nr = if count == 1 {
         1
@@ -431,11 +418,13 @@ fn choose_swapfile(fname: &CStr) -> Option<XString> {
         let question = gettext(c"Enter number of swap file to use (0 to quit): ");
         let nr = prompt_for_input(Some(question), 0, false, None);
         if nr < 1 || nr > count {
-            return None;
+            return Err(MemlineError::NoneChosen);
         }
         nr
     };
-    recover_names(Some(fname), false, None, nr).1
+    recover_names(Some(fname), false, None, nr)
+        .1
+        .ok_or(MemlineError::NoneChosen)
 }
 
 /// Walk the swap file's block tree and append every line it can find to
@@ -445,12 +434,12 @@ fn choose_swapfile(fname: &CStr) -> Option<XString> {
 /// whose `ml_stack` records the descent. Nothing in the file is trusted: a
 /// count or a block number that cannot be right costs a `???` line and the
 /// walk carries on. Returns the number of lines appended and the number of
-/// problems found, or `Err` when block 1 itself is unusable, which leaves
-/// nothing to recover.
+/// problems found, or why block 1 itself is unusable, which leaves nothing
+/// to recover.
 ///
 /// The block the walk is on is the recovery memline's locked block, so that
 /// the caller releases it whichever way the walk ends.
-fn recover_lines(mut buffer: Buf) -> Result<(LineNr, c_int), ()> {
+fn recover_lines(mut buffer: Buf) -> Result<(LineNr, c_int), MemlineError> {
     let mut bnum: BlockNr = 1; // start with block 1
     let mut page_count: c_uint = 1; // which is one page
     let mut lnum: LineNr = LineNr::ZERO; // append after line 0 in curbuf
@@ -483,8 +472,7 @@ fn recover_lines(mut buffer: Buf) -> Result<(LineNr, c_int), ()> {
             }
             if block.is_none() {
                 if bnum == 1 {
-                    semsg!("E309: Unable to read block 1 from {}", shown(&swap_name));
-                    return Err(());
+                    return Err(MemlineError::NoBlockOne(ThinCString::from_cstr(&swap_name)));
                 }
                 error += 1;
                 append_note(&mut lnum, c"???MANY LINES MISSING");
@@ -565,13 +553,13 @@ fn recover_lines(mut buffer: Buf) -> Result<(LineNr, c_int), ()> {
                         ip_bnum: bnum,
                         ip_low: LineNr::ZERO,
                         ip_high: LineNr::ZERO,
-                        ip_index: idx as c_int,
+                        ip_index: len_as_int(idx),
                     };
                     buffer.b_ml.stack_set(top, frame);
 
                     bnum = pe.pe_bnum;
                     line_count = LineNr::new(pe.pe_line_count);
-                    page_count = pe.pe_page_count as c_uint;
+                    page_count = pe.pe_page_count.cast_unsigned();
                     // `pe_page_count` sizes the allocation `get` makes, so a
                     // bogus value (0x40000000, say) would ask for gigabytes.
                     // It must be at least one page, and the block must lie
@@ -583,7 +571,7 @@ fn recover_lines(mut buffer: Buf) -> Result<(LineNr, c_int), ()> {
                         // Skip this entry and pop back up, to recover
                         // whatever else there is.
                         let ip = buffer.b_ml.stack_at(top);
-                        idx = ip.ip_index as usize + 1;
+                        idx = ip.ip_index.cast_unsigned() as usize + 1;
                         bnum = ip.ip_bnum;
                         page_count = 1;
                         buffer.b_ml.stack_pop();
@@ -596,11 +584,7 @@ fn recover_lines(mut buffer: Buf) -> Result<(LineNr, c_int), ()> {
                 && !DataBlock(buffer.b_ml.page(id)).is_data()
             {
                 if bnum == 1 {
-                    semsg!(
-                        "E310: Block 1 ID wrong ({} not a .swp file?)",
-                        shown(&swap_name)
-                    );
-                    return Err(());
+                    return Err(MemlineError::BlockOneId(ThinCString::from_cstr(&swap_name)));
                 }
                 error += 1;
                 append_note(&mut lnum, c"???BLOCK MISSING");
@@ -684,7 +668,7 @@ fn recover_lines(mut buffer: Buf) -> Result<(LineNr, c_int), ()> {
                 break 'walk; // finished
             };
             bnum = ip.ip_bnum;
-            idx = ip.ip_index as usize + 1;
+            idx = ip.ip_index.cast_unsigned() as usize + 1;
             page_count = 1;
         }
         line_breakcheck();
@@ -736,7 +720,8 @@ fn report_recovery(error: c_int, recorded: &Recorded, fname_used: &CStr) {
         // There may be a live Nvim on the same file; the user may want to
         // go and kill it.
         say(c"\nNote: process STILL RUNNING: ");
-        msg_outnum(recorded.pid as c_int);
+        // `%d`: the 32-bit truncation upstream printed.
+        msg_outnum(low32(recorded.pid).cast_signed());
     }
     if !ui_has(kUIMessages) {
         msg_str(c"\n\n");
@@ -803,17 +788,26 @@ pub fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) {
 ///
 /// This is `:preserve`, and what happens when the original file has been
 /// changed or deleted. `message` reports whether it worked.
-pub fn ml_preserve(mut buffer: Buf, message: bool, do_fsync: bool) {
+pub fn ml_preserve(buffer: Buf, message: bool, do_fsync: bool) {
+    let preserved = preserve(buffer, do_fsync);
+    if !message {
+        return;
+    }
+    match preserved {
+        Ok(()) => tell(c"File preserved", 0),
+        Err(err) => err.report(),
+    }
+}
+
+/// [`ml_preserve`]'s work, answering why it did not take.
+fn preserve(mut buffer: Buf, do_fsync: bool) -> Result<(), MemlineError> {
     if buffer
         .b_ml
         .ml_mfp
         .as_ref()
         .is_none_or(|memfile| memfile.fname().is_none())
     {
-        if message {
-            complain(c"E313: Cannot preserve, there is no swap file");
-        }
-        return;
+        return Err(MemlineError::NothingToPreserve);
     }
 
     // Only an interrupt from here on counts, not one from before.
@@ -823,9 +817,11 @@ pub fn ml_preserve(mut buffer: Buf, message: bool, do_fsync: bool) {
     ml_flush_line(buffer); // flush the buffered line
     let _ = ml_find_line(buffer, LineNr::ZERO, ML_FLUSH); // flush the locked block
     let sync_flags = MFS_ALL | if do_fsync { MFS_FLUSH } else { 0 };
-    // `ml_preserve` still answers OK/FAIL to its own callers, so the
-    // memfile's result is converted here and again below.
-    let mut status = buffer.b_ml.memfile().sync(sync_flags).map_or(FAIL, |()| OK);
+    let mut status = buffer
+        .b_ml
+        .memfile()
+        .sync(sync_flags)
+        .map_err(|_| MemlineError::PreserveFailed);
     buffer.b_ml.stack_clear(); // the stack is invalid after MFS_ALL
 
     // Some data blocks may have gone from a negative to a positive block
@@ -840,7 +836,7 @@ pub fn ml_preserve(mut buffer: Buf, message: bool, do_fsync: bool) {
             let mut lnum: LineNr = LineNr::ONE;
             while buffer.b_ml.memfile().need_trans() && lnum <= buffer.b_ml.ml_line_count {
                 if ml_find_line(buffer, lnum, ML_FIND).is_none() {
-                    status = FAIL;
+                    status = Err(MemlineError::PreserveFailed);
                     break 'theend;
                 }
                 lnum = buffer.b_ml.locked_high() + 1;
@@ -848,18 +844,11 @@ pub fn ml_preserve(mut buffer: Buf, message: bool, do_fsync: bool) {
             let _ = ml_find_line(buffer, LineNr::ZERO, ML_FLUSH); // flush the locked block
             // Sync the pointer blocks that were just updated.
             if buffer.b_ml.memfile().sync(sync_flags).is_err() {
-                status = FAIL;
+                status = Err(MemlineError::PreserveFailed);
             }
             buffer.b_ml.stack_clear(); // the stack is invalid now
         }
     }
     got_int.set(got_int.get() | got_int_save);
-
-    if message {
-        if status == OK {
-            tell(c"File preserved", 0);
-        } else {
-            complain(c"E314: Preserve failed");
-        }
-    }
+    status
 }

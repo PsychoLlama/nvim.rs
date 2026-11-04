@@ -156,7 +156,7 @@ pub(crate) fn process_next_cpt_value(
             st.first_match_pos = start_match_pos;
             // Move the cursor back one character so that CTRL-N can match
             // the word immediately after the cursor.
-            if ctrl_x_mode_normal() && !fuzzy_collect && dec(&mut st.first_match_pos) < 0 {
+            if ctrl_x_mode_normal() && !fuzzy_collect && dec(&mut st.first_match_pos).is_stuck() {
                 // Move to after the last character in the buffer, so that
                 // a word at the start of it is found correctly.
                 let lnum = Buf::current().line_count();
