@@ -21,6 +21,13 @@
 //! Original: `src/nvim/usercmd.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::Scope;
 use crate::ascii::ascii_iswhite;
@@ -189,7 +196,7 @@ fn add_cmd_modifier(out: &mut Vec<u8>, name: &[u8], multi_mods: &mut bool) {
 /// The window-placement modifiers of `cmod`, in the order upstream emits
 /// them, one word each.
 pub(crate) fn win_cmd_modifier_words(cmod: &CmdMod) -> Vec<CString> {
-    let split = |flag: u32| cmod.cmod_split & flag as c_int != 0;
+    let split = |flag: u32| cmod.cmod_split.cast_unsigned() & flag != 0;
     let mut words: Vec<CString> = Vec::new();
     let mut add = |name: &CStr, present: bool| {
         if present {

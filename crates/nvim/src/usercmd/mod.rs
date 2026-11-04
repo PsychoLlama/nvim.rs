@@ -32,6 +32,13 @@
 //! Original: `src/nvim/usercmd.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 mod attr;
 mod complete;
@@ -40,7 +47,7 @@ mod list;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use attr::{parse_addr_type_arg, parse_compl_arg};
+pub(crate) use attr::{AttrError, parse_addr_type_arg, parse_compl_arg};
 pub(crate) use complete::{
     cmdcomplete_str_to_type, cmdcomplete_type_to_str, get_user_cmd_addr_type,
     get_user_cmd_complete, get_user_cmd_flags, get_user_cmd_nargs, get_user_commands,
@@ -57,19 +64,15 @@ use crate::ex_docmd::ends_excmd;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::replace_termcodes;
 use crate::lua::executor::nlua_set_sctx;
-use crate::memory::XString;
-use crate::message::emsg;
+use crate::memory::{ThinCString, XString};
 use crate::message_fmt::{emsg_text, msg_bytes, msg_cstr};
 use crate::option::vars::p_cpo;
-use crate::os::cshim::gettext;
 use crate::runtime::sourcing_lnum;
 use crate::runtime::state::current_sctx;
 use crate::semsg;
-use crate::tr_c;
+use crate::tr;
 use crate::types::CmdIdx;
-use crate::types::{
-    CmdAddr, ExArg, ExArgt, Expand, ExpandContext, Failed, LuaRef, UserCmd, int64_t,
-};
+use crate::types::{CmdAddr, ExArg, ExArgt, Expand, ExpandContext, LuaRef, UserCmd, int64_t};
 use crate::window::prevwin_curwin;
 use crate::winlayer::Buf;
 use core::cmp::Ordering;
@@ -363,6 +366,36 @@ impl Definition {
     }
 }
 
+/// Why `:command` or `nvim_create_user_command` refused a definition, and
+/// the message that says so -- upstream's texts. Reported once, by the
+/// command or the API function, with [`UserCmdError::report`].
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum UserCmdError {
+    #[error(transparent)]
+    Attr(#[from] AttrError),
+    #[error("{}", tr!("E182: Invalid command name"))]
+    InvalidName,
+    #[error("{}", tr!("E183: User defined commands must start with an uppercase letter"))]
+    Lowercase,
+    #[error("{}", tr!("E841: Reserved name, cannot be used for user defined command"))]
+    Reserved,
+    #[error("{}", tr!("E1208: -complete used without allowing arguments"))]
+    CompleteWithoutArguments,
+    /// The definition as typed, from the name on: upstream quotes all of it.
+    #[error("{}", tr!("E174: Command already exists: add ! to replace it: {}", msg_bytes(.0.as_bytes())))]
+    Exists(ThinCString),
+}
+
+// Two words, so a `Result` carrying one is no wider than it has to be.
+const _: () = assert!(size_of::<UserCmdError>() <= 16);
+
+impl UserCmdError {
+    /// Puts the message out.
+    pub(crate) fn report(&self) {
+        emsg_text(self.to_string());
+    }
+}
+
 /// Define, or redefine, one user command: the first `name_len` bytes of
 /// `text` with replacement text `rep` (each read as a C string),
 /// buffer-local when `buffer_local`. The refusal quotes `text` whole, as
@@ -370,6 +403,7 @@ impl Definition {
 /// rest of the line.
 ///
 /// Takes ownership of `def`: on failure what it owns is given back here.
+/// E174 for a command another script defined, without a bang.
 pub(crate) fn uc_add_command(
     text: &[u8],
     name_len: usize,
@@ -377,7 +411,7 @@ pub(crate) fn uc_add_command(
     def: Definition,
     buffer_local: bool,
     force: bool,
-) -> Result<(), Failed> {
+) -> Result<(), UserCmdError> {
     let (text, rep) = (cstr::until_nul(text), cstr::until_nul(rep));
     let name = &text[..name_len.min(text.len())];
     let replaced = p_cpo(|cpo| replace_termcodes(rep, 0, 0, None, cpo, None));
@@ -411,9 +445,7 @@ pub(crate) fn uc_add_command(
         && (existing.sc_sid != current_sctx.get().sc_sid
             || existing.sc_seq == current_sctx.get().sc_seq)
     {
-        let name = msg_bytes(text);
-        semsg!("E174: Command already exists: add ! to replace it: {name}");
-        return Err(Failed);
+        return Err(UserCmdError::Exists(text.into()));
     }
 
     let entry = def.into_command(Rc::from(cstr::owned(name)), replacement);
@@ -430,8 +462,16 @@ pub(crate) fn uc_add_command(
     Ok(())
 }
 
-/// `:command` -- define one, or list them.
+/// `:command` -- define one, or list them; the one place its refusals are
+/// reported.
 pub(crate) fn ex_command(excmd: &mut ExArg) {
+    if let Err(err) = define_command(excmd) {
+        err.report();
+    }
+}
+
+/// `:command`'s attributes, name and replacement text.
+fn define_command(excmd: &ExArg) -> Result<(), UserCmdError> {
     let mut def = Definition {
         argt: ExArgt::NONE,
         default_count: -1,
@@ -462,48 +502,38 @@ pub(crate) fn ex_command(excmd: &mut ExArg) {
             compl_arg: &mut def.complete_arg,
             addr_type_arg: &mut def.addr_type,
         };
-        if attr::uc_scan_attr(line.rest_of(attr_start), attr_end - attr_start, into).is_err() {
-            return;
-        }
+        attr::uc_scan_attr(line.rest_of(attr_start), attr_end - attr_start, into)?;
         p = line.skip_white(attr_end);
     };
 
     let name = p;
-    let Some(name_end) = name_end else {
-        emsg(gettext(c"E182: Invalid command name"));
-        return;
-    };
+    let name_end = name_end.ok_or(UserCmdError::InvalidName)?;
     let rest = line.skip_white(name_end);
     let name_bytes = line.slice_at(name, name_end - name);
     // Not `name_bytes[0]`: an attribute-only line (`:command -nargs=1 |`)
     // leaves the name empty, and upstream still reads the byte there.
     let first = line.byte_at(name);
 
-    let complaint = if !has_attr && ends_excmd(c_int::from(line.byte_at(rest))) != 0 {
+    if !has_attr && ends_excmd(c_int::from(line.byte_at(rest))) != 0 {
         list::uc_list(name_bytes);
-        None
+        Ok(())
     } else if !first.is_ascii_uppercase() {
-        Some(c"E183: User defined commands must start with an uppercase letter")
+        Err(UserCmdError::Lowercase)
     } else if b"Next".starts_with(name_bytes) {
-        Some(c"E841: Reserved name, cannot be used for user defined command")
+        Err(UserCmdError::Reserved)
     } else if def.complete != ExpandContext::Nothing && !def.argt.has(ExArgt::EXTRA) {
-        Some(c"E1208: -complete used without allowing arguments")
+        Err(UserCmdError::CompleteWithoutArguments)
     } else {
         def.default_count = int64_t::from(default_count);
         let (text, len) = (line.rest_of(name), name_bytes.len());
-        let _ = uc_add_command(
+        uc_add_command(
             text,
             len,
             line.rest_of(rest),
             def,
             buffer_local,
             excmd.forceit,
-        );
-        return;
-    };
-
-    if let Some(message) = complaint {
-        emsg(gettext(message));
+        )
     }
 }
 
@@ -563,13 +593,12 @@ pub(crate) fn ex_delcommand(excmd: &mut ExArg) {
     }
 
     let Some((table, idx)) = found else {
-        let untranslated = if buffer_only {
-            c"E1237: No such user-defined command in current buffer: %s"
-        } else {
-            c"E184: No such user-defined command: %s"
-        };
         let arg = msg_cstr(arg);
-        emsg_text(tr_c!(untranslated, arg));
+        if buffer_only {
+            semsg!("E1237: No such user-defined command in current buffer: {arg}");
+        } else {
+            semsg!("E184: No such user-defined command: {arg}");
+        }
         return;
     };
     uc_del_command(table, idx);

@@ -20,6 +20,13 @@
 //! Original: `src/nvim/usercmd.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::attr::ADDR_TYPES;
 use super::{Scope, ucmd_name};
@@ -298,6 +305,6 @@ pub(crate) fn cmdcomplete_str_to_type(complete_str: &CStr) -> ExpandContext {
     COMMAND_COMPLETE
         .iter()
         .position(|name| name.is_some_and(|name| name.to_bytes() == typed))
-        .and_then(|i| ExpandContext::try_from(i as c_int).ok())
+        .and_then(|i| ExpandContext::try_from(c_int::try_from(i).ok()?).ok())
         .unwrap_or(ExpandContext::Nothing)
 }

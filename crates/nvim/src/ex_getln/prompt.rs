@@ -149,7 +149,8 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
         // input() with a third argument: completion
         let name = name.to_bytes();
         let mut argt = ExArgt::NONE;
-        if parse_compl_arg(name, name, &mut xp_type, &mut argt, &mut xp_arg).is_err() {
+        if let Err(refused) = parse_compl_arg(name, name, &mut xp_type, &mut argt, &mut xp_arg) {
+            refused.report();
             return;
         }
     }

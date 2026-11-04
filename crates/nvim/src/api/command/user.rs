@@ -25,6 +25,7 @@ use crate::cstr;
 use crate::message_fmt::msg_cstr;
 use crate::types::Handle;
 use crate::types::{ExArgt, ExpandContext};
+use crate::usercmd::AttrError;
 use crate::winlayer::graph::switch_buffer;
 
 pub fn nvim_create_user_command(
@@ -200,10 +201,15 @@ pub fn create_user_command(
             };
             match parse_addr_type_arg(addr.as_bytes(), addr.as_cstr().to_bytes()) {
                 Ok(parsed) => addr_type_arg = parsed,
-                Err(word) => {
-                    // Upstream cut the caller's string at the word the
-                    // message named, and quotes what is left of it.
-                    failed = Some(err_bad_value(c"addr", &cstr::owned(word)));
+                Err(refused) => {
+                    // Upstream printed the message as well as refusing, cut
+                    // the caller's string at the word the message named,
+                    // and quotes what is left of it.
+                    refused.report();
+                    let AttrError::AddrType(word) = refused else {
+                        unreachable!("an address type is refused by its word")
+                    };
+                    failed = Some(err_bad_value(c"addr", word.as_cstr()));
                     break '_err;
                 }
             }
@@ -247,7 +253,9 @@ pub fn create_user_command(
         } else if let Some(complete) = opts.complete.as_ref().and_then(Object::as_string) {
             let (value, shown) = (complete.as_bytes(), complete.as_cstr().to_bytes());
             let parsed = parse_compl_arg(value, shown, &mut context, &mut argt, &mut compl_arg);
-            if parsed.is_err() {
+            if let Err(refused) = parsed {
+                // Upstream printed the message as well as refusing.
+                refused.report();
                 failed = Some(err_bad_value(c"complete", complete.as_cstr()));
                 break '_err;
             }
@@ -301,7 +309,9 @@ pub fn create_user_command(
             complete_luaref: ::core::mem::replace(&mut compl_luaref, LUA_NOREF),
             preview_luaref: ::core::mem::replace(&mut preview_luaref, LUA_NOREF),
         };
-        if uc_add_command(cmd_name, name.len(), rep, def, buffer_local, force).is_err() {
+        if let Err(refused) = uc_add_command(cmd_name, name.len(), rep, def, buffer_local, force) {
+            // Upstream printed the message as well as refusing.
+            refused.report();
             failed = Some(Error::exception(c"Failed to create user command"));
         }
         return match failed {

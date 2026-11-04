@@ -28,13 +28,57 @@ use super::complete::{COMMAND_COMPLETE, command_complete_name};
 use crate::ascii::ascii_iswhite;
 use crate::charset::getdigits_int_at;
 use crate::cstr;
-use crate::message::emsg;
-use crate::message_fmt::msg_bytes;
-use crate::os::cshim::gettext;
-use crate::semsg;
-use crate::types::{CmdAddr, ExArgt, ExpandContext, Failed};
+use crate::memory::ThinCString;
+use crate::message_fmt::{emsg_text, msg_bytes};
+use crate::tr;
+use crate::types::{CmdAddr, ExArgt, ExpandContext};
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
+
+/// Why a `:command` attribute, or the API's spelling of one, was refused,
+/// and the message that says so: E175–E181, E467, E468, upstream's texts.
+///
+/// Reported once by whoever parsed the definition -- `:command`,
+/// `nvim_create_user_command`, `input()`'s completion argument -- with
+/// [`AttrError::report`].
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum AttrError {
+    #[error("{}", tr!("E175: No attribute specified"))]
+    NoAttribute,
+    #[error("{}", tr!("E176: Invalid number of arguments"))]
+    Nargs,
+    #[error("{}", tr!("E177: Count cannot be specified twice"))]
+    TwoCount,
+    #[error("{}", tr!("E178: Invalid default value for count"))]
+    InvalidCount,
+    #[error("{}", tr!("E179: Argument required for {}", "-complete"))]
+    CompleteRequired,
+    #[error("{}", tr!("E179: Argument required for {}", "-addr"))]
+    AddrRequired,
+    /// The word the message names -- the value up to its first white
+    /// space -- which the API's own refusal quotes again.
+    #[error("{}", tr!("E180: Invalid address type value: {}", msg_bytes(.0.as_bytes())))]
+    AddrType(ThinCString),
+    /// The rest of the line from the value on, as upstream quoted it.
+    #[error("{}", tr!("E180: Invalid complete value: {}", msg_bytes(.0.as_bytes())))]
+    Complete(ThinCString),
+    #[error("{}", tr!("E468: Completion argument only allowed for custom completion"))]
+    CompletionArgument,
+    #[error("{}", tr!("E467: Custom completion requires a function argument"))]
+    NeedsFunction,
+    #[error("{}", tr!("E181: Invalid attribute: {}", msg_bytes(.0.as_bytes())))]
+    Invalid(ThinCString),
+}
+
+// Two words, so a `Result` carrying one is no wider than it has to be.
+const _: () = assert!(size_of::<AttrError>() <= 16);
+
+impl AttrError {
+    /// Puts the message out.
+    pub(crate) fn report(&self) {
+        emsg_text(self.to_string());
+    }
+}
 
 /// The address types `-addr=` names, and the short forms `:command` lists
 /// them under.
@@ -84,10 +128,10 @@ fn abbreviates(attr: &[u8], name: &str) -> bool {
 /// Parse an `-addr=` value: the type it names.
 ///
 /// `value` is the value; `shown` is the C string it starts (the rest of a
-/// command line, or the API's string). On failure the answer is the word
-/// the message named -- `shown` up to its first whitespace, where upstream
-/// cut it in place -- which the API's own refusal quotes again.
-pub(crate) fn parse_addr_type_arg<'a>(value: &[u8], shown: &'a [u8]) -> Result<CmdAddr, &'a [u8]> {
+/// command line, or the API's string). A refusal names the word the
+/// message quotes -- `shown` up to its first whitespace, where upstream cut
+/// it in place.
+pub(crate) fn parse_addr_type_arg(value: &[u8], shown: &[u8]) -> Result<CmdAddr, AttrError> {
     if let Some(row) = ADDR_TYPES.iter().find(|row| row.name.to_bytes() == value) {
         return Ok(row.expand);
     }
@@ -95,9 +139,7 @@ pub(crate) fn parse_addr_type_arg<'a>(value: &[u8], shown: &'a [u8]) -> Result<C
         .iter()
         .position(|&byte| byte == 0 || ascii_iswhite(c_int::from(byte)))
         .map_or(shown, |end| &shown[..end]);
-    let shown_word = msg_bytes(word);
-    semsg!("E180: Invalid address type value: {shown_word}");
-    Err(word)
+    Err(AttrError::AddrType(word.into()))
 }
 
 /// Parse a `-complete=` value: a name from [`COMMAND_COMPLETE`], optionally
@@ -113,7 +155,7 @@ pub(crate) fn parse_compl_arg(
     complp: &mut ExpandContext,
     argt: &mut ExArgt,
     compl_arg: &mut Option<CString>,
-) -> Result<(), Failed> {
+) -> Result<(), AttrError> {
     // The argument part is whatever follows the first comma.
     let (name, arg) = match value.iter().position(|&b| b == b',') {
         Some(comma) => (&value[..comma], Some(&value[comma + 1..])),
@@ -125,9 +167,7 @@ pub(crate) fn parse_compl_arg(
         .filter_map(|i| ExpandContext::try_from(i).ok())
         .find(|&i| command_complete_name(i).is_some_and(|n| n.to_bytes() == name));
     let Some(expand) = found else {
-        let value = msg_bytes(cstr::until_nul(shown));
-        semsg!("E180: Invalid complete value: {value}");
-        return Err(Failed);
+        return Err(AttrError::Complete(cstr::until_nul(shown).into()));
     };
     *complp = expand;
     if expand == ExpandContext::Buffers {
@@ -141,16 +181,10 @@ pub(crate) fn parse_compl_arg(
 
     let custom = expand == ExpandContext::UserDefined || expand == ExpandContext::UserList;
     if !custom && arg.is_some() {
-        emsg(gettext(
-            c"E468: Completion argument only allowed for custom completion",
-        ));
-        return Err(Failed);
+        return Err(AttrError::CompletionArgument);
     }
     if custom && arg.is_none() {
-        emsg(gettext(
-            c"E467: Custom completion requires a function argument",
-        ));
-        return Err(Failed);
+        return Err(AttrError::NeedsFunction);
     }
     if let Some(arg) = arg {
         *compl_arg = Some(cstr::owned(cstr::until_nul(arg)));
@@ -168,27 +202,15 @@ pub(super) struct Attributes<'a> {
     pub(super) addr_type_arg: &'a mut CmdAddr,
 }
 
-/// What went wrong with an attribute, as the message still to report.
-enum Bad {
-    Nargs,
-    TwoCount,
-    InvalidCount,
-    /// `-complete` and `-addr` are the two that insist on a value.
-    Missing(&'static CStr),
-    /// The value parser has reported already.
-    Reported,
-}
-
 /// Fold one `-attribute[=value]` into `into`.
 ///
 /// The attribute is the first `len` bytes of `attr`, which runs on to the
 /// end of the command line: a bad `-complete=` value is reported with the
 /// rest of the line after it, as upstream's `%s` of a pointer into the line
 /// shows it.
-pub(super) fn uc_scan_attr(attr: &[u8], len: usize, into: Attributes) -> Result<(), Failed> {
+pub(super) fn uc_scan_attr(attr: &[u8], len: usize, into: Attributes) -> Result<(), AttrError> {
     if len == 0 {
-        emsg(gettext(c"E175: No attribute specified"));
-        return Err(Failed);
+        return Err(AttrError::NoAttribute);
     }
     let typed = &attr[..len];
 
@@ -219,7 +241,7 @@ pub(super) fn uc_scan_attr(attr: &[u8], len: usize, into: Attributes) -> Result<
     // The value as a slice, and as the C string it starts.
     let value_of = |at: usize| (&typed[at..], &attr[at..]);
 
-    let outcome = if abbreviates(name, "nargs") {
+    if abbreviates(name, "nargs") {
         scan_nargs(value.map(|at| value_of(at).0), into.argt)
     } else if abbreviates(name, "range") {
         scan_range(
@@ -237,53 +259,25 @@ pub(super) fn uc_scan_attr(attr: &[u8], len: usize, into: Attributes) -> Result<
         )
     } else if abbreviates(name, "complete") {
         match value.map(value_of) {
-            None => Err(Bad::Missing(c"-complete")),
-            Some((v, shown)) => parse_compl_arg(v, shown, into.complp, into.argt, into.compl_arg)
-                .map_err(|Failed| Bad::Reported),
+            None => Err(AttrError::CompleteRequired),
+            Some((v, shown)) => parse_compl_arg(v, shown, into.complp, into.argt, into.compl_arg),
         }
     } else if abbreviates(name, "addr") {
         *into.argt |= ExArgt::RANGE;
-        match value.map(value_of) {
-            None => Err(Bad::Missing(c"-addr")),
-            Some((v, shown)) => match parse_addr_type_arg(v, shown) {
-                Err(_) => Err(Bad::Reported),
-                Ok(addr_type) => {
-                    *into.addr_type_arg = addr_type;
-                    if addr_type != CmdAddr::Lines {
-                        *into.argt |= ExArgt::ZEROR;
-                    }
-                    Ok(())
-                }
-            },
+        let (v, shown) = value.map(value_of).ok_or(AttrError::AddrRequired)?;
+        let addr_type = parse_addr_type_arg(v, shown)?;
+        *into.addr_type_arg = addr_type;
+        if addr_type != CmdAddr::Lines {
+            *into.argt |= ExArgt::ZEROR;
         }
+        Ok(())
     } else {
-        let shown = msg_bytes(typed);
-        semsg!("E181: Invalid attribute: {shown}");
-        return Err(Failed);
-    };
-
-    let Err(bad) = outcome else { return Ok(()) };
-    match bad {
-        Bad::Nargs => {
-            emsg(gettext(c"E176: Invalid number of arguments"));
-        }
-        Bad::TwoCount => {
-            emsg(gettext(c"E177: Count cannot be specified twice"));
-        }
-        Bad::InvalidCount => {
-            emsg(gettext(c"E178: Invalid default value for count"));
-        }
-        Bad::Missing(what) => {
-            let what = what.to_string_lossy();
-            semsg!("E179: Argument required for {what}");
-        }
-        Bad::Reported => {}
+        Err(AttrError::Invalid(typed.into()))
     }
-    Err(Failed)
 }
 
 /// `-nargs=`: one of `0`, `1`, `*`, `?`, `+`.
-fn scan_nargs(value: Option<&[u8]>, argt: &mut ExArgt) -> Result<(), Bad> {
+fn scan_nargs(value: Option<&[u8]>, argt: &mut ExArgt) -> Result<(), AttrError> {
     match value {
         Some([b'0']) => Ok(()),
         Some([b'1']) => {
@@ -302,7 +296,7 @@ fn scan_nargs(value: Option<&[u8]>, argt: &mut ExArgt) -> Result<(), Bad> {
             *argt |= ExArgt::EXTRA | ExArgt::NEEDARG;
             Ok(())
         }
-        _ => Err(Bad::Nargs),
+        _ => Err(AttrError::Nargs),
     }
 }
 
@@ -312,21 +306,21 @@ fn scan_range(
     argt: &mut ExArgt,
     def: &mut c_int,
     addr_type_arg: &mut CmdAddr,
-) -> Result<(), Bad> {
+) -> Result<(), AttrError> {
     *argt |= ExArgt::RANGE;
     match value {
         Some(b"%") => *argt |= ExArgt::DFLALL,
         Some(v) => {
             if *def >= 0 {
-                return Err(Bad::TwoCount);
+                return Err(AttrError::TwoCount);
             }
             // `-range=` with nothing after it is rejected here, where
             // `-count=` accepts it: upstream's emptiness test is on this
             // branch only.
             if v.is_empty() {
-                return Err(Bad::InvalidCount);
+                return Err(AttrError::InvalidCount);
             }
-            *def = digits(v).ok_or(Bad::InvalidCount)?;
+            *def = digits(v).ok_or(AttrError::InvalidCount)?;
             *argt |= ExArgt::ZEROR;
         }
         None => {}
@@ -344,7 +338,7 @@ fn scan_count(
     argt: &mut ExArgt,
     def: &mut c_int,
     addr_type_arg: &mut CmdAddr,
-) -> Result<(), Bad> {
+) -> Result<(), AttrError> {
     *argt |= ExArgt::COUNT | ExArgt::ZEROR | ExArgt::RANGE;
     // The default for -count is to count anything.
     if *addr_type_arg == CmdAddr::NoRange {
@@ -352,11 +346,11 @@ fn scan_count(
     }
     if let Some(v) = value {
         if *def >= 0 {
-            return Err(Bad::TwoCount);
+            return Err(AttrError::TwoCount);
         }
         // Unlike -range, an empty value is accepted here: `getdigits_int`
         // answers 0 and the emptiness check below is on -range only.
-        *def = digits(v).ok_or(Bad::InvalidCount)?;
+        *def = digits(v).ok_or(AttrError::InvalidCount)?;
     }
     *def = (*def).max(0);
     Ok(())
