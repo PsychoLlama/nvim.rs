@@ -448,6 +448,7 @@ pub(crate) fn serialize_pos(bi: &mut BufInfo, pos: Pos) {
 
 /// Reads a position back, clamping each field at zero: a negative line or
 /// column is not a position, and every caller would have to check anyway.
+#[inline]
 pub(crate) fn unserialize_pos(bi: &mut BufInfo) -> Pos {
     Pos {
         lnum: LineNr::new(bi.read_4c().max(0)),

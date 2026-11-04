@@ -354,6 +354,36 @@ impl ReadBuf {
     }
 }
 
+/// Widen the `len` Latin-1 bytes at the start of `bytes` to UTF-8 in place,
+/// from the back, so the result ends where `bytes` does; answers where it
+/// starts. `bytes` has room for every byte to become two.
+///
+/// A run of ASCII moves in one `copy_within`; only a byte at or above 0x80
+/// becomes two. (The byte-at-a-time loop this replaces compiled to one more
+/// instruction per byte once the read around it changed: +400 M Ir on
+/// readbench's Latin-1 phase.)
+fn widen_latin1(bytes: &mut [u8], len: usize) -> usize {
+    let mut dest = bytes.len();
+    let mut end = len;
+    while end > 0 {
+        let start = bytes[..end]
+            .iter()
+            .rposition(|&b| b >= 0x80)
+            .map_or(0, |at| at + 1);
+        dest -= end - start;
+        bytes.copy_within(start..end, dest);
+        if start == 0 {
+            break;
+        }
+        let b = bytes[start - 1];
+        dest -= 2;
+        bytes[dest] = 0xc0 | (b >> 6);
+        bytes[dest + 1] = 0x80 | (b & 0x3f);
+        end = start - 1;
+    }
+    dest
+}
+
 /// What the conversion knows, carried from one read to the next.
 pub(crate) struct Conv {
     /// What Nvim converts itself, or nothing.
@@ -567,20 +597,7 @@ impl Conv {
         if flags == FioFlags::LATIN1 {
             // The common case, and a simple one: each byte is a character,
             // one or two bytes long in UTF-8.
-            let bytes = &mut w.bytes[start..room_end];
-            let mut dest = room_end - start;
-            for p in (0..p - start).rev() {
-                let b = bytes[p];
-                if b < 0x80 {
-                    dest -= 1;
-                    bytes[dest] = b;
-                } else {
-                    dest -= 2;
-                    bytes[dest] = 0xc0 | (b >> 6);
-                    bytes[dest + 1] = 0x80 | (b & 0x3f);
-                }
-            }
-            let dest = start + dest;
+            let dest = start + widen_latin1(&mut w.bytes[start..room_end], p - start);
             w.move_linerest(dest);
             w.size = (room_end - dest).cast_signed();
             w.ptr = dest;
