@@ -160,8 +160,9 @@ fn an_explicit_end_stops_before_the_nul() {
     assert_eq!(compile("foo/bar", 0), Some(("^$".into(), false)));
 }
 
-/// Unbalanced braces are the one way this fails: it answers NULL and reports
-/// which side is missing.
+/// Unbalanced braces are the one way this fails: it answers which side is
+/// missing, in the message its callers report -- the compiler itself says
+/// nothing (each caller decides what to do instead, and says it then).
 #[cfg(not(miri))]
 #[test]
 fn unbalanced_braces_are_refused_with_a_message() {
@@ -173,7 +174,16 @@ fn unbalanced_braces_are_refused_with_a_message() {
         ("foo}bar", "E219: Missing {."),
         ("{{a}", "E220: Missing }."),
     ] {
-        let compiled = check_emsg(&editor, || compile(pat, pat.len()), Some(msg));
-        assert!(compiled.is_none(), "{pat:?} should not have compiled");
+        let refused = check_emsg(
+            &editor,
+            || file_pat_to_reg_pat(pat.as_bytes(), pat.len()),
+            None,
+        );
+        let said = refused.err().map(|err| err.to_string());
+        assert_eq!(
+            said.as_deref(),
+            Some(msg),
+            "{pat:?} should not have compiled"
+        );
     }
 }
