@@ -86,7 +86,8 @@ fn simplify(name: &[u8]) -> ThinCString {
 pub fn f_glob2regpat(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let pat = str_arg_chk(args, 0, &mut numbuf);
-    result.write_string(pat.and_then(file_pat_to_regpat).map(ThinCString::from));
+    let regpat = pat.and_then(|pat| file_pat_to_regpat(pat).inspect_err(|err| err.report()).ok());
+    result.write_string(regpat.map(ThinCString::from));
 }
 
 /// `isabsolutepath({path})`: whether the path starts at the root.

@@ -6,6 +6,13 @@
 //! after a file is read.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::env::home_to_tilde;
 use crate::memory::XString;
@@ -106,9 +113,13 @@ pub(crate) fn msg_add_lines(
         return;
     }
 
-    let fmt = ngettext(c"%s%ld line, ", c"%s%ld lines, ", lnum.get() as u64);
+    let fmt = ngettext(
+        c"%s%ld line, ",
+        c"%s%ld lines, ",
+        u64::from(lnum.get().cast_unsigned()),
+    );
     report.push_fmt(fmt, &[space.into(), lines.into()]);
-    let fmt = ngettext(c"%ld byte", c"%ld bytes", nchars as core::ffi::c_ulong);
+    let fmt = ngettext(c"%ld byte", c"%ld bytes", nchars.cast_unsigned());
     report.push_fmt(fmt, &[bytes.into()]);
 }
 

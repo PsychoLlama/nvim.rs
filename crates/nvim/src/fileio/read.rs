@@ -10,6 +10,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::fileio::Loaded;
 use crate::mbyte::canonize;
@@ -22,7 +29,6 @@ use core::ffi::c_int;
 use super::*;
 use crate::edit::BeginlineOpts;
 use crate::ex_docmd::cmdmod_has;
-use crate::keycodes::Ctrl_Z;
 use crate::memfile::MfDirty;
 use crate::option::cpo_has;
 use crate::pos::MAXCOL;
@@ -183,7 +189,11 @@ pub(crate) fn readfile_named(
         ) {
             Ok(opened) => opened,
             Err(early) => {
-                retval = early;
+                // Said here, where upstream's `readfile` said it.
+                retval = early.map_err(|err| {
+                    err.report();
+                    Failed
+                });
                 break 'theend;
             }
         };
@@ -202,7 +212,7 @@ pub(crate) fn readfile_named(
             filemess(Buf::current(), sfname, c"");
         }
 
-        msg_scroll.set(false as c_int); // overwrite the file message
+        msg_scroll.set(c_int::from(false)); // overwrite the file message
 
         // Set linecnt now, before the "retry" caused by a wrong guess at
         // the fileformat, and after the autocommands, which may change it.
@@ -225,9 +235,10 @@ pub(crate) fn readfile_named(
             && command.force_enc != 0
         {
             // `force_enc` is an offset into the command's own line.
-            let name = command
-                .line
-                .rest_of(command.line.cmd + command.force_enc as usize);
+            let name = command.line.rest_of(
+                command.line.cmd
+                    + usize::try_from(command.force_enc).expect("an offset into the line"),
+            );
             fenc = canonize(name);
             keep_dest_enc = true;
         } else if Buf::current().b_p_bin != 0 {
@@ -276,8 +287,8 @@ pub(crate) fn readfile_named(
                 }
                 file_rewind = false;
                 if set_options {
-                    Buf::current().b_p_bomb = false as c_int;
-                    Buf::current().b_start_bomb = false as c_int;
+                    Buf::current().b_p_bomb = c_int::from(false);
+                    Buf::current().b_start_bomb = c_int::from(false);
                 }
                 conv.conv_error = LineNr::ZERO;
             }
@@ -414,7 +425,7 @@ pub(crate) fn readfile_named(
                     // the size if the line gets very long, to avoid a lot
                     // of copying. But don't read more than 1 Mbyte at a
                     // time, so that we can be interrupted.
-                    w.size = (0x10000 + w.linerest as isize).min(0x100000);
+                    w.size = (0x10000 + w.linerest.cast_signed()).min(0x100000);
                 }
 
                 // Split lines that are too long for ColNr. After this check
@@ -422,9 +433,9 @@ pub(crate) fn readfile_named(
                 // length must stay below MAXCOL - 1 (we add 1 for the NUL
                 // when casting to ColNr). If it fires we insert a newline
                 // right away, so linerest does not grow.
-                if w.size < 0 || w.linerest as isize >= MAXCOL as isize - w.size {
+                if w.size < 0 || w.linerest.cast_signed() >= MAXCOL as isize - w.size {
                     split += 1;
-                    w.bytes[w.ptr] = NL as u8; // split the line by inserting a NL
+                    w.bytes[w.ptr] = b'\n'; // split the line by inserting a NL
                     w.size = 1;
                 } else if !skip_read {
                     if !w.make_room() {
@@ -458,7 +469,7 @@ pub(crate) fn readfile_named(
                         // Put the unconverted bytes from last time first.
                         conv.restore(&mut w.bytes[w.ptr..]);
                         w.ptr += conv.restlen;
-                        w.size -= conv.restlen as isize;
+                        w.size -= conv.restlen.cast_signed();
                     }
 
                     w.size = if how.buffer {
@@ -511,7 +522,7 @@ pub(crate) fn readfile_named(
                                 if conv.bad_char != BAD_KEEP && conv.active() {
                                     while conv.restlen > 0 {
                                         w.ptr -= 1;
-                                        w.bytes[w.ptr] = conv.bad_char as u8;
+                                        w.bytes[w.ptr] = conv.bad_byte();
                                         conv.restlen -= 1;
                                     }
                                 }
@@ -546,13 +557,13 @@ pub(crate) fn readfile_named(
                     };
                     if let Some((_, blen)) = found {
                         // Remove the BOM from the text.
-                        filesize += blen as FileOffset;
-                        w.size -= blen as isize;
+                        filesize += FileOffset::try_from(blen).expect("a BOM is a few bytes");
+                        w.size -= blen.cast_signed();
                         let rest = w.ptr + blen..w.ptr + blen + w.len();
                         w.bytes.copy_within(rest, w.ptr);
                         if set_options {
-                            Buf::current().b_p_bomb = true as c_int;
-                            Buf::current().b_start_bomb = true as c_int;
+                            Buf::current().b_p_bomb = c_int::from(true);
+                            Buf::current().b_start_bomb = c_int::from(true);
                         }
                     }
 
@@ -570,7 +581,7 @@ pub(crate) fn readfile_named(
 
                 // Include the bytes that were not converted last time.
                 w.ptr -= conv.restlen;
-                w.size += conv.restlen as isize;
+                w.size += conv.restlen.cast_signed();
                 conv.restlen = 0;
                 // A read error or end of file.
                 if w.size <= 0 {
@@ -674,12 +685,12 @@ pub(crate) fn readfile_named(
         if w.linerest != 0
             && Buf::current().b_p_bin == 0
             && fileformat == EOL_DOS
-            && w.bytes[w.ptr - 1] == Ctrl_Z as u8
+            && w.bytes[w.ptr - 1] == 0x1a
         {
             w.ptr -= 1;
             w.linerest -= 1;
             if set_options {
-                Buf::current().b_p_eof = true as c_int;
+                Buf::current().b_p_eof = c_int::from(true);
             }
         }
 
@@ -688,7 +699,7 @@ pub(crate) fn readfile_named(
         if !error && !got_int.get() && w.linerest != 0 {
             // Remember it for when writing.
             if set_options {
-                Buf::current().b_p_eol = false as c_int;
+                Buf::current().b_p_eol = c_int::from(false);
             }
             w.bytes[w.ptr] = 0;
             let line = &w.bytes[w.line_start..=w.ptr];
@@ -767,7 +778,7 @@ pub(crate) fn readfile_named(
                 if !how.dummy {
                     filemess(Buf::current(), sfname, gettext(e_interr));
                     if how.newfile {
-                        Buf::current().b_p_ro = true as c_int; // must use "w!" now
+                        Buf::current().b_p_ro = c_int::from(true); // must use "w!" now
                     }
                 }
                 msg_scroll.set(msg_save);
@@ -847,7 +858,7 @@ fn rewind(input: Option<&File>) -> bool {
 fn read_retrying(file: &mut File, into: &mut [u8]) -> isize {
     loop {
         match file.read(into) {
-            Ok(n) => return n as isize,
+            Ok(n) => return n.cast_signed(),
             Err(err) if err.kind() == ErrorKind::Interrupted => {}
             Err(_) => return -1,
         }
@@ -874,15 +885,15 @@ fn read_from_buffer(w: &mut ReadBuf, last: LineNr, lnum: &mut LineNr, col: &mut 
             .iter_mut()
             .zip(&line[..n])
         {
-            *to = if b == NL as u8 { 0 } else { b };
+            *to = if b == b'\n' { 0 } else { b };
         }
         tlen += n;
         if partial {
             *col += n;
-            return tlen as isize;
+            return tlen.cast_signed();
         }
         // Append the whole line and a newline.
-        w.bytes[w.ptr + tlen] = NL as u8;
+        w.bytes[w.ptr + tlen] = b'\n';
         tlen += 1;
         *col = 0;
         *lnum += 1;
@@ -891,7 +902,7 @@ fn read_from_buffer(w: &mut ReadBuf, last: LineNr, lnum: &mut LineNr, col: &mut 
             if Buf::current().b_p_eol == 0 {
                 tlen -= 1;
             }
-            return tlen as isize;
+            return tlen.cast_signed();
         }
     }
 }

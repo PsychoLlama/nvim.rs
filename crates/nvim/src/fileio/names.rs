@@ -10,6 +10,13 @@
 //! autocommand patterns are matched.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::ascii::ascii_isspace;
 use crate::cstr;
@@ -24,7 +31,7 @@ use crate::path::tail_index;
 
 use super::*;
 use crate::regexp::{OwnedProg, RE_MAGIC};
-use crate::types::{FAIL, MAXPATHL, OK};
+use crate::types::{MAXPATHL, OK};
 use crate::winlayer::buffers;
 
 /// `S_IFLNK`: the file type bits of a symbolic link.
@@ -157,15 +164,14 @@ pub fn modname(fname: Option<&CStr>, ext: &[u8], prepend_dot: bool) -> Option<XS
 /// How long a basename [`modname`] keeps.
 const BASENAMELEN: usize = 255 - 5;
 
-/// Rename `from` to `to` via a third name in the same directory: whether it
-/// worked.
+/// Rename `from` to `to` via a third name in the same directory.
 ///
 /// Needed when the two names refer to the same file but are spelled
 /// differently, which a plain rename would treat as a no-op.
-fn rename_with_tmp(from: &CStr, to: &CStr) -> bool {
+fn rename_with_tmp(from: &CStr, to: &CStr) -> Result<(), IoFailed> {
     let from_bytes = from.to_bytes();
     if from_bytes.len() >= MAXPATHL as usize - 5 {
-        return false;
+        return Err(IoFailed);
     }
 
     // Everything up to the tail stays put; only the last component is
@@ -184,24 +190,23 @@ fn rename_with_tmp(from: &CStr, to: &CStr) -> bool {
         if os_rename(from, &temp) != OK {
             // If it fails for one temp name it will most likely fail for
             // any temp name, so give up.
-            return false;
+            return Err(IoFailed);
         }
         if os_rename(&temp, to) == OK {
-            return true;
+            return Ok(());
         }
         // Strange, the second step failed. Try moving the file back and
         // report the failure.
         os_rename(&temp, from);
-        return false;
+        return Err(IoFailed);
     }
-    false
+    Err(IoFailed)
 }
 
-/// Rename `from` to `to`, copying the file across if a rename cannot do it:
-/// whether it worked.
+/// Rename `from` to `to`, copying the file across if a rename cannot do it.
 ///
 /// `os_rename` only works when both names are on the same file system.
-pub(crate) fn rename_file(from: &CStr, to: &CStr) -> bool {
+pub(crate) fn rename_file(from: &CStr, to: &CStr) -> Result<(), IoFailed> {
     let mut use_tmp_file = false;
 
     // When the names are identical there is nothing to do. When they refer
@@ -211,14 +216,12 @@ pub(crate) fn rename_file(from: &CStr, to: &CStr) -> bool {
         if p_fic() && path_tail(from) != path_tail(to) {
             use_tmp_file = true;
         } else {
-            return true;
+            return Ok(());
         }
     }
 
     // Fail if the "from" file doesn't exist. Avoids that "to" is deleted.
-    let Some(from_info) = file_info(from) else {
-        return false;
-    };
+    let from_info = file_info(from).ok_or(IoFailed)?;
 
     // It's possible for the source and destination to be the same file.
     // This happens when "from" and "to" differ in case and are on a FAT32
@@ -238,25 +241,21 @@ pub(crate) fn rename_file(from: &CStr, to: &CStr) -> bool {
 
     // First try a normal rename, and return if it works.
     if os_rename(from, to) == OK {
-        return true;
+        return Ok(());
     }
 
     // The rename failed, try copying the file.
-    if vim_copyfile(from, to) != OK {
-        return false;
-    }
+    vim_copyfile(from, to)?;
     if file_info(from).is_some() {
         os_remove(from);
     }
-    true
+    Ok(())
 }
 
 /// Copy `from` to `to`, with the same permissions and ACL.
 ///
 /// A symbolic link is copied as a link, not as its target.
-///
-/// @return  FAIL for failure, OK for success
-pub fn vim_copyfile(from: &CStr, to: &CStr) -> c_int {
+pub(crate) fn vim_copyfile(from: &CStr, to: &CStr) -> Result<(), IoFailed> {
     let path = |name: &CStr| std::path::PathBuf::from(std::ffi::OsStr::from_bytes(name.to_bytes()));
     if link_info(from).is_some_and(|info| info.stat.st_mode & S_IFMT as u64 == S_IFLNK) {
         // Upstream reads the link into a `MAXPATHL` buffer: a longer target
@@ -265,25 +264,19 @@ pub fn vim_copyfile(from: &CStr, to: &CStr) -> c_int {
             .ok()
             .filter(|target| !target.as_os_str().is_empty())
             .filter(|target| target.as_os_str().len() <= MAXPATHL as usize);
-        let Some(target) = target else {
-            return FAIL;
-        };
-        return if std::os::unix::fs::symlink(target, path(to)).is_ok() {
-            OK
-        } else {
-            FAIL
-        };
+        let target = target.ok_or(IoFailed)?;
+        return std::os::unix::fs::symlink(target, path(to)).map_err(|_| IoFailed);
     }
 
     // For systems that support ACL: get the ACL from the original file.
     let acl = os_get_acl(from);
     if os_copy(from, to, UV_FS_COPYFILE_EXCL) != 0 {
         os_free_acl(acl);
-        return FAIL;
+        return Err(IoFailed);
     }
     os_set_acl(to, acl);
     os_free_acl(acl);
-    OK
+    Ok(())
 }
 
 /// `uv_fs_copyfile`'s flag: fail if the destination exists.
@@ -335,8 +328,12 @@ pub fn match_file_list(list: &CStr, sfname: &CStr, ffname: &CStr) -> bool {
     while !rest.is_empty() {
         let (part, after) = split_option_part(rest, MAXPATHL as usize, b",");
         rest = after;
-        let Some((regpat, allow_dirs)) = file_pat_to_reg_pat(&part, part.len()) else {
-            break;
+        let (regpat, allow_dirs) = match file_pat_to_reg_pat(&part, part.len()) {
+            Ok(compiled) => compiled,
+            Err(err) => {
+                err.report();
+                break;
+            }
         };
         let Some(mut prog) = OwnedProg::compile(regpat.as_cstr(), RE_MAGIC) else {
             continue;
@@ -354,8 +351,8 @@ pub fn match_file_list(list: &CStr, sfname: &CStr, ffname: &CStr) -> bool {
 }
 
 /// [`file_pat_to_reg_pat`] of a whole pattern the caller holds: the regexp,
-/// or `None` when the braces in the pattern do not balance.
-pub(crate) fn file_pat_to_regpat(pat: &CStr) -> Option<XString> {
+/// or that the braces in the pattern do not balance.
+pub(crate) fn file_pat_to_regpat(pat: &CStr) -> Result<XString, PatternError> {
     let pat = pat.to_bytes();
     file_pat_to_reg_pat(pat, pat.len()).map(|(regpat, _)| regpat)
 }
@@ -369,8 +366,8 @@ pub(crate) fn file_pat_to_regpat(pat: &CStr) -> Option<XString> {
 /// guarded by the one before it not being NUL, and so may this.
 ///
 /// @return  the regexp, and whether a directory path separator has to be
-///          matched; `None` when the braces in the pattern do not balance.
-pub fn file_pat_to_reg_pat(pat: &[u8], end: usize) -> Option<(XString, bool)> {
+///          matched; or that the braces in the pattern do not balance.
+pub fn file_pat_to_reg_pat(pat: &[u8], end: usize) -> Result<(XString, bool), PatternError> {
     let mut allow_dirs = false;
     let mut note_dir = |c: u8| {
         if c == b'/' {
@@ -379,7 +376,7 @@ pub fn file_pat_to_reg_pat(pat: &[u8], end: usize) -> Option<(XString, bool)> {
     };
 
     if end == 0 {
-        return Some((XString::from_bytes(b"^$"), false));
+        return Ok((XString::from_bytes(b"^$"), false));
     }
     let at = |i: usize| cstr::byte_at(pat, i);
 
@@ -442,7 +439,7 @@ pub fn file_pat_to_reg_pat(pat: &[u8], end: usize) -> Option<(XString, bool)> {
                 } else if c == b','
                     || c == b'%'
                     || c == b'#'
-                    || ascii_isspace(c as c_int)
+                    || ascii_isspace(c_int::from(c))
                     || c == b'{'
                     || c == b'}'
                 {
@@ -483,13 +480,11 @@ pub fn file_pat_to_reg_pat(pat: &[u8], end: usize) -> Option<(XString, bool)> {
     }
 
     if nested != 0 {
-        let unbalanced = if nested < 0 {
-            c"E219: Missing {."
+        return Err(if nested < 0 {
+            PatternError::MissingOpen
         } else {
-            c"E220: Missing }."
-        };
-        emsg(gettext(unbalanced));
-        return None;
+            PatternError::MissingClose
+        });
     }
-    Some((XString::from_vec(reg), allow_dirs))
+    Ok((XString::from_vec(reg), allow_dirs))
 }

@@ -302,7 +302,9 @@ pub fn autocmd_register(
                 allow_dirs: false,
             };
             if !is_buflocal {
-                let reg_pat = file_pat_to_reg_pat(pat, pat.len());
+                let reg_pat = file_pat_to_reg_pat(pat, pat.len())
+                    .inspect_err(|err| err.report())
+                    .ok();
                 if let Some((reg_pat, allow_dirs)) = &reg_pat {
                     new_pat.allow_dirs = *allow_dirs;
                     new_pat.reg_prog = vim_regcomp(reg_pat.as_cstr(), RE_MAGIC);

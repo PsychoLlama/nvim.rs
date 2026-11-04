@@ -12,6 +12,13 @@
 //! applied to U+FEFF.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use std::fs::File;
 use std::io::Write as _;
@@ -71,25 +78,36 @@ fn ucs2bytes(c: c_uint, flags: FioFlags) -> ([u8; 4], usize, bool) {
                 // first is 0xd800-0xdbff, the second 0xdc00-0xdfff.
                 c -= 0x10000;
                 error = c >= 0x100000;
-                put(0, (((c >> 10) & 0x3ff) + 0xd800) as u16);
+                put(0, low16(((c >> 10) & 0x3ff) + 0xd800));
                 at = 2;
                 c = (c & 0x3ff) + 0xdc00;
             } else {
                 error = true;
             }
         }
-        put(at, c as u16);
+        // UCS-2 keeps the low sixteen bits of a character it cannot hold.
+        put(at, low16(c));
         return (out, at + 2, error);
     }
 
     // Latin1.
-    if c >= 0x100 {
-        out[0] = 0xbf;
-        (out, 1, true)
-    } else {
-        out[0] = c as u8;
-        (out, 1, false)
+    match u8::try_from(c) {
+        Ok(byte) => {
+            out[0] = byte;
+            (out, 1, false)
+        }
+        Err(_) => {
+            out[0] = 0xbf;
+            (out, 1, true)
+        }
     }
+}
+
+/// The low sixteen bits of `c`: what C's store of an `int` into a 16-bit
+/// slot kept.
+fn low16(c: c_uint) -> u16 {
+    let [low, high, ..] = c.to_le_bytes();
+    u16::from_le_bytes([low, high])
 }
 
 /// Generate the byte-order mark for encoding `name` into `buf`.
@@ -226,10 +244,10 @@ impl ByteWriter {
         let staged = &mut self.buf[self.len..self.len + n];
         staged.copy_from_slice(&bytes[..n]);
         for byte in staged.iter_mut() {
-            if *byte == NL as u8 {
+            if *byte == b'\n' {
                 *byte = 0; // replace newlines with NULs
-            } else if mac && *byte == CAR as u8 {
-                *byte = NL as u8; // Mac: replace CRs with NLs
+            } else if mac && *byte == b'\r' {
+                *byte = b'\n'; // Mac: replace CRs with NLs
             }
         }
         self.len += n;
@@ -312,7 +330,7 @@ impl ByteWriter {
                     break;
                 }
                 let c = if n > 1 {
-                    char_at(rest) as c_uint
+                    char_at(rest).cast_unsigned()
                 } else {
                     c_uint::from(rest[0])
                 };

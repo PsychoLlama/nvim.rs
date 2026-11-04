@@ -279,7 +279,7 @@ pub fn f_delete(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(match flags.to_bytes() {
         b"" => done(os_remove(name)),
         b"d" => done(os_rmdir(name)),
-        b"rf" => VarNumber::from(delete_recursive(name)),
+        b"rf" => delete_recursive(name).map_or(-1, |()| 0),
         _ => {
             err1(e_invexpr2, flags);
             return;
@@ -307,7 +307,7 @@ pub fn f_filecopy(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     });
     if copyable {
         let to = str_arg(args, 1, &mut numbuf2);
-        result.write_number((vim_copyfile(from, to) == OK) as VarNumber);
+        result.write_number(VarNumber::from(vim_copyfile(from, to).is_ok()));
     }
 }
 
@@ -474,7 +474,7 @@ pub fn f_rename(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut buf = NumBuf::new();
     let from = str_arg(args, 0, &mut numbuf);
     let to = path_arg(args, 1, &mut buf);
-    result.write_number(if rename_file(from, to) { 0 } else { -1 });
+    result.write_number(rename_file(from, to).map_or(-1, |()| 0));
 }
 
 /// `tempname()`: a fresh name in the session's own temporary directory.

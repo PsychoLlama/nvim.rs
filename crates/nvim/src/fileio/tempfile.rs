@@ -242,10 +242,9 @@ pub fn readdir_core(
     Ok(names)
 }
 
-/// Delete `name` and everything in it, recursively.
-///
-/// @return  0 for success, -1 if some file was not deleted.
-pub fn delete_recursive(name: &CStr) -> c_int {
+/// Delete `name` and everything in it, recursively; `Err` when some file
+/// was not deleted.
+pub(crate) fn delete_recursive(name: &CStr) -> Result<(), IoFailed> {
     delete_tree(name.to_bytes())
 }
 
@@ -255,32 +254,34 @@ pub fn delete_recursive(name: &CStr) -> c_int {
 /// only because each level of the recursion rewrites the prefix it shares
 /// with its caller. This carries its own buffer instead, which also lifts
 /// the `MAXPATHL` limit on how deep a tree can be deleted.
-fn delete_tree(name: &[u8]) -> c_int {
+fn delete_tree(name: &[u8]) -> Result<(), IoFailed> {
     let path = CString::new(name).unwrap_or_default();
     if !os_isrealdir(&path) {
         // Delete symlink only.
-        return if os_remove(&path) == 0 { 0 } else { -1 };
+        return if os_remove(&path) == 0 {
+            Ok(())
+        } else {
+            Err(IoFailed)
+        };
     }
 
-    let Ok(names) = readdir_core(&path, None) else {
-        return -1;
-    };
+    let names = readdir_core(&path, None).map_err(|_| IoFailed)?;
 
-    let mut result = 0;
+    let mut result = Ok(());
     let mut child = name.to_vec();
     child.push(b'/');
     let stem = child.len();
     for entry in &names {
         child.truncate(stem);
         child.extend_from_slice(entry.to_bytes());
-        if delete_tree(&child) != 0 {
+        if delete_tree(&child).is_err() {
             // Remember the failure but continue deleting any further
             // entries.
-            result = -1;
+            result = Err(IoFailed);
         }
     }
     if os_rmdir(&path) != 0 {
-        result = -1;
+        result = Err(IoFailed);
     }
     result
 }
@@ -317,7 +318,8 @@ pub fn vim_deltempdir() {
     vim_closetempdir();
     // Remove the trailing path separator, which is always there.
     let dir = dir.to_bytes();
-    delete_tree(dir.strip_suffix(b"/").unwrap_or(dir));
+    // Whatever is left behind stays there: nothing to say on the way out.
+    let _ = delete_tree(dir.strip_suffix(b"/").unwrap_or(dir));
 }
 
 /// Gets the path to Nvim's own temp dir, ending with a slash.

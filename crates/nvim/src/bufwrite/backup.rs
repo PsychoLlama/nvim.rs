@@ -13,6 +13,13 @@
 //! into a path.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use std::ffi::CString;
 use std::fs::{File, OpenOptions};
@@ -121,14 +128,11 @@ fn get_fileinfo_os(fname: &CStr, file_info_old: &mut FileInfo) -> Result<TargetF
     let (perm, device, newfile) = if !exists {
         (-1, false, true)
     } else if mode & __S_IFMT as uint64_t == S_IFREG {
-        (mode as c_int, false, false)
+        (file_info_old.mode(), false, false)
     } else if mode & __S_IFMT as uint64_t == S_IFDIR {
-        return Err(WriteError::numbered(c"E502", c"is a directory"));
+        return Err(WriteError::IsDirectory);
     } else if os_nodetype(fname) != NODE_WRITABLE {
-        return Err(WriteError::numbered(
-            c"E503",
-            c"is not a file or writable device",
-        ));
+        return Err(WriteError::NotWritable);
     } else {
         // A device of some kind (or a fifo): we can write to it, but
         // there is nothing to back up and no permissions worth copying.
@@ -164,9 +168,9 @@ pub(crate) fn get_fileinfo(
     target.readonly = os_file_is_writable(fname) == 0;
     if !forceit && target.readonly {
         return Err(Some(if cpo_has(CpoFlag::FWRITE) {
-            WriteError::numbered(c"E504", E_READONLY_CPO)
+            WriteError::ReadOnlyCpo
         } else {
-            WriteError::numbered(c"E505", c"is read-only (add ! to override)")
+            WriteError::ReadOnly
         }));
     }
     // Without `!`, check the timestamp has not changed since the read.
@@ -275,9 +279,9 @@ fn want_backup_copy(
         return true; // can't write in this directory
     };
     let (uid, gid) = (file_info_old.stat.st_uid, file_info_old.stat.st_gid);
-    let _ = std::os::unix::fs::fchown(&file, Some(uid as uv_uid_t), Some(gid as uv_gid_t));
+    let _ = std::os::unix::fs::fchown(&file, file_info_old.uid(), file_info_old.gid());
     let copy = file_info(&tmp_fname).is_none_or(|info| {
-        info.stat.st_uid != uid || info.stat.st_gid != gid || info.stat.st_mode as c_int != perm
+        info.stat.st_uid != uid || info.stat.st_gid != gid || info.mode() != perm
     });
     // Close before removing: on Windows an open file cannot be deleted.
     drop(file);
@@ -391,8 +395,7 @@ fn backup_by_copy(
     backup_ext: &[u8],
     forceit: bool,
 ) -> Result<Option<XString>, WriteError> {
-    let cannot_create =
-        || WriteError::plain(c"E509: Cannot create backup file (add ! to override)");
+    let cannot_create = || WriteError::CannotCreateBackup;
     let mut err = None;
     let mut made = None;
 
@@ -429,8 +432,13 @@ fn backup_by_copy(
         // Try to give the backup the original's group. Failing that, give
         // the group the same bits as others.
         let gid = file_info_old.stat.st_gid;
+        // -1 leaves the owner as it is.
         if file_info_new.stat.st_gid != gid
-            && os_chown(path, -1i32 as uv_uid_t, gid as uv_gid_t) != 0
+            && os_chown(
+                path,
+                uv_uid_t::MAX,
+                file_info_old.gid().unwrap_or(uv_gid_t::MAX),
+            ) != 0
         {
             os_setperm(path, (perm & 0o707) | ((perm & 0o7) << 3));
         }
@@ -467,7 +475,7 @@ fn backup_by_rename(
     // 'cpoptions' "W" means not overwriting a read-only file. A rename
     // may be possible anyway, so it needs its own check here.
     if target.readonly && cpo_has(CpoFlag::FWRITE) {
-        return Err(WriteError::numbered(c"E504", E_READONLY_CPO));
+        return Err(WriteError::ReadOnlyCpo);
     }
 
     // path/fo.o.h becomes path/fo.o.h.bak, in the first directory of
@@ -480,16 +488,14 @@ fn backup_by_rename(
         {
             return false;
         }
-        if rename_file(fname, backup.as_cstr()) {
+        if rename_file(fname, backup.as_cstr()).is_ok() {
             made = Some(backup);
             return true;
         }
         false // don't do the rename below
     });
     if made.is_none() && !forceit {
-        return Err(WriteError::plain(
-            c"E510: Can't make backup file (add ! to override)",
-        ));
+        return Err(WriteError::CannotMakeBackup);
     }
     Ok(made)
 }
@@ -511,14 +517,14 @@ pub(crate) fn restore_backup(backup: &Backup, fname: &CStr, direct: bool, newfil
             // move the copy into its place. That may fail, in which case
             // the copy is left where it is.
             if !path_exists(fname) {
-                rename_file(path, fname);
+                let _ = rename_file(path, fname);
             }
             // If the original does exist, throw the copy away.
             if path_exists(fname) {
                 os_remove(path);
             }
         } else {
-            rename_file(path, fname);
+            let _ = rename_file(path, fname);
         }
     }
     newfile || path_exists(fname)
@@ -534,7 +540,7 @@ pub(crate) fn recover_from_backup(backup: &Backup, fname: &CStr) -> bool {
         return false;
     };
     if !backup.copy {
-        return rename_file(path.as_cstr(), fname);
+        return rename_file(path.as_cstr(), fname).is_ok();
     }
     // Copying may take a while; if we were interrupted, let the user
     // know the message arrived.
@@ -563,7 +569,8 @@ pub(crate) fn apply_patchmode(
                 emsg(translate(c"E205: Patchmode: can't save original file"));
             }
             Some(org) if !path_exists(org.as_cstr()) => {
-                rename_file(path.as_cstr(), org.as_cstr());
+                // A rename that fails leaves the backup where it is.
+                let _ = rename_file(path.as_cstr(), org.as_cstr());
                 backup.path = None; // don't delete the file
                 let atime = file_info_old.stat.st_atim.tv_sec as f64;
                 let mtime = file_info_old.stat.st_mtim.tv_sec as f64;
@@ -637,15 +644,10 @@ pub(crate) fn open_write_file(
         if (!target.newfile && file_info_old.stat.st_nlink > 1)
             || link_info(fname).is_some_and(|link| !link.same_file_as(file_info_old))
         {
-            *err = Some(WriteError::plain(
-                c"E166: Can't open linked file for writing",
-            ));
+            *err = Some(WriteError::LinkedFile);
             return None;
         }
-        *err = Some(WriteError::errno(
-            c"E212: Can't open file for writing: %s",
-            code,
-        ));
+        *err = Some(WriteError::CannotOpen(code));
         if !(req.forceit && !cpo_has(CpoFlag::FWRITE) && target.perm >= 0) {
             return None;
         }
@@ -694,7 +696,7 @@ pub(crate) fn finish_write(
             && error != UV_ENOTSUP
             && !target.device
         {
-            err = Some(WriteError::shared(e_fsync, error));
+            err = Some(WriteError::FsyncFailed(error));
         }
     }
 
@@ -709,7 +711,7 @@ pub(crate) fn finish_write(
         // right — some systems drop permission or ACL data over it.
         let (uid, gid) = (file_info_old.stat.st_uid, file_info_old.stat.st_gid);
         if file_info(wfname).is_none_or(|info| info.stat.st_uid != uid || info.stat.st_gid != gid) {
-            let _ = std::os::unix::fs::fchown(&file, Some(uid as uv_uid_t), Some(gid as uv_gid_t));
+            let _ = std::os::unix::fs::fchown(&file, file_info_old.uid(), file_info_old.gid());
             if target.perm >= 0 {
                 os_setperm(wfname, target.perm); // may have changed
             }
@@ -720,7 +722,7 @@ pub(crate) fn finish_write(
     }
 
     if let Err(error) = close_file(file) {
-        err = Some(WriteError::errno(c"E512: Close failed: %s", error));
+        err = Some(WriteError::CloseFailed(error));
     }
 
     let mut perm = target.perm;

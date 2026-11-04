@@ -7,6 +7,13 @@
 //! byte.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use std::fs::File;
 use std::io::{Seek, SeekFrom};
@@ -82,11 +89,11 @@ impl LineSplit<'_> {
 /// Two `memchr`s, as upstream's: the newline first, then the NULs before it,
 /// which there almost never are.
 fn next_newline(bytes: &mut [u8], from: usize, end: usize) -> Option<usize> {
-    let nl = memchr_in(&bytes[from..end], NL as u8).map(|at| from + at);
+    let nl = memchr_in(&bytes[from..end], b'\n').map(|at| from + at);
     let mut at = from;
     let stop = nl.unwrap_or(end);
     while let Some(nul) = memchr_in(&bytes[at..stop], 0) {
-        bytes[at + nul] = NL as u8;
+        bytes[at + nul] = b'\n';
         at += nul + 1;
     }
     nl
@@ -108,14 +115,14 @@ fn split_mac(w: &mut ReadBuf, st: &mut LineSplit) -> Split {
     while w.ptr < end {
         let c = w.bytes[w.ptr];
         // Catch the most common case first.
-        if c != 0 && c != CAR as u8 && c != NL as u8 {
+        if c != 0 && c != b'\r' && c != b'\n' {
             w.ptr += 1;
             continue;
         }
         if c == 0 {
-            w.bytes[w.ptr] = NL as u8; // NULs are replaced by newlines!
-        } else if c == NL as u8 {
-            w.bytes[w.ptr] = CAR as u8; // NLs are replaced by CRs!
+            w.bytes[w.ptr] = b'\n'; // NULs are replaced by newlines!
+        } else if c == b'\n' {
+            w.bytes[w.ptr] = b'\r'; // NLs are replaced by CRs!
         } else {
             if st.skip_count == 0 {
                 w.bytes[w.ptr] = 0; // end of line
@@ -162,7 +169,7 @@ fn split_nl(w: &mut ReadBuf, st: &mut LineSplit) -> Split {
             bytes[nl] = 0; // end of line
             let mut line_end = nl;
             if dos {
-                if nl > line_start && bytes[nl - 1] == CAR as u8 {
+                if nl > line_start && bytes[nl - 1] == b'\r' {
                     // Remove the CR before the NL.
                     bytes[nl - 1] = 0;
                     line_end -= 1;

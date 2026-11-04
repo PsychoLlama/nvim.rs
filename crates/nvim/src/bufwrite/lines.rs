@@ -10,9 +10,17 @@
 //! what the write turned out to be.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::memline::Lines;
 use crate::memory::XString;
+use crate::narrow::len_as_int;
 use core::ffi::{CStr, c_int};
 
 use super::*;
@@ -54,11 +62,11 @@ pub(crate) struct WriteNotes {
 /// The count is upstream's `int`, which a write past 2 GiB overflows; it
 /// wraps, as C's did, and only the "written" message reads it.
 fn flush_full(writer: &mut ByteWriter, nchars: &mut c_int) -> bool {
-    let full = writer.capacity() as c_int;
+    let full = writer.capacity();
     if !writer.flush() {
         return false;
     }
-    *nchars = nchars.wrapping_add(full - writer.staged() as c_int);
+    *nchars = nchars.wrapping_add(len_as_int(full - writer.staged()));
     true
 }
 
@@ -123,9 +131,9 @@ pub(crate) fn write_lines(
 
         // EOL_MAC and EOL_DOS write a CR; EOL_DOS follows it with an NL.
         let full = if fileformat == EOL_UNIX {
-            writer.push(NL as u8)
+            writer.push(b'\n')
         } else {
-            let full = writer.push(CAR as u8);
+            let full = writer.push(b'\r');
             if fileformat != EOL_DOS {
                 full
             } else {
@@ -133,7 +141,7 @@ pub(crate) fn write_lines(
                     end = LineNr::ZERO; // write error: break the loop
                     break;
                 }
-                writer.push(NL as u8)
+                writer.push(b'\n')
             }
         };
         if full {
@@ -151,11 +159,11 @@ pub(crate) fn write_lines(
     }
 
     if writer.staged() > 0 && end > LineNr::ZERO {
-        let remaining = writer.staged() as c_int;
+        let remaining = writer.staged();
         if !writer.flush() {
             end = LineNr::ZERO; // write error
         }
-        nchars = nchars.wrapping_add(remaining - writer.staged() as c_int);
+        nchars = nchars.wrapping_add(len_as_int(remaining - writer.staged()));
     }
     // Did everything convert and get written?
     if end != LineNr::ZERO && writer.staged() > 0 {
@@ -186,7 +194,7 @@ pub(crate) fn report_written(
 ) {
     // The report. Upstream assembles it in `IObuff`, which `msg_progress`
     // and `set_keep_msg` write again.
-    let (lnum, nchars) = (written.lnum, written.nchars as FileOffset);
+    let (lnum, nchars) = (written.lnum, FileOffset::from(written.nchars));
     let mut report = Report::quoted_fname(buffer, Some(fname), IOSIZE as usize);
     let note = |report: &mut Report, text: &'static CStr| report.push(translate(text).to_bytes());
 

@@ -101,7 +101,7 @@ pub fn ml_setname(mut buffer: Buf) {
         }
         // The swap file has to be closed before it can be renamed.
         buffer.b_ml.memfile().close_file();
-        if rename_file(&old, fname.as_cstr()) {
+        if rename_file(&old, fname.as_cstr()).is_ok() {
             success = true;
             let memfile = buffer.b_ml.memfile();
             memfile.free_fnames();

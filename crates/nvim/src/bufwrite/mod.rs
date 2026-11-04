@@ -9,6 +9,13 @@
 //! ([`lines`]).
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::ex_docmd::cmdmod_has;
 use crate::mbyte::canonize;
@@ -16,11 +23,9 @@ use crate::memline::MlFlags;
 use crate::narrow::len_as_int;
 use crate::semsg;
 use crate::tr_plural;
-use crate::types::CAR;
 use crate::types::ColNr;
 use crate::types::NL;
-use core::ffi::CStr;
-use std::borrow::Cow;
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use crate::autocmd::{apply_autocmds_exarg, aucmd_prepbuf, aucmd_restbuf};
@@ -63,8 +68,8 @@ use crate::sha256::Sha256;
 use crate::startup::exiting;
 use crate::strings::{FmtArg, format_into};
 use crate::types::{
-    AcoSave, CmdModFlags, CpoFlag, ExArg, FAIL, Failed, FileInfo, FileOffset, IOSIZE, LineNr,
-    MAXPATHL, Pos, ShmFlag, VimAcl, uint64_t, uv_gid_t, uv_uid_t,
+    AcoSave, CmdModFlags, CpoFlag, ExArg, Failed, FileInfo, FileOffset, IOSIZE, LineNr, MAXPATHL,
+    Pos, ShmFlag, VimAcl, uint64_t, uv_gid_t, uv_uid_t,
 };
 use crate::ui::ui_flush;
 use crate::undo::{curbuf_is_changed, u_unchanged, u_update_save_nr, u_write_undo};
@@ -79,21 +84,47 @@ mod autocmds;
 pub(crate) use self::autocmds::*;
 mod lines;
 pub(crate) use self::lines::*;
-/// A write error, held until the cleanup path can report it.
+/// Why a write failed, held until the cleanup path can report it.
 ///
-/// `buf_write` has a single exit that emits the message, because the file
-/// name has to be quoted first and because every failure shares the
-/// "original file may be lost" handling that follows.
-pub(crate) struct WriteError {
-    /// The `E502`-style code, printed before the quoted file name.
-    num: Option<&'static CStr>,
-    /// The message, already translated. Owned only when it had to be
-    /// formatted; otherwise borrowed from the translation catalog.
-    msg: Cow<'static, CStr>,
-    /// A libuv error code whose text is appended, or 0 for none. Without a
-    /// `num` it is instead the argument of the message's own `%s`.
-    arg: ::core::ffi::c_int,
+/// `buf_write` has a single exit that reports it, because the file name has
+/// to be quoted first and because every failure shares the "original file
+/// may be lost" handling that follows. The messages are upstream's; each is
+/// translated through the same catalogue entry it always was.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WriteError {
+    /// `E502`: the name is a directory.
+    IsDirectory,
+    /// `E503`: neither a file nor a writable device.
+    NotWritable,
+    /// `E504`: read-only, and 'cpoptions' has "W".
+    ReadOnlyCpo,
+    /// `E505`: read-only.
+    ReadOnly,
+    /// `E509`: no backup could be made by copying.
+    CannotCreateBackup,
+    /// `E510`: no backup could be made by renaming.
+    CannotMakeBackup,
+    /// `E166`: the file is a link that was not followed.
+    LinkedFile,
+    /// `E212`: the file would not open, with libuv's code.
+    CannotOpen(c_int),
+    /// `E667`: the sync failed, with libuv's code.
+    FsyncFailed(c_int),
+    /// `E512`: the close failed, with libuv's code.
+    CloseFailed(c_int),
+    /// Interrupted while writing.
+    Interrupted,
+    /// `E214`: no temp file for a conversion.
+    NoTempFile,
+    /// `E213`: the conversion is not possible.
+    CannotConvert,
+    /// `E513`: the conversion failed, on this line when one is known.
+    ConversionFailed(LineNr),
+    /// `E514`: the write itself failed.
+    WriteFailed,
 }
+
+const _: () = assert!(size_of::<WriteError>() <= 16);
 
 /// The translated form of a literal message.
 pub(crate) fn translate(msg: &'static CStr) -> &'static CStr {
@@ -101,92 +132,57 @@ pub(crate) fn translate(msg: &'static CStr) -> &'static CStr {
 }
 
 impl WriteError {
-    /// A numbered error: `E502: "name" is a directory`.
-    pub(crate) fn numbered(num: &'static CStr, msg: &'static CStr) -> Self {
-        WriteError {
-            num: Some(num),
-            msg: translate(msg).into(),
-            arg: 0,
-        }
-    }
-
-    /// A message that carries its own error number, if any.
-    pub(crate) fn plain(msg: &'static CStr) -> Self {
-        WriteError {
-            num: None,
-            msg: translate(msg).into(),
-            arg: 0,
-        }
-    }
-
-    /// A message whose single `%s` takes the text of libuv error `arg`.
-    pub(crate) fn errno(msg: &'static CStr, arg: ::core::ffi::c_int) -> Self {
-        WriteError {
-            num: None,
-            msg: translate(msg).into(),
-            arg,
-        }
-    }
-
-    /// A message that had to be formatted at the point of failure.
-    pub(crate) fn formatted(msg: CString) -> Self {
-        WriteError {
-            num: None,
-            msg: msg.into(),
-            arg: 0,
-        }
-    }
-
-    /// A message from one of the shared `e_*` globals rather than from a
-    /// literal here, with `arg` as for [`errno`](Self::errno).
-    pub(crate) fn shared(msg: &'static CStr, arg: ::core::ffi::c_int) -> Self {
-        WriteError {
-            num: None,
-            msg: gettext(msg).into(),
-            arg,
-        }
-    }
-
     /// Report the error, against the already-quoted file name in `fname`.
-    pub(crate) fn emit(&self, fname: &CStr) {
+    pub(crate) fn report(&self, fname: &CStr) {
         let iobuff = msg_cstr(fname);
-        let msg = msg_cstr(&self.msg);
-        match (self.num, self.arg) {
-            (Some(num), 0) => {
-                let num = msg_cstr(num);
-                semsg!("{num}: {iobuff}{msg}");
+        // A numbered error: `E502: "name" is a directory`.
+        let numbered = |num: &'static CStr, msg: &'static CStr| {
+            let (num, msg) = (msg_cstr(num), msg_cstr(translate(msg)));
+            semsg!("{num}: {iobuff}{msg}");
+        };
+        // A message whose single `%s` takes the text of libuv error `arg`;
+        // the message is deliberately its own format string here.
+        let with_errno = |msg: &'static CStr, arg: c_int| {
+            let why = msg_cstr(os_strerror(arg));
+            emsg_text(tr_plural!(translate(msg), why));
+        };
+        let plain = |msg: &'static CStr| {
+            emsg(translate(msg));
+        };
+        match *self {
+            Self::IsDirectory => numbered(c"E502", c"is a directory"),
+            Self::NotWritable => numbered(c"E503", c"is not a file or writable device"),
+            Self::ReadOnlyCpo => numbered(c"E504", E_READONLY_CPO),
+            Self::ReadOnly => numbered(c"E505", c"is read-only (add ! to override)"),
+            Self::CannotCreateBackup => {
+                plain(c"E509: Cannot create backup file (add ! to override)");
             }
-            (Some(num), arg) => {
-                let (num, why) = (msg_cstr(num), msg_cstr(os_strerror(arg)));
-                semsg!("{num}: {iobuff}{msg}: {why}");
+            Self::CannotMakeBackup => plain(c"E510: Can't make backup file (add ! to override)"),
+            Self::LinkedFile => plain(c"E166: Can't open linked file for writing"),
+            Self::CannotOpen(code) => with_errno(c"E212: Can't open file for writing: %s", code),
+            Self::FsyncFailed(code) => with_errno(e_fsync, code),
+            Self::CloseFailed(code) => with_errno(c"E512: Close failed: %s", code),
+            Self::Interrupted => plain(e_interr),
+            Self::NoTempFile => plain(c"E214: Can't find temp file for writing"),
+            Self::CannotConvert => {
+                plain(c"E213: Cannot convert (add ! to write without conversion)");
             }
-            // The message is deliberately its own format string here.
-            (None, arg) if arg != 0 => {
-                let why = msg_cstr(os_strerror(arg));
-                emsg_text(tr_plural!(self.msg.as_ref(), why));
+            Self::ConversionFailed(lnum) if lnum == LineNr::ZERO => {
+                plain(c"E513: Write error, conversion failed (make 'fenc' empty to override)");
             }
-            (None, _) => {
-                emsg(&self.msg);
+            Self::ConversionFailed(lnum) => {
+                // Upstream formats into 300 bytes.
+                let fmt = translate(
+                    c"E513: Write error, conversion failed in line %d (make 'fenc' empty to override)",
+                );
+                let mut msg = vec![0; 300];
+                let len = format_into(&mut msg, fmt.to_bytes(), &[FmtArg::from(lnum)]).min(299);
+                msg.truncate(len);
+                emsg(&CString::new(msg).unwrap_or_default());
             }
+            Self::WriteFailed => plain(c"E514: Write error (file system full?)"),
         }
     }
-}
-
-/// "conversion failed", naming the line it failed on when one is known.
-pub(crate) fn conversion_failed(lnum: LineNr) -> WriteError {
-    if lnum == LineNr::ZERO {
-        return WriteError::plain(
-            c"E513: Write error, conversion failed (make 'fenc' empty to override)",
-        );
-    }
-    // Upstream formats into 300 bytes.
-    let fmt = translate(
-        c"E513: Write error, conversion failed in line %d (make 'fenc' empty to override)",
-    );
-    let mut msg = vec![0; 300];
-    let len = format_into(&mut msg, fmt.to_bytes(), &[FmtArg::from(lnum)]).min(299);
-    msg.truncate(len);
-    WriteError::formatted(CString::new(msg).unwrap_or_default())
 }
 
 pub const O_NOFOLLOW: ::core::ffi::c_int = ::libc::O_NOFOLLOW;
@@ -507,7 +503,10 @@ pub(crate) fn buf_write(
             let forced_enc = excmd
                 .as_deref()
                 .filter(|command| command.force_enc != 0)
-                .map(|command| command.line.cmd + command.force_enc as usize);
+                .map(|command| {
+                    command.line.cmd
+                        + usize::try_from(command.force_enc).expect("an offset into the line")
+                });
             let fenc = if let Some(at) = forced_enc {
                 // `force_enc` is an offset into the command's line.
                 let line = &excmd.as_ref().expect("the command is there").line;
@@ -531,7 +530,7 @@ pub(crate) fn buf_write(
                     let fsync = if b.b_p_fs >= 0 { b.b_p_fs != 0 } else { p_fs() };
                     ml_preserve(buf, false, fsync);
                     if got_int.get() {
-                        err = Some(WriteError::shared(e_interr, 0));
+                        err = Some(WriteError::Interrupted);
                         break 'restore_backup;
                     }
                 }
@@ -566,8 +565,7 @@ pub(crate) fn buf_write(
                     } else if P_CCV.first_byte() != 0 {
                         let Some(temp) = temp_name() else {
                             // Can't write without a temp file!
-                            err =
-                                Some(WriteError::plain(c"E214: Can't find temp file for writing"));
+                            err = Some(WriteError::NoTempFile);
                             break 'restore_backup;
                         };
                         wfname = WriteTarget::Temp(temp);
@@ -580,9 +578,7 @@ pub(crate) fn buf_write(
                     && matches!(wfname, WriteTarget::Direct)
                 {
                     if !req.forceit {
-                        err = Some(WriteError::plain(
-                            c"E213: Cannot convert (add ! to write without conversion)",
-                        ));
+                        err = Some(WriteError::CannotConvert);
                         break 'restore_backup;
                     }
                     notconverted = true;
@@ -693,7 +689,7 @@ pub(crate) fn buf_write(
                         // turns that into the output file.
                         let from = temp.as_cstr();
                         if end != LineNr::ZERO
-                            && eval_charconvert(c"utf-8", fenc, from, fname) == FAIL
+                            && eval_charconvert(c"utf-8", fenc, from, fname).is_err()
                         {
                             writer.conv_error = true;
                             end = LineNr::ZERO;
@@ -705,11 +701,11 @@ pub(crate) fn buf_write(
                 if end == LineNr::ZERO {
                     if err.is_none() {
                         err = Some(if writer.conv_error {
-                            conversion_failed(writer.conv_error_lnum)
+                            WriteError::ConversionFailed(writer.conv_error_lnum)
                         } else if got_int.get() {
-                            WriteError::shared(e_interr, 0)
+                            WriteError::Interrupted
                         } else {
-                            WriteError::plain(c"E514: Write error (file system full?)")
+                            WriteError::WriteFailed
                         });
                     }
                     if recover_from_backup(&backup, fname) {
@@ -800,7 +796,7 @@ pub(crate) fn buf_write(
     if let Some(err) = &err {
         // -100 to save some space for a further error message.
         let quoted = Report::quoted_fname(b, Some(fname), IOSIZE as usize - 100);
-        err.emit(quoted.as_cstr());
+        err.report(quoted.as_cstr());
         retval = Err(Failed);
         if end == LineNr::ZERO {
             let hl_id = HLF_E;

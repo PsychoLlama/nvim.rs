@@ -15,6 +15,7 @@ use neovim::fileio::file_pat_to_reg_pat;
 /// separator has to match; `None` when it does not compile.
 fn compile(pat: &str, end: usize) -> Option<(String, bool)> {
     file_pat_to_reg_pat(pat.as_bytes(), end)
+        .ok()
         .map(|(reg, dirs)| (String::from_utf8_lossy(&reg).into_owned(), dirs))
 }
 

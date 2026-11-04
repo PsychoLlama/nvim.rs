@@ -27,7 +27,6 @@ use super::*;
 use crate::eval::typval::{ListRef, NumBuf};
 use crate::guard::Suppress;
 use crate::narrow::number_as_int;
-use crate::types::{FAIL, OK};
 
 /// Publish the `v:` strings an expression is meant to read.
 fn set_vim_var_strings(vars: &[(Vv, &CStr)]) {
@@ -43,17 +42,19 @@ fn clear_vim_var_strings(vars: &[Vv]) {
     }
 }
 
+/// `'charconvert'` did not convert: the expression failed, or answered a
+/// true value, which is how it says the conversion did not work. Anything
+/// the expression said is out; the conversion failing says nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct NotConverted;
+
 /// Evaluate `'charconvert'` to convert `fname_from` into `fname_to`.
-///
-/// Answers `FAIL` both when the expression itself failed and when it
-/// answered a true value, which is how it reports that the conversion did
-/// not work.
-pub fn eval_charconvert(
+pub(crate) fn eval_charconvert(
     enc_from: &CStr,
     enc_to: &CStr,
     fname_from: &CStr,
     fname_to: &CStr,
-) -> c_int {
+) -> Result<(), NotConverted> {
     const VARS: [Vv; 4] = [
         Vv::CharconvertFrom,
         Vv::CharconvertTo,
@@ -76,7 +77,7 @@ pub fn eval_charconvert(
     clear_vim_var_strings(&VARS);
     current_sctx.set(saved_sctx);
 
-    if err { FAIL } else { OK }
+    if err { Err(NotConverted) } else { Ok(()) }
 }
 
 /// Evaluate `'diffexpr'` to write the difference between `origfile` and

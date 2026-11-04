@@ -672,7 +672,8 @@ fn match_shorthand(head: u8, diffmode: bool) -> c_int {
 }
 
 /// The four-attempt regexp search. `None` when the pattern could not be
-/// turned into a regexp at all, which upstream reports without a message.
+/// turned into a regexp at all: its braces do not balance, which is said
+/// here.
 fn match_pattern(
     text: &[u8],
     end: usize,
@@ -680,7 +681,9 @@ fn match_pattern(
     diffmode: bool,
     curtab_only: bool,
 ) -> Option<c_int> {
-    let (pat, _) = file_pat_to_reg_pat(text, end)?;
+    let (pat, _) = file_pat_to_reg_pat(text, end)
+        .inspect_err(|err| err.report())
+        .ok()?;
     // The pattern and its terminator, which the attempts below write.
     let mut buf = pat.into_vec();
     let patlen = buf.len() - 1;

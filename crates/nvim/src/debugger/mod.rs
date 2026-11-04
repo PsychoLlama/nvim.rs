@@ -411,6 +411,8 @@ pub fn ex_breakadd(excmd: &mut ExArg) {
     // A name is matched as a file glob, so it is compiled the way `:next
     // *.c` would be, not as a regexp the user wrote.
     let Some(prog) = file_pat_to_regpat(breakpoint.name.as_cstr())
+        .inspect_err(|err| err.report())
+        .ok()
         .and_then(|pattern| OwnedProg::compile(pattern.as_cstr(), RE_MAGIC + RE_STRING))
     else {
         return;

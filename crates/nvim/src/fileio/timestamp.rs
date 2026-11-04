@@ -8,6 +8,13 @@
 //! scratch buffer first, so that they can be put back if the re-read fails.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::buffer::BufFlags;
 use crate::cstr;
@@ -23,7 +30,7 @@ use std::ffi::CStr;
 use super::*;
 use crate::buffer::BufRef;
 use crate::highlight_group::{HLF_E, HLF_W};
-use crate::types::{FAIL, Failed, OK, ShmFlag, Vv};
+use crate::types::{Failed, ShmFlag, Vv};
 
 /// Has a warning already been shown this sweep? Only one is worth reading.
 static ALREADY_WARNED: GlobalCell<bool> = GlobalCell::new(false);
@@ -117,7 +124,7 @@ pub fn check_timestamps(focus: c_int) -> c_int {
     // Don't check timestamps while system() or another low-level function
     // may cause us to lose and gain focus.
     if no_check_timestamps.get() > 0 {
-        return false as c_int;
+        return c_int::from(false);
     }
 
     // Avoid doing a check twice. The OK/Reload dialog can cause a focus
@@ -125,7 +132,7 @@ pub fn check_timestamps(focus: c_int) -> c_int {
     // growing. Do check again after typing something.
     if focus != 0 && did_check_timestamps.get() {
         need_check_timestamps.set(true);
-        return false as c_int;
+        return c_int::from(false);
     }
 
     if !stuff_empty()
@@ -172,15 +179,14 @@ pub fn check_timestamps(focus: c_int) -> c_int {
     didit
 }
 
-/// Move all the lines from buffer `frombuf` to buffer `tobuf`.
-///
-/// @return  OK or FAIL. On FAIL `tobuf` is incomplete and/or `frombuf` is not
-///          empty.
+/// Move all the lines from buffer `frombuf` to buffer `tobuf`. On `Err`
+/// `tobuf` is incomplete and/or `frombuf` is not empty, and the memline
+/// has said why.
 ///
 /// Safe: both [`Buf`]s carry the whole of the promise this needs.
-fn move_lines(frombuf: Buf, tobuf: Buf) -> c_int {
+fn move_lines(frombuf: Buf, tobuf: Buf) -> Result<(), Failed> {
     let saved = switch_buffer(tobuf);
-    let mut retval = OK;
+    let mut retval = Ok(());
 
     // Copy the lines in "frombuf" to "tobuf".
     let mut lnum = LineNr::ONE;
@@ -191,21 +197,22 @@ fn move_lines(frombuf: Buf, tobuf: Buf) -> c_int {
         line.push(0);
         let appended = ml_append_terminated(lnum - 1, &line, false);
         if appended.is_err() {
-            retval = FAIL;
+            retval = appended;
             break;
         }
         lnum += 1;
     }
 
     // Delete all the lines in "frombuf".
-    if retval != FAIL {
+    if retval.is_ok() {
         frombuf.make_current();
         let mut lnum = Buf::current().b_ml.ml_line_count;
         while lnum > LineNr::ZERO {
-            if ml_delete(lnum).is_err() {
+            let deleted = ml_delete(lnum);
+            if deleted.is_err() {
                 // Oops! We could try putting back the saved lines, but
                 // that might fail again...
-                retval = FAIL;
+                retval = deleted;
                 break;
             }
             lnum -= 1;
@@ -362,7 +369,7 @@ pub fn buf_check_timestamp(mut buffer: Buf) -> c_int {
         file_info = found.unwrap_or_default();
         !file_info_ok
             || time_differs(&file_info, buffer.b_mtime, buffer.b_mtime_ns)
-            || file_info.stat.st_mode as c_int != buffer.b_orig_mode
+            || file_info.mode() != buffer.b_orig_mode
     };
 
     if differs {
@@ -547,7 +554,7 @@ pub fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
     let mut bufref = BufRef::NONE;
     if !(buf_is_empty(Buf::current()) || saved.is_err()) {
         // Allocate a buffer without putting it in the buffer list.
-        let savebuf = buflist_new(None, None, LineNr::ONE, BLN_DUMMY as c_int);
+        let savebuf = buflist_new(None, None, LineNr::ONE, BLN_DUMMY.cast_signed());
         bufref = BufRef::of_opt(savebuf);
         if let Some(scratch) = savebuf
             && buffer.raw() == Buf::current_raw()
@@ -561,7 +568,7 @@ pub fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
         }
         if saved.is_err()
             || buffer.raw() != Buf::current_raw()
-            || savebuf.is_none_or(|scratch| move_lines(buffer, scratch) == FAIL)
+            || savebuf.is_none_or(|scratch| move_lines(buffer, scratch).is_err())
         {
             let fname = msg_bytes(buffer.name.shown().map_or(&[][..], CStr::to_bytes));
             semsg!("E462: Could not prepare for reloading \"{fname}\"");
@@ -609,7 +616,8 @@ pub fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
                         break;
                     }
                 }
-                move_lines(scratch, buffer);
+                // What could not be put back is lost, as upstream.
+                let _ = move_lines(scratch, buffer);
             }
         } else if let Some(buffer) = current {
             // "buf" is still valid. Mark the buffer as unmodified and free
@@ -669,7 +677,7 @@ pub fn buf_store_file_info(mut buffer: Buf, file_info: &FileInfo) {
     buffer.b_mtime = file_info.stat.st_mtim.tv_sec;
     buffer.b_mtime_ns = file_info.stat.st_mtim.tv_nsec;
     buffer.b_orig_size = file_info.stat.st_size;
-    buffer.b_orig_mode = file_info.stat.st_mode as c_int;
+    buffer.b_orig_mode = file_info.mode();
 }
 
 /// Adjust the line with a missing end-of-line, used for the next write.

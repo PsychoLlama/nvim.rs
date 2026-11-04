@@ -19,6 +19,13 @@
 //! This is the read side of `bufwrite::convert`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use std::fs::File;
 
@@ -26,7 +33,7 @@ use crate::bufwrite::translate;
 use crate::cstr;
 use crate::mbyte::{
     ENC_2BYTE, ENC_2WORD, ENC_4BYTE, ENC_ENDIAN_L, ENC_LATIN1, ENC_UNICODE, ICONV_EINVAL, char_at,
-    encode_char, head_off, open_iconv, promised_char_len,
+    encode_char, head_off, open_iconv, promised_char_len, utf8_len,
 };
 use crate::memory::XString;
 use crate::option::vars::P_CCV;
@@ -34,7 +41,6 @@ use crate::os::iconv::Iconv;
 use crate::strings::has_char;
 
 use super::*;
-use crate::types::FAIL;
 
 crate::flag_set! {
     /// What Nvim knows how to convert itself, from an encoding's name:
@@ -136,7 +142,7 @@ pub(crate) fn readfile_charconvert(
         Some(name) => {
             // Close the input file; errors are ignored.
             *input = None;
-            if eval_charconvert(fenc, c"utf-8", fname, name.as_cstr()) == FAIL {
+            if eval_charconvert(fenc, c"utf-8", fname, name.as_cstr()).is_err() {
                 errmsg = Some(translate(c"Conversion with 'charconvert' failed"));
             }
             if errmsg.is_none() {
@@ -369,6 +375,12 @@ pub(crate) struct Conv {
 }
 
 impl Conv {
+    /// The byte `++bad=` puts in place of one that will not convert, once
+    /// `BAD_KEEP` and `BAD_DROP` are ruled out: the option takes one byte.
+    pub(crate) fn bad_byte(&self) -> u8 {
+        u8::try_from(self.bad_char).unwrap_or(b'?')
+    }
+
     pub(crate) fn new(bad_char: c_int) -> Self {
         Conv {
             flags: FioFlags::NONE,
@@ -471,7 +483,7 @@ impl Conv {
             } else if self.bad_char == BAD_DROP {
                 None
             } else {
-                Some(self.bad_char as u8)
+                Some(self.bad_byte())
             };
             // Upstream counts the room down without looking; there is
             // always some, the read having left seven eighths of the buffer
@@ -491,7 +503,7 @@ impl Conv {
 
         w.move_linerest(out_start);
         w.ptr = out_start;
-        w.size = (to - out_start) as isize;
+        w.size = (to - out_start).cast_signed();
         true
     }
 
@@ -519,7 +531,7 @@ impl Conv {
                 while t > start && w.bytes[t] & 0xc0 == 0x80 {
                     t -= 1;
                 }
-                if t + utf_byte2len(w.bytes[t]) as usize > data_end {
+                if t + usize::try_from(utf_byte2len(w.bytes[t])).unwrap_or(1) > data_end {
                     tail = Some(t);
                     p = t;
                 }
@@ -549,7 +561,7 @@ impl Conv {
 
         if let Some(tail) = tail {
             self.stash(&w.bytes[tail..data_end]);
-            w.size -= (data_end - tail) as isize;
+            w.size -= (data_end - tail).cast_signed();
         }
 
         if flags == FioFlags::LATIN1 {
@@ -570,7 +582,7 @@ impl Conv {
             }
             let dest = start + dest;
             w.move_linerest(dest);
-            w.size = (room_end - dest) as isize;
+            w.size = (room_end - dest).cast_signed();
             w.ptr = dest;
             return true;
         }
@@ -593,7 +605,7 @@ impl Conv {
                             continue;
                         }
                         if self.bad_char != BAD_KEEP {
-                            u8c = self.bad_char as u32;
+                            u8c = self.bad_char.cast_unsigned();
                         }
                     }
                     // The second word of a pair; take the first and put them
@@ -611,7 +623,7 @@ impl Conv {
                             continue;
                         }
                         if self.bad_char != BAD_KEEP {
-                            u8c = self.bad_char as u32;
+                            u8c = self.bad_char.cast_unsigned();
                         }
                     }
                 }
@@ -640,7 +652,7 @@ impl Conv {
                 } else {
                     let len = head_off(&w.bytes[start..data_end], p - start);
                     p -= len;
-                    u8c = char_at(&w.bytes[p..data_end]) as u32;
+                    u8c = char_at(&w.bytes[p..data_end]).cast_unsigned();
                     if len == 0 {
                         // Not a valid UTF-8 character: retry with another
                         // fenc when possible, otherwise report the error.
@@ -652,19 +664,19 @@ impl Conv {
                             continue;
                         }
                         if self.bad_char != BAD_KEEP {
-                            u8c = self.bad_char as u32;
+                            u8c = self.bad_char.cast_unsigned();
                         }
                     }
                 }
             }
             debug_assert!(u8c <= i32::MAX as u32);
-            let c = u8c as c_int;
-            dest -= utf_char2len(c) as usize;
+            let c = u8c.cast_signed();
+            dest -= utf8_len(c);
             encode_char(c, &mut w.bytes[dest..room_end]);
         }
 
         w.move_linerest(dest);
-        w.size = (room_end - dest) as isize;
+        w.size = (room_end - dest).cast_signed();
         w.ptr = dest;
         true
     }
@@ -703,7 +715,7 @@ impl Conv {
                 }
                 if p > start {
                     self.stash(&w.bytes[p..end]);
-                    w.size -= todo as isize;
+                    w.size -= todo.cast_signed();
                     break;
                 }
             }
@@ -733,7 +745,7 @@ impl Conv {
                 w.size -= 1;
             } else {
                 if self.bad_char != BAD_KEEP {
-                    w.bytes[p] = self.bad_char as u8;
+                    w.bytes[p] = self.bad_byte();
                 }
                 p += 1;
             }
@@ -806,7 +818,7 @@ impl FormatGuess {
 
     /// Guess the end-of-line format from the first bytes of the file.
     pub(crate) fn guess(&mut self, data: &[u8]) -> c_int {
-        let (nl, cr) = (NL as u8, CAR as u8);
+        let (nl, cr) = (b'\n', b'\r');
         let mut fileformat = EOL_UNKNOWN;
 
         // First try finding a NL, for Dos and Unix.

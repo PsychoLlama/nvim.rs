@@ -258,7 +258,9 @@ pub(crate) fn do_path_expand(
 
     // A name starting with a dot is only matched by a pattern that does.
     let starts_with_dot = buf[dir_len] == b'.';
-    let Some(pat) = file_pat_to_regpat(cstr::in_bytes(&buf[dir_len..])) else {
+    let Ok(pat) =
+        file_pat_to_regpat(cstr::in_bytes(&buf[dir_len..])).inspect_err(|err| err.report())
+    else {
         return 0;
     };
     // Ignore case if given 'wildignorecase', else respect 'fileignorecase'.

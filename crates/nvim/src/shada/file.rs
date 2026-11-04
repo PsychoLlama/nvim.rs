@@ -397,7 +397,7 @@ fn replace_original(
         }
     }
 
-    if !rename_file(tempname, fname) {
+    if rename_file(tempname, fname).is_err() {
         shada_file_error2(
             c"E136: Can't rename ShaDa file from %s to %s!",
             tempname,

@@ -495,7 +495,8 @@ fn arglist_del_files(patterns: &[XString]) {
         if got_int.get() {
             break;
         }
-        let Some(regexp) = file_pat_to_regpat(pattern.as_cstr()) else {
+        let Ok(regexp) = file_pat_to_regpat(pattern.as_cstr()).inspect_err(|err| err.report())
+        else {
             break;
         };
         let re_flags = if magic_isset() { RE_MAGIC } else { 0 };

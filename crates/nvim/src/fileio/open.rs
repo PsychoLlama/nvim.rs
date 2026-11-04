@@ -12,6 +12,13 @@
 //! `'fileformat'`, `'fileencoding'` and `'binary'`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::types::ColNr;
 use std::fs::File;
@@ -70,7 +77,7 @@ pub(crate) struct Opened<'a> {
 
 /// Open what `readfile` was asked to read.
 ///
-/// `Err` carries the answer `readfile` should give: a failure, or a
+/// `Err` carries the answer `readfile` should give: why it failed, or a
 /// directory, or `Ok` when an autocommand did the reading itself.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn open_source<'a>(
@@ -81,9 +88,9 @@ pub(crate) fn open_source<'a>(
     how: How,
     silent: bool,
     msg_save: c_int,
-) -> Result<Opened<'a>, Result<Loaded, Failed>> {
+) -> Result<Opened<'a>, Result<Loaded, ReadError>> {
     let set_options = how.set_options;
-    let mut retval = Err(Failed);
+    let mut retval = Err(ReadError::Reported(Failed));
     // The file once it is open, or why it could not be opened.
     let mut input: Result<File, c_int> = Err(0);
     let mut perm = 0;
@@ -142,7 +149,7 @@ pub(crate) fn open_source<'a>(
         if how.newfile {
             if read_autocmd(AutoEvent::BufReadCmd, sfname, excmd.as_deref_mut(), false) {
                 retval = if aborting() {
-                    Err(Failed)
+                    Err(Failed.into())
                 } else {
                     Ok(Loaded::Read)
                 };
@@ -157,7 +164,7 @@ pub(crate) fn open_source<'a>(
             }
         } else if read_autocmd(AutoEvent::FileReadCmd, sfname, excmd.as_deref_mut(), true) {
             retval = if aborting() {
-                Err(Failed)
+                Err(Failed.into())
             } else {
                 Ok(Loaded::Read)
             };
@@ -236,7 +243,7 @@ pub(crate) fn open_source<'a>(
     // in readonly mode, and only touch b_p_ro when BufFlags::CHECK_RO is set.
     let check_readonly = how.newfile && Buf::current().b_flags.has(BufFlags::CHECK_RO);
     if check_readonly && !readonlymode.get() {
-        Buf::current().b_p_ro = false as c_int;
+        Buf::current().b_p_ro = c_int::from(false);
     }
 
     if how.newfile && !how.stdin && !how.buffer && !how.fifo {
@@ -254,7 +261,7 @@ pub(crate) fn open_source<'a>(
             // and write for the user, or we might not be able to write
             // it ourselves. The bits are set below, after the swap
             // file is created.
-            swap_mode = (info.stat.st_mode as c_int & 0o644) | 0o600;
+            swap_mode = (info.mode() & 0o644) | 0o600;
         } else {
             Buf::current().b_mtime = 0;
             Buf::current().b_mtime_ns = 0;
@@ -302,8 +309,7 @@ pub(crate) fn open_source<'a>(
                 check_need_swap(how.newfile);
                 // The SwapExists autocommand may mess things up.
                 if buffer_changed() {
-                    emsg(gettext(E_AUCHANGEDBUF));
-                    return Err(retval);
+                    return Err(Err(ReadError::AutocmdsChangedBuffer));
                 }
             }
             if !silent {
@@ -348,27 +354,27 @@ pub(crate) fn open_source<'a>(
             c"[Permission Denied]"
         };
         filemess(Buf::current(), sfname, translate(note));
-        Buf::current().b_p_ro = true as c_int; // must use "w!" now
+        Buf::current().b_p_ro = c_int::from(true); // must use "w!" now
         return Err(retval);
     }
 
     // Only set the 'ro' flag for readonly files the first time they
     // are loaded. Help files always get readonly mode.
     if (check_readonly && file_readonly) || Buf::current().b_help {
-        Buf::current().b_p_ro = true as c_int;
+        Buf::current().b_p_ro = c_int::from(true);
     }
 
     if set_options {
         // Don't change 'eol' when reading from a buffer: it was
         // already set correctly when stdin was read.
         if !how.buffer {
-            Buf::current().b_p_eof = false as c_int;
-            Buf::current().b_start_eof = false as c_int;
-            Buf::current().b_p_eol = true as c_int;
-            Buf::current().b_start_eol = true as c_int;
+            Buf::current().b_p_eof = c_int::from(false);
+            Buf::current().b_start_eof = c_int::from(false);
+            Buf::current().b_p_eol = c_int::from(true);
+            Buf::current().b_start_eol = c_int::from(true);
         }
-        Buf::current().b_p_bomb = false as c_int;
-        Buf::current().b_start_bomb = false as c_int;
+        Buf::current().b_p_bomb = c_int::from(false);
+        Buf::current().b_start_bomb = c_int::from(false);
     }
 
     // Create a swap file now, so that other Nvims are warned that we
@@ -376,8 +382,8 @@ pub(crate) fn open_source<'a>(
     if !buf_is_dontwrite(current_buf()) {
         check_need_swap(how.newfile);
         if !how.stdin && buffer_changed() {
-            emsg(gettext(E_AUCHANGEDBUF));
-            return Err(retval); // the file is closed with `input`
+            // The file is closed with `input`.
+            return Err(Err(ReadError::AutocmdsChangedBuffer));
         }
         // Set the swap file's protection bits now that it exists.
         if swap_mode > 0
@@ -393,7 +399,7 @@ pub(crate) fn open_source<'a>(
                 && let Some(info) = &file_info
                 && crate::os::fs::file_info(&swap_fname)
                     .is_some_and(|swap| info.stat.st_gid != swap.stat.st_gid)
-                && !Buf::current().set_swap_file_group(info.stat.st_gid as uv_gid_t)
+                && !Buf::current().set_swap_file_group(info.gid().unwrap_or(uv_gid_t::MAX))
             {
                 swap_mode &= 0o600;
             }
@@ -433,7 +439,7 @@ pub(crate) fn open_source<'a>(
         // The output from the autocommands should neither overwrite
         // anything nor be overwritten: set msg_scroll, and restore it
         // if no output was done.
-        msg_scroll.set(true as c_int);
+        msg_scroll.set(c_int::from(true));
         if how.filtering {
             read_autocmd(
                 AutoEvent::FilterReadPre,
@@ -461,7 +467,7 @@ pub(crate) fn open_source<'a>(
             // Autocommands may abort script processing.
             no_wait_return.set(no_wait_return.get() - 1);
             msg_scroll.set(msg_save);
-            Buf::current().b_p_ro = true as c_int; // must use "w!" now
+            Buf::current().b_p_ro = c_int::from(true); // must use "w!" now
             return Err(retval);
         }
 
@@ -477,14 +483,12 @@ pub(crate) fn open_source<'a>(
         if changed || unreadable {
             no_wait_return.set(no_wait_return.get() - 1);
             msg_scroll.set(msg_save);
-            let msg = if unreadable {
-                c"E200: *ReadPre autocommands made the file unreadable"
+            Buf::current().b_p_ro = c_int::from(true); // must use "w!" now
+            return Err(Err(if unreadable {
+                ReadError::ReadPreUnreadable
             } else {
-                c"E201: *ReadPre autocommands must not change current buffer"
-            };
-            emsg(gettext(msg));
-            Buf::current().b_p_ro = true as c_int; // must use "w!" now
-            return Err(retval);
+                ReadError::ReadPreChangedBuffer
+            }));
         }
     }
 

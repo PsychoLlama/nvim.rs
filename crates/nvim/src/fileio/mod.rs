@@ -7,6 +7,13 @@
 //! `BufRead`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 pub mod buffered;
 pub(crate) mod state;
@@ -38,7 +45,7 @@ use crate::getchar::stuff_empty;
 use crate::global_cell::GlobalCell;
 use crate::guard::allbuf_lock;
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_WRN};
-use crate::mbyte::{canon_props, canonize, utf_byte2len, utf_char2len};
+use crate::mbyte::{canon_props, canonize, utf_byte2len};
 use crate::memline::{check_need_swap, ml_append_terminated, ml_delete, ml_open};
 use crate::memory::{XString, try_grow_zeroed};
 use crate::message::e_interr;
@@ -80,8 +87,6 @@ use crate::state::mode::{State, exmode_active, restart_edit};
 use crate::state::{MODE_CMDLINE, MODE_NORMAL_BUSY};
 use crate::strings::{FmtArg, formatted};
 use crate::types::AutoEvent;
-use crate::types::CAR;
-use crate::types::NL;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     AcoSave, BlnFlags, Directory, ExArg, Failed, FileInfo, FileOffset, IOSIZE, LineNr, OptVal,
@@ -98,6 +103,10 @@ use std::fs::File;
 use std::io::{ErrorKind, Seek, SeekFrom};
 
 // The carve of the transpiled module; see each child's docs.
+mod error;
+pub(crate) use self::error::IoFailed;
+pub use self::error::PatternError;
+pub(crate) use self::error::ReadError;
 mod convert;
 pub use self::convert::*;
 mod lines;
@@ -206,7 +215,7 @@ pub fn filemess(buffer: Buf, name: Option<&CStr>, note: &CStr) {
         && !exiting.get()
         && p_verbose() == 0
     {
-        msg_scroll.set(false as c_int);
+        msg_scroll.set(c_int::from(false));
     }
     if msg_scroll.get() == 0 {
         // Wait a bit when overwriting an error message.
@@ -322,7 +331,7 @@ pub fn set_file_options(set_options: bool, excmd: Option<&mut ExArg>) {
     // Set or reset 'binary'.
     if let Some(forced_bin) = forced.map(|command| command.force_bin).filter(|&b| b != 0) {
         let oldval = Buf::current().b_p_bin;
-        Buf::current().b_p_bin = (forced_bin == FORCE_BIN) as c_int;
+        Buf::current().b_p_bin = c_int::from(forced_bin == FORCE_BIN);
         let bin = Buf::current().b_p_bin != 0;
         set_options_bin(oldval != 0, bin, OptionSetFlags::LOCAL);
     }
@@ -333,11 +342,9 @@ pub fn set_forced_fenc(excmd: &mut ExArg) {
     if excmd.force_enc == 0 {
         return;
     }
-    let fenc = canonize(
-        excmd
-            .line
-            .rest_of(excmd.line.cmd + excmd.force_enc as usize),
-    );
+    let fenc = canonize(excmd.line.rest_of(
+        excmd.line.cmd + usize::try_from(excmd.force_enc).expect("an offset into the line"),
+    ));
     set_option_direct(
         kOptFileencoding,
         OptVal::from_cstr(fenc.as_cstr()),

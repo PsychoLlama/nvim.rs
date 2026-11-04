@@ -165,7 +165,8 @@ pub(crate) fn uniquefy_paths(names: &mut Vec<XString>, pattern: &CStr, path_opti
     // "*". FIXME(upstream): is this valid for all possible patterns?
     let mut file_pattern = vec![b'*'];
     file_pattern.extend_from_slice(pattern.to_bytes());
-    let Some(pat) = file_pat_to_regpat(&cstr::owned(&file_pattern)) else {
+    let Ok(pat) = file_pat_to_regpat(&cstr::owned(&file_pattern)).inspect_err(|err| err.report())
+    else {
         return;
     };
     // Always ignoring case.
