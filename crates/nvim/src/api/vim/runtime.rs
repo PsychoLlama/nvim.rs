@@ -116,6 +116,6 @@ pub fn nvim_set_current_dir(dir: ApiString) -> Result<(), Error> {
     // Cut at an interior NUL, as upstream's `char *` copy is.
     let dir = crate::cstr::owned(dir.as_cstr().to_bytes());
     api_try(|| {
-        change_dir(&dir, kCdScopeGlobal);
+        let _ = change_dir(&dir, kCdScopeGlobal);
     })
 }

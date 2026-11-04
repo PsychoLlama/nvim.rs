@@ -12,12 +12,20 @@
 //! Each function is a walk over the command line the caller owns, by
 //! offset.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::addrtype::{arglist_len, get_cmd_default_range, loaded_buffer_range};
 use crate::cstr::byte_at;
 use crate::ex_docmd::ex_msg;
 use crate::ex_docmd::is_user_cmd;
 use crate::mark::{mark_check, mark_get, mark_get_visual, mark_move_to};
+use crate::message::emsg;
 use crate::narrow::len_as_int;
 use crate::narrow::number_as_lnum;
 use crate::search::do_search_in;
@@ -50,8 +58,8 @@ use crate::quickfix::{qf_get_cur_idx, qf_get_cur_valid_idx, qf_get_size, qf_get_
 use crate::regexp::{RE_SEARCH, RE_SUBST, skip_regexp_at};
 use crate::search::{BACKWARD, FORWARD, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG};
 use crate::types::{
-    CmdAddr, ColNr, Direction, ExArg, ExArgt, ExpandContext, FAIL, LineNr, MarkGet, MarkMove, OK,
-    Pos,
+    CmdAddr, ColNr, Direction, ExArg, ExArgt, ExpandContext, FAIL, FileMark, LineNr, MarkGet,
+    MarkMove, Pos,
 };
 use crate::winlayer::{Buf, Win, first_buffer, last_buffer};
 
@@ -118,120 +126,156 @@ pub(crate) fn find_excmd_after_range(excmd: &mut ExArg) -> Option<usize> {
     end
 }
 
+/// Why an address or a range could not be read.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum AddressError {
+    /// The message the command reports: E16, E20, E10, E481/E493, E1247.
+    /// `do_one_cmd` reports it through its `errormsg`, which names the
+    /// command line after it; the other callers put it out as it is.
+    #[error("{}", .0.to_string_lossy())]
+    Refused(CString),
+    /// Said already -- a search that found nothing, `search_last_pattern`
+    /// -- or upstream says nothing: a `'` at the end of the line, a mark
+    /// whose line the shada file mangled.
+    #[error("refused without a message of its own")]
+    Quiet,
+}
+
+// Two words, so a `Result` carrying one is no wider than it has to be.
+const _: () = assert!(size_of::<AddressError>() <= 16);
+
+impl AddressError {
+    /// Puts the message out, for a caller with no channel of its own.
+    pub(crate) fn report(&self) {
+        if let Self::Refused(msg) = self {
+            emsg(msg);
+        }
+    }
+
+    /// Hands the message to a caller that reports through an `errormsg`
+    /// slot, as `do_one_cmd` does.
+    pub(crate) fn into_errormsg(self, errormsg: &mut Option<CString>) {
+        if let Self::Refused(msg) = self {
+            *errormsg = Some(msg);
+        }
+    }
+}
+
+/// [`mark_check`]'s refusal as an [`AddressError`].
+fn check_mark(fm: Option<&FileMark>) -> Result<(), AddressError> {
+    let mut errormsg = None;
+    if mark_check(fm, &mut errormsg) {
+        Ok(())
+    } else {
+        Err(errormsg.map_or(AddressError::Quiet, AddressError::Refused))
+    }
+}
+
 /// Read the whole range — one address, or a pair around `,` or `;` — into
 /// `args.line1`/`line2`/`addr_count`.
 ///
 /// `;` differs from `,` in moving the cursor to the first address before
 /// the second is resolved, which is what makes `:.;+3` mean "three lines
 /// from here" however the first address was spelled.
-pub fn parse_cmd_address(excmd: &mut ExArg, errormsg: &mut Option<CString>, silent: bool) -> c_int {
-    let mut address_count = 1;
-    let mut lnum: LineNr;
+pub(crate) fn parse_cmd_address(excmd: &mut ExArg, silent: bool) -> Result<(), AddressError> {
     let mut need_check_cursor = false;
-    let mut ret = FAIL;
-
-    'theend: {
-        loop {
-            excmd.line1 = excmd.line2;
-            excmd.line2 = get_cmd_default_range(excmd);
-            excmd.line.cmd = excmd.line.skip_white(excmd.line.cmd);
-            // The scan walks a cursor of its own, and the buffer it walks is
-            // the command's, so everything it needs of the command is read
-            // out before the line is lent.
-            let (cmdidx, addr_type, skip) = (excmd.cmdidx, excmd.addr_type, excmd.skip);
-            let to_other_file = (excmd.addr_count == 0) as c_int;
-            let mut at = Some(excmd.line.cmd);
-            lnum = get_address(
-                Some(cmdidx),
-                excmd.line.buffer_mut(),
-                &mut at,
-                addr_type,
-                skip,
-                silent,
-                to_other_file,
-                address_count,
-                errormsg,
-            );
-            // `get_address` answers no offset when the address was
-            // malformed: upstream stores a null in `eap->cmd` and tests
-            // that, which an offset cannot say, so the test comes first.
-            let Some(at) = at else {
-                break 'theend;
-            };
-            excmd.line.cmd = at;
-            address_count += 1;
-            if lnum != MAXLNUM {
-                excmd.line2 = lnum;
-            } else if excmd.line.byte_at(excmd.line.cmd) == b'%' {
-                // `%` is not an address, it is a whole range, so it is
-                // only recognised where an address was expected and
-                // none was found.
-                excmd.line.cmd += 1;
-                if !whole_range(excmd, errormsg) {
-                    break 'theend;
-                }
-                excmd.addr_count += 1;
-            } else if excmd.line.byte_at(excmd.line.cmd) == b'*' {
-                if excmd.addr_type != CmdAddr::Lines {
-                    *errormsg = Some(ex_msg(e_invrange));
-                    break 'theend;
-                }
-                excmd.line.cmd += 1;
-                if !excmd.skip {
-                    // The Visual marks are never adjusted and have no
-                    // store: each is computed on the spot.
-                    let first = mark_get_visual(Buf::current(), '<' as c_int);
-                    if !mark_check(first.as_ref(), errormsg) {
-                        break 'theend;
-                    }
-                    excmd.line1 = first.map_or(LineNr::ZERO, |fm| fm.mark.lnum);
-                    let last = mark_get_visual(Buf::current(), '>' as c_int);
-                    if !mark_check(last.as_ref(), errormsg) {
-                        break 'theend;
-                    }
-                    excmd.line2 = last.map_or(LineNr::ZERO, |fm| fm.mark.lnum);
-                    excmd.addr_count += 1;
-                }
-            }
-            excmd.addr_count += 1;
-            if excmd.line.byte_at(excmd.line.cmd) == b';' {
-                if !excmd.skip {
-                    Win::current().w_cursor.lnum = excmd.line2;
-                    // A zero line number is not a position, so only the
-                    // column is worth correcting there.
-                    if excmd.line2 > LineNr::ZERO {
-                        check_cursor(Win::current());
-                    } else {
-                        check_cursor_col(Win::current());
-                    }
-                    need_check_cursor = true;
-                }
-            } else if excmd.line.byte_at(excmd.line.cmd) != b',' {
-                break;
-            }
-            excmd.line.cmd += 1;
-        }
-        if excmd.addr_count == 1 {
-            excmd.line1 = excmd.line2;
-            // One address that resolved to nothing is no address.
-            if lnum == MAXLNUM {
-                excmd.addr_count = 0;
-            }
-        }
-        ret = OK;
-    }
+    let read = read_range(excmd, silent, &mut need_check_cursor);
     // The `;` above may have left the cursor on a line the command is
     // about to delete; putting it back is the caller's problem, so this
     // only re-clamps it.
     if need_check_cursor {
         check_cursor(Win::current());
     }
-    ret
+    read
 }
 
-/// Fill in the range `%` means for this address kind. Answers false when
-/// the kind has no "all", having reported why.
-fn whole_range(excmd: &mut ExArg, errormsg: &mut Option<CString>) -> bool {
+/// [`parse_cmd_address`]'s walk, saying whether a `;` moved the cursor.
+fn read_range(
+    excmd: &mut ExArg,
+    silent: bool,
+    need_check_cursor: &mut bool,
+) -> Result<(), AddressError> {
+    let mut address_count = 1;
+    let mut lnum: LineNr;
+    loop {
+        excmd.line1 = excmd.line2;
+        excmd.line2 = get_cmd_default_range(excmd);
+        excmd.line.cmd = excmd.line.skip_white(excmd.line.cmd);
+        // The scan walks a cursor of its own, and the buffer it walks is
+        // the command's, so everything it needs of the command is read
+        // out before the line is lent.
+        let (cmdidx, addr_type, skip) = (excmd.cmdidx, excmd.addr_type, excmd.skip);
+        let to_other_file = excmd.addr_count == 0;
+        let mut at = excmd.line.cmd;
+        lnum = get_address(
+            Some(cmdidx),
+            excmd.line.buffer_mut(),
+            &mut at,
+            addr_type,
+            skip,
+            silent,
+            to_other_file,
+            address_count,
+        )?;
+        excmd.line.cmd = at;
+        address_count += 1;
+        if lnum != MAXLNUM {
+            excmd.line2 = lnum;
+        } else if excmd.line.byte_at(excmd.line.cmd) == b'%' {
+            // `%` is not an address, it is a whole range, so it is
+            // only recognised where an address was expected and
+            // none was found.
+            excmd.line.cmd += 1;
+            whole_range(excmd)?;
+            excmd.addr_count += 1;
+        } else if excmd.line.byte_at(excmd.line.cmd) == b'*' {
+            if excmd.addr_type != CmdAddr::Lines {
+                return Err(AddressError::Refused(ex_msg(e_invrange)));
+            }
+            excmd.line.cmd += 1;
+            if !excmd.skip {
+                // The Visual marks are never adjusted and have no
+                // store: each is computed on the spot.
+                let first = mark_get_visual(Buf::current(), c_int::from(b'<'));
+                check_mark(first.as_ref())?;
+                excmd.line1 = first.map_or(LineNr::ZERO, |fm| fm.mark.lnum);
+                let last = mark_get_visual(Buf::current(), c_int::from(b'>'));
+                check_mark(last.as_ref())?;
+                excmd.line2 = last.map_or(LineNr::ZERO, |fm| fm.mark.lnum);
+                excmd.addr_count += 1;
+            }
+        }
+        excmd.addr_count += 1;
+        if excmd.line.byte_at(excmd.line.cmd) == b';' {
+            if !excmd.skip {
+                Win::current().w_cursor.lnum = excmd.line2;
+                // A zero line number is not a position, so only the
+                // column is worth correcting there.
+                if excmd.line2 > LineNr::ZERO {
+                    check_cursor(Win::current());
+                } else {
+                    check_cursor_col(Win::current());
+                }
+                *need_check_cursor = true;
+            }
+        } else if excmd.line.byte_at(excmd.line.cmd) != b',' {
+            break;
+        }
+        excmd.line.cmd += 1;
+    }
+    if excmd.addr_count == 1 {
+        excmd.line1 = excmd.line2;
+        // One address that resolved to nothing is no address.
+        if lnum == MAXLNUM {
+            excmd.addr_count = 0;
+        }
+    }
+    Ok(())
+}
+
+/// Fill in the range `%` means for this address kind: E16 when the kind has
+/// no "all".
+fn whole_range(excmd: &mut ExArg) -> Result<(), AddressError> {
     match excmd.addr_type {
         CmdAddr::Lines | CmdAddr::Other => {
             excmd.line1 = LineNr::ONE;
@@ -250,8 +294,7 @@ fn whole_range(excmd: &mut ExArg, errormsg: &mut Option<CString>) -> bool {
             // Only a *user* command may say `%` over windows or tab
             // pages; a builtin one would not know what to do with it.
             if !is_user_cmd(excmd.cmdidx) {
-                *errormsg = Some(ex_msg(e_invrange));
-                return false;
+                return Err(AddressError::Refused(ex_msg(e_invrange)));
             }
             excmd.line1 = LineNr::ONE;
             excmd.line2 = if excmd.addr_type == CmdAddr::Windows {
@@ -261,8 +304,7 @@ fn whole_range(excmd: &mut ExArg, errormsg: &mut Option<CString>) -> bool {
             };
         }
         CmdAddr::TabsRelative | CmdAddr::Unsigned | CmdAddr::Quickfix => {
-            *errormsg = Some(ex_msg(e_invrange));
-            return false;
+            return Err(AddressError::Refused(ex_msg(e_invrange)));
         }
         CmdAddr::Arguments => {
             let len = arglist_len();
@@ -287,7 +329,7 @@ fn whole_range(excmd: &mut ExArg, errormsg: &mut Option<CString>) -> bool {
         // without setting anything, as upstream does.
         CmdAddr::NoRange => {}
     }
-    true
+    Ok(())
 }
 
 /// Step over a range without resolving it, answering how many bytes of
@@ -359,10 +401,9 @@ pub(crate) fn addr_error(addr_type: CmdAddr) -> CString {
 /// Read one address, including any `+N`/`-N` offsets after it.
 ///
 /// `text` is the buffer the address is written in — a command line, or an
-/// item of `'diffanchors'` — and `at` says where to start and comes back
-/// saying where the address ended. It comes back `None` for an error, with
-/// the message in `errormsg`; upstream reports that by writing a null
-/// cursor, which an offset cannot spell. The buffer is writable because a
+/// item of `'diffanchors'` — and `at` says where to start and, when the
+/// address was read, comes back saying where it ended (upstream wrote a
+/// null cursor for a malformed one). The buffer is writable because a
 /// `/pat/` address hands the pattern to `do_search`, which NUL-terminates
 /// it in place and puts the byte back.
 ///
@@ -374,18 +415,17 @@ pub(crate) fn addr_error(addr_type: CmdAddr) -> CString {
 /// Answers `MAXLNUM` for "there was no address here", which is not the same
 /// as an address that resolved to nothing.
 #[allow(clippy::too_many_arguments)]
-pub fn get_address(
+pub(crate) fn get_address(
     cmdidx: Option<CmdIdx>,
     text: &mut [u8],
-    at: &mut Option<usize>,
+    at: &mut usize,
     addr_type: CmdAddr,
     skip: bool,
     silent: bool,
-    to_other_file: c_int,
+    to_other_file: bool,
     address_count: c_int,
-    errormsg: &mut Option<CString>,
-) -> LineNr {
-    let mut cmd = at.expect("an address is read from somewhere in its own text");
+) -> Result<LineNr, AddressError> {
+    let mut cmd = *at;
     cmd = cmd + skip::white(&text[cmd.min(text.len())..]);
     let mut lnum: LineNr = MAXLNUM;
     let mut pos = Pos {
@@ -393,10 +433,7 @@ pub fn get_address(
         col: ColNr::ZERO,
         coladd: 0,
     };
-    // Upstream's null `cmd`: the address was malformed and the caller's
-    // cursor must not move.
-    let mut failed = false;
-    'error: loop {
+    loop {
         match byte_at(text, cmd) {
             b'.' | b'$' => {
                 let want_last = byte_at(text, cmd) == b'$';
@@ -409,23 +446,16 @@ pub fn get_address(
                 match addr {
                     Addr::At(n) => lnum = n,
                     Addr::Unchanged => {}
-                    Addr::Refused => {
-                        *errormsg = Some(addr_error(addr_type));
-                        failed = true;
-                        break;
-                    }
+                    Addr::Refused => return Err(AddressError::Refused(addr_error(addr_type))),
                 }
             }
             b'\'' => {
                 cmd += 1;
                 if byte_at(text, cmd) == 0 {
-                    failed = true;
-                    break;
+                    return Err(AddressError::Quiet);
                 }
                 if addr_type != CmdAddr::Lines {
-                    *errormsg = Some(addr_error(addr_type));
-                    failed = true;
-                    break;
+                    return Err(AddressError::Refused(addr_error(addr_type)));
                 }
                 if skip {
                     cmd += 1;
@@ -433,11 +463,11 @@ pub fn get_address(
                     // A mark in another file is only followed when it
                     // is the whole address and the command can change
                     // file; otherwise only this buffer's marks count.
-                    let flag = if to_other_file != 0 && byte_at(text, cmd + 1) == 0 {
-                        kMarkAll as c_int
+                    let flag: MarkGet = if to_other_file && byte_at(text, cmd + 1) == 0 {
+                        kMarkAll
                     } else {
-                        kMarkBufLocal as c_int
-                    } as MarkGet;
+                        kMarkBufLocal
+                    };
                     // The mark's name, as the C's `*cmd` reads it: signed,
                     // so a mark named with a high byte is a negative
                     // number and matches nothing.
@@ -449,11 +479,10 @@ pub fn get_address(
                             mark_move_to(Some(fm), 0 as MarkMove);
                             lnum = Win::current().w_cursor.lnum;
                         }
-                        _ if !mark_check(found.as_ref(), errormsg) => {
-                            failed = true;
-                            break;
+                        _ => {
+                            check_mark(found.as_ref())?;
+                            lnum = found.as_ref().map_or(LineNr::ZERO, |fm| fm.mark.lnum);
                         }
-                        _ => lnum = found.as_ref().map_or(LineNr::ZERO, |fm| fm.mark.lnum),
                     }
                 }
             }
@@ -461,12 +490,10 @@ pub fn get_address(
                 cmd += 1;
                 let c = c_int::from(delim);
                 if addr_type != CmdAddr::Lines {
-                    *errormsg = Some(addr_error(addr_type));
-                    failed = true;
-                    break;
+                    return Err(AddressError::Refused(addr_error(addr_type)));
                 }
                 if skip {
-                    cmd += skip_regexp_at(&text[cmd..], c, magic_isset() as c_int);
+                    cmd += skip_regexp_at(&text[cmd..], c, c_int::from(magic_isset()));
                     if byte_at(text, cmd) == delim {
                         cmd += 1;
                     }
@@ -491,8 +518,7 @@ pub fn get_address(
                     };
                     if do_search_in(&text[cmd..], c, c, flags) == 0 {
                         Win::current().w_cursor = pos;
-                        failed = true;
-                        break;
+                        return Err(AddressError::Quiet);
                     }
                     lnum = Win::current().w_cursor.lnum;
                     Win::current().w_cursor = pos;
@@ -509,18 +535,12 @@ pub fn get_address(
                 // the last substitute pattern.
                 cmd += 1;
                 if addr_type != CmdAddr::Lines {
-                    *errormsg = Some(addr_error(addr_type));
-                    failed = true;
-                    break;
+                    return Err(AddressError::Refused(addr_error(addr_type)));
                 }
                 let i = match byte_at(text, cmd) {
                     b'&' => RE_SUBST as c_int,
                     b'?' | b'/' => RE_SEARCH as c_int,
-                    _ => {
-                        *errormsg = Some(ex_msg(e_backslash));
-                        failed = true;
-                        break;
-                    }
+                    _ => return Err(AddressError::Refused(ex_msg(e_backslash))),
                 };
                 if !skip {
                     pos.lnum = if lnum != MAXLNUM {
@@ -540,8 +560,7 @@ pub fn get_address(
                         FORWARD as c_int
                     } as Direction;
                     if search_last_pattern(&mut pos, dir, SEARCH_MSG as c_int, i) == FAIL {
-                        failed = true;
-                        break;
+                        return Err(AddressError::Quiet);
                     }
                     lnum = pos.lnum;
                 }
@@ -580,16 +599,12 @@ pub fn get_address(
                 let (n, past) = getdigits_int_at(text, cmd, false, MAXLNUM.get());
                 cmd = past;
                 if n == MAXLNUM.get() {
-                    *errormsg = Some(ex_msg(e_line_number_out_of_range));
-                    failed = true;
-                    break 'error;
+                    return Err(AddressError::Refused(ex_msg(e_line_number_out_of_range)));
                 }
                 n
             };
             if addr_type == CmdAddr::TabsRelative {
-                *errormsg = Some(ex_msg(e_invrange));
-                failed = true;
-                break 'error;
+                return Err(AddressError::Refused(ex_msg(e_invrange)));
             } else if addr_type == CmdAddr::LoadedBuffers || addr_type == CmdAddr::Buffers {
                 let offset = if sign == b'-' { -n } else { n };
                 lnum = LineNr::new(compute_buffer_local_count(addr_type, lnum, offset));
@@ -604,9 +619,7 @@ pub fn get_address(
                 if sign == b'-' {
                     lnum -= n;
                 } else if lnum >= LineNr::ZERO && n >= INT32_MAX - lnum.get() {
-                    *errormsg = Some(ex_msg(e_line_number_out_of_range));
-                    failed = true;
-                    break 'error;
+                    return Err(AddressError::Refused(ex_msg(e_line_number_out_of_range)));
                 } else {
                     lnum += n;
                 }
@@ -619,8 +632,8 @@ pub fn get_address(
             break;
         }
     }
-    *at = (!failed).then_some(cmd);
-    lnum
+    *at = cmd;
+    Ok(lnum)
 }
 
 /// What an address kind answers for `.`, `$` or a bare offset.
@@ -709,7 +722,7 @@ pub(crate) fn invalid_range(excmd: &mut ExArg) -> Option<CString> {
             // `:diffget`/`:diffput` accept one line past the end: they
             // may add a line there.
             let extra =
-                (excmd.cmdidx == CmdIdx::diffget || excmd.cmdidx == CmdIdx::diffput) as c_int;
+                c_int::from(excmd.cmdidx == CmdIdx::diffget || excmd.cmdidx == CmdIdx::diffput);
             if excmd.line2 > Buf::current().b_ml.ml_line_count + extra {
                 return invrange();
             }
@@ -718,7 +731,7 @@ pub(crate) fn invalid_range(excmd: &mut ExArg) -> Option<CString> {
             // An empty argument list still accepts line 1, which is
             // what makes `:argdelete` on it report a better message.
             let len = arglist_len();
-            if excmd.line2 > LineNr::new(len) + (len == 0) as c_int {
+            if excmd.line2 > LineNr::new(len) + c_int::from(len == 0) {
                 return invrange();
             }
         }

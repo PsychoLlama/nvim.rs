@@ -406,7 +406,7 @@ pub(crate) fn ex_mkrc(excmd: &mut ExArg) {
     };
     let fname = fname.as_cstr();
 
-    if let Some(file) = create_exfile(fname, excmd.forceit) {
+    if let Ok(file) = create_exfile(fname, excmd.forceit) {
         let mut out = SessionFile::new(file);
         let failed = write_rc(&mut out, excmd, fname, view_session, using_vdir);
         // The close answers a write error the buffering hid, and must run

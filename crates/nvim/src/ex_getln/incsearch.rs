@@ -255,7 +255,8 @@ pub(crate) fn parse_pattern_and_range(incsearch_start: Pos) -> Option<PatternSpa
     let save_cursor = Win::current().w_cursor;
     Win::current().w_cursor = incsearch_start;
 
-    parse_cmd_address(&mut ea, &mut dummy, true);
+    // A range that does not parse is no range: nothing to say while typing.
+    let _ = parse_cmd_address(&mut ea, true);
 
     if ea.addr_count > 0 {
         // Allow for a reverse match.

@@ -80,7 +80,7 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::profile::{func_line_exec, script_line_exec};
 use crate::runtime::do_finish;
-use crate::types::{CmdAddr, CmdLine, CondId, ExArg, ExArgt, FAIL, IOSIZE};
+use crate::types::{CmdAddr, CmdLine, CondId, ExArg, ExArgt, IOSIZE};
 use crate::winlayer::{Buf, Win};
 
 /// A zeroed `ExArg` with the empty range the parsers start from.
@@ -216,7 +216,8 @@ fn locate_command(
         excmd,
         p.map(|at| excmd.line.byte_at(excmd.line.skip_white(at))),
     );
-    if parse_cmd_address(excmd, errormsg, false) == FAIL {
+    if let Err(refused) = parse_cmd_address(excmd, false) {
+        refused.into_errormsg(errormsg);
         return Err(Refused);
     }
 

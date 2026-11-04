@@ -5,6 +5,13 @@
 //! and `:cd -` goes back to the previous one *at that scope*. `post_chdir`
 //! is what keeps the three in step after any of them changes.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use crate::env::expand_env;
@@ -57,7 +64,7 @@ use crate::options::kOptFindfunc;
 
 use crate::optionstr::OptString;
 use crate::types::{
-    BoolVarValue, Callback, CdScope, CpoFlag, ExArg, Failed, NUL, OK, OptError, OptInt, OptSet,
+    BoolVarValue, Callback, CdScope, CpoFlag, ExArg, Failed, OptError, OptInt, OptSet,
     OptionSetFlags, ScriptCtx, TypVal, VAR_LIST, VAR_STRING, VAR_UNKNOWN, kBoolVarFalse,
     kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow,
 };
@@ -68,7 +75,7 @@ use crate::types::{
 fn findfunc_callback() -> Callback {
     let mut cb = Callback::None;
     let buf = Buf::current();
-    if buf.b_p_ffu.first_byte() != NUL as u8 {
+    if buf.b_p_ffu.first_byte() != 0 {
         callback_copy(&mut cb, &buf.b_ffu_cb);
     } else {
         ffu_cb.with(|global| callback_copy(&mut cb, global));
@@ -108,7 +115,7 @@ pub(crate) fn call_findfunc(pat: &[u8], cmdcomplete: BoolVarValue) -> Option<Lis
     drop(locked);
 
     let mut retlist = None;
-    if called as c_int == OK {
+    if called {
         if rettv.v_type() as c_uint == VAR_LIST as c_uint {
             // No conversion, a fresh copyID.
             retlist = rettv
@@ -269,15 +276,15 @@ pub(crate) fn post_chdir(scope: CdScope, trigger_dirchanged: bool) {
 /// The DirChangedPre autocommand fires *before* the change and may cancel
 /// it by failing; that is why the `chdir` and the event are only reached
 /// when the directory really differs.
-pub(crate) fn change_dir(new_dir: &CStr, scope: CdScope) -> bool {
+pub(crate) fn change_dir(new_dir: &CStr, scope: CdScope) -> Result<(), Failed> {
     if allbuf_locked() {
-        return false;
+        return Err(Failed);
     }
     let mut new_dir = XString::from_cstr(new_dir);
     if new_dir.as_cstr() == c"-" {
         let Some(pdir) = prev_dir_of(owner_of(scope)) else {
             emsg(gettext(c"E186: No previous directory"));
-            return false;
+            return Err(Failed);
         };
         new_dir = pdir;
     }
@@ -296,13 +303,13 @@ pub(crate) fn change_dir(new_dir: &CStr, scope: CdScope) -> bool {
         do_autocmd_dirchanged(new_dir.as_cstr(), scope, kCdCauseManual, true);
         if vim_chdir(new_dir.as_cstr()) != 0 {
             emsg(gettext(e_failed));
-            return false;
+            return Err(Failed);
         }
     }
 
     set_prev_dir(owner_of(scope), pdir);
     post_chdir(scope, dir_differs);
-    true
+    Ok(())
 }
 
 /// `:cd`, `:lcd`, `:tcd` and their `…chdir` spellings.
@@ -323,7 +330,7 @@ pub fn ex_cd(excmd: &mut ExArg) {
     } else {
         kCdScopeGlobal
     };
-    if change_dir(&new_dir, scope) && (KeyTyped.get() || p_verbose() >= 5 as OptInt) {
+    if change_dir(&new_dir, scope).is_ok() && (KeyTyped.get() || p_verbose() >= OptInt::from(5)) {
         report_working_dir();
     }
 }

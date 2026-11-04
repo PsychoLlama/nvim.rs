@@ -135,30 +135,24 @@ pub(crate) fn parse_diffanchors(
         }
         let saved_buf = switch_buffer(buffer);
         let saved_win = bufwin.map(switch_window);
-        let mut errormsg = None;
-        let mut cursor = Some(at);
         let lnum = get_address(
             None,
             &mut dia,
-            &mut cursor,
+            &mut at,
             CmdAddr::Lines,
             check_only,
             true,
-            0,
+            false,
             1,
-            &mut errormsg,
         );
         saved_buf.restore();
         if let Some(saved_win) = saved_win {
             saved_win.restore();
         }
-        if let Some(msg) = &errormsg {
-            emsg(msg);
-        }
-        let Some(cursor) = cursor else {
-            return Err(Failed);
-        };
-        at = cursor;
+        let lnum = lnum.map_err(|refused| {
+            refused.report();
+            Failed
+        })?;
         if dia[at] != b',' && dia[at] != 0 {
             return Err(Failed);
         }

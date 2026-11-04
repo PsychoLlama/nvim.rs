@@ -331,21 +331,23 @@ pub(crate) fn parse_command_modifiers(
                         // The scan walks a cursor of its own; see
                         // `parse_cmd_address`.
                         let (cmdidx, skip) = (excmd.cmdidx, excmd.skip);
-                        let mut cursor = Some(excmd.line.cmd);
-                        let tabnr = get_address(
+                        let mut cursor = excmd.line.cmd;
+                        let read = get_address(
                             Some(cmdidx),
                             excmd.line.buffer_mut(),
                             &mut cursor,
                             CmdAddr::Tabs,
                             skip,
                             skip_only,
-                            0,
+                            false,
                             1,
-                            errormsg,
-                        )
-                        .get();
-                        let Some(cursor) = cursor else {
-                            return Err(Failed);
+                        );
+                        let tabnr = match read {
+                            Ok(tabnr) => tabnr.get(),
+                            Err(refused) => {
+                                refused.into_errormsg(errormsg);
+                                return Err(Failed);
+                            }
                         };
                         excmd.line.cmd = cursor;
                         if tabnr == MAXLNUM.get() {

@@ -45,7 +45,7 @@ use crate::winlayer::graph::{cmdwin_result, cmdwin_type, firstwin, lastwin, topf
 
 use crate::message::msg;
 
-use crate::types::{CmdModFlags, ExArg, FAIL, Failed, Integer, LineNr, OK, Vv};
+use crate::types::{CmdModFlags, ExArg, Failed, Integer, LineNr, Vv};
 use crate::ui::{ui_call_error_exit, ui_call_suspend, ui_flush};
 use crate::undo::{buf_is_changed, curbuf_is_changed};
 
@@ -95,7 +95,7 @@ pub(crate) fn before_quit_autocmds(window: Win, quit_all: bool, forceit: bool) -
     }
 
     // ExitPre is only for a quit that would end the process.
-    if quit_all || check_more(false, forceit) == OK && only_one_window() {
+    if quit_all || may_leave(forceit) && only_one_window() {
         fire_autocmds(AutoEvent::ExitPre, false, Buf::current_or_none());
         if quit_was_cancelled(window.id(), Buf::current) {
             return true;
@@ -149,7 +149,7 @@ pub(crate) fn ex_quit(excmd: &mut ExArg) {
     }
 
     let save_exiting = exiting.get();
-    if check_more(false, excmd.forceit) == OK && only_one_window() {
+    if may_leave(excmd.forceit) && only_one_window() {
         exiting.set(true);
     }
     // The three refusals: unsaved changes in this buffer, files left in
@@ -165,7 +165,7 @@ pub(crate) fn ex_quit(excmd: &mut ExArg) {
                 })
                 | CCGD_EXCMD as c_int,
         )
-        || check_more(true, excmd.forceit) == FAIL
+        || check_more(excmd.forceit).is_err()
         || only_one_window() && check_changed_any(excmd.forceit, true)
     {
         not_exiting(save_exiting);
@@ -543,13 +543,13 @@ pub(crate) fn ex_exit(excmd: &mut ExArg) {
         return;
     }
     let save_exiting = exiting.get();
-    if check_more(false, excmd.forceit) == OK && only_one_window() {
+    if may_leave(excmd.forceit) && only_one_window() {
         exiting.set(true);
     }
     // `:wq` always writes; `:x` only writes a changed buffer.
     if (excmd.cmdidx == CmdIdx::wq || curbuf_is_changed()) && do_write(excmd).is_err()
         || before_quit_autocmds(Win::current(), false, excmd.forceit)
-        || check_more(true, excmd.forceit) == FAIL
+        || check_more(excmd.forceit).is_err()
         || only_one_window() && check_changed_any(excmd.forceit, false)
     {
         not_exiting(save_exiting);
@@ -582,9 +582,14 @@ fn check_changed_any(hidden: bool, unload: bool) -> bool {
     crate::ex_cmds2::check_changed_any(hidden, unload)
 }
 
-/// `check_more()` as checked code.
-fn check_more(message: bool, forceit: bool) -> c_int {
-    crate::ex_docmd::argopt::check_more(message, forceit)
+/// Whether leaving would abandon no unedited argument-list file.
+fn may_leave(forceit: bool) -> bool {
+    crate::ex_docmd::argopt::unedited_files(forceit).is_none()
+}
+
+/// The refusal to leave such a file: E173, or the 'confirm' dialog's "No".
+fn check_more(forceit: bool) -> Result<(), Failed> {
+    crate::ex_docmd::argopt::check_more(forceit)
 }
 
 /// `close_others()` as checked code.

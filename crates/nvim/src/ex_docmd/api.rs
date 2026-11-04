@@ -57,7 +57,7 @@ use crate::winlayer::graph::cmdwin_type;
 
 use crate::os::cshim::gettext;
 use crate::search::{restore_last_search_pattern, save_last_search_pattern};
-use crate::types::{CmdAddr, CmdLine, CmdParseInfo, ExArg, ExArgt, FAIL, Failed, LineNr, Pos};
+use crate::types::{CmdAddr, CmdLine, CmdParseInfo, ExArg, ExArgt, Failed, LineNr, Pos};
 use crate::usercmd::do_ucmd;
 use crate::winlayer::{Buf, Win};
 
@@ -108,7 +108,8 @@ pub fn parse_cmdline(
         };
 
         set_cmd_addr_type(excmd, Some(excmd.line.byte_at(excmd.line.skip_white(p))));
-        if parse_cmd_address(excmd, errormsg, true) == FAIL {
+        if let Err(refused) = parse_cmd_address(excmd, true) {
+            refused.into_errormsg(errormsg);
             break 'end;
         }
 

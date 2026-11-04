@@ -1,6 +1,13 @@
 //! Arguments that are not file names: `++opt=value`, `+cmd`, the tab page
 //! argument, and opening the file a command will write to.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 use crate::cmdexpand::expand_generic;
 use crate::ex_docmd::ex_msg;
 use crate::ex_docmd::source::ex_errmsg;
@@ -34,6 +41,7 @@ use crate::mbyte::{get_encoding_name, utf8len_tab};
 use crate::message::vim_dialog_yesno;
 use crate::message::{e_invarg2, e_invargval, e_invrange};
 use crate::message_fmt::{emsg_text, msg_cstr};
+use crate::narrow::number_as_int;
 use crate::option::vars::p_confirm;
 use crate::optionstr::{check_ff_value, get_fileformat_name};
 use crate::os::cshim::ngettext;
@@ -42,8 +50,8 @@ use crate::os::fs::{CFile, dir_exists, os_mkdir, os_strerror, path_exists};
 
 use crate::types::regexp::RegMatch;
 use crate::types::{
-    CmdLine, CmdModFlags, CompleteListItemGetter, EcmdCmd, ExArg, Expand, FAIL, Failed, OK,
-    int32_t, intmax_t,
+    CmdLine, CmdModFlags, CompleteListItemGetter, EcmdCmd, ExArg, Expand, FAIL, Failed, int32_t,
+    intmax_t,
 };
 use crate::window::{only_one_window, tabpage_index};
 
@@ -303,8 +311,9 @@ pub(crate) fn get_tabpage_arg(excmd: &mut ExArg) -> c_int {
             };
 
             let p_save = p;
-            let (number, past) = getdigits_at(excmd.line.tail(0), p, false, tab_number as intmax_t);
-            tab_number = number as c_int;
+            let (number, past) =
+                getdigits_at(excmd.line.tail(0), p, false, intmax_t::from(tab_number));
+            tab_number = number_as_int(number);
             p = past;
 
             if relative == 0 {
@@ -398,43 +407,53 @@ pub(crate) fn get_tabpage_arg(excmd: &mut ExArg) -> c_int {
     tab_number
 }
 
-/// Refuse to leave when the argument list has files nobody has edited yet.
+/// How many files of the argument list nobody has edited yet, when leaving
+/// now would abandon them -- `None` when quitting is allowed.
 ///
-/// Answers `OK` when quitting is allowed. `quitmore` is what makes the
-/// second `:q` work: the refusal sets it, and `do_one_cmd` counts it down.
-pub(crate) fn check_more(message: bool, forceit: bool) -> c_int {
+/// `quitmore` is what makes the second `:q` work: [`check_more`]'s refusal
+/// sets it, and `do_one_cmd` counts it down.
+pub(crate) fn unedited_files(forceit: bool) -> Option<c_int> {
     let n = crate::arglist::argcount() - Win::current().w_arg_idx - 1;
-    if forceit
+    let allowed = forceit
         || !only_one_window()
         || crate::arglist::argcount() <= 1
         || ARG_HAD_LAST.get()
         || n <= 0
-        || quitmore.get() != 0
-    {
-        return OK;
-    }
-    if !message {
-        return FAIL;
-    }
+        || quitmore.get() != 0;
+    (!allowed).then_some(n)
+}
+
+/// Refuse to leave when the argument list has files nobody has edited yet:
+/// E173 (and `quitmore` set, so a second `:q` goes through), or -- with
+/// 'confirm' -- the dialog's "No".
+pub(crate) fn check_more(forceit: bool) -> Result<(), Failed> {
+    let Some(n) = unedited_files(forceit) else {
+        return Ok(());
+    };
+    let plural = c_ulong::from(n.unsigned_abs());
     if (p_confirm() || cmdmod_has(CmdModFlags::CONFIRM)) && !Buf::current().name.is_unnamed() {
         let fmt = ngettext(
             c"%d more file to edit.  Quit anyway?",
             c"%d more files to edit.  Quit anyway?",
-            n as c_ulong,
+            plural,
         );
         let room = DIALOG_MSG_SIZE as usize;
         let question = XString::from_bytes(&crate::formatted!(room, fmt.to_bytes(), n));
-        let answer = vim_dialog_yesno(VIM_QUESTION as c_int, None, question.as_cstr(), 1);
-        return if answer == VIM_YES as c_int { OK } else { FAIL };
+        let answer = vim_dialog_yesno(VIM_QUESTION.cast_signed(), None, question.as_cstr(), 1);
+        return if answer == VIM_YES.cast_signed() {
+            Ok(())
+        } else {
+            Err(Failed)
+        };
     }
     let fmt = ngettext(
         c"E173: %d more file to edit",
         c"E173: %d more files to edit",
-        n as c_ulong,
+        plural,
     );
     emsg_text(tr_plural!(fmt, n));
     quitmore.set(2);
-    FAIL
+    Err(Failed)
 }
 
 /// `mkdir`, reporting the reason it failed.
@@ -448,57 +467,47 @@ pub fn vim_mkdir_emsg(name: &CStr, prot: c_int) -> Result<(), Failed> {
     Ok(())
 }
 
-/// Whether `:mkvimrc` and friends may write `fname`: not a directory, and
-/// -- unless appending, or with the command's `!` -- not a file that exists.
-/// Says why not.
-fn exfile_writable(fname: &CStr, forceit: bool, appending: bool) -> bool {
+/// Whether `:mkvimrc` and friends may write `fname`: not a directory (E17),
+/// and -- unless appending, or with the command's `!` -- not a file that
+/// exists (E189).
+fn exfile_writable(fname: &CStr, forceit: bool, appending: bool) -> Result<(), Failed> {
     if dir_exists(fname) {
         let fname = msg_cstr(fname);
         semsg!("E17: \"{fname}\" is a directory");
-        return false;
+        return Err(Failed);
     }
     if !forceit && !appending && path_exists(fname) {
         let fname = msg_cstr(fname);
         semsg!("E189: \"{fname}\" exists (add ! to override)");
-        return false;
+        return Err(Failed);
     }
-    true
+    Ok(())
 }
 
 /// "E190", for a file that would not open.
-fn cannot_open_exfile(fname: &CStr) {
+fn cannot_open_exfile(fname: &CStr) -> Failed {
     let fname = msg_cstr(fname);
     semsg!("E190: Cannot open \"{fname}\" for writing");
+    Failed
 }
 
 /// Open the file `:redir` is about to write.
 ///
 /// Appending is always allowed; creating over an existing file needs the
 /// command's `!`.
-pub fn open_exfile(fname: &CStr, forceit: c_int, mode: &CStr) -> Option<CFile> {
-    if !exfile_writable(fname, forceit != 0, mode.to_bytes().first() == Some(&b'a')) {
-        return None;
-    }
-    let file = CFile::open(fname, mode);
-    if file.is_none() {
-        cannot_open_exfile(fname);
-    }
-    file
+pub fn open_exfile(fname: &CStr, forceit: c_int, mode: &CStr) -> Result<CFile, Failed> {
+    exfile_writable(fname, forceit != 0, mode.to_bytes().first() == Some(&b'a'))?;
+    CFile::open(fname, mode).ok_or_else(|| cannot_open_exfile(fname))
 }
 
 /// Create the file `:mkvimrc`, `:mkview` and `:mksession` write, truncating
 /// one that exists (which needs the command's `!`) -- upstream's
 /// `open_exfile(.., "wb")`.
-pub(crate) fn create_exfile(fname: &CStr, forceit: bool) -> Option<std::fs::File> {
-    if !exfile_writable(fname, forceit, false) {
-        return None;
-    }
+pub(crate) fn create_exfile(fname: &CStr, forceit: bool) -> Result<std::fs::File, Failed> {
+    exfile_writable(fname, forceit, false)?;
     use std::os::unix::ffi::OsStrExt;
-    let file = std::fs::File::create(std::ffi::OsStr::from_bytes(fname.to_bytes())).ok();
-    if file.is_none() {
-        cannot_open_exfile(fname);
-    }
-    file
+    std::fs::File::create(std::ffi::OsStr::from_bytes(fname.to_bytes()))
+        .map_err(|_| cannot_open_exfile(fname))
 }
 
 /// A dialog message: the one-`%s` `format` filled in with the file name it

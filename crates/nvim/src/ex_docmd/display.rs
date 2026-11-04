@@ -95,11 +95,7 @@ pub(crate) fn ex_redir(excmd: &mut ExArg) {
         at = excmd.line.skip_white(at);
         close_redir();
         let fname = expand_env(excmd.line.cstr_from(at), false);
-        redir_fd.set(open_exfile(
-            fname.as_cstr(),
-            c_int::from(excmd.forceit),
-            mode,
-        ));
+        redir_fd.set(open_exfile(fname.as_cstr(), c_int::from(excmd.forceit), mode).ok());
     } else if excmd.line.byte_at(at) == b'@' {
         close_redir();
         at += 1;

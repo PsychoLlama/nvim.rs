@@ -274,28 +274,26 @@ fn put_lines(excmd: &mut ExArg, flags: PutFlags) {
 /// `:copy` and `:move` — both take a destination address after the
 /// command, which is why they parse one more address here.
 pub(crate) fn ex_copymove(excmd: &mut ExArg) {
-    let mut errormsg = None;
     // The scan walks a cursor of its own; see `parse_cmd_address`.
     let (cmdidx, addr_type) = (excmd.cmdidx, excmd.addr_type);
-    let mut at = Some(excmd.line.arg);
-    let n = get_address(
+    let mut at = excmd.line.arg;
+    let read = get_address(
         Some(cmdidx),
         excmd.line.buffer_mut(),
         &mut at,
         addr_type,
         false,
         false,
-        0,
+        false,
         1,
-        &mut errormsg,
     );
-    // `get_address` answers no offset when the address was malformed.
-    let Some(at) = at else {
-        if let Some(msg) = &errormsg {
-            emsg(msg);
+    let n = match read {
+        Ok(n) => n,
+        Err(refused) => {
+            refused.report();
+            excmd.line.next = None;
+            return;
         }
-        excmd.line.next = None;
-        return;
     };
     excmd.line.arg = at;
     get_flags(excmd);
