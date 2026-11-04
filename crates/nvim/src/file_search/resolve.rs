@@ -25,7 +25,7 @@ use crate::option::{option_parts, split_option_part};
 use crate::optionstr::OptString;
 use crate::os::fs::path_exists;
 use crate::path::buffer_path;
-use crate::tr_c;
+use crate::tr;
 use crate::types::MAXPATHL;
 use crate::winlayer::Buf;
 use core::ffi::c_int;
@@ -189,14 +189,13 @@ fn find_without_path(
 /// Say that `name` is not there, in the wording the caller earned: a first
 /// call has not found it at all, a repeat call has run out.
 fn report_missing(first: bool, find_what: c_int, name: &CStr) {
-    let message = match (first, find_what == FINDFILE_DIR) {
-        (true, true) => e_cant_find_directory_str_in_cdpath,
-        (true, false) => e_cant_find_file_str_in_path,
-        (false, true) => e_no_more_directory_str_found_in_cdpath,
-        (false, false) => e_no_more_file_str_found_in_path,
-    };
     let name = msg_cstr(name);
-    emsg_text(tr_c!(message, name));
+    emsg_text(match (first, find_what == FINDFILE_DIR) {
+        (true, true) => tr!("E344: Can't find directory \"{}\" in cdpath", name),
+        (true, false) => tr!("E345: Can't find file \"{}\" in path", name),
+        (false, true) => tr!("E346: No more directory \"{}\" found in cdpath", name),
+        (false, false) => tr!("E347: No more file \"{}\" found in path", name),
+    });
 }
 
 /// The walk over the entries of `'path'` or `'cdpath'`: the search running

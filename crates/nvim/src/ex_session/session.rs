@@ -23,6 +23,13 @@
 //! Original: `src/nvim/ex_session.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::flag::{FR_COL, FR_LEAF};
 use super::view::put_view;
@@ -118,8 +125,8 @@ pub(crate) fn makeopens(out: &mut SessionFile, dirnow: &XString) -> bool {
     if opts.has(kOptSsopFlagResize)
         && !out.write(format_args!(
             "set lines={} columns={}\n",
-            Rows.get() as int64_t,
-            Columns.get() as int64_t
+            int64_t::from(Rows.get()),
+            int64_t::from(Columns.get())
         ))
     {
         return false;
@@ -428,9 +435,9 @@ fn ses_winsizes(out: &mut SessionFile, restore_size: bool, tab: TabPage) -> bool
             if window.w_height + window.w_hsep_height + window.w_status_height < top.fr_height
                 && !out.write(format_args!(
                     "exe '{n}resize ' . ((&lines * {} + {}) / {})\n",
-                    window.w_height as int64_t,
-                    Rows.get() as int64_t / 2,
-                    Rows.get() as int64_t,
+                    int64_t::from(window.w_height),
+                    int64_t::from(Rows.get()) / 2,
+                    int64_t::from(Rows.get()),
                 ))
             {
                 return false;
@@ -439,9 +446,9 @@ fn ses_winsizes(out: &mut SessionFile, restore_size: bool, tab: TabPage) -> bool
             if window.w_width < Columns.get()
                 && !out.write(format_args!(
                     "exe 'vert {n}resize ' . ((&columns * {} + {}) / {})\n",
-                    window.w_width as int64_t,
-                    Columns.get() as int64_t / 2,
-                    Columns.get() as int64_t,
+                    int64_t::from(window.w_width),
+                    int64_t::from(Columns.get()) / 2,
+                    int64_t::from(Columns.get()),
                 ))
             {
                 return false;

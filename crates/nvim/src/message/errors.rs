@@ -483,13 +483,6 @@ pub(crate) static e_fast_api_disabled: &CStr =
 pub(crate) static e_floatonly: &CStr =
     c"E5601: Cannot close window, only floating window would remain";
 pub(crate) static e_floatexchange: &CStr = c"E5602: Cannot exchange or rotate float";
-pub(crate) static e_cant_find_directory_str_in_cdpath: &CStr =
-    c"E344: Can't find directory \"%s\" in cdpath";
-pub(crate) static e_cant_find_file_str_in_path: &CStr = c"E345: Can't find file \"%s\" in path";
-pub(crate) static e_no_more_directory_str_found_in_cdpath: &CStr =
-    c"E346: No more directory \"%s\" found in cdpath";
-pub(crate) static e_no_more_file_str_found_in_path: &CStr =
-    c"E347: No more file \"%s\" found in path";
 pub(crate) static e_value_is_locked: &CStr = c"E741: Value is locked";
 pub(crate) static e_value_is_locked_str: &CStr = c"E741: Value is locked: %.*s";
 pub(crate) static e_cannot_change_value: &CStr = c"E742: Cannot change value";

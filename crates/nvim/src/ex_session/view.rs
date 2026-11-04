@@ -18,6 +18,13 @@
 //! Original: `src/nvim/ex_session.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::{
     SessionFile, SessionOpts, did_lcd, ses_arglist, ses_escape_fname, ses_fname, ses_get_fname,
@@ -85,7 +92,10 @@ pub(crate) fn put_view(
         && window.w_arg_idx < crate::arglist::wargcount(window)
         && opts.is_session()
     {
-        if !out.write(format_args!("{}argu\n", window.w_arg_idx as int64_t + 1)) {
+        if !out.write(format_args!(
+            "{}argu\n",
+            int64_t::from(window.w_arg_idx) + 1
+        )) {
             return false;
         }
         did_next = true;
@@ -183,7 +193,7 @@ fn put_edit(out: &mut SessionFile, window: Win, opts: SessionOpts) -> Option<boo
 /// even when "options" is not in 'sessionoptions'.
 fn put_help_edit(out: &mut SessionFile, window: Win) -> bool {
     let curtag = if 0 < window.w_tagstackidx && window.w_tagstackidx <= window.w_tagstacklen {
-        window.w_tagstack[(window.w_tagstackidx - 1) as usize]
+        window.w_tagstack[usize::try_from(window.w_tagstackidx - 1).expect("checked above")]
             .tagname
             .as_ref()
             .map_or(&b""[..], |tagname| tagname.as_bytes())
@@ -265,9 +275,9 @@ fn put_cursor(out: &mut SessionFile, window: Win) -> bool {
         return out.write(format_args!(
             "let s:c = {} - (({} * winwidth(0) + {}) / {})\nif s:c > 0\n  exe 'normal! ' . s:c . '|zs' . {} . '|'\nelse\n",
             virtcol + 1,
-            (window.w_virtcol - window.w_leftcol) as int64_t,
-            (width / 2) as int64_t,
-            width as int64_t,
+            int64_t::from(window.w_virtcol - window.w_leftcol),
+            int64_t::from(width / 2),
+            int64_t::from(width),
             virtcol + 1,
         )) && put_view_curpos(out, window, "  ")
             && out.line(c"endif");

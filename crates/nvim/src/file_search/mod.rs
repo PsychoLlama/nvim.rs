@@ -12,6 +12,13 @@
 //! reached, and `**N` limits how far down `**` descends.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -26,10 +33,6 @@ use crate::mbyte::mb_tolower;
 use crate::memory::XString;
 use crate::message::emsg;
 use crate::message::state::line_msg;
-use crate::message::{
-    e_cant_find_directory_str_in_cdpath, e_cant_find_file_str_in_path,
-    e_no_more_directory_str_found_in_cdpath, e_no_more_file_str_found_in_path,
-};
 use crate::normal::get_visual_text;
 use crate::option::vars::p_fic;
 use crate::option::{option_parts, was_set_insecurely};
@@ -389,9 +392,9 @@ impl FindContext {
                 // is signed here, so a limit of 128 or more tests as
                 // negative: `**200` never descends and never counts
                 // down. Preserved -- it is what those patterns do.
-                let left = frame.wc_path.at(2) as i8;
+                let left = frame.wc_path.at(2).cast_signed();
                 if left > 0 {
-                    frame.wc_path.set(2, (left - 1) as u8);
+                    frame.wc_path.set(2, (left - 1).cast_unsigned());
                     file_path.push(b'*')?;
                 }
                 if frame.wc_path.at(2) == 0 {
@@ -411,7 +414,8 @@ impl FindContext {
             // Stopping at a separator means there is still something
             // left, which is handled below by pushing every directory
             // expand_wildcards() returned back onto the stack.
-            while rest < frame.wc_path.len() && !vim_ispathsep(frame.wc_path.at(rest) as c_int) {
+            while rest < frame.wc_path.len() && !vim_ispathsep(c_int::from(frame.wc_path.at(rest)))
+            {
                 file_path.push(frame.wc_path.at(rest))?;
                 rest += 1;
             }
@@ -666,10 +670,10 @@ impl FindContext {
         }
 
         // Cut off the last directory.
-        while *path_end > 0 && vim_ispathsep(start_dir.at(*path_end) as c_int) {
+        while *path_end > 0 && vim_ispathsep(c_int::from(start_dir.at(*path_end))) {
             *path_end -= 1;
         }
-        while *path_end > 0 && !vim_ispathsep(start_dir.at(*path_end - 1) as c_int) {
+        while *path_end > 0 && !vim_ispathsep(c_int::from(start_dir.at(*path_end - 1))) {
             *path_end -= 1;
         }
         start_dir.truncate(*path_end);

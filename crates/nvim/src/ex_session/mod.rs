@@ -34,6 +34,13 @@
 //! Original: `src/nvim/ex_session.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -51,10 +58,11 @@ use crate::fileio::shorten_fnames;
 use crate::global_cell::GlobalCell;
 use crate::mapping::makemap;
 use crate::mbyte::cluster_len;
+use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::message::emsg;
 use crate::message::{e_noname, e_prev_dir, e_write};
-use crate::message_fmt::msg_cstr;
+use crate::message_fmt::{emsg_text, msg_cstr};
 use crate::option::makeset;
 use crate::option::vars::{P_VDIR, p_acd, p_hls, ssop_flags, vop_flags};
 use crate::options::{
@@ -66,7 +74,7 @@ use crate::os::fs::{dir_exists, dirname_within, os_chdir};
 use crate::path::{after_pathsep, vim_full_name, vim_ispathsep};
 use crate::runtime::do_source;
 use crate::search::state::no_hlsearch;
-use crate::semsg;
+use crate::tr;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::PATHSEPSTR;
@@ -308,16 +316,42 @@ pub(crate) fn ses_do_win(win: Win) -> bool {
 
 // -- `:loadview` -----------------------------------------------------------
 
+/// Why `:mkview` or `:loadview` did nothing; said once, by the command.
+#[derive(Debug, thiserror::Error)]
+enum ViewError {
+    /// The buffer has no name to make a view file name from.
+    #[error("{}", msg_cstr(gettext(e_noname)))]
+    NoFileName,
+    /// The view file would not open.
+    #[error("{}", tr!("E484: Can't open file {}", msg_cstr(.0.as_cstr())))]
+    CannotOpen(ThinCString),
+}
+
+const _: () = assert!(size_of::<ViewError>() <= 16);
+
+impl ViewError {
+    fn report(&self) {
+        emsg_text(self.to_string());
+    }
+}
+
 /// `:loadview [nr]`.
 pub(crate) fn ex_loadview(excmd: &mut ExArg) {
-    let Some(fname) = get_view_file(excmd.line.byte_at(excmd.line.arg)) else {
-        return;
-    };
+    if let Err(err) = load_view(excmd.line.byte_at(excmd.line.arg)) {
+        err.report();
+    }
+}
+
+/// [`ex_loadview`]'s work.
+fn load_view(c: u8) -> Result<(), ViewError> {
+    let fname = get_view_file(c)?;
     // The name is this frame's own, which the view cannot reach.
     if do_source(fname.as_cstr(), false, DOSO_NONE, None) == FAIL {
-        let fname = msg_cstr(fname.as_cstr());
-        semsg!("E484: Can't open file {fname}");
+        return Err(ViewError::CannotOpen(ThinCString::from_cstr(
+            fname.as_cstr(),
+        )));
     }
+    Ok(())
 }
 
 /// The name of the view file for the current buffer, in 'viewdir'.
@@ -331,10 +365,9 @@ pub(crate) fn ex_loadview(excmd: &mut ExArg) {
 /// function, so views round-trip; do not "fix" it, every existing 'viewdir'
 /// depends on it. The answer keeps those bytes; its C string stops at the
 /// NUL.
-fn get_view_file(c: u8) -> Option<XString> {
+fn get_view_file(c: u8) -> Result<XString, ViewError> {
     let Some(full) = Buf::current().name.full().map(XString::from_cstr) else {
-        emsg(gettext(e_noname));
-        return None;
+        return Err(ViewError::NoFileName);
     };
     let sname = home_to_tilde(None, full.as_cstr(), full.len() + 3, true);
 
@@ -359,7 +392,7 @@ fn get_view_file(c: u8) -> Option<XString> {
     view.push_byte(b'=');
     view.push_byte(c);
     view.push_str(".vim");
-    Some(view)
+    Ok(view)
 }
 
 // -- `:mkexrc`, `:mkvimrc`, `:mkview`, `:mksession` ------------------------
@@ -386,8 +419,9 @@ pub(crate) fn ex_mkrc(excmd: &mut ExArg) {
         cmdidx == CmdIdx::mkview && (arg.is_empty() || (first.is_ascii_digit() && arg.len() == 1));
     let fname = if using_vdir {
         excmd.forceit = true;
-        let Some(view_file) = get_view_file(first) else {
-            return;
+        let view_file = match get_view_file(first) {
+            Ok(view_file) => view_file,
+            Err(err) => return err.report(),
         };
         // The 'viewdir' may still need creating.
         let vdir = P_VDIR.get();
