@@ -7,9 +7,16 @@
 //! an equal one is already there.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
 
 /// The room upstream gave a help match's score: ten bytes, less the
 /// terminator.
@@ -47,7 +54,7 @@ impl FindTags {
         margs: &MatchArgs,
         buf_ffname: Option<&CStr>,
     ) {
-        let name_only = self.flags & TAG_NAMES as c_int != 0;
+        let name_only = self.flags & TAG_NAMES != 0;
         let line = self.line();
         let is_current = test_for_current(tagp.fname.of(line), self.tag_fname.bytes(), buf_ffname);
         let is_static = test_for_static(line, tagp);

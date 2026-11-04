@@ -38,7 +38,7 @@ use crate::memline::Lines;
 use crate::message::e_noident;
 use crate::message::emsg;
 use crate::normal::{
-    DT_POP, FIND_IDENT, FIND_STRING, HIST_SEARCH, VSE_NONE, check_clear_op_quit,
+    FIND_IDENT, FIND_STRING, HIST_SEARCH, VSE_NONE, check_clear_op_quit,
     check_text_or_curbuf_locked, clear_op, get_visual_text, normal_search, visual_active,
 };
 use crate::option::magic_isset;
@@ -48,8 +48,8 @@ use crate::search::state::no_smartcase;
 use crate::state::MODE_TERMINAL;
 use crate::state::mode::restart_edit;
 use crate::strings::shellescape;
-use crate::tag::do_tag;
 use crate::tag::state::g_tag_at_cursor;
+use crate::tag::{TagCmd, do_tag};
 use crate::types::{CmdArg, ColNr, Failed, LineNr, int64_t};
 use crate::undo::curbuf_is_changed;
 use crate::window::check_can_set_curbuf_disabled;
@@ -374,7 +374,7 @@ pub(crate) fn nv_tagpop(cmd_arg: &mut CmdArg) {
     if check_clear_op_quit(cmd_arg.op()) {
         return;
     }
-    do_tag(c"", DT_POP.cast_signed(), cmd_arg.count1, 0, true);
+    do_tag(c"", TagCmd::Pop, cmd_arg.count1, 0, true);
 }
 
 /// `gf`, `gF` and `[f`: edit the file named under the cursor.

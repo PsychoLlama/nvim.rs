@@ -6,6 +6,13 @@
 //! parts the completion display wants.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::cstr;
@@ -30,18 +37,18 @@ fn byte(s: &[u8], at: usize) -> u8 {
 /// completion menu displays and matches against, and the string keeps all
 /// three.
 pub(crate) fn tag_matches(tagnames: bool, pat: &CStr) -> Result<Vec<XString>, Failed> {
-    let mut flags = (TAG_REGEXP | TAG_VERBOSE | TAG_NO_TAGFUNC) as c_int;
+    let mut flags = TAG_REGEXP | TAG_VERBOSE | TAG_NO_TAGFUNC;
     // A leading '/' asks for the rest to be read as a regexp; without
     // one the pattern is a literal name, and case is then not folded.
     let pat = match pat.to_bytes() {
         [b'/', rest @ ..] => rest,
         pat => {
-            flags |= TAG_NOIC as c_int;
+            flags |= TAG_NOIC;
             pat
         }
     };
 
-    let mincount = TAG_MANY as c_int;
+    let mincount = TAG_MANY;
     // A copy: the search must not hold a borrow of the buffer.
     let buf_ffname = Buf::current().name.full().map(XString::from_cstr);
     let buf_ffname = buf_ffname.as_ref().map(XString::as_cstr);
@@ -81,7 +88,7 @@ fn reshape_match(found: &TagMatch) -> XString {
 /// `Err` when a field could not be recorded. `'tagfunc'` may run, before
 /// anything is appended.
 pub fn get_tags(list: &mut List, pat: &CStr, buf_fname: Option<&CStr>) -> Result<(), Failed> {
-    let flags = (TAG_REGEXP | TAG_NOIC) as c_int;
+    let flags = TAG_REGEXP | TAG_NOIC;
     let mincount = MAXCOL;
     let found = find_tags(pat.to_bytes(), flags, mincount, buf_fname)?;
 

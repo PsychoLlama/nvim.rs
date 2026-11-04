@@ -6,12 +6,20 @@
 //! [`get_tagstack`] and [`set_tagstack`] are the Vimscript views.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::cstr;
 use crate::formatted;
 use crate::highlight_group::HLF_D;
 use crate::memory::ThinCString;
+use crate::narrow::number_as_int;
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
 use crate::types::{Failed, IOSIZE, ListRef, VAR_LIST};
@@ -24,6 +32,12 @@ use core::ffi::{CStr, c_int};
 /// promise: the family's error messages are all string constants.
 pub(crate) fn tag_emsg(msg: &'static CStr) {
     emsg(gettext(msg));
+}
+
+/// A count of stack entries as the window keeps it: never past
+/// [`TAGSTACKSIZE`].
+fn depth(len: usize) -> c_int {
+    c_int::try_from(len.min(TAGSTACKSIZE)).expect("twenty entries")
 }
 
 /// How many entries a window's stack holds before the oldest is dropped.
@@ -70,7 +84,7 @@ impl TagStack {
     pub(crate) fn len(&self) -> usize {
         // Upstream never lets the count past the array, but clamp anyway:
         // every index below is taken from this.
-        (self.win.w_tagstacklen as usize).min(TAGSTACKSIZE)
+        usize::try_from(self.win.w_tagstacklen).map_or(TAGSTACKSIZE, |len| len.min(TAGSTACKSIZE))
     }
 
     /// The entry `CTRL-T` would pop next; one past the end at the top.
@@ -89,8 +103,7 @@ impl TagStack {
     /// The stack length is a valid index: it means "at the top", where
     /// `CTRL-T` pops the newest entry.
     pub(crate) fn set_curidx(&mut self, curidx: c_int) {
-        let len = self.len() as c_int;
-        self.win.w_tagstackidx = curidx.clamp(0, len);
+        self.win.w_tagstackidx = curidx.clamp(0, depth(self.len()));
     }
 
     /// Throw the whole stack away.
@@ -105,7 +118,7 @@ impl TagStack {
             tagstack_clear_entry(item);
         }
         // `len` is no larger than the count it replaces.
-        self.win.w_tagstacklen = len as c_int;
+        self.win.w_tagstacklen = depth(len);
     }
 
     /// Drop the oldest entry, shifting the rest down to free the top.
@@ -248,8 +261,8 @@ pub fn do_tags(_excmd: &mut ExArg) {
 fn tag_details(tag: &Taggy, retdict: &mut Dict) {
     let (tagname, user_data) = entry_strings(tag);
     let _ = retdict.add_str(b"tagname", tagname);
-    let _ = retdict.add_number(b"matchnr", (tag.cur_match + 1) as VarNumber);
-    let _ = retdict.add_number(b"bufnr", tag.cur_fnum as VarNumber);
+    let _ = retdict.add_number(b"matchnr", VarNumber::from(tag.cur_match + 1));
+    let _ = retdict.add_number(b"bufnr", VarNumber::from(tag.cur_fnum));
     if user_data.is_some() {
         let _ = retdict.add_str(b"user_data", user_data);
     }
@@ -258,7 +271,7 @@ fn tag_details(tag: &Taggy, retdict: &mut Dict) {
     let _ = retdict.add_list(b"from", Some(pos.clone()));
     let mark = &tag.fmark;
     let str_m = if mark.fnum != -1 {
-        mark.fnum as VarNumber
+        VarNumber::from(mark.fnum)
     } else {
         0
     };
@@ -267,19 +280,19 @@ fn tag_details(tag: &Taggy, retdict: &mut Dict) {
     // Columns are counted from one outside, except for the "past the
     // end of the line" sentinel, which is passed through.
     let n2 = if mark.mark.col == ColNr::MAX {
-        MAXCOL as VarNumber
+        VarNumber::from(MAXCOL)
     } else {
         i64::from(mark.mark.col + 1)
     };
     pos.edit().push_number(n2);
-    pos.edit().push_number(mark.mark.coladd as VarNumber);
+    pos.edit().push_number(VarNumber::from(mark.mark.coladd));
 }
 
 /// `gettagstack()` — describe the tag stack of `window` into `retdict`.
 pub fn get_tagstack(window: Win, retdict: &mut Dict) {
     let mut stack = TagStack::of(window);
-    let _ = retdict.add_number(b"length", stack.len() as VarNumber);
-    let _ = retdict.add_number(b"curidx", (stack.curidx() + 1) as VarNumber);
+    let _ = retdict.add_number(b"length", VarNumber::from(depth(stack.len())));
+    let _ = retdict.add_number(b"curidx", VarNumber::from(stack.curidx() + 1));
 
     let items = tv_list_alloc(2);
     let _ = retdict.add_list(b"items", Some(items.clone()));
@@ -313,12 +326,12 @@ pub fn set_tagstack(window: Win, d: &Dict, action: c_int) -> Result<(), Failed> 
 
     let mut stack = TagStack::of(window);
     if let Some(di) = dict_find(Some(d), b"curidx") {
-        stack.set_curidx(tv_get_number(&di.di_tv) as c_int - 1);
+        stack.set_curidx(number_as_int(tv_get_number(&di.di_tv)) - 1);
     }
 
     if action == 't' as c_int {
         // Drop everything above the current entry.
-        let keep = stack.curidx().max(0) as usize;
+        let keep = usize::try_from(stack.curidx()).unwrap_or(0);
         if keep < stack.len() {
             stack.truncate(keep);
         }
@@ -330,7 +343,7 @@ pub fn set_tagstack(window: Win, d: &Dict, action: c_int) -> Result<(), Failed> 
         }
         stack.push_items(&items);
         // Leave the index above the last entry, as a fresh jump would.
-        stack.set_curidx(stack.len() as c_int);
+        stack.set_curidx(depth(stack.len()));
     }
     Ok(())
 }
@@ -345,5 +358,5 @@ fn entry_strings(tag: &Taggy) -> (Option<&CStr>, Option<&CStr>) {
 
 /// A number field of a dict, zero when it is missing.
 fn number(d: &Dict, key: &[u8]) -> c_int {
-    dict_get_number(Some(d), key) as c_int
+    number_as_int(dict_get_number(Some(d), key))
 }

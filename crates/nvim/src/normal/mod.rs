@@ -113,7 +113,6 @@ pub(crate) const ACTION_SHOW: c_uint = 1;
 pub(crate) const ACTION_SHOW_ALL: c_uint = 4;
 pub(crate) const FIND_ANY: c_uint = 1;
 pub(crate) const FIND_DEFINE: c_uint = 2;
-pub(crate) const DT_POP: c_uint = 2;
 /// The normal-mode state machine's own state: one per running
 /// `normal_enter` (lent to `state_enter` for the length of its loop) or
 /// `normal_cmd` (on that call's stack).

@@ -9,6 +9,13 @@
 //! the two callers that want something other than whole lines.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::cstr;
@@ -26,7 +33,7 @@ use crate::search::ignorecase_opt;
 use crate::semsg;
 use crate::smsg;
 use crate::types::RegMatch;
-use crate::types::{CONV_NONE, CONV_NONE_INIT, FAIL, Failed, OK};
+use crate::types::{CONV_NONE, CONV_NONE_INIT, Failed};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 use core::hash::{Hash, Hasher};
@@ -174,7 +181,7 @@ impl MatchArgs {
             matchoff: 0,
             match_re: false,
             match_no_ic: false,
-            has_re: flags & TAG_REGEXP as c_int != 0,
+            has_re: flags & TAG_REGEXP != 0,
             sortic: false,
             sort_error: false,
         }
@@ -241,7 +248,7 @@ impl TagMatch {
         // The list upstream hands back separates the two parts with 0x02
         // and turns *every* 0x02 back into a NUL, so a line reads only up
         // to the first one it holds.
-        if let Some(sep) = text[line_at..].iter().position(|&b| b == TAG_SEP as u8) {
+        if let Some(sep) = text[line_at..].iter().position(|&b| b == TAG_SEP) {
             text.truncate(line_at + sep);
         }
         text.push(0);
@@ -352,7 +359,7 @@ impl FindTags {
             flags,
             tag_file_sorted: 0,
             get_searchpat: false,
-            help_only: flags & TAG_HELP as c_int != 0,
+            help_only: flags & TAG_HELP != 0,
             did_open: false,
             mincount,
             linear: false,
@@ -424,7 +431,7 @@ impl FindTags {
         let buffer = Buf::current();
         let fname = buffer.name.shown().map_or(&[][..], CStr::to_bytes);
         let flen = fname.len();
-        if self.flags & TAG_KEEP_LANG as c_int != 0
+        if self.flags & TAG_KEEP_LANG != 0
             && self.help_lang_find.is_none()
             && flen > 4
             && fname[flen - 1] == b'x'
@@ -461,14 +468,19 @@ impl FindTags {
 
     /// Let `'tagfunc'` answer instead of reading any tags file.
     ///
-    /// Answers `NOTDONE` when there is no usable `'tagfunc'`, `OK` when it
-    /// answered and `FAIL` otherwise.
-    fn apply_tagfunc(&mut self, pat: &CStr, buf_ffname: Option<&CStr>) -> c_int {
-        if self.flags & TAG_NO_TAGFUNC as c_int != 0
+    /// `None` when there is no `'tagfunc'` to ask, or it declined: the tags
+    /// files are read instead. `Err` when it could not be used -- what
+    /// `find_tags` answers for no matches.
+    fn apply_tagfunc(
+        &mut self,
+        pat: &CStr,
+        buf_ffname: Option<&CStr>,
+    ) -> Option<Result<(), Failed>> {
+        if self.flags & TAG_NO_TAGFUNC != 0
             || TAGFUNC_RUNNING.get()
             || Buf::current().b_p_tfu.first_byte() == 0
         {
-            return NOTDONE;
+            return None;
         }
         TAGFUNC_RUNNING.set(true);
         // `'tagfunc'` does its own filtering, so every answer is kept
@@ -476,12 +488,12 @@ impl FindTags {
         let answer = find_tagfunc_tags(pat, self.flags, buf_ffname);
         TAGFUNC_RUNNING.set(false);
         match answer {
-            TagfuncAnswer::Declined => NOTDONE,
-            TagfuncAnswer::Unusable => FAIL,
+            TagfuncAnswer::Declined => None,
+            TagfuncAnswer::Unusable => Some(Err(Failed)),
             TagfuncAnswer::Tags(tags) => {
                 self.match_count = c_int::try_from(tags.len()).unwrap_or(c_int::MAX);
                 self.from_tagfunc = tags;
-                OK
+                Some(Ok(()))
             }
         }
     }
@@ -541,7 +553,7 @@ impl FindTags {
             } else {
                 fast_breakcheck();
             }
-            if self.flags & TAG_INS_COMP as c_int != 0 {
+            if self.flags & TAG_INS_COMP != 0 {
                 ins_compl_check_keys(30, false);
             }
             if got_int.get() || ins_compl_interrupted() {
@@ -549,7 +561,7 @@ impl FindTags {
                 break;
             }
             // For completion, stop once there are plenty.
-            if self.mincount == TAG_MANY as c_int && self.match_count >= TAG_MANY as c_int {
+            if self.mincount == TAG_MANY && self.match_count >= TAG_MANY {
                 self.stop_searching = true;
                 break;
             }
@@ -658,9 +670,9 @@ fn search(
 ) -> Result<Vec<Found>, Failed> {
     // Find every match when the caller wants them all, and also for
     // completion, where the count is only a cut-off.
-    let findall = mincount == MAXCOL || mincount == TAG_MANY as c_int;
-    let has_re = flags & TAG_REGEXP as c_int != 0;
-    let noic = flags & TAG_NOIC as c_int != 0;
+    let findall = mincount == MAXCOL || mincount == TAG_MANY;
+    let has_re = flags & TAG_REGEXP != 0;
+    let noic = flags & TAG_NOIC != 0;
     // The pattern as the caller gave it, for 'tagcase' and 'tagfunc'.
     let pattern = XString::from_bytes(cstr::until_nul(pat));
 
@@ -686,7 +698,7 @@ fn search(
     }
 
     let help_save = Buf::current().b_help;
-    if flags & TAG_HELP as c_int != 0 {
+    if flags & TAG_HELP != 0 {
         Buf::current().b_help = true;
     }
 
@@ -722,13 +734,12 @@ fn search(
 
     let mut retval = Err(Failed);
     if !(has_re && st.orgpat.regmatch.regprog.is_none()) {
-        // `apply_tagfunc` still answers the C's three statuses; `NOTDONE`
-        // means there is no 'tagfunc' and the tag files are searched below.
+        // No answer from 'tagfunc': the tag files are searched below.
         let tagfunc = st.apply_tagfunc(pattern.as_cstr(), buf_ffname);
-        retval = if tagfunc == OK { Ok(()) } else { Err(Failed) };
-        if tagfunc == NOTDONE {
+        retval = tagfunc.unwrap_or(Err(Failed));
+        if tagfunc.is_none() {
             // A ".txt" help file keeps "en" as its language.
-            if flags & TAG_KEEP_LANG as c_int != 0 && st.help_lang_find.is_none() {
+            if flags & TAG_KEEP_LANG != 0 && st.help_lang_find.is_none() {
                 let buffer = Buf::current();
                 let fname = buffer.name.shown().map_or(&[][..], CStr::to_bytes);
                 st.is_txt =
@@ -761,7 +772,7 @@ fn search(
             }
 
             if !st.stop_searching {
-                if !st.did_open && flags & TAG_VERBOSE as c_int != 0 {
+                if !st.did_open && flags & TAG_VERBOSE != 0 {
                     tag_emsg(c"E433: No tags file");
                 }
                 retval = Ok(());
@@ -789,7 +800,7 @@ pub(crate) fn find_tags(
     mincount: c_int,
     buf_ffname: Option<&CStr>,
 ) -> Result<Vec<TagMatch>, Failed> {
-    debug_assert_eq!(flags & (TAG_NAMES | TAG_HELP) as c_int, 0);
+    debug_assert_eq!(flags & (TAG_NAMES | TAG_HELP), 0);
     let found = search(pat, flags, mincount, buf_ffname)?;
     Ok(found
         .into_iter()
@@ -805,7 +816,7 @@ pub(crate) fn find_tag_names(
     mincount: c_int,
     buf_ffname: Option<&CStr>,
 ) -> Result<Vec<XString>, Failed> {
-    let found = search(pat, flags | TAG_NAMES as c_int, mincount, buf_ffname)?;
+    let found = search(pat, flags | TAG_NAMES, mincount, buf_ffname)?;
     Ok(found
         .into_iter()
         .map(|found| XString::from_vec(found.key))
@@ -822,7 +833,7 @@ pub(crate) fn find_help_tag_matches(
     flags: c_int,
     mincount: c_int,
 ) -> Result<Vec<HelpTagMatch>, Failed> {
-    debug_assert_ne!(flags & TAG_HELP as c_int, 0);
+    debug_assert_ne!(flags & TAG_HELP, 0);
     let found = search(pat.to_bytes(), flags, mincount, None)?;
     Ok(found
         .into_iter()

@@ -7,6 +7,13 @@
 //! `;"<Tab>field:value` fields at the end of a line.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::Jumped;
 use super::*;
@@ -22,7 +29,7 @@ use crate::os::fs::path_exists;
 use crate::regexp::skip_regexp_at;
 use crate::search::{SEARCH_KEEP, do_search_in};
 use crate::strings::{FmtArg, find_bytes, format_into};
-use crate::types::{CpoFlag, FAIL, Failed, OK};
+use crate::types::{CpoFlag, Failed};
 use crate::window::WSP_VERT;
 use crate::window::tab_index;
 use crate::winlayer::TabPage;
@@ -116,7 +123,7 @@ pub(crate) fn parse_match(line: &[u8]) -> (TagParts, bool) {
         });
         // Past the `;"`; the fields themselves follow a TAB.
         let after = extra + 2;
-        if byte(line, after) == TAB as u8 {
+        if byte(line, after) == b'\t' {
             read_extra_fields(text, after + 1, &mut tagp, &mut kind_at, &mut user_data_at);
         }
     }
@@ -376,11 +383,7 @@ impl Jump {
 
         Win::current().w_set_curswant = true;
         postponed_split.set(0);
-        let mut retval = if self.run_command(line, tagp) == OK {
-            Ok(Jumped::Done)
-        } else {
-            Err(Failed)
-        };
+        let mut retval = self.run_command(line, tagp).map(|()| Jumped::Done);
         // Jumping to another file counts as success: at least the file
         // was found.
         if opened == GETFILE_OPEN_OTHER as c_int {
@@ -452,7 +455,7 @@ impl Jump {
         // 'switchbuf' may ask for the new window to be a vertical
         // split, or for a whole new tab page.
         if switchbuf & kOptSwbFlagVsplit as c_uint != 0 {
-            cmdmod_add_split(WSP_VERT as c_int);
+            cmdmod_add_split(WSP_VERT.cast_signed());
         }
         if switchbuf & kOptSwbFlagNewtab as c_uint != 0 && cmdmod_tab() == 0 {
             cmdmod_set_tab(tab_index(TabPage::current()) + 1);
@@ -467,7 +470,7 @@ impl Jump {
     }
 
     /// Run the tag's command: a search, or an ex command in the sandbox.
-    fn run_command(&mut self, line: &[u8], tagp: &TagParts) -> c_int {
+    fn run_command(&mut self, line: &[u8], tagp: &TagParts) -> Result<(), Failed> {
         // Tag commands always run with 'nomagic'.
         let save_magic = magic_overruled.get();
         magic_overruled.set(OPTION_MAGIC_OFF);
@@ -486,7 +489,7 @@ impl Jump {
             self.search(line, tagp, search_options)
         } else {
             self.pattern.execute();
-            OK
+            Ok(())
         };
 
         magic_overruled.set(save_magic);
@@ -496,8 +499,14 @@ impl Jump {
         retval
     }
 
-    /// Search for the tag's pattern, guessing at it if it is not there.
-    fn search(&mut self, line: &[u8], tagp: &TagParts, search_options: c_int) -> c_int {
+    /// Search for the tag's pattern, guessing at it if it is not there;
+    /// E434 when there is nothing to guess from.
+    fn search(
+        &mut self,
+        line: &[u8],
+        tagp: &TagParts,
+        search_options: c_int,
+    ) -> Result<(), Failed> {
         let save_p_ws = p_ws();
         let save_p_ic = p_ic();
         let save_p_scs = p_scs();
@@ -526,11 +535,11 @@ impl Jump {
 
         let retval = match found {
             // The tag's own pattern matched: nothing to report.
-            Found::Exactly => OK,
+            Found::Exactly => Ok(()),
             Found::Nowhere => {
                 tag_emsg(c"E434: Can't find tag pattern");
                 Win::current().w_cursor.lnum = save_lnum;
-                FAIL
+                Err(Failed)
             }
             Found::IgnoringCase | Found::Guessing => {
                 // Only say so when it really was a guess, not when
@@ -543,7 +552,7 @@ impl Jump {
                         msg_delay(1010, true);
                     }
                 }
-                OK
+                Ok(())
             }
         };
 

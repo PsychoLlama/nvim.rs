@@ -9,6 +9,13 @@
 //! that `:tnext` does not have to read the tags files again.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::Jumped;
 use super::*;
@@ -42,10 +49,6 @@ fn match_at(i: c_int) -> TagMatch {
 /// so there is no point looking again for a later one.
 static MATCH_LIMIT: GlobalCell<c_int> = GlobalCell::new(0);
 
-/// `:tlast`. The parent's `DT_*` family is the transpile's, which left
-/// this one out; it is used here and nowhere else in the module.
-const DT_LAST: c_uint = 6;
-
 /// The view the tag stack starts a jump from: no remembered scroll
 /// position.
 const NO_VIEW: FileMarkView = FileMarkView {
@@ -78,10 +81,10 @@ fn restart_ptag(tag: &XString) {
 /// Jump to a tag, or move about the tag stack.
 ///
 /// `tag` is the tag or pattern, empty for the forms that take none.
-/// `kind` is one of the `DT_*` constants, `count` the command's count,
+/// `kind` is the command, `count` its count,
 /// `forceit` its `!`, and `verbose` asks for "tag not found" to be
 /// reported.
-pub fn do_tag(tag: &CStr, kind: c_int, count: c_int, forceit: c_int, verbose: bool) {
+pub(crate) fn do_tag(tag: &CStr, kind: TagCmd, count: c_int, forceit: c_int, verbose: bool) {
     if TAGFUNC_RUNNING.get() {
         // The stack is what `'tagfunc'` is being asked to describe.
         tag_emsg(c"E986: Cannot modify the tag stack within tagfunc");
@@ -103,9 +106,9 @@ pub fn do_tag(tag: &CStr, kind: c_int, count: c_int, forceit: c_int, verbose: bo
 struct DoTag {
     /// The tag or pattern given, empty for the argument-less forms.
     tag: XString,
-    /// Which `DT_*` command this is. `DT_HELP` becomes `DT_TAG`, and a
-    /// retry after a missing file becomes `DT_NEXT`.
-    kind: c_int,
+    /// Which command this is. `Help` becomes `Tag`, and a retry after a
+    /// missing file becomes `Next`.
+    kind: TagCmd,
     count: c_int,
     forceit: c_int,
     verbose: bool,
@@ -153,16 +156,16 @@ struct DoTag {
 }
 
 impl DoTag {
-    fn new(tag: &CStr, kind: c_int, count: c_int, forceit: c_int, verbose: bool) -> Self {
+    fn new(tag: &CStr, kind: TagCmd, count: c_int, forceit: c_int, verbose: bool) -> Self {
         let win = Win::current();
         // `:help` tags are literal, and 'tagfunc' has no business
         // answering for them.
-        let help = kind == DT_HELP as c_int;
+        let help = kind == TagCmd::Help;
         let idx = win.w_tagstackidx;
 
         let cmd = DoTag {
             tag: XString::from_cstr(tag),
-            kind: if help { DT_TAG as c_int } else { kind },
+            kind: if help { TagCmd::Tag } else { kind },
             count,
             forceit,
             verbose,
@@ -229,7 +232,10 @@ impl DoTag {
         // A preview tag has its own one-entry stack.
         self.use_tagstack = g_do_tagpreview.get() == 0;
 
-        let named = matches!(self.kind as c_uint, DT_TAG | DT_SELECT | DT_JUMP | DT_LTAG);
+        let named = matches!(
+            self.kind,
+            TagCmd::Tag | TagCmd::Select | TagCmd::Jump | TagCmd::LTag
+        );
         if !self.tag.is_empty() && named {
             self.push_new_tag();
             self.new_tag = true;
@@ -249,7 +255,7 @@ impl DoTag {
 
     /// Whether the command shows a list and asks the user to pick.
     fn selecting(&self) -> bool {
-        matches!(self.kind as c_uint, DT_SELECT | DT_JUMP)
+        matches!(self.kind, TagCmd::Select | TagCmd::Jump)
     }
 
     /// A new tag was named: put it on the stack (or on the preview entry).
@@ -310,9 +316,9 @@ impl DoTag {
             return false;
         }
 
-        match self.kind as c_uint {
-            DT_POP => return self.pop_older(),
-            DT_TAG | DT_LTAG => {
+        match self.kind {
+            TagCmd::Pop => return self.pop_older(),
+            TagCmd::Tag | TagCmd::LTag => {
                 if !self.go_newer() {
                     return false;
                 }
@@ -358,7 +364,7 @@ impl DoTag {
             if buflist_getfile(
                 mark.fnum,
                 mark.mark.lnum,
-                GETF_SETMARK as c_int,
+                GETF_SETMARK.cast_signed(),
                 self.forceit,
             )
             .is_err()
@@ -432,11 +438,11 @@ impl DoTag {
             }
         }
 
-        match self.kind as c_uint {
-            DT_FIRST => self.cur_match = self.count - 1,
-            DT_SELECT | DT_JUMP | DT_LAST => self.cur_match = MAXCOL - 1,
-            DT_NEXT => self.cur_match += self.count,
-            DT_PREV => self.cur_match -= self.count,
+        match self.kind {
+            TagCmd::First => self.cur_match = self.count - 1,
+            TagCmd::Select | TagCmd::Jump | TagCmd::Last => self.cur_match = MAXCOL - 1,
+            TagCmd::Next => self.cur_match += self.count,
+            TagCmd::Prev => self.cur_match -= self.count,
             _ => {}
         }
         if self.cur_match == MAXCOL {
@@ -520,8 +526,16 @@ impl DoTag {
                 g_do_tagpreview.set(0);
                 return;
             }
-            if !self.choose() || !self.jump(&name) {
+            if !self.choose() {
                 return;
+            }
+            match self.jump(&name) {
+                Ok(true) => {}
+                Ok(false) => return,
+                Err(err) => {
+                    err.report();
+                    return;
+                }
             }
         }
     }
@@ -556,11 +570,11 @@ impl DoTag {
             MATCHES_ARE_FOR.set(Some(name.clone()));
         }
 
-        if matches!(self.kind as c_uint, DT_SELECT | DT_JUMP | DT_LTAG) {
+        if matches!(self.kind, TagCmd::Select | TagCmd::Jump | TagCmd::LTag) {
             // Every match is wanted, to list them.
             self.cur_match = MAXCOL - 1;
         }
-        MATCH_LIMIT.set(if self.kind == DT_TAG as c_int {
+        MATCH_LIMIT.set(if self.kind == TagCmd::Tag {
             MAXCOL
         } else {
             self.cur_match + 1
@@ -571,15 +585,15 @@ impl DoTag {
         let mut flags = match &name[..] {
             [b'/', rest @ ..] if !self.no_regexp => {
                 *name = XString::from_bytes(rest);
-                TAG_REGEXP as c_int
+                TAG_REGEXP
             }
-            _ => TAG_NOIC as c_int,
+            _ => TAG_NOIC,
         };
         if self.verbose {
-            flags |= TAG_VERBOSE as c_int;
+            flags |= TAG_VERBOSE;
         }
         if !self.use_tfu {
-            flags |= TAG_NO_TAGFUNC as c_int;
+            flags |= TAG_NO_TAGFUNC;
         }
 
         let buf_ffname = self.buf_ffname.as_ref().map(XString::as_cstr);
@@ -615,15 +629,15 @@ impl DoTag {
     fn choose(&mut self) -> bool {
         let found = match_count();
         let mut ask = false;
-        if self.kind == DT_TAG as c_int && !self.tag.is_empty() {
+        if self.kind == TagCmd::Tag && !self.tag.is_empty() {
             // A count on ":tag <name>" picks that match.
             self.cur_match = (self.count - 1).max(0);
-        } else if self.kind == DT_SELECT as c_int || (self.kind == DT_JUMP as c_int && found > 1) {
+        } else if self.kind == TagCmd::Select || (self.kind == TagCmd::Jump && found > 1) {
             // A copy: the listing may be interrupted by anything.
             let matches = TAG_MATCHES.with(Clone::clone);
             print_tag_list(self.new_tag, self.use_tagstack, &matches);
             ask = true;
-        } else if self.kind == DT_LTAG as c_int {
+        } else if self.kind == TagCmd::LTag {
             let matches = TAG_MATCHES.with(Clone::clone);
             add_llist_tags(&self.tag, &matches);
             // Jump to the first tag.
@@ -648,7 +662,7 @@ impl DoTag {
             // Don't give this error when a file was not found and we
             // are looking for a match in another file that was not
             // found either: E429 says so below.
-            if matches!(self.kind as c_uint, DT_NEXT | DT_FIRST)
+            if matches!(self.kind, TagCmd::Next | TagCmd::First)
                 && MISSING_FILE.with(Option::is_none)
             {
                 tag_emsg(if found == 1 {
@@ -697,8 +711,8 @@ impl DoTag {
     /// Jump to the chosen match.
     ///
     /// Answers `true` when the file it named did not exist and the next
-    /// match is worth trying.
-    fn jump(&mut self, name: &XString) -> bool {
+    /// match is worth trying; E429 when none is.
+    fn jump(&mut self, name: &XString) -> Result<bool, TagError> {
         // Only when about to try the next match: otherwise E429 below
         // reports it.
         if self.error_cur_match != self.cur_match
@@ -725,38 +739,36 @@ impl DoTag {
             if self.use_tagstack && self.idx > Win::current().w_tagstacklen {
                 self.idx = Win::current().w_tagstackidx;
             }
-            return false;
+            return Ok(false);
         }
 
         // The file does not exist: try the next matching tag, if there
         // can be one.
-        let more = (self.kind == DT_PREV as c_int && self.cur_match > 0)
-            || (matches!(self.kind as c_uint, DT_TAG | DT_NEXT | DT_FIRST)
+        let more = (self.kind == TagCmd::Prev && self.cur_match > 0)
+            || (matches!(self.kind, TagCmd::Tag | TagCmd::Next | TagCmd::First)
                 && (MATCH_LIMIT.get() != MAXCOL || self.cur_match < match_count() - 1));
         if !more {
             let missing = MISSING_FILE.with(Clone::clone).unwrap_or_default();
-            let arg0 = msg_cstr(missing.as_cstr());
-            semsg!("E429: File \"{arg0}\" does not exist");
-            return false;
+            return Err(TagError::NoSuchFile(missing.as_cstr().into()));
         }
         self.error_cur_match = self.cur_match;
         if self.use_tagstack {
             self.idx -= 1;
         }
-        if self.kind == DT_PREV as c_int {
+        if self.kind == TagCmd::Prev {
             self.cur_match -= 1;
         } else {
-            self.kind = DT_NEXT as c_int;
+            self.kind = TagCmd::Next;
             self.cur_match += 1;
         }
-        true
+        Ok(true)
     }
 
     /// Say which of how many matches this is, when that is worth saying.
     fn report_count(&self, ignored_case: bool) {
         let found = match_count();
         if self.selecting()
-            || self.kind == DT_TAG as c_int
+            || self.kind == TagCmd::Tag
             || (found <= 1 && !ignored_case)
             || self.skip_msg
         {

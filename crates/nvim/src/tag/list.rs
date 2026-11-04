@@ -6,6 +6,13 @@
 //! list for `:ltag`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::charset::atoi;
@@ -162,7 +169,7 @@ fn print_extra_fields(line: &[u8], command_end: usize, tagp: &TagParts) -> bool 
     // Past the `;"` and the separator after it.
     let mut p = command_end + 3;
     while !matches!(byte(line, p), 0 | b'\r' | b'\n') {
-        while byte(line, p) == TAB as u8 {
+        while byte(line, p) == b'\t' {
             p += 1;
         }
 
@@ -194,7 +201,7 @@ fn print_extra_fields(line: &[u8], command_end: usize, tagp: &TagParts) -> bool 
                 msg_advance(INFO_COLUMN);
             }
             p += msg_display_char(cstr::until_nul(&line[p..]), hl_id, false);
-            if byte(line, p) == TAB as u8 {
+            if byte(line, p) == b'\t' {
                 msg_str_hl(c" ", hl_id, false);
                 break;
             }
@@ -233,7 +240,7 @@ fn print_command(line: &[u8], command: usize, command_end: usize) {
     }
 
     while p != command_end {
-        let width = if byte(line, p) == TAB as u8 {
+        let width = if byte(line, p) == b'\t' {
             1
         } else {
             ptr2cells_at(&line[p..])
@@ -251,7 +258,7 @@ fn print_command(line: &[u8], command: usize, command_end: usize) {
         if byte(line, p) == b'\\' && (byte(line, p + 1) == delim || byte(line, p + 1) == b'\\') {
             p += 1;
         }
-        if byte(line, p) == TAB as u8 {
+        if byte(line, p) == b'\t' {
             msg_putchar(' ' as c_int);
             p += 1;
         } else {

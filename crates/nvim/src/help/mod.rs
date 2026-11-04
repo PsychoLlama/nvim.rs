@@ -52,7 +52,7 @@ use crate::pos::MAXCOL;
 use crate::semsg;
 use crate::smsg;
 use crate::state::mode::restart_edit;
-use crate::tag::{HelpTagMatch, do_tag, find_help_tag_matches};
+use crate::tag::{HelpTagMatch, TagCmd, do_tag, find_help_tag_matches};
 use crate::types::ApiString;
 use crate::types::Handle;
 use crate::types::Key;
@@ -87,8 +87,6 @@ mod flag {
     pub(super) const TAG_NO_TAGFUNC: c_uint = 256;
     /// The longest match list `:help` will show.
     pub(super) const TAG_MANY: c_uint = 300;
-    /// `do_tag`'s "this is a help tag" kind.
-    pub(super) const DT_HELP: c_uint = 8;
 
     /// `path_full_compare`'s "same file" answer.
     pub(super) const kEqualFiles: FileComparison = 1;
@@ -98,7 +96,7 @@ mod flag {
 }
 
 use flag::{
-    DT_HELP, TAG_HELP, TAG_KEEP_LANG, TAG_MANY, TAG_NAMES, TAG_NO_TAGFUNC, TAG_REGEXP, TAG_VERBOSE,
+    TAG_HELP, TAG_KEEP_LANG, TAG_MANY, TAG_NAMES, TAG_NO_TAGFUNC, TAG_REGEXP, TAG_VERBOSE,
     kRetNilBool, kRetObject,
 };
 
@@ -185,7 +183,7 @@ pub(crate) fn open_help(excmd: Option<&mut ExArg>) {
         // and `do_tag` needs it to open folds under the cursor.
         KeyTyped.set(old_key_typed);
 
-        do_tag(tag.as_cstr(), DT_HELP as c_int, 1, 0, true);
+        do_tag(tag.as_cstr(), TagCmd::Help, 1, 0, true);
 
         // Delete the empty buffer if we are not using it. Careful:
         // autocommands may have jumped to another window, so check that

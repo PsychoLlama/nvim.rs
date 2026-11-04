@@ -6,6 +6,13 @@
 //! same shape a tags file line would have had.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::eval::typval::CallFrame;
@@ -106,8 +113,8 @@ pub(crate) fn find_tagfunc_tags(
     let mut flag_string = Vec::with_capacity(3);
     for (wanted, flag) in [
         (g_tag_at_cursor.get(), b'c'),
-        (flags & TAG_INS_COMP as c_int != 0, b'i'),
-        (flags & TAG_REGEXP as c_int != 0, b'r'),
+        (flags & TAG_INS_COMP != 0, b'i'),
+        (flags & TAG_REGEXP != 0, b'r'),
     ] {
         if wanted {
             flag_string.push(flag);
@@ -115,7 +122,7 @@ pub(crate) fn find_tagfunc_tags(
     }
 
     let info = tv_dict_alloc_lock(VarLock::Fixed);
-    if flags & TAG_INS_COMP as c_int == 0 {
+    if flags & TAG_INS_COMP == 0 {
         // The tag stack entry the jump came from, whose `user_data` the
         // function may want. One past the top means nothing was popped,
         // so the newest entry is the interesting one.
@@ -223,7 +230,7 @@ fn tag_of(d: &Dict, flags: c_int) -> Option<Found> {
         return None;
     };
 
-    if flags & TAG_NAMES as c_int != 0 {
+    if flags & TAG_NAMES != 0 {
         // Only the name is wanted.
         return Some(Found::new(name.to_bytes().to_vec(), MT_GL_OTH as usize));
     }

@@ -228,15 +228,6 @@ pub struct SavedDebugState {
 }
 
 pub const ETYPE_EXCEPT: EStackType = 5;
-pub const DT_LTAG: c_uint = 11;
-pub const DT_TAG: c_uint = 1;
-pub const DT_LAST: c_uint = 6;
-pub const DT_FIRST: c_uint = 5;
-pub const DT_POP: c_uint = 2;
-pub const DT_NEXT: c_uint = 3;
-pub const DT_PREV: c_uint = 4;
-pub const DT_SELECT: c_uint = 7;
-pub const DT_JUMP: c_uint = 9;
 pub const FIND_ANY: c_uint = 1;
 pub const FIND_DEFINE: c_uint = 2;
 pub const ACTION_SPLIT: c_uint = 3;

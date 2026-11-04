@@ -12,6 +12,13 @@
 //! `fseeko` as the bisection used them, over a [`File`].
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::cstr;
@@ -225,7 +232,7 @@ pub(crate) fn strnicmp_prefix(s1: &[u8], s2: &[u8], len: usize) -> c_int {
 
 /// Where the first TAB at or after `from` is in `line`.
 pub(crate) fn find_tab(line: &[u8], from: usize) -> Option<usize> {
-    find_byte(line.get(from..)?, TAB as u8).map(|at| from + at)
+    find_byte(line.get(from..)?, b'\t').map(|at| from + at)
 }
 
 impl FindTags {
@@ -369,7 +376,7 @@ impl FindTags {
     ///
     /// Answers true if the line in the buffer should be parsed as a tag.
     pub(crate) fn start_state(&mut self, margs: &mut MatchArgs, sinfo: &mut SearchInfo) -> bool {
-        let noic = self.flags & TAG_NOIC as c_int != 0;
+        let noic = self.flags & TAG_NOIC != 0;
 
         // The header ends at the first line that sorts below "!_TAG_".
         // With case folded, a lower-case letter sorts before "_".

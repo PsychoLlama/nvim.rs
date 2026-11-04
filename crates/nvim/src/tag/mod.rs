@@ -1,4 +1,11 @@
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 pub(crate) mod state;
 use crate::ascii::{ascii_isspace, ascii_iswhite};
@@ -25,7 +32,7 @@ use crate::help::help_heuristic;
 use crate::input::prompt_for_input;
 use crate::insexpand::{ins_compl_check_keys, ins_compl_interrupted};
 use crate::mark::{fm_getname, mark_view_make, mark_view_restore, setpcmark};
-use crate::memory::XString;
+use crate::memory::{ThinCString, XString};
 use crate::message::state::{msg_col, msg_didout, msg_scroll, msg_scrolled, msg_silent};
 use crate::message::{e_invarg, e_listreq};
 use crate::message::{
@@ -33,6 +40,7 @@ use crate::message::{
     msg_display_char, msg_ext_set_kind, msg_putchar, msg_start, msg_str, msg_str_hl, msg_title,
     verbose_enter, verbose_leave, wait_return,
 };
+use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::r#move::{set_topline, validate_cursor};
 use crate::option::vars::{
     P_IC, P_SCS, P_WS, fdo_flags, jop_flags, p_enc, p_ic, p_scs, p_sft, p_tbs, p_tgst, p_tl, p_tr,
@@ -55,8 +63,8 @@ use crate::state::mode::State;
 use crate::tag::state::{
     g_do_tagpreview, g_tag_at_cursor, keep_help_flag, postponed_split, postponed_split_flags,
 };
+use crate::tr;
 use crate::types::AutoEvent;
-use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     Callback, ColNr, Dict, ExArg, Expand, FileMark, FileMarkView, FileOffset, GetFileFlags,
@@ -89,31 +97,63 @@ pub use self::tagfunc::*;
 mod stack;
 pub use self::stack::*;
 mod command;
-pub use self::command::*;
+pub(crate) use self::command::*;
 pub const OPTION_MAGIC_OFF: OptMagic = 2;
 pub const GETF_SETMARK: GetFileFlags = 1;
 pub const GETFILE_OPEN_OTHER: GetFileRet = -1;
 pub const GETFILE_SAME_FILE: GetFileRet = 0;
 pub const FINDFILE_FILE: ::core::ffi::c_uint = 0;
 pub const LSIZE: ::core::ffi::c_uint = 512;
-pub const DT_LTAG: ::core::ffi::c_uint = 11;
-pub const DT_JUMP: ::core::ffi::c_uint = 9;
-pub const DT_HELP: ::core::ffi::c_uint = 8;
-pub const DT_SELECT: ::core::ffi::c_uint = 7;
-pub const DT_FIRST: ::core::ffi::c_uint = 5;
-pub const DT_PREV: ::core::ffi::c_uint = 4;
-pub const DT_NEXT: ::core::ffi::c_uint = 3;
-pub const DT_POP: ::core::ffi::c_uint = 2;
-pub const DT_TAG: ::core::ffi::c_uint = 1;
-pub const TAG_MANY: ::core::ffi::c_uint = 300;
-pub const TAG_NO_TAGFUNC: ::core::ffi::c_uint = 256;
-pub const TAG_KEEP_LANG: ::core::ffi::c_uint = 128;
-pub const TAG_INS_COMP: ::core::ffi::c_uint = 64;
-pub const TAG_VERBOSE: ::core::ffi::c_uint = 32;
-pub const TAG_NOIC: ::core::ffi::c_uint = 8;
-pub const TAG_REGEXP: ::core::ffi::c_uint = 4;
-pub const TAG_NAMES: ::core::ffi::c_uint = 2;
-pub const TAG_HELP: ::core::ffi::c_uint = 1;
+pub const TAG_MANY: ::core::ffi::c_int = 300;
+pub const TAG_NO_TAGFUNC: ::core::ffi::c_int = 256;
+pub const TAG_KEEP_LANG: ::core::ffi::c_int = 128;
+pub const TAG_INS_COMP: ::core::ffi::c_int = 64;
+pub const TAG_VERBOSE: ::core::ffi::c_int = 32;
+pub const TAG_NOIC: ::core::ffi::c_int = 8;
+pub const TAG_REGEXP: ::core::ffi::c_int = 4;
+pub const TAG_NAMES: ::core::ffi::c_int = 2;
+pub const TAG_HELP: ::core::ffi::c_int = 1;
+/// Why a tag command stopped, and the message that says so. Reported
+/// once, by [`do_tag`].
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum TagError {
+    /// Every match named a file that does not exist; this is the last one.
+    #[error("{}", tr!("E429: File \"{}\" does not exist", msg_bytes(.0.as_bytes())))]
+    NoSuchFile(ThinCString),
+}
+
+impl TagError {
+    /// Puts the message out.
+    pub(crate) fn report(&self) {
+        emsg_text(self.to_string());
+    }
+}
+
+/// Which tag command [`do_tag`] runs: upstream's `DT_*`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TagCmd {
+    /// `:tag {name}`, or `:tag` with none: go newer on the stack.
+    Tag,
+    /// `:pop`, `CTRL-T`.
+    Pop,
+    /// `:tnext`.
+    Next,
+    /// `:tprevious`, `:tNext`.
+    Prev,
+    /// `:tfirst`, `:trewind`.
+    First,
+    /// `:tlast`.
+    Last,
+    /// `:tselect`.
+    Select,
+    /// `:help`: a literal tag 'tagfunc' does not answer for.
+    Help,
+    /// `:tjump`.
+    Jump,
+    /// `:ltag`.
+    LTag,
+}
+
 /// Where one field of a line starts and ends, as byte offsets into it.
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub(crate) struct Span {
@@ -200,7 +240,9 @@ static PREVIEW_ENTRY: GlobalCell<Taggy> = GlobalCell::new(Taggy {
     cur_fnum: 0 as ::core::ffi::c_int,
     user_data: None,
 });
-pub const TAG_SEP: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
+/// What separates a tags-file line from the name of the file it came from
+/// in a match.
+pub const TAG_SEP: u8 = 0x2;
 /// Forget which tag the remembered matches are for.
 pub fn tag_freematch() {
     drop(MATCHES_ARE_FOR.take());

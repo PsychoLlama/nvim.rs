@@ -16,18 +16,17 @@ use crate::charset::getdigits_int_at;
 use crate::ex_docmd::scan::ends_excmd;
 use crate::ex_docmd::source::ex_errmsg;
 use crate::ex_docmd::{
-    ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, ACTION_SPLIT, DT_FIRST, DT_JUMP, DT_LAST, DT_LTAG,
-    DT_NEXT, DT_POP, DT_PREV, DT_SELECT, DT_TAG, FIND_ANY, FIND_DEFINE, cmdmod_split, cmdmod_tab,
-    cmdnames, kDirectionNotSet,
+    ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, ACTION_SPLIT, FIND_ANY, FIND_DEFINE, cmdmod_split,
+    cmdmod_tab, cmdnames, kDirectionNotSet,
 };
 use crate::message::e_trailing_arg;
 use crate::option::magic_isset;
 use crate::option::vars::p_pvh;
 use crate::search::find_pattern_in_path;
-use crate::tag::do_tag;
 use crate::tag::state::{
     g_do_tagpreview, postponed_split, postponed_split_flags, postponed_split_tab,
 };
+use crate::tag::{TagCmd, do_tag};
 use crate::types::ExArg;
 
 /// `:isearch`, `:ilist`, `:ijump`, `:isplit` and their `:d…` twins.
@@ -139,17 +138,17 @@ pub(crate) fn ex_tag(excmd: &mut ExArg) {
 /// leading `l` overrides everything: it is the location-list form.
 fn ex_tag_cmd(excmd: &mut ExArg, name: &[u8]) {
     let mut cmd = match name.get(1).copied().unwrap_or(0) {
-        b'j' => DT_JUMP,
-        b's' => DT_SELECT,
-        b'p' | b'N' => DT_PREV,
-        b'n' => DT_NEXT,
-        b'o' => DT_POP,
-        b'f' | b'r' => DT_FIRST,
-        b'l' => DT_LAST,
-        _ => DT_TAG,
-    } as c_int;
+        b'j' => TagCmd::Jump,
+        b's' => TagCmd::Select,
+        b'p' | b'N' => TagCmd::Prev,
+        b'n' => TagCmd::Next,
+        b'o' => TagCmd::Pop,
+        b'f' | b'r' => TagCmd::First,
+        b'l' => TagCmd::Last,
+        _ => TagCmd::Tag,
+    };
     if name.first() == Some(&b'l') {
-        cmd = DT_LTAG as c_int;
+        cmd = TagCmd::LTag;
     }
     let tag = excmd.line.cstr_from(excmd.line.arg);
     let count = if excmd.addr_count > 0 {
