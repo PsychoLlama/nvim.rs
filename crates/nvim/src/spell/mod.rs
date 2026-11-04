@@ -85,10 +85,10 @@ pub use lang::{
 pub use lookup::{can_compound, match_checkcompoundpattern, match_compoundrule, valid_word_prefix};
 pub use navigate::{spell_cat_line, spell_move_to};
 use slang::count_syllables;
-pub(crate) use slang::{LoadedLangs, languages, loaded_langs, put_lang, with_lang};
+pub(crate) use slang::{LoadedLangs, init_syl_tab, languages, loaded_langs, put_lang, with_lang};
 pub use slang::{
-    SpellBuf, WordCounts, WordHasher, count_common_word, init_syl_tab, open_spellbuf,
-    register_lang, slang_clear, slang_clear_sug, take_lang,
+    SpellBuf, WordCounts, WordHasher, count_common_word, open_spellbuf, register_lang, slang_clear,
+    slang_clear_sug, take_lang,
 };
 pub use soundfold::{eval_soundfold, spell_soundfold};
 pub(crate) use wordtree::Tree;
@@ -157,7 +157,6 @@ crate::flag_set! {
 }
 
 /// A `.spl` file is malformed.
-pub const SP_FORMERROR: c_int = -2;
 /// A word with no region restriction, and the "no such region" answer.
 pub const REGION_ALL: c_int = 255;
 /// The saturation point of a `COMMON` word count.

@@ -29,7 +29,15 @@
 //! the two kinds never share a value.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use super::low_byte;
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::smsg;
 use crate::strings::{find_char, has_char};
@@ -38,7 +46,6 @@ use core::ffi::{CStr, c_int, c_uint};
 use crate::charset::getdigits_int_at;
 use crate::cstr::byte_at;
 use crate::mbyte::{c_cluster_len, char_at};
-use crate::types::NUL;
 
 use super::wordtree::COMP_ITEM_BYTES;
 use super::{
@@ -69,7 +76,7 @@ pub(super) fn get_affitem(flagtype: c_int, text: &[u8], at: &mut usize) -> c_uin
             // Zero would read as "no flag", so it gets its own value.
             res = ZERO_FLAG;
         }
-        return res as c_uint;
+        return res.cast_unsigned();
     }
 
     let mut res = char_at(rest(text, *at));
@@ -77,52 +84,76 @@ pub(super) fn get_affitem(flagtype: c_int, text: &[u8], at: &mut usize) -> c_uin
     // Two-character flags: always for LONG, and for CAPLONG only when
     // the first character is upper case ASCII.
     if flagtype == AFT_LONG
-        || (flagtype == AFT_CAPLONG && res >= b'A' as c_int && res <= b'Z' as c_int)
+        || (flagtype == AFT_CAPLONG && res >= c_int::from(b'A') && res <= c_int::from(b'Z'))
     {
-        if byte_at(text, *at) == NUL as u8 {
+        if byte_at(text, *at) == 0 {
             return 0;
         }
         res = char_at(rest(text, *at)) + (res << 16);
         *at += c_cluster_len(rest(text, *at));
     }
-    res as c_uint
+    res.cast_unsigned()
 }
 
-/// Decode an item that should hold exactly one flag, complaining if it
-/// does not.
-pub(super) fn affitem2flag(flagtype: c_int, item: &[u8], fname: &CStr, lnum: c_int) -> c_uint {
-    let mut at = 0;
-    let res = get_affitem(flagtype, item, &mut at);
-    if res == 0 {
+/// Why an affix item is not exactly one flag. Not an error to `:mkspell`:
+/// the caller warns, with [`report`](Self::report), and reads it as no flag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum FlagError {
+    /// No flag could be read from it.
+    Unreadable,
+    /// There is more after the flag; `unreadable` when that flag could not
+    /// be read either, which is said first.
+    TooLong { unreadable: bool },
+}
+
+impl FlagError {
+    /// Warn about `item`, in `fname` line `lnum`.
+    pub(super) fn report(self, flagtype: c_int, item: &[u8], fname: &CStr, lnum: c_int) {
         let (file, shown) = (msg_cstr(fname), msg_bytes(item));
-        if flagtype == AFT_NUM {
-            smsg!(0, "Flag is not a number in {file} line {lnum}: {shown}");
-        } else {
-            smsg!(0, "Illegal flag in {file} line {lnum}: {shown}");
+        if matches!(self, Self::Unreadable | Self::TooLong { unreadable: true }) {
+            if flagtype == AFT_NUM {
+                smsg!(0, "Flag is not a number in {file} line {lnum}: {shown}");
+            } else {
+                smsg!(0, "Illegal flag in {file} line {lnum}: {shown}");
+            }
+        }
+        if matches!(self, Self::TooLong { .. }) {
+            smsg!(0, "Affix name too long in {file} line {lnum}: {shown}");
         }
     }
+}
+
+/// Decode an item that should hold exactly one flag: never 0.
+pub(super) fn affitem2flag(flagtype: c_int, item: &[u8]) -> Result<c_uint, FlagError> {
+    let mut at = 0;
+    let res = get_affitem(flagtype, item, &mut at);
     // Anything left over means the item was more than one flag.
-    if byte_at(item, at) != NUL as u8 {
-        let (file, shown) = (msg_cstr(fname), msg_bytes(item));
-        smsg!(0, "Affix name too long in {file} line {lnum}: {shown}");
-        return 0;
+    if byte_at(item, at) != 0 {
+        return Err(FlagError::TooLong {
+            unreadable: res == 0,
+        });
     }
-    res
+    if res == 0 {
+        return Err(FlagError::Unreadable);
+    }
+    Ok(res)
 }
 
 /// Is `flag` one of the flags in `afflist`?
 pub(super) fn flag_in_afflist(flagtype: c_int, afflist: &[u8], flag: c_uint) -> bool {
     match flagtype {
-        AFT_CHAR => find_char(afflist, flag as c_int).is_some(),
+        AFT_CHAR => find_char(afflist, flag.cast_signed()).is_some(),
         AFT_LONG | AFT_CAPLONG => {
             let mut p = 0;
-            while byte_at(afflist, p) != NUL as u8 {
-                let mut n = char_at(rest(afflist, p)) as c_uint;
+            while byte_at(afflist, p) != 0 {
+                let mut n = char_at(rest(afflist, p)).cast_unsigned();
                 p += c_cluster_len(rest(afflist, p));
-                if (flagtype == AFT_LONG || (n >= b'A' as c_uint && n <= b'Z' as c_uint))
-                    && byte_at(afflist, p) != NUL as u8
+                if (flagtype == AFT_LONG || (n >= c_uint::from(b'A') && n <= c_uint::from(b'Z')))
+                    && byte_at(afflist, p) != 0
                 {
-                    n = (char_at(rest(afflist, p)) as c_uint).wrapping_add(n << 16);
+                    n = char_at(rest(afflist, p))
+                        .cast_unsigned()
+                        .wrapping_add(n << 16);
                     p += c_cluster_len(rest(afflist, p));
                 }
                 if n == flag {
@@ -133,11 +164,11 @@ pub(super) fn flag_in_afflist(flagtype: c_int, afflist: &[u8], flag: c_uint) -> 
         }
         AFT_NUM => {
             let mut p = 0;
-            while byte_at(afflist, p) != NUL as u8 {
+            while byte_at(afflist, p) != 0 {
                 let (digits, past) = getdigits_int_at(afflist, p, true, 0);
                 p = past;
                 debug_assert!(digits >= 0);
-                let mut n = digits as c_uint;
+                let mut n = digits.cast_unsigned();
                 if n == 0 {
                     n = ZERO_FLAG as c_uint;
                 }
@@ -146,7 +177,7 @@ pub(super) fn flag_in_afflist(flagtype: c_int, afflist: &[u8], flag: c_uint) -> 
                 }
                 // Step over the comma, or the byte that was not a
                 // digit, so the walk terminates.
-                if byte_at(afflist, p) != NUL as u8 {
+                if byte_at(afflist, p) != 0 {
                     p += 1;
                 }
             }
@@ -166,7 +197,7 @@ pub(super) fn aff_process_flags(affile: &AffFile, entry: &mut AffEntry) {
         return;
     };
     let mut p = 0;
-    while byte_at(flags, p) != NUL as u8 {
+    while byte_at(flags, p) != 0 {
         let prevp = p;
         let flag = get_affitem(affile.af_flagtype, flags, &mut p);
         if flag == affile.af_comppermit || flag == affile.af_compforbid {
@@ -184,7 +215,7 @@ pub(super) fn aff_process_flags(affile: &AffFile, entry: &mut AffEntry) {
             p += 1;
         }
     }
-    if flags.first().is_none_or(|&b| b == NUL as u8) {
+    if flags.first().is_none_or(|&b| b == 0) {
         entry.ae_flags = None;
     }
 }
@@ -239,7 +270,7 @@ pub(super) fn process_compflags(spin: &mut SpellInfo, aff: &mut AffFile, compfla
                     id
                 }
             };
-            dest.push(id as u8);
+            dest.push(low_byte(id));
         }
         if aff.af_flagtype == AFT_NUM && byte_at(compflags, p) == b',' {
             p += 1;

@@ -11,6 +11,13 @@
 //! decisions as its `do_*` fields.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use crate::message_fmt::msg_cstr;
@@ -156,7 +163,7 @@ pub(super) fn handle_sal(spin: &mut SpellInfo, items: &[&CStr]) {
         _ => None,
     };
     if let Some(slot) = slot {
-        *slot = sal_to_bool(items[2]) as c_int;
+        *slot = c_int::from(sal_to_bool(items[2]));
         return;
     }
     // "_" means the rule deletes what it matched.

@@ -30,7 +30,16 @@
 //! four million words.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use super::low_byte;
+use crate::narrow::len_as_int;
 use crate::semsg;
 use crate::smsg;
 use core::ffi::{CStr, c_int, c_uint};
@@ -49,13 +58,13 @@ use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::path::path_full_compare;
 use crate::spell::{languages, open_spellbuf, put_lang, spell_soundfold, take_lang, with_lang};
-use crate::types::{Failed, LineNr, NUL, SpellIdx, SpellLang};
+use crate::types::{Failed, LineNr, SpellIdx, SpellLang};
 
 use super::wordtree::{NodeId, tree_add_word, wordtree_alloc, wordtree_compress};
 use super::write::{SplWriter, clear_node, put_node};
 use super::{
-    FAIL, MAXWLEN, OK, SpellInfo, VIMSUGMAGIC, VIMSUGVERSION, kEqualFiles, spell_load_file,
-    spell_message, spell_message_fmt,
+    MAXWLEN, SpellInfo, VIMSUGMAGIC, VIMSUGVERSION, kEqualFiles, spell_load_file, spell_message,
+    spell_message_fmt,
 };
 
 /// Read the just-written `.spl` back and turn it into a `.sug`.
@@ -94,7 +103,7 @@ pub(super) fn spell_make_sugfile(spin: &mut SpellInfo, wfname: &CStr) {
     spin.si_foldwcount = 0;
 
     spell_message(spin, c"Performing soundfolding...");
-    if sug_filltree(spin, &mut slang).is_ok() && sug_maketable(spin) != FAIL {
+    if sug_filltree(spin, &mut slang).is_ok() && sug_maketable(spin).is_ok() {
         let done = i64::from(spin.spellbuf().line_count());
         smsg!(0, "Number of words after soundfolding: {}", done);
         spell_message(spin, super::wordtree::MSG_COMPRESSING);
@@ -183,7 +192,10 @@ fn sug_filltree(spin: &mut SpellInfo, slang: &mut SpellLang) -> Result<(), Faile
         // arguments, split across the two.
         tword[depth] = 0;
         spell_soundfold(slang, &tword, true, &mut tsalword);
-        let (hi, lo) = ((words_done >> 16) as c_int, (words_done & 0xffff) as c_int);
+        let (hi, lo) = (
+            (words_done >> 16).cast_signed(),
+            (words_done & 0xffff).cast_signed(),
+        );
         tree_add_word(spin, crate::cstr::until_nul(&tsalword), foldroot, hi, lo, 0);
         words_done = words_done.wrapping_add(1);
         wordcount[depth] += 1;
@@ -205,22 +217,19 @@ fn sug_filltree(spin: &mut SpellInfo, slang: &mut SpellLang) -> Result<(), Faile
 }
 
 /// Collect each word end's word numbers into one line of a scratch buffer.
-fn sug_maketable(spin: &mut SpellInfo) -> c_int {
+/// `Err` when a line could not be added, which the memline has said.
+fn sug_maketable(spin: &mut SpellInfo) -> Result<(), Failed> {
     spin.si_spellbuf = Some(open_spellbuf());
 
     let mut line: Vec<u8> = Vec::with_capacity(100);
     let root = spin.si_foldroot.and_then(|root| spin.node(root).wn_sibling);
-    if sug_filltable(spin, root, 0, &mut line) == -1 {
-        FAIL
-    } else {
-        OK
-    }
+    sug_filltable(spin, root, 0, &mut line).map(|_| ())
 }
 
 /// Walk the sound-fold tree, and for each run of word ends write one line
 /// holding their numbers as byte-encoded differences.
 ///
-/// Returns the next unused word number, or -1 on failure.
+/// Returns the next unused word number.
 ///
 /// The run of word ends is collapsed to a single node as it goes: the tree
 /// that gets written only needs one, since the numbers now live in the
@@ -231,17 +240,14 @@ fn sug_filltable(
     node: Option<NodeId>,
     startwordnr: c_int,
     line: &mut Vec<u8>,
-) -> c_int {
+) -> Result<c_int, Failed> {
     let mut wordnr = startwordnr;
     let mut next = node;
     let spellbuf = spin.spellbuf();
     while let Some(p) = next {
-        if spin.node(p).wn_byte != NUL as u8 {
+        if spin.node(p).wn_byte != 0 {
             let child = spin.node(p).wn_child;
-            wordnr = sug_filltable(spin, child, wordnr, line);
-            if wordnr == -1 {
-                return -1;
-            }
+            wordnr = sug_filltable(spin, child, wordnr, line)?;
             next = spin.node(p).wn_sibling;
             continue;
         }
@@ -250,7 +256,7 @@ fn sug_filltable(
         let mut prev_nr = 0;
         let mut run = Some(p);
         while let Some(np) = run
-            && spin.node(np).wn_byte == NUL as u8
+            && spin.node(np).wn_byte == 0
         {
             let n = spin.node(np);
             let nr = (c_int::from(n.wn_flags) << 16) + (c_int::from(n.wn_region) & 0xffff);
@@ -263,15 +269,13 @@ fn sug_filltable(
         line.push(0);
 
         let at = LineNr::new(wordnr);
-        if ml_append_buf_terminated(spellbuf, at, line, true).is_err() {
-            return -1;
-        }
+        ml_append_buf_terminated(spellbuf, at, line, true)?;
         wordnr += 1;
 
         // Drop the rest of the run and blank what is left, so the node
         // carries no word number into the file.
         while let Some(sib) = spin.node(p).wn_sibling
-            && spin.node(sib).wn_byte == NUL as u8
+            && spin.node(sib).wn_byte == 0
         {
             spin.node_mut(p).wn_sibling = spin.node(sib).wn_sibling;
         }
@@ -281,7 +285,7 @@ fn sug_filltable(
 
         next = n.wn_sibling;
     }
-    wordnr
+    Ok(wordnr)
 }
 
 /// Encode one word-number difference into one to four bytes.
@@ -298,18 +302,23 @@ fn offset2bytes(nr: c_int, buf: &mut [u8; 4]) -> usize {
     let b4 = rem / 255 + 1;
 
     if b4 > 1 || b3 > 0x1f {
-        *buf = [(0xe0 + b4) as u8, b3 as u8, b2 as u8, b1 as u8];
+        *buf = [
+            low_byte(0xe0 + b4),
+            low_byte(b3),
+            low_byte(b2),
+            low_byte(b1),
+        ];
         return 4;
     }
     if b3 > 1 || b2 > 0x3f {
-        buf[..3].copy_from_slice(&[(0xc0 + b3) as u8, b2 as u8, b1 as u8]);
+        buf[..3].copy_from_slice(&[low_byte(0xc0 + b3), low_byte(b2), low_byte(b1)]);
         return 3;
     }
     if b2 > 1 || b1 > 0x7f {
-        buf[..2].copy_from_slice(&[(0x80 + b2) as u8, b1 as u8]);
+        buf[..2].copy_from_slice(&[low_byte(0x80 + b2), low_byte(b1)]);
         return 2;
     }
-    buf[0] = b1 as u8;
+    buf[0] = low_byte(b1);
     1
 }
 
@@ -340,10 +349,10 @@ fn sug_write(spin: &mut SpellInfo, fname: &CStr) {
     // The fold tree is built and compressed by now.
     let tree = spin.si_foldroot.and_then(|root| spin.node(root).wn_sibling);
     clear_node(spin, tree);
-    let nodecount = put_node(None, spin, tree, 0, 0, false) as usize;
+    let nodecount = (put_node(None, spin, tree, 0, 0, false)).cast_unsigned() as usize;
     w.u32(nodecount);
     debug_assert!(nodecount + nodecount * size_of::<c_int>() < c_int::MAX as usize);
-    spin.si_memtot += (nodecount + nodecount * size_of::<c_int>()) as c_int;
+    spin.si_memtot += len_as_int(nodecount + nodecount * size_of::<c_int>());
     put_node(Some(&mut w), spin, tree, 0, 0, false);
 
     let spellbuf = spin.spellbuf();
@@ -361,7 +370,7 @@ fn sug_write(spin: &mut SpellInfo, fname: &CStr) {
             emsg(gettext(e_write));
             return;
         }
-        spin.si_memtot += line.len() as c_int;
+        spin.si_memtot += len_as_int(line.len());
     }
 
     w.byte(0);

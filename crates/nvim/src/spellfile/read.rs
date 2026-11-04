@@ -29,12 +29,22 @@
 //! (`unwrap_or(-1)`) instead of propagating the error.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
-use crate::semsg;
+use super::low_byte;
+use crate::memory::ThinCString;
+use crate::narrow::len_as_int;
 use crate::smsg;
 use crate::spell::{WordFlags, WordTree};
 use crate::strings::has_bytes;
 use crate::winlayer::Win;
+use crate::{semsg, tr};
 use core::ffi::{CStr, c_int, c_uint};
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
@@ -44,8 +54,8 @@ use crate::drawscreen::{UPD_SOME_VALID, redraw_all_later};
 use crate::getchar::state::got_int;
 use crate::memline::ml_append_buf_terminated;
 use crate::memory::XString;
-use crate::message::{emsg, verbose_enter, verbose_leave};
-use crate::message_fmt::msg_cstr;
+use crate::message::{verbose_enter, verbose_leave};
+use crate::message_fmt::{emsg_text, msg_cstr};
 use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;
 use crate::os::input::fast_breakcheck;
@@ -55,7 +65,7 @@ use crate::spell::{
     e_format, init_syl_tab, languages, open_spellbuf, parse_spelllang, put_lang, slang_clear,
     slang_clear_sug, take_lang, with_lang,
 };
-use crate::types::{LangId, LineNr, NUL, OptInt, SpellIdx, SpellLang, time_t, uint8_t};
+use crate::types::{LangId, LineNr, OptInt, SpellIdx, SpellLang, time_t, uint8_t};
 
 use super::sections::{
     read_charflags_section, read_compound, read_prefcond_section, read_region_section,
@@ -63,7 +73,7 @@ use super::sections::{
 };
 use super::spl::{SpellReadError, Spl, SplResult, trim_nul};
 use super::{
-    BY_FLAGS, BY_FLAGS2, BY_INDEX, BY_NOFLAGS, BY_SPECIAL, ETYPE_SPELL, MAXWLEN, OK, SN_CHARFLAGS,
+    BY_FLAGS, BY_FLAGS2, BY_INDEX, BY_NOFLAGS, BY_SPECIAL, ETYPE_SPELL, MAXWLEN, SN_CHARFLAGS,
     SN_COMPOUND, SN_END, SN_INFO, SN_MAP, SN_MIDWORD, SN_NOBREAK, SN_NOCOMPOUNDSUGS,
     SN_NOSPLITSUGS, SN_PREFCOND, SN_REGION, SN_REP, SN_REPSAL, SN_SAL, SN_SOFO, SN_SUGFILE,
     SN_SYLLABLE, SN_WORDS, SNF_REQUIRED, SPL_FNAME_ADD, VIMSPELLMAGIC, VIMSPELLMAGICL,
@@ -74,15 +84,78 @@ use super::{
 /// second pass over a node's bytes knows not to descend into it again.
 pub(super) const SHARED_MASK: c_int = 0x8000000;
 
-/// Why the load stopped.
+/// Why a `.spl` file did not load, said once by [`spell_load_file`] or
+/// [`spell_reload_file`] while the file is still on the execution stack,
+/// so the message is preceded by "Error in <file>:".
+#[derive(Debug, thiserror::Error)]
+enum SpellLoadError {
+    /// The file would not open. Said only when the load is not silent, and
+    /// under 'verbose' when it is.
+    #[error("{}", tr!("E484: Can't open file {}", msg_cstr(.0.as_cstr())))]
+    CannotOpen(ThinCString),
+    /// The magic is not there.
+    #[error("{}", msg_cstr(gettext(c"E757: This does not look like a spell file")))]
+    NotSpellFile,
+    /// A read failed: the file, and what the failure said.
+    #[error("{}", tr!("E5042: Failed to read spell file {}: {}", msg_cstr(.0.0.as_cstr()), &.0.1))]
+    ReadFailed(Box<(ThinCString, String)>),
+    /// Written by an older version of the format.
+    #[error("{}", msg_cstr(gettext(c"E771: Old spell file, needs to be updated")))]
+    TooOld,
+    /// Written by a newer version of the format.
+    #[error(
+        "{}",
+        msg_cstr(gettext(c"E772: Spell file is for newer version of Vim"))
+    )]
+    TooNew,
+    /// A section says something it cannot.
+    #[error("{}", msg_cstr(gettext(e_format)))]
+    Format,
+    /// The file ended early.
+    #[error("{}", msg_cstr(gettext(e_spell_trunc)))]
+    Truncated,
+    /// A section the file says is required, which this build cannot read.
+    #[error("{}", msg_cstr(gettext(c"E770: Unsupported section in spell file")))]
+    Unsupported,
+    /// Abandoned without a word, as upstream does: a counted string that
+    /// was short, a syllable entry too long, a read failure mid-section.
+    #[error("refused without a message")]
+    Quiet,
+}
+
+const _: () = assert!(size_of::<SpellLoadError>() <= 16);
+
+impl SpellLoadError {
+    /// Puts the message out, unless there is none. `silent` is a load that
+    /// says it cannot open the file only under 'verbose'.
+    fn report(&self, silent: bool) {
+        match self {
+            Self::Quiet => {}
+            Self::CannotOpen(fname) if silent => {
+                if p_verbose() > 2 as OptInt {
+                    verbose_enter();
+                    let fname = msg_cstr(fname.as_cstr());
+                    smsg!(0, "E484: Can't open file {fname}");
+                    verbose_leave();
+                }
+            }
+            _ => {
+                emsg_text(self.to_string());
+            }
+        }
+    }
+}
+
+/// Why the section loop stopped.
 ///
 /// [`Stop::Silent`] is the section reader's "stop, and say nothing further":
-/// either the message is already on the screen, or the case is one upstream
-/// abandons the file over without a word.
+/// the case is one upstream abandons the file over without a word.
 enum Stop {
-    /// One of the reader's own three errors, still to be reported.
+    /// One of the reader's own three errors.
     Read(SpellReadError),
-    /// Nothing more to say.
+    /// A load error of its own.
+    Load(SpellLoadError),
+    /// Nothing to say.
     Silent,
 }
 
@@ -112,19 +185,15 @@ pub fn spell_load_file(fname: &CStr, lang: Option<&[u8]>, silent: bool) -> Optio
     let opened = Spl::open(path);
     let mut slang = None;
     let mut did_estack_push = false;
-    let ok = load_spl(
-        opened,
-        fname,
-        None,
-        silent,
-        &mut slang,
-        &mut did_estack_push,
-        lang,
-    );
+    let loaded = load_spl(opened, fname, None, &mut slang, &mut did_estack_push, lang);
+    // Said before the file leaves the execution stack.
+    if let Err(err) = &loaded {
+        err.report(silent);
+    }
     if did_estack_push {
         estack_pop();
     }
-    if ok { slang } else { None }
+    loaded.ok().and(slang)
 }
 
 /// Read `fname` again into `slang`, which [`slang_clear`] has emptied: the
@@ -134,43 +203,36 @@ pub(crate) fn spell_reload_file(fname: &CStr, slang: &mut SpellLang) -> bool {
     let opened = Spl::open(path);
     let mut did_estack_push = false;
     let mut fresh = None;
-    let ok = load_spl(
+    let loaded = load_spl(
         opened,
         fname,
         Some(slang),
-        false,
         &mut fresh,
         &mut did_estack_push,
         None,
     );
+    // Said before the file leaves the execution stack.
+    if let Err(err) = &loaded {
+        err.report(false);
+    }
     if did_estack_push {
         estack_pop();
     }
-    ok
+    loaded.is_ok()
 }
 
-/// The body of [`spell_load_file`]: true when the language is usable. Reads
-/// into `old` when given, else into a new language left in `fresh`.
+/// The body of [`spell_load_file`]: `Ok` when the language is usable.
+/// Reads into `old` when given, else into a new language left in `fresh`.
 fn load_spl(
     opened: std::io::Result<Spl>,
     fname: &CStr,
     old: Option<&mut SpellLang>,
-    silent: bool,
     fresh: &mut Option<Box<SpellLang>>,
     did_estack_push: &mut bool,
     lang: Option<&[u8]>,
-) -> bool {
+) -> Result<(), SpellLoadError> {
     let Ok(mut spl) = opened else {
-        if !silent {
-            let fname = msg_cstr(fname);
-            semsg!("E484: Can't open file {fname}");
-        } else if p_verbose() > 2 as OptInt {
-            verbose_enter();
-            let fname = msg_cstr(fname);
-            smsg!(0, "E484: Can't open file {fname}");
-            verbose_leave();
-        }
-        return false;
+        return Err(SpellLoadError::CannotOpen(ThinCString::from_cstr(fname)));
     };
     if p_verbose() > 2 as OptInt {
         verbose_enter();
@@ -201,21 +263,17 @@ fn load_spl(
 }
 
 /// Read the header, every section and the three trees.
-fn read_spl(spl: &mut Spl, slang: &mut SpellLang, fname: &CStr) -> bool {
+fn read_spl(spl: &mut Spl, slang: &mut SpellLang, fname: &CStr) -> Result<(), SpellLoadError> {
     match spell_check_magic_string(spl) {
         Err(SpellReadError::Format | SpellReadError::Trunc) => {
-            let fmt = gettext(c"E757: This does not look like a spell file");
-            // SAFETY: `gettext`'s answer is a NUL-terminated string.
-            let arg0 = msg_cstr(fmt);
-            semsg!("{arg0}");
-            return false;
+            return Err(SpellLoadError::NotSpellFile);
         }
         Err(SpellReadError::Other) => {
             let why = spl.last_error();
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let fname = msg_cstr(fname);
-            semsg!("E5042: Failed to read spell file {fname}: {why}");
-            return false;
+            return Err(SpellLoadError::ReadFailed(Box::new((
+                ThinCString::from_cstr(fname),
+                why,
+            ))));
         }
         Ok(()) => {}
     }
@@ -223,21 +281,17 @@ fn read_spl(spl: &mut Spl, slang: &mut SpellLang, fname: &CStr) -> bool {
     // A missing version byte reads as -1, which is "too old".
     let version = spl.getc().map_or(-1, c_int::from);
     if version < VIMSPELLVERSION {
-        emsg(gettext(c"E771: Old spell file, needs to be updated"));
-        return false;
+        return Err(SpellLoadError::TooOld);
     }
     if version > VIMSPELLVERSION {
-        emsg(gettext(c"E772: Spell file is for newer version of Vim"));
-        return false;
+        return Err(SpellLoadError::TooNew);
     }
 
     loop {
         let id = spl.getc().map_or(-1, c_int::from);
-        let res = if id == SN_END as c_int {
+        let res = if id == SN_END.cast_signed() {
             match read_trees(spl, slang) {
-                Ok(()) => {
-                    return true;
-                }
+                Ok(()) => return Ok(()),
                 Err(e) => Err(Stop::Read(e)),
             }
         } else {
@@ -251,19 +305,15 @@ fn read_spl(spl: &mut Spl, slang: &mut SpellLang, fname: &CStr) -> bool {
 
         match res {
             Ok(()) => {}
-            Err(Stop::Read(SpellReadError::Format)) => {
-                // SAFETY: the message table's own string.
-                emsg(gettext(e_format));
-                return false;
-            }
+            Err(Stop::Read(SpellReadError::Format)) => return Err(SpellLoadError::Format),
             Err(Stop::Read(SpellReadError::Trunc)) => break,
-            Err(Stop::Read(SpellReadError::Other) | Stop::Silent) => return false,
+            Err(Stop::Load(err)) => return Err(err),
+            Err(Stop::Read(SpellReadError::Other) | Stop::Silent) => {
+                return Err(SpellLoadError::Quiet);
+            }
         }
     }
-
-    // SAFETY: the message table's own string.
-    emsg(gettext(e_spell_trunc));
-    false
+    Err(SpellLoadError::Truncated)
 }
 
 /// Dispatch one section by its id.
@@ -274,15 +324,19 @@ fn read_section(
     flags: c_int,
     mut len: c_int,
 ) -> Result<(), Stop> {
-    match id as u32 {
+    match id.cast_unsigned() {
         SN_INFO => {
-            let text = spl.read_string(len as usize).map_err(|_| Stop::Silent)?;
+            let text = spl
+                .read_string(len.cast_unsigned() as usize)
+                .map_err(|_| Stop::Silent)?;
             slang.sl_info = Some(XString::from_bytes(trim_nul(&text)));
         }
         SN_REGION => read_region_section(spl, slang, len)?,
         SN_CHARFLAGS => read_charflags_section(spl)?,
         SN_MIDWORD => {
-            let text = spl.read_string(len as usize).map_err(|_| Stop::Silent)?;
+            let text = spl
+                .read_string(len.cast_unsigned() as usize)
+                .map_err(|_| Stop::Silent)?;
             slang.sl_midword = trim_nul(&text).to_vec();
         }
         SN_PREFCOND => read_prefcond_section(spl, slang)?,
@@ -291,7 +345,9 @@ fn read_section(
         SN_SAL => read_sal_section(spl, slang)?,
         SN_SOFO => read_sofo_section(spl, slang)?,
         SN_MAP => {
-            let text = spl.read_string(len as usize).map_err(|_| Stop::Silent)?;
+            let text = spl
+                .read_string(len.cast_unsigned() as usize)
+                .map_err(|_| Stop::Silent)?;
             set_map_str(slang, trim_nul(&text));
         }
         SN_WORDS => read_words_section(spl, slang, len)?,
@@ -301,17 +357,16 @@ fn read_section(
         SN_COMPOUND => read_compound(spl, slang, len)?,
         SN_NOBREAK => slang.sl_nobreak = true,
         SN_SYLLABLE => {
-            let text = spl.read_string(len as usize).map_err(|_| Stop::Silent)?;
-            if init_syl_tab(slang, trim_nul(&text)) != OK {
-                return Err(Stop::Silent);
-            }
+            let text = spl
+                .read_string(len.cast_unsigned() as usize)
+                .map_err(|_| Stop::Silent)?;
+            init_syl_tab(slang, trim_nul(&text)).map_err(|_| Stop::Silent)?;
         }
         _ => {
             // An unknown section is only fatal when the file insists
             // it is understood; otherwise step over it.
             if flags & SNF_REQUIRED != 0 {
-                emsg(gettext(c"E770: Unsupported section in spell file"));
-                return Err(Stop::Silent);
+                return Err(Stop::Load(SpellLoadError::Unsupported));
             }
             loop {
                 len -= 1;
@@ -436,7 +491,7 @@ fn read_sug_body(spl: &mut Spl, slang: &mut SpellLang) -> SplResult<()> {
         loop {
             let c = spl.byte()?;
             line.push(c);
-            if c == NUL as u8 {
+            if c == 0 {
                 break;
             }
         }
@@ -531,7 +586,7 @@ fn spell_read_tree(
     if len < 0 {
         return Err(SpellReadError::Trunc);
     }
-    let len_usize = len as usize;
+    let len_usize = len.cast_unsigned() as usize;
     // The index array is `len` ints; refuse a length that could not be
     // allocated rather than wrapping the multiplication.
     if len_usize > usize::MAX / size_of::<c_int>() {
@@ -578,9 +633,9 @@ fn read_tree_node(
     maxprefcondnr: c_int,
     depth: c_int,
 ) -> SplResult<SpellIdx> {
-    let maxidx = byts.len() as c_int;
+    let maxidx = len_as_int(byts.len());
     let mut idx = startidx;
-    if depth > MAXWLEN as c_int {
+    if usize::try_from(depth).is_ok_and(|depth| depth > MAXWLEN) {
         return Err(SpellReadError::Format);
     }
     let len = spl.getc().map_or(-1, c_int::from);
@@ -591,7 +646,7 @@ fn read_tree_node(
         return Err(SpellReadError::Format);
     }
 
-    byts[idx as usize] = len as uint8_t;
+    byts[idx.cast_unsigned() as usize] = low_byte(len);
     idx += 1;
 
     for _ in 1..=len {
@@ -599,15 +654,15 @@ fn read_tree_node(
         if c < 0 {
             return Err(SpellReadError::Trunc);
         }
-        if c <= BY_SPECIAL as c_int {
-            if c == BY_NOFLAGS as c_int && !prefixtree {
+        if c <= BY_SPECIAL.cast_signed() {
+            if c == BY_NOFLAGS.cast_signed() && !prefixtree {
                 // A word end with nothing to say about it.
-                idxs[idx as usize] = 0;
-            } else if c != BY_INDEX as c_int {
+                idxs[idx.cast_unsigned() as usize] = 0;
+            } else if c != BY_INDEX.cast_signed() {
                 // A word end carrying flags; how many bytes follow
                 // depends on which flags are set.
                 if prefixtree {
-                    c = if c == BY_FLAGS as c_int {
+                    c = if c == BY_FLAGS.cast_signed() {
                         spl.getc().map_or(-1, c_int::from) << 24
                     } else {
                         0
@@ -621,7 +676,7 @@ fn read_tree_node(
                 } else {
                     let kind = c;
                     c = spl.getc().map_or(-1, c_int::from);
-                    if kind == BY_FLAGS2 as c_int {
+                    if kind == BY_FLAGS2.cast_signed() {
                         c += spl.getc().map_or(-1, c_int::from) << 8;
                     }
                     if WordFlags::from_bits(c).has(WordFlags::REGION) {
@@ -631,7 +686,7 @@ fn read_tree_node(
                         c += spl.getc().map_or(-1, c_int::from) << 24;
                     }
                 }
-                idxs[idx as usize] = c as SpellIdx;
+                idxs[idx.cast_unsigned() as usize] = c as SpellIdx;
                 c = 0;
             } else {
                 // A reference to a sub-tree written earlier.
@@ -639,18 +694,18 @@ fn read_tree_node(
                 if n < 0 || n >= maxidx {
                     return Err(SpellReadError::Format);
                 }
-                idxs[idx as usize] = n.wrapping_add(SHARED_MASK) as SpellIdx;
+                idxs[idx.cast_unsigned() as usize] = n.wrapping_add(SHARED_MASK) as SpellIdx;
                 c = spl.getc().map_or(-1, c_int::from);
             }
         }
-        byts[idx as usize] = c as uint8_t;
+        byts[idx.cast_unsigned() as usize] = low_byte(c);
         idx += 1;
     }
 
     // Second pass: children follow the whole node, so their indices
     // are only known now.
     for i in 1..=len {
-        let at = (startidx + i) as usize;
+        let at = (startidx + i).cast_unsigned() as usize;
         if byts[at] == 0 {
             continue;
         }

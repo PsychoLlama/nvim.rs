@@ -7,9 +7,16 @@
 //! is in, `/regions=` names the regions the digits refer to.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::message_fmt::{msg_bytes, msg_cstr};
-use crate::semsg;
+use crate::narrow::len_as_int;
 use crate::smsg;
 use crate::spell::WordFlags;
 use core::ffi::{CStr, c_int};
@@ -26,16 +33,16 @@ use crate::os::input::line_breakcheck;
 use crate::strings::{any_non_ascii, find_char};
 use crate::types::{CONV_NONE, Failed, LineNr};
 
+use super::MkspellError;
 use super::wordtree::store_word;
 use super::{MAXLINELEN, MAXREGIONS, SpellInfo, spell_message_fmt};
+use crate::memory::ThinCString;
 
 /// Read a plain word list: one word per line, with optional `/` flags, and
 /// `/encoding=` and `/regions=` header lines.
-pub(super) fn spell_read_wordfile(spin: &mut SpellInfo, fname: &CStr) -> Result<(), Failed> {
+pub(super) fn spell_read_wordfile(spin: &mut SpellInfo, fname: &CStr) -> Result<(), MkspellError> {
     let Ok(file) = File::open(OsStr::from_bytes(fname.to_bytes())) else {
-        let fname = msg_cstr(fname);
-        semsg!("E484: Can't open file {fname}");
-        return Err(Failed);
+        return Err(MkspellError::CannotOpen(ThinCString::from_cstr(fname)));
     };
     let mut fd = Fgets::new(file);
     let name = fname.to_string_lossy();
@@ -134,7 +141,7 @@ pub(super) fn spell_read_wordfile(spin: &mut SpellInfo, fname: &CStr) -> Result<
             format_args!("Ignored {non_ascii} words with non-ASCII characters"),
         );
     }
-    retval
+    Ok(retval?)
 }
 
 /// Handle a `/`-prefixed header line of a word file.
@@ -196,7 +203,7 @@ fn read_wordfile_header(
             let (fname, line) = (msg_cstr(fname), msg_bytes(regions));
             smsg!(0, "Too many regions in {fname} line {}: {line}", lnum);
         } else {
-            spin.si_region_count = regions.len() as c_int / 2;
+            spin.si_region_count = len_as_int(regions.len()) / 2;
             spin.si_region_name[..regions.len()].copy_from_slice(regions);
             spin.si_region_name[regions.len()] = 0;
             spin.si_region = (1 << spin.si_region_count) - 1;

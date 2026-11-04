@@ -31,7 +31,15 @@
 //! append to one buffer, prefix ids first.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use super::low_byte;
 use crate::cstr;
 use crate::semsg;
 use crate::smsg;
@@ -55,15 +63,17 @@ use crate::option::vars::p_verbose;
 use crate::os::input::line_breakcheck;
 use crate::os::time::os_time;
 use crate::strings::any_non_ascii;
-use crate::types::{CONV_NONE, Failed, NUL, Timestamp};
+use crate::types::{CONV_NONE, Failed, Timestamp};
 use crate::ui::ui_flush;
 
+use super::MkspellError;
 use super::flags::{flag_in_afflist, get_affitem};
 use super::wordtree::store_word;
 use super::{
     AFT_NUM, AffEntry, AffFile, AffixKind, CONDIT_AFF, CONDIT_CFIX, CONDIT_COMB, CONDIT_SUF,
     MAXLINELEN, MAXWLEN, SpellInfo, spell_message_fmt, vim_regexec_prog,
 };
+use crate::memory::ThinCString;
 
 /// The size of upstream's buffer for the progress line.
 const PROGRESS_ROOM: usize = 754;
@@ -74,11 +84,9 @@ pub(super) fn spell_read_dic(
     spin: &mut SpellInfo,
     fname: &CStr,
     affile: &AffFile,
-) -> Result<(), Failed> {
+) -> Result<(), MkspellError> {
     let Ok(file) = File::open(OsStr::from_bytes(fname.to_bytes())) else {
-        let fname = msg_cstr(fname);
-        semsg!("E484: Can't open file {fname}");
-        return Err(Failed);
+        return Err(MkspellError::CannotOpen(ThinCString::from_cstr(fname)));
     };
     let mut fd = Fgets::new(file);
 
@@ -114,7 +122,7 @@ pub(super) fn spell_read_dic(
         line_breakcheck();
         lnum += 1;
         // As C reads the line: up to its first NUL.
-        let read = cstr::find_byte(&raw, NUL as u8).map_or(&raw[..], |at| &raw[..at]);
+        let read = cstr::find_byte(&raw, 0).map_or(&raw[..], |at| &raw[..at]);
         if matches!(read.first(), Some(b'#' | b'/')) {
             continue;
         }
@@ -196,7 +204,7 @@ pub(super) fn spell_read_dic(
         }
 
         let mut flags = WordFlags::NONE;
-        store_afflist[0] = NUL as u8;
+        store_afflist[0] = 0;
         let mut pfxlen = 0;
         let mut need_affix = false;
         if let Some(afflist) = &afflist {
@@ -220,7 +228,7 @@ pub(super) fn spell_read_dic(
         }
 
         if let Some(afflist) = &afflist {
-            w.push(NUL as u8);
+            w.push(0);
             let word = CStr::from_bytes_with_nul(&w).expect("the stem holds no NUL");
             // Suffixes first, so a prefix can then be put on a word
             // that already has one; then prefixes on the bare stem.
@@ -257,7 +265,7 @@ pub(super) fn spell_read_dic(
             non_ascii
         );
     }
-    retval
+    Ok(retval?)
 }
 
 /// Turn the affix flags a word carries into the `WF_*` bits stored with it.
@@ -292,7 +300,7 @@ fn put(list: &mut [u8], at: usize, byte: u8) {
 fn get_pfxlist(affile: &AffFile, afflist: &[u8], out: &mut [u8]) -> usize {
     let mut cnt = 0;
     let mut p = 0;
-    while byte_at(afflist, p) != NUL as u8 {
+    while byte_at(afflist, p) != 0 {
         let prevp = p;
         if get_affitem(affile.af_flagtype, afflist, &mut p) != 0
             && let Some(at) = affile.af_pref.find(&afflist[prevp..p.min(afflist.len())])
@@ -301,7 +309,7 @@ fn get_pfxlist(affile: &AffFile, afflist: &[u8], out: &mut [u8]) -> usize {
             // the rest were expanded into the word list.
             let id = affile.af_pref.get(at).ah_new_id;
             if id != 0 {
-                put(out, cnt, id as u8);
+                put(out, cnt, low_byte(id));
                 cnt += 1;
             }
         }
@@ -309,7 +317,7 @@ fn get_pfxlist(affile: &AffFile, afflist: &[u8], out: &mut [u8]) -> usize {
             p += 1;
         }
     }
-    put(out, cnt, NUL as u8);
+    put(out, cnt, 0);
     cnt
 }
 
@@ -317,19 +325,19 @@ fn get_pfxlist(affile: &AffFile, afflist: &[u8], out: &mut [u8]) -> usize {
 fn get_compflags(affile: &AffFile, afflist: &[u8], out: &mut [u8]) {
     let mut cnt = 0;
     let mut p = 0;
-    while byte_at(afflist, p) != NUL as u8 {
+    while byte_at(afflist, p) != 0 {
         let prevp = p;
         if get_affitem(affile.af_flagtype, afflist, &mut p) != 0
             && let Some(at) = affile.af_comp.find(&afflist[prevp..p.min(afflist.len())])
         {
-            put(out, cnt, affile.af_comp.get(at).ci_new_id as u8);
+            put(out, cnt, low_byte(affile.af_comp.get(at).ci_new_id));
             cnt += 1;
         }
         if affile.af_flagtype == AFT_NUM && byte_at(afflist, p) == b',' {
             p += 1;
         }
     }
-    put(out, cnt, NUL as u8);
+    put(out, cnt, 0);
 }
 
 /// One call's worth of [`store_aff_word`] arguments.
@@ -466,21 +474,21 @@ fn store_aff_word(spin: &mut SpellInfo, affile: &AffFile, call: AffWord<'_>) -> 
                             list.get_mut(use_pfxlen..).unwrap_or_default(),
                         );
                     } else {
-                        put(list, use_pfxlen, NUL as u8);
+                        put(list, use_pfxlen, 0);
                     }
                     let mut i = pfxlen;
-                    while byte_at(pfxlist, i) != NUL as u8 {
+                    while byte_at(pfxlist, i) != 0 {
                         let want = byte_at(pfxlist, i);
                         let mut j = use_pfxlen;
-                        while byte_at(list, j) != NUL as u8 {
+                        while byte_at(list, j) != 0 {
                             if want == list[j] {
                                 break;
                             }
                             j += 1;
                         }
-                        if byte_at(list, j) == NUL as u8 {
+                        if byte_at(list, j) == 0 {
                             put(list, j, want);
-                            put(list, j + 1, NUL as u8);
+                            put(list, j + 1, 0);
                         }
                         i += 1;
                     }
@@ -497,7 +505,7 @@ fn store_aff_word(spin: &mut SpellInfo, affile: &AffFile, call: AffWord<'_>) -> 
                     *byte = byte_at(from, k);
                 }
                 pfx_pfxlist[..n].copy_from_slice(&copy[..n]);
-                put(&mut pfx_pfxlist, use_pfxlen, NUL as u8);
+                put(&mut pfx_pfxlist, use_pfxlen, 0);
                 use_list = IdList::Forbid(0);
             }
 
@@ -630,7 +638,7 @@ fn affix_applies(
 fn copy_into(dst: &mut [u8; MAXWLEN], src: &[u8]) {
     let n = src.len().min(MAXWLEN - 1);
     dst[..n].copy_from_slice(&src[..n]);
-    dst[n] = NUL as u8;
+    dst[n] = 0;
 }
 
 /// `xstrlcat` into a word buffer: as much of `src` as fits after what is
@@ -642,7 +650,7 @@ fn append_into(dst: &mut [u8; MAXWLEN], src: &[u8]) {
     }
     let n = src.len().min(MAXWLEN - 1 - len);
     dst[len..len + n].copy_from_slice(&src[..n]);
-    dst[len + n] = NUL as u8;
+    dst[len + n] = 0;
 }
 
 /// Chop and add what one affix says, into `newword`.
@@ -672,7 +680,7 @@ fn build_affixed_word(newword: &mut [u8; MAXWLEN], word: &[u8], ae: &AffEntry, p
             }
             p -= head_off(&newword[..len], p - 1) + 1;
         }
-        newword[p] = NUL as u8;
+        newword[p] = 0;
     }
     if let Some(add) = &ae.ae_add {
         append_into(newword, add);

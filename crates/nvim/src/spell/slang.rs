@@ -33,9 +33,9 @@ use crate::buffer::alloc_unregistered_buffer;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::memline::{ml_close, ml_open, ml_open_file};
-use crate::types::{OK, SpellLang, uint8_t, uint16_t};
+use crate::types::{SpellLang, uint8_t, uint16_t};
 
-use super::{MAXWLEN, MAXWORDCOUNT, SP_FORMERROR, SY_MAXLEN, SylItem, WordEnd, WordTree};
+use super::{MAXWLEN, MAXWORDCOUNT, SY_MAXLEN, SylItem, WordEnd, WordTree};
 
 /// The hash the `COMMON` table keys words with: upstream's `hash_hash`
 /// (`h = h * 101 + byte`), spread over the word by a multiplicative mix so
@@ -191,8 +191,9 @@ pub fn count_common_word(slang: &mut SpellLang, word: &[u8], count: uint8_t) {
 /// becomes `sl_syllable`, the set of single syllable characters, and each
 /// part after it becomes an entry in `sl_syl_items`.
 ///
-/// Returns `SP_FORMERROR` for an entry longer than [`SY_MAXLEN`].
-pub fn init_syl_tab(slang: &mut SpellLang, value: &[u8]) -> c_int {
+/// Refuses an entry longer than [`SY_MAXLEN`], having kept the syllable
+/// characters.
+pub(crate) fn init_syl_tab(slang: &mut SpellLang, value: &[u8]) -> Result<(), SyllableTooLong> {
     let mut parts = value.split(|&b| b == b'/');
     slang.sl_syllable = Some(parts.next().unwrap_or_default().to_vec());
     let mut items: Vec<SylItem> = Vec::new();
@@ -202,15 +203,20 @@ pub fn init_syl_tab(slang: &mut SpellLang, value: &[u8]) -> c_int {
             continue;
         }
         if item.len() >= SY_MAXLEN as usize {
-            return SP_FORMERROR;
+            return Err(SyllableTooLong);
         }
         items.push(SylItem {
             sy_chars: item.into(),
         });
     }
     slang.sl_syl_items = items;
-    OK
+    Ok(())
 }
+
+/// A `SYLLABLE` entry longer than [`SY_MAXLEN`]: upstream's
+/// `SP_FORMERROR`, which the reader abandons the file over without a word.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct SyllableTooLong;
 
 /// How many syllables `word` has, by the language's syllable definition.
 ///

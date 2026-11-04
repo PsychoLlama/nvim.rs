@@ -1,4 +1,11 @@
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The constants here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -8,24 +15,25 @@ use crate::cstr;
 use crate::getchar::state::got_int;
 use core::cell::RefCell;
 
+use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::message::{e_exists, e_invarg};
 use crate::message::{emsg, msg, verbose_enter, verbose_leave};
-use crate::message_fmt::{msg_bytes, msg_cstr};
+use crate::message_fmt::{emsg_text, msg_bytes, msg_cstr};
 use crate::option::vars::{p_msm, p_verbose};
 use crate::os::cshim::gettext;
 use crate::os::fs::{dir_exists, path_exists};
 use crate::path::{path_tail, tail_index};
-use crate::semsg;
 use crate::spell::SpellBuf;
 use crate::spell::{did_set_spelltab, spell_enc, spelltab};
 use crate::strings::has_bytes;
 use crate::strings::has_char;
+use crate::tr;
 use crate::types::CmdIdx;
 use crate::types::TAB;
 use crate::types::{
-    CONV_NONE, EStackType, ExArg, FAIL, Failed, FileComparison, MAXPATHL, NUL, OK, OptInt, RepItem,
-    SpellAddType, SpellTab, VimConv, XDGVarType, time_t,
+    CONV_NONE, EStackType, ExArg, Failed, FileComparison, MAXPATHL, OptInt, RepItem, SpellAddType,
+    SpellTab, VimConv, XDGVarType, time_t,
 };
 use crate::ui::ui_flush;
 use crate::winlayer::Buf;
@@ -72,7 +80,6 @@ pub const COMP_CHECKCASE: ::core::ffi::c_uint = 4;
 pub const COMP_CHECKREP: ::core::ffi::c_uint = 2;
 pub const COMP_CHECKDUP: ::core::ffi::c_uint = 1;
 pub const SP_OTHERERROR: ::core::ffi::c_int = -3;
-pub const SP_FORMERROR: ::core::ffi::c_int = -2;
 pub const SP_TRUNCERROR: ::core::ffi::c_int = -1;
 pub const SPELL_ADD_RARE: SpellAddType = 2;
 pub const SPELL_ADD_BAD: SpellAddType = 1;
@@ -101,6 +108,26 @@ pub const SN_PREFCOND: ::core::ffi::c_uint = 3;
 pub const SN_MIDWORD: ::core::ffi::c_uint = 2;
 pub const CF_UPPER: ::core::ffi::c_uint = 2;
 pub const CF_WORD: ::core::ffi::c_uint = 1;
+/// [`CF_WORD`] and [`CF_UPPER`] as the byte the `CHARFLAGS` section holds.
+pub(super) const CF_WORD_BIT: u8 = CF_WORD.to_le_bytes()[0];
+pub(super) const CF_UPPER_BIT: u8 = CF_UPPER.to_le_bytes()[0];
+
+/// The low byte of `c`: what C keeps when it stores an `int` in a `char`,
+/// which is what every byte the spell file holds was.
+pub(super) fn low_byte(c: ::core::ffi::c_int) -> u8 {
+    c.to_le_bytes()[0]
+}
+
+/// The low sixteen bits of `c`, as C's store of an `int` in a `short`.
+pub(super) fn low16(c: ::core::ffi::c_int) -> u16 {
+    let [low, high, ..] = c.to_le_bytes();
+    u16::from_le_bytes([low, high])
+}
+
+/// A length as the one byte the file gives it, cut as C's was.
+pub(super) fn len_byte(len: usize) -> u8 {
+    len.to_le_bytes()[0]
+}
 pub const SN_CHARFLAGS: ::core::ffi::c_uint = 1;
 pub const SN_REGION: ::core::ffi::c_uint = 0;
 pub const SN_INFO: ::core::ffi::c_uint = 15;
@@ -432,7 +459,7 @@ fn parse_mkspellmem(
     let mut at = 0;
     let start = digits_then(value, &mut at, b',')?;
     let incr = digits_then(value, &mut at, b',')?;
-    let added = digits_then(value, &mut at, NUL as u8)?;
+    let added = digits_then(value, &mut at, 0)?;
     Some((start, incr, added))
 }
 
@@ -448,7 +475,7 @@ fn digits_then(text: &[u8], at: &mut usize, sep: u8) -> Option<::core::ffi::c_in
     if cstr::byte_at(text, *at) != sep {
         return None;
     }
-    if sep != NUL as u8 {
+    if sep != 0 {
         *at += 1;
     }
     Some(n)
@@ -508,11 +535,13 @@ pub fn mkspell(fnames: &[&[u8]], ascii: bool, over_write: bool, added_word: bool
     let wfname = wfname.as_cstr();
 
     '_theend: {
-        if !output_is_writable(wfname, incount, over_write) {
+        if let Err(err) = output_is_writable(wfname, incount, over_write) {
+            err.report();
             break '_theend;
         }
         let innames = &innames[..usize::try_from(incount).unwrap_or(0).min(innames.len())];
-        if !read_region_names(&mut spin, innames) {
+        if let Err(err) = read_region_names(&mut spin, innames) {
+            err.report();
             break '_theend;
         }
         spin.si_region_count = incount;
@@ -523,7 +552,11 @@ pub fn mkspell(fnames: &[&[u8]], ascii: bool, over_write: bool, added_word: bool
             spin.si_clear_chartab = 1;
         }
 
-        let mut error = read_inputs(&mut spin, innames, &mut afile);
+        // The reader stops at the first input that fails; why is said
+        // before anything else is.
+        let mut error = read_inputs(&mut spin, innames, &mut afile)
+            .inspect_err(MkspellError::report)
+            .is_err();
         if spin.si_compflags.is_some() && spin.si_nobreak != 0 {
             let text = c"Warning: both compounding and NOBREAK specified";
             msg(gettext(text), 0);
@@ -608,54 +641,99 @@ fn output_name(
     (name, if fcount == 1 { 1 } else { default_incount })
 }
 
-/// Can `:mkspell` write here? Reports why not, if not.
-fn output_is_writable(wfname: &CStr, incount: ::core::ffi::c_int, over_write: bool) -> bool {
-    if incount <= 0 {
-        emsg(gettext(e_invarg));
-    } else if has_char(path_tail(wfname), '_' as ::core::ffi::c_int) {
-        emsg(gettext(c"E751: Output file name must not have region name"));
-    } else if incount > MAXREGIONS as ::core::ffi::c_int {
-        semsg!(
-            "E754: Only up to {} regions supported",
-            MAXREGIONS as ::core::ffi::c_int
-        );
-    } else if !over_write && path_exists(wfname) {
-        emsg(gettext(e_exists));
-    } else if dir_exists(wfname) {
-        let wfname = msg_cstr(wfname);
-        semsg!("E17: \"{wfname}\" is a directory");
-    } else {
-        return true;
+/// Why `:mkspell` stopped: said once, by [`mkspell`].
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum MkspellError {
+    /// No input names.
+    #[error("{}", msg_cstr(gettext(e_invarg)))]
+    NoInput,
+    /// The output name carries a region.
+    #[error(
+        "{}",
+        msg_cstr(gettext(c"E751: Output file name must not have region name"))
+    )]
+    RegionInOutput,
+    /// More inputs than a file has regions.
+    #[error("{}", tr!("E754: Only up to {} regions supported", MAXREGIONS.cast_signed()))]
+    TooManyRegions,
+    /// The output exists and `!` was not given.
+    #[error("{}", msg_cstr(gettext(e_exists)))]
+    OutputExists,
+    /// The output is a directory.
+    #[error("{}", tr!("E17: \"{}\" is a directory", msg_cstr(.0.as_cstr())))]
+    OutputIsDirectory(ThinCString),
+    /// One of several inputs does not end in a region.
+    #[error("{}", tr!("E755: Invalid region in {}", msg_bytes(.0.as_bytes())))]
+    InvalidRegion(ThinCString),
+    /// An input file would not open.
+    #[error("{}", tr!("E484: Can't open file {}", msg_cstr(.0.as_cstr())))]
+    CannotOpen(ThinCString),
+    /// What a reader said about its input as it went.
+    #[error(transparent)]
+    Reported(#[from] Failed),
+}
+
+const _: () = assert!(size_of::<MkspellError>() <= 16);
+
+impl MkspellError {
+    /// Puts the message out, unless it is already out.
+    pub(crate) fn report(&self) {
+        if !matches!(self, Self::Reported(_)) {
+            emsg_text(self.to_string());
+        }
     }
-    false
+}
+
+/// Can `:mkspell` write here? Why not, if not.
+fn output_is_writable(
+    wfname: &CStr,
+    incount: ::core::ffi::c_int,
+    over_write: bool,
+) -> Result<(), MkspellError> {
+    if incount <= 0 {
+        Err(MkspellError::NoInput)
+    } else if has_char(path_tail(wfname), '_' as ::core::ffi::c_int) {
+        Err(MkspellError::RegionInOutput)
+    } else if incount > MAXREGIONS.cast_signed() {
+        Err(MkspellError::TooManyRegions)
+    } else if !over_write && path_exists(wfname) {
+        Err(MkspellError::OutputExists)
+    } else if dir_exists(wfname) {
+        Err(MkspellError::OutputIsDirectory(ThinCString::from_cstr(
+            wfname,
+        )))
+    } else {
+        Ok(())
+    }
 }
 
 /// Fill in `si_region_name` from the `_xy` each input name ends with.
 ///
-/// A single input covers every region and carries no suffix. Returns false,
-/// having reported the name, when one of several does not carry one.
-fn read_region_names(spin: &mut SpellInfo, innames: &[&[u8]]) -> bool {
+/// A single input covers every region and carries no suffix. Refused,
+/// naming the input, when one of several does not carry one.
+fn read_region_names(spin: &mut SpellInfo, innames: &[&[u8]]) -> Result<(), MkspellError> {
     if innames.len() <= 1 {
-        return true;
+        return Ok(());
     }
     for (i, name) in innames.iter().enumerate() {
         let len = name.len();
         if len - tail_index(name) < 5 || name[len - 3] != b'_' {
-            let name = msg_bytes(name);
-            semsg!("E755: Invalid region in {name}");
-            return false;
+            return Err(MkspellError::InvalidRegion(ThinCString::from_bytes(name)));
         }
         spin.si_region_name[i * 2] = name[len - 2].to_ascii_lowercase();
         spin.si_region_name[i * 2 + 1] = name[len - 1].to_ascii_lowercase();
     }
-    true
+    Ok(())
 }
 
 /// Read every input into `spin`: an `.aff`/`.dic` pair where an `.aff`
-/// exists, a plain word list otherwise. Returns whether one of them failed,
-/// which stops the rest. The affix files read go to `afile`, which owns
-/// them until the run is over.
-fn read_inputs(spin: &mut SpellInfo, innames: &[&[u8]], afile: &mut Vec<Option<AffFile>>) -> bool {
+/// exists, a plain word list otherwise. One that fails stops the rest. The
+/// affix files read go to `afile`, which owns them until the run is over.
+fn read_inputs(
+    spin: &mut SpellInfo,
+    innames: &[&[u8]],
+    afile: &mut Vec<Option<AffFile>>,
+) -> Result<(), MkspellError> {
     for (i, &stem) in innames.iter().enumerate() {
         spin.si_conv.vc_type = CONV_NONE;
         spin.si_region = 1 << i;
@@ -666,26 +744,23 @@ fn read_inputs(spin: &mut SpellInfo, innames: &[&[u8]], afile: &mut Vec<Option<A
         };
 
         let aff_name = with_ext(b".aff");
-        let failed = if path_exists(aff_name.as_cstr()) {
-            let aff = spell_read_aff(spin, aff_name.as_cstr());
-            let failed = match aff {
-                None => true,
-                Some(ref aff) => {
+        let read = if path_exists(aff_name.as_cstr()) {
+            match spell_read_aff(spin, aff_name.as_cstr()) {
+                Err(err) => Err(err),
+                Ok(aff) => {
                     let dic_name = with_ext(b".dic");
-                    spell_read_dic(spin, dic_name.as_cstr(), aff).is_err()
+                    let read = spell_read_dic(spin, dic_name.as_cstr(), &aff);
+                    afile.push(Some(aff));
+                    read
                 }
-            };
-            afile.push(aff);
-            failed
+            }
         } else {
-            spell_read_wordfile(spin, XString::from_bytes(stem).as_cstr()).is_err()
+            spell_read_wordfile(spin, XString::from_bytes(stem).as_cstr())
         };
         spin.si_conv = crate::types::CONV_NONE_INIT;
-        if failed {
-            return true;
-        }
+        read?;
     }
-    false
+    Ok(())
 }
 
 /// Show `text` while `:mkspell` runs, quietly unless it was asked to be

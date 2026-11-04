@@ -46,10 +46,15 @@
 //! | `STRCMP(items[n], "X")` | `items[n] == c"X"` |
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
-use crate::semsg;
 use crate::smsg;
-use crate::tr_c;
 use core::ffi::{CStr, c_int, c_uint};
 use std::ffi::OsStr;
 use std::fs::File;
@@ -61,13 +66,14 @@ use crate::fileio::Fgets;
 use crate::getchar::state::got_int;
 use crate::mbyte::canonize;
 use crate::message::msg;
-use crate::message_fmt::{msg_bytes, msg_cstr, report_msg};
+use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::option::vars::p_enc;
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::spell::init_spell_chartab;
-use crate::types::{CONV_NONE, NUL, uint8_t};
+use crate::types::{CONV_NONE, uint8_t};
 
+use super::MkspellError;
 use super::affix::{handle_affix_entry, handle_affix_header};
 use super::flags::{affitem2flag, process_compflags};
 use super::tables::{add_comppat, add_rep_entry, append_info, handle_map, handle_sal};
@@ -76,6 +82,7 @@ use super::{
     AFT_CAPLONG, AFT_CHAR, AFT_LONG, AFT_NUM, AffFile, AffixKind, COMP_CHECKCASE, COMP_CHECKDUP,
     COMP_CHECKREP, COMP_CHECKTRIPLE, MAXLINELEN, SpellInfo, TAB, spell_message_fmt,
 };
+use crate::memory::ThinCString;
 
 /// The most items one `.aff` line is split into; the rest are ignored.
 pub(super) const MAXITEMCNT: usize = 30;
@@ -155,17 +162,25 @@ impl FlagField {
     }
 
     /// The two compounding flags change how already-read `PFX` entries
-    /// would have been processed, so declaring one late is worth a warning.
-    fn warn_after_pfx(self) -> Option<&'static CStr> {
-        match self {
-            Self::CompForbid => Some(
-                c"Defining COMPOUNDFORBIDFLAG after PFX item may give wrong results in %s line %d",
+    /// would have been processed, so declaring one late is worth a warning:
+    /// given here, for `fname` line `lnum`.
+    fn warn_after_pfx(self, fname: &CStr, lnum: c_int) {
+        let fname = msg_cstr(fname);
+        let _: bool = match self {
+            Self::CompForbid => smsg!(
+                0,
+                "Defining COMPOUNDFORBIDFLAG after PFX item may give wrong results in {} line {}",
+                fname,
+                lnum
             ),
-            Self::CompPermit => Some(
-                c"Defining COMPOUNDPERMITFLAG after PFX item may give wrong results in %s line %d",
+            Self::CompPermit => smsg!(
+                0,
+                "Defining COMPOUNDPERMITFLAG after PFX item may give wrong results in {} line {}",
+                fname,
+                lnum
             ),
-            _ => None,
-        }
+            _ => false,
+        };
     }
 }
 
@@ -193,23 +208,46 @@ enum NumField {
     SylMax,
 }
 
-/// Keywords taking a number, with the complaint for a bad one.
-const NUMBER_RULES: &[(&CStr, NumField, &CStr)] = &[
-    (
-        c"COMPOUNDWORDMAX",
-        NumField::WordMax,
-        c"Wrong COMPOUNDWORDMAX value in %s line %d: %s",
-    ),
-    (
-        c"COMPOUNDMIN",
-        NumField::Min,
-        c"Wrong COMPOUNDMIN value in %s line %d: %s",
-    ),
-    (
-        c"COMPOUNDSYLMAX",
-        NumField::SylMax,
-        c"Wrong COMPOUNDSYLMAX value in %s line %d: %s",
-    ),
+impl NumField {
+    /// The complaint for a value that is not a number, in `fname` line
+    /// `lnum`.
+    fn complain(self, fname: &CStr, lnum: c_int, item: &CStr) {
+        let (fname, item) = (msg_cstr(fname), msg_cstr(item));
+        let _: bool = match self {
+            Self::WordMax => {
+                smsg!(
+                    0,
+                    "Wrong COMPOUNDWORDMAX value in {} line {}: {}",
+                    fname,
+                    lnum,
+                    item
+                )
+            }
+            Self::Min => smsg!(
+                0,
+                "Wrong COMPOUNDMIN value in {} line {}: {}",
+                fname,
+                lnum,
+                item
+            ),
+            Self::SylMax => {
+                smsg!(
+                    0,
+                    "Wrong COMPOUNDSYLMAX value in {} line {}: {}",
+                    fname,
+                    lnum,
+                    item
+                )
+            }
+        };
+    }
+}
+
+/// Keywords taking a number.
+const NUMBER_RULES: &[(&CStr, NumField)] = &[
+    (c"COMPOUNDWORDMAX", NumField::WordMax),
+    (c"COMPOUNDMIN", NumField::Min),
+    (c"COMPOUNDSYLMAX", NumField::SylMax),
 ];
 
 /// Bare keywords that only set a compound-checking option bit.
@@ -264,7 +302,7 @@ fn is_aff_rule(items: &[&CStr], rulename: &CStr, mincount: usize) -> bool {
 
 /// The item's first byte, or `NUL` when it is empty.
 pub(super) fn first_byte(item: &CStr) -> uint8_t {
-    item.to_bytes().first().copied().unwrap_or(NUL as uint8_t)
+    item.to_bytes().first().copied().unwrap_or(0)
 }
 
 /// Keywords whose argument is free text kept for `:spellinfo`.
@@ -280,13 +318,11 @@ fn is_info_keyword(name: &[uint8_t]) -> bool {
     .contains(&name)
 }
 
-/// Read a `.aff` file and return what it describes, or `None` if it could
-/// not be opened.
-pub(super) fn spell_read_aff(spin: &mut SpellInfo, fname: &CStr) -> Option<AffFile> {
+/// Read a `.aff` file and return what it describes, or that it could not
+/// be opened.
+pub(super) fn spell_read_aff(spin: &mut SpellInfo, fname: &CStr) -> Result<AffFile, MkspellError> {
     let Ok(file) = File::open(OsStr::from_bytes(fname.to_bytes())) else {
-        let fname = msg_cstr(fname);
-        semsg!("E484: Can't open file {fname}");
-        return None;
+        return Err(MkspellError::CannotOpen(ThinCString::from_cstr(fname)));
     };
     let mut fd = Fgets::new(file);
     let name = fname.to_string_lossy();
@@ -349,7 +385,7 @@ pub(super) fn spell_read_aff(spin: &mut SpellInfo, fname: &CStr) -> Option<AffFi
         } else {
             line.extend_from_slice(read);
         }
-        line.push(NUL as uint8_t);
+        line.push(0);
 
         let items = split_items(&mut line);
         if items.is_empty() {
@@ -361,7 +397,7 @@ pub(super) fn spell_read_aff(spin: &mut SpellInfo, fname: &CStr) -> Option<AffFi
     }
 
     finish_aff(spin, &mut aff, &mut st, fname);
-    Some(aff)
+    Ok(aff)
 }
 
 /// Split a line into white-space separated items, in place.
@@ -379,10 +415,10 @@ fn split_items(line: &mut [uint8_t]) -> Vec<&CStr> {
     let mut spans: Vec<(usize, usize)> = Vec::new();
     let mut at = 0;
     loop {
-        while line[at] != NUL as uint8_t && line[at] <= b' ' {
+        while line[at] != 0 && line[at] <= b' ' {
             at += 1;
         }
-        if line[at] == NUL as uint8_t || spans.len() == MAXITEMCNT {
+        if line[at] == 0 || spans.len() == MAXITEMCNT {
             break;
         }
         let start = at;
@@ -390,7 +426,7 @@ fn split_items(line: &mut [uint8_t]) -> Vec<&CStr> {
         if spans.len() == 1 && is_info_keyword(&line[spans[0].0..spans[0].1]) {
             // Take the rest of the line, stopping only at a control
             // character that is not a tab.
-            while line[at] >= b' ' || line[at] as c_int == TAB {
+            while line[at] >= b' ' || c_int::from(line[at]) == TAB {
                 at += 1;
             }
         } else {
@@ -399,10 +435,10 @@ fn split_items(line: &mut [uint8_t]) -> Vec<&CStr> {
             }
         }
         spans.push((start, at));
-        if line[at] == NUL as uint8_t {
+        if line[at] == 0 {
             break;
         }
-        line[at] = NUL as uint8_t;
+        line[at] = 0;
         at += 1;
     }
 
@@ -471,13 +507,15 @@ fn handle_line(
         if *field.slot(aff) != 0 {
             break;
         }
-        let flag = affitem2flag(aff.af_flagtype, items[1].to_bytes(), fname, lnum);
+        let item = items[1].to_bytes();
+        // A bad item is warned about and declares no flag.
+        let flag = affitem2flag(aff.af_flagtype, item).unwrap_or_else(|err| {
+            err.report(aff.af_flagtype, item, fname, lnum);
+            0
+        });
         *field.slot(aff) = flag;
-        if let Some(warning) = field.warn_after_pfx()
-            && aff.af_pref.len() > 0
-        {
-            let fname = msg_cstr(fname);
-            let _: bool = report_msg(0, || tr_c!(warning, fname, lnum));
+        if aff.af_pref.len() > 0 {
+            field.warn_after_pfx(fname, lnum);
         }
         return true;
     }
@@ -520,7 +558,7 @@ fn handle_line(
         return true;
     }
 
-    for (name, field, complaint) in NUMBER_RULES {
+    for (name, field) in NUMBER_RULES {
         if !is_aff_rule(items, name, 2) {
             continue;
         }
@@ -534,15 +572,14 @@ fn handle_line(
         }
         *slot = item_number(items[1]);
         if *slot == 0 {
-            let (fname, item) = (msg_cstr(fname), msg_cstr(items[1]));
-            let _: bool = report_msg(0, || tr_c!(complaint, fname, lnum, item));
+            field.complain(fname, lnum, items[1]);
         }
         return true;
     }
 
     for (name, bit) in COMPOPT_RULES {
         if is_aff_rule(items, name, 1) {
-            st.compoptions |= *bit as c_int;
+            st.compoptions |= (*bit).cast_signed();
             return true;
         }
     }
@@ -820,7 +857,7 @@ mod tests {
     /// file, and answer the items as bytes.
     fn items_of(text: &str) -> Vec<Vec<uint8_t>> {
         let mut line: Vec<uint8_t> = text.bytes().collect();
-        line.push(NUL as uint8_t);
+        line.push(0);
         split_items(&mut line)
             .iter()
             .map(|item| item.to_bytes().to_vec())

@@ -19,8 +19,16 @@
 //! since ids are a scarce single byte shared with compound flags.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::message_fmt::msg_cstr;
+use crate::narrow::len_as_int;
 use crate::smsg;
 use core::cell::RefCell;
 use core::ffi::{CStr, c_int};
@@ -87,13 +95,20 @@ pub(super) fn handle_affix_header(
         }
         None => {
             spin.si_arena.charge(AFF_HEADER_BYTES, true);
-            let flag = affitem2flag(aff.af_flagtype, name, fname, lnum);
-            // An unusable name is fatal: the key would not fit, or the
-            // flag could not be read.
-            if flag == 0 || name.len() >= AH_KEY_LEN as usize {
-                st.cur_aff = None;
-                return false;
-            }
+            // An unusable name is fatal: the flag could not be read (which
+            // is warned about), or the key would not fit.
+            let flag = match affitem2flag(aff.af_flagtype, name) {
+                Ok(flag) if name.len() < AH_KEY_LEN as usize => flag,
+                Ok(_) => {
+                    st.cur_aff = None;
+                    return false;
+                }
+                Err(err) => {
+                    err.report(aff.af_flagtype, name, fname, lnum);
+                    st.cur_aff = None;
+                    return false;
+                }
+            };
             let clashes = [
                 aff.af_bad,
                 aff.af_rare,
@@ -254,7 +269,7 @@ pub(super) fn postpone_prefix(
         let c_up = if c >= 128 {
             mb_toupper(c)
         } else {
-            c_int::from(spelltab_upper(c as usize))
+            c_int::from(spelltab_upper(c.cast_unsigned() as usize))
         };
         if c_up != c
             && entry
@@ -313,10 +328,10 @@ pub(super) fn file_postponed_prefix(
         .iter()
         .rposition(|held| held.as_deref() == want);
     let idx = match found {
-        Some(at) => at as c_int,
+        Some(at) => len_as_int(at),
         None => {
             spin.si_prefcond.push(want.map(Into::into));
-            spin.si_prefcond.len() as c_int - 1
+            len_as_int(spin.si_prefcond.len()) - 1
         }
     };
 
@@ -325,16 +340,16 @@ pub(super) fn file_postponed_prefix(
     let ah = aff.affixes(kind).get(at);
     let mut n = PFX_FLAGS;
     if ah.ah_combine == 0 {
-        n |= WFP_NC as c_int;
+        n |= WFP_NC.cast_signed();
     }
     if upper {
-        n |= WFP_UP as c_int;
+        n |= WFP_UP.cast_signed();
     }
     if entry.ae_comppermit {
-        n |= WFP_COMPPERMIT as c_int;
+        n |= WFP_COMPPERMIT.cast_signed();
     }
     if entry.ae_compforbid {
-        n |= WFP_COMPFORBID as c_int;
+        n |= WFP_COMPFORBID.cast_signed();
     }
     let prefroot = spin.si_prefroot.expect("mkspell allocates the roots first");
     let new_id = ah.ah_new_id;

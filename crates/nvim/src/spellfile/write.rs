@@ -30,7 +30,20 @@
 //! not are the ones the C left exposed too.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use super::CF_UPPER_BIT;
+use super::CF_WORD_BIT;
+use super::len_byte;
+use super::low_byte;
+use super::low16;
+use crate::narrow::len_as_int;
 use crate::semsg;
 use crate::spell::WordFlags;
 use core::ffi::{CStr, c_int};
@@ -46,15 +59,14 @@ use crate::message::emsg;
 use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext;
 use crate::spell::{spelltab_fold, spelltab_isu, spelltab_isw};
-use crate::types::{Failed, NUL, time_t};
+use crate::types::{Failed, time_t};
 
 use super::wordtree::{NodeId, WordNode};
 use super::{
-    BY_FLAGS, BY_FLAGS2, BY_INDEX, BY_NOFLAGS, CF_UPPER, CF_WORD, PFX_FLAGS, SAL_COLLAPSE,
-    SAL_F0LLOWUP, SAL_REM_ACCENTS, SN_CHARFLAGS, SN_COMPOUND, SN_END, SN_INFO, SN_MAP, SN_MIDWORD,
-    SN_NOBREAK, SN_NOCOMPOUNDSUGS, SN_NOSPLITSUGS, SN_PREFCOND, SN_REGION, SN_REP, SN_REPSAL,
-    SN_SAL, SN_SOFO, SN_SUGFILE, SN_SYLLABLE, SN_WORDS, SNF_REQUIRED, SpellInfo, VIMSPELLMAGIC,
-    VIMSPELLVERSION,
+    BY_FLAGS, BY_FLAGS2, BY_INDEX, BY_NOFLAGS, PFX_FLAGS, SAL_COLLAPSE, SAL_F0LLOWUP,
+    SAL_REM_ACCENTS, SN_CHARFLAGS, SN_COMPOUND, SN_END, SN_INFO, SN_MAP, SN_MIDWORD, SN_NOBREAK,
+    SN_NOCOMPOUNDSUGS, SN_NOSPLITSUGS, SN_PREFCOND, SN_REGION, SN_REP, SN_REPSAL, SN_SAL, SN_SOFO,
+    SN_SUGFILE, SN_SYLLABLE, SN_WORDS, SNF_REQUIRED, SpellInfo, VIMSPELLMAGIC, VIMSPELLVERSION,
 };
 
 /// A `.spl` or `.sug` file being written.
@@ -63,6 +75,10 @@ pub(super) struct SplWriter {
     /// Cleared by the first write that fails. Checked once, when the file
     /// is closed.
     ok: bool,
+    /// How many tree chains [`put_node`] abandoned on a failed write. Each
+    /// is one `e_write` upstream said on the spot; [`write_vim_spell`] says
+    /// them, nothing else being said in between.
+    abandoned: usize,
 }
 
 impl SplWriter {
@@ -70,6 +86,7 @@ impl SplWriter {
         Self {
             out: BufWriter::new(file),
             ok: true,
+            abandoned: 0,
         }
     }
 
@@ -85,15 +102,19 @@ impl SplWriter {
     }
 
     pub(super) fn byte(&mut self, c: c_int) {
-        self.bytes(&[c as u8]);
+        self.bytes(&[low_byte(c)]);
     }
 
+    /// `v`'s low four bytes, big-endian.
     pub(super) fn u32(&mut self, v: usize) {
-        self.bytes(&(v as u32).to_be_bytes());
+        let be = v.to_be_bytes();
+        self.bytes(&be[be.len() - 4..]);
     }
 
+    /// `v`'s low two bytes, big-endian.
     fn u16(&mut self, v: usize) {
-        self.bytes(&(v as u16).to_be_bytes());
+        let be = v.to_be_bytes();
+        self.bytes(&be[be.len() - 2..]);
     }
 
     /// Write a payload.
@@ -141,7 +162,7 @@ pub(super) fn write_vim_spell(spin: &mut SpellInfo, fname: &CStr) -> Result<(), 
         put_compound(&mut w, spin);
         put_syllable(&mut w, spin);
 
-        w.byte(SN_END as c_int);
+        w.byte(SN_END.cast_signed());
         put_trees(&mut w, spin, regionmask);
 
         // The trailing byte the reader uses to tell a complete file
@@ -151,6 +172,9 @@ pub(super) fn write_vim_spell(spin: &mut SpellInfo, fname: &CStr) -> Result<(), 
 
     if !w.finish() {
         retval = Err(Failed);
+    }
+    for _ in 0..w.abandoned {
+        emsg(gettext(e_write));
     }
     if retval.is_err() {
         emsg(gettext(e_write));
@@ -163,7 +187,7 @@ fn put_info(w: &mut SplWriter, spin: &SpellInfo) {
     let Some(text) = &spin.si_info else {
         return;
     };
-    w.section(SN_INFO as c_int, 0, text.len());
+    w.section(SN_INFO.cast_signed(), 0, text.len());
     w.bytes(text);
 }
 
@@ -174,8 +198,8 @@ fn put_region(w: &mut SplWriter, spin: &SpellInfo) -> c_int {
         return 0;
     }
     // `si_region_name` holds `si_region_count` two-byte names.
-    let len = spin.si_region_count as usize * 2;
-    w.section(SN_REGION as c_int, SNF_REQUIRED, len);
+    let len = spin.si_region_count.cast_unsigned() as usize * 2;
+    w.section(SN_REGION.cast_signed(), SNF_REQUIRED, len);
     w.bytes(&spin.si_region_name[..len]);
     (1 << spin.si_region_count) - 1
 }
@@ -192,12 +216,12 @@ fn put_charflags(w: &mut SplWriter, spin: &SpellInfo) {
     let mut folchars: Vec<u8> = Vec::with_capacity(512);
     let mut buf = [0u8; 8];
     for i in 128..256 {
-        let n = encode_char(spelltab_fold(i) as c_int, &mut buf);
+        let n = encode_char(c_int::from(spelltab_fold(i)), &mut buf);
         folchars.extend_from_slice(&buf[..n]);
     }
 
     w.section(
-        SN_CHARFLAGS as c_int,
+        SN_CHARFLAGS.cast_signed(),
         SNF_REQUIRED,
         1 + 128 + 2 + folchars.len(),
     );
@@ -206,10 +230,10 @@ fn put_charflags(w: &mut SplWriter, spin: &SpellInfo) {
         .map(|i| {
             let mut f = 0u8;
             if spelltab_isw(i) {
-                f |= CF_WORD as u8;
+                f |= CF_WORD_BIT;
             }
             if spelltab_isu(i) {
-                f |= CF_UPPER as u8;
+                f |= CF_UPPER_BIT;
             }
             f
         })
@@ -225,7 +249,7 @@ fn put_midword(w: &mut SplWriter, spin: &SpellInfo) {
     let Some(text) = &spin.si_midword else {
         return;
     };
-    w.section(SN_MIDWORD as c_int, SNF_REQUIRED, text.len());
+    w.section(SN_MIDWORD.cast_signed(), SNF_REQUIRED, text.len());
     w.bytes(text);
 }
 
@@ -237,7 +261,7 @@ fn put_prefcond(w: &mut SplWriter, spin: &mut SpellInfo) {
         return;
     }
     let len = write_spell_prefcond(None, &spin.si_prefcond);
-    w.section(SN_PREFCOND as c_int, SNF_REQUIRED, len);
+    w.section(SN_PREFCOND.cast_signed(), SNF_REQUIRED, len);
     write_spell_prefcond(Some(w), &spin.si_prefcond);
 }
 
@@ -276,18 +300,18 @@ fn put_rep_and_sal(w: &mut SplWriter, spin: &mut SpellInfo) {
             len += 1;
         }
         let count = table.len();
-        w.section(sect_id as c_int, 0, len);
+        w.section(sect_id.cast_signed(), 0, len);
 
         if round == 2 {
             let mut flags = 0;
             if spin.si_followup != 0 {
-                flags |= SAL_F0LLOWUP as c_int;
+                flags |= SAL_F0LLOWUP.cast_signed();
             }
             if spin.si_collapse != 0 {
-                flags |= SAL_COLLAPSE as c_int;
+                flags |= SAL_COLLAPSE.cast_signed();
             }
             if spin.si_rem_accents != 0 {
-                flags |= SAL_REM_ACCENTS as c_int;
+                flags |= SAL_REM_ACCENTS.cast_signed();
             }
             w.byte(flags);
         }
@@ -303,7 +327,7 @@ fn put_rep_and_sal(w: &mut SplWriter, spin: &mut SpellInfo) {
             .flat_map(|item| [&item.from, &item.to])
             .flat_map(|half| {
                 debug_assert!(half.len() < c_int::MAX as usize);
-                core::iter::once(half.len() as u8).chain(half.iter().copied())
+                core::iter::once(len_byte(half.len())).chain(half.iter().copied())
             })
             .collect();
         w.bytes(&halves);
@@ -316,7 +340,7 @@ fn put_sofo(w: &mut SplWriter, spin: &SpellInfo) {
         return;
     };
     // Two length-prefixed strings.
-    w.section(SN_SOFO as c_int, 0, from.len() + to.len() + 4);
+    w.section(SN_SOFO.cast_signed(), 0, from.len() + to.len() + 4);
     w.u16(from.len());
     w.bytes(from);
     w.u16(to.len());
@@ -329,14 +353,14 @@ fn put_words(w: &mut SplWriter, spin: &SpellInfo) {
     if spin.si_commonwords.len() == 0 {
         return;
     }
-    w.byte(SN_WORDS as c_int);
+    w.byte(SN_WORDS.cast_signed());
     w.byte(0);
     // Keys go out with their terminator, so the reader can split them
     // apart again.
     let mut payload: Vec<u8> = Vec::new();
     for word in spin.si_commonwords.iter() {
         payload.extend_from_slice(word);
-        payload.push(NUL as u8);
+        payload.push(0);
     }
     w.u32(payload.len());
     w.bytes(&payload);
@@ -348,7 +372,7 @@ fn put_map(w: &mut SplWriter, spin: &SpellInfo) {
     if spin.si_map.is_empty() {
         return;
     }
-    w.section(SN_MAP as c_int, 0, spin.si_map.len());
+    w.section(SN_MAP.cast_signed(), 0, spin.si_map.len());
     w.bytes(&spin.si_map);
 }
 
@@ -359,7 +383,7 @@ fn put_sugfile(w: &mut SplWriter, spin: &mut SpellInfo) {
     if spin.si_nosugfile != 0 || !wanted {
         return;
     }
-    w.section(SN_SUGFILE as c_int, 0, 8);
+    w.section(SN_SUGFILE.cast_signed(), 0, 8);
     // `time(NULL)`: whole seconds since the epoch.
     spin.si_sugtime = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -376,7 +400,7 @@ fn put_flag_sections(w: &mut SplWriter, spin: &SpellInfo) {
         (spin.si_nocompoundsugs != 0, SN_NOCOMPOUNDSUGS),
     ] {
         if set {
-            w.section(id as c_int, 0, 0);
+            w.section(id.cast_signed(), 0, 0);
         }
     }
 }
@@ -394,7 +418,7 @@ fn put_compound(w: &mut SplWriter, spin: &SpellInfo) {
         len += pat.len() + 1;
     }
     // Five limit bytes, a spare, and the two-byte pattern count.
-    w.section(SN_COMPOUND as c_int, 0, len + 7);
+    w.section(SN_COMPOUND.cast_signed(), 0, len + 7);
 
     w.byte(spin.si_compmax);
     w.byte(spin.si_compminlen);
@@ -404,7 +428,7 @@ fn put_compound(w: &mut SplWriter, spin: &SpellInfo) {
     w.u16(patterns.len());
     for pat in patterns {
         debug_assert!(pat.len() < c_int::MAX as usize);
-        w.byte(pat.len() as c_int);
+        w.bytes(&[len_byte(pat.len())]);
         w.bytes(pat);
     }
     w.bytes(compflags);
@@ -414,12 +438,12 @@ fn put_compound(w: &mut SplWriter, spin: &SpellInfo) {
 /// `COMPOUNDSYLMAX`. Emitted after `SN_NOBREAK`, which shares this test.
 fn put_syllable(w: &mut SplWriter, spin: &SpellInfo) {
     if spin.si_nobreak != 0 {
-        w.section(SN_NOBREAK as c_int, 0, 0);
+        w.section(SN_NOBREAK.cast_signed(), 0, 0);
     }
     let Some(text) = &spin.si_syllable else {
         return;
     };
-    w.section(SN_SYLLABLE as c_int, 0, text.len());
+    w.section(SN_SYLLABLE.cast_signed(), 0, text.len());
     w.bytes(text);
 }
 
@@ -439,10 +463,11 @@ fn put_trees(w: &mut SplWriter, spin: &mut SpellInfo, regionmask: c_int) {
         let prefixtree = round == 2;
 
         clear_node(spin, tree);
-        let nodecount = put_node(None, spin, tree, 0, regionmask, prefixtree) as usize;
+        let nodecount =
+            (put_node(None, spin, tree, 0, regionmask, prefixtree)).cast_unsigned() as usize;
         w.u32(nodecount);
         debug_assert!(nodecount + nodecount * size_of::<c_int>() < c_int::MAX as usize);
-        spin.si_memtot += (nodecount + nodecount * size_of::<c_int>()) as c_int;
+        spin.si_memtot += len_as_int(nodecount + nodecount * size_of::<c_int>());
 
         put_node(Some(w), spin, tree, 0, regionmask, prefixtree);
     }
@@ -457,7 +482,7 @@ pub(super) fn clear_node(spin: &mut SpellInfo, node: Option<NodeId>) {
         n.wn_index = 0;
         n.wn_link = None;
         let (byte, child, sibling) = (n.wn_byte, n.wn_child, n.wn_sibling);
-        if byte != NUL as u8 {
+        if byte != 0 {
             clear_node(spin, child);
         }
         next = sibling;
@@ -516,8 +541,8 @@ pub(super) fn put_node(
         if c.wn_index != 0 && c.wn_link != Some(head) {
             // Already written under a different parent.
             if let Some(w) = w.as_deref_mut() {
-                w.byte(BY_INDEX as c_int);
-                let at = c.wn_index as u32;
+                w.byte(BY_INDEX.cast_signed());
+                let at = c.wn_index.cast_unsigned();
                 w.bytes(&at.to_be_bytes()[1..]);
             }
         } else if c.wn_link.is_none() {
@@ -527,7 +552,9 @@ pub(super) fn put_node(
         if let Some(w) = w.as_deref_mut() {
             w.byte(c_int::from(byte));
             if !w.ok {
-                emsg(gettext(e_write));
+                // The chain is abandoned; the count it answers is unused
+                // when writing.
+                w.abandoned += 1;
                 return 0;
             }
         }
@@ -557,10 +584,10 @@ fn put_word_end(w: &mut SplWriter, np: &WordNode, regionmask: c_int, prefixtree:
     if prefixtree {
         // Prefix ids carry their own flag set; the common case has
         // none of the interesting bits and needs no flags byte.
-        if c_int::from(np.wn_flags) == c_int::from(PFX_FLAGS as u16) {
-            w.byte(BY_NOFLAGS as c_int);
+        if np.wn_flags == low16(PFX_FLAGS) {
+            w.byte(BY_NOFLAGS.cast_signed());
         } else {
-            w.byte(BY_FLAGS as c_int);
+            w.byte(BY_FLAGS.cast_signed());
             w.byte(c_int::from(np.wn_flags));
         }
         w.byte(c_int::from(np.wn_affix_id));
@@ -578,15 +605,15 @@ fn put_word_end(w: &mut SplWriter, np: &WordNode, regionmask: c_int, prefixtree:
         flags |= WordFlags::AFX;
     }
     if flags.is_empty() {
-        w.byte(BY_NOFLAGS as c_int);
+        w.byte(BY_NOFLAGS.cast_signed());
         return;
     }
     if np.wn_flags >= 0x100 {
-        w.byte(BY_FLAGS2 as c_int);
+        w.byte(BY_FLAGS2.cast_signed());
         w.byte(flags.bits());
-        w.byte((flags.bits() as core::ffi::c_uint >> 8) as c_int);
+        w.byte((flags.bits().cast_unsigned() >> 8).cast_signed());
     } else {
-        w.byte(BY_FLAGS as c_int);
+        w.byte(BY_FLAGS.cast_signed());
         w.byte(flags.bits());
     }
     if flags.has(WordFlags::REGION) {
@@ -616,7 +643,7 @@ pub(super) fn write_spell_prefcond(
         let bytes = cond.as_deref().unwrap_or_default();
         if let Some(w) = w.as_deref_mut() {
             debug_assert!(bytes.len() <= c_int::MAX as usize);
-            w.byte(bytes.len() as c_int);
+            w.bytes(&[len_byte(bytes.len())]);
             w.bytes(bytes);
         }
         totlen += bytes.len();

@@ -21,8 +21,20 @@
 //! - `COMPOUND` — the rules for joining words together.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use super::CF_UPPER_BIT;
+use super::CF_WORD_BIT;
+use super::len_byte;
+use super::low_byte;
 use crate::cstr;
+use crate::narrow::len_as_int;
 use crate::strings::has_char;
 use core::cell::RefCell;
 use core::ffi::c_int;
@@ -32,12 +44,12 @@ use crate::mbyte::{c_cluster_len, char_at, char_len, encode_char, utf_char2len};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::spell::{ascii_spell_chartab, count_common_word};
-use crate::types::{NUL, RepItem, SalFirst, SalItem, SpellLang, int16_t, uint8_t};
+use crate::types::{NUL, RepItem, SalFirst, SalItem, SpellLang, int16_t};
 
 use super::spl::{SpellReadError, Spl, SplResult, trim_nul};
 use super::{
-    CF_UPPER, CF_WORD, COMPOUND_MAX_LEN, MAXREGIONS, MAXWLEN, SAL_COLLAPSE, SAL_F0LLOWUP,
-    SAL_REM_ACCENTS, e_duplicate_char_in_map_entry, set_spell_finish, vim_regcomp,
+    COMPOUND_MAX_LEN, MAXREGIONS, MAXWLEN, SAL_COLLAPSE, SAL_F0LLOWUP, SAL_REM_ACCENTS,
+    e_duplicate_char_in_map_entry, set_spell_finish, vim_regcomp,
 };
 use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRICT, RE_STRING};
 
@@ -48,10 +60,10 @@ pub(super) fn read_region_section(
     len: c_int,
 ) -> SplResult<()> {
     // `sl_regions` holds MAXREGIONS * 2 letters plus a terminator.
-    if len > MAXREGIONS as c_int * 2 {
+    if len > MAXREGIONS.cast_signed() * 2 {
         return Err(SpellReadError::Format);
     }
-    let len = len as usize;
+    let len = len.cast_unsigned() as usize;
     let bytes = spl.read_nonnul_bytes(len)?;
     slang.sl_regions[..len].copy_from_slice(&bytes[..len]);
     slang.sl_regions[len] = 0;
@@ -82,27 +94,27 @@ pub(super) fn read_prefcond_section(spl: &mut Spl, slang: &mut SpellLang) -> Spl
     if cnt <= 0 {
         return Err(SpellReadError::Format);
     }
-    let cnt = cnt as usize;
+    let cnt = cnt.cast_unsigned() as usize;
     let mut progs: Vec<RefCell<Option<OwnedProg>>> = (0..cnt).map(|_| RefCell::new(None)).collect();
 
     for slot in &mut progs {
         let n = spl.getc().map_or(-1, c_int::from);
-        if n < 0 || n >= MAXWLEN as c_int {
+        if n < 0 || n.cast_unsigned() as usize >= MAXWLEN {
             return Err(SpellReadError::Format);
         }
         if n == 0 {
             continue;
         }
-        let n = n as usize;
+        let n = n.cast_unsigned() as usize;
         // The condition matches what precedes the prefix, from its start.
         let mut pat = Vec::with_capacity(n + 2);
         pat.push(b'^');
         pat.extend_from_slice(&spl.read_nonnul_bytes(n)?);
-        pat.push(NUL as u8);
+        pat.push(0);
         *slot.get_mut() = vim_regcomp(cstr::in_bytes(&pat), RE_MAGIC | RE_STRING);
     }
 
-    slang.sl_prefixcnt = cnt as c_int;
+    slang.sl_prefixcnt = len_as_int(cnt);
     slang.sl_prefprog = progs;
     Ok(())
 }
@@ -116,7 +128,7 @@ pub(super) fn read_rep_section(
 ) -> SplResult<()> {
     let cnt = spl.get2c()?;
 
-    let mut items: Vec<RepItem> = Vec::with_capacity(cnt as usize);
+    let mut items: Vec<RepItem> = Vec::with_capacity(cnt.cast_unsigned() as usize);
     for _ in 0..cnt {
         let from = spl.read_cnt_string(1)?;
         if from.is_empty() {
@@ -140,7 +152,7 @@ pub(super) fn read_rep_section(
     for (i, item) in items.iter().enumerate() {
         let lead = usize::from(item.from.first().copied().unwrap_or(0));
         if first[lead] == -1 {
-            first[lead] = i as int16_t;
+            first[lead] = int16_t::try_from(i).expect("fewer items than a short holds");
         }
     }
     *out = items;
@@ -158,20 +170,20 @@ pub(super) fn read_sal_section(spl: &mut Spl, slang: &mut SpellLang) -> SplResul
 
     // A missing flags byte reads as -1, which sets all three.
     let flags = spl.getc().map_or(-1, c_int::from);
-    if flags & SAL_F0LLOWUP as c_int != 0 {
+    if flags & SAL_F0LLOWUP.cast_signed() != 0 {
         slang.sl_followup = true;
     }
-    if flags & SAL_COLLAPSE as c_int != 0 {
+    if flags & SAL_COLLAPSE.cast_signed() != 0 {
         slang.sl_collapse = true;
     }
-    if flags & SAL_REM_ACCENTS as c_int != 0 {
+    if flags & SAL_REM_ACCENTS.cast_signed() != 0 {
         slang.sl_rem_accents = true;
     }
 
     let cnt = spl.get2c()?;
-    let mut rules: Vec<SalItem> = Vec::with_capacity(cnt as usize + 1);
+    let mut rules: Vec<SalItem> = Vec::with_capacity(cnt.cast_unsigned() as usize + 1);
 
-    while (rules.len() as c_int) < cnt {
+    while len_as_int(rules.len()) < cnt {
         // The whole item arrives as `ccnt` bytes: the lead, then an
         // optional "(abc)" set, then the flag characters.
         let ccnt = usize::from(spl.byte()?);
@@ -210,7 +222,7 @@ pub(super) fn read_sal_section(spl: &mut Spl, slang: &mut SpellLang) -> SplResul
             return Err(SpellReadError::Format);
         }
         let mut sm_rules = rest.to_vec();
-        sm_rules.push(NUL as u8);
+        sm_rules.push(0);
 
         let to = spl.read_cnt_string(1)?;
         let sm_to_w = if to.is_empty() {
@@ -221,7 +233,7 @@ pub(super) fn read_sal_section(spl: &mut Spl, slang: &mut SpellLang) -> SplResul
 
         let sm_lead_w = bytes2wide(lead);
         rules.push(SalItem {
-            sm_leadlen: sm_lead_w.len() as c_int - 1,
+            sm_leadlen: len_as_int(sm_lead_w.len()) - 1,
             sm_lead_w,
             sm_oneof_w: oneof.map(|set| bytes2wide(trim_nul(set))),
             sm_rules: sm_rules.into_boxed_slice(),
@@ -235,7 +247,7 @@ pub(super) fn read_sal_section(spl: &mut Spl, slang: &mut SpellLang) -> SplResul
             sm_lead_w: Box::new([NUL]),
             sm_leadlen: 0,
             sm_oneof_w: None,
-            sm_rules: Box::new([NUL as u8]),
+            sm_rules: Box::new([0]),
             sm_to_w: None,
         });
     }
@@ -257,7 +269,7 @@ pub(super) fn read_words_section(
         word.clear();
         loop {
             let c = spl.byte()?;
-            if c == NUL as u8 {
+            if c == 0 {
                 break;
             }
             // One slot is kept for the terminator the word is counted with.
@@ -266,7 +278,7 @@ pub(super) fn read_words_section(
             }
             word.push(c);
         }
-        done += word.len() as c_int + 1;
+        done += len_as_int(word.len()) + 1;
         count_common_word(slang, &word, 10);
     }
     Ok(())
@@ -295,11 +307,11 @@ pub(super) fn read_sofo_section(spl: &mut Spl, slang: &mut SpellLang) -> SplResu
 /// loop, so this answers over the part built so far — and stops at a NUL
 /// the file put there, exactly as the C string search it replaces did.
 fn byte_in_flags(flags: &[u8], c: u8) -> bool {
-    if c == NUL as u8 {
+    if c == 0 {
         return false;
     }
     for &b in flags {
-        if b == NUL as u8 {
+        if b == 0 {
             return false;
         }
         if b == c {
@@ -322,13 +334,13 @@ pub(super) fn read_compound(spl: &mut Spl, slang: &mut SpellLang, len: c_int) ->
 
     todo -= 1;
     let mut c = spl.getc().map_or(-1, c_int::from);
-    slang.sl_compmax = if c < 2 { MAXWLEN as c_int } else { c };
+    slang.sl_compmax = if c < 2 { len_as_int(MAXWLEN) } else { c };
     todo -= 1;
     c = spl.getc().map_or(-1, c_int::from);
     slang.sl_compminlen = if c < 1 { 0 } else { c };
     todo -= 1;
     c = spl.getc().map_or(-1, c_int::from);
-    slang.sl_compsylmax = if c < 1 { MAXWLEN as c_int } else { c };
+    slang.sl_compsylmax = if c < 1 { len_as_int(MAXWLEN) } else { c };
 
     // A zero here marks the newer layout, which adds the options byte
     // and the CHECKCOMPOUNDPATTERN list; anything else is a flag of
@@ -341,10 +353,10 @@ pub(super) fn read_compound(spl: &mut Spl, slang: &mut SpellLang, len: c_int) ->
 
             let cnt = spl.get2c()?;
             todo -= 2;
-            let mut pats: Vec<Box<[u8]>> = Vec::with_capacity(cnt as usize);
+            let mut pats: Vec<Box<[u8]>> = Vec::with_capacity(cnt.cast_unsigned() as usize);
             for _ in 0..cnt {
                 let p = spl.read_cnt_string(1)?;
-                todo -= p.len() as c_int + 1;
+                todo -= len_as_int(p.len()) + 1;
                 pats.push(trim_nul(&p).into());
             }
             slang.sl_comppat = pats;
@@ -358,12 +370,12 @@ pub(super) fn read_compound(spl: &mut Spl, slang: &mut SpellLang, len: c_int) ->
     if todo < 0 {
         return Err(SpellReadError::Format);
     }
-    if todo as usize > COMPOUND_MAX_LEN as usize {
+    if todo.cast_unsigned() as usize > COMPOUND_MAX_LEN as usize {
         return Err(SpellReadError::Format);
     }
 
     // The pattern is `^\( … \)$` with every flag as a branch.
-    let mut pat: Vec<u8> = Vec::with_capacity(todo as usize * 4 + 8);
+    let mut pat: Vec<u8> = Vec::with_capacity(todo.cast_unsigned() as usize * 4 + 8);
     pat.extend_from_slice(b"^\\(");
     // Every flag, and the ones that may start a compound.
     let mut all: Vec<u8> = Vec::new();
@@ -418,13 +430,13 @@ pub(super) fn read_compound(spl: &mut Spl, slang: &mut SpellLang, len: c_int) ->
                 pat.push(b'\\');
             }
             let at = pat.len();
-            pat.resize(at + utf_char2len(c) as usize, 0);
+            pat.resize(at + (utf_char2len(c)).cast_unsigned() as usize, 0);
             encode_char(c, &mut pat[at..]);
         }
     }
 
     pat.extend_from_slice(b"\\)$");
-    pat.push(NUL as u8);
+    pat.push(0);
 
     slang.sl_compallflags = all;
     slang.sl_compstartflags = start;
@@ -456,7 +468,7 @@ fn set_sofo(slang: &mut SpellLang, from: &[u8], to: &[u8]) -> SplResult<()> {
     let mut sizes = [0usize; 256];
     for &c in from.iter().take(from.len() - 1) {
         if c >= 256 {
-            sizes[(c & 0xff) as usize] += 1;
+            sizes[(c & 0xff).cast_unsigned() as usize] += 1;
         }
     }
     let mut map: Vec<Box<[c_int]>> = sizes
@@ -475,14 +487,14 @@ fn set_sofo(slang: &mut SpellLang, from: &[u8], to: &[u8]) -> SplResult<()> {
     first.fill(0);
     for (&c, &to_c) in from.iter().zip(to.iter()).take(from.len() - 1) {
         if c >= 256 {
-            let low = (c & 0xff) as usize;
+            let low = (c & 0xff).cast_unsigned() as usize;
             let at = filled[low];
             map[low][at] = c;
             map[low][at + 1] = to_c;
             map[low][at + 2] = NUL;
             filled[low] += 2;
         } else {
-            first[c as usize] = to_c as SalFirst;
+            first[c.cast_unsigned() as usize] = to_c as SalFirst;
         }
     }
     slang.sl_sofo_map = map;
@@ -499,17 +511,19 @@ fn set_sal_first(slang: &mut SpellLang) {
 
     let mut i = 0;
     while i < rules.len() {
-        let c = (rules[i].sm_lead_w[0] & 0xff) as usize;
+        let c = (rules[i].sm_lead_w[0] & 0xff).cast_unsigned() as usize;
         if sfirst[c] == -1 {
-            sfirst[c] = i as SalFirst;
+            sfirst[c] = SalFirst::try_from(i).expect("fewer rules than a SalFirst holds");
             // Skip the run that is already together.
-            while i + 1 < rules.len() && (rules[i + 1].sm_lead_w[0] & 0xff) as usize == c {
+            while i + 1 < rules.len()
+                && (rules[i + 1].sm_lead_w[0] & 0xff).cast_unsigned() as usize == c
+            {
                 i += 1;
             }
             // Pull any later rule with the same low byte up to join it.
             let mut n = 1;
             while i + n < rules.len() {
-                if (rules[i + n].sm_lead_w[0] & 0xff) as usize == c {
+                if (rules[i + n].sm_lead_w[0] & 0xff).cast_unsigned() as usize == c {
                     i += 1;
                     n -= 1;
                     rules[i..=i + n].rotate_right(1);
@@ -554,7 +568,7 @@ pub(super) fn set_map_str(slang: &mut SpellLang, map: &[u8]) {
     while at < map.len() {
         let c = char_at(&map[at..]);
         at += char_len(&map[at..]);
-        if c == b'/' as c_int {
+        if c == c_int::from(b'/') {
             headc = 0;
             continue;
         }
@@ -562,7 +576,7 @@ pub(super) fn set_map_str(slang: &mut SpellLang, map: &[u8]) {
             headc = c;
         }
         if c < 256 {
-            slang.sl_map_array[c as usize] = headc;
+            slang.sl_map_array[c.cast_unsigned() as usize] = headc;
             continue;
         }
 
@@ -589,16 +603,16 @@ fn set_spell_charflags(flags: &[u8], fol: &[u8]) {
     // Only the high half is described; the low half is fixed.
     for i in 0..128usize {
         if let Some(&f) = flags.get(i) {
-            new_st.st_isw[i + 128] = f & CF_WORD as u8 != 0;
-            new_st.st_isu[i + 128] = f & CF_UPPER as u8 != 0;
+            new_st.st_isw[i + 128] = f & CF_WORD_BIT != 0;
+            new_st.st_isu[i + 128] = f & CF_UPPER_BIT != 0;
         }
         if at < fol.len() {
             let c = char_at(&fol[at..]);
             at += c_cluster_len(&fol[at..]);
-            new_st.st_fold[i + 128] = c as uint8_t;
+            new_st.st_fold[i + 128] = low_byte(c);
             // Record the reverse mapping too, when it fits.
-            if i as c_int + 128 != c && new_st.st_isu[i + 128] && c < 256 {
-                new_st.st_upper[c as usize] = (i + 128) as uint8_t;
+            if len_as_int(i) + 128 != c && new_st.st_isu[i + 128] && c < 256 {
+                new_st.st_upper[c.cast_unsigned() as usize] = len_byte(i + 128);
             }
         }
     }

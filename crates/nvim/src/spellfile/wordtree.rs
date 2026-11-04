@@ -81,8 +81,18 @@
 //! because the records themselves no longer have them.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use super::low_byte;
+use super::low16;
 use crate::cstr;
+use crate::narrow::len_as_int;
 use crate::spell::WordFlags;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int, c_uint};
@@ -272,8 +282,14 @@ pub(super) fn set_compression_limits(start: c_int, incr: c_int, added: c_int) {
 
 /// The size of an accounting block, for scaling `'mkspellmem'`.
 pub(super) const fn block_size() -> c_int {
-    SBLOCKSIZE as c_int
+    SBLOCKSIZE_INT
 }
+
+/// [`SBLOCKSIZE`] as the `int` the memory accounting counts in.
+const SBLOCKSIZE_INT: c_int = {
+    let [a, b, c, d, ..] = SBLOCKSIZE.to_le_bytes();
+    c_int::from_le_bytes([a, b, c, d])
+};
 
 /// Allocate a tree's root node. Always a fresh one, never the free list's.
 pub(super) fn wordtree_alloc(spin: &mut SpellInfo) -> NodeId {
@@ -311,7 +327,7 @@ pub(super) fn store_word(
     pfxlist: &[u8],
     need_affix: bool,
 ) -> Result<(), Failed> {
-    debug_assert!(!word.contains(&(NUL as u8)), "a word is cut at its NUL");
+    debug_assert!(!word.contains(&(0)), "a word is cut at its NUL");
     let text = word;
     let ct = captype(text, text.len());
     if !valid_spell_word(text) {
@@ -353,7 +369,7 @@ fn add_per_affix(
     need_affix: bool,
 ) {
     // The list is a C string: its ids run to the first NUL.
-    let ids = pfxlist.iter().copied().take_while(|&id| id != NUL as u8);
+    let ids = pfxlist.iter().copied().take_while(|&id| id != 0);
     for id in ids.chain([0]) {
         let affix_id = c_int::from(id.cast_signed());
         if !need_affix || affix_id != NUL {
@@ -394,7 +410,7 @@ pub(super) fn tree_add_word(
     region: c_int,
     affix_id: c_int,
 ) {
-    debug_assert!(!word.contains(&(NUL as u8)), "a word is cut at its NUL");
+    debug_assert!(!word.contains(&(0)), "a word is cut at its NUL");
     let order = EndOrder {
         flags,
         masked: flags & WN_MASK,
@@ -424,7 +440,7 @@ pub(super) fn tree_add_word(
                 let new = spin.node_mut(np);
                 new.wn_child = from.wn_child;
                 new.wn_byte = from.wn_byte;
-                if from.wn_byte == NUL as u8 {
+                if from.wn_byte == 0 {
                     new.wn_flags = from.wn_flags;
                     new.wn_region = from.wn_region;
                     new.wn_affix_id = from.wn_affix_id;
@@ -457,7 +473,7 @@ pub(super) fn tree_add_word(
             }
         });
         let hinted = hint.and_then(|from| {
-            if byte != NUL as u8 && spin.node(from).wn_byte == byte {
+            if byte != 0 && spin.node(from).wn_byte == byte {
                 // The byte's own node: everything ahead of it sorts before,
                 // and a match inserts nothing, so its predecessor is moot.
                 return Some((Some(from), None));
@@ -479,7 +495,7 @@ pub(super) fn tree_add_word(
             Some(n) => {
                 let n = spin.node(n);
                 n.wn_byte != byte
-                    || (byte == NUL as u8
+                    || (byte == 0
                         && (flags < 0
                             || spin.si_sugtree != 0
                             || c_int::from(n.wn_flags) != flags & WN_MASK
@@ -501,7 +517,7 @@ pub(super) fn tree_add_word(
             *slot = Some((chain_head, n));
         }
 
-        if byte == NUL as u8 {
+        if byte == 0 {
             if order.sugtree {
                 let run_head = match (last, head) {
                     (Some(_), Some(head)) => head,
@@ -516,9 +532,9 @@ pub(super) fn tree_add_word(
                 spin.si_end_hint.insert(run_head, n);
             }
             let end = spin.node_mut(n);
-            end.wn_flags = flags as u16;
-            end.wn_region |= region as i16;
-            end.wn_affix_id = affix_id as u8;
+            end.wn_flags = low16(flags);
+            end.wn_region |= low16(region).cast_signed();
+            end.wn_affix_id = low_byte(affix_id);
             break;
         }
         prev = Link::Child(n);
@@ -537,7 +553,7 @@ pub(super) fn tree_add_word(
         }
     }
     let due = if spin.si_compress_cnt == 1 {
-        spin.si_free_count < MAXWLEN as c_int
+        spin.si_free_count < len_as_int(MAXWLEN)
     } else {
         spin.si_arena.block_count >= COMPRESS_START.get()
     };
@@ -586,7 +602,7 @@ fn skip_siblings(
 ) -> (Option<NodeId>, Option<NodeId>) {
     if order.flags < 0 {
         // The prefix tree: by affix id.
-        let affix = order.affix_id as c_uint;
+        let affix = order.affix_id.cast_unsigned();
         skip_while(nodes, node, byte, |n| c_uint::from(n.wn_affix_id) < affix)
     } else if order.sugtree {
         // By flags, then region: the `.sug` tree's word number.
@@ -597,7 +613,7 @@ fn skip_siblings(
         })
     } else {
         // By flags, then affix id.
-        let (flags, affix) = (order.masked, order.affix_id as c_uint);
+        let (flags, affix) = (order.masked, order.affix_id.cast_unsigned());
         skip_while(nodes, node, byte, |n| {
             let f = c_int::from(n.wn_flags);
             f < flags || (f == flags && c_uint::from(n.wn_affix_id) < affix)
@@ -618,8 +634,7 @@ fn skip_while(
     let mut last = None;
     while let Some(n) = node {
         let sibling = &nodes[n.index()];
-        let before =
-            sibling.wn_byte < byte || (sibling.wn_byte == NUL as u8 && end_before(sibling));
+        let before = sibling.wn_byte < byte || (sibling.wn_byte == 0 && end_before(sibling));
         if !before {
             break;
         }
@@ -818,10 +833,11 @@ fn write_digest(spin: &mut SpellInfo, node: NodeId, len: c_int) {
     let mut next = Some(node);
     while let Some(np) = next {
         let n = spin.node(np);
-        let v: c_uint = if n.wn_byte == NUL as u8 {
+        let v: c_uint = if n.wn_byte == 0 {
             (c_int::from(n.wn_flags)
                 + (c_int::from(n.wn_region) << 8)
-                + (c_int::from(n.wn_affix_id) << 16)) as c_uint
+                + (c_int::from(n.wn_affix_id) << 16))
+                .cast_unsigned()
         } else {
             let child = n.wn_child.map_or(0, NodeId::raw);
             c_uint::from(n.wn_byte).wrapping_add(child.wrapping_shl(8))
@@ -830,7 +846,7 @@ fn write_digest(spin: &mut SpellInfo, node: NodeId, len: c_int) {
         next = n.wn_sibling;
     }
 
-    let mut digest = [len as u8, 0, 0, 0, 0];
+    let mut digest = [low_byte(len), 0, 0, 0, 0];
     for (i, shift) in [0, 8, 16, 24].into_iter().enumerate() {
         digest[i + 1] = ((nr >> shift & 0xff) as u8).max(1);
     }
@@ -895,7 +911,7 @@ fn node_equal(spin: &SpellInfo, n1: NodeId, n2: NodeId) -> bool {
         if a.wn_byte != b.wn_byte {
             break;
         }
-        let differs = if a.wn_byte == NUL as u8 {
+        let differs = if a.wn_byte == 0 {
             a.wn_flags != b.wn_flags || a.wn_region != b.wn_region || a.wn_affix_id != b.wn_affix_id
         } else {
             a.wn_child != b.wn_child

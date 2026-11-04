@@ -3320,7 +3320,6 @@ static const int SP_BAD = 3;
 static const int SP_BANNED = -1;
 static const int SP_COLUMN = 128;
 static const int SP_END = 64;
-static const int SP_FORMERROR = -2;
 static const int SP_LOCAL = 2;
 static const int SP_NOMOVE = 1;
 static const int SP_OK = 1;
