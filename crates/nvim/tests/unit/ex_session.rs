@@ -432,3 +432,27 @@ fn float_globals_are_written_as_printf_writes_them() {
     fx.run("unlet! g:FltKey_é");
     restore(&fx);
 }
+
+/// Every refusal `:mkview`/`:loadview` can give, with every message each one
+/// puts out. Recorded before their errors became values reported once.
+#[test]
+fn refusals_report_once() {
+    let sandbox = sources("ex_session_refusals");
+    let fx = Probe::new(sandbox.editor());
+    fx.run("enew!");
+    for (cmd, want) in [
+        ("mkview", "E32: No file name"),
+        ("loadview", "E32: No file name"),
+    ] {
+        fx.check_messages(cmd, want);
+    }
+    // The view file's name spells the file's whole path.
+    let viewdir = fx.eval("&viewdir").trim_matches('\'').to_owned();
+    let flat = format!("{}/a.txt", sandbox.as_str()).replace('/', "=+");
+    fx.check_messages(
+        "edit a.txt | loadview 3",
+        &format!("E484: Can't open file {viewdir}{flat}=3.vim"),
+    );
+    fx.home();
+    fx.settle();
+}

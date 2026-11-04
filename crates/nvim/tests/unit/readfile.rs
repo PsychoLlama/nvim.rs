@@ -445,3 +445,41 @@ latin1 => "\n\"l.txt\" [converted] 1 line, 6 bytes"
 dos => "\n\"d.txt\" [dos] 2 lines, 6 bytes"
 [getline(1, '$'), &fileencoding, &ff, line("'["), line("']")] => [['one', 'café', 'two', 'x', 'y'], 'utf-8', 'unix', 4, 5]
 "#;
+
+/// Every refusal a read and the file-pattern compiler can give, with every
+/// message each one puts out (`:silent` keeps errors, so a message said
+/// twice shows twice). Recorded before the read's errors became a value
+/// reported once.
+#[test]
+fn refusals_report_once() {
+    let sandbox = Sandbox::dir("readfile_refusals");
+    let fx = Probe::new(sandbox.editor());
+    sandbox.write("Xa", b"a\n");
+    sandbox.write("Xb", b"b\n");
+    fx.run("autocmd BufReadPre Xa ++once new");
+    fx.check_messages(
+        "edit Xa",
+        "E201: *ReadPre autocommands must not change current buffer",
+    );
+    fx.home();
+    fx.run("autocmd BufReadPre Xb ++once call delete('Xb')");
+    fx.check_messages(
+        "edit Xb",
+        "E200: *ReadPre autocommands made the file unreadable",
+    );
+    fx.home();
+    for (cmd, want) in [
+        ("autocmd BufRead {a echo", "E220: Missing }."),
+        ("autocmd BufRead a} echo", "E219: Missing {."),
+        ("echo glob2regpat('{x')", "E220: Missing }."),
+        ("buffer {zz", "E220: Missing }."),
+        ("buffer zz}", "E219: Missing {."),
+    ] {
+        fx.check_messages(cmd, want);
+    }
+    fx.run("set wildignore={x");
+    fx.check_messages("echo expand('*', 0, 1)", "E220: Missing }.");
+    fx.run("set wildignore&");
+    fx.home();
+    fx.settle();
+}

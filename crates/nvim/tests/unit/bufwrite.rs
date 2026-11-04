@@ -429,3 +429,56 @@ fn the_write_report() {
     }
     restore(&fx);
 }
+
+/// Every refusal `:write` can give, with every message each one puts out
+/// (`:silent` keeps errors, so a message said twice shows twice). Recorded
+/// before the write's error became an enum reported once.
+#[test]
+fn refusals_report_once() {
+    use std::os::unix::fs::PermissionsExt;
+    let sandbox = Sandbox::dir("bufwrite_refusals");
+    let fx = Probe::new(sandbox.editor());
+    sandbox.mkdir("Xdir");
+    sandbox.write("Xro", b"ro\n");
+    std::fs::set_permissions(sandbox.path("Xro"), std::fs::Permissions::from_mode(0o444))
+        .expect("read-only");
+    fx.run("set backupskip= backupdir=. writebackup nobackup backupcopy=auto");
+    fx.run("call setline(1, 'text')");
+    let dir = format!("E17: \"{}/Xdir\" is a directory", sandbox.as_str());
+    for (cmd, want) in [
+        ("enew! | call setline(1, 'x') | write Xdir", dir.as_str()),
+        (
+            "enew! | call setline(1, 'x') | write Xno/x",
+            "E212: Can't open file for writing: no such file or directory",
+        ),
+        ("enew! | call setline(1, 'x') | write", "E32: No file name"),
+        (
+            "edit! Xro | setlocal noreadonly | call setline(1, 'x') | write",
+            "E505: \"Xro\" is read-only (add ! to override)",
+        ),
+        (
+            "set cpoptions+=W | write!",
+            "E504: \"Xro\" is read-only (cannot override: \"W\" in 'cpoptions')",
+        ),
+        (
+            "set cpoptions-=W | enew! | setlocal buftype=acwrite | file Xac | write",
+            "E676: No matching autocommands for buftype=acwrite buffer",
+        ),
+    ] {
+        fx.check_messages(cmd, want);
+    }
+    // Not errors, so only the screen has them: a conversion that lost a
+    // character, and a backup that could not be made.
+    fx.run("enew! | setlocal fileencoding=latin1 | call setline(1, '\u{20ac}')");
+    fx.check_output(
+        "write Xconv",
+        "\n\"Xconv\"  CONVERSION ERROR in line 1;[New] 1L, 4B written",
+    );
+    fx.run("enew! | call setline(1, 'b') | file Xbk | silent write");
+    fx.run("set backup backupdir=Xnobackupdir");
+    fx.check_messages("write", "none");
+    fx.check_output("write", "\n\"Xbk\" 1L, 2B written");
+    restore(&fx);
+    let _ = std::fs::set_permissions(sandbox.path("Xro"), std::fs::Permissions::from_mode(0o644));
+    fx.settle();
+}

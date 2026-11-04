@@ -442,3 +442,98 @@ fn sugfile_section(spl: &[u8]) -> Option<usize> {
     }
     None
 }
+
+/// Every refusal `:mkspell` and loading a `.spl` can give, with every
+/// message each one puts out (`:silent` keeps errors, so a message said
+/// twice shows twice). Recorded before the spell file errors became values
+/// reported once.
+#[cfg(not(miri))]
+#[test]
+fn refusals_report_once() {
+    use crate::support::Probe;
+    use std::os::unix::fs::PermissionsExt;
+    let sandbox = Sandbox::dir("spellfile-refusals");
+    let fx = Probe::new(sandbox.editor());
+    sandbox.write("Xin.dic", b"1\none\n");
+    sandbox.write("Xin.aff", b"");
+    sandbox.write("Xexist.utf-8.spl", b"");
+    sandbox.mkdir("Xdirout.utf-8.spl");
+    sandbox.write("Xbad.aff", b"");
+    sandbox.write("Xbad.dic", b"1\none\n");
+    std::fs::set_permissions(
+        sandbox.path("Xbad.aff"),
+        std::fs::Permissions::from_mode(0o000),
+    )
+    .expect("unreadable");
+    sandbox.write("Xlong.aff", b"PFX AB Y 1\nPFX AB 0 re .\n");
+    sandbox.write("Xlong.dic", b"1\none/AB\n");
+    for (cmd, want) in [
+        (
+            "mkspell Xout_xx Xin",
+            "E751: Output file name must not have region name",
+        ),
+        (
+            "mkspell Xout a b c d e f g h i",
+            "E754: Only up to 8 regions supported",
+        ),
+        ("mkspell Xexist Xin", "E13: File exists (add ! to override)"),
+        (
+            "mkspell! Xdirout Xin",
+            "E17: \"Xdirout.utf-8.spl\" is a directory",
+        ),
+        ("mkspell Xreg Xin_aa Xb", "E755: Invalid region in Xb"),
+        ("mkspell! Xo2 Xbad", "E484: Can't open file Xbad.aff"),
+        ("mkspell! Xo3 Xlong", "none"),
+    ] {
+        fx.check_messages(cmd, want);
+    }
+    fx.check_output("mkspell! Xo4 Xlong", "\nReading affix file Xlong.aff...\nAffix name too long in Xlong.aff line 1: AB\nReading dictionary file Xlong.dic...\nline      2, word      0 - one\nCompressing word tree...\nCompressed case-folded: 0 of 8 nodes; 8 (100%) remaining\nWriting spell file Xo4.utf-8.spl...\nDone!\nEstimated runtime memory use: 40 bytes");
+    let _ = std::fs::set_permissions(
+        sandbox.path("Xbad.aff"),
+        std::fs::Permissions::from_mode(0o644),
+    );
+
+    // Loading: a `.spl` under 'runtimepath' that is not one, is too old or
+    // too new, stops early, or insists on a section this build lacks.
+    sandbox.mkdir("rtp/spell");
+    let bad = |lang: &str, bytes: &[u8], want: &str| {
+        sandbox.write(&format!("rtp/spell/{lang}.utf-8.spl"), bytes);
+        let want = format!(
+            "Error in {}/rtp/spell/{lang}.utf-8.spl:\n{want}",
+            sandbox.as_str()
+        );
+        fx.check_messages(&format!("setlocal spell spelllang={lang}"), &want);
+        fx.run("setlocal nospell spelllang&");
+    };
+    fx.run(&format!("set runtimepath^={}/rtp", sandbox.as_str()));
+    bad(
+        "xa",
+        b"not a spell file",
+        "E757: This does not look like a spell file",
+    );
+    bad(
+        "xb",
+        b"VIMspell\x01",
+        "E771: Old spell file, needs to be updated",
+    );
+    bad(
+        "xc",
+        b"VIMspell\xff",
+        "E772: Spell file is for newer version of Vim",
+    );
+    bad("xd", b"VIMspell\x32", "E758: Truncated spell file");
+    bad(
+        "xe",
+        b"VIMspell\x32\x63\x01\x00\x00\x00\x00",
+        "E770: Unsupported section in spell file",
+    );
+    bad(
+        "xf",
+        b"VIMspell\x32\x00\x00\x00\x00\x00\x05abc",
+        "E758: Truncated spell file",
+    );
+    bad("xg", b"VIMspell\x32\xff", "E758: Truncated spell file");
+    fx.run("set runtimepath&");
+    fx.home();
+    fx.settle();
+}

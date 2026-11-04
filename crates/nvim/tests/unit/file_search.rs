@@ -267,3 +267,45 @@ fn completion_lists_the_names_the_path_reaches() {
     ]);
     restore(&fx);
 }
+
+/// Every refusal the file searcher's commands can give, with every message
+/// each one puts out. Recorded before its errors became values reported
+/// once.
+#[test]
+fn refusals_report_once() {
+    let sandbox = tree("file_search_refusals");
+    let fx = Probe::new(sandbox.editor());
+    fx.run("set path=root/**");
+    fx.run("enew!");
+    fx.run("call setline(1, ['', 'nosuchfile.xyz'])");
+    for (cmd, want) in [
+        ("1 | normal! gf", "E446: No file name under cursor"),
+        (
+            "2 | normal! gf",
+            "E447: Can't find file \"nosuchfile.xyz\" in path",
+        ),
+        (
+            "find nosuchfile.xyz",
+            "E345: Can't find file \"nosuchfile.xyz\" in path",
+        ),
+        (
+            "2 | normal! \u{17}f",
+            "E447: Can't find file \"nosuchfile.xyz\" in path",
+        ),
+        (
+            "sfind nosuchfile.xyz",
+            "E345: Can't find file \"nosuchfile.xyz\" in path",
+        ),
+    ] {
+        fx.check_messages(cmd, want);
+    }
+    let long = "x".repeat(5000);
+    fx.run(&format!("set path={long}"));
+    fx.check_messages(
+        "find a",
+        "E854: Path too long for completion\nE345: Can't find file \"a\" in path",
+    );
+    fx.run("set path&");
+    fx.home();
+    fx.settle();
+}

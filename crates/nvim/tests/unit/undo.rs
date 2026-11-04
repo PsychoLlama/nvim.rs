@@ -717,4 +717,93 @@ mod tree {
         fx.check("undotree().seq_last", "2");
         unscratch(&fx);
     }
+
+    /// Every refusal the undo commands and the undo file can give, with
+    /// every message each one puts out (`:silent` keeps errors, so a
+    /// message said twice shows twice). Recorded before the undo errors
+    /// became a value reported once.
+    #[test]
+    fn refusals_report_once() {
+        let sandbox = Sandbox::dir("undo-refusals");
+        let fx = Probe::new(sandbox.editor());
+        scratch(&fx);
+        fx.run("call setline(1, 'one')");
+        sync(&fx);
+        fx.run("call setline(1, 'two')");
+        sync(&fx);
+        fx.run("silent write Xr");
+        fx.run("wundo Xr.un");
+        let good = std::fs::read(sandbox.path("Xr.un")).expect("the undo file");
+        for (cmd, want) in [
+            ("undo 99", "E830: Undo number 99 not found"),
+            ("later 1", "none"),
+            (
+                "setlocal nomodifiable | undo",
+                "E21: Cannot make changes, 'modifiable' is off",
+            ),
+            (
+                "setlocal modifiable | sandbox normal! u",
+                "E48: Not allowed in sandbox",
+            ),
+            (
+                "undo | undojoin",
+                "E790: undojoin is not allowed after undo",
+            ),
+            ("redo", "none"),
+            (
+                "rundo Xmissing.un",
+                "E822: Cannot open undo file for reading: Xmissing.un",
+            ),
+            (
+                "wundo Xnodir/x.un",
+                "E828: Cannot open undo file for writing: Xnodir/x.un",
+            ),
+            ("wundo! .", "E828: Cannot open undo file for writing: ."),
+        ] {
+            fx.check_messages(cmd, want);
+        }
+        fx.run("silent undo 0");
+        fx.check_messages("earlier 1", "none");
+        // Not errors: `:silent` keeps them off the history, the screen has
+        // them.
+        fx.check_output("earlier 1000s", "\nAlready at oldest change");
+        fx.run("silent later 10");
+        fx.check_output("later 1", "\nAlready at newest change");
+        sandbox.write("Xnot.un", b"not an undo file");
+        fx.check_messages("rundo Xnot.un", "E823: Not an undo file: Xnot.un");
+        let mut future = good.clone();
+        future[9..11].copy_from_slice(&[0, 4]);
+        sandbox.write("Xfuture.un", &future);
+        fx.check_messages(
+            "rundo Xfuture.un",
+            "E824: Incompatible undo file: Xfuture.un",
+        );
+        sandbox.write("Xcut.un", &good[..good.len() - 40]);
+        fx.check_messages(
+            "rundo Xcut.un",
+            "E825: Corrupted undo file (extmark truncated): Xcut.un",
+        );
+        sandbox.write("Xhash.un", &good[..20]);
+        fx.check_messages(
+            "rundo Xhash.un",
+            "E825: Corrupted undo file (hash): Xhash.un",
+        );
+        fx.check_messages("rundo Xr.un", "none");
+        // The text moved: the hash no longer matches.
+        fx.run("call setline(1, 'three')");
+        fx.check_messages("rundo Xr.un", "none");
+        fx.check_messages("verbose rundo Xr.un", "none");
+        // 'undodir' names a directory that cannot be made: under a file.
+        sandbox.write("plain", b"");
+        fx.run("setlocal undofile");
+        fx.run("set undodir=plain/sub");
+        fx.check_messages(
+            "write",
+            "E5003: Unable to create directory \"plain\" for undo file: file already exists",
+        );
+        fx.check_messages("verbose write", "E5003: Unable to create directory \"plain\" for undo file: file already exists\nCannot write undo file in any directory in 'undodir'");
+        fx.run("set undodir& | setlocal noundofile");
+        unscratch(&fx);
+        fx.settle();
+    }
 }

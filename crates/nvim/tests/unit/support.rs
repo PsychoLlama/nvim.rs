@@ -608,6 +608,16 @@ impl<'a> Probe<'a> {
         }
     }
 
+    /// Take back what the messages so far did to the screen: the lines they
+    /// scrolled and the hit-enter prompt they asked for. A case that puts
+    /// many errors on the shared editor's screen ends with this, or a later
+    /// case's long message meets a prompt that waits for a key.
+    /// `assert_fails()` is the one command that undoes all of it.
+    pub(crate) fn settle(&self) {
+        self.run("call assert_fails('throw \"settle\"')");
+        self.run("let v:errors = []");
+    }
+
     /// `expr`'s value as `string()` renders it, or `<fail>`.
     pub(crate) fn eval(&self, expr: &str) -> String {
         let text = format!("string({expr})");

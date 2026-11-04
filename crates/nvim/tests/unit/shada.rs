@@ -1422,3 +1422,197 @@ fn mark_extra_data_under_edits() {
         ]
     );
 }
+
+/// Every refusal reading and writing a ShaDa file can give, with every
+/// message each one puts out (`:silent` keeps errors, so a message said
+/// twice shows twice). Each bad file holds one entry, so its position is
+/// the entry's. Recorded before the ShaDa errors became a value reported
+/// once.
+#[test]
+fn refusals_report_once() {
+    use std::os::unix::fs::PermissionsExt;
+    let sandbox = Sandbox::dir("shada_refusals");
+    let fx = Probe::new(sandbox.editor());
+    fx.run("set shada=!,'100,<50,s10,h,:10,/10,@10,%");
+    let e = |typ: u8, payload: &[u8]| entry_bytes(typ, 0, payload);
+    let cases: Vec<(&str, Vec<u8>, &str)> = vec![
+        (
+            "hist-nil",
+            e(4, &[0xc0]),
+            "E575: Error while reading ShaDa file: history entry at position 0 is not an array with enough elements",
+        ),
+        (
+            "hist-type",
+            e(4, &[0x92, 0xc0, 0xc4, 0x01, b'x']),
+            "E575: Error while reading ShaDa file: history entry at position 0 has wrong history type type",
+        ),
+        (
+            "hist-str",
+            e(4, &[0x92, 0x00, 0x01]),
+            "E575: Error while reading ShaDa file: history entry at position 0 has wrong history string type",
+        ),
+        (
+            "hist-nul",
+            e(4, &[0x92, 0x00, 0xc4, 0x02, b'a', 0]),
+            "E575: Error while reading ShaDa file: history entry at position 0 contains string with zero byte inside",
+        ),
+        (
+            "hist-sep",
+            e(4, &[0x92, 0x01, 0xc4, 0x01, b'a']),
+            "E575: Error while reading ShaDa file: search history entry at position 0 does not have separator character",
+        ),
+        (
+            "hist-septype",
+            e(4, &[0x93, 0x01, 0xc4, 0x01, b'a', 0xc0]),
+            "E575: Error while reading ShaDa file: search history entry at position 0 has wrong history separator type",
+        ),
+        (
+            "pat-empty",
+            e(2, &[0x80]),
+            "E575: Error while reading ShaDa file: search pattern entry at position 0 has no pattern",
+        ),
+        (
+            "pat-sm",
+            e(2, &map(&[(b"sm", vec![0x01])])),
+            "E575: Error while reading ShaDa file: search pattern entry at position 0 has sm key value which is not a boolean",
+        ),
+        (
+            "mark-nofile",
+            e(7, &map(&[(b"l", vec![0x01])])),
+            "E575: Error while reading ShaDa file: mark entry at position 0 is missing file name",
+        ),
+        (
+            "mark-line",
+            e(7, &map(&[(b"f", bin(b"x")), (b"l", vec![0xff])])),
+            "E575: Error while reading ShaDa file: mark entry at position 0 has invalid line number",
+        ),
+        (
+            "mark-col",
+            e(7, &map(&[(b"f", bin(b"x")), (b"c", vec![0xff])])),
+            "E575: Error while reading ShaDa file: mark entry at position 0 has invalid column number",
+        ),
+        (
+            "mark-n",
+            e(8, &map(&[(b"f", bin(b"x")), (b"n", vec![0x61])])),
+            "E575: Error while reading ShaDa file: mark entry at position 0 has n key which is only valid for local and global mark entries",
+        ),
+        (
+            "mark-key",
+            e(7, &map(&[(b"f", vec![0x01])])),
+            "E575: Error while reading ShaDa file: mark entry at position 0 has f key value which is not a binary",
+        ),
+        (
+            "reg-rc",
+            e(5, &map(&[(b"n", vec![0x61])])),
+            "E575: Error while reading ShaDa file: register entry at position 0 has rc key with missing or empty array",
+        ),
+        (
+            "reg-key",
+            e(5, &map(&[(b"n", bin(b"a"))])),
+            "E575: Error while reading ShaDa file: register entry at position 0 has n key value which is not an integer",
+        ),
+        (
+            "var-nil",
+            e(6, &[0xc0]),
+            "E575: Error while reading ShaDa file: variable entry at position 0 is not an array with enough elements",
+        ),
+        (
+            "var-name",
+            e(6, &[0x92, 0x01, 0x01]),
+            "E575: Error while reading ShaDa file: variable entry at position 0 has wrong variable name type",
+        ),
+        (
+            "sub-nil",
+            e(3, &[0xc0]),
+            "E575: Error while reading ShaDa file: sub string entry at position 0 is not an array with enough elements",
+        ),
+        (
+            "sub-type",
+            e(3, &[0x91, 0x01]),
+            "E575: Error while reading ShaDa file: sub string entry at position 0 has wrong sub string type",
+        ),
+        (
+            "buf-nil",
+            e(9, &[0xc0]),
+            "E575: Error while reading ShaDa file: buffer list entry at position 0 is not an array",
+        ),
+        (
+            "buf-nofile",
+            e(9, &[0x91, 0x80]),
+            "E575: Error while reading ShaDa file: buffer list at position 0 contains entry that does not have a file name",
+        ),
+        (
+            "buf-key",
+            e(9, &[0x91, 0x81, 0xa1, b'f', 0x01]),
+            "E575: Error while reading ShaDa file: buffer list at position 0 contains entry that has f key value which is not a binary",
+        ),
+        (
+            "kind-0",
+            vec![0x00, 0x00, 0x01, 0xc0],
+            "E576: Error while reading ShaDa file: there is an item at position 0 that must not be there: Missing items are for internal uses only",
+        ),
+        (
+            "too-long",
+            vec![
+                0x04, 0x00, 0xcf, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+            ],
+            "E576: Error while reading ShaDa file: there is an item at position 0 that is stated to be too long",
+        ),
+        (
+            "ended",
+            vec![0x04, 0x00, 0x05, 0x91],
+            "E576: Error while reading ShaDa file: last entry specified that it occupies 5 bytes, but file ended earlier",
+        ),
+        (
+            "not-int",
+            vec![0x04, 0xc0, 0x01, 0xc0],
+            "E576: Error while reading ShaDa file: expected positive integer at position 1",
+        ),
+        (
+            "no-int",
+            vec![0x04],
+            "E576: Error while reading ShaDa file: expected positive integer at position 1, but got nothing",
+        ),
+        (
+            "unknown-error",
+            e(100, &[0xc1]),
+            "E576: Failed to parse ShaDa file due to a msgpack parser error at position 7",
+        ),
+        (
+            "unknown-short",
+            e(100, &[0x92]),
+            "E576: Failed to parse ShaDa file: incomplete msgpack string at position 7",
+        ),
+        (
+            "unknown-extra",
+            e(100, &[0x01, 0x02]),
+            "E576: Failed to parse ShaDa file: extra bytes in msgpack string at position 7",
+        ),
+    ];
+    for (name, bytes, want) in &cases {
+        let path = sandbox.write(&format!("{name}.shada"), bytes);
+        fx.check_messages(&format!("rshada! {}", path.display()), want);
+    }
+    fx.check_messages("rshada Xmissing.shada", "E886: System error while opening ShaDa file Xmissing.shada for reading: no such file or directory");
+
+    // Writing: a file that is not ShaDa is left alone, a read-only one is
+    // not replaced, and a directory that cannot be made is said so.
+    sandbox.write("Xnot.shada", b"\x01\x00\x05\x91");
+    fx.check_messages("wshada Xnot.shada", "E576: Reading ShaDa file: last entry specified that it occupies 5 bytes, but file ended earlier\nE136: Did not rename Xnot.shada.tmp.a because Xnot.shada does not look like a ShaDa file\nE136: Do not forget to remove Xnot.shada.tmp.a or rename it manually to Xnot.shada.");
+    fx.check_messages("wshada Xro.shada", "none");
+    std::fs::set_permissions(
+        sandbox.path("Xro.shada"),
+        std::fs::Permissions::from_mode(0o444),
+    )
+    .expect("read-only");
+    fx.check_messages("wshada Xro.shada", "E137: ShaDa file is not writable: Xro.shada\nE136: Do not forget to remove Xro.shada.tmp.a or rename it manually to Xro.shada.");
+    sandbox.write("plain", b"");
+    fx.check_messages("wshada plain/sub/x.shada", "E886: System error while opening ShaDa file plain/sub/x.shada for reading to merge before writing it: not a directory\nE886: Failed to create directory plain for writing ShaDa file: file already exists");
+    let _ = std::fs::set_permissions(
+        sandbox.path("Xro.shada"),
+        std::fs::Permissions::from_mode(0o644),
+    );
+    fx.run("call histdel('cmd') | call histdel('search') | call histdel('expr')");
+    restore(&fx);
+    fx.settle();
+}

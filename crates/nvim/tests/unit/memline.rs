@@ -833,3 +833,131 @@ fn global_marks_lines_across_blocks() {
     holds(&fx, &want);
     unscratch(&fx);
 }
+
+/// Every refusal `:recover` and the swap file's name can give, with every
+/// message each one puts out: the swap file cannot be found, opened or
+/// believed, its first data block is missing or is not one, and a name
+/// that is a loop of links. Recorded before the memline's errors became a
+/// value reported once.
+#[test]
+fn refusals_report_once() {
+    let sandbox = Sandbox::dir("memline-refusals");
+    let fx = Probe::new(sandbox.editor());
+    let swap = preserved(&fx, &sandbox);
+    let page = u32::from_le_bytes(
+        swap[offset_of!(ZeroBlockLayout, b0_page_size)..][..4]
+            .try_into()
+            .unwrap(),
+    ) as usize;
+    let version = offset_of!(ZeroBlockLayout, b0_version);
+    let magic = offset_of!(ZeroBlockLayout, b0_magic_long);
+    let page_size = offset_of!(ZeroBlockLayout, b0_page_size);
+    // What the screen says before a block-1 refusal: the names, the second
+    // one absolute.
+    let using = format!(
+        "\nUsing swap file \".f.txt.swp\"\n\nOriginal file \"{}/f.txt\"\n\n",
+        sandbox.as_str()
+    );
+    let host = fx.eval("hostname()").trim_matches('\'').to_owned();
+    type Corruption = Box<dyn Fn(&mut Vec<u8>)>;
+    // The corruption, every message `:silent` keeps, and what the screen
+    // got -- the block-zero reports are not errors, so only the screen
+    // has them.
+    let cases: [(Corruption, &str, String); 7] = [
+        (
+            Box::new(|b: &mut Vec<u8>| b.clear()),
+            "none",
+            "\nUnable to read block 0 from .f.txt.swp\nMaybe no changes were made or Nvim did \
+             not update the swap file."
+                .into(),
+        ),
+        (
+            Box::new(move |b: &mut Vec<u8>| b[magic] ^= 0xff),
+            "none",
+            format!(
+                "\n.f.txt.swp cannot be used on this computer.\nThe file was created on \
+                 {host},\nor the file has been damaged."
+            ),
+        ),
+        (
+            Box::new(move |b: &mut Vec<u8>| {
+                b[page_size..page_size + 4].copy_from_slice(&512u32.to_le_bytes())
+            }),
+            "none",
+            "\n.f.txt.swp has been damaged (page size is smaller than minimum value).\n".into(),
+        ),
+        (
+            Box::new(move |b: &mut Vec<u8>| b[version..version + 8].copy_from_slice(b"VIM 3.0\0")),
+            "none",
+            "\n.f.txt.swp cannot be used with this version of Nvim.\nUse Vim version 3.0.\n".into(),
+        ),
+        (
+            Box::new(move |b: &mut Vec<u8>| b.truncate(page)),
+            "E309: Unable to read block 1 from .f.txt.swp",
+            format!("{using}E309: Unable to read block 1 from .f.txt.swp"),
+        ),
+        (
+            Box::new(move |b: &mut Vec<u8>| {
+                b[page] = b'x';
+                b[page + 1] = b'y';
+            }),
+            "E310: Block 1 ID wrong (.f.txt.swp not a .swp file?)",
+            format!("{using}E310: Block 1 ID wrong (.f.txt.swp not a .swp file?)"),
+        ),
+        (
+            Box::new(|b: &mut Vec<u8>| b.fill(b'x')),
+            "E307: .f.txt.swp does not look like a Nvim swap file",
+            "\nE307: .f.txt.swp does not look like a Nvim swap file".into(),
+        ),
+    ];
+    for (corrupt, messages, screen) in cases {
+        let mut bytes = swap.clone();
+        corrupt(&mut bytes);
+        std::fs::write(sandbox.path(".f.txt.swp"), &bytes).expect("the swap file back");
+        fx.run("new");
+        fx.run("only!");
+        fx.check_messages("recover .f.txt.swp", messages);
+        fx.run("silent! bwipeout!");
+        fx.run("new");
+        fx.run("only!");
+        fx.check_output("silent! recover .f.txt.swp", &screen);
+        fx.run("silent! bwipeout!");
+        let _ = std::fs::remove_file(sandbox.path(".f.txt.swp"));
+    }
+    // Not here: `:recover` with no swap file to find (E305) leaves the
+    // shared editor so that `options_oracle`'s `:set all` listing later
+    // meets a hit-enter prompt (on the tree before this case too).
+    // test_recover.vim's `assert_fails('recover', 'E305:')` keeps it.
+
+    // A loop of links, for the swap file's name: the file cannot be read,
+    // so the swap file is only made on the first change.
+    std::os::unix::fs::symlink("loop2", sandbox.path("loop1")).expect("a link");
+    std::os::unix::fs::symlink("loop1", sandbox.path("loop2")).expect("a link");
+    // In a window and buffer of its own: the wipe below must not take
+    // buffer 1, whose number every later case expects.
+    fx.run("new");
+    fx.run("only!");
+    fx.check_messages(
+        "edit loop1 | call setline(1, 'x')",
+        "W10: Warning: Changing a readonly file\nE773: Symlink loop for \"loop1\"",
+    );
+    fx.run("silent! bwipeout!");
+
+    // The last 'directory' entry cannot be made: under a plain file.
+    sandbox.write("plain", b"");
+    fx.run("set directory=plain/sub");
+    // In a window and buffer of its own: the wipe below must not take
+    // buffer 1, whose number every later case expects.
+    fx.run("new");
+    fx.run("only!");
+    fx.check_messages(
+        "edit g.txt",
+        "E303: Unable to create directory \"plain\" for swap file, recovery impossible: file \
+         already exists\nE303: Unable to open swap file for \"g.txt\", recovery impossible",
+    );
+    fx.run("silent! bwipeout!");
+
+    fx.run(&format!("{} swapfile&", set_suite_directory()));
+    fx.home();
+    fx.settle();
+}
