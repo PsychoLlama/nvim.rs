@@ -6,10 +6,18 @@
 //! (Fish disk 217) by GRWalter (Fred).
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 mod vim_patches;
 
 use crate::env::{DEFAULT_VIM_DIR, DEFAULT_VIMRUNTIME_DIR};
+use crate::narrow::len_as_int;
 use crate::types::Handle;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
@@ -115,7 +123,7 @@ fn leading_number(text: &[u8]) -> Option<c_int> {
         value = Some(
             so_far
                 .saturating_mul(10)
-                .saturating_add((digit - b'0') as c_int),
+                .saturating_add(c_int::from(digit - b'0')),
         );
     }
     value
@@ -178,7 +186,7 @@ pub(crate) fn ex_version(excmd: &mut ExArg) {
     // Start the banner below the ":version" the user typed. The message
     // UI lays its own messages out, so it needs no help.
     if !ui_has(kUIMessages) {
-        msg_putchar(b'\n' as c_int);
+        msg_putchar(c_int::from(b'\n'));
     }
     list_version();
 }
@@ -192,7 +200,7 @@ fn version_msg_wrap(s: &CStr, wrap: bool) {
         && msg_col.get() + len >= Columns.get()
         && !s.to_bytes().starts_with(b"\n")
     {
-        msg_putchar(b'\n' as c_int);
+        msg_putchar(c_int::from(b'\n'));
     }
     if got_int.get() {
         return;
@@ -215,21 +223,23 @@ fn version_msg(s: &CStr) {
 /// by column, with `items[current]` in brackets. `:args` lists the argument
 /// list this way, with the current file bracketed.
 pub(crate) fn list_in_columns(items: &[&CStr], current: c_int) {
-    let count = items.len() as c_int;
+    let count = len_as_int(items.len());
+    // Which item is bracketed, as an index; none when `current` names none.
+    let current = usize::try_from(current).ok();
     // The widest item, plus the gap that separates two columns.
     let width = 1 + items
         .iter()
         .enumerate()
-        .map(|(i, item)| vim_strsize_cstr(item) + if i as c_int == current { 2 } else { 0 })
+        .map(|(i, item)| vim_strsize_cstr(item) + if Some(i) == current { 2 } else { 0 })
         .max()
         .unwrap_or(0);
 
     // Too narrow even for one column: one item per line, wrapped.
     if Columns.get() < width {
         for (i, item) in items.iter().enumerate() {
-            version_msg_wrap(item, i as c_int == current);
-            if msg_col.get() > 0 && (i as c_int) < count - 1 {
-                msg_putchar(b'\n' as c_int);
+            version_msg_wrap(item, Some(i) == current);
+            if msg_col.get() > 0 && len_as_int(i) < count - 1 {
+                msg_putchar(c_int::from(b'\n'));
             }
         }
         return;
@@ -246,31 +256,32 @@ pub(crate) fn list_in_columns(items: &[&CStr], current: c_int) {
         // `nrow` rows down the previous column.
         let idx = i / ncol + i % ncol * nrow;
         let last_col = (i + 1) % ncol == 0;
-        let Some(item) = items.get(idx as usize) else {
+        let at = idx.cast_unsigned() as usize;
+        let Some(item) = items.get(at) else {
             // A hole in the last column: only the row break is owed.
             if msg_col.get() > 0 {
                 if cur_row < nrow {
-                    msg_putchar(b'\n' as c_int);
+                    msg_putchar(c_int::from(b'\n'));
                 }
                 cur_row += 1;
             }
             continue;
         };
-        if idx == current {
-            msg_putchar(b'[' as c_int);
+        if Some(at) == current {
+            msg_putchar(c_int::from(b'['));
         }
         msg_str(item);
-        if idx == current {
-            msg_putchar(b']' as c_int);
+        if Some(at) == current {
+            msg_putchar(c_int::from(b']'));
         }
         if last_col {
             if msg_col.get() > 0 && cur_row < nrow {
-                msg_putchar(b'\n' as c_int);
+                msg_putchar(c_int::from(b'\n'));
             }
             cur_row += 1;
         } else {
             while msg_col.get() % width != 0 {
-                msg_putchar(b' ' as c_int);
+                msg_putchar(c_int::from(b' '));
             }
         }
     }
@@ -292,7 +303,7 @@ pub(crate) fn list_lua_version() {
 pub(crate) fn list_version() {
     msg_ext_set_kind(c"list_cmd");
     msg_str(LONG_VERSION);
-    msg_putchar(b'\n' as c_int);
+    msg_putchar(c_int::from(b'\n'));
     // The Nvim release this port tracks -- the version every
     // compatibility surface (`has('nvim-…')`, `v:version`, the API
     // metadata) answers with.
@@ -301,13 +312,13 @@ pub(crate) fn list_version() {
     ))
     .expect("version numbers hold no NUL");
     msg_str(&compat);
-    msg_putchar(b'\n' as c_int);
+    msg_putchar(c_int::from(b'\n'));
     list_lua_version();
 
     if p_verbose() > 0 as OptInt {
-        msg_putchar(b'\n' as c_int);
+        msg_putchar(c_int::from(b'\n'));
         msg_str(BUILD_LINE);
-        msg_putchar(b'\n' as c_int);
+        msg_putchar(c_int::from(b'\n'));
         msg_str(c"Vim versions: ");
         for (i, baseline) in VIM_BASELINES.iter().enumerate() {
             if i != 0 {
@@ -349,7 +360,7 @@ pub(crate) fn may_show_intro() -> bool {
     empty
         && Buf::current().name.is_unnamed()
         && Buf::current().handle == Handle::new(1)
-        && Win::current().handle == Handle::new(LOWEST_WIN_ID as c_int)
+        && Win::current().handle == Handle::new(LOWEST_WIN_ID.cast_signed())
         && one_window(Win::current(), None)
         && !P_SHM.has_byte(ShmFlag::INTRO.byte())
 }
@@ -415,7 +426,7 @@ fn news_line() -> CString {
 /// Draw the intro screen, unless the window is too small to hold it --
 /// `:intro` (`colon`) asks for it regardless.
 pub(crate) fn intro_message(colon: bool) {
-    let mut blanklines = Rows.get() - (INTRO_LINES.len() as c_int - 1);
+    let mut blanklines = Rows.get() - (len_as_int(INTRO_LINES.len()) - 1);
     if p_ls() > 1 as OptInt {
         blanklines -= Rows.get() - current_topframe().fr_height;
     }
@@ -435,7 +446,7 @@ pub(crate) fn intro_message(colon: bool) {
         } else {
             translate(line)
         };
-        let row = top + i as c_int;
+        let row = top + len_as_int(i);
         if !mesg.is_empty() && row < Rows.get() - 1 {
             do_intro_line(row, mesg, colon, i < 3);
         }

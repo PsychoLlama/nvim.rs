@@ -7,6 +7,13 @@
 //! been loaded, which is why they are not in this module.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::env::{get_appname, user_config_path, xdg_var};
 use crate::memory::XString;
@@ -14,7 +21,7 @@ use crate::message_fmt::msg_cstr;
 use crate::semsg;
 use crate::types::LineNr;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
 use std::ffi::CString;
 
 use crate::ex_docmd::do_cmdline_cmd;
@@ -24,7 +31,6 @@ use crate::option::vars::p_exrc;
 use crate::os::cshim::{gettext, write_c_stderr};
 use crate::os::fs::path_exists;
 use crate::os::state::{kEqualFiles, kXDGConfigDirs};
-use crate::path::PATHSEP;
 use crate::path::path_full_compare;
 use crate::profile::time_msg_at;
 use crate::quickfix::qf_jump_to_current;
@@ -94,7 +100,7 @@ pub(crate) fn exe_commands(parm: &MainParams) {
     if !exmode_active.get() {
         msg_scroll.set(0);
     }
-    if parm.edit_type == EDIT_QF as c_int {
+    if parm.edit_type == EDIT_QF.cast_signed() {
         // `-q`: the commands may have changed the quickfix list.
         qf_jump_to_current();
     }
@@ -111,7 +117,7 @@ pub(crate) fn exe_commands(parm: &MainParams) {
 /// produce a doubled one. Upstream only does this on the system side, so
 /// this does too.
 fn config_subpath(dir: &[u8], appname: &[u8], suffix: &[u8], dedup_sep: bool) -> CString {
-    let sep = PATHSEP as u8;
+    let sep = b'/';
     let mut path = dir.to_vec();
     if !dedup_sep || dir.last() != Some(&sep) {
         path.push(sep);
@@ -143,12 +149,12 @@ pub(crate) fn do_system_initialization() {
     let appname = appname.to_bytes();
     let sourced = for_each_config_dir(|dir| {
         let vimrc = config_subpath(dir, appname, b"/sysinit.vim", true);
-        do_source(&vimrc, false, DOSO_NONE as c_int, None) != FAIL
+        do_source(&vimrc, false, DOSO_NONE.cast_signed(), None) != FAIL
     });
     if sourced {
         return;
     }
-    do_source(SYS_VIMRC_FILE, false, DOSO_NONE as c_int, None);
+    do_source(SYS_VIMRC_FILE, false, DOSO_NONE.cast_signed(), None);
 }
 
 /// Try `init.lua` and then `init.vim` in one directory.
@@ -157,7 +163,7 @@ pub(crate) fn do_system_initialization() {
 /// neither was: `do_exrc` is off when the file that was sourced *is* the
 /// `exrc` the working directory would offer, so it is not read twice.
 fn source_init_pair(init_lua: &CStr, init_vim: &CStr, check_exrc_is_same: bool) -> Option<bool> {
-    if path_exists(init_lua) && do_source(init_lua, true, DOSO_VIMRC as c_int, None) != 0 {
+    if path_exists(init_lua) && do_source(init_lua, true, DOSO_VIMRC.cast_signed(), None) != 0 {
         // Both present: the Lua one won, and the user should know.
         if path_exists(init_vim) {
             let (init_lua, init_vim) = (msg_cstr(init_lua), msg_cstr(init_vim));
@@ -165,7 +171,7 @@ fn source_init_pair(init_lua: &CStr, init_vim: &CStr, check_exrc_is_same: bool) 
         }
         return Some(p_exrc());
     }
-    if do_source(init_vim, true, DOSO_VIMRC as c_int, None) != FAIL {
+    if do_source(init_vim, true, DOSO_VIMRC.cast_signed(), None) != FAIL {
         let mut do_exrc = p_exrc();
         if do_exrc && check_exrc_is_same {
             let same = path_full_compare(VIMRC_FILE, init_vim, false, true);
@@ -234,7 +240,7 @@ pub(crate) fn do_exrc_initialization() {
 pub(crate) fn source_startup_scripts(parm: &MainParams) {
     if let Some(vimrc) = parm.vimrc.as_deref() {
         let named_none = vimrc == c"NONE" || vimrc == c"NORC";
-        if !named_none && do_source(vimrc, false, DOSO_NONE as c_int, None) != OK {
+        if !named_none && do_source(vimrc, false, DOSO_NONE.cast_signed(), None) != OK {
             let vimrc = msg_cstr(vimrc);
             semsg!("E282: Cannot read from \"{vimrc}\"");
         }

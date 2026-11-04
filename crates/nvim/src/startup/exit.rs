@@ -7,6 +7,13 @@
 //! signal handler and from the allocator, so it does as little as it can.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -117,7 +124,7 @@ pub fn getout(mut exitval: c_int) -> ! {
     }
 
     set_vim_var_type(Vv::Exiting, VAR_NUMBER);
-    set_vim_var_nr(Vv::Exiting, exitval as VarNumber);
+    set_vim_var_nr(Vv::Exiting, VarNumber::from(exitval));
 
     // `:restart` and friends set a reason of their own first.
     if with_vim_var_str(Vv::Exitreason, CStr::is_empty) {

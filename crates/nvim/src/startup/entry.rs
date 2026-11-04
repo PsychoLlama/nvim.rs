@@ -7,6 +7,13 @@
 //! the seams `--startuptime` reports.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::env::appname_is_valid;
 use crate::event_queue::ChildQueue;
@@ -15,7 +22,7 @@ use crate::types::ArgListId;
 use crate::types::AutoEvent;
 use crate::types::Key;
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_int, c_uint};
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use crate::api::ui::remote_ui_wait_for_attach;
@@ -275,11 +282,11 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
 
     debug_assert!(
         p_ch() >= 0
-            && Rows.get() as OptInt >= p_ch()
-            && Rows.get() as OptInt - p_ch() <= c_int::MAX as OptInt,
+            && OptInt::from(Rows.get()) >= p_ch()
+            && OptInt::from(Rows.get()) - p_ch() <= OptInt::from(c_int::MAX),
         "'cmdheight' does not fit in the screen"
     );
-    cmdline_row.set(Rows.get() - p_ch() as c_int);
+    cmdline_row.set(Rows.get() - c_int::try_from(p_ch()).expect("checked against the screen"));
     msg_row.set(cmdline_row.get());
     default_grid_alloc();
 
@@ -316,7 +323,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
     time_msg_at(c"clear screen");
 
     if edit_stdin(&params) {
-        params.edit_type = EDIT_STDIN as c_int;
+        params.edit_type = EDIT_STDIN.cast_signed();
     }
     if let Some(scriptin) = params.scriptin.as_deref()
         && !open_scriptin(scriptin)
@@ -393,7 +400,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
         msg_scroll.set(0);
     }
 
-    if params.edit_type == EDIT_STDIN as c_int && !recoverymode.get() {
+    if params.edit_type == EDIT_STDIN.cast_signed() && !recoverymode.get() {
         read_stdin();
     }
 
@@ -415,7 +422,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
     time_msg_at(c"BufEnter autocommands");
     setpcmark();
 
-    if params.edit_type == EDIT_QF as c_int {
+    if params.edit_type == EDIT_QF.cast_signed() {
         qf_jump_to_current();
         time_msg_at(c"jump to first error");
     }
@@ -460,11 +467,10 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
 
     if !restart_edit.get().is_nul() {
         // A `-c startinsert` and friends: push the key that gets there.
-        stuff_readbuf_char(Key::from_code(-(253 + ((KE_NOP as c_int) << 8))));
+        stuff_readbuf_char(Key::from_code(-(253 + (c_int::from(KE_NOP) << 8))));
     }
 
-    if cb_flags.get() & (kOptCbFlagUnnamed as c_int | kOptCbFlagUnnamedplus as c_int) as c_uint != 0
-    {
+    if cb_flags.get() & (kOptCbFlagUnnamed | kOptCbFlagUnnamedplus) != 0 {
         // Warm the clipboard provider so the first yank is not slow.
         eval_has_provider(c"clipboard", false);
     }

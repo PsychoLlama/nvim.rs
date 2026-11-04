@@ -9,6 +9,13 @@
 //! [`quit_on_swap_exists`].
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use crate::ex_cmds::EcmdFlags;
@@ -95,7 +102,7 @@ pub(crate) fn set_argf_var() {
 ///
 /// A quickfix list that cannot be built is fatal, with status 3.
 pub(crate) fn handle_quickfix(parm: &MainParams) {
-    if parm.edit_type != EDIT_QF as c_int {
+    if parm.edit_type != EDIT_QF.cast_signed() {
         return;
     }
     if let Some(ef) = parm.errorfile.as_deref() {
@@ -148,7 +155,7 @@ pub(crate) fn read_stdin() {
     let save_msg_didany = msg_didany.get();
 
     if !Buf::current().name.full().is_none() {
-        let Some(stdin_buf) = buflist_add_name(None, LineNr::ZERO, BLN_LISTED as c_int) else {
+        let Some(stdin_buf) = buflist_add_name(None, LineNr::ZERO, BLN_LISTED.cast_signed()) else {
             semsg!("Failed to create buffer for stdin");
             return;
         };
@@ -213,13 +220,16 @@ pub(crate) fn create_windows(parm: &mut MainParams) {
     if parm.window_count > 1 {
         // Leave the layout alone if a vimrc command already split it.
         if parm.window_layout == 0 {
-            parm.window_layout = WIN_HOR as c_int;
+            parm.window_layout = WIN_HOR.cast_signed();
         }
-        if parm.window_layout == WIN_TABS as c_int {
+        if parm.window_layout == WIN_TABS.cast_signed() {
             parm.window_count = make_tabpages(parm.window_count);
             time_msg_at(c"making tab pages");
         } else if first_win().next().is_none_or(|next| next.w_floating) {
-            let (count, vertical) = (parm.window_count, parm.window_layout == WIN_VER as c_int);
+            let (count, vertical) = (
+                parm.window_count,
+                parm.window_layout == WIN_VER.cast_signed(),
+            );
             parm.window_count = make_windows(count, vertical);
             time_msg_at(c"making windows");
         } else {
@@ -250,12 +260,12 @@ pub(crate) fn create_windows(parm: &mut MainParams) {
     while passes < MAX_WINDOW_PASSES {
         passes += 1;
         if dorewind {
-            if parm.window_layout == WIN_TABS as c_int {
+            if parm.window_layout == WIN_TABS.cast_signed() {
                 goto_tabpage(1);
             } else {
                 first_win().make_current();
             }
-        } else if parm.window_layout == WIN_TABS as c_int {
+        } else if parm.window_layout == WIN_TABS.cast_signed() {
             if TabPage::current().next().is_none() {
                 break;
             }
@@ -303,7 +313,7 @@ pub(crate) fn create_windows(parm: &mut MainParams) {
         }
     }
 
-    if parm.window_layout == WIN_TABS as c_int {
+    if parm.window_layout == WIN_TABS.cast_signed() {
         goto_tabpage(1);
     } else {
         first_win().make_current();
@@ -342,7 +352,7 @@ pub(crate) fn edit_buffers(parm: &MainParams) {
         }
 
         if advance {
-            if parm.window_layout == WIN_TABS as c_int {
+            if parm.window_layout == WIN_TABS.cast_signed() {
                 if TabPage::current().next().is_none() {
                     break;
                 }
@@ -397,7 +407,7 @@ pub(crate) fn edit_buffers(parm: &MainParams) {
         set_shortmess(&saved);
     }
 
-    if parm.window_layout == WIN_TABS as c_int {
+    if parm.window_layout == WIN_TABS.cast_signed() {
         goto_tabpage(1);
     }
     // The release order is load-bearing: entering the first non-preview
@@ -417,7 +427,7 @@ pub(crate) fn edit_buffers(parm: &MainParams) {
     drop(no_leave);
 
     time_msg_at(c"editing files in windows");
-    if parm.window_count > 1 && parm.window_layout != WIN_TABS as c_int {
+    if parm.window_count > 1 && parm.window_layout != WIN_TABS.cast_signed() {
         win_equal(Win::current_or_none(), false, 'b' as c_int);
     }
 }

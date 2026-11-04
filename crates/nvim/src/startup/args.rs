@@ -12,6 +12,13 @@
 //! rest of its own word says so.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::memory::XString;
 use crate::semsg;
@@ -107,7 +114,9 @@ pub(crate) fn get_number_arg(word: &[u8], idx: &mut usize, def: c_int) -> c_int 
         n.saturating_mul(10).saturating_add(i64::from(d - b'0'))
     });
     *idx += digits;
-    value as c_int
+    // The truncation to `int`: the low four bytes.
+    let [a, b, c, d, ..] = value.to_le_bytes();
+    c_int::from_le_bytes([a, b, c, d])
 }
 
 /// Whether standard input should become a buffer.
@@ -121,7 +130,7 @@ pub(crate) fn edit_stdin(parm: &MainParams) -> bool {
         && !(embedded_mode.get() && stdin_fd.get() <= 0)
         && (!exmode_active.get() || parm.input_is_text)
         && !stdin_isatty.get()
-        && parm.edit_type <= EDIT_STDIN as c_int
+        && parm.edit_type <= EDIT_STDIN.cast_signed()
         && parm.scriptin.is_none();
     parm.dash_for_stdin || implicit
 }
@@ -206,7 +215,7 @@ impl<'a> Scan<'a> {
 
     /// Claim the one "what is this process editing" slot for `-t` or `-q`.
     fn claim_edit_type(&mut self, kind: c_int) {
-        if self.parm.edit_type != EDIT_NONE as c_int {
+        if self.parm.edit_type != EDIT_NONE.cast_signed() {
             mainerr(err_too_many_args, Some(self.arg()), None);
         }
         self.parm.edit_type = kind;
@@ -233,7 +242,9 @@ impl<'a> Scan<'a> {
             let data = api_metadata_raw();
             let written = write_bytes(std::io::stdout().as_fd(), data.as_bytes(), false);
             if written < 0 {
-                let why = msg_cstr(os_strerror(written as c_int));
+                let why = msg_cstr(os_strerror(
+                    c_int::try_from(written).expect("a libuv error code"),
+                ));
                 semsg!("E5420: Failed to write to file: {why}");
             }
             os_exit(0);
@@ -296,11 +307,11 @@ impl<'a> Scan<'a> {
                     silent_mode.set(true);
                     self.parm.no_swap_file = true;
                 } else {
-                    if self.parm.edit_type > EDIT_STDIN as c_int {
+                    if self.parm.edit_type > EDIT_STDIN.cast_signed() {
                         mainerr(err_too_many_args, Some(self.arg()), None);
                     }
                     self.parm.dash_for_stdin = true;
-                    self.parm.edit_type = EDIT_STDIN as c_int;
+                    self.parm.edit_type = EDIT_STDIN.cast_signed();
                 }
                 self.idx = None;
             }
@@ -350,13 +361,13 @@ impl<'a> Scan<'a> {
                 // A count of 0 means one window per file.
                 self.parm.window_count = self.number_arg(0);
                 self.parm.window_layout = match c {
-                    b'p' => WIN_TABS as c_int,
-                    b'o' => WIN_HOR as c_int,
-                    _ => WIN_VER as c_int,
+                    b'p' => WIN_TABS.cast_signed(),
+                    b'o' => WIN_HOR.cast_signed(),
+                    _ => WIN_VER.cast_signed(),
                 };
             }
             b'q' => {
-                self.claim_edit_type(EDIT_QF as c_int);
+                self.claim_edit_type(EDIT_QF.cast_signed());
                 if self.has_tail() {
                     // `-q{errorfile}`
                     self.parm.errorfile = Some(self.tail().to_owned());
@@ -386,7 +397,7 @@ impl<'a> Scan<'a> {
                 }
             }
             b't' => {
-                self.claim_edit_type(EDIT_TAG as c_int);
+                self.claim_edit_type(EDIT_TAG.cast_signed());
                 if self.has_tail() {
                     // `-t{tag}`
                     self.parm.tag = Some(self.tail().to_owned());
@@ -547,10 +558,10 @@ impl<'a> Scan<'a> {
         self.idx = None;
 
         // Only one kind of editing at a time.
-        if self.parm.edit_type > EDIT_STDIN as c_int {
+        if self.parm.edit_type > EDIT_STDIN.cast_signed() {
             mainerr(err_too_many_args, Some(self.arg()), None);
         }
-        self.parm.edit_type = EDIT_FILE as c_int;
+        self.parm.edit_type = EDIT_FILE.cast_signed();
 
         // The global argument list takes the copy made here.
         let mut path = XString::from_cstr(self.arg());
@@ -685,9 +696,9 @@ pub(crate) fn init_path(exename: &CStr) {
 pub(crate) fn set_window_layout(parm: &mut MainParams) {
     if parm.diff_mode && parm.window_layout == 0 {
         parm.window_layout = if diffopt_horizontal() {
-            WIN_HOR as c_int
+            WIN_HOR.cast_signed()
         } else {
-            WIN_VER as c_int
+            WIN_VER.cast_signed()
         };
     }
 }

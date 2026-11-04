@@ -27,6 +27,13 @@
 //! [`state`]: crate::state::mode
 //! [`message`]: crate::message::state
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -119,7 +126,7 @@ impl MainParams {
             pre_commands: Vec::new(),
             lua_script: None,
             script_args_at: -1,
-            edit_type: EDIT_NONE as c_int,
+            edit_type: EDIT_NONE.cast_signed(),
             tag: None,
             errorfile: None,
             input_is_text: false,
