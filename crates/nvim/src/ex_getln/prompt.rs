@@ -18,7 +18,7 @@ use super::*;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::memory::ThinCString;
-use crate::types::{ExArgt, ExpandContext, NUL, VAR_DICT};
+use crate::types::{ExArgt, ExpandContext, VAR_DICT};
 
 /// Read the script body of a command that takes either `:command script` or a
 /// heredoc:
@@ -175,11 +175,7 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
     let save_ex_normal_busy = ex_normal_busy.get();
     ex_normal_busy.set(0);
     let line = getcmdline_prompt(
-        if secret {
-            NUL
-        } else {
-            '@' as ::core::ffi::c_int
-        },
+        Some(if secret { 0 } else { b'@' }),
         Some(p),
         get_echo_hl_id(),
         xp_type,

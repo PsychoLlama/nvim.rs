@@ -7,6 +7,13 @@
 //! caller outside this module uses.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -22,9 +29,7 @@ use crate::message::emsg;
 use crate::option::vars::{P_STL, P_TAL, P_WBR};
 use crate::optionstr::OptString;
 use crate::state::Step;
-use crate::types::{
-    BackslashEscape, ExpandContext, NUL, OptionSetFlags, kBoolVarFalse, kBoolVarTrue,
-};
+use crate::types::{BackslashEscape, ExpandContext, OptionSetFlags, kBoolVarFalse, kBoolVarTrue};
 use crate::winlayer::windows as windows_in_curtab;
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
@@ -36,7 +41,7 @@ impl CommandLineState {
     /// C's `nextwild(&s->xpc, mode, options, s->firstc != '@')`, which every
     /// wildmenu key spells with the same two trailing arguments.
     pub(crate) fn next_wild(&self, mode: WildMode, options: WildOpts) -> ::core::ffi::c_int {
-        let escape = self.firstc != '@' as ::core::ffi::c_int;
+        let escape = self.firstc != b'@';
         Cc::current().with_completion(|xpc| nextwild(xpc, mode, options, escape))
     }
 }
@@ -76,7 +81,7 @@ fn command_line_state_init() -> CommandLineState {
         firstc: 0,
         count: 0,
         indent: 0,
-        c: 0,
+        c: Key::NUL,
         gotesc: false,
         do_abbr: false,
         lookfor: None,
@@ -103,17 +108,13 @@ fn command_line_state_init() -> CommandLineState {
 }
 
 /// Initialize the current command-line info.
-pub(crate) fn init_ccline(firstc: ::core::ffi::c_int, indent: ::core::ffi::c_int) {
+pub(crate) fn init_ccline(firstc: u8, indent: ::core::ffi::c_int) {
     let mut cc = Cc::current();
-    cc.overstrike = 0; // always start in insert mode
+    cc.overstrike = false; // always start in insert mode
     debug_assert!(indent >= 0);
 
     // Set some variables for redrawcmd().
-    cc.cmdfirstc = if firstc == '@' as ::core::ffi::c_int {
-        0
-    } else {
-        firstc
-    };
+    cc.cmdfirstc = if firstc == b'@' { 0 } else { firstc };
     cc.cmdindent = if firstc > 0 { indent } else { 0 };
 
     // Allocate the initial command-line buffer.
@@ -124,7 +125,7 @@ pub(crate) fn init_ccline(firstc: ::core::ffi::c_int, indent: ::core::ffi::c_int
     sb_text_start_cmdline();
 
     // Autoindent for :insert and :append.
-    if firstc <= 0 {
+    if firstc == 0 {
         cc.cmdbuff.fill(usize::try_from(indent).unwrap_or(0), b' ');
         cc.cmdpos = indent;
         cc.cmdspos = indent;
@@ -136,7 +137,7 @@ pub(crate) fn ui_ext_cmdline_hide(abort: bool) {
         cmdline_was_last_drawn.set(false);
         let mut cc = Cc::current();
         cc.redraw_state = kCmdRedrawNone;
-        ui_call_cmdline_hide(cc.level as Integer, abort as Boolean);
+        ui_call_cmdline_hide(Integer::from(cc.level), abort);
     }
 }
 
@@ -149,7 +150,7 @@ pub(crate) fn cmdline_event_dict(save_v_event: &mut SaveVEvent, cmdtype: &CStr) 
     let _ = dict.edit().add_str(b"cmdtype", Some(cmdtype));
     let _ = dict
         .edit()
-        .add_number(b"cmdlevel", Cc::current().level as VarNumber);
+        .add_number(b"cmdlevel", VarNumber::from(Cc::current().level));
     dict.edit().set_keys_readonly();
     dict
 }
@@ -159,8 +160,11 @@ pub(crate) fn cmdline_event_dict(save_v_event: &mut SaveVEvent, cmdtype: &CStr) 
 /// `count` is only used for incremental search, `indent` is the indent for
 /// inside conditionals, and `clear_ccline` asks for `ccline` to be cleared
 /// first.
+///
+/// `firstc` is the character the line starts with (0 for none), or `None`
+/// for a prompt with none that CTRL-C ends: `inputlist()`'s number prompt.
 pub(crate) fn command_line_enter(
-    firstc: ::core::ffi::c_int,
+    firstc: Option<u8>,
     count: ::core::ffi::c_int,
     indent: ::core::ffi::c_int,
     clear_ccline: bool,
@@ -172,7 +176,8 @@ pub(crate) fn command_line_enter(
     let save_cmdpreview = cmdpreview.get();
     cmdpreview.set(false);
     let mut state = CommandLineState {
-        firstc,
+        firstc: firstc.unwrap_or(0),
+        break_ctrl_c: firstc.is_none(),
         count,
         indent,
         save_msg_scroll: msg_scroll.get(),
@@ -199,11 +204,6 @@ pub(crate) fn command_line_enter(
         ccline.set(CMDLINE_INFO_INIT);
     }
 
-    if s.firstc == -1 {
-        s.firstc = NUL;
-        s.break_ctrl_c = true;
-    }
-
     init_ccline(s.firstc, s.indent);
     debug_assert!(cc.in_use());
     let prompt_id = last_prompt_id.get();
@@ -224,9 +224,8 @@ pub(crate) fn command_line_enter(
 
         cmdmsg_rl.set(
             Win::current().w_onebuf_opt.wo_rl != 0
-                && Win::current().w_onebuf_opt.wo_rlc.first_byte() as ::core::ffi::c_int
-                    == 's' as ::core::ffi::c_int
-                && (s.firstc == '/' as ::core::ffi::c_int || s.firstc == '?' as ::core::ffi::c_int),
+                && Win::current().w_onebuf_opt.wo_rlc.first_byte() == b's'
+                && (s.firstc == b'/' || s.firstc == b'?'),
         );
 
         msg_grid_validate();
@@ -242,7 +241,7 @@ pub(crate) fn command_line_enter(
         xpc.context = ExpandContext::Nothing;
         xpc.backslash = BackslashEscape::NONE;
         xpc.shell = false;
-        if input_fn != 0 {
+        if input_fn {
             xpc.context = xp_context;
             xpc.pattern = 0;
             xpc.arg = xp_arg;
@@ -254,30 +253,23 @@ pub(crate) fn command_line_enter(
 
         State.set(MODE_CMDLINE);
 
-        if s.firstc == '/' as ::core::ffi::c_int
-            || s.firstc == '?' as ::core::ffi::c_int
-            || s.firstc == '@' as ::core::ffi::c_int
-        {
+        if s.firstc == b'/' || s.firstc == b'?' || s.firstc == b'@' {
             // Use ":lmap" mappings for the search pattern and input().
-            let which = if Buf::current().b_p_imsearch == B_IMODE_USE_INSERT as OptInt {
+            let which = if Buf::current().b_p_imsearch == OptInt::from(B_IMODE_USE_INSERT) {
                 ImOption::Insert
             } else {
                 ImOption::Search
             };
             s.b_im = Some((which, Buf::current().id()));
-            if im_value(Buf::current(), which) == B_IMODE_LMAP as OptInt {
+            if im_value(Buf::current(), which) == OptInt::from(B_IMODE_LMAP) {
                 State.set(State.get() | MODE_LANGMAP);
             }
         }
 
         setmouse();
 
-        s.cmdline_type = if firstc > 0 {
-            firstc
-        } else {
-            '-' as ::core::ffi::c_int
-        };
-        firstcbuf[0] = s.cmdline_type as u8;
+        s.cmdline_type = if s.firstc > 0 { s.firstc } else { b'-' };
+        firstcbuf[0] = s.cmdline_type;
 
         if has_event(AutoEvent::CmdlineEnter) {
             let mut save_v_event: SaveVEvent = SAVE_V_EVENT_INIT;
@@ -294,7 +286,7 @@ pub(crate) fn command_line_enter(
 
             if err.is_set() {
                 if !ui_has(kUIMessages) {
-                    msg_putchar('\n' as ::core::ffi::c_int);
+                    msg_putchar(::core::ffi::c_int::from(b'\n'));
                 }
                 msg_scroll.set(1);
                 msg_str_hl(err.message_or_empty(), HLF_E, true);
@@ -307,7 +299,7 @@ pub(crate) fn command_line_enter(
 
         init_history();
         s.hiscnt = get_hislen(); // an impossible history value
-        s.histype = hist_char2type(s.firstc) as ::core::ffi::c_int;
+        s.histype = hist_char2type(::core::ffi::c_int::from(s.firstc));
         reset_digraph(); // init digraph typeahead
 
         // If something above caused an error, reset the flags: we do
@@ -323,9 +315,9 @@ pub(crate) fn command_line_enter(
             let mut found_one = false;
             for mut wp in windows_in_curtab() {
                 if P_STL.first_byte() != 0
-                    || wp.w_onebuf_opt.wo_stl.first_byte() as ::core::ffi::c_int != NUL
+                    || wp.w_onebuf_opt.wo_stl.first_byte() != 0
                     || P_WBR.first_byte() != 0
-                    || wp.w_onebuf_opt.wo_wbr.first_byte() as ::core::ffi::c_int != NUL
+                    || wp.w_onebuf_opt.wo_wbr.first_byte() != 0
                 {
                     wp.w_redr_status = true;
                     found_one = true;
@@ -407,7 +399,7 @@ pub(crate) fn command_line_enter(
             // it was typed).
             if s.histype != HIST_INVALID
                 && !cc.is_empty()
-                && s.firstc != NUL
+                && s.firstc != 0
                 && (s.some_key_typed || s.histype == HIST_SEARCH)
             {
                 add_to_history(
@@ -415,12 +407,12 @@ pub(crate) fn command_line_enter(
                     cc.bytes(),
                     true,
                     if s.histype == HIST_SEARCH {
-                        s.firstc as u8
+                        s.firstc
                     } else {
-                        NUL as u8
+                        0
                     },
                 );
-                if s.firstc == ':' as ::core::ffi::c_int {
+                if s.firstc == b':' {
                     new_last_cmdline.set(Some(XString::from_bytes(cstr::until_nul(cc.bytes()))));
                 }
             }
@@ -442,7 +434,7 @@ pub(crate) fn command_line_enter(
 
         if err.is_set() {
             if !ui_has(kUIMessages) {
-                msg_putchar('\n' as ::core::ffi::c_int);
+                msg_putchar(::core::ffi::c_int::from(b'\n'));
             }
             emsg(err.message_or_empty());
             did_emsg.set(0);
@@ -537,7 +529,7 @@ pub(crate) fn command_line_check(s: &mut CommandLineState) -> Step {
     }
 
     // Defer the screen update to avoid pum flicker during wildtrigger().
-    if s.c == SpecialKey::Wild.code() && s.firstc != '@' as ::core::ffi::c_int {
+    if s.c == SpecialKey::Wild && s.firstc != b'@' {
         s.skip_pum_redraw = true;
     }
 
@@ -575,7 +567,7 @@ pub(crate) fn abandon_cmdline() {
 ///
 /// Careful: this can be called recursively.
 pub fn getcmdline(
-    firstc: ::core::ffi::c_int,
+    firstc: Option<u8>,
     count: ::core::ffi::c_int,
     indent: ::core::ffi::c_int,
     _do_concat: bool,
@@ -585,9 +577,9 @@ pub fn getcmdline(
 
 /// [`getcmdline_prompt`] with no prompt text, completion, colouring or mouse
 /// report: the line typed, owned, or `None` when it was abandoned.
-pub(crate) fn getcmdline_bare(firstc: ::core::ffi::c_int) -> Option<XString> {
+pub(crate) fn getcmdline_bare(firstc: u8) -> Option<XString> {
     getcmdline_prompt(
-        firstc,
+        Some(firstc),
         None,
         0,
         ExpandContext::Nothing,
@@ -603,7 +595,8 @@ pub(crate) fn getcmdline_bare(firstc: ::core::ffi::c_int) -> Option<XString> {
 /// Prepared to be called recursively from [`getcmdline`] — `f_input()` does
 /// exactly that when evaluating an expression from `<C-r>=`.
 ///
-/// `firstc` is the prompt type (`@` for `input()`, `>` for debug), `prompt`
+/// `firstc` is the prompt type (`@` for `input()`, `>` for debug; `None`
+/// for a number prompt CTRL-C ends, see [`command_line_enter`]), `prompt`
 /// what is displayed before the user text, `hl_id` the prompt highlight,
 /// `xp_context`/`xp_arg` the completion, `highlight_callback` the colouring
 /// of the user's input, `one_key` returns after a single key press (button
@@ -617,7 +610,7 @@ pub(crate) fn getcmdline_bare(firstc: ::core::ffi::c_int) -> Option<XString> {
 /// for the call, and it is released when the prompt returns.
 #[allow(clippy::too_many_arguments)]
 pub fn getcmdline_prompt(
-    firstc: ::core::ffi::c_int,
+    firstc: Option<u8>,
     prompt: Option<&CStr>,
     hl_id: ::core::ffi::c_int,
     xp_context: ExpandContext,
@@ -644,7 +637,7 @@ pub fn getcmdline_prompt(
     cc.hl_id = hl_id;
     cc.xp_context = xp_context;
     cc.xp_arg = xp_arg.map(XString::from_cstr);
-    cc.input_fn = (firstc == '@' as ::core::ffi::c_int) as ::core::ffi::c_int;
+    cc.input_fn = firstc == Some(b'@');
     cc.highlight_callback = highlight_callback;
     cc.one_key = one_key;
     cc.mouse_prompt = mouse_used.is_some();
@@ -676,7 +669,7 @@ pub fn getcmdline_prompt(
 /// [`getcmdline_prompt`] for a prompt the caller holds, with no completion
 /// argument and no mouse: the line typed, or `None`.
 pub(crate) fn getcmdline_prompt_text(
-    firstc: ::core::ffi::c_int,
+    firstc: Option<u8>,
     prompt: &::core::ffi::CStr,
     hl_id: ::core::ffi::c_int,
     xp_context: ExpandContext,

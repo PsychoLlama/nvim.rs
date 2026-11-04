@@ -459,7 +459,7 @@ pub(crate) fn nv_down(cmd_arg: &mut CmdArg) {
             return;
         }
         if cmdwin_type.get() != 0 {
-            cmdwin_result.set(Key::CAR.code());
+            cmdwin_result.set(Key::CAR);
             return;
         }
         if buf_is_prompt(current_buf())

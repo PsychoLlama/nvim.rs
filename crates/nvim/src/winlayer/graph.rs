@@ -42,7 +42,7 @@ use crate::memory::XString;
 use crate::optionstr::BUF_STRING_OPTIONS;
 use crate::registry::id_map;
 use crate::types::MemLine;
-use crate::types::{BufName, Buffer, Handle, MarkTree, Tabpage, Window};
+use crate::types::{BufName, Buffer, Handle, Key, MarkTree, Tabpage, Window};
 use core::ffi::c_int;
 use core::mem::MaybeUninit;
 
@@ -73,8 +73,10 @@ pub(crate) static lastbuf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
 /// shape: only `Buf::is_current` and [`switch_buffer`] read it.
 pub(super) static curbuf: GlobalCell<*mut Buffer> =
     GlobalCell::new(::core::ptr::null_mut::<Buffer>());
-pub(crate) static cmdwin_type: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub(crate) static cmdwin_result: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+/// The command-line window's type: the first character of the line it
+/// edits (`:`, `/`, `?`, ...), 0 when there is no such window.
+pub(crate) static cmdwin_type: GlobalCell<u8> = GlobalCell::new(0);
+pub(crate) static cmdwin_result: GlobalCell<Key> = GlobalCell::new(Key::NUL);
 pub(crate) static cmdwin_level: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub(crate) static cmdwin_buf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
 pub(crate) static cmdwin_win: GlobalCell<Option<WinId>> = GlobalCell::new(None);

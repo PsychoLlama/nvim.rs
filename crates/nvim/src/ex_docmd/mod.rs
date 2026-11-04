@@ -169,7 +169,7 @@ crate::flag_set! {
 /// end of the input, or when the command was given no source.
 pub(crate) fn exarg_getline(
     excmd: &mut ExArg,
-    c: c_int,
+    c: Option<u8>,
     indent: c_int,
     do_concat: bool,
 ) -> Option<XString> {

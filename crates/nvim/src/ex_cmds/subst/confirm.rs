@@ -100,9 +100,9 @@ fn prompt_exmode(st: &Sub) -> c_int {
     prompt.resize(ec.max(ColNr::ZERO).as_usize() + 1, b'^');
     let prompt = XString::from_vec(prompt);
     let resp = getcmdline_prompt_text(
-        -1 as c_int,
+        None,
         prompt.as_cstr(),
-        0 as c_int,
+        0,
         ExpandContext::Nothing,
         no_callback(),
         false,

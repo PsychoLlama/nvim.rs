@@ -118,7 +118,7 @@ pub const BACKWARD: Direction = -1;
 pub const FORWARD: Direction = 1;
 pub const MAGIC_ALL: Magic = 4;
 pub const MAGIC_ON: Magic = 3;
-pub const HIST_SEARCH: ::core::ffi::c_int = 1;
+pub(crate) use crate::cmdhist::HIST_SEARCH;
 pub const kMTLineWise: MotionType = 1;
 pub const kEqualFiles: FileComparison = 1;
 pub const CHECK_PATH: ::core::ffi::c_uint = 3;

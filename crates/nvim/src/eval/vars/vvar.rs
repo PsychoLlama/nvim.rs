@@ -29,7 +29,7 @@ use core::mem;
 use super::*;
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::tv_dict_free_contents;
-use crate::types::{HashTab, SaveVEvent};
+use crate::types::{HashTab, Key, SaveVEvent};
 
 /// The `v:` dictionary, built on first use.
 pub(crate) fn vimvar_dict() -> DictRef {
@@ -323,10 +323,10 @@ pub fn set_vim_var_special(idx: Vv, val: SpecialVarValue) {
     replace_vimvar(idx, TypVal::Special(val));
 }
 
-/// Set `v:char` to the character `c`.
-pub fn set_vim_var_char(c: c_int) {
+/// Set `v:char` to the character `c` types.
+pub fn set_vim_var_char(c: Key) {
     let mut buf = [0u8; 7];
-    let buflen = crate::mbyte::encode_char(c, &mut buf);
+    let buflen = crate::mbyte::encode_char(c.code(), &mut buf);
     set_vim_var_string(Vv::Char, Some(&buf[..buflen]));
 }
 

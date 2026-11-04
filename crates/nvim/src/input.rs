@@ -202,7 +202,7 @@ pub(crate) fn prompt_for_input(
     // Don't map prompt input, but do allow special keys.
     let raw_key = Keys::unmapped_with_codes();
     let resp = getcmdline_prompt(
-        -1,
+        None,
         Some(prompt),
         hl_id,
         ExpandContext::Nothing,

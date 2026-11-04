@@ -336,7 +336,7 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
         }
         // The search goes into the history as if it had been typed.
         init_history();
-        add_to_history(HIST_SEARCH as c_int, &out, true, b'\0');
+        add_to_history(HIST_SEARCH, &out, true, 0);
         let dir = if cmdchar.is('*') { '/' } else { '?' } as c_int;
         normal_search(cmd_arg, dir, &out, 0, None);
     } else {

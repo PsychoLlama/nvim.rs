@@ -212,6 +212,6 @@ pub fn f_win_gettype(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 /// the empty string when it is not open.
 pub fn f_getcmdwintype(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_empty(VAR_STRING);
-    let kind = cmdwin_type.get().to_le_bytes()[0];
+    let kind = cmdwin_type.get();
     result.write_string(Some(ThinCString::from_bytes(&[kind])));
 }

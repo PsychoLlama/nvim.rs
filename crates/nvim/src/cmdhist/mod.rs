@@ -139,7 +139,7 @@ fn get_histtype(name: &[u8], return_default: bool) -> HistoryType {
             return HIST_DEFAULT;
         }
         // SAFETY: reads the cmdline state global; main thread only.
-        return hist_char2type(get_cmdline_firstc());
+        return hist_char2type(c_int::from(get_cmdline_firstc()));
     }
     for (i, hist_name) in HISTORY_NAMES.iter().enumerate() {
         let hist_name = &hist_name[..hist_name.len() - 1]; // drop the NUL

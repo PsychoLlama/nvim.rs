@@ -223,7 +223,7 @@ pub(crate) fn eval_map_expr(expr: &MapExpr, c: Key) -> Option<MapStr> {
     // Forbid changing text or using ":normal", which rules out most of the bad
     // side effects, and restore the cursor position afterwards.
     let locked = Lock::expr_map();
-    set_vim_var_char(c.code()); // set v:char to the typed character
+    set_vim_var_char(c); // set v:char to the typed character
     let save_cursor = Win::current().w_cursor;
     let save_msg_col = msg_col.get();
     let save_msg_row = msg_row.get();

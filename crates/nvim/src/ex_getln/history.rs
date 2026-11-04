@@ -17,8 +17,8 @@
 use super::*;
 use crate::charset::{Str2NrBases, skip, str2nr_scan};
 use crate::cstr;
-use crate::keycodes::{Ctrl_N, SpecialKey};
-use crate::types::{ExpandContext, Failed, NUL};
+use crate::keycodes::SpecialKey;
+use crate::types::{ExpandContext, Failed};
 
 /// Step `s->hiscnt` one entry back (or forward, with `next_match`) through
 /// the history, skipping entries that do not start with what was typed.
@@ -55,7 +55,7 @@ pub(crate) fn command_line_next_histidx(s: &mut CommandLineState, next_match: bo
             s.hiscnt = s.save_hiscnt;
             break;
         };
-        if (s.c != SpecialKey::Up.code() && s.c != SpecialKey::Down.code())
+        if (s.c != SpecialKey::Up && s.c != SpecialKey::Down)
             || s.hiscnt == s.save_hiscnt
             || entry
                 .text
@@ -70,7 +70,7 @@ pub(crate) fn command_line_next_histidx(s: &mut CommandLineState, next_match: bo
 /// Handle Up, Down, PageUp, PageDown, CTRL-N and CTRL-P on the command line.
 pub(crate) fn command_line_browse_history(s: &mut CommandLineState) -> KeyOutcome {
     let mut cc = Cc::current();
-    if s.histype == HIST_INVALID || get_hislen() == 0 || s.firstc == NUL {
+    if s.histype == HIST_INVALID || get_hislen() == 0 || s.firstc == 0 {
         return KeyOutcome::NotChanged; // no history
     }
 
@@ -84,11 +84,11 @@ pub(crate) fn command_line_browse_history(s: &mut CommandLineState) -> KeyOutcom
         s.lookfor = Some(cstr::until_nul(&line[..upto]).to_vec());
     }
 
-    let next_match = s.c == SpecialKey::Down.code()
-        || s.c == SpecialKey::SDown.code()
-        || s.c == Ctrl_N
-        || s.c == SpecialKey::Pagedown.code()
-        || s.c == SpecialKey::Kpagedown.code();
+    let next_match = s.c == SpecialKey::Down
+        || s.c == SpecialKey::SDown
+        || s.c == Key::CTRL_N
+        || s.c == SpecialKey::Pagedown
+        || s.c == SpecialKey::Kpagedown;
     command_line_next_histidx(s, next_match);
 
     if s.hiscnt == s.save_hiscnt {
@@ -100,27 +100,24 @@ pub(crate) fn command_line_browse_history(s: &mut CommandLineState) -> KeyOutcom
     // separator it was added under when it is a history entry.
     dealloc_cmdbuff();
     completion_mut(|xpc| xpc.context = ExpandContext::Nothing);
-    let (text, hist_sep): (Vec<u8>, Option<::core::ffi::c_int>) = if s.hiscnt == get_hislen() {
+    let (text, hist_sep): (Vec<u8>, Option<u8>) = if s.hiscnt == get_hislen() {
         // Back to the old one.
         (s.lookfor.clone().unwrap_or_default(), None)
     } else {
         let entry =
             hist_entry_text(s.histype, s.hiscnt).expect("the walk stopped on an occupied slot");
-        (
-            entry.text.to_bytes().to_vec(),
-            Some(::core::ffi::c_int::from(entry.sep)),
-        )
+        (entry.text.to_bytes().to_vec(), Some(entry.sep))
     };
 
-    let old_firstc = hist_sep.unwrap_or(NUL);
+    let old_firstc = hist_sep.unwrap_or(0);
     let line = if s.histype == HIST_SEARCH && hist_sep.is_some() && old_firstc != s.firstc {
         // Correct for the separator character used when the history entry
         // was added versus the one used now.
-        let firstc = s.firstc.to_le_bytes()[0];
+        let firstc = s.firstc;
         let unescaped = |j: usize| j == 0 || text[j - 1] != b'\\';
         let mut line = Vec::with_capacity(text.len() + 1);
         for (j, &b) in text.iter().enumerate() {
-            if ::core::ffi::c_int::from(b) == old_firstc && unescaped(j) {
+            if b == old_firstc && unescaped(j) {
                 // Replace the old separator with the new one, unless it is
                 // escaped.
                 line.push(firstc);

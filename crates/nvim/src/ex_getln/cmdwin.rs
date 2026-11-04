@@ -19,9 +19,8 @@ use crate::buffer::{BufRef, current_buf};
 use crate::cstr;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_set_tab};
 use crate::guard::Allow;
-use crate::keycodes::{Ctrl_C, SpecialKey};
-use crate::types::Key;
-use crate::types::{CmdModFlags, NUL, OptError, OptionSetFlags};
+use crate::keycodes::SpecialKey;
+use crate::types::{CmdModFlags, OptError, OptionSetFlags};
 use crate::window::valid_win;
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
@@ -100,13 +99,14 @@ pub fn did_set_cedit(_args: &mut OptSet) -> Result<(), OptError> {
 /// is initialised, which is the whole of the precondition.
 pub(crate) fn derive_cedit_key() -> Result<(), OptError> {
     if p_cedit(CStr::is_empty) {
-        cedit_key.set(-1);
+        cedit_key.set(None);
     } else {
+        // The option names the key the way `'wildchar'` does: by its code.
         let n = p_cedit(|value| string_to_key(value.to_bytes()));
         if n == 0 || vim_isprintc(n) {
             return Err(e_invarg.into());
         }
-        cedit_key.set(n);
+        cedit_key.set(Some(Key::from_code(n)));
     }
     Ok(())
 }
@@ -114,9 +114,9 @@ pub(crate) fn derive_cedit_key() -> Result<(), OptError> {
 /// Open a window on the current command line and its history, and edit in it.
 ///
 /// Returns when the window is closed, with `CAR` if the command is to be
-/// executed, `Ctrl_C` if it is to be abandoned, and `K_IGNORE` if editing
+/// executed, `CTRL-C` if it is to be abandoned, and `<Ignore>` if editing
 /// continues.
-pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
+pub(crate) fn open_cmdwin() -> Key {
     let mut bufref = BufRef::NONE;
     let old_curwin = Win::current().id();
     // Uninitialised in the C; `win_size_save` below fills it.
@@ -129,7 +129,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
     // recursively, and can't do it when typing a password.
     if text_or_buf_locked() || cmdwin_type.get() != 0 || cmdline_star.get() > 0 {
         beep_flush();
-        return SpecialKey::Ignore.code();
+        return Key::from(SpecialKey::Ignore);
     }
 
     let old_curbuf = BufRef::of_opt(current_buf());
@@ -153,7 +153,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
     .is_err()
     {
         beep_flush();
-        return SpecialKey::Ignore.code();
+        return Key::from(SpecialKey::Ignore);
     }
     // win_split() autocommands may have messed with the old window or
     // buffer. Treat it as abandoning this command line.
@@ -162,7 +162,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
         || !old_curbuf.valid()
     {
         beep_flush();
-        return Ctrl_C;
+        return Key::CTRL_C;
     }
     // Don't let quitting the More prompt make this fail.
     got_int.set(false);
@@ -208,7 +208,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
         cmdwin_win.set(None);
         cmdwin_old_curwin.set(None);
         beep_flush();
-        return Ctrl_C;
+        return Key::CTRL_C;
     }
     cmdwin_buf.set(Some(Buf::current().id()));
 
@@ -226,7 +226,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
     // Showing the prompt may have set need_wait_return; reset it.
     need_wait_return.set(false);
 
-    let histtype = hist_char2type(cmdwin_type.get());
+    let histtype = hist_char2type(::core::ffi::c_int::from(cmdwin_type.get()));
     if histtype == HIST_CMD || histtype == HIST_DEBUG {
         if p_wc() == OptInt::from(TAB) {
             add_map(b"<Tab>", b"<C-X><C-V>", MODE_INSERT, true);
@@ -288,7 +288,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
     clear_showcmd();
 
     // Reset here so a CmdwinEnter autocommand can set it.
-    cmdwin_result.set(0);
+    cmdwin_result.set(Key::NUL);
 
     trigger_cmd_autocmd(cmdwin_type.get(), AutoEvent::CmdwinEnter);
     if !restart_edit.get().is_nul() {
@@ -323,21 +323,19 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
     if valid_win(old_curwin).is_none_or(|w| !old_curbuf.is(w.buffer_or_none()))
         || !old_curbuf.valid()
     {
-        cmdwin_result.set(Ctrl_C);
+        cmdwin_result.set(Key::CTRL_C);
         emsg(gettext(e_active_window_or_buffer_changed_or_deleted));
     } else {
         // Autocmds may abort script processing.
-        if aborting() && cmdwin_result.get() != SpecialKey::Ignore.code() {
-            cmdwin_result.set(Ctrl_C);
+        if aborting() && cmdwin_result.get() != SpecialKey::Ignore {
+            cmdwin_result.set(Key::CTRL_C);
         }
         // Set the new command line from the cmdline buffer.
         dealloc_cmdbuff();
 
-        if cmdwin_result.get() == SpecialKey::Xf1.code()
-            || cmdwin_result.get() == SpecialKey::Xf2.code()
-        {
+        if cmdwin_result.get() == SpecialKey::Xf1 || cmdwin_result.get() == SpecialKey::Xf2 {
             // ":qa[!]" was typed.
-            let p = if cmdwin_result.get() == SpecialKey::Xf2.code() {
+            let p = if cmdwin_result.get() == SpecialKey::Xf2 {
                 c"qa"
             } else {
                 c"qa!"
@@ -346,14 +344,14 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
             if histtype == HIST_CMD {
                 // Execute the command directly.
                 Cc::current().set_text(p.to_bytes());
-                cmdwin_result.set(CAR);
+                cmdwin_result.set(Key::CAR);
             } else {
                 // First need to cancel what we were doing.
                 stuff_readbuf_char(Key::ascii(b':'));
                 stuff_readbuf(p.to_bytes());
                 stuff_readbuf_char(Key::CAR);
             }
-        } else if cmdwin_result.get() == Ctrl_C {
+        } else if cmdwin_result.get() == Key::CTRL_C {
             // ":q" or ":close": don't execute any command and don't
             // modify the cmdline window.
             Cc::current().close();
@@ -366,7 +364,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
         if !cc.in_use() {
             cc.set_text(&[]);
             cc.cmdpos = 0;
-            cmdwin_result.set(Ctrl_C);
+            cmdwin_result.set(Key::CTRL_C);
         } else {
             cc.cmdpos = Win::current().w_cursor.col.get();
             // If the cursor is on the last character, it probably should
@@ -374,7 +372,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
             if cc.cmdpos == cc.len() - 1 || cc.cmdpos > cc.len() {
                 cc.cmdpos = cc.len();
             }
-            if cmdwin_result.get() == SpecialKey::Ignore.code() {
+            if cmdwin_result.get() == SpecialKey::Ignore {
                 cc.cmdspos = cmd_screencol(cc.cmdpos);
                 redrawcmd();
             }
@@ -422,7 +420,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
 
 /// True when in the cmdwin, and not editing the command line.
 pub fn is_in_cmdwin() -> bool {
-    cmdwin_type.get() != 0 && get_cmdline_type() == NUL
+    cmdwin_type.get() != 0 && get_cmdline_type() == 0
 }
 
 /// C's `close_buffer(NULL, buf, DOBUF_WIPE, false, false)`: wipe the command

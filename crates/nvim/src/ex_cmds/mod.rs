@@ -182,7 +182,7 @@ pub const DOBUF_WIPE: DoBufAction = 4;
 pub const DOBUF_DEL: DoBufAction = 3;
 pub const DOBUF_UNLOAD: DoBufAction = 2;
 pub const BFA_KEEP_UNDO: BfaFlags = 4;
-pub const HIST_SEARCH: ::core::ffi::c_int = 1;
+pub(crate) use crate::cmdhist::HIST_SEARCH;
 pub const VIM_QUESTION: ::core::ffi::c_uint = 4;
 pub const VIM_YES: ::core::ffi::c_uint = 2;
 pub const ML_DEL_MESSAGE: ::core::ffi::c_uint = 1;

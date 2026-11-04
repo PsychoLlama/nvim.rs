@@ -206,7 +206,8 @@ fn next_append_line(args: &mut ExArg, indent: c_int) -> Option<Option<Vec<u8>>> 
     let in_loop = args
         .cond_stack
         .is_some_and(|cond| cond.with(|cs| cs.loop_level > 0));
-    let first = if in_loop { -1 } else { NUL };
+    // Inside a loop CTRL-C breaks out of the line.
+    let first = if in_loop { None } else { Some(0) };
     // Up to its first NUL, which is where upstream's `char *` ended it.
     let line = source.next_line(first, indent, true).map(|line| {
         let mut line = line.into_vec();

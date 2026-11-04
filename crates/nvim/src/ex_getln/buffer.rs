@@ -25,7 +25,6 @@ use crate::cstr;
 use crate::guard::Lock;
 use crate::keycodes::{Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_F, Ctrl_L, Ctrl_P, Ctrl_V, Ctrl_W};
 use crate::memory::XString;
-use crate::types::Key;
 use core::ffi::CStr;
 
 // ---------------------------------------------------------------------------
@@ -199,17 +198,14 @@ fn stuff_char(c: ::core::ffi::c_int) {
 
 /// Get an Ex command line for the `:` command.
 ///
-/// `c` is normally `:`, and NUL for `:append`; `indent` is the indent for
-/// inside conditionals. The [`Typed`](crate::ex_docmd::LineSource::Typed)
+/// `c` is normally `:`, and NUL for `:append` (`None` for one inside a loop,
+/// which CTRL-C breaks out of); `indent` is the indent for inside
+/// conditionals. The [`Typed`](crate::ex_docmd::LineSource::Typed)
 /// arm of `do_cmdline`'s line source; `None` when the line was abandoned.
-pub fn getexline(
-    c: ::core::ffi::c_int,
-    indent: ::core::ffi::c_int,
-    do_concat: bool,
-) -> Option<XString> {
+pub fn getexline(c: Option<u8>, indent: ::core::ffi::c_int, do_concat: bool) -> Option<XString> {
     // When executing a register, remove the ':' in front of each line.
-    if exec_from_reg.get() && vpeekc().code() == ':' as ::core::ffi::c_int {
-        vgetc().code();
+    if exec_from_reg.get() && vpeekc().is(':') {
+        vgetc();
     }
     getcmdline(c, 1, indent, do_concat)
 }
@@ -217,7 +213,7 @@ pub fn getexline(
 /// A command line read for a command that wants more of its body and has no
 /// source to read it from: `getcmdline` with no count, owned.
 pub(crate) fn cmdline_input(
-    c: ::core::ffi::c_int,
+    c: Option<u8>,
     indent: ::core::ffi::c_int,
     do_concat: bool,
 ) -> Option<XString> {
@@ -226,15 +222,12 @@ pub(crate) fn cmdline_input(
 
 /// The pattern `/` or `?` reads, given `count`; `None` when it was
 /// abandoned.
-pub(crate) fn search_cmdline(
-    firstc: ::core::ffi::c_int,
-    count: ::core::ffi::c_int,
-) -> Option<XString> {
-    getcmdline(firstc, count, 0, true)
+pub(crate) fn search_cmdline(firstc: u8, count: ::core::ffi::c_int) -> Option<XString> {
+    getcmdline(Some(firstc), count, 0, true)
 }
 
 pub fn cmdline_overstrike() -> bool {
-    Cc::current().overstrike != 0
+    Cc::current().overstrike
 }
 
 /// Whether the cursor is at the end of the command line.

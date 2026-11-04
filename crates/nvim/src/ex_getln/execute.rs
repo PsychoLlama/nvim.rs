@@ -21,15 +21,11 @@ use crate::cmdexpand::{WildMode, WildOpts};
 use crate::cstr;
 use crate::ex_docmd::{DoCmdOpts, LineSource, do_cmdline};
 use crate::guard::{Keys, Lock, Suppress};
-use crate::keycodes::{
-    Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_E, Ctrl_G, Ctrl_H, Ctrl_L, Ctrl_N, Ctrl_P, Ctrl_U, Ctrl_W,
-    Ctrl_Y, Ctrl_Z, SpecialKey,
-};
+use crate::keycodes::SpecialKey;
 use crate::option::cpo_has;
 use crate::option::vars::P_ICM;
 use crate::state::Step;
-use crate::types::Key;
-use crate::types::{CpoFlag, ExpandContext, NUL, OK};
+use crate::types::{CpoFlag, ExpandContext, OK};
 use crate::winlayer::Win;
 
 /// What `CTRL-\` did with the key typed after it.
@@ -46,10 +42,10 @@ enum CtrlBsl {
 
 /// The wildmenu gesture a key is, if it is one: Ctrl-E cancels the popup menu
 /// and goes back to the original text, Ctrl-Y accepts the current selection.
-const fn wildmenu_gesture(c: ::core::ffi::c_int) -> Option<WildMode> {
+const fn wildmenu_gesture(c: Key) -> Option<WildMode> {
     match c {
-        Ctrl_E => Some(WildMode::Cancel),
-        Ctrl_Y => Some(WildMode::Apply),
+        Key::CTRL_E => Some(WildMode::Cancel),
+        Key::CTRL_Y => Some(WildMode::Apply),
         _ => None,
     }
 }
@@ -62,22 +58,20 @@ fn command_line_handle_ctrl_bsl(s: &mut CommandLineState) -> CtrlBsl {
     let mut cc = Cc::current();
     s.c = {
         let _raw = Keys::unmapped_with_codes();
-        plain_vgetc().code()
+        plain_vgetc()
     };
 
     // CTRL-\ e doesn't work when obtaining an expression, unless it is
     // in a mapping.
-    if s.c != Ctrl_N
-        && s.c != Ctrl_G
-        && (s.c != 'e' as ::core::ffi::c_int
-            || (cc.cmdfirstc == '=' as ::core::ffi::c_int && KeyTyped.get())
-            || cmdline_star.get() > 0)
+    if s.c != Key::CTRL_N
+        && s.c != Key::CTRL_G
+        && (!s.c.is('e') || (cc.cmdfirstc == b'=' && KeyTyped.get()) || cmdline_star.get() > 0)
     {
-        vungetc(Key::from_code(s.c));
+        vungetc(s.c);
         return CtrlBsl::ProcessNextKey;
     }
 
-    if s.c != 'e' as ::core::ffi::c_int {
+    if !s.c.is('e') {
         // Will drop the command line after putting it in the history.
         s.gotesc = true;
         return CtrlBsl::GotoNormalMode;
@@ -91,8 +85,8 @@ fn command_line_handle_ctrl_bsl(s: &mut CommandLineState) -> CtrlBsl {
         cc.cmdpos
     });
 
-    s.c = get_expr_register();
-    if s.c == '=' as ::core::ffi::c_int {
+    s.c = Key::from_code(get_expr_register());
+    if s.c.is('=') {
         // Evaluate the expression. "textlock" avoids nasty things like
         // going to another buffer.
         let p = {
@@ -124,32 +118,28 @@ fn command_line_handle_ctrl_bsl(s: &mut CommandLineState) -> CtrlBsl {
 }
 
 /// Free the expanded names and take the wildmenu down.  `c` is the key that
-/// ended it, or -1 when no key did.
-pub(crate) fn command_line_end_wildmenu(
-    s: &mut CommandLineState,
-    key_is_wc: bool,
-    c: ::core::ffi::c_int,
-) {
+/// ended it, if a key did.
+pub(crate) fn command_line_end_wildmenu(s: &mut CommandLineState, key_is_wc: bool, c: Option<Key>) {
     if cmdline_pum_active() {
-        if c != -1 {
+        if let Some(c) = c {
             s.skip_pum_redraw = s.skip_pum_redraw
                 && !key_is_wc
-                && !ascii_iswhite(c)
-                && (vim_isprintc(c)
-                    || c == SpecialKey::Bs.code()
-                    || c == Ctrl_H
-                    || c == SpecialKey::Del.code()
-                    || c == SpecialKey::Kdel.code()
-                    || c == Ctrl_W
-                    || c == Ctrl_U);
+                && !ascii_iswhite(c.code())
+                && (vim_isprintc(c.code())
+                    || c == SpecialKey::Bs
+                    || c == Key::CTRL_H
+                    || c == SpecialKey::Del
+                    || c == SpecialKey::Kdel
+                    || c == Key::CTRL_W
+                    || c == Key::CTRL_U);
         }
-        cmdline_pum_remove(c != -1 && s.skip_pum_redraw);
+        cmdline_pum_remove(c.is_some() && s.skip_pum_redraw);
     }
     if completion(|xpc| xpc.matches.is_some()) {
         expand_completion(WildOpts::NONE, WildMode::Free);
     }
     s.did_wild_list = false;
-    if !p_wmnu() || (c != SpecialKey::Up.code() && c != SpecialKey::Down.code()) {
+    if !p_wmnu() || c.is_none_or(|c| c != SpecialKey::Up && c != SpecialKey::Down) {
         completion_mut(|xpc| xpc.context = ExpandContext::Nothing);
     }
     s.wim_index = 0;
@@ -165,29 +155,26 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
 
     let display_tick_saved: DispTick = Win::current().w_display_tick;
     let mut cc = Cc::current();
-    s.c = key.code();
+    s.c = key;
 
     // If the cmdline was replaced externally (e.g. by setcmdline() during
     // an <expr> mapping), clean up the wildmenu completion state so that
     // stale completion data is not used.
     if cc.cmdbuff_replaced && match_count() > 0 {
-        command_line_end_wildmenu(s, false, -1);
+        command_line_end_wildmenu(s, false, None);
     }
     cc.cmdbuff_replaced = false;
 
     // Skip the wildmenu during history navigation with Up/Down.
-    if s.c == SpecialKey::Wild.code() && s.did_hist_navigate {
+    if s.c == SpecialKey::Wild && s.did_hist_navigate {
         s.did_hist_navigate = false;
         return Step::Go;
     }
 
-    if s.c == SpecialKey::Event.code()
-        || s.c == SpecialKey::Command.code()
-        || s.c == SpecialKey::Lua.code()
-    {
-        if s.c == SpecialKey::Event.code() {
+    if s.c == SpecialKey::Event || s.c == SpecialKey::Command || s.c == SpecialKey::Lua {
+        if s.c == SpecialKey::Event {
             state_handle_k_event();
-        } else if s.c == SpecialKey::Command.code() {
+        } else if s.c == SpecialKey::Command {
             let _ = do_cmdline(None, Some(&mut LineSource::CmdKey), DoCmdOpts::NOWAIT);
         } else {
             map_execute_lua(false, false);
@@ -212,7 +199,7 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
                 s.next_wild(WildMode::PumWant, WildOpts::NONE);
                 if pum_want.get().finish {
                     s.next_wild(WildMode::Apply, WildOpts::NO_BEEP);
-                    command_line_end_wildmenu(s, false, s.c);
+                    command_line_end_wildmenu(s, false, Some(s.c));
                 }
             }
             pum_ext_want_done();
@@ -230,13 +217,13 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
         if cmdmsg_rl.get() && !KeyStuffed.get() {
             // Invert horizontal movements and operations. Only when typed
             // by the user directly, not as the result of a mapping.
-            match SpecialKey::try_from(s.c) {
-                Ok(SpecialKey::Right) => s.c = SpecialKey::Left.code(),
-                Ok(SpecialKey::SRight) => s.c = SpecialKey::SLeft.code(),
-                Ok(SpecialKey::CRight) => s.c = SpecialKey::CLeft.code(),
-                Ok(SpecialKey::Left) => s.c = SpecialKey::Right.code(),
-                Ok(SpecialKey::SLeft) => s.c = SpecialKey::SRight.code(),
-                Ok(SpecialKey::CLeft) => s.c = SpecialKey::CRight.code(),
+            match s.c.special() {
+                Some(SpecialKey::Right) => s.c = Key::from(SpecialKey::Left),
+                Some(SpecialKey::SRight) => s.c = Key::from(SpecialKey::SLeft),
+                Some(SpecialKey::CRight) => s.c = Key::from(SpecialKey::CLeft),
+                Some(SpecialKey::Left) => s.c = Key::from(SpecialKey::Right),
+                Some(SpecialKey::SLeft) => s.c = Key::from(SpecialKey::SRight),
+                Some(SpecialKey::CLeft) => s.c = Key::from(SpecialKey::CRight),
                 _ => {}
             }
         }
@@ -245,8 +232,8 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
     // Ignore got_int when CTRL-C was typed here. Don't ignore it in
     // :global, we really need to break then, e.g. for ":g/pat/normal /pat"
     // (without the <CR>). Don't ignore it for the input() function.
-    if s.c == Ctrl_C
-        && s.firstc != '@' as ::core::ffi::c_int
+    if s.c == Key::CTRL_C
+        && s.firstc != b'@'
         // do clear got_int in Ex mode, to avoid an infinite Ctrl-C loop
         && (!s.break_ctrl_c || exmode_active.get())
         && global_busy.get() == 0
@@ -257,25 +244,25 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
     // Free the old command line when finished moving around in the
     // history list.
     if s.lookfor.is_some()
-        && s.c != SpecialKey::SDown.code()
-        && s.c != SpecialKey::SUp.code()
-        && s.c != SpecialKey::Down.code()
-        && s.c != SpecialKey::Up.code()
-        && s.c != SpecialKey::Pagedown.code()
-        && s.c != SpecialKey::Pageup.code()
-        && s.c != SpecialKey::Kpagedown.code()
-        && s.c != SpecialKey::Kpageup.code()
-        && s.c != SpecialKey::Left.code()
-        && s.c != SpecialKey::Right.code()
-        && (match_count() > 0 || (s.c != Ctrl_P && s.c != Ctrl_N))
+        && s.c != SpecialKey::SDown
+        && s.c != SpecialKey::SUp
+        && s.c != SpecialKey::Down
+        && s.c != SpecialKey::Up
+        && s.c != SpecialKey::Pagedown
+        && s.c != SpecialKey::Pageup
+        && s.c != SpecialKey::Kpagedown
+        && s.c != SpecialKey::Kpageup
+        && s.c != SpecialKey::Left
+        && s.c != SpecialKey::Right
+        && (match_count() > 0 || (s.c != Key::CTRL_P && s.c != Key::CTRL_N))
     {
         s.lookfor = None;
     }
 
     // When there are matching completions to select, <S-Tab> works like
     // CTRL-P (unless 'wildchar' is <S-Tab>).
-    if OptInt::from(s.c) != p_wc() && s.c == SpecialKey::STab.code() && match_count() > 0 {
-        s.c = Ctrl_P;
+    if s.c != wildchar() && s.c == SpecialKey::STab && match_count() > 0 {
+        s.c = Key::CTRL_P;
     }
 
     if p_wmnu() {
@@ -285,7 +272,7 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
 
     // Which wildmenu gesture, if any, the key was already used for.
     let mut wild_type = None;
-    let key_is_wc = (OptInt::from(s.c) == p_wc() && KeyTyped.get()) || OptInt::from(s.c) == p_wcm();
+    let key_is_wc = (s.c == wildchar() && KeyTyped.get()) || is_wildcharm(s.c);
     if (cmdline_pum_active() || wild_menu_showing.get() != 0 || s.did_wild_list)
         && !key_is_wc
         && match_count() > 0
@@ -297,16 +284,13 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
 
     // Trigger the CmdlineLeavePre autocommand.
     if (KeyTyped.get()
-        && (s.c == '\n' as ::core::ffi::c_int
-            || s.c == '\r' as ::core::ffi::c_int
-            || s.c == SpecialKey::Kenter.code()
-            || s.c == ESC))
-        || s.c == Ctrl_C
+        && (s.c == Key::NL || s.c == Key::CAR || s.c == SpecialKey::Kenter || s.c == Key::ESC))
+        || s.c == Key::CTRL_C
     {
         set_vim_var_char(s.c); // set v:char
         trigger_cmd_autocmd(s.cmdline_type, AutoEvent::CmdlineLeavePre);
         s.event_cmdlineleavepre_triggered = true;
-        if (s.c == ESC || s.c == Ctrl_C) && wim_has(0, kOptWimFlagList) {
+        if (s.c == Key::ESC || s.c == Key::CTRL_C) && wim_has(0, kOptWimFlagList) {
             set_no_hlsearch(true);
         }
     }
@@ -316,20 +300,20 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
     // Ctrl-P or Ctrl-A or Ctrl-L). If the popup menu is displayed then
     // PageDown and PageUp navigate it too.
     let end_wildmenu = !key_is_wc
-        && s.c != Ctrl_Z
-        && s.c != Ctrl_N
-        && s.c != Ctrl_P
-        && s.c != Ctrl_A
-        && s.c != Ctrl_L
+        && s.c != Key::CTRL_Z
+        && s.c != Key::CTRL_N
+        && s.c != Key::CTRL_P
+        && s.c != Key::CTRL_A
+        && s.c != Key::CTRL_L
         && (!cmdline_pum_active()
-            || (s.c != SpecialKey::Pagedown.code()
-                && s.c != SpecialKey::Pageup.code()
-                && s.c != SpecialKey::Kpagedown.code()
-                && s.c != SpecialKey::Kpageup.code()));
+            || (s.c != SpecialKey::Pagedown
+                && s.c != SpecialKey::Pageup
+                && s.c != SpecialKey::Kpagedown
+                && s.c != SpecialKey::Kpageup));
 
     // Free the expanded names when finished walking through the matches.
     if end_wildmenu {
-        command_line_end_wildmenu(s, key_is_wc, s.c);
+        command_line_end_wildmenu(s, key_is_wc, Some(s.c));
     }
 
     if p_wmnu() {
@@ -339,48 +323,48 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
 
     // CTRL-\ CTRL-N or CTRL-\ CTRL-G goes to Normal mode, CTRL-\ e
     // prompts for an expression.
-    if s.c == Ctrl_BSL {
+    if s.c == Key::CTRL_BSL {
         match command_line_handle_ctrl_bsl(s) {
             CtrlBsl::Changed => return command_line_changed(s),
             CtrlBsl::NotChanged => return command_line_not_changed(s),
             CtrlBsl::GotoNormalMode => return Step::Leave, // back to cmd mode
             // The backslash key was not processed by
             // command_line_handle_ctrl_bsl().
-            CtrlBsl::ProcessNextKey => s.c = Ctrl_BSL,
+            CtrlBsl::ProcessNextKey => s.c = Key::CTRL_BSL,
         }
     }
 
-    if s.c == cedit_key.get() || s.c == SpecialKey::Cmdwin.code() {
+    if cedit_key.get() == Some(s.c) || s.c == SpecialKey::Cmdwin {
         // TODO(vim): why is ex_normal_busy checked here?
-        if (s.c == SpecialKey::Cmdwin.code() || ex_normal_busy.get() == 0) && !got_int.get() {
+        if (s.c == SpecialKey::Cmdwin || ex_normal_busy.get() == 0) && !got_int.get() {
             // Open a window to edit the command line (and history).
             s.c = open_cmdwin();
             s.some_key_typed = true;
         }
     } else {
-        s.c = do_digraph(Key::from_code(s.c)).code();
+        s.c = do_digraph(s.c);
     }
 
-    if s.c == '\n' as ::core::ffi::c_int
-        || s.c == '\r' as ::core::ffi::c_int
-        || s.c == SpecialKey::Kenter.code()
-        || (s.c == ESC && (!KeyTyped.get() || cpo_has(CpoFlag::ESC)))
+    if s.c == Key::NL
+        || s.c == Key::CAR
+        || s.c == SpecialKey::Kenter
+        || (s.c == Key::ESC && (!KeyTyped.get() || cpo_has(CpoFlag::ESC)))
     {
         // In Ex mode a backslash escapes a newline.
         if exmode_active.get()
-            && s.c != ESC
+            && s.c != Key::ESC
             && cc.cmdpos == cc.len()
             && cc.cmdpos > 0
             && cc.byte_at(cc.cmdpos - 1) == b'\\'
         {
-            if s.c == SpecialKey::Kenter.code() {
-                s.c = '\n' as ::core::ffi::c_int;
+            if s.c == SpecialKey::Kenter {
+                s.c = Key::NL;
             }
         } else {
             // Might have typed ESC previously; don't truncate the cmdline
             // now.
             s.gotesc = false;
-            if ccheck_abbr(Key::from_code(s.c), true) {
+            if ccheck_abbr(s.c, true) {
                 return command_line_changed(s);
             }
 
@@ -395,19 +379,19 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
     }
 
     // Completion for 'wildchar', 'wildcharm' and wildtrigger().
-    if (OptInt::from(s.c) == p_wc() && !s.gotesc && KeyTyped.get())
-        || OptInt::from(s.c) == p_wcm()
-        || s.c == SpecialKey::Wild.code()
-        || s.c == Ctrl_Z
+    if (s.c == wildchar() && !s.gotesc && KeyTyped.get())
+        || is_wildcharm(s.c)
+        || s.c == SpecialKey::Wild
+        || s.c == Key::CTRL_Z
     {
         // Silence the bell.
-        let quiet_bell = (s.c == SpecialKey::Wild.code()).then(Suppress::emsg_silent);
+        let quiet_bell = (s.c == SpecialKey::Wild).then(Suppress::emsg_silent);
         let res = command_line_wildchar_complete(s);
         drop(quiet_bell);
         if res == KeyOutcome::Changed {
             return command_line_changed(s);
         }
-        if s.c == SpecialKey::Wild.code() {
+        if s.c == SpecialKey::Wild {
             return command_line_not_changed(s);
         }
     }
@@ -415,7 +399,7 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
     s.gotesc = false;
 
     // <S-Tab> goes to the last match, in a clumsy way.
-    if s.c == SpecialKey::STab.code()
+    if s.c == SpecialKey::STab
         && KeyTyped.get()
         && s.next_wild(WildMode::ExpandKeep, WildOpts::NONE) == OK
     {
@@ -434,8 +418,8 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
         return command_line_changed(s);
     }
 
-    if s.c == NUL || s.c == SpecialKey::Zero.code() {
-        s.c = NL; // NUL is stored as NL
+    if s.c.is_nul() || s.c == SpecialKey::Zero {
+        s.c = Key::NL; // NUL is stored as NL
     }
 
     s.do_abbr = true; // default: check for an abbreviation
@@ -447,7 +431,7 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
         if s.is_state.winid != Win::current().handle {
             init_incsearch_state(&mut s.is_state);
         }
-        if KeyTyped.get() || vpeekc().code() == NUL {
+        if KeyTyped.get() || vpeekc().is_nul() {
             may_do_incsearch_highlighting(s.firstc, s.count, &mut s.is_state);
         }
         return command_line_not_changed(s);
@@ -479,13 +463,13 @@ pub(crate) fn command_line_not_changed(s: &mut CommandLineState) -> Step {
 }
 
 /// Trigger the `CmdlineChanged` autocommands.
-pub(crate) fn do_autocmd_cmdlinechanged(firstc: ::core::ffi::c_int) {
+pub(crate) fn do_autocmd_cmdlinechanged(firstc: u8) {
     if !has_event(AutoEvent::CmdlineChanged) {
         return;
     }
     let mut err: Error = Error::none();
     let mut save_v_event: SaveVEvent = SAVE_V_EVENT_INIT;
-    let firstcbuf = [firstc.to_le_bytes()[0], 0];
+    let firstcbuf = [firstc, 0];
     let firstcbuf = cstr::in_bytes(&firstcbuf);
     let dict = cmdline_event_dict(&mut save_v_event, firstcbuf);
 
@@ -498,7 +482,7 @@ pub(crate) fn do_autocmd_cmdlinechanged(firstc: ::core::ffi::c_int) {
 
     if err.is_set() {
         if !ui_has(kUIMessages) {
-            msg_putchar('\n' as ::core::ffi::c_int);
+            msg_putchar(::core::ffi::c_int::from(b'\n'));
         }
         msg_scroll.set(1);
         msg_str_hl(err.message_or_empty(), HLF_E, true);
@@ -512,12 +496,12 @@ pub(crate) fn do_autocmd_cmdlinechanged(firstc: ::core::ffi::c_int) {
 pub(crate) fn command_line_changed(s: &mut CommandLineState) -> Step {
     let cc = Cc::current();
     let prev_cmdpreview = cmdpreview.get();
-    let preview_shown = s.firstc == ':' as ::core::ffi::c_int
+    let preview_shown = s.firstc == b':'
         && current_sctx.get().sc_sid == 0 // only if interactive
         && P_ICM.first_byte() != 0 // 'inccommand' is set
         && !exmode_active.get() // not in ex mode
         && cmdline_star.get() == 0 // not typing a password
-        && vpeekc_any().code() == 0
+        && vpeekc_any().is_nul()
         && cmdpreview_may_show();
     if !preview_shown {
         cmdpreview.set(false);
@@ -527,7 +511,7 @@ pub(crate) fn command_line_changed(s: &mut CommandLineState) -> Step {
             let _ = update_screen(); // clear the 'inccommand' preview
         }
         if completion(|xpc| xpc.context) == ExpandContext::Nothing
-            && (KeyTyped.get() || vpeekc().code() == NUL)
+            && (KeyTyped.get() || vpeekc().is_nul())
         {
             may_do_incsearch_highlighting(s.firstc, s.count, &mut s.is_state);
         }
@@ -539,11 +523,7 @@ pub(crate) fn command_line_changed(s: &mut CommandLineState) -> Step {
                 .as_deref()
                 .is_some_and(|prev| prev != cstr::until_nul(cc.bytes())))
     {
-        do_autocmd_cmdlinechanged(if s.firstc > 0 {
-            s.firstc
-        } else {
-            '-' as ::core::ffi::c_int
-        });
+        do_autocmd_cmdlinechanged(if s.firstc > 0 { s.firstc } else { b'-' });
     }
 
     may_trigger_cursormovedc(s);
@@ -554,7 +534,7 @@ pub(crate) fn command_line_changed(s: &mut CommandLineState) -> Step {
         // there are no characters left to read, to avoid useless
         // intermediate redraws. If the cmdline is external the UI handles
         // shaping and no redraw is needed.
-        if !ui_has(kUICmdline) && vpeekc().code() == NUL {
+        if !ui_has(kUICmdline) && vpeekc().is_nul() {
             redrawcmd();
         }
     }

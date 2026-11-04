@@ -242,7 +242,7 @@ fn ask_for_line(
     // A run with no source has only the line it was given.
     let line = match source.kind {
         SourceKind::None => None,
-        _ => source.lines.next_line(c_int::from(b':'), indent, true),
+        _ => source.lines.next_line(Some(b':'), indent, true),
     };
     let Some(line) = line else {
         // An aborted command line does not wait for a return. The end of a

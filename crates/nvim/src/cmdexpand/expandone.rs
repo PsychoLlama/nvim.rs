@@ -83,7 +83,7 @@ pub(crate) fn nextwild(
 
     if expand.matches.is_none() {
         pre_incsearch_pos.set(expand.pre_incsearch_pos);
-        if ccline.input_fn != 0 && ccline.xp_context == ExpandContext::Commands {
+        if ccline.input_fn && ccline.xp_context == ExpandContext::Commands {
             // Expand commands typed in the input() function.
             let line = ccline.text_bytes().to_vec();
             set_cmd_context(expand, &line, ccline.cmdpos, false);

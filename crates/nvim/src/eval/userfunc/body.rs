@@ -111,7 +111,7 @@ pub(crate) fn get_function_body(
                 (line, Some(at))
             } else {
                 *line_to_free = None;
-                *line_to_free = read_next_line(excmd, c_int::from(b':'), indent, do_concat);
+                *line_to_free = read_next_line(excmd, Some(b':'), indent, do_concat);
                 if KeyTyped.get() {
                     lines_left.set(Rows.get() - 1);
                 }

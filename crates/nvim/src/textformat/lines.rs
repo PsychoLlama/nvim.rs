@@ -133,7 +133,7 @@ pub(crate) fn fex_format(lnum: LineNr, count: c_long, c: c_int) -> c_int {
 
     set_vim_var_nr(Vv::Lnum, i64::from(lnum));
     set_vim_var_nr(Vv::Count, count as VarNumber);
-    set_vim_var_char(c);
+    set_vim_var_char(Key::from_code(c));
 
     // Copy it: the option can be changed while it is running.
     let fex = Buf::current().b_p_fex.get();

@@ -66,7 +66,7 @@ pub(crate) fn nv_search(cmd_arg: &mut CmdArg) {
         nv_operator(cmd_arg);
         return;
     }
-    cmd_arg.searchbuf = search_cmdline(cmd_arg.cmdchar.code(), cmd_arg.count1);
+    cmd_arg.searchbuf = search_cmdline(cmd_arg.cmdchar.as_byte().unwrap_or(0), cmd_arg.count1);
     if cmd_arg.searchbuf.is_none() {
         clear_op(op);
         return;

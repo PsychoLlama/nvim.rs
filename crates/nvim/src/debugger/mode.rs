@@ -239,7 +239,7 @@ fn debug_prompt(cmd: &CStr) {
         // Do not debug whatever reading the line itself runs -- an expression
         // mapping, for instance.
         let outer_level = debug_break_level.replace(-1);
-        let cmdline = getcmdline_bare(c_int::from(b'>'));
+        let cmdline = getcmdline_bare(b'>');
         debug_break_level.set(outer_level);
 
         if typeahead_saved {

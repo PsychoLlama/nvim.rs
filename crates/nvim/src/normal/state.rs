@@ -266,7 +266,7 @@ pub(crate) fn normal_enter(cmdwin: bool, noexmode: bool) {
     let mut state = new_state(op);
     state.cmdwin = cmdwin;
     state.noexmode = noexmode;
-    state.toplevel = (!cmdwin || cmdwin_result.get() == 0) && !noexmode;
+    state.toplevel = (!cmdwin || cmdwin_result.get().is_nul()) && !noexmode;
     // The innermost operator is the one `op_pending` reports on; the outer
     // one is put back on the way out.
     let outer = frame_make_current(Some(id));
@@ -605,7 +605,7 @@ pub(crate) fn normal_check(ns: &mut NormalState) -> Step {
         do_exmode();
         return Step::Again;
     }
-    if ns.cmdwin && cmdwin_result.get() != 0 {
+    if ns.cmdwin && !cmdwin_result.get().is_nul() {
         return Step::Leave;
     }
     normal_prepare(ns);

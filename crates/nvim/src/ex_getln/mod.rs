@@ -1,4 +1,11 @@
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -6,7 +13,7 @@ pub(crate) mod state;
 use crate::api::extmark::nvim_create_namespace;
 use crate::api::private::helpers::{try_enter, try_leave};
 use crate::api::vim::nvim_create_buf;
-use crate::ascii::{ascii_isalpha, ascii_isspace, ascii_iswhite};
+use crate::ascii::{ascii_isspace, ascii_iswhite};
 use crate::autocmd::{
     apply_autocmds, aucmd_prepbuf, aucmd_restbuf, block_autocmds, has_event, unblock_autocmds,
 };
@@ -18,8 +25,8 @@ use crate::charset::{ptr2cells_at, vim_is_ident_char, vim_isprintc, vim_iswordc}
 use crate::cmdexpand::state::wild_menu_showing;
 use crate::cmdexpand::{
     clear_cmdline_orig, cmdline_pum_active, cmdline_pum_cleanup, cmdline_pum_remove,
-    expand_cleanup, expand_one, nextwild, set_expand_context, showmatches, wildmenu_cleanup,
-    wildmenu_process_key, wildmenu_translate_key,
+    expand_cleanup, expand_one, is_wildcharm, nextwild, set_expand_context, showmatches, wildchar,
+    wildmenu_cleanup, wildmenu_process_key, wildmenu_translate_key,
 };
 use crate::cmdhist::{
     add_to_history, get_hisidx, get_hislen, hist_char2type, hist_entry_text, init_history,
@@ -92,7 +99,7 @@ use crate::r#move::{
 use crate::normal::{clear_showcmd, normal_enter};
 use crate::option::vars::{
     P_HLS, p_ari, p_arshape, p_cedit, p_ch, p_cwh, p_hls, p_ic, p_icm, p_is, p_paste, p_ru, p_scs,
-    p_tbidi, p_wc, p_wcm, p_wmnu, wim_flags,
+    p_tbidi, p_wc, p_wmnu, wim_flags,
 };
 use crate::option::{
     csh_like_shell, magic_isset, set_iminsert_global, set_imsearch_global, set_option_direct,
@@ -136,6 +143,7 @@ use crate::types::CAR;
 use crate::types::CmdIdx;
 use crate::types::ESC;
 use crate::types::EcmdCmd;
+use crate::types::Key;
 use crate::types::NL;
 use crate::types::TAB;
 use crate::types::ui::{kUICmdline, kUIMessages};
@@ -144,10 +152,9 @@ use crate::types::{
     CmdParseInfo, CmdParseMagic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr, ColoredCmdline,
     Direction, DispTick, DoBufAction, DoBufStart, Error, EvalFuncData, ExArg, ExArgt, Expand,
     ExpandContext, ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy,
-    ExprComparisonType, ExprOptScope, ExprParserFlags, Handle, HashTab, HistoryType, Integer,
-    LineNr, Magic, MotionType, Object, OptInt, OptMagic, OptSet, OptVal, ParserState, Pos,
-    ProfTime, SaveVEvent, SearchItArg, TryState, TypVal, UndoLink, UndoObjectType, VarNumber,
-    size_t, time_t, uint8_t,
+    ExprComparisonType, ExprOptScope, ExprParserFlags, Handle, HashTab, Integer, LineNr, Magic,
+    MotionType, Object, OptInt, OptMagic, OptSet, OptVal, ParserState, Pos, ProfTime, SaveVEvent,
+    SearchItArg, TryState, TypVal, UndoLink, UndoObjectType, VarNumber, size_t, time_t, uint8_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{
@@ -216,10 +223,7 @@ pub const kMTCharWise: MotionType = 0;
 pub const kCmdRedrawAll: CmdRedraw = 2;
 pub const kCmdRedrawPos: CmdRedraw = 1;
 pub const kCmdRedrawNone: CmdRedraw = 0;
-pub const HIST_DEBUG: HistoryType = 4;
-pub const HIST_SEARCH: HistoryType = 1;
-pub const HIST_CMD: HistoryType = 0;
-pub const HIST_INVALID: HistoryType = -1;
+pub(crate) use crate::cmdhist::{HIST_CMD, HIST_DEBUG, HIST_INVALID, HIST_SEARCH};
 pub const VSE_NONE: ::core::ffi::c_int = 0;
 pub const VSE_BUFFER: ::core::ffi::c_int = 2;
 pub const VSE_SHELL: ::core::ffi::c_int = 1;
@@ -230,10 +234,12 @@ pub const VSE_SHELL: ::core::ffi::c_int = 1;
 /// field C's globals pointed into, the completion, belongs to the command
 /// line ([`CmdlineInfo::xpc`]) instead.
 pub struct CommandLineState {
-    pub firstc: ::core::ffi::c_int,
+    /// The character the line starts with (`:`, `/`, `?`, `=`, `@`, `>`, ...),
+    /// 0 for none.
+    pub firstc: u8,
     pub count: ::core::ffi::c_int,
     pub indent: ::core::ffi::c_int,
-    pub c: ::core::ffi::c_int,
+    pub c: Key,
     pub gotesc: bool,
     pub do_abbr: bool,
     /// What was typed before the first history key, up to the cursor: the
@@ -262,7 +268,7 @@ pub struct CommandLineState {
     /// state is kept in, and the buffer: C's `b_im_ptr`, a pointer into it.
     /// An id, because the command line can run user code that wipes it.
     pub(crate) b_im: Option<(ImOption, BufId)>,
-    pub cmdline_type: ::core::ffi::c_int,
+    pub cmdline_type: u8,
     pub event_cmdlineleavepre_triggered: bool,
     pub did_hist_navigate: bool,
 }
@@ -434,11 +440,11 @@ pub(crate) const CMDLINE_INFO_INIT: CmdlineInfo = CmdlineInfo {
     cmdindent: 0,
     cmdprompt: None,
     hl_id: 0,
-    overstrike: 0,
+    overstrike: false,
     xpc: None,
     xp_context: ExpandContext::Nothing,
     xp_arg: None,
-    input_fn: 0,
+    input_fn: false,
     cmdbuff_replaced: false,
     prompt_id: 0,
     highlight_callback: Callback::None,
@@ -612,7 +618,8 @@ pub(crate) static saved_cmdlines: GlobalCell<Vec<Box<CmdlineInfo>>> = GlobalCell
 static new_cmdpos: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static cmdline_block: GlobalCell<CmdlineBlock> = GlobalCell::new(CmdlineBlock::EMPTY);
 static getln_interrupted_highlight: GlobalCell<bool> = GlobalCell::new(false);
-static cedit_key: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
+/// The key `'cedit'` names, which opens the command-line window.
+static cedit_key: GlobalCell<Option<Key>> = GlobalCell::new(None);
 static cmdpreview_bufnr: GlobalCell<Handle> = GlobalCell::new(Handle::NONE);
 static cmdpreview_ns: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static e_active_window_or_buffer_changed_or_deleted: &::core::ffi::CStr =

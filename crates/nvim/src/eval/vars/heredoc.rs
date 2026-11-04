@@ -228,7 +228,7 @@ pub(crate) fn heredoc_get(excmd: &mut ExArg, at: usize, script_get: bool) -> Opt
                 line_arg = Some(after);
                 excmd.line.rest_of(next).to_vec()
             }
-            None => match exarg_getline(excmd, 0, 0, false) {
+            None => match exarg_getline(excmd, Some(0), 0, false) {
                 Some(line) => line.to_vec(),
                 None => {
                     if !script_get {

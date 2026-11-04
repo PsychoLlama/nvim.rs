@@ -32,7 +32,7 @@ use crate::os::time::os_time;
 use crate::regexp::{RE_LAST, RE_SUBST, regtilde_owned};
 use crate::search::save_re_pat;
 use crate::shada::ShadaExtra;
-use crate::types::{CmdLine, ExArg, Failed, NUL, Timestamp, size_t};
+use crate::types::{CmdLine, ExArg, Failed, Timestamp, size_t};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::c_int;
@@ -180,7 +180,7 @@ pub(crate) fn sub_joining_lines(
             save_re_pat(RE_SUBST as c_int, pat, magic_isset());
         }
         // Put the pattern in the search history.
-        add_to_history(HIST_SEARCH as c_int, pat, true, NUL as u8);
+        add_to_history(HIST_SEARCH, pat, true, 0);
     }
     true
 }

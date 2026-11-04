@@ -112,11 +112,9 @@ pub fn set_expand_context(expand: &mut Expand) {
     let ccline = Cc::current();
 
     // Handle search commands: '/' or '?'.
-    if (ccline.cmdfirstc == c_int::from(b'/') || ccline.cmdfirstc == c_int::from(b'?'))
-        && may_expand_pattern.get()
-    {
+    if (ccline.cmdfirstc == b'/' || ccline.cmdfirstc == b'?') && may_expand_pattern.get() {
         expand.context = ExpandContext::PatternInBuf;
-        expand.search_dir = if ccline.cmdfirstc == c_int::from(b'/') {
+        expand.search_dir = if ccline.cmdfirstc == b'/' {
             FORWARD
         } else {
             BACKWARD
@@ -130,10 +128,10 @@ pub fn set_expand_context(expand: &mut Expand) {
     }
 
     // Only handle ':', '>', or '=' command-lines, or expression input.
-    if ccline.cmdfirstc != c_int::from(b':')
-        && ccline.cmdfirstc != c_int::from(b'>')
-        && ccline.cmdfirstc != c_int::from(b'=')
-        && ccline.input_fn == 0
+    if ccline.cmdfirstc != b':'
+        && ccline.cmdfirstc != b'>'
+        && ccline.cmdfirstc != b'='
+        && !ccline.input_fn
     {
         expand.context = ExpandContext::Nothing;
         return;

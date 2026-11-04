@@ -41,7 +41,7 @@ use crate::types::NUL;
 /// empty answer leaves the previous expression in place, so that `"=<CR>`
 /// repeats it.
 pub fn get_expr_register() -> c_int {
-    let Some(new_line) = cmdline_input('=' as c_int, 0, true) else {
+    let Some(new_line) = cmdline_input(Some(b'='), 0, true) else {
         return NUL; // cancelled
     };
     // An empty answer keeps the previous expression.

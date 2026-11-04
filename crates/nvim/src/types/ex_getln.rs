@@ -254,13 +254,14 @@ pub struct CmdlineInfo {
     pub(crate) cmdbuff: CmdBuff,
     pub cmdpos: ::core::ffi::c_int,
     pub cmdspos: ::core::ffi::c_int,
-    pub cmdfirstc: ::core::ffi::c_int,
+    /// The character shown before the line, 0 for none.
+    pub cmdfirstc: u8,
     pub cmdindent: ::core::ffi::c_int,
     /// The text shown before the line, a copy of the caller's: C's
     /// `cmdprompt`, which borrowed it.
     pub(crate) cmdprompt: Option<crate::memory::XString>,
     pub hl_id: ::core::ffi::c_int,
-    pub overstrike: ::core::ffi::c_int,
+    pub overstrike: bool,
     /// The completion in progress, owned by the command line while its key
     /// loop runs and `None` outside it: C's `xpc`, which pointed into the
     /// loop's stack frame. The loop moves it out for the length of each call
@@ -269,7 +270,7 @@ pub struct CmdlineInfo {
     pub(crate) xpc: Option<Expand>,
     pub xp_context: ExpandContext,
     pub xp_arg: Option<crate::memory::XString>,
-    pub input_fn: ::core::ffi::c_int,
+    pub input_fn: bool,
     pub cmdbuff_replaced: bool,
     pub prompt_id: ::core::ffi::c_uint,
     pub highlight_callback: Callback,

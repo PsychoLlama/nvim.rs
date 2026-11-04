@@ -22,11 +22,11 @@ use crate::ex_docmd::set_no_hlsearch;
 use crate::ex_getln::{put_on_cmdline, redrawcmd};
 use crate::getchar::state::KeyTyped;
 use crate::guard::Allow;
-use crate::keycodes::{Ctrl_N, Ctrl_P, SpecialKey};
+use crate::keycodes::SpecialKey;
 use crate::mbyte::head_off;
-use crate::option::vars::{P_LS, P_WMH, p_wc, p_wmnu};
-use crate::path::{PATHSEP, vim_ispathsep};
-use crate::types::ExpandContext;
+use crate::option::vars::{P_LS, P_WMH, p_wc, p_wcm, p_wmnu};
+use crate::path::{PATHSEP_BYTE, vim_ispathsep};
+use crate::types::{ExpandContext, Key, OptInt};
 use crate::window::last_status;
 use crate::winlayer::{Cc, current_topframe};
 use core::ffi::c_int;
@@ -38,10 +38,7 @@ use core::ffi::c_int;
 const UPSEG: &[u8] = b"/../";
 /// [`UPSEG`] without its leading separator.
 const UPSEG_TAIL: &[u8] = b"../";
-const _: () = assert!(
-    PATHSEP == b'/' as c_int,
-    "UPSEG hard-codes the path separator"
-);
+const _: () = assert!(PATHSEP_BYTE == b'/', "UPSEG hard-codes the path separator");
 
 /// The byte at `i` of the command line, or NUL outside it.
 fn line_byte(cclp: Cc, i: c_int) -> u8 {
@@ -57,16 +54,16 @@ fn line_byte(cclp: Cc, i: c_int) -> u8 {
 /// name ending in `.` opens the submenu rather than executing.
 pub(crate) fn wildmenu_translate_key(
     cclp: Cc,
-    key: c_int,
+    key: Key,
     context: ExpandContext,
     did_wild_list: bool,
-) -> c_int {
+) -> Key {
     let mut c = key;
     if cmdline_pum_active() || did_wild_list || wild_menu_showing.get() != 0 {
-        if c == SpecialKey::Left.code() {
-            c = Ctrl_P;
-        } else if c == SpecialKey::Right.code() {
-            c = Ctrl_N;
+        if c == SpecialKey::Left {
+            c = Key::CTRL_P;
+        } else if c == SpecialKey::Right {
+            c = Key::CTRL_N;
         }
     }
 
@@ -75,9 +72,9 @@ pub(crate) fn wildmenu_translate_key(
         && cclp.cmdpos > 1
         && line_byte(cclp, cclp.cmdpos - 1) == b'.'
         && line_byte(cclp, cclp.cmdpos - 2) != b'\\'
-        && (c == c_int::from(b'\n') || c == c_int::from(b'\r') || c == SpecialKey::Kenter.code())
+        && (c == Key::NL || c == Key::CAR || c == SpecialKey::Kenter)
     {
-        c = SpecialKey::Down.code();
+        c = Key::from(SpecialKey::Down);
     }
     c
 }
@@ -94,22 +91,34 @@ fn cmdline_del(mut cclp: Cc, from: c_int) {
 ///
 /// `KeyTyped` is set in case the key that got us here came from a mapping:
 /// the wildchar has to look typed or the completion will not run.
-///
-/// A 'wildchar' too wide for a key code can never be typed, so it answers
-/// `<Ignore>` rather than the truncated key upstream's `(int)p_wc` made of it.
-fn recomplete() -> c_int {
+fn recomplete() -> Key {
     KeyTyped.set(true);
-    c_int::try_from(p_wc()).unwrap_or(SpecialKey::Ignore.code())
+    wildchar()
+}
+
+/// The key `'wildchar'` names.
+///
+/// The option is a number, the key's code. One too wide for a key code can
+/// never be typed, so it answers `<Ignore>` rather than the truncated key
+/// upstream's `(int)p_wc` made of it.
+pub(crate) fn wildchar() -> Key {
+    c_int::try_from(p_wc()).map_or(Key::from(SpecialKey::Ignore), Key::from_code)
+}
+
+/// Whether `key` is the one `'wildcharm'` names (a number, like
+/// `'wildchar'`).
+pub(crate) fn is_wildcharm(key: Key) -> bool {
+    OptInt::from(key.code()) == p_wcm()
 }
 
 /// A key pressed while the wildmenu for menu names (`ExpandContext::Menunames`) is up.
-fn wildmenu_process_key_menunames(cclp: Cc, key: c_int, expand: &mut Expand) -> c_int {
+fn wildmenu_process_key_menunames(cclp: Cc, key: Key, expand: &mut Expand) -> Key {
     let at = |k: c_int| line_byte(cclp, k);
-    if key == SpecialKey::Down.code() && cclp.cmdpos > 0 && at(cclp.cmdpos - 1) == b'.' {
+    if key == SpecialKey::Down && cclp.cmdpos > 0 && at(cclp.cmdpos - 1) == b'.' {
         // Hitting <Down> after "emenu Name.": complete the submenu.
         return recomplete();
     }
-    if key != SpecialKey::Up.code() {
+    if key != SpecialKey::Up {
         return key;
     }
 
@@ -150,7 +159,7 @@ fn wildmenu_process_key_menunames(cclp: Cc, key: c_int, expand: &mut Expand) -> 
 /// `<Down>` descends into the directory under the cursor and `<Up>` leaves it,
 /// both by editing the path on the command line and asking for a fresh
 /// completion of the result.
-fn wildmenu_process_key_filenames(cclp: Cc, key: c_int, expand: &Expand) -> c_int {
+fn wildmenu_process_key_filenames(cclp: Cc, key: Key, expand: &Expand) -> Key {
     let at = |k: c_int| line_byte(cclp, k);
     // Where the pattern being completed starts.
     let start = as_count(expand.pattern);
@@ -164,9 +173,9 @@ fn wildmenu_process_key_filenames(cclp: Cc, key: c_int, expand: &Expand) -> c_in
             .is_some_and(|rest| rest.starts_with(what))
     };
 
-    if key == SpecialKey::Down.code()
+    if key == SpecialKey::Down
         && cclp.cmdpos > 0
-        && c_int::from(at(cclp.cmdpos - 1)) == PATHSEP
+        && at(cclp.cmdpos - 1) == PATHSEP_BYTE
         && (cclp.cmdpos < 3 || at(cclp.cmdpos - 2) != b'.' || at(cclp.cmdpos - 3) != b'.')
     {
         // Go down a directory.
@@ -176,7 +185,7 @@ fn wildmenu_process_key_filenames(cclp: Cc, key: c_int, expand: &Expand) -> c_in
     // The command line as it stands, with the match inserted, is what the
     // pattern's offset is read against: upstream's `xp_pattern` followed
     // the insertion.
-    if key == SpecialKey::Down.code() && starts_with_at(start, UPSEG_TAIL) {
+    if key == SpecialKey::Down && starts_with_at(start, UPSEG_TAIL) {
         // In a direct ancestor: strip off one "../" to go down.  Walk
         // back to the separator that ends the "..".
         let mut found = false;
@@ -203,7 +212,7 @@ fn wildmenu_process_key_filenames(cclp: Cc, key: c_int, expand: &Expand) -> c_in
         return key;
     }
 
-    if key != SpecialKey::Up.code() {
+    if key != SpecialKey::Up {
         return key;
     }
 
@@ -251,7 +260,7 @@ fn wildmenu_process_key_filenames(cclp: Cc, key: c_int, expand: &Expand) -> c_in
 }
 
 /// Handle a key pressed while the wildmenu is displayed.
-pub(crate) fn wildmenu_process_key(cclp: Cc, key: c_int, expand: &mut Expand) -> c_int {
+pub(crate) fn wildmenu_process_key(cclp: Cc, key: Key, expand: &mut Expand) -> Key {
     // Special translations for 'wildmenu'.
     match expand.context {
         ExpandContext::Menunames => wildmenu_process_key_menunames(cclp, key, expand),
@@ -273,7 +282,7 @@ pub(crate) fn wildmenu_cleanup(cclp: Cc) {
     }
 
     let skt = KeyTyped.get();
-    let redraw = (cclp.input_fn != 0).then(Allow::redraw);
+    let redraw = cclp.input_fn.then(Allow::redraw);
 
     // Clear highlighting applied during wildmenu activity.
     set_no_hlsearch(true);

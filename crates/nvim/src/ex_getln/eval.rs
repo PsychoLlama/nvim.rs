@@ -8,6 +8,13 @@
 //! `eval/funcs/table`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::cstr;
@@ -16,7 +23,8 @@ use crate::eval::typval::NumBuf;
 use crate::getchar::Remap;
 use crate::keycodes::KE_WILD;
 use crate::memory::{ThinCString, XString};
-use crate::types::{ExpandContext, NUL};
+use crate::narrow::number_as_int;
+use crate::types::ExpandContext;
 
 /// Whether a command line is being edited at all: C's
 /// `get_cmdline_info()->cmdbuff != NULL`, which nothing outside `ex_getln/`
@@ -46,18 +54,14 @@ pub(crate) fn get_ccline_ptr() -> Option<Cc> {
 
 /// The current command-line type: `:`, `/`, `?`, `@`, `>` or `-`, and `NUL`
 /// when no command line is being edited.
-pub(crate) fn get_cmdline_type() -> ::core::ffi::c_int {
+pub(crate) fn get_cmdline_type() -> u8 {
     let Some(p) = get_ccline_ptr() else {
-        return NUL;
+        return 0;
     };
-    if p.cmdfirstc == NUL {
+    if p.cmdfirstc == 0 {
         // No first character: `input()` reports '@', a `:insert` style
         // line-getter '-'.
-        return if p.input_fn != 0 {
-            '@' as ::core::ffi::c_int
-        } else {
-            '-' as ::core::ffi::c_int
-        };
+        return if p.input_fn { b'@' } else { b'-' };
     }
     p.cmdfirstc
 }
@@ -142,7 +146,7 @@ pub fn f_getcmdline(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 
 /// `getcmdpos()` function.
 pub fn f_getcmdpos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_number(get_ccline_ptr().map_or(0, |p| (p.cmdpos + 1) as VarNumber));
+    result.write_number(get_ccline_ptr().map_or(0, |p| VarNumber::from(p.cmdpos + 1)));
 }
 
 /// `getcmdprompt()` function.
@@ -156,24 +160,24 @@ pub fn f_getcmdprompt(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
 
 /// `getcmdscreenpos()` function.
 pub fn f_getcmdscreenpos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_number(get_ccline_ptr().map_or(0, |p| (p.cmdspos + 1) as VarNumber));
+    result.write_number(get_ccline_ptr().map_or(0, |p| VarNumber::from(p.cmdspos + 1)));
 }
 
 /// `getcmdtype()` function.
 pub fn f_getcmdtype(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // One character, NUL outside a command line -- kept byte-for-byte, so
     // that answer reads as the empty string.
-    let kind = get_cmdline_type() as u8;
+    let kind = get_cmdline_type();
     result.write_string(Some(ThinCString::from_bytes(&[kind])));
 }
 
 /// Replace the command line with `text` and put the cursor at `pos`.
 ///
-/// A negative or out-of-range `pos` means the end of the line.  Answers 1
-/// when there is no command line to set, 0 on success.
-pub(crate) fn set_cmdline_str(text: &[u8], pos: ::core::ffi::c_int) -> ::core::ffi::c_int {
+/// A negative or out-of-range `pos` means the end of the line.  Answers
+/// whether there was a command line to set.
+pub(crate) fn set_cmdline_str(text: &[u8], pos: ::core::ffi::c_int) -> bool {
     let Some(mut p) = get_ccline_ptr() else {
-        return 1;
+        return false;
     };
 
     // `p` is not always `ccline`: inside `<C-r>=` it is the command line
@@ -195,20 +199,19 @@ pub(crate) fn set_cmdline_str(text: &[u8], pos: ::core::ffi::c_int) -> ::core::f
     // Trigger CmdlineChanged autocommands.
     do_autocmd_cmdlinechanged(get_cmdline_type());
 
-    0
+    true
 }
 
 /// Remember `pos` as the byte position to put the cursor at, zero-based.
 ///
 /// It is not applied here but after `CTRL-\ e` or `CTRL-R =` has finished
-/// changing the command line.  Answers 1 when there is no command line, 0 on
-/// success.
-pub(crate) fn set_cmdline_pos(pos: ::core::ffi::c_int) -> ::core::ffi::c_int {
+/// changing the command line.  Answers whether there was a command line.
+pub(crate) fn set_cmdline_pos(pos: ::core::ffi::c_int) -> bool {
     if get_ccline_ptr().is_none() {
-        return 1;
+        return false;
     }
     new_cmdpos.set(pos.max(0));
-    0
+    true
 }
 
 /// `setcmdline()` function.
@@ -223,7 +226,7 @@ pub fn f_setcmdline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         let Ok(given) = tv_get_number_chk(&args[1]) else {
             return;
         };
-        pos = given as ::core::ffi::c_int - 1;
+        pos = number_as_int(given) - 1;
         if pos < 0 {
             emsg(gettext(e_positive));
             return;
@@ -231,20 +234,21 @@ pub fn f_setcmdline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     // tv_get_string() so that a NULL string reads as an empty one.
-    let answer = set_cmdline_str(numbuf.string(&args[0]).to_bytes(), pos);
-    result.write_number(answer as VarNumber);
+    // 0 when it was set, 1 when there is no command line.
+    let set = set_cmdline_str(numbuf.string(&args[0]).to_bytes(), pos);
+    result.write_number(VarNumber::from(!set));
 }
 
 /// `setcmdpos()` function.
 pub fn f_setcmdpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let pos = tv_get_number(&args[0]) as ::core::ffi::c_int - 1;
+    let pos = number_as_int(tv_get_number(&args[0])) - 1;
     if pos >= 0 {
-        result.write_number(set_cmdline_pos(pos) as VarNumber);
+        result.write_number(VarNumber::from(!set_cmdline_pos(pos)));
     }
 }
 
 /// The first character of the current command line (`:`, `/`, `?`, …).
-pub fn get_cmdline_firstc() -> ::core::ffi::c_int {
+pub fn get_cmdline_firstc() -> u8 {
     Cc::current().cmdfirstc
 }
 
@@ -259,11 +263,7 @@ pub fn f_wildtrigger(_args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData
         return;
     }
 
-    let cmd_type = get_cmdline_type();
-    if cmd_type == ':' as ::core::ffi::c_int
-        || cmd_type == '/' as ::core::ffi::c_int
-        || cmd_type == '?' as ::core::ffi::c_int
-    {
+    if matches!(get_cmdline_type(), b':' | b'/' | b'?') {
         // K_WILD as a single special key, pushed into the typeahead.
         let key_string = [K_SPECIAL, KS_EXTRA, KE_WILD];
         let _ = ins_typebuf(&key_string, Remap::No, 0, true, false);

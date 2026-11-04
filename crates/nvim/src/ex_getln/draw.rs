@@ -35,7 +35,7 @@ pub(crate) fn cmdline_charsize(idx: ::core::ffi::c_int) -> ::core::ffi::c_int {
 /// one for the `:` / `/` / `?` when there is one.
 pub(crate) fn cmd_startcol() -> ::core::ffi::c_int {
     let cc = Cc::current();
-    cc.cmdindent + i32::from(cc.cmdfirstc != NUL)
+    cc.cmdindent + i32::from(cc.cmdfirstc != 0)
 }
 
 /// The screen column for a byte position on the command line.
@@ -114,7 +114,7 @@ pub(crate) fn draw_cmdline(start: ::core::ffi::c_int, len: ::core::ffi::c_int) {
         // One star per character, not per byte.
         let mut i = 0;
         while i < len {
-            msg_putchar('*' as ::core::ffi::c_int);
+            msg_putchar(::core::ffi::c_int::from(b'*'));
             i += cluster_len_at(cc, start + i).max(1);
         }
     } else if !cc.last_colors.chunks().is_empty() {
@@ -200,7 +200,7 @@ pub fn unputcmdline() {
     let mut cc = Cc::current();
     msg_no_more.set(true);
     if cc.len() == cc.cmdpos && !ui_has(kUICmdline) {
-        msg_putchar(' ' as ::core::ffi::c_int);
+        msg_putchar(::core::ffi::c_int::from(b' '));
     } else {
         draw_cmdline(cc.cmdpos, cluster_len_at(cc, cc.cmdpos));
     }
@@ -222,7 +222,7 @@ pub fn put_on_cmdline(text: &[u8], redraw: bool) {
     realloc_cmdbuff(cc, cc.len() + len + 1);
 
     let pos = cc.cmdpos;
-    if cc.overstrike == 0 {
+    if !cc.overstrike {
         cc.cmdbuff.splice(pos, pos, text);
     } else {
         // Count the characters in the new string.
@@ -261,7 +261,7 @@ pub fn put_on_cmdline(text: &[u8], redraw: bool) {
         cursorcmd();
         draw_cmdline(cc.cmdpos, cc.len() - cc.cmdpos);
         // Avoid clearing the rest of the line too often.
-        if cmdline_row.get() != row_before || cc.overstrike != 0 {
+        if cmdline_row.get() != row_before || cc.overstrike {
             msg_clr_eos();
         }
         msg_no_more.set(false);
@@ -320,21 +320,21 @@ pub(crate) fn redrawcmdprompt() {
         cc.redraw_state = kCmdRedrawAll;
         return;
     }
-    if cc.cmdfirstc != NUL {
-        msg_putchar(cc.cmdfirstc);
+    if cc.cmdfirstc != 0 {
+        msg_putchar(::core::ffi::c_int::from(cc.cmdfirstc));
     }
     // A copy: the message code re-enters the editor.
     if let Some(prompt) = cc.cmdprompt.clone() {
         msg_str_hl(prompt.as_cstr(), cc.hl_id, false);
         cc.cmdindent = msg_col.get() + (msg_row.get() - cmdline_row.get()) * Columns.get();
         // The reverse of cmd_startcol().
-        if cc.cmdfirstc != NUL {
+        if cc.cmdfirstc != 0 {
             cc.cmdindent -= 1;
         }
     } else {
         let mut i = cc.cmdindent;
         while i > 0 {
-            msg_putchar(' ' as ::core::ffi::c_int);
+            msg_putchar(::core::ffi::c_int::from(b' '));
             i -= 1;
         }
     }

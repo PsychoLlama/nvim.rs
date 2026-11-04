@@ -202,7 +202,7 @@ pub fn search_regcomp(
         pat
     } else {
         if options & SEARCH_HIS != 0 {
-            add_to_history(HIST_SEARCH, typed, true, NUL as u8);
+            add_to_history(HIST_SEARCH, typed, true, 0);
         }
         XString::from_bytes(typed)
     };

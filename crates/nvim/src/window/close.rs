@@ -35,7 +35,6 @@ use crate::drawscreen::state::{clear_cmdline, mode_displayed};
 use crate::ex_cmds2::{can_abandon, dialog_changed};
 use crate::ex_docmd::cmdmod_has;
 use crate::guard::Suppress;
-use crate::keycodes::Ctrl_C;
 use crate::message::{e_cmdwin, e_floatonly};
 use crate::r#move::WinValid;
 use crate::option::vars::{p_confirm, p_write};
@@ -258,7 +257,7 @@ pub fn can_close_in_cmdwin(win: Win) -> Result<bool, Error> {
 fn cmdwin_allows(win: Win) -> Result<bool, Error> {
     if cmdwin_type.get() != 0 {
         if cmdwin_win.get() == Some(win.id()) {
-            cmdwin_result.set(Ctrl_C);
+            cmdwin_result.set(Key::CTRL_C);
             return Ok(false);
         } else if cmdwin_old_curwin.get() == Some(win.id()) {
             return Err(make_err(e_cmdwin));

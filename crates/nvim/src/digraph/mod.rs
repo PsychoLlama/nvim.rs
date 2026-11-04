@@ -669,7 +669,7 @@ pub fn ex_loadkeymap(excmd: &mut ExArg) {
 /// skipped; an over-long or half-empty entry is dropped, and an empty `to`
 /// reports E791.
 fn read_keymap_entries(excmd: &mut ExArg, mut buffer: Buf) {
-    while let Some(line) = exarg_getline(excmd, 0, 0, true) {
+    while let Some(line) = exarg_getline(excmd, Some(0), 0, true) {
         let s = skip_white(&line);
         if !s.is_empty() && s[0] != b'"' {
             let (from, rest) = split_at_white(s);

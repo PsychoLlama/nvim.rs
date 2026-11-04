@@ -17,7 +17,7 @@
 use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
 use crate::cstr;
-use crate::keycodes::{Ctrl_Z, SpecialKey};
+use crate::keycodes::SpecialKey;
 use crate::option::vars::P_WIM;
 use crate::options::OptWimFlags;
 use crate::types::{ExpandContext, Failed, OK};
@@ -36,7 +36,7 @@ pub(crate) fn command_line_wildchar_complete(s: &mut CommandLineState) -> KeyOut
     let cc = Cc::current();
     let res;
     let mut options = WildOpts::NO_BEEP;
-    let redraw_if_menu_empty = s.c == SpecialKey::Wild.code();
+    let redraw_if_menu_empty = s.c == SpecialKey::Wild;
     let wim_noselect = p_wmnu() && wim_has(0, kOptWimFlagNoselect);
 
     if wim_has(s.wim_index, kOptWimFlagLastused) {
@@ -65,13 +65,9 @@ pub(crate) fn command_line_wildchar_complete(s: &mut CommandLineState) -> KeyOut
         let wim_full = wim_has(0, kOptWimFlagFull);
 
         s.wim_index = 0;
-        if OptInt::from(s.c) == p_wc()
-            || OptInt::from(s.c) == p_wcm()
-            || s.c == SpecialKey::Wild.code()
-            || s.c == Ctrl_Z
-        {
+        if s.c == wildchar() || is_wildcharm(s.c) || s.c == SpecialKey::Wild || s.c == Key::CTRL_Z {
             options |= WildOpts::MAY_EXPAND_PATTERN;
-            if s.c == SpecialKey::Wild.code() {
+            if s.c == SpecialKey::Wild {
                 options |= WildOpts::FUNC_TRIGGER;
             }
             let start = s.is_state.search_start;
@@ -97,7 +93,7 @@ pub(crate) fn command_line_wildchar_complete(s: &mut CommandLineState) -> KeyOut
 
         // If interrupted while completing, behave as if it failed.
         if got_int.get() {
-            vpeekc().code(); // remove <C-C> from the input stream
+            vpeekc(); // remove <C-C> from the input stream
             got_int.set(false); // don't abandon the command line
             expand_completion(WildOpts::NONE, WildMode::Free);
             completion_mut(|xpc| xpc.context = ExpandContext::Nothing);
@@ -146,7 +142,7 @@ pub(crate) fn command_line_wildchar_complete(s: &mut CommandLineState) -> KeyOut
         s.wim_index += 1;
     }
 
-    if s.c == ESC {
+    if s.c == Key::ESC {
         s.gotesc = true;
     }
 

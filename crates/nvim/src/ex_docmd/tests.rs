@@ -411,7 +411,7 @@ fn the_loop_store_reads_through_stores_and_replays_at_depth() {
         });
         let read = |source: &mut dyn ReadLines| {
             source
-                .next_line(0, 0, false)
+                .next_line(Some(0), 0, false)
                 .map(|line| String::from_utf8_lossy(&line).into_owned())
         };
         assert_eq!(read(&mut twice).as_deref(), Some("one"));
@@ -450,13 +450,16 @@ fn the_loop_store_reads_through_stores_and_replays_at_depth() {
             inner: &mut once,
         });
         let mut first = twice
-            .next_line(0, 0, false)
+            .next_line(Some(0), 0, false)
             .expect("a stored line")
             .into_vec();
         first[0] = 0;
-        assert_eq!(twice.next_line(0, 0, false).as_deref(), Some(&b"two"[..]));
+        assert_eq!(
+            twice.next_line(Some(0), 0, false).as_deref(),
+            Some(&b"two"[..])
+        );
         // Replaying, past the end is the end of the body.
-        assert!(twice.next_line(0, 0, false).is_none());
+        assert!(twice.next_line(Some(0), 0, false).is_none());
     }
     assert_eq!(lines(&inner)[0].0, "one");
     // The script itself is still at its second line.

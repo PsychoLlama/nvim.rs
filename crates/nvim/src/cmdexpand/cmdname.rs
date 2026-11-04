@@ -584,11 +584,11 @@ pub fn set_cmd_context(expand: &mut Expand, line: &[u8], col: c_int, use_ccline:
     let snapshot = expand.line.clone();
     let text = snapshot.as_cstr();
 
-    if use_ccline && ccline.cmdfirstc == c_int::from(b'=') {
+    if use_ccline && ccline.cmdfirstc == b'=' {
         // Pass CmdIdx::SIZE because there is no real command.
         set_context_for_expression(expand, 0, CmdIdx::SIZE);
         expand.has_pattern = true;
-    } else if use_ccline && ccline.input_fn != 0 {
+    } else if use_ccline && ccline.input_fn {
         expand.context = ccline.xp_context;
         expand.pattern = 0;
         expand.has_pattern = true;

@@ -36,10 +36,11 @@ use crate::ex_docmd::{
 };
 
 use crate::getchar::beep_flush;
-use crate::keycodes::{Ctrl_C, KE_IGNORE, KE_XF1, KE_XF2};
+use crate::keycodes::SpecialKey;
 use crate::message::e_autocmd_close;
 use crate::option::vars::{p_awa, p_confirm, p_write};
 use crate::startup::exiting;
+use crate::types::Key;
 use crate::winlayer::graph::{cmdwin_result, cmdwin_type, firstwin, lastwin, topframe};
 
 use crate::message::msg;
@@ -54,12 +55,6 @@ use crate::window::{
 };
 
 use crate::winlayer::{Buf, Win, WinId, first_tab, first_window, last_window, tabs, windows};
-
-/// The key a command-line window sends back to close itself, with the
-/// modifier bits an `xf1`/`xf2`/`ignore` special key carries.
-const fn special_key(code: c_int) -> c_int {
-    -(253 + (code << 8))
-}
 
 /// `:bdelete`, `:bwipeout` and `:bunload`.
 pub(crate) fn ex_bunload(excmd: &mut ExArg) {
@@ -133,7 +128,7 @@ fn quit_was_cancelled(window: WinId, buf: impl FnOnce() -> Buf) -> bool {
 pub(crate) fn ex_quit(excmd: &mut ExArg) {
     if cmdwin_type.get() != 0 {
         // In the command-line window, `:q` closes that instead.
-        cmdwin_result.set(Ctrl_C);
+        cmdwin_result.set(Key::CTRL_C);
         return;
     }
     if text_locked() {
@@ -225,10 +220,10 @@ pub(crate) fn ex_cquit(excmd: &mut ExArg) {
 /// starts writing.
 pub fn before_quit_all(excmd: &mut ExArg) -> Result<(), Failed> {
     if cmdwin_type.get() != 0 {
-        cmdwin_result.set(special_key(if excmd.forceit {
-            KE_XF1 as c_int
+        cmdwin_result.set(Key::from(if excmd.forceit {
+            SpecialKey::Xf1
         } else {
-            KE_XF2 as c_int
+            SpecialKey::Xf2
         }));
         return Err(Failed);
     }
@@ -258,7 +253,7 @@ pub(crate) fn ex_quitall(excmd: &mut ExArg) {
 /// `:close`.
 pub(crate) fn ex_close(excmd: &mut ExArg) {
     if cmdwin_type.get() != 0 {
-        cmdwin_result.set(Ctrl_C);
+        cmdwin_result.set(Key::CTRL_C);
         return;
     }
     if text_locked() || curbuf_locked() {
@@ -351,7 +346,7 @@ pub(crate) fn ex_win_close(forceit: c_int, win: Win, tabpage: Option<TabPage>) {
 /// `:tabclose`.
 pub(crate) fn ex_tabclose(excmd: &mut ExArg) {
     if cmdwin_type.get() != 0 {
-        cmdwin_result.set(special_key(KE_IGNORE as c_int));
+        cmdwin_result.set(Key::from(SpecialKey::Ignore));
         return;
     }
     if only_tab() {
@@ -380,7 +375,7 @@ pub(crate) fn ex_tabclose(excmd: &mut ExArg) {
 /// `:tabonly`.
 pub(crate) fn ex_tabonly(excmd: &mut ExArg) {
     if cmdwin_type.get() != 0 {
-        cmdwin_result.set(special_key(KE_IGNORE as c_int));
+        cmdwin_result.set(Key::from(SpecialKey::Ignore));
         return;
     }
     if only_tab() {
@@ -540,7 +535,7 @@ pub(crate) fn ex_stop(excmd: &mut ExArg) {
 /// `:xit` and `:wq` — write, then quit.
 pub(crate) fn ex_exit(excmd: &mut ExArg) {
     if cmdwin_type.get() != 0 {
-        cmdwin_result.set(Ctrl_C);
+        cmdwin_result.set(Key::CTRL_C);
         return;
     }
     if text_locked() {

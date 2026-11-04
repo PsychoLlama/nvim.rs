@@ -7,23 +7,30 @@
 //! pair saves and restores the window the preview scrolled.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::charset::skip;
 use crate::cstr;
 use crate::strings::has_char;
-use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 
 use crate::guard::Suppress;
 use crate::mbyte::cluster_len;
+use crate::narrow::len_as_int;
 use crate::types::{Failed, NUL};
 use core::ffi::CStr;
 
 /// Fire a `Cmdline*` / `Cmdwin*` autocommand whose `<afile>` and `<amatch>`
 /// are the command-line type character.
-pub(crate) fn trigger_cmd_autocmd(typechar: ::core::ffi::c_int, evt: AutoEvent) {
-    let typestr = [typechar as u8, 0];
+pub(crate) fn trigger_cmd_autocmd(typechar: u8, evt: AutoEvent) {
+    let typestr = [typechar, 0];
     cmdline_autocmd(evt, cstr::in_bytes(&typestr));
 }
 
@@ -144,19 +151,19 @@ pub(crate) fn parse_pattern_and_range(incsearch_start: Pos) -> Option<PatternSpa
         // ends before anything else reaches the line; what outlives it is
         // offsets.
         let buf = ea.line.buffer();
-        let at = |q: usize| ::core::ffi::c_int::from(cstr::byte_at(buf, q));
+        let at = |q: usize| cstr::byte_at(buf, q);
         // C's `skipwhite` over the same string.
         let skip_ws = |q: usize| q + skip::white(buf.get(q..).unwrap_or_default());
-        if !has_char(c"sgvlu", at(cmd)) {
+        if !has_char(c"sgvlu", ::core::ffi::c_int::from(at(cmd))) {
             return None;
         }
 
         // Skip over the command name to find the pattern separator.
         let mut p = cmd;
-        while ascii_isalpha(at(p)) {
+        while at(p).is_ascii_alphabetic() {
             p += 1;
         }
-        if at(skip_ws(p)) == NUL {
+        if at(skip_ws(p)) == 0 {
             return None;
         }
 
@@ -173,26 +180,24 @@ pub(crate) fn parse_pattern_and_range(incsearch_start: Pos) -> Option<PatternSpa
             || abbreviates(c"snomagic", 3)
             || abbreviates(c"vglobal", 0)
         {
-            if at(cmd) == 's' as ::core::ffi::c_int && at(cmd + 1) == 'm' as ::core::ffi::c_int {
+            if at(cmd) == b's' && at(cmd + 1) == b'm' {
                 magic_overruled.set(OPTION_MAGIC_ON);
-            } else if at(cmd) == 's' as ::core::ffi::c_int
-                && at(cmd + 1) == 'n' as ::core::ffi::c_int
-            {
+            } else if at(cmd) == b's' && at(cmd + 1) == b'n' {
                 magic_overruled.set(OPTION_MAGIC_OFF);
             }
         } else if abbreviates(c"sort", 3) || abbreviates(c"uniq", 3) {
             // Skip over "!" and the flags.
-            if at(p) == '!' as ::core::ffi::c_int {
+            if at(p) == b'!' {
                 p = skip_ws(p + 1);
             }
             loop {
                 p = skip_ws(p);
-                if !ascii_isalpha(at(p)) {
+                if !at(p).is_ascii_alphabetic() {
                     break;
                 }
                 p += 1;
             }
-            if at(p) == NUL {
+            if at(p) == 0 {
                 return None;
             }
         } else if abbreviates(c"vimgrep", 3)
@@ -202,13 +207,13 @@ pub(crate) fn parse_pattern_and_range(incsearch_start: Pos) -> Option<PatternSpa
             || abbreviates(c"global", 0)
         {
             // Skip an optional "!".
-            if at(p) == '!' as ::core::ffi::c_int {
+            if at(p) == b'!' {
                 p += 1;
-                if at(skip_ws(p)) == NUL {
+                if at(skip_ws(p)) == 0 {
                     return None;
                 }
             }
-            if at(cmd) != 'g' as ::core::ffi::c_int {
+            if at(cmd) != b'g' {
                 delim_optional = true;
             }
         } else {
@@ -216,16 +221,18 @@ pub(crate) fn parse_pattern_and_range(incsearch_start: Pos) -> Option<PatternSpa
         }
 
         p = skip_ws(p);
-        let delim = if delim_optional && vim_is_ident_char(at(p) as uint8_t as ::core::ffi::c_int) {
-            ' ' as ::core::ffi::c_int
-        } else {
-            let c = at(p);
-            p += 1;
-            c
-        };
+        let delim = ::core::ffi::c_int::from(
+            if delim_optional && vim_is_ident_char(::core::ffi::c_int::from(at(p))) {
+                b' '
+            } else {
+                let c = at(p);
+                p += 1;
+                c
+            },
+        );
 
         let end = p + skip_pattern(&buf[p.min(buf.len())..], delim, &mut magic);
-        let use_last_pat = end == p && at(end) == delim;
+        let use_last_pat = end == p && ::core::ffi::c_int::from(at(end)) == delim;
 
         if end == p && !use_last_pat {
             return None;
@@ -239,8 +246,8 @@ pub(crate) fn parse_pattern_and_range(incsearch_start: Pos) -> Option<PatternSpa
         // Found a non-empty pattern, or "//".
         PatternSpan {
             delim,
-            skiplen: p as ::core::ffi::c_int,
-            patlen: (end - p) as ::core::ffi::c_int,
+            skiplen: len_as_int(p),
+            patlen: len_as_int(end - p),
         }
     };
 
@@ -278,7 +285,7 @@ pub(crate) fn parse_pattern_and_range_of(
 ///
 /// May change the last search pattern.
 pub(crate) fn do_incsearch_highlighting(
-    firstc: ::core::ffi::c_int,
+    firstc: u8,
     is_state: &IncsearchState,
 ) -> Option<PatternSpan> {
     if !p_is() || cmd_silent.get() {
@@ -289,15 +296,15 @@ pub(crate) fn do_incsearch_highlighting(
     search_first_line.set(LineNr::ZERO);
     search_last_line.set(MAXLNUM);
 
-    if firstc == '/' as ::core::ffi::c_int || firstc == '?' as ::core::ffi::c_int {
+    if firstc == b'/' || firstc == b'?' {
         return Some(PatternSpan {
-            delim: firstc,
+            delim: ::core::ffi::c_int::from(firstc),
             skiplen: 0,
             patlen: Cc::current().len(),
         });
     }
 
-    if firstc != ':' as ::core::ffi::c_int {
+    if firstc != b':' {
         return None;
     }
 
@@ -307,7 +314,7 @@ pub(crate) fn do_incsearch_highlighting(
 
 /// Do the `'incsearch'` preview, if it is wanted here.
 pub(crate) fn may_do_incsearch_highlighting(
-    firstc: ::core::ffi::c_int,
+    firstc: u8,
     count: ::core::ffi::c_int,
     s: &mut IncsearchState,
 ) {
@@ -377,11 +384,7 @@ pub(crate) fn may_do_incsearch_highlighting(
         };
         // So it doesn't beep on a bad expression.
         let no_emsg = Suppress::emsg();
-        let dir = if firstc == ':' as ::core::ffi::c_int {
-            '/' as ::core::ffi::c_int
-        } else {
-            firstc
-        };
+        let dir = ::core::ffi::c_int::from(if firstc == b':' { b'/' } else { firstc });
         // A copy of the pattern: the `patlen` bytes of the command line
         // from `skiplen`.
         let pat = pattern_of(cc, skiplen, patlen);
@@ -400,7 +403,7 @@ pub(crate) fn may_do_incsearch_highlighting(
         // Interrupted while searching: behave as if it failed.
         if got_int.get() {
             // Remove <C-C> from the input stream.
-            vpeekc().code();
+            vpeekc();
             // Don't abandon the command line.
             got_int.set(false);
             found = 0;
@@ -475,8 +478,8 @@ pub(crate) fn may_do_incsearch_highlighting(
 ///
 /// Answers `Ok` when the caller should treat the key as unchanged.
 pub(crate) fn may_add_char_to_search(
-    firstc: ::core::ffi::c_int,
-    c: &mut ::core::ffi::c_int,
+    firstc: u8,
+    c: &mut Key,
     s: &mut IncsearchState,
 ) -> Result<(), Failed> {
     // Parsing the range may already set the last search pattern.
@@ -496,8 +499,11 @@ pub(crate) fn may_add_char_to_search(
 
     if s.did_incsearch {
         Win::current().w_cursor = s.match_end;
-        *c = gchar_cursor();
-        if *c != NUL {
+        // The character after the match, which becomes the key typed: a
+        // codepoint read from the text, as the C's `int` was.
+        let mut ch = gchar_cursor();
+        *c = Key::from_code(ch);
+        if ch != NUL {
             // With 'ignorecase' and 'smartcase' set and no uppercase in
             // the command line, lowercase the character.
             if p_ic()
@@ -505,25 +511,26 @@ pub(crate) fn may_add_char_to_search(
                 // The pattern starts `skiplen` bytes into the command line.
                 && !pat_has_uppercase(&pattern_of(Cc::current(), skiplen, ::core::ffi::c_int::MAX))
             {
-                *c = mb_tolower(*c);
+                ch = mb_tolower(ch);
             }
             let magics = if magic_isset() { c"\\~^$.*[" } else { c"\\^$" };
-            if *c == search_delim || has_char(magics, *c) {
+            if ch == search_delim || has_char(magics, ch) {
                 // Put a backslash before the special characters.
-                stuff_readbuf_char(Key::from_code(*c));
-                *c = '\\' as ::core::ffi::c_int;
+                stuff_readbuf_char(Key::from_code(ch));
+                ch = ::core::ffi::c_int::from(b'\\');
             }
             // Add any composing characters.
-            let cursor_len = || with_cursor_rest(cluster_len) as ::core::ffi::c_int;
-            if utf_char2len(*c) != cursor_len() {
-                let save_c = *c;
-                while utf_char2len(*c) != cursor_len() {
-                    Win::current().w_cursor.col += utf_char2len(*c);
-                    *c = gchar_cursor();
-                    stuff_readbuf_char(Key::from_code(*c));
+            let cursor_len = || len_as_int(with_cursor_rest(cluster_len));
+            if utf_char2len(ch) != cursor_len() {
+                let save_c = ch;
+                while utf_char2len(ch) != cursor_len() {
+                    Win::current().w_cursor.col += utf_char2len(ch);
+                    ch = gchar_cursor();
+                    stuff_readbuf_char(Key::from_code(ch));
                 }
-                *c = save_c;
+                ch = save_c;
             }
+            *c = Key::from_code(ch);
             return Err(Failed);
         }
     }
@@ -576,7 +583,7 @@ pub(crate) fn finish_incsearch_highlighting(
 /// Answers `Ok` when there was no incremental search to move, `Err`
 /// otherwise (which is what tells the key loop the line did not change).
 pub(crate) fn may_do_command_line_next_incsearch(
-    firstc: ::core::ffi::c_int,
+    firstc: u8,
     count: ::core::ffi::c_int,
     s: &mut IncsearchState,
     next_match: bool,
@@ -619,12 +626,12 @@ pub(crate) fn may_do_command_line_next_incsearch(
 
     // Do not search for the search end delimiter, unless it is part of
     // the pattern; an escaped one is searched for unescaped.
-    if pat.len() > 2 && firstc == ::core::ffi::c_int::from(pat[pat.len() - 1]) {
+    if pat.len() > 2 && pat.last() == Some(&firstc) {
         pat.pop();
         if let Some(last) = pat.last_mut()
             && *last == b'\\'
         {
-            *last = firstc as u8;
+            *last = firstc;
         }
     }
 
@@ -656,12 +663,12 @@ pub(crate) fn may_do_command_line_next_incsearch(
         s.search_start = s.match_start;
         s.match_end = t;
         s.match_start = t;
-        if !next_match && firstc != '?' as ::core::ffi::c_int {
+        if !next_match && firstc != b'?' {
             // Move just before the current match, so that when nv_search
             // finishes the cursor is put back on the match.
             s.search_start = t;
             decl(&mut s.search_start);
-        } else if next_match && firstc == '?' as ::core::ffi::c_int {
+        } else if next_match && firstc == b'?' {
             // Move just after the current match, for the same reason.
             s.search_start = t;
             incl(&mut s.search_start);
@@ -669,7 +676,7 @@ pub(crate) fn may_do_command_line_next_incsearch(
         if lt(t, s.search_start) && next_match {
             // Wrapped around.
             s.search_start = t;
-            if firstc == '?' as ::core::ffi::c_int {
+            if firstc == b'?' {
                 incl(&mut s.search_start);
             } else {
                 decl(&mut s.search_start);
@@ -716,11 +723,11 @@ pub(crate) fn empty_pattern(pat: &[u8], delim: ::core::ffi::c_int) -> bool {
 /// [`empty_pattern`] with the `'magic'` level already known.
 pub(crate) fn empty_pattern_magic(pat: &[u8], magic_val: Magic) -> bool {
     let mut len = pat.len();
-    let at = |i: usize| ::core::ffi::c_int::from(pat[i]);
+    let at = |i: usize| pat[i];
 
     // Remove a trailing \v and the like.
     while len >= 2
-        && at(len - 2) == '\\' as ::core::ffi::c_int
+        && at(len - 2) == b'\\'
         && has_char(c"mMvVcCZ", ::core::ffi::c_int::from(pat[len - 1]))
     {
         len -= 2;
@@ -730,16 +737,16 @@ pub(crate) fn empty_pattern_magic(pat: &[u8], magic_val: Magic) -> bool {
     // ends with '|' and very magic is set).
     len == 0
         || len > 1
-            && at(len - 1) == '|' as ::core::ffi::c_int
-            && (at(len - 2) == '\\' as ::core::ffi::c_int && magic_val == MAGIC_ON
-                || at(len - 2) != '\\' as ::core::ffi::c_int && magic_val == MAGIC_ALL)
+            && at(len - 1) == b'|'
+            && (at(len - 2) == b'\\' && magic_val == MAGIC_ON
+                || at(len - 2) != b'\\' && magic_val == MAGIC_ALL)
 }
 
 /// C's `skip_regexp_ex(p, delim, magic_isset(), NULL, NULL, &magic)`: how
 /// long the pattern `text` starts with is, and what magicness it ended
 /// under. `text` holds a NUL.
 fn skip_pattern(text: &[u8], delim: ::core::ffi::c_int, magic: &mut Magic) -> usize {
-    let is_magic = magic_isset() as ::core::ffi::c_int;
+    let is_magic = ::core::ffi::c_int::from(magic_isset());
     let (end, ended) = skip_regexp_magic(text, delim, is_magic);
     *magic = ended;
     end

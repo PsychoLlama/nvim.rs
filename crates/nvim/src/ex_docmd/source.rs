@@ -358,7 +358,7 @@ pub(crate) trait ReadLines {
     /// The next line, or `None` at the end of the input. `c` is the prompt
     /// character, `indent` the indent to show and `do_concat` whether `\`
     /// continuation lines are joined -- each source takes what it needs.
-    fn next_line(&mut self, c: c_int, indent: c_int, do_concat: bool) -> Option<XString>;
+    fn next_line(&mut self, c: Option<u8>, indent: c_int, do_concat: bool) -> Option<XString>;
     /// Which kind of source this is.
     fn kind(&self) -> SourceKind;
     /// Whether this is a `:while`/`:for` replaying, rather than the source
@@ -421,7 +421,7 @@ pub(crate) struct LoopLines<'a> {
 }
 
 impl LoopLines<'_> {
-    fn next_line(&mut self, c: c_int, indent: c_int, do_concat: bool) -> Option<XString> {
+    fn next_line(&mut self, c: Option<u8>, indent: c_int, do_concat: bool) -> Option<XString> {
         let next = usize::try_from(*self.current_line + 1).unwrap_or(0);
         let Some(stored) = self.store.get(next) else {
             // Past the end of what was stored. On a repeat pass that means
@@ -447,7 +447,7 @@ impl LoopLines<'_> {
 }
 
 impl ReadLines for LineSource<'_> {
-    fn next_line(&mut self, c: c_int, indent: c_int, do_concat: bool) -> Option<XString> {
+    fn next_line(&mut self, c: Option<u8>, indent: c_int, do_concat: bool) -> Option<XString> {
         match self {
             // A command that reads more of its body with no source to read
             // it from asks the command line.
@@ -586,7 +586,7 @@ pub fn not_exiting(save_exiting: bool) {
 /// source. `None` at the end of input.
 pub(crate) fn read_next_line(
     excmd: &mut ExArg,
-    c: c_int,
+    c: Option<u8>,
     indent: c_int,
     do_concat: bool,
 ) -> Option<XString> {

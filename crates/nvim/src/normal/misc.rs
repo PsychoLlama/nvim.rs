@@ -10,7 +10,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::keycodes::{Ctrl_C, SpecialKey};
+use crate::keycodes::SpecialKey;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win, windows};
 
@@ -223,7 +223,7 @@ pub(crate) fn nv_normal(cmd_arg: &mut CmdArg) {
     }
     restart_edit.set(Key::NUL);
     if cmdwin_type.get() != 0 {
-        cmdwin_result.set(Ctrl_C);
+        cmdwin_result.set(Key::CTRL_C);
     }
     if visual_active() {
         end_visual_mode();
@@ -254,14 +254,14 @@ pub(crate) fn nv_esc(cmd_arg: &mut CmdArg) {
         }
         restart_edit.set(Key::NUL);
         if cmdwin_type.get() != 0 {
-            cmdwin_result.set(SpecialKey::Ignore.code());
+            cmdwin_result.set(Key::from(SpecialKey::Ignore));
             got_int.set(false);
             return;
         }
     } else if cmdwin_type.get() != 0 && ex_normal_busy.get() != 0 && typebuf_was_empty.get() {
         // `:normal` in the command-line window ran out of keys: leave the
         // window open rather than acting on the <Esc> it synthesised.
-        cmdwin_result.set(SpecialKey::Ignore.code());
+        cmdwin_result.set(Key::from(SpecialKey::Ignore));
         return;
     }
     if visual_active() {

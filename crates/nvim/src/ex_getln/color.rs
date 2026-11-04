@@ -6,6 +6,13 @@
 //! the built-in colouring of `=` expressions.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -15,6 +22,7 @@ use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{NumBuf, index_of, list_items, list_iter};
 use crate::guard::Suppress;
 use crate::message_fmt::msg_cstr;
+use crate::narrow::{len_as_int, number_as_int};
 use crate::tr_plural;
 use crate::types::VAR_LIST;
 
@@ -26,7 +34,7 @@ pub(crate) fn color_expr_cmdline(mut colored_ccline: Cc) {
         let text = cstr::until_nul(colored_ccline.bytes());
         let line = [text];
         let mut pstate = ParserState::new(&line, true);
-        let _ = viml_pexpr_parse(&mut pstate, kExprFlagsDisallowEOC as ::core::ffi::c_int);
+        let _ = viml_pexpr_parse(&mut pstate, kExprFlagsDisallowEOC.cast_signed());
         pstate.take_highlight()
     };
 
@@ -37,26 +45,24 @@ pub(crate) fn color_expr_cmdline(mut colored_ccline: Cc) {
 
     let mut prev_end: size_t = 0;
     for chunk in &colors {
-        debug_assert!(chunk.start.col < INT_MAX as size_t);
-        debug_assert!(chunk.end_col < INT_MAX as size_t);
         if chunk.start.col != prev_end {
             chunks.push(CmdlineColorChunk {
-                start: prev_end as ::core::ffi::c_int,
-                end: chunk.start.col as ::core::ffi::c_int,
+                start: len_as_int(prev_end),
+                end: len_as_int(chunk.start.col),
                 hl_id: 0,
             });
         }
         chunks.push(CmdlineColorChunk {
-            start: chunk.start.col as ::core::ffi::c_int,
-            end: chunk.end_col as ::core::ffi::c_int,
+            start: len_as_int(chunk.start.col),
+            end: len_as_int(chunk.end_col),
             hl_id: syn_name2id(chunk.group),
         });
         prev_end = chunk.end_col;
     }
     let len = colored_ccline.len();
-    if prev_end < len as size_t {
+    if prev_end < usize::try_from(len).unwrap_or(0) {
         colored_ccline.last_colors.push(CmdlineColorChunk {
-            start: prev_end as ::core::ffi::c_int,
+            start: len_as_int(prev_end),
             end: len,
             hl_id: 0,
         });
@@ -94,7 +100,7 @@ pub(crate) fn color_cmdline(mut colored_ccline: Cc) -> bool {
     macro_rules! print_errmsg {
         ($($arg:tt)*) => {{
             msg_scroll.set(1);
-msg_putchar('\n' as ::core::ffi::c_int);
+msg_putchar(::core::ffi::c_int::from(b'\n'));
             let _: bool = $crate::smsg!(HLF_E, $($arg)*);
             printed_errmsg = true;
         }};
@@ -148,13 +154,13 @@ msg_putchar('\n' as ::core::ffi::c_int);
         if colored_ccline.highlight_callback.is_set() {
             // Currently this should only happen while processing input()
             // prompts.
-            debug_assert!(colored_ccline.input_fn != 0);
+            debug_assert!(colored_ccline.input_fn);
             // A reference of this frame's own, rather than upstream's bit
             // copy: the callback is user code, and the command line it
             // came from is a global it can reach.
             color_cb = colored_ccline.highlight_callback.duplicate();
             can_free_cb = true;
-        } else if colored_ccline.cmdfirstc == ':' as ::core::ffi::c_int {
+        } else if colored_ccline.cmdfirstc == b':' {
             // C's TRY_WRAP.
             let mut tstate: TryState = TRY_STATE_INIT;
             try_enter(&mut tstate);
@@ -163,7 +169,7 @@ msg_putchar('\n' as ::core::ffi::c_int);
                 dict_get_callback(Some(&globvar_dict()), b"Nvim_color_cmdline", &mut color_cb);
             err.absorb(try_leave(&tstate));
             can_free_cb = true;
-        } else if colored_ccline.cmdfirstc == '=' as ::core::ffi::c_int {
+        } else if colored_ccline.cmdfirstc == b'=' {
             color_expr_cmdline(colored_ccline);
         }
         if err.is_set() || !dgc_ret {
@@ -175,7 +181,7 @@ msg_putchar('\n' as ::core::ffi::c_int);
         }
         if colored_ccline
             .cmdbuff
-            .raw_byte_at(colored_ccline.len() as usize)
+            .raw_byte_at(usize::try_from(colored_ccline.len()).unwrap_or(0))
             != 0
         {
             arg_allocated = true;
@@ -234,12 +240,11 @@ msg_putchar('\n' as ::core::ffi::c_int);
             let Ok(start) = tv_get_number_chk(&chunk[0].li_tv) else {
                 break 'body Label::Error;
             };
-            if !(prev_end <= start && start < colored_ccline.len() as VarNumber) {
+            if !(prev_end <= start && start < VarNumber::from(colored_ccline.len())) {
                 let end = colored_ccline.len();
                 print_errmsg!("E5403: Chunk {i} start {start} not in range [{prev_end}, {end})");
                 break 'body Label::Error;
-            } else if utf8len_tab_zero
-                [usize::from(colored_ccline.byte_at(start as ::core::ffi::c_int))]
+            } else if utf8len_tab_zero[usize::from(colored_ccline.byte_at(number_as_int(start)))]
                 == 0
             {
                 print_errmsg!("E5405: Chunk {i} start {start} splits multibyte character");
@@ -248,8 +253,8 @@ msg_putchar('\n' as ::core::ffi::c_int);
 
             if start != prev_end {
                 let coloured = CmdlineColorChunk {
-                    start: prev_end as ::core::ffi::c_int,
-                    end: start as ::core::ffi::c_int,
+                    start: number_as_int(prev_end),
+                    end: number_as_int(start),
                     hl_id: 0,
                 };
                 colored_ccline.last_colors.push(coloured);
@@ -258,13 +263,12 @@ msg_putchar('\n' as ::core::ffi::c_int);
             let Ok(end) = tv_get_number_chk(&chunk[1].li_tv) else {
                 break 'body Label::Error;
             };
-            if !(start < end && end <= colored_ccline.len() as VarNumber) {
+            if !(start < end && end <= VarNumber::from(colored_ccline.len())) {
                 let limit = colored_ccline.len();
                 print_errmsg!("E5404: Chunk {i} end {end} not in range ({start}, {limit}]");
                 break 'body Label::Error;
-            } else if end < colored_ccline.len() as VarNumber
-                && utf8len_tab_zero[usize::from(colored_ccline.byte_at(end as ::core::ffi::c_int))]
-                    == 0
+            } else if end < VarNumber::from(colored_ccline.len())
+                && utf8len_tab_zero[usize::from(colored_ccline.byte_at(number_as_int(end)))] == 0
             {
                 print_errmsg!("E5406: Chunk {i} end {end} splits multibyte character");
                 break 'body Label::Error;
@@ -275,16 +279,16 @@ msg_putchar('\n' as ::core::ffi::c_int);
                 break 'body Label::Error;
             };
             let coloured = CmdlineColorChunk {
-                start: start as ::core::ffi::c_int,
-                end: end as ::core::ffi::c_int,
+                start: number_as_int(start),
+                end: number_as_int(end),
                 hl_id: syn_name2id(group),
             };
             colored_ccline.last_colors.push(coloured);
         }
 
-        if prev_end < colored_ccline.len() as VarNumber {
+        if prev_end < VarNumber::from(colored_ccline.len()) {
             let coloured = CmdlineColorChunk {
-                start: prev_end as ::core::ffi::c_int,
+                start: number_as_int(prev_end),
                 end: colored_ccline.len(),
                 hl_id: 0,
             };

@@ -409,7 +409,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> Step {
 fn key_end_insert(s: &mut InsertState) -> Next {
     if s.c == Key::CTRL_C && cmdwin_type.get() != 0 {
         // Close the command-line window.
-        cmdwin_result.set(SpecialKey::Ignore.code());
+        cmdwin_result.set(Key::from(SpecialKey::Ignore));
         got_int.set(false); // don't stop executing autocommands et al
         s.nomove = true;
         return Next::Leave;
@@ -481,7 +481,7 @@ fn key_eol(s: &mut InsertState) -> Next {
     }
     // In the command-line window it accepts the line.
     if cmdwin_type.get() != 0 {
-        cmdwin_result.set(Key::CAR.code());
+        cmdwin_result.set(Key::CAR);
         return Next::Leave;
     }
     // In a prompt buffer it submits, unless Shift is held.

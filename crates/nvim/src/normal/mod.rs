@@ -75,7 +75,7 @@ pub(crate) const kMarkBeginLine: MarkMove = 1;
 pub(crate) const kMarkAll: MarkGet = 1;
 pub(crate) const GETF_ALT: GetFileFlags = 2;
 pub(crate) const GETF_SETMARK: GetFileFlags = 1;
-pub(crate) const HIST_SEARCH: c_int = 1;
+pub(crate) use crate::cmdhist::HIST_SEARCH;
 pub(crate) const VSE_NONE: c_uint = 0;
 pub(crate) const kMTLineWise: MotionType = 1;
 pub(crate) const kMTCharWise: MotionType = 0;
