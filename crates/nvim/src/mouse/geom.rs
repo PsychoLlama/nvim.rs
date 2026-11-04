@@ -137,3 +137,123 @@ pub(crate) fn wheel_leftcol(leftcol: ColNr, step: c_int, direction: c_int) -> Co
     let moved = leftcol + if direction == MSCR_RIGHT { -step } else { step };
     moved.max(ColNr::ZERO)
 }
+
+#[cfg(test)]
+mod tests {
+    //! The key-side decoding a mouse event goes through before `do_mouse`
+    //! reads the buffer: which keys are mouse keys, which button and phase
+    //! each names, the click count and modifier letters `%@Func@` handlers
+    //! receive, and the two pieces of scroll arithmetic.
+
+    use super::*;
+    use crate::keycodes::mouse_button;
+    use crate::types::Key;
+
+    const MOUSE_KEYS: [(SpecialKey, c_int, bool, bool); 18] = [
+        (SpecialKey::Leftmouse, MOUSE_LEFT, true, false),
+        (SpecialKey::Leftdrag, MOUSE_LEFT, false, true),
+        (SpecialKey::Leftrelease, MOUSE_LEFT, false, false),
+        (SpecialKey::Middlemouse, MOUSE_MIDDLE, true, false),
+        (SpecialKey::Middledrag, MOUSE_MIDDLE, false, true),
+        (SpecialKey::Middlerelease, MOUSE_MIDDLE, false, false),
+        (SpecialKey::Rightmouse, MOUSE_RIGHT, true, false),
+        (SpecialKey::Rightdrag, MOUSE_RIGHT, false, true),
+        (SpecialKey::Rightrelease, MOUSE_RIGHT, false, false),
+        (SpecialKey::X1mouse, MOUSE_X1, true, false),
+        (SpecialKey::X1drag, MOUSE_X1, false, true),
+        (SpecialKey::X1release, MOUSE_X1, false, false),
+        (SpecialKey::X2mouse, MOUSE_X2, true, false),
+        (SpecialKey::X2drag, MOUSE_X2, false, true),
+        (SpecialKey::X2release, MOUSE_X2, false, false),
+        // A move is a drag with no button down.
+        (SpecialKey::Mousemove, 3, false, true),
+        // The wheel names no button.
+        (SpecialKey::Mousedown, 0, false, false),
+        (SpecialKey::Mouseleft, 0, false, false),
+    ];
+
+    #[test]
+    fn a_mouse_key_names_its_button_and_phase() {
+        for (key, button, click, drag) in MOUSE_KEYS {
+            assert!(is_mouse_key(key.code()), "{key:?}");
+            assert_eq!(
+                mouse_button(Key::from(key)),
+                (button, click, drag),
+                "{key:?}"
+            );
+        }
+        for key in [
+            SpecialKey::Mouseup,
+            SpecialKey::Mouseright,
+            SpecialKey::LeftmouseNm,
+            SpecialKey::LeftreleaseNm,
+        ] {
+            assert!(is_mouse_key(key.code()), "{key:?}");
+        }
+        let mouse = SpecialKey::ALL
+            .iter()
+            .filter(|key| is_mouse_key(key.code()))
+            .count();
+        assert_eq!(mouse, 22);
+        for key in [Key::ascii(b'a'), Key::NUL, Key::from(SpecialKey::Up)] {
+            assert!(!is_mouse_key(key.code()));
+            assert_eq!(mouse_button(key), (0, false, false));
+        }
+        // `<Ignore>` is not a mouse key, but decodes as a release with no
+        // button: what a stray release is turned into.
+        assert!(!is_mouse_key(SpecialKey::Ignore.code()));
+        assert_eq!(
+            mouse_button(Key::from(SpecialKey::Ignore)),
+            (3, false, false)
+        );
+    }
+
+    #[test]
+    fn the_click_count_reads_the_widest_bit() {
+        assert_eq!(click_count(ModMask::NONE), 1);
+        assert_eq!(click_count(ModMask::SHIFT), 1);
+        assert_eq!(click_count(ModMask::TWO_CLICK), 2);
+        assert_eq!(click_count(ModMask::THREE_CLICK | ModMask::CTRL), 3);
+        assert_eq!(click_count(ModMask::FOUR_CLICK), 4);
+    }
+
+    #[test]
+    fn a_click_handler_gets_letters_and_a_button_name() {
+        assert_eq!(&modifier_letters(ModMask::NONE), b"    \0");
+        assert_eq!(
+            &modifier_letters(ModMask::SHIFT | ModMask::ALT | ModMask::TWO_CLICK),
+            b"s a \0"
+        );
+        assert_eq!(&modifier_letters(ModMask::CTRL | ModMask::META), b" c m\0");
+        for (button, name) in [
+            (MOUSE_LEFT, c"l"),
+            (MOUSE_RIGHT, c"r"),
+            (MOUSE_MIDDLE, c"m"),
+            (MOUSE_X1, c"x1"),
+            (MOUSE_X2, c"x2"),
+            (3, c"?"),
+        ] {
+            assert_eq!(button_name(button), name);
+        }
+    }
+
+    #[test]
+    fn the_scroll_arithmetic() {
+        // 'smoothscroll': the first screen line is the first width, every
+        // later one the second.
+        assert_eq!(skipped_top_lines(ColNr::ZERO, 80, 72), 0);
+        assert_eq!(skipped_top_lines(ColNr::new(1), 80, 72), 1);
+        assert_eq!(skipped_top_lines(ColNr::new(80), 80, 72), 1);
+        assert_eq!(skipped_top_lines(ColNr::new(81), 80, 72), 1);
+        assert_eq!(skipped_top_lines(ColNr::new(152), 80, 72), 2);
+        assert_eq!(skipped_top_lines(ColNr::new(153), 80, 72), 2);
+        assert_eq!(skipped_top_lines(ColNr::new(224), 80, 72), 3);
+        // The horizontal wheel never scrolls past the left margin.
+        assert_eq!(wheel_leftcol(ColNr::new(10), 6, MSCR_RIGHT), ColNr::new(4));
+        assert_eq!(wheel_leftcol(ColNr::new(4), 6, MSCR_RIGHT), ColNr::ZERO);
+        assert_eq!(
+            wheel_leftcol(ColNr::new(4), 6, super::super::MSCR_LEFT),
+            ColNr::new(10)
+        );
+    }
+}

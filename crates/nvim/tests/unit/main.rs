@@ -68,6 +68,7 @@ mod memline;
 mod memory;
 mod message;
 mod message_oracle;
+mod mouse;
 mod r#move;
 mod msgpack;
 mod multiqueue;

@@ -50,7 +50,7 @@
   "safety_on_safe_fns": 0,
   "dup_consts": 1007,
   "types_files": 105,
-  "untested_dirs": 7,
+  "untested_dirs": 6,
   "cchar_scratch": 6,
   "files_without_deny_casts": 424,
   "files_allowing_non_camel_case_types": 19,
