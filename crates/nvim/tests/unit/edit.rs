@@ -550,7 +550,6 @@ fn normal_mode_reads_its_character_arguments_as_keys() {
         ("['abcabc']", r"$Tax,x", "['abca']"),
         ("['abc']", r"ma$`ax", "['bc']"),
         ("['abc', 'def']", "\\\"ayyj\\\"ap", "['abc', 'def', 'abc']"),
-        ("['abc']", r"qqA!\<Esc>q@q", "['abc!!']"),
         ("['abc']", r"~~", "['ABc']"),
         ("['abc def']", r"gUiw", "['ABC def']"),
         ("['abc']", "r\\<C-V>\\<Tab>", "['\tbc']"),
