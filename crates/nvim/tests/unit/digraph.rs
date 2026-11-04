@@ -53,3 +53,117 @@ fn lookup_finds_known_digraphs() {
     assert_eq!(get(b'S', b'E'), Some(0xa7)); // §
     assert_eq!(get(b'x', b'x'), None);
 }
+
+/// `:digraphs` and the `digraph_*()` functions' refusals, with every message
+/// each puts out and what it answered: a message reported twice, or not at
+/// all, moves the row.
+#[cfg(not(miri))]
+#[test]
+fn refusals_report_once() {
+    use crate::support::{Probe, Sandbox};
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    for (cmd, want) in [
+        (
+            "digraphs a",
+            "E1214: Digraph must be just two characters: a",
+        ),
+        ("digraphs ab", "E39: Number expected"),
+        ("digraphs ab x", "E39: Number expected"),
+        ("digraphs ab 0x41", "none"),
+        ("digraphs zq 233", "none"),
+        (
+            "exe \"digraphs \\<Esc>a 65\"",
+            "E104: Escape not allowed in digraph",
+        ),
+        ("digraphs zq 233 zr", "E39: Number expected"),
+        ("digraphs zq 233 zr 234", "none"),
+    ] {
+        fx.check_messages(cmd, want);
+    }
+    for (call, want, answer) in [
+        (
+            "digraph_get('a')",
+            "E1214: Digraph must be just two characters: a",
+            "''",
+        ),
+        (
+            "digraph_get('abc')",
+            "E1214: Digraph must be just two characters: abc",
+            "''",
+        ),
+        ("digraph_get([])", "E730: Using a List as a String", "''"),
+        ("digraph_get('zq')", "none", "'é'"),
+        (
+            "digraph_set('a', 'x')",
+            "E1214: Digraph must be just two characters: a",
+            "v:false",
+        ),
+        (
+            "digraph_set('abc', 'x')",
+            "E1214: Digraph must be just two characters: abc",
+            "v:false",
+        ),
+        (
+            "digraph_set('', 'x')",
+            "E1214: Digraph must be just two characters: ",
+            "v:false",
+        ),
+        (
+            "digraph_set([], 'x')",
+            "E730: Using a List as a String\nE1214: Digraph must be just two characters: [NULL]",
+            "v:false",
+        ),
+        (
+            "digraph_set('a\\<Esc>', 'x')",
+            "E1214: Digraph must be just two characters: a\\<Esc>",
+            "v:false",
+        ),
+        (
+            "digraph_set(\"\\<Esc>a\", 'x')",
+            "E104: Escape not allowed in digraph",
+            "v:false",
+        ),
+        (
+            "digraph_set('zs', 'xy')",
+            "E1215: Digraph must be one character: xy",
+            "v:false",
+        ),
+        (
+            "digraph_set('zs', [])",
+            "E730: Using a List as a String",
+            "v:false",
+        ),
+        ("digraph_set('zs', '')", "none", "v:true"),
+        ("digraph_set('zs', 'é')", "none", "v:true"),
+        (
+            "digraph_setlist(1)",
+            "E1216: digraph_setlist() argument must be a list of lists with two items",
+            "v:false",
+        ),
+        (
+            "digraph_setlist([1])",
+            "E1216: digraph_setlist() argument must be a list of lists with two items",
+            "v:false",
+        ),
+        (
+            "digraph_setlist([['zt']])",
+            "E1216: digraph_setlist() argument must be a list of lists with two items",
+            "v:false",
+        ),
+        (
+            "digraph_setlist([['zt', 'a'], ['zuv', 'b'], ['zw', 'c']])",
+            "E1214: Digraph must be just two characters: zuv",
+            "v:false",
+        ),
+        ("digraph_setlist(v:_null_list)", "none", "v:true"),
+        (
+            "[digraph_get('zs'), digraph_get('zt'), digraph_get('zw')]",
+            "none",
+            "['é', 'a', 'w']",
+        ),
+    ] {
+        fx.check_messages(&format!("let g:r = {call}"), want);
+        fx.check("g:r", answer);
+    }
+}

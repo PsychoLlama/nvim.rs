@@ -90,3 +90,121 @@ fn ranges_counts_and_address_types() {
     fx.run("silent! comclear | unlet g:uc");
     fx.home();
 }
+
+/// Every refusal of `:command`, `:delcommand` and `nvim_create_user_command`
+/// with every message it puts out: a message reported twice, or not at all,
+/// moves the row.
+#[test]
+fn refusals_report_once() {
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    fx.home();
+    fx.run("silent! comclear");
+    for (cmd, want) in [
+        (
+            "command -nargs=x UcA x",
+            "E176: Invalid number of arguments",
+        ),
+        ("command -nargs UcA x", "E176: Invalid number of arguments"),
+        (
+            "command -count=1 -count=2 UcA x",
+            "E177: Count cannot be specified twice",
+        ),
+        (
+            "command -range=1 -count=2 UcA x",
+            "E177: Count cannot be specified twice",
+        ),
+        (
+            "command -count=x UcA x",
+            "E178: Invalid default value for count",
+        ),
+        (
+            "command -range= UcA x",
+            "E178: Invalid default value for count",
+        ),
+        (
+            "command -range=2x UcA x",
+            "E178: Invalid default value for count",
+        ),
+        (
+            "command -complete UcA x",
+            "E179: Argument required for -complete",
+        ),
+        ("command -addr UcA x", "E179: Argument required for -addr"),
+        (
+            "command -addr=bogus UcA x",
+            "E180: Invalid address type value: bogus",
+        ),
+        (
+            "command -addr=bogus more UcA x",
+            "E180: Invalid address type value: bogus",
+        ),
+        (
+            "command -complete=bogus -nargs=1 UcA x",
+            "E180: Invalid complete value: bogus -nargs=1 UcA x",
+        ),
+        (
+            "command -complete=file,x -nargs=1 UcA x",
+            "E468: Completion argument only allowed for custom completion",
+        ),
+        (
+            "command -complete=custom -nargs=1 UcA x",
+            "E467: Custom completion requires a function argument",
+        ),
+        ("command -bogus UcA x", "E181: Invalid attribute: bogus"),
+        ("command - UcA x", "E175: No attribute specified"),
+        (
+            "command ucA x",
+            "E183: User defined commands must start with an uppercase letter",
+        ),
+        (
+            "command N x",
+            "E841: Reserved name, cannot be used for user defined command",
+        ),
+        (
+            "command -complete=file UcA x",
+            "E1208: -complete used without allowing arguments",
+        ),
+        ("command 1x", "E182: Invalid command name"),
+        ("command UcB x", "none"),
+        (
+            "command UcB y",
+            "E174: Command already exists: add ! to replace it: UcB y",
+        ),
+        ("command! UcB y", "none"),
+        (
+            "delcommand Nope",
+            "E184: No such user-defined command: Nope",
+        ),
+        (
+            "delcommand -buffer Nope",
+            "E1237: No such user-defined command in current buffer: Nope",
+        ),
+        (
+            "delcommand -buffer UcB",
+            "E1237: No such user-defined command in current buffer: UcB",
+        ),
+        ("delcommand UcB", "none"),
+        (
+            "call nvim_create_user_command('UcC', 'x', {'complete': 'bogus', 'nargs': 1})",
+            "E180: Invalid complete value: bogus\nE5555: API call: Invalid 'complete': 'bogus'",
+        ),
+        (
+            "call nvim_create_user_command('UcC', 'x', {'addr': 'bogus'})",
+            "E180: Invalid address type value: bogus\nE5555: API call: Invalid 'addr': 'bogus'",
+        ),
+        (
+            "call nvim_create_user_command('UcC', 'x', {'addr': 'bogus word'})",
+            "E180: Invalid address type value: bogus\nE5555: API call: Invalid 'addr': 'bogus'",
+        ),
+        ("call nvim_create_user_command('UcC', 'x', {})", "none"),
+        (
+            "call nvim_create_user_command('UcC', 'y', {'force': v:false})",
+            "E174: Command already exists: add ! to replace it: UcC\nE5555: API call: Failed to create user command",
+        ),
+    ] {
+        fx.check_messages(cmd, want);
+    }
+    fx.check("exists(':UcA') . exists(':UcB') . exists(':UcC')", "'002'");
+    fx.run("silent! comclear");
+}

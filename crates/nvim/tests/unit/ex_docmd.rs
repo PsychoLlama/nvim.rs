@@ -1012,3 +1012,70 @@ fn a_tab_page_argument_is_read_or_refused() {
     );
     probe.home();
 }
+
+/// The refusals of a range, an `++opt`, `:cd` and `:mkvimrc`, and the
+/// last-file check of `:q`, with every message each puts out: a message
+/// reported twice, or not at all, moves the row.
+#[test]
+fn refusals_report_once() {
+    use crate::support::Probe;
+    let sandbox = Sandbox::dir("ex_docmd_refusals");
+    let fx = Probe::new(sandbox.editor());
+    sandbox.mkdir("sub");
+    sandbox.write("exists.vim", b"x");
+    fx.home();
+    fx.run(LINES);
+    let root = sandbox.as_str().to_string();
+    fx.run(&format!("cd {root}"));
+    for (cmd, want) in [
+        ("99", "none"),
+        ("'z", "E20: Mark not set: silent 'z"),
+        ("'zp", "E20: Mark not set: silent 'zp"),
+        ("/nomatch/p", "E486: Pattern not found: nomatch"),
+        ("\\/p", "E486: Pattern not found: nomatch"),
+        ("1;/nomatch/p", "E486: Pattern not found: nomatch"),
+        ("3,1p", "none"),
+        ("1,99p", "E16: Invalid range: silent 1,99p"),
+        ("0p", "none"),
+        ("+99p", "E16: Invalid range: silent +99p"),
+        ("-99p", "E16: Invalid range: silent -99p"),
+        (".,$-9p", "E16: Invalid range: silent .,$-9p"),
+        ("2,3p", "none"),
+        ("e ++bogus x", "E474: Invalid argument: silent e ++bogus x"),
+        (
+            "e ++ff=bogus x",
+            "E474: Invalid argument: silent e ++ff=bogus",
+        ),
+        ("e ++enc", "E474: Invalid argument: silent e ++enc"),
+        ("w ++bin ++bad=keep", "E32: No file name"),
+        ("e ++bad=x x", "none"),
+        ("mkvimrc sub", "E17: \"sub\" is a directory"),
+        (
+            "mkvimrc exists.vim",
+            "E189: \"exists.vim\" exists (add ! to override)",
+        ),
+        ("mkexrc sub", "E17: \"sub\" is a directory"),
+        (
+            "mksession exists.vim",
+            "E189: \"exists.vim\" exists (add ! to override)",
+        ),
+        ("2,1d", "E16: Invalid range: silent 2,1d"),
+        (
+            "cd /nonexistent/dir",
+            "E344: Can't find directory \"/nonexistent/dir\" in cdpath\nE472: Command failed",
+        ),
+        ("cd sub | cd - | cd -", "none"),
+    ] {
+        fx.check_messages(cmd, want);
+    }
+    fx.check(
+        "getcwd() ==# expand('~') ? 'home' : fnamemodify(getcwd(), ':t')",
+        "'sub'",
+    );
+    fx.run("cd -");
+    fx.run("args a b c");
+    // Once only: a second `:quit` would be let through.
+    fx.check_messages("quit", "E173: 2 more files to edit");
+    fx.run("argdelete *");
+    fx.home();
+}

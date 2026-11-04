@@ -210,3 +210,63 @@ fn clear_resets_numbering() {
     ring.add(b"y", 0, 2);
     assert_eq!(ring.newest_number(), 1);
 }
+
+/// `:history`'s argument and the `hist*()` functions' refusals, with every
+/// message each puts out: a message reported twice, or not at all, moves
+/// the row.
+#[cfg(not(miri))]
+#[test]
+fn refusals_report_once() {
+    use crate::support::{Probe, Sandbox};
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    fx.run("call histdel('/') | call histdel('@') | call histdel('>')");
+    fx.run("call histadd('/', 'one') | call histadd('/', 'two') | call histadd('/', 'three')");
+    for (cmd, want) in [
+        ("history bogus", "E488: Trailing characters: bogus"),
+        ("history allx", "E488: Trailing characters: allx"),
+        ("history / 1,x", "E488: Trailing characters: x"),
+        ("history / 1 2", "E488: Trailing characters: 2"),
+        (
+            "history / 99999999999",
+            "E1510: Value too large: / 99999999999",
+        ),
+        ("history / 2", "none"),
+        ("history / -1", "none"),
+        ("history / ,2", "none"),
+        ("history / 5,9", "none"),
+        ("history @", "none"),
+    ] {
+        fx.check_messages(cmd, want);
+    }
+    for (call, want, answer) in [
+        ("histget('bogus')", "none", "''"),
+        ("histget('/', 99)", "none", "''"),
+        ("histget('/', -1)", "none", "'three'"),
+        ("histget('/', 2)", "none", "'two'"),
+        (
+            "histget('/', [])",
+            "E745: Using a List as a Number",
+            "'three'",
+        ),
+        ("histnr('bogus')", "none", "-1"),
+        ("histnr('/')", "none", "3"),
+        ("histnr('@')", "none", "-1"),
+        ("histadd('bogus', 'x')", "none", "0"),
+        ("histadd('/', '')", "none", "0"),
+        ("histdel('bogus')", "none", "0"),
+        ("histdel('/', 99)", "none", "0"),
+        ("histdel('/', 'zzz')", "none", "0"),
+        ("histdel('/', 'two')", "none", "1"),
+        ("histdel('/', [])", "E730: Using a List as a String", "0"),
+        (
+            "[histget('/', -1), histget('/', 1), histnr('/')]",
+            "none",
+            "['three', 'one', 3]",
+        ),
+    ] {
+        fx.check_messages(&format!("let g:r = {call}"), want);
+        fx.check("g:r", answer);
+    }
+    fx.run("call histdel('/')");
+}

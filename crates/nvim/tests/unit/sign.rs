@@ -197,3 +197,156 @@ fn placements_follow_redefinition() {
     fx.run("call sign_unplace('*') | call sign_undefine()");
     fx.home();
 }
+
+/// Every refusal of `:sign` and the `sign_*()` functions with every message
+/// it puts out -- a message reported twice, or not at all, moves the row --
+/// and, for a function, what it answered.
+#[test]
+fn refusals_report_once() {
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    setup(&fx);
+    for (cmd, want) in [
+        ("sign", "E471: Argument required: silent sign"),
+        ("sign foo", "E160: Unknown sign command: foo"),
+        ("sign define", "E156: Missing sign name"),
+        ("sign define Sx text=abc", "E239: Invalid sign text: abc"),
+        ("sign define Sy bogus=1", "E475: Invalid argument: bogus=1"),
+        ("sign list Nope", "E155: Unknown sign: Nope"),
+        ("sign undefine Nope", "E155: Unknown sign: Nope"),
+        ("sign place 1 line=1 name=Nope", "E155: Unknown sign: Nope"),
+        ("sign place 1 line=1", "E474: Invalid argument"),
+        ("sign place line=1 name=Sa", "E474: Invalid argument"),
+        (
+            "sign place 1 name=Sa buffer=1",
+            "E885: Not possible to change sign Sa",
+        ),
+        (
+            "sign place 2 line=1 name=Sa buffer=99",
+            "E158: Invalid buffer name: 99",
+        ),
+        (
+            "sign place 3 line=1 name=Sa buffer=1 x",
+            "E488: Trailing characters:  x",
+        ),
+        ("sign place 4 line=1 name=Sa group=*", "none"),
+        ("sign place group=", "E474: Invalid argument"),
+        ("sign unplace 3 line=1", "E474: Invalid argument"),
+        ("sign unplace * 3", "E474: Invalid argument"),
+        ("sign unplace 3 frob", "E474: Invalid argument"),
+        ("2 | sign unplace", "E159: Missing sign number"),
+        ("sign unplace 99 buffer=1", "none"),
+        ("sign jump", "E471: Argument required"),
+        ("sign jump 99 buffer=1", "E157: Invalid sign ID: 99"),
+        ("sign jump 3 group= buffer=1", "E474: Invalid argument"),
+        ("sign jump 3 line=1 buffer=1", "E474: Invalid argument"),
+    ] {
+        fx.check_messages(cmd, want);
+    }
+    for (call, want, answer) in [
+        (
+            "sign_define('Sx', {'text': 'abc'})",
+            "E239: Invalid sign text: abc",
+            "-1",
+        ),
+        (
+            "sign_define([{'name': 'Sz'}, 1, {}, {'name': 'Sw', 'text': 'abc'}])",
+            "E715: Dictionary required\nE239: Invalid sign text: abc",
+            "[0, -1, -1, -1]",
+        ),
+        (
+            "sign_define({})",
+            "E731: Using a Dictionary as a String",
+            "-1",
+        ),
+        (
+            "sign_place(-1, '', 'Sa', 1)",
+            "E474: Invalid argument",
+            "-1",
+        ),
+        (
+            "sign_place(5, '', 'Sa', 1, {'lnum': 0})",
+            "E474: Invalid argument",
+            "-1",
+        ),
+        ("sign_place(5, '*', 'Sa', 1, {'lnum': 1})", "none", "-1"),
+        (
+            "sign_place(5, '', 'Nope', 1, {'lnum': 1})",
+            "E155: Unknown sign: Nope",
+            "-1",
+        ),
+        (
+            "sign_place(5, '', 'Sa', 99, {'lnum': 1})",
+            "E158: Invalid buffer name: 99",
+            "-1",
+        ),
+        (
+            "sign_place(5, [], 'Sa', 1, {'lnum': 1})",
+            "E730: Using a List as a String",
+            "-1",
+        ),
+        (
+            "sign_place([], '', 'Sa', 1, {'lnum': 1})",
+            "E745: Using a List as a Number",
+            "-1",
+        ),
+        (
+            "sign_place(5, '', 'Sa', 1, 1)",
+            "E1206: Dictionary required for argument 5",
+            "-1",
+        ),
+        ("sign_placelist(1)", "E714: List required", "[]"),
+        (
+            "sign_placelist([1, {'name': 'Sa', 'buffer': 1, 'lnum': 2}, {'buffer': 1}, {'name': 'Sa'}])",
+            "E715: Dictionary required",
+            "[-1, 4, -1, -1]",
+        ),
+        (
+            "sign_unplace('', {'id': 0})",
+            "E474: Invalid argument",
+            "-1",
+        ),
+        ("sign_unplace('', {'id': 99})", "none", "-1"),
+        (
+            "sign_unplace('', {'buffer': 99})",
+            "E158: Invalid buffer name: 99",
+            "-1",
+        ),
+        ("sign_unplace('Nogroup')", "none", "-1"),
+        (
+            "sign_unplace(1)",
+            "E1174: String required for argument 1",
+            "-1",
+        ),
+        (
+            "sign_unplacelist([1, {'id': -1}, {'id': 99}, {'buffer': 99}])",
+            "E715: Dictionary required\nE474: Invalid argument\nE158: Invalid buffer name: 99",
+            "[-1, -1, -1, -1]",
+        ),
+        ("sign_unplacelist(1)", "E714: List required", "[]"),
+        ("sign_jump(0, '', 1)", "E474: Invalid argument", "-1"),
+        ("sign_jump(99, '', 1)", "E157: Invalid sign ID: 99", "-1"),
+        (
+            "sign_jump(1, [], 1)",
+            "E730: Using a List as a String",
+            "-1",
+        ),
+        (
+            "sign_jump(1, '', 99)",
+            "E158: Invalid buffer name: 99",
+            "-1",
+        ),
+        ("sign_undefine('Nope')", "E155: Unknown sign: Nope", "-1"),
+        (
+            "sign_undefine(['Nope', 'Sz', []])",
+            "E155: Unknown sign: Nope\nE730: Using a List as a String",
+            "[-1, 0, -1]",
+        ),
+        ("sign_getplaced(99)", "E158: Invalid buffer name: 99", "[]"),
+        ("sign_getplaced(1, {'lnum': 0})", "none", "[]"),
+    ] {
+        fx.check_messages(&format!("let g:r = {call}"), want);
+        fx.check("g:r", answer);
+    }
+    fx.run("call sign_unplace('*') | call sign_undefine()");
+}

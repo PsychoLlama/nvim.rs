@@ -429,3 +429,59 @@ fn the_stack_holds_twenty_and_is_copied_on_split() {
     fx.run("only");
     restore(&fx);
 }
+
+/// The refusals of `:tag` and its kin, and of a `'tagfunc'`, with every
+/// message each puts out: a message reported twice, or not at all, moves
+/// the row.
+#[test]
+fn refusals_report_once() {
+    let sandbox = sources("tag_refusals");
+    sandbox.write(
+        "tags",
+        b"gone\tsrc/missing.c\t1\nhere\tsrc/a.c\t1\ntwice\tsrc/missing.c\t1\ntwice\tsrc/gone.c\t1\n",
+    );
+    let fx = Probe::new(sandbox.editor());
+    restore(&fx);
+    fx.run("set tags=tags");
+    // A named function, so the message's name does not depend on how many
+    // lambdas ran before.
+    fx.run("exe \"func! TagfuncFails(p, f, i)\\nreturn nosuch()\\nendfunc\"");
+    for (cmd, want) in [
+        ("tag gone", "E429: File \"src/missing.c\" does not exist"),
+        ("tag twice", "E429: File \"src/gone.c\" does not exist"),
+        ("tag nothing", "E426: Tag not found: nothing"),
+        ("pop", "none"),
+        ("tag here", "none"),
+        ("tnext", "E427: There is only one matching tag"),
+        ("tprevious", "E425: Cannot go before first matching tag"),
+        ("pop", "none"),
+        ("pop", "none"),
+        ("tag", "E429: File \"src/missing.c\" does not exist"),
+        ("tselect /zzz", "E426: Tag not found: zzz"),
+        ("ptag gone", "E429: File \"src/missing.c\" does not exist"),
+        (
+            "let &tagfunc = \"{p, f, i -> 1}\" | tag here",
+            "E987: Invalid return value from tagfunc\nE426: Tag not found: here",
+        ),
+        ("let &tagfunc = \"{p, f, i -> v:null}\" | tag here", "none"),
+        (
+            "let &tagfunc = \"{p, f, i -> [{'name': p}]}\" | tag here",
+            "E987: Invalid return value from tagfunc\nE426: Tag not found: here",
+        ),
+        (
+            "let &tagfunc = 'TagfuncFails' | tag here",
+            "Error in function TagfuncFails:\nline    1:\nE117: Unknown function: nosuch\nE987: Invalid return value from tagfunc\nE426: Tag not found: here",
+        ),
+        (
+            "let &tagfunc = \"{p, f, i -> []}\" | tag here",
+            "E426: Tag not found: here",
+        ),
+        ("set tagfunc= | setlocal tagfunc= | tag here", "none"),
+    ] {
+        fx.check_messages(cmd, want);
+    }
+    fx.run("set tagfunc=");
+    fx.run("setlocal tagfunc=");
+    fx.run("delfunction TagfuncFails");
+    restore(&fx);
+}

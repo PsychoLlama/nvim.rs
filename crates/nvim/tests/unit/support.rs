@@ -637,6 +637,22 @@ impl<'a> Probe<'a> {
         }
     }
 
+    /// Every message `cmd` puts out, as `:messages` keeps them -- so a
+    /// message reported twice shows twice, which `v:errmsg` cannot tell --
+    /// or `none`. The command runs under `:silent`, which keeps errors.
+    pub(crate) fn messages_of(&self, cmd: &str) -> String {
+        self.run("messages clear");
+        self.run(&format!("silent {cmd}"));
+        let got = self.output("messages");
+        self.run("messages clear");
+        let got = got.trim_start_matches('\n');
+        if got.is_empty() {
+            "none".into()
+        } else {
+            got.into()
+        }
+    }
+
     #[track_caller]
     fn book(&self, kind: &str, what: &str, got: &str, want: &str) {
         if got != want {
@@ -665,6 +681,13 @@ impl<'a> Probe<'a> {
     #[track_caller]
     pub(crate) fn check_error(&self, cmd: &str, want: &str) {
         self.book("check_error", cmd, &self.error_from(cmd), want);
+    }
+
+    /// What `cmd` reports, every message of it (see
+    /// [`messages_of`](Self::messages_of)), should be `want`.
+    #[track_caller]
+    pub(crate) fn check_messages(&self, cmd: &str, want: &str) {
+        self.book("check_messages", cmd, &self.messages_of(cmd), want);
     }
 
     /// [`check`](Self::check) over a table of `(expr, want)` rows.
