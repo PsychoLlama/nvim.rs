@@ -23,7 +23,6 @@ use super::super::*;
 use super::{u_undo_end, u_undoredo};
 use crate::memline::MlFlags;
 use crate::os::time::os_time_raw;
-use crate::semsg;
 use crate::winlayer::Buf;
 
 // ---------------------------------------------------------------------------
@@ -173,8 +172,9 @@ pub fn undo_time(step: c_int, sec: bool, file: bool, absolute: bool) {
     });
 
     let (aim, closest_start) = undo_aim(buf, step, sec, file, absolute);
-    let Some(dest) = undo_search(buf, step, absolute, aim, closest_start) else {
-        return;
+    let dest = match undo_search(buf, step, absolute, aim, closest_start) {
+        Ok(dest) => dest,
+        Err(err) => return err.report(),
     };
     let mut did_undo = true;
     if dest.found || dest.target == 0 {
@@ -293,18 +293,18 @@ fn aim_for(
 /// looks for that nearest header. The second round always goes by sequence
 /// number, because several headers can share a timestamp.
 ///
-/// Answers `None` once it has reported that there is nowhere to go.
+/// Answers why there is nowhere to go, when there is not.
 fn undo_search(
     buffer: Buf,
     step: c_int,
     absolute: bool,
     mut aim: Aim,
     closest_start: time_t,
-) -> Option<UndoDest> {
+) -> Result<UndoDest, UndoError> {
     if aim.target == 0 {
         // Back to the origin. Nothing to search for: no header carries
         // sequence number zero, and the walk up stops when it runs out.
-        return Some(UndoDest {
+        return Ok(UndoDest {
             target: 0,
             marks: Marks {
                 mark: lastmark.get(),
@@ -332,7 +332,7 @@ fn undo_search(
         };
         if let Some(seq) = walk_to_target(buffer, start, step, round == 1, aim, &mut closest, marks)
         {
-            return Some(UndoDest {
+            return Ok(UndoDest {
                 target: seq,
                 marks,
                 above,
@@ -340,17 +340,14 @@ fn undo_search(
             });
         }
         if absolute {
-            semsg!("E830: Undo number {} not found", int64_t::from(step));
-            return None;
+            return Err(UndoError::NoSuchNumber(step));
         }
         if closest.val == closest.start {
-            let text = if step < 0 {
-                c"Already at oldest change"
+            return Err(if step < 0 {
+                UndoError::AtOldest
             } else {
-                c"Already at newest change"
-            };
-            msg(gettext(text), 0);
-            return None;
+                UndoError::AtNewest
+            });
         }
         // Aim at the nearest header instead, by sequence number; and when we
         // were going backwards, stop above it rather than on it.
@@ -361,7 +358,7 @@ fn undo_search(
     }
     // Round two aims at a sequence number a header in the tree carried, so it
     // finds it. The C is defensive here all the same, and so is this.
-    Some(UndoDest {
+    Ok(UndoDest {
         target: closest.seq,
         marks,
         above,

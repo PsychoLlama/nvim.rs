@@ -19,7 +19,6 @@ use crate::memory::XString;
 use crate::message_fmt::msg_cstr;
 use crate::os::fs::file_info;
 use crate::os::users::os_getuid;
-use crate::semsg;
 use crate::smsg;
 use crate::winlayer::Buf;
 use core::ffi::CStr;
@@ -65,17 +64,23 @@ pub fn u_read_undo(
         smsg!(0, "Reading undo file: {file_name}");
     });
     let path = <std::ffi::OsStr as std::os::unix::ffi::OsStrExt>::from_bytes(file_name.to_bytes());
-    match std::fs::File::open(path) {
-        Err(_) => {
-            if name.is_some() || p_verbose() > 0 {
-                let file_name = msg_cstr(file_name);
-                semsg!("E822: Cannot open undo file for reading: {file_name}");
-            }
-        }
+    let automatic = name.is_none();
+    let read = match std::fs::File::open(path) {
+        // A file `'undodir'` picked that is not there is no surprise.
+        Err(_) if automatic && p_verbose() <= 0 => Err(UndoFileError::Quiet),
+        Err(_) => Err(UndoFileError::CannotOpenForReading),
         Ok(file) => {
             let mut bi = BufInfo::reader(Buf::current(), file);
-            read_undo_file(&mut bi, file_name, name.is_none(), hash);
+            read_undo_file(&mut bi, hash)
         }
+    };
+    match read {
+        Ok(()) if !automatic => {
+            let file_name = msg_cstr(file_name);
+            smsg!(0, "Finished reading undo file {file_name}");
+        }
+        Ok(()) => {}
+        Err(err) => err.report(file_name, automatic),
     }
 }
 
@@ -104,53 +109,32 @@ fn owner_matches(file_name: &CStr, orig_name: Option<&CStr>) -> bool {
 }
 
 /// Reads the whole of an open undo file and grafts it onto the current
-/// buffer. Every failure has already said what was wrong with the file.
+/// buffer, or answers what was wrong with the file.
 fn read_undo_file(
     bi: &mut BufInfo,
-    file_name: &CStr,
-    automatic: bool,
     hash: &[u8; UNDO_HASH_SIZE as usize],
-) {
+) -> Result<(), UndoFileError> {
     let mut magic = [0u8; UF_START_MAGIC.len()];
     if !bi.read(&mut magic) || magic != UF_START_MAGIC {
-        let file_name = msg_cstr(file_name);
-        semsg!("E823: Not an undo file: {file_name}");
-        return;
+        return Err(UndoFileError::NotAnUndoFile);
     }
     if bi.read_2c() != UF_VERSION {
-        let file_name = msg_cstr(file_name);
-        semsg!("E824: Incompatible undo file: {file_name}");
-        return;
+        return Err(UndoFileError::Incompatible);
     }
     let mut read_hash = [0u8; UNDO_HASH_SIZE as usize];
     if !bi.read(&mut read_hash) {
-        corruption_error(c"hash", file_name);
-        return;
+        return Err(UndoFileError::Corrupt(Corruption::Hash));
     }
     let line_count = LineNr::new(bi.read_4c());
     // The tree describes text; a buffer holding different text cannot
     // have it applied.
     if *hash != read_hash || line_count != Buf::current().b_ml.ml_line_count {
-        verbosely(automatic, || {
-            let mesg = gettext(c"File contents changed, cannot use undo info");
-            give_warning(mesg, true, true);
-        });
-        return;
+        return Err(UndoFileError::ContentsChanged);
     }
 
-    let Some(header) = read_file_header(bi, file_name) else {
-        return;
-    };
-    let Some(headers) = read_headers(bi, file_name, header.num_head) else {
-        return;
-    };
-    if !graft(headers, header, file_name) {
-        return;
-    }
-    if !automatic {
-        let file_name = msg_cstr(file_name);
-        smsg!(0, "Finished reading undo file {file_name}");
-    }
+    let header = read_file_header(bi)?;
+    let headers = read_headers(bi, header.num_head)?;
+    graft(headers, header)
 }
 
 /// Everything the undo file says before its first header record.
@@ -172,13 +156,12 @@ struct FileHeader {
     last_save_nr: c_int,
 }
 
-/// Reads the file header. `None` is a file that has already been complained
-/// about, or one whose shadow-line length is not a length at all — which
-/// upstream rejects silently, and so does this.
+/// Reads the file header, or why not -- one whose shadow-line length is not
+/// a length at all upstream rejects silently, and so does this.
 ///
 /// `bi` is positioned at the shadow-line length.
-fn read_file_header(bi: &mut BufInfo, file_name: &CStr) -> Option<FileHeader> {
-    let str_len = usize::try_from(bi.read_4c()).ok()?;
+fn read_file_header(bi: &mut BufInfo) -> Result<FileHeader, UndoFileError> {
+    let str_len = usize::try_from(bi.read_4c()).map_err(|_| UndoFileError::Quiet)?;
     // A line the file ran out in the middle of is no line, as upstream's
     // NULL from `read_string_decrypt` was.
     let line = if str_len > 0 {
@@ -189,8 +172,7 @@ fn read_file_header(bi: &mut BufInfo, file_name: &CStr) -> Option<FileHeader> {
     let line_lnum = LineNr::new(bi.read_4c());
     let line_colnr = bi.read_4c();
     if line_lnum < LineNr::ZERO || line_colnr < 0 {
-        corruption_error(c"line lnum/col", file_name);
-        return None;
+        return Err(UndoFileError::Corrupt(Corruption::LineLnumCol));
     }
     let mut header = FileHeader {
         line,
@@ -212,7 +194,7 @@ fn read_file_header(bi: &mut BufInfo, file_name: &CStr) -> Option<FileHeader> {
             header.last_save_nr = value;
         }
     }
-    Some(header)
+    Ok(header)
 }
 
 /// Reads the `num_head` header records and the end marker after them.
@@ -222,40 +204,37 @@ fn read_file_header(bi: &mut BufInfo, file_name: &CStr) -> Option<FileHeader> {
 /// that actually turned up. On failure nothing survives.
 ///
 /// `bi` is positioned at the first header record.
-fn read_headers(bi: &mut BufInfo, file_name: &CStr, num_head: c_int) -> Option<Vec<UndoHeader>> {
+fn read_headers(bi: &mut BufInfo, num_head: c_int) -> Result<Vec<UndoHeader>, UndoFileError> {
     let mut headers: Vec<UndoHeader> = Vec::new();
     loop {
         let c = bi.read_2c();
         if c != UF_HEADER_MAGIC {
             // The file claims a count of its own; a run that stops short
             // of it, or an end marker that is not one, is corruption.
-            if headers.len() != usize::try_from(num_head).unwrap_or(usize::MAX) {
-                corruption_error(c"num_head", file_name);
+            return if headers.len() != usize::try_from(num_head).unwrap_or(usize::MAX) {
+                Err(UndoFileError::Corrupt(Corruption::NumHead))
             } else if c != UF_HEADER_END_MAGIC {
-                corruption_error(c"end marker", file_name);
+                Err(UndoFileError::Corrupt(Corruption::EndMarker))
             } else {
-                return Some(headers);
-            }
-            return None;
+                Ok(headers)
+            };
         }
         if headers.len() >= usize::try_from(num_head).unwrap_or(0) {
-            corruption_error(c"num_head too small", file_name);
-            return None;
+            return Err(UndoFileError::Corrupt(Corruption::NumHeadTooSmall));
         }
-        headers.push(unserialize_uhp(bi, file_name)?);
+        headers.push(unserialize_uhp(bi)?);
     }
 }
 
 /// Replaces the current buffer's undo tree with the one the file describes.
 ///
-/// Answers whether it took: a file naming one header twice describes a tree
-/// with two headers of the same name, which is not a tree.
-fn graft(mut headers: Vec<UndoHeader>, header: FileHeader, file_name: &CStr) -> bool {
+/// Refused when a file names one header twice: that describes a tree with
+/// two headers of the same name, which is not a tree.
+fn graft(mut headers: Vec<UndoHeader>, header: FileHeader) -> Result<(), UndoFileError> {
     let mut seqs: HashSet<c_int> = HashSet::with_capacity(headers.len());
     for uh in &headers {
         if !seqs.insert(uh.seq) {
-            corruption_error(c"duplicate uh_seq", file_name);
-            return false;
+            return Err(UndoFileError::Corrupt(Corruption::DuplicateUhSeq));
         }
     }
 
@@ -311,5 +290,5 @@ fn graft(mut headers: Vec<UndoHeader>, header: FileHeader, file_name: &CStr) -> 
     buf.b_u_save_nr_last = header.last_save_nr;
     buf.b_u_save_nr_cur = header.last_save_nr;
     buf.b_u_synced = true;
-    true
+    Ok(())
 }

@@ -131,7 +131,8 @@ fn count_after_sync(count: c_int) -> c_int {
 
 /// Undoes or redoes — whichever `undo_undoes` says — `startcount` times.
 pub(crate) fn u_doit(startcount: c_int, quiet: bool, do_buf_event: bool) {
-    if !undo_allowed(Buf::current()) {
+    if let Err(err) = undo_allowed(Buf::current()) {
+        err.report();
         return;
     }
     u_newcount.set(0);

@@ -20,7 +20,6 @@ use super::*;
 use crate::memory::XString;
 use crate::message_fmt::msg_cstr;
 use crate::os::fs::{file_info, getperm, path_exists};
-use crate::semsg;
 use crate::smsg;
 use crate::winlayer::Buf;
 use core::ffi::CStr;
@@ -56,7 +55,10 @@ pub fn u_write_undo(
             }
         }
     };
-    write_undo_file(file_name, name.is_none(), forceit, buffer, hash);
+    let automatic = name.is_none();
+    if let Err(err) = write_undo_file(file_name, automatic, forceit, buffer, hash) {
+        err.report(file_name, automatic);
+    }
 }
 
 /// "no directory in 'undodir' will take it", the one message a write can
@@ -64,19 +66,21 @@ pub fn u_write_undo(
 const NO_UNDODIR: &CStr = c"Cannot write undo file in any directory in 'undodir'";
 
 /// The write itself, once the target path is known. `automatic` says whether
-/// the caller left the name to `'undodir'`.
+/// the caller left the name to `'undodir'`. A file that is refused (it is not
+/// an undo file, or there is nothing to write) has been said only under
+/// 'verbose', and answers `Ok`: nothing went wrong.
 fn write_undo_file(
     file_name: &CStr,
     automatic: bool,
     forceit: bool,
     buffer: Buf,
     hash: &[u8; UNDO_HASH_SIZE as usize],
-) {
+) -> Result<(), UndoFileError> {
     if path_exists(file_name) {
         // Never clobber a file that is not an undo file, unless `:wundo!`
         // said to.
         if (automatic || !forceit) && !looks_like_undo_file(file_name, automatic) {
-            return;
+            return Ok(());
         }
         os_remove(file_name);
     }
@@ -84,7 +88,7 @@ fn write_undo_file(
         if p_verbose() > 0 {
             verb_msg(gettext(c"Skipping undo file write, nothing to undo"));
         }
-        return;
+        return Ok(());
     }
 
     // The undo file inherits the edited file's permissions, minus
@@ -110,9 +114,7 @@ fn write_undo_file(
         .mode(mode)
         .open(path);
     let Ok(file) = opened else {
-        let file_name = msg_cstr(file_name);
-        semsg!("E828: Cannot open undo file for writing: {file_name}");
-        return;
+        return Err(UndoFileError::CannotOpenForWriting);
     };
     // The mode `open` was given went through the umask; this one does not.
     // A failure leaves the file as `open` made it, as upstream ignored it.
@@ -130,14 +132,17 @@ fn write_undo_file(
     let mut bi = BufInfo::writer(buffer, file);
     let write_ok = write_tree(&mut bi, buffer, hash);
     drop(bi);
-    if !write_ok {
-        let file_name = msg_cstr(file_name);
-        semsg!("E829: Write error in undo file: {file_name}");
-    }
+    // A failed write still gets the edited file's ACL. Upstream said E829
+    // first; copying an ACL says nothing, so the order is not seen.
     if let Some(edited) = edited.as_ref() {
         let acl: VimAcl = os_get_acl(edited.as_cstr());
         os_set_acl(file_name, acl);
         os_free_acl(acl);
+    }
+    if write_ok {
+        Ok(())
+    } else {
+        Err(UndoFileError::WriteFailed)
     }
 }
 

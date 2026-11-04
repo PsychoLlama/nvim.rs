@@ -300,7 +300,8 @@ pub fn f_complete(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     // Check for undo allowed here, because if something was already
     // inserted the line was already saved for undo and this check isn't
     // done.
-    if !undo_allowed(Buf::current()) {
+    if let Err(err) = undo_allowed(Buf::current()) {
+        err.report();
         return;
     }
 

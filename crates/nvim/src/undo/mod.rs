@@ -48,10 +48,9 @@ use crate::mbyte::c_cluster_len;
 use crate::memline::MlFlags;
 use crate::memline::{ml_delete, resolve_symlink};
 use crate::memory::XString;
-use crate::message::{e_modifiable, e_sandbox, e_textlock};
 use crate::message::{
-    emsg, give_warning, iemsg, internal_error, messaging, msg, msg_end, msg_ext_set_kind,
-    msg_putchar, msg_start, msg_str, msg_str_hl, verb_msg, verbose_enter, verbose_leave,
+    emsg, iemsg, internal_error, messaging, msg, msg_end, msg_ext_set_kind, msg_putchar, msg_start,
+    msg_str, msg_str_hl, verb_msg, verbose_enter, verbose_leave,
 };
 use crate::option::vars::{fdo_flags, p_fs, p_ul, p_verbose};
 use crate::options::kOptFdoFlagUndo;
@@ -91,6 +90,7 @@ use header::*;
 
 mod apply;
 mod bufinfo;
+mod error;
 mod eval;
 mod file;
 pub mod format;
@@ -98,6 +98,7 @@ mod read;
 pub mod store;
 mod tree;
 mod write;
+pub(crate) use error::{Corruption, UndoError, UndoFileError};
 
 use crate::winlayer::{Buf, buffers};
 use store::{header_adopt, header_chain};
@@ -217,23 +218,20 @@ pub fn u_savedel(lnum: LineNr, nlines: i32) -> Result<(), Failed> {
     )
 }
 
-/// Whether `buffer` may be changed at all, saying why not when it may not.
+/// Whether `buffer` may be changed at all, and why not when it may not.
 ///
 /// Safe: a [`Buf`] carries the whole of the promise this needs.
-pub fn undo_allowed(buffer: Buf) -> bool {
+pub(crate) fn undo_allowed(buffer: Buf) -> Result<(), UndoError> {
     if buffer.b_p_ma == 0 {
-        emsg(gettext(e_modifiable));
-        return false;
+        return Err(UndoError::NotModifiable);
     }
     if sandbox.get() != 0 {
-        emsg(gettext(e_sandbox));
-        return false;
+        return Err(UndoError::Sandbox);
     }
     if textlock.get() != 0 || expr_map_locked() {
-        emsg(gettext(e_textlock));
-        return false;
+        return Err(UndoError::Textlock);
     }
-    true
+    Ok(())
 }
 
 /// `'undolevels'` for `buffer`: its own, or the global one when it has none.
@@ -275,15 +273,18 @@ pub fn u_savecommon(
     reload: bool,
 ) -> Result<(), Failed> {
     let b = buffer;
+    // Every change to every buffer comes through here, so this is where a
+    // refusal is said.
     if !reload {
-        if !undo_allowed(buffer) {
-            return Err(Failed);
-        }
+        undo_allowed(buffer).map_err(|err| {
+            err.report();
+            Failed
+        })?;
         if ptr::eq(buffer.raw(), Buf::current_raw()) {
             change_warning(buffer, 0);
         }
         if bot > b.line_count() + 1 {
-            emsg(gettext(c"E881: Line count changed unexpectedly"));
+            UndoError::LineCountChanged.report();
             return Err(Failed);
         }
     }

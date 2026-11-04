@@ -24,12 +24,11 @@ use core::ffi::CStr;
 
 use super::format::*;
 use super::*;
+use crate::memory::ThinCString;
 use crate::memory::XString;
-use crate::message_fmt::{msg_cstr, msg_cstr_opt};
 use crate::option::split_option_part;
 use crate::option::vars::P_UDIR;
 use crate::os::fs::{dir_exists, mkdir_recurse, path_exists};
-use crate::semsg;
 
 /// The SHA-256 of every line of `buffer`, each followed by a NUL separator.
 ///
@@ -76,7 +75,14 @@ pub fn u_get_undo_file_name(buf_ffname: Option<&CStr>, reading: bool) -> Option<
         } else {
             trim_path_separators(&mut dir_name);
             let dir_name = XString::from_vec(dir_name);
-            if dir_is_usable(dir_name.as_cstr(), rest.is_empty(), reading) {
+            // A directory that could not be made is said, and is no
+            // directory: the search goes on.
+            let usable = dir_is_usable(dir_name.as_cstr(), rest.is_empty(), reading)
+                .unwrap_or_else(|err| {
+                    err.report(dir_name.as_cstr(), false);
+                    false
+                });
+            if usable {
                 let munged = munged.get_or_insert_with(|| munge_separators(ffname));
                 Some(concat_fnames(&dir_name, munged, true))
             } else {
@@ -134,29 +140,26 @@ fn trim_path_separators(dir_name: &mut Vec<u8>) {
 }
 
 /// Whether undo files may be put in `dir_name`, creating it if this is the
-/// last entry in `'undodir'` and we are about to write.
-fn dir_is_usable(dir_name: &CStr, last_in_list: bool, reading: bool) -> bool {
+/// last entry in `'undodir'` and we are about to write; why not, when it
+/// could not be made.
+fn dir_is_usable(
+    dir_name: &CStr,
+    last_in_list: bool,
+    reading: bool,
+) -> Result<bool, UndoFileError> {
     if dir_exists(dir_name) {
-        return true;
+        return Ok(true);
     }
     if !last_in_list || reading {
-        return false;
+        return Ok(false);
     }
     match mkdir_recurse(dir_name, 0o755) {
-        Ok(_) => true,
+        Ok(_) => Ok(true),
         Err(failure) => {
-            let shown = msg_cstr_opt(failure.dir.as_deref());
-            let why = msg_cstr(failure.why);
-            semsg!("E5003: Unable to create directory \"{shown}\" for undo file: {why}");
-            false
+            let dir = failure.dir.as_deref().map(ThinCString::from_cstr);
+            Err(UndoFileError::CannotCreateDir(Box::new((dir, failure.why))))
         }
     }
-}
-
-/// `E825`: the file said something a well-formed undo file cannot say.
-pub(crate) fn corruption_error(mesg: &CStr, file_name: &CStr) {
-    let (mesg, file_name) = (msg_cstr(mesg), msg_cstr(file_name));
-    semsg!("E825: Corrupted undo file ({mesg}): {file_name}");
 }
 
 /// Writes the file header: the magic, the version, the buffer hash, the `U`
@@ -230,8 +233,8 @@ pub(crate) fn serialize_uhp(bi: &mut BufInfo, uh: &UndoHeader) -> bool {
     true
 }
 
-/// Reads one undo header back, or `None` for a file that has already been
-/// complained about (or that ran out mid-record).
+/// Reads one undo header back, or why the file is no good (which may be
+/// that it ran out mid-record, said by nobody).
 ///
 /// The four link fields come back as the sequence numbers the file spells
 /// them as, which is what a link already is; nothing is converted. What is
@@ -239,7 +242,7 @@ pub(crate) fn serialize_uhp(bi: &mut BufInfo, uh: &UndoHeader) -> bool {
 /// or less is not one a buffer ever hands out.
 ///
 /// `bi` is positioned just after the header magic.
-pub(crate) fn unserialize_uhp(bi: &mut BufInfo, file_name: &CStr) -> Option<UndoHeader> {
+pub(crate) fn unserialize_uhp(bi: &mut BufInfo) -> Result<UndoHeader, UndoFileError> {
     let mut uh = UndoHeader {
         next: UndoLink::to_seq(bi.read_4c()),
         prev: UndoLink::to_seq(bi.read_4c()),
@@ -249,8 +252,7 @@ pub(crate) fn unserialize_uhp(bi: &mut BufInfo, file_name: &CStr) -> Option<Undo
         ..Default::default()
     };
     if uh.seq <= 0 {
-        corruption_error(c"uh_seq", file_name);
-        return None;
+        return Err(UndoFileError::Corrupt(Corruption::UhSeq));
     }
     uh.cursor = unserialize_pos(bi);
     uh.cursor_vcol = ColNr::new(bi.read_4c());
@@ -265,17 +267,15 @@ pub(crate) fn unserialize_uhp(bi: &mut BufInfo, file_name: &CStr) -> Option<Undo
     uh.time = bi.read_time();
     // Unlike the file header's, a truncated trailer here is corruption:
     // the entry records that must follow it are gone.
-    let Some(fields) = optional_fields(bi) else {
-        corruption_error(c"truncated", file_name);
-        return None;
-    };
+    let fields = optional_fields(bi).ok_or(UndoFileError::Corrupt(Corruption::Truncated))?;
     for (what, value) in fields {
         if what == UHP_SAVE_NR {
             uh.save_nr = value;
         }
     }
-    (unserialize_entries(bi, &mut uh, file_name) && unserialize_extmarks(bi, &mut uh, file_name))
-        .then_some(uh)
+    unserialize_entries(bi, &mut uh)?;
+    unserialize_extmarks(bi, &mut uh)?;
+    Ok(uh)
 }
 
 /// The optional-field trailer both the file header and every undo header end
@@ -310,9 +310,9 @@ pub(crate) fn optional_fields(bi: &mut BufInfo) -> Option<Vec<(c_int, c_int)>> {
     }
 }
 
-/// Reads the run of entry records into `uh`, up to the end marker. Says so
-/// on a corrupt one; the caller drops the header either way it fails.
-fn unserialize_entries(bi: &mut BufInfo, uh: &mut UndoHeader, file_name: &CStr) -> bool {
+/// Reads the run of entry records into `uh`, up to the end marker; the
+/// caller drops the header either way it fails.
+fn unserialize_entries(bi: &mut BufInfo, uh: &mut UndoHeader) -> Result<(), UndoFileError> {
     loop {
         let c = bi.read_2c();
         if c != UF_ENTRY_MAGIC {
@@ -320,35 +320,27 @@ fn unserialize_entries(bi: &mut BufInfo, uh: &mut UndoHeader, file_name: &CStr) 
                 // The file lists them newest first; the header keeps the
                 // newest last.
                 uh.entries.reverse();
-                return true;
+                return Ok(());
             }
-            corruption_error(c"entry end", file_name);
-            return false;
+            return Err(UndoFileError::Corrupt(Corruption::EntryEnd));
         }
-        let Some(entry) = unserialize_uep(bi, file_name) else {
-            return false;
-        };
-        uh.entries.push(entry);
+        uh.entries.push(unserialize_uep(bi)?);
     }
 }
 
 /// Reads the run of extmark records into `uh`'s list, up to the end marker.
-fn unserialize_extmarks(bi: &mut BufInfo, uh: &mut UndoHeader, file_name: &CStr) -> bool {
+fn unserialize_extmarks(bi: &mut BufInfo, uh: &mut UndoHeader) -> Result<(), UndoFileError> {
     loop {
         let c = bi.read_2c();
         if c != UF_ENTRY_MAGIC {
             if c == UF_ENTRY_END_MAGIC {
-                return true;
+                return Ok(());
             }
-            corruption_error(c"entry end", file_name);
-            return false;
+            return Err(UndoFileError::Corrupt(Corruption::EntryEnd));
         }
         // Upstream leaks the header here; every other failure in this
         // function frees it, and so does dropping it.
-        let Some(extup) = unserialize_extmark(bi, file_name) else {
-            return false;
-        };
-        uh.extmarks.push(extup);
+        uh.extmarks.push(unserialize_extmark(bi)?);
     }
 }
 
@@ -378,31 +370,27 @@ pub(crate) fn serialize_extmark(bi: &mut BufInfo, extup: ExtmarkUndoObject) -> b
 /// [`format::decode_splice`].
 ///
 /// `bi` is positioned just after the entry magic.
-pub(crate) fn unserialize_extmark(bi: &mut BufInfo, file_name: &CStr) -> Option<ExtmarkUndoObject> {
+pub(crate) fn unserialize_extmark(bi: &mut BufInfo) -> Result<ExtmarkUndoObject, UndoFileError> {
     let kind: UndoObjectType = bi.read_4c().cast_unsigned();
     let mut image = [0u8; EXTMARK_PAYLOAD_LEN];
     let decoded = if kind == kExtmarkSplice {
         if !bi.read(&mut image) {
-            corruption_error(c"extmark truncated", file_name);
-            return None;
+            return Err(UndoFileError::Corrupt(Corruption::ExtmarkTruncated));
         }
         decode_splice(&image)
             .map(ExtmarkUndoObject::Splice)
-            .ok_or(c"extmark splice")
+            .ok_or(Corruption::ExtmarkSplice)
     } else if kind == kExtmarkMove {
         if !bi.read(&mut image) {
-            corruption_error(c"extmark truncated", file_name);
-            return None;
+            return Err(UndoFileError::Corrupt(Corruption::ExtmarkTruncated));
         }
         decode_move(&image)
             .map(ExtmarkUndoObject::Move)
-            .ok_or(c"extmark move")
+            .ok_or(Corruption::ExtmarkMove)
     } else {
-        Err(c"extmark type")
+        Err(Corruption::ExtmarkType)
     };
-    decoded
-        .inspect_err(|mesg| corruption_error(mesg, file_name))
-        .ok()
+    decoded.map_err(UndoFileError::Corrupt)
 }
 
 /// Writes one undo entry: where the lines it saved came from, and the lines.
@@ -426,28 +414,24 @@ pub(crate) fn serialize_uep(bi: &mut BufInfo, entry: &UndoEntry) -> bool {
 /// is the file's word, and a corrupt one must not reserve gigabytes.
 const ENTRY_LINES_RESERVED: usize = 1024;
 
-/// Reads one undo entry back, or `None` when it is corrupt (said) or the
-/// file ran out in the middle of it (not said, as upstream).
-pub(crate) fn unserialize_uep(bi: &mut BufInfo, file_name: &CStr) -> Option<UndoEntry> {
+/// Reads one undo entry back, or why not: it is corrupt, or the file ran
+/// out in the middle of it (not said, as upstream).
+pub(crate) fn unserialize_uep(bi: &mut BufInfo) -> Result<UndoEntry, UndoFileError> {
     let top = bi.read_4c();
     let bot = bi.read_4c();
     let lcount = bi.read_4c();
     // A count, not an offset. Upstream widens it to `size_t` for the loop
     // below, so a negative one becomes about 2^64 iterations over an array
     // it never allocated.
-    let Ok(size) = usize::try_from(bi.read_4c()) else {
-        corruption_error(c"entry size", file_name);
-        return None;
-    };
+    let size =
+        usize::try_from(bi.read_4c()).map_err(|_| UndoFileError::Corrupt(Corruption::EntrySize))?;
     let mut lines = Vec::with_capacity(size.min(ENTRY_LINES_RESERVED));
     for _ in 0..size {
-        let Ok(line_len) = usize::try_from(bi.read_4c()) else {
-            corruption_error(c"line length", file_name);
-            return None;
-        };
-        lines.push(undo_read_string(bi, line_len)?);
+        let line_len = usize::try_from(bi.read_4c())
+            .map_err(|_| UndoFileError::Corrupt(Corruption::LineLength))?;
+        lines.push(undo_read_string(bi, line_len).ok_or(UndoFileError::Quiet)?);
     }
-    Some(UndoEntry {
+    Ok(UndoEntry {
         top: LineNr::new(top),
         bot: LineNr::new(bot),
         lcount: LineNr::new(lcount),
@@ -617,7 +601,7 @@ mod tests {
 
         let mut bi = BufInfo::reader(buffer, File::open(&scratch.0).expect("written"));
         assert_eq!(bi.read_2c(), UF_HEADER_MAGIC);
-        let back = unserialize_uhp(&mut bi, c"lib test").expect("reads back");
+        let back = unserialize_uhp(&mut bi).expect("reads back");
         assert_eq!(back.link(), UndoLink::to_seq(5));
         assert_eq!(
             (back.next, back.prev, back.alt_next, back.alt_prev),
