@@ -16,6 +16,13 @@
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::{
     SUB_FLAGS, check_regexp_delim, skip_substitute, sub_joining_lines, sub_parse_flags,
@@ -24,23 +31,60 @@ use super::{
 use crate::ascii::ascii_iswhite;
 use crate::charset::getdigits_int_at;
 use crate::ex_cmds::{INT_MAX, kSubIgnoreCase, kSubMatchCase};
-use crate::memory::XString;
-use crate::message::emsg;
-use crate::message::{e_backslash, e_invcmd, e_modifiable, e_nopresub, e_zerocount};
-use crate::message_fmt::msg_bytes;
+use crate::memory::{ThinCString, XString};
+use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::option::magic_isset;
-use crate::os::cshim::gettext;
 use crate::regexp::{RE_LAST, RE_SEARCH, RE_SUBST, regtilde_owned, skip_regexp_in_place};
 use crate::search::{SEARCH_HIS, search_regcomp_owned};
-use crate::semsg;
+use crate::tr;
 use crate::types::CmdIdx;
 use crate::types::ColNr;
+use crate::types::Failed;
 use crate::types::RegMMatch;
 use crate::types::{ExArg, NUL};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
+
+/// Why `:substitute` refused its arguments, and the message that says so
+/// -- upstream's texts. Reported once, by `do_sub`.
+#[derive(Debug, thiserror::Error)]
+pub(super) enum SubError {
+    #[error("{}", tr!("E33: No previous substitute regular expression"))]
+    NoPrevious,
+    #[error("{}", tr!("E10: \\ should be followed by /, ? or &"))]
+    Backslash,
+    #[error("{}", tr!("E939: Positive count required"))]
+    ZeroCount,
+    /// The count as typed.
+    #[error("{}", tr!("E1510: Value too large: {}", msg_bytes(.0.as_bytes())))]
+    TooLarge(ThinCString),
+    /// The rest of the line from the garbage on.
+    #[error("{}", tr!("E488: Trailing characters: {}", msg_bytes(.0.as_bytes())))]
+    Trailing(ThinCString),
+    #[error("{}", tr!("E21: Cannot make changes, 'modifiable' is off"))]
+    NotModifiable,
+    /// After the regexp engine's own refusal of the pattern, unless the
+    /// `e` flag asked for silence.
+    #[error("{}", tr!("E476: Invalid command"))]
+    InvalidCommand,
+    /// The delimiter check or the regexp engine has spoken.
+    #[error(transparent)]
+    Reported(#[from] Failed),
+}
+
+// Two words, so a `Result` carrying one is no wider than it has to be.
+const _: () = assert!(size_of::<SubError>() <= 16);
+
+impl SubError {
+    /// Puts the message out, unless it is already out.
+    pub(super) fn report(&self) {
+        if !matches!(self, Self::Reported(_)) {
+            emsg_text(self.to_string());
+        }
+    }
+}
 
 /// What `do_sub` needs from the command line before it can start matching.
 pub(super) struct SubSetup {
@@ -80,7 +124,11 @@ struct Parsed {
 
 /// Split `/pattern/replacement/` off the argument, or take the previous
 /// pattern and replacement.
-fn read_pattern(args: &mut ExArg, cmdpreview_ns: c_int, keeppatterns: bool) -> Option<Parsed> {
+fn read_pattern(
+    args: &mut ExArg,
+    cmdpreview_ns: c_int,
+    keeppatterns: bool,
+) -> Result<Parsed, SubError> {
     let mut at = args.line.arg;
     let mut which_pat = if args.cmdidx == CmdIdx::tilde {
         RE_LAST as c_int // use last used regexp
@@ -99,7 +147,7 @@ fn read_pattern(args: &mut ExArg, cmdpreview_ns: c_int, keeppatterns: bool) -> O
     if !fresh {
         // Use the previous pattern and substitution.
         if args.skip {
-            return Some(Parsed {
+            return Ok(Parsed {
                 pat: None,
                 sub: None,
                 which_pat,
@@ -108,12 +156,9 @@ fn read_pattern(args: &mut ExArg, cmdpreview_ns: c_int, keeppatterns: bool) -> O
                 flags_at: at,
             });
         }
-        let Some(previous) = super::parse::previous_replacement() else {
-            // There is no previous command.
-            emsg(gettext(e_nopresub));
-            return None;
-        };
-        return Some(Parsed {
+        // There is no previous command.
+        let previous = super::parse::previous_replacement().ok_or(SubError::NoPrevious)?;
+        return Ok(Parsed {
             // search_regcomp() will use the previous pattern.
             pat: None,
             sub: Some(previous),
@@ -126,9 +171,7 @@ fn read_pattern(args: &mut ExArg, cmdpreview_ns: c_int, keeppatterns: bool) -> O
 
     // The delimiter is handed on as a `char`, so a high byte arrives
     // sign-extended -- which is what indexes the ctype table upstream.
-    if check_regexp_delim(c_int::from(first as c_char)).is_err() {
-        return None;
-    }
+    check_regexp_delim(c_int::from(first.cast_signed()))?;
 
     let pat;
     let delimiter;
@@ -139,9 +182,8 @@ fn read_pattern(args: &mut ExArg, cmdpreview_ns: c_int, keeppatterns: bool) -> O
         // substitute pattern (like "//sub/").
         at += 1;
         let which = args.line.byte_at(at);
-        if which == NUL as u8 || !b"/?&".contains(&which) {
-            emsg(gettext(e_backslash));
-            return None;
+        if which == 0 || !b"/?&".contains(&which) {
+            return Err(SubError::Backslash);
         }
         if which != b'&' {
             which_pat = RE_SEARCH as c_int; // use last '/' pattern
@@ -180,11 +222,11 @@ fn read_pattern(args: &mut ExArg, cmdpreview_ns: c_int, keeppatterns: bool) -> O
     (sub_end, at) = skip_substitute(&mut args.line, at, delimiter);
     let sub = XString::from_bytes(args.line.slice_at(start, sub_end - start));
 
-    if !args.skip && !keeppatterns && cmdpreview_ns <= 0 as c_int {
+    if !args.skip && !keeppatterns && cmdpreview_ns <= 0 {
         sub_set_replacement(sub.clone());
     }
 
-    Some(Parsed {
+    Ok(Parsed {
         pat: Some(pat),
         sub: Some(sub),
         which_pat,
@@ -197,38 +239,35 @@ fn read_pattern(args: &mut ExArg, cmdpreview_ns: c_int, keeppatterns: bool) -> O
 /// Read the trailing count at `*at`, which turns `:s/pat/sub/ N` into a
 /// range of N lines starting at the last one, moving `*at` past it.
 ///
-/// Answers false when the count was refused.
-fn read_count(args: &mut ExArg, at: &mut usize) -> bool {
+fn read_count(args: &mut ExArg, at: &mut usize) -> Result<(), SubError> {
     if !args.line.byte_at(*at).is_ascii_digit() {
-        return true;
+        return Ok(());
     }
     let count_at = *at;
     let (i, past) = getdigits_int_at(args.line.buffer(), count_at, false, INT_MAX);
     *at = past;
-    if i <= 0 as c_int && !args.skip && SUB_FLAGS.with(|flags| flags.do_error) {
-        emsg(gettext(e_zerocount));
-        return false;
+    if i <= 0 && !args.skip && SUB_FLAGS.with(|flags| flags.do_error) {
+        return Err(SubError::ZeroCount);
     }
     // Upstream writes `i >= INT_MAX`, which for a `c_int` is `==`.
     if i == INT_MAX {
-        let count_arg = msg_bytes(args.line.slice_at(count_at, past - count_at));
-        semsg!("E1510: Value too large: {count_arg}");
-        return false;
+        let count_arg = args.line.slice_at(count_at, past - count_at);
+        return Err(SubError::TooLarge(count_arg.into()));
     }
     args.line1 = args.line2;
     args.line2 += i - 1;
     args.line2 = args.line2.min(Buf::current().b_ml.ml_line_count);
-    true
+    Ok(())
 }
 
-/// Read the whole `:s` command line, answering None when the command is
-/// finished -- because it was refused, because it was only being parsed, or
-/// because the `\n` form turned it into a join.
+/// Read the whole `:s` command line: what to match and replace with, or
+/// `None` when the command is finished -- because it was only being
+/// parsed, or because the `\n` form turned it into a join.
 pub(super) fn parse_sub(
     args: &mut ExArg,
     cmdpreview_ns: c_int,
     keeppatterns: bool,
-) -> Option<SubSetup> {
+) -> Result<Option<SubSetup>, SubError> {
     let Parsed {
         pat,
         sub,
@@ -244,11 +283,11 @@ pub(super) fn parse_sub(
             pat.as_deref().map(CStr::to_bytes),
             sub,
             flags_at,
-            cmdpreview_ns <= 0 as c_int,
+            cmdpreview_ns <= 0,
             keeppatterns,
         );
         if joined {
-            return None;
+            return Ok(None);
         }
     }
 
@@ -260,9 +299,7 @@ pub(super) fn parse_sub(
     let (save_do_all, save_do_ask) = SUB_FLAGS.with(|flags| (flags.do_all, flags.do_ask));
 
     let mut at = args.line.skip_white(flags_at);
-    if !read_count(args, &mut at) {
-        return None;
-    }
+    read_count(args, &mut at)?;
 
     // Check for a trailing command or garbage.
     at = args.line.skip_white(at);
@@ -271,30 +308,25 @@ pub(super) fn parse_sub(
         // Not end-of-line or comment.
         args.line.next = args.line.check_next(at);
         if args.line.next.is_none() {
-            let rest = msg_bytes(args.line.rest_of(at));
-            semsg!("E488: Trailing characters: {rest}");
-            return None;
+            return Err(SubError::Trailing(args.line.rest_of(at).into()));
         }
     }
     if args.skip {
         // Not executing commands, only parsing.
-        return None;
+        return Ok(None);
     }
     // Upstream asserts here; the `args.skip` return above is why it holds --
     // that is the only path that leaves the replacement unset.
-    let sub = sub?;
+    let Some(sub) = sub else {
+        return Ok(None);
+    };
 
     // Substitution is not allowed in a non-'modifiable' buffer.
     if !SUB_FLAGS.with(|flags| flags.do_count) && Buf::current().b_p_ma == 0 {
-        emsg(gettext(e_modifiable));
-        return None;
+        return Err(SubError::NotModifiable);
     }
 
-    let options = if cmdpreview_ns > 0 as c_int {
-        0 as c_int
-    } else {
-        SEARCH_HIS as c_int
-    };
+    let options = if cmdpreview_ns > 0 { 0 } else { SEARCH_HIS };
     let compiled = search_regcomp_owned(
         pat.as_deref().unwrap_or_default(),
         RE_SUBST as c_int,
@@ -303,10 +335,11 @@ pub(super) fn parse_sub(
         false,
     );
     let Some((mut regmatch, _)) = compiled else {
-        if SUB_FLAGS.with(|flags| flags.do_error) {
-            emsg(gettext(e_invcmd));
-        }
-        return None;
+        return Err(if SUB_FLAGS.with(|flags| flags.do_error) {
+            SubError::InvalidCommand
+        } else {
+            SubError::Reported(Failed)
+        });
     };
 
     // The 'i' or 'I' flag overrules 'ignorecase' and 'smartcase'.
@@ -323,10 +356,10 @@ pub(super) fn parse_sub(
     let sub = if sub.starts_with(b"\\=") {
         sub
     } else {
-        regtilde_owned(sub, magic_isset(), cmdpreview_ns > 0 as c_int).0
+        regtilde_owned(sub, magic_isset(), cmdpreview_ns > 0).0
     };
 
-    Some(SubSetup {
+    Ok(Some(SubSetup {
         sub,
         regmatch,
         has_second_delim,
@@ -334,5 +367,5 @@ pub(super) fn parse_sub(
         pat_given: pat.is_some(),
         save_do_all,
         save_do_ask,
-    })
+    }))
 }

@@ -246,9 +246,7 @@ pub fn do_write(args: &mut ExArg) -> Result<(), Failed> {
         if cannot_write_curbuf(args) {
             return Err(Failed);
         }
-        if !confirm_partial_write(args) {
-            return Err(Failed);
-        }
+        confirm_partial_write(args)?;
     }
 
     // The two names to check and write under: the ones typed, or the
@@ -342,18 +340,19 @@ fn cannot_write_curbuf(args: &mut ExArg) -> bool {
         || check_readonly(&mut args.forceit, Buf::current())
 }
 
-/// Writing less than the whole buffer needs a `!`, or the user's blessing.
-fn confirm_partial_write(args: &mut ExArg) -> bool {
+/// Writing less than the whole buffer needs a `!` (E140), or the user's
+/// blessing: the dialog's "No" refuses too.
+fn confirm_partial_write(args: &mut ExArg) -> Result<(), Failed> {
     if (args.line1 == LineNr::ONE && args.line2 == Buf::current().b_ml.ml_line_count)
         || args.forceit
         || args.append
         || p_wa()
     {
-        return true;
+        return Ok(());
     }
     if !confirming() {
         emsg(gettext(c"E140: Use ! to write partial buffer"));
-        return false;
+        return Err(Failed);
     }
     if vim_dialog_yesno(
         VIM_QUESTION as c_int,
@@ -362,10 +361,10 @@ fn confirm_partial_write(args: &mut ExArg) -> bool {
         2,
     ) != VIM_YES as c_int
     {
-        return false;
+        return Err(Failed);
     }
     args.forceit = true;
-    true
+    Ok(())
 }
 
 /// `:saveas` swaps the current buffer's names with the alternate buffer's, so

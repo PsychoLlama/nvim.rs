@@ -667,8 +667,13 @@ pub(crate) fn do_sub(
     let keeppatterns = cmdmod_has(CmdModFlags::KEEPPATTERNS);
     let (old_cursor, old_line_count) = (Win::current().w_cursor, Buf::current().b_ml.ml_line_count);
 
-    let Some(setup) = parse_sub(args, cmdpreview_ns, keeppatterns) else {
-        return 0 as c_int;
+    let setup = match parse_sub(args, cmdpreview_ns, keeppatterns) {
+        Ok(Some(setup)) => setup,
+        Ok(None) => return 0,
+        Err(refused) => {
+            refused.report();
+            return 0;
+        }
     };
     let SubSetup {
         sub,

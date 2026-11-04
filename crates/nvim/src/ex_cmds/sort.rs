@@ -18,7 +18,7 @@
 
 use super::LineCopy;
 use super::say;
-use super::{MAXLNUM, RE_MAGIC, e_interr, e_invarg, e_noprevre, kExtmarkNOOP, kExtmarkUndo};
+use super::{MAXLNUM, RE_MAGIC, e_interr, kExtmarkNOOP, kExtmarkUndo};
 use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
 use crate::charset::Str2NrBases;
@@ -28,15 +28,17 @@ use crate::extmark::extmark_splice;
 use crate::getchar::state::got_int;
 use crate::mark::mark_adjust;
 use crate::memline::{Lines, ml_append_cstr, ml_delete};
+use crate::memory::ThinCString;
 use crate::message::emsg;
-use crate::message_fmt::{msg_bytes, msg_cstr};
+use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::narrow::len_as_int;
 use crate::option::vars::p_ic;
 use crate::os::cshim::{cstr_ncasecmp, gettext, strcoll, strtod_prefix};
 use crate::os::input::fast_breakcheck;
 use crate::regexp::{char_delim, skip_regexp_at, vim_regexec};
 use crate::search::last_search_pat;
-use crate::semsg;
+use crate::tr;
+use crate::types::Failed;
 use crate::types::RegMatch;
 use crate::types::{BCount, ColNr, ExArg, ExtmarkOp, Float, LineNr, NUL, VarNumber, size_t};
 use crate::undo::u_save;
@@ -142,41 +144,66 @@ fn compare_lines(order: StringOrder, l1: &SortLine, l2: &SortLine) -> Ordering {
     keys.then(l1.lnum.cmp(&l2.lnum))
 }
 
+/// Why `:sort` or `:uniq` refused its flags, and the message that says so
+/// -- upstream's texts. Reported once, by the command.
+#[derive(Debug, thiserror::Error)]
+enum SortError {
+    /// The pattern as typed, from its first byte on.
+    #[error("{}", tr!("E654: Missing delimiter after search pattern: {}", msg_bytes(.0.as_bytes())))]
+    MissingDelimiter(ThinCString),
+    #[error("{}", tr!("E35: No previous regular expression"))]
+    NoPreviousPattern,
+    /// The rest of the argument from the flag on.
+    #[error("{}", tr!("E475: Invalid argument: {}", msg_bytes(.0.as_bytes())))]
+    InvalidArgument(ThinCString),
+    /// More than one of `n`, `f`, `b`, `o` and `x`.
+    #[error("{}", tr!("E474: Invalid argument"))]
+    TwoFormats,
+    /// The regexp engine's refusal of the pattern.
+    #[error(transparent)]
+    Reported(#[from] Failed),
+}
+
+impl SortError {
+    /// Puts the message out, unless it is already out.
+    fn report(&self) {
+        if !matches!(self, Self::Reported(_)) {
+            emsg_text(self.to_string());
+        }
+    }
+}
+
 /// The `/pat/` argument both commands accept in place of a flag letter,
 /// its opening delimiter at `delim_at` in the command line.
 ///
 /// Returns where the closing delimiter is, which upstream overwrites with a
 /// NUL so the pattern is its own string -- the scan resumes one byte past
-/// it.  `None` means it failed, with the reason already reported.
+/// it.
 fn compile_sort_pattern(
     args: &mut ExArg,
     delim_at: usize,
     regmatch: &mut Option<RegMatch>,
-) -> Option<usize> {
+) -> Result<usize, SortError> {
     // The delimiter is handed on as a `char`, sign-extended -- and the skip
     // compares the pattern's bytes the same way, so a high byte still ends it.
     let delim = char_delim(args.line.byte_at(delim_at));
     let start = delim_at + 1;
     let end = start + skip_regexp_at(args.line.tail(start), delim, 1);
     if char_delim(args.line.byte_at(end)) != delim {
-        let startp = msg_bytes(args.line.rest_of(start));
-        semsg!("E654: Missing delimiter after search pattern: {startp}");
-        return None;
+        return Err(SortError::MissingDelimiter(args.line.rest_of(start).into()));
     }
     args.line.terminate_at(end);
 
     // Use the last search pattern if the sort pattern is empty.
     let compiled = if end == start {
-        let Some(last) = last_search_pat() else {
-            emsg(gettext(e_noprevre));
-            return None;
-        };
+        let last = last_search_pat().ok_or(SortError::NoPreviousPattern)?;
         RegMatch::compile(last.as_cstr(), RE_MAGIC, p_ic())
     } else {
         RegMatch::compile(args.line.cstr_from(start), RE_MAGIC, p_ic())
     };
-    *regmatch = Some(compiled?);
-    Some(end)
+    // The regexp engine reports its own refusal.
+    *regmatch = Some(compiled.ok_or(Failed)?);
+    Ok(end)
 }
 
 /// True for the letters that can only ever be flags, so that anything else is
@@ -268,29 +295,27 @@ fn flag_fallback(
     byte: u8,
     regmatch: &mut Option<RegMatch>,
     keep_nextcmd: bool,
-) -> Option<Fallback> {
+) -> Result<Fallback, SortError> {
     let base = args.line.arg;
     if let Some(next) = args.line.check_next(base + at)
         && !(keep_nextcmd && args.line.next.is_some())
     {
         args.line.next = Some(next);
-        return Some(Fallback::NextCmd);
+        return Ok(Fallback::NextCmd);
     }
     if is_alpha(byte) || regmatch.is_some() {
-        let arg0 = msg_cstr(args.line.cstr_from(base + at));
-        semsg!("E475: Invalid argument: {arg0}");
-        return None;
+        let arg0 = args.line.cstr_from(base + at);
+        return Err(SortError::InvalidArgument(arg0.into()));
     }
     compile_sort_pattern(args, base + at, regmatch).map(|end| Fallback::Pattern(end - base))
 }
 
-/// Read `:sort`'s flags and its optional pattern.  `None` means the command
-/// was rejected, with the reason already reported.
+/// Read `:sort`'s flags and its optional pattern.
 fn parse_sort_flags(
     args: &mut ExArg,
     spec: &mut SortSpec,
     regmatch: &mut Option<RegMatch>,
-) -> Option<StringOrder> {
+) -> Result<StringOrder, SortError> {
     let mut order = StringOrder::BYTES;
     // Only one of 'n', 'b', 'o', 'f' and 'x' is allowed.
     let mut formats = 0;
@@ -330,22 +355,20 @@ fn parse_sort_flags(
     }
 
     if formats > 1 {
-        emsg(gettext(e_invarg));
-        return None;
+        return Err(SortError::TwoFormats);
     }
     // From here on "numeric" covers every integer format.
     spec.numeric |= !spec.radix.is_empty();
-    Some(order)
+    Ok(order)
 }
 
-/// Read `:uniq`'s flags and its optional pattern.  `None` means the command
-/// was rejected, with the reason already reported.
+/// Read `:uniq`'s flags and its optional pattern.
 fn parse_uniq_flags(
     args: &mut ExArg,
     mode: &mut UniqMode,
     use_match: &mut bool,
     regmatch: &mut Option<RegMatch>,
-) -> Option<StringOrder> {
+) -> Result<StringOrder, SortError> {
     let mut order = StringOrder::BYTES;
     let mut at = 0;
 
@@ -370,7 +393,7 @@ fn parse_uniq_flags(
         at += 1;
     }
 
-    Some(order)
+    Ok(order)
 }
 
 /// The part of `line` the comparison should look at: the whole line when
@@ -574,8 +597,12 @@ fn sort_range(args: &mut ExArg) {
     let mut count = (line2 - line1) as size_t + 1;
 
     'sortend: {
-        let Some(order) = parse_sort_flags(args, &mut spec, &mut regmatch) else {
-            break 'sortend;
+        let order = match parse_sort_flags(args, &mut spec, &mut regmatch) {
+            Ok(order) => order,
+            Err(refused) => {
+                refused.report();
+                break 'sortend;
+            }
         };
         let Some(mut sorted) = collect_sort_keys(line1, line2, &spec, &mut regmatch) else {
             break 'sortend;
@@ -764,8 +791,12 @@ fn uniq_range(args: &mut ExArg) {
     let mut deleted = 0;
 
     'uniqend: {
-        let Some(order) = parse_uniq_flags(args, &mut mode, &mut use_match, &mut regmatch) else {
-            break 'uniqend;
+        let order = match parse_uniq_flags(args, &mut mode, &mut use_match, &mut regmatch) {
+            Ok(order) => order,
+            Err(refused) => {
+                refused.report();
+                break 'uniqend;
+            }
         };
 
         let mut scan = UniqScan {

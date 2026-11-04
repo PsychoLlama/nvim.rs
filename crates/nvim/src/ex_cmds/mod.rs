@@ -41,7 +41,7 @@ use crate::getchar::state::got_int;
 use crate::guard::{sandbox, secure};
 use crate::input::prompt_for_input;
 use crate::message::state::{msg_scroll, quit_more};
-use crate::message::{e_curdir, e_interr, e_invarg, e_noprevre, e_sandbox};
+use crate::message::{e_curdir, e_interr, e_sandbox};
 use crate::message::{
     emsg, message_filtered, msg, msg_clr_eos, msg_display, msg_end, msg_outnum, msg_putchar,
     msg_start, msg_starthere, msg_str, msgmore,

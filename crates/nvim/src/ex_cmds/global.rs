@@ -29,9 +29,9 @@ use crate::getchar::state::got_int;
 use crate::mark::setpcmark;
 use crate::memline::{ml_clearmarked, ml_firstmarked, ml_setmarked};
 use crate::message::state::{msg_col, msg_didout, msg_scrolled};
-use crate::message::{e_backslash, e_interr, e_invcmd};
+use crate::message::{e_interr, e_invcmd};
 use crate::message::{emsg, msg};
-use crate::message_fmt::msg_bytes;
+use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::r#move::changed_line_abv_curs;
 use crate::option::magic_isset;
 use crate::os::cshim::gettext;
@@ -39,6 +39,8 @@ use crate::os::input::{line_breakcheck, os_breakcheck};
 use crate::regexp::{RE_BOTH, RE_LAST, RE_SEARCH, RE_SUBST, char_delim, skip_regexp_in_place};
 use crate::search::{SEARCH_HIS, search_regcomp_owned};
 use crate::smsg;
+use crate::tr;
+use crate::types::Failed;
 use crate::types::RegMMatch;
 use crate::types::{ColNr, ExArg, LineNr};
 use crate::winlayer::{Buf, Win};
@@ -88,12 +90,34 @@ struct GlobalPat {
     cmd_at: usize,
 }
 
-/// Split `:g/pat/cmd` into its pattern and its command, reporting the three
-/// ways it can be malformed.
+/// Why `:global` refused its head, and the message that says so --
+/// upstream's texts. Reported once, by [`ex_global`].
+#[derive(Debug, thiserror::Error)]
+enum GlobalError {
+    #[error("{}", tr!("E10: \\ should be followed by /, ? or &"))]
+    Backslash,
+    #[error("{}", tr!("E148: Regular expression missing from global"))]
+    NoPattern,
+    /// The delimiter check has spoken.
+    #[error(transparent)]
+    Reported(#[from] Failed),
+}
+
+impl GlobalError {
+    /// Puts the message out, unless it is already out.
+    fn report(&self) {
+        if !matches!(self, Self::Reported(_)) {
+            emsg_text(self.to_string());
+        }
+    }
+}
+
+/// Split `:g/pat/cmd` into its pattern and its command: the three ways it
+/// can be malformed are refusals.
 ///
 /// The closing delimiter is replaced by a NUL in place, as upstream does,
 /// so the command that follows is a string of its own in `args`'s line.
-fn global_pattern(args: &mut ExArg) -> Option<GlobalPat> {
+fn global_pattern(args: &mut ExArg) -> Result<GlobalPat, GlobalError> {
     let arg = args.line.arg;
     let first = args.line.byte_at(arg);
 
@@ -103,12 +127,9 @@ fn global_pattern(args: &mut ExArg) -> Option<GlobalPat> {
         let which_pat = match args.line.byte_at(arg + 1) {
             b'&' => RE_SUBST as c_int,
             b'/' | b'?' => RE_SEARCH as c_int,
-            _ => {
-                emsg(gettext(e_backslash));
-                return None;
-            }
+            _ => return Err(GlobalError::Backslash),
         };
-        return Some(GlobalPat {
+        return Ok(GlobalPat {
             pat: CString::default(),
             which_pat,
             cmd_at: arg + 2,
@@ -116,15 +137,12 @@ fn global_pattern(args: &mut ExArg) -> Option<GlobalPat> {
     }
 
     if first == 0 {
-        emsg(gettext(c"E148: Regular expression missing from global"));
-        return None;
+        return Err(GlobalError::NoPattern);
     }
     let delim = first;
     // The delimiter is handed on as a `char`, so a high byte arrives
     // sign-extended -- which is what indexes the ctype table upstream.
-    if check_regexp_delim(char_delim(delim)).is_err() {
-        return None;
-    }
+    check_regexp_delim(char_delim(delim))?;
 
     let pat_at = arg + 1;
     // A `?` delimiter's `\?` is unescaped in the line itself, as upstream's
@@ -140,7 +158,7 @@ fn global_pattern(args: &mut ExArg) -> Option<GlobalPat> {
         args.line.terminate_at(cmd_at);
         cmd_at += 1;
     }
-    Some(GlobalPat {
+    Ok(GlobalPat {
         // Terminated by the argument's own NUL when there was no closing
         // delimiter, by the one just written when there was.
         pat: args.line.cstr_from(pat_at).to_owned(),
@@ -199,8 +217,12 @@ pub fn ex_global(excmd: &mut ExArg) {
     } else {
         excmd.line.byte_at(excmd.line.cmd)
     };
-    let Some(parsed) = global_pattern(excmd) else {
-        return;
+    let parsed = match global_pattern(excmd) {
+        Ok(parsed) => parsed,
+        Err(refused) => {
+            refused.report();
+            return;
+        }
     };
 
     let compiled = search_regcomp_owned(

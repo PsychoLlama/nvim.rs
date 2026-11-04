@@ -61,7 +61,7 @@ use crate::startup::silent_mode;
 use crate::strings::escaped_bytes;
 use crate::tr;
 use crate::types::ui::kUIMessages;
-use crate::types::{CmdModFlags, CpoFlag, ExArg, LineNr, NUL, OptInt};
+use crate::types::{CmdModFlags, CpoFlag, ExArg, Failed, LineNr, NUL, OptInt};
 use crate::ui::state::Rows;
 use crate::ui::{ui_cursor_goto, ui_has};
 use crate::undo::{buf_is_changed, u_save};
@@ -75,13 +75,13 @@ use std::ffi::CString;
 /// empty command is never remembered.
 static PREVCMD: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
 
-/// Check that [`PREVCMD`] is set; if it is not, report it.
-fn prevcmd_is_set() -> bool {
+/// Check that [`PREVCMD`] is set: E34 when it is not.
+fn prevcmd_is_set() -> Result<(), Failed> {
     if PREVCMD.with(Vec::is_empty) {
         emsg(gettext(e_noprev));
-        return false;
+        return Err(Failed);
     }
-    true
+    Ok(())
 }
 
 /// Handle `:!cmd`, and the `:r !cmd` / `:w !cmd` forms.
@@ -113,7 +113,7 @@ pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, 
         .to_vec();
     let mut head: Vec<u8> = Vec::new();
     let assembled = loop {
-        if ins_prevcmd && !prevcmd_is_set() {
+        if ins_prevcmd && prevcmd_is_set().is_err() {
             return;
         }
         let mut text = head;
@@ -146,7 +146,7 @@ pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, 
     'theend: {
         if bangredo.get() {
             // Put the command in the redo buffer.
-            if !prevcmd_is_set() {
+            if prevcmd_is_set().is_err() {
                 break 'theend;
             }
             let escaped = PREVCMD.with(|cmd| escaped_bytes(cmd, b"%#"));
