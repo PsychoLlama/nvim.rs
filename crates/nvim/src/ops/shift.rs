@@ -309,7 +309,7 @@ fn shift_block(op: &OpArg, amount: c_int) {
     let mut bd = BlockDef::ZERO;
     let lnum = Win::current().w_cursor.lnum;
     block_prep(&mut bd, op, lnum, true);
-    if bd.is_short != 0 {
+    if bd.is_short {
         return;
     }
 

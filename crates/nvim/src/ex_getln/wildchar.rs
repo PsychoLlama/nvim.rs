@@ -20,7 +20,7 @@ use crate::cstr;
 use crate::keycodes::SpecialKey;
 use crate::option::vars::P_WIM;
 use crate::options::OptWimFlags;
-use crate::types::{ExpandContext, Failed, OK};
+use crate::types::{ExpandContext, Failed};
 
 /// Whether stage `idx` of `'wildmode'` carries `flag` (a `kOptWimFlag*`).
 ///
@@ -56,7 +56,7 @@ pub(crate) fn command_line_wildchar_complete(s: &mut CommandLineState) -> KeyOut
         } else if wim_has(s.wim_index, kOptWimFlagFull) {
             res = s.next_wild(WildMode::Next, options);
         } else {
-            res = OK; // don't insert 'wildchar' now
+            res = true; // don't insert 'wildchar' now
         }
     } else {
         // Typed 'wildchar' for the first time.
@@ -101,7 +101,7 @@ pub(crate) fn command_line_wildchar_complete(s: &mut CommandLineState) -> KeyOut
         }
 
         // Display the matches.
-        if res == OK && match_count() > if wim_noselect { 0 } else { 1 } {
+        if res && match_count() > if wim_noselect { 0 } else { 1 } {
             if wim_longest {
                 let found_longest_prefix = cc.cmdpos != cmdpos_before;
                 if wim_list || (p_wmnu() && wim_full) {
@@ -146,7 +146,7 @@ pub(crate) fn command_line_wildchar_complete(s: &mut CommandLineState) -> KeyOut
         s.gotesc = true;
     }
 
-    if res == OK {
+    if res {
         KeyOutcome::Changed
     } else {
         KeyOutcome::NotChanged

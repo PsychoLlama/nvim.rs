@@ -63,7 +63,7 @@ struct BlockInsertPre {
 pub(crate) fn op_insert(op: &mut OpArg, count1: c_int) {
     let mut bd = BlockDef::ZERO;
     // `edit()` changes `w_curswant`; record it now, for `A`.
-    bd.is_max = c_int::from(Win::current().w_curswant == ColNr::MAX);
+    bd.is_max = Win::current().w_curswant == ColNr::MAX;
 
     // The Visual block is still marked; get rid of it now.
     Win::current().w_cursor.lnum = op.start.lnum;
@@ -158,7 +158,7 @@ fn move_cursor_for_append(op: &OpArg, bd: &mut BlockDef) -> bool {
         let len = get_cursor_line_len();
         let col = Win::current().w_cursor.col;
         Win::current().w_cursor.col = col.max(len.min(bd.textcol + bd.textlen));
-        if bd.is_short != 0 && bd.is_max == 0 {
+        if bd.is_short && !bd.is_max {
             // The first line was too short: pad it out and say so in `bd`.
             if u_save_cursor().is_err() {
                 return false;
@@ -205,7 +205,7 @@ fn replay_insert(op: &mut OpArg, bd: &mut BlockDef, pre: &mut BlockInsertPre, st
 
     // The user may have moved the cursor before typing; try to move the
     // block to match. Only when the difference is not the indent's doing.
-    if op.start.lnum == Buf::current().b_op_start_orig.lnum && bd.is_max == 0 && !did_indent {
+    if op.start.lnum == Buf::current().b_op_start_orig.lnum && !bd.is_max && !did_indent {
         let orig = Buf::current().b_op_start_orig;
         let t = getviscol2(orig.col, orig.coladd);
         let orig_at = Buf::current().b_op_start_orig.col + Buf::current().b_op_start_orig.coladd;
@@ -244,7 +244,7 @@ fn replay_insert(op: &mut OpArg, bd: &mut BlockDef, pre: &mut BlockInsertPre, st
         op.end.col -= ind_post_col - pre.ind_pre_col;
         op.end_vcol -= ind_post_vcol - pre.ind_pre_vcol;
     }
-    if bd.is_max == 0 || bd2.textlen < bd.textlen {
+    if !bd.is_max || bd2.textlen < bd.textlen {
         if op.op_type == OpType::Append {
             pre.pre_textlen += bd2.textlen - bd.textlen;
             if bd2.endspaces != 0 {
@@ -265,7 +265,7 @@ fn replay_insert(op: &mut OpArg, bd: &mut BlockDef, pre: &mut BlockInsertPre, st
         add += bd.textlen;
         // The cursor may have been moved during the insert when `$` was
         // used, and then the block has no right edge to measure from.
-        if bd.is_max != 0
+        if bd.is_max
             && start_insert.lnum == Insstart.get().lnum
             && start_insert.col > Insstart.get().col
         {
@@ -404,7 +404,7 @@ fn replay_change(op: &OpArg, bd: &mut BlockDef, mut pre_textlen: c_int, pre_inde
     let mut linenr = op.start.lnum + 1;
     while linenr <= op.end.lnum {
         block_prep(bd, op, linenr, true);
-        if bd.is_short == 0 || op_virtual() {
+        if !bd.is_short || op_virtual() {
             // When the block starts in virtual space, that offset is
             // padding in front of the text.
             let mut vpos = Pos {
@@ -412,7 +412,7 @@ fn replay_change(op: &OpArg, bd: &mut BlockDef, mut pre_textlen: c_int, pre_inde
                 col: ColNr::ZERO,
                 coladd: 0,
             };
-            if bd.is_short != 0 {
+            if bd.is_short {
                 getvpos(Win::current(), &mut vpos, op.start_vcol);
             }
 

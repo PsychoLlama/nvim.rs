@@ -33,7 +33,7 @@ use crate::popupmenu::state::pum_want;
 use crate::popupmenu::{pum_clear, pum_get_height};
 use crate::semsg;
 use crate::types::ui::{kUICmdline, kUIWildmenu};
-use crate::types::{ExpandContext, FAIL, OK, XpPrefix};
+use crate::types::{ExpandContext, XpPrefix};
 use crate::ui::{ui_flush, ui_has, vim_beep};
 use crate::winlayer::Cc;
 use core::ffi::{CStr, c_int};
@@ -64,10 +64,10 @@ pub(crate) fn as_count(n: usize) -> c_int {
 
 /// Expand the word before the cursor on the command line.
 ///
-/// Answers `FAIL` when this is not a context in which anything can be
-/// completed, which tells the caller to pass the character through as a
-/// normal character instead — that is what makes `:s/^I^D` work.  `OK` means
-/// the key was consumed, even when there were no matches.
+/// Answers whether the key was used: `false` when this is not a context in
+/// which anything can be completed, which tells the caller to pass the
+/// character through as a normal character instead — that is what makes
+/// `:s/^I^D` work. `true` even when there were no matches.
 ///
 /// `mode` is passed on to [`expand_one`]; `escape` asks for the matches to
 /// be escaped for use on the command line.
@@ -76,7 +76,7 @@ pub(crate) fn nextwild(
     mode: WildMode,
     options: WildOpts,
     escape: bool,
-) -> c_int {
+) -> bool {
     let mut ccline = Cc::current();
     let from_wildtrigger_func = options.has(WildOpts::FUNC_TRIGGER);
     let wild_navigate = mode.navigates();
@@ -102,10 +102,10 @@ pub(crate) fn nextwild(
         // Something illegal on the command line.
         ExpandContext::Unsuccessful => {
             beep_flush();
-            return OK;
+            return true;
         }
         // The caller can use the character as a normal char instead.
-        ExpandContext::Nothing => return FAIL,
+        ExpandContext::Nothing => return false,
         _ => {}
     }
 
@@ -118,7 +118,7 @@ pub(crate) fn nextwild(
     // Skip showing matches if the prefix is invalid during wildtrigger().
     let context = expand.context;
     if from_wildtrigger_func && context == ExpandContext::Commands && expand.pattern_len == 0 {
-        return FAIL;
+        return false;
     }
 
     // If 'cmd_silent' is set don't show the dots, because the redrawcmd()
@@ -204,7 +204,7 @@ pub(crate) fn nextwild(
     // When expanding a ":map" command and no matches are found, assume
     // the key is supposed to be inserted literally.
     if expand.context == ExpandContext::Mappings && p.is_none() {
-        return FAIL;
+        return false;
     }
 
     if expand.match_count() <= 0 && p.is_none() {
@@ -214,7 +214,7 @@ pub(crate) fn nextwild(
         expand_one(expand, None, None, WildOpts::NONE, WildMode::Free);
     }
 
-    OK
+    true
 }
 
 /// Move the selection within an already expanded match list, and answer a

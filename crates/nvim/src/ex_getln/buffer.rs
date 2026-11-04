@@ -189,10 +189,6 @@ fn is_word_char(c: ::core::ffi::c_int) -> bool {
     vim_iswordc(c)
 }
 
-fn stuff_char(c: ::core::ffi::c_int) {
-    stuff_readbuf_char(Key::from_code(c));
-}
-
 // ---------------------------------------------------------------------------
 // Getting a command line.
 
@@ -407,9 +403,10 @@ pub fn cmdline_paste_str(s: &CStr, literally: bool) {
             || c == Ctrl_L
             || (c == Ctrl_BSL && cstr::byte_at(text, at) == 0x0e)
         {
-            stuff_char(Ctrl_V);
+            stuff_readbuf_char(Key::CTRL_V);
         }
-        stuff_char(c);
+        // The character read from the text, typed.
+        stuff_readbuf_char(Key::from_code(c));
     }
 }
 

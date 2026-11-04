@@ -25,7 +25,7 @@ use crate::keycodes::ModMask;
 use crate::keycodes::SpecialKey;
 use crate::narrow::len_as_int;
 use crate::state::Step;
-use crate::types::{ExpandContext, FAIL, MB_MAXCHAR};
+use crate::types::{ExpandContext, MB_MAXCHAR};
 use crate::winlayer::Buf;
 
 /// Where the character before byte `at` of `line` starts: C's
@@ -463,7 +463,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
                 // menu if there is one.
                 cmdline_pum_cleanup(cc);
             }
-            if s.next_wild(WildMode::All, WildOpts::NONE) == FAIL {
+            if !s.next_wild(WildMode::All, WildOpts::NONE) {
                 return None;
             }
             completion_mut(|xpc| xpc.context = ExpandContext::Nothing);
@@ -476,7 +476,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
                 return Some(command_line_not_changed(s));
             }
             // Completion: the longest common part.
-            if s.next_wild(WildMode::Longest, WildOpts::NONE) == FAIL {
+            if !s.next_wild(WildMode::Longest, WildOpts::NONE) {
                 return None;
             }
             Some(command_line_changed(s))
@@ -501,7 +501,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
                 } else {
                     WildMode::Next
                 };
-                if s.next_wild(wild_type, WildOpts::NONE) == FAIL {
+                if !s.next_wild(wild_type, WildOpts::NONE) {
                     return None;
                 }
                 return Some(command_line_changed(s));
@@ -520,7 +520,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
                 } else {
                     WildMode::PageUp
                 };
-                if s.next_wild(wild_type, WildOpts::NONE) == FAIL {
+                if !s.next_wild(wild_type, WildOpts::NONE) {
                     return None;
                 }
                 Some(command_line_changed(s))

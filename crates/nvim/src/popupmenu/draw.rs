@@ -13,11 +13,19 @@
 //! is why nearly every step here has two spellings.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::cstr;
 use crate::grid::with_linebuf;
 use crate::message::emsg;
+use crate::narrow::len_as_int;
 use crate::types::ColNr;
 use crate::types::kFloatRelativeEditor;
 use crate::winlayer::Win;
@@ -42,7 +50,7 @@ const WIN_CONFIG_INIT: WinConfig = WinConfig {
     focusable: true,
     mouse: true,
     split: kWinSplitLeft,
-    zindex: kZIndexFloatDefault as c_int,
+    zindex: kZIndexFloatDefault.cast_signed(),
     style: kWinStyleUnused,
     border: false,
     shadow: false,
@@ -178,7 +186,7 @@ fn text_attrs_for(
 
     let text: &[u8] = text;
     let leader = leader.to_bytes();
-    let mut attrs = vec![0; strsize(text) as usize];
+    let mut attrs = vec![0; cell_index(strsize(text))];
     let mut at = 0;
     let mut cell_idx = 0;
     let mut char_pos: uint32_t = 0;
@@ -197,7 +205,7 @@ fn text_attrs_for(
             // `mb_strnicmp(ptr, leader, leader_len)`: both sides cut to the
             // leader's length.
             if matched_len < 0 && strnicmp_in(&rest[..rest.len().min(leader.len())], leader) == 0 {
-                matched_len = leader.len() as c_int;
+                matched_len = len_as_int(leader.len());
             }
             if matched_len > 0 {
                 new_attr = matched_attr(win);
@@ -212,7 +220,7 @@ fn text_attrs_for(
 
         let char_cells = c_cells_at(rest);
         for i in 0..char_cells {
-            attrs[(cell_idx + i) as usize] = new_attr;
+            attrs[cell_index(cell_idx + i)] = new_attr;
         }
         cell_idx += char_cells;
 
@@ -241,7 +249,7 @@ fn pum_grid_puts_with_attrs(col: c_int, cells: c_int, text: &[u8], attrs: &[c_in
         } else {
             col - col_start
         };
-        grid_line_puts(col, &rest[..char_len], attrs[cell as usize]);
+        grid_line_puts(col, &rest[..char_len], attrs[cell_index(cell)]);
         col += c_cells_at(rest);
         at += char_len;
     }
@@ -365,7 +373,7 @@ impl PumRow {
         let width_limit = pum_width.get();
         // Two cells are kept for the separator unless nothing follows.
         let pad = if next_isempty { 0 } else { 2 };
-        let mut cells = c_string_cells(text) as c_int;
+        let mut cells = len_as_int(c_string_cells(text));
         if width_limit - self.totwidth < cells + pad {
             self.need_trunc = true;
         }
@@ -521,7 +529,7 @@ impl PumRow {
 fn pum_draw_row(style: &RowStyle, items: &[PumItem], i: c_int, grid_row: c_int) {
     let win = Win::current();
     let idx = i + pum_first.get();
-    let item = &items[idx as usize];
+    let item = &items[usize::try_from(idx).expect("a menu row")];
     let selected = idx == pum_selected.get();
     let mut row = PumRow {
         hlfs: if selected {
@@ -616,16 +624,16 @@ fn pum_draw_row(style: &RowStyle, items: &[PumItem], i: c_int, grid_row: c_int) 
         );
         if row.need_trunc {
             with_linebuf(|line| {
-                line.chars_mut()[lcol as usize] = if style.fcs_trunc != 0 {
+                line.chars_mut()[cell_index(lcol)] = if style.fcs_trunc != 0 {
                     style.fcs_trunc
                 } else {
                     schar_from_ascii(b'<')
                 };
-                line.attrs_mut()[lcol as usize] = trunc_attr as ScreenAttr;
+                line.attrs_mut()[cell_index(lcol)] = trunc_attr as ScreenAttr;
                 // The marker may have replaced the left half of a wide
                 // character; give the orphaned right half a space.
-                if pum_width.get() > 1 && line.chars()[lcol as usize + 1] == 0 {
-                    line.chars_mut()[lcol as usize + 1] = schar_from_ascii(b' ');
+                if pum_width.get() > 1 && line.chars()[cell_index(lcol) + 1] == 0 {
+                    line.chars_mut()[cell_index(lcol) + 1] = schar_from_ascii(b' ');
                 }
             });
         }
@@ -634,15 +642,15 @@ fn pum_draw_row(style: &RowStyle, items: &[PumItem], i: c_int, grid_row: c_int) 
         grid_line_fill(row.grid_col, rcol, schar_from_ascii(b' '), row.orig_attr);
         if row.need_trunc {
             with_linebuf(|line| {
-                if pum_width.get() > 1 && line.chars()[(rcol - 1) as usize] == 0 {
-                    line.chars_mut()[(rcol - 2) as usize] = schar_from_ascii(b' ');
+                if pum_width.get() > 1 && line.chars()[cell_index(rcol - 1)] == 0 {
+                    line.chars_mut()[cell_index(rcol - 2)] = schar_from_ascii(b' ');
                 }
-                line.chars_mut()[(rcol - 1) as usize] = if style.fcs_trunc != 0 {
+                line.chars_mut()[cell_index(rcol - 1)] = if style.fcs_trunc != 0 {
                     style.fcs_trunc
                 } else {
                     schar_from_ascii(b'>')
                 };
-                line.attrs_mut()[(rcol - 1) as usize] = trunc_attr as ScreenAttr;
+                line.attrs_mut()[cell_index(rcol - 1)] = trunc_attr as ScreenAttr;
             });
         }
     }
@@ -726,8 +734,8 @@ pub fn pum_redraw() {
         grid_alloc(&mut grid, rows, cols, !invalid_grid, false);
         ui_call_grid_resize(
             Integer::from(grid.handle),
-            grid.cols as Integer,
-            grid.rows as Integer,
+            Integer::from(grid.cols),
+            Integer::from(grid.rows),
         );
     } else if invalid_grid {
         grid.invalidate();
@@ -780,4 +788,13 @@ pub fn pum_redraw() {
         pum_draw_row(&style, &items, i, grid_row);
         grid_row += 1;
     }
+}
+
+/// A cell index or count the drawing arithmetic keeps non-negative.
+///
+/// # Panics
+/// On a negative one, which upstream's `(size_t)` index would have read
+/// out of bounds with.
+fn cell_index(n: c_int) -> usize {
+    usize::try_from(n).expect("a non-negative cell index")
 }

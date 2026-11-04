@@ -1,11 +1,15 @@
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
-use crate::types::CAR;
-use crate::types::ESC;
-use crate::types::NL;
 use crate::winlayer::cmdline_window;
 use core::ffi::{CStr, c_int, c_uint};
 use std::rc::Rc;
@@ -293,10 +297,10 @@ fn pum_publish_external(items: &[PumItem], selected: c_int, anchor: &PumAnchor) 
     }
     ui_call_popupmenu_show(
         arr.into(),
-        selected as Integer,
-        (anchor.win_row - pum_win_row_offset.get()) as Integer,
-        (anchor.cursor_col - pum_win_col_offset.get()) as Integer,
-        pum_anchor_grid.get() as Integer,
+        Integer::from(selected),
+        Integer::from(anchor.win_row - pum_win_row_offset.get()),
+        Integer::from(anchor.cursor_col - pum_win_col_offset.get()),
+        Integer::from(pum_anchor_grid.get()),
     );
 }
 
@@ -337,7 +341,7 @@ pub fn pum_display(
 
         if pum_external.get() {
             if !array_changed {
-                ui_call_popupmenu_select(selected as Integer);
+                ui_call_popupmenu_select(Integer::from(selected));
                 return;
             }
             pum_publish_external(&items, selected, &anchor);
@@ -376,9 +380,9 @@ pub fn pum_display(
 
     let mut grid = pum_grid_ref();
     grid.zindex = if State.get() & MODE_CMDLINE != 0 {
-        kZIndexCmdlinePopupMenu as c_int
+        kZIndexCmdlinePopupMenu.cast_signed()
     } else {
-        kZIndexPopupMenu as c_int
+        kZIndexPopupMenu.cast_signed()
     };
     pum_redraw();
 }
@@ -512,7 +516,7 @@ pub fn pum_set_event_info(dict: &mut Dict) {
     for (key, value) in [(c"height", h), (c"width", w), (c"row", r), (c"col", c)] {
         let _ = dict.add_float(key.to_bytes(), value as Float);
     }
-    let _ = dict.add_number(b"size", pum_size.get() as VarNumber);
+    let _ = dict.add_number(b"size", VarNumber::from(pum_size.get()));
     let scrollbar = if pum_scrollbar.get() != 0 {
         kBoolVarTrue
     } else {
@@ -536,14 +540,14 @@ fn pum_send_float_pos() {
         Integer::from(grid.handle),
         Handle::new(-1),
         anchor,
-        pum_anchor_grid.get() as Integer,
-        (pum_row.get() - row_off - pum_win_row_offset.get()) as Float,
-        (pum_left_col.get() - pum_win_col_offset.get()) as Float,
+        Integer::from(pum_anchor_grid.get()),
+        Float::from(pum_row.get() - row_off - pum_win_row_offset.get()),
+        Float::from(pum_left_col.get() - pum_win_col_offset.get()),
         false,
-        grid.zindex as Integer,
-        grid.comp_index as c_int as Integer,
-        grid.comp_row as Integer,
-        grid.comp_col as Integer,
+        Integer::from(grid.zindex),
+        crate::narrow::len_as_integer(grid.comp_index),
+        Integer::from(grid.comp_row),
+        Integer::from(grid.comp_col),
     );
 }
 

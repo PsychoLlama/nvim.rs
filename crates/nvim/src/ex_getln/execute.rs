@@ -25,7 +25,7 @@ use crate::keycodes::SpecialKey;
 use crate::option::cpo_has;
 use crate::option::vars::P_ICM;
 use crate::state::Step;
-use crate::types::{CpoFlag, ExpandContext, OK};
+use crate::types::{CpoFlag, ExpandContext};
 use crate::winlayer::Win;
 
 /// What `CTRL-\` did with the key typed after it.
@@ -405,7 +405,7 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
     // <S-Tab> goes to the last match, in a clumsy way.
     if s.c == SpecialKey::STab
         && KeyTyped.get()
-        && s.next_wild(WildMode::ExpandKeep, WildOpts::NONE) == OK
+        && s.next_wild(WildMode::ExpandKeep, WildOpts::NONE)
     {
         if match_count() > 1
             && ((!s.did_wild_list && wim_has(s.wim_index, kOptWimFlagList)) || p_wmnu())

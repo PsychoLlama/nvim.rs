@@ -61,7 +61,7 @@ pub(crate) fn block_insert(op: &OpArg, s: &[u8], b_insert: bool, bdp: &mut Block
     let mut lnum = op.start.lnum + 1;
     while lnum <= op.end.lnum {
         block_prep(bdp, op, lnum, true);
-        if bdp.is_short != 0 && b_insert {
+        if bdp.is_short && b_insert {
             // `I` on a line that ends before the block starts.
             lnum += 1;
             continue;
@@ -81,7 +81,7 @@ pub(crate) fn block_insert(op: &OpArg, s: &[u8], b_insert: bool, bdp: &mut Block
                 count = ts_val - 1;
             }
             offset = bdp.textcol;
-        } else if bdp.is_short == 0 {
+        } else if !bdp.is_short {
             // Append, with padding after the block.
             ts_val = bdp.end_char_vcols;
             spaces = if bdp.endspaces != 0 {
@@ -97,7 +97,7 @@ pub(crate) fn block_insert(op: &OpArg, s: &[u8], b_insert: bool, bdp: &mut Block
             // Append past the end of a short line: pad out to the block's
             // edge, unless `$` made the block open-ended.
             ts_val = bdp.end_char_vcols;
-            if bdp.is_max == 0 {
+            if !bdp.is_max {
                 spaces = op.end_vcol - bdp.end_vcol + 1;
             }
             count = spaces;
@@ -128,7 +128,7 @@ pub(crate) fn block_insert(op: &OpArg, s: &[u8], b_insert: bool, bdp: &mut Block
             let startcol = offset;
             offset += len_as_int(s.len());
             let mut tail = at;
-            if spaces > 0 && bdp.is_short == 0 {
+            if spaces > 0 && !bdp.is_short {
                 if byte_at(oldp, at) == b'\t' {
                     // Post-padding: the rest of the TAB being split, which
                     // is then dropped rather than copied.
@@ -247,8 +247,8 @@ pub(crate) fn block_prep_line(
     bd.textlen = 0;
     bd.start_vcol = ColNr::ZERO;
     bd.end_vcol = ColNr::ZERO;
-    bd.is_short = 0;
-    bd.is_one_char = 0;
+    bd.is_short = false;
+    bd.is_one_char = false;
     bd.pre_whitesp = 0;
     bd.pre_whitesp_c = 0;
     bd.end_char_vcols = 0;
@@ -286,7 +286,7 @@ pub(crate) fn block_prep_line(
     if bd.start_vcol < op.start_vcol {
         // The line ends before the block starts.
         bd.end_vcol = bd.start_vcol;
-        bd.is_short = 1;
+        bd.is_short = true;
         if !is_del || op.op_type == OpType::Append {
             bd.endspaces = op.end_vcol - op.start_vcol + 1;
         }
@@ -300,7 +300,7 @@ pub(crate) fn block_prep_line(
 
         if bd.end_vcol > op.end_vcol {
             // The whole block is inside one character -- a wide TAB.
-            bd.is_one_char = 1;
+            bd.is_one_char = true;
             if op.op_type == OpType::Insert {
                 bd.endspaces = bd.start_char_vcols - bd.startspaces;
             } else if op.op_type == OpType::Append {
@@ -337,7 +337,7 @@ pub(crate) fn block_prep_line(
                 // The line ends inside the block. Filling it out to the
                 // block's width is the alternative, and it is deliberately
                 // not done: it leaves trailing white space behind.
-                bd.is_short = 1;
+                bd.is_short = true;
                 if op.op_type == OpType::Append || op_virtual() {
                     bd.endspaces = op.end_vcol - bd.end_vcol + c_int::from(op.inclusive);
                 }
@@ -384,7 +384,7 @@ fn charwise_block_prep(
 
     bd.startspaces = 0;
     bd.endspaces = 0;
-    bd.is_one_char = 0;
+    bd.is_one_char = false;
     bd.start_char_vcols = 0;
 
     let mut startcol: ColNr = ColNr::ZERO;
@@ -415,7 +415,7 @@ fn charwise_block_prep(
             if byte_at(p, at) == 0 || (cs + end.coladd < ce && head_off(p, at) == 0) {
                 if start.lnum == end.lnum && start.col == end.col {
                     // The whole region is inside one character.
-                    bd.is_one_char = 1;
+                    bd.is_one_char = true;
                     bd.startspaces = end.coladd - start.coladd + c_int::from(inclusive);
                     endcol = startcol;
                 } else {
@@ -429,7 +429,7 @@ fn charwise_block_prep(
     if endcol == ColNr::MAX {
         endcol = plen;
     }
-    bd.textlen = if startcol > endcol || bd.is_one_char != 0 {
+    bd.textlen = if startcol > endcol || bd.is_one_char {
         0
     } else {
         endcol - startcol + c_int::from(inclusive)

@@ -127,14 +127,14 @@ pub(crate) fn op_replace(op: &mut OpArg, mut c: Key) -> Result<(), Failed> {
 /// `op` must be blockwise.
 fn replace_block(op: &mut OpArg, c: Key, had_ctrl_v_cr: bool) {
     let mut bd = BlockDef::ZERO;
-    bd.is_max = c_int::from(Win::current().w_curswant == ColNr::MAX);
+    bd.is_max = Win::current().w_curswant == ColNr::MAX;
     while Win::current().w_cursor.lnum <= op.end.lnum {
         // Make sure the cursor position is valid for `block_prep`.
         Win::current().w_cursor.col = ColNr::ZERO;
         // The cursor walks the region, so its line is the buffer's.
         let lnum = Win::current().w_cursor.lnum;
         block_prep(&mut bd, op, lnum, true);
-        if bd.textlen != 0 || (op_virtual() && bd.is_max == 0) {
+        if bd.textlen != 0 || (op_virtual() && !bd.is_max) {
             replace_block_line(op, &mut bd, c, had_ctrl_v_cr);
         }
         Win::current().w_cursor.lnum += 1;
@@ -159,7 +159,7 @@ fn replace_block_line(op: &mut OpArg, bd: &mut BlockDef, c: Key, had_ctrl_v_cr: 
     // characters a split TAB needs, here and just below; nothing reads it,
     // so only this side effect on `startspaces` is carried over.)
     if op_virtual()
-        && bd.is_short != 0
+        && bd.is_short
         && byte_at(Lines::current().line(baselnum), bd.textcol.as_usize()) == 0
     {
         let mut vpos = Pos {
@@ -173,12 +173,12 @@ fn replace_block_line(op: &mut OpArg, bd: &mut BlockDef, c: Key, had_ctrl_v_cr: 
 
     // How many characters to replace.
     let mut numc = op.end_vcol - op.start_vcol + 1;
-    if bd.is_short != 0 && (!op_virtual() || bd.is_max != 0) {
+    if bd.is_short && (!op_virtual() || bd.is_max) {
         numc -= (op.end_vcol - bd.end_vcol) + 1;
     }
     // A double-wide character only fits half as many times.
     if utf_char2cells(c.code()) > 1 {
-        if numc & 1 != 0 && bd.is_short == 0 {
+        if numc & 1 != 0 && !bd.is_short {
             bd.endspaces += 1;
         }
         numc /= 2;
@@ -216,7 +216,7 @@ fn replace_block_line(op: &mut OpArg, bd: &mut BlockDef, c: Key, had_ctrl_v_cr: 
                 line.extend_from_slice(encoded);
             }
             let mut newcols = line.len() - textcol;
-            if bd.is_short == 0 {
+            if !bd.is_short {
                 line.resize(line.len() + width(bd.endspaces), b' ');
                 newcols += width(bd.endspaces);
                 line.extend_from_slice(tail);

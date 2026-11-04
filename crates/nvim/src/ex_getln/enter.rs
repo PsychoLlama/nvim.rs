@@ -40,7 +40,7 @@ use core::ffi::CStr;
 impl CommandLineState {
     /// C's `nextwild(&s->xpc, mode, options, s->firstc != '@')`, which every
     /// wildmenu key spells with the same two trailing arguments.
-    pub(crate) fn next_wild(&self, mode: WildMode, options: WildOpts) -> ::core::ffi::c_int {
+    pub(crate) fn next_wild(&self, mode: WildMode, options: WildOpts) -> bool {
         let escape = self.firstc != b'@';
         Cc::current().with_completion(|xpc| nextwild(xpc, mode, options, escape))
     }
