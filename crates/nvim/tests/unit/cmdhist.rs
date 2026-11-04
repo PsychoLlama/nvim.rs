@@ -6,11 +6,10 @@ use neovim::cmdhist::Ring;
 /// Entry texts oldest-first, walking raw slots back from the newest.
 fn texts_newest_first(ring: &Ring) -> Vec<Vec<u8>> {
     let mut out = Vec::new();
-    let len = ring.len() as i32;
-    if len == 0 || ring.newest_idx() < 0 {
+    let len = ring.len();
+    let Some(start) = ring.newest_idx().filter(|_| len != 0) else {
         return out;
-    }
-    let start = ring.newest_idx();
+    };
     let mut i = start;
     loop {
         match ring.get(i) {
@@ -32,8 +31,8 @@ fn add_assigns_increasing_numbers() {
     ring.add(b"one", 0, 100);
     ring.add(b"two", 0, 101);
     ring.add(b"three", 0, 102);
-    assert_eq!(ring.newest_idx(), 2);
-    assert_eq!(ring.newest_number(), 3);
+    assert_eq!(ring.newest_idx(), Some(2));
+    assert_eq!(ring.newest_number(), Some(3));
     let newest = ring.get(2).unwrap();
     assert_eq!(newest.text(), b"three");
     assert_eq!(newest.timestamp(), 102);
@@ -47,8 +46,8 @@ fn add_wraps_and_overwrites_oldest() {
         ring.add(&text[..], 0, i as u64);
     }
     // Slot 0 was overwritten by the fourth entry.
-    assert_eq!(ring.newest_idx(), 0);
-    assert_eq!(ring.newest_number(), 4);
+    assert_eq!(ring.newest_idx(), Some(0));
+    assert_eq!(ring.newest_number(), Some(4));
     assert_eq!(ring.get(0).unwrap().text(), b"a4");
     assert_eq!(ring.get(1).unwrap().text(), b"a2");
 }
@@ -64,7 +63,7 @@ fn move_to_front_renumbers_and_restamps() {
         texts_newest_first(&ring),
         [b"one".to_vec(), b"three".to_vec(), b"two".to_vec()]
     );
-    let front = ring.get(ring.newest_idx()).unwrap();
+    let front = ring.get(ring.newest_idx().unwrap()).unwrap();
     assert_eq!(front.number(), 4);
     assert_eq!(front.timestamp(), 99);
     // Unknown text is not found.
@@ -78,7 +77,7 @@ fn move_to_front_distinguishes_search_separator() {
     // Same text under the other search separator is a different entry.
     assert!(!ring.move_to_front(b"pat", Some(b'?'), 2));
     assert!(ring.move_to_front(b"pat", Some(b'/'), 3));
-    assert_eq!(ring.get(ring.newest_idx()).unwrap().sep(), b'/');
+    assert_eq!(ring.get(ring.newest_idx().unwrap()).unwrap().sep(), b'/');
 }
 
 #[test]
@@ -87,9 +86,9 @@ fn drop_newest_steps_back() {
     ring.add(b"one", 0, 1);
     ring.add(b"two", 0, 2);
     ring.drop_newest();
-    assert_eq!(ring.newest_idx(), 0);
-    assert_eq!(ring.newest_number(), 1);
-    assert_eq!(ring.get(ring.newest_idx()).unwrap().text(), b"one");
+    assert_eq!(ring.newest_idx(), Some(0));
+    assert_eq!(ring.newest_number(), Some(1));
+    assert_eq!(ring.get(ring.newest_idx().unwrap()).unwrap().text(), b"one");
 }
 
 #[test]
@@ -99,15 +98,15 @@ fn calc_idx_maps_numbers_to_slots() {
         ring.add(&text[..], 0, i as u64);
     }
     // Numbers 2..=4 survive; 1 was overwritten.
-    assert_eq!(ring.calc_idx(1), -1);
-    assert_eq!(ring.calc_idx(2), 1);
-    assert_eq!(ring.calc_idx(4), 0);
-    assert_eq!(ring.calc_idx(5), -1);
+    assert_eq!(ring.calc_idx(1), None);
+    assert_eq!(ring.calc_idx(2), Some(1));
+    assert_eq!(ring.calc_idx(4), Some(0));
+    assert_eq!(ring.calc_idx(5), None);
     // Negative numbers count back from the newest.
-    assert_eq!(ring.calc_idx(-1), 0);
-    assert_eq!(ring.calc_idx(-3), 1);
-    assert_eq!(ring.calc_idx(-4), -1);
-    assert_eq!(ring.calc_idx(0), -1);
+    assert_eq!(ring.calc_idx(-1), Some(0));
+    assert_eq!(ring.calc_idx(-3), Some(1));
+    assert_eq!(ring.calc_idx(-4), None);
+    assert_eq!(ring.calc_idx(0), None);
 }
 
 #[test]
@@ -123,7 +122,7 @@ fn delete_matching_compacts_survivors() {
         [b"keep2".to_vec(), b"keep1".to_vec()]
     );
     // Survivors keep their numbers.
-    assert_eq!(ring.get(ring.newest_idx()).unwrap().number(), 3);
+    assert_eq!(ring.get(ring.newest_idx().unwrap()).unwrap().number(), 3);
     assert!(!ring.delete_matching(|e| e.text() == b"gone"));
 }
 
@@ -133,8 +132,8 @@ fn delete_matching_everything_empties_the_ring() {
     ring.add(b"a", 0, 1);
     ring.add(b"b", 0, 2);
     assert!(ring.delete_matching(|_| true));
-    assert_eq!(ring.newest_idx(), -1);
-    assert_eq!(ring.newest_number(), -1);
+    assert_eq!(ring.newest_idx(), None);
+    assert_eq!(ring.newest_number(), None);
 }
 
 #[test]
@@ -144,8 +143,8 @@ fn delete_at_newest_leaves_idx_on_vacant_slot() {
     ring.delete_at(0);
     // C quirk: idx steps back onto a vacant slot, and the vacant slot
     // reads as number 0 (what `histnr()` reports in this state).
-    assert_eq!(ring.newest_idx(), 3);
-    assert_eq!(ring.newest_number(), 0);
+    assert_eq!(ring.newest_idx(), Some(3));
+    assert_eq!(ring.newest_number(), Some(0));
     assert!(ring.get(3).is_none());
 }
 
@@ -160,7 +159,7 @@ fn delete_at_middle_shifts_newer_entries_down() {
         texts_newest_first(&ring),
         [b"three".to_vec(), b"one".to_vec()]
     );
-    assert_eq!(ring.newest_idx(), 1);
+    assert_eq!(ring.newest_idx(), Some(1));
 }
 
 #[test]
@@ -174,7 +173,7 @@ fn resize_grow_keeps_all_entries() {
         texts_newest_first(&ring),
         [b"two".to_vec(), b"one".to_vec()]
     );
-    assert_eq!(ring.newest_number(), 2);
+    assert_eq!(ring.newest_number(), Some(2));
 }
 
 #[test]
@@ -186,7 +185,7 @@ fn resize_shrink_keeps_newest_entries() {
     ring.resize(2);
     assert_eq!(ring.len(), 2);
     assert_eq!(texts_newest_first(&ring), [b"e5".to_vec(), b"e4".to_vec()]);
-    assert_eq!(ring.newest_number(), 5);
+    assert_eq!(ring.newest_number(), Some(5));
 }
 
 #[test]
@@ -208,7 +207,7 @@ fn clear_resets_numbering() {
     ring.clear();
     assert!(ring.is_empty());
     ring.add(b"y", 0, 2);
-    assert_eq!(ring.newest_number(), 1);
+    assert_eq!(ring.newest_number(), Some(1));
 }
 
 /// `:history`'s argument and the `hist*()` functions' refusals, with every

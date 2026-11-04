@@ -24,21 +24,28 @@ use crate::types::{ExpandContext, Failed};
 /// the history, skipping entries that do not start with what was typed.
 pub(crate) fn command_line_next_histidx(s: &mut CommandLineState, next_match: bool) {
     loop {
+        let newest = get_hisidx(s.histype);
         if !next_match {
-            // One step backwards.
-            if s.hiscnt == get_hislen() {
+            // One step backwards. An empty history, and the step back
+            // from slot 0 when the newest entry is the last slot (where
+            // upstream read slot -1), stop as the top of the list does.
+            let back = if s.hiscnt == get_hislen() {
                 // first time
-                s.hiscnt = get_hisidx(s.histype);
-            } else if s.hiscnt == 0 && get_hisidx(s.histype) != get_hislen() - 1 {
-                s.hiscnt = get_hislen() - 1;
-            } else if s.hiscnt != get_hisidx(s.histype) + 1 {
-                s.hiscnt -= 1;
+                newest
+            } else if s.hiscnt == 0 && newest != Some(get_hislen() - 1) {
+                Some(get_hislen() - 1)
+            } else if newest.map(|idx| idx + 1) != Some(s.hiscnt) {
+                s.hiscnt.checked_sub(1)
             } else {
                 // at the top of the list
+                None
+            };
+            let Some(back) = back else {
                 s.hiscnt = s.save_hiscnt;
                 break;
-            }
-        } else if s.hiscnt == get_hisidx(s.histype) {
+            };
+            s.hiscnt = back;
+        } else if Some(s.hiscnt) == newest {
             // On the last entry: clear the line.
             s.hiscnt = get_hislen();
             break;

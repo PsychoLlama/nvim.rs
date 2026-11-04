@@ -242,24 +242,24 @@ pub(crate) fn open_cmdwin() -> Key {
 
     // Fill the buffer with the history.
     init_history();
-    if get_hislen() > 0 && histtype != HIST_INVALID {
-        let mut i = get_hisidx(histtype);
-        if i >= 0 {
-            let mut lnum: LineNr = LineNr::ZERO;
-            // C's do-while: `get_hisidx` is re-read at the test, because
-            // `ml_append`'s autocommands can move it.
-            loop {
-                i += 1;
-                if i == get_hislen() {
-                    i = 0;
-                }
-                if let Some(entry) = hist_entry_text(histtype, i) {
-                    let _ = ml_append_cstr(lnum, &entry.text);
-                    lnum += 1;
-                }
-                if i == get_hisidx(histtype) {
-                    break;
-                }
+    if get_hislen() > 0
+        && histtype != HIST_INVALID
+        && let Some(mut i) = get_hisidx(histtype)
+    {
+        let mut lnum: LineNr = LineNr::ZERO;
+        // C's do-while: `get_hisidx` is re-read at the test, because
+        // `ml_append`'s autocommands can move it.
+        loop {
+            i += 1;
+            if i == get_hislen() {
+                i = 0;
+            }
+            if let Some(entry) = hist_entry_text(histtype, i) {
+                let _ = ml_append_cstr(lnum, &entry.text);
+                lnum += 1;
+            }
+            if Some(i) == get_hisidx(histtype) {
+                break;
             }
         }
     }

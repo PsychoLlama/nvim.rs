@@ -14,6 +14,13 @@
 //! and [`hist_shada_replace`] takes the merged result back in, owned.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 mod ring;
 
@@ -35,15 +42,18 @@ use crate::memory::ThinCString;
 use crate::message::{
     cut_middle, message_filtered, msg, msg_display_bytes, msg_ext_set_kind, msg_putchar, msg_title,
 };
+use crate::message_fmt::emsg_text;
+use crate::narrow::number_as_int;
 use crate::option::vars::p_hi;
 use crate::os::cshim::gettext;
 use crate::os::time::os_time;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regexec};
 use crate::shada::ShadaExtra;
+use crate::tr;
 use crate::types::RegMatch;
 use crate::types::{
-    CmdModFlags, EvalFuncData, ExArg, Expand, Failed, HistoryType, IOSIZE, OptInt, Timestamp,
-    TypVal, VAR_NUMBER, VarNumber,
+    CmdModFlags, EvalFuncData, ExArg, Expand, HistoryType, IOSIZE, Timestamp, TypVal, VAR_NUMBER,
+    VarNumber,
 };
 use crate::ui::state::Columns;
 use core::ffi::{CStr, c_int};
@@ -73,22 +83,40 @@ static HISTORY: GlobalCell<[Ring; HIST_COUNT]> = GlobalCell::new([EMPTY_RING; HI
 /// Consecutive searches from one mapping replace each other.
 static LAST_MAPTICK: GlobalCell<c_int> = GlobalCell::new(-1);
 
-fn valid_histype(histype: c_int) -> bool {
-    (0..HIST_COUNT as c_int).contains(&histype)
+/// Why `:history` refused its argument, and the message that says so.
+/// Reported once, by [`ex_history`].
+#[derive(Debug, thiserror::Error)]
+enum HistError {
+    /// What follows the history name or the range, as upstream quoted it.
+    #[error("{}", tr!("E488: Trailing characters: {}", String::from_utf8_lossy(.0.as_bytes())))]
+    Trailing(ThinCString),
+    /// The whole argument: a range bound past what a number holds.
+    #[error("{}", tr!("E1510: Value too large: {}", String::from_utf8_lossy(.0.as_bytes())))]
+    TooLarge(ThinCString),
+}
+
+/// The ring `histype` names, if it names one.
+fn ring_of(histype: HistoryType) -> Option<usize> {
+    usize::try_from(histype)
+        .ok()
+        .filter(|&ring| ring < HIST_COUNT)
+}
+
+/// [`ring_of`] for a caller that only ever holds a real history type.
+fn ring_for(histype: HistoryType) -> usize {
+    ring_of(histype).expect("a history type that names a ring")
 }
 
 /// Current ring capacity (the 'history' option value at the last
 /// [`init_history`] call; 0 before the first).
-pub fn get_hislen() -> c_int {
-    HISTORY.with(|h| h[0].len() as c_int)
+pub fn get_hislen() -> usize {
+    HISTORY.with(|h| h[0].len())
 }
 
-/// Raw slot index of the newest entry of `histype`, or -1.
-pub fn get_hisidx(histype: c_int) -> c_int {
-    if !valid_histype(histype) {
-        return -1;
-    }
-    HISTORY.with(|h| h[histype as usize].newest_idx())
+/// Raw slot index of the newest entry of `histype`, if it has any.
+pub fn get_hisidx(histype: HistoryType) -> Option<usize> {
+    let ring = ring_of(histype)?;
+    HISTORY.with(|h| h[ring].newest_idx())
 }
 
 /// A copy of the entry at raw ring index `idx`: what a caller keeps while it
@@ -101,12 +129,10 @@ pub struct HistEntryText {
 }
 
 /// The entry at raw slot `idx` of history `histype`, if occupied, copied.
-pub fn hist_entry_text(histype: c_int, idx: c_int) -> Option<HistEntryText> {
-    if !valid_histype(histype) {
-        return None;
-    }
+pub fn hist_entry_text(histype: HistoryType, idx: usize) -> Option<HistEntryText> {
+    let ring = ring_of(histype)?;
     HISTORY.with(|h| {
-        h[histype as usize].get(idx).map(|e| HistEntryText {
+        h[ring].get(idx).map(|e| HistEntryText {
             text: CString::from(&*e.text),
             sep: e.sep,
         })
@@ -141,10 +167,10 @@ fn get_histtype(name: &[u8], return_default: bool) -> HistoryType {
         // SAFETY: reads the cmdline state global; main thread only.
         return hist_char2type(c_int::from(get_cmdline_firstc()));
     }
-    for (i, hist_name) in HISTORY_NAMES.iter().enumerate() {
+    for (histype, hist_name) in (HIST_CMD..).zip(HISTORY_NAMES) {
         let hist_name = &hist_name[..hist_name.len() - 1]; // drop the NUL
         if name.len() <= hist_name.len() && hist_name[..name.len()].eq_ignore_ascii_case(name) {
-            return i as HistoryType;
+            return histype;
         }
     }
     if name.len() == 1 && SHORT_NAMES.contains(&name[0]) {
@@ -156,12 +182,10 @@ fn get_histtype(name: &[u8], return_default: bool) -> HistoryType {
 /// Sync the rings to the 'history' option, keeping the newest entries when
 /// shrinking.
 pub fn init_history() {
-    let history_opt = p_hi();
-    assert!(
-        (0..=OptInt::from(c_int::MAX)).contains(&history_opt),
-        "'history' out of range"
-    );
-    let newlen = history_opt as usize;
+    let newlen = usize::try_from(p_hi())
+        .ok()
+        .filter(|&len| len <= c_int::MAX.unsigned_abs() as usize)
+        .expect("'history' out of range");
     HISTORY.with_mut(|h| {
         if h[0].len() != newlen {
             for ring in h {
@@ -174,25 +198,27 @@ pub fn init_history() {
 /// Add `new_entry` to history `histype`, deduplicating against existing
 /// entries. `in_map` marks searches issued from a mapping (consecutive
 /// ones replace each other); `sep` is the search separator to remember.
-pub fn add_to_history(histype: c_int, new_entry: &[u8], in_map: bool, sep: u8) {
+pub fn add_to_history(histype: HistoryType, new_entry: &[u8], in_map: bool, sep: u8) {
     if get_hislen() == 0 || histype == HIST_INVALID {
         return;
     }
     debug_assert!(histype != HIST_DEFAULT);
+    let at = ring_for(histype);
+    let search = ring_for(HIST_SEARCH);
     if cmdmod_has(CmdModFlags::KEEPPATTERNS) && histype == HIST_SEARCH {
         return;
     }
     let now = os_time();
     HISTORY.with_mut(|h| {
         if histype == HIST_SEARCH && in_map {
-            if maptick.get() == LAST_MAPTICK.get() && !h[HIST_SEARCH as usize].is_empty() {
+            if maptick.get() == LAST_MAPTICK.get() && !h[search].is_empty() {
                 // Consecutive searches from one mapping: only the last one
                 // is kept.
-                h[HIST_SEARCH as usize].drop_newest();
+                h[search].drop_newest();
             }
             LAST_MAPTICK.set(-1);
         }
-        let ring = &mut h[histype as usize];
+        let ring = &mut h[at];
         let sep_match = if histype == HIST_SEARCH {
             Some(sep)
         } else {
@@ -208,53 +234,53 @@ pub fn add_to_history(histype: c_int, new_entry: &[u8], in_map: bool, sep: u8) {
     });
 }
 
-/// Sequence number of the newest entry of `histype`, or -1.
-fn get_history_idx(histype: c_int) -> c_int {
-    if get_hislen() == 0 || !valid_histype(histype) {
-        return -1;
-    }
-    HISTORY.with(|h| h[histype as usize].newest_number())
+/// Sequence number of the newest entry of `histype`, if it has any (`0`
+/// when the newest slot was deleted, see [`Ring::newest_number`]).
+fn get_history_idx(histype: HistoryType) -> Option<c_int> {
+    let ring = ring_of(histype).filter(|_| get_hislen() != 0)?;
+    HISTORY.with(|h| h[ring].newest_number())
 }
 
 /// Map a history number to a raw slot index (see [`Ring::calc_idx`]).
-fn calc_hist_idx(histype: c_int, num: c_int) -> c_int {
-    if !valid_histype(histype) {
-        return -1;
-    }
-    HISTORY.with(|h| h[histype as usize].calc_idx(num))
+fn calc_hist_idx(histype: HistoryType, num: c_int) -> Option<usize> {
+    let ring = ring_of(histype)?;
+    HISTORY.with(|h| h[ring].calc_idx(num))
 }
 
-/// Clear history `histype`. Returns `Ok`/`Err`.
-fn clr_history(histype: c_int) -> Result<(), Failed> {
-    if get_hislen() != 0 && valid_histype(histype) {
-        HISTORY.with_mut(|h| h[histype as usize].clear());
-        return Ok(());
-    }
-    Err(Failed)
+/// Clear history `histype`: whether it named one there is room for.
+fn clr_history(histype: HistoryType) -> bool {
+    let Some(ring) = ring_of(histype).filter(|_| get_hislen() != 0) else {
+        return false;
+    };
+    HISTORY.with_mut(|h| h[ring].clear());
+    true
 }
 
 /// Delete all entries of `histype` matching the vim regex `pat`.
-fn del_history_entry(histype: c_int, pat: &CStr) -> bool {
-    if get_hislen() == 0 || !valid_histype(histype) || pat.is_empty() || get_hisidx(histype) < 0 {
+fn del_history_entry(histype: HistoryType, pat: &CStr) -> bool {
+    let Some(ring) = ring_of(histype).filter(|_| get_hislen() != 0) else {
+        return false;
+    };
+    if pat.is_empty() || get_hisidx(histype).is_none() {
         return false;
     }
     let Some(mut regmatch) = RegMatch::compile(pat, RE_MAGIC + RE_STRING, false) else {
         return false;
     };
-    HISTORY.with_mut(|h| {
-        h[histype as usize].delete_matching(|e| vim_regexec(&mut regmatch, e.cstr(), 0))
-    })
+    HISTORY.with_mut(|h| h[ring].delete_matching(|e| vim_regexec(&mut regmatch, e.cstr(), 0)))
 }
 
 /// Delete the entry of `histype` with history number `num`.
-fn del_history_idx(histype: c_int, num: c_int) -> bool {
-    let i = calc_hist_idx(histype, num);
-    if i < 0 {
+fn del_history_idx(histype: HistoryType, num: c_int) -> bool {
+    let Some(i) = calc_hist_idx(histype, num) else {
         return false;
-    }
+    };
     HISTORY.with_mut(|h| {
-        let ring = &mut h[histype as usize];
-        if histype == HIST_SEARCH && maptick.get() == LAST_MAPTICK.get() && i == ring.newest_idx() {
+        let ring = &mut h[ring_for(histype)];
+        if histype == HIST_SEARCH
+            && maptick.get() == LAST_MAPTICK.get()
+            && Some(i) == ring.newest_idx()
+        {
             LAST_MAPTICK.set(-1);
         }
         ring.delete_at(i);
@@ -306,18 +332,18 @@ pub fn f_histdel(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             let histype = get_histtype(name, false);
             let Some(arg) = args.get(1) else {
                 // Only one argument: clear the whole history.
-                return result.write_number(VarNumber::from(clr_history(histype).is_ok() as c_int));
+                return result.write_number(VarNumber::from(clr_history(histype)));
             };
             if arg.v_type() == VAR_NUMBER {
                 // Delete by history number.
-                del_history_idx(histype, tv_get_number(arg) as c_int) as c_int
+                del_history_idx(histype, number_as_int(tv_get_number(arg)))
             } else {
                 // Delete by regex.
                 let mut buf = NumBuf::new();
-                c_int::from(del_history_entry(histype, buf.string(arg)))
+                del_history_entry(histype, buf.string(arg))
             }
         } else {
-            0
+            false
         }
     };
     // SAFETY: eval-function contract.
@@ -332,10 +358,12 @@ pub fn f_histget(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         let num = if args.len() <= 1 {
             get_history_idx(histype)
         } else {
-            tv_get_number_chk(&args[1]).unwrap_or(-1) as c_int
+            Some(tv_get_number_chk(&args[1]).map_or(-1, number_as_int))
         };
-        let idx = calc_hist_idx(histype, num);
-        match hist_entry_text(histype, idx) {
+        let entry = num
+            .and_then(|num| calc_hist_idx(histype, num))
+            .and_then(|idx| hist_entry_text(histype, idx));
+        match entry {
             None => ThinCString::empty(),
             Some(e) => ThinCString::from_cstr(&e.text),
         }
@@ -347,12 +375,8 @@ pub fn f_histget(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_histnr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract.
     let histype = arg_histtype(&args[0]);
-    let n = if histype == HIST_INVALID {
-        HIST_INVALID
-    } else {
-        get_history_idx(histype)
-    };
-    // SAFETY: eval-function contract.
+    // `-1` for no such history, and for one with no entries.
+    let n = get_history_idx(histype).unwrap_or(-1);
     result.write_number(VarNumber::from(n));
 }
 
@@ -364,8 +388,12 @@ pub fn ex_history(excmd: &mut ExArg) {
         msg(gettext(c"'history' option is zero"), 0);
         return;
     }
-    let Some((histypes, first, last)) = parse_history_arg(excmd.line.arg()) else {
-        return;
+    let (histypes, first, last) = match parse_history_arg(excmd.line.arg()) {
+        Ok(parsed) => parsed,
+        Err(refused) => {
+            emsg_text(refused.to_string());
+            return;
+        }
     };
     for histype in histypes {
         if got_int.get() {
@@ -376,11 +404,10 @@ pub fn ex_history(excmd: &mut ExArg) {
 }
 
 /// Parse `:history`'s argument: an optional history name (or an abbreviation
-/// of "all") followed by an optional `[first][,last]` range. Reports its own
-/// errors and answers `None` when it did.
+/// of "all") followed by an optional `[first][,last]` range.
 fn parse_history_arg(
     bytes: &[u8],
-) -> Option<(core::ops::RangeInclusive<HistoryType>, c_int, c_int)> {
+) -> Result<(core::ops::RangeInclusive<HistoryType>, c_int, c_int), HistError> {
     // A leading digit, '-' or ',' starts the range: the history is the
     // default one and there is no name to read.
     let named = !bytes
@@ -402,11 +429,9 @@ fn parse_history_arg(
             HIST_INVALID => {
                 let all = b"all";
                 if name.len() > all.len() || !all[..name.len()].eq_ignore_ascii_case(name) {
-                    let arg = String::from_utf8_lossy(bytes);
-                    crate::semsg!("E488: Trailing characters: {arg}");
-                    return None;
+                    return Err(HistError::Trailing(bytes.into()));
                 }
-                0..=(HIST_COUNT as HistoryType - 1)
+                HIST_CMD..=HIST_DEBUG
             }
             histype => histype..=histype,
         }
@@ -417,39 +442,41 @@ fn parse_history_arg(
     let parsed = get_list_range(bytes, &mut end, &mut first, &mut last);
     let rest = bytes.get(end..).unwrap_or_default();
     if parsed.is_ok() && rest.is_empty() {
-        return Some((histypes, first, last));
+        return Ok((histypes, first, last));
     }
-    if rest.is_empty() {
-        let arg = String::from_utf8_lossy(bytes);
-        crate::semsg!("E1510: Value too large: {arg}");
+    Err(if rest.is_empty() {
+        HistError::TooLarge(bytes.into())
     } else {
-        let rest = String::from_utf8_lossy(rest);
-        crate::semsg!("E488: Trailing characters: {rest}");
-    }
-    None
+        HistError::Trailing(rest.into())
+    })
 }
 
 /// Print one history's title, then every entry whose sequence number falls
 /// in `[first, last]` — negative bounds counting back from the newest entry.
 fn list_one_history(histype: HistoryType, first: c_int, last: c_int) {
-    let name = HISTORY_NAMES[histype as usize];
+    let ring = ring_for(histype);
+    let name = HISTORY_NAMES[ring];
     let name = String::from_utf8_lossy(&name[..name.len() - 1]);
     let title = format!("\n      #  {name} history\0");
     msg_title(cstr::in_bytes(title.as_bytes()));
     let hislen = get_hislen();
-    let idx = get_hisidx(histype);
-    let number_at = |i: c_int| HISTORY.with(|h| h[histype as usize].number_at(i));
+    let Some(idx) = get_hisidx(histype) else {
+        return;
+    };
+    let number_at = |i: usize| HISTORY.with(|h| h[ring].number_at(i));
+    // A negative bound counts back from the newest entry; one further back
+    // than the ring is long is entry 0, which no entry has.
     let resolve = |bound: c_int| {
         if bound >= 0 {
-            bound
-        } else if -i64::from(bound) > i64::from(hislen) {
-            0
-        } else {
-            number_at((hislen + bound + idx + 1) % hislen)
+            return bound;
+        }
+        match usize::try_from(bound.unsigned_abs()) {
+            Ok(back) if back <= hislen => number_at((hislen + idx + 1 - back) % hislen),
+            _ => 0,
         }
     };
     let (first, last) = (resolve(first), resolve(last));
-    if idx < 0 || first > last {
+    if first > last {
         return;
     }
     // List from the oldest slot forward, ending at the newest.
@@ -474,7 +501,7 @@ fn list_one_history(histype: HistoryType, first: c_int, last: c_int) {
 /// One `:history` row: `>` on the newest entry, the sequence number, and the
 /// text truncated to the window width.
 fn print_history_entry(text: &[u8], num: c_int, newest: bool) {
-    msg_putchar('\n' as c_int);
+    msg_putchar(c_int::from(b'\n'));
     // Upstream builds the row in `IObuff`: the marker, the number, and the
     // text in what is left.
     let mut row = format!("{}{num:6}  ", if newest { '>' } else { ' ' }).into_bytes();
@@ -522,14 +549,14 @@ pub(crate) struct HistRestored {
     pub extra: Option<ShadaExtra>,
 }
 
-fn shada_sep(histype: c_int, sep: u8) -> u8 {
+fn shada_sep(histype: HistoryType, sep: u8) -> u8 {
     if histype == HIST_SEARCH { sep } else { 0 }
 }
 
 /// Copies of the entries of `histype` for writing shada, oldest first.
-pub(crate) fn hist_shada_view(histype: c_int) -> Vec<HistShadaEntry> {
+pub(crate) fn hist_shada_view(histype: HistoryType) -> Vec<HistShadaEntry> {
     HISTORY.with(|h| {
-        let ring = &h[histype as usize];
+        let ring = &h[ring_for(histype)];
         ring.oldest_first_indices()
             .into_iter()
             .map(|i| {
@@ -547,14 +574,14 @@ pub(crate) fn hist_shada_view(histype: c_int) -> Vec<HistShadaEntry> {
 
 /// Move the entries of `histype` out for the shada read-merge, oldest
 /// first, leaving the ring empty.
-pub(crate) fn hist_shada_take(histype: c_int) -> Vec<HistShadaEntry> {
+pub(crate) fn hist_shada_take(histype: HistoryType) -> Vec<HistShadaEntry> {
     HISTORY.with_mut(|h| {
-        let ring = &mut h[histype as usize];
+        let ring = &mut h[ring_for(histype)];
         let taken: Vec<HistShadaEntry> = ring
             .oldest_first_indices()
             .into_iter()
             .map(|i| {
-                let e = ring.entries[i as usize].take().expect("occupied slot");
+                let e = ring.entries[i].take().expect("occupied slot");
                 HistShadaEntry {
                     text: e.text,
                     sep: shada_sep(histype, e.sep),
@@ -571,24 +598,24 @@ pub(crate) fn hist_shada_take(histype: c_int) -> Vec<HistShadaEntry> {
 /// Replace the contents of `histype` with `entries` (oldest first, as
 /// produced by the shada merge), renumbering from 1. Entries beyond the
 /// ring capacity are discarded oldest-first.
-pub(crate) fn hist_shada_replace(histype: c_int, entries: Vec<HistRestored>) {
+pub(crate) fn hist_shada_replace(histype: HistoryType, entries: Vec<HistRestored>) {
     init_history();
     HISTORY.with_mut(|h| {
-        let ring = &mut h[histype as usize];
+        let ring = &mut h[ring_for(histype)];
         ring.clear();
         let skip = entries.len().saturating_sub(ring.len());
-        let mut n: c_int = 0;
-        for entry in entries.into_iter().skip(skip) {
-            n += 1;
-            ring.entries[(n - 1) as usize] = Some(HistEntry {
-                number: n,
+        let mut kept = 0;
+        for (slot, (number, entry)) in (1..).zip(entries.into_iter().skip(skip)).enumerate() {
+            ring.entries[slot] = Some(HistEntry {
+                number,
                 text: entry.text,
                 sep: entry.sep,
                 timestamp: entry.timestamp,
                 extra: entry.extra,
             });
+            ring.num = number;
+            kept = slot + 1;
         }
-        ring.num = n;
-        ring.idx = n - 1;
+        ring.idx = kept.checked_sub(1);
     });
 }

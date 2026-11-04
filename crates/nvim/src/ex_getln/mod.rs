@@ -247,8 +247,8 @@ pub struct CommandLineState {
     /// prefix the history walk matches, and the line `<Down>` gives back
     /// past the newest entry. C's `lookfor`/`lookforlen`.
     pub(crate) lookfor: Option<Vec<u8>>,
-    pub hiscnt: ::core::ffi::c_int,
-    pub save_hiscnt: ::core::ffi::c_int,
+    pub hiscnt: usize,
+    pub save_hiscnt: usize,
     pub histype: ::core::ffi::c_int,
     pub is_state: IncsearchState,
     pub did_wild_list: bool,

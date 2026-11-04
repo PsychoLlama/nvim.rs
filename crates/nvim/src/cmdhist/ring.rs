@@ -9,6 +9,13 @@
 //! exactly as they did in the C arrays.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::shada::ShadaExtra;
 use crate::types::Timestamp;
@@ -63,18 +70,18 @@ pub(super) fn to_cstring(bytes: &[u8]) -> CString {
 /// coupling (the 'history' option, maptick, timestamps) lives in the
 /// module-level functions.
 ///
-/// `idx` is the raw slot of the newest entry, `-1` when empty. Entries sit
-/// contiguously behind `idx` (wrapping); vacant slots elsewhere are normal
-/// after resizes and deletions.
+/// `idx` is the raw slot of the newest entry, `None` when empty. Entries
+/// sit contiguously behind `idx` (wrapping); vacant slots elsewhere are
+/// normal after resizes and deletions.
 pub struct Ring {
     pub(super) entries: Vec<Option<HistEntry>>,
-    pub(super) idx: c_int,
+    pub(super) idx: Option<usize>,
     pub(super) num: c_int,
 }
 
 pub(super) const EMPTY_RING: Ring = Ring {
     entries: Vec::new(),
-    idx: -1,
+    idx: None,
     num: 0,
 };
 
@@ -82,7 +89,7 @@ impl Ring {
     pub fn new(len: usize) -> Ring {
         Ring {
             entries: (0..len).map(|_| None).collect(),
-            idx: -1,
+            idx: None,
             num: 0,
         }
     }
@@ -93,34 +100,40 @@ impl Ring {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.idx < 0
+        self.idx.is_none()
     }
 
-    /// Raw slot index of the newest entry, `-1` when empty.
-    pub fn newest_idx(&self) -> c_int {
+    /// Raw slot index of the newest entry, `None` when empty.
+    pub fn newest_idx(&self) -> Option<usize> {
         self.idx
     }
 
-    /// Sequence number of the newest entry; `-1` when the ring is empty,
+    /// Sequence number of the newest entry; `None` when the ring is empty,
     /// `0` when `idx` points at a vacant slot (possible after deleting the
     /// newest entry — a C quirk `histnr()` exposes).
-    pub fn newest_number(&self) -> c_int {
-        if self.idx < 0 {
-            return -1;
-        }
-        self.number_at(self.idx)
+    pub fn newest_number(&self) -> Option<c_int> {
+        self.idx.map(|idx| self.number_at(idx))
     }
 
     /// Entry at raw slot `idx`, if occupied.
-    pub fn get(&self, idx: c_int) -> Option<&HistEntry> {
-        let idx = usize::try_from(idx).ok()?;
+    pub fn get(&self, idx: usize) -> Option<&HistEntry> {
         self.entries.get(idx)?.as_ref()
     }
 
     /// Sequence number at a raw slot; vacant slots read as 0, exactly like
     /// the zero-filled C array.
-    pub(super) fn number_at(&self, idx: c_int) -> c_int {
+    pub(super) fn number_at(&self, idx: usize) -> c_int {
         self.get(idx).map_or(0, |e| e.number)
+    }
+
+    /// The slot before `i`, wrapping.
+    fn before(&self, i: usize) -> usize {
+        i.checked_sub(1).unwrap_or(self.entries.len() - 1)
+    }
+
+    /// The slot after `i`, wrapping.
+    fn after(&self, i: usize) -> usize {
+        (i + 1) % self.entries.len()
     }
 
     /// Resize to `newlen` slots, keeping the newest entries. Mirrors the C
@@ -128,38 +141,36 @@ impl Ring {
     /// age order (any leading vacancy from a not-full ring included), and
     /// `idx` lands on `min(newlen, oldlen) - 1`.
     pub fn resize(&mut self, newlen: usize) {
-        let oldlen = self.entries.len() as c_int;
-        let newlen_i = newlen as c_int;
-        if newlen_i == oldlen {
+        let oldlen = self.entries.len();
+        if newlen == oldlen {
             return;
         }
         let mut temp: Vec<Option<HistEntry>> = (0..newlen).map(|_| None).collect();
-        let j = self.idx;
-        if j >= 0 {
+        let kept = newlen.min(oldlen);
+        if let Some(j) = self.idx {
             // l1: slots [0..=j] to keep; l2: kept slots wrapped at the end.
-            let l1 = (j + 1).min(newlen_i);
-            let l2 = newlen_i.min(oldlen) - l1;
+            let l1 = (j + 1).min(newlen);
+            let l2 = kept - l1;
             let i1 = j + 1 - l1;
-            let i2 = l1.max(oldlen - newlen_i + l1);
-            for k in 0..l2 {
-                temp[k as usize] = self.entries[(i2 + k) as usize].take();
+            let i2 = l1 + oldlen.saturating_sub(newlen);
+            let (wrapped, front) = temp.split_at_mut(l2);
+            for (slot, kept) in wrapped.iter_mut().zip(&mut self.entries[i2..i2 + l2]) {
+                *slot = kept.take();
             }
-            for k in 0..l1 {
-                temp[(l2 + k) as usize] = self.entries[(i1 + k) as usize].take();
+            for (slot, kept) in front[..l1].iter_mut().zip(&mut self.entries[i1..i1 + l1]) {
+                *slot = kept.take();
             }
         }
-        self.idx = if j < 0 { -1 } else { newlen_i.min(oldlen) - 1 };
+        self.idx = self.idx.and_then(|_| kept.checked_sub(1));
         self.entries = temp;
     }
 
     /// Append an entry, overwriting the oldest slot when full.
     pub fn add(&mut self, text: &[u8], sep: u8, now: Timestamp) {
-        self.idx += 1;
-        if self.idx == self.entries.len() as c_int {
-            self.idx = 0;
-        }
+        let idx = self.idx.map_or(0, |idx| self.after(idx));
+        self.idx = Some(idx);
         self.num += 1;
-        self.entries[self.idx as usize] = Some(HistEntry {
+        self.entries[idx] = Some(HistEntry {
             number: self.num,
             text: Rc::from(to_cstring(text)),
             sep,
@@ -173,14 +184,12 @@ impl Ring {
     /// fresh number and timestamp and report `true`. `sep` must also match
     /// when given (search history distinguishes `/` from `?` entries).
     pub fn move_to_front(&mut self, text: &[u8], sep: Option<u8>, now: Timestamp) -> bool {
-        if self.idx < 0 {
+        let Some(start) = self.idx else {
             return false;
-        }
-        let hislen = self.entries.len() as c_int;
-        let start = self.idx;
+        };
         let mut i = start;
         let found = loop {
-            match self.entries[i as usize].as_ref() {
+            match self.entries[i].as_ref() {
                 None => return false,
                 Some(e) => {
                     if e.text.to_bytes() == text && sep.is_none_or(|s| s == e.sep) {
@@ -188,75 +197,74 @@ impl Ring {
                     }
                 }
             }
-            i -= 1;
-            if i < 0 {
-                i = hislen - 1;
-            }
+            i = self.before(i);
             if i == start {
                 return false;
             }
         };
-        let mut entry = self.entries[found as usize].take().expect("slot occupied");
+        let mut entry = self.entries[found].take().expect("slot occupied");
         let mut i = found;
         while i != start {
-            let next = (i + 1) % hislen;
-            self.entries[i as usize] = self.entries[next as usize].take();
+            let next = self.after(i);
+            self.entries[i] = self.entries[next].take();
             i = next;
         }
         self.num += 1;
         entry.number = self.num;
         entry.timestamp = now;
         entry.extra = None;
-        self.entries[start as usize] = Some(entry);
+        self.entries[start] = Some(entry);
         true
     }
 
     /// Remove the newest entry, stepping `idx` back (used when a search
     /// from a mapping replaces the previous search from the same mapping).
+    ///
+    /// # Panics
+    /// On an empty ring: the caller has seen an entry.
     pub fn drop_newest(&mut self) {
-        self.entries[self.idx as usize] = None;
+        let idx = self.idx.expect("a ring with an entry to drop");
+        self.entries[idx] = None;
         self.num -= 1;
-        self.idx -= 1;
-        if self.idx < 0 {
-            self.idx = self.entries.len() as c_int - 1;
-        }
+        self.idx = Some(self.before(idx));
     }
 
     /// Map a history number to a raw slot index: positive `num` finds the
     /// entry with that sequence number, negative counts back from the
-    /// newest (-1 = newest). Returns -1 if there is no such entry.
-    pub fn calc_idx(&self, num: c_int) -> c_int {
-        let hislen = self.entries.len() as c_int;
-        let mut i = self.idx;
-        if hislen == 0 || i < 0 || num == 0 {
-            return -1;
+    /// newest (-1 = newest). `None` if there is no such entry.
+    pub fn calc_idx(&self, num: c_int) -> Option<usize> {
+        let hislen = self.entries.len();
+        let start = self.idx?;
+        if hislen == 0 || num == 0 {
+            return None;
         }
         if num > 0 {
+            // Walk back from the newest while the numbers are too high,
+            // wrapping once.
+            let mut i = Some(start);
             let mut wrapped = false;
-            while self.number_at(i) > num {
-                i -= 1;
-                if i >= 0 {
-                    continue;
-                }
-                if wrapped {
-                    break;
-                }
-                i += hislen;
-                wrapped = true;
+            while let Some(at) = i
+                && self.number_at(at) > num
+            {
+                i = match at.checked_sub(1) {
+                    Some(prev) => Some(prev),
+                    None if wrapped => None,
+                    None => {
+                        wrapped = true;
+                        Some(hislen - 1)
+                    }
+                };
             }
-            if i >= 0 && self.number_at(i) == num && self.get(i).is_some() {
-                return i;
+            i.filter(|&at| self.number_at(at) == num && self.get(at).is_some())
+        } else {
+            let back = usize::try_from(num.unsigned_abs()).ok()?;
+            if back > hislen {
+                return None;
             }
-        } else if -i64::from(num) <= i64::from(hislen) {
-            i += num + 1;
-            if i < 0 {
-                i += hislen;
-            }
-            if self.get(i).is_some() {
-                return i;
-            }
+            // `start + 1 - back`, wrapping: `back` is at most `hislen`.
+            let at = (start + 1 + hislen - back) % hislen;
+            self.get(at).is_some().then_some(at)
         }
-        -1
     }
 
     /// Drop every entry and reset numbering.
@@ -264,7 +272,7 @@ impl Ring {
         for slot in &mut self.entries {
             *slot = None;
         }
-        self.idx = -1;
+        self.idx = None;
         self.num = 0;
     }
 
@@ -272,41 +280,33 @@ impl Ring {
     /// the newest slot (entries keep their numbers). Returns whether
     /// anything matched.
     pub fn delete_matching(&mut self, mut matches: impl FnMut(&HistEntry) -> bool) -> bool {
-        if self.idx < 0 {
+        let Some(idx) = self.idx else {
             return false;
-        }
-        let hislen = self.entries.len() as c_int;
-        let idx = self.idx;
+        };
         let mut found = false;
         let mut i = idx;
         let mut last = idx;
         loop {
-            let matched = match self.entries[i as usize].as_ref() {
+            let matched = match self.entries[i].as_ref() {
                 None => break,
                 Some(e) => matches(e),
             };
             if matched {
                 found = true;
-                self.entries[i as usize] = None;
+                self.entries[i] = None;
             } else {
                 if i != last {
-                    self.entries[last as usize] = self.entries[i as usize].take();
+                    self.entries[last] = self.entries[i].take();
                 }
-                last -= 1;
-                if last < 0 {
-                    last += hislen;
-                }
+                last = self.before(last);
             }
-            i -= 1;
-            if i < 0 {
-                i += hislen;
-            }
+            i = self.before(i);
             if i == idx {
                 break;
             }
         }
-        if self.entries[idx as usize].is_none() {
-            self.idx = -1;
+        if self.entries[idx].is_none() {
+            self.idx = None;
         }
         found
     }
@@ -314,32 +314,32 @@ impl Ring {
     /// Delete the entry at raw slot `i`, shifting newer entries down and
     /// stepping `idx` back one slot (which may leave it on a vacant slot —
     /// the C behavior when the newest entry is deleted).
-    pub fn delete_at(&mut self, mut i: c_int) {
-        let hislen = self.entries.len() as c_int;
-        let idx = self.idx;
-        self.entries[i as usize] = None;
+    ///
+    /// # Panics
+    /// On an empty ring: `i` is a slot [`Ring::calc_idx`] found.
+    pub fn delete_at(&mut self, mut i: usize) {
+        let idx = self.idx.expect("a ring with an entry to delete");
+        self.entries[i] = None;
         while i != idx {
-            let j = (i + 1) % hislen;
-            self.entries[i as usize] = self.entries[j as usize].take();
+            let j = self.after(i);
+            self.entries[i] = self.entries[j].take();
             i = j;
         }
-        self.idx = if idx > 0 { idx - 1 } else { idx - 1 + hislen };
+        self.idx = Some(self.before(idx));
     }
 
     /// Raw slot indexes of the live entries, oldest first: the first
     /// occupied slot after `idx`, forward (wrapping) until a vacant slot
     /// or until `idx` itself has been yielded.
-    pub(super) fn oldest_first_indices(&self) -> Vec<c_int> {
+    pub(super) fn oldest_first_indices(&self) -> Vec<usize> {
         let mut out = Vec::new();
-        if self.idx < 0 {
+        let Some(idx) = self.idx else {
             return out;
-        }
-        let hislen = self.entries.len() as c_int;
-        let idx = self.idx;
+        };
         let mut p = idx;
         loop {
-            p = (p + 1) % hislen;
-            if self.entries[p as usize].is_some() {
+            p = self.after(p);
+            if self.entries[p].is_some() {
                 break;
             }
             if p == idx {
@@ -347,14 +347,14 @@ impl Ring {
             }
         }
         loop {
-            if self.entries[p as usize].is_none() {
+            if self.entries[p].is_none() {
                 break;
             }
             out.push(p);
             if p == idx {
                 break;
             }
-            p = (p + 1) % hislen;
+            p = self.after(p);
         }
         out
     }
