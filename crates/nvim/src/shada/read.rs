@@ -10,7 +10,15 @@
 //! history's, and whatever is not given away drops with the entry.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use super::low_byte;
 use crate::buffer::{buflist_new, buflist_setfpos};
 use crate::eval::typval::tv_list_alloc;
 use crate::eval::var_set_global;
@@ -66,7 +74,7 @@ fn wanted_kinds(flags: u32, want_marks: bool, get_old_files: bool) -> ReadKinds 
             kinds |= want(kind::BUFFER_LIST);
         }
     }
-    if want_marks && get_shada_parameter(c_int::from(b'\'')) > 0 {
+    if want_marks && get_shada_parameter(c_int::from(b'\'')).is_some_and(|n| n > 0) {
         kinds |= want(kind::LOCAL_MARK) | want(kind::CHANGE);
     }
     // File marks are also where `v:oldfiles` comes from.
@@ -124,7 +132,8 @@ pub(crate) fn shada_read(source: &mut Source, flags: u32) {
     let mut hms = [const { None }; HIST_COUNT];
     if kinds & want(kind::HISTORY_ENTRY) != 0 {
         for (i, hms) in hms.iter_mut().enumerate() {
-            *hms = Some(HistoryMergerState::new(i as u8, p_hi() as usize, true));
+            let size = usize::try_from(p_hi()).expect("'history' is not negative");
+            *hms = Some(HistoryMergerState::new(low_byte(len_as_int(i)), size, true));
         }
     }
     if get_old_files && (oldfiles_list.is_none() || force) {
@@ -148,11 +157,14 @@ pub(crate) fn shada_read(source: &mut Source, flags: u32) {
         match source.next_entry(kinds, 0) {
             Ok(entry) => state.apply(entry),
             Err(ReadStatus::Finished) => break,
-            // One bad entry is skipped; a file that turned out not to be
-            // ShaDa, or that stopped reading, ends the pass with what has
-            // been applied so far left in place.
-            Err(ReadStatus::Malformed) => continue,
-            Err(_) => break,
+            // One bad entry is said and skipped; a file that turned out not
+            // to be ShaDa, or that stopped reading, is said and ends the
+            // pass with what has been applied so far left in place.
+            Err(status @ ReadStatus::Malformed(_)) => status.report(),
+            Err(status) => {
+                status.report();
+                break;
+            }
         }
     }
 
@@ -248,11 +260,12 @@ impl Reading {
             no_scs: !flag(pat.smartcase, default.smartcase),
             timestamp,
             off: SearchOffset {
-                dir: if flag(pat.search_backward, default.search_backward) {
+                dir: (if flag(pat.search_backward, default.search_backward) {
                     b'?'
                 } else {
                     b'/'
-                } as c_char,
+                })
+                .cast_signed(),
                 line: flag(pat.has_line_offset, default.has_line_offset),
                 end: flag(pat.place_cursor_at_end, default.place_cursor_at_end),
                 off: pat.offset.or(default.offset).unwrap_or(0),
@@ -374,9 +387,12 @@ fn apply_buffer_list(list: Vec<ShadaBufferListItem>) {
     for item in list {
         let fname = item.fname.as_cstr();
         let sfname = path_try_shorten_fname(fname);
-        let Some(mut buf) =
-            buflist_new(Some(fname), Some(sfname), LineNr::ZERO, BLN_LISTED as c_int)
-        else {
+        let Some(mut buf) = buflist_new(
+            Some(fname),
+            Some(sfname),
+            LineNr::ZERO,
+            BLN_LISTED.cast_signed(),
+        ) else {
             continue;
         };
         shada_restore_last_cursor(buf, item.pos);
@@ -412,6 +428,6 @@ pub fn shada_read_string(string: ApiString, flags: c_int) {
         data: string.as_bytes(),
         read: 0,
     };
-    shada_read(&mut source, flags as u32);
+    shada_read(&mut source, flags.cast_unsigned());
     source.close();
 }

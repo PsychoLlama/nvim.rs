@@ -233,7 +233,7 @@ pub fn did_set_shada(_args: &mut OptSet) -> Result<(), OptError> {
         }
     }
     // The ' item, how many files to remember marks for, is required.
-    if !value.is_empty() && get_shada_parameter(c_int::from(b'\'')) < 0 {
+    if !value.is_empty() && get_shada_parameter(c_int::from(b'\'')).is_none_or(|n| n < 0) {
         return Err((c"E528: Must specify a ' value").into());
     }
     Ok(())

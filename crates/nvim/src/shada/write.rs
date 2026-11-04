@@ -11,7 +11,15 @@
 //! only then is the result written out.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use super::low_byte;
 use crate::ascii::ascii_isdigit;
 use crate::buffer::find_buf;
 use crate::eval::{get_copy_id, set_ref_in_dict_items, set_ref_in_list_items};
@@ -19,6 +27,8 @@ use crate::ex_cmds::shada_replacement;
 use crate::fileio::buffered::WriteFile;
 use crate::mark::{set_last_cursor, shada_buffer_marks, shada_changes, shada_global_marks};
 use crate::memory::{XString, qsort_by};
+use crate::narrow::len_as_int;
+use crate::narrow::len_as_integer;
 use crate::option::vars::{p_enc, p_hi};
 use crate::os::env::process_id;
 use crate::os::time::os_time;
@@ -26,12 +36,11 @@ use crate::search::{search_was_last_used, state::no_hlsearch};
 use crate::types::LineNr;
 use crate::types::builders::DictBuf;
 use crate::types::{
-    ApiString, Integer, Object, TypVal, VAR_DICT, VAR_FLAVOUR_SHADA, VAR_FUNC, VAR_LIST,
-    VAR_PARTIAL,
+    ApiString, Object, TypVal, VAR_DICT, VAR_FLAVOUR_SHADA, VAR_FUNC, VAR_LIST, VAR_PARTIAL,
 };
 use crate::version::LONG_VERSION;
 use crate::winlayer::{Buf, Win, buffers, tab_windows};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::collect::{
     VarWalk, find_removable_bufs, hist_type2char, ignore_buf, replace_numbered_mark,
@@ -56,8 +65,8 @@ struct Limits {
     /// dropped. Zero means nothing is written at all.
     max_kbyte: usize,
     /// `<`, or `"` when `<` is absent: how many lines of a register are
-    /// kept. Zero means no registers.
-    max_reg_lines: c_int,
+    /// kept. Zero means no registers, `None` no limit.
+    max_reg_lines: Option<usize>,
     /// `'`: how many files' local marks are kept. Zero also turns off the
     /// jump list and the change lists.
     num_marked_files: usize,
@@ -70,30 +79,28 @@ struct Limits {
 impl Limits {
     /// Read `'shada'`. `None` when `s0` says the file may hold nothing.
     fn from_shada_option() -> Option<Limits> {
-        let mut max_kbyte_i = get_shada_parameter(c_int::from(b's'));
-        if max_kbyte_i < 0 {
-            // Not given: the format's own default.
-            max_kbyte_i = 10;
-        }
-        if max_kbyte_i == 0 {
+        // A negative number is one too big for an `int`, read as not
+        // given at all, as upstream's `< 0` tests read it.
+        let given =
+            |c: u8| get_shada_parameter(c_int::from(c)).and_then(|n| usize::try_from(n).ok());
+        // Not given: the format's own default.
+        let max_kbyte = given(b's').unwrap_or(10);
+        if max_kbyte == 0 {
             return None;
         }
-        let mut max_reg_lines = get_shada_parameter(c_int::from(b'<'));
-        if max_reg_lines < 0 {
-            max_reg_lines = get_shada_parameter(c_int::from(b'"'));
-        }
         Some(Limits {
-            max_kbyte: max_kbyte_i as usize,
-            max_reg_lines,
-            num_marked_files: get_shada_parameter(c_int::from(b'\'')) as usize,
+            max_kbyte,
+            max_reg_lines: given(b'<').or_else(|| given(b'"')),
+            // Not given is no limit: upstream's -1, read as a size.
+            num_marked_files: given(b'\'').unwrap_or(usize::MAX),
             global_vars: find_shada_parameter(c_int::from(b'!')).is_some(),
-            global_marks: get_shada_parameter(c_int::from(b'f')) != 0,
+            global_marks: get_shada_parameter(c_int::from(b'f')) != Some(0),
         })
     }
 
     /// Whether any register is written.
     fn registers(&self) -> bool {
-        self.max_reg_lines != 0
+        self.max_reg_lines != Some(0)
     }
 }
 
@@ -153,13 +160,19 @@ pub(crate) fn shada_write(writer: &mut WriteFile, reader: Option<&mut Source>) -
 fn init_histories(wms: &mut WriteMergerState) -> [bool; HIST_COUNT] {
     let mut wanted = [false; HIST_COUNT];
     for (i, wanted) in wanted.iter_mut().enumerate() {
-        let mut num_saved = get_shada_parameter(hist_type2char(i as c_int));
-        if num_saved == -1 {
-            num_saved = p_hi() as c_int;
-        }
+        // Not given, or an `atoi` that came out at -1: 'history'.
+        let num_saved = match get_shada_parameter(hist_type2char(len_as_int(i))) {
+            None | Some(-1) => c_int::try_from(p_hi()).expect("'history' fits an int"),
+            Some(n) => n,
+        };
         if num_saved > 0 {
             *wanted = true;
-            wms.hms[i] = Some(HistoryMergerState::new(i as u8, num_saved as usize, false));
+            let size = usize::try_from(num_saved).expect("checked positive");
+            wms.hms[i] = Some(HistoryMergerState::new(
+                low_byte(len_as_int(i)),
+                size,
+                false,
+            ));
         }
     }
     wanted
@@ -268,7 +281,7 @@ impl Writing<'_> {
             )
             .insert(
                 c"max_kbyte",
-                Object::integer(self.limits.max_kbyte as Integer),
+                Object::integer(len_as_integer(self.limits.max_kbyte)),
             )
             .insert(c"pid", Object::integer(process_id()))
             .insert(
@@ -456,7 +469,7 @@ impl Writing<'_> {
         let entry = ShadaEntry::new(
             os_time(),
             ShadaEntryData::GlobalMark(ShadaFileMark {
-                name: b'0' as c_char,
+                name: b'0'.cast_signed(),
                 mark: Win::current().w_cursor,
                 fname: fname.expect("an ignored buffer has a name"),
             }),

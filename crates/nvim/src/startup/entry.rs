@@ -378,7 +378,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
     }
 
     if P_SHADA.first_byte() != 0 {
-        let _ = shada_read_everything(None, false, true);
+        shada_read_everything(None, false, true);
         time_msg_at(c"reading ShaDa");
     }
     if get_vim_var_list_handle(Vv::Oldfiles).is_none() {

@@ -7,44 +7,50 @@
 //! back out unchanged.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use super::low_byte;
 use crate::eval::decode::decode_string;
 use crate::memory::XString;
-use crate::message_fmt::{emsg_text, msg_cstr_opt};
 use crate::mpack::mpack_core::MPACK_OK;
 use crate::narrow::number_as_col;
 use crate::narrow::number_as_lnum;
-use crate::tr_c;
 use crate::types::{
     ApiDict, ColNr, Integer, KeyDict__shada_buflist_item, KeyDict__shada_mark,
     KeyDict__shada_register, LineNr, MotionType, VAR_TYPE_BLOB,
 };
-use core::ffi::{CStr, c_char};
+use core::ffi::CStr;
 use std::ffi::CString;
 use std::rc::Rc;
 
 use super::unpack::{Cursor, Header, Parsed};
 use super::{
-    DEFAULT_POS, DEFAULT_REGISTER, DEFAULT_SEARCH_PATTERN, HIST_SEARCH, ShadaBufferListItem,
-    ShadaEntry, ShadaEntryData, ShadaExtra, ShadaFileMark, ShadaGlobalVar, ShadaHistoryItem,
-    ShadaRegister, default_mark_name, kind,
+    DEFAULT_POS, DEFAULT_REGISTER, DEFAULT_SEARCH_PATTERN, EntryFault, HIST_SEARCH, Keyed,
+    ShadaBufferListItem, ShadaEntry, ShadaEntryData, ShadaError, ShadaExtra, ShadaFileMark,
+    ShadaGlobalVar, ShadaHistoryItem, ShadaRegister, default_mark_name, kind,
 };
 use crate::eval::typval::TV_INITIAL_VALUE;
 
-/// Report `E575` for an entry at byte `pos` the file states wrongly.
-fn malformed_entry(fmt: &'static CStr, pos: u64) {
-    emsg_text(tr_c!(fmt, pos));
+/// A parse failure: the entry is dropped, with what to say about it --
+/// `None` for a value msgpack could not step over, which upstream drops
+/// without a word.
+pub(crate) struct Malformed(pub(crate) Option<ShadaError>);
+
+/// The `E575` for an entry at `pos` that says something it cannot.
+fn fault(fault: EntryFault, pos: u64) -> Malformed {
+    Malformed(Some(ShadaError::Entry(fault, pos)))
 }
 
-/// As [`malformed_entry`], for the messages whose `%s` carries the reason
-/// the keyset reader gave (or `[NULL]`, when it gave none).
-fn malformed_entry_because(fmt: &'static CStr, pos: u64, why: &Option<CString>) {
-    let why = msg_cstr_opt(why.as_deref());
-    emsg_text(tr_c!(fmt, pos, why));
+/// The `E575` for an entry at `pos` whose map did not read as its keyset.
+fn keyed(entry: Keyed, pos: u64, why: Option<CString>) -> Malformed {
+    Malformed(Some(ShadaError::Keyed(Box::new((entry, pos, why)))))
 }
-
-/// A parse failure. The entry is dropped and reported as missing.
-pub(crate) struct Malformed;
 
 /// A file name, mark name or variable name as C reads it: up to its first
 /// NUL.
@@ -83,17 +89,13 @@ pub(crate) fn parse_known(header: &Header, cursor: &mut Cursor) -> Result<ShadaE
     for _ in 0..trailing {
         let item_start = cursor.rest();
         if cursor.skip() != Parsed::Ok {
-            return Err(Malformed);
+            return Err(Malformed(None));
         }
         let used = item_start.len() - cursor.left();
         ShadaExtra::push(&mut extra, &item_start[..used]);
     }
     if cursor.left() != 0 {
-        malformed_entry(
-            c"E575: Error while reading ShaDa file: item entry at position %lu additional bytes",
-            pos,
-        );
-        return Err(Malformed);
+        return Err(fault(EntryFault::ItemExtraBytes, pos));
     }
     Ok(ShadaEntry {
         timestamp: header.timestamp,
@@ -110,16 +112,10 @@ type Parsed2 = Result<(ShadaEntryData, usize), Malformed>;
 fn parse_search_pattern(pos: u64, cursor: &mut Cursor, extra: &mut Option<ShadaExtra>) -> Parsed2 {
     let mut it = DEFAULT_SEARCH_PATTERN;
     if let Err(why) = cursor.keydict(&mut it, extra) {
-        malformed_entry_because(
-            c"E575: Error while reading ShaDa file: search pattern entry at position %lu %s",
-            pos,
-            &why,
-        );
-        return Err(Malformed);
+        return Err(keyed(Keyed::SearchPattern, pos, why));
     }
     if it.pat.is_none() {
-        malformed_entry(c"E575: Error while reading ShaDa file: search pattern entry at position %lu has no pattern", pos);
-        return Err(Malformed);
+        return Err(fault(EntryFault::PatternWithoutPattern, pos));
     }
     Ok((ShadaEntryData::SearchPattern(it), 0))
 }
@@ -129,21 +125,15 @@ fn parse_mark(header: &Header, cursor: &mut Cursor, extra: &mut Option<ShadaExtr
     let pos = header.fpos;
     let mut it = KeyDict__shada_mark::default();
     if let Err(why) = cursor.keydict(&mut it, extra) {
-        malformed_entry_because(
-            c"E575: Error while reading ShaDa file: mark entry at position %lu %s",
-            pos,
-            &why,
-        );
-        return Err(Malformed);
+        return Err(keyed(Keyed::Mark, pos, why));
     }
 
     let mut name = default_mark_name(header.kind);
     if let Some(n) = it.n {
         if header.kind == kind::JUMP || header.kind == kind::CHANGE {
-            malformed_entry(c"E575: Error while reading ShaDa file: mark entry at position %lu has n key which is only valid for local and global mark entries", pos);
-            return Err(Malformed);
+            return Err(fault(EntryFault::MarkWithN, pos));
         }
-        name = n as c_char;
+        name = low_byte(n).cast_signed();
     }
     let mut mark = DEFAULT_POS;
     if let Some(lnum) = it.l {
@@ -153,16 +143,13 @@ fn parse_mark(header: &Header, cursor: &mut Cursor, extra: &mut Option<ShadaExtr
         mark.col = number_as_col(col);
     }
     let Some(fname) = it.f.as_ref().map(|f| c_string(f.as_bytes())) else {
-        malformed_entry(c"E575: Error while reading ShaDa file: mark entry at position %lu is missing file name", pos);
-        return Err(Malformed);
+        return Err(fault(EntryFault::MarkWithoutFile, pos));
     };
     if mark.lnum <= LineNr::ZERO {
-        malformed_entry(c"E575: Error while reading ShaDa file: mark entry at position %lu has invalid line number", pos);
-        return Err(Malformed);
+        return Err(fault(EntryFault::MarkLine, pos));
     }
     if mark.col < ColNr::ZERO {
-        malformed_entry(c"E575: Error while reading ShaDa file: mark entry at position %lu has invalid column number", pos);
-        return Err(Malformed);
+        return Err(fault(EntryFault::MarkColumn, pos));
     }
     let mark = ShadaFileMark { name, mark, fname };
     let data = match header.kind {
@@ -178,17 +165,11 @@ fn parse_mark(header: &Header, cursor: &mut Cursor, extra: &mut Option<ShadaExtr
 fn parse_register(pos: u64, cursor: &mut Cursor, extra: &mut Option<ShadaExtra>) -> Parsed2 {
     let mut it = KeyDict__shada_register::default();
     if let Err(why) = cursor.keydict(&mut it, extra) {
-        malformed_entry_because(
-            c"E575: Error while reading ShaDa file: register entry at position %lu %s",
-            pos,
-            &why,
-        );
-        return Err(Malformed);
+        return Err(keyed(Keyed::Register, pos, why));
     }
     let contents = it.rc.take().map(|rc| rc.into_vec()).unwrap_or_default();
     if contents.is_empty() {
-        malformed_entry(c"E575: Error while reading ShaDa file: register entry at position %lu has rc key with missing or empty array", pos);
-        return Err(Malformed);
+        return Err(fault(EntryFault::RegisterWithoutContents, pos));
     }
     let mut reg = ShadaRegister {
         contents,
@@ -198,13 +179,14 @@ fn parse_register(pos: u64, cursor: &mut Cursor, extra: &mut Option<ShadaExtra>)
         reg.is_unnamed = is_unnamed;
     }
     if let Some(motion) = it.rt {
-        reg.motion = MotionType::from(motion as u8);
+        reg.motion = MotionType::from(low_byte(motion));
     }
     if let Some(name) = it.n {
-        reg.name = name as c_char;
+        reg.name = low_byte(name).cast_signed();
     }
     if let Some(width) = it.rw {
-        reg.width = width as usize;
+        // A negative width wraps, as C's conversion to `size_t` does.
+        reg.width = usize::try_from(width.cast_unsigned()).unwrap_or(usize::MAX);
     }
     Ok((ShadaEntryData::Register(reg), 0))
 }
@@ -213,35 +195,29 @@ fn parse_register(pos: u64, cursor: &mut Cursor, extra: &mut Option<ShadaExtra>)
 fn parse_history(pos: u64, cursor: &mut Cursor) -> Parsed2 {
     let len = cursor.array().filter(|&len| len >= 2);
     let Some(len) = len else {
-        malformed_entry(c"E575: Error while reading ShaDa file: history entry at position %lu is not an array with enough elements", pos);
-        return Err(Malformed);
+        return Err(fault(EntryFault::HistoryNotArray, pos));
     };
     let Some(hist_type) = cursor.integer() else {
-        malformed_entry(c"E575: Error while reading ShaDa file: history entry at position %lu has wrong history type type", pos);
-        return Err(Malformed);
+        return Err(fault(EntryFault::HistoryType, pos));
     };
     let Some(text) = cursor.string() else {
-        malformed_entry(c"E575: Error while reading ShaDa file: history entry at position %lu has wrong history string type", pos);
-        return Err(Malformed);
+        return Err(fault(EntryFault::HistoryString, pos));
     };
     let Ok(text) = CString::new(text).map(Rc::<CStr>::from) else {
-        malformed_entry(c"E575: Error while reading ShaDa file: history entry at position %lu contains string with zero byte inside", pos);
-        return Err(Malformed);
+        return Err(fault(EntryFault::HistoryNul, pos));
     };
 
-    let histtype = hist_type as u8;
+    let histtype = low_byte(hist_type);
     let is_search = histtype == HIST_SEARCH;
     let mut sep = 0;
     if is_search {
         if len < 3 {
-            malformed_entry(c"E575: Error while reading ShaDa file: search history entry at position %lu does not have separator character", pos);
-            return Err(Malformed);
+            return Err(fault(EntryFault::SearchHistoryWithoutSeparator, pos));
         }
         let Some(read) = cursor.integer() else {
-            malformed_entry(c"E575: Error while reading ShaDa file: search history entry at position %lu has wrong history separator type", pos);
-            return Err(Malformed);
+            return Err(fault(EntryFault::SearchHistorySeparatorType, pos));
         };
-        sep = read as u8;
+        sep = low_byte(read);
     }
     let item = ShadaHistoryItem {
         histtype,
@@ -258,12 +234,10 @@ fn parse_history(pos: u64, cursor: &mut Cursor) -> Parsed2 {
 /// value is a Blob (which is otherwise indistinguishable from a String).
 fn parse_variable(pos: u64, cursor: &mut Cursor) -> Parsed2 {
     let Some(len) = cursor.array().filter(|&len| len >= 2) else {
-        malformed_entry(c"E575: Error while reading ShaDa file: variable entry at position %lu is not an array with enough elements", pos);
-        return Err(Malformed);
+        return Err(fault(EntryFault::VariableNotArray, pos));
     };
     let Some(name) = cursor.string() else {
-        malformed_entry(c"E575: Error while reading ShaDa file: variable entry at position %lu has wrong variable name type", pos);
-        return Err(Malformed);
+        return Err(fault(EntryFault::VariableNameType, pos));
     };
     let name = c_string(name);
 
@@ -271,8 +245,7 @@ fn parse_variable(pos: u64, cursor: &mut Cursor) -> Parsed2 {
     let value = if let Some(binval) = cursor.string() {
         if len > 2 {
             if cursor.integer() != Some(Integer::from(VAR_TYPE_BLOB)) {
-                malformed_entry(c"E575: Error while reading ShaDa file: variable entry at position %lu has wrong variable type", pos);
-                return Err(Malformed);
+                return Err(fault(EntryFault::VariableType, pos));
             }
             is_blob = true;
         }
@@ -280,8 +253,7 @@ fn parse_variable(pos: u64, cursor: &mut Cursor) -> Parsed2 {
     } else {
         let mut value = TV_INITIAL_VALUE;
         if cursor.typval(&mut value) != MPACK_OK.cast_signed() {
-            malformed_entry(c"E575: Error while reading ShaDa file: variable entry at position %lu has value that cannot be converted to the Vimscript value", pos);
-            return Err(Malformed);
+            return Err(fault(EntryFault::VariableValue, pos));
         }
         value
     };
@@ -295,12 +267,10 @@ fn parse_variable(pos: u64, cursor: &mut Cursor) -> Parsed2 {
 /// The last `:substitute` replacement string: a one-element array.
 fn parse_sub_string(pos: u64, cursor: &mut Cursor) -> Parsed2 {
     let Some(len) = cursor.array().filter(|&len| len >= 1) else {
-        malformed_entry(c"E575: Error while reading ShaDa file: sub string entry at position %lu is not an array with enough elements", pos);
-        return Err(Malformed);
+        return Err(fault(EntryFault::SubNotArray, pos));
     };
     let Some(sub) = cursor.string() else {
-        malformed_entry(c"E575: Error while reading ShaDa file: sub string entry at position %lu has wrong sub string type", pos);
-        return Err(Malformed);
+        return Err(fault(EntryFault::SubType, pos));
     };
     Ok((ShadaEntryData::SubString(c_string(sub)), len - 1))
 }
@@ -309,16 +279,14 @@ fn parse_sub_string(pos: u64, cursor: &mut Cursor) -> Parsed2 {
 /// the cursor position in it.
 fn parse_buffer_list(pos: u64, cursor: &mut Cursor) -> Parsed2 {
     let Some(len) = cursor.array() else {
-        malformed_entry(c"E575: Error while reading ShaDa file: buffer list entry at position %lu is not an array", pos);
-        return Err(Malformed);
+        return Err(fault(EntryFault::BufferListNotArray, pos));
     };
     let mut items = Vec::with_capacity(len);
     for _ in 0..len {
         let mut it = KeyDict__shada_buflist_item::default();
         let mut extra = None;
         if let Err(why) = cursor.keydict(&mut it, &mut extra) {
-            malformed_entry_because(c"E575: Error while reading ShaDa file: buffer list at position %lu contains entry that %s", pos, &why);
-            return Err(Malformed);
+            return Err(keyed(Keyed::BufferList, pos, why));
         }
         let mut at = DEFAULT_POS;
         if let Some(lnum) = it.l {
@@ -329,10 +297,10 @@ fn parse_buffer_list(pos: u64, cursor: &mut Cursor) -> Parsed2 {
         }
         let fname = it.f.as_ref().map(|f| c_string(f.as_bytes()));
 
-        let complaint: &CStr = if at.lnum <= LineNr::ZERO {
-            c"E575: Error while reading ShaDa file: buffer list at position %lu contains entry with invalid line number"
+        let complaint = if at.lnum <= LineNr::ZERO {
+            EntryFault::BufferListLine
         } else if at.col < ColNr::ZERO {
-            c"E575: Error while reading ShaDa file: buffer list at position %lu contains entry with invalid column number"
+            EntryFault::BufferListColumn
         } else if let Some(fname) = fname {
             items.push(ShadaBufferListItem {
                 pos: at,
@@ -341,10 +309,9 @@ fn parse_buffer_list(pos: u64, cursor: &mut Cursor) -> Parsed2 {
             });
             continue;
         } else {
-            c"E575: Error while reading ShaDa file: buffer list at position %lu contains entry that does not have a file name"
+            EntryFault::BufferListWithoutFile
         };
-        emsg_text(tr_c!(complaint, pos));
-        return Err(Malformed);
+        return Err(fault(complaint, pos));
     }
     Ok((ShadaEntryData::BufferList(items), 0))
 }

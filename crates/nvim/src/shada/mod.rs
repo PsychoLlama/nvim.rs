@@ -13,6 +13,13 @@
 //! can drop, replace or move any entry without asking where it came from.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::memory::XString;
 use crate::registry::{IdMap, IdSet, id_map, id_set};
@@ -26,6 +33,8 @@ use core::ffi::{CStr, c_char};
 use std::collections::VecDeque;
 use std::rc::Rc;
 
+mod error;
+pub(crate) use self::error::{EntryFault, Keyed, ShadaError};
 mod file;
 pub use self::file::*;
 mod merge;
@@ -123,17 +132,35 @@ pub(crate) mod read_flags {
     pub(crate) const MISSING_ERROR: u32 = 16;
 }
 
-/// How reading one entry went.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+/// The low byte of `n`: what C keeps when it stores a wider integer in a
+/// `char`, which is what the file's names, motions and history types are.
+pub(crate) fn low_byte(n: impl Into<i64>) -> u8 {
+    n.into().to_le_bytes()[0]
+}
+
+/// How reading one entry went, when it did not give an entry: with what to
+/// say about it, which the loop reading entries reports.
+#[derive(Debug)]
 pub(crate) enum ReadStatus {
     /// The end of the file.
     Finished,
     /// The file could not be read.
-    ReadError,
+    ReadError(ShadaError),
     /// The file is not ShaDa at all.
-    NotShada,
-    /// One entry was malformed; the rest may still be good.
-    Malformed,
+    NotShada(ShadaError),
+    /// One entry was malformed; the rest may still be good. `None` for a
+    /// value msgpack could not step over, which upstream drops silently.
+    Malformed(Option<ShadaError>),
+}
+
+impl ReadStatus {
+    /// Puts out what there is to say about it.
+    pub(crate) fn report(&self) {
+        match self {
+            Self::Finished | Self::Malformed(None) => {}
+            Self::ReadError(err) | Self::NotShada(err) | Self::Malformed(Some(err)) => err.report(),
+        }
+    }
 }
 
 /// How writing went.
@@ -425,7 +452,7 @@ pub(crate) type RemovableBufs = IdSet<*const Buffer>;
 /// Where a global mark's letter lives in `namedfm`: `A`-`Z` first, then the
 /// ten numbered marks. `None` for a name that is neither.
 fn mark_global_index(name: c_char) -> Option<usize> {
-    match name as u8 {
+    match name.cast_unsigned() {
         letter @ b'A'..=b'Z' => Some(usize::from(letter - b'A')),
         digit @ b'0'..=b'9' => Some(NMARKS + usize::from(digit - b'0')),
         _ => None,
@@ -436,7 +463,7 @@ fn mark_global_index(name: c_char) -> Option<usize> {
 /// first, then the three special ones. `None` for a name that is none of
 /// them.
 fn mark_local_index(name: c_char) -> Option<usize> {
-    match name as u8 {
+    match name.cast_unsigned() {
         letter @ b'a'..=b'z' => Some(usize::from(letter - b'a')),
         b'"' => Some(NMARKS),
         b'^' => Some(NMARKS + 1),
@@ -483,7 +510,7 @@ const DEFAULT_REGISTER: ShadaRegister = ShadaRegister {
 /// not name is the `"` one.
 const fn default_mark_name(kind: u64) -> c_char {
     match kind {
-        kind::GLOBAL_MARK | kind::LOCAL_MARK => b'"' as c_char,
+        kind::GLOBAL_MARK | kind::LOCAL_MARK => b'"'.cast_signed(),
         _ => 0,
     }
 }

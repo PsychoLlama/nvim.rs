@@ -12,6 +12,13 @@
 //! the temporary file the user may want to remove.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::ascii::ascii_isdigit;
 use crate::env::{expand_env_within, home_to_tilde, state_subpath};
@@ -22,49 +29,34 @@ use crate::fileio::buffered::{
 use crate::fileio::{modname, rename_file};
 use crate::global_cell::GlobalCell;
 use crate::mbyte::strnicmp_in;
+use crate::memory::ThinCString;
 use crate::message::{verbose_enter, verbose_leave};
-use crate::message_fmt::{emsg_text, msg_cstr};
+use crate::message_fmt::msg_cstr;
 use crate::option::split_option_part;
 use crate::option::vars::{P_SHADA, P_SHADAFILE, p_fs, p_shada, p_shadafile, p_verbose};
 use crate::os::cshim::gettext;
-use crate::os::fs::{dir_exists, file_info, getperm, mkdir_recurse, os_remove, os_strerror};
+use crate::os::fs::{dir_exists, file_info, getperm, mkdir_recurse, os_remove};
 use crate::os::users::{os_getgid, os_getuid};
 use crate::os::uv_error::{UV_EEXIST, UV_ELOOP, UV_ENOENT};
 use crate::path::{concat_fnames, tail_with_sep_index};
-use crate::types::{FAIL, Failed, FileInfo, MAXPATHL, OK};
+use crate::smsg;
+use crate::types::{FileInfo, MAXPATHL, uv_gid_t, uv_uid_t};
 use crate::winlayer::Buf;
-use crate::{smsg, tr_c};
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use super::read::shada_read;
 use super::unpack::Source;
 use super::write::shada_write;
-use super::{WriteStatus, read_flags};
+use super::{ShadaError, WriteStatus, read_flags};
 
-/// Report `E136`/`E137`/`E138`/`E886` about the ShaDa file itself, naming
-/// the file it is about.
-fn shada_file_error(fmt: &'static CStr, what: &CStr) {
-    let what = msg_cstr(what);
-    emsg_text(tr_c!(fmt, what));
-}
-
-/// As [`shada_file_error`], for the messages that name two things: a file
-/// and either a second file or a libuv message.
-fn shada_file_error2(fmt: &'static CStr, what: &CStr, why: &CStr) {
-    let (what, why) = (msg_cstr(what), msg_cstr(why));
-    emsg_text(tr_c!(fmt, what, why));
-}
-
-/// Close a file written to, saying so if that fails. `'fsync'` decides
-/// whether the bytes are pushed to the platter first.
+/// Close a file written to, saying so if that fails: it is the last thing
+/// a write does, so there is nothing left to do about it but say.
+/// `'fsync'` decides whether the bytes are pushed to the platter first.
 fn close_writer(file: WriteFile) {
     let error = file.close(p_fs());
     if error != 0 {
-        shada_file_error(
-            c"E886: System error while closing ShaDa file: %s",
-            os_strerror(error),
-        );
+        ShadaError::Close(error).report();
     }
 }
 
@@ -113,13 +105,18 @@ fn shada_filename(file: Option<&CStr>) -> Option<CString> {
     Some(CString::new(expanded).expect("shada: expanded file name holds a NUL"))
 }
 
-/// Read a ShaDa file into the running editor.
+/// Read a ShaDa file into the running editor, saying what went wrong.
 ///
 /// `flags` says which parts of it are wanted; see [`read_flags`].
-fn shada_read_file(file: Option<&CStr>, flags: u32) -> Result<(), Failed> {
-    let Some(fname) = shada_filename(file) else {
-        return Err(Failed);
-    };
+fn shada_read_file(file: Option<&CStr>, flags: u32) {
+    if let Err(err) = read_file(file, flags) {
+        err.report();
+    }
+}
+
+/// [`shada_read_file`]'s work.
+fn read_file(file: Option<&CStr>, flags: u32) -> Result<(), ShadaError> {
+    let fname = shada_filename(file).ok_or(ShadaError::Off)?;
     let opened = ReadFile::open(&fname, kFileReadOnly);
 
     if p_verbose() > 1 {
@@ -153,13 +150,12 @@ fn shada_read_file(file: Option<&CStr>, flags: u32) -> Result<(), Failed> {
             // A missing file is only worth complaining about when the caller
             // asked for one by name.
             if error != UV_ENOENT || flags & read_flags::MISSING_ERROR != 0 {
-                shada_file_error2(
-                    c"E886: System error while opening ShaDa file %s for reading: %s",
-                    &fname,
-                    os_strerror(error),
-                );
+                return Err(ShadaError::OpenForReading(
+                    ThinCString::from_cstr(&fname),
+                    error,
+                ));
             }
-            return Err(Failed);
+            return Ok(());
         }
     };
 
@@ -170,8 +166,8 @@ fn shada_read_file(file: Option<&CStr>, flags: u32) -> Result<(), Failed> {
 }
 
 /// Read the marks out of the default ShaDa file.
-pub fn shada_read_marks() -> Result<(), Failed> {
-    shada_read_file(None, read_flags::MARKS)
+pub fn shada_read_marks() {
+    shada_read_file(None, read_flags::MARKS);
 }
 
 /// Read everything out of a ShaDa file.
@@ -181,11 +177,7 @@ pub fn shada_read_marks() -> Result<(), Failed> {
 ///
 /// `None` is "the file 'shada' names", which is what `:rshada` with no
 /// argument means.
-pub fn shada_read_everything(
-    fname: Option<&CStr>,
-    forceit: bool,
-    missing_ok: bool,
-) -> Result<(), Failed> {
+pub fn shada_read_everything(fname: Option<&CStr>, forceit: bool, missing_ok: bool) {
     let mut flags = read_flags::INFO | read_flags::MARKS | read_flags::OLDFILES;
     if !missing_ok {
         flags |= read_flags::MISSING_ERROR;
@@ -193,7 +185,7 @@ pub fn shada_read_everything(
     if forceit {
         flags |= read_flags::FORCE;
     }
-    shada_read_file(fname, flags)
+    shada_read_file(fname, flags);
 }
 
 /// The temporary file a merged ShaDa file is built in, opened, and its
@@ -201,10 +193,12 @@ pub fn shada_read_everything(
 ///
 /// It sits next to the real one and is named `.tmp.a` through `.tmp.z`;
 /// another Nvim writing at the same moment holds one of those, so the
-/// letters are tried in turn. `None` means every one of them was taken, or
-/// the open failed for some other reason — which is reported here.
-fn open_temp_writer(fname: &CStr, perm: c_int) -> Option<(WriteFile, CString)> {
-    let mut tempname = modname(Some(fname), b".tmp.a", false)?.into_vec();
+/// letters are tried in turn. `Err` when every one of them was taken, or
+/// the open failed for some other reason.
+fn open_temp_writer(fname: &CStr, perm: c_int) -> Result<(WriteFile, CString), ShadaError> {
+    let mut tempname = modname(Some(fname), b".tmp.a", false)
+        .ok_or(ShadaError::Quiet)?
+        .into_vec();
     tempname.pop(); // the terminator: the name is rebuilt for each try
     let last = tempname.len() - 1;
 
@@ -212,23 +206,14 @@ fn open_temp_writer(fname: &CStr, perm: c_int) -> Option<(WriteFile, CString)> {
         let name = CString::new(tempname.clone()).expect("shada: a NUL crept in");
         let flags: FileOpenFlags = kFileCreateOnly | kFileNoSymlink;
         match WriteFile::open(&name, flags, perm) {
-            Ok(file) => return Some((file, name)),
+            Ok(file) => return Ok((file, name)),
             Err(error) if error != UV_EEXIST && error != UV_ELOOP => {
-                shada_file_error2(
-                    c"E886: System error while opening temporary ShaDa file %s for writing: %s",
-                    &name,
-                    os_strerror(error),
-                );
-                return None;
+                return Err(ShadaError::OpenTemp(ThinCString::from_cstr(&name), error));
             }
             Err(_) => {}
         }
         if tempname[last] == b'z' {
-            shada_file_error(
-                c"E138: All %s.tmp.X files exist, cannot write ShaDa file!",
-                fname,
-            );
-            return None;
+            return Err(ShadaError::AllTempsTaken(ThinCString::from_cstr(fname)));
         }
         tempname[last] += 1;
     }
@@ -236,7 +221,7 @@ fn open_temp_writer(fname: &CStr, perm: c_int) -> Option<(WriteFile, CString)> {
 
 /// Open the ShaDa file itself for writing, making the directory it lives in
 /// if it is not there yet.
-fn open_direct_writer(fname: &CStr) -> Option<WriteFile> {
+fn open_direct_writer(fname: &CStr) -> Result<WriteFile, ShadaError> {
     // Everything before the file name is the directory.
     let tail = tail_with_sep_index(fname.to_bytes());
     if tail != 0 {
@@ -244,26 +229,13 @@ fn open_direct_writer(fname: &CStr) -> Option<WriteFile> {
         if !dir_exists(&dir)
             && let Err(failure) = mkdir_recurse(&dir, 0o700)
         {
-            shada_file_error2(
-                c"E886: Failed to create directory %s for writing ShaDa file: %s",
-                failure.dir.as_deref().unwrap_or(c"[NULL]"),
-                failure.why,
-            );
-            return None;
+            let failed = failure.dir.as_deref().map(ThinCString::from_cstr);
+            return Err(ShadaError::CreateDir(Box::new((failed, failure.why))));
         }
     }
 
-    match WriteFile::open(fname, kFileCreate | kFileTruncate, 0o600) {
-        Ok(file) => Some(file),
-        Err(error) => {
-            shada_file_error2(
-                c"E886: System error while opening ShaDa file %s for writing: %s",
-                fname,
-                os_strerror(error),
-            );
-            None
-        }
-    }
+    WriteFile::open(fname, kFileCreate | kFileTruncate, 0o600)
+        .map_err(|error| ShadaError::OpenForWriting(ThinCString::from_cstr(fname), error))
 }
 
 /// Write the ShaDa file.
@@ -272,11 +244,17 @@ fn open_direct_writer(fname: &CStr) -> Option<WriteFile> {
 /// is read and merged in first. Falling back to `nomerge` is normal — it is
 /// what happens when there is no file yet.
 ///
-/// `None` is "the file 'shada' names".
-pub fn shada_write_file(file: Option<&CStr>, nomerge: bool) -> c_int {
-    let Some(fname) = shada_filename(file) else {
-        return FAIL;
-    };
+/// `None` is "the file 'shada' names". What goes wrong is said here; a
+/// problem with the old file is said and the write goes on regardless.
+pub fn shada_write_file(file: Option<&CStr>, nomerge: bool) {
+    if let Err(err) = write_file(file, nomerge) {
+        err.report();
+    }
+}
+
+/// [`shada_write_file`]'s work, answering why the file was not written.
+fn write_file(file: Option<&CStr>, nomerge: bool) -> Result<(), ShadaError> {
+    let fname = shada_filename(file).ok_or(ShadaError::Off)?;
 
     // The merge half: open the old file, then a temporary next to it.
     let mut merge: Option<(Source, WriteFile, CString)> = None;
@@ -286,7 +264,7 @@ pub fn shada_write_file(file: Option<&CStr>, nomerge: bool) -> c_int {
                 if error != UV_ENOENT {
                     // Something other than "no file yet" — say so, but still
                     // try to write: that may work regardless.
-                    shada_file_error2(c"E886: System error while opening ShaDa file %s for reading to merge before writing it: %s", &fname, os_strerror(error));
+                    ShadaError::OpenForMerging(ThinCString::from_cstr(&fname), error).report();
                 }
             }
             Ok(reader) => {
@@ -302,10 +280,13 @@ pub fn shada_write_file(file: Option<&CStr>, nomerge: bool) -> c_int {
                 };
                 let source = Source::File(reader);
                 match open_temp_writer(&fname, perm) {
-                    Some((writer, tempname)) => merge = Some((source, writer, tempname)),
-                    None => {
+                    Ok((writer, tempname)) => merge = Some((source, writer, tempname)),
+                    Err(err) => {
+                        // Said before the old file is closed, which may say
+                        // something too.
+                        err.report();
                         source.close();
-                        return FAIL;
+                        return Ok(());
                     }
                 }
             }
@@ -315,10 +296,7 @@ pub fn shada_write_file(file: Option<&CStr>, nomerge: bool) -> c_int {
     let (mut writer, reader) = match merge {
         Some((source, writer, tempname)) => (writer, Some((source, tempname))),
         // No merge: the file itself is what gets written.
-        None => match open_direct_writer(&fname) {
-            Some(writer) => (writer, None),
-            None => return FAIL,
-        },
+        None => (open_direct_writer(&fname)?, None),
     };
 
     if p_verbose() > 1 {
@@ -343,40 +321,36 @@ pub fn shada_write_file(file: Option<&CStr>, nomerge: bool) -> c_int {
                 "shada: an ignorable error reached the top of the write"
             );
             source.close();
-            if !replace_original(&writer, &fname, &tempname, sw_ret) {
-                shada_file_error2(
-                    c"E136: Do not forget to remove %s or rename it manually to %s.",
-                    &tempname,
-                    &fname,
-                );
+            if let Err(err) = replace_original(&writer, &fname, &tempname, sw_ret) {
+                // Why it was not replaced, then where it is.
+                err.report();
+                ShadaError::TempLeft(ShadaError::names(&tempname, &fname)).report();
             }
         }
     }
     close_writer(writer);
-    OK
+    Ok(())
 }
 
-/// Move the finished temporary file over the real one. Answers whether the
-/// temporary file is gone; if it is not, the caller says where it is.
+/// Move the finished temporary file over the real one, or answer why it
+/// was not; the temporary file is then still there, which the caller says.
 fn replace_original(
     writer: &WriteFile,
     fname: &CStr,
     tempname: &CStr,
     sw_ret: WriteStatus,
-) -> bool {
+) -> Result<(), ShadaError> {
     if sw_ret != WriteStatus::Successful {
-        let fmt = if sw_ret == WriteStatus::ReadNotShada {
-            c"E136: Did not rename %s because %s does not look like a ShaDa file"
+        let names = ShadaError::names(tempname, fname);
+        return Err(if sw_ret == WriteStatus::ReadNotShada {
+            ShadaError::NotRenamedNotShada(names)
         } else {
-            c"E136: Did not rename %s to %s because there were errors during writing it"
-        };
-        shada_file_error2(fmt, tempname, fname);
-        return false;
+            ShadaError::NotRenamedErrors(names)
+        });
     }
 
     let Some(old_info) = file_info(fname).filter(writable_by_us) else {
-        shada_file_error(c"E137: ShaDa file is not writable: %s", fname);
-        return false;
+        return Err(ShadaError::NotWritable(ThinCString::from_cstr(fname)));
     };
 
     // Running as root, the new file is given the old one's owner: it is
@@ -386,27 +360,21 @@ fn replace_original(
         && (old_info.stat.st_uid != u64::from(ROOT_UID)
             || old_info.stat.st_gid != u64::from(os_getgid()))
     {
-        let fchown_ret = writer.fchown(old_info.stat.st_uid as _, old_info.stat.st_gid as _);
+        let (uid, gid) = (old_info.uid(), old_info.gid());
+        let fchown_ret = writer.fchown(uid.unwrap_or(uv_uid_t::MAX), gid.unwrap_or(uv_gid_t::MAX));
         if fchown_ret != 0 {
-            shada_file_error2(
-                c"E136: Failed setting uid and gid for file %s: %s",
-                tempname,
-                os_strerror(fchown_ret),
-            );
-            return false;
+            return Err(ShadaError::Chown(
+                ThinCString::from_cstr(tempname),
+                fchown_ret,
+            ));
         }
     }
 
     if rename_file(tempname, fname).is_err() {
-        shada_file_error2(
-            c"E136: Can't rename ShaDa file from %s to %s!",
-            tempname,
-            fname,
-        );
-        return false;
+        return Err(ShadaError::Rename(ShadaError::names(tempname, fname)));
     }
     os_remove(tempname);
-    true
+    Ok(())
 }
 
 /// The superuser's id.
@@ -460,23 +428,19 @@ pub(crate) fn shada_removable(name: &CStr) -> bool {
     false
 }
 
-/// The number `'shada'` gives for a parameter, or −1 if it has none.
+/// The number `'shada'` gives for a parameter, or `None` if it has none.
 ///
-/// Only works for the number parameters, not for `r` or `n`.
-pub fn get_shada_parameter(type_0: c_int) -> c_int {
-    let Some(at) = find_shada_parameter(type_0) else {
-        return -1;
-    };
+/// Only works for the number parameters, not for `r` or `n`. A number too
+/// big for an `int` comes back as `atoi` makes it, which may be negative;
+/// the callers read a negative one as upstream did.
+pub fn get_shada_parameter(type_0: c_int) -> Option<c_int> {
+    let at = find_shada_parameter(type_0)?;
     p_shada(|shada| {
         let digits = &shada.to_bytes()[at..];
-        if digits
+        digits
             .first()
             .is_some_and(|&c| ascii_isdigit(c_int::from(c)))
-        {
-            atoi(digits)
-        } else {
-            -1
-        }
+            .then(|| atoi(digits))
     })
 }
 
@@ -489,7 +453,9 @@ fn atoi(text: &[u8]) -> c_int {
         .fold(0i64, |acc, &c| {
             acc.saturating_mul(10).saturating_add(i64::from(c - b'0'))
         });
-    value as c_int
+    // The truncation to `int`: the low four bytes.
+    let [a, b, c, d, ..] = value.to_le_bytes();
+    c_int::from_le_bytes([a, b, c, d])
 }
 
 /// Where in `'shada'` a parameter's value starts — the byte after its
@@ -521,9 +487,11 @@ pub fn find_shada_parameter(type_0: c_int) -> Option<usize> {
 /// Read the current buffer's marks, the first time it is looked at.
 pub fn check_marks_read() {
     let mut buf = Buf::current();
-    if !buf.b_marks_read && get_shada_parameter(c_int::from(b'\'')) > 0 && buf.name.full().is_some()
+    if !buf.b_marks_read
+        && get_shada_parameter(c_int::from(b'\'')).is_some_and(|n| n > 0)
+        && buf.name.full().is_some()
     {
-        let _ = shada_read_marks();
+        shada_read_marks();
     }
     // Set unconditionally: it is what stops this running again after
     // `'shada'` gains its `'` parameter with the buffer already open.

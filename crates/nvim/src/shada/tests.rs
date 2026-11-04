@@ -45,7 +45,7 @@ fn read_all(bytes: &[u8]) -> Vec<ShadaEntry> {
         match source.next_entry(ReadKinds::MAX, 0) {
             Ok(entry) => found.push(entry),
             Err(status) => {
-                assert_eq!(status, ReadStatus::Finished);
+                assert!(matches!(status, ReadStatus::Finished), "{status:?}");
                 return found;
             }
         }

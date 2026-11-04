@@ -203,7 +203,7 @@ pub(crate) fn shada_insert_jump(fm: ShadaMark) {
                 None => fm.fnum == existing.fmark.fnum,
             };
             if marks_equal(existing.fmark.mark, fm.mark) && same_file {
-                i = -1;
+                return; // already there
             }
             break;
         }
@@ -211,12 +211,12 @@ pub(crate) fn shada_insert_jump(fm: ShadaMark) {
     }
     // A full list loses its oldest jump: the insertion below moves it to
     // the slot it then fills, which releases it.
-    let len = win.w_jumplistlen;
-    let i = marklist_insert(&mut win.w_jumplist, len, i);
-    if i == -1 {
+    let len = list_index(win.w_jumplistlen);
+    let Some(at) = marklist_insert(&mut win.w_jumplist, len, list_index(i)) else {
         return;
-    }
-    win.w_jumplist[list_index(i)] = fm.into_xfmark();
+    };
+    let i = c_int::try_from(at).expect("a position in the list");
+    win.w_jumplist[at] = fm.into_xfmark();
     if win.w_jumplistlen < JUMPLISTSIZE {
         win.w_jumplistlen += 1;
     }
@@ -234,26 +234,25 @@ pub(crate) fn shada_insert_change(mut buffer: Buf, fm: ShadaMark) {
         let existing = &buffer.b_changelist[list_index(i - 1)];
         if existing.timestamp <= fm.timestamp {
             if marks_equal(existing.mark, fm.mark) {
-                i = -1;
+                return; // already there
             }
             break;
         }
         i -= 1;
     }
     // A full list loses its oldest change the same way.
-    let len = buffer.b_changelistlen;
-    let i = marklist_insert(&mut buffer.b_changelist, len, i);
-    if i == -1 {
+    let len = list_index(buffer.b_changelistlen);
+    let Some(at) = marklist_insert(&mut buffer.b_changelist, len, list_index(i)) else {
         return;
-    }
-    buffer.b_changelist[list_index(i)] = fm.into_fmark().0;
+    };
+    buffer.b_changelist[at] = fm.into_fmark().0;
     if buffer.b_changelistlen < JUMPLISTSIZE {
         buffer.b_changelistlen += 1;
     }
 }
 
-/// A position in a jump or change list, which the walks above keep as a
-/// `c_int` that is only negative as a "not at all" answer checked first.
+/// A position in a jump or change list, which the walks above keep as the
+/// lists' own `c_int` lengths.
 fn list_index(i: c_int) -> usize {
     usize::try_from(i).expect("a position in the list")
 }

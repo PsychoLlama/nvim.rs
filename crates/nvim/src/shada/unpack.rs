@@ -11,34 +11,32 @@
 //! file it writes: see `merge`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::api::private::keyset::{KeySet, Slot};
 use crate::eval::decode::unpack_typval;
 use crate::fileio::buffered::ReadFile;
-use crate::message_fmt::{emsg_text, msg_cstr};
 use crate::mpack::token::{self, Kind, Read, Tok};
-use crate::os::cshim::gettext;
-use crate::os::fs::os_strerror;
 use crate::types::{ApiString, Integer, StringArray, TypVal};
-use crate::{semsg, tr_c};
-use core::ffi::{CStr, c_int};
+use core::ffi::c_int;
 use std::borrow::Cow;
 use std::ffi::CString;
 
-use super::parse::parse_known;
-use super::{ReadKinds, ReadStatus, ShadaEntry, ShadaEntryData, ShadaExtra, ShadaUnknownItem};
+use super::parse::{Malformed, parse_known};
+use super::{
+    ReadKinds, ReadStatus, ShadaEntry, ShadaEntryData, ShadaError, ShadaExtra, ShadaUnknownItem,
+};
 use super::{WANT_UNKNOWN, kind};
 
-/// Report `E576`/`E886` about the file, naming a byte offset or a length.
-fn shada_read_error(fmt: &'static CStr, at: u64) {
-    emsg_text(tr_c!(fmt, at));
-}
-
-/// As [`shada_read_error`], for the messages whose `%s` is a libuv error or
-/// a fixed reason.
-fn shada_read_error_why(fmt: &'static CStr, why: &CStr) {
-    let why = msg_cstr(why);
-    emsg_text(tr_c!(fmt, why));
+/// A negative read or skip count, which is libuv's error code.
+fn uv_code(count: isize) -> c_int {
+    c_int::try_from(count).expect("a libuv error code")
 }
 
 /// What `mpack_parse` made of a value it was asked to step over.
@@ -369,7 +367,7 @@ impl<'a> Source<'a> {
                 let n = buf.len().min(data.len() - *read);
                 buf[..n].copy_from_slice(&data[*read..*read + n]);
                 *read += n;
-                n as isize
+                n.cast_signed()
             }
         }
     }
@@ -381,7 +379,7 @@ impl<'a> Source<'a> {
             Source::Bytes { data, read } => {
                 let n = size.min(data.len() - *read);
                 *read += n;
-                n as isize
+                n.cast_signed()
             }
         }
     }
@@ -419,15 +417,12 @@ impl<'a> Source<'a> {
     fn read_exact(&mut self, buf: &mut [u8]) -> Result<(), ReadStatus> {
         let read_bytes = self.read(buf);
         if read_bytes < 0 {
-            shada_read_error_why(
-                c"E886: System error while reading ShaDa file: %s",
-                os_strerror(read_bytes as c_int),
-            );
-            return Err(ReadStatus::ReadError);
+            return Err(ReadStatus::ReadError(ShadaError::Read(uv_code(read_bytes))));
         }
-        if read_bytes as usize != buf.len() {
-            shada_read_error(c"E576: Error while reading ShaDa file: last entry specified that it occupies %lu bytes, but file ended earlier", buf.len() as u64);
-            return Err(ReadStatus::NotShada);
+        if read_bytes.cast_unsigned() != buf.len() {
+            return Err(ReadStatus::NotShada(
+                ShadaError::ReadShort(buf.len() as u64),
+            ));
         }
         Ok(())
     }
@@ -436,23 +431,18 @@ impl<'a> Source<'a> {
     fn skip_exact(&mut self, size: usize) -> Result<(), ReadStatus> {
         let skip_bytes = self.skip(size);
         if skip_bytes < 0 {
-            shada_read_error_why(
-                c"E886: System error while skipping in ShaDa file: %s",
-                os_strerror(skip_bytes as c_int),
-            );
-            return Err(ReadStatus::ReadError);
+            return Err(ReadStatus::ReadError(ShadaError::Skip(uv_code(skip_bytes))));
         }
-        if skip_bytes as usize != size {
-            assert!((skip_bytes as usize) < size, "skipped past end of file");
-            if self.at_eof() {
-                shada_read_error(c"E576: Reading ShaDa file: last entry specified that it occupies %lu bytes, but file ended earlier", size as u64);
+        if skip_bytes.cast_unsigned() != size {
+            assert!(
+                skip_bytes.cast_unsigned() < size,
+                "skipped past end of file"
+            );
+            return Err(ReadStatus::NotShada(if self.at_eof() {
+                ShadaError::SkipEnded(size as u64)
             } else {
-                shada_read_error_why(
-                    c"E886: System error while skipping in ShaDa file: %s",
-                    gettext(c"too few bytes read"),
-                );
-            }
-            return Err(ReadStatus::NotShada);
+                ShadaError::SkipShort
+            }));
         }
         Ok(())
     }
@@ -471,18 +461,15 @@ impl<'a> Source<'a> {
         let mut first = [0u8; 1];
         let read_bytes = self.read(&mut first);
         if read_bytes < 0 {
-            shada_read_error_why(
-                c"E886: System error while reading integer from ShaDa file: %s",
-                os_strerror(read_bytes as c_int),
-            );
-            return Err(ReadStatus::ReadError);
+            return Err(ReadStatus::ReadError(ShadaError::ReadInteger(uv_code(
+                read_bytes,
+            ))));
         }
         if read_bytes == 0 {
             if allow_eof && self.at_eof() {
                 return Err(ReadStatus::Finished);
             }
-            shada_read_error(c"E576: Error while reading ShaDa file: expected positive integer at position %lu, but got nothing", fpos);
-            return Err(ReadStatus::NotShada);
+            return Err(ReadStatus::NotShada(ShadaError::NoInteger(fpos)));
         }
 
         // A positive fixint is its own value; the four uint formats say how
@@ -496,13 +483,7 @@ impl<'a> Source<'a> {
             0xcd => 2,
             0xce => 4,
             0xcf => 8,
-            _ => {
-                shada_read_error(
-                    c"E576: Error while reading ShaDa file: expected positive integer at position %lu",
-                    fpos,
-                );
-                return Err(ReadStatus::NotShada);
-            }
+            _ => return Err(ReadStatus::NotShada(ShadaError::NotInteger(fpos))),
         };
         let mut bytes = [0u8; 8];
         self.read_exact(&mut bytes[8 - length..])?;
@@ -517,33 +498,29 @@ impl<'a> Source<'a> {
         let length = self.read_uint64(false)?;
 
         if length > isize::MAX as u64 {
-            shada_read_error(c"E576: Error while reading ShaDa file: there is an item at position %lu that is stated to be too long", fpos);
-            return Err(ReadStatus::NotShada);
+            return Err(ReadStatus::NotShada(ShadaError::TooLong(fpos)));
         }
         if kind == 0 {
             // The internal "missing" kind would otherwise be skipped
             // silently, because `1 << 0` is never in the flags.
-            shada_read_error(c"E576: Error while reading ShaDa file: there is an item at position %lu that must not be there: Missing items are for internal uses only", fpos);
-            return Err(ReadStatus::NotShada);
+            return Err(ReadStatus::NotShada(ShadaError::MissingKind(fpos)));
         }
         Ok(Header {
             kind,
             timestamp,
-            length: length as usize,
+            length: usize::try_from(length).expect("checked against isize::MAX above"),
             fpos,
         })
     }
 
-    /// Close a file source, saying so if that fails. A string has nothing
-    /// to close.
+    /// Close a file source, saying so if that fails: the file was read, so
+    /// there is nothing to do about it but say. A string has nothing to
+    /// close.
     pub(crate) fn close(self) {
         if let Source::File(file) = self
             && let Err(error) = file.close()
         {
-            shada_read_error_why(
-                c"E886: System error while closing ShaDa file: %s",
-                os_strerror(error),
-            );
+            ShadaError::Close(error).report();
         }
     }
 
@@ -596,7 +573,8 @@ impl<'a> Source<'a> {
                 ));
             }
 
-            return parse_known(&header, &mut cursor).map_err(|_| ReadStatus::Malformed);
+            return parse_known(&header, &mut cursor)
+                .map_err(|Malformed(why)| ReadStatus::Malformed(why));
         }
     }
 }
@@ -609,24 +587,10 @@ pub(crate) fn check_status(
 ) -> Result<(), ReadStatus> {
     let at = initial_fpos;
     match status {
-        Parsed::Ok if remaining != 0 => {
-            shada_read_error(
-                c"E576: Failed to parse ShaDa file: extra bytes in msgpack string at position %lu",
-                at,
-            );
-            Err(ReadStatus::NotShada)
-        }
+        Parsed::Ok if remaining != 0 => Err(ReadStatus::NotShada(ShadaError::ExtraBytes(at))),
         Parsed::Ok => Ok(()),
-        Parsed::Eof => {
-            semsg!("E576: Failed to parse ShaDa file: incomplete msgpack string at position {at}");
-            Err(ReadStatus::NotShada)
-        }
-        Parsed::Error => {
-            semsg!(
-                "E576: Failed to parse ShaDa file due to a msgpack parser error at position {at}"
-            );
-            Err(ReadStatus::NotShada)
-        }
+        Parsed::Eof => Err(ReadStatus::NotShada(ShadaError::Incomplete(at))),
+        Parsed::Error => Err(ReadStatus::NotShada(ShadaError::NotMsgpack(at))),
     }
 }
 

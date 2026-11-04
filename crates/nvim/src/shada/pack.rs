@@ -17,7 +17,15 @@
 //! writer keeps them byte for byte.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use super::low_byte;
 use crate::eval::encode::encode_vim_to_msgpack;
 use crate::message_fmt::msg_cstr;
 use crate::msgpack_rpc::packer::{format, pack_to_bytes};
@@ -324,7 +332,7 @@ fn pack_mark(kind: u64, mark: &ShadaFileMark, extra: &Option<ShadaExtra>, out: &
     }
     if mark.name != default_name {
         out.key(b"n");
-        out.uint(u32::from(mark.name as u8));
+        out.uint(u32::from(mark.name.cast_unsigned()));
     }
     out.extra(extra);
 }
@@ -346,10 +354,10 @@ fn pack_register(reg: &ShadaRegister, extra: &Option<ShadaExtra>, out: &mut Pack
         out.bin(line.as_bytes());
     }
     out.key(b"n");
-    out.uint(u32::from(reg.name as u8));
+    out.uint(u32::from(reg.name.cast_unsigned()));
     if reg.motion != default.motion {
         out.key(b"rt");
-        out.uint(u32::from(reg.motion as u8));
+        out.uint(u32::from(low_byte(reg.motion)));
     }
     if reg.width != default.width {
         out.key(b"rw");
@@ -378,11 +386,11 @@ fn pack_buffer_list(list: &[ShadaBufferListItem], out: &mut Packer) {
         out.bin(buffer.fname.as_cstr().to_bytes());
         if buffer.pos.lnum != default.lnum {
             out.key(b"l");
-            out.uint64(buffer.pos.lnum.get() as u64);
+            out.uint64(u64::from(buffer.pos.lnum.get().cast_unsigned()));
         }
         if buffer.pos.col != default.col {
             out.key(b"c");
-            out.uint64(buffer.pos.col.get() as u64);
+            out.uint64(u64::from(buffer.pos.col.get().cast_unsigned()));
         }
         out.extra(&buffer.extra);
     }

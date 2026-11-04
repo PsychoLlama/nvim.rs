@@ -13,7 +13,15 @@
 //! rather than into a file; the context stack uses them.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use super::low_byte;
 use crate::buffer::{buf_is_quickfix, buf_is_terminal, find_buf};
 use crate::cmdhist::{HIST_DEBUG, HIST_EXPR, HIST_INPUT};
 use crate::eval::typval::{TV_INITIAL_VALUE, tv_copy};
@@ -21,6 +29,7 @@ use crate::eval::{var_flavour, vars::globvar_dict};
 use crate::mark::{ShadaMark, cleanup_jumplist, setpcmark, shada_jumps};
 use crate::memory::XString;
 use crate::message_fmt::msg_addr;
+use crate::narrow::len_as_int;
 use crate::os::time::os_time;
 use crate::register::{op_reg_index, shada_registers};
 use crate::search::shada_pattern;
@@ -31,7 +40,7 @@ use crate::types::{
     VAR_FLAVOUR_SHADA, VAR_FUNC, VAR_PARTIAL, VarFlavour,
 };
 use crate::winlayer::{Buf, Win, buffers};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::file::{get_shada_parameter, shada_removable};
 use super::pack::{Packer, pack_entry};
@@ -71,12 +80,12 @@ pub(crate) fn find_removable_bufs(removable_bufs: &mut RemovableBufs) {
 /// `'shada'`'s `%` entry caps how many are kept; a negative cap means all
 /// of them.
 pub(crate) fn shada_get_buflist(removable_bufs: &RemovableBufs) -> ShadaEntry {
-    let max_bufs = get_shada_parameter(c_int::from(b'%'));
+    let max_bufs = get_shada_parameter(c_int::from(b'%')).and_then(|n| usize::try_from(n).ok());
     let mut wanted = Vec::new();
     for buf in buffers() {
         if !ignore_buf(Some(buf), removable_bufs)
             && buf.b_p_bl != 0
-            && (max_bufs < 0 || wanted.len() < max_bufs as usize)
+            && max_bufs.is_none_or(|max| wanted.len() < max)
             && let Some(fname) = buf.name.full()
         {
             wanted.push(ShadaBufferListItem {
@@ -116,7 +125,7 @@ pub(crate) fn search_pattern_entry(
         is_last_used: Some(last_used),
         is_substitute_pattern: Some(is_substitute_pattern),
         highlighted: Some(last_used && search_highlighted),
-        search_backward: Some(!is_substitute_pattern && pat.off.dir == b'?' as c_char),
+        search_backward: Some(!is_substitute_pattern && pat.off.dir == b'?'.cast_signed()),
         offset: if is_substitute_pattern {
             defaults.offset
         } else {
@@ -134,10 +143,8 @@ pub(crate) fn search_pattern_entry(
 /// Every global register that has anything in it, into `wms`.
 ///
 /// `max_reg_lines` is `'shada'`'s `<` (or `"`) entry: a register with more
-/// lines than that is not remembered at all. A negative value means no
-/// limit.
-pub(crate) fn shada_initialize_registers(wms: &mut WriteMergerState, max_reg_lines: c_int) {
-    let limit = usize::try_from(max_reg_lines).ok();
+/// lines than that is not remembered at all; `None` is no limit.
+pub(crate) fn shada_initialize_registers(wms: &mut WriteMergerState, limit: Option<usize>) {
     for (name, is_unnamed, yank) in shada_registers(limit) {
         let entry = ShadaEntry {
             timestamp: yank.timestamp,
@@ -148,7 +155,7 @@ pub(crate) fn shada_initialize_registers(wms: &mut WriteMergerState, max_reg_lin
                 is_unnamed,
                 // Only a blockwise register has a width.
                 width: if yank.motion == MOTION_BLOCKWISE {
-                    yank.width as usize
+                    usize::try_from(yank.width).expect("a block's width")
                 } else {
                     0
                 },
@@ -171,11 +178,11 @@ pub(crate) fn replace_numbered_mark(wms: &mut WriteMergerState, idx: usize, mut 
     let last = marks.len() - 1;
     for (i, mark) in marks.iter_mut().enumerate().take(last).skip(idx) {
         if let ShadaEntryData::GlobalMark(mark) = &mut mark.data {
-            mark.name = (b'0' + i as u8 + 1) as c_char;
+            mark.name = (b'0' + low_byte(len_as_int(i)) + 1).cast_signed();
         }
     }
     super::merge::shift_within(marks, idx..last, idx + 1);
-    entry.data.filemark_mut().name = (b'0' + idx as u8) as c_char;
+    entry.data.filemark_mut().name = (b'0' + low_byte(len_as_int(idx))).cast_signed();
     marks[idx] = entry;
 }
 
@@ -312,7 +319,7 @@ fn packed_string(out: &Packer) -> ApiString {
 /// Every register, as msgpack.
 pub fn shada_encode_regs() -> ApiString {
     let mut wms = WriteMergerState::new();
-    shada_initialize_registers(&mut wms, -1);
+    shada_initialize_registers(&mut wms, None);
     let mut out = Packer::default();
     for reg in wms.registers.iter().filter(|reg| !reg.is_missing()) {
         let written = pack_entry(&mut out, reg, 0);

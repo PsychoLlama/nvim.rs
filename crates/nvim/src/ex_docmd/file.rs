@@ -535,7 +535,7 @@ pub(crate) fn ex_shada(excmd: &mut ExArg) {
     let save_shada =
         p_shada(CStr::is_empty).then(|| P_SHADA.swap(Some(XString::from_cstr(c"'100"))));
     if excmd.cmdidx == CmdIdx::rviminfo || excmd.cmdidx == CmdIdx::rshada {
-        let _ = shada_read_everything(
+        shada_read_everything(
             Some(excmd.line.cstr_from(excmd.line.arg)),
             excmd.forceit,
             false,

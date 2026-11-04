@@ -17,12 +17,20 @@
 //! of them.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::ascii::ascii_isdigit;
 use crate::cmdhist::{
     HistRestored, HistShadaEntry, hist_shada_replace, hist_shada_take, hist_shada_view,
 };
 use crate::mark::{global_mark_timestamp, shada_local_mark_timestamp};
+use crate::narrow::len_as_int;
 use crate::path::path_fnamecmp;
 use crate::register::{op_reg_index, shada_cleared_register_timestamp};
 use crate::registry::{IdMap, id_map};
@@ -317,17 +325,20 @@ pub(crate) fn marks_equal(a: Pos, b: Pos) -> bool {
 ///
 /// Higher indices are newer. A full list drops its oldest item to make
 /// room; if the new item is older than everything in a full list there is
-/// nowhere for it to go and this answers −1. So does an `i` of −1, which is
-/// how a caller says the item is one the list already holds.
+/// nowhere for it to go and this answers `None`.
 ///
 /// The items are *moved* within the list, not duplicated: what is left in
 /// the slot answered is whatever the caller is about to write over.
-pub(crate) fn marklist_insert<T>(list: &mut [T], len: c_int, i: c_int) -> c_int {
-    let len = len as usize;
-    match i.cmp(&0) {
-        Ordering::Less => -1,
-        Ordering::Greater => {
-            let mut at = i as usize;
+pub(crate) fn marklist_insert<T>(list: &mut [T], len: usize, i: usize) -> Option<usize> {
+    match i {
+        0 if len == JUMPLISTSIZE => None, // older than the whole list
+        0 => {
+            if len > 0 {
+                shift_within(list, 0..len, 1);
+            }
+            Some(0)
+        }
+        mut at => {
             if len == JUMPLISTSIZE {
                 at -= 1;
                 if at > 0 {
@@ -336,17 +347,7 @@ pub(crate) fn marklist_insert<T>(list: &mut [T], len: c_int, i: c_int) -> c_int 
             } else if at != len {
                 shift_within(list, at..len, at + 1); // newer items shift up
             }
-            at as c_int
-        }
-        Ordering::Equal => {
-            if len == JUMPLISTSIZE {
-                -1 // older than the whole list
-            } else {
-                if len > 0 {
-                    shift_within(list, 0..len, 1);
-                }
-                0
-            }
+            Some(at)
         }
     }
 }
@@ -375,23 +376,23 @@ fn insert_mark_list(
     entry: ShadaEntry,
     same: impl Fn(&ShadaEntry) -> bool,
 ) {
-    // Walk back to the first entry no newer than this one.
-    let mut i = *size as c_int;
+    // Walk back to the first entry no newer than this one; one the list
+    // already holds is not inserted again.
+    let mut i = *size;
     while i > 0 {
-        let existing = &list[i as usize - 1];
+        let existing = &list[i - 1];
         if existing.timestamp <= entry.timestamp {
             if same(existing) {
-                i = -1;
+                return;
             }
             break;
         }
         i -= 1;
     }
-    let i = marklist_insert(list, *size as c_int, i);
-    if i == -1 {
+    let Some(i) = marklist_insert(list, *size, i) else {
         return;
-    }
-    list[i as usize] = entry;
+    };
+    list[i] = entry;
     if *size < JUMPLISTSIZE {
         *size += 1;
     }
@@ -424,10 +425,15 @@ pub(crate) fn read_when_writing(
         let entry = match source.next_entry(kinds, max_kbyte) {
             Ok(entry) => entry,
             Err(ReadStatus::Finished) => return ret,
-            Err(ReadStatus::Malformed) => continue,
-            // Whatever has been merged so far is still worth writing.
-            Err(ReadStatus::NotShada) => return WriteStatus::ReadNotShada,
-            Err(_) => return ret,
+            Err(status) => {
+                status.report();
+                match status {
+                    ReadStatus::Malformed(_) => continue,
+                    // Whatever has been merged so far is still worth writing.
+                    ReadStatus::NotShada(_) => return WriteStatus::ReadNotShada,
+                    _ => return ret,
+                }
+            }
         };
 
         match &entry.data {
@@ -527,7 +533,7 @@ fn merge_global_mark(
     };
     // Nothing has claimed the slot yet, so what the file entry has to beat
     // is the mark this Nvim holds.
-    if slot.is_missing() && global_mark_timestamp(idx as c_int) >= entry.timestamp {
+    if slot.is_missing() && global_mark_timestamp(len_as_int(idx)) >= entry.timestamp {
         return None;
     }
     keep_newer(slot, entry);
