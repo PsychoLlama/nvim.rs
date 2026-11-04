@@ -6,6 +6,13 @@
 //! of sources.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::cmdexpand::Expanded;
@@ -13,12 +20,14 @@ use crate::cstr;
 use crate::ex_getln::tilde_replace_matches;
 use crate::formatted;
 use crate::memory::XString;
+use crate::narrow::len_as_int;
 use crate::option::next_option_part;
 use crate::option::vars::{P_DICT, P_TSR, P_TSRFU};
 use crate::optionstr::{OptString, OptStringRef, local_or_global};
 use crate::path::ExpandFlags;
+use crate::path::PATHSEP_BYTE;
 use crate::strings::has_char;
-use crate::types::{FAIL, Failed, IOSIZE, NUL, OK, ShmFlag};
+use crate::types::{FAIL, Failed, IOSIZE, ShmFlag};
 use crate::winlayer::BufId;
 use crate::winlayer::{Buf, buffers};
 
@@ -71,7 +80,7 @@ impl CptScan {
 
     /// The byte the scan is on, `NUL` once `'complete'` is used up.
     pub(crate) fn at(&self) -> u8 {
-        self.rest().first().copied().unwrap_or(NUL as u8)
+        self.rest().first().copied().unwrap_or(0)
     }
 
     /// Step over one byte: C's `*++st->e_cpt` reaching the name after a
@@ -101,7 +110,7 @@ impl CptScan {
 /// `'thesaurusfunc'` is set.
 pub(crate) fn thesaurus_func_complete(type_0: c_int) -> bool {
     type_0 == CTRL_X_THESAURUS
-        && (Buf::current().b_p_tsrfu.first_byte() as c_int != NUL || P_TSRFU.first_byte() != 0)
+        && (Buf::current().b_p_tsrfu.first_byte() != 0 || P_TSRFU.first_byte() != 0)
 }
 
 /// Is there another `'complete'` entry in `rest`, so the source index should
@@ -169,7 +178,7 @@ pub(crate) fn process_next_cpt_value(
                 // current buffer is what `ins_compl_get_exp` does for the
                 // same case one level up.
                 let from = st.ins_buf.and_then(BufId::get).unwrap_or_else(Buf::current);
-                let next = ins_compl_next_buf(from, c_int::from(flag));
+                let next = ins_compl_next_buf(from, flag);
                 st.ins_buf = Some(next.id());
                 next != Buf::current()
             }
@@ -215,7 +224,7 @@ pub(crate) fn process_next_cpt_value(
                 let message = formatted!(IOSIZE as usize, fmt.to_bytes(), name);
                 scan_progress(XString::from_vec(message).as_cstr());
             }
-        } else if flag == NUL as u8 {
+        } else if flag == 0 {
             status = INS_COMPL_CPT_END;
         } else {
             if ctrl_x_mode_line_or_eval() {
@@ -371,7 +380,7 @@ pub(crate) fn get_next_filename_completion() {
     // Fuzzy matching is done over the whole directory, so the pattern is
     // widened to a wildcard and the leader keeps only the last component.
     if in_fuzzy_collect {
-        let last_sep = leader.iter().rposition(|&b| c_int::from(b) == PATHSEP);
+        let last_sep = leader.iter().rposition(|&b| b == PATHSEP_BYTE);
         match last_sep {
             // No path separator: match everything in the current dir.
             None => compl_pattern().replace(ApiString::from_bytes(b"*")),
@@ -403,11 +412,11 @@ pub(crate) fn get_next_filename_completion() {
         // The score of every candidate that matched, by its index, and the
         // indices that matched.
         let mut scores = vec![FUZZY_SCORE_NONE; matches.len()];
-        let mut fuzzy_indices: Vec<c_int> = Vec::new();
+        let mut fuzzy_indices: Vec<usize> = Vec::new();
         for (i, candidate) in matches.iter().enumerate() {
             let score = fuzzy_match_str(candidate.as_cstr(), leader.as_cstr());
             if score != FUZZY_SCORE_NONE {
-                fuzzy_indices.push(i as c_int);
+                fuzzy_indices.push(i);
                 scores[i] = score;
             }
         }
@@ -415,11 +424,12 @@ pub(crate) fn get_next_filename_completion() {
         if !fuzzy_indices.is_empty() {
             sort_by_fuzzy_score(&scores, &mut fuzzy_indices);
             for (i, &idx) in fuzzy_indices.iter().enumerate() {
-                let current_score = scores[idx as usize];
-                let text: &[u8] = &matches[idx as usize];
+                let current_score = scores[idx];
+                let text: &[u8] = &matches[idx];
                 let flags = CP_FAST | if p_fic() || p_wic() { CP_ICASE } else { 0 };
                 let (none, score) = (NO_EXTRA, current_score);
-                if ins_compl_add(text, None, none, None, dir, flags, false, NO_HL, score) == OK {
+                let added = ins_compl_add(text, None, none, None, dir, flags, false, NO_HL, score);
+                if added == Added::Linked {
                     dir = FORWARD;
                 }
                 if need_collect_bests && (i == 0 || current_score == max_score) {
@@ -443,14 +453,14 @@ pub(crate) fn get_next_filename_completion() {
 /// Order `indices` (into `scores`) best score first, the lower index first
 /// between equal scores. The order is total, so this is the permutation
 /// upstream's `qsort` produced.
-pub(crate) fn sort_by_fuzzy_score(scores: &[c_int], indices: &mut [c_int]) {
-    let score = |idx: c_int| scores[idx as usize];
+pub(crate) fn sort_by_fuzzy_score(scores: &[c_int], indices: &mut [usize]) {
+    let score = |idx: usize| scores[idx];
     indices.sort_unstable_by(|&a, &b| score(b).cmp(&score(a)).then(a.cmp(&b)));
 }
 
 /// Vim command-line completion (`CTRL-X CTRL-V`).
 pub(crate) fn get_next_cmdline_completion() {
-    let col = compl_pattern().len() as c_int;
+    let col = len_as_int(compl_pattern().len());
     // Moved out for the expansion, which can run a user completion function.
     let mut xp = compl_xp.take().unwrap_or_default();
     let (expanded, matches) = expand_cmdline(&mut xp, col);
@@ -535,9 +545,9 @@ pub(crate) fn compl_source_start_timer(source_idx: c_int) {
 ///
 /// With `compl_started` false the search starts at that position, otherwise it
 /// continues where the previous call stopped. May return before every match is
-/// found; the answer is the total number of matches, or −1 while that is still
-/// unknown. -- Acevedo
-pub(crate) fn ins_compl_get_exp(ini: Pos) -> c_int {
+/// found; the answer is the total number of matches, or `None` while that is
+/// still unknown. -- Acevedo
+pub(crate) fn ins_compl_get_exp(ini: Pos) -> Option<c_int> {
     // Upstream's function-scope `static InsComplNextState st`: the scan is
     // collected over many calls, so it outlives each one. Moved out for
     // this one, as the sources run user code: a nested collection (which
@@ -561,7 +571,7 @@ impl InsComplNextState {
 }
 
 /// [`ins_compl_get_exp`] over its scan state.
-fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> c_int {
+fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
     let mut found_new_match;
     let mut type_0 = ctrl_x_mode.get();
     let mut may_advance_cpt_idx = false;
@@ -608,9 +618,9 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> c_int {
             compl_source_start_timer(0);
             compl_time_slice_expired.set(false);
             compl_timeout_ms.set(if compl_autocomplete.get() {
-                (COMPL_INITIAL_TIMEOUT_MS as OptInt).max(p_act()) as uint64_t
+                COMPL_INITIAL_TIMEOUT_MS.max(p_act()).cast_unsigned()
             } else {
-                p_cto() as uint64_t
+                p_cto().cast_unsigned()
             });
         }
     }
@@ -728,15 +738,15 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> c_int {
     cpt_sources().set_index(-1);
     compl_started.set(true);
 
-    if (ctrl_x_mode_normal() || ctrl_x_mode_line_or_eval()) && st.cpt.at() == NUL as u8 {
+    if (ctrl_x_mode_normal() || ctrl_x_mode_line_or_eval()) && st.cpt.at() == 0 {
         // Got to the end of 'complete'.
         found_new_match = FAIL;
     }
 
-    // Total number of matches; −1 while unknown.
-    let mut match_count = -1;
+    // Total number of matches; `None` while unknown.
+    let mut match_count = None;
     if found_new_match == FAIL || (ctrl_x_mode_not_default() && !ctrl_x_mode_line_or_eval()) {
-        match_count = ins_compl_make_cyclic();
+        match_count = Some(ins_compl_make_cyclic());
     }
 
     if cot_fuzzy() && compl_get_longest.get() && compl_num_bests.get() > 0 {
@@ -756,7 +766,7 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> c_int {
     }
     may_trigger_modechanged();
 
-    if match_count > 0 && !ctrl_x_mode_spell() {
+    if match_count.is_some_and(|n| n > 0) && !ctrl_x_mode_spell() {
         if is_nearest_active() && !ins_compl_has_preinsert() {
             sort_compl_match_list(MatchOrder::Nearest);
         }

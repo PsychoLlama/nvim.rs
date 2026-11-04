@@ -12,33 +12,39 @@
 //! `size_of::<[c_char; N]>() - 1` goes away entirely.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::eval::typval::{DictRef, NumBuf, dict_get_string_buf, list_iter};
 use crate::guard::Allow;
-use crate::keycodes::{Ctrl_E, Ctrl_N, Ctrl_Y, SpecialKey};
+use crate::keycodes::SpecialKey;
 use crate::memline::Lines;
 use crate::narrow::number_as_col;
+use crate::types::Key;
 use crate::types::ListRef;
-use crate::types::{
-    FAIL, OK, VAR_DICT, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock, kListLenMayKnow,
-};
+use crate::types::{VAR_DICT, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock, kListLenMayKnow};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 
 /// Fire `CompleteDone` with `v:event` describing how the completion ended:
 /// `word` is the match accepted, if any.
-pub(crate) fn do_autocmd_completedone(c: c_int, mode: c_int, word: Option<&CStr>) {
+pub(crate) fn do_autocmd_completedone(c: Key, mode: c_int, word: Option<&CStr>) {
     let mut save_v_event = SAVE_V_EVENT_INIT;
     let v_event = get_v_event(&mut save_v_event);
     let add_str = |key: &str, val: &CStr| v_event.edit().add_str(key.as_bytes(), Some(val));
 
-    let mode_name = CTRL_X_MODE_NAMES[(mode & !CTRL_X_WANT_IDENT) as usize].unwrap_or(c"");
+    let mode_name = ctrl_x_mode_name(mode).unwrap_or(c"");
     let _ = add_str("complete_word", word.unwrap_or(c""));
     let _ = add_str("complete_type", mode_name);
-    let reason = if c == Ctrl_Y || word.is_some() {
+    let reason = if c == Key::CTRL_Y || word.is_some() {
         c"accept"
-    } else if c == Ctrl_E {
+    } else if c == Key::CTRL_E {
         c"cancel"
     } else {
         c"discard"
@@ -63,9 +69,8 @@ pub(crate) fn ins_compl_dict_alloc(m: MatchId) -> DictRef {
 /// `word`/`abbr`/`menu`/`kind`/`info` and the option keys.
 ///
 /// `fast` uses `fast_breakcheck()` instead of `os_breakcheck()`. Answers
-/// NOTDONE if the string is already in the list, OK if it was added, FAIL on
-/// error.
-pub(crate) fn ins_compl_add_tv(tv: &TypVal, dir: Direction, fast: bool) -> c_int {
+/// [`Added::Refused`] when there is no word, or on interrupt.
+pub(crate) fn ins_compl_add_tv(tv: &TypVal, dir: Direction, fast: bool) -> Added {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let word: Option<&CStr>;
@@ -89,10 +94,10 @@ pub(crate) fn ins_compl_add_tv(tv: &TypVal, dir: Direction, fast: bool) -> c_int
         };
 
         word = numbuf.dict_string(d, b"word");
-        extra[CPT_ABBR as usize] = owned(b"abbr");
-        extra[CPT_MENU as usize] = owned(b"menu");
-        extra[CPT_KIND as usize] = owned(b"kind");
-        extra[CPT_INFO as usize] = owned(b"info");
+        extra[CPT_ABBR] = owned(b"abbr");
+        extra[CPT_MENU] = owned(b"menu");
+        extra[CPT_KIND] = owned(b"kind");
+        extra[CPT_INFO] = owned(b"info");
 
         let mut highlight = |key: &[u8]| get_user_highlight_attr(numbuf2.dict_string(d, key));
         user_hl[0] = highlight(b"abbr_hlgroup");
@@ -113,14 +118,14 @@ pub(crate) fn ins_compl_add_tv(tv: &TypVal, dir: Direction, fast: bool) -> c_int
     }
 
     let Some(word) = word.filter(|word| empty || !word.is_empty()) else {
-        return FAIL;
+        return Added::Refused;
     };
 
     let text = word.to_bytes();
     let score = FUZZY_SCORE_NONE;
     let data = Some(&mut user_data);
-    // Anything but `OK` leaves the value with this frame -- `NOTDONE` (the
-    // word was already in the list) included -- which drops it.
+    // Anything but `Linked` leaves the value with this frame -- a duplicate
+    // included -- which drops it.
     ins_compl_add(text, None, extra, data, dir, flags, dup, user_hl, score)
 }
 
@@ -132,7 +137,7 @@ pub(crate) fn ins_compl_add_list(list: &ListRef) {
     // list it is reading. The handle keeps the list itself alive.
     let mut at = 0;
     while let Some(tv) = list.items().get(at).map(|item| item.li_tv.clone()) {
-        if ins_compl_add_tv(&tv, dir, true) == OK {
+        if ins_compl_add_tv(&tv, dir, true) == Added::Linked {
             // If dir was BACKWARD then honour it just once.
             dir = FORWARD;
         } else if did_emsg.get() != 0 {
@@ -227,7 +232,7 @@ pub(crate) fn set_completion(mut startcol: ColNr, list: Option<&ListRef>) {
 
     // If already doing completions stop it.
     if ctrl_x_mode_not_default() {
-        ins_compl_prep(' ' as c_int);
+        ins_compl_prep(Key::SPACE);
     }
     ins_compl_clear();
     ins_compl_free();
@@ -267,12 +272,12 @@ pub(crate) fn set_completion(mut startcol: ColNr, list: Option<&ListRef>) {
     compl_curr_match.set(compl_first_match.get());
     let no_select = compl_no_select || compl_longest;
     if compl_no_insert || no_select {
-        let _ = ins_complete(SpecialKey::Down.code(), false);
+        let _ = ins_complete(Key::from(SpecialKey::Down), false);
         if no_select {
-            let _ = ins_complete(SpecialKey::Up.code(), false);
+            let _ = ins_complete(Key::from(SpecialKey::Up), false);
         }
     } else {
-        let _ = ins_complete(Ctrl_N, false);
+        let _ = ins_complete(Key::CTRL_N, false);
     }
     compl_enter_selects.set(compl_no_insert);
 
@@ -312,20 +317,20 @@ pub fn f_complete(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// The `complete_add()` function; a `VimLFunc` row in the builtin table.
 pub fn f_complete_add(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    (*result).write_number(ins_compl_add_tv(&args[0], kDirectionNotSet, false) as VarNumber);
+    (*result).write_number(ins_compl_add_tv(&args[0], kDirectionNotSet, false).number());
 }
 
 /// The `complete_check()` function; a `VimLFunc` row in the builtin table.
 pub fn f_complete_check(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let _redraw = Allow::redraw();
     ins_compl_check_keys(0, true);
-    result.write_number(ins_compl_interrupted() as VarNumber);
+    result.write_number(VarNumber::from(ins_compl_interrupted()));
 }
 
 /// Fill `di` with match `m`, as `complete_info()` reports it.
 pub(crate) fn fill_complete_info_dict(di: &mut Dict, m: MatchId, add_match: bool) {
     m.with(|item| {
-        let extra = |which: c_int| item.extra[which as usize].as_ref().map(XString::as_cstr);
+        let extra = |which: usize| item.extra[which].as_ref().map(XString::as_cstr);
         let add_str = |di: &mut Dict, key: &str, val: Option<&CStr>| {
             let _ = di.add_str(key.as_bytes(), val);
         };
@@ -335,7 +340,7 @@ pub(crate) fn fill_complete_info_dict(di: &mut Dict, m: MatchId, add_match: bool
         add_str(di, "kind", extra(CPT_KIND));
         add_str(di, "info", extra(CPT_INFO));
         if add_match {
-            let _ = di.add_bool(b"match", item.in_match_array as BoolVarValue);
+            let _ = di.add_bool(b"match", BoolVarValue::from(item.in_match_array));
         }
         if item.user_data.v_type() == VAR_UNKNOWN {
             // Add an empty string for backwards compatibility.
@@ -379,7 +384,7 @@ pub(crate) fn get_complete_info(what_list: Option<&List>, retdict: &mut Dict) {
     }
 
     if ret.is_ok() && what_flag & CI_WHAT_PUM_VISIBLE != 0 {
-        ret = add_nr(retdict, "pum_visible", pum_visible() as VarNumber);
+        ret = add_nr(retdict, "pum_visible", VarNumber::from(pum_visible()));
     }
 
     if ret.is_ok() && what_flag & CI_WHAT_PREINSERTED_TEXT != 0 {
@@ -449,13 +454,13 @@ pub(crate) fn get_complete_info(what_list: Option<&List>, retdict: &mut Dict) {
         }
     }
     if ret.is_ok() && what_flag & CI_WHAT_SELECTED != 0 {
-        ret = add_nr(retdict, "selected", selected_idx as VarNumber);
+        ret = add_nr(retdict, "selected", VarNumber::from(selected_idx));
         if let Some(wp) = win_float_find_preview() {
-            let _ = add_nr(retdict, "preview_winid", wp.handle.get() as VarNumber);
+            let _ = add_nr(retdict, "preview_winid", VarNumber::from(wp.handle.get()));
             let _ = add_nr(
                 retdict,
                 "preview_bufnr",
-                wp.buffer().handle.get() as VarNumber,
+                VarNumber::from(wp.buffer().handle.get()),
             );
         }
     }

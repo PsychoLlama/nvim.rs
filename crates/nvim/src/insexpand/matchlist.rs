@@ -24,15 +24,38 @@ use super::*;
 use crate::cstr;
 use crate::mbyte::{char_at, cluster_len};
 use crate::memory::XString;
-use crate::types::{FAIL, Failed, OK, VarLock};
+use crate::types::{Failed, VarLock};
 use crate::winlayer::Win;
 use core::cmp::Ordering;
 
 /// No `abbr`/`kind`/`menu`/`info` strings.
-pub(crate) const NO_EXTRA: [Option<XString>; CPT_COUNT as usize] = [None, None, None, None];
+pub(crate) const NO_EXTRA: [Option<XString>; CPT_COUNT] = [None, None, None, None];
 
 /// No user highlight for the `abbr` and `kind` columns.
 pub(crate) const NO_HL: [c_int; 2] = [-1, -1];
+
+/// What [`ins_compl_add`] did with a match.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub(crate) enum Added {
+    /// It was linked into the list.
+    Linked,
+    /// Its text is already in the list, so it was not added again.
+    Duplicate,
+    /// It was not added and the caller should stop adding: the user
+    /// interrupted, or (`complete_add()`) there was no word to add.
+    Refused,
+}
+
+impl Added {
+    /// `complete_add()`'s answer: 1 added, 2 already there, 0 not added.
+    pub(crate) fn number(self) -> VarNumber {
+        match self {
+            Added::Linked => 1,
+            Added::Duplicate => 2,
+            Added::Refused => 0,
+        }
+    }
+}
 
 /// Add one match to the list.
 ///
@@ -43,20 +66,20 @@ pub(crate) const NO_HL: [c_int; 2] = [-1, -1];
 /// (`kDirectionNotSet` means `compl_direction`), `adup` whether a duplicate
 /// is acceptable, and `user_hl` the `abbr` and `kind` highlight attributes.
 ///
-/// Returns `NOTDONE` when the text is already in the list, `FAIL` on
-/// interrupt, `OK` when it was linked in.
+/// Answers [`Added::Duplicate`] when the text is already in the list and
+/// [`Added::Refused`] on interrupt.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn ins_compl_add(
     text: &[u8],
     fname: Option<&CStr>,
-    extra: [Option<XString>; CPT_COUNT as usize],
+    extra: [Option<XString>; CPT_COUNT],
     user_data: Option<&mut TypVal>,
     cdir: Direction,
     flags: c_int,
     adup: bool,
     user_hl: [c_int; 2],
     score: c_int,
-) -> c_int {
+) -> Added {
     let dir = if cdir == kDirectionNotSet {
         compl_direction.get()
     } else {
@@ -69,7 +92,7 @@ pub(crate) fn ins_compl_add(
         os_breakcheck();
     }
     if got_int.get() {
-        return FAIL;
+        return Added::Refused;
     }
     let text = &text[..text.iter().position(|&b| b == 0).unwrap_or(text.len())];
 
@@ -78,7 +101,7 @@ pub(crate) fn ins_compl_add(
         if is_nearest_active() && score > 0 {
             dup.update(|m| m.score = m.score.min(score));
         }
-        return NOTDONE;
+        return Added::Duplicate;
     }
     let text = XString::from_bytes(text);
 
@@ -127,7 +150,7 @@ pub(crate) fn ins_compl_add(
     {
         ins_compl_longest_match(added);
     }
-    OK
+    Added::Linked
 }
 
 impl ComplMatches {
@@ -477,9 +500,12 @@ pub(crate) fn ins_compl_add_orig_text(flags: c_int) -> Result<(), Failed> {
     let text = compl_orig_text().to_vec();
     let (dir, score) = (kDirectionNotSet, FUZZY_SCORE_NONE);
     let added = ins_compl_add(&text, None, NO_EXTRA, None, dir, flags, false, NO_HL, score);
-    // `ins_compl_add` also answers `NOTDONE` for a text already in the list,
-    // which upstream's callers here read as "not added".
-    if added == OK { Ok(()) } else { Err(Failed) }
+    // A text already in the list is "not added" to upstream's callers here.
+    if added == Added::Linked {
+        Ok(())
+    } else {
+        Err(Failed)
+    }
 }
 
 /// Does the text of `m` start with `leader`, honouring its `CP_ICASE` /
@@ -561,12 +587,10 @@ pub(crate) fn ins_compl_add_match_list(matches: &[XString], icase: bool) {
     for text in matches {
         let text = text.as_cstr().to_bytes();
         let score = FUZZY_SCORE_NONE;
-        let add_r = ins_compl_add(text, None, NO_EXTRA, None, dir, flags, false, NO_HL, score);
-        if add_r == FAIL {
-            break;
-        }
-        if add_r == OK {
-            dir = FORWARD;
+        match ins_compl_add(text, None, NO_EXTRA, None, dir, flags, false, NO_HL, score) {
+            Added::Refused => break,
+            Added::Linked => dir = FORWARD,
+            Added::Duplicate => {}
         }
     }
 }

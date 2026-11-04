@@ -16,7 +16,7 @@ use crate::cstr;
 use crate::file_search::FileNameOpts;
 use crate::fileio::Fgets;
 use crate::highlight_group::{HLF_D, HLF_R};
-use crate::insexpand::{word_end, word_start};
+use crate::insexpand::{Added, word_end, word_start};
 use crate::mbyte::c_cluster_len;
 use crate::memory::XString;
 use crate::message::msg_display_bytes;
@@ -27,7 +27,7 @@ use crate::optionstr::{OptString, local_or_global};
 use crate::regexp::RE_MAGIC;
 use crate::smsg;
 use crate::strings::has_bytes;
-use crate::types::{FAIL, IOSIZE, NUL, OK, ShmFlag};
+use crate::types::{IOSIZE, NUL, ShmFlag};
 use crate::window::valid_win;
 use crate::winlayer::WinId;
 use crate::winlayer::{Buf, Win};
@@ -650,9 +650,9 @@ fn expand_match(walk: &mut Walk, startp: usize, dir: &mut Direction) -> After {
     let from_file = from_file.as_ref().map(XString::as_cstr);
     match ins_compl_add_infercase(rest, i, p_ic(), from_file, *dir, cont_s_ipos, 0) {
         // If dir was BACKWARD, honour it just once.
-        r if r == OK => *dir = FORWARD,
-        r if r == FAIL => return After::Stop,
-        _ => {}
+        Added::Linked => *dir = FORWARD,
+        Added::Refused => return After::Stop,
+        Added::Duplicate => {}
     }
     After::Resume(p)
 }

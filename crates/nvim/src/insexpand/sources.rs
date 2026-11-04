@@ -26,7 +26,7 @@ use crate::memline::Lines;
 use crate::option::split_option_part;
 use crate::path::ExpandFlags;
 use crate::strings::escaped_bytes;
-use crate::types::{FAIL, Failed, IOSIZE, OK, ShmFlag};
+use crate::types::{FAIL, Failed, IOSIZE, ShmFlag};
 use crate::winlayer::BufId;
 use crate::winlayer::{Buf, Win, first_buffer, first_window};
 use std::ffi::OsStr;
@@ -135,8 +135,8 @@ fn thesaurus_add_words_in_line(
     line: &[u8],
     dir: Direction,
     skip_word: usize,
-) -> (c_int, usize) {
-    let mut status = OK;
+) -> (Added, usize) {
+    let mut status = Added::Linked;
 
     // Add the other matches on the line.
     let mut at = 0;
@@ -163,7 +163,7 @@ fn thesaurus_add_words_in_line(
         // Add the word, skipping the regexp match.
         if wstart != skip_word {
             status = add_scanned_word(line, wstart, at, fname, dir, FUZZY_SCORE_NONE);
-            if status == FAIL {
+            if status == Added::Refused {
                 break;
             }
         }
@@ -232,7 +232,9 @@ pub(crate) fn ins_compl_files(
                         word_end(line, start)
                     };
                     let score = found.score;
-                    if add_scanned_word(line, start, word_end, Some(fname), *dir, score) == FAIL {
+                    if add_scanned_word(line, start, word_end, Some(fname), *dir, score)
+                        == Added::Refused
+                    {
                         break;
                     }
                     at = word_end; // start from the next word
@@ -255,11 +257,11 @@ pub(crate) fn ins_compl_files(
                         // For a thesaurus, add all the words in the line.
                         (add_r, at) = thesaurus_add_words_in_line(Some(fname), line, *dir, start);
                     }
-                    if add_r == OK {
+                    match add_r {
                         // If dir was BACKWARD then honour it just once.
-                        *dir = FORWARD;
-                    } else if add_r == FAIL {
-                        break;
+                        Added::Linked => *dir = FORWARD,
+                        Added::Refused => break,
+                        Added::Duplicate => {}
                     }
                     // Avoid an expensive call to vim_regexec() at the end
                     // of the line.
@@ -282,12 +284,12 @@ pub(crate) fn ins_compl_files(
 ///
 /// Safe: [`Buf`] is the live buffer the walk starts from, and the window it
 /// remembers between calls is vetted below rather than trusted.
-pub(crate) fn ins_compl_next_buf(mut buffer: Buf, flag: c_int) -> Buf {
+pub(crate) fn ins_compl_next_buf(mut buffer: Buf, flag: u8) -> Buf {
     // `next_buf_window` outlives the call, and a completion runs user
     // functions and Lua in between, so it stays a handle that `win_valid`
     // vets -- a `Win` would be promising a liveness nothing here can keep.
     let wp = next_buf_window;
-    if flag == 'w' as c_int {
+    if flag == b'w' {
         // Just windows.
         if buffer.raw() == Buf::current_raw() || !wp.get().is_some_and(win_valid) {
             // First call for this flag/expansion, or the window was closed.
@@ -322,10 +324,10 @@ pub(crate) fn ins_compl_next_buf(mut buffer: Buf, flag: c_int) -> Buf {
             if buffer.raw() == Buf::current_raw() {
                 break;
             }
-            let skip_buffer = if flag == 'U' as c_int {
+            let skip_buffer = if flag == b'U' {
                 buffer.b_p_bl != 0
             } else {
-                buffer.b_p_bl == 0 || buffer.b_ml.ml_mfp.is_none() != (flag == 'u' as c_int)
+                buffer.b_p_bl == 0 || buffer.b_ml.ml_mfp.is_none() != (flag == b'u')
             };
             // Stop if we found a buffer that matches our criteria.
             if !skip_buffer && !buffer.b_scanned {
@@ -579,7 +581,7 @@ pub(crate) fn get_next_default_completion(
         };
         let (ic, dir) = (p_ic(), kDirectionNotSet);
         let add_r = ins_compl_add_infercase(&found, len, ic, fname, dir, cont_s_ipos, score);
-        if add_r != NOTDONE {
+        if add_r != Added::Duplicate {
             if in_fuzzy_collect && best_score_is(score) {
                 compl_num_bests.set(compl_num_bests.get() + 1);
             }
@@ -640,7 +642,8 @@ pub(crate) fn get_register_completion() {
                     continue;
                 }
                 let added = starts_with_orig(line)
-                    && add_scanned_word(line, 0, line.len(), None, dir, FUZZY_SCORE_NONE) == OK;
+                    && add_scanned_word(line, 0, line.len(), None, dir, FUZZY_SCORE_NONE)
+                        == Added::Linked;
                 if added {
                     dir = FORWARD;
                 }
@@ -660,7 +663,8 @@ pub(crate) fn get_register_completion() {
                 let end = end.min(line.len());
                 let added = end > at
                     && starts_with_orig(&line[at..])
-                    && add_scanned_word(line, at, end, None, dir, FUZZY_SCORE_NONE) == OK;
+                    && add_scanned_word(line, at, end, None, dir, FUZZY_SCORE_NONE)
+                        == Added::Linked;
                 if added {
                     dir = FORWARD;
                 }
@@ -691,7 +695,7 @@ fn add_scanned_word(
     fname: Option<&CStr>,
     dir: Direction,
     score: c_int,
-) -> c_int {
+) -> Added {
     ins_compl_add_infercase(
         &line[start..],
         end - start,

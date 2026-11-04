@@ -68,22 +68,20 @@ const WIN_CONFIG_INIT: WinConfig = WinConfig {
 /// `cia_flags` holds the three column kinds as decimal digits, most
 /// significant first; zero means the option is at its default.
 #[inline]
-fn pum_align_order() -> [c_int; 3] {
+fn pum_align_order() -> [usize; 3] {
     let flags = cia_flags.get();
     if flags == 0 {
-        return [CPT_ABBR as c_int, CPT_KIND as c_int, CPT_MENU as c_int];
+        return [CPT_ABBR, CPT_KIND, CPT_MENU];
     }
-    [
-        (flags / 100) as c_int,
-        (flags / 10 % 10) as c_int,
-        (flags % 10) as c_int,
-    ]
+    // A digit each: the option's setter wrote three, from 0 to 2.
+    let digit = |n: c_uint| usize::try_from(n % 10).unwrap_or(0);
+    [digit(flags / 100), digit(flags / 10), digit(flags)]
 }
 
 /// One item's text for a column kind, or `None` when it has none.
 #[inline]
-fn item_text(item: &PumItem, item_type: c_int) -> Option<&[u8]> {
-    match item_type as c_uint {
+fn item_text(item: &PumItem, item_type: usize) -> Option<&[u8]> {
+    match item_type {
         CPT_ABBR => Some(&item.pum_text),
         CPT_KIND => item.pum_kind.as_deref(),
         CPT_MENU => item.pum_extra.as_deref(),
@@ -96,8 +94,8 @@ fn item_text(item: &PumItem, item_type: c_int) -> Option<&[u8]> {
 /// Only the first two column kinds can carry one; the caller never asks for
 /// the third.
 #[inline]
-fn pum_user_attr_combine(item: &PumItem, item_type: c_int, attr: c_int) -> c_int {
-    let user_attr = [item.pum_user_abbr_hlattr, item.pum_user_kind_hlattr][item_type as usize];
+fn pum_user_attr_combine(item: &PumItem, item_type: usize, attr: c_int) -> c_int {
+    let user_attr = [item.pum_user_abbr_hlattr, item.pum_user_kind_hlattr][item_type];
     if user_attr > 0 {
         hl_combine_attr(attr, user_attr)
     } else {
@@ -444,11 +442,11 @@ impl PumRow {
         &mut self,
         style: &RowStyle,
         item: &PumItem,
-        item_type: c_int,
+        item_type: usize,
         next_isempty: bool,
     ) {
         let win = Win::current();
-        let hlf = self.hlfs[item_type as usize];
+        let hlf = self.hlfs[item_type];
         self.orig_attr = hl_combine_attr(win_hl_attr(win, HLF_PNI), win_hl_attr(win, hlf as c_int));
         let attr = if item_type < 2 {
             pum_user_attr_combine(item, item_type, self.orig_attr)
@@ -476,7 +474,7 @@ impl PumRow {
             // Draw [start, at).
             let st = transstr_owned(&text[start..at], true);
 
-            let attrs = if item_type == CPT_ABBR as c_int {
+            let attrs = if item_type == CPT_ABBR {
                 pum_compute_text_attrs(&st, hlf, item.pum_user_abbr_hlattr)
             } else {
                 None
@@ -561,8 +559,8 @@ fn pum_draw_row(style: &RowStyle, items: &[PumItem], i: c_int, grid_row: c_int) 
     ];
     // Where the second and third columns start: the first column's width,
     // plus the separator the layout reserved.
-    let basic_width = widths[order[0] as usize];
-    let last_isabbr = order[2] == CPT_ABBR as c_int;
+    let basic_width = widths[order[0]];
+    let last_isabbr = order[2] == CPT_ABBR;
 
     for j in 0..3 {
         let item_type = order[j];
@@ -570,9 +568,9 @@ fn pum_draw_row(style: &RowStyle, items: &[PumItem], i: c_int, grid_row: c_int) 
         row.put_column(style, item, item_type, next_isempty);
 
         let n = if j > 0 {
-            widths[order[1] as usize] + c_int::from(!last_isabbr)
+            widths[order[1]] + c_int::from(!last_isabbr)
         } else {
-            c_int::from(order[j] == CPT_ABBR as c_int)
+            c_int::from(order[j] == CPT_ABBR)
         };
 
         // Stop when there is nothing more to display.

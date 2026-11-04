@@ -22,7 +22,6 @@ use crate::eval::typval::dict_find;
 use crate::global_cell::{editor_state::Held, editor_state_lock};
 use crate::options::kOptCotFlagNearest;
 use crate::os::input::reset_breakcheck_count;
-use crate::types::{FAIL, OK};
 use core::ffi::c_char;
 use std::ffi::CString;
 
@@ -68,7 +67,7 @@ fn reset() {
 
 /// Add `text` as a match: `dir` side of the current one, `adup` allowing a
 /// duplicate, scored `score`.
-fn add_with(text: &str, dir: Direction, flags: c_int, adup: bool, score: c_int) -> c_int {
+fn add_with(text: &str, dir: Direction, flags: c_int, adup: bool, score: c_int) -> Added {
     let flags = flags | CP_FAST;
     ins_compl_add(
         text.as_bytes(),
@@ -83,11 +82,11 @@ fn add_with(text: &str, dir: Direction, flags: c_int, adup: bool, score: c_int) 
     )
 }
 
-fn add(text: &str) -> c_int {
+fn add(text: &str) -> Added {
     add_with(text, kDirectionNotSet, 0, false, FUZZY_SCORE_NONE)
 }
 
-fn add_scored(text: &str, score: c_int) -> c_int {
+fn add_scored(text: &str, score: c_int) -> Added {
     add_with(text, kDirectionNotSet, 0, false, score)
 }
 
@@ -103,7 +102,7 @@ fn start(text: &str) {
 fn ring(orig: &str, words: &[&str]) {
     start(orig);
     for word in words {
-        assert_eq!(add(word), OK);
+        assert_eq!(add(word), Added::Linked);
     }
     compl_matches.set(ins_compl_make_cyclic());
 }
@@ -156,9 +155,13 @@ fn shown_at() -> Option<usize> {
 
 /// One `<C-N>`/`<C-P>` press of `todo` steps, in `compl_shows_dir`.
 fn step(todo: c_int) {
-    let mut num_matches = -1;
-    let status = find_next_completion_match(false, todo, true, &mut num_matches);
-    assert_eq!(status, OK);
+    let mut num_matches = None;
+    assert!(find_next_completion_match(
+        false,
+        todo,
+        true,
+        &mut num_matches
+    ));
 }
 
 fn sort_fuzzy() {
@@ -169,7 +172,7 @@ fn sort_nearest() {
     sort_compl_match_list(MatchOrder::Nearest);
 }
 
-fn order_by_fuzzy_score(scores: &mut [c_int], indices: &mut [c_int]) {
+fn order_by_fuzzy_score(scores: &mut [c_int], indices: &mut [usize]) {
     sort_by_fuzzy_score(scores, indices);
 }
 
@@ -186,7 +189,7 @@ fn forward_adds_follow_the_current_match() {
     let _f = Fixture::new(0);
     start("ap");
     for word in ["apple", "apricot", "ape"] {
-        assert_eq!(add(word), OK);
+        assert_eq!(add(word), Added::Linked);
         assert_eq!(position(curr_match()), Some(texts().len() - 1));
     }
     assert_eq!(texts(), ["<o>", "apple", "apricot", "ape"]);
@@ -209,7 +212,7 @@ fn backward_adds_go_before_the_current_match() {
     compl_direction.set(BACKWARD);
     start("x");
     for word in ["x1", "x2", "x3"] {
-        assert_eq!(add(word), OK);
+        assert_eq!(add(word), Added::Linked);
         assert_eq!(position(curr_match()), Some(0));
     }
     // The original text ends up last, which is where backward completion
@@ -217,7 +220,10 @@ fn backward_adds_go_before_the_current_match() {
     assert_eq!(texts(), ["x3", "x2", "x1", "<o>"]);
     assert!(first_match().is_some_and(|m| !m.is_original()));
     // An explicit direction overrides `compl_direction`.
-    assert_eq!(add_with("x4", FORWARD, 0, false, FUZZY_SCORE_NONE), OK);
+    assert_eq!(
+        add_with("x4", FORWARD, 0, false, FUZZY_SCORE_NONE),
+        Added::Linked
+    );
     assert_eq!(texts(), ["x3", "x4", "x2", "x1", "<o>"]);
     assert_eq!(position(curr_match()), Some(1));
 }
@@ -225,7 +231,7 @@ fn backward_adds_go_before_the_current_match() {
 /// Add `text` with the extras a source can hand over: a file name, the four
 /// `abbr`/`kind`/`menu`/`info` strings (an empty one is dropped) and a string
 /// as user data.
-fn add_full(text: &str, fname: Option<&str>, extra: [&str; 4], user_data: Option<&str>) -> c_int {
+fn add_full(text: &str, fname: Option<&str>, extra: [&str; 4], user_data: Option<&str>) -> Added {
     let fname = fname.map(|f| CString::new(f).expect("no NUL in a test name"));
     let extra = extra.map(|s| Some(XString::from(s)));
     let mut data = user_data.map(|d| TypVal::string_from(d.as_bytes()));
@@ -297,23 +303,23 @@ fn an_expansion_takes_its_direction_once() {
 fn duplicates_are_refused_unless_allowed() {
     let _f = Fixture::new(0);
     start("ap");
-    assert_eq!(add("apple"), OK);
-    assert_eq!(add("apple"), NOTDONE);
+    assert_eq!(add("apple"), Added::Linked);
+    assert_eq!(add("apple"), Added::Duplicate);
     // A prefix and an extension are different words.
-    assert_eq!(add("app"), OK);
-    assert_eq!(add("apples"), OK);
+    assert_eq!(add("app"), Added::Linked);
+    assert_eq!(add("apples"), Added::Linked);
     // The original text is never a duplicate.
-    assert_eq!(add("ap"), OK);
-    assert_eq!(add("ap"), NOTDONE);
+    assert_eq!(add("ap"), Added::Linked);
+    assert_eq!(add("ap"), Added::Duplicate);
     // `dup` lets the same word in twice.
     assert_eq!(
         add_with("apple", kDirectionNotSet, 0, true, FUZZY_SCORE_NONE),
-        OK
+        Added::Linked
     );
     assert_eq!(texts(), ["<o>", "apple", "app", "apples", "ap", "apple"]);
     // An interrupt refuses everything.
     got_int.set(true);
-    assert_eq!(add("apricot"), FAIL);
+    assert_eq!(add("apricot"), Added::Refused);
     got_int.set(false);
     assert_eq!(texts().len(), 6);
 }
@@ -322,15 +328,15 @@ fn duplicates_are_refused_unless_allowed() {
 fn a_nearer_duplicate_lowers_the_score() {
     let _f = Fixture::new(kOptCotFlagNearest);
     start("w");
-    assert_eq!(add_scored("word", 5), OK);
-    assert_eq!(add_scored("word", 3), NOTDONE);
+    assert_eq!(add_scored("word", 5), Added::Linked);
+    assert_eq!(add_scored("word", 3), Added::Duplicate);
     assert_eq!(score_of(nth(1)), 3);
-    assert_eq!(add_scored("word", 9), NOTDONE);
-    assert_eq!(add_scored("word", 0), NOTDONE);
+    assert_eq!(add_scored("word", 9), Added::Duplicate);
+    assert_eq!(add_scored("word", 0), Added::Duplicate);
     assert_eq!(score_of(nth(1)), 3);
     // Without `nearest` the first score stands.
     cot_flags.set(0);
-    assert_eq!(add_scored("word", 1), NOTDONE);
+    assert_eq!(add_scored("word", 1), Added::Duplicate);
     assert_eq!(score_of(nth(1)), 3);
 }
 
@@ -340,7 +346,7 @@ fn fuzzy_longest_inserts_by_score() {
     compl_get_longest.set(true);
     start("w");
     for (word, score) in [("a", 10), ("b", 30), ("c", 20), ("d", 30)] {
-        assert_eq!(add_scored(word, score), OK);
+        assert_eq!(add_scored(word, score), Added::Linked);
     }
     // Highest first, a tie after the earlier one; the ring is already closed.
     assert_eq!(texts(), ["<o>", "b", "d", "c", "a"]);
@@ -508,7 +514,7 @@ fn nearest_sorts_scored_matches_and_leaves_unscored_in_runs() {
         ("n3", NONE),
         ("s1", 1),
     ] {
-        assert_eq!(add_scored(word, score), OK);
+        assert_eq!(add_scored(word, score), Added::Linked);
     }
     ins_compl_make_cyclic();
     sort_nearest();
@@ -534,7 +540,7 @@ fn a_refresh_drops_one_source_and_keeps_the_rest_in_place() {
     start("");
     for (source, word) in [(0, "a0"), (0, "b0"), (1, "a1"), (1, "b1"), (2, "a2")] {
         cpt_sources().set_index(source);
-        assert_eq!(add(word), OK);
+        assert_eq!(add(word), Added::Linked);
     }
     set_shown(3);
     cpt_sources().set_index(1);
@@ -552,10 +558,10 @@ fn a_match_shares_the_file_name_of_the_current_one() {
     let _f = Fixture::new(0);
     start("w");
     let none = ["", "", "", ""];
-    assert_eq!(add_full("w1", Some("one.txt"), none, None), OK);
-    assert_eq!(add_full("w2", Some("one.txt"), none, None), OK);
-    assert_eq!(add_full("w3", Some("two.txt"), none, None), OK);
-    assert_eq!(add_full("w4", None, none, None), OK);
+    assert_eq!(add_full("w1", Some("one.txt"), none, None), Added::Linked);
+    assert_eq!(add_full("w2", Some("one.txt"), none, None), Added::Linked);
+    assert_eq!(add_full("w3", Some("two.txt"), none, None), Added::Linked);
+    assert_eq!(add_full("w4", None, none, None), Added::Linked);
     let (one, two, three) = (fname_of(nth(1)), fname_of(nth(2)), fname_of(nth(3)));
     let (one, two, three) = (
         one.expect("a name"),
@@ -580,9 +586,9 @@ fn a_match_reads_back_as_a_completed_item() {
             ["FOO", "", "menu", "info"],
             Some("data")
         ),
-        OK
+        Added::Linked
     );
-    assert_eq!(add("fob"), OK);
+    assert_eq!(add("fob"), Added::Linked);
     let item = completed_item(nth(1));
     let get = |key: &[u8]| member(&item, key);
     assert_eq!(get(b"word").as_deref(), Some("foo"));
@@ -604,13 +610,13 @@ fn the_free_takes_every_match_and_what_it_owns() {
     start("f");
     assert_eq!(
         add_full("foo", Some("f.c"), ["A", "K", "M", "I"], Some("data")),
-        OK
+        Added::Linked
     );
     assert_eq!(
         add_full("fob", Some("f.c"), ["", "", "", ""], Some("more")),
-        OK
+        Added::Linked
     );
-    assert_eq!(add("fig"), OK);
+    assert_eq!(add("fig"), Added::Linked);
     ins_compl_make_cyclic();
     set_shown(2);
     compl_old_match.set(Some(nth(1)));
@@ -688,12 +694,12 @@ fn a_match_from_rebuilt_complete_rows_counts_against_no_source() {
     cpt_sources().set_rows(vec![CPT_SOURCE_INIT, CPT_SOURCE_INIT, capped]);
     start("");
     cpt_sources().set_index(2);
-    assert_eq!(add("a2"), OK);
-    assert_eq!(add("b2"), OK);
+    assert_eq!(add("a2"), Added::Linked);
+    assert_eq!(add("b2"), Added::Linked);
     // ...and a single uncapped row after a `:set complete=` rebuilt them.
     cpt_sources().set_rows(vec![CPT_SOURCE_INIT]);
     cpt_sources().set_index(0);
-    assert_eq!(add("a0"), OK);
+    assert_eq!(add("a0"), Added::Linked);
 
     assert_eq!(nth(1).with(ComplItem::cpt_source), None);
     assert_eq!(nth(3).with(ComplItem::cpt_source), Some(0));

@@ -210,11 +210,10 @@ impl Cells {
         if State.get() & MODE_INSERT != 0
             && ins_compl_win_active(window)
             && (self.in_curline || ins_compl_lnum_in_range(wlv.lnum))
+            && let Some(ins_match_attr) =
+                ins_compl_col_range_attr(wlv.lnum, self.byte_col()).filter(|&attr| attr > 0)
         {
-            let ins_match_attr = ins_compl_col_range_attr(wlv.lnum, self.byte_col());
-            if ins_match_attr > 0 {
-                self.search_attr = hl_combine_attr(self.search_attr, ins_match_attr);
-            }
+            self.search_attr = hl_combine_attr(self.search_attr, ins_match_attr);
         }
     }
 

@@ -105,7 +105,7 @@ fn infercase_text(text: &[u8], typed: &[u8]) -> Vec<u8> {
 /// takes `len` bytes, so a case change that alters a byte length shifts
 /// which bytes those are, and this does the same. `cont_s_ipos` says the next
 /// `CTRL-X <>` sets the initial position.
-pub fn ins_compl_add_infercase(
+pub(crate) fn ins_compl_add_infercase(
     rest: &[u8],
     len: usize,
     icase: bool,
@@ -113,7 +113,7 @@ pub fn ins_compl_add_infercase(
     dir: Direction,
     cont_s_ipos: bool,
     score: c_int,
-) -> c_int {
+) -> Added {
     let recased;
     let mut text = &rest[..len.min(rest.len())];
     if p_ic() && Buf::current().b_p_inf != 0 && len > 0 {
@@ -262,13 +262,8 @@ pub(crate) fn find_common_prefix(curbuf_only: bool) -> Option<(XString, usize)> 
             }
         }
 
-        let from_curbuf = cur_source.is_some_and(|source| {
-            c_int::from(
-                cpt_sources()
-                    .row(c_int::try_from(source).unwrap_or(c_int::MAX))
-                    .cs_flag,
-            ) == '.' as c_int
-        });
+        let from_curbuf =
+            cur_source.is_some_and(|source| cpt_sources().row_at(source).cs_flag == b'.');
         if match_limit_exceeded || (curbuf_only && !from_curbuf) {
             continue;
         }

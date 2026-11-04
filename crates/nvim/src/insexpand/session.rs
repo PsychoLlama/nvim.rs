@@ -6,6 +6,13 @@
 //! [`super::getexp::ins_compl_get_exp`].
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::charset::display::foldcase;
@@ -13,11 +20,10 @@ use crate::charset::is_word_at;
 use crate::charset::skip;
 use crate::cstr::{self, byte_at};
 use crate::guard::Lock;
-use crate::keycodes::{Ctrl_N, Ctrl_P, Ctrl_R};
 use crate::mbyte::{char_at, class_in, head_off};
 use crate::memline::Lines;
 use crate::memory::XString;
-use crate::narrow::number_as_col;
+use crate::narrow::{len_as_int, number_as_col};
 use crate::semsg;
 use crate::types::Key;
 use crate::types::{ExpandContext, Failed, IOSIZE, ShmFlag};
@@ -44,10 +50,12 @@ pub(crate) fn get_normal_compl_info(mut startcol: c_int, curs_col: ColNr) -> Res
     let buffer = Buf::current();
     // The text from column `col`, read as the C string it was: past the end
     // is NUL.
-    let from = |col: c_int| line.get(col as usize..).unwrap_or_default();
+    // A column the scans below keep at or above zero, as an index.
+    let at = |col: c_int| usize::try_from(col).unwrap_or(0);
+    let from = |col: c_int| line.get(at(col)..).unwrap_or_default();
     // The start of the character before column `col`: C's `mb_prevptr`.
     let prev = |col: c_int| {
-        let col = col as usize;
+        let col = at(col);
         if col == 0 {
             0
         } else {
@@ -69,7 +77,7 @@ pub(crate) fn get_normal_compl_info(mut startcol: c_int, curs_col: ColNr) -> Res
         if !compl_status_adding() {
             while {
                 startcol -= 1;
-                startcol >= 0 && vim_is_ident_char(c_int::from(byte_at(line, startcol as usize)))
+                startcol >= 0 && vim_is_ident_char(c_int::from(byte_at(line, at(startcol))))
             } {}
             startcol += 1;
             compl_col.set(compl_col.get() + startcol);
@@ -102,14 +110,14 @@ pub(crate) fn get_normal_compl_info(mut startcol: c_int, curs_col: ColNr) -> Res
             // Search backwards for the point where the character class
             // changes, or for a single-byte character that is not a word
             // character.
-            startcol -= head_off(line, startcol as usize) as c_int;
+            startcol -= len_as_int(head_off(line, at(startcol)));
             let base_class = class_in(from(startcol), buffer);
             loop {
                 startcol -= 1;
                 if startcol < 0 {
                     break;
                 }
-                let head_off = head_off(line, startcol as usize) as c_int;
+                let head_off = len_as_int(head_off(line, at(startcol)));
                 if base_class != class_in(from(startcol - head_off), buffer) {
                     break;
                 }
@@ -164,7 +172,7 @@ pub(crate) fn get_filename_compl_info(mut startcol: c_int, curs_col: ColNr) -> R
         // C's MB_PTR_BACK: step back over one whole character.
         let back = |p: usize| p - (head_off(line, p - 1) + 1);
         let is_filec = |p: usize| vim_isfilec(char_at(line.get(p..).unwrap_or_default()));
-        let mut p = back(startcol as usize);
+        let mut p = back(usize::try_from(startcol).unwrap_or(0));
         while p > 0 && is_filec(p) {
             p = back(p);
         }
@@ -173,14 +181,14 @@ pub(crate) fn get_filename_compl_info(mut startcol: c_int, curs_col: ColNr) -> R
         startcol = if p == 0 && is_filec(p) {
             0
         } else {
-            p as c_int + 1
+            len_as_int(p) + 1
         };
     }
 
     compl_col.set(compl_col.get() + startcol);
     compl_length.set((curs_col - startcol).get());
     let start = compl_col.get().as_usize().min(line.len());
-    let end = (start + compl_length.get().max(0) as usize).min(line.len());
+    let end = (start + usize::try_from(compl_length.get()).unwrap_or(0)).min(line.len());
     let typed = &line[start..end];
     compl_pattern().set(ApiString::from_bytes(&addstar(typed, ExpandContext::Files)));
     Ok(())
@@ -218,21 +226,20 @@ pub(crate) fn get_cmdline_compl_info(curs_col: ColNr) -> Result<(), Failed> {
 }
 
 /// Set `compl_col`, `compl_length`, `compl_pattern` and `cpt_compl_pattern`.
-pub(crate) fn set_compl_globals(mut startcol: c_int, curs_col: ColNr, is_cpt_compl: bool) {
+pub(crate) fn set_compl_globals(mut startcol: ColNr, curs_col: ColNr, is_cpt_compl: bool) {
     if is_cpt_compl {
         cpt_compl_pattern().clear();
-        if startcol < compl_col.get().get() {
+        if startcol < compl_col.get() {
             prepend_startcol_text(cpt_compl_pattern(), compl_orig_text(), startcol);
         } else {
             cpt_compl_pattern().set(compl_orig_text().to_owned());
         }
     } else {
-        if startcol < 0 || startcol > curs_col.get() {
-            startcol = curs_col.get();
+        if startcol < ColNr::ZERO || startcol > curs_col {
+            startcol = curs_col;
         }
-        let len = curs_col - startcol;
-        compl_col.set(ColNr::new(startcol));
-        compl_length.set(len.get());
+        compl_col.set(startcol);
+        compl_length.set(curs_col - startcol);
         // The line is read afresh inside: the user function that got here may
         // have changed it.
         compl_pattern().set(compl_text_from_line());
@@ -243,12 +250,12 @@ pub(crate) fn set_compl_globals(mut startcol: c_int, curs_col: ColNr, is_cpt_com
 /// (`'omnifunc'`, `'completefunc'` and `'thesaurusfunc'`).
 ///
 /// `cb` is set when a function in `'complete'` triggered this (the caller
-/// holds it for the call), `None` otherwise. Answers whether to go on, and
-/// the column the function answered -- 0 when it was not reached.
+/// holds it for the call), `None` otherwise. Answers the column the function
+/// answered, or why there is none to go on with.
 pub(crate) fn get_userdefined_compl_info(
     curs_col: ColNr,
     cb: Option<&Callback>,
-) -> (Result<(), Failed>, c_int) {
+) -> Result<ColNr, Declined> {
     // Call the user-defined function with "a:findstart" set to 1 to obtain
     // the length of the text to complete.
     let save_state = State.get();
@@ -265,7 +272,7 @@ pub(crate) fn get_userdefined_compl_info(
                     "omnifunc"
                 };
                 semsg!("E764: Option '{arg0}' is not set");
-                return (Err(Failed), 0);
+                return Err(Declined::Cancel);
             }
             // A second reference: the function may reset the option.
             held = get_insert_callback(ctrl_x_mode.get());
@@ -287,42 +294,57 @@ pub(crate) fn get_userdefined_compl_info(
     validate_cursor(Win::current());
     if !equalpos(Win::current().w_cursor, pos) {
         emsg(gettext(E_COMPLDEL));
-        return (Err(Failed), 0);
+        return Err(Declined::Cancel);
     }
 
     // -2 means the function wants to cancel the completion without an
-    // error; do the same if it did not execute successfully.
+    // error; do the same if it did not execute successfully -- which a -3
+    // also reads as, then.
     if col == ColNr::new(-2) || aborting() {
-        return (Err(Failed), col.get());
+        return Err(if col == ColNr::new(-3) {
+            Declined::Leave
+        } else {
+            Declined::Cancel
+        });
     }
 
     // -3 does the same as -2 and leaves CTRL-X mode.
     if col == ColNr::new(-3) {
         if is_cpt_function {
-            return (Err(Failed), col.get());
+            return Err(Declined::Leave);
         }
         ctrl_x_mode.set(CTRL_X_NORMAL);
         edit_submode.set(None);
         if !shortmess(ShmFlag::COMPLETIONMENU) {
             msg_clr_cmdline();
         }
-        return (Err(Failed), col.get());
+        return Err(Declined::Leave);
     }
 
     // Reset the extended parameters of completion when starting a new one.
     compl_opt_refresh_always.set(false);
 
     if !is_cpt_function {
-        set_compl_globals(col.get(), curs_col, false);
+        set_compl_globals(col, curs_col, false);
     }
-    (Ok(()), col.get())
+    Ok(col)
+}
+
+/// Why [`get_userdefined_compl_info`] has no column: the completion stops.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub(crate) enum Declined {
+    /// The function answered -2, failed, or could not be called (with a
+    /// message, then): cancel this completion.
+    Cancel,
+    /// The function answered -3: cancel, and (unless a `'complete'`
+    /// function asked) leave CTRL-X mode.
+    Leave,
 }
 
 /// The pattern, column and length for spell completion; reads `spell_bad_len`.
 pub(crate) fn get_spell_compl_info(startcol: c_int, curs_col: ColNr) -> Result<(), Failed> {
     if spell_bad_len.get() > 0 {
-        debug_assert!(spell_bad_len.get() <= c_int::MAX as size_t);
-        compl_col.set(curs_col - spell_bad_len.get() as c_int);
+        compl_col.set(curs_col - len_as_int(spell_bad_len.get()));
     } else {
         compl_col.set(ColNr::new(spell_word_start(startcol)));
     }
@@ -365,7 +387,9 @@ pub(crate) fn compl_get_info(startcol: c_int, curs_col: ColNr) -> Result<(), Fai
     {
         // No 'complete' function asked for this, and the column is not
         // wanted.
-        get_userdefined_compl_info(curs_col, None).0
+        get_userdefined_compl_info(curs_col, None)
+            .map(drop)
+            .map_err(|_| Failed)
     } else if ctrl_x_mode_spell() {
         get_spell_compl_info(startcol, curs_col)
     } else {
@@ -550,13 +574,13 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
 
 /// Do Insert mode completion, called when the character `c` was typed and it
 /// means something for completion; answers `Ok`, or `Err` if something failed.
-pub fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
+pub fn ins_complete(c: Key, enable_pum: bool) -> Result<(), Failed> {
     // Milliseconds of `'autocompletelinger'` elapsed since collection began.
     let elapsed_ms = |start: uint64_t| os_hrtime().wrapping_sub(start) / 1_000_000;
 
     let disable_ac_delay = compl_started.get()
         && ctrl_x_mode_normal()
-        && (c == Ctrl_N || c == Ctrl_P || c == Ctrl_R || ins_compl_pum_key(c));
+        && (c == Key::CTRL_N || c == Key::CTRL_P || c == Key::CTRL_R || ins_compl_pum_key(c));
 
     compl_direction.set(ins_compl_key2dir(c));
     let insert_match = ins_compl_use_match(c);
@@ -591,17 +615,17 @@ pub fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
         compl_time_slice_expired.set(false);
     }
 
-    if n > 1 {
+    if let Some(n) = n.filter(|&n| n > 1) {
         // All matches have been found.
         compl_matches.set(n);
     }
     compl_curr_match.set(compl_shown_match.get());
     compl_direction.set(compl_shows_dir.get());
 
-    // Eat the ESC that vgetc().code() returns after a CTRL-C, to avoid leaving
+    // Eat the ESC that vgetc() returns after a CTRL-C, to avoid leaving
     // Insert mode.
     if got_int.get() && global_busy.get() == 0 {
-        vgetc().code();
+        vgetc();
         got_int.set(false);
     }
 
@@ -641,7 +665,7 @@ pub fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
         && p_acl() > 0
         && !disable_ac_delay
         && !no_matches_found
-        && elapsed_ms(compl_start_tv) < p_acl() as uint64_t
+        && elapsed_ms(compl_start_tv) < p_acl().cast_unsigned()
     {
         setcursor();
         ui_flush();
@@ -656,7 +680,7 @@ pub fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
                 break;
             }
             os_delay(2, true);
-            if elapsed_ms(compl_start_tv) >= p_acl() as uint64_t {
+            if elapsed_ms(compl_start_tv) >= p_acl().cast_unsigned() {
                 break;
             }
         }

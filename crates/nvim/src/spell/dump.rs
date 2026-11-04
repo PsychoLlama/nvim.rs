@@ -35,7 +35,9 @@ use crate::buffer::buf_is_empty;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_later};
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::getchar::state::got_int;
-use crate::insexpand::{ins_compl_add_infercase, ins_compl_check_keys, ins_compl_interrupted};
+use crate::insexpand::{
+    Added, ins_compl_add_infercase, ins_compl_check_keys, ins_compl_interrupted,
+};
 use crate::mbyte::{c_cluster_len, char_at, strnicmp_in};
 use crate::memline::{ml_append_text, ml_delete};
 use crate::memory::XString;
@@ -45,7 +47,7 @@ use crate::option::{boolean_optval, get_option_value, set_option_value_give_err}
 use crate::options::{kOptSpell, kOptSpelllang};
 use crate::os::input::line_breakcheck;
 use crate::search::FORWARD;
-use crate::types::{Direction, ExArg, IOSIZE, LineNr, OK, OptVal, OptionSetFlags, SpellLang};
+use crate::types::{Direction, ExArg, IOSIZE, LineNr, OptVal, OptionSetFlags, SpellLang};
 
 use super::chartab::{captype, make_case_word, onecap_copy, spell_toupper};
 use super::check::no_spell_checking;
@@ -431,7 +433,9 @@ fn dump_word(
         tw.starts_with(pat)
     };
     let want = sink.dir.as_deref().copied().unwrap_or(FORWARD);
-    if matches && ins_compl_add_infercase(tw, tw.len(), p_ic(), None, want, false, 0) == OK {
+    if matches
+        && ins_compl_add_infercase(tw, tw.len(), p_ic(), None, want, false, 0) == Added::Linked
+    {
         // A BACKWARD request is honoured only for the first match.
         if let Some(dir) = sink.dir.as_deref_mut() {
             *dir = FORWARD;

@@ -2555,7 +2555,6 @@ static const int LOOKFOR_NOBREAK = 8;
 static const int LOOKFOR_SCOPEDECL = 7;
 static const int LOOKFOR_TERM = 5;
 static const int LOOKFOR_UNTERM = 6;
-static const int LOWER_S = 115;
 static const int LOWEST_WIN_ID = 1000;
 static const int LSIZE = 512;
 static const int LUA_ERRMEM = 4;

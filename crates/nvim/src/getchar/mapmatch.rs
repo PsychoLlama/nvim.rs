@@ -93,7 +93,7 @@ pub(crate) fn at_ins_compl_key() -> bool {
     {
         c = Key::ctrl(tb.byte(3));
     }
-    (ctrl_x_mode_not_default() && vim_is_ctrl_x_key(c.code()))
+    (ctrl_x_mode_not_default() && vim_is_ctrl_x_key(c))
         || (compl_status_local() && (c == Key::ctrl(b'N') || c == Key::ctrl(b'P')))
 }
 

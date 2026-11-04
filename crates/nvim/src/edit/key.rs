@@ -558,7 +558,7 @@ fn check_pum(s: &mut InsertState) {
             insert_do_complete(s);
             if pum_want.get().finish {
                 // Accept the item and stop completing.
-                ins_compl_prep(Ctrl_Y);
+                ins_compl_prep(Key::CTRL_Y);
             }
         }
         pum_ext_want_done();

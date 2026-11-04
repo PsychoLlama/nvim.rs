@@ -219,11 +219,16 @@ impl CptSources {
         (generation == self.generation() && idx < self.len()).then_some(idx)
     }
 
-    /// Row `idx` by value, or the zeroed row when `idx` is out of range.
+    /// Row `idx` by value, or the zeroed row when `idx` is out of range
+    /// (−1 included).
     pub(crate) fn row(self, idx: c_int) -> CptSource {
-        let idx = usize::try_from(idx).ok();
+        usize::try_from(idx).map_or(CPT_SOURCE_INIT, |idx| self.row_at(idx))
+    }
+
+    /// Row `idx` by value, or the zeroed row when `idx` is out of range.
+    pub(crate) fn row_at(self, idx: usize) -> CptSource {
         CPT_SOURCES
-            .with(|rows| idx.and_then(|idx| rows.get(idx).copied()))
+            .with(|rows| rows.get(idx).copied())
             .unwrap_or(CPT_SOURCE_INIT)
     }
 
@@ -627,6 +632,27 @@ pub(crate) fn get_callback_if_cpt_func(entry: &[u8], idx: c_int) -> Option<HeldC
     }
 }
 
+/// The start column a `'complete'` function's `findstart` call answered,
+/// clamped to the cursor, or `None` when it declined; a -3 also turns its
+/// `refresh: 'always'` off.
+fn cpt_function_start(idx: c_int, answer: Result<ColNr, Declined>) -> Option<ColNr> {
+    match answer {
+        Ok(startcol) => {
+            let cursor = Win::current().w_cursor.col;
+            Some(if startcol < ColNr::ZERO || startcol > cursor {
+                cursor
+            } else {
+                startcol
+            })
+        }
+        Err(Declined::Leave) => {
+            cpt_sources().update(idx, |source| source.cs_refresh_always = false);
+            None
+        }
+        Err(Declined::Cancel) => None,
+    }
+}
+
 /// Call the functions named in `'complete'` with `findstart=1` and record the
 /// start column each answers.
 pub(crate) fn prepare_cpt_compl_funcs() {
@@ -635,20 +661,11 @@ pub(crate) fn prepare_cpt_compl_funcs() {
     for (idx, entry) in cpt_entries(&cpt).enumerate() {
         let idx = c_int::try_from(idx).unwrap_or(c_int::MAX);
         let Some(cb) = get_callback_if_cpt_func(entry.at, idx) else {
-            cpt_sources().update(idx, |source| source.cs_startcol = -3);
+            cpt_sources().update(idx, |source| source.cs_startcol = None);
             continue;
         };
         let col = Win::current().w_cursor.col;
-        let (ret, mut startcol) = get_userdefined_compl_info(col, Some(&cb));
-        if ret.is_err() {
-            if startcol == -3 {
-                cpt_sources().update(idx, |source| source.cs_refresh_always = false);
-            } else {
-                startcol = -2;
-            }
-        } else if startcol < 0 || startcol > Win::current().w_cursor.col.get() {
-            startcol = Win::current().w_cursor.col.get();
-        }
+        let startcol = cpt_function_start(idx, get_userdefined_compl_info(col, Some(&cb)));
         cpt_sources().update(idx, |source| source.cs_startcol = startcol);
     }
 }
@@ -671,7 +688,7 @@ pub(crate) fn setup_cpt_sources() {
     let rows = cpt_entries(&option)
         .map(|entry| {
             let mut source = CptSource {
-                cs_flag: entry.at[0].cast_signed(),
+                cs_flag: entry.at[0],
                 ..CPT_SOURCE_INIT
             };
             if let Some(caret) = entry.part.iter().position(|&b| b == b'^') {
@@ -694,10 +711,9 @@ pub(crate) fn is_cpt_func_refresh_always() -> bool {
 /// its `refresh:always` flag.
 pub(crate) fn get_cpt_func_completion_matches(cb: &Callback) {
     let idx = cpt_sources().index();
-    let startcol = cpt_sources().row(idx).cs_startcol;
-    if startcol == -2 || startcol == -3 {
+    let Some(startcol) = cpt_sources().row(idx).cs_startcol else {
         return;
-    }
+    };
 
     set_compl_globals(startcol, Win::current().w_cursor.col, true);
 
@@ -738,18 +754,9 @@ pub(crate) fn cpt_compl_refresh() {
         if let Some(cb) = cb {
             remove_old_matches();
             let col = Win::current().w_cursor.col;
-            let (ret, mut startcol) = get_userdefined_compl_info(col, Some(&cb));
-            if ret.is_err() {
-                if startcol == -3 {
-                    cpt_sources().update(idx, |source| source.cs_refresh_always = false);
-                } else {
-                    startcol = -2;
-                }
-            } else if startcol < 0 || startcol > Win::current().w_cursor.col.get() {
-                startcol = Win::current().w_cursor.col.get();
-            }
+            let startcol = cpt_function_start(idx, get_userdefined_compl_info(col, Some(&cb)));
             cpt_sources().update(idx, |source| source.cs_startcol = startcol);
-            if ret.is_ok() {
+            if startcol.is_some() {
                 compl_source_start_timer(idx);
                 get_cpt_func_completion_matches(&cb);
             }

@@ -15,14 +15,12 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::keycodes::{
-    Ctrl_C, Ctrl_E, Ctrl_N, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_V, Ctrl_X, Ctrl_Y, Ctrl_Z, SpecialKey,
-};
+use crate::keycodes::SpecialKey;
 use crate::mbyte::head_off;
 use crate::mbyte::{char_at, cluster_len, encode_char};
 use crate::memline::Lines;
 use crate::types::Key;
-use crate::types::{BsFlag, NUL, ShmFlag};
+use crate::types::{BsFlag, ShmFlag};
 use crate::winlayer::Win;
 
 /// Delete one character before the cursor and show the subset of the matches
@@ -30,7 +28,7 @@ use crate::winlayer::Win;
 ///
 /// Answers the character to use, or NUL when the work is done and another
 /// character is to be got from the user.
-pub fn ins_compl_bs() -> c_int {
+pub fn ins_compl_bs() -> Key {
     if ins_compl_preinsert_effect() {
         ins_compl_delete(false);
     }
@@ -60,7 +58,7 @@ pub fn ins_compl_bs() -> c_int {
         || ctrl_x_mode_eval()
         || (!can_bs(BsFlag::START) && from_start - compl_length.get() < 0)
     {
-        return SpecialKey::Bs.code();
+        return Key::from(SpecialKey::Bs);
     }
 
     // Deleted more than what was used to find matches, or didn't finish
@@ -88,7 +86,7 @@ pub fn ins_compl_bs() -> c_int {
         // Make sure the current match is not a hidden item.
         compl_curr_match.set(compl_shown_match.get());
     }
-    NUL
+    Key::NUL
 }
 
 /// Called after changing `compl_leader`: show the popup menu with a different
@@ -124,7 +122,7 @@ pub(crate) fn ins_compl_new_leader() {
         } else {
             compl_autocomplete.set(false);
         }
-        if ins_complete(Ctrl_N, true).is_err() {
+        if ins_complete(Key::CTRL_N, true).is_err() {
             compl_cont_status.set(0);
         }
         compl_restarting.set(false);
@@ -154,7 +152,7 @@ pub(crate) fn ins_compl_new_leader() {
 }
 
 /// Append one character to the match leader. May reduce the number of matches.
-pub fn ins_compl_addleader(c: c_int) {
+pub fn ins_compl_addleader(c: Key) {
     if ins_compl_preinsert_effect() {
         ins_compl_delete(false);
     }
@@ -162,12 +160,12 @@ pub fn ins_compl_addleader(c: c_int) {
     if stop_arrow().is_err() {
         return;
     }
-    if utf_char2len(c) > 1 {
+    if c.utf8_len() > 1 {
         let mut buf = [0u8; MB_MAXCHAR];
-        let len = encode_char(c, &mut buf);
+        let len = encode_char(c.code(), &mut buf);
         insert_chars(&buf[..len]);
     } else {
-        ins_char(Key::from_code(c));
+        ins_char(c);
     }
 
     // If we didn't complete finding matches we must search again.
@@ -243,11 +241,12 @@ pub fn ins_compl_addfrommatch() {
     } else {
         shown.text_copy()
     };
-    ins_compl_addleader(char_at(&text[len..]));
+    // The next character of the match's text, as the key that types it.
+    ins_compl_addleader(Key::from_code(char_at(&text[len..])));
 }
 
 /// Stop insert completion mode.
-pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bool {
+pub(crate) fn ins_compl_stop(c: Key, prev_mode: c_int, mut retval: bool) -> bool {
     // Remove pre-inserted text when present.
     if ins_compl_preinsert_effect() && ins_compl_win_active(Win::current()) {
         ins_compl_delete(false);
@@ -256,7 +255,7 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
     // Get here when we have finished typing a sequence of ^N and ^P or
     // other completion characters in CTRL-X mode.  Free up memory that was
     // used, and make sure we can redo the insert.
-    if compl_curr_match.get().is_some() || !compl_leader().is_unset() || c == Ctrl_E {
+    if compl_curr_match.get().is_some() || !compl_leader().is_unset() || c == Key::CTRL_E {
         // If any of the original typed text has been changed, e.g. when
         // 'ignorecase' is set, we must add back-spaces to the redo buffer.
         // We add as few as necessary to delete just the part of the
@@ -264,7 +263,7 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
         // when the match was edited or when CTRL-E was used, don't use the
         // current match.
         let used = curr_match()
-            .filter(|_| compl_used_match.get() && c != Ctrl_E)
+            .filter(|_| compl_used_match.get() && c != Key::CTRL_E)
             .map(MatchId::text_copy);
         ins_compl_fix_redo_buf_for_leader(used.as_ref().map(XString::as_cstr));
     }
@@ -287,7 +286,7 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
             dec_cursor();
         }
         // Only format when something was inserted.
-        if !arrow_used.get() && !ins_need_undo_get() && c != Ctrl_E {
+        if !arrow_used.get() && !ins_need_undo_get() && c != Key::CTRL_E {
             insertchar(Key::NUL, 0, -1);
         }
         if prev_col > ColNr::ZERO && Win::current().w_cursor.col < get_cursor_line_len() {
@@ -299,8 +298,9 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
     // selection without inserting anything.  When compl_enter_selects is
     // set the Enter key does the same.
     let mut word: Option<XString> = None;
-    if (c == Ctrl_Y
-        || (compl_enter_selects.get() && (c == CAR || c == SpecialKey::Kenter.code() || c == NL)))
+    if (c == Key::CTRL_Y
+        || (compl_enter_selects.get()
+            && (c == Key::CAR || c == SpecialKey::Kenter || c == Key::NL)))
         && pum_visible()
     {
         word = shown_match().map(MatchId::text_copy);
@@ -313,13 +313,17 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
     // one match with 'completeopt' "menu" without "menuone"), the user had
     // no opportunity to explicitly accept or dismiss it, so treat this as
     // an implicit accept (#38160).
-    if word.is_none() && c != Ctrl_E && compl_used_match.get() && compl_match_array().is_unset() {
+    if word.is_none()
+        && c != Key::CTRL_E
+        && compl_used_match.get()
+        && compl_match_array().is_unset()
+    {
         word = curr_match().map(MatchId::text_copy);
     }
 
     // CTRL-E means completion is Ended: go back to the typed text, but
     // only if the popup is still visible.
-    if c == Ctrl_E {
+    if c == Key::CTRL_E {
         ins_compl_delete(false);
         let text = if !compl_leader().is_unset() {
             Some(compl_leader())
@@ -329,7 +333,7 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
             None
         };
         if let Some(text) = text.map(ComplStr::to_vec) {
-            let compl_len = usize::try_from(get_compl_len()).unwrap_or(usize::MAX);
+            let compl_len = get_compl_len();
             if text.len() > compl_len {
                 ins_compl_insert_text(&text[compl_len..]);
             }
@@ -363,14 +367,14 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
     compl_num_bests.set(0);
     compl_ins_end_col.set(ColNr::ZERO);
 
-    if c == Ctrl_C && cmdwin_type.get() != 0 {
+    if c == Key::CTRL_C && cmdwin_type.get() != 0 {
         // Avoid the popup menu remaining displayed when leaving the
         // command line window.
         let _ = update_screen();
     }
 
     // Indent now if a key was typed that is in 'cinkeys'.
-    if want_cindent && in_cinkeys(KEY_COMPLETE, ' ' as c_int, inindent(0)) {
+    if want_cindent && in_cinkeys(KEY_COMPLETE, c_int::from(b' '), inindent(0)) {
         do_c_expr_indent();
     }
     // Trigger the CompleteDone event to give scripts a chance to act upon
@@ -382,57 +386,59 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
 
 /// Cancel completion.
 pub fn ins_compl_cancel() -> bool {
-    ins_compl_stop(' ' as c_int, ctrl_x_mode.get(), true)
+    ins_compl_stop(Key::SPACE, ctrl_x_mode.get(), true)
 }
 
 /// Prepare for Insert mode completion, or stop it; called just after typing a
 /// character in Insert mode.
 ///
 /// Answers true when `c` is not to be inserted.
-pub fn ins_compl_prep(c: c_int) -> bool {
+pub fn ins_compl_prep(c: Key) -> bool {
     let mut retval = false;
     let prev_mode = ctrl_x_mode.get();
 
     // Forget any previous 'special' messages if this is actually a ^X mode
     // key — bar ^R, in which case we wait to see what it gives us.
-    if c != Ctrl_R && vim_is_ctrl_x_key(c) {
+    if c != Key::CTRL_R && vim_is_ctrl_x_key(c) {
         edit_submode_extra.set(None);
     }
 
     // Ignore end of Select mode mapping and mouse scroll/movement.
     if matches!(
-        SpecialKey::try_from(c),
-        Ok(SpecialKey::Select
-            | SpecialKey::Mousedown
-            | SpecialKey::Mouseup
-            | SpecialKey::Mouseleft
-            | SpecialKey::Mouseright
-            | SpecialKey::Mousemove
-            | SpecialKey::Event
-            | SpecialKey::Command
-            | SpecialKey::Lua)
+        c.special(),
+        Some(
+            SpecialKey::Select
+                | SpecialKey::Mousedown
+                | SpecialKey::Mouseup
+                | SpecialKey::Mouseleft
+                | SpecialKey::Mouseright
+                | SpecialKey::Mousemove
+                | SpecialKey::Event
+                | SpecialKey::Command
+                | SpecialKey::Lua
+        )
     ) {
         return retval;
     }
 
-    if ctrl_x_mode.get() == CTRL_X_CMDLINE_CTRL_X && c != Ctrl_X {
-        if c == Ctrl_V
-            || c == Ctrl_Q
-            || c == Ctrl_Z
+    if ctrl_x_mode.get() == CTRL_X_CMDLINE_CTRL_X && c != Key::CTRL_X {
+        if c == Key::CTRL_V
+            || c == Key::CTRL_Q
+            || c == Key::CTRL_Z
             || ins_compl_pum_key(c)
             || !vim_is_ctrl_x_key(c)
         {
             // Not starting another completion mode.
             ctrl_x_mode.set(CTRL_X_CMDLINE);
             // CTRL-X CTRL-Z should stop completion without inserting anything.
-            if c == Ctrl_Z {
+            if c == Key::CTRL_Z {
                 retval = true;
             }
         } else {
             ctrl_x_mode.set(CTRL_X_CMDLINE);
             // Other CTRL-X keys first stop completion, then start another
             // completion mode.
-            ins_compl_prep(' ' as c_int);
+            ins_compl_prep(Key::SPACE);
             ctrl_x_mode.set(CTRL_X_NOT_DEFINED_YET);
         }
     }
@@ -466,9 +472,9 @@ pub fn ins_compl_prep(c: c_int) -> bool {
         // back to showing what mode we are in.
         redraw_mode.set(true);
         if (ctrl_x_mode_normal()
-            && c != Ctrl_N
-            && c != Ctrl_P
-            && c != Ctrl_R
+            && c != Key::CTRL_N
+            && c != Key::CTRL_P
+            && c != Key::CTRL_R
             && !ins_compl_pum_key(c))
             || ctrl_x_mode.get() == CTRL_X_FINISHED
         {
@@ -559,30 +565,27 @@ pub fn ins_compl_check_keys(frequency: c_int, in_compl_func: bool) {
 
     // Check for a typed key.  Do use mappings, otherwise
     // vim_is_ctrl_x_key() can't do its work correctly.
-    let mut c = vpeekc_any().code();
-    if c != NUL && !test_disable_char_avail.get() {
-        if vim_is_ctrl_x_key(c) && c != Ctrl_X && c != Ctrl_R {
-            c = safe_vgetc().code(); // Eat the character
+    let mut c = vpeekc_any();
+    if !c.is_nul() && !test_disable_char_avail.get() {
+        if vim_is_ctrl_x_key(c) && c != Key::CTRL_X && c != Key::CTRL_R {
+            c = safe_vgetc(); // Eat the character
             compl_shows_dir.set(ins_compl_key2dir(c));
             let (repeat, allow_get) = (
                 ins_compl_key2count(c),
-                !matches!(
-                    SpecialKey::try_from(c),
-                    Ok(SpecialKey::Up | SpecialKey::Down)
-                ),
+                !matches!(c.special(), Some(SpecialKey::Up | SpecialKey::Down)),
             );
             ins_compl_next(false, repeat, allow_get);
         } else {
             // Need to get the character to have KeyTyped set.  We'll put it
             // back with vungetc() below.  But skip K_IGNORE.
-            c = safe_vgetc().code();
-            if c != SpecialKey::Ignore.code() {
+            c = safe_vgetc();
+            if c != SpecialKey::Ignore {
                 // Don't interrupt completion when the character wasn't
                 // typed, e.g. when doing @q to replay keys.
-                if c != Ctrl_R && KeyTyped.get() {
+                if c != Key::CTRL_R && KeyTyped.get() {
                     compl_interrupted.set(true);
                 }
-                vungetc(Key::from_code(c));
+                vungetc(c);
             }
         }
     } else {

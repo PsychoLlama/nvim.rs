@@ -94,9 +94,7 @@ pub const kWinSplitLeft: WinSplit = 0;
 pub const kZIndexCmdlinePopupMenu: c_uint = 250;
 pub const kZIndexPopupMenu: c_uint = 100;
 pub const kZIndexFloatDefault: c_uint = 50;
-pub const CPT_MENU: c_uint = 2;
-pub const CPT_KIND: c_uint = 1;
-pub const CPT_ABBR: c_uint = 0;
+pub(crate) use crate::insexpand::{CPT_ABBR, CPT_KIND, CPT_MENU};
 pub const DEFAULT_GRID_HANDLE: c_int = 1;
 
 // The menu's state. Every one of these is written by one of the placement

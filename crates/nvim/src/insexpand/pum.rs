@@ -7,6 +7,13 @@
 //! `CompleteChanged` with the selected item.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::autocmd::fire_autocmds;
@@ -15,6 +22,7 @@ use crate::guard::{Allow, Lock};
 use crate::memline::Lines;
 use crate::memory::XString;
 use crate::message::msg;
+use crate::narrow::len_as_int;
 use crate::tr;
 use crate::types::{IOSIZE, ShmFlag};
 use crate::winlayer::Buf;
@@ -68,7 +76,7 @@ impl ComplMatchArray {
     /// The number of items.
     #[cfg(test)]
     pub(crate) fn len(self) -> c_int {
-        COMPL_MATCH_ARRAY.with(|array| array.ids.len()) as c_int
+        len_as_int(COMPL_MATCH_ARRAY.with(|array| array.ids.len()))
     }
 
     /// The index of the row built from match `id`.
@@ -98,11 +106,11 @@ impl ComplMatchArray {
 }
 
 /// The highlight attribute for the inserted-but-not-accepted text at
-/// `lnum`/`col`, or −1 where there is none.
-pub fn ins_compl_col_range_attr(lnum: LineNr, col: c_int) -> c_int {
+/// `lnum`/`col`, where there is one.
+pub fn ins_compl_col_range_attr(lnum: LineNr, col: c_int) -> Option<c_int> {
     let (preinsert, longest) = (ins_compl_has_preinsert(), ins_compl_preinsert_longest());
     if cot_fuzzy() || (!compl_hi_on_autocompl_longest.get() && longest) {
-        return -1;
+        return None;
     }
     // Either kind of preview takes `PreInsert`; only an accepted match that
     // has not been confirmed yet takes `ComplMatchIns`.
@@ -113,22 +121,19 @@ pub fn ins_compl_col_range_attr(lnum: LineNr, col: c_int) -> c_int {
     };
     let attr = syn_name2attr(name);
     if attr == 0 {
-        return -1;
+        return None;
     }
 
-    let start_col = compl_col.get() + ins_compl_leader_len() as c_int;
+    let start_col = compl_col.get() + len_as_int(ins_compl_leader_len());
     if !ins_compl_has_multiple() {
-        return if col >= start_col.get() && col < compl_ins_end_col.get().get() {
-            attr
-        } else {
-            -1
-        };
+        let inside = col >= start_col.get() && col < compl_ins_end_col.get().get();
+        return inside.then_some(attr);
     }
     let cursor_lnum = Win::current().w_cursor.lnum;
     let inside = (lnum == compl_lnum.get() && col >= start_col.get() && col < MAXCOL)
         || (lnum > compl_lnum.get() && lnum < cursor_lnum)
         || (lnum == cursor_lnum && col <= compl_ins_end_col.get().get());
-    if inside { attr } else { -1 }
+    inside.then_some(attr)
 }
 
 /// Take the popup menu down and drop the item array it was built from.
@@ -208,7 +213,7 @@ fn match_position_message(number: c_int, total: c_int) -> XString {
 
 /// Build `dest` by prepending the buffer text from `startcol` to `compl_col`
 /// to `src`.
-pub(crate) fn prepend_startcol_text(dest: ComplStr, src: ComplStr, startcol: c_int) {
+pub(crate) fn prepend_startcol_text(dest: ComplStr, src: ComplStr, startcol: ColNr) {
     let prepend_len = usize::try_from(compl_col.get() - startcol).unwrap_or(0);
     let new_length = prepend_len + src.len();
 
@@ -244,7 +249,7 @@ pub(crate) fn get_leader_for_startcol(match_0: MatchId, cached: bool) -> ComplSt
         let Some(cpt_idx) = match_0.with(ComplItem::cpt_source) else {
             break 'theend;
         };
-        let startcol = cpt_sources().row(cpt_idx as c_int).cs_startcol;
+        let startcol = cpt_sources().row_at(cpt_idx).cs_startcol;
 
         if compl_leader().is_unset() {
             // The leader is not set yet (`'autocomplete'` fires before
@@ -253,7 +258,7 @@ pub(crate) fn get_leader_for_startcol(match_0: MatchId, cached: bool) -> ComplSt
             // *before* it carry pre-`compl_col` text that must not be
             // compared with the original text, so the empty
             // `compl_leader` is returned to mean "no prefix filter".
-            if startcol < 0 || startcol >= compl_col.get().get() {
+            if startcol.is_none_or(|start| start >= compl_col.get()) {
                 return compl_orig_text();
             }
             return compl_leader();
@@ -262,13 +267,10 @@ pub(crate) fn get_leader_for_startcol(match_0: MatchId, cached: bool) -> ComplSt
         if compl_col.get() <= ColNr::ZERO {
             break 'theend;
         }
-        if startcol >= 0 && startcol < compl_col.get().get() {
-            let prepend_len = compl_col.get() - startcol;
-            let new_length = prepend_len + compl_leader().len() as c_int;
-            if cached
-                && new_length.as_usize() == adjusted_leader().len()
-                && !adjusted_leader().is_unset()
-            {
+        if let Some(startcol) = startcol.filter(|&start| start < compl_col.get()) {
+            let prepend_len = usize::try_from(compl_col.get() - startcol).unwrap_or(0);
+            let new_length = prepend_len + compl_leader().len();
+            if cached && new_length == adjusted_leader().len() && !adjusted_leader().is_unset() {
                 return adjusted_leader();
             }
             adjusted_leader().clear();
@@ -281,8 +283,8 @@ pub(crate) fn get_leader_for_startcol(match_0: MatchId, cached: bool) -> ComplSt
 
 /// Build `compl_match_array` from the match list.
 ///
-/// Returns the entry that should be selected, or −1 for none.
-pub(crate) fn ins_compl_build_pum() -> c_int {
+/// Returns the entry that should be selected, if any.
+pub(crate) fn ins_compl_build_pum() -> Option<c_int> {
     // Under a user completion function with `refresh: 'always'` the leader
     // is not a prefix filter, so drop it.
     //
@@ -328,7 +330,7 @@ pub(crate) fn ins_compl_build_pum() -> c_int {
     let mut did_find_shown_match = false;
     let mut shown_compl: Option<MatchId> = None;
     let mut i = 0;
-    let mut cur = -1;
+    let mut cur = None;
 
     // How many matches each `'complete'` source has in the menu so far.
     let mut match_count = vec![
@@ -370,7 +372,7 @@ pub(crate) fn ins_compl_build_pum() -> c_int {
                 && let Some(count) = match_count.get_mut(source)
             {
                 *count += 1;
-                let max_matches = cpt_sources().row(source as c_int).cs_max_matches;
+                let max_matches = cpt_sources().row_at(source).cs_max_matches;
                 if max_matches > 0 && *count > max_matches {
                     match_limit_exceeded = true;
                 }
@@ -392,13 +394,13 @@ pub(crate) fn ins_compl_build_pum() -> c_int {
                         // shown match turns out to be just below it.
                         shown_compl = Some(comp);
                     }
-                    cur = i;
+                    cur = Some(i);
                 } else if cot_fuzzy() {
                     if i == 0 {
                         shown_compl = Some(comp);
                     }
                     if !shown_match_ok && shown_match() == Some(comp) {
-                        cur = i;
+                        cur = Some(i);
                         shown_match_ok = true;
                     }
                 }
@@ -424,13 +426,13 @@ pub(crate) fn ins_compl_build_pum() -> c_int {
 
     if shown_in_menu.is_empty() {
         compl_match_array().clear();
-        return -1;
+        return None;
     }
 
     if cot_fuzzy() && !compl_no_select && !shown_match_ok {
         compl_shown_match.set(shown_compl);
         shown_match_ok = true;
-        cur = 0;
+        cur = Some(0);
     }
 
     // Collected straight into the shared array: one allocation, not a
@@ -438,7 +440,7 @@ pub(crate) fn ins_compl_build_pum() -> c_int {
     let array: Rc<[PumItem]> = MATCHES.with(|list| {
         let item = |id: MatchId| {
             let m = list.get(id);
-            let extra = |which: c_int| m.extra[which as usize].clone();
+            let extra = |which: usize| m.extra[which].clone();
             PumItem {
                 pum_text: extra(CPT_ABBR).unwrap_or_else(|| m.text.clone()),
                 pum_kind: extra(CPT_KIND),
@@ -455,7 +457,7 @@ pub(crate) fn ins_compl_build_pum() -> c_int {
 
     if !shown_match_ok {
         // No displayed match at all.
-        cur = -1;
+        cur = None;
     }
     cur
 }
@@ -470,18 +472,20 @@ pub fn ins_compl_show_pum() {
     // Update the screen before drawing the popup menu over it.
     let _ = update_screen();
 
-    let mut cur = -1;
     let mut array_changed = false;
 
-    if compl_match_array().is_unset() {
+    // The item to select, as the menu (and `complete_info()`, and the UI)
+    // count it: -1 is "none".
+    let cur = if compl_match_array().is_unset() {
         array_changed = true;
-        cur = ins_compl_build_pum();
-    } else if let Some(shown) = shown_match() {
+        ins_compl_build_pum()
+    } else {
         // The menu already exists; only the current item has to be found.
-        if let Some(i) = compl_match_array().position_of(shown) {
-            cur = i as c_int;
-        }
+        shown_match()
+            .and_then(|shown| compl_match_array().position_of(shown))
+            .map(len_as_int)
     }
+    .unwrap_or(-1);
 
     if compl_match_array().is_unset() {
         if compl_started.get() && has_event(AutoEvent::CompleteChanged) {
@@ -639,8 +643,9 @@ pub(crate) fn ins_compl_show_statusmsg() {
         None => msg_clr_cmdline(),
         Some(extra) if !p_smd() => {
             msg_hist_off.set(true);
-            let attr = if (edit_submode_highl.get() as c_uint) < HLF_COUNT as c_uint {
-                edit_submode_highl.get() as c_int + 1
+            let highl = edit_submode_highl.get();
+            let attr = if (0..HLF_COUNT).contains(&highl) {
+                highl + 1
             } else {
                 0
             };

@@ -1,12 +1,17 @@
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::memory::XString;
 use crate::types::AutoEvent;
-use crate::types::CAR;
-use crate::types::NL;
 use crate::types::TAB;
 use core::ffi::{CStr, c_int, c_uint};
 
@@ -50,9 +55,7 @@ use crate::highlight_group::{HLF_COUNT, HLF_E, HLF_R, HLF_W, syn_name2attr};
 use crate::indent::{get_indent, inindent};
 use crate::indent_c::{cindent_on, do_c_expr_indent, in_cinkeys};
 use crate::lua::executor::nlua_expand_pat;
-use crate::mbyte::{
-    c_cluster_len, mb_islower, mb_isupper, mb_tolower, mb_toupper, utf_char2len, utf8len_tab,
-};
+use crate::mbyte::{c_cluster_len, mb_islower, mb_isupper, mb_tolower, mb_toupper, utf8len_tab};
 use crate::memline::{dec, ml_delete};
 use crate::message::state::{did_emsg, emsg_silent, in_assert_fails, msg_hist_off};
 use crate::message::{e_invarg, e_listreq, e_patnotf};
@@ -115,7 +118,7 @@ pub use self::mode::*;
 mod matchlist;
 pub use self::matchlist::*;
 mod text;
-pub use self::text::*;
+pub(crate) use self::text::*;
 mod pum;
 pub use self::pum::*;
 mod sources;
@@ -175,7 +178,7 @@ pub(crate) struct ComplItem {
     /// The text the match inserts.
     pub(crate) text: XString,
     /// `abbr`, `kind`, `menu` and `info`, indexed by `CPT_*`; never empty.
-    pub(crate) extra: [Option<XString>; CPT_COUNT as usize],
+    pub(crate) extra: [Option<XString>; CPT_COUNT],
     /// The `user_data` a completion function handed over.
     pub(crate) user_data: TypVal,
     /// The file the match came from. Shared with the match added before it
@@ -218,25 +221,32 @@ impl ComplItem {
 }
 pub const CP_ICASE: ::core::ffi::c_int = 16;
 pub const CP_ORIGINAL_TEXT: ::core::ffi::c_int = 1;
-pub const CPT_COUNT: ::core::ffi::c_int = 4;
 pub const CP_FAST: ::core::ffi::c_int = 32;
 pub const CP_CONT_S_IPOS: ::core::ffi::c_int = 4;
-pub const CPT_INFO: ::core::ffi::c_int = 3;
-pub const CPT_KIND: ::core::ffi::c_int = 1;
-pub const CPT_MENU: ::core::ffi::c_int = 2;
-pub const CPT_ABBR: ::core::ffi::c_int = 0;
+/// The four strings a match carries beside its text, as indices into its
+/// `extra`; the first three are also the popup menu's column kinds, in
+/// `'completeitemalign'`'s default order.
+pub const CPT_ABBR: usize = 0;
+pub const CPT_KIND: usize = 1;
+pub const CPT_MENU: usize = 2;
+pub const CPT_INFO: usize = 3;
+pub const CPT_COUNT: usize = 4;
 #[derive(Copy, Clone)]
 pub struct CptSource {
     pub cs_refresh_always: bool,
-    pub cs_startcol: ::core::ffi::c_int,
+    /// Where a `'complete'` function said its matches start; `None` when
+    /// it declined (its `findstart` answered -2 or -3, or it failed) or the
+    /// entry is not a function.
+    pub cs_startcol: Option<ColNr>,
     pub cs_max_matches: ::core::ffi::c_int,
     pub compl_start_tv: uint64_t,
-    pub cs_flag: ::core::ffi::c_char,
+    /// The entry's source letter (`.`, `w`, `b`, `u`, `U`, `k`, ...).
+    pub cs_flag: u8,
 }
 /// A zeroed `CptSource`, which is what `xcalloc` left every row as.
 pub(crate) const CPT_SOURCE_INIT: CptSource = CptSource {
     cs_refresh_always: false,
-    cs_startcol: 0,
+    cs_startcol: Some(ColNr::ZERO),
     cs_max_matches: 0,
     compl_start_tv: 0,
     cs_flag: 0,
@@ -319,8 +329,6 @@ pub(crate) const SAVE_V_EVENT_INIT: SaveVEvent = SaveVEvent {
     sve_hashtab: HashTab::new(),
 };
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
 pub const CTRL_X_WANT_IDENT: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;
 /// Message for CTRL-X mode, indexed by `ctrl_x_mode` with `CTRL_X_WANT_IDENT`
 /// masked off (C's `CTRL_X_MSG(i)` macro; see `ctrl_x_msg`). `None` is
@@ -761,7 +769,7 @@ state_record! {
     /// The completion is `'autocomplete'`'s.
     compl_autocomplete: bool = false;
     /// The time budget of one `'complete'` source.
-    compl_timeout_ms: uint64_t = COMPL_INITIAL_TIMEOUT_MS as uint64_t;
+    compl_timeout_ms: uint64_t = COMPL_INITIAL_TIMEOUT_MS.cast_unsigned();
     /// The current source ran out of time.
     compl_time_slice_expired: bool = false;
     /// The completion started after a non-keyword character.
@@ -801,7 +809,9 @@ state_record! {
     SCAN: InsComplNextState = INS_COMPL_NEXT_STATE_INIT;
 }
 
-pub const COMPL_INITIAL_TIMEOUT_MS: ::core::ffi::c_int = 80 as ::core::ffi::c_int;
+/// A `'complete'` source's first time budget, in milliseconds, as
+/// `'autocompletetimeout'` counts it.
+pub(crate) const COMPL_INITIAL_TIMEOUT_MS: OptInt = 80;
 pub const COMPL_MIN_TIMEOUT_MS: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
 pub const COMPL_FUNC_TIMEOUT_MS: ::core::ffi::c_int = 300 as ::core::ffi::c_int;
 pub const COMPL_FUNC_TIMEOUT_NON_KW_MS: ::core::ffi::c_int = 1000 as ::core::ffi::c_int;

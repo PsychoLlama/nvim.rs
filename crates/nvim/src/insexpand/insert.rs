@@ -7,12 +7,19 @@
 //! out.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::mbyte::{char_at, char_len, cluster_len};
 use crate::memline::Lines;
 use crate::narrow::len_as_int;
-use crate::types::{OK, VarLock};
+use crate::types::VarLock;
 use crate::winlayer::{Buf, Win};
 
 /// The bytes `from .. to` of the cursor line, as a completion string.
@@ -33,7 +40,7 @@ pub(crate) fn ins_compl_insert_text(text: &[u8]) {
 /// `text` from where the typed part of it ends: the part a completion
 /// still has to insert. Upstream offsets the pointer unchecked.
 pub(crate) fn untyped_part(text: &[u8]) -> &[u8] {
-    &text[(get_compl_len() as usize).min(text.len())..]
+    &text[get_compl_len().min(text.len())..]
 }
 
 /// Insert `prefix` as the completion, and redraw.
@@ -90,7 +97,7 @@ pub(crate) fn fuzzy_longest_match() {
     // The best matches, from a list `ins_compl_make_cyclic` has closed; a
     // shorter list than expected simply yields fewer candidates.
     let best: Vec<MatchId> = ::core::iter::successors(Some(start), |m| m.next())
-        .take(num_bests as usize)
+        .take(usize::try_from(num_bests).unwrap_or(0))
         .collect();
     let prefix = best[0].text_copy();
     let prefix_len = MATCHES.with(|list| {
@@ -156,7 +163,7 @@ pub fn ins_compl_delete(new_leader: bool) {
             l += char_len(&leader[l..]);
             o += char_len(&orig[o..]);
         }
-        orig_col = o as c_int;
+        orig_col = len_as_int(o);
     }
 
     // In insert mode: delete the typed part.
@@ -168,7 +175,7 @@ pub fn ins_compl_delete(new_leader: bool) {
             orig_col
         };
     if ins_compl_preinsert_effect() {
-        col += ins_compl_leader_len() as c_int;
+        col += len_as_int(ins_compl_leader_len());
         Win::current().w_cursor.col = compl_ins_end_col.get();
     }
 
@@ -243,7 +250,7 @@ pub(crate) fn insert_chars(text: &[u8]) {
 pub fn ins_compl_insert(move_cursor: bool, insert_prefix: bool) {
     // Upstream dereferences `compl_shown_match` here without checking.
     let shown = shown_match().expect("a running completion has a shown match");
-    let compl_len = get_compl_len() as usize;
+    let compl_len = get_compl_len();
     let preinsert = ins_compl_has_preinsert();
     let leader_len = ins_compl_leader_len();
     // What to insert: `len` bytes of `text` from `start`. A copy, because
@@ -266,9 +273,9 @@ pub fn ins_compl_insert(move_cursor: bool, insert_prefix: bool) {
         if let Some(cpt_idx) = cpt_idx
             && compl_col.get() >= ColNr::ZERO
         {
-            let startcol = cpt_sources().row(cpt_idx as c_int).cs_startcol;
-            if startcol >= 0 && startcol < compl_col.get().get() {
-                let skip = (compl_col.get() - startcol).as_usize();
+            let startcol = cpt_sources().row_at(cpt_idx).cs_startcol;
+            if let Some(startcol) = startcol.filter(|&start| start < compl_col.get()) {
+                let skip = usize::try_from(compl_col.get() - startcol).unwrap_or(0);
                 if skip <= len {
                     len -= skip;
                     start = skip;
@@ -317,13 +324,15 @@ pub fn ins_compl_insert(move_cursor: bool, insert_prefix: bool) {
 /// completions; without it, running out in the given direction does nothing.
 /// `advance` moves to the first match rather than showing the original text.
 ///
-/// Answers `OK`, or `-1` when the number of matches is still unknown.
+/// Answers whether it walked the whole way: `false` when it ran out of
+/// matches and was not allowed to look for more, so the number of matches is
+/// still unknown. `num_matches` gets the total when a search found it.
 pub(crate) fn find_next_completion_match(
     allow_get_expansion: bool,
     mut todo: c_int,
     advance: bool,
-    num_matches: &mut c_int,
-) -> c_int {
+    num_matches: &mut Option<c_int>,
+) -> bool {
     let mut found_end;
     let mut found_compl: Option<MatchId> = None;
     let has_preinsert = ins_compl_has_preinsert();
@@ -365,7 +374,7 @@ pub(crate) fn find_next_completion_match(
                         compl_pending.set(compl_pending.get() + (todo + 1));
                     }
                 }
-                return -1;
+                return false;
             }
 
             if !compl_no_select && advance {
@@ -428,11 +437,11 @@ pub(crate) fn find_next_completion_match(
             todo = 1; // use first usable match after wrapping around
         }
     }
-    OK
+    true
 }
 
 /// Fill in the next completion in the current direction; answers the total
-/// number of matches, or `-1` if still unknown.
+/// number of matches, or `None` while that is still unknown.
 ///
 /// `compl_curr_match` belongs to [`ins_compl_get_exp`] while it runs, so this
 /// works through `compl_shown_match`. It recurses at most once: first with
@@ -440,8 +449,12 @@ pub(crate) fn find_next_completion_match(
 /// back in with it false.
 ///
 /// `count` is at least 1; `insert_match` inserts the newly selected match.
-pub(crate) fn ins_compl_next(allow_get_expansion: bool, count: c_int, insert_match: bool) -> c_int {
-    let mut num_matches = -1;
+pub(crate) fn ins_compl_next(
+    allow_get_expansion: bool,
+    count: c_int,
+    insert_match: bool,
+) -> Option<c_int> {
+    let mut num_matches = None;
     let started = compl_started.get();
     // Taken as an identity, not an address: a completion function can wipe
     // the buffer and the allocator can hand the same address back, so the
@@ -456,9 +469,7 @@ pub(crate) fn ins_compl_next(allow_get_expansion: bool, count: c_int, insert_mat
 
     // When a user completion function answers -1 for findstart, which is
     // the next time round with 'always', compl_shown_match becomes NULL.
-    let Some(shown) = shown_match() else {
-        return -1;
-    };
+    let shown = shown_match()?;
 
     if !compl_leader().is_unset() && !shown.is_original() && !cot_fuzzy() {
         ins_compl_update_shown_match();
@@ -481,14 +492,14 @@ pub(crate) fn ins_compl_next(allow_get_expansion: bool, count: c_int, insert_mat
 
     // Repeat this for when <PageUp> or <PageDown> is typed.  But don't
     // wrap around.
-    if find_next_completion_match(allow_get_expansion, count, advance, &mut num_matches) == -1 {
-        return -1;
+    if !find_next_completion_match(allow_get_expansion, count, advance, &mut num_matches) {
+        return None;
     }
 
     if Buf::current().id() != orig_curbuf {
         // In case some completion function switched buffer, don't insert
         // the completion elsewhere.
-        return -1;
+        return None;
     }
 
     // Insert the text of the new completion, or the compl_leader.

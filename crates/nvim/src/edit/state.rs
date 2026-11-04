@@ -447,7 +447,7 @@ pub(crate) fn insert_execute(s: &mut InsertState, key: Key) -> Step {
         }
         s.count = 0;
         s.nomove = true;
-        ins_compl_prep(Key::ESC.code());
+        ins_compl_prep(Key::ESC);
         return Step::Leave;
     }
     if key == SpecialKey::Ignore || key == SpecialKey::Nop {
@@ -465,7 +465,7 @@ pub(crate) fn insert_execute(s: &mut InsertState, key: Key) -> Step {
     }
 
     ins_compl_init_get_longest();
-    if ins_compl_prep(s.c.code()) {
+    if ins_compl_prep(s.c) {
         return Step::Go;
     }
 
@@ -565,7 +565,7 @@ fn compl_takes_key(s: &mut InsertState) -> bool {
     if (s.c == SpecialKey::Bs || s.c == Key::CTRL_H)
         && Win::current().w_cursor.col > ins_compl_col()
     {
-        s.c = Key::from_code(ins_compl_bs());
+        s.c = ins_compl_bs();
         if s.c.is_nul() {
             return true;
         }
@@ -584,13 +584,13 @@ fn compl_takes_key(s: &mut InsertState) -> bool {
     // An ordinary character extends the leader.  `InsertCharPre` may
     // replace it with a whole string, which goes in a character at a
     // time.
-    if ins_compl_accept_char(s.c.code()) {
+    if ins_compl_accept_char(s.c) {
         match do_insert_char_pre(s.c) {
-            None => ins_compl_addleader(s.c.code()),
+            None => ins_compl_addleader(s.c),
             Some(text) => {
                 let mut at = 0;
                 while at < text.len() {
-                    ins_compl_addleader(char_at(&text[at..]));
+                    ins_compl_addleader(Key::from_code(char_at(&text[at..])));
                     at += c_cluster_len(&text[at..]);
                 }
             }
@@ -623,7 +623,7 @@ pub(crate) fn insert_do_complete(s: &mut InsertState) {
     compl_busy.set(true);
     // Folds must not be updated while the popup menu is being built.
     let folds_frozen = Suppress::fold_update();
-    if ins_complete(s.c.code(), true).is_err() {
+    if ins_complete(s.c, true).is_err() {
         compl_status_clear();
     }
     drop(folds_frozen);
