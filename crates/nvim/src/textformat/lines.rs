@@ -37,7 +37,6 @@ use crate::option::was_set_insecurely;
 use crate::options::kOptFormatexpr;
 use crate::optionstr::OptString;
 use crate::os::input::line_breakcheck;
-use crate::pos::MAXCOL;
 use crate::search::check_linecomment;
 use crate::state::mode::{State, saved_cursor};
 use crate::state::{MODE_INSERT, MODE_NORMAL};
@@ -329,7 +328,7 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
                     .flags
                     .is_none_or(|flags| !flags.with_rest(|rest| rest.starts_with(b"://")))
                     || check_linecomment(Lines::current().line(Win::current().w_cursor.lnum))
-                        == MAXCOL
+                        .is_none()
                 {
                     is_end_par = true;
                 }

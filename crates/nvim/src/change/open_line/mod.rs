@@ -436,9 +436,8 @@ pub fn open_line(
             && (!has_format_option(FoFlag::NO_OPEN_COMS) || flags & OPENLINE_FORMAT != 0)
         {
             // A line comment after code: `code(); // why`.
-            comment_start = check_linecomment(head);
-            if comment_start != MAXCOL {
-                let from = usize::try_from(comment_start).unwrap_or(0);
+            if let Some(from) = check_linecomment(head) {
+                comment_start = len_as_int(from);
                 let (len, tried) = get_leader_len(&head[from..], false, true);
                 // One out-parameter for both scans upstream: a scan that
                 // tried nothing leaves the first one's answer.

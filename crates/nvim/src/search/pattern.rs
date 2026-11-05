@@ -10,6 +10,13 @@
 //! search of their own without disturbing what the user last typed.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -20,6 +27,7 @@ use crate::guard::Suppress;
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::memory::XString;
 use crate::optionstr::OptString;
+use crate::regexp::low_byte;
 use crate::regexp::{RE_BOTH, RE_LAST, RE_MAGIC, RE_SEARCH, RE_SUBST};
 use crate::search::{SEARCH_HIS, SEARCH_KEEP, SEARCH_START};
 use crate::shada::ShadaExtra;
@@ -77,8 +85,8 @@ const fn no_pattern(magic: bool, dir: c_char) -> SearchPattern {
 /// The pair is also the interchange with ShaDa, which hands a slot over
 /// wholesale ([`shada_set_pattern`]).
 pub(crate) static spats: GlobalCell<[SearchPattern; 2]> = GlobalCell::new([
-    no_pattern(true, b'/' as c_char),
-    no_pattern(true, b'/' as c_char),
+    no_pattern(true, b'/'.cast_signed()),
+    no_pattern(true, b'/'.cast_signed()),
 ]);
 
 /// Which of [`spats`] was used most recently — the one `RE_LAST` means.
@@ -468,7 +476,7 @@ pub fn pat_has_uppercase(pat: &[u8]) -> bool {
 
 /// Reset the search direction to forwards. For `gd` and `gD`.
 pub fn reset_search_dir() {
-    update_spat(RE_SEARCH, |spat| spat.off.dir = b'/' as c_char);
+    update_spat(RE_SEARCH, |spat| spat.off.dir = b'/'.cast_signed());
     set_vv_searchforward();
 }
 
@@ -487,7 +495,7 @@ pub fn set_last_search_pat(s: &[u8], idx: c_int, magic: bool, setlast: bool) {
             no_scs: false,
             timestamp: os_time(),
             off: SearchOffset {
-                dir: b'/' as c_char,
+                dir: b'/'.cast_signed(),
                 ..NO_OFFSET
             },
             additional_data: None,
@@ -526,13 +534,13 @@ pub fn last_pat_prog(regmatch: &mut RegMMatch) {
 /// Set the direction `n` repeats in, for `:let v:searchforward =`.
 pub fn set_search_direction(cdir: c_int) {
     // The direction is `/` or `?`, a byte.
-    let dir = cdir as c_char;
+    let dir = low_byte(cdir).cast_signed();
     update_spat(RE_SEARCH, |spat| spat.off.dir = dir);
 }
 
 /// Publish the search direction as `v:searchforward`.
 pub(crate) fn set_vv_searchforward() {
-    let forward = with_spat(RE_SEARCH, |spat| spat.off.dir == b'/' as c_char);
+    let forward = with_spat(RE_SEARCH, |spat| spat.off.dir == b'/'.cast_signed());
     set_vim_var_nr(Vv::Searchforward, VarNumber::from(forward));
 }
 

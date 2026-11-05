@@ -10,6 +10,13 @@
 //! lines it is continued over.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::change::leader_len_of;
@@ -17,12 +24,11 @@ use crate::cstr;
 use crate::fileio::Fgets;
 use crate::highlight_group::HLF_N;
 use crate::mbyte::strnicmp_in;
-use crate::types::NUL;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 
-const FIND_DEFINE: c_int = super::FIND_DEFINE as c_int;
-const ACTION_SHOW_ALL: c_int = super::ACTION_SHOW_ALL as c_int;
+const FIND_DEFINE: c_int = super::FIND_DEFINE.cast_signed();
+const ACTION_SHOW_ALL: c_int = super::ACTION_SHOW_ALL.cast_signed();
 const LSIZE: usize = super::LSIZE as usize;
 
 /// Whether a match at `startp` is really in code rather than in a
@@ -47,7 +53,7 @@ pub(crate) fn match_is_code(line: &CStr, startp: usize) -> bool {
     let lead = skip::white(bytes);
     if matched || (at(lead) == b'/' && at(lead + 1) == b'*') || at(lead) == b'*' {
         let mut p = 0;
-        while at(p) != NUL as u8 && p < startp {
+        while at(p) != b'\0' && p < startp {
             if matched && at(p) == b'/' {
                 let next = at(p + 1);
                 if next == b'*' || next == b'/' {
@@ -94,8 +100,7 @@ pub(crate) fn match_on_line(
         // so skip to it before testing, and don't let the match run
         // past the end of that identifier.
         p = pats.def.ends[0].unwrap_or(0);
-        while cstr::byte_at(bytes, p) != NUL as u8
-            && !vim_iswordc(c_int::from(cstr::byte_at(bytes, p)))
+        while cstr::byte_at(bytes, p) != b'\0' && !vim_iswordc(c_int::from(cstr::byte_at(bytes, p)))
         {
             p += 1;
         }

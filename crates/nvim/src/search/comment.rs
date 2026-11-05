@@ -8,14 +8,19 @@
 //! formatting and C-indent code ask.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::charset::skip;
 use crate::cstr::byte_at;
 use crate::memline::Lines;
-use crate::pos::MAXCOL;
 use crate::winlayer::Buf;
-use core::ffi::c_int;
 
 /// Whether a raw string starting at `linep[startpos.col - 1]` ends
 /// between `startpos` and `endpos`.
@@ -64,24 +69,22 @@ pub(crate) fn find_rawstring_end(lines: &mut Lines, startpos: &Pos, endpos: &Pos
 // Line-level helpers, shared with the indent and formatting code.
 // ---------------------------------------------------------------------
 
-/// The column a `//` comment starts at on `line`, or `MAXCOL`.
+/// The byte column a `//` comment starts at on `line`, if it has one.
 ///
 /// With `'lisp'` set the comment character is `;` instead, and neither a
 /// `#\;` nor a `;` inside a string counts.
-pub fn check_linecomment(line: &[u8]) -> c_int {
+pub fn check_linecomment(line: &[u8]) -> Option<usize> {
     // `at` scans from the start; a byte read past the end is the line's own
     // terminator, which stops every test below.
     let mut at = 0usize;
     if Buf::current().b_p_lisp != 0 {
         // Skip Lispish one-line comments.
         if !line.contains(&b';') {
-            return MAXCOL; // there are no comments
+            return None; // there are no comments
         }
         let mut in_str = false; // inside of a string
         loop {
-            let Some(off) = line[at..].iter().position(|&b| b == b'"' || b == b';') else {
-                return MAXCOL;
-            };
+            let off = line[at..].iter().position(|&b| b == b'"' || b == b';')?;
             at += off;
             if line[at] == b'"' {
                 if in_str {
@@ -104,9 +107,7 @@ pub fn check_linecomment(line: &[u8]) -> c_int {
         }
     } else {
         loop {
-            let Some(off) = line[at..].iter().position(|&b| b == b'/') else {
-                return MAXCOL;
-            };
+            let off = line[at..].iter().position(|&b| b == b'/')?;
             at += off;
             // Accept a double '/', unless it is preceded by '*' and
             // followed by '*', because "*//*" ends one comment and
@@ -121,7 +122,7 @@ pub fn check_linecomment(line: &[u8]) -> c_int {
             at += 1;
         }
     }
-    at as c_int
+    Some(at)
 }
 
 /// Whether line `lnum` is empty or holds nothing but white space.

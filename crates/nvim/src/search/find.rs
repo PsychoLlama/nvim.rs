@@ -7,10 +7,18 @@
 //! unrelated plain-text line scanner insert-mode line completion uses.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::cstr;
 use crate::mbyte::{strcmp_ic_in, strnicmp_in};
+use crate::narrow::len_as_int;
 use crate::option::cpo_has;
 use crate::pos::MAXCOL;
 use crate::regexp::{LineMatcher, RE_SEARCH, walk_lines};
@@ -18,7 +26,7 @@ use crate::search::{
     SEARCH_COL, SEARCH_END, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG, SEARCH_NOOF, SEARCH_PEEK,
     SEARCH_START,
 };
-use crate::types::{CpoFlag, NUL, ShmFlag};
+use crate::types::{CpoFlag, ShmFlag};
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
 use core::ffi::c_int;
@@ -109,7 +117,7 @@ impl Searcher<'_, '_> {
     #[inline(always)]
     fn byte_at(&self, lnum: LineNr, col: ColNr) -> u8 {
         if lnum > self.buf.b_ml.ml_line_count {
-            return NUL as u8;
+            return b'\0';
         }
         cstr::byte_at(self.lines().line(lnum), usize::try_from(col).unwrap_or(0))
     }
@@ -194,7 +202,7 @@ impl Searcher<'_, '_> {
             if matchcol == ColNr::ZERO && self.opt(SEARCH_START) {
                 return true;
             }
-            if self.byte_at(lnum, matchcol) == NUL as u8 {
+            if self.byte_at(lnum, matchcol) == b'\0' {
                 return false;
             }
             *nmatched = self.exec(lnum, matchcol);
@@ -251,7 +259,7 @@ impl Searcher<'_, '_> {
                 }
                 self.step_over(at, found.start.col)
             };
-            if self.byte_at(at, matchcol) == NUL as u8 || {
+            if self.byte_at(at, matchcol) == b'\0' || {
                 *nmatched = self.exec(at, matchcol);
                 *nmatched == 0
             } {
@@ -321,7 +329,7 @@ impl Searcher<'_, '_> {
                 if line.len() <= col {
                     1
                 } else {
-                    cluster_len(&line[col..]) as c_int
+                    len_as_int(cluster_len(&line[col..]))
                 }
             } else {
                 1
@@ -522,7 +530,7 @@ impl Searcher<'_, '_> {
                     // first byte.
                     let col = usize::try_from(pos.col).unwrap_or(0);
                     let back = head_off(self.lines().line(pos.lnum), col);
-                    pos.col -= back as c_int;
+                    pos.col -= len_as_int(back);
                 }
             }
             (pos, found.start)

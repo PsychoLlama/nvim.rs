@@ -9,6 +9,13 @@
 //! counts as a match, and `'path'` is where the names are resolved.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::charset::is_word_at;
@@ -21,13 +28,14 @@ use crate::mbyte::c_cluster_len;
 use crate::memory::XString;
 use crate::message::msg_display_bytes;
 use crate::message_fmt::msg_cstr;
+use crate::narrow::len_as_int;
 use crate::option::vars::P_DEF;
 use crate::option::vars::P_INC;
 use crate::optionstr::{OptString, local_or_global};
 use crate::regexp::RE_MAGIC;
 use crate::smsg;
 use crate::strings::has_bytes;
-use crate::types::{IOSIZE, NUL, ShmFlag};
+use crate::types::{IOSIZE, ShmFlag};
 use crate::window::valid_win;
 use crate::winlayer::WinId;
 use crate::winlayer::{Buf, Win};
@@ -36,12 +44,12 @@ use std::ffi::OsStr;
 use std::fs::File;
 use std::os::unix::ffi::OsStrExt;
 
-const CHECK_PATH: c_int = super::CHECK_PATH as c_int;
-const FIND_DEFINE: c_int = super::FIND_DEFINE as c_int;
-const ACTION_SHOW: c_int = super::ACTION_SHOW as c_int;
-const ACTION_SPLIT: c_int = super::ACTION_SPLIT as c_int;
-const ACTION_SHOW_ALL: c_int = super::ACTION_SHOW_ALL as c_int;
-const ACTION_EXPAND: c_int = super::ACTION_EXPAND as c_int;
+const CHECK_PATH: c_int = super::CHECK_PATH.cast_signed();
+const FIND_DEFINE: c_int = super::FIND_DEFINE.cast_signed();
+const ACTION_SHOW: c_int = super::ACTION_SHOW.cast_signed();
+const ACTION_SPLIT: c_int = super::ACTION_SPLIT.cast_signed();
+const ACTION_SHOW_ALL: c_int = super::ACTION_SHOW_ALL.cast_signed();
+const ACTION_EXPAND: c_int = super::ACTION_EXPAND.cast_signed();
 const LSIZE: usize = super::LSIZE as usize;
 
 /// One file on the include stack.
@@ -97,7 +105,7 @@ impl FileStack {
     /// How deep the walk is inside included files; -1 in the buffer
     /// itself.
     fn depth(&self) -> c_int {
-        self.open.len() as c_int - 1
+        len_as_int(self.open.len()) - 1
     }
 
     /// Whether `name` has been searched already, and if so whether a
@@ -220,7 +228,7 @@ fn get_line_and_copy(lnum: LineNr) -> Vec<u8> {
     let mut lines = Lines::current();
     let line = lines.line(lnum);
     let mut copy = cstr::until_nul(&line[..line.len().min(LSIZE - 1)]).to_vec();
-    copy.push(NUL as u8);
+    copy.push(b'\0');
     copy
 }
 
@@ -228,7 +236,7 @@ fn get_line_and_copy(lnum: LineNr) -> Vec<u8> {
 fn read_line_copy(mut read: Vec<u8>) -> Vec<u8> {
     let end = cstr::until_nul(&read).len();
     read.truncate(end);
-    read.push(NUL as u8);
+    read.push(b'\0');
     read
 }
 
@@ -314,7 +322,7 @@ impl Walk {
                 let len = self.line.len() - 1;
                 if len > 0 && self.line[len - 1] == strip {
                     self.line.truncate(len - 1);
-                    self.line.push(NUL as u8);
+                    self.line.push(b'\0');
                 }
             }
         } else if !self.already {
@@ -486,7 +494,8 @@ fn show_include_name(
         for _ in 0..walk.depth_displayed {
             msg_str(c"  ");
         }
-        let shown = &walk.files.open[walk.depth_displayed as usize].name;
+        let depth = usize::try_from(walk.depth_displayed).expect("a depth below the walk's");
+        let shown = &walk.files.open[depth].name;
         msg_home_replace(shown.as_cstr());
         msg_str(c" -->\n");
     }
@@ -517,7 +526,7 @@ fn show_include_name(
             } else {
                 // Find the file name after the end of the match.
                 let mut p = match_end;
-                while at(p) != NUL as u8 && !vim_isfilec(c_int::from(at(p))) {
+                while at(p) != b'\0' && !vim_isfilec(c_int::from(at(p))) {
                     p += 1;
                 }
                 let mut i = 0;
@@ -869,8 +878,8 @@ pub fn find_pattern_in_path(
                 if pats.def.regprog.is_none()
                     && action == ACTION_EXPAND
                     && !compl_status_sol()
-                    && cstr::byte_at(text, startp) != NUL as u8
-                    && cstr::byte_at(text, after_char) != NUL as u8
+                    && cstr::byte_at(text, startp) != b'\0'
+                    && cstr::byte_at(text, after_char) != b'\0'
                 {
                     from = resume;
                     continue;

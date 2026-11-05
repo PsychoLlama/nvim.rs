@@ -431,8 +431,8 @@ pub fn f_getcharsearch(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
     tv_dict_alloc_ret(result);
     let dict = result.dict_mut().expect("the dict just stored");
     let _ = dict.add_str_len(b"char", Some(text));
-    let _ = dict.add_number(b"forward", last_csearch_forward() as VarNumber);
-    let _ = dict.add_number(b"until", last_csearch_until() as VarNumber);
+    let _ = dict.add_number(b"forward", VarNumber::from(last_csearch_forward()));
+    let _ = dict.add_number(b"until", VarNumber::from(last_csearch_until()));
 }
 
 /// `setcharsearch({dict})` — each key is optional and missing keys leave

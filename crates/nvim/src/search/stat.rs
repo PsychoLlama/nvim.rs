@@ -8,12 +8,20 @@
 //! numbers.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::eval::typval::{NumBuf, list_items};
 use crate::memory::XString;
+use crate::narrow::number_as_int;
 use crate::optionstr::OptString;
 use crate::regexp::RE_LAST;
 use crate::search::{SEARCH_KEEP, SEARCH_STAT_DEF_TIMEOUT};
@@ -102,7 +110,7 @@ impl Counted {
     /// Record what the numbers were counted from.
     fn remember(&mut self, at: Pos) {
         self.pat = last_search_pat();
-        self.chgtick = buf_get_changedtick(Buf::current()) as c_int;
+        self.chgtick = number_as_int(buf_get_changedtick(Buf::current()));
         self.buf = Some(Buf::current().id());
         self.at = at;
     }
@@ -135,7 +143,7 @@ pub(crate) fn cmdline_search_stat(
     // A right-to-left window has the pair the other way round, so that
     // it still reads "current of total" on screen.
     let reversed = Win::current().w_onebuf_opt.wo_rl != 0
-        && Win::current().w_onebuf_opt.wo_rlc.first_byte() as c_int == 's' as c_int;
+        && c_int::from(Win::current().w_onebuf_opt.wo_rlc.first_byte()) == 's' as c_int;
     // Four digits is the most `'maxsearchcount'` allows on either side of
     // the slash, so the longest of these is `[>9999/>9999]` -- thirteen
     // bytes, and upstream's `STAT_BUF_LEN` scratch buffer never truncated
@@ -239,7 +247,7 @@ fn update_search_stat(
         let save_ws = p_ws();
         P_WS.set(false);
         let start = if timeout > 0 {
-            profile_setlimit(timeout as int64_t)
+            profile_setlimit(int64_t::from(timeout))
         } else {
             0
         };
@@ -310,14 +318,12 @@ fn dict_number(dict: Option<&Dict>, key: &CStr, current: c_int) -> Option<c_int>
     let Some(di) = dict_find(dict, key.to_bytes()) else {
         return Some(current);
     };
-    tv_get_number_chk(&di.di_tv)
-        .ok()
-        .map(|value| value as c_int)
+    tv_get_number_chk(&di.di_tv).ok().map(number_as_int)
 }
 
 /// One element of the `pos` list, which is `[lnum, col, off]`.
 fn list_number(item: &TypVal) -> Option<c_int> {
-    tv_get_number_chk(item).ok().map(|value| value as c_int)
+    tv_get_number_chk(item).ok().map(number_as_int)
 }
 
 /// `searchcount()`: the match counts as a dictionary.
@@ -325,7 +331,7 @@ pub fn f_searchcount(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     let mut numbuf = NumBuf::new();
     let mut pos = Win::current().w_cursor;
     let mut pattern: Option<Vec<u8>> = None;
-    let mut maxcount = p_msc() as c_int;
+    let mut maxcount = number_as_int(p_msc());
     let mut timeout = SEARCH_STAT_DEF_TIMEOUT as c_int;
     // Upstream also sets this when 'shortmess' contains `S`, which it
     // already is.

@@ -24,8 +24,8 @@ use crate::getchar::state::got_int;
 use crate::indent::{change_indent, get_number_indent, set_indent};
 use crate::mbyte::{utf_allow_break, utf_allow_break_before};
 use crate::r#move::update_topline;
+use crate::narrow::len_as_int;
 use crate::os::input::line_breakcheck;
-use crate::pos::MAXCOL;
 use crate::search::{FORWARD, check_linecomment};
 use crate::state::VREPLACE_FLAG;
 use crate::state::mode::{
@@ -274,13 +274,13 @@ fn wrap_leader_len() -> i32 {
     let mut lines = Lines::current();
     let line = lines.line(Win::current().w_cursor.lnum);
     let mut leader_len = get_leader_len(line, false, true).0;
-    if leader_len == 0 && Buf::current().b_p_cin != 0 {
-        let comment_start = check_linecomment(line);
-        if comment_start != MAXCOL {
-            leader_len = get_leader_len(&line[comment_start as usize..], false, true).0;
-            if leader_len != 0 {
-                leader_len += comment_start;
-            }
+    if leader_len == 0
+        && Buf::current().b_p_cin != 0
+        && let Some(comment_start) = check_linecomment(line)
+    {
+        leader_len = get_leader_len(&line[comment_start..], false, true).0;
+        if leader_len != 0 {
+            leader_len += len_as_int(comment_start);
         }
     }
     leader_len

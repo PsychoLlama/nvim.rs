@@ -38,12 +38,11 @@ pub(crate) fn align_with_line_comment() -> Option<c_int> {
         // There may be a statement before the comment; search from the
         // end of the line above for a comment start.
         let lnum = Win::current().w_cursor.lnum - 1;
-        let col = check_linecomment(Lines::current().line(lnum));
-        if col != MAXCOL {
+        if let Some(col) = check_linecomment(Lines::current().line(lnum)) {
             let lnum = Win::current().w_cursor.lnum - 1;
             trypos = Some(Pos {
                 lnum,
-                col: ColNr::new(col),
+                col: ColNr::from_index(col),
                 coladd: 0,
             });
         }

@@ -77,7 +77,7 @@ use crate::option::get_ve_flags;
 use crate::option::vars::{p_deco, p_paste, p_ri, p_sm, p_sr};
 use crate::options::kOptVeFlagOnemore;
 use crate::plines::{linetabsize_eol, win_chartabsize};
-use crate::pos::{MAXCOL, MAXLNUM};
+use crate::pos::MAXLNUM;
 use crate::search::state::highlight_match;
 use crate::search::{BACKWARD, FORWARD, check_linecomment, findmatch, linewhite, showmatch};
 use crate::spell::spell_check_window;

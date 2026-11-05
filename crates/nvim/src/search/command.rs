@@ -10,6 +10,13 @@
 //! [`select`](super::select).
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::autocmd::fire_autocmds;
@@ -19,11 +26,13 @@ use crate::mbyte::{c_cluster_len, char_at};
 use crate::memory::XString;
 use crate::message::msg_display_bytes;
 use crate::narrow::number_as_lnum;
+use crate::narrow::{len_as_int, number_as_int};
 use crate::option::{ScrollMargin, ScrollOff, cpo_has};
 use crate::optionstr::{OptString, OptStringRef};
 use crate::plines::getvcol;
 use crate::pos::MAXCOL;
 use crate::regexp::RE_LAST;
+use crate::regexp::low_byte;
 use crate::search::{
     SEARCH_ECHO, SEARCH_END, SEARCH_HIS, SEARCH_KEEP, SEARCH_MARK, SEARCH_MSG, SEARCH_NOOF,
     SEARCH_OPT, SEARCH_PEEK, SEARCH_REV, SEARCH_START, SEARCH_STAT_BUF_LEN,
@@ -77,7 +86,7 @@ enum Source {
 /// Answers `None` when neither remembered pattern exists, which the caller
 /// says (E35).
 fn pattern_to_search(first: u8, delim: c_int) -> Option<Source> {
-    if !(first == NUL as u8 || as_char(first) == delim) {
+    if !(first == b'\0' || as_char(first) == delim) {
         return Some(Source::Typed);
     }
     if has_last_search_pattern() {
@@ -161,7 +170,7 @@ fn write_offset(dirc: c_int, off: SearchOffset) -> Vec<u8> {
     if !(off.line || off.end || off.off != 0) {
         return out;
     }
-    out.push(dirc as u8);
+    out.push(low_byte(dirc));
     if off.end {
         out.push(b'e');
     } else if !off.line {
@@ -249,13 +258,13 @@ fn echo_search_cmd(dirc: c_int, searchstr: &[u8], options: c_int) -> Option<(Ech
     let with_stats = !shortmess(ShmFlag::SEARCHCOUNT) || cmd_silent.get();
     let size = echo_size(plen, off_text.len(), with_stats);
     let mut echo = vec![b' '; size];
-    echo[size - 1] = NUL as u8;
+    echo[size - 1] = b'\0';
 
     // Do not fill the buffer when cmd_silent is set: it is left empty
     // for the search-statistics feature.
     if !cmd_silent.get() {
         ui_busy_start();
-        echo[0] = dirc as u8;
+        echo[0] = low_byte(dirc);
         let at = if utf_iscomposing_first(char_at(p)) {
             // Use a space to draw the composing character on.
             echo[1] = b' ';
@@ -275,7 +284,7 @@ fn echo_search_cmd(dirc: c_int, searchstr: &[u8], options: c_int) -> Option<(Ech
             && Win::current().w_onebuf_opt.wo_rlc.first_byte() == b's'
         {
             let mut reversed = reverse_echo(cstr::until_nul(&echo));
-            reversed.push(NUL as u8);
+            reversed.push(b'\0');
             echo = reversed;
         }
 
@@ -424,7 +433,7 @@ pub(crate) fn do_search(
     // leg. `patlen` is how long the caller (and, after a leg, the walk)
     // says that is, kept with upstream's wrapping arithmetic.
     let mut text = pat.to_vec();
-    text.push(NUL as u8);
+    text.push(b'\0');
     let mut at = 0usize;
     let mut patlen = pat.len();
     // Whether `text` is the copy `skip_regexp_copy` made when it rewrote
@@ -440,7 +449,7 @@ pub(crate) fn do_search(
         dirc = c_int::from(off.dir.to_ne_bytes()[0]);
     } else {
         let mut off = search_offset();
-        off.dir = dirc as c_char;
+        off.dir = low_byte(dirc).cast_signed();
         set_search_offset(off);
         set_vv_searchforward();
     }
@@ -489,7 +498,7 @@ pub(crate) fn do_search(
             // substitute pattern.
             let mut span = (at, patlen);
 
-            if cstr::byte_at(&text, at) != NUL as u8 {
+            if cstr::byte_at(&text, at) != b'\0' {
                 // Find the end of the regular expression. If there is
                 // a matching '/' or '?', toss it.
                 let is_magic = c_int::from(magic_isset());
@@ -501,13 +510,13 @@ pub(crate) fn do_search(
                         // Made a copy of "pat" to change "\?" to "?".
                         let len = cstr::until_nul(&copy).len();
                         copy.truncate(len);
-                        copy.push(NUL as u8);
+                        copy.push(b'\0');
                         // Wrapping, as upstream: `patlen` is what the
                         // caller claimed, which for `get_address` is a
                         // prefix of a longer command line — the copy can
                         // be longer, and C's size_t difference is then
                         // the negative number this wants.
-                        let extra = patlen.wrapping_sub(len) as c_int;
+                        let extra = number_as_int(patlen.wrapping_sub(len).cast_signed() as i64);
                         searchcmdlen.set(searchcmdlen.get() + extra);
                         text = copy;
                         at = 0;
@@ -532,7 +541,7 @@ pub(crate) fn do_search(
                 // Compute the length of the search command, for
                 // get_address().
                 let consumed = p - at;
-                searchcmdlen.set(searchcmdlen.get() + consumed as c_int);
+                searchcmdlen.set(searchcmdlen.get() + len_as_int(consumed));
                 patlen = patlen.wrapping_sub(consumed);
                 at = p; // put pat after the search command
             }
@@ -607,7 +616,7 @@ pub(crate) fn do_search(
                         has_folding(w, lnum, None, None)
                     });
                 let cursor = Win::current().w_cursor;
-                let (top_bot, maxcount) = (show_top_bot_msg, p_msc() as c_int);
+                let (top_bot, maxcount) = (show_top_bot_msg, number_as_int(p_msc()));
                 let tm = SEARCH_STAT_DEF_TIMEOUT;
                 cmdline_search_stat(dirc, pos, cursor, top_bot, &mut echo, inexact, maxcount, tm);
             }
@@ -742,9 +751,9 @@ pub fn showmatch(c: c_int) {
     // Brief pause, unless 'm' is present in 'cpo' and a character is
     // available.
     if cpo_has(CpoFlag::SHOWMATCH) {
-        os_delay(p_mat() as u64 * 100 + 8, true);
+        os_delay(p_mat().cast_unsigned() * 100 + 8, true);
     } else if !char_avail() {
-        os_delay(p_mat() as u64 * 100 + 9, false);
+        os_delay(p_mat().cast_unsigned() * 100 + 9, false);
     }
 
     Win::current().w_cursor = save_cursor; // restore cursor position

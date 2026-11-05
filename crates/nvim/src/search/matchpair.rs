@@ -9,6 +9,13 @@
 //! and the `'cpoptions'` flags `%` and `M` that switch those rules off.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::charset::skip;
@@ -21,9 +28,9 @@ use crate::types::{CpoFlag, NUL};
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
-const FM_BACKWARD: c_int = super::FM_BACKWARD as c_int;
-const FM_FORWARD: c_int = super::FM_FORWARD as c_int;
-const FM_BLOCKSTOP: c_int = super::FM_BLOCKSTOP as c_int;
+const FM_BACKWARD: c_int = super::FM_BACKWARD.cast_signed();
+const FM_FORWARD: c_int = super::FM_FORWARD.cast_signed();
+const FM_BLOCKSTOP: c_int = super::FM_BLOCKSTOP.cast_signed();
 const FORWARD: c_int = super::FORWARD as c_int;
 const BACKWARD: c_int = super::BACKWARD as c_int;
 
@@ -62,41 +69,44 @@ pub fn findmatchlimit(
 // Deciding what to look for.
 // ---------------------------------------------------------------------
 
-/// The byte `off` columns away from `col`, as the pointer walk read it.
+/// The byte `off` bytes away from byte column `col`, as the pointer walk
+/// read it.
 ///
 /// Past the end of the line is its terminator, which is what stopped every
-/// forward test. A *negative* index is the one place this is not the
-/// pointer's answer: the C read the byte before the line, and every caller
-/// guards against reaching that, so answering NUL keeps the guards honest
-/// and takes the read out of the language.
-fn at_col(line: &[u8], col: c_int, off: c_int) -> u8 {
-    usize::try_from(col + off).map_or(0, |i| byte_at(line, i))
+/// forward test. Before the start of the line is the one place this is not
+/// the pointer's answer: the C read the byte before the line, and every
+/// caller guards against reaching that, so answering NUL keeps the guards
+/// honest and takes the read out of the language.
+fn at_col(line: &[u8], col: usize, off: isize) -> u8 {
+    col.checked_add_signed(off).map_or(0, |i| byte_at(line, i))
 }
 
-/// Whether the character before `line[col]` is `ch`, reporting the
-/// column of that previous character through `prev`.
-///
-/// False when `col` is zero. Handles multi-byte characters.
-fn check_prevcol(line: &[u8], col: c_int, ch: u8, prev: Option<&mut c_int>) -> bool {
-    let mut col = col - 1;
-    if col > 0 {
-        col -= head_off(line, col as usize) as c_int;
-    }
-    if let Some(prev) = prev {
-        *prev = col;
-    }
-    col >= 0 && byte_at(line, col as usize) == ch
+/// The byte column of the character before `line[col]`; `None` at the
+/// start of the line. Handles multi-byte characters.
+fn prev_col(line: &[u8], col: usize) -> Option<usize> {
+    let col = col.checked_sub(1)?;
+    Some(if col > 0 {
+        col - head_off(line, col)
+    } else {
+        col
+    })
+}
+
+/// Whether the character before `line[col]` is `ch`.
+fn check_prevcol(line: &[u8], col: usize, ch: u8) -> bool {
+    prev_col(line, col).is_some_and(|prev| byte_at(line, prev) == ch)
 }
 
 /// How many backslashes immediately precede `line[col]`.
 ///
 /// An odd number means the character there is escaped. `'cpoptions'` "M"
 /// switches the whole idea off, and both callers check that first.
-fn backslash_count(line: &[u8], col: c_int) -> c_int {
+fn backslash_count(line: &[u8], col: usize) -> usize {
     let mut count = 0;
     let mut col = col;
-    while check_prevcol(line, col, b'\\', Some(&mut col)) {
+    while let Some(prev) = prev_col(line, col).filter(|&prev| byte_at(line, prev) == b'\\') {
         count += 1;
+        col = prev;
     }
     count
 }
@@ -170,7 +180,7 @@ struct Target {
     raw_string: bool,
     /// Whether the bracket the walk started on was itself escaped; only a
     /// match with the same escaping counts.
-    match_escaped: c_int,
+    match_escaped: bool,
 }
 
 /// What interpreting `initc` decided to do.
@@ -209,7 +219,7 @@ fn make_plan(
         comment_dir: 0,
         ignore_cend: false,
         raw_string: false,
-        match_escaped: 0,
+        match_escaped: false,
     };
 
     // '/' and '*' are special cases: look for the start or end of a
@@ -243,8 +253,8 @@ fn make_plan(
         // Only check for the special things when 'cpo' has no '%'.
         if !cpo_match {
             let white = skip::white(line);
-            let col = pos.col;
-            let at = |off: c_int| at_col(line, col.get(), off);
+            let col = pos.col.as_usize();
+            let at = |off: isize| at_col(line, col, off);
             if byte_at(line, white) == b'#' && pos.col <= ColNr::from_index(white) {
                 // Are we before or at #if, #else etc.?
                 let word = after_hash(line, white);
@@ -291,7 +301,7 @@ fn make_plan(
                 if target.findc != 0 {
                     break;
                 }
-                pos.col += cluster_len(rest) as c_int;
+                pos.col = ColNr::from_index(pos.col.as_usize() + cluster_len(rest));
             }
             if target.findc == 0 {
                 // No brace in the line; maybe use "  #if" then.
@@ -301,7 +311,7 @@ fn make_plan(
                     return Plan::Nothing;
                 }
             } else if !cpo_bsl {
-                target.match_escaped = backslash_count(line, pos.col.get()) & 1;
+                target.match_escaped = backslash_count(line, pos.col.as_usize()) & 1 != 0;
             }
         }
     }
@@ -401,17 +411,21 @@ enum Step {
 }
 
 /// Everything the walk carries from one position to the next.
+///
+/// The position is a line and a *byte* column: the walk steps over the
+/// line's bytes, and a [`Pos`] is built only for an answer.
 struct Walk {
-    pos: Pos,
-    /// The buffer's line cache. The walk reads `pos`'s line out of it at
-    /// every step; upstream keeps a pointer instead and re-derives it at
-    /// each line boundary and after anything that may have released it,
-    /// which is the bookkeeping this replaces.
+    lnum: LineNr,
+    col: usize,
+    /// The buffer's line cache. The walk reads its line out of it at every
+    /// step; upstream keeps a pointer instead and re-derives it at each
+    /// line boundary and after anything that may have released it, which
+    /// is the bookkeeping this replaces.
     lines: Lines,
     backwards: bool,
     lisp: bool,
-    /// Where a `//` (or Lisp `;`) comment starts on this line, or MAXCOL.
-    comment_col: ColNr,
+    /// Where a `//` (or Lisp `;`) comment starts on this line, if one does.
+    comment_col: Option<usize>,
     /// The start position is inside a Lisp comment, so the match has to
     /// be inside it too.
     lispcomm: bool,
@@ -432,38 +446,67 @@ struct Walk {
 }
 
 impl Walk {
+    /// Where the walk stands, as a position.
+    fn pos(&self) -> Pos {
+        Pos {
+            lnum: self.lnum,
+            col: ColNr::from_index(self.col),
+            coladd: 0,
+        }
+    }
+
+    /// The position `back` bytes before the walk's.
+    fn pos_before(&self, back: usize) -> Pos {
+        Pos {
+            lnum: self.lnum,
+            col: ColNr::from_index(self.col - back),
+            coladd: 0,
+        }
+    }
+
+    /// The line the walk is on.
+    fn line(&mut self) -> &[u8] {
+        self.lines.line(self.lnum)
+    }
+
+    /// Look for a line comment on the walk's line.
+    fn find_comment(&mut self) {
+        self.comment_col = check_linecomment(self.lines.line(self.lnum));
+    }
+
     /// Step one character backwards, answering false at the start of the
     /// buffer or when the travel limit is reached.
     fn step_back(&mut self, comment_dir: c_int) -> bool {
         // The character to match is inside a comment; don't look
         // outside it.
-        if self.lispcomm && self.pos.col < self.comment_col {
+        if self.lispcomm && self.comment_col.is_none_or(|comment| self.col < comment) {
             return false;
         }
-        if self.pos.col != ColNr::ZERO {
-            self.pos.col -= 1;
-            let back = head_off(self.lines.line(self.pos.lnum), self.pos.col.as_usize());
-            self.pos.col -= back as c_int;
+        if self.col != 0 {
+            let col = self.col - 1;
+            self.col = col - head_off(self.lines.line(self.lnum), col);
             return true;
         }
         // At the start of the line, go to the previous one.
-        if self.pos.lnum == LineNr::ONE {
+        if self.lnum == LineNr::ONE {
             return false; // start of file
         }
-        self.pos.lnum -= 1;
+        self.lnum -= 1;
         self.traveled += 1;
-        if self.maxtravel > 0 && self.traveled as int64_t > self.maxtravel {
+        if self.maxtravel > 0 && int64_t::from(self.traveled) > self.maxtravel {
             return false;
         }
-        self.pos.col = self.lines.line_len(self.pos.lnum); // pos.col on the trailing NUL
+        self.col = self.line().len(); // on the trailing NUL
         self.do_quotes = -1;
         line_breakcheck();
         // Does this line hold a single-line comment?
         if comment_dir != 0 || self.lisp {
-            self.comment_col = ColNr::new(check_linecomment(self.lines.line(self.pos.lnum)));
+            self.find_comment();
         }
-        if self.lisp && self.comment_col != ColNr::MAX {
-            self.pos.col = self.comment_col; // skip the comment
+        if self.lisp
+            && let Some(comment) = self.comment_col
+        {
+            self.col = comment; // skip the comment
         }
         true
     }
@@ -471,36 +514,34 @@ impl Walk {
     /// Step one character forwards, answering false at the end of the
     /// buffer or when the travel limit is reached.
     fn step_forward(&mut self) -> bool {
-        let line = self.lines.line(self.pos.lnum);
-        let col = self.pos.col.as_usize();
+        let col = self.col;
+        let line = self.lines.line(self.lnum);
         let at_end = col >= line.len()
             // For Lisp don't look for a match inside a comment.
-            || (self.lisp && self.comment_col != ColNr::MAX && self.pos.col == self.comment_col);
+            || (self.lisp && self.comment_col == Some(col));
         if !at_end {
-            // A character is a few bytes: the unchecked narrow is exact, and
-            // this is the walk's per-character step.
-            self.pos.col += cluster_len(&line[col..]) as c_int;
+            self.col += cluster_len(&line[col..]);
             return true;
         }
         // End of file, or the line is exhausted and the comment with
         // it — then don't look for a match out in the code.
-        if self.pos.lnum == Buf::current().b_ml.ml_line_count || self.lispcomm {
+        if self.lnum == Buf::current().b_ml.ml_line_count || self.lispcomm {
             return false;
         }
-        self.pos.lnum += 1;
+        self.lnum += 1;
         // Upstream compares the count *before* the increment here and
         // *after* it when going backwards; preserved.
         let before = self.traveled;
         self.traveled += 1;
-        if self.maxtravel != 0 && before as int64_t > self.maxtravel {
+        if self.maxtravel != 0 && int64_t::from(before) > self.maxtravel {
             return false;
         }
-        self.pos.col = ColNr::ZERO;
+        self.col = 0;
         self.do_quotes = -1;
         line_breakcheck();
         if self.lisp {
             // In the new line.
-            self.comment_col = ColNr::new(check_linecomment(self.lines.line(self.pos.lnum)));
+            self.find_comment();
         }
         true
     }
@@ -510,14 +551,15 @@ impl Walk {
     ///
     /// Comments do not nest, and quotes inside them are ignored.
     fn comment_step(&mut self, target: &Target) -> Step {
-        let col = self.pos.col;
-        let line = self.lines.line(self.pos.lnum);
-        let at = |off: c_int| at_col(line, col.get(), off);
+        let col = self.col;
+        let comment_col = self.comment_col;
+        let line = self.lines.line(self.lnum);
+        let at = |off: isize| at_col(line, col, off);
 
         if target.comment_dir == FORWARD {
             if at(0) == b'*' && at(1) == b'/' {
-                self.pos.col += 1;
-                return Step::Found(self.pos);
+                self.col += 1;
+                return Step::Found(self.pos());
             }
             return Step::Next;
         }
@@ -525,13 +567,13 @@ impl Walk {
         // Searching backwards. A comment may contain "/*" or "//",
         // and may start or end with "/*/". Ignore a "/*" after "//"
         // and after "*".
-        if self.pos.col == ColNr::ZERO {
+        if col == 0 {
             return Step::Next;
         }
         if target.raw_string {
             let opens = at(-1) == b'R'
                 && at(0) == b'"'
-                && line[(col.as_usize() + 1).min(line.len())..].contains(&b'(');
+                && line[(col + 1).min(line.len())..].contains(&b'(');
             if opens {
                 // A possible start of a raw string. Now that the
                 // delimiter is known, check whether it ends before
@@ -545,36 +587,31 @@ impl Walk {
                 // The borrow of `line` ends here: the scan below reads
                 // every line between the two positions out of the same
                 // cache, which is what used to release `linep`.
-                if !find_rawstring_end(&mut self.lines, &self.pos, &end) {
+                let start = self.pos();
+                if !find_rawstring_end(&mut self.lines, &start, &end) {
                     self.count += 1;
-                    self.match_pos = self.pos;
-                    self.match_pos.col -= 1;
+                    self.match_pos = self.pos_before(1);
                 }
             }
             return Step::Next;
         }
         if at(-1) == b'/'
             && at(0) == b'*'
-            && (self.pos.col == ColNr::new(1) || at(-2) != b'*')
-            && self.pos.col < self.comment_col
+            && (col == 1 || at(-2) != b'*')
+            && comment_col.is_none_or(|comment| col < comment)
         {
             self.count += 1;
-            self.match_pos = self.pos;
-            self.match_pos.col -= 1;
+            self.match_pos = self.pos_before(1);
         } else if at(-1) == b'*' && at(0) == b'/' {
             if self.count > 0 {
-                self.pos = self.match_pos;
-            } else if self.pos.col > ColNr::new(1)
-                && at(-2) == b'/'
-                && self.pos.col <= self.comment_col
+                return Step::Found(self.match_pos);
+            } else if col > 1 && at(-2) == b'/' && comment_col.is_none_or(|comment| col <= comment)
             {
-                self.pos.col -= 2;
+                return Step::Found(self.pos_before(2));
             } else if target.ignore_cend {
                 return Step::Next;
-            } else {
-                return Step::Nothing;
             }
-            return Step::Found(self.pos);
+            return Step::Nothing;
         }
         Step::Next
     }
@@ -595,9 +632,9 @@ impl Walk {
         // A walk that never reaches the start position leaves
         // `at_start` at -1, i.e. *true*. Upstream.
         let mut at_start = self.do_quotes;
-        let stop = self.pos.col.as_usize() + usize::from(self.backwards);
+        let stop = self.col + usize::from(self.backwards);
         {
-            let line = self.lines.line(self.pos.lnum);
+            let line = self.lines.line(self.lnum);
             // Count the quotes, skipping \" and '"'. Watch out for "\\".
             let mut at = 0usize;
             while at < line.len() {
@@ -633,13 +670,13 @@ impl Walk {
                 }
             }
         }
-        if self.pos.lnum <= LineNr::ONE {
+        if self.lnum <= LineNr::ONE {
             return;
         }
         // The line above is a second read of the same cache, so the borrow
         // above has to be over -- which is the whole of what upstream's
         // "ml_get() keeps only one line; get linep back" was about.
-        let continued = self.lines.line(self.pos.lnum - 1).last() == Some(&b'\\');
+        let continued = self.lines.line(self.lnum - 1).last() == Some(&b'\\');
         if continued {
             self.do_quotes = 1;
             if self.start_in_quotes.is_none() {
@@ -659,47 +696,46 @@ impl Walk {
     /// `'\233'` and `'\x3f'` are not skipped — there is never a brace in
     /// them. Answers whether the position moved.
     fn skip_char_constant(&mut self) -> bool {
-        let col = self.pos.col;
-        let line = self.lines.line(self.pos.lnum);
-        let at = |off: c_int| at_col(line, col.get(), off);
+        let col = self.col;
+        let line = self.lines.line(self.lnum);
+        let at = |off: isize| at_col(line, col, off);
         if self.backwards {
-            if self.pos.col > ColNr::new(1) {
+            if col > 1 {
                 if at(-2) == b'\'' {
-                    self.pos.col -= 2;
+                    self.col -= 2;
                     return true;
                 }
-                if at(-2) == b'\\' && self.pos.col > ColNr::new(2) && at(-3) == b'\'' {
-                    self.pos.col -= 3;
+                if at(-2) == b'\\' && col > 2 && at(-3) == b'\'' {
+                    self.col -= 3;
                     return true;
                 }
             }
         } else if at(1) != 0 {
             // Forward search.
             if at(1) == b'\\' && at(2) != 0 && at(3) == b'\'' {
-                self.pos.col += 3;
+                self.col += 3;
                 return true;
             }
             if at(2) == b'\'' {
-                self.pos.col += 2;
+                self.col += 2;
                 return true;
             }
         }
         false
     }
 
-    /// Look at the character under `pos` and decide whether it is the
+    /// Look at the character under the walk and decide whether it is the
     /// match, keeping the "am I inside a string?" state up to date.
     fn match_char(&mut self, target: &Target, cpo_match: bool, cpo_bsl: bool) -> Step {
-        let col = self.pos.col;
+        let col = self.col;
         let c = {
-            let line = self.lines.line(self.pos.lnum);
-            char_at(&line[col.as_usize().min(line.len())..])
+            let line = self.lines.line(self.lnum);
+            char_at(&line[col.min(line.len())..])
         };
         if c == NUL {
             // At the end of a line without a trailing backslash,
             // reset inquote.
-            if col == ColNr::ZERO || at_col(self.lines.line(self.pos.lnum), col.get(), -1) != b'\\'
-            {
+            if col == 0 || at_col(self.lines.line(self.lnum), col, -1) != b'\\' {
                 self.inquote = false;
                 self.start_in_quotes = Some(false);
             }
@@ -709,12 +745,13 @@ impl Walk {
             // A quote preceded by an odd number of backslashes is
             // ignored.
             if self.do_quotes != 0 {
-                let line = self.lines.line(self.pos.lnum);
-                let mut back = col - 1;
-                while back >= ColNr::ZERO && byte_at(line, back.as_usize()) == b'\\' {
-                    back -= 1;
-                }
-                if ((col - 1 - back) & 1) == 0 {
+                let line = self.lines.line(self.lnum);
+                let backslashes = line[..col]
+                    .iter()
+                    .rev()
+                    .take_while(|&&b| b == b'\\')
+                    .count();
+                if backslashes & 1 == 0 {
                     self.inquote = !self.inquote;
                     self.start_in_quotes = Some(false);
                 }
@@ -736,9 +773,9 @@ impl Walk {
         // over "#\(" and friends.
         if Buf::current().b_p_lisp != 0
             && has_char(c"(){}[]", c)
-            && col > ColNr::new(1)
-            && check_prevcol(self.lines.line(self.pos.lnum), col.get(), b'\\', None)
-            && check_prevcol(self.lines.line(self.pos.lnum), (col - 1).get(), b'#', None)
+            && col > 1
+            && check_prevcol(self.lines.line(self.lnum), col, b'\\')
+            && check_prevcol(self.lines.line(self.lnum), col - 1, b'#')
         {
             return Step::Next;
         }
@@ -748,19 +785,17 @@ impl Walk {
         if (!self.inquote || self.start_in_quotes == Some(true))
             && (c == target.initc || c == target.findc)
         {
-            let bslcnt = if cpo_bsl {
-                0
-            } else {
-                backslash_count(self.lines.line(self.pos.lnum), col.get())
-            };
             // Only accept a match when 'M' is in 'cpo', or when the
             // escaping is what it was at the start.
-            if cpo_bsl || (bslcnt & 1) == target.match_escaped {
+            if cpo_bsl
+                || (backslash_count(self.lines.line(self.lnum), col) & 1 != 0)
+                    == target.match_escaped
+            {
                 if c == target.initc {
                     self.count += 1;
                 } else {
                     if self.count == 0 {
-                        return Step::Found(self.pos);
+                        return Step::Found(self.pos());
                     }
                     self.count -= 1;
                 }
@@ -812,11 +847,12 @@ fn find_match(
     }
 
     let mut walk = Walk {
-        pos,
+        lnum: pos.lnum,
+        col: pos.col.as_usize(),
         lines,
         backwards: target.backwards,
         lisp,
-        comment_col: ColNr::MAX,
+        comment_col: None,
         lispcomm: false,
         traveled: 0,
         maxtravel,
@@ -829,9 +865,9 @@ fn find_match(
 
     // Backward search: does this line hold a single-line comment?
     if (walk.backwards && target.comment_dir != 0) || lisp {
-        walk.comment_col = ColNr::new(check_linecomment(walk.lines.line(walk.pos.lnum)));
+        walk.find_comment();
     }
-    if lisp && walk.comment_col != ColNr::MAX && walk.pos.col > walk.comment_col {
+    if lisp && walk.comment_col.is_some_and(|comment| walk.col > comment) {
         walk.lispcomm = true; // find the match inside this comment
     }
 
@@ -850,11 +886,11 @@ fn find_match(
         // With FM_BLOCKSTOP, stop at a '{' or '}' in column 0. The line is
         // read only once the column and the flag both say so; the walk
         // steps a character at a time and this is per step.
-        if walk.pos.col == ColNr::ZERO && flags & FM_BLOCKSTOP != 0 {
-            let first = c_int::from(byte_at(walk.lines.line(walk.pos.lnum), 0));
+        if walk.col == 0 && flags & FM_BLOCKSTOP != 0 {
+            let first = c_int::from(byte_at(walk.line(), 0));
             if first == '{' as c_int || first == '}' as c_int {
                 if first == target.findc && walk.count == 0 {
-                    return Some(walk.pos); // match!
+                    return Some(walk.pos()); // match!
                 }
                 break; // out of scope
             }
