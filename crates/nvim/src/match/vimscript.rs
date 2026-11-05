@@ -194,8 +194,13 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
                 match_add(win, group, None, priority, id, positions, conceal)
             }
         };
-        if added != id {
-            match_add_failed = true;
+        match added {
+            Ok(added) if added == id => {}
+            Ok(_) => match_add_failed = true,
+            Err(err) => {
+                err.report();
+                match_add_failed = true;
+            }
         }
 
         at += 1;
@@ -264,7 +269,16 @@ pub(crate) fn f_matchadd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
 
     let conceal = conceal_char.as_deref();
     let added = match_add(win, grp, Some(pat), prio, id, None, conceal);
-    result.write_number(VarNumber::from(added));
+    result.write_number(VarNumber::from(answer_or_report(added)));
+}
+
+/// What `matchadd()`/`matchaddpos()` answer: the new match's id, or -1
+/// having said why not.
+fn answer_or_report(added: Result<c_int, MatchError>) -> c_int {
+    added.unwrap_or_else(|err| {
+        err.report();
+        -1
+    })
 }
 
 /// `matchaddpos(group, positions [, priority [, id [, options]]])`.
@@ -295,7 +309,7 @@ pub(crate) fn f_matchaddpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFun
 
     let conceal = conceal_char.as_deref();
     let added = match_add(win, group, None, prio, id, l, conceal);
-    result.write_number(VarNumber::from(added));
+    result.write_number(VarNumber::from(answer_or_report(added)));
 }
 
 /// `matcharg(id)` — the `[group, pattern]` of `:match`, `:2match` or
@@ -328,7 +342,13 @@ pub(crate) fn f_matchdelete(args: &[TypVal], result: &mut TypVal, _fptr: EvalFun
         None => -1,
         Some(win) => {
             let id = tv_get_number(&args[0]) as c_int;
-            VarNumber::from(match_delete(win, id, true))
+            match match_delete(win, id) {
+                Ok(()) => 0,
+                Err(err) => {
+                    err.report();
+                    -1
+                }
+            }
         }
     };
     result.write_number(deleted);

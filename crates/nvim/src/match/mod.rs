@@ -36,22 +36,24 @@ use crate::highlight_group::{
     HLF_L, HLF_LC, syn_check_group, syn_id2attr, syn_id2name, syn_name2id,
 };
 use crate::mbyte::{char_at, encode_char};
-use crate::memory::XString;
+use crate::memory::{ThinCString, XString};
 use crate::message::emsg;
 use crate::message::state::called_emsg;
 use crate::message::{e_dictreq, e_invalwindow, e_invcmd, e_listreq, e_trailing_arg};
-use crate::message_fmt::{msg_bytes, msg_cstr};
+use crate::message_fmt::msg_bytes;
 use crate::option::vars::p_rdt;
 use crate::os::cshim::gettext;
 use crate::profile::{profile_passed_limit, profile_setlimit};
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec_multi};
 use crate::search::state::{search_first_line, search_last_line};
 use crate::types::{
-    ColNr, EvalFuncData, ExArg, LLPos, LineNr, List, MatchItem, MatchState, RegMMatch, TypVal,
-    VAR_LIST, VAR_NUMBER, VarNumber, Window, int64_t, ptrdiff_t,
+    ColNr, EvalFuncData, ExArg, Failed, LLPos, LineNr, List, MatchItem, MatchState, RegMMatch,
+    TypVal, VAR_LIST, VAR_NUMBER, VarNumber, Window, ptrdiff_t,
 };
 use crate::winlayer::Win;
 
+mod error;
+use self::error::MatchError;
 mod searchhl;
 pub(crate) use self::searchhl::*;
 mod vimscript;
@@ -60,7 +62,7 @@ pub(crate) use self::vimscript::*;
 /// `matchadd()`'s and `:match`'s default priority.
 const DEFAULT_PRIORITY: c_int = 10;
 
-/// Adds a match to `window`'s match list, and answers its id or `-1`.
+/// Adds a match to `window`'s match list, and answers its id.
 ///
 /// Exactly one of `pat` and `pos_list` describes what to highlight: a
 /// pattern, or a list of `[lnum]` / `[lnum, col]` / `[lnum, col, len]`
@@ -73,27 +75,22 @@ fn match_add(
     id: c_int,
     pos_list: Option<&List>,
     conceal_char: Option<&CStr>,
-) -> c_int {
+) -> Result<c_int, MatchError> {
     let mut id = id;
     let mut rtype = UPD_SOME_VALID;
 
     if grp.is_empty() || pat.is_some_and(CStr::is_empty) {
-        return -1;
+        return Err(MatchError::Empty);
     }
     if id < -1 || id == 0 {
-        semsg!(
-            "E799: Invalid ID: {} (must be greater than or equal to 1)",
-            int64_t::from(id)
-        );
-        return -1;
+        return Err(MatchError::InvalidId(id));
     }
     if id == -1 {
         id = window.w_next_match_id;
         window.w_next_match_id += 1;
     } else {
         if window.w_matches.iter().any(|item| item.mit_id == id) {
-            semsg!("E801: ID already taken: {}", int64_t::from(id));
-            return -1;
+            return Err(MatchError::IdTaken(id));
         }
         // Keep the auto-allocated ids above every hand-picked one, with
         // room for a few more to be picked soon.
@@ -104,15 +101,14 @@ fn match_add(
 
     let hlg_id = syn_check_group(grp.to_bytes());
     if hlg_id == 0 {
-        return -1;
+        // The group's name was refused, which `syn_check_group` said.
+        return Err(MatchError::Reported(Failed));
     }
     let mut regprog = None;
     if let Some(pat) = pat {
         regprog = vim_regcomp(pat, RE_MAGIC);
         if regprog.is_none() {
-            let pat = msg_cstr(pat);
-            semsg!("E475: Invalid argument: {pat}");
-            return -1;
+            return Err(MatchError::Pattern(ThinCString::from_cstr(pat)));
         }
     }
 
@@ -139,15 +135,12 @@ fn match_add(
 
     if let Some(pos_list) = pos_list {
         item.mit_pos_array = vec![LLPos::default(); list_items(Some(pos_list)).len()];
-        match fill_pos_array(&mut item.mit_pos_array, pos_list) {
-            Some((toplnum, botlnum)) if toplnum != LineNr::ZERO => {
-                redraw_win_range_later(window, toplnum, botlnum);
-                item.mit_toplnum = toplnum;
-                item.mit_botlnum = botlnum;
-                rtype = UPD_VALID;
-            }
-            Some(_) => {}
-            None => return -1,
+        let (toplnum, botlnum) = fill_pos_array(&mut item.mit_pos_array, pos_list)?;
+        if toplnum != LineNr::ZERO {
+            redraw_win_range_later(window, toplnum, botlnum);
+            item.mit_toplnum = toplnum;
+            item.mit_botlnum = botlnum;
+            rtype = UPD_VALID;
         }
     }
 
@@ -161,17 +154,20 @@ fn match_add(
     window.w_matches.insert(at, item);
 
     redraw_later(window, rtype);
-    id
+    Ok(id)
 }
 
 /// Fills a match's position array from a `matchaddpos()` list.
 ///
-/// Answers the `(toplnum, botlnum)` redraw range, or `None` after
-/// diagnosing a malformed entry. A *rejected but not fatal* entry — a
+/// Answers the `(toplnum, botlnum)` redraw range, or the malformed entry's
+/// refusal. A *rejected but not fatal* entry — a
 /// non-positive line, a negative column or length — is skipped without
 /// taking a slot, which is why the array can end up with unused slots at
 /// its end (a zero line number ends it).
-fn fill_pos_array(positions: &mut [LLPos], pos_list: &List) -> Option<(LineNr, LineNr)> {
+fn fill_pos_array(
+    positions: &mut [LLPos],
+    pos_list: &List,
+) -> Result<(LineNr, LineNr), MatchError> {
     let mut toplnum: LineNr = LineNr::ZERO;
     let mut botlnum: LineNr = LineNr::ZERO;
     let mut i = 0;
@@ -187,21 +183,16 @@ fn fill_pos_array(positions: &mut [LLPos], pos_list: &List) -> Option<(LineNr, L
         if tv.v_type() == VAR_LIST {
             let sub = list_items(tv.list_ref());
             if sub.is_empty() {
-                semsg!("E5030: Empty list at position {at}");
-                return None;
+                return Err(MatchError::EmptyPosition(at));
             }
-            let Ok(first) = tv_get_number_chk(&sub[0].li_tv) else {
-                return None;
-            };
+            let first = tv_get_number_chk(&sub[0].li_tv)?;
             lnum = number_as_lnum(first);
             if lnum <= LineNr::ZERO {
                 skip = true;
             } else {
                 positions[i].lnum = lnum;
                 if let Some(second) = sub.get(1) {
-                    let Ok(second) = tv_get_number_chk(&second.li_tv) else {
-                        return None;
-                    };
+                    let second = tv_get_number_chk(&second.li_tv)?;
                     col = number_as_col(second);
                     if col < ColNr::ZERO {
                         skip = true;
@@ -212,8 +203,8 @@ fn fill_pos_array(positions: &mut [LLPos], pos_list: &List) -> Option<(LineNr, L
                         // before the failure is even looked at.
                         if len < 0 {
                             skip = true;
-                        } else if read.is_err() {
-                            return None;
+                        } else {
+                            read?;
                         }
                     }
                 }
@@ -234,8 +225,7 @@ fn fill_pos_array(positions: &mut [LLPos], pos_list: &List) -> Option<(LineNr, L
                 };
             }
         } else {
-            semsg!("E5031: List or number required at position {at}");
-            return None;
+            return Err(MatchError::NotAPosition(at));
         }
 
         if !skip {
@@ -248,28 +238,19 @@ fn fill_pos_array(positions: &mut [LLPos], pos_list: &List) -> Option<(LineNr, L
             i += 1;
         }
     }
-    Some((toplnum, botlnum))
+    Ok((toplnum, botlnum))
 }
 
-/// Removes the match `id` from `window`'s list; `-1` when there is no such match.
-fn match_delete(mut window: Win, id: c_int, perr: bool) -> c_int {
+/// Removes the match `id` from `window`'s list, or says why it cannot.
+fn match_delete(mut window: Win, id: c_int) -> Result<(), MatchError> {
     let mut rtype = UPD_SOME_VALID;
 
     if id < 1 {
-        if perr {
-            semsg!(
-                "E802: Invalid ID: {} (must be greater than or equal to 1)",
-                int64_t::from(id)
-            );
-        }
-        return -1;
+        return Err(MatchError::DeleteInvalidId(id));
     }
 
     let Some(at) = window.w_matches.iter().position(|item| item.mit_id == id) else {
-        if perr {
-            semsg!("E803: ID not found: {}", int64_t::from(id));
-        }
-        return -1;
+        return Err(MatchError::NoSuchId(id));
     };
     let item = window.w_matches.remove(at);
     if item.mit_toplnum != LineNr::ZERO {
@@ -278,7 +259,7 @@ fn match_delete(mut window: Win, id: c_int, perr: bool) -> c_int {
     }
     drop(item);
     redraw_later(window, rtype);
-    0
+    Ok(())
 }
 
 /// Removes every match from `window`'s list, and the list's own storage
@@ -308,9 +289,10 @@ pub(crate) fn ex_match(excmd: &mut ExArg) {
     let id = excmd.line2.get();
     let skip = excmd.skip;
 
-    // Whatever happens next, the old pattern for this id goes.
+    // Whatever happens next, the old pattern for this id goes -- if there
+    // is one: its absence is not worth a word.
     if !skip {
-        match_delete(Win::current(), id, false);
+        let _ = match_delete(Win::current(), id);
     }
 
     let line = &excmd.line;
@@ -353,7 +335,9 @@ pub(crate) fn ex_match(excmd: &mut ExArg) {
             }
             let pat = cstr::owned(line.slice_at(p + 1, end - (p + 1)));
             let win = Win::current();
-            match_add(win, &group, Some(&pat), DEFAULT_PRIORITY, id, None, None);
+            if let Err(err) = match_add(win, &group, Some(&pat), DEFAULT_PRIORITY, id, None, None) {
+                err.report();
+            }
         }
     }
     excmd.line.next = excmd.line.find_next(end);
