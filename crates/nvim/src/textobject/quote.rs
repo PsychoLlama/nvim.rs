@@ -30,25 +30,30 @@ use crate::optionstr::OptString;
 use crate::pos::{equalpos, lt};
 use crate::types::{ColNr, NUL, OpArg};
 
-/// The column of the next `quotechar` at or after `col`, or -1 when there is
-/// none before the end of the line.
+/// The column of the next `quotechar` at or after `col`; `None` when there
+/// is none before the end of the line.
 ///
 /// A character named in `escape` ('quoteescape') takes the one after it out
 /// of consideration, whatever it is.
-fn find_next_quote(line: &[u8], mut col: c_int, quotechar: c_int, escape: Option<&[u8]>) -> c_int {
+fn find_next_quote(
+    line: &[u8],
+    mut col: c_int,
+    quotechar: c_int,
+    escape: Option<&[u8]>,
+) -> Option<c_int> {
     let at = |col: c_int| byte_at(line, col as usize);
     loop {
         let c = c_int::from(at(col));
         if c == NUL {
-            return -1;
+            return None;
         }
         if escape.is_some_and(|escape| find_char(escape, c).is_some()) {
             col += 1;
             if at(col) == 0 {
-                return -1;
+                return None;
             }
         } else if c == quotechar {
-            return col;
+            return Some(col);
         }
         col += c_cluster_len(&line[col as usize..]) as c_int;
     }
@@ -115,17 +120,13 @@ fn quoted_span(
         // find the *next* quoted string.
         if vis_bef_curs {
             // Assume this is a closing quote: move past the next opening one.
-            col_start = next(col_start + 1);
-            if col_start < 0 {
-                return None;
-            }
-            let mut end = next_esc(col_start + 1);
-            if end < 0 {
+            col_start = next(col_start + 1)?;
+            col_end = next_esc(col_start + 1).unwrap_or_else(|| {
                 // It was a starting quote after all.
-                end = col_start;
+                let end = col_start;
                 col_start = Win::current().w_cursor.col.get();
-            }
-            col_end = end;
+                end
+            });
         } else {
             let mut end = prev(col_start);
             if at(end) != quotechar {
@@ -146,22 +147,20 @@ fn quoted_span(
         // between two strings.
         let mut first_col = col_start;
         if !vis_empty {
+            // No quote after the selection leaves no string to find.
             first_col = if vis_bef_curs {
-                next(col_start)
+                next(col_start)?
             } else {
                 prev(col_start)
             };
         }
         col_start = 0;
         loop {
-            col_start = next(col_start);
-            if col_start < 0 || col_start > first_col {
+            col_start = next(col_start)?;
+            if col_start > first_col {
                 return None;
             }
-            let end = next_esc(col_start + 1);
-            if end < 0 {
-                return None;
-            }
+            let end = next_esc(col_start + 1)?;
             if col_start <= first_col && first_col <= end {
                 col_end = end;
                 break;
@@ -173,16 +172,9 @@ fn quoted_span(
         col_start = prev_esc(col_start);
         if at(col_start) != quotechar {
             // None before the cursor: look after it.
-            col_start = next(col_start);
-            if col_start < 0 {
-                return None;
-            }
+            col_start = next(col_start)?;
         }
-        let end = next_esc(col_start + 1);
-        if end < 0 {
-            return None;
-        }
-        col_end = end;
+        col_end = next_esc(col_start + 1)?;
     }
     Some((col_start, col_end))
 }
@@ -194,8 +186,13 @@ fn swap_cursor_and_anchor() {
 }
 
 /// `i"` / `a'` / ... : the text inside the quoted string under the cursor,
-/// cursor left at the end. Answers whether one was found.
-pub fn current_quote(op: &mut OpArg, count: c_int, include: bool, quotechar: c_int) -> bool {
+/// cursor left at the end.
+pub(crate) fn current_quote(
+    op: &mut OpArg,
+    count: c_int,
+    include: bool,
+    quotechar: c_int,
+) -> Result<(), NoObject> {
     // A copy of the cursor line: the cursor moves to the next line below
     // when the string ends the line, and the line is still read after that.
     let line = Lines::current().line_copy(Win::current().w_cursor.lnum);
@@ -216,7 +213,7 @@ pub fn current_quote(op: &mut OpArg, count: c_int, include: bool, quotechar: c_i
     if visual_active() {
         // This only works within one line.
         if visual_anchor().lnum != Win::current().w_cursor.lnum {
-            return false;
+            return Err(NoObject);
         }
         vis_bef_curs = lt(visual_anchor(), Win::current().w_cursor);
         vis_empty = equalpos(visual_anchor(), Win::current().w_cursor);
@@ -286,7 +283,7 @@ pub fn current_quote(op: &mut OpArg, count: c_int, include: bool, quotechar: c_i
                 swap_cursor_and_anchor();
             }
         }
-        return false;
+        return Err(NoObject);
     };
     col_start = start;
 
@@ -364,5 +361,5 @@ pub fn current_quote(op: &mut OpArg, count: c_int, include: bool, quotechar: c_i
     } else {
         op.inclusive = inclusive;
     }
-    true
+    Ok(())
 }

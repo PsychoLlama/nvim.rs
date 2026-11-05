@@ -32,7 +32,7 @@ use crate::normal::{VisualMode, set_visual_anchor, set_visual_mode, visual_activ
 use crate::option::cpo_has;
 use crate::pos::{equalpos, lt};
 use crate::search::{BACKWARD, FORWARD};
-use crate::types::{CpoFlag, Direction, Failed, NUL, OpArg, Pos};
+use crate::types::{CpoFlag, Direction, NUL, OpArg, Pos};
 
 /// One step of a position walk: [`incl`] going forward, [`decl`] going back.
 type StepFn = fn(&mut Pos) -> Moved;
@@ -44,7 +44,7 @@ type StepFn = fn(&mut Pos) -> Moved;
 /// followed by end of line, or by a space or tab -- two of them when
 /// 'cpoptions' has `J` -- with any number of `)`, `]`, `"` and `'` in
 /// between. A paragraph or section boundary ends one as well.
-pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
+pub(crate) fn findsent(dir: Direction, mut count: c_int) -> Result<(), NoObject> {
     let mut noskip = false; // do not skip blanks
     let mut pos = Win::current().w_cursor;
     let step: StepFn = if dir as c_int == FORWARD as c_int {
@@ -81,7 +81,7 @@ pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
                 // At the start of a paragraph or section, going forward:
                 // the next line is the answer.
                 if pos.lnum == Buf::current().b_ml.ml_line_count {
-                    return Err(Failed);
+                    return Err(NoObject);
                 }
                 pos.lnum += 1;
                 break 'found;
@@ -167,7 +167,7 @@ pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
                 }
                 if step(&mut pos).is_stuck() {
                     if count != 0 {
-                        return Err(Failed);
+                        return Err(NoObject);
                     }
                     noskip = true;
                     break;
@@ -189,7 +189,7 @@ pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
             // Nothing moved: step one character and try again.
             if step(&mut pos).is_stuck() {
                 if count != 0 {
-                    return Err(Failed);
+                    return Err(NoObject);
                 }
                 break;
             }
@@ -325,7 +325,7 @@ fn extend_sentences(mut count: c_int, include: bool, start_pos: Pos, mut pos: Po
 /// `is` / `as`: the sentence(s) under the cursor, cursor left at the end. In
 /// Visual mode an existing selection is extended by one or more sentences
 /// instead.
-pub fn current_sent(op: &mut OpArg, count: c_int, include: bool) -> Result<(), Failed> {
+pub(crate) fn current_sent(op: &mut OpArg, count: c_int, include: bool) -> Result<(), NoObject> {
     let mut start_pos = Win::current().w_cursor;
     let mut pos = start_pos;
     let _ = findsent(FORWARD, 1); // the start of the next sentence

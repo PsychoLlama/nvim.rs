@@ -34,11 +34,16 @@ mod quote;
 mod sent;
 mod word;
 
-pub use self::pair::*;
+pub(crate) use self::pair::*;
 pub use self::para::*;
-pub use self::quote::*;
-pub use self::sent::*;
-pub use self::word::*;
+pub(crate) use self::quote::*;
+pub(crate) use self::sent::*;
+pub(crate) use self::word::*;
+
+/// A text object or motion that ran out of text: nothing to select, or no
+/// further to move. Nothing is said about it; the caller beeps.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct NoObject;
 
 pub const kMTLineWise: MotionType = 1;
 pub const kMTCharWise: MotionType = 0;

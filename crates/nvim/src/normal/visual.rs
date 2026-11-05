@@ -817,13 +817,13 @@ pub(crate) fn nv_object(cmd_arg: &mut CmdArg) {
             // A tag block's end is already where it should be; the
             // operator must not push it back over the closing tag.
             cmd_arg.outcome |= Outcome::NO_ADJ_OP_END;
-            op.on_copy(|op| current_tagblock(op, n, include) != 0)
+            op.on_copy(|op| current_tagblock(op, n, include).is_ok())
         }
-        b'p' => op.on_copy(|op| current_par(op, n, include, c_int::from(b'p')) != 0),
+        b'p' => op.on_copy(|op| current_par(op, n, include, c_int::from(b'p')).is_ok()),
         b's' => op.on_copy(|op| current_sent(op, n, include).is_ok()),
         b'"' | b'\'' | b'`' => {
             let quote = cmd_arg.nchar;
-            op.on_copy(|op| current_quote(op, n, include, quote.code()))
+            op.on_copy(|op| current_quote(op, n, include, quote.code()).is_ok())
         }
         _ => false,
     };

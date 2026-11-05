@@ -34,7 +34,7 @@ use crate::option::vars::{P_SEL, P_WS, p_ws};
 use crate::option::{SavedCpo, cpo_has};
 use crate::pos::{equalpos, lt, ltoreq};
 use crate::search::{BACKWARD, FORWARD, findmatch, findmatchlimit};
-use crate::types::{ColNr, CpoFlag, FAIL, Failed, NUL, OK, OpArg, Pos};
+use crate::types::{ColNr, CpoFlag, NUL, OpArg, Pos};
 
 /// The `do_searchpair` pattern that matches any HTML start tag, used to find
 /// the one enclosing the cursor before its name is known.
@@ -56,13 +56,13 @@ const NAMED_END_TAG_REST: &[u8] = b">\\c";
 /// `include` takes the brackets themselves; without it a closing bracket
 /// preceded only by indent gives the object the whole line break, which is
 /// what `sol` records.
-pub fn current_block(
+pub(crate) fn current_block(
     op: &mut OpArg,
     mut count: c_int,
     include: bool,
     what: c_int,
     other: c_int,
-) -> Result<(), Failed> {
+) -> Result<(), NoObject> {
     let mut pos: Option<Pos>;
     let mut start_pos = Pos {
         lnum: LineNr::ZERO,
@@ -133,11 +133,11 @@ pub fn current_block(
     // Then the matching closing bracket.
     if pos.is_none() {
         Win::current().w_cursor = old_pos;
-        return Err(Failed);
+        return Err(NoObject);
     }
     let Some(mut end_pos) = findmatch(None, other) else {
         Win::current().w_cursor = old_pos;
-        return Err(Failed);
+        return Err(NoObject);
     };
     Win::current().w_cursor = end_pos;
 
@@ -161,7 +161,7 @@ pub fn current_block(
             // In Visual mode, an empty result means there is no inner block.
             if equalpos(start_pos, end_pos) && visual_active() {
                 Win::current().w_cursor = old_pos;
-                return Err(Failed);
+                return Err(NoObject);
             }
             // In Visual mode, a result no bigger than what we started with
             // extends to the next block out and excludes again. An empty area
@@ -178,13 +178,13 @@ pub fn current_block(
             pos = findmatch(None, what);
             let Some(found) = pos else {
                 Win::current().w_cursor = old_pos;
-                return Err(Failed);
+                return Err(NoObject);
             };
             start_pos = found;
             Win::current().w_cursor = found;
             let Some(found_end) = findmatch(None, other) else {
                 Win::current().w_cursor = old_pos;
-                return Err(Failed);
+                return Err(NoObject);
             };
             end_pos = found_end;
             Win::current().w_cursor = end_pos;
@@ -280,18 +280,21 @@ fn in_html_tag(end_tag: bool) -> bool {
 
 /// `do_searchpair` with the arguments this file always passes: no middle
 /// pattern, no skip expression, no match position, no stop line and no
-/// time limit.
-fn search_tag_pair(spat: &[u8], epat: &[u8], dir: c_int) -> c_int {
-    do_searchpair(spat, b"", epat, dir, None, 0, None, LineNr::ZERO, 0)
+/// time limit. Answers whether it found the pair.
+fn search_tag_pair(spat: &[u8], epat: &[u8], dir: c_int) -> bool {
+    do_searchpair(spat, b"", epat, dir, None, 0, None, LineNr::ZERO, 0) > 0
 }
 
 /// `it` / `at`: the region between an enclosing HTML start and end tag,
 /// cursor left at the end.
-pub fn current_tagblock(op: &mut OpArg, count_arg: c_int, include: bool) -> c_int {
+pub(crate) fn current_tagblock(
+    op: &mut OpArg,
+    count_arg: c_int,
+    include: bool,
+) -> Result<(), NoObject> {
     let mut count = count_arg;
     let mut do_include = include;
     let save_p_ws = p_ws();
-    let mut retval = FAIL;
     let mut is_inclusive = true;
     P_WS.set(false);
 
@@ -346,10 +349,10 @@ pub fn current_tagblock(op: &mut OpArg, count_arg: c_int, include: bool) -> c_in
     'again: loop {
         // Search backwards for the unclosed `<aaa>`.
         for _ in 0..count {
-            if search_tag_pair(ANY_START_TAG.to_bytes(), ANY_END_TAG.to_bytes(), BACKWARD) <= 0 {
+            if !search_tag_pair(ANY_START_TAG.to_bytes(), ANY_END_TAG.to_bytes(), BACKWARD) {
                 Win::current().w_cursor = old_pos;
                 P_WS.set(save_p_ws);
-                return retval;
+                return Err(NoObject);
             }
         }
         start_pos = Win::current().w_cursor;
@@ -371,13 +374,13 @@ pub fn current_tagblock(op: &mut OpArg, count_arg: c_int, include: bool) -> c_in
         if name.is_empty() {
             Win::current().w_cursor = old_pos;
             P_WS.set(save_p_ws);
-            return retval;
+            return Err(NoObject);
         }
         let spat = [&b"<"[..], &name, NAMED_START_TAG_REST].concat();
         let epat = [&b"</"[..], &name, NAMED_END_TAG_REST].concat();
-        let r = search_tag_pair(&spat, &epat, FORWARD);
+        let found = search_tag_pair(&spat, &epat, FORWARD);
 
-        if r < 1 || lt(Win::current().w_cursor, old_end) {
+        if !found || lt(Win::current().w_cursor, old_end) {
             // No other end, or it is before the previous one: this could
             // be an HTML tag with no matching end. Search backwards for
             // another start tag.
@@ -460,8 +463,6 @@ pub fn current_tagblock(op: &mut OpArg, count_arg: c_int, include: bool) -> c_in
             op.inclusive = is_inclusive;
         }
     }
-    retval = OK;
-
     P_WS.set(save_p_ws);
-    retval
+    Ok(())
 }

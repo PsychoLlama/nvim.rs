@@ -38,7 +38,7 @@ use crate::normal::{
 use crate::pos::{clearpos, equalpos, lt, ltoreq};
 use crate::search::{BACKWARD, FORWARD};
 use crate::state::mode::VIsual_select_exclu_adj;
-use crate::types::{Failed, NUL, OpArg, Pos};
+use crate::types::{NUL, OpArg, Pos};
 
 /// Whether [`cls`] should answer a WORD's classes rather than a word's.
 ///
@@ -96,7 +96,7 @@ fn back_in_line() {
 ///
 /// With `eol`, the last word stops at end of line, which is what an operator
 /// wants: `dw` on the last word of a line must not eat the newline.
-pub fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), Failed> {
+pub(crate) fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), NoObject> {
     Win::current().w_cursor.coladd = 0;
     cls_bigword.set(bigword);
     loop {
@@ -117,7 +117,7 @@ pub fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), Failed
         let last_line = Win::current().w_cursor.lnum == Buf::current().b_ml.ml_line_count;
         let mut i = inc_cursor();
         if i.is_stuck() || (i.left_the_line() && last_line) {
-            return Err(Failed); // started on the last character of the file
+            return Err(NoObject); // started on the last character of the file
         }
         if i.left_the_line() && eol && count == 0 {
             return Ok(()); // started on the last character of the line
@@ -152,7 +152,7 @@ pub fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), Failed
 ///
 /// With `stop`, a cursor already on the start of a word moves one word less,
 /// which is what makes `cb` from mid-word do the right thing.
-pub fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> Result<(), Failed> {
+pub(crate) fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> Result<(), NoObject> {
     Win::current().w_cursor.coladd = 0;
     cls_bigword.set(bigword);
     loop {
@@ -167,7 +167,7 @@ pub fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> Result<(), F
         }
         let sclass = cls();
         if dec_cursor().is_stuck() {
-            return Err(Failed); // started at the start of the file
+            return Err(NoObject); // started at the start of the file
         }
         'finished: {
             if !stop || sclass == cls() || sclass == 0 {
@@ -207,12 +207,12 @@ pub fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> Result<(), F
 /// (Real vi's `e` crosses a blank line and lands on the *first* character of
 /// the next non-blank line, while `E` does not. That looks like a bug and is
 /// not reproduced here -- upstream says so too.)
-pub fn end_word(
+pub(crate) fn end_word(
     mut count: c_int,
     bigword: bool,
     mut stop: bool,
     empty: bool,
-) -> Result<(), Failed> {
+) -> Result<(), NoObject> {
     Win::current().w_cursor.coladd = 0;
     cls_bigword.set(bigword);
 
@@ -239,13 +239,13 @@ pub fn end_word(
         }
         let sclass = cls();
         if inc_cursor().is_stuck() {
-            return Err(Failed);
+            return Err(NoObject);
         }
         'finished: {
             if cls() == sclass && sclass != 0 {
                 // In the middle of a word: just go to its end.
                 if skip_chars(sclass, FORWARD as c_int) {
-                    return Err(Failed);
+                    return Err(NoObject);
                 }
             } else if !stop || sclass == 0 {
                 // At the end of a word: go to the end of the next one,
@@ -260,11 +260,11 @@ pub fn end_word(
                         break 'finished;
                     }
                     if inc_cursor().is_stuck() {
-                        return Err(Failed); // hit the end of the file
+                        return Err(NoObject); // hit the end of the file
                     }
                 }
                 if skip_chars(cls(), FORWARD as c_int) {
-                    return Err(Failed);
+                    return Err(NoObject);
                 }
             }
             dec_cursor(); // overshot: back one
@@ -278,7 +278,7 @@ pub fn end_word(
 /// `Err` when the start of the file was reached.
 ///
 /// With `eol`, an end of line stops the motion.
-pub fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), Failed> {
+pub(crate) fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), NoObject> {
     Win::current().w_cursor.coladd = 0;
     cls_bigword.set(bigword);
     loop {
@@ -289,7 +289,7 @@ pub fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), Fai
         let sclass = cls();
         let mut i = dec_cursor();
         if i.is_stuck() {
-            return Err(Failed);
+            return Err(NoObject);
         }
         if eol && i == Moved::NewLine {
             return Ok(());
@@ -328,12 +328,12 @@ pub fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), Fai
 /// Used with an operator pending and in Visual mode, where a `count` beyond
 /// the first extends the selection by that many more objects -- in whichever
 /// direction the cursor sits relative to the Visual start.
-pub fn current_word(
+pub(crate) fn current_word(
     op: &mut OpArg,
     mut count: c_int,
     include: bool,
     bigword: bool,
-) -> Result<(), Failed> {
+) -> Result<(), NoObject> {
     let mut start_pos = Pos {
         lnum: LineNr::ZERO,
         col: ColNr::ZERO,
@@ -395,7 +395,7 @@ pub fn current_word(
         if visual_active() && lt(Win::current().w_cursor, visual_anchor()) {
             // In Visual mode with the cursor at the start: move it back.
             if decl(&mut Win::current().cursor()).is_stuck() {
-                return Err(Failed);
+                return Err(NoObject);
             }
             if include != (cls() != 0) {
                 bck_word(1, bigword, true)?;
@@ -406,11 +406,11 @@ pub fn current_word(
         } else {
             // Move the cursor forward one word and/or run of white space.
             if incl(&mut Win::current().cursor()).is_stuck() {
-                return Err(Failed);
+                return Err(NoObject);
             }
             if include != (cls() == 0) {
                 if fwd_word(1, bigword, true).is_err() && count > 1 {
-                    return Err(Failed);
+                    return Err(NoObject);
                 }
                 // An end just past a newline must not include the first
                 // character of that line: put the cursor on the last
@@ -419,7 +419,7 @@ pub fn current_word(
                     inclusive = false;
                 }
             } else if end_word(1, bigword, true, true).is_err() {
-                return Err(Failed);
+                return Err(NoObject);
             }
         }
         count -= 1;

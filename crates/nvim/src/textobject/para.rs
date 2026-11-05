@@ -29,7 +29,7 @@ use crate::normal::{
 use crate::option::vars::{p_para, p_sections};
 use crate::search::{BACKWARD, FORWARD, linewhite};
 use crate::types::ColNr;
-use crate::types::{FAIL, LineNr, OK, OpArg};
+use crate::types::{LineNr, OpArg};
 
 /// `{` / `}` / `[[` / `]]`: move to the `count`th paragraph or section
 /// boundary in `dir`, answering whether one was found.
@@ -161,9 +161,10 @@ pub fn starts_para(lnum: LineNr, para: c_int, both: bool) -> bool {
 /// already more than one line and from the bottom of [`current_par`] when it
 /// would otherwise get stuck -- `Vipipip` on a single white line.
 ///
-/// Answers OK, or FAIL when the buffer ran out.
-fn extend_paragraphs(mut start_lnum: LineNr, count: c_int, include: bool) -> c_int {
-    let mut retval = OK;
+/// Answers `Err` when the buffer ran out -- with the cursor moved as far as
+/// it got, as upstream's.
+fn extend_paragraphs(mut start_lnum: LineNr, count: c_int, include: bool) -> Result<(), NoObject> {
+    let mut retval = Ok(());
     let dir = if start_lnum < visual_anchor().lnum {
         BACKWARD as c_int
     } else {
@@ -184,7 +185,7 @@ fn extend_paragraphs(mut start_lnum: LineNr, count: c_int, include: bool) -> c_i
             break;
         }
         if start_lnum == LineNr::new(limit(dir)) {
-            retval = FAIL;
+            retval = Err(NoObject);
             break;
         }
         // Two passes when white space is included: one over the
@@ -223,11 +224,16 @@ fn extend_paragraphs(mut start_lnum: LineNr, count: c_int, include: bool) -> c_i
 /// last line. In Visual mode an existing multi-line selection is extended
 /// instead.
 ///
-/// `type_0` is `p`; `S` (section) is not implemented upstream and answers
-/// FAIL.
-pub fn current_par(op: &mut OpArg, count: c_int, include: bool, type_0: c_int) -> c_int {
+/// `type_0` is `p`; `S` (section) is not implemented upstream and finds
+/// nothing.
+pub(crate) fn current_par(
+    op: &mut OpArg,
+    count: c_int,
+    include: bool,
+    type_0: c_int,
+) -> Result<(), NoObject> {
     if type_0 == 'S' as c_int {
-        return FAIL; // not implemented yet
+        return Err(NoObject); // not implemented yet
     }
     let mut start_lnum = Win::current().w_cursor.lnum;
 
@@ -270,7 +276,7 @@ pub fn current_par(op: &mut OpArg, count: c_int, include: bool, type_0: c_int) -
             break;
         }
         if end_lnum == Buf::current().b_ml.ml_line_count {
-            return FAIL;
+            return Err(NoObject);
         }
         if !include {
             do_white = line_is_white(end_lnum + 1);
@@ -323,7 +329,7 @@ pub fn current_par(op: &mut OpArg, count: c_int, include: bool, type_0: c_int) -
     }
     Win::current().w_cursor.lnum = end_lnum;
     Win::current().w_cursor.col = ColNr::ZERO;
-    OK
+    Ok(())
 }
 
 /// [`linewhite`] for a line of the current buffer.
