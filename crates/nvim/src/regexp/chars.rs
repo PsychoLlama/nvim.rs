@@ -10,7 +10,7 @@ use core::cmp::Ordering;
 use core::ffi::{CStr, c_int};
 
 use super::mbyte::{char_at_nul, cluster_len_at};
-use super::{ByteClass, MAGIC_ALL};
+use super::{ByteClass, MAGIC_ALL, Spelled};
 
 /// A magic metacharacter is held as its byte minus 256, so that the parser
 /// can tell `*` (a repeat) from `\*` (a literal star) by sign alone. These
@@ -29,11 +29,11 @@ pub(crate) const fn magic(c: u8) -> c_int {
     c as c_int - 256
 }
 
-/// The backslash an error message has to print in front of a metacharacter
-/// for the message to echo what the user typed: none under `\v`, where
-/// every metacharacter is bare, one otherwise.
-pub(crate) fn magic_prefix(rc: &RegCompiler) -> &'static str {
-    if rc.magic == MAGIC_ALL { "" } else { "\\" }
+/// How an error message spells a metacharacter so that it echoes what the
+/// user typed: bare under `\v`, where every metacharacter is, escaped
+/// otherwise.
+pub(crate) fn spelled(rc: &RegCompiler) -> Spelled {
+    Spelled::bare_if(rc.magic == MAGIC_ALL)
 }
 
 /// The control character a `\r`/`\t`/`\e`/`\b` abbreviation stands for.

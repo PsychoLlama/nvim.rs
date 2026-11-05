@@ -14,17 +14,13 @@
 
 use crate::regexp::NfaOp;
 use crate::regexp::RegCompiler;
-use crate::semsg;
-use crate::siemsg;
 use core::ffi::c_int;
 
-use super::{Parsed, Rejected, cursor};
+use super::{Parsed, cursor};
 use crate::mbyte::{char_at, char_len, utf_char2len};
-use crate::message::e_nopresub;
-use crate::message::emsg;
-use crate::os::cshim::gettext;
-use crate::regexp::state::rc_did_emsg;
-use crate::regexp::{RF_HASNL, getchr, magic, peekchr, reg_prev_sub, seen_endbrace, unmagic};
+use crate::regexp::{
+    CompileError, RF_HASNL, getchr, magic, peekchr, reg_prev_sub, seen_endbrace, unmagic,
+};
 
 /// The `\x` class shorthands, in the order upstream's two parallel tables
 /// (`classchars` and `nfa_classcodes`) paired them. The `\_x` form of each is
@@ -78,14 +74,11 @@ pub(crate) fn class_shorthand(rc: &mut RegCompiler, c: c_int, accepts_newline: b
         // Reachable two ways: `\_` followed by something that is not a
         // class, and — only in principle — a dispatch that sent a character
         // here that is not one either.
-        if accepts_newline {
-            let c = i64::from(c);
-            semsg!("E877: (NFA regexp) Invalid character class: {c}");
-            rc_did_emsg.set(true);
+        return Err(if accepts_newline {
+            CompileError::InvalidClass(i64::from(c))
         } else {
-            siemsg!("INTERNAL: Unknown character class char: {}", c);
-        }
-        return Err(Rejected);
+            CompileError::UnknownClass(c)
+        });
     };
 
     // `.` followed by a combining character is that grapheme, not the "any"
@@ -109,9 +102,7 @@ pub(crate) fn class_shorthand(rc: &mut RegCompiler, c: c_int, accepts_newline: b
 pub(crate) fn back_reference(rc: &mut RegCompiler, c: c_int) -> Parsed {
     let refnum = unmagic(c) - c_int::from(b'1');
     // A back-reference to a group that has not been closed yet cannot work.
-    if !seen_endbrace(rc, refnum + 1) {
-        return Err(Rejected);
-    }
+    seen_endbrace(rc, refnum + 1)?;
     rc.post.emit_op(NfaOp::backref(refnum + 1));
     rc.has_backref = 1;
     Ok(())
@@ -122,8 +113,7 @@ pub(crate) fn back_reference(rc: &mut RegCompiler, c: c_int) -> Parsed {
 /// whole run.
 pub(crate) fn previous_substitute(rc: &mut RegCompiler) -> Parsed {
     let Some(sub) = reg_prev_sub.with(Clone::clone) else {
-        emsg(gettext(e_nopresub));
-        return Err(Rejected);
+        return Err(CompileError::NoPreviousSubstitute);
     };
     let mut rest: &[u8] = &sub;
     let mut first = true;

@@ -51,7 +51,7 @@ use crate::regexp::{
     REGSTACK_INITIAL, RS_MCLOSE, RS_MOPEN, RS_ZOPEN, RegBehind, RegItem, RegStar, RegState, Rex,
     SavedInput, Slot, reg_getline,
 };
-use crate::types::int64_t;
+use crate::types::{Failed, int64_t};
 
 /// What one frame cost on upstream's byte stack: a `regitem_T` — the state
 /// (4), the group number (2, padded to 4), the node pointer (8) and the
@@ -344,50 +344,53 @@ impl RegStack {
     }
 
     /// Would `bytes` more put the stack over 'maxmempattern'? Reports E363
-    /// and refuses if so.
-    fn charge(&mut self, bytes: usize) -> bool {
+    /// and refuses if so: the matcher gives up the attempt where it stands,
+    /// and the next start column tries (and says it) again, as upstream's
+    /// does.
+    fn charge(&mut self, bytes: usize) -> Result<(), Failed> {
         // 'maxmempattern' is bounded far below `i64::MAX`, so a stack that
         // does not fit in one is over any limit there could be.
         let kbytes = i64::try_from(self.bytes >> 10).unwrap_or(i64::MAX);
         if kbytes >= p_mmp() {
             emsg(gettext(E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN));
-            return false;
+            return Err(Failed);
         }
         self.bytes += bytes;
-        true
+        Ok(())
     }
 
     /// Push a frame for `state` and hand it back for the caller to fill in.
     ///
-    /// `None` when 'maxmempattern' has been reached.
-    pub(crate) fn push(&mut self, state: RegState, scan: usize) -> Option<&mut RegItem> {
-        if !self.charge(REGITEM_BYTES) {
-            return None;
-        }
+    /// Refused, having said so, when 'maxmempattern' has been reached.
+    pub(crate) fn push(&mut self, state: RegState, scan: usize) -> Result<&mut RegItem, Failed> {
+        self.charge(REGITEM_BYTES)?;
         self.frames.push(RegItem {
             rs_state: state,
             rs_scan: scan,
             ..BLANK_FRAME
         });
-        self.frames.last_mut()
+        // Never empty: the frame was just pushed. `ok_or` keeps the answer
+        // the `Option` it was, with no check of its own.
+        self.frames.last_mut().ok_or(Failed)
     }
 
     /// Push a `\{n,m}` counter and the frame that reads it.
-    pub(crate) fn push_star(&mut self, state: RegState, scan: usize, counter: RegStar) -> bool {
-        if !self.charge(REGSTAR_BYTES) {
-            return false;
-        }
+    pub(crate) fn push_star(
+        &mut self,
+        state: RegState,
+        scan: usize,
+        counter: RegStar,
+    ) -> Result<(), Failed> {
+        self.charge(REGSTAR_BYTES)?;
         self.stars.push(counter);
-        self.push(state, scan).is_some()
+        self.push(state, scan).map(drop)
     }
 
     /// Push a look-behind snapshot and the frame that reads it.
-    pub(crate) fn push_behind(&mut self, state: RegState, scan: usize) -> bool {
-        if !self.charge(REGBEHIND_BYTES) {
-            return false;
-        }
+    pub(crate) fn push_behind(&mut self, state: RegState, scan: usize) -> Result<(), Failed> {
+        self.charge(REGBEHIND_BYTES)?;
         self.behinds.push(BLANK_BEHIND);
-        self.push(state, scan).is_some()
+        self.push(state, scan).map(drop)
     }
 
     /// The frame on top.

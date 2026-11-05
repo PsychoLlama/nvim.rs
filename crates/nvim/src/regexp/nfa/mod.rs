@@ -38,22 +38,8 @@ pub(crate) use self::postfix::Postfix;
 pub(crate) use self::program::*;
 pub(crate) use self::run::*;
 
-/// The parser refused the pattern, so there is no postfix program.
-///
-/// It stands for both of upstream's reasons to answer `FAIL`, which it never
-/// told apart either:
-///
-/// * the pattern is invalid, and the arm that found it has already reported
-///   which `E` code applies and set `rc_did_emsg`;
-/// * 'regexpengine' is 0 and this engine has *declined* a pattern it could
-///   only compile badly — a wide `\{n,m}` bound. Nothing is reported and
-///   `vim_regcomp` hands the pattern to the backtracking engine instead.
-///
-/// The two are told apart by `rc_did_emsg`, which outlives the call, not by
-/// this value.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct Rejected;
-
 /// What a parse function answers: the postfix program has been appended to,
-/// or the pattern was refused.
-pub(crate) type Parsed<T = ()> = Result<T, Rejected>;
+/// or why the pattern is refused -- an invalid pattern, or, under
+/// 'regexpengine' 0, a pattern this engine declines to compile badly (a wide
+/// `\{n,m}` bound), which `vim_regcomp` hands to the backtracking engine.
+pub(crate) type Parsed<T = ()> = super::Compiled<T>;

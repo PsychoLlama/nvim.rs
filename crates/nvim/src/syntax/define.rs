@@ -455,7 +455,7 @@ pub(crate) fn read_pattern(
     // first, to avoid the 'l' flag.
     let pattern = cstr::owned(&tail[1..end]);
     let _cpo = SavedCpo::empty();
-    ci.sp_prog = vim_regcomp_ext(&pattern, RE_MAGIC, extmatch);
+    ci.sp_prog = vim_regcomp_ext(&pattern, RE_MAGIC, extmatch).ok();
     ci.sp_pattern = Some(pattern);
     ci.sp_prog.as_ref()?;
     ci.sp_ic = cur_syn_block().b_syn_ic;

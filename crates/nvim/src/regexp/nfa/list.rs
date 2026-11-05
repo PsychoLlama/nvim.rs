@@ -26,7 +26,7 @@
 
 use crate::regexp::NfaOp;
 use crate::regexp::NotAnOpcode;
-use crate::types::ColNr;
+use crate::types::{ColNr, Failed};
 use core::cell::Cell;
 use core::ffi::c_int;
 
@@ -243,16 +243,17 @@ impl<'t, 'p> ThreadList<'t, 'p> {
         &mut self.threads[i]
     }
 
-    /// Reserve the next slot size up, or report E363 and refuse.
-    fn grow(&mut self) -> bool {
+    /// Reserve the next slot size up, or report E363 and refuse: the match
+    /// gives up, as upstream's does.
+    fn grow(&mut self) -> Result<(), Failed> {
         let newlen = self.slots * 3 / 2 + 50;
         if (((newlen * NFA_THREAD_BYTES) >> 10) as i64) >= p_mmp() {
             emsg(gettext(E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN));
-            return false;
+            return Err(Failed);
         }
         self.threads.reserve_exact(newlen - self.threads.len());
         self.slots = newlen;
-        true
+        Ok(())
     }
 
     /// Append a thread for `state`, carrying `subs` and `pim`.
@@ -382,7 +383,7 @@ pub(crate) fn addstate_here<'p>(
         // even though the result is one shorter than the list is now, and
         // 'maxmempattern' is charged against that. Rotating in place needs no
         // room at all, but the limit has to fire where it used to.
-        if l.n + count > l.slots && !l.grow() {
+        if l.n + count > l.slots && l.grow().is_err() {
             return false;
         }
         // What was appended moves to `listidx`, pushing the threads between
@@ -510,7 +511,7 @@ fn place<'p>(
         }
     }
 
-    if l.len() == l.slots && !l.grow() {
+    if l.len() == l.slots && l.grow().is_err() {
         return Place::Full;
     }
     lastlist.set(l.id);

@@ -19,15 +19,14 @@ use crate::regexp::NfaOp;
 use crate::regexp::RegCompiler;
 use core::ffi::c_int;
 
+use super::Parsed;
 use super::cursor;
 use super::equi_class::nfa_emit_equi_class;
 use crate::mbyte::utf_char2len;
-use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
-    CharClass, INT_MAX, MAGIC_OFF, NL, REGEXP_ABBR, REGEXP_INRANGE, backslash_abbr, coll_get_char,
-    pat_byte, pat_char, pat_charlen,
+    CharClass, CompileError, INT_MAX, MAGIC_OFF, NL, REGEXP_ABBR, REGEXP_INRANGE, Spelled,
+    backslash_abbr, coll_get_char, pat_byte, pat_char, pat_charlen,
 };
-use crate::semsg;
 
 use super::cursor::{
     advance_grapheme, byte_at, char_at, grapheme_len, recognize_char_class, take_cursor_bracketed,
@@ -65,8 +64,6 @@ pub(crate) enum Collection {
     Done,
     /// No closing `]`: the `[` is an ordinary character.
     Literal,
-    /// Already reported.
-    Failed,
 }
 
 /// Parse a collection whose `[` has already been consumed.
@@ -79,18 +76,16 @@ pub(crate) fn collection(
     rc: &mut RegCompiler,
     mut accepts_newline: bool,
     atom_start: usize,
-) -> Collection {
+) -> Parsed<Collection> {
     let end = cursor::collection_end(rc);
     if byte_at(rc, end) != b']' {
         if rc.strict != 0 {
             // Not `magic_prefix`: this wants the backslash whenever `[` is
             // not magic, which is one 'magic' level lower.
-            let prefix = if rc.magic > MAGIC_OFF { "" } else { "\\" };
-            semsg!("E769: Missing ] after {prefix}[");
-            rc_did_emsg.set(true);
-            return Collection::Failed;
+            let spelled = Spelled::bare_if(rc.magic > MAGIC_OFF);
+            return Err(CompileError::MissingBracket(spelled));
         }
-        return Collection::Literal;
+        return Ok(Collection::Literal);
     }
 
     // `[0-9]` and its kin are really `\d` and can be one state instead of
@@ -104,7 +99,7 @@ pub(crate) fn collection(
             rc.post.emit_op(NfaOp::Or);
         }
         skip_past(rc, end);
-        return Collection::Done;
+        return Ok(Collection::Done);
     }
 
     let negated = pat_byte(rc, 0) == b'^';
@@ -162,9 +157,7 @@ pub(crate) fn collection(
                 b'd' | b'o' | b'x' | b'u' | b'U' => {
                     startc = coll_get_char(rc);
                     if startc == INT_MAX {
-                        semsg!("E1541: Value too large, max Unicode codepoint is U+10FFFF");
-                        rc_did_emsg.set(true);
-                        return Collection::Failed;
+                        return Err(CompileError::CodepointTooLarge);
                     }
                     got_coll_char = true;
                     // `coll_get_char` left the cursor past the escape; the
@@ -183,9 +176,7 @@ pub(crate) fn collection(
             range_endpoint = true;
             startc = oldstartc;
             if startc > endc {
-                semsg!("E944: Reverse range in character class");
-                rc_did_emsg.set(true);
-                return Collection::Failed;
+                return Err(CompileError::ReverseRange);
             }
             emit_span(rc, startc, endc);
             emit_range = false;
@@ -239,7 +230,7 @@ pub(crate) fn collection(
         });
         rc.post.emit_op(NfaOp::Or);
     }
-    Collection::Done
+    Ok(Collection::Done)
 }
 
 /// Put the cursor past the collection's closing `]`.

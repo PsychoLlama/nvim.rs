@@ -24,10 +24,8 @@ use super::literal::{
     back_reference, class_shorthand, is_class_shorthand, literal, previous_substitute,
 };
 use super::parse::nfa_reg;
-use super::{Parsed, Rejected, cursor};
-use crate::regexp::state::rc_did_emsg;
-use crate::regexp::{NL, REG_PAREN, RF_HASNL, getchr, magic, unmagic};
-use crate::semsg;
+use super::{Parsed, cursor};
+use crate::regexp::{CompileError, NL, REG_PAREN, RF_HASNL, getchr, magic, unmagic};
 use crate::types::NUL;
 
 const M_AMP: c_int = magic(b'&');
@@ -127,9 +125,9 @@ pub(crate) fn nfa_regatom(rc: &mut RegCompiler) -> Parsed {
         M_BAR | M_AMP | M_PAREN_CLOSE | M_EQUAL | M_QUESTION | M_PLUS | M_AT | M_STAR | M_BRACE => {
             // Every arm above is a magic token, so `unmagic` answers the one
             // ASCII byte it was built from; the low byte is that byte.
-            let c = char::from(unmagic(c).cast_unsigned().to_le_bytes()[0]);
-            semsg!("E866: (NFA regexp) Misplaced {c}");
-            Err(Rejected)
+            Err(CompileError::Misplaced(
+                unmagic(c).cast_unsigned().to_le_bytes()[0],
+            ))
         }
 
         M_TILDE => previous_substitute(rc),
@@ -146,18 +144,15 @@ pub(crate) fn nfa_regatom(rc: &mut RegCompiler) -> Parsed {
 }
 
 fn nul_found() -> Parsed {
-    semsg!("E865: (NFA) Regexp end encountered prematurely");
-    rc_did_emsg.set(true);
-    Err(Rejected)
+    Err(CompileError::PrematureEnd)
 }
 
 /// A `[` that may open a collection. If it does not close, it is an ordinary
 /// character — unless 'regexpengine' strictness is on, where the missing `]`
 /// is an error.
 fn bracketed(rc: &mut RegCompiler, accepts_newline: bool, atom_start: usize, c: c_int) -> Parsed {
-    match collection(rc, accepts_newline, atom_start) {
+    match collection(rc, accepts_newline, atom_start)? {
         Collection::Done => Ok(()),
-        Collection::Failed => Err(Rejected),
         Collection::Literal => literal(rc, c, atom_start),
     }
 }

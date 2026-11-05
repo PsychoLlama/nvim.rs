@@ -18,16 +18,11 @@ use core::ffi::c_int;
 use super::compile::use_multibytecode;
 use super::op::BtOp;
 use crate::mbyte::utf_iscomposing_legacy;
-use crate::message::e_nopresub;
-use crate::message::emsg;
-use crate::os::cshim::gettext;
 use crate::regexp::mbyte::{char_at_nul, char_len_at, composes_at};
-use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
-    GRAPHEME_STATE_INIT, HASWIDTH, NOT_MULTI, SIMPLE, getchr, magic, peekchr, re_multi_type,
-    reg_prev_sub, skipchr, ungetchr, unmagic,
+    CompileError, Compiled, GRAPHEME_STATE_INIT, HASWIDTH, NOT_MULTI, SIMPLE, getchr, magic,
+    peekchr, re_multi_type, reg_prev_sub, skipchr, ungetchr, unmagic,
 };
-use crate::semsg;
 use crate::types::{GraphemeState, NUL};
 
 /// The `\x` class shorthands, in the order upstream's two parallel tables
@@ -79,16 +74,14 @@ pub(crate) fn class_shorthand(
     flagp: &mut c_int,
     c: c_int,
     crosses_lines: bool,
-) -> Option<Node> {
+) -> Compiled<Node> {
     let Some(&(_, code)) = CLASS_SHORTHANDS
         .iter()
         .find(|(name, _)| c_int::from(*name) == unmagic(c))
     else {
         // The only way to get here is `\_` followed by something that is not
         // a class.
-        semsg!("E63: Invalid use of \\_");
-        rc_did_emsg.set(true);
-        return None;
+        return Err(CompileError::InvalidUnderscore);
     };
 
     // `.` followed by a combining character is that grapheme, not the "any"
@@ -100,16 +93,16 @@ pub(crate) fn class_shorthand(
 
     let ret = rc.code.node_nl(code, crosses_lines);
     *flagp |= HASWIDTH | SIMPLE;
-    Some(ret)
+    Ok(ret)
 }
 
 /// A single character that has to be matched as a whole rather than as
 /// bytes, because a multi may follow it or it can carry combining marks.
-fn multibyte_node(rc: &mut RegCompiler, flagp: &mut c_int, c: c_int) -> Option<Node> {
+fn multibyte_node(rc: &mut RegCompiler, flagp: &mut c_int, c: c_int) -> Compiled<Node> {
     let ret = rc.code.node(BtOp::Multibytecode);
     rc.code.char(c);
     *flagp |= HASWIDTH | SIMPLE;
-    Some(ret)
+    Ok(ret)
 }
 
 /// A run of ordinary characters, emitted as one `EXACTLY` node.
@@ -118,7 +111,7 @@ fn multibyte_node(rc: &mut RegCompiler, flagp: &mut c_int, c: c_int) -> Option<N
 /// repeats only the `c`: everything but the last character of the run is
 /// safe to swallow. `one_exactly` — set while parsing a `\%[...]` member —
 /// caps the run at one character.
-pub(crate) fn literal_run(rc: &mut RegCompiler, flagp: &mut c_int, mut c: c_int) -> Option<Node> {
+pub(crate) fn literal_run(rc: &mut RegCompiler, flagp: &mut c_int, mut c: c_int) -> Compiled<Node> {
     if use_multibytecode(rc, c) {
         return multibyte_node(rc, flagp, c);
     }
@@ -142,7 +135,7 @@ pub(crate) fn literal_run(rc: &mut RegCompiler, flagp: &mut c_int, mut c: c_int)
     if len == 1 {
         *flagp |= SIMPLE;
     }
-    Some(ret)
+    Ok(ret)
 }
 
 /// Swallow the combining characters that belong with the character just
@@ -161,11 +154,9 @@ fn emit_combining_marks(rc: &mut RegCompiler) {
 
 /// `\~`: the text of the last `:substitute` replacement, as literal
 /// characters.
-pub(crate) fn previous_substitute(rc: &mut RegCompiler, flagp: &mut c_int) -> Option<Node> {
+pub(crate) fn previous_substitute(rc: &mut RegCompiler, flagp: &mut c_int) -> Compiled<Node> {
     let Some(sub) = reg_prev_sub.with(Clone::clone) else {
-        emsg(gettext(e_nopresub));
-        rc_did_emsg.set(true);
-        return None;
+        return Err(CompileError::NoPreviousSubstitute);
     };
     let ret = rc.code.node(BtOp::Exactly);
     for &byte in sub.iter() {
@@ -178,5 +169,5 @@ pub(crate) fn previous_substitute(rc: &mut RegCompiler, flagp: &mut c_int) -> Op
             *flagp |= SIMPLE;
         }
     }
-    Some(ret)
+    Ok(ret)
 }

@@ -7,6 +7,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::regexp::Compiled;
 use crate::regexp::ExtMatch;
 use crate::regexp::ExtMatchRef;
 use crate::regexp::RF_HAD_EOL;
@@ -236,9 +237,9 @@ fn try_match(rex: Rex, prog: &NfaRegProg, col: &mut ColNr) -> Attempt {
     Attempt::Ran(nfa_regtry(rex, prog, *col))
 }
 
-/// Compile `rc`'s pattern into a program, or answer `None` after reporting
-/// why not -- or, under 'regexpengine' 0, having declined it quietly.
-pub(crate) fn nfa_regcomp(rc: &mut RegCompiler) -> Option<NfaRegProg> {
+/// Compile `rc`'s pattern into a program, or answer why not -- which,
+/// under 'regexpengine' 0, may be that this engine declines it.
+pub(crate) fn nfa_regcomp(rc: &mut RegCompiler) -> Compiled<NfaRegProg> {
     rc.nfa.count = 0;
     rc.nfa.states = Vec::new();
     rc.post.start(rc.pattern_len);
@@ -247,16 +248,11 @@ pub(crate) fn nfa_regcomp(rc: &mut RegCompiler) -> Option<NfaRegProg> {
     rc.has_backref = 0;
     rc.restart();
 
-    if re2post(rc).is_err() {
-        return None;
-    }
+    re2post(rc)?;
     // The first pass counts the states, which sizes the thread lists.
-    post2nfa(&mut rc.nfa, rc.post.items(), Pass::Count);
+    post2nfa(&mut rc.nfa, rc.post.items(), Pass::Count)?;
     rc.nfa.states = Vec::with_capacity(usize::try_from(rc.nfa.count).unwrap_or(0));
-    let start = post2nfa(&mut rc.nfa, rc.post.items(), Pass::Build);
-    if start.is_none() {
-        return None;
-    }
+    let start = post2nfa(&mut rc.nfa, rc.post.items(), Pass::Build)?;
     let mut flags = rc.flags;
     if rc.had_eol != 0 {
         flags |= RF_HAD_EOL;
@@ -281,5 +277,5 @@ pub(crate) fn nfa_regcomp(rc: &mut RegCompiler) -> Option<NfaRegProg> {
     prog.reganch = nfa_get_reganch(&prog.states, start, 0);
     prog.regstart = nfa_get_regstart(&prog.states, start, 0);
     prog.match_text = nfa_get_match_text(&prog.states, start);
-    Some(prog)
+    Ok(prog)
 }

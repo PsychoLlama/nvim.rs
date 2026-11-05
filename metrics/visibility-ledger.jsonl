@@ -169,7 +169,7 @@
 {"path":"neovim::grid::schar_get_first_codepoint","kind":"fn","file":"crates/nvim/src/grid/schar.rs","tests":["crates/nvim/tests/unit/grid.rs"]}
 {"path":"neovim::grid::schar_high","kind":"fn","file":"crates/nvim/src/grid/schar.rs","tests":["crates/nvim/tests/unit/grid.rs"]}
 {"path":"neovim::grid::schar_len","kind":"fn","file":"crates/nvim/src/grid/schar.rs","tests":["crates/nvim/tests/unit/grid.rs"]}
-{"path":"neovim::guard::Suppress","kind":"struct","file":"crates/nvim/src/guard.rs","tests":["crates/nvim/tests/unit/eval_decode.rs","crates/nvim/tests/unit/typval_dict.rs"]}
+{"path":"neovim::guard::Suppress","kind":"struct","file":"crates/nvim/src/guard.rs","tests":["crates/nvim/tests/unit/eval_decode.rs","crates/nvim/tests/unit/regexp.rs","crates/nvim/tests/unit/typval_dict.rs"]}
 {"path":"neovim::guard::sandbox","kind":"static","file":"crates/nvim/src/guard.rs","tests":["crates/nvim/tests/unit/typval_dict.rs"]}
 {"path":"neovim::harness::schar_get","kind":"fn","file":"crates/nvim/src/harness.rs","tests":["crates/nvim/tests/unit/grid.rs","crates/nvim/tests/unit/mbyte.rs","crates/nvim/tests/unit/mbyte_oracle.rs","crates/nvim/tests/unit/optionstr_oracle.rs"]}
 {"path":"neovim::harness::utf_ptr2char","kind":"fn","file":"crates/nvim/src/harness.rs","tests":["crates/nvim/tests/unit/mbyte.rs","crates/nvim/tests/unit/mbyte_oracle.rs"]}

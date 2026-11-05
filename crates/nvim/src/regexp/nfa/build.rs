@@ -24,12 +24,11 @@ use crate::regexp::NfaOp;
 use crate::regexp::NfaStates;
 use core::ffi::c_int;
 
+use super::Parsed;
 use super::run::failure_chance;
 use super::sub::match_follows;
 use crate::mbyte::utf_char2len;
-use crate::regexp::NfaRegProg;
-use crate::regexp::state::rc_did_emsg;
-use crate::semsg;
+use crate::regexp::{CompileError, NfaRegProg};
 use crate::types::MB_MAXBYTES;
 
 /// How far the width walk follows a `NFA_SPLIT` before giving up.
@@ -92,15 +91,15 @@ struct Frag {
 
 /// Take the next state of the program.
 ///
-/// `None` once the counting pass's estimate is used up, which the callers
-/// treat as "give up on this pattern" — silently, as upstream does.
-fn state(states: &mut NfaStates, c: c_int, out: StateId, out1: StateId) -> Option<StateId> {
+/// Declined once the counting pass's estimate is used up: the pattern is
+/// given up on silently, as upstream does.
+fn state(states: &mut NfaStates, c: c_int, out: StateId, out1: StateId) -> Parsed<StateId> {
     if states.states.len() >= usize::try_from(states.count).unwrap_or(0) {
-        return None;
+        return Err(CompileError::Declined);
     }
     let id = StateId::new(states.states.len());
     states.states.push(NfaState::new(c, out, out1));
-    Some(id)
+    Ok(id)
 }
 
 /// A one-element patch list over the edge `slot`.
@@ -150,14 +149,10 @@ impl Stack {
         }
     }
 
-    /// Pop, reporting E874 when the program asks for an operand that is not
-    /// there.
-    fn pop(&mut self) -> Option<Frag> {
-        let frag = self.frags.pop();
-        if frag.is_none() {
-            semsg!("E874: (NFA) Could not pop the stack!");
-        }
-        frag
+    /// Pop, refusing with E874 when the program asks for an operand that is
+    /// not there.
+    fn pop(&mut self) -> Parsed<Frag> {
+        self.frags.pop().ok_or(CompileError::CannotPop)
     }
 }
 
@@ -170,11 +165,11 @@ pub(crate) enum Pass {
     Build,
 }
 
-/// The widest match the machine from `startstate` can make, or -1 when that
+/// The widest match the machine from `startstate` can make, or `None` when that
 /// cannot be bounded. Backs `\@<=`, which has to know how far back to start.
-fn nfa_max_width(states: &[NfaState], startstate: StateId, depth: c_int) -> c_int {
+fn nfa_max_width(states: &[NfaState], startstate: StateId, depth: c_int) -> Option<c_int> {
     if depth > MAX_DEPTH {
-        return -1;
+        return None;
     }
     let mut len = 0;
     let mut state = startstate;
@@ -185,14 +180,11 @@ fn nfa_max_width(states: &[NfaState], startstate: StateId, depth: c_int) -> c_in
         let code = op(state);
         match NfaOp::try_from(code) {
             // The end of the lookbehind's own pattern.
-            Ok(NfaOp::EndInvisible | NfaOp::EndInvisibleNeg) => return len,
+            Ok(NfaOp::EndInvisible | NfaOp::EndInvisibleNeg) => return Some(len),
             Ok(NfaOp::Split) => {
-                let l = nfa_max_width(states, out_of(state), depth + 1);
-                let r = nfa_max_width(states, out1_of(state), depth + 1);
-                if l < 0 || r < 0 {
-                    return -1;
-                }
-                return len + l.max(r);
+                let l = nfa_max_width(states, out_of(state), depth + 1)?;
+                let r = nfa_max_width(states, out1_of(state), depth + 1)?;
+                return Some(len + l.max(r));
             }
             // Any character, so as wide as a character gets. A
             // collection continues past its `NFA_END_COLL`, which is
@@ -201,7 +193,7 @@ fn nfa_max_width(states: &[NfaState], startstate: StateId, depth: c_int) -> c_in
                 len += c_int::try_from(MB_MAXBYTES).expect("`MB_MAXBYTES` is 21");
                 if c != NfaOp::Any {
                     if out1_of(state).is_none() || out_of(out1_of(state)).is_none() {
-                        return -1;
+                        return None;
                     }
                     state = out_of(out1_of(state));
                     continue;
@@ -226,8 +218,8 @@ fn nfa_max_width(states: &[NfaState], startstate: StateId, depth: c_int) -> c_in
             }
             // A back-reference is as wide as whatever it captured, and a
             // line break or a skip is unbounded.
-            Ok(NfaOp::Newl | NfaOp::Skip) => return -1,
-            Ok(reference) if reference.is_reference() => return -1,
+            Ok(NfaOp::Newl | NfaOp::Skip) => return None,
+            Ok(reference) if reference.is_reference() => return None,
             // Zero width.
             Ok(marker) if marker.is_capture_marker() => {}
             Ok(
@@ -266,21 +258,21 @@ fn nfa_max_width(states: &[NfaState], startstate: StateId, depth: c_int) -> c_in
             // this walk cannot reason about.
             _ => {
                 if code < 0 {
-                    return -1;
+                    return None;
                 }
                 len += utf_char2len(code);
             }
         }
         state = out_of(state);
     }
-    -1
+    None
 }
 
 /// Run the postfix program.
 ///
 /// [`Pass::Count`] only adds up `count` and returns no state; [`Pass::Build`]
-/// returns the machine's entry state, or none once it has said why not.
-pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> StateId {
+/// returns the machine's entry state, or why there is none.
+pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> Parsed<StateId> {
     let counting = pass == Pass::Count;
     let cap = if counting {
         0
@@ -314,20 +306,16 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> S
             Ok(NfaOp::Concat) => {
                 // Two fragments run one after the other: the first's loose
                 // ends go to the second's start.
-                let (Some(e2), Some(e1)) = (stack.pop(), stack.pop()) else {
-                    return StateId::NONE;
-                };
+                let e2 = stack.pop()?;
+                let e1 = stack.pop()?;
                 patch(states, e1.out, e2.start);
                 stack.push(e1.start, e2.out);
             }
             Ok(NfaOp::Or) => {
                 // A choice between two fragments.
-                let (Some(e2), Some(e1)) = (stack.pop(), stack.pop()) else {
-                    return StateId::NONE;
-                };
-                let Some(s) = state(states, NfaOp::Split.code(), e1.start, e2.start) else {
-                    return StateId::NONE;
-                };
+                let e2 = stack.pop()?;
+                let e1 = stack.pop()?;
+                let s = state(states, NfaOp::Split.code(), e1.start, e2.start)?;
                 stack.push(s, append(states, e1.out, e2.out));
             }
             // A repeat is a split whose taken branch loops back to it; `\?`
@@ -337,18 +325,14 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> S
                 repeat
                 @ (NfaOp::Star | NfaOp::StarNongreedy | NfaOp::Quest | NfaOp::QuestNongreedy),
             ) => {
-                let Some(e) = stack.pop() else {
-                    return StateId::NONE;
-                };
+                let e = stack.pop()?;
                 let greedy = matches!(repeat, NfaOp::Star | NfaOp::Quest);
                 let (out, out1) = if greedy {
                     (e.start, StateId::NONE)
                 } else {
                     (StateId::NONE, e.start)
                 };
-                let Some(s) = state(states, NfaOp::Split.code(), out, out1) else {
-                    return StateId::NONE;
-                };
+                let s = state(states, NfaOp::Split.code(), out, out1)?;
                 let exit = list1(states, if greedy { Slot::out1(s) } else { Slot::out(s) });
                 if matches!(repeat, NfaOp::Star | NfaOp::StarNongreedy) {
                     patch(states, e.out, s);
@@ -362,13 +346,8 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> S
                 // off with the state the matcher stops at, and point the
                 // opening state's `out1` at it so a walk can skip over the
                 // whole collection.
-                let Some(e) = stack.pop() else {
-                    return StateId::NONE;
-                };
-                let Some(s) = state(states, NfaOp::EndColl.code(), StateId::NONE, StateId::NONE)
-                else {
-                    return StateId::NONE;
-                };
+                let e = stack.pop()?;
+                let s = state(states, NfaOp::EndColl.code(), StateId::NONE, StateId::NONE)?;
                 patch(states, e.out, s);
                 states.states[e.start.index()].out1 = s;
                 stack.push(e.start, list1(states, Slot::out(s)));
@@ -376,9 +355,8 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> S
             Ok(NfaOp::Range) => {
                 // Two members become a range: their character values move
                 // into `val` and the opcodes say which end each one is.
-                let (Some(e2), Some(e1)) = (stack.pop(), stack.pop()) else {
-                    return StateId::NONE;
-                };
+                let e2 = stack.pop()?;
+                let e1 = stack.pop()?;
                 // Both fragments are single member states.
                 for (end, op) in [(e2.start, NfaOp::RangeMax), (e1.start, NfaOp::RangeMin)] {
                     let member = &mut states.states[end.index()];
@@ -398,13 +376,8 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> S
                 let mut first_out = Slot::END;
                 while n > 0 {
                     n -= 1;
-                    let Some(e) = stack.pop() else {
-                        return StateId::NONE;
-                    };
-                    let Some(new) = state(states, NfaOp::Split.code(), e.start, StateId::NONE)
-                    else {
-                        return StateId::NONE;
-                    };
+                    let e = stack.pop()?;
+                    let new = state(states, NfaOp::Split.code(), e.start, StateId::NONE)?;
                     if first_out == Slot::END {
                         first_out = e.out;
                     }
@@ -432,27 +405,14 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> S
                     NfaOp::PrevAtomJustBefore | NfaOp::PrevAtomJustBeforeNeg
                 );
                 let pattern = look == NfaOp::PrevAtomLikePattern;
-                let Some(e) = stack.pop() else {
-                    return StateId::NONE;
-                };
-                let Some(end) = state(states, end_state.code(), StateId::NONE, StateId::NONE)
-                else {
-                    return StateId::NONE;
-                };
-                let Some(s) = state(states, start_state.code(), e.start, end) else {
-                    return StateId::NONE;
-                };
+                let e = stack.pop()?;
+                let end = state(states, end_state.code(), StateId::NONE, StateId::NONE)?;
+                let s = state(states, start_state.code(), e.start, end)?;
                 if pattern {
                     // `\@>` keeps what it matched, so the sub-match's end is
                     // recorded and the outer match resumes past it.
-                    let Some(skip) =
-                        state(states, NfaOp::Skip.code(), StateId::NONE, StateId::NONE)
-                    else {
-                        return StateId::NONE;
-                    };
-                    let Some(zend) = state(states, NfaOp::Zend.code(), end, StateId::NONE) else {
-                        return StateId::NONE;
-                    };
+                    let skip = state(states, NfaOp::Skip.code(), StateId::NONE, StateId::NONE)?;
+                    let zend = state(states, NfaOp::Zend.code(), end, StateId::NONE)?;
                     states.states[end.index()].out = skip;
                     patch(states, e.out, zend);
                     stack.push(s, list1(states, Slot::out(skip)));
@@ -462,8 +422,10 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> S
                     if before {
                         // With no explicit `\@123<=` width, work out how far
                         // back the pattern could possibly start.
+                        // An unbounded one is "unknown", which the state
+                        // spells as no positive width.
                         let width = if operand <= 0 {
-                            nfa_max_width(&states.states, e.start, 0)
+                            nfa_max_width(&states.states, e.start, 0).unwrap_or(0)
                         } else {
                             operand
                         };
@@ -481,18 +443,11 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> S
                 let inner = if stack.frags.is_empty() {
                     None
                 } else {
-                    match stack.pop() {
-                        Some(e) => Some(e),
-                        None => return StateId::NONE,
-                    }
+                    Some(stack.pop()?)
                 };
                 let start = inner.map_or(StateId::NONE, |e| e.start);
-                let Some(s) = state(states, item, start, StateId::NONE) else {
-                    return StateId::NONE;
-                };
-                let Some(s1) = state(states, mclose.code(), StateId::NONE, StateId::NONE) else {
-                    return StateId::NONE;
-                };
+                let s = state(states, item, start, StateId::NONE)?;
+                let s1 = state(states, mclose.code(), StateId::NONE, StateId::NONE)?;
                 match inner {
                     None => {
                         let edge = list1(states, Slot::out(s));
@@ -513,13 +468,8 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> S
             // A back-reference matches a run whose length is only known at
             // match time, so an `NFA_SKIP` follows it to consume the rest.
             Ok(reference) if reference.is_reference() => {
-                let Some(s) = state(states, item, StateId::NONE, StateId::NONE) else {
-                    return StateId::NONE;
-                };
-                let Some(s1) = state(states, NfaOp::Skip.code(), StateId::NONE, StateId::NONE)
-                else {
-                    return StateId::NONE;
-                };
+                let s = state(states, item, StateId::NONE, StateId::NONE)?;
+                let s1 = state(states, NfaOp::Skip.code(), StateId::NONE, StateId::NONE)?;
                 let edge = list1(states, Slot::out(s));
                 patch(states, edge, s1);
                 stack.push(s, list1(states, Slot::out(s1)));
@@ -528,9 +478,7 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> S
             // position assertion — is one state that stands alone. The
             // assertions keep their operand in `val`.
             _ => {
-                let Some(s) = state(states, item, StateId::NONE, StateId::NONE) else {
-                    return StateId::NONE;
-                };
+                let s = state(states, item, StateId::NONE, StateId::NONE)?;
                 if operand != 0 {
                     states.states[s.index()].val = operand;
                 }
@@ -543,23 +491,15 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> S
     if counting {
         // One more for the accepting state added below.
         states.count += 1;
-        return StateId::NONE;
+        return Ok(StateId::NONE);
     }
 
-    let Some(e) = stack.pop() else {
-        return StateId::NONE;
-    };
+    let e = stack.pop()?;
     if !stack.frags.is_empty() {
-        semsg!(
-            "E875: (NFA regexp) (While converting from postfix to NFA),too many states left on stack"
-        );
-        rc_did_emsg.set(true);
-        return StateId::NONE;
+        return Err(CompileError::StatesLeft);
     }
     if states.states.len() >= usize::try_from(states.count).unwrap_or(0) {
-        semsg!("E876: (NFA regexp) Not enough space to store the whole NFA ");
-        rc_did_emsg.set(true);
-        return StateId::NONE;
+        return Err(CompileError::NotEnoughStates);
     }
     // The accepting state, taken by hand rather than through `state`, whose
     // refusal would have been silent.
@@ -570,7 +510,7 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> S
         StateId::NONE,
     ));
     patch(states, e.out, matchstate);
-    e.start
+    Ok(e.start)
 }
 
 /// How many states one program item needs.

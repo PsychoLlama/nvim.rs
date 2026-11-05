@@ -38,7 +38,7 @@ use crate::mbyte::{
 };
 use crate::memline::Lines;
 use crate::memory::XString;
-use crate::message::{e_null, e_re_damg, e_resulting_text_too_long};
+use crate::message::{e_null, e_re_corr, e_re_damg, e_resulting_text_too_long};
 use crate::message::{emsg, iemsg};
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
@@ -116,13 +116,7 @@ impl<'d> Out<'d> {
     /// Is there room for `n` more bytes? The measuring pass has no buffer to
     /// overrun and always says yes.
     fn room(&self, n: usize) -> bool {
-        match &self.dest {
-            Some(dest) if self.at + n > dest.len() => {
-                iemsg(E_NOT_ENOUGH_SPACE);
-                false
-            }
-            _ => true,
-        }
+        !matches!(&self.dest, Some(dest) if self.at + n > dest.len())
     }
 
     /// Step over `n` bytes without writing them.
@@ -172,6 +166,34 @@ impl<'d> Out<'d> {
         if let Some(byte) = self.dest.as_mut().and_then(|dest| dest.get_mut(self.at)) {
             *byte = NUL as u8;
         }
+    }
+}
+
+/// Why an expansion produced nothing. Each is said by the entry point the
+/// caller called, once, with upstream's text.
+#[derive(Clone, Copy, Debug)]
+enum RegsubError {
+    /// Neither replacement text nor an expression ("can't happen").
+    NullArgument,
+    /// The match's backtracking program has lost its magic number.
+    CorruptProgram,
+    /// `\=` expressions nested past [`MAX_REGSUB_NESTING`].
+    NestingTooDeep,
+    /// The copying pass would have overrun the caller's buffer: the two
+    /// passes disagreed, which is a bug here.
+    NoSpace,
+}
+
+impl RegsubError {
+    /// Put the message out.
+    fn report(self) {
+        let text = match self {
+            Self::NullArgument => gettext(e_null),
+            Self::CorruptProgram => gettext(e_re_corr),
+            Self::NestingTooDeep => gettext(E_SUBSTITUTE_NESTING_TOO_DEEP),
+            Self::NoSpace => return iemsg(E_NOT_ENOUGH_SPACE),
+        };
+        emsg(text);
     }
 }
 
@@ -280,8 +302,8 @@ pub(crate) fn regtilde_owned(source: XString, magic: bool, preview: bool) -> (XS
 
 /// The size of what `source` -- or `expr`, when the replacement is an
 /// expression -- expands to after the string match `matches` over `line`,
-/// terminator included, written into `dest` on the copying pass. 0 on an
-/// error.
+/// terminator included, written into `dest` on the copying pass, or why
+/// there is none.
 ///
 /// `line` is the text `matches` ran over, which its capture spans index;
 /// neither it nor the match may have changed since
@@ -293,7 +315,7 @@ fn regsub_string(
     expr: Option<&TypVal>,
     dest: Option<&mut [u8]>,
     flags: c_int,
-) -> usize {
+) -> Result<usize, RegsubError> {
     // The capture spans are offsets into `line`, which `copy_capture` and
     // `submatch()` resolve them in. A string replacement has no lines to
     // cross, so a `\n` in it is a literal newline rather than a line break.
@@ -309,8 +331,7 @@ fn regsub_string(
 
 /// What `source` -- or `expr`, when the replacement is an expression --
 /// stands for after the string match `matches` over `line`. Both passes run
-/// here. `None` when the measuring pass answered no length, which is how
-/// the expansion reports a failure.
+/// here. `None` when the measuring pass found none, which has been said.
 pub(crate) fn regsub_to_vec(
     matches: &RegMatch,
     line: &CStr,
@@ -318,11 +339,16 @@ pub(crate) fn regsub_to_vec(
     expr: Option<&TypVal>,
 ) -> Option<Vec<u8>> {
     let magic = REGSUB_MAGIC as c_int;
-    let len = regsub_string(matches, line, source, expr, None, magic);
-    let size = Some(len).filter(|&size| size > 0)?;
+    let size = regsub_string(matches, line, source, expr, None, magic)
+        .inspect_err(|err| err.report())
+        .ok()?;
     let mut out = vec![0u8; size];
     let copy = REGSUB_COPY as c_int | magic;
-    regsub_string(matches, line, source, expr, Some(&mut out[..]), copy);
+    // A copying pass that stops short leaves what it wrote; the measured
+    // length stands.
+    if let Err(err) = regsub_string(matches, line, source, expr, Some(&mut out[..]), copy) {
+        err.report();
+    }
     out.truncate(size - 1);
     Some(out)
 }
@@ -335,7 +361,7 @@ fn regsub_buffer(
     source: &[u8],
     dest: Option<&mut [u8]>,
     flags: c_int,
-) -> usize {
+) -> Result<usize, RegsubError> {
     // A buffer match always works on `curbuf`.
     let buf = Buf::current();
     let rex = Expanding {
@@ -379,8 +405,8 @@ struct Expanding<'a> {
 }
 
 impl Expanding<'_> {
-    /// Does the match's program fail its magic check? Reports so when it
-    /// does. A match with no program has nothing to check.
+    /// Does the match's program fail its magic check? A match with no
+    /// program has nothing to check.
     fn magic_wrong(self) -> bool {
         let prog = match self.matched {
             Matched::Str { matches, .. } => matches.regprog.as_ref(),
@@ -402,25 +428,23 @@ fn getline(lines: &mut Lines, firstlnum: LineNr, maxline: LineNr, lnum: LineNr) 
     }
 }
 
-/// The expansion itself, against the match `rex` describes.
-/// Returns the size of the result including its NUL, or 0 on an error.
+/// The expansion itself, against the match `rex` describes: the size of
+/// the result including its NUL.
 fn regsub_both(
     rex: Expanding<'_>,
     source: Option<&[u8]>,
     expr: Option<&TypVal>,
     dest: Option<&mut [u8]>,
     flags: c_int,
-) -> usize {
+) -> Result<usize, RegsubError> {
     if source.is_none() && expr.is_none() {
-        emsg(gettext(e_null));
-        return 0;
+        return Err(RegsubError::NullArgument);
     }
     if rex.magic_wrong() {
-        return 0;
+        return Err(RegsubError::CorruptProgram);
     }
     if NESTING.get() == MAX_REGSUB_NESTING {
-        emsg(gettext(E_SUBSTITUTE_NESTING_TOO_DEEP));
-        return 0;
+        return Err(RegsubError::NestingTooDeep);
     }
 
     let source = source.unwrap_or_default();
@@ -435,12 +459,12 @@ fn regsub_both(
     };
 
     match outcome {
-        Outcome::NoSpace => return 0,
+        Outcome::NoSpace => return Err(RegsubError::NoSpace),
         Outcome::Done => out.terminate(),
         // Deliberately unterminated: upstream jumps past the NUL write.
         Outcome::Damaged => {}
     }
-    out.at + 1
+    Ok(out.at + 1)
 }
 
 /// The `\=` replacement: evaluate an expression and take its value as the
@@ -764,7 +788,8 @@ fn copy_run(text: &[u8], len: isize, case: &mut Case, backslash: bool, out: &mut
 }
 
 /// The measuring pass over `matches`' last match: the size of what `source`
-/// expands to, terminator included, or `None` on an error.
+/// expands to, terminator included, or `None` when there is none, which has
+/// been said.
 pub(crate) fn regsub_multi_len(
     matches: &RegMMatch,
     lnum: LineNr,
@@ -772,8 +797,9 @@ pub(crate) fn regsub_multi_len(
     flags: c_int,
 ) -> Option<usize> {
     let flags = flags & !(REGSUB_COPY as c_int);
-    let size = regsub_buffer(matches, lnum, source, None, flags);
-    Some(size).filter(|&size| size > 0)
+    regsub_buffer(matches, lnum, source, None, flags)
+        .inspect_err(|err| err.report())
+        .ok()
 }
 
 /// The writing pass: expand `source` into `dest`, which bounds the write.
@@ -786,11 +812,14 @@ pub(crate) fn regsub_multi_into(
     dest: &mut [u8],
     flags: c_int,
 ) {
-    regsub_buffer(
+    let copied = regsub_buffer(
         matches,
         lnum,
         source,
         Some(dest),
         flags | REGSUB_COPY as c_int,
     );
+    if let Err(err) = copied {
+        err.report();
+    }
 }

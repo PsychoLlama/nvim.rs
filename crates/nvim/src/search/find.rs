@@ -589,8 +589,8 @@ pub fn searchit(
 ) -> c_int {
     let mut regmatch = RegMMatch::default();
     let keep = options & (SEARCH_HIS | SEARCH_KEEP);
-    if search_regcomp(pat, RE_SEARCH, pat_use, keep, &mut regmatch).is_err() {
-        if options & SEARCH_MSG != 0 && !rc_did_emsg.get() {
+    if let Err(refused) = search_regcomp(pat, RE_SEARCH, pat_use, keep, &mut regmatch) {
+        if options & SEARCH_MSG != 0 && refused == Refused::Unexplained {
             let pattern = get_search_pat();
             let arg0 = msg_bytes(&pattern);
             semsg!("E383: Invalid search string: {arg0}");

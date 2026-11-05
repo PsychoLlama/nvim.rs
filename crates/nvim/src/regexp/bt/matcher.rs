@@ -237,7 +237,7 @@ fn push_frame(
         // `\%(` captures nothing, but still needs a frame so that the
         // unwinder has something to step over.
         BtOp::Nopen | BtOp::Nclose => {
-            if stack.push(RS_NOPEN, scan).is_none() {
+            if stack.push(RS_NOPEN, scan).is_err() {
                 RA_FAIL
             } else {
                 RA_CONT
@@ -250,7 +250,7 @@ fn push_frame(
             if prog.op_byte(*next) != BtOp::Branch.code() as uint8_t {
                 *next = scan + 3;
                 RA_CONT
-            } else if stack.push(RS_BRANCH, scan).is_none() {
+            } else if stack.push(RS_BRANCH, scan).is_err() {
                 RA_FAIL
             } else {
                 RA_BREAK
@@ -297,7 +297,7 @@ fn push_frame(
         // `\@=`, `\@!` and `\@>`: run the operand, then decide what its
         // outcome means.
         BtOp::Nomatch | BtOp::Match | BtOp::Subpat => {
-            let Some(rp) = stack.push(RS_NOMATCH, scan) else {
+            let Ok(rp) = stack.push(RS_NOMATCH, scan) else {
                 return RA_FAIL;
             };
             rp.rs_no = op.code() as int16_t;
@@ -310,7 +310,7 @@ fn push_frame(
         // unwinder walks the start position backwards until it does.
         BtOp::Behind | BtOp::Nobehind => {
             // The capture snapshot rides in front of the frame.
-            if !stack.push_behind(RS_BEHIND1, scan) {
+            if stack.push_behind(RS_BEHIND1, scan).is_err() {
                 return RA_FAIL;
             }
             let (rp, bp) = stack.top_behind();
@@ -336,7 +336,7 @@ fn push_frame(
 /// the capture opcodes: see [`capture_slot`].
 fn push_capture(rex: Rex, stack: &mut RegStack, state: RegState, scan: usize, no: c_int) -> c_int {
     let slot = capture_slot(rex, state, no as usize);
-    let Some(rp) = stack.push(state, scan) else {
+    let Ok(rp) = stack.push(state, scan) else {
         return RA_FAIL;
     };
     rp.rs_no = no as int16_t;
@@ -366,7 +366,7 @@ fn brace_complex(
 
     // Still below the smaller bound: another pass is mandatory.
     if count <= min.min(max) {
-        let Some(rp) = stack.push(RS_BRCPLX_MORE, scan) else {
+        let Ok(rp) = stack.push(RS_BRCPLX_MORE, scan) else {
             return RA_FAIL;
         };
         rp.rs_no = no as int16_t;
@@ -375,7 +375,7 @@ fn brace_complex(
     } else if greedy {
         // Another pass is allowed; try it, and fall back to stopping.
         if count <= max {
-            let Some(rp) = stack.push(RS_BRCPLX_LONG, scan) else {
+            let Ok(rp) = stack.push(RS_BRCPLX_LONG, scan) else {
                 return RA_FAIL;
             };
             rp.rs_no = no as int16_t;
@@ -384,7 +384,7 @@ fn brace_complex(
         }
     } else if count <= min {
         // Non-greedy: try stopping first, and fall back to another pass.
-        let Some(rp) = stack.push(RS_BRCPLX_SHORT, scan) else {
+        let Ok(rp) = stack.push(RS_BRCPLX_SHORT, scan) else {
             return RA_FAIL;
         };
         rp.rs_saved = reg_save(rex, backpos);
@@ -449,7 +449,7 @@ fn counted_repeat(
     } else {
         RS_STAR_SHORT
     };
-    if !stack.push_star(state, scan, rst) {
+    if stack.push_star(state, scan, rst).is_err() {
         return RA_FAIL;
     }
     RA_BREAK

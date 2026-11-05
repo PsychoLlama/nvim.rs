@@ -12,16 +12,14 @@ use crate::regexp::RegCompiler;
 use crate::regexp::set_magic;
 use core::ffi::c_int;
 
+use super::Parsed;
 use super::atom::nfa_regatom as regatom;
-use super::{Parsed, Rejected};
-use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
-    MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, MAX_LIMIT, NOT_MULTI, NSUBEXP, ParseState, RE_AUTO,
-    REG_NOPAREN, REG_NPAREN, REG_PAREN, REG_ZPAREN, RF_ICASE, RF_ICOMBINE, RF_NOICASE, getchr,
-    getdecchrs, magic, magic_prefix, peekchr, re_multi_type, read_limits, restore_parse_state,
-    save_parse_state, skipchr, skipchr_keepstart, unmagic,
+    CompileError, MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, MAX_LIMIT, NOT_MULTI, NSUBEXP,
+    ParseState, RE_AUTO, REG_NOPAREN, REG_NPAREN, REG_PAREN, REG_ZPAREN, RF_ICASE, RF_ICOMBINE,
+    RF_NOICASE, getchr, getdecchrs, magic, peekchr, re_multi_type, read_limits,
+    restore_parse_state, save_parse_state, skipchr, skipchr_keepstart, spelled, unmagic,
 };
-use crate::semsg;
 use crate::types::NUL;
 
 const M_AMP: c_int = magic(b'&');
@@ -87,9 +85,7 @@ fn lookaround(rc: &mut RegCompiler) -> Parsed {
         _ => None,
     };
     let Some(code) = code else {
-        let op = op as u8 as char;
-        semsg!("E869: (NFA) Unknown operator '\\@{op}'");
-        return Err(Rejected);
+        return Err(CompileError::UnknownAtOperator(op as u8));
     };
     rc.post.emit(code);
     if matches!(
@@ -108,7 +104,6 @@ enum Repeat {
     /// `\{0}`: the piece is finished and a repeat after it is *not*
     /// rejected — `a\{0}*` is accepted, as upstream's early return does.
     Erased,
-    Failed,
 }
 
 /// `\{n,m}`: emitted by re-parsing the atom up to `maxval` times, each copy
@@ -117,7 +112,11 @@ enum Repeat {
 ///
 /// `atom_start` is where the atom's own items begin; the first pass is
 /// thrown away and re-emitted from there.
-fn counted_repeat(rc: &mut RegCompiler, before_atom: &ParseState, atom_start: usize) -> Repeat {
+fn counted_repeat(
+    rc: &mut RegCompiler,
+    before_atom: &ParseState,
+    atom_start: usize,
+) -> Parsed<Repeat> {
     // `\{-n,m}` asks for the shortest match.
     let mut greedy = true;
     let c = peekchr(rc);
@@ -126,12 +125,13 @@ fn counted_repeat(rc: &mut RegCompiler, before_atom: &ParseState, atom_start: us
         greedy = false;
     }
     let (mut minval, mut maxval) = (0, 0);
-    // `read_limits` is shared with the backtracking engine and still
-    // answers OK/FAIL.
-    if read_limits(rc, &mut minval, &mut maxval).is_err() {
-        semsg!("E870: (NFA regexp) Error reading repetition limits");
-        rc_did_emsg.set(true);
-        return Repeat::Failed;
+    // `read_limits` is shared with the backtracking engine, whose refusal
+    // this engine follows with its own.
+    if let Err(err) = read_limits(rc, &mut minval, &mut maxval) {
+        return Err(match err {
+            CompileError::BraceSyntax(spelled) => CompileError::RepetitionLimits(spelled),
+            other => other,
+        });
     }
 
     // `\{}` and `\{,}` are plain stars.
@@ -141,13 +141,13 @@ fn counted_repeat(rc: &mut RegCompiler, before_atom: &ParseState, atom_start: us
         } else {
             NfaOp::StarNongreedy.code()
         });
-        return Repeat::Emitted;
+        return Ok(Repeat::Emitted);
     }
     // `\{0}` matches nothing at all, so the atom's items go too.
     if maxval == 0 {
         rc.post.truncate(atom_start);
         rc.post.emit_op(NfaOp::Empty);
-        return Repeat::Erased;
+        return Ok(Repeat::Erased);
     }
     // Under 'regexpengine' = 0 a wide bound is not worth the states; fail
     // out and let the backtracking engine, which counts, take the pattern.
@@ -157,7 +157,7 @@ fn counted_repeat(rc: &mut RegCompiler, before_atom: &ParseState, atom_start: us
         && (maxval != MAX_LIMIT && minval < AUTO_MAX_SPAN)
         && !rc.wants_nfa
     {
-        return Repeat::Failed;
+        return Err(CompileError::Declined);
     }
 
     rc.post.truncate(atom_start);
@@ -173,9 +173,7 @@ fn counted_repeat(rc: &mut RegCompiler, before_atom: &ParseState, atom_start: us
     while i < maxval {
         restore_parse_state(rc, before_atom);
         let copy_start = rc.post.len();
-        if regatom(rc).is_err() {
-            return Repeat::Failed;
-        }
+        regatom(rc)?;
         if i + 1 > minval {
             if maxval == MAX_LIMIT {
                 // An open-ended bound: the last copy stands for all of them.
@@ -200,7 +198,7 @@ fn counted_repeat(rc: &mut RegCompiler, before_atom: &ParseState, atom_start: us
     }
     restore_parse_state(rc, &after_atom);
     rc.token = -1;
-    Repeat::Emitted
+    Ok(Repeat::Emitted)
 }
 
 /// One atom and the repeat that follows it, if any.
@@ -232,18 +230,15 @@ pub(crate) fn nfa_regpiece(rc: &mut RegCompiler) -> Parsed {
         }
         M_AT => lookaround(rc)?,
         M_QUESTION | M_EQUAL => rc.post.emit_op(NfaOp::Quest),
-        M_BRACE => match counted_repeat(rc, &before_atom, atom_start) {
+        M_BRACE => match counted_repeat(rc, &before_atom, atom_start)? {
             Repeat::Emitted => {}
             Repeat::Erased => return Ok(()),
-            Repeat::Failed => return Err(Rejected),
         },
         _ => {}
     }
 
     if re_multi_type(peekchr(rc)) != NOT_MULTI {
-        semsg!("E871: (NFA regexp) Can't have a multi follow a multi");
-        rc_did_emsg.set(true);
-        return Err(Rejected);
+        return Err(CompileError::MultiAfterMulti);
     }
     Ok(())
 }
@@ -325,9 +320,7 @@ fn open_bracket(rc: &mut RegCompiler, paren: c_int) -> Parsed<c_int> {
     match paren {
         REG_PAREN => {
             if rc.next_group >= NSUBEXP as c_int {
-                semsg!("E872: (NFA regexp) Too many '('");
-                rc_did_emsg.set(true);
-                return Err(Rejected);
+                return Err(CompileError::NfaTooManyGroups);
             }
             let parno = rc.next_group;
             rc.next_group = parno + 1;
@@ -335,9 +328,7 @@ fn open_bracket(rc: &mut RegCompiler, paren: c_int) -> Parsed<c_int> {
         }
         REG_ZPAREN => {
             if rc.next_zgroup >= NSUBEXP as c_int {
-                semsg!("E879: (NFA regexp) Too many \\z(");
-                rc_did_emsg.set(true);
-                return Err(Rejected);
+                return Err(CompileError::NfaTooManyZGroups);
             }
             let parno = rc.next_zgroup;
             rc.next_zgroup = parno + 1;
@@ -347,16 +338,13 @@ fn open_bracket(rc: &mut RegCompiler, paren: c_int) -> Parsed<c_int> {
     }
 }
 
-/// Report the bracket the pattern failed to close or opened too many of.
-fn unbalanced(rc: &mut RegCompiler, paren: c_int) -> Rejected {
-    let prefix = magic_prefix(rc);
+/// The bracket the pattern failed to close.
+fn unbalanced(rc: &RegCompiler, paren: c_int) -> CompileError {
     if paren == REG_NPAREN {
-        semsg!("E53: Unmatched {prefix}%(");
+        CompileError::UnmatchedNoCapture(spelled(rc))
     } else {
-        semsg!("E54: Unmatched {prefix}(");
+        CompileError::UnmatchedGroup(spelled(rc))
     }
-    rc_did_emsg.set(true);
-    Rejected
 }
 
 /// A whole pattern, or the contents of one bracket: branches joined by `\|`.
@@ -381,13 +369,9 @@ pub(crate) fn nfa_reg(rc: &mut RegCompiler, paren: c_int) -> Parsed {
         // The whole pattern was parsed but there is more text: either a
         // stray `\)` or something the grammar never reached.
         if peekchr(rc) == M_PAREN_CLOSE {
-            let prefix = magic_prefix(rc);
-            semsg!("E55: Unmatched {prefix})");
-        } else {
-            semsg!("E873: (NFA regexp) proper termination error");
+            return Err(CompileError::UnmatchedClose(spelled(rc)));
         }
-        rc_did_emsg.set(true);
-        return Err(Rejected);
+        return Err(CompileError::Termination);
     }
 
     // The bracket's own marker goes last, as the operator over everything

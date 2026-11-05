@@ -66,7 +66,7 @@ use crate::guard::Suppress;
 use crate::message::e_argreq;
 use crate::message::state::{did_emsg, emsg_silent};
 use crate::message::{emsg, internal_error};
-use crate::message_fmt::msg_bytes;
+use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::option::SavedCpo;
 use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRING, char_delim, skip_regexp_err_at};
 use crate::runtime::do_finish;
@@ -217,8 +217,11 @@ pub(crate) fn ex_catch(excmd: &mut ExArg) {
         let delim = char_delim(excmd.line.byte_at(excmd.line.arg));
         let start = excmd.line.arg + 1;
         match skip_regexp_err_at(excmd.line.tail(start), delim, c_int::from(true)) {
-            Some(len) => span = Some((start, start + len)),
-            None => give_up = true,
+            Ok(len) => span = Some((start, start + len)),
+            Err(missing) => {
+                emsg_text(missing.to_string());
+                give_up = true;
+            }
         }
     }
 

@@ -20,8 +20,8 @@ use crate::regexp::RegCompiler;
 use core::ffi::{CStr, c_int};
 
 use super::{
-    MULTI_MULT, MatchPos, NSUBEXP, PosKind, RA_FAIL, RA_MATCH, RA_NOMATCH, Rex, cstrncmp,
-    head_off_at, peekchr, prefix_at, re_multi_type,
+    CompileError, Compiled, MULTI_MULT, MatchPos, NSUBEXP, PosKind, RA_FAIL, RA_MATCH, RA_NOMATCH,
+    Rex, cstrncmp, head_off_at, peekchr, prefix_at, re_multi_type,
 };
 use crate::charset::vim_iswordc_buf;
 use crate::getchar::state::got_int;
@@ -30,8 +30,6 @@ use crate::normal::{VisualMode, visual_ever_started, visual_selection};
 use crate::os::input::fast_breakcheck;
 use crate::plines::win_linetabsize;
 use crate::pos::lt;
-use crate::regexp::state::rc_did_emsg;
-use crate::semsg;
 use crate::types::{ColNr, LineNr};
 
 use crate::winlayer::{Buf, Win};
@@ -115,17 +113,20 @@ pub(crate) struct ExtMatchIo<'a> {
     pub(crate) output: Option<&'a mut Option<ExtMatchRef>>,
 }
 
-/// The character class of the character before the cursor, or -1 at the
+/// The character class of the character before the cursor; `None` at the
 /// start of the line. Backs `\<` and `\>`.
-pub(crate) fn reg_prev_class(rex: Rex) -> c_int {
+pub(crate) fn reg_prev_class(rex: Rex) -> Option<c_int> {
     if rex.col() <= ColNr::ZERO {
-        return -1;
+        return None;
     }
     // The cursor is past the start of the line, so the byte before it is on
     // the line and the walk back stops at the line's start.
     let line = rex.line();
     let prev = rex.input() - 1;
-    class_in(&line[prev - head_off_at(line, prev)..], rex.reg_buf())
+    Some(class_in(
+        &line[prev - head_off_at(line, prev)..],
+        rex.reg_buf(),
+    ))
 }
 
 /// Is the position being matched inside the Visual area? Backs `\%V`.
@@ -311,12 +312,10 @@ pub(crate) fn match_with_backref(
     }
 }
 
-/// Reject a repeat applied to `what`, a zero-width atom such as `\zs`.
-pub(crate) fn re_mult_next(rc: &mut RegCompiler, what: &str) -> bool {
+/// Reject a repeat applied to `\zs`, or `\ze` when `ze`.
+pub(crate) fn re_mult_next(rc: &mut RegCompiler, ze: bool) -> Compiled {
     if re_multi_type(peekchr(rc)) == MULTI_MULT {
-        semsg!("E888: (NFA regexp) cannot repeat {what}");
-        rc_did_emsg.set(true);
-        return false;
+        return Err(CompileError::CannotRepeat { ze });
     }
-    true
+    Ok(())
 }

@@ -23,10 +23,9 @@ use core::ffi::{c_int, c_uint};
 
 use super::op::BtOp;
 use crate::mbyte::{encode_char, utf_char2len, utf_iscomposing_legacy};
-use crate::message::emsg;
-use crate::os::cshim::gettext;
-use crate::regexp::state::rc_did_emsg;
-use crate::regexp::{BtRegProg, NOT_MULTI, REX_SET, peekchr, re_multi_type};
+use crate::regexp::{
+    BtRegProg, CompileError, Compiled, NOT_MULTI, REX_SET, peekchr, re_multi_type,
+};
 use crate::types::{NUL, int64_t, uint8_t, uint32_t};
 
 /// The fixed part of a node: the opcode plus the offset to the next one.
@@ -403,9 +402,9 @@ fn next_of(head: &[u8; NODE_HDR], p: usize) -> usize {
 /// look-behind: `\(...\)\@<=` runs the group after the reference in the
 /// program, so a reference forward into one is fine as long as some `\@<=`
 /// or `\@<!` is still to come in the pattern.
-pub(crate) fn seen_endbrace(rc: &RegCompiler, refnum: c_int) -> bool {
+pub(crate) fn seen_endbrace(rc: &RegCompiler, refnum: c_int) -> Compiled {
     if rc.closed_groups[refnum as usize] != 0 {
-        return true;
+        return Ok(());
     }
     // The rest of the pattern, up to its NUL.
     let rest = cstr::until_nul(&rc.text[rc.cursor.min(rc.text.len())..]);
@@ -413,11 +412,9 @@ pub(crate) fn seen_endbrace(rc: &RegCompiler, refnum: c_int) -> bool {
         .windows(3)
         .any(|w| w[0] == b'@' && w[1] == b'<' && matches!(w[2], b'!' | b'='))
     {
-        return true;
+        return Ok(());
     }
-    emsg(gettext(c"E65: Illegal back reference"));
-    rc_did_emsg.set(true);
-    false
+    Err(CompileError::IllegalBackReference)
 }
 
 #[cfg(test)]

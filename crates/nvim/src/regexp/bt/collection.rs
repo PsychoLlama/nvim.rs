@@ -20,13 +20,11 @@ use super::piece::coll_get_char;
 use crate::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
 use crate::mbyte::{mb_islower, mb_isupper, utf_char2len};
-use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
-    CharClass, ESC, HASNL, HASWIDTH, INT_MAX, MAGIC_OFF, REGEXP_ABBR, REGEXP_INRANGE, SIMPLE,
-    backslash_abbr, pat_byte, pat_char, pat_charlen, pat_seek, skip_anyof, skipchr, take_bracketed,
-    take_char_class,
+    CharClass, CompileError, Compiled, ESC, HASNL, HASWIDTH, INT_MAX, MAGIC_OFF, REGEXP_ABBR,
+    REGEXP_INRANGE, SIMPLE, Spelled, backslash_abbr, pat_byte, pat_char, pat_charlen, pat_seek,
+    skip_anyof, skipchr, take_bracketed, take_char_class,
 };
-use crate::semsg;
 use crate::types::NUL;
 
 /// What a `[` at the cursor turned out to be.
@@ -34,8 +32,6 @@ pub(crate) enum Collection {
     Node(Node),
     /// No closing `]`: the `[` is an ordinary character.
     Literal,
-    /// Already reported.
-    Failed,
 }
 
 /// Parse a collection whose `[` has already been consumed.
@@ -43,17 +39,15 @@ pub(crate) fn collection(
     rc: &mut RegCompiler,
     flagp: &mut c_int,
     crosses_lines: bool,
-) -> Collection {
+) -> Compiled<Collection> {
     if !collection_closes(rc) {
         if rc.strict != 0 {
             // Not `magic_prefix`: this one wants the backslash whenever `[`
             // is not magic, which is one 'magic' level lower.
-            let prefix = if rc.magic > MAGIC_OFF { "" } else { "\\" };
-            semsg!("E769: Missing ] after {prefix}[");
-            rc_did_emsg.set(true);
-            return Collection::Failed;
+            let spelled = Spelled::bare_if(rc.magic > MAGIC_OFF);
+            return Err(CompileError::MissingBracket(spelled));
         }
-        return Collection::Literal;
+        return Ok(Collection::Literal);
     }
 
     let negated = pat_byte(rc, 0) == b'^';
@@ -81,15 +75,11 @@ pub(crate) fn collection(
         match pat_byte(rc, 0) {
             b'-' => {
                 pat_seek(rc, 1);
-                if let Some(failed) = range(rc, &mut startc) {
-                    return failed;
-                }
+                range(rc, &mut startc)?;
             }
             b'\\' if escaped_here(rc) => {
                 pat_seek(rc, 1);
-                if let Some(failed) = escaped(rc, flagp, &mut startc, ret, widens_on_nl) {
-                    return failed;
-                }
+                escaped(rc, flagp, &mut startc, ret, widens_on_nl)?;
             }
             b'[' => bracketed_item(rc, &mut startc),
             _ => {
@@ -117,14 +107,11 @@ pub(crate) fn collection(
     // has to be reset before `skipchr` steps over the `]`.
     rc.prev_token_len = 1;
     if pat_byte(rc, 0) != b']' {
-        // `e_toomsbra`'s text, inlined: `semsg!` needs a literal.
-        semsg!("E76: Too many [");
-        rc_did_emsg.set(true);
-        return Collection::Failed;
+        return Err(CompileError::TooManyBrackets);
     }
     skipchr(rc);
     *flagp |= HASWIDTH | SIMPLE;
-    Collection::Node(ret)
+    Ok(Collection::Node(ret))
 }
 
 /// Does the collection at the cursor have a closing `]`?
@@ -134,8 +121,8 @@ fn collection_closes(rc: &RegCompiler) -> bool {
 }
 
 /// A `-` inside the collection: either a range from `startc`, or a literal
-/// dash. Returns `Some` only on error.
-fn range(rc: &mut RegCompiler, startc: &mut c_int) -> Option<Collection> {
+/// dash.
+fn range(rc: &mut RegCompiler, startc: &mut c_int) -> Compiled {
     // A dash is literal at the end, with nothing in front of it, or before a
     // `\n` — which is a line break rather than a character.
     if matches!(pat_byte(rc, 0), b']' | 0)
@@ -144,7 +131,7 @@ fn range(rc: &mut RegCompiler, startc: &mut c_int) -> Option<Collection> {
     {
         rc.code.byte(b'-' as c_int);
         *startc = b'-' as c_int;
-        return None;
+        return Ok(());
     }
 
     let mut endc = 0;
@@ -160,18 +147,14 @@ fn range(rc: &mut RegCompiler, startc: &mut c_int) -> Option<Collection> {
         endc = coll_get_char(rc);
     }
     if *startc > endc {
-        semsg!("E944: Reverse range in character class");
-        rc_did_emsg.set(true);
-        return Some(Collection::Failed);
+        return Err(CompileError::ReverseRange);
     }
     let multibyte = utf_char2len(*startc) > 1 || utf_char2len(endc) > 1;
     if multibyte {
         // Every member is written into the program, so a wide range would
         // blow it up.
         if endc > *startc + 256 {
-            semsg!("E945: Range too large in character class");
-            rc_did_emsg.set(true);
-            return Some(Collection::Failed);
+            return Err(CompileError::RangeTooLarge);
         }
         for c in *startc + 1..=endc {
             rc.code.char(c);
@@ -182,7 +165,7 @@ fn range(rc: &mut RegCompiler, startc: &mut c_int) -> Option<Collection> {
         }
     }
     *startc = -1;
-    None
+    Ok(())
 }
 
 /// Does the backslash at the cursor escape something, or is it a literal
@@ -195,14 +178,14 @@ fn escaped_here(rc: &RegCompiler) -> bool {
 }
 
 /// The character after a backslash inside the collection, with the cursor
-/// already past the backslash. Returns `Some` only on error.
+/// already past the backslash.
 fn escaped(
     rc: &mut RegCompiler,
     flagp: &mut c_int,
     startc: &mut c_int,
     ret: Node,
     widens_on_nl: bool,
-) -> Option<Collection> {
+) -> Compiled {
     match pat_byte(rc, 0) {
         b'n' => {
             // A line break is not a member of the set but a widening of the
@@ -213,14 +196,12 @@ fn escaped(
             }
             pat_seek(rc, 1);
             *startc = -1;
-            None
+            Ok(())
         }
         b'd' | b'o' | b'x' | b'u' | b'U' => {
             *startc = coll_get_char(rc);
             if *startc == INT_MAX {
-                semsg!("E1541: Value too large, max Unicode codepoint is U+10FFFF");
-                rc_did_emsg.set(true);
-                return Some(Collection::Failed);
+                return Err(CompileError::CodepointTooLarge);
             }
             // As elsewhere, a NUL in the pattern stands for a newline.
             if *startc == 0 {
@@ -228,13 +209,13 @@ fn escaped(
             } else {
                 rc.code.char(*startc);
             }
-            None
+            Ok(())
         }
         c => {
             pat_seek(rc, 1);
             *startc = backslash_abbr(c as c_int);
             rc.code.byte(*startc);
-            None
+            Ok(())
         }
     }
 }

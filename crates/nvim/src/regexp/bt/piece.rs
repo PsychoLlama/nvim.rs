@@ -22,15 +22,13 @@ use super::compile::regnext;
 use super::op::BtOp;
 use crate::regexp::BtRegProg;
 use crate::regexp::mbyte::char_at_nul;
-use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
-    HASLOOKBH, HASNL, HASWIDTH, INT_MAX, MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, NOT_MULTI,
-    NSUBEXP, REG_NOPAREN, REG_NPAREN, REG_PAREN, REG_ZPAREN, REGMAGIC, RF_HASNL, RF_ICASE,
-    RF_ICOMBINE, RF_LOOKBH, RF_NOICASE, SIMPLE, SPSTART, WORST, getchr, getdecchrs, gethexchrs,
-    getoctchrs, magic, magic_prefix, peekchr, re_multi_type, read_limits, skipchr,
-    skipchr_keepstart, unmagic,
+    CompileError, Compiled, HASLOOKBH, HASNL, HASWIDTH, INT_MAX, MAGIC_ALL, MAGIC_NONE, MAGIC_OFF,
+    MAGIC_ON, NOT_MULTI, NSUBEXP, REG_NOPAREN, REG_NPAREN, REG_PAREN, REG_ZPAREN, REGMAGIC,
+    RF_HASNL, RF_ICASE, RF_ICOMBINE, RF_LOOKBH, RF_NOICASE, SIMPLE, SPSTART, Spelled, WORST,
+    getchr, getdecchrs, gethexchrs, getoctchrs, magic, peekchr, re_multi_type, read_limits,
+    skipchr, skipchr_keepstart, spelled, unmagic,
 };
-use crate::semsg;
 use crate::types::{NUL, int64_t, uint8_t, uint32_t};
 use core::cell::Cell;
 
@@ -51,30 +49,20 @@ const M_V_LOWER: c_int = magic(b'v');
 const M_V_UPPER: c_int = magic(b'V');
 const M_Z_UPPER: c_int = magic(b'Z');
 
-/// Report an error and mark the compile as failed, so that
-/// [`super::super::api`] does not go on to blame the engine.
-macro_rules! fail {
-    ($($msg:tt)*) => {{
-        semsg!($($msg)*);
-        rc_did_emsg.set(true);
-        return None;
-    }};
-}
-
 /// An atom, optionally followed by a repeat.
 ///
 /// A `SIMPLE` atom — one that matches exactly one character and never
 /// backtracks into itself — gets a single `STAR`/`PLUS`/`BRACE_SIMPLE` node
 /// the matcher can run as a counted loop. Anything else has to be wired up
 /// as an explicit branch-and-back loop in the program.
-pub(crate) fn regpiece(rc: &mut RegCompiler, flagp: &mut c_int) -> Option<Node> {
+pub(crate) fn regpiece(rc: &mut RegCompiler, flagp: &mut c_int) -> Compiled<Node> {
     let mut flags = 0;
     let ret = regatom(rc, &mut flags)?;
 
     let op = peekchr(rc);
     if re_multi_type(op) == NOT_MULTI {
         *flagp = flags;
-        return Some(ret);
+        return Ok(ret);
     }
     // A repeat can match nothing, so whatever it wraps stops guaranteeing
     // width and becomes a possible start-of-pattern position.
@@ -130,8 +118,7 @@ pub(crate) fn regpiece(rc: &mut RegCompiler, flagp: &mut c_int) -> Option<Node> 
                 _ => None,
             };
             let Some(lop) = lop else {
-                let prefix = magic_prefix(rc);
-                fail!("E59: Invalid character after {prefix}@");
+                return Err(CompileError::InvalidAfterAt(spelled(rc)));
             };
             let behind = lop == BtOp::Behind || lop == BtOp::Nobehind;
             if behind {
@@ -161,9 +148,7 @@ pub(crate) fn regpiece(rc: &mut RegCompiler, flagp: &mut c_int) -> Option<Node> 
         }
         M_BRACE => {
             let (mut minval, mut maxval) = (0, 0);
-            if read_limits(rc, &mut minval, &mut maxval).is_err() {
-                return None;
-            }
+            read_limits(rc, &mut minval, &mut maxval)?;
             if flags & SIMPLE != 0 {
                 rc.code.insert(BtOp::BraceSimple, ret);
                 rc.code
@@ -172,8 +157,7 @@ pub(crate) fn regpiece(rc: &mut RegCompiler, flagp: &mut c_int) -> Option<Node> 
                 // A complex `{}` needs a counter slot of its own at match
                 // time, and there are only ten.
                 if rc.complex_braces >= NSUBEXP as c_int {
-                    let prefix = magic_prefix(rc);
-                    fail!("E60: Too many complex {prefix}{{...}}s");
+                    return Err(CompileError::TooManyComplexBraces(spelled(rc)));
                 }
                 rc.code
                     .insert(BtOp::BRACE_COMPLEX[slot(rc.complex_braces)], ret);
@@ -197,20 +181,20 @@ pub(crate) fn regpiece(rc: &mut RegCompiler, flagp: &mut c_int) -> Option<Node> 
             // `\*` under 'nomagic' is a literal star, so this message wants
             // the backslash whenever `*` is *not* magic — a looser test than
             // the one every other message here uses.
-            let prefix = if rc.magic >= MAGIC_ON { "" } else { "\\" };
-            fail!("E61: Nested {prefix}*");
+            return Err(CompileError::NestedStar(Spelled::bare_if(
+                rc.magic >= MAGIC_ON,
+            )));
         }
-        let prefix = magic_prefix(rc);
-        let c = unmagic(peekchr(rc)) as u8 as char;
-        fail!("E62: Nested {prefix}{c}");
+        let c = unmagic(peekchr(rc)) as u8;
+        return Err(CompileError::Nested(spelled(rc), c));
     }
-    Some(ret)
+    Ok(ret)
 }
 
 /// A run of pieces, plus the `\c`/`\C`/`\Z` and `\v`/`\m`/`\M`/`\V` switches,
 /// which are not atoms at all: they change how the rest of the pattern is
 /// read and emit nothing.
-pub(crate) fn regconcat(rc: &mut RegCompiler, flagp: &mut c_int) -> Option<Node> {
+pub(crate) fn regconcat(rc: &mut RegCompiler, flagp: &mut c_int) -> Compiled<Node> {
     let mut first: Option<Node> = None;
     let mut chain: Option<Node> = None;
     *flagp = WORST;
@@ -220,7 +204,7 @@ pub(crate) fn regconcat(rc: &mut RegCompiler, flagp: &mut c_int) -> Option<Node>
             // An empty concatenation still needs a node for its caller to
             // chain onto.
             NUL | M_BAR | M_AMP | M_PAREN_CLOSE => {
-                return Some(first.unwrap_or_else(|| rc.code.node(BtOp::Nothing)));
+                return Ok(first.unwrap_or_else(|| rc.code.node(BtOp::Nothing)));
             }
             M_Z_UPPER => {
                 rc.flags |= RF_ICOMBINE as u32;
@@ -242,7 +226,7 @@ pub(crate) fn regconcat(rc: &mut RegCompiler, flagp: &mut c_int) -> Option<Node>
                 let mut flags = 0;
                 let latest = regpiece(rc, &mut flags)?;
                 if rc.code.too_long {
-                    return None;
+                    return Err(CompileError::TooLong);
                 }
                 *flagp |= flags & (HASWIDTH | HASNL | HASLOOKBH);
                 match chain {
@@ -259,7 +243,7 @@ pub(crate) fn regconcat(rc: &mut RegCompiler, flagp: &mut c_int) -> Option<Node>
 
 /// The concatenations of one alternative, joined by `\&`: all of them have to
 /// match at this position, and the last one's match is the alternative's.
-pub(crate) fn regbranch(rc: &mut RegCompiler, flagp: &mut c_int) -> Option<Node> {
+pub(crate) fn regbranch(rc: &mut RegCompiler, flagp: &mut c_int) -> Compiled<Node> {
     let mut chain: Option<Node> = None;
     *flagp = WORST | HASNL;
     let ret = rc.code.node(BtOp::Branch);
@@ -274,13 +258,13 @@ pub(crate) fn regbranch(rc: &mut RegCompiler, flagp: &mut c_int) -> Option<Node>
             rc.code.tail(chain, latest);
         }
         if peekchr(rc) != M_AMP {
-            return Some(ret);
+            return Ok(ret);
         }
         skipchr(rc);
         let node = rc.code.node(BtOp::End);
         rc.code.tail(latest, node);
         if rc.code.too_long {
-            return Some(ret);
+            return Ok(ret);
         }
         rc.code.insert(BtOp::Match, latest);
         chain = Some(latest);
@@ -292,14 +276,14 @@ pub(crate) fn regbranch(rc: &mut RegCompiler, flagp: &mut c_int) -> Option<Node>
 /// `paren` says which bracket we are inside, and therefore which capture
 /// node pair wraps the branches: `\(`..`\)`, `\z(`..`\)`, `\%(`..`\)` or
 /// nothing at all for the outermost call.
-pub(crate) fn reg(rc: &mut RegCompiler, paren: c_int, flagp: &mut c_int) -> Option<Node> {
+pub(crate) fn reg(rc: &mut RegCompiler, paren: c_int, flagp: &mut c_int) -> Compiled<Node> {
     let mut parno = 0;
     *flagp = HASWIDTH;
 
     let open = match paren {
         REG_ZPAREN => {
             if rc.next_zgroup >= NSUBEXP as c_int {
-                fail!("E50: Too many \\z(");
+                return Err(CompileError::TooManyZGroups);
             }
             parno = rc.next_zgroup;
             rc.next_zgroup = parno + 1;
@@ -307,8 +291,7 @@ pub(crate) fn reg(rc: &mut RegCompiler, paren: c_int, flagp: &mut c_int) -> Opti
         }
         REG_PAREN => {
             if rc.next_group >= NSUBEXP as c_int {
-                let prefix = magic_prefix(rc);
-                fail!("E51: Too many {prefix}(");
+                return Err(CompileError::TooManyGroups(spelled(rc)));
             }
             parno = rc.next_group;
             rc.next_group = parno + 1;
@@ -339,7 +322,7 @@ pub(crate) fn reg(rc: &mut RegCompiler, paren: c_int, flagp: &mut c_int) -> Opti
         skipchr(rc);
         let br = regbranch(rc, &mut flags)?;
         if rc.code.too_long {
-            return None;
+            return Err(CompileError::TooLong);
         }
         rc.code.tail(ret, br);
         take_flags(flagp, flags);
@@ -361,31 +344,21 @@ pub(crate) fn reg(rc: &mut RegCompiler, paren: c_int, flagp: &mut c_int) -> Opti
     }
 
     if paren != REG_NOPAREN && getchr(rc) != M_PAREN_CLOSE {
-        match paren {
-            REG_ZPAREN => {
-                fail!("E52: Unmatched \\z(");
-            }
-            REG_NPAREN => {
-                let prefix = magic_prefix(rc);
-                fail!("E53: Unmatched {prefix}%(");
-            }
-            _ => {
-                let prefix = magic_prefix(rc);
-                fail!("E54: Unmatched {prefix}(");
-            }
-        }
+        return Err(match paren {
+            REG_ZPAREN => CompileError::UnmatchedZGroup,
+            REG_NPAREN => CompileError::UnmatchedNoCapture(spelled(rc)),
+            _ => CompileError::UnmatchedGroup(spelled(rc)),
+        });
     } else if paren == REG_NOPAREN && peekchr(rc) != NUL {
         if rc.token == M_PAREN_CLOSE {
-            let prefix = magic_prefix(rc);
-            fail!("E55: Unmatched {prefix})");
+            return Err(CompileError::UnmatchedClose(spelled(rc)));
         }
-        // `e_trailing`'s text, inlined: `semsg!` needs a literal.
-        fail!("E488: Trailing characters");
+        return Err(CompileError::Trailing);
     }
     if paren == REG_PAREN {
         had_endbrace_seen(rc, parno);
     }
-    Some(ret)
+    Ok(ret)
 }
 
 /// Note that group `parno` has closed, which is what makes a later `\N`
@@ -394,26 +367,27 @@ fn had_endbrace_seen(rc: &mut RegCompiler, parno: c_int) {
     rc.closed_groups[parno as usize] = 1;
 }
 
-/// Compile `rc`'s pattern into a backtracking program, or answer null
-/// having reported why not.
+/// Compile `rc`'s pattern into a backtracking program, or answer why not.
 ///
 /// One pass of `reg` writes the program (upstream's first, measuring, pass
 /// is not needed: see [`super::compile`]). Afterwards the head of the program
 /// is inspected for a required first character or a required substring, which
 /// [`super::exec`] uses to skip start positions cheaply.
-pub(crate) fn bt_regcomp(rc: &mut RegCompiler) -> Option<BtRegProg> {
+pub(crate) fn bt_regcomp(rc: &mut RegCompiler) -> Compiled<BtRegProg> {
     let mut flags = 0;
     rc.restart();
     // Most patterns compile to a few bytes per pattern byte; a `[:class:]`
     // is the outlier, and a reallocation covers it.
     rc.code.reserve(4 * rc.pattern_len + 32);
     rc.code.byte(REGMAGIC);
-    if reg(rc, REG_NOPAREN, &mut flags).is_none() || rc.code.too_long {
-        if rc.code.too_long {
-            semsg!("E339: Pattern too long");
-            rc_did_emsg.set(true);
-        }
-        return None;
+    // A refusal found after the program got too long is said first, and
+    // then the length -- upstream checked the length on the way out.
+    match reg(rc, REG_NOPAREN, &mut flags) {
+        Err(CompileError::TooLong) => return Err(CompileError::TooLong),
+        Err(err) if rc.code.too_long => return Err(CompileError::TooLongAfter(Box::new(err))),
+        Err(err) => return Err(err),
+        Ok(_) if rc.code.too_long => return Err(CompileError::TooLong),
+        Ok(_) => {}
     }
     let mut regflags = rc.flags;
     if flags & HASNL != 0 {
@@ -435,7 +409,7 @@ pub(crate) fn bt_regcomp(rc: &mut RegCompiler) -> Option<BtRegProg> {
         program: rc.code.take_text(),
     };
     find_shortcuts(&mut prog, flags);
-    Some(prog)
+    Ok(prog)
 }
 
 /// Fill in the `regstart`/`reganch`/`regmust` hints the executor uses to

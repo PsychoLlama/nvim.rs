@@ -91,7 +91,7 @@ pub(crate) fn match_one(
                 RA_NOMATCH
             } else {
                 let this = char_class(rex);
-                nomatch_unless(this > 1 && reg_prev_class(rex) != this)
+                nomatch_unless(this > 1 && reg_prev_class(rex) != Some(this))
             }
         }
         BtOp::Eow => {
@@ -100,7 +100,7 @@ pub(crate) fn match_one(
             } else {
                 let this = char_class(rex);
                 let prev = reg_prev_class(rex);
-                nomatch_unless(this != prev && prev != 0 && prev != 1)
+                nomatch_unless(prev.is_none_or(|prev| this != prev && prev != 0 && prev != 1))
             }
         }
 

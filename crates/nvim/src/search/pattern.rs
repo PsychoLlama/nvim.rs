@@ -23,7 +23,7 @@ use crate::optionstr::OptString;
 use crate::regexp::{RE_BOTH, RE_LAST, RE_MAGIC, RE_SEARCH, RE_SUBST};
 use crate::search::{SEARCH_HIS, SEARCH_KEEP, SEARCH_START};
 use crate::shada::ShadaExtra;
-use crate::types::{ApiString, CmdModFlags, FAIL, Failed, NUL, Timestamp, Vv};
+use crate::types::{ApiString, CmdModFlags, FAIL, NUL, Timestamp, Vv};
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
 use core::ffi::{c_char, c_int};
@@ -158,16 +158,15 @@ fn put_spat(idx: c_int, pat: SearchPattern) -> SearchPattern {
 ///
 /// `regmatch` gets the compiled pattern and the ignore-case flag to match
 /// it with. Answers the pattern that was compiled -- `pat` itself, or the
-/// remembered one an empty `pat` stood for -- or `Err` when it does not
-/// compile or there is no remembered one to fall back on.
+/// remembered one an empty `pat` stood for -- or, when it does not compile
+/// or there is no remembered one to fall back on, what was said about it.
 pub fn search_regcomp(
     pat: &[u8],
     pat_save: c_int,
     pat_use: c_int,
     options: c_int,
     regmatch: &mut RegMMatch,
-) -> Result<XString, Failed> {
-    rc_did_emsg.set(false);
+) -> Result<XString, Refused> {
     let mut magic = magic_isset();
     // The pattern stops at a NUL, as upstream's copies of it did.
     let typed = cstr::until_nul(pat);
@@ -193,8 +192,7 @@ pub fn search_regcomp(
                 e_noprevre
             };
             emsg(gettext(msg));
-            rc_did_emsg.set(true);
-            return Err(Failed);
+            return Err(Refused::Invalid);
         };
         magic = spat_magic;
         no_smartcase.set(no_scs);
@@ -229,10 +227,11 @@ pub fn search_regcomp(
 
     regmatch.rmm_ic = c_int::from(ignorecase(text));
     regmatch.rmm_maxcol = ColNr::ZERO;
-    regmatch.regprog = vim_regcomp(source.as_cstr(), if magic { RE_MAGIC } else { 0 });
-    if regmatch.regprog.is_none() {
-        return Err(Failed);
-    }
+    regmatch.regprog = Some(vim_regcomp_ext(
+        source.as_cstr(),
+        if magic { RE_MAGIC } else { 0 },
+        0,
+    )?);
     Ok(source)
 }
 

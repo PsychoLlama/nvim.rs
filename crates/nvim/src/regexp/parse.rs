@@ -12,23 +12,22 @@
 #![forbid(unsafe_code)]
 
 use crate::cstr;
+use crate::memory::ThinCString;
 use crate::message_fmt::msg_bytes;
 use crate::option::cpo_has;
 use crate::regexp::RegCompiler;
-use crate::semsg;
+use crate::tr;
 use crate::types::CpoFlag;
 use core::ffi::{c_char, c_int};
 
 use super::mbyte::{char_at_nul, char_len_at, cluster_len_at};
 use super::{
-    MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, MAX_LIMIT, MULTI_MULT, MULTI_ONE, Magic, NOT_MULTI,
-    ParseState, REGEXP_ABBR, REGEXP_INRANGE, backslash_abbr, take_bracketed, take_char_class,
-    toggle_magic, unmagic,
+    CompileError, Compiled, MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, MAX_LIMIT, MULTI_MULT,
+    MULTI_ONE, Magic, NOT_MULTI, ParseState, REGEXP_ABBR, REGEXP_INRANGE, backslash_abbr, spelled,
+    take_bracketed, take_char_class, toggle_magic, unmagic,
 };
 use crate::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::charset::{getdigits_int_at, hex2nr};
-use crate::regexp::state::rc_did_emsg;
-use crate::types::Failed;
 
 /// Whether `c` is a repeat operator, and whether it can match more than one
 /// of the preceding atom.
@@ -265,27 +264,42 @@ pub(crate) fn skip_regexp_copy(
     (end, Some(copy))
 }
 
-/// [`skip_regexp_at`], but complain when the delimiter is missing: how many
-/// bytes of `text` the pattern takes, or `None` when the closing delimiter
-/// is missing (which reports E654).
+/// A pattern whose closing delimiter is missing: the whole text it was
+/// looked for in, as the message shows it.
+#[derive(Debug)]
+pub(crate) struct MissingDelimiter(ThinCString);
+
+const _: () = assert!(size_of::<MissingDelimiter>() <= 16);
+
+impl core::fmt::Display for MissingDelimiter {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let startp = msg_bytes(self.0.as_bytes());
+        f.write_str(&tr!(
+            "E654: Missing delimiter after search pattern: {startp}"
+        ))
+    }
+}
+
+/// [`skip_regexp_at`], refusing a missing delimiter: how many bytes of
+/// `text` the pattern takes.
 ///
 /// # Panics
 /// If `text` holds no NUL at all.
-pub(crate) fn skip_regexp_err_at(text: &[u8], delim: c_int, magic: c_int) -> Option<usize> {
+pub(crate) fn skip_regexp_err_at(
+    text: &[u8],
+    delim: c_int,
+    magic: c_int,
+) -> Result<usize, MissingDelimiter> {
     let end = skip_regexp_at(text, delim, magic);
     // Upstream's `*p != delim`: the byte promoted as a `char`.
     if char_delim(cstr::byte_at(text, end)) != delim {
         // The whole string, as the pointer form's `c_str(startp)` showed
         // it -- not just the part the skip consumed.
-        let shown = text
-            .iter()
-            .position(|byte| *byte == 0)
-            .unwrap_or(text.len());
-        let startp = msg_bytes(&text[..shown]);
-        semsg!("E654: Missing delimiter after search pattern: {startp}");
-        return None;
+        return Err(MissingDelimiter(ThinCString::from_bytes(cstr::until_nul(
+            text,
+        ))));
     }
-    Some(end)
+    Ok(end)
 }
 
 /// The byte `off` bytes past the cursor; NUL past the pattern's end.
@@ -587,13 +601,12 @@ fn take_digits(rc: &mut RegCompiler, default: c_int) -> c_int {
 }
 
 /// Parse the `{n,m}` bound at the cursor into `minval`/`maxval`, leaving
-/// the cursor past the closing brace. Answers `Err` after reporting a
-/// syntax error.
+/// the cursor past the closing brace.
 pub(crate) fn read_limits(
     rc: &mut RegCompiler,
     minval: &mut c_int,
     maxval: &mut c_int,
-) -> Result<(), Failed> {
+) -> Compiled {
     // `{-n,m}` asks for the shortest match, which the caller reads back
     // out of the min/max order rather than from a flag.
     let mut reverse = false;
@@ -620,10 +633,7 @@ pub(crate) fn read_limits(
         pat_seek(rc, 1);
     }
     if pat_byte(rc, 0) != b'}' {
-        let prefix = if rc.magic == MAGIC_ALL { "" } else { "\\" };
-        semsg!("E554: Syntax error in {prefix}{{...}}");
-        rc_did_emsg.set(true);
-        return Err(Failed);
+        return Err(CompileError::BraceSyntax(spelled(rc)));
     }
     if (!reverse && *minval > *maxval) || (reverse && *minval < *maxval) {
         core::mem::swap(minval, maxval);

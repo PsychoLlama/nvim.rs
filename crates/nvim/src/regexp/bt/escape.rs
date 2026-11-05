@@ -14,72 +14,51 @@ use super::compile::use_multibytecode;
 use super::op::BtOp;
 use super::piece::reg;
 use crate::ascii::ascii_isdigit;
-use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
-    HASLOOKBH, HASNL, HASWIDTH, INT_MAX, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, SIMPLE, SPSTART,
-    getchr, getdecchrs, gethexchrs, getoctchrs, magic_prefix, pat_byte, re_mult_next, ungetchr,
-    unmagic,
+    CompileError, Compiled, HASLOOKBH, HASNL, HASWIDTH, INT_MAX, REG_NPAREN, REG_ZPAREN, REX_SET,
+    REX_USE, SIMPLE, SPSTART, getchr, getdecchrs, gethexchrs, getoctchrs, pat_byte, re_mult_next,
+    spelled, ungetchr, unmagic,
 };
-use crate::semsg;
 use crate::types::{NUL, int64_t, uint8_t, uint32_t};
 
 use crate::winlayer::Win;
 /// `\z(`, `\z1`..`\z9`, `\zs` and `\ze`.
-pub(crate) fn z_atom(rc: &mut RegCompiler, flagp: &mut c_int) -> Option<Node> {
+pub(crate) fn z_atom(rc: &mut RegCompiler, flagp: &mut c_int) -> Compiled<Node> {
     match unmagic(getchr(rc)) as u8 {
         b'(' => {
             // Only a syntax pattern may *define* an external submatch.
             if rc.extmatch & REX_SET == 0 {
-                semsg!("E66: \\z( not allowed here");
-                rc_did_emsg.set(true);
-                return None;
+                return Err(CompileError::ZGroupNotAllowed);
             }
-            if denied_in_optional_sequence(rc) {
-                return None;
-            }
+            denied_in_optional_sequence(rc)?;
             let mut flags = 0;
-            let ret = reg(rc, REG_ZPAREN, &mut flags);
-            if ret.is_none() {
-                return ret;
-            }
+            let ret = reg(rc, REG_ZPAREN, &mut flags)?;
             *flagp |= flags & (HASWIDTH | SPSTART | HASNL | HASLOOKBH);
             rc.has_z = REX_SET;
-            ret
+            Ok(ret)
         }
         c @ b'1'..=b'9' => {
             // ...and only a pattern run inside such a region may use one.
             if rc.extmatch & REX_USE == 0 {
-                semsg!("E67: \\z1 - \\z9 not allowed here");
-                rc_did_emsg.set(true);
-                return None;
+                return Err(CompileError::ZRefNotAllowed);
             }
             let ret = rc.code.node(BtOp::ZREF[usize::from(c - b'0')]);
             rc.has_z = REX_USE;
-            Some(ret)
+            Ok(ret)
         }
         // `\zs`/`\ze` move the reported match start/end without consuming
         // anything, so they are the group-0 open and close nodes.
         b's' => {
             let ret = rc.code.node(BtOp::Mopen);
-            if re_mult_next(rc, "\\zs") {
-                Some(ret)
-            } else {
-                None
-            }
+            re_mult_next(rc, false)?;
+            Ok(ret)
         }
         b'e' => {
             let ret = rc.code.node(BtOp::Mclose);
-            if re_mult_next(rc, "\\ze") {
-                Some(ret)
-            } else {
-                None
-            }
+            re_mult_next(rc, true)?;
+            Ok(ret)
         }
-        _ => {
-            semsg!("E68: Invalid character after \\z");
-            rc_did_emsg.set(true);
-            None
-        }
+        _ => Err(CompileError::InvalidAfterZ),
     }
 }
 
@@ -92,35 +71,29 @@ pub(crate) fn percent_atom(
     rc: &mut RegCompiler,
     flagp: &mut c_int,
     save_prev_at_start: c_int,
-) -> Option<Node> {
+) -> Compiled<Node> {
     let c = unmagic(getchr(rc));
     match c as u8 {
         b'(' => {
-            if denied_in_optional_sequence(rc) {
-                return None;
-            }
+            denied_in_optional_sequence(rc)?;
             let mut flags = 0;
-            let ret = reg(rc, REG_NPAREN, &mut flags);
-            if !ret.is_none() {
-                *flagp |= flags & (HASWIDTH | SPSTART | HASNL | HASLOOKBH);
-            }
-            ret
+            let ret = reg(rc, REG_NPAREN, &mut flags)?;
+            *flagp |= flags & (HASWIDTH | SPSTART | HASNL | HASLOOKBH);
+            Ok(ret)
         }
-        b'^' => Some(rc.code.node(BtOp::ReBof)),
-        b'$' => Some(rc.code.node(BtOp::ReEof)),
+        b'^' => Ok(rc.code.node(BtOp::ReBof)),
+        b'$' => Ok(rc.code.node(BtOp::ReEof)),
         b'#' => {
             // `\%#=1` selects an engine and is only legal at the very start
             // of the pattern, where `vim_regcomp` strips it; getting here
             // means it was somewhere else.
             if pat_byte(rc, 0) == b'=' && matches!(pat_byte(rc, 1), b'0'..=b'2') {
-                let which = pat_byte(rc, 1) as char;
-                semsg!("E1281: Atom '\\%#={which}' must be at the start of the pattern");
-                return None;
+                return Err(CompileError::EngineNotAtStart(pat_byte(rc, 1)));
             }
-            Some(rc.code.node(BtOp::Cursor))
+            Ok(rc.code.node(BtOp::Cursor))
         }
-        b'V' => Some(rc.code.node(BtOp::ReVisual)),
-        b'C' => Some(rc.code.node(BtOp::ReComposing)),
+        b'V' => Ok(rc.code.node(BtOp::ReVisual)),
+        b'C' => Ok(rc.code.node(BtOp::ReComposing)),
         b'[' => optional_sequence(rc, flagp),
         b'd' | b'o' | b'x' | b'u' | b'U' => character_escape(rc, flagp, c),
         _ => position_atom(rc, c, save_prev_at_start),
@@ -133,10 +106,8 @@ pub(crate) fn percent_atom(
 /// Built as a chain of branches: each member's branch falls through to the
 /// next, and every branch's tail lands on the same trailing `NOTHING`, so
 /// stopping early is always an option.
-fn optional_sequence(rc: &mut RegCompiler, flagp: &mut c_int) -> Option<Node> {
-    if denied_in_optional_sequence(rc) {
-        return None;
-    }
+fn optional_sequence(rc: &mut RegCompiler, flagp: &mut c_int) -> Compiled<Node> {
+    denied_in_optional_sequence(rc)?;
     let mut first: Option<Node> = None;
     let mut last: Option<Node> = None;
 
@@ -146,10 +117,7 @@ fn optional_sequence(rc: &mut RegCompiler, flagp: &mut c_int) -> Option<Node> {
             break;
         }
         if c == NUL {
-            let prefix = magic_prefix(rc);
-            semsg!("E69: Missing ] after {prefix}%[");
-            rc_did_emsg.set(true);
-            return None;
+            return Err(CompileError::MissingOptionalEnd(spelled(rc)));
         }
         let br = rc.code.node(BtOp::Branch);
         match last {
@@ -157,7 +125,7 @@ fn optional_sequence(rc: &mut RegCompiler, flagp: &mut c_int) -> Option<Node> {
             Some(prev) => {
                 rc.code.tail(prev, br);
                 if rc.code.too_long {
-                    return None;
+                    return Err(CompileError::TooLong);
                 }
             }
         }
@@ -165,16 +133,13 @@ fn optional_sequence(rc: &mut RegCompiler, flagp: &mut c_int) -> Option<Node> {
         // Each member is exactly one atom; `one_exactly` is what stops a
         // literal run from swallowing the rest of the sequence.
         rc.one_exactly = 1;
-        last = regatom(rc, flagp);
+        let member = regatom(rc, flagp);
         rc.one_exactly = 0;
-        last?;
+        last = Some(member?);
     }
 
     let (Some(ret), Some(lastnode)) = (first, last) else {
-        let prefix = magic_prefix(rc);
-        semsg!("E70: Empty {prefix}%[]");
-        rc_did_emsg.set(true);
-        return None;
+        return Err(CompileError::EmptyOptional(spelled(rc)));
     };
 
     let lastbranch = rc.code.node(BtOp::Branch);
@@ -188,7 +153,7 @@ fn optional_sequence(rc: &mut RegCompiler, flagp: &mut c_int) -> Option<Node> {
         if rc.code.opcode_at(br) == BtOp::Branch.code() as uint8_t {
             rc.code.tail(br, lastbranch);
             if rc.code.too_long {
-                return None;
+                return Err(CompileError::TooLong);
             }
             br = br.operand();
         } else {
@@ -199,12 +164,12 @@ fn optional_sequence(rc: &mut RegCompiler, flagp: &mut c_int) -> Option<Node> {
         }
     }
     *flagp &= !(HASWIDTH | SIMPLE);
-    Some(ret)
+    Ok(ret)
 }
 
 /// `\%d123`, `\%o40`, `\%x2f`, `\%u1234`, `\%U1234abcd`: one character named
 /// by its code point.
-fn character_escape(rc: &mut RegCompiler, flagp: &mut c_int, c: c_int) -> Option<Node> {
+fn character_escape(rc: &mut RegCompiler, flagp: &mut c_int, c: c_int) -> Compiled<Node> {
     let i = match c as u8 {
         b'd' => getdecchrs(rc),
         b'o' => getoctchrs(rc),
@@ -214,10 +179,7 @@ fn character_escape(rc: &mut RegCompiler, flagp: &mut c_int, c: c_int) -> Option
         _ => -1,
     };
     if !(0..=INT_MAX as int64_t).contains(&i) {
-        let prefix = magic_prefix(rc);
-        semsg!("E678: Invalid character after {prefix}%[dxouU]");
-        rc_did_emsg.set(true);
-        return None;
+        return Err(CompileError::InvalidNumber(spelled(rc)));
     }
     let i = i as c_int;
     let ret = if use_multibytecode(rc, i) {
@@ -234,31 +196,27 @@ fn character_escape(rc: &mut RegCompiler, flagp: &mut c_int, c: c_int) -> Option
     }
     rc.code.byte(NUL);
     *flagp |= HASWIDTH;
-    Some(ret)
+    Ok(ret)
 }
 
 /// The position assertions: `\%23l`, `\%<23c`, `\%>23v`, `\%.l` (the cursor's
 /// own line/column) and `\%'m` (a mark).
-fn position_atom(rc: &mut RegCompiler, first: c_int, save_prev_at_start: c_int) -> Option<Node> {
+fn position_atom(rc: &mut RegCompiler, first: c_int, save_prev_at_start: c_int) -> Compiled<Node> {
     if (ascii_isdigit(first) || matches!(first as u8, b'<' | b'>' | b'\'' | b'.'))
         && let Some(node) = compare_atom(rc, first, save_prev_at_start)
     {
         return node;
     }
-    let prefix = magic_prefix(rc);
-    semsg!("E71: Invalid character after {prefix}%");
-    rc_did_emsg.set(true);
-    None
+    Err(CompileError::InvalidAfterPercent(spelled(rc)))
 }
 
 /// The body of [`position_atom`]: `None` means the escape did not turn out to
-/// be a position assertion after all, and E71 is the answer; `Some(None)` an
-/// error already reported.
+/// be a position assertion after all, and E71 is the answer.
 fn compare_atom(
     rc: &mut RegCompiler,
     first: c_int,
     save_prev_at_start: c_int,
-) -> Option<Option<Node>> {
+) -> Option<Compiled<Node>> {
     // `<` and `>` make the test "before" and "after"; the node stores the
     // character itself as the comparison.
     let cmp = first;
@@ -288,16 +246,13 @@ fn compare_atom(
         let ret = rc.code.node(BtOp::ReMark);
         rc.code.byte(c);
         rc.code.byte(cmp);
-        return Some(Some(ret));
+        return Some(Ok(ret));
     }
     if !matches!(c as u8, b'l' | b'c' | b'v') || !(cur || got_digit) {
         return None;
     }
     if cur && n != 0 {
-        let c = unmagic(c) as u8 as char;
-        semsg!("E1204: No Number allowed after .: '\\%{c}'");
-        rc_did_emsg.set(true);
-        return Some(None);
+        return Some(Err(CompileError::NumberAfterDot(unmagic(c) as u8)));
     }
 
     let ret = match c as u8 {
@@ -328,7 +283,7 @@ fn compare_atom(
     };
     rc.code.number(n);
     rc.code.byte(cmp);
-    Some(Some(ret))
+    Some(Ok(ret))
 }
 
 /// The cursor's own line, column or virtual column, as `\%.l`, `\%.c` and

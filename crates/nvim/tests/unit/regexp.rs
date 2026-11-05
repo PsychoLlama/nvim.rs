@@ -1838,6 +1838,31 @@ fn a_back_reference_to_a_group_that_spans_lines_matches_on_both_engines() {
     put("silent! keepjumps keepmarks %delete _");
 }
 
+/// With messages suppressed, the automatic engine hands a pattern the NFA
+/// engine refused to the backtracker: upstream told a refusal from a quiet
+/// decline by counting messages, and a suppressed message is not counted.
+/// With messages on, the refusal stands.
+#[test]
+fn a_suppressed_nfa_refusal_falls_back_to_the_backtracker() {
+    let _sandbox = Sandbox::globals();
+    // E951 on the NFA engine; the backtracker takes the number as it is.
+    let auto = cstr(r"\%#=0\%99999999999l");
+    let nfa = cstr(r"\%#=2\%99999999999l");
+    let (mut by_auto, mut by_nfa) = (false, true);
+    neovim::guard::Suppress::emsg_skip_during(&mut || {
+        by_auto = vim_regcomp(&auto, RE_MAGIC).is_some();
+        by_nfa = vim_regcomp(&nfa, RE_MAGIC).is_some();
+    });
+    assert!(by_auto, "the automatic engine fell back");
+    assert!(!by_nfa, "a forced engine has nothing to fall back to");
+    // `:silent!` still counts the message it hides.
+    let mut by_silent = true;
+    neovim::guard::Suppress::emsg_silent_during(&mut || {
+        by_silent = vim_regcomp(&auto, RE_MAGIC).is_some();
+    });
+    assert!(!by_silent, "a refusal that was said stands");
+}
+
 // ---------------------------------------------------------------------------
 // Refusals
 // ---------------------------------------------------------------------------

@@ -365,7 +365,7 @@ fn at_word_start(rex: Rex, curc: c_int) -> bool {
         return false;
     }
     let this_class = class_in(rex.rest(), rex.reg_buf());
-    this_class > 1 && reg_prev_class(rex) != this_class
+    this_class > 1 && reg_prev_class(rex) != Some(this_class)
 }
 
 /// `\>`: a keyword character behind the position and something else at it.
@@ -374,8 +374,7 @@ fn at_word_end(rex: Rex) -> bool {
         return false;
     }
     let this_class = class_in(rex.rest(), rex.reg_buf());
-    let prev_class = reg_prev_class(rex);
-    this_class != prev_class && prev_class != 0 && prev_class != 1
+    reg_prev_class(rex).is_none_or(|prev| this_class != prev && prev != 0 && prev != 1)
 }
 
 /// Walk a collection's members, looking for one that accepts `curc`.

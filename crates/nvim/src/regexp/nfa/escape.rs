@@ -8,16 +8,14 @@ use crate::regexp::NfaOp;
 use crate::regexp::RegCompiler;
 use core::ffi::c_int;
 
+use super::Parsed;
 use super::atom::nfa_regatom;
 use super::parse::nfa_reg;
-use super::{Parsed, Rejected};
 use crate::ascii::ascii_isdigit;
-use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
-    INT32_MAX, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, getchr, getdecchrs, gethexchrs,
-    getoctchrs, magic_prefix, pat_byte, peekchr, re_mult_next, unmagic,
+    CompileError, INT32_MAX, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, getchr, getdecchrs,
+    gethexchrs, getoctchrs, pat_byte, peekchr, re_mult_next, spelled, unmagic,
 };
-use crate::semsg;
 use crate::types::{MB_MAXBYTES, NUL};
 
 use crate::winlayer::Win;
@@ -29,26 +27,20 @@ pub(crate) fn z_atom(rc: &mut RegCompiler) -> Parsed {
     match u8::try_from(c) {
         Ok(b's') => {
             rc.post.emit_op(NfaOp::Zstart);
-            if !re_mult_next(rc, "\\zs") {
-                return Err(Rejected);
-            }
+            re_mult_next(rc, false)?;
         }
         Ok(b'e') => {
             rc.post.emit_op(NfaOp::Zend);
             // The match end moves, so the matcher has to keep group 0's
             // end position rather than take it from where it stopped.
             rc.has_zend = 1;
-            if !re_mult_next(rc, "\\ze") {
-                return Err(Rejected);
-            }
+            re_mult_next(rc, true)?;
         }
         Ok(b'1'..=b'9') => {
             // A `\z1` back-reference only means something while a syntax
             // item's contained pattern is being matched.
             if rc.extmatch & REX_USE == 0 {
-                semsg!("E67: \\z1 - \\z9 not allowed here");
-                rc_did_emsg.set(true);
-                return Err(Rejected);
+                return Err(CompileError::ZRefNotAllowed);
             }
             rc.post.emit_op(NfaOp::zref(c - b'0' as c_int));
             rc.has_z = REX_USE;
@@ -56,18 +48,12 @@ pub(crate) fn z_atom(rc: &mut RegCompiler) -> Parsed {
         Ok(b'(') => {
             // And `\z(` only in the item that defines them.
             if rc.extmatch != REX_SET {
-                semsg!("E66: \\z( not allowed here");
-                rc_did_emsg.set(true);
-                return Err(Rejected);
+                return Err(CompileError::ZGroupNotAllowed);
             }
             nfa_reg(rc, REG_ZPAREN)?;
             rc.has_z = REX_SET;
         }
-        _ => {
-            let c = unmagic(c) as u8 as char;
-            semsg!("E867: (NFA) Unknown operator '\\z{c}'");
-            return Err(Rejected);
-        }
+        _ => return Err(CompileError::UnknownZOperator(unmagic(c) as u8)),
     }
     Ok(())
 }
@@ -94,9 +80,7 @@ pub(crate) fn percent_atom(rc: &mut RegCompiler, save_prev_at_start: c_int) -> P
             // of the pattern, where `vim_regcomp` strips it; getting here
             // means it was somewhere else.
             if pat_byte(rc, 0) == b'=' && matches!(pat_byte(rc, 1), b'0'..=b'2') {
-                let which = pat_byte(rc, 1) as char;
-                semsg!("E1281: Atom '\\%#={which}' must be at the start of the pattern");
-                return Err(Rejected);
+                return Err(CompileError::EngineNotAtStart(pat_byte(rc, 1)));
             }
             rc.post.emit_op(NfaOp::Cursor);
         }
@@ -119,10 +103,7 @@ fn character_escape(rc: &mut RegCompiler, escape: u8) -> Parsed {
         _ => gethexchrs(rc, 8),
     };
     if !(0..=INT32_MAX as i64).contains(&nr) {
-        let prefix = magic_prefix(rc);
-        semsg!("E678: Invalid character after {prefix}%[dxouU]");
-        rc_did_emsg.set(true);
-        return Err(Rejected);
+        return Err(CompileError::InvalidNumber(spelled(rc)));
     }
     // A NUL cannot be matched as itself; in a pattern it stands for a line
     // break, as it does everywhere else in the engine.
@@ -142,20 +123,14 @@ fn optional_sequence(rc: &mut RegCompiler) -> Parsed {
             break;
         }
         if c == NUL {
-            let prefix = magic_prefix(rc);
-            semsg!("E69: Missing ] after {prefix}%[");
-            rc_did_emsg.set(true);
-            return Err(Rejected);
+            return Err(CompileError::MissingOptionalEnd(spelled(rc)));
         }
         nfa_regatom(rc)?;
         n += 1;
     }
     getchr(rc);
     if n == 0 {
-        let prefix = magic_prefix(rc);
-        semsg!("E70: Empty {prefix}%[]");
-        rc_did_emsg.set(true);
-        return Err(Rejected);
+        return Err(CompileError::EmptyOptional(spelled(rc)));
     }
     rc.post.emit_op(NfaOp::OptChars);
     rc.post.emit(n);
@@ -191,13 +166,10 @@ fn position_atom(rc: &mut RegCompiler, cmp: c_int, save_prev_at_start: c_int) ->
     let mut got_digit = false;
     while ascii_isdigit(c) {
         if cur {
-            let c = unmagic(c) as u8 as char;
-            semsg!("E1204: No Number allowed after .: '\\%{c}'");
-            return Err(Rejected);
+            return Err(CompileError::NumberAfterDot(unmagic(c) as u8));
         }
         if n > ((INT32_MAX - (c - b'0' as c_int)) / 10) as i64 {
-            semsg!("E951: \\% value too large");
-            return Err(Rejected);
+            return Err(CompileError::PositionTooLarge);
         }
         n = n * 10 + (c - b'0' as c_int) as i64;
         c = getchr(rc);
@@ -206,9 +178,7 @@ fn position_atom(rc: &mut RegCompiler, cmp: c_int, save_prev_at_start: c_int) ->
 
     if let Ok(unit @ (b'l' | b'c' | b'v')) = u8::try_from(c) {
         if !cur && !got_digit {
-            let c = unmagic(c) as u8 as char;
-            semsg!("E1273: (NFA regexp) missing value in '\\%{c}'");
-            return Err(Rejected);
+            return Err(CompileError::MissingValue(unmagic(c) as u8));
         }
         let mut limit = INT32_MAX;
         match unit {
@@ -255,8 +225,7 @@ fn position_atom(rc: &mut RegCompiler, cmp: c_int, save_prev_at_start: c_int) ->
             }
         }
         if n >= limit as i64 {
-            semsg!("E951: \\% value too large");
-            return Err(Rejected);
+            return Err(CompileError::PositionTooLarge);
         }
         rc.post.emit(n as c_int);
         return Ok(());
@@ -274,9 +243,7 @@ fn position_atom(rc: &mut RegCompiler, cmp: c_int, save_prev_at_start: c_int) ->
         return Ok(());
     }
 
-    let c = unmagic(c) as u8 as char;
-    semsg!("E867: (NFA) Unknown operator '\\%{c}'");
-    Err(Rejected)
+    Err(CompileError::UnknownPercentOperator(unmagic(c) as u8))
 }
 
 fn cursor_lnum() -> i64 {

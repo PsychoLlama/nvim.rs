@@ -31,11 +31,11 @@ use super::{
     NFA_TOO_EXPENSIVE, NfaRegProg, RE_NOBREAK, REGMAGIC, REX_ALL, RF_HAD_EOL, RF_HASNL, RegExec,
     Rex, bt_regexec, nfa_regexec,
 };
-use crate::message::state::called_emsg;
+use crate::message::emsg_not_now;
 use crate::message::{emsg, msg_str, verbose_enter, verbose_leave};
 use crate::option::vars::{P_RE, p_re, p_verbose};
 use crate::os::cshim::gettext;
-use crate::regexp::{RE_AUTO, REX_SET};
+use crate::regexp::{CompileError, Engine, RE_AUTO, REX_SET, Refused};
 use crate::types::{ColNr, LPos, LineNr, OptInt, ProfTime, RE_GROUPS, RegMMatch, RegMatch};
 
 /// The first line of the last buffer match, which upstream's `rex` kept
@@ -127,14 +127,9 @@ impl OwnedProg {
     }
 
     /// Does the program belong to the backtracking engine, and has its magic
-    /// number not survived? Only that engine's programs carry one. Reports so
-    /// when it has not.
+    /// number not survived? Only that engine's programs carry one.
     pub(crate) fn magic_wrong(&self) -> bool {
-        let wrong = matches!(&self.0.program, Program::Bt(bt) if bt.program[0] != REGMAGIC as u8);
-        if wrong {
-            emsg(gettext(crate::message::e_re_corr));
-        }
-        wrong
+        matches!(&self.0.program, Program::Bt(bt) if bt.program[0] != REGMAGIC as u8)
     }
 
     /// Was it compiled with `RE_NOBREAK`?
@@ -210,23 +205,26 @@ impl OwnedProg {
 
 /// Compile `expr` into a program. A leading `\%#=0`, `\%#=1` or `\%#=2`
 /// overrides 'regexpengine' for this pattern; with the automatic setting
-/// the NFA engine is tried first and a failure that reported no error
-/// falls back to the backtracking one.
+/// the NFA engine is tried first and a refusal that said nothing falls back
+/// to the backtracking one.
 ///
-/// Answers `None` when the pattern does not parse, having reported why.
+/// Answers `None` when the pattern does not compile; why has been said.
 pub fn vim_regcomp(expr_arg: &CStr, re_flags: c_int) -> Option<OwnedProg> {
-    vim_regcomp_ext(expr_arg, re_flags, 0)
+    vim_regcomp_ext(expr_arg, re_flags, 0).ok()
 }
 
 /// [`vim_regcomp`] for a syntax pattern: `extmatch` says which `\z`
 /// specials it may use -- `REX_SET` for a region's start pattern, which
 /// defines `\z(` groups, `REX_USE` for its skip and end patterns, which
 /// match them with `\z1`..`\z9`.
+///
+/// The one place a compile refusal is said: the answer tells the caller
+/// whether what was said blamed the pattern.
 pub(crate) fn vim_regcomp_ext(
     expr_arg: &CStr,
     re_flags: c_int,
     extmatch: c_int,
-) -> Option<OwnedProg> {
+) -> Result<OwnedProg, Refused> {
     let mut expr = expr_arg;
     let mut engine = p_re() as c_int;
     if expr.to_bytes().starts_with(b"\\%#=") {
@@ -251,26 +249,35 @@ pub(crate) fn vim_regcomp_ext(
     // being compiled, so the compiler reads the current buffer's.
     let buf = Buf::current();
 
-    let called_emsg_before = called_emsg.get();
     let mut program = if engine != BACKTRACKING_ENGINE as c_int {
         let auto = if engine == AUTOMATIC_ENGINE as c_int {
             RE_AUTO
         } else {
             0
         };
-        nfa_regcomp(&mut RegCompiler::new(expr, re_flags + auto, buf, extmatch)).map(|mut nfa| {
-            nfa.automatic = engine == AUTOMATIC_ENGINE as c_int;
-            Program::Nfa(nfa)
-        })
+        nfa_regcomp(&mut RegCompiler::new(expr, re_flags + auto, buf, extmatch))
+            .map(|mut nfa| {
+                nfa.automatic = engine == AUTOMATIC_ENGINE as c_int;
+                Program::Nfa(nfa)
+            })
+            .map_err(|err| (Engine::Nfa, err))
     } else {
-        bt_regcomp(&mut RegCompiler::new(expr, re_flags, buf, extmatch)).map(Program::Bt)
+        bt_regcomp(&mut RegCompiler::new(expr, re_flags, buf, extmatch))
+            .map(Program::Bt)
+            .map_err(|err| (Engine::Backtracking, err))
     };
-    // Only retry when the NFA engine declined quietly: an error means the
-    // pattern is bad, not merely too much for that engine.
-    if program.is_none()
+    if let Err((Engine::Nfa, err)) = &program
         && engine == AUTOMATIC_ENGINE as c_int
-        && called_emsg.get() == called_emsg_before
     {
+        // Only retry when the NFA engine said nothing: a refusal it said
+        // means the pattern is bad, not merely too much for that engine.
+        // Upstream told the two apart by counting messages, so a refusal
+        // said while messages are off is retried too.
+        let said = !matches!(err, CompileError::Declined) && !emsg_not_now();
+        err.report();
+        if said {
+            return Err(err.refused(Engine::Nfa));
+        }
         engine = BACKTRACKING_ENGINE as c_int;
         if p_verbose() > 0 as OptInt {
             verbose_enter();
@@ -280,16 +287,23 @@ pub(crate) fn vim_regcomp_ext(
             msg_str(expr);
             verbose_leave();
         }
-        program = bt_regcomp(&mut RegCompiler::new(expr, re_flags, buf, extmatch)).map(Program::Bt);
+        program = bt_regcomp(&mut RegCompiler::new(expr, re_flags, buf, extmatch))
+            .map(Program::Bt)
+            .map_err(|err| (Engine::Backtracking, err));
     }
+    let program = match program {
+        Ok(program) => program,
+        Err((refusing, err)) => {
+            err.report();
+            return Err(err.refused(refusing));
+        }
+    };
     let engine = c_uint::try_from(engine).unwrap_or(AUTOMATIC_ENGINE);
-    program.map(|program| {
-        OwnedProg(Box::new(Compiled {
-            engine,
-            re_flags,
-            program,
-        }))
-    })
+    Ok(OwnedProg(Box::new(Compiled {
+        engine,
+        re_flags,
+        program,
+    })))
 }
 
 /// Recompile the NFA program `prog` for the backtracking engine, which is
@@ -313,7 +327,7 @@ fn recompile_backtracking(prog: &OwnedProg, extmatch: bool) -> Option<OwnedProg>
     // survive the recompile.
     let new = vim_regcomp_ext(&pat, prog.0.re_flags, if extmatch { REX_ALL } else { 0 });
     P_RE.set(save_p_re);
-    new
+    new.ok()
 }
 
 /// Run `prog` over the whole of `line`, starting at byte `col`, leaving the

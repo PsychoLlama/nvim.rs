@@ -50,11 +50,10 @@ pub(crate) fn regrepeat(rex: Rex, prog: BtProg<'_>, p: usize, maxcount: int64_t)
     let mut count: int64_t = 0;
 
     // Only a `\_x` node counts a line break, and only in a multi-line
-    // match where the line break is not already part of the text.
-    let Ok((op, crosses_lines)) = opcode else {
-        iemsg(gettext(e_re_corr));
-        return 0;
-    };
+    // match where the line break is not already part of the text. A byte
+    // that names no opcode is the default arm's, as in upstream's switch:
+    // it says the program is corrupt and counts nothing.
+    let (op, crosses_lines) = opcode.unwrap_or((BtOp::End, false));
     let next_line = || {
         if !rex.multi() || !crosses_lines || rex.lnum() > rex.reg_maxline() || rex.reg_line_lbr() {
             return Line::End;
@@ -257,40 +256,38 @@ pub(crate) fn regrepeat(rex: Rex, prog: BtProg<'_>, p: usize, maxcount: int64_t)
             }
         }
 
-        // Everything else is one of the `RI_*` byte classes.
-        _ => {
-            let Some((mask, positive)) = byte_class(op) else {
-                iemsg(gettext(e_re_corr));
-                rex.set_input(scan);
-                return count as c_int;
-            };
-
-            'bytes: while count < maxcount {
-                if c_int::from(byte(line, scan)) == NUL {
-                    match next_line() {
-                        Line::Crossed => (line, scan) = (rex.line(), 0),
-                        Line::Interrupted | Line::End => break 'bytes,
-                    }
-                } else {
-                    let len = cluster_len_at(line, scan);
-                    if len > 1 {
-                        // A multibyte character is in none of these
-                        // classes, so only the negative form takes it.
-                        if positive {
+        // Everything else is one of the `RI_*` byte classes, or a node
+        // that cannot be repeated -- which the compiler never emits.
+        _ => match byte_class(op) {
+            None => iemsg(gettext(e_re_corr)),
+            Some((mask, positive)) => {
+                'bytes: while count < maxcount {
+                    if c_int::from(byte(line, scan)) == NUL {
+                        match next_line() {
+                            Line::Crossed => (line, scan) = (rex.line(), 0),
+                            Line::Interrupted | Line::End => break 'bytes,
+                        }
+                    } else {
+                        let len = cluster_len_at(line, scan);
+                        if len > 1 {
+                            // A multibyte character is in none of these
+                            // classes, so only the negative form takes it.
+                            if positive {
+                                break 'bytes;
+                            }
+                            scan += len;
+                        } else if RI_FLAGS[usize::from(line[scan])].has(mask) == positive
+                            || literal_newline(line, scan)
+                        {
+                            scan += 1;
+                        } else {
                             break 'bytes;
                         }
-                        scan += len;
-                    } else if RI_FLAGS[usize::from(line[scan])].has(mask) == positive
-                        || literal_newline(line, scan)
-                    {
-                        scan += 1;
-                    } else {
-                        break 'bytes;
                     }
+                    count += 1;
                 }
-                count += 1;
             }
-        }
+        },
     }
 
     rex.set_input(scan);
