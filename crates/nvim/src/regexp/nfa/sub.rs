@@ -33,7 +33,7 @@ const MATCH_FOLLOWS_DEPTH: c_int = 10;
 /// set beside the ordinary one, and only copied when there are any.
 #[inline(always)]
 pub(crate) fn has_zsubexpr(rex: Rex) -> bool {
-    rex.nfa_has_zsubexpr() != 0
+    rex.nfa_has_zsubexpr()
 }
 
 /// Does the pattern have a back-reference? It is the only thing that reads a
@@ -41,7 +41,7 @@ pub(crate) fn has_zsubexpr(rex: Rex) -> bool {
 /// can tell two threads on one state apart by their ends.
 #[inline(always)]
 pub(crate) fn has_backref(rex: Rex) -> bool {
-    rex.nfa_has_backref() != 0
+    rex.nfa_has_backref()
 }
 
 /// How many captures the pattern can fill.
@@ -95,7 +95,7 @@ pub(crate) fn copy_sub_off(to: &mut RegSub, from: &RegSub) {
 /// lookaround is allowed to move.
 pub(crate) fn copy_ze_off(rex: Rex, to: &mut RegSub, from: &RegSub) {
     let kind = rex.pos_kind();
-    if rex.nfa_has_zend() != 0 && from.list[0].end.is_set(kind) {
+    if rex.nfa_has_zend() && from.list[0].end.is_set(kind) {
         to.list[0].end = from.list[0].end;
     }
 }

@@ -7,6 +7,13 @@
 //! to try and hands control back to the forward walk with `RA_CONT`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::narrow::len_as_int;
 use crate::types::LineNr;
@@ -24,7 +31,7 @@ use crate::regexp::{
     RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, Rex, SavedInput, head_off_at, reg_breakcheck,
     reg_getline, reg_restore, reg_save, restore_subexpr,
 };
-use crate::types::{ColNr, NUL, int64_t, uint8_t};
+use crate::types::{ColNr, NUL, int64_t};
 
 /// Pop frames until one of them has something new to try, or the stack runs
 /// out. Updates `scan` and `status` in place.
@@ -50,7 +57,7 @@ pub(crate) fn resume(
                     // The frame was pushed for a capture opcode, so its
                     // state and `rs_no` name the slot it saved.
                     let rp = stack.top();
-                    capture_slot(rex, rp.rs_state, rp.rs_no as usize).set(rp.rs_saved.pos);
+                    capture_slot(rex, rp.rs_state, usize::from(rp.rs_no)).set(rp.rs_saved.pos);
                 }
                 stack.pop(scan);
             }
@@ -66,7 +73,7 @@ pub(crate) fn resume(
                         reg_restore(rex, &stack.top().rs_saved, backpos);
                         *scan = stack.top().rs_scan;
                     }
-                    if *scan == 0 || prog.op_byte(*scan) != BtOp::Branch.code() as uint8_t {
+                    if *scan == 0 || prog.op_byte(*scan) != BtOp::Branch.byte() {
                         *status = RA_NOMATCH;
                         stack.pop(scan);
                     } else {
@@ -85,7 +92,7 @@ pub(crate) fn resume(
                 if *status == RA_NOMATCH {
                     let rp = stack.top();
                     reg_restore(rex, &rp.rs_saved, backpos);
-                    braces.slot(rp.rs_no as usize).count -= 1;
+                    braces.slot(usize::from(rp.rs_no)).count -= 1;
                 }
                 stack.pop(scan);
             }
@@ -94,7 +101,7 @@ pub(crate) fn resume(
                 if *status == RA_NOMATCH {
                     let rp = stack.top();
                     reg_restore(rex, &rp.rs_saved, backpos);
-                    braces.slot(rp.rs_no as usize).count -= 1;
+                    braces.slot(usize::from(rp.rs_no)).count -= 1;
                     *status = RA_CONT;
                 }
                 stack.pop(scan);
@@ -118,7 +125,7 @@ pub(crate) fn resume(
             // `\@=`, `\@!`, `\@>`: the operand's outcome, inverted for
             // `\@!`. `\@>` keeps whatever the operand consumed.
             RS_NOMATCH => {
-                let no = stack.top().rs_no as c_int;
+                let no = c_int::from(stack.top().rs_no);
                 let want = if no == BtOp::Nomatch.code() {
                     RA_MATCH
                 } else {
@@ -199,7 +206,7 @@ fn behind_step(
     // It matched, and it ended exactly where the look-behind sits.
     if *status == RA_MATCH && rex.is_at(rex.behind_pos().pos) {
         rex.set_behind_pos(bp.save_behind);
-        if rp.rs_no as c_int == BtOp::Behind.code() {
+        if c_int::from(rp.rs_no) == BtOp::Behind.code() {
             reg_restore(rex, &bp.save_after, backpos);
         } else {
             // `\@<!` wanted it *not* to match.
@@ -232,7 +239,7 @@ fn behind_step(
     } else {
         // Nowhere left to look.
         rex.set_behind_pos(bp.save_behind);
-        if rp.rs_no as c_int == BtOp::Nobehind.code() {
+        if c_int::from(rp.rs_no) == BtOp::Nobehind.code() {
             reg_restore(rex, &bp.save_after, backpos);
             *status = RA_MATCH;
         } else if *status == RA_MATCH {
@@ -261,7 +268,7 @@ fn step_back_lines(
     } else {
         stop.col
     };
-    if limit > 0 && (end_col - was.col) as i64 >= limit {
+    if limit > 0 && i64::from(end_col - was.col) >= limit {
         return false;
     }
     if was.col == ColNr::ZERO {
@@ -377,8 +384,8 @@ fn star(
         // The byte the pattern needs next is known; positions that cannot
         // supply it are skipped without re-entering the walk.
         if !(rst.nextb == NUL
-            || rex.byte() as c_int == rst.nextb
-            || rex.byte() as c_int == rst.nextb_ic)
+            || c_int::from(rex.byte()) == rst.nextb
+            || c_int::from(rex.byte()) == rst.nextb_ic)
         {
             continue;
         }

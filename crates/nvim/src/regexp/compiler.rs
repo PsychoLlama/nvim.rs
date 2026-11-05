@@ -59,7 +59,7 @@ pub(crate) struct RegCompiler<'p> {
     pub(crate) next_token: c_int,
     /// How many bytes the previous token took, which is how far
     /// [`super::ungetchr`] steps back.
-    pub(crate) prev_token_len: c_int,
+    pub(crate) prev_token_len: usize,
     /// Is the cursor where a branch starts, so that `^` anchors and `*` is
     /// literal? And was the previous token?
     pub(crate) at_start: c_int,
@@ -82,8 +82,8 @@ pub(crate) struct RegCompiler<'p> {
 
     // ------------------------------------------- what the pattern holds
     /// The next `\(` group number, and the next `\z(` one.
-    pub(crate) next_group: c_int,
-    pub(crate) next_zgroup: c_int,
+    pub(crate) next_group: usize,
+    pub(crate) next_zgroup: usize,
     /// `\z(` groups were defined (`REX_SET`) or `\z1` used (`REX_USE`).
     pub(crate) has_z: c_int,
     /// The `RF_*` findings: `\c`, `\C`, `\Z`, and what the program needs.
@@ -101,15 +101,15 @@ pub(crate) struct RegCompiler<'p> {
     pub(crate) code: BtEmitter,
     /// How many complex `\{n,m}` the program has; the matcher has ten
     /// counter slots.
-    pub(crate) complex_braces: c_int,
+    pub(crate) complex_braces: usize,
 
     // ------------------------------------------------------- the NFA
     /// Something only this engine handles was seen, so a wide `\{n,m}`
     /// must not hand the pattern to the backtracker.
     pub(crate) wants_nfa: bool,
     /// The pattern uses `\ze`, or a back-reference.
-    pub(crate) has_zend: c_int,
-    pub(crate) has_backref: c_int,
+    pub(crate) has_zend: bool,
+    pub(crate) has_backref: bool,
     pub(crate) post: Postfix,
     pub(crate) nfa: NfaStates,
 }
@@ -168,8 +168,8 @@ impl<'p> RegCompiler<'p> {
             code: BtEmitter::new(),
             complex_braces: 0,
             wants_nfa: false,
-            has_zend: 0,
-            has_backref: 0,
+            has_zend: false,
+            has_backref: false,
             post: Postfix::new(),
             nfa: NfaStates {
                 count: 0,

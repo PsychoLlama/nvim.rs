@@ -6,6 +6,13 @@
 //! literal run never runs the machine at all.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::regexp::Compiled;
 use crate::regexp::ExtMatch;
@@ -204,7 +211,7 @@ fn try_match(rex: Rex, prog: &NfaRegProg, col: &mut ColNr) -> Attempt {
     }
     rex.set_need_clear_subexpr(true);
     let has_z = prog.reghasz == REX_SET;
-    rex.set_nfa_has_zsubexpr(has_z as c_int);
+    rex.set_nfa_has_zsubexpr(has_z);
     rex.set_need_clear_zsubexpr(has_z);
 
     if prog.regstart != NUL {
@@ -244,8 +251,8 @@ pub(crate) fn nfa_regcomp(rc: &mut RegCompiler) -> Compiled<NfaRegProg> {
     rc.nfa.states = Vec::new();
     rc.post.start(rc.pattern_len);
     rc.wants_nfa = false;
-    rc.has_zend = 0;
-    rc.has_backref = 0;
+    rc.has_zend = false;
+    rc.has_backref = false;
     rc.restart();
 
     re2post(rc)?;
@@ -268,7 +275,7 @@ pub(crate) fn nfa_regcomp(rc: &mut RegCompiler) -> Compiled<NfaRegProg> {
         has_backref: rc.has_backref,
         reghasz: rc.has_z,
         pattern: rc.pattern.to_owned(),
-        nsubexp: rc.next_group,
+        nsubexp: c_int::try_from(rc.next_group).expect("at most ten groups"),
         nstate: rc.nfa.count,
         states: core::mem::take(&mut rc.nfa.states),
         spare: SpareLists::new(),

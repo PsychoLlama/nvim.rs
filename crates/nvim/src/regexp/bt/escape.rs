@@ -4,9 +4,17 @@
 //! the `\%d123` character escapes).
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::compile::Node;
 use crate::regexp::RegCompiler;
+use crate::regexp::low_byte;
 use core::ffi::c_int;
 
 use super::atom::{denied_in_optional_sequence, regatom};
@@ -15,16 +23,16 @@ use super::op::BtOp;
 use super::piece::reg;
 use crate::ascii::ascii_isdigit;
 use crate::regexp::{
-    CompileError, Compiled, HASLOOKBH, HASNL, HASWIDTH, INT_MAX, REG_NPAREN, REG_ZPAREN, REX_SET,
-    REX_USE, SIMPLE, SPSTART, getchr, getdecchrs, gethexchrs, getoctchrs, pat_byte, re_mult_next,
-    spelled, ungetchr, unmagic,
+    CompileError, Compiled, HASLOOKBH, HASNL, HASWIDTH, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE,
+    SIMPLE, SPSTART, getchr, getdecchrs, gethexchrs, getoctchrs, pat_byte, re_mult_next, spelled,
+    ungetchr, unmagic,
 };
-use crate::types::{NUL, int64_t, uint8_t, uint32_t};
+use crate::types::{NUL, uint32_t};
 
 use crate::winlayer::Win;
 /// `\z(`, `\z1`..`\z9`, `\zs` and `\ze`.
 pub(crate) fn z_atom(rc: &mut RegCompiler, flagp: &mut c_int) -> Compiled<Node> {
-    match unmagic(getchr(rc)) as u8 {
+    match low_byte(unmagic(getchr(rc))) {
         b'(' => {
             // Only a syntax pattern may *define* an external submatch.
             if rc.extmatch & REX_SET == 0 {
@@ -73,7 +81,7 @@ pub(crate) fn percent_atom(
     save_prev_at_start: c_int,
 ) -> Compiled<Node> {
     let c = unmagic(getchr(rc));
-    match c as u8 {
+    match low_byte(c) {
         b'(' => {
             denied_in_optional_sequence(rc)?;
             let mut flags = 0;
@@ -150,7 +158,7 @@ fn optional_sequence(rc: &mut RegCompiler, flagp: &mut c_int) -> Compiled<Node> 
     // the whole sequence; a branch's operand is the member itself.
     let mut br = ret;
     while br != lastnode {
-        if rc.code.opcode_at(br) == BtOp::Branch.code() as uint8_t {
+        if rc.code.opcode_at(br) == BtOp::Branch.byte() {
             rc.code.tail(br, lastbranch);
             if rc.code.too_long {
                 return Err(CompileError::TooLong);
@@ -170,7 +178,7 @@ fn optional_sequence(rc: &mut RegCompiler, flagp: &mut c_int) -> Compiled<Node> 
 /// `\%d123`, `\%o40`, `\%x2f`, `\%u1234`, `\%U1234abcd`: one character named
 /// by its code point.
 fn character_escape(rc: &mut RegCompiler, flagp: &mut c_int, c: c_int) -> Compiled<Node> {
-    let i = match c as u8 {
+    let i = match low_byte(c) {
         b'd' => getdecchrs(rc),
         b'o' => getoctchrs(rc),
         b'x' => gethexchrs(rc, 2),
@@ -178,10 +186,12 @@ fn character_escape(rc: &mut RegCompiler, flagp: &mut c_int, c: c_int) -> Compil
         b'U' => gethexchrs(rc, 8),
         _ => -1,
     };
-    if !(0..=INT_MAX as int64_t).contains(&i) {
+    let Ok(i) = c_int::try_from(i) else {
+        return Err(CompileError::InvalidNumber(spelled(rc)));
+    };
+    if i < 0 {
         return Err(CompileError::InvalidNumber(spelled(rc)));
     }
-    let i = i as c_int;
     let ret = if use_multibytecode(rc, i) {
         rc.code.node(BtOp::Multibytecode)
     } else {
@@ -202,7 +212,7 @@ fn character_escape(rc: &mut RegCompiler, flagp: &mut c_int, c: c_int) -> Compil
 /// The position assertions: `\%23l`, `\%<23c`, `\%>23v`, `\%.l` (the cursor's
 /// own line/column) and `\%'m` (a mark).
 fn position_atom(rc: &mut RegCompiler, first: c_int, save_prev_at_start: c_int) -> Compiled<Node> {
-    if (ascii_isdigit(first) || matches!(first as u8, b'<' | b'>' | b'\'' | b'.'))
+    if (ascii_isdigit(first) || matches!(low_byte(first), b'<' | b'>' | b'\'' | b'.'))
         && let Some(node) = compare_atom(rc, first, save_prev_at_start)
     {
         return node;
@@ -221,12 +231,12 @@ fn compare_atom(
     // character itself as the comparison.
     let cmp = first;
     let mut c = first;
-    if matches!(cmp as u8, b'<' | b'>') {
+    if matches!(low_byte(cmp), b'<' | b'>') {
         c = getchr(rc);
     }
     // `\%.l` is "the cursor's line", read now rather than at match time.
     let mut cur = false;
-    if unmagic(c) == b'.' as c_int {
+    if unmagic(c) == c_int::from(b'.') {
         cur = true;
         c = getchr(rc);
     }
@@ -236,11 +246,11 @@ fn compare_atom(
         got_digit = true;
         n = n
             .wrapping_mul(10)
-            .wrapping_add((c - b'0' as c_int) as uint32_t);
+            .wrapping_add((c - c_int::from(b'0')).cast_unsigned());
         c = getchr(rc);
     }
 
-    if unmagic(c) == b'\'' as c_int && n == 0 {
+    if unmagic(c) == c_int::from(b'\'') && n == 0 {
         // `\%'m`: the position of mark m.
         let c = getchr(rc);
         let ret = rc.code.node(BtOp::ReMark);
@@ -248,14 +258,14 @@ fn compare_atom(
         rc.code.byte(cmp);
         return Some(Ok(ret));
     }
-    if !matches!(c as u8, b'l' | b'c' | b'v') || !(cur || got_digit) {
+    if !matches!(low_byte(c), b'l' | b'c' | b'v') || !(cur || got_digit) {
         return None;
     }
     if cur && n != 0 {
-        return Some(Err(CompileError::NumberAfterDot(unmagic(c) as u8)));
+        return Some(Err(CompileError::NumberAfterDot(low_byte(unmagic(c)))));
     }
 
-    let ret = match c as u8 {
+    let ret = match low_byte(c) {
         b'l' => {
             if cur {
                 n = cursor_value(b'l');
@@ -291,9 +301,15 @@ fn compare_atom(
 fn cursor_value(kind: u8) -> uint32_t {
     let win = Win::current();
     match kind {
-        b'l' => win.w_cursor.lnum.get() as u32,
-        b'c' => win.w_cursor.col.get() as u32 + 1,
+        b'l' => win.w_cursor.lnum.get().cast_unsigned(),
+        b'c' => win.w_cursor.col.get().cast_unsigned() + 1,
         // The last screen column of the character under the cursor.
-        _ => win.virtual_vcol_span_at(win.w_cursor).1.get() as u32 + 1,
+        _ => {
+            win.virtual_vcol_span_at(win.w_cursor)
+                .1
+                .get()
+                .cast_unsigned()
+                + 1
+        }
     }
 }

@@ -3,11 +3,20 @@
 //! that let the loop skip work.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::program::{NfaRegProg, NfaState, StateId};
 use super::step::Run;
+use super::sub::slots;
 use crate::narrow::len_as_int;
 use crate::regexp::NfaOp;
+use crate::regexp::byte_count;
 use crate::siemsg;
 use crate::types::LineNr;
 use core::ffi::c_int;
@@ -40,7 +49,7 @@ pub(crate) fn check_char_class(rex: Rex, cls: c_int, c: c_int) -> Result<(), Fai
     let member = match NfaOp::try_from(cls) {
         Ok(NfaOp::ClassAlnum) => (1..128).contains(&c) && ascii(u8::is_ascii_alphanumeric),
         Ok(NfaOp::ClassAlpha) => (1..128).contains(&c) && ascii(u8::is_ascii_alphabetic),
-        Ok(NfaOp::ClassBlank) => c == b' ' as c_int || c == b'\t' as c_int,
+        Ok(NfaOp::ClassBlank) => c == c_int::from(b' ') || c == c_int::from(b'\t'),
         Ok(NfaOp::ClassCntrl) => (1..=127).contains(&c) && ascii(u8::is_ascii_control),
         Ok(NfaOp::ClassDigit) => ascii_isdigit(c),
         Ok(NfaOp::ClassGraph) => (1..=127).contains(&c) && ascii(u8::is_ascii_graphic),
@@ -49,18 +58,21 @@ pub(crate) fn check_char_class(rex: Rex, cls: c_int, c: c_int) -> Result<(), Fai
         Ok(NfaOp::ClassLower) => mb_islower(c) && c != 170 && c != 186,
         Ok(NfaOp::ClassPrint) => vim_isprintc(c),
         Ok(NfaOp::ClassPunct) => (1..128).contains(&c) && ascii(u8::is_ascii_punctuation),
-        Ok(NfaOp::ClassSpace) => (9..=13).contains(&c) || c == b' ' as c_int,
+        Ok(NfaOp::ClassSpace) => (9..=13).contains(&c) || c == c_int::from(b' '),
         Ok(NfaOp::ClassUpper) => mb_isupper(c),
         Ok(NfaOp::ClassXdigit) => ascii_isxdigit(c),
-        Ok(NfaOp::ClassTab) => c == b'\t' as c_int,
-        Ok(NfaOp::ClassReturn) => c == b'\r' as c_int,
+        Ok(NfaOp::ClassTab) => c == c_int::from(b'\t'),
+        Ok(NfaOp::ClassReturn) => c == c_int::from(b'\r'),
         Ok(NfaOp::ClassBackspace) => c == 0x08,
         Ok(NfaOp::ClassEscape) => c == ESC,
         Ok(NfaOp::ClassIdent) => vim_is_ident_char(c),
         Ok(NfaOp::ClassKeyword) => reg_iswordc(rex, c),
         Ok(NfaOp::ClassFname) => vim_isfilec(c),
         _ => {
-            siemsg!("E877: (NFA regexp) Invalid character class: {}", cls as i64);
+            siemsg!(
+                "E877: (NFA regexp) Invalid character class: {}",
+                i64::from(cls)
+            );
             return Err(Failed);
         }
     };
@@ -69,13 +81,13 @@ pub(crate) fn check_char_class(rex: Rex, cls: c_int, c: c_int) -> Result<(), Fai
 
 /// Match what capture group `subidx` captured. On success `*bytelen` is how
 /// far to advance — on the *last* line, for a capture that spans lines.
-pub(crate) fn match_backref(rex: Rex, sub: &RegSub, subidx: c_int, bytelen: &mut c_int) -> bool {
+pub(crate) fn match_backref(rex: Rex, sub: &RegSub, subidx: usize, bytelen: &mut c_int) -> bool {
     // An unset group matches the empty string rather than failing.
-    if sub.in_use <= subidx {
+    if slots(sub.in_use) <= subidx {
         *bytelen = 0;
         return true;
     }
-    let capture = sub.list[subidx as usize];
+    let capture = sub.list[subidx];
     let (start, end) = (capture.start.as_pos(), capture.end.as_pos());
     if start.lnum < LineNr::ZERO || end.lnum < LineNr::ZERO {
         *bytelen = 0;
@@ -101,14 +113,14 @@ pub(crate) fn match_backref(rex: Rex, sub: &RegSub, subidx: c_int, bytelen: &mut
 }
 
 /// Match what the enclosing syntax item's `\z(` group captured.
-pub(crate) fn match_zref(rex: Rex, subidx: c_int, bytelen: &mut c_int) -> bool {
+pub(crate) fn match_zref(rex: Rex, subidx: usize, bytelen: &mut c_int) -> bool {
     cleanup_zsubexpr(rex);
-    rex.with_ext_capture(subidx as usize, |captured| {
+    rex.with_ext_capture(subidx, |captured| {
         let Some(captured) = captured else {
             *bytelen = 0;
             return true;
         };
-        let mut len = captured.count_bytes() as c_int;
+        let mut len = byte_count(captured.count_bytes());
         if cstrncmp(rex, captured.to_bytes_with_nul(), rex.rest(), &mut len) == 0 {
             *bytelen = len;
             return true;
@@ -365,10 +377,10 @@ pub(crate) fn find_match_text(
         // already found — but a fold can encode to a different length,
         // so measure what is actually there.
         let mut regstart_len2 = regstart_len;
-        if regstart_len2 > 1 && char_len_at(line, at) as c_int != regstart_len2 {
+        if regstart_len2 > 1 && byte_count(char_len_at(line, at)) != regstart_len2 {
             regstart_len2 = utf_char2len(utf_fold(regstart));
         }
-        let mut s2 = at + regstart_len2 as usize;
+        let mut s2 = at + regstart_len2.cast_unsigned() as usize;
         while match_text[s1] != 0 {
             // The same ASCII byte on both sides is the same one-byte
             // character: the common case, decided without decoding.

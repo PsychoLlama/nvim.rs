@@ -288,23 +288,23 @@ impl NfaOp {
     ];
 
     /// The marker that opens capture group `number`, `\\(` through `\\9(`.
-    pub(crate) fn mopen(number: c_int) -> NfaOp {
-        NfaOp::MOPEN[group(number)]
+    pub(crate) fn mopen(number: usize) -> NfaOp {
+        NfaOp::MOPEN[number]
     }
 
     /// The marker that opens external capture group `number`, `\\z(`.
-    pub(crate) fn zopen(number: c_int) -> NfaOp {
-        NfaOp::ZOPEN[group(number)]
+    pub(crate) fn zopen(number: usize) -> NfaOp {
+        NfaOp::ZOPEN[number]
     }
 
     /// The `\\1`..`\\9` back-reference to group `number`.
-    pub(crate) fn backref(number: c_int) -> NfaOp {
-        NfaOp::BACKREFS[group(number) - 1]
+    pub(crate) fn backref(number: usize) -> NfaOp {
+        NfaOp::BACKREFS[number - 1]
     }
 
     /// The `\\z1`..`\\z9` reference to external group `number`.
-    pub(crate) fn zref(number: c_int) -> NfaOp {
-        NfaOp::ZREFS[group(number) - 1]
+    pub(crate) fn zref(number: usize) -> NfaOp {
+        NfaOp::ZREFS[number - 1]
     }
 
     /// The number this opcode is stored as.
@@ -630,10 +630,4 @@ impl TryFrom<c_int> for NfaOp {
             None => Err(NotAnOpcode),
         }
     }
-}
-
-/// A capture group number as an index. The parser has already refused a
-/// pattern with more than nine groups, so anything else is a bug here.
-fn group(number: c_int) -> usize {
-    usize::try_from(number).expect("a capture group number")
 }

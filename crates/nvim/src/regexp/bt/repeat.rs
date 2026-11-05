@@ -8,6 +8,13 @@
 //! matches, which [`BtOp::decode`] answers alongside the opcode.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::c_int;
 
@@ -42,7 +49,7 @@ enum Line {
 /// The walk holds the line it is on and an offset into it, and takes the
 /// line again from the match only when it crosses onto the next one: the
 /// per-character loops index one slice.
-pub(crate) fn regrepeat(rex: Rex, prog: BtProg<'_>, p: usize, maxcount: int64_t) -> c_int {
+pub(crate) fn regrepeat(rex: Rex, prog: BtProg<'_>, p: usize, maxcount: int64_t) -> int64_t {
     let opcode = BtOp::decode(prog.op_byte(p));
     let opnd = prog.operand(p);
     let mut line = rex.line();
@@ -291,7 +298,7 @@ pub(crate) fn regrepeat(rex: Rex, prog: BtProg<'_>, p: usize, maxcount: int64_t)
     }
 
     rex.set_input(scan);
-    count as c_int
+    count
 }
 
 /// The `RI_*` mask an opcode tests against, and whether it wants a hit or a

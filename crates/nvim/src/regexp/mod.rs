@@ -14,6 +14,13 @@
 //! a [`RegCompiler`] (see [`compiler`]). It holds no code.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -24,7 +31,7 @@ use crate::types::CAR;
 use crate::types::ESC;
 use crate::types::NL;
 use crate::types::TAB;
-use crate::types::{ColNr, LPos, LineNr, Magic, MarkGet, int16_t, int64_t, uint8_t};
+use crate::types::{ColNr, LPos, LineNr, Magic, MarkGet, int64_t, uint8_t};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int, c_uint};
 /// Last-pattern selectors and the regexp-engine/flag bits.
@@ -158,22 +165,22 @@ pub const NFA_MAX_STATES: c_int = 100000;
 pub const AUTOMATIC_ENGINE: c_uint = 0;
 pub struct ParseState {
     pub regparse: usize,
-    pub prevchr_len: c_int,
+    pub prevchr_len: usize,
     pub curchr: c_int,
     pub prevchr: c_int,
     pub prevprevchr: c_int,
     pub nextchr: c_int,
     pub at_start: c_int,
     pub prev_at_start: c_int,
-    pub regnpar: c_int,
+    pub regnpar: usize,
 }
 /// One decision the forward walk made, and what undoing it needs.
 pub(crate) struct RegItem {
     /// Which decision, and so which of the fields below mean anything.
     pub rs_state: RegState,
-    /// The capture slot, the `\{n,m}` counter or the lookaround opcode the
-    /// state is about, depending on the state.
-    pub rs_no: int16_t,
+    /// The capture slot, the `\{n,m}` counter or the lookaround opcode's
+    /// byte the state is about, depending on the state.
+    pub rs_no: u8,
     /// The program node the frame was pushed for, as an offset into the
     /// program text.
     pub rs_scan: usize,

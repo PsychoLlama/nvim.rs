@@ -3,7 +3,15 @@
 //! matcher to reconsider, so each one just says whether the match continues.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use crate::regexp::{byte_count, low_byte};
 use crate::types::ColNr;
 use core::ffi::c_int;
 
@@ -21,7 +29,7 @@ use crate::regexp::{
     kMarkBufLocal, match_with_backref, nul_terminated_len, reg_getline, reg_getline_len,
     reg_match_visual, reg_nextline, reg_prev_class,
 };
-use crate::types::{LineNr, NUL, Pos, uint8_t, uint32_t};
+use crate::types::{LineNr, NUL, Pos, uint32_t};
 
 use crate::winlayer::Win;
 
@@ -52,9 +60,9 @@ pub(crate) fn match_one(
         Some(RA_CONT)
     };
     // The `RI_*` byte classes only classify Latin-1.
-    let ri = |mask: ByteClass| c < 0x100 && RI_FLAGS[c as usize].has(mask);
+    let ri = |mask: ByteClass| c < 0x100 && RI_FLAGS[usize::from(low_byte(c))].has(mask);
     // The `S`-prefixed classes reject a leading digit.
-    let digit_here = || ascii_isdigit(rex.byte() as c_int);
+    let digit_here = || ascii_isdigit(c_int::from(rex.byte()));
 
     let status = match op {
         BtOp::Bol => nomatch_unless(rex.at_bol()),
@@ -74,12 +82,12 @@ pub(crate) fn match_one(
 
         // `\%23l`, `\%23c`, `\%23v` and their `<`/`>` forms. A line
         // number only means something in a multi-line match.
-        BtOp::ReLnum => {
-            nomatch_unless(rex.multi() && re_num_cmp(prog, rex.buf_lnum().get() as u32, scan))
-        }
+        BtOp::ReLnum => nomatch_unless(
+            rex.multi() && re_num_cmp(prog, rex.buf_lnum().get().cast_unsigned(), scan),
+        ),
         BtOp::ReCol => nomatch_unless(re_num_cmp(
             prog,
-            (rex.col().get() as u32).wrapping_add(1),
+            rex.col().get().cast_unsigned().wrapping_add(1),
             scan,
         )),
         BtOp::ReVcol => nomatch_unless(re_num_cmp(prog, virtual_column(rex).wrapping_add(1), scan)),
@@ -153,7 +161,7 @@ pub(crate) fn match_one(
         | BtOp::Backref6
         | BtOp::Backref7
         | BtOp::Backref8
-        | BtOp::Backref9 => back_reference(rex, op.code() - BACKREF),
+        | BtOp::Backref9 => back_reference(rex, usize::from(low_byte(op.code() - BACKREF))),
         BtOp::Zref1
         | BtOp::Zref2
         | BtOp::Zref3
@@ -162,7 +170,7 @@ pub(crate) fn match_one(
         | BtOp::Zref6
         | BtOp::Zref7
         | BtOp::Zref8
-        | BtOp::Zref9 => external_reference(rex, op.code() - ZREF),
+        | BtOp::Zref9 => external_reference(rex, usize::from(low_byte(op.code() - ZREF))),
 
         // The position a `\@<=` look-behind has to end at.
         // `behind_pos` is this engine's own saved position.
@@ -232,7 +240,7 @@ fn virtual_column(rex: Rex) -> uint32_t {
     if rex.multi() && (lnum <= LineNr::ZERO || lnum > wp.buffer().b_ml.ml_line_count) {
         lnum = LineNr::ONE;
     }
-    win_linetabsize(wp, lnum, rex.line(), rex.col()) as uint32_t
+    win_linetabsize(wp, lnum, rex.line(), rex.col()).cast_unsigned()
 }
 
 /// `\%'m`, `\%<'m`, `\%>'m`: is the cursor at, before or after mark `m`?
@@ -297,7 +305,7 @@ fn exactly(rex: Rex, prog: BtProg<'_>, scan: usize, next: usize) -> c_int {
     if c_int::from(opnd[1]) == NUL && !rex.reg_ic() {
         len = 1;
     } else {
-        len = nul_terminated_len(opnd) as c_int;
+        len = byte_count(nul_terminated_len(opnd));
         if cstrncmp(rex, opnd, rex.rest(), &mut len) != 0 {
             return RA_NOMATCH;
         }
@@ -306,9 +314,9 @@ fn exactly(rex: Rex, prog: BtProg<'_>, scan: usize, next: usize) -> c_int {
     // different grapheme here, unless 'reg_icombine' or a following `\%C`
     // says to ignore combining characters.
     let at = rex.input();
-    if composes_at(rex.line(), at, at + len as usize, None)
+    if composes_at(rex.line(), at, at.wrapping_add_signed(len as isize), None)
         && !rex.reg_icombine()
-        && prog.op_byte(next) != BtOp::ReComposing.code() as uint8_t
+        && prog.op_byte(next) != BtOp::ReComposing.byte()
     {
         return RA_NOMATCH;
     }
@@ -338,7 +346,7 @@ fn collection(rex: Rex, operand: &[u8], c: c_int, positive: bool) -> c_int {
         }
         // Upstream advances even when the tail did not match; the status
         // is what decides the outcome.
-        rex.advance(combining as c_int);
+        rex.advance(byte_count(combining));
     }
     status
 }
@@ -346,7 +354,7 @@ fn collection(rex: Rex, operand: &[u8], c: c_int, positive: bool) -> c_int {
 /// One multibyte character, possibly a bare combining character — which
 /// matches anywhere in the grapheme at the cursor.
 fn multibyte(rex: Rex, opnd: &[u8]) -> c_int {
-    let mut len = cluster_len_at(opnd, 0) as c_int;
+    let mut len = byte_count(cluster_len_at(opnd, 0));
     if len < 2 {
         return RA_NOMATCH;
     }
@@ -367,7 +375,7 @@ fn multibyte(rex: Rex, opnd: &[u8]) -> c_int {
                 }
             } else if opndc == inpc {
                 // Include the combining characters that follow.
-                len = (i + cluster_len_at(line, input + i)) as c_int;
+                len = byte_count(i + cluster_len_at(line, input + i));
                 // RA_MATCH, not RA_CONT: upstream ends the whole pattern
                 // here. Preserved rather than "fixed".
                 status = RA_MATCH;
@@ -387,10 +395,10 @@ fn multibyte(rex: Rex, opnd: &[u8]) -> c_int {
 }
 
 /// `\1`..`\9`: the text group `no` captured, again.
-fn back_reference(rex: Rex, no: c_int) -> c_int {
+fn back_reference(rex: Rex, no: usize) -> c_int {
     cleanup_subexpr(rex);
     let kind = rex.pos_kind();
-    let (start, end) = (rex.start(no as usize).get(), rex.end(no as usize).get());
+    let (start, end) = (rex.start(no).get(), rex.end(no).get());
     let mut len = 0;
     let mut status = RA_CONT;
     if !start.is_set(kind) || !end.is_set(kind) {
@@ -428,13 +436,13 @@ fn back_reference(rex: Rex, no: c_int) -> c_int {
 
 /// `\z1`..`\z9`: the text the enclosing syntax region captured. Missing
 /// captures match the empty string rather than failing.
-fn external_reference(rex: Rex, no: c_int) -> c_int {
+fn external_reference(rex: Rex, no: usize) -> c_int {
     cleanup_zsubexpr(rex);
-    rex.with_ext_capture(no as usize, |text| {
+    rex.with_ext_capture(no, |text| {
         let Some(text) = text else {
             return RA_CONT;
         };
-        let mut len = text.count_bytes() as c_int;
+        let mut len = byte_count(text.count_bytes());
         if cstrncmp(rex, text.to_bytes_with_nul(), rex.rest(), &mut len) != 0 {
             return RA_NOMATCH;
         }

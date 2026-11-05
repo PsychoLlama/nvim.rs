@@ -16,9 +16,17 @@
 //! and the matcher walks the finished program by offset too.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use crate::regexp::RegCompiler;
+use crate::regexp::low_byte;
 use core::ffi::{c_int, c_uint};
 
 use super::op::BtOp;
@@ -26,7 +34,7 @@ use crate::mbyte::{encode_char, utf_char2len, utf_iscomposing_legacy};
 use crate::regexp::{
     BtRegProg, CompileError, Compiled, NOT_MULTI, REX_SET, peekchr, re_multi_type,
 };
-use crate::types::{NUL, int64_t, uint8_t, uint32_t};
+use crate::types::{int64_t, uint8_t, uint32_t};
 
 /// The fixed part of a node: the opcode plus the offset to the next one.
 const NODE_HDR: usize = 3;
@@ -196,10 +204,11 @@ impl BtEmitter {
         core::mem::take(&mut self.text)
     }
 
-    /// Emit one byte of program. `b` is a byte, or a character below 256.
+    /// Emit one byte of program. `b` is a byte, or a character below 256:
+    /// its low byte is stored, as upstream's `regc()` stored a `char_u`.
     #[inline]
     pub(crate) fn byte(&mut self, b: c_int) {
-        self.text.push(b as uint8_t);
+        self.text.push(low_byte(b));
     }
 
     /// Emit one character of program, as its UTF-8 bytes.
@@ -225,7 +234,7 @@ impl BtEmitter {
     pub(crate) fn node_nl(&mut self, op: BtOp, crosses_lines: bool) -> Node {
         let node = Node(self.text.len());
         self.text
-            .extend_from_slice(&[op.encode(crosses_lines), NUL as uint8_t, NUL as uint8_t]);
+            .extend_from_slice(&[op.encode(crosses_lines), b'\0', b'\0']);
         node
     }
 
@@ -258,7 +267,7 @@ impl BtEmitter {
         let offset = usize::from(u16::from_be_bytes([text[p.0 + 1], text[p.0 + 2]]));
         if offset == 0 {
             None
-        } else if text[p.0] == BtOp::Back.code() as uint8_t {
+        } else if text[p.0] == BtOp::Back.byte() {
             Some(Node(p.0 - offset))
         } else {
             Some(Node(p.0 + offset))
@@ -273,7 +282,7 @@ impl BtEmitter {
     pub(crate) fn tail(&mut self, p: Node, val: Node) {
         let too_long = self.too_long;
         let text = &mut self.text;
-        let back = BtOp::Back.code() as uint8_t;
+        let back = BtOp::Back.byte();
         // Walk to the end of the chain, as `next` does; an overflowed chain
         // is not walked, and the patch lands on `p` itself.
         let mut scan = p.0;
@@ -290,7 +299,7 @@ impl BtEmitter {
                 };
             }
         }
-        let (at, val) = (scan as isize, val.0 as isize);
+        let (at, val) = (scan.cast_signed(), val.0.cast_signed());
         let offset = if text[scan] == back {
             at - val
         } else {
@@ -298,12 +307,14 @@ impl BtEmitter {
         };
         // A 16-bit offset cannot reach: the pattern is too long. The caller
         // notices and gives up on the whole program.
-        if offset > 0xffff {
-            self.too_long = true;
-        } else {
-            let bytes = (offset as u16).to_be_bytes();
-            text[scan + 1] = bytes[0];
-            text[scan + 2] = bytes[1];
+        // A negative offset is the C's: its low sixteen bits.
+        match u16::try_from(offset & 0xffff) {
+            Ok(low) if offset <= 0xffff => {
+                let bytes = low.to_be_bytes();
+                text[scan + 1] = bytes[0];
+                text[scan + 2] = bytes[1];
+            }
+            _ => self.too_long = true,
         }
     }
 
@@ -328,9 +339,9 @@ impl BtEmitter {
         let end = text.len();
         text.resize(end + width, 0);
         text.copy_within(opnd.0..end, opnd.0 + width);
-        text[opnd.0] = op.code() as uint8_t;
-        text[opnd.0 + 1] = NUL as uint8_t;
-        text[opnd.0 + 2] = NUL as uint8_t;
+        text[opnd.0] = op.byte();
+        text[opnd.0 + 1] = b'\0';
+        text[opnd.0 + 2] = b'\0';
         text[opnd.0 + NODE_HDR..opnd.0 + width].copy_from_slice(operand);
     }
 
@@ -340,20 +351,23 @@ impl BtEmitter {
     }
 
     /// Insert a node carrying one 32-bit number in front of `opnd`.
-    pub(crate) fn insert_nr(&mut self, op: BtOp, val: int64_t, opnd: Node) {
-        debug_assert!((0..=uint32_t::MAX as int64_t).contains(&val));
-        self.insert_with(op, opnd, &(val as uint32_t).to_be_bytes());
+    pub(crate) fn insert_nr(&mut self, op: BtOp, val: uint32_t, opnd: Node) {
+        self.insert_with(op, opnd, &val.to_be_bytes());
     }
 
     /// Insert a `BRACE_LIMITS`-shaped node — two 32-bit numbers — in front
     /// of `opnd`, and point it at the end of itself so the matcher can find
     /// the braced atom.
-    pub(crate) fn insert_limits(&mut self, op: BtOp, minval: int64_t, maxval: int64_t, opnd: Node) {
-        debug_assert!((0..=uint32_t::MAX as int64_t).contains(&minval));
-        debug_assert!((0..=uint32_t::MAX as int64_t).contains(&maxval));
+    pub(crate) fn insert_limits(
+        &mut self,
+        op: BtOp,
+        minval: uint32_t,
+        maxval: uint32_t,
+        opnd: Node,
+    ) {
         let mut operand = [0; 8];
-        operand[..4].copy_from_slice(&(minval as uint32_t).to_be_bytes());
-        operand[4..].copy_from_slice(&(maxval as uint32_t).to_be_bytes());
+        operand[..4].copy_from_slice(&minval.to_be_bytes());
+        operand[4..].copy_from_slice(&maxval.to_be_bytes());
         self.insert_with(op, opnd, &operand);
         self.tail(opnd, Node(opnd.0 + NODE_HDR + operand.len()));
     }
@@ -389,7 +403,7 @@ fn next_of(head: &[u8; NODE_HDR], p: usize) -> usize {
     let offset = usize::from(u16::from_be_bytes([head[1], head[2]]));
     if offset == 0 {
         0
-    } else if head[0] == BtOp::Back.code() as uint8_t {
+    } else if head[0] == BtOp::Back.byte() {
         p - offset
     } else {
         p + offset
@@ -402,8 +416,8 @@ fn next_of(head: &[u8; NODE_HDR], p: usize) -> usize {
 /// look-behind: `\(...\)\@<=` runs the group after the reference in the
 /// program, so a reference forward into one is fine as long as some `\@<=`
 /// or `\@<!` is still to come in the pattern.
-pub(crate) fn seen_endbrace(rc: &RegCompiler, refnum: c_int) -> Compiled {
-    if rc.closed_groups[refnum as usize] != 0 {
+pub(crate) fn seen_endbrace(rc: &RegCompiler, refnum: usize) -> Compiled {
+    if rc.closed_groups[refnum] != 0 {
         return Ok(());
     }
     // The rest of the pattern, up to its NUL.
@@ -438,11 +452,7 @@ mod tests {
             code.tail(first, end);
         });
         // magic, then BRANCH -> +3, NOTHING -> +3, END with no next.
-        let (branch, nothing, end) = (
-            BtOp::Branch.code() as u8,
-            BtOp::Nothing.code() as u8,
-            BtOp::End.code() as u8,
-        );
+        let (branch, nothing, end) = (BtOp::Branch.byte(), BtOp::Nothing.byte(), BtOp::End.byte());
         assert_eq!(text, [0o234, branch, 0, 3, nothing, 0, 3, end, 0, 0]);
     }
 
@@ -454,7 +464,7 @@ mod tests {
         let back = code.node(BtOp::Back);
         code.tail(back, target);
         assert_eq!(code.next(back), Some(target));
-        assert_eq!(&code.take_text()[4..], [BtOp::Back.code() as u8, 0, 3]);
+        assert_eq!(&code.take_text()[4..], [BtOp::Back.byte(), 0, 3]);
     }
 
     #[test]
@@ -464,8 +474,8 @@ mod tests {
             let atom = code.node(BtOp::Any);
             code.insert_nr(BtOp::Behind, 0x0102_0304, atom);
         });
-        let behind = BtOp::Behind.code() as u8;
-        let any = BtOp::Any.code() as u8;
+        let behind = BtOp::Behind.byte();
+        let any = BtOp::Any.byte();
         assert_eq!(text, [0o234, behind, 0, 0, 1, 2, 3, 4, any, 0, 0]);
     }
 

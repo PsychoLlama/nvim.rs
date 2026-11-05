@@ -3,9 +3,18 @@
 //! from `\%(` through the `\%23l` position assertions.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use crate::narrow::const_len_as_int;
 use crate::regexp::NfaOp;
 use crate::regexp::RegCompiler;
+use crate::regexp::low_byte;
 use core::ffi::c_int;
 
 use super::Parsed;
@@ -33,16 +42,16 @@ pub(crate) fn z_atom(rc: &mut RegCompiler) -> Parsed {
             rc.post.emit_op(NfaOp::Zend);
             // The match end moves, so the matcher has to keep group 0's
             // end position rather than take it from where it stopped.
-            rc.has_zend = 1;
+            rc.has_zend = true;
             re_mult_next(rc, true)?;
         }
-        Ok(b'1'..=b'9') => {
+        Ok(digit @ b'1'..=b'9') => {
             // A `\z1` back-reference only means something while a syntax
             // item's contained pattern is being matched.
             if rc.extmatch & REX_USE == 0 {
                 return Err(CompileError::ZRefNotAllowed);
             }
-            rc.post.emit_op(NfaOp::zref(c - b'0' as c_int));
+            rc.post.emit_op(NfaOp::zref(usize::from(digit - b'0')));
             rc.has_z = REX_USE;
         }
         Ok(b'(') => {
@@ -53,7 +62,7 @@ pub(crate) fn z_atom(rc: &mut RegCompiler) -> Parsed {
             nfa_reg(rc, REG_ZPAREN)?;
             rc.has_z = REX_SET;
         }
-        _ => return Err(CompileError::UnknownZOperator(unmagic(c) as u8)),
+        _ => return Err(CompileError::UnknownZOperator(low_byte(unmagic(c)))),
     }
     Ok(())
 }
@@ -102,12 +111,16 @@ fn character_escape(rc: &mut RegCompiler, escape: u8) -> Parsed {
         b'u' => gethexchrs(rc, 4),
         _ => gethexchrs(rc, 8),
     };
-    if !(0..=INT32_MAX as i64).contains(&nr) {
+    if !(0..=i64::from(INT32_MAX)).contains(&nr) {
         return Err(CompileError::InvalidNumber(spelled(rc)));
     }
     // A NUL cannot be matched as itself; in a pattern it stands for a line
     // break, as it does everywhere else in the engine.
-    rc.post.emit(if nr == 0 { 0xa } else { nr as c_int });
+    rc.post.emit(if nr == 0 {
+        0xa
+    } else {
+        c_int::try_from(nr).expect("checked against INT32_MAX")
+    });
     Ok(())
 }
 
@@ -119,7 +132,7 @@ fn optional_sequence(rc: &mut RegCompiler) -> Parsed {
     let mut n = 0;
     loop {
         let c = peekchr(rc);
-        if c == b']' as c_int {
+        if c == c_int::from(b']') {
             break;
         }
         if c == NUL {
@@ -140,9 +153,9 @@ fn optional_sequence(rc: &mut RegCompiler) -> Parsed {
 
 /// Which side of the given position a match has to be on.
 fn compare(cmp: c_int, lt: c_int, gt: c_int, at: c_int) -> c_int {
-    if cmp == b'<' as c_int {
+    if cmp == c_int::from(b'<') {
         lt
-    } else if cmp == b'>' as c_int {
+    } else if cmp == c_int::from(b'>') {
         gt
     } else {
         at
@@ -154,10 +167,10 @@ fn compare(cmp: c_int, lt: c_int, gt: c_int, at: c_int) -> c_int {
 /// column or virtual column.
 fn position_atom(rc: &mut RegCompiler, cmp: c_int, save_prev_at_start: c_int) -> Parsed {
     let mut c = cmp;
-    if c == b'<' as c_int || c == b'>' as c_int {
+    if c == c_int::from(b'<') || c == c_int::from(b'>') {
         c = getchr(rc);
     }
-    let cur = unmagic(c) == b'.' as c_int;
+    let cur = unmagic(c) == c_int::from(b'.');
     if cur {
         c = getchr(rc);
     }
@@ -166,19 +179,19 @@ fn position_atom(rc: &mut RegCompiler, cmp: c_int, save_prev_at_start: c_int) ->
     let mut got_digit = false;
     while ascii_isdigit(c) {
         if cur {
-            return Err(CompileError::NumberAfterDot(unmagic(c) as u8));
+            return Err(CompileError::NumberAfterDot(low_byte(unmagic(c))));
         }
-        if n > ((INT32_MAX - (c - b'0' as c_int)) / 10) as i64 {
+        if n > i64::from((INT32_MAX - (c - c_int::from(b'0'))) / 10) {
             return Err(CompileError::PositionTooLarge);
         }
-        n = n * 10 + (c - b'0' as c_int) as i64;
+        n = n * 10 + i64::from(c - c_int::from(b'0'));
         c = getchr(rc);
         got_digit = true;
     }
 
     if let Ok(unit @ (b'l' | b'c' | b'v')) = u8::try_from(c) {
         if !cur && !got_digit {
-            return Err(CompileError::MissingValue(unmagic(c) as u8));
+            return Err(CompileError::MissingValue(low_byte(unmagic(c))));
         }
         let mut limit = INT32_MAX;
         match unit {
@@ -221,17 +234,18 @@ fn position_atom(rc: &mut RegCompiler, cmp: c_int, save_prev_at_start: c_int) ->
                 ));
                 // A virtual column is bounded by what a byte column can
                 // expand to.
-                limit = INT32_MAX / MB_MAXBYTES as c_int;
+                limit = INT32_MAX / const_len_as_int(MB_MAXBYTES);
             }
         }
-        if n >= limit as i64 {
+        if n >= i64::from(limit) {
             return Err(CompileError::PositionTooLarge);
         }
-        rc.post.emit(n as c_int);
+        rc.post
+            .emit(c_int::try_from(n).expect("checked against the limit"));
         return Ok(());
     }
 
-    if unmagic(c) == b'\'' as c_int && n == 0 {
+    if unmagic(c) == c_int::from(b'\'') && n == 0 {
         rc.post.emit(compare(
             cmp,
             NfaOp::MarkLt.code(),
@@ -243,7 +257,7 @@ fn position_atom(rc: &mut RegCompiler, cmp: c_int, save_prev_at_start: c_int) ->
         return Ok(());
     }
 
-    Err(CompileError::UnknownPercentOperator(unmagic(c) as u8))
+    Err(CompileError::UnknownPercentOperator(low_byte(unmagic(c))))
 }
 
 fn cursor_lnum() -> i64 {

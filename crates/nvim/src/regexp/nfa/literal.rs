@@ -14,6 +14,7 @@
 
 use crate::regexp::NfaOp;
 use crate::regexp::RegCompiler;
+use crate::regexp::low_byte;
 use core::ffi::c_int;
 
 use super::{Parsed, cursor};
@@ -100,11 +101,12 @@ pub(crate) fn class_shorthand(rc: &mut RegCompiler, c: c_int, accepts_newline: b
 
 /// `\1` .. `\9`: match what that capture group matched.
 pub(crate) fn back_reference(rc: &mut RegCompiler, c: c_int) -> Parsed {
-    let refnum = unmagic(c) - c_int::from(b'1');
+    // `\1`..`\9`: the digit is the group.
+    let refnum = usize::from(low_byte(unmagic(c)) - b'0');
     // A back-reference to a group that has not been closed yet cannot work.
-    seen_endbrace(rc, refnum + 1)?;
-    rc.post.emit_op(NfaOp::backref(refnum + 1));
-    rc.has_backref = 1;
+    seen_endbrace(rc, refnum)?;
+    rc.post.emit_op(NfaOp::backref(refnum));
+    rc.has_backref = true;
     Ok(())
 }
 

@@ -7,6 +7,13 @@
 //! into the program.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::compile::Node;
 use crate::charset::vim_iswordc_buf;
@@ -66,7 +73,7 @@ pub(crate) fn collection(
     // close and not a range.
     let mut startc = -1;
     if matches!(pat_byte(rc, 0), b']' | b'-') {
-        startc = pat_byte(rc, 0) as c_int;
+        startc = c_int::from(pat_byte(rc, 0));
         rc.code.byte(startc);
         pat_seek(rc, 1);
     }
@@ -94,7 +101,7 @@ pub(crate) fn collection(
                 }
                 for _ in 0..len {
                     let byte = pat_byte(rc, 0);
-                    rc.code.byte(byte as c_int);
+                    rc.code.byte(c_int::from(byte));
                     pat_seek(rc, 1);
                 }
             }
@@ -129,8 +136,8 @@ fn range(rc: &mut RegCompiler, startc: &mut c_int) -> Compiled {
         || *startc == -1
         || (pat_byte(rc, 0) == b'\\' && pat_byte(rc, 1) == b'n')
     {
-        rc.code.byte(b'-' as c_int);
-        *startc = b'-' as c_int;
+        rc.code.byte(c_int::from(b'-'));
+        *startc = c_int::from(b'-');
         return Ok(());
     }
 
@@ -141,9 +148,12 @@ fn range(rc: &mut RegCompiler, startc: &mut c_int) -> Compiled {
     if endc == 0 {
         endc = pat_char(rc, 0);
         let len = pat_charlen(rc, 0);
-        pat_seek(rc, len as isize);
+        pat_seek(
+            rc,
+            isize::try_from(len).expect("a character is a few bytes"),
+        );
     }
-    if endc == b'\\' as c_int && !rc.cpo_lit {
+    if endc == c_int::from(b'\\') && !rc.cpo_lit {
         endc = coll_get_char(rc);
     }
     if *startc > endc {
@@ -213,7 +223,7 @@ fn escaped(
         }
         c => {
             pat_seek(rc, 1);
-            *startc = backslash_abbr(c as c_int);
+            *startc = backslash_abbr(c_int::from(c));
             rc.code.byte(*startc);
             Ok(())
         }
@@ -239,7 +249,7 @@ fn bracketed_item(rc: &mut RegCompiler, startc: &mut c_int) {
         rc.code.char(coll);
         return;
     }
-    *startc = pat_byte(rc, 0) as c_int;
+    *startc = c_int::from(pat_byte(rc, 0));
     rc.code.byte(*startc);
     pat_seek(rc, 1);
 }
@@ -309,17 +319,17 @@ fn emit_char_class(rc: &mut RegCompiler, class: CharClass) {
     // The rest are short literal sets.
     match class {
         CharClass::Blank => {
-            rc.code.byte(b' ' as c_int);
-            rc.code.byte(b'\t' as c_int);
+            rc.code.byte(c_int::from(b' '));
+            rc.code.byte(c_int::from(b'\t'));
         }
         CharClass::Space => {
             for c in 9..=13 {
                 rc.code.byte(c);
             }
-            rc.code.byte(b' ' as c_int);
+            rc.code.byte(c_int::from(b' '));
         }
-        CharClass::Tab => rc.code.byte(b'\t' as c_int),
-        CharClass::Return => rc.code.byte(b'\r' as c_int),
+        CharClass::Tab => rc.code.byte(c_int::from(b'\t')),
+        CharClass::Return => rc.code.byte(c_int::from(b'\r')),
         CharClass::Backspace => rc.code.byte(0x08),
         CharClass::Escape => rc.code.byte(ESC),
         _ => {}

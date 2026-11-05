@@ -10,12 +10,20 @@
 //! function of the byte.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use crate::memory::ThinCString;
 use crate::message_fmt::msg_bytes;
 use crate::option::cpo_has;
 use crate::regexp::RegCompiler;
+use crate::regexp::low_byte;
 use crate::tr;
 use crate::types::CpoFlag;
 use core::ffi::{c_char, c_int};
@@ -23,8 +31,8 @@ use core::ffi::{c_char, c_int};
 use super::mbyte::{char_at_nul, char_len_at, cluster_len_at};
 use super::{
     CompileError, Compiled, MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, MAX_LIMIT, MULTI_MULT,
-    MULTI_ONE, Magic, NOT_MULTI, ParseState, REGEXP_ABBR, REGEXP_INRANGE, backslash_abbr, spelled,
-    take_bracketed, take_char_class, toggle_magic, unmagic,
+    MULTI_ONE, Magic, NOT_MULTI, ParseState, REGEXP_ABBR, REGEXP_INRANGE, backslash_abbr,
+    byte_count, spelled, take_bracketed, take_char_class, toggle_magic, unmagic,
 };
 use crate::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::charset::{getdigits_int_at, hex2nr};
@@ -35,8 +43,12 @@ pub(crate) fn re_multi_type(c: c_int) -> c_int {
     // Only the magic forms count, so undo the marker rather than calling
     // `unmagic` — that would also accept the literal byte.
     match c + 256 {
-        x if x == b'@' as c_int || x == b'=' as c_int || x == b'?' as c_int => MULTI_ONE,
-        x if x == b'*' as c_int || x == b'+' as c_int || x == b'{' as c_int => MULTI_MULT,
+        x if x == c_int::from(b'@') || x == c_int::from(b'=') || x == c_int::from(b'?') => {
+            MULTI_ONE
+        }
+        x if x == c_int::from(b'*') || x == c_int::from(b'+') || x == c_int::from(b'{') => {
+            MULTI_MULT
+        }
         _ => NOT_MULTI,
     }
 }
@@ -315,7 +327,7 @@ pub(crate) fn pat_char(rc: &RegCompiler, off: usize) -> c_int {
 /// The encoded length of the character `off` bytes past the cursor; 0 at
 /// the pattern's NUL.
 pub(crate) fn pat_charlen(rc: &RegCompiler, off: usize) -> c_int {
-    char_len_at(rc.text, rc.cursor.wrapping_add(off)) as c_int
+    byte_count(char_len_at(rc.text, rc.cursor.wrapping_add(off)))
 }
 
 /// Move the cursor. Wrapping arithmetic because [`peekchr`] and
@@ -373,8 +385,8 @@ pub(crate) fn peekchr(rc: &mut RegCompiler) -> c_int {
     if rc.token != -1 {
         return rc.token;
     }
-    rc.token = pat_byte(rc, 0) as c_int;
-    match rc.token as u8 {
+    rc.token = c_int::from(pat_byte(rc, 0));
+    match low_byte(rc.token) {
         b'.' | b'[' | b'~' => {
             // Magic as soon as 'magic' is on.
             if rc.magic >= MAGIC_ON {
@@ -395,13 +407,13 @@ pub(crate) fn peekchr(rc: &mut RegCompiler) -> c_int {
             // escape reparse, where the preceding token was consumed.
             if rc.magic >= MAGIC_ON
                 && rc.at_start == 0
-                && !(rc.prev_at_start != 0 && rc.prev_token == b'^' as c_int - 256)
+                && !(rc.prev_at_start != 0 && rc.prev_token == c_int::from(b'^') - 256)
                 && (rc.escape_depth != 0
-                    || (rc.prev_token != b'(' as c_int - 256
-                        && rc.prev_token != b'&' as c_int - 256
-                        && rc.prev_token != b'|' as c_int - 256))
+                    || (rc.prev_token != c_int::from(b'(') - 256
+                        && rc.prev_token != c_int::from(b'&') - 256
+                        && rc.prev_token != c_int::from(b'|') - 256))
             {
-                rc.token = b'*' as c_int - 256;
+                rc.token = c_int::from(b'*') - 256;
             }
         }
         b'^' => {
@@ -409,14 +421,14 @@ pub(crate) fn peekchr(rc: &mut RegCompiler) -> c_int {
             if rc.magic >= MAGIC_OFF
                 && (rc.at_start != 0
                     || rc.magic == MAGIC_ALL
-                    || rc.prev_token == b'(' as c_int - 256
-                    || rc.prev_token == b'|' as c_int - 256
-                    || rc.prev_token == b'&' as c_int - 256
-                    || rc.prev_token == b'n' as c_int - 256
-                    || (unmagic(rc.prev_token) == b'(' as c_int
-                        && rc.prev2_token == b'%' as c_int - 256))
+                    || rc.prev_token == c_int::from(b'(') - 256
+                    || rc.prev_token == c_int::from(b'|') - 256
+                    || rc.prev_token == c_int::from(b'&') - 256
+                    || rc.prev_token == c_int::from(b'n') - 256
+                    || (unmagic(rc.prev_token) == c_int::from(b'(')
+                        && rc.prev2_token == c_int::from(b'%') - 256))
             {
-                rc.token = b'^' as c_int - 256;
+                rc.token = c_int::from(b'^') - 256;
                 rc.at_start = 1;
                 rc.prev_at_start = 0;
             }
@@ -447,7 +459,7 @@ pub(crate) fn peekchr(rc: &mut RegCompiler) -> c_int {
                     || (is_magic_all && matches!(pat_byte(rc, i), b'|' | b'&' | b')'))
                     || rc.magic == MAGIC_ALL
                 {
-                    rc.token = b'$' as c_int - 256;
+                    rc.token = c_int::from(b'$') - 256;
                 }
             }
         }
@@ -455,7 +467,7 @@ pub(crate) fn peekchr(rc: &mut RegCompiler) -> c_int {
             let c = pat_byte(rc, 1);
             if c == 0 {
                 // A trailing backslash is a literal backslash.
-                rc.token = b'\\' as c_int;
+                rc.token = c_int::from(b'\\');
             } else if c <= b'~' && IS_META[c as usize] {
                 // `\x` means whatever a bare `x` would not: reparse the
                 // escaped byte and flip its magic marker.
@@ -471,9 +483,9 @@ pub(crate) fn peekchr(rc: &mut RegCompiler) -> c_int {
                 pat_seek(rc, -1);
                 rc.token = toggle_magic(rc.token);
             } else if is_abbr(c) {
-                rc.token = backslash_abbr(c as c_int);
+                rc.token = backslash_abbr(c_int::from(c));
             } else if rc.magic == MAGIC_NONE && matches!(c, b'$' | b'^') {
-                rc.token = toggle_magic(c as c_int);
+                rc.token = toggle_magic(c_int::from(c));
             } else {
                 rc.token = pat_char(rc, 1);
             }
@@ -489,10 +501,10 @@ pub(crate) fn peekchr(rc: &mut RegCompiler) -> c_int {
 pub(crate) fn skipchr(rc: &mut RegCompiler) {
     // A `\` and the byte after it are one token, so skip both.
     rc.prev_token_len = if pat_byte(rc, 0) == b'\\' { 1 } else { 0 };
-    if pat_byte(rc, rc.prev_token_len as usize) != 0 {
-        rc.prev_token_len += pat_charlen(rc, rc.prev_token_len as usize);
+    if pat_byte(rc, rc.prev_token_len) != 0 {
+        rc.prev_token_len += char_len_at(rc.text, rc.cursor.wrapping_add(rc.prev_token_len));
     }
-    pat_seek(rc, rc.prev_token_len as isize);
+    pat_seek(rc, rc.prev_token_len.cast_signed());
     rc.prev_at_start = rc.at_start;
     rc.at_start = 0;
     rc.prev2_token = rc.prev_token;
@@ -537,7 +549,7 @@ pub(crate) fn ungetchr(rc: &mut RegCompiler) {
     rc.prev_token = rc.prev2_token;
     rc.at_start = rc.prev_at_start;
     rc.prev_at_start = 0;
-    pat_seek(rc, -(rc.prev_token_len as isize));
+    pat_seek(rc, -rc.prev_token_len.cast_signed());
 }
 
 /// Read up to `maxinputlen` hex digits at the cursor, or -1 if there are
@@ -546,11 +558,11 @@ pub(crate) fn gethexchrs(rc: &mut RegCompiler, maxinputlen: c_int) -> i64 {
     let mut nr: i64 = 0;
     let mut i = 0;
     while i < maxinputlen {
-        let c = pat_byte(rc, 0) as c_int;
+        let c = c_int::from(pat_byte(rc, 0));
         if !ascii_isxdigit(c) {
             break;
         }
-        nr = (nr << 4) | hex2nr(c) as i64;
+        nr = (nr << 4) | i64::from(hex2nr(c));
         pat_seek(rc, 1);
         i += 1;
     }
@@ -566,7 +578,7 @@ pub(crate) fn getdecchrs(rc: &mut RegCompiler) -> i64 {
         if !c.is_ascii_digit() {
             break;
         }
-        nr = nr * 10 + (c - b'0') as i64;
+        nr = nr * 10 + i64::from(c - b'0');
         pat_seek(rc, 1);
         // Unlike the hex and octal readers this drops the lookahead, so
         // that what follows `\%d123` is peeked afresh.
@@ -586,7 +598,7 @@ pub(crate) fn getoctchrs(rc: &mut RegCompiler) -> i64 {
         if !(b'0'..=b'7').contains(&c) {
             break;
         }
-        nr = (nr << 3) | hex2nr(c as c_int) as i64;
+        nr = (nr << 3) | i64::from(hex2nr(c_int::from(c)));
         pat_seek(rc, 1);
         i += 1;
     }
@@ -618,12 +630,12 @@ pub(crate) fn read_limits(
     *minval = take_digits(rc, 0);
     if pat_byte(rc, 0) == b',' {
         pat_seek(rc, 1);
-        *maxval = if ascii_isdigit(pat_byte(rc, 0) as c_int) {
+        *maxval = if ascii_isdigit(c_int::from(pat_byte(rc, 0))) {
             take_digits(rc, MAX_LIMIT)
         } else {
             MAX_LIMIT
         };
-    } else if ascii_isdigit(first_byte as c_int) {
+    } else if ascii_isdigit(c_int::from(first_byte)) {
         // `{n}` is exactly n.
         *maxval = *minval;
     } else {

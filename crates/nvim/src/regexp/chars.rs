@@ -3,6 +3,13 @@
 //! items a `[]` collection can name — `[:alpha:]`, `[=a=]` and `[.a.]`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use crate::regexp::RegCompiler;
@@ -29,6 +36,14 @@ pub(crate) const fn magic(c: u8) -> c_int {
     c as c_int - 256
 }
 
+/// The low byte of `c`, as C's store of an `int` in a `char_u`: how a
+/// token -- a character, or a metacharacter's negative code -- is matched
+/// against the ASCII letter it was spelled with.
+#[inline(always)]
+pub(crate) const fn low_byte(c: c_int) -> u8 {
+    c.to_le_bytes()[0]
+}
+
 /// How an error message spells a metacharacter so that it echoes what the
 /// user typed: bare under `\v`, where every metacharacter is, escaped
 /// otherwise.
@@ -39,11 +54,11 @@ pub(crate) fn spelled(rc: &RegCompiler) -> Spelled {
 /// The control character a `\r`/`\t`/`\e`/`\b` abbreviation stands for.
 /// Anything else is returned unchanged.
 pub(crate) fn backslash_abbr(c: c_int) -> c_int {
-    match c as u8 {
-        b'r' => b'\r' as c_int,
-        b't' => b'\t' as c_int,
-        b'e' => 0x1b,
-        b'b' => 0x08,
+    match u8::try_from(c) {
+        Ok(b'r') => c_int::from(b'\r'),
+        Ok(b't') => c_int::from(b'\t'),
+        Ok(b'e') => 0x1b,
+        Ok(b'b') => 0x08,
         _ => c,
     }
 }
@@ -59,7 +74,7 @@ const fn build_ri_flags() -> [ByteClass; 256] {
     let mut tab = [B::NONE; 256];
     let mut i = 0usize;
     while i < 256 {
-        let b = i as u8;
+        let b = i.to_le_bytes()[0];
         tab[i] = match b {
             b'0'..=b'7' => B::DIGIT.or(B::HEX).or(B::OCTAL).or(B::WORD),
             b'8'..=b'9' => B::DIGIT.or(B::HEX).or(B::WORD),

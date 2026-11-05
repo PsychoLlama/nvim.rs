@@ -9,11 +9,21 @@
 //! for "an error was already reported".
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::compile::Node;
 use crate::cstr;
+use crate::narrow::number_as_u32;
 use crate::regexp::RF_HAD_EOL;
 use crate::regexp::RegCompiler;
+use crate::regexp::byte_count;
+use crate::regexp::low_byte;
 use crate::regexp::set_magic;
 use core::ffi::c_int;
 
@@ -29,7 +39,7 @@ use crate::regexp::{
     getchr, getdecchrs, gethexchrs, getoctchrs, magic, peekchr, re_multi_type, read_limits,
     skipchr, skipchr_keepstart, spelled, unmagic,
 };
-use crate::types::{NUL, int64_t, uint8_t, uint32_t};
+use crate::types::{NUL, int64_t};
 use core::cell::Cell;
 
 const M_AMP: c_int = magic(b'&');
@@ -106,11 +116,11 @@ pub(crate) fn regpiece(rc: &mut RegCompiler, flagp: &mut c_int) -> Compiled<Node
         // an optional decimal in front giving the look-behind limit.
         M_AT => {
             let mut nr = getdecchrs(rc);
-            let lop = match unmagic(getchr(rc)) as u8 {
+            let lop = match low_byte(unmagic(getchr(rc))) {
                 b'=' => Some(BtOp::Match),
                 b'!' => Some(BtOp::Nomatch),
                 b'>' => Some(BtOp::Subpat),
-                b'<' => match unmagic(getchr(rc)) as u8 {
+                b'<' => match low_byte(unmagic(getchr(rc))) {
                     b'=' => Some(BtOp::Behind),
                     b'!' => Some(BtOp::Nobehind),
                     _ => None,
@@ -132,7 +142,7 @@ pub(crate) fn regpiece(rc: &mut RegCompiler, flagp: &mut c_int) -> Compiled<Node
                 // A missing limit reads as -1; the node carries an unsigned
                 // count, and 0 means "no limit given".
                 nr = nr.max(0);
-                rc.code.insert_nr(lop, nr as uint32_t as int64_t, ret);
+                rc.code.insert_nr(lop, number_as_u32(nr), ret);
             } else {
                 rc.code.insert(lop, ret);
             }
@@ -151,21 +161,28 @@ pub(crate) fn regpiece(rc: &mut RegCompiler, flagp: &mut c_int) -> Compiled<Node
             read_limits(rc, &mut minval, &mut maxval)?;
             if flags & SIMPLE != 0 {
                 rc.code.insert(BtOp::BraceSimple, ret);
-                rc.code
-                    .insert_limits(BtOp::BraceLimits, minval as int64_t, maxval as int64_t, ret);
+                rc.code.insert_limits(
+                    BtOp::BraceLimits,
+                    minval.cast_unsigned(),
+                    maxval.cast_unsigned(),
+                    ret,
+                );
             } else {
                 // A complex `{}` needs a counter slot of its own at match
                 // time, and there are only ten.
-                if rc.complex_braces >= NSUBEXP as c_int {
+                if rc.complex_braces >= NSUBEXP as usize {
                     return Err(CompileError::TooManyComplexBraces(spelled(rc)));
                 }
-                rc.code
-                    .insert(BtOp::BRACE_COMPLEX[slot(rc.complex_braces)], ret);
+                rc.code.insert(BtOp::BRACE_COMPLEX[rc.complex_braces], ret);
                 let node = rc.code.node(BtOp::Back);
                 rc.code.op_tail(ret, node);
                 rc.code.op_tail(ret, ret);
-                rc.code
-                    .insert_limits(BtOp::BraceLimits, minval as int64_t, maxval as int64_t, ret);
+                rc.code.insert_limits(
+                    BtOp::BraceLimits,
+                    minval.cast_unsigned(),
+                    maxval.cast_unsigned(),
+                    ret,
+                );
                 rc.complex_braces += 1;
             }
             if minval > 0 && maxval > 0 {
@@ -185,7 +202,7 @@ pub(crate) fn regpiece(rc: &mut RegCompiler, flagp: &mut c_int) -> Compiled<Node
                 rc.magic >= MAGIC_ON,
             )));
         }
-        let c = unmagic(peekchr(rc)) as u8;
+        let c = low_byte(unmagic(peekchr(rc)));
         return Err(CompileError::Nested(spelled(rc), c));
     }
     Ok(ret)
@@ -282,20 +299,20 @@ pub(crate) fn reg(rc: &mut RegCompiler, paren: c_int, flagp: &mut c_int) -> Comp
 
     let open = match paren {
         REG_ZPAREN => {
-            if rc.next_zgroup >= NSUBEXP as c_int {
+            if rc.next_zgroup >= NSUBEXP as usize {
                 return Err(CompileError::TooManyZGroups);
             }
             parno = rc.next_zgroup;
             rc.next_zgroup = parno + 1;
-            Some(rc.code.node(BtOp::ZOPEN[slot(parno)]))
+            Some(rc.code.node(BtOp::ZOPEN[parno]))
         }
         REG_PAREN => {
-            if rc.next_group >= NSUBEXP as c_int {
+            if rc.next_group >= NSUBEXP as usize {
                 return Err(CompileError::TooManyGroups(spelled(rc)));
             }
             parno = rc.next_group;
             rc.next_group = parno + 1;
-            Some(rc.code.node(BtOp::MOPEN[slot(parno)]))
+            Some(rc.code.node(BtOp::MOPEN[parno]))
         }
         REG_NPAREN => Some(rc.code.node(BtOp::Nopen)),
         _ => None,
@@ -331,8 +348,8 @@ pub(crate) fn reg(rc: &mut RegCompiler, paren: c_int, flagp: &mut c_int) -> Comp
     // Every branch's tail, and every branch's operand tail, ends at the
     // closing node.
     let ender = rc.code.node(match paren {
-        REG_ZPAREN => BtOp::ZCLOSE[slot(parno)],
-        REG_PAREN => BtOp::MCLOSE[slot(parno)],
+        REG_ZPAREN => BtOp::ZCLOSE[parno],
+        REG_PAREN => BtOp::MCLOSE[parno],
         REG_NPAREN => BtOp::Nclose,
         _ => BtOp::End,
     });
@@ -363,8 +380,8 @@ pub(crate) fn reg(rc: &mut RegCompiler, paren: c_int, flagp: &mut c_int) -> Comp
 
 /// Note that group `parno` has closed, which is what makes a later `\N`
 /// back-reference to it legal.
-fn had_endbrace_seen(rc: &mut RegCompiler, parno: c_int) {
-    rc.closed_groups[parno as usize] = 1;
+fn had_endbrace_seen(rc: &mut RegCompiler, parno: usize) {
+    rc.closed_groups[parno] = 1;
 }
 
 /// Compile `rc`'s pattern into a backtracking program, or answer why not.
@@ -405,7 +422,7 @@ pub(crate) fn bt_regcomp(rc: &mut RegCompiler) -> Compiled<BtRegProg> {
         reganch: 0,
         regmust: None,
         regmlen: Cell::new(0),
-        reghasz: rc.has_z as uint8_t,
+        reghasz: low_byte(rc.has_z),
         program: rc.code.take_text(),
     };
     find_shortcuts(&mut prog, flags);
@@ -466,7 +483,7 @@ fn find_shortcuts(prog: &mut BtRegProg, flags: c_int) {
         let mut len = 0;
         while scan != 0 {
             if opcode_at(scan) == Some(BtOp::Exactly) {
-                let scanlen = cstr::until_nul(&code[scan + 3..]).len() as c_int;
+                let scanlen = cstr::until_nul(&code[scan + 3..]).len();
                 // `>=` rather than `>`: upstream prefers the *last* of
                 // equally long candidates.
                 if scanlen >= len {
@@ -477,7 +494,7 @@ fn find_shortcuts(prog: &mut BtRegProg, flags: c_int) {
             scan = regnext(code, scan);
         }
         prog.regmust = longest;
-        prog.regmlen.set(len);
+        prog.regmlen.set(byte_count(len));
     }
 }
 
@@ -500,15 +517,9 @@ pub(crate) fn coll_get_char(rc: &mut RegCompiler) -> c_int {
     if nr < 0 {
         // Not an escape after all: the backslash stands for itself.
         rc.cursor = start;
-        nr = b'\\' as int64_t;
+        nr = int64_t::from(b'\\');
     }
-    nr.min(INT_MAX as int64_t) as c_int
-}
-
-/// A capture group or complex-brace number as an index into one of
-/// [`BtOp`]'s runs. The parser has already refused a tenth of either.
-fn slot(number: c_int) -> usize {
-    usize::try_from(number).expect("a group number")
+    c_int::try_from(nr).unwrap_or(INT_MAX)
 }
 
 /// The opcode of node `p` of `code`, or `None` when `p` is 0 (no node) or

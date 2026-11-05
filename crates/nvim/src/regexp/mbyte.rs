@@ -3,8 +3,16 @@
 //! the case-folded character search.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
+use crate::regexp::{byte_count, low_byte};
 use core::ffi::c_int;
 
 use super::Rex;
@@ -115,7 +123,7 @@ pub(crate) fn cstrncmp(rex: Rex, s1: &[u8], s2: &[u8], n: &mut c_int) -> c_int {
         // than the current one's, so a multibyte s1 overcounts the
         // characters; the result feeds only the length hint below, and
         // the quirk is load-bearing for what `*n` comes back as.
-        let first = cluster_len_at(s1, 0) as c_int;
+        let first = byte_count(cluster_len_at(s1, 0));
         let mut p = 0;
         let mut chars = 0;
         let mut left = *n;
@@ -129,7 +137,7 @@ pub(crate) fn cstrncmp(rex: Rex, s1: &[u8], s2: &[u8], n: &mut c_int) -> c_int {
             chars -= 1;
             p += cluster_len_at(s2, p);
         }
-        let n2 = p as c_int;
+        let n2 = byte_count(p);
         // `strnicmp_in` ends either side at a NUL itself.
         let result = strnicmp_in(head(s1, bound(*n)), head(s2, bound(n2)));
         if result == 0 && n2 < *n {
@@ -144,7 +152,7 @@ pub(crate) fn cstrncmp(rex: Rex, s1: &[u8], s2: &[u8], n: &mut c_int) -> c_int {
         let (mut str1, mut str2) = (0usize, 0usize);
         let mut c1 = 0;
         let mut c2 = 0;
-        while (str1 as isize) < *n as isize {
+        while str1.cast_signed() < *n as isize {
             c1 = char_at_nul(s1, str1);
             str1 += cluster_len_at(s1, str1);
             c2 = char_at_nul(s2, str2);
@@ -160,7 +168,7 @@ pub(crate) fn cstrncmp(rex: Rex, s1: &[u8], s2: &[u8], n: &mut c_int) -> c_int {
         }
         result = c2 - c1;
         if result == 0 {
-            *n = str2 as c_int;
+            *n = byte_count(str2);
         }
     }
     result
@@ -216,11 +224,11 @@ fn find_char_ic(text: &[u8], c: c_int) -> Option<usize> {
     if c > 0x80 {
         cc = utf_fold(c);
         lc = cc;
-    } else if (b'A' as c_int..=b'Z' as c_int).contains(&c) {
-        cc = c + (b'a' - b'A') as c_int;
+    } else if (c_int::from(b'A')..=c_int::from(b'Z')).contains(&c) {
+        cc = c + c_int::from(b'a' - b'A');
         lc = cc;
-    } else if (b'a' as c_int..=b'z' as c_int).contains(&c) {
-        cc = c - (b'a' - b'A') as c_int;
+    } else if (c_int::from(b'a')..=c_int::from(b'z')).contains(&c) {
+        cc = c - c_int::from(b'a' - b'A');
         lc = c;
     } else {
         return find_char_in(text, c);
@@ -251,7 +259,7 @@ fn find_char_in(text: &[u8], c: c_int) -> Option<usize> {
         return None;
     }
     if c < 0x80 {
-        return memchr_in(text, c as u8);
+        return memchr_in(text, low_byte(c));
     }
     find_char(text, c)
 }

@@ -23,9 +23,17 @@
 //! [`NFA_THREAD_BYTES`], not what it measures today.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::regexp::NfaOp;
 use crate::regexp::NotAnOpcode;
+use crate::regexp::byte_count;
 use crate::types::{ColNr, Failed};
 use core::cell::Cell;
 use core::ffi::c_int;
@@ -247,7 +255,7 @@ impl<'t, 'p> ThreadList<'t, 'p> {
     /// gives up, as upstream's does.
     fn grow(&mut self) -> Result<(), Failed> {
         let newlen = self.slots * 3 / 2 + 50;
-        if (((newlen * NFA_THREAD_BYTES) >> 10) as i64) >= p_mmp() {
+        if i64::try_from((newlen * NFA_THREAD_BYTES) >> 10).unwrap_or(i64::MAX) >= p_mmp() {
             emsg(gettext(E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN));
             return Err(Failed);
         }
@@ -361,7 +369,8 @@ pub(crate) fn addstate_here<'p>(
     pim: Option<&NfaPim<'p>>,
     ip: &mut c_int,
 ) -> bool {
-    let listidx = *ip as usize;
+    // The thread the loop is on: never negative here.
+    let listidx = (*ip).cast_unsigned() as usize;
     let before = l.len();
     if !walk(l, state, subs, pim, -(*ip) - ADDSTATE_HERE_OFFSET, 0) {
         return false;
@@ -393,7 +402,7 @@ pub(crate) fn addstate_here<'p>(
         l.threads[listidx + count..n].rotate_left(1);
     }
     l.n -= 1;
-    *ip = listidx as c_int - 1;
+    *ip = byte_count(listidx) - 1;
     true
 }
 
@@ -414,7 +423,11 @@ fn walk<'p>(
     // A negative `off` past the sentinel means "add at the current position",
     // and carries the index the current list has got to.
     let (add_here, off, listindex) = if off_arg <= -ADDSTATE_HERE_OFFSET {
-        (true, 0, (-(off_arg + ADDSTATE_HERE_OFFSET)) as usize)
+        (
+            true,
+            0,
+            (-(off_arg + ADDSTATE_HERE_OFFSET)).cast_unsigned() as usize,
+        )
     } else {
         (false, off_arg, 0)
     };
@@ -526,7 +539,7 @@ fn place<'p>(
 fn past_line_start(rex: Rex) -> bool {
     let endp = rex.nfa_endp();
     rex.input() > 0
-        && rex.byte() as c_int != NUL
+        && c_int::from(rex.byte()) != NUL
         && endp.is_none_or(|endp| !rex.multi() || rex.lnum() == endp.as_pos().lnum)
 }
 
@@ -582,7 +595,7 @@ fn follow<'p>(
 
 /// Has a `\ze` already put group 0's end somewhere?
 fn has_zend_set(rex: Rex, subs: &RegSubs) -> bool {
-    rex.nfa_has_zend() != 0 && subs.norm.list[0].end.is_set(rex.pos_kind())
+    rex.nfa_has_zend() && subs.norm.list[0].end.is_set(rex.pos_kind())
 }
 
 /// Which capture set a bracket state records into, and which slot of it.

@@ -116,8 +116,8 @@ pub(crate) struct NfaRegProg {
     /// The literal text after `regstart` the whole pattern is, NUL
     /// included, when it is nothing else.
     pub(crate) match_text: Option<Vec<u8>>,
-    pub(crate) has_zend: c_int,
-    pub(crate) has_backref: c_int,
+    pub(crate) has_zend: bool,
+    pub(crate) has_backref: bool,
     pub(crate) reghasz: c_int,
     /// The pattern, for the recompile a `NFA_TOO_EXPENSIVE` asks for.
     pub(crate) pattern: CString,

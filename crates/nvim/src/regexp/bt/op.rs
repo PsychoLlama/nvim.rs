@@ -298,6 +298,13 @@ impl BtOp {
         self as c_int
     }
 
+    /// The byte this opcode is stored as in a program: every code is below
+    /// 256 (`BtOp` is `repr(i32)` only to share the C numbering).
+    #[inline(always)]
+    pub(crate) const fn byte(self) -> u8 {
+        self.code().to_le_bytes()[0]
+    }
+
     /// Where this opcode stands in `run`, which for the capture runs is the
     /// group number and for the reference runs the reference number.
     ///

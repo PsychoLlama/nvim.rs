@@ -6,9 +6,17 @@
 //! for a run of ordinary characters.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::compile::Node;
 use crate::regexp::RegCompiler;
+use crate::regexp::low_byte;
 use core::ffi::c_int;
 
 use super::collection::{Collection, collection};
@@ -71,7 +79,7 @@ pub(crate) fn regatom(rc: &mut RegCompiler, flagp: &mut c_int) -> Compiled<Node>
     // shifts its opcode to the newline-accepting variant of itself.
     if c == M_UNDERSCORE {
         c = unmagic(getchr(rc));
-        return match c as u8 {
+        return match low_byte(c) {
             b'^' => Ok(rc.code.node(BtOp::Bol)),
             b'$' => {
                 rc.had_eol = 1;
@@ -79,7 +87,7 @@ pub(crate) fn regatom(rc: &mut RegCompiler, flagp: &mut c_int) -> Compiled<Node>
             }
             _ => {
                 *flagp |= HASNL;
-                if c == b'[' as c_int {
+                if c == c_int::from(b'[') {
                     bracketed(rc, flagp, true, c)
                 } else {
                     class_shorthand(rc, flagp, c, true)
@@ -133,23 +141,23 @@ pub(crate) fn regatom(rc: &mut RegCompiler, flagp: &mut c_int) -> Compiled<Node>
             let c = unmagic(c);
             // As in E61: `*` is magic one level sooner than the rest, so the
             // backslash this message shows is decided by a looser test.
-            let bare = if c == b'*' as c_int {
+            let bare = if c == c_int::from(b'*') {
                 rc.magic >= MAGIC_ON
             } else {
                 rc.magic == MAGIC_ALL
             };
             Err(CompileError::FollowsNothing(
                 Spelled::bare_if(bare),
-                c as u8,
+                low_byte(c),
             ))
         }
 
         M_TILDE => previous_substitute(rc, flagp),
 
         M_1..=M_9 => {
-            let refnum = c - M_0;
+            let refnum = group_index(c - M_0);
             seen_endbrace(rc, refnum)?;
-            Ok(rc.code.node(BtOp::BACKREF[group_index(refnum)]))
+            Ok(rc.code.node(BtOp::BACKREF[refnum]))
         }
 
         M_Z => z_atom(rc, flagp),

@@ -13,6 +13,13 @@
 //! that fails on most lines would otherwise pay for per line.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use crate::global_cell::GlobalCell;
@@ -129,7 +136,7 @@ impl OwnedProg {
     /// Does the program belong to the backtracking engine, and has its magic
     /// number not survived? Only that engine's programs carry one.
     pub(crate) fn magic_wrong(&self) -> bool {
-        matches!(&self.0.program, Program::Bt(bt) if bt.program[0] != REGMAGIC as u8)
+        matches!(&self.0.program, Program::Bt(bt) if c_int::from(bt.program[0]) != REGMAGIC)
     }
 
     /// Was it compiled with `RE_NOBREAK`?
@@ -226,38 +233,37 @@ pub(crate) fn vim_regcomp_ext(
     extmatch: c_int,
 ) -> Result<OwnedProg, Refused> {
     let mut expr = expr_arg;
-    let mut engine = p_re() as c_int;
+    // 'regexpengine' is 0, 1 or 2: the option refuses anything else.
+    let mut engine = c_uint::try_from(p_re()).unwrap_or(AUTOMATIC_ENGINE);
     if expr.to_bytes().starts_with(b"\\%#=") {
         // The prefix may be the whole pattern, and then the byte after it
         // is the terminator -- which is not a digit, so the error below is
         // what upstream reports for it too.
-        let chosen = c_int::from(cstr::byte_at(expr.to_bytes(), 4)) - '0' as c_int;
-        if chosen == AUTOMATIC_ENGINE as c_int
-            || chosen == BACKTRACKING_ENGINE as c_int
-            || chosen == NFA_ENGINE as c_int
-        {
+        let chosen =
+            c_uint::from(cstr::byte_at(expr.to_bytes(), 4)).wrapping_sub(c_uint::from(b'0'));
+        if chosen == AUTOMATIC_ENGINE || chosen == BACKTRACKING_ENGINE || chosen == NFA_ENGINE {
             engine = chosen;
             expr = cstr::suffix(expr, 5);
         } else {
             emsg(gettext(
                 c"E864: \\%#= can only be followed by 0, 1, or 2. The automatic engine will be used ",
             ));
-            engine = AUTOMATIC_ENGINE as c_int;
+            engine = AUTOMATIC_ENGINE;
         }
     }
     // The pattern can name a buffer-local thing (`\k`, say) while it is
     // being compiled, so the compiler reads the current buffer's.
     let buf = Buf::current();
 
-    let mut program = if engine != BACKTRACKING_ENGINE as c_int {
-        let auto = if engine == AUTOMATIC_ENGINE as c_int {
+    let mut program = if engine != BACKTRACKING_ENGINE {
+        let auto = if engine == AUTOMATIC_ENGINE {
             RE_AUTO
         } else {
             0
         };
         nfa_regcomp(&mut RegCompiler::new(expr, re_flags + auto, buf, extmatch))
             .map(|mut nfa| {
-                nfa.automatic = engine == AUTOMATIC_ENGINE as c_int;
+                nfa.automatic = engine == AUTOMATIC_ENGINE;
                 Program::Nfa(nfa)
             })
             .map_err(|err| (Engine::Nfa, err))
@@ -267,7 +273,7 @@ pub(crate) fn vim_regcomp_ext(
             .map_err(|err| (Engine::Backtracking, err))
     };
     if let Err((Engine::Nfa, err)) = &program
-        && engine == AUTOMATIC_ENGINE as c_int
+        && engine == AUTOMATIC_ENGINE
     {
         // Only retry when the NFA engine said nothing: a refusal it said
         // means the pattern is bad, not merely too much for that engine.
@@ -278,7 +284,7 @@ pub(crate) fn vim_regcomp_ext(
         if said {
             return Err(err.refused(Engine::Nfa));
         }
-        engine = BACKTRACKING_ENGINE as c_int;
+        engine = BACKTRACKING_ENGINE;
         if p_verbose() > 0 as OptInt {
             verbose_enter();
             msg_str(gettext(
@@ -298,7 +304,6 @@ pub(crate) fn vim_regcomp_ext(
             return Err(err.refused(refusing));
         }
     };
-    let engine = c_uint::try_from(engine).unwrap_or(AUTOMATIC_ENGINE);
     Ok(OwnedProg(Box::new(Compiled {
         engine,
         re_flags,
@@ -314,7 +319,7 @@ fn recompile_backtracking(prog: &OwnedProg, extmatch: bool) -> Option<OwnedProg>
     };
     let pat: CString = nfa.pattern.clone();
     let save_p_re = p_re();
-    P_RE.set(BACKTRACKING_ENGINE as c_int as OptInt);
+    P_RE.set(OptInt::from(BACKTRACKING_ENGINE));
     if p_verbose() > 0 as OptInt {
         verbose_enter();
         msg_str(gettext(

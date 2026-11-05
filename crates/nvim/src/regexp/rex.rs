@@ -54,10 +54,11 @@ use crate::memline::held_line;
 use crate::types::{ColNr, LPos, LineNr, ProfTime};
 use crate::winlayer::{Buf, Win};
 
-/// A character's length as the `int` the engines count in. A character is a
-/// few bytes, so the conversion never saturates.
+/// A length in bytes as the `int` the engines count in. A character, a line
+/// and a pattern are all well below 2 GiB, so the conversion never
+/// saturates.
 #[inline(always)]
-fn byte_count(len: usize) -> c_int {
+pub(crate) fn byte_count(len: usize) -> c_int {
     c_int::try_from(len).unwrap_or(c_int::MAX)
 }
 
@@ -164,12 +165,12 @@ impl BtVars {
 /// The NFA engine's own variables: see [`BtVars`].
 #[derive(Default)]
 struct NfaVars {
-    has_zend: Cell<c_int>,
-    has_backref: Cell<c_int>,
+    has_zend: Cell<bool>,
+    has_backref: Cell<bool>,
     nsubexpr: Cell<c_int>,
     listid: Cell<c_int>,
     alt_listid: Cell<c_int>,
-    has_zsubexpr: Cell<c_int>,
+    has_zsubexpr: Cell<bool>,
     verdict: Cell<c_int>,
     endp: Cell<Option<MatchPos>>,
     ll_index: Cell<usize>,
@@ -180,12 +181,12 @@ impl NfaVars {
     /// Back to [`NfaVars::default`], in place.
     #[inline(always)]
     fn reset(&self) {
-        self.has_zend.set(0);
-        self.has_backref.set(0);
+        self.has_zend.set(false);
+        self.has_backref.set(false);
         self.nsubexpr.set(0);
         self.listid.set(0);
         self.alt_listid.set(0);
-        self.has_zsubexpr.set(0);
+        self.has_zsubexpr.set(false);
         self.verdict.set(0);
         self.endp.set(None);
         self.ll_index.set(0);
@@ -794,34 +795,34 @@ impl<'t> Rex<'t> {
 
     /// Did the pattern use `\ze`?
     #[inline(always)]
-    pub(crate) fn nfa_has_zend(self) -> c_int {
+    pub(crate) fn nfa_has_zend(self) -> bool {
         self.0.nfa.has_zend.get()
     }
 
     #[inline(always)]
-    pub(crate) fn set_nfa_has_zend(self, has: c_int) {
+    pub(crate) fn set_nfa_has_zend(self, has: bool) {
         self.0.nfa.has_zend.set(has);
     }
 
     /// Did the pattern use a back-reference? One forces the slow path.
     #[inline(always)]
-    pub(crate) fn nfa_has_backref(self) -> c_int {
+    pub(crate) fn nfa_has_backref(self) -> bool {
         self.0.nfa.has_backref.get()
     }
 
     #[inline(always)]
-    pub(crate) fn set_nfa_has_backref(self, has: c_int) {
+    pub(crate) fn set_nfa_has_backref(self, has: bool) {
         self.0.nfa.has_backref.set(has);
     }
 
     /// Did the pattern use a `\z(` group?
     #[inline(always)]
-    pub(crate) fn nfa_has_zsubexpr(self) -> c_int {
+    pub(crate) fn nfa_has_zsubexpr(self) -> bool {
         self.0.nfa.has_zsubexpr.get()
     }
 
     #[inline(always)]
-    pub(crate) fn set_nfa_has_zsubexpr(self, has: c_int) {
+    pub(crate) fn set_nfa_has_zsubexpr(self, has: bool) {
         self.0.nfa.has_zsubexpr.set(has);
     }
 

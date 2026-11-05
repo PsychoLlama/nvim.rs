@@ -5,10 +5,17 @@
 //! has reached is the one asked for.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::program::NfaState;
+use crate::narrow::const_len_as_int;
 use crate::regexp::NfaOp;
-use core::ffi::c_int;
 
 use super::run::nfa_re_num_cmp;
 use crate::mark::mark_get;
@@ -44,9 +51,9 @@ pub(crate) fn at_line(rex: Rex, state: &NfaState) -> bool {
     );
     rex.multi()
         && nfa_re_num_cmp(
-            want as u64,
+            u64::from(want.cast_unsigned()),
             state.c - NfaOp::Lnum.code(),
-            lnum(rex).get() as u64,
+            u64::from(lnum(rex).get().cast_unsigned()),
         )
 }
 
@@ -54,9 +61,9 @@ pub(crate) fn at_line(rex: Rex, state: &NfaState) -> bool {
 pub(crate) fn at_col(rex: Rex, state: &NfaState) -> bool {
     debug_assert!(state.val >= 0, "column assertion out of range");
     nfa_re_num_cmp(
-        state.val as u64,
+        u64::from(state.val.cast_unsigned()),
         state.c - NfaOp::Col.code(),
-        col(rex).get() as u64 + 1,
+        u64::from(col(rex).get().cast_unsigned()) + 1,
     )
 }
 
@@ -69,7 +76,7 @@ pub(crate) fn at_vcol(rex: Rex, state: &NfaState) -> bool {
     // A virtual column is never smaller than the byte column divided by
     // the widest a character can be, so a `\%<` can be answered without
     // measuring anything.
-    if op != 1 && col > ColNr::new(want * MB_MAXBYTES as c_int) {
+    if op != 1 && col > ColNr::new(want * const_len_as_int(MB_MAXBYTES)) {
         return false;
     }
     let wp = window(rex);
@@ -77,7 +84,7 @@ pub(crate) fn at_vcol(rex: Rex, state: &NfaState) -> bool {
     // expands to more columns than one tab does.
     if op == 1 && col - 1 > ColNr::new(want) && col > ColNr::new(100) {
         let ts = wp.buffer().b_p_ts.max(4);
-        if i64::from(col) > want as i64 * ts {
+        if i64::from(col) > i64::from(want) * ts {
             return true;
         }
     }
@@ -87,7 +94,11 @@ pub(crate) fn at_vcol(rex: Rex, state: &NfaState) -> bool {
     }
     let vcol = win_linetabsize(wp, lnum, rex.line(), col);
     assert!(want >= 0, "virtual column assertion out of range");
-    nfa_re_num_cmp(want as u64, op, vcol as u64 + 1)
+    nfa_re_num_cmp(
+        u64::from(want.cast_unsigned()),
+        op,
+        u64::from(vcol.cast_unsigned()) + 1,
+    )
 }
 
 /// `\%'m`: the position of mark `m`.

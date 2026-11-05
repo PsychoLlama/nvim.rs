@@ -333,8 +333,8 @@ pub(crate) fn step<'p>(
 
 /// The group a `\\1`-style reference names: its opcode's position in the run
 /// of nine, plus one.
-fn group_number(index: usize) -> c_int {
-    c_int::try_from(index + 1).expect("a group number below ten")
+fn group_number(index: usize) -> usize {
+    index + 1
 }
 
 /// A thread that matched `bytelen` bytes: it may be shorter than the

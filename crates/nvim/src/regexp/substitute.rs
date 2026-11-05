@@ -19,6 +19,13 @@
 //! deliberately reuses what the first computed (the `\=` result).
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use crate::winlayer::Buf;
@@ -164,7 +171,7 @@ impl<'d> Out<'d> {
     /// Write the terminator at the cursor, when there is room for it.
     fn terminate(&mut self) {
         if let Some(byte) = self.dest.as_mut().and_then(|dest| dest.get_mut(self.at)) {
-            *byte = NUL as u8;
+            *byte = b'\0';
         }
     }
 }
@@ -338,12 +345,12 @@ pub(crate) fn regsub_to_vec(
     source: Option<&[u8]>,
     expr: Option<&TypVal>,
 ) -> Option<Vec<u8>> {
-    let magic = REGSUB_MAGIC as c_int;
+    let magic = REGSUB_MAGIC.cast_signed();
     let size = regsub_string(matches, line, source, expr, None, magic)
         .inspect_err(|err| err.report())
         .ok()?;
     let mut out = vec![0u8; size];
-    let copy = REGSUB_COPY as c_int | magic;
+    let copy = REGSUB_COPY.cast_signed() | magic;
     // A copying pass that stops short leaves what it wrote; the measured
     // length stands.
     if let Err(err) = regsub_string(matches, line, source, expr, Some(&mut out[..]), copy) {
@@ -448,7 +455,7 @@ fn regsub_both(
     }
 
     let source = source.unwrap_or_default();
-    let mut out = Out::new(dest.filter(|_| flags & REGSUB_COPY as c_int != 0));
+    let mut out = Out::new(dest.filter(|_| flags & REGSUB_COPY.cast_signed() != 0));
     // A caller-supplied function, or a replacement that starts `\=`, is
     // a Vimscript expression rather than replacement text.
     let outcome = if expr.is_some() || source.starts_with(b"\\=") {
@@ -493,7 +500,7 @@ fn eval_replacement(
                 .with_mut(|slots| slots[nested].take())
                 .unwrap_or_default();
             dest[..text.len()].copy_from_slice(&text);
-            dest[text.len()] = NUL as u8;
+            dest[text.len()] = b'\0';
             out.skip(text.len());
         }
         return;
@@ -531,7 +538,8 @@ fn eval_replacement(
     NESTING.set(nested);
 
     let text = text.map(|mut text| {
-        if line_breaks_to_cr(&mut text, rex.line_lbr) && flags & REGSUB_BACKSLASH as c_int != 0 {
+        if line_breaks_to_cr(&mut text, rex.line_lbr) && flags & REGSUB_BACKSLASH.cast_signed() != 0
+        {
             // The backslashes will be consumed downstream; double them
             // so they survive.
             text = payload(escaped_bytes(&text, b"\\"));
@@ -554,15 +562,15 @@ fn eval_replacement(
 fn line_breaks_to_cr(text: &mut [u8], literal_nl: bool) -> bool {
     let mut had_backslash = false;
     let mut s = 0;
-    while s < text.len() && text[s] != NUL as u8 {
-        if text[s] == NL as u8 && !literal_nl {
-            text[s] = CAR as u8;
-        } else if text[s] == b'\\' && cstr::byte_at(text, s + 1) != NUL as u8 {
+    while s < text.len() && text[s] != b'\0' {
+        if text[s] == b'\n' && !literal_nl {
+            text[s] = b'\r';
+        } else if text[s] == b'\\' && cstr::byte_at(text, s + 1) != b'\0' {
             // Skip the escaped character — but convert it too, so that
             // `:s/abc\\\ndef/\="aaa\\\nbbb"/` breaks the line.
             s += 1;
-            if text[s] == NL as u8 && !literal_nl {
-                text[s] = CAR as u8;
+            if text[s] == b'\n' && !literal_nl {
+                text[s] = b'\r';
             }
             had_backslash = true;
         }
@@ -577,8 +585,8 @@ fn line_breaks_to_cr(text: &mut [u8], literal_nl: bool) -> bool {
 fn expand_replacement(rex: Expanding<'_>, source: &[u8], flags: c_int, out: &mut Out) -> Outcome {
     let source = cstr::until_nul(source);
     let at = |i: usize| cstr::byte_at(source, i);
-    let magic = flags & REGSUB_MAGIC as c_int != 0;
-    let backslash = flags & REGSUB_BACKSLASH as c_int != 0;
+    let magic = flags & REGSUB_MAGIC.cast_signed() != 0;
+    let backslash = flags & REGSUB_BACKSLASH.cast_signed() != 0;
     let mut case = Case::default();
     let mut src = 0;
 
@@ -589,16 +597,16 @@ fn expand_replacement(rex: Expanding<'_>, source: &[u8], flags: c_int, out: &mut
             return Outcome::Done;
         }
 
-        // Which capture this stands for, or -1 for ordinary text.
-        let mut no = -1;
+        // Which capture this stands for, if any.
+        let mut no = None;
         if c == '&' as c_int && magic {
-            no = 0;
-        } else if c == '\\' as c_int && at(src) != NUL as u8 {
+            no = Some(0);
+        } else if c == '\\' as c_int && at(src) != b'\0' {
             if at(src) == b'&' && !magic {
                 src += 1;
-                no = 0;
+                no = Some(0);
             } else if at(src).is_ascii_digit() {
-                no = c_int::from(at(src) - b'0');
+                no = Some(usize::from(at(src) - b'0'));
                 src += 1;
             } else if b"uUlLeE".contains(&at(src)) {
                 let hook = at(src);
@@ -616,15 +624,15 @@ fn expand_replacement(rex: Expanding<'_>, source: &[u8], flags: c_int, out: &mut
             }
         }
 
-        if no >= 0 {
-            match copy_capture(rex, no as usize, &mut case, backslash, out) {
+        if let Some(no) = no {
+            match copy_capture(rex, no, &mut case, backslash, out) {
                 Outcome::Done => continue,
                 stopped => return stopped,
             }
         }
 
         // A special key travels as its own three bytes.
-        if c == c_int::from(K_SPECIAL) && at(src) != NUL as u8 && at(src + 1) != NUL as u8 {
+        if c == c_int::from(K_SPECIAL) && at(src) != b'\0' && at(src + 1) != b'\0' {
             if !out.room(3) {
                 return Outcome::NoSpace;
             }
@@ -635,7 +643,7 @@ fn expand_replacement(rex: Expanding<'_>, source: &[u8], flags: c_int, out: &mut
             continue;
         }
 
-        if c == '\\' as c_int && at(src) != NUL as u8 {
+        if c == '\\' as c_int && at(src) != b'\0' {
             match at(src) {
                 b'r' => c = CAR,
                 b'n' => c = NL,
@@ -737,7 +745,7 @@ fn copy_capture(
                 if !out.room(1) {
                     return Outcome::NoSpace;
                 }
-                out.push(CAR as u8);
+                out.push(b'\r');
                 clnum += 1;
                 col = ColNr::ZERO;
             }
@@ -753,7 +761,7 @@ fn copy_run(text: &[u8], len: isize, case: &mut Case, backslash: bool, out: &mut
     let mut s = 0;
     let mut len = len;
     while len != 0 {
-        let Some(&byte) = text.get(s).filter(|&&byte| byte != NUL as u8) else {
+        let Some(&byte) = text.get(s).filter(|&&byte| byte != b'\0') else {
             // The line is shorter than it was when the match ran.
             if out.copy() {
                 iemsg(gettext(e_re_damg));
@@ -761,7 +769,7 @@ fn copy_run(text: &[u8], len: isize, case: &mut Case, backslash: bool, out: &mut
             return Outcome::Damaged;
         };
 
-        if backslash && (byte == CAR as u8 || byte == b'\\') {
+        if backslash && (byte == b'\r' || byte == b'\\') {
             // A bare CR would become a line break and a bare backslash
             // would be halved away; double them.
             if !out.room(2) {
@@ -796,7 +804,7 @@ pub(crate) fn regsub_multi_len(
     source: &[u8],
     flags: c_int,
 ) -> Option<usize> {
-    let flags = flags & !(REGSUB_COPY as c_int);
+    let flags = flags & !REGSUB_COPY.cast_signed();
     regsub_buffer(matches, lnum, source, None, flags)
         .inspect_err(|err| err.report())
         .ok()
@@ -817,7 +825,7 @@ pub(crate) fn regsub_multi_into(
         lnum,
         source,
         Some(dest),
-        flags | REGSUB_COPY as c_int,
+        flags | REGSUB_COPY.cast_signed(),
     );
     if let Err(err) = copied {
         err.report();

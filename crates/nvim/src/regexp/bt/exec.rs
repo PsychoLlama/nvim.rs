@@ -9,6 +9,13 @@
 //! which the API layer set up for this one match.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::narrow::len_as_int;
 use crate::types::LineNr;
@@ -29,7 +36,7 @@ use crate::regexp::{
     BtRegProg, MatchPos, NSUBEXP, REGMAGIC, RF_ICASE, RF_ICOMBINE, RF_NOICASE, Rex, char_at_nul,
     cleanup_subexpr, cleanup_zsubexpr, cluster_len_at, cstrchr_line, cstrncmp, reg_getline,
 };
-use crate::types::{ColNr, LPos, NUL, uint32_t};
+use crate::types::{ColNr, LPos, NUL, int64_t, uint32_t};
 
 /// How many start columns may be tried between two reads of the caller's
 /// time limit.
@@ -285,7 +292,7 @@ fn scan_columns(rex: Rex, prog: BtProg, state: &mut BtState, col: &mut ColNr) ->
             rex.set_line(reg_getline(rex, LineNr::ZERO).unwrap_or(b"\0"));
         }
         let rest = rest_from(rex.line(), *col);
-        if rest[0] == NUL as u8 {
+        if rest[0] == b'\0' {
             return 0;
         }
         *col += len_as_int(cluster_len_at(rest, 0));
@@ -307,7 +314,7 @@ fn scan_columns(rex: Rex, prog: BtProg, state: &mut BtState, col: &mut ColNr) ->
 /// The `\%23l`-family comparison: node `scan`'s operand against `val`, with
 /// the `>`/`<`/`=` the pattern spelled out riding in the node's eighth byte.
 pub(crate) fn re_num_cmp(prog: BtProg, val: uint32_t, scan: usize) -> bool {
-    let n = prog.operand_u32(scan, 3) as u32;
+    let (n, val) = (prog.operand_u32(scan, 3), int64_t::from(val));
     match prog.byte(scan, 7) {
         b'>' => val > n,
         b'<' => val < n,

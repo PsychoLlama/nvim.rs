@@ -6,9 +6,18 @@
 //! grammar recognises land after their operands.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use crate::narrow::number_as_int;
 use crate::regexp::NfaOp;
 use crate::regexp::RegCompiler;
+use crate::regexp::low_byte;
 use crate::regexp::set_magic;
 use core::ffi::c_int;
 
@@ -68,7 +77,7 @@ fn lookaround(rc: &mut RegCompiler) -> Parsed {
     // Read before the operator: `\@123<=` puts the width in front of it.
     let width = getdecchrs(rc);
     let mut op = unmagic(getchr(rc));
-    let code = match op as u8 {
+    let code = match low_byte(op) {
         b'=' => Some(NfaOp::PrevAtomNoWidth.code()),
         b'!' => Some(NfaOp::PrevAtomNoWidthNeg.code()),
         b'>' => Some(NfaOp::PrevAtomLikePattern.code()),
@@ -76,7 +85,7 @@ fn lookaround(rc: &mut RegCompiler) -> Parsed {
             // The message below names whatever followed the `<`, not the
             // `<` itself.
             op = unmagic(getchr(rc));
-            match op as u8 {
+            match low_byte(op) {
                 b'=' => Some(NfaOp::PrevAtomJustBefore.code()),
                 b'!' => Some(NfaOp::PrevAtomJustBeforeNeg.code()),
                 _ => None,
@@ -85,14 +94,15 @@ fn lookaround(rc: &mut RegCompiler) -> Parsed {
         _ => None,
     };
     let Some(code) = code else {
-        return Err(CompileError::UnknownAtOperator(op as u8));
+        return Err(CompileError::UnknownAtOperator(low_byte(op)));
     };
     rc.post.emit(code);
     if matches!(
         NfaOp::try_from(code),
         Ok(NfaOp::PrevAtomJustBefore | NfaOp::PrevAtomJustBeforeNeg)
     ) {
-        rc.post.emit(width as c_int);
+        // Upstream's `(int)` of the `long` the digits were read into.
+        rc.post.emit(number_as_int(width));
     }
     Ok(())
 }
@@ -120,7 +130,7 @@ fn counted_repeat(
     // `\{-n,m}` asks for the shortest match.
     let mut greedy = true;
     let c = peekchr(rc);
-    if c == b'-' as c_int || c == magic(b'-') {
+    if c == c_int::from(b'-') || c == magic(b'-') {
         skipchr(rc);
         greedy = false;
     }
@@ -316,10 +326,10 @@ pub(crate) fn nfa_regbranch(rc: &mut RegCompiler) -> Parsed {
 }
 
 /// What kind of bracket the pattern being parsed sits inside, if any.
-fn open_bracket(rc: &mut RegCompiler, paren: c_int) -> Parsed<c_int> {
+fn open_bracket(rc: &mut RegCompiler, paren: c_int) -> Parsed<usize> {
     match paren {
         REG_PAREN => {
-            if rc.next_group >= NSUBEXP as c_int {
+            if rc.next_group >= NSUBEXP as usize {
                 return Err(CompileError::NfaTooManyGroups);
             }
             let parno = rc.next_group;
@@ -327,7 +337,7 @@ fn open_bracket(rc: &mut RegCompiler, paren: c_int) -> Parsed<c_int> {
             Ok(parno)
         }
         REG_ZPAREN => {
-            if rc.next_zgroup >= NSUBEXP as c_int {
+            if rc.next_zgroup >= NSUBEXP as usize {
                 return Err(CompileError::NfaTooManyZGroups);
             }
             let parno = rc.next_zgroup;
@@ -377,7 +387,7 @@ pub(crate) fn nfa_reg(rc: &mut RegCompiler, paren: c_int) -> Parsed {
     // The bracket's own marker goes last, as the operator over everything
     // the branches emitted.
     if paren == REG_PAREN {
-        rc.closed_groups[parno as usize] = 1;
+        rc.closed_groups[parno] = 1;
         rc.post.emit_op(NfaOp::mopen(parno));
     } else if paren == REG_ZPAREN {
         rc.post.emit_op(NfaOp::zopen(parno));

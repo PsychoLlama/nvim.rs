@@ -13,6 +13,13 @@
 //! `regstack_push` charges against the stack's byte size.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::c_int;
 
@@ -27,13 +34,14 @@ use crate::message::e_re_corr;
 use crate::message::{iemsg, internal_error};
 use crate::os::cshim::gettext;
 use crate::profile::profile_passed_limit;
+use crate::regexp::low_byte;
 use crate::regexp::{
     MAX_LIMIT, RA_BREAK, RA_CONT, RA_FAIL, RA_MATCH, RA_NOMATCH, RS_BEHIND1, RS_BRANCH,
     RS_BRCPLX_LONG, RS_BRCPLX_MORE, RS_BRCPLX_SHORT, RS_MCLOSE, RS_MOPEN, RS_NOMATCH, RS_NOPEN,
     RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, RegStar, RegState, Rex, cleanup_subexpr,
     cleanup_zsubexpr, reg_breakcheck, reg_nextline, reg_save, save_capture, save_subexpr,
 };
-use crate::types::{NUL, int16_t, int64_t, uint8_t};
+use crate::types::{NUL, int64_t};
 
 /// The first code of each run a group number is measured from. These are
 /// `const` items because `BtOp::Mopen.code()` is a *call* in a runtime
@@ -114,11 +122,14 @@ fn walk(
             if crosses_lines
                 && !rex.reg_line_lbr()
                 && rex.multi()
-                && rex.byte() as c_int == NUL
+                && c_int::from(rex.byte()) == NUL
                 && rex.lnum() <= rex.reg_maxline()
             {
                 reg_nextline(rex);
-            } else if crosses_lines && rex.reg_line_lbr() && rex.byte() as c_int == '\n' as c_int {
+            } else if crosses_lines
+                && rex.reg_line_lbr()
+                && c_int::from(rex.byte()) == '\n' as c_int
+            {
                 // With 'reg_line_lbr' the break is a real newline byte.
                 rex.advance_char();
             } else {
@@ -194,7 +205,7 @@ fn push_frame(
         | BtOp::Mopen8
         | BtOp::Mopen9 => {
             cleanup_subexpr(rex);
-            push_capture(rex, stack, RS_MOPEN, scan, op.code() - MOPEN)
+            push_capture(rex, stack, RS_MOPEN, scan, low_byte(op.code() - MOPEN))
         }
         BtOp::Mclose
         | BtOp::Mclose1
@@ -207,7 +218,7 @@ fn push_frame(
         | BtOp::Mclose8
         | BtOp::Mclose9 => {
             cleanup_subexpr(rex);
-            push_capture(rex, stack, RS_MCLOSE, scan, op.code() - MCLOSE)
+            push_capture(rex, stack, RS_MCLOSE, scan, low_byte(op.code() - MCLOSE))
         }
         BtOp::Zopen1
         | BtOp::Zopen2
@@ -219,7 +230,7 @@ fn push_frame(
         | BtOp::Zopen8
         | BtOp::Zopen9 => {
             cleanup_zsubexpr(rex);
-            push_capture(rex, stack, RS_ZOPEN, scan, op.code() - ZOPEN)
+            push_capture(rex, stack, RS_ZOPEN, scan, low_byte(op.code() - ZOPEN))
         }
         BtOp::Zclose1
         | BtOp::Zclose2
@@ -231,7 +242,7 @@ fn push_frame(
         | BtOp::Zclose8
         | BtOp::Zclose9 => {
             cleanup_zsubexpr(rex);
-            push_capture(rex, stack, RS_ZCLOSE, scan, op.code() - ZCLOSE)
+            push_capture(rex, stack, RS_ZCLOSE, scan, low_byte(op.code() - ZCLOSE))
         }
 
         // `\%(` captures nothing, but still needs a frame so that the
@@ -247,7 +258,7 @@ fn push_frame(
         // The last branch of an alternation needs no frame: there is
         // nothing left to fall back to.
         BtOp::Branch => {
-            if prog.op_byte(*next) != BtOp::Branch.code() as uint8_t {
+            if prog.op_byte(*next) != BtOp::Branch.byte() {
                 *next = scan + 3;
                 RA_CONT
             } else if stack.push(RS_BRANCH, scan).is_err() {
@@ -288,7 +299,7 @@ fn push_frame(
         | BtOp::BraceComplex7
         | BtOp::BraceComplex8
         | BtOp::BraceComplex9 => {
-            let slot = op.code() - BRACE_COMPLEX;
+            let slot = low_byte(op.code() - BRACE_COMPLEX);
             brace_complex(rex, stack, backpos, braces, slot, scan, next)
         }
 
@@ -300,7 +311,7 @@ fn push_frame(
             let Ok(rp) = stack.push(RS_NOMATCH, scan) else {
                 return RA_FAIL;
             };
-            rp.rs_no = op.code() as int16_t;
+            rp.rs_no = op.byte();
             rp.rs_saved = reg_save(rex, backpos);
             *next = scan + 3;
             RA_CONT
@@ -315,7 +326,7 @@ fn push_frame(
             }
             let (rp, bp) = stack.top_behind();
             save_subexpr(rex, bp);
-            rp.rs_no = op.code() as int16_t;
+            rp.rs_no = op.byte();
             rp.rs_saved = reg_save(rex, backpos);
             RA_CONT
         }
@@ -334,12 +345,12 @@ fn push_frame(
 ///
 /// `state` is a capture state and `no` a group number decoded from one of
 /// the capture opcodes: see [`capture_slot`].
-fn push_capture(rex: Rex, stack: &mut RegStack, state: RegState, scan: usize, no: c_int) -> c_int {
-    let slot = capture_slot(rex, state, no as usize);
+fn push_capture(rex: Rex, stack: &mut RegStack, state: RegState, scan: usize, no: u8) -> c_int {
+    let slot = capture_slot(rex, state, usize::from(no));
     let Ok(rp) = stack.push(state, scan) else {
         return RA_FAIL;
     };
-    rp.rs_no = no as int16_t;
+    rp.rs_no = no;
     save_capture(rex, &mut rp.rs_saved.pos, slot);
     RA_CONT
 }
@@ -355,11 +366,11 @@ fn brace_complex(
     stack: &mut RegStack,
     backpos: &mut BackPos,
     braces: &mut Braces,
-    no: c_int,
+    no: u8,
     scan: usize,
     next: &mut usize,
 ) -> c_int {
-    let brace = braces.slot(no as usize);
+    let brace = braces.slot(usize::from(no));
     brace.count += 1;
     let (count, min, max) = (brace.count, brace.min, brace.max);
     let greedy = min <= max;
@@ -369,7 +380,7 @@ fn brace_complex(
         let Ok(rp) = stack.push(RS_BRCPLX_MORE, scan) else {
             return RA_FAIL;
         };
-        rp.rs_no = no as int16_t;
+        rp.rs_no = no;
         rp.rs_saved = reg_save(rex, backpos);
         *next = scan + 3;
     } else if greedy {
@@ -378,7 +389,7 @@ fn brace_complex(
             let Ok(rp) = stack.push(RS_BRCPLX_LONG, scan) else {
                 return RA_FAIL;
             };
-            rp.rs_no = no as int16_t;
+            rp.rs_no = no;
             rp.rs_saved = reg_save(rex, backpos);
             *next = scan + 3;
         }
@@ -412,7 +423,7 @@ fn counted_repeat(
     // Knowing the byte the repeat has to stop before lets the unwinder
     // skip positions that cannot possibly continue.
     let next = prog.next(scan);
-    if next != 0 && prog.op_byte(next) == BtOp::Exactly.code() as uint8_t {
+    if next != 0 && prog.op_byte(next) == BtOp::Exactly.byte() {
         rst.nextb = c_int::from(prog.byte(next, 3));
         rst.nextb_ic = if !rex.reg_ic() {
             rst.nextb
@@ -424,12 +435,12 @@ fn counted_repeat(
     }
     if op != BtOp::BraceSimple {
         rst.minval = if op == BtOp::Star { 0 } else { 1 };
-        rst.maxval = MAX_LIMIT as int64_t;
+        rst.maxval = int64_t::from(MAX_LIMIT);
     } else {
         (rst.minval, rst.maxval) = rex.brace_limits();
     }
 
-    rst.count = super::repeat::regrepeat(rex, prog, scan + 3, rst.maxval) as int64_t;
+    rst.count = super::repeat::regrepeat(rex, prog, scan + 3, rst.maxval);
     if got_int.get() {
         return RA_FAIL;
     }
