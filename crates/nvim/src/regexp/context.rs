@@ -116,7 +116,7 @@ pub(crate) struct ExtMatchIo<'a> {
 /// The character class of the character before the cursor; `None` at the
 /// start of the line. Backs `\<` and `\>`.
 pub(crate) fn reg_prev_class(rex: Rex) -> Option<c_int> {
-    if rex.col() <= ColNr::ZERO {
+    if rex.at_bol() {
         return None;
     }
     // The cursor is past the start of the line, so the byte before it is on

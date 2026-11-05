@@ -123,10 +123,12 @@ pub(crate) fn cstrncmp(rex: Rex, s1: &[u8], s2: &[u8], n: &mut c_int) -> c_int {
         // than the current one's, so a multibyte s1 overcounts the
         // characters; the result feeds only the length hint below, and
         // the quirk is load-bearing for what `*n` comes back as.
-        let first = byte_count(cluster_len_at(s1, 0));
+        // Counted in signed bytes, as upstream's `int`s: a negative `*n`
+        // counts nothing.
+        let first = cluster_len_at(s1, 0).cast_signed();
         let mut p = 0;
         let mut chars = 0;
-        let mut left = *n;
+        let mut left = *n as isize;
         while left > 0 && cstr::byte_at(s1, p) != 0 {
             left -= first;
             p += cluster_len_at(s1, p);
@@ -137,11 +139,10 @@ pub(crate) fn cstrncmp(rex: Rex, s1: &[u8], s2: &[u8], n: &mut c_int) -> c_int {
             chars -= 1;
             p += cluster_len_at(s2, p);
         }
-        let n2 = byte_count(p);
         // `strnicmp_in` ends either side at a NUL itself.
-        let result = strnicmp_in(head(s1, bound(*n)), head(s2, bound(n2)));
-        if result == 0 && n2 < *n {
-            *n = n2;
+        let result = strnicmp_in(head(s1, bound(*n)), head(s2, p));
+        if result == 0 && p.cast_signed() < *n as isize {
+            *n = byte_count(p);
         }
         result
     };

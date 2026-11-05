@@ -17,7 +17,6 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::narrow::len_as_int;
 use crate::types::LineNr;
 use core::ffi::c_int;
 
@@ -52,11 +51,11 @@ fn rest_from(line: &[u8], col: ColNr) -> &[u8] {
         .unwrap_or(&line[line.len() - 1..])
 }
 
-/// Try to match the whole pattern starting at column `col`.
+/// Try to match the whole pattern starting at byte `at` of the line.
 ///
 /// Returns 0 for no match, or one more than the line the match ended on.
-fn regtry(rex: Rex, prog: BtProg, state: &mut BtState, col: ColNr) -> c_int {
-    rex.set_col(col);
+fn regtry(rex: Rex, prog: BtProg, state: &mut BtState, at: usize) -> c_int {
+    rex.set_input(at);
     rex.set_need_clear_subexpr(true);
     rex.set_need_clear_zsubexpr(prog.has_z());
 
@@ -65,7 +64,7 @@ fn regtry(rex: Rex, prog: BtProg, state: &mut BtState, col: ColNr) -> c_int {
     }
 
     cleanup_subexpr(rex);
-    settle_group_zero(rex, col);
+    settle_group_zero(rex, ColNr::from_index(at));
 
     // The `\z(` captures go to the syntax highlighter as fresh copies,
     // because it keeps them past the end of this match.
@@ -257,7 +256,7 @@ fn try_anchored(rex: Rex, prog: BtProg, state: &mut BtState, col: ColNr) -> c_in
                 // Latin-1 has case pairs that do not fold together.
                 || (c < 255 && start < 255 && mb_tolower(start) == mb_tolower(c))));
     if matches {
-        regtry(rex, prog, state, col)
+        regtry(rex, prog, state, usize::try_from(col).unwrap_or(0))
     } else {
         0
     }
@@ -267,23 +266,33 @@ fn try_anchored(rex: Rex, prog: BtProg, state: &mut BtState, col: ColNr) -> c_in
 ///
 /// `col` comes back holding the column the reported match starts at.
 fn scan_columns(rex: Rex, prog: BtProg, state: &mut BtState, col: &mut ColNr) -> c_int {
+    let (retval, at) = scan_from(rex, prog, state, usize::try_from(*col).unwrap_or(0));
+    *col = ColNr::try_from(at).unwrap_or(ColNr::MAX);
+    retval
+}
+
+/// [`scan_columns`] over byte offsets, which is what the walk steps in:
+/// the answer, and the byte the last attempt started at.
+fn scan_from<'t>(rex: Rex<'t>, prog: BtProg, state: &mut BtState, mut at: usize) -> (c_int, usize) {
     let mut tm_count = 0;
+    // The line from `at` on; past its end, its NUL.
+    let rest = |line: &'t [u8], at: usize| line.get(at..).unwrap_or(&line[line.len() - 1..]);
     while !got_int.get() {
         // The pattern's first character is known: skip straight to the
         // next place it occurs.
         if prog.regstart() != NUL {
-            match cstrchr_line(rex, rest_from(rex.line(), *col), prog.regstart()) {
-                Some(off) => *col += len_as_int(off),
-                None => return 0,
+            match cstrchr_line(rex, rest(rex.line(), at), prog.regstart()) {
+                Some(off) => at += off,
+                None => return (0, at),
             }
         }
-        if rex.reg_maxcol() > ColNr::ZERO && *col >= rex.reg_maxcol() {
-            return 0;
+        if rex.reg_maxcol() > ColNr::ZERO && at >= rex.reg_maxcol().as_usize() {
+            return (0, at);
         }
 
-        let retval = regtry(rex, prog, state, *col);
+        let retval = regtry(rex, prog, state, at);
         if retval > 0 {
-            return retval;
+            return (retval, at);
         }
 
         // A failed attempt may have walked onto a later line.
@@ -291,11 +300,11 @@ fn scan_columns(rex: Rex, prog: BtProg, state: &mut BtState, col: &mut ColNr) ->
             rex.set_lnum(LineNr::ZERO);
             rex.set_line(reg_getline(rex, LineNr::ZERO).unwrap_or(b"\0"));
         }
-        let rest = rest_from(rex.line(), *col);
+        let rest = rest(rex.line(), at);
         if rest[0] == b'\0' {
-            return 0;
+            return (0, at);
         }
-        *col += len_as_int(cluster_len_at(rest, 0));
+        at += cluster_len_at(rest, 0);
 
         if let Some(deadline) = rex.deadline() {
             tm_count += 1;
@@ -303,12 +312,12 @@ fn scan_columns(rex: Rex, prog: BtProg, state: &mut BtState, col: &mut ColNr) ->
                 tm_count = 0;
                 if profile_passed_limit(deadline) {
                     rex.set_timed_out();
-                    return 0;
+                    return (0, at);
                 }
             }
         }
     }
-    0
+    (0, at)
 }
 
 /// The `\%23l`-family comparison: node `scan`'s operand against `val`, with

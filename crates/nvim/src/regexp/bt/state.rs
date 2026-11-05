@@ -361,17 +361,15 @@ impl RegStack {
 
     /// Push a frame for `state` and hand it back for the caller to fill in.
     ///
-    /// Refused, having said so, when 'maxmempattern' has been reached.
-    pub(crate) fn push(&mut self, state: RegState, scan: usize) -> Result<&mut RegItem, Failed> {
-        self.charge(REGITEM_BYTES)?;
+    /// `None` when 'maxmempattern' has been reached, which has been said.
+    pub(crate) fn push(&mut self, state: RegState, scan: usize) -> Option<&mut RegItem> {
+        self.charge(REGITEM_BYTES).ok()?;
         self.frames.push(RegItem {
             rs_state: state,
             rs_scan: scan,
             ..BLANK_FRAME
         });
-        // Never empty: the frame was just pushed. `ok_or` keeps the answer
-        // the `Option` it was, with no check of its own.
-        self.frames.last_mut().ok_or(Failed)
+        self.frames.last_mut()
     }
 
     /// Push a `\{n,m}` counter and the frame that reads it.
@@ -383,14 +381,14 @@ impl RegStack {
     ) -> Result<(), Failed> {
         self.charge(REGSTAR_BYTES)?;
         self.stars.push(counter);
-        self.push(state, scan).map(drop)
+        self.push(state, scan).map(drop).ok_or(Failed)
     }
 
     /// Push a look-behind snapshot and the frame that reads it.
     pub(crate) fn push_behind(&mut self, state: RegState, scan: usize) -> Result<(), Failed> {
         self.charge(REGBEHIND_BYTES)?;
         self.behinds.push(BLANK_BEHIND);
-        self.push(state, scan).map(drop)
+        self.push(state, scan).map(drop).ok_or(Failed)
     }
 
     /// The frame on top.
