@@ -64,7 +64,7 @@ pub(crate) use self::bt::*;
 pub(crate) use self::chars::*;
 pub(crate) use self::compiler::*;
 pub(crate) use self::context::*;
-pub use self::error::Refused;
+pub(crate) use self::error::Refused;
 pub(crate) use self::error::{CompileError, Compiled, Engine, Spelled};
 pub(crate) use self::mbyte::*;
 pub(crate) use self::nfa::*;

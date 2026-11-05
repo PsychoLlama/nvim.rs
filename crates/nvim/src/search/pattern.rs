@@ -168,7 +168,7 @@ fn put_spat(idx: c_int, pat: SearchPattern) -> SearchPattern {
 /// it with. Answers the pattern that was compiled -- `pat` itself, or the
 /// remembered one an empty `pat` stood for -- or, when it does not compile
 /// or there is no remembered one to fall back on, what was said about it.
-pub fn search_regcomp(
+pub(crate) fn search_regcomp(
     pat: &[u8],
     pat_save: c_int,
     pat_use: c_int,
@@ -263,7 +263,7 @@ pub(crate) fn search_regcomp_owned(
 
 /// The pattern [`search_regcomp`] last compiled, copied out; empty before
 /// the first compile.
-pub fn get_search_pat() -> XString {
+pub(crate) fn get_search_pat() -> XString {
     compiled_pat.with(|pat| pat.clone().unwrap_or_default())
 }
 
@@ -688,4 +688,54 @@ pub fn set_last_used_pattern(is_substitute_pattern: bool) {
 /// one used last.
 pub fn search_was_last_used() -> bool {
     last_idx.get() == RE_SEARCH
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::eval::test_fixture::Fixture;
+    use crate::ex_docmd::state::cmdmod;
+
+    /// Compile `a\xc0` with `'rightleft'` on and `'rightleftcmd'` set to
+    /// `rlc`, under `:keeppatterns` so the remembered search patterns of
+    /// whatever runs next are not disturbed, and answer the pattern
+    /// [`get_search_pat`] then holds.
+    fn compiled_rightleft(rlc: &str) -> XString {
+        let _fixture = Fixture::new();
+        let mut win = Win::current();
+        win.w_onebuf_opt.wo_rl = 1;
+        win.w_onebuf_opt.wo_rlc = Some(XString::from(rlc));
+        let flags = cmdmod.with(|c| c.cmod_flags);
+        cmdmod.with_mut(|c| c.cmod_flags |= CmdModFlags::KEEPPATTERNS);
+        let mut regmatch = RegMMatch::default();
+        let rc = search_regcomp(b"a\xc0", 0, 0, 0, &mut regmatch);
+        cmdmod.with_mut(|c| c.cmod_flags = flags);
+        assert!(rc.is_ok(), "the pattern compiles");
+        get_search_pat()
+    }
+
+    #[test]
+    fn a_right_to_left_pattern_is_reversed_bytewise() {
+        // `a\xc0` is deliberately not valid UTF-8: `\xc0` announces a
+        // two-byte sequence that is not there. Reversing it has to move
+        // bytes, not characters, or the reversal reads past the end of the
+        // pattern.
+        assert_eq!(
+            &compiled_rightleft("s")[..],
+            b"\xc0a",
+            "the pattern was reversed"
+        );
+    }
+
+    #[test]
+    fn only_a_rightleftcmd_of_s_reverses_the_pattern() {
+        // `'rightleft'` alone is not the trigger: `'rightleftcmd'` says
+        // which command lines are typed right to left, and only `s`
+        // (search) is a value the reversal applies to.
+        assert_eq!(
+            &compiled_rightleft("")[..],
+            b"a\xc0",
+            "the pattern was kept as typed"
+        );
+    }
 }

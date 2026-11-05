@@ -1,28 +1,15 @@
-//! The two search entry points that only an outside caller can reach.
+//! A port of `test/unit/search_spec.lua`, and the search refusals.
 //!
-//! A port of `test/unit/search_spec.lua`. `pat_has_uppercase` is the
-//! `'smartcase'` decision — "does this pattern contain an uppercase
-//! character", answered over a pattern whose escapes depend on its own
-//! magicness. `search_regcomp` is the compile-and-remember step every
-//! search command goes through; the one case here pins its
-//! `'rightleft'`/`'rightleftcmd'` branch, which reverses the pattern before
-//! compiling it and has to do so bytewise, because a reversed pattern is
-//! not necessarily valid UTF-8.
-//!
-//! Both need the editor: the first reads the character tables and
-//! `'magic'`, the second reads `curwin`, `curbuf` and the command
-//! modifiers. The LuaJIT harness forked a child per case and could write
-//! those freely; here every write is saved and put back.
+//! `pat_has_uppercase` is the `'smartcase'` decision — "does this pattern
+//! contain an uppercase character", answered over a pattern whose escapes
+//! depend on its own magicness. It reads the character tables and
+//! `'magic'`. The spec's `search_regcomp` cases (its
+//! `'rightleft'`/`'rightleftcmd'` reversal) live beside the function, in
+//! `search/pattern.rs`.
 
 #![cfg(not(miri))]
 
-use std::ffi::{CStr, c_int};
-
-use neovim::ex_docmd::state::cmdmod;
-use neovim::memory::XString;
-use neovim::search::{get_search_pat, pat_has_uppercase, search_regcomp};
-use neovim::types::{CmdModFlags, RegMMatch};
-use neovim::winlayer::graph::curwin;
+use neovim::search::pat_has_uppercase;
 
 use crate::support::Sandbox;
 
@@ -81,81 +68,6 @@ fn a_very_magic_pattern_spells_the_same_pairs_without_a_backslash() {
     assert!(has_uppercase("\\vaab%AU"));
     assert!(!has_uppercase("\\vaa_Ab"));
     assert!(has_uppercase("\\vaab_AU"));
-}
-
-/// `curwin`'s `'rightleft'`/`'rightleftcmd'` pair and the command
-/// modifiers, restored however the case leaves.
-struct RightLeft {
-    _sandbox: Sandbox,
-    rl: c_int,
-    rlc: Option<XString>,
-    flags: CmdModFlags,
-}
-
-impl RightLeft {
-    /// Turn on `'rightleft'` with `'rightleftcmd'` set to `s`, which is
-    /// what makes `search_regcomp` reverse the pattern, and add
-    /// `:keeppatterns` so the compile does not disturb the remembered
-    /// search patterns of whatever runs next.
-    fn claim(rlc: &'static CStr) -> RightLeft {
-        let sandbox = Sandbox::globals();
-        // SAFETY: `curwin` is the first window `early_init` allocated, and
-        // the sandbox holds the editor lock for as long as this guard.
-        unsafe {
-            let win = curwin.get();
-            let saved = RightLeft {
-                _sandbox: sandbox,
-                rl: (*win).w_onebuf_opt.wo_rl,
-                rlc: (*win).w_onebuf_opt.wo_rlc.take(),
-                flags: cmdmod.with(|c| c.cmod_flags),
-            };
-            (*win).w_onebuf_opt.wo_rl = 1;
-            (*win).w_onebuf_opt.wo_rlc = Some(XString::from_cstr(rlc));
-            cmdmod.with_mut(|c| c.cmod_flags |= CmdModFlags::KEEPPATTERNS);
-            saved
-        }
-    }
-}
-
-impl Drop for RightLeft {
-    fn drop(&mut self) {
-        // SAFETY: the sandbox in this guard still holds the editor lock.
-        unsafe {
-            let win = curwin.get();
-            (*win).w_onebuf_opt.wo_rl = self.rl;
-            (*win).w_onebuf_opt.wo_rlc = self.rlc.take();
-            cmdmod.with_mut(|c| c.cmod_flags = self.flags);
-        }
-    }
-}
-
-#[test]
-fn a_right_to_left_pattern_is_reversed_bytewise() {
-    // `a\xc0` is deliberately not valid UTF-8: `\xc0` announces a two-byte
-    // sequence that is not there. Reversing it has to move bytes, not
-    // characters, or the reversal reads past the end of the pattern.
-    let _guard = RightLeft::claim(c"s");
-    let mut regmatch = RegMMatch::default();
-    let rc = search_regcomp(b"a\xc0", 0, 0, 0, &mut regmatch);
-    assert!(rc.is_ok(), "the reversed pattern still compiles");
-
-    let compiled = get_search_pat();
-    assert_eq!(&compiled[..], b"\xc0a", "the pattern was reversed");
-}
-
-#[test]
-fn only_a_rightleftcmd_of_s_reverses_the_pattern() {
-    // `'rightleft'` alone is not the trigger: `'rightleftcmd'` says which
-    // command lines are typed right to left, and only `s` (search) is a
-    // value the reversal applies to. The Lua spec never asserted this side,
-    // so dropping the `'rightleftcmd'` test entirely went unnoticed.
-    let _guard = RightLeft::claim(c"");
-    let mut regmatch = RegMMatch::default();
-    let rc = search_regcomp(b"a\xc0", 0, 0, 0, &mut regmatch);
-    assert!(rc.is_ok());
-
-    let compiled = get_search_pat();
-    assert_eq!(&compiled[..], b"a\xc0", "the pattern was kept as typed");
 }
 
 /// Every message a refused or failed search puts out, through each entry

@@ -173,7 +173,7 @@ const _: () = assert!(size_of::<CompileError>() <= 16);
 /// What a pattern a compile refused was told; whatever there was to say has
 /// been said.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Refused {
+pub(crate) enum Refused {
     /// The message blamed the pattern.
     Invalid,
     /// The message did not blame the pattern (`\%#=` misplaced, one of the
