@@ -25,11 +25,18 @@
 //! [`dump_prefixes`] does that walk.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr::until_nul;
 use crate::spell::WordFlags;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_int, c_uint};
+use core::ffi::c_int;
 
 use crate::buffer::buf_is_empty;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_later};
@@ -107,11 +114,11 @@ pub fn ex_spellinfo(_excmd: &mut ExArg) {
         msg_str(c"file: ");
         msg_str(fname.as_cstr());
         // Always true, as upstream's test is.
-        msg_putchar('\n' as c_int);
+        msg_putchar(c_int::from(b'\n'));
         if let Some(info) = info {
             msg_str(info.as_cstr());
             if lpi + 1 < count {
-                msg_putchar('\n' as c_int);
+                msg_putchar(c_int::from(b'\n'));
             }
         }
     }
@@ -259,7 +266,7 @@ fn dump_language(
     // Without prefixes, a pattern can prune the walk; with them, a
     // prefix could still make a non-matching branch match.
     let patlen = match sink.pat {
-        Some(pat) if slang.sl_prefix_tree.is_empty() => pat.len() as isize,
+        Some(pat) if slang.sl_prefix_tree.is_empty() => pat.len().cast_signed(),
         _ => -1,
     };
 
@@ -280,7 +287,7 @@ fn dump_language(
         arridx[0] = 0;
         curi[0] = 1;
         while depth >= 0 && !got_int.get() && (sink.pat.is_none() || !ins_compl_interrupted()) {
-            let d = depth as usize;
+            let d = depth.cast_unsigned();
             if curi[d] > tree.node_len(arridx[d]) {
                 // Every child of this node is done.
                 depth -= 1;
@@ -302,7 +309,7 @@ fn dump_language(
                     && !flags.has(WordFlags::NEEDCOMP)
                     && (do_region
                         || !flags.has(WordFlags::REGION)
-                        || (flags.bits() as c_uint >> 16) & lp_region as c_uint != 0)
+                        || (flags.bits().cast_unsigned() >> 16) & lp_region.cast_unsigned() != 0)
                 {
                     word[d] = 0;
                     if !do_region {
@@ -311,7 +318,7 @@ fn dump_language(
 
                     // Dump the bare word when it has no prefix, or
                     // when this is the first of its prefixes.
-                    let prefix_id = flags.bits() as c_uint >> 24;
+                    let prefix_id = flags.bits().cast_unsigned() >> 24;
                     if prefix_id == 0 || curi[d] == 2 {
                         dump_word(slang, &word, sink, flags, *lnum);
                         if sink.pat.is_none() {
@@ -327,8 +334,8 @@ fn dump_language(
                 // An ordinary byte: descend.
                 word[d] = c;
                 depth += 1;
-                arridx[depth as usize] = tree.child_node(n);
-                curi[depth as usize] = 1;
+                arridx[depth.cast_unsigned()] = tree.child_node(n);
+                curi[depth.cast_unsigned()] = 1;
 
                 // Prune a branch that cannot match the pattern.
                 // Case is always ignored here; dump_word() checks it
@@ -337,7 +344,7 @@ fn dump_language(
                 if let Some(pat) = sink.pat
                     && depth <= patlen
                 {
-                    let n = depth as usize;
+                    let n = depth.cast_unsigned();
                     if strnicmp_in(prefix(&word, n), prefix(pat, n)) != 0 {
                         depth -= 1;
                     }
@@ -482,7 +489,7 @@ fn dump_prefixes(
     arridx[0] = 0;
     curi[0] = 1;
     while depth >= 0 && !got_int.get() {
-        let d = depth as usize;
+        let d = depth.cast_unsigned();
         let mut n = arridx[d];
         let len = tree.node_len(n);
         if curi[d] > len {
@@ -508,7 +515,7 @@ fn dump_prefixes(
                 if cond_req && !has_word_up {
                     continue;
                 }
-                let c = valid_word_prefix(i as c_int, n, flags, candidate, slang, cond_req);
+                let c = valid_word_prefix(i, n, flags, candidate, slang, cond_req);
                 if c != 0 {
                     put_tail(&mut prefix[d..], candidate);
                     let pfx_flags = if WordFlags::from_bits(c).has(WordFlags::RAREPFX) {
@@ -526,8 +533,8 @@ fn dump_prefixes(
             // An ordinary byte: descend.
             prefix[d] = tree.byte(n);
             depth += 1;
-            arridx[depth as usize] = tree.child_node(n);
-            curi[depth as usize] = 1;
+            arridx[depth.cast_unsigned()] = tree.child_node(n);
+            curi[depth.cast_unsigned()] = 1;
         }
     }
 

@@ -33,10 +33,18 @@
 //! anything: "a.b" -> "b.a" is a legitimate swap.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::mbyte::{char_at, char_len, cluster_len, encode_char, utf_char2len};
+use crate::narrow::as_index;
 use crate::spell::spell_iswordp;
-use crate::spellsuggest::walk::{State, Walk};
+use crate::spellsuggest::walk::{State, Walk, frame_pos};
 use crate::spellsuggest::{SCORE_SWAP, SCORE_SWAP3};
 use crate::types::NUL;
 use crate::winlayer::Win;
@@ -58,7 +66,7 @@ impl Walk<'_> {
 
     /// Swap two characters of the bad word: "12" -> "21".
     pub(super) fn swap(&mut self) {
-        let level = self.depth as usize;
+        let level = self.depth;
         let bad_idx = self.stack[level].bad_idx as usize;
 
         if self.fword_at(bad_idx) == NUL {
@@ -79,7 +87,7 @@ impl Walk<'_> {
 
         let word = self.fword_from(bad_idx);
         let (first, first_len) = Walk::head(word);
-        let second = if word[first_len] == NUL as u8 {
+        let second = if word[first_len] == 0 {
             NUL
         } else if !self.soundfold
             // The byte after the first character was just tested
@@ -113,17 +121,17 @@ impl Walk<'_> {
         self.stack[level].state = State::UnSwap;
         self.depth += 1;
 
-        let second_len = utf_char2len(second) as usize;
+        let second_len = as_index(utf_char2len(second));
         let word = self.fword_from(bad_idx);
         word.copy_within(first_len..first_len + second_len, 0);
         encode_char(first, &mut word[second_len..]);
-        self.stack[self.depth as usize].change_from = (bad_idx + first_len + second_len) as u8;
+        self.stack[self.depth].change_from = frame_pos(bad_idx + first_len + second_len);
     }
 
     /// Undo the swap -- "21" -> "12" -- and go straight on to try swapping
     /// two characters over a third, as the C fell through.
     pub(super) fn un_swap(&mut self) {
-        let level = self.depth as usize;
+        let level = self.depth;
         let bad_idx = self.stack[level].bad_idx as usize;
         // The two characters are the ones `swap` wrote, so their lengths
         // are readable from the bad word itself and the rewrite stays
@@ -143,7 +151,7 @@ impl Walk<'_> {
 
     /// Swap two characters over a third: "123" -> "321".
     pub(super) fn swap3(&mut self) {
-        let level = self.depth as usize;
+        let level = self.depth;
         let bad_idx = self.stack[level].bad_idx as usize;
 
         // Each length is measured from the character before it, so every
@@ -181,19 +189,19 @@ impl Walk<'_> {
         self.stack[level].state = State::UnSwap3;
         self.depth += 1;
 
-        let third_len = utf_char2len(third) as usize;
+        let third_len = as_index(utf_char2len(third));
         let word = self.fword_from(bad_idx);
         word.copy_within(third_at..third_at + third_len, 0);
         encode_char(middle, &mut word[third_len..]);
         encode_char(first, &mut word[middle_len + third_len..]);
-        self.stack[self.depth as usize].change_from =
-            (bad_idx + first_len + middle_len + third_len) as u8;
+        self.stack[self.depth].change_from =
+            frame_pos(bad_idx + first_len + middle_len + third_len);
     }
 
     /// Undo the three-character swap -- "321" -> "123" -- and go on to
     /// rotate the three left: "123" -> "231".
     pub(super) fn un_swap3(&mut self) {
-        let level = self.depth as usize;
+        let level = self.depth;
         let bad_idx = self.stack[level].bad_idx as usize;
 
         // The three characters are the ones `swap3` wrote, so their
@@ -235,13 +243,13 @@ impl Walk<'_> {
         rest_len += Walk::head(&word[first_len + rest_len..]).1;
         word.copy_within(first_len..first_len + rest_len, 0);
         encode_char(first, &mut word[rest_len..]);
-        self.stack[self.depth as usize].change_from = (bad_idx + first_len + rest_len) as u8;
+        self.stack[self.depth].change_from = frame_pos(bad_idx + first_len + rest_len);
     }
 
     /// Undo the left rotation -- "231" -> "123" -- and go on to rotate the
     /// three right: "123" -> "312".
     pub(super) fn un_rot3l(&mut self) {
-        let level = self.depth as usize;
+        let level = self.depth;
         let bad_idx = self.stack[level].bad_idx as usize;
 
         // The three characters are the ones `un_rot3l`'s caller wrote, so
@@ -272,13 +280,13 @@ impl Walk<'_> {
         let (last, last_len) = Walk::head(&word[moved_len..]);
         word.copy_within(..moved_len, last_len);
         encode_char(last, word);
-        self.stack[self.depth as usize].change_from = (bad_idx + moved_len + last_len) as u8;
+        self.stack[self.depth].change_from = frame_pos(bad_idx + moved_len + last_len);
     }
 
     /// Undo the right rotation -- "312" -> "123" -- and go straight on to
     /// the `REP` items, as the C fell through.
     pub(super) fn un_rot3r(&mut self) {
-        let level = self.depth as usize;
+        let level = self.depth;
         let bad_idx = self.stack[level].bad_idx as usize;
 
         // The three characters are the ones `un_rot3l` wrote, so their

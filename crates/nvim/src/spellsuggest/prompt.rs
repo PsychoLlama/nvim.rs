@@ -28,6 +28,13 @@
 //! and fills the redo buffer with `ciw{word}<Esc>` so that `.` can.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::change::inserted_bytes;
 use crate::cursor::get_cursor_line_len;
@@ -47,12 +54,15 @@ use crate::message::{
 };
 use crate::message_fmt::{msg_bytes, msg_text};
 use crate::mouse::state::mouse_row;
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
 use crate::normal::{end_visual_mode, visual_active, visual_anchor};
 use crate::option::vars::p_verbose;
 use crate::options::kOptBoFlagSpell;
 use crate::optionstr::OptString;
 use crate::os::cshim::gettext;
 use crate::search::FORWARD;
+use crate::spell::MAXWLEN_INT;
 use crate::spell::{
     SMT_ALL, SpellReplacement, check_need_cap, last_replacement, parse_spelllang,
     spell_iswordp_nmw, spell_move_to,
@@ -98,7 +108,7 @@ pub(crate) fn spell_suggest(count: c_int) {
 
 /// The body of `z=`, with `'spell'` already on.
 fn suggest_and_replace(count: c_int, prev_cursor: Pos, msg_scroll_save: c_int) {
-    if Win::current().syn_block().b_p_spl.first_byte() as c_int == NUL {
+    if c_int::from(Win::current().syn_block().b_p_spl.first_byte()) == NUL {
         emsg(gettext(e_no_spell));
         return;
     }
@@ -130,19 +140,19 @@ fn suggest_and_replace(count: c_int, prev_cursor: Pos, msg_scroll_save: c_int) {
 
     let mut selected = count;
     msg_ext_set_kind(c"confirm");
-    if sug.su_ga.len() as c_int <= 0 {
+    if sug.su_ga.is_empty() {
         msg(gettext(c"No suggestions"), 0);
     } else if count > 0 {
-        if count > sug.su_ga.len() as c_int {
-            let found = sug.su_ga.len() as c_int as int64_t;
+        if count > len_as_int(sug.su_ga.len()) {
+            let found = int64_t::from(len_as_int(sug.su_ga.len()));
             smsg!(0, "Only {} suggestions", found);
         }
     } else {
         selected = ask_which_suggestion(&sug, msg_scroll_save);
     }
 
-    if selected > 0 && selected <= sug.su_ga.len() as c_int && u_save_cursor().is_ok() {
-        let stp = &sug.su_ga[selected as usize - 1];
+    if selected > 0 && selected <= len_as_int(sug.su_ga.len()) && u_save_cursor().is_ok() {
+        let stp = &sug.su_ga[as_index(selected) - 1];
         apply_suggestion(&sug, stp, &line, col);
     } else {
         Win::current().w_cursor = prev_cursor;
@@ -230,14 +240,14 @@ fn ask_which_suggestion(sug: &SugInfo, msg_scroll_save: c_int) -> c_int {
     };
     msg_text(asked);
     msg_clr_eos();
-    msg_putchar('\n' as c_int);
+    msg_putchar(c_int::from(b'\n'));
 
     msg_scroll.set(1);
-    let last = sug.su_ga.len() as c_int - 1;
+    let last = len_as_int(sug.su_ga.len()) - 1;
     for (i, stp) in sug.su_ga.iter().enumerate() {
-        show_suggestion(i as c_int, stp, sug);
-        if !ui_has(kUIMessages) || (i as c_int) < last {
-            msg_putchar('\n' as c_int);
+        show_suggestion(len_as_int(i), stp, sug);
+        if !ui_has(kUIMessages) || len_as_int(i) < last {
+            msg_putchar(c_int::from(b'\n'));
         }
     }
 
@@ -247,7 +257,7 @@ fn ask_which_suggestion(sug: &SugInfo, msg_scroll_save: c_int) -> c_int {
     let mut mouse_used = false;
     let mut selected = prompt_for_input(None, 0, false, Some(&mut mouse_used));
     if mouse_used {
-        selected = sug.su_ga.len() as c_int + 1 - (cmdline_row.get() - mouse_row.get());
+        selected = len_as_int(sug.su_ga.len()) + 1 - (cmdline_row.get() - mouse_row.get());
     }
 
     lines_left.set(Rows.get()); // avoid the more-prompt
@@ -257,7 +267,7 @@ fn ask_which_suggestion(sug: &SugInfo, msg_scroll_save: c_int) -> c_int {
 
 /// The first `len` bytes of the bad word's line, or as many as it has.
 fn bad_prefix(sug: &SugInfo, len: c_int) -> &[u8] {
-    &sug.su_bad[..(len.max(0) as usize).min(sug.su_bad.len())]
+    &sug.su_bad[..usize::try_from(len).unwrap_or(0).min(sug.su_bad.len())]
 }
 
 /// Print one numbered suggestion of `sug`'s, without its trailing newline.
@@ -268,12 +278,12 @@ fn show_suggestion(i: c_int, stp: &Suggest, sug: &SugInfo) {
     let mut word = stp.word_bytes().to_vec();
     word.truncate(MAXWLEN);
     let extra = badlen - stp.st_orglen;
-    if extra > 0 && stp.st_wordlen + extra <= MAXWLEN as c_int {
-        debug_assert_eq!(word.len(), stp.st_wordlen as usize);
+    if extra > 0 && stp.st_wordlen + extra <= MAXWLEN_INT {
+        debug_assert_eq!(word.len(), as_index(stp.st_wordlen));
         // `badlen` exceeding `st_orglen` by `extra` says those bytes of the
         // bad word follow what the suggestion replaces.
-        let rest = sug.bad_from(stp.st_orglen as usize);
-        word.extend_from_slice(&rest[..rest.len().min(extra as usize)]);
+        let rest = sug.bad_from(as_index(stp.st_orglen));
+        word.extend_from_slice(&rest[..rest.len().min(as_index(extra))]);
     }
 
     let mut number = format!("{:2}", i + 1);
@@ -327,7 +337,7 @@ fn apply_suggestion(sug: &SugInfo, stp: &Suggest, line: &[u8], col: usize) {
         // Replacing less than the bad word: what is left of it goes on
         // the end of the replacement.
         let from = bad_prefix(sug, sug.su_badlen);
-        let rest = &from[(stp.st_orglen as usize).min(from.len())..];
+        let rest = &from[usize::try_from(stp.st_orglen).unwrap_or(0).min(from.len())..];
         let mut repl = stp.word_bytes().to_vec();
         repl.extend_from_slice(rest);
         // `IOSIZE` was upstream's scratch buffer, and it truncated there.
@@ -351,12 +361,12 @@ fn apply_suggestion(sug: &SugInfo, stp: &Suggest, line: &[u8], col: usize) {
     let mut newline = Vec::with_capacity(line.len() + stp.word_bytes().len());
     newline.extend_from_slice(&line[..col]);
     newline.extend_from_slice(stp.word_bytes());
-    newline.extend_from_slice(sug.bad_from(stp.st_orglen as usize));
+    newline.extend_from_slice(sug.bad_from(as_index(stp.st_orglen)));
 
     // Redo is a change-word command.
     reset_redobuff();
     append_to_redobuff(b"ciw");
-    let replaced_len = (stp.st_wordlen + sug.su_badlen - stp.st_orglen).max(0) as usize;
+    let replaced_len = as_index((stp.st_wordlen + sug.su_badlen - stp.st_orglen).max(0));
     append_to_redobuff_literally(&newline[col..(col + replaced_len).min(newline.len())]);
     append_to_redobuff_char(Key::ESC);
 

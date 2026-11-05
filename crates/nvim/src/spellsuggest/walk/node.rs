@@ -26,11 +26,20 @@
 //! case-folded tree to look for the word the prefix goes in front of.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::ascii::ascii_iswhite;
 use crate::cstr::until_nul;
 use crate::mbyte::{c_cluster_len, char_count};
+use crate::narrow::as_index;
 use crate::spell::WordFlags;
+use crate::spell::compound_flag;
 use crate::spell::{
     can_compound, captype, make_case_word, match_checkcompoundpattern, nofold_len, spell_iswordp,
     spell_iswordp_nmw, spell_valid_case, valid_word_prefix,
@@ -39,7 +48,8 @@ use crate::spellsuggest::collect::{List, add_banned, add_suggestion};
 use crate::spellsuggest::score::score_wordcount_adj;
 use crate::spellsuggest::soundalike::{add_sound_suggest, find_keepcap_word};
 use crate::spellsuggest::walk::{
-    FLAG_PREFIX_OK, PFD_NOTSPECIAL, PFD_PREFIXTREE, STACK_SIZE, State, Walk, c_prefix_eq, char_back,
+    FLAG_PREFIX_OK, PFD_NOTSPECIAL, PFD_PREFIXTREE, STACK_SIZE, State, Walk, c_prefix_eq,
+    char_back, frame_pos, saved_flags,
 };
 use crate::spellsuggest::{
     MAXWLEN, SCORE_ICASE, SCORE_NONWORD, SCORE_RARE, SCORE_REGION, SugInfo, copy_terminated,
@@ -67,14 +77,14 @@ impl Walk<'_> {
     /// At the start of a node: deal with the NUL bytes, which mean the
     /// good word may end here.
     pub(super) fn node_start(&mut self) {
-        let level = self.depth as usize;
+        let level = self.depth;
         let entry_state = self.stack[level].state;
 
         let node = self.stack[level].node;
         // The tree index is this level's node plus a child number the
         // node's own length byte bounds.
-        let node_len = self.byte_at(node) as c_int; // bytes in this node
-        let at = node + self.stack[level].child as SpellIdx; // the current byte
+        let node_len = c_int::from(self.byte_at(node)); // bytes in this node
+        let at = node + SpellIdx::from(self.stack[level].child); // the current byte
 
         if self.stack[level].prefix_depth == PFD_PREFIXTREE {
             self.prefix_tree_node(entry_state, node_len, at);
@@ -83,10 +93,10 @@ impl Walk<'_> {
 
         // The `||` short circuit is what keeps the read from happening once
         // the child number has run past the node's own length byte.
-        if self.stack[level].child as c_int > node_len || self.byte_at(at) != 0 {
+        if c_int::from(self.stack[level].child) > node_len || self.byte_at(at) != 0 {
             // Past the bytes in the node and/or past its NUL bytes.
             self.stack[level].state = State::EndNul;
-            self.stack[level].saved_badflags = self.su.su_badflags.bits() as u8;
+            self.stack[level].saved_badflags = saved_flags(self.su.su_badflags);
             return;
         }
 
@@ -101,7 +111,7 @@ impl Walk<'_> {
     /// caps type for the rest of the bad word becomes the one the word
     /// after the prefix is judged by.
     fn prefix_tree_node(&mut self, entry_state: State, node_len: c_int, at: SpellIdx) {
-        let level = self.depth as usize;
+        let level = self.depth;
 
         // Skip over the NUL bytes; they are used just below. The `&&` is
         // what stops the read once the count has reached the node's length.
@@ -109,18 +119,18 @@ impl Walk<'_> {
         while nul_count < node_len && self.byte_at(at + nul_count) == 0 {
             nul_count += 1;
         }
-        self.stack[level].child += nul_count as i16;
+        self.stack[level].child += i16::try_from(nul_count).expect("a node has at most 255 bytes");
 
         // Always past the NUL bytes now.
         self.stack[level].state = State::EndNul;
-        self.stack[level].saved_badflags = self.su.su_badflags.bits() as u8;
+        self.stack[level].saved_badflags = saved_flags(self.su.su_badflags);
 
         // At the end of a prefix, or at the very start of the prefix
         // tree: check for a word following. `at` is still the byte the
         // node was entered at, so a NUL there is what says a prefix
         // ended.
         let at_prefix_end = self.byte_at(at) == 0 || entry_state == State::NoPrefix;
-        if self.depth >= MAXWLEN as c_int - 1 || !at_prefix_end {
+        if self.depth >= MAXWLEN - 1 || !at_prefix_end {
             return;
         }
 
@@ -134,19 +144,20 @@ impl Walk<'_> {
         let prefix_flags = self.su.captype_between(0, prefix_len);
         self.su.su_badflags = self
             .su
-            .captype_between(prefix_len, self.su.su_badlen as usize);
+            .captype_between(prefix_len, as_index(self.su.su_badlen));
 
         self.go_deeper(0);
         self.depth += 1;
-        let child = self.depth as usize;
-        self.stack[child].prefix_depth = (self.depth - 1) as u8;
+        let child = self.depth;
+        self.stack[child].prefix_depth =
+            u8::try_from(self.depth - 1).expect("the stack is MAXWLEN levels deep");
         // The word after the prefix is in the case-folded tree.
         self.tree = self.word_tree;
         self.stack[child].node = 0;
 
         // Move the prefix to `preword` with the right case, which is
         // also what makes `find_keepcap_word` work later.
-        self.tword[self.stack[child].good_len as usize] = NUL as u8;
+        self.tword[self.stack[child].good_len as usize] = 0;
         let split_off = self.stack[child].split_off as usize;
         let preword_len = self.stack[child].preword_len as usize;
         make_case_word(
@@ -154,14 +165,14 @@ impl Walk<'_> {
             &mut self.preword[preword_len..],
             prefix_flags,
         );
-        self.stack[child].preword_len = self.preword_len() as u8;
+        self.stack[child].preword_len = frame_pos(self.preword_len());
         self.stack[child].split_off = self.stack[child].good_len;
     }
 
     /// Undo the changes a word split or a compound join made, and go back
     /// to looking for NUL bytes at this node.
     pub(super) fn split_undo(&mut self) {
-        let level = self.depth as usize;
+        let level = self.depth;
         let saved = WordFlags::from_bits(self.stack[level].saved_badflags.into());
         self.su.su_badflags = saved;
 
@@ -174,7 +185,7 @@ impl Walk<'_> {
     /// A word ends at this NUL byte: check it over and, if the bad word
     /// ends too, offer it.
     fn word_end(&mut self, at: SpellIdx) {
-        let level = self.depth as usize;
+        let level = self.depth;
         self.stack[level].child += 1; // eat one NUL byte
 
         // `at` is a NUL child of this level's node, so the entry beside it
@@ -193,7 +204,7 @@ impl Walk<'_> {
             } else {
                 !spell_iswordp(&self.fword[bad_idx..], Win::current())
             };
-        self.tword[self.stack[level].good_len as usize] = NUL as u8;
+        self.tword[self.stack[level].good_len as usize] = 0;
 
         if !self.prefix_allows_word(&mut flags) {
             return;
@@ -256,7 +267,7 @@ impl Walk<'_> {
             // Sound-folded words have no flags. The `&&` keeps the region
             // read out of the common case.
             if flags.has(WordFlags::REGION)
-                && (flags.bits() as u32 >> 16) & self.langp.region as u32 == 0
+                && (flags.bits().cast_unsigned() >> 16) & self.langp.region.cast_unsigned() == 0
             {
                 newscore += SCORE_REGION;
             }
@@ -286,7 +297,7 @@ impl Walk<'_> {
     /// Returns false when the prefix cannot be used with the word, which
     /// ends this NUL byte's turn. A rare prefix makes the whole word rare.
     fn prefix_allows_word(&mut self, flags: &mut WordFlags) -> bool {
-        let level = self.depth as usize;
+        let level = self.depth;
         if self.stack[level].prefix_depth > PFD_NOTSPECIAL
             || self.stack[level].flags & FLAG_PREFIX_OK != 0
             || self.prefix_tree.is_empty()
@@ -305,7 +316,7 @@ impl Walk<'_> {
 
         // Count the NUL bytes of the prefix node. None at all means
         // this is the first try, the one without a prefix.
-        let mut node = self.stack[prefix_level].node as usize;
+        let mut node = as_index(self.stack[prefix_level].node);
         let node_len = self.prefix_tree.node_len(node);
         node += 1;
         let prefix_count = self.prefix_tree.word_ends(node, node_len);
@@ -315,7 +326,7 @@ impl Walk<'_> {
 
         let split_off = self.stack[level].split_off as usize;
         let prefix_flags = valid_word_prefix(
-            prefix_count as c_int,
+            prefix_count,
             node,
             *flags,
             &self.tword[split_off..],
@@ -339,9 +350,12 @@ impl Walk<'_> {
     /// For a `NOBREAK` language: did the word before this one come through
     /// unchanged?
     fn nobreak_previous_word_matches(&mut self) -> bool {
-        let level = self.depth as usize;
-        let taken = self.stack[level].bad_idx as c_int - self.stack[level].split_bad_idx as c_int;
-        if taken != self.stack[level].good_len as c_int - self.stack[level].split_off as c_int {
+        let level = self.depth;
+        let taken =
+            c_int::from(self.stack[level].bad_idx) - c_int::from(self.stack[level].split_bad_idx);
+        if taken
+            != c_int::from(self.stack[level].good_len) - c_int::from(self.stack[level].split_off)
+        {
             return false;
         }
         let split_off = self.stack[level].split_off as usize;
@@ -351,7 +365,7 @@ impl Walk<'_> {
         c_prefix_eq(
             self.fword.get(split_bad_idx..).unwrap_or_default(),
             &self.tword[split_off..],
-            taken.max(0) as usize,
+            as_index(taken.max(0)),
         )
     }
 
@@ -362,9 +376,9 @@ impl Walk<'_> {
     /// whether a correct word follows -- which is what the rest of the
     /// walk goes on to do.
     fn suggest_previous_word(&mut self) {
-        let level = self.depth as usize;
+        let level = self.depth;
         let preword_len = self.stack[level].preword_len as usize;
-        self.preword[preword_len] = NUL as u8;
+        self.preword[preword_len] = 0;
         let score = score_wordcount_adj(
             self.slang,
             self.stack[level].score,
@@ -376,7 +390,7 @@ impl Walk<'_> {
                 self.su,
                 List::Main,
                 &self.preword,
-                self.stack[level].split_bad_idx as c_int - self.repextra,
+                c_int::from(self.stack[level].split_bad_idx) - self.repextra,
                 score,
                 0,
                 false,
@@ -400,30 +414,32 @@ impl Walk<'_> {
         flags: WordFlags,
         bad_word_ends: bool,
     ) -> Option<(Option<usize>, bool)> {
-        let level = self.depth as usize;
+        let level = self.depth;
         let this_word_len =
-            self.stack[level].good_len as c_int - self.stack[level].split_off as c_int;
+            c_int::from(self.stack[level].good_len) - c_int::from(self.stack[level].split_off);
         let split_off = self.stack[level].split_off as usize;
 
         // No compound flag, or too short to be a compound part.
-        if (flags.bits() as u32) >> 24 == 0 || this_word_len < self.slang.sl_compminlen {
+        if compound_flag(flags) == 0 || this_word_len < self.slang.sl_compminlen {
             return None;
         }
         // `COMPOUNDMIN` counts characters, not bytes. `tword` was
         // terminated before this ran.
         let compminlen = self.slang.sl_compminlen;
-        if compminlen > 0 && (char_count(until_nul(&self.tword[split_off..])) as c_int) < compminlen
+        if compminlen > 0
+            && usize::try_from(compminlen)
+                .is_ok_and(|min| char_count(until_nul(&self.tword[split_off..])) < min)
         {
             return None;
         }
 
         let comp_len = self.stack[level].comp_len as usize;
-        self.compflags[comp_len] = ((flags.bits() as u32) >> 24) as u8;
-        self.compflags[comp_len + 1] = NUL as u8;
+        self.compflags[comp_len] = compound_flag(flags);
+        self.compflags[comp_len + 1] = 0;
         let preword_len = self.stack[level].preword_len as usize;
         // The word `tword` holds, after whatever a previous split left in
         // `preword`.
-        let word = &self.tword[split_off..split_off + this_word_len as usize];
+        let word = &self.tword[split_off..split_off + as_index(this_word_len)];
         copy_terminated(&mut self.preword[preword_len..], word);
 
         // CHECKCOMPOUNDPATTERN forbids some pairs of word endings and
@@ -459,7 +475,7 @@ impl Walk<'_> {
     /// Put the word with its proper case into `preword`, after whatever a
     /// previous split or compound left there.
     fn build_preword(&mut self, flags: WordFlags, prev_word_tail: Option<usize>) {
-        let level = self.depth as usize;
+        let level = self.depth;
         let split_off = self.stack[level].split_off as usize;
         let preword_len = self.stack[level].preword_len as usize;
         // `tword` was terminated by the caller.
@@ -477,7 +493,7 @@ impl Walk<'_> {
             // one character long only says one-cap, though.
             let mut caps = self.su.su_badflags;
             if caps.has(WordFlags::ALLCAP)
-                && self.su.su_badlen as usize == c_cluster_len(&self.su.su_bad)
+                && as_index(self.su.su_badlen) == c_cluster_len(&self.su.su_bad)
             {
                 caps = WordFlags::ONECAP;
             }
@@ -499,7 +515,7 @@ impl Walk<'_> {
     /// Returns the score the walk carries on with, which the non-word
     /// penalty may have raised.
     fn offer_word(&mut self, mut newscore: c_int) -> c_int {
-        let level = self.depth as usize;
+        let level = self.depth;
 
         if self.soundfold {
             // A sound-folded match stands for real words, which have
@@ -535,7 +551,7 @@ impl Walk<'_> {
             return newscore;
         }
 
-        let replaced = self.stack[level].bad_idx as c_int - self.repextra;
+        let replaced = c_int::from(self.stack[level].bad_idx) - self.repextra;
         let sallang = self.langp.sallang;
         add_suggestion(
             self.su,

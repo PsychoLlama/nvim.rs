@@ -17,11 +17,19 @@
 //! one whose first byte no longer does.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
 use crate::spellsuggest::SCORE_REP;
-use crate::spellsuggest::walk::{State, Walk};
+use crate::spellsuggest::walk::{State, Walk, frame_pos};
 use crate::types::RepItem;
-use core::ffi::c_int;
 
 impl<'a> Walk<'a> {
     /// Decide whether trying `REP` items here is worth it at all, and if
@@ -29,7 +37,7 @@ impl<'a> Walk<'a> {
     ///
     /// Runs on into [`Walk::rep`], as the C fell through.
     pub(super) fn rep_ini(&mut self) {
-        let level = self.depth as usize;
+        let level = self.depth;
 
         // Skip quickly when there are no REP items and this is not the
         // sound-fold tree, when the score would be too high anyway, or
@@ -49,7 +57,7 @@ impl<'a> Walk<'a> {
 
         // The first-byte index is a 256-entry table indexed by an unsigned
         // byte of the bad word.
-        let first_byte = self.fword_at(self.stack[level].bad_idx as usize) as usize;
+        let first_byte = as_index(self.fword_at(self.stack[level].bad_idx as usize));
         self.stack[level].child = first[first_byte];
 
         if self.stack[level].child < 0 {
@@ -68,17 +76,18 @@ impl<'a> Walk<'a> {
     /// This state is its own successor: [`State::RepUndo`] puts the bad
     /// word back and returns here for the next item.
     pub(super) fn rep(&mut self) {
-        let level = self.depth as usize;
+        let level = self.depth;
         let bad_idx = self.stack[level].bad_idx as usize;
         let items = self.rep_items();
 
-        while (self.stack[level].child as usize) < items.len() {
-            let item = &items[self.stack[level].child as usize];
+        while (usize::from(self.stack[level].child.cast_unsigned())) < items.len() {
+            let item = &items[usize::from(self.stack[level].child.cast_unsigned())];
             self.stack[level].child += 1;
 
             if item.from[0] != self.fword[bad_idx] {
                 // Past every item that could match.
-                self.stack[level].child = items.len() as i16;
+                self.stack[level].child =
+                    i16::try_from(items.len()).expect("a REP list is shorter than 32768 items");
                 break;
             }
             if !self.fword[bad_idx..].starts_with(&item.from) || !self.try_deeper(SCORE_REP) {
@@ -95,19 +104,20 @@ impl<'a> Walk<'a> {
             let (from_len, to_len) = (item.from.len(), item.to.len());
             if from_len != to_len {
                 move_tail(&mut self.fword[bad_idx..], from_len, to_len);
-                self.repextra += to_len as c_int - from_len as c_int;
+                self.repextra += len_as_int(to_len) - len_as_int(from_len);
             }
             self.fword[bad_idx..bad_idx + to_len].copy_from_slice(&item.to);
 
-            let child = self.depth as usize;
-            self.stack[child].change_from = (bad_idx + to_len) as u8;
+            let child = self.depth;
+            self.stack[child].change_from = frame_pos(bad_idx + to_len);
             self.stack[child].char_len = 0;
             break;
         }
 
         // The state test tells "the list ran out" apart from "an item
         // matched and pushed a level", which left it at `RepUndo`.
-        if self.stack[level].child as usize >= items.len() && self.stack[level].state == State::Rep
+        if usize::from(self.stack[level].child.cast_unsigned()) >= items.len()
+            && self.stack[level].state == State::Rep
         {
             self.stack[level].state = State::Final;
         }
@@ -116,15 +126,15 @@ impl<'a> Walk<'a> {
     /// Put the text a `REP` item replaced back, and go on to the next
     /// item.
     pub(super) fn rep_undo(&mut self) {
-        let level = self.depth as usize;
+        let level = self.depth;
         let bad_idx = self.stack[level].bad_idx as usize;
         // `child` still points just past the item that was applied.
-        let item = &self.rep_items()[self.stack[level].child as usize - 1];
+        let item = &self.rep_items()[usize::from(self.stack[level].child.cast_unsigned()) - 1];
         let (from_len, to_len) = (item.from.len(), item.to.len());
 
         if from_len != to_len {
             move_tail(&mut self.fword[bad_idx..], to_len, from_len);
-            self.repextra -= to_len as c_int - from_len as c_int;
+            self.repextra -= len_as_int(to_len) - len_as_int(from_len);
         }
         self.fword[bad_idx..bad_idx + from_len].copy_from_slice(&item.from);
 

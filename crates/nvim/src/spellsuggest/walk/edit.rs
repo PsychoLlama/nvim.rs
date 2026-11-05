@@ -26,13 +26,21 @@
 //! [`State::Del`]'s first test enforces.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::getchar::state::got_int;
 use crate::mbyte::{c_cluster_len, char_at, utf_iscomposing_legacy, utf8len_tab};
+use crate::narrow::as_index;
 use crate::spell::WordFlags;
 use crate::spellsuggest::score::similar_chars;
 use crate::spellsuggest::walk::{
-    DIFF_INSERT, DIFF_NONE, DIFF_YES, FLAG_DID_DEL, State, Walk, char_back,
+    DIFF_INSERT, DIFF_NONE, DIFF_YES, FLAG_DID_DEL, State, Walk, char_back, frame_pos,
 };
 use crate::spellsuggest::{
     SCORE_DEL, SCORE_DELCOMP, SCORE_DELDUP, SCORE_INS, SCORE_INSCOMP, SCORE_INSDUP, SCORE_SIMILAR,
@@ -44,13 +52,13 @@ use core::ffi::c_int;
 /// The sound-fold marker for a word starting with a vowel. Adding or
 /// dropping one is cheaper than a real edit, as `soundalike_score` also
 /// assumes.
-const SOUND_VOWEL: c_int = b'*' as c_int;
+const SOUND_VOWEL: u8 = b'*';
 
 /// How many bytes a character starting with this byte has, from the
 /// encoding's own table.
 #[inline]
 fn byte2len(c: c_int) -> u8 {
-    utf8len_tab[c as usize]
+    utf8len_tab[as_index(c)]
 }
 
 impl Walk<'_> {
@@ -61,7 +69,7 @@ impl Walk<'_> {
     /// driver loop, exactly as the C fell through.
     #[inline(always)]
     pub(super) fn end_nul(&mut self) {
-        let level = self.depth as usize;
+        let level = self.depth;
         let saved = WordFlags::from_bits(self.stack[level].saved_badflags.into());
         self.su.su_badflags = saved;
 
@@ -86,11 +94,11 @@ impl Walk<'_> {
     /// until the node runs out.
     #[inline(always)]
     pub(super) fn plain(&mut self) {
-        let level = self.depth as usize;
+        let level = self.depth;
         let node = self.stack[level].node;
 
         // A node's first byte is the count of children that follow it.
-        if self.stack[level].child as c_int > self.byte_at(node) as c_int {
+        if c_int::from(self.stack[level].child) > c_int::from(self.byte_at(node)) {
             // Every byte of this node has been taken. Where the bad
             // word has already been changed, skip the other tricks.
             self.stack[level].state = if self.stack[level].bad_idx >= self.stack[level].change_from
@@ -102,9 +110,9 @@ impl Walk<'_> {
             return;
         }
 
-        let at = node + self.stack[level].child as SpellIdx;
+        let at = node + SpellIdx::from(self.stack[level].child);
         self.stack[level].child += 1;
-        let byte = c_int::from(self.byte_at(at));
+        let byte = self.byte_at(at);
 
         let bad_idx = self.stack[level].bad_idx as usize;
         // Matching costs nothing. So does a byte in the middle of a
@@ -112,7 +120,7 @@ impl Walk<'_> {
         //
         // `bad_idx` is a position the walk reached inside the bad
         // word, the caller's NUL-terminated buffer.
-        let newscore = if byte == self.fword_at(bad_idx)
+        let newscore = if byte == self.fword[bad_idx]
             || (self.stack[level].char_len > 0 && self.stack[level].diff != DIFF_NONE)
         {
             0
@@ -127,7 +135,7 @@ impl Walk<'_> {
         // `del_idx` is a bad-word position too, and the `&&` is
         // what keeps it from being read before a delete has set it.
         let undoing_a_delete = self.stack[level].flags & FLAG_DID_DEL != 0
-            && byte == self.fword_at(self.stack[level].del_idx as usize);
+            && byte == self.fword[self.stack[level].del_idx as usize];
         let allowed = newscore == 0
             || (self.stack[level].bad_idx >= self.stack[level].change_from && !undoing_a_delete);
         if !allowed || !self.try_deeper(newscore) {
@@ -136,13 +144,13 @@ impl Walk<'_> {
 
         self.go_deeper(newscore);
         self.depth += 1;
-        let child = self.depth as usize;
+        let child = self.depth;
 
         // A bad-word position again, as above.
         if self.fword_at(self.stack[child].bad_idx as usize) != NUL {
             self.stack[child].bad_idx += 1;
         }
-        self.tword[self.stack[child].good_len as usize] = byte as u8;
+        self.tword[self.stack[child].good_len as usize] = byte;
         self.stack[child].good_len += 1;
         self.stack[child].node = self.idx_at(at);
         if newscore == SCORE_SUBST {
@@ -152,11 +160,11 @@ impl Walk<'_> {
         if self.stack[child].char_len == 0 {
             // The first byte of a character.
             self.stack[child].char_idx = 0;
-            self.stack[child].char_len = byte2len(byte);
+            self.stack[child].char_len = byte2len(c_int::from(byte));
             // Cannot underflow: `end_nul` sent a bad word that ends
             // here to STATE_DEL instead, so `bad_idx` was just
             // advanced above.
-            self.stack[child].bad_char_start = (self.stack[child].bad_idx as c_int - 1) as u8;
+            self.stack[child].bad_char_start = self.stack[child].bad_idx - 1;
             self.stack[child].diff = if newscore != 0 { DIFF_YES } else { DIFF_NONE };
         } else if self.stack[child].diff == DIFF_INSERT && self.stack[child].bad_idx > 0 {
             // Inserting the trail bytes of a character does not
@@ -177,7 +185,7 @@ impl Walk<'_> {
     /// as a whole has earned.
     #[inline(always)]
     fn settle_character(&mut self) {
-        let level = self.depth as usize;
+        let level = self.depth;
         let char_start = self.stack[level].bad_char_start as usize;
         let good_char = self.stack[level].good_len as usize - self.stack[level].char_len as usize;
 
@@ -186,9 +194,10 @@ impl Walk<'_> {
             // different length than the bytes matched; that was not
             // checked while the bytes were coming in.
             //
-            self.stack[level].bad_idx = (self.stack[level].bad_char_start as usize
-                + c_cluster_len(&self.fword[char_start..]))
-                as u8;
+            self.stack[level].bad_idx = frame_pos(
+                usize::from(self.stack[level].bad_char_start)
+                    + c_cluster_len(&self.fword[char_start..]),
+            );
 
             let good = char_at(&self.tword[good_char..]);
             let bad = char_at(&self.fword[char_start..]);
@@ -231,7 +240,7 @@ impl Walk<'_> {
     /// exactly as the C fell through.
     #[inline(always)]
     pub(super) fn delete(&mut self) {
-        let level = self.depth as usize;
+        let level = self.depth;
 
         if self.stack[level].char_len > 0 {
             // Past the first byte of a character: delete, insert and
@@ -248,7 +257,7 @@ impl Walk<'_> {
         // word, the caller's NUL-terminated buffer.
         let newscore = if self.soundfold
             && self.stack[level].bad_idx == 0
-            && self.fword_at(bad_idx) == SOUND_VOWEL
+            && self.fword[bad_idx] == SOUND_VOWEL
         {
             // Deleting a leading vowel counts less; `soundalike_score`
             // charges the same.
@@ -264,7 +273,7 @@ impl Walk<'_> {
 
         self.go_deeper(newscore);
         self.depth += 1;
-        let child = self.depth as usize;
+        let child = self.depth;
 
         // Remember the deleted character so that it is not inserted
         // again straight away.
@@ -275,8 +284,9 @@ impl Walk<'_> {
         // -- "nn" -> "n" -- earns a bonus; that is a little illogical
         // for the sound-fold tree but it scores better there too.
         let deleted = char_at(&self.fword[bad_idx..]);
-        self.stack[child].bad_idx =
-            (self.stack[child].bad_idx as usize + c_cluster_len(&self.fword[bad_idx..])) as u8;
+        self.stack[child].bad_idx = frame_pos(
+            usize::from(self.stack[child].bad_idx) + c_cluster_len(&self.fword[bad_idx..]),
+        );
         if utf_iscomposing_legacy(deleted) {
             self.stack[child].score -= SCORE_DEL - SCORE_DELCOMP;
         } else if deleted == char_at(&self.fword[self.stack[child].bad_idx as usize..]) {
@@ -288,7 +298,7 @@ impl Walk<'_> {
     /// inserting here.
     #[inline(always)]
     pub(super) fn ins_prep(&mut self) {
-        let level = self.depth as usize;
+        let level = self.depth;
 
         if self.stack[level].flags & FLAG_DID_DEL != 0 {
             // A byte was just deleted, so inserting one makes no
@@ -300,12 +310,12 @@ impl Walk<'_> {
         // Skip over the NUL bytes.
         let node = self.stack[level].node;
         loop {
-            if self.stack[level].child as c_int > self.byte_at(node) as c_int {
+            if c_int::from(self.stack[level].child) > c_int::from(self.byte_at(node)) {
                 // Only NUL bytes at this node.
                 self.stack[level].state = State::Swap;
                 return;
             }
-            if self.byte_at(node + self.stack[level].child as SpellIdx) != NUL as u8 {
+            if self.byte_at(node + SpellIdx::from(self.stack[level].child)) != 0 {
                 // Found a byte to insert.
                 self.stack[level].state = State::Ins;
                 return;
@@ -320,18 +330,18 @@ impl Walk<'_> {
     /// of the node instead.
     #[inline(always)]
     pub(super) fn insert(&mut self) {
-        let level = self.depth as usize;
+        let level = self.depth;
         let node = self.stack[level].node;
 
         // `node` is a node the walk arrived at, and a node's first
         // byte is the count of children that follow it.
-        if self.stack[level].child as c_int > self.byte_at(node) as c_int {
+        if c_int::from(self.stack[level].child) > c_int::from(self.byte_at(node)) {
             // Every byte of this node has been tried.
             self.stack[level].state = State::Swap;
             return;
         }
 
-        let at = node + self.stack[level].child as SpellIdx;
+        let at = node + SpellIdx::from(self.stack[level].child);
         self.stack[level].child += 1;
 
         // A bounds check the tree itself should have made unnecessary;
@@ -339,12 +349,12 @@ impl Walk<'_> {
         // its own length. The C only guarded the case-folded tree, where
         // the mismatch had been seen; this guards whichever tree is being
         // walked, so a disagreement can never reach the index below.
-        if at as usize >= self.tree.len() {
+        if as_index(at) >= self.tree.len() {
             got_int.set(true);
             return;
         }
 
-        let byte = c_int::from(self.byte_at(at));
+        let byte = self.byte_at(at);
         let newscore = if self.soundfold && self.stack[level].good_len == 0 && byte == SOUND_VOWEL {
             // Inserting a leading vowel counts less; see
             // `soundalike_score`.
@@ -356,21 +366,21 @@ impl Walk<'_> {
         // Skip a byte equal to the bad word's: accepting it, which
         // STATE_PLAIN already did, is always better.
         //
-        if byte == self.fword_at(self.stack[level].bad_idx as usize) || !self.try_deeper(newscore) {
+        if byte == self.fword[self.stack[level].bad_idx as usize] || !self.try_deeper(newscore) {
             return;
         }
 
         self.go_deeper(newscore);
         self.depth += 1;
-        let child = self.depth as usize;
+        let child = self.depth;
 
-        self.tword[self.stack[child].good_len as usize] = byte as u8;
+        self.tword[self.stack[child].good_len as usize] = byte;
         self.stack[child].good_len += 1;
         // `at` is a child byte of the node, so the entry beside it
         // is where that child's own node starts.
         self.stack[child].node = self.idx_at(at);
 
-        let char_len = byte2len(byte);
+        let char_len = byte2len(c_int::from(byte));
         if char_len > 1 {
             // More bytes of the same character follow; they all have
             // to arrive before any other edit is tried.
@@ -381,7 +391,7 @@ impl Walk<'_> {
             // Doubling a character earns a bonus, in the sound-fold
             // tree as well.
             let good_len = self.stack[child].good_len as usize;
-            if good_len >= 2 && c_int::from(self.tword[good_len - 2]) == byte {
+            if good_len >= 2 && self.tword[good_len - 2] == byte {
                 self.stack[child].score -= SCORE_INS - SCORE_INSDUP;
             }
         }

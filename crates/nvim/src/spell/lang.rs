@@ -26,12 +26,20 @@
 //! letters — so `en-math` uses `en`'s.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
+use crate::narrow::len_as_int;
 use crate::smsg;
 use crate::types::AutoEvent;
 use crate::winlayer::Win;
@@ -608,7 +616,7 @@ fn find_region(regions: &[u8], region: &[u8]) -> c_int {
             break;
         }
         if pair[0] == at(0) && pair.get(1).copied().unwrap_or(0) == at(1) {
-            return i as c_int;
+            return len_as_int(i);
         }
     }
     REGION_ALL
@@ -730,8 +738,11 @@ fn use_midword(id: LangId, mut window: Win) {
         let rest = &midword[p..];
         let c = char_at(rest);
         let l = c_cluster_len(rest).max(1);
-        if c < 256 && l <= 2 {
-            syn.b_spell_ismw[c as usize] = true;
+        if let Ok(c) = usize::try_from(c)
+            && c < 256
+            && l <= 2
+        {
+            syn.b_spell_ismw[c] = true;
         } else {
             syn.b_spell_ismw_mb.extend_from_slice(&rest[..l]);
         }

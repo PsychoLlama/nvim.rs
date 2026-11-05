@@ -16,13 +16,17 @@
 //! tree allowed to write the cast, which is what lets every module that calls
 //! it keep clippy's cast family switched on.
 //!
-//! Three classes live here, and each one names the C it stands in for:
+//! Four classes live here, and each one names the C it stands in for:
 //!
 //! * **Wrapping** -- `number_as_int`, `msgpack_uint_as_u32`. The C truncates,
 //!   the truncated value is well defined, and callers can see it.
 //! * **Checked** -- `len_as_int`. The C's `(int)strlen(...)` yields a negative
 //!   length past 2 GiB and every consumer then treats it as a byte count, so
 //!   there is no behaviour to preserve; a panic replaces corruption.
+//! * **Reinterpreting** -- `as_index`. An index or length the C keeps in an
+//!   `int` and uses as a subscript, `[n]`: never negative, and one that were
+//!   would index far past any table and panic there. Formed once per byte in
+//!   the spell checker and the suggestion walk, so it has no test of its own.
 //! * **Saturating** -- `float_as_i64`. The C's float-to-integer conversion is
 //!   *undefined* out of range, and Rust's `as` is defined and saturating, so
 //!   the port is already the better of the two. Naming it says so on purpose
@@ -105,6 +109,13 @@ pub(crate) const fn const_len_as_int(len: usize) -> c_int {
 /// reaching an interface that measures it in `int`.
 pub(crate) fn len_as_int(len: usize) -> c_int {
     c_int::try_from(len).unwrap_or_else(|_| panic!("length {len} does not fit in a C int"))
+}
+
+/// An index or length kept in a C `int`, as the subscript it is: the C's
+/// `[n]`, exactly. See the module docs for why it has no test.
+#[inline(always)]
+pub(crate) const fn as_index(n: c_int) -> usize {
+    n as usize
 }
 
 /// A count or length widened to the API's `Integer`, as upstream's

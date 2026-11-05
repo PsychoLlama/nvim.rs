@@ -37,6 +37,13 @@
 //!   the two outside sources (`expr:`, `file:`) they can name.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -52,6 +59,9 @@ mod tests;
 
 use crate::cstr::until_nul;
 use crate::memory::XString;
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
+use crate::spell::MAXWLEN_INT;
 use crate::spell::{WordFlags, WordHasher};
 use crate::winlayer::{Buf, Win};
 pub(crate) use prompt::spell_suggest;
@@ -77,7 +87,7 @@ use crate::spellsuggest::collect::{
 use crate::spellsuggest::score::spell_isupper;
 use crate::spellsuggest::soundalike::{SoundDone, suggest_try_soundalike};
 use crate::spellsuggest::walk::suggest_trie_walk;
-use crate::types::{Hlf, LangId, LangP, MAXPATHL, NUL};
+use crate::types::{Hlf, LangId, LangP, MAXPATHL};
 use core::ffi::{CStr, c_int};
 use core::hash::BuildHasherDefault;
 use std::collections::HashSet;
@@ -86,9 +96,6 @@ use crate::highlight_group::HLF_COUNT;
 /// The longest word the spell code handles, and so the size of every word
 /// buffer in this module tree.
 pub(crate) use crate::spell::MAXWLEN;
-
-/// A tab, which sound folding treats as a space.
-pub(crate) const TAB: c_int = '\t' as c_int;
 
 // Word flags. These live beside each word in the tree, except for
 // `WordFlags::MIXCAP`, which only ever appears in `su_badflags`.
@@ -366,7 +373,7 @@ pub(crate) fn spell_suggest_list(
             // A suggestion may replace only part of `word`; what it does
             // not replace goes on the end.
             let mut word = XString::from_bytes(stp.word_bytes());
-            word.push_bytes(sug.bad_from(stp.st_orglen as usize));
+            word.push_bytes(sug.bad_from(as_index(stp.st_orglen)));
             word
         })
         .collect()
@@ -376,7 +383,7 @@ pub(crate) fn spell_suggest_list(
 pub(crate) fn copy_terminated(dest: &mut [u8], src: &[u8]) {
     let n = src.len().min(dest.len() - 1);
     dest[..n].copy_from_slice(&src[..n]);
-    dest[n] = NUL as u8;
+    dest[n] = 0;
 }
 
 /// Find suggestions for the word at the start of `bad` -- the line from the
@@ -417,18 +424,18 @@ fn spell_find_suggest(
     } else {
         let len;
         (len, attr) = spell_check(Win::current(), bad, None, false);
-        len as c_int
+        len_as_int(len)
     };
     su.su_maxcount = maxcount;
     su.su_maxscore = SCORE_MAXINIT;
-    su.su_badlen = su.su_badlen.min(MAXWLEN as c_int - 1); // just in case
-    let badlen = su.su_badlen as usize;
+    su.su_badlen = su.su_badlen.min(MAXWLEN_INT - 1); // just in case
+    let badlen = as_index(su.su_badlen);
     copy_terminated(&mut su.su_badword, &bad[..badlen.min(bad.len())]);
     let _ = spell_casefold(Win::current(), bad, badlen, &mut su.su_fbadword);
     // Upstream note: this breaks if the case-folded text comes out
     // longer than the original, because an illegal byte then throws
     // the pointer arithmetic off.
-    su.su_fbadword[badlen] = NUL as u8;
+    su.su_fbadword[badlen] = 0;
 
     su.su_badflags = badword_captype(bad, badlen);
     if need_cap {
@@ -550,7 +557,7 @@ fn spell_suggest_intern(su: &mut SugInfo, interactive: bool) {
         su.su_sfmaxscore = SCORE_MAXINIT * 3;
         suggest_try_soundalike(su);
         for ceiling in [SCORE_SFMAX2, SCORE_SFMAX3] {
-            if su.su_ga.len() as c_int >= clean_count(su) {
+            if len_as_int(su.su_ga.len()) >= clean_count(su) {
                 break;
             }
             su.su_maxscore = ceiling;
@@ -617,13 +624,13 @@ fn suggest_try_change(su: &mut SugInfo) {
     let folded = until_nul(&su.su_fbadword);
     let n = folded.len();
     fword[..n].copy_from_slice(folded);
-    let tail = su.bad_from(su.su_badlen as usize);
+    let tail = su.bad_from(as_index(su.su_badlen));
     let _ = spell_casefold(Win::current(), tail, tail.len(), &mut fword[n..]);
 
     // Keep the result no longer than the original text.
     let n = su.su_bad.len();
     if n < MAXWLEN {
-        fword[n] = NUL as u8;
+        fword[n] = 0;
     }
 
     for lp in window_langs() {

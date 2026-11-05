@@ -54,7 +54,7 @@ pub struct SalItem {
     /// The characters this rule matches, terminated by a `NUL`.
     pub sm_lead_w: Box<[::core::ffi::c_int]>,
     /// How many of them there are.
-    pub sm_leadlen: ::core::ffi::c_int,
+    pub sm_leadlen: usize,
     /// The optional `(abc)` set: any one of these may follow the lead.
     pub sm_oneof_w: Option<Box<[::core::ffi::c_int]>>,
     /// The flag characters after the lead, terminated by a `NUL`.

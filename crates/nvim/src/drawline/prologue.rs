@@ -519,7 +519,7 @@ impl LineSetup {
         if lnum < window.w_buffer.b_ml.ml_line_count {
             let mut lines = window.buffer().lines();
             let next = lines.line(lnum + 1);
-            spell_cat_line(&mut nextline[SPELL_LOOKAHEAD..], next, SPWORDLEN);
+            spell_cat_line(&mut nextline[SPELL_LOOKAHEAD..], next, SPELL_LOOKAHEAD);
         }
         let line = self.line.text();
 

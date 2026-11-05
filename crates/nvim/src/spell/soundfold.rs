@@ -20,6 +20,13 @@
 //! into a caller-owned `res` buffer of that size.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
@@ -27,6 +34,7 @@ use core::ffi::{CStr, c_int};
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::mbyte::{char_at, char_len, encode_char, utf_class};
 use crate::memory::XString;
+use crate::regexp::low_byte;
 use crate::types::{MB_MAXBYTES, NUL, SpellLang};
 
 use super::chartab::{spell_casefold, spell_iswordp_nmw, spell_iswordp_w};
@@ -92,13 +100,13 @@ fn spell_soundfold_sofo(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
         let mut c = char_at(rest);
         s += char_len(rest);
         if utf_class(c) == 0 {
-            c = ' ' as c_int;
-        } else if c < 256 {
-            c = slang.sl_sal_first[c as usize];
+            c = c_int::from(b' ');
+        } else if let Ok(byte) = u8::try_from(c) {
+            c = slang.sl_sal_first[usize::from(byte)];
         } else {
             // The scheme's table has one entry per low byte, and each list
             // ends in a zero.
-            let list = &slang.sl_sofo_map[(c & 0xff) as usize];
+            let list = &slang.sl_sofo_map[usize::from(low_byte(c))];
             c = list
                 .as_chunks::<2>()
                 .0
@@ -170,7 +178,7 @@ fn spell_soundfold_wsal(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
                 if did_white {
                     continue;
                 }
-                c = ' ' as c_int;
+                c = c_int::from(b' ');
                 did_white = true;
             } else {
                 did_white = false;
@@ -204,12 +212,12 @@ fn spell_soundfold_wsal(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
         // Rules are grouped by the low byte of their first character. For
         // a character like 0x300 that byte is NUL, so the run's end has
         // to be recognised by the sentinel entry as well.
-        let mut n = slang.sl_sal_first[(c & 0xff) as usize];
+        let first = first_rule(slang, c);
         let mut z0 = 0;
 
-        if n >= 0 {
+        if let Some(mut n) = first {
             'rules: loop {
-                let ws = &smp[n as usize].sm_lead_w;
+                let ws = &smp[n].sm_lead_w;
                 if !(ws[0] & 0xff == c & 0xff && ws[0] != NUL) {
                     break 'rules;
                 }
@@ -219,7 +227,7 @@ fn spell_soundfold_wsal(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
                     if c != ws[0] {
                         break 'next_rule;
                     }
-                    k = smp[n as usize].sm_leadlen as usize;
+                    k = smp[n].sm_leadlen;
                     if k > 1 {
                         if word[i + 1] != ws[1] {
                             break 'next_rule;
@@ -231,7 +239,7 @@ fn spell_soundfold_wsal(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
 
                     // The character after the lead must be one of
                     // "sm_oneof", and counts towards the match.
-                    if let Some(oneof) = &smp[n as usize].sm_oneof_w {
+                    if let Some(oneof) = &smp[n].sm_oneof_w {
                         if !oneof
                             .iter()
                             .take_while(|&&ch| ch != NUL)
@@ -242,7 +250,7 @@ fn spell_soundfold_wsal(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
                         k += 1;
                     }
 
-                    let mut rules = &smp[n as usize].sm_rules[..];
+                    let mut rules = &smp[n].sm_rules[..];
                     let mut pri = 5;
 
                     p0 = c_int::from(rules[0]);
@@ -255,7 +263,7 @@ fn spell_soundfold_wsal(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
                         rules = &rules[1..];
                     }
                     if ascii_isdigit(c_int::from(rules[0])) {
-                        pri = c_int::from(rules[0]) - '0' as c_int;
+                        pri = c_int::from(rules[0]) - c_int::from(b'0');
                         rules = &rules[1..];
                     }
                     if rules[0] == b'^' && rules[1] == b'^' {
@@ -264,25 +272,25 @@ fn spell_soundfold_wsal(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
 
                     let at_word_start = rules[0] == b'^'
                         && (i == 0
-                            || !(word[i - 1] == ' ' as c_int
+                            || !(word[i - 1] == c_int::from(b' ')
                                 || spell_iswordp_w(&word[i - 1..], win)))
                         && (rules[1] != b'$' || !spell_iswordp_w(&word[i + k0..], win));
                     let at_word_end = rules[0] == b'$'
                         && i > 0
                         && spell_iswordp_w(&word[i - 1..], win)
                         && !spell_iswordp_w(&word[i + k0..], win);
-                    if !(rules[0] == NUL as u8 || at_word_start || at_word_end) {
+                    if !(rules[0] == 0 || at_word_start || at_word_end) {
                         break 'next_rule;
                     }
 
                     // A longer rule starting at this match's last
                     // character wins if its priority is at least as high.
                     let c0 = word[i + k - 1];
-                    let mut n0 = slang.sl_sal_first[(c0 & 0xff) as usize];
-                    if slang.sl_followup
+                    let first0 = first_rule(slang, c0);
+                    if let Some(mut n0) = first0
+                        && slang.sl_followup
                         && k > 1
-                        && n0 >= 0
-                        && p0 != '-' as c_int
+                        && p0 != c_int::from(b'-')
                         && word[i + k] != NUL
                     {
                         'followups: loop {
@@ -292,7 +300,7 @@ fn spell_soundfold_wsal(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
                             // U+0100, U+0200, ... -- matches the sentinel
                             // too and walks off the end. The C read past
                             // the array there; this stops.
-                            let Some(followup) = smp.get(n0 as usize) else {
+                            let Some(followup) = smp.get(n0) else {
                                 break 'followups;
                             };
                             let ws = &followup.sm_lead_w;
@@ -303,7 +311,7 @@ fn spell_soundfold_wsal(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
                                 if c0 != ws[0] {
                                     break 'next_followup;
                                 }
-                                k0 = followup.sm_leadlen as usize;
+                                k0 = followup.sm_leadlen;
                                 if k0 > 1 {
                                     if word[i + k] != ws[1] {
                                         break 'next_followup;
@@ -336,12 +344,12 @@ fn spell_soundfold_wsal(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
                                     frules = &frules[1..];
                                 }
                                 if ascii_isdigit(c_int::from(frules[0])) {
-                                    p0 = c_int::from(frules[0]) - '0' as c_int;
+                                    p0 = c_int::from(frules[0]) - c_int::from(b'0');
                                     frules = &frules[1..];
                                 }
 
                                 // A '^' rule never cuts the current match.
-                                if frules[0] == NUL as u8
+                                if frules[0] == 0
                                     || (frules[0] == b'$' && !spell_iswordp_w(&word[i + k0..], win))
                                 {
                                     // Same length means the follow-up is
@@ -356,7 +364,7 @@ fn spell_soundfold_wsal(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
 
                         if p0 >= pri
                             && smp
-                                .get(n0 as usize)
+                                .get(n0)
                                 .is_some_and(|f| f.sm_lead_w[0] & 0xff == c0 & 0xff)
                         {
                             break 'next_rule;
@@ -364,8 +372,8 @@ fn spell_soundfold_wsal(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
                     }
 
                     // The rule applies: substitute "sm_to_w".
-                    let to = smp[n as usize].sm_to_w.as_deref();
-                    let rules = &smp[n as usize].sm_rules[..];
+                    let to = smp[n].sm_to_w.as_deref();
+                    let rules = &smp[n].sm_rules[..];
                     p0 = c_int::from(rules.contains(&b'<'));
                     if p0 == 1 && z == 0 {
                         // A '<' rule writes back into the word so the
@@ -422,7 +430,7 @@ fn spell_soundfold_wsal(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
                 n += 1;
             }
         } else if ascii_iswhite(c) {
-            c = ' ' as c_int;
+            c = c_int::from(b' ');
             k = 1;
         }
 
@@ -450,4 +458,10 @@ fn spell_soundfold_wsal(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
         }
     }
     res[l] = 0;
+}
+
+/// The first SAL rule for characters whose low byte is `c`'s, if any.
+/// Rules are grouped by the low byte of their first character.
+fn first_rule(slang: &SpellLang, c: c_int) -> Option<usize> {
+    usize::try_from(slang.sl_sal_first[usize::from(low_byte(c))]).ok()
 }

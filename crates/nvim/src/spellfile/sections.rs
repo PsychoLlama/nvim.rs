@@ -233,7 +233,7 @@ pub(super) fn read_sal_section(spl: &mut Spl, slang: &mut SpellLang) -> SplResul
 
         let sm_lead_w = bytes2wide(lead);
         rules.push(SalItem {
-            sm_leadlen: len_as_int(sm_lead_w.len()) - 1,
+            sm_leadlen: sm_lead_w.len() - 1,
             sm_lead_w,
             sm_oneof_w: oneof.map(|set| bytes2wide(trim_nul(set))),
             sm_rules: sm_rules.into_boxed_slice(),

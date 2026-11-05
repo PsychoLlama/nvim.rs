@@ -23,12 +23,20 @@
 //!   [`check_need_cap`] answers the question for a given position.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::cstr::byte_at;
 use crate::memline::Lines;
 use crate::memory::XString;
+use crate::narrow::len_as_int;
 use crate::spell::WordFlags;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
@@ -61,7 +69,7 @@ fn is_upper(c: c_int) -> bool {
     if c >= 128 {
         mb_isupper(c)
     } else {
-        spelltab_isu(c as usize)
+        usize::try_from(c).is_ok_and(spelltab_isu)
     }
 }
 
@@ -218,11 +226,11 @@ fn look_up(
         mi.fend += step(text, mi.fend);
     }
     let folded = casefold_len(window, text, mi.fend, &mut mi.fword[..MAXWLEN + 1]);
-    mi.fwordlen = folded.unwrap_or_else(|written| written) as c_int;
+    mi.fwordlen = folded.unwrap_or_else(|written| written);
 
     if is_camel_case && mi.fwordlen > 0 {
         // Put a fake word end into the folded word.
-        mi.fword[(mi.fwordlen - 1) as usize] = b' ';
+        mi.fword[mi.fwordlen - 1] = b' ';
     }
 
     // Bad until recognised.
@@ -288,7 +296,7 @@ fn look_up(
                     if p >= mi.end {
                         break;
                     }
-                    mi.compoff = fp as c_int;
+                    mi.compoff = fp;
                     find_word(&mut mi, FIND_COMPOUND);
                     if mi.result != SP_BAD {
                         mi.end = p;
@@ -524,7 +532,7 @@ pub fn spell_word_start(startcol: c_int) -> c_int {
     // Then back to the start of that word.
     let mut col = 0;
     while p > 0 {
-        col = p as c_int;
+        col = len_as_int(p);
         p -= head_off(line, p - 1) + 1;
         if !spell_iswordp(&line[p..], win) {
             break;

@@ -34,10 +34,20 @@
 //! reads in bounds and keeps the answer identical.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::ascii::ascii_iswhite;
 use crate::cstr::until_nul;
 use crate::mbyte::{char_at, char_len, mb_isupper, utf_fold};
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
+use crate::spell::MAXWLEN_INT;
 use crate::spell::{spell_casefold, spell_soundfold, spelltab_fold, spelltab_isu};
 use crate::spellsuggest::{
     MAXWLEN, SCORE_COMMON1, SCORE_COMMON2, SCORE_COMMON3, SCORE_DEL, SCORE_ICASE, SCORE_INS,
@@ -65,7 +75,7 @@ pub(super) fn spell_tofold(c: c_int) -> c_int {
     if c >= 128 {
         utf_fold(c)
     } else {
-        spelltab_fold(c as usize) as c_int
+        c_int::from(spelltab_fold(as_index(c)))
     }
 }
 
@@ -75,7 +85,7 @@ pub(super) fn spell_isupper(c: c_int) -> bool {
     if c >= 128 {
         mb_isupper(c)
     } else {
-        spelltab_isu(c as usize)
+        spelltab_isu(as_index(c))
     }
 }
 
@@ -111,7 +121,7 @@ pub(super) fn similar_chars(slang: &SpellLang, c1: c_int, c2: c_int) -> bool {
 /// The `MAP` group a character belongs to, or 0 for none.
 fn map_class(slang: &SpellLang, c: c_int) -> c_int {
     if c < 256 {
-        return slang.sl_map_array[c as usize];
+        return slang.sl_map_array[as_index(c)];
     }
     slang.sl_map_hash.get(&c).copied().unwrap_or(0)
 }
@@ -258,8 +268,8 @@ pub(super) fn soundalike_score(goodstart: &SoundBuf, badstart: &SoundBuf) -> c_i
         }
     }
 
-    let goodlen = tail_len(goodstart, gi) as isize;
-    let badlen = tail_len(badstart, bi) as isize;
+    let goodlen = tail_len(goodstart, gi).cast_signed();
+    let badlen = tail_len(badstart, bi).cast_signed();
 
     // Too different in length to be fixed by two changes.
     let n = goodlen - badlen;
@@ -686,13 +696,13 @@ pub(super) fn stp_sal_score(
         // Sound-fold the bad word with the extra characters that the
         // suggestion covers.
         let mut fword = EMPTY_SOUND;
-        let _ = spell_casefold(Win::current(), &su.su_bad, orglen as usize, &mut fword);
+        let _ = spell_casefold(Win::current(), &su.su_bad, as_index(orglen), &mut fword);
 
         // Joining two words changes the sound a lot -- "t he" sounds
         // like "t h" where "the" sounds like "@" -- so drop the blanks,
         // unless the good word has one too.
         let is_white = |b: &u8| *b == b' ' || *b == b'\t';
-        if ascii_iswhite(c_int::from(su.bad_byte(su.su_badlen as usize)))
+        if ascii_iswhite(c_int::from(su.bad_byte(as_index(su.su_badlen))))
             && !word.iter().any(is_white)
         {
             let len = until_nul(&fword).len();
@@ -703,23 +713,23 @@ pub(super) fn stp_sal_score(
                     kept += 1;
                 }
             }
-            fword[kept] = NUL as u8;
+            fword[kept] = 0;
         }
 
         spell_soundfold(slang, &fword, true, &mut badsound2);
         &badsound2
     };
 
-    let wordlen = word.len() as c_int;
-    let pgood: &[u8] = if lendiff > 0 && wordlen + lendiff < MAXWLEN as c_int {
+    let wordlen = len_as_int(word.len());
+    let pgood: &[u8] = if lendiff > 0 && wordlen + lendiff < MAXWLEN_INT {
         // Append the part of the bad word the suggestion does not
         // reach, so that what gets folded is the whole replacement.
         let n = word.len();
         goodword[..n].copy_from_slice(word);
-        let rest = su.bad_from(orglen as usize);
+        let rest = su.bad_from(as_index(orglen));
         copy_terminated(
             &mut goodword[n..],
-            &rest[..rest.len().min(lendiff as usize)],
+            &rest[..rest.len().min(as_index(lendiff))],
         );
         until_nul(&goodword)
     } else {

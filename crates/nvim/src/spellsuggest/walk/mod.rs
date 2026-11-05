@@ -74,6 +74,13 @@
 //! on, and a checked add would panic where the C quietly wrapped.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 mod edit;
 mod node;
@@ -84,9 +91,10 @@ mod transpose;
 use crate::cstr::until_nul;
 use crate::getchar::state::got_int;
 use crate::mbyte::head_off;
+use crate::narrow::as_index;
 use crate::os::input::os_breakcheck;
 use crate::profile::{profile_passed_limit, profile_setlimit};
-use crate::spell::{LoadedLangs, Tree};
+use crate::spell::{LoadedLangs, Tree, WordFlags};
 use crate::spellsuggest::{MAXWLEN, SugInfo, spell_suggest_timeout};
 use crate::types::{LangP, ProfTime, SpellIdx, SpellLang, int64_t};
 use core::ffi::c_int;
@@ -230,6 +238,26 @@ pub(crate) struct Frame {
     pub del_idx: u8,
 }
 
+/// A position in one of the walk's `MAXWLEN` buffers, as the byte a
+/// [`Frame`] keeps it in. `MAXWLEN` is below 256, so the narrow loses
+/// nothing; it is unchecked, as the C's `(uint8_t)` was, because the walk
+/// forms these once per edit it tries. A debug build asserts it.
+#[inline(always)]
+pub(crate) fn frame_pos(n: usize) -> u8 {
+    debug_assert!(
+        n <= usize::from(u8::MAX),
+        "position {n} is past a frame's byte"
+    );
+    n.to_le_bytes()[0]
+}
+
+/// What a [`Frame`] saves of the bad word's case flags: their low byte, as
+/// upstream's `(uint8_t)su_badflags` did. The case flags all sit there.
+#[inline(always)]
+pub(crate) fn saved_flags(flags: WordFlags) -> u8 {
+    flags.bits().to_le_bytes()[0]
+}
+
 /// Indexing the stack must stay a shift; see the module docs.
 const _: () = assert!(size_of::<Frame>() == 32);
 
@@ -282,7 +310,10 @@ pub(crate) struct Walk<'a> {
     pub compflags: [u8; MAXWLEN],
 
     pub stack: [Frame; STACK_SIZE],
-    pub depth: c_int,
+    /// The level being worked on: an index into `stack`.
+    pub depth: usize,
+    /// The bottom level has been left: the walk is over.
+    finished: bool,
     /// Counts down to the next check for CTRL-C, which is too slow to do
     /// every round.
     breakcheckcount: c_int,
@@ -352,6 +383,7 @@ impl<'a> Walk<'a> {
             compflags: [0; MAXWLEN],
             stack: [Frame::default(); STACK_SIZE],
             depth: 0,
+            finished: false,
             breakcheckcount: 1000,
         };
         walk.stack[0].child = 1;
@@ -369,7 +401,7 @@ impl<'a> Walk<'a> {
 
         let timeout = spell_suggest_timeout.get();
         if timeout > 0 {
-            walk.time_limit = profile_setlimit(timeout as int64_t);
+            walk.time_limit = profile_setlimit(int64_t::from(timeout));
         }
         Some(walk)
     }
@@ -378,7 +410,7 @@ impl<'a> Walk<'a> {
     /// interrupts.
     #[inline(always)]
     fn run(&mut self) {
-        while self.depth >= 0 && !got_int.get() {
+        while !self.finished && !got_int.get() {
             self.step();
         }
     }
@@ -386,7 +418,7 @@ impl<'a> Walk<'a> {
     /// Run the current level's current state once.
     #[inline(always)]
     fn step(&mut self) {
-        match self.stack[self.depth as usize].state {
+        match self.stack[self.depth].state {
             State::Start | State::NoPrefix => self.node_start(),
             State::SplitUndo => self.split_undo(),
             State::EndNul => self.end_nul(),
@@ -409,11 +441,15 @@ impl<'a> Walk<'a> {
 
     /// Every edit at this level has been tried: pop it.
     fn leave_level(&mut self) {
-        self.depth -= 1;
-
-        if self.depth >= 0 && self.stack[self.depth as usize].prefix_depth == PFD_PREFIXTREE {
-            // Continue in, or go back to, the prefix tree.
-            self.tree = self.prefix_tree;
+        match self.depth.checked_sub(1) {
+            None => self.finished = true,
+            Some(up) => {
+                self.depth = up;
+                if self.stack[up].prefix_depth == PFD_PREFIXTREE {
+                    // Continue in, or go back to, the prefix tree.
+                    self.tree = self.prefix_tree;
+                }
+            }
         }
 
         // Checking for CTRL-C takes time, so only do it now and then.
@@ -436,7 +472,7 @@ impl<'a> Walk<'a> {
     /// the child the parent's successor state instead of [`State::Start`].
     #[inline]
     fn go_deeper(&mut self, score_add: c_int) {
-        let level = self.depth as usize;
+        let level = self.depth;
         let mut child = self.stack[level];
         child.state = State::Start;
         child.score = self.stack[level].score + score_add;
@@ -450,8 +486,7 @@ impl<'a> Walk<'a> {
     /// already found is not worth trying.
     #[inline(always)]
     fn try_deeper(&self, score_add: c_int) -> bool {
-        self.depth < MAXWLEN as c_int - 1
-            && self.stack[self.depth as usize].score + score_add < self.su.su_maxscore
+        self.depth < MAXWLEN - 1 && self.stack[self.depth].score + score_add < self.su.su_maxscore
     }
 
     /// One byte of the tree currently being walked.
@@ -460,14 +495,14 @@ impl<'a> Walk<'a> {
     /// index the walk forms is bounded by a count the tree itself stores.
     #[inline]
     fn byte_at(&self, at: SpellIdx) -> u8 {
-        self.tree.byte(at as usize)
+        self.tree.byte(as_index(at))
     }
 
     /// The tree entry beside a byte: for a child byte, where its node
     /// starts; for a NUL byte, the word's flags.
     #[inline]
     fn idx_at(&self, at: SpellIdx) -> SpellIdx {
-        self.tree.idx(at as usize)
+        self.tree.idx(as_index(at))
     }
 
     /// One byte of the bad word, unsigned.

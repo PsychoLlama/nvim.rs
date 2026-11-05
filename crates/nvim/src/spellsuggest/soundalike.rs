@@ -31,6 +31,13 @@
 //! character both folded and upper-case.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr::until_nul;
 use crate::mbyte::{char_at, char_len};
@@ -46,10 +53,10 @@ use crate::spellsuggest::score::{
 };
 use crate::spellsuggest::walk::suggest_trie_walk;
 use crate::spellsuggest::{
-    MAXWLEN, SCORE_ICASE, SCORE_LIMITMAX, SCORE_MAXMAX, SCORE_REGION, SPS_DOUBLE, SugInfo, TAB,
+    MAXWLEN, SCORE_ICASE, SCORE_LIMITMAX, SCORE_MAXMAX, SCORE_REGION, SPS_DOUBLE, SugInfo,
     sps_flags, window_langs,
 };
-use crate::types::{LangId, LangP, LineNr, NUL, SpellLang, int16_t};
+use crate::types::{LangId, LangP, LineNr, SpellLang, int16_t};
 use core::ffi::c_int;
 use core::hash::BuildHasherDefault;
 use std::collections::HashMap;
@@ -93,12 +100,12 @@ pub(super) fn bytes2offset(bytes: &[u8], pos: &mut usize) -> c_int {
     // keeps the walk inside the line where the C would have run on into
     // whatever followed it.
     let next = |pos: &mut usize| -> c_int {
-        let b = bytes.get(*pos).copied().unwrap_or(0) as c_int;
+        let b = c_int::from(bytes.get(*pos).copied().unwrap_or(0));
         *pos += 1;
         b - 1
     };
 
-    let c = bytes.get(*pos).copied().unwrap_or(0) as c_int;
+    let c = c_int::from(bytes.get(*pos).copied().unwrap_or(0));
     *pos += 1;
     let (mut nr, extra) = if c & 0x80 == 0 {
         (c - 1, 0)
@@ -134,13 +141,13 @@ pub(super) fn add_sound_suggest(
     let done = sounddone(su, langp.slang);
     match done.get_mut(goodword) {
         None => {
-            done.insert(goodword.into(), score as int16_t);
+            done.insert(goodword.into(), score16(score));
         }
         Some(best) => {
             if score >= c_int::from(*best) {
                 return;
             }
-            *best = score as int16_t;
+            *best = score16(score);
         }
     }
 
@@ -164,6 +171,13 @@ pub(super) fn add_sound_suggest(
         let (theword, n, i) = word_number_to_letters(slang, orgnr);
         emit_word(su, langp, slang, &theword, n, i, score);
     }
+}
+
+/// A score as the `int16_t` the done-table keeps it in: its low 16 bits,
+/// as upstream's `(int16_t)score` did.
+fn score16(score: c_int) -> int16_t {
+    let [lo, hi, ..] = score.to_le_bytes();
+    int16_t::from_le_bytes([lo, hi])
 }
 
 /// The table of soundfolds already handled for language `id`, made empty on
@@ -237,7 +251,7 @@ pub(super) fn word_number_to_letters(
         n = tree.child_node(n + i);
         wlen += 1;
     }
-    theword[wlen] = NUL as u8;
+    theword[wlen] = 0;
     (theword, n, i)
 }
 
@@ -292,7 +306,7 @@ fn emit_word(
 
         // A word from another region is worth less.
         let mut goodscore = if flags.has(WordFlags::REGION)
-            && (flags.bits() as u32 >> 16) & langp.region as u32 == 0
+            && (flags.bits().cast_unsigned() >> 16) & langp.region.cast_unsigned() == 0
         {
             SCORE_REGION
         } else {
@@ -356,7 +370,7 @@ pub(super) fn soundfold_find(slang: &SpellLang, word: &[u8]) -> Option<c_int> {
         // A leading zero byte means a word may end here.
         let mut c = byte(wlen);
         if tree.ends_word(arridx) {
-            if c == NUL as u8 {
+            if c == 0 {
                 return Some(wordnr);
             }
 
@@ -370,7 +384,7 @@ pub(super) fn soundfold_find(slang: &SpellLang, word: &[u8]) -> Option<c_int> {
             wordnr += 1;
         }
 
-        if c == NUL as u8 {
+        if c == 0 {
             return None; // the word ends but the tree does not
         }
 
@@ -378,7 +392,7 @@ pub(super) fn soundfold_find(slang: &SpellLang, word: &[u8]) -> Option<c_int> {
         // hanging below the ones passed over. The index a sibling holds
         // is itself a node start, and that node's own entry is the
         // number of words below it.
-        if c == TAB as u8 {
+        if c == b'\t' {
             c = b' '; // a tab counts as a space
         }
         while tree.byte(arridx) < c {
@@ -399,7 +413,7 @@ pub(super) fn soundfold_find(slang: &SpellLang, word: &[u8]) -> Option<c_int> {
         // One space in the good word may stand for several in the
         // word being checked.
         if c == b' ' {
-            while byte(wlen) == b' ' || byte(wlen) == TAB as u8 {
+            while byte(wlen) == b' ' || byte(wlen) == b'\t' {
                 wlen += 1;
             }
         }
@@ -439,7 +453,7 @@ pub(super) fn find_keepcap_word(slang: &SpellLang, fword: &[u8], kword: &mut [u8
     let tree = slang.sl_keep_tree.view();
     if tree.is_empty() {
         // The tree is empty: cannot happen.
-        kword[0] = NUL as u8;
+        kword[0] = 0;
         return;
     }
     let fword = until_nul(fword);
@@ -455,12 +469,12 @@ pub(super) fn find_keepcap_word(slang: &SpellLang, fword: &[u8], kword: &mut [u8
     // and `uword`; every tree index is a node start the tree handed back,
     // stepped forward at most that node's child count.
     while depth >= 0 {
-        let level = stack[depth as usize];
+        let level = stack[depth.cast_unsigned()];
         if level.fwordidx >= fword.len() {
             // At the end of the folded word: if the tree lets a word
             // end here, this is the answer.
             if tree.ends_word(level.arridx + 1) {
-                kword[level.kwordlen] = NUL as u8;
+                kword[level.kwordlen] = 0;
                 return;
             }
             // Otherwise the answer would be too long; back up.
@@ -468,8 +482,8 @@ pub(super) fn find_keepcap_word(slang: &SpellLang, fword: &[u8], kword: &mut [u8
             continue;
         }
 
-        stack[depth as usize].round += 1;
-        let round = stack[depth as usize].round;
+        stack[depth.cast_unsigned()].round += 1;
+        let round = stack[depth.cast_unsigned()].round;
         if round > 2 {
             // Both cases tried; back up.
             depth -= 1;
@@ -507,7 +521,7 @@ pub(super) fn find_keepcap_word(slang: &SpellLang, fword: &[u8], kword: &mut [u8
         // The whole character matched: keep it and go a level deeper.
         kword[level.kwordlen..level.kwordlen + taken].copy_from_slice(&chars[..taken]);
         depth += 1;
-        stack[depth as usize] = KeepCapLevel {
+        stack[depth.cast_unsigned()] = KeepCapLevel {
             arridx: tryidx,
             round: 0,
             fwordidx: level.fwordidx + flen,
@@ -517,5 +531,5 @@ pub(super) fn find_keepcap_word(slang: &SpellLang, fword: &[u8], kword: &mut [u8
     }
 
     // Not found: cannot happen.
-    kword[0] = NUL as u8;
+    kword[0] = 0;
 }

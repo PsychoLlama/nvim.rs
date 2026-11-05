@@ -20,6 +20,13 @@
 //! folded word to reconstruct how it should be spelled.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr::byte_at;
 use crate::spell::WordFlags;
@@ -47,9 +54,9 @@ pub fn ascii_spell_chartab() -> SpellTab {
         st_fold: [0; 256],
         st_upper: [0; 256],
     };
-    for i in 0..256 {
-        sp.st_fold[i] = i as uint8_t;
-        sp.st_upper[i] = i as uint8_t;
+    for b in 0..=u8::MAX {
+        sp.st_fold[usize::from(b)] = b;
+        sp.st_upper[usize::from(b)] = b;
     }
     for i in b'0'..=b'9' {
         sp.st_isw[i as usize] = true;
@@ -96,23 +103,32 @@ pub(crate) fn spelltab_upper(c: usize) -> uint8_t {
     spelltab.get_field(|tab| &tab.st_upper[c])
 }
 
+/// A character the caller has tested below 256 (or 128), as the index of a
+/// 256-entry table. A character is never negative, so this is the C's `[c]`
+/// with no test of its own: these lookups run once per character checked.
+#[inline(always)]
+fn tab_index(c: c_int) -> usize {
+    c.cast_unsigned() as usize
+}
+
 /// Reset [`spelltab`] to what the current encoding says, discarding
 /// anything a `.spl` file installed. Called once at startup and again
 /// whenever the spell files are reloaded.
 pub fn init_spell_chartab() {
     did_set_spelltab.set(false);
     let mut tab = ascii_spell_chartab();
-    for i in 128..256 {
+    for b in 128..=u8::MAX {
+        let (i, at) = (c_int::from(b), usize::from(b));
         let f = utf_fold(i);
         let u = mb_toupper(i);
 
-        tab.st_isu[i as usize] = mb_isupper(i);
-        tab.st_isw[i as usize] = tab.st_isu[i as usize] || mb_islower(i);
+        tab.st_isu[at] = mb_isupper(i);
+        tab.st_isw[at] = tab.st_isu[at] || mb_islower(i);
         // The folded and upper-cased values of 0xb5 differ between latin1
         // and utf-8, which used to raise E763 for no good reason. Keep the
         // latin1 answer for both.
-        tab.st_fold[i as usize] = if f < 256 { f as uint8_t } else { i as uint8_t };
-        tab.st_upper[i as usize] = if u < 256 { u as uint8_t } else { i as uint8_t };
+        tab.st_fold[at] = u8::try_from(f).unwrap_or(b);
+        tab.st_upper[at] = u8::try_from(u).unwrap_or(b);
     }
     spelltab.set(tab);
 }
@@ -151,7 +167,7 @@ pub fn spell_iswordp(p: &[u8], window: Win) -> bool {
         // so it lands in the table like any other byte below 256.
         let c = char_at(p);
         let midword = if c < 256 {
-            window.syn_block().b_spell_ismw[c as usize]
+            window.syn_block().b_spell_ismw[tab_index(c)]
         } else {
             is_midword_mb(window, c)
         };
@@ -164,7 +180,7 @@ pub fn spell_iswordp(p: &[u8], window: Win) -> bool {
     if c > 255 {
         return spell_mb_isword_class(utf_class(c), window);
     }
-    spelltab_isw(c as usize)
+    spelltab_isw(tab_index(c))
 }
 
 /// Whether `p` starts with a word character, ignoring midword characters.
@@ -173,7 +189,7 @@ pub fn spell_iswordp_nmw(p: &[u8], window: Win) -> bool {
     if c > 255 {
         return spell_mb_isword_class(utf_class(c), window);
     }
-    spelltab_isw(c as usize)
+    spelltab_isw(tab_index(c))
 }
 
 /// Whether a character class from [`utf_class`] is a word character.
@@ -192,7 +208,7 @@ fn spell_mb_isword_class(cl: c_int, window: Win) -> bool {
 pub(super) fn spell_iswordp_w(w: &[c_int], window: Win) -> bool {
     let first = w.first().copied().unwrap_or(0);
     let midword = if first < 256 {
-        window.syn_block().b_spell_ismw[first as usize]
+        window.syn_block().b_spell_ismw[tab_index(first)]
     } else {
         is_midword_mb(window, first)
     };
@@ -205,7 +221,7 @@ pub(super) fn spell_iswordp_w(w: &[c_int], window: Win) -> bool {
     if c > 255 {
         return spell_mb_isword_class(utf_class(c), window);
     }
-    spelltab_isw(c as usize)
+    spelltab_isw(tab_index(c))
 }
 
 /// Case-fold the first `len` bytes of `text` into `out`, NUL terminated,
@@ -275,7 +291,7 @@ pub(crate) fn casefold_len(
         } else if c >= 128 {
             c = utf_fold(c);
         } else {
-            c = c_int::from(spelltab_fold(c as usize));
+            c = c_int::from(spelltab_fold(tab_index(c)));
         }
         outi += encode_char(c, &mut out[outi..]);
     }
@@ -355,7 +371,7 @@ fn is_upper(c: c_int) -> bool {
     if c >= 128 {
         mb_isupper(c)
     } else {
-        spelltab_isu(c as usize)
+        spelltab_isu(tab_index(c))
     }
 }
 
@@ -365,7 +381,7 @@ pub(super) fn spell_toupper(c: c_int) -> c_int {
     if c >= 128 {
         mb_toupper(c)
     } else {
-        c_int::from(spelltab_upper(c as usize))
+        c_int::from(spelltab_upper(tab_index(c)))
     }
 }
 
@@ -401,7 +417,7 @@ pub fn onecap_copy(word: &[u8], out: &mut [u8], upper: bool) {
     } else if c >= 128 {
         utf_fold(c)
     } else {
-        c_int::from(spelltab_fold(c as usize))
+        c_int::from(spelltab_fold(tab_index(c)))
     };
     let l = encode_char(c, out);
     put_cstr(out, l, tail(word, first), MAXWLEN - l);
@@ -420,7 +436,7 @@ pub fn allcap_copy(word: &[u8], out: &mut [u8]) {
         if c == 0xdf {
             // German sharp s upper-cases to two characters; the second
             // goes through the usual path below.
-            c = 'S' as c_int;
+            c = c_int::from(b'S');
             if d >= MAXWLEN - 1 {
                 break;
             }

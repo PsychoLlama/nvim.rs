@@ -27,6 +27,13 @@
 //! on the way out.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr::{byte_at, until_nul};
 use crate::narrow::len_as_int;
@@ -164,7 +171,7 @@ pub fn spell_move_to(
         };
         if lnum < window.w_buffer.b_ml.ml_line_count {
             let next = lines.line(lnum + 1);
-            spell_cat_line(&mut buf[line_len..], next, MAXWLEN as c_int);
+            spell_cat_line(&mut buf[line_len..], next, MAXWLEN);
         }
 
         let mut p = skip;
@@ -230,7 +237,7 @@ pub fn spell_move_to(
                         } else if curline {
                             // Insert-mode completion wants the cursor
                             // after the bad word.
-                            found_pos.col += len as c_int;
+                            found_pos.col += len_as_int(len);
                         }
                         found_len = len;
                     }
@@ -241,7 +248,7 @@ pub fn spell_move_to(
 
             // On to the character after the word.
             p += len;
-            capcol -= len as c_int;
+            capcol -= len_as_int(len);
         }
 
         if done {
@@ -325,8 +332,7 @@ pub fn spell_move_to(
 /// The blanks are kept rather than dropped so that the caller's columns
 /// still refer to the same places. At most `maxlen` bytes of `buf` are
 /// written, terminator included; `line` ends at its end or at a NUL.
-pub fn spell_cat_line(buf: &mut [u8], line: &[u8], maxlen: c_int) {
-    let maxlen = usize::try_from(maxlen).unwrap_or(0);
+pub fn spell_cat_line(buf: &mut [u8], line: &[u8], maxlen: usize) {
     let mut p = skip::white(line);
     while has_char(c"*#/\"\t", c_int::from(byte_at(line, p))) {
         p += 1;

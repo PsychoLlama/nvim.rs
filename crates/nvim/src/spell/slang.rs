@@ -18,6 +18,13 @@
 //! against.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::global_cell::GlobalCell;
 use crate::memory::XString;
@@ -35,7 +42,7 @@ use crate::mbyte::{c_cluster_len, char_at};
 use crate::memline::{ml_close, ml_open, ml_open_file};
 use crate::types::{SpellLang, uint8_t, uint16_t};
 
-use super::{MAXWLEN, MAXWORDCOUNT, SY_MAXLEN, SylItem, WordEnd, WordTree};
+use super::{MAXWLEN, MAXWLEN_INT, MAXWORDCOUNT, SY_MAXLEN, SylItem, WordEnd, WordTree};
 
 /// The hash the `COMMON` table keys words with: upstream's `hash_hash`
 /// (`h = h * 101 + byte`), spread over the word by a multiplicative mix so
@@ -82,9 +89,9 @@ impl SpellLang {
             sl_regions: [0; 17],
             sl_midword: Vec::new(),
             sl_wordcount: WordCounts::default(),
-            sl_compmax: MAXWLEN as c_int,
+            sl_compmax: MAXWLEN_INT,
             sl_compminlen: 0,
-            sl_compsylmax: MAXWLEN as c_int,
+            sl_compsylmax: MAXWLEN_INT,
             sl_compoptions: 0,
             sl_comppat: Vec::new(),
             sl_compprog: RefCell::new(None),
@@ -153,9 +160,9 @@ pub fn slang_clear(slang: &mut SpellLang) {
 
     slang_clear_sug(slang);
 
-    slang.sl_compmax = MAXWLEN as c_int;
+    slang.sl_compmax = MAXWLEN_INT;
     slang.sl_compminlen = 0;
-    slang.sl_compsylmax = MAXWLEN as c_int;
+    slang.sl_compsylmax = MAXWLEN_INT;
     slang.sl_regions[0] = 0;
 }
 
@@ -181,7 +188,7 @@ pub fn count_common_word(slang: &mut SpellLang, word: &[u8], count: uint8_t) {
     if let Some(total) = slang.sl_wordcount.get_mut(word) {
         // The C adds and then checks for the wrap, which is a saturate
         // spelled the long way round.
-        *total = total.checked_add(count).unwrap_or(MAXWORDCOUNT as uint16_t);
+        *total = total.checked_add(count).unwrap_or(MAXWORDCOUNT);
     } else {
         slang.sl_wordcount.insert(word.into(), count);
     }

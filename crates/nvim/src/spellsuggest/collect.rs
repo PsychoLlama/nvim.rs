@@ -23,8 +23,17 @@
 //! are scored separately and then interleaved.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr::until_nul;
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
 use crate::winlayer::Win;
 
 use crate::highlight_group::HLF_COUNT;
@@ -114,9 +123,9 @@ pub(super) fn add_suggestion(
     // shared trailing character is not part of the replacement.
     let bad = &su.su_bad[..];
     let mut gi = goodword.len();
-    let mut bi = badlenarg.max(0) as usize;
+    let mut bi = as_index(badlenarg.max(0));
     let (goodlen, badlen) = loop {
-        let lens = (gi as c_int, bi as c_int);
+        let lens = (len_as_int(gi), len_as_int(bi));
         // The second test only bites on a replaced length past the end of
         // the line, which the C read on into whatever followed it.
         if gi == 0 || bi == 0 || bi > bad.len() {
@@ -134,7 +143,7 @@ pub(super) fn add_suggestion(
         // first "the" replaced by itself.
         return;
     }
-    let good = &goodword[..goodlen as usize];
+    let good = &goodword[..as_index(goodlen)];
 
     // Already in the list? The replaced length is part of the identity:
     // "thes," -> "these" is a different suggestion from "thes" ->
@@ -202,7 +211,7 @@ pub(super) fn add_suggestion(
     su.list_mut(list).push(entry);
 
     // Far enough over the display count that sorting pays for itself.
-    if su.list(list).len() as c_int > max_count(su) {
+    if len_as_int(su.list(list).len()) > max_count(su) {
         let keep = clean_count(su);
         let ceiling = if maxsf {
             su.su_sfmaxscore
@@ -231,7 +240,7 @@ pub(super) fn check_suggestions(su: &mut SugInfo, list: List) {
         // recognisable; at most `MAXWLEN` bytes of the two.
         let word = stp.word_bytes();
         let word = &word[..word.len().min(MAXWLEN)];
-        let rest = su.bad_from(stp.st_orglen as usize);
+        let rest = su.bad_from(as_index(stp.st_orglen));
         longword.clear();
         longword.extend_from_slice(word);
         longword.extend_from_slice(&rest[..rest.len().min(MAXWLEN - word.len())]);
@@ -354,7 +363,7 @@ pub(super) fn cleanup_suggestions(list: &mut Vec<Suggest>, maxscore: c_int, keep
     }
     list.sort_by(sug_compare);
 
-    let keep = keep.max(0) as usize;
+    let keep = as_index(keep.max(0));
     if list.len() <= keep {
         return maxscore;
     }
@@ -485,6 +494,6 @@ pub(super) fn score_combine(su: &mut SugInfo) {
     }
 
     // Keep only what will be displayed.
-    merged.truncate(su.su_maxcount.max(0) as usize);
+    merged.truncate(as_index(su.su_maxcount.max(0)));
     su.su_ga = merged;
 }

@@ -29,18 +29,24 @@
 //! replacement applied to the rest of the buffer.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::memline::Lines;
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
-use crate::narrow::len_as_int;
+use crate::narrow::{const_len_as_int, len_as_int};
 use crate::semsg;
-use crate::types::TAB;
 use crate::winlayer::Win;
 use core::ffi::CStr;
-use core::ffi::{c_int, c_uint};
+use core::ffi::c_int;
 use std::borrow::Cow;
 
 use crate::change::inserted_bytes;
@@ -82,6 +88,7 @@ pub use lang::{
     compile_cap_prog, did_set_spell_option, parse_spelllang, spell_delete_wordlist, spell_enc,
     spell_free_all, spell_reload, valid_spellfile, valid_spelllang,
 };
+pub(crate) use lookup::compound_flag;
 pub use lookup::{can_compound, match_checkcompoundpattern, match_compoundrule, valid_word_prefix};
 pub use navigate::{spell_cat_line, spell_move_to};
 use slang::count_syllables;
@@ -101,6 +108,8 @@ pub const kEqualFiles: FileComparison = 1;
 /// The longest word, in bytes, that any of this can handle. Every word
 /// buffer in the subsystem is this size.
 pub const MAXWLEN: usize = 254;
+/// [`MAXWLEN`] as the C `int` the spell file's limits are counted in.
+pub(crate) const MAXWLEN_INT: c_int = const_len_as_int(MAXWLEN);
 
 crate::flag_set! {
     /// Flags stored with a word in the tree, in the low bits of its
@@ -160,7 +169,7 @@ crate::flag_set! {
 /// A word with no region restriction, and the "no such region" answer.
 pub const REGION_ALL: c_int = 255;
 /// The saturation point of a `COMMON` word count.
-pub const MAXWORDCOUNT: c_uint = 65535;
+pub const MAXWORDCOUNT: u16 = 65535;
 
 pub const SMT_RARE: SpellMoveType = 2;
 pub const SMT_BAD: SpellMoveType = 1;
@@ -206,8 +215,8 @@ pub const SY_MAXLEN: c_int = 30;
 /// on its way down the tree: one past the node's index, and how far into
 /// the word it sat.
 pub(crate) struct WordEnd {
-    pub len: c_int,
-    pub node: u32,
+    pub len: usize,
+    pub node: usize,
 }
 
 /// State threaded through one word's lookup, so that the tree walk and the
@@ -235,21 +244,21 @@ pub(crate) struct MatchInf<'a> {
     pub cend: Option<usize>,
     /// The case-folded word.
     pub fword: [u8; MAXWLEN + 1],
-    pub fwordlen: c_int,
+    pub fwordlen: usize,
     /// Where in the language's prefix tree the candidate prefixes start,
     pub prefarridx: usize,
     /// and how many there are.
-    pub prefcnt: c_int,
+    pub prefcnt: usize,
     /// The prefix's length, folded and as written.
-    pub prefixlen: c_int,
-    pub cprefixlen: c_int,
+    pub prefixlen: usize,
+    pub cprefixlen: usize,
     /// Where the next compound part begins.
-    pub compoff: c_int,
+    pub compoff: usize,
     /// The flag of each compound part used so far.
     pub compflags: [uint8_t; MAXWLEN],
-    pub complen: c_int,
+    pub complen: usize,
     /// How many of those parts were COMPOUNDROOT.
-    pub compextra: c_int,
+    pub compextra: usize,
     /// The best result so far, and the capitalisation it assumed.
     pub result: SpellResult,
     pub capflags: WordFlags,
@@ -395,7 +404,7 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
     };
     let repl_from_len = repl_from.len();
     let repl_to_len = repl_to.len();
-    let addlen = repl_to_len as i64 - repl_from_len as i64;
+    let grows = repl_to_len > repl_from_len;
 
     // The word to replace, anchored as a very-nomagic whole word.
     let mut frompat = XString::from_bytes(b"\\V\\<");
@@ -407,7 +416,7 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
     SUB_NLINES.set(0);
     Win::current().w_cursor.lnum = LineNr::ZERO;
     while !got_int.get() {
-        let slash = '/' as c_int;
+        let slash = c_int::from(b'/');
         let found = do_search(None, slash, slash, &frompat, 1, SEARCH_KEEP, None);
         if found.is_none() || u_save_cursor().is_err() {
             break;
@@ -421,7 +430,7 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
             let line = lines.line(Win::current().w_cursor.lnum);
             let at = col.as_usize();
             let present = chartab::tail(line, at).starts_with(&repl_to);
-            (addlen <= 0 || !present).then(|| {
+            (!grows || !present).then(|| {
                 let mut rebuilt = XString::from_bytes(&line[..at.min(line.len())]);
                 rebuilt.push_bytes(&repl_to);
                 rebuilt.push_bytes(chartab::tail(line, at + repl_from_len));
@@ -431,7 +440,7 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
         if let Some(replaced) = replaced {
             let _ = ml_replace_owned(Win::current().w_cursor.lnum, replaced);
             let lnum = Win::current().w_cursor.lnum;
-            let (was, now) = (repl_from_len as c_int, repl_to_len as c_int);
+            let (was, now) = (len_as_int(repl_from_len), len_as_int(repl_to_len));
             inserted_bytes(lnum, col, was, now);
 
             if Win::current().w_cursor.lnum != prev_lnum {

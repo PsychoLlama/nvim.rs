@@ -25,15 +25,27 @@
 //! only thing stopping the two from taking turns forever.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr::until_nul;
 use crate::mbyte::{c_cluster_len, char_count};
+use crate::narrow::as_index;
+use crate::spell::MAXWLEN_INT;
 use crate::spell::WordFlags;
+use crate::spell::compound_flag;
 use crate::spell::{byte_in_str, can_compound, match_compoundrule, nofold_len, spell_iswordp_nmw};
 use crate::spellsuggest::score::score_wordcount_adj;
 use crate::spellsuggest::walk::node::last_word_start;
-use crate::spellsuggest::walk::{FLAG_DID_SPLIT, PFD_NOPREFIX, PFD_PREFIXTREE, State, Walk};
-use crate::spellsuggest::{MAXWLEN, SCORE_SPLIT, SCORE_SPLIT_NO, SCORE_SUBST};
+use crate::spellsuggest::walk::{
+    FLAG_DID_SPLIT, PFD_NOPREFIX, PFD_PREFIXTREE, State, Walk, frame_pos, saved_flags,
+};
+use crate::spellsuggest::{SCORE_SPLIT, SCORE_SPLIT_NO, SCORE_SUBST};
 use crate::types::NUL;
 use crate::winlayer::Win;
 use core::ffi::c_int;
@@ -51,7 +63,7 @@ impl Walk<'_> {
         good_word_ends: bool,
         mut newscore: c_int,
     ) {
-        let level = self.depth as usize;
+        let level = self.depth;
 
         // Only where a change is still allowed, and never in the
         // middle of a character.
@@ -64,14 +76,15 @@ impl Walk<'_> {
         // Past the end of the bad word there is nothing left to split
         // off. Otherwise a split lets the *next* word be changed, as
         // in "the the" where it is the second "the" that is wrong.
-        let try_split = (self.stack[level].bad_idx as c_int - self.repextra) < self.su.su_badlen
+        let try_split = (c_int::from(self.stack[level].bad_idx) - self.repextra)
+            < self.su.su_badlen
             && !self.soundfold;
 
         let mut try_compound = self.may_compound(flags);
         if try_compound {
             let comp_len = self.stack[level].comp_len as usize;
-            self.compflags[comp_len] = ((flags.bits() as u32) >> 24) as u8;
-            self.compflags[comp_len + 1] = NUL as u8;
+            self.compflags[comp_len] = compound_flag(flags);
+            self.compflags[comp_len + 1] = 0;
         }
 
         if self.slang.sl_nobreak && !self.slang.sl_nocompoundsugs {
@@ -85,7 +98,7 @@ impl Walk<'_> {
             self.stack[level].flags |= FLAG_DID_SPLIT;
             self.stack[level].child -= 1; // do the same NUL again
             let comp_len = self.stack[level].comp_len as usize;
-            self.compflags[comp_len] = NUL as u8;
+            self.compflags[comp_len] = 0;
         } else {
             self.stack[level].flags &= !FLAG_DID_SPLIT;
         }
@@ -107,21 +120,21 @@ impl Walk<'_> {
         self.go_deeper(newscore);
 
         // Saved so that STATE_SPLITUNDO can put it back.
-        self.stack[level].saved_badflags = self.su.su_badflags.bits() as u8;
+        self.stack[level].saved_badflags = saved_flags(self.su.su_badflags);
         self.stack[level].state = State::SplitUndo;
 
         self.depth += 1;
-        let child = self.depth as usize;
+        let child = self.depth;
 
         if !try_compound && !bad_word_ends {
             // The separator, when there is room for it and its NUL.
             let len = self.preword_len();
             if len + 1 < self.preword.len() {
                 self.preword[len] = b' ';
-                self.preword[len + 1] = NUL as u8;
+                self.preword[len + 1] = 0;
             }
         }
-        self.stack[child].preword_len = self.preword_len() as u8;
+        self.stack[child].preword_len = frame_pos(self.preword_len());
         self.stack[child].split_off = self.stack[child].good_len;
         self.stack[child].split_bad_idx = self.stack[child].bad_idx;
 
@@ -144,7 +157,7 @@ impl Walk<'_> {
         );
         self.su.su_badflags = self
             .su
-            .captype_between(consumed, self.su.su_badlen as usize);
+            .captype_between(consumed, as_index(self.su.su_badlen));
 
         // Restart at the top of the tree.
         self.stack[child].node = 0;
@@ -164,10 +177,10 @@ impl Walk<'_> {
     // outlined they cost spellbench 1.4 %.
     #[inline(always)]
     fn may_compound(&mut self, flags: WordFlags) -> bool {
-        let level = self.depth as usize;
+        let level = self.depth;
         let split_off = self.stack[level].split_off as usize;
         let this_word_len =
-            self.stack[level].good_len as c_int - self.stack[level].split_off as c_int;
+            c_int::from(self.stack[level].good_len) - c_int::from(self.stack[level].split_off);
 
         // `tword` is NUL-terminated here; every `&&` below guards only the
         // work to its right.
@@ -175,15 +188,16 @@ impl Walk<'_> {
         !self.soundfold
             && !slang.sl_nocompoundsugs
             && slang.sl_compprog.borrow().is_some()
-            && (flags.bits() as u32) >> 24 != 0
+            && compound_flag(flags) != 0
             && this_word_len >= slang.sl_compminlen
             && (slang.sl_compminlen == 0
-                || char_count(until_nul(&self.tword[split_off..])) as c_int >= slang.sl_compminlen)
-            && (slang.sl_compsylmax < MAXWLEN as c_int
-                || (self.stack[level].comp_len as c_int + 1
-                    - self.stack[level].comp_split as c_int)
+                || usize::try_from(slang.sl_compminlen)
+                    .is_ok_and(|min| char_count(until_nul(&self.tword[split_off..])) >= min))
+            && (slang.sl_compsylmax < MAXWLEN_INT
+                || (c_int::from(self.stack[level].comp_len) + 1
+                    - c_int::from(self.stack[level].comp_split))
                     < slang.sl_compmax)
-            && self.can_be_compound(((flags.bits() as u32) >> 24) as c_int)
+            && self.can_be_compound(compound_flag(flags))
     }
 
     /// What a split costs, and whether it is allowed at all.
@@ -192,7 +206,7 @@ impl Walk<'_> {
     /// separate words, which ends this NUL byte's turn.
     #[inline(always)]
     fn split_penalty(&mut self, flags: WordFlags, mut newscore: c_int) -> Option<c_int> {
-        let level = self.depth as usize;
+        let level = self.depth;
 
         // Splitting means the words so far have to be valid on their
         // own. A single word must not carry NEEDCOMPOUND.
@@ -241,7 +255,7 @@ impl Walk<'_> {
         bad_word_ends: bool,
         good_word_ends: bool,
     ) {
-        let child = self.depth as usize;
+        let child = self.depth;
         let bad_idx = self.stack[child].bad_idx as usize;
 
         // `bad_idx` is a position the walk reached inside the bad
@@ -263,14 +277,14 @@ impl Walk<'_> {
             let preword_len = self.stack[child].preword_len as usize;
             self.preword[preword_len..preword_len + taken]
                 .copy_from_slice(&self.fword[bad_idx..bad_idx + taken]);
-            self.stack[child].preword_len = (preword_len + taken) as u8;
-            self.preword[self.stack[child].preword_len as usize] = NUL as u8;
+            self.stack[child].preword_len = frame_pos(preword_len + taken);
+            self.preword[self.stack[child].preword_len as usize] = 0;
         } else {
             // Replacing a non-word character with a space is a
             // substitution, not a split.
             self.stack[child].score -= SCORE_SPLIT - SCORE_SUBST;
         }
-        self.stack[child].bad_idx = (self.stack[child].bad_idx as usize + taken) as u8;
+        self.stack[child].bad_idx = frame_pos(usize::from(self.stack[child].bad_idx) + taken);
     }
 
     /// Could the compound flags collected so far, plus `flag`, still form
@@ -278,8 +292,8 @@ impl Walk<'_> {
     ///
     /// This also checks the `COMPOUNDRULE` lines, but only when they carry
     /// no wildcards -- with wildcards a partial sequence says nothing.
-    fn can_be_compound(&mut self, flag: c_int) -> bool {
-        let level = self.depth as usize;
+    fn can_be_compound(&mut self, flag: u8) -> bool {
+        let level = self.depth;
         let comp_len = self.stack[level].comp_len as usize;
         let comp_split = self.stack[level].comp_split as usize;
 
@@ -291,7 +305,7 @@ impl Walk<'_> {
         } else {
             &slang.sl_compallflags
         };
-        if !byte_in_str(allowed, flag) {
+        if !byte_in_str(allowed, c_int::from(flag)) {
             return false;
         }
 
@@ -301,11 +315,11 @@ impl Walk<'_> {
         if slang.sl_comprules.is_none() || comp_len <= comp_split {
             return true;
         }
-        self.compflags[comp_len] = flag as u8;
-        self.compflags[comp_len + 1] = NUL as u8;
+        self.compflags[comp_len] = flag;
+        self.compflags[comp_len + 1] = 0;
         // `compflags` is NUL-terminated by the two lines above.
         let matched = match_compoundrule(slang, &self.compflags[comp_split..]);
-        self.compflags[comp_len] = NUL as u8;
+        self.compflags[comp_len] = 0;
         matched
     }
 }
