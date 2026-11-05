@@ -195,3 +195,35 @@ fn z_equals_with_a_count_and_spellrepall() {
     fx.check("getline(1, '$')", "['a held there', 'held again held']");
     restore(&fx);
 }
+
+/// Every message the speller's refusals and warnings put out, against a
+/// dictionary that is loaded: the search wrapping round, a replacement
+/// `:spellrepall` cannot find again, and a word list that is missing.
+#[test]
+fn refusals_report_once() {
+    let sandbox = Sandbox::dir("spellsuggest_refusals");
+    let fx = Probe::new(sandbox.editor());
+    speller(&fx, &sandbox, "sugrefuse", "helo and wrld");
+    fx.run("call setline(2, 'fine')");
+    fx.run("set spellsuggest=best,4");
+    for (cmd, want) in [
+        ("call cursor(2, 1) | normal! ]s", "none"),
+        ("call cursor(1, 1) | normal! [s", "none"),
+        ("set nowrapscan | call cursor(2, 1) | normal! ]s", "none"),
+        ("call cursor(1, 1) | normal! [s", "none"),
+        ("set wrapscan&", "none"),
+        ("call cursor(1, 1) | normal! 1z=", "none"),
+        ("spellrepall", "E753: Not found: helo"),
+        ("set spelllang=sugrefuse,unitnosuch", "none"),
+        ("set spelllang=sugrefuse_xx", "none"),
+        ("set spelllang=sugrefuse", "none"),
+        (
+            "set spellsuggest=file:/nonexistent/pairs.txt | echo spellsuggest('helo', 1)",
+            "E484: Can't open file /nonexistent/pairs.txt",
+        ),
+    ] {
+        fx.check_messages(cmd, want);
+    }
+    fx.check("getline(1, '$')", "['Hello and wrld', 'fine']");
+    restore(&fx);
+}

@@ -103,6 +103,7 @@ mod startup;
 mod statusline;
 mod strings;
 mod strings_oracle;
+mod syntax;
 mod tag;
 mod tempfile;
 mod terminfo;
