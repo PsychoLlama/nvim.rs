@@ -81,6 +81,27 @@ impl ColNr {
             .unwrap_or_else(|_| panic!("column index {index} past MAXCOL"))
     }
 
+    /// The column at byte offset `offset` into a line, unchecked: the
+    /// offset's low 32 bits, as upstream's `(colnr_T)(p - line)`.
+    ///
+    /// This narrows a `usize` to `c_int` without a check. That is sound
+    /// for an offset into a line, because a line holds at most `MAXCOL`
+    /// (`c_int::MAX`) bytes, so every offset into one (its NUL included)
+    /// fits. It is for the per-position conversions of a hot walk, where a
+    /// checked narrow costs in the loop; anything else takes
+    /// [`from_index`](Self::from_index), which panics instead.
+    ///
+    /// Debug builds assert that the offset fits.
+    #[inline(always)]
+    pub fn from_line_offset(offset: usize) -> Self {
+        debug_assert!(
+            c_int::try_from(offset).is_ok(),
+            "offset {offset} is past any line"
+        );
+        let [a, b, c, d, ..] = offset.to_le_bytes();
+        Self(c_int::from_le_bytes([a, b, c, d]))
+    }
+
     /// `count` columns on, stopping at [`MAX`](Self::MAX) rather than
     /// wrapping.
     pub const fn saturating_add(self, count: i32) -> Self {

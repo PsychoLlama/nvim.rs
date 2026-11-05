@@ -508,16 +508,12 @@ impl<'t> Rex<'t> {
         self.input() == 0
     }
 
-    /// The column the cursor is in, zero-based, in bytes.
-    ///
-    /// A line is at most `MAXCOL` bytes, so the offset always is a `ColNr`:
-    /// its low 32 bits, as upstream's `(colnr_T)(rex.input - rex.line)`.
-    /// The walk asks at every capture and saved position, so this is a
-    /// plain move rather than a checked one.
+    /// The column the cursor is in, zero-based, in bytes. The walk asks at
+    /// every capture and saved position, so this is
+    /// [`ColNr::from_line_offset`]'s plain move rather than a checked one.
     #[inline(always)]
     pub(crate) fn col(self) -> ColNr {
-        let [a, b, c, d, ..] = self.input().to_le_bytes();
-        ColNr::new(c_int::from_le_bytes([a, b, c, d]))
+        ColNr::from_line_offset(self.input())
     }
 
     /// Put the cursor in column `col` of the line it is already on.
