@@ -28,14 +28,13 @@ use crate::charset::vim_isprintc;
 use crate::cursor_shape::cursor_mode_uses_syn_id;
 use crate::global_cell::GlobalCell;
 use crate::highlight::state::{normal_bg, normal_fg};
-use crate::highlight::{HLATTRS_INIT, HlAttrFlags, hl_get_syn_attr, ns_get_hl};
-use crate::message::{e_highlight_group_name_invalid_char, e_highlight_group_name_too_long};
-use crate::message::{emsg, msg_source};
-use crate::os::cshim::gettext;
+use crate::highlight::{HLATTRS_INIT, HlAttrFlags, hl_get_syn_attr, ns_get_attr, ns_get_link};
 use crate::types::{HlAttrs, NS, RgbValue, ScriptCtx, int16_t};
 use crate::ui::ui_mode_info_set;
 
-use super::{HLF_W, MAX_HL_ID, MAX_SYN_NAME, SG_LINK, kColorIdxBg, kColorIdxFg, kColorIdxNone};
+use super::{
+    HighlightError, MAX_HL_ID, MAX_SYN_NAME, SG_LINK, kColorIdxBg, kColorIdxFg, kColorIdxNone,
+};
 
 /// Information about one highlight group.
 ///
@@ -361,38 +360,46 @@ pub(crate) fn syn_id2name(id: c_int) -> &'static CStr {
 }
 
 /// The id of the group `name` spells, adding it if it does not exist yet.
-/// 0 on failure.
+///
+/// The group table is the boundary of its refusals: a name it cannot add is
+/// said here, and the answer is 0, the id no group has — which every caller
+/// already reads as "no highlight", and the ones that refuse on it (`:syntax`,
+/// `:highlight`, `matchadd()`, the options) follow it with their own message.
 pub(crate) fn syn_check_group(name: &[u8]) -> c_int {
+    check_group(name).unwrap_or_else(|why| {
+        why.report();
+        0
+    })
+}
+
+/// [`syn_check_group`] without the report.
+fn check_group(name: &[u8]) -> Result<c_int, HighlightError> {
     if name.len() > MAX_SYN_NAME as usize {
-        emsg(gettext(e_highlight_group_name_too_long));
-        return 0;
+        return Err(HighlightError::NameTooLong);
     }
     match lookup(name) {
         0 => syn_add_group(name),
-        id => id,
+        id => Ok(id),
     }
 }
 
-/// Adds a group named `name` and answers its id, or 0 if the name is not a
+/// Adds a group named `name` and answers its id, or why the name is not a
 /// legal one (or the table is full).
 ///
 /// `.` and `@` are allowed because treesitter capture names use them; a
 /// `@nested.group` also records `@nested` as its parent, adding that too, so
 /// that a cleared child can fall back to it.
-fn syn_add_group(name: &[u8]) -> c_int {
+fn syn_add_group(name: &[u8]) -> Result<c_int, HighlightError> {
     for &byte in name {
         let c = c_int::from(byte);
         if !vim_isprintc(c) {
-            emsg(gettext(c"E669: Unprintable character in group name"));
-            return 0;
+            return Err(HighlightError::UnprintableName);
         }
         if !byte.is_ascii_alphabetic()
             && !ascii_isdigit(c)
             && !matches!(byte, b'_' | b'.' | b'@' | b'-')
         {
-            msg_source(HLF_W);
-            emsg(gettext(e_highlight_group_name_invalid_char));
-            return 0;
+            return Err(HighlightError::InvalidNameChar);
         }
     }
 
@@ -402,13 +409,13 @@ fn syn_add_group(name: &[u8]) -> c_int {
         && let Some(at) = name.iter().rposition(|&b| b == b'.')
     {
         // Recursive, and it can add a group of its own, so it happens before
-        // this one is appended.
+        // this one is appended. A parent the table cannot add is said, and
+        // the child is added without one, as upstream.
         scoped_parent = syn_check_group(&name[..at]);
     }
 
     if highlight_num_groups() >= MAX_HL_ID as c_int {
-        emsg(gettext(c"E849: Too many highlight and syntax groups"));
-        return 0;
+        return Err(HighlightError::TooManyGroups);
     }
 
     let group = HlGroup::new(
@@ -424,22 +431,27 @@ fn syn_add_group(name: &[u8]) -> c_int {
         table.entries.push(group);
         let id = table.entries.len() as c_int;
         table.ids.insert(group.name_u, id);
-        id
+        Ok(id)
     })
 }
 
 /// The attribute-table id for the group with id `hl_id`, following links.
 pub(crate) fn syn_id2attr(hl_id: c_int) -> c_int {
     let mut optional = false;
-    syn_ns_id2attr(Handle::new(-1), hl_id, &mut optional)
+    // Never `None`: only an optional lookup can come back empty.
+    syn_ns_id2attr(Handle::new(-1), hl_id, &mut optional).unwrap_or(0)
 }
 
 /// [`syn_id2attr`] against a particular namespace.
 ///
 /// `optional` says the caller will accept "this namespace defines nothing",
-/// and is cleared if the namespace turns out to define the group as empty on
-/// purpose.
-pub(crate) fn syn_ns_id2attr(mut ns_id: NS, mut hl_id: c_int, optional: &mut bool) -> c_int {
+/// which is the `None` answer, and is cleared if the namespace turns out to
+/// define the group as empty on purpose.
+pub(crate) fn syn_ns_id2attr(
+    mut ns_id: NS,
+    mut hl_id: c_int,
+    optional: &mut bool,
+) -> Option<c_int> {
     if syn_ns_get_final_id(&mut ns_id, &mut hl_id) {
         // The namespace defines the group to be empty; that is not optional.
         *optional = false;
@@ -450,15 +462,15 @@ pub(crate) fn syn_ns_id2attr(mut ns_id: NS, mut hl_id: c_int, optional: &mut boo
         // this branch and running the ui/ functional specs and the highlight
         // oldtests never reached it, so the read is unreachable in practice
         // as well as undefined.
-        return 0;
+        return Some(0);
     }
     let group = group(hl_id);
-    let attr = ns_get_hl(&mut ns_id, hl_id, false, group.set != 0);
-    // An optional group falls through to nothing rather than to the global.
-    if attr >= 0 || (*optional && ns_id > Handle::NONE) {
-        return attr;
+    match ns_get_attr(&mut ns_id, hl_id, group.set != 0) {
+        Some(attr) => Some(attr),
+        // An optional group falls through to nothing rather than to the global.
+        None if *optional && ns_id > Handle::NONE => None,
+        None => Some(group.attr),
     }
-    group.attr
 }
 
 /// Follows `*hl_idp`'s links to the group that carries the attributes.
@@ -480,15 +492,20 @@ pub(crate) fn syn_ns_get_final_id(ns_id: &mut NS, hl_idp: &mut c_int) -> bool {
         // TODO(bfredl): when using "tmp" attribute (no link) the function
         // might be called twice. it needs be smart enough to remember attr
         // only to syn_id2attr time
-        let check = ns_get_hl(ns_id, hl_id, true, group.set != 0);
-        if check == 0 {
-            // How dare! It broke the link.
-            *hl_idp = hl_id;
-            return true;
-        } else if check > 0 {
-            used = true;
-            hl_id = check;
-        } else if group.link > 0 && group.link <= highlight_num_groups() {
+        match ns_get_link(ns_id, hl_id, group.set != 0) {
+            Some(0) => {
+                // How dare! It broke the link.
+                *hl_idp = hl_id;
+                return true;
+            }
+            Some(link) => {
+                used = true;
+                hl_id = link;
+                continue;
+            }
+            None => {}
+        }
+        if group.link > 0 && group.link <= highlight_num_groups() {
             hl_id = group.link;
         } else if group.cleared && group.parent > 0 {
             hl_id = group.parent;

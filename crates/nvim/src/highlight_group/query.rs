@@ -18,7 +18,10 @@ use crate::types::Handle;
 use core::ffi::{CStr, c_int};
 
 use crate::highlight::dict::put;
-use crate::highlight::{HLATTRS_DICT_SIZE, HlAttrFlags, hlattrs2dict, ns_get_hl, syn_attr2entry};
+use crate::highlight::{
+    HLATTRS_DICT_SIZE, HLATTRS_INIT, HlAttrFlags, hlattrs2dict, ns_get_attr, ns_get_link,
+    syn_attr2entry,
+};
 use crate::narrow::number_as_int;
 use crate::types::{ApiDict, ApiString, Error, KeyDict_get_highlight, NS, Object};
 use crate::ui::ui_rgb_attached;
@@ -39,22 +42,22 @@ fn hlgroup2dict(hl: &mut DictBuilder, ns_id: NS, hl_id: c_int) -> bool {
     let link = if ns_id == Handle::NONE {
         entry.link
     } else {
-        ns_get_hl(&mut ns, hl_id, true, entry.set != 0)
+        match ns_get_link(&mut ns, hl_id, entry.set != 0) {
+            Some(link) => link,
+            None => return false,
+        }
     };
-    if link == -1 {
-        return false;
-    }
     if ns_id == Handle::NONE && entry.cleared && entry.set == 0 {
         // The table entry was created but never set.
         return false;
     }
 
     ns = ns_id;
-    let attr = syn_attr2entry(if ns_id == Handle::NONE {
-        entry.attr
+    let attr = if ns_id == Handle::NONE {
+        syn_attr2entry(entry.attr)
     } else {
-        ns_get_hl(&mut ns, hl_id, false, entry.set != 0)
-    });
+        ns_get_attr(&mut ns, hl_id, entry.set != 0).map_or(HLATTRS_INIT, syn_attr2entry)
+    };
 
     // `default` and `link`, then the rgb pass, then the `cterm` sub-dict
     // the second pass fills: what this function can write, reserved once.
@@ -87,11 +90,11 @@ pub(crate) fn ns_get_hl_defs(
 ) -> Result<ApiDict, Error> {
     let link = opts.link.unwrap_or(true);
 
-    let mut id = -1;
+    let mut picked = None;
     if let Some(name) = opts.name.as_ref() {
         let create = opts.create.unwrap_or(true);
         let name = name.as_bytes();
-        id = if create {
+        let id = if create {
             syn_check_group(name)
         } else {
             syn_name2id_bytes(name)
@@ -99,11 +102,13 @@ pub(crate) fn ns_get_hl_defs(
         if id == 0 && !create {
             return Ok(ApiDict::new());
         }
+        picked = Some(id);
     } else if let Some(given) = opts.id {
-        id = number_as_int(given);
+        // An `id` of -1 is upstream's "no id": every group is listed.
+        picked = Some(number_as_int(given)).filter(|&id| id != -1);
     }
 
-    if id != -1 {
+    if let Some(id) = picked {
         if id < 1 || id > highlight_num_groups() {
             return Err(Error::validation(c"Highlight id out of bounds"));
         }

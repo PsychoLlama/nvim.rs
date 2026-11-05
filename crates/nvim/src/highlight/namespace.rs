@@ -185,28 +185,51 @@ pub fn ns_hl_def(
     provider_field(ns_id, |p| p.hl_cached = false);
 }
 
-/// Resolves highlight group `hl_id` in the namespace `*ns_hl` names.
-///
-/// Answers -1 for "this namespace has nothing to say, use the global group".
-/// Otherwise, with `link` set, the group this one links to (0 meaning "it has
-/// real attributes, not a link"); without it, the attribute id.
+/// The attribute id namespace `*ns_hl` gives highlight group `hl_id`, or
+/// `None` when the namespace has nothing to say and the global group is to
+/// be used.
 ///
 /// `*ns_hl` is in/out: a negative value means "whatever is active", which is
-/// filled in, and a `link_global` definition rewrites it to 0 so that the
-/// caller resolves the link against the global table.
+/// filled in. `nodefault` skips definitions the namespace only supplied as a
+/// default.
+pub(crate) fn ns_get_attr(ns_hl: &mut NS, hl_id: c_int, nodefault: bool) -> Option<c_int> {
+    let item = ns_get_item(ns_hl, hl_id, false, nodefault)?;
+    (item.attr_id >= 0).then_some(item.attr_id)
+}
+
+/// The group namespace `*ns_hl` links highlight group `hl_id` to: `Some(0)`
+/// when the namespace gives it attributes of its own instead, `None` when
+/// the namespace has nothing to say and the global group is to be used.
 ///
-/// `nodefault` skips definitions the namespace only supplied as a default.
-pub fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: bool) -> c_int {
+/// `*ns_hl` is in/out as for [`ns_get_attr`], and a `link_global`
+/// definition rewrites it to 0 so that the caller resolves the link against
+/// the global table.
+pub(crate) fn ns_get_link(ns_hl: &mut NS, hl_id: c_int, nodefault: bool) -> Option<c_int> {
+    let item = ns_get_item(ns_hl, hl_id, true, nodefault)?;
+    if item.attr_id >= 0 {
+        // Real attributes, so there is no link to follow.
+        return Some(0);
+    }
+    if item.link_global {
+        *ns_hl = Handle::NONE;
+    }
+    (item.link_id >= 0).then_some(item.link_id)
+}
+
+/// What namespace `*ns_hl` says about `hl_id`, asking its `hl_def` callback
+/// (with `link`, the question it is asked) when the cached answer is stale.
+/// `None` when the namespace has nothing to say.
+fn ns_get_item(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: bool) -> Option<ColorItem> {
     // Guards the `hl_def` callback against asking about itself.
     static RECURSIVE: GlobalCell<c_int> = GlobalCell::new(0);
 
     if *ns_hl == Handle::NONE {
         // The default namespace has no provider, so stop here.
-        return -1;
+        return None;
     }
     if *ns_hl < Handle::NONE {
         if ns_hl_active.get() <= Handle::NONE {
-            return -1;
+            return None;
         }
         *ns_hl = ns_hl_active.get();
     }
@@ -269,19 +292,9 @@ pub fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: bool) -> c
     }
 
     if (item.is_default && nodefault) || !valid {
-        return -1;
+        return None;
     }
-    if !link {
-        return item.attr_id;
-    }
-    if item.attr_id >= 0 {
-        // Real attributes, so there is no link to follow.
-        return 0;
-    }
-    if item.link_global {
-        *ns_hl = Handle::NONE;
-    }
-    item.link_id
+    Some(item)
 }
 
 /// What a group the namespace has never been asked about reads as.
@@ -338,10 +351,8 @@ pub fn hl_ns_get_attrs(ns_id: c_int, hl_id: c_int, optional: Option<&mut bool>) 
     if let Some(optional) = optional {
         *optional = opt;
     }
-    if syn_attr <= 0 {
-        return None;
-    }
-    Some(syn_attr2entry(syn_attr))
+    // 0 is the empty attribute set: no attributes either.
+    syn_attr.filter(|&attr| attr > 0).map(syn_attr2entry)
 }
 
 /// The attribute id for builtin group `idx` in namespace `ns_id`.

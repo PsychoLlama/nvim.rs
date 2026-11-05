@@ -44,10 +44,8 @@ use crate::drawscreen::screen_invalidate_highlights;
 use crate::global_cell::GlobalCell;
 use crate::highlight::state::{highlight_attr, highlight_attr_last};
 use crate::highlight_group::{
-    HLF_COUNT, highlight_attr_set_all, highlight_changed, hlf_names, syn_id2name,
+    HLF_COUNT, HighlightError, highlight_attr_set_all, highlight_changed, hlf_names, syn_id2name,
 };
-use crate::message::emsg;
-use crate::os::cshim::gettext;
 use crate::types::DictBuilder;
 use crate::types::{ApiString, Array, HlAttrs, HlEntry, HlKind, Integer, Object, uint32_t};
 use crate::ui::ui_call_hl_attr_define;
@@ -66,11 +64,11 @@ pub mod namespace;
 
 pub use blend::{hl_blend_attrs, hl_invalidate_blends};
 pub use dict::{HLATTRS_DICT_SIZE, dict2hlattrs, hl_get_attr_by_id, hlattrs2dict};
-pub(crate) use namespace::win_hl_attr;
 pub use namespace::{
-    hl_check_ns, hl_get_ui_attr, hl_ns_get_attrs, ns_get_hl, ns_hl_def, update_ns_hl,
-    update_window_hl, win_bg_attr, win_check_ns_hl,
+    hl_check_ns, hl_get_ui_attr, hl_ns_get_attrs, ns_hl_def, update_ns_hl, update_window_hl,
+    win_bg_attr, win_check_ns_hl,
 };
+pub(crate) use namespace::{ns_get_attr, ns_get_link, win_hl_attr};
 
 crate::flag_set! {
     /// The attribute bits an `HlAttrs`' `rgb_ae_attr`/`cterm_ae_attr` carry.
@@ -311,8 +309,9 @@ pub(crate) fn get_attr_entry(mut entry: HlEntry) -> c_int {
         // Out of attribute entries: throw the table away and let every group
         // compute a fresh one. Twice round means we are really out.
         if REBUILDING.get() || retried {
-            let msg = c"E424: Too many different highlighting attributes in use";
-            emsg(gettext(msg));
+            // The attribute table is the boundary of its one refusal: it
+            // says so, and the entry draws with the empty attribute set.
+            HighlightError::TooManyAttributes.report();
             return 0;
         }
         REBUILDING.set(true);

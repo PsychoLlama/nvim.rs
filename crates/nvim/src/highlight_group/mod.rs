@@ -15,6 +15,8 @@ use crate::highlight::{HlAttrFlags, hl_get_ui_attr, syn_attr2entry};
 use crate::message::msg_grid_ref;
 use crate::types::{ApiString, Integer};
 use crate::ui::ui_call_hl_group_set;
+mod error;
+pub(crate) use self::error::HighlightError;
 mod hlf;
 
 pub(crate) use self::hlf::*;
@@ -156,7 +158,7 @@ pub(crate) fn highlight_changed() {
     // Sentinel: used when no highlight is active.
     highlight_attr.with_mut(|attrs| attrs[HLF_NONE as usize] = 0);
 
-    let mut id_s = -1;
+    let mut id_s = None;
     let mut id_snc = 0;
     for hlf in 1..HLF_COUNT {
         let name = hlf_names[hlf as usize];
@@ -169,7 +171,7 @@ pub(crate) fn highlight_changed() {
         if hlf == HLF_SNC {
             id_snc = final_id;
         } else if hlf == HLF_S {
-            id_s = final_id;
+            id_s = Some(final_id);
         }
 
         let attr = hl_get_ui_attr(ns_id.get(), hlf, final_id, hlf == HLF_INACTIVE);
@@ -190,10 +192,8 @@ pub(crate) fn highlight_changed() {
     // with StatusLineNC, one for the StatusLine default.
     let hlcnt = highlight_num_groups();
     open_scratch(hlcnt, 10);
-    if id_s == -1 {
-        // Make id_s always valid, using the last (all-zero) scratch entry.
-        id_s = hlcnt + 10;
-    }
+    // Make id_s always valid, using the last (all-zero) scratch entry.
+    let id_s = id_s.unwrap_or(hlcnt + 10);
     for i in 0..9 {
         let userhl = cstr::owned(format!("User{}", i + 1).as_bytes());
         let id = syn_name2id(&userhl);

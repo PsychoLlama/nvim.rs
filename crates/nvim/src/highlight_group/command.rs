@@ -36,8 +36,10 @@ use crate::types::{OptVal, OptionSetFlags};
 use crate::ui::state::t_colors;
 use crate::ui::{ui_default_colors_set, ui_has, ui_refresh, ui_rgb_attached};
 
+use crate::memory::ThinCString;
+
 use super::{
-    ATTR_NAMES, SG_CTERM, SG_GUI, SG_LINK, cterm_color_index,
+    ATTR_NAMES, HighlightError, SG_CTERM, SG_GUI, SG_LINK, cterm_color_index,
     e_group_has_settings_highlight_link_ignored, group, highlight_attr_set_all, highlight_clear,
     highlight_list_one, highlight_num_groups, hl_has_settings, init_highlight, kColorIdxNone,
     lookup_color, name_to_color, restore_cterm_colors, set_hl_attr, syn_check_group,
@@ -198,14 +200,12 @@ pub(crate) fn do_highlight(text: &CStr, forceit: bool, init: bool) {
         init,
         is_normal_group,
         did_change: false,
-        error: false,
     };
-    if !doclear {
-        state.run(&mut line);
-    }
+    // A refusal stops the key loop; what it stored so far stays.
+    let refused = !doclear && state.run(&mut line).map_err(|why| why.report()).is_err();
 
     let mut did_highlight_changed = false;
-    if !state.error && is_normal_group {
+    if !refused && is_normal_group {
         // Every group may be using "bg" and/or "fg", which just moved.
         highlight_attr_set_all();
 
@@ -324,18 +324,16 @@ struct KeyLoop {
     is_normal_group: bool,
     /// A `gui*=` handler said the value it wrote differs from the old one.
     did_change: bool,
-    error: bool,
 }
 
 impl KeyLoop {
-    fn run(&mut self, line: &mut Line) {
-        // SAFETY: the caller's live line, and the editor's own tables.
+    /// Applies every `key=value` pair, stopping at the first one refused.
+    fn run(&mut self, line: &mut Line) -> Result<(), HighlightError> {
         while !line.at_end() {
             let key_at = line.at;
+            let rest = |line: &Line| ThinCString::from_cstr(line.tail(key_at));
             if line.peek() == b'=' {
-                let arg0 = msg_cstr(line.tail(key_at));
-                semsg!("E415: Unexpected equal sign: {arg0}");
-                break;
+                return Err(HighlightError::UnexpectedEqualSign(rest(line)));
             }
 
             // Isolate the key: "term", "ctermfg", "guibg", ...
@@ -345,8 +343,7 @@ impl KeyLoop {
             }
             let key = line.bytes[start..line.at].to_ascii_uppercase();
             if key.len() > 63 {
-                emsg(gettext(c"E423: Illegal argument"));
-                break;
+                return Err(HighlightError::TooLong);
             }
             line.skip_white();
 
@@ -361,9 +358,7 @@ impl KeyLoop {
             }
 
             if line.peek() != b'=' {
-                let arg0 = msg_cstr(line.tail(key_at));
-                semsg!("E416: Missing equal sign: {arg0}");
-                break;
+                return Err(HighlightError::MissingEqualSign(rest(line)));
             }
             line.at += 1;
             line.skip_white();
@@ -374,11 +369,7 @@ impl KeyLoop {
             let end = if quoted {
                 match line.bytes[arg_at..].iter().position(|&b| b == b'\'') {
                     Some(at) => arg_at + at,
-                    None => {
-                        let arg0 = msg_cstr(line.tail(key_at));
-                        semsg!("E475: Invalid argument: {arg0}");
-                        break;
-                    }
+                    None => return Err(HighlightError::InvalidArgument(rest(line))),
                 }
             } else {
                 let mut at = line.at;
@@ -389,22 +380,17 @@ impl KeyLoop {
             };
             line.at = end;
             if end == arg_at {
-                let arg0 = msg_cstr(line.tail(key_at));
-                semsg!("E417: Missing argument: {arg0}");
-                break;
+                return Err(HighlightError::MissingArgument(rest(line)));
             }
             if end - arg_at > 511 {
-                emsg(gettext(c"E423: Illegal argument"));
-                break;
+                return Err(HighlightError::TooLong);
             }
             let arg = &line.bytes[arg_at..end];
             if quoted {
                 line.at += 1;
             }
 
-            if !self.store(&key, arg, line.tail(key_at)) {
-                break;
-            }
+            self.store(&key, arg, line.tail(key_at))?;
 
             with_group(self.id, |entry| {
                 entry.cleared = false;
@@ -416,38 +402,34 @@ impl KeyLoop {
             });
             line.skip_white();
         }
+        Ok(())
     }
 
-    /// Applies one `key=arg` pair. Answers false to stop the loop, having set
-    /// [`Self::error`] and reported it. `key_start` is the rest of the
-    /// command line from the key, for the messages.
-    fn store(&mut self, key: &[u8], arg: &[u8], key_start: &CStr) -> bool {
+    /// Applies one `key=arg` pair. `key_start` is the rest of the command
+    /// line from the key, for the messages.
+    fn store(&mut self, key: &[u8], arg: &[u8], key_start: &CStr) -> Result<(), HighlightError> {
         match key {
             b"TERM" | b"CTERM" | b"GUI" => self.set_attrs(key, arg),
             b"CTERMFG" | b"CTERMBG" => self.set_cterm_color(key, arg, key_start),
             b"GUIFG" | b"GUIBG" | b"GUISP" => {
                 self.set_gui_color(key, arg);
-                true
+                Ok(())
             }
             // Fonts, and the raw terminal codes, are ignored.
-            b"FONT" | b"START" | b"STOP" => true,
+            b"FONT" | b"START" | b"STOP" => Ok(()),
             b"BLEND" => {
                 let blend = if arg == b"NONE" { -1 } else { parse_int(arg) };
                 with_group(self.id, |entry| entry.blend = blend);
-                true
+                Ok(())
             }
-            _ => {
-                // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let key_start = msg_cstr(key_start);
-                semsg!("E423: Illegal argument: {key_start}");
-                self.error = true;
-                false
-            }
+            _ => Err(HighlightError::IllegalKey(ThinCString::from_cstr(
+                key_start,
+            ))),
         }
     }
 
     /// `term=`/`cterm=`/`gui=`: a comma-separated list of attribute names.
-    fn set_attrs(&mut self, key: &[u8], arg: &[u8]) -> bool {
+    fn set_attrs(&mut self, key: &[u8], arg: &[u8]) -> Result<(), HighlightError> {
         let mut attr = HlAttrFlags::NONE;
         let mut off = 0;
         while off < arg.len() {
@@ -459,9 +441,7 @@ impl KeyLoop {
                     && arg[off..off + name.len()].eq_ignore_ascii_case(name)
             });
             let Some(&(name, flag)) = found else {
-                semsg!("E418: Illegal value: {}", msg_bytes(arg));
-                self.error = true;
-                return false;
+                return Err(HighlightError::IllegalValue(ThinCString::from_bytes(arg)));
             };
             if flag.has(HlAttrFlags::UNDERLINE_MASK) {
                 // The underline styles share a field.
@@ -493,17 +473,21 @@ impl KeyLoop {
                 entry.gui = attr;
             });
         }
-        true
+        Ok(())
     }
 
     /// `ctermfg=`/`ctermbg=`: a number, `fg`/`bg`, or one of the sixteen
     /// colour names.
-    fn set_cterm_color(&mut self, key: &[u8], arg: &[u8], key_start: &CStr) -> bool {
+    fn set_cterm_color(
+        &mut self,
+        key: &[u8],
+        arg: &[u8],
+        key_start: &CStr,
+    ) -> Result<(), HighlightError> {
         let foreground = key[5] == b'F';
         if self.init && group(self.id).set & SG_CTERM as c_int != 0 {
-            return true;
+            return Ok(());
         }
-        // SAFETY: main-thread message and option calls.
         if !self.init {
             with_group(self.id, |entry| entry.set |= SG_CTERM as c_int);
         }
@@ -520,16 +504,12 @@ impl KeyLoop {
             parse_int(arg)
         } else if arg.eq_ignore_ascii_case(b"fg") {
             if cterm_normal_fg_color.get() == 0 {
-                emsg(gettext(c"E419: FG color unknown"));
-                self.error = true;
-                return false;
+                return Err(HighlightError::FgUnknown);
             }
             cterm_normal_fg_color.get() - 1
         } else if arg.eq_ignore_ascii_case(b"bg") {
             if cterm_normal_bg_color.get() <= 0 {
-                emsg(gettext(c"E420: BG color unknown"));
-                self.error = true;
-                return false;
+                return Err(HighlightError::BgUnknown);
             }
             cterm_normal_bg_color.get() - 1
         } else {
@@ -538,11 +518,8 @@ impl KeyLoop {
                 CStr::from_bytes_with_nul(&[name.as_slice(), b"\0"].concat()).map(CStr::to_owned);
             let idx = name.ok().and_then(|name| cterm_color_index(&name));
             let Some(idx) = idx else {
-                // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let key_start = msg_cstr(key_start);
-                semsg!("E421: Color name or number not recognized: {key_start}");
-                self.error = true;
-                return false;
+                let key_start = ThinCString::from_cstr(key_start);
+                return Err(HighlightError::ColorNotRecognized(key_start));
             };
             let (color, bold) = lookup_color(idx, foreground);
             // Set or reset bold to get the light foreground colours some
@@ -571,7 +548,7 @@ impl KeyLoop {
                 self.guess_background(color);
             }
         }
-        true
+        Ok(())
     }
 
     /// A dark `Normal` background means `'background'` should be `dark`; fix
