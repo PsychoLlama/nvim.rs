@@ -19,7 +19,7 @@
 )]
 
 use crate::narrow::as_index;
-use crate::narrow::len_as_int;
+use crate::narrow::count_as_int;
 use core::ffi::c_int;
 
 use super::*;
@@ -28,7 +28,7 @@ impl SynState {
     /// Number of items on the state stack.
     #[inline(always)]
     pub(crate) fn state_len(&self) -> c_int {
-        len_as_int(self.stack.len())
+        count_as_int(self.stack.len())
     }
 
     /// The item at `i` on the state stack (0 is the outermost).

@@ -24,7 +24,7 @@
 )]
 
 use crate::narrow::as_index;
-use crate::narrow::len_as_int;
+use crate::narrow::{count_as_int, len_as_int};
 use crate::types::Handle;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
@@ -179,7 +179,7 @@ static GROUPS: GlobalCell<GroupTable> = GlobalCell::new(GroupTable::new());
 
 /// The number of highlight groups.
 pub(crate) fn highlight_num_groups() -> c_int {
-    GROUPS.with(|table| len_as_int(table.entries.len()))
+    GROUPS.with(|table| count_as_int(table.entries.len()))
 }
 
 /// The id the group at *index* `id` links to, 0 for none.

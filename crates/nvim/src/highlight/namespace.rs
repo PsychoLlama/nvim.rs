@@ -192,7 +192,11 @@ pub fn ns_hl_def(
 /// `*ns_hl` is in/out: a negative value means "whatever is active", which is
 /// filled in. `nodefault` skips definitions the namespace only supplied as a
 /// default.
+#[inline]
 pub(crate) fn ns_get_attr(ns_hl: &mut NS, hl_id: c_int, nodefault: bool) -> Option<c_int> {
+    if !ns_speaks(ns_hl) {
+        return None;
+    }
     let item = ns_get_item(ns_hl, hl_id, false, nodefault)?;
     (item.attr_id >= 0).then_some(item.attr_id)
 }
@@ -204,7 +208,11 @@ pub(crate) fn ns_get_attr(ns_hl: &mut NS, hl_id: c_int, nodefault: bool) -> Opti
 /// `*ns_hl` is in/out as for [`ns_get_attr`], and a `link_global`
 /// definition rewrites it to 0 so that the caller resolves the link against
 /// the global table.
+#[inline]
 pub(crate) fn ns_get_link(ns_hl: &mut NS, hl_id: c_int, nodefault: bool) -> Option<c_int> {
+    if !ns_speaks(ns_hl) {
+        return None;
+    }
     let item = ns_get_item(ns_hl, hl_id, true, nodefault)?;
     if item.attr_id >= 0 {
         // Real attributes, so there is no link to follow.
@@ -216,23 +224,32 @@ pub(crate) fn ns_get_link(ns_hl: &mut NS, hl_id: c_int, nodefault: bool) -> Opti
     (item.link_id >= 0).then_some(item.link_id)
 }
 
+/// Resolves "whatever is active" in `*ns_hl`, and answers whether the
+/// namespace it names can have anything to say: the default namespace has
+/// no provider. The common case, kept out of [`ns_get_item`]'s frame.
+#[inline(always)]
+fn ns_speaks(ns_hl: &mut NS) -> bool {
+    if *ns_hl == Handle::NONE {
+        return false;
+    }
+    if *ns_hl < Handle::NONE {
+        if ns_hl_active.get() <= Handle::NONE {
+            return false;
+        }
+        *ns_hl = ns_hl_active.get();
+    }
+    true
+}
+
 /// What namespace `*ns_hl` says about `hl_id`, asking its `hl_def` callback
 /// (with `link`, the question it is asked) when the cached answer is stale.
-/// `None` when the namespace has nothing to say.
+/// `None` when the namespace has nothing to say; [`ns_speaks`] has already
+/// resolved `*ns_hl` to a namespace that might.
 fn ns_get_item(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: bool) -> Option<ColorItem> {
     // Guards the `hl_def` callback against asking about itself.
     static RECURSIVE: GlobalCell<c_int> = GlobalCell::new(0);
 
-    if *ns_hl == Handle::NONE {
-        // The default namespace has no provider, so stop here.
-        return None;
-    }
-    if *ns_hl < Handle::NONE {
-        if ns_hl_active.get() <= Handle::NONE {
-            return None;
-        }
-        *ns_hl = ns_hl_active.get();
-    }
+    // [`ns_speaks`] has resolved the namespace.
     let ns_id = *ns_hl;
     let key = ColorKey {
         ns_id: ns_id.get(),

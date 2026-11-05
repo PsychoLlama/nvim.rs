@@ -18,8 +18,8 @@
 )]
 
 use crate::narrow::as_index;
-use crate::narrow::len_as_int;
 use crate::narrow::number_as_col;
+use crate::narrow::{count_as_int, len_as_int};
 use core::ffi::c_int;
 
 use crate::charset::display::foldcase;
@@ -199,7 +199,7 @@ impl SynState {
     ) -> Option<(c_int, RegMMatch)> {
         let mut best: Option<(c_int, RegMMatch)> = None;
         let mut idx = start_idx;
-        while idx < len_as_int(self.block().patterns().len()) {
+        while idx < count_as_int(self.block().patterns().len()) {
             let spp = self.block();
             let spp = spp.pattern(idx);
             if c_int::from(spp.sp_type) != SPTYPE_END {

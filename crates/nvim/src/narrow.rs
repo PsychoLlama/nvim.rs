@@ -16,13 +16,18 @@
 //! tree allowed to write the cast, which is what lets every module that calls
 //! it keep clippy's cast family switched on.
 //!
-//! Four classes live here, and each one names the C it stands in for:
+//! Five classes live here, and each one names the C it stands in for:
 //!
 //! * **Wrapping** -- `number_as_int`, `msgpack_uint_as_u32`. The C truncates,
 //!   the truncated value is well defined, and callers can see it.
 //! * **Checked** -- `len_as_int`. The C's `(int)strlen(...)` yields a negative
 //!   length past 2 GiB and every consumer then treats it as a byte count, so
 //!   there is no behaviour to preserve; a panic replaces corruption.
+//! * **Bounded** -- `count_as_int`. The length of a table the editor itself
+//!   caps far below `INT_MAX` (the syntax state stack, the pattern and
+//!   group tables), read on a per-character path where `len_as_int`'s test
+//!   measurably costs (p41-10b: +1.4 % Ir on scrbench's syntax phase).
+//!   Unchecked as the C's `(int)` was; a debug build asserts it.
 //! * **Reinterpreting** -- `as_index`. An index or length the C keeps in an
 //!   `int` and uses as a subscript, `[n]`: never negative, and one that were
 //!   would index far past any table and panic there. Formed once per byte in
@@ -109,6 +114,15 @@ pub(crate) const fn const_len_as_int(len: usize) -> c_int {
 /// reaching an interface that measures it in `int`.
 pub(crate) fn len_as_int(len: usize) -> c_int {
     c_int::try_from(len).unwrap_or_else(|_| panic!("length {len} does not fit in a C int"))
+}
+
+/// The length of a table the editor caps far below `INT_MAX`, as the C
+/// `int` it is counted in, unchecked. See the module docs for which tables
+/// qualify; anything else takes [`len_as_int`].
+#[inline(always)]
+pub(crate) const fn count_as_int(len: usize) -> c_int {
+    debug_assert!(len <= c_int::MAX as usize, "a bounded table past a C int");
+    len as c_int
 }
 
 /// An index or length kept in a C `int`, as the subscript it is: the C's

@@ -19,7 +19,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::narrow::len_as_int;
+use crate::narrow::count_as_int;
 use crate::narrow::number_as_col;
 use core::ffi::c_int;
 
@@ -382,7 +382,7 @@ impl SynState {
         self.next_match.idx = 0; // no match in this line yet
         self.next_match.col = ColNr::MAX;
 
-        let mut idx = len_as_int(block.patterns().len());
+        let mut idx = count_as_int(block.patterns().len());
         while idx > 0 {
             idx -= 1;
             // Everything the loop needs is copied out first: `find_endpos`

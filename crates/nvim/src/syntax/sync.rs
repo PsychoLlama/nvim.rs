@@ -17,7 +17,7 @@
 )]
 
 use crate::message_fmt::msg_bytes;
-use crate::narrow::len_as_int;
+use crate::narrow::count_as_int;
 use crate::option::SavedCpo;
 use crate::regexp::{char_delim, skip_regexp_at};
 use crate::semsg;
@@ -122,7 +122,7 @@ impl SynState {
 
         // Restrict the search for the end of the comment to "maxlines".
         if find_start_comment(self.block().b_syn_sync_maxlines as c_int).is_some() {
-            let mut idx = len_as_int(self.block().patterns().len());
+            let mut idx = count_as_int(self.block().patterns().len());
             while idx > 0 {
                 idx -= 1;
                 let block = self.block();

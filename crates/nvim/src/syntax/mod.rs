@@ -63,7 +63,7 @@ use crate::message::{
     msg_putchar, msg_str, msg_str_hl, msg_title,
 };
 use crate::narrow::as_index;
-use crate::narrow::len_as_int;
+use crate::narrow::count_as_int;
 use crate::winlayer::BufId;
 use crate::winlayer::WinId;
 
@@ -480,13 +480,13 @@ impl SynBlockRef {
 /// Number of patterns in [`cur_syn_block`].
 #[inline]
 pub(crate) fn cur_pattern_count() -> ::core::ffi::c_int {
-    len_as_int(cur_syn_block().patterns().len())
+    count_as_int(cur_syn_block().patterns().len())
 }
 
 /// Number of clusters in [`cur_syn_block`].
 #[inline]
 pub(crate) fn cur_cluster_count() -> ::core::ffi::c_int {
-    len_as_int(cur_syn_block().clusters().len())
+    count_as_int(cur_syn_block().clusters().len())
 }
 /// A syntax block — a window's or a buffer's `SynBlock`, whose holder has
 /// promised it outlives the value.
