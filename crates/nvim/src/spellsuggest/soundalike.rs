@@ -144,11 +144,10 @@ pub(super) fn add_sound_suggest(
         }
     }
 
-    let sfwordnr = soundfold_find(slang, goodword);
-    if sfwordnr < 0 {
+    let Some(sfwordnr) = soundfold_find(slang, goodword) else {
         internal_error(c"add_sound_suggest()");
         return;
-    }
+    };
 
     // Walk the list of word numbers that produce this soundfold.
     let sugbuf = slang
@@ -337,9 +336,9 @@ fn emit_word(
     }
 }
 
-/// Find `word` in the sound-fold tree and return its word number, or -1
+/// Find `word` in the sound-fold tree and return its word number, or `None`
 /// when it is not there. `word` ends at its end or at a NUL.
-pub(super) fn soundfold_find(slang: &SpellLang, word: &[u8]) -> c_int {
+pub(super) fn soundfold_find(slang: &SpellLang, word: &[u8]) -> Option<c_int> {
     let tree = slang.sl_sound_tree.view();
     let byte = |at: usize| word.get(at).copied().unwrap_or(0);
 
@@ -358,7 +357,7 @@ pub(super) fn soundfold_find(slang: &SpellLang, word: &[u8]) -> c_int {
         let mut c = byte(wlen);
         if tree.ends_word(arridx) {
             if c == NUL as u8 {
-                return wordnr;
+                return Some(wordnr);
             }
 
             // Skip the zeros; there can be several.
@@ -366,13 +365,13 @@ pub(super) fn soundfold_find(slang: &SpellLang, word: &[u8]) -> c_int {
             arridx += ends;
             len -= ends;
             if len == 0 {
-                return -1; // no children, the word should have ended
+                return None; // no children, the word should have ended
             }
             wordnr += 1;
         }
 
         if c == NUL as u8 {
-            return -1; // the word ends but the tree does not
+            return None; // the word ends but the tree does not
         }
 
         // Linear search over the accepted bytes, counting the words
@@ -387,11 +386,11 @@ pub(super) fn soundfold_find(slang: &SpellLang, word: &[u8]) -> c_int {
             arridx += 1;
             len -= 1;
             if len == 0 {
-                return -1; // ran out of bytes without finding it
+                return None; // ran out of bytes without finding it
             }
         }
         if tree.byte(arridx) != c {
-            return -1;
+            return None;
         }
 
         arridx = tree.child_node(arridx);

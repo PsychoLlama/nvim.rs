@@ -71,14 +71,14 @@ fn a_word_number_walks_back_to_its_letters() {
     for (nr, word) in [(0, &b"ab"[..]), (1, b"ac"), (2, b"b")] {
         let (letters, _, _) = word_number_to_letters(&lang, nr);
         assert_eq!(until_nul(&letters), word);
-        assert_eq!(soundfold_find(&lang, word), nr);
+        assert_eq!(soundfold_find(&lang, word), Some(nr));
     }
     // Not words: a prefix, a word continued, a byte the tree lacks.
-    assert_eq!(soundfold_find(&lang, b"a"), -1);
-    assert_eq!(soundfold_find(&lang, b"abc"), -1);
-    assert_eq!(soundfold_find(&lang, b"z"), -1);
+    assert_eq!(soundfold_find(&lang, b"a"), None);
+    assert_eq!(soundfold_find(&lang, b"abc"), None);
+    assert_eq!(soundfold_find(&lang, b"z"), None);
     // The word ends at a NUL as well as at its end.
-    assert_eq!(soundfold_find(&lang, b"ac\0zz"), 1);
+    assert_eq!(soundfold_find(&lang, b"ac\0zz"), Some(1));
 }
 
 #[test]
