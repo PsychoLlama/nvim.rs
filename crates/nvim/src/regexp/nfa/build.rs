@@ -91,16 +91,22 @@ struct Frag {
 
 /// Take the next state of the program.
 ///
-/// Declined once the counting pass's estimate is used up: the pattern is
-/// given up on silently, as upstream does.
-fn state(states: &mut NfaStates, c: c_int, out: StateId, out1: StateId) -> Parsed<StateId> {
+/// `None` once the counting pass's estimate is used up, which declines the
+/// pattern silently, as upstream does (see [`DECLINED`]).
+fn state(states: &mut NfaStates, c: c_int, out: StateId, out1: StateId) -> Option<StateId> {
     if states.states.len() >= usize::try_from(states.count).unwrap_or(0) {
-        return Err(CompileError::Declined);
+        return None;
     }
     let id = StateId::new(states.states.len());
     states.states.push(NfaState::new(c, out, out1));
-    Ok(id)
+    Some(id)
 }
+
+/// What running out of states answers. The two helpers here answer
+/// `Option`s, which travel in registers, and the walk below turns them into
+/// a refusal only where one has happened.
+const DECLINED: CompileError = CompileError::Declined;
+const CANNOT_POP: CompileError = CompileError::CannotPop;
 
 /// A one-element patch list over the edge `slot`.
 fn list1(states: &mut NfaStates, slot: Slot) -> Slot {
@@ -149,10 +155,10 @@ impl Stack {
         }
     }
 
-    /// Pop, refusing with E874 when the program asks for an operand that is
-    /// not there.
-    fn pop(&mut self) -> Parsed<Frag> {
-        self.frags.pop().ok_or(CompileError::CannotPop)
+    /// Pop; `None` (E874, [`CANNOT_POP`]) when the program asks for an
+    /// operand that is not there.
+    fn pop(&mut self) -> Option<Frag> {
+        self.frags.pop()
     }
 }
 
@@ -306,16 +312,16 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> P
             Ok(NfaOp::Concat) => {
                 // Two fragments run one after the other: the first's loose
                 // ends go to the second's start.
-                let e2 = stack.pop()?;
-                let e1 = stack.pop()?;
+                let e2 = stack.pop().ok_or(CANNOT_POP)?;
+                let e1 = stack.pop().ok_or(CANNOT_POP)?;
                 patch(states, e1.out, e2.start);
                 stack.push(e1.start, e2.out);
             }
             Ok(NfaOp::Or) => {
                 // A choice between two fragments.
-                let e2 = stack.pop()?;
-                let e1 = stack.pop()?;
-                let s = state(states, NfaOp::Split.code(), e1.start, e2.start)?;
+                let e2 = stack.pop().ok_or(CANNOT_POP)?;
+                let e1 = stack.pop().ok_or(CANNOT_POP)?;
+                let s = state(states, NfaOp::Split.code(), e1.start, e2.start).ok_or(DECLINED)?;
                 stack.push(s, append(states, e1.out, e2.out));
             }
             // A repeat is a split whose taken branch loops back to it; `\?`
@@ -325,14 +331,14 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> P
                 repeat
                 @ (NfaOp::Star | NfaOp::StarNongreedy | NfaOp::Quest | NfaOp::QuestNongreedy),
             ) => {
-                let e = stack.pop()?;
+                let e = stack.pop().ok_or(CANNOT_POP)?;
                 let greedy = matches!(repeat, NfaOp::Star | NfaOp::Quest);
                 let (out, out1) = if greedy {
                     (e.start, StateId::NONE)
                 } else {
                     (StateId::NONE, e.start)
                 };
-                let s = state(states, NfaOp::Split.code(), out, out1)?;
+                let s = state(states, NfaOp::Split.code(), out, out1).ok_or(DECLINED)?;
                 let exit = list1(states, if greedy { Slot::out1(s) } else { Slot::out(s) });
                 if matches!(repeat, NfaOp::Star | NfaOp::StarNongreedy) {
                     patch(states, e.out, s);
@@ -346,8 +352,9 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> P
                 // off with the state the matcher stops at, and point the
                 // opening state's `out1` at it so a walk can skip over the
                 // whole collection.
-                let e = stack.pop()?;
-                let s = state(states, NfaOp::EndColl.code(), StateId::NONE, StateId::NONE)?;
+                let e = stack.pop().ok_or(CANNOT_POP)?;
+                let s = state(states, NfaOp::EndColl.code(), StateId::NONE, StateId::NONE)
+                    .ok_or(DECLINED)?;
                 patch(states, e.out, s);
                 states.states[e.start.index()].out1 = s;
                 stack.push(e.start, list1(states, Slot::out(s)));
@@ -355,8 +362,8 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> P
             Ok(NfaOp::Range) => {
                 // Two members become a range: their character values move
                 // into `val` and the opcodes say which end each one is.
-                let e2 = stack.pop()?;
-                let e1 = stack.pop()?;
+                let e2 = stack.pop().ok_or(CANNOT_POP)?;
+                let e1 = stack.pop().ok_or(CANNOT_POP)?;
                 // Both fragments are single member states.
                 for (end, op) in [(e2.start, NfaOp::RangeMax), (e1.start, NfaOp::RangeMin)] {
                     let member = &mut states.states[end.index()];
@@ -376,8 +383,9 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> P
                 let mut first_out = Slot::END;
                 while n > 0 {
                     n -= 1;
-                    let e = stack.pop()?;
-                    let new = state(states, NfaOp::Split.code(), e.start, StateId::NONE)?;
+                    let e = stack.pop().ok_or(CANNOT_POP)?;
+                    let new = state(states, NfaOp::Split.code(), e.start, StateId::NONE)
+                        .ok_or(DECLINED)?;
                     if first_out == Slot::END {
                         first_out = e.out;
                     }
@@ -405,14 +413,17 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> P
                     NfaOp::PrevAtomJustBefore | NfaOp::PrevAtomJustBeforeNeg
                 );
                 let pattern = look == NfaOp::PrevAtomLikePattern;
-                let e = stack.pop()?;
-                let end = state(states, end_state.code(), StateId::NONE, StateId::NONE)?;
-                let s = state(states, start_state.code(), e.start, end)?;
+                let e = stack.pop().ok_or(CANNOT_POP)?;
+                let end = state(states, end_state.code(), StateId::NONE, StateId::NONE)
+                    .ok_or(DECLINED)?;
+                let s = state(states, start_state.code(), e.start, end).ok_or(DECLINED)?;
                 if pattern {
                     // `\@>` keeps what it matched, so the sub-match's end is
                     // recorded and the outer match resumes past it.
-                    let skip = state(states, NfaOp::Skip.code(), StateId::NONE, StateId::NONE)?;
-                    let zend = state(states, NfaOp::Zend.code(), end, StateId::NONE)?;
+                    let skip = state(states, NfaOp::Skip.code(), StateId::NONE, StateId::NONE)
+                        .ok_or(DECLINED)?;
+                    let zend =
+                        state(states, NfaOp::Zend.code(), end, StateId::NONE).ok_or(DECLINED)?;
                     states.states[end.index()].out = skip;
                     patch(states, e.out, zend);
                     stack.push(s, list1(states, Slot::out(skip)));
@@ -443,11 +454,12 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> P
                 let inner = if stack.frags.is_empty() {
                     None
                 } else {
-                    Some(stack.pop()?)
+                    Some(stack.pop().ok_or(CANNOT_POP)?)
                 };
                 let start = inner.map_or(StateId::NONE, |e| e.start);
-                let s = state(states, item, start, StateId::NONE)?;
-                let s1 = state(states, mclose.code(), StateId::NONE, StateId::NONE)?;
+                let s = state(states, item, start, StateId::NONE).ok_or(DECLINED)?;
+                let s1 =
+                    state(states, mclose.code(), StateId::NONE, StateId::NONE).ok_or(DECLINED)?;
                 match inner {
                     None => {
                         let edge = list1(states, Slot::out(s));
@@ -468,8 +480,9 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> P
             // A back-reference matches a run whose length is only known at
             // match time, so an `NFA_SKIP` follows it to consume the rest.
             Ok(reference) if reference.is_reference() => {
-                let s = state(states, item, StateId::NONE, StateId::NONE)?;
-                let s1 = state(states, NfaOp::Skip.code(), StateId::NONE, StateId::NONE)?;
+                let s = state(states, item, StateId::NONE, StateId::NONE).ok_or(DECLINED)?;
+                let s1 = state(states, NfaOp::Skip.code(), StateId::NONE, StateId::NONE)
+                    .ok_or(DECLINED)?;
                 let edge = list1(states, Slot::out(s));
                 patch(states, edge, s1);
                 stack.push(s, list1(states, Slot::out(s1)));
@@ -478,7 +491,7 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> P
             // position assertion — is one state that stands alone. The
             // assertions keep their operand in `val`.
             _ => {
-                let s = state(states, item, StateId::NONE, StateId::NONE)?;
+                let s = state(states, item, StateId::NONE, StateId::NONE).ok_or(DECLINED)?;
                 if operand != 0 {
                     states.states[s.index()].val = operand;
                 }
@@ -494,7 +507,7 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> P
         return Ok(StateId::NONE);
     }
 
-    let e = stack.pop()?;
+    let e = stack.pop().ok_or(CANNOT_POP)?;
     if !stack.frags.is_empty() {
         return Err(CompileError::StatesLeft);
     }

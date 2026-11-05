@@ -255,53 +255,37 @@ pub(crate) fn vim_regcomp_ext(
     // being compiled, so the compiler reads the current buffer's.
     let buf = Buf::current();
 
-    let mut program = if engine != BACKTRACKING_ENGINE {
-        let auto = if engine == AUTOMATIC_ENGINE {
-            RE_AUTO
-        } else {
-            0
-        };
-        nfa_regcomp(&mut RegCompiler::new(expr, re_flags + auto, buf, extmatch))
-            .map(|mut nfa| {
-                nfa.automatic = engine == AUTOMATIC_ENGINE;
-                Program::Nfa(nfa)
-            })
-            .map_err(|err| (Engine::Nfa, err))
+    let program = if engine == BACKTRACKING_ENGINE {
+        bt_compile(expr, re_flags, buf, extmatch)?
     } else {
-        bt_regcomp(&mut RegCompiler::new(expr, re_flags, buf, extmatch))
-            .map(Program::Bt)
-            .map_err(|err| (Engine::Backtracking, err))
-    };
-    if let Err((Engine::Nfa, err)) = &program
-        && engine == AUTOMATIC_ENGINE
-    {
-        // Only retry when the NFA engine said nothing: a refusal it said
-        // means the pattern is bad, not merely too much for that engine.
-        // Upstream told the two apart by counting messages, so a refusal
-        // said while messages are off is retried too.
-        let said = !matches!(err, CompileError::Declined) && !emsg_not_now();
-        err.report();
-        if said {
-            return Err(err.refused(Engine::Nfa));
-        }
-        engine = BACKTRACKING_ENGINE;
-        if p_verbose() > 0 as OptInt {
-            verbose_enter();
-            msg_str(gettext(
-                c"Switching to backtracking RE engine for pattern: ",
-            ));
-            msg_str(expr);
-            verbose_leave();
-        }
-        program = bt_regcomp(&mut RegCompiler::new(expr, re_flags, buf, extmatch))
-            .map(Program::Bt)
-            .map_err(|err| (Engine::Backtracking, err));
-    }
-    let program = match program {
-        Ok(program) => program,
-        Err((refusing, err)) => {
-            err.report();
-            return Err(err.refused(refusing));
+        let automatic = engine == AUTOMATIC_ENGINE;
+        let auto = if automatic { RE_AUTO } else { 0 };
+        match nfa_regcomp(&mut RegCompiler::new(expr, re_flags + auto, buf, extmatch)) {
+            Ok(mut nfa) => {
+                nfa.automatic = automatic;
+                Program::Nfa(nfa)
+            }
+            Err(err) => {
+                // Only retry when the NFA engine said nothing: a refusal it
+                // said means the pattern is bad, not merely too much for that
+                // engine. Upstream told the two apart by counting messages,
+                // so a refusal said while messages are off is retried too.
+                let said = !matches!(err, CompileError::Declined) && !emsg_not_now();
+                err.report();
+                if said || !automatic {
+                    return Err(err.refused(Engine::Nfa));
+                }
+                engine = BACKTRACKING_ENGINE;
+                if p_verbose() > 0 as OptInt {
+                    verbose_enter();
+                    msg_str(gettext(
+                        c"Switching to backtracking RE engine for pattern: ",
+                    ));
+                    msg_str(expr);
+                    verbose_leave();
+                }
+                bt_compile(expr, re_flags, buf, extmatch)?
+            }
         }
     };
     Ok(OwnedProg(Box::new(Compiled {
@@ -309,6 +293,25 @@ pub(crate) fn vim_regcomp_ext(
         re_flags,
         program,
     })))
+}
+
+/// [`bt_regcomp`], saying why when it refuses. A refusal found after the
+/// program outgrew the node offsets is said first and then the length:
+/// upstream checked the length on the way out.
+fn bt_compile(
+    expr: &CStr,
+    re_flags: c_int,
+    buffer: Buf,
+    extmatch: c_int,
+) -> Result<Program, Refused> {
+    let mut rc = RegCompiler::new(expr, re_flags, buffer, extmatch);
+    bt_regcomp(&mut rc).map(Program::Bt).map_err(|err| {
+        err.report();
+        if rc.code.too_long && !matches!(err, CompileError::TooLong) {
+            CompileError::TooLong.report();
+        }
+        err.refused(Engine::Backtracking)
+    })
 }
 
 /// Recompile the NFA program `prog` for the backtracking engine, which is

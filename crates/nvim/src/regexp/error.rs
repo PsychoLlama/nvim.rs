@@ -57,7 +57,7 @@ pub(crate) enum Engine {
 
 /// Why a pattern does not compile. A character in a variant is the byte the
 /// message shows.
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum CompileError {
     /// `\z(` past the ninth.
     TooManyZGroups,
@@ -103,9 +103,6 @@ pub(crate) enum CompileError {
     TooManyBrackets,
     /// The program does not fit the backtracker's offsets.
     TooLong,
-    /// The program got too long while another refusal was being found:
-    /// both are said, that one first.
-    TooLongAfter(Box<CompileError>),
     /// A group or an alternation inside `\%[]`.
     InvalidInOptional(Spelled),
     /// The parser lost track of where an alternative ends.
@@ -190,10 +187,6 @@ impl CompileError {
     pub(crate) fn report(&self) {
         match self {
             Self::Declined => {}
-            Self::TooLongAfter(first) => {
-                first.report();
-                Self::TooLong.report();
-            }
             Self::RepetitionLimits(spelled) => {
                 Self::BraceSyntax(*spelled).report();
                 emsg_text(tr!("E870: (NFA regexp) Error reading repetition limits"));
@@ -208,7 +201,7 @@ impl CompileError {
     /// `rc_did_emsg` records. The two engines differ on `\%.5l` and on `~`.
     pub(crate) fn blames_pattern(&self, engine: Engine) -> bool {
         match self {
-            Self::TooLongAfter(_) | Self::RepetitionLimits(_) => true,
+            Self::RepetitionLimits(_) => true,
             Self::NumberAfterDot(_) | Self::NoPreviousSubstitute => engine == Engine::Backtracking,
             Self::EngineNotAtStart(_)
             | Self::Misplaced(_)
@@ -298,7 +291,7 @@ impl fmt::Display for CompileError {
                 tr!("E71: Invalid character after {prefix}%")
             }
             Self::TooManyBrackets => tr!("E76: Too many ["),
-            Self::TooLong | Self::TooLongAfter(_) => tr!("E339: Pattern too long"),
+            Self::TooLong => tr!("E339: Pattern too long"),
             Self::InvalidInOptional(spelled) => {
                 let prefix = spelled.prefix();
                 tr!("E369: Invalid item in {prefix}%[]")

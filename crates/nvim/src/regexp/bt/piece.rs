@@ -397,14 +397,11 @@ pub(crate) fn bt_regcomp(rc: &mut RegCompiler) -> Compiled<BtRegProg> {
     // is the outlier, and a reallocation covers it.
     rc.code.reserve(4 * rc.pattern_len + 32);
     rc.code.byte(REGMAGIC);
-    // A refusal found after the program got too long is said first, and
-    // then the length -- upstream checked the length on the way out.
-    match reg(rc, REG_NOPAREN, &mut flags) {
-        Err(CompileError::TooLong) => return Err(CompileError::TooLong),
-        Err(err) if rc.code.too_long => return Err(CompileError::TooLongAfter(Box::new(err))),
-        Err(err) => return Err(err),
-        Ok(_) if rc.code.too_long => return Err(CompileError::TooLong),
-        Ok(_) => {}
+    // A refusal found after the program got too long is said with the
+    // length after it: `bt_compile` reads `too_long` for that.
+    reg(rc, REG_NOPAREN, &mut flags)?;
+    if rc.code.too_long {
+        return Err(CompileError::TooLong);
     }
     let mut regflags = rc.flags;
     if flags & HASNL != 0 {

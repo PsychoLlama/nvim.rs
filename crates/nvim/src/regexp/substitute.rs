@@ -122,6 +122,7 @@ impl<'d> Out<'d> {
 
     /// Is there room for `n` more bytes? The measuring pass has no buffer to
     /// overrun and always says yes.
+    #[inline(always)]
     fn room(&self, n: usize) -> bool {
         !matches!(&self.dest, Some(dest) if self.at + n > dest.len())
     }
@@ -143,6 +144,7 @@ impl<'d> Out<'d> {
     /// that [`Out::push_composing`] can write a tail after it. Both are then
     /// stepped over by the closing `skip(1)`, which is how upstream's
     /// `dst += charlen - 1; …; dst++` reads.
+    #[inline(always)]
     fn push_char(&mut self, c: c_int) -> bool {
         let charlen = usize::try_from(utf_char2len(c)).unwrap_or(1);
         if !self.room(charlen) {
@@ -157,6 +159,7 @@ impl<'d> Out<'d> {
 
     /// Append `tail`, the composing characters that follow the base
     /// character [`Out::push_char`] just wrote, after it.
+    #[inline(always)]
     fn push_composing(&mut self, tail: &[u8]) -> bool {
         if !self.room(tail.len()) {
             return false;
