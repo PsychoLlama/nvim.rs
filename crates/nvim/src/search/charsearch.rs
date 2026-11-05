@@ -14,7 +14,7 @@ use crate::mbyte::MAX_SCHAR_SIZE;
 use crate::mbyte::{c_cluster_len, char_len, encode_char};
 use crate::narrow::len_as_int;
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, Failed, NUL};
+use crate::types::{CpoFlag, NUL};
 use crate::winlayer::Win;
 use core::ffi::c_int;
 
@@ -93,8 +93,8 @@ pub fn set_csearch_until(t_cmd: c_int) {
 ///
 /// With `t_cmd` the cursor lands just before the character rather than on
 /// it. A NUL `cmd_arg.nchar` repeats the last character search instead of
-/// starting a new one — that is `;` and `,`.
-pub fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), Failed> {
+/// starting a new one — that is `;` and `,`. Not finding it says nothing.
+pub(crate) fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), NoMatch> {
     let mut c = cmd_arg.nchar.code(); // char to search for
     let mut dir = cmd_arg.arg; // true for searching forward
     let mut t_cmd = t_cmd;
@@ -126,7 +126,7 @@ pub fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), Failed> {
     } else {
         // Repeat the previous search.
         if lastc.get() as c_int == NUL && lastc_bytelen.get() <= 1 {
-            return Err(Failed);
+            return Err(NoMatch);
         }
         dir = if dir != 0 {
             -(lastcdir.get() as c_int) // repeat in the opposite direction
@@ -164,11 +164,11 @@ pub fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), Failed> {
                 let at = usize::try_from(col).unwrap_or(0);
                 col += c_cluster_len(line.get(at..).unwrap_or_default()) as c_int;
                 if col >= len {
-                    return Err(Failed);
+                    return Err(NoMatch);
                 }
             } else {
                 if col == 0 {
-                    return Err(Failed);
+                    return Err(NoMatch);
                 }
                 col -= head_off(line, col as usize - 1) as c_int + 1;
             }

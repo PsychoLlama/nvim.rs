@@ -26,7 +26,7 @@ use crate::memline::Lines;
 use crate::option::split_option_part;
 use crate::path::ExpandFlags;
 use crate::strings::escaped_bytes;
-use crate::types::{FAIL, Failed, IOSIZE, ShmFlag};
+use crate::types::{Failed, IOSIZE, ShmFlag};
 use crate::winlayer::BufId;
 use crate::winlayer::{Buf, Win, first_buffer, first_window};
 use std::ffi::OsStr;
@@ -504,14 +504,15 @@ pub(crate) fn get_next_default_completion(
             // added a word that was at the beginning of the line.
             // A copy: the search must not hold the completion state.
             let pat = compl_pattern().to_vec();
-            found_new_match = search_for_exact_line(ins_buf, &mut pos, dir, &pat);
+            found_new_match =
+                search_for_exact_line(ins_buf, &mut pos, dir, &pat).map_err(|_| Failed);
         } else {
             let pat = compl_pattern().to_vec();
             let flags = SEARCH_KEEP + SEARCH_NFMSG;
             let found = searchit(
                 None, ins_buf, &mut pos, None, dir, &pat, 1, flags, RE_LAST, None,
             );
-            found_new_match = if found == FAIL { Err(Failed) } else { Ok(()) };
+            found_new_match = found.map(drop).map_err(|_| Failed);
         }
         drop(silenced);
         *st.cur_match_pos() = pos;

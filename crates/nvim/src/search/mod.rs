@@ -44,7 +44,7 @@ use crate::message::state::{
     bot_top_msg, called_emsg, cmd_silent, msg_ext_overwrite, msg_hist_off, msg_nowait, msg_row,
     msg_scrolled, msg_silent, top_bot_msg,
 };
-use crate::message::{e_interr, e_nopresub, e_noprevre, e_patnotf2};
+use crate::message::{e_interr, e_nopresub, e_noprevre};
 use crate::message::{
     emsg, fit_middle, give_warning, iemsg, messaging, msg, msg_check, msg_clr_eos, msg_display,
     msg_end, msg_ext_set_kind, msg_fit_head, msg_home_replace, msg_prt_line, msg_putchar,
@@ -91,10 +91,12 @@ pub const SEARCH_HL_PRIORITY: ::core::ffi::c_int = 0;
 pub const SEARCH_NFMSG: ::core::ffi::c_int = 8;
 
 // The carve of the transpiled module; see each child's docs.
+mod error;
+pub(crate) use self::error::*;
 mod pattern;
 pub use self::pattern::*;
 mod find;
-pub use self::find::*;
+pub(crate) use self::find::*;
 mod charsearch;
 pub use self::charsearch::*;
 mod command;
@@ -106,7 +108,7 @@ pub use self::includes::*;
 mod comment;
 pub use self::comment::*;
 mod select;
-pub use self::select::*;
+pub(crate) use self::select::*;
 mod matchpair;
 pub use self::matchpair::*;
 mod stat;

@@ -371,7 +371,7 @@ pub(crate) fn find_decl(word: &[u8], locally: bool, thisblock: bool, flags_arg: 
         let re = RE_LAST as c_int;
         let hit = searchit(win, buf, &mut pos, None, FORWARD, &pat, 1, opts, re, None);
         Win::current().w_cursor = pos;
-        found = hit != 0;
+        found = hit.is_ok();
         if Win::current().w_cursor.lnum >= old_pos.lnum {
             // Found it below the cursor, which is not a declaration of
             // what is under the cursor.

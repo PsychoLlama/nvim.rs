@@ -29,7 +29,7 @@ use crate::search::{
     SEARCH_OPT, SEARCH_PEEK, SEARCH_REV, SEARCH_START, SEARCH_STAT_BUF_LEN,
     SEARCH_STAT_DEF_TIMEOUT,
 };
-use crate::types::{CmdModFlags, CpoFlag, FAIL, NUL, ShmFlag};
+use crate::types::{CmdModFlags, CpoFlag, NUL, ShmFlag};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
@@ -44,6 +44,15 @@ use core::ffi::{c_char, c_int};
 /// statistics are written into its tail, right-aligned, by
 /// [`cmdline_search_stat`](super::cmdline_search_stat).
 type Echo = Vec<u8>;
+
+/// What a search command found.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Hit {
+    /// A match.
+    Match,
+    /// A match, with a line offset added: the motion is linewise.
+    Linewise,
+}
 
 /// Where the pattern to search for comes from.
 enum Source {
@@ -65,7 +74,8 @@ enum Source {
 /// `RE_LAST`. Only when there is no search pattern at all does the
 /// `:substitute` pattern get named explicitly.
 ///
-/// Answers `None` when neither remembered pattern exists (E35).
+/// Answers `None` when neither remembered pattern exists, which the caller
+/// says (E35).
 fn pattern_to_search(first: u8, delim: c_int) -> Option<Source> {
     if !(first == NUL as u8 || as_char(first) == delim) {
         return Some(Source::Typed);
@@ -73,11 +83,7 @@ fn pattern_to_search(first: u8, delim: c_int) -> Option<Source> {
     if has_last_search_pattern() {
         return Some(Source::Remembered);
     }
-    let Some(subst) = substitute_pattern() else {
-        emsg(gettext(e_noprevre));
-        return None;
-    };
-    Some(Source::Substitute(subst))
+    substitute_pattern().map(Source::Substitute)
 }
 
 /// `byte` as upstream compares it with a delimiter: a `char`, which is
@@ -321,9 +327,8 @@ fn back_off_start(pos: &mut Pos, off: i64) {
 
 /// Apply the offset to the position a search found.
 ///
-/// Answers 2 when a *line* offset was added (which the caller reports back
-/// as "found, and the motion is linewise"), 1 otherwise.
-fn add_offset(pos: &mut Pos, off: SearchOffset) -> c_int {
+/// Answers [`Hit::Linewise`] when a *line* offset was added.
+fn add_offset(pos: &mut Pos, off: SearchOffset) -> Hit {
     if off.line {
         // Add the offset to the line number.
         let lnum = i64::from(pos.lnum) + off.off;
@@ -336,7 +341,7 @@ fn add_offset(pos: &mut Pos, off: SearchOffset) -> c_int {
             number_as_lnum(lnum)
         };
         pos.col = ColNr::ZERO;
-        return 2; // pattern found, line offset added
+        return Hit::Linewise;
     }
     if pos.col < ColNr::new(MAXCOL - 2) {
         // Just in case.
@@ -359,7 +364,7 @@ fn add_offset(pos: &mut Pos, off: SearchOffset) -> c_int {
             }
         }
     }
-    1
+    Hit::Match
 }
 
 /// Search forward for `pattern` from the cursor, as `/pattern/` would but
@@ -367,12 +372,17 @@ fn add_offset(pos: &mut Pos, off: SearchOffset) -> c_int {
 /// Answers whether it was found; the cursor is on the match when it was.
 pub(crate) fn search_forward_keep(pattern: &[u8]) -> bool {
     let slash = c_int::from(b'/');
-    do_search(None, slash, slash, pattern, 1, SEARCH_KEEP, None) != 0
+    do_search(None, slash, slash, pattern, 1, SEARCH_KEEP, None).is_some()
 }
 
 /// [`do_search`] once for the pattern that starts `text` and ends at its
 /// first NUL (or the end), with no operator and no extra arguments.
-pub(crate) fn do_search_in(text: &[u8], dirc: c_int, search_delim: c_int, options: c_int) -> c_int {
+pub(crate) fn do_search_in(
+    text: &[u8],
+    dirc: c_int,
+    search_delim: c_int,
+    options: c_int,
+) -> Option<Hit> {
     let pat = cstr::until_nul(text);
     do_search(None, dirc, search_delim, pat, 1, options, None)
 }
@@ -387,9 +397,9 @@ pub(crate) fn do_search_in(text: &[u8], dirc: c_int, search_delim: c_int, option
 /// `off.off == 0`) this makes the motion linewise without moving the
 /// match position.
 ///
-/// Answers 0 for failure, 1 for found, and 2 for found with a line offset
-/// added.
-pub fn do_search(
+/// Answers what was found, or `None` -- having said why, as `options`
+/// asks.
+pub(crate) fn do_search(
     mut op: Option<&mut OpArg>,
     dirc: c_int,
     search_delim: c_int,
@@ -397,7 +407,7 @@ pub fn do_search(
     count: c_int,
     options: c_int,
     mut sia: Option<&mut SearchItArg>,
-) -> c_int {
+) -> Option<Hit> {
     searchcmdlen.set(0);
     // A line offset is not remembered; this is vi compatible.
     let mut off = search_offset();
@@ -461,7 +471,7 @@ pub fn do_search(
         set_no_hlsearch(false);
     }
 
-    let mut retval = 0;
+    let mut retval = Hit::Match;
     // Whether a `;` follows the offset, i.e. whether another leg comes next.
     let chained = |text: &[u8], at: usize| cstr::byte_at(text, at) == b';';
 
@@ -472,6 +482,7 @@ pub fn do_search(
             let mut show_top_bot_msg = false;
 
             let Some(source) = pattern_to_search(cstr::byte_at(&text, at), delim) else {
+                emsg(gettext(e_noprevre));
                 break 'end false;
             };
             // The pattern searched for, as a span of `text` or as the
@@ -564,7 +575,7 @@ pub fn do_search(
             if !shortmess(ShmFlag::SEARCH) && wrapped {
                 show_top_bot_msg = true;
             }
-            if c == FAIL {
+            if c.is_err() {
                 break 'end false;
             }
 
@@ -574,7 +585,7 @@ pub fn do_search(
             {
                 op.inclusive = true; // 'e' includes the last character
             }
-            retval = 1; // pattern found
+            retval = Hit::Match;
 
             if wrapped {
                 fire_autocmds(AutoEvent::SearchWrapped, false, None);
@@ -629,13 +640,10 @@ pub fn do_search(
         true
     };
 
-    if !found {
-        retval = 0;
-    }
     if options & SEARCH_KEEP != 0 || cmdmod_has(CmdModFlags::KEEPPATTERNS) {
         set_search_offset(old_off);
     }
-    retval
+    found.then_some(retval)
 }
 
 // ---------------------------------------------------------------------

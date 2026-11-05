@@ -58,8 +58,8 @@ use crate::quickfix::{qf_get_cur_idx, qf_get_cur_valid_idx, qf_get_size, qf_get_
 use crate::regexp::{RE_SEARCH, RE_SUBST, skip_regexp_at};
 use crate::search::{BACKWARD, FORWARD, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG};
 use crate::types::{
-    CmdAddr, ColNr, Direction, ExArg, ExArgt, ExpandContext, FAIL, FileMark, LineNr, MarkGet,
-    MarkMove, Pos,
+    CmdAddr, ColNr, Direction, ExArg, ExArgt, ExpandContext, FileMark, LineNr, MarkGet, MarkMove,
+    Pos,
 };
 use crate::winlayer::{Buf, Win, first_buffer, last_buffer};
 
@@ -516,7 +516,7 @@ pub(crate) fn get_address(
                     } else {
                         SEARCH_HIS as c_int | SEARCH_MSG as c_int
                     };
-                    if do_search_in(&text[cmd..], c, c, flags) == 0 {
+                    if do_search_in(&text[cmd..], c, c, flags).is_none() {
                         Win::current().w_cursor = pos;
                         return Err(AddressError::Quiet);
                     }
@@ -559,7 +559,7 @@ pub(crate) fn get_address(
                     } else {
                         FORWARD as c_int
                     } as Direction;
-                    if search_last_pattern(&mut pos, dir, SEARCH_MSG as c_int, i) == FAIL {
+                    if search_last_pattern(&mut pos, dir, SEARCH_MSG as c_int, i).is_err() {
                         return Err(AddressError::Quiet);
                     }
                     lnum = pos.lnum;

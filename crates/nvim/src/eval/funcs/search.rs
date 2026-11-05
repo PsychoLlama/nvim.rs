@@ -189,12 +189,13 @@ fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut c_int) 
     // Repeat until {skip} answers false.
     let mut subpatnum;
     loop {
-        subpatnum = search_in_current(&mut pos, dir as Direction, &pat, options, lnum_stop, &tm);
+        subpatnum =
+            search_in_current(&mut pos, dir as Direction, &pat, options, lnum_stop, &tm).ok();
         // Coming back to the first match means every match was skipped.
         if firstpos.lnum != LineNr::ZERO && equalpos(pos, firstpos) {
-            subpatnum = FAIL;
+            subpatnum = None;
         }
-        if subpatnum == FAIL || !use_skip {
+        if subpatnum.is_none() || !use_skip {
             break;
         }
         if firstpos.lnum == LineNr::ZERO {
@@ -207,7 +208,7 @@ fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut c_int) 
         let answer = eval_expr_to_bool(&args[4]);
         Win::current().w_cursor = save_pos;
         let Ok(do_skip) = answer else {
-            subpatnum = FAIL;
+            subpatnum = None;
             break;
         };
         if !do_skip {
@@ -218,9 +219,9 @@ fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut c_int) 
     }
 
     let mut retval = 0;
-    if subpatnum != FAIL {
+    if let Some(subpatnum) = subpatnum {
         retval = if flags & SP_SUBPAT != 0 {
-            subpatnum
+            c_int::from(subpatnum)
         } else {
             pos.lnum.get()
         };
@@ -465,9 +466,12 @@ pub fn do_searchpair(
     // nested, since a middle only counts at the outermost level.
     let mut pat = &full;
     loop {
-        let n = search_in_current(&mut pos, dir as Direction, pat, options, lnum_stop, &tm);
+        let found = search_in_current(&mut pos, dir as Direction, pat, options, lnum_stop, &tm);
         // No match, or back at the first one: the walk is done.
-        if n == FAIL || (firstpos.lnum != LineNr::ZERO && equalpos(pos, firstpos)) {
+        let Ok(n) = found else {
+            break;
+        };
+        if firstpos.lnum != LineNr::ZERO && equalpos(pos, firstpos) {
             break;
         }
         if firstpos.lnum == LineNr::ZERO {

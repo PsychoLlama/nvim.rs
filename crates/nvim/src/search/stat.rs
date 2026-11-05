@@ -18,7 +18,7 @@ use crate::optionstr::OptString;
 use crate::regexp::RE_LAST;
 use crate::search::{SEARCH_KEEP, SEARCH_STAT_DEF_TIMEOUT};
 use crate::semsg;
-use crate::types::{FAIL, VAR_LIST};
+use crate::types::VAR_LIST;
 use crate::winlayer::{Buf, BufId, Win};
 use core::ffi::{CStr, c_int};
 
@@ -260,7 +260,8 @@ fn update_search_stat(
                 SEARCH_KEEP,
                 RE_LAST,
                 None,
-            ) != FAIL
+            )
+            .is_ok()
         {
             done_search = true;
             // Stop after passing the time limit.

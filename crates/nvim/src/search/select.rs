@@ -22,7 +22,7 @@ use crate::normal::{
 use crate::option::vars::P_SEL;
 use crate::regexp::RE_SEARCH;
 use crate::search::{SEARCH_END, SEARCH_KEEP};
-use crate::types::Failed;
+
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
@@ -86,7 +86,7 @@ fn search_around(
         );
         P_WS.set(old_p_ws);
 
-        if result != 0 {
+        if result.is_ok() {
             continue;
         }
         if i == 1 {
@@ -115,7 +115,7 @@ fn search_around(
 ///
 /// Used while an operator is pending and in Visual mode: the match becomes
 /// the Visual area.
-pub fn current_search(count: c_int, forward: bool) -> Result<(), Failed> {
+pub(crate) fn current_search(count: c_int, forward: bool) -> Result<(), NoMatch> {
     let save_visual = visual_anchor();
 
     // Correct the cursor when 'selection' is exclusive.
@@ -145,25 +145,17 @@ pub fn current_search(count: c_int, forward: bool) -> Result<(), Failed> {
     // direction.
     let pat = last_search_pat().unwrap_or_default();
     let cursor = Win::current().w_cursor;
-    let zero_width = is_zero_width(&pat, true, cursor, FORWARD);
-    if zero_width == -1 {
-        return Err(Failed); // pattern not found
-    }
+    let Some(zero_width) = is_zero_width(&pat, true, cursor, FORWARD) else {
+        return Err(NoMatch); // pattern not found
+    };
 
-    let found = search_around(
-        &pat,
-        pos,
-        count,
-        forward,
-        skip_first_backward,
-        zero_width != 0,
-    );
+    let found = search_around(&pat, pos, count, forward, skip_first_backward, zero_width);
     let Some(found) = found else {
         Win::current().w_cursor = orig_pos;
         if visual_active() {
             set_visual_anchor(save_visual);
         }
-        return Err(Failed);
+        return Err(NoMatch);
     };
 
     if !visual_active() {

@@ -23,7 +23,7 @@ use crate::optionstr::OptString;
 use crate::regexp::{RE_BOTH, RE_LAST, RE_MAGIC, RE_SEARCH, RE_SUBST};
 use crate::search::{SEARCH_HIS, SEARCH_KEEP, SEARCH_START};
 use crate::shada::ShadaExtra;
-use crate::types::{ApiString, CmdModFlags, FAIL, NUL, Timestamp, Vv};
+use crate::types::{ApiString, CmdModFlags, NUL, Timestamp, Vv};
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
 use core::ffi::{c_char, c_int};
@@ -541,18 +541,17 @@ pub(crate) fn set_vv_searchforward() {
 /// With `move_to_match` the search starts at the top of the buffer, else
 /// at `cur`. `direction` is `FORWARD` or `BACKWARD`.
 ///
-/// Answers 1, 0, or -1 for failure.
+/// `None` when there is no telling: the pattern does not compile (which has
+/// been said), does not match, or matching it reported an error.
 pub(crate) fn is_zero_width(
     pattern: &[u8],
     move_to_match: bool,
     cur: Pos,
     direction: Direction,
-) -> c_int {
+) -> Option<bool> {
     let mut regmatch = RegMMatch::default();
     let called_emsg_before = called_emsg.get();
-    if search_regcomp(pattern, RE_SEARCH, RE_SEARCH, SEARCH_KEEP, &mut regmatch).is_err() {
-        return -1;
-    }
+    search_regcomp(pattern, RE_SEARCH, RE_SEARCH, SEARCH_KEEP, &mut regmatch).ok()?;
 
     // Init startcol correctly.
     regmatch.startpos[0].col = ColNr::NONE;
@@ -561,9 +560,8 @@ pub(crate) fn is_zero_width(
     let mut pos = if move_to_match { Pos::default() } else { cur };
     let flag = if move_to_match { 0 } else { SEARCH_START };
 
-    let mut result = -1;
     let (w, b) = (Some(Win::current()), Buf::current());
-    let found = searchit(
+    searchit(
         w,
         b,
         &mut pos,
@@ -574,32 +572,28 @@ pub(crate) fn is_zero_width(
         SEARCH_KEEP + flag,
         RE_SEARCH,
         None,
-    );
-    if found != FAIL {
-        // A zero-width pattern matches somewhere; find where, then ask
-        // whether its start and end are the same position.
-        let nmatched = loop {
-            regmatch.startpos[0].col += 1;
-            let col = regmatch.startpos[0].col;
-            let nmatched = vim_regexec_multi(&mut regmatch, w, b, pos.lnum, col, None, None);
-            let short_of_the_match = if direction == FORWARD {
-                regmatch.startpos[0].col < pos.col
-            } else {
-                regmatch.startpos[0].col > pos.col
-            };
-            if nmatched != 0 || regmatch.regprog.is_none() || !short_of_the_match {
-                break nmatched;
-            }
+    )
+    .ok()?;
+    // A zero-width pattern matches somewhere; find where, then ask whether
+    // its start and end are the same position.
+    let nmatched = loop {
+        regmatch.startpos[0].col += 1;
+        let col = regmatch.startpos[0].col;
+        let nmatched = vim_regexec_multi(&mut regmatch, w, b, pos.lnum, col, None, None);
+        let short_of_the_match = if direction == FORWARD {
+            regmatch.startpos[0].col < pos.col
+        } else {
+            regmatch.startpos[0].col > pos.col
         };
-        if called_emsg.get() == called_emsg_before {
-            result = c_int::from(
-                nmatched != 0
-                    && regmatch.startpos[0].lnum == regmatch.endpos[0].lnum
-                    && regmatch.startpos[0].col == regmatch.endpos[0].col,
-            );
+        if nmatched != 0 || regmatch.regprog.is_none() || !short_of_the_match {
+            break nmatched;
         }
-    }
-    result
+    };
+    (called_emsg.get() == called_emsg_before).then(|| {
+        nmatched != 0
+            && regmatch.startpos[0].lnum == regmatch.endpos[0].lnum
+            && regmatch.startpos[0].col == regmatch.endpos[0].col
+    })
 }
 
 /// One remembered pattern as ShaDa reads and writes it, owned.

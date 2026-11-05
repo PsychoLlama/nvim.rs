@@ -409,7 +409,7 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
     while !got_int.get() {
         let slash = '/' as c_int;
         let found = do_search(None, slash, slash, &frompat, 1, SEARCH_KEEP, None);
-        if found == 0 || u_save_cursor().is_err() {
+        if found.is_none() || u_save_cursor().is_err() {
             break;
         }
 

@@ -367,7 +367,7 @@ pub(crate) fn may_do_incsearch_highlighting(
     }
 
     // The do_search() result.
-    let mut found = 0;
+    let mut found = false;
 
     if patlen != 0 || use_last_pat {
         let mut search_flags = SEARCH_OPT + SEARCH_NOOF + SEARCH_PEEK;
@@ -390,14 +390,14 @@ pub(crate) fn may_do_incsearch_highlighting(
         // from `skiplen`.
         let pat = pattern_of(cc, skiplen, patlen);
         let flags = search_flags;
-        found = do_search(None, dir, search_delim, &pat, count, flags, Some(&mut sia));
+        found = do_search(None, dir, search_delim, &pat, count, flags, Some(&mut sia)).is_some();
         drop(no_emsg);
 
         if Win::current().w_cursor.lnum < search_first_line.get()
             || Win::current().w_cursor.lnum > search_last_line.get()
         {
             // The match is outside the address range.
-            found = 0;
+            found = false;
             Win::current().w_cursor = s.search_start;
         }
 
@@ -407,7 +407,7 @@ pub(crate) fn may_do_incsearch_highlighting(
             vpeekc();
             // Don't abandon the command line.
             got_int.set(false);
-            found = 0;
+            found = false;
         } else if char_avail() {
             // Searching was cancelled because a character was typed.
             s.incsearch_postponed = true;
@@ -420,7 +420,7 @@ pub(crate) fn may_do_incsearch_highlighting(
     }
 
     // Add or remove the search match position.
-    highlight_match.set(found != 0);
+    highlight_match.set(found);
 
     // First restore the old curwin values, so the screen is positioned the
     // same way the real search command would leave it.
@@ -428,7 +428,7 @@ pub(crate) fn may_do_incsearch_highlighting(
     curwin_cursor_moved();
 
     let mut end_pos = Win::current().w_cursor;
-    if found != 0 {
+    if found {
         s.match_start = Win::current().w_cursor;
         set_cursor_to_search_match();
         validate_curwin_cursor();
@@ -463,7 +463,7 @@ pub(crate) fn may_do_incsearch_highlighting(
     // it is beyond the end of the pattern, as for ":s/pat/".
     if cc.byte_at(skiplen + patlen) != 0 {
         Win::current().w_cursor = s.search_start;
-    } else if found != 0 {
+    } else if found {
         Win::current().w_cursor = end_pos;
         // Mark as valid for the cmdline_show redraw.
         Win::current().w_valid_cursor = end_pos;
@@ -660,7 +660,7 @@ pub(crate) fn may_do_command_line_next_incsearch(
     drop(no_emsg);
     ui_busy_stop();
 
-    if found != 0 {
+    if found.is_ok() {
         s.search_start = s.match_start;
         s.match_end = t;
         s.match_start = t;

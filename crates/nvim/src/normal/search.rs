@@ -38,7 +38,7 @@ use crate::options::{kOptFdoFlagMark, kOptFdoFlagSearch, kOptJopFlagView};
 use crate::os::cshim::gettext;
 use crate::pos::equalpos;
 use crate::search::state::no_hlsearch;
-use crate::search::{SEARCH_ECHO, SEARCH_MARK, SEARCH_MSG, SEARCH_OPT, do_search};
+use crate::search::{Hit, SEARCH_ECHO, SEARCH_MARK, SEARCH_MSG, SEARCH_OPT, do_search};
 use crate::state::virtual_active;
 use crate::types::{CmdArg, FileMark, MarkMove, MarkMoveRes, OpType, SearchItArg};
 use crate::window::goto_tabpage_lastused;
@@ -101,28 +101,28 @@ pub(crate) fn nv_next(cmd_arg: &mut CmdArg) {
     // A match that lands where the cursor already is, without having
     // wrapped, is the one we are standing on: search once more so `n`
     // always moves.
-    if i == 1 && !wrapped && equalpos(old, Win::current().w_cursor) {
+    if i == Some(Hit::Match) && !wrapped && equalpos(old, Win::current().w_cursor) {
         cmd_arg.count1 += 1;
         let again = SEARCH_MARK as c_int | cmd_arg.arg;
         normal_search(cmd_arg, 0, b"", again, None);
         cmd_arg.count1 -= 1;
     }
-    if i > 0 && current_match_is_distinct() {
+    if i.is_some() && current_match_is_distinct() {
         redraw_later(Win::current(), UPD_SOME_VALID);
     }
 }
 
 /// The search every normal-mode search command goes through.
 ///
-/// Answers `do_search`'s result: 0 for no match, 1 for a match, 2 for a match
-/// the offset made linewise. `wrapped` is told whether the search wrapped.
+/// Answers `do_search`'s result. `wrapped` is told whether the search
+/// wrapped.
 pub(crate) fn normal_search(
     cmd_arg: &mut CmdArg,
     dir: c_int,
     pat: &[u8],
     opt: c_int,
     wrapped: Option<&mut bool>,
-) -> c_int {
+) -> Option<Hit> {
     let mut sia = SearchItArg::default();
     let prev_cursor = Win::current().w_cursor;
     let mut op = cmd_arg.op();
@@ -140,17 +140,17 @@ pub(crate) fn normal_search(
         *wrapped = sia.sa_wrapped;
     }
 
-    if i == 0 {
-        clear_op(op);
-    } else {
+    if let Some(hit) = i {
         // A `/pat/+1`-style offset makes the motion linewise.
-        if i == 2 {
+        if hit == Hit::Linewise {
             op.motion_type = kMTLineWise;
         }
         Win::current().w_cursor.coladd = 0;
         if op.op_type == OpType::Nop && fdo_flags.get() & kOptFdoFlagSearch != 0 && KeyTyped.get() {
             fold_open_cursor();
         }
+    } else {
+        clear_op(op);
     }
     if !equalpos(Win::current().w_cursor, prev_cursor) && current_match_is_distinct() {
         redraw_later(Win::current(), UPD_SOME_VALID);

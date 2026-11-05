@@ -11,7 +11,6 @@
 use super::*;
 use crate::cstr;
 use crate::mbyte::{strcmp_ic_in, strnicmp_in};
-use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::option::cpo_has;
 use crate::pos::MAXCOL;
 use crate::regexp::{LineMatcher, RE_SEARCH, walk_lines};
@@ -19,9 +18,7 @@ use crate::search::{
     SEARCH_COL, SEARCH_END, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG, SEARCH_NOOF, SEARCH_PEEK,
     SEARCH_START,
 };
-use crate::semsg;
-use crate::tr_plural;
-use crate::types::{CpoFlag, FAIL, Failed, NUL, ShmFlag};
+use crate::types::{CpoFlag, NUL, ShmFlag};
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
 use core::ffi::c_int;
@@ -36,7 +33,7 @@ use core::ffi::c_int;
 struct Found {
     start: LPos,
     end: LPos,
-    submatch: c_int,
+    submatch: u8,
 }
 
 /// Where the search started from, and how close to it a match may sit.
@@ -298,7 +295,7 @@ impl Searcher<'_, '_> {
         mut count: c_int,
         stop_lnum: LineNr,
         mut extra_arg: Option<&mut SearchItArg>,
-    ) -> (c_int, c_int, LineNr) {
+    ) -> (c_int, u8, LineNr) {
         let mut found;
         let mut submatch = 0;
         let mut first_match = true;
@@ -550,7 +547,7 @@ pub(crate) fn search_last_pattern(
     dir: Direction,
     options: c_int,
     pat_use: c_int,
-) -> c_int {
+) -> Result<u8, SearchError> {
     let (win, buf) = (Some(Win::current()), Buf::current());
     searchit(win, buf, pos, None, dir, b"", 1, options, pat_use, None)
 }
@@ -572,10 +569,34 @@ pub(crate) fn search_last_pattern(
 /// pattern an empty `pat` means; `extra_arg` adds a line to stop after and
 /// a deadline, and reports a timeout and a wrap.
 ///
-/// Answers `FAIL` (zero) for failure, otherwise the index of the first
-/// matching sub-pattern plus one; one if there was none.
+/// Answers the index of the first matching sub-pattern plus one (one if
+/// there was none), or why nothing was found -- having said what
+/// `options` asked for.
 #[allow(clippy::too_many_arguments)]
-pub fn searchit(
+pub(crate) fn searchit(
+    win: Option<Win>,
+    buffer: Buf,
+    pos: &mut Pos,
+    end_pos: Option<&mut Pos>,
+    dir: Direction,
+    pat: &[u8],
+    count: c_int,
+    options: c_int,
+    pat_use: c_int,
+    extra_arg: Option<&mut SearchItArg>,
+) -> Result<u8, SearchError> {
+    let found = search_buffer(
+        win, buffer, pos, end_pos, dir, pat, count, options, pat_use, extra_arg,
+    );
+    if let Err(err) = found {
+        err.report(options);
+    }
+    found
+}
+
+/// [`searchit`]'s search, saying nothing.
+#[allow(clippy::too_many_arguments)]
+fn search_buffer(
     win: Option<Win>,
     buffer: Buf,
     pos: &mut Pos,
@@ -586,17 +607,10 @@ pub fn searchit(
     options: c_int,
     pat_use: c_int,
     mut extra_arg: Option<&mut SearchItArg>,
-) -> c_int {
+) -> Result<u8, SearchError> {
     let mut regmatch = RegMMatch::default();
     let keep = options & (SEARCH_HIS | SEARCH_KEEP);
-    if let Err(refused) = search_regcomp(pat, RE_SEARCH, pat_use, keep, &mut regmatch) {
-        if options & SEARCH_MSG != 0 && refused == Refused::Unexplained {
-            let pattern = get_search_pat();
-            let arg0 = msg_bytes(&pattern);
-            semsg!("E383: Invalid search string: {arg0}");
-        }
-        return FAIL;
-    }
+    search_regcomp(pat, RE_SEARCH, pat_use, keep, &mut regmatch).map_err(SearchError::Pattern)?;
 
     // Stop after this line number, when it is not zero.
     let mut stop_lnum: LineNr = LineNr::ZERO;
@@ -638,21 +652,15 @@ pub fn searchit(
     }
 
     if found == 0 {
-        if got_int.get() {
-            emsg(gettext(e_interr));
-        } else if options & SEARCH_MSG == SEARCH_MSG {
-            let msg = if p_ws() {
-                gettext(e_patnotf2)
-            } else if lnum == LineNr::ZERO {
-                gettext(c"E384: Search hit TOP without match for: %s")
-            } else {
-                gettext(c"E385: Search hit BOTTOM without match for: %s")
-            };
-            let pattern = get_search_pat();
-            let pat = msg_bytes(&pattern);
-            emsg_text(tr_plural!(msg, pat));
-        }
-        return FAIL;
+        return Err(if got_int.get() {
+            SearchError::Interrupted
+        } else if p_ws() {
+            SearchError::NotFound(Edge::Wrapped)
+        } else if lnum == LineNr::ZERO {
+            SearchError::NotFound(Edge::Top)
+        } else {
+            SearchError::NotFound(Edge::Bottom)
+        });
     }
 
     // A pattern like "\n\zs" may go past the last line.
@@ -664,7 +672,7 @@ pub fn searchit(
         }
     }
 
-    submatch + 1
+    Ok(submatch + 1)
 }
 
 /// [`searchit`] once, for `pat` in `buffer` from `pos`, with no window and
@@ -691,15 +699,15 @@ pub(crate) fn searchit_buf(
         options,
         pat_use,
         None,
-    ) != FAIL
+    )
+    .is_ok()
 }
 
 /// [`searchit`] once in the current window, for the search builtins: for
 /// `pat` from `pos`, which answers the match, giving up past line
 /// `stop_lnum` (when it is not zero) or at the deadline `deadline`.
 ///
-/// Answers [`searchit`]'s number: [`FAIL`], or the first matching
-/// sub-pattern plus one.
+/// Answers [`searchit`]'s: the first matching sub-pattern plus one.
 pub(crate) fn search_in_current(
     pos: &mut Pos,
     dir: Direction,
@@ -707,7 +715,7 @@ pub(crate) fn search_in_current(
     options: c_int,
     stop_lnum: LineNr,
     deadline: &ProfTime,
-) -> c_int {
+) -> Result<u8, SearchError> {
     let mut extra = SearchItArg {
         sa_stop_lnum: stop_lnum,
         sa_tm: Some(deadline),
@@ -731,10 +739,10 @@ pub(crate) fn search_in_current(
 /// The number of the first sub-pattern that matched, or zero if none of
 /// them did.
 #[inline(always)]
-fn first_submatch(matcher: &LineMatcher) -> c_int {
+fn first_submatch(matcher: &LineMatcher) -> u8 {
     (1..10)
-        .find(|&i| matcher.start(i).lnum >= LineNr::ZERO)
-        .map_or(0, |i| i as c_int)
+        .find(|&i| matcher.start(usize::from(i)).lnum >= LineNr::ZERO)
+        .unwrap_or(0)
 }
 
 /// Search for a line starting with `pat`, ignoring leading white space,
@@ -744,18 +752,18 @@ fn first_submatch(matcher: &LineMatcher) -> c_int {
 /// With `'ignorecase'` the pattern must be in lower case. The pattern stops
 /// at a NUL.
 ///
-/// Answers `Err` if no line was found.
-pub fn search_for_exact_line(
+/// Answers `Err` if no line was found; nothing is said.
+pub(crate) fn search_for_exact_line(
     buffer: Buf,
     pos: &mut Pos,
     dir: Direction,
     pat: &[u8],
-) -> Result<(), Failed> {
+) -> Result<(), NoMatch> {
     let pat = cstr::until_nul(pat);
     let mut start: LineNr = LineNr::ZERO;
     let compl_len = ins_compl_len();
     if buffer.b_ml.ml_line_count == LineNr::ZERO {
-        return Err(Failed);
+        return Err(NoMatch);
     }
     loop {
         pos.lnum += dir;
@@ -812,5 +820,5 @@ pub fn search_for_exact_line(
             }
         }
     }
-    Err(Failed)
+    Err(NoMatch)
 }
