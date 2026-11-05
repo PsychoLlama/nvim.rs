@@ -6,6 +6,13 @@
 //! and [`clear_keywtab`] empty them.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::charset::display::foldcase;
 use crate::cstr;
@@ -231,7 +238,7 @@ fn add_keyword(name: &[u8], def: &KeywordDef) {
     let entry = KeyEntry {
         syn: sp_syn {
             inc_tag: current_syn_inc_tag.get(),
-            id: def.id as int16_t,
+            id: id16(def.id),
         },
         // Each entry gets its own copy, as upstream's did: `:syntax list`
         // tells two keywords' lists apart by identity.
@@ -272,7 +279,7 @@ fn add_keyword_variants(
         match bracket {
             None => kwlen = cstr::until_nul(&buf[kw..]).len(),
             Some(p) => {
-                buf[p] = NUL as u8;
+                buf[p] = 0;
                 kwlen = p - kw;
             }
         }
@@ -285,7 +292,7 @@ fn add_keyword_variants(
             let kw = ThinCString::from_bytes(cstr::until_nul(&buf[kw..]));
             return Err(SyntaxError::MissingBracket(kw));
         }
-        if next == ']' as c_int {
+        if next == c_int::from(b']') {
             if c_int::from(cstr::byte_at(buf, p + 2)) != NUL {
                 let parts = (
                     ThinCString::from_bytes(cstr::until_nul(&buf[kw..])),
@@ -354,14 +361,14 @@ pub(crate) fn syn_cmd_keyword(args: &mut ExArg, _syncing: c_int) {
                 }
                 while byte(at) != NUL && !ascii_iswhite(byte(at)) {
                     // A backslash hides the byte after it, itself included.
-                    if byte(at) == '\\' as c_int && byte(at + 1) != NUL {
+                    if byte(at) == c_int::from(b'\\') && byte(at + 1) != NUL {
                         at += 1;
                     }
                     buf[out] = line[at];
                     out += 1;
                     at += 1;
                 }
-                buf[out] = NUL as u8;
+                buf[out] = 0;
                 out += 1;
                 cnt += 1;
                 end = Some(at + skip::white(&line[at..]));

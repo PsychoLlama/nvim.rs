@@ -6,11 +6,20 @@
 //! nothing here parses.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::charset::skip;
+use crate::narrow::len_as_int;
 use core::ffi::{CStr, c_int};
 
 use super::*;
+use crate::narrow::number_as_int;
 use crate::types::{Candidate, ExpandContext};
 use std::ffi::CString;
 
@@ -223,10 +232,12 @@ pub(crate) fn syn_get_stack_item(i: c_int) -> Option<c_int> {
 impl SynState {
     /// How many `fold` items are open at the current position.
     fn cur_foldlevel(&self) -> c_int {
-        self.stack
-            .iter()
-            .filter(|si| si.si_flags.has(SynFlags::FOLD))
-            .count() as c_int
+        len_as_int(
+            self.stack
+                .iter()
+                .filter(|si| si.si_flags.has(SynFlags::FOLD))
+                .count(),
+        )
     }
 }
 
@@ -262,8 +273,8 @@ pub(crate) fn syn_get_foldlevel(window: Win, lnum: LineNr) -> c_int {
         });
     }
 
-    if level as OptInt > window.w_onebuf_opt.wo_fdn {
-        level = window.w_onebuf_opt.wo_fdn as c_int;
+    if OptInt::from(level) > window.w_onebuf_opt.wo_fdn {
+        level = number_as_int(window.w_onebuf_opt.wo_fdn);
         if level < 0 {
             level = 0;
         }

@@ -7,6 +7,13 @@
 //! table.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::highlight::HlAttrFlags;
 use crate::option::vars::P_BG;
@@ -298,7 +305,7 @@ fn highlight_link(line: &mut Line, forceit: bool, init: bool, dodefault: bool) {
     {
         with_group(from_id, |entry| {
             if !init {
-                entry.set |= SG_LINK as c_int;
+                entry.set |= SG_LINK.cast_signed();
             }
             entry.link = to_id;
             entry.script_ctx = current_sctx.get();
@@ -350,7 +357,9 @@ impl KeyLoop {
             if key == b"NONE" {
                 if !self.init || group(self.id).set == 0 {
                     if !self.init {
-                        with_group(self.id, |entry| entry.set |= (SG_CTERM + SG_GUI) as c_int);
+                        with_group(self.id, |entry| {
+                            entry.set |= (SG_CTERM + SG_GUI).cast_signed()
+                        });
                     }
                     highlight_clear(self.id);
                 }
@@ -396,7 +405,7 @@ impl KeyLoop {
                 entry.cleared = false;
                 // When highlighting has been given for a group, don't
                 // link it.
-                if !self.init || entry.set & SG_LINK as c_int == 0 {
+                if !self.init || entry.set & SG_LINK.cast_signed() == 0 {
                     entry.link = 0;
                 }
             });
@@ -456,19 +465,19 @@ impl KeyLoop {
 
         // "term=" is accepted and ignored.
         if key[0] == b'C' {
-            if !self.init || group(self.id).set & SG_CTERM as c_int == 0 {
+            if !self.init || group(self.id).set & SG_CTERM.cast_signed() == 0 {
                 with_group(self.id, |entry| {
                     if !self.init {
-                        entry.set |= SG_CTERM as c_int;
+                        entry.set |= SG_CTERM.cast_signed();
                     }
                     entry.cterm = attr;
                     entry.cterm_bold = false;
                 });
             }
-        } else if key[0] == b'G' && (!self.init || group(self.id).set & SG_GUI as c_int == 0) {
+        } else if key[0] == b'G' && (!self.init || group(self.id).set & SG_GUI.cast_signed() == 0) {
             with_group(self.id, |entry| {
                 if !self.init {
-                    entry.set |= SG_GUI as c_int;
+                    entry.set |= SG_GUI.cast_signed();
                 }
                 entry.gui = attr;
             });
@@ -485,11 +494,11 @@ impl KeyLoop {
         key_start: &CStr,
     ) -> Result<(), HighlightError> {
         let foreground = key[5] == b'F';
-        if self.init && group(self.id).set & SG_CTERM as c_int != 0 {
+        if self.init && group(self.id).set & SG_CTERM.cast_signed() != 0 {
             return Ok(());
         }
         if !self.init {
-            with_group(self.id, |entry| entry.set |= SG_CTERM as c_int);
+            with_group(self.id, |entry| entry.set |= SG_CTERM.cast_signed());
         }
         // Setting the foreground colour undoes a "bold" that was only
         // there to reach a light colour.
@@ -580,11 +589,11 @@ impl KeyLoop {
 
     /// `guifg=`/`guibg=`/`guisp=`.
     fn set_gui_color(&mut self, key: &[u8], arg: &[u8]) {
-        if self.init && group(self.id).set & SG_GUI as c_int != 0 {
+        if self.init && group(self.id).set & SG_GUI.cast_signed() != 0 {
             return;
         }
         if !self.init {
-            with_group(self.id, |entry| entry.set |= SG_GUI as c_int);
+            with_group(self.id, |entry| entry.set |= SG_GUI.cast_signed());
         }
 
         let (color, idx) = if arg == b"NONE" {

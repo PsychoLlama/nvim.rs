@@ -27,6 +27,13 @@
 //! [`KeywordTable`]. **An `xfree` in this module is a bug.**
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -55,6 +62,8 @@ use crate::message::{
     emsg, msg, msg_advance, msg_display, msg_display_bytes, msg_ext_set_kind, msg_outnum,
     msg_putchar, msg_str, msg_str_hl, msg_title,
 };
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
 use crate::winlayer::BufId;
 use crate::winlayer::WinId;
 
@@ -213,7 +222,8 @@ impl IdList {
 pub(crate) const MAX_HL_ID: ::core::ffi::c_uint = 20000;
 /// The `contains=ALL`/`ALLBUT` marker, which shares its value with the highest
 /// possible highlight id and is offset by the `:syntax include` tag.
-pub(crate) const SYNID_ALLBUT: ::core::ffi::c_int = MAX_HL_ID as ::core::ffi::c_int;
+pub(crate) const SYNID_ALLBUT: ::core::ffi::c_int = 20000;
+const _: () = assert!(SYNID_ALLBUT.cast_unsigned() == MAX_HL_ID);
 /// `do_source` flag: this is not a plugin or a package.
 pub(crate) const DOSO_NONE: ::core::ffi::c_uint = 0;
 #[derive(Clone)]
@@ -445,13 +455,13 @@ impl SynBlockRef {
     /// The pattern at `idx`, which must be one the block has.
     #[inline]
     pub(crate) fn pattern(&self, idx: ::core::ffi::c_int) -> &SynPat {
-        &self.b_syn_patterns[idx as usize]
+        &self.b_syn_patterns[as_index(idx)]
     }
 
     /// The pattern at `idx`, to write to.
     #[inline]
     pub(crate) fn pattern_mut(&mut self, idx: ::core::ffi::c_int) -> &mut SynPat {
-        &mut self.b_syn_patterns[idx as usize]
+        &mut self.b_syn_patterns[as_index(idx)]
     }
 
     /// The block's clusters, on [`SynBlock::patterns`]' terms.
@@ -470,13 +480,13 @@ impl SynBlockRef {
 /// Number of patterns in [`cur_syn_block`].
 #[inline]
 pub(crate) fn cur_pattern_count() -> ::core::ffi::c_int {
-    cur_syn_block().patterns().len() as ::core::ffi::c_int
+    len_as_int(cur_syn_block().patterns().len())
 }
 
 /// Number of clusters in [`cur_syn_block`].
 #[inline]
 pub(crate) fn cur_cluster_count() -> ::core::ffi::c_int {
-    cur_syn_block().clusters().len() as ::core::ffi::c_int
+    len_as_int(cur_syn_block().clusters().len())
 }
 /// A syntax block — a window's or a buffer's `SynBlock`, whose holder has
 /// promised it outlives the value.
@@ -529,3 +539,18 @@ pub(crate) const ITEM_END: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub(crate) const ITEM_MATCHGROUP: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub(crate) const REX_SET: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub(crate) const REX_USE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
+
+/// A syntax or group id as the `int16_t` the pattern tables keep it in, as
+/// upstream's `(int16_t)` casts did. Ids are bounded by `MAX_HL_ID` and the
+/// cluster range above `SYNID_CLUSTER`, both well inside it.
+///
+/// # Panics
+/// If `id` does not fit, which no id the tables hand out can do.
+pub(crate) fn id16(id: ::core::ffi::c_int) -> int16_t {
+    int16_t::try_from(id).unwrap_or_else(|_| panic!("syntax id {id} does not fit an int16_t"))
+}
+
+/// An `SPTYPE_*` kind as the `c_char` a pattern keeps it in.
+pub(crate) fn sp_type_char(kind: ::core::ffi::c_int) -> ::core::ffi::c_char {
+    ::core::ffi::c_char::try_from(kind).expect("the SPTYPE_ kinds fit a c_char")
+}

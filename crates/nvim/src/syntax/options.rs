@@ -8,11 +8,20 @@
 //! per-cell path even though the rest of this module is not.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::charset::skip;
 use crate::cstr;
 use crate::mbyte::{char_at, cluster_len};
 use crate::memory::ThinCString;
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
 use crate::types::Failed;
 use core::ffi::{CStr, c_int};
 
@@ -147,7 +156,7 @@ fn flag_matches(rest: &[u8], f: &SynFlag) -> bool {
     let after = byte(rest, name.len());
     ascii_iswhite(after)
         || if f.arg.takes_value() {
-            after == '=' as c_int
+            after == c_int::from(b'=')
         } else {
             ends_excmd(after) != 0
         }
@@ -262,10 +271,10 @@ fn read_sync_group(line: &[u8], at: usize, opt: &mut SynOptArg) -> Result<usize,
         let syn_id = syn_name2id(&owned);
         let block = cur_syn_block();
         let found = block.patterns().iter().rposition(|spp| {
-            spp.sp_syn.id as c_int == syn_id && spp.sp_type as c_int == SPTYPE_START
+            c_int::from(spp.sp_syn.id) == syn_id && c_int::from(spp.sp_type) == SPTYPE_START
         });
         match found {
-            Some(i) => opt.sync_idx = i as c_int,
+            Some(i) => opt.sync_idx = len_as_int(i),
             None => return Err(SyntaxError::NoRegionItem(ThinCString::from_bytes(name))),
         }
     }
@@ -338,7 +347,7 @@ fn parse_id_list(line: &[u8], at: usize, keylen: usize, skip: bool) -> IdListPas
     let after_key = (at + keylen).min(line.len());
     let mut p = after_key + skip::white(&line[after_key..]);
 
-    if byte(line, p) != '=' as c_int {
+    if byte(line, p) != c_int::from(b'=') {
         return IdListPass {
             ids,
             end: p,
@@ -366,7 +375,7 @@ fn parse_id_list(line: &[u8], at: usize, keylen: usize, skip: bool) -> IdListPas
         }
 
         match parse_id_name(line, at, p, end, skip, &mut ids) {
-            Ok(Some(id)) => ids.push(id as int16_t),
+            Ok(Some(id)) => ids.push(id16(id)),
             // A regexp name pushed its own matches, or `skip` is on.
             Ok(None) => {}
             Err(why) => {
@@ -379,7 +388,7 @@ fn parse_id_list(line: &[u8], at: usize, keylen: usize, skip: bool) -> IdListPas
         }
 
         p = end + skip::white(&line[end..]);
-        if byte(line, p) != ',' as c_int {
+        if byte(line, p) != c_int::from(b',') {
             break;
         }
         p += 1; // skip the comma between arguments; it is not the terminator
@@ -469,7 +478,7 @@ fn parse_id_name(
     while i > 0 {
         i -= 1;
         if vim_regexec(&mut regmatch, syn_id2name(i + 1), 0) {
-            ids.push((i + 1) as int16_t);
+            ids.push(id16(i + 1));
             matched = true;
         }
     }
@@ -586,7 +595,7 @@ fn id_list_has(
             return retval;
         }
         if c_int::from(item) >= SYNID_CLUSTER {
-            let scl_list = &block.clusters()[(c_int::from(item) - SYNID_CLUSTER) as usize].scl_list;
+            let scl_list = &block.clusters()[as_index(c_int::from(item) - SYNID_CLUSTER)].scl_list;
             if !scl_list.is_none()
                 && depth < 30
                 && id_list_has(block, scl_list, ssp, flags, depth + 1)

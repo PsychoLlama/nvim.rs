@@ -146,7 +146,7 @@ pub(crate) fn highlight_has_attr(
         return None;
     }
     let entry = group(id);
-    let attr = if modec == 'g' as c_int {
+    let attr = if modec == c_int::from(b'g') {
         entry.gui
     } else {
         entry.cterm
@@ -195,7 +195,7 @@ pub(crate) fn highlight_color<'a>(
     }
 
     let entry = group(id);
-    if modec == 'g' as c_int {
+    if modec == c_int::from(b'g') {
         if what.get(2) == Some(&b'#') && ui_rgb_attached() {
             let n = if fg {
                 entry.rgb_fg
@@ -228,7 +228,7 @@ pub(crate) fn highlight_color<'a>(
     if font || sp {
         return None;
     }
-    if modec == 'c' as c_int {
+    if modec == c_int::from(b'c') {
         let n = if fg { entry.cterm_fg } else { entry.cterm_bg } - 1;
         if n < 0 {
             return None;

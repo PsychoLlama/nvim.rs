@@ -6,9 +6,18 @@
 //! [`syn_check_cluster`] resolves a name to an id, creating it if needed.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use crate::message_fmt::msg_bytes;
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
 use crate::semsg;
 use crate::types::Failed;
 use core::ffi::{CStr, c_int};
@@ -89,7 +98,7 @@ fn scl_name2id(name: &CStr) -> c_int {
         .iter()
         .rposition(|c| c.scl_name_u == name_u)
     {
-        Some(i) => i as c_int + SYNID_CLUSTER,
+        Some(i) => len_as_int(i) + SYNID_CLUSTER,
         None => 0,
     }
 }
@@ -118,7 +127,7 @@ pub(crate) fn syn_check_cluster(name: &[u8]) -> Result<c_int, Failed> {
 /// Add a cluster with no members, answering its id.
 fn syn_add_cluster(name: CString) -> Result<c_int, SyntaxError> {
     let mut block = cur_syn_block();
-    let len = block.clusters().len() as c_int;
+    let len = len_as_int(block.clusters().len());
     if len >= MAX_CLUSTER_ID {
         return Err(SyntaxError::TooManyClusters);
     }
@@ -162,7 +171,7 @@ fn cluster_op(rest: &[u8]) -> Option<(usize, c_int)> {
             continue;
         }
         let after = c_int::from(cstr::byte_at(rest, name.len()));
-        if ascii_iswhite(after) || after == '=' as c_int {
+        if ascii_iswhite(after) || after == c_int::from(b'=') {
             return Some((name.len(), op));
         }
     }
@@ -203,7 +212,7 @@ pub(crate) fn syn_cmd_cluster(args: &mut ExArg, _syncing: c_int) {
                 }
             }
             let mut block = cur_syn_block();
-            let list = &mut block.clusters_mut()[scl_id as usize].scl_list;
+            let list = &mut block.clusters_mut()[as_index(scl_id)].scl_list;
             syn_combine_list(list, clstr_list, list_op);
             got_clstr = true;
         }

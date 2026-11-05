@@ -6,8 +6,17 @@
 //! `contains=`/`nextgroup=` list, and [`syn_list_cluster`] a cluster.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::message_fmt::msg_bytes;
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
 use crate::semsg;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
@@ -175,7 +184,7 @@ fn syn_list_flags(names: &[(SynFlags, &CStr)], flags: SynFlags, hl_id: c_int) {
     for (flag, name) in names {
         if flags.has(*flag) {
             msg_str_hl(name, hl_id, false);
-            msg_putchar(' ' as c_int);
+            msg_putchar(c_int::from(b' '));
         }
     }
 }
@@ -202,7 +211,7 @@ fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
     while idx < block.patterns().len() && !got_int.get() {
         let first = idx;
         let spp = &block.patterns()[first];
-        if spp.sp_syn.id as c_int != id || spp.sp_syncing != syncing {
+        if c_int::from(spp.sp_syn.id) != id || spp.sp_syncing != syncing {
             idx += 1;
             continue;
         }
@@ -233,7 +242,7 @@ fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
     if link != 0 && (did_header || link_only) && !got_int.get() {
         syn_list_header(did_header, 0, id, true);
         msg_str_hl(c"links to", LIST_HL, false);
-        msg_putchar(' ' as c_int);
+        msg_putchar(c_int::from(b' '));
         msg_display(syn_id2name(link), 0, false);
     }
 }
@@ -247,29 +256,39 @@ fn put_item_patterns(mut idx: usize) -> usize {
     let mut last_matchgroup = 0;
     let block = cur_syn_block();
     let pats = block.patterns();
-    let sp_type = |i: usize| pats[i].sp_type as c_int;
+    let sp_type = |i: usize| c_int::from(pats[i].sp_type);
 
     if sp_type(idx) == SPTYPE_MATCH {
-        put_pattern(&mut last_matchgroup, c"match", ' ' as c_int, &pats[idx]);
-        msg_putchar(' ' as c_int);
+        put_pattern(
+            &mut last_matchgroup,
+            c"match",
+            c_int::from(b' '),
+            &pats[idx],
+        );
+        msg_putchar(c_int::from(b' '));
     } else if sp_type(idx) == SPTYPE_START {
         // The three loops bound themselves on the array; upstream bounds
         // only the last of them and reads past it if a region's END
         // entries are ever missing.
         while idx < pats.len() && sp_type(idx) == SPTYPE_START {
-            put_pattern(&mut last_matchgroup, c"start", '=' as c_int, &pats[idx]);
+            put_pattern(
+                &mut last_matchgroup,
+                c"start",
+                c_int::from(b'='),
+                &pats[idx],
+            );
             idx += 1;
         }
         if idx < pats.len() && sp_type(idx) == SPTYPE_SKIP {
-            put_pattern(&mut last_matchgroup, c"skip", '=' as c_int, &pats[idx]);
+            put_pattern(&mut last_matchgroup, c"skip", c_int::from(b'='), &pats[idx]);
             idx += 1;
         }
         while idx < pats.len() && sp_type(idx) == SPTYPE_END {
-            put_pattern(&mut last_matchgroup, c"end", '=' as c_int, &pats[idx]);
+            put_pattern(&mut last_matchgroup, c"end", c_int::from(b'='), &pats[idx]);
             idx += 1;
         }
         idx -= 1;
-        msg_putchar(' ' as c_int);
+        msg_putchar(c_int::from(b' '));
     }
     idx
 }
@@ -281,15 +300,15 @@ fn put_sync_group(flags: SynFlags, sync_idx: c_int) {
     } else {
         msg_str_hl(c"groupthere", LIST_HL, false);
     }
-    msg_putchar(' ' as c_int);
+    msg_putchar(c_int::from(b' '));
     if sync_idx >= 0 {
         let block = cur_syn_block();
-        let target_id = block.patterns()[sync_idx as usize].sp_syn.id as c_int;
+        let target_id = c_int::from(block.patterns()[as_index(sync_idx)].sp_syn.id);
         msg_display(syn_id2name(target_id), 0, false);
     } else {
         msg_str(c"NONE");
     }
-    msg_putchar(' ' as c_int);
+    msg_putchar(c_int::from(b' '));
 }
 
 /// List one cluster and its members.
@@ -297,8 +316,8 @@ fn syn_list_cluster(id: c_int) {
     // Slight hack: roughly duplicate the guts of `syn_list_header`.
     let mut endcol = 15;
     let block = cur_syn_block();
-    let cluster = &block.clusters()[id as usize];
-    msg_putchar('\n' as c_int);
+    let cluster = &block.clusters()[as_index(id)];
+    msg_putchar(c_int::from(b'\n'));
     msg_display(&cluster.scl_name, 0, false);
 
     if msg_col.get() >= endcol {
@@ -320,9 +339,9 @@ fn syn_list_cluster(id: c_int) {
 /// Print `name=a,b,@cl` for a `contains=`/`containedin=`/`nextgroup=` list.
 fn put_id_list(name: &CStr, ids: &[int16_t], hl_id: c_int) {
     msg_str_hl(name, hl_id, false);
-    msg_putchar('=' as c_int);
+    msg_putchar(c_int::from(b'='));
     for (at, &id) in ids.iter().enumerate() {
-        let item = id as c_int;
+        let item = c_int::from(id);
         // Whether anything follows, which is what tells ALLBUT from ALL and
         // where the separating comma goes.
         let more = at + 1 < ids.len();
@@ -336,17 +355,17 @@ fn put_id_list(name: &CStr, ids: &[int16_t], hl_id: c_int) {
             msg_str(c"CONTAINED");
         } else if item >= SYNID_CLUSTER {
             let block = cur_syn_block();
-            let name = &block.clusters()[(item - SYNID_CLUSTER) as usize].scl_name;
-            msg_putchar('@' as c_int);
+            let name = &block.clusters()[as_index(item - SYNID_CLUSTER)].scl_name;
+            msg_putchar(c_int::from(b'@'));
             msg_display(name, 0, false);
         } else {
             msg_display(syn_id2name(item), 0, false);
         }
         if more {
-            msg_putchar(',' as c_int);
+            msg_putchar(c_int::from(b','));
         }
     }
-    msg_putchar(' ' as c_int);
+    msg_putchar(c_int::from(b' '));
 }
 
 /// The delimiters `put_pattern` will wrap a pattern in, best first.
@@ -359,16 +378,16 @@ const SEPCHARS: &[u8] = b"/+=-#@\"|'^&";
 /// one item, so a change is printed once rather than per pattern.
 fn put_pattern(last_matchgroup: &mut c_int, s: &CStr, c: c_int, spp: &SynPat) {
     // May have to write "matchgroup=group".
-    if *last_matchgroup != spp.sp_syn_match_id as c_int {
-        *last_matchgroup = spp.sp_syn_match_id as c_int;
+    if *last_matchgroup != c_int::from(spp.sp_syn_match_id) {
+        *last_matchgroup = c_int::from(spp.sp_syn_match_id);
         msg_str_hl(c"matchgroup", LIST_HL, false);
-        msg_putchar('=' as c_int);
+        msg_putchar(c_int::from(b'='));
         if *last_matchgroup == 0 {
             msg_display(c"NONE", 0, false);
         } else {
             msg_display(syn_id2name(*last_matchgroup), 0, false);
         }
-        msg_putchar(' ' as c_int);
+        msg_putchar(c_int::from(b' '));
     }
 
     // The name of the pattern and an '=' or ' '.
@@ -386,12 +405,12 @@ fn put_pattern(last_matchgroup: &mut c_int, s: &CStr, c: c_int, spp: &SynPat) {
             break;
         }
     }
-    msg_putchar(SEPCHARS[i] as c_int);
+    msg_putchar(c_int::from(SEPCHARS[i]));
     msg_display(pattern, 0, false);
-    msg_putchar(SEPCHARS[i] as c_int);
+    msg_putchar(c_int::from(SEPCHARS[i]));
 
     put_pattern_offsets(spp);
-    msg_putchar(' ' as c_int);
+    msg_putchar(c_int::from(b' '));
 }
 
 /// Print the `ms=s+1,he=e-2,lc=3` offsets of one pattern.
@@ -401,22 +420,22 @@ fn put_pattern_offsets(spp: &SynPat) {
         // A start offset and an end offset share one name; the flag word
         // holds the start half in its low `SPO_COUNT` bits.
         let mask = 1 << i;
-        if spp.sp_off_flags as c_int & (mask + (mask << SPO_COUNT)) == 0 {
+        if c_int::from(spp.sp_off_flags) & (mask + (mask << SPO_COUNT)) == 0 {
             continue;
         }
         if !first {
-            msg_putchar(',' as c_int); // separate with commas
+            msg_putchar(c_int::from(b',')); // separate with commas
         }
-        msg_str(SPO_NAME_TAB[i as usize]);
-        let n = spp.sp_offsets[i as usize];
+        msg_str(SPO_NAME_TAB[as_index(i)]);
+        let n = spp.sp_offsets[as_index(i)];
         if i != SPO_LC_OFF {
-            if spp.sp_off_flags as c_int & mask != 0 {
-                msg_putchar('s' as c_int);
+            if c_int::from(spp.sp_off_flags) & mask != 0 {
+                msg_putchar(c_int::from(b's'));
             } else {
-                msg_putchar('e' as c_int);
+                msg_putchar(c_int::from(b'e'));
             }
             if n > 0 {
-                msg_putchar('+' as c_int);
+                msg_putchar(c_int::from(b'+'));
             }
         }
         if n != 0 || i == SPO_LC_OFF {
@@ -515,7 +534,7 @@ fn put_keyword(
     let outlen = if force_newline {
         0
     } else {
-        keyword.len() as c_int
+        len_as_int(keyword.len())
     };
     if syn_list_header(did_header, outlen, id, force_newline) {
         *prev = KeywordOpts::none();
@@ -523,33 +542,33 @@ fn put_keyword(
 
     if prev.contained != opts.contained {
         msg_str_hl(c"contained", LIST_HL, false);
-        msg_putchar(' ' as c_int);
+        msg_putchar(c_int::from(b' '));
         prev.contained = opts.contained;
     }
     if !prev.cont_in_list.same(&opts.cont_in_list) {
         put_id_list(c"containedin", opts.cont_in_list.ids(), LIST_HL);
-        msg_putchar(' ' as c_int);
+        msg_putchar(c_int::from(b' '));
         prev.cont_in_list = opts.cont_in_list.clone();
     }
     if !prev.next_list.same(&opts.next_list) {
         put_id_list(c"nextgroup", opts.next_list.ids(), LIST_HL);
-        msg_putchar(' ' as c_int);
+        msg_putchar(c_int::from(b' '));
         prev.next_list = opts.next_list.clone();
         // The three skip flags are only meaningful with a `nextgroup=`,
         // and upstream only ever prints them here.
         if opts.skipnl != SynFlags::NONE {
             msg_str_hl(c"skipnl", LIST_HL, false);
-            msg_putchar(' ' as c_int);
+            msg_putchar(c_int::from(b' '));
             prev.skipnl = opts.skipnl;
         }
         if opts.skipwhite != SynFlags::NONE {
             msg_str_hl(c"skipwhite", LIST_HL, false);
-            msg_putchar(' ' as c_int);
+            msg_putchar(c_int::from(b' '));
             prev.skipwhite = opts.skipwhite;
         }
         if opts.skipempty != SynFlags::NONE {
             msg_str_hl(c"skipempty", LIST_HL, false);
-            msg_putchar(' ' as c_int);
+            msg_putchar(c_int::from(b' '));
             prev.skipempty = opts.skipempty;
         }
     }

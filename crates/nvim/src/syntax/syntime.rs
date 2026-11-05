@@ -5,6 +5,13 @@
 //! the table. Used to find the pattern that makes a syntax file slow.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
@@ -92,7 +99,7 @@ fn syntime_report() {
             matches: time.match_0,
             slowest: time.slowest,
             average: profile_divide(time.total, time.count),
-            id: spp.sp_syn.id as c_int,
+            id: c_int::from(spp.sp_syn.id),
             pattern: spp
                 .sp_pattern
                 .as_deref()

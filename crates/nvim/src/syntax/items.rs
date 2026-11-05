@@ -10,7 +10,16 @@
 //! reached ([`SynState::check_state_ends`]).
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
 use core::ffi::c_int;
 
 use super::*;
@@ -19,19 +28,19 @@ impl SynState {
     /// Number of items on the state stack.
     #[inline(always)]
     pub(crate) fn state_len(&self) -> c_int {
-        self.stack.len() as c_int
+        len_as_int(self.stack.len())
     }
 
     /// The item at `i` on the state stack (0 is the outermost).
     #[inline(always)]
     pub(crate) fn item(&self, i: c_int) -> &StateItem {
-        &self.stack[i as usize]
+        &self.stack[as_index(i)]
     }
 
     /// The item at `i`, to change.
     #[inline(always)]
     pub(crate) fn item_mut(&mut self, i: c_int) -> &mut StateItem {
-        &mut self.stack[i as usize]
+        &mut self.stack[as_index(i)]
     }
 
     /// The index of the innermost item. Only meaningful when the stack is not
@@ -73,7 +82,7 @@ impl SynState {
         cur_si.si_next_list = spp.sp_next_list.clone();
         cur_si.si_extmatch = extmatch;
 
-        if spp.sp_type as c_int == SPTYPE_START && !spp.sp_flags.has(SynFlags::ONELINE) {
+        if c_int::from(spp.sp_type) == SPTYPE_START && !spp.sp_flags.has(SynFlags::ONELINE) {
             // A start-skip-end that may cross lines: work out how much of it
             // is in this line.
             let endcol = self.next_match.m_endpos.col;
@@ -109,7 +118,7 @@ impl SynState {
 
         // If the start pattern has a `matchgroup=` of its own, push a second
         // item for it, ending where the start match ends.
-        if spp.sp_type as c_int == SPTYPE_START && spp.sp_syn_match_id != 0 {
+        if c_int::from(spp.sp_type) == SPTYPE_START && spp.sp_syn_match_id != 0 {
             self.push_current_state(idx);
             let top = self.top();
             let seqnr = self.take_seqnr();
@@ -224,7 +233,7 @@ impl SynState {
             // (SynFlags::HAS_EOL will not be set).
             let cur_si = self.item(cur);
             if cur_si.si_idx >= 0
-                && self.block().pattern(cur_si.si_idx).sp_type as c_int == SPTYPE_START
+                && c_int::from(self.block().pattern(cur_si.si_idx).sp_type) == SPTYPE_START
                 && !cur_si.si_flags.has(SynFlags::MATCH | SynFlags::KEEPEND)
             {
                 self.update_si_end(cur, self.col.get(), true);
@@ -251,9 +260,9 @@ impl SynState {
         let is_match = self.item(idx).si_flags.has(SynFlags::MATCH);
 
         let id = if is_match {
-            spp.sp_syn_match_id as c_int
+            c_int::from(spp.sp_syn_match_id)
         } else {
-            spp.sp_syn.id as c_int
+            c_int::from(spp.sp_syn.id)
         };
         let cont_list = if is_match {
             IdList::NONE

@@ -15,7 +15,16 @@
 //! builds.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
 use crate::types::Handle;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
@@ -143,7 +152,7 @@ impl HlGroup {
                 || self.rgb_fg_idx != kColorIdxNone
                 || self.rgb_bg_idx != kColorIdxNone
                 || self.rgb_sp_idx != kColorIdxNone
-                || (check_link && self.set & SG_LINK as c_int != 0))
+                || (check_link && self.set & SG_LINK.cast_signed() != 0))
     }
 }
 
@@ -170,17 +179,17 @@ static GROUPS: GlobalCell<GroupTable> = GlobalCell::new(GroupTable::new());
 
 /// The number of highlight groups.
 pub(crate) fn highlight_num_groups() -> c_int {
-    GROUPS.with(|table| table.entries.len() as c_int)
+    GROUPS.with(|table| len_as_int(table.entries.len()))
 }
 
 /// The id the group at *index* `id` links to, 0 for none.
 pub(crate) fn highlight_link_id(id: c_int) -> c_int {
-    GROUPS.with(|table| table.entries[id as usize].link)
+    GROUPS.with(|table| table.entries[as_index(id)].link)
 }
 
 /// A copy of the group with id `id`.
 pub(crate) fn group(id: c_int) -> HlGroup {
-    GROUPS.with(|table| table.entries[id as usize - 1])
+    GROUPS.with(|table| table.entries[as_index(id) - 1])
 }
 
 /// Runs `f` on the group with id `id`.
@@ -189,14 +198,14 @@ pub(crate) fn group(id: c_int) -> HlGroup {
 /// reach the table again — a `:highlight` from an autocommand, or the Lua
 /// callback a namespace lookup can run.
 pub(crate) fn with_group<R>(id: c_int, f: impl FnOnce(&mut HlGroup) -> R) -> R {
-    GROUPS.with_mut(|table| f(&mut table.entries[id as usize - 1]))
+    GROUPS.with_mut(|table| f(&mut table.entries[as_index(id) - 1]))
 }
 
 /// Whether the group with id `id` has any highlighting of its own.
 ///
 /// `check_link` also counts an explicit `:highlight link`.
 pub(crate) fn hl_has_settings(id: c_int, check_link: bool) -> bool {
-    GROUPS.with(|table| table.entries[id as usize - 1].has_settings(check_link))
+    GROUPS.with(|table| table.entries[as_index(id) - 1].has_settings(check_link))
 }
 
 /// Forgets everything the group with id `id` was given, keeping only its
@@ -233,11 +242,11 @@ pub(crate) fn set_hl_attr(id: c_int) {
     // The unset value for an RGB colour is -1, but a group is created with
     // zeroes, so the colour index is what says whether one was ever set.
     let at_en = GROUPS.with(|table| {
-        let group = &table.entries[id as usize - 1];
+        let group = &table.entries[as_index(id) - 1];
         HlAttrs {
             cterm_ae_attr: group.cterm,
-            cterm_fg_color: group.cterm_fg as int16_t,
-            cterm_bg_color: group.cterm_bg as int16_t,
+            cterm_fg_color: int16_t::try_from(group.cterm_fg).expect("a cterm colour fits 16 bits"),
+            cterm_bg_color: int16_t::try_from(group.cterm_bg).expect("a cterm colour fits 16 bits"),
             rgb_ae_attr: group.gui,
             rgb_fg_color: if group.rgb_fg_idx != kColorIdxNone {
                 group.rgb_fg
@@ -414,7 +423,7 @@ fn syn_add_group(name: &[u8]) -> Result<c_int, HighlightError> {
         scoped_parent = syn_check_group(&name[..at]);
     }
 
-    if highlight_num_groups() >= MAX_HL_ID as c_int {
+    if highlight_num_groups() >= MAX_HL_ID.cast_signed() {
         return Err(HighlightError::TooManyGroups);
     }
 
@@ -429,7 +438,7 @@ fn syn_add_group(name: &[u8]) -> Result<c_int, HighlightError> {
             table.entries.reserve(300);
         }
         table.entries.push(group);
-        let id = table.entries.len() as c_int;
+        let id = len_as_int(table.entries.len());
         table.ids.insert(group.name_u, id);
         Ok(id)
     })
@@ -534,12 +543,14 @@ pub(crate) fn syn_get_final_id(hl_id: c_int) -> c_int {
 /// entries because `syn_id2attr` is asked for them.
 pub(crate) fn open_scratch(keep: c_int, count: usize) {
     GROUPS.with_mut(|table| {
-        table.entries.truncate(keep as usize);
-        table.entries.resize(keep as usize + count, HlGroup::ZEROED);
+        table.entries.truncate(as_index(keep));
+        table
+            .entries
+            .resize(as_index(keep) + count, HlGroup::ZEROED);
     });
 }
 
 /// Gives the scratch entries back.
 pub(crate) fn close_scratch(keep: c_int) {
-    GROUPS.with_mut(|table| table.entries.truncate(keep as usize));
+    GROUPS.with_mut(|table| table.entries.truncate(as_index(keep)));
 }

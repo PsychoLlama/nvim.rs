@@ -9,7 +9,16 @@
 //! `hs=`/`he=`/`rs=`/`re=`/`lc=` offsets to a match.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
 use crate::narrow::number_as_col;
 use core::ffi::c_int;
 
@@ -117,7 +126,7 @@ impl SynState {
         // that continues to the next line because it contained a region.
         // Upstream answers `hl_endpos = startpos` here, which no caller reads:
         // both test `m_endpos.lnum` first, and it is 0.
-        if self.block().pattern(idx).sp_type as c_int != SPTYPE_START {
+        if c_int::from(self.block().pattern(idx).sp_type) != SPTYPE_START {
             let mut end = RegionEnd::none();
             end.hl_endpos = startpos;
             return end;
@@ -126,10 +135,10 @@ impl SynState {
         // Find the SKIP or first END pattern after the last START pattern. The
         // patterns of one `:syntax region` are stored consecutively, START(s)
         // then an optional SKIP then the ENDs.
-        while self.block().pattern(idx).sp_type as c_int == SPTYPE_START {
+        while c_int::from(self.block().pattern(idx).sp_type) == SPTYPE_START {
             idx += 1;
         }
-        let skip_idx = if self.block().pattern(idx).sp_type as c_int == SPTYPE_SKIP {
+        let skip_idx = if c_int::from(self.block().pattern(idx).sp_type) == SPTYPE_SKIP {
             idx += 1;
             Some(idx - 1)
         } else {
@@ -190,10 +199,10 @@ impl SynState {
     ) -> Option<(c_int, RegMMatch)> {
         let mut best: Option<(c_int, RegMMatch)> = None;
         let mut idx = start_idx;
-        while idx < self.block().patterns().len() as c_int {
+        while idx < len_as_int(self.block().patterns().len()) {
             let spp = self.block();
             let spp = spp.pattern(idx);
-            if spp.sp_type as c_int != SPTYPE_END {
+            if c_int::from(spp.sp_type) != SPTYPE_END {
                 break; // past the last END pattern of this region
             }
             let lc_col = (matchcol.get() - spp.sp_offsets[SPO_LC_OFF as usize]).max(0);
@@ -292,7 +301,7 @@ impl SynState {
                 // The end group is highlighted differently: the highlighting
                 // stops where the `matchgroup=` item takes over, and the match
                 // is then turned into that item.
-                let flagged = offsets.flags as c_int & (1 << (SPO_RE_OFF + SPO_COUNT)) != 0;
+                let flagged = c_int::from(offsets.flags) & (1 << (SPO_RE_OFF + SPO_COUNT)) != 0;
                 let base = if flagged {
                     best.endpos[0]
                 } else {
@@ -369,13 +378,13 @@ impl SynState {
         idx: c_int,
         extra: c_int,
     ) -> LPos {
-        let flagged = spp.flags as c_int & (1 << idx) != 0;
+        let flagged = c_int::from(spp.flags) & (1 << idx) != 0;
         let base = if flagged {
             regmatch.startpos[0]
         } else {
             regmatch.endpos[0]
         };
-        let off = spp.offsets[idx as usize] + if flagged { extra } else { 0 };
+        let off = spp.offsets[as_index(idx)] + if flagged { extra } else { 0 };
 
         let col = if base.lnum > self.line_count() {
             // Watch out for a match with the last NL in the buffer. Matters for
@@ -404,13 +413,13 @@ impl SynState {
         idx: c_int,
         extra: c_int,
     ) -> LPos {
-        let flagged = spp.flags as c_int & (1 << (idx + SPO_COUNT)) != 0;
+        let flagged = c_int::from(spp.flags) & (1 << (idx + SPO_COUNT)) != 0;
         let base = if flagged {
             regmatch.endpos[0]
         } else {
             regmatch.startpos[0]
         };
-        let off = spp.offsets[idx as usize] + if flagged { extra } else { 0 };
+        let off = spp.offsets[as_index(idx)] + if flagged { extra } else { 0 };
 
         let (lnum, col) = if base.lnum > self.line_count() {
             // A "\n" at the end of the pattern may take us below the last line.
@@ -566,7 +575,7 @@ impl SynState {
         // Find the first character after the keyword; the first character was
         // already checked by the caller. The walk stops at the end of the
         // line at the latest: past it there is no word character.
-        let text = &line[startcol as usize..];
+        let text = &line[as_index(startcol)..];
         let mut kwlen = 0;
         loop {
             kwlen += c_cluster_len(&text[kwlen..]);
@@ -591,7 +600,7 @@ impl SynState {
         let entry = found?;
         Some(KeywordMatch {
             id: c_int::from(entry.syn.id),
-            endcol: startcol + kwlen as c_int,
+            endcol: startcol + len_as_int(kwlen),
             flags: entry.flags,
             next_list: entry.next_list.clone(),
             cchar: entry.conceal_char,

@@ -1,4 +1,11 @@
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -46,6 +53,8 @@ use crate::highlight::state::{highlight_attr, highlight_attr_last};
 use crate::highlight_group::{
     HLF_COUNT, HighlightError, highlight_attr_set_all, highlight_changed, hlf_names, syn_id2name,
 };
+use crate::narrow::as_index;
+use crate::narrow::{len_as_int, len_as_integer};
 use crate::types::DictBuilder;
 use crate::types::{ApiString, Array, HlAttrs, HlEntry, HlKind, Integer, Object, uint32_t};
 use crate::ui::ui_call_hl_attr_define;
@@ -188,12 +197,12 @@ impl AttrTable {
     /// `entry`'s id, and whether it had to be added.
     fn put(&mut self, entry: HlEntry) -> (c_int, bool) {
         if let Some(&id) = self.ids.get(&entry) {
-            return (id as c_int, false);
+            return (id.cast_signed(), false);
         }
-        let id = self.entries.len() as uint32_t;
+        let id = uint32_t::try_from(self.entries.len()).expect("attribute ids fit 32 bits");
         self.entries.push(entry);
         self.ids.insert(entry, id);
-        (id as c_int, true)
+        (id.cast_signed(), true)
     }
 
     fn len(&self) -> usize {
@@ -206,16 +215,16 @@ impl AttrTable {
     /// unchecked here; a panic is the honest answer for the case it read out
     /// of bounds in.
     fn at(&self, id: c_int) -> HlEntry {
-        self.entries[id as usize]
+        self.entries[as_index(id)]
     }
 
     /// The entry `id` names, or `None` for anything outside the table — an id
     /// from before the last rebuild, or the 0 sentinel.
     fn live(&self, id: c_int) -> Option<HlEntry> {
-        if id <= 0 || id as usize >= self.entries.len() {
+        if id <= 0 || as_index(id) >= self.entries.len() {
             None
         } else {
-            Some(self.entries[id as usize])
+            Some(self.entries[as_index(id)])
         }
     }
 
@@ -244,7 +253,7 @@ impl UrlTable {
         if let Some(&id) = self.ids.get(url) {
             return id;
         }
-        let id = self.urls.len() as uint32_t;
+        let id = uint32_t::try_from(self.urls.len()).expect("url ids fit 32 bits");
         self.urls.push(url.to_owned());
         self.ids.insert(url.to_owned(), id);
         id
@@ -349,9 +358,9 @@ pub fn ui_send_all_hls(
     // ever did this stops rather than reading past the end.
     let mut i = 1;
     while i < ATTRS.with(AttrTable::len) {
-        let inspect = hl_inspect(i as c_int);
-        let attr = ATTRS.with(|attrs| attrs.at(i as c_int)).attr;
-        define(i as Integer, attr, inspect);
+        let inspect = hl_inspect(len_as_int(i));
+        let attr = ATTRS.with(|attrs| attrs.at(len_as_int(i))).attr;
+        define(len_as_integer(i), attr, inspect);
         i += 1;
     }
     for (hlf, name) in hlf_names.iter().enumerate() {
@@ -421,7 +430,7 @@ pub fn hl_get_underline() -> c_int {
 ///
 pub fn hl_add_url(attr: c_int, url: &CStr) -> c_int {
     let mut attrs = HLATTRS_INIT;
-    attrs.url = URLS.with_mut(|urls| urls.intern(url)) as i32;
+    attrs.url = URLS.with_mut(|urls| urls.intern(url)).cast_signed();
     let entry = HlEntry {
         attr: attrs,
         kind: kHlUI,
@@ -571,7 +580,7 @@ pub fn hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int {
 /// The number of ids handed out so far, counting the id-0 sentinel. Every id
 /// below this is a live entry.
 pub fn attr_entry_count() -> c_int {
-    ATTRS.with(AttrTable::len) as c_int
+    len_as_int(ATTRS.with(AttrTable::len))
 }
 
 /// The attributes id `attr` names.
@@ -630,7 +639,7 @@ fn hl_inspect_impl(arr: &mut Vec<Object>, attr: c_int) {
             let ui_name = if entry.id1 == -1 {
                 c"Normal"
             } else {
-                hlf_names[entry.id1 as usize]
+                hlf_names[as_index(entry.id1)]
             };
             put(&mut item, c"ui_name", name_object(ui_name));
             put(&mut item, c"hi_name", name_object(syn_id2name(entry.id2)));

@@ -7,14 +7,23 @@
 //! ones.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use crate::memory::ThinCString;
 use crate::message_fmt::msg_bytes;
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
 use crate::option::SavedCpo;
 use crate::semsg;
 use crate::types::Failed;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use super::*;
 use crate::regexp::{RE_MAGIC, char_delim, skip_regexp_at};
@@ -31,10 +40,10 @@ pub(crate) fn syn_incl_toplevel(id: c_int, flags: &mut SynFlags) {
     }
     *flags |= SynFlags::CONTAINED | SynFlags::INCLUDED_TOPLEVEL;
     if cur_syn_block().b_syn_topgrp >= SYNID_CLUSTER {
-        let tlg_id = (cur_syn_block().b_syn_topgrp - SYNID_CLUSTER) as usize;
+        let tlg_id = as_index(cur_syn_block().b_syn_topgrp - SYNID_CLUSTER);
         let mut block = cur_syn_block();
         let list = &mut block.clusters_mut()[tlg_id].scl_list;
-        syn_combine_list(list, IdList::from_ids(&[id as int16_t]), CLUSTER_ADD);
+        syn_combine_list(list, IdList::from_ids(&[id16(id)]), CLUSTER_ADD);
     }
 }
 
@@ -96,7 +105,7 @@ pub(crate) fn syn_cmd_include(args: &mut ExArg, _syncing: c_int) {
     let arg = args.line.cstr_from(args.line.arg);
     // The command's own line, which nothing the script runs can reach.
     let failed = if source {
-        do_source(arg, false, DOSO_NONE as c_int, None) == FAIL
+        do_source(arg, false, DOSO_NONE.cast_signed(), None) == FAIL
     } else {
         source_runtime(arg, RuntimeOpts::ALL).is_err()
     };
@@ -168,8 +177,8 @@ pub(crate) fn syn_cmd_match(args: &mut ExArg, syncing: c_int) {
                 // Store the pattern in the item list; the three id lists are
                 // handed over rather than copied.
                 item.sp_syncing = syncing != 0;
-                item.sp_type = SPTYPE_MATCH as c_char;
-                item.sp_syn.id = syn_id as int16_t;
+                item.sp_type = sp_type_char(SPTYPE_MATCH);
+                item.sp_syn.id = id16(syn_id);
                 item.sp_syn.inc_tag = current_syn_inc_tag.get();
                 item.sp_flags = opt.flags;
                 item.sp_sync_idx = opt.sync_idx;
@@ -281,7 +290,7 @@ fn parse_region_args(args: &mut ExArg, line: &[u8], at: Option<usize>) -> Region
         }
 
         at = key_end + skip::white(&line[key_end..]);
-        if byte(at) != '=' as c_int {
+        if byte(at) != c_int::from(b'=') {
             cursor = None;
             let shown = msg_bytes(line);
             semsg!("E398: Missing '=': {shown}");
@@ -322,7 +331,7 @@ fn parse_region_args(args: &mut ExArg, line: &[u8], at: Option<usize>) -> Region
         {
             pat.sp_flags |= SynFlags::HAS_EOL;
         }
-        out.pats[item as usize].insert(0, RegionPat { pat, matchgroup_id });
+        out.pats[as_index(item)].insert(0, RegionPat { pat, matchgroup_id });
     }
 
     // An `illegal` stop is reported as E390, which is what upstream's
@@ -401,20 +410,20 @@ fn store_region(args: RegionArgs, syn_id: c_int, syncing: bool) {
         block.b_syn_containedin = 1;
     }
     for item in [ITEM_START, ITEM_SKIP, ITEM_END] {
-        for entry in ::core::mem::take(&mut pats[item as usize]) {
+        for entry in ::core::mem::take(&mut pats[as_index(item)]) {
             let mut spp = entry.pat;
             spp.sp_syncing = syncing;
-            spp.sp_type = if item == ITEM_START {
+            spp.sp_type = sp_type_char(if item == ITEM_START {
                 SPTYPE_START
             } else if item == ITEM_SKIP {
                 SPTYPE_SKIP
             } else {
                 SPTYPE_END
-            } as c_char;
+            });
             spp.sp_flags |= opt.flags;
-            spp.sp_syn.id = syn_id as int16_t;
+            spp.sp_syn.id = id16(syn_id);
             spp.sp_syn.inc_tag = current_syn_inc_tag.get();
-            spp.sp_syn_match_id = entry.matchgroup_id as int16_t;
+            spp.sp_syn_match_id = id16(entry.matchgroup_id);
             spp.sp_cchar = conceal_char;
             if item == ITEM_START {
                 // Every START of the region gets its own copy: upstream
@@ -455,7 +464,7 @@ pub(crate) fn read_pattern(
     // borrowed from the caller is handed to a raw pointer.
     let mut tail: Vec<u8> = Vec::with_capacity(body.len() + 1);
     tail.extend_from_slice(body);
-    tail.push(NUL as u8);
+    tail.push(0);
 
     let end = 1 + skip_regexp_at(&tail[1..], char_delim(delimiter), 1);
     if cstr::byte_at(&tail, end) != delimiter {
@@ -495,7 +504,7 @@ fn offset_name(text: &[u8], at: usize) -> Option<c_int> {
     let idx = SPO_NAME_TAB
         .iter()
         .rposition(|name| name.to_bytes() == head)?;
-    Some(idx as c_int)
+    Some(len_as_int(idx))
 }
 
 /// Read the comma-separated `ms=s+1,he=e-2,lc=3` offsets after a pattern.
@@ -508,7 +517,7 @@ fn read_pattern_offsets(ci: &mut SynPat, text: &mut [u8], mut at: usize) -> usiz
         let Some(mut idx) = offset_name(text, at) else {
             return at;
         };
-        let slot = idx as usize;
+        let slot = as_index(idx);
 
         // An offset applies to the match's start unless it names `e`, which
         // selects the second half of the flag word.
@@ -519,7 +528,7 @@ fn read_pattern_offsets(ci: &mut SynPat, text: &mut [u8], mut at: usize) -> usiz
                 _ => return at,
             }
         }
-        ci.sp_off_flags |= (1 << idx) as int16_t;
+        ci.sp_off_flags |= id16(1 << idx);
 
         if idx == SPO_LC_OFF {
             // lc=99
@@ -527,8 +536,8 @@ fn read_pattern_offsets(ci: &mut SynPat, text: &mut [u8], mut at: usize) -> usiz
             at = past;
             ci.sp_offsets[slot] = n;
             // An "lc=" offset automatically sets the "ms=" offset.
-            if ci.sp_off_flags as c_int & (1 << SPO_MS_OFF) == 0 {
-                ci.sp_off_flags |= (1 << SPO_MS_OFF) as int16_t;
+            if c_int::from(ci.sp_off_flags) & (1 << SPO_MS_OFF) == 0 {
+                ci.sp_off_flags |= id16(1 << SPO_MS_OFF);
                 ci.sp_offsets[SPO_MS_OFF as usize] = n;
             }
         } else {
@@ -559,7 +568,7 @@ mod tests {
 
     /// The offsets `text` names, read as `read_pattern` would read them.
     fn offsets(text: &str) -> (SynPat, usize) {
-        let mut buffer: Vec<u8> = text.bytes().chain([NUL as u8]).collect();
+        let mut buffer: Vec<u8> = text.bytes().chain([0]).collect();
         let mut pat = EMPTY_SYNPAT;
         let at = read_pattern_offsets(&mut pat, &mut buffer, 0);
         (pat, at)
@@ -571,7 +580,7 @@ mod tests {
         assert_eq!(at, 6);
         assert_eq!(pat.sp_offsets[SPO_MS_OFF as usize], 1);
         assert_eq!(
-            pat.sp_off_flags as c_int & (1 << SPO_MS_OFF),
+            c_int::from(pat.sp_off_flags) & (1 << SPO_MS_OFF),
             1 << SPO_MS_OFF
         );
     }
@@ -582,8 +591,11 @@ mod tests {
         assert_eq!(at, 6);
         assert_eq!(pat.sp_offsets[SPO_HE_OFF as usize], -2);
         let from_end = SPO_HE_OFF + SPO_COUNT;
-        assert_eq!(pat.sp_off_flags as c_int & (1 << from_end), 1 << from_end);
-        assert_eq!(pat.sp_off_flags as c_int & (1 << SPO_HE_OFF), 0);
+        assert_eq!(
+            c_int::from(pat.sp_off_flags) & (1 << from_end),
+            1 << from_end
+        );
+        assert_eq!(c_int::from(pat.sp_off_flags) & (1 << SPO_HE_OFF), 0);
     }
 
     #[test]
@@ -604,7 +616,7 @@ mod tests {
         assert_eq!(pat.sp_offsets[SPO_LC_OFF as usize], 3);
         assert_eq!(pat.sp_offsets[SPO_MS_OFF as usize], 3);
         assert_eq!(
-            pat.sp_off_flags as c_int & (1 << SPO_MS_OFF),
+            c_int::from(pat.sp_off_flags) & (1 << SPO_MS_OFF),
             1 << SPO_MS_OFF
         );
     }

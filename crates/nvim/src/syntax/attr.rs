@@ -11,7 +11,15 @@
 //! highlighted line.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use crate::narrow::len_as_int;
 use crate::narrow::number_as_col;
 use core::ffi::c_int;
 
@@ -374,7 +382,7 @@ impl SynState {
         self.next_match.idx = 0; // no match in this line yet
         self.next_match.col = ColNr::MAX;
 
-        let mut idx = block.patterns().len() as c_int;
+        let mut idx = len_as_int(block.patterns().len());
         while idx > 0 {
             idx -= 1;
             // Everything the loop needs is copied out first: `find_endpos`
@@ -588,7 +596,7 @@ impl SynState {
             if block.b_nospell_cluster_id == 0 || trans_id == 0 {
                 return block.b_syn_spell != SYNSPL_NOTOP;
             }
-            sps.id = block.b_nospell_cluster_id as int16_t;
+            sps.id = id16(block.b_nospell_cluster_id);
             return !self.in_id_list(Some(sip), contains, sps, no_cont_in, SynFlags::NONE);
         }
         // The @Spell cluster is defined: spell check in items carrying it,
@@ -597,10 +605,10 @@ impl SynState {
         if trans_id == 0 {
             return block.b_syn_spell == SYNSPL_TOP;
         }
-        sps.id = block.b_spell_cluster_id as int16_t;
+        sps.id = id16(block.b_spell_cluster_id);
         let mut can = self.in_id_list(Some(sip), contains, sps, no_cont_in, SynFlags::NONE);
         if block.b_nospell_cluster_id != 0 {
-            sps.id = block.b_nospell_cluster_id as int16_t;
+            sps.id = id16(block.b_nospell_cluster_id);
             if self.in_id_list(Some(sip), contains, sps, no_cont_in, SynFlags::NONE) {
                 can = false;
             }
@@ -663,7 +671,7 @@ impl PatScan {
         PatScan {
             syncing: spp.sp_syncing,
             flags: spp.sp_flags,
-            ty: spp.sp_type as c_int,
+            ty: c_int::from(spp.sp_type),
             line_id: spp.sp_line_id,
             startcol: spp.sp_startcol.get(),
             syn: spp.sp_syn,

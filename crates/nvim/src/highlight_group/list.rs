@@ -6,9 +6,18 @@
 //! line. The `get_highlight_name*` pair is command-line completion.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::charset::skip;
 use crate::cstr;
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
 use crate::types::Candidate;
 use core::ffi::{CStr, c_int};
 
@@ -141,7 +150,7 @@ fn list_arg(id: c_int, didh: bool, value: ListValue, name: &CStr) -> bool {
         return didh;
     };
 
-    let width = vim_strsize_cstr(text) + name.count_bytes() as c_int + 1;
+    let width = vim_strsize_cstr(text) + len_as_int(name.count_bytes()) + 1;
     syn_list_header(didh, width, id, false);
     if !got_int.get() {
         if !name.is_empty() {
@@ -191,7 +200,7 @@ pub(crate) fn highlight_list_one(id: c_int) {
         syn_list_header(didh, 0, id, true);
         didh = true;
         msg_str_hl(c"links to", HLF_D, false);
-        msg_putchar(' ' as c_int);
+        msg_putchar(c_int::from(b' '));
         msg_display(group(entry.link).name, 0, false);
     }
 
@@ -222,7 +231,7 @@ pub(crate) fn syn_list_header(
     // SAFETY: main-thread message calls.
     if !did_header {
         if !ui_has(kUIMessages) || msg_col.get() > 0 {
-            msg_putchar('\n' as c_int);
+            msg_putchar(c_int::from(b'\n'));
         }
         if got_int.get() {
             return true;
@@ -231,10 +240,10 @@ pub(crate) fn syn_list_header(
         msg_col.set(name_col);
         endcol = 15;
     } else if (ui_has(kUIMessages) || msg_silent.get() != 0) && !force_newline {
-        msg_putchar(' ' as c_int);
+        msg_putchar(c_int::from(b' '));
         adjust = false;
     } else if msg_col.get() + outlen + 1 >= Columns.get() || force_newline {
-        msg_putchar('\n' as c_int);
+        msg_putchar(c_int::from(b'\n'));
         if got_int.get() {
             return true;
         }
@@ -253,10 +262,10 @@ pub(crate) fn syn_list_header(
 
     if !did_header {
         if endcol == Columns.get() - 1 && endcol <= name_col {
-            msg_putchar(' ' as c_int);
+            msg_putchar(c_int::from(b' '));
         }
         msg_str_hl(c"xxx", id, false);
-        msg_putchar(' ' as c_int);
+        msg_putchar(c_int::from(b' '));
     }
 
     newline
@@ -278,12 +287,19 @@ fn highlight_list() {
 fn highlight_list_two(cnt: c_int, id: c_int) {
     const FRAMES: &[u8] = b"N \x08I \x08!  \x08\0";
     // The index is 0 or 9, both inside.
-    let at = (cnt / 11) as usize;
+    let at = as_index(cnt / 11);
     msg_str_hl(cstr::in_bytes(&FRAMES[at..]), id, false);
     msg_clr_eos();
     ui_flush();
     // TODO(justinmk): is this delay needed? ":hi" seems to work without it.
-    os_delay(if cnt == 99 { 40 } else { cnt as u64 * 50 }, false);
+    os_delay(
+        if cnt == 99 {
+            40
+        } else {
+            u64::from(cnt.unsigned_abs()) * 50
+        },
+        false,
+    );
 }
 
 /// `strncmp(full, word, word.len()) == 0`: whether `word` is a prefix of

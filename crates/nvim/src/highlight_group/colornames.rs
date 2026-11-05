@@ -7,9 +7,18 @@
 //! given survives the round trip.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
 use core::cmp::Ordering;
 use core::ffi::{CStr, c_int};
 
@@ -773,7 +782,7 @@ fn parse_hex6(digits: &[u8]) -> Option<RgbValue> {
     }
     let mut value: RgbValue = 0;
     for &byte in digits {
-        value = value * 16 + RgbValue::from((byte as char).to_digit(16)? as u8);
+        value = value * 16 + RgbValue::try_from(char::from(byte).to_digit(16)?).ok()?;
     }
     Some(value)
 }
@@ -809,7 +818,7 @@ pub(crate) fn name_to_color(name: &CStr) -> (RgbValue, c_int) {
         match casecmp(name, COLOR_NAMES[mid].name) {
             Ordering::Less => hi = mid,
             Ordering::Greater => lo = mid + 1,
-            Ordering::Equal => return (COLOR_NAMES[mid].color, mid as c_int),
+            Ordering::Equal => return (COLOR_NAMES[mid].color, len_as_int(mid)),
         }
     }
     (-1, kColorIdxNone)
@@ -825,7 +834,7 @@ pub(crate) fn name_to_color(name: &CStr) -> (RgbValue, c_int) {
 /// `kColorIdx*` values — upstream called `abort()` in the same place.
 pub(crate) fn coloridx_to_name(idx: c_int, val: c_int, hexbuf: &mut HexBuf) -> Option<&CStr> {
     if idx >= 0 {
-        return Some(COLOR_NAMES[idx as usize].name);
+        return Some(COLOR_NAMES[as_index(idx)].name);
     }
     match idx {
         kColorIdxNone => None,
@@ -835,12 +844,12 @@ pub(crate) fn coloridx_to_name(idx: c_int, val: c_int, hexbuf: &mut HexBuf) -> O
             let [r, g, b] = [val >> 16 & 0xff, val >> 8 & 0xff, val & 0xff];
             *hexbuf = [
                 b'#',
-                HEX[(r >> 4) as usize],
-                HEX[(r & 0xf) as usize],
-                HEX[(g >> 4) as usize],
-                HEX[(g & 0xf) as usize],
-                HEX[(b >> 4) as usize],
-                HEX[(b & 0xf) as usize],
+                HEX[as_index(r >> 4)],
+                HEX[as_index(r & 0xf)],
+                HEX[as_index(g >> 4)],
+                HEX[as_index(g & 0xf)],
+                HEX[as_index(b >> 4)],
+                HEX[as_index(b & 0xf)],
                 0,
             ];
             Some(CStr::from_bytes_with_nul(hexbuf).expect("NUL-terminated"))

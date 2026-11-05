@@ -8,8 +8,16 @@
 //! [`syn_cmd_sync`] is the command that configures them.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::message_fmt::msg_bytes;
+use crate::narrow::len_as_int;
 use crate::option::SavedCpo;
 use crate::regexp::{char_delim, skip_regexp_at};
 use crate::semsg;
@@ -114,13 +122,13 @@ impl SynState {
 
         // Restrict the search for the end of the comment to "maxlines".
         if find_start_comment(self.block().b_syn_sync_maxlines as c_int).is_some() {
-            let mut idx = self.block().patterns().len() as c_int;
+            let mut idx = len_as_int(self.block().patterns().len());
             while idx > 0 {
                 idx -= 1;
                 let block = self.block();
                 let spp = block.pattern(idx);
-                if spp.sp_syn.id as c_int == self.block().b_syn_sync_id as c_int
-                    && spp.sp_type as c_int == SPTYPE_START
+                if c_int::from(spp.sp_syn.id) == c_int::from(self.block().b_syn_sync_id)
+                    && c_int::from(spp.sp_type) == SPTYPE_START
                 {
                     self.validate_current_state();
                     self.push_current_state(idx);
@@ -442,11 +450,11 @@ pub(crate) fn syn_cmd_sync(args: &mut ExArg, _syncing: c_int) {
                 arg_end = args.line.skip_to_white(next_arg);
                 if !args.skip {
                     let name = args.line.slice_at(next_arg, arg_end - next_arg);
-                    cur_syn_block().b_syn_sync_id = syn_check_group(name) as int16_t;
+                    cur_syn_block().b_syn_sync_id = id16(syn_check_group(name));
                 }
                 next_arg = args.line.skip_white(arg_end);
             } else if !args.skip {
-                cur_syn_block().b_syn_sync_id = syn_name2id(c"Comment") as int16_t;
+                cur_syn_block().b_syn_sync_id = id16(syn_name2id(c"Comment"));
             }
         } else if let Some(count) = sync_count_key(word) {
             if word.get(count.digits_at - 1) != Some(&b'=')

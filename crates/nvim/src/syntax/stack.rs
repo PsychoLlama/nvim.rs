@@ -17,7 +17,16 @@
 //! is left over, at a distance that depends on how long the buffer is.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
 use crate::winlayer::Buf;
 use core::ffi::c_int;
 
@@ -383,12 +392,12 @@ impl SynState {
             // When shrinking, clean up the existing stack first and make sure
             // every entry that is still valid fits in the new array.
             let used =
-                |block: &SynBlockRef| (block.b_sst.len() - block.b_sst.free_count()) as c_int;
+                |block: &SynBlockRef| len_as_int(block.b_sst.len() - block.b_sst.free_count());
             while used(&block) + 2 > len && self.stack_cleanup() {}
             len = len.max(used(&block) + 2);
         }
         debug_assert!(len >= 0);
-        block.b_sst.rebuild(len as usize);
+        block.b_sst.rebuild(as_index(len));
     }
 
     /// Thin out the parsed block's cache, answering whether anything was
@@ -606,7 +615,6 @@ mod tests {
     use super::*;
     use crate::buffer::{bare_buffer, free_bare_buffer};
     use crate::global_cell::{editor_state::Held, editor_state_lock};
-    use core::ffi::c_char;
 
     /// A parser over a bare buffer's syntax block with `patterns` plain
     /// match patterns, a cache of `entries` entries and an empty, valid state
@@ -626,7 +634,7 @@ mod tests {
             let mut block = buffer.syntax();
             for _ in 0..patterns {
                 let mut pattern = EMPTY_SYNPAT;
-                pattern.sp_type = SPTYPE_MATCH as c_char;
+                pattern.sp_type = sp_type_char(SPTYPE_MATCH);
                 block.b_syn_patterns.push(pattern);
             }
             let mut parser = SynState::new();

@@ -1,8 +1,16 @@
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
+use crate::narrow::as_index;
 use crate::types::Handle;
 use core::ffi::{CStr, c_int, c_uint};
 
@@ -106,7 +114,7 @@ fn combine_stl_hlt(
         // a set of attribute bits at all. The arm is unreachable --
         // `id_alt` is `HLF_SNC`'s final id, and a builtin group always
         // has one -- so this is carried as written rather than fixed.
-        let attr = HlAttrFlags::from_bits(highlight_attr.with(|attrs| attrs[hlf as usize]));
+        let attr = HlAttrFlags::from_bits(highlight_attr.with(|attrs| attrs[as_index(hlf)]));
         HlGroup {
             cterm: attr,
             gui: attr,
@@ -161,7 +169,7 @@ pub(crate) fn highlight_changed() {
     let mut id_s = None;
     let mut id_snc = 0;
     for hlf in 1..HLF_COUNT {
-        let name = hlf_names[hlf as usize];
+        let name = hlf_names[as_index(hlf)];
         let id = syn_check_group(name.to_bytes());
         assert!(id != 0, "builtin highlight group {hlf} could not be added");
 
@@ -175,8 +183,8 @@ pub(crate) fn highlight_changed() {
         }
 
         let attr = hl_get_ui_attr(ns_id.get(), hlf, final_id, hlf == HLF_INACTIVE);
-        highlight_attr.with_mut(|attrs| attrs[hlf as usize] = attr);
-        if attr == highlight_attr_last.with(|last| last[hlf as usize]) {
+        highlight_attr.with_mut(|attrs| attrs[as_index(hlf)] = attr);
+        if attr == highlight_attr_last.with(|last| last[as_index(hlf)]) {
             continue;
         }
         if hlf == HLF_MSG {
@@ -184,7 +192,7 @@ pub(crate) fn highlight_changed() {
             msg_grid.blending = syn_attr2entry(attr).hl_blend > -1;
         }
         ui_call_hl_group_set(ApiString::from_cstr(name), Integer::from(attr));
-        highlight_attr_last.with_mut(|last| last[hlf as usize] = attr);
+        highlight_attr_last.with_mut(|last| last[as_index(hlf)] = attr);
     }
 
     // Ten scratch entries, live at once in case the attribute table
@@ -205,8 +213,8 @@ pub(crate) fn highlight_changed() {
                 combine_stl_hlt(id, id_s, id_snc, hlcnt, i, HLF_SNC),
             )
         };
-        highlight_user.with_mut(|table| table[i as usize] = user);
-        highlight_stlnc.with_mut(|table| table[i as usize] = stlnc);
+        highlight_user.with_mut(|table| table[as_index(i)] = user);
+        highlight_stlnc.with_mut(|table| table[as_index(i)] = stlnc);
     }
     close_scratch(hlcnt);
 
