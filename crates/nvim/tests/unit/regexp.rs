@@ -1837,3 +1837,328 @@ fn a_back_reference_to_a_group_that_spans_lines_matches_on_both_engines() {
     put("set regexpengine=0");
     put("silent! keepjumps keepmarks %delete _");
 }
+
+// ---------------------------------------------------------------------------
+// Refusals
+// ---------------------------------------------------------------------------
+
+/// Every message a refused pattern puts out, engine by engine, through
+/// `match()` (which says nothing of its own after the compiler): one row per
+/// pattern, the backtracking engine's messages and then the NFA engine's.
+/// The automatic engine says exactly what the NFA one does -- it only falls
+/// back when the NFA engine declined without a word. A doubled, dropped or
+/// reordered message moves a row.
+#[test]
+fn refusals_report_once() {
+    let sandbox = Sandbox::globals();
+    let fx = crate::support::Probe::new(sandbox.editor());
+    let rows: &[(&str, &str, &str)] = &[
+        (r"\(", "E54: Unmatched \\(", "E54: Unmatched \\("),
+        (r"\)", "E55: Unmatched \\)", "E55: Unmatched \\)"),
+        (r"\%(", "E53: Unmatched \\%(", "E53: Unmatched \\%("),
+        (
+            r"a\{",
+            "E554: Syntax error in \\{...}",
+            "E554: Syntax error in \\{...}\nE870: (NFA regexp) Error reading repetition limits",
+        ),
+        (
+            r"a\{x",
+            "E554: Syntax error in \\{...}",
+            "E554: Syntax error in \\{...}\nE870: (NFA regexp) Error reading repetition limits",
+        ),
+        (
+            r"a\{1,x}",
+            "E554: Syntax error in \\{...}",
+            "E554: Syntax error in \\{...}\nE870: (NFA regexp) Error reading repetition limits",
+        ),
+        (r"\v(", "E54: Unmatched (", "E54: Unmatched ("),
+        (r"\v)", "E55: Unmatched )", "E55: Unmatched )"),
+        (r"\v%(", "E53: Unmatched %(", "E53: Unmatched %("),
+        (
+            r"\z(a\)",
+            "E66: \\z( not allowed here",
+            "E66: \\z( not allowed here",
+        ),
+        (
+            r"\z1",
+            "E67: \\z1 - \\z9 not allowed here",
+            "E67: \\z1 - \\z9 not allowed here",
+        ),
+        (
+            r"\zq",
+            "E68: Invalid character after \\z",
+            "E867: (NFA) Unknown operator '\\zq'",
+        ),
+        (
+            r"\v(a){1,2}{3}",
+            "E62: Nested {",
+            "E871: (NFA regexp) Can't have a multi follow a multi",
+        ),
+        (
+            r"a**",
+            "E61: Nested *",
+            "E871: (NFA regexp) Can't have a multi follow a multi",
+        ),
+        (
+            r"a*\+",
+            "E62: Nested \\+",
+            "E871: (NFA regexp) Can't have a multi follow a multi",
+        ),
+        (
+            r"a\{1}*",
+            "E61: Nested *",
+            "E871: (NFA regexp) Can't have a multi follow a multi",
+        ),
+        (
+            r"a\{1}\{2}",
+            "E62: Nested \\{",
+            "E871: (NFA regexp) Can't have a multi follow a multi",
+        ),
+        (
+            r"\+",
+            "E64: \\+ follows nothing",
+            "E866: (NFA regexp) Misplaced +",
+        ),
+        (
+            r"\v+",
+            "E64: + follows nothing",
+            "E866: (NFA regexp) Misplaced +",
+        ),
+        (
+            r"\=",
+            "E64: \\= follows nothing",
+            "E866: (NFA regexp) Misplaced =",
+        ),
+        (
+            r"\@=",
+            "E64: \\@ follows nothing",
+            "E866: (NFA regexp) Misplaced @",
+        ),
+        (
+            r"a\@x",
+            "E59: Invalid character after \\@",
+            "E869: (NFA) Unknown operator '\\@x'",
+        ),
+        (
+            r"a\@<x",
+            "E59: Invalid character after \\@",
+            "E869: (NFA) Unknown operator '\\@x'",
+        ),
+        (
+            r"\_%",
+            "E63: Invalid use of \\_",
+            "E877: (NFA regexp) Invalid character class: 37",
+        ),
+        (
+            r"\_q",
+            "E63: Invalid use of \\_",
+            "E877: (NFA regexp) Invalid character class: 113",
+        ),
+        (r"\_[", "none", "none"),
+        (
+            r"\1",
+            "E65: Illegal back reference",
+            "E65: Illegal back reference",
+        ),
+        (
+            r"\(a\)\2",
+            "E65: Illegal back reference",
+            "E65: Illegal back reference",
+        ),
+        (
+            r"[b-a]",
+            "E944: Reverse range in character class",
+            "E944: Reverse range in character class",
+        ),
+        (r"[\U110000]", "none", "none"),
+        (r"[\U10FFFF]", "none", "none"),
+        (
+            r"[\d1-\d1000]",
+            "E945: Range too large in character class",
+            "none",
+        ),
+        (r"[\x100-\x400]", "none", "none"),
+        (
+            r"\%d99999999999",
+            "E678: Invalid character after \\%[dxouU]",
+            "E678: Invalid character after \\%[dxouU]",
+        ),
+        (
+            r"\%d",
+            "E678: Invalid character after \\%[dxouU]",
+            "E678: Invalid character after \\%[dxouU]",
+        ),
+        (
+            r"\%x",
+            "E678: Invalid character after \\%[dxouU]",
+            "E678: Invalid character after \\%[dxouU]",
+        ),
+        (
+            r"\%u",
+            "E678: Invalid character after \\%[dxouU]",
+            "E678: Invalid character after \\%[dxouU]",
+        ),
+        (
+            r"\%U",
+            "E678: Invalid character after \\%[dxouU]",
+            "E678: Invalid character after \\%[dxouU]",
+        ),
+        (
+            r"\%q",
+            "E71: Invalid character after \\%",
+            "E867: (NFA) Unknown operator '\\%q'",
+        ),
+        (
+            r"\%.5l",
+            "E1204: No Number allowed after .: '\\%l'",
+            "E1204: No Number allowed after .: '\\%5'",
+        ),
+        (r"\%.l", "none", "none"),
+        (r"\%99999999999l", "none", "E951: \\% value too large"),
+        (r"\%99999999999c", "none", "E951: \\% value too large"),
+        (r"\%99999999999v", "none", "E951: \\% value too large"),
+        (
+            r"\%<l",
+            "E71: Invalid character after \\%",
+            "E1273: (NFA regexp) missing value in '\\%l'",
+        ),
+        (
+            r"\%>c",
+            "E71: Invalid character after \\%",
+            "E1273: (NFA regexp) missing value in '\\%c'",
+        ),
+        (
+            r"\%l",
+            "E71: Invalid character after \\%",
+            "E1273: (NFA regexp) missing value in '\\%l'",
+        ),
+        (
+            r"a\%#=1",
+            "E1281: Atom '\\%#=1' must be at the start of the pattern",
+            "E1281: Atom '\\%#=1' must be at the start of the pattern",
+        ),
+        (r"\%#=3a", "none", "none"),
+        (r"\%#=", "none", "none"),
+        (r"\%#=9", "none", "none"),
+        (r"a\", "none", "none"),
+        (
+            r"\(\(\(\(\(\(\(\(\(\(a\)\)\)\)\)\)\)\)\)\)",
+            "E51: Too many \\(",
+            "E872: (NFA regexp) Too many '('",
+        ),
+        (
+            r"\%[",
+            "E69: Missing ] after \\%[",
+            "E69: Missing ] after \\%[",
+        ),
+        (
+            r"\%[abc",
+            "E69: Missing ] after \\%[",
+            "E69: Missing ] after \\%[",
+        ),
+        (r"\%[]", "E70: Empty \\%[]", "E70: Empty \\%[]"),
+        (r"\%[\(a\)]", "E369: Invalid item in \\%[]", "none"),
+        (
+            r"\%[a*]",
+            "E64: * follows nothing",
+            "E866: (NFA regexp) Misplaced *",
+        ),
+        (r"\%[a\%[b]]", "E369: Invalid item in \\%[]", "none"),
+        (r"\%[\zs]", "none", "none"),
+        (
+            r"\zs*",
+            "E888: (NFA regexp) cannot repeat \\zs",
+            "E888: (NFA regexp) cannot repeat \\zs",
+        ),
+        (
+            r"\ze\+",
+            "E888: (NFA regexp) cannot repeat \\ze",
+            "E888: (NFA regexp) cannot repeat \\ze",
+        ),
+        (r"\v<*", "none", "none"),
+        (r"\%^*", "none", "none"),
+        (r"\%$*", "none", "none"),
+        (
+            r"x\{-1,2}*",
+            "E61: Nested *",
+            "E871: (NFA regexp) Can't have a multi follow a multi",
+        ),
+        (
+            r"\(\)\{1,2}\(\)\{1,2}\(\)\{1,2}\(\)\{1,2}\(\)\{1,2}\(\)\{1,2}\(\)\{1,2}\(\)\{1,2}\(\)\{1,2}\(\)\{1,2}\(\)\{1,2}",
+            "E51: Too many \\(",
+            "E872: (NFA regexp) Too many '('",
+        ),
+        (r"\%V*", "none", "none"),
+        (
+            r"\{",
+            "E64: \\{ follows nothing",
+            "E866: (NFA regexp) Misplaced {",
+        ),
+        (r"*", "none", "none"),
+        (r"a\|*", "none", "none"),
+        (r"\(*\)", "none", "none"),
+        (
+            r"\@<=x",
+            "E64: \\@ follows nothing",
+            "E866: (NFA regexp) Misplaced @",
+        ),
+        (r"\%[a]\@=", "none", "none"),
+        (
+            r"\%#=1\%[ab]",
+            "E1281: Atom '\\%#=1' must be at the start of the pattern",
+            "E1281: Atom '\\%#=1' must be at the start of the pattern",
+        ),
+        (r"[[:alpha:]", "none", "none"),
+        (r"[[=a=]", "none", "none"),
+        (r"[[.a.]", "none", "none"),
+        (r"[a", "none", "none"),
+        (r"\%[a\]", "none", "none"),
+        (r"\%d256", "none", "none"),
+    ];
+    for &(pat, bt, nfa) in rows {
+        let quoted = pat.replace('\'', "''");
+        for (engine, want) in [("1", bt), ("2", nfa), ("0", nfa)] {
+            fx.check_messages(&format!("call match('x', '\\%#={engine}{quoted}')"), want);
+        }
+    }
+    let e864 = "E864: \\%#= can only be followed by 0, 1, or 2. The automatic engine will be used ";
+    for (cmd, want) in [
+        // The engine prefix itself: a wrong one is said and compiling goes on.
+        (r"call match('x', '\%#=3a')", e864),
+        (r"call match('x', '\%#=')", e864),
+        (
+            r"call match('x', '\%#=1' .. repeat('a\|', 40000))",
+            "E339: Pattern too long",
+        ),
+        // The substitution side.
+        (
+            "exe \"func! RegsubNest()\\nreturn substitute('a', 'a', '\\\\=RegsubNest()', '')\\nendfunc\"",
+            "none",
+        ),
+        (
+            "call RegsubNest()",
+            "Error in function RegsubNest[1]..RegsubNest[1]..RegsubNest[1]..RegsubNest[1]..\
+             RegsubNest:\nline    1:\nE1290: substitute nesting too deep",
+        ),
+        ("delfunc RegsubNest", "none"),
+    ] {
+        fx.check_messages(cmd, want);
+    }
+    // The matcher's own refusal, said once per attempt: the NFA engine
+    // gives up the whole match, the backtracker each start column. An error
+    // ends the command line, so 'maxmempattern' is put back on its own.
+    let e363 = "E363: Pattern uses more memory than 'maxmempattern'";
+    fx.run("set mmp=1");
+    for engine in ["2", "0"] {
+        let cmd = format!(r"call match(repeat('a', 300), '\%#={engine}^\(a*\)*\(a*\)*\(a*\)*$')");
+        fx.check_messages(&cmd, e363);
+    }
+    let per_column = fx.messages_of(r"call match(repeat('ab', 100), '\%#=1\(.\)*$')");
+    fx.run("set mmp&");
+    assert_eq!(
+        per_column,
+        vec![e363; 190].join("\n"),
+        "one E363 per start column"
+    );
+    fx.settle();
+}

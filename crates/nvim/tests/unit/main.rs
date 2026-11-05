@@ -107,6 +107,7 @@ mod tag;
 mod tempfile;
 mod terminfo;
 mod termkey;
+mod textobject;
 mod typval;
 mod typval_dict;
 mod typval_list;

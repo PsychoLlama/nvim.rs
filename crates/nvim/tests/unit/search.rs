@@ -157,3 +157,75 @@ fn only_a_rightleftcmd_of_s_reverses_the_pattern() {
     let compiled = get_search_pat();
     assert_eq!(&compiled[..], b"a\xc0", "the pattern was kept as typed");
 }
+
+/// Every message a refused or failed search puts out, through each entry
+/// point that reports: the `/` address, `search()`, `:s`, the `/` and `?`
+/// commands, `;` offsets and the include searches. A compile error the
+/// compiler only half-reports (E1281, E867) is followed by E383; one that
+/// counts as the pattern's fault is not. A doubled, dropped or reordered
+/// message moves a row.
+#[test]
+fn refusals_report_once() {
+    let sandbox = Sandbox::globals();
+    let fx = crate::support::Probe::new(sandbox.editor());
+    fx.run("new | only!");
+    fx.run("call setline(1, ['one a', 'two b', 'three a'])");
+    let e1281 = "E1281: Atom '\\%#=1' must be at the start of the pattern";
+    for (cmd, want) in [
+        (r"/\%#=1\(/", "E54: Unmatched \\("),
+        (r"/\%#=2\(/", "E54: Unmatched \\("),
+        (
+            r"/\%#=2a\%#=1/",
+            &format!("{e1281}\nE383: Invalid search string: \\%#=2a\\%#=1"),
+        ),
+        (
+            r"/\%#=1a\%#=1/",
+            &format!("{e1281}\nE383: Invalid search string: \\%#=1a\\%#=1"),
+        ),
+        (
+            r"/\%#=2a\zq/",
+            "E867: (NFA) Unknown operator '\\zq'\nE383: Invalid search string: \\%#=2a\\zq",
+        ),
+        (
+            r"/\%#=2\%[\(a\)]x/",
+            "E486: Pattern not found: \\%#=2\\%[\\(a\\)]x",
+        ),
+        (r"call search('\%#=1\(')", "E54: Unmatched \\("),
+        (r"call search('\%#=2a\%#=1')", e1281),
+        ("call search('zzz')", "none"),
+        (r"s/\%#=1\(/x/", "E54: Unmatched \\(\nE476: Invalid command"),
+        (
+            r"s/\%#=2a\%#=1/x/",
+            &format!("{e1281}\nE476: Invalid command"),
+        ),
+        ("s/zzz/x/", "E486: Pattern not found: zzz"),
+        ("exe \"norm! /\\\\%#=1\\\\(\\r\"", "E54: Unmatched \\("),
+        (
+            "exe \"norm! /\\\\%#=2a\\\\%#=1\\r\"",
+            &format!("{e1281}\nE383: Invalid search string: \\%#=2a\\%#=1"),
+        ),
+        ("exe \"norm! /zzz\\r\"", "E486: Pattern not found: zzz"),
+        (
+            "set nows | exe \"norm! G/zzz\\r\" | set ws",
+            "E385: Search hit BOTTOM without match for: zzz",
+        ),
+        (
+            "set nows | exe \"norm! gg?zzz\\r\" | set ws",
+            "E384: Search hit TOP without match for: zzz",
+        ),
+        ("/zzz/", "E385: Search hit BOTTOM without match for: zzz"),
+        (
+            "exe \"norm! gg/a/;x\\r\"",
+            "E386: Expected '?' or '/'  after ';'",
+        ),
+        ("ijump zzz", "E389: Couldn't find pattern"),
+        ("ilist zzz", "E389: Couldn't find pattern"),
+        ("dsearch zzz", "E388: Couldn't find definition"),
+        ("exe \"norm! gg[i\"", "E387: Match is on current line"),
+    ] {
+        fx.check_messages(cmd, want);
+    }
+    fx.run("bwipe!");
+    fx.home();
+    fx.settle();
+}

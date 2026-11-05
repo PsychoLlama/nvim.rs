@@ -207,3 +207,122 @@ fn another_windows_list_by_id() {
     fx.run("unlet g:unit_match_win");
     restore(&fx);
 }
+
+/// Every message each refusal puts out, and what the builtin answers: a
+/// doubled, dropped or reordered message moves a row. The quiet refusals
+/// (an empty group or pattern) answer -1 without a word.
+#[test]
+fn refusals_report_once() {
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    window(&fx, "['one a', 'two b']");
+    let e1281 = "E1281: Atom '\\%#=1' must be at the start of the pattern";
+    for (cmd, want) in [
+        (
+            "call matchadd('Search', 'a', 10, 0)",
+            "E799: Invalid ID: 0 (must be greater than or equal to 1)",
+        ),
+        (
+            "call matchadd('Search', 'a', 10, -2)",
+            "E799: Invalid ID: -2 (must be greater than or equal to 1)",
+        ),
+        (
+            "call matchadd('Search', 'a', 10, 1)",
+            "E798: ID is reserved for \":match\": 1",
+        ),
+        (
+            "call matchadd('Search', 'a', 10, 3)",
+            "E798: ID is reserved for \":match\": 3",
+        ),
+        ("call matchadd('Search', 'a', 10, 1000)", "none"),
+        (
+            "call matchadd('Search', 'a', 10, 1000)",
+            "E801: ID already taken: 1000",
+        ),
+        (
+            r"call matchadd('Search', '\(')",
+            "E54: Unmatched \\(\nE475: Invalid argument: \\(",
+        ),
+        (
+            r"call matchadd('Search', '\%#=2a\%#=1')",
+            &format!("{e1281}\nE475: Invalid argument: \\%#=2a\\%#=1"),
+        ),
+        ("call matchadd('', 'a')", "none"),
+        ("call matchadd('Search', '')", "none"),
+        (
+            "call matchadd('Search', 'a', 10, -1, 1)",
+            "E715: Dictionary required",
+        ),
+        (
+            "call matchadd('Search', 'a', 10, -1, {'window': 9999})",
+            "E957: Invalid window number",
+        ),
+        (
+            "call matchaddpos('Search', [[]])",
+            "E5030: Empty list at position 0",
+        ),
+        (
+            "call matchaddpos('Search', [1, 'x'])",
+            "E5031: List or number required at position 1",
+        ),
+        ("call matchaddpos('Search', [[1, 'x']])", "none"),
+        (
+            "call matchaddpos('Search', 1)",
+            "E686: Argument of matchaddpos() must be a List",
+        ),
+        ("call matchaddpos('Search', [[1, 2, 3, 4]])", "none"),
+        ("call matchaddpos('', [1])", "none"),
+        (
+            "call matchaddpos('Search', [1], 10, 2)",
+            "E798: ID is reserved for \"match\": 2",
+        ),
+        (
+            "call matchdelete(0)",
+            "E802: Invalid ID: 0 (must be greater than or equal to 1)",
+        ),
+        ("call matchdelete(99999)", "E803: ID not found: 99999"),
+        ("call matchdelete(1000)", "none"),
+        ("call matchdelete(1000)", "E803: ID not found: 1000"),
+        ("call setmatches(1)", "E714: List required"),
+        (
+            "call setmatches([1])",
+            "E474: List item 0 is either not a dictionary or an empty one",
+        ),
+        (
+            "call setmatches([{'group': 'Search'}])",
+            "E474: List item 0 is missing one of the required keys",
+        ),
+        ("call getmatches(9999)", "E957: Invalid window number"),
+        ("call clearmatches(9999)", "E957: Invalid window number"),
+        (
+            r"match Search /\(/",
+            "E54: Unmatched \\(\nE475: Invalid argument: \\(",
+        ),
+        (
+            "match Search /a/ x",
+            "E488: Trailing characters: / x: silent match Search /a/ x",
+        ),
+        ("match Search", "E475: Invalid argument: Search"),
+        ("match Search /a", "E475: Invalid argument: /a"),
+        ("match none", "none"),
+        ("4match Search /a/", "E476: Invalid command"),
+        ("2match Search /a/", "none"),
+        ("2match none", "none"),
+    ] {
+        fx.check_messages(cmd, want);
+    }
+    for (expr, want) in [
+        ("matchadd('', 'a')", "-1"),
+        ("matchadd('Search', '')", "-1"),
+        (r"matchadd('Search', '\(')", "-1"),
+        ("matchaddpos('Search', [[]])", "-1"),
+        ("matchdelete(99999)", "-1"),
+        ("matchadd('Search', 'a', 10, 1001)", "1001"),
+        ("matchadd('Search', 'a', 10, 1001)", "-1"),
+    ] {
+        fx.run(&format!("silent! let g:answer = {expr}"));
+        fx.check("g:answer", want);
+    }
+    restore(&fx);
+    fx.settle();
+}
