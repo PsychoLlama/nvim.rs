@@ -126,6 +126,8 @@ impl core::error::Error for HighlightError {}
 
 impl HighlightError {
     /// Put the message out.
+    #[cold]
+    #[inline(never)]
     pub(crate) fn report(&self) {
         if matches!(self, Self::InvalidNameChar) {
             // Upstream names the script and line first, as a warning.

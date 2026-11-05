@@ -138,6 +138,8 @@ fn shown(text: &ThinCString) -> BytesDisplay<'_> {
 
 impl SyntaxError {
     /// Put the message out, if the refusal has one left to say.
+    #[cold]
+    #[inline(never)]
     pub(crate) fn report(&self) {
         if !matches!(self, Self::Unexplained | Self::Reported(_)) {
             emsg_text(self.to_string());
