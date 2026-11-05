@@ -7,10 +7,19 @@
 //! inside a quoted string, and how 'selection' shifts both ends.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr::byte_at;
 use crate::memline::Lines;
+use crate::narrow::len_as_int;
 use crate::option::vars::P_SEL;
+use crate::regexp::low_byte;
 use crate::strings::find_char;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
@@ -30,6 +39,17 @@ use crate::optionstr::OptString;
 use crate::pos::{equalpos, lt};
 use crate::types::{ColNr, NUL, OpArg};
 
+/// The byte at column `col` of `line`; NUL past its end and before its
+/// start, which every walk below stops at.
+fn byte_of(line: &[u8], col: c_int) -> u8 {
+    usize::try_from(col).map_or(0, |i| byte_at(line, i))
+}
+
+/// Column `col` as an index: the walks never step before column zero.
+fn index(col: c_int) -> usize {
+    usize::try_from(col).expect("a column on the line")
+}
+
 /// The column of the next `quotechar` at or after `col`; `None` when there
 /// is none before the end of the line.
 ///
@@ -41,7 +61,7 @@ fn find_next_quote(
     quotechar: c_int,
     escape: Option<&[u8]>,
 ) -> Option<c_int> {
-    let at = |col: c_int| byte_at(line, col as usize);
+    let at = |col: c_int| byte_of(line, col);
     loop {
         let c = c_int::from(at(col));
         if c == NUL {
@@ -55,7 +75,7 @@ fn find_next_quote(
         } else if c == quotechar {
             return Some(col);
         }
-        col += c_cluster_len(&line[col as usize..]) as c_int;
+        col += len_as_int(c_cluster_len(&line[index(col)..]));
     }
 }
 
@@ -70,10 +90,10 @@ fn find_prev_quote(
     quotechar: c_int,
     escape: Option<&[u8]>,
 ) -> c_int {
-    let at = |col: c_int| c_int::from(byte_at(line, col as usize));
+    let at = |col: c_int| c_int::from(byte_of(line, col));
     while col_start > 0 {
         col_start -= 1;
-        col_start -= head_off(line, col_start as usize) as c_int;
+        col_start -= len_as_int(head_off(line, index(col_start)));
         let mut n = 0;
         if let Some(escape) = escape {
             while col_start - n > 0 && find_char(escape, at(col_start - n - 1)).is_some() {
@@ -110,7 +130,7 @@ fn quoted_span(
     let next_esc = |col| find_next_quote(line, col, quotechar, qe);
     let prev = |col| find_prev_quote(line, col, quotechar, None);
     let prev_esc = |col| find_prev_quote(line, col, quotechar, qe);
-    let at = |col: c_int| c_int::from(byte_at(line, col as usize));
+    let at = |col: c_int| c_int::from(byte_of(line, col));
 
     let on_quote = at(col_start) == quotechar;
     let col_end;
@@ -197,7 +217,7 @@ pub(crate) fn current_quote(
     // when the string ends the line, and the line is still read after that.
     let line = Lines::current().line_copy(Win::current().w_cursor.lnum);
     // Past the end reads as the terminator, which no quote character is.
-    let at = |col: c_int| byte_at(&line, col as usize);
+    let at = |col: c_int| byte_of(&line, col);
     let mut col_start = Win::current().w_cursor.col.get();
     let mut inclusive = false;
     let mut vis_empty = true; // the Visual selection is one character or less
@@ -242,16 +262,16 @@ pub(crate) fn current_quote(
         let sel_end;
         if vis_bef_curs {
             inside_quotes = visual_anchor().col > ColNr::ZERO
-                && at((visual_anchor().col - 1).get()) == quotechar as u8
+                && at((visual_anchor().col - 1).get()) == low_byte(quotechar)
                 && at(Win::current().w_cursor.col.get()) != 0
-                && at((Win::current().w_cursor.col + 1).get()) == quotechar as u8;
+                && at((Win::current().w_cursor.col + 1).get()) == low_byte(quotechar);
             i = visual_anchor().col.get();
             sel_end = Win::current().w_cursor.col.get();
         } else {
             inside_quotes = Win::current().w_cursor.col > ColNr::ZERO
-                && at((Win::current().w_cursor.col - 1).get()) == quotechar as u8
+                && at((Win::current().w_cursor.col - 1).get()) == low_byte(quotechar)
                 && at(visual_anchor().col.get()) != 0
-                && at((visual_anchor().col + 1).get()) == quotechar as u8;
+                && at((visual_anchor().col + 1).get()) == low_byte(quotechar);
             i = Win::current().w_cursor.col.get();
             sel_end = visual_anchor().col.get();
         }
@@ -316,9 +336,9 @@ pub(crate) fn current_quote(
             || (vis_bef_curs
                 && !selected_quote
                 && (inside_quotes
-                    || (at(anchor_col.get()) != quotechar as u8
+                    || (at(anchor_col.get()) != low_byte(quotechar)
                         && (anchor_col == ColNr::ZERO
-                            || at((anchor_col - 1).get()) != quotechar as u8))))
+                            || at((anchor_col - 1).get()) != low_byte(quotechar)))))
         {
             set_visual_anchor(Win::current().w_cursor);
             redraw_curbuf_later(UPD_INVERTED);
@@ -345,9 +365,9 @@ pub(crate) fn current_quote(
             // a quote.
             if inside_quotes
                 || (!selected_quote
-                    && at(visual_anchor().col.get()) != quotechar as u8
+                    && at(visual_anchor().col.get()) != low_byte(quotechar)
                     && (at(visual_anchor().col.get()) == 0
-                        || at((visual_anchor().col + 1).get()) != quotechar as u8))
+                        || at((visual_anchor().col + 1).get()) != low_byte(quotechar)))
             {
                 dec_cursor();
                 set_visual_anchor(Win::current().w_cursor);

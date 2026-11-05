@@ -7,9 +7,17 @@
 //! is described by.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::eval::typval::{DictRef, NumBuf, list_items, list_iter};
+use crate::narrow::number_as_int;
 use crate::semsg;
 use crate::types::{Failed, VAR_DICT, VAR_LIST, kListLenMayKnow};
 use crate::winlayer::Win;
@@ -180,8 +188,8 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
         // Three scratches are in play here — this one and the two the
         // frame lends below — and none may be reused before its value is.
         let group = group_buf.dict_string(d, b"group").unwrap_or(c"");
-        let priority = dict_get_number(d, b"priority") as c_int;
-        let id = dict_get_number(d, b"id") as c_int;
+        let priority = number_as_int(dict_get_number(d, b"priority"));
+        let id = number_as_int(dict_get_number(d, b"id"));
         let conceal = dict_find(d, b"conceal").map(|di| numbuf.string(&di.di_tv));
 
         let added = match &held {
@@ -225,15 +233,15 @@ fn optional_args(args: &[TypVal]) -> Option<(c_int, c_int, Option<CString>, Win)
     // Nested, not sequential: an `id` is only read when a `priority` was
     // given, and the dictionary only when an `id` was.
     if args.len() > 2 {
-        prio = tv_get_number_chk(&args[2]).unwrap_or_else(|_| {
+        prio = number_as_int(tv_get_number_chk(&args[2]).unwrap_or_else(|_| {
             error = true;
             0
-        }) as c_int;
+        }));
         if args.len() > 3 {
-            id = tv_get_number_chk(&args[3]).unwrap_or_else(|_| {
+            id = number_as_int(tv_get_number_chk(&args[3]).unwrap_or_else(|_| {
                 error = true;
                 0
-            }) as c_int;
+            }));
             if args.len() > 4 {
                 conceal_char = matchadd_dict_arg(&args[4], &mut win).ok()?;
             }
@@ -315,7 +323,7 @@ pub(crate) fn f_matchaddpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFun
 /// `matcharg(id)` — the `[group, pattern]` of `:match`, `:2match` or
 /// `:3match`, or `["", ""]` when that one is not set.
 pub(crate) fn f_matcharg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let id = tv_get_number(&args[0]) as c_int;
+    let id = number_as_int(tv_get_number(&args[0]));
     let is_excmd = (1..=3).contains(&id);
     // Any other id answers an empty list, not an error.
     let l = tv_list_alloc_ret(result, if is_excmd { 2 } else { 0 });
@@ -341,7 +349,7 @@ pub(crate) fn f_matchdelete(args: &[TypVal], result: &mut TypVal, _fptr: EvalFun
     let deleted = match win {
         None => -1,
         Some(win) => {
-            let id = tv_get_number(&args[0]) as c_int;
+            let id = number_as_int(tv_get_number(&args[0]));
             match match_delete(win, id) {
                 Ok(()) => 0,
                 Err(err) => {
