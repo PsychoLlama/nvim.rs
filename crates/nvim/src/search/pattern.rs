@@ -28,7 +28,7 @@ use crate::mbyte::{c_cluster_len, char_at};
 use crate::memory::XString;
 use crate::optionstr::OptString;
 use crate::regexp::low_byte;
-use crate::regexp::{RE_BOTH, RE_LAST, RE_MAGIC, RE_SEARCH, RE_SUBST};
+use crate::regexp::{MAGIC_ALL, MAGIC_ON, RE_BOTH, RE_LAST, RE_MAGIC, RE_SEARCH, RE_SUBST};
 use crate::search::{SEARCH_HIS, SEARCH_KEEP, SEARCH_START};
 use crate::shada::ShadaExtra;
 use crate::types::{ApiString, CmdModFlags, NUL, Timestamp, Vv};

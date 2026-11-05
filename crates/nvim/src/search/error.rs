@@ -16,11 +16,11 @@
 use core::ffi::c_int;
 
 use super::{SEARCH_MSG, get_search_pat};
-use crate::message::{e_interr, e_patnotf2, emsg};
+use crate::message::{e_interr, emsg};
 use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::os::cshim::gettext;
 use crate::regexp::Refused;
-use crate::{semsg, tr_plural};
+use crate::{semsg, tr};
 
 /// Where a search that found nothing gave up.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -64,14 +64,13 @@ impl SearchError {
                 emsg(gettext(e_interr));
             }
             Self::NotFound(edge) if options & SEARCH_MSG == SEARCH_MSG => {
-                let msg = match edge {
-                    Edge::Wrapped => gettext(e_patnotf2),
-                    Edge::Top => gettext(c"E384: Search hit TOP without match for: %s"),
-                    Edge::Bottom => gettext(c"E385: Search hit BOTTOM without match for: %s"),
-                };
                 let pattern = get_search_pat();
                 let pat = msg_bytes(&pattern);
-                emsg_text(tr_plural!(msg, pat));
+                emsg_text(match edge {
+                    Edge::Wrapped => tr!("E486: Pattern not found: {pat}"),
+                    Edge::Top => tr!("E384: Search hit TOP without match for: {pat}"),
+                    Edge::Bottom => tr!("E385: Search hit BOTTOM without match for: {pat}"),
+                });
             }
             Self::NotFound(_) => {}
         }

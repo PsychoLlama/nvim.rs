@@ -33,7 +33,7 @@ use crate::memline::{Lines, Moved, decl, inc, incl};
 use crate::option::vars::{P_SEL, P_WS, p_ws};
 use crate::option::{SavedCpo, cpo_has};
 use crate::pos::{equalpos, lt, ltoreq};
-use crate::search::{BACKWARD, FORWARD, findmatch, findmatchlimit};
+use crate::search::{BACKWARD, FM_FORWARD, FORWARD, findmatch, findmatchlimit};
 use crate::types::{ColNr, CpoFlag, NUL, OpArg, Pos};
 
 /// The `do_searchpair` pattern that matches any HTML start tag, used to find

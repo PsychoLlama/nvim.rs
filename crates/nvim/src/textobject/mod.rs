@@ -31,8 +31,6 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use core::ffi::c_uint;
-
 use crate::types::MotionType;
 
 mod pair;
@@ -54,5 +52,3 @@ pub(crate) struct NoObject;
 
 pub const kMTLineWise: MotionType = 1;
 pub const kMTCharWise: MotionType = 0;
-/// `findmatchlimit`'s "search forward" flag.
-pub const FM_FORWARD: c_uint = 2;

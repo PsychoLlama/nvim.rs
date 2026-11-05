@@ -417,7 +417,6 @@ pub(crate) static e_cant_read_file_str: &CStr = c"E485: Can't read file %s";
 pub(crate) static e_null: &CStr = c"E38: Null argument";
 pub(crate) static e_outofmem: &CStr = c"E41: Out of memory!";
 pub(crate) static e_patnotf: &CStr = c"Pattern not found";
-pub(crate) static e_patnotf2: &CStr = c"E486: Pattern not found: %s";
 pub(crate) static e_positive: &CStr = c"E487: Argument must be positive";
 pub(crate) static e_prev_dir: &CStr = c"E459: Cannot go back to previous directory";
 pub(crate) static e_no_errors: &CStr = c"E42: No Errors";

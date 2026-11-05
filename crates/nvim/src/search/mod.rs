@@ -86,9 +86,9 @@ use crate::types::AutoEvent;
 use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CmdArg, ColNr, Dict, Direction, EvalFuncData, FileComparison, LPos, LineNr, Magic, MotionType,
-    OpArg, Pos, ProfTime, RegMMatch, RegMatch, SearchItArg, SearchOffset, TypVal, VarNumber,
-    int64_t, size_t,
+    CmdArg, ColNr, Dict, Direction, EvalFuncData, FileComparison, LPos, LineNr, MotionType, OpArg,
+    Pos, ProfTime, RegMMatch, RegMatch, SearchItArg, SearchOffset, TypVal, VarNumber, int64_t,
+    size_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush, ui_has, vim_beep};
@@ -124,8 +124,6 @@ pub const BACKWARD_FILE: Direction = -3;
 pub const FORWARD_FILE: Direction = 3;
 pub const BACKWARD: Direction = -1;
 pub const FORWARD: Direction = 1;
-pub const MAGIC_ALL: Magic = 4;
-pub const MAGIC_ON: Magic = 3;
 pub(crate) use crate::cmdhist::HIST_SEARCH;
 pub const kMTLineWise: MotionType = 1;
 pub const kEqualFiles: FileComparison = 1;
@@ -153,5 +151,4 @@ pub const FM_BACKWARD: ::core::ffi::c_uint = 1;
 pub const SEARCH_STAT_DEF_TIMEOUT: ::core::ffi::c_int = 40;
 pub const SEARCH_STAT_BUF_LEN: ::core::ffi::c_int = 16;
 pub const LSIZE: ::core::ffi::c_uint = 512;
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub(crate) mod state;
