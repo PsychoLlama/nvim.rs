@@ -9,9 +9,11 @@
 #![forbid(unsafe_code)]
 
 use crate::cstr;
+use crate::memory::ThinCString;
 use crate::message_fmt::msg_bytes;
 use crate::option::SavedCpo;
 use crate::semsg;
+use crate::types::Failed;
 use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
@@ -52,10 +54,10 @@ pub(crate) fn syn_cmd_include(args: &mut ExArg, _syncing: c_int) {
             emsg(gettext(c"E397: Filename required"));
             return;
         };
-        sgl_id = syn_check_cluster(&line[..name.len]);
-        if sgl_id == 0 {
+        let Ok(cluster) = syn_check_cluster(&line[..name.len]) else {
             return;
-        }
+        };
+        sgl_id = cluster;
         // `separate_nextcmd` and `expand_filename` depend on this.
         args.line.arg = at + name.rest;
     }
@@ -136,16 +138,21 @@ pub(crate) fn syn_cmd_match(args: &mut ExArg, syncing: c_int) {
     // Isolate the group name, then the options before the pattern, the
     // pattern, and the options after it.
     let name = split_group_name(&line);
-    let mut end = name.as_ref().and_then(|name| {
-        let at = read_item_options(&line, name.rest, &mut opt, &mut conceal_char, args.skip)?;
-        let at = read_pattern(&line, at, &mut item, 0)?;
-        if item.sp_prog.as_ref().is_some_and(OwnedProg::had_eol)
-            && !opt.flags.has(SynFlags::EXCLUDENL)
-        {
-            opt.flags |= SynFlags::HAS_EOL;
-        }
-        read_item_options(&line, at, &mut opt, &mut conceal_char, args.skip)
-    });
+    let parsed = name
+        .as_ref()
+        .ok_or(SyntaxError::Unexplained)
+        .and_then(|name| {
+            let at = read_item_options(&line, name.rest, &mut opt, &mut conceal_char, args.skip)?;
+            let at = read_pattern(&line, at, &mut item, 0)?;
+            if item.sp_prog.as_ref().is_some_and(OwnedProg::had_eol)
+                && !opt.flags.has(SynFlags::EXCLUDENL)
+            {
+                opt.flags |= SynFlags::HAS_EOL;
+            }
+            read_item_options(&line, at, &mut opt, &mut conceal_char, args.skip)
+        });
+    // The parser's refusal is said before the E475 below that follows it.
+    let mut end = parsed.map_err(|why| why.report()).ok();
 
     let mut stored = false;
     if let Some(at) = end {
@@ -250,8 +257,11 @@ fn parse_region_args(args: &mut ExArg, line: &[u8], at: Option<usize>) -> Region
 
     let mut cursor = at;
     while let Some(mut at) = cursor.filter(|&at| ends_excmd(byte(at)) == 0) {
-        // Options may appear anywhere between the patterns.
-        cursor = read_item_options(line, at, &mut out.opt, &mut out.conceal_char, args.skip);
+        // Options may appear anywhere between the patterns. A refusal is
+        // said here, before the E475 `syn_cmd_region` follows it with.
+        cursor = read_item_options(line, at, &mut out.opt, &mut out.conceal_char, args.skip)
+            .map_err(|why| why.report())
+            .ok();
         match cursor {
             Some(next) if ends_excmd(byte(next)) == 0 => at = next,
             _ => break,
@@ -303,7 +313,9 @@ fn parse_region_args(args: &mut ExArg, line: &[u8], at: Option<usize>) -> Region
         // external matches, skip and end patterns use them.
         let extmatch = if item == ITEM_START { REX_SET } else { REX_USE };
         let mut pat = EMPTY_SYNPAT;
-        cursor = read_pattern(line, at, &mut pat, extmatch);
+        cursor = read_pattern(line, at, &mut pat, extmatch)
+            .map_err(|why| why.report())
+            .ok();
         if item == ITEM_END
             && pat.sp_prog.as_ref().is_some_and(OwnedProg::had_eol)
             && !out.opt.flags.has(SynFlags::EXCLUDENL)
@@ -423,17 +435,18 @@ fn store_region(args: RegionArgs, syn_id: c_int, syncing: bool) {
 /// Read the delimited pattern at `line[at..]`, plus its offsets, into `ci`.
 /// `extmatch` is which `\z` specials it may use ([`vim_regcomp_ext`]).
 ///
-/// Answers the offset of what follows it, or `None` after reporting an error.
+/// Answers the offset of what follows it.
 pub(crate) fn read_pattern(
     line: &[u8],
     at: usize,
     ci: &mut SynPat,
     extmatch: c_int,
-) -> Option<usize> {
+) -> Result<usize, SyntaxError> {
     // Need at least three characters: two delimiters and something between.
-    let body = line.get(at..)?;
+    // Upstream refuses a shorter one without a word.
+    let body = line.get(at..).ok_or(SyntaxError::Unexplained)?;
     if body.len() < 3 {
-        return None;
+        return Err(SyntaxError::Unexplained);
     }
     let delimiter = body[0];
 
@@ -446,9 +459,7 @@ pub(crate) fn read_pattern(
 
     let end = 1 + skip_regexp_at(&tail[1..], char_delim(delimiter), 1);
     if cstr::byte_at(&tail, end) != delimiter {
-        let shown = msg_bytes(body);
-        semsg!("E401: Pattern delimiter not found: {shown}");
-        return None;
+        return Err(SyntaxError::NoDelimiter(ThinCString::from_bytes(body)));
     }
 
     // Store the pattern and its compiled program. 'cpoptions' is emptied
@@ -457,18 +468,21 @@ pub(crate) fn read_pattern(
     let _cpo = SavedCpo::empty();
     ci.sp_prog = vim_regcomp_ext(&pattern, RE_MAGIC, extmatch).ok();
     ci.sp_pattern = Some(pattern);
-    ci.sp_prog.as_ref()?;
+    if ci.sp_prog.is_none() {
+        // The compiler has said why.
+        return Err(SyntaxError::Reported(Failed));
+    }
     ci.sp_ic = cur_syn_block().b_syn_ic;
     syn_clear_time(&mut ci.sp_time);
 
     let end = read_pattern_offsets(ci, &mut tail, end + 1);
     let after = c_int::from(cstr::byte_at(&tail, end));
     if ends_excmd(after) == 0 && !ascii_iswhite(after) {
-        let shown = msg_bytes(body);
-        semsg!("E402: Garbage after pattern: {shown}");
-        return None;
+        return Err(SyntaxError::GarbageAfterPattern(ThinCString::from_bytes(
+            body,
+        )));
     }
-    Some(at + end + skip::white(&line[at + end..]))
+    Ok(at + end + skip::white(&line[at + end..]))
 }
 
 /// The offset names, indexed by `SPO_*`.

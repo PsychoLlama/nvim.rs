@@ -204,20 +204,19 @@ pub(crate) fn syn_get_sub_char() -> c_int {
     with_parser(|parser| parser.current.sub_char)
 }
 
-/// The syntax id at position `i` of the state stack, or -1 when `i` is out of
-/// range.
+/// The syntax id at position `i` of the state stack, or `None` past its top.
 ///
 /// The caller must have called [`Win::syntax_id`] first, to fill the stack.
-pub(crate) fn syn_get_stack_item(i: c_int) -> c_int {
+pub(crate) fn syn_get_stack_item(i: c_int) -> Option<c_int> {
     with_parser(|parser| {
         if i >= parser.state_len() {
             // The state was not properly finished for the last character
             // (`keep_state` was true), so it has to be invalidated.
             parser.invalidate_current_state();
             parser.col = ColNr::MAX;
-            return -1;
+            return None;
         }
-        parser.item(i).si_id
+        Some(parser.item(i).si_id)
     })
 }
 

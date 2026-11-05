@@ -330,11 +330,10 @@ pub fn f_synstack(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // Run the syntax engine, keeping the stack this time.
         Win::current().syntax_id(lnum, col, false, None, true);
         for i in 0.. {
-            let id = syn_get_stack_item(i);
-            if id < 0 {
+            let Some(id) = syn_get_stack_item(i) else {
                 break;
-            }
-            list.push_number(id as VarNumber);
+            };
+            list.push_number(VarNumber::from(id));
         }
     }
 }

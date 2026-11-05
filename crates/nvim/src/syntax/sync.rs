@@ -13,6 +13,7 @@ use crate::message_fmt::msg_bytes;
 use crate::option::SavedCpo;
 use crate::regexp::{char_delim, skip_regexp_at};
 use crate::semsg;
+use crate::types::Failed;
 use core::ffi::{CStr, c_int};
 
 use super::*;
@@ -470,15 +471,17 @@ pub(crate) fn syn_cmd_sync(args: &mut ExArg, _syncing: c_int) {
             }
         } else if word == b"LINECONT" {
             match sync_linecont(args, next_arg) {
-                Err(LineContError::Illegal) => {
+                Ok(after) => next_arg = after,
+                // Nothing said: E404 below, against the whole argument.
+                Err(SyntaxError::Unexplained) => {
                     illegal = true;
                     break;
                 }
-                Err(LineContError::Reported) => {
+                Err(why) => {
+                    why.report();
                     finished = true;
                     break;
                 }
-                Ok(after) => next_arg = after,
             }
         } else {
             // Everything else is a subcommand of its own, run in syncing
@@ -517,32 +520,23 @@ fn sync_count_key(key: &[u8]) -> Option<&'static SyncCount> {
         .map(|(_, count)| count)
 }
 
-/// Why a `linecont=` argument was rejected.
-enum LineContError {
-    /// Report E404 against the whole argument.
-    Illegal,
-    /// A message has already been given.
-    Reported,
-}
-
 /// `:syntax sync linecont /{pattern}/` — the pattern whose match on a line
 /// means the next one continues it.
 ///
-/// Answers where the pattern ends.
-fn sync_linecont(args: &ExArg, next_arg: usize) -> Result<usize, LineContError> {
+/// Answers where the pattern ends. A missing pattern or delimiter is
+/// [`SyntaxError::Unexplained`]: the caller reports E404 against the whole
+/// argument.
+fn sync_linecont(args: &ExArg, next_arg: usize) -> Result<usize, SyntaxError> {
     let delim = args.line.byte_at(next_arg);
     if delim == 0 {
-        return Err(LineContError::Illegal); // missing pattern
+        return Err(SyntaxError::Unexplained); // missing pattern
     }
     if cur_syn_block().b_syn_linecont_pat.is_some() {
-        emsg(gettext(
-            c"E403: syntax sync: line continuations pattern specified twice",
-        ));
-        return Err(LineContError::Reported);
+        return Err(SyntaxError::LineContTwice);
     }
     let arg_end = next_arg + 1 + skip_regexp_at(args.line.tail(next_arg + 1), char_delim(delim), 1);
     if args.line.byte_at(arg_end) != delim {
-        return Err(LineContError::Illegal); // end delimiter not found
+        return Err(SyntaxError::Unexplained); // end delimiter not found
     }
 
     if !args.skip {
@@ -556,7 +550,8 @@ fn sync_linecont(args: &ExArg, next_arg: usize) -> Result<usize, LineContError> 
         syn_clear_time(&mut block.b_syn_linecont_time);
 
         if block.b_syn_linecont_prog.is_none() {
-            return Err(LineContError::Reported);
+            // The compiler has said why.
+            return Err(SyntaxError::Reported(Failed));
         }
         block.b_syn_linecont_pat = Some(pat);
     }

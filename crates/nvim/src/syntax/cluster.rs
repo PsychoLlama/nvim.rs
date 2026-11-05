@@ -10,6 +10,7 @@
 use crate::cstr;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
+use crate::types::Failed;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
@@ -101,23 +102,25 @@ pub(crate) fn syn_scl_namen2id(name: &[u8]) -> c_int {
 
 /// Like [`syn_scl_namen2id`], but create the cluster when it does not exist.
 ///
-/// Answers 0 only when there is no room for another cluster.
-pub(crate) fn syn_check_cluster(name: &[u8]) -> c_int {
+/// The cluster table is the boundary of its one refusal: when there is no
+/// room for another cluster it says so and answers `Failed`.
+pub(crate) fn syn_check_cluster(name: &[u8]) -> Result<c_int, Failed> {
     let name = name_in(name);
     match scl_name2id(&name) {
-        0 => syn_add_cluster(name),
-        id => id,
+        0 => syn_add_cluster(name).map_err(|why| {
+            why.report();
+            Failed
+        }),
+        id => Ok(id),
     }
 }
 
-/// Add a cluster with no members, answering its id, or 0 when the table is
-/// full.
-fn syn_add_cluster(name: CString) -> c_int {
+/// Add a cluster with no members, answering its id.
+fn syn_add_cluster(name: CString) -> Result<c_int, SyntaxError> {
     let mut block = cur_syn_block();
     let len = block.clusters().len() as c_int;
     if len >= MAX_CLUSTER_ID {
-        emsg(gettext(c"E848: Too many syntax clusters"));
-        return 0;
+        return Err(SyntaxError::TooManyClusters);
     }
 
     // The two clusters the spell checker asks about by id.
@@ -134,7 +137,7 @@ fn syn_add_cluster(name: CString) -> c_int {
         scl_name_u,
         scl_list: IdList::NONE,
     });
-    len + SYNID_CLUSTER
+    Ok(len + SYNID_CLUSTER)
 }
 
 /// The three list operations `:syntax cluster` accepts, longest name first in
@@ -178,14 +181,12 @@ pub(crate) fn syn_cmd_cluster(args: &mut ExArg, _syncing: c_int) {
     let line = args.line.arg().to_vec();
     let mut end: Option<usize> = None;
     if let Some(name) = split_group_name(&line) {
-        let scl_id = syn_check_cluster(&line[..name.len]);
-        if scl_id == 0 {
+        let Ok(scl_id) = syn_check_cluster(&line[..name.len]) else {
             return;
-        }
-        // Always a valid index: `syn_check_cluster` answers either 0,
-        // handled above, or an id at or above `SYNID_CLUSTER`. Upstream
-        // tests `scl_id >= 0` here and frees the list on the other branch;
-        // that branch is unreachable.
+        };
+        // Always a valid index: `syn_check_cluster` answers an id at or
+        // above `SYNID_CLUSTER`. Upstream tests `scl_id >= 0` here and frees
+        // the list on the other branch; that branch is unreachable.
         let scl_id = scl_id - SYNID_CLUSTER;
         let mut cursor = name.rest;
 
@@ -193,10 +194,11 @@ pub(crate) fn syn_cmd_cluster(args: &mut ExArg, _syncing: c_int) {
             let mut clstr_list = IdList::NONE;
             match read_id_list(&line, cursor, keylen, &mut clstr_list, args.skip) {
                 Ok(next) => cursor = next,
-                Err(next) => {
-                    let shown = msg_bytes(&line[next..]);
+                Err(refused) => {
+                    refused.why.report();
+                    let shown = msg_bytes(&line[refused.at..]);
                     semsg!("E475: Invalid argument: {shown}");
-                    cursor = next;
+                    cursor = refused.at;
                     break;
                 }
             }

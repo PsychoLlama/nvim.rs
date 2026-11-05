@@ -11,6 +11,7 @@ use crate::charset::display::foldcase;
 use crate::cstr;
 use crate::hashtab::{SlotEntry, hash_bytes};
 use crate::mbyte::c_cluster_len;
+use crate::memory::ThinCString;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use core::ffi::c_int;
@@ -255,9 +256,13 @@ fn add_keyword(name: &[u8], def: &KeywordDef) {
 /// `buf` holds the keywords one after another, each NUL-terminated.
 /// `ab[cde]` defines `ab`, `abc`, `abcd` and `abcde`. The variants are made
 /// by editing `buf` in place: the `[` becomes the NUL of the short form, then
-/// each following character is shifted left over it. `None` means the
-/// notation was malformed and the message has been given.
-fn add_keyword_variants(buf: &mut [u8], mut kw: usize, def: &KeywordDef) -> Option<usize> {
+/// each following character is shifted left over it. Answers where the next
+/// keyword starts, or why the notation was malformed.
+fn add_keyword_variants(
+    buf: &mut [u8],
+    mut kw: usize,
+    def: &KeywordDef,
+) -> Result<usize, SyntaxError> {
     let mut kwlen;
     let mut bracket = cstr::until_nul(&buf[kw..])
         .iter()
@@ -277,18 +282,16 @@ fn add_keyword_variants(buf: &mut [u8], mut kw: usize, def: &KeywordDef) -> Opti
         };
         let next = c_int::from(cstr::byte_at(buf, p + 1));
         if next == NUL {
-            let kw = msg_bytes(cstr::until_nul(&buf[kw..]));
-            semsg!("E789: Missing ']': {kw}");
-            return None;
+            let kw = ThinCString::from_bytes(cstr::until_nul(&buf[kw..]));
+            return Err(SyntaxError::MissingBracket(kw));
         }
         if next == ']' as c_int {
             if c_int::from(cstr::byte_at(buf, p + 2)) != NUL {
-                let (kw, arg1) = (
-                    msg_bytes(cstr::until_nul(&buf[kw..])),
-                    msg_bytes(cstr::until_nul(&buf[p + 2..])),
+                let parts = (
+                    ThinCString::from_bytes(cstr::until_nul(&buf[kw..])),
+                    ThinCString::from_bytes(cstr::until_nul(&buf[p + 2..])),
                 );
-                semsg!("E890: Trailing char after ']': {kw}]{arg1}");
-                return None;
+                return Err(SyntaxError::TrailingAfterBracket(Box::new(parts)));
             }
             // Step over the `]`: it and the NUL after it are exactly the
             // two bytes between here and the next keyword.
@@ -302,7 +305,7 @@ fn add_keyword_variants(buf: &mut [u8], mut kw: usize, def: &KeywordDef) -> Opti
         buf.copy_within(p + 1..p + 1 + len, p);
         bracket = Some(p + len);
     }
-    Some(kw + kwlen + 1)
+    Ok(kw + kwlen + 1)
 }
 
 /// `:syntax keyword {group} [{options}] {keyword} ..`.
@@ -341,7 +344,10 @@ pub(crate) fn syn_cmd_keyword(args: &mut ExArg, _syncing: c_int) {
             let mut out = 0;
             let byte = |at: usize| c_int::from(cstr::byte_at(&line, at));
             while let Some(mut at) = end.filter(|&at| ends_excmd(byte(at)) == 0) {
-                end = read_item_options(&line, at, &mut opt, &mut conceal_char, args.skip);
+                // A refusal is said here, before the E475 that follows it.
+                end = read_item_options(&line, at, &mut opt, &mut conceal_char, args.skip)
+                    .map_err(|why| why.report())
+                    .ok();
                 match end {
                     Some(next) if ends_excmd(byte(next)) == 0 => at = next,
                     _ => break,
@@ -375,8 +381,11 @@ pub(crate) fn syn_cmd_keyword(args: &mut ExArg, _syncing: c_int) {
                 while cnt > 0 {
                     cnt -= 1;
                     match add_keyword_variants(&mut buf, kw, &def) {
-                        Some(next) => kw = next,
-                        None => break,
+                        Ok(next) => kw = next,
+                        Err(why) => {
+                            why.report();
+                            break;
+                        }
                     }
                 }
             }

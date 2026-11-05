@@ -12,8 +12,8 @@
 use crate::charset::skip;
 use crate::cstr;
 use crate::mbyte::{char_at, cluster_len};
-use crate::message_fmt::msg_bytes;
-use crate::semsg;
+use crate::memory::ThinCString;
+use crate::types::Failed;
 use core::ffi::{CStr, c_int};
 
 use super::*;
@@ -171,7 +171,7 @@ fn find_flag(rest: &[u8], keyword: bool) -> Option<&'static SynFlag> {
 }
 
 /// Read the item options at `line[at..]`, answering the offset of the first
-/// argument that is not one, or `None` once an error has been reported.
+/// argument that is not one, or why one was refused.
 ///
 /// Callable at any point in an argument list and repeatedly, so that options
 /// before, between and after the patterns of a `:syntax region` all land in
@@ -182,7 +182,7 @@ pub(crate) fn read_item_options(
     opt: &mut SynOptArg,
     conceal_char: &mut c_int,
     skip: bool,
-) -> Option<usize> {
+) -> Result<usize, SyntaxError> {
     if cur_syn_block().b_syn_conceal != 0 {
         opt.flags |= SynFlags::CONCEAL;
     }
@@ -197,16 +197,15 @@ pub(crate) fn read_item_options(
         match f.arg {
             OptArg::Contains => {
                 if !opt.has_cont_list {
-                    emsg(gettext(E_CONTAINS_NOT_ACCEPTED_HERE));
-                    return None;
+                    return Err(SyntaxError::ContainsNotAccepted);
                 }
-                at = read_id_list(line, at, 8, &mut opt.cont_list, skip).ok()?;
+                at = read_id_list(line, at, 8, &mut opt.cont_list, skip).map_err(|e| e.why)?;
             }
             OptArg::ContainedIn => {
-                at = read_id_list(line, at, 11, &mut opt.cont_in_list, skip).ok()?;
+                at = read_id_list(line, at, 11, &mut opt.cont_in_list, skip).map_err(|e| e.why)?;
             }
             OptArg::NextGroup => {
-                at = read_id_list(line, at, 9, &mut opt.next_list, skip).ok()?;
+                at = read_id_list(line, at, 9, &mut opt.next_list, skip).map_err(|e| e.why)?;
             }
             OptArg::Cchar => {
                 // `cchar` is five letters and `flag_matches` already
@@ -214,8 +213,7 @@ pub(crate) fn read_item_options(
                 let cchar = &line[(at + 6).min(line.len())..];
                 *conceal_char = char_at(cchar);
                 if !vim_isprintc(*conceal_char) {
-                    emsg(gettext(E_INVALID_CCHAR_VALUE));
-                    return None;
+                    return Err(SyntaxError::InvalidCchar);
                 }
                 // Upstream advances by `utfc_ptr2len(arg + 6) - 1` *before*
                 // this test and by seven after it; at the end of the line
@@ -237,21 +235,20 @@ pub(crate) fn read_item_options(
             }
         }
     }
-    Some(at)
+    Ok(at)
 }
 
 /// Read the group name after `grouphere`/`groupthere` and record the pattern
 /// index it names in `opt.sync_idx`.
 ///
-/// Answers the offset of what follows it, or `None` after reporting an error.
-fn read_sync_group(line: &[u8], at: usize, opt: &mut SynOptArg) -> Option<usize> {
+/// Answers the offset of what follows it.
+fn read_sync_group(line: &[u8], at: usize, opt: &mut SynOptArg) -> Result<usize, SyntaxError> {
     if !opt.takes_sync_idx {
-        emsg(gettext(c"E393: group[t]here not accepted here"));
-        return None;
+        return Err(SyntaxError::SyncGroupNotAccepted);
     }
     let end = at + skip::to_white(&line[at..]);
     if end == at {
-        return None;
+        return Err(SyntaxError::Unexplained);
     }
     let name = &line[at..end];
 
@@ -269,15 +266,11 @@ fn read_sync_group(line: &[u8], at: usize, opt: &mut SynOptArg) -> Option<usize>
         });
         match found {
             Some(i) => opt.sync_idx = i as c_int,
-            None => {
-                let shown = msg_bytes(name);
-                semsg!("E394: Didn't find region item for {shown}");
-                return None;
-            }
+            None => return Err(SyntaxError::NoRegionItem(ThinCString::from_bytes(name))),
         }
     }
 
-    Some(end + skip::white(&line[end..]))
+    Ok(end + skip::white(&line[end..]))
 }
 
 /// What one pass of [`parse_id_list`] found.
@@ -287,23 +280,29 @@ struct IdListPass {
     /// Where the scan stopped. Answered even on failure — `:syntax cluster`
     /// reports its error against it.
     end: usize,
-    /// An error was reported and the whole list is to be discarded.
-    failed: bool,
+    /// Why the whole list is to be discarded.
+    failed: Option<SyntaxError>,
+}
+
+/// A group list that was refused, and where the scan stopped.
+pub(crate) struct ListRefused {
+    /// The offset `:syntax cluster` reports its E475 against.
+    pub(crate) at: usize,
+    pub(crate) why: SyntaxError,
 }
 
 /// Turn a `contains=`-style group list into a list of ids.
 ///
-/// `at` stands on the keyword; the answer is the offset past the list, in
-/// `Ok` when it parsed and in `Err` when an error was reported — both
-/// callers need the end, and only one of them cares which it is. An
-/// existing `list` is kept and the newly parsed one discarded.
+/// `at` stands on the keyword; the answer is the offset past the list, or
+/// why it was refused and where the scan stopped. An existing `list` is
+/// kept and the newly parsed one discarded.
 pub(crate) fn read_id_list(
     line: &[u8],
     at: usize,
     keylen: usize,
     list: &mut IdList,
     skip: bool,
-) -> Result<usize, usize> {
+) -> Result<usize, ListRefused> {
     // The list is parsed more than once. A name that is a regexp matches
     // the group table as it stands, and a *later* name in the same list
     // can create a group that the regexp would also have matched
@@ -313,7 +312,7 @@ pub(crate) fn read_id_list(
     let mut previous: Option<usize> = None;
     let pass = loop {
         let pass = parse_id_list(line, at, keylen, skip);
-        if pass.failed {
+        if pass.failed.is_some() {
             break pass;
         }
         match previous {
@@ -322,8 +321,8 @@ pub(crate) fn read_id_list(
         }
     };
 
-    if pass.failed {
-        return Err(pass.end);
+    if let Some(why) = pass.failed {
+        return Err(ListRefused { at: pass.end, why });
     }
     // An already-parsed list is kept; upstream allocates the second one
     // and frees it again.
@@ -340,23 +339,23 @@ fn parse_id_list(line: &[u8], at: usize, keylen: usize, skip: bool) -> IdListPas
     let mut p = after_key + skip::white(&line[after_key..]);
 
     if byte(line, p) != '=' as c_int {
-        let shown = msg_bytes(&line[at..]);
-        semsg!("E405: Missing equal sign: {shown}");
         return IdListPass {
             ids,
             end: p,
-            failed: true,
+            failed: Some(SyntaxError::MissingEqualSign(ThinCString::from_bytes(
+                &line[at..],
+            ))),
         };
     }
     p += 1; // the `=` itself; it is not the terminator, so this is in range
     p += skip::white(&line[p..]);
     if ends_excmd(byte(line, p)) != 0 {
-        let shown = msg_bytes(&line[at..]);
-        semsg!("E406: Empty argument: {shown}");
         return IdListPass {
             ids,
             end: p,
-            failed: true,
+            failed: Some(SyntaxError::EmptyArgument(ThinCString::from_bytes(
+                &line[at..],
+            ))),
         };
     }
 
@@ -370,11 +369,11 @@ fn parse_id_list(line: &[u8], at: usize, keylen: usize, skip: bool) -> IdListPas
             Ok(Some(id)) => ids.push(id as int16_t),
             // A regexp name pushed its own matches, or `skip` is on.
             Ok(None) => {}
-            Err(()) => {
+            Err(why) => {
                 return IdListPass {
                     ids,
                     end: p,
-                    failed: true,
+                    failed: Some(why),
                 };
             }
         }
@@ -393,7 +392,7 @@ fn parse_id_list(line: &[u8], at: usize, keylen: usize, skip: bool) -> IdListPas
     IdListPass {
         ids,
         end: p,
-        failed: false,
+        failed: None,
     }
 }
 
@@ -402,7 +401,7 @@ fn parse_id_list(line: &[u8], at: usize, keylen: usize, skip: bool) -> IdListPas
 /// `at` stands on the list's keyword, whose first letter decides whether
 /// `ALL`/`TOP`/... are accepted; `line[start..end]` is the name. Answers the
 /// id to add, `None` when the name added its own (a regexp) or added nothing
-/// (`@cluster` while skipping), and `Err` when a message has been given.
+/// (`@cluster` while skipping), or why the name was refused.
 fn parse_id_name(
     line: &[u8],
     at: usize,
@@ -410,7 +409,7 @@ fn parse_id_name(
     end: usize,
     skip: bool,
     ids: &mut Vec<int16_t>,
-) -> Result<Option<c_int>, ()> {
+) -> Result<Option<c_int>, SyntaxError> {
     let text_len = end - start;
     // Leave room in front for the `^` and behind for the `$` the regexp
     // form needs.
@@ -424,14 +423,10 @@ fn parse_id_name(
         // Only `contains=` and `containedin=` accept these, which is what
         // upstream tests by the keyword's first letter.
         if !cstr::byte_at(line, at).eq_ignore_ascii_case(&b'C') {
-            let shown = msg_bytes(text);
-            semsg!("E407: {shown} not allowed here");
-            return Err(());
+            return Err(SyntaxError::NotAllowedHere(ThinCString::from_bytes(text)));
         }
         if !ids.is_empty() {
-            let shown = msg_bytes(text);
-            semsg!("E408: {shown} must be first in contains list");
-            return Err(());
+            return Err(SyntaxError::MustBeFirst(ThinCString::from_bytes(text)));
         }
         let base = match text[0] {
             b'A' => SYNID_ALLBUT,
@@ -445,24 +440,18 @@ fn parse_id_name(
         if skip {
             return Ok(None);
         }
-        let id = syn_check_cluster(&text[1..]);
-        return if id == 0 {
-            let shown = msg_bytes(&line[start..]);
-            semsg!("E409: Unknown group name: {shown}");
-            Err(())
-        } else {
-            Ok(Some(id))
+        // The cluster table says why it refused the name; E409 follows.
+        return match syn_check_cluster(&text[1..]) {
+            Ok(id) => Ok(Some(id)),
+            Err(Failed) => Err(unknown_group(&line[start..])),
         };
     }
 
     if !text.iter().any(|b| b"\\.*^$~[".contains(b)) {
-        let id = syn_check_group(text);
-        return if id == 0 {
-            let shown = msg_bytes(&line[start..]);
-            semsg!("E409: Unknown group name: {shown}");
-            Err(())
-        } else {
-            Ok(Some(id))
+        // The group table says why it refused the name; E409 follows.
+        return match syn_check_group(text) {
+            0 => Err(unknown_group(&line[start..])),
+            id => Ok(Some(id)),
         };
     }
 
@@ -472,7 +461,8 @@ fn parse_id_name(
     name.push(0);
     let mut regmatch = RegMatch::new(vim_regcomp(cstr::in_bytes(&name), RE_MAGIC), true);
     if regmatch.regprog.is_none() {
-        return Err(());
+        // The compiler has said why.
+        return Err(SyntaxError::Reported(Failed));
     }
     let mut matched = false;
     let mut i = highlight_num_groups();
@@ -485,11 +475,14 @@ fn parse_id_name(
     }
     drop(regmatch);
     if !matched {
-        let shown = msg_bytes(&line[start..]);
-        semsg!("E409: Unknown group name: {shown}");
-        return Err(());
+        return Err(unknown_group(&line[start..]));
     }
     Ok(None)
+}
+
+/// E409 for the name at the start of `text`.
+fn unknown_group(text: &[u8]) -> SyntaxError {
+    SyntaxError::UnknownGroup(ThinCString::from_bytes(text))
 }
 
 impl SynState {
