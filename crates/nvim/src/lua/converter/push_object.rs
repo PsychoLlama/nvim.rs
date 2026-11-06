@@ -20,7 +20,6 @@
 
 use super::{TYPE_IDX_VALUE, VAL_IDX_VALUE};
 use crate::lua::stack::{At, Stack};
-use crate::narrow::len_as_int;
 use crate::narrow::number_as_int;
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, Float, Handle, Integer, Object, ObjectType,
@@ -94,9 +93,10 @@ pub fn push_dict(stack: &mut Stack, dict: &ApiDict, special: bool) {
 
 pub fn push_array(stack: &mut Stack, array: &Array, special: bool) {
     stack.new_table(array.len(), 0);
-    for (i, item) in array.iter().enumerate() {
+    // Lua's index is a C `int` counted from 1, as upstream's `(int)i + 1`.
+    for (item, index) in array.iter().zip(1..) {
         push_object(stack, item, special);
-        stack.raw_set_index(At::from_top(2), len_as_int(i) + 1);
+        stack.raw_set_index(At::from_top(2), index);
     }
 }
 

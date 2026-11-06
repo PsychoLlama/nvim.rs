@@ -18,7 +18,7 @@
 #![forbid(unsafe_code)]
 
 use crate::narrow::as_index;
-use crate::narrow::len_as_int;
+use crate::narrow::const_len_as_int;
 use crate::tui::termkey::csi::{self, CSI_MAX_PARAMS, CsiSeq};
 use crate::tui::termkey::keytables::{
     CSI_FINAL_BASE, CSI_FUNC_COUNT, CSI_FUNCS, CSI_SS3, SS3, SS3_KEYPAD_ALT,
@@ -137,7 +137,7 @@ fn handle_csi_func(
         let modifiers = key.modifiers;
         emit_codepoint(tk, csi::param_groups(params[2]).0, key);
         key.modifiers |= modifiers;
-    } else if (0..len_as_int(CSI_FUNC_COUNT)).contains(&number) {
+    } else if (0..const_len_as_int(CSI_FUNC_COUNT)).contains(&number) {
         let info = CSI_FUNCS[as_index(number)];
         key.kind = info.kind;
         key.code = KeyCode::scalar(info.sym);

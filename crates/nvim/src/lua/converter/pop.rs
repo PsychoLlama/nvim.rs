@@ -265,8 +265,9 @@ pub fn pop_float(stack: &mut Stack) -> Result<Float, Error> {
 /// [`pop_array`] once the table is known to be one.
 fn pop_array_unchecked(stack: &mut Stack, table_props: LuaTableProps) -> Result<Array, Error> {
     let mut ret = Vec::with_capacity(table_props.maxidx);
-    for i in 1..=table_props.maxidx {
-        stack.raw_get_index(At::TOP, len_as_int(i));
+    // `maxidx` came from a Lua index, so it is a C `int` already.
+    for i in 1..=len_as_int(table_props.maxidx) {
+        stack.raw_get_index(At::TOP, i);
         match pop_object(stack, false) {
             Ok(val) => ret.push(val),
             Err(e) => {
