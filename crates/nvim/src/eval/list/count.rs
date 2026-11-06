@@ -20,12 +20,13 @@
 
 use super::{
     Container, DictArg, ListArg, char_len, check_lock, copy_tv, cstr_of_chk, err,
-    err_not_countable, err_nr, number_of, starts_with_ic, string_bytes,
+    err_not_countable, number_of, starts_with_ic, string_bytes,
 };
 use crate::eval::typval::NumBuf;
-use crate::message::{e_invarg, e_list_index_out_of_range_nr, e_listblobreq};
+use crate::message::{e_invarg, e_listblobreq};
 use crate::narrow::number_as_int;
-use crate::types::{EvalFuncData, TypVal, VarNumber, int64_t};
+use crate::semsg;
+use crate::types::{EvalFuncData, Failed, TypVal, VarNumber, int64_t};
 
 /// `add(container, item)`: append one item to a List or one byte to a Blob.
 pub fn f_add(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
@@ -95,13 +96,13 @@ fn count_string(hay: &[u8], needle: &[u8], ic: bool) -> VarNumber {
 }
 
 /// How many items of `l` from index `idx` on equal `needle`.
-fn count_list(l: ListArg, needle: &TypVal, idx: int64_t, ic: bool) -> VarNumber {
+fn count_list(l: ListArg, needle: &TypVal, idx: int64_t, ic: bool) -> Result<VarNumber, Failed> {
     if l.len() == 0 {
-        return 0;
+        return Ok(0);
     }
     let Some(first) = l.find(number_as_int(idx)) else {
-        err_nr(e_list_index_out_of_range_nr, idx);
-        return 0;
+        semsg!("E684: List index out of range: {idx}");
+        return Err(Failed);
     };
 
     let mut n = 0;
@@ -112,7 +113,7 @@ fn count_list(l: ListArg, needle: &TypVal, idx: int64_t, ic: bool) -> VarNumber 
         }
         cur = li.next();
     }
-    n
+    Ok(n)
 }
 
 /// How many values of `d` equal `needle`.
@@ -157,7 +158,8 @@ pub fn f_count(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                     0
                 };
                 if !error {
-                    n = count_list(l, &args[1], idx, ic);
+                    // A start past the end is said, and counts nothing.
+                    n = count_list(l, &args[1], idx, ic).unwrap_or(0);
                 }
             }
             Container::Dict(d) if !d.is_null() => {

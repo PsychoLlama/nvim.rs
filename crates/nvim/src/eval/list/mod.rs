@@ -56,14 +56,13 @@ use crate::eval::{eval_expr_typval, get_copy_id};
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::mbyte::{cluster_len, strnicmp_in};
 use crate::memory::ThinCString;
-use crate::message::e_listdictblobarg;
 use crate::message::emsg;
-use crate::message_fmt::{emsg_text, msg_cstr};
+use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext;
-use crate::tr_c;
+use crate::semsg;
 use crate::types::{
     Blob, Dict, DictItem, EvalFuncData, List, ListItem, TypVal, VAR_BLOB, VAR_DICT, VAR_LIST,
-    VAR_STRING, VarLock, VarNumber, VarType, Vv, int64_t, ptrdiff_t, uint8_t,
+    VAR_STRING, VarLock, VarNumber, VarType, Vv, ptrdiff_t, uint8_t,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -74,11 +73,6 @@ mod filtermap;
 pub use self::count::{f_add, f_count};
 pub use self::extend::{f_extend, f_extendnew, f_insert};
 pub use self::filtermap::{f_filter, f_foreach, f_map, f_mapnew};
-
-static e_argument_of_str_must_be_list_string_or_dictionary: &CStr =
-    c"E706: Argument of %s must be a List, String or Dictionary";
-static e_argument_of_str_must_be_list_string_dictionary_or_blob: &CStr =
-    c"E1250: Argument of %s must be a List, String, Dictionary or Blob";
 
 /// A cleared `TypVal`, the `{ .v_type = VAR_UNKNOWN }` every walk starts
 /// its per-item result from.
@@ -720,37 +714,19 @@ pub(crate) fn err(msg: &'static CStr) {
     emsg(gettext(msg));
 }
 
-/// Report `msg` -- a shared error text with one `%s` -- naming `what`.
-#[inline(always)]
-pub(crate) fn err_str(msg: &'static CStr, what: &CStr) {
-    // The message is translated, the name is not -- upstream's
-    // `semsg(_(msg), what)`.
-    emsg_text(tr_c!(msg, msg_cstr(what)));
-}
-
-/// Report `msg` -- a shared error text with one `%ld` -- naming `n`.
-#[inline(always)]
-pub(crate) fn err_nr(msg: &'static CStr, n: int64_t) {
-    emsg_text(tr_c!(msg, n));
-}
-
 /// `E1250`: what `filter()`/`map()`/`mapnew()`/`foreach()` say about an
 /// argument that is none of the four containers.
 #[inline(always)]
 pub(crate) fn err_not_container(func_name: &CStr) {
-    err_str(
-        e_argument_of_str_must_be_list_string_dictionary_or_blob,
-        func_name,
-    );
+    let arg0 = msg_cstr(func_name);
+    semsg!("E1250: Argument of {arg0} must be a List, String, Dictionary or Blob");
 }
 
 /// `E706`: what `count()` says about the same.
 #[inline(always)]
 pub(crate) fn err_not_countable(func_name: &CStr) {
-    err_str(
-        e_argument_of_str_must_be_list_string_or_dictionary,
-        func_name,
-    );
+    let arg0 = msg_cstr(func_name);
+    semsg!("E706: Argument of {arg0} must be a List, String or Dictionary");
 }
 
 /// Name the `v:` variable `idx` in the argument frame `filter_map_one`
@@ -859,7 +835,10 @@ pub fn f_remove(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         Container::Dict(_) => tv_dict_remove(args, result, arg_errmsg),
         Container::Blob(b) => blob_remove(b.get().as_deref_mut(), args, result, arg_errmsg),
         Container::List(l) => list_remove(l.get().as_deref_mut(), args, result, arg_errmsg),
-        _ => err_str(e_listdictblobarg, c"remove()"),
+        _ => {
+            let arg0 = "remove()";
+            semsg!("E896: Argument of {arg0} must be a List, Dictionary or Blob");
+        }
     }
 }
 

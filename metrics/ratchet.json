@@ -7,7 +7,7 @@
   "c_int_returns": 1040,
   "ok_fail": 51,
   "error_out_params": 0,
-  "semsg_c": 26,
+  "semsg_c": 19,
   "raw_cstr": 240,
   "libc_strings": 5,
   "const_c_int": 959,

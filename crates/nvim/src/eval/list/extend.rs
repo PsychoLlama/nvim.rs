@@ -13,12 +13,10 @@
 
 use core::ffi::{CStr, c_int};
 
-use super::{
-    Container, DictArg, ListArg, check_lock, copy_tv, cstr_of, cstr_of_chk, err_nr, err_str,
-    number_of,
-};
+use super::{Container, DictArg, ListArg, check_lock, copy_tv, cstr_of, cstr_of_chk, number_of};
 use crate::eval::typval::NumBuf;
-use crate::message::{e_invarg2, e_list_index_out_of_range_nr, e_listblobarg, e_listdictarg};
+use crate::message_fmt::msg_cstr;
+use crate::semsg;
 use crate::types::{EvalFuncData, TypVal, VarLock, int64_t, uint8_t};
 
 /// `extend()`/`extendnew()` over two Dicts: merge `argvars[1]`'s keys into
@@ -68,7 +66,8 @@ fn extend_dict(args: &[TypVal], arg_errmsg: &'static CStr, is_new: bool, result:
             return;
         };
         if !matches!(name.to_bytes(), b"keep" | b"force" | b"error") {
-            err_str(e_invarg2, name);
+            let what = msg_cstr(name);
+            semsg!("E475: Invalid argument: {what}");
             return;
         }
         action = name;
@@ -123,7 +122,9 @@ fn extend_list(args: &[TypVal], arg_errmsg: &'static CStr, is_new: bool, result:
             }
             match l1.find(idx) {
                 Some(item) => break 'find Some(item),
-                None => err_nr(e_list_index_out_of_range_nr, idx as int64_t),
+                None => {
+                    semsg!("E684: List index out of range: {}", idx as int64_t);
+                }
             }
         }
         return;
@@ -144,10 +145,10 @@ fn extend(args: &[TypVal], result: &mut TypVal, arg_errmsg: &'static CStr, is_ne
     match (Container::of(&args[0]), Container::of(&args[1])) {
         (Container::List(_), Container::List(_)) => extend_list(args, arg_errmsg, is_new, result),
         (Container::Dict(_), Container::Dict(_)) => extend_dict(args, arg_errmsg, is_new, result),
-        _ => err_str(
-            e_listdictarg,
-            if is_new { c"extendnew()" } else { c"extend()" },
-        ),
+        _ => {
+            let arg0 = if is_new { "extendnew()" } else { "extend()" };
+            semsg!("E712: Argument of {arg0} must be a List or Dictionary");
+        }
     }
 }
 
@@ -185,7 +186,8 @@ pub fn f_insert(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                 }
                 if before < 0 || before > len {
                     let mut numbuf = NumBuf::new();
-                    err_str(e_invarg2, cstr_of(&args[2], &mut numbuf));
+                    let what = msg_cstr(cstr_of(&args[2], &mut numbuf));
+                    semsg!("E475: Invalid argument: {what}");
                     return;
                 }
             }
@@ -195,7 +197,8 @@ pub fn f_insert(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             }
             if !(0..=255).contains(&val) {
                 let mut numbuf = NumBuf::new();
-                err_str(e_invarg2, cstr_of(&args[1], &mut numbuf));
+                let what = msg_cstr(cstr_of(&args[1], &mut numbuf));
+                semsg!("E475: Invalid argument: {what}");
                 return;
             }
             b.insert_byte(before, val as uint8_t);
@@ -217,13 +220,16 @@ pub fn f_insert(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             if before != l.len() as int64_t {
                 item = l.find(before as c_int);
                 if item.is_none() {
-                    err_nr(e_list_index_out_of_range_nr, before);
+                    semsg!("E684: List index out of range: {before}");
                     return;
                 }
             }
             l.insert_tv(&args[1], item);
             copy_tv(&args[0], result);
         }
-        _ => err_str(e_listblobarg, c"insert()"),
+        _ => {
+            let arg0 = "insert()";
+            semsg!("E899: Argument of {arg0} must be a List or Blob");
+        }
     }
 }

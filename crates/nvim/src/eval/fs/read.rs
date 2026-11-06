@@ -25,12 +25,11 @@ use super::{__S_IFMT, str_arg};
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::{tv_blob_alloc_ret, tv_get_number, tv_list_alloc_ret};
 use crate::memory::ThinCString;
-use crate::message::{e_cant_read_file_str, e_isadir2, e_notopen};
-use crate::message_fmt::{emsg_text, msg_cstr};
+use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext;
 use crate::os::fs::dir_exists;
 use crate::pos::MAXLNUM;
-use crate::tr_c;
+use crate::semsg;
 use crate::types::{
     EvalFuncData, FileOffset, List, TypVal, int64_t, kListLenUnknown, ptrdiff_t, uint64_t,
 };
@@ -338,11 +337,6 @@ fn dupz(line: &[u8]) -> ThinCString {
 // The builtins
 // ---------------------------------------------------------------------
 
-/// Report the one-`%s` message `fmt`, translated, about the path `p`.
-fn err_path(fmt: &'static CStr, p: &CStr) {
-    emsg_text(tr_c!(fmt, msg_cstr(p)));
-}
-
 /// Argument `i` as a Number, which is how `readblob()` reads its offset and
 /// size and `readfile()` its maximum line count.
 fn nr(args: &[TypVal], i: usize) -> int64_t {
@@ -388,18 +382,21 @@ fn read_file_or_blob(args: &[TypVal], result: &mut TypVal, always_blob: bool) {
 
     let fname = str_arg(args, 0, &mut numbuf3);
     if dir_exists(fname) {
-        err_path(e_isadir2, fname);
+        let name = msg_cstr(fname);
+        semsg!("E17: \"{name}\" is a directory");
         return;
     }
     let empty = fname.to_bytes().is_empty();
     let Some(mut fd) = (if empty { None } else { File::open(fname) }) else {
-        err_path(e_notopen, if empty { gettext(c"<empty>") } else { fname });
+        let name = msg_cstr(if empty { gettext(c"<empty>") } else { fname });
+        semsg!("E484: Can't open file {name}");
         return;
     };
 
     if blob {
         if !read_blob(&mut fd, result, offset, size) {
-            err_path(e_cant_read_file_str, fname);
+            let name = msg_cstr(fname);
+            semsg!("E485: Can't read file {name}");
         }
     } else if let Some(lines) = result.list_mut() {
         read_lines(&mut fd, lines, binary, maxline);

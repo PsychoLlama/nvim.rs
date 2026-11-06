@@ -34,13 +34,13 @@ use crate::ex_cmds::check_secure;
 use crate::ex_docmd::{change_dir, vim_mkdir_emsg};
 use crate::fileio::{delete_recursive, rename_file, temp_name, vim_copyfile};
 use crate::memory::ThinCString;
+use crate::message::e_invarg;
 use crate::message::emsg;
-use crate::message::{e_invarg, e_invargNval, e_invexpr2, e_mkdir};
-use crate::message_fmt::{emsg_text, msg_cstr, msg_cstr_opt};
+use crate::message_fmt::{msg_cstr, msg_cstr_opt};
 use crate::os::cshim::gettext;
 use crate::os::fs::{current_dir, link_info, mkdir_recurse, os_remove, os_rmdir};
 use crate::path::{full_name_save, tail_index};
-use crate::tr_c;
+use crate::semsg;
 use crate::types::{
     CdScope, EvalFuncData, FAIL, MAXPATHL, OK, TypVal, VAR_NUMBER, VAR_STRING, VarNumber,
     kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow, uint64_t,
@@ -106,16 +106,6 @@ fn find_win(args: &[TypVal], tabpage: Option<TabPage>) -> Option<Win> {
 /// Report the plain message `msg`, translated.
 fn err0(msg: &'static CStr) {
     emsg(gettext(msg));
-}
-
-/// Report the one-`%s` message `fmt`, translated, about `a`.
-fn err1(fmt: &'static CStr, a: &CStr) {
-    emsg_text(tr_c!(fmt, msg_cstr(a)));
-}
-
-/// Report the two-`%s` message `fmt`, translated, about `a` and `b`.
-fn err2(fmt: &'static CStr, a: Option<&CStr>, b: &CStr) {
-    emsg_text(tr_c!(fmt, msg_cstr_opt(a), msg_cstr(b)));
 }
 
 // ---------------------------------------------------------------------
@@ -237,7 +227,8 @@ pub fn f_chdir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             b"tabpage" => kCdScopeTabpage,
             b"window" => kCdScopeWindow,
             _ => {
-                err2(e_invargNval, Some(c"scope"), s);
+                let (arg0, value) = ("scope", msg_cstr(s));
+                semsg!("E475: Invalid value for argument {arg0}: {value}");
                 return;
             }
         };
@@ -281,7 +272,8 @@ pub fn f_delete(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         b"d" => done(os_rmdir(name)),
         b"rf" => delete_recursive(name).map_or(-1, |()| 0),
         _ => {
-            err1(e_invexpr2, flags);
+            let text = msg_cstr(flags);
+            semsg!("E15: Invalid expression: \"{text}\"");
             return;
         }
     });
@@ -418,7 +410,8 @@ pub fn f_mkdir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                     }
                 }
                 Err(failure) => {
-                    err2(e_mkdir, failure.dir.as_deref(), failure.why);
+                    let (dir, why) = (msg_cstr_opt(failure.dir.as_deref()), msg_cstr(failure.why));
+                    semsg!("E739: Cannot create directory {dir}: {why}");
                     result.write_number(FAIL as VarNumber);
                     return;
                 }

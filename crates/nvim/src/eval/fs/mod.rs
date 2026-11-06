@@ -78,7 +78,6 @@ pub const kFileReadOnly: FileOpenFlags = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SEEK_END: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-static e_error_while_writing_str: &::core::ffi::CStr = c"E80: Error while writing: %s";
 
 // ---------------------------------------------------------------------
 // The safe layer

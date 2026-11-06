@@ -19,41 +19,28 @@
 
 #![forbid(unsafe_code)]
 
-use super::{
-    e_error_while_writing_str, from, kFileAppend, kFileCreate, kFileMkDir, kFileTruncate,
-    str_arg_chk,
-};
+use super::{from, kFileAppend, kFileCreate, kFileMkDir, kFileTruncate, str_arg_chk};
 use crate::eval::typval::{NumBuf, blob_bytes, list_items, tv_check_str_or_nr};
 use crate::eval::userfunc::{add_defer, can_add_defer};
 use crate::ex_cmds::check_secure;
 use crate::fileio::buffered::WriteFile;
 use crate::memory::ThinCString;
-use crate::message::e_invarg2;
 use crate::message::emsg;
-use crate::message_fmt::{emsg_text, msg_cstr};
+use crate::message_fmt::msg_cstr;
 use crate::option::vars::p_fs;
 use crate::os::cshim::gettext;
 use crate::os::fs::os_strerror;
 use crate::path::full_name_save;
 use crate::runtime::script_is_lua;
 use crate::runtime::state::current_sctx;
-use crate::tr_c;
+use crate::types::Failed;
 use crate::types::{Blob, EvalFuncData, List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber};
+use crate::{semsg, tr};
 use core::ffi::{CStr, c_int};
 
 // ---------------------------------------------------------------------
 // The messages
 // ---------------------------------------------------------------------
-
-/// Report the one-`%s` message `fmt`, translated, about `a`.
-fn err1(fmt: &'static CStr, a: &CStr) {
-    emsg_text(tr_c!(fmt, msg_cstr(a)));
-}
-
-/// Report the two-`%s` message `fmt`, translated, about `a` and `b`.
-fn err2(fmt: &'static CStr, a: &CStr, b: &CStr) {
-    emsg_text(tr_c!(fmt, msg_cstr(a), msg_cstr(b)));
-}
 
 /// Report `msg`, translated.
 fn err(msg: &'static CStr) {
@@ -62,7 +49,8 @@ fn err(msg: &'static CStr) {
 
 /// Report `E80: Error while writing: %s`.
 fn err_writing(error: c_int) {
-    err1(e_error_while_writing_str, os_strerror(error));
+    let why = msg_cstr(os_strerror(error));
+    semsg!("E80: Error while writing: {why}");
 }
 
 // ---------------------------------------------------------------------
@@ -185,26 +173,26 @@ fn defer_delete(fname: &CStr) {
     add_defer(c"delete", ::core::slice::from_mut(&mut tv));
 }
 
-/// Whether the first argument is something this builtin can write, having
-/// reported if not.
-fn writable(args: &[TypVal]) -> bool {
+/// `Ok` if the first argument is something this builtin can write; else the
+/// refusal has been reported.
+fn writable(args: &[TypVal]) -> Result<(), Failed> {
     // XXX: this logic is a bit weird because of how `decode_string` works
     // (#39328): it assigns VAR_BLOB when it finds a NUL in the Lua string,
     // and VAR_STRING when it does not.
     if args.first().is_some_and(|arg| arg.v_type() == VAR_LIST) {
         return list_items(args[0].list_ref())
             .iter()
-            .all(|item| tv_check_str_or_nr(&item.li_tv).is_ok());
+            .try_for_each(|item| tv_check_str_or_nr(&item.li_tv));
     }
     // A Lua string is always treated as blob data.
     if args.first().is_some_and(|arg| arg.v_type() == VAR_BLOB)
         || (args.first().is_some_and(|arg| arg.v_type() == VAR_STRING) && in_lua_script())
     {
-        return true;
+        return Ok(());
     }
-    let what = c"writefile() first argument must be a List or a Blob";
-    err1(e_invarg2, gettext(what));
-    false
+    let what = tr!("writefile() first argument must be a List or a Blob");
+    semsg!("E475: Invalid argument: {what}");
+    Err(Failed)
 }
 
 /// The flags of the third argument, or None having reported an unknown one.
@@ -217,7 +205,7 @@ struct Flags {
 }
 
 impl Flags {
-    fn read(args: &[TypVal]) -> Option<Self> {
+    fn read(args: &[TypVal]) -> Result<Self, Failed> {
         let mut numbuf = NumBuf::new();
         let mut f = Self {
             binary: false,
@@ -227,9 +215,9 @@ impl Flags {
             mkdir_p: false,
         };
         if args.len() <= 2 {
-            return Some(f);
+            return Ok(f);
         }
-        let flags = str_arg_chk(args, 2, &mut numbuf)?;
+        let flags = str_arg_chk(args, 2, &mut numbuf).ok_or(Failed)?;
         for (i, &c) in flags.to_bytes().iter().enumerate() {
             match c {
                 b'b' => f.binary = true,
@@ -241,12 +229,13 @@ impl Flags {
                 _ => {
                     // The rest of the flags with `%s`, not this one with
                     // `%c`, so that a multibyte character survives.
-                    err1(c"E5060: Unknown flag: %s", from(flags, i));
-                    return None;
+                    let rest = msg_cstr(from(flags, i));
+                    semsg!("E5060: Unknown flag: {rest}");
+                    return Err(Failed);
                 }
             }
         }
-        Some(f)
+        Ok(f)
     }
 }
 
@@ -254,10 +243,10 @@ impl Flags {
 /// written to the file, 0 on success and -1 on failure.
 pub fn f_writefile(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(-1 as VarNumber);
-    if secure() || !writable(args) {
+    if secure() || writable(args).is_err() {
         return;
     }
-    let Some(flags) = Flags::read(args) else {
+    let Ok(flags) = Flags::read(args) else {
         return;
     };
 
@@ -284,8 +273,8 @@ pub fn f_writefile(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut out = match WriteFile::open(fname, open_flags, 0o666) {
         Ok(out) => out,
         Err(error) => {
-            let fmt = c"E482: Can't open file %s for writing: %s";
-            err2(fmt, fname, os_strerror(error));
+            let (name, why) = (msg_cstr(fname), msg_cstr(os_strerror(error)));
+            semsg!("E482: Can't open file {name} for writing: {why}");
             return;
         }
     };
@@ -309,7 +298,7 @@ pub fn f_writefile(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
     let error = out.close(flags.do_fsync);
     if error != 0 {
-        let fmt = c"E80: Error when closing file %s: %s";
-        err2(fmt, fname, os_strerror(error));
+        let (name, why) = (msg_cstr(fname), msg_cstr(os_strerror(error)));
+        semsg!("E80: Error when closing file {name}: {why}");
     }
 }
