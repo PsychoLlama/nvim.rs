@@ -125,8 +125,8 @@ impl LineShift {
     /// `fnum`. The global table, every jump list and every tag stack hold
     /// marks in other buffers, which this adjustment must not touch.
     #[inline(always)]
-    fn mark_nodel_in(self, fm: &mut FileMark, fnum: Option<Handle>) {
-        if fm.fnum == fnum {
+    fn mark_nodel_in(self, fm: &mut FileMark, fnum: Handle) {
+        if fm.fnum == Some(fnum) {
             self.mark_nodel(fm);
         }
     }
@@ -167,8 +167,8 @@ impl ColShift {
 
     /// [`ColShift::col`], but only for a mark that names buffer `fnum`.
     #[inline(always)]
-    fn mark_in(self, fm: &mut FileMark, fnum: Option<Handle>) {
-        if fm.fnum == fnum {
+    fn mark_in(self, fm: &mut FileMark, fnum: Handle) {
+        if fm.fnum == Some(fnum) {
             self.mark(fm);
         }
     }
@@ -255,7 +255,7 @@ pub fn mark_adjust_buf(
         // slots naming *this* buffer are touched.
         namedfm.with_mut(|table| {
             for mark in table.iter_mut() {
-                shift.mark_nodel_in(&mut mark.fmark, Some(fnum));
+                shift.mark_nodel_in(&mut mark.fmark, fnum);
             }
         });
         let prompt = buf_is_prompt(Some(buffer));
@@ -323,7 +323,7 @@ pub fn mark_adjust_buf(
         if !cmdmod_has(CmdModFlags::LOCKMARKS) {
             let len = slot(win.w_jumplistlen);
             for jump in &mut win.w_jumplist[..len] {
-                shift.mark_nodel_in(&mut jump.fmark, Some(fnum));
+                shift.mark_nodel_in(&mut jump.fmark, fnum);
             }
         }
         if win.w_buffer != buffer {
@@ -332,7 +332,7 @@ pub fn mark_adjust_buf(
         if !cmdmod_has(CmdModFlags::LOCKMARKS) {
             let len = slot(win.w_tagstacklen);
             for tag in &mut win.w_tagstack[..len] {
-                shift.mark_nodel_in(&mut tag.fmark, Some(fnum));
+                shift.mark_nodel_in(&mut tag.fmark, fnum);
             }
         }
         // The remembered Visual range of a window that is not the current
@@ -444,7 +444,7 @@ pub fn mark_col_adjust(
 
     namedfm.with_mut(|table| {
         for mark in table.iter_mut() {
-            shift.mark_in(&mut mark.fmark, Some(fnum));
+            shift.mark_in(&mut mark.fmark, fnum);
         }
     });
     let prompt = buf_is_prompt(Some(buf));
@@ -475,14 +475,14 @@ pub fn mark_col_adjust(
     for mut win in windows() {
         let len = slot(win.w_jumplistlen);
         for jump in &mut win.w_jumplist[..len] {
-            shift.mark_in(&mut jump.fmark, Some(fnum));
+            shift.mark_in(&mut jump.fmark, fnum);
         }
         if win.w_buffer != buf {
             continue;
         }
         let len = slot(win.w_tagstacklen);
         for tag in &mut win.w_tagstack[..len] {
-            shift.mark_in(&mut tag.fmark, Some(fnum));
+            shift.mark_in(&mut tag.fmark, fnum);
         }
         if !win.is_current() {
             let mut cursor = win.w_cursor;
