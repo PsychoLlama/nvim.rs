@@ -65,6 +65,7 @@ use crate::tag::state::{
 };
 use crate::tr;
 use crate::types::AutoEvent;
+use crate::types::Handle;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     Callback, ColNr, Dict, ExArg, Expand, FileMark, FileMarkView, FileOffset, GetFileRet, LineNr,
@@ -227,7 +228,7 @@ static PREVIEW_ENTRY: GlobalCell<Taggy> = GlobalCell::new(Taggy {
             col: ColNr::ZERO,
             coladd: 0,
         },
-        fnum: None,
+        in_buffer: Handle::NONE,
         timestamp: 0 as Timestamp,
         view: FileMarkView {
             topline_offset: MAXLNUM.get(),

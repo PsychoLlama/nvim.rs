@@ -96,7 +96,7 @@ pub(super) fn slot(i: c_int) -> usize {
 pub(crate) fn fresh_mark(pos: Pos, fnum: Option<Handle>, view: FileMarkView) -> FileMark {
     FileMark {
         mark: pos,
-        fnum,
+        in_buffer: fnum.unwrap_or(Handle::NONE),
         timestamp: os_time(),
         view,
         extra: None,
@@ -205,7 +205,7 @@ mod tests {
     fn clearing_keeps_the_timestamp_it_is_given() {
         let mut fm = FileMark {
             mark: at(12, 3),
-            fnum: Handle::from_number(7),
+            in_buffer: Handle::new(7),
             timestamp: 1,
             view: FileMarkView {
                 topline_offset: 4,
@@ -215,7 +215,7 @@ mod tests {
         };
         fm.clear(4242);
         assert!(!fm.is_set());
-        assert_eq!(fm.fnum, None);
+        assert_eq!(fm.fnum(), None);
         assert_eq!(fm.timestamp, 4242);
         assert_eq!(fm.view.topline_offset, NO_VIEW.topline_offset);
         assert!(fm.extra.is_none());

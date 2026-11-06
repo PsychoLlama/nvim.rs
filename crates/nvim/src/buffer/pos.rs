@@ -23,6 +23,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::types::Handle;
 use crate::winfloat::kWinStyleMinimal;
 use crate::winlayer::WinId;
 
@@ -216,7 +217,7 @@ pub fn buflist_findfmark(buffer: Buf) -> FileMark {
                 col: ColNr::ZERO,
                 coladd: 0,
             },
-            fnum: None,
+            in_buffer: Handle::NONE,
             timestamp: 0 as Timestamp,
             view: FileMarkView {
                 topline_offset: MAXLNUM.get(),

@@ -475,7 +475,7 @@ pub(crate) fn get_address(
                     let found = mark_get(Buf::current(), Win::current(), flag, name);
                     cmd += 1;
                     match &found {
-                        Some(fm) if fm.fnum != Some(Buf::current().handle) => {
+                        Some(fm) if fm.fnum() != Some(Buf::current().handle) => {
                             mark_move_to(Some(fm), 0 as MarkMove);
                             lnum = Win::current().w_cursor.lnum;
                         }

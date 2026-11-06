@@ -258,7 +258,7 @@ pub fn mark_forget_file(mut window: Win, fnum: Option<Handle>) {
     // Backwards, so removing an entry cannot skip the one after it.
     for i in (0..window.w_tagstacklen).rev() {
         let at = slot(i);
-        if window.w_tagstack[at].fmark.fnum != fnum {
+        if window.w_tagstack[at].fmark.fnum() != fnum {
             continue;
         }
         let len = slot(window.w_tagstacklen);
@@ -283,7 +283,7 @@ pub fn mark_forget_file(mut window: Win, fnum: Option<Handle>) {
 pub fn pos_to_mark(buffer: Buf, pos: Pos) -> FileMark {
     FileMark {
         mark: pos,
-        fnum: Some(buffer.handle),
+        in_buffer: buffer.handle,
         ..FileMark::UNSET
     }
 }
@@ -395,14 +395,14 @@ pub fn fmarks_check_names(buffer: Buf) {
 }
 
 fn fmarks_check_one(fm: &mut XFileMark, name: &[u8], handle: Handle) {
-    if fm.fmark.fnum.is_some() {
+    if fm.fmark.fnum().is_some() {
         return;
     }
     match fm.file_name() {
         Some(fname) if path_fnamecmp(name, fname.to_bytes()) == 0 => {}
         _ => return,
     }
-    fm.fmark.fnum = Some(handle);
+    fm.fmark.set_fnum(Some(handle));
     fm.fname = None;
 }
 
@@ -431,7 +431,7 @@ pub(crate) fn mark_check(fm: Option<&FileMark>, errormsg: &mut Option<CString>) 
         return false;
     }
     let buf = Buf::current();
-    fm.fnum != Some(buf.handle) || mark_check_line_bounds(Some(buf), fm, errormsg)
+    !fm.is_in(buf.handle) || mark_check_line_bounds(Some(buf), fm, errormsg)
 }
 
 /// Check if a mark line number is greater than the buffer line count, and set e_markinval.

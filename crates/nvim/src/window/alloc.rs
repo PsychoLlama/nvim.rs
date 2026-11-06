@@ -72,7 +72,7 @@ const ZERO_POS: Pos = Pos {
 /// jump list and tag stack slot.
 const ZERO_FILEMARK: FileMark = FileMark {
     mark: ZERO_POS,
-    fnum: None,
+    in_buffer: Handle::NONE,
     timestamp: 0,
     view: FileMarkView {
         topline_offset: 0,

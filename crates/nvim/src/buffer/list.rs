@@ -70,7 +70,7 @@ pub(crate) const INIT_FMARK: FileMark = FileMark {
         col: ColNr::ZERO,
         coladd: 0,
     },
-    fnum: None,
+    in_buffer: Handle::NONE,
     timestamp: 0 as Timestamp,
     view: FileMarkView {
         topline_offset: MAXLNUM.get(),

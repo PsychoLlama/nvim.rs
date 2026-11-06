@@ -146,7 +146,7 @@ impl TagStack {
         // back out.
         entry.cur_match = item.cur_match.max(0);
         entry.fmark.mark = item.mark;
-        entry.fmark.fnum = item.fnum;
+        entry.fmark.set_fnum(item.fnum);
         entry.fmark.view = NO_VIEW;
         entry.user_data = item.user_data;
     }
@@ -245,7 +245,7 @@ pub fn do_tags(_excmd: &mut ExArg) {
         );
         row.push(0);
         msg_display(cstr::in_bytes(&row), 0, false);
-        let hl = if item.fmark.fnum == Some(Buf::current().handle) {
+        let hl = if item.fmark.fnum() == Some(Buf::current().handle) {
             HLF_D
         } else {
             0
@@ -271,8 +271,8 @@ fn tag_details(tag: &Taggy, retdict: &mut Dict) {
     let pos = tv_list_alloc(4);
     let _ = retdict.add_list(b"from", Some(pos.clone()));
     let mark = &tag.fmark;
-    let str_m = if mark.fnum != Some(Handle::new(-1)) {
-        VarNumber::from(Handle::number_of(mark.fnum))
+    let str_m = if mark.fnum() != Some(Handle::new(-1)) {
+        VarNumber::from(Handle::number_of(mark.fnum()))
     } else {
         0
     };

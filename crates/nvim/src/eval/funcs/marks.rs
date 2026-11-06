@@ -108,7 +108,7 @@ pub fn f_getjumplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         let d = mark_dict(entry.fmark.mark);
         let _ = d.edit().add_number(
             b"bufnr",
-            VarNumber::from(Handle::number_of(entry.fmark.fnum)),
+            VarNumber::from(Handle::number_of(entry.fmark.fnum())),
         );
         // A jump into a file that is no longer loaded keeps its name.
         if let Some(fname) = entry.file_name() {

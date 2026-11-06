@@ -49,7 +49,7 @@ impl ShadaMark {
     fn of(fm: &FileMark, fname: Option<XString>) -> ShadaMark {
         ShadaMark {
             mark: fm.mark,
-            fnum: fm.fnum,
+            fnum: fm.fnum(),
             timestamp: fm.timestamp,
             fname,
             extra: fm.extra.as_deref().cloned(),
@@ -60,7 +60,7 @@ impl ShadaMark {
     fn into_fmark(self) -> (FileMark, Option<XString>) {
         let fm = FileMark {
             mark: self.mark,
-            fnum: self.fnum,
+            in_buffer: self.fnum.unwrap_or(Handle::NONE),
             timestamp: self.timestamp,
             // Nothing is known about where the window was scrolled to.
             view: FileMarkView::NONE,
@@ -178,7 +178,7 @@ pub(crate) fn shada_local_mark_timestamp(buffer: Buf, win: Win, name: u8) -> Tim
 pub(crate) fn shada_restore_last_cursor(mut buffer: Buf, pos: Pos) {
     buffer.b_last_cursor = FileMark {
         mark: pos,
-        fnum: None,
+        in_buffer: Handle::NONE,
         timestamp: os_time(),
         view: FileMarkView::NONE,
         extra: None,
@@ -200,7 +200,7 @@ pub(crate) fn shada_insert_jump(fm: ShadaMark) {
         if existing.fmark.timestamp <= fm.timestamp {
             let same_file = match &fm.fname {
                 Some(fname) => existing.file_name() == Some(fname.as_cstr()),
-                None => fm.fnum == existing.fmark.fnum,
+                None => fm.fnum == existing.fmark.fnum(),
             };
             if marks_equal(existing.fmark.mark, fm.mark) && same_file {
                 return; // already there

@@ -370,7 +370,7 @@ impl WinInfo {
                     col: ColNr::ZERO,
                     coladd: 0,
                 },
-                fnum: None,
+                in_buffer: Handle::NONE,
                 timestamp: 0,
                 view: FileMarkView {
                     topline_offset: 0,

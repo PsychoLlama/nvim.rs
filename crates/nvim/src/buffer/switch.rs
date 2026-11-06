@@ -845,7 +845,7 @@ fn walk_jumplist(unloaded: &mut Option<Buf>, update_jumplist: &mut bool) -> Opti
 
     let forward = jumpidx;
     while jop_clean() || jumpidx != win.w_jumplistidx {
-        let mut buf = find_buf(win.w_jumplist[as_index(jumpidx)].fmark.fnum);
+        let mut buf = find_buf(win.w_jumplist[as_index(jumpidx)].fmark.fnum());
 
         if let Some(b) = buf {
             // Skip current and unlisted bufs.  Also skip a quickfix or closing

@@ -126,7 +126,7 @@ impl LineShift {
     /// marks in other buffers, which this adjustment must not touch.
     #[inline(always)]
     fn mark_nodel_in(self, fm: &mut FileMark, fnum: Handle) {
-        if fm.fnum == Some(fnum) {
+        if fm.is_in(fnum) {
             self.mark_nodel(fm);
         }
     }
@@ -168,7 +168,7 @@ impl ColShift {
     /// [`ColShift::col`], but only for a mark that names buffer `fnum`.
     #[inline(always)]
     fn mark_in(self, fm: &mut FileMark, fnum: Handle) {
-        if fm.fnum == Some(fnum) {
+        if fm.is_in(fnum) {
             self.mark(fm);
         }
     }

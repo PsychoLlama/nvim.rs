@@ -171,7 +171,7 @@ pub fn var2fpos(
         pos = fm.mark;
         // Only the file marks carry a buffer of their own.
         if second.is_ascii_uppercase() || second.is_ascii_digit() {
-            *ret_fnum = Handle::number_of(fm.fnum);
+            *ret_fnum = Handle::number_of(fm.fnum());
         }
     }
 

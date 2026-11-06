@@ -25,15 +25,17 @@ pub type MarkMoveRes = ::core::ffi::c_uint;
 #[derive(Clone)]
 pub struct FileMark {
     pub mark: Pos,
-    /// The buffer the mark is in; `None` for a buffer-local mark, which is
-    /// in the buffer that keeps it.
-    pub fnum: Option<Handle>,
+    /// The buffer the mark is in, `Handle::NONE` for none: read it as
+    /// [`FileMark::fnum`]. Not an `Option<Handle>`, which has no niche and
+    /// would add a word to every mark of every store (+0.26 % Ir on
+    /// undobench, in the copies and `mark_adjust`'s per-mark test).
+    pub(crate) in_buffer: Handle,
     pub timestamp: Timestamp,
     pub view: FileMarkView,
     /// The ShaDa entry's keys this Nvim has no field for, written back as
     /// read. Boxed: a buffer is a zeroed allocation holding a hundred and
     /// thirty of these, and only a `Sized` box's `None` is promised to be
-    /// all-zero bytes -- which also keeps the record six words.
+    /// all-zero bytes -- which also keeps the record five words.
     pub(crate) extra: Option<Box<crate::shada::ShadaExtra>>,
 }
 #[derive(Copy, Clone)]
@@ -53,6 +55,26 @@ impl FileMarkView {
 }
 
 impl FileMark {
+    /// The buffer the mark is in; `None` for a buffer-local mark, which is
+    /// in the buffer that keeps it.
+    #[inline]
+    pub fn fnum(&self) -> Option<Handle> {
+        Handle::from_number(self.in_buffer.get())
+    }
+
+    /// Point the mark at `fnum`'s buffer, or at none.
+    #[inline]
+    pub fn set_fnum(&mut self, fnum: Option<Handle>) {
+        self.in_buffer = fnum.unwrap_or(Handle::NONE);
+    }
+
+    /// Whether the mark is in `buffer`: [`FileMark::fnum`]` == Some(buffer)`
+    /// as one comparison.
+    #[inline]
+    pub fn is_in(&self, buffer: Handle) -> bool {
+        self.in_buffer == buffer
+    }
+
     /// A mark that is not set.
     pub const UNSET: Self = Self {
         mark: Pos {
@@ -60,7 +82,7 @@ impl FileMark {
             col: ColNr::ZERO,
             coladd: 0,
         },
-        fnum: None,
+        in_buffer: Handle::NONE,
         timestamp: 0,
         view: FileMarkView::NONE,
         extra: None,
@@ -120,7 +142,7 @@ impl SavedMark {
     pub fn of(fm: &FileMark) -> Self {
         Self {
             mark: fm.mark,
-            fnum: fm.fnum.unwrap_or(Handle::NONE),
+            fnum: fm.in_buffer,
             timestamp: fm.timestamp,
             view: fm.view,
         }
@@ -131,7 +153,7 @@ impl SavedMark {
     pub fn to_mark(self) -> FileMark {
         FileMark {
             mark: self.mark,
-            fnum: Handle::from_number(self.fnum.get()),
+            in_buffer: self.fnum,
             timestamp: self.timestamp,
             view: self.view,
             extra: None,

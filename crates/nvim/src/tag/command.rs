@@ -187,7 +187,7 @@ impl DoTag {
             skip_msg: false,
             saved_fmark: FileMark {
                 mark: Pos::default(),
-                fnum: None,
+                in_buffer: Handle::NONE,
                 timestamp: 0,
                 view: NO_VIEW,
                 extra: None,
@@ -360,10 +360,10 @@ impl DoTag {
             return false;
         };
         self.saved_fmark = mark.clone();
-        if mark.fnum != Some(Buf::current().handle) {
+        if mark.fnum() != Some(Buf::current().handle) {
             // Another file. If it cannot be opened (it may have
             // changed) keep the original position on the stack.
-            if buflist_getfile(mark.fnum, mark.mark.lnum, GETF_SETMARK, self.forceit).is_err() {
+            if buflist_getfile(mark.fnum(), mark.mark.lnum, GETF_SETMARK, self.forceit).is_err() {
                 self.idx = self.old_idx;
                 return false;
             }
@@ -462,7 +462,7 @@ impl DoTag {
             let saved = entry.fmark.clone();
             if save_pos {
                 entry.fmark.mark = cursor;
-                entry.fmark.fnum = Some(handle);
+                entry.fmark.set_fnum(Some(handle));
                 entry.fmark.view = view;
             }
             if !selecting {

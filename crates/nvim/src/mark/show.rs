@@ -85,7 +85,7 @@ pub fn ex_marks(excmd: &mut ExArg) {
     // name, or the one a mark out of the shada file still carries.
     for (i, name) in global_mark_names() {
         let mark = store::global_mark(i);
-        let fnum = mark.fmark.fnum;
+        let fnum = mark.fmark.fnum();
         let file = if fnum.is_some() {
             fm_getname(&mark.fmark, 15)
         } else {
@@ -320,7 +320,7 @@ pub fn ex_delmarks(excmd: &mut ExArg) {
                 };
                 let fnum = namedfm.with(|table| {
                     let mark = &table[n].fmark;
-                    mark.is_set().then_some(mark.fnum)
+                    mark.is_set().then_some(mark.fnum())
                 });
                 if let Some(fnum) = fnum {
                     // The event is announced against the mark's OWN buffer
@@ -332,7 +332,7 @@ pub fn ex_delmarks(excmd: &mut ExArg) {
                 namedfm.with_mut(|table| {
                     let slot = &mut table[n];
                     slot.fmark.mark.lnum = LineNr::ZERO;
-                    slot.fmark.fnum = None;
+                    slot.fmark.set_fnum(None);
                     slot.fmark.timestamp = timestamp;
                     slot.fname = None;
                 });
@@ -438,10 +438,10 @@ pub(super) fn mark_line(pos: Pos, lead_len: c_int) -> XString {
 /// The name of the file a filemark is in — or, when it is in the current
 /// buffer, the text at the mark. `None` when its buffer is gone.
 pub fn fm_getname(fm: &FileMark, lead_len: c_int) -> Option<XString> {
-    if fm.fnum == Some(Buf::current().handle) {
+    if fm.fnum() == Some(Buf::current().handle) {
         return Some(mark_line(fm.mark, lead_len));
     }
-    buflist_nr2name(fm.fnum, 0, 1)
+    buflist_nr2name(fm.fnum(), 0, 1)
 }
 
 #[cfg(test)]

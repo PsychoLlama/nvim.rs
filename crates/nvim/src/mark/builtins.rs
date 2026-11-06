@@ -101,7 +101,7 @@ pub fn get_global_marks(l: &mut List) {
     let mut mname: [u8; 3] = *b"' \0";
     for (i, name) in global_mark_names() {
         let mark = global_mark(i);
-        let fnum = mark.fmark.fnum;
+        let fnum = mark.fmark.fnum();
         let file = if fnum.is_some() {
             buflist_nr2name(fnum, 1, 1)
         } else {

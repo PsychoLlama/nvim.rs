@@ -32,7 +32,7 @@ pub fn nvim_buf_del_mark(buf: BufferHandle, name: ApiString) -> Result<Boolean, 
     let Some(fm) = mark_get(b, Win::current(), kMarkAllNoResolve, mark) else {
         return Err(err_bad_value(c"mark name", name.as_cstr()));
     };
-    if fm.mark.lnum != LineNr::ZERO && fm.fnum == Some(b.handle) {
+    if fm.mark.lnum != LineNr::ZERO && fm.is_in(b.handle) {
         set_mark(Some(b), name, 0 as Integer, 0 as Integer)?;
         res = true;
     }
@@ -77,7 +77,7 @@ pub fn nvim_buf_get_mark(buf: BufferHandle, name: ApiString) -> Result<Array, Er
     let Some(fm) = mark_get(b, Win::current(), kMarkAllNoResolve, mark) else {
         return Err(err_bad_value(c"mark name", name.as_cstr()));
     };
-    if fm.fnum != Some(b.handle) {
+    if !fm.is_in(b.handle) {
         pos.lnum = LineNr::ZERO;
         pos.col = ColNr::ZERO;
     } else {
