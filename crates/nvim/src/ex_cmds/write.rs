@@ -23,7 +23,7 @@
 
 use super::{
     GETFILE_ERROR, GETFILE_NOT_WRITTEN, GETFILE_OPEN_OTHER, GETFILE_SAME_FILE, NODE_OTHER,
-    VIM_QUESTION, VIM_YES, buf_autocmd, do_bang,
+    buf_autocmd, do_bang,
 };
 use crate::arglist::do_argfile;
 use crate::autocmd::{augroup_exists_of, do_doautocmd};
@@ -47,6 +47,8 @@ use crate::guard::Suppress;
 use crate::mark::setpcmark;
 use crate::memline::swap_name_for;
 use crate::memory::XString;
+use crate::message::VIM_QUESTION;
+use crate::message::VIM_YES;
 use crate::message::state::emsg_silent;
 use crate::message::{e_argreq, e_bufloaded, e_exists, e_invarg, e_readonly};
 use crate::message::{emsg, vim_dialog_yesno};
@@ -82,8 +84,7 @@ fn confirming() -> bool {
 /// Put `name` into the one-`%s` message `fmt` and ask the user to confirm it.
 fn dialog_yesno_about(fmt: &CStr, name: Option<&CStr>) -> bool {
     let question = dialog_msg(fmt, name);
-    vim_dialog_yesno(VIM_QUESTION.cast_signed(), None, question.as_cstr(), 2)
-        == VIM_YES.cast_signed()
+    vim_dialog_yesno(VIM_QUESTION, None, question.as_cstr(), 2) == VIM_YES
 }
 
 /// Give the current buffer the name `new_fname`, moving the old name into a
@@ -363,13 +364,7 @@ fn confirm_partial_write(args: &mut ExArg) -> Result<(), Failed> {
         emsg(gettext(c"E140: Use ! to write partial buffer"));
         return Err(Failed);
     }
-    if vim_dialog_yesno(
-        VIM_QUESTION.cast_signed(),
-        None,
-        gettext(c"Write partial file?"),
-        2,
-    ) != VIM_YES.cast_signed()
-    {
+    if vim_dialog_yesno(VIM_QUESTION, None, gettext(c"Write partial file?"), 2) != VIM_YES {
         return Err(Failed);
     }
     args.forceit = true;

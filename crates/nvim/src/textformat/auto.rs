@@ -181,7 +181,7 @@ pub fn check_auto_format(end_insert: bool) {
         did_add_space.set(false);
         return;
     }
-    let mut c = ' ' as c_int;
+    let mut c = c_int::from(b' ');
     if !end_insert {
         inc_cursor();
         c = gchar_cursor();

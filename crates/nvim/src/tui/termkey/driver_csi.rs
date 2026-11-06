@@ -10,6 +10,8 @@
 
 #![forbid(unsafe_code)]
 
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
 use crate::tui::termkey::csi::{self, CSI_MAX_PARAMS, CsiSeq};
 use crate::tui::termkey::keytables::{
     CSI_FINAL_BASE, CSI_FUNC_COUNT, CSI_FUNCS, CSI_SS3, SS3, SS3_KEYPAD_ALT,
@@ -23,7 +25,7 @@ use crate::tui::termkey::termkey::{
     peekkey_mouse,
 };
 use crate::types::{KeyCode, TermKeyKey, TermKeyResult};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 /// Parameters resolved against the input buffer. A `None` entry is an omitted
 /// parameter, which reads as -1.
@@ -90,13 +92,13 @@ fn modifiers_and_event(key: &mut TermKeyKey, param: Option<&[u8]>) -> Option<()>
 /// an unknown CSI is what the consumer already does with every other sequence
 /// this driver does not claim.
 fn handle_csi_ss3(key: &mut TermKeyKey, command: u32, params: &Params) -> TermKeyResult {
-    if command > 0xff {
+    let Ok(final_byte) = u8::try_from(command) else {
         return TERMKEY_RES_NONE;
-    }
+    };
     if modifiers_and_event(key, params[1]).is_none() {
         return TERMKEY_RES_NONE;
     }
-    let info = CSI_SS3[(command as u8 - CSI_FINAL_BASE) as usize];
+    let info = CSI_SS3[usize::from(final_byte - CSI_FINAL_BASE)];
     key.kind = info.kind;
     key.code = KeyCode::scalar(info.sym);
     key.modifiers &= !info.modifier_mask;
@@ -128,8 +130,8 @@ fn handle_csi_func(
         let modifiers = key.modifiers;
         emit_codepoint(tk, csi::param_groups(params[2]).0, key);
         key.modifiers |= modifiers;
-    } else if (0..CSI_FUNC_COUNT as c_int).contains(&number) {
-        let info = CSI_FUNCS[number as usize];
+    } else if (0..len_as_int(CSI_FUNC_COUNT)).contains(&number) {
+        let info = CSI_FUNCS[as_index(number)];
         key.kind = info.kind;
         key.code = KeyCode::scalar(info.sym);
         key.modifiers &= !info.modifier_mask;
@@ -153,7 +155,7 @@ fn handle_csi_u(
 ) -> TermKeyResult {
     // Upstream matched the whole packed command, so a private-use introducer
     // takes the sequence out of this encoding entirely.
-    if command != b'u' as u32 {
+    if command != u32::from(b'u') {
         return TERMKEY_RES_NONE;
     }
     if modifiers_and_event(key, params[1]).is_none() {
@@ -185,21 +187,21 @@ fn handle_csi_mouse(
     if nparams < 3 {
         return TERMKEY_RES_NONE;
     }
-    if introducer != 0 && introducer != b'<' as u32 {
+    if introducer != 0 && introducer != u32::from(b'<') {
         return TERMKEY_RES_NONE;
     }
     key.kind = TERMKEY_TYPE_MOUSE;
     let mut payload: Payload = [0; 4];
-    payload[0] = csi::param_groups(params[0]).0 as c_char;
+    payload[0] = report::low_byte(csi::param_groups(params[0]).0);
     // Bits 2-4 of the button code are the modifiers; lift them out of it.
-    key.modifiers = (payload[0] as c_int & 0x1c) >> 2;
-    payload[0] = (payload[0] as c_int & !0x1c) as c_char;
+    key.modifiers = (c_int::from(payload[0]) & 0x1c) >> 2;
+    payload[0] &= !0x1c;
     report::pack_position(
         &mut payload,
         csi::param_groups(params[1]).0,
         csi::param_groups(params[2]).0,
     );
-    if introducer == b'<' as u32 && final_byte == b'm' {
+    if introducer == u32::from(b'<') && final_byte == b'm' {
         report::mark_sgr_release(&mut payload);
     }
     key.code = KeyCode::report(payload);
@@ -214,7 +216,7 @@ fn handle_csi_position(
     nparams: usize,
     params: &Params,
 ) -> TermKeyResult {
-    if command != (b'?' as u32) << 8 | b'R' as u32 {
+    if command != u32::from(b'?') << 8 | u32::from(b'R') {
         return handle_csi_ss3(key, command, params);
     }
     if nparams < 2 {
@@ -238,11 +240,11 @@ fn handle_csi_mode(
     nparams: usize,
     params: &Params,
 ) -> TermKeyResult {
-    let initial = (command >> 8 & 0xff) as c_int;
-    if command >> 16 != b'$' as u32 || command & 0xff != b'y' as u32 {
+    let initial = (command >> 8 & 0xff).cast_signed();
+    if command >> 16 != u32::from(b'$') || command & 0xff != u32::from(b'y') {
         return TERMKEY_RES_NONE;
     }
-    if initial != 0 && initial != b'?' as c_int {
+    if initial != 0 && initial != c_int::from(b'?') {
         return TERMKEY_RES_NONE;
     }
     if nparams < 2 {
@@ -292,14 +294,14 @@ fn peek_csi(
             return TERMKEY_RES_AGAIN;
         }
         // Out of patience: the introducer was just Alt-[ after all.
-        emit_codepoint(tk, CSI_7BIT as c_int, key);
-        key.modifiers |= TERMKEY_KEYMOD_ALT as c_int;
+        emit_codepoint(tk, c_int::from(CSI_7BIT), key);
+        key.modifiers |= TERMKEY_KEYMOD_ALT;
         *nbytep = intro_len;
         return TERMKEY_RES_KEY;
     };
     // `CSI M` with fewer than three parameters is the X10 mouse protocol, whose
     // three payload bytes follow the sequence rather than sitting inside it.
-    if seq.command == b'M' as u32 && seq.nparams < 3 {
+    if seq.command == u32::from(b'M') && seq.nparams < 3 {
         let peek = |tk: &TermKey, nbytep: &mut usize| peekkey_mouse(tk, key, nbytep);
         return with_buffer_advanced(tk, seq.len, nbytep, peek);
     }
@@ -314,7 +316,7 @@ fn peek_csi(
         // introducer, and let the consumer re-parse the rest before the
         // next `peekkey` discards it.
         key.kind = TERMKEY_TYPE_UNKNOWN_CSI;
-        key.code = KeyCode::scalar(seq.command as c_int);
+        key.code = KeyCode::scalar(seq.command.cast_signed());
         key.modifiers = 0;
         tk.hightide = seq.len - intro_len;
         *nbytep = intro_len;
@@ -362,8 +364,8 @@ fn peek_ss3(
         }
         // Out of patience: the introducer was just Alt-O after all.
         let len = bytes.len();
-        emit_codepoint(tk, SS3_7BIT as c_int, key);
-        key.modifiers |= TERMKEY_KEYMOD_ALT as c_int;
+        emit_codepoint(tk, c_int::from(SS3_7BIT), key);
+        key.modifiers |= TERMKEY_KEYMOD_ALT;
         *nbytep = len;
         return TERMKEY_RES_KEY;
     }
@@ -374,13 +376,13 @@ fn peek_ss3(
     let slot = (command - CSI_FINAL_BASE) as usize;
     let mut info = CSI_SS3[slot];
     if info.sym == TERMKEY_SYM_UNKNOWN {
-        if tk.flags & TERMKEY_FLAG_CONVERTKP as c_int != 0 && SS3_KEYPAD_ALT[slot] != 0 {
+        if tk.flags & TERMKEY_FLAG_CONVERTKP != 0 && SS3_KEYPAD_ALT[slot] != 0 {
             // The consumer wants keypad keys as the characters they stand for.
-            let codepoint = SS3_KEYPAD_ALT[slot] as u8 as c_int;
+            let codepoint = c_int::from(SS3_KEYPAD_ALT[slot]);
             key.kind = TERMKEY_TYPE_UNICODE;
             key.code = KeyCode::scalar(codepoint);
             key.modifiers = 0;
-            key.utf8[0] = SS3_KEYPAD_ALT[slot] as u8;
+            key.utf8[0] = SS3_KEYPAD_ALT[slot];
             key.utf8[1] = 0;
             *nbytep = intro_len + 1;
             return TERMKEY_RES_KEY;

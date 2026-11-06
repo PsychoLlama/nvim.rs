@@ -151,16 +151,14 @@ fn set_terminal_winopts(s: &mut TerminalState) {
     s.save_w_p_so = wp.w_onebuf_opt.wo_so;
     s.save_w_p_siso = wp.w_onebuf_opt.wo_siso;
 
-    if wp.w_onebuf_opt.wo_cul != 0
-        && wp.w_p_culopt_flags as c_int & kOptCuloptFlagNumber as c_int != 0
-    {
+    if wp.w_onebuf_opt.wo_cul != 0 && u32::from(wp.w_p_culopt_flags) & kOptCuloptFlagNumber != 0 {
         if wp.w_onebuf_opt.wo_culopt.bytes() != b"number" {
             s.save_w_p_culopt = wp
                 .w_onebuf_opt
                 .wo_culopt
                 .replace(XString::from_cstr(c"number"));
         }
-        wp.w_p_culopt_flags = kOptCuloptFlagNumber as uint8_t;
+        wp.w_p_culopt_flags = kOptCuloptFlagNumber.to_le_bytes()[0];
     } else {
         wp.w_onebuf_opt.wo_cul = 0;
     }
@@ -170,7 +168,7 @@ fn set_terminal_winopts(s: &mut TerminalState) {
 
     if wp.w_onebuf_opt.wo_cuc != s.save_w_p_cuc {
         wp.redraw_later(UPD_SOME_VALID);
-    } else if wp.w_onebuf_opt.wo_cul != s.save_w_p_cul as c_int
+    } else if wp.w_onebuf_opt.wo_cul != c_int::from(s.save_w_p_cul)
         || (wp.w_onebuf_opt.wo_cul != 0 && wp.w_p_culopt_flags != s.save_w_p_culopt_flags)
     {
         wp.redraw_later(UPD_VALID);
@@ -199,7 +197,7 @@ fn put_back_winopts(s: &mut TerminalState, winopts: &mut WinOpt) {
     if s.save_w_p_culopt.is_some() {
         winopts.wo_culopt = s.save_w_p_culopt.take();
     }
-    winopts.wo_cul = s.save_w_p_cul as c_int;
+    winopts.wo_cul = c_int::from(s.save_w_p_cul);
     winopts.wo_cuc = s.save_w_p_cuc;
     winopts.wo_so = s.save_w_p_so;
     winopts.wo_siso = s.save_w_p_siso;
@@ -235,7 +233,7 @@ fn restore_saved_winopts(s: &mut TerminalState) {
     if win_valid(wp.id()) {
         if s.save_w_p_cuc != wp.w_onebuf_opt.wo_cuc {
             wp.redraw_later(UPD_SOME_VALID);
-        } else if s.save_w_p_cul as c_int != wp.w_onebuf_opt.wo_cul
+        } else if c_int::from(s.save_w_p_cul) != wp.w_onebuf_opt.wo_cul
             || (s.save_w_p_cul && s.save_w_p_culopt_flags != wp.w_p_culopt_flags)
         {
             wp.redraw_later(UPD_VALID);

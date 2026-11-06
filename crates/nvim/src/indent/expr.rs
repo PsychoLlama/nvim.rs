@@ -10,6 +10,8 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::options::kBufOptIndentexpr;
+use crate::options::kOptIndentexpr;
 use crate::strings::has_char;
 use crate::winlayer::Buf;
 
@@ -75,7 +77,7 @@ pub fn get_expr_indent() -> c_int {
 
     // Reset `did_throw`, unless 'debug' has "throw" and we are inside a
     // try/catch.
-    let debug_throw = p_debug(|value| has_char(value, 't' as c_int));
+    let debug_throw = p_debug(|value| has_char(value, c_int::from(b't')));
     if did_throw.get() && (!debug_throw || trylevel.get() == 0) {
         handle_did_throw();
         did_throw.set(false);
@@ -135,11 +137,11 @@ fn count_parens(line: &[u8], parencount: &mut c_int) {
 
 /// The `(` or `[` that encloses the cursor line, whichever starts later.
 fn enclosing_open() -> Option<Pos> {
-    let __v = findmatch(None, '(' as c_int);
+    let __v = findmatch(None, c_int::from(b'('));
     let Some(paren) = __v else {
-        return findmatch(None, '[' as c_int);
+        return findmatch(None, c_int::from(b'['));
     };
-    match findmatch(None, '[' as c_int) {
+    match findmatch(None, c_int::from(b'[')) {
         Some(square) if !lt(square, paren) => Some(square),
         _ => Some(paren),
     }
@@ -342,7 +344,7 @@ pub fn fixthisline(get_the_indent: Indenter) {
     if amount < 0 {
         return;
     }
-    change_indent(INDENT_SET.cast_signed(), amount, 0, true);
+    change_indent(INDENT_SET, amount, 0, true);
     if linewhite(Win::current().w_cursor.lnum) {
         // Delete the indent again if the line stays empty.
         did_ai.set(true);

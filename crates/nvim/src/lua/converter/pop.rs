@@ -9,6 +9,10 @@
 
 #![forbid(unsafe_code)]
 
+use crate::narrow::float_as_i64;
+use crate::narrow::float_as_int;
+use crate::narrow::float_as_usize;
+use crate::narrow::len_as_int;
 use crate::semsg;
 use crate::types::DictBuilder;
 use core::ffi::c_int;
@@ -64,10 +68,11 @@ pub(crate) fn classify_table(stack: &mut Stack) -> LuaTableProps {
             }
             Kind::Number => {
                 let n = stack.to_number(KEY);
-                if n > size_t::MAX as lua_Number || n <= 0.0 || (n as size_t) as lua_Number != n {
+                if n > size_t::MAX as lua_Number || n <= 0.0 || float_as_usize(n) as lua_Number != n
+                {
                     other_keys_num += 1;
                 } else {
-                    ret.maxidx = ret.maxidx.max(n as size_t);
+                    ret.maxidx = ret.maxidx.max(float_as_usize(n));
                 }
             }
             Kind::Boolean => {
@@ -78,13 +83,12 @@ pub(crate) fn classify_table(stack: &mut Stack) -> LuaTableProps {
                     } else {
                         0.0
                     };
-                    let recognised = is_number
-                        && (n == kObjectTypeFloat as lua_Number
-                            || n == kObjectTypeArray as lua_Number
-                            || n == kObjectTypeDict as lua_Number);
-                    if recognised {
+                    let recognised = [kObjectTypeFloat, kObjectTypeArray, kObjectTypeDict]
+                        .into_iter()
+                        .find(|&kind| is_number && n == lua_Number::from(kind));
+                    if let Some(kind) = recognised {
                         ret.has_type_key = true;
-                        ret.type_0 = n as ObjectType;
+                        ret.type_0 = kind;
                     } else {
                         other_keys_num += 1;
                     }
@@ -109,9 +113,9 @@ pub(crate) fn classify_table(stack: &mut Stack) -> LuaTableProps {
             && ret.maxidx != 0
             && ret.maxidx
                 != tsize
-                    .wrapping_sub(ret.has_type_key as size_t)
+                    .wrapping_sub(size_t::from(ret.has_type_key))
                     .wrapping_sub(other_keys_num)
-                    .wrapping_sub(has_val_key as size_t)
+                    .wrapping_sub(size_t::from(has_val_key))
                     .wrapping_sub(ret.string_keys_num)
         {
             // The keys are not a contiguous run from 1, so the array stops at
@@ -120,7 +124,7 @@ pub(crate) fn classify_table(stack: &mut Stack) -> LuaTableProps {
             // slots.
             ret.maxidx = 0;
             loop {
-                stack.raw_get_index(At::TOP, ret.maxidx as c_int + 1);
+                stack.raw_get_index(At::TOP, len_as_int(ret.maxidx) + 1);
                 let past_end = stack.is_nil(At::TOP);
                 stack.pop(1);
                 if past_end {
@@ -165,11 +169,11 @@ pub fn pop_integer(stack: &mut Stack) -> Result<Integer, Error> {
     }
     if n > API_INTEGER_MAX as lua_Number
         || n < API_INTEGER_MIN as lua_Number
-        || (n as Integer) as lua_Number != n
+        || float_as_i64(n) as lua_Number != n
     {
         return Err(Error::exception(c"Number is not integral"));
     }
-    Ok(n as Integer)
+    Ok(float_as_i64(n))
 }
 
 /// Pop any Lua value for its truthiness.
@@ -255,7 +259,7 @@ pub fn pop_float(stack: &mut Stack) -> Result<Float, Error> {
 fn pop_array_unchecked(stack: &mut Stack, table_props: LuaTableProps) -> Result<Array, Error> {
     let mut ret = Vec::with_capacity(table_props.maxidx);
     for i in 1..=table_props.maxidx {
-        stack.raw_get_index(At::TOP, i as c_int);
+        stack.raw_get_index(At::TOP, len_as_int(i));
         match pop_object(stack, false) {
             Ok(val) => ret.push(val),
             Err(e) => {
@@ -343,7 +347,7 @@ pub fn pop_handle(stack: &mut Stack) -> Result<Handle, Error> {
     let ret = if stack.kind(At::TOP) != Kind::Number {
         Err(Error::validation(c"Expected Lua number"))
     } else {
-        Ok(Handle::new((stack.to_number(At::TOP)) as c_int))
+        Ok(Handle::new(float_as_int(stack.to_number(At::TOP))))
     };
     stack.pop(1);
     ret

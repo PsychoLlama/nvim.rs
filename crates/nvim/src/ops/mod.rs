@@ -161,12 +161,6 @@ pub const REPLACE_NL_NCHAR: crate::types::Key = crate::types::Key::from_code(-2)
 /// `get_yank_register` mode: the register is about to be written.
 pub const YREG_YANK: ::core::ffi::c_int = 1;
 
-/// `change_indent`: set the indent to the given column.
-pub const INDENT_SET: ::core::ffi::c_int = 1;
-
-/// `set_indent`: report the change through `changed_bytes`.
-pub const SIN_CHANGED: ::core::ffi::c_int = 1;
-
 /// The Visual area a `.` replays -- see `pending::REDO_VISUAL`.
 #[derive(Copy, Clone)]
 pub struct RedoVisual {

@@ -13,11 +13,12 @@
 
 use super::{TYPE_IDX_VALUE, VAL_IDX_VALUE};
 use crate::lua::stack::{At, Stack};
+use crate::narrow::len_as_int;
+use crate::narrow::number_as_int;
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, Float, Handle, Integer, Object, ObjectType,
     kObjectTypeFloat, lua_Number,
 };
-use core::ffi::c_int;
 
 /// Push the key a special table's type tag is stored under.
 #[inline]
@@ -88,7 +89,7 @@ pub fn push_array(stack: &mut Stack, array: &Array, special: bool) {
     stack.new_table(array.len(), 0);
     for (i, item) in array.iter().enumerate() {
         push_object(stack, item, special);
-        stack.raw_set_index(At::from_top(2), i as c_int + 1);
+        stack.raw_set_index(At::from_top(2), len_as_int(i) + 1);
     }
 }
 
@@ -112,7 +113,7 @@ pub fn push_object(stack: &mut Stack, obj: &Object, special: bool) {
         Object::Array(a) => push_array(stack, a, special),
         Object::Dict(d) => push_dict(stack, d, special),
         Object::Buffer(h) | Object::Window(h) | Object::Tabpage(h) => {
-            push_handle(stack, Handle::new((*h) as c_int));
+            push_handle(stack, Handle::new(number_as_int(*h)));
         }
     }
 }

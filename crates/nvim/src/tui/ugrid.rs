@@ -7,25 +7,26 @@
 
 #![forbid(unsafe_code)]
 
+use crate::narrow::as_index;
 use crate::types::{ScreenAttr, ScreenChar, UCell, UGrid, UGridCells};
 use core::ffi::c_int;
 
 /// A cleared cell: an ASCII space carrying `attr`.
 fn blank(attr: ScreenAttr) -> UCell {
     UCell {
-        data: b' ' as ScreenChar,
+        data: ScreenChar::from(b' '),
         attr,
     }
 }
 
 impl UGridCells {
     fn row(&self, row: c_int) -> &[UCell] {
-        let start = row as usize * self.width;
+        let start = as_index(row) * self.width;
         &self.cells[start..start + self.width]
     }
 
     fn row_mut(&mut self, row: c_int) -> &mut [UCell] {
-        let start = row as usize * self.width;
+        let start = as_index(row) * self.width;
         &mut self.cells[start..start + self.width]
     }
 }
@@ -37,8 +38,8 @@ impl UGrid {
     /// "nothing drawn here yet" marker the printing path tests for.
     pub fn resize(&mut self, width: c_int, height: c_int) {
         self.cells = Some(Box::new(UGridCells {
-            width: width as usize,
-            cells: vec![UCell::default(); width as usize * height as usize],
+            width: as_index(width),
+            cells: vec![UCell::default(); as_index(width) * as_index(height)],
         }));
         self.width = width;
         self.height = height;
@@ -65,7 +66,7 @@ impl UGrid {
     ) {
         let cells = self.cells();
         for row in top..=bot {
-            cells.row_mut(row)[left as usize..=right as usize].fill(blank(attr));
+            cells.row_mut(row)[as_index(left)..=as_index(right)].fill(blank(attr));
         }
     }
 
@@ -92,11 +93,11 @@ impl UGrid {
         };
         let cells = self.cells();
         let width = cells.width;
-        let span = (right - left + 1) as usize;
+        let span = as_index(right - left + 1);
         let mut row = start;
         while row != stop {
-            let source = (row + count) as usize * width + left as usize;
-            let target = row as usize * width + left as usize;
+            let source = as_index(row + count) * width + as_index(left);
+            let target = as_index(row) * width + as_index(left);
             cells.cells.copy_within(source..source + span, target);
             row += step;
         }
@@ -113,12 +114,12 @@ impl UGrid {
     /// One cell, copied out. Cells are two words; callers that want to keep
     /// looking at the grid while they print take a copy rather than a borrow.
     pub fn cell(&self, row: c_int, col: c_int) -> UCell {
-        self.row(row)[col as usize]
+        self.row(row)[as_index(col)]
     }
 
     /// Overwrite one cell.
     pub fn set_cell(&mut self, row: c_int, col: c_int, cell: UCell) {
-        self.cells().row_mut(row)[col as usize] = cell;
+        self.cells().row_mut(row)[as_index(col)] = cell;
     }
 
     fn cells(&mut self) -> &mut UGridCells {
@@ -147,7 +148,7 @@ mod tests {
                     row,
                     col,
                     UCell {
-                        data: (row * width + col) as ScreenChar,
+                        data: (row * width + col).cast_unsigned(),
                         attr: row as ScreenAttr,
                     },
                 );

@@ -15,6 +15,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::narrow::as_index;
 use core::ffi::c_int;
 
 use crate::types::{ScreenCell, VTermLineInfo, VTermPos, VTermScreen};
@@ -38,7 +39,7 @@ struct NewBuffer {
 impl NewBuffer {
     /// A grid and its marks for `rows` x `cols`, every byte zero.
     fn alloc(rows: c_int, cols: c_int) -> Self {
-        let (rows, width) = (rows.max(0) as usize, cols.max(0) as usize);
+        let (rows, width) = (as_index(rows.max(0)), as_index(cols.max(0)));
         NewBuffer {
             cells: vec![ZERO_CELL; rows * width],
             lineinfo: vec![BLANK_LINEINFO; rows],
@@ -48,29 +49,29 @@ impl NewBuffer {
 
     /// Row `row` of the new grid.
     fn row(&mut self, row: c_int) -> &mut [ScreenCell] {
-        let width = self.cols as usize;
-        let start = row as usize * width;
+        let width = as_index(self.cols);
+        let start = as_index(row) * width;
         &mut self.cells[start..start + width]
     }
 
     /// The line marks of row `row`.
     fn info(&mut self, row: c_int) -> &mut VTermLineInfo {
-        &mut self.lineinfo[row as usize]
+        &mut self.lineinfo[as_index(row)]
     }
 
     /// Slides `count` rows starting at row 0 down by `downwards` rows, cells
     /// and line marks together.
     fn shift_down(&mut self, downwards: c_int, count: c_int) {
-        let width = self.cols as usize;
-        let (downwards, count) = (downwards as usize, count as usize);
+        let width = as_index(self.cols);
+        let (downwards, count) = (as_index(downwards), as_index(count));
         self.cells.copy_within(..count * width, downwards * width);
         self.lineinfo.copy_within(..count, downwards);
     }
 
     /// Slides the `count` rows starting at row `from` up to row 0.
     fn shift_up(&mut self, from: c_int, count: c_int) {
-        let width = self.cols as usize;
-        let (from, count) = (from as usize, count as usize);
+        let width = as_index(self.cols);
+        let (from, count) = (as_index(from), as_index(count));
         self.cells
             .copy_within(from * width..(from + count) * width, 0);
         self.lineinfo.copy_within(from..from + count, 0);
@@ -88,15 +89,15 @@ struct OldBuffer<'a> {
 impl OldBuffer<'_> {
     /// Row `row` of the old grid.
     fn row(&self, row: c_int) -> &[ScreenCell] {
-        let width = self.cols as usize;
-        let start = row as usize * width;
+        let width = as_index(self.cols);
+        let start = as_index(row) * width;
         &self.cells[start..start + width]
     }
 
     /// Whether row `row` continues the line above it.
     fn continues(&self, row: c_int) -> bool {
         self.lineinfo
-            .get(row as usize)
+            .get(as_index(row))
             .is_some_and(|info| info.continuation() != 0)
     }
 }
@@ -209,7 +210,7 @@ impl VTermScreen {
                     width -= count;
                     let mut new_col = 0;
                     while count != 0 {
-                        new.row(new_row)[new_col as usize] = old.row(old_row)[old_col as usize];
+                        new.row(new_row)[as_index(new_col)] = old.row(old_row)[as_index(old_col)];
                         if old_cursor.row == old_row && old_cursor.col == old_col {
                             new_cursor = VTermPos {
                                 row: new_row,
@@ -233,7 +234,7 @@ impl VTermScreen {
                         new_cursor.row = new_row;
                         new_cursor.col = (old_cursor.col - old_col + new_col).min(new_cols - 1);
                     }
-                    blank_cells(&mut new.row(new_row)[new_col as usize..], &pen);
+                    blank_cells(&mut new.row(new_row)[as_index(new_col)..], &pen);
                     let continuation = u32::from(new_row > new_row_start);
                     new.info(new_row).set_continuation(continuation);
                     new_row += 1;
@@ -318,11 +319,11 @@ impl VTermScreen {
     fn pop_line(&mut self, old_cols: c_int) -> Option<&[crate::types::VTermScreenCell]> {
         let owned = &mut *self.owned;
         let host = owned.host.as_deref_mut()?;
-        let cells = &mut owned.sb_buffer[..old_cols as usize];
+        let cells = &mut owned.sb_buffer[..as_index(old_cols)];
         if host.sb_popline(cells)? == 0 {
             return None;
         }
-        Some(&owned.sb_buffer[..old_cols as usize])
+        Some(&owned.sb_buffer[..as_index(old_cols)])
     }
 
     /// The state's resize, as the screen takes it: both buffers rebuilt, the
@@ -350,7 +351,7 @@ impl VTermScreen {
         } else if new_rows != old_rows {
             // The altscreen itself is not allocated, but its line marks still
             // have to match the new height.
-            lineinfos[BUFIDX_ALTSCREEN] = vec![BLANK_LINEINFO; new_rows.max(0) as usize];
+            lineinfos[BUFIDX_ALTSCREEN] = vec![BLANK_LINEINFO; as_index(new_rows.max(0))];
         }
 
         self.owned.active = if altscreen_active {

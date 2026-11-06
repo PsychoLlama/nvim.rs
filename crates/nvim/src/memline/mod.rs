@@ -104,7 +104,6 @@ pub use self::lines::*;
 
 pub(crate) static inhibit_delete_count: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 
-pub const VIM_WARNING: ::core::ffi::c_uint = 2;
 pub const READ_NEW: ::core::ffi::c_uint = 1;
 pub const FLUSH_TYPEAHEAD: FlushBuffers = 1;
 /// The smallest page a swap file can have, which is what block zero is first

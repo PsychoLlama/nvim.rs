@@ -61,6 +61,7 @@ use crate::guard::{Allow, Suppress};
 use crate::highlight_group::HLF_W;
 use crate::memline::MlFlags;
 use crate::memory::XString;
+use crate::message::VIM_QUESTION;
 use crate::message::state::{msg_col, msg_didany, msg_didout, msg_row};
 use crate::message::{
     VIM_ALL, VIM_DISCARDALL, VIM_NO, VIM_YES, emsg, msg, msg_source, vim_dialog_yesnoallcancel,
@@ -76,19 +77,15 @@ use crate::semsg;
 use crate::startup::exiting;
 use crate::types::CmdIdx;
 use crate::types::Handle;
-use crate::types::{
-    CmdModFlags, ExArg, Failed, LineNr, MAXPATHL, VarNumber, Vv, ptrdiff_t, uint64_t,
-};
+use crate::types::{CmdModFlags, ExArg, Failed, LineNr, MAXPATHL, VarNumber, Vv, ptrdiff_t};
 use crate::undo::buf_is_changed;
 use crate::window::goto_tabpage_win;
 use crate::winlayer::TabPage;
 use crate::winlayer::{Buf, Win, buffers, first_buffer, tabs, windows, windows_in_tab};
 use core::ffi::{CStr, c_int};
 
-use flag::{
-    CCGD_ALLBUF, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, DOBUF_GOTO, DOBUF_UNLOAD,
-    VIM_QUESTION,
-};
+pub(crate) use flag::{CCGD_ALLBUF, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN};
+use flag::{DOBUF_GOTO, DOBUF_UNLOAD};
 
 pub(crate) use listdo::ex_listdo;
 
@@ -98,19 +95,16 @@ mod flag {
     use crate::types::{DoBufAction, DoBufStart};
 
     /// `check_changed` flags.
-    pub(super) const CCGD_AW: c_int = 1;
-    pub(super) const CCGD_MULTWIN: c_int = 2;
-    pub(super) const CCGD_FORCEIT: c_int = 4;
-    pub(super) const CCGD_ALLBUF: c_int = 8;
-    pub(super) const CCGD_EXCMD: c_int = 16;
+    pub(crate) const CCGD_AW: c_int = 1;
+    pub(crate) const CCGD_MULTWIN: c_int = 2;
+    pub(crate) const CCGD_FORCEIT: c_int = 4;
+    pub(crate) const CCGD_ALLBUF: c_int = 8;
+    pub(crate) const CCGD_EXCMD: c_int = 16;
 
     /// `do_buffer` actions and starting points.
     pub(super) const DOBUF_GOTO: DoBufAction = 0;
     pub(super) const DOBUF_UNLOAD: DoBufAction = 2;
     pub(super) const DOBUF_FIRST: DoBufStart = 1;
-
-    /// `do_dialog` types; the answers live in `message.rs`.
-    pub(super) const VIM_QUESTION: c_int = 4;
 }
 
 // -- List walks -------------------------------------------------------------
@@ -185,8 +179,8 @@ fn script_host_execute(name: &CStr, excmd: &mut ExArg) {
     let mut argv = tv_list_alloc(3 as ptrdiff_t);
     let into = &mut *argv;
     into.push_str(Some(script.as_cstr()));
-    into.push_number(excmd.line1.get() as VarNumber);
-    into.push_number(excmd.line2.get() as VarNumber);
+    into.push_number(VarNumber::from(excmd.line1.get()));
+    into.push_number(VarNumber::from(excmd.line2.get()));
     eval_call_provider(name, c"execute", Some(argv), true);
 }
 
@@ -206,8 +200,8 @@ fn script_host_execute_file(name: &CStr, excmd: &mut ExArg) {
     let mut argv = tv_list_alloc(3 as ptrdiff_t);
     let into = &mut *argv;
     into.push_str(Some(&full));
-    into.push_number(excmd.line1.get() as VarNumber);
-    into.push_number(excmd.line2.get() as VarNumber);
+    into.push_number(VarNumber::from(excmd.line1.get()));
+    into.push_number(VarNumber::from(excmd.line2.get()));
     eval_call_provider(name, c"execute_file", Some(argv), true);
 }
 
@@ -218,8 +212,8 @@ fn script_host_do_range(name: &CStr, excmd: &mut ExArg) {
     }
     let mut argv = tv_list_alloc(3 as ptrdiff_t);
     let into = &mut *argv;
-    into.push_number(excmd.line1.get() as VarNumber);
-    into.push_number(excmd.line2.get() as VarNumber);
+    into.push_number(VarNumber::from(excmd.line1.get()));
+    into.push_number(VarNumber::from(excmd.line2.get()));
     into.push_str(Some(excmd.line.cstr_from(excmd.line.arg)));
     eval_call_provider(name, c"do_range", Some(argv), true);
 }
@@ -327,7 +321,7 @@ pub(crate) fn dialog_changed(mut buffer: Buf, checkall: bool) {
         vim_dialog_yesnocancel(VIM_QUESTION, None, question.as_cstr(), 1)
     };
 
-    if ret == VIM_YES as c_int {
+    if ret == VIM_YES {
         let empty_bufname = buffer.name.is_unnamed();
         if empty_bufname {
             buf_set_name(buffer.handle.get(), c"Untitled");
@@ -346,11 +340,11 @@ pub(crate) fn dialog_changed(mut buffer: Buf, checkall: bool) {
             // a double free the moment the two ever alias.
             buffer.name.clear();
         }
-    } else if ret == VIM_NO as c_int {
+    } else if ret == VIM_NO {
         unchanged(buffer, true, false);
-    } else if ret == VIM_ALL as c_int {
+    } else if ret == VIM_ALL {
         write_all_writable();
-    } else if ret == VIM_DISCARDALL as c_int {
+    } else if ret == VIM_DISCARDALL {
         for buf2 in buffers() {
             unchanged(buf2, true, false);
         }
@@ -381,7 +375,7 @@ fn write_all_writable() {
 pub(crate) fn dialog_close_terminal(buffer: Buf) -> bool {
     let name = buffer.name.shown().unwrap_or(c"?");
     let question = dialog_msg(c"Close \"%s\"?", Some(name));
-    vim_dialog_yesnocancel(VIM_QUESTION, None, question.as_cstr(), 1) == VIM_YES as c_int
+    vim_dialog_yesnocancel(VIM_QUESTION, None, question.as_cstr(), 1) == VIM_YES
 }
 
 /// Whether `buffer` can be abandoned -- by hiding it, autowriting it or
@@ -499,23 +493,23 @@ fn report_unwritten(buffer: Buf) {
         msg_col.set(0);
         msg_didout.set(false);
     }
-    let shown = if !buffer.terminal.is_null() && channel_job_running(buffer.b_p_channel as uint64_t)
-    {
-        semsg!(
-            "E947: Job still running in buffer \"{}\"",
-            msg_cstr_opt(buffer.name.shown())
-        )
-    } else {
-        let special = buf_spname_owned(buffer);
-        let name = special
-            .as_ref()
-            .map(XString::as_cstr)
-            .or_else(|| buffer.name.shown());
-        semsg!(
-            "E162: No write since last change for buffer \"{}\"",
-            msg_cstr_opt(name)
-        )
-    };
+    let shown =
+        if !buffer.terminal.is_null() && channel_job_running(buffer.b_p_channel.cast_unsigned()) {
+            semsg!(
+                "E947: Job still running in buffer \"{}\"",
+                msg_cstr_opt(buffer.name.shown())
+            )
+        } else {
+            let special = buf_spname_owned(buffer);
+            let name = special
+                .as_ref()
+                .map(XString::as_cstr)
+                .or_else(|| buffer.name.shown());
+            semsg!(
+                "E162: No write since last change for buffer \"{}\"",
+                msg_cstr_opt(name)
+            )
+        };
     // Only makes sense if the error is shown, which `cause_errthrow` may
     // prevent.
     if shown && msg_didany.get() {

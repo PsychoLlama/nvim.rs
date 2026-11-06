@@ -10,6 +10,8 @@
 
 use super::*;
 use crate::grid::{SCHAR_BUF_SIZE, default_grid_ref, default_gridview, schar_text};
+use crate::narrow::len_as_integer;
+use crate::narrow::number_as_int;
 use crate::window::kZIndexMessages;
 use crate::winlayer::Win;
 use core::ffi::{c_int, c_uint};
@@ -65,7 +67,7 @@ pub(crate) fn ui_ext_msg_set_pos(row: c_int, scrolled: bool) {
         scrolled,
         sep,
         grid.zindex.into(),
-        grid.comp_index as Integer,
+        len_as_integer(grid.comp_index),
     );
     grid.pending_comp_index_update = false;
 }
@@ -92,7 +94,7 @@ pub fn msg_grid_validate() {
     let mut grid = msg_grid_ref();
     grid_assign_handle(&mut grid);
     let should_alloc = msg_use_grid();
-    let max_rows = Rows.get() - p_ch() as c_int;
+    let max_rows = Rows.get() - number_as_int(p_ch());
 
     if should_alloc
         && (grid.rows != Rows.get() || grid.cols != Columns.get() || !grid.is_allocated())
@@ -159,7 +161,7 @@ pub fn msg_cursor_goto(row: c_int, mut col: c_int) {
 
 /// How many screen lines the message area currently occupies.
 pub fn msg_scrollsize() -> c_int {
-    msg_scrolled.get() + p_ch() as c_int + c_int::from(p_ch() > 0 || msg_scrolled.get() > 1)
+    msg_scrolled.get() + number_as_int(p_ch()) + c_int::from(p_ch() > 0 || msg_scrolled.get() > 1)
 }
 
 /// Should message output be batched into one scroll at flush time?
@@ -256,7 +258,7 @@ pub fn msg_reset_scroll() {
     }
     grid.throttled = false;
     // TODO(bfredl): calculate the conflict in the compositor instead.
-    msg_grid_set_pos(Rows.get() - p_ch() as c_int, false);
+    msg_grid_set_pos(Rows.get() - number_as_int(p_ch()), false);
     clear_cmdline.set(true);
     if grid.is_allocated() {
         // The bound is re-evaluated each time round, as upstream does.

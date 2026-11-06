@@ -21,6 +21,9 @@ use crate::grid::{
 };
 use crate::log::{LOGLVL_WRN, logmsg};
 use crate::mbyte::{ambiguous_width_at, char_at, utf_char2cells};
+use crate::narrow::as_index;
+use crate::narrow::count_as_int;
+use crate::narrow::number_as_int;
 use crate::tui::attrs::{attrs_differ, update_attrs};
 use crate::tui::events::tui_busy_stop;
 use crate::tui::negotiate::{LEFT_AND_RIGHT_MARGINS, tui_set_term_mode};
@@ -230,7 +233,7 @@ fn print_cell(tui: &mut TUIData, text: &[u8], attr: ScreenAttr) {
 
 /// Print `width` spaces in the current attributes.
 fn print_spaces(tui: &mut TUIData, width: c_int) {
-    out_repeat(tui, b' ', width as usize);
+    out_repeat(tui, b' ', as_index(width));
     tui.grid.col += width;
     if tui.immediate_wrap_after_last_column {
         final_column_wrap(tui);
@@ -372,7 +375,7 @@ pub(crate) fn invalidate(tui: &mut TUIData, top: c_int, bot: c_int, left: c_int,
 /// The editor's screen changed size.
 ///
 pub fn tui_grid_resize(tui: &mut TUIData, _grid: Integer, width: Integer, height: Integer) {
-    tui.grid.resize(width as c_int, height as c_int);
+    tui.grid.resize(number_as_int(width), number_as_int(height));
     let (grid_width, grid_height) = (tui.grid.width, tui.grid.height);
     for r in &mut tui.invalid_regions {
         r.bot = r.bot.min(grid_height);
@@ -401,8 +404,8 @@ pub fn tui_grid_clear(tui: &mut TUIData, _grid: Integer) {
 /// Where the cursor should be left after the next flush.
 ///
 pub fn tui_grid_cursor_goto(tui: &mut TUIData, _grid: Integer, row: Integer, col: Integer) {
-    tui.row = row as c_int;
-    tui.col = col as c_int;
+    tui.row = number_as_int(row);
+    tui.col = number_as_int(col);
 }
 
 /// Scroll `rows` rows out of the region `[startrow, endrow) x [startcol,
@@ -424,11 +427,14 @@ pub fn tui_grid_scroll(
     rows: Integer,
     _cols: Integer,
 ) {
-    let (top, bot) = (startrow as c_int, endrow as c_int - 1);
-    let (left, right) = (startcol as c_int, endcol as c_int - 1);
+    let (startrow, endrow) = (number_as_int(startrow), number_as_int(endrow));
+    let (startcol, endcol) = (number_as_int(startcol), number_as_int(endcol));
+    let rows = number_as_int(rows);
+    let (top, bot) = (startrow, endrow - 1);
+    let (left, right) = (startcol, endcol - 1);
     let fullwidth = left == 0 && right == tui.width - 1;
     let full_screen = fullwidth && top == 0 && bot == tui.height - 1;
-    tui.grid.scroll(top, bot, left, right, rows as c_int);
+    tui.grid.scroll(top, bot, left, right, rows);
 
     let has_margins = tui.has_left_and_right_margin_mode && tui.can_set_lr_margin;
     let can_scroll = tui.can_scroll
@@ -443,13 +449,7 @@ pub fn tui_grid_scroll(
         } else {
             startrow -= rows;
         }
-        invalidate(
-            tui,
-            startrow as c_int,
-            endrow as c_int,
-            startcol as c_int,
-            endcol as c_int,
-        );
+        invalidate(tui, startrow, endrow, startcol, endcol);
         return;
     }
 
@@ -458,7 +458,6 @@ pub fn tui_grid_scroll(
     }
     cursor_goto(tui, top, left);
     update_attrs(tui, 0);
-    let rows = rows as c_int;
     match rows {
         1 => emit_out(tui, kTerm_delete_line),
         -1 => emit_out(tui, kTerm_insert_line),
@@ -489,44 +488,35 @@ pub fn tui_raw_line(
 ) {
     let len = usize::try_from(endcol - startcol).unwrap_or(0);
     let (chunk, attrs) = (&chunk[..len], &attrs[..len]);
-    let row = linerow as c_int;
+    let row = number_as_int(linerow);
+    let (startcol, endcol) = (number_as_int(startcol), number_as_int(endcol));
+    let clearcol = number_as_int(clearcol);
     for (i, (&data, &attr)) in chunk.iter().zip(attrs).enumerate() {
         assert!(
-            (attr as usize) < tui.attrs.len(),
+            as_index(attr) < tui.attrs.len(),
             "undefined attribute {attr}"
         );
-        let col = startcol as c_int + i as c_int;
+        let col = startcol + count_as_int(i);
         tui.grid.set_cell(row, col, UCell { data, attr });
     }
-    for col in startcol as c_int..endcol as c_int {
+    for col in startcol..endcol {
         let cell = tui.grid.cell(row, col);
-        let doublewidth = col < endcol as c_int - 1 && tui.grid.cell(row, col + 1).data == NOTHING;
+        let doublewidth = col < endcol - 1 && tui.grid.cell(row, col + 1).data == NOTHING;
         print_cell_at_pos(tui, row, col, cell, doublewidth);
     }
     if clearcol > endcol {
-        tui.grid.clear_chunk(
-            row,
-            endcol as c_int,
-            clearcol as c_int,
-            clearattr as ScreenAttr,
-        );
-        clear_region(
-            tui,
-            row,
-            row + 1,
-            endcol as c_int,
-            clearcol as c_int,
-            clearattr as c_int,
-        );
+        let clearattr = number_as_int(clearattr);
+        tui.grid.clear_chunk(row, endcol, clearcol, clearattr);
+        clear_region(tui, row, row + 1, endcol, clearcol, clearattr);
     }
     // A wrapped row's last cell must actually be printed for the terminal to
     // wrap by itself, which is how a long line stays one line for whoever
     // copies it out of the terminal.
     if flags as c_int & WRAPPED != 0
         && tui.width == tui.grid.width
-        && linerow + 1 < tui.grid.height as Integer
+        && linerow + 1 < Integer::from(tui.grid.height)
     {
-        if endcol != tui.grid.width as Integer {
+        if endcol != tui.grid.width {
             let width = tui.grid.width;
             let size = if tui.grid.cell(row, width - 1).data == NOTHING {
                 2
@@ -587,7 +577,7 @@ fn repaint_row(tui: &mut TUIData, row: c_int, left: c_int, right: c_int) {
     let mut clear_col = right;
     while clear_col > 0 {
         let cell = tui.grid.cell(row, clear_col - 1);
-        if cell.data != b' ' as ScreenChar || cell.attr != clear_attr {
+        if cell.data != ScreenChar::from(b' ') || cell.attr != clear_attr {
             break;
         }
         clear_col -= 1;

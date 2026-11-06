@@ -27,8 +27,6 @@ use crate::mbyte::strnicmp_in;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 
-const FIND_DEFINE: c_int = super::FIND_DEFINE.cast_signed();
-const ACTION_SHOW_ALL: c_int = super::ACTION_SHOW_ALL.cast_signed();
 const LSIZE: usize = super::LSIZE as usize;
 
 /// Whether a match at `startp` is really in code rather than in a

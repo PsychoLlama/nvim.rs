@@ -6,6 +6,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::narrow::as_index;
 use crate::tui::termkey::csi::{self, CSI_MAX_PARAMS};
 use crate::tui::termkey::driver_csi::CsiDriver;
 use crate::tui::termkey::driver_ti::TerminfoDriver;
@@ -87,12 +88,12 @@ pub const TERMKEY_MOUSE_PRESS: TermKeyMouseEvent = 1;
 pub const TERMKEY_MOUSE_DRAG: TermKeyMouseEvent = 2;
 pub const TERMKEY_MOUSE_RELEASE: TermKeyMouseEvent = 3;
 
-pub type TermKeyModifier = ::core::ffi::c_uint;
+pub type TermKeyModifier = ::core::ffi::c_int;
 pub const TERMKEY_KEYMOD_SHIFT: TermKeyModifier = 1;
 pub const TERMKEY_KEYMOD_ALT: TermKeyModifier = 2;
 pub const TERMKEY_KEYMOD_CTRL: TermKeyModifier = 4;
 
-pub type TermKeyFlag = ::core::ffi::c_uint;
+pub type TermKeyFlag = ::core::ffi::c_int;
 pub const TERMKEY_FLAG_NOINTERPRET: TermKeyFlag = 1;
 pub const TERMKEY_FLAG_CONVERTKP: TermKeyFlag = 2;
 pub const TERMKEY_FLAG_UTF8: TermKeyFlag = 8;
@@ -100,7 +101,7 @@ pub const TERMKEY_FLAG_SPACESYMBOL: TermKeyFlag = 32;
 pub const TERMKEY_FLAG_NOSTART: TermKeyFlag = 256;
 pub const TERMKEY_FLAG_KEEPC0: TermKeyFlag = 512;
 
-pub type TermKeyCanon = ::core::ffi::c_uint;
+pub type TermKeyCanon = ::core::ffi::c_int;
 pub const TERMKEY_CANON_SPACESYMBOL: TermKeyCanon = 1;
 pub const TERMKEY_CANON_DELBS: TermKeyCanon = 2;
 
@@ -198,7 +199,7 @@ impl TermKey {
             csi: CsiDriver::default(),
         };
         tk.set_flags(flags);
-        if flags & TERMKEY_FLAG_NOSTART as c_int == 0 {
+        if flags & TERMKEY_FLAG_NOSTART == 0 {
             tk.start(term);
         }
         tk
@@ -233,10 +234,10 @@ impl TermKey {
         self.flags = newflags;
         // The two spellings of "a space is a symbol, not a character" are
         // kept in step in both directions.
-        if self.flags & TERMKEY_FLAG_SPACESYMBOL as c_int != 0 {
-            self.canonflags |= TERMKEY_CANON_SPACESYMBOL as c_int;
+        if self.flags & TERMKEY_FLAG_SPACESYMBOL != 0 {
+            self.canonflags |= TERMKEY_CANON_SPACESYMBOL;
         } else {
-            self.canonflags &= !(TERMKEY_CANON_SPACESYMBOL as c_int);
+            self.canonflags &= !(TERMKEY_CANON_SPACESYMBOL);
         }
     }
 
@@ -246,10 +247,10 @@ impl TermKey {
 
     pub fn set_canonflags(&mut self, flags: c_int) {
         self.canonflags = flags;
-        if self.canonflags & TERMKEY_CANON_SPACESYMBOL as c_int != 0 {
-            self.flags |= TERMKEY_FLAG_SPACESYMBOL as c_int;
+        if self.canonflags & TERMKEY_CANON_SPACESYMBOL != 0 {
+            self.flags |= TERMKEY_FLAG_SPACESYMBOL;
         } else {
-            self.flags &= !(TERMKEY_FLAG_SPACESYMBOL as c_int);
+            self.flags &= !(TERMKEY_FLAG_SPACESYMBOL);
         }
     }
 
@@ -414,15 +415,15 @@ fn fill_utf8(codepoint: c_int, out: &mut [u8; 7]) {
 /// Turn a codepoint into a key, applying the C0 and C1 readings.
 pub fn emit_codepoint(tk: &TermKey, codepoint: c_int, key: &mut TermKeyKey) {
     let flags = tk.flags;
-    let interpret = flags & TERMKEY_FLAG_NOINTERPRET as c_int == 0;
+    let interpret = flags & TERMKEY_FLAG_NOINTERPRET == 0;
     if codepoint == 0 {
         // NUL is Ctrl-Space, which has no character of its own.
         key.kind = TERMKEY_TYPE_KEYSYM;
         key.code = KeyCode::scalar(TERMKEY_SYM_SPACE);
-        key.modifiers = TERMKEY_KEYMOD_CTRL as c_int;
-    } else if codepoint < 0x20 && flags & TERMKEY_FLAG_KEEPC0 as c_int == 0 {
+        key.modifiers = TERMKEY_KEYMOD_CTRL;
+    } else if codepoint < 0x20 && flags & TERMKEY_FLAG_KEEPC0 == 0 {
         let sym = if interpret {
-            C0_SYMS[codepoint as usize]
+            C0_SYMS[as_index(codepoint)]
         } else {
             TERMKEY_SYM_NONE
         };
@@ -430,13 +431,13 @@ pub fn emit_codepoint(tk: &TermKey, codepoint: c_int, key: &mut TermKeyKey) {
             // Ctrl-letter: C0 codes map onto '@' through '_', but the
             // lower-case letter is the friendlier name for A-Z.
             key.kind = TERMKEY_TYPE_UNICODE;
-            let base = if (b'A' as c_int..=b'Z' as c_int).contains(&(codepoint + 0x40)) {
+            let base = if (c_int::from(b'A')..=c_int::from(b'Z')).contains(&(codepoint + 0x40)) {
                 0x60
             } else {
                 0x40
             };
             key.code = KeyCode::scalar(codepoint + base);
-            key.modifiers = TERMKEY_KEYMOD_CTRL as c_int;
+            key.modifiers = TERMKEY_KEYMOD_CTRL;
         } else {
             key.kind = TERMKEY_TYPE_KEYSYM;
             key.code = KeyCode::scalar(sym);
@@ -466,7 +467,7 @@ pub fn emit_codepoint(tk: &TermKey, codepoint: c_int, key: &mut TermKeyKey) {
 /// key gets: space as a symbol or a character, and DEL as backspace.
 fn canonicalise(tk: &TermKey, key: &mut TermKeyKey) {
     let flags = tk.canonflags;
-    if flags & TERMKEY_CANON_SPACESYMBOL as c_int != 0 {
+    if flags & TERMKEY_CANON_SPACESYMBOL != 0 {
         if key.kind == TERMKEY_TYPE_UNICODE && key.code.codepoint() == 0x20 {
             key.kind = TERMKEY_TYPE_KEYSYM;
             key.code = KeyCode::scalar(TERMKEY_SYM_SPACE);
@@ -476,7 +477,7 @@ fn canonicalise(tk: &TermKey, key: &mut TermKeyKey) {
         key.code = KeyCode::scalar(0x20);
         fill_utf8(0x20, &mut key.utf8);
     }
-    if flags & TERMKEY_CANON_DELBS as c_int != 0
+    if flags & TERMKEY_CANON_DELBS != 0
         && key.kind == TERMKEY_TYPE_KEYSYM
         && key.code.sym() == TERMKEY_SYM_DEL
     {
@@ -573,7 +574,7 @@ fn peekkey_simple(
                 *nbytep = 1;
                 return TERMKEY_RES_KEY;
             }
-            key.modifiers |= TERMKEY_KEYMOD_ALT as c_int;
+            key.modifiers |= TERMKEY_KEYMOD_ALT;
             *nbytep += 1;
         }
         return result;
@@ -583,7 +584,7 @@ fn peekkey_simple(
         *nbytep = 1;
         return TERMKEY_RES_KEY;
     }
-    if tk.flags & TERMKEY_FLAG_UTF8 as c_int != 0 {
+    if tk.flags & TERMKEY_FLAG_UTF8 != 0 {
         let bytes = tk.buffered();
         let (codepoint, len, result) = match utf8::decode(bytes) {
             Decoded::Char { codepoint, len } => (codepoint, len, TERMKEY_RES_KEY),
@@ -622,11 +623,11 @@ pub fn peekkey_mouse(tk: &TermKey, key: &mut TermKeyKey, nbytep: &mut usize) -> 
     key.kind = TERMKEY_TYPE_MOUSE;
     let mut payload: report::Payload = [0; 4];
     for (slot, byte) in payload.iter_mut().zip(&tk.buffered()[..3]) {
-        *slot = (*byte as core::ffi::c_char as c_int - 0x20) as core::ffi::c_char;
+        *slot = byte.wrapping_sub(0x20);
     }
     // Bits 2-4 of the button code are the modifiers; lift them out of it.
-    key.modifiers = (payload[0] as c_int & 0x1c) >> 2;
-    payload[0] = (payload[0] as c_int & !0x1c) as core::ffi::c_char;
+    key.modifiers = (c_int::from(payload[0]) & 0x1c) >> 2;
+    payload[0] &= !0x1c;
     key.code = KeyCode::report(payload);
     *nbytep = 3;
     TERMKEY_RES_KEY

@@ -44,12 +44,6 @@ use std::ffi::OsStr;
 use std::fs::File;
 use std::os::unix::ffi::OsStrExt;
 
-const CHECK_PATH: c_int = super::CHECK_PATH.cast_signed();
-const FIND_DEFINE: c_int = super::FIND_DEFINE.cast_signed();
-const ACTION_SHOW: c_int = super::ACTION_SHOW.cast_signed();
-const ACTION_SPLIT: c_int = super::ACTION_SPLIT.cast_signed();
-const ACTION_SHOW_ALL: c_int = super::ACTION_SHOW_ALL.cast_signed();
-const ACTION_EXPAND: c_int = super::ACTION_EXPAND.cast_signed();
 const LSIZE: usize = super::LSIZE as usize;
 
 /// One file on the include stack.

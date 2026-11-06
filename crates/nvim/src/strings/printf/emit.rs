@@ -20,7 +20,8 @@
 
 #![forbid(unsafe_code)]
 
-use core::ffi::{CStr, c_int, c_uint};
+use crate::narrow::as_index;
+use core::ffi::{CStr, c_int};
 use core::fmt::Write as _;
 use std::borrow::Cow;
 
@@ -152,10 +153,10 @@ impl<'a> Args<'a> {
     /// narrowed what it read out of the `va_list`.
     fn next_bits(&mut self) -> u64 {
         if let Some(tvs) = self.typvals() {
-            return tv_nr(tvs, &mut self.arg_idx) as u64;
+            return tv_nr(tvs, &mut self.arg_idx).cast_unsigned();
         }
         match self.next_value() {
-            Some(FmtArg::Int(n)) => n as u64,
+            Some(FmtArg::Int(n)) => n.cast_unsigned(),
             Some(FmtArg::UInt(n)) => n,
             Some(FmtArg::Str(text)) => text.as_ptr().addr() as u64,
             Some(FmtArg::Ptr(at)) => at.addr() as u64,
@@ -183,8 +184,8 @@ impl<'a> Args<'a> {
         match self.next_value() {
             Some(FmtArg::Ptr(at)) => at.addr(),
             Some(FmtArg::Str(text)) => text.as_ptr().addr(),
-            Some(FmtArg::Int(n)) => n as usize,
-            Some(FmtArg::UInt(n)) => n as usize,
+            Some(FmtArg::Int(n)) => usize::try_from(n.cast_unsigned()).unwrap_or(usize::MAX),
+            Some(FmtArg::UInt(n)) => usize::try_from(n).unwrap_or(usize::MAX),
             Some(FmtArg::Float(_)) | None => 0,
         }
     }
@@ -250,10 +251,12 @@ fn star_argument(args: &mut Args, fmt: &[u8], p: &mut usize, digstart: usize) ->
     let typed = args.typvals().is_some();
     // `*N$` addresses the width argument positionally.
     if ascii_isdigit(c_int::from(byte_at(fmt, *p))) {
-        args.arg_idx = get_unsigned_int(fmt, digstart, p, typed).ok_or(())? as c_int;
+        args.arg_idx = get_unsigned_int(fmt, digstart, p, typed)
+            .ok_or(())?
+            .cast_signed();
         *p += 1; // step over the '$'
     }
-    let mut j = args.next_bits() as c_int;
+    let mut j = low32(args.next_bits()).cast_signed();
     if j > MAX_ALLOWED_STRING_WIDTH {
         if typed {
             format_overflow_error(fmt, digstart);
@@ -298,7 +301,9 @@ fn parse_conversion(args: &mut Args, fmt: &[u8], p: &mut usize) -> Result<Conver
     }
     if at(ptype) == b'$' {
         let digstart = *p;
-        pos_arg = get_unsigned_int(fmt, digstart, p, typed).ok_or(())? as c_int;
+        pos_arg = get_unsigned_int(fmt, digstart, p, typed)
+            .ok_or(())?
+            .cast_signed();
         *p += 1; // step over the '$'
     }
 
@@ -346,7 +351,7 @@ fn parse_conversion(args: &mut Args, fmt: &[u8], p: &mut usize) -> Result<Conver
             *p += 1;
             let j = star_argument(args, fmt, p, digstart)?;
             if j >= 0 {
-                c.precision = j as usize;
+                c.precision = as_index(j);
             } else {
                 c.precision_specified = false;
                 c.precision = 0;
@@ -417,7 +422,7 @@ fn render_string<'b, 'a: 'b>(
         b'c' => {
             // The C points at a `uchar` local; the scratch buffer is
             // the same one byte.
-            tmp[0] = args.next_bits() as u8;
+            tmp[0] = args.next_bits().to_le_bytes()[0];
             Body::Tmp(1)
         }
         // b's' | b'S'
@@ -464,7 +469,7 @@ fn render_string<'b, 'a: 'b>(
                     // (O-B15-2).
                     c.min_field_width = c
                         .min_field_width
-                        .saturating_add_signed(str_arg_l as isize - cells as isize);
+                        .saturating_add_signed(str_arg_l.cast_signed() - cells.cast_signed());
                 }
             }
             Body::Text(text, str_arg_l)
@@ -514,10 +519,10 @@ fn render_integer(c: &mut Conversion, args: &mut Args, tmp: &mut [u8; TMP]) -> B
     } else if c.fmt_spec == b'd' {
         let bits = args.next_bits();
         arg = match c.length_modifier {
-            b'h' => i64::from(bits as c_int as i16),
-            b'l' | b'L' => bits as i64,
-            b'z' => bits as isize as i64,
-            _ => i64::from(bits as c_int),
+            b'h' => i64::from(low16(bits).cast_signed()),
+            // `long` and `ssize_t` are the whole 64 bits here.
+            b'l' | b'L' | b'z' => bits.cast_signed(),
+            _ => i64::from(low32(bits).cast_signed()),
         };
         arg_sign = match arg {
             0 => 0,
@@ -527,10 +532,10 @@ fn render_integer(c: &mut Conversion, args: &mut Args, tmp: &mut [u8; TMP]) -> B
     } else {
         let bits = args.next_bits();
         uarg = match c.length_modifier {
-            b'h' => u64::from(bits as c_uint as u16),
-            b'l' | b'L' => bits,
-            b'z' => bits as usize as u64,
-            _ => u64::from(bits as c_uint),
+            b'h' => u64::from(low16(bits)),
+            // `unsigned long` and `size_t` are the whole 64 bits here.
+            b'l' | b'L' | b'z' => bits,
+            _ => u64::from(low32(bits)),
         };
         arg_sign = c_int::from(uarg != 0);
     }
@@ -747,4 +752,17 @@ pub(in crate::strings) fn format(out: &mut [u8], fmt: &[u8], src: Source<'_>) ->
         emsg(gettext(E_TOO_MANY_ARGS));
     }
     sink.produced
+}
+
+/// The low 32 bits of a variadic argument's word: what reading it back as
+/// an `int`/`unsigned` keeps.
+fn low32(bits: u64) -> u32 {
+    let [b0, b1, b2, b3, ..] = bits.to_le_bytes();
+    u32::from_le_bytes([b0, b1, b2, b3])
+}
+
+/// The low 16 bits, for the `h` length modifier's `short`.
+fn low16(bits: u64) -> u16 {
+    let [b0, b1, ..] = bits.to_le_bytes();
+    u16::from_le_bytes([b0, b1])
 }

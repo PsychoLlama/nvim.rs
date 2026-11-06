@@ -28,6 +28,7 @@ use crate::guard::{Lock, Suppress};
 use crate::mbyte::cluster_len;
 use crate::memory::ThinCString;
 use crate::memory::XString;
+use crate::message::VIM_WARNING;
 use crate::message_fmt::msg_cstr;
 use crate::option::split_option_part;
 use crate::option::vars::P_DIR;
@@ -466,7 +467,7 @@ fn ask_about_swapfile(buffer: Buf, fname: &CStr) -> SwapExistsChoice {
         let but = gettext(c"&Open Read-Only\n&Edit anyway\n&Recover\n&Delete it\n&Quit\n&Abort");
         let running = proc_running.get() != 0;
         let buttons = if running { run_but } else { but };
-        let (title, warn) = (gettext(c"VIM - ATTENTION"), VIM_WARNING.cast_signed());
+        let (title, warn) = (gettext(c"VIM - ATTENTION"), VIM_WARNING);
         // `do_dialog` reads the message as a C string, which ends at the
         // first NUL, as the `vsnprintf` behind `kv_printf` left it.
         let end = msg.iter().position(|&byte| byte == 0).unwrap_or(msg.len());

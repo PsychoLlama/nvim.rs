@@ -23,6 +23,8 @@
 
 pub mod entry;
 
+use crate::narrow::as_index;
+use crate::narrow::count_as_int;
 use core::ffi::{c_int, c_long, c_uint};
 use core::ops::{Deref, DerefMut};
 
@@ -65,12 +67,12 @@ pub(super) const BLANK_LINE: VTermLineInfo = VTermLineInfo {
 
 /// Whether `next` extends the grapheme that `prev` ended.
 pub(super) fn is_composing(prev: u32, next: u32, grapheme: &mut GraphemeState) -> bool {
-    iscomposing(prev as c_int, next as c_int, Some(grapheme))
+    iscomposing(prev.cast_signed(), next.cast_signed(), Some(grapheme))
 }
 
 /// How many bytes the tab-stop bit vector needs for `cols` columns.
 fn tabstop_bytes(cols: c_int) -> usize {
-    (cols.max(0) as usize).div_ceil(8)
+    as_index(cols.max(0)).div_ceil(8)
 }
 
 /// Who the state machine paints through.
@@ -103,7 +105,7 @@ pub(crate) struct StateOwned {
 
 impl StateOwned {
     pub(super) fn new(rows: c_int, cols: c_int) -> Self {
-        let rows = rows.max(0) as usize;
+        let rows = as_index(rows.max(0));
         StateOwned {
             tabstops: vec![0; tabstop_bytes(cols)],
             // TODO(vterm): the altscreen's marks could wait until it is
@@ -177,7 +179,7 @@ impl VTermState {
         for byte in 0..bytes {
             let mut bits = 0u8;
             for bit in 0..8 {
-                let col = (byte as c_int) << 3 | bit;
+                let col = count_as_int(byte) << 3 | bit;
                 // Columns the old screen had keep their stop; fresh ones get
                 // the default one every eighth column.
                 let stop = if col < self.cols {
@@ -234,7 +236,7 @@ impl VTermState {
     pub(super) fn append_grapheme(&mut self, at: usize, codepoint: u32) -> usize {
         let mut encoded = [0u8; 8];
         // Eight bytes, more than any encoding needs.
-        let len = encode_char(codepoint as c_int, &mut encoded);
+        let len = encode_char(codepoint.cast_signed(), &mut encoded);
         let len = len.min(self.grapheme_buf.len() - at);
         for (to, &from) in self.grapheme_buf[at..at + len].iter_mut().zip(&encoded) {
             *to = from.cast_signed();
@@ -434,7 +436,7 @@ impl StateCx<'_> {
 
     /// Stamps one grapheme onto the screen at `pos`.
     pub(super) fn put_glyph(&mut self, schar: ScreenChar, width: c_int, pos: VTermPos) {
-        let line = self.lineinfo()[pos.row as usize];
+        let line = self.lineinfo()[as_index(pos.row)];
         let mut info = VTermGlyphInfo {
             schar,
             width,
@@ -470,7 +472,7 @@ impl StateCx<'_> {
     /// Reports the cursor's position whether or not it moved, which is what a
     /// full reset needs so that the consumer redraws it.
     pub(super) fn force_cursor_report(&mut self, oldpos: VTermPos) {
-        let (pos, visible) = (self.pos, self.mode.cursor_visible() as c_int);
+        let (pos, visible) = (self.pos, self.mode.cursor_visible().cast_signed());
         match self.consumer() {
             (Consumer::Screen, Some(screen), _) => {
                 screen.movecursor(pos, oldpos, visible);
@@ -489,7 +491,7 @@ impl StateCx<'_> {
             // on the line that followed it.
             let last = (rect.end_row + 1).min(self.rows);
             for row in (rect.start_row + 1).max(0)..last {
-                self.lineinfo_mut()[row as usize].set_continuation(0);
+                self.lineinfo_mut()[as_index(row)].set_continuation(0);
             }
         }
         match self.consumer() {
@@ -517,15 +519,15 @@ impl StateCx<'_> {
 
         // A full-width vertical scroll moves the line marks with the lines.
         if rect.start_col == 0 && rect.end_col == self.cols && rightward == 0 {
-            let start = rect.start_row as usize;
-            let height = (rows - downward.abs()) as usize;
+            let start = as_index(rect.start_row);
+            let height = as_index(rows - downward.abs());
             let lines = self.lineinfo_mut();
             if downward > 0 {
-                let shift = downward as usize;
+                let shift = as_index(downward);
                 lines.copy_within(start + shift..start + shift + height, start);
-                lines[(rect.end_row - downward) as usize..rect.end_row as usize].fill(BLANK_LINE);
+                lines[as_index(rect.end_row - downward)..as_index(rect.end_row)].fill(BLANK_LINE);
             } else {
-                let shift = (-downward) as usize;
+                let shift = as_index(-downward);
                 lines.copy_within(start..start + height, start + shift);
                 lines[start..start + shift].fill(BLANK_LINE);
             }
@@ -558,16 +560,16 @@ impl StateCx<'_> {
         doublewidth: bool,
         doubleheight: c_uint,
     ) {
-        let mut info = self.lineinfo()[row as usize];
+        let mut info = self.lineinfo()[as_index(row)];
         info.set_doublewidth(c_uint::from(doublewidth));
         info.set_doubleheight(doubleheight);
         let accepted = match self.consumer() {
             (Consumer::Screen, Some(screen), state) => {
                 let lines = state.lineinfo();
-                screen.set_lineinfo(row, &info, &lines[row as usize], state.rows, lines) != 0
+                screen.set_lineinfo(row, &info, &lines[as_index(row)], state.rows, lines) != 0
             }
             (Consumer::Foreign(foreign), _, state) => {
-                let current = &state.lineinfo()[row as usize];
+                let current = &state.lineinfo()[as_index(row)];
                 foreign
                     .setlineinfo(row, &info, current)
                     .is_some_and(|accepted| accepted != 0)
@@ -575,7 +577,7 @@ impl StateCx<'_> {
             _ => false,
         };
         if accepted || force {
-            self.lineinfo_mut()[row as usize] = info;
+            self.lineinfo_mut()[as_index(row)] = info;
         }
     }
 
@@ -655,7 +657,7 @@ impl StateCx<'_> {
         // No screen to rebuild them, so the marks follow the new height here,
         // keeping the rows that survive.
         for lines in &mut self.state.owned.lineinfos {
-            lines.resize(rows.max(0) as usize, BLANK_LINE);
+            lines.resize(as_index(rows.max(0)), BLANK_LINE);
         }
         if let Consumer::Foreign(foreign) = consumer {
             let [primary, altscreen] = &mut self.state.owned.lineinfos;

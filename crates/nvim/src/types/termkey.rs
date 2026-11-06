@@ -49,10 +49,8 @@ impl KeyCode {
     }
 
     /// A report's packed payload.
-    pub fn report(payload: [::core::ffi::c_char; 4]) -> Self {
-        Self(::core::ffi::c_int::from_ne_bytes(
-            payload.map(|byte| byte.to_ne_bytes()[0]),
-        ))
+    pub fn report(payload: [u8; 4]) -> Self {
+        Self(::core::ffi::c_int::from_ne_bytes(payload))
     }
 
     /// The character a `TERMKEY_TYPE_UNICODE` key stands for.
@@ -72,10 +70,8 @@ impl KeyCode {
     }
 
     /// The four packed bytes of a mouse, position or mode report.
-    pub fn payload(self) -> [::core::ffi::c_char; 4] {
-        self.0
-            .to_ne_bytes()
-            .map(|byte| ::core::ffi::c_char::from_ne_bytes([byte]))
+    pub fn payload(self) -> [u8; 4] {
+        self.0.to_ne_bytes()
     }
 }
 

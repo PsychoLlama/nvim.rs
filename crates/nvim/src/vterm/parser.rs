@@ -12,6 +12,8 @@
 
 #![forbid(unsafe_code)]
 
+use crate::narrow::as_index;
+use crate::narrow::const_len_as_int;
 use crate::types::{VTerm_parser, VTermParserState, VTermTerminator};
 use crate::vterm::host::{Csi, Fragment, ParserHandler};
 use crate::vterm::vterm::{VTERM_TERMINATOR_BEL, VTERM_TERMINATOR_ST};
@@ -138,7 +140,7 @@ impl<H: ParserHandler + ?Sized> Parser<'_, H> {
     /// Collects one intermediate byte, if there is room; the last slot is
     /// reserved for the NUL the consumer's escape callback is handed.
     fn push_intermed(&mut self, c: u8) {
-        let len = self.intermedlen as usize;
+        let len = as_index(self.intermedlen);
         if len < INTERMED_MAX - 1 {
             self.intermed[len] = c;
             self.intermedlen += 1;
@@ -147,7 +149,7 @@ impl<H: ParserHandler + ?Sized> Parser<'_, H> {
 
     /// NUL-terminates the intermediates ahead of reporting a sequence.
     fn terminate_intermed(&mut self) {
-        let len = self.intermedlen as usize;
+        let len = as_index(self.intermedlen);
         self.intermed[len] = 0;
     }
 
@@ -171,7 +173,7 @@ impl<H: ParserHandler + ?Sized> Parser<'_, H> {
                 let intermed = (block.intermedlen != 0)
                     .then(|| CStr::from_bytes_until_nul(&block.intermed).ok())
                     .flatten();
-                let argc = (csi.argi.max(0) as usize).min(csi.args.len());
+                let argc = as_index(csi.argi.max(0)).min(csi.args.len());
                 let csi = Csi {
                     leader,
                     args: &csi.args[..argc],
@@ -184,7 +186,7 @@ impl<H: ParserHandler + ?Sized> Parser<'_, H> {
                 // The consumer sees the intermediates followed by the final
                 // byte, NUL-terminated.
                 let mut seq = [0u8; INTERMED_MAX + 1];
-                let intermedlen = (block.intermedlen.max(0) as usize).min(seq.len() - 1);
+                let intermedlen = as_index(block.intermedlen.max(0)).min(seq.len() - 1);
                 seq[..intermedlen].copy_from_slice(&block.intermed[..intermedlen]);
                 seq[intermedlen] = command;
                 let _ = handler.escape(&seq[..=intermedlen]);
@@ -200,7 +202,7 @@ impl<H: ParserHandler + ?Sized> Parser<'_, H> {
                         let _ = handler.osc(block.v.leaderlen, frag);
                     }
                     ParserState::Dcs => {
-                        let len = (block.v.leaderlen.max(0) as usize).min(block.v.leader.len());
+                        let len = as_index(block.v.leaderlen.max(0)).min(block.v.leader.len());
                         let _ = handler.dcs(&block.v.leader[..len], frag);
                     }
                     ParserState::Apc => {
@@ -221,7 +223,7 @@ impl<H: ParserHandler + ?Sized> Parser<'_, H> {
             }
             ParserEvent::Text(text) => {
                 if let Some(eaten) = handler.text(text) {
-                    return eaten.max(0) as usize;
+                    return as_index(eaten.max(0));
                 }
             }
         }
@@ -355,14 +357,14 @@ pub(crate) fn write<H: ParserHandler + ?Sized>(
                         // Private-use markers, 0x3c to 0x3f.
                         if (0x3c..=0x3f).contains(&c) {
                             let csi = &mut parser.v;
-                            if (csi.leaderlen as usize) < CSI_LEADER_MAX - 1 {
-                                csi.leader[csi.leaderlen as usize] = c;
+                            if as_index(csi.leaderlen) < CSI_LEADER_MAX - 1 {
+                                csi.leader[as_index(csi.leaderlen)] = c;
                                 csi.leaderlen += 1;
                             }
                             break;
                         }
                         let csi = &mut parser.v;
-                        csi.leader[csi.leaderlen as usize] = 0;
+                        csi.leader[as_index(csi.leaderlen)] = 0;
                         csi.argi = 0;
                         csi.args[0] = CSI_ARG_MISSING;
                         parser.state = ParserState::CsiArgs.raw();
@@ -370,7 +372,7 @@ pub(crate) fn write<H: ParserHandler + ?Sized>(
                     }
                     ParserState::CsiArgs => {
                         let csi = &mut parser.v;
-                        let argi = csi.argi as usize;
+                        let argi = as_index(csi.argi);
                         if c.is_ascii_digit() {
                             if csi.args[argi] == CSI_ARG_MISSING {
                                 csi.args[argi] = 0;
@@ -396,10 +398,10 @@ pub(crate) fn write<H: ParserHandler + ?Sized>(
                             if argi + 1 < CSI_ARGS_MAX {
                                 csi.argi += 1;
                             }
-                            csi.args[csi.argi as usize] = CSI_ARG_MISSING;
+                            csi.args[as_index(csi.argi)] = CSI_ARG_MISSING;
                             break;
                         }
-                        csi.argi = (csi.argi + 1).min(CSI_ARGS_MAX as c_int);
+                        csi.argi = (csi.argi + 1).min(const_len_as_int(CSI_ARGS_MAX));
                         parser.intermedlen = 0;
                         parser.state = ParserState::CsiIntermed.raw();
                         section = ParserState::CsiIntermed;
@@ -447,8 +449,8 @@ pub(crate) fn write<H: ParserHandler + ?Sized>(
                         // A DCS keeps its command bytes where a control
                         // sequence keeps its leader.
                         let dcs = &mut parser.v;
-                        if (dcs.leaderlen as usize) < CSI_LEADER_MAX {
-                            dcs.leader[dcs.leaderlen as usize] = c;
+                        if as_index(dcs.leaderlen) < CSI_LEADER_MAX {
+                            dcs.leader[as_index(dcs.leaderlen)] = c;
                             dcs.leaderlen += 1;
                         }
                         if (0x40..=0x7e).contains(&c) {

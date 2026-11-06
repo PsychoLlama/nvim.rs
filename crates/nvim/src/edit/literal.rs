@@ -203,11 +203,7 @@ pub(crate) fn insert_special(mut c: Key, mut allow_modmask: bool, mut ctrlv: boo
         }
     }
     if stop_arrow().is_ok() {
-        let flags = if ctrlv {
-            INSCHAR_CTRLV.cast_signed()
-        } else {
-            0
-        };
+        let flags = if ctrlv { INSCHAR_CTRLV } else { 0 };
         insertchar(c, flags, -1);
     }
 }

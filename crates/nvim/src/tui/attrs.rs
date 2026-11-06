@@ -16,6 +16,9 @@
 use crate::global_cell::GlobalCell;
 use crate::highlight::HlAttrFlags;
 use crate::map::DenseSet;
+use crate::narrow::as_index;
+use crate::narrow::number_as_int;
+use crate::narrow::number_as_u16;
 use crate::tui::output::{out, out_cstr, out_fmt, terminfo_out, terminfo_print_nums};
 use crate::tui::paint::invalidate;
 use crate::tui::terminfo::caps::{
@@ -56,7 +59,7 @@ pub fn tui_add_url(_tui: &mut TUIData, url: Option<&CStr>) -> int32_t {
         return -1;
     };
     let (key, _) = URLS.with_mut(|urls| urls.insert_with(url.to_bytes(), <[u8]>::to_vec));
-    key as int32_t
+    key.cast_signed()
 }
 
 /// Record highlight `id`'s definition.
@@ -75,7 +78,7 @@ pub fn tui_hl_attr_define(
     attrs.cterm_ae_attr = cterm_attrs.cterm_ae_attr;
     attrs.cterm_fg_color = cterm_attrs.cterm_fg_color;
     attrs.cterm_bg_color = cterm_attrs.cterm_bg_color;
-    let id = id as usize;
+    let id = usize::try_from(id).expect("an attribute id is never negative");
     reserve_attr(tui, id);
     tui.attrs[id] = attrs;
 }
@@ -94,11 +97,8 @@ pub(crate) fn reserve_attr(tui: &mut TUIData, id: usize) {
 
 /// Highlight `id`'s definition.
 pub(crate) fn attr(tui: &TUIData, id: c_int) -> HlAttrs {
-    assert!(
-        (id as usize) < tui.attrs.len(),
-        "attribute {id} not defined"
-    );
-    tui.attrs[id as usize]
+    assert!(as_index(id) < tui.attrs.len(), "attribute {id} not defined");
+    tui.attrs[as_index(id)]
 }
 
 /// Would painting under `id1` look any different from painting under `id2`?
@@ -187,12 +187,12 @@ pub(crate) fn update_attrs(tui: &mut TUIData, attr_id: c_int) {
                 tui,
                 kTerm_set_attributes,
                 &[
-                    standout as c_int,
-                    underline as c_int,
-                    reverse as c_int,
-                    blink as c_int,
-                    dim as c_int,
-                    bold as c_int,
+                    c_int::from(standout),
+                    c_int::from(underline),
+                    c_int::from(reverse),
+                    c_int::from(blink),
+                    c_int::from(dim),
+                    c_int::from(bold),
                 ],
             );
         } else if !tui.default_attr {
@@ -349,10 +349,10 @@ fn set_url(tui: &mut TUIData, url: int32_t) {
         // staging buffer, and staging it in pieces would let a flush fall
         // between them — which wraps what it writes in synchronised-output
         // or cursor sequences, inside the OSC.
-        let id = URL_ID_BASE.wrapping_add(url as u32);
+        let id = URL_ID_BASE.wrapping_add(url.cast_unsigned());
         let mut seq = format!("\x1b]8;id={id};").into_bytes();
         URLS.with(|urls| {
-            let target = &urls.keys()[url as usize];
+            let target = &urls.keys()[as_index(url)];
             seq.reserve(target.len() + OSC8_TERMINATOR.len());
             seq.extend_from_slice(target);
         });
@@ -377,11 +377,11 @@ pub fn tui_default_colors_set(
     cterm_fg: Integer,
     cterm_bg: Integer,
 ) {
-    tui.clear_attrs.rgb_fg_color = rgb_fg as int32_t;
-    tui.clear_attrs.rgb_bg_color = rgb_bg as int32_t;
-    tui.clear_attrs.rgb_sp_color = rgb_sp as int32_t;
-    tui.clear_attrs.cterm_fg_color = cterm_fg as i16;
-    tui.clear_attrs.cterm_bg_color = cterm_bg as i16;
+    tui.clear_attrs.rgb_fg_color = number_as_int(rgb_fg);
+    tui.clear_attrs.rgb_bg_color = number_as_int(rgb_bg);
+    tui.clear_attrs.rgb_sp_color = number_as_int(rgb_sp);
+    tui.clear_attrs.cterm_fg_color = number_as_u16(cterm_fg).cast_signed();
+    tui.clear_attrs.cterm_bg_color = number_as_u16(cterm_bg).cast_signed();
     tui.print_attr_id = -1;
     // Until this arrives, nothing can be said about what the terminal would
     // paint an erased cell with, so clearing does not go through attributes.

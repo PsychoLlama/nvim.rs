@@ -35,7 +35,7 @@ use super::mpack_core::{MPACK_EOF, MPACK_ERROR, MPACK_OK, Next, TokBuf};
 use super::token::{Kind, Tok};
 
 /// The stack is full: the document nests deeper than `capacity`.
-pub const MPACK_NOMEM: c_int = MPACK_ERROR.cast_signed() + 1;
+pub const MPACK_NOMEM: c_int = MPACK_ERROR + 1;
 
 /// The walker stopped the walk ([`Decode::stopped`], [`Encode::stopped`]):
 /// it failed, and has its own error to report.
@@ -43,8 +43,8 @@ pub const MPACK_EXCEPTION: c_int = MPACK_NOMEM + 1;
 
 pub const MPACK_MAX_OBJECT_DEPTH: c_int = 32;
 
-const COMPLETE: c_int = MPACK_OK.cast_signed();
-const PENDING: c_int = MPACK_EOF.cast_signed();
+const COMPLETE: c_int = MPACK_OK;
+const PENDING: c_int = MPACK_EOF;
 
 /// One object in the walk: its token, how many of its children have been
 /// seen, and the walker's own state for it.
@@ -226,7 +226,7 @@ impl<D: Default> Parser<D> {
             let (tok, chunk) = match self.tokbuf.read(input) {
                 Next::Eof => continue,
                 Next::Error => {
-                    status = MPACK_ERROR.cast_signed();
+                    status = MPACK_ERROR;
                     *input = save;
                     break;
                 }
@@ -287,7 +287,7 @@ impl<D: Default> Parser<D> {
                 let (write_status, count) = self.tokbuf.write(&mut out[written..], &tok, chunk);
                 written += count;
                 if write_status != MPACK_OK {
-                    status = c_int::try_from(write_status).expect("a status fits an int");
+                    status = write_status;
                 }
             }
         }

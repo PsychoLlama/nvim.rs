@@ -24,7 +24,13 @@ use super::*;
 use crate::ascii::ascii_isdigit;
 use crate::charset::getdigits_int_at;
 use crate::cstr;
-use crate::keycodes::{Ctrl_BSL, Ctrl_C, Ctrl_G, Ctrl_O, replace_termcodes};
+use crate::keycodes::replace_termcodes;
+
+/// The control bytes `:amenu` wraps a mode's right-hand side in.
+const CTRL_C: u8 = 0x03;
+const CTRL_G: u8 = 0x07;
+const CTRL_O: u8 = 0x0f;
+const CTRL_BSL: u8 = 0x1c;
 use crate::mbyte::cluster_len;
 use crate::menu::sys_menu;
 use crate::option::vars::p_cpo;
@@ -315,20 +321,20 @@ fn set_rhs(menu: &mut VimMenu, modes: c_int, arg: &MenuArg, amenu: bool, call_da
         let prefix = match call_data {
             Some(rhs) if amenu && !rhs.is_empty() => match 1 << i {
                 MENU_VISUAL_MODE | MENU_SELECT_MODE | MENU_OP_PENDING_MODE | MENU_CMDLINE_MODE => {
-                    Some(vec![Ctrl_C as u8])
+                    Some(vec![CTRL_C])
                 }
-                MENU_INSERT_MODE => Some(vec![Ctrl_BSL as u8, Ctrl_O as u8]),
+                MENU_INSERT_MODE => Some(vec![CTRL_BSL, CTRL_O]),
                 _ => None,
             },
             _ => None,
         };
         menu.strings[i] = match (prefix, call_data) {
             (Some(mut buf), Some(rhs)) => {
-                let restore = buf[0] == Ctrl_C as u8;
+                let restore = buf[0] == CTRL_C;
                 buf.extend_from_slice(rhs);
                 if restore {
                     // CTRL-C left Visual mode; CTRL-\ CTRL-G returns to it.
-                    buf.extend_from_slice(&[Ctrl_BSL as u8, Ctrl_G as u8]);
+                    buf.extend_from_slice(&[CTRL_BSL, CTRL_G]);
                 }
                 Some(owned(&buf))
             }

@@ -35,8 +35,8 @@ pub const KEY_ENCODING_REPORT_ASSOCIATED: c_int = 0x10;
 /// `SM` / `RM`: the two ANSI modes this terminal implements.
 pub(super) fn set_ansi_mode(state: &mut StateCx<'_>, num: c_int, on: bool) {
     match num {
-        4 => state.mode.set_insert(on as _),   // IRM - ECMA-48 7.2.10
-        20 => state.mode.set_newline(on as _), // LNM - ANSI X3.4-1977
+        4 => state.mode.set_insert(on.into()), // IRM - ECMA-48 7.2.10
+        20 => state.mode.set_newline(on.into()), // LNM - ANSI X3.4-1977
         _ => {}
     }
 }
@@ -46,7 +46,7 @@ pub(super) fn set_ansi_mode(state: &mut StateCx<'_>, num: c_int, on: bool) {
 /// `CSI ? … h` / `CSI ? … l`: the DEC private modes.
 pub(super) fn set_dec_mode(state: &mut StateCx<'_>, num: c_int, on: bool) {
     match num {
-        1 => state.mode.set_cursor(on as _), // DECCKM - cursor keys
+        1 => state.mode.set_cursor(on.into()), // DECCKM - cursor keys
         5 => {
             state.set_termprop_bool(VTERM_PROP_REVERSE, on);
         }
@@ -54,12 +54,12 @@ pub(super) fn set_dec_mode(state: &mut StateCx<'_>, num: c_int, on: bool) {
             // DECOM - origin mode. Switching it homes the cursor into
             // whichever origin now applies.
             let oldpos = state.pos;
-            state.mode.set_origin(on as _);
+            state.mode.set_origin(on.into());
             state.pos.row = if on { state.scrollregion_top } else { 0 };
             state.pos.col = if on { state.scroll_left() } else { 0 };
             state.update_cursor(oldpos, true);
         }
-        7 => state.mode.set_autowrap(on as _),
+        7 => state.mode.set_autowrap(on.into()),
         12 => {
             state.set_termprop_bool(VTERM_PROP_CURSORBLINK, on);
         }
@@ -69,7 +69,7 @@ pub(super) fn set_dec_mode(state: &mut StateCx<'_>, num: c_int, on: bool) {
         69 => {
             // DECVSSM / DECLRMM - left and right margins. Turning them on
             // must clear every line's double-width and double-height marks.
-            state.mode.set_leftrightmargin(on as _);
+            state.mode.set_leftrightmargin(on.into());
             if on {
                 for row in 0..state.rows {
                     state.set_lineinfo(row, true, DWL_OFF, DHL_OFF);
@@ -87,7 +87,7 @@ pub(super) fn set_dec_mode(state: &mut StateCx<'_>, num: c_int, on: bool) {
         }
         1004 => {
             state.set_termprop_bool(VTERM_PROP_FOCUSREPORT, on);
-            state.mode.set_report_focus(on as _);
+            state.mode.set_report_focus(on.into());
         }
         1005 => state.mouse_protocol = if on { MOUSE_UTF8 } else { MOUSE_X10 },
         1006 => state.mouse_protocol = if on { MOUSE_SGR } else { MOUSE_X10 },
@@ -100,7 +100,7 @@ pub(super) fn set_dec_mode(state: &mut StateCx<'_>, num: c_int, on: bool) {
             state.set_termprop_bool(VTERM_PROP_ALTSCREEN, on);
             save_cursor(state, on);
         }
-        2004 => state.mode.set_bracketpaste(on as _),
+        2004 => state.mode.set_bracketpaste(on.into()),
         2026 => {
             state.set_termprop_bool(VTERM_PROP_SYNCOUTPUT, on);
         }
@@ -236,11 +236,13 @@ pub(super) fn push_key_encoding_flags(state: &mut StateCx<'_>, arg: c_int) {
 /// `CSI < u`: pop `arg` entries. Popping the stack empty resets the flags.
 pub(super) fn pop_key_encoding_flags(state: &mut StateCx<'_>, arg: c_int) {
     let stack = flag_stack(state);
-    if arg >= c_int::from(stack.size) {
-        stack.size = 1;
-        stack.items[0] = no_flags();
-    } else if arg > 0 {
-        stack.size -= arg as u8;
+    match u8::try_from(arg) {
+        Ok(pop) if pop < stack.size => stack.size -= pop,
+        Err(_) if arg < 0 => {}
+        _ => {
+            stack.size = 1;
+            stack.items[0] = no_flags();
+        }
     }
 }
 

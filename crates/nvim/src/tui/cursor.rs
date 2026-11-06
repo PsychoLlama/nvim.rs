@@ -16,6 +16,8 @@ use crate::global_cell::GlobalCell;
 use crate::highlight::HlAttrFlags;
 use crate::log::{LOGLVL_WRN, logmsg};
 use crate::message_fmt::msg_cstr_opt;
+use crate::narrow::as_index;
+use crate::narrow::number_as_int;
 use crate::tui::output::{terminfo_out, terminfo_print_nums, terminfo_print_str};
 use crate::tui::terminfo::caps::{
     kTerm_reset_cursor_color, kTerm_reset_cursor_style, kTerm_set_cursor_color,
@@ -48,7 +50,7 @@ fn decscusr_code(entry: &CursorEntry) -> c_int {
         _ => 0,
     };
     let steady = entry.blinkon == 0 || entry.blinkoff == 0;
-    base + steady as c_int
+    base + c_int::from(steady)
 }
 
 /// The shape `'guicursor'` names, falling back to a block.
@@ -83,9 +85,9 @@ pub fn decode_cursor_entry(args: &ApiDict) -> CursorEntry {
         // *key* named and would have dereferenced whatever was there.
         match (item.key.bytes(), &item.value) {
             (b"cursor_shape", Object::String(name)) => entry.shape = decode_shape(name),
-            (b"blinkon", Object::Integer(ms)) => entry.blinkon = *ms as c_int,
-            (b"blinkoff", Object::Integer(ms)) => entry.blinkoff = *ms as c_int,
-            (b"attr_id", Object::Integer(id)) => entry.id = *id as c_int,
+            (b"blinkon", Object::Integer(ms)) => entry.blinkon = number_as_int(*ms),
+            (b"blinkoff", Object::Integer(ms)) => entry.blinkoff = number_as_int(*ms),
+            (b"attr_id", Object::Integer(id)) => entry.id = number_as_int(*id),
             _ => {}
         }
     }
@@ -117,7 +119,7 @@ pub fn set_mode(tui: &mut TUIData, mode: usize) {
 /// sensible to send it from a palette index.
 ///
 fn apply_color(tui: &mut TUIData, entry: &CursorEntry) {
-    let in_range = entry.id != 0 && (entry.id as usize) < tui.attrs.len() && tui.rgb;
+    let in_range = entry.id != 0 && as_index(entry.id) < tui.attrs.len() && tui.rgb;
     if !in_range {
         // Attribute 0 means "no special cursor". Only bother resetting if a
         // previous mode actually changed something.
@@ -129,7 +131,7 @@ fn apply_color(tui: &mut TUIData, entry: &CursorEntry) {
         return;
     }
 
-    let aep: HlAttrs = tui.attrs[entry.id as usize];
+    let aep: HlAttrs = tui.attrs[as_index(entry.id)];
     tui.want_invisible = aep.hl_blend == BLEND_INVISIBLE;
     if tui.want_invisible {
         return;
@@ -144,11 +146,11 @@ fn apply_color(tui: &mut TUIData, entry: &CursorEntry) {
         if tui.set_cursor_color_as_str {
             let mut hex = [0u8; 8];
             // 24 bits is all the capability can carry.
-            let color = aep.rgb_bg_color as u32 & 0xff_ffff;
+            let color = aep.rgb_bg_color.cast_unsigned() & 0xff_ffff;
             hex[0] = b'#';
             for i in 0..6 {
                 let nibble = (color >> (20 - 4 * i)) & 0xf;
-                hex[1 + i as usize] = char::from_digit(nibble, 16).unwrap_or('0') as u8;
+                hex[1 + as_index(i)] = char::from_digit(nibble, 16).unwrap_or('0') as u8;
             }
             let s = CStr::from_bytes_with_nul(&hex).expect("hex buffer is NUL-terminated");
             terminfo_print_str(tui, kTerm_set_cursor_color, s);

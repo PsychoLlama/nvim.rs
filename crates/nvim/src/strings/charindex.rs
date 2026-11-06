@@ -15,6 +15,10 @@
 
 #![forbid(unsafe_code)]
 
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
+use crate::narrow::len_as_integer;
+use crate::narrow::number_as_int;
 use core::ffi::c_int;
 
 use super::strict_bool_arg;
@@ -24,7 +28,7 @@ use crate::eval::typval::{
 };
 use crate::mbyte::{char_at, char_len, cluster_len};
 use crate::memory::ThinCString;
-use crate::types::{EvalFuncData, TypVal, VarNumber, int64_t, size_t};
+use crate::types::{EvalFuncData, TypVal, VarNumber, size_t};
 
 /// The character-length rule a `countcc`/`comp` flag selects: composing
 /// characters counted separately, or folded into their base.
@@ -109,7 +113,7 @@ fn byteidx_common(args: &[TypVal], result: &mut TypVal, comp: bool) {
         }
         idx -= 1;
     }
-    (*result).write_number(at as VarNumber);
+    (*result).write_number(len_as_integer(at));
 }
 
 /// "byteidx()" function
@@ -151,14 +155,22 @@ pub fn f_charidx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     let char_len = CharLen::new(countcc);
-    let mut at: VarNumber = 0;
+    let mut at: usize = 0;
     let mut len: c_int = 0;
-    while if utf16idx { idx >= 0 } else { at <= idx } {
-        let rest = &bytes[at as usize..];
+    while if utf16idx {
+        idx >= 0
+    } else {
+        len_as_integer(at) <= idx
+    } {
+        let rest = &bytes[at..];
         if rest.is_empty() {
             // An index of exactly the string's length in bytes (or
             // UTF-16 units) answers the string's length in characters.
-            if if utf16idx { idx == 0 } else { at == idx } {
+            if if utf16idx {
+                idx == 0
+            } else {
+                len_as_integer(at) == idx
+            } {
                 result.write_number(VarNumber::from(len));
             }
             return;
@@ -169,11 +181,11 @@ pub fn f_charidx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                 idx -= 1;
             }
         }
-        at += char_len.of(rest) as VarNumber;
+        at += char_len.of(rest);
         len += 1;
     }
 
-    result.write_number((len - 1).max(0) as VarNumber);
+    result.write_number(VarNumber::from((len - 1).max(0)));
 }
 
 /// "strgetchar()" function: the code point of the `idx`-th character.
@@ -230,6 +242,7 @@ pub fn f_strcharpart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     let mut numbuf = NumBuf::new();
     let bytes = numbuf.bytes(&args[0]);
     let slen = bytes.len();
+    let slen_int = len_as_int(slen);
 
     let mut nbyte: c_int = 0;
     let mut skipcc = false;
@@ -242,50 +255,50 @@ pub fn f_strcharpart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         }
         if nchar > 0 {
             // Walk `nchar` characters in to find the byte offset.
-            while nchar > 0 && (nbyte as size_t) < slen {
-                nbyte += CharLen::new(!skipcc).of(&bytes[nbyte as usize..]) as c_int;
+            while nchar > 0 && as_index(nbyte) < slen {
+                nbyte += len_as_int(CharLen::new(!skipcc).of(&bytes[as_index(nbyte)..]));
                 nchar -= 1;
             }
         } else {
             // A negative start is already a byte offset, and stays
             // negative until the overlap is taken below.
-            nbyte = nchar as c_int;
+            nbyte = number_as_int(nchar);
         }
     }
 
     let mut len: c_int = if args.len() > 2 {
-        let mut charlen = tv_get_number(&args[2]) as c_int;
+        let mut charlen = number_as_int(tv_get_number(&args[2]));
         let mut len = 0;
-        while charlen > 0 && nbyte + len < slen as c_int {
+        while charlen > 0 && nbyte + len < slen_int {
             let off = nbyte + len;
             // Offsets before the string count one byte each, so a
             // negative start still consumes its share of `charlen`.
             len += if off < 0 {
                 1
             } else {
-                CharLen::new(!skipcc).of(&bytes[off as usize..]) as c_int
+                len_as_int(CharLen::new(!skipcc).of(&bytes[as_index(off)..]))
             };
             charlen -= 1;
         }
         len
     } else {
-        slen as c_int - nbyte // Default: everything from `nbyte` on.
+        slen_int - nbyte // Default: everything from `nbyte` on.
     };
 
     // Only the overlap between the requested part and the string.
     if nbyte < 0 {
         len += nbyte;
         nbyte = 0;
-    } else if nbyte as size_t > slen {
-        nbyte = slen as c_int;
+    } else if as_index(nbyte) > slen {
+        nbyte = slen_int;
     }
     if len < 0 {
         len = 0;
-    } else if nbyte + len > slen as c_int {
-        len = slen as c_int - nbyte;
+    } else if nbyte + len > slen_int {
+        len = slen_int - nbyte;
     }
 
-    let part = &bytes[nbyte as usize..(nbyte + len) as usize];
+    let part = &bytes[as_index(nbyte)..as_index(nbyte + len)];
     result.write_string(Some(ThinCString::from_bytes(part)));
 }
 
@@ -294,7 +307,7 @@ pub fn f_strcharpart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 pub fn f_strpart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let bytes = numbuf.bytes(&args[0]);
-    let slen = bytes.len() as VarNumber;
+    let slen = len_as_integer(bytes.len());
 
     let start = tv_get_number_chk(&args[1]);
     let mut n = start.unwrap_or(0);
@@ -321,16 +334,22 @@ pub fn f_strpart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     if args.len() > 2 && args.len() > 3 {
         // `len` was a character count after all: re-measure it.
-        let mut off = n as int64_t;
-        while off < slen as int64_t && len > 0 {
-            off += cluster_len(&bytes[off as usize..]) as int64_t;
+        let mut off = n;
+        while off < slen && len > 0 {
+            off += len_as_integer(cluster_len(&bytes[byte_offset(off)..]));
             len -= 1;
         }
-        len = (off - n as int64_t) as VarNumber;
+        len = off - n;
     }
 
-    let part = &bytes[n as usize..(n + len) as usize];
+    let part = &bytes[byte_offset(n)..byte_offset(n + len)];
     result.write_string(Some(ThinCString::from_bytes(part)));
+}
+
+/// A byte offset [`f_strpart`] has already clamped to the string, as the
+/// subscript it is.
+fn byte_offset(n: VarNumber) -> usize {
+    usize::try_from(n).expect("an offset clamped to the string is never negative")
 }
 
 /// "utf16idx()" function: the UTF-16 index of a byte (or character) offset.
@@ -366,13 +385,21 @@ pub fn f_utf16idx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // The answer is the index of the *start* of the character the offset
     // lands in, so it trails `len` by one iteration.
     let mut utf16idx: c_int = 0;
-    let mut at: VarNumber = 0;
-    while if charidx { idx >= 0 } else { at <= idx } {
-        let rest = &bytes[at as usize..];
+    let mut at: usize = 0;
+    while if charidx {
+        idx >= 0
+    } else {
+        len_as_integer(at) <= idx
+    } {
+        let rest = &bytes[at..];
         if rest.is_empty() {
             // An index of exactly the string's length in bytes (or
             // characters) answers its length in UTF-16 units.
-            if if charidx { idx == 0 } else { at == idx } {
+            if if charidx {
+                idx == 0
+            } else {
+                len_as_integer(at) == idx
+            } {
                 result.write_number(VarNumber::from(len));
             }
             return;
@@ -382,12 +409,12 @@ pub fn f_utf16idx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         if code_point(rest, clen) > 0xffff {
             len += 1;
         }
-        at += clen as VarNumber;
+        at += clen;
         if charidx {
             idx -= 1;
         }
         len += 1;
     }
 
-    result.write_number(utf16idx as VarNumber);
+    result.write_number(VarNumber::from(utf16idx));
 }

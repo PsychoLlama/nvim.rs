@@ -107,7 +107,7 @@ const ACHARS: [Achar; 54] = [
 
 fn find_achar(c: c_int) -> Option<&'static Achar> {
     ACHARS
-        .binary_search_by_key(&(c as u32), |a| a.c)
+        .binary_search_by_key(&c.cast_unsigned(), |a| a.c)
         .ok()
         .map(|i| &ACHARS[i])
 }
@@ -200,14 +200,14 @@ pub(crate) fn arabic_shape(
         let forward_combine = can_join(c, next_c);
         curr_c = if backward_combine {
             if forward_combine {
-                curr_a.medial as c_int
+                curr_a.medial.cast_signed()
             } else {
-                curr_a.final_ as c_int
+                curr_a.final_.cast_signed()
             }
         } else if forward_combine {
-            curr_a.initial as c_int
+            curr_a.initial.cast_signed()
         } else {
-            curr_a.isolated as c_int
+            curr_a.isolated.cast_signed()
         };
     }
     if curr_c == 0 { c } else { curr_c }
@@ -230,14 +230,23 @@ mod tests {
         let probes: Vec<c_int> = if cfg!(miri) {
             ACHARS
                 .iter()
-                .flat_map(|a| [a.c as c_int - 1, a.c as c_int, a.c as c_int + 1])
+                .flat_map(|a| {
+                    [
+                        a.c.cast_signed() - 1,
+                        a.c.cast_signed(),
+                        a.c.cast_signed() + 1,
+                    ]
+                })
                 .chain([0, 0xFFFF])
                 .collect()
         } else {
             (0..0x10000).collect()
         };
         for c in probes {
-            let expect = ACHARS.iter().find(|a| a.c == c as u32).map(|a| a.c);
+            let expect = ACHARS
+                .iter()
+                .find(|a| a.c == c.cast_unsigned())
+                .map(|a| a.c);
             assert_eq!(find_achar(c).map(|a| a.c), expect);
         }
     }

@@ -22,6 +22,8 @@ use crate::mbyte::{char_at, utf8len_tab};
 use crate::message::state::{keep_msg, keep_msg_hl_id, msg_row, msg_scrolled, need_wait_return};
 use crate::message::{msg_putchar, set_keep_msg};
 use crate::mouse::{is_mouse_key, setmouse};
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
 use crate::os::cshim::gettext;
 use crate::os::input::{InputEvents, input_get};
 use crate::state::mode::State;
@@ -50,12 +52,12 @@ pub(crate) fn ask_yesno(question: &CStr) -> c_int {
     let fmt = gettext(c"%s (y/n)?");
     let prompt = cstr::owned(&formatted!(IOSIZE as usize, fmt.to_bytes(), question));
 
-    let mut r = ' ' as c_int;
-    while r != 'y' as c_int && r != 'n' as c_int {
+    let mut r = c_int::from(b' ');
+    while r != c_int::from(b'y') && r != c_int::from(b'n') {
         // Same highlighting as for wait_return().
         r = prompt_for_input(Some(&prompt), HLF_R, true, None);
         if r == Ctrl_C || r == ESC {
-            r = 'n' as c_int;
+            r = c_int::from(b'n');
             if !ui_has(kUIMessages) {
                 msg_putchar(r);
             }
@@ -101,12 +103,12 @@ pub(crate) fn get_keystroke(events: Option<&'static GlobalCell<Option<ChildQueue
         // number of bytes.
         let mut maxlen = (buflen - 6 - len) / 3;
         if buf.is_empty() {
-            buf = vec![0; buflen as usize];
+            buf = vec![0; as_index(buflen)];
         } else if maxlen < 10 {
             // Need some more space. This might happen while receiving a
             // long escape sequence.
             buflen += 100;
-            buf.resize(buflen as usize, 0);
+            buf.resize(as_index(buflen), 0);
             maxlen = (buflen - 6 - len) / 3;
         }
 
@@ -116,12 +118,12 @@ pub(crate) fn get_keystroke(events: Option<&'static GlobalCell<Option<ChildQueue
         // `buf[len..]` has at least `maxlen` bytes of room by the arithmetic
         // above, and `fix_input_buffer` rewrites in place within the
         // tripling headroom that leaves.
-        let at = len as usize;
-        let read = &mut buf[at..at + maxlen.max(0) as usize];
-        let mut n = input_get(read, timeout, 0, events) as c_int;
+        let at = as_index(len);
+        let read = &mut buf[at..at + as_index(maxlen.max(0))];
+        let mut n = len_as_int(input_get(read, timeout, 0, events));
         if n > 0 {
             // Replace zero and K_SPECIAL by a special key code.
-            n = fix_input_buffer(&mut buf[at..], n as usize) as c_int;
+            n = len_as_int(fix_input_buffer(&mut buf[at..], as_index(n)));
             len += n;
         }
         if n > 0 {
@@ -141,7 +143,7 @@ pub(crate) fn get_keystroke(events: Option<&'static GlobalCell<Option<ChildQueue
                 continue; // More bytes to get.
             }
             let end = if len >= buflen { buflen - 1 } else { len };
-            break char_at(&buf[..end as usize]);
+            break char_at(&buf[..as_index(end)]);
         }
 
         let key = key_unescape(buf[1], buf[2]).code();
@@ -153,7 +155,7 @@ pub(crate) fn get_keystroke(events: Option<&'static GlobalCell<Option<ChildQueue
         }
         len -= 3;
         if len > 0 {
-            buf.copy_within(3..3 + len as usize, 0);
+            buf.copy_within(3..3 + as_index(len), 0);
         }
     };
 

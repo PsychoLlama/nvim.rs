@@ -55,6 +55,18 @@ fn unbase64one(c: u8) -> Option<u8> {
     }
 }
 
+/// Selection bits as the 16-bit mask the progress record keeps them in;
+/// every bit OSC 52 can name (`CUT7` is bit 11) fits.
+const fn progress_bits(mask: VTermSelectionMask) -> u16 {
+    let [lo, hi, ..] = mask.to_le_bytes();
+    u16::from_le_bytes([lo, hi])
+}
+
+/// The low eight bits of a base64 group: the byte they decode to.
+const fn low_byte(bits: u32) -> u8 {
+    bits.to_le_bytes()[0]
+}
+
 /// OSC 52: a selection name, then either `?` to ask for its contents or
 /// base64 to set them.
 fn clipboard(state: &mut StateCx<'_>, frag: Fragment<'_>) {
@@ -69,17 +81,17 @@ fn clipboard(state: &mut StateCx<'_>, frag: Fragment<'_>) {
     // The selection name: any number of buffer letters, ended by a semicolon.
     while progress.state() == SELECTION_INITIAL && !rest.is_empty() {
         match rest[0] {
-            b'c' => progress.mask |= VTERM_SELECTION_CLIPBOARD as u16,
-            b'p' => progress.mask |= VTERM_SELECTION_PRIMARY as u16,
-            b'q' => progress.mask |= VTERM_SELECTION_SECONDARY as u16,
-            b's' => progress.mask |= VTERM_SELECTION_SELECT as u16,
+            b'c' => progress.mask |= progress_bits(VTERM_SELECTION_CLIPBOARD),
+            b'p' => progress.mask |= progress_bits(VTERM_SELECTION_PRIMARY),
+            b'q' => progress.mask |= progress_bits(VTERM_SELECTION_SECONDARY),
+            b's' => progress.mask |= progress_bits(VTERM_SELECTION_SELECT),
             digit @ b'0'..=b'7' => {
-                progress.mask |= (VTERM_SELECTION_CUT0 << (digit - b'0')) as u16;
+                progress.mask |= progress_bits(VTERM_SELECTION_CUT0 << (digit - b'0'));
             }
             b';' => {
                 progress.set_state(SELECTION_SELECTED);
                 if progress.mask == 0 {
-                    progress.mask = (VTERM_SELECTION_SELECT | VTERM_SELECTION_CUT0) as u16;
+                    progress.mask = progress_bits(VTERM_SELECTION_SELECT | VTERM_SELECTION_CUT0);
                 }
             }
             _ => {}
@@ -136,11 +148,11 @@ fn clipboard(state: &mut StateCx<'_>, frag: Fragment<'_>) {
             // Padding: flush whatever whole bytes the partial group holds.
             let buffer = state.selection_buffer_mut();
             if sextets == 2 {
-                buffer[bufcur] = (value >> 4) as u8;
+                buffer[bufcur] = low_byte(value >> 4);
                 bufcur += 1;
             } else if sextets == 3 {
-                buffer[bufcur] = (value >> 10) as u8;
-                buffer[bufcur + 1] = (value >> 2) as u8;
+                buffer[bufcur] = low_byte(value >> 10);
+                buffer[bufcur + 1] = low_byte(value >> 2);
                 bufcur += 2;
             }
             while rest.first() == Some(&b'=') {
@@ -153,9 +165,9 @@ fn clipboard(state: &mut StateCx<'_>, frag: Fragment<'_>) {
             rest = &rest[1..];
             if sextets == 4 {
                 let buffer = state.selection_buffer_mut();
-                buffer[bufcur] = (value >> 16) as u8;
-                buffer[bufcur + 1] = (value >> 8) as u8;
-                buffer[bufcur + 2] = value as u8;
+                buffer[bufcur] = low_byte(value >> 16);
+                buffer[bufcur + 1] = low_byte(value >> 8);
+                buffer[bufcur + 2] = low_byte(value);
                 bufcur += 3;
                 value = 0;
                 sextets = 0;

@@ -6,7 +6,6 @@
 #![forbid(unsafe_code)]
 
 use crate::eval::typval::tv_get_bool_chk;
-use crate::keycodes::Ctrl_V;
 use crate::mbyte::{cluster_len, encode_char};
 use crate::memory::XString;
 use crate::semsg;
@@ -51,10 +50,8 @@ pub(crate) fn any_non_ascii(s: &[u8]) -> bool {
 /// Upstream's `del_trailing_spaces` zero-fills from here.
 pub fn trailing_spaces_start(s: &[u8]) -> usize {
     let mut end = s.len();
-    while end > 1
-        && matches!(s[end - 1], b' ' | b'\t')
-        && s[end - 2] != b'\\'
-        && s[end - 2] != Ctrl_V as u8
+    while end > 1 && matches!(s[end - 1], b' ' | b'\t') && s[end - 2] != b'\\' && s[end - 2] != 0x16
+    // CTRL-V
     {
         end -= 1;
     }

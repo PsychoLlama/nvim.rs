@@ -16,6 +16,8 @@ use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::message::msg_display_bytes;
 use crate::message_fmt::msg_bytes;
+use crate::narrow::len_as_int;
+use crate::narrow::number_as_int;
 use crate::semsg;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
@@ -298,7 +300,7 @@ fn tabnext(excmd: &mut ExArg) {
     if excmd.line.byte_at(excmd.line.arg) != 0 {
         let start = excmd.line.arg;
         let (number, at) = getdigits_at(excmd.line.buffer_mut(), start, false, 0);
-        tab_number = number as c_int;
+        tab_number = number_as_int(number);
         if at == start
             || matches!(excmd.line.byte_at(start), b'-' | b'+')
             || excmd.line.byte_at(at) != 0
@@ -345,11 +347,11 @@ pub(crate) fn ex_tabs(_excmd: &mut ExArg) {
             break;
         }
         if msg_col.get() > 0 {
-            msg_char('\n' as c_int);
+            msg_char(b'\n');
         }
         // Upstream assembles the line in `IObuff`; it is cut where that
         // would cut it.
-        let nr = tabcount as c_int + 1;
+        let nr = len_as_int(tabcount) + 1;
         let line = crate::formatted!(IOSIZE as usize, gettext(c"Tab page %d").to_bytes(), nr);
         msg_display_bytes(&line, HLF_T, false);
         os_breakcheck();
@@ -367,21 +369,17 @@ fn list_tab_windows(tabpage: TabPage, lastused_win: Option<Win>) {
         if !wp.w_config.focusable || wp.w_config.hide {
             continue;
         }
-        msg_char('\n' as c_int);
+        msg_char(b'\n');
         msg_char(if wp.is_current() {
-            '>' as c_int
+            b'>'
         } else if lastused_win == Some(wp) {
-            '#' as c_int
+            b'#'
         } else {
-            ' ' as c_int
+            b' '
         });
-        msg_char(' ' as c_int);
-        msg_char(if is_changed(wp.buffer()) {
-            '+' as c_int
-        } else {
-            ' ' as c_int
-        });
-        msg_char(' ' as c_int);
+        msg_char(b' ');
+        msg_char(if is_changed(wp.buffer()) { b'+' } else { b' ' });
+        msg_char(b' ');
         msg_display(fill_name(wp.buffer()).as_cstr(), 0, false);
         os_breakcheck();
     }
@@ -403,8 +401,8 @@ fn fill_name(buffer: Buf) -> XString {
     }
 }
 
-fn msg_char(c: c_int) {
-    msg_putchar(c);
+fn msg_char(c: u8) {
+    msg_putchar(c_int::from(c));
 }
 
 fn is_changed(buffer: Buf) -> bool {
@@ -452,12 +450,12 @@ fn resize(excmd: &mut ExArg) {
         }
     }
 
-    let relative = c_int::from(excmd.line.byte_at(excmd.line.arg)) == '-' as c_int
-        || c_int::from(excmd.line.byte_at(excmd.line.arg)) == '+' as c_int;
+    let relative =
+        excmd.line.byte_at(excmd.line.arg) == b'-' || excmd.line.byte_at(excmd.line.arg) == b'+';
     let empty = excmd.line.byte_at(excmd.line.arg) == 0;
     // A non-number reads as zero, as `atol` does.
     let arg = excmd.line.arg;
-    let mut n = getdigits_at(excmd.line.buffer_mut(), arg, false, 0).0 as c_int;
+    let mut n = number_as_int(getdigits_at(excmd.line.buffer_mut(), arg, false, 0).0);
     if cmdmod.with(|m| m.cmod_split) & WSP_VERT != 0 {
         if relative {
             n += wp.w_width;
@@ -508,7 +506,7 @@ fn wincmd(excmd: &mut ExArg) {
     // `CTRL-W g` takes a second character.
     let mut xchar = NUL;
     let mut at;
-    if c_int::from(excmd.line.byte_at(excmd.line.arg)) == 'g' as c_int
+    if excmd.line.byte_at(excmd.line.arg) == b'g'
         || c_int::from(excmd.line.byte_at(excmd.line.arg)) == Ctrl_G
     {
         let second = excmd.line.byte_at(excmd.line.arg + 1);
@@ -561,7 +559,7 @@ pub(crate) fn ex_popup(excmd: &mut ExArg) {
 
 /// `:psearch` — `:isearch` with the result shown in the preview window.
 pub(crate) fn ex_psearch(excmd: &mut ExArg) {
-    g_do_tagpreview.set(p_pvh() as c_int);
+    g_do_tagpreview.set(number_as_int(p_pvh()));
     // SAFETY: the caller's promise -- a live command.
     ex_findpat(excmd);
     g_do_tagpreview.set(0);
@@ -585,7 +583,7 @@ pub(crate) fn ex_pbuffer(excmd: &mut ExArg) {
 
 /// Open or reuse the preview window, and make it current.
 fn prepare_preview_window() {
-    g_do_tagpreview.set(p_pvh() as c_int);
+    g_do_tagpreview.set(number_as_int(p_pvh()));
     prepare_tagpreview(true);
 }
 

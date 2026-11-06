@@ -26,6 +26,8 @@
 
 #![forbid(unsafe_code)]
 
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
 use core::fmt::Write as _;
 
 /// The buffer size upstream's callers reserve per conversion. Kept because
@@ -131,7 +133,7 @@ pub fn append_g_fmt(out: &mut Vec<u8>, num: f64, precision: u32) {
         &digits[..end]
     }
 
-    if exponent < -4 || exponent >= precision as i32 {
+    if exponent < -4 || exponent >= len_as_int(precision) {
         out.push(digits[0]);
         let fraction = trimmed(&digits[1..]);
         if !fraction.is_empty() {
@@ -153,7 +155,7 @@ pub fn append_g_fmt(out: &mut Vec<u8>, num: f64, precision: u32) {
             tens /= 10;
         }
     } else if exponent >= 0 {
-        let whole = exponent as usize + 1;
+        let whole = as_index(exponent) + 1;
         out.extend_from_slice(&digits[..whole]);
         let fraction = trimmed(&digits[whole..]);
         if !fraction.is_empty() {
@@ -162,7 +164,7 @@ pub fn append_g_fmt(out: &mut Vec<u8>, num: f64, precision: u32) {
         }
     } else {
         out.extend_from_slice(b"0.");
-        out.extend(core::iter::repeat_n(b'0', (-exponent - 1) as usize));
+        out.extend(core::iter::repeat_n(b'0', as_index(-exponent - 1)));
         out.extend_from_slice(trimmed(digits));
     }
 }
@@ -384,7 +386,7 @@ fn scale_to_f64(significand: u128, sticky: bool, scale: i32) -> f64 {
     if significand == 0 {
         return 0.0;
     }
-    let width = 128 - significand.leading_zeros() as i32;
+    let width = 128 - significand.leading_zeros().cast_signed();
     // The value is `1.f * 2^exponent`.
     let exponent = scale.saturating_add(width - 1);
     if exponent > 1023 {
@@ -403,9 +405,9 @@ fn scale_to_f64(significand: u128, sticky: bool, scale: i32) -> f64 {
 
     let dropped = width - keep;
     let mut kept = if dropped <= 0 {
-        significand << (-dropped) as u32
+        significand << (-dropped).cast_unsigned()
     } else {
-        let shift = dropped as u32;
+        let shift = dropped.cast_unsigned();
         let kept = significand >> shift;
         let remainder = significand & ((1u128 << shift) - 1);
         let half = 1u128 << (shift - 1);
@@ -446,7 +448,7 @@ fn scale_to_f64(significand: u128, sticky: bool, scale: i32) -> f64 {
 /// `16.000000000000007`, which is a real warning about relying on it.
 fn power_of_two(exponent: i32) -> f64 {
     debug_assert!((-1022..=1023).contains(&exponent));
-    f64::from_bits(((exponent + 1023) as u64) << 52)
+    f64::from_bits(u64::from((exponent + 1023).cast_unsigned()) << 52)
 }
 
 #[cfg(test)]

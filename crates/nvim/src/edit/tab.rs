@@ -30,6 +30,9 @@
 
 use crate::charset::skip;
 use crate::cstr::byte_at;
+use crate::indent::INDENT_DEC;
+use crate::indent::INDENT_INC;
+use crate::indent::INDENT_SET;
 use crate::indent::StopList;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};

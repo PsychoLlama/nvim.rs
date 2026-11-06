@@ -10,14 +10,19 @@ use crate::tui::termkey::termkey::{
     TERMKEY_MOUSE_DRAG, TERMKEY_MOUSE_PRESS, TERMKEY_MOUSE_RELEASE, TERMKEY_MOUSE_UNKNOWN,
 };
 use crate::types::TermKeyMouseEvent;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 /// The report payload: `TermKeyKey::code::mouse`.
-pub type Payload = [c_char; 4];
+pub type Payload = [u8; 4];
+
+/// The low byte of `n`, as the C's `(char)` store keeps it.
+pub(crate) fn low_byte(n: c_int) -> u8 {
+    n.to_le_bytes()[0]
+}
 
 /// Bit in the fourth byte marking an SGR release (`CSI < ... m`), which is
 /// otherwise indistinguishable from the press that shares its button code.
-const SGR_RELEASE: c_int = 0x80;
+const SGR_RELEASE: u8 = 0x80;
 
 /// Pack a screen position. Eleven bits of line and twelve of column fit in
 /// bytes 1-3, so anything past that is clamped rather than wrapped.
@@ -31,23 +36,23 @@ const SGR_RELEASE: c_int = 0x80;
 pub fn pack_position(payload: &mut Payload, col: c_int, line: c_int) {
     let col = col.min(0xfff);
     let line = line.min(0x7ff);
-    payload[1] = (col & 0xff) as c_char;
-    payload[2] = (line & 0xff) as c_char;
-    payload[3] = ((col & 0xf00) >> 8 | (line & 0x700) >> 4) as c_char;
+    payload[1] = low_byte(col);
+    payload[2] = low_byte(line);
+    payload[3] = low_byte((col & 0xf00) >> 8 | (line & 0x700) >> 4);
 }
 
 /// Unpack a screen position as (line, column).
 pub fn unpack_position(payload: &Payload) -> (c_int, c_int) {
-    let high = payload[3] as u8 as c_int;
-    let col = payload[1] as u8 as c_int | (high & 0x0f) << 8;
-    let line = payload[2] as u8 as c_int | (high & 0x70) << 4;
+    let high = c_int::from(payload[3]);
+    let col = c_int::from(payload[1]) | (high & 0x0f) << 8;
+    let line = c_int::from(payload[2]) | (high & 0x70) << 4;
     (line, col)
 }
 
 /// Decode a mouse report's button code into (event, button). Button 0 means
 /// the event carries none, as for a release under the X10 protocol.
 pub fn decode_mouse(payload: &Payload) -> (TermKeyMouseEvent, c_int) {
-    let raw = payload[0] as u8 as c_int;
+    let raw = c_int::from(payload[0]);
     let dragging = raw & 0x20 != 0;
     let moving = |dragging: bool| {
         if dragging {
@@ -70,7 +75,7 @@ pub fn decode_mouse(payload: &Payload) -> (TermKeyMouseEvent, c_int) {
         128..=129 => (moving(dragging), code - 128 + 8),
         _ => (TERMKEY_MOUSE_UNKNOWN, 0),
     };
-    if payload[3] as c_int & SGR_RELEASE != 0 {
+    if payload[3] & SGR_RELEASE != 0 {
         event = TERMKEY_MOUSE_RELEASE;
     }
     (event, button)
@@ -78,24 +83,24 @@ pub fn decode_mouse(payload: &Payload) -> (TermKeyMouseEvent, c_int) {
 
 /// Mark an SGR mouse report as a release.
 pub fn mark_sgr_release(payload: &mut Payload) {
-    payload[3] = (payload[3] as c_int | SGR_RELEASE) as c_char;
+    payload[3] |= SGR_RELEASE;
 }
 
 /// Pack a DECRPM mode report: which mode, its value, and the private-mode
 /// introducer (`?`, or 0 for an ANSI mode).
 pub fn pack_mode(payload: &mut Payload, initial: c_int, mode: c_int, value: c_int) {
-    payload[0] = initial as c_char;
-    payload[1] = (mode >> 8) as c_char;
-    payload[2] = (mode & 0xff) as c_char;
-    payload[3] = value as c_char;
+    payload[0] = low_byte(initial);
+    payload[1] = low_byte(mode >> 8);
+    payload[2] = low_byte(mode);
+    payload[3] = low_byte(value);
 }
 
 /// Unpack a mode report as (initial, mode, value).
 pub fn unpack_mode(payload: &Payload) -> (c_int, c_int, c_int) {
     (
-        payload[0] as u8 as c_int,
-        (payload[1] as u8 as c_int) << 8 | payload[2] as u8 as c_int,
-        payload[3] as u8 as c_int,
+        c_int::from(payload[0]),
+        c_int::from(payload[1]) << 8 | c_int::from(payload[2]),
+        c_int::from(payload[3]),
     )
 }
 
@@ -134,7 +139,7 @@ mod tests {
 
     #[test]
     fn button_groups_decode_to_their_numbers() {
-        let ev = |code: c_int| decode_mouse(&[code as c_char, 0, 0, 0]);
+        let ev = |code: u8| decode_mouse(&[code, 0, 0, 0]);
         assert_eq!(ev(0), (TERMKEY_MOUSE_PRESS, 1));
         assert_eq!(ev(2), (TERMKEY_MOUSE_PRESS, 3));
         assert_eq!(ev(3), (TERMKEY_MOUSE_RELEASE, 0));
@@ -153,17 +158,14 @@ mod tests {
     #[test]
     fn upstream_reports_no_button_past_the_ninth() {
         // Codes 0x82/0x83 would be buttons 10 and 11.
-        assert_eq!(
-            decode_mouse(&[0x82u8 as c_char, 0, 0, 0]),
-            (TERMKEY_MOUSE_UNKNOWN, 0)
-        );
+        assert_eq!(decode_mouse(&[0x82, 0, 0, 0]), (TERMKEY_MOUSE_UNKNOWN, 0));
     }
 
     #[test]
     fn a_mode_report_survives_the_round_trip() {
         let mut payload: Payload = [0; 4];
-        pack_mode(&mut payload, b'?' as c_int, 1, 2);
-        assert_eq!(unpack_mode(&payload), (b'?' as c_int, 1, 2));
+        pack_mode(&mut payload, c_int::from(b'?'), 1, 2);
+        assert_eq!(unpack_mode(&payload), (c_int::from(b'?'), 1, 2));
 
         pack_mode(&mut payload, 0, 4, 1);
         assert_eq!(unpack_mode(&payload), (0, 4, 1));

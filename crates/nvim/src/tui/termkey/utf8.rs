@@ -42,13 +42,17 @@ pub fn encoded_len(codepoint: c_int) -> usize {
 pub fn encode(codepoint: c_int) -> ([u8; UTF8_MAX_BYTES], usize) {
     let mut out = [0u8; UTF8_MAX_BYTES];
     let len = encoded_len(codepoint);
-    let value = codepoint as u32;
+    let value = codepoint.cast_unsigned();
     // The lead byte's marker is the pattern for its length; every continuation
     // byte carries six more bits under 0b10.
     const LEAD: [u32; 7] = [0, 0x00, 0xc0, 0xe0, 0xf0, 0xf8, 0xfc];
-    out[0] = LEAD[len].wrapping_add(value >> (6 * (len - 1))) as u8;
+    out[0] = LEAD[len]
+        .wrapping_add(value >> (6 * (len - 1)))
+        .to_le_bytes()[0];
     for (i, byte) in out[1..len].iter_mut().enumerate() {
-        *byte = 0x80u32.wrapping_add(value >> (6 * (len - 2 - i)) & 0x3f) as u8;
+        *byte = 0x80u32
+            .wrapping_add(value >> (6 * (len - 2 - i)) & 0x3f)
+            .to_le_bytes()[0];
     }
     (out, len)
 }
@@ -63,17 +67,17 @@ pub fn decode(bytes: &[u8]) -> Decoded {
     let (len, mut codepoint) = match lead {
         ..0x80 => {
             return Decoded::Char {
-                codepoint: lead as c_int,
+                codepoint: c_int::from(lead),
                 len: 1,
             };
         }
         // A continuation byte with nothing to continue.
         0x80..0xc0 => return invalid(1),
-        0xc0..0xe0 => (2, (lead & 0x1f) as c_int),
-        0xe0..0xf0 => (3, (lead & 0x0f) as c_int),
-        0xf0..0xf8 => (4, (lead & 0x07) as c_int),
-        0xf8..0xfc => (5, (lead & 0x03) as c_int),
-        0xfc..0xfe => (6, (lead & 0x01) as c_int),
+        0xc0..0xe0 => (2, c_int::from(lead & 0x1f)),
+        0xe0..0xf0 => (3, c_int::from(lead & 0x0f)),
+        0xf0..0xf8 => (4, c_int::from(lead & 0x07)),
+        0xf8..0xfc => (5, c_int::from(lead & 0x03)),
+        0xfc..0xfe => (6, c_int::from(lead & 0x01)),
         _ => return invalid(1),
     };
     for (i, &byte) in bytes.iter().enumerate().take(len).skip(1) {
@@ -82,7 +86,7 @@ pub fn decode(bytes: &[u8]) -> Decoded {
             // continuation; the offending byte is left for the next read.
             return invalid(i);
         }
-        codepoint = codepoint << 6 | (byte & 0x3f) as c_int;
+        codepoint = codepoint << 6 | c_int::from(byte & 0x3f);
     }
     if bytes.len() < len {
         return Decoded::Incomplete;

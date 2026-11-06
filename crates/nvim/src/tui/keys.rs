@@ -30,9 +30,9 @@ use core::ffi::c_int;
 use core::fmt::Write;
 
 /// The modifiers termkey reports, as the bits a key carries them in.
-const MOD_SHIFT: c_int = TERMKEY_KEYMOD_SHIFT.cast_signed();
-const MOD_ALT: c_int = TERMKEY_KEYMOD_ALT.cast_signed();
-const MOD_CTRL: c_int = TERMKEY_KEYMOD_CTRL.cast_signed();
+const MOD_SHIFT: c_int = TERMKEY_KEYMOD_SHIFT;
+const MOD_ALT: c_int = TERMKEY_KEYMOD_ALT;
+const MOD_CTRL: c_int = TERMKEY_KEYMOD_CTRL;
 
 /// The modifiers termkey does not report, in the same bits the kitty
 /// keyboard protocol sends them.

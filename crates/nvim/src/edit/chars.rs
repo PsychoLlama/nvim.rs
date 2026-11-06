@@ -67,7 +67,7 @@ const fn needs_processing(c: Key) -> bool {
 /// `INSCHAR_DO_COM` and `INSCHAR_COM_LIST`.  `second_indent` is the indent
 /// for a second line, if not negative.
 pub(crate) fn insertchar(c: Key, flags: c_int, second_indent: c_int) {
-    let textwidth = comp_textwidth(flags & INSCHAR_FORMAT.cast_signed() != 0);
+    let textwidth = comp_textwidth(flags & INSCHAR_FORMAT != 0);
     wrap_before_insert(c, flags, second_indent, textwidth);
 
     if c.is_nul() {
@@ -136,7 +136,7 @@ pub(crate) fn insertchar(c: Key, flags: c_int, second_indent: c_int) {
 
         // After CTRL-V the first character is recorded literally, and
         // the rest as themselves.
-        let redo_from = if flags & INSCHAR_CTRLV.cast_signed() != 0 {
+        let redo_from = if flags & INSCHAR_CTRLV != 0 {
             redo_literal(Key::byte(typed[0]));
             1
         } else {
@@ -154,7 +154,7 @@ pub(crate) fn insertchar(c: Key, flags: c_int, second_indent: c_int) {
             append_to_redobuff_char(c);
         } else {
             ins_char(c);
-            if flags & INSCHAR_CTRLV.cast_signed() != 0 {
+            if flags & INSCHAR_CTRLV != 0 {
                 redo_literal(c);
             } else {
                 append_to_redobuff_char(c);
@@ -174,7 +174,7 @@ pub(crate) fn insertchar(c: Key, flags: c_int, second_indent: c_int) {
 /// already too long, and lacks `b` or a blank was inserted at or before
 /// 'textwidth'.
 fn wrap_before_insert(c: Key, flags: c_int, second_indent: c_int, textwidth: c_int) {
-    let force_format = flags & INSCHAR_FORMAT.cast_signed();
+    let force_format = flags & INSCHAR_FORMAT;
     let fo_ins_blank = has_format_option(FoFlag::INS_BLANK);
     let fo_ins_long = has_format_option(FoFlag::INS_LONG);
 
@@ -200,7 +200,7 @@ fn wrap_before_insert(c: Key, flags: c_int, second_indent: c_int, textwidth: c_i
         get_nolist_virtcol() + char2cells(if c.is_nul() { gchar_cursor() } else { c.code() });
 
     if Buf::current().b_p_fex.first_byte() != 0
-        && flags & INSCHAR_NO_FEX.cast_signed() == 0
+        && flags & INSCHAR_NO_FEX == 0
         && (force_format != 0 || virtcol > ColNr::new(textwidth))
     {
         do_internal = fex_format(Win::current().w_cursor.lnum, 1, c.code()) != 0;

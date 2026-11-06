@@ -13,6 +13,11 @@
 use crate::keycodes::SpecialKey;
 use crate::mark::kMarkBeginLine;
 use crate::mark::kMarkContext;
+use crate::search::ACTION_GOTO;
+use crate::search::ACTION_SHOW;
+use crate::search::ACTION_SHOW_ALL;
+use crate::search::FIND_ANY;
+use crate::search::FIND_DEFINE;
 use crate::strings::has_char;
 use crate::types::ColNr;
 use crate::types::Key;
@@ -27,9 +32,9 @@ use crate::fold::fold_move_to;
 use crate::mark::{getnextmark, pos_to_mark, setpcmark};
 use crate::mouse::do_mouse;
 use crate::normal::{
-    ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, FIND_ANY, FIND_DEFINE, FIND_IDENT, FM_BACKWARD,
-    FM_FORWARD, SMT_BAD, SMT_RARE, clear_op, clear_op_beep, ident_under_cursor, kDirectionNotSet,
-    kMTCharWise, may_fold_open, nv_gotofile, nv_mark_move_to, nv_put_opt,
+    FIND_IDENT, FM_BACKWARD, FM_FORWARD, SMT_BAD, SMT_RARE, clear_op, clear_op_beep,
+    ident_under_cursor, kDirectionNotSet, kMTCharWise, may_fold_open, nv_gotofile, nv_mark_move_to,
+    nv_put_opt,
 };
 use crate::options::{kOptFdoFlagBlock, kOptFdoFlagSearch};
 use crate::pos::MAXLNUM;
@@ -196,7 +201,7 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
 /// tests -- CTRL-D, `d` and `D` all end in the same four bits.
 fn nv_bracket_ident(cmd_arg: &mut CmdArg) {
     // `find_pattern_in_path` keeps the name, so it is handed a copy.
-    let name = ident_under_cursor(FIND_IDENT.cast_signed());
+    let name = ident_under_cursor(FIND_IDENT);
     if name.is_empty() {
         clear_op(cmd_arg.op());
         return;
@@ -212,16 +217,16 @@ fn nv_bracket_ident(cmd_arg: &mut CmdArg) {
         false
     };
     let what = if nchar.code() & 0xf == c_int::from(b'd') & 0xf {
-        FIND_DEFINE.cast_signed()
+        FIND_DEFINE
     } else {
-        FIND_ANY.cast_signed()
+        FIND_ANY
     };
     let action = if is_upper {
-        ACTION_SHOW_ALL.cast_signed()
+        ACTION_SHOW_ALL
     } else if is_lower {
-        ACTION_SHOW.cast_signed()
+        ACTION_SHOW
     } else {
-        ACTION_GOTO.cast_signed()
+        ACTION_GOTO
     };
     // `]` starts below the cursor line, `[` at the top of the file.
     let from = if cmd_arg.cmdchar.is(']') {

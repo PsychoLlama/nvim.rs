@@ -54,6 +54,14 @@ struct Keycode {
     csinum: c_int,
 }
 
+impl Keycode {
+    /// The byte a legacy sequence ends in: the low byte of `literal`, as
+    /// the `%c` conversion upstream spelled it with keeps it.
+    fn literal_byte(self) -> u8 {
+        self.literal.to_le_bytes()[0]
+    }
+}
+
 const fn key(form: KeyForm, literal: u8, csinum: c_int) -> Keycode {
     Keycode {
         form,
@@ -191,7 +199,7 @@ fn csi_form(k: Keycode, mod_0: VTermModifier, ctrl8bit: bool) -> EscapeSeq {
     if mod_0 != 0 {
         let _ = write!(seq, "1;{}", mod_0 + 1);
     }
-    seq.push(k.literal as u8);
+    seq.push(k.literal_byte());
     seq
 }
 
@@ -214,7 +222,7 @@ fn literal_form(key: VTermKey, k: Keycode, mod_0: VTermModifier, modes: KeyModes
         if mod_0 & VTERM_MOD_ALT != 0 {
             seq.push(0x1b);
         }
-        seq.push(k.literal as u8);
+        seq.push(k.literal_byte());
         seq
     }
 }
@@ -248,7 +256,7 @@ fn encode_key(key: VTermKey, mod_0: VTermModifier, modes: KeyModes) -> Option<Es
             } else {
                 let _ = write!(seq, "{};{}", k.csinum, mod_0 + 1);
             }
-            seq.push(k.literal as u8);
+            seq.push(k.literal_byte());
             return Some(seq);
         }
         KeyForm::Tab | KeyForm::Enter | KeyForm::Literal => KeyForm::Literal,
@@ -267,7 +275,7 @@ fn encode_key(key: VTermKey, mod_0: VTermModifier, modes: KeyModes) -> Option<Es
         // SS3 has no room for parameters, so a modified key falls back to CSI.
         KeyForm::Ss3 if mod_0 == 0 => {
             let mut seq = EscapeSeq::ss3(modes.ctrl8bit);
-            seq.push(k.literal as u8);
+            seq.push(k.literal_byte());
             seq
         }
         KeyForm::Ss3 | KeyForm::Csi => csi_form(k, mod_0, modes.ctrl8bit),
@@ -304,7 +312,7 @@ fn encode_unichar(c: u32, mod_0: VTermModifier, modes: KeyModes) -> Option<Escap
     };
     if passthru {
         let mut seq = EscapeSeq::new();
-        seq.push_utf8(c as i32);
+        seq.push_utf8(c.cast_signed());
         return Some(seq);
     }
 
@@ -330,7 +338,7 @@ fn encode_unichar(c: u32, mod_0: VTermModifier, modes: KeyModes) -> Option<Escap
     if mod_0 & VTERM_MOD_ALT != 0 {
         seq.push(0x1b);
     }
-    seq.push(c as u8);
+    seq.push(c.to_le_bytes()[0]);
     Some(seq)
 }
 

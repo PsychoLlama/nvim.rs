@@ -8,8 +8,8 @@
     clippy::ptr_as_ptr
 )]
 
+use super::ARENA_BLOCK_SIZE;
 use super::wrappers::blob_alloc_ret;
-use super::{ARENA_BLOCK_SIZE, MPACK_EOF, MPACK_ERROR, MPACK_OK};
 use crate::eval::decode::{MsgpackDecoder, json_decode_string, unpack_typval};
 use crate::eval::encode::{
     ListRead, ListReader, encode_list_write, encode_tv2json, encode_vim_list_to_buf,
@@ -17,6 +17,9 @@ use crate::eval::encode::{
 };
 use crate::eval::typval::{NumBuf, blob_bytes, tv_list_alloc};
 use crate::message_fmt::msg_bytes;
+use crate::mpack::mpack_core::MPACK_EOF;
+use crate::mpack::mpack_core::MPACK_ERROR;
+use crate::mpack::mpack_core::MPACK_OK;
 use crate::msgpack_rpc::packer::pack_to_bytes;
 use crate::semsg;
 use crate::types::{
@@ -97,7 +100,7 @@ pub fn f_msgpackdump(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 
 /// Report an unpacker status that is not `MPACK_OK`.
 fn emsg_mpack_error(status: c_int) {
-    match status.cast_unsigned() {
+    match status {
         MPACK_ERROR => semsg!("E475: Invalid argument: Failed to parse msgpack string"),
         MPACK_EOF => semsg!("E475: Invalid argument: Incomplete msgpack string"),
         // Anything past MPACK_ERROR is the parser's depth limit.
@@ -120,7 +123,7 @@ fn msgpackparse_unpack_list(list: &List, ret_list: &mut List) {
     // One arena block's worth at a time, as upstream reads.
     let mut buf = vec![0u8; ARENA_BLOCK_SIZE.cast_unsigned() as usize];
     let mut decoder = MsgpackDecoder::new();
-    let mut status = MPACK_OK.cast_signed();
+    let mut status = MPACK_OK;
     loop {
         let (rlret, read_bytes) = reader.read(&mut buf);
         let Ok(rlret) = rlret else {
@@ -133,21 +136,21 @@ fn msgpackparse_unpack_list(list: &List, ret_list: &mut List) {
         while !cursor.is_empty() {
             match decoder.feed(&mut cursor) {
                 Ok(Some(value)) => {
-                    status = MPACK_OK.cast_signed();
+                    status = MPACK_OK;
                     ret_list.push(value);
                 }
-                Ok(None) => status = MPACK_EOF.cast_signed(),
+                Ok(None) => status = MPACK_EOF,
                 Err(error) => {
                     status = error;
                     break;
                 }
             }
         }
-        if rlret == ListRead::Drained || status > MPACK_EOF.cast_signed() {
+        if rlret == ListRead::Drained || status > MPACK_EOF {
             break;
         }
     }
-    if status != MPACK_OK.cast_signed() {
+    if status != MPACK_OK {
         emsg_mpack_error(status);
     }
 }
@@ -159,7 +162,7 @@ fn msgpackparse_unpack_blob(blob: Option<&Blob>, ret_list: &mut List) {
     while !data.is_empty() {
         let mut tv = TypVal::Unknown;
         let status = unpack_typval(&mut data, &mut tv);
-        if status != MPACK_OK.cast_signed() {
+        if status != MPACK_OK {
             emsg_mpack_error(status);
             return;
         }
@@ -193,7 +196,6 @@ mod tests {
     use crate::eval::list::string_tv;
     use crate::eval::typval::{ListRef, tv_dict_alloc, tv_list_alloc};
     use crate::global_cell::editor_state_lock;
-    use core::ffi::c_uint;
 
     fn list(items: Vec<TypVal>) -> ListRef {
         let mut l = tv_list_alloc(-1);
@@ -274,15 +276,12 @@ mod tests {
             if cut == 0 {
                 continue;
             }
-            assert_eq!(c_uint::try_from(status), Ok(MPACK_EOF), "cut at {cut}");
+            assert_eq!(status, MPACK_EOF, "cut at {cut}");
             assert_eq!(tv.v_type(), VAR_UNKNOWN, "cut at {cut}");
         }
         let mut data = &bytes[..];
         let mut tv = TypVal::Number(0);
-        assert_eq!(
-            c_uint::try_from(unpack_typval(&mut data, &mut tv)),
-            Ok(MPACK_OK)
-        );
+        assert_eq!(unpack_typval(&mut data, &mut tv), MPACK_OK);
         assert!(data.is_empty());
         assert_eq!(
             crate::eval::encode::tv2string_bytes(&tv),

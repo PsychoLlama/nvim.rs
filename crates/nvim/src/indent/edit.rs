@@ -5,7 +5,11 @@
 
 use crate::extmark::kExtmarkUndo;
 use crate::memory::XString;
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
 use crate::narrow::number_as_col;
+use crate::narrow::number_as_int;
+use crate::options::kOptVartabstop;
 use core::ffi::CStr;
 
 use super::*;
@@ -49,7 +53,7 @@ use crate::winlayer::{Buf, Win};
 /// non-blank of the line.
 pub fn inindent(extra: c_int) -> bool {
     let cursor = Win::current().w_cursor;
-    let col = skip::white(Lines::current().line(cursor.lnum)) as c_int;
+    let col = len_as_int(skip::white(Lines::current().line(cursor.lnum)));
     col >= cursor.col.get() + extra
 }
 
@@ -144,7 +148,7 @@ pub fn op_reindent(op: &OpArg, how: Indenter) {
             ngettext(
                 c"%ld line indented ",
                 c"%ld lines indented ",
-                done as ::core::ffi::c_ulong,
+                ::core::ffi::c_ulong::from(done.unsigned_abs()),
             ),
             int64_t::from(done),
             c"success",
@@ -162,7 +166,7 @@ pub fn preprocs_left() -> bool {
     let buf = Buf::current();
     buf.b_p_si != 0 && buf.b_p_cin == 0
         || buf.b_p_cin != 0
-            && in_cinkeys('#' as c_int, ' ' as c_int, true)
+            && in_cinkeys(c_int::from(b'#'), c_int::from(b' '), true)
             && buf.b_ind_hash_comment == 0
 }
 
@@ -188,21 +192,21 @@ fn si_indent_like_open_brace(pos: Pos) {
         // Skip the blanks before the '{'.
         while {
             i -= 1;
-            i > 0 && ascii_iswhite(c_int::from(byte_at(line, i as usize)))
+            i > 0 && ascii_iswhite(c_int::from(byte_at(line, as_index(i))))
         } {}
     }
-    let after_paren = byte_at(line, i as usize) == b')';
+    let after_paren = byte_at(line, as_index(i)) == b')';
     win.w_cursor.lnum = pos.lnum;
     win.w_cursor.col = ColNr::new(i);
-    if after_paren && let Some(open) = findmatch(None, '(' as c_int) {
+    if after_paren && let Some(open) = findmatch(None, c_int::from(b'(')) {
         win.w_cursor = open;
     }
     let indent = get_indent();
     win.w_cursor = old_pos;
     if State.get() & VREPLACE_FLAG != 0 {
-        change_indent(INDENT_SET as c_int, indent, 0, true);
+        change_indent(INDENT_SET, indent, 0, true);
     } else {
-        set_indent(indent, SIN_CHANGED as c_int);
+        set_indent(indent, SIN_CHANGED);
     }
 }
 
@@ -231,18 +235,18 @@ fn si_should_shift_back() -> bool {
 /// `{`, `}` and `#`.
 pub fn ins_try_si(c: c_int) {
     let win = Win::current();
-    if (did_si.get() || can_si_back.get()) && c == '{' as c_int
-        || can_si.get() && c == '}' as c_int && inindent(0)
+    if (did_si.get() || can_si_back.get()) && c == c_int::from(b'{')
+        || can_si.get() && c == c_int::from(b'}') && inindent(0)
     {
-        let matching = if c == '}' as c_int {
-            findmatch(None, '{' as c_int)
+        let matching = if c == c_int::from(b'}') {
+            findmatch(None, c_int::from(b'{'))
         } else {
             None
         };
         if let Some(matching) = matching {
             si_indent_like_open_brace(matching);
         } else if win.w_cursor.col > ColNr::ZERO {
-            let shift = !(c == '{' as c_int
+            let shift = !(c == c_int::from(b'{')
                 && can_si_back.get()
                 && win.w_cursor.lnum > LineNr::ONE
                 && !si_should_shift_back());
@@ -252,10 +256,10 @@ pub fn ins_try_si(c: c_int) {
         }
     }
     // The indent of a '#' is always zero.
-    if win.w_cursor.col > ColNr::ZERO && can_si.get() && c == '#' as c_int && inindent(0) {
+    if win.w_cursor.col > ColNr::ZERO && can_si.get() && c == c_int::from(b'#') && inindent(0) {
         // Remember the current indent for the next line.
         old_indent.set(get_indent());
-        set_indent(0, SIN_CHANGED as c_int);
+        set_indent(0, SIN_CHANGED);
     }
     // Adjust `ai_col`: the character at this position can be deleted.
     ai_col.set(ai_col.get().min(win.w_cursor.col));
@@ -264,15 +268,8 @@ pub fn ins_try_si(c: c_int) {
 /// Applies the indent [`change_indent`] was asked for, leaving the cursor on
 /// the first non-blank.
 fn apply_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_bytes: bool) {
-    if type_0 == INDENT_SET as c_int {
-        set_indent(
-            amount,
-            if call_changed_bytes {
-                SIN_CHANGED as c_int
-            } else {
-                0
-            },
-        );
+    if type_0 == INDENT_SET {
+        set_indent(amount, if call_changed_bytes { SIN_CHANGED } else { 0 });
         return;
     }
     let save_state = State.get();
@@ -280,12 +277,7 @@ fn apply_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_bytes: 
     if State.get() & VREPLACE_FLAG != 0 {
         State.set(MODE_INSERT);
     }
-    shift_line(
-        type_0 == INDENT_DEC as c_int,
-        round != 0,
-        1,
-        call_changed_bytes,
-    );
+    shift_line(type_0 == INDENT_DEC, round != 0, 1, call_changed_bytes);
     State.set(save_state);
 }
 
@@ -315,7 +307,7 @@ fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
                     break;
                 }
             }
-            new_cursor_col = at as c_int;
+            new_cursor_col = len_as_int(at);
         }
     }
     if vcol == win.w_virtcol.get() {
@@ -326,7 +318,7 @@ fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
     win.w_cursor.col = ColNr::new(new_cursor_col);
     let ptrlen = usize::try_from(win.w_virtcol.get() - vcol).expect("non-negative");
     ins_str(&vec![b' '; ptrlen]);
-    new_cursor_col + ptrlen as c_int
+    new_cursor_col + len_as_int(ptrlen)
 }
 
 /// Moves `Insstart` and `ai_col` back by what the indent lost, so that the
@@ -494,10 +486,10 @@ pub fn copy_indent(size: c_int, src: &[u8]) -> bool {
 
     // Copy the usable part of the source's own indent.
     for &b in src_indent {
-        if todo <= 0 || !(b == b' ' || b == TAB as u8) {
+        if todo <= 0 || !(b == b' ' || b == b'\t') {
             break;
         }
-        if b == TAB as u8 {
+        if b == b'\t' {
             let tab_pad = pad(ind_done);
             if todo < tab_pad {
                 break; // this tab would overshoot the target
@@ -517,7 +509,7 @@ pub fn copy_indent(size: c_int, src: &[u8]) -> bool {
     if todo >= tab_pad && !expandtab {
         todo -= tab_pad;
         ind_col += tab_pad;
-        indent.push(TAB as u8);
+        indent.push(b'\t');
     }
     // Whole tabs for as much of the rest as they cover.
     if !expandtab {
@@ -528,12 +520,12 @@ pub fn copy_indent(size: c_int, src: &[u8]) -> bool {
             }
             todo -= tab_pad;
             ind_col += tab_pad;
-            indent.push(TAB as u8);
+            indent.push(b'\t');
         }
     }
     // Spaces for what is left.
-    indent.resize(indent.len() + todo.max(0) as usize, b' ');
-    let ind_len = indent.len() as c_int;
+    indent.resize(indent.len() + as_index(todo.max(0)), b' ');
+    let ind_len = len_as_int(indent.len());
 
     // The indent, then the whole of the cursor line.
     let lnum = Win::current().w_cursor.lnum;
@@ -639,7 +631,7 @@ impl Retab {
     fn retabulate(&mut self, scan: &mut LineScan, tabs: &RetabTabs) -> Retabulated {
         let buf = Buf::current();
         // The run's width on screen.
-        let width = (scan.vcol - self.start_vcol) as c_int;
+        let width = number_as_int(scan.vcol - self.start_vcol);
         self.num_spaces = width;
         let mut num_tabs = 0;
         if buf.b_p_et == 0 {
@@ -647,7 +639,7 @@ impl Retab {
             (num_tabs, self.num_spaces) = match tabstops(tabs.vts.as_deref()) {
                 Some(stops) => stops.from_to(start, end),
                 None => {
-                    let ts = buf.b_p_ts as c_int;
+                    let ts = number_as_int(buf.b_p_ts);
                     debug_assert!(ts != 0);
                     tabstop::uniform_from_to(start, end, ts)
                 }
@@ -664,16 +656,16 @@ impl Retab {
         }
         // How many characters the run will actually take.
         let len = self.num_spaces + num_tabs;
-        let old_len = scan.text.len() as c_int;
+        let old_len = len_as_int(scan.text.len());
         let new_len = old_len - scan.col + self.start_col + len + 1;
         if new_len <= 0 || new_len == MAXCOL {
             emsg_text_too_long();
             return Retabulated::TooLong;
         }
-        let mut new_line = Vec::with_capacity(new_len as usize);
-        new_line.extend_from_slice(&scan.text[..self.start_col as usize]);
+        let mut new_line = Vec::with_capacity(as_index(new_len));
+        new_line.extend_from_slice(&scan.text[..as_index(self.start_col)]);
         new_line.extend((0..len).map(|i| if i < num_tabs { b'\t' } else { b' ' }));
-        new_line.extend_from_slice(&scan.text[scan.col as usize..]);
+        new_line.extend_from_slice(&scan.text[as_index(scan.col)..]);
         if ml_replace_owned(scan.lnum, XString::from_bytes(&new_line)).is_ok() {
             let lnum = scan.lnum.get() - 1;
             let (old, new) = (old_len, new_len - 1);
@@ -704,14 +696,14 @@ impl Retab {
             vcol: 0,
             did_undo: false,
         };
-        let byte = |s: &LineScan| byte_at(&s.text, s.col as usize);
+        let byte = |s: &LineScan| byte_at(&s.text, as_index(s.col));
         let win = Win::current();
         let width = |s: &LineScan| {
-            let at = s.col as usize;
+            let at = as_index(s.col);
             let text = &s.text[at..(at + CHAR_CELLS_SPAN).min(s.text.len())];
             win_chartabsize(win, text, number_as_col(s.vcol))
         };
-        let charlen = |s: &LineScan| c_cluster_len(&s.text[s.col as usize..]) as c_int;
+        let charlen = |s: &LineScan| len_as_int(c_cluster_len(&s.text[as_index(s.col)..]));
         loop {
             let at = byte(&scan);
             if ascii_iswhite(c_int::from(at)) {

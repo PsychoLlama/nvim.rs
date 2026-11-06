@@ -113,7 +113,7 @@ impl Utf8Decoder {
         if cp < min || (0xd800..=0xdfff).contains(&cp) || cp == 0xfffe || cp == 0xffff {
             UNICODE_INVALID
         } else {
-            cp as u32
+            cp.cast_unsigned()
         }
     }
 

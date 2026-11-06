@@ -25,8 +25,9 @@ use crate::event_queue::{self, QueueId};
 use crate::global_cell::GlobalCell;
 use crate::memline::{ml_append_buf_terminated, ml_replace_buf_text};
 use crate::r#move::{curs_columns, set_topline};
+use crate::narrow::number_as_u16;
 use crate::startup::exiting;
-use crate::types::{ColNr, LineNr, uint16_t, uint64_t};
+use crate::types::{ColNr, LineNr, uint64_t};
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_mode_info_set};
 use crate::winlayer::{Buf, Win, tab_windows};
 use core::ffi::c_int;
@@ -179,7 +180,7 @@ fn refresh_size(mut term: Term) -> bool {
     term.invalid_end = height;
     // Read out before the call: the channel is free to re-enter.
     let (resize_cb, owner) = (term.opts.resize_cb, term.opts.owner);
-    let (width, height) = (width as uint16_t, height as uint16_t);
+    let (width, height) = (number_as_u16(width.into()), number_as_u16(height.into()));
     resize_cb.expect("non-null function pointer")(width, height, owner);
     true
 }
@@ -216,8 +217,8 @@ pub(crate) fn refresh_screen(mut term: Term, buffer: Buf) {
     }
 
     let first_linenr = row_to_linenr(term, term.invalid_start);
-    for (offset, row) in (term.invalid_start..term.invalid_end).enumerate() {
-        let linenr = LineNr::new(first_linenr + offset as c_int);
+    for (offset, row) in (0..).zip(term.invalid_start..term.invalid_end) {
+        let linenr = LineNr::new(first_linenr + offset);
         fetch_row(term, row, width);
         let text = crate::cstr::in_bytes(&term.textbuf);
         // Past the end of the buffer means the terminal is still filling

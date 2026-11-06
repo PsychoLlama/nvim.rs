@@ -10,9 +10,9 @@ const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwx
 /// Index+1 of each alphabet byte; 0 marks bytes outside the alphabet.
 const CHAR_TO_INDEX: [u8; 256] = {
     let mut table = [0u8; 256];
-    let mut i = 0;
-    while i < ALPHABET.len() {
-        table[ALPHABET[i] as usize] = i as u8 + 1;
+    let mut i: u8 = 0;
+    while (i as usize) < ALPHABET.len() {
+        table[ALPHABET[i as usize] as usize] = i + 1;
         i += 1;
     }
     table
@@ -22,7 +22,7 @@ pub(crate) fn encode(src: &[u8]) -> String {
     let mut dest = Vec::with_capacity(src.len().div_ceil(3) * 4);
     let (chunks, remainder) = src.as_chunks::<3>();
     for chunk in chunks {
-        let bits = (chunk[0] as u32) << 16 | (chunk[1] as u32) << 8 | chunk[2] as u32;
+        let bits = u32::from(chunk[0]) << 16 | u32::from(chunk[1]) << 8 | u32::from(chunk[2]);
         dest.push(ALPHABET[(bits >> 18) as usize]);
         dest.push(ALPHABET[(bits >> 12 & 0x3f) as usize]);
         dest.push(ALPHABET[(bits >> 6 & 0x3f) as usize]);
@@ -64,11 +64,11 @@ pub(crate) fn decode(src: &[u8]) -> Option<Vec<u8>> {
             leftover = Some(i);
             break;
         }
-        acc = (acc << 6 & 0xfff) + (d as u32 - 1);
+        acc = (acc << 6 & 0xfff) + (u32::from(d) - 1);
         acc_len += 6;
         if acc_len >= 8 {
             acc_len -= 8;
-            dest.push((acc >> acc_len) as u8);
+            dest.push((acc >> acc_len).to_le_bytes()[0]);
         }
     }
     if acc_len > 4 || acc & ((1 << acc_len) - 1) != 0 {
@@ -76,7 +76,7 @@ pub(crate) fn decode(src: &[u8]) -> Option<Vec<u8>> {
     }
     if let Some(i) = leftover {
         let padding = &src[i..];
-        if padding.iter().any(|&c| c != b'=') || padding.len() as u32 != acc_len / 2 {
+        if padding.iter().any(|&c| c != b'=') || u32::try_from(padding.len()) != Ok(acc_len / 2) {
             return None;
         }
     }

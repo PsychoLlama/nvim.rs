@@ -28,7 +28,7 @@ use crate::memory::XString;
 use crate::types::{CmdMod, CmdModFlags};
 use core::ffi::{CStr, c_int};
 
-pub static cmdmod: GlobalCell<CmdMod> = GlobalCell::new(CmdMod {
+pub(crate) static cmdmod: GlobalCell<CmdMod> = GlobalCell::new(CmdMod {
     cmod_flags: CmdModFlags::NONE,
     cmod_split: 0,
     cmod_tab: 0,

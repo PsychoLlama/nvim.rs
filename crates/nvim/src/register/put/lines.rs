@@ -24,6 +24,7 @@
 use crate::cursor::getvpos;
 use crate::extmark::kExtmarkNOOP;
 use crate::extmark::kExtmarkUndo;
+use crate::indent::SIN_NOMARK;
 use crate::mbyte::head_off;
 use crate::memory::XString;
 use crate::narrow::len_as_int;

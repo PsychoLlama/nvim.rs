@@ -561,7 +561,7 @@ fn apply_cmdmod() {
             let save = p_verbose() + 1;
             cmdmod.with_mut(|cm| cm.cmod_verbose_save = save);
         }
-        P_VERBOSE.set((verbose - 1) as OptInt);
+        P_VERBOSE.set(OptInt::from(verbose - 1));
     }
     if mods.has(CmdModFlags::SILENT | CmdModFlags::UNSILENT)
         && cmdmod.with(|cm| cm.cmod_save_msg_silent) == 0

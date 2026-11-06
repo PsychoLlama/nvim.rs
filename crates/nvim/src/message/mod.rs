@@ -152,8 +152,8 @@ use crate::types::TAB;
 use crate::types::ui::{kUIMessages, kUIMultigrid};
 use crate::types::{
     ApiString, Array, EStackArg, ExArg, FlushBuffers, GridView, HlMessage, HlMessageChunk, IOSIZE,
-    Integer, KeyDict_echo_opts, MessageData, Object, OptInt, ScreenAttr, ScreenChar, ShmFlag,
-    TypVal, Vv, int64_t, size_t, uint64_t,
+    KeyDict_echo_opts, MessageData, Object, OptInt, ScreenAttr, ScreenChar, ShmFlag, TypVal, Vv,
+    int64_t, size_t, uint64_t,
 };
 use crate::ui::state::{Columns, Rows, resize_events};
 use crate::ui::{
@@ -191,11 +191,18 @@ pub use self::progress::*;
 mod errors;
 pub use self::errors::*;
 /// [`do_dialog`] answers, as `confirm()` reports them.
-pub const VIM_DISCARDALL: c_uint = 6;
-pub const VIM_ALL: c_uint = 5;
-pub const VIM_CANCEL: c_uint = 4;
-pub const VIM_NO: c_uint = 3;
-pub const VIM_YES: c_uint = 2;
+pub const VIM_DISCARDALL: c_int = 6;
+pub const VIM_ALL: c_int = 5;
+pub const VIM_CANCEL: c_int = 4;
+pub const VIM_NO: c_int = 3;
+pub const VIM_YES: c_int = 2;
+/// [`do_dialog`] types: the icon a GUI would show, which `confirm()` names
+/// by its first letter.
+pub(crate) const VIM_GENERIC: c_int = 0;
+pub(crate) const VIM_ERROR: c_int = 1;
+pub(crate) const VIM_WARNING: c_int = 2;
+pub(crate) const VIM_INFO: c_int = 3;
+pub(crate) const VIM_QUESTION: c_int = 4;
 /// How much of the scrollback the next message should drop.
 pub type ScrollbackClear = ::core::ffi::c_uint;
 pub const SB_CLEAR_CMDLINE_DONE: ScrollbackClear = 3;
@@ -696,7 +703,7 @@ pub fn msgmore(n: c_int) {
     } else {
         (c"%d line less", c"%d fewer lines")
     };
-    let fmt = ngettext(one, many, pn as ::core::ffi::c_ulong);
+    let fmt = ngettext(one, many, ::core::ffi::c_ulong::from(n.unsigned_abs()));
     // Upstream assembles the report in a `MSG_BUF_LEN` buffer, and the note
     // is cut to what is left of it.
     let room = MSG_BUF_LEN as usize;

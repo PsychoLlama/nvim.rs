@@ -42,6 +42,8 @@ use crate::memory::XString;
 use crate::message::e_noident;
 use crate::message::{emsg, emsg_multiline};
 use crate::message_fmt::{msg_bytes, msg_cstr};
+use crate::narrow::len_as_int;
+use crate::narrow::number_as_int;
 use crate::option::set_option_direct;
 use crate::option::vars::{p_hf, p_hh, p_hlg, p_sb};
 use crate::options::{kOptBuftype, kOptFoldmethod, kOptIskeyword};
@@ -303,8 +305,8 @@ fn enter_help_window() -> Option<HelpWindow> {
     if win_split(0, split).is_err() {
         return None;
     }
-    if (Win::current().w_height as OptInt) < p_hh() {
-        win_setheight(p_hh() as c_int);
+    if OptInt::from(Win::current().w_height) < p_hh() {
+        win_setheight(number_as_int(p_hh()));
     }
 
     // Open the help file. `do_ecmd` sets `b_help` and `readfile` sets
@@ -362,7 +364,7 @@ fn split_help_lang(subject: &mut Vec<u8>) -> Option<[u8; 2]> {
 ///
 /// The tag is assumed to already match the requested subject, at `offset`.
 pub(crate) fn help_heuristic(tag: &[u8], offset: c_int, wrong_case: bool) -> c_int {
-    let num_letters = tag.iter().filter(|c| c.is_ascii_alphanumeric()).count() as c_int;
+    let num_letters = len_as_int(tag.iter().filter(|c| c.is_ascii_alphanumeric()).count());
 
     // Weight the letter count far above the character count. A match
     // starting in the middle of a word goes in the last half; a match more
@@ -387,7 +389,7 @@ pub(crate) fn help_heuristic(tag: &[u8], offset: c_int, wrong_case: bool) -> c_i
     if tag.len() > 1 && tag[0] == b'+' {
         offset += 100;
     }
-    100 * num_letters + tag.len() as c_int + offset
+    100 * num_letters + len_as_int(tag.len()) + offset
 }
 
 /// The order of the match list: by the heuristic score `find_tags` stored
@@ -422,9 +424,10 @@ fn find_help_tags(subject: &[u8], keep_lang: bool) -> Result<Vec<Vec<u8>>, Faile
     let pattern = XString::from_bytes(escaped.split(|&b| b == 0).next().unwrap_or_default());
     drop(res);
 
-    let mut flags = (TAG_HELP | TAG_REGEXP | TAG_NAMES | TAG_VERBOSE | TAG_NO_TAGFUNC) as c_int;
+    let mut flags =
+        (TAG_HELP | TAG_REGEXP | TAG_NAMES | TAG_VERBOSE | TAG_NO_TAGFUNC).cast_signed();
     if keep_lang {
-        flags |= TAG_KEEP_LANG as c_int;
+        flags |= TAG_KEEP_LANG.cast_signed();
     }
     let mut matches = find_help_tag_matches(pattern.as_cstr(), flags, MAXCOL)?;
     // Sort on the heuristic number `find_tags` put after the tag.

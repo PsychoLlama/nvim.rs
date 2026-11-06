@@ -477,9 +477,8 @@ fn read_command_args(
     if !ni
         && !excmd.argt.has(ExArgt::EXTRA)
         && excmd.line.byte_at(excmd.line.arg) != 0
-        && c_int::from(excmd.line.byte_at(excmd.line.arg)) != '"' as c_int
-        && (c_int::from(excmd.line.byte_at(excmd.line.arg)) != '|' as c_int
-            || !excmd.argt.has(ExArgt::TRLBAR))
+        && excmd.line.byte_at(excmd.line.arg) != b'"'
+        && (excmd.line.byte_at(excmd.line.arg) != b'|' || !excmd.argt.has(ExArgt::TRLBAR))
     {
         *errormsg = Some(ex_errmsg(
             e_trailing_arg,

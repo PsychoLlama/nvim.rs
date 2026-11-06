@@ -161,12 +161,12 @@ pub const VTERM_MOD_CTRL: VTermModifier = 4;
 /// Bit 0 of the type byte says which representation is live. Bits 1-2 mark
 /// a colour as *being* the terminal's default foreground or background,
 /// which keeps it out of an SGR report entirely.
-pub const VTERM_COLOR_RGB: ::core::ffi::c_uint = 0;
-pub const VTERM_COLOR_INDEXED: ::core::ffi::c_uint = 1;
-pub const VTERM_COLOR_TYPE_MASK: ::core::ffi::c_uint = 1;
-pub const VTERM_COLOR_DEFAULT_FG: ::core::ffi::c_uint = 2;
-pub const VTERM_COLOR_DEFAULT_BG: ::core::ffi::c_uint = 4;
-pub const VTERM_COLOR_DEFAULT_MASK: c_uint = 6;
+pub const VTERM_COLOR_RGB: u8 = 0;
+pub const VTERM_COLOR_INDEXED: u8 = 1;
+pub const VTERM_COLOR_TYPE_MASK: u8 = 1;
+pub const VTERM_COLOR_DEFAULT_FG: u8 = 2;
+pub const VTERM_COLOR_DEFAULT_BG: u8 = 4;
+pub const VTERM_COLOR_DEFAULT_MASK: u8 = 6;
 /// The underline styles a cell's pen can ask for.
 pub const VTERM_UNDERLINE_OFF: c_uint = 0;
 pub const VTERM_UNDERLINE_SINGLE: c_uint = 1;

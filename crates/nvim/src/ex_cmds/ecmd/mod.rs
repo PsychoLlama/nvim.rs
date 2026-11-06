@@ -31,14 +31,15 @@
 mod switch;
 
 use self::switch::{Switch, delbuf_msg, switch_to_other_buffer};
-use super::{
-    CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, READ_KEEP_UNDO, READ_NOWINENTER, SEA_DIALOG,
-    SEA_QUIT,
-};
+use super::{READ_KEEP_UNDO, READ_NOWINENTER, SEA_DIALOG, SEA_QUIT};
 use crate::arglist::check_arg_idx;
 use crate::buffer::BFA_KEEP_UNDO;
 use crate::buffer::KEYMAP_INIT;
 use crate::ex_cmds::say;
+use crate::ex_cmds2::CCGD_AW;
+use crate::ex_cmds2::CCGD_EXCMD;
+use crate::ex_cmds2::CCGD_FORCEIT;
+use crate::ex_cmds2::CCGD_MULTWIN;
 use crate::fileio::ReadFlags;
 use crate::types::AutoEvent;
 use crate::types::ColNr;
@@ -304,16 +305,16 @@ pub(crate) fn do_ecmd(
         // arithmetic, so it belongs outside the call's region.
         let mut ccgd = 0;
         if p_awa() {
-            ccgd |= CCGD_AW.cast_signed();
+            ccgd |= CCGD_AW;
         }
         if !other_file {
-            ccgd |= CCGD_MULTWIN.cast_signed();
+            ccgd |= CCGD_MULTWIN;
         }
         if flags.has(EcmdFlags::FORCEIT) {
-            ccgd |= CCGD_FORCEIT.cast_signed();
+            ccgd |= CCGD_FORCEIT;
         }
         if has_command {
-            ccgd |= CCGD_EXCMD.cast_signed();
+            ccgd |= CCGD_EXCMD;
         }
         if must_ask && check_changed(Buf::current(), ccgd) {
             if fnum.is_none() && other_file && ecmd.ffname.is_some() {

@@ -14,6 +14,9 @@ use crate::autocmd::fire_autocmds;
 use crate::buffer::DOBUF_DEL;
 use crate::buffer::DOBUF_UNLOAD;
 use crate::buffer::DOBUF_WIPE;
+use crate::ex_cmds2::CCGD_AW;
+use crate::ex_cmds2::CCGD_EXCMD;
+use crate::ex_cmds2::CCGD_FORCEIT;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::AutoEvent;
@@ -33,7 +36,7 @@ use crate::ex_cmds2::{autowrite_all, check_changed, dialog_changed};
 
 use crate::ex_docmd::argopt::get_tabpage_arg;
 
-use crate::ex_docmd::{CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, EXIT_FAILURE, cmdmod_has};
+use crate::ex_docmd::{EXIT_FAILURE, cmdmod_has};
 
 use crate::getchar::beep_flush;
 use crate::keycodes::SpecialKey;
@@ -157,13 +160,9 @@ pub(crate) fn ex_quit(excmd: &mut ExArg) {
     if !buf_hide(wp.buffer())
         && check_changed(
             wp.buffer(),
-            (if p_awa() { CCGD_AW as c_int } else { 0 })
-                | (if excmd.forceit {
-                    CCGD_FORCEIT as c_int
-                } else {
-                    0
-                })
-                | CCGD_EXCMD as c_int,
+            (if p_awa() { CCGD_AW } else { 0 })
+                | (if excmd.forceit { CCGD_FORCEIT } else { 0 })
+                | CCGD_EXCMD,
         )
         || check_more(excmd.forceit).is_err()
         || only_one_window() && check_changed_any(excmd.forceit, true)
@@ -212,7 +211,7 @@ pub(crate) fn ex_cquit(excmd: &mut ExArg) {
         EXIT_FAILURE
     };
     // Tell the UI *why* the process is about to vanish, before it does.
-    ui_call_error_exit(status as Integer);
+    ui_call_error_exit(Integer::from(status));
     getout(status);
 }
 
@@ -338,7 +337,7 @@ pub(crate) fn ex_win_close(forceit: c_int, win: Win, tabpage: Option<TabPage>) {
             let _ = win_close(w, hide, forceit != 0);
         }
         Some(tp) => {
-            win_close_othertab(win, hide as c_int, tp, forceit != 0);
+            win_close_othertab(win, c_int::from(hide), tp, forceit != 0);
         }
     }
 }

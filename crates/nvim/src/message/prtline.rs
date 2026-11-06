@@ -59,7 +59,7 @@ pub fn msg_prt_line(line: &CStr, list: bool) {
     // Output a space for an empty line, or it would not overwrite what is
     // already on the row.
     if at(0) == 0 && !(list && lcs.eol != 0) {
-        msg_putchar(b' ' as c_int);
+        msg_putchar(c_int::from(b' '));
     }
 
     let mut s = 0;
@@ -124,7 +124,7 @@ pub fn msg_prt_line(line: &CStr, list: bool) {
                 // `s` is already past `c`, so `s - 2` is the byte before it
                 // -- the lookbehind that makes the *second* space of a run
                 // count as multispace too.
-                in_multispace = c == b' ' as c_int
+                in_multispace = c == c_int::from(b' ')
                     && (at(s) == b' ' || (col > 0 && s >= 2 && at(s - 2) == b' '));
                 if !in_multispace {
                     multispace_pos = 0;
@@ -151,8 +151,8 @@ pub fn msg_prt_line(line: &CStr, list: bool) {
                     extra_last = tab3;
                     hl_id = HLF_0;
                 } else {
-                    sc = b' ' as ScreenChar;
-                    extra_fill = b' ' as ScreenChar;
+                    sc = ScreenChar::from(b' ');
+                    extra_fill = ScreenChar::from(b' ');
                 }
             } else if c == NUL && list && lcs.eol != 0 {
                 // One more turn of the loop, which reads a NUL out of
@@ -172,7 +172,7 @@ pub fn msg_prt_line(line: &CStr, list: bool) {
                 // Its own highlight, so `<ff>` can be told apart from the
                 // same four characters typed literally.
                 hl_id = HLF_0;
-            } else if c == b' ' as c_int {
+            } else if c == c_int::from(b' ') {
                 hl_id = HLF_0;
                 sc = if in_lead && in_multispace && leadmultispace.is_some() {
                     cycle(
@@ -192,10 +192,10 @@ pub fn msg_prt_line(line: &CStr, list: bool) {
                     lcs.space
                 } else {
                     hl_id = 0;
-                    b' ' as ScreenChar
+                    ScreenChar::from(b' ')
                 };
             } else {
-                sc = c as ScreenChar;
+                sc = c.cast_unsigned();
             }
         }
 

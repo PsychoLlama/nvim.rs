@@ -107,7 +107,7 @@ pub fn render(body: &KeyBody, modifiers: c_int, format: TermKeyFormat) -> Vec<u8
 
     if has(format, TERMKEY_FORMAT_CARETCTRL)
         && let KeyBody::Unicode { codepoint, .. } = body
-        && modifiers == TERMKEY_KEYMOD_CTRL as c_int
+        && modifiers == TERMKEY_KEYMOD_CTRL
         && let Some(caret) = caret_notation(*codepoint)
     {
         // Caret notation carries the control modifier itself, so nothing else
@@ -187,7 +187,8 @@ fn write_body(out: &mut Out, body: &KeyBody, format: TermKeyFormat) {
             value,
         } => {
             if initial != 0 {
-                let _ = write!(out, "Mode({}{mode}={value})", initial as u8 as char);
+                let initial = char::from(initial.to_le_bytes()[0]);
+                let _ = write!(out, "Mode({initial}{mode}={value})");
             } else {
                 let _ = write!(out, "Mode({mode}={value})");
             }
@@ -196,7 +197,7 @@ fn write_body(out: &mut Out, body: &KeyBody, format: TermKeyFormat) {
         KeyBody::Osc => out.0.extend_from_slice(b"OSC"),
         KeyBody::Apc => out.0.extend_from_slice(b"APC"),
         KeyBody::UnknownCsi(command) => {
-            let _ = write!(out, "CSI {}", (command & 0xff) as u8 as char);
+            let _ = write!(out, "CSI {}", char::from(command.to_le_bytes()[0]));
         }
         KeyBody::Unrecognised => {}
     }
@@ -206,9 +207,9 @@ fn write_body(out: &mut Out, body: &KeyBody, format: TermKeyFormat) {
 mod tests {
     use super::*;
 
-    const CTRL: c_int = TERMKEY_KEYMOD_CTRL as c_int;
-    const ALT: c_int = TERMKEY_KEYMOD_ALT as c_int;
-    const SHIFT: c_int = TERMKEY_KEYMOD_SHIFT as c_int;
+    const CTRL: c_int = TERMKEY_KEYMOD_CTRL;
+    const ALT: c_int = TERMKEY_KEYMOD_ALT;
+    const SHIFT: c_int = TERMKEY_KEYMOD_SHIFT;
 
     fn unicode(codepoint: c_int, utf8: &str) -> KeyBody<'_> {
         KeyBody::Unicode {
@@ -223,14 +224,14 @@ mod tests {
 
     #[test]
     fn a_plain_character_is_itself_even_in_brackets() {
-        let key = unicode(b'A' as c_int, "A");
+        let key = unicode(c_int::from(b'A'), "A");
         assert_eq!(text(&key, 0, 0), "A");
         assert_eq!(text(&key, 0, TERMKEY_FORMAT_WRAPBRACKET), "A");
     }
 
     #[test]
     fn modifiers_spell_out_and_lower_case_on_request() {
-        let key = unicode(b'b' as c_int, "b");
+        let key = unicode(c_int::from(b'b'), "b");
         assert_eq!(text(&key, CTRL, 0), "C-b");
         assert_eq!(text(&key, CTRL, TERMKEY_FORMAT_LONGMOD), "Ctrl-b");
         assert_eq!(
@@ -246,7 +247,7 @@ mod tests {
 
     #[test]
     fn alt_becomes_meta_on_request() {
-        let key = unicode(b'c' as c_int, "c");
+        let key = unicode(c_int::from(b'c'), "c");
         assert_eq!(text(&key, ALT, 0), "A-c");
         assert_eq!(text(&key, ALT, TERMKEY_FORMAT_LONGMOD), "Alt-c");
         assert_eq!(text(&key, ALT, TERMKEY_FORMAT_ALTISMETA), "M-c");
@@ -258,19 +259,23 @@ mod tests {
 
     #[test]
     fn modifiers_are_emitted_alt_then_ctrl_then_shift() {
-        let key = unicode(b'x' as c_int, "x");
+        let key = unicode(c_int::from(b'x'), "x");
         assert_eq!(text(&key, ALT | CTRL | SHIFT, 0), "A-C-S-x");
     }
 
     #[test]
     fn caret_notation_replaces_the_control_modifier() {
         assert_eq!(
-            text(&unicode(b'b' as c_int, "b"), CTRL, TERMKEY_FORMAT_CARETCTRL),
+            text(
+                &unicode(c_int::from(b'b'), "b"),
+                CTRL,
+                TERMKEY_FORMAT_CARETCTRL
+            ),
             "^B"
         );
         assert_eq!(
             text(
-                &unicode(b'b' as c_int, "b"),
+                &unicode(c_int::from(b'b'), "b"),
                 CTRL,
                 TERMKEY_FORMAT_CARETCTRL | TERMKEY_FORMAT_WRAPBRACKET
             ),
@@ -278,12 +283,20 @@ mod tests {
         );
         // '@' and '[' through '_' are their own caret letters.
         assert_eq!(
-            text(&unicode(b'@' as c_int, "@"), CTRL, TERMKEY_FORMAT_CARETCTRL),
+            text(
+                &unicode(c_int::from(b'@'), "@"),
+                CTRL,
+                TERMKEY_FORMAT_CARETCTRL
+            ),
             "^@"
         );
         // Anything else falls back to the modifier prefix.
         assert_eq!(
-            text(&unicode(b'1' as c_int, "1"), CTRL, TERMKEY_FORMAT_CARETCTRL),
+            text(
+                &unicode(c_int::from(b'1'), "1"),
+                CTRL,
+                TERMKEY_FORMAT_CARETCTRL
+            ),
             "C-1"
         );
         // Upstream compares the whole codepoint: U+0161 is not 'a'.
@@ -294,7 +307,7 @@ mod tests {
         // As does a key carrying more than just control.
         assert_eq!(
             text(
-                &unicode(b'b' as c_int, "b"),
+                &unicode(c_int::from(b'b'), "b"),
                 CTRL | ALT,
                 TERMKEY_FORMAT_CARETCTRL
             ),
@@ -343,7 +356,7 @@ mod tests {
         assert_eq!(
             text(
                 &KeyBody::Mode {
-                    initial: b'?' as c_int,
+                    initial: c_int::from(b'?'),
                     mode: 1,
                     value: 2
                 },
@@ -365,6 +378,6 @@ mod tests {
             "Mode(4=1)"
         );
         assert_eq!(text(&KeyBody::Dcs, 0, 0), "DCS");
-        assert_eq!(text(&KeyBody::UnknownCsi(b'v' as c_int), 0, 0), "CSI v");
+        assert_eq!(text(&KeyBody::UnknownCsi(c_int::from(b'v')), 0, 0), "CSI v");
     }
 }

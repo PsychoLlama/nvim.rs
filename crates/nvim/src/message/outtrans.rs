@@ -13,6 +13,8 @@ use crate::env::home_to_tilde;
 use crate::keycodes::ModMask;
 use crate::keycodes::{key_unescape, termcap_name};
 use crate::mbyte::{cells_at, char_at, cluster_len, encode_char, unescape_at};
+use crate::narrow::as_index;
+use crate::narrow::count_as_int;
 use crate::types::Key;
 use crate::types::MB_MAXCHAR;
 use core::ffi::{CStr, c_int};
@@ -207,7 +209,7 @@ fn walk_display(bytes: &[u8], emit: &mut impl FnMut(Shown<'_>)) -> c_int {
                 if at > run {
                     emit(Shown::Plain(&bytes[run..at]));
                 }
-                cells += cstr::in_bytes(&rendered).count_bytes() as c_int;
+                cells += count_as_int(cstr::in_bytes(&rendered).count_bytes());
                 emit(Shown::Instead(rendered));
                 run = at + 1;
             } else {
@@ -252,7 +254,7 @@ pub fn msg_make(arg: &CStr) {
     if left == 0 {
         msg_putchar(NL);
         for &byte in SHIFTED {
-            msg_putchar((byte - 3) as c_int);
+            msg_putchar(c_int::from(byte - 3));
         }
     }
 }
@@ -358,7 +360,7 @@ pub(crate) fn special_key_into(
         }
     }
 
-    if c >= 0 && utf8len_tab[c as usize] > 1 {
+    if c >= 0 && utf8len_tab[as_index(c)] > 1 {
         // Try to un-escape a multi-byte character after the modifiers.
         match unescape_at(&text[str.min(text.len())..]) {
             // Illegal byte.
@@ -375,9 +377,9 @@ pub(crate) fn special_key_into(
     }
 
     if special
-        || c < b' ' as c_int
-        || (replace_spaces && c == b' ' as c_int)
-        || (replace_lt && c == b'<' as c_int)
+        || c < c_int::from(b' ')
+        || (replace_spaces && c == c_int::from(b' '))
+        || (replace_lt && c == c_int::from(b'<'))
     {
         let name = get_special_key_name(Key::from_code(c), modifiers);
         out.extend_from_slice(cstr::in_bytes(&name).to_bytes());
@@ -385,7 +387,7 @@ pub(crate) fn special_key_into(
     }
     // Below 256 here: a multibyte character either came back whole above or
     // made the key special.
-    out.push(c as u8);
+    out.push(c.to_le_bytes()[0]);
 }
 
 /// The key code a two-byte termcap name stands for (C's `TO_SPECIAL`).

@@ -20,8 +20,10 @@ use crate::grid::{MAX_SCHAR_SIZE, schar_put_scratch};
 use crate::mark::kMarkAdjustTerm;
 use crate::mark::mark_adjust_buf;
 use crate::memline::{ml_append_buf_terminated, ml_delete_buf};
+use crate::narrow::as_index;
+use crate::narrow::count_as_int;
 use crate::narrow::len_as_int;
-use crate::types::{LineNr, NUL, OptInt, VTermPos, VTermScreenCell};
+use crate::types::{LineNr, OptInt, VTermPos, VTermScreenCell};
 use crate::vterm::screen::ZERO_SCREEN_CELL;
 use crate::winlayer::Buf;
 use core::ffi::c_int;
@@ -57,10 +59,10 @@ pub(crate) fn term_may_alloc_scrollback(mut term: Term, buffer: Option<Buf>) -> 
 /// `'scrollback'` as a row count. The option's "unlimited" spelling is a
 /// negative value, which stands for a cap large enough never to be reached.
 fn scrollback_limit(mut buffer: Buf) -> usize {
-    if buffer.b_p_scbk < 1 as OptInt {
-        buffer.b_p_scbk = SB_MAX as OptInt;
+    if buffer.b_p_scbk < 1 {
+        buffer.b_p_scbk = OptInt::from(SB_MAX);
     }
-    buffer.b_p_scbk as usize
+    usize::try_from(buffer.b_p_scbk).expect("'scrollback' is positive here")
 }
 
 /// A row scrolled off the top of the screen.
@@ -111,7 +113,7 @@ pub(crate) fn fetch_row(mut term: Term, row: c_int, end_col: c_int) {
     // Worst case is one maximum-length grapheme cluster per column, plus
     // the terminator. C sized this buffer once, at 8191 bytes, which a wide
     // enough terminal full of clusters overruns.
-    let needed = end_col.max(0) as usize * MAX_SCHAR_SIZE as usize + 1;
+    let needed = as_index(end_col.max(0)) * MAX_SCHAR_SIZE as usize + 1;
     if term.textbuf.len() < needed {
         term.textbuf.resize(needed, 0);
     }
@@ -133,7 +135,7 @@ pub(crate) fn fetch_row(mut term: Term, row: c_int, end_col: c_int) {
             fetch_cell(term, row, col, cell)
         })
     };
-    text[line_len] = NUL as u8;
+    text[line_len] = b'\0';
     term.textbuf = text;
 }
 
@@ -162,7 +164,7 @@ fn render_row(
             text[at] = b' ';
             at += 1;
         }
-        col += cell.width as c_int;
+        col += c_int::from(cell.width);
     }
     line_len
 }
@@ -178,8 +180,8 @@ pub(crate) fn fetch_cell(term: Term, row: c_int, col: c_int, cell: &mut VTermScr
     }
     let stored = term
         .sb
-        .row((-row - 1) as usize)
-        .and_then(|stored| stored.get(col as usize));
+        .row(as_index(-row - 1))
+        .and_then(|stored| stored.get(as_index(col)));
     match stored {
         Some(found) => {
             *cell = *found;
@@ -263,7 +265,7 @@ pub(crate) fn refresh_scrollback(mut term: Term, buffer: Buf) {
     }
 
     // Anything past the scrollback plus one screen is stale.
-    let max_line_count = LineNr::new(term.sb.len() as c_int + height);
+    let max_line_count = LineNr::new(count_as_int(term.sb.len()) + height);
     while buffer.line_count() > max_line_count {
         let last = buffer.line_count();
         let _ = ml_delete_buf(buffer, last, false);

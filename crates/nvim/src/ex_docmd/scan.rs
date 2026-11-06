@@ -54,7 +54,7 @@ pub(crate) fn parse_register(excmd: &mut ExArg) {
     let is_user_command = is_user_cmd(excmd.cmdidx);
     if !excmd.argt.has(ExArgt::REGSTR)
         || excmd.line.byte_at(excmd.line.arg) == 0
-        || (is_user_command && c_int::from(excmd.line.byte_at(excmd.line.arg)) == '=' as c_int)
+        || (is_user_command && excmd.line.byte_at(excmd.line.arg) == b'=')
         || (excmd.argt.has(ExArgt::COUNT)
             && ascii_isdigit(c_int::from(excmd.line.byte_at(excmd.line.arg))))
     {
@@ -316,5 +316,7 @@ pub(crate) fn skip_cmd_arg_at(text: &[u8], mut at: usize) -> usize {
 /// Does this character end an Ex command? Answers a `c_int` rather than a
 /// `bool` because a dozen still-transpiled callers compare it against 0.
 pub fn ends_excmd(c: c_int) -> c_int {
-    (c == NUL || c == '|' as c_int || c == '"' as c_int || c == '\n' as c_int) as c_int
+    c_int::from(
+        c == NUL || c == c_int::from(b'|') || c == c_int::from(b'"') || c == c_int::from(b'\n'),
+    )
 }

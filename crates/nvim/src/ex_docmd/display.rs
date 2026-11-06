@@ -249,7 +249,7 @@ pub(crate) fn ex_digraphs(excmd: &mut ExArg) {
 /// Set 'no_hlsearch', keeping `v:hlsearch` in step.
 pub fn set_no_hlsearch(flag: bool) {
     no_hlsearch.set(flag);
-    set_vim_var_nr(Vv::Hlsearch, (!no_hlsearch.get() && p_hls()) as VarNumber);
+    set_vim_var_nr(Vv::Hlsearch, VarNumber::from(!no_hlsearch.get() && p_hls()));
 }
 
 /// `:nohlsearch`.

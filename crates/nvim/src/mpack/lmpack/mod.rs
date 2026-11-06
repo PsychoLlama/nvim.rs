@@ -34,6 +34,7 @@
 pub mod session;
 pub mod walk;
 
+use crate::narrow::float_as_usize;
 use core::ffi::{CStr, c_int};
 
 use self::walk::{LuaDecoder, LuaEncoder};
@@ -260,13 +261,13 @@ pub fn start_offset(stack: &Stack, len: usize) -> Result<usize, Raise> {
     if start.trunc() != start {
         return Err(Raise::argument(3, "start position must be an integer"));
     }
-    if start as usize > len {
+    if float_as_usize(start) > len {
         return Err(Raise::argument(
             3,
             "start position must be less than or equal to the input string length",
         ));
     }
-    Ok(start as usize - 1)
+    Ok(float_as_usize(start) - 1)
 }
 
 /// The length msgpack should give the value on top of the stack, and — for a
@@ -290,9 +291,9 @@ pub fn objlen(stack: &mut Stack, is_array: Option<&mut bool>) -> mpack_uint32_t 
             looks_like_array = looks_like_array
                 && stack.kind(At::TOP) == Kind::Number
                 && key > 0.0
-                && key as usize as lua_Number == key;
-            if looks_like_array && key as usize > max {
-                max = key as usize;
+                && float_as_usize(key) as lua_Number == key;
+            if looks_like_array && float_as_usize(key) > max {
+                max = float_as_usize(key);
             }
             len += 1;
         }
@@ -303,7 +304,7 @@ pub fn objlen(stack: &mut Stack, is_array: Option<&mut bool>) -> mpack_uint32_t 
         }
     }
     // msgpack lengths are 32-bit; upstream saturates rather than failing.
-    len.min(mpack_uint32_t::MAX as usize) as mpack_uint32_t
+    mpack_uint32_t::try_from(len).unwrap_or(mpack_uint32_t::MAX)
 }
 
 // ---------------------------------------------------------------------------
@@ -383,7 +384,7 @@ pub fn unpack_into_registry(
         return Err(failure.raise(stack));
     }
     unpacker.unpacking = false;
-    if status == MPACK_ERROR as c_int {
+    if status == MPACK_ERROR {
         return Err(Raise::message("invalid msgpack string"));
     }
     Ok(status)
@@ -412,7 +413,7 @@ fn unpacker_unpack(stack: &mut Stack) -> Result<c_int, Raise> {
     // over input that does not continue what it was given can leave a
     // scalar it could not store (upstream leaves it on the stack below its
     // results; its `assert` is off in release builds).
-    if status == MPACK_EOF as c_int {
+    if status == MPACK_EOF {
         view.set_top(argc);
         view.push_nil();
     } else {
@@ -502,7 +503,7 @@ fn unparse_all(
             MPACK_EXCEPTION => return Err(Unfinished::Stopped),
             MPACK_NOMEM if !may_grow => return Err(Unfinished::TooDeep),
             MPACK_NOMEM => parser.grow(),
-            status if status == MPACK_EOF as c_int => {}
+            status if status == MPACK_EOF => {}
             _ => return Ok(out),
         }
     }
@@ -588,8 +589,8 @@ fn decode(stack: &mut Stack) -> Result<c_int, Raise> {
     // so a document deeper than 32 is an error rather than a reallocation.
     let message = match status {
         MPACK_NOMEM => "object was too deep to unpack",
-        s if s == MPACK_EOF as c_int => "incomplete msgpack string",
-        s if s == MPACK_ERROR as c_int => "invalid msgpack string",
+        s if s == MPACK_EOF => "incomplete msgpack string",
+        s if s == MPACK_ERROR => "invalid msgpack string",
         _ if !input.is_empty() => "trailing data in msgpack string",
         _ => {
             view.replace(reg);

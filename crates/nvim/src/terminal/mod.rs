@@ -55,6 +55,8 @@ use crate::highlight::{HlAttrFlags, hl_combine_attr, hl_get_term_attr};
 use crate::highlight_group::name_to_color;
 use crate::memline::MlFlags;
 use crate::memline::ml_delete_buf;
+use crate::narrow::as_index;
+use crate::narrow::count_as_int;
 use crate::option::set_option_value;
 use crate::options::kOptBuftype;
 use crate::startup::exiting;
@@ -66,7 +68,7 @@ use crate::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::types::{
     AcoSave, BufferHandle, ColNr, Event, Handle, HlAttrs, LineNr, Object, OptVal, OptionSetFlags,
     Pos, RefcountSize, RgbValue, SaveVEvent, Terminal, TerminalOptions, VTermColor, VTermColor_rgb,
-    VTermScreenCell, VTermScreenCellAttrs, VarNumber, int16_t, uint8_t,
+    VTermScreenCell, VTermScreenCellAttrs, VarNumber, int16_t,
 };
 use crate::vterm::host::Value;
 use crate::vterm::screen::ZERO_SCREEN_CELL;
@@ -77,7 +79,7 @@ use crate::vterm::vterm::{
     VTERM_PROP_CURSORSHAPE_UNDERLINE,
 };
 use crate::winlayer::{self, Buf, Win, tab_windows, windows};
-use core::ffi::{CStr, c_int, c_uint};
+use core::ffi::{CStr, c_int};
 
 use scrollback::{fetch_cell, refresh_scrollback, term_may_alloc_scrollback};
 
@@ -186,7 +188,7 @@ pub(crate) fn terminal_alloc(mut buffer: Buf, opts: TerminalOptions) -> Term {
         .set_termprop(VTERM_PROP_CURSORBLINK, Value::Bool(cursor_blink));
 
     term.invalid_start = 0;
-    term.invalid_end = opts.height as c_int;
+    term.invalid_end = c_int::from(opts.height);
     term.pending.events = Some(ParkingQueue::detached());
 
     if !buffer.b_ml.ml_flags.has(MlFlags::EMPTY) {
@@ -274,16 +276,17 @@ pub(crate) fn terminal_open(mut term: Term, mut buffer: Buf, attached: &dyn Fn()
         if rgb == -1 as RgbValue {
             continue;
         }
+        let [blue, green, red, _] = rgb.to_le_bytes();
         let color = VTermColor {
             rgb: VTermColor_rgb {
-                type_0: VTERM_COLOR_RGB as uint8_t,
-                red: (rgb >> 16 & 0xff) as uint8_t,
-                green: (rgb >> 8 & 0xff) as uint8_t,
-                blue: (rgb & 0xff) as uint8_t,
+                type_0: VTERM_COLOR_RGB,
+                red,
+                green,
+                blue,
             },
         };
         term.vt.set_palette_color(i, &color);
-        term.color_set[i as usize] = true;
+        term.color_set[as_index(i)] = true;
     }
 }
 
@@ -349,10 +352,10 @@ pub(crate) fn terminal_close(mut term: Term, status: c_int) {
     // A plain save area `get_v_event` fills in, restored below.
     let mut save_v_event = SaveVEvent::default();
     let dict = get_v_event(&mut save_v_event);
-    let _ = dict.edit().add_number(b"status", status as VarNumber);
+    let _ = dict.edit().add_number(b"status", VarNumber::from(status));
     dict.edit().set_keys_readonly();
     let mut payload = DictBuf::<1>::new();
-    payload.insert(c"pos", Object::integer(pos as i64));
+    payload.insert(c"pos", Object::integer(i64::from(pos)));
     let data = payload.object();
     let exited = status >= 0;
     let (group, buf) = (AUGROUP_ALL, Some(buf));
@@ -551,8 +554,8 @@ pub(crate) fn terminal_receive(mut term: Term, bytes: &[u8]) {
 ///
 /// vterm fills a colour in whole, so the reads below all rest on the same
 /// thing; it is booked here once instead of at each of the eight uses.
-fn color_type(color: &VTermColor) -> c_uint {
-    c_uint::from(color.type_byte())
+fn color_type(color: &VTermColor) -> u8 {
+    color.type_byte()
 }
 
 /// The palette entry an indexed colour names.
@@ -620,8 +623,10 @@ pub(crate) fn terminal_get_line_attributes(
         // A palette entry the user configured resolves to a real RGB value
         // here; one they did not stays indexed, so that the UI's own palette
         // applies instead.
-        let fg_set = vt_fg_idx != 0 && vt_fg_idx <= 16 && term.color_set[(vt_fg_idx - 1) as usize];
-        let bg_set = vt_bg_idx != 0 && vt_bg_idx <= 16 && term.color_set[(vt_bg_idx - 1) as usize];
+        let user_set = |idx: int16_t| {
+            (1..=16).contains(&idx) && term.color_set[as_index(c_int::from(idx) - 1)]
+        };
+        let (fg_set, bg_set) = (user_set(vt_fg_idx), user_set(vt_bg_idx));
 
         let attrs = cell.attrs;
         let mut hl_attrs = get_underline_hl_flag(attrs);
@@ -662,7 +667,7 @@ pub(crate) fn terminal_get_line_attributes(
             attr_id = hl_combine_attr(attr_id, cell.uri);
         }
         // `width` was clamped to the array.
-        term_attrs[col as usize] = attr_id;
+        term_attrs[as_index(col)] = attr_id;
     }
 }
 
@@ -712,12 +717,12 @@ fn row_to_linenr(term: Term, row: c_int) -> c_int {
     if row == c_int::MAX {
         return c_int::MAX;
     }
-    row + term.sb.len() as c_int + 1
+    row + count_as_int(term.sb.len()) + 1
 }
 
 /// The inverse of [`row_to_linenr`]. Negative for a scrollback line.
 fn linenr_to_row(term: Term, linenr: c_int) -> c_int {
-    linenr - term.sb.len() as c_int - 1
+    linenr - count_as_int(term.sb.len()) - 1
 }
 
 /// Whether the user is typing at this terminal right now.

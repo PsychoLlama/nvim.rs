@@ -20,6 +20,8 @@
 mod callbacks;
 pub mod resize;
 
+use crate::narrow::as_index;
+use crate::narrow::count_as_int;
 use core::ffi::c_int;
 
 use crate::types::{
@@ -132,7 +134,7 @@ impl VTermScreen {
         if row < 0 || row >= self.rows || col < 0 || col >= self.cols {
             return None;
         }
-        Some((self.cols * row + col) as usize)
+        Some(as_index(self.cols * row + col))
     }
 
     /// The cell at `row`/`col`, to write through; `None` outside the grid.
@@ -253,7 +255,7 @@ impl VTermScreen {
     /// Copies the screen's row `row` into the scrollback staging buffer and
     /// hands it over to the host.
     fn push_line(&mut self, row: c_int) {
-        let cols = self.cols.max(0) as usize;
+        let cols = as_index(self.cols.max(0));
         let reverse = self.global_reverse() != 0;
         let start = self.index(row, 0);
         let ScreenOwned {
@@ -289,7 +291,7 @@ impl VTermScreen {
                 self.push_line(row);
             }
         }
-        let width = (src.end_col - src.start_col) as usize;
+        let width = as_index(src.end_col - src.start_col);
         let downward = src.start_row - dest.start_row;
         // Overlapping ranges: copy away from the direction of travel.
         let (mut row, limit, step) = if downward < 0 {
@@ -325,10 +327,10 @@ impl VTermScreen {
         let (first, last) = (rect.start_col.max(0), rect.end_col.min(self.cols));
         let mut row = rect.start_row;
         while row < state_rows && row < rect.end_row {
-            let info = lines[row as usize];
+            let info = lines[as_index(row)];
             let (dwl, dhl) = (info.doublewidth(), info.doubleheight());
             if let Some(start) = self.index(row, first).filter(|_| first < last) {
-                let width = (last - first) as usize;
+                let width = as_index(last - first);
                 for cell in &mut self.grid_mut()[start..start + width] {
                     if selective && cell.pen.protected_cell() != 0 {
                         continue;
@@ -353,7 +355,7 @@ impl VTermScreen {
         };
         // The row runs to the end of the grid's row, so the cell after this
         // one is in it exactly when it is on the same row.
-        let end = at + (self.cols - pos.col) as usize;
+        let end = at + as_index(self.cols - pos.col);
         let line = &self.grid()[at..end];
         export_at(line, 0, self.global_reverse() != 0, out);
         1
@@ -376,7 +378,7 @@ impl VTermScreen {
     /// Resizes the one-row staging buffer that carries cells to and from the
     /// host's scrollback.
     fn realloc_sb_buffer(&mut self, cols: c_int) {
-        self.owned.sb_buffer = vec![ZERO_SCREEN_CELL; cols.max(0) as usize];
+        self.owned.sb_buffer = vec![ZERO_SCREEN_CELL; as_index(cols.max(0))];
     }
 }
 
@@ -406,7 +408,7 @@ impl VTermScreen {
     pub(crate) fn row(&self, row: c_int) -> Option<ScreenRow<'_>> {
         let start = self.index(row, 0)?;
         Some(ScreenRow {
-            line: &self.grid()[start..start + self.cols as usize],
+            line: &self.grid()[start..start + as_index(self.cols)],
             global_reverse: self.global_reverse() != 0,
         })
     }
@@ -430,7 +432,7 @@ fn export_at(line: &[ScreenCell], col: usize, global_reverse: bool, out: &mut VT
 
 /// A freshly allocated, fully blanked cell grid.
 fn new_buffer(pen: ScreenPen, rows: c_int, cols: c_int) -> Vec<ScreenCell> {
-    let mut cells = vec![ZERO_CELL; rows.max(0) as usize * cols.max(0) as usize];
+    let mut cells = vec![ZERO_CELL; as_index(rows.max(0)) * as_index(cols.max(0))];
     blank_cells(&mut cells, &pen);
     cells
 }
@@ -438,11 +440,11 @@ fn new_buffer(pen: ScreenPen, rows: c_int, cols: c_int) -> Vec<ScreenCell> {
 /// How many leading cells of `row` are non-blank, i.e. where its trailing run
 /// of blanks starts.
 fn line_popcount(row: &[ScreenCell]) -> c_int {
-    let mut col = row.len() as c_int - 1;
-    while col >= 0 && row[col as usize].schar == 0 {
-        col -= 1;
-    }
-    col + 1
+    let filled = row
+        .iter()
+        .rposition(|cell| cell.schar != 0)
+        .map_or(0, |last| last + 1);
+    count_as_int(filled)
 }
 
 /// A scroll as the host sees it: a move it may perform itself, and damage.

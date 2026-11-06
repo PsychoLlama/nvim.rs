@@ -12,6 +12,8 @@ use crate::cmdexpand::expand_generic;
 use crate::ex_docmd::ex_msg;
 use crate::ex_docmd::source::ex_errmsg;
 use crate::memory::XString;
+use crate::message::VIM_QUESTION;
+use crate::message::VIM_YES;
 use crate::types::Candidate;
 use crate::types::CmdIdx;
 use crate::types::LineNr;
@@ -34,8 +36,7 @@ use crate::ex_docmd::lookup::check_for_word;
 use crate::arglist::state::ARG_HAD_LAST;
 use crate::ex_docmd::window::current_tab_nr;
 use crate::ex_docmd::{
-    BAD_DROP, BAD_KEEP, DIALOG_MSG_SIZE, FORCE_BIN, FORCE_NOBIN, VIM_QUESTION, VIM_YES, cmdmod_has,
-    quitmore,
+    BAD_DROP, BAD_KEEP, DIALOG_MSG_SIZE, FORCE_BIN, FORCE_NOBIN, cmdmod_has, quitmore,
 };
 use crate::mbyte::{get_encoding_name, utf8len_tab};
 use crate::message::vim_dialog_yesno;
@@ -438,8 +439,8 @@ pub(crate) fn check_more(forceit: bool) -> Result<(), Failed> {
         );
         let room = DIALOG_MSG_SIZE as usize;
         let question = XString::from_bytes(&crate::formatted!(room, fmt.to_bytes(), n));
-        let answer = vim_dialog_yesno(VIM_QUESTION.cast_signed(), None, question.as_cstr(), 1);
-        return if answer == VIM_YES.cast_signed() {
+        let answer = vim_dialog_yesno(VIM_QUESTION, None, question.as_cstr(), 1);
+        return if answer == VIM_YES {
             Ok(())
         } else {
             Err(Failed)

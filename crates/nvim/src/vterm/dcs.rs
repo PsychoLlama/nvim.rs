@@ -10,7 +10,7 @@
 
 #![forbid(unsafe_code)]
 
-use core::ffi::{c_int, c_long};
+use core::ffi::c_long;
 use core::fmt::Write;
 
 use crate::types::VTermState;
@@ -75,7 +75,7 @@ fn request_status_string(state: &mut StateCx<'_>, frag: Fragment<'_>) {
         }
         [b' ', b'q', 0] => {
             // DECSCUSR numbers the shapes in pairs, steady then blinking.
-            let mut reply = match state.mode.cursor_shape() as c_int {
+            let mut reply = match state.mode.cursor_shape().cast_signed() {
                 VTERM_PROP_CURSORSHAPE_BLOCK => 2,
                 VTERM_PROP_CURSORSHAPE_UNDERLINE => 4,
                 VTERM_PROP_CURSORSHAPE_BAR_LEFT => 6,
@@ -107,12 +107,12 @@ fn report_pen(state: &VTermState, seq: &mut EscapeSeq) {
     for (i, &param) in params.iter().enumerate() {
         let separator = if i + 1 == params.len() {
             ""
-        } else if param & CSI_ARG_FLAG_MORE as c_long != 0 {
+        } else if param & c_long::from(CSI_ARG_FLAG_MORE) != 0 {
             ":"
         } else {
             ";"
         };
-        let _ = write!(seq, "{}{separator}", param & CSI_ARG_MASK as c_long);
+        let _ = write!(seq, "{}{separator}", param & c_long::from(CSI_ARG_MASK));
     }
     let _ = write!(seq, "m");
 }

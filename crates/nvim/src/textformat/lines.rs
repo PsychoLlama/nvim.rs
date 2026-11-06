@@ -7,6 +7,8 @@
 
 #![forbid(unsafe_code)]
 
+use crate::indent::SIN_CHANGED;
+use crate::narrow::number_as_int;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win, windows};
 use core::ffi::{c_int, c_long};
@@ -140,7 +142,7 @@ pub(crate) fn fex_format(lnum: LineNr, count: c_long, c: c_int) -> c_int {
     let script_ctx = Script::context(Buf::current().b_p_script_ctx[kBufOptFormatexpr as usize]);
     let r = {
         let _sandboxed = use_sandbox.then(Lock::sandbox);
-        eval_to_number(&fex, true) as c_int
+        number_as_int(eval_to_number(&fex, true))
     };
     set_vim_var_string(Vv::Char, None);
     drop(script_ctx);
@@ -158,7 +160,7 @@ fn paragraph_indent(first_line: LineNr) -> c_int {
     } else if Buf::current().b_p_lisp != 0 {
         get_lisp_indent()
     } else if cindent_on() {
-        if Buf::current().b_p_inde.first_byte() as c_int != NUL {
+        if c_int::from(Buf::current().b_p_inde.first_byte()) != NUL {
             get_expr_indent()
         } else {
             get_c_indent()
@@ -340,7 +342,7 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
                 if need_set_indent {
                     // Rewrite the first line's indent with the minimal
                     // number of tabs and spaces the options ask for.
-                    set_indent(paragraph_indent(first_line), SIN_CHANGED as c_int);
+                    set_indent(paragraph_indent(first_line), SIN_CHANGED);
                 }
 
                 // Put the cursor on the last non-space.
@@ -356,22 +358,14 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
                 P_SMD.set(false);
                 insertchar(
                     Key::NUL,
-                    INSCHAR_FORMAT as c_int
-                        + if do_comments {
-                            INSCHAR_DO_COM as c_int
-                        } else {
-                            0
-                        }
+                    INSCHAR_FORMAT
+                        + if do_comments { INSCHAR_DO_COM } else { 0 }
                         + if do_comments && do_comments_list {
-                            INSCHAR_COM_LIST as c_int
+                            INSCHAR_COM_LIST
                         } else {
                             0
                         }
-                        + if avoid_fex {
-                            INSCHAR_NO_FEX as c_int
-                        } else {
-                            0
-                        },
+                        + if avoid_fex { INSCHAR_NO_FEX } else { 0 },
                     second_indent,
                 );
                 State.set(old_state);

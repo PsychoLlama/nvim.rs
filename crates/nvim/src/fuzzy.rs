@@ -37,6 +37,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::narrow::float_as_int;
 use core::ffi::c_int;
 use std::ffi::CStr;
 
@@ -79,7 +80,7 @@ fn chars(s: &CStr) -> Vec<c_int> {
 /// that is nothing but separators, has none — which is how a candidate ends
 /// up with a score of zero rather than a rejection.
 fn words(pattern: &[c_int]) -> impl Iterator<Item = &[c_int]> {
-    let separator = |&c: &c_int| c == b' ' as c_int || c == b'\t' as c_int;
+    let separator = |&c: &c_int| c == c_int::from(b' ') || c == c_int::from(b'\t');
     pattern.split(separator).filter(|word| !word.is_empty())
 }
 
@@ -148,7 +149,7 @@ impl Match {
                 .collect()
         };
         // The first character is treated as if a path separator preceded it.
-        let mut last_c = b'/' as c_int;
+        let mut last_c = c_int::from(b'/');
         let mut match_bonus = Vec::with_capacity(haystack.len().min(FUZZY_MATCH_MAX_LEN));
         for &c in haystack.iter().take(FUZZY_MATCH_MAX_LEN) {
             match_bonus.push(compute_bonus(last_c, c));
@@ -231,8 +232,8 @@ fn match_positions(needle: &[c_int], haystack: &[c_int], positions: &mut [u32]) 
     if n == m {
         // `has_match` only lets equal-length strings through when they are
         // the same string, ignoring case.
-        for (i, slot) in positions.iter_mut().take(n).enumerate() {
-            *slot = i as u32;
+        for (slot, i) in positions.iter_mut().take(n).zip(0..) {
+            *slot = i;
         }
         return SCORE_MAX;
     }
@@ -259,11 +260,11 @@ fn match_positions(needle: &[c_int], haystack: &[c_int], positions: &mut [u32]) 
     // Several paths can reach the same weight; take the first one found,
     // which is the latest in the candidate.
     let mut match_required = false;
-    let mut j = m as isize - 1;
+    let mut j = m;
     for i in (0..n).rev() {
-        while j >= 0 {
-            let (at, row) = (j as usize, i * m);
+        while j > 0 {
             j -= 1;
+            let (at, row) = (j, i * m);
             if d[row + at] != SCORE_MIN && (match_required || d[row + at] == m_best[row + at]) {
                 // A score that came from SCORE_MATCH_CONSECUTIVE says the
                 // character before this one has to be a match too.
@@ -271,7 +272,8 @@ fn match_positions(needle: &[c_int], haystack: &[c_int], positions: &mut [u32]) 
                     && at > 0
                     && m_best[row + at] == d[row - m + at - 1] + SCORE_MATCH_CONSECUTIVE;
                 if let Some(slot) = positions.get_mut(i) {
-                    *slot = at as u32;
+                    *slot =
+                        u32::try_from(at).expect("a match position is below FUZZY_MATCH_MAX_LEN");
                 }
                 break;
             }
@@ -287,9 +289,9 @@ fn scale(score: Score) -> c_int {
     } else if score == SCORE_MAX {
         c_int::MAX
     } else if score < 0.0 {
-        (score * SCORE_SCALE - 0.5).ceil() as c_int
+        float_as_int((score * SCORE_SCALE - 0.5).ceil())
     } else {
-        (score * SCORE_SCALE + 0.5).floor() as c_int
+        float_as_int((score * SCORE_SCALE + 0.5).floor())
     }
 }
 

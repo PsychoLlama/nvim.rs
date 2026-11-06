@@ -26,7 +26,7 @@
 use crate::narrow::len_as_int;
 use crate::narrow::number_as_col;
 use crate::option::vars::P_SEL;
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{c_int, c_uint};
 
 pub mod arith;
 
@@ -679,11 +679,11 @@ pub fn char_before_cursor() -> c_int {
 }
 
 /// Overwrite the byte under the cursor.
-pub fn pchar_cursor(c: c_char) {
+pub fn pchar_cursor(c: u8) {
     let cursor = Win::current().w_cursor;
     let mut lines = Lines::current();
     if let Some(byte) = lines.line_mut(cursor.lnum).get_mut(cursor.col.as_usize()) {
-        *byte = u8::from_ne_bytes(c.to_ne_bytes());
+        *byte = c;
     }
 }
 

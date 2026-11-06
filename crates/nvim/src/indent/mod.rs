@@ -20,6 +20,9 @@
 
 use crate::cstr;
 use crate::extmark::kExtmarkUndo;
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
+use crate::narrow::number_as_int;
 use crate::semsg;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int, c_uint};
@@ -70,16 +73,16 @@ pub use expr::{
     use_indentexpr_for_lisp,
 };
 
-const INDENT_SET: c_uint = 1;
-const INDENT_DEC: c_uint = 3;
-const kBufOptIndentexpr: c_uint = 47;
-const kOptIndentexpr: OptIndex = 148;
-const kOptVartabstop: OptIndex = 338;
+/// `change_indent` kinds.
+pub(crate) const INDENT_SET: c_int = 1;
+pub(crate) const INDENT_INC: c_int = 2;
+pub(crate) const INDENT_DEC: c_int = 3;
 const TAB: c_int = 9;
-const SIN_CHANGED: c_uint = 1;
-const SIN_INSERT: c_uint = 2;
-const SIN_UNDO: c_uint = 4;
-const SIN_NOMARK: c_uint = 8;
+/// `set_indent` flags.
+pub(crate) const SIN_CHANGED: c_int = 1;
+pub(crate) const SIN_INSERT: c_int = 2;
+pub(crate) const SIN_UNDO: c_int = 4;
+pub(crate) const SIN_NOMARK: c_int = 8;
 
 impl Indenter {
     /// The indent this engine answers for the cursor line; negative when it
@@ -221,7 +224,7 @@ impl Buf {
     /// The width of the 'vartabstop' stop at `col` ('tabstop' when there is
     /// no list); with `left`, of the one a cursor moving back would cross.
     pub(crate) fn tab_width_at(self, col: ColNr, left: bool) -> c_int {
-        let ts = self.b_p_ts as c_int;
+        let ts = number_as_int(self.b_p_ts);
         self.with_stops(StopList::Tab, |stops| {
             stops.map_or(ts, |stops| stops.at(col, left))
         })
@@ -239,7 +242,7 @@ impl Buf {
     /// The tabs and trailing spaces that fill the columns `start_col` to
     /// `end_col`, by this buffer's 'tabstop' and 'vartabstop'.
     pub(crate) fn tab_fill(self, start_col: ColNr, end_col: ColNr) -> (c_int, c_int) {
-        let ts = self.b_p_ts as c_int;
+        let ts = number_as_int(self.b_p_ts);
         self.with_stops(StopList::Tab, |stops| match stops {
             Some(stops) => stops.from_to(start_col, end_col),
             None => tabstop::uniform_from_to(start_col, end_col, ts),
@@ -298,7 +301,7 @@ pub fn get_sw_value_indent(buffer: Buf, left: bool) -> c_int {
 /// `buffer`'s 'shiftwidth' at screen column `col`.
 pub fn get_sw_value_col(buffer: Buf, col: ColNr, left: bool) -> c_int {
     if buffer.b_p_sw != 0 {
-        buffer.b_p_sw as c_int
+        number_as_int(buffer.b_p_sw)
     } else {
         buffer.tab_width_at(col, left)
     }
@@ -310,7 +313,7 @@ pub fn get_sts_value() -> c_int {
     if Buf::current().b_p_sts < 0 {
         get_sw_value(Buf::current())
     } else {
-        Buf::current().b_p_sts as c_int
+        number_as_int(Buf::current().b_p_sts)
     }
 }
 
@@ -386,7 +389,7 @@ fn indent_width(text: &[u8], stops: Option<&[i32]>, ts: OptInt) -> c_int {
     let mut next_tab_vcol: c_int;
     match stops {
         None => {
-            tabstop_width = (if ts == 0 { 8 } else { ts }) as c_int;
+            tabstop_width = number_as_int(if ts == 0 { 8 } else { ts });
             next_tab_vcol = tabstop_width;
         }
         Some(stops) => {
@@ -433,7 +436,7 @@ fn indent_width(text: &[u8], stops: Option<&[i32]>, ts: OptInt) -> c_int {
 /// The screen width of the indent at `text` under 'tabstop' `ts` and
 /// 'vartabstop' `vts`, a count-prefixed array.
 pub fn indent_size_ts(text: &[u8], ts: OptInt, vts: Option<&[i32]>) -> c_int {
-    debug_assert!(char2cells(' ' as c_int) == 1);
+    debug_assert!(char2cells(c_int::from(b' ')) == 1);
     indent_width(text, tabstops(vts).map(tabstop::TabStops::widths), ts)
 }
 
@@ -464,7 +467,7 @@ struct IndentPlan {
 /// `oldline` is the current line; reading past its end reads its NUL.
 fn plan_indent(size: c_int, flags: c_int, oldline: &[u8]) -> IndentPlan {
     let buf = Buf::current();
-    let preserve = flags & SIN_INSERT as c_int == 0 && buf.b_p_pi != 0;
+    let preserve = flags & SIN_INSERT == 0 && buf.b_p_pi != 0;
     let pad = |col: c_int| buf.tab_padding(ColNr::new(col));
     let at = |i: usize| c_int::from(byte_at(oldline, i));
     let mut plan = IndentPlan {
@@ -532,7 +535,7 @@ fn plan_indent(size: c_int, flags: c_int, oldline: &[u8]) -> IndentPlan {
     }
     // Count the spaces the indent needs.
     while todo > 0 {
-        if at(plan.rest) != ' ' as c_int {
+        if at(plan.rest) != c_int::from(b' ') {
             plan.doit = true;
         } else {
             plan.rest += 1;
@@ -560,7 +563,7 @@ struct Reindented {
 fn reindent_line(size: c_int, flags: c_int, oldline: &[u8]) -> Option<Reindented> {
     let buf = Buf::current();
     // The size of the line, including the NUL.
-    let mut line_len = oldline.len() as c_int + 1;
+    let mut line_len = len_as_int(oldline.len()) + 1;
     let pad = |col: c_int| buf.tab_padding(ColNr::new(col));
     let at = |i: usize| c_int::from(byte_at(oldline, i));
     // `STRICT_ADD`/`STRICT_SUB` (`macros.h`): the arithmetic sizing the
@@ -585,15 +588,15 @@ fn reindent_line(size: c_int, flags: c_int, oldline: &[u8]) -> Option<Reindented
     let mut p = rest;
 
     // Return if the indent is OK already.
-    if !doit && !ascii_iswhite(at(p)) && flags & SIN_INSERT as c_int == 0 {
+    if !doit && !ascii_iswhite(at(p)) && flags & SIN_INSERT == 0 {
         return None;
     }
 
-    if flags & SIN_INSERT as c_int != 0 {
+    if flags & SIN_INSERT != 0 {
         p = 0;
     } else {
         p += skip::white(oldline.get(p..).unwrap_or_default());
-        line_len -= p as c_int;
+        line_len -= len_as_int(p);
     }
 
     // Columns (in bytes) of the old indent that were preserved, and so
@@ -609,7 +612,7 @@ fn reindent_line(size: c_int, flags: c_int, oldline: &[u8]) -> Option<Reindented
         n = strict(n.checked_sub(ind_done), 599, c"STRICT_SUB overflow");
         n = strict(n.checked_add(line_len), 600, c"STRICT_ADD overflow");
         debug_assert!(n >= 0);
-        newline_size = n as usize;
+        newline_size = as_index(n);
         todo = size - ind_done;
         // The indent's total length in characters, which was undercounted
         // until now.
@@ -619,14 +622,14 @@ fn reindent_line(size: c_int, flags: c_int, oldline: &[u8]) -> Option<Reindented
         todo = size;
         debug_assert!(ind_len + line_len >= 0);
         let n = strict(ind_len.checked_add(line_len), 626, c"STRICT_ADD overflow");
-        newline_size = n as usize;
+        newline_size = as_index(n);
     }
     // The terminator is `XString::from_vec`'s, inside the size counted.
     let mut out: Vec<u8> = Vec::with_capacity(newline_size);
 
     if orig_char_len != -1 {
-        out.extend_from_slice(&oldline[..orig_char_len as usize]);
-        p = orig_char_len as usize;
+        out.extend_from_slice(&oldline[..as_index(orig_char_len)]);
+        p = as_index(orig_char_len);
         // Skip any further white space, which is there when the new
         // indent is smaller than the old one.
         while ascii_iswhite(at(p)) {
@@ -636,7 +639,7 @@ fn reindent_line(size: c_int, flags: c_int, oldline: &[u8]) -> Option<Reindented
 
     // Put the characters in the new line; without 'expandtab', use tabs.
     if buf.b_p_et == 0 {
-        if flags & SIN_INSERT as c_int == 0 && buf.b_p_pi != 0 {
+        if flags & SIN_INSERT == 0 && buf.b_p_pi != 0 {
             // Reuse as much of the existing indent's structure as fits.
             p = 0;
             ind_done = 0;
@@ -676,7 +679,7 @@ fn reindent_line(size: c_int, flags: c_int, oldline: &[u8]) -> Option<Reindented
             ind_done += tab_pad;
         }
     }
-    let new_offset = ColNr::from_index(out.len() + todo.max(0) as usize);
+    let new_offset = ColNr::from_index(out.len() + as_index(todo.max(0)));
     out.resize(new_offset.as_usize(), b' ');
     out.extend_from_slice(oldline.get(p..).unwrap_or_default());
     Some(Reindented {
@@ -713,9 +716,9 @@ pub fn set_indent(size: c_int, flags: c_int) -> bool {
 
     let mut retval = false;
     // Replace the line, unless undo fails.
-    if flags & SIN_UNDO as c_int == 0 || u_savesub(lnum).is_ok() {
+    if flags & SIN_UNDO == 0 || u_savesub(lnum).is_ok() {
         let _ = ml_replace_owned(lnum, XString::from_vec(line));
-        if flags & SIN_NOMARK as c_int == 0 {
+        if flags & SIN_NOMARK == 0 {
             extmark_splice_cols(
                 buf,
                 lnum.get() - 1,
@@ -725,7 +728,7 @@ pub fn set_indent(size: c_int, flags: c_int) -> bool {
                 kExtmarkUndo,
             );
         }
-        if flags & SIN_CHANGED as c_int != 0 {
+        if flags & SIN_CHANGED != 0 {
             changed_bytes(lnum, ColNr::ZERO);
         }
         // Correct the saved cursor position if it is on this line.
@@ -776,7 +779,7 @@ pub fn get_number_indent(lnum: LineNr) -> c_int {
         regmatch.rm_ic = false;
         // The match starts past the comment leader, so its offsets are
         // relative to there and the leader goes back on at the end.
-        let lead_len = lead_len as usize;
+        let lead_len = as_index(lead_len);
         if vim_regexec(&mut regmatch, cstr::suffix(line.as_cstr(), lead_len), 0) {
             pos.lnum = lnum;
             pos.col = ColNr::from_index(lead_len + regmatch.ends[0].unwrap_or(0));

@@ -20,7 +20,7 @@
 
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use core::ffi::{c_int, c_uint};
+use core::ffi::c_int;
 
 use crate::ascii::ascii_iswhite;
 use crate::mbyte::{char_at, utf_iscomposing_first};
@@ -42,8 +42,6 @@ pub(crate) use self::para::*;
 pub use self::wrap::*;
 
 pub const kBufOptFormatexpr: c_int = 36;
-pub const INDENT_SET: c_uint = 1;
-pub const SIN_CHANGED: c_uint = 1;
 
 // The 'formatoptions' flag letters this family reads. Each is the option's
 // own spelling, so a flag test is `has_format_option(FoFlag::WRAP)`.

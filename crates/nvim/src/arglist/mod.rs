@@ -61,7 +61,7 @@ use crate::window::{
 };
 use crate::winlayer::graph::{cmdwin_type, firstwin, lastused_tabpage, lastwin};
 use crate::winlayer::{Buf, Win, tab_windows};
-use core::ffi::{CStr, c_int, c_uint};
+use core::ffi::{CStr, c_int};
 
 pub(crate) use all::arg_all_bytes;
 pub use all::ex_all;
@@ -73,17 +73,11 @@ pub use eval::{f_argc, f_argidx, f_arglistid, f_argv};
 
 /// Constants the transpiler copied in from the headers this module includes.
 mod flag {
-    use super::{BlnFlags, FileComparison, c_uint};
+    use super::{BlnFlags, FileComparison};
 
     /// `buflist_new` flags.
     pub(super) const BLN_CURBUF: BlnFlags = 1;
     pub(super) const BLN_LISTED: BlnFlags = 2;
-
-    /// `check_changed` flags.
-    pub(super) const CCGD_AW: c_uint = 1;
-    pub(super) const CCGD_MULTWIN: c_uint = 2;
-    pub(super) const CCGD_FORCEIT: c_uint = 4;
-    pub(super) const CCGD_EXCMD: c_uint = 16;
 
     /// `path_full_compare` result bit meaning "the same file".
     pub(super) const EQUAL_FILES: FileComparison = 1;
@@ -93,8 +87,8 @@ use flag::*;
 /// `flag` when `cond`, and no bits otherwise — the `cond ? FLAG : 0` the
 /// flag arguments of `buflist_add`, `check_changed` and `do_ecmd` are
 /// assembled from.
-fn flag_if(cond: bool, flag: c_uint) -> c_int {
-    if cond { flag as c_int } else { 0 }
+fn flag_if(cond: bool, flag: c_int) -> c_int {
+    if cond { flag } else { 0 }
 }
 
 /// An entry count as an index. Every count here came out of the list
@@ -342,7 +336,7 @@ pub fn split_one_arg(s: &mut [u8]) -> usize {
         if s[end] == b'\\' && end + 1 < s.len() && s[end + 1] != 0 {
             end += 1;
         } else {
-            if !inbacktick && ascii_isspace(s[end] as c_int) {
+            if !inbacktick && ascii_isspace(c_int::from(s[end])) {
                 break;
             }
             if s[end] == b'`' {

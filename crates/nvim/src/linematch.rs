@@ -22,6 +22,8 @@
 
 #![forbid(unsafe_code)]
 
+use crate::narrow::as_index;
+use crate::narrow::count_as_int;
 use crate::types::LineNr;
 use core::ffi::c_int;
 
@@ -174,11 +176,11 @@ pub fn block_from_lnum(block: &[u8], lnum: LineNr) -> Option<&[u8]> {
 
 /// Flatten a per-buffer line index into an index of the flattened tensor.
 fn unwrap_indexes(values: &[c_int], diff_len: &[c_int]) -> usize {
-    let mut stride: usize = diff_len.iter().map(|&len| len as usize + 1).product();
+    let mut stride: usize = diff_len.iter().map(|&len| as_index(len) + 1).product();
     let mut idx = 0;
     for (k, &n) in values.iter().enumerate() {
-        stride /= diff_len[k] as usize + 1;
-        idx += stride * n as usize;
+        stride /= as_index(diff_len[k]) + 1;
+        idx += stride * as_index(n);
     }
     idx
 }
@@ -278,9 +280,9 @@ impl Tensor<'_> {
     /// origin, given that the step *out* of `idx` was `last_decision`.
     /// Records the winning path in the cell's `optimal_choice`.
     fn min_turns(&mut self, idx: usize, last_decision: c_int) -> usize {
-        let memo = self.nodes[idx].choice_mem[last_decision as usize];
+        let memo = self.nodes[idx].choice_mem[as_index(last_decision)];
         if memo >= 0 {
-            return memo as usize;
+            return as_index(memo);
         }
         let mut minimum = 0;
         for i in 0..self.nodes[idx].path_n {
@@ -291,7 +293,7 @@ impl Tensor<'_> {
                 minimum = turns;
             }
         }
-        self.nodes[idx].choice_mem[last_decision as usize] = minimum as c_int;
+        self.nodes[idx].choice_mem[as_index(last_decision)] = count_as_int(minimum);
         minimum
     }
 }
@@ -311,8 +313,8 @@ pub fn linematch_nbuffers(diff_blk: &[&[u8]], diff_len: &[c_int], iwhite: bool) 
     let mut max_decisions = 0usize;
     for &len in diff_len {
         debug_assert!(len >= 0);
-        memsize *= len as usize + 1;
-        max_decisions += len as usize;
+        memsize *= as_index(len) + 1;
+        max_decisions += as_index(len);
     }
 
     let mut tensor = Tensor {

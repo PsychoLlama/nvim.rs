@@ -9,6 +9,8 @@
 
 #![forbid(unsafe_code)]
 
+use crate::narrow::len_as_integer;
+use crate::narrow::number_as_int;
 use crate::semsg;
 use core::ffi::c_int;
 
@@ -55,7 +57,7 @@ pub fn f_str2nr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut base = 10;
     let mut what = Str2NrBases::NONE;
     if args.len() > 1 {
-        base = tv_get_number(&args[1]) as c_int;
+        base = number_as_int(tv_get_number(&args[1]));
         if !matches!(base, 2 | 8 | 10 | 16) {
             emsg(gettext(e_invarg));
             return;
@@ -105,7 +107,7 @@ pub fn f_stridx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         let Ok(start_idx) = tv_get_number_chk(&args[2]) else {
             return;
         };
-        if start_idx >= haystack.len() as VarNumber {
+        if start_idx >= len_as_integer(haystack.len()) {
             return;
         }
         // A negative start is ignored, not counted from the end.
@@ -114,7 +116,7 @@ pub fn f_stridx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     if let Some(pos) = find_bytes(&haystack[start..], needle) {
         // Reported against the whole string, not against the start.
-        result.write_number((start + pos) as VarNumber);
+        result.write_number(len_as_integer(start + pos));
     }
 }
 
@@ -161,7 +163,7 @@ pub fn f_strridx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     };
 
     if let Some(at) = lastmatch {
-        result.write_number(at as VarNumber);
+        result.write_number(len_as_integer(at));
     }
 }
 
@@ -173,7 +175,7 @@ pub fn f_string(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// "strlen()" function: the length in bytes.
 pub fn f_strlen(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    result.write_number(numbuf.bytes(&args[0]).len() as VarNumber);
+    result.write_number(len_as_integer(numbuf.bytes(&args[0]).len()));
 }
 
 /// The character count `strchars()` and `strcharlen()` share.
@@ -222,7 +224,7 @@ pub fn f_strdisplaywidth(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
     let mut numbuf = NumBuf::new();
     let text = numbuf.string(&args[0]);
     let col = if args.len() > 1 {
-        tv_get_number(&args[1]) as c_int
+        number_as_int(tv_get_number(&args[1]))
     } else {
         0
     };
@@ -233,7 +235,7 @@ pub fn f_strdisplaywidth(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
 pub fn f_strwidth(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let text = numbuf.string(&args[0]).to_bytes();
-    result.write_number(c_string_cells(text) as VarNumber);
+    result.write_number(len_as_integer(c_string_cells(text)));
 }
 
 /// "strtrans()" function: unprintable characters as `^X`/`<xx>`.
@@ -364,7 +366,7 @@ pub fn f_trim(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             let Ok(given) = tv_get_number_chk(&args[2]) else {
                 return;
             };
-            dir = given as c_int;
+            dir = number_as_int(given);
             if !(0..=2).contains(&dir) {
                 let arg0 = msg_cstr(numbuf.string(&args[2]));
                 semsg!("E475: Invalid argument: {arg0}");

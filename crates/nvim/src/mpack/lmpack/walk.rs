@@ -24,6 +24,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::narrow::float_as_int;
 use core::ffi::c_int;
 
 use super::{geti, is_nil_sentinel, objlen, push_nil_sentinel, reference, unreference};
@@ -172,7 +173,7 @@ impl Decode<NodeRefs> for LuaDecoder<'_> {
                 self.buffer.clear();
                 if kind(&node) == MPACK_TOKEN_EXT
                     && self.ext != LUA_NOREF
-                    && !self.apply_ext_handler(tok.lo as c_int)
+                    && !self.apply_ext_handler(tok.lo.cast_signed())
                 {
                     // The handler failed: the walk stops here, the string
                     // goes, and the parent is left as it is.
@@ -505,7 +506,7 @@ impl LuaEncoder<'_> {
             self.fail(Failure::Message(message));
             return true;
         }
-        node.tok = mpack_pack_ext(ext as c_int, objlen(stack, None));
+        node.tok = mpack_pack_ext(float_as_int(ext), objlen(stack, None));
         // Leave only the returned string, where the table was.
         stack.replace(At::from_top(5));
         stack.pop(3);

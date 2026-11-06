@@ -23,6 +23,9 @@
 
 #![forbid(unsafe_code)]
 
+use crate::narrow::float_as_f32;
+use crate::narrow::float_as_u32;
+
 /// The longest encoded token: a one-byte type code plus a 64-bit payload.
 pub const MAX_TOKEN_LEN: usize = 9;
 
@@ -134,9 +137,9 @@ pub fn decode_token(buf: &[u8]) -> Read {
             used: 1,
         },
         // fixmap / fixarray / fixstr carry their length in the type code
-        0x80..=0x8f => fixed(Kind::Map, (t & 0xf) as u32),
-        0x90..=0x9f => fixed(Kind::Array, (t & 0xf) as u32),
-        0xa0..=0xbf => fixed(Kind::Str, (t & 0x1f) as u32),
+        0x80..=0x8f => fixed(Kind::Map, u32::from(t & 0xf)),
+        0x90..=0x9f => fixed(Kind::Array, u32::from(t & 0xf)),
+        0xa0..=0xbf => fixed(Kind::Str, u32::from(t & 0x1f)),
         0xc0 => Read::Done {
             tok: Tok::byte(Kind::Nil, 0, 0),
             used: 1,
@@ -159,7 +162,7 @@ pub fn decode_token(buf: &[u8]) -> Read {
         0xd4..=0xd8 => match rest.first() {
             None => Read::Partial { need: 1 },
             Some(&ext) => Read::Done {
-                tok: Tok::new(Kind::Ext, 1 << (t - 0xd4), ext as u32, 0),
+                tok: Tok::new(Kind::Ext, 1 << (t - 0xd4), u32::from(ext), 0),
                 used: 2,
             },
         },
@@ -200,9 +203,8 @@ fn value(kind: Kind, width: u32, rest: &[u8]) -> Read {
         return Read::Partial { need: width };
     }
     let mut tok = Tok::new(kind, width, 0, 0);
-    for (i, &b) in rest[..w].iter().enumerate() {
-        let remaining = width - 1 - i as u32;
-        tok.lo |= (b as u32) << ((remaining % 4) * 8);
+    for (remaining, &b) in (0..width).rev().zip(&rest[..w]) {
+        tok.lo |= u32::from(b) << ((remaining % 4) * 8);
         if remaining == 4 {
             tok.hi = tok.lo;
             tok.lo = 0;
@@ -238,7 +240,7 @@ fn blob(kind: Kind, width: u32, rest: &[u8]) -> Read {
         unreachable!("the length check above guarantees `width` bytes");
     };
     let ext = if needs_ext {
-        rest[width as usize] as u32
+        u32::from(rest[width as usize])
     } else {
         0
     };
@@ -403,13 +405,23 @@ const POW2_64: f64 = 18446744073709551616.0;
 
 /// `mpack_pack_uint`.
 pub const fn pack_uint(v: u64) -> Tok {
-    Tok::new(Kind::Uint, 0, v as u32, (v >> 32) as u32)
+    let (lo, hi) = halves(v);
+    Tok::new(Kind::Uint, 0, lo, hi)
+}
+
+/// A 64-bit word as its (low, high) 32-bit halves.
+const fn halves(v: u64) -> (u32, u32) {
+    let [b0, b1, b2, b3, b4, b5, b6, b7] = v.to_le_bytes();
+    (
+        u32::from_le_bytes([b0, b1, b2, b3]),
+        u32::from_le_bytes([b4, b5, b6, b7]),
+    )
 }
 
 /// `mpack_pack_sint`: negatives are stored as their two's complement, which
 /// on a `u64` is just the bit pattern.
 pub const fn pack_sint(v: i64) -> Tok {
-    let mut tok = pack_uint(v as u64);
+    let mut tok = pack_uint(v.cast_unsigned());
     if v < 0 {
         tok.kind = Some(Kind::Sint);
     }
@@ -441,7 +453,7 @@ pub const fn unpack_sint(tok: &Tok) -> i64 {
         tok.len
     };
     let magnitude = (!bits & ((1u64 << (width * 8 - 1)) - 1)).wrapping_add(1);
-    -(magnitude.wrapping_sub(1) as i64) - 1
+    -magnitude.wrapping_sub(1).cast_signed() - 1
 }
 
 /// `mpack_unpack_boolean`.
@@ -454,17 +466,17 @@ pub const fn unpack_boolean(tok: &Tok) -> bool {
 /// spellings mean "high half in `hi`".
 pub fn pack_float(v: f64) -> Tok {
     if fits_single(v) {
-        Tok::new(Kind::Float, 4, (v as f32).to_bits(), 0)
+        Tok::new(Kind::Float, 4, float_as_f32(v).to_bits(), 0)
     } else {
-        let bits = v.to_bits();
-        Tok::new(Kind::Float, 8, bits as u32, (bits >> 32) as u32)
+        let (lo, hi) = halves(v.to_bits());
+        Tok::new(Kind::Float, 8, lo, hi)
     }
 }
 
 /// `mpack_unpack_float_fast`.
 pub fn unpack_float(tok: &Tok) -> f64 {
     if tok.len == 4 {
-        f32::from_bits(tok.lo) as f64
+        f64::from(f32::from_bits(tok.lo))
     } else {
         f64::from_bits(tok.word())
     }
@@ -473,7 +485,7 @@ pub fn unpack_float(tok: &Tok) -> f64 {
 /// Whether a `f32` round-trips `v` exactly. False for NaN, which is what
 /// sends NaN down the 8-byte arm.
 fn fits_single(v: f64) -> bool {
-    v as f32 as f64 == v
+    f64::from(float_as_f32(v)) == v
 }
 
 /// `mpack_unpack_number`: the value of an int, uint or float token as a
@@ -513,7 +525,7 @@ pub fn unpack_number(tok: &Tok) -> f64 {
             hi = hi.wrapping_add(1);
         }
     }
-    let magnitude = lo as f64 + POW2_32 * hi as f64;
+    let magnitude = f64::from(lo) + POW2_32 * f64::from(hi);
     if negative { -magnitude } else { magnitude }
 }
 
@@ -543,8 +555,8 @@ pub fn pack_number(v: f64) -> Tok {
     let mut tok = Tok::new(
         Kind::Uint,
         0,
-        fmod_pow2_32(vabs) as u32,
-        (vabs / POW2_32) as u32,
+        float_as_u32(fmod_pow2_32(vabs)),
+        float_as_u32(vabs / POW2_32),
     );
 
     if v < 0.0 {
@@ -579,7 +591,7 @@ pub fn pack_number(v: f64) -> Tok {
 /// whatever the host's `cvttsd2si` happened to leave behind. Either way the
 /// caller's round-trip check rejects it.
 fn fmod_pow2_32(a: f64) -> f64 {
-    a - ((a / POW2_32) as u32 as f64 * POW2_32)
+    a - (f64::from(float_as_u32(a / POW2_32)) * POW2_32)
 }
 
 #[cfg(test)]
@@ -681,7 +693,7 @@ mod tests {
             0x80,
             0xffff,
             0x1_0000,
-            u32::MAX as u64,
+            u64::from(u32::MAX),
             u64::MAX,
         ] {
             let tok = dec(&enc(&pack_uint(v)));
@@ -695,7 +707,7 @@ mod tests {
             -129,
             -32768,
             -32769,
-            i32::MIN as i64,
+            i64::from(i32::MIN),
             i64::MIN,
         ] {
             let tok = dec(&enc(&pack_sint(v)));

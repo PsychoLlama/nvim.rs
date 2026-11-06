@@ -252,7 +252,7 @@ fn parse_variable(pos: u64, cursor: &mut Cursor) -> Parsed2 {
         decode_string(binval, is_blob)
     } else {
         let mut value = TV_INITIAL_VALUE;
-        if cursor.typval(&mut value) != MPACK_OK.cast_signed() {
+        if cursor.typval(&mut value) != MPACK_OK {
             return Err(fault(EntryFault::VariableValue, pos));
         }
         value

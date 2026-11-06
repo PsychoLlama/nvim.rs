@@ -10,7 +10,7 @@
 
 #![forbid(unsafe_code)]
 
-use core::ffi::{c_int, c_uint};
+use core::ffi::c_int;
 
 use crate::types::{
     VTermAttr, VTermGlyphInfo, VTermLineInfo, VTermPos, VTermProp, VTermRect, VTermScreen,
@@ -68,7 +68,7 @@ impl VTermScreen {
 
     /// Applies one SGR attribute to the pen the screen paints with.
     pub(crate) fn set_pen_attr(&mut self, attr: VTermAttr, val: &Value<'_>) -> c_int {
-        let number = || val.int() as c_uint;
+        let number = || val.int().cast_unsigned();
         let pen = &mut self.pen;
         match attr {
             VTERM_ATTR_BOLD => pen.set_bold(number()),
@@ -113,7 +113,7 @@ impl VTermScreen {
                 }
             }
             VTERM_PROP_REVERSE => {
-                self.set_global_reverse(boolean as c_uint);
+                self.set_global_reverse(boolean.cast_unsigned());
                 self.damage_screen();
             }
             _ => {}

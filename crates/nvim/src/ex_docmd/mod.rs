@@ -195,12 +195,6 @@ pub struct CommandDefinition {
 pub const DOBUF_LAST: DoBufStart = 2;
 pub const kChannelPartAll: ChannelPart = 4;
 pub const kMTLineWise: MotionType = 1;
-pub const VIM_QUESTION: c_uint = 4;
-pub const VIM_YES: c_uint = 2;
-pub const CCGD_EXCMD: c_uint = 16;
-pub const CCGD_FORCEIT: c_uint = 4;
-pub const CCGD_MULTWIN: c_uint = 2;
-pub const CCGD_AW: c_uint = 1;
 pub const VALID_HEAD: c_uint = 2;
 pub const VALID_PATH: c_uint = 1;
 pub const DIALOG_MSG_SIZE: c_uint = 1000;
@@ -220,20 +214,10 @@ pub struct SavedDebugState {
 }
 
 pub const ETYPE_EXCEPT: EStackType = 5;
-pub const FIND_ANY: c_uint = 1;
-pub const FIND_DEFINE: c_uint = 2;
-pub const ACTION_SPLIT: c_uint = 3;
-pub const ACTION_GOTO: c_uint = 2;
-pub const ACTION_SHOW_ALL: c_uint = 4;
-pub const ACTION_SHOW: c_uint = 1;
 pub const kRetNilBool: LuaRetMode = 1;
-pub const CHECK_PATH: c_uint = 3;
 pub const ESTACK_SCRIPT: EStackArg = 3;
 pub const ESTACK_STACK: EStackArg = 2;
 pub const ESTACK_SFILE: EStackArg = 1;
-pub const FIND_STRING: c_uint = 2;
-pub const FIND_EVAL: c_uint = 4;
-pub const FIND_IDENT: c_uint = 1;
 pub const INT32_MAX: c_int = 2147483647 as c_int;
 pub const NULL_1: *mut c_void = ::core::ptr::null_mut::<c_void>();
 pub const EXIT_FAILURE: c_int = 1 as c_int;

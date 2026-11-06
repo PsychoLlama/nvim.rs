@@ -25,6 +25,7 @@
 
 mod tables;
 
+use crate::narrow::as_index;
 use tables::{PROPERTIES, SEQUENCES, STAGE1, STAGE2};
 
 /// The properties of a single codepoint. Field names and meanings match the
@@ -132,7 +133,7 @@ const HANGUL_SCOUNT: i32 = 11172;
 /// `0 <= uc < 0x110000`.
 #[inline]
 fn property_unchecked(uc: i32) -> &'static utf8proc_property_t {
-    &PROPERTIES[STAGE2[STAGE1[(uc >> 8) as usize] as usize + (uc & 0xFF) as usize] as usize]
+    &PROPERTIES[STAGE2[STAGE1[as_index(uc >> 8)] as usize + as_index(uc & 0xFF)] as usize]
 }
 
 /// Looks up the properties of `uc`. Out-of-range codepoints (including
@@ -276,10 +277,10 @@ pub fn utf8proc_grapheme_break_stateful(c1: i32, c2: i32, state: Option<&mut i32
     let p1 = utf8proc_get_property(c1);
     let p2 = utf8proc_get_property(c2);
     grapheme_break_extended(
-        p1.boundclass as i32,
-        p2.boundclass as i32,
-        p1.indic_conjunct_break as i32,
-        p2.indic_conjunct_break as i32,
+        i32::from(p1.boundclass),
+        i32::from(p2.boundclass),
+        i32::from(p1.indic_conjunct_break),
+        i32::from(p2.indic_conjunct_break),
         state,
     )
 }
@@ -293,10 +294,10 @@ pub fn utf8proc_grapheme_break(c1: i32, c2: i32) -> bool {
 /// Decodes the codepoint starting at `SEQUENCES[*i]`, advancing `*i` past
 /// the extra unit when it is stored as a UTF-16 surrogate pair.
 fn seqindex_decode_entry(i: &mut usize) -> i32 {
-    let mut entry_cp = SEQUENCES[*i] as i32;
+    let mut entry_cp = i32::from(SEQUENCES[*i]);
     if (entry_cp & 0xF800) == 0xD800 {
         *i += 1;
-        entry_cp = ((entry_cp & 0x03FF) << 10) | (SEQUENCES[*i] as i32 & 0x03FF);
+        entry_cp = ((entry_cp & 0x03FF) << 10) | (i32::from(SEQUENCES[*i]) & 0x03FF);
         entry_cp += 0x10000;
     }
     entry_cp
@@ -317,15 +318,15 @@ fn seqindex_write_char_decomposed(
 ) -> isize {
     let mut written: isize = 0;
     let mut i = (seqindex & 0x3FFF) as usize;
-    let mut len = (seqindex >> 14) as i32;
+    let mut len = i32::from(seqindex >> 14);
     if len >= 3 {
-        len = SEQUENCES[i] as i32;
+        len = i32::from(SEQUENCES[i]);
         i += 1;
     }
     while len >= 0 {
         let entry_cp = seqindex_decode_entry(&mut i);
-        let sub = if (written as usize) < dst.len() {
-            &mut dst[written as usize..]
+        let sub = if written.cast_unsigned() < dst.len() {
+            &mut dst[written.cast_unsigned()..]
         } else {
             &mut [][..]
         };
@@ -493,9 +494,9 @@ pub fn utf8proc_decompose_char(
     if options & UTF8PROC_CHARBOUND != 0 {
         let boundary = grapheme_break_extended(
             0,
-            property.boundclass as i32,
+            i32::from(property.boundclass),
             0,
-            property.indic_conjunct_break as i32,
+            i32::from(property.indic_conjunct_break),
             last_boundclass,
         );
         if boundary {
@@ -528,13 +529,13 @@ mod tests {
         assert_eq!(utf8proc_get_property(0x0301).combining_class, 230); // combining acute
         assert!(utf8proc_get_property(0x00A7).ambiguous_width); // § (East Asian A)
         assert_eq!(
-            utf8proc_get_property(0x1F600).boundclass as i32, // 😀
+            i32::from(utf8proc_get_property(0x1F600).boundclass), // 😀
             UTF8PROC_BOUNDCLASS_EXTENDED_PICTOGRAPHIC
         );
         // Out-of-range codepoints resolve to the all-defaults entry.
         assert_eq!(utf8proc_get_property(-1).category, UTF8PROC_CATEGORY_CN);
         assert_eq!(
-            utf8proc_get_property(0x110000).boundclass as i32,
+            i32::from(utf8proc_get_property(0x110000).boundclass),
             UTF8PROC_BOUNDCLASS_OTHER
         );
     }

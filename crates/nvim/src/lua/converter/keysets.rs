@@ -7,6 +7,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::lua::converter::push_object::push_integer;
 use core::ffi::{CStr, c_int};
 
 use super::{
@@ -27,9 +28,9 @@ use crate::types::{
 /// The three api types that need a name of their own on the Lua side, both
 /// ways round: `vim.types.float` is the tag and `vim.types[tag]` the name.
 const NAMED_TYPES: [(&CStr, c_int); 3] = [
-    (c"float", kObjectTypeFloat as c_int),
-    (c"array", kObjectTypeArray as c_int),
-    (c"dictionary", kObjectTypeDict as c_int),
+    (c"float", kObjectTypeFloat.cast_signed()),
+    (c"array", kObjectTypeArray.cast_signed()),
+    (c"dictionary", kObjectTypeDict.cast_signed()),
 ];
 
 /// Install `type_idx`, `val_idx` and `types` on the `vim` table below the top
@@ -150,7 +151,7 @@ pub(crate) fn push_keydict(stack: &mut Stack, value: &mut dyn KeySet) {
         stack.push_bytes(field.name.to_bytes());
         match slot {
             Slot::Any(Some(object)) => push_object(stack, object, false),
-            Slot::Integer(Some(n)) => stack.push_integer(*n as lua_Integer),
+            Slot::Integer(Some(n)) => push_integer(stack, *n),
             Slot::Handle(Some(h)) => stack.push_integer((*h).get() as lua_Integer),
             Slot::Float(Some(f)) => stack.push_number(*f),
             Slot::Boolean(Some(b)) => stack.push_boolean(*b),

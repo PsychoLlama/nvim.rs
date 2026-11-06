@@ -158,7 +158,7 @@ pub(crate) fn nv_zg_zw(cmd_arg: &mut CmdArg, mut nchar: Key) -> Result<(), Faile
     let word = match word {
         Some(word) => word,
         None => {
-            let found = ident_under_cursor(FIND_IDENT.cast_signed());
+            let found = ident_under_cursor(FIND_IDENT);
             if found.is_empty() {
                 return Err(Failed);
             }

@@ -134,11 +134,6 @@ pub const OPENLINE_DELSPACES: ::core::ffi::c_int = 1;
 pub const KEY_OPEN_BACK: ::core::ffi::c_int = 258;
 pub const KEY_OPEN_FORW: ::core::ffi::c_int = 257;
 
-/// `set_indent()` flags: do not move the marks, and this indent is being
-/// set from Insert mode.
-pub const SIN_NOMARK: ::core::ffi::c_int = 8;
-pub const SIN_INSERT: ::core::ffi::c_int = 2;
-
 /// `ml_delete_flags()`: report "N fewer lines".
 pub const ML_DEL_MESSAGE: ::core::ffi::c_int = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();

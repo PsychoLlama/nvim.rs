@@ -40,6 +40,8 @@ use crate::cstr::byte_at;
 use crate::extmark::kExtmarkNOOP;
 use crate::extmark::kExtmarkUndo;
 use crate::guard::Suppress;
+use crate::indent::SIN_INSERT;
+use crate::indent::SIN_NOMARK;
 use crate::memline::{Lines, ml_append_terminated};
 use crate::memory::XString;
 use crate::narrow::len_as_int;

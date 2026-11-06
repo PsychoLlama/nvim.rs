@@ -225,12 +225,7 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
             // `*` and `#` fall back to the string under the cursor when
             // there is no identifier there.
             let searchy = cmdchar.is('*') || cmdchar.is('#');
-            let find_type = FIND_IDENT.cast_signed()
-                | if searchy {
-                    FIND_STRING.cast_signed()
-                } else {
-                    0
-                };
+            let find_type = FIND_IDENT | if searchy { FIND_STRING } else { 0 };
             let Some((col, len)) = find_ident_under_cursor(find_type) else {
                 clear_op(cmd_arg.op());
                 return;

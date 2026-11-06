@@ -146,18 +146,6 @@ pub const YREG_PUT: ::core::ffi::c_int = 2;
 pub const YREG_YANK: ::core::ffi::c_int = 1;
 pub const YREG_PASTE: ::core::ffi::c_int = 0;
 
-/// `ins_typebuf` remap mode: what the inserted keys may be remapped by.
-/// `set_indent()` flags: leave the marks alone, save for undo, this is an
-/// Insert-mode indent, mark the buffer changed.
-pub const SIN_NOMARK: ::core::ffi::c_int = 8;
-pub const SIN_UNDO: ::core::ffi::c_int = 4;
-pub const SIN_INSERT: ::core::ffi::c_int = 2;
-pub const SIN_CHANGED: ::core::ffi::c_int = 1;
-
-/// `find_ident_under_cursor()` flags: accept a non-keyword run as well as
-/// an identifier.
-pub const FIND_STRING: ::core::ffi::c_int = 2;
-pub const FIND_IDENT: ::core::ffi::c_int = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 static expr_line: GlobalCell<Option<XString>> = GlobalCell::new(None);

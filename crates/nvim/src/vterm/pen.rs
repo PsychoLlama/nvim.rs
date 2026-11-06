@@ -12,6 +12,9 @@
 
 #![forbid(unsafe_code)]
 
+use crate::narrow::as_index;
+use crate::narrow::len_as_integer;
+use crate::narrow::number_as_u32;
 use core::ffi::{c_int, c_long, c_uint};
 
 use crate::types::{VTermAttr, VTermColor, VTermColor_rgb, VTermPen, VTermState, VTermValueType};
@@ -40,8 +43,8 @@ pub const CSI_ARG_MISSING: c_long = 2147483647;
 // ---------------------------------------------------------------- colours
 
 /// Splits a colour into its type byte and the payload that byte selects.
-fn color_parts(col: &VTermColor) -> (c_uint, ColorValue) {
-    let flags = c_uint::from(col.type_byte());
+fn color_parts(col: &VTermColor) -> (u8, ColorValue) {
+    let flags = col.type_byte();
     // The type bit names the only arm that may be read: the indexed arm is
     // two bytes where the RGB arm is four.
     let value = if flags & VTERM_COLOR_TYPE_MASK == VTERM_COLOR_INDEXED {
@@ -59,11 +62,11 @@ fn color_parts(col: &VTermColor) -> (c_uint, ColorValue) {
 /// Both payloads are written through the RGB arm so the whole union ends up
 /// initialised — an indexed colour's index shares its byte with the red
 /// channel, and upstream left the two bytes past it as whatever was there.
-fn make_color(flags: c_uint, value: ColorValue) -> VTermColor {
-    let marks = (flags & !VTERM_COLOR_TYPE_MASK) as u8;
+fn make_color(flags: u8, value: ColorValue) -> VTermColor {
+    let marks = flags & !VTERM_COLOR_TYPE_MASK;
     let (kind, red, green, blue) = match value {
-        ColorValue::Rgb { red, green, blue } => (VTERM_COLOR_RGB as u8, red, green, blue),
-        ColorValue::Indexed(idx) => (VTERM_COLOR_INDEXED as u8, idx, 0, 0),
+        ColorValue::Rgb { red, green, blue } => (VTERM_COLOR_RGB, red, green, blue),
+        ColorValue::Indexed(idx) => (VTERM_COLOR_INDEXED, idx, 0, 0),
     };
     VTermColor {
         rgb: VTermColor_rgb {
@@ -82,7 +85,7 @@ fn plain_color(value: ColorValue) -> VTermColor {
 
 /// Stamps a colour as *being* the terminal's default foreground or
 /// background, replacing any mark it already carried.
-fn mark_default(col: VTermColor, mark: c_uint) -> VTermColor {
+fn mark_default(col: VTermColor, mark: u8) -> VTermColor {
     let (flags, value) = color_parts(&col);
     make_color((flags & !VTERM_COLOR_DEFAULT_MASK) | mark, value)
 }
@@ -91,7 +94,7 @@ fn mark_default(col: VTermColor, mark: c_uint) -> VTermColor {
 /// slots below 16, the fixed cube and grey ramp above, nothing outside.
 fn palette_color(state: &VTermState, index: c_long) -> Option<VTermColor> {
     if (0..16).contains(&index) {
-        return Some(state.colors[index as usize]);
+        return state.colors.get(usize::try_from(index).ok()?).copied();
     }
     fixed_palette(index).map(plain_color)
 }
@@ -117,7 +120,7 @@ pub fn convert_color_to_rgb(state: &VTermState, col: &mut VTermColor) {
 /// ignored.
 pub fn set_palette_color(state: &mut VTermState, index: c_int, col: &VTermColor) {
     if (0..16).contains(&index) {
-        state.colors[index as usize] = *col;
+        state.colors[as_index(index)] = *col;
     }
 }
 
@@ -134,7 +137,7 @@ pub fn init_pen(state: &mut VTermState) {
         VTERM_COLOR_DEFAULT_BG,
     );
     for slot in 0..state.colors.len() {
-        if let Some(value) = ansi_default(slot as c_long) {
+        if let Some(value) = ansi_default(len_as_integer(slot)) {
             state.colors[slot] = plain_color(value);
         }
     }
@@ -149,7 +152,7 @@ fn flag(on: bool) -> Value<'static> {
 
 /// The integer form of an attribute value.
 fn number(n: c_uint) -> Value<'static> {
-    Value::Int(n as c_int)
+    Value::Int(n.cast_signed())
 }
 
 /// The colour form of an attribute value.
@@ -217,12 +220,12 @@ pub(crate) fn restore_pen(state: &mut StateCx<'_>) {
     state.report_pen(VTERM_ATTR_OVERLINE, flag(pen.overline() != 0));
     state.report_pen(VTERM_ATTR_FOREGROUND, color(pen.fg));
     state.report_pen(VTERM_ATTR_BACKGROUND, color(pen.bg));
-    state.report_pen(VTERM_ATTR_URI, number(pen.uri as c_uint));
+    state.report_pen(VTERM_ATTR_URI, number(pen.uri.cast_unsigned()));
 }
 
 /// Points the pen's foreground or background at an ANSI palette slot.
 fn set_pen_col_ansi(state: &mut StateCx<'_>, attr: VTermAttr, index: c_long) {
-    let col = plain_color(ColorValue::Indexed(index as u8));
+    let col = plain_color(ColorValue::Indexed(index.to_le_bytes()[0]));
     if attr == VTERM_ATTR_BACKGROUND {
         state.pen.bg = col;
     } else {
@@ -247,21 +250,21 @@ pub(crate) fn set_pen_attr(state: &mut StateCx<'_>, attr: VTermAttr, val: Value<
     if value_type(&val) != attr_value_type(attr) {
         return false;
     }
-    let boolean = val.int() as c_uint;
+    let boolean = val.int().cast_unsigned();
     let number = val.int();
     match attr {
         VTERM_ATTR_BOLD => state.pen.set_bold(boolean),
-        VTERM_ATTR_UNDERLINE => state.pen.set_underline(number as c_uint),
+        VTERM_ATTR_UNDERLINE => state.pen.set_underline(number.cast_unsigned()),
         VTERM_ATTR_ITALIC => state.pen.set_italic(boolean),
         VTERM_ATTR_BLINK => state.pen.set_blink(boolean),
         VTERM_ATTR_REVERSE => state.pen.set_reverse(boolean),
         VTERM_ATTR_CONCEAL => state.pen.set_conceal(boolean),
         VTERM_ATTR_STRIKE => state.pen.set_strike(boolean),
-        VTERM_ATTR_FONT => state.pen.set_font(number as c_uint),
+        VTERM_ATTR_FONT => state.pen.set_font(number.cast_unsigned()),
         VTERM_ATTR_FOREGROUND => state.pen.fg = val.color(),
         VTERM_ATTR_BACKGROUND => state.pen.bg = val.color(),
         VTERM_ATTR_SMALL => state.pen.set_small(boolean),
-        VTERM_ATTR_BASELINE => state.pen.set_baseline(number as c_uint),
+        VTERM_ATTR_BASELINE => state.pen.set_baseline(number.cast_unsigned()),
         VTERM_ATTR_URI => state.pen.uri = number,
         VTERM_ATTR_DIM => state.pen.set_dim(boolean),
         VTERM_ATTR_OVERLINE => state.pen.set_overline(boolean),
@@ -308,7 +311,7 @@ fn parse_sgr_color(palette: c_long, args: &[c_long]) -> (Option<ColorValue>, usi
             let Some(channels) = args.get(skip..skip + 3) else {
                 return (None, args.len());
             };
-            let channel = |i: usize| (channels[i] & c_long::from(CSI_ARG_MASK)) as u8;
+            let channel = |i: usize| channels[i].to_le_bytes()[0];
             let value = ColorValue::rgb(channel(0), channel(1), channel(2));
             (Some(value), skip + 3)
         }
@@ -320,7 +323,7 @@ fn parse_sgr_color(palette: c_long, args: &[c_long]) -> (Option<ColorValue>, usi
             if index & c_long::from(CSI_ARG_MASK) == CSI_ARG_MISSING {
                 return (None, 1);
             }
-            (Some(ColorValue::Indexed(index as u8)), 1)
+            (Some(ColorValue::Indexed(index.to_le_bytes()[0])), 1)
         }
         _ => (None, 0),
     }
@@ -390,7 +393,7 @@ pub(crate) fn apply_sgr(state: &mut StateCx<'_>, args: &[c_long]) {
                 state.report_pen(VTERM_ATTR_STRIKE, flag(true));
             }
             10..=19 => {
-                state.pen.set_font((arg - 10) as c_uint);
+                state.pen.set_font(number_as_u32(arg - 10));
                 state.report_pen(VTERM_ATTR_FONT, number(state.pen.font()));
             }
             21 => {

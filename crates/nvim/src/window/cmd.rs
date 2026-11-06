@@ -30,6 +30,10 @@ use crate::keycodes::{
 };
 use crate::narrow::as_index;
 use crate::narrow::number_as_int;
+use crate::normal::FIND_IDENT;
+use crate::search::ACTION_SPLIT;
+use crate::search::FIND_ANY;
+use crate::search::FIND_DEFINE;
 use crate::types::AutoEvent;
 use crate::types::Key;
 use crate::winlayer::prev_window;

@@ -32,7 +32,8 @@
 //!   `int` and uses as a subscript, `[n]`: never negative, and one that were
 //!   would index far past any table and panic there. Formed once per byte in
 //!   the spell checker and the suggestion walk, so it has no test of its own.
-//! * **Saturating** -- `float_as_i64`, `float_as_int`. The C's float-to-integer conversion is
+//! * **Saturating** -- `float_as_i64`, `float_as_int`, `float_as_u32`,
+//!   `float_as_usize`, `float_as_f32`. The C's float-to-integer conversion is
 //!   *undefined* out of range, and Rust's `as` is defined and saturating, so
 //!   the port is already the better of the two. Naming it says so on purpose
 //!   rather than by accident.
@@ -177,6 +178,27 @@ pub(crate) fn float_as_i64(n: f64) -> i64 {
 /// as the screen cell `(int)` made of it, clamped to `c_int`'s range.
 pub(crate) fn float_as_int(n: f64) -> c_int {
     n as c_int
+}
+
+/// [`float_as_i64`] at a `uint32_t`'s width: the msgpack encoder's halves of
+/// an integral `double`, clamped to `0..=u32::MAX` (NaN to 0) where the C's
+/// `(uint32_t)` was undefined; the encoder's round trip rejects the clamped
+/// ones.
+pub(crate) fn float_as_u32(n: f64) -> u32 {
+    n as u32
+}
+
+/// [`float_as_i64`] at a `size_t`'s width: a Lua number used as an array
+/// index or a position, clamped to `0..=usize::MAX` (NaN to 0) where the
+/// C's `(size_t)` was undefined. Every caller tests the round trip.
+pub(crate) fn float_as_usize(n: f64) -> usize {
+    n as usize
+}
+
+/// A `double` rounded to the nearest `float`, as the C's `(float)` does in
+/// range; out of range Rust answers an infinity where the C was undefined.
+pub(crate) fn float_as_f32(n: f64) -> f32 {
+    n as f32
 }
 
 #[cfg(test)]

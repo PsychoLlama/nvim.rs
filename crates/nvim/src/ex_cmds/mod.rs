@@ -176,16 +176,10 @@ pub const GETFILE_SAME_FILE: GetFileRet = 0;
 pub const GETFILE_NOT_WRITTEN: GetFileRet = 2;
 pub const GETFILE_ERROR: GetFileRet = 1;
 pub(crate) use crate::cmdhist::HIST_SEARCH;
-pub const VIM_QUESTION: ::core::ffi::c_uint = 4;
-pub const VIM_YES: ::core::ffi::c_uint = 2;
 pub const ML_DEL_MESSAGE: ::core::ffi::c_uint = 1;
 pub const READ_FILTER: ::core::ffi::c_uint = 2;
 pub const READ_NOWINENTER: ::core::ffi::c_uint = 128;
 pub const READ_KEEP_UNDO: ::core::ffi::c_uint = 32;
-pub const CCGD_EXCMD: ::core::ffi::c_uint = 16;
-pub const CCGD_FORCEIT: ::core::ffi::c_uint = 4;
-pub const CCGD_MULTWIN: ::core::ffi::c_uint = 2;
-pub const CCGD_AW: ::core::ffi::c_uint = 1;
 #[derive(Copy, Clone)]
 pub struct SubResult {
     pub start: LPos,

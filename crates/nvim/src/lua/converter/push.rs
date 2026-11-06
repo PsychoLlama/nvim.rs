@@ -17,6 +17,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::narrow::len_as_int;
 use crate::semsg;
 use core::ffi::{CStr, c_int};
 
@@ -92,7 +93,7 @@ impl LuaSink<'_> {
             .stack
             .iter()
             .position(|frame| frame.walks(conv_type, container))?;
-        Some(At::from_top(((depth - found) * 2) as c_int))
+        Some(At::from_top(len_as_int((depth - found) * 2)))
     }
 }
 

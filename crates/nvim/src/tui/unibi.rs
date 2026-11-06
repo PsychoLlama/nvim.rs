@@ -24,6 +24,8 @@
 #![forbid(unsafe_code)]
 
 use crate::cstr;
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::io::Read;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
@@ -120,13 +122,17 @@ fn ru16(p: &[u8], off: usize) -> usize {
 /// 0x7fff and read as -1.
 fn short16(p: &[u8], off: usize) -> i32 {
     let n = ru16(p, off);
-    if n <= 0x7fff { n as i32 } else { -1 }
+    if n <= 0x7fff { len_as_int(n) } else { -1 }
 }
 
 /// `get_int32`: same top-bit rule for the 32-bit number format.
 fn int32(p: &[u8], off: usize) -> i32 {
     let n = u32::from_le_bytes([p[off], p[off + 1], p[off + 2], p[off + 3]]);
-    if n <= 0x7fff_ffff { n as i32 } else { -1 }
+    if n <= 0x7fff_ffff {
+        n.cast_signed()
+    } else {
+        -1
+    }
 }
 
 /// `unibi_from_mem`: parse a compiled terminfo description. `None` is the
@@ -136,7 +142,7 @@ pub fn from_mem(data: &[u8]) -> Option<Term> {
     if p.len() < 12 {
         return None;
     }
-    let magic = ru16(p, 0) as u16;
+    let magic = u16::from_le_bytes([p[0], p[1]]);
     let numsize = match magic {
         MAGIC_16BIT => 2,
         MAGIC_32BIT => 4,
@@ -196,8 +202,8 @@ pub fn from_mem(data: &[u8]) -> Option<Term> {
     let mut strs: Vec<Option<CString>> = Vec::with_capacity(NSTR);
     for i in 0..NSTR {
         strs.push(match str_offs.get(i) {
-            Some(&off) if off >= 0 && (off as usize) < tablsz => {
-                Some(cstr::in_bytes(&table[off as usize..]).to_owned())
+            Some(&off) if off >= 0 && as_index(off) < tablsz => {
+                Some(cstr::in_bytes(&table[as_index(off)..]).to_owned())
             }
             _ => None,
         });
@@ -259,11 +265,11 @@ pub fn from_mem(data: &[u8]) -> Option<Term> {
     let mut val_offs: Vec<Option<usize>> = Vec::with_capacity(extstr);
     for i in 0..extstr {
         let v = short16(p, i * 2);
-        if v < 0 || v as usize >= exttab {
+        if v < 0 || as_index(v) >= exttab {
             val_offs.push(None);
             continue;
         }
-        let v = v as usize;
+        let v = as_index(v);
         let end = match raw_tbl[v..].iter().position(|&b| b == 0) {
             Some(k) => v + k + 1,
             None => exttab,
@@ -282,10 +288,10 @@ pub fn from_mem(data: &[u8]) -> Option<Term> {
     let mut name_offs: Vec<usize> = Vec::with_capacity(extall);
     for i in 0..extall {
         let v = short16(p, i * 2);
-        if v < 0 || v as usize >= names_sz {
+        if v < 0 || as_index(v) >= names_sz {
             return None;
         }
-        name_offs.push(v as usize);
+        name_offs.push(as_index(v));
     }
     p = &p[extall * 2..];
 
@@ -470,7 +476,11 @@ mod tests {
                 self.str_offs.len(),
                 self.table.len(),
             ] {
-                out.extend_from_slice(&(v as u16).to_le_bytes());
+                out.extend_from_slice(
+                    &u16::try_from(v)
+                        .expect("a test fixture's count")
+                        .to_le_bytes(),
+                );
             }
             out.extend_from_slice(self.names);
             out.push(0);
@@ -496,7 +506,11 @@ mod tests {
                     ext.val_offs.len() + ext.bools.len() + ext.nums.len(),
                     ext.table.len(),
                 ] {
-                    out.extend_from_slice(&(v as u16).to_le_bytes());
+                    out.extend_from_slice(
+                        &u16::try_from(v)
+                            .expect("a test fixture's count")
+                            .to_le_bytes(),
+                    );
                 }
                 out.extend_from_slice(&ext.bools);
                 if ext.bools.len() % 2 == 1 {

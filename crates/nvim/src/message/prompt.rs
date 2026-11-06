@@ -26,6 +26,7 @@ use crate::guard::Keys;
 use crate::keycodes::{Ctrl_B, Ctrl_C, Ctrl_F, NotAKey, SpecialKey};
 use crate::log::logmsg;
 use crate::strings::has_char;
+use crate::types::Key;
 use crate::types::NUL;
 use crate::winlayer::Win;
 use core::ffi::c_int;
@@ -33,17 +34,17 @@ use core::ffi::c_int;
 /// The pager's and hit-enter prompt's own keys, as `c_int` so they can share
 /// a `match` with the `K_*` codes -- which are negative, so a `u8` match
 /// would alias them onto the ASCII range.
-const KEY_SPACE: c_int = b' ' as c_int;
-const KEY_COLON: c_int = b':' as c_int;
-const KEY_UPPER_G: c_int = b'G' as c_int;
-const KEY_B: c_int = b'b' as c_int;
-const KEY_D: c_int = b'd' as c_int;
-const KEY_F: c_int = b'f' as c_int;
-const KEY_G: c_int = b'g' as c_int;
-const KEY_J: c_int = b'j' as c_int;
-const KEY_K: c_int = b'k' as c_int;
-const KEY_Q: c_int = b'q' as c_int;
-const KEY_U: c_int = b'u' as c_int;
+const KEY_SPACE: c_int = Key::ascii(b' ').code();
+const KEY_COLON: c_int = Key::ascii(b':').code();
+const KEY_UPPER_G: c_int = Key::ascii(b'G').code();
+const KEY_B: c_int = Key::ascii(b'b').code();
+const KEY_D: c_int = Key::ascii(b'd').code();
+const KEY_F: c_int = Key::ascii(b'f').code();
+const KEY_G: c_int = Key::ascii(b'g').code();
+const KEY_J: c_int = Key::ascii(b'j').code();
+const KEY_K: c_int = Key::ascii(b'k').code();
+const KEY_Q: c_int = Key::ascii(b'q').code();
+const KEY_U: c_int = Key::ascii(b'u').code();
 
 /// Call this after prompting the user: avoids a hit-return message and a
 /// delay.

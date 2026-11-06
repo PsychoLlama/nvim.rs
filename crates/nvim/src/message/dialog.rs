@@ -85,7 +85,7 @@ pub fn do_dialog(
                 msg_didany.set(false);
                 msg_didout.set(false);
             }
-            _ if c == b':' as c_int && ex_cmd => {
+            _ if c == c_int::from(b':') && ex_cmd => {
                 retval = dfltbutton;
                 ins_char_typebuf(Key::ascii(b':'), ModMask::NONE, false);
                 break;
@@ -258,9 +258,9 @@ pub fn vim_dialog_yesno(type_0: c_int, title: Option<&CStr>, message: &CStr, dfl
     let title = title.unwrap_or_else(|| gettext(c"Question"));
     let buttons = gettext(c"&Yes\n&No");
     if do_dialog(type_0, Some(title), message, buttons, dflt, None, false) == 1 {
-        return VIM_YES as c_int;
+        return VIM_YES;
     }
-    VIM_NO as c_int
+    VIM_NO
 }
 
 /// A yes/no/cancel dialog.
@@ -273,9 +273,9 @@ pub fn vim_dialog_yesnocancel(
     let title = title.unwrap_or_else(|| gettext(c"Question"));
     let buttons = gettext(c"&Yes\n&No\n&Cancel");
     match do_dialog(type_0, Some(title), message, buttons, dflt, None, false) {
-        1 => VIM_YES as c_int,
-        2 => VIM_NO as c_int,
-        _ => VIM_CANCEL as c_int,
+        1 => VIM_YES,
+        2 => VIM_NO,
+        _ => VIM_CANCEL,
     }
 }
 
@@ -290,10 +290,10 @@ pub fn vim_dialog_yesnoallcancel(
     let title = title.unwrap_or(c"Question");
     let buttons = gettext(c"&Yes\n&No\nSave &All\n&Discard All\n&Cancel");
     match do_dialog(type_0, Some(title), message, buttons, dflt, None, false) {
-        1 => VIM_YES as c_int,
-        2 => VIM_NO as c_int,
-        3 => VIM_ALL as c_int,
-        4 => VIM_DISCARDALL as c_int,
-        _ => VIM_CANCEL as c_int,
+        1 => VIM_YES,
+        2 => VIM_NO,
+        3 => VIM_ALL,
+        4 => VIM_DISCARDALL,
+        _ => VIM_CANCEL,
     }
 }

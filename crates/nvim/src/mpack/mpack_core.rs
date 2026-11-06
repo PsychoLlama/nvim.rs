@@ -26,15 +26,15 @@
 
 #![forbid(unsafe_code)]
 
-use core::ffi::{c_int, c_uint};
+use core::ffi::c_int;
 
 use super::token::{self, Kind, MAX_TOKEN_LEN, Read, Tok};
 use crate::types::mpack_token_type_t;
 
 /// `mpack_read`/`mpack_write` status codes.
-pub const MPACK_OK: c_uint = 0;
-pub const MPACK_EOF: c_uint = 1;
-pub const MPACK_ERROR: c_uint = 2;
+pub const MPACK_OK: c_int = 0;
+pub const MPACK_EOF: c_int = 1;
+pub const MPACK_ERROR: c_int = 2;
 
 pub const MPACK_TOKEN_NIL: mpack_token_type_t = Kind::Nil as mpack_token_type_t;
 pub const MPACK_TOKEN_BOOLEAN: mpack_token_type_t = Kind::Boolean as mpack_token_type_t;
@@ -47,8 +47,6 @@ pub const MPACK_TOKEN_MAP: mpack_token_type_t = Kind::Map as mpack_token_type_t;
 pub const MPACK_TOKEN_BIN: mpack_token_type_t = Kind::Bin as mpack_token_type_t;
 pub const MPACK_TOKEN_STR: mpack_token_type_t = Kind::Str as mpack_token_type_t;
 pub const MPACK_TOKEN_EXT: mpack_token_type_t = Kind::Ext as mpack_token_type_t;
-
-pub const MPACK_MAX_TOKEN_LEN: c_int = MAX_TOKEN_LEN as c_int;
 
 // ---------------------------------------------------------------------------
 // The streaming state
@@ -145,7 +143,7 @@ impl TokBuf {
     /// `MPACK_EOF` means `out` filled first; the caller drains it and calls
     /// again, and the parked token wins over whatever it passes. A chunk
     /// token's body is `chunk`, which a resuming caller hands over again.
-    pub fn write(&mut self, out: &mut [u8], tok: &Tok, chunk: &[u8]) -> (c_uint, usize) {
+    pub fn write(&mut self, out: &mut [u8], tok: &Tok, chunk: &[u8]) -> (c_int, usize) {
         debug_assert!(!out.is_empty());
         let tok = if self.plen != 0 {
             self.pending_tok
@@ -243,7 +241,7 @@ pub(crate) fn read_step(tb: &mut TokBuf, input: &[u8]) -> (Step, usize) {
 ///
 /// Answers `(status, written)`. On a short buffer the whole encoding is
 /// parked in `pending` and [`drain_pending`] hands over the rest.
-fn write_step(tb: &mut TokBuf, tok: &Tok, out: &mut [u8]) -> (c_uint, usize) {
+fn write_step(tb: &mut TokBuf, tok: &Tok, out: &mut [u8]) -> (c_int, usize) {
     let Some(encoded) = token::encode_token(tok) else {
         return (MPACK_ERROR, 0);
     };
@@ -262,7 +260,7 @@ fn write_step(tb: &mut TokBuf, tok: &Tok, out: &mut [u8]) -> (c_uint, usize) {
 }
 
 /// Hand over the rest of a parked encoding (`mpack_wpending`).
-fn drain_pending(tb: &mut TokBuf, out: &mut [u8]) -> (c_uint, usize) {
+fn drain_pending(tb: &mut TokBuf, out: &mut [u8]) -> (c_int, usize) {
     debug_assert!(tb.ppos < tb.plen, "nothing pending");
     let count = (tb.plen - tb.ppos).min(out.len());
     out[..count].copy_from_slice(&tb.pending[tb.ppos..tb.ppos + count]);
@@ -278,7 +276,7 @@ fn drain_pending(tb: &mut TokBuf, out: &mut [u8]) -> (c_uint, usize) {
 /// Copy the next slice of a `str`/`bin`/`ext` body out of `body`, which is
 /// the whole of it. `ppos` counts how much of *this* chunk has gone, and
 /// `plen` holds the chunk's length while it is unfinished.
-fn write_chunk(tb: &mut TokBuf, tok: &Tok, body: &[u8], out: &mut [u8]) -> (c_uint, usize) {
+fn write_chunk(tb: &mut TokBuf, tok: &Tok, body: &[u8], out: &mut [u8]) -> (c_int, usize) {
     if tb.plen == 0 {
         tb.ppos = 0;
     }
@@ -306,7 +304,7 @@ fn write_chunk(tb: &mut TokBuf, tok: &Tok, body: &[u8], out: &mut [u8]) -> (c_ui
 /// token answers `MPACK_EOF` with its type code consumed, as the C did; an
 /// invalid byte answers `MPACK_ERROR`, consumed too.
 #[inline]
-pub fn read_token(input: &mut &[u8]) -> (c_uint, Tok) {
+pub fn read_token(input: &mut &[u8]) -> (c_int, Tok) {
     match token::decode_token(input) {
         Read::Done { tok, used } => {
             *input = &input[used..];
@@ -344,7 +342,12 @@ mod tests {
                 rest = &rest[used..];
                 match step {
                     Step::Token(tok) => out.push(tok),
-                    Step::Chunk => out.push(Tok::new(Kind::Chunk, used as u32, 0, 0)),
+                    Step::Chunk => out.push(Tok::new(
+                        Kind::Chunk,
+                        u32::try_from(used).expect("a chunk of a test message"),
+                        0,
+                        0,
+                    )),
                     Step::Eof => break,
                     Step::Error => panic!("unexpected error"),
                 }
@@ -366,7 +369,12 @@ mod tests {
                 rest = &rest[used..];
                 match step {
                     Step::Token(tok) => out.push(tok),
-                    Step::Chunk => out.push(Tok::new(Kind::Chunk, used as u32, 0, 0)),
+                    Step::Chunk => out.push(Tok::new(
+                        Kind::Chunk,
+                        u32::try_from(used).expect("a chunk of a test message"),
+                        0,
+                        0,
+                    )),
                     _ => panic!("unexpected"),
                 }
             }

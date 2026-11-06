@@ -135,7 +135,6 @@ pub const EOL_UNKNOWN: c_int = -1;
 pub const EOL_UNIX: c_int = 0;
 pub const EOL_DOS: c_int = 1;
 pub const EOL_MAC: c_int = 2;
-const VIM_WARNING: c_int = 2;
 const SEA_QUIT: c_int = 2;
 const EOVERFLOW: c_int = ::libc::EOVERFLOW;
 /// The file-type bits of a mode.

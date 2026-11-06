@@ -10,9 +10,7 @@
 )]
 
 use super::wrappers::{arg_number, arg_number_chk};
-use super::{
-    SIGINT, VIM_ERROR, VIM_GENERIC, VIM_INFO, VIM_QUESTION, VIM_WARNING, tv_get_buf_from_arg,
-};
+use super::{SIGINT, tv_get_buf_from_arg};
 use crate::api::vim::nvim_feedkeys;
 use crate::buffer::buf_is_prompt;
 use crate::drawscreen::state::cmdline_row;
@@ -26,6 +24,11 @@ use crate::getchar::{restore_typeahead, save_typeahead};
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::input::prompt_for_number;
+use crate::message::VIM_ERROR;
+use crate::message::VIM_GENERIC;
+use crate::message::VIM_INFO;
+use crate::message::VIM_QUESTION;
+use crate::message::VIM_WARNING;
 use crate::message::e_invarg;
 use crate::message::state::{lines_left, msg_row, msg_scroll};
 use crate::message::{
@@ -48,11 +51,11 @@ use core::ffi::c_int;
 /// `{type}` spellings `confirm()` recognises, by their first letter.
 /// Anything else leaves the default in place.
 const DIALOG_TYPES: [(u8, c_int); 5] = [
-    (b'E', VIM_ERROR.cast_signed()),
-    (b'Q', VIM_QUESTION.cast_signed()),
-    (b'I', VIM_INFO.cast_signed()),
-    (b'W', VIM_WARNING.cast_signed()),
-    (b'G', VIM_GENERIC.cast_signed()),
+    (b'E', VIM_ERROR),
+    (b'Q', VIM_QUESTION),
+    (b'I', VIM_INFO),
+    (b'W', VIM_WARNING),
+    (b'G', VIM_GENERIC),
 ];
 
 /// `confirm({msg} [, {choices} [, {default} [, {type}]]])`
@@ -62,7 +65,7 @@ pub fn f_confirm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut type_buf = NumBuf::new();
     let mut buttons = None;
     let mut default = 1;
-    let mut kind = VIM_GENERIC.cast_signed();
+    let mut kind = VIM_GENERIC;
     let mut error = false;
 
     let message = numbuf.string_chk(&args[0]).ok();

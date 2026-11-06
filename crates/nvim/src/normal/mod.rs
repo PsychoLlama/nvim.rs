@@ -70,9 +70,9 @@ pub(crate) const kMTLineWise: MotionType = 1;
 pub(crate) const kMTCharWise: MotionType = 0;
 pub(crate) const SHOWCMD_COLS: c_uint = 10;
 pub(crate) const SHOWCMD_BUFLEN: c_uint = 41;
-pub(crate) const FIND_EVAL: c_uint = 4;
-pub(crate) const FIND_STRING: c_uint = 2;
-pub(crate) const FIND_IDENT: c_uint = 1;
+pub(crate) const FIND_EVAL: c_int = 4;
+pub(crate) const FIND_STRING: c_int = 2;
+pub(crate) const FIND_IDENT: c_int = 1;
 pub(crate) struct NvCmd {
     pub cmd_char: Key,
     pub cmd_func: NvFunc,
@@ -97,11 +97,6 @@ pub(crate) const SPELL_ADD_GOOD: SpellAddType = 0;
 pub(crate) const SMT_RARE: SpellMoveType = 2;
 pub(crate) const SMT_BAD: SpellMoveType = 1;
 pub(crate) const FM_BACKWARD: c_uint = 1;
-pub(crate) const ACTION_GOTO: c_uint = 2;
-pub(crate) const ACTION_SHOW: c_uint = 1;
-pub(crate) const ACTION_SHOW_ALL: c_uint = 4;
-pub(crate) const FIND_ANY: c_uint = 1;
-pub(crate) const FIND_DEFINE: c_uint = 2;
 /// The normal-mode state machine's own state: one per running
 /// `normal_enter` (lent to `state_enter` for the length of its loop) or
 /// `normal_cmd` (on that call's stack).

@@ -12,9 +12,8 @@
 
 /// `insertchar()` flags — upstream's anonymous enum in `edit.h`.
 ///
-/// c2rust typed this `c_uint`, so every use site is `INSCHAR_X as c_int`;
-/// retyping belongs to the slice that deletes those casts.
-pub type InscharFlags = ::core::ffi::c_uint;
+/// A C `int`: `insertchar` and `internal_format` take the set as one.
+pub type InscharFlags = ::core::ffi::c_int;
 
 /// force formatting
 pub const INSCHAR_FORMAT: InscharFlags = 1;

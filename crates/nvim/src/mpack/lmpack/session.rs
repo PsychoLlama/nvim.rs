@@ -16,6 +16,8 @@
 
 #![forbid(unsafe_code)]
 
+use crate::narrow::float_as_u32;
+use crate::narrow::number_as_int;
 use core::ffi::{CStr, c_int};
 
 use super::{
@@ -29,7 +31,7 @@ use crate::mpack::object::MPACK_NOMEM;
 use crate::mpack::rpc::{
     self, MPACK_RPC_NOTIFICATION, MPACK_RPC_REQUEST, MPACK_RPC_RESPONSE, RpcMessage,
 };
-use crate::types::{lua_Integer, lua_Number, mpack_uint32_t};
+use crate::types::{lua_Integer, lua_Number};
 
 /// The scratch a whole envelope fits in: an array header, a one-byte type
 /// and a five-byte id at most.
@@ -48,7 +50,7 @@ impl Default for Session {
         Session {
             session: None,
             unpacked: Unpacked {
-                type_0: MPACK_EOF as c_int,
+                type_0: MPACK_EOF,
                 msg: RpcMessage::default(),
                 method_or_error: LUA_NOREF,
                 args_or_result: LUA_NOREF,
@@ -152,13 +154,13 @@ pub fn receive(stack: &mut Stack) -> Result<c_int, Raise> {
     // A message is only complete when its body is too, unless there is no
     // unpacker to read a body with.
     let unpacked = &session(&mut view).unpacked;
-    let complete = unpacked.type_0 != MPACK_EOF as c_int
+    let complete = unpacked.type_0 != MPACK_EOF
         && (unpacked.args_or_result != LUA_NOREF || unpacker.is_none());
     if complete {
         if !push_message(&mut view, reg) {
             return Err(Raise::message("invalid msgpack-rpc string"));
         }
-        session(&mut view).unpacked.type_0 = MPACK_EOF as c_int;
+        session(&mut view).unpacked.type_0 = MPACK_EOF;
         if unpacker.is_some() {
             push_body(&mut view, reg);
         }
@@ -184,18 +186,18 @@ fn read_message(
 ) -> Result<(), Raise> {
     loop {
         let current = session(stack);
-        if current.unpacked.type_0 == MPACK_EOF as c_int {
+        if current.unpacked.type_0 == MPACK_EOF {
             let framer = current.session.as_mut().expect("a live session");
             current.unpacked.type_0 = framer.receive(input, &mut current.unpacked.msg);
             // With no unpacker the envelope *is* the message.
-            if unpacker.is_none() || current.unpacked.type_0 == MPACK_EOF as c_int {
+            if unpacker.is_none() || current.unpacked.type_0 == MPACK_EOF {
                 return Ok(());
             }
         }
         let Some((unpacker, unpacker_reg)) = unpacker else {
             return Ok(());
         };
-        if unpack_into_registry(stack, unpacker, unpacker_reg, input)? == MPACK_EOF as c_int {
+        if unpack_into_registry(stack, unpacker, unpacker_reg, input)? == MPACK_EOF {
             return Ok(());
         }
         // The first value is the method (or the error), the second the
@@ -220,11 +222,11 @@ fn push_message(stack: &mut Stack, reg: At) -> bool {
     match kind {
         MPACK_RPC_REQUEST => {
             stack.push_bytes(b"request");
-            stack.push_number(id as lua_Number);
+            stack.push_number(lua_Number::from(id));
         }
         MPACK_RPC_RESPONSE => {
             stack.push_bytes(b"response");
-            geti(stack, reg, data as c_int);
+            geti(stack, reg, number_as_int(data));
         }
         MPACK_RPC_NOTIFICATION => {
             stack.push_bytes(b"notification");
@@ -273,7 +275,7 @@ pub fn request(stack: &mut Stack) -> Result<c_int, Raise> {
     let used = loop {
         let (result, used) = framer.request(&mut buf, i64::from(handle));
         if result != MPACK_NOMEM {
-            debug_assert_eq!(result, MPACK_OK as c_int);
+            debug_assert_eq!(result, MPACK_OK);
             break used;
         }
         // Every slot holds an outstanding request; double the table.
@@ -295,8 +297,8 @@ pub fn reply(stack: &mut Stack) -> Result<c_int, Raise> {
     }
     let mut buf = [0u8; ENVELOPE_MAX];
     let framer = session(stack).session.as_mut().expect("a live session");
-    let (result, used) = framer.reply(&mut buf, id as mpack_uint32_t);
-    debug_assert_eq!(result, MPACK_OK as c_int);
+    let (result, used) = framer.reply(&mut buf, float_as_u32(id));
+    debug_assert_eq!(result, MPACK_OK);
     stack.push_bytes(&buf[..used]);
     Ok(1)
 }
@@ -310,7 +312,7 @@ pub fn notify(stack: &mut Stack) -> Result<c_int, Raise> {
     let mut buf = [0u8; ENVELOPE_MAX];
     let framer = session(stack).session.as_mut().expect("a live session");
     let (result, used) = framer.notify(&mut buf);
-    debug_assert_eq!(result, MPACK_OK as c_int);
+    debug_assert_eq!(result, MPACK_OK);
     stack.push_bytes(&buf[..used]);
     Ok(1)
 }

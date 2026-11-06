@@ -27,6 +27,8 @@ use crate::ex_getln::cmdline_input;
 use crate::guard::Depth;
 use crate::memory::XString;
 use crate::message::e_noalt;
+use crate::normal::FIND_IDENT;
+use crate::normal::FIND_STRING;
 use crate::normal::ident_under_cursor;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;

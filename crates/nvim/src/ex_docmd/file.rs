@@ -8,6 +8,10 @@ use crate::buffer::DOBUF_MOD;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::do_ecmd;
 use crate::ex_cmds::newlnum;
+use crate::ex_cmds2::CCGD_AW;
+use crate::ex_cmds2::CCGD_EXCMD;
+use crate::ex_cmds2::CCGD_FORCEIT;
+use crate::ex_cmds2::CCGD_MULTWIN;
 use crate::file_search::find_nth_file_in_path;
 use crate::fileio::{ReadFlags, readfile_named};
 use crate::guard::Allow;
@@ -19,6 +23,9 @@ use crate::memory::XString;
 use crate::message::msg;
 use crate::message_fmt::msg_bytes;
 use crate::os::cshim::gettext;
+use crate::search::ACTION_SHOW;
+use crate::search::ACTION_SHOW_ALL;
+use crate::search::CHECK_PATH;
 use crate::semsg;
 use crate::types::CmdIdx;
 use crate::types::ColNr;
@@ -38,10 +45,7 @@ use crate::ex_cmds2::{check_changed, check_fname};
 use crate::ex_docmd::cmdline::do_cmdline_cmd;
 use crate::ex_docmd::path::findfunc_find_file;
 use crate::ex_docmd::source::ex_errmsg;
-use crate::ex_docmd::{
-    ACTION_SHOW, ACTION_SHOW_ALL, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, CHECK_PATH,
-    DOBUF_LAST, cmdmod_has, ex_pressedreturn, kDirectionNotSet,
-};
+use crate::ex_docmd::{DOBUF_LAST, cmdmod_has, ex_pressedreturn, kDirectionNotSet};
 use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::ex_getln::{text_or_buf_locked, ui_ext_cmdline_block_leave};
 use crate::file_search::FileNameOpts;
@@ -173,14 +177,10 @@ pub(crate) fn ex_recover(excmd: &mut ExArg) {
     recoverymode.set(true);
     let unsaved = check_changed(
         Buf::current(),
-        (if p_awa() { CCGD_AW as c_int } else { 0 })
-            | CCGD_MULTWIN as c_int
-            | (if excmd.forceit {
-                CCGD_FORCEIT as c_int
-            } else {
-                0
-            })
-            | CCGD_EXCMD as c_int,
+        (if p_awa() { CCGD_AW } else { 0 })
+            | CCGD_MULTWIN
+            | (if excmd.forceit { CCGD_FORCEIT } else { 0 })
+            | CCGD_EXCMD,
     );
     if !unsaved
         && (excmd.line.byte_at(excmd.line.arg) == 0
@@ -496,12 +496,12 @@ pub(crate) fn ex_checkpath(excmd: &mut ExArg) {
         kDirectionNotSet,
         false,
         false,
-        CHECK_PATH as c_int,
+        CHECK_PATH,
         1,
         if excmd.forceit {
-            ACTION_SHOW_ALL as c_int
+            ACTION_SHOW_ALL
         } else {
-            ACTION_SHOW as c_int
+            ACTION_SHOW
         },
         LineNr::ONE,
         MAXLNUM,

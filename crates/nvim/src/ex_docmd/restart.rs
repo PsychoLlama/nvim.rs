@@ -13,6 +13,7 @@ use crate::memory::ThinCString;
 use crate::message::emsg;
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::msgpack_rpc::channel::rpc_call_with;
+use crate::narrow::as_index;
 use crate::os::env::ENV_STARTREASON;
 use crate::shell::Argv;
 use core::ffi::CStr;
@@ -310,7 +311,7 @@ fn restart_argv(no_ui: bool) -> (Vec<ThinCString>, Option<ThinCString>) {
     let argv_list = get_vim_var_list_handle(Vv::Argv);
 
     let mut words: Vec<ThinCString> =
-        Vec::with_capacity(list_len(argv_list.as_deref()) as usize + 2);
+        Vec::with_capacity(as_index(list_len(argv_list.as_deref())) + 2);
     let mut listen_arg: Option<ThinCString> = None;
 
     let items = list_items(argv_list.as_deref());

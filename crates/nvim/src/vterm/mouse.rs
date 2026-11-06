@@ -49,7 +49,7 @@ fn encode_mouse(
     row: c_int,
 ) -> Option<EscapeSeq> {
     // The modifier bits sit above the two low button bits in every protocol.
-    let modifiers = (modifiers as c_int) << 2;
+    let modifiers = modifiers.cast_signed() << 2;
     // Only SGR can say *which* button was released, so the others report a
     // release as the "no button" code.
     let released_as_3 = if pressed { code } else { 3 };
@@ -64,9 +64,9 @@ fn encode_mouse(
                 return None;
             }
             seq.push(b'M');
-            seq.push(((code | modifiers) + 0x20) as u8);
-            seq.push((col.min(0xff - 0x21) + 0x21) as u8);
-            seq.push((row.min(0xff - 0x21) + 0x21) as u8);
+            seq.push(((code | modifiers) + 0x20).to_le_bytes()[0]);
+            seq.push((col.min(0xff - 0x21) + 0x21).to_le_bytes()[0]);
+            seq.push((row.min(0xff - 0x21) + 0x21).to_le_bytes()[0]);
         }
         MOUSE_UTF8 => {
             seq.push(b'M');
@@ -108,7 +108,7 @@ fn drag_code(mouse_buttons: c_int) -> Option<c_int> {
         // Motion with nothing held reports the "no button" code.
         return Some(3 + 0x20);
     }
-    let button = mouse_buttons.trailing_zeros() as c_int + 1;
+    let button = mouse_buttons.trailing_zeros().cast_signed() + 1;
     match button {
         1..=3 => Some(button - 1 + 0x20),
         8..=11 => Some(button - 8 + 0x80 + 0x20),

@@ -7,7 +7,14 @@
 //! `:tselect` and the rest only in their second.
 #![forbid(unsafe_code)]
 
+use crate::narrow::number_as_int;
 use crate::regexp::skip_regexp_at;
+use crate::search::ACTION_GOTO;
+use crate::search::ACTION_SHOW;
+use crate::search::ACTION_SHOW_ALL;
+use crate::search::ACTION_SPLIT;
+use crate::search::FIND_ANY;
+use crate::search::FIND_DEFINE;
 use core::ffi::c_int;
 
 use crate::ascii::ascii_isdigit;
@@ -15,10 +22,7 @@ use crate::charset::getdigits_int_at;
 
 use crate::ex_docmd::scan::ends_excmd;
 use crate::ex_docmd::source::ex_errmsg;
-use crate::ex_docmd::{
-    ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, ACTION_SPLIT, FIND_ANY, FIND_DEFINE, cmdmod_split,
-    cmdmod_tab, cmdnames, kDirectionNotSet,
-};
+use crate::ex_docmd::{cmdmod_split, cmdmod_tab, cmdnames, kDirectionNotSet};
 use crate::message::e_trailing_arg;
 use crate::option::magic_isset;
 use crate::option::vars::p_pvh;
@@ -63,12 +67,12 @@ pub(crate) fn ex_findpat(excmd: &mut ExArg) {
     // `/pat/` searches for a pattern rather than for a whole word, and
     // the rest of the line after it may be another command.
     let mut whole = true;
-    if c_int::from(excmd.line.byte_at(excmd.line.arg)) == '/' as c_int {
+    if excmd.line.byte_at(excmd.line.arg) == b'/' {
         whole = false;
         excmd.line.arg += 1;
-        let magic = magic_isset() as c_int;
-        let mut at =
-            excmd.line.arg + skip_regexp_at(excmd.line.tail(excmd.line.arg), '/' as c_int, magic);
+        let magic = c_int::from(magic_isset());
+        let mut at = excmd.line.arg
+            + skip_regexp_at(excmd.line.tail(excmd.line.arg), c_int::from(b'/'), magic);
         if excmd.line.byte_at(at) != 0 {
             excmd.line.terminate_at(at);
             at = excmd.line.skip_white(at + 1);
@@ -87,11 +91,7 @@ pub(crate) fn ex_findpat(excmd: &mut ExArg) {
             kDirectionNotSet,
             whole,
             !excmd.forceit,
-            if define {
-                FIND_DEFINE as c_int
-            } else {
-                FIND_ANY as c_int
-            },
+            if define { FIND_DEFINE } else { FIND_ANY },
             n,
             action,
             excmd.line1,
@@ -104,7 +104,7 @@ pub(crate) fn ex_findpat(excmd: &mut ExArg) {
 
 /// `:ptag` and friends — the same as `:tag`, in the preview window.
 pub(crate) fn ex_ptag(excmd: &mut ExArg) {
-    g_do_tagpreview.set(p_pvh() as c_int);
+    g_do_tagpreview.set(number_as_int(p_pvh()));
     ex_tag_cmd(
         excmd,
         &cmdnames[excmd.cmdidx.index()].cmd_name.to_bytes()[1..],

@@ -41,7 +41,7 @@ use crate::types::{
 const MAX_NESTING: usize = 32;
 
 /// The status past `MPACK_ERROR`: the value nests deeper than [`MAX_NESTING`].
-pub(crate) const MPACK_NOMEM: c_int = MPACK_ERROR.cast_signed() + 1;
+pub(crate) const MPACK_NOMEM: c_int = MPACK_ERROR + 1;
 
 /// The most a container's header may reserve before its items arrive.
 ///
@@ -300,7 +300,7 @@ impl MsgpackDecoder {
             let (taken, rest) = data.split_at(used);
             let done = match step {
                 Step::Eof => None,
-                Step::Error => return Err(MPACK_ERROR.cast_signed()),
+                Step::Error => return Err(MPACK_ERROR),
                 Step::Token(tok) => self.token(tok)?,
                 Step::Chunk => self.chunk(taken)?,
             };
@@ -324,9 +324,9 @@ pub(crate) fn unpack_typval(data: &mut &[u8], ret: &mut TypVal) -> c_int {
     match MsgpackDecoder::new().feed(data) {
         Ok(Some(value)) => {
             ret.overwrite(value);
-            MPACK_OK.cast_signed()
+            MPACK_OK
         }
-        Ok(None) => MPACK_EOF.cast_signed(),
+        Ok(None) => MPACK_EOF,
         Err(status) => status,
     }
 }

@@ -152,7 +152,7 @@ struct BlockNrHasher(u64);
 impl Hasher for BlockNrHasher {
     fn write_i64(&mut self, n: i64) {
         // splitmix64's finalizer.
-        let mut z = n as u64;
+        let mut z = n.cast_unsigned();
         z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
         z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
         self.0 = z ^ (z >> 31);
@@ -160,7 +160,12 @@ impl Hasher for BlockNrHasher {
 
     fn write(&mut self, bytes: &[u8]) {
         for &b in bytes {
-            self.write_i64((self.0 as i64).wrapping_mul(31).wrapping_add(b as i64));
+            self.write_i64(
+                self.0
+                    .cast_signed()
+                    .wrapping_mul(31)
+                    .wrapping_add(i64::from(b)),
+            );
         }
     }
 
@@ -241,8 +246,9 @@ impl MemFile {
         let blocksize = memfile.file.as_ref().and_then(|file| file.metadata().ok());
         if let Some(blocksize) = blocksize.map(|metadata| metadata.blksize())
             && (MIN_SWAP_PAGE_SIZE..=MAX_SWAP_PAGE_SIZE).contains(&blocksize)
+            && let Ok(blocksize) = c_uint::try_from(blocksize)
         {
-            memfile.mf_page_size = blocksize as c_uint;
+            memfile.mf_page_size = blocksize;
         }
 
         // When recovering, the real page size comes out of block zero later
@@ -319,7 +325,7 @@ impl MemFile {
         {
             block.bnum = free.bnum;
             if free.page_count > page_count {
-                free.bnum += page_count as BlockNr;
+                free.bnum += BlockNr::from(page_count);
                 free.page_count -= page_count;
             } else {
                 self.free.pop();
@@ -330,7 +336,7 @@ impl MemFile {
             self.mf_neg_count += 1;
         } else {
             block.bnum = self.mf_blocknr_max;
-            self.mf_blocknr_max += page_count as BlockNr;
+            self.mf_blocknr_max += BlockNr::from(page_count);
         }
 
         block.flags = BH_LOCKED | BH_DIRTY; // a new block is always dirty
@@ -590,7 +596,7 @@ impl MemFile {
         };
 
         let page_size = self.mf_page_size;
-        let offset = (page_size as BlockNr * block.bnum) as FileOffset;
+        let offset = (BlockNr::from(page_size) * block.bnum) as FileOffset;
         if !seek_to(file, offset) {
             perror_msg(c"E294: Seek error in swap file read");
             return Err(SwapFailed);
@@ -633,7 +639,7 @@ impl MemFile {
                 Some(id)
             };
 
-            let offset = (page_size as BlockNr * nr) as FileOffset;
+            let offset = (BlockNr::from(page_size) * nr) as FileOffset;
             let page_count = at.map_or(1, |at| self.used.block(at).page_count);
             // Upstream lets this wrap, and a line long enough to overflow it
             // would have overflowed `ml_append_int`'s arithmetic first.
@@ -680,8 +686,8 @@ impl MemFile {
             if let Some(at) = at {
                 self.used.block_mut(at).flags &= !BH_DIRTY; // a real block, not filler
             }
-            if nr + page_count as BlockNr > self.mf_infile_count {
-                self.mf_infile_count = nr + page_count as BlockNr;
+            if nr + BlockNr::from(page_count) > self.mf_infile_count {
+                self.mf_infile_count = nr + BlockNr::from(page_count);
             }
             if nr == target {
                 break; // wrote the block we came for
@@ -714,14 +720,14 @@ impl MemFile {
         {
             new_bnum = free.bnum;
             if free.page_count > page_count {
-                free.bnum += page_count as BlockNr;
+                free.bnum += BlockNr::from(page_count);
                 free.page_count -= page_count;
             } else {
                 self.free.pop();
             }
         } else {
             new_bnum = self.mf_blocknr_max;
-            self.mf_blocknr_max += page_count as BlockNr;
+            self.mf_blocknr_max += BlockNr::from(page_count);
         }
 
         // Refiling moves the block to the end of the order, as taking it

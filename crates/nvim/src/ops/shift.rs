@@ -25,6 +25,8 @@
 )]
 
 use crate::extmark::kExtmarkUndo;
+use crate::indent::INDENT_SET;
+use crate::indent::SIN_CHANGED;
 use crate::memory::XString;
 use crate::narrow::{len_as_int, number_as_int};
 use crate::winlayer::{Buf, Win};

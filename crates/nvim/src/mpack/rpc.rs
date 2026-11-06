@@ -49,8 +49,8 @@ pub const MPACK_RPC_ERESPID: c_int = 11;
 
 pub const MPACK_RPC_MAX_REQUESTS: c_int = 32;
 
-const COMPLETE: c_int = MPACK_OK.cast_signed();
-const PENDING: c_int = MPACK_EOF.cast_signed();
+const COMPLETE: c_int = MPACK_OK;
+const PENDING: c_int = MPACK_EOF;
 
 /// The envelope's `type` field. Adding [`MPACK_RPC_REQUEST`] to it gives the
 /// kind this module reports.
@@ -226,7 +226,7 @@ impl Session {
                     0,
                 ),
                 Next::Eof => return PENDING,
-                Next::Error => return super::mpack_core::MPACK_ERROR.cast_signed(),
+                Next::Error => return super::mpack_core::MPACK_ERROR,
             };
             let status = self.receive_tok(tok, msg);
             if status >= MPACK_RPC_REQUEST || input.is_empty() {
@@ -256,7 +256,7 @@ impl Session {
             let (write_status, count) = self.writer.write(&mut out[written..], &tok, &[]);
             written += count;
             if write_status != MPACK_OK {
-                status = write_status.cast_signed();
+                status = write_status;
             }
         }
         (status, written)

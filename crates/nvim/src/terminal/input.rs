@@ -62,7 +62,7 @@ const ESC: c_int = 27;
 
 /// vterm's name for function key `n`.
 const fn function_key(n: c_int) -> VTermKey {
-    VTERM_KEY_FUNCTION_0 + n as VTermKey
+    VTERM_KEY_FUNCTION_0 + n.cast_unsigned()
 }
 
 /// vterm's button numbers: 1-3 are the real buttons, 4-7 are the wheel's
@@ -88,8 +88,8 @@ fn convert_modifiers(key: &mut c_int, mods: ModMask, state: &mut VTermModifier) 
     }
     if mods.has(ModMask::CTRL) {
         *state |= VTERM_MOD_CTRL;
-        if !mods.has(ModMask::SHIFT) && (b'A' as c_int..=b'Z' as c_int).contains(key) {
-            *key += b'a' as c_int - b'A' as c_int;
+        if !mods.has(ModMask::SHIFT) && (c_int::from(b'A')..=c_int::from(b'Z')).contains(key) {
+            *key += c_int::from(b'a') - c_int::from(b'A');
         }
     }
     if mods.has(ModMask::ALT) {
@@ -225,7 +225,7 @@ pub(super) fn terminal_send_key(mut term: Term, c: c_int) {
     if named != VTERM_KEY_NONE {
         term.vt.keyboard_key(named, state);
     } else if key >= 0 {
-        term.vt.keyboard_unichar(key as u32, state);
+        term.vt.keyboard_unichar(key.cast_unsigned(), state);
     }
 }
 

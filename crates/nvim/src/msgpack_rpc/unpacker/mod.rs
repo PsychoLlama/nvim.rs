@@ -163,10 +163,10 @@ impl Unpacker {
             if !body_is_unpacked {
                 let Unpacker { parser, result, .. } = self;
                 let status = parser.parse(input, &mut BodyWalk { result });
-                if status == MPACK_EOF.cast_signed() {
+                if status == MPACK_EOF {
                     return false;
                 }
-                if status != MPACK_OK.cast_signed() {
+                if status != MPACK_OK {
                     self.unpack_error = Error::validation(c"failed to parse msgpack");
                     self.state = protocol::INVALID;
                     return false;
@@ -321,11 +321,11 @@ pub fn unpack(data: &[u8]) -> Result<Object, Error> {
 
     let message = if result == MPACK_NOMEM {
         c"object was too deep to unpack"
-    } else if result == MPACK_EOF.cast_signed() {
+    } else if result == MPACK_EOF {
         c"incomplete msgpack string"
-    } else if result == MPACK_ERROR.cast_signed() {
+    } else if result == MPACK_ERROR {
         c"invalid msgpack string"
-    } else if result == MPACK_OK.cast_signed() && !rest.is_empty() {
+    } else if result == MPACK_OK && !rest.is_empty() {
         c"trailing data in msgpack string"
     } else {
         return Ok(value);

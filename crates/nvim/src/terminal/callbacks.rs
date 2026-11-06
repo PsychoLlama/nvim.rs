@@ -32,7 +32,7 @@ use crate::vterm::vterm::{
     VTERM_PROP_MOUSE, VTERM_PROP_SYNCOUTPUT, VTERM_PROP_THEMEUPDATES, VTERM_PROP_TITLE,
     VTERM_SELECTION_PRIMARY,
 };
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use crate::winlayer::Buf;
 
@@ -196,9 +196,9 @@ fn apply_termprop(mut term: Term, prop: VTermProp, val: &Value<'_>) -> c_int {
 /// names.
 fn term_clipboard_set(mask: VTermSelectionMask, payload: &[u8]) {
     let regname = if mask == VTERM_SELECTION_PRIMARY {
-        b'*' as c_char
+        b'*'
     } else {
-        b'+' as c_char
+        b'+'
     };
     let payload = payload.split(|&byte| byte == 0).next().unwrap_or_default();
     // A readfile()-style list of lines (`:h chansend()`), the last one kept
@@ -212,7 +212,7 @@ fn term_clipboard_set(mask: VTermSelectionMask, payload: &[u8]) {
     let args = &mut *held;
     args.push_list(Some(lines));
     args.push_bytes(Some(b"v"));
-    args.push_bytes(Some(&[regname.cast_unsigned()]));
+    args.push_bytes(Some(&[regname]));
     // The provider is Vimscript, which is why this runs on the main loop.
     eval_call_provider(c"clipboard", c"set", Some(held), true);
 }

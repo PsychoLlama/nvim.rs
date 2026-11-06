@@ -12,6 +12,10 @@
 use super::*;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
+use crate::ex_cmds2::CCGD_AW;
+use crate::ex_cmds2::CCGD_EXCMD;
+use crate::ex_cmds2::CCGD_FORCEIT;
+use crate::ex_cmds2::CCGD_MULTWIN;
 use crate::memline::MlFlags;
 use crate::types::CmdIdx;
 use crate::winlayer::{Buf, Win};
@@ -131,17 +135,15 @@ fn can_leave_curbuf(argn: c_int, forceit: bool) -> bool {
             return true;
         }
     }
-    let flags = CCGD_AW as c_int
-        | CCGD_EXCMD as c_int
-        | flag_if(!other, CCGD_MULTWIN)
-        | flag_if(forceit, CCGD_FORCEIT);
+    let flags =
+        CCGD_AW | CCGD_EXCMD | flag_if(!other, CCGD_MULTWIN) | flag_if(forceit, CCGD_FORCEIT);
     !check_changed(Buf::current(), flags)
 }
 
 /// Edit argument `argn`. A `:s…` command splits a window first; `:tab` opens
 /// a tab page.
 pub fn do_argfile(excmd: &mut ExArg, argn: c_int) {
-    let is_split_cmd = c_int::from(excmd.line.byte_at(excmd.line.cmd)) == 's' as c_int;
+    let is_split_cmd = excmd.line.byte_at(excmd.line.cmd) == b's';
     let forceit = excmd.forceit;
     let cmdidx = excmd.cmdidx;
     let old_arg_idx = cur_arg_idx();
@@ -205,7 +207,7 @@ pub fn ex_next(excmd: &mut ExArg) {
     let has_arg = c_int::from(excmd.line.byte_at(excmd.line.arg)) != NUL;
     // Check for a changed buffer now: if this fails the argument list is not
     // redefined.
-    let flags = CCGD_AW as c_int | CCGD_EXCMD as c_int | flag_if(forceit, CCGD_FORCEIT);
+    let flags = CCGD_AW | CCGD_EXCMD | flag_if(forceit, CCGD_FORCEIT);
     let buffer = Buf::current();
     let blocked = !buf_hide(buffer) && !is_snext && check_changed(buffer, flags);
     if blocked {

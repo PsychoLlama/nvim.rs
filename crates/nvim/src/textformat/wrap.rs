@@ -14,9 +14,11 @@ use crate::change::OPENLINE_DO_COM;
 use crate::change::OPENLINE_FORMAT;
 use crate::change::OPENLINE_KEEPTRAIL;
 use crate::change::OPENLINE_MARKFIX;
+use crate::indent::INDENT_SET;
+use crate::indent::SIN_CHANGED;
 use crate::memline::Lines;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::*;
 use crate::change::{get_leader_len, ins_bytes, ins_str, open_line};
@@ -114,7 +116,7 @@ impl BreakSearch {
         // 'formatoptions' `p`: don't break after a period followed by
         // fewer than two spaces -- that is an abbreviation, not a
         // sentence end.
-        if has_format_option(FoFlag::PERIOD_ABBR) && cc == '.' as c_int && wcc < 2 {
+        if has_format_option(FoFlag::PERIOD_ABBR) && cc == c_int::from(b'.') && wcc < 2 {
             return Step::Again;
         }
         // Don't break inside the comment leader.
@@ -241,7 +243,7 @@ impl BreakSearch {
         // The character the last step back landed on, read with the step.
         let mut landed: Option<c_int> = None;
         while (!fo_ins_blank && !has_format_option(FoFlag::INS_VI))
-            || flags & INSCHAR_FORMAT as c_int != 0
+            || flags & INSCHAR_FORMAT != 0
             || Win::current().w_cursor.lnum != Insstart.get().lnum
             || Win::current().w_cursor.col >= Insstart.get().col
         {
@@ -309,7 +311,8 @@ pub fn internal_format(
     c: c_int,
 ) {
     let mut win = Win::current();
-    let mut save_char = NUL as c_char;
+    // The space stood in for, when there is one.
+    let mut save_char = None;
     let mut haveto_redraw = false;
     let fo_ins_blank = has_format_option(FoFlag::INS_BLANK);
     let fo_multibyte = has_format_option(FoFlag::MBYTE_BREAK);
@@ -317,7 +320,7 @@ pub fn internal_format(
     let fo_white_par = has_format_option(FoFlag::WHITE_PAR);
     let mut first_line = true;
     let mut no_leader = false;
-    let mut do_comments = flags & INSCHAR_DO_COM as c_int != 0;
+    let mut do_comments = flags & INSCHAR_DO_COM != 0;
     let has_lbr = win.w_onebuf_opt.wo_lbr;
 
     // So that `win_charsize()` counts correctly.
@@ -327,9 +330,12 @@ pub fn internal_format(
     // deleted; stand an `x` in for it and put it back at the end.
     if Buf::current().b_p_ai == 0 && State.get() & VREPLACE_FLAG == 0 {
         let cc = gchar_cursor();
-        if ascii_iswhite(cc) {
-            save_char = cc as c_char;
-            pchar_cursor('x' as c_char);
+        if let Some(white) = u8::try_from(cc)
+            .ok()
+            .filter(|&b| ascii_iswhite(c_int::from(b)))
+        {
+            save_char = Some(white);
+            pchar_cursor(b'x');
         }
     }
 
@@ -345,7 +351,7 @@ pub fn internal_format(
 
         if no_leader {
             do_comments = false;
-        } else if flags & INSCHAR_FORMAT as c_int == 0 && has_format_option(FoFlag::WRAP_COMS) {
+        } else if flags & INSCHAR_FORMAT == 0 && has_format_option(FoFlag::WRAP_COMS) {
             do_comments = true;
         }
         let leader_len = if do_comments { wrap_leader_len() } else { 0 };
@@ -356,10 +362,7 @@ pub fn internal_format(
         if leader_len == 0 {
             no_leader = true;
         }
-        if flags & INSCHAR_FORMAT as c_int == 0
-            && leader_len == 0
-            && !has_format_option(FoFlag::WRAP)
-        {
+        if flags & INSCHAR_FORMAT == 0 && leader_len == 0 && !has_format_option(FoFlag::WRAP) {
             break;
         }
         let mut startcol = win.w_cursor.col.get();
@@ -445,19 +448,19 @@ pub fn internal_format(
                 + if fo_white_par { OPENLINE_KEEPTRAIL } else { 0 }
                 + if do_comments { OPENLINE_DO_COM } else { 0 }
                 + OPENLINE_FORMAT
-                + if flags & INSCHAR_COM_LIST as c_int != 0 {
+                + if flags & INSCHAR_COM_LIST != 0 {
                     OPENLINE_COM_LIST
                 } else {
                     0
                 },
-            if flags & INSCHAR_COM_LIST as c_int != 0 {
+            if flags & INSCHAR_COM_LIST != 0 {
                 second_indent
             } else {
                 old_indent.get()
             },
             Some(&mut did_do_comment),
         );
-        if flags & INSCHAR_COM_LIST as c_int == 0 {
+        if flags & INSCHAR_COM_LIST == 0 {
             old_indent.set(0);
         }
         // A comment leader was inserted, so a following line may get one
@@ -468,7 +471,7 @@ pub fn internal_format(
         replace_offset.set(0);
 
         if first_line {
-            if flags & INSCHAR_COM_LIST as c_int == 0 {
+            if flags & INSCHAR_COM_LIST == 0 {
                 // Auto-wrap of numbered lists. Outside Insert mode --
                 // that is, from `format_lines` -- `INSCHAR_COM_LIST` is
                 // set and `open_line` above has already done this.
@@ -477,7 +480,7 @@ pub fn internal_format(
                 }
                 if second_indent >= 0 {
                     if State.get() & VREPLACE_FLAG != 0 {
-                        change_indent(INDENT_SET as c_int, second_indent, 0, true);
+                        change_indent(INDENT_SET, second_indent, 0, true);
                     } else if leader_len > 0 && second_indent - leader_len > 0 {
                         // A numbered list item that has a comment:
                         // `open_line` put the leader in and left the
@@ -488,7 +491,7 @@ pub fn internal_format(
                             ins_str(b" ");
                         }
                     } else {
-                        set_indent(second_indent, SIN_CHANGED as c_int);
+                        set_indent(second_indent, SIN_CHANGED);
                     }
                 }
             }
@@ -517,9 +520,9 @@ pub fn internal_format(
         line_breakcheck();
     }
 
-    if save_char as c_int != NUL {
+    if let Some(white) = save_char {
         // Put the space after the cursor back.
-        pchar_cursor(save_char);
+        pchar_cursor(white);
     }
     win.w_onebuf_opt.wo_lbr = has_lbr;
 

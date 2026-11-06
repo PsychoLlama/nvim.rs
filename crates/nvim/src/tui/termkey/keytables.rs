@@ -21,7 +21,7 @@ use crate::tui::termkey::termkey::{
     TERMKEY_TYPE_UNICODE,
 };
 use crate::types::{TermKeySym, keyinfo};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 /// Final bytes and SS3 commands live in 0x40..0x80, so the tables are indexed
 /// by the byte less this.
@@ -80,8 +80,8 @@ pub static CSI_SS3: [keyinfo; 64] = {
     table[slot(b'Z')] = keyinfo {
         kind: TERMKEY_TYPE_KEYSYM,
         sym: TERMKEY_SYM_TAB,
-        modifier_mask: TERMKEY_KEYMOD_SHIFT as c_int,
-        modifier_set: TERMKEY_KEYMOD_SHIFT as c_int,
+        modifier_mask: TERMKEY_KEYMOD_SHIFT,
+        modifier_set: TERMKEY_KEYMOD_SHIFT,
     };
     table
 };
@@ -113,25 +113,25 @@ pub static SS3: [keyinfo; 64] = {
 
 /// The plain character each keypad key stands for, reported instead of the
 /// keypad symbol under TERMKEY_FLAG_CONVERTKP. Zero where there is none.
-pub static SS3_KEYPAD_ALT: [c_char; 64] = {
+pub static SS3_KEYPAD_ALT: [u8; 64] = {
     let mut table = [0; 64];
-    table[slot(b'X')] = b'=' as c_char;
-    table[slot(b'j')] = b'*' as c_char;
-    table[slot(b'k')] = b'+' as c_char;
-    table[slot(b'l')] = b',' as c_char;
-    table[slot(b'm')] = b'-' as c_char;
-    table[slot(b'n')] = b'.' as c_char;
-    table[slot(b'o')] = b'/' as c_char;
-    table[slot(b'p')] = b'0' as c_char;
-    table[slot(b'q')] = b'1' as c_char;
-    table[slot(b'r')] = b'2' as c_char;
-    table[slot(b's')] = b'3' as c_char;
-    table[slot(b't')] = b'4' as c_char;
-    table[slot(b'u')] = b'5' as c_char;
-    table[slot(b'v')] = b'6' as c_char;
-    table[slot(b'w')] = b'7' as c_char;
-    table[slot(b'x')] = b'8' as c_char;
-    table[slot(b'y')] = b'9' as c_char;
+    table[slot(b'X')] = b'=';
+    table[slot(b'j')] = b'*';
+    table[slot(b'k')] = b'+';
+    table[slot(b'l')] = b',';
+    table[slot(b'm')] = b'-';
+    table[slot(b'n')] = b'.';
+    table[slot(b'o')] = b'/';
+    table[slot(b'p')] = b'0';
+    table[slot(b'q')] = b'1';
+    table[slot(b'r')] = b'2';
+    table[slot(b's')] = b'3';
+    table[slot(b't')] = b'4';
+    table[slot(b'u')] = b'5';
+    table[slot(b'v')] = b'6';
+    table[slot(b'w')] = b'7';
+    table[slot(b'x')] = b'8';
+    table[slot(b'y')] = b'9';
     table
 };
 
@@ -207,7 +207,7 @@ mod tests {
     #[test]
     fn keypad_enter_has_no_plain_character_but_the_digits_do() {
         assert_eq!(SS3_KEYPAD_ALT[slot(b'M')], 0);
-        assert_eq!(SS3_KEYPAD_ALT[slot(b'p')], b'0' as c_char);
-        assert_eq!(SS3_KEYPAD_ALT[slot(b'y')], b'9' as c_char);
+        assert_eq!(SS3_KEYPAD_ALT[slot(b'p')], b'0');
+        assert_eq!(SS3_KEYPAD_ALT[slot(b'y')], b'9');
     }
 }

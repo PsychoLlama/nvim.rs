@@ -40,7 +40,7 @@ pub fn parse(bytes: &[u8], intro_len: usize) -> Option<CsiSeq> {
     // The sequence ends at the first byte in the final-byte range.
     let end = (intro_len..bytes.len()).find(|&i| (0x40..0x80).contains(&bytes[i]))?;
 
-    let mut command = bytes[end] as u32;
+    let mut command = u32::from(bytes[end]);
     let mut params: [Option<(usize, usize)>; CSI_MAX_PARAMS] = [None; CSI_MAX_PARAMS];
     let mut nparams = 0;
     let mut start: Option<usize> = None;
@@ -48,7 +48,7 @@ pub fn parse(bytes: &[u8], intro_len: usize) -> Option<CsiSeq> {
 
     // A private-use introducer ('<' to '?') goes in the second byte.
     if (b'<'..=b'?').contains(&bytes[pos]) {
-        command |= (bytes[pos] as u32) << 8;
+        command |= u32::from(bytes[pos]) << 8;
         pos += 1;
     }
     while pos < end {
@@ -66,7 +66,7 @@ pub fn parse(bytes: &[u8], intro_len: usize) -> Option<CsiSeq> {
             }
         } else if (0x20..=0x2f).contains(&byte) {
             // An intermediate byte ends the parameters and joins the command.
-            command |= (byte as u32) << 16;
+            command |= u32::from(byte) << 16;
             break;
         }
         pos += 1;
@@ -105,7 +105,9 @@ pub fn param_groups(param: Option<&[u8]>) -> (c_int, Option<c_int>) {
             debug_assert!(byte.is_ascii_digit());
             // A terminal can send arbitrarily many digits; upstream wrapped
             // rather than trapping, and a debug build of this tree would panic.
-            value = value.wrapping_mul(10).wrapping_add((byte - b'0') as c_int);
+            value = value
+                .wrapping_mul(10)
+                .wrapping_add(c_int::from(byte - b'0'));
         }
         value
     });
@@ -137,7 +139,7 @@ mod tests {
     fn parses_parameters_and_the_final_byte() {
         let bytes = b"\x1b[5;25v";
         let seq = parse(bytes, 2).unwrap();
-        assert_eq!(seq.command, b'v' as u32);
+        assert_eq!(seq.command, u32::from(b'v'));
         assert_eq!(seq.len, bytes.len());
         assert_eq!(args(&seq, bytes), [Some(5), Some(25)]);
     }
@@ -145,13 +147,13 @@ mod tests {
     #[test]
     fn packs_the_private_introducer_and_intermediate_into_the_command() {
         let seq = parse(b"\x1b[?w", 2).unwrap();
-        assert_eq!(seq.command, (b'?' as u32) << 8 | b'w' as u32);
+        assert_eq!(seq.command, u32::from(b'?') << 8 | u32::from(b'w'));
         assert_eq!(seq.nparams, 0);
 
         let seq = parse(b"\x1b[?$x", 2).unwrap();
         assert_eq!(
             seq.command,
-            (b'$' as u32) << 16 | (b'?' as u32) << 8 | b'x' as u32
+            u32::from(b'$') << 16 | u32::from(b'?') << 8 | u32::from(b'x')
         );
     }
 

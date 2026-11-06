@@ -134,7 +134,7 @@ mod tests {
             &[0x91, 0x81, 0xa1],
         ] {
             let (status, tv, _) = unpack(bytes);
-            assert_eq!(status, MPACK_EOF.cast_signed(), "{bytes:x?}");
+            assert_eq!(status, MPACK_EOF, "{bytes:x?}");
             assert_eq!(tv.v_type(), VAR_UNKNOWN);
         }
     }
@@ -145,10 +145,10 @@ mod tests {
     fn an_object_is_decoded_and_the_rest_left() {
         let _serial = editor_state_lock();
         let (status, tv, left) = unpack(&[0x92, 0x01, 0xa1, b'x', 0xc0]);
-        assert_eq!((status, left), (MPACK_OK.cast_signed(), 1));
+        assert_eq!((status, left), (MPACK_OK, 1));
         assert_eq!(text(&tv), "[1, 'x']");
         let (status, _, left) = unpack(&[0xc1, 0x00]);
-        assert_eq!((status, left), (MPACK_ERROR.cast_signed(), 2));
+        assert_eq!((status, left), (MPACK_ERROR, 2));
         // A string holding a NUL is a blob; an empty one is still a string.
         let (_, tv, _) = unpack(&[0x92, 0xa3, b'a', 0, b'b', 0xa0]);
         assert_eq!(text(&tv), "[0z610062, '']");
@@ -160,7 +160,7 @@ mod tests {
         let _serial = editor_state_lock();
         let mut deep = vec![0x91; 31];
         deep.push(0x01);
-        assert_eq!(unpack(&deep).0, MPACK_OK.cast_signed());
+        assert_eq!(unpack(&deep).0, MPACK_OK);
         let mut too_deep = vec![0x91; 32];
         too_deep.push(0x01);
         assert_eq!(unpack(&too_deep).0, MPACK_NOMEM);

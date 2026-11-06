@@ -364,7 +364,7 @@ fn arg_all_open_windows(aall: &mut ArgAllState, count: c_int) {
         if !split_failed {
             os_breakcheck();
             // With ":tab", open a new tab page for each new window.
-            let room = tabpage_index(None) as OptInt <= p_tpm();
+            let room = OptInt::from(tabpage_index(None)) <= p_tpm();
             if aall.had_tab > 0 && room {
                 cmdmod.with_mut(|m| m.cmod_tab = 9999);
             }

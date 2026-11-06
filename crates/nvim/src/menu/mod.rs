@@ -28,6 +28,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::memory::XString;
+use crate::narrow::as_index;
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
@@ -371,7 +372,7 @@ pub(crate) fn show_popupmenu() {
     if menu_mode == MENU_INDEX_INVALID {
         return;
     }
-    let mode = MODE_CHARS[menu_mode as usize];
+    let mode = MODE_CHARS[as_index(menu_mode)];
 
     // The autocmd may redefine menus, which is why the search below runs
     // afterwards.

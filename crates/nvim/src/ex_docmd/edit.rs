@@ -59,8 +59,8 @@ use crate::pos::MAXLNUM;
 use crate::register::do_execreg;
 use crate::search::{BACKWARD, FORWARD};
 use crate::types::{
-    ColNr, CpoFlag, ExArg, Handle, LineNr, NUL, OpArg, OpType, OptMagic, PUT_CURSLINE,
-    PUT_FIXINDENT, PUT_LINE, Pos, PutFlags, int64_t, size_t,
+    ColNr, CpoFlag, ExArg, Handle, LineNr, OpArg, OpType, OptMagic, PUT_CURSLINE, PUT_FIXINDENT,
+    PUT_LINE, Pos, PutFlags, int64_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 
@@ -150,9 +150,7 @@ pub(crate) fn ex_syncbind(_excmd: &mut ExArg) {
 /// `:=` — the line number, unless something follows it, in which case it
 /// is `:lua`'s alias.
 pub(crate) fn ex_equal(excmd: &mut ExArg) {
-    if excmd.line.byte_at(excmd.line.arg) != 0
-        && c_int::from(excmd.line.byte_at(excmd.line.arg)) != '|' as c_int
-    {
+    if excmd.line.byte_at(excmd.line.arg) != 0 && excmd.line.byte_at(excmd.line.arg) != b'|' {
         ex_lua(excmd);
     } else {
         excmd.line.next = excmd.line.find_next(excmd.line.arg);
@@ -166,9 +164,9 @@ pub(crate) fn ex_sleep(excmd: &mut ExArg) {
         setcursor_mayforce(Win::current(), true);
     }
     let mut len = i64::from(excmd.line2);
-    match c_int::from(excmd.line.byte_at(excmd.line.arg)) {
-        c if c == 'm' as c_int => {}
-        c if c == NUL => len *= 1000,
+    match excmd.line.byte_at(excmd.line.arg) {
+        b'm' => {}
+        0 => len *= 1000,
         _ => {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let arg = msg_bytes(excmd.line.arg());
@@ -234,7 +232,7 @@ pub(crate) fn ex_operators(excmd: &mut ExArg) {
         }
         _ => {
             // In a 'rightleft' window the two shift commands swap.
-            oa.op_type = if (excmd.cmdidx == CmdIdx::rshift) as c_int
+            oa.op_type = if c_int::from(excmd.cmdidx == CmdIdx::rshift)
                 ^ Win::current().w_onebuf_opt.wo_rl
                 != 0
             {
@@ -376,7 +374,7 @@ pub(crate) fn ex_join(excmd: &mut ExArg) {
         excmd.line2 += 1;
     }
     let _ = do_join(
-        (excmd.line2.get() as isize - excmd.line1.get() as isize + 1) as size_t,
+        (excmd.line2.get() as isize - excmd.line1.get() as isize + 1).cast_unsigned(),
         !excmd.forceit,
         true,
         true,
@@ -579,7 +577,7 @@ pub(crate) fn ex_foldopen(excmd: &mut ExArg) {
     op_fold_range(
         range_start(excmd),
         range_end(excmd),
-        (excmd.cmdidx == CmdIdx::foldopen) as c_int,
+        c_int::from(excmd.cmdidx == CmdIdx::foldopen),
         c_int::from(excmd.forceit),
         false,
     );
@@ -606,10 +604,10 @@ fn range_end(excmd: &mut ExArg) -> Pos {
 /// `:folddoopen` and `:folddoclosed` — run a command on every line that is
 /// (or is not) inside a closed fold.
 pub(crate) fn ex_folddo(excmd: &mut ExArg) {
-    let want_closed = (excmd.cmdidx == CmdIdx::folddoclosed) as c_int;
+    let want_closed = c_int::from(excmd.cmdidx == CmdIdx::folddoclosed);
     let mut lnum = excmd.line1;
     while lnum <= excmd.line2 {
-        if has_folding(Win::current(), lnum, None, None) as c_int == want_closed {
+        if c_int::from(has_folding(Win::current(), lnum, None, None)) == want_closed {
             ml_setmarked(lnum);
         }
         lnum += 1;

@@ -10,6 +10,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::narrow::len_as_int;
 use crate::tui::terminfo::caps::{KEYS, MAX_FUNCTION_KEY, key_slot};
 use crate::tui::termkey::termkey::{
     TERMKEY_KEYMOD_SHIFT, TERMKEY_RES_AGAIN, TERMKEY_RES_KEY, TERMKEY_RES_NONE,
@@ -56,7 +57,7 @@ static NAMED_KEYS: [NamedKey; 16] = [
         slot: key_slot::BTAB,
         kind: TERMKEY_TYPE_KEYSYM,
         sym: TERMKEY_SYM_TAB,
-        mods: TERMKEY_KEYMOD_SHIFT as c_int,
+        mods: TERMKEY_KEYMOD_SHIFT,
     },
     named(key_slot::CLEAR, TERMKEY_SYM_CLEAR),
     named(key_slot::DC, TERMKEY_SYM_DELETE),
@@ -138,7 +139,7 @@ fn load(tk: &TermKey, entry: Option<&TerminfoEntry>) -> KeyTrie {
         // Upstream only reaches for the shifted variant when the unshifted one
         // was present, so a terminal describing only `key_sfoo` gets neither.
         if loaded {
-            let mods = key.mods | TERMKEY_KEYMOD_SHIFT as c_int;
+            let mods = key.mods | TERMKEY_KEYMOD_SHIFT;
             register(
                 tk,
                 &mut trie,
@@ -169,7 +170,7 @@ fn load(tk: &TermKey, entry: Option<&TerminfoEntry>) -> KeyTrie {
             &name,
             keyinfo {
                 kind: TERMKEY_TYPE_FUNCTION,
-                sym: number as TermKeySym,
+                sym: len_as_int(number),
                 modifier_mask: 0,
                 modifier_set: 0,
             },

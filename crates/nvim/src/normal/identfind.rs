@@ -162,13 +162,13 @@ pub(crate) fn find_ident_at_pos(
     mut startcol: ColNr,
     find_type: c_int,
 ) -> Option<(ColNr, usize)> {
-    let eval = find_type & FIND_EVAL.cast_signed() != 0;
+    let eval = find_type & FIND_EVAL != 0;
     let mut lines = window.buffer().lines();
     let mut line = ScanLine(lines.line(lnum));
     let mut col: c_int = 0;
     let mut this_class: c_int = 0;
     // Pass 0 wants a word character; pass 1 will take punctuation too.
-    let mut pass = c_int::from(find_type & FIND_IDENT.cast_signed() == 0);
+    let mut pass = c_int::from(find_type & FIND_IDENT == 0);
     while pass < 2 {
         col = startcol.get();
         while line.at(col) != 0 {
@@ -196,9 +196,7 @@ pub(crate) fn find_ident_at_pos(
             let mut prevcol = line.prev_col(col);
             let prev_class = line.class(prevcol);
             if this_class != prev_class
-                && (pass == 0
-                    || prev_class == CLASS_WHITE
-                    || find_type & FIND_IDENT.cast_signed() != 0)
+                && (pass == 0 || prev_class == CLASS_WHITE || find_type & FIND_IDENT != 0)
                 && (!eval
                     || prevcol == 0
                     || !line.is_eval_item(&mut prevcol, &mut bn, BACKWARD as c_int))
@@ -209,14 +207,14 @@ pub(crate) fn find_ident_at_pos(
         }
         // Every word script counts as the same class from here on.
         this_class = this_class.min(CLASS_WORD);
-        if find_type & FIND_STRING.cast_signed() == 0 || this_class == CLASS_WORD {
+        if find_type & FIND_STRING == 0 || this_class == CLASS_WORD {
             break;
         }
         pass += 1;
     }
 
     if line.at(col) == 0 || (pass == 0 && this_class != CLASS_WORD) {
-        if find_type & FIND_STRING.cast_signed() != 0 {
+        if find_type & FIND_STRING != 0 {
             emsg(gettext(c"E348: No string under cursor"));
         } else {
             emsg(gettext(e_noident));
@@ -251,7 +249,7 @@ pub(crate) fn find_ident_at_pos(
 /// `gd` and `gD`: jump to the local or global declaration of the identifier
 /// under the cursor.
 pub(crate) fn nv_gd(op: Op, nchar: Key, thisblock: bool) {
-    let word = ident_under_cursor(FIND_IDENT.cast_signed());
+    let word = ident_under_cursor(FIND_IDENT);
     let locally = nchar.is('d');
     let found = !word.is_empty() && find_decl(&word, locally, thisblock, SEARCH_START as c_int);
     if !found {

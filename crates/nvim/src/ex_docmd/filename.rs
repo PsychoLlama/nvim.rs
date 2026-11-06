@@ -9,10 +9,13 @@ use crate::cmdexpand::{WildMode, WildOpts, expand_one};
 use crate::cstr;
 use crate::env::{expand_env, expand_env_escaped};
 use crate::ex_cmds::newlnum;
+use crate::normal::FIND_EVAL;
+use crate::normal::FIND_IDENT;
+use crate::normal::FIND_STRING;
 use crate::optionstr::{OptString, local_or_global};
 use crate::types::Handle;
 use crate::types::{CmdIdx, EcmdCmd};
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
 use std::ffi::CString;
 
 use crate::arglist::arg_all_bytes;
@@ -26,8 +29,8 @@ use crate::eval::vars::get_vim_var_list_handle;
 use crate::ex_docmd::scan::skip_grep_pat;
 use crate::ex_docmd::state::ESCAPE_CHARS;
 use crate::ex_docmd::{
-    ESTACK_SCRIPT, ESTACK_SFILE, ESTACK_STACK, FIND_EVAL, FIND_IDENT, FIND_STRING, VALID_HEAD,
-    VALID_PATH, e_no_autocommand_buffer_number_to_substitute_for_abuf,
+    ESTACK_SCRIPT, ESTACK_SFILE, ESTACK_STACK, VALID_HEAD, VALID_PATH,
+    e_no_autocommand_buffer_number_to_substitute_for_abuf,
     e_no_autocommand_file_name_to_substitute_for_afile,
     e_no_autocommand_match_name_to_substitute_for_amatch, e_no_call_stack_to_substitute_for_stack,
     e_no_line_number_to_use_for_sflnum, e_no_line_number_to_use_for_slnum,
@@ -356,9 +359,9 @@ pub(crate) fn eval_vars(
 
     if matches!(spec_idx, SPEC_CWORD | SPEC_CCWORD | SPEC_CEXPR) {
         let what = match spec_idx {
-            SPEC_CWORD => FIND_IDENT as c_int | FIND_STRING as c_int,
-            SPEC_CEXPR => FIND_IDENT as c_int | FIND_STRING as c_int | FIND_EVAL as c_int,
-            _ => FIND_STRING as c_int,
+            SPEC_CWORD => FIND_IDENT | FIND_STRING,
+            SPEC_CEXPR => FIND_IDENT | FIND_STRING | FIND_EVAL,
+            _ => FIND_STRING,
         };
         // No modifiers: `<cword>:t` leaves the `:t` where it is.
         let ident = ident_under_cursor(what);
@@ -372,7 +375,7 @@ pub(crate) fn eval_vars(
         };
     }
 
-    let mut valid = VALID_HEAD as c_int | VALID_PATH as c_int;
+    let mut valid = VALID_HEAD.cast_signed() | VALID_PATH.cast_signed();
     let mut tilde_file = false;
     let mut skip_mod = false;
     let mut escaped = false;
@@ -535,15 +538,17 @@ pub(crate) fn eval_vars(
         result = modified;
     }
 
-    if result.is_empty() || valid != VALID_HEAD as c_int + VALID_PATH as c_int {
+    if result.is_empty() || valid != VALID_HEAD.cast_signed() + VALID_PATH.cast_signed() {
         if !empty_is_error {
             return Expansion::Skip(used);
         }
-        return Expansion::Refused(if valid != VALID_HEAD as c_int + VALID_PATH as c_int {
-            gettext(c"E499: Empty file name for '%' or '#', only works with \":p:h\"")
-        } else {
-            gettext(c"E500: Evaluates to an empty string")
-        });
+        return Expansion::Refused(
+            if valid != VALID_HEAD.cast_signed() + VALID_PATH.cast_signed() {
+                gettext(c"E499: Empty file name for '%' or '#', only works with \":p:h\"")
+            } else {
+                gettext(c"E500: Evaluates to an empty string")
+            },
+        );
     }
     Expansion::Text {
         text: result,

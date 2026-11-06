@@ -11,13 +11,11 @@
 #![forbid(unsafe_code)]
 
 #[cfg(miri)]
-use core::fmt::Write as _;
-
-#[cfg(miri)]
 use super::emit::TmpWriter;
 use super::emit::{Args, Body, Conversion, TMP};
 use super::infinity_str;
 use crate::ascii::ascii_isdigit;
+use crate::narrow::float_as_usize;
 
 /// `%f`, `%F`, `%e`, `%E`, `%g` and `%G`.
 ///
@@ -75,7 +73,7 @@ pub(super) fn render_float(
         // conversion also spends digits on the integer part.
         let mut max_prec = TMP - 10;
         if matches!(c.fmt_spec, b'f' | b'F') && abs_f > 1.0 {
-            max_prec -= abs_f.log10() as usize;
+            max_prec -= float_as_usize(abs_f.log10());
         }
         c.precision = c.precision.min(max_prec);
         c.precision

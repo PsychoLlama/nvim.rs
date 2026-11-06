@@ -12,7 +12,9 @@
 
 #![forbid(unsafe_code)]
 
-use core::ffi::{c_int, c_uint};
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
+use core::ffi::c_int;
 
 use crate::types::{
     GraphemeState, VTerm, VTermEncodingInstance, VTermKeyEncodingFlags, VTermKeyEncodingStack,
@@ -162,13 +164,13 @@ impl ParserHandler for StateCx<'_> {
         // decoder so that a multi-byte sequence can span calls.
         let lead = bytes.first().copied().unwrap_or(0);
         let slot = if self.gsingle_set != 0 {
-            self.gsingle_set as usize
+            as_index(self.gsingle_set)
         } else if lead & 0x80 == 0 {
-            self.gl_set as usize
+            as_index(self.gl_set)
         } else if self.utf8() {
             usize::MAX
         } else {
-            self.gr_set as usize
+            as_index(self.gr_set)
         };
         let utf8 = self.encoding_utf8.enc;
         let shared = match self.encoding.get(slot) {
@@ -199,7 +201,7 @@ impl ParserHandler for StateCx<'_> {
             text::print(self, &scratch[..got]);
         }
         self.scratch = scratch;
-        Some(eaten as c_int)
+        Some(len_as_int(eaten))
     }
 
     fn control(&mut self, control: u8) -> Option<c_int> {
@@ -289,14 +291,14 @@ impl StateCx<'_> {
         if !self.offer_termprop(prop, val) {
             return false;
         }
-        let boolean = val.int() as c_uint;
+        let boolean = val.int().cast_unsigned();
         let number = val.int();
         match prop {
             // Titles are passed straight through, never stored.
             VTERM_PROP_TITLE | VTERM_PROP_ICONNAME => {}
             VTERM_PROP_CURSORVISIBLE => self.mode.set_cursor_visible(boolean),
             VTERM_PROP_CURSORBLINK => self.mode.set_cursor_blink(boolean),
-            VTERM_PROP_CURSORSHAPE => self.mode.set_cursor_shape(number as c_uint),
+            VTERM_PROP_CURSORSHAPE => self.mode.set_cursor_shape(number.cast_unsigned()),
             VTERM_PROP_REVERSE => self.mode.set_screen(boolean),
             VTERM_PROP_ALTSCREEN => {
                 self.mode.set_alt_screen(boolean);

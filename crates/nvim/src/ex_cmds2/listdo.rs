@@ -34,6 +34,7 @@ use crate::mark::setpcmark;
 use crate::memory::XString;
 use crate::message::emsg;
 use crate::r#move::validate_cursor;
+use crate::narrow::as_index;
 use crate::narrow::len_as_int;
 use crate::normal::do_check_scrollbind;
 use crate::optionstr::OptString;
@@ -316,7 +317,7 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
             }
             ListDo::Quickfix { .. } => {
                 debug_assert!(i >= 0, "i >= 0");
-                if i as size_t >= qf_size || LineNr::new(i) >= excmd.line2 {
+                if as_index(i) >= qf_size || LineNr::new(i) >= excmd.line2 {
                     break;
                 }
                 let qf_idx = qf_get_cur_idx(excmd.cmdidx);

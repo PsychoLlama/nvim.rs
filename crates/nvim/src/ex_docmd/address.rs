@@ -505,7 +505,7 @@ pub(crate) fn get_address(
                         Win::current().w_cursor.lnum = lnum.min(Buf::current().b_ml.ml_line_count);
                     }
                     Win::current().w_cursor.col =
-                        if c == '/' as c_int && Win::current().w_cursor.lnum > LineNr::ZERO {
+                        if c == c_int::from(b'/') && Win::current().w_cursor.lnum > LineNr::ZERO {
                             ColNr::MAX
                         } else {
                             ColNr::ZERO
