@@ -279,6 +279,16 @@ forbids — `charset/`, `getchar/`, `mbyte/`, `startup/`, `strings/`,
 the commit that finished the last of its descendants. This is the same rule as
 "take a `mod.rs` last", stated for the attribute rather than for the lint.
 
+**The cast deny stops at the same line.** Clippy's cast lints are denied in
+every file off the perimeter; the files without them are a written floor,
+`CAST_DENY_FLOOR` in `scripts/ratchet.py`, checked both ways by every run:
+the perimeter files whose own casts are out of the migration's scope
+(`xdiff/`'s vendored files, `os/input.rs`, `os/fs/`, `tui/input.rs`,
+`lua/treesitter/ranges.rs`), the module roots a deny would reach them
+through (`lib.rs`, `os/mod.rs`, `tui/mod.rs`, `xdiff/mod.rs`), and
+`narrow.rs`, the one module whose job is to write the deliberate
+narrowings, for good.
+
 ## The types the perimeter cannot hold
 
 The perimeter is measured in unchecked lines, and it prunes itself on them:

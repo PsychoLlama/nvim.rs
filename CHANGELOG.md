@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Gave the editor's results and numbers Rust types: each command and file family reports its own error type once, where the message is said, instead of a message followed by `-1`, `0` or `false`; lines, columns, window/buffer/tab handles and keys are distinct types (`LineNr`, `ColNr`, `Handle`, `Key`) rather than one C `int`; and clippy's cast lints are denied in every module outside the perimeter, so a narrowing is written once, by name. An API value is 8 bytes smaller.
+
+### Fixed
+
+- With `'showcmd'` on, a modifier key waiting for the next key overran the pending-key buffer.
+- An `<expr>` abbreviation triggered by Esc, CTRL-O or Tab saw a wrong `v:char` (U+011B for Esc).
+- `:highlight {group}` refused with E415, E416, E417, E475 or E423 still re-derived every group and redrew the UI as if it had worked.
+
 ## [2026.11.02-732b23427e]
 
 ### Changed
