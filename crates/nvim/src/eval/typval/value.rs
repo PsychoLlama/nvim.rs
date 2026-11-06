@@ -548,12 +548,15 @@ mod tests {
     }
 
     /// Ten thousand levels deep, which a recursive free would not survive.
+    /// Under Miri a thousand: the same iterative free, which is what Miri
+    /// is there to check, and ten thousand took it fourteen minutes.
     #[test]
     fn a_deep_nest_is_freed_without_recursing() {
+        const DEPTH: usize = if cfg!(miri) { 1_000 } else { 10_000 };
         let _serial = editor_state_lock();
         let bottom = list(vec![TypVal::Number(0)]);
         let mut tv = TypVal::list(Some(bottom.clone()));
-        for depth in 0..10_000 {
+        for depth in 0..DEPTH {
             tv = if depth % 2 == 0 {
                 TypVal::list(Some(list(vec![tv])))
             } else {
