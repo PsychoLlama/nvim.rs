@@ -521,7 +521,11 @@ plus these whole-tree metrics, which are not per-file:
                     The needle is `clippy::cast_lossless` inside a `deny(...)`,
                     spanning newlines so rustfmt may wrap the list: that lint
                     is the one the `From` vocabulary answers, so it is the
-                    family's marker. Naming the rest is the house convention,
+                    family's marker. The files left without it are a written
+                    floor, `CAST_DENY_FLOOR` (each with its reason: a
+                    perimeter file's casts, a module root over one, and
+                    `narrow.rs`, the cast home, for good), checked both ways
+                    by every run. Naming the rest is the house convention,
                     not something the ratchet can check — as with
                     `forbid(unsafe_code)`, the attribute is a claim the
                     compiler then enforces, and the ratchet only counts who
@@ -755,7 +759,10 @@ plus these whole-tree metrics, which are not per-file:
                         source, because `mask()` blanks a char literal, quotes
                         and all; the `as` it captured is checked against the
                         masked copy, so a cast written inside a comment or a
-                        string still costs nothing. Phase 32.
+                        string still costs nothing. Phase 32. It also counts
+                        `c_int::from(b'x')`, the same byte widened into C's
+                        `int` in the spelling the cast lints ask for (152 ->
+                        584 when it learned it: an instrument change).
                       emit_sentinel  a message emitted, then a sentinel
                         returned: an EMIT_CALL (`emsg`, `semsg!`, `iemsg`,
                         `smsg!`, `give_warning`, `msg_puts*`, `api_error!`,
@@ -770,6 +777,11 @@ plus these whole-tree metrics, which are not per-file:
                         `emsg_silent`) is the boundary that reports it.
                         Replaced `failed_uses` (every `Failed`, which counted
                         the honest form of the same thing as debt). Phase 41.
+                        A call to a local message wrapper (a free `fn err*` or
+                        `emsg_*` that answers nothing and calls an EMIT_CALL,
+                        found by `emit_wrappers`) is an emitter too: the
+                        wrappers hid their callers' sentinels, 50 -> 74 when
+                        the needle learned them (an instrument change).
                       labeled_blocks  `'label: {`/`loop`/`while`/`for` — the
                         transpiler's rendering of C's `goto`. A lifetime bound
                         (`'a: 'b`) cannot match: what follows the colon has to
@@ -1831,9 +1843,16 @@ INSTRUMENTS_FIELDS = {
 # matched against the *raw* text and confirmed as code by checking that the
 # `as` it captured survived masking. A `b'x'` keeps its `b` through masking,
 # which is why the prefix is optional here rather than required.
+#
+# `c_int::from(b'x')` is the same character respelled the way the cast lints
+# ask for -- a byte widened into C's `int` -- so it is counted too: the cast
+# deny turned many `b'x' as c_int` into it without changing the domain. The
+# `from` is the token checked against the masked copy there.
 CHAR_AS_C_INT = re.compile(
     r"b?'(?:\\.|[^'\\\n])'\s*(as)\s+"
     r"(?:(?:::)?(?:core|std)::ffi::|(?:::)?libc::)?c_u?int\b"
+    r"|\b(?:(?:::)?(?:core|std)::ffi::|(?:::)?libc::)?c_u?int::(from)"
+    r"\(\s*b?'(?:\\.|[^'\\\n])'\s*\)"
 )
 
 
@@ -1857,10 +1876,45 @@ EMIT_SENTINEL = re.compile(
 )
 
 
-def emit_sentinels(masked):
+# A local message wrapper: a free `fn` named `err*` or `emsg_*` that answers
+# nothing and whose body calls an EMIT_CALL -- `err0(msg)` in eval/fs/dir.rs,
+# `emsg_static` in eval/vars/store.rs. A call to one is a message as much as
+# the `emsg` it wraps, so `emit_sentinel` follows them too; without this the
+# wrappers hid their callers' sentinels (a wrapper inlined showed its count).
+# Methods (`self` first) and a wrapper that answers something (`err_msg ->
+# Option<CString>`, the API's `err_* -> Error` builders) are not wrappers.
+EMIT_WRAPPER_NAME = re.compile(r"^(?:err\w*|emsg_\w+)$")
+
+
+def emit_wrappers(tree):
+    """The names of every local message wrapper in `tree` (see above)."""
+    names = set()
+    for masked in tree.values():
+        for sig in fn_signatures(masked):
+            if not EMIT_WRAPPER_NAME.match(sig.name) or sig.returns != "()":
+                continue
+            if re.match(r"\(\s*(?:&\s*(?:mut\s+)?)?(?:mut\s+)?self\b", sig.params):
+                continue
+            body = masked.find("{", sig.end)
+            if body == -1 or masked[sig.end : body].strip():
+                continue
+            if EMIT_CALL.search(masked, body, matching_brace(masked, body)):
+                names.add(sig.name)
+    return names
+
+
+def emit_call_re(wrappers):
+    """EMIT_CALL widened to the wrapper names `emit_wrappers` found."""
+    if not wrappers:
+        return EMIT_CALL
+    names = "|".join(sorted(map(re.escape, wrappers)))
+    return re.compile(rf"{EMIT_CALL.pattern}|(?<![.\w])(?<!fn )(?:{names})\s*\(")
+
+
+def emit_sentinels(masked, emit_call=EMIT_CALL):
     """How many EMIT_CALLs in `masked` are followed by a sentinel answer."""
     found = 0
-    for match in EMIT_CALL.finditer(masked):
+    for match in emit_call.finditer(masked):
         close = balanced(masked, match.end() - 1, "(", ")")
         end = masked.find(";", close)
         if end != -1 and EMIT_SENTINEL.match(masked, end + 1):
@@ -1932,6 +1986,36 @@ DENY_UNSAFE_OP = "#![deny(unsafe_op_in_unsafe_fn)]"
 # A module's claim to have finished its casts. `.` spans newlines so the list
 # may be wrapped; `clippy::cast_lossless` is the family's marker (see above).
 DENY_CASTS = re.compile(r"#!\[deny\([^\]]*\bclippy::cast_lossless\b", re.DOTALL)
+
+# The files that do not carry the cast deny, each with why. This is the floor
+# `files_without_deny_casts` stands on, and it is checked both ways by
+# `check_cast_deny_floor`: a file without the deny that is not here fails the
+# run, and so does a row whose file now carries the deny (or is gone) -- drop
+# the row and lower the count. Three classes:
+#   perimeter  a perimeter file's own casts, out of the migration's scope;
+#   root       a module root whose `#![deny]` would reach a perimeter file
+#              below it that has casts, so it lands when they do;
+#   home       `narrow.rs`, the one module whose job is to write the
+#              deliberate narrowings once (a float-to-integer conversion has
+#              no cast-free spelling), so that everything else can deny them.
+#              It is permanent.
+CAST_DENY_FLOOR = {
+    "crates/nvim/src/narrow.rs": "home: the named, documented narrowings",
+    "crates/nvim/src/lib.rs": "root: reaches xdiff/, os/, tui/input.rs",
+    "crates/nvim/src/tui/mod.rs": "root: reaches tui/input.rs",
+    "crates/nvim/src/os/mod.rs": "root: reaches os/input.rs, os/fs/",
+    "crates/nvim/src/xdiff/mod.rs": "root: reaches the vendored xdiff files",
+    "crates/nvim/src/tui/input.rs": "perimeter: timeout/mode widths (5)",
+    "crates/nvim/src/os/input.rs": "perimeter: option widths, mouse codes, key bytes (35)",
+    "crates/nvim/src/os/fs/mod.rs": "perimeter: modes and write counts (5); root over meta.rs",
+    "crates/nvim/src/os/fs/meta.rs": "perimeter: stat mode, xattr sizes (6)",
+    "crates/nvim/src/lua/treesitter/ranges.rs": "perimeter: a Lua number as a TSPoint row (2)",
+    "crates/nvim/src/xdiff/xdiffi/mod.rs": "perimeter: vendored libxdiff (32)",
+    "crates/nvim/src/xdiff/xhistogram.rs": "perimeter: vendored libxdiff (20)",
+    "crates/nvim/src/xdiff/xpatience.rs": "perimeter: vendored libxdiff (18)",
+    "crates/nvim/src/xdiff/xprepare.rs": "perimeter: vendored libxdiff (19)",
+    "crates/nvim/src/xdiff/xtypes.rs": "perimeter: vendored libxdiff (21)",
+}
 # A file's claim that some of its names are someone else's -- a linked
 # library's ABI, a generator's contract, or c2rust's spelling of an anonymous
 # member. Counted per file and not per finding: the unit of work is emptying a
@@ -3478,6 +3562,7 @@ def instrument_sites(tree, sources, wrappers=None):
     aliases = raw_aliases(tree)
     consts = {}
     tops, tested = set(), set()
+    emit_call = emit_call_re(emit_wrappers(tree))
     for file, masked in tree.items():
         source = sources[file]
         for name, needle in INSTRUMENTS.items():
@@ -3501,10 +3586,12 @@ def instrument_sites(tree, sources, wrappers=None):
         if found := safety_on_safe_fns(source, masked, declarations):
             sites["safety_on_safe_fns"][file] = found
         if found := sum(
-            1 for m in CHAR_AS_C_INT.finditer(source) if masked[m.start(1)] == "a"
+            1
+            for m in CHAR_AS_C_INT.finditer(source)
+            if masked[m.start(m.lastindex)] == source[m.start(m.lastindex)]
         ):
             sites["char_as_c_int"][file] = found
-        if found := emit_sentinels(masked):
+        if found := emit_sentinels(masked, emit_call):
             sites["emit_sentinel"][file] = found
         if in_home(file, TYPES_HOME):
             sites["types_files"][file] = 1
@@ -3659,6 +3746,29 @@ def check_names(tree):
             + "\nRename them in CELL_PTR_ALLOW/CELL_COPY_OWNER, or drop "
             "the entry (and lower the baseline) if "
             "the global is gone."
+        )
+
+
+def check_cast_deny_floor(tree, report=False):
+    """Every file without the cast deny is a `CAST_DENY_FLOOR` row, and every
+    row still names a file without it. With `report`, print the floor."""
+    without = {f for f, m in tree.items() if DENY_CASTS.search(m) is None}
+    if report:
+        print(f"files_without_deny_casts: {len(without)}")
+        for file in sorted(without):
+            print(f"  {file}  {CAST_DENY_FLOOR.get(file, 'NOT ON THE FLOOR')}")
+    off = sorted(without - CAST_DENY_FLOOR.keys())
+    stale = sorted(CAST_DENY_FLOOR.keys() - without)
+    if off or stale:
+        sys.exit(
+            "ratchet: the cast deny's floor list is out of date:\n  "
+            + "\n  ".join(
+                [f"{f}: no cast deny and no CAST_DENY_FLOOR row" for f in off]
+                + [f"{f}: a CAST_DENY_FLOOR row that excuses nothing" for f in stale]
+            )
+            + "\nGive the file the deny (finish its casts), or -- only for a "
+            "perimeter file, a module root over one, or narrow.rs -- a row "
+            "with its reason; drop a row whose file now carries the deny."
         )
 
 
@@ -4771,6 +4881,20 @@ SELF_TEST_INSTRUMENTS = [
         },
         {"char_as_c_int": 2},
     ),
+    # ... and so does the same byte respelled `c_int::from(b'x')`; a
+    # `u8::from`, a name, or the text in a comment does not.
+    (
+        {
+            "crates/nvim/src/a.rs": "fn f() {\n"
+            "    g(c_int::from(b'/'));\n"
+            "    g(::core::ffi::c_int::from(b'\\n'));\n"
+            "    g(c_int::from(k));\n"
+            "    g(u32::from(b'x'));\n"
+            "    // c_int::from(b'z')\n"
+            "}\n",
+        },
+        {"char_as_c_int": 2},
+    ),
     # A labelled block or loop counts; a lifetime bound does not.
     (
         {
@@ -4871,6 +4995,21 @@ SELF_TEST_INSTRUMENTS = [
             "fn k() -> Result<(), Failed> {\n    emsg(e_x);\n    return Err(Failed);\n}\n"
             "fn m() -> c_int {\n    let n = f(g(1));\n    0\n}\n"
             'fn n() -> c_int {\n    let v = match k {\n        _ => {\n            siemsg!("bad", k);\n            0\n        }\n    };\n    v\n}\n',
+        },
+        {"emit_sentinel": 3},
+    ),
+    # A local wrapper (`err*`/`emsg_*`, answering nothing, calling an emitter)
+    # is an emitter too; a method, a builder that answers a value, and a call
+    # through `.` are not.
+    (
+        {
+            "crates/nvim/src/a.rs": "fn err0(msg: &CStr) {\n    emsg(msg);\n}\n"
+            "fn f() -> bool {\n    err0(e_x);\n    return false;\n}\n"
+            "fn err_msg(m: &CStr) -> Option<CString> {\n    emsg(m);\n    None\n}\n",
+            "crates/nvim/src/b.rs": "fn g() -> c_int {\n    super::err0(e_x);\n    -1\n}\n"
+            "fn error(&mut self) {\n    emsg(e_x);\n}\n"
+            "fn h() -> bool {\n    self.error();\n    false\n}\n"
+            "fn k() -> bool {\n    p.err0(e_x);\n    false\n}\n",
         },
         {"emit_sentinel": 3},
     ),
@@ -5197,6 +5336,9 @@ def main():
     if dimension == "unsafe_placement":
         placement_report(tree, sources)
         return
+    if dimension == "files_without_deny_casts":
+        check_cast_deny_floor(tree, report=True)
+        return
     if dimension is not None:
         breakdown(sites, dimension)
         return
@@ -5210,6 +5352,7 @@ def main():
     check_names(tree)
     check_perimeter(stats)
     check_unsafe_placement(tree, sources)
+    check_cast_deny_floor(tree)
     index = unsafe_fn_index(tree)
     check_unsafe_fn_allowlist(index, unsafe_fn_allowlist())
     sync_perimeter_doc(stats, "--check" in args)
