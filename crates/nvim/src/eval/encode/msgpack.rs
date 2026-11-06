@@ -18,20 +18,13 @@
 
 use core::ffi::{CStr, c_int};
 
-use crate::eval::encode::conv_error;
+use crate::eval::encode::{Dump, conv_error};
 use crate::eval::typval_encode::{Container, ConvPath, ConvType, Flow, TypvalSink, encode_typval};
 use crate::msgpack_rpc::packer::{
     mpack_array, mpack_bin, mpack_bool, mpack_check_buffer, mpack_ext, mpack_float8, mpack_integer,
     mpack_map, mpack_nil, mpack_str, mpack_uint64,
 };
 use crate::types::{Float, PackerBuffer, TypVal};
-
-/// The two errors this sink can raise, both through
-/// [`conv_error`][crate::eval::encode::conv_error], which appends
-/// the path down to the offending value.
-const E5004_FUNCREF: &CStr =
-    c"E5004: Error while dumping %s, %s: attempt to dump function reference";
-const E5005_SELF_REFERENCE: &CStr = c"E5005: Unable to dump %s: container references itself in %s";
 
 struct MsgpackSink<'a> {
     packer: &'a mut PackerBuffer,
@@ -96,7 +89,7 @@ impl TypvalSink for MsgpackSink<'_> {
         _prefix: &'static CStr,
         path: &ConvPath<'_, '_>,
     ) -> Flow {
-        conv_error(E5004_FUNCREF, path)
+        conv_error(Dump::MsgpackFuncref, path)
     }
 
     fn conv_empty_list(&mut self) {
@@ -126,7 +119,7 @@ impl TypvalSink for MsgpackSink<'_> {
         _conv_type: ConvType,
         path: &ConvPath<'_, '_>,
     ) -> Flow {
-        conv_error(E5005_SELF_REFERENCE, path)
+        conv_error(Dump::MsgpackSelfReference, path)
     }
 }
 

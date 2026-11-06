@@ -37,13 +37,14 @@ use crate::eval::vars::msgpack_type_list_is;
 use crate::global_cell::GlobalCell;
 use crate::mbyte::{char_at, char_len, utf_char2len, utf_printable};
 use crate::message::emsg;
-use crate::message_fmt::{emsg_text, msg_bytes, msg_cstr, to_message};
+use crate::message_fmt::{emsg_text, msg_bytes, to_message};
 use crate::os::cshim::gettext;
-use crate::tr_c;
-use crate::tr_plural;
 use crate::types::{
     Failed, IOSIZE, List, MessagePackType, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_STRING,
 };
+
+mod error;
+pub(crate) use self::error::{Dump, EncodeError};
 
 // The sinks carved out of this module's `typval_encode.c.h` instantiations.
 mod json;
@@ -191,10 +192,13 @@ pub fn encode_list_write(list: &mut List, bytes: &[u8]) {
 
 /// Report a failed dump, naming the path down to the value that failed.
 ///
-/// `msg` must carry exactly two `%s`: the object being dumped, then the path
-/// — "key foo, index 2, key bar" — which this builds out of the walk's stack.
-/// Always answers [`Flow::Fail`], because that is all its callers do with it.
-pub(crate) fn conv_error(msg: &'static CStr, path: &ConvPath<'_, '_>) -> Flow {
+/// `refusal` names the sink and what it met; the message quotes the object
+/// being dumped and then the path -- "key foo, index 2, key bar" -- which
+/// this builds out of the walk's stack. Always answers [`Flow::Fail`],
+/// because that is all its callers do with it.
+#[cold]
+#[inline(never)]
+pub(crate) fn conv_error(refusal: Dump, path: &ConvPath<'_, '_>) -> Flow {
     let mut msg_ga = Vec::<u8>::new();
     // Upstream formats each part in the shared `IObuff`, which cuts it at
     // `IOSIZE - 1` bytes; `to_message` cuts where that did.
@@ -257,12 +261,12 @@ pub(crate) fn conv_error(msg: &'static CStr, path: &ConvPath<'_, '_>) -> Flow {
         }
     }
 
-    let where_0 = if path.stack.is_empty() {
-        crate::tr!("itself")
+    let place = if path.stack.is_empty() {
+        crate::tr!("itself").into_bytes()
     } else {
-        format!("{}", msg_bytes(&msg_ga))
+        msg_ga
     };
-    emsg_text(tr_plural!(gettext(msg), msg_cstr(path.objname), where_0));
+    emsg_text(refusal.message(path.objname, &place));
     Flow::Fail
 }
 
@@ -373,11 +377,6 @@ impl<'a> ListReader<'a> {
     }
 }
 
-const E474_BAD_UTF8: &CStr =
-    c"E474: String \"%.*s\" contains byte that does not start any UTF-8 character";
-const E474_SURROGATE: &CStr =
-    c"E474: UTF-8 string contains code point which belongs to a surrogate pair: %.*s";
-
 /// The hexadecimal digits a `\uNNNN` escape is spelled with.
 const XDIGITS: &[u8; 16] = b"0123456789ABCDEF";
 
@@ -435,19 +434,12 @@ fn json_surrogate_pair(ch: c_int) -> (c_int, c_int) {
     )
 }
 
-/// `semsg(_(msg), (int)tail.len(), tail)` — the two `%.*s` refusals below.
-fn err_tail(msg: &'static CStr, tail: &[u8]) {
-    let len = c_int::try_from(tail.len()).unwrap_or(c_int::MAX);
-    emsg_text(tr_c!(msg, len, msg_bytes(tail)));
-}
-
-/// How long the escaped form of `text` will be, or `None` once the refusal
-/// has been reported.
+/// How long the escaped form of `text` will be, or why it cannot be JSON.
 ///
 /// This is upstream's first pass: the one that decides whether the string can
 /// be JSON at all.
 #[inline(always)]
-fn json_escaped_len(text: &[u8]) -> Option<usize> {
+fn json_escaped_len(text: &[u8]) -> Result<usize, EncodeError> {
     let mut str_len = 0;
     let mut i = 0;
     while i < text.len() {
@@ -458,13 +450,15 @@ fn json_escaped_len(text: &[u8]) -> Option<usize> {
         if json_escape_of(ch).is_some() {
             str_len += 2;
         } else if ch > 0x7f && shift == 1 {
-            err_tail(E474_BAD_UTF8, &text[i - shift..]);
-            return None;
+            return Err(EncodeError::BadUtf8(ThinCString::from_bytes(
+                &text[i - shift..],
+            )));
         } else if (SURROGATE_HI_START..=SURROGATE_HI_END).contains(&ch)
             || (SURROGATE_LO_START..=SURROGATE_LO_END).contains(&ch)
         {
-            err_tail(E474_SURROGATE, &text[i - shift..]);
-            return None;
+            return Err(EncodeError::Surrogate(ThinCString::from_bytes(
+                &text[i - shift..],
+            )));
         } else if json_encode_raw(ch) {
             str_len += shift;
         } else {
@@ -472,7 +466,7 @@ fn json_escaped_len(text: &[u8]) -> Option<usize> {
             str_len += 6 * (1 + usize::from(ch >= SURROGATE_FIRST_CHAR));
         }
     }
-    Some(str_len)
+    Ok(str_len)
 }
 
 /// Convert a string to a JSON string literal, quotes included.
@@ -486,10 +480,8 @@ fn json_escaped_len(text: &[u8]) -> Option<usize> {
 /// where the value does, which is the answer a NUL-terminated `VAR_STRING`
 /// always got.
 #[inline(always)]
-pub(crate) fn convert_to_json_string(gap: &mut Vec<u8>, text: &[u8]) -> Result<(), Failed> {
-    let Some(str_len) = json_escaped_len(text) else {
-        return Err(Failed);
-    };
+pub(crate) fn convert_to_json_string(gap: &mut Vec<u8>, text: &[u8]) -> Result<(), EncodeError> {
+    let str_len = json_escaped_len(text)?;
     gap.push(b'"');
     gap.reserve(str_len);
     let mut i = 0;

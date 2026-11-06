@@ -24,27 +24,14 @@
 use core::ffi::{CStr, c_int};
 
 use crate::eval::encode::{
-    conv_error, convert_to_json_string, encode_check_json_key, push_decimal, push_float_g,
-    report_self_reference,
+    Dump, EncodeError, conv_error, convert_to_json_string, encode_check_json_key, push_decimal,
+    push_float_g, report_self_reference,
 };
 use crate::eval::typval_encode::{Container, ConvPath, ConvType, Flow, TypvalSink, encode_typval};
-use crate::message::emsg;
-use crate::os::cshim::gettext;
 use crate::types::{Float, TypVal};
-
-const E474_FUNCREF: &CStr = c"E474: Error while dumping %s, %s: attempt to dump function reference";
-const E474_NAN: &CStr = c"E474: Unable to represent NaN value in JSON";
-const E474_INFINITY: &CStr = c"E474: Unable to represent infinity in JSON";
-const E474_EXT: &CStr = c"E474: Unable to convert EXT string to JSON";
-const E474_INVALID_KEY: &CStr = c"E474: Invalid key in special dictionary";
 
 struct JsonSink<'a> {
     gap: &'a mut Vec<u8>,
-}
-
-/// Raise `msg`, which carries no arguments.
-fn err(msg: &'static CStr) {
-    emsg(gettext(msg));
 }
 
 impl TypvalSink for JsonSink<'_> {
@@ -73,14 +60,8 @@ impl TypvalSink for JsonSink<'_> {
 
     fn conv_float(&mut self, flt: Float) -> Flow {
         match flt.classify() {
-            ::core::num::FpCategory::Nan => {
-                err(E474_NAN);
-                Flow::Fail
-            }
-            ::core::num::FpCategory::Infinite => {
-                err(E474_INFINITY);
-                Flow::Fail
-            }
+            ::core::num::FpCategory::Nan => EncodeError::Nan.refuse(),
+            ::core::num::FpCategory::Infinite => EncodeError::Infinity.refuse(),
             _ => {
                 push_float_g(self.gap, flt);
                 Flow::Go
@@ -91,16 +72,14 @@ impl TypvalSink for JsonSink<'_> {
     /// Escaped, quoted UTF-8.  A string that is not valid UTF-8 is a failure,
     /// which is what makes this the hook JSON most often refuses on.
     fn conv_string(&mut self, bytes: &[u8]) -> Flow {
-        if convert_to_json_string(self.gap, bytes).is_ok() {
-            Flow::Go
-        } else {
-            Flow::Fail
+        match convert_to_json_string(self.gap, bytes) {
+            Ok(()) => Flow::Go,
+            Err(refusal) => refusal.refuse(),
         }
     }
 
     fn conv_ext_string(&mut self, _bytes: &[u8], _ext_type: i8) -> Flow {
-        err(E474_EXT);
-        Flow::Fail
+        EncodeError::ExtString.refuse()
     }
 
     /// A blob becomes an array of byte values — JSON has nothing shorter.
@@ -125,7 +104,7 @@ impl TypvalSink for JsonSink<'_> {
         _prefix: &'static CStr,
         path: &ConvPath<'_, '_>,
     ) -> Flow {
-        conv_error(E474_FUNCREF, path)
+        conv_error(Dump::JsonFuncref, path)
     }
 
     fn conv_empty_list(&mut self) {
@@ -159,8 +138,7 @@ impl TypvalSink for JsonSink<'_> {
         if encode_check_json_key(key) {
             Flow::Go
         } else {
-            err(E474_INVALID_KEY);
-            Flow::Fail
+            EncodeError::InvalidKey.refuse()
         }
     }
 
