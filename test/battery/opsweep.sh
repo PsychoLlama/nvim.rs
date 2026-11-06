@@ -119,7 +119,14 @@ set -e
 # at all; the change number is one counter for the whole run, so it is
 # a function of every case above the one that printed it.  A filter's
 # temp file is named inside a per-process directory with a random name.
-sed -E 's/#[0-9]+/#N/g; s/[0-9]+ (second|minute|hour|day)s? ago/N ago/g; s#/tmp/nvim\.[^/]*/[A-Za-z0-9]+/[0-9]+#<TEMPFILE>#g' \
+# And with 'noshelltemp' a filter whose command never reads its input
+# (`.!echo replaced`, `%!exit 3`) races the editor's write of the lines
+# into its stdin: when the shell has already exited, the write fails and
+# the editor says E5677 EPIPE.  Which side wins is the kernel's scheduling,
+# not the editor's behaviour (upstream says the same, as often), so the
+# line is dropped; the filter's own result is in the report either way.
+sed -E -e 's/#[0-9]+/#N/g; s/[0-9]+ (second|minute|hour|day)s? ago/N ago/g; s#/tmp/nvim\.[^/]*/[A-Za-z0-9]+/[0-9]+#<TEMPFILE>#g' \
+  -e '/^E5677: Error writing input to shell-command: EPIPE$/d' \
   <"$OUT/$LABEL.stderr.raw" >"$OUT/$LABEL.stderr"
 rm -f "$OUT/$LABEL.stderr.raw"
 
