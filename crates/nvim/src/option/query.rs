@@ -9,8 +9,10 @@
 #![forbid(unsafe_code)]
 
 use crate::env::getenv_resolved;
+use crate::keycodes::SpecialKey;
 use crate::optionstr::{OptString, local_or_global};
 use crate::strings::find_bytes;
+use crate::types::Key;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int, c_uint};
 
@@ -21,7 +23,8 @@ use crate::eval::typval::{DictRef, callback_free, tv_dict_alloc};
 use crate::eval::{callback_from_typval, eval_expr};
 use crate::memory::XString;
 use crate::option::vars::{
-    P_BS, P_CPO, P_FFS, P_SHM, P_SISO, P_SO, bkc_flags, p_magic, p_sh, p_siso, p_so, ve_flags,
+    P_BS, P_CPO, P_FFS, P_SHM, P_SISO, P_SO, bkc_flags, p_magic, p_sh, p_siso, p_so, p_wc, p_wcm,
+    ve_flags,
 };
 use crate::options::*;
 use crate::optionstr::OptStringRef;
@@ -568,6 +571,26 @@ impl ScrollOff {
             Self::Global(ScrollMargin::Columns) => P_SISO.set(value),
         }
     }
+}
+
+/// The key a key-code option (`'wildchar'`, `'wildcharm'`) names: the
+/// option is a number, the key's code, and a number too wide for a code
+/// names no key.
+pub(crate) fn option_key(code: OptInt) -> Option<Key> {
+    c_int::try_from(code).ok().map(Key::from_code)
+}
+
+/// The key `'wildchar'` names.
+///
+/// One too wide for a key code can never be typed, so it answers `<Ignore>`
+/// rather than the truncated key upstream's `(int)p_wc` made of it.
+pub(crate) fn wildchar() -> Key {
+    option_key(p_wc()).unwrap_or(Key::from(SpecialKey::Ignore))
+}
+
+/// Whether `key` is the one `'wildcharm'` names.
+pub(crate) fn is_wildcharm(key: Key) -> bool {
+    option_key(p_wcm()) == Some(key)
 }
 
 #[cfg(test)]

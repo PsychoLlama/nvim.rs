@@ -24,9 +24,10 @@ use crate::getchar::state::KeyTyped;
 use crate::guard::Allow;
 use crate::keycodes::SpecialKey;
 use crate::mbyte::head_off;
-use crate::option::vars::{P_LS, P_WMH, p_wc, p_wcm, p_wmnu};
+use crate::option::vars::{P_LS, P_WMH, p_wmnu};
+use crate::option::wildchar;
 use crate::path::{PATHSEP_BYTE, vim_ispathsep};
-use crate::types::{ExpandContext, Key, OptInt};
+use crate::types::{ExpandContext, Key};
 use crate::window::last_status;
 use crate::winlayer::{Cc, current_topframe};
 use core::ffi::c_int;
@@ -94,21 +95,6 @@ fn cmdline_del(mut cclp: Cc, from: c_int) {
 fn recomplete() -> Key {
     KeyTyped.set(true);
     wildchar()
-}
-
-/// The key `'wildchar'` names.
-///
-/// The option is a number, the key's code. One too wide for a key code can
-/// never be typed, so it answers `<Ignore>` rather than the truncated key
-/// upstream's `(int)p_wc` made of it.
-pub(crate) fn wildchar() -> Key {
-    c_int::try_from(p_wc()).map_or(Key::from(SpecialKey::Ignore), Key::from_code)
-}
-
-/// Whether `key` is the one `'wildcharm'` names (a number, like
-/// `'wildchar'`).
-pub(crate) fn is_wildcharm(key: Key) -> bool {
-    OptInt::from(key.code()) == p_wcm()
 }
 
 /// A key pressed while the wildmenu for menu names (`ExpandContext::Menunames`) is up.

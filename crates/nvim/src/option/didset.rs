@@ -18,6 +18,7 @@
 use crate::autocmd::{fire_autocmds, fire_autocmds_for};
 use crate::keycodes::{Ctrl_C, SpecialKey};
 use crate::types::AutoEvent;
+use crate::types::Key;
 use crate::winlayer::TabPage;
 use core::ffi::{CStr, c_int};
 
@@ -74,8 +75,8 @@ use crate::winlayer::graph::{firstwin, lastwin};
 
 use super::{
     B_IMODE_NONE, B_IMODE_USE_INSERT, NO_SCREEN, OptSlot, STATUS_HEIGHT, check_blending,
-    did_set_title, option_var, option_was_set, redraw_titles, set_option_value, set_options_bin,
-    write_slot,
+    did_set_title, option_key, option_var, option_was_set, redraw_titles, set_option_value,
+    set_options_bin, write_slot,
 };
 use crate::highlight_group::HLF_W;
 use crate::memory::XString;
@@ -620,12 +621,14 @@ pub(crate) fn did_set_updatecount(args: &mut OptSet) -> Result<(), OptError> {
 /// 'wildchar'/'wildcharm': a key that already means something on the command
 /// line cannot also start completion.
 pub(crate) fn did_set_wildchar(args: &mut OptSet) -> Result<(), OptError> {
-    let c = Frame::read(args).varp.number_var().get();
-    if c == Ctrl_C as OptInt
-        || c == '\n' as OptInt
-        || c == '\r' as OptInt
-        || c == SpecialKey::Kenter.code() as OptInt
-    {
+    let key = option_key(Frame::read(args).varp.number_var().get());
+    let refused = [
+        Key::from_code(Ctrl_C),
+        Key::ascii(b'\n'),
+        Key::ascii(b'\r'),
+        Key::from(SpecialKey::Kenter),
+    ];
+    if key.is_some_and(|key| refused.contains(&key)) {
         return Err((e_invarg).into());
     }
     Ok(())

@@ -228,7 +228,7 @@ pub(crate) fn open_cmdwin() -> Key {
 
     let histtype = hist_char2type(::core::ffi::c_int::from(cmdwin_type.get()));
     if histtype == HIST_CMD || histtype == HIST_DEBUG {
-        if p_wc() == OptInt::from(TAB) {
+        if wildchar() == Key::TAB {
             add_map(b"<Tab>", b"<C-X><C-V>", MODE_INSERT, true);
             add_map(b"<Tab>", b"a<C-X><C-V>", MODE_NORMAL, true);
         }

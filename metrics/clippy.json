@@ -14,7 +14,6 @@
     "crates/nvim/src/insexpand/getexp.rs": 1,
     "crates/nvim/src/mark/adjust.rs": 1,
     "crates/nvim/src/os/env/mod.rs": 1,
-    "crates/nvim/src/sign/vimscript.rs": 1,
     "crates/nvim/src/statusline/tabline.rs": 1,
     "crates/nvim/tests/unit/charset_oracle.rs": 1
   }

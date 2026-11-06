@@ -25,8 +25,8 @@ use crate::charset::{ptr2cells_at, vim_is_ident_char, vim_isprintc, vim_iswordc}
 use crate::cmdexpand::state::wild_menu_showing;
 use crate::cmdexpand::{
     clear_cmdline_orig, cmdline_pum_active, cmdline_pum_cleanup, cmdline_pum_remove,
-    expand_cleanup, expand_one, is_wildcharm, nextwild, set_expand_context, showmatches, wildchar,
-    wildmenu_cleanup, wildmenu_process_key, wildmenu_translate_key,
+    expand_cleanup, expand_one, nextwild, set_expand_context, showmatches, wildmenu_cleanup,
+    wildmenu_process_key, wildmenu_translate_key,
 };
 use crate::cmdhist::{
     add_to_history, get_hisidx, get_hislen, hist_char2type, hist_entry_text, init_history,
@@ -99,12 +99,13 @@ use crate::r#move::{
 use crate::normal::{clear_showcmd, normal_enter};
 use crate::option::vars::{
     P_HLS, p_ari, p_arshape, p_cedit, p_ch, p_cwh, p_hls, p_ic, p_icm, p_is, p_paste, p_ru, p_scs,
-    p_tbidi, p_wc, p_wmnu, wim_flags,
+    p_tbidi, p_wmnu, wim_flags,
 };
 use crate::option::{
     csh_like_shell, magic_isset, set_iminsert_global, set_imsearch_global, set_option_direct,
     set_option_value_give_err, string_to_key,
 };
+use crate::option::{is_wildcharm, wildchar};
 use crate::options::{
     kOptBoFlagError, kOptBoFlagWildmode, kOptBufhidden, kOptFiletype, kOptInccommand,
     kOptWimFlagFull, kOptWimFlagLastused, kOptWimFlagList, kOptWimFlagLongest, kOptWimFlagNoselect,
@@ -146,7 +147,6 @@ use crate::types::ESC;
 use crate::types::EcmdCmd;
 use crate::types::Key;
 use crate::types::NL;
-use crate::types::TAB;
 use crate::types::ui::{kUICmdline, kUIMessages};
 use crate::types::{
     AcoSave, ApiString, Array, Boolean, Buffer, Callback, CmdAddr, CmdBuff, CmdLine, CmdMod,

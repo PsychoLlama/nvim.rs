@@ -476,7 +476,7 @@ pub(crate) fn f_sign_undefine(args: &[TypVal], result: &mut TypVal, _fptr: EvalF
         result.write_number(0);
         return;
     }
-    if let Some(name) = numbuf.string_chk(&args[0]).ok() {
+    if let Ok(name) = numbuf.string_chk(&args[0]) {
         let undefined = sign_undefine_by_name(name.to_bytes()).map(|()| 0);
         result.write_number(VarNumber::from(answer_or_report(undefined)));
     }
