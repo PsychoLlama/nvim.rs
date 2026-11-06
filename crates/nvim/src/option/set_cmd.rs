@@ -35,6 +35,8 @@ use crate::keycodes::special_key_at;
 use crate::memory::ThinCString;
 use crate::optionstr::OptString;
 use crate::types::CmdIdx;
+use crate::types::option::kOptValTypeBoolean;
+use crate::types::option::kOptValTypeNumber;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 
@@ -60,10 +62,9 @@ use super::{
     FSK_KEEP_X_KEY, FSK_KEYCODE, FSK_SIMPLIFY, OP_ADDING, OP_NONE, OP_PREPENDING, OP_REMOVING,
     didset_options, didset_options2, get_option, get_option_default, get_option_value, get_varp,
     get_varp_scope, is_tty_option, kOptFlagMLE, kOptFlagSecure, kOptScopeBuf, kOptScopeWin,
-    kOptValTypeBoolean, kOptValTypeNumber, option_has_scope, option_has_type,
-    option_is_global_local, option_is_window_local, option_scope_idx, option_var, set_option,
-    set_options_default, showoneopt, showoptions, slot_value, stropt_get_newval,
-    unset_option_local_value,
+    option_has_scope, option_has_type, option_is_global_local, option_is_window_local,
+    option_scope_idx, option_var, set_option, set_options_default, showoneopt, showoptions,
+    slot_value, stropt_get_newval, unset_option_local_value,
 };
 
 /// The messages the parse reports. They go back to [`do_set`] rather than

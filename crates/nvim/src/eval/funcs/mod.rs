@@ -80,7 +80,6 @@ pub const MPACK_EOF: ::core::ffi::c_uint = 1;
 pub const MPACK_OK: ::core::ffi::c_uint = 0;
 pub const kProcTypePty: ProcType = 1;
 pub const MAX_FUNC_ARGS: ::core::ffi::c_uint = 20;
-pub const NUMBUFLEN: ::core::ffi::c_uint = 65;
 pub const NSUBEXP: ::core::ffi::c_uint = 10;
 pub const kChannelPartAll: ChannelPart = 4;
 pub const kChannelPartRpc: ChannelPart = 3;
@@ -109,8 +108,6 @@ pub const kRetObject: LuaRetMode = 0;
 pub const kGRegList: GRegFlags = 4;
 pub const kGRegExprSrc: GRegFlags = 2;
 pub const MENU_ALL_MODES: ::core::ffi::c_uint = 127;
-pub const GLV_READ_ONLY: ::core::ffi::c_uint = 16;
-pub const GLV_NO_AUTOLOAD: ::core::ffi::c_uint = 4;
 pub const TFN_NO_DEREF: ::core::ffi::c_uint = 8;
 pub const TFN_NO_AUTOLOAD: ::core::ffi::c_uint = 4;
 pub const TFN_QUIET: ::core::ffi::c_uint = 2;
@@ -144,12 +141,8 @@ pub const INTERNAL_CALL_MASK: uint64_t = 1_u64
         .wrapping_mul(8_usize)
         .wrapping_sub(1_usize);
 pub const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
-pub const VARNUMBER_MAX: ::core::ffi::c_long = INT64_MAX;
-pub const VARNUMBER_MIN: ::core::ffi::c_long = INT64_MIN;
 static e_string_list_or_blob_required: &::core::ffi::CStr = c"E1098: String, List or Blob required";
 static e_missing_function_argument: &::core::ffi::CStr = c"E1132: Missing function argument";
-pub const TV_TRANSLATE: ::core::ffi::c_ulong = SIZE_MAX;
-pub const FNE_CHECK_START: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const SIGINT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 
 #[cfg(test)]

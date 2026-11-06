@@ -164,8 +164,6 @@ pub(crate) fn answer_or_report(result: Result<c_int, SignError>) -> c_int {
 /// `:sign place` / `sign_place()` call names one.
 pub(crate) const SIGN_DEF_PRIO: c_int = 10;
 
-pub(crate) const MSG_BUF_LEN: c_int = 480;
-
 /// [`group_get_ns`]'s answer for the group `"*"`: every namespace, the
 /// global one included.
 pub(crate) const ALL_GROUPS: int64_t = u32::MAX as int64_t;

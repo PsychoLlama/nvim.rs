@@ -277,7 +277,6 @@ static prev_dir: GlobalCell<Option<XString>> = GlobalCell::new(None);
 static filetype_detect: GlobalCell<Option<bool>> = GlobalCell::new(None);
 static filetype_plugin: GlobalCell<Option<bool>> = GlobalCell::new(None);
 static filetype_indent: GlobalCell<Option<bool>> = GlobalCell::new(None);
-pub const MSG_BUF_LEN: c_int = 480 as c_int;
 pub const FILETYPE_FILE: &CStr = c"filetype.lua filetype.vim";
 pub const FTPLUGIN_FILE: &CStr = c"ftplugin.vim";
 pub const INDENT_FILE: &CStr = c"indent.vim";

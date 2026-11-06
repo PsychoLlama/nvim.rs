@@ -14,6 +14,7 @@
 
 use crate::global_cell::field;
 use crate::memory::XString;
+use crate::option::HIGHLIGHT_INIT;
 use crate::strings::has_char;
 use crate::types::Handle;
 use core::ffi::{CStr, c_int, c_uint};
@@ -50,11 +51,10 @@ use crate::window::check_colorcolumn;
 
 use super::frame::{invalid, local_window, new_bytes, new_value, old_bytes, varp, win};
 use super::{
-    COCU_ALL, HIGHLIGHT_INIT, INT_MAX, MOUSESCROLL_HOR_DFLT, MOUSESCROLL_VERT_DFLT, WW_ALL,
-    check_chars_options, check_signcolumn, check_str_opt, did_set_option_listflag,
-    did_set_statustabline_rulerformat, did_set_str_generic,
-    e_showbreak_contains_unprintable_or_wide_character, kAlignLeft, kWinSplitLeft, kWinStyleUnused,
-    kZIndexFloatDefault, opt_strings_mask, terminal_notify_theme,
+    COCU_ALL, INT_MAX, MOUSESCROLL_HOR_DFLT, MOUSESCROLL_VERT_DFLT, WW_ALL, check_chars_options,
+    check_signcolumn, check_str_opt, did_set_option_listflag, did_set_statustabline_rulerformat,
+    did_set_str_generic, e_showbreak_contains_unprintable_or_wide_character, kAlignLeft,
+    kWinSplitLeft, kWinStyleUnused, kZIndexFloatDefault, opt_strings_mask, terminal_notify_theme,
 };
 use crate::decoration::SCL_NUM;
 use crate::normal::visual_active;

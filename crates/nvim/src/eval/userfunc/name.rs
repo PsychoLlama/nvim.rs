@@ -18,6 +18,8 @@
 )]
 
 use crate::charset::skip;
+use crate::eval::FNE_CHECK_START;
+use crate::eval::FNE_INCL_BR;
 use crate::eval::lval::{LValue, Slot as LvalSlot, Target};
 use crate::eval::typval::{DictRef, PartialRef};
 use crate::eval::vars::with_var;

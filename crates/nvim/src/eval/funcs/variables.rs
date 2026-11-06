@@ -8,7 +8,9 @@
     clippy::ptr_as_ptr
 )]
 
-use super::{FNE_CHECK_START, GLV_NO_AUTOLOAD, GLV_READ_ONLY};
+use crate::eval::FNE_CHECK_START;
+use crate::eval::GLV_NO_AUTOLOAD;
+use crate::eval::GLV_READ_ONLY;
 use crate::eval::typval::DI_FLAGS_LOCK;
 use crate::eval::typval::{NumBuf, callback_free, tv_islocked};
 use crate::eval::vars::with_var;

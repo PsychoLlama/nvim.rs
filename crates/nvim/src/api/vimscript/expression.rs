@@ -27,6 +27,21 @@ use crate::message_fmt::msg_bytes;
 use crate::narrow::len_as_integer;
 use crate::types::DictBuilder;
 use crate::types::NodeId;
+use crate::viml::parser::expressions::kExprAsgnPlain;
+use crate::viml::parser::expressions::kExprFlagsDisallowEOC;
+use crate::viml::parser::expressions::kExprFlagsMulti;
+use crate::viml::parser::expressions::kExprFlagsParseLet;
+use crate::viml::parser::expressions::kExprNodeAssignment;
+use crate::viml::parser::expressions::kExprNodeComparison;
+use crate::viml::parser::expressions::kExprNodeDoubleQuotedString;
+use crate::viml::parser::expressions::kExprNodeEnvironment;
+use crate::viml::parser::expressions::kExprNodeFloat;
+use crate::viml::parser::expressions::kExprNodeInteger;
+use crate::viml::parser::expressions::kExprNodeOption;
+use crate::viml::parser::expressions::kExprNodePlainIdentifier;
+use crate::viml::parser::expressions::kExprNodePlainKey;
+use crate::viml::parser::expressions::kExprNodeRegister;
+use crate::viml::parser::expressions::kExprNodeSingleQuotedString;
 use core::ffi::{CStr, c_int, c_uint};
 
 pub fn nvim_parse_expression(

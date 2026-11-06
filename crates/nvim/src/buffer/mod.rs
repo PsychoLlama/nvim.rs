@@ -115,7 +115,6 @@ pub const kAlignLeft: AlignTextPos = 0;
 pub const kWinStyleMinimal: WinStyle = 1;
 pub const kWinStyleUnused: WinStyle = 0;
 pub const kWinSplitLeft: WinSplit = 0;
-pub const DO_NOT_FREE_CNT: ::core::ffi::c_uint = 1073741823;
 pub const kCdCauseAuto: CdCause = 2;
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
 pub const kExtmarkUndo: ExtmarkOp = 1;

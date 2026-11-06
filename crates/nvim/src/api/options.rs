@@ -24,6 +24,9 @@ use crate::autocmd::{
     aucmd_prepbuf, aucmd_restbuf, block_autocmds, do_filetype_autocmd, has_event, unblock_autocmds,
 };
 use crate::buffer::{BufFlags, BufRef, buflist_new, wipe_buffer};
+use crate::option::kOptScopeBuf;
+use crate::option::kOptScopeGlobal;
+use crate::option::kOptScopeWin;
 use crate::options::{kOptBufhidden, kOptBuftype, kOptInvalid};
 use crate::types::AutoEvent;
 use crate::winlayer::Win;
@@ -44,10 +47,6 @@ use crate::types::{
 };
 use crate::window::close_windows;
 use crate::winlayer::Buf;
-
-const kOptScopeBuf: OptScope = 2;
-const kOptScopeWin: OptScope = 1;
-const kOptScopeGlobal: OptScope = 0;
 
 /// `buflist_new`: a scratch buffer, not on the buffer list.
 const BLN_DUMMY: c_int = 4;

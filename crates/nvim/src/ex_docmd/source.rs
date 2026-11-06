@@ -5,6 +5,7 @@
 #![forbid(unsafe_code)]
 use crate::buffer::buf_get_changedtick;
 use crate::eval::vars::{set_vim_var_owned, vim_var_string};
+use crate::message::MSG_BUF_LEN;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 
@@ -34,7 +35,7 @@ use crate::ex_docmd::sourcing_lnum;
 use crate::drawscreen::state::cmdline_row;
 use crate::ex_docmd::state::{ex_no_reprint, ex_normal_busy, global_busy};
 use crate::ex_docmd::{
-    DoCmdOpts, ETYPE_EXCEPT, MSG_BUF_LEN, SavedDebugState, cmdline_call_depth, ex_pressedreturn,
+    DoCmdOpts, ETYPE_EXCEPT, SavedDebugState, cmdline_call_depth, ex_pressedreturn,
 };
 use crate::ex_eval::discard_current_exception;
 use crate::ex_eval::state::{

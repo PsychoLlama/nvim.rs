@@ -17,6 +17,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::eval::FSK_IN_STRING;
 use core::ffi::{CStr, c_int};
 
 use super::*;

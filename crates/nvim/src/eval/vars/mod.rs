@@ -130,20 +130,15 @@ pub const INT64_MIN: ::core::ffi::c_long = -9223372036854775807 - 1;
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807;
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615;
 
-pub const VARNUMBER_MAX: ::core::ffi::c_long = INT64_MAX;
-pub const VARNUMBER_MIN: ::core::ffi::c_long = INT64_MIN;
 pub const BAD_KEEP: c_int = -1;
 pub const BAD_DROP: c_int = -2;
 pub const FORCE_BIN: c_int = 1;
 pub const FORCE_NOBIN: c_int = 2;
 pub const NOTDONE: c_int = 2;
 pub const CHAN_STDERR: c_int = 2;
-pub const FNE_INCL_BR: c_int = 1;
-pub const FNE_CHECK_START: c_int = 2;
 
 /// The two `name_len` sentinels the `var_check_*` family accepts in place of
 /// a real length: translate the name and measure it, or just measure it.
-pub const TV_TRANSLATE: ::core::ffi::c_ulong = SIZE_MAX;
 pub const TV_CSTRING: ::core::ffi::c_ulong = SIZE_MAX - 1;
 
 /// How deep `:const` locks the value it stores.

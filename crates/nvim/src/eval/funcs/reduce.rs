@@ -9,9 +9,9 @@
 )]
 
 use super::wrappers::arg_copy;
-use super::{
-    VARNUMBER_MAX, VARNUMBER_MIN, e_missing_function_argument, e_string_list_or_blob_required,
-};
+use super::{e_missing_function_argument, e_string_list_or_blob_required};
+use crate::eval::VARNUMBER_MAX;
+use crate::eval::VARNUMBER_MIN;
 use crate::eval::typval::CallFrame;
 use crate::eval::typval::{
     NumBuf, blob_bytes, dict_len, list_items, list_iter, list_len, tv_check_for_number_arg,

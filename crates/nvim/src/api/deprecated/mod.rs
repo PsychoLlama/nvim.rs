@@ -35,9 +35,9 @@ use crate::pos::{MAXCOL, MAXLNUM};
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, BufferHandle, ColNr, DecorExt, DecorInline, DecorPriority,
     DecorVirtText, DecorVirtText_data, Error, Integer, KeyDict_empty, KeyDict_exec_opts,
-    LuaRetMode, MsgpackRpcRequestHandler, Object, OptIndex, OptScope, OptVal, TabpageHandle,
-    VirtText, WindowHandle, int64_t, kObjectTypeArray, kObjectTypeString, size_t, uint8_t,
-    uint32_t, uint64_t,
+    LuaRetMode, MsgpackRpcRequestHandler, Object, OptIndex, OptVal, TabpageHandle, VirtText,
+    WindowHandle, int64_t, kObjectTypeArray, kObjectTypeString, size_t, uint8_t, uint32_t,
+    uint64_t,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -57,9 +57,6 @@ pub use self::options::*;
 pub use self::vars::*;
 pub use self::write::*;
 pub const kRetObject: LuaRetMode = 0;
-pub const kOptScopeBuf: OptScope = 2;
-pub const kOptScopeWin: OptScope = 1;
-pub const kOptScopeGlobal: OptScope = 0;
 pub const LINE_BUFFER_MIN_SIZE: ::core::ffi::c_uint = 4096;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();

@@ -17,6 +17,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::eval::typval::DO_NOT_FREE_CNT;
 use crate::memline::MlFlags;
 use crate::message_fmt::msg_cstr_opt;
 use crate::types::AutoEvent;

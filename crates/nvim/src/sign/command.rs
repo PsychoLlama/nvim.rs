@@ -22,6 +22,7 @@ use crate::buffer::find_buffer_by_name;
 use crate::charset::atoi;
 use crate::charset::getdigits_int_at;
 use crate::charset::skip;
+use crate::message::MSG_BUF_LEN;
 use crate::message::{msg_bytes, msg_display_bytes};
 use crate::message_fmt::msg_bytes as shown;
 use crate::smsg;

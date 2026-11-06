@@ -9,10 +9,10 @@
     clippy::ptr_as_ptr
 )]
 
-use super::VARNUMBER_MAX;
 use super::wrappers::{arg_number_chk, tv_get_float_chk};
 use crate::charset::skip;
 use crate::charset::string2float_in;
+use crate::eval::VARNUMBER_MAX;
 use crate::eval::typval::{ListRef, NumBuf, tv_list_alloc_ret};
 use crate::global_cell::GlobalCell;
 use crate::message_fmt::msg_cstr;

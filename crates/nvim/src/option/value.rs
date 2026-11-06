@@ -24,6 +24,10 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::types::option::kOptValTypeBoolean;
+use crate::types::option::kOptValTypeNil;
+use crate::types::option::kOptValTypeNumber;
+use crate::types::option::kOptValTypeString;
 use core::ffi::{CStr, c_int};
 
 use crate::memory::{ThinCString, XString};
@@ -34,10 +38,7 @@ use crate::types::{
 use crate::types::{BoolVarValue, TypVal, VarNumber, kSpecialVarNull};
 use crate::undo::curbuf_is_changed;
 
-use super::{
-    OptSlot, get_option, is_option_hidden, kOptValTypeBoolean, kOptValTypeNil, kOptValTypeNumber,
-    kOptValTypeString, option_has_type, with_option_default,
-};
+use super::{OptSlot, get_option, is_option_hidden, option_has_type, with_option_default};
 
 /// The `Option<bool>` an option variable's tri-state word stands for: a
 /// negative word is "not set in this scope", and anything above 1 is true.

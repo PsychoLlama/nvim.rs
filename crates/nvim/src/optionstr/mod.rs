@@ -29,7 +29,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::types::{AlignTextPos, CharsOption, WinSplit, WinStyle};
+use crate::types::{AlignTextPos, WinSplit, WinStyle};
 use core::ffi::{CStr, c_int, c_uint};
 
 mod check;
@@ -60,8 +60,6 @@ pub const kZIndexFloatDefault: c_uint = 50;
 pub const CPT_MENU: c_uint = 2;
 pub const CPT_KIND: c_uint = 1;
 pub const CPT_ABBR: c_uint = 0;
-pub const kListchars: CharsOption = 1;
-pub const kFillchars: CharsOption = 0;
 pub const LSIZE: c_uint = 512;
 /// 'imsearch' at -1 follows 'iminsert' rather than answering for itself.
 pub const B_IMODE_USE_INSERT: c_int = -1;
@@ -69,7 +67,6 @@ pub const B_IMODE_NONE: c_int = 0;
 pub const B_IMODE_LMAP: c_int = 1;
 /// The only value nvim accepts for 'highlight': Vim's highlight-group
 /// mapping is not implemented, so the option can only be left alone.
-pub const HIGHLIGHT_INIT: &CStr = c"8:SpecialKey,~:EndOfBuffer,z:TermCursor,@:NonText,d:Directory,e:ErrorMsg,i:IncSearch,l:Search,y:CurSearch,m:MoreMsg,M:ModeMsg,n:LineNr,a:LineNrAbove,b:LineNrBelow,N:CursorLineNr,G:CursorLineSign,O:CursorLineFold,r:Question,s:StatusLine,S:StatusLineNC,c:VertSplit,t:Title,v:Visual,V:VisualNOS,w:WarningMsg,W:WildMenu,f:Folded,F:FoldColumn,A:DiffAdd,C:DiffChange,D:DiffDelete,T:DiffText,E:DiffTextAdd,>:SignColumn,-:Conceal,B:SpellBad,P:SpellCap,R:SpellRare,L:SpellLocal,+:Pmenu,=:PmenuSel,k:PmenuMatch,<:PmenuMatchSel,[:PmenuKind,]:PmenuKindSel,{:PmenuExtra,}:PmenuExtraSel,x:PmenuSbar,X:PmenuThumb,*:TabLine,#:TabLineSel,_:TabLineFill,!:CursorColumn,.:CursorLine,o:ColorColumn,q:QuickFixLine,z:StatusLineTerm,Z:StatusLineTermNC,g:MsgArea,h:ComplMatchIns,0:Whitespace,I:PreInsert";
 pub const EOL_MAC: c_int = 2;
 /// The letters 'formatoptions' accepts.
 pub const FO_ALL: &CStr = c"tcro/q2vlb1mMBn,aw]jp";

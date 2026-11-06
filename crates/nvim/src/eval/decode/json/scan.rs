@@ -15,6 +15,7 @@
 )]
 
 use crate::charset::{Str2NrBases, str2nr_in, string2float_in};
+use crate::eval::encode::SURROGATE_FIRST_CHAR;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use core::ffi::c_int;
@@ -33,7 +34,6 @@ const SURROGATE_HI_START: UVarNumber = 0xd800;
 const SURROGATE_HI_END: UVarNumber = 0xdbff;
 const SURROGATE_LO_START: UVarNumber = 0xdc00;
 const SURROGATE_LO_END: UVarNumber = 0xdfff;
-const SURROGATE_FIRST_CHAR: c_int = 0x10000;
 
 /// Scan a double-quoted JSON string and store it.
 ///

@@ -74,7 +74,6 @@ use crate::option::{
     kOptFlagNoDefault, kOptFlagNoDup, kOptFlagNoGlob, kOptFlagNoMkrc, kOptFlagOneComma,
     kOptFlagPriMkrc, kOptFlagRedrAll, kOptFlagRedrBuf, kOptFlagRedrStat, kOptFlagRedrTabl,
     kOptFlagRedrWin, kOptFlagSecure, kOptFlagUIOption, kOptScopeBuf, kOptScopeGlobal, kOptScopeWin,
-    kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString,
 };
 use crate::optionstr::{
     did_set_ambiwidth, did_set_background, did_set_backspace, did_set_backupcopy,
@@ -104,7 +103,7 @@ use crate::quickfix::did_set_quickfixtextfunc;
 use crate::runtime::did_set_runtimepackpath;
 use crate::tag::did_set_tagfunc;
 use crate::types::ascii::TAB;
-use crate::types::option::MAX_MCO;
+use crate::types::option::{MAX_MCO, kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString};
 use crate::types::{OptDefault, OptIndex, OptInt, OptScopeFlags, OptVar, VimOption, ssize_t};
 use crate::window::{did_set_winminheight, did_set_winminwidth};
 

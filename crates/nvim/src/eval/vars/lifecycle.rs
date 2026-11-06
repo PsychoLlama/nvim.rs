@@ -14,6 +14,8 @@
 )]
 
 use crate::cstr;
+use crate::eval::VARNUMBER_MAX;
+use crate::eval::VARNUMBER_MIN;
 use crate::eval::typval::DI_FLAGS_FIX;
 use crate::eval::typval::DI_FLAGS_RO;
 use crate::memory::ThinCString;

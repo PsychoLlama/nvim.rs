@@ -45,7 +45,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::highlight::HlAttrFlags;
-use crate::types::{CharsOption, HlAttrs, OptScope, OptValType, RgbValue, int16_t, int32_t};
+use crate::types::{CharsOption, HlAttrs, OptScope, RgbValue, int16_t, int32_t};
 use core::ffi::{c_int, c_uint};
 
 mod check;
@@ -119,10 +119,6 @@ pub(crate) const kOptFlagWasSet: OptFlags = 8;
 pub(crate) const kOptFlagNoDefault: OptFlags = 4;
 pub(crate) const kOptFlagNoDefExp: OptFlags = 2;
 pub(crate) const kOptFlagExpand: OptFlags = 1;
-pub(crate) const kOptValTypeString: OptValType = 2;
-pub(crate) const kOptValTypeNumber: OptValType = 1;
-pub(crate) const kOptValTypeBoolean: OptValType = 0;
-pub(crate) const kOptValTypeNil: OptValType = -1;
 pub(crate) const kOptScopeBuf: OptScope = 2;
 pub(crate) const kOptScopeWin: OptScope = 1;
 pub(crate) const kOptScopeGlobal: OptScope = 0;

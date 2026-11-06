@@ -51,6 +51,5 @@ pub(crate) use self::cmdline::*;
 pub use self::parse::*;
 pub use self::user::*;
 pub const kDirectionNotSet: Direction = 0;
-pub const NUMBUFLEN: ::core::ffi::c_uint = 65;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;

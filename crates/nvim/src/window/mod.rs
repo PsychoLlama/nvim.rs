@@ -115,7 +115,6 @@ pub const kWinStyleUnused: WinStyle = 0;
 pub const kWinSplitLeft: WinSplit = 0;
 pub const kZIndexMessages: ::core::ffi::c_uint = 200;
 pub const kZIndexFloatDefault: ::core::ffi::c_uint = 50;
-pub const NUMBUFLEN: ::core::ffi::c_uint = 65;
 pub const kDirectionNotSet: Direction = 0;
 pub const kCdCauseWindow: CdCause = 1;
 pub const kCdCauseManual: CdCause = 0;

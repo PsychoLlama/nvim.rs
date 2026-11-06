@@ -136,10 +136,8 @@ pub const FCERR_UNKNOWN: c_int = 0;
 
 pub const LUA_NOREF: c_int = -2;
 pub const NOTDONE: c_int = 2;
-pub const FNE_INCL_BR: c_int = 1;
-pub const FNE_CHECK_START: c_int = 2;
 pub const TV_CSTRING: size_t = size_t::MAX - 1;
-pub const MSG_BUF_LEN: c_int = 480;
+use crate::message::MSG_BUF_LEN;
 pub const MSG_BUF_CLEN: c_int = MSG_BUF_LEN / 6;
 pub const PROF_YES: c_int = 1;
 

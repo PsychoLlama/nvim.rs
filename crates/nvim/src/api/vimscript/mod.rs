@@ -19,10 +19,9 @@ use crate::message::state::{did_emsg, msg_col, redir_off};
 use crate::message::{capture_finish, capture_start};
 use crate::runtime::do_source_str;
 use crate::types::{
-    ApiDict, ApiString, Array, Boolean, Error, ExprAST, ExprASTNode, ExprASTNodeType,
-    ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags,
-    Integer, KeyDict_exec_opts, Object, ParserState, TypVal, VAR_FUNC, VAR_PARTIAL,
-    kErrorTypeException, kErrorTypeValidation, size_t, uint64_t,
+    ApiDict, ApiString, Array, Boolean, Error, ExprAST, ExprASTNode, Integer, KeyDict_exec_opts,
+    Object, ParserState, TypVal, VAR_FUNC, VAR_PARTIAL, kErrorTypeException, kErrorTypeValidation,
+    size_t, uint64_t,
 };
 use crate::viml::parser::expressions::{
     ASSIGNMENT_NAMES, CASE_STRATEGY_NAMES, COMPARISON_NAMES, NODE_TYPE_NAMES, viml_pexpr_parse,
@@ -37,62 +36,5 @@ pub use self::eval::*;
 pub use self::exec::*;
 pub use self::expression::*;
 pub const MAX_FUNC_ARGS: ::core::ffi::c_uint = 20;
-pub const kExprAsgnConcat: ExprAssignmentType = 3;
-pub const kExprAsgnSubtract: ExprAssignmentType = 2;
-pub const kExprAsgnAdd: ExprAssignmentType = 1;
-pub const kExprAsgnPlain: ExprAssignmentType = 0;
-pub const kExprOptScopeLocal: ExprOptScope = 108;
-pub const kExprOptScopeGlobal: ExprOptScope = 103;
-pub const kExprOptScopeUnspecified: ExprOptScope = 0;
-pub const kCCStrategyIgnoreCase: ExprCaseCompareStrategy = 63;
-pub const kCCStrategyMatchCase: ExprCaseCompareStrategy = 35;
-pub const kCCStrategyUseOption: ExprCaseCompareStrategy = 0;
-pub const kExprCmpIdentical: ExprComparisonType = 4;
-pub const kExprCmpGreaterOrEqual: ExprComparisonType = 3;
-pub const kExprCmpGreater: ExprComparisonType = 2;
-pub const kExprCmpMatches: ExprComparisonType = 1;
-pub const kExprCmpEqual: ExprComparisonType = 0;
-pub const kExprNodeAssignment: ExprASTNodeType = 38;
-pub const kExprNodeEnvironment: ExprASTNodeType = 37;
-pub const kExprNodeOption: ExprASTNodeType = 36;
-pub const kExprNodeMod: ExprASTNodeType = 35;
-pub const kExprNodeDivision: ExprASTNodeType = 34;
-pub const kExprNodeMultiplication: ExprASTNodeType = 33;
-pub const kExprNodeNot: ExprASTNodeType = 32;
-pub const kExprNodeBinaryMinus: ExprASTNodeType = 31;
-pub const kExprNodeUnaryMinus: ExprASTNodeType = 30;
-pub const kExprNodeAnd: ExprASTNodeType = 29;
-pub const kExprNodeOr: ExprASTNodeType = 28;
-pub const kExprNodeDoubleQuotedString: ExprASTNodeType = 27;
-pub const kExprNodeSingleQuotedString: ExprASTNodeType = 26;
-pub const kExprNodeFloat: ExprASTNodeType = 25;
-pub const kExprNodeInteger: ExprASTNodeType = 24;
-pub const kExprNodeConcatOrSubscript: ExprASTNodeType = 23;
-pub const kExprNodeConcat: ExprASTNodeType = 22;
-pub const kExprNodeComparison: ExprASTNodeType = 21;
-pub const kExprNodeArrow: ExprASTNodeType = 20;
-pub const kExprNodeColon: ExprASTNodeType = 19;
-pub const kExprNodeComma: ExprASTNodeType = 18;
-pub const kExprNodeCurlyBracesIdentifier: ExprASTNodeType = 17;
-pub const kExprNodeDictLiteral: ExprASTNodeType = 16;
-pub const kExprNodeLambda: ExprASTNodeType = 15;
-pub const kExprNodeUnknownFigure: ExprASTNodeType = 14;
-pub const kExprNodeComplexIdentifier: ExprASTNodeType = 13;
-pub const kExprNodePlainKey: ExprASTNodeType = 12;
-pub const kExprNodePlainIdentifier: ExprASTNodeType = 11;
-pub const kExprNodeCall: ExprASTNodeType = 10;
-pub const kExprNodeNested: ExprASTNodeType = 9;
-pub const kExprNodeBinaryPlus: ExprASTNodeType = 8;
-pub const kExprNodeUnaryPlus: ExprASTNodeType = 7;
-pub const kExprNodeListLiteral: ExprASTNodeType = 6;
-pub const kExprNodeSubscript: ExprASTNodeType = 5;
-pub const kExprNodeRegister: ExprASTNodeType = 4;
-pub const kExprNodeTernaryValue: ExprASTNodeType = 3;
-pub const kExprNodeTernary: ExprASTNodeType = 2;
-pub const kExprNodeOpMissing: ExprASTNodeType = 1;
-pub const kExprNodeMissing: ExprASTNodeType = 0;
-pub const kExprFlagsParseLet: ExprParserFlags = 4;
-pub const kExprFlagsDisallowEOC: ExprParserFlags = 2;
-pub const kExprFlagsMulti: ExprParserFlags = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();

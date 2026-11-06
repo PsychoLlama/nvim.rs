@@ -23,6 +23,8 @@
 
 use crate::env::expand_env_escaped;
 use crate::optionstr::OptString;
+use crate::types::option::kOptValTypeBoolean;
+use crate::types::option::kOptValTypeNumber;
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
 use std::ffi::CString;
@@ -47,8 +49,8 @@ use crate::types::{
 
 use super::{
     FUZZY_SCORE_NONE, find_option_len, get_option, get_varp_scope_from, is_option_hidden,
-    kOptFlagColon, kOptFlagComma, kOptFlagExpand, kOptFlagFlagList, kOptValTypeBoolean,
-    kOptValTypeNumber, option_has_type, option_value_text, option_var,
+    kOptFlagColon, kOptFlagComma, kOptFlagExpand, kOptFlagFlagList, option_has_type,
+    option_value_text, option_var,
 };
 
 /// What [`set_context_in_set_cmd`] worked out, for the `Expand*` half.

@@ -50,7 +50,6 @@ use crate::types::{
     ParserState, UVarNumber, size_t, uint8_t,
 };
 pub const FSK_SIMPLIFY: ::core::ffi::c_uint = 8;
-pub const FSK_IN_STRING: ::core::ffi::c_uint = 4;
 pub const FSK_KEYCODE: ::core::ffi::c_uint = 1;
 pub const kCCStrategyIgnoreCase: ExprCaseCompareStrategy = 63;
 pub const kCCStrategyMatchCase: ExprCaseCompareStrategy = 35;

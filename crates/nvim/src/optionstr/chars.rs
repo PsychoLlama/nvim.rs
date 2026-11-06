@@ -37,6 +37,8 @@
 use crate::formatted;
 use crate::global_cell::field;
 use crate::memory::ThinCString;
+use crate::option::kFillchars;
+use crate::option::kListchars;
 use crate::types::Candidate;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int, c_uint};
@@ -60,8 +62,7 @@ use crate::winlayer;
 use super::frame::new_bytes;
 use super::{
     OptStringRef, e_conflicts_with_value_of_fillchars, e_conflicts_with_value_of_listchars,
-    e_wrong_character_width_for_field_str, e_wrong_number_of_characters_for_field_str, kFillchars,
-    kListchars,
+    e_wrong_character_width_for_field_str, e_wrong_number_of_characters_for_field_str,
 };
 
 /// A 'fillchars' struct with every field blank -- what the assignment round

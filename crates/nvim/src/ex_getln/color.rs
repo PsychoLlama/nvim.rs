@@ -25,6 +25,7 @@ use crate::message_fmt::msg_cstr;
 use crate::narrow::{len_as_int, number_as_int};
 use crate::tr_plural;
 use crate::types::VAR_LIST;
+use crate::viml::parser::expressions::kExprFlagsDisallowEOC;
 
 /// Colour a `=` expression command line with the Vimscript expression parser,
 /// filling the gaps the parser leaves uncoloured with `hl_id` 0, into the

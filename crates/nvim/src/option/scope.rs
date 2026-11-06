@@ -28,6 +28,9 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::types::option::kOptValTypeBoolean;
+use crate::types::option::kOptValTypeNumber;
+use crate::types::option::kOptValTypeString;
 use core::ffi::c_int;
 
 use crate::global_cell::field;
@@ -44,8 +47,7 @@ use crate::winlayer::{Buf, Win};
 
 use super::{
     BoolVar, Local, NO_LOCAL_UNDOLEVEL, NumVar, OptSlot, StrVar, WinOptSet, get_option,
-    kOptScopeBuf, kOptScopeGlobal, kOptScopeWin, kOptValTypeBoolean, kOptValTypeNumber,
-    kOptValTypeString,
+    kOptScopeBuf, kOptScopeGlobal, kOptScopeWin,
 };
 
 /// The [`OptSlot`] naming one field of `$buf`.

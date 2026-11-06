@@ -15,6 +15,8 @@
 )]
 
 use crate::cstr;
+use crate::eval::FNE_CHECK_START;
+use crate::eval::FNE_INCL_BR;
 use crate::semsg;
 use crate::winlayer::TabPage;
 use crate::winlayer::{Buf, Win};

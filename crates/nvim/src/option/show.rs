@@ -35,6 +35,8 @@ use crate::narrow::number_as_int;
 use crate::option::vars::P_MOUSE;
 use crate::optionstr::OptString;
 use crate::types::Key;
+use crate::types::option::kOptValTypeBoolean;
+use crate::types::option::kOptValTypeNumber;
 use crate::winlayer::Win;
 use core::ffi::c_int;
 use std::io::Write;
@@ -67,9 +69,9 @@ use crate::undo::curbuf_is_changed;
 use super::{
     Local, OptSlot, WinOptSet, get_option, get_option_unset_value, get_varp, get_varp_scope,
     kOptFlagComma, kOptFlagExpand, kOptFlagNoGlob, kOptFlagNoMkrc, kOptFlagPriMkrc,
-    kOptFlagUIOption, kOptValTypeBoolean, kOptValTypeNumber, option_has_type,
-    option_is_global_local, option_is_global_only, option_is_window_local, option_parts,
-    option_var, optval_as_object, optval_is_default, slot_holds, slot_value,
+    kOptFlagUIOption, option_has_type, option_is_global_local, option_is_global_only,
+    option_is_window_local, option_parts, option_var, optval_as_object, optval_is_default,
+    slot_holds, slot_value,
 };
 
 /// The column width one option gets in the multi-column listing, and the

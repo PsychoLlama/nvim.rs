@@ -34,6 +34,7 @@ use crate::tr;
 use crate::types::AutoEvent;
 use crate::types::ColNr;
 use crate::types::LineNr;
+use crate::types::option::kOptValTypeString;
 use crate::winlayer::Win;
 use core::ffi::CStr;
 
@@ -71,10 +72,10 @@ use super::{
     NO_LOCAL_UNDOLEVEL, OptSlot, Replaced, SID_NONE, boolean_optval, check_redraw,
     do_spelllang_source, do_syntax_autocmd, get_varp, get_varp_scope, insecure_flag,
     is_option_hidden, kOptFlagCurswant, kOptFlagHLOnly, kOptFlagRedrAll, kOptFlagSecure,
-    kOptFlagUIOption, kOptScopeBuf, kOptScopeWin, kOptValTypeString, mark_option_was_set,
-    option_has_scope, option_has_type, option_is_global_local, option_is_global_only,
-    option_scope_idx, option_var, replace_slot, restore_slot, set_option_last_set, slot_holds,
-    slot_value, tty_option_end, validate_option_value, write_slot,
+    kOptFlagUIOption, kOptScopeBuf, kOptScopeWin, mark_option_was_set, option_has_scope,
+    option_has_type, option_is_global_local, option_is_global_only, option_scope_idx, option_var,
+    replace_slot, restore_slot, set_option_last_set, slot_holds, slot_value, tty_option_end,
+    validate_option_value, write_slot,
 };
 use crate::winlayer::Buf;
 
