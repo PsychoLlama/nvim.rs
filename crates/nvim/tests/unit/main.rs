@@ -31,6 +31,7 @@ mod encode_sinks;
 mod env;
 mod eval_decode;
 mod eval_encode;
+mod eval_errors;
 mod ex_cmds;
 mod ex_cmds2;
 mod ex_docmd;
