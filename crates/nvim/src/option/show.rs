@@ -145,7 +145,7 @@ pub(crate) fn showoptions(all: bool, opt_flags: OptionSetFlags) {
         // is `r + i * rows`.
         let mut row = 0;
         while row < rows && !got_int.get() {
-            msg_putchar('\n' as c_int);
+            msg_putchar(c_int::from(b'\n'));
             if got_int.get() {
                 break;
             }
@@ -214,7 +214,7 @@ pub(crate) fn showoneopt(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
     msg_str(opt.fullname);
 
     if !boolean {
-        msg_putchar('=' as c_int);
+        msg_putchar(c_int::from(b'='));
         let rendered = option_value_text(opt_idx, opt_flags);
         if !rendered.is_empty() {
             msg_display(rendered.as_cstr(), 0, false);

@@ -71,7 +71,7 @@ use crate::message::{e_endfor, e_endif, e_endtry, e_endwhile, e_for, e_while};
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::CmdIdx;
-use crate::types::{CondId, CondStack, ExArg, FAIL, Failed, OK, Pend};
+use crate::types::{CondId, CondStack, ExArg, Failed, Pend};
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
@@ -222,17 +222,17 @@ pub(crate) fn update_force_abort() {
     }
 }
 
-/// Whether a command whose subcommand returned `retcode` should abort the
-/// script. Lets an autocommand be suppressed after a failing subcommand, as
-/// long as the error message has not been shown and so has not itself caused
-/// the abort.
-pub(crate) fn should_abort(retcode: c_int) -> bool {
-    (retcode == FAIL && trylevel.get() != 0 && emsg_silent.get() == 0) || aborting()
+/// Whether a command whose subcommand `failed` should abort the script.
+/// Lets an autocommand be suppressed after a failing subcommand, as long as
+/// the error message has not been shown and so has not itself caused the
+/// abort.
+pub(crate) fn should_abort(failed: bool) -> bool {
+    (failed && trylevel.get() != 0 && emsg_silent.get() == 0) || aborting()
 }
 
 /// [`should_abort`] over an answer that has already become a `Result`.
 pub(crate) fn should_abort_err<T>(answer: Result<T, Failed>) -> bool {
-    should_abort(if answer.is_ok() { OK } else { FAIL })
+    should_abort(answer.is_err())
 }
 
 /// Whether a function with the "abort" flag should not count as ended on an

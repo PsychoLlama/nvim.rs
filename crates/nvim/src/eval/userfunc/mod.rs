@@ -144,7 +144,6 @@ pub const LUA_NOREF: c_int = -2;
 pub const NOTDONE: c_int = 2;
 pub const FNE_INCL_BR: c_int = 1;
 pub const FNE_CHECK_START: c_int = 2;
-pub const AUTOLOAD_CHAR: c_int = '#' as c_int;
 pub const TV_CSTRING: size_t = size_t::MAX - 1;
 pub const MSG_BUF_LEN: c_int = 480;
 pub const MSG_BUF_CLEN: c_int = MSG_BUF_LEN / 6;

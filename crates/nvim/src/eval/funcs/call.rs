@@ -3,10 +3,11 @@
 #![forbid(unsafe_code)]
 
 use super::wrappers::arg_number;
-use super::{AUTOLOAD_CHAR, MAX_FUNC_ARGS, TFN_INT, TFN_NO_AUTOLOAD, TFN_NO_DEREF, TFN_QUIET};
+use super::{MAX_FUNC_ARGS, TFN_INT, TFN_NO_AUTOLOAD, TFN_NO_DEREF, TFN_QUIET};
 use crate::ascii::ascii_isdigit;
 use crate::autocmd::{au_exists, autocmd_supported};
 use crate::env::expand_env;
+use crate::eval::AUTOLOAD_CHAR;
 use crate::eval::gc::{garbage_collect_at_exit, want_garbage_collect};
 use crate::eval::typval::{
     ListRef, NumBuf, PartialRef, list_iter, list_len, tv_check_for_dict_arg, tv_check_for_list_arg,
@@ -295,7 +296,7 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
     // checking would load it.
     let mut trans_name = None;
     if let Some(written) = given
-        && ((use_string && !has_char(written, AUTOLOAD_CHAR)) || is_funcref)
+        && ((use_string && !has_char(written, c_int::from(AUTOLOAD_CHAR))) || is_funcref)
     {
         let flags = TFN_INT as c_int
             | TFN_QUIET as c_int

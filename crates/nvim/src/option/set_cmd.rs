@@ -305,8 +305,8 @@ fn get_option_newval(
 fn take_number(opt_idx: OptIndex, arg: &[u8], errmsg: &mut Option<OptError>) -> Option<OptInt> {
     let is_key_option = matches!(opt_idx, kOptWildchar | kOptWildcharm);
     let first = c_int::from(at(arg, 0));
-    let looks_like_key = first == '<' as c_int
-        || first == '^' as c_int
+    let looks_like_key = first == c_int::from(b'<')
+        || first == c_int::from(b'^')
         || (first != NUL && (at(arg, 1) == 0 || white_at(arg, 1)) && !ascii_isdigit(first));
     if is_key_option && looks_like_key {
         let key = OptInt::from(string_to_key(arg));
@@ -317,7 +317,7 @@ fn take_number(opt_idx: OptIndex, arg: &[u8], errmsg: &mut Option<OptError>) -> 
         return Some(key);
     }
 
-    if first != '-' as c_int && !ascii_isdigit(first) {
+    if first != c_int::from(b'-') && !ascii_isdigit(first) {
         *errmsg = Some(E_NUMBER_REQUIRED_AFTER_EQUAL.into());
         return None;
     }
@@ -442,7 +442,7 @@ fn do_one_set_option(
 /// which script context 'verbose' reports.
 fn show_one(opt_idx: OptIndex, opt_flags: OptionSetFlags, varp: OptSlot, did_show: &mut bool) {
     if *did_show {
-        msg_putchar('\n' as c_int);
+        msg_putchar(c_int::from(b'\n'));
     } else {
         msg_ext_set_kind(c"list_cmd");
         gotocmdline(true);
@@ -524,7 +524,7 @@ pub(crate) fn do_set(arg: &[u8], opt_flags: OptionSetFlags) -> Result<(), Failed
     if silent_mode.get() && did_show {
         silent_mode.set(false);
         info_message.set(true);
-        msg_putchar('\n' as c_int);
+        msg_putchar(c_int::from(b'\n'));
         silent_mode.set(true);
         info_message.set(false);
     }

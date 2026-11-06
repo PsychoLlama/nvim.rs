@@ -5,7 +5,7 @@
 use crate::types::kOptValTypeBoolean;
 use crate::types::kOptValTypeNumber;
 use crate::types::kOptValTypeString;
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_int, c_uint, c_void};
 use core::mem::ManuallyDrop;
 
 use crate::eval::gc::{RootId, unroot_dict};
@@ -140,7 +140,6 @@ pub const NOTDONE: c_int = 2;
 pub const CHAN_STDERR: c_int = 2;
 pub const FNE_INCL_BR: c_int = 1;
 pub const FNE_CHECK_START: c_int = 2;
-pub const AUTOLOAD_CHAR: c_char = b'#'.cast_signed();
 
 /// The two `name_len` sentinels the `var_check_*` family accepts in place of
 /// a real length: translate the name and measure it, or just measure it.

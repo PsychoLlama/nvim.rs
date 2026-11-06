@@ -24,6 +24,7 @@
 use super::*;
 use crate::cstr;
 use crate::env::{expand_env, home_to_tilde};
+use crate::eval::AUTOLOAD_CHAR;
 use crate::eval::typval::NumBuf;
 use crate::ex_docmd::SourceKind;
 use crate::ex_eval::CsFlags;
@@ -421,7 +422,7 @@ pub(crate) fn autoload_name_of(name: &[u8]) -> XString {
 
     // Everything from the last separator on is the member name, which the
     // suffix replaces; the separators before it are directories.
-    let separator = u8::try_from(AUTOLOAD_CHAR).expect("`#` is a byte");
+    let separator = AUTOLOAD_CHAR;
     let cut = out.iter().rposition(|&b| b == separator).unwrap_or(0);
     out.truncate(cut);
     for byte in &mut out {
@@ -457,7 +458,7 @@ pub(crate) fn sourced_lnum_of(excmd: &ExArg) -> LineNr {
 /// from it.
 pub(crate) fn script_autoload_named(name: &[u8], reload: bool) -> bool {
     // If there is no `#` after name[0] there is no package name.
-    let separator = u8::try_from(AUTOLOAD_CHAR).expect("`#` is a byte");
+    let separator = AUTOLOAD_CHAR;
     if !matches!(name.iter().position(|&b| b == separator), Some(1..)) {
         return false;
     }

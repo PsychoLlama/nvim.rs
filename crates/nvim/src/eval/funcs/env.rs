@@ -4,8 +4,8 @@
 
 use super::wrappers::{arg_number_chk, dict_alloc_ret};
 use super::{
-    ENV_SEPCHAR, kXDGCacheHome, kXDGConfigDirs, kXDGConfigHome, kXDGDataDirs, kXDGDataHome,
-    kXDGRuntimeDir, kXDGStateHome, tv_get_buf,
+    kXDGCacheHome, kXDGConfigDirs, kXDGConfigHome, kXDGDataDirs, kXDGDataHome, kXDGRuntimeDir,
+    kXDGStateHome, tv_get_buf,
 };
 use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_one};
 use crate::env::{get_appname, getenv_resolved, xdg_home, xdg_var};
@@ -18,6 +18,7 @@ use crate::memory::ThinCString;
 use crate::message::emsg;
 use crate::message_fmt::msg_cstr;
 use crate::option::vars::{p_verbose, p_wic};
+use crate::os::env::ENV_SEPCHAR;
 use crate::os::env::{copy_environment, vim_setenv_named, vim_unsetenv_named};
 use crate::os::fs::os_setperm;
 use crate::path::concat_fnames;
@@ -215,7 +216,7 @@ fn get_xdg_var_list(xdg: XDGVarType, result: &mut TypVal) {
         return;
     };
     // An empty entry names no directory.
-    for dir in dirs.as_bytes().split(|&byte| byte == ENV_SEPCHAR as u8) {
+    for dir in dirs.as_bytes().split(|&byte| byte == ENV_SEPCHAR) {
         if !dir.is_empty() {
             let path = concat_fnames(dir, appname.to_bytes(), true);
             list.push(TypVal::string(Some(ThinCString::from(path))));

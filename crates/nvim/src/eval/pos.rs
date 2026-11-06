@@ -163,7 +163,7 @@ pub fn var2fpos(
         }
         pos = fm.mark;
         // Only the file marks carry a buffer of their own.
-        if (mname >= b'A' as c_int && mname <= b'Z' as c_int) || ascii_isdigit(mname) {
+        if (mname >= c_int::from(b'A') && mname <= c_int::from(b'Z')) || ascii_isdigit(mname) {
             *ret_fnum = fm.fnum;
         }
     }

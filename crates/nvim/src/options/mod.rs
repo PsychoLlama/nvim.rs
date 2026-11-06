@@ -58,7 +58,7 @@ use crate::option::vars::{
 use crate::option::{
     B_IMODE_NONE, B_IMODE_USE_INSERT, CPO_VIM, CTRL_F_STR, DFLT_COLS, DFLT_EFM, DFLT_ERRORFILE,
     DFLT_FO_VIM, DFLT_GFN, DFLT_GREPFORMAT, DFLT_HELPFILE, DFLT_ROWS, ENC_DFLT, HIGHLIGHT_INIT,
-    LISPWORD_VALUE, TAB, did_set_arabic, did_set_autochdir, did_set_binary, did_set_buflisted,
+    LISPWORD_VALUE, did_set_arabic, did_set_autochdir, did_set_binary, did_set_buflisted,
     did_set_cmdheight, did_set_diff, did_set_eof_eol_fixeol_bomb, did_set_equalalways,
     did_set_foldlevel, did_set_foldminlines, did_set_foldnestmax, did_set_helpheight,
     did_set_hlsearch, did_set_ignorecase, did_set_iminsert, did_set_langnoremap, did_set_langremap,
@@ -103,6 +103,7 @@ use crate::optionstr::{
 use crate::quickfix::did_set_quickfixtextfunc;
 use crate::runtime::did_set_runtimepackpath;
 use crate::tag::did_set_tagfunc;
+use crate::types::ascii::TAB;
 use crate::types::option::MAX_MCO;
 use crate::types::{OptDefault, OptIndex, OptInt, OptScopeFlags, OptVar, VimOption, ssize_t};
 use crate::window::{did_set_winminheight, did_set_winminwidth};

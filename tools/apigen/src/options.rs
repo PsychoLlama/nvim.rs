@@ -1416,7 +1416,7 @@ pub fn generate(
     let opts = parse_options(&source)?;
     // c2rust copied the option-index constants into every module that
     // included the generated header; `option.rs` is their canonical home.
-    let symbols = Symbols::collect(root, out_dir, &["crate::option"])?;
+    let symbols = Symbols::collect(root, out_dir, &["crate::option", "crate::types::ascii"])?;
 
     // Each section is formatted as one batch so the chunker counts the lines
     // the file will actually have.

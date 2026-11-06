@@ -28,9 +28,7 @@ use crate::search::{
     BACKWARD, FORWARD, SEARCH_COL, SEARCH_END, SEARCH_KEEP, SEARCH_START, search_in_current,
 };
 use crate::semsg;
-use crate::types::{
-    Direction, EvalFuncData, FAIL, Failed, LineNr, Pos, TypVal, VarNumber, int64_t,
-};
+use crate::types::{Direction, EvalFuncData, Failed, LineNr, Pos, TypVal, VarNumber, int64_t};
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 
@@ -332,7 +330,8 @@ pub fn f_searchdecl(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
     if !error && let Some(name) = name {
         let found = find_decl_of(name, locally, thisblock, SEARCH_KEEP as c_int);
-        result.write_number((found as c_int == FAIL) as VarNumber);
+        // 0 when the declaration was found.
+        result.write_number(VarNumber::from(!found));
     }
 }
 

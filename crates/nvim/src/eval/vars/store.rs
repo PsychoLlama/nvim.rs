@@ -8,6 +8,7 @@
 #![forbid(unsafe_code)]
 
 use crate::cstr;
+use crate::eval::AUTOLOAD_CHAR;
 use crate::eval::typval::DictRef;
 use crate::semsg;
 use crate::tr_plural;
@@ -297,10 +298,7 @@ pub(crate) fn var_wrong_func_name_named(name: &[u8], new_var: bool) -> bool {
 /// `Ok` if `varname` is spellable as a variable name; else E461 is reported.
 pub(crate) fn valid_varname_named(varname: &[u8]) -> Result<(), Failed> {
     for (i, &c) in varname.iter().enumerate() {
-        if !eval_isnamec1(c_int::from(c))
-            && (i == 0 || !c.is_ascii_digit())
-            && c != AUTOLOAD_CHAR as u8
-        {
+        if !eval_isnamec1(c_int::from(c)) && (i == 0 || !c.is_ascii_digit()) && c != AUTOLOAD_CHAR {
             let varname = msg_bytes(varname);
             semsg!("E461: Illegal variable name: {varname}");
             return Err(Failed);

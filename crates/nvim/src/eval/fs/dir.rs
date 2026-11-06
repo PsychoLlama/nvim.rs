@@ -42,8 +42,8 @@ use crate::os::fs::{current_dir, link_info, mkdir_recurse, os_remove, os_rmdir};
 use crate::path::{full_name_save, tail_index};
 use crate::semsg;
 use crate::types::{
-    CdScope, EvalFuncData, FAIL, MAXPATHL, OK, TypVal, VAR_NUMBER, VAR_STRING, VarNumber,
-    kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow, uint64_t,
+    CdScope, EvalFuncData, MAXPATHL, TypVal, VAR_NUMBER, VAR_STRING, VarNumber, kCdScopeGlobal,
+    kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow, uint64_t,
 };
 use crate::window::find_tabpage;
 use crate::window::{DirOwner, own_dir};
@@ -366,10 +366,10 @@ pub fn f_mkdir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // Upstream's default, which is *not* the 0777 the shell's `mkdir` uses.
     let mut prot: c_int = 0o755;
-    // Held in a local and written back at each exit, so that the answer is
-    // only ever written into the union, never read back out of it.
-    let mut status = FAIL as VarNumber;
-    result.write_number(status);
+    // Whether the directory is there now: the answer, 1 or 0, written back
+    // at each exit.
+    let mut made = false;
+    result.write_number(VarNumber::from(made));
     if secure() {
         return;
     }
@@ -412,21 +412,21 @@ pub fn f_mkdir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                 Err(failure) => {
                     let (dir, why) = (msg_cstr_opt(failure.dir.as_deref()), msg_cstr(failure.why));
                     semsg!("E739: Cannot create directory {dir}: {why}");
-                    result.write_number(FAIL as VarNumber);
+                    result.write_number(VarNumber::from(false));
                     return;
                 }
             }
-            status = OK as VarNumber;
+            made = true;
         }
     }
-    if status == FAIL as VarNumber {
+    if !made {
         // The callee reports its own error.
-        status = VarNumber::from(vim_mkdir_emsg(&dir, prot).is_ok());
+        made = vim_mkdir_emsg(&dir, prot).is_ok();
     }
-    result.write_number(status);
+    result.write_number(VarNumber::from(made));
 
     // The "D" and "R" flags: deferred deletion of the created directory.
-    if status == OK as VarNumber && created.is_none() && (defer || defer_recurse) {
+    if made && created.is_none() && (defer || defer_recurse) {
         created = Some(ThinCString::from(full_name_save(&dir, false)));
     }
     if let Some(created) = created {

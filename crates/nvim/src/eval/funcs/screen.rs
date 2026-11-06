@@ -219,13 +219,13 @@ pub fn f_syn_id_attr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         let mut modebuf = NumBuf::new();
         let mode = modebuf.bytes(&args[2]);
         match mode.first().copied().unwrap_or(0).to_ascii_lowercase() {
-            c @ (b'c' | b'g') => c as c_int,
+            c @ (b'c' | b'g') => c_int::from(c),
             _ => 0,
         }
     } else if ui_rgb_attached() {
-        'g' as c_int
+        c_int::from(b'g')
     } else {
-        'c' as c_int
+        c_int::from(b'c')
     };
 
     let answer = match attr_selector(what.to_bytes()) {

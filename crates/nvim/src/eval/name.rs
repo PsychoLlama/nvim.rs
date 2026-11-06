@@ -261,27 +261,28 @@ pub(crate) fn expanded_name(name: &[u8], open: usize, close: Option<usize>) -> O
 /// arrives negative and must not match.
 #[inline(always)]
 fn is_alpha(c: c_int) -> bool {
-    (c >= b'A' as c_int && c <= b'Z' as c_int) || (c >= b'a' as c_int && c <= b'z' as c_int)
+    (c >= c_int::from(b'A') && c <= c_int::from(b'Z'))
+        || (c >= c_int::from(b'a') && c <= c_int::from(b'z'))
 }
 
 /// May this character be part of a variable name?
 pub fn eval_isnamec(c: c_int) -> bool {
     is_alpha(c)
         || ascii_isdigit(c)
-        || c == b'_' as c_int
-        || c == b':' as c_int
-        || c == AUTOLOAD_CHAR
+        || c == c_int::from(b'_')
+        || c == c_int::from(b':')
+        || c == c_int::from(AUTOLOAD_CHAR)
 }
 
 /// May this character *start* a variable name?
 pub fn eval_isnamec1(c: c_int) -> bool {
-    is_alpha(c) || c == b'_' as c_int
+    is_alpha(c) || c == c_int::from(b'_')
 }
 
 /// May this character be part of a `.key` subscript? Unlike a variable
 /// name, no `:` and no `#`.
 pub fn eval_isdictc(c: c_int) -> bool {
-    is_alpha(c) || ascii_isdigit(c) || c == b'_' as c_int
+    is_alpha(c) || ascii_isdigit(c) || c == c_int::from(b'_')
 }
 
 /// Is this partial the one `v:lua` stands for? An identity test: the

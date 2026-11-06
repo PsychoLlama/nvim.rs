@@ -10,6 +10,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::eval::AUTOLOAD_CHAR;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::winlayer::TabPage;
@@ -377,7 +378,7 @@ pub(crate) fn find_var_home(name: &[u8]) -> Option<VarHome> {
     if name.get(1) != Some(&b':') {
         // An implicit scope. The name must not start with a colon or a
         // '#'.
-        if lead == b':' || lead == AUTOLOAD_CHAR as u8 {
+        if lead == b':' || lead == AUTOLOAD_CHAR {
             return None;
         }
         // "version" is "v:version" in every scope.
@@ -393,10 +394,7 @@ pub(crate) fn find_var_home(name: &[u8]) -> Option<VarHome> {
         return home(ScopeKind::Global, Some(globvar_dict()), 2);
     }
     // Without `g:` there must be no ':' or '#' in the rest.
-    if name[2..]
-        .iter()
-        .any(|&c| c == b':' || c == AUTOLOAD_CHAR as u8)
-    {
+    if name[2..].iter().any(|&c| c == b':' || c == AUTOLOAD_CHAR) {
         return None;
     }
     match lead {

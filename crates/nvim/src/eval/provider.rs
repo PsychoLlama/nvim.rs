@@ -39,7 +39,7 @@ use crate::runtime::sourcing_name_copy;
 use crate::runtime::state::{ETYPE_TOP, current_sctx};
 use crate::types::channel::kChannelStreamProc;
 use crate::types::{
-    Callback, CallbackReader, CallerScope, EStack, EstackInfo, FAIL, ScriptCtx, TypVal, VAR_NUMBER,
+    Callback, CallbackReader, CallerScope, EStack, EstackInfo, ScriptCtx, TypVal, VAR_NUMBER,
     VAR_STRING, VarNumber, ptrdiff_t, uint64_t,
 };
 use crate::undo::u_clearallandblockfree;
@@ -353,7 +353,7 @@ pub fn invoke_prompt_interrupt() -> bool {
     got_int.set(false);
     // A copy: the callback may replace itself, or wipe the buffer.
     let callback = Buf::current().b_prompt_interrupt.duplicate();
-    let ret = callback_call(&callback, &[], &mut rettv);
+    let called = callback_call(&callback, &[], &mut rettv);
     clear_local(&mut rettv);
-    ret as c_int != FAIL
+    called
 }

@@ -131,7 +131,8 @@ pub const COPYID_INC: c_int = 2 as c_int;
 pub const COPYID_MASK: c_int = !(0x1 as c_int);
 pub const FNE_INCL_BR: c_int = 1 as c_int;
 pub const FNE_CHECK_START: c_int = 2 as c_int;
-pub const AUTOLOAD_CHAR: c_int = '#' as c_int;
+/// The separator of an autoload name's path: `foo#bar#baz()`.
+pub const AUTOLOAD_CHAR: u8 = b'#';
 pub const DICT_MAXNEST: c_int = 100 as c_int;
 
 /// The messages this tree reports, as the C spells them. Each is a

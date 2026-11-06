@@ -15,7 +15,7 @@ use super::*;
 use crate::ascii::{ascii_isident, ascii_iswhite};
 
 /// The character that separates the parts of an autoload name, `foo#bar`.
-const AUTOLOAD_CHAR: u8 = b'#';
+use crate::eval::AUTOLOAD_CHAR;
 
 /// The scope letters an identifier may carry before its colon, as in `g:foo`.
 /// (The C's `EXPR_VAR_SCOPE_LIST` lists `b` twice; the duplicate is inert.)

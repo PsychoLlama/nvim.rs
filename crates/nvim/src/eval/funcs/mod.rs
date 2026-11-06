@@ -144,9 +144,7 @@ static e_string_list_or_blob_required: &::core::ffi::CStr = c"E1098: String, Lis
 static e_missing_function_argument: &::core::ffi::CStr = c"E1132: Missing function argument";
 pub const TV_TRANSLATE: ::core::ffi::c_ulong = SIZE_MAX;
 pub const FNE_CHECK_START: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const AUTOLOAD_CHAR: ::core::ffi::c_int = '#' as ::core::ffi::c_int;
 pub const SIGINT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const ENV_SEPCHAR: ::core::ffi::c_int = ':' as ::core::ffi::c_int;
 
 #[cfg(test)]
 mod arity_audit {

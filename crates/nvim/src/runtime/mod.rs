@@ -203,7 +203,6 @@ pub const O_RDONLY: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
 pub const SYS_OPTWIN_FILE: &::core::ffi::CStr = c"$VIMRUNTIME/scripts/optwin.lua";
-pub const AUTOLOAD_CHAR: ::core::ffi::c_int = '#' as ::core::ffi::c_int;
 pub const PROF_YES: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SID_MODELINE: ::core::ffi::c_int = -1;
 pub const SID_CMDARG: ::core::ffi::c_int = -2;

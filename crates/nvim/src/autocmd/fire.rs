@@ -208,7 +208,7 @@ pub fn apply_autocmds_retval(
     buffer: Buf,
     retval: &mut ::core::ffi::c_int,
 ) -> bool {
-    if should_abort(*retval) {
+    if should_abort(*retval == FAIL) {
         return false;
     }
     let did_cmd = apply_autocmds_group(

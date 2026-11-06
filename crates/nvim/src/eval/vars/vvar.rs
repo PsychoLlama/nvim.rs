@@ -556,7 +556,11 @@ pub(crate) fn before_set_vvar(key: &[u8], tv: &mut TypVal, copy: bool, watched: 
             item.di_tv.write_number(n);
         }
         if key == b"searchforward" {
-            set_search_direction(if n != 0 { b'/' as c_int } else { b'?' as c_int });
+            set_search_direction(if n != 0 {
+                c_int::from(b'/')
+            } else {
+                c_int::from(b'?')
+            });
         } else if key == b"hlsearch" {
             no_hlsearch.set(n == 0);
             redraw_all_later(UPD_SOME_VALID);

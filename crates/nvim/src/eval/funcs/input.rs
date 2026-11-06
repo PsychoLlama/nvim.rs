@@ -174,7 +174,7 @@ pub fn f_inputlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // A UI that owns the message area keeps the items in one message,
         // bar the last separator.
         if !ui_has(kUIMessages) || at + 1 < len {
-            msg_putchar('\n' as c_int);
+            msg_putchar(c_int::from(b'\n'));
         }
     }
 

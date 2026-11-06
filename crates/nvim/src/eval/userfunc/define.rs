@@ -442,7 +442,7 @@ impl Definition<'_, '_> {
     fn create(&mut self) -> Result<(), Refusal> {
         let name = self.name.clone().unwrap_or_default();
         if self.fudi.is_none()
-            && u8::try_from(AUTOLOAD_CHAR).is_ok_and(|c| name.contains(&c))
+            && name.contains(&crate::eval::AUTOLOAD_CHAR)
             && !self.autoload_name_matches_script(&name)
         {
             let shown = msg_bytes(&name);
