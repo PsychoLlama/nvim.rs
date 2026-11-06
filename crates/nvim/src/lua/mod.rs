@@ -1,3 +1,10 @@
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
 //! The Lua runtime: the LuaJIT FFI bindings, the `vim.*` stdlib, and the

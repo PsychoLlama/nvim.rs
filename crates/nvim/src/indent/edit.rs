@@ -1,6 +1,13 @@
 //! Reindenting text: the `=` operator, `:retab`, the `<C-t>`/`<C-d>`
 //! shifts, Insert-mode smart indent, and copying an existing line's indent.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::extmark::kExtmarkUndo;

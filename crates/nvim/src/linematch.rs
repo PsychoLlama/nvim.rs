@@ -20,6 +20,13 @@
 //! as a byte slice — the `mmfile_t`s the diff machinery passes around
 //! convert at the call site — and get the decisions back as a `Vec`.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::narrow::as_index;

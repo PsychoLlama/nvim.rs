@@ -35,6 +35,13 @@
 //! Portions of this file are adapted from fzy. Original code: Copyright (c)
 //! 2014 John Hawthorn, MIT licensed.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::narrow::float_as_int;

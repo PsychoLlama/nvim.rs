@@ -8,6 +8,13 @@
 //!
 //! `exiting` is set *before* the checks and put back by `not_exiting` when
 //! any of them refuses, because the checks themselves look at it.
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::autocmd::fire_autocmds;

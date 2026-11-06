@@ -27,6 +27,13 @@
 //! The array is built where the macro is written, on the stack: a call
 //! allocates nothing for its arguments.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use core::ffi::{CStr, c_int, c_long, c_uint, c_ulong, c_void};

@@ -13,6 +13,13 @@
 //! [`invalidate`] and drawn at the next [`tui_flush`], so a burst of updates
 //! costs one write.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::event::r#loop::{main_loop_purge, main_loop_size};

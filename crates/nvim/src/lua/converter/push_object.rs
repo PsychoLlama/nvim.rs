@@ -9,6 +9,13 @@
 //! pushed without being given up. A caller done with the object drops it
 //! afterwards, which releases its references.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::{TYPE_IDX_VALUE, VAL_IDX_VALUE};

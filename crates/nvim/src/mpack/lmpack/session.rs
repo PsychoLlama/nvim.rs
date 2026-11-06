@@ -14,6 +14,13 @@
 //! Ported from libmpack, Copyright (c) 2016 Thiago de Arruda, under the
 //! MIT license; the notice is reproduced in licenses/libmpack-LICENSE.txt.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::narrow::float_as_u32;

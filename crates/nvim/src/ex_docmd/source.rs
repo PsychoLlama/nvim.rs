@@ -2,6 +2,13 @@
 //! restores for the debugger, the sources it reads its lines from -- the
 //! [`LineSource`] arms and the loop line store `:while` and `:for` replay
 //! from -- and Ex mode.
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 use crate::buffer::buf_get_changedtick;
 use crate::eval::vars::{set_vim_var_owned, vim_var_string};

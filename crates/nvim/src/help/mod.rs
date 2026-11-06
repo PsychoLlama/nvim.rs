@@ -21,6 +21,13 @@
 //!
 //! Original: `src/nvim/help.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 // The constants here keep upstream's spelling.
 #![allow(non_upper_case_globals)]

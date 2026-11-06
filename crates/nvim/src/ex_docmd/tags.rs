@@ -5,6 +5,13 @@
 //! `cmdnames` to decide what it does. `:djump`, `:dlist`, `:dsearch` and
 //! `:dsplit` differ only in their third letter; `:tnext`, `:tprevious`,
 //! `:tselect` and the rest only in their second.
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::narrow::number_as_int;

@@ -5,6 +5,13 @@
 //! [`push_keydict`] renders one back.  [`init_types`] installs the
 //! names the api's type tags are known by on the Lua side.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::lua::converter::push_object::push_integer;

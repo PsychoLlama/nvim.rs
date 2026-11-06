@@ -15,6 +15,13 @@
 //! numbers are relative to how much scrollback exists, so the scrollback
 //! has to settle before the screen is written at the right lines.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::autocmd::{block_autocmds, unblock_autocmds};

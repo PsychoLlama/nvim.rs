@@ -4,6 +4,13 @@
 //! Expansion rewrites the command line in place: every replacement is
 //! spliced into the `ExArg`'s own line by [`repl_cmdline`], which moves the
 //! cursors past it.
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 use crate::cmdexpand::{WildMode, WildOpts, expand_one};
 use crate::cstr;

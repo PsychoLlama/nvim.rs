@@ -17,6 +17,13 @@
 //! user code is handed copies, and a list is found again by its id, and an
 //! entry by its index, once the user code has returned.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 mod all;

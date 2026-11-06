@@ -4,6 +4,13 @@
 //! sequences as themselves; the `str2special*` half renders key codes as
 //! `<C-X>` notation, which is what mapping listings and `keytrans()` show.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;

@@ -11,6 +11,13 @@
 //! generally means resetting everything and rebuilding, which is why
 //! [`update_attrs`] emits a full description rather than a diff.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::global_cell::GlobalCell;

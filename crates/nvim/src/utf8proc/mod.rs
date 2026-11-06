@@ -19,6 +19,13 @@
 //! Unicode, Inc. license. This port stays under those terms; both notices
 //! are reproduced in full in licenses/utf8proc-LICENSE.md.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 // utf8proc's option and property types, vendored with the library's names.
 #![allow(non_camel_case_types)]

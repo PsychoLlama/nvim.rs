@@ -8,6 +8,13 @@
 //! them more cheaply than Rust does; under Miri they are Rust's, which are
 //! the same (see `render_digits`).
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 #[cfg(miri)]

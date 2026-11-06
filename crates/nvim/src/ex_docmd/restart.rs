@@ -1,5 +1,12 @@
 //! `:restart`, `:detach` and `:connect` — the commands that hand the
 //! session to another process or take it back.
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::channel::channel_close_or_report;
