@@ -25,6 +25,7 @@ use crate::cstr;
 use crate::keycodes::Ctrl_V;
 use crate::keycodes::SpecialKey;
 use crate::keycodes::special_key_at;
+use crate::memory::ThinCString;
 use crate::optionstr::OptString;
 use crate::types::CmdIdx;
 use crate::winlayer::{Buf, Win};
@@ -37,13 +38,11 @@ use crate::eval::last_set_msg;
 use crate::ex_getln::gotocmdline;
 use crate::guard::Suppress;
 use crate::guard::sandbox;
-use crate::memory::XString;
 use crate::message::state::info_message;
 use crate::message::{e_invarg, e_sandbox, e_trailing};
 use crate::message::{emsg, msg_ext_set_kind, msg_putchar};
 use crate::option::vars::{p_mle, p_verbose};
 use crate::options::{kOptFoldmethod, kOptInvalid, kOptWildchar, kOptWildcharm, kOptWrap};
-use crate::os::cshim::gettext_owned;
 use crate::startup::silent_mode;
 use crate::types::{
     ExArg, Failed, IOSIZE, NUL, OptError, OptIndex, OptInt, OptVal, OptionSetFlags, ScriptId,
@@ -431,9 +430,10 @@ fn do_one_set_option(
     if let Err(err) = set_option(opt_idx, newval, opt_flags, 0 as ScriptId, false, replaced) {
         // The report carries what upstream's `errbuf` held: the message cut
         // to the room it had.
-        let message = err.as_cstr().to_bytes();
+        let message = err.to_cstring();
+        let message = message.to_bytes();
         let kept = &message[..message.len().min(ERRBUF_LEN - 1)];
-        *errmsg = Some(OptError::Owned(XString::from_bytes(kept)));
+        *errmsg = Some(OptError::Owned(ThinCString::from_bytes(kept)));
     }
 }
 
@@ -512,7 +512,7 @@ pub(crate) fn do_set(arg: &[u8], opt_flags: OptionSetFlags) -> Result<(), Failed
                 }
             }
             if let Some(errmsg) = errmsg {
-                report(errmsg.as_cstr(), &arg[startarg..p.min(arg.len())]);
+                report(&errmsg, &arg[startarg..p.min(arg.len())]);
                 return Err(Failed);
             }
         }
@@ -556,12 +556,12 @@ fn skip_to_white_escaped(arg: &[u8], mut p: usize) -> usize {
 ///
 /// The argument is appended only when both fit in the report buffer; a
 /// message that long stands on its own.
-fn report(errmsg: &CStr, arg: &[u8]) {
+fn report(errmsg: &OptError, arg: &[u8]) {
     // Upstream builds the report in `IObuff`, and translates its unprintable
     // characters in place within that room: the buffer is the room.
     let room = IOSIZE as usize;
     let mut report = vec![0u8; room];
-    let msg = gettext_owned(errmsg);
+    let msg = errmsg.to_cstring();
     let msg = msg.to_bytes();
     let kept = msg.len().min(room - 1);
     report[..kept].copy_from_slice(&msg[..kept]);

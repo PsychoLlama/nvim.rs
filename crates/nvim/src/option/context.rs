@@ -163,5 +163,5 @@ pub(crate) fn set_option_value_for(
     if let Some(ctx) = ctx {
         ctx.leave();
     }
-    errmsg.map_err(|errmsg| Error::exception(errmsg.as_cstr()))
+    errmsg.map_err(|errmsg| Error::exception(&errmsg.to_cstring()))
 }

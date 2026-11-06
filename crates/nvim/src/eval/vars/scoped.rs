@@ -11,6 +11,7 @@ use crate::autocmd::AucmdBuf;
 use crate::cstr;
 use crate::eval::window::WinSwitch;
 use crate::guard::Suppress;
+use crate::message_fmt::emsg_text;
 use crate::message_fmt::msg_bytes;
 use crate::option::set_option_value_handle_tty;
 use crate::semsg;
@@ -210,7 +211,7 @@ fn set_option_from_tv(name: &[u8], value: &TypVal) {
         let local = OptionSetFlags::LOCAL;
         let set = set_option_value_handle_tty(name, opt_idx, optval, local);
         if let Err(errmsg) = set {
-            emsg(errmsg.as_cstr());
+            emsg_text(errmsg.to_string());
         }
     }
 }

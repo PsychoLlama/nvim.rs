@@ -16,11 +16,11 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::formatted;
+use crate::message_fmt::msg_cstr;
+use crate::tr;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 
-use crate::memory::XString;
 use crate::message::{e_invarg, e_positive, e_scroll, e_winheight, e_winwidth};
 use crate::option::vars::{p_wh, p_wiw, p_wmh, p_wmw};
 use crate::options::*;
@@ -90,18 +90,18 @@ pub(crate) fn check_num_option_bounds(
         kOptLines => {
             let least = min_rows_for_all_tabpages();
             if *newval < least as OptInt && full_screen.get() {
-                let fmt = gettext(c"E593: Need at least %d lines");
-                let message = formatted!(OptError::ROOM, fmt.to_bytes(), least);
-                errmsg = Err(XString::from_vec(message).into());
+                errmsg = Err(OptError::formatted(tr!(
+                    "E593: Need at least {least} lines"
+                )));
                 *newval = least as OptInt;
             }
             *newval = (*newval).min(INT_MAX as OptInt);
         }
         kOptColumns => {
             if *newval < MIN_COLUMNS as OptInt && full_screen.get() {
-                let fmt = gettext(c"E594: Need at least %d columns");
-                let message = formatted!(OptError::ROOM, fmt.to_bytes(), MIN_COLUMNS as c_int);
-                errmsg = Err(XString::from_vec(message).into());
+                errmsg = Err(OptError::formatted(tr!(
+                    "E594: Need at least {MIN_COLUMNS} columns"
+                )));
                 *newval = MIN_COLUMNS as OptInt;
             }
             *newval = (*newval).min(INT_MAX as OptInt);
@@ -227,19 +227,13 @@ pub(crate) fn validate_option_value(
         Ok(())
     } else if !option_has_type(opt_idx, newval.kind()) {
         let rep = optval_to_text(newval);
-        let fmt = c"Invalid value for option '%s': expected %s, got %s %s";
-        let fmt = gettext(fmt);
-        let want = optval_type_name(opt.type_0);
-        let got = optval_type_name(newval.kind());
-        let message = formatted!(
-            OptError::ROOM,
-            fmt.to_bytes(),
-            opt.fullname,
-            want,
-            got,
-            rep.as_cstr(),
-        );
-        Err(XString::from_vec(message).into())
+        let name = msg_cstr(opt.fullname);
+        let want = msg_cstr(optval_type_name(opt.type_0));
+        let got = msg_cstr(optval_type_name(newval.kind()));
+        let rep = msg_cstr(rep.as_cstr());
+        Err(OptError::formatted(tr!(
+            "Invalid value for option '{name}': expected {want}, got {got} {rep}"
+        )))
     } else if let OptVal::Number(number) = newval {
         // The check clamps in place, so it is handed the value's own word.
         validate_num_option(opt_idx, number)

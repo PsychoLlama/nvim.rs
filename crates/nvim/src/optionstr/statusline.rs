@@ -14,20 +14,19 @@
 )]
 
 use crate::cstr;
-use crate::formatted;
+use crate::message_fmt::msg_cstr;
+use crate::tr;
 use core::ffi::{c_int, c_uint};
 
 use crate::ascii::ascii_isdigit;
 use crate::charset::{getdigits_int_at, transchar_byte};
 use crate::drawscreen::comp_col;
 use crate::drawscreen::state::ru_wid;
-use crate::memory::XString;
 use crate::message::e_invalid_format_string_single_percent_s;
 use crate::message::{verbose_open, verbose_stop};
 use crate::option::vars::{P_SHADA, P_VFILE, p_ruf, ssop_flags};
 use crate::option::{did_set_title, get_option_default};
 use crate::options::{kOptSsopFlagCurdir, kOptSsopFlagSesdir, kOptStatusline, opt_ssop_values};
-use crate::os::cshim::gettext;
 use crate::shada::get_shada_parameter;
 use crate::statusline::state::stl_syntax;
 use crate::types::{LineNr, OptError, OptSet, OptionSetFlags, StlSyntax};
@@ -220,10 +219,11 @@ pub fn did_set_shada(_args: &mut OptSet) -> Result<(), OptError> {
             }
             if !ascii_isdigit(c_int::from(at(i - 1))) {
                 let byte = c_int::from(at(i - 1));
-                let fmt = gettext(c"E526: Missing number after <%s>");
                 let shown = transchar_byte(byte);
-                let message = formatted!(OptError::ROOM, fmt.to_bytes(), cstr::in_bytes(&shown));
-                return Err(XString::from_vec(message).into());
+                let shown = msg_cstr(cstr::in_bytes(&shown));
+                return Err(OptError::formatted(tr!(
+                    "E526: Missing number after <{shown}>"
+                )));
             }
         }
         if at(i) == b',' {

@@ -36,6 +36,7 @@
 
 use crate::formatted;
 use crate::global_cell::field;
+use crate::memory::ThinCString;
 use crate::types::Candidate;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int, c_uint};
@@ -44,7 +45,6 @@ use crate::charset::{char2cells, hexhex_at};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::grid::schar_from_char;
 use crate::mbyte::{c_cluster_len, c_cluster_schar};
-use crate::memory::XString;
 use crate::message::{e_invarg, e_leadtab_requires_tab};
 use crate::narrow::number_as_int;
 use crate::option::vars::{P_FCS, P_LCS};
@@ -321,7 +321,7 @@ fn take_encoded_char(bytes: &[u8], at: &mut usize) -> ScreenChar {
 /// sibling, naming the field they did not like. `fmt` takes one string.
 fn field_value_err(fmt: &'static CStr, field: &CStr) -> OptError {
     let message = formatted!(OptError::ROOM, gettext(fmt).to_bytes(), field);
-    OptError::Owned(XString::from_vec(message))
+    OptError::Owned(ThinCString::from_vec(message))
 }
 
 /// [`set_chars_option`] over the window's own 'fillchars' or 'listchars',

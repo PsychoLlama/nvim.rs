@@ -64,7 +64,7 @@ pub fn nvim_eval_statusline(
         let format = str.as_bytes();
         let format = &format[..format.iter().position(|&b| b == 0).unwrap_or(format.len())];
         if let Err(errmsg) = check_stl_option(format) {
-            return Err(Error::validation(errmsg.as_cstr()));
+            return Err(Error::validation(&errmsg.to_cstring()));
         }
     }
 

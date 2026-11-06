@@ -31,7 +31,7 @@ use core::ffi::{CStr, c_int, c_uint};
 use crate::message::e_invarg;
 use crate::option::{get_option, kOptFlagComma, kOptFlagOneComma, option_var};
 use crate::options::{kOptFileformat, kOptFileformats, kOptSessionoptions, kOptViewoptions};
-use crate::types::{FAIL, Failed, OK, OptError, OptIndex, OptSet};
+use crate::types::{Failed, OptError, OptIndex, OptSet};
 
 use super::illegal_char;
 
@@ -149,18 +149,13 @@ pub(crate) fn check_str_opt(
     Ok(())
 }
 
-/// Is `p` one of "unix", "dos" or "mac"? `OK` or `FAIL`.
+/// Is `p` one of "unix", "dos" or "mac"?
 ///
 /// `:read ++ff=…` and `:write ++ff=…` check their argument with this before
 /// touching a buffer, which is why it is reachable without going through
 /// `did_set_*`.
-pub fn check_ff_value(p: &CStr) -> c_int {
-    let values = opt_values(kOptFileformat);
-    if opt_strings_ok(p.to_bytes(), values, false) {
-        OK
-    } else {
-        FAIL
-    }
+pub fn is_ff_value(p: &CStr) -> bool {
+    opt_strings_ok(p.to_bytes(), opt_values(kOptFileformat), false)
 }
 
 #[cfg(test)]

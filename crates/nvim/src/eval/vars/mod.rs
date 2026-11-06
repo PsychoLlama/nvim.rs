@@ -48,7 +48,7 @@ use crate::message::{
     e_string_required,
 };
 use crate::message::{
-    emsg, internal_error, message_filtered, msg_advance, msg_bytes, msg_clr_eos, msg_display_bytes,
+    internal_error, message_filtered, msg_advance, msg_bytes, msg_clr_eos, msg_display_bytes,
     msg_ext_set_kind, msg_putchar, msg_start, msg_str,
 };
 use crate::option::vars::{p_ccv, p_dex, p_pex, p_verbose};

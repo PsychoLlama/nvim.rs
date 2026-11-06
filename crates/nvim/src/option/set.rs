@@ -21,6 +21,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::message_fmt::emsg_text;
 use crate::tr;
 use crate::types::AutoEvent;
 use crate::types::ColNr;
@@ -38,7 +39,6 @@ use crate::global_cell::GlobalCell;
 use crate::guard::{sandbox, secure};
 use crate::lua::executor::nlua_set_sctx;
 use crate::memory::XString;
-use crate::message::emsg;
 use crate::message::{e_invarg, e_sandbox, e_secure, e_unsupportedoption};
 use crate::mouse::setmouse;
 use crate::option::optval_as_tv;
@@ -52,7 +52,6 @@ use crate::options::{
     kOptUndolevels, kOptWinbar, options,
 };
 use crate::optionstr::check_illegal_path_names;
-use crate::os::cshim::{gettext, gettext_owned};
 use crate::types::{
     ApiString, OptError, OptIndex, OptSet, OptVal, OptionSetFlags, ScriptCtx, ScriptId, VimOption,
     Vv, uint32_t,
@@ -617,7 +616,7 @@ pub(crate) fn set_option_value(
     debug_assert!(opt_idx != kOptInvalid);
 
     if sandbox.get() > 0 && get_option(opt_idx).flags & kOptFlagSecure != 0 {
-        return Err(OptError::Owned(XString::from_cstr(gettext(e_sandbox))));
+        return Err(OptError::Static(e_sandbox));
     }
     set_option(opt_idx, value, opt_flags, 0, false, true)
 }
@@ -648,9 +647,7 @@ pub(crate) fn set_option_value_handle_tty(
         return Ok(());
     }
     let name = crate::message_fmt::msg_bytes(name);
-    Err(OptError::Owned(XString::from_bytes(
-        tr!("E355: Unknown option: {name}").as_bytes(),
-    )))
+    Err(OptError::formatted(tr!("E355: Unknown option: {name}")))
 }
 
 /// [`set_option_value`], reporting a rejection as an error message.
@@ -660,7 +657,7 @@ pub(crate) fn set_option_value_give_err(
     opt_flags: OptionSetFlags,
 ) {
     if let Err(errmsg) = set_option_value(opt_idx, value, opt_flags) {
-        emsg(&gettext_owned(errmsg.as_cstr()));
+        emsg_text(errmsg.to_string());
     }
 }
 

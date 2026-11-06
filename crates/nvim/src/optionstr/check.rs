@@ -23,6 +23,9 @@
 
 use crate::cstr;
 use crate::formatted;
+use crate::memory::ThinCString;
+use crate::message_fmt::msg_cstr;
+use crate::tr;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 
@@ -79,10 +82,9 @@ pub fn didset_string_options() {
 
 /// "E539: Illegal character <x>", naming the byte it did not like.
 pub fn illegal_char(c: c_int) -> OptError {
-    let fmt = gettext(c"E539: Illegal character <%s>");
     let shown = transchar(c);
-    let message = formatted!(OptError::ROOM, fmt.to_bytes(), cstr::in_bytes(&shown));
-    OptError::Owned(XString::from_vec(message))
+    let shown = msg_cstr(cstr::in_bytes(&shown));
+    OptError::formatted(tr!("E539: Illegal character <{shown}>"))
 }
 
 /// "E535: Illegal character after <%c>", for the options that spell a field
@@ -90,7 +92,7 @@ pub fn illegal_char(c: c_int) -> OptError {
 pub(crate) fn illegal_char_after_chr(c: c_int) -> OptError {
     let fmt = gettext(e_illegal_character_after_chr);
     let message = formatted!(OptError::ROOM, fmt.to_bytes(), c);
-    OptError::Owned(XString::from_vec(message))
+    OptError::Owned(ThinCString::from_vec(message))
 }
 
 /// Every string option a buffer holds, by selector: what a freshly

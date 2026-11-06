@@ -43,15 +43,14 @@ use crate::message::{e_invarg2, e_invargval, e_invrange};
 use crate::message_fmt::{emsg_text, msg_cstr};
 use crate::narrow::number_as_int;
 use crate::option::vars::p_confirm;
-use crate::optionstr::{check_ff_value, get_fileformat_name};
+use crate::optionstr::{get_fileformat_name, is_ff_value};
 use crate::os::cshim::ngettext;
 
 use crate::os::fs::{CFile, dir_exists, os_mkdir, os_strerror, path_exists};
 
 use crate::types::regexp::RegMatch;
 use crate::types::{
-    CmdLine, CmdModFlags, CompleteListItemGetter, EcmdCmd, ExArg, Expand, FAIL, Failed, int32_t,
-    intmax_t,
+    CmdLine, CmdModFlags, CompleteListItemGetter, EcmdCmd, ExArg, Expand, Failed, int32_t, intmax_t,
 };
 use crate::window::{only_one_window, tabpage_index};
 
@@ -190,7 +189,7 @@ pub fn getargopt(excmd: &mut ExArg) -> Result<(), Failed> {
     match opt {
         Opt::FileFormat => {
             // The value, NUL-terminated by the write just above.
-            if check_ff_value(excmd.line.cstr_from(at)) == FAIL {
+            if !is_ff_value(excmd.line.cstr_from(at)) {
                 return Err(Failed);
             }
             // Only the first letter is kept: 'u', 'd' or 'm'.

@@ -22,7 +22,7 @@
 use super::*;
 use crate::formatted;
 use crate::mbyte::{char_at, char_len};
-use crate::memory::XString;
+use crate::memory::ThinCString;
 use crate::message_fmt::msg_bytes;
 use crate::option::vars::P_LANGMAP;
 use crate::swmsg;
@@ -107,7 +107,7 @@ pub fn did_set_langmap(_args: &mut OptSet) -> Result<(), OptError> {
     // their one `%s`.
     let fail = |fmt: &'static CStr, arg: &[u8]| {
         let message = formatted!(OptError::ROOM, gettext(fmt).to_bytes(), arg);
-        Err(OptError::Owned(XString::from_vec(message)))
+        Err(OptError::Owned(ThinCString::from_vec(message)))
     };
 
     let mut at = 0;

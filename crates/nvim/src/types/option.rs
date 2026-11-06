@@ -259,38 +259,44 @@ pub type OptValType = ::core::ffi::c_int;
 /// four levels for that, and the frame held a third copy of it. A message
 /// that names what it disliked owns its bytes here, so the buffer and both
 /// parameters are gone and a callback's answer outlives its frame.
+///
+/// Whoever reports it says `emsg_text(err.to_string())`; the `:set` family
+/// appends the argument it refused first.
+#[derive(Debug, thiserror::Error)]
 pub enum OptError {
-    /// One of the message statics, already translated.
+    /// One of the message statics, translated when it is said.
+    #[error("{}", crate::message_fmt::msg_cstr(crate::os::cshim::gettext(.0)))]
     Static(&'static ::core::ffi::CStr),
-    /// A message the callback formatted, naming the value it disliked.
-    Owned(XString),
+    /// A message the callback formatted, naming the value it disliked:
+    /// already translated.
+    #[error("{}", crate::message_fmt::msg_cstr(.0.as_cstr()))]
+    Owned(crate::memory::ThinCString),
 }
+
+const _: () = assert!(size_of::<OptError>() <= 16);
 
 impl OptError {
     /// The room a formatted rejection is given, which is the size upstream
-    /// told `vim_snprintf` its `errbuf` was. Stated once, because the
-    /// message owns its bytes and is measured at the terminator the
-    /// formatter left rather than carried beside a length.
+    /// told `vim_snprintf` its `errbuf` was.
     pub const ROOM: usize = IOSIZE as usize;
 
-    /// The message, for a caller that reports it.
-    pub fn as_cstr(&self) -> &::core::ffi::CStr {
-        match self {
-            OptError::Static(message) => message,
-            OptError::Owned(message) => message.as_cstr(),
-        }
+    /// A rejection a callback formatted (with [`tr!`](crate::tr)), cut to
+    /// the [`ROOM`](Self::ROOM) upstream's buffer had.
+    pub fn formatted(text: String) -> Self {
+        let message = crate::message_fmt::to_message(text, Self::ROOM);
+        OptError::Owned(crate::memory::ThinCString::from_cstr(&message))
+    }
+
+    /// The message as the C string a byte-level reporter (`:set`'s, the
+    /// API's) builds on: translated, cut to [`ROOM`](Self::ROOM).
+    pub fn to_cstring(&self) -> std::ffi::CString {
+        crate::message_fmt::to_message(self.to_string(), Self::ROOM)
     }
 }
 
 impl From<&'static ::core::ffi::CStr> for OptError {
     fn from(message: &'static ::core::ffi::CStr) -> Self {
         OptError::Static(message)
-    }
-}
-
-impl From<XString> for OptError {
-    fn from(message: XString) -> Self {
-        OptError::Owned(message)
     }
 }
 

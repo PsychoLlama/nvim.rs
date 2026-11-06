@@ -21,6 +21,7 @@
 use crate::cstr::{self, byte_at};
 use crate::env::getenv_resolved;
 use crate::guard::Suppress;
+use crate::message_fmt::emsg_text;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::CmdIdx;
@@ -40,12 +41,11 @@ use crate::eval::{
 };
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::ends_excmd;
-use crate::message::{e_invarg, e_listreq, emsg, internal_error};
+use crate::message::{e_invarg, e_listreq, internal_error};
 use crate::option::{
     boolean_optval, get_option_value, get_tty_option, is_option_hidden, is_tty_option,
     optval_concat, set_option_value_handle_tty,
 };
-use crate::os::cshim::gettext_owned;
 use crate::os::env::vim_setenv_named;
 use crate::register::{get_reg_contents_owned, write_reg_contents};
 use crate::types::{ExArg, Failed, OptInt, OptVal, TypVal, VAR_LIST, VarNumber};
@@ -490,7 +490,7 @@ fn ex_let_option(
         let err = set_option_value_handle_tty(name, opt_idx, newval, opt_flags);
         arg_end = Some(end);
         if let Err(err) = err {
-            emsg(&gettext_owned(err.as_cstr()));
+            emsg_text(err.to_string());
         }
     }
 
