@@ -181,24 +181,32 @@ end
 -- such a pattern is exponential, so it is either microseconds or never,
 -- and the limit is far from both.
 local TIMEOUT = 1000
+-- The exceptions: a pattern that is neither, whose answer would depend on
+-- the machine's load at TIMEOUT.  `syn/csc:146` (cscEqError, a `\(..\)*`
+-- of alternatives each ending in `\s*`, against its own source line) takes
+-- the backtracking engine ~0.9 s to start and ~1.0 s to end on the debug
+-- build of an idle machine, so under the battery's load the end search ran
+-- out of time and the row read `57,0` for `57,57` now and then.  It gets
+-- ten times that, which it finishes inside on every run.
+local SLOW = { ["syn/csc:146"] = 10000 }
 local scratch = vim.api.nvim_create_buf(false, true)
 vim.api.nvim_win_set_buf(0, scratch)
-local function answer(pat, line)
+local function answer(pat, line, limit)
   local parts = {}
   for _, subj in ipairs({ line, PROBE }) do
     vim.api.nvim_buf_set_lines(scratch, 0, -1, false, { subj })
     vim.api.nvim_win_set_cursor(0, { 1, 0 })
     local t0 = vim.uv.hrtime()
-    local ok, s = pcall(vim.fn.searchpos, pat, "cnW", 0, TIMEOUT)
+    local ok, s = pcall(vim.fn.searchpos, pat, "cnW", 0, limit)
     if not ok then
       return "!" .. ecode(s), s
     end
-    if (vim.uv.hrtime() - t0) / 1e6 >= TIMEOUT then
+    if (vim.uv.hrtime() - t0) / 1e6 >= limit then
       parts[#parts + 1] = "T"
     elseif s[1] == 0 then
       parts[#parts + 1] = "-"
     else
-      local e = vim.fn.searchpos(pat, "cnWe", 0, TIMEOUT)
+      local e = vim.fn.searchpos(pat, "cnWe", 0, limit)
       parts[#parts + 1] = string.format("%d,%d", s[2], e[2])
     end
   end
@@ -233,7 +241,7 @@ for _, f in ipairs(files) do
         local a = {}
         for e = 0, 2 do
           vim.o.regexpengine = e
-          local res, msg = answer(pat, l)
+          local res, msg = answer(pat, l, SLOW[tag] or TIMEOUT)
           a[e + 1] = res
           if msg then
             errors[e + 1] = errors[e + 1] + 1
