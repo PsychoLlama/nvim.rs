@@ -117,7 +117,7 @@ fn patch_into(excmd: &mut ExArg, tmp_orig: &CStr, tmp_new: &CStr) {
     }
     cmdmod_set_tab(0);
     let vertical = diff_flags.get() & DIFF_VERTICAL != 0;
-    let flags = if vertical { WSP_VERT.cast_signed() } else { 0 };
+    let flags = if vertical { WSP_VERT } else { 0 };
     if win_split(0, flags).is_err() {
         return;
     }
@@ -180,7 +180,7 @@ pub fn ex_diffsplit(excmd: &mut ExArg) {
     set_fraction(old_curwin);
     cmdmod_set_tab(0);
     let vertical = diff_flags.get() & DIFF_VERTICAL != 0;
-    let flags = if vertical { WSP_VERT.cast_signed() } else { 0 };
+    let flags = if vertical { WSP_VERT } else { 0 };
     if win_split(0, flags).is_err() {
         return;
     }

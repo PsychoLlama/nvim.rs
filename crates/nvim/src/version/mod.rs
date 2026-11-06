@@ -360,7 +360,7 @@ pub(crate) fn may_show_intro() -> bool {
     empty
         && Buf::current().name.is_unnamed()
         && Buf::current().handle == Handle::new(1)
-        && Win::current().handle == Handle::new(LOWEST_WIN_ID.cast_signed())
+        && Win::current().handle == Handle::new(LOWEST_WIN_ID)
         && one_window(Win::current(), None)
         && !P_SHM.has_byte(ShmFlag::INTRO.byte())
 }

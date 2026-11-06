@@ -28,10 +28,11 @@
 
 use core::mem;
 
+use crate::decoration::DECOR_HIGHLIGHT_INLINE_INIT;
 use crate::marktree::iter::{marktree_itr_current, marktree_itr_first, marktree_itr_next};
 use crate::marktree::key::{
-    DECOR_HIGHLIGHT_INLINE_INIT, MT_BRANCH_FACTOR, MtFlags, mt_flags, mt_lookup_id, mt_lookup_key,
-    mt_right, mt_start, pos_leq, unrelative,
+    MT_BRANCH_FACTOR, MtFlags, mt_flags, mt_lookup_id, mt_lookup_key, mt_right, mt_start, pos_leq,
+    unrelative,
 };
 use crate::marktree::meta::MetaCount;
 use crate::marktree::node::{MAX_KEYS, NodeId};

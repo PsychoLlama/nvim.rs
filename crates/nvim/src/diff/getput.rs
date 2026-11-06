@@ -6,19 +6,29 @@
 //! copy; `nv_diffgetput` is the Normal-mode form, where the range is the block
 //! under the cursor.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
 use crate::buffer::buflist_findpat_prefix;
 use crate::charset::skip;
 use crate::message_fmt::msg_bytes;
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
+use crate::narrow::number_as_int;
 use crate::optionstr::OptString;
 use crate::semsg;
 use crate::types::CmdIdx;
 use crate::types::EcmdCmd;
 use crate::types::{CmdLine, ExArgt, NUL};
 use crate::winlayer::{Buf, TabPage, Win, windows};
-use core::ffi::{CStr, c_int, c_uint};
+use core::ffi::{CStr, c_int};
 
 /// `emsg(gettext(msg))`, the pair every error here is reported through.
 fn emsg_gettext(msg: &'static CStr) {
@@ -37,7 +47,7 @@ fn writable_target(buffer: Buf, cmdidx: CmdIdx) -> bool {
 /// position, which is the only way to choose a side in a three-way diff.
 pub fn nv_diffgetput(put: bool, count: size_t) {
     if buf_is_prompt(current_buf()) {
-        vim_beep(kOptBoFlagOperator as c_int as c_uint);
+        vim_beep(kOptBoFlagOperator);
         return;
     }
     let mut ea: ExArg = ExArg {
@@ -100,7 +110,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
         // and it is an error if there are two of them to choose from.
         let mut found_not_ma = false;
         while idx_other < DB_COUNT {
-            if let Some(buf) = tp.diffbuf(idx_other as usize).filter(|b| !b.is_current()) {
+            if let Some(buf) = tp.diffbuf(as_index(idx_other)).filter(|b| !b.is_current()) {
                 if writable_target(buf, cmdidx) {
                     break;
                 }
@@ -117,7 +127,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
             return;
         }
         for i in idx_other + 1..DB_COUNT {
-            if let Some(buf) = tp.diffbuf(i as usize).filter(|b| !b.is_current())
+            if let Some(buf) = tp.diffbuf(as_index(i)).filter(|b| !b.is_current())
                 && writable_target(buf, cmdidx)
             {
                 let msg = c"E101: More than two buffers in diff mode, don't know which one to use";
@@ -141,7 +151,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
             .count();
         let nr = if arg + digits == end {
             // `atol`'s answer, cut to an `int` as upstream's cast cuts it.
-            skip::decimal(excmd.line.rest_of(arg)).0 as c_int
+            number_as_int(skip::decimal(excmd.line.rest_of(arg)).0)
         } else {
             let found =
                 buflist_findpat_prefix(excmd.line.cstr_from(arg), end - arg, false, true, false);
@@ -190,7 +200,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
     let mut aco = AcoSave::default();
     let put = cmdidx != CmdIdx::diffget;
     if put {
-        aucmd_prepbuf(&mut aco, tp.used_diffbuf(idx_other as usize));
+        aucmd_prepbuf(&mut aco, tp.used_diffbuf(as_index(idx_other)));
     }
     let (idx_from, idx_to) = if put {
         (idx_cur, idx_other)
@@ -259,7 +269,7 @@ fn diffgetput(
     line1: LineNr,
     line2: LineNr,
 ) {
-    let (idx_cur, idx_from, idx_to) = (idx_cur as usize, idx_from as usize, idx_to as usize);
+    let (idx_cur, idx_from, idx_to) = (as_index(idx_cur), as_index(idx_from), as_index(idx_to));
     let mut tp = TabPage::current();
     let mut off: i32 = 0;
     let mut at = 0;
@@ -390,7 +400,7 @@ fn diffgetput(
             extmark_adjust(cb, lnum, last, max, amount, kExtmarkUndo);
             changed_lines(cb, lnum, ColNr::ZERO, lnum + count, amount, true);
             if let Some((lnum, count)) = &freed_ranges {
-                diff_fold_update(lnum, count, idx_to as c_int);
+                diff_fold_update(lnum, count, len_as_int(idx_to));
             }
             // `mark_adjust` may drop blocks, and `changed_lines` runs
             // autocommands and buffer-update callbacks: if either changed

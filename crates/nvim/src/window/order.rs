@@ -10,8 +10,16 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
+use crate::narrow::number_as_int;
 use core::ffi::c_int;
 
 use super::*;
@@ -32,12 +40,13 @@ pub fn make_windows(count: c_int, vertical: bool) -> c_int {
     // Each window needs at least 'winminheight' lines and a status line, and
     // the current window wants 'winheight'.
     let maxcount = if vertical {
-        ((cur.w_width + cur.w_vsep_width) as OptInt - (p_wiw() - p_wmw())) as c_int
-            / (p_wmw() as c_int + 1)
+        number_as_int(OptInt::from(cur.w_width + cur.w_vsep_width) - (p_wiw() - p_wmw()))
+            / (number_as_int(p_wmw()) + 1)
     } else {
-        ((cur.w_height + cur.w_hsep_height + cur.w_status_height) as OptInt - (p_wh() - p_wmh()))
-            as c_int
-            / (p_wmh() as c_int + STATUS_HEIGHT as c_int + global_winbar_rows())
+        number_as_int(
+            OptInt::from(cur.w_height + cur.w_hsep_height + cur.w_status_height)
+                - (p_wh() - p_wmh()),
+        ) / (number_as_int(p_wmh()) + STATUS_HEIGHT + global_winbar_rows())
     }
     .max(2);
     let count = count.min(maxcount);
@@ -57,14 +66,14 @@ pub fn make_windows(count: c_int, vertical: bool) -> c_int {
             let width = cur.w_width;
             (
                 width - (width - todo) / (todo + 1) - 1,
-                WSP_VERT as c_int | WSP_ABOVE as c_int,
+                WSP_VERT | WSP_ABOVE,
             )
         } else {
             let height = cur.w_height;
-            let status = STATUS_HEIGHT as c_int;
+            let status = STATUS_HEIGHT;
             (
                 height - (height - todo * status) / (todo + 1) - status,
-                WSP_ABOVE as c_int,
+                WSP_ABOVE,
             )
         };
         if win_split(size, flags).is_err() {
@@ -283,7 +292,7 @@ pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Fa
 
     // Keep the window's height when it was moved horizontally. The identity
     // was taken before `win_split_ins` fired its autocommands.
-    if size == 0 && flags & WSP_VERT as c_int == 0 && win_valid(window.id()) && !window.w_floating {
+    if size == 0 && flags & WSP_VERT == 0 && win_valid(window.id()) && !window.w_floating {
         setheight_win(height, window);
         if p_ea() {
             let cur = Win::current();
@@ -348,8 +357,8 @@ fn move_after(win1: Win, win2: Win) {
 /// `'winminheight'` plus a status line,
 /// plus its window bar where there is one.
 pub(crate) fn max_wincount(fr: FrameRef, height: c_int) -> c_int {
-    let per_win = p_wmh() as c_int + STATUS_HEIGHT as c_int;
-    if fr.fr_layout as c_int != FR_COL {
+    let per_win = number_as_int(p_wmh()) + STATUS_HEIGHT;
+    if c_int::from(fr.fr_layout) != FR_COL {
         return height / (per_win + frame2window(fr).w_winbar_height);
     }
     if global_winbar_rows() != 0 {
@@ -362,7 +371,7 @@ pub(crate) fn max_wincount(fr: FrameRef, height: c_int) -> c_int {
     let mut total = 0;
     for frp in fr.children() {
         let cost = per_win + frame2window(frp).w_winbar_height;
-        if (height as OptInt) < cost as OptInt {
+        if OptInt::from(height) < OptInt::from(cost) {
             break;
         }
         height -= cost;

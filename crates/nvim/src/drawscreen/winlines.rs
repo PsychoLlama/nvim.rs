@@ -10,11 +10,20 @@
 //! for a last line that does not fit, and the `'fillchars'` "eob" area below the
 //! last line.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
 use crate::decoration::SIGN_WIDTH;
 use crate::r#move::WinValid;
+use crate::narrow::as_index;
+use crate::narrow::number_as_u16;
 use crate::option::cpo_has;
 use crate::optionstr::OptString;
 use crate::types::{CpoFlag, WLine};
@@ -219,7 +228,7 @@ fn line_needs_drawing(window: Win, buffer: Buf, rg: &Regions, w: &Walk) -> bool 
         || (w.row >= rg.mid_start && w.row < rg.mid_end)
         || rg.top_to_mod
         || w.idx >= window.w_lines_valid
-        || w.row + c_int::from(window.w_lines[w.idx as usize].wl_size) > rg.bot_start
+        || w.row + c_int::from(window.w_lines[as_index(w.idx)].wl_size) > rg.bot_start
     {
         return true;
     }
@@ -296,7 +305,7 @@ fn draw_one_line(
 
     scroll_for_changed_lines(window, rg, w);
 
-    let idx = w.idx as usize;
+    let idx = as_index(w.idx);
     if foldinfo.fi_lines == 0
         && w.idx < window.w_lines_valid
         && window.w_lines[idx].wl_valid
@@ -393,13 +402,13 @@ fn draw_one_line(
     if w.row > window.w_view_height {
         // Past the end of the grid. The height may still be needed later.
         if dollar_vcol.get() == ColNr::NONE || !is_curline {
-            window.w_lines[idx].wl_size = plines_win(window, w.lnum, true) as uint16_t;
+            window.w_lines[idx].wl_size = number_as_u16(plines_win(window, w.lnum, true).into());
         }
         w.idx += 1;
         return false;
     }
     if dollar_vcol.get() == ColNr::NONE || !is_curline {
-        window.w_lines[idx].wl_size = (w.row - w.srow) as uint16_t;
+        window.w_lines[idx].wl_size = number_as_u16((w.row - w.srow).into());
     }
     w.lnum = window.w_lines[idx].wl_lastlnum + 1;
     w.idx += 1;
@@ -429,7 +438,7 @@ fn scroll_for_changed_lines(window: Win, rg: &mut Regions, w: &mut Walk) {
     let mut old_rows = 0;
     let mut i = w.idx;
     while i < window.w_lines_valid {
-        let wl = window.w_lines[i as usize];
+        let wl = window.w_lines[as_index(i)];
         // Only valid entries have a meaningful `wl_lnum`; invalid ones are
         // part of the changed area.
         if wl.wl_valid && wl.wl_lnum == rg.mod_bot {
@@ -443,8 +452,8 @@ fn scroll_for_changed_lines(window: Win, rg: &mut Regions, w: &mut Walk) {
             // The last valid entry above `mod_bot`; the invalid entries
             // after it are part of the change too.
             i += 1;
-            while i < window.w_lines_valid && !window.w_lines[i as usize].wl_valid {
-                old_rows += c_int::from(window.w_lines[i as usize].wl_size);
+            while i < window.w_lines_valid && !window.w_lines[as_index(i)].wl_valid {
+                old_rows += c_int::from(window.w_lines[as_index(i)].wl_size);
                 i += 1;
             }
             break;
@@ -540,8 +549,8 @@ fn move_line_entries(
                 window.w_lines_valid = j;
                 break;
             }
-            window.w_lines[j as usize] = window.w_lines[i as usize];
-            let size = c_int::from(window.w_lines[j as usize].wl_size);
+            window.w_lines[as_index(j)] = window.w_lines[as_index(i)];
+            let size = c_int::from(window.w_lines[as_index(j)].wl_size);
             // Stop at a line that will not fit.
             if at_row + size > window.w_view_height {
                 window.w_lines_valid = j + 1;
@@ -558,13 +567,13 @@ fn move_line_entries(
         window.w_lines_valid = (window.w_lines_valid + j).min(window.w_view_height);
         let mut at = window.w_lines_valid;
         while at - j >= w.idx {
-            window.w_lines[at as usize] = window.w_lines[(at - j) as usize];
+            window.w_lines[as_index(at)] = window.w_lines[as_index(at - j)];
             at -= 1;
         }
         // The entries for the inserted lines are invalid now, but `wl_size`
         // is read above, so it is zeroed rather than left alone.
         while at >= w.idx {
-            let wl = &mut window.w_lines[at as usize];
+            let wl = &mut window.w_lines[as_index(at)];
             wl.wl_size = 0;
             wl.wl_valid = false;
             at -= 1;
@@ -585,7 +594,7 @@ fn skip_one_line(
     cursorline_fi: FoldInfo,
     spv: &mut SpellVars,
 ) {
-    let size = c_int::from(window.w_lines[w.idx as usize].wl_size);
+    let size = c_int::from(window.w_lines[as_index(w.idx)].wl_size);
     let numbers_moved = (window.w_onebuf_opt.wo_nu != 0
         && rg.mod_top != LineNr::ZERO
         && w.lnum >= rg.mod_bot
@@ -617,7 +626,7 @@ fn skip_one_line(
     if w.row > window.w_view_height {
         return;
     }
-    w.lnum = window.w_lines[(w.idx - 1) as usize].wl_lastlnum + 1;
+    w.lnum = window.w_lines[as_index(w.idx - 1)].wl_lastlnum + 1;
     w.did_update = DidUpdate::None;
     spv.spv_capcol_lnum = LineNr::ZERO;
 }

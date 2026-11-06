@@ -7,6 +7,13 @@
 //!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::types::CmdIdx;
@@ -93,7 +100,7 @@ fn move_win_after(win: Win, after: Win) {
 }
 
 fn split_below_room() -> Result<(), Failed> {
-    win_split(0, WSP_ROOM as c_int | WSP_BELOW as c_int)
+    win_split(0, WSP_ROOM | WSP_BELOW)
 }
 
 fn is_locked(win: Win) -> bool {
@@ -144,8 +151,8 @@ fn get_key() {
 
 /// Make `buffer` the current buffer, as `:buffer` does.
 fn goto_buf(buffer: Buf) {
-    let update_jumplist = jop_flags.get() & kOptJopFlagClean as c_int as u32 == 0;
-    set_curbuf(buffer, DOBUF_GOTO as c_int, update_jumplist);
+    let update_jumplist = jop_flags.get() & kOptJopFlagClean == 0;
+    set_curbuf(buffer, DOBUF_GOTO, update_jumplist);
 }
 
 /// The swap-file dialogue's aftermath, when the user did not choose Quit.
@@ -271,9 +278,12 @@ fn close_superfluous_windows(had_tab: c_int, open_wins: &mut c_int) {
 
 /// Whether `win` is one of the superfluous windows the first stage closes.
 fn should_close(win: Win, had_tab: c_int) -> bool {
-    let too_small = if cmdmod.with(|m| m.cmod_split) & WSP_VERT as c_int != 0 {
-        ((win.w_height + win.w_hsep_height + win.w_status_height) as OptInt)
-            < Rows.get() as OptInt - p_ch() - tabline_rows() as OptInt - global_stl_rows() as OptInt
+    let too_small = if cmdmod.with(|m| m.cmod_split) & WSP_VERT != 0 {
+        OptInt::from(win.w_height + win.w_hsep_height + win.w_status_height)
+            < OptInt::from(Rows.get())
+                - p_ch()
+                - OptInt::from(tabline_rows())
+                - OptInt::from(global_stl_rows())
     } else {
         win.w_width != Columns.get()
     };
@@ -356,7 +366,7 @@ fn open_window_for(
         return false;
     }
     // When ":tab" was used open a new tab for a new window repeatedly.
-    if had_tab > 0 && tab_index() as OptInt <= p_tpm() {
+    if had_tab > 0 && OptInt::from(tab_index()) <= p_tpm() {
         cmdmod.with_mut(|m| m.cmod_tab = 9999);
     }
     true

@@ -183,7 +183,7 @@ pub(crate) fn nlua_do_ucmd(cmd: &LuaCommand, excmd: &ExArg, preview: bool) -> c_
         stack.push_integer((verbose - 1) as lua_Integer);
         set(stack, c"verbose");
 
-        let has = |flag: u32| split & c_int::try_from(flag).unwrap_or_default() != 0;
+        let has = |flag: c_int| split & flag != 0;
         let split_name: &[u8] = if has(WSP_ABOVE) {
             b"aboveleft"
         } else if has(WSP_BELOW) {

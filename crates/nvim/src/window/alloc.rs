@@ -379,7 +379,7 @@ pub(crate) fn win_alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
     match oldwin {
         None => {
             // Very first window: make a new empty buffer for it.
-            let buf = buflist_new(None, None, LineNr::ONE, BLN_LISTED.cast_signed());
+            let buf = buflist_new(None, None, LineNr::ONE, BLN_LISTED);
             let Some(mut buf) = buf else {
                 leave_curbuf();
                 return Err(Failed);

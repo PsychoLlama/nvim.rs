@@ -510,7 +510,7 @@ pub(crate) fn get_lcs_ext(window: Win) -> ScreenChar {
         // With 'wrap' a line never continues past the right of the screen.
         return NUL as ScreenChar;
     }
-    if window.w_onebuf_opt.wo_wrap_flags & kOptFlagInsecure as uint32_t != 0 {
+    if window.w_onebuf_opt.wo_wrap_flags & kOptFlagInsecure != 0 {
         // 'nowrap' set from a modeline: forcibly use '>'.
         return schar_from_ascii(b'>');
     }

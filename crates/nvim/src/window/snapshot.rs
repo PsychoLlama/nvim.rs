@@ -10,8 +10,17 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
+use crate::narrow::as_index;
+use crate::narrow::number_as_int;
 use core::ffi::{CStr, c_int};
 
 use super::*;
@@ -104,7 +113,7 @@ pub fn reset_lnums() {
 
 /// The saved frame tree in slot `idx` of `tabpage`, if there is one.
 fn snapshot_of(tabpage: TabPage, idx: c_int) -> Option<FrameRef> {
-    tabpage.tp_snapshot[idx as usize].and_then(FrameId::get)
+    tabpage.tp_snapshot[as_index(idx)].and_then(FrameId::get)
 }
 
 pub fn make_snapshot(idx: c_int) {
@@ -115,7 +124,7 @@ pub fn make_snapshot(idx: c_int) {
 pub(crate) fn take_snapshot(idx: c_int) {
     let mut tp = TabPage::current();
     drop_snapshot(tp, idx);
-    tp.tp_snapshot[idx as usize] = Some(make_snapshot_rec(current_topframe()));
+    tp.tp_snapshot[as_index(idx)] = Some(make_snapshot_rec(current_topframe()));
 }
 
 /// Copy `fr` and everything hanging off it into a freshly allocated tree,
@@ -131,7 +140,7 @@ fn make_snapshot_rec(fr: FrameRef) -> FrameId {
     copy.fr_height = fr.fr_height;
     copy.fr_next = fr.next().map(make_snapshot_rec);
     copy.fr_child = fr.child().map(make_snapshot_rec);
-    if fr.fr_layout as c_int == FR_LEAF && fr.win().is_some_and(Win::is_current) {
+    if c_int::from(fr.fr_layout) == FR_LEAF && fr.win().is_some_and(Win::is_current) {
         copy.fr_win = Some(Win::current().id());
     }
     copy.id()
@@ -143,7 +152,7 @@ pub(crate) fn drop_snapshot(tabpage: TabPage, idx: c_int) {
     if let Some(fr) = snapshot_of(tabpage, idx) {
         clear_snapshot_rec(fr);
     }
-    tabpage.tp_snapshot[idx as usize] = None;
+    tabpage.tp_snapshot[as_index(idx)] = None;
 }
 
 /// Free `fr` and everything hanging off it.
@@ -242,7 +251,7 @@ fn restore_snapshot_rec(sn: FrameRef, fr: FrameRef) -> Option<Win> {
     let mut wp = None;
     fr.fr_height = sn.fr_height;
     fr.fr_width = sn.fr_width;
-    if fr.fr_layout as c_int == FR_LEAF {
+    if c_int::from(fr.fr_layout) == FR_LEAF {
         new_height(fr, fr.fr_height, false, false, false);
         new_width(fr, fr.fr_width, false, false);
         wp = snapshot_win(sn);
@@ -311,11 +320,11 @@ fn parse_colorcolumn(text: &[u8], tw: OptInt) -> Result<Vec<c_int>, OptError> {
                 skip = true; // 'textwidth' not set, skip this item
             } else {
                 debug_assert!(
-                    (col >= 0 && tw <= (c_int::MAX - col) as OptInt)
-                        || (col < 0 && tw >= (c_int::MIN - col) as OptInt),
+                    (col >= 0 && tw <= OptInt::from(c_int::MAX - col))
+                        || (col < 0 && tw >= OptInt::from(c_int::MIN - col)),
                     "col + tw fits in an int"
                 );
-                col += tw as c_int;
+                col += number_as_int(tw);
                 skip = col < 0;
             }
         } else if at(i).is_ascii_digit() {
@@ -355,7 +364,7 @@ pub fn get_last_winid() -> c_int {
 }
 
 pub fn win_locked(window: Win) -> c_int {
-    window.w_locked as c_int
+    c_int::from(window.w_locked)
 }
 
 /// The tab page and window number of the window with handle `id`, both
@@ -376,7 +385,7 @@ fn tab_and_win_number(id: Handle) -> Option<(c_int, c_int)> {
             if wp.handle == id {
                 return Some(if numbered { (tnum, wnum) } else { (0, 0) });
             }
-            wnum += numbered as c_int;
+            wnum += c_int::from(numbered);
         }
     }
     None

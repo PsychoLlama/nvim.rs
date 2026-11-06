@@ -30,11 +30,20 @@
 //!
 //! Original: `src/nvim/statusline.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
 use crate::statusline::state::tab_page_click_defs;
 use crate::types::CAR;
 use crate::types::DictBuilder;
@@ -186,7 +195,7 @@ pub(crate) fn set_click_defs(
     if line.cells.is_empty() || cols.start >= cols.end {
         return;
     }
-    line.cells[cols.start as usize..cols.end as usize].fill(StlClickDefinition {
+    line.cells[as_index(cols.start)..as_index(cols.end)].fill(StlClickDefinition {
         type_0: kind,
         tabnr,
         func: 0,
@@ -222,8 +231,9 @@ pub(crate) fn fill_click_defs(
     // the line has, and the reserve before the expansion guarantees `width`
     // of them.
     for rec in recs {
-        let bytes = rec.start as isize - from as isize;
-        len += strnsize(text.get(from..).unwrap_or_default(), bytes as c_int);
+        // A record before `from` measures nothing, as a negative length did.
+        let bytes = len_as_int(rec.start.saturating_sub(from));
+        len += strnsize(text.get(from..).unwrap_or_default(), bytes);
         debug_assert!(len <= width, "len <= width");
         if col < len {
             claim(line, col..len, cur, cur_name.take());
@@ -253,7 +263,7 @@ fn claim(
         line.funcs.push(name);
         def.func = u32::try_from(line.funcs.len()).unwrap_or(0);
     }
-    line.cells[cols.start as usize..cols.end as usize].fill(def);
+    line.cells[as_index(cols.start)..as_index(cols.end)].fill(def);
 }
 
 /// Run `f` over the tab page line's definitions, which the screen resize

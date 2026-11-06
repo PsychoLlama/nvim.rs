@@ -161,9 +161,8 @@ impl Opening {
                 kWinSplitAbove
             };
         }
-        let flags =
-            win_split_flags(self.config.split, self.parent.is_none()) | WSP_NOENTER.cast_signed();
-        let vertical = flags & WSP_VERT.cast_signed() != 0;
+        let flags = win_split_flags(self.config.split, self.parent.is_none()) | WSP_NOENTER;
+        let vertical = flags & WSP_VERT != 0;
         let size = if vertical {
             self.config.width
         } else {
@@ -325,21 +324,21 @@ pub(crate) fn win_split_dir(win: Win) -> WinSplit {
 pub(crate) fn win_split_flags(split: WinSplit, toplevel: bool) -> ::core::ffi::c_int {
     let mut flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if split == kWinSplitAbove || split == kWinSplitBelow {
-        flags |= WSP_HOR.cast_signed();
+        flags |= WSP_HOR;
     } else {
-        flags |= WSP_VERT.cast_signed();
+        flags |= WSP_VERT;
     }
     if split == kWinSplitAbove || split == kWinSplitLeft {
         flags |= if ::core::ffi::c_int::from(toplevel) != 0 {
-            WSP_TOP.cast_signed()
+            WSP_TOP
         } else {
-            WSP_ABOVE.cast_signed()
+            WSP_ABOVE
         };
     } else {
         flags |= if ::core::ffi::c_int::from(toplevel) != 0 {
-            WSP_BOT.cast_signed()
+            WSP_BOT
         } else {
-            WSP_BELOW.cast_signed()
+            WSP_BELOW
         };
     }
     flags

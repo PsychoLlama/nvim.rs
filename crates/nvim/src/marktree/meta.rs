@@ -111,10 +111,11 @@ pub fn filtered_key_flags(filter: &MetaCount) -> MtFlags {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::decoration::DECOR_HIGHLIGHT_INLINE_INIT;
     use crate::decoration::{
         kMTMetaConcealLines, kMTMetaInline, kMTMetaLines, kMTMetaSignHL, kMTMetaSignText,
     };
-    use crate::marktree::key::{DECOR_HIGHLIGHT_INLINE_INIT, kMTFilterSelect};
+    use crate::marktree::key::kMTFilterSelect;
     use crate::types::{DecorInline, MTPos};
 
     fn key(flags: MtFlags) -> MTKey {

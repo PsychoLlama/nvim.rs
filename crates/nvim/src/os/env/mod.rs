@@ -316,7 +316,7 @@ fn uv_home_dir() -> Option<Vec<u8>> {
 /// length upstream's scratch buffer held.
 pub fn get_env_name(_expand: &Expand, idx: usize) -> Option<Candidate> {
     let mut name = env_name_at(idx)?;
-    name.truncate(EXPAND_BUF_LEN as usize - 1);
+    name.truncate(EXPAND_BUF_LEN - 1);
     let name = CString::new(name).expect("a variable name holds no NUL");
     Some(Candidate::Owned(name))
 }

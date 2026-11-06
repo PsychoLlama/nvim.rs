@@ -64,16 +64,16 @@ pub(crate) fn jump_to_help_window(
 
     // Put the split at the very top when no position was asked for and
     // the current window is one of a narrow vertical split.
-    let mut flags = WSP_HELP.cast_signed();
+    let mut flags = WSP_HELP;
     if cmdmod_split() == 0 && Win::current().w_width != Columns.get() && Win::current().w_width < 80
     {
-        flags |= WSP_TOP.cast_signed();
+        flags |= WSP_TOP;
     }
     // A new window asked for by the user gets its own copy of the
     // location list; otherwise it shares this one.
     let share_loclist = qi.kind == QFLT_LOCATION && !newwin;
     if share_loclist {
-        flags |= WSP_NEWLOC.cast_signed();
+        flags |= WSP_NEWLOC;
     }
     win_split(0, flags)?;
     *opened_window = true;
@@ -105,9 +105,9 @@ fn qf_goto_tabwin_with_file(fnum: c_int) -> bool {
 /// quickfix window is all there is. `ll_ref` is the location list the
 /// location list window shows, which the new window takes.
 fn qf_open_new_file_win(ll_ref: Option<QfId>) -> Result<(), Failed> {
-    let mut flags = WSP_ABOVE.cast_signed();
+    let mut flags = WSP_ABOVE;
     if ll_ref.is_some() {
-        flags |= WSP_NEWLOC.cast_signed();
+        flags |= WSP_NEWLOC;
     }
     if win_split(0, flags).is_err() {
         // Not enough room for a window.

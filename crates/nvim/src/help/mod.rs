@@ -293,16 +293,12 @@ fn enter_help_window() -> Option<HelpWindow> {
 
     // Split off a help window; put it at the far top when no position
     // was given and the current window is vertically split and narrow.
-    let mut split = WSP_HELP as c_int;
+    let mut split = WSP_HELP;
     if cmdmod.with(|m| m.cmod_split) == 0
         && Win::current().w_width != Columns.get()
         && Win::current().w_width < 80
     {
-        split |= if p_sb() {
-            WSP_BOT as c_int
-        } else {
-            WSP_TOP as c_int
-        };
+        split |= if p_sb() { WSP_BOT } else { WSP_TOP };
     }
     if win_split(0, split).is_err() {
         return None;

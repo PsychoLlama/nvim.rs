@@ -56,10 +56,10 @@ fn concat_cmdmods(cmdline: &mut Vec<u8>, cmdmod: &CmdMod) {
     }
     // A switch over the *masked* value, so two placement bits at once
     // spell no modifier at all rather than the first of them.
-    const ABOVE: c_int = WSP_ABOVE.cast_signed();
-    const BELOW: c_int = WSP_BELOW.cast_signed();
-    const TOP: c_int = WSP_TOP.cast_signed();
-    const BOT: c_int = WSP_BOT.cast_signed();
+    const ABOVE: c_int = WSP_ABOVE;
+    const BELOW: c_int = WSP_BELOW;
+    const TOP: c_int = WSP_TOP;
+    const BOT: c_int = WSP_BOT;
     match cmdmod.cmod_split & (ABOVE | BELOW | TOP | BOT) {
         ABOVE => cmdline_concat_str(cmdline, c"aboveleft "),
         BELOW => cmdline_concat_str(cmdline, c"belowright "),
@@ -67,10 +67,10 @@ fn concat_cmdmods(cmdline: &mut Vec<u8>, cmdmod: &CmdMod) {
         BOT => cmdline_concat_str(cmdline, c"botright "),
         _ => {}
     }
-    if cmdmod.cmod_split & WSP_VERT.cast_signed() != 0 {
+    if cmdmod.cmod_split & WSP_VERT != 0 {
         cmdline_concat_str(cmdline, c"vertical ");
     }
-    if cmdmod.cmod_split & WSP_HOR.cast_signed() != 0 {
+    if cmdmod.cmod_split & WSP_HOR != 0 {
         cmdline_concat_str(cmdline, c"horizontal ");
     }
     for (mask, text) in [

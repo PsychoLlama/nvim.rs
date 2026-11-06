@@ -9,6 +9,13 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
@@ -20,6 +27,8 @@ use crate::keycodes::{
     Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_V, Ctrl_W,
     Ctrl_X, Ctrl_Z, NotAKey, SpecialKey,
 };
+use crate::narrow::as_index;
+use crate::narrow::number_as_int;
 use crate::types::AutoEvent;
 use crate::types::Key;
 use crate::winlayer::prev_window;
@@ -138,7 +147,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
                 return;
             }
             reset_visual_and_resel();
-            split_or_new(nchar, prenum, WSP_VERT as c_int);
+            split_or_new(nchar, prenum, WSP_VERT);
         }
         // split the current window and edit the alternate file
         Err(NotAKey(ALTFILE | Ctrl_HAT)) => {
@@ -263,15 +272,15 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
         }
         // make all windows the same width and/or height
         Err(NotAKey(EQUALISE)) => {
-            let split = cmdmod.with(|m| m.cmod_split) & (WSP_VERT as c_int | WSP_HOR as c_int);
-            let dir = if split == WSP_VERT as c_int {
+            let split = cmdmod.with(|m| m.cmod_split) & (WSP_VERT | WSP_HOR);
+            let dir = if split == WSP_VERT {
                 b'v'
-            } else if split == WSP_HOR as c_int {
+            } else if split == WSP_HOR {
                 b'h'
             } else {
                 b'b'
             };
-            equal(None, false, dir as c_int);
+            equal(None, false, c_int::from(dir));
         }
         // increase, decrease or set the current window's height
         Err(NotAKey(TALLER)) => setheight_win(Win::current().w_height + prenum1, Win::current()),
@@ -280,7 +289,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             let height = if prenum != 0 {
                 prenum
             } else {
-                Rows.get() - min_set_ch.get() as c_int
+                Rows.get() - number_as_int(min_set_ch.get())
             };
             setheight_win(height, Win::current());
         }
@@ -315,12 +324,12 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
         // 'path', in a new window: any match, or the definition
         Err(NotAKey(IDENT_ANY | Ctrl_I)) => {
             if !in_cmdwin() {
-                find_in_path(FIND_ANY as c_int, prenum, prenum1);
+                find_in_path(FIND_ANY, prenum, prenum1);
             }
         }
         Err(NotAKey(IDENT_DEFINE | Ctrl_D)) => {
             if !in_cmdwin() {
-                find_in_path(FIND_DEFINE as c_int, prenum, prenum1);
+                find_in_path(FIND_DEFINE, prenum, prenum1);
             }
         }
         // quickfix window only: view the result under the cursor in a new split
@@ -377,7 +386,7 @@ fn new_window(nchar: c_int, prenum: c_int) {
     if prenum != 0 {
         cmd.extend_from_slice(prenum.to_string().as_bytes()); // window height
     }
-    if nchar == b'v' as c_int || nchar == Ctrl_V {
+    if nchar == c_int::from(b'v') || nchar == Ctrl_V {
         cmd.push(b'v');
     }
     cmd.extend_from_slice(b"new");
@@ -406,7 +415,7 @@ fn cycle_windows(nchar: c_int, prenum: c_int) {
     }
     let wp = if prenum != 0 {
         nth_focusable(prenum)
-    } else if nchar == b'W' as c_int {
+    } else if nchar == c_int::from(b'W') {
         prev_focusable()
     } else {
         next_focusable()
@@ -497,14 +506,9 @@ fn move_to_edge(nchar: c_int, prenum: c_int) {
         beep();
         return;
     }
-    let sideways = nchar == b'H' as c_int || nchar == b'L' as c_int;
-    let first = nchar == b'H' as c_int || nchar == b'K' as c_int;
-    let dir = if sideways { WSP_VERT as c_int } else { 0 }
-        | if first {
-            WSP_TOP as c_int
-        } else {
-            WSP_BOT as c_int
-        };
+    let sideways = nchar == c_int::from(b'H') || nchar == c_int::from(b'L');
+    let first = nchar == c_int::from(b'H') || nchar == c_int::from(b'K');
+    let dir = if sideways { WSP_VERT } else { 0 } | if first { WSP_TOP } else { WSP_BOT };
     let _ = splitmove(Win::current(), prenum, dir);
 }
 
@@ -513,7 +517,7 @@ fn tagpreview_height(prenum: c_int) -> c_int {
     if prenum != 0 {
         prenum
     } else {
-        p_pvh() as c_int
+        number_as_int(p_pvh())
     }
 }
 
@@ -522,7 +526,7 @@ fn tagpreview_height(prenum: c_int) -> c_int {
 /// tag.
 fn jump_to_tag(nchar: c_int, prenum: c_int) {
     postponed_split.set(if prenum != 0 { prenum } else { -1 });
-    if nchar != b'}' as c_int {
+    if nchar != c_int::from(b'}') {
         g_do_tagpreview.set(0);
     }
     // Execute the command right here, which "wincmd ]" in a function needs.
@@ -546,7 +550,7 @@ fn goto_file(nchar: c_int, prenum1: c_int) {
 
     // If 'switchbuf' has "useopen" or "usetab" and the file is already open in
     // a window, jump to it.
-    let jump = (kOptSwbFlagUseopen as c_int | kOptSwbFlagUsetab as c_int) as ::core::ffi::c_uint;
+    let jump = kOptSwbFlagUseopen | kOptSwbFlagUsetab;
     let mut wp = None;
     if swb_flags.get() & jump != 0 && cmdmod.with(|m| m.cmod_tab) == 0 {
         wp = find_buffer_by_name(name.as_cstr()).and_then(swbuf_goto_win);
@@ -563,7 +567,7 @@ fn goto_file(nchar: c_int, prenum1: c_int) {
             wp = Some(Win::current());
         }
     }
-    if wp.is_some() && nchar == b'F' as c_int && lnum >= LineNr::ZERO {
+    if wp.is_some() && nchar == c_int::from(b'F') && lnum >= LineNr::ZERO {
         let mut cur = Win::current();
         cur.w_cursor.lnum = lnum;
         revalidate_cursor_lnum(cur);
@@ -575,7 +579,7 @@ fn goto_file(nchar: c_int, prenum1: c_int) {
 /// under the cursor, searching along `'path'`.
 fn find_in_path(kind: c_int, prenum: c_int, prenum1: c_int) {
     // A copy: if the line is changed it will be freed.
-    let found = crate::normal::ident_under_cursor(FIND_IDENT as c_int);
+    let found = crate::normal::ident_under_cursor(FIND_IDENT);
     if found.is_empty() {
         return;
     }
@@ -622,7 +626,7 @@ fn window_g_command(prenum: c_int, prenum1: c_int, xchar: c_int) {
 fn g_jump_to_tag(prenum: c_int, xchar: c_int) {
     postponed_split.set(if prenum != 0 { prenum } else { -1 });
     // Execute the command right here, which "wincmd g}" in a function needs.
-    do_ident(b'g' as c_int, xchar);
+    do_ident(c_int::from(b'g'), xchar);
     postponed_split.set(0);
 }
 
@@ -664,7 +668,7 @@ fn langmap_adjust(c: c_int) -> c_int {
         return c;
     }
     if c < 256 {
-        return langmap_mapchar.with(|map| map[c as usize] as c_int);
+        return langmap_mapchar.with(|map| c_int::from(map[as_index(c)]));
     }
     langmap_adjust_mb(Key::from_code(c)).code()
 }
@@ -696,7 +700,7 @@ fn find_buffer_by_name(name: &CStr) -> Option<Buf> {
 
 /// Edit buffer `fnum` in the current window, remembering the alternate file.
 fn open_buffer_here(fnum: c_int) {
-    let _ = buflist_getfile(fnum, LineNr::ZERO, GETF_ALT as c_int, 0);
+    let _ = buflist_getfile(fnum, LineNr::ZERO, GETF_ALT, 0);
 }
 
 /// Whether the current buffer may not be changed right now.
@@ -735,7 +739,7 @@ fn first_non_blank() {
 /// first, or the `prenum1`th, match of `pat` along `'path'`.
 fn search_path(pat: &[u8], kind: c_int, skip_comments: bool, prenum1: c_int) {
     let (first, last) = (LineNr::ONE, MAXLNUM);
-    let action = ACTION_SPLIT as c_int;
+    let action = ACTION_SPLIT;
     find_pattern_in_path(
         pat,
         kDirectionNotSet,

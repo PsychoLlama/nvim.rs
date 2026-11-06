@@ -12,8 +12,19 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
+use crate::narrow::as_index;
+use crate::narrow::float_as_int;
+use crate::narrow::len_as_int;
+use crate::narrow::number_as_int;
 use crate::narrow::number_as_lnum;
 use core::ffi::{c_int, c_uint};
 
@@ -78,7 +89,7 @@ fn set_buf(win: Win, buffer: Buf) -> Result<(), Error> {
         if !switchwin.sw_same_win {
             P_ACD.set(false);
         }
-        let (goto, first, fwd) = (DOBUF_GOTO as c_int, DOBUF_FIRST as c_int, FORWARD as c_int);
+        let (goto, first, fwd) = (DOBUF_GOTO, DOBUF_FIRST, FORWARD as c_int);
         let nr = buffer.handle();
         let _ = do_buffer(goto, first, fwd, nr.get(), 0);
         if !switchwin.sw_same_win {
@@ -162,10 +173,10 @@ fn ext_win_position(window: Win, validate: bool) {
             ui_call_win_pos(
                 Integer::from(wp.w_grid_alloc.handle),
                 wp.handle as WindowHandle,
-                wp.w_winrow as Integer,
-                wp.w_wincol as Integer,
-                wp.w_width as Integer,
-                wp.w_height as Integer,
+                Integer::from(wp.w_winrow),
+                Integer::from(wp.w_wincol),
+                Integer::from(wp.w_width),
+                Integer::from(wp.w_height),
             );
         }
         return;
@@ -187,9 +198,9 @@ fn ext_win_position(window: Win, validate: bool) {
             anchor_to_window(parent, &c, validate, &mut grid, &mut row, &mut col);
         }
     } else if c.relative as c_uint == kFloatRelativeLaststatus as c_uint {
-        row += (Rows.get() - p_ch() as c_int - last_stl_rows(false)) as Float;
+        row += Float::from(Rows.get() - number_as_int(p_ch()) - last_stl_rows(false));
     } else if c.relative as c_uint == kFloatRelativeTabline as c_uint {
-        row += tabline_rows() as Float;
+        row += Float::from(tabline_rows());
     }
 
     // A changed 'zindex' means the float has to move within the compositor's
@@ -210,11 +221,11 @@ fn ext_win_position(window: Win, validate: bool) {
 
     let east = c.anchor as c_int & kFloatAnchorEast as c_int != 0;
     let south = c.anchor as c_int & kFloatAnchorSouth as c_int != 0;
-    let mut comp_row = row as c_int - if south { wp.w_height_outer } else { 0 };
-    let mut comp_col = col as c_int - if east { wp.w_width_outer } else { 0 };
+    let mut comp_row = float_as_int(row) - if south { wp.w_height_outer } else { 0 };
+    let mut comp_col = float_as_int(col) - if east { wp.w_width_outer } else { 0 };
     // Don't cover the command line unless the float sits above the messages.
-    let above_ch = if wp.w_config.zindex < kZIndexMessages as c_int {
-        p_ch() as c_int
+    let above_ch = if wp.w_config.zindex < kZIndexMessages {
+        number_as_int(p_ch())
     } else {
         0
     };
@@ -239,7 +250,7 @@ fn ext_win_position(window: Win, validate: bool) {
     let (h, w) = (wp.w_height_outer, wp.w_width_outer);
     ui_comp_put_grid(wp.grid_alloc(), comp_row, comp_col, h, w, valid, false);
     if ui_has(kUIMultigrid) {
-        let anchor = ApiString::from_cstr(FLOAT_ANCHOR_STR[c.anchor as usize]);
+        let anchor = ApiString::from_cstr(FLOAT_ANCHOR_STR[as_index(c.anchor)]);
         let anchor_grid = grid.handle;
         ui_call_win_float_pos(
             Integer::from(wp.w_grid_alloc.handle),
@@ -249,10 +260,10 @@ fn ext_win_position(window: Win, validate: bool) {
             row,
             col,
             c.mouse as Boolean,
-            wp.w_grid_alloc.zindex as Integer,
-            wp.w_grid_alloc.comp_index as c_int as Integer,
-            wp.w_winrow as Integer,
-            wp.w_wincol as Integer,
+            Integer::from(wp.w_grid_alloc.zindex),
+            Integer::from(len_as_int(wp.w_grid_alloc.comp_index)),
+            Integer::from(wp.w_winrow),
+            Integer::from(wp.w_wincol),
         );
     }
     ui_check_cursor_grid(wp.w_grid_alloc.handle);
@@ -286,8 +297,8 @@ fn anchor_to_window(
     win_grid_alloc(parent);
     let own = parent.w_grid;
     *grid = grid_adjust(own, &mut row_off, &mut col_off);
-    *row += row_off as Float;
-    *col += col_off as Float;
+    *row += Float::from(row_off);
+    *col += Float::from(col_off);
     if c.bufpos.lnum < LineNr::ZERO {
         return;
     }
@@ -300,8 +311,8 @@ fn anchor_to_window(
         coladd: 0,
     };
     let (trow, tcol, _, _) = textpos2screenpos(parent, &mut pos, true);
-    *row += (trow - 1) as Float;
-    *col += (tcol - 1) as Float;
+    *row += Float::from(trow - 1);
+    *col += Float::from(tcol - 1);
 }
 
 pub fn ui_ext_win_viewport(window: Win) {
@@ -328,10 +339,10 @@ fn ext_win_viewport(window: Win) {
     let mut last_skipcol = i64::from(window.w_viewport_last_skipcol);
     // Lines were removed below the last known top line.
     if last_topline > line_count {
-        delta -= (last_topline - line_count) as int64_t;
+        delta -= int64_t::from(last_topline - line_count);
         last_topline = line_count;
         last_topfill = 0;
-        last_skipcol = MAXCOL as int64_t;
+        last_skipcol = int64_t::from(MAXCOL);
     }
     last_botline = last_botline.min(line_count);
 
@@ -342,7 +353,7 @@ fn ext_win_viewport(window: Win) {
         let mut vcole = last_skipcol;
         let mut lnume = last_topline;
         if last_topline > LineNr::ZERO && cur_botline < last_topline {
-            delta -= (last_topline - cur_botline) as int64_t;
+            delta -= int64_t::from(last_topline - cur_botline);
             lnume = cur_botline;
             vcole = 0;
         }
@@ -360,14 +371,14 @@ fn ext_win_viewport(window: Win) {
         let mut vcole = i64::from(window.w_skipcol);
         let mut lnume = cur_topline;
         if last_botline > LineNr::ZERO && cur_topline > last_botline {
-            delta += (cur_topline - last_botline) as int64_t;
+            delta += int64_t::from(cur_topline - last_botline);
             lnume = last_botline;
             vcole = 0;
         }
         delta += text_height(window, last_topline, last_skipcol, &mut lnume, &mut vcole);
     }
-    delta += last_topfill as int64_t;
-    delta -= window.w_topfill as int64_t;
+    delta += int64_t::from(last_topfill);
+    delta -= int64_t::from(window.w_topfill);
 
     // `w_botline` is one past the last line, except when the last line is not
     // fully visible.

@@ -15,10 +15,18 @@
 //! `for i in 0..len`, and why [`SubscriberList::at`] indexes every slot ever
 //! written rather than the live prefix — see its comment.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::narrow::len_as_integer;
 use core::ffi::{CStr, c_int};
 
 use crate::api::buffer::{LineSink, buf_collect_lines};
@@ -508,7 +516,7 @@ fn send_changes(mut buffer: Buf, firstline: LineNr, num_added: int64_t, num_remo
 
     let mut linedata = Array::new();
     if num_added > 0 && buffer.channels().len() != 0 {
-        let n = num_added as size_t;
+        let n = usize::try_from(num_added).expect("tested positive");
         linedata = collect_lines(buffer, n, firstline);
     }
 
@@ -557,10 +565,10 @@ fn send_changes(mut buffer: Buf, firstline: LineNr, num_added: int64_t, num_remo
             args.push(Object::integer(i64::from(firstline - 1)));
             args.push(Object::integer(i64::from(firstline - 1) + num_removed));
             args.push(Object::integer(i64::from(firstline - 1) + num_added));
-            args.push(Object::integer(deleted.bytes as Integer));
+            args.push(Object::integer(len_as_integer(deleted.bytes)));
             if cb.utf_sizes {
-                args.push(Object::integer(deleted.codepoints as Integer));
-                args.push(Object::integer(deleted.codeunits as Integer));
+                args.push(Object::integer(len_as_integer(deleted.codepoints)));
+                args.push(Object::integer(len_as_integer(deleted.codeunits)));
             }
             let res = call_ref(cb.on_lines, c"lines", args.array(), kRetNilBool);
             if truthy(res) {
@@ -640,7 +648,7 @@ fn send_splice(mut buffer: Buf, start: Corner, old: Corner, new: Corner) {
             args.push(Object::buffer(buffer.handle));
             args.push(Object::integer(changedtick(buffer)));
             for corner in [start, old, new] {
-                args.push(Object::integer(corner.row as Integer));
+                args.push(Object::integer(Integer::from(corner.row)));
                 args.push(Object::integer(i64::from(corner.col)));
                 args.push(Object::integer(corner.byte as Integer));
             }

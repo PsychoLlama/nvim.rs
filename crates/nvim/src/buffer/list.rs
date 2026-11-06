@@ -10,6 +10,13 @@
 //!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::cstr;
@@ -46,7 +53,7 @@ use crate::semsg;
 use crate::types::RegMatch;
 use crate::types::{
     Buffer, Callback, ColNr, Failed, FileID, FileMark, FileMarkView, Handle, LineNr, OptInt, Pos,
-    Timestamp, VAR_SCOPE, WinInfo, int16_t, uint64_t,
+    Timestamp, VAR_SCOPE, WinInfo, uint64_t,
 };
 use crate::undo::curbuf_is_changed;
 use crate::window::{WSP_VERT, swbuf_goto_win_with_buf, win_split};
@@ -132,7 +139,7 @@ pub fn buflist_new(
 
     // If the file name is already in the list, update that entry.
     if let Some((ffname, _)) = &names
-        && flags & (BLN_DUMMY as c_int | BLN_NEW as c_int) == 0
+        && flags & (BLN_DUMMY | BLN_NEW) == 0
         && let Some(buf) = buflist_findname_file_id(ffname.as_cstr(), file_id.as_ref())
     {
         return reuse_entry(buf, lnum, flags);
@@ -141,13 +148,13 @@ pub fn buflist_new(
     // The current buffer, when it has no name and no contents, otherwise a
     // fresh one. This is the ONLY place a buffer structure is allocated.
     let mut reusable = None;
-    if flags & BLN_CURBUF as c_int != 0 && curbuf_reusable() {
+    if flags & BLN_CURBUF != 0 && curbuf_reusable() {
         let cur = current_buf().expect("curbuf != NULL");
         let bufref = BufRef::of(cur);
         trigger_undo_ftplugin(cur, current_win());
         // It is as if this buffer were deleted. Watch out for autocommands
         // that change curbuf: if that happens, allocate a new buffer anyway.
-        buf_freeall(cur, BFA_WIPE as c_int | BFA_DEL as c_int);
+        buf_freeall(cur, BFA_WIPE | BFA_DEL);
         if aborting() {
             // Autocommands may abort script processing.
             return None;
@@ -184,18 +191,18 @@ pub fn buflist_new(
 
     if reused_curbuf {
         // Delete the local variables and the rest.
-        free_buffer_stuff(buf, kBffInitChangedtick as c_int);
+        free_buffer_stuff(buf, kBffInitChangedtick);
         // Init the options.
         buf.b_p_initialized = false;
-        copy_options_into(buf, BCO_ENTER as c_int);
+        copy_options_into(buf, BCO_ENTER);
         // The keymaps have to be reloaded and b:keymap_name set.
-        buf.b_kmap_state = (buf.b_kmap_state as c_int | KEYMAP_INIT) as int16_t;
+        buf.b_kmap_state |= KEYMAP_INIT;
     } else {
         // `fresh` is `Some` exactly when the buffer is not the reused
         // current one, which is the branch this is.
         buf = append_to_list(buf, fresh.take().expect("a fresh buffer was allocated"));
         // Always copy the options from the current buffer.
-        copy_options_into(buf, BCO_ALWAYS as c_int);
+        copy_options_into(buf, BCO_ALWAYS);
     }
 
     // The entry pushed above, which nothing since has replaced: the first
@@ -218,21 +225,17 @@ pub fn buflist_new(
     }
     buf.b_u_synced = true;
     buf.b_flags = BufFlags::CHECK_RO | BufFlags::NEVERLOADED;
-    if flags & BLN_DUMMY as c_int != 0 {
+    if flags & BLN_DUMMY != 0 {
         buf.b_flags |= BufFlags::DUMMY;
     }
     buf_clear_file(buf);
     clrallmarks(buf, 0 as Timestamp);
     fmarks_check_names(buf);
     // Init 'buflisted'.
-    buf.b_p_bl = if flags & BLN_LISTED as c_int != 0 {
-        1
-    } else {
-        0
-    };
+    buf.b_p_bl = if flags & BLN_LISTED != 0 { 1 } else { 0 };
     reset_update_subscribers(buf);
 
-    if flags & BLN_DUMMY as c_int == 0 && !announce_new_buffer(buf, flags) {
+    if flags & BLN_DUMMY == 0 && !announce_new_buffer(buf, flags) {
         return None;
     }
 
@@ -250,21 +253,18 @@ pub fn buflist_new(
 /// options, and list it if `BLN_LISTED` asked and it was not listed.
 fn reuse_entry(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Option<Buf> {
     if lnum != LineNr::ZERO {
-        let win = (flags & BLN_NOCURWIN as c_int == 0).then(current_win);
+        let win = (flags & BLN_NOCURWIN == 0).then(current_win);
         buflist_setfpos(buffer, win, lnum, ColNr::ZERO, false);
     }
-    if flags & BLN_NOOPT as c_int == 0 {
+    if flags & BLN_NOOPT == 0 {
         // Copy the options now, if 'cpo' doesn't have 's' and not done
         // already.
         copy_options_into(buffer, 0);
     }
-    if flags & BLN_LISTED as c_int != 0 && buffer.b_p_bl == 0 {
+    if flags & BLN_LISTED != 0 && buffer.b_p_bl == 0 {
         buffer.b_p_bl = 1;
         let bufref = BufRef::of(buffer);
-        if flags & BLN_DUMMY as c_int == 0
-            && fire_buf_event(AutoEvent::BufAdd, buffer)
-            && !bufref.valid()
-        {
+        if flags & BLN_DUMMY == 0 && fire_buf_event(AutoEvent::BufAdd, buffer) && !bufref.valid() {
             return None;
         }
     }
@@ -366,10 +366,7 @@ fn announce_new_buffer(buffer: Buf, flags: c_int) -> bool {
     if fire_buf_event(AutoEvent::BufNew, buffer) && !bufref.valid() {
         return false;
     }
-    if flags & BLN_LISTED as c_int != 0
-        && fire_buf_event(AutoEvent::BufAdd, buffer)
-        && !bufref.valid()
-    {
+    if flags & BLN_LISTED != 0 && fire_buf_event(AutoEvent::BufAdd, buffer) && !bufref.valid() {
         return false;
     }
     // Autocommands may abort script processing.
@@ -467,7 +464,7 @@ pub fn free_buf_options(mut buffer: Buf, free_p_ff: bool) {
     buffer.b_p_ac = -1;
     buffer.b_p_ar = -1;
     buffer.b_p_fs = -1;
-    buffer.b_p_ul = NO_LOCAL_UNDOLEVEL as OptInt;
+    buffer.b_p_ul = OptInt::from(NO_LOCAL_UNDOLEVEL);
     buffer.b_p_lw = None;
     buffer.b_p_bkc = None;
     buffer.b_p_menc = None;
@@ -484,7 +481,7 @@ pub fn buflist_getfile(
     forceit: c_int,
 ) -> Result<(), Failed> {
     let Some(buf) = find_buf(n) else {
-        if options & GETF_ALT as c_int != 0 && n == 0 {
+        if options & GETF_ALT != 0 && n == 0 {
             emsg(gettext(e_noalt));
         } else {
             semsg!("E92: Buffer {n} not found");
@@ -509,12 +506,12 @@ pub fn buflist_getfile(
         (lnum, col) = (fm.mark.lnum, fm.mark.col);
     }
 
-    if options & GETF_SWITCH as c_int != 0 && !goto_existing_window(buf) {
+    if options & GETF_SWITCH != 0 && !goto_existing_window(buf) {
         return Err(Failed);
     }
 
     let redraw_off = Suppress::redraw();
-    let (handle, setmark) = (buf.handle.get(), options & GETF_SETMARK as c_int != 0);
+    let (handle, setmark) = (buf.handle.get(), options & GETF_SETMARK != 0);
     // A live buffer's handle, and no file name to load under it.
     let failed = getfile(handle, None, None, setmark, lnum, forceit != 0) > 0;
     drop(redraw_off);
@@ -529,7 +526,7 @@ pub fn buflist_getfile(
         win.w_cursor.coladd = 0;
         win.w_set_curswant = true;
     }
-    if jop_flags.get() & kOptJopFlagView as c_int as u32 != 0 && fm.is_some() {
+    if jop_flags.get() & kOptJopFlagView != 0 && fm.is_some() {
         mark_view_restore(fm.as_ref());
     }
     Ok(())
@@ -539,17 +536,15 @@ pub fn buflist_getfile(
 /// showing `buffer`, or make one. Answers false when the split failed.
 fn goto_existing_window(buffer: Buf) -> bool {
     let wp = swbuf_goto_win_with_buf(Some(buffer));
-    let splits = (kOptSwbFlagVsplit as c_int
-        | kOptSwbFlagSplit as c_int
-        | kOptSwbFlagNewtab as c_int) as u32;
+    let splits = kOptSwbFlagVsplit | kOptSwbFlagSplit | kOptSwbFlagNewtab;
     if wp.is_some() || swb_flags.get() & splits == 0 || buf_is_empty(Buf::current()) {
         return true;
     }
-    if swb_flags.get() & kOptSwbFlagNewtab as c_int as u32 != 0 {
+    if swb_flags.get() & kOptSwbFlagNewtab != 0 {
         tabpage_new();
     } else {
-        let vertical = swb_flags.get() & kOptSwbFlagVsplit as c_int as u32 != 0;
-        let flags = if vertical { WSP_VERT as c_int } else { 0 };
+        let vertical = swb_flags.get() & kOptSwbFlagVsplit != 0;
+        let flags = if vertical { WSP_VERT } else { 0 };
         if win_split(0, flags).is_err() {
             return false;
         }
@@ -576,7 +571,7 @@ pub(crate) fn buflist_getfpos() {
         win.w_cursor.coladd = 0;
         win.w_set_curswant = true;
     }
-    if jop_flags.get() & kOptJopFlagView as c_int as u32 != 0 {
+    if jop_flags.get() & kOptJopFlagView != 0 {
         mark_view_restore(Some(&fm));
     }
 }

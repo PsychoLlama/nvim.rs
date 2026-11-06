@@ -532,10 +532,10 @@ fn apply_mods(cmd: &KeyDict_cmd, excmd: &ExArg, cmdinfo: &mut CmdParseInfo) -> R
     }
 
     if mods.vertical.unwrap_or(false) {
-        cmdinfo.cmdmod.cmod_split |= WSP_VERT.cast_signed();
+        cmdinfo.cmdmod.cmod_split |= WSP_VERT;
     }
     if mods.horizontal.unwrap_or(false) {
-        cmdinfo.cmdmod.cmod_split |= WSP_HOR.cast_signed();
+        cmdinfo.cmdmod.cmod_split |= WSP_HOR;
     }
     if let Some(named) = mods.split.as_ref() {
         let split = named.as_cstr();
@@ -591,7 +591,7 @@ fn split_direction(name: &CStr) -> Option<Option<c_int>> {
         b"botright" => WSP_BOT,
         _ => return None,
     };
-    Some(Some(bit.cast_signed()))
+    Some(Some(bit))
 }
 
 /// Unpack `mods.filter` and compile its pattern.

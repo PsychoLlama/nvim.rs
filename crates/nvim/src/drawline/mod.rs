@@ -1,3 +1,10 @@
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
@@ -49,6 +56,7 @@ use crate::mbyte::{
 use crate::memline::gchar_pos;
 use crate::message::state::did_emsg;
 use crate::r#move::{set_empty_rows, validate_virtcol, win_col_off2};
+use crate::narrow::as_index;
 use crate::option::kOptFlagInsecure;
 use crate::option::vars::dy_flags;
 use crate::options::{
@@ -259,9 +267,9 @@ fn wlv_put_linebuf(
                 // Do not overwrite the line number either: "123 text"
                 // becomes "123<<<xt".
                 while off < window.w_view_width
-                    && ascii_isdigit(
-                        schar_get_ascii(line.chars()[off as usize]) as ::core::ffi::c_int
-                    )
+                    && ascii_isdigit(::core::ffi::c_int::from(schar_get_ascii(
+                        line.chars()[as_index(off)],
+                    )))
                 {
                     off += 1;
                 }
@@ -271,14 +279,14 @@ fn wlv_put_linebuf(
                     break;
                 }
                 if off + 1 < window.w_view_width
-                    && line.chars()[off as usize + 1] == NUL as ScreenChar
+                    && line.chars()[as_index(off) + 1] == NUL as ScreenChar
                 {
                     // The first half of a double-width character is being
                     // overwritten; blank its second half.
-                    line.chars_mut()[off as usize + 1] = schar_from_ascii(b' ');
+                    line.chars_mut()[as_index(off) + 1] = schar_from_ascii(b' ');
                 }
-                line.chars_mut()[off as usize] = schar_from_ascii(b'<');
-                line.attrs_mut()[off as usize] = at_attr;
+                line.chars_mut()[as_index(off)] = schar_from_ascii(b'<');
+                line.attrs_mut()[as_index(off)] = at_attr;
                 off += 1;
             }
         });

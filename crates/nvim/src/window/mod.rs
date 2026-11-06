@@ -32,6 +32,13 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
@@ -39,12 +46,14 @@
 pub(crate) mod state;
 use crate::cstr;
 use crate::memory::XString;
+use crate::narrow::count_as_int;
 use crate::types::AutoEvent;
 use crate::types::CAR;
 use crate::types::CmdIdx;
 use crate::types::TAB;
 use crate::winlayer::WinId;
 use crate::winlayer::prev_window;
+use core::ffi::c_int;
 
 use crate::autocmd::{apply_autocmds, is_aucmd_win};
 use crate::buffer::{buf_hide, buf_is_quickfix};
@@ -113,8 +122,8 @@ pub const kAlignLeft: AlignTextPos = 0;
 pub const kWinStyleMinimal: WinStyle = 1;
 pub const kWinStyleUnused: WinStyle = 0;
 pub const kWinSplitLeft: WinSplit = 0;
-pub const kZIndexMessages: ::core::ffi::c_uint = 200;
-pub const kZIndexFloatDefault: ::core::ffi::c_uint = 50;
+pub const kZIndexMessages: c_int = 200;
+pub const kZIndexFloatDefault: c_int = 50;
 pub const kDirectionNotSet: Direction = 0;
 pub const kCdCauseWindow: CdCause = 1;
 pub const kCdCauseManual: CdCause = 0;
@@ -135,37 +144,37 @@ pub const DOBUF_FIRST: DoBufStart = 1;
 pub const DOBUF_CURRENT: DoBufStart = 0;
 pub const kMTLineWise: MotionType = 1;
 pub const kMTCharWise: MotionType = 0;
-pub const FIND_EVAL: ::core::ffi::c_uint = 4;
-pub const FIND_STRING: ::core::ffi::c_uint = 2;
-pub const FIND_IDENT: ::core::ffi::c_uint = 1;
-pub const BCO_NOHELP: ::core::ffi::c_uint = 4;
-pub const BCO_ENTER: ::core::ffi::c_uint = 1;
-pub const CHECK_PATH: ::core::ffi::c_uint = 3;
-pub const FIND_DEFINE: ::core::ffi::c_uint = 2;
-pub const FIND_ANY: ::core::ffi::c_uint = 1;
-pub const ACTION_SHOW_ALL: ::core::ffi::c_uint = 4;
-pub const ACTION_SPLIT: ::core::ffi::c_uint = 3;
-pub const ACTION_GOTO: ::core::ffi::c_uint = 2;
-pub const ACTION_SHOW: ::core::ffi::c_uint = 1;
-pub const WSP_QUICKFIX: ::core::ffi::c_uint = 1024;
-pub const WSP_NOENTER: ::core::ffi::c_uint = 512;
-pub const WSP_NEWLOC: ::core::ffi::c_uint = 256;
-pub const WSP_ABOVE: ::core::ffi::c_uint = 128;
-pub const WSP_BELOW: ::core::ffi::c_uint = 64;
-pub const WSP_HELP: ::core::ffi::c_uint = 32;
-pub const WSP_BOT: ::core::ffi::c_uint = 16;
-pub const WSP_TOP: ::core::ffi::c_uint = 8;
-pub const WSP_HOR: ::core::ffi::c_uint = 4;
-pub const WSP_VERT: ::core::ffi::c_uint = 2;
-pub const WSP_ROOM: ::core::ffi::c_uint = 1;
-pub const STATUS_HEIGHT: ::core::ffi::c_uint = 1;
-pub const MIN_LINES: ::core::ffi::c_uint = 2;
-pub const LOWEST_WIN_ID: ::core::ffi::c_uint = 1000;
-pub const WEE_TRIGGER_LEAVE_AUTOCMDS: ::core::ffi::c_uint = 16;
-pub const WEE_TRIGGER_ENTER_AUTOCMDS: ::core::ffi::c_uint = 8;
-pub const WEE_UNDO_SYNC: ::core::ffi::c_uint = 1;
-pub const WEE_TRIGGER_NEW_AUTOCMDS: ::core::ffi::c_uint = 4;
-pub const WEE_CURWIN_INVALID: ::core::ffi::c_uint = 2;
+pub const FIND_EVAL: c_int = 4;
+pub const FIND_STRING: c_int = 2;
+pub const FIND_IDENT: c_int = 1;
+pub const BCO_NOHELP: ::core::ffi::c_int = 4;
+pub const BCO_ENTER: ::core::ffi::c_int = 1;
+pub const CHECK_PATH: c_int = 3;
+pub const FIND_DEFINE: c_int = 2;
+pub const FIND_ANY: c_int = 1;
+pub const ACTION_SHOW_ALL: c_int = 4;
+pub const ACTION_SPLIT: c_int = 3;
+pub const ACTION_GOTO: c_int = 2;
+pub const ACTION_SHOW: c_int = 1;
+pub const WSP_QUICKFIX: c_int = 1024;
+pub const WSP_NOENTER: c_int = 512;
+pub const WSP_NEWLOC: c_int = 256;
+pub const WSP_ABOVE: c_int = 128;
+pub const WSP_BELOW: c_int = 64;
+pub const WSP_HELP: c_int = 32;
+pub const WSP_BOT: c_int = 16;
+pub const WSP_TOP: c_int = 8;
+pub const WSP_HOR: c_int = 4;
+pub const WSP_VERT: c_int = 2;
+pub const WSP_ROOM: c_int = 1;
+pub const STATUS_HEIGHT: c_int = 1;
+pub const MIN_LINES: c_int = 2;
+pub const LOWEST_WIN_ID: c_int = 1000;
+pub const WEE_TRIGGER_LEAVE_AUTOCMDS: c_int = 16;
+pub const WEE_TRIGGER_ENTER_AUTOCMDS: c_int = 8;
+pub const WEE_UNDO_SYNC: c_int = 1;
+pub const WEE_TRIGGER_NEW_AUTOCMDS: c_int = 4;
+pub const WEE_CURWIN_INVALID: c_int = 2;
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
@@ -274,12 +283,12 @@ pub fn swbuf_goto_win_with_buf(buffer: Option<Buf>) -> Option<Win> {
 
 /// The window `'switchbuf'` says to jump to for `buffer`, having jumped to it.
 fn swbuf_goto_win(buffer: Buf) -> Option<Win> {
-    let flag = |f: ::core::ffi::c_int| swb_flags.get() & f as ::core::ffi::c_uint != 0;
+    let flag = |f: ::core::ffi::c_uint| swb_flags.get() & f != 0;
     let mut wp = None;
-    if flag(kOptSwbFlagUseopen as ::core::ffi::c_int) {
+    if flag(kOptSwbFlagUseopen) {
         wp = jump_open_win(buffer);
     }
-    if wp.is_none() && flag(kOptSwbFlagUsetab as ::core::ffi::c_int) {
+    if wp.is_none() && flag(kOptSwbFlagUsetab) {
         wp = jump_open_tab(buffer);
     }
     wp
@@ -336,7 +345,7 @@ fn valid_win_any_tab(win: WinId) -> bool {
 }
 
 pub fn win_count() -> ::core::ffi::c_int {
-    windows().count() as ::core::ffi::c_int
+    count_as_int(windows().count())
 }
 
 /// The window `win` names, if it is still on the current tab page's list.
@@ -462,7 +471,7 @@ fn drop_grid(win: Win) {
 
 static command_frame_height: GlobalCell<bool> = GlobalCell::new(true);
 static last_win_id: GlobalCell<::core::ffi::c_int> =
-    GlobalCell::new(LOWEST_WIN_ID as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
+    GlobalCell::new(LOWEST_WIN_ID - 1 as ::core::ffi::c_int);
 static did_initial_scroll_size_snapshot: GlobalCell<bool> = GlobalCell::new(false);
 pub const FRACTION_MULT: ::core::ffi::c_int = 16384 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;

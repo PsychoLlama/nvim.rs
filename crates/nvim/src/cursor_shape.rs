@@ -20,11 +20,20 @@
 //! `what` is `SHAPE_CURSOR` at every call site today, but the `used_for`
 //! filter and the `mouse_shape` key are upstream's and stay.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
 use crate::types::ApiString;
 use crate::types::DictBuilder;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use crate::charset::getdigits_int_at;
 use crate::ex_getln::{cmdline_at_end, cmdline_overstrike};
@@ -60,8 +69,8 @@ pub(crate) const SHAPE_HOR: CursorShape = 1;
 pub(crate) const SHAPE_VER: CursorShape = 2;
 
 /// What an entry is consulted for: `'mouseshape'`, `'guicursor'`, or both.
-pub(crate) const SHAPE_MOUSE: c_int = 1;
-pub(crate) const SHAPE_CURSOR: c_int = 2;
+pub(crate) const SHAPE_MOUSE: u8 = 1;
+pub(crate) const SHAPE_CURSOR: u8 = 2;
 
 /// `N_("E548: Digit expected")`. The option layer translates what it gets
 /// back, as it does the other four messages here.
@@ -76,7 +85,7 @@ static E_DIGIT_EXPECTED: &CStr = c"E548: Digit expected";
 /// over the length being compared, so `"c"` resolves to `cmdline_normal`
 /// rather than `cmdline_insert`.
 #[rustfmt::skip]
-const DEFAULT_SHAPES: [(&CStr, &CStr, [c_int; 3], c_int); SHAPE_IDX_COUNT as usize] = [
+const DEFAULT_SHAPES: [(&CStr, &CStr, [c_int; 3], u8); SHAPE_IDX_COUNT as usize] = [
     (c"normal",           c"n",  [700, 400, 250], SHAPE_CURSOR + SHAPE_MOUSE),
     (c"visual",           c"v",  [700, 400, 250], SHAPE_CURSOR + SHAPE_MOUSE),
     (c"insert",           c"i",  [700, 400, 250], SHAPE_CURSOR + SHAPE_MOUSE),
@@ -110,7 +119,7 @@ const fn default_entry(idx: usize) -> CursorEntry {
         id: 0,
         id_lm: 0,
         name,
-        used_for: used_for as c_char,
+        used_for,
     }
 }
 
@@ -130,7 +139,7 @@ static SHAPE_TABLE: GlobalCell<[CursorEntry; SHAPE_IDX_COUNT as usize]> =
 
 /// One mode's entry, copied out of the table.
 pub(crate) fn shape_entry(idx: ShapeIdx) -> CursorEntry {
-    SHAPE_TABLE.with(|table| table[idx as usize])
+    SHAPE_TABLE.with(|table| table[as_index(idx)])
 }
 
 /// Change one mode's entry in place.
@@ -139,7 +148,7 @@ pub(crate) fn shape_entry(idx: ShapeIdx) -> CursorEntry {
 /// else: anything that calls out of this module can read the table back
 /// (module docs).
 pub(crate) fn update_shape_entry(idx: ShapeIdx, f: impl FnOnce(&mut CursorEntry)) {
-    SHAPE_TABLE.with_mut(|table| f(&mut table[idx as usize]));
+    SHAPE_TABLE.with_mut(|table| f(&mut table[as_index(idx)]));
 }
 
 /// Every entry back to block, unblinking and uncoloured — the state an
@@ -166,8 +175,8 @@ pub(crate) fn mode_style_array() -> Array {
     let mut all = Vec::with_capacity(SHAPE_IDX_COUNT as size_t);
     for idx in 0..SHAPE_IDX_COUNT {
         let cur = shape_entry(idx);
-        let for_mouse = c_int::from(cur.used_for) & SHAPE_MOUSE != 0;
-        let for_cursor = c_int::from(cur.used_for) & SHAPE_CURSOR != 0;
+        let for_mouse = cur.used_for & SHAPE_MOUSE != 0;
+        let for_cursor = cur.used_for & SHAPE_CURSOR != 0;
         // Upstream sizes for three keys plus the nine cursor ones, so a
         // cursor-only entry ("sm", "t") leaves one slot unused.
         let mut dic = DictBuilder::with_capacity(if for_cursor { 12 } else { 3 });
@@ -245,7 +254,7 @@ fn mode_name_matches(idx: usize, text: &[u8], len: usize) -> bool {
 /// Two passes: the first rejects the value as a whole without writing
 /// anything, the second applies it. `what` is [`SHAPE_CURSOR`] or
 /// [`SHAPE_MOUSE`] and decides which modes are legal to name.
-pub(crate) fn parse_shape_opt(what: c_int) -> Result<(), OptError> {
+pub(crate) fn parse_shape_opt(what: u8) -> Result<(), OptError> {
     // Set by a `ve` in the mode list, in either round.
     let mut found_ve = false;
 
@@ -294,7 +303,7 @@ pub(crate) fn parse_shape_opt(what: c_int) -> Result<(), OptError> {
 /// `found_ve` accumulates across both rounds, as upstream's local does.
 fn parse_parts(
     bytes: &[u8],
-    what: c_int,
+    what: u8,
     apply: bool,
     found_ve: &mut bool,
 ) -> Result<(), &'static CStr> {
@@ -340,7 +349,7 @@ fn parse_parts(
                         idx += 1;
                     }
                     if idx == SHAPE_IDX_COUNT as usize
-                        || c_int::from(shape_entry(idx as ShapeIdx).used_for) & what == 0
+                        || shape_entry(len_as_int(idx)).used_for & what == 0
                     {
                         return Err(e_illegal_mode);
                     }
@@ -356,7 +365,7 @@ fn parse_parts(
             if all_idx >= 0 {
                 // "a" bypasses the `used_for` filter above: it sets every
                 // entry, including the ones this `what` does not own.
-                idx = all_idx as usize;
+                idx = as_index(all_idx);
                 all_idx -= 1;
             }
 
@@ -393,14 +402,15 @@ fn parse_parts(
                             return Err(c"E549: Illegal percentage");
                         }
                         if apply {
-                            let vertical = (first as u8).eq_ignore_ascii_case(&b'v');
-                            update_shape_entry(idx as ShapeIdx, |e| {
+                            let vertical =
+                                u8::try_from(first).is_ok_and(|b| b.eq_ignore_ascii_case(&b'v'));
+                            update_shape_entry(len_as_int(idx), |e| {
                                 e.shape = if vertical { SHAPE_VER } else { SHAPE_HOR };
                                 e.percentage = n;
                             });
                         }
                     } else if apply {
-                        update_shape_entry(idx as ShapeIdx, |e| match len {
+                        update_shape_entry(len_as_int(idx), |e| match len {
                             9 => e.blinkwait = n,
                             7 => e.blinkon = n,
                             _ => e.blinkoff = n,
@@ -408,7 +418,7 @@ fn parse_parts(
                     }
                 } else if starts_with_ci(rest, b"block") {
                     if apply {
-                        update_shape_entry(idx as ShapeIdx, |e| e.shape = SHAPE_BLOCK);
+                        update_shape_entry(len_as_int(idx), |e| e.shape = SHAPE_BLOCK);
                     }
                     p += 5;
                 } else {
@@ -434,7 +444,7 @@ fn parse_parts(
                         // An empty name is upstream's too -- "block-Cursor/"
                         // looks one up with length zero.
                         let id = syn_check_group(&bytes[p..endp]);
-                        update_shape_entry(idx as ShapeIdx, |e| {
+                        update_shape_entry(len_as_int(idx), |e| {
                             e.id = if slashp.is_some() { first } else { id };
                             e.id_lm = id;
                         });

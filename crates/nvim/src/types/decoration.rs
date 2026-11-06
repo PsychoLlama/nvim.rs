@@ -97,7 +97,7 @@ pub struct DecorRange {
 }
 pub type DecorRangeKind = uint8_t;
 /// How a virtual text's highlight combines with what is under it.
-pub type HlMode = ::core::ffi::c_uint;
+pub type HlMode = uint8_t;
 /// One slot of the `DecorRange` slab: either a range, or a link in the
 /// freelist threaded through the slab itself.
 #[derive(Copy, Clone)]
@@ -213,7 +213,7 @@ pub struct DecorState {
 #[derive(Clone)]
 pub struct DecorVirtText {
     pub flags: uint8_t,
-    pub hl_mode: uint8_t,
+    pub hl_mode: HlMode,
     pub priority: DecorPriority,
     pub width: ::core::ffi::c_int,
     pub col: ::core::ffi::c_int,

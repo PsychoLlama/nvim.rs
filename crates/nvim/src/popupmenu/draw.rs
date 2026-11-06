@@ -50,7 +50,7 @@ const WIN_CONFIG_INIT: WinConfig = WinConfig {
     focusable: true,
     mouse: true,
     split: kWinSplitLeft,
-    zindex: kZIndexFloatDefault.cast_signed(),
+    zindex: kZIndexFloatDefault,
     style: kWinStyleUnused,
     border: false,
     shadow: false,

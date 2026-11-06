@@ -215,7 +215,7 @@ pub(crate) fn frame_fixed_width(frp: FrameRef) -> bool {
 /// any height: the caller has already made room.
 pub(crate) fn add_statusline(frp: FrameRef) {
     if let Some(mut win) = frp.win() {
-        win.w_status_height = STATUS_HEIGHT.cast_signed();
+        win.w_status_height = STATUS_HEIGHT;
     } else if ::core::ffi::c_int::from(frp.fr_layout) == FR_ROW {
         // Handle all the frames in the row.
         frp.children().for_each(add_statusline);

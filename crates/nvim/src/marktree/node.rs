@@ -1,3 +1,10 @@
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 //! The B-tree's nodes, and the slab that owns them.
@@ -22,6 +29,8 @@
 //! operations that touch two nodes at once (copying keys or children across, the
 //! parent links) are methods on the tree.
 
+use crate::narrow::count_as_int;
+use crate::narrow::count_as_u8;
 use core::ffi::c_int;
 use core::ops::{Index, IndexMut, Range};
 
@@ -116,7 +125,7 @@ impl Node {
     #[inline]
     pub fn set_key_count(&mut self, count: usize) {
         debug_assert!(count <= MAX_KEYS, "count <= MAX_KEYS");
-        self.key_count = count as u8;
+        self.key_count = count_as_u8(count);
     }
 
     /// Distance from the leaves: zero for a leaf, one for a node whose children
@@ -152,7 +161,7 @@ impl Node {
     #[inline]
     pub fn set_parent_index(&mut self, index: usize) {
         debug_assert!(index < MAX_CHILDREN, "index < MAX_CHILDREN");
-        self.parent_index = index as u8;
+        self.parent_index = count_as_u8(index);
     }
 
     // -- keys --------------------------------------------------------------
@@ -483,16 +492,17 @@ pub fn find_key(keys: &[MTKey], k: MTKey) -> (c_int, bool) {
         }
     }
     if begin == keys.len() {
-        return (keys.len() as c_int - 1, false);
+        return (count_as_int(keys.len()) - 1, false);
     }
     let found = key_cmp(k, keys[begin]) == 0;
-    (begin as c_int - c_int::from(!found), found)
+    (count_as_int(begin) - c_int::from(!found), found)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::marktree::key::{DECOR_HIGHLIGHT_INLINE_INIT, MtFlags};
+    use crate::decoration::DECOR_HIGHLIGHT_INLINE_INIT;
+    use crate::marktree::key::MtFlags;
     use crate::types::{DecorInline, MTPos};
 
     fn key(row: i32, col: i32, flags: MtFlags) -> MTKey {

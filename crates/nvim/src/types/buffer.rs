@@ -97,8 +97,8 @@ pub struct WinConfig {
 }
 pub type WinSplit = ::core::ffi::c_uint;
 pub type WinStyle = ::core::ffi::c_uint;
-pub type BfaFlags = ::core::ffi::c_uint;
-pub type BlnFlags = ::core::ffi::c_uint;
+pub type BfaFlags = ::core::ffi::c_int;
+pub type BlnFlags = ::core::ffi::c_int;
 /// `Copy`, and not an owner: the two fields together are a *weak* name for
 /// a buffer -- a handle (the address it had and the number it had) and the
 /// free count that says whether the address still means that buffer. The
@@ -177,8 +177,8 @@ pub struct DiffLineChange {
     pub dc_end_lnum_off: [::core::ffi::c_int; 8],
 }
 pub type DispTick = uint64_t;
-pub type DoBufAction = ::core::ffi::c_uint;
-pub type DoBufStart = ::core::ffi::c_uint;
+pub type DoBufAction = ::core::ffi::c_int;
+pub type DoBufStart = ::core::ffi::c_int;
 pub struct FcsChars {
     pub stl: ScreenChar,
     pub stlnc: ScreenChar,
@@ -683,7 +683,7 @@ pub struct file_buffer_b_signcols {
     pub autom: bool,
 }
 pub type GetFileRet = ::core::ffi::c_int;
-pub type GetFileFlags = ::core::ffi::c_uint;
+pub type GetFileFlags = ::core::ffi::c_int;
 /// Not `Copy`: `multispace` and `leadmultispace` are owned runs, made by
 /// 'listchars' and dropped when the window's value is replaced. A zeroed
 /// struct holds neither, which is what a zeroed window starts with.

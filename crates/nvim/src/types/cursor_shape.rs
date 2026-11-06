@@ -23,7 +23,7 @@ pub struct CursorEntry {
     pub id: ::core::ffi::c_int,
     pub id_lm: ::core::ffi::c_int,
     pub name: &'static ::core::ffi::CStr,
-    pub used_for: ::core::ffi::c_char,
+    pub used_for: u8,
 }
 
 impl CursorEntry {

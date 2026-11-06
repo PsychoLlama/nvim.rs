@@ -200,7 +200,7 @@ fn splitview(excmd: &mut ExArg) {
 
 /// `WSP_VERT` when the command was spelled with a leading `v`.
 fn vertical_flag(first: u8) -> c_int {
-    if first == b'v' { WSP_VERT as c_int } else { 0 }
+    if first == b'v' { WSP_VERT } else { 0 }
 }
 
 /// `RESET_BINDING()`: a window that has just been given another file is not
@@ -458,7 +458,7 @@ fn resize(excmd: &mut ExArg) {
     // A non-number reads as zero, as `atol` does.
     let arg = excmd.line.arg;
     let mut n = getdigits_at(excmd.line.buffer_mut(), arg, false, 0).0 as c_int;
-    if cmdmod.with(|m| m.cmod_split) & WSP_VERT as c_int != 0 {
+    if cmdmod.with(|m| m.cmod_split) & WSP_VERT != 0 {
         if relative {
             n += wp.w_width;
         } else if n == 0 && empty {

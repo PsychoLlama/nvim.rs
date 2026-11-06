@@ -1,3 +1,10 @@
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 //! Building one screen line and pushing it to the grid.
@@ -16,6 +23,8 @@ use super::*;
 use crate::grid::{SLF_INC_VCOL, SLF_RIGHTLEFT, SLF_WRAP};
 use crate::log::logmsg;
 use crate::mbyte::{c_cells_at, c_cluster_schar};
+use crate::narrow::as_index;
+use crate::narrow::count_as_int;
 use crate::types::LineBuf;
 
 /// The one line under construction. See [`LineBuf`].
@@ -82,7 +91,7 @@ static BATCH: GlobalCell<LineBatch> = GlobalCell::new(LineBatch::new());
 #[inline(always)]
 fn at(col: c_int) -> size_t {
     debug_assert!(col >= 0, "col >= 0");
-    col as size_t
+    as_index(col)
 }
 
 /// Which columns of a line the UI has to be told about.
@@ -140,7 +149,7 @@ pub fn screengrid_line_start(grid: GridRef, row: c_int, col: c_int) {
         row,
         coloff: col,
         maxcol: grid.cols.min(grid.cols - col),
-        first: width as c_int,
+        first: count_as_int(width),
         last: 0,
         clear_to: 0,
         bg_attr: 0,
@@ -148,7 +157,7 @@ pub fn screengrid_line_start(grid: GridRef, row: c_int, col: c_int) {
         flags: 0,
     };
     debug_assert!(
-        b.maxcol as size_t <= width,
+        as_index(b.maxcol) <= width,
         "(size_t)grid_line_maxcol <= linebuf_size"
     );
     BATCH.set(b);
@@ -178,7 +187,7 @@ pub fn grid_line_put_schar(col: c_int, schar: ScreenChar, attr: c_int) {
         return;
     }
 
-    with_linebuf(|buf| buf.put(col as size_t, schar, attr, ColNr::NONE));
+    with_linebuf(|buf| buf.put(as_index(col), schar, attr, ColNr::NONE));
 
     b.first = b.first.min(col);
     // TODO(bfredl): Y U NO DOUBLEWIDTH?
@@ -223,17 +232,17 @@ pub fn grid_line_puts(col: c_int, text: &[u8], attr: c_int) -> c_int {
 
             // At the start of the text, overwriting the right half of a
             // two-cell character already in this batch truncates it to '>'.
-            if at == 0 && col > b.first && col < b.last && chars[col as size_t] == 0 {
-                chars[(col - 1) as size_t] = schar_from_ascii(b'>');
+            if at == 0 && col > b.first && col < b.last && chars[as_index(col)] == 0 {
+                chars[as_index(col - 1)] = schar_from_ascii(b'>');
             }
 
-            chars[col as size_t] = schar;
-            attrs[col as size_t] = attr;
-            vcols[col as size_t] = ColNr::NONE;
+            chars[as_index(col)] = schar;
+            attrs[as_index(col)] = attr;
+            vcols[as_index(col)] = ColNr::NONE;
             if mbyte_cells == 2 {
-                chars[(col + 1) as size_t] = 0;
-                attrs[(col + 1) as size_t] = attr;
-                vcols[(col + 1) as size_t] = ColNr::NONE;
+                chars[as_index(col + 1)] = 0;
+                attrs[as_index(col + 1)] = attr;
+                vcols[as_index(col + 1)] = ColNr::NONE;
             }
 
             col += mbyte_cells;
@@ -431,7 +440,7 @@ fn grid_char_needs_redraw(
     col: c_int,
     cols: c_int,
 ) -> bool {
-    let at = col as size_t;
+    let at = as_index(col);
     let (chars, attrs) = (line.chars(), line.attrs());
     cols > 0
         && ((chars[at] != on_grid.chars[at]
@@ -476,13 +485,13 @@ fn copy_changed_cells(
 
     while col < endcol {
         // 1 for a normal char, 2 when it occupies two display cells.
-        let char_cells = if col + 1 < endcol && chars[(col + 1) as size_t] == 0 {
+        let char_cells = if col + 1 < endcol && chars[as_index(col + 1)] == 0 {
             2
         } else {
             1
         };
         let redraw_this = redraw_next;
-        let off = col as size_t;
+        let off = as_index(col);
         redraw_next =
             grid_char_needs_redraw(line, on_grid, col + char_cells, endcol - col - char_cells);
 
@@ -496,8 +505,8 @@ fn copy_changed_cells(
             // Same when writing the right half of a double-width char
             // over the left half of an existing one.
             if col + char_cells == endcol
-                && off + (char_cells as size_t) < on_grid.chars.len()
-                && on_grid.chars[off + char_cells as size_t] == 0
+                && off + as_index(char_cells) < on_grid.chars.len()
+                && on_grid.chars[off + as_index(char_cells)] == 0
             {
                 clear_next = true;
             }
@@ -550,7 +559,7 @@ fn clear_rest_of_line(
     if rightleft {
         let mut col = clear_width - 1;
         while col >= clear_start {
-            on_grid.vcols[col as size_t] = if inc_vcol {
+            on_grid.vcols[as_index(col)] = if inc_vcol {
                 last_vcol += 1;
                 last_vcol
             } else {
@@ -565,7 +574,7 @@ fn clear_rest_of_line(
     // TODO(bfredl): we could cache winline widths.
     let mut col = clear_start;
     while col < clear_width {
-        let off = col as size_t;
+        let off = as_index(col);
         if on_grid.chars[off] != schar_from_ascii(b' ')
             || on_grid.attrs[off] != clear_attr
             || rdb_flags.get() & kOptRdbFlagNodelta != 0
@@ -637,16 +646,12 @@ pub fn grid_put_linebuf(
     let invalid_row = !grid.same(default_grid_ref()) && grid.invalid_row(row) && col == 0;
     // The row from `coloff` on: every column below indexes into it.
     let off_to = grid.cell_offset(row, coloff);
-    let span_width = (grid.cols - coloff) as size_t;
+    let span_width = as_index(grid.cols - coloff);
 
     // At the start of the text, overwriting the right half of a two-cell
     // character already on the grid truncates it into a '>'.
-    let truncated = (col > 0 && grid.char_at(off_to + col as size_t) == 0).then(|| {
-        (
-            (col - 1) as size_t,
-            grid.attr_at(off_to + col as size_t - 1),
-        )
-    });
+    let truncated = (col > 0 && grid.char_at(off_to + as_index(col)) == 0)
+        .then(|| (as_index(col - 1), grid.attr_at(off_to + as_index(col) - 1)));
     if truncated.is_some() {
         col -= 1;
     }
@@ -685,13 +690,13 @@ pub fn grid_put_linebuf(
         if copied.clear_next {
             // Clear the second half of a double-width character whose left
             // half was overwritten with a single-width one.
-            on_grid.chars[copied.col as size_t] = schar_from_ascii(b' ');
+            on_grid.chars[as_index(copied.col)] = schar_from_ascii(b' ');
             end_dirty += 1;
         }
 
         // Clearing the left half of a double-width char clears the right
         // too.
-        if (clear_width as size_t) < span_width && on_grid.chars[clear_width as size_t] == 0 {
+        if as_index(clear_width) < span_width && on_grid.chars[as_index(clear_width)] == 0 {
             clear_width += 1;
         }
 

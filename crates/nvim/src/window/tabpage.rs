@@ -10,8 +10,17 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
+use crate::narrow::as_index;
+use crate::narrow::number_as_int;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::winlayer::TabId;
@@ -288,8 +297,10 @@ fn in_window(tabpage: TabPage, body: impl FnOnce()) {
 /// `Rows - 'cmdheight' - tabline - global statusline`: the rows a tab page's
 /// windows may use.
 fn rows_avail() -> int64_t {
-    (Rows.get() as OptInt - p_ch() - tabline_rows() as OptInt - global_stl_rows() as OptInt)
-        as int64_t
+    (OptInt::from(Rows.get())
+        - p_ch()
+        - OptInt::from(tabline_rows())
+        - OptInt::from(global_stl_rows())) as int64_t
 }
 
 /// Open a new tab page if `:tab cmd` was used. It edits the same buffer, as
@@ -316,7 +327,7 @@ pub(crate) fn may_open_tabpage() -> Result<(), Failed> {
 }
 
 pub fn make_tabpages(maxcount: c_int) -> c_int {
-    let count = maxcount.min(p_tpm() as c_int);
+    let count = maxcount.min(number_as_int(p_tpm()));
 
     // Don't execute autocommands while creating the tab pages: `curwin` and
     // `curbuf` are not set up yet.
@@ -349,7 +360,7 @@ pub fn valid_tabpage_win(tpc: TabPage) -> c_int {
     let Some(tp) = valid_tab(tpc.id()) else {
         return 0; // shouldn't happen
     };
-    windows_in_tab(tp).any(|wp| valid_win_any_tab(wp.id())) as c_int
+    c_int::from(windows_in_tab(tp).any(|wp| valid_win_any_tab(wp.id())))
 }
 
 pub fn close_tabpage(tab: TabPage) {
@@ -387,7 +398,7 @@ fn nth_tab(n: c_int) -> Option<TabPage> {
     if n < 0 {
         return None; // the walk runs off the end of the list
     }
-    tabs().nth(n as usize - 1)
+    tabs().nth(as_index(n) - 1)
 }
 
 pub(crate) fn tabpage_index(ftp: Option<TabPage>) -> c_int {
@@ -439,7 +450,7 @@ fn leave_tab(new_curbuf: Option<Buf>, trigger_leave_autocmds: bool) -> Result<()
     tp.tp_lastwin = lastwin.get();
     tp.tp_old_rows_avail = rows_avail();
     if tp.tp_old_columns != -1 as int64_t {
-        tp.tp_old_columns = Columns.get() as int64_t;
+        tp.tp_old_columns = int64_t::from(Columns.get());
     }
     firstwin.set(None);
     lastwin.set(None);
@@ -480,14 +491,14 @@ fn enter_tab(
     // The TabEnter event would ideally come first, but there is no valid
     // current window yet, which would break some commands. This triggers
     // autocommands, and so may make `tabpage` invalid.
-    let flags = WEE_CURWIN_INVALID as c_int
+    let flags = WEE_CURWIN_INVALID
         | if trigger_enter_autocmds {
-            WEE_TRIGGER_ENTER_AUTOCMDS as c_int
+            WEE_TRIGGER_ENTER_AUTOCMDS
         } else {
             0
         }
         | if trigger_leave_autocmds {
-            WEE_TRIGGER_LEAVE_AUTOCMDS as c_int
+            WEE_TRIGGER_LEAVE_AUTOCMDS
         } else {
             0
         };
@@ -513,10 +524,10 @@ fn enter_tab(
     if TabPage::current().tp_old_rows_avail != rows_avail() || old_off != first_win().w_winrow {
         new_screen_rows();
     }
-    if TabPage::current().tp_old_columns != Columns.get() as int64_t {
+    if TabPage::current().tp_old_columns != int64_t::from(Columns.get()) {
         if starting.get() == 0 {
             new_screen_cols(); // update window widths
-            TabPage::current().tp_old_columns = Columns.get() as int64_t;
+            TabPage::current().tp_old_columns = int64_t::from(Columns.get());
         } else {
             TabPage::current().tp_old_columns = -1 as int64_t; // update window widths later
         }

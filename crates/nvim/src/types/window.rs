@@ -193,7 +193,7 @@ pub struct Window {
     pub w_set_curswant: bool,
     pub w_cursorline: LineNr,
     pub w_last_cursorline: LineNr,
-    pub w_old_visual_mode: ::core::ffi::c_char,
+    pub w_old_visual_mode: ::core::ffi::c_int,
     pub w_old_cursor_lnum: LineNr,
     pub w_old_cursor_fcol: ColNr,
     pub w_old_cursor_lcol: ColNr,

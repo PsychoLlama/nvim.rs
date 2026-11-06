@@ -87,15 +87,11 @@ fn splitmove_options(opts: &TypVal) -> (c_int, c_int) {
     let d = (*opts).dict_ref();
     let mut flags = 0;
     if dict_get_number(d, b"vertical") != 0 {
-        flags |= WSP_VERT.cast_signed();
+        flags |= WSP_VERT;
     }
     if let Some(di) = dict_find(d, b"rightbelow") {
         let below = tv_get_number(&di.di_tv);
-        flags |= if below != 0 {
-            WSP_BELOW.cast_signed()
-        } else {
-            WSP_ABOVE.cast_signed()
-        };
+        flags |= if below != 0 { WSP_BELOW } else { WSP_ABOVE };
     }
     (flags, number_as_int(dict_get_number(d, b"size")))
 }

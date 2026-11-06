@@ -191,7 +191,7 @@ pub use self::progress::*;
 mod errors;
 pub use self::errors::*;
 /// The compositor layer messages float on.
-pub const kZIndexMessages: c_uint = 200;
+pub const kZIndexMessages: ::core::ffi::c_int = 200;
 /// [`do_dialog`] answers, as `confirm()` reports them.
 pub const VIM_DISCARDALL: c_uint = 6;
 pub const VIM_ALL: c_uint = 5;

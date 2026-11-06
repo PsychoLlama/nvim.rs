@@ -7,6 +7,13 @@
 //! (`eval_has_provider`/`eval_call_provider` run user code that may
 //! reenter this module).
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
@@ -260,7 +267,7 @@ pub(crate) fn set_clipboard(mut name: RegName, reg: Reg) {
             // decide the type.
             _ => ::std::process::abort(),
         };
-        let lines = tv_list_alloc(reg.lines.len() as ptrdiff_t + ptrdiff_t::from(trailing));
+        let lines = tv_list_alloc(reg.lines.len().cast_signed() + ptrdiff_t::from(trailing));
         for line in reg.lines.iter() {
             lines.edit().push_bytes(Some(line));
         }

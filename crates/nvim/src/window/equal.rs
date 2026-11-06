@@ -9,8 +9,16 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
+use crate::narrow::number_as_int;
 use core::ffi::c_int;
 
 use super::arith::NextCurwin;
@@ -66,9 +74,9 @@ fn equal_rec(
     width: c_int,
     height: c_int,
 ) {
-    if topfr.fr_layout as c_int == FR_LEAF {
+    if c_int::from(topfr.fr_layout) == FR_LEAF {
         equal_leaf(topfr, col, row, width, height);
-    } else if topfr.fr_layout as c_int == FR_ROW {
+    } else if c_int::from(topfr.fr_layout) == FR_ROW {
         equal_row(next_curwin, current, topfr, dir, col, row, width, height);
     } else {
         equal_col(next_curwin, current, topfr, dir, col, row, width, height);
@@ -152,7 +160,7 @@ fn equal_row(
             // The maximum number of windows horizontally in "fr".
             let n = minwidth(fr, NextCurwin::NoWin);
             let sep = if fr.next().is_none() { sh.extra_sep } else { 0 };
-            wincount = (n + sep) / (p_wmw() as c_int + 1);
+            wincount = (n + sep) / (number_as_int(p_wmw()) + 1);
             let m = minwidth(fr, NextCurwin::of(next_curwin));
             let hnc = sh.has_next_curwin && frame_has_win(fr, Some(next_curwin));
             if hnc {
@@ -165,7 +173,7 @@ fn equal_row(
             };
             if hnc {
                 // Add next_curwin's own size on top of its share.
-                sh.next_curwin_size -= p_wiw() as c_int - (m - n);
+                sh.next_curwin_size -= number_as_int(p_wiw()) - (m - n);
                 sh.next_curwin_size = sh.next_curwin_size.max(0);
                 new_size += sh.next_curwin_size;
                 sh.room -= new_size - sh.next_curwin_size;
@@ -197,7 +205,7 @@ fn row_share(next_curwin: Win, topfr: FrameRef, col: c_int, width: c_int) -> Sha
     // one has no separator, so it is worth one extra column.
     let mut n = minwidth(topfr, NextCurwin::NoWin);
     let extra_sep = if col + width == Columns.get() { 1 } else { 0 };
-    let mut totwincount = (n + extra_sep) / (p_wmw() as c_int + 1);
+    let mut totwincount = (n + extra_sep) / (number_as_int(p_wmw()) + 1);
     let has_next_curwin = frame_has_win(topfr, Some(next_curwin));
 
     // "m" is the minimal width when counting 'winwidth' for "next_curwin".
@@ -205,7 +213,7 @@ fn row_share(next_curwin: Win, topfr: FrameRef, col: c_int, width: c_int) -> Sha
     let mut room = width - m;
     let mut next_curwin_size;
     if room < 0 {
-        next_curwin_size = p_wiw() as c_int + room;
+        next_curwin_size = number_as_int(p_wiw()) + room;
         room = 0;
     } else {
         next_curwin_size = -1;
@@ -218,13 +226,13 @@ fn row_share(next_curwin: Win, topfr: FrameRef, col: c_int, width: c_int) -> Sha
             n = minwidth(fr, NextCurwin::NoWin);
             let mut new_size = fr.fr_width;
             if frame_has_win(fr, Some(next_curwin)) {
-                room += p_wiw() as c_int - p_wmw() as c_int;
+                room += number_as_int(p_wiw()) - number_as_int(p_wmw());
                 next_curwin_size = 0;
-                new_size = new_size.max(p_wiw() as c_int);
+                new_size = new_size.max(number_as_int(p_wiw()));
             } else {
                 // These windows don't use up room.
                 let sep = if fr.next().is_none() { extra_sep } else { 0 };
-                totwincount -= (n + sep) / (p_wmw() as c_int + 1);
+                totwincount -= (n + sep) / (number_as_int(p_wmw()) + 1);
             }
             room -= new_size - n;
             if room < 0 {
@@ -237,18 +245,19 @@ fn row_share(next_curwin: Win, topfr: FrameRef, col: c_int, width: c_int) -> Sha
             if !has_next_curwin {
                 next_curwin_size = 0;
             } else if totwincount > 1
-                && ((room + (totwincount - 2)) / (totwincount - 1)) as OptInt > p_wiw()
+                && OptInt::from((room + (totwincount - 2)) / (totwincount - 1)) > p_wiw()
             {
                 // Can make all windows wider than 'winwidth': spread the room
                 // equally.
-                next_curwin_size = (room as OptInt
-                    + p_wiw()
-                    + (totwincount - 1) as OptInt * p_wmw()
-                    + (totwincount - 1) as OptInt) as c_int
-                    / totwincount;
-                room -= next_curwin_size - p_wiw() as c_int;
+                next_curwin_size = number_as_int(
+                    OptInt::from(room)
+                        + p_wiw()
+                        + OptInt::from(totwincount - 1) * p_wmw()
+                        + OptInt::from(totwincount - 1),
+                ) / totwincount;
+                room -= next_curwin_size - number_as_int(p_wiw());
             } else {
-                next_curwin_size = p_wiw() as c_int;
+                next_curwin_size = number_as_int(p_wiw());
             }
         }
     }
@@ -310,7 +319,7 @@ fn equal_col(
             };
             if hnc {
                 // Upstream clamps at zero on the width axis and not here.
-                sh.next_curwin_size -= p_wh() as c_int - (m - n);
+                sh.next_curwin_size -= number_as_int(p_wh()) - (m - n);
                 new_size += sh.next_curwin_size;
                 sh.room -= new_size - sh.next_curwin_size;
             } else {
@@ -339,7 +348,7 @@ fn col_share(next_curwin: Win, topfr: FrameRef, row: c_int, height: c_int) -> Sh
     // Add one for the bottom window if it has neither status line nor
     // separator.
     let extra_sep = if row + height >= cmdline_row.get() && p_ls() == 0 as OptInt {
-        STATUS_HEIGHT as c_int
+        STATUS_HEIGHT
     } else if global_stl_rows() > 0 {
         1
     } else {
@@ -354,7 +363,7 @@ fn col_share(next_curwin: Win, topfr: FrameRef, row: c_int, height: c_int) -> Sh
     if room < 0 {
         // The room is less than 'winheight': use all space for the current
         // window.
-        next_curwin_size = p_wh() as c_int + room;
+        next_curwin_size = number_as_int(p_wh()) + room;
         room = 0;
     } else {
         next_curwin_size = -1;
@@ -365,9 +374,9 @@ fn col_share(next_curwin: Win, topfr: FrameRef, row: c_int, height: c_int) -> Sh
             n = minheight(fr, NextCurwin::NoWin);
             let mut new_size = fr.fr_height;
             if frame_has_win(fr, Some(next_curwin)) {
-                room += p_wh() as c_int - p_wmh() as c_int;
+                room += number_as_int(p_wh()) - number_as_int(p_wmh());
                 next_curwin_size = 0;
-                new_size = new_size.max(p_wh() as c_int);
+                new_size = new_size.max(number_as_int(p_wh()));
             } else {
                 let sep = if fr.next().is_none() { extra_sep } else { 0 };
                 totwincount -= max_wincount(fr, n + sep);
@@ -383,16 +392,17 @@ fn col_share(next_curwin: Win, topfr: FrameRef, row: c_int, height: c_int) -> Sh
             if !has_next_curwin {
                 next_curwin_size = 0;
             } else if totwincount > 1
-                && ((room + (totwincount - 2)) / (totwincount - 1)) as OptInt > p_wh()
+                && OptInt::from((room + (totwincount - 2)) / (totwincount - 1)) > p_wh()
             {
-                next_curwin_size = (room as OptInt
-                    + p_wh()
-                    + (totwincount - 1) as OptInt * p_wmh()
-                    + (totwincount - 1) as OptInt) as c_int
-                    / totwincount;
-                room -= next_curwin_size - p_wh() as c_int;
+                next_curwin_size = number_as_int(
+                    OptInt::from(room)
+                        + p_wh()
+                        + OptInt::from(totwincount - 1) * p_wmh()
+                        + OptInt::from(totwincount - 1),
+                ) / totwincount;
+                room -= next_curwin_size - number_as_int(p_wh());
             } else {
-                next_curwin_size = p_wh() as c_int;
+                next_curwin_size = number_as_int(p_wh());
             }
         }
     }

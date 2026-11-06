@@ -155,7 +155,7 @@ pub(crate) fn read_stdin() {
     let save_msg_didany = msg_didany.get();
 
     if !Buf::current().name.full().is_none() {
-        let Some(stdin_buf) = buflist_add_name(None, LineNr::ZERO, BLN_LISTED.cast_signed()) else {
+        let Some(stdin_buf) = buflist_add_name(None, LineNr::ZERO, BLN_LISTED) else {
             semsg!("Failed to create buffer for stdin");
             return;
         };

@@ -150,7 +150,7 @@ pub fn nvim_buf_set_virtual_text(
 
     let vt = DecorVirtText {
         flags: 0 as uint8_t,
-        hl_mode: u8::try_from(kHlModeUnknown).expect("a highlight mode fits its byte"),
+        hl_mode: kHlModeUnknown,
         priority: 0 as DecorPriority,
         width,
         col: 0 as ::core::ffi::c_int,

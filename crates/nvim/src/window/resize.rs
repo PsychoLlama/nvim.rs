@@ -12,8 +12,16 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
+use crate::narrow::number_as_int;
 use core::ffi::c_int;
 
 use super::arith::NextCurwin;
@@ -181,7 +189,7 @@ pub(crate) fn fix_cursor(normal: bool) {
     }
     wp.w_do_win_fix_cursor = false;
     // Determine the first and last line of the window, `'scrolloff'` included.
-    let so = scrolloff(wp).min((wp.w_view_height / 2) as ::core::ffi::c_long) as c_int;
+    let so = number_as_int(scrolloff(wp).min(::core::ffi::c_long::from(wp.w_view_height / 2)));
     let lnum = wp.w_cursor.lnum;
     wp.w_cursor.lnum = wp.w_topline;
     cursor_down(wp, so);
@@ -281,7 +289,7 @@ pub(crate) fn to_fraction(window: Win, prev_height: c_int) {
                 }
                 if lnum == LineNr::ONE {
                     // The first line in the buffer is folded.
-                    line_size = !decor_conceal_line(window, 0, false) as c_int;
+                    line_size = c_int::from(!decor_conceal_line(window, 0, false));
                     sline -= 1;
                     break;
                 }
@@ -373,7 +381,7 @@ pub(crate) fn set_inner_size(window: Win, valid_cursor: bool) {
 
     let (border_height, border_width) = (win_border_height(window), win_border_width(window));
     let float_stl = if window.w_floating && window.w_status_height != 0 {
-        STATUS_HEIGHT as c_int
+        STATUS_HEIGHT
     } else {
         0
     };
@@ -387,10 +395,10 @@ pub(crate) fn set_inner_size(window: Win, valid_cursor: bool) {
             ui_call_win_viewport_margins(
                 Integer::from(window.w_grid_alloc.handle),
                 window.handle as WindowHandle,
-                window.w_winrow_off as Integer,
-                window.w_border_adj[2] as Integer,
-                window.w_wincol_off as Integer,
-                window.w_border_adj[1] as Integer,
+                Integer::from(window.w_winrow_off),
+                Integer::from(window.w_border_adj[2]),
+                Integer::from(window.w_wincol_off),
+                Integer::from(window.w_border_adj[1]),
             );
         }
     }
@@ -416,7 +424,7 @@ pub fn win_default_scroll(window: Win) -> OptInt {
 /// The `'scroll'` a window gets when the option is not set by hand: half its
 /// height, and never less than one.
 pub(crate) fn default_scroll(window: Win) -> OptInt {
-    (window.w_view_height / 2).max(1) as OptInt
+    OptInt::from((window.w_view_height / 2).max(1))
 }
 
 pub fn win_comp_scroll(window: Win) {
@@ -440,7 +448,7 @@ pub(crate) fn comp_scroll(window: Win) {
 // The rows that are not text
 
 pub fn command_height() {
-    let mut old_p_ch = TabPage::current().tp_ch_used as c_int;
+    let mut old_p_ch = number_as_int(TabPage::current().tp_ch_used);
     // Find the last frame that spans the whole width and is not pinned by
     // 'winfixheight', which is the one the command line trades rows with.
     let mut frp = Some(lastwin_nofloating(None).frame());
@@ -453,33 +461,33 @@ pub fn command_height() {
     }
     while let Some(fr) = frp.filter(|fr| {
         fr.prev().is_some()
-            && fr.fr_layout as c_int == FR_LEAF
+            && c_int::from(fr.fr_layout) == FR_LEAF
             && fr.win().is_some_and(|w| w.w_onebuf_opt.wo_wfh != 0)
     }) {
         frp = fr.prev();
     }
 
-    while p_ch() > old_p_ch as OptInt && command_frame_height.get() {
+    while p_ch() > OptInt::from(old_p_ch) && command_frame_height.get() {
         let Some(fr) = frp else {
             err(e_noroom);
-            P_CH.set(old_p_ch as OptInt);
+            P_CH.set(OptInt::from(old_p_ch));
             break;
         };
         let spare = fr.fr_height - minheight(fr, NextCurwin::Unset);
-        let h = ((p_ch() - old_p_ch as OptInt) as c_int).min(spare);
+        let h = number_as_int(p_ch() - OptInt::from(old_p_ch)).min(spare);
         add_height(fr, -h);
         old_p_ch += h;
         frp = fr.prev();
     }
-    if p_ch() < old_p_ch as OptInt
+    if p_ch() < OptInt::from(old_p_ch)
         && command_frame_height.get()
         && let Some(fr) = frp
     {
-        add_height(fr, (old_p_ch as OptInt - p_ch()) as c_int);
+        add_height(fr, number_as_int(OptInt::from(old_p_ch) - p_ch()));
     }
 
     comp_positions();
-    cmdline_row.set(Rows.get() - p_ch() as c_int);
+    cmdline_row.set(Rows.get() - number_as_int(p_ch()));
     redraw_cmdline.set(true);
     if msg_scrolled.get() == 0 && full_screen.get() {
         let mut grid = default_gridview();
@@ -539,7 +547,7 @@ pub(crate) fn remove_status_line(window: Win, add_hsep: bool) {
         } else {
             window.w_height
         };
-        new_win_height(window, text + STATUS_HEIGHT as c_int);
+        new_win_height(window, text + STATUS_HEIGHT);
     }
     comp_col();
     window.w_click_defs.status = ClickLine::default();
@@ -556,7 +564,7 @@ fn resizable_frame(fr: FrameRef) -> Option<FrameRef> {
         }
         let parent = fp.parent().expect("not the top frame");
         fp = match fp.prev() {
-            Some(prev) if parent.fr_layout as c_int == FR_COL => prev,
+            Some(prev) if c_int::from(parent.fr_layout) == FR_COL => prev,
             _ => parent,
         };
     }
@@ -609,7 +617,7 @@ fn last_status_rec(fr: FrameRef, statusline: bool, is_stl_global: bool) {
             remove_status_line(wp, false);
         } else if wp.w_status_height == 0 && !is_stl_global && statusline {
             // Add a status line, taking a row from wherever there is one.
-            wp.w_status_height = STATUS_HEIGHT as c_int;
+            wp.w_status_height = STATUS_HEIGHT;
             if !resize_frame_for_status(fr) {
                 return;
             }
@@ -621,7 +629,7 @@ fn last_status_rec(fr: FrameRef, statusline: bool, is_stl_global: bool) {
     } else if wp.w_status_height != 0 && is_stl_global {
         remove_status_line(wp, true);
     } else if wp.w_status_height == 0 && !is_stl_global {
-        wp.w_status_height = STATUS_HEIGHT as c_int;
+        wp.w_status_height = STATUS_HEIGHT;
         wp.w_hsep_height = 0;
         comp_col();
     }
@@ -648,9 +656,9 @@ pub(crate) fn set_winbar_win(
     let global = p_wbr(|value| c_int::from(value.to_bytes().first().copied().unwrap_or(0)));
     let local = c_int::from(window.w_onebuf_opt.wo_wbr.first_byte());
     let winbar_height = if window.w_floating {
-        (local != NUL) as c_int
+        c_int::from(local != NUL)
     } else {
-        (global != NUL || local != NUL) as c_int
+        c_int::from(global != NUL || local != NUL)
     };
     if window.w_winbar_height != winbar_height {
         if winbar_height == 1 && window.w_view_height <= 1 {
@@ -703,7 +711,7 @@ pub fn global_winbar_height() -> c_int {
 
 /// The rows a global `'winbar'` takes off every window.
 pub(crate) fn global_winbar_rows() -> c_int {
-    (P_WBR.first_byte() != 0) as c_int
+    c_int::from(P_WBR.first_byte() != 0)
 }
 
 pub(crate) fn global_stl_height() -> c_int {
@@ -713,7 +721,7 @@ pub(crate) fn global_stl_height() -> c_int {
 /// The rows a global status line (`'laststatus'` = 3) takes.
 pub(crate) fn global_stl_rows() -> c_int {
     if p_ls() == 3 as OptInt {
-        STATUS_HEIGHT as c_int
+        STATUS_HEIGHT
     } else {
         0
     }
@@ -728,7 +736,7 @@ pub fn last_stl_height(morewin: bool) -> c_int {
 pub(crate) fn last_stl_rows(morewin: bool) -> c_int {
     let alone = is_only_window(first_window(), None);
     if p_ls() > 1 as OptInt || (p_ls() == 1 as OptInt && (morewin || !alone)) {
-        STATUS_HEIGHT as c_int
+        STATUS_HEIGHT
     } else {
         0
     }
@@ -746,7 +754,7 @@ pub fn min_rows(tabpage: TabPage) -> c_int {
 /// The fewest rows tab page `tabpage` can be drawn in.
 pub(crate) fn min_rows_of(tabpage: TabPage) -> c_int {
     if windows().next().is_none() {
-        return MIN_LINES as c_int;
+        return MIN_LINES;
     }
     let mut total = minheight(tabpage.topframe(), NextCurwin::Unset);
     total += tabline_rows() + global_stl_rows();
@@ -773,7 +781,7 @@ pub fn min_rows_for_all_tabpages() -> c_int {
 /// The fewest rows every tab page can be drawn in at once.
 pub(crate) fn min_rows_all_tabpages() -> c_int {
     if windows().next().is_none() {
-        return MIN_LINES as c_int;
+        return MIN_LINES;
     }
     let mut total = 0;
     for tp in tabs() {

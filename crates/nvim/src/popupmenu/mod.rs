@@ -95,9 +95,9 @@ pub use self::menu::*;
 pub const kAlignLeft: AlignTextPos = 0;
 pub const kWinStyleUnused: WinStyle = 0;
 pub const kWinSplitLeft: WinSplit = 0;
-pub const kZIndexCmdlinePopupMenu: c_uint = 250;
-pub const kZIndexPopupMenu: c_uint = 100;
-pub const kZIndexFloatDefault: c_uint = 50;
+pub const kZIndexCmdlinePopupMenu: ::core::ffi::c_int = 250;
+pub const kZIndexPopupMenu: ::core::ffi::c_int = 100;
+pub const kZIndexFloatDefault: ::core::ffi::c_int = 50;
 pub(crate) use crate::insexpand::{CPT_ABBR, CPT_KIND, CPT_MENU};
 pub const DEFAULT_GRID_HANDLE: c_int = 1;
 
@@ -380,9 +380,9 @@ pub fn pum_display(
 
     let mut grid = pum_grid_ref();
     grid.zindex = if State.get() & MODE_CMDLINE != 0 {
-        kZIndexCmdlinePopupMenu.cast_signed()
+        kZIndexCmdlinePopupMenu
     } else {
-        kZIndexPopupMenu.cast_signed()
+        kZIndexPopupMenu
     };
     pum_redraw();
 }

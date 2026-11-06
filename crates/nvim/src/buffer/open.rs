@@ -16,11 +16,19 @@
 //!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
 use crate::memline::MlFlags;
+use crate::narrow::number_as_int;
 use crate::types::AutoEvent;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
@@ -42,7 +50,7 @@ use crate::os::fs::getperm;
 use crate::pos::MAXLNUM;
 use crate::startup::{getout, readonlymode, v_dying};
 use crate::types::{
-    AcoSave, ColNr, CpoFlag, ExArg, Failed, Handle, LineNr, NUL, OptInt, OptVal, OptionSetFlags,
+    AcoSave, ColNr, CpoFlag, ExArg, Failed, Handle, LineNr, OptInt, OptVal, OptionSetFlags,
     ShmFlag, VarNumber, int64_t,
 };
 use crate::winlayer::buffers;
@@ -171,9 +179,9 @@ pub fn calc_percentage(part: int64_t, whole: int64_t) -> c_int {
     // With 32 bit longs and more than 21,474,836 lines multiplying by 100
     // causes an overflow, thus for large numbers divide instead.
     if part > 1000000 {
-        (part / (whole / 100)) as c_int
+        number_as_int(part / (whole / 100))
     } else {
-        (part * 100 / whole) as c_int
+        number_as_int(part * 100 / whole)
     }
 }
 
@@ -486,7 +494,7 @@ fn no_memfile(old_tw: OptInt) -> Result<(), Failed> {
 pub fn buf_contents_changed(buffer: Buf) -> bool {
     let mut differ = true;
 
-    let newbuf = buflist_new(None, None, LineNr::ONE, BLN_DUMMY as c_int);
+    let newbuf = buflist_new(None, None, LineNr::ONE, BLN_DUMMY);
     if newbuf.is_none() {
         return true;
     }
@@ -560,16 +568,13 @@ pub fn read_buffer_into(buffer: Buf, start: LineNr, end: LineNr, out: &mut Vec<u
     loop {
         // NL -> NUL translation.
         let line = lines.line(lnum);
-        out.extend(
-            line.iter()
-                .map(|&b| if b == NL as u8 { NUL as u8 } else { b }),
-        );
+        out.extend(line.iter().map(|&b| if b == b'\n' { b'\0' } else { b }));
         // Finished a line, add a NL, unless this line should not have one.
         if lnum != end
             || buffer.b_p_bin == 0 && buffer.b_p_fixeol != 0
             || lnum != buffer.b_no_eol_lnum && (lnum != buffer.line_count() || buffer.b_p_eol != 0)
         {
-            out.push(NL as u8);
+            out.push(b'\n');
         }
         lnum += 1;
         if lnum > end {

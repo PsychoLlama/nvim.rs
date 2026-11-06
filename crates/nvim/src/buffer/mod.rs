@@ -42,6 +42,13 @@
 //!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
@@ -50,7 +57,6 @@ pub(crate) mod state;
 use crate::autocmd::fire_autocmds;
 use crate::ex_cmds::EcmdFlags;
 use crate::types::AutoEvent;
-use crate::types::NL;
 use crate::winlayer::BufId;
 use core::ffi::{CStr, c_int};
 use core::ptr;
@@ -139,7 +145,7 @@ pub const DOBUF_GOTO: DoBufAction = 0;
 pub const DOBUF_MOD: DoBufStart = 3;
 pub const DOBUF_FIRST: DoBufStart = 1;
 pub const DOBUF_CURRENT: DoBufStart = 0;
-pub type DoBufFlags = ::core::ffi::c_uint;
+pub type DoBufFlags = ::core::ffi::c_int;
 pub const DOBUF_SKIPHELP: DoBufFlags = 4;
 pub const DOBUF_FORCEIT: DoBufFlags = 1;
 pub const BFA_IGNORE_ABORT: BfaFlags = 8;
@@ -153,11 +159,11 @@ pub const READ_STDIN: ::core::ffi::c_uint = 4;
 pub const READ_NEW: ::core::ffi::c_uint = 1;
 pub const READ_FIFO: ::core::ffi::c_uint = 64;
 pub const READ_NOFILE: ::core::ffi::c_uint = 256;
-pub const BCO_NOHELP: ::core::ffi::c_uint = 4;
-pub const BCO_ENTER: ::core::ffi::c_uint = 1;
-pub const kBffInitChangedtick: ::core::ffi::c_uint = 2;
-pub const kBffClearWinInfo: ::core::ffi::c_uint = 1;
-pub const BCO_ALWAYS: ::core::ffi::c_uint = 2;
+pub const BCO_NOHELP: ::core::ffi::c_int = 4;
+pub const BCO_ENTER: ::core::ffi::c_int = 1;
+pub const kBffInitChangedtick: ::core::ffi::c_int = 2;
+pub const kBffClearWinInfo: ::core::ffi::c_int = 1;
+pub const BCO_ALWAYS: ::core::ffi::c_int = 2;
 pub struct BufMatch {
     /// Matched and sorted within the one expansion call.
     pub buf: Buf,
@@ -201,7 +207,7 @@ crate::flag_set! {
     /// from the buffer it wrote into the one it wrote *for*.
     const WRITE_MASK = 0x8 | 0x10 | 0x40;
 }
-pub const KEYMAP_INIT: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
+pub const KEYMAP_INIT: ::core::ffi::c_short = 1;
 pub const NMARKS: ::core::ffi::c_int =
     'z' as ::core::ffi::c_int - 'a' as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;

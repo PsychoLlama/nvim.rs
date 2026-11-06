@@ -125,11 +125,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> Result<(), NotClos
     }
 
     let bufref = BufRef::of_opt(win.buffer_or_none());
-    let action = if free_buf {
-        DOBUF_UNLOAD.cast_signed()
-    } else {
-        0
-    };
+    let action = if free_buf { DOBUF_UNLOAD } else { 0 };
     let did_decrement = close_win_buffer(win, action, true);
 
     if valid_win(win.id()).is_some()
@@ -247,8 +243,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> Result<(), NotClos
     }
 
     if close_curwin {
-        let flags = (WEE_CURWIN_INVALID | WEE_TRIGGER_ENTER_AUTOCMDS | WEE_TRIGGER_LEAVE_AUTOCMDS)
-            .cast_signed();
+        let flags = WEE_CURWIN_INVALID | WEE_TRIGGER_ENTER_AUTOCMDS | WEE_TRIGGER_LEAVE_AUTOCMDS;
         enter_ext(wp, flags);
         if other_buffer {
             // careful: after this `wp` and `win` may be invalid!
@@ -530,11 +525,7 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tabpage: TabPage, force: 
         bufref = BufRef::of_opt(win.buffer_or_none());
         if let Some(buf) = win.buffer_or_none() {
             // Close the link to the buffer.
-            let action = if free_buf {
-                DOBUF_UNLOAD.cast_signed()
-            } else {
-                0
-            };
+            let action = if free_buf { DOBUF_UNLOAD } else { 0 };
             did_decrement = close_buffer(Some(win), buf, action, false, true);
         }
 

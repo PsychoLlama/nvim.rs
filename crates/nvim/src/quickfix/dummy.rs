@@ -63,13 +63,13 @@ pub(crate) fn load_dummy_buffer(
     resulting_dir: &mut Option<XString>,
 ) -> Option<Buf> {
     // Allocate a buffer without putting it in the buffer list.
-    let mut newbuf = buflist_add_name(None, LineNr::ONE, BLN_DUMMY.cast_signed())?;
+    let mut newbuf = buflist_add_name(None, LineNr::ONE, BLN_DUMMY)?;
 
     let mut failed = true;
     let newbufref = BufRef::of(newbuf);
 
     // Init the options.
-    buf_copy_options(newbuf, (BCO_ENTER | BCO_NOHELP).cast_signed());
+    buf_copy_options(newbuf, BCO_ENTER | BCO_NOHELP);
 
     // Need to open the memfile before putting the buffer in a window.
     if ml_open(newbuf).is_ok() {
@@ -176,7 +176,7 @@ pub(crate) fn unload_dummy_buffer(buffer: Buf, dirname_start: &CStr) {
     if Buf::current_or_none() == Some(buffer) {
         return;
     }
-    close_buffer(None, buffer, DOBUF_UNLOAD.cast_signed(), false, true);
+    close_buffer(None, buffer, DOBUF_UNLOAD, false, true);
 
     // When autocommands/'autochdir' option changed directory: go back.
     restore_start_dir(dirname_start);

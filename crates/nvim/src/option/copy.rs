@@ -294,17 +294,17 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
         return;
     }
 
-    let entering = flags & BCO_ENTER.cast_signed() != 0;
+    let entering = flags & BCO_ENTER != 0;
     let keep_global = !cpo_has(CpoFlag::BUFOPTGLOB) || !entering;
     let keep_local = b.b_p_initialized || (!entering && cpo_has(CpoFlag::BUFOPT));
     let should_copy = !(keep_global && keep_local);
 
-    if should_copy || flags & BCO_ALWAYS.cast_signed() != 0 {
+    if should_copy || flags & BCO_ALWAYS != 0 {
         b.b_p_script_ctx.fill(ScriptCtx::NONE);
 
         // A help buffer keeps its own settings when it already has them
         // — jumping back to one with CTRL-T or CTRL-O must not reset it.
-        let dont_do_help = (flags & BCO_NOHELP.cast_signed() != 0 && b.b_help) || b.b_p_initialized;
+        let dont_do_help = (flags & BCO_NOHELP != 0 && b.b_help) || b.b_p_initialized;
         // 'iskeyword' is the one string that survives the free below.
         let save_p_isk = if dont_do_help { b.b_p_isk.take() } else { None };
 

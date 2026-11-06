@@ -115,14 +115,9 @@ pub(crate) fn do_exbuffer(excmd: &mut ExArg) {
         return;
     }
     if excmd.addr_count == 0 {
-        goto_buffer(excmd, DOBUF_CURRENT as c_int, FORWARD as c_int, 0);
+        goto_buffer(excmd, DOBUF_CURRENT, FORWARD as c_int, 0);
     } else {
-        goto_buffer(
-            excmd,
-            DOBUF_FIRST as c_int,
-            FORWARD as c_int,
-            excmd.line2.get(),
-        );
+        goto_buffer(excmd, DOBUF_FIRST, FORWARD as c_int, excmd.line2.get());
     }
     run_ecmd_cmd(excmd);
 }
@@ -136,46 +131,31 @@ fn run_ecmd_cmd(excmd: &mut ExArg) {
 
 /// `:bmodified`.
 pub(crate) fn ex_bmodified(excmd: &mut ExArg) {
-    goto_buffer(
-        excmd,
-        DOBUF_MOD as c_int,
-        FORWARD as c_int,
-        excmd.line2.get(),
-    );
+    goto_buffer(excmd, DOBUF_MOD, FORWARD as c_int, excmd.line2.get());
     run_ecmd_cmd(excmd);
 }
 
 /// `:bnext`.
 pub(crate) fn ex_bnext(excmd: &mut ExArg) {
-    goto_buffer(
-        excmd,
-        DOBUF_CURRENT as c_int,
-        FORWARD as c_int,
-        excmd.line2.get(),
-    );
+    goto_buffer(excmd, DOBUF_CURRENT, FORWARD as c_int, excmd.line2.get());
     run_ecmd_cmd(excmd);
 }
 
 /// `:bprevious` and `:bNext`.
 pub(crate) fn ex_bprevious(excmd: &mut ExArg) {
-    goto_buffer(
-        excmd,
-        DOBUF_CURRENT as c_int,
-        BACKWARD as c_int,
-        excmd.line2.get(),
-    );
+    goto_buffer(excmd, DOBUF_CURRENT, BACKWARD as c_int, excmd.line2.get());
     run_ecmd_cmd(excmd);
 }
 
 /// `:brewind` and `:bfirst`.
 pub(crate) fn ex_brewind(excmd: &mut ExArg) {
-    goto_buffer(excmd, DOBUF_FIRST as c_int, FORWARD as c_int, 0);
+    goto_buffer(excmd, DOBUF_FIRST, FORWARD as c_int, 0);
     run_ecmd_cmd(excmd);
 }
 
 /// `:blast`.
 pub(crate) fn ex_blast(excmd: &mut ExArg) {
-    goto_buffer(excmd, DOBUF_LAST as c_int, BACKWARD as c_int, 0);
+    goto_buffer(excmd, DOBUF_LAST, BACKWARD as c_int, 0);
     run_ecmd_cmd(excmd);
 }
 

@@ -1,3 +1,10 @@
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 //! Paired marks: the second key, and the records of what a range covers.
@@ -16,6 +23,7 @@
 //! records, and [`pseudo_index_for_id`] is how the rebalancer decides which
 //! side of a moving boundary a half sits on without walking to it.
 
+use crate::narrow::as_index;
 use core::ffi::c_int;
 
 use crate::marktree::iter::marktree_itr_next_skip;
@@ -49,7 +57,7 @@ fn iat(iter: &MarkTreeIter, depth: c_int, q: c_int) -> c_int {
     if depth == iter.depth {
         iter.index + q
     } else {
-        iter.path[depth as usize].index
+        iter.path[as_index(depth)].index
     }
 }
 
@@ -73,8 +81,8 @@ pub fn marktree_intersect_pair(
     let max_depth = iter.depth.min(end_iter.depth);
     while depth < max_depth {
         let (here, there) = (
-            iter.path[depth as usize].index,
-            end_iter.path[depth as usize].index,
+            iter.path[as_index(depth)].index,
+            end_iter.path[as_index(depth)].index,
         );
         if here > there {
             return; // empty range
@@ -102,7 +110,7 @@ pub fn marktree_intersect_pair(
         // Stepping over a subtree is exactly the case where the range covers
         // the whole of it, so that is where the record goes.
         if skip && !tree[x].is_leaf() {
-            let covered = tree[x].child((iter.index + 1) as usize);
+            let covered = tree[x].child(as_index(iter.index + 1));
             if delete {
                 unintersect_node(tree, covered, id, true);
             } else {

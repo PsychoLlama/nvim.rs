@@ -135,13 +135,13 @@ fn parse_mods(cmdmod: &CmdMod) -> ApiDict {
     let flag = |mask: CmdModFlags| Object::boolean(cmdmod.cmod_flags.has(mask));
     let split_flag = |mask: c_int| Object::boolean(cmdmod.cmod_split & mask != 0);
     // The four placements are mutually exclusive; no modifier is "".
-    let split: &CStr = if cmdmod.cmod_split & WSP_BOT.cast_signed() != 0 {
+    let split: &CStr = if cmdmod.cmod_split & WSP_BOT != 0 {
         c"botright"
-    } else if cmdmod.cmod_split & WSP_TOP.cast_signed() != 0 {
+    } else if cmdmod.cmod_split & WSP_TOP != 0 {
         c"topleft"
-    } else if cmdmod.cmod_split & WSP_BELOW.cast_signed() != 0 {
+    } else if cmdmod.cmod_split & WSP_BELOW != 0 {
         c"belowright"
-    } else if cmdmod.cmod_split & WSP_ABOVE.cast_signed() != 0 {
+    } else if cmdmod.cmod_split & WSP_ABOVE != 0 {
         c"aboveleft"
     } else {
         c""
@@ -170,8 +170,8 @@ fn parse_mods(cmdmod: &CmdMod) -> ApiDict {
         (c"keeppatterns", flag(CmdModFlags::KEEPPATTERNS)),
         (c"lockmarks", flag(CmdModFlags::LOCKMARKS)),
         (c"noswapfile", flag(CmdModFlags::NOSWAPFILE)),
-        (c"vertical", split_flag(WSP_VERT.cast_signed())),
-        (c"horizontal", split_flag(WSP_HOR.cast_signed())),
+        (c"vertical", split_flag(WSP_VERT)),
+        (c"horizontal", split_flag(WSP_HOR)),
         (c"split", Object::string(ApiString::from_cstr(split))),
     ])
 }

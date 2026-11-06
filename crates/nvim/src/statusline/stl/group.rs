@@ -9,8 +9,16 @@
 //!
 //! Original: `src/nvim/statusline.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
+use crate::narrow::as_index;
 use core::ffi::c_int;
 
 use super::{Fill, Kind, StlScratch, cells_at, char_len_at, strsize_at};
@@ -27,7 +35,7 @@ pub(super) fn close(
     fill: &Fill,
 ) -> usize {
     *groupdepth -= 1;
-    let gi = s.groupitems[*groupdepth as usize];
+    let gi = s.groupitems[as_index(*groupdepth)];
     let start = s.items[gi].start;
 
     // How long the group is. The write cursor is NUL-terminated first so
@@ -154,10 +162,9 @@ fn truncate(
 
     // Shift the items back by what was dropped, less the one byte the `<`
     // took; anything that was cut away starts at the `<` itself.
-    let offset = dropped as isize - 1;
     for idx in gi + 1..s.curitem {
-        let moved = s.items[idx].start as isize - offset;
-        s.items[idx].start = moved.max(start as isize) as usize;
+        let moved = (s.items[idx].start + 1).saturating_sub(dropped);
+        s.items[idx].start = moved.max(start);
     }
     pos
 }
@@ -177,13 +184,14 @@ fn pad_left(
     fill: &Fill,
 ) -> usize {
     let width = fill.len();
-    let mut added_cells = i64::from(minwid) - group_len;
-    let mut added_bytes = added_cells * width as i64;
-    if pos + added_bytes as usize > end {
-        added_cells = ((end - pos) / width) as i64;
-        added_bytes = added_cells * width as i64;
+    // The caller pads only a group narrower than its minimum.
+    let mut added_cells = usize::try_from(i64::from(minwid) - group_len)
+        .expect("a padded group is narrower than its minimum width");
+    let mut added_bytes = added_cells * width;
+    if pos + added_bytes > end {
+        added_cells = (end - pos) / width;
+        added_bytes = added_cells * width;
     }
-    let added_bytes = added_bytes as usize;
 
     out.copy_within(start..pos, start + added_bytes);
     let pos = pos + added_bytes;

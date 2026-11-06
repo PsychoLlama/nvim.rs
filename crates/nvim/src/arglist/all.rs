@@ -300,7 +300,7 @@ fn open_window_for_arg(
         // Split the current window, taking space from all of them.
         let p_ea_save = p_ea();
         P_EA.set(true);
-        let split_ret = win_split(0, WSP_ROOM as c_int | WSP_BELOW as c_int);
+        let split_ret = win_split(0, WSP_ROOM | WSP_BELOW);
         P_EA.set(p_ea_save);
         split_ret?;
     }

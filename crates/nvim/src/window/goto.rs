@@ -11,9 +11,17 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::memory::XString;
+use crate::narrow::number_as_int;
 use crate::types::AutoEvent;
 use crate::winlayer::WinId;
 use crate::winlayer::prev_window;
@@ -216,25 +224,25 @@ fn neighbor(
             let next = if backwards { fr.prev() } else { fr.next() };
             let parent = fr.parent().expect("not the top frame");
             match next {
-                Some(nfr) if parent.fr_layout as c_int == axis.own() => break nfr,
+                Some(nfr) if c_int::from(parent.fr_layout) == axis.own() => break nfr,
                 _ => fr = parent,
             }
         };
 
         // Now go downwards to find the frame at the far end of it.
         loop {
-            if nfr.fr_layout as c_int == FR_LEAF {
+            if c_int::from(nfr.fr_layout) == FR_LEAF {
                 foundfr = nfr;
                 break;
             }
             let mut fr = nfr.child().expect("a frame that is not a leaf has a child");
-            if nfr.fr_layout as c_int == axis.cross() {
+            if c_int::from(nfr.fr_layout) == axis.cross() {
                 // Find the frame the cursor is at, across the other axis.
                 while fr.next().is_some() && axis.frame_end(fr) <= axis.cursor(window) {
                     fr = fr.next().expect("just tested");
                 }
             }
-            if nfr.fr_layout as c_int == axis.own() && backwards {
+            if c_int::from(nfr.fr_layout) == axis.own() && backwards {
                 fr = frames(Some(fr)).last().expect("at least one");
             }
             nfr = fr;
@@ -252,9 +260,9 @@ pub fn win_enter(window: Win, undo_sync: bool) {
 /// Autocommands may close it immediately, so the caller must re-check it with
 /// [`valid_win`].
 pub(crate) fn enter(window: Win, undo_sync: bool) {
-    let sync = if undo_sync { WEE_UNDO_SYNC as c_int } else { 0 };
-    let enter = WEE_TRIGGER_ENTER_AUTOCMDS as c_int;
-    enter_ext(window, sync | enter | WEE_TRIGGER_LEAVE_AUTOCMDS as c_int);
+    let sync = if undo_sync { WEE_UNDO_SYNC } else { 0 };
+    let enter = WEE_TRIGGER_ENTER_AUTOCMDS;
+    enter_ext(window, sync | enter | WEE_TRIGGER_LEAVE_AUTOCMDS);
 }
 
 /// Make `window` the current window, `flags` saying which autocommands to fire.
@@ -262,7 +270,7 @@ pub(crate) fn enter(window: Win, undo_sync: bool) {
 /// `WEE_CURWIN_INVALID` means `curwin` has just been closed and must not be
 /// read.
 pub(crate) fn enter_ext(window: Win, flags: c_int) {
-    let curwin_invalid = flags & WEE_CURWIN_INVALID as c_int != 0;
+    let curwin_invalid = flags & WEE_CURWIN_INVALID != 0;
     if window.is_current() && !curwin_invalid {
         return; // nothing to do
     }
@@ -270,7 +278,7 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
     if !curwin_invalid {
         leave_window(Win::current());
     }
-    if !curwin_invalid && flags & WEE_TRIGGER_LEAVE_AUTOCMDS as c_int != 0 {
+    if !curwin_invalid && flags & WEE_TRIGGER_LEAVE_AUTOCMDS != 0 {
         // Be careful: if autocommands delete the window, return now.
         if !window.w_buffer.is_current() {
             fire(AutoEvent::BufLeave, Buf::current());
@@ -290,7 +298,7 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
     }
 
     // sync undo before leaving the current buffer
-    if flags & WEE_UNDO_SYNC as c_int != 0 && !window.w_buffer.is_current() {
+    if flags & WEE_UNDO_SYNC != 0 && !window.w_buffer.is_current() {
         u_sync(false);
     }
     // Might need to scroll the old window before switching, e.g. when the
@@ -300,7 +308,7 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
     }
     // may have to copy the buffer options when 'cpo' contains 'S'
     if !window.w_buffer.is_current() {
-        let flags = BCO_ENTER as c_int | BCO_NOHELP as c_int;
+        let flags = BCO_ENTER | BCO_NOHELP;
         buf_copy_options(window.buffer(), flags);
     }
     if !curwin_invalid {
@@ -326,10 +334,10 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
     enter_window(Win::current());
 
     // Careful: autocommands may close the window and make `window` invalid.
-    if flags & WEE_TRIGGER_NEW_AUTOCMDS as c_int != 0 {
+    if flags & WEE_TRIGGER_NEW_AUTOCMDS != 0 {
         fire(AutoEvent::WinNew, Buf::current());
     }
-    if flags & WEE_TRIGGER_ENTER_AUTOCMDS as c_int != 0 {
+    if flags & WEE_TRIGGER_ENTER_AUTOCMDS != 0 {
         fire(AutoEvent::WinEnter, Buf::current());
         if other_buffer {
             fire(AutoEvent::BufEnter, Buf::current());
@@ -355,15 +363,15 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
 
     // set window height to desired minimal value
     let cur = Win::current();
-    if (cur.w_height as OptInt) < p_wh() && cur.w_onebuf_opt.wo_wfh == 0 && !cur.w_floating {
-        setheight_win(p_wh() as c_int, cur);
+    if OptInt::from(cur.w_height) < p_wh() && cur.w_onebuf_opt.wo_wfh == 0 && !cur.w_floating {
+        setheight_win(number_as_int(p_wh()), cur);
     } else if cur.w_height == 0 {
         setheight_win(1, cur);
     }
     // set window width to desired minimal value
     let cur = Win::current();
-    if (cur.w_width as OptInt) < p_wiw() && cur.w_onebuf_opt.wo_wfw == 0 && !cur.w_floating {
-        setwidth_win(p_wiw() as c_int, cur);
+    if OptInt::from(cur.w_width) < p_wiw() && cur.w_onebuf_opt.wo_wfw == 0 && !cur.w_floating {
+        setwidth_win(number_as_int(p_wiw()), cur);
     }
 
     setmouse(); // in case jumped to/from help buffer

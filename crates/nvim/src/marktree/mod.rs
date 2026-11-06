@@ -1,3 +1,10 @@
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 //! The extmark store: a wide B-tree keyed by (row, col).
@@ -46,6 +53,8 @@ pub mod pair;
 pub mod rebalance;
 pub mod splice;
 
+use crate::narrow::as_index;
+use crate::narrow::count_as_int;
 use core::ffi::c_int;
 
 pub use crate::marktree::check::*;
@@ -184,7 +193,7 @@ impl Lasti {
 pub fn marktree_del_itr(tree: &mut MarkTree, iter: &mut MarkTreeIter, rev: bool) -> uint64_t {
     let mut adjustment = 0;
     let cur = iter.node.expect("a positioned iterator");
-    let curi = iter.index as usize;
+    let curi = as_index(iter.index);
     let raw = tree[cur].key(curi);
     let id = mt_lookup_key(raw);
 
@@ -218,9 +227,9 @@ pub fn marktree_del_itr(tree: &mut MarkTree, iter: &mut MarkTreeIter, rev: bool)
     // 3. Delete the leaf key.
     let mut x = iter.node.expect("a leaf key before an internal one");
     debug_assert!(tree[x].is_leaf(), "x->level == 0");
-    let mut intkey = tree[x].key(iter.index as usize);
+    let mut intkey = tree[x].key(as_index(iter.index));
     let mut meta_inc = meta_describe_key(intkey);
-    let hole = iter.index as usize;
+    let hole = as_index(iter.index);
     let leaf = &mut tree[x];
     if leaf.key_count() > hole + 1 {
         leaf.copy_keys_within(hole + 1..leaf.key_count(), hole);
@@ -247,7 +256,7 @@ pub fn marktree_del_itr(tree: &mut MarkTree, iter: &mut MarkTreeIter, rev: bool)
             let p = tree[lnode]
                 .parent()
                 .expect("a node below `cur` has a parent");
-            let i = iter.path[depth as usize].index as usize;
+            let i = as_index(iter.path[as_index(depth)].index);
             debug_assert!(tree[p].child(i) == lnode, "p->ptr[i] == lnode");
             if i > 0 {
                 unrelative(tree[p].key(i - 1).pos, &mut intkey.pos);
@@ -334,50 +343,50 @@ pub fn marktree_del_itr(tree: &mut MarkTree, iter: &mut MarkTreeIter, rev: bool)
             // This node is fine, so the rest of the tree is.
             break;
         }
-        let pi = iter.path[rdepth as usize].index;
-        debug_assert!(tree[p].child(pi as usize) == x, "p->ptr[pi] == x");
+        let pi = iter.path[as_index(rdepth)].index;
+        debug_assert!(tree[p].child(as_index(pi)) == x, "p->ptr[pi] == x");
         if pi > 0 {
-            ppos.row -= tree[p].key(pi as usize - 1).pos.row;
-            ppos.col = iter.path[rdepth as usize].old_col;
+            ppos.row -= tree[p].key(as_index(pi) - 1).pos.row;
+            ppos.col = iter.path[as_index(rdepth)].old_col;
         }
         // `ppos` is now the position of `p`.
 
-        if pi > 0 && tree[tree[p].child(pi as usize - 1)].key_count() > min_keys {
+        if pi > 0 && tree[tree[p].child(as_index(pi) - 1)].key_count() > min_keys {
             lasti.bump(iter, 1);
             iter_dirty = true;
             // Steal one key from the left neighbour.
-            pivot_right(tree, ppos, p, pi as usize - 1);
+            pivot_right(tree, ppos, p, as_index(pi) - 1);
             break;
-        } else if pi < tree[p].key_count() as c_int
-            && tree[tree[p].child(pi as usize + 1)].key_count() > min_keys
+        } else if pi < count_as_int(tree[p].key_count())
+            && tree[tree[p].child(as_index(pi) + 1)].key_count() > min_keys
         {
             // Steal one key from the right neighbour.
-            pivot_left(tree, ppos, p, pi as usize);
+            pivot_left(tree, ppos, p, as_index(pi));
             break;
         } else if pi > 0 {
             assert!(
-                tree[tree[p].child(pi as usize - 1)].key_count() == min_keys,
+                tree[tree[p].child(as_index(pi) - 1)].key_count() == min_keys,
                 "p->ptr[pi - 1]->n == T - 1"
             );
             // Merge with the left neighbour.
-            lasti.bump(iter, MT_BRANCH_FACTOR as c_int);
-            x = merge_node(tree, p, pi as usize - 1);
+            lasti.bump(iter, MT_BRANCH_FACTOR.cast_signed());
+            x = merge_node(tree, p, as_index(pi) - 1);
             if lasti == Lasti::Cur {
                 // TRICKY: we merged the node the iterator was on.
                 iter.node = Some(x);
             }
-            iter.path[rdepth as usize].index -= 1;
+            iter.path[as_index(rdepth)].index -= 1;
             iter_dirty = true;
         } else {
             assert!(
-                pi < tree[p].key_count() as c_int
-                    && tree[tree[p].child(pi as usize + 1)].key_count() == min_keys,
+                pi < count_as_int(tree[p].key_count())
+                    && tree[tree[p].child(as_index(pi) + 1)].key_count() == min_keys,
                 "pi < p->n && p->ptr[pi + 1]->n == T - 1"
             );
             // No iterator adjustment is needed.
-            merge_node(tree, p, pi as usize);
+            merge_node(tree, p, as_index(pi));
         }
-        lasti = Lasti::Level(rdepth as usize);
+        lasti = Lasti::Level(as_index(rdepth));
         rdepth -= 1;
         x = p;
     }
@@ -388,7 +397,7 @@ pub fn marktree_del_itr(tree: &mut MarkTree, iter: &mut MarkTreeIter, rev: bool)
         .expect("a tree that held the deleted key has a root");
     if tree[root].key_count() == 0 {
         if iter.depth > 0 {
-            iter.path.copy_within(1..iter.depth as usize, 0);
+            iter.path.copy_within(1..as_index(iter.depth), 0);
             iter.depth -= 1;
         }
         if !tree[root].is_leaf() {
@@ -419,7 +428,7 @@ pub fn marktree_del_itr(tree: &mut MarkTree, iter: &mut MarkTreeIter, rev: bool)
         marktree_itr_next(tree, iter);
         marktree_itr_next(tree, iter);
     } else if let Some(node) = iter.node
-        && iter.index as usize >= tree[node].key_count()
+        && as_index(iter.index) >= tree[node].key_count()
     {
         // We deleted the last key of a leaf node; go to the internal key
         // after it.
@@ -435,7 +444,7 @@ pub fn marktree_del_itr(tree: &mut MarkTree, iter: &mut MarkTreeIter, rev: bool)
 pub fn marktree_revise_meta(tree: &mut MarkTree, iter: &mut MarkTreeIter, old_key: MTKey) {
     let x = iter.node.expect("a positioned iterator");
     let meta_old = meta_describe_key(old_key);
-    let meta_new = meta_describe_key(tree[x].key(iter.index as usize));
+    let meta_new = meta_describe_key(tree[x].key(as_index(iter.index)));
     if meta_new == meta_old {
         return;
     }
@@ -505,7 +514,7 @@ fn move_within_leaf(
     if !matched {
         new_i += 1;
     }
-    let (i, new_i) = (iter.index as usize, new_i as usize);
+    let (i, new_i) = (as_index(iter.index), as_index(new_i));
     if new_i == i {
         leaf.key_mut(i).pos = newpos;
     } else if new_i < i {
@@ -524,7 +533,7 @@ fn move_within_leaf(
 /// own leaf.
 pub fn marktree_move(tree: &mut MarkTree, iter: &mut MarkTreeIter, row: c_int, col: c_int) {
     let x = iter.node.expect("a positioned iterator");
-    let mut key = tree[x].key(iter.index as usize);
+    let mut key = tree[x].key(as_index(iter.index));
     let newpos = MTPos { row, col };
     if tree[x].is_leaf() && move_within_leaf(tree, x, iter, key, newpos) {
         return;
@@ -568,5 +577,5 @@ pub fn marktree_lookup(
         // corrupt and there is nothing sensible to answer.
         ::std::process::abort()
     };
-    marktree_itr_set_node(tree, iter, n, i as c_int)
+    marktree_itr_set_node(tree, iter, n, count_as_int(i))
 }

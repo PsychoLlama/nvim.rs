@@ -8,12 +8,20 @@
 //! which starts the next one) or because the text ran out
 //! ([`Cells::finish_line`], which does not).
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
 use crate::decoration::{kHlModeCombine, kHlModeReplace, kVLLeftcol, kVLScroll};
 use crate::grid::{SLF_INC_VCOL, SLF_WRAP, grid_of_view, with_linebuf};
 use crate::r#move::WinValid;
+use crate::narrow::as_index;
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, NUL};
 use crate::winlayer::Buf;
@@ -206,7 +214,7 @@ impl Cells {
             && window.w_onebuf_opt.wo_rl == 0; // not right-to-left
 
         let mut draw_col = wlv.col - wlv.boguscols;
-        let span = wlv.off as usize..(wlv.off + self.view_width - draw_col) as usize;
+        let span = as_index(wlv.off)..as_index(wlv.off + self.view_width - draw_col);
         with_linebuf(|line| line.vcols_mut()[span].fill(wlv.vcol - 1));
 
         // Fill the columns concealment pretended to use, so that
@@ -215,7 +223,7 @@ impl Cells {
             let attr = hl_combine_attr(wlv.line_attr_lowprio, wlv.line_attr);
             with_linebuf(|line| {
                 while draw_col < self.view_width {
-                    let at = wlv.off as usize;
+                    let at = as_index(wlv.off);
                     line.chars_mut()[at] = schar_from_ascii(b' ');
                     line.attrs_mut()[at] = attr as ScreenAttr;
                     // The vcols were filled by the loop above.
@@ -348,7 +356,7 @@ impl Cells {
         // out there lands somewhere sensible.
         with_linebuf(|line| {
             for i in wlv.col..self.view_width {
-                line.vcols_mut()[(wlv.off + (i - wlv.col)) as usize] = wlv.vcol + (i - wlv.col);
+                line.vcols_mut()[as_index(wlv.off + (i - wlv.col))] = wlv.vcol + (i - wlv.col);
             }
         });
 
@@ -430,7 +438,7 @@ impl Cells {
         }
 
         while wlv.col < self.view_width {
-            with_linebuf(|line| line.chars_mut()[wlv.off as usize] = schar_from_ascii(b' '));
+            with_linebuf(|line| line.chars_mut()[as_index(wlv.off)] = schar_from_ascii(b' '));
             wlv.advance_color_col(window, wlv.hl_vcol());
 
             let mut col_attr = base_attr;
@@ -451,7 +459,7 @@ impl Cells {
             }
             col_attr = hl_combine_attr(col_attr, wlv.line_attr);
 
-            with_linebuf(|line| line.attrs_mut()[wlv.off as usize] = col_attr as ScreenAttr);
+            with_linebuf(|line| line.attrs_mut()[as_index(wlv.off)] = col_attr as ScreenAttr);
             // The vcols were filled by the loop in the caller.
             wlv.off += 1;
             wlv.col += 1;

@@ -252,7 +252,7 @@ pub(crate) fn pum_show_popupmenu(menu: MenuId) {
         pum_is_drawn.set(true);
         // Above the cmdline area: #23275.
         let mut grid = pum_grid_ref();
-        grid.zindex = kZIndexCmdlinePopupMenu.cast_signed();
+        grid.zindex = kZIndexCmdlinePopupMenu;
         pum_redraw();
         setcursor_mayforce(Win::current(), true);
         let c = vgetc();

@@ -191,15 +191,15 @@ pub(crate) fn parse_command_modifiers(
                 if !takes(excmd, b"aboveleft", 3) {
                     break;
                 }
-                cm.cmod_split |= WSP_ABOVE as c_int;
+                cm.cmod_split |= WSP_ABOVE;
             }
             b'b' => {
                 if takes(excmd, b"belowright", 3) {
-                    cm.cmod_split |= WSP_BELOW as c_int;
+                    cm.cmod_split |= WSP_BELOW;
                 } else if takes(excmd, b"browse", 3) {
                     cm.cmod_flags |= CmdModFlags::BROWSE;
                 } else if takes(excmd, b"botright", 2) {
-                    cm.cmod_split |= WSP_BOT as c_int;
+                    cm.cmod_split |= WSP_BOT;
                 } else {
                     break;
                 }
@@ -265,7 +265,7 @@ pub(crate) fn parse_command_modifiers(
             }
             b'h' => {
                 if takes(excmd, b"horizontal", 3) {
-                    cm.cmod_split |= WSP_HOR as c_int;
+                    cm.cmod_split |= WSP_HOR;
                 } else if at == excmd.line.cmd
                     && let Some(after) = check_for_word(&excmd.line, at, b"hide", 3)
                     && excmd.line.byte_at(after) != 0
@@ -284,7 +284,7 @@ pub(crate) fn parse_command_modifiers(
                 if takes(excmd, b"lockmarks", 3) {
                     cm.cmod_flags |= CmdModFlags::LOCKMARKS;
                 } else if takes(excmd, b"leftabove", 5) {
-                    cm.cmod_split |= WSP_ABOVE as c_int;
+                    cm.cmod_split |= WSP_ABOVE;
                 } else {
                     break;
                 }
@@ -302,7 +302,7 @@ pub(crate) fn parse_command_modifiers(
                 if !takes(excmd, b"rightbelow", 6) {
                     break;
                 }
-                cm.cmod_split |= WSP_BELOW as c_int;
+                cm.cmod_split |= WSP_BELOW;
             }
             b's' => {
                 if takes(excmd, b"sandbox", 3) {
@@ -362,7 +362,7 @@ pub(crate) fn parse_command_modifiers(
                     }
                     excmd.line.cmd = at;
                 } else if takes(excmd, b"topleft", 2) {
-                    cm.cmod_split |= WSP_TOP as c_int;
+                    cm.cmod_split |= WSP_TOP;
                 } else {
                     break;
                 }
@@ -375,7 +375,7 @@ pub(crate) fn parse_command_modifiers(
             }
             b'v' => {
                 if takes(excmd, b"vertical", 4) {
-                    cm.cmod_split |= WSP_VERT as c_int;
+                    cm.cmod_split |= WSP_VERT;
                 } else if let Some(after) = check_for_word(&excmd.line, at, b"verbose", 4) {
                     at = after;
                     // The count is read from `args.cmd`, which

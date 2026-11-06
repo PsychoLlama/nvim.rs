@@ -7,6 +7,13 @@
 //! into a [`Decoration`], which then either goes to the redraw that asked
 //! for it (`ephemeral`) or is stored in the buffer as a mark.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
@@ -15,7 +22,10 @@ use crate::api::private::validate::{
 };
 use crate::decoration::decor_drawing_window;
 use crate::narrow::number_as_col;
+use crate::narrow::number_as_int;
 use crate::narrow::number_as_lnum;
+use crate::narrow::number_as_u16;
+use crate::narrow::number_as_u32;
 use crate::winlayer::Buf;
 
 /// The keyset this call was handed.
@@ -81,23 +91,23 @@ impl Decoration {
 
     /// The four sign highlight keys, any of which makes this a sign.
     fn sign_highlights(&mut self, opts: &Opts) {
-        self.sign.hl_id = opts.sign_hl_group.unwrap_or(0) as ::core::ffi::c_int;
-        self.sign.cursorline_hl_id = opts.cursorline_hl_group.unwrap_or(0) as ::core::ffi::c_int;
-        self.sign.number_hl_id = opts.number_hl_group.unwrap_or(0) as ::core::ffi::c_int;
-        self.sign.line_hl_id = opts.line_hl_group.unwrap_or(0) as ::core::ffi::c_int;
+        self.sign.hl_id = number_as_int(opts.sign_hl_group.unwrap_or(0));
+        self.sign.cursorline_hl_id = number_as_int(opts.cursorline_hl_group.unwrap_or(0));
+        self.sign.number_hl_id = number_as_int(opts.number_hl_group.unwrap_or(0));
+        self.sign.line_hl_id = number_as_int(opts.line_hl_group.unwrap_or(0));
         if self.sign.hl_id != 0
             || self.sign.cursorline_hl_id != 0
             || self.sign.number_hl_id != 0
             || self.sign.line_hl_id != 0
         {
-            self.sign.flags |= kSHIsSign as uint16_t;
+            self.sign.flags |= kSHIsSign;
         }
     }
 
     /// The `conceal` and `conceal_lines` keys.
     fn conceal(&mut self, opts: &Opts) -> Result<(), Error> {
         if let Some(conceal) = opts.conceal.as_ref() {
-            self.hl.flags |= kSHConceal as uint16_t;
+            self.hl.flags |= kSHConceal;
             self.has_hl = true;
             if !conceal.is_empty() {
                 let (conceal_char, ch) = c_cluster_schar(conceal.as_bytes());
@@ -108,7 +118,7 @@ impl Decoration {
             }
         }
         if let Some(conceal_lines) = opts.conceal_lines.as_ref() {
-            self.hl.flags |= kSHConcealLines as uint16_t;
+            self.hl.flags |= kSHConcealLines;
             self.has_hl = true;
             if conceal_lines.as_bytes().first().is_some_and(|&b| b != 0) {
                 return Err(Error::validation(
@@ -138,11 +148,11 @@ impl Decoration {
             };
         }
         if let Some(win_col) = opts.virt_text_win_col {
-            self.virt_text.col = win_col as ::core::ffi::c_int;
+            self.virt_text.col = number_as_int(win_col);
             self.virt_text.pos = kVPosWinCol;
         }
         if opts.hl_eol.unwrap_or(false) {
-            self.hl.flags |= kSHHlEol as uint16_t;
+            self.hl.flags |= kSHHlEol;
         }
         if opts.virt_text_hide.unwrap_or(false) {
             self.virt_text.flags |= kVTHide as uint8_t;
@@ -152,14 +162,14 @@ impl Decoration {
         }
         if let Some(mode) = opts.hl_mode.as_ref() {
             self.virt_text.hl_mode = match mode.as_cstr().to_bytes() {
-                b"replace" => kHlModeReplace as uint8_t,
-                b"combine" => kHlModeCombine as uint8_t,
+                b"replace" => kHlModeReplace,
+                b"combine" => kHlModeCombine,
                 b"blend" => {
                     if self.virt_text.pos == kVPosInline {
                         let why = c"cannot use 'blend' hl_mode with inline virtual text";
                         return Err(Error::validation(why));
                     }
-                    kHlModeBlend as uint8_t
+                    kHlModeBlend
                 }
                 _ => return Err(err_bad_value(c"hl_mode", mode.as_cstr())),
             };
@@ -209,7 +219,7 @@ impl Decoration {
         if !(0..=MAX_PRIORITY).contains(&given) {
             return Err(err_out_of_range(c"priority"));
         }
-        let priority = given as DecorPriority;
+        let priority = number_as_u16(given);
         self.hl.priority = priority;
         self.sign.priority = priority;
         self.virt_text.priority = priority;
@@ -228,7 +238,7 @@ impl Decoration {
         if init_sign_text(text, &mut self.sign.text).is_err() {
             return Err(err_invalid(c"sign_text", Bad::Unsaid));
         }
-        self.sign.flags |= kSHIsSign as uint16_t;
+        self.sign.flags |= kSHIsSign;
         Ok(())
     }
 
@@ -236,7 +246,7 @@ impl Decoration {
     /// highlight even when no group was named.
     fn highlight_extras(&mut self, opts: &Opts) {
         if let Some(spell) = opts.spell {
-            self.hl.flags |= (if spell { kSHSpellOn } else { kSHSpellOff }) as uint16_t;
+            self.hl.flags |= if spell { kSHSpellOn } else { kSHSpellOff };
             self.has_hl = true;
         }
         if let Some(given) = opts.url.as_ref() {
@@ -246,9 +256,9 @@ impl Decoration {
             self.has_hl = true;
         }
         if opts.ui_watched.unwrap_or(false) {
-            self.hl.flags |= kSHUIWatched as uint16_t;
+            self.hl.flags |= kSHUIWatched;
             if self.virt_text.pos == kVPosOverlay {
-                self.hl.flags |= kSHUIWatchedOverlay as uint16_t;
+                self.hl.flags |= kSHUIWatchedOverlay;
             }
             self.has_hl = true;
         }
@@ -264,7 +274,7 @@ impl Decoration {
         id: uint32_t,
     ) -> Result<(), Error> {
         // An ephemeral mark with no end covers the one position it names.
-        let (row, col) = (at.line as ::core::ffi::c_int, number_as_col(at.col));
+        let (row, col) = (number_as_int(at.line), number_as_col(at.col));
         let (end_row, end_col) = if at.line2 == -1 {
             (row, col)
         } else {
@@ -275,7 +285,7 @@ impl Decoration {
             if !(0..=MAX_PRIORITY).contains(&given) {
                 return Err(err_out_of_range(c"_subpriority"));
             }
-            subpriority = given as DecorPriority;
+            subpriority = number_as_u16(given);
         }
         // Each part of the decoration is handed over exactly once.
         if !self.virt_text.data.text().is_empty() {
@@ -302,7 +312,7 @@ impl Decoration {
                 end_col.get(),
                 sh,
                 true,
-                ns_id as uint32_t,
+                number_as_u32(ns_id),
                 id,
                 subpriority,
             );
@@ -334,7 +344,7 @@ impl Decoration {
             decor_flags |= MtFlags::DECOR_VIRT_LINES;
         }
         let mut decor_indexed: uint32_t = DECOR_ID_INVALID;
-        if self.sign.flags & kSHIsSign as uint16_t != 0 {
+        if self.sign.flags & kSHIsSign != 0 {
             if self.sign.text[0] != 0 {
                 decor_flags |= MtFlags::DECOR_SIGNTEXT;
             }
@@ -363,7 +373,7 @@ impl Decoration {
                     let mut sh: DecorSignHighlight = DECOR_SIGN_HIGHLIGHT_INIT;
                     sh.hl_id = hl_id;
                     sh.flags = if opts.hl_eol.unwrap_or(false) {
-                        kSHHlEol as uint16_t
+                        kSHHlEol
                     } else {
                         0
                     };
@@ -373,7 +383,7 @@ impl Decoration {
                 }
             }
         }
-        if self.hl.flags & kSHConcealLines as uint16_t != 0 {
+        if self.hl.flags & kSHConcealLines != 0 {
             decor_flags |= MtFlags::DECOR_CONCEAL_LINES;
         }
         let decor = if decor_alloc != DECOR_ID_INVALID
@@ -400,9 +410,9 @@ impl Decoration {
         // The mark takes over the decoration this call owned.
         extmark_set(
             buffer,
-            ns_id as uint32_t,
+            number_as_u32(ns_id),
             Some(id),
-            at.line as ::core::ffi::c_int,
+            number_as_int(at.line),
             number_as_col(at.col),
             at.line2,
             at.col2,
@@ -420,8 +430,8 @@ impl Decoration {
 fn blank_virt(lines: bool) -> DecorVirtText {
     DecorVirtText {
         flags: if lines { kVTIsLines as uint8_t } else { 0 },
-        hl_mode: kHlModeUnknown as uint8_t,
-        priority: DECOR_PRIORITY_BASE as DecorPriority,
+        hl_mode: kHlModeUnknown,
+        priority: DECOR_PRIORITY_BASE,
         width: 0,
         col: 0,
         pos: kVPosEndOfLine,
@@ -461,7 +471,7 @@ pub fn nvim_buf_set_extmark(
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(0);
     };
-    if !ns_initialized(ns_id as uint32_t) {
+    if !ns_initialized(number_as_u32(ns_id)) {
         return Err(err_bad_number(c"ns_id", ns_id));
     }
     // A refusal drops the half-built decoration, which nothing took over.
@@ -486,7 +496,7 @@ fn set_extmark(
         if given <= 0 {
             return Err(err_expected(c"id", c"positive Integer", None));
         }
-        id = given as uint32_t;
+        id = number_as_u32(given);
     }
     let strict = opts.strict.unwrap_or(true);
     let (line2, col2) = end_position(opts, b, strict)?;
@@ -544,7 +554,7 @@ fn end_position(
         if given < 0 || (given > i64::from(b.line_count()) && strict) {
             return Err(err_out_of_range(c"end_row"));
         }
-        line2 = given as ::core::ffi::c_int;
+        line2 = number_as_int(given);
     }
     let mut col2: ColNr = ColNr::NONE;
     if let Some(given) = opts.end_col {
@@ -612,7 +622,7 @@ fn clamp(
             len = ColNr::ZERO;
         } else {
             // An end column with no end row is on the mark's own line.
-            line2 = line as ::core::ffi::c_int;
+            line2 = number_as_int(line);
         }
         if col2 > len {
             if strict {

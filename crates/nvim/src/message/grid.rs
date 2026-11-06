@@ -98,7 +98,7 @@ pub fn msg_grid_validate() {
     {
         // Force a valid screen size.
         grid_alloc(&mut grid, Rows.get(), Columns.get(), false, true);
-        grid.zindex = kZIndexMessages as c_int;
+        grid.zindex = kZIndexMessages;
         grid.track_dirty_cols(Rows.get());
 
         // Tell the compositor to put the grid at the bottom, or at the top

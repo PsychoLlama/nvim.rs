@@ -1,3 +1,10 @@
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
@@ -13,10 +20,8 @@
 //! Positions inside the tree are stored *relative* to the enclosing node's
 //! position, which is what `relative`/`unrelative`/`compose` translate between.
 
-use crate::types::{
-    DecorHighlightInline, DecorInline, DecorPriority, MTKey, MTPair, MTPos, ScreenChar, uint16_t,
-    uint32_t, uint64_t,
-};
+use crate::decoration::DECOR_HIGHLIGHT_INLINE_INIT;
+use crate::types::{DecorInline, MTKey, MTPair, MTPos, uint16_t, uint32_t, uint64_t};
 
 /// Minimum fill of a node. The maximum branch is twice this.
 pub const MT_BRANCH_FACTOR: ::core::ffi::c_uint = 10;
@@ -95,15 +100,6 @@ crate::flag_set! {
 /// Low bit of a lookup handle: set for the end half of a pair.
 pub const MARKTREE_END_FLAG: uint64_t = 1;
 
-pub const DECOR_PRIORITY_BASE: ::core::ffi::c_int = 0x1000;
-
-pub const DECOR_HIGHLIGHT_INLINE_INIT: DecorHighlightInline = DecorHighlightInline {
-    flags: 0,
-    priority: DECOR_PRIORITY_BASE as DecorPriority,
-    hl_id: 0,
-    conceal_char: 0 as ScreenChar,
-};
-
 /// What `marktree_itr_current` answers for an exhausted iterator, and what a
 /// failed lookup returns. Not a valid position, so callers can test `pos.row`.
 pub const MT_INVALID_KEY: MTKey = MTKey {
@@ -118,7 +114,7 @@ pub const MT_INVALID_KEY: MTKey = MTKey {
 /// high bits, the mark id the middle, and the end flag the low bit — so the two
 /// halves of a pair are adjacent and the start sorts first.
 pub fn mt_lookup_id(ns: uint32_t, id: uint32_t, enda: bool) -> uint64_t {
-    (ns as uint64_t) << 33 | ((id << 1) as uint64_t) | if enda { MARKTREE_END_FLAG } else { 0 }
+    uint64_t::from(ns) << 33 | uint64_t::from(id << 1) | if enda { MARKTREE_END_FLAG } else { 0 }
 }
 
 /// The handle for the named side of `key`'s pair, whichever side `key` is.
@@ -236,19 +232,19 @@ pub fn compose(base: &mut MTPos, val: MTPos) {
 /// and the "sorts last" pseudo-key flag participate — two real marks that agree
 /// on those compare equal and the tree keeps them in insertion order.
 pub fn key_cmp(a: MTKey, b: MTKey) -> ::core::ffi::c_int {
-    let cmp = (b.pos.row < a.pos.row) as ::core::ffi::c_int
-        - (a.pos.row < b.pos.row) as ::core::ffi::c_int;
+    let cmp = ::core::ffi::c_int::from(b.pos.row < a.pos.row)
+        - ::core::ffi::c_int::from(a.pos.row < b.pos.row);
     if cmp != 0 {
         return cmp;
     }
-    let cmp = (b.pos.col < a.pos.col) as ::core::ffi::c_int
-        - (a.pos.col < b.pos.col) as ::core::ffi::c_int;
+    let cmp = ::core::ffi::c_int::from(b.pos.col < a.pos.col)
+        - ::core::ffi::c_int::from(a.pos.col < b.pos.col);
     if cmp != 0 {
         return cmp;
     }
     let a = a.flags.masked(MtFlags::ORDER_MASK).bits();
     let b = b.flags.masked(MtFlags::ORDER_MASK).bits();
-    (b < a) as ::core::ffi::c_int - (a < b) as ::core::ffi::c_int
+    ::core::ffi::c_int::from(b < a) - ::core::ffi::c_int::from(a < b)
 }
 
 #[cfg(test)]

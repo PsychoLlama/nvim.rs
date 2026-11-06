@@ -74,17 +74,18 @@ use crate::types::{
 use crate::ui::state::{Columns, Rows};
 use crate::undo::{buf_is_changed, u_compute_hash, u_read_undo, u_sync};
 use crate::window::{
-    check_window_colorcolumn, command_height, global_stl_height, last_status, min_rows, new_height,
-    tabline_height, win_comp_pos, win_equal, win_new_screen_rows, win_setheight, win_setwidth,
+    STATUS_HEIGHT, check_window_colorcolumn, command_height, global_stl_height, last_status,
+    min_rows, new_height, tabline_height, win_comp_pos, win_equal, win_new_screen_rows,
+    win_setheight, win_setwidth,
 };
 use crate::winfloat::win_float_update_statusline;
 use crate::winlayer::current_topframe;
 use crate::winlayer::graph::{firstwin, lastwin};
 
 use super::{
-    B_IMODE_NONE, B_IMODE_USE_INSERT, NO_SCREEN, OptSlot, STATUS_HEIGHT, check_blending,
-    did_set_title, option_key, option_var, option_was_set, redraw_titles, set_option_value,
-    set_options_bin, write_slot,
+    B_IMODE_NONE, B_IMODE_USE_INSERT, NO_SCREEN, OptSlot, check_blending, did_set_title,
+    option_key, option_var, option_was_set, redraw_titles, set_option_value, set_options_bin,
+    write_slot,
 };
 use crate::highlight_group::HLF_W;
 use crate::memory::XString;
@@ -346,24 +347,12 @@ pub(crate) fn did_set_laststatus(args: &mut OptSet) -> Result<(), OptError> {
     let (old_value, value) = (f.old_number(), f.new_number());
     let top = current_topframe();
     if value == 3 && old_value != 3 {
-        new_height(
-            top,
-            top.fr_height - STATUS_HEIGHT.cast_signed(),
-            false,
-            false,
-            false,
-        );
+        new_height(top, top.fr_height - STATUS_HEIGHT, false, false, false);
         win_comp_pos();
         clear_cmdline.set(true);
     }
     if old_value == 3 && value != 3 {
-        new_height(
-            top,
-            top.fr_height + STATUS_HEIGHT.cast_signed(),
-            false,
-            false,
-            false,
-        );
+        new_height(top, top.fr_height + STATUS_HEIGHT, false, false, false);
         win_comp_pos();
     }
     status_redraw_curbuf();

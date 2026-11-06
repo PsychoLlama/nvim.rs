@@ -23,7 +23,7 @@
 //! * **Checked** -- `len_as_int`. The C's `(int)strlen(...)` yields a negative
 //!   length past 2 GiB and every consumer then treats it as a byte count, so
 //!   there is no behaviour to preserve; a panic replaces corruption.
-//! * **Bounded** -- `count_as_int`. The length of a table the editor itself
+//! * **Bounded** -- `count_as_int`, `count_as_u8`. The length of a table the editor itself
 //!   caps far below `INT_MAX` (the syntax state stack, the pattern and
 //!   group tables), read on a per-character path where `len_as_int`'s test
 //!   measurably costs (p41-10b: +1.4 % Ir on scrbench's syntax phase).
@@ -32,7 +32,7 @@
 //!   `int` and uses as a subscript, `[n]`: never negative, and one that were
 //!   would index far past any table and panic there. Formed once per byte in
 //!   the spell checker and the suggestion walk, so it has no test of its own.
-//! * **Saturating** -- `float_as_i64`. The C's float-to-integer conversion is
+//! * **Saturating** -- `float_as_i64`, `float_as_int`. The C's float-to-integer conversion is
 //!   *undefined* out of range, and Rust's `as` is defined and saturating, so
 //!   the port is already the better of the two. Naming it says so on purpose
 //!   rather than by accident.
@@ -131,6 +131,15 @@ pub(crate) const fn count_as_int(len: usize) -> c_int {
     len as c_int
 }
 
+/// The same bounded count in the byte a packed node keeps it in: the marktree's
+/// key count and child slot, which `MAX_KEYS`/`MAX_CHILDREN` cap at a few
+/// dozen. Unchecked as the C's `(uint8_t)` was; a debug build asserts it.
+#[inline(always)]
+pub(crate) const fn count_as_u8(len: usize) -> u8 {
+    debug_assert!(len <= u8::MAX as usize, "a bounded count past a byte");
+    len as u8
+}
+
 /// An index or length kept in a C `int`, as the subscript it is: the C's
 /// `[n]`, exactly. See the module docs for why it has no test.
 #[inline(always)]
@@ -162,6 +171,12 @@ pub(crate) fn len_as_integer(len: usize) -> i64 {
 /// error the C never had, nor into a wrap that reintroduces one.
 pub(crate) fn float_as_i64(n: f64) -> i64 {
     n as i64
+}
+
+/// [`float_as_i64`] at a C `int`'s width: a floating window's `row`/`col`
+/// as the screen cell `(int)` made of it, clamped to `c_int`'s range.
+pub(crate) fn float_as_int(n: f64) -> c_int {
+    n as c_int
 }
 
 #[cfg(test)]

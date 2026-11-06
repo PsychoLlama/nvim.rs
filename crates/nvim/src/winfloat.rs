@@ -19,10 +19,19 @@
 //!
 //! Original: `src/nvim/winfloat.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::narrow::float_as_int;
+use crate::narrow::number_as_int;
 use crate::narrow::number_as_lnum;
 use crate::types::ColNr;
 use crate::types::Handle;
@@ -54,9 +63,9 @@ use crate::types::{
 use crate::ui::state::{Columns, Rows};
 use crate::ui::ui_has;
 use crate::window::{
-    NotClosed, last_status, lastwin_nofloating, merge_win_config, win_alloc, win_append, win_close,
-    win_comp_pos, win_enter, win_find_tabpage, win_free, win_init, win_remove,
-    win_remove_status_line, win_set_buf, win_set_inner_size, winframe_remove,
+    NotClosed, STATUS_HEIGHT, last_status, lastwin_nofloating, merge_win_config, win_alloc,
+    win_append, win_close, win_comp_pos, win_enter, win_find_tabpage, win_free, win_init,
+    win_remove, win_remove_status_line, win_set_buf, win_set_inner_size, winframe_remove,
 };
 use crate::winlayer::graph::cmdwin_win;
 use crate::winlayer::{
@@ -71,7 +80,6 @@ const kAlignLeft: AlignTextPos = 0;
 const kWinSplitLeft: WinSplit = 0;
 const kWinStyleUnused: WinStyle = 0;
 const kWinStyleMinimal: WinStyle = 1;
-const STATUS_HEIGHT: c_int = 1;
 
 /// An unset title/footer.
 const NO_VIRT_TEXT: VirtText = VirtText::new();
@@ -521,7 +529,7 @@ pub(crate) fn win_config_float(win: Win, mut fconfig: WinConfig) {
 
     if !ui_has(kUIMultigrid) {
         let above_ch = if win.w_config.zindex < kZIndexMessages {
-            p_ch() as c_int
+            number_as_int(p_ch())
         } else {
             0
         };
@@ -546,8 +554,8 @@ pub(crate) fn win_config_float(win: Win, mut fconfig: WinConfig) {
         win.w_winrow = row;
         win.w_wincol = col;
     } else {
-        win.w_winrow = fconfig.row as c_int;
-        win.w_wincol = fconfig.col as c_int;
+        win.w_winrow = float_as_int(fconfig.row);
+        win.w_wincol = float_as_int(fconfig.col);
     }
 
     // changing border style while keeping border only requires redrawing border
@@ -562,8 +570,8 @@ pub(crate) fn win_config_float(win: Win, mut fconfig: WinConfig) {
 /// gone away leaves the config's own row and column, which is why the
 /// lookup's refusal is thrown away.
 fn anchored_position(win: Win) -> (c_int, c_int) {
-    let mut row = win.w_config.row as c_int;
-    let mut col = win.w_config.col as c_int;
+    let mut row = float_as_int(win.w_config.row);
+    let mut col = float_as_int(win.w_config.col);
     let parent = find_window_by_handle(win.w_config.window).unwrap_or_default();
     if let Some(parent) = parent {
         let mut parent = parent;

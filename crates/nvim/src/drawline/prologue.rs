@@ -15,10 +15,20 @@
 //! whole grid's attribute numbering shifts. Every lookup here is where
 //! upstream put it.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
 use crate::decoration::kMTMetaInline;
+use crate::narrow::as_index;
+use crate::narrow::count_as_int;
+use crate::narrow::len_as_int;
 use crate::normal::{VisualSelection, visual_active, visual_selection};
 use crate::option::vars::P_SEL;
 use crate::optionstr::OptString;
@@ -409,8 +419,7 @@ impl LineSetup {
     /// Apply `'cursorline'` to this line, if it is the cursor's.
     fn cursorline(&mut self, wlv: &mut WinLineVars, window: Win) {
         if window.w_onebuf_opt.wo_cul == 0
-            || window.w_p_culopt_flags as ::core::ffi::c_int
-                == kOptCuloptFlagNumber as ::core::ffi::c_int
+            || u32::from(window.w_p_culopt_flags) == kOptCuloptFlagNumber
             || wlv.lnum != window.w_cursorline
             // Not while Visual mode is active: it would stop being clear
             // what is selected.
@@ -418,10 +427,8 @@ impl LineSetup {
         {
             return;
         }
-        self.cul_screenline = self.is_wrapped
-            && window.w_p_culopt_flags as ::core::ffi::c_int
-                & kOptCuloptFlagScreenline as ::core::ffi::c_int
-                != 0;
+        self.cul_screenline =
+            self.is_wrapped && u32::from(window.w_p_culopt_flags) & kOptCuloptFlagScreenline != 0;
         if self.cul_screenline {
             // Only the cursor's own screen row is highlighted, so the loop
             // needs that row's margins.
@@ -455,7 +462,7 @@ impl LineSetup {
             self.statuscol.lnum = wlv.lnum;
             self.statuscol.foldinfo = wlv.foldinfo;
             self.statuscol.width =
-                window.col_off() - (cmdwin_win.get() == Some(window.id())) as ::core::ffi::c_int;
+                window.col_off() - ::core::ffi::c_int::from(cmdwin_win.get() == Some(window.id()));
             self.statuscol.sign_cul_id = if use_cursor_line_highlight(window, wlv.lnum) {
                 wlv.sign_cul_attr
             } else {
@@ -554,10 +561,10 @@ impl LineSetup {
             nextline[..line_len].copy_from_slice(line);
             nextline.copy_within(SPELL_LOOKAHEAD..SPELL_LOOKAHEAD + tail + 1, line_len);
             self.nextlinecol = 0;
-            self.nextline_idx = line_len as ::core::ffi::c_int + 1;
+            self.nextline_idx = count_as_int(line_len) + 1;
         } else {
             // Long line: only its last `SPWORDLEN` bytes can matter.
-            self.nextlinecol = (line_len - SPELL_LOOKAHEAD) as ::core::ffi::c_int;
+            self.nextlinecol = count_as_int(line_len - SPELL_LOOKAHEAD);
             nextline[..SPELL_LOOKAHEAD].copy_from_slice(&line[line_len - SPELL_LOOKAHEAD..]);
             self.nextline_idx = SPWORDLEN + 1;
         }
@@ -692,13 +699,12 @@ impl LineSetup {
             // end of a word.
             let end =
                 spell_to_word_end(self.line.text().get(self.pos..).unwrap_or_default(), window);
-            self.word_end = (linecol.as_usize() + end + 1) as ::core::ffi::c_int;
+            self.word_end = len_as_int(linecol.as_usize() + end + 1);
         } else {
             // Bad word found: its attribute applies to the end of it.
-            debug_assert!(len <= ::core::ffi::c_int::MAX as size_t);
-            self.word_end = (window.w_cursor.col + len as ::core::ffi::c_int + 1).get();
+            self.word_end = (window.w_cursor.col + len_as_int(len) + 1).get();
             if spell_hlf != HLF_COUNT {
-                self.spell_attr = default_hl_attr(spell_hlf as usize);
+                self.spell_attr = default_hl_attr(as_index(spell_hlf));
             }
         }
         window.w_cursor = saved_cursor;

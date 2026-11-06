@@ -101,7 +101,7 @@ pub fn setfname(
                 }
                 // Delete it from the list: a live, unloaded buffer shown in
                 // no window.
-                close_buffer(None, o, DOBUF_WIPE.cast_signed(), false, false);
+                close_buffer(None, o, DOBUF_WIPE, false, false);
             }
             b.name.set(ffname, Some(sfname));
         }

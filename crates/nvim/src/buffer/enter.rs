@@ -16,6 +16,13 @@
 //!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::eval::typval::DI_FLAGS_FIX;
@@ -56,7 +63,7 @@ use crate::state::MODE_INSERT;
 use crate::state::mode::{State, VIsual_reselect};
 use crate::terminal::check_buf_terminal_size;
 use crate::types::{
-    CmdModFlags, ColNr, DictItem, DictKey, LineNr, NUL, OptInt, ShmFlag, TypVal, VarLock, uint64_t,
+    CmdModFlags, ColNr, DictItem, DictKey, LineNr, NUL, OptInt, ShmFlag, TypVal, VarLock,
 };
 use crate::undo::u_sync;
 use crate::window::get_last_winid;
@@ -153,12 +160,12 @@ fn set_spelllang(win: Win) {
 /// Whether the window's `'spelllang'` is set. It lives in the syntax block
 /// the window shares with its buffer.
 fn has_spelllang(win: Win) -> bool {
-    win.syntax().b_p_spl.first_byte() as c_int != NUL
+    c_int::from(win.syntax().b_p_spl.first_byte()) != NUL
 }
 
 /// Whether the job behind terminal buffer `buffer` is still running.
 fn job_running(buffer: Buf) -> bool {
-    channel_job_running(buffer.b_p_channel as uint64_t)
+    channel_job_running(buffer.b_p_channel.cast_unsigned())
 }
 
 /// Recompute every buffer's short file name against the new directory.
@@ -175,9 +182,7 @@ fn reshorten_fnames() {
 ///
 /// With `update_jumplist` the position being left joins the jump list.
 pub fn set_curbuf(buffer: Buf, action: c_int, update_jumplist: bool) {
-    let unload = action == DOBUF_UNLOAD as c_int
-        || action == DOBUF_DEL as c_int
-        || action == DOBUF_WIPE as c_int;
+    let unload = action == DOBUF_UNLOAD || action == DOBUF_DEL || action == DOBUF_WIPE;
     let old_tw: OptInt = Buf::current().b_p_tw;
     let winid_before = last_winid();
 
@@ -261,7 +266,7 @@ fn leave_prevbuf(
     if unload
         || prev_nwindows <= 1
             && winid_before != last_winid()
-            && action == DOBUF_GOTO as c_int
+            && action == DOBUF_GOTO
             && !may_hide(prevbuf)
     {
         close_all_windows(prevbuf, false);
@@ -286,8 +291,8 @@ fn leave_prevbuf(
     let window = Win::current_or_none().filter(|win| prevbuf == win.w_buffer);
     let how = if unload {
         action
-    } else if action == DOBUF_GOTO as c_int && !may_hide(prevbuf) && !is_changed(prevbuf) {
-        DOBUF_UNLOAD as c_int
+    } else if action == DOBUF_GOTO && !may_hide(prevbuf) && !is_changed(prevbuf) {
+        DOBUF_UNLOAD
     } else {
         0
     };
@@ -318,7 +323,7 @@ pub(crate) fn enter_buffer(mut buffer: Buf) {
     buffer.b_nwindows += 1;
 
     // Copy buffer and window local option values.  Not for a help buffer.
-    copy_options_into(buffer, BCO_ENTER as c_int | BCO_NOHELP as c_int);
+    copy_options_into(buffer, BCO_ENTER | BCO_NOHELP);
     if !buffer.b_help {
         restore_winopts(buffer);
     } else {
@@ -351,7 +356,7 @@ pub(crate) fn enter_buffer(mut buffer: Buf) {
         // If there is no filetype, allow for detecting one.  Esp. useful for
         // ":ball" used in an autocommand.  If there already is a filetype we
         // might prefer to keep it.
-        if buffer.b_p_ft.first_byte() as c_int == NUL {
+        if c_int::from(buffer.b_p_ft.first_byte()) == NUL {
             buffer.b_did_filetype = false;
         }
         load_current_buffer();
@@ -385,7 +390,7 @@ pub(crate) fn enter_buffer(mut buffer: Buf) {
     // Change directories when the 'acd' option is set.
     do_autochdir_now();
 
-    if Buf::current().b_kmap_state as c_int & KEYMAP_INIT != 0 {
+    if Buf::current().b_kmap_state & KEYMAP_INIT != 0 {
         init_keymap();
     }
     // May need to set the spell language.  Can only do this after the buffer

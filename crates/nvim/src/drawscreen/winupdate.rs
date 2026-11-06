@@ -11,12 +11,23 @@
 //! That is why a bug here shows up as STALE CELLS: every shortcut is a promise
 //! that some rows do not have to be redrawn.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::decoration::DECOR_PRIORITY_BASE;
 use crate::decoration::{DECOR_ID_INVALID, decor_put_vt, kVPosWinCol};
 use crate::grid::default_grid_ref;
 use crate::r#move::WinValid;
+use crate::narrow::as_index;
+use crate::narrow::count_as_int;
+use crate::narrow::number_as_u16;
 use crate::normal::{VisualSelection, visual_selection};
 use crate::optionstr::OptString;
 use crate::winlayer::Buf;
@@ -196,7 +207,7 @@ pub(crate) fn win_update(window: Win) {
     if rg.redr_type == UPD_REDRAW_TOP {
         let mut rows = 0;
         for i in 0..win.w_lines_valid {
-            rows += c_int::from(win.w_lines[i as usize].wl_size);
+            rows += c_int::from(win.w_lines[as_index(i)].wl_size);
             if rows >= win.w_upd_rows {
                 rg.top_end = rows;
                 break;
@@ -268,7 +279,7 @@ fn add_suspended_terminal_note(buffer: Buf) {
     let note = DecorVirtText {
         flags: 0,
         hl_mode: 0,
-        priority: DECOR_PRIORITY_BASE as DecorPriority,
+        priority: DECOR_PRIORITY_BASE,
         width: 0,
         col: 0,
         pos: kVPosWinCol,
@@ -391,7 +402,7 @@ fn widen_over_folds(win: Win, rg: &mut Regions) {
     let mut lnumt = win.w_topline;
     let mut lnumb = MAXLNUM;
     for i in 0..win.w_lines_valid {
-        let wl = win.w_lines[i as usize];
+        let wl = win.w_lines[as_index(i)];
         if !wl.wl_valid {
             continue;
         }
@@ -530,12 +541,12 @@ fn scroll_down(mut win: Win, rg: &mut Regions) {
     win.w_lines_valid = (win.w_lines_valid + off).min(win.w_view_height);
     let mut idx = win.w_lines_valid;
     while idx - off >= 0 {
-        win.w_lines[idx as usize] = win.w_lines[(idx - off) as usize];
+        win.w_lines[as_index(idx)] = win.w_lines[as_index(idx - off)];
         idx -= 1;
     }
     // The entries the scrolled ones vacated describe lines that are gone.
     while idx >= 0 {
-        win.w_lines[idx as usize].wl_valid = false;
+        win.w_lines[as_index(idx)].wl_valid = false;
         idx -= 1;
     }
 }
@@ -547,7 +558,7 @@ fn scroll_up(mut win: Win, rg: &mut Regions) {
     let mut at = -1;
     let mut rows = 0;
     for i in 0..win.w_lines_valid {
-        let wl = win.w_lines[i as usize];
+        let wl = win.w_lines[as_index(i)];
         if wl.wl_valid && wl.wl_lnum == win.w_topline {
             at = i;
             break;
@@ -589,15 +600,15 @@ fn scroll_up(mut win: Win, rg: &mut Regions) {
         // Stop at a line that did not fit -- unless nothing was deleted, in
         // which case it is still valid where it is.
         if rows > 0 && rg.bot_start + rows + size > win.w_view_height {
-            win.w_lines_valid = idx as c_int + 1;
+            win.w_lines_valid = count_as_int(idx) + 1;
             break;
         }
         rg.bot_start += size;
         idx += 1;
         at += 1;
         // Stop at the last valid entry.
-        if at >= win.w_lines_valid as usize {
-            win.w_lines_valid = idx as c_int;
+        if at >= as_index(win.w_lines_valid) {
+            win.w_lines_valid = count_as_int(idx);
             break;
         }
     }
@@ -605,7 +616,8 @@ fn scroll_up(mut win: Win, rg: &mut Regions) {
     // Correct the first entry for filler lines at the top when it is not
     // going to be drawn below.
     if win_may_fill(win) && rg.bot_start > 0 {
-        win.w_lines[0].wl_size = plines_correct_topline(win, win.w_topline, true).0 as uint16_t;
+        win.w_lines[0].wl_size =
+            number_as_u16(plines_correct_topline(win, win.w_topline, true).0.into());
     }
 }
 
@@ -648,15 +660,15 @@ fn plan_visual_area(win: Win, buffer: Buf, rg: &mut Regions) {
     rg.mid_start = if rg.scrolled_down { rg.top_end } else { 0 };
 
     while lnum < from && idx < win.w_lines_valid {
-        let wl = win.w_lines[idx as usize];
+        let wl = win.w_lines[as_index(idx)];
         if wl.wl_valid {
             rg.mid_start += c_int::from(wl.wl_size);
         } else if !rg.scrolled_down {
             srow += c_int::from(wl.wl_size);
         }
         idx += 1;
-        lnum = if idx < win.w_lines_valid && win.w_lines[idx as usize].wl_valid {
-            win.w_lines[idx as usize].wl_lnum
+        lnum = if idx < win.w_lines_valid && win.w_lines[as_index(idx)].wl_valid {
+            win.w_lines[as_index(idx)].wl_lnum
         } else {
             lnum + 1
         };
@@ -665,7 +677,7 @@ fn plan_visual_area(win: Win, buffer: Buf, rg: &mut Regions) {
 
     rg.mid_end = win.w_view_height;
     while idx < win.w_lines_valid {
-        let wl = win.w_lines[idx as usize];
+        let wl = win.w_lines[as_index(idx)];
         if wl.wl_valid && wl.wl_lnum > to {
             // Only update to the first row of this line.
             rg.mid_end = srow;
@@ -686,7 +698,7 @@ fn visual_line_range(mut win: Win, sel: VisualSelection, redr_type: c_int) -> (L
     let anchor = sel.anchor.lnum;
 
     let (mut from, mut to) =
-        if sel.mode.raw() != win.w_old_visual_mode as c_int || redr_type == UPD_INVERTED_ALL {
+        if sel.mode.raw() != win.w_old_visual_mode || redr_type == UPD_INVERTED_ALL {
             // The kind of selection changed, or the X selection was gained or
             // lost: redraw all of it, and the lines the cursor moved over.
             let (a, b) = (cursor.min(anchor), cursor.max(anchor));
@@ -782,7 +794,7 @@ fn visual_block_columns(win: Win, sel: VisualSelection) -> (ColNr, ColNr) {
 /// moved.
 fn remember_visual_area(mut window: Win, buffer: Buf) {
     if let Some(sel) = visual_selection().filter(|_| buffer == Win::current().buffer()) {
-        window.w_old_visual_mode = sel.mode.raw() as c_char;
+        window.w_old_visual_mode = sel.mode.raw();
         window.w_old_cursor_lnum = Win::current().w_cursor.lnum;
         window.w_old_visual_lnum = sel.anchor.lnum;
         window.w_old_visual_col = sel.anchor.col;
@@ -803,9 +815,9 @@ fn send_win_extmarks(window: Win) {
                 Integer::from(window.w_grid_alloc.handle),
                 window.handle as WindowHandle,
                 Integer::from(m.ns_id),
-                m.mark_id as Integer,
-                m.win_row as Integer,
-                m.win_col as Integer,
+                m.mark_id.cast_signed(),
+                Integer::from(m.win_row),
+                Integer::from(m.win_col),
             );
         }
     });

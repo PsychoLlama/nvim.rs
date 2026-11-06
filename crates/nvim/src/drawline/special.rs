@@ -10,10 +10,19 @@
 //! What these have in common is that they all set up a run in
 //! [`WinLineVars::extra_todo`] and hand the first cell of it back to the loop.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
 use crate::grid::with_linebuf;
+use crate::narrow::as_index;
+use crate::narrow::count_as_int;
 use crate::normal::{visual_active, visual_anchor, visual_mode};
 use crate::optionstr::OptStringRef;
 use crate::strings::has_char;
@@ -172,7 +181,7 @@ impl Cells {
             wlv.col -= 1;
         } else {
             // Add a blank character to highlight.
-            with_linebuf(|line| line.chars_mut()[wlv.off as usize] = schar_from_ascii(b' '));
+            with_linebuf(|line| line.chars_mut()[as_index(wlv.off)] = schar_from_ascii(b' '));
         }
         if self.area_attr == 0 && !self.has_fold {
             // Use the attributes of the highest-priority match.
@@ -184,8 +193,8 @@ impl Cells {
             wlv.char_attr
         };
         with_linebuf(|line| {
-            line.attrs_mut()[wlv.off as usize] = eol_attr as ScreenAttr;
-            line.vcols_mut()[wlv.off as usize] = wlv.vcol;
+            line.attrs_mut()[as_index(wlv.off)] = eol_attr as ScreenAttr;
+            line.vcols_mut()[as_index(wlv.off)] = wlv.vcol;
         });
         wlv.col += 1;
         wlv.off += 1;
@@ -266,15 +275,15 @@ impl Cells {
                 // `extra_todo` shorter than the Tab — so the running total is
                 // signed. Upstream lets `size_t` wrap through the same
                 // arithmetic and relies on the total coming back positive.
-                let tab2_len = schar_len(lcs_tab2) as isize;
+                let tab2_len = schar_len(lcs_tab2).cast_signed();
                 let mut len = tab_len as isize * tab2_len;
                 if lcs_tab3 != 0 {
-                    len += schar_len(lcs_tab3) as isize - tab2_len;
+                    len += schar_len(lcs_tab3).cast_signed() - tab2_len;
                 }
                 if wlv.extra_todo > 0 {
                     len += (wlv.extra_todo - tab_len) as isize;
                 }
-                let len = len as size_t;
+                let len = len.cast_unsigned();
                 self.cell_char = lcs_tab1;
                 self.char_code = schar_get_first_codepoint(self.cell_char);
                 let buf = wlv.extra.set_room(len);
@@ -293,7 +302,7 @@ impl Cells {
                     };
                     let slen = schar_get_adv(&mut rest, lcs_here);
                     wlv.extra_todo +=
-                        slen as ::core::ffi::c_int - ::core::ffi::c_int::from(saved_nextra > 0);
+                        count_as_int(slen) - ::core::ffi::c_int::from(saved_nextra > 0);
                 }
                 if wlv.vcol_off_co > 0 {
                     // `fix_for_boguscols` below adds it back.
@@ -352,14 +361,15 @@ impl Cells {
         if wlv.extra_todo == 0 {
             wlv.extra_todo = byte2cells(self.char_code) - 1;
         }
-        if dy_flags.get() & kOptDyFlagUhex as uint32_t != 0 && window.w_onebuf_opt.wo_rl != 0 {
+        if dy_flags.get() & kOptDyFlagUhex != 0 && window.w_onebuf_opt.wo_rl != 0 {
             // Reverse "<12>".
             mirror_ascii(text);
         }
         (wlv.extra_fill, wlv.extra_last) = (NUL as ScreenChar, NUL as ScreenChar);
         // The first byte is this cell; the rest is the run.
         let unprintable = self.char_code;
-        self.char_code = ::core::ffi::c_int::from(text.first().copied().unwrap_or(0));
+        let first = text.first().copied().unwrap_or(0);
+        self.char_code = ::core::ffi::c_int::from(first);
         let tail = text.get(1..).unwrap_or_default();
         if window.w_onebuf_opt.wo_lbr != 0 {
             // With 'linebreak' the escape has to be padded out to the
@@ -377,7 +387,7 @@ impl Cells {
         wlv.n_attr = wlv.extra_todo + 1;
         wlv.extra_attr = win_hl_attr(window, HLF_8);
         self.attr_before_run = wlv.char_attr;
-        self.cell_char = schar_from_ascii(self.char_code as u8);
+        self.cell_char = schar_from_ascii(first);
     }
 
     /// Should a cell be drawn for the line break itself?

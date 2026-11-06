@@ -455,7 +455,7 @@ impl Jump {
         // 'switchbuf' may ask for the new window to be a vertical
         // split, or for a whole new tab page.
         if switchbuf & kOptSwbFlagVsplit as c_uint != 0 {
-            cmdmod_add_split(WSP_VERT.cast_signed());
+            cmdmod_add_split(WSP_VERT);
         }
         if switchbuf & kOptSwbFlagNewtab as c_uint != 0 && cmdmod_tab() == 0 {
             cmdmod_set_tab(tab_index(TabPage::current()) + 1);

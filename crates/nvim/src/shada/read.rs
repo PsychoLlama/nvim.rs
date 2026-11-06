@@ -387,12 +387,7 @@ fn apply_buffer_list(list: Vec<ShadaBufferListItem>) {
     for item in list {
         let fname = item.fname.as_cstr();
         let sfname = path_try_shorten_fname(fname);
-        let Some(mut buf) = buflist_new(
-            Some(fname),
-            Some(sfname),
-            LineNr::ZERO,
-            BLN_LISTED.cast_signed(),
-        ) else {
+        let Some(mut buf) = buflist_new(Some(fname), Some(sfname), LineNr::ZERO, BLN_LISTED) else {
             continue;
         };
         shada_restore_last_cursor(buf, item.pos);

@@ -34,7 +34,7 @@ use crate::os::cshim::gettext;
 use crate::os::input::os_breakcheck;
 use crate::pos::equalpos;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_int, c_uint};
+use core::ffi::c_int;
 
 use super::show::*;
 use super::store::slot;
@@ -62,9 +62,7 @@ pub fn setpcmark() {
     }
     // With 'jumpoptions' "stack", a new jump truncates everything the user
     // had walked back past, the way a browser's history does.
-    if jop_flags.get() & kOptJopFlagStack as c_uint != 0
-        && win.w_jumplistidx < win.w_jumplistlen - 1
-    {
+    if jop_flags.get() & kOptJopFlagStack != 0 && win.w_jumplistidx < win.w_jumplistlen - 1 {
         win.w_jumplistlen = win.w_jumplistidx + 1;
     }
     win.w_jumplistlen += 1;
@@ -232,7 +230,7 @@ pub fn cleanup_jumplist(mut window: Win, loadfiles: bool) {
     // Compact in place: `from` reads, `to` writes, and an entry is dropped
     // when a LATER entry names the same line of the same buffer — the newest
     // of a run of duplicates is the one kept.
-    let stack = jop_flags.get() & kOptJopFlagStack as c_uint != 0;
+    let stack = jop_flags.get() & kOptJopFlagStack != 0;
     let w: &mut Window = &mut window;
     let len = slot(w.w_jumplistlen);
     let mut to = 0;

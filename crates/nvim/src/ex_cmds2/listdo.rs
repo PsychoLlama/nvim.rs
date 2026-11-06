@@ -208,12 +208,7 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
             }
             buf = cur;
             if let Some(first) = buf {
-                goto_buffer(
-                    excmd,
-                    DOBUF_FIRST as c_int,
-                    FORWARD as c_int,
-                    first.handle.get(),
-                );
+                goto_buffer(excmd, DOBUF_FIRST, FORWARD as c_int, first.handle.get());
             }
         }
         ListDo::Quickfix { .. } => {
@@ -313,7 +308,7 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
                 if !buffers().any(|bp| bp.handle == Handle::new(next_fnum)) {
                     break;
                 }
-                goto_buffer(excmd, DOBUF_FIRST as c_int, FORWARD as c_int, next_fnum);
+                goto_buffer(excmd, DOBUF_FIRST, FORWARD as c_int, next_fnum);
                 // If autocommands took us elsewhere, quit here.
                 if Buf::current().handle != Handle::new(next_fnum) {
                     break;

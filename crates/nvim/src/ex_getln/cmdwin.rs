@@ -148,7 +148,7 @@ pub(crate) fn open_cmdwin() -> Key {
     // Create a window for the command-line buffer.
     if win_split(
         ::core::ffi::c_int::try_from(p_cwh()).unwrap_or(::core::ffi::c_int::MAX),
-        WSP_BOT.cast_signed(),
+        WSP_BOT,
     )
     .is_err()
     {
@@ -426,6 +426,6 @@ pub fn is_in_cmdwin() -> bool {
 /// C's `close_buffer(NULL, buf, DOBUF_WIPE, false, false)`: wipe the command
 /// window's buffer out, window-less and without forcing.
 fn wipe_buffer(buffer: Buf) {
-    let wipe = DOBUF_WIPE.cast_signed();
+    let wipe = DOBUF_WIPE;
     close_buffer(None, buffer, wipe, false, false);
 }

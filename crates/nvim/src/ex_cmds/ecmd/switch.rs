@@ -104,7 +104,7 @@ pub(super) fn switch_to_other_buffer(
             ffname,
             sfname,
             LineNr::new(tlnum),
-            BLN_LISTED.cast_signed() | BLN_NOCURWIN.cast_signed(),
+            BLN_LISTED | BLN_NOCURWIN,
         );
         if let Some(newbuf) = newbuf.filter(|_| flags.has(EcmdFlags::ALTBUF)) {
             Win::current().w_alt_fnum = newbuf.handle.get();
@@ -115,11 +115,11 @@ pub(super) fn switch_to_other_buffer(
             ffname,
             sfname,
             LineNr::ZERO,
-            BLN_CURBUF.cast_signed()
+            BLN_CURBUF
                 | (if flags.has(EcmdFlags::SET_HELP) {
                     0
                 } else {
-                    BLN_LISTED.cast_signed()
+                    BLN_LISTED
                 }),
         );
         // Autocmds may change curwin and curbuf.
@@ -262,7 +262,7 @@ fn leave_for_buffer(
     buffer.b_locked += 1;
 
     if old_curbuf.is(Buf::current_or_none()) {
-        buf_copy_options(buffer, BCO_ENTER.cast_signed());
+        buf_copy_options(buffer, BCO_ENTER);
     }
 
     // A terminal buffer that is still running is hidden, never unloaded.
@@ -271,11 +271,7 @@ fn leave_for_buffer(
     // Close the link to the current buffer.  This will set
     // oldwin->w_buffer to NULL.
     u_sync(false);
-    let mode = if unload {
-        DOBUF_UNLOAD.cast_signed()
-    } else {
-        0
-    };
+    let mode = if unload { DOBUF_UNLOAD } else { 0 };
     let win = oldwin.and_then(WinId::get);
     let did_decrement = close_buffer(win, Buf::current(), mode, false, false);
 

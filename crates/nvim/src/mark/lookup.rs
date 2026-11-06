@@ -335,7 +335,7 @@ fn switch_to_mark_buf(fm: &FileMark, pcmark_on_switch: bool) -> MarkMoveRes {
     }
     let getfile_flag = if pcmark_on_switch { GETF_SETMARK } else { 0 };
     // `buflist_getfile` loads the file.
-    let ok = buflist_getfile(fm.fnum, fm.mark.lnum, getfile_flag.cast_signed(), 0).is_ok();
+    let ok = buflist_getfile(fm.fnum, fm.mark.lnum, getfile_flag, 0).is_ok();
     if ok {
         kMarkSwitchedBuf
     } else {

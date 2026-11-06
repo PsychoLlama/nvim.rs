@@ -24,6 +24,13 @@
 //! several grids into one for UIs that did not ask for `ext_multigrid` in
 //! [`ui_compositor`](crate::ui_compositor).
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
@@ -58,6 +65,7 @@ use crate::highlight::{highlight_use_hlstate, ui_send_all_hls};
 use crate::highlight_group::HLF_W;
 use crate::message::state::{emsg_silent, in_assert_fails};
 use crate::message::{msg, msg_ext_ui_flush, msg_scroll_flush, msg_source, msg_ui_refresh};
+use crate::narrow::as_index;
 use crate::option::vars::{
     P_GUICURSOR, P_LZ, bo_flags, p_debug, p_lz, p_tgc, p_vb, p_wd, rdb_flags,
 };
@@ -310,11 +318,11 @@ pub fn ui_refresh() {
         if ui_refresh_cmdheight.get() {
             let _ = set_option_value(
                 kOptCmdheight,
-                OptVal::Number(had_message as _),
+                OptVal::Number(had_message.into()),
                 OptionSetFlags::NONE,
             );
             for mut tp in tabs() {
-                tp.tp_ch_used = had_message as _;
+                tp.tp_ch_used = had_message.into();
             }
         }
         msg_scroll_flush();
@@ -381,11 +389,11 @@ fn ui_may_set_default_colors() {
     }
     pending_default_colors.set(false);
     ui_call_default_colors_set(
-        normal_fg.get() as Integer,
-        normal_bg.get() as Integer,
-        normal_sp.get() as Integer,
-        cterm_normal_fg_color.get() as Integer,
-        cterm_normal_bg_color.get() as Integer,
+        Integer::from(normal_fg.get()),
+        Integer::from(normal_bg.get()),
+        Integer::from(normal_sp.get()),
+        Integer::from(cterm_normal_fg_color.get()),
+        Integer::from(cterm_normal_bg_color.get()),
     );
 }
 
@@ -411,7 +419,7 @@ pub fn vim_beep(val: core::ffi::c_uint) {
     if emsg_silent.get() != 0 || in_assert_fails.get() {
         return;
     }
-    if bo_flags.get() & val == 0 && bo_flags.get() & kOptBoFlagAll as core::ffi::c_uint == 0 {
+    if bo_flags.get() & val == 0 && bo_flags.get() & kOptBoFlagAll == 0 {
         // At most three beeps per half second: a stuck macro that beeps on
         // every iteration should not make the terminal unusable.
         static beeps: GlobalCell<c_int> = GlobalCell::new(0);
@@ -476,7 +484,11 @@ pub fn ui_attach_impl(mut ui: RemoteUI) {
         let Some(active) = with_ui(chanid, |ui| ui.ui_ext[widget]) else {
             break;
         };
-        ui_set_ext_option(chanid, widget as UIExtension, active);
+        ui_set_ext_option(
+            chanid,
+            UIExtension::try_from(widget).expect("a UI extension index"),
+            active,
+        );
     }
 
     // Highlights are sent as definitions plus ids, unless this is the
@@ -565,22 +577,22 @@ pub fn ui_line(
     ui_may_set_default_colors();
 
     let off = grid.cell_offset(row, startcol);
-    let (chars, attrs) = grid.cells(off, (grid.cols - startcol) as usize);
+    let (chars, attrs) = grid.cells(off, as_index(grid.cols - startcol));
     let handle = Integer::from(grid.handle);
-    let (at_row, from) = (row as Integer, startcol as Integer);
-    let (to, clear_from) = (endcol as Integer, clearcol as Integer);
-    let clear_attr = clearattr as Integer;
+    let (at_row, from) = (Integer::from(row), Integer::from(startcol));
+    let (to, clear_from) = (Integer::from(endcol), Integer::from(clearcol));
+    let clear_attr = Integer::from(clearattr);
     ui_call_raw_line(
         handle, at_row, from, to, clear_from, clear_attr, flags, chars, attrs,
     );
 
     // 'writedelay' with `redrawdebug=line`: park the cursor at the end of
     // the line just drawn and pause, so the draw order is watchable.
-    if p_wd() != 0 && rdb_flags.get() & kOptRdbFlagLine as core::ffi::c_uint != 0 {
+    if p_wd() != 0 && rdb_flags.get() & kOptRdbFlagLine != 0 {
         ui_call_grid_cursor_goto(
             Integer::from(grid.handle),
-            row as Integer,
-            clearcol.min(grid.cols - 1) as Integer,
+            Integer::from(row),
+            Integer::from(clearcol.min(grid.cols - 1)),
         );
         ui_call_flush();
         os_sleep(p_wd().unsigned_abs());
@@ -673,8 +685,8 @@ pub fn ui_flush() {
     if pending_cursor_update.get() {
         ui_call_grid_cursor_goto(
             Integer::from(cursor_grid_handle.get()),
-            cursor_row.get() as Integer,
-            cursor_col.get() as Integer,
+            Integer::from(cursor_row.get()),
+            Integer::from(cursor_col.get()),
         );
         pending_cursor_update.set(false);
         // Moving the cursor can uncover a window whose viewport changed.
@@ -701,23 +713,23 @@ pub fn ui_flush() {
             ui_mode_idx.get()
         };
         let full_name = shape_entry(idx).full_name;
-        ui_call_mode_change(ApiString::from_cstr(full_name), idx as Integer);
+        ui_call_mode_change(ApiString::from_cstr(full_name), Integer::from(idx));
         pending_mode_update.set(false);
         cursor_was_obscured.set(cursor_obscured);
     }
 
-    if pending_has_mouse.get() != mouse::wanted() as c_int {
+    if pending_has_mouse.get() != c_int::from(mouse::wanted()) {
         if mouse::wanted() {
             ui_call_mouse_on();
         } else {
             ui_call_mouse_off();
         }
-        pending_has_mouse.set(mouse::wanted() as c_int);
+        pending_has_mouse.set(c_int::from(mouse::wanted()));
     }
 
     ui_call_flush();
 
-    if p_wd() != 0 && rdb_flags.get() & kOptRdbFlagFlush as core::ffi::c_uint != 0 {
+    if p_wd() != 0 && rdb_flags.get() & kOptRdbFlagFlush != 0 {
         os_sleep(p_wd().unsigned_abs());
     }
 }
@@ -772,15 +784,18 @@ pub fn ui_array() -> Array {
 fn ui_info(ui: &RemoteUI) -> ApiDict {
     let mut info = DictBuilder::with_capacity(10 + kUIExtCount as usize);
     let fixed: [(&'static str, Object); 9] = [
-        ("width", Object::integer(ui.width as Integer)),
-        ("height", Object::integer(ui.height as Integer)),
+        ("width", Object::integer(Integer::from(ui.width))),
+        ("height", Object::integer(Integer::from(ui.height))),
         ("rgb", Object::boolean(ui.rgb)),
         ("override", Object::boolean(ui.override_0)),
         ("term_name", Object::string(ui.term_name.clone())),
         // Reported empty rather than read back: the background a UI
         // sent is only meaningful to whoever sent it.
         ("term_background", Object::literal("")),
-        ("term_colors", Object::integer(ui.term_colors as Integer)),
+        (
+            "term_colors",
+            Object::integer(Integer::from(ui.term_colors)),
+        ),
         ("stdin_tty", Object::boolean(ui.stdin_tty)),
         ("stdout_tty", Object::boolean(ui.stdout_tty)),
     ];
@@ -795,7 +810,7 @@ fn ui_info(ui: &RemoteUI) -> ApiDict {
             info.insert(name.to_bytes(), Object::boolean(ui.ui_ext[widget]));
         }
     }
-    info.insert("chan", Object::integer(ui.channel_id as Integer));
+    info.insert("chan", Object::integer(ui.channel_id.cast_signed()));
     info.into()
 }
 

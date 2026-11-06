@@ -196,13 +196,13 @@ fn split_flags(qi: Qi) -> c_int {
     let mut flags = if cmdmod.with(|m| m.cmod_split) != 0 {
         0
     } else if qi.is_quickfix() {
-        WSP_BOT.cast_signed()
+        WSP_BOT
     } else {
-        WSP_BELOW.cast_signed()
+        WSP_BELOW
     };
-    flags |= WSP_NEWLOC.cast_signed();
+    flags |= WSP_NEWLOC;
     if qi.is_quickfix() {
-        flags |= WSP_QUICKFIX.cast_signed();
+        flags |= WSP_QUICKFIX;
     }
     flags
 }
@@ -250,7 +250,7 @@ pub fn ex_copen(excmd: &mut ExArg) {
     reset_visual_and_resel(); // stop Visual mode
 
     // Find an existing quickfix window, or open a new one.
-    let vertical = cmdmod.with(|m| m.cmod_split) & WSP_VERT.cast_signed() != 0;
+    let vertical = cmdmod.with(|m| m.cmod_split) & WSP_VERT != 0;
     let found =
         cmdmod.with(|m| m.cmod_tab) == 0 && goto_cwindow(qi, addr_count != 0, height, vertical);
     if !found && !open_new_cwindow(qi, height) {

@@ -124,11 +124,11 @@ pub fn nvim_buf_delete(buf: BufferHandle, opts: &mut KeyDict_buf_delete) -> Resu
     let unload: bool = opts.unload.unwrap_or(false);
     let result: Result<(), Failed> = do_buffer(
         if ::core::ffi::c_int::from(unload) != 0 {
-            DOBUF_UNLOAD.cast_signed()
+            DOBUF_UNLOAD
         } else {
-            DOBUF_WIPE.cast_signed()
+            DOBUF_WIPE
         },
-        DOBUF_FIRST.cast_signed(),
+        DOBUF_FIRST,
         FORWARD as ::core::ffi::c_int,
         b.handle.get(),
         ::core::ffi::c_int::from(force),

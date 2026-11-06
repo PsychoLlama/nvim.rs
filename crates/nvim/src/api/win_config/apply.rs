@@ -277,7 +277,7 @@ impl Relayout {
     /// Put the window back into the layout as a split of its parent, and
     /// undo the detachment if that does not work.
     fn insert(&mut self) -> Result<Applied, Refusal> {
-        let flags = win_split_flags(self.split, self.parent.is_none()) | WSP_NOENTER.cast_signed();
+        let flags = win_split_flags(self.split, self.parent.is_none()) | WSP_NOENTER;
         self.parent_tp = match self.parent_id {
             None => Some(TabPage::current()),
             Some(parent) => win_find_tabpage(parent),

@@ -15,6 +15,13 @@
 //!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::cstr;
@@ -22,6 +29,7 @@ use crate::env::home_to_tilde;
 use crate::fileio::Report;
 use crate::formatted;
 use crate::memline::MlFlags;
+use crate::narrow::number_as_int;
 use crate::strings::has_char;
 use core::ffi::{CStr, c_int};
 
@@ -214,7 +222,7 @@ fn show(buffer: Buf, by_time: bool, name: &XString) {
     }
 
     if !ui_has(kUIMessages) || msg_col.get() > 0 {
-        msg_putchar(b'\n' as c_int);
+        msg_putchar(c_int::from(b'\n'));
     }
 
     let listed = if buffer.b_p_bl != 0 { b' ' } else { b'u' };
@@ -343,7 +351,7 @@ pub fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
         let fmt = ngettext(
             c"%ld line --%d%%--",
             c"%ld lines --%d%%--",
-            lines.get() as u64,
+            u64::from(lines.get().unsigned_abs()),
         );
         let percent = percentage(cursor, lines);
         out.push_fmt(fmt, &[i64::from(lines).into(), percent.into()]);
@@ -423,7 +431,7 @@ pub fn maketitle() {
     if p_title() {
         let mut maxlen = 0;
         if p_titlelen() > 0 as OptInt {
-            maxlen = ((p_titlelen() * Columns.get() as OptInt / 100) as c_int).max(10);
+            maxlen = number_as_int(p_titlelen() * OptInt::from(Columns.get()) / 100).max(10);
         }
         let title = if !titlestring.is_empty() {
             if stl_syntax.get().has(StlSyntax::TITLE) {
@@ -484,7 +492,7 @@ fn default_icon() -> Vec<u8> {
     let mut start = 0;
     if name.len() > 100 {
         let cut = name.len() - 100;
-        start = cut + cp_bounds(name, cut).end_off as usize;
+        start = cut + usize::from(cp_bounds(name, cut).end_off.unsigned_abs());
     }
     let mut out = [0u8; IOSIZE as usize];
     out[..name.len() - start].copy_from_slice(&name[start..]);

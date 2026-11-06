@@ -8,12 +8,22 @@
 //! door to the same answer, and the only way to observe any of it without a
 //! screen.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::cstr::byte_at;
+use crate::narrow::as_index;
+use crate::narrow::len_as_int;
+use crate::narrow::number_as_int;
 use crate::types::DiffLineChanges;
 use crate::winlayer::{Buf, BufId, TabPage, Win};
 use core::ffi::c_int;
@@ -31,7 +41,7 @@ pub fn diff_update_line(lnum: LineNr) {
     if idx == DB_COUNT {
         return;
     }
-    let idx = idx as usize;
+    let idx = as_index(idx);
     tp.with_diff(|blocks| {
         if let Some(dp) = blocks.iter_mut().find(|dp| lnum <= dp.end(idx)) {
             dp.has_changes = false;
@@ -46,7 +56,7 @@ impl DiffLine {
         match self.changes {
             DiffLineChanges::None => 0,
             DiffLineChanges::Simple { .. } => 1,
-            DiffLineChanges::Inline { num, .. } => num as c_int,
+            DiffLineChanges::Inline { num, .. } => num.cast_signed(),
         }
     }
 
@@ -80,7 +90,7 @@ impl DiffLine {
             DiffLineChanges::Simple { start, .. } => start.get(),
             _ => self
                 .inline_change(i)
-                .map_or(c_int::MAX, |ch| ch.dc_start[self.bufidx as usize].get()),
+                .map_or(c_int::MAX, |ch| ch.dc_start[as_index(self.bufidx)].get()),
         }
     }
 
@@ -100,7 +110,7 @@ impl DiffLine {
         let Some(ch) = self.inline_change(i) else {
             return (c_int::MAX, c_int::MAX, false);
         };
-        let buf = self.bufidx as usize;
+        let buf = as_index(self.bufidx);
         let lineoff = self.lineoff;
         let start = if ch.dc_start_lnum_off[buf] < lineoff {
             0
@@ -161,28 +171,28 @@ fn common_prefix(org: &[u8], new: &[u8]) -> (usize, usize) {
 /// turns into an exclusive one.
 fn common_suffix(org: &[u8], new: &[u8], start: c_int, si_new: c_int) -> c_int {
     let flags = diff_flags.get();
-    let (mut ei_org, mut ei_new) = (org.len() as c_int, new.len() as c_int);
+    let (mut ei_org, mut ei_new) = (len_as_int(org.len()), len_as_int(new.len()));
     while ei_org >= start && ei_new >= si_new && ei_org >= 0 && ei_new >= 0 {
-        let w_org = ascii_iswhite(c_int::from(byte_at(org, ei_org as usize)));
-        let w_new = ascii_iswhite(c_int::from(byte_at(new, ei_new as usize)));
+        let w_org = ascii_iswhite(c_int::from(byte_at(org, as_index(ei_org))));
+        let w_new = ascii_iswhite(c_int::from(byte_at(new, as_index(ei_new))));
         if flags & DIFF_IWHITE != 0 && w_org && w_new
             || flags & DIFF_IWHITEALL != 0 && (w_org || w_new)
         {
-            while ei_org >= start && ascii_iswhite(c_int::from(byte_at(org, ei_org as usize))) {
+            while ei_org >= start && ascii_iswhite(c_int::from(byte_at(org, as_index(ei_org)))) {
                 ei_org -= 1;
             }
-            while ei_new >= si_new && ascii_iswhite(c_int::from(byte_at(new, ei_new as usize))) {
+            while ei_new >= si_new && ascii_iswhite(c_int::from(byte_at(new, as_index(ei_new)))) {
                 ei_new -= 1;
             }
         } else {
             // Both ends move to the head of the character covering them
             // before being compared, exactly as the prefix walk does.
-            let p1 = ei_org as usize - head_off(org, ei_org as usize);
-            let p2 = ei_new as usize - head_off(new, ei_new as usize);
+            let p1 = as_index(ei_org) - head_off(org, as_index(ei_org));
+            let p2 = as_index(ei_new) - head_off(new, as_index(ei_new));
             match char_len(&org[p1.min(org.len())..], &new[p2.min(new.len())..]) {
                 Some(l) => {
-                    ei_org -= l as c_int;
-                    ei_new -= l as c_int;
+                    ei_org -= len_as_int(l);
+                    ei_new -= len_as_int(l);
                 }
                 None => break,
             }
@@ -213,7 +223,7 @@ fn diff_find_change_simple(
     // is this window's own on the turn that skips it.
     let line_org =
         (diff_flags.get() & DIFF_INLINE_NONE == 0).then(|| window.buffer().lines().line_copy(lnum));
-    let off = lnum - dp.df_lnum[idx as usize];
+    let off = lnum - dp.df_lnum[as_index(idx)];
     let mut added = true;
     for (i, slot) in slots.iter().enumerate() {
         // A line past the other buffer's count is a filler line there,
@@ -221,7 +231,7 @@ fn diff_find_change_simple(
         let Some(buf) = slot.and_then(BufId::get) else {
             continue;
         };
-        if i as c_int == idx || off >= dp.df_count[i] {
+        if len_as_int(i) == idx || off >= dp.df_count[i] {
             continue;
         }
         added = false;
@@ -234,9 +244,9 @@ fn diff_find_change_simple(
         let new = lines.line(other);
 
         let (si_org, si_new) = common_prefix(org, new);
-        *startp = (*startp).min(si_org as c_int);
+        *startp = (*startp).min(len_as_int(si_org));
         if byte_at(org, si_org) != 0 || byte_at(new, si_new) != 0 {
-            *endp = (*endp).max(common_suffix(org, new, *startp, si_new as c_int));
+            *endp = (*endp).max(common_suffix(org, new, *startp, len_as_int(si_new)));
         }
     }
     added
@@ -260,14 +270,14 @@ pub(crate) fn diff_find_change(window: Win, lnum: LineNr, diffline: &mut DiffLin
     let generation = tp.tp_diff_gen;
     tp.with_diff(|blocks| {
         // The first block this line is not already past.
-        let Some(block) = blocks.iter().position(|dp| lnum < dp.end(idx as usize)) else {
+        let Some(block) = blocks.iter().position(|dp| lnum < dp.end(as_index(idx))) else {
             return false;
         };
         let dp = &mut blocks[block];
         if diff_check_sanity(&slots, dp).is_err() {
             return false;
         }
-        let off = (lnum - dp.df_lnum[idx as usize]) as c_int;
+        let off = (lnum - dp.df_lnum[as_index(idx)]) as c_int;
         diffline.bufidx = idx;
         diffline.lineoff = off;
 
@@ -290,7 +300,7 @@ pub(crate) fn diff_find_change(window: Win, lnum: LineNr, diffline: &mut DiffLin
         // The changes are stored for the whole block; this line's share of
         // them is the run whose line-offset span covers `off`.
         let changes = &dp.df_changes;
-        let at = idx as usize;
+        let at = as_index(idx);
         let mut first = None;
         let mut num_changes = 0;
         let mut change_idx = 0;
@@ -321,7 +331,7 @@ pub(crate) fn diff_find_change(window: Win, lnum: LineNr, diffline: &mut DiffLin
         }
         let last = &changes[changes.len() - 1];
         (0..DB_COUNT as usize).all(|i| {
-            i as c_int == idx || slots[i].is_none() || last.dc_start_lnum_off[i] == c_int::MAX
+            len_as_int(i) == idx || slots[i].is_none() || last.dc_start_lnum_off[i] == c_int::MAX
         })
     })
 }
@@ -384,7 +394,7 @@ pub fn f_diff_hl_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     if hlID.get() == HLF_CHD || hlID.get() == HLF_TXD {
-        let col = tv_get_number(&args[1]) as c_int - 1;
+        let col = number_as_int(tv_get_number(&args[1])) - 1;
         if cache_results {
             hlID.set(if col >= change_start.get() && col < change_end.get() {
                 HLF_TXD

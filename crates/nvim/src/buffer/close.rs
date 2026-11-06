@@ -15,11 +15,19 @@
 //!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::eval::typval::DO_NOT_FREE_CNT;
 use crate::memline::MlFlags;
 use crate::message_fmt::msg_cstr_opt;
+use crate::narrow::as_index;
 use crate::types::AutoEvent;
 use crate::winlayer::WinId;
 use core::ffi::c_int;
@@ -231,8 +239,8 @@ impl Disposition {
     fn of(buffer: Buf, action: c_int) -> Self {
         let mut it = Disposition {
             unload: action != 0,
-            del: action == DOBUF_DEL as c_int || action == DOBUF_WIPE as c_int,
-            wipe: action == DOBUF_WIPE as c_int,
+            del: action == DOBUF_DEL || action == DOBUF_WIPE,
+            wipe: action == DOBUF_WIPE,
         };
         // The caller must take care of NOT deleting/freeing when 'bufhidden'
         // is "hide" (otherwise we could never free or delete a buffer).
@@ -255,13 +263,9 @@ impl Disposition {
 
     /// The `BFA_*` set [`buf_freeall`] takes for this disposition.
     fn free_flags(self, ignore_abort: bool) -> c_int {
-        (if self.del { BFA_DEL as c_int } else { 0 })
-            + (if self.wipe { BFA_WIPE as c_int } else { 0 })
-            + (if ignore_abort {
-                BFA_IGNORE_ABORT as c_int
-            } else {
-                0
-            })
+        (if self.del { BFA_DEL } else { 0 })
+            + (if self.wipe { BFA_WIPE } else { 0 })
+            + (if ignore_abort { BFA_IGNORE_ABORT } else { 0 })
     }
 }
 
@@ -466,10 +470,7 @@ fn close_buffer_inner(
         if how.del {
             // Free all internal variables and reset option values, to make
             // ":bdel" compatible with Vim 5.7.
-            free_buffer_stuff(
-                buf,
-                kBffClearWinInfo as c_int | kBffInitChangedtick as c_int,
-            );
+            free_buffer_stuff(buf, kBffClearWinInfo | kBffInitChangedtick);
 
             // Make it look like a new buffer.
             buf.b_flags = BufFlags::CHECK_RO | BufFlags::NEVERLOADED;
@@ -636,7 +637,7 @@ pub fn buf_freeall(buffer: Buf, flags: c_int) {
     restore_curwin(is_curwin, the_curwin, the_curtab);
 
     // autocmds may abort script processing
-    if flags & BFA_IGNORE_ABORT as c_int == 0 && aborting_now() {
+    if flags & BFA_IGNORE_ABORT == 0 && aborting_now() {
         return;
     }
 
@@ -678,7 +679,7 @@ pub fn buf_freeall(buffer: Buf, flags: c_int) {
         forget_lines(buf, count.get());
     }
 
-    if flags & BFA_KEEP_UNDO as c_int == 0 {
+    if flags & BFA_KEEP_UNDO == 0 {
         // free the memory allocated for undo and reset all undo information
         free_undo(buf);
     }
@@ -710,7 +711,7 @@ fn announce_unload(mut buffer: Buf, flags: c_int) -> Option<Buf> {
         return None;
     }
     let mut buf = bufref.get()?;
-    if flags & BFA_DEL as c_int != 0
+    if flags & BFA_DEL != 0
         && buf.b_p_bl != 0
         && fire_named(AutoEvent::BufDelete, buf)
         && !bufref.valid()
@@ -719,7 +720,7 @@ fn announce_unload(mut buffer: Buf, flags: c_int) -> Option<Buf> {
         return None;
     }
     buf = bufref.get()?;
-    if flags & BFA_WIPE as c_int != 0 && fire_named(AutoEvent::BufWipeout, buf) && !bufref.valid() {
+    if flags & BFA_WIPE != 0 && fire_named(AutoEvent::BufWipeout, buf) && !bufref.valid() {
         // Autocommands may delete the buffer.
         return None;
     }
@@ -737,12 +738,12 @@ fn free_buffer(mut buffer: Buf) {
     let owned = forget_handle(buffer.handle());
     note_buffer_freed();
     // b:changedtick uses an item in Buffer.
-    free_buffer_stuff(buffer, kBffClearWinInfo as c_int);
+    free_buffer_stuff(buffer, kBffClearWinInfo);
     let shared = buffer
         .b_bufvar
         .di_tv
         .dict_ref()
-        .is_some_and(|dict| dict.dv_refcount.get() > DO_NOT_FREE_CNT as c_int);
+        .is_some_and(|dict| dict.dv_refcount.get() > DO_NOT_FREE_CNT.cast_signed());
     if shared {
         rescue_changedtick(buffer);
     }
@@ -760,7 +761,7 @@ fn free_buffer(mut buffer: Buf) {
     for i in 0..NMARKS as usize {
         buffer.b_namedm[i].clear(0);
     }
-    for i in 0..buffer.b_changelistlen as usize {
+    for i in 0..as_index(buffer.b_changelistlen) {
         buffer.b_changelist[i].clear(0);
     }
     if autocmd_busy.get() {
@@ -788,13 +789,13 @@ pub(crate) fn clear_wininfo(mut buffer: Buf) {
 /// Free what `:bdel` and a wipe-out drop: the window memory, the local
 /// options, the variables, the user commands, the extmarks and the mappings.
 pub(crate) fn free_buffer_stuff(mut buffer: Buf, free_flags: c_int) {
-    if free_flags & kBffClearWinInfo as c_int != 0 {
+    if free_flags & kBffClearWinInfo != 0 {
         clear_wininfo(buffer); // including window-local options
         free_buf_options(buffer, true);
         buffer.b_s.b_langp = Vec::new();
     }
     clear_buf_vars(buffer); // free all internal variables
-    if free_flags & kBffInitChangedtick as c_int != 0 {
+    if free_flags & kBffInitChangedtick != 0 {
         buf_init_changedtick(buffer);
     }
     free_user_commands(buffer); // clear local user commands
@@ -813,7 +814,7 @@ pub fn wipe_buffer(buffer: Buf, aucmd: bool) {
     if !aucmd {
         block_autocmds_now();
     }
-    close_buffer(None, buffer, DOBUF_WIPE as c_int, false, true);
+    close_buffer(None, buffer, DOBUF_WIPE, false, true);
     if !aucmd {
         unblock_autocmds_now();
     }

@@ -1,3 +1,10 @@
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
@@ -31,7 +38,7 @@ use crate::types::{
     ExtmarkType, Integer, KeyDict_get_extmark, KeyDict_get_extmarks, KeyDict_ns_opts,
     KeyDict_set_decoration_provider, KeyDict_set_extmark, LineNr, LuaRef, MTKey, MTPair, NS,
     Object, VirtLine, VirtText, VirtTextChunk, Window, int32_t, kObjectTypeArray, size_t, uint8_t,
-    uint16_t, uint32_t,
+    uint32_t,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -44,14 +51,6 @@ pub use self::decor::*;
 pub use self::ns::*;
 pub use self::query::*;
 pub use self::set::*;
-pub const kSHConcealLines: ::core::ffi::c_uint = 128;
-pub const kSHConceal: ::core::ffi::c_uint = 64;
-pub const kSHSpellOff: ::core::ffi::c_uint = 32;
-pub const kSHSpellOn: ::core::ffi::c_uint = 16;
-pub const kSHUIWatchedOverlay: ::core::ffi::c_uint = 8;
-pub const kSHUIWatched: ::core::ffi::c_uint = 4;
-pub const kSHHlEol: ::core::ffi::c_uint = 2;
-pub const kSHIsSign: ::core::ffi::c_uint = 1;
 pub const kExtmarkHighlight: ExtmarkType = 32;
 pub const kExtmarkVirtLines: ExtmarkType = 16;
 pub const kExtmarkVirtText: ExtmarkType = 8;
@@ -59,6 +58,8 @@ pub const kExtmarkSign: ExtmarkType = 2;
 pub const kExtmarkNone: ExtmarkType = 1;
 /// No allocated decoration: the index a `DecorSignHighlight` chain ends on.
 pub const DECOR_ID_INVALID: uint32_t = u32::MAX;
-/// Where a decoration with no `priority` of its own sits.
-pub const DECOR_PRIORITY_BASE: ::core::ffi::c_int = 0x1000;
-pub(crate) use crate::decoration::{DECOR_HIGHLIGHT_INLINE_INIT, DECOR_SIGN_HIGHLIGHT_INIT};
+pub(crate) use crate::decoration::{
+    DECOR_HIGHLIGHT_INLINE_INIT, DECOR_PRIORITY_BASE, DECOR_SIGN_HIGHLIGHT_INIT, kSHConceal,
+    kSHConcealLines, kSHHlEol, kSHIsSign, kSHSpellOff, kSHSpellOn, kSHUIWatched,
+    kSHUIWatchedOverlay,
+};

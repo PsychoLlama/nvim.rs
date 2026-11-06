@@ -274,8 +274,7 @@ impl Cells {
         prev_at: usize,
         c0: ::core::ffi::c_int,
     ) {
-        let no_plain_buffer =
-            window.syn_block().b_p_spo_flags & kOptSpoFlagNoplainbuffer as uint32_t != 0;
+        let no_plain_buffer = window.syn_block().b_p_spo_flags & kOptSpoFlagNoplainbuffer != 0;
         let mut can_spell = !no_plain_buffer;
 
         // Not at the start of the line only because a double-width

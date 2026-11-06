@@ -86,7 +86,7 @@ pub(crate) fn cmdpreview_open_win(cmdpreview_buf: Buf) -> Option<Win> {
 
     if win_split(
         ::core::ffi::c_int::try_from(p_cwh()).unwrap_or(::core::ffi::c_int::MAX),
-        WSP_BOT.cast_signed(),
+        WSP_BOT,
     )
     .is_err()
     {
@@ -102,8 +102,8 @@ pub(crate) fn cmdpreview_open_win(cmdpreview_buf: Buf) -> Option<Win> {
     let mut tstate: TryState = TRY_STATE_INIT;
     try_enter(&mut tstate);
     let result = do_buffer(
-        DOBUF_GOTO.cast_signed(),
-        DOBUF_FIRST.cast_signed(),
+        DOBUF_GOTO,
+        DOBUF_FIRST,
         FORWARD as ::core::ffi::c_int,
         cmdpreview_buf.handle.get(),
         0,

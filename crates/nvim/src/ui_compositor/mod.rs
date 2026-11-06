@@ -22,12 +22,22 @@
 //! contributors; licensed under the Apache License, Version 2.0, as recorded
 //! in `LICENSE.txt`.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 mod scratch;
 
+use crate::narrow::as_index;
+use crate::narrow::len_as_integer;
+use crate::narrow::number_as_int;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int, c_uint};
 
@@ -333,11 +343,11 @@ fn raise_grid(mut grid: GridRef, new_index: usize) {
 }
 
 pub fn ui_comp_grid_cursor_goto(grid_handle: Integer, r: Integer, c: Integer) {
-    if !ui_comp_set_grid(Handle::new(grid_handle as c_int)) {
+    if !ui_comp_set_grid(Handle::new(number_as_int(grid_handle))) {
         return;
     }
-    let cursor_row = cur_layer().comp_row + r as c_int;
-    let cursor_col = cur_layer().comp_col + c as c_int;
+    let cursor_row = cur_layer().comp_row + number_as_int(r);
+    let cursor_col = cur_layer().comp_col + number_as_int(c);
 
     // Upstream's TODO: for efficiency all grids should be configured before
     // `win_update` runs, rather than here.
@@ -435,8 +445,8 @@ fn compose_line(row: Integer, startcol: Integer, endcol: Integer, mut flags: Lin
         flags &= !kLineFlagWrap;
     }
 
-    let start = startcol + skipstart as Integer;
-    let end = endcol - skipend as Integer;
+    let start = startcol + len_as_integer(skipstart);
+    let end = endcol - len_as_integer(skipend);
     // `compose_into` filled `endcol - startcol` cells of both buffers, and
     // both skips are inside that range. Sending reaches no compositor state.
     BUFS.with(|bufs| {
@@ -457,15 +467,17 @@ fn compose_into(
     let default = default_layer();
     let (mut skipstart, mut skipend) = skips;
     let mut top = None;
-    let width = (endcol - startcol) as usize;
+    // Screen columns: a C `int` on both sides of the wire.
+    let (start, end) = (number_as_int(startcol), number_as_int(endcol));
+    let width = as_index(end - start);
     let line = &mut bufs.chars[..width];
     let attrbuf = &mut bufs.attrs[..width];
     // The backdrop 'winblend' and 'pumblend' blend against.
-    let bg_off = default.row_start(row as c_int) + startcol as usize;
+    let bg_off = default.row_start(number_as_int(row)) + as_index(start);
     let bg = default.cells(bg_off, width);
 
-    let mut col = startcol as c_int;
-    while Integer::from(col) < endcol {
+    let mut col = start;
+    while col < end {
         // How far the topmost layer covering `col` owns.
         let mut until = 0;
         LAYERS.with(|stack| {
@@ -490,12 +502,12 @@ fn compose_into(
                 }
             }
         });
-        until = until.min(endcol as c_int);
+        until = until.min(end);
 
         debug_assert!(until > col, "until > col");
         debug_assert!(until <= default.cols, "until <= default_grid.cols");
-        let at = (Integer::from(col) - startcol) as usize;
-        let n = (until - col) as usize;
+        let at = as_index(col - start);
+        let n = as_index(until - col);
 
         // The default grid covers every column of every row it has, and is
         // the bottom layer, so some layer always won the column above.
@@ -510,7 +522,7 @@ fn compose_into(
             attrbuf[at..at + n].fill(sep_attr);
         } else {
             let grid_row = row - Integer::from(grid.comp_row);
-            let off = grid.row_start(grid_row as c_int) + (col - grid.comp_col) as usize;
+            let off = grid.row_start(number_as_int(grid_row)) + as_index(col - grid.comp_col);
             let (chars, attrs) = grid.cells(off, n);
             line[at..at + n].copy_from_slice(chars);
             attrbuf[at..at + n].copy_from_slice(attrs);
@@ -572,7 +584,7 @@ fn compose_debug(rows: (Integer, Integer), cols: (Integer, Integer), syn_id: c_i
     if delay {
         debug_delay(endrow - startrow);
     }
-    for r in startrow as c_int..endrow as c_int {
+    for r in number_as_int(startrow)..number_as_int(endrow) {
         let row = Integer::from(r);
         // The chunk is empty on the wire (`startcol` twice), so only the
         // clear out to `endcol` reaches the UI.
@@ -588,7 +600,7 @@ fn compose_debug(rows: (Integer, Integer), cols: (Integer, Integer), syn_id: c_i
 fn debug_delay(lines: Integer) {
     ui_call_flush();
     let wd = p_wd().unsigned_abs();
-    let factor = lines.clamp(1, 5) as u64;
+    let factor = lines.clamp(1, 5).cast_unsigned();
     os_sleep(factor * wd);
 }
 
@@ -604,7 +616,7 @@ fn compose_area<T: Into<Integer>>(startrow: T, endrow: T, startcol: T, endcol: T
     if endcol <= startcol {
         return;
     }
-    for r in startrow as c_int..endrow as c_int {
+    for r in number_as_int(startrow)..number_as_int(endrow) {
         compose_line(r.into(), startcol, endcol, kLineFlagInvalid);
     }
 }
@@ -641,7 +653,7 @@ pub fn ui_comp_raw_line(
     chunk: &[ScreenChar],
     attrs: &[ScreenAttr],
 ) {
-    if !ui_comp_should_draw() || !ui_comp_set_grid(Handle::new(grid as c_int)) {
+    if !ui_comp_should_draw() || !ui_comp_set_grid(Handle::new(number_as_int(grid))) {
         return;
     }
     let cur = cur_layer();
@@ -670,7 +682,7 @@ pub fn ui_comp_raw_line(
         endcol = endcol.min(clearcol);
     }
 
-    let covered = curgrid_covered_above(row as c_int);
+    let covered = curgrid_covered_above(number_as_int(row));
     // Upstream's TODO: `compose_line` should learn to respect clearing, and
     // be optimized for uncovered lines.
     if flags & kLineFlagInvalid != 0 || covered || cur.blending {
@@ -686,7 +698,7 @@ pub fn ui_comp_raw_line(
             endcol >= clearcol,
         );
         compose_debug((row, row + 1), (endcol, clearcol), clear, true);
-        let n = (endcol - startcol).max(0) as usize;
+        let n = as_index(number_as_int(endcol - startcol).max(0));
         debug_assert!(attrs[..n].iter().all(|&attr| attr >= 0), "attrs[i] >= 0");
         let (cc, ca) = (clearcol, clearattr);
         ui_composed_call_raw_line(1, row, startcol, endcol, cc, ca, flags, chunk, attrs);
@@ -715,9 +727,9 @@ pub fn ui_comp_msg_set_pos(
 ) {
     let mut msg = msg_layer();
     msg.pending_comp_index_update = true;
-    msg.comp_row = row as c_int;
+    msg.comp_row = number_as_int(row);
     if scrolled && row > 0 {
-        msg_sep_row.set(row as c_int - 1);
+        msg_sep_row.set(number_as_int(row) - 1);
         if !sep_char.data().is_null() {
             msg_sep_char.set(schar_from_buf(sep_char.as_bytes()));
         }
@@ -733,13 +745,13 @@ pub fn ui_comp_msg_set_pos(
         && ui_comp_should_draw()
         && (was_at < Rows.get() || (scrolled && !msg_was_scrolled.get()))
     {
-        let delta = was_at - row as c_int;
+        let delta = was_at - number_as_int(row);
         if msg.blending {
-            let first_row = (row as c_int - c_int::from(scrolled)).max(0);
+            let first_row = (number_as_int(row) - c_int::from(scrolled)).max(0);
             compose_area(first_row, Rows.get() - delta, 0, Columns.get());
         } else {
             // Scroll the separator together with the message text.
-            let first_row = (row as c_int - c_int::from(msg_was_scrolled.get())).max(0);
+            let first_row = (number_as_int(row) - c_int::from(msg_was_scrolled.get())).max(0);
             let (bot, right) = (Integer::from(Rows.get()), Integer::from(Columns.get()));
             ui_composed_call_grid_scroll(1, first_row.into(), bot, 0, right, delta.into(), 0);
             if scrolled && !msg_was_scrolled.get() && row > 0 {
@@ -748,7 +760,7 @@ pub fn ui_comp_msg_set_pos(
         }
     }
 
-    msg_current_row.set(row as c_int);
+    msg_current_row.set(number_as_int(row));
     msg_was_scrolled.set(scrolled);
 }
 
@@ -770,7 +782,7 @@ pub fn ui_comp_grid_scroll(
     rows: Integer,
     cols: Integer,
 ) {
-    if !ui_comp_should_draw() || !ui_comp_set_grid(Handle::new(grid as c_int)) {
+    if !ui_comp_should_draw() || !ui_comp_set_grid(Handle::new(number_as_int(grid))) {
         return;
     }
     let cur = cur_layer();
@@ -778,18 +790,18 @@ pub fn ui_comp_grid_scroll(
     let bot = bot + Integer::from(cur.comp_row);
     let left = left + Integer::from(cur.comp_col);
     let right = right + Integer::from(cur.comp_col);
-    let covered = curgrid_covered_above((bot - rows.max(0)) as c_int);
+    let covered = curgrid_covered_above(number_as_int(bot - rows.max(0)));
 
     if covered || cur.blending {
         // Upstream's TODO: check whether the rectangles overlap at all, and
         // work out the subareas that could still scroll.
         let recompose = dbghl_recompose.get();
         compose_debug((top, bot), (left, right), recompose, true);
-        for r in (top + (-rows).max(0)) as c_int..(bot - rows.max(0)) as c_int {
+        for r in number_as_int(top + (-rows).max(0))..number_as_int(bot - rows.max(0)) {
             // Upstream's TODO: a workaround for `win_update` scrolling twice
             // in a row, the second over space the first invalidated.
             let row_off = cur.row_start(r - cur.comp_row);
-            let off = row_off + left as usize - cur.comp_col as usize;
+            let off = row_off + as_index(number_as_int(left)) - as_index(cur.comp_col);
             if cur.attr_at(off) >= 0 {
                 compose_line(r.into(), left, right, 0);
             }
@@ -806,9 +818,9 @@ pub fn ui_comp_grid_scroll(
 pub fn ui_comp_grid_resize(grid: Integer, width: Integer, height: Integer) {
     if grid == 1 {
         ui_composed_call_grid_resize(1, width, height);
-        chk_width.set(width as c_int);
-        chk_height.set(height as c_int);
-        let new_bufsize = width as usize;
+        chk_width.set(number_as_int(width));
+        chk_height.set(number_as_int(height));
+        let new_bufsize = as_index(number_as_int(width));
         BUFS.with_mut(|bufs| {
             if bufs.chars.len() != new_bufsize {
                 bufs.chars = vec![0; new_bufsize];

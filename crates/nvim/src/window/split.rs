@@ -11,8 +11,17 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
+use crate::narrow::as_index;
+use crate::narrow::number_as_int;
 use core::ffi::{c_char, c_int};
 
 use super::arith::NextCurwin;
@@ -53,16 +62,13 @@ pub(crate) fn split(size: c_int, flags: c_int) -> Result<(), Failed> {
     }
     // Add flags from ":vertical", ":topleft" and ":botright".
     let flags = flags | cmdmod.with(|m| m.cmod_split);
-    if flags & WSP_TOP as c_int != 0 && flags & WSP_BOT as c_int != 0 {
+    if flags & WSP_TOP != 0 && flags & WSP_BOT != 0 {
         err(c"E442: Can't split topleft and botright at the same time");
         return Err(Failed);
     }
     // When creating the help window make a snapshot of the window layout;
     // otherwise clear the snapshot, it is now invalid.
-    for (flag, idx) in [
-        (WSP_HELP as c_int, SNAP_HELP_IDX),
-        (WSP_QUICKFIX as c_int, SNAP_QUICKFIX_IDX),
-    ] {
+    for (flag, idx) in [(WSP_HELP, SNAP_HELP_IDX), (WSP_QUICKFIX, SNAP_QUICKFIX_IDX)] {
         if flags & flag != 0 {
             take_snapshot(idx);
         } else {
@@ -121,9 +127,9 @@ fn split_ins(
         trigger_winnewpre();
     }
 
-    let mut oldwin = if flags & WSP_TOP as c_int != 0 {
+    let mut oldwin = if flags & WSP_TOP != 0 {
         first_win()
-    } else if flags & WSP_BOT as c_int != 0 || Win::current().w_floating {
+    } else if flags & WSP_BOT != 0 || Win::current().w_floating {
         // Can't split a float: use the last non-floating window instead.
         lastwin_nofloating(None)
     } else {
@@ -133,19 +139,19 @@ fn split_ins(
     // window the split started from, not the one it ends up naming.
     let oldwin_id = oldwin.id();
 
-    let vertical = flags & WSP_VERT as c_int != 0;
-    let toplevel = flags & (WSP_TOP as c_int | WSP_BOT as c_int) != 0;
+    let vertical = flags & WSP_VERT != 0;
+    let toplevel = flags & (WSP_TOP | WSP_BOT) != 0;
     let layout = if vertical { FR_ROW } else { FR_COL };
 
     // Add a status line when 'laststatus' is 1 and the first window is split.
     let mut need_status = 0;
     let first = first_win();
     if is_only_window(first, None) && p_ls() == 1 as OptInt && oldwin.w_status_height == 0 {
-        if oldwin.w_height as OptInt <= p_wmh() {
+        if OptInt::from(oldwin.w_height) <= p_wmh() {
             err(e_noroom);
             return None;
         }
-        need_status = STATUS_HEIGHT as c_int;
+        need_status = STATUS_HEIGHT;
         win_float_anchor_laststatus();
     }
 
@@ -212,29 +218,29 @@ fn split_ins(
     // Don't change the window height/width to 'winheight'/'winwidth' when a
     // size was given: hold the option at `size` across `win_enter_ext`, which
     // is where it would otherwise be applied.
-    let saved = if vertical { p_wiw() } else { p_wh() } as c_int;
+    let saved = number_as_int(if vertical { p_wiw() } else { p_wh() });
     if size != 0 {
         if vertical {
-            P_WIW.set(size as OptInt);
+            P_WIW.set(OptInt::from(size));
         } else {
-            P_WH.set(size as OptInt);
+            P_WH.set(OptInt::from(size));
         }
     }
-    if flags & WSP_NOENTER as c_int == 0 {
+    if flags & WSP_NOENTER == 0 {
         let new_flags = if new_wp.is_none() {
-            WEE_TRIGGER_NEW_AUTOCMDS as c_int
+            WEE_TRIGGER_NEW_AUTOCMDS
         } else {
             0
         };
-        let enter = WEE_TRIGGER_ENTER_AUTOCMDS as c_int | WEE_TRIGGER_LEAVE_AUTOCMDS as c_int;
+        let enter = WEE_TRIGGER_ENTER_AUTOCMDS | WEE_TRIGGER_LEAVE_AUTOCMDS;
         // This fires WinNew/WinEnter/WinLeave, after which nothing derived
         // from `wp` is read.
         enter_ext(wp, new_flags | enter);
     }
     if vertical {
-        P_WIW.set(saved as OptInt);
+        P_WIW.set(OptInt::from(saved));
     } else {
-        P_WH.set(saved as OptInt);
+        P_WH.set(OptInt::from(saved));
     }
     // An autocommand may have closed `oldwin`, so the identity was taken
     // before `enter_ext` fired them.
@@ -251,11 +257,11 @@ fn split_room_vertical(size: c_int, flags: c_int, oldwin: Win, toplevel: bool) -
     let wmw1 = if p_wmw() == 0 as OptInt {
         1
     } else {
-        p_wmw() as c_int
+        number_as_int(p_wmw())
     };
     let mut needed = wmw1 + 1;
-    if flags & WSP_ROOM as c_int != 0 {
-        needed += p_wiw() as c_int - wmw1;
+    if flags & WSP_ROOM != 0 {
+        needed += number_as_int(p_wiw()) - wmw1;
     }
     let top = current_topframe();
     let (minwidth, available) = if toplevel {
@@ -283,7 +289,7 @@ fn split_room_vertical(size: c_int, flags: c_int, oldwin: Win, toplevel: bool) -
     new_size = new_size.min(available - minwidth - 1).max(wmw1);
 
     // If it doesn't fit in the current window, need `win_equal()`.
-    let mut do_equal = ((oldwin.w_width - new_size - 1) as OptInt) < p_wmw();
+    let mut do_equal = OptInt::from(oldwin.w_width - new_size - 1) < p_wmw();
 
     // Don't take columns for the new window from a 'winfixwidth' window: take
     // them from a window to the left or right instead, plus one separator.
@@ -316,10 +322,10 @@ fn split_room_horizontal(
     need_status: c_int,
 ) -> Option<Room> {
     // The current window requires at least one line plus its window bar.
-    let wmh1 = (p_wmh() as c_int).max(1) + oldwin.w_winbar_height;
-    let mut needed = wmh1 + STATUS_HEIGHT as c_int;
-    if flags & WSP_ROOM as c_int != 0 {
-        needed += p_wh() as c_int - wmh1 + oldwin.w_winbar_height;
+    let wmh1 = number_as_int(p_wmh()).max(1) + oldwin.w_winbar_height;
+    let mut needed = wmh1 + STATUS_HEIGHT;
+    if flags & WSP_ROOM != 0 {
+        needed += number_as_int(p_wh()) - wmh1 + oldwin.w_winbar_height;
     }
     if p_ch() < 1 as OptInt {
         needed += 1; // adjust for 'cmdheight' = 0
@@ -349,18 +355,18 @@ fn split_room_horizontal(
 
     let mut oldwin_height = oldwin.w_height;
     if need_status != 0 {
-        oldwin.w_status_height = STATUS_HEIGHT as c_int;
-        oldwin_height -= STATUS_HEIGHT as c_int;
+        oldwin.w_status_height = STATUS_HEIGHT;
+        oldwin_height -= STATUS_HEIGHT;
     }
     let mut new_size = size;
     if new_size == 0 {
         new_size = oldwin_height / 2;
     }
     new_size = new_size
-        .min(available - minheight - STATUS_HEIGHT as c_int)
+        .min(available - minheight - STATUS_HEIGHT)
         .max(wmh1);
 
-    let mut do_equal = ((oldwin_height - new_size - STATUS_HEIGHT as c_int) as OptInt) < p_wmh();
+    let mut do_equal = OptInt::from(oldwin_height - new_size - STATUS_HEIGHT) < p_wmh();
 
     // Don't take lines for the new window from a 'winfixheight' window.
     let mut did_set_fraction = false;
@@ -369,17 +375,17 @@ fn split_room_horizontal(
         // position, using the old height.
         save_fraction(*oldwin);
         did_set_fraction = true;
-        setheight_win(oldwin.w_height + new_size + STATUS_HEIGHT as c_int, *oldwin);
+        setheight_win(oldwin.w_height + new_size + STATUS_HEIGHT, *oldwin);
         oldwin_height = oldwin.w_height;
         if need_status != 0 {
-            oldwin_height -= STATUS_HEIGHT as c_int;
+            oldwin_height -= STATUS_HEIGHT;
         }
     }
 
     if !do_equal && p_ea() && size == 0 && ead() != 'h' as c_int {
         let oldwin = *oldwin;
         do_equal = wider_sibling(oldwin, |w| {
-            w.w_height > new_size || w.w_height > oldwin_height - new_size - STATUS_HEIGHT as c_int
+            w.w_height > new_size || w.w_height > oldwin_height - new_size - STATUS_HEIGHT
         });
     }
     Some(Room {
@@ -414,7 +420,7 @@ fn siblings_minwidth(frame: FrameRef) -> c_int {
     let mut prev = frame;
     let mut up = frame.parent();
     while let Some(frp) = up {
-        if frp.fr_layout as c_int == FR_ROW {
+        if c_int::from(frp.fr_layout) == FR_ROW {
             for frp2 in frp.children().filter(|frp2| *frp2 != prev) {
                 total += minwidth(frp2, NextCurwin::NoWin);
             }
@@ -431,7 +437,7 @@ fn siblings_minheight(frame: FrameRef) -> c_int {
     let mut prev = frame;
     let mut up = frame.parent();
     while let Some(frp) = up {
-        if frp.fr_layout as c_int == FR_COL {
+        if c_int::from(frp.fr_layout) == FR_COL {
             for frp2 in frp.children().filter(|frp2| *frp2 != prev) {
                 total += minheight(frp2, NextCurwin::NoWin);
             }
@@ -445,10 +451,10 @@ fn siblings_minheight(frame: FrameRef) -> c_int {
 /// Put the new window on the window list beside `oldwin`, allocating one when
 /// the caller did not bring its own, and give it a frame.
 fn insert_window(flags: c_int, new_wp: Option<Win>, oldwin: Win, _vertical: bool) -> Option<Win> {
-    let below = flags & WSP_TOP as c_int == 0
-        && (flags & WSP_BOT as c_int != 0
-            || flags & WSP_BELOW as c_int != 0
-            || (flags & WSP_ABOVE as c_int == 0 && split_after(_vertical)));
+    let below = flags & WSP_TOP == 0
+        && (flags & WSP_BOT != 0
+            || flags & WSP_BELOW != 0
+            || (flags & WSP_ABOVE == 0 && split_after(_vertical)));
     let after = if below { Some(oldwin) } else { oldwin.prev() };
     let Some(mut wp) = new_wp else {
         let wp = win_alloc(after, false);
@@ -504,11 +510,11 @@ fn split_frame(
 ) -> (FrameRef, FrameRef, bool) {
     let top = current_topframe();
     let (mut curfrp, before) = if toplevel {
-        let same_axis = (top.fr_layout as c_int == FR_COL && !vertical)
-            || (top.fr_layout as c_int == FR_ROW && vertical);
+        let same_axis = (c_int::from(top.fr_layout) == FR_COL && !vertical)
+            || (c_int::from(top.fr_layout) == FR_ROW && vertical);
         let frp = if same_axis {
             let first = top.child().expect("a row or column has a child");
-            if flags & WSP_BOT as c_int != 0 {
+            if flags & WSP_BOT != 0 {
                 frames(Some(first)).last().expect("at least one")
             } else {
                 first
@@ -516,11 +522,11 @@ fn split_frame(
         } else {
             top
         };
-        (frp, flags & WSP_TOP as c_int != 0)
+        (frp, flags & WSP_TOP != 0)
     } else {
-        let before = if flags & WSP_BELOW as c_int != 0 {
+        let before = if flags & WSP_BELOW != 0 {
             false
-        } else if flags & WSP_ABOVE as c_int != 0 {
+        } else if flags & WSP_ABOVE != 0 {
             true
         } else {
             !split_after(vertical)
@@ -532,11 +538,11 @@ fn split_frame(
     // it and move the old contents down a level.
     if curfrp
         .parent()
-        .is_none_or(|p| p.fr_layout as c_int != layout)
+        .is_none_or(|p| c_int::from(p.fr_layout) != layout)
     {
         let mut inner = new_frame_like(curfrp);
         let mut outer = curfrp;
-        outer.fr_layout = layout as c_char;
+        outer.fr_layout = c_char::try_from(layout).expect("FR_ROW or FR_COL");
         inner.fr_parent = Some(outer.id());
         inner.fr_next = None;
         inner.fr_prev = None;
@@ -613,7 +619,7 @@ fn size_vertical(
     }
     if toplevel {
         wp.w_winrow = tabline_rows();
-        let stl = (p_ls() == 1 as OptInt || p_ls() == 2 as OptInt) as c_int;
+        let stl = c_int::from(p_ls() == 1 as OptInt || p_ls() == 2 as OptInt);
         new_win_height(wp, curfrp.fr_height - stl);
         wp.w_status_height = stl;
         wp.w_hsep_height = 0;
@@ -635,14 +641,14 @@ fn size_vertical(
         oldwin.w_vsep_width = 1;
     }
     if toplevel {
-        if flags & WSP_BOT as c_int != 0 {
+        if flags & WSP_BOT != 0 {
             set_vsep(curfrp, true);
         }
-        let sep = (flags & WSP_TOP as c_int != 0) as c_int;
+        let sep = c_int::from(flags & WSP_TOP != 0);
         new_width(
             curfrp,
             curfrp.fr_width - (room.new_size + sep),
-            flags & WSP_TOP as c_int != 0,
+            flags & WSP_TOP != 0,
             false,
         );
     } else {
@@ -688,39 +694,30 @@ fn size_horizontal(
     new_win_height(wp, room.new_size);
     let old_status_height = oldwin.w_status_height;
     if before {
-        wp.w_hsep_height = is_stl_global as c_int;
+        wp.w_hsep_height = c_int::from(is_stl_global);
     } else {
         wp.w_hsep_height = oldwin.w_hsep_height;
-        oldwin.w_hsep_height = is_stl_global as c_int;
+        oldwin.w_hsep_height = c_int::from(is_stl_global);
     }
     if toplevel {
         let mut new_fr_height = curfrp.fr_height - room.new_size;
         if is_stl_global {
-            if flags & WSP_BOT as c_int != 0 {
+            if flags & WSP_BOT != 0 {
                 add_hsep(curfrp);
             } else {
                 new_fr_height -= 1;
             }
         } else {
-            if !(flags & WSP_BOT as c_int != 0 && p_ls() == 0 as OptInt) {
-                new_fr_height -= STATUS_HEIGHT as c_int;
+            if !(flags & WSP_BOT != 0 && p_ls() == 0 as OptInt) {
+                new_fr_height -= STATUS_HEIGHT;
             }
-            if flags & WSP_BOT as c_int != 0 {
+            if flags & WSP_BOT != 0 {
                 add_statusline(curfrp);
             }
         }
-        new_height(
-            curfrp,
-            new_fr_height,
-            flags & WSP_TOP as c_int != 0,
-            false,
-            false,
-        );
+        new_height(curfrp, new_fr_height, flags & WSP_TOP != 0, false, false);
     } else {
-        new_win_height(
-            oldwin,
-            room.oldwin_height - (room.new_size + STATUS_HEIGHT as c_int),
-        );
+        new_win_height(oldwin, room.oldwin_height - (room.new_size + STATUS_HEIGHT));
     }
     if before {
         wp.w_winrow = oldwin.w_winrow;
@@ -728,17 +725,17 @@ fn size_horizontal(
             wp.w_status_height = 0;
             oldwin.w_winrow += wp.w_height + 1;
         } else {
-            wp.w_status_height = STATUS_HEIGHT as c_int;
-            oldwin.w_winrow += wp.w_height + STATUS_HEIGHT as c_int;
+            wp.w_status_height = STATUS_HEIGHT;
+            oldwin.w_winrow += wp.w_height + STATUS_HEIGHT;
         }
     } else if is_stl_global {
         wp.w_winrow = oldwin.w_winrow + oldwin.w_height + 1;
         wp.w_status_height = 0;
     } else {
-        wp.w_winrow = oldwin.w_winrow + oldwin.w_height + STATUS_HEIGHT as c_int;
+        wp.w_winrow = oldwin.w_winrow + oldwin.w_height + STATUS_HEIGHT;
         wp.w_status_height = old_status_height;
-        if flags & WSP_BOT as c_int == 0 {
-            oldwin.w_status_height = STATUS_HEIGHT as c_int;
+        if flags & WSP_BOT == 0 {
+            oldwin.w_status_height = STATUS_HEIGHT;
         }
     }
     frame_fix_height(wp);
@@ -773,7 +770,7 @@ fn init(newp: Win, oldp: Win, flags: c_int) {
     newp.w_fraction = oldp.w_fraction;
     newp.w_prev_fraction_row = oldp.w_prev_fraction_row;
     copy_jumplist(oldp, newp);
-    if flags & WSP_NEWLOC as c_int != 0 {
+    if flags & WSP_NEWLOC != 0 {
         // Don't copy the location list.
         newp.w_llist = None;
         newp.w_llist_ref = None;
@@ -794,7 +791,7 @@ fn init(newp: Win, oldp: Win, flags: c_int) {
     }
 
     // Copy the tag stack and its strings.
-    for i in 0..oldp.w_tagstacklen as usize {
+    for i in 0..as_index(oldp.w_tagstacklen) {
         newp.w_tagstack[i] = oldp.w_tagstack[i].clone();
     }
     newp.w_tagstackidx = oldp.w_tagstackidx;

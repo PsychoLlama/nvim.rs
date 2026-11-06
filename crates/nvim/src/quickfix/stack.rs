@@ -523,7 +523,7 @@ fn wipe_qf_buffer(mut qi: Qi) {
     if buf_was_null {
         Win::current().w_buffer = Buf::current_or_none().unwrap_or(Buf::NULL);
     }
-    close_buffer(None, qfbuf, DOBUF_WIPE.cast_signed(), false, false);
+    close_buffer(None, qfbuf, DOBUF_WIPE, false, false);
     qi.bufnr = INVALID_QFBUFNR;
     if buf_was_null {
         Win::current().w_buffer = Buf::NULL;

@@ -18,9 +18,18 @@
 //!
 //! Original: `src/nvim/statusline.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::memline::MlFlags;
+use crate::narrow::as_index;
+use crate::narrow::number_as_int;
 use crate::optionstr::{OptString, local_or_global};
 use core::ffi::c_int;
 
@@ -161,7 +170,7 @@ impl Target {
             maxwidth = win.w_view_width;
         } else {
             row = if is_stl_global {
-                Rows.get() - p_ch() as c_int - 1
+                Rows.get() - number_as_int(p_ch()) - 1
             } else {
                 win.w_winrow + win.w_height
             };
@@ -243,7 +252,7 @@ fn ruler_body(ruf: &[u8]) -> &[u8] {
         acc.saturating_mul(10)
             .saturating_add(i64::from(digit - b'0'))
     });
-    if value as c_int != 0 {
+    if number_as_int(value) != 0 {
         at += digits.count();
     }
     // Upstream reads the byte and steps past it in one `*stl++ != '('`, so a
@@ -322,12 +331,13 @@ fn paint_chunks(
     // line.
     for run in runs.iter().map(Some).chain(core::iter::once(None)) {
         let stop = run.map_or(end, |r| r.start);
-        let textlen = stop as isize - p as isize;
+        // Negative (`None`) is "to the end", as upstream's `ssize_t`.
+        let textlen = stop.checked_sub(p);
         // Make all characters printable. `p` can be past the end of the
         // line -- the expander records a run at the truncation point -- and
         // there is then nothing left to transform.
         let src = line.get(p..).unwrap_or_default();
-        let tsize = transstr_into(src, usize::try_from(textlen).ok(), &mut transbuf, true);
+        let tsize = transstr_into(src, textlen, &mut transbuf, true);
         match content.as_deref_mut() {
             None => col += paint_text(col, &transbuf[..tsize], curattr),
             Some(content) => push_chunk(content, curattr, &transbuf[..tsize], curgroup),
@@ -367,13 +377,13 @@ fn run_highlight(
     // window that is not the current one" counterparts, which only exist
     // for a window that has a status line of its own.
     let stlnc = win.is_some_and(|w| !w.is_current() && w.w_status_height != 0);
-    let idx = (run.userhl - 1) as usize;
+    let idx = as_index(run.userhl - 1);
     let attr = if stlnc {
         highlight_stlnc.with(|hl| hl[idx])
     } else {
         highlight_user.with(|hl| hl[idx])
     };
-    let name = [b'U', b's', b'e', b'r', run.userhl as u8 + b'0'];
+    let name = [b'U', b's', b'e', b'r', b"0123456789"[as_index(run.userhl)]];
     let group = syn_name2id_bytes(&name);
     (attr, group)
 }
@@ -382,9 +392,9 @@ fn run_highlight(
 fn push_chunk(content: &mut Vec<Object>, attr: c_int, text: &[u8], group: c_int) {
     // The text is copied: the event outlives the buffer it was built in.
     let chunk = [
-        Object::integer(attr as Integer),
+        Object::integer(Integer::from(attr)),
         Object::string(ApiString::from_bytes(text)),
-        Object::integer(group as Integer),
+        Object::integer(Integer::from(group)),
     ];
     content.push(Object::array(chunk));
 }
@@ -570,7 +580,7 @@ pub fn redraw_ruler() {
     // Add a "50%" if there is room for it. On the last line, don't print in
     // the last column: that scrolls the screen up on some terminals.
     let rel_pos = get_rel_pos(win, room);
-    let mut n1 = buffer.len() as c_int + strsize(&rel_pos);
+    let mut n1 = len_as_int(buffer.len()) + strsize(&rel_pos);
     if win.w_status_height == 0 && !is_stl_global {
         n1 += 1; // Can't use the last character of the screen.
     }
@@ -657,9 +667,9 @@ fn show_ext_ruler(buffer: &[u8], attr: c_int) {
         attr == hl_attr(HLF_MSG as c_int),
         "attr == HL_ATTR(HLF_MSG)"
     );
-    chunk.push(Object::integer(attr as Integer));
+    chunk.push(Object::integer(Integer::from(attr)));
     chunk.push(Object::string(ApiString::from_bytes(buffer)));
-    chunk.push(Object::integer(HLF_MSG as Integer));
+    chunk.push(Object::integer(Integer::from(HLF_MSG)));
     content.push(Object::array(chunk));
     ui_call_msg_ruler(content.into());
     DID_SHOW_EXT_RULER.set(true);

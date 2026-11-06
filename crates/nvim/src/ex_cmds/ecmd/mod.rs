@@ -536,7 +536,7 @@ fn reuse_current_buffer(state: &mut Ecmd) -> bool {
             return false;
         }
         u_unchanged(Buf::current());
-        buf_freeall(Buf::current(), BFA_KEEP_UNDO.cast_signed());
+        buf_freeall(Buf::current(), BFA_KEEP_UNDO);
         // Tell readfile() not to clear or reload undo info.
         state.readfile_flags = READ_KEEP_UNDO.cast_signed();
     } else {

@@ -12,8 +12,16 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
+use crate::narrow::number_as_int;
 use core::ffi::c_int;
 
 use super::arith::NextCurwin;
@@ -67,7 +75,7 @@ pub(crate) fn comp_pos(topfrp: FrameRef, row: &mut c_int, col: &mut c_int) {
         let startrow = *row;
         let startcol = *col;
         for frp in topfrp.children() {
-            if topfrp.fr_layout as c_int == FR_ROW {
+            if c_int::from(topfrp.fr_layout) == FR_ROW {
                 // All frames in a row start at the same row.
                 *row = startrow;
             } else {
@@ -92,12 +100,11 @@ pub(crate) fn setheight_win(height: c_int, win: Win) {
     let mut win = win;
     // Always keep the current window at least one line high, even when
     // 'winminheight' is zero; two when it has a window bar.
-    let floor = if win.is_current() {
+    let floor = number_as_int(if win.is_current() {
         p_wmh().max(1)
     } else {
         p_wmh()
-    } as c_int
-        + win.w_winbar_height;
+    }) + win.w_winbar_height;
     let height = height.max(floor);
 
     if win.w_floating {
@@ -134,7 +141,7 @@ fn set_frame_height(curfrp: FrameRef, height: c_int) {
         }
         return;
     };
-    if parent.fr_layout as c_int == FR_ROW {
+    if c_int::from(parent.fr_layout) == FR_ROW {
         // A row of frames: the frames left and right of this one need resizing
         // too, so size the row and let it distribute. Check their minimum
         // height first.
@@ -168,7 +175,7 @@ fn set_frame_height(curfrp: FrameRef, height: c_int) {
         } else {
             let wp = lastwin_nofloating(None);
             let below = wp.w_winrow + wp.w_height + wp.w_hsep_height + wp.w_status_height;
-            (Rows.get() - p_ch() as c_int - global_stl_rows() - below).max(0)
+            (Rows.get() - number_as_int(p_ch()) - global_stl_rows() - below).max(0)
         };
 
         if height <= room + room_cmdline {
@@ -181,7 +188,7 @@ fn set_frame_height(curfrp: FrameRef, height: c_int) {
         let target = arith::parent_target(
             height,
             minheight(parent, NextCurwin::NoWin),
-            p_wmh() as c_int,
+            number_as_int(p_wmh()),
         );
         set_frame_height(parent, target);
         // NOTREACHED
@@ -263,7 +270,7 @@ pub(crate) fn setwidth_win(width: c_int, window: Win) {
     // Always keep the current window at least one column wide, even when
     // 'winminwidth' is zero.
     let width = if window.is_current() {
-        width.max(p_wmw() as c_int).max(1)
+        width.max(number_as_int(p_wmw())).max(1)
     } else {
         width.max(0)
     };
@@ -293,7 +300,7 @@ pub(crate) fn set_frame_width(curfrp: FrameRef, width: c_int) {
         // topframe: can't change width.
         return;
     };
-    if parent.fr_layout as c_int == FR_COL {
+    if c_int::from(parent.fr_layout) == FR_COL {
         let w = minwidth(parent, NextCurwin::Unset);
         set_frame_width(parent, width.max(w));
         return;
@@ -317,14 +324,19 @@ pub(crate) fn set_frame_width(curfrp: FrameRef, width: c_int) {
         if width <= room {
             break;
         }
-        let rows_avail =
-            Rows.get() as OptInt - p_ch() - tabline_rows() as OptInt - global_stl_rows() as OptInt;
-        if run == 2 || curfrp.fr_height as OptInt >= rows_avail {
+        let rows_avail = OptInt::from(Rows.get())
+            - p_ch()
+            - OptInt::from(tabline_rows())
+            - OptInt::from(global_stl_rows());
+        if run == 2 || OptInt::from(curfrp.fr_height) >= rows_avail {
             width = room;
             break;
         }
-        let target =
-            arith::parent_target(width, minwidth(parent, NextCurwin::NoWin), p_wmw() as c_int);
+        let target = arith::parent_target(
+            width,
+            minwidth(parent, NextCurwin::NoWin),
+            number_as_int(p_wmw()),
+        );
         set_frame_width(parent, target);
     }
 
@@ -380,7 +392,7 @@ pub fn did_set_winminheight(_args: &mut OptSet) -> Result<(), OptError> {
     let mut first = true;
     // Loop until there is a 'winminheight' that is possible.
     while p_wmh() > 0 as OptInt {
-        let room = Rows.get() - p_ch() as c_int;
+        let room = Rows.get() - number_as_int(p_ch());
         if room >= min_rows_all_tabpages() {
             break;
         }
@@ -422,7 +434,7 @@ fn drag_status_line(dragwin: Win, offset: c_int) {
         // More than one window; when the parent frame is not a column of
         // frames, its parent should be.
         fr = fr.parent().expect("not the top frame");
-        if fr.fr_layout as c_int != FR_COL {
+        if c_int::from(fr.fr_layout) != FR_COL {
             curfr = fr;
             if fr != top {
                 // Only a row of windows: may drag the status line.
@@ -470,7 +482,7 @@ fn drag_status_line(dragwin: Win, offset: c_int) {
         // Only dragging the last status line can reduce 'cmdheight'.
         let mut sum = Rows.get() - cmdline_row.get();
         if curfr.next().is_some() {
-            sum -= p_ch() as c_int + global_stl_rows();
+            sum -= number_as_int(p_ch()) + global_stl_rows();
         } else if min_set_ch.get() > 0 as OptInt {
             sum -= 1;
         }
@@ -530,7 +542,7 @@ fn drag_vsep_line(dragwin: Win, offset: c_int) {
     let mut curfr = fr;
     fr = fr.parent().expect("not the top frame");
     // When the parent frame is not a row of frames, its parent should be.
-    if fr.fr_layout as c_int != FR_ROW {
+    if c_int::from(fr.fr_layout) != FR_ROW {
         if fr == top {
             // Only a column of windows (cannot happen?).
             return;

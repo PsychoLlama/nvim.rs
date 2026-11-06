@@ -314,7 +314,7 @@ pub(crate) fn alist_add(id: ArgListId, name: XString, set_fnum: c_int) {
     ARGLIST_LOCKED.set(true);
     wp.w_locked = true;
     let fnum = if set_fnum > 0 {
-        let flags = BLN_LISTED as c_int | flag_if(set_fnum == 2, BLN_CURBUF);
+        let flags = BLN_LISTED | if set_fnum == 2 { BLN_CURBUF } else { 0 };
         buflist_add_name(Some(name.as_cstr()), LineNr::ZERO, flags)
             .map_or(0, |buf| buf.handle.get())
     } else {
@@ -433,7 +433,7 @@ fn alist_add_list(files: Vec<XString>, after: c_int, will_edit: bool) {
         return;
     }
     let mut wp = Win::current();
-    let flags = BLN_LISTED as c_int | flag_if(will_edit, BLN_CURBUF);
+    let flags = BLN_LISTED | if will_edit { BLN_CURBUF } else { 0 };
     let after = after.clamp(0, argcount());
     let count = count_of(files.len());
     ARGLIST_LOCKED.set(true);

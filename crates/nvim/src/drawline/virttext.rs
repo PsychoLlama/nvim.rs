@@ -13,6 +13,13 @@
 //! [`line_putchar`] is the single-character primitive under both of them (and
 //! under the column drawing in `columns.rs`).
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
@@ -25,10 +32,12 @@ use crate::decoration::{
     kVPosWinCol, kVTRepeatLinebreak, set_decor_eol_col, set_decor_range_draw_col, with_decor_virt,
 };
 use crate::grid::with_linebuf;
+use crate::narrow::as_index;
+use crate::narrow::count_as_int;
+use crate::narrow::len_as_int;
 use crate::types::Handle;
 use crate::types::NUL;
 use crate::winlayer::Buf;
-use core::ffi::c_int;
 
 /// Put the character at the start of `text` into `dest`, and answer how many
 /// cells it used and how many bytes of `text` it took.
@@ -65,11 +74,11 @@ pub(crate) fn line_putchar(
     }
     // Overwriting the left half of a double-width character: clear its
     // orphaned right half.
-    if cells < maxcells && dest[cells as usize] == 0 {
-        dest[cells as usize] = schar_from_ascii(b' ');
+    if cells < maxcells && dest[as_index(cells)] == 0 {
+        dest[as_index(cells)] = schar_from_ascii(b' ');
     }
     if is_tab {
-        dest[..cells as usize].fill(schar_from_ascii(b' '));
+        dest[..as_index(cells)].fill(schar_from_ascii(b' '));
     } else {
         dest[0] = cell;
         if cells > 1 {
@@ -200,8 +209,8 @@ pub(crate) fn draw_virt_text(
         if item.kind == kDecorKindUIWatched {
             let ui = item.data.ui_watched();
             push_win_extmark(WinExtmark {
-                ns_id: Handle::new(ui.ns_id as c_int),
-                mark_id: ui.mark_id as uint64_t,
+                ns_id: Handle::new(ui.ns_id.cast_signed()),
+                mark_id: uint64_t::from(ui.mark_id),
                 win_row,
                 win_col: item.draw_col,
             });
@@ -212,7 +221,7 @@ pub(crate) fn draw_virt_text(
                 buffer,
                 item.draw_col,
                 VirtChunks::Text(vt.link),
-                vt.hl_mode as HlMode,
+                HlMode::from(vt.hl_mode),
                 max_col,
                 item.draw_col - col_off,
                 0,
@@ -312,7 +321,7 @@ pub(crate) fn draw_virt_text_item(
             debug_assert!(skip_cells <= 0);
 
             let mut through = false;
-            let under = line.attrs_mut()[col as usize];
+            let under = line.attrs_mut()[as_index(col)];
             let attr = match hl_mode {
                 kHlModeCombine => hl_combine_attr(under, virt_attr),
                 kHlModeBlend => {
@@ -327,22 +336,22 @@ pub(crate) fn draw_virt_text_item(
             // Landing on the right half of a double-width character: clear
             // its left half too, and the right half itself so `line_putchar`
             // has a non-zero cell to start from.
-            if !through && line.chars()[col as usize] == 0 {
+            if !through && line.chars()[as_index(col)] == 0 {
                 debug_assert!(col > 0);
-                line.chars_mut()[col as usize - 1] = schar_from_ascii(b' ');
-                line.chars_mut()[col as usize] = schar_from_ascii(b' ');
+                line.chars_mut()[as_index(col) - 1] = schar_from_ascii(b' ');
+                line.chars_mut()[as_index(col)] = schar_from_ascii(b' ');
             }
 
             let mut dummy: [ScreenChar; 2] = [schar_from_ascii(b' '); 2];
             let dest: &mut [ScreenChar] = if through {
                 &mut dummy
             } else {
-                &mut line.chars_mut()[col as usize..]
+                &mut line.chars_mut()[as_index(col)..]
             };
             let (cells, taken) = line_putchar(buffer, draw_text, dest, max_col - col, vcol);
             let attrs = line.attrs_mut();
             for _ in 0..cells {
-                attrs[col as usize] = attr as ScreenAttr;
+                attrs[as_index(col)] = attr as ScreenAttr;
                 col += 1;
             }
 
@@ -413,7 +422,7 @@ impl WinLineVars {
                             with_decor_virt(link, |vt| (vt.data.text().len(), vt.hl_mode));
                         self.virt_inline = link;
                         self.virt_inline_len = len;
-                        self.virt_inline_hl_mode = hl_mode as HlMode;
+                        self.virt_inline_hl_mode = HlMode::from(hl_mode);
                         set_decor_range_draw_col(i, DRAW_COL_NEVER);
                         break;
                     }
@@ -437,7 +446,7 @@ impl WinLineVars {
             let Some(len) = copied else {
                 continue;
             };
-            self.extra_todo = len as ::core::ffi::c_int;
+            self.extra_todo = len_as_int(len);
             if self.extra_todo == 0 {
                 continue;
             }
@@ -446,11 +455,11 @@ impl WinLineVars {
             self.extra_attr = attr;
             let text = self.extra.rest();
             let text = &text[..text.len() - 1];
-            self.n_attr = char_count(text) as ::core::ffi::c_int;
+            self.n_attr = len_as_int(char_count(text));
 
             if self.skip_cells > 0 {
                 // The text starts left of the first visible column.
-                let width = c_string_cells(text) as ::core::ffi::c_int;
+                let width = len_as_int(c_string_cells(text));
                 if width <= self.skip_cells {
                     // Entirely off-screen: drop it and take the next
                     // chunk. The cells it would have taken still count
@@ -474,7 +483,7 @@ impl WinLineVars {
                     let c_len = c_cluster_len(rest);
                     remaining -= cells;
                     self.extra.advance(c_len);
-                    self.extra_todo -= c_len as ::core::ffi::c_int;
+                    self.extra_todo -= count_as_int(c_len);
                     self.n_attr -= 1;
                 }
                 self.skipped_cells += self.skip_cells - remaining;

@@ -16,6 +16,13 @@
 //!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::autocmd::fire_autocmds;
@@ -257,7 +264,7 @@ fn check_changedtick_item(buffer: Buf) {
         "changedtick_di->di_lock == VarLock::Fixed"
     );
     assert!(
-        item.di_flags as c_int == DI_FLAGS_RO as c_int | DI_FLAGS_FIX as c_int,
+        c_int::from(item.di_flags) == c_int::from(DI_FLAGS_RO) | c_int::from(DI_FLAGS_FIX),
         "changedtick_di->di_flags == (DI_FLAGS_RO|DI_FLAGS_FIX)"
     );
     assert!(

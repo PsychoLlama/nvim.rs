@@ -114,7 +114,7 @@ fn qf_jump_edit_buffer(
             Some(true) => buflist_getfile(
                 fnum,
                 LineNr::ONE,
-                GETF_SETMARK.cast_signed() | GETF_SWITCH.cast_signed(),
+                GETF_SETMARK | GETF_SWITCH,
                 c_int::from(forceit),
             )
             .is_ok(),

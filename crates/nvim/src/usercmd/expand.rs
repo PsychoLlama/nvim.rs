@@ -196,7 +196,7 @@ fn add_cmd_modifier(out: &mut Vec<u8>, name: &[u8], multi_mods: &mut bool) {
 /// The window-placement modifiers of `cmod`, in the order upstream emits
 /// them, one word each.
 pub(crate) fn win_cmd_modifier_words(cmod: &CmdMod) -> Vec<CString> {
-    let split = |flag: u32| cmod.cmod_split.cast_unsigned() & flag != 0;
+    let split = |flag: c_int| cmod.cmod_split & flag != 0;
     let mut words: Vec<CString> = Vec::new();
     let mut add = |name: &CStr, present: bool| {
         if present {

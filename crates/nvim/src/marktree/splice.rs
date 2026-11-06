@@ -1,3 +1,10 @@
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 //! Adjusting every mark for a buffer edit.
@@ -24,6 +31,8 @@
 //! the order and [`check_damage`] records the pairs whose ends crossed, so
 //! [`marktree_restore_pair`] can put them back once the walk is done.
 
+use crate::narrow::as_index;
+use crate::narrow::count_as_int;
 use core::ffi::c_int;
 
 use crate::map::DenseMap;
@@ -138,7 +147,7 @@ fn swap_keys(
 ) {
     let x1 = iter1.node.expect("a positioned iterator");
     let x2 = iter2.node.expect("a positioned iterator");
-    let (i1, i2) = (iter1.index as usize, iter2.index as usize);
+    let (i1, i2) = (as_index(iter1.index), as_index(iter2.index));
     let (key1, key2) = (tree[x1].key(i1), tree[x2].key(i2));
 
     if !tree[x1].is_leaf() || x1 != x2 {
@@ -261,10 +270,10 @@ pub fn marktree_splice(
             let mut loc_start = start;
             let mut loc_old = old_extent;
             relative(iter.pos, &mut loc_start);
-            relative(oldbase[iter.depth as usize], &mut loc_old);
+            relative(oldbase[as_index(iter.depth)], &mut loc_old);
 
             while let Some(x) = iter.node {
-                let i = iter.index as usize;
+                let i = as_index(iter.index);
                 // NB: strictly should be less than the right gravity of
                 // loc_old, but the iterator comparison below will already
                 // break on that.
@@ -292,7 +301,7 @@ pub fn marktree_splice(
 
                 moved = true;
                 if !tree[x].is_leaf() {
-                    let depth = iter.depth as usize;
+                    let depth = as_index(iter.depth);
                     oldbase[depth + 1] = tree[x].key(i).pos;
                     let base = oldbase[depth];
                     unrelative(base, &mut oldbase[depth + 1]);
@@ -317,10 +326,10 @@ pub fn marktree_splice(
             let mut loc_new = new_extent;
             relative(iter.pos, &mut loc_new);
             let mut limit = old_extent;
-            relative(oldbase[iter.depth as usize], &mut limit);
+            relative(oldbase[as_index(iter.depth)], &mut limit);
 
             while let Some(x) = iter.node {
-                let i = iter.index as usize;
+                let i = as_index(iter.index);
                 if pos_leq(limit, tree[x].key(i).pos) {
                     break 'shift;
                 }
@@ -329,7 +338,7 @@ pub fn marktree_splice(
                 tree[x].key_mut(i).pos = loc_new;
                 moved = true;
                 if !tree[x].is_leaf() {
-                    let depth = iter.depth as usize;
+                    let depth = as_index(iter.depth);
                     oldbase[depth + 1] = oldpos;
                     let base = oldbase[depth];
                     unrelative(base, &mut oldbase[depth + 1]);
@@ -353,10 +362,10 @@ pub fn marktree_splice(
     while let Some(x) = iter.node
         && !done
     {
-        let base = oldbase[iter.depth as usize];
+        let base = oldbase[as_index(iter.depth)];
         let node = &mut tree[x];
         loop {
-            let key = node.key_mut(iter.index as usize);
+            let key = node.key_mut(as_index(iter.index));
             unrelative(base, &mut key.pos);
             let realrow = key.pos.row;
             debug_assert!(realrow >= old_extent.row, "realrow >= old_extent.row");
@@ -374,7 +383,7 @@ pub fn marktree_splice(
                 moved = true;
             }
             relative(iter.pos, &mut key.pos);
-            if done || iter.index + 1 >= node.key_count() as c_int {
+            if done || iter.index + 1 >= count_as_int(node.key_count()) {
                 break;
             }
             iter.index += 1;

@@ -15,12 +15,21 @@
 //! [`WinLineVars::off`], so the order the callers run in *is* the column order
 //! on screen.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
 use crate::decoration::{SCL_NUM, SIGN_WIDTH};
 use crate::grid::with_linebuf;
 use crate::r#move::WinValid;
+use crate::narrow::as_index;
+use crate::narrow::count_as_int;
 use crate::option::cpo_has;
 use crate::optionstr::OptString;
 use crate::types::{CpoFlag, MAXPATHL, NUL, StlOpt, Vv};
@@ -70,7 +79,7 @@ impl WinLineVars {
                 line_putchar(
                     window.buffer(),
                     text.get(at..).unwrap_or_default(),
-                    &mut line.chars_mut()[self.off as usize..],
+                    &mut line.chars_mut()[as_index(self.off)..],
                     window.w_view_width - self.off,
                     self.off,
                 )
@@ -91,7 +100,7 @@ impl WinLineVars {
                 } else {
                     ColNr::NONE
                 };
-                let at = self.off as usize;
+                let at = as_index(self.off);
                 with_linebuf(|line| {
                     line.attrs_mut()[at] = myattr as ScreenAttr;
                     line.vcols_mut()[at] = vcol;
@@ -115,7 +124,7 @@ impl WinLineVars {
     ) {
         with_linebuf(|line| {
             for _ in 0..width {
-                let at = self.off as usize;
+                let at = as_index(self.off);
                 line.chars_mut()[at] = fillchar;
                 line.attrs_mut()[at] = attr as ScreenAttr;
                 self.off += 1;
@@ -132,9 +141,7 @@ impl WinLineVars {
 pub fn use_cursor_line_highlight(window: Win, lnum: LineNr) -> bool {
     window.w_onebuf_opt.wo_cul != 0
         && lnum == window.w_cursorline
-        && window.w_p_culopt_flags as ::core::ffi::c_int
-            & kOptCuloptFlagNumber as ::core::ffi::c_int
-            != 0
+        && u32::from(window.w_p_culopt_flags) & kOptCuloptFlagNumber != 0
 }
 
 /// The glyph for a fold-column cell that is inside a fold but is neither the
@@ -155,7 +162,7 @@ fn foldcolumn_sep_char(
     } else if window.w_p_fcs_chars.foldinner != NUL as ScreenChar {
         window.w_p_fcs_chars.foldinner
     } else if first_level + i <= 9 {
-        schar_from_ascii(b'0' + (first_level + i) as u8)
+        schar_from_ascii(b"0123456789"[as_index(first_level + i)])
     } else {
         schar_from_ascii(b'>')
     }
@@ -179,7 +186,7 @@ fn fold_column_cells(
     let level = foldinfo.fi_level;
     // Too narrow for the nesting: start at the lowest level that fits and
     // use digits for the depth.
-    let first_level = (level - fdc - closed as ::core::ffi::c_int + 1).max(1);
+    let first_level = (level - fdc - ::core::ffi::c_int::from(closed) + 1).max(1);
     let closedcol = fdc.min(level);
     // A filler line shows the fold column of the line above, so the
     // `foldopen`/`foldclose` markers are not drawn twice. That is the
@@ -192,8 +199,8 @@ fn fold_column_cells(
     };
 
     let mut cells = [(0 as ScreenChar, ColNr::ZERO); MAX_FOLDCOLUMN];
-    for (i, cell) in cells.iter_mut().enumerate().take(fdc as usize) {
-        let i = i as ::core::ffi::c_int;
+    for (i, cell) in cells.iter_mut().enumerate().take(as_index(fdc)) {
+        let i = count_as_int(i);
         let mut symbol = if i >= level {
             schar_from_ascii(b' ')
         } else if i == closedcol - 1 && closed {
@@ -235,7 +242,7 @@ pub fn fill_foldcolumn(
     out_buffer: &mut [ScreenChar],
 ) {
     let cells = fold_column_cells(window, foldinfo, lnum, fdc, is_virt);
-    for (i, &(symbol, vcol)) in cells.iter().enumerate().take(fdc as usize) {
+    for (i, &(symbol, vcol)) in cells.iter().enumerate().take(as_index(fdc)) {
         out_vcol[i] = vcol;
         out_buffer[i] = symbol;
     }
@@ -258,7 +265,7 @@ impl WinLineVars {
         );
         let is_virt = self.filler_todo > 0;
         let cells = fold_column_cells(window, self.foldinfo, self.lnum, fdc, is_virt);
-        for &(symbol, vcol) in cells.iter().take(fdc as usize) {
+        for &(symbol, vcol) in cells.iter().take(as_index(fdc)) {
             put_cell(self.off, symbol, attr, vcol);
             self.off += 1;
         }
@@ -276,7 +283,7 @@ impl WinLineVars {
     /// `number`), which is wider and is only ever asked for when there really
     /// is a sign — [`WinLineVars::draw_lnum_col`] tests that first.
     pub(crate) fn draw_sign(&mut self, nrcol: bool, window: Win, sign_idx: ::core::ffi::c_int) {
-        let sattr = self.sign_attrs[sign_idx as usize];
+        let sattr = self.sign_attrs[as_index(sign_idx)];
         let scl_attr = win_hl_attr(
             window,
             if use_cursor_line_highlight(window, self.lnum) {
@@ -321,10 +328,11 @@ impl WinLineVars {
             fill,
             hl_combine_attr(scl_attr, attr),
         );
-        let sign_pos = self.off - SIGN_WIDTH as ::core::ffi::c_int - nrcol as ::core::ffi::c_int;
+        let sign_pos =
+            self.off - SIGN_WIDTH as ::core::ffi::c_int - ::core::ffi::c_int::from(nrcol);
         debug_assert!(sign_pos >= 0);
         with_linebuf(|line| {
-            let chars = &mut line.chars_mut()[sign_pos as usize..];
+            let chars = &mut line.chars_mut()[as_index(sign_pos)..];
             chars[0] = sattr.text[0];
             chars[1] = sattr.text[1];
         });
@@ -372,13 +380,13 @@ impl WinLineVars {
     /// continuation rows only when `'cursorlineopt'` also contains "line" —
     /// otherwise the highlight follows the number itself, not the column.
     fn use_cursor_line_nr(&self, window: Win) -> bool {
-        let culopt = window.w_p_culopt_flags as ::core::ffi::c_int;
+        let culopt = u32::from(window.w_p_culopt_flags);
         window.w_onebuf_opt.wo_cul != 0
             && self.lnum == window.w_cursorline
-            && culopt & kOptCuloptFlagNumber as ::core::ffi::c_int != 0
+            && culopt & kOptCuloptFlagNumber != 0
             && (self.row == self.startrow + self.filler_lines
                 || (self.row > self.startrow + self.filler_lines
-                    && culopt & kOptCuloptFlagLine as ::core::ffi::c_int != 0))
+                    && culopt & kOptCuloptFlagLine != 0))
     }
 
     /// The number-column attribute: the right `LineNr*` highlight with the
@@ -572,7 +580,7 @@ impl WinLineVars {
             }
         }
 
-        set_vim_var_nr(Vv::Virtnum, virtnum as VarNumber);
+        set_vim_var_nr(Vv::Virtnum, VarNumber::from(virtnum));
         let built = build_statuscol_str(
             window,
             LineNr::new(lnum),
@@ -586,10 +594,9 @@ impl WinLineVars {
             if was_reset {
                 // 'statuscolumn' was reset because the expression failed.
                 window.w_nrwidth_line_count = LineNr::ZERO;
-                window.w_nrwidth = (window.w_onebuf_opt.wo_nu != 0
-                    || window.w_onebuf_opt.wo_rnu != 0)
-                    as ::core::ffi::c_int
-                    * number_width(window);
+                window.w_nrwidth = ::core::ffi::c_int::from(
+                    window.w_onebuf_opt.wo_nu != 0 || window.w_onebuf_opt.wo_rnu != 0,
+                ) * number_width(window);
             } else {
                 window.w_nrwidth += (width - stc.width).min(MAX_STCWIDTH - stc.width);
                 window.w_nrwidth_width = window.w_nrwidth;
@@ -619,9 +626,9 @@ impl WinLineVars {
         // A last turn past the runs draws the rest of the text.
         for run in built.hl.iter().map(Some).chain(core::iter::once(None)) {
             // A negative length is "to the end", as upstream's `ssize_t`.
-            let textlen = run.map_or(text.len(), |run| run.start) as isize - p as isize;
+            let textlen = run.map_or(text.len(), |run| run.start).checked_sub(p);
             let src = text.get(p..).unwrap_or_default();
-            let translen = transstr_into(src, usize::try_from(textlen).ok(), &mut transbuf, true);
+            let translen = transstr_into(src, textlen, &mut transbuf, true);
             // `transbuf` is NUL-terminated after `translen`.
             self.draw_col_buf(window, &transbuf, translen, cur_attr, fold_vcol, false);
             let Some(run) = run else { break };

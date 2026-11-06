@@ -38,9 +38,18 @@
 //!
 //! Original: `src/nvim/statusline.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::env::home_to_tilde;
+use crate::narrow::as_index;
+use crate::narrow::number_as_int;
 use crate::narrow::number_as_lnum;
 use crate::normal::{set_visual_active, showcmd_buf, visual_active};
 use core::cell::Cell;
@@ -330,7 +339,7 @@ impl Env<'_> {
         stc.fold_vcol.set(fold_vcol);
         let mut buf = [0u8; TMPLEN as usize];
         let mut len = 0usize;
-        for &glyph in &glyphs[..fdc as usize] {
+        for &glyph in &glyphs[..as_index(fdc)] {
             len += put_schar(&mut buf, len, glyph);
         }
         text.extend_from_slice(&buf[..len]);
@@ -402,7 +411,7 @@ pub(super) fn tr(msg: &'static CStr) -> &'static [u8] {
 
 /// `toupper()` in the current locale, which is what `%Y` upper-cases with.
 pub(super) fn upper(byte: u8) -> u8 {
-    byte_toupper(c_int::from(byte)) as u8
+    u8::try_from(byte_toupper(c_int::from(byte))).unwrap_or(byte)
 }
 
 /// The number `text` spells, when it spells one at all.
@@ -419,7 +428,7 @@ pub(super) fn as_number(text: &[u8]) -> Option<c_int> {
         acc.saturating_mul(10)
             .saturating_add(i64::from(digit - b'0'))
     });
-    Some(value as c_int)
+    Some(number_as_int(value))
 }
 
 /// A copy of `bytes` as a C string, cut at a NUL as upstream's `xmemdupz`
@@ -465,7 +474,7 @@ impl Fill {
     /// Resolve `schar`, defaulting a zero to the blank upstream uses.
     fn of(schar: ScreenChar) -> Self {
         let schar = if schar == 0 {
-            b' ' as ScreenChar
+            ScreenChar::from(b' ')
         } else {
             schar
         };
@@ -481,7 +490,7 @@ impl Fill {
 
     /// Whether it is the `-` that must not be put in front of a digit.
     pub(super) fn is_dash(&self) -> bool {
-        self.schar == b'-' as ScreenChar
+        self.schar == ScreenChar::from(b'-')
     }
 
     /// Write one at `at`, answering where the next byte goes.
@@ -657,7 +666,7 @@ pub fn build_stl_str_hl(
     // the format actually used. Evaluating it can fail, in which case the
     // literal text is what gets rendered.
     let usefmt = if fmt_bytes.starts_with(b"%!") {
-        let mut winid = TypVal::Number(win.handle.get() as VarNumber);
+        let mut winid = TypVal::Number(VarNumber::from(win.handle.get()));
         let name = c"g:statusline_winid";
         set_var(name.to_bytes(), &mut winid, false);
         let expanded = eval_to_string_safe(&fmt_bytes[2..], sandbox, false);
@@ -784,7 +793,7 @@ fn expand(
         if too_long {
             fill::truncate(s, out, &mut built, outputlen, maxwidth, fill);
         } else if built.width < maxwidth
-            && outputlen + (maxwidth - built.width) as usize * fill.len() + 1 < out.len()
+            && outputlen + as_index(maxwidth - built.width) * fill.len() + 1 < out.len()
         {
             fill::spread(s, out, &mut built, maxwidth, fill);
         }

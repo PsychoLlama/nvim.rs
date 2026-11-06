@@ -152,7 +152,7 @@ pub(crate) const SCL_NUM: c_int = -2;
 /// The index that ends a decoration's chain of items.
 pub(crate) const DECOR_ID_INVALID: uint32_t = store::NO_ENTRY;
 /// The priority a decoration gets when its creator did not name one.
-const DECOR_PRIORITY_BASE: DecorPriority = 0x1000;
+pub(crate) const DECOR_PRIORITY_BASE: DecorPriority = 0x1000;
 
 /// An unset inline highlight — no flags, no group, base priority.
 pub(crate) const DECOR_HIGHLIGHT_INLINE_INIT: DecorHighlightInline = DecorHighlightInline {

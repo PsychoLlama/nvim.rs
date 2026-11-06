@@ -1,10 +1,18 @@
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 pub mod state;
+use crate::narrow::number_as_int;
 use crate::types::AutoEvent;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use crate::buffer::{buf_meta_total, maketitle};
 use crate::charset::{vim_isprintc, vim_strsize_cstr};
@@ -100,9 +108,8 @@ use crate::syntax::{
 use crate::terminal::{buf_terminal_check_size, buf_terminal_suspended};
 use crate::types::ui::{kUICmdline, kUIMessages, kUIMultigrid};
 use crate::types::{
-    ColNr, DecorPriority, DecorVirtText, DecorVirtText_data, Failed, FoldInfo, Handle, Hlf,
-    Integer, LineNr, OptInt, Pos, ProfTime, ScreenChar, SpellVars, VarNumber, VirtTextChunk,
-    WindowHandle, int64_t, uint16_t,
+    ColNr, DecorVirtText, DecorVirtText_data, Failed, FoldInfo, Handle, Hlf, Integer, LineNr,
+    OptInt, Pos, ProfTime, ScreenChar, SpellVars, VarNumber, VirtTextChunk, WindowHandle, int64_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{
@@ -149,7 +156,6 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 pub const FR_LEAF: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const FR_ROW: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FR_COL: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const DECOR_PRIORITY_BASE: ::core::ffi::c_int = 0x1000 as ::core::ffi::c_int;
 static redraw_popupmenu: GlobalCell<bool> = GlobalCell::new(false);
 static msg_grid_invalid: GlobalCell<bool> = GlobalCell::new(false);
 static resizing_autocmd: GlobalCell<bool> = GlobalCell::new(false);
@@ -218,7 +224,7 @@ fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
     if mg.is_allocated() {
         for i in 0..scrollsize.min(mg.rows) {
             let (off, cols) = (mg.row_start(i), mg.cols);
-            mg.clear_line(off, cols, (i as OptInt) < p_ch());
+            mg.clear_line(off, cols, OptInt::from(i) < p_ch());
         }
     }
     mg.throttled = false;
@@ -229,7 +235,7 @@ fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
         was_invalidated = ui_comp_set_screen_valid(false);
         let mut dg = default_grid_ref();
         let mut row = valid;
-        while (row as OptInt) < Rows.get() as OptInt - p_ch() {
+        while OptInt::from(row) < OptInt::from(Rows.get()) - p_ch() {
             let off = dg.row_start(row);
             dg.clear_line(off, Columns.get(), false);
             row += 1;
@@ -247,12 +253,12 @@ fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
                 wp.w_redr_status = true;
             }
         }
-        if is_stl_global && Rows.get() as OptInt - p_ch() - 1 > valid as OptInt {
+        if is_stl_global && OptInt::from(Rows.get()) - p_ch() - 1 > OptInt::from(valid) {
             Win::current().w_redr_status = true;
         }
     }
 
-    msg_grid_set_pos(Rows.get() - p_ch() as c_int, false);
+    msg_grid_set_pos(Rows.get() - number_as_int(p_ch()), false);
     msg_grid_invalid.set(false);
     if was_invalidated {
         // Only the message area was invalid, not the floats.
@@ -383,7 +389,7 @@ pub fn update_screen() -> Result<(), Failed> {
     if redr_type == UPD_NOT_VALID && clear_cmdline.get() && !ui_has(kUIMessages) {
         grid_clear(
             default_gridview(),
-            Rows.get() - p_ch() as c_int,
+            Rows.get() - number_as_int(p_ch()),
             Rows.get(),
             0,
             Columns.get(),
@@ -466,7 +472,7 @@ pub fn update_screen() -> Result<(), Failed> {
                 wp.grid_alloc(),
                 &wp.w_config,
                 Some(wp.w_border_adj),
-                wp.w_onebuf_opt.wo_winbl as c_int,
+                number_as_int(wp.w_onebuf_opt.wo_winbl),
                 hl_attr.as_ref().map(|table| &table[..]),
             );
         }
@@ -637,7 +643,7 @@ pub fn compute_foldcolumn(window: Win, col: c_int) -> c_int {
     let min_width = if window.raw() == Win::current_raw() && p_wmw() == 0 {
         1
     } else {
-        p_wmw() as c_int
+        number_as_int(p_wmw())
     };
     fdc.min(window.w_view_width - (col + min_width))
 }
@@ -668,7 +674,7 @@ pub fn number_width(mut window: Win) -> c_int {
         window.w_statuscol_line_count = LineNr::ZERO;
         window.w_nrwidth_width =
             c_int::from(window.w_onebuf_opt.wo_nu != 0 || window.w_onebuf_opt.wo_rnu != 0)
-                * window.w_onebuf_opt.wo_nuw as c_int;
+                * number_as_int(window.w_onebuf_opt.wo_nuw);
         return window.w_nrwidth_width;
     }
 
@@ -685,7 +691,7 @@ pub fn number_width(mut window: Win) -> c_int {
     }
 
     // 'numberwidth' is the minimal width plus one.
-    n = n.max(window.w_onebuf_opt.wo_nuw as c_int - 1);
+    n = n.max(number_as_int(window.w_onebuf_opt.wo_nuw) - 1);
 
     // With `'signcolumn'` "number" and a sign to show, the number column
     // needs room for the two-cell sign text.
