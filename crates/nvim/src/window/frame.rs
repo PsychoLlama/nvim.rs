@@ -41,15 +41,15 @@ pub(crate) struct AltWin {
     /// The frame that grows into the closing one's room.
     pub frame: FrameRef,
     /// `'v'` when the room is given away vertically, `'h'` horizontally.
-    pub dir: c_int,
+    pub dir: u8,
 }
 
 /// Free `win`'s frame and the window itself, and say which neighbour took its
 /// room and along which axis.
-pub(crate) fn free_mem(win: Win, tabpage: Option<TabPage>) -> (Option<Win>, c_int) {
+pub(crate) fn free_mem(win: Win, tabpage: Option<TabPage>) -> (Option<Win>, u8) {
     let mut win_tp = tabpage.unwrap_or_else(TabPage::current);
     let (wp, dir) = if win.w_floating {
-        (win_float_find_altwin(win, tabpage), 'h' as c_int)
+        (win_float_find_altwin(win, tabpage), b'h')
     } else {
         let frp = win.frame();
         let removed = winframe_remove(win, tabpage, false);
@@ -74,7 +74,7 @@ pub(crate) struct Removed {
     /// The window the caller should go to, `None` when `win` was the only one.
     pub win: Option<Win>,
     /// `'v'` when the room was given away vertically, `'h'` horizontally.
-    pub dir: c_int,
+    pub dir: u8,
     /// The frame that grew, left *unflattened* so [`winframe_restore`] can
     /// undo the whole thing. Only when the caller asked to keep it — and an
     /// identity, because the caller holds it across a `win_split_ins` that
@@ -114,11 +114,11 @@ pub(crate) fn winframe_remove(win: Win, tabpage: Option<TabPage>, keep_unflat: b
     }
     frame_remove(frp_close);
     let altfr = alt.frame;
-    if alt.dir == 'v' as c_int {
+    if alt.dir == b'v' {
         let taller = altfr.fr_height + frp_close.fr_height;
         new_height(altfr, taller, Some(altfr) == frp_close.next(), false, false);
     } else {
-        debug_assert!(alt.dir == 'h' as c_int, "*dirp == 'h'");
+        debug_assert!(alt.dir == b'h', "*dirp == 'h'");
         let wider = altfr.fr_width + frp_close.fr_width;
         new_width(altfr, wider, Some(altfr) == frp_close.next(), false);
     }
@@ -203,7 +203,7 @@ pub(crate) fn find_altwin(win: Win, tabpage: Option<TabPage>) -> Option<AltWin> 
             fwd = after.next();
         }
     }
-    let dir = if vertical { 'v' } else { 'h' } as c_int;
+    let dir = if vertical { b'v' } else { b'h' };
     debug_assert!(
         wp != win && frame != frp_close,
         "wp != win && frp2 != frp_close"
@@ -276,7 +276,7 @@ pub(crate) fn flatten(frp: FrameRef) {
 
 /// Undo a [`winframe_remove`] that was told to leave the tree unflattened:
 /// link `window`'s frame back in and take its room off the frame that grew.
-pub(crate) fn winframe_restore(window: Win, dir: c_int, unflat_altfr: FrameRef) {
+pub(crate) fn winframe_restore(window: Win, dir: u8, unflat_altfr: FrameRef) {
     let frp = window.frame();
     // Restore the lists of frames the window was in.
     match frp.prev() {
@@ -300,11 +300,11 @@ pub(crate) fn winframe_restore(window: Win, dir: c_int, unflat_altfr: FrameRef) 
             add_hsep(prev);
         }
     }
-    if dir == 'v' as c_int {
+    if dir == b'v' {
         let shorter = unflat_altfr.fr_height - frp.fr_height;
         let topfirst = Some(unflat_altfr) == frp.next();
         new_height(unflat_altfr, shorter, topfirst, false, false);
-    } else if dir == 'h' as c_int {
+    } else if dir == b'h' {
         let narrower = unflat_altfr.fr_width - frp.fr_width;
         let leftfirst = Some(unflat_altfr) == frp.next();
         new_width(unflat_altfr, narrower, leftfirst, false);

@@ -30,7 +30,7 @@ use crate::narrow::number_as_int;
 use crate::narrow::number_as_lnum;
 use crate::types::ColNr;
 use crate::types::LineNr;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use crate::ex_eval::state::{
     current_exception, did_throw, force_abort, msg_lists, need_rethrow, trylevel,
@@ -267,16 +267,16 @@ pub(crate) fn set_mark(
         col: ColNr::new(number_as_int(col)),
         coladd: 0,
     };
-    // As C read it: a `char`, so a byte past ASCII is negative. A name that
-    // is not one character is the caller's check; an empty one reads NUL.
-    let first = name.as_bytes().first().copied().unwrap_or(0);
-    let mark = c_int::from(c_char::from_ne_bytes([first]));
+    // A byte past ASCII names no mark, as upstream's negative `char` did. A
+    // name that is not one character is the caller's check; an empty one
+    // reads NUL.
+    let mark = name.as_bytes().first().copied().unwrap_or(0);
     let handle = buffer.handle;
     if setmark_at(mark, pos, Some(handle)).is_ok() {
         return Ok(());
     }
     // `%c` wrote the one byte, whatever it was.
-    let byte = first;
+    let byte = mark;
     let mark = msg_bytes(core::slice::from_ref(&byte));
     Err(match deleting {
         true => api_error!(kErrorTypeException, "Failed to delete named mark: {mark}"),

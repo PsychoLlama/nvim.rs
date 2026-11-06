@@ -24,9 +24,8 @@ use crate::state::mode::State;
 use crate::state::{
     MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_INSERT, MODE_SETWSIZE,
 };
-use crate::strings::has_char;
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
 
 /// What [`ui_check_mouse`] last worked out.
 static has_mouse: GlobalCell<bool> = GlobalCell::new(false);
@@ -36,12 +35,14 @@ pub(super) fn wanted() -> bool {
     has_mouse.get()
 }
 
-const MOUSE_NORMAL: c_int = b'n' as c_int;
-const MOUSE_VISUAL: c_int = b'v' as c_int;
-const MOUSE_INSERT: c_int = b'i' as c_int;
-const MOUSE_COMMAND: c_int = b'c' as c_int;
-const MOUSE_HELP: c_int = b'h' as c_int;
-const MOUSE_RETURN: c_int = b'r' as c_int;
+const MOUSE_NORMAL: u8 = b'n';
+/// The `'mouse'` flag for Visual mode, which a drag also needs before it
+/// may start one.
+pub(crate) const MOUSE_VISUAL: u8 = b'v';
+const MOUSE_INSERT: u8 = b'i';
+const MOUSE_COMMAND: u8 = b'c';
+const MOUSE_HELP: u8 = b'h';
+const MOUSE_RETURN: u8 = b'r';
 /// The modes `'mouse'`'s `a` covers.
 const MOUSE_A: &CStr = c"nvich";
 
@@ -62,7 +63,7 @@ pub fn ui_check_mouse() {
         MOUSE_COMMAND
     } else if state == MODE_EXTERNCMD {
         // The mouse belongs to whatever is running, not to us.
-        c_int::from(b' ')
+        b' '
     } else {
         MOUSE_NORMAL
     };
@@ -72,13 +73,12 @@ pub fn ui_check_mouse() {
 }
 
 /// Whether `'mouse'` enables the mouse for `mode`.
-pub fn ui_mouse_has(mode: c_int) -> bool {
+pub fn ui_mouse_has(mode: u8) -> bool {
     p_mouse(|value| {
         value.to_bytes().iter().any(|&flag| {
-            let flag = c_int::from(flag);
             match flag {
                 // `a` is every mode but the hit-return prompt.
-                _ if flag == c_int::from(b'a') => has_char(MOUSE_A, mode),
+                b'a' => MOUSE_A.to_bytes().contains(&mode),
                 MOUSE_HELP => mode != MOUSE_RETURN && Buf::current().b_help,
                 _ => mode == flag,
             }

@@ -246,10 +246,7 @@ fn virtual_column(rex: Rex) -> uint32_t {
 /// `\%'m`, `\%<'m`, `\%>'m`: is the cursor at, before or after mark `m`?
 fn at_mark(rex: Rex, prog: BtProg<'_>, scan: usize) -> c_int {
     // The operand is the mark name and the comparison character.
-    let (mark, cmp) = (
-        c_int::from(prog.byte(scan, 3)),
-        c_int::from(prog.byte(scan, 4)),
-    );
+    let (mark, cmp) = (prog.byte(scan, 3), c_int::from(prog.byte(scan, 4)));
     let col = if rex.multi() { rex.col() } else { ColNr::ZERO };
     // `mark_get` computes a motion mark (`'{`, `'(`) on the spot.
     let fm = mark_get(rex.reg_buf(), Win::current(), kMarkBufLocal, mark);

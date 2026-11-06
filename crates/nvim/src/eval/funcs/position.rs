@@ -426,7 +426,7 @@ fn set_position(args: &[TypVal], result: &mut TypVal, charpos: bool) {
         }
         // A mark name is exactly one byte after the quote.
         [b'\'', c] => {
-            if setmark_at(c_int::from(*c), pos, Handle::from_number(fnum)).is_ok() {
+            if setmark_at(*c, pos, Handle::from_number(fnum)).is_ok() {
                 result.write_number(0);
             }
         }

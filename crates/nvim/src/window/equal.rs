@@ -30,7 +30,7 @@ use crate::types::OptInt;
 use crate::ui::state::Columns;
 use crate::winlayer::{FrameRef, Win};
 
-pub fn win_equal(next_curwin: Option<Win>, current: bool, dir: c_int) {
+pub fn win_equal(next_curwin: Option<Win>, current: bool, dir: u8) {
     equal(next_curwin, current, dir);
 }
 
@@ -39,12 +39,8 @@ pub fn win_equal(next_curwin: Option<Win>, current: bool, dir: c_int) {
 /// `next_curwin` will soon be the current window, so it is the one that gets
 /// `'winheight'`/`'winwidth'` if there is room; `dir` is `'v'`, `'h'`, `'b'`
 /// or 0 to take it from `'eadirection'`.
-pub(crate) fn equal(next_curwin: Option<Win>, current: bool, dir: c_int) {
-    let dir = if dir == 0 {
-        p_ead(|value| c_int::from(cstr::first(value)))
-    } else {
-        dir
-    };
+pub(crate) fn equal(next_curwin: Option<Win>, current: bool, dir: u8) {
+    let dir = if dir == 0 { p_ead(cstr::first) } else { dir };
     let topfr = current_topframe();
     equal_rec(
         next_curwin.unwrap_or_else(Win::current),
@@ -68,7 +64,7 @@ fn equal_rec(
     next_curwin: Win,
     current: bool,
     topfr: FrameRef,
-    dir: c_int,
+    dir: u8,
     col: c_int,
     row: c_int,
     width: c_int,
@@ -131,7 +127,7 @@ fn equal_row(
     next_curwin: Win,
     current: bool,
     topfr: FrameRef,
-    dir: c_int,
+    dir: u8,
     col: c_int,
     row: c_int,
     width: c_int,
@@ -141,7 +137,7 @@ fn equal_row(
     topfr.fr_width = width;
     topfr.fr_height = height;
     let mut sh = Share::none();
-    if dir != 'v' as c_int {
+    if dir != b'v' {
         sh = row_share(next_curwin, topfr, col, width);
     }
 
@@ -151,7 +147,7 @@ fn equal_row(
         let new_size = if fr.next().is_none() {
             // Last frame gets all that remains (avoids a rounding error).
             width
-        } else if dir == 'v' as c_int {
+        } else if dir == b'v' {
             fr.fr_width
         } else if frame_fixed_width(fr) {
             wincount = 0; // doesn't count as a sizeable window
@@ -186,7 +182,7 @@ fn equal_row(
         // Skip a frame that is full width when splitting or closing a window,
         // unless equalizing all frames.
         if !current
-            || dir != 'v' as c_int
+            || dir != b'v'
             || topfr.parent().is_some()
             || new_size != fr.fr_width
             || frame_has_win(fr, Some(next_curwin))
@@ -279,7 +275,7 @@ fn equal_col(
     next_curwin: Win,
     current: bool,
     topfr: FrameRef,
-    dir: c_int,
+    dir: u8,
     col: c_int,
     row: c_int,
     width: c_int,
@@ -289,7 +285,7 @@ fn equal_col(
     topfr.fr_width = width;
     topfr.fr_height = height;
     let mut sh = Share::none();
-    if dir != 'h' as c_int {
+    if dir != b'h' {
         sh = col_share(next_curwin, topfr, row, height);
     }
 
@@ -298,7 +294,7 @@ fn equal_col(
         let mut wincount = 1;
         let new_size = if fr.next().is_none() {
             height
-        } else if dir == 'h' as c_int {
+        } else if dir == b'h' {
             fr.fr_height
         } else if frame_fixed_height(fr) {
             wincount = 0;
@@ -329,7 +325,7 @@ fn equal_col(
         };
 
         if !current
-            || dir != 'h' as c_int
+            || dir != b'h'
             || topfr.parent().is_some()
             || new_size != fr.fr_height
             || frame_has_win(fr, Some(next_curwin))

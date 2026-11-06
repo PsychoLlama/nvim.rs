@@ -225,8 +225,8 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> Result<(), NotClos
         // If the last window has a status line now and we do not want one,
         // remove it. Do this before `equal()`, which may change a height.
         update_last_status(false);
-        let ead = p_ead(|value| c_int::from(cstr::first(value)));
-        if !Win::current().w_floating && p_ea() && (ead == 'b' as c_int || ead == dir) {
+        let ead = p_ead(cstr::first);
+        if !Win::current().w_floating && p_ea() && (ead == b'b' || ead == dir) {
             // If the frame of the closed window contains the new current
             // window, resize only that frame; otherwise resize all windows.
             let same = Win::current().frame().fr_parent == win_frame;

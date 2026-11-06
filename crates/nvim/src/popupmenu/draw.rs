@@ -26,50 +26,8 @@ use crate::cstr;
 use crate::grid::with_linebuf;
 use crate::message::emsg;
 use crate::narrow::len_as_int;
-use crate::types::ColNr;
-use crate::types::kFloatRelativeEditor;
+use crate::winfloat::WIN_CONFIG_INIT;
 use crate::winlayer::Win;
-
-/// `WIN_CONFIG_INIT`: the float config a fresh `parse_winborder` writes into.
-///
-/// Only the border half is used here, but `grid_draw_border` also reads the
-/// title and footer fields, so the whole thing has to start out empty.
-const WIN_CONFIG_INIT: WinConfig = WinConfig {
-    window: Handle::NONE,
-    bufpos: LPos {
-        lnum: LineNr::new(-1),
-        col: ColNr::ZERO,
-    },
-    height: 0,
-    width: 0,
-    row: 0.0,
-    col: 0.0,
-    anchor: 0,
-    relative: kFloatRelativeEditor,
-    external: false,
-    focusable: true,
-    mouse: true,
-    split: kWinSplitLeft,
-    zindex: kZIndexFloatDefault,
-    style: kWinStyleUnused,
-    border: false,
-    shadow: false,
-    border_chars: [[0; 32]; 8],
-    border_hl_ids: [0; 8],
-    border_attr: [0; 8],
-    title: false,
-    title_pos: kAlignLeft,
-    title_chunks: VirtText::new(),
-    title_width: 0,
-    footer: false,
-    footer_pos: kAlignLeft,
-    footer_chunks: VirtText::new(),
-    footer_width: 0,
-    noautocmd: false,
-    fixed: false,
-    hide: false,
-    _cmdline_offset: c_int::MAX,
-};
 
 /// The order the three item columns are drawn in, per `'completeitemalign'`.
 ///

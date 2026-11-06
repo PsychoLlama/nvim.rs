@@ -43,7 +43,6 @@ use crate::types::Handle;
 use crate::types::LineNr;
 use core::ffi::{c_char, c_int};
 
-use crate::ascii::ascii_islower;
 use crate::os::time::os_time;
 use crate::types::{FileMark, FileMarkView, Pos, XFileMark};
 use crate::winlayer::Buf;
@@ -65,8 +64,16 @@ pub(super) const NO_VIEW: FileMarkView = FileMarkView::NONE;
 /// Every caller works the name out by adding an index to a letter, and every
 /// such sum is ASCII by construction, so a failure is a bug in that
 /// arithmetic rather than in the user's input.
-pub(super) fn mark_name(c: c_int) -> c_char {
+pub(super) fn mark_name(c: u8) -> c_char {
     c_char::try_from(c).expect("mark name is one ASCII byte")
+}
+
+/// The mark name `i` places after `first`: `nth_name(b'a', 2)` is `'c`.
+///
+/// The callers count within one class of names, so the sum is ASCII by
+/// construction and a failure is a bug in that count.
+pub(super) fn nth_name(first: u8, i: c_int) -> u8 {
+    first + u8::try_from(i).expect("mark name is one ASCII byte")
 }
 
 /// A position in one of the fixed-size stores, bounds-checked.
@@ -115,16 +122,16 @@ pub(super) enum LocalMark {
 impl LocalMark {
     /// The store `name` names: `'a`-`'z`, `'"`, `'^`, `'.` or `':`, or
     /// `None` for any other name.
-    pub(super) fn named(name: c_int) -> Option<LocalMark> {
-        Some(if ascii_islower(name) {
-            LocalMark::Named(slot(name - 'a' as c_int))
-        } else if name == '"' as c_int {
+    pub(super) fn named(name: u8) -> Option<LocalMark> {
+        Some(if name.is_ascii_lowercase() {
+            LocalMark::Named(usize::from(name - b'a'))
+        } else if name == b'"' {
             LocalMark::LastCursor
-        } else if name == '^' as c_int {
+        } else if name == b'^' {
             LocalMark::LastInsert
-        } else if name == '.' as c_int {
+        } else if name == b'.' {
             LocalMark::LastChange
-        } else if name == ':' as c_int {
+        } else if name == b':' {
             LocalMark::PromptStart
         } else {
             return None;
@@ -147,15 +154,15 @@ impl LocalMark {
 
 /// Every slot of the global table, `'A` first, `'9` last, with its mark
 /// name.
-pub(super) fn global_mark_names() -> impl Iterator<Item = (usize, c_char)> {
+pub(super) fn global_mark_names() -> impl Iterator<Item = (usize, u8)> {
     (0..super::NGLOBALMARKS).map(|i| {
         // `'A`-`'Z` occupy `0..NMARKS` and `'0`-`'9` the rest.
         let name = if i < super::NMARKS {
-            'A' as c_int + i
+            nth_name(b'A', i)
         } else {
-            '0' as c_int + i - super::NMARKS
+            nth_name(b'0', i - super::NMARKS)
         };
-        (slot(i), mark_name(name))
+        (slot(i), name)
     })
 }
 
@@ -238,21 +245,19 @@ mod tests {
 
     #[test]
     fn local_stores_are_named_by_their_mark() {
-        assert_eq!(LocalMark::named('a' as c_int), Some(LocalMark::Named(0)));
-        assert_eq!(LocalMark::named('z' as c_int), Some(LocalMark::Named(25)));
-        assert_eq!(LocalMark::named('"' as c_int), Some(LocalMark::LastCursor));
-        assert_eq!(LocalMark::named('^' as c_int), Some(LocalMark::LastInsert));
-        assert_eq!(LocalMark::named('.' as c_int), Some(LocalMark::LastChange));
-        assert_eq!(LocalMark::named(':' as c_int), Some(LocalMark::PromptStart));
-        assert_eq!(LocalMark::named('A' as c_int), None);
-        assert_eq!(LocalMark::named('[' as c_int), None);
+        assert_eq!(LocalMark::named(b'a'), Some(LocalMark::Named(0)));
+        assert_eq!(LocalMark::named(b'z'), Some(LocalMark::Named(25)));
+        assert_eq!(LocalMark::named(b'"'), Some(LocalMark::LastCursor));
+        assert_eq!(LocalMark::named(b'^'), Some(LocalMark::LastInsert));
+        assert_eq!(LocalMark::named(b'.'), Some(LocalMark::LastChange));
+        assert_eq!(LocalMark::named(b':'), Some(LocalMark::PromptStart));
+        assert_eq!(LocalMark::named(b'A'), None);
+        assert_eq!(LocalMark::named(b'['), None);
     }
 
     #[test]
     fn the_global_table_is_named_upper_case_then_digits() {
-        let names: Vec<u8> = global_mark_names()
-            .map(|(_, name)| name.cast_unsigned())
-            .collect();
+        let names: Vec<u8> = global_mark_names().map(|(_, name)| name).collect();
         assert_eq!(names, b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789");
         assert_eq!(global_mark_names().nth(26).map(|(i, _)| i), Some(26));
     }

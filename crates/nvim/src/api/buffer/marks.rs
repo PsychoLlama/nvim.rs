@@ -26,8 +26,8 @@ pub fn nvim_buf_del_mark(buf: BufferHandle, name: ApiString) -> Result<Boolean, 
         let name = name.as_cstr();
         return Err(err_bad_value(c"mark name (must be a single char)", name));
     }
-    // As C read it: a `char`, so a byte past ASCII is negative.
-    let mark = ::core::ffi::c_int::from(::core::ffi::c_char::from_ne_bytes([name.as_bytes()[0]]));
+    // A byte past ASCII names no mark, as upstream's negative `char` did.
+    let mark = name.as_bytes()[0];
     let Some(fm) = mark_get(b, Win::current(), kMarkAllNoResolve, mark) else {
         return Err(err_bad_value(c"mark name", name.as_cstr()));
     };
@@ -72,13 +72,8 @@ pub fn nvim_buf_get_mark(buf: BufferHandle, name: ApiString) -> Result<Array, Er
         col: ColNr::ZERO,
         coladd: 0,
     };
-    let mark = ::core::ffi::c_char::from_ne_bytes([name.as_bytes()[0]]);
-    let Some(fm) = mark_get(
-        b,
-        Win::current(),
-        kMarkAllNoResolve,
-        ::core::ffi::c_int::from(mark),
-    ) else {
+    let mark = name.as_bytes()[0];
+    let Some(fm) = mark_get(b, Win::current(), kMarkAllNoResolve, mark) else {
         return Err(err_bad_value(c"mark name", name.as_cstr()));
     };
     if fm.fnum != Some(b.handle) {

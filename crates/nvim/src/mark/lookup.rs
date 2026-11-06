@@ -39,9 +39,9 @@ use crate::search::{BACKWARD, FORWARD};
 /// can run user code (a jump loading a file) while it holds it. The marks
 /// that are really *motions* or never-adjusted positions have no store of
 /// their own and are computed; their `view` and `timestamp` are unset.
-pub fn mark_get(buffer: Buf, win: Win, flag: MarkGet, name: c_int) -> Option<FileMark> {
+pub fn mark_get(buffer: Buf, win: Win, flag: MarkGet, name: u8) -> Option<FileMark> {
     let handle = buffer.handle;
-    if ascii_isupper(name) || ascii_isdigit(name) {
+    if name.is_ascii_uppercase() || name.is_ascii_digit() {
         let xfm = mark_get_global(flag as c_uint != kMarkAllNoResolve as c_uint, name);
         // A global mark that names another buffer is *not* this buffer's
         // mark: `kMarkBufLocal` answers an unset record rather than a
@@ -51,7 +51,7 @@ pub fn mark_get(buffer: Buf, win: Win, flag: MarkGet, name: c_int) -> Option<Fil
         }
         return Some(xfm.fmark);
     }
-    if name > 0 && name < NMARK_LOCAL_MAX {
+    if name > 0 && c_int::from(name) < NMARK_LOCAL_MAX {
         return mark_get_local(buffer, win, name);
     }
     None
@@ -64,16 +64,16 @@ pub fn mark_get(buffer: Buf, win: Win, flag: MarkGet, name: c_int) -> Option<Fil
 ///          table.
 /// `resolve` — Whether to try resolving the mark fnum (i.e., load the buffer stored in
 ///                 the mark fname and update the XFileMark (expensive)).
-pub fn mark_get_global(resolve: bool, name: c_int) -> XFileMark {
+pub fn mark_get_global(resolve: bool, name: u8) -> XFileMark {
     // Spelled out rather than handed to `mark_global_index` because that
     // takes a `c_char`, and narrowing `name` first would turn `'A' + 256`
     // into a valid index instead of the abort below. See p20-12's trap 9:
     // these two range tests are a NO-MUTATE zone, because perturbing either
     // turns an ordinary `'a` lookup into a panic.
-    let idx = if ascii_isdigit(name) {
-        name - '0' as c_int + NMARKS
-    } else if ascii_isupper(name) {
-        name - 'A' as c_int
+    let idx = if name.is_ascii_digit() {
+        usize::from(name - b'0') + slot(NMARKS)
+    } else if name.is_ascii_uppercase() {
+        usize::from(name - b'A')
     } else {
         // Deliberately a hard failure, not a `debug_assert!`: `idx` is the
         // index into `namedfm` on the next line, and neither branch above has
@@ -82,7 +82,6 @@ pub fn mark_get_global(resolve: bool, name: c_int) -> XFileMark {
         // digit or an uppercase letter before they get here.
         unreachable!("mark name is neither a digit nor an uppercase letter");
     };
-    let idx = slot(idx);
     let mark = global_mark(idx);
     // A mark read out of the shada file names its buffer by file name until
     // something asks for it; loading that file is what `resolve` pays for,
@@ -110,7 +109,7 @@ pub fn mark_get_global(resolve: bool, name: c_int) -> XFileMark {
 /// Returns a copy of the mark, `None` if not found. Whatever it is, it is
 /// reported against `buffer`: a store's record has its `fnum` set to the
 /// buffer's in place, as upstream writes it through the pointer it answers.
-pub fn mark_get_local(buffer: Buf, win: Win, name: c_int) -> Option<FileMark> {
+pub fn mark_get_local(buffer: Buf, win: Win, name: u8) -> Option<FileMark> {
     let handle = buffer.handle;
     let store = LocalMark::named(name)
         .filter(|store| *store != LocalMark::PromptStart || buf_is_prompt(Some(buffer)));
@@ -120,13 +119,13 @@ pub fn mark_get_local(buffer: Buf, win: Win, name: c_int) -> Option<FileMark> {
             mark.clone()
         }));
     }
-    let mut mark = if name == '[' as c_int {
+    let mut mark = if name == b'[' {
         pos_to_mark(buffer, buffer.b_op_start)
-    } else if name == ']' as c_int {
+    } else if name == b']' {
         pos_to_mark(buffer, buffer.b_op_end)
-    } else if name == '<' as c_int || name == '>' as c_int {
+    } else if name == b'<' || name == b'>' {
         mark_get_visual(buffer, name)?
-    } else if name == '\'' as c_int || name == '`' as c_int {
+    } else if name == b'\'' || name == b'`' {
         // The context mark is the WINDOW's; its number is overwritten with
         // `buffer`'s below, as upstream does after reading `curbuf`'s.
         pos_to_mark(Buf::current(), win.w_pcmark)
@@ -146,7 +145,7 @@ pub fn mark_get_local(buffer: Buf, win: Win, name: c_int) -> Option<FileMark> {
 ///
 /// Returns the mark, or `None` when `name` names no motion or the motion
 /// found nothing.
-pub fn mark_get_motion(buffer: Buf, win: Win, name: c_int) -> Option<FileMark> {
+pub fn mark_get_motion(buffer: Buf, win: Win, name: u8) -> Option<FileMark> {
     let mut cur = Win::current();
     // The motion is computed by *moving the cursor* and reading where it
     // landed, so the cursor is put back before answering. `listcmd_busy`
@@ -155,21 +154,13 @@ pub fn mark_get_motion(buffer: Buf, win: Win, name: c_int) -> Option<FileMark> {
     let was_busy = listcmd_busy.get();
     listcmd_busy.set(true);
     let mut mark = None;
-    if name == '{' as c_int || name == '}' as c_int {
-        let dir = if name == '}' as c_int {
-            FORWARD
-        } else {
-            BACKWARD
-        };
+    if name == b'{' || name == b'}' {
+        let dir = if name == b'}' { FORWARD } else { BACKWARD };
         if findpar(dir as c_int, 1, NUL, false).is_some() {
             mark = Some(pos_to_mark(buffer, win.w_cursor));
         }
-    } else if name == '(' as c_int || name == ')' as c_int {
-        let dir = if name == ')' as c_int {
-            FORWARD
-        } else {
-            BACKWARD
-        };
+    } else if name == b'(' || name == b')' {
+        let dir = if name == b')' { FORWARD } else { BACKWARD };
         if findsent(dir as Direction, 1).is_ok() {
             mark = Some(pos_to_mark(buffer, win.w_cursor));
         }
@@ -191,24 +182,24 @@ pub fn mark_get_motion(buffer: Buf, win: Win, name: c_int) -> Option<FileMark> {
 /// `name` — Mark name '<' or '>'.
 ///
 /// Returns the mark, or `None` when `name` is neither `'<` nor `'>`.
-pub fn mark_get_visual(buffer: Buf, name: c_int) -> Option<FileMark> {
-    if name != '<' as c_int && name != '>' as c_int {
+pub fn mark_get_visual(buffer: Buf, name: u8) -> Option<FileMark> {
+    if name != b'<' && name != b'>' {
         return None;
     }
     let (start, end) = (buffer.b_visual.vi_start, buffer.b_visual.vi_end);
     // `'<` is whichever end comes FIRST, not whichever was set first: a
     // Visual selection made backwards still reports its marks in order.
-    let wants_start = (name == '<' as c_int) == lt(start, end) || end.lnum == LineNr::ZERO;
+    let wants_start = (name == b'<') == lt(start, end) || end.lnum == LineNr::ZERO;
     let at = if wants_start && start.lnum != LineNr::ZERO {
         start
     } else {
         end
     };
     let mut mark = pos_to_mark(buffer, at);
-    if buffer.b_visual.vi_mode == 'V' as c_int {
+    if buffer.b_visual.vi_mode == c_int::from(b'V') {
         // A linewise selection has no columns of its own; `'<` is the start
         // of the line and `'>` the end of it.
-        mark.mark.col = if name == '<' as c_int {
+        mark.mark.col = if name == b'<' {
             ColNr::ZERO
         } else {
             ColNr::MAX
@@ -355,9 +346,9 @@ fn switch_to_mark_buf(fm: &FileMark, pcmark_on_switch: bool) -> MarkMoveRes {
 pub(super) fn mark_global_index(name: c_char) -> c_int {
     let name = c_int::from(name);
     if ascii_isupper(name) {
-        name - 'A' as c_int
+        name - c_int::from(b'A')
     } else if ascii_isdigit(name) {
-        NMARKS + (name - '0' as c_int)
+        NMARKS + (name - c_int::from(b'0'))
     } else {
         -1
     }

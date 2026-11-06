@@ -86,7 +86,7 @@ pub fn win_split_ins(
     size: c_int,
     flags: c_int,
     new_wp: Option<Win>,
-    dir: c_int,
+    dir: u8,
     to_flatten: Option<FrameRef>,
 ) -> Option<Win> {
     split_ins(size, flags, new_wp, dir, to_flatten)
@@ -116,7 +116,7 @@ fn split_ins(
     size: c_int,
     flags: c_int,
     new_wp: Option<Win>,
-    dir: c_int,
+    dir: u8,
     to_flatten: Option<FrameRef>,
 ) -> Option<Win> {
     // `aucmd_win[]` should always remain floating.
@@ -205,12 +205,12 @@ fn split_ins(
 
     if room.do_equal || dir != 0 {
         let axis = match (vertical, dir) {
-            (true, d) if d == 'v' as c_int => 'b',
-            (true, _) => 'h',
-            (false, d) if d == 'h' as c_int => 'b',
-            (false, _) => 'v',
+            (true, b'v') => b'b',
+            (true, _) => b'h',
+            (false, b'h') => b'b',
+            (false, _) => b'v',
         };
-        equal(Some(wp), true, axis as c_int);
+        equal(Some(wp), true, axis);
     } else if !is_autocmd_window(Some(wp)) {
         fix_scroll(false);
     }
@@ -299,7 +299,7 @@ fn split_room_vertical(size: c_int, flags: c_int, oldwin: Win, toplevel: bool) -
 
     // Only make all windows the same width if one of them (except oldwin) is
     // wider than one of the split windows.
-    if !do_equal && p_ea() && size == 0 && ead() != 'v' as c_int {
+    if !do_equal && p_ea() && size == 0 && ead() != b'v' {
         do_equal = wider_sibling(oldwin, |w| {
             w.w_width > new_size || w.w_width > oldwin.w_width - new_size - 1
         });
@@ -382,7 +382,7 @@ fn split_room_horizontal(
         }
     }
 
-    if !do_equal && p_ea() && size == 0 && ead() != 'h' as c_int {
+    if !do_equal && p_ea() && size == 0 && ead() != b'h' {
         let oldwin = *oldwin;
         do_equal = wider_sibling(oldwin, |w| {
             w.w_height > new_size || w.w_height > oldwin_height - new_size - STATUS_HEIGHT
@@ -397,8 +397,8 @@ fn split_room_horizontal(
 }
 
 /// The first character of `'eadirection'`.
-fn ead() -> c_int {
-    p_ead(|value| c_int::from(cstr::first(value)))
+fn ead() -> u8 {
+    p_ead(cstr::first)
 }
 
 /// Whether any window beside `oldwin` in its own row or column answers `taller`
@@ -780,9 +780,9 @@ fn init(newp: Win, oldp: Win, flags: c_int) {
     newp.w_localdir = oldp.w_localdir.clone();
     newp.w_prevdir = oldp.w_prevdir.clone();
 
-    let spk = p_spk(|value| c_int::from(cstr::first(value)));
-    if spk != 'c' as c_int {
-        if spk == 't' as c_int {
+    let spk = p_spk(cstr::first);
+    if spk != b'c' {
+        if spk == b't' {
             newp.w_skipcol = oldp.w_skipcol;
         }
         newp.w_botline = oldp.w_botline;

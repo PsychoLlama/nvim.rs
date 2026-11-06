@@ -18,9 +18,9 @@
 use crate::buffer::buflist_nr2name;
 use crate::eval::typval::{tv_dict_alloc, tv_list_alloc};
 use crate::winlayer::{Buf, Win};
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
 
-use super::store::{global_mark, global_mark_names, slot};
+use super::store::{global_mark, global_mark_names, nth_name, slot};
 use super::*;
 use crate::types::Failed;
 use crate::types::kListLenMayKnow;
@@ -73,7 +73,7 @@ pub fn get_buf_local_marks(buffer: Buf, l: &mut List) {
     let handle = Some(buf.handle);
     let mut mname: [u8; 3] = *b"' \0";
     for i in 0..NMARKS {
-        mname[1] = u8::try_from('a' as c_int + i).expect("mark name is one ASCII byte");
+        mname[1] = nth_name(b'a', i);
         let name = CStr::from_bytes_with_nul(&mname).expect("a two-byte mark name");
         let _ = add_mark(l, name, buf.b_namedm[slot(i)].mark, handle, None);
     }
@@ -110,7 +110,7 @@ pub fn get_global_marks(l: &mut List) {
         let Some(file) = file else {
             continue;
         };
-        mname[1] = name.cast_unsigned();
+        mname[1] = name;
         let mark_text = CStr::from_bytes_with_nul(&mname).expect("a two-byte mark name");
         let _ = add_mark(l, mark_text, mark.fmark.mark, fnum, Some(file.as_cstr()));
     }

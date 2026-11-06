@@ -44,7 +44,7 @@ use crate::eval::typval::{callback_free, tv_dict_item_copy, unlink_buf_changedti
 use crate::eval::vars::{release_var_scope, vars_clear};
 use crate::extmark::extmark_free_all;
 use crate::mapping::map_clear_mode;
-use crate::mark::{mark_adjust_buf, mark_forget_file, set_last_cursor};
+use crate::mark::{NMARKS, mark_adjust_buf, mark_forget_file, set_last_cursor};
 use crate::memline::ml_close;
 use crate::message::e_auabort;
 use crate::normal::visual_active;

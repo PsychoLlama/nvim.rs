@@ -96,7 +96,7 @@ struct Relayout {
     /// frame it left unflattened -- held as an identity, because
     /// `win_split_ins` can free frames. Both are what puts the layout back
     /// if the move fails.
-    dir: c_int,
+    dir: u8,
     unflat_altfr: Option<FrameId>,
     /// The window that takes the moved one's place where it was.
     altwin: Option<Win>,

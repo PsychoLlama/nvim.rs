@@ -15,6 +15,7 @@
 #![forbid(unsafe_code)]
 
 use crate::keycodes::ModMask;
+use crate::types::Failed;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 
@@ -164,7 +165,13 @@ pub(crate) fn nv_mark(cmd_arg: &mut CmdArg) {
     if check_clear_op(cmd_arg.op()) {
         return;
     }
-    if setmark(cmd_arg.nchar.code()).is_err() {
+    if cmd_arg
+        .nchar
+        .as_byte()
+        .ok_or(Failed)
+        .and_then(setmark)
+        .is_err()
+    {
         clear_op_beep(cmd_arg.op());
     }
 }
@@ -247,7 +254,9 @@ pub(crate) fn nv_gomark(cmd_arg: &mut CmdArg) {
     }
 
     // A copy of the mark, which outlives the jump below.
-    let fm = mark_get(Buf::current(), Win::current(), kMarkAll, name.code());
+    let fm = name
+        .as_byte()
+        .and_then(|name| mark_get(Buf::current(), Win::current(), kMarkAll, name));
     let move_res = nv_mark_move_to(cmd_arg, flags, fm.as_ref());
     if !virtual_active(Win::current()) {
         Win::current().w_cursor.coladd = 0;

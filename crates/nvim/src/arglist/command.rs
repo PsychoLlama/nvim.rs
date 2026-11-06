@@ -194,7 +194,7 @@ pub fn do_argfile(excmd: &mut ExArg, argn: c_int) {
         set_cur_arg_idx(old_arg_idx);
     } else if cmdidx != CmdIdx::argdo {
         // Like Vi: set the mark where the cursor is in the file.
-        let _ = setmark('\'' as c_int);
+        let _ = setmark(b'\'');
     }
 }
 

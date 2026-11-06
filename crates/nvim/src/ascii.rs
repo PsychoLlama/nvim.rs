@@ -32,13 +32,6 @@ pub(crate) fn ascii_isalpha(c: c_int) -> bool {
         || (c_uint::from(b'a')..=c_uint::from(b'z')).contains(&c)
 }
 
-/// `ASCII_ISLOWER`: an unaccented lower-case Latin letter.
-pub(crate) fn ascii_islower(c: c_int) -> bool {
-    // Unsigned, as `ascii_isalpha`, so a negative byte fails rather than
-    // wrapping into the range.
-    (c_uint::from(b'a')..=c_uint::from(b'z')).contains(&c.cast_unsigned())
-}
-
 /// `ASCII_ISUPPER`: an unaccented upper-case Latin letter.
 pub(crate) fn ascii_isupper(c: c_int) -> bool {
     (c_uint::from(b'A')..=c_uint::from(b'Z')).contains(&c.cast_unsigned())

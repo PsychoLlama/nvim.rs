@@ -296,7 +296,7 @@ pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Fa
         setheight_win(height, window);
         if p_ea() {
             let cur = Win::current();
-            equal(Some(cur), cur == window, 'v' as c_int);
+            equal(Some(cur), cur == window, b'v');
         }
     }
     Ok(())

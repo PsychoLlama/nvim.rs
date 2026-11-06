@@ -119,12 +119,12 @@ fn fdccol_count(window: Win) -> c_int {
     let fdc = window.w_onebuf_opt.wo_fdc.bytes();
     // `'foldcolumn'` is vetted by its own `did_set_*`, so the first four
     // bytes and -- once they read `auto` -- the two after them are there.
-    let byte = |n: usize| c_int::from(fdc.get(n).copied().unwrap_or(0));
+    let digit = |n: usize| c_int::from(fdc.get(n).copied().unwrap_or(0)) - c_int::from(b'0');
     if !fdc.starts_with(b"auto") {
-        return byte(0) - '0' as c_int;
+        return digit(0);
     }
-    let fdccol = if byte(4) == ':' as c_int {
-        byte(5) - '0' as c_int
+    let fdccol = if fdc.get(4) == Some(&b':') {
+        digit(5)
     } else {
         1
     };

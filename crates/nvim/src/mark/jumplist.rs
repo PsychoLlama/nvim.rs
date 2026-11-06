@@ -335,7 +335,7 @@ pub fn ex_jumps(_excmd: &mut ExArg) {
             if let Some(name) = name
                 && !message_filtered(name.as_cstr())
             {
-                msg_putchar('\n' as c_int);
+                msg_putchar(c_int::from(b'\n'));
                 if got_int.get() {
                     break;
                 }
@@ -377,7 +377,7 @@ pub fn ex_changes(_excmd: &mut ExArg) {
     while i < buf.b_changelistlen && !got_int.get() {
         let pos = buf.b_changelist[slot(i)].mark;
         if pos.lnum != LineNr::ZERO {
-            msg_putchar('\n' as c_int);
+            msg_putchar(c_int::from(b'\n'));
             if got_int.get() {
                 break;
             }

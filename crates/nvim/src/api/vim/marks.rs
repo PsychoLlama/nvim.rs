@@ -54,7 +54,7 @@ pub fn nvim_del_mark(name: ApiString) -> Result<Boolean, Error> {
 pub fn nvim_get_mark(name: ApiString, _opts: &mut KeyDict_empty) -> Result<Array, Error> {
     let mark = global_mark_name(&name)?;
     // A copy of the slot, which exists whether or not it is set.
-    let mark = mark_get_global(false, c_int::from(mark));
+    let mark = mark_get_global(false, mark.cast_unsigned());
     let (pos, fnum) = (mark.fmark.mark, mark.fmark.fnum);
     // A mark in a buffer names the buffer; one restored from ShaDa names
     // only the file it was in.

@@ -43,6 +43,7 @@ use crate::getchar::beep_flush;
 use crate::getchar::state::{KeyTyped, got_int};
 use crate::global_cell::GlobalCell;
 use crate::guard::{sandbox, textlock};
+use crate::mark::NMARKS;
 use crate::mark::{mark_adjust, setpcmark};
 use crate::mbyte::c_cluster_len;
 use crate::memline::MlFlags;
@@ -74,7 +75,6 @@ mod header {
     use super::{ExtmarkOp, UndoObjectType, c_int};
 
     pub(super) const EOF: c_int = -1;
-    pub(super) const NMARKS: c_int = 26;
 
     /// The `UndoHeader::flags` bits.
     pub(super) const UH_CHANGED: c_int = 1;

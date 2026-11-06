@@ -295,7 +295,7 @@ pub fn nvim_open_win(
 /// `win_split_ins` as this file calls it: a new window of `size`, with no
 /// window or frame to place it against.
 fn split_ins(size: ::core::ffi::c_int, flags: ::core::ffi::c_int) -> Option<Win> {
-    win_split_ins(size, flags, None, 0 as ::core::ffi::c_int, None)
+    win_split_ins(size, flags, None, 0, None)
 }
 
 /// Which side of its neighbour `win` was split off, for the `split` key.

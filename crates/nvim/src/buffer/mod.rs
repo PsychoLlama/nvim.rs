@@ -209,8 +209,6 @@ crate::flag_set! {
     const WRITE_MASK = 0x8 | 0x10 | 0x40;
 }
 pub const KEYMAP_INIT: ::core::ffi::c_short = 1;
-pub const NMARKS: ::core::ffi::c_int =
-    'z' as ::core::ffi::c_int - 'a' as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline(always)]
 pub fn buf_get_changedtick(buffer: Buf) -> VarNumber {

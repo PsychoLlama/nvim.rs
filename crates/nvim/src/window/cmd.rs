@@ -68,51 +68,50 @@ use crate::ui::ui_has;
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
 use crate::winlayer::graph::{cmdwin_type, firstwin, lastwin};
 
-// The keys CTRL-W dispatches on. `const` blocks because a cast expression
-// is not a `match` pattern, and a plain integer `const` would also land in
-// the generated unit-test declarations.
-const SPLIT: c_int = const { b's' as c_int };
-const SPLIT_ALT: c_int = const { b'S' as c_int };
-const VSPLIT: c_int = const { b'v' as c_int };
-const ALTFILE: c_int = const { b'^' as c_int };
-const NEW: c_int = const { b'n' as c_int };
-const QUIT: c_int = const { b'q' as c_int };
-const CLOSE: c_int = const { b'c' as c_int };
-const PCLOSE: c_int = const { b'z' as c_int };
-const PREVIEW: c_int = const { b'P' as c_int };
-const ONLY: c_int = const { b'o' as c_int };
-const NEXT: c_int = const { b'w' as c_int };
-const PREV: c_int = const { b'W' as c_int };
-const DOWN: c_int = const { b'j' as c_int };
-const UP: c_int = const { b'k' as c_int };
-const LEFT: c_int = const { b'h' as c_int };
-const RIGHT: c_int = const { b'l' as c_int };
-const TO_NEW_TAB: c_int = const { b'T' as c_int };
-const TOP: c_int = const { b't' as c_int };
-const BOTTOM: c_int = const { b'b' as c_int };
-const LAST_USED: c_int = const { b'p' as c_int };
-const EXCHANGE: c_int = const { b'x' as c_int };
-const ROTATE_DOWN: c_int = const { b'r' as c_int };
-const ROTATE_UP: c_int = const { b'R' as c_int };
-const MOVE_TOP: c_int = const { b'K' as c_int };
-const MOVE_BOT: c_int = const { b'J' as c_int };
-const MOVE_LEFT: c_int = const { b'H' as c_int };
-const MOVE_RIGHT: c_int = const { b'L' as c_int };
-const EQUALISE: c_int = const { b'=' as c_int };
-const TALLER: c_int = const { b'+' as c_int };
-const SHORTER: c_int = const { b'-' as c_int };
-const SET_HEIGHT: c_int = const { b'_' as c_int };
-const WIDER: c_int = const { b'>' as c_int };
-const NARROWER: c_int = const { b'<' as c_int };
-const SET_WIDTH: c_int = const { b'|' as c_int };
-const TAG_PREVIEW: c_int = const { b'}' as c_int };
-const TAG_SPLIT: c_int = const { b']' as c_int };
-const FILE: c_int = const { b'f' as c_int };
-const FILE_LINE: c_int = const { b'F' as c_int };
-const IDENT_ANY: c_int = const { b'i' as c_int };
-const IDENT_DEFINE: c_int = const { b'd' as c_int };
-const EXTENDED: c_int = const { b'g' as c_int };
-const DETACH: c_int = const { b'e' as c_int };
+// The keys CTRL-W dispatches on, as the codes `SpecialKey::try_from` hands
+// back for a plain character: a `match` pattern needs a constant.
+const SPLIT: c_int = Key::ascii(b's').code();
+const SPLIT_ALT: c_int = Key::ascii(b'S').code();
+const VSPLIT: c_int = Key::ascii(b'v').code();
+const ALTFILE: c_int = Key::ascii(b'^').code();
+const NEW: c_int = Key::ascii(b'n').code();
+const QUIT: c_int = Key::ascii(b'q').code();
+const CLOSE: c_int = Key::ascii(b'c').code();
+const PCLOSE: c_int = Key::ascii(b'z').code();
+const PREVIEW: c_int = Key::ascii(b'P').code();
+const ONLY: c_int = Key::ascii(b'o').code();
+const NEXT: c_int = Key::ascii(b'w').code();
+const PREV: c_int = Key::ascii(b'W').code();
+const DOWN: c_int = Key::ascii(b'j').code();
+const UP: c_int = Key::ascii(b'k').code();
+const LEFT: c_int = Key::ascii(b'h').code();
+const RIGHT: c_int = Key::ascii(b'l').code();
+const TO_NEW_TAB: c_int = Key::ascii(b'T').code();
+const TOP: c_int = Key::ascii(b't').code();
+const BOTTOM: c_int = Key::ascii(b'b').code();
+const LAST_USED: c_int = Key::ascii(b'p').code();
+const EXCHANGE: c_int = Key::ascii(b'x').code();
+const ROTATE_DOWN: c_int = Key::ascii(b'r').code();
+const ROTATE_UP: c_int = Key::ascii(b'R').code();
+const MOVE_TOP: c_int = Key::ascii(b'K').code();
+const MOVE_BOT: c_int = Key::ascii(b'J').code();
+const MOVE_LEFT: c_int = Key::ascii(b'H').code();
+const MOVE_RIGHT: c_int = Key::ascii(b'L').code();
+const EQUALISE: c_int = Key::ascii(b'=').code();
+const TALLER: c_int = Key::ascii(b'+').code();
+const SHORTER: c_int = Key::ascii(b'-').code();
+const SET_HEIGHT: c_int = Key::ascii(b'_').code();
+const WIDER: c_int = Key::ascii(b'>').code();
+const NARROWER: c_int = Key::ascii(b'<').code();
+const SET_WIDTH: c_int = Key::ascii(b'|').code();
+const TAG_PREVIEW: c_int = Key::ascii(b'}').code();
+const TAG_SPLIT: c_int = Key::ascii(b']').code();
+const FILE: c_int = Key::ascii(b'f').code();
+const FILE_LINE: c_int = Key::ascii(b'F').code();
+const IDENT_ANY: c_int = Key::ascii(b'i').code();
+const IDENT_DEFINE: c_int = Key::ascii(b'd').code();
+const EXTENDED: c_int = Key::ascii(b'g').code();
+const DETACH: c_int = Key::ascii(b'e').code();
 
 pub fn do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
     window_command(nchar, prenum, xchar);
@@ -280,7 +279,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             } else {
                 b'b'
             };
-            equal(None, false, c_int::from(dir));
+            equal(None, false, dir);
         }
         // increase, decrease or set the current window's height
         Err(NotAKey(TALLER)) => setheight_win(Win::current().w_height + prenum1, Win::current()),

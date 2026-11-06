@@ -30,12 +30,11 @@ use crate::option::vars::P_PEX;
 use crate::os::fs::{current_dir, file_info};
 use crate::path::full_name_save;
 use crate::shell::call_shell_text;
-use crate::strings::has_char;
 use crate::types::CmdIdx;
 use crate::types::{Failed, OptionSetFlags};
 use crate::winlayer::graph::{switch_to, switch_window};
 use crate::winlayer::{Buf, TabPage, Win, windows};
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
 
 /// `emsg(gettext(msg))`, the pair every error here is reported through.
 fn emsg_gettext(msg: &'static CStr) {
@@ -281,7 +280,7 @@ pub fn diff_win_options(mut window: Win, addbuf: bool) {
     window.w_onebuf_opt.wo_fdl = 0 as OptInt;
     fold_update_all(window);
     changed_window_setting(window);
-    if !p_sbo(|value| has_char(value, 'h' as c_int)) {
+    if !p_sbo(|value| value.to_bytes().contains(&b'h')) {
         let _ = do_cmdline_cmd(c"set sbo+=hor");
     }
     window.w_onebuf_opt.wo_diff_saved = 1;
@@ -354,7 +353,7 @@ pub fn ex_diffoff(excmd: &mut ExArg) {
         tp.tp_diff_update = 0;
         diff_clear(tp);
     }
-    if !diffwin && p_sbo(|value| has_char(value, 'h' as c_int)) {
+    if !diffwin && p_sbo(|value| value.to_bytes().contains(&b'h')) {
         let _ = do_cmdline_cmd(c"set sbo-=hor");
     }
 }

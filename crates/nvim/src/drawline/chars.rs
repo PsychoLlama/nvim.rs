@@ -39,7 +39,7 @@ impl Cells {
         } else if wlv.filler_todo > 0 {
             // Wait with reading text until the filler lines are done, but
             // still give the cell something to be.
-            self.char_code = ' ' as ::core::ffi::c_int;
+            self.char_code = ::core::ffi::c_int::from(b' ');
             self.cell_char = schar_from_ascii(b' ');
         } else if self.has_foldtext || (self.has_fold && wlv.col >= self.view_width) {
             // The fold text is already placed; skip the buffer line.
@@ -73,7 +73,7 @@ impl Cells {
                 // A double-width character with one column left: show a
                 // `>` and leave the pointer where it is, so the character
                 // itself starts the next row.
-                self.char_code = '>' as ::core::ffi::c_int;
+                self.char_code = ::core::ffi::c_int::from(b'>');
                 self.char_len = 1;
                 self.cell_char = schar_from_ascii(b'>');
                 self.overflow_attr = win_hl_attr(window, HLF_AT);
@@ -101,7 +101,7 @@ impl Cells {
                 wlv.extra_fill = schar_from_ascii(MB_FILLER_CHAR);
                 wlv.extra_last = NUL as ScreenChar;
                 self.cell_char = schar_from_ascii(b' ');
-                self.char_code = ' ' as ::core::ffi::c_int;
+                self.char_code = ::core::ffi::c_int::from(b' ');
                 self.char_len = 1;
                 wlv.n_attr += 1;
                 wlv.extra_attr = win_hl_attr(window, HLF_AT);
@@ -211,7 +211,7 @@ impl Cells {
             // and put the pointer back, so the character is drawn at the
             // start of the next row.
             self.cell_char = schar_from_ascii(b'>');
-            self.char_code = '>' as ::core::ffi::c_int;
+            self.char_code = ::core::ffi::c_int::from(b'>');
             self.char_len = 1;
             self.overflow_attr = win_hl_attr(window, HLF_AT);
             // Steps back before the line when the character is its first;
@@ -231,7 +231,7 @@ impl Cells {
             wlv.extra_fill = schar_from_ascii(MB_FILLER_CHAR);
             wlv.extra_last = NUL as ScreenChar;
             self.cell_char = schar_from_ascii(b' ');
-            self.char_code = ' ' as ::core::ffi::c_int;
+            self.char_code = ::core::ffi::c_int::from(b' ');
             self.char_len = 1;
             if self.area_attr == 0 && self.search_attr == 0 {
                 wlv.n_attr = wlv.extra_todo + 1;
@@ -515,7 +515,7 @@ impl Cells {
                 wlv.fix_for_boguscols();
             }
             if window.w_onebuf_opt.wo_list == 0 {
-                self.char_code = ' ' as ::core::ffi::c_int;
+                self.char_code = ::core::ffi::c_int::from(b' ');
                 self.cell_char = schar_from_ascii(b' ');
             }
         }
@@ -526,7 +526,7 @@ impl Cells {
     /// character starts.
     pub(super) fn listchars(&mut self, wlv: &mut WinLineVars, window: Win, prev_at: usize) {
         if window.w_onebuf_opt.wo_list != 0 {
-            self.in_multispace = self.char_code == ' ' as ::core::ffi::c_int
+            self.in_multispace = self.char_code == ::core::ffi::c_int::from(b' ')
                 && (self.byte() == b' ' || (prev_at > 0 && self.line.byte(prev_at - 1) == b' '));
             if !self.in_multispace {
                 self.multispace_pos = 0;
@@ -542,7 +542,7 @@ impl Cells {
             && ((((self.char_code == 160 && self.char_len == 2)
                 || (self.char_code == 0x202f && self.char_len == 3))
                 && lcs.nbsp != 0)
-                || (self.char_code == ' ' as ::core::ffi::c_int
+                || (self.char_code == ::core::ffi::c_int::from(b' ')
                     && self.char_len == 1
                     && (lcs.space != 0 || (self.in_multispace && lcs.multispace.is_some()))
                     && at >= self.leadcol.get() as isize
@@ -553,7 +553,7 @@ impl Cells {
             {
                 self.cell_char = cycle_run(run, &mut self.multispace_pos);
             } else {
-                self.cell_char = if self.char_code == ' ' as ::core::ffi::c_int {
+                self.cell_char = if self.char_code == ::core::ffi::c_int::from(b' ') {
                     lcs.space
                 } else {
                     lcs.nbsp
@@ -567,7 +567,7 @@ impl Cells {
 
         // Leading and trailing whitespace get their own characters, and
         // this one is honoured with 'nolist' too.
-        if self.char_code == ' ' as ::core::ffi::c_int
+        if self.char_code == ::core::ffi::c_int::from(b' ')
             && self.char_len == 1
             && ((self.trailcol != ColNr::MAX && at > self.trailcol.get() as isize)
                 || (self.leadcol != ColNr::ZERO && at < self.leadcol.get() as isize))

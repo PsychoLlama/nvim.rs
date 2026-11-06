@@ -236,10 +236,10 @@ fn read_range(
             if !excmd.skip {
                 // The Visual marks are never adjusted and have no
                 // store: each is computed on the spot.
-                let first = mark_get_visual(Buf::current(), c_int::from(b'<'));
+                let first = mark_get_visual(Buf::current(), b'<');
                 check_mark(first.as_ref())?;
                 excmd.line1 = first.map_or(LineNr::ZERO, |fm| fm.mark.lnum);
-                let last = mark_get_visual(Buf::current(), c_int::from(b'>'));
+                let last = mark_get_visual(Buf::current(), b'>');
                 check_mark(last.as_ref())?;
                 excmd.line2 = last.map_or(LineNr::ZERO, |fm| fm.mark.lnum);
                 excmd.addr_count += 1;
@@ -468,10 +468,9 @@ pub(crate) fn get_address(
                     } else {
                         kMarkBufLocal
                     };
-                    // The mark's name, as the C's `*cmd` reads it: signed,
-                    // so a mark named with a high byte is a negative
-                    // number and matches nothing.
-                    let name = c_int::from(byte_at(text, cmd).cast_signed());
+                    // The mark's name. A high byte matches nothing, as the
+                    // C's signed `*cmd` did.
+                    let name = byte_at(text, cmd);
                     let found = mark_get(Buf::current(), Win::current(), flag, name);
                     cmd += 1;
                     match &found {

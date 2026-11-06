@@ -621,7 +621,7 @@ fn beaten_by_a_loaded_buffer(entry: &ShadaEntry) -> bool {
             continue;
         };
         if path_fnamecmp(name, full.to_bytes()) == 0
-            && shada_local_mark_timestamp(buf, Win::current(), c_int::from(mark.name))
+            && shada_local_mark_timestamp(buf, Win::current(), mark.name.cast_unsigned())
                 >= entry.timestamp
         {
             return true;

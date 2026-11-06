@@ -126,8 +126,6 @@ pub(crate) const MSCR_RIGHT: c_int = -2;
 
 const FR_LEAF: c_int = 0;
 const FR_ROW: c_int = 1;
-/// The `'mouse'` flag a drag needs before it may start Visual mode.
-const MOUSE_VISUAL: u8 = b'v';
 /// The handle of the screen-wide grid every window draws on without
 /// `ext_multigrid`.
 const DEFAULT_GRID_HANDLE: c_int = 1;

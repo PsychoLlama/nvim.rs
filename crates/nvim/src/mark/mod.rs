@@ -24,7 +24,6 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::ascii::{ascii_isdigit, ascii_islower, ascii_isupper};
 use crate::autocmd::{aucmd_defer, has_event};
 use crate::buffer::{buf_is_prompt, buflist_new, find_buf};
 use crate::charset::{ptr2cells_at, vim_isprintc};
@@ -107,8 +106,10 @@ pub const kMarkAdjustTerm: MarkAdjustMode = 2;
 
 /// `'a`..`'z` are the buffer-local marks; `'0`..`'9` extend the global set
 /// with the shada file's previously-edited-file marks.
-pub const NMARKS: c_int = 'z' as c_int - 'a' as c_int + 1;
-pub const EXTRA_MARKS: c_int = '9' as c_int - '0' as c_int + 1;
+/// `'a`-`'z`.
+pub const NMARKS: c_int = 26;
+/// `'0`-`'9`.
+pub const EXTRA_MARKS: c_int = 10;
 pub const NGLOBALMARKS: c_int = NMARKS + EXTRA_MARKS;
 /// The highest byte a buffer-local mark name may be.
 pub const NMARK_LOCAL_MAX: c_int = 126;
@@ -123,7 +124,7 @@ pub(crate) static namedfm: GlobalCell<[XFileMark; 36]> = GlobalCell::new([XFileM
 
 /// Set named mark "c" at current cursor position.
 /// Answers `Ok` on success, `Err` if bad name given.
-pub fn setmark(c: c_int) -> Result<(), Failed> {
+pub fn setmark(c: u8) -> Result<(), Failed> {
     let (win, buf) = (Win::current(), Buf::current());
     let view = mark_view_make_at(win, win.w_cursor);
     setmark_pos(c, win.w_cursor, true, Some(buf.handle), view)
@@ -173,19 +174,16 @@ fn do_markset_autocmd(c: c_char, pos: Pos, buffer: Buf) {
 /// what makes setting `''` push a jump list entry rather than just move the
 /// context mark (upstream compares the pointer against `&curwin->w_cursor`).
 fn setmark_pos(
-    c: c_int,
+    c: u8,
     at: Pos,
     from_cursor: bool,
     fnum: Option<Handle>,
     view: FileMarkView,
 ) -> Result<(), Failed> {
-    if c < 0 {
-        return Err(Failed);
-    }
     // `''` and `` '` `` are the same slot, and it is the window's rather than
     // the buffer's: setting it from the cursor pushes a jumplist entry, while
     // setting it from anywhere else just moves it.
-    if c == '\'' as c_int || c == '`' as c_int {
+    if c == b'\'' || c == b'`' {
         let mut win = Win::current();
         if from_cursor {
             setpcmark();
@@ -202,22 +200,22 @@ fn setmark_pos(
 
     // The tick family and the Visual range are not adjusted and not saved, so
     // they are stored as bare positions rather than as marks.
-    if c == '[' as c_int {
+    if c == b'[' {
         buf.b_op_start = at;
-    } else if c == ']' as c_int {
+    } else if c == b']' {
         buf.b_op_end = at;
-    } else if c == '<' as c_int || c == '>' as c_int {
-        if c == '<' as c_int {
+    } else if c == b'<' || c == b'>' {
+        if c == b'<' {
             buf.b_visual.vi_start = at;
         } else {
             buf.b_visual.vi_end = at;
         }
         if buf.b_visual.vi_mode == NUL {
-            buf.b_visual.vi_mode = 'v' as c_int;
+            buf.b_visual.vi_mode = c_int::from(b'v');
         }
-    } else if c == '"' as c_int {
+    } else if c == b'"' {
         buf.b_last_cursor = fresh_mark(at, Some(handle), view);
-    } else if c == ':' as c_int {
+    } else if c == b':' {
         if !buf_is_prompt(Some(buf)) {
             return Err(Failed);
         }
@@ -226,11 +224,11 @@ fn setmark_pos(
         // it moves on every prompt redraw, and a MarkSet per keystroke is
         // not what the event is for.
         return Ok(());
-    } else if ascii_islower(c) {
+    } else if c.is_ascii_lowercase() {
         // A buffer-local mark keeps the *caller's* `fnum` rather than the
         // buffer's own handle. The two agree everywhere but `nvim_buf_set_mark`.
-        buf.b_namedm[slot(c - 'a' as c_int)] = fresh_mark(at, fnum, view);
-    } else if ascii_isupper(c) || ascii_isdigit(c) {
+        buf.b_namedm[usize::from(c - b'a')] = fresh_mark(at, fnum, view);
+    } else if c.is_ascii_uppercase() || c.is_ascii_digit() {
         let idx = slot(lookup::mark_global_index(mark_name(c)));
         store::set_global_mark(
             idx,
@@ -251,7 +249,7 @@ fn setmark_pos(
 ///
 /// A position held by value is never the cursor itself, so `''` set this way
 /// just moves the context mark rather than pushing a jumplist entry.
-pub(crate) fn setmark_at(c: c_int, pos: Pos, fnum: Option<Handle>) -> Result<(), Failed> {
+pub(crate) fn setmark_at(c: u8, pos: Pos, fnum: Option<Handle>) -> Result<(), Failed> {
     setmark_pos(c, pos, false, fnum, NO_VIEW)
 }
 

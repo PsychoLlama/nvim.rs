@@ -16,7 +16,6 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::ascii::{ascii_isdigit, ascii_islower, ascii_isupper};
 use crate::buffer::{buf_is_prompt, buflist_nr2name, find_buf};
 use crate::charset::ptr2cells_at;
 use crate::getchar::state::got_int;
@@ -33,12 +32,11 @@ use crate::os::cshim::gettext;
 use crate::os::time::os_time;
 use crate::pos::lt;
 use crate::semsg;
-use crate::strings::find_char;
 use crate::ui::state::Columns;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
 
-use super::store::{UNSET_POS, global_mark_names, mark_name, slot};
+use super::store::{UNSET_POS, global_mark_names, mark_name, nth_name, slot};
 use super::*;
 use crate::highlight_group::HLF_D;
 
@@ -65,20 +63,20 @@ pub fn ex_marks(excmd: &mut ExArg) {
     // Every row that carries no file name, in listing order. The global table
     // goes between the locals and the tick family, which is why it is not one
     // list.
-    let locals: Vec<(c_int, Pos)> = (0..NMARKS)
-        .map(|i| (i + 'a' as c_int, buf.b_namedm[slot(i)].mark))
+    let locals: Vec<(u8, Pos)> = (0..NMARKS)
+        .map(|i| (nth_name(b'a', i), buf.b_namedm[slot(i)].mark))
         .collect();
     let ticks = [
-        ('"' as c_int, buf.b_last_cursor.mark),
-        ('[' as c_int, buf.b_op_start),
-        (']' as c_int, buf.b_op_end),
-        ('^' as c_int, buf.b_last_insert.mark),
-        ('.' as c_int, buf.b_last_change.mark),
+        (b'"', buf.b_last_cursor.mark),
+        (b'[', buf.b_op_start),
+        (b']', buf.b_op_end),
+        (b'^', buf.b_last_insert.mark),
+        (b'.', buf.b_last_change.mark),
     ];
-    let prompt = buf_is_prompt(Some(buf)).then(|| (':' as c_int, buf.b_prompt_start.mark));
-    let visual = [('<' as c_int, first), ('>' as c_int, second)];
+    let prompt = buf_is_prompt(Some(buf)).then(|| (b':', buf.b_prompt_start.mark));
+    let visual = [(b'<', first), (b'>', second)];
 
-    show_one_mark('\'' as c_int, arg, win.w_pcmark, None, true);
+    show_one_mark(b'\'', arg, win.w_pcmark, None, true);
     for (c, pos) in locals {
         show_one_mark(c, arg, pos, None, true);
     }
@@ -97,13 +95,7 @@ pub fn ex_marks(excmd: &mut ExArg) {
             continue;
         };
         let current = fnum == Some(buf.handle);
-        show_one_mark(
-            c_int::from(name),
-            arg,
-            mark.fmark.mark,
-            Some(file.as_cstr()),
-            current,
-        );
+        show_one_mark(name, arg, mark.fmark.mark, Some(file.as_cstr()), current);
     }
     for (c, pos) in ticks.into_iter().chain(prompt).chain(visual) {
         show_one_mark(c, arg, pos, None, true);
@@ -140,13 +132,13 @@ static DID_TITLE: GlobalCell<bool> = GlobalCell::new(false);
 /// shows, and `current` says the mark is in the current file -- a row there
 /// with no name shows the LINE'S TEXT.
 pub(super) fn show_one_mark(
-    c: c_int,
+    c: u8,
     arg: Option<&[u8]>,
     pos: Pos,
     name_arg: Option<&CStr>,
     current: bool,
 ) {
-    let wanted = arg.is_none_or(|arg| find_char(arg, c).is_some());
+    let wanted = arg.is_none_or(|arg| arg.contains(&c));
     if got_int.get() || !wanted || pos.lnum == LineNr::ZERO {
         return;
     }
@@ -166,14 +158,14 @@ pub(super) fn show_one_mark(
     if !DID_TITLE.replace(true) {
         msg_title(gettext(c"\nmark line  col file/text"));
     }
-    msg_putchar('\n' as c_int);
+    msg_putchar(c_int::from(b'\n'));
     if got_int.get() {
         return;
     }
     // ` %c %6d %4d `
     let mut row = Row::new();
     row.push(b' ');
-    row.push(u8::try_from(c).unwrap_or(b'?'));
+    row.push(c);
     row.push(b' ');
     row.number(pos.lnum.get(), 6);
     row.push(b' ');
@@ -269,15 +261,15 @@ pub fn ex_delmarks(excmd: &mut ExArg) {
 
     let mut i = 0;
     while i < names.len() {
-        let here = c_int::from(names[i]);
+        let here = names[i];
         // Where the message points: the rest of the argument from here, which
         // is what upstream's `%s` prints.
         let rest = msg_bytes(&names[i..]);
-        let lower = ascii_islower(here);
-        let digit = ascii_isdigit(here);
-        let upper = ascii_isupper(here);
+        let lower = here.is_ascii_lowercase();
+        let digit = here.is_ascii_digit();
+        let upper = here.is_ascii_uppercase();
         if !(lower || digit || upper) {
-            if !delmarks_one(&mut buf, mark_name(here), timestamp) {
+            if !delmarks_one(&mut buf, here, timestamp) {
                 semsg!("E475: Invalid argument: {rest}");
                 return;
             }
@@ -289,13 +281,13 @@ pub fn ex_delmarks(excmd: &mut ExArg) {
         // ahead, which over a slice is a bounds check.
         let from = here;
         let to = if names.get(i + 1) == Some(&b'-') {
-            let end = names.get(i + 2).map_or(-1, |&b| c_int::from(b));
+            let end = names.get(i + 2).copied().unwrap_or(0);
             let same_class = if lower {
-                ascii_islower(end)
+                end.is_ascii_lowercase()
             } else if digit {
-                ascii_isdigit(end)
+                end.is_ascii_digit()
             } else {
-                ascii_isupper(end)
+                end.is_ascii_uppercase()
             };
             if !same_class || end < from {
                 semsg!("E475: Invalid argument: {rest}");
@@ -308,7 +300,7 @@ pub fn ex_delmarks(excmd: &mut ExArg) {
         };
         for c in from..=to {
             if lower {
-                let at = slot(c - 'a' as c_int);
+                let at = usize::from(c - b'a');
                 if buf.b_namedm[at].is_set() {
                     do_markset_autocmd(mark_name(c), gone, buf);
                 }
@@ -321,11 +313,11 @@ pub fn ex_delmarks(excmd: &mut ExArg) {
             } else {
                 // The fourth and fifth writings of the `namedfm` index
                 // formula; see `lookup::mark_global_index`.
-                let n = slot(if digit {
-                    c - '0' as c_int + NMARKS
+                let n = if digit {
+                    usize::from(c - b'0') + slot(NMARKS)
                 } else {
-                    c - 'A' as c_int
-                });
+                    usize::from(c - b'A')
+                };
                 let fnum = namedfm.with(|table| {
                     let mark = &table[n].fmark;
                     mark.is_set().then_some(mark.fnum)
@@ -357,7 +349,7 @@ fn delmarks_all(buffer: Buf) {
     // `clrallmarks` leaves the Visual range alone.
     for i in 0..NMARKS {
         if buffer.b_namedm[slot(i)].is_set() {
-            do_markset_autocmd(mark_name('a' as c_int + i), UNSET_POS, buffer);
+            do_markset_autocmd(mark_name(nth_name(b'a', i)), UNSET_POS, buffer);
         }
     }
     for (name, set) in [
@@ -376,32 +368,32 @@ fn delmarks_all(buffer: Buf) {
 
 /// One non-alphanumeric `:delmarks` name. `false` means the name is not a
 /// mark at all, which is E474 in the caller.
-fn delmarks_one(buffer: &mut Buf, name: c_char, timestamp: Timestamp) -> bool {
+fn delmarks_one(buffer: &mut Buf, name: u8, timestamp: Timestamp) -> bool {
     // `:` and a space are accepted and do nothing: the prompt mark is not the
     // user's to delete, and a space is how `:delmarks a b` separates names.
-    let lnum = match c_int::from(name) {
-        34 => buffer.b_last_cursor.mark.lnum,
-        94 => buffer.b_last_insert.mark.lnum,
-        46 => buffer.b_last_change.mark.lnum,
-        91 => buffer.b_op_start.lnum,
-        93 => buffer.b_op_end.lnum,
-        60 => buffer.b_visual.vi_start.lnum,
-        62 => buffer.b_visual.vi_end.lnum,
-        58 | 32 => return true,
+    let lnum = match name {
+        b'"' => buffer.b_last_cursor.mark.lnum,
+        b'^' => buffer.b_last_insert.mark.lnum,
+        b'.' => buffer.b_last_change.mark.lnum,
+        b'[' => buffer.b_op_start.lnum,
+        b']' => buffer.b_op_end.lnum,
+        b'<' => buffer.b_visual.vi_start.lnum,
+        b'>' => buffer.b_visual.vi_end.lnum,
+        b':' | b' ' => return true,
         _ => return false,
     };
     if lnum != LineNr::ZERO {
-        do_markset_autocmd(name, UNSET_POS, *buffer);
+        do_markset_autocmd(mark_name(name), UNSET_POS, *buffer);
     }
     // The three fmark stores are released; the four positions are only
     // invalidated, because they own nothing.
-    match c_int::from(name) {
-        34 => buffer.b_last_cursor.clear(timestamp),
-        94 => buffer.b_last_insert.clear(timestamp),
-        46 => buffer.b_last_change.clear(timestamp),
-        91 => buffer.b_op_start.lnum = LineNr::ZERO,
-        93 => buffer.b_op_end.lnum = LineNr::ZERO,
-        60 => buffer.b_visual.vi_start.lnum = LineNr::ZERO,
+    match name {
+        b'"' => buffer.b_last_cursor.clear(timestamp),
+        b'^' => buffer.b_last_insert.clear(timestamp),
+        b'.' => buffer.b_last_change.clear(timestamp),
+        b'[' => buffer.b_op_start.lnum = LineNr::ZERO,
+        b']' => buffer.b_op_end.lnum = LineNr::ZERO,
+        b'<' => buffer.b_visual.vi_start.lnum = LineNr::ZERO,
         _ => buffer.b_visual.vi_end.lnum = LineNr::ZERO,
     }
     true

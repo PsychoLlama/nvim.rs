@@ -428,7 +428,7 @@ pub(crate) fn edit_buffers(parm: &MainParams) {
 
     time_msg_at(c"editing files in windows");
     if parm.window_count > 1 && parm.window_layout != WIN_TABS.cast_signed() {
-        win_equal(Win::current_or_none(), false, 'b' as c_int);
+        win_equal(Win::current_or_none(), false, b'b');
     }
 }
 

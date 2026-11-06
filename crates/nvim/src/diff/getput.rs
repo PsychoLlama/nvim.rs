@@ -236,7 +236,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
         // The last block went away: the diff folds have nothing left to
         // describe, so every window folding by `diff` is rebuilt.
         for wp in windows() {
-            let by_diff = c_int::from(wp.w_onebuf_opt.wo_fdm.first_byte()) == 'd' as c_int;
+            let by_diff = wp.w_onebuf_opt.wo_fdm.first_byte() == b'd';
             if wp.w_onebuf_opt.wo_diff != 0 && by_diff && wp.w_onebuf_opt.wo_fen != 0 {
                 fold_update_all(wp);
             }

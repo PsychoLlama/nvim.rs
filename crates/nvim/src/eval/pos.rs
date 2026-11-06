@@ -16,7 +16,6 @@ use crate::types::Handle;
 use crate::winlayer::Buf;
 use core::ffi::c_int;
 
-use crate::ascii::ascii_isdigit;
 use crate::buffer::find_buf;
 use crate::eval::kMarkAll;
 use crate::eval::typval::{NumBuf, list_find_nr, list_len};
@@ -165,14 +164,13 @@ pub fn var2fpos(
             pos = wp.w_cursor;
         }
     } else if first == b'\'' {
-        let mname = c_int::from(second);
-        let fm = mark_get(bp, wp, kMarkAll, mname)?;
+        let fm = mark_get(bp, wp, kMarkAll, second)?;
         if fm.mark.lnum <= LineNr::ZERO {
             return None;
         }
         pos = fm.mark;
         // Only the file marks carry a buffer of their own.
-        if (mname >= c_int::from(b'A') && mname <= c_int::from(b'Z')) || ascii_isdigit(mname) {
+        if second.is_ascii_uppercase() || second.is_ascii_digit() {
             *ret_fnum = Handle::number_of(fm.fnum);
         }
     }

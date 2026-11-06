@@ -88,7 +88,7 @@ pub(crate) fn shada_global_marks() -> Vec<(c_char, ShadaMark)> {
             continue;
         }
         let fname = xfm.file_name().map(XString::from_cstr);
-        found.push((name, ShadaMark::of(&xfm.fmark, fname)));
+        found.push((mark_name(name), ShadaMark::of(&xfm.fmark, fname)));
     }
     found
 }
@@ -110,7 +110,7 @@ pub(crate) fn shada_buffer_marks(buffer: Buf) -> Vec<(c_char, ShadaMark)> {
         .into_iter()
         .chain(named)
         .filter(|(_, mark)| mark.is_set())
-        .map(|(name, mark)| (mark_name(c_int::from(name)), ShadaMark::of(mark, None)))
+        .map(|(name, mark)| (mark_name(name), ShadaMark::of(mark, None)))
         .collect()
 }
 
@@ -155,7 +155,7 @@ pub(crate) fn shada_set_global_mark(name: c_char, fm: ShadaMark, update: bool) -
 /// Set `buffer`'s mark `name` to `fm`, which the store takes over; answers
 /// whether it did. `update` as [`shada_set_global_mark`].
 pub(crate) fn shada_set_local_mark(name: c_char, buffer: Buf, fm: ShadaMark, update: bool) -> bool {
-    let Some(store) = LocalMark::named(c_int::from(name)) else {
+    let Some(store) = LocalMark::named(name.cast_unsigned()) else {
         return false;
     };
     store.with(buffer, |target| {
@@ -169,7 +169,7 @@ pub(crate) fn shada_set_local_mark(name: c_char, buffer: Buf, fm: ShadaMark, upd
 
 /// When `buffer`'s mark `name` was set, as [`mark_get`] resolves it; 0 for
 /// one it does not.
-pub(crate) fn shada_local_mark_timestamp(buffer: Buf, win: Win, name: c_int) -> Timestamp {
+pub(crate) fn shada_local_mark_timestamp(buffer: Buf, win: Win, name: u8) -> Timestamp {
     mark_get(buffer, win, kMarkBufLocal, name).map_or(0, |fm| fm.timestamp)
 }
 

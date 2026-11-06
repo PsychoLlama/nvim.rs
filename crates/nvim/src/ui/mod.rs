@@ -41,6 +41,7 @@ mod sinks;
 pub(crate) mod state;
 
 pub use callbacks::{ui_add_cb, ui_call_event, ui_cb_ext, ui_remove_cb};
+pub(crate) use mouse::MOUSE_VISUAL;
 pub use mouse::{ui_check_mouse, ui_mouse_has};
 pub use sinks::*;
 
@@ -77,7 +78,6 @@ use crate::os::time::{os_hrtime, os_sleep};
 use crate::startup::{exiting, full_screen, starting, ui_client_channel_id};
 use crate::state::MODE_CMDLINE;
 use crate::state::mode::State;
-use crate::strings::has_char;
 use crate::types::DictBuilder;
 use crate::types::ui::{
     kLineFlagInvalid, kLineFlagWrap, kUIExtCount, kUIFloatDebug, kUIHlState, kUILinegrid,
@@ -437,7 +437,7 @@ pub fn vim_beep(val: core::ffi::c_uint) {
             }
         }
     }
-    if p_debug(|value| has_char(value, 'e' as c_int)) {
+    if p_debug(|value| value.to_bytes().contains(&b'e')) {
         msg_source(HLF_W);
         msg(gettext(c"Beep!"), HLF_W);
     }

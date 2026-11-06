@@ -68,6 +68,7 @@ use crate::statusline::{
 };
 use crate::types::Key;
 use crate::types::{Direction, NUL, PUT_CURSEND, PUT_FIXINDENT};
+use crate::ui::MOUSE_VISUAL;
 use crate::ui::state::Columns;
 use crate::ui::ui_mouse_has;
 use crate::window::{goto_tabpage, tabpage_move};
@@ -202,7 +203,7 @@ pub(crate) fn do_mouse(
         }
     }
 
-    let mouse_can_visual = ui_mouse_has(c_int::from(MOUSE_VISUAL));
+    let mouse_can_visual = ui_mouse_has(MOUSE_VISUAL);
     let visual_corner = visual_jump_flags(
         &mut jump_flags,
         is_click,

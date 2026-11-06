@@ -208,7 +208,7 @@ pub(crate) fn fix_cursor(normal: bool) {
     if nlnum != LineNr::ZERO {
         if normal {
             // Save the position for the `''` mark.
-            let _ = setmark('\'' as c_int);
+            let _ = setmark(b'\'');
             wp.w_cursor.lnum = nlnum;
         } else {
             wp.w_fraction = if nlnum == bot { FRACTION_MULT } else { 0 };

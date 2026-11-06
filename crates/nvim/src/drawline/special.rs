@@ -221,7 +221,7 @@ impl Cells {
         {
             // With 'virtualedit' the selection can run past the end of the
             // line; draw a blank for it.
-            self.char_code = ' ' as ::core::ffi::c_int;
+            self.char_code = ::core::ffi::c_int::from(b' ');
             self.cell_char = schar_from_char(self.char_code);
             // Put the pointer back at the NUL.
             self.pos -= 1;
