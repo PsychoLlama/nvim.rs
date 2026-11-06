@@ -141,7 +141,7 @@ pub fn render(body: &KeyBody, modifiers: c_int, format: TermKeyFormat) -> Vec<u8
 
 /// The letter a control character is `^`-notated as, if it has one.
 fn caret_notation(codepoint: c_int) -> Option<char> {
-    let byte = codepoint as u8;
+    let byte = u8::try_from(codepoint).ok()?;
     match byte {
         b'a'..=b'z' => Some((byte - 0x20) as char),
         b'@' | b'['..=b'_' => Some(byte as char),
@@ -285,6 +285,11 @@ mod tests {
         assert_eq!(
             text(&unicode(b'1' as c_int, "1"), CTRL, TERMKEY_FORMAT_CARETCTRL),
             "C-1"
+        );
+        // Upstream compares the whole codepoint: U+0161 is not 'a'.
+        assert_eq!(
+            text(&unicode(0x161, "\u{161}"), CTRL, TERMKEY_FORMAT_CARETCTRL),
+            "C-\u{161}"
         );
         // As does a key carrying more than just control.
         assert_eq!(
