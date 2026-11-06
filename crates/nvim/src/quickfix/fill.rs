@@ -164,7 +164,7 @@ fn qf_buf_line(
     if let Some(module) = &entry.module {
         out.extend_from_slice(module);
     } else {
-        let errbuf = if entry.fnum != 0 {
+        let errbuf = if entry.fnum.is_some() {
             find_buf(entry.fnum)
         } else {
             None
@@ -386,7 +386,8 @@ pub(crate) fn qf_fill_buffer(qfl: Qfl, buffer: Buf, old_last: Option<usize>, qf_
         let qftf_list = call_qftf_func(qfl, qf_winid, lnum.get() + 1, qfl.count());
         // An index: appending a line below runs autocommands.
         let mut qftf_at = 0;
-        let mut prev_bufnr = -1;
+        // `None` before the first entry, which always starts a file.
+        let mut prev_bufnr: Option<Option<Handle>> = None;
         let mut invalid_val = false;
         let mut line = Vec::new();
 
@@ -417,12 +418,12 @@ pub(crate) fn qf_fill_buffer(qfl: Qfl, buffer: Buf, old_last: Option<usize>, qf_
                 entry,
                 &mut dir,
                 text_func.as_deref(),
-                prev_bufnr != fnum,
+                prev_bufnr != Some(fnum),
             );
             if ml_append_bytes(buffer, lnum, &line).is_err() {
                 break;
             }
-            prev_bufnr = fnum;
+            prev_bufnr = Some(fnum);
             lnum += 1;
             at += 1;
             if at >= qfl.entries.len() {

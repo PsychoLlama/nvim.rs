@@ -100,11 +100,12 @@ impl Buffers {
     }
 
     /// `buflist_findpat(pat, NULL, unlisted, 0, 0)` — the buffer's handle,
-    /// `-1` for no match or `-2` for several.
+    /// `-1` when none or several match (the refusal is said).
     fn findpat(&self, pattern: &str, unlisted: bool) -> c_int {
         let pattern = cstr(pattern);
         // No length: the whole pattern, the spec's call.
         buflist_findpat(&pattern, None, unlisted, false, false)
+            .map_or(-1, neovim::types::Handle::number_of)
     }
 }
 

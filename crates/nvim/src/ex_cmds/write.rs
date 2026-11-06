@@ -61,6 +61,7 @@ use crate::semsg;
 use crate::startup::{exiting, getout};
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
+use crate::types::Handle;
 use crate::types::{
     CmdModFlags, CpoFlag, ExArg, Failed, LineNr, MAXPATHL, NUL, OptionSetFlags, ShmFlag, int32_t,
 };
@@ -770,7 +771,7 @@ pub fn getfile(
         ffname_arg
     };
     let opened = do_ecmd(
-        fnum,
+        Handle::from_number(fnum),
         ffname,
         sfname,
         None,

@@ -216,7 +216,7 @@ pub fn buflist_findfmark(buffer: Buf) -> FileMark {
                 col: ColNr::ZERO,
                 coladd: 0,
             },
-            fnum: 0,
+            fnum: None,
             timestamp: 0 as Timestamp,
             view: FileMarkView {
                 topline_offset: MAXLNUM.get(),

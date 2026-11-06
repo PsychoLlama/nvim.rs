@@ -126,7 +126,7 @@ pub(crate) static namedfm: GlobalCell<[XFileMark; 36]> = GlobalCell::new([XFileM
 pub fn setmark(c: c_int) -> Result<(), Failed> {
     let (win, buf) = (Win::current(), Buf::current());
     let view = mark_view_make_at(win, win.w_cursor);
-    setmark_pos(c, win.w_cursor, true, buf.handle.get(), view)
+    setmark_pos(c, win.w_cursor, true, Some(buf.handle), view)
 }
 
 /// Schedules "MarkSet" event.
@@ -176,7 +176,7 @@ fn setmark_pos(
     c: c_int,
     at: Pos,
     from_cursor: bool,
-    fnum: c_int,
+    fnum: Option<Handle>,
     view: FileMarkView,
 ) -> Result<(), Failed> {
     if c < 0 {
@@ -216,12 +216,12 @@ fn setmark_pos(
             buf.b_visual.vi_mode = 'v' as c_int;
         }
     } else if c == '"' as c_int {
-        buf.b_last_cursor = fresh_mark(at, handle.get(), view);
+        buf.b_last_cursor = fresh_mark(at, Some(handle), view);
     } else if c == ':' as c_int {
         if !buf_is_prompt(Some(buf)) {
             return Err(Failed);
         }
-        buf.b_prompt_start = fresh_mark(at, handle.get(), view);
+        buf.b_prompt_start = fresh_mark(at, Some(handle), view);
         // The prompt mark is the one store that does NOT announce itself:
         // it moves on every prompt redraw, and a MarkSet per keystroke is
         // not what the event is for.
@@ -251,13 +251,13 @@ fn setmark_pos(
 ///
 /// A position held by value is never the cursor itself, so `''` set this way
 /// just moves the context mark rather than pushing a jumplist entry.
-pub(crate) fn setmark_at(c: c_int, pos: Pos, fnum: c_int) -> Result<(), Failed> {
+pub(crate) fn setmark_at(c: c_int, pos: Pos, fnum: Option<Handle>) -> Result<(), Failed> {
     setmark_pos(c, pos, false, fnum, NO_VIEW)
 }
 
 /// Delete every entry referring to file "fnum" from both the jumplist and the
 /// tag stack.
-pub fn mark_forget_file(mut window: Win, fnum: c_int) {
+pub fn mark_forget_file(mut window: Win, fnum: Option<Handle>) {
     mark_jumplist_forget_file(window, fnum);
     // Backwards, so removing an entry cannot skip the one after it.
     for i in (0..window.w_tagstacklen).rev() {
@@ -287,7 +287,7 @@ pub fn mark_forget_file(mut window: Win, fnum: c_int) {
 pub fn pos_to_mark(buffer: Buf, pos: Pos) -> FileMark {
     FileMark {
         mark: pos,
-        fnum: buffer.handle.get(),
+        fnum: Some(buffer.handle),
         ..FileMark::UNSET
     }
 }
@@ -385,7 +385,7 @@ pub fn fmarks_check_names(buffer: Buf) {
     let (name, handle) = (name.to_bytes(), buffer.handle);
     namedfm.with_mut(|table| {
         for mark in table.iter_mut() {
-            fmarks_check_one(mark, name, handle.get());
+            fmarks_check_one(mark, name, handle);
         }
     });
     // The current tab page's windows only, as upstream: a mark in another
@@ -393,20 +393,20 @@ pub fn fmarks_check_names(buffer: Buf) {
     for mut win in windows() {
         let len = slot(win.w_jumplistlen);
         for jump in &mut win.w_jumplist[..len] {
-            fmarks_check_one(jump, name, handle.get());
+            fmarks_check_one(jump, name, handle);
         }
     }
 }
 
-fn fmarks_check_one(fm: &mut XFileMark, name: &[u8], handle: c_int) {
-    if fm.fmark.fnum != 0 {
+fn fmarks_check_one(fm: &mut XFileMark, name: &[u8], handle: Handle) {
+    if fm.fmark.fnum.is_some() {
         return;
     }
     match fm.file_name() {
         Some(fname) if path_fnamecmp(name, fname.to_bytes()) == 0 => {}
         _ => return,
     }
-    fm.fmark.fnum = handle;
+    fm.fmark.fnum = Some(handle);
     fm.fname = None;
 }
 
@@ -435,7 +435,7 @@ pub(crate) fn mark_check(fm: Option<&FileMark>, errormsg: &mut Option<CString>) 
         return false;
     }
     let buf = Buf::current();
-    fm.fnum != buf.handle.get() || mark_check_line_bounds(Some(buf), fm, errormsg)
+    fm.fnum != Some(buf.handle) || mark_check_line_bounds(Some(buf), fm, errormsg)
 }
 
 /// Check if a mark line number is greater than the buffer line count, and set e_markinval.
@@ -494,7 +494,7 @@ pub fn set_last_cursor(win: Win) {
     };
     // `fnum` 0, not the buffer's handle: this mark is written when the buffer
     // is left, and the shada writer is what fills the file name in.
-    buf.b_last_cursor = fresh_mark(win.w_cursor, 0, NO_VIEW);
+    buf.b_last_cursor = fresh_mark(win.w_cursor, None, NO_VIEW);
 }
 
 /// Adjust position to point to the first byte of a multi-byte character

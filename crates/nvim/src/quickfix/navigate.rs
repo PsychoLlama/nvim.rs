@@ -19,6 +19,7 @@
 
 use super::*;
 use crate::types::CmdIdx;
+use crate::types::Handle;
 use core::cmp::Ordering;
 use core::ffi::c_int;
 
@@ -98,7 +99,7 @@ pub fn ex_cnext(excmd: &mut ExArg) {
 /// list. An entry is named by its position; its number is one more.
 struct Adjacent<'a> {
     entries: &'a [QfEntry],
-    bnr: c_int,
+    bnr: Option<Handle>,
     pos: Pos,
     linewise: bool,
 }
@@ -339,7 +340,7 @@ pub fn ex_cbelow(excmd: &mut ExArg) {
     };
     let errornr = Adjacent {
         entries: &qi.current_list().entries,
-        bnr: Buf::current().handle.get(),
+        bnr: Some(Buf::current().handle),
         pos,
         linewise,
     }

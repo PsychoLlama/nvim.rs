@@ -30,7 +30,7 @@ fn add_mark(
     l: &mut List,
     mname: &CStr,
     pos: Pos,
-    bufnr: c_int,
+    bufnr: Option<Handle>,
     fname: Option<&CStr>,
 ) -> Result<(), Failed> {
     // An unset mark is omitted rather than reported at line 0: the list is
@@ -41,7 +41,8 @@ fn add_mark(
     let mut d_held = tv_dict_alloc();
     l.push_dict(Some(d_held.clone()));
     let lpos = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
-    lpos.edit().push_number(VarNumber::from(bufnr));
+    lpos.edit()
+        .push_number(VarNumber::from(Handle::number_of(bufnr)));
     lpos.edit().push_number(VarNumber::from(pos.lnum));
     // 1-BASED, unlike `:marks` and unlike the store. `MAXCOL` — which is
     // what a linewise `'>` carries — is passed through rather than
@@ -69,7 +70,7 @@ fn add_mark(
 /// `l` — List to store marks
 pub fn get_buf_local_marks(buffer: Buf, l: &mut List) {
     let (buf, win, cur) = (buffer, Win::current(), Buf::current());
-    let handle = buf.handle.get();
+    let handle = Some(buf.handle);
     let mut mname: [u8; 3] = *b"' \0";
     for i in 0..NMARKS {
         mname[1] = u8::try_from('a' as c_int + i).expect("mark name is one ASCII byte");
@@ -78,7 +79,7 @@ pub fn get_buf_local_marks(buffer: Buf, l: &mut List) {
     }
     // The context mark is the WINDOW's and is reported against the CURRENT
     // buffer, which is why it is the one row here that does not use `handle`.
-    let _ = add_mark(l, c"''", win.w_pcmark, cur.handle.get(), None);
+    let _ = add_mark(l, c"''", win.w_pcmark, Some(cur.handle), None);
     let positions: [(&CStr, Pos); 7] = [
         (c"'\"", buf.b_last_cursor.mark),
         (c"'[", buf.b_op_start),
@@ -101,7 +102,7 @@ pub fn get_global_marks(l: &mut List) {
     for (i, name) in global_mark_names() {
         let mark = global_mark(i);
         let fnum = mark.fmark.fnum;
-        let file = if fnum != 0 {
+        let file = if fnum.is_some() {
             buflist_nr2name(fnum, 1, 1)
         } else {
             mark.file_name().map(XString::from_cstr)

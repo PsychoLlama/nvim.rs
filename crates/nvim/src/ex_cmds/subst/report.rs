@@ -284,7 +284,7 @@ pub(crate) fn show_sub(
         // every use below it sits behind `if (cmdpreview_buf)`, so a release
         // build that somehow lost the buffer *skips the preview* rather than
         // faulting. Keep both halves: the debug assertion, and the skip.
-        let buf = find_buf(cmdpreview_bufnr.get());
+        let buf = find_buf(Handle::from_number(cmdpreview_bufnr.get()));
         debug_assert!(buf.is_some(), "cmdpreview_buf != NULL");
         buf.map(|buf| {
             // Width of the "|lnum|..." column, from the highest line number

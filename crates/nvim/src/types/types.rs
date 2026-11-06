@@ -103,6 +103,21 @@ impl Handle {
         self.0 as Integer
     }
 
+    /// A buffer number as Vimscript and the C structs carry one: 0 names
+    /// no buffer, so it is `None`.
+    pub const fn from_number(n: c_int) -> Option<Self> {
+        if n == 0 { None } else { Some(Self(n)) }
+    }
+
+    /// The reverse of [`Handle::from_number`]: the number Vimscript reads, 0
+    /// for none.
+    pub const fn number_of(handle: Option<Self>) -> c_int {
+        match handle {
+            Some(handle) => handle.0,
+            None => 0,
+        }
+    }
+
     /// The handle the next counter value names: this one plus 1.
     pub const fn next(self) -> Self {
         Self(self.0 + 1)

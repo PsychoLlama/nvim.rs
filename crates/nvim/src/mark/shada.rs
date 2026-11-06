@@ -37,7 +37,7 @@ use super::*;
 pub(crate) struct ShadaMark {
     pub(crate) mark: Pos,
     /// The buffer's number; 0 when the mark names a file instead.
-    pub(crate) fnum: c_int,
+    pub(crate) fnum: Option<Handle>,
     pub(crate) timestamp: Timestamp,
     /// The file a mark with no buffer names.
     pub(crate) fname: Option<XString>,
@@ -178,7 +178,7 @@ pub(crate) fn shada_local_mark_timestamp(buffer: Buf, win: Win, name: c_int) -> 
 pub(crate) fn shada_restore_last_cursor(mut buffer: Buf, pos: Pos) {
     buffer.b_last_cursor = FileMark {
         mark: pos,
-        fnum: 0,
+        fnum: None,
         timestamp: os_time(),
         view: FileMarkView::NONE,
         extra: None,

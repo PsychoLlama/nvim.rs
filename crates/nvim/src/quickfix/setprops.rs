@@ -29,6 +29,7 @@ use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
 use crate::option::vars::P_EFM;
 use crate::semsg;
+use crate::types::Handle;
 use crate::types::{ListRef, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 
@@ -62,7 +63,7 @@ fn dict_int(d: &Dict, key: &[u8]) -> c_int {
 struct DictEntry {
     filename: Option<XString>,
     module: Option<XString>,
-    bufnum: c_int,
+    bufnum: Option<Handle>,
     lnum: LineNr,
     end_lnum: LineNr,
     col: c_int,
@@ -84,7 +85,7 @@ impl DictEntry {
         DictEntry {
             filename: dict_string(d, b"filename"),
             module: dict_string(d, b"module"),
-            bufnum: dict_int(d, b"bufnr"),
+            bufnum: Handle::from_number(dict_int(d, b"bufnr")),
             lnum: LineNr::new(dict_int(d, b"lnum")),
             end_lnum: LineNr::new(dict_int(d, b"end_lnum")),
             col: dict_int(d, b"col"),
@@ -117,17 +118,17 @@ fn qf_add_entry_from_dict(qfl: Qfl, mut from: DictEntry, first_entry: bool) -> b
 
     // An entry that names neither a file nor a position cannot be
     // jumped to.
-    let mut valid = !(from.filename.is_none() && from.bufnum == 0
+    let mut valid = !(from.filename.is_none() && from.bufnum.is_none()
         || from.lnum == LineNr::ZERO && from.pattern.is_none());
 
-    if from.bufnum != 0 && find_buf(from.bufnum).is_none() {
+    if from.bufnum.is_some() && find_buf(from.bufnum).is_none() {
         // Ignore the buffer number, and report it once per call.
         if !DID_BUFNR_EMSG.get() {
             DID_BUFNR_EMSG.set(true);
-            semsg!("E92: Buffer {} not found", from.bufnum);
+            semsg!("E92: Buffer {} not found", Handle::number_of(from.bufnum));
         }
         valid = false;
-        from.bufnum = 0;
+        from.bufnum = None;
     }
 
     // An explicit "valid" overrides all of that.
@@ -165,15 +166,15 @@ fn qf_add_entry_from_dict(qfl: Qfl, mut from: DictEntry, first_entry: bool) -> b
 fn entry_is_closer_to_target(
     entry: &QfEntry,
     other_entry: &QfEntry,
-    target_fnum: c_int,
+    target_fnum: Option<Handle>,
     target_lnum: LineNr,
     target_col: c_int,
 ) -> bool {
-    if target_fnum == 0 {
+    if target_fnum.is_none() {
         return false;
     }
-    let is_target_file = entry.fnum != 0 && entry.fnum == target_fnum;
-    let other_is_target_file = other_entry.fnum != 0 && other_entry.fnum == target_fnum;
+    let is_target_file = entry.fnum.is_some() && entry.fnum == target_fnum;
+    let other_is_target_file = other_entry.fnum.is_some() && other_entry.fnum == target_fnum;
     if is_target_file != other_is_target_file {
         return is_target_file;
     }
@@ -225,9 +226,9 @@ fn qf_add_entries(
     let mut old_last = None;
 
     // Where the list was, so that 'u' can find the nearest entry again.
-    let (prev_fnum, prev_lnum, prev_col) = qfl
-        .current()
-        .map_or((0, 0, 0), |entry| (entry.fnum, entry.lnum.get(), entry.col));
+    let (prev_fnum, prev_lnum, prev_col) = qfl.current().map_or((0, 0, 0), |entry| {
+        (Handle::number_of(entry.fnum), entry.lnum.get(), entry.col)
+    });
 
     let mut select_first_entry = false;
     let mut select_nearest_entry = false;
@@ -276,7 +277,7 @@ fn qf_add_entries(
                             entry_is_closer_to_target(
                                 &qfl.entries[added],
                                 &qfl.entries[chosen],
-                                prev_fnum,
+                                Handle::from_number(prev_fnum),
                                 LineNr::new(prev_lnum),
                                 prev_col,
                             )

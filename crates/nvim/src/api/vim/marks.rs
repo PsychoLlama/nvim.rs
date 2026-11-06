@@ -59,7 +59,7 @@ pub fn nvim_get_mark(name: ApiString, _opts: &mut KeyDict_empty) -> Result<Array
     // A mark in a buffer names the buffer; one restored from ShaDa names
     // only the file it was in.
     let mut bufnr = fnum;
-    let filename = if fnum != 0 {
+    let filename = if fnum.is_some() {
         buflist_nr2name(bufnr, 1, 1)
     } else {
         mark.file_name().map(XString::from_cstr)
@@ -73,7 +73,7 @@ pub fn nvim_get_mark(name: ApiString, _opts: &mut KeyDict_empty) -> Result<Array
             name
         }
         _ => {
-            bufnr = 0;
+            bufnr = None;
             XString::new()
         }
     };
@@ -81,7 +81,7 @@ pub fn nvim_get_mark(name: ApiString, _opts: &mut KeyDict_empty) -> Result<Array
     let path = Object::string(ApiString::from_bytes(filename.as_cstr().to_bytes()));
     rv.push(Object::integer(row));
     rv.push(Object::integer(col));
-    rv.push(Object::integer(Integer::from(bufnr)));
+    rv.push(Object::integer(Integer::from(Handle::number_of(bufnr))));
     rv.push(path);
     Ok(rv.into())
 }

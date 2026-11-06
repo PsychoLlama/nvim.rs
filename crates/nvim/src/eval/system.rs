@@ -39,6 +39,7 @@ use crate::semsg;
 use crate::shell::Argv;
 use crate::shell::system::os_system_capture;
 use crate::smsg;
+use crate::types::Handle;
 use crate::types::LineNr;
 use crate::types::{
     EvalFuncData, Failed, IOSIZE, List, OptInt, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING,
@@ -233,7 +234,7 @@ pub fn save_tv_as_string(tv: &TypVal, endnl: bool, crlf: bool) -> Result<Option<
 /// A Number names a buffer; its whole text is the input.
 fn buffer_as_string(tv: &TypVal) -> Result<Option<Vec<u8>>, Failed> {
     let nr = tv.number_or_zero();
-    let Some(buffer) = find_buf(number_as_int(nr)) else {
+    let Some(buffer) = find_buf(Handle::from_number(number_as_int(nr))) else {
         semsg!("E86: Buffer {} does not exist", nr);
         return Err(Failed);
     };

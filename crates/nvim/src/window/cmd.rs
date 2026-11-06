@@ -364,7 +364,7 @@ fn split_alternate(prenum: c_int) {
     let fnum = if prenum == 0 {
         Win::current().w_alt_fnum
     } else {
-        prenum
+        Handle::from_number(prenum)
     };
     if find_buffer(fnum).is_none() {
         if prenum == 0 {
@@ -689,7 +689,7 @@ fn do_ident(first: c_int, second: c_int) {
 }
 
 /// Buffer `fnum`, if there is one.
-fn find_buffer(fnum: c_int) -> Option<Buf> {
+fn find_buffer(fnum: Option<Handle>) -> Option<Buf> {
     find_buf(fnum)
 }
 
@@ -699,7 +699,7 @@ fn find_buffer_by_name(name: &CStr) -> Option<Buf> {
 }
 
 /// Edit buffer `fnum` in the current window, remembering the alternate file.
-fn open_buffer_here(fnum: c_int) {
+fn open_buffer_here(fnum: Option<Handle>) {
     let _ = buflist_getfile(fnum, LineNr::ZERO, GETF_ALT, 0);
 }
 
@@ -722,7 +722,7 @@ fn grab_filename(prenum1: c_int, lnum: &mut LineNr) -> Option<XString> {
 /// `do_ecmd()`: edit file `name` in the current window, keeping the alternate.
 fn edit_file(name: &CStr) -> Result<(), Failed> {
     let lnum = newlnum::LASTL as LineNr;
-    do_ecmd(0, Some(name), None, None, lnum, EcmdFlags::HIDE, None)
+    do_ecmd(None, Some(name), None, None, lnum, EcmdFlags::HIDE, None)
 }
 
 /// Clamp `window`'s cursor line into its buffer.

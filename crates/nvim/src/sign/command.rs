@@ -377,7 +377,7 @@ fn parse_sign_cmd_args(cmd: c_int, line: &[u8]) -> Result<SignCmdArgs, SignError
         } else if let Some(v) = arg.strip_prefix(b"buffer=") {
             filename = Some(v);
             let (nr, past) = getdigits_int_at(v, 0, true, 0);
-            out.buf = find_buf(nr);
+            out.buf = find_buf(Handle::from_number(nr));
             // Diagnosed but not fatal, which is why this still breaks
             // out with whatever buffer it found.
             if !skip_white(&v[past..]).is_empty() {

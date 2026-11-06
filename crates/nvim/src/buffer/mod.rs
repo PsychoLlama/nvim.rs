@@ -57,6 +57,7 @@ pub(crate) mod state;
 use crate::autocmd::fire_autocmds;
 use crate::ex_cmds::EcmdFlags;
 use crate::types::AutoEvent;
+use crate::types::Handle;
 use crate::winlayer::BufId;
 use core::ffi::{CStr, c_int};
 use core::ptr;
@@ -458,7 +459,15 @@ pub(crate) fn edit_file(
     flags: EcmdFlags,
     win: Win,
 ) -> Result<(), Failed> {
-    do_ecmd(fnum, None, None, excmd, newlnum, flags, Some(win.id()))
+    do_ecmd(
+        Handle::from_number(fnum),
+        None,
+        None,
+        excmd,
+        newlnum,
+        flags,
+        Some(win.id()),
+    )
 }
 
 fn layout_lock() {

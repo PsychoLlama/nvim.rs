@@ -10,6 +10,7 @@ use crate::cstr;
 use crate::env::{expand_env, expand_env_escaped};
 use crate::ex_cmds::newlnum;
 use crate::optionstr::{OptString, local_or_global};
+use crate::types::Handle;
 use crate::types::{CmdIdx, EcmdCmd};
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
@@ -416,7 +417,7 @@ pub(crate) fn eval_vars(
                 if i == 0 && byte(1) == b'<' && used > 1 {
                     used = 1;
                 }
-                let Some(buf) = find_buf(i) else {
+                let Some(buf) = find_buf(Handle::from_number(i)) else {
                     return Expansion::Refused(gettext(
                         c"E194: No alternate file name to substitute for '#'",
                     ));

@@ -33,6 +33,7 @@ use crate::option::vars::{p_enc, p_hi};
 use crate::os::env::process_id;
 use crate::os::time::os_time;
 use crate::search::{search_was_last_used, state::no_hlsearch};
+use crate::types::Handle;
 use crate::types::LineNr;
 use crate::types::builders::DictBuf;
 use crate::types::{
@@ -395,8 +396,8 @@ impl Writing<'_> {
 
     /// The file name to record a global mark against, or `None` when the
     /// mark is not worth keeping.
-    fn mark_fname(&self, fnum: c_int, fname: Option<XString>) -> Option<XString> {
-        if fnum == 0 {
+    fn mark_fname(&self, fnum: Option<Handle>, fname: Option<XString>) -> Option<XString> {
+        if fnum.is_none() {
             debug_assert!(fname.is_some(), "shada: a mark with no buffer or file");
             return fname.filter(|fname| !shada_removable(fname.as_cstr()));
         }

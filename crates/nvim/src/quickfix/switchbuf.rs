@@ -89,10 +89,10 @@ pub(crate) fn jump_to_help_window(
 }
 
 /// Go to a window showing the buffer, in any tab page.
-fn qf_goto_tabwin_with_file(fnum: c_int) -> bool {
+fn qf_goto_tabwin_with_file(fnum: Option<Handle>) -> bool {
     for tp in tabs() {
         for wp in windows_in_tab(tp) {
-            if wp.buffer().handle == Handle::new(fnum) {
+            if Some(wp.buffer().handle) == fnum {
                 goto_tabpage_win(tp, wp);
                 return true;
             }
@@ -130,9 +130,9 @@ fn qf_open_new_file_win(ll_ref: Option<QfId>) -> Result<(), Failed> {
 /// The caller may already have found one; otherwise it is the window showing
 /// the file, or failing that the nearest previous window holding an ordinary
 /// buffer.
-fn qf_goto_win_with_ll_file(use_win: Option<Win>, qf_fnum: c_int, ll_ref: Option<QfId>) {
+fn qf_goto_win_with_ll_file(use_win: Option<Win>, qf_fnum: Option<Handle>, ll_ref: Option<QfId>) {
     let win = use_win
-        .or_else(|| find_win(|wp| wp.buffer().handle == Handle::new(qf_fnum)))
+        .or_else(|| find_win(|wp| Some(wp.buffer().handle) == qf_fnum))
         .unwrap_or_else(|| {
             // Walk backwards from here, wrapping at the top, for a window
             // holding an ordinary buffer.
@@ -171,10 +171,10 @@ fn prev_window(window: Win) -> Win {
 /// it settles for the previously used window (`'switchbuf'` `uselast`), the
 /// best ordinary window seen on the way, or whichever window neighbours the
 /// quickfix window.
-fn qf_goto_win_with_qfl_file(qf_fnum: c_int) {
+fn qf_goto_win_with_qfl_file(qf_fnum: Option<Handle>) {
     let mut win = Win::current();
     let mut altwin: Option<Win> = None;
-    while win.buffer().handle != Handle::new(qf_fnum) {
+    while Some(win.buffer().handle) != qf_fnum {
         win = prev_window(win);
         if win.is_quickfix_window() {
             let last = crate::winlayer::prev_window()
@@ -212,7 +212,7 @@ fn qf_goto_win_with_qfl_file(qf_fnum: c_int) {
 /// `opened_window` is set when a window was split, so that the caller can
 /// close it again if the jump then fails.
 pub(crate) fn qf_jump_to_usable_window(
-    qf_fnum: c_int,
+    qf_fnum: Option<Handle>,
     newwin: bool,
     opened_window: &mut bool,
 ) -> Result<(), Failed> {

@@ -272,7 +272,7 @@ pub(crate) fn set_mark(
     let first = name.as_bytes().first().copied().unwrap_or(0);
     let mark = c_int::from(c_char::from_ne_bytes([first]));
     let handle = buffer.handle;
-    if setmark_at(mark, pos, handle.get()).is_ok() {
+    if setmark_at(mark, pos, Some(handle)).is_ok() {
         return Ok(());
     }
     // `%c` wrote the one byte, whatever it was.

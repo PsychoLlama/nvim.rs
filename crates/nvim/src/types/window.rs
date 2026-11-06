@@ -291,7 +291,8 @@ pub struct Window {
     pub w_stl_state: ::core::ffi::c_int,
     pub w_stl_visual_mode: ::core::ffi::c_int,
     pub w_stl_visual_pos: Pos,
-    pub w_alt_fnum: ::core::ffi::c_int,
+    /// The alternate file `#` names, if any.
+    pub w_alt_fnum: Option<Handle>,
     pub w_alist: ArgListId,
     pub w_arg_idx: ::core::ffi::c_int,
     /// Whether `w_arg_idx` no longer names the argument the window shows.
@@ -369,7 +370,7 @@ impl WinInfo {
                     col: ColNr::ZERO,
                     coladd: 0,
                 },
-                fnum: 0,
+                fnum: None,
                 timestamp: 0,
                 view: FileMarkView {
                     topline_offset: 0,

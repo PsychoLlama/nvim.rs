@@ -183,7 +183,7 @@ fn skip(buffer: Buf, arg: &CStr, forceit: c_int) -> bool {
         || has_flag(arg, b'x') && !buffer.b_flags.has(BufFlags::READERR)
         || has_flag(arg, b'%') && buffer.raw() != Buf::current_raw()
         || has_flag(arg, b'#')
-            && (buffer.raw() == Buf::current_raw() || alt_fnum != buffer.handle.get())
+            && (buffer.raw() == Buf::current_raw() || alt_fnum != Some(buffer.handle))
 }
 
 /// The name to show for `buffer`, as upstream cut it into `NameBuff`.
@@ -228,7 +228,7 @@ fn show(buffer: Buf, by_time: bool, name: &XString) {
     let listed = if buffer.b_p_bl != 0 { b' ' } else { b'u' };
     let current = if buffer.raw() == Buf::current_raw() {
         b'%'
-    } else if current_win().w_alt_fnum == buffer.handle.get() {
+    } else if current_win().w_alt_fnum == Some(buffer.handle) {
         b'#'
     } else {
         b' '

@@ -228,7 +228,7 @@ static PREVIEW_ENTRY: GlobalCell<Taggy> = GlobalCell::new(Taggy {
             col: ColNr::ZERO,
             coladd: 0,
         },
-        fnum: 0 as ::core::ffi::c_int,
+        fnum: None,
         timestamp: 0 as Timestamp,
         view: FileMarkView {
             topline_offset: MAXLNUM.get(),
@@ -237,7 +237,7 @@ static PREVIEW_ENTRY: GlobalCell<Taggy> = GlobalCell::new(Taggy {
         extra: None,
     },
     cur_match: 0 as ::core::ffi::c_int,
-    cur_fnum: 0 as ::core::ffi::c_int,
+    cur_fnum: None,
     user_data: None,
 });
 /// What separates a tags-file line from the name of the file it came from

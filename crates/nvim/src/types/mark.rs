@@ -25,13 +25,15 @@ pub type MarkMoveRes = ::core::ffi::c_uint;
 #[derive(Clone)]
 pub struct FileMark {
     pub mark: Pos,
-    pub fnum: ::core::ffi::c_int,
+    /// The buffer the mark is in; `None` for a buffer-local mark, which is
+    /// in the buffer that keeps it.
+    pub fnum: Option<Handle>,
     pub timestamp: Timestamp,
     pub view: FileMarkView,
     /// The ShaDa entry's keys this Nvim has no field for, written back as
     /// read. Boxed: a buffer is a zeroed allocation holding a hundred and
     /// thirty of these, and only a `Sized` box's `None` is promised to be
-    /// all-zero bytes -- which also keeps the record five words.
+    /// all-zero bytes -- which also keeps the record six words.
     pub(crate) extra: Option<Box<crate::shada::ShadaExtra>>,
 }
 #[derive(Copy, Clone)]
@@ -58,7 +60,7 @@ impl FileMark {
             col: ColNr::ZERO,
             coladd: 0,
         },
-        fnum: 0,
+        fnum: None,
         timestamp: 0,
         view: FileMarkView::NONE,
         extra: None,
@@ -89,7 +91,7 @@ impl FileMark {
 #[derive(Copy, Clone)]
 pub struct SavedMark {
     pub mark: Pos,
-    pub fnum: ::core::ffi::c_int,
+    pub fnum: Option<Handle>,
     pub timestamp: Timestamp,
     pub view: FileMarkView,
 }
@@ -102,7 +104,7 @@ impl SavedMark {
             col: ColNr::ZERO,
             coladd: 0,
         },
-        fnum: 0,
+        fnum: None,
         timestamp: 0,
         view: FileMarkView {
             topline_offset: 0,

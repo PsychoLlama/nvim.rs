@@ -25,6 +25,7 @@ use crate::lua::executor::nlua_set_sctx;
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
+use crate::types::Handle;
 use crate::types::{AutoHandler, Failed};
 use crate::winlayer::TabPage;
 use crate::winlayer::{Win, tabs};
@@ -288,7 +289,9 @@ pub fn autocmd_register(
         Some(id) => id,
         None => {
             // A buffer-local pattern needs a buffer that exists.
-            if is_buflocal && (buflocal_nr == 0 || find_buf(buflocal_nr).is_none()) {
+            if is_buflocal
+                && (buflocal_nr == 0 || find_buf(Handle::from_number(buflocal_nr)).is_none())
+            {
                 semsg!("E680: <buffer={}>: invalid buffer number ", buflocal_nr);
                 return Err(Failed);
             }

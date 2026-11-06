@@ -109,7 +109,7 @@ pub(crate) fn put_view(
         }
     }
 
-    if window.w_alt_fnum != 0 && !put_alternate(out, window, opts) {
+    if window.w_alt_fnum.is_some() && !put_alternate(out, window, opts) {
         return false;
     }
 

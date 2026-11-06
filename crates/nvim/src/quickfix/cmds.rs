@@ -28,6 +28,7 @@ use crate::option::vars::P_EFM;
 use crate::option::vars::P_MENC;
 use crate::optionstr::{OptString, local_or_global};
 use crate::types::CmdIdx;
+use crate::types::Handle;
 use crate::types::{Failed, NUL, OptionSetFlags, VAR_LIST};
 use core::ffi::{CStr, c_int};
 
@@ -133,7 +134,7 @@ fn cbuffer_process_args(excmd: &mut ExArg) -> Option<Buf> {
     {
         let at = excmd.line.arg;
         let (number, _) = getdigits_int_at(excmd.line.buffer_mut(), at, false, 0);
-        find_buf(number)
+        find_buf(Handle::from_number(number))
     } else {
         None
     };

@@ -139,14 +139,14 @@ pub(crate) fn argcount() -> c_int {
 }
 
 /// The buffer number of entry `n` of list `id`, if there is such an entry.
-fn entry_fnum(id: ArgListId, n: c_int) -> Option<c_int> {
+fn entry_fnum(id: ArgListId, n: c_int) -> Option<Handle> {
     let n = usize::try_from(n).ok()?;
-    with_list(id, |al| al.entries.get(n).map(|entry| entry.fnum)).flatten()
+    with_list(id, |al| al.entries.get(n).and_then(|entry| entry.fnum)).flatten()
 }
 
 /// The buffer number of entry `n` of `window`'s argument list, if there is
 /// such an entry.
-pub(crate) fn warg_fnum(window: Win, n: c_int) -> Option<c_int> {
+pub(crate) fn warg_fnum(window: Win, n: c_int) -> Option<Handle> {
     entry_fnum(window.w_alist, n)
 }
 
@@ -213,7 +213,7 @@ fn same_file(name: &CStr, fname: Option<&CStr>) -> bool {
 /// Is `buffer` the file `entry` names -- by number, or by resolving both
 /// names?
 fn holds_entry(buffer: Buf, entry: &ArgEntry) -> bool {
-    buffer.handle == Handle::new(entry.fnum)
+    Some(buffer.handle) == entry.fnum
         || with_entry_name(entry, |name| same_file(name, buffer.name.full()))
 }
 
@@ -315,10 +315,9 @@ pub(crate) fn alist_add(id: ArgListId, name: XString, set_fnum: c_int) {
     wp.w_locked = true;
     let fnum = if set_fnum > 0 {
         let flags = BLN_LISTED | if set_fnum == 2 { BLN_CURBUF } else { 0 };
-        buflist_add_name(Some(name.as_cstr()), LineNr::ZERO, flags)
-            .map_or(0, |buf| buf.handle.get())
+        buflist_add_name(Some(name.as_cstr()), LineNr::ZERO, flags).map(|buf| buf.handle)
     } else {
-        0
+        None
     };
     wp.w_locked = false;
     ARGLIST_LOCKED.set(false);
@@ -443,8 +442,8 @@ fn alist_add_list(files: Vec<XString>, after: c_int, will_edit: bool) {
     let added: Vec<ArgEntry> = files
         .into_iter()
         .map(|name| {
-            let fnum = buflist_add_name(Some(name.as_cstr()), LineNr::ZERO, flags)
-                .map_or(0, |buf| buf.handle.get());
+            let fnum =
+                buflist_add_name(Some(name.as_cstr()), LineNr::ZERO, flags).map(|buf| buf.handle);
             ArgEntry { name, fnum }
         })
         .collect();

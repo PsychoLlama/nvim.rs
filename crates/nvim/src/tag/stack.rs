@@ -22,6 +22,7 @@ use crate::memory::ThinCString;
 use crate::narrow::number_as_int;
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
+use crate::types::Handle;
 use crate::types::{Failed, IOSIZE, ListRef, VAR_LIST};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
@@ -64,12 +65,12 @@ pub(crate) struct Push {
     /// The tag being jumped to.
     pub(crate) tagname: ThinCString,
     /// The buffer the jump landed in, or 0 when that is not known yet.
-    pub(crate) cur_fnum: c_int,
+    pub(crate) cur_fnum: Option<Handle>,
     /// Which of the matches was taken, counted from zero.
     pub(crate) cur_match: c_int,
     /// Where the cursor was before the jump, and in which buffer.
     pub(crate) mark: Pos,
-    pub(crate) fnum: c_int,
+    pub(crate) fnum: Option<Handle>,
     /// Whatever `'tagfunc'` attached to the match.
     pub(crate) user_data: Option<ThinCString>,
 }
@@ -181,10 +182,10 @@ impl TagStack {
             }
             self.push(Push {
                 tagname,
-                cur_fnum: number(&item, b"bufnr"),
+                cur_fnum: Handle::from_number(number(&item, b"bufnr")),
                 cur_match: number(&item, b"matchnr") - 1,
                 mark,
-                fnum,
+                fnum: Handle::from_number(fnum),
                 user_data: dict_get_string_alloc(Some(&*item), b"user_data"),
             });
         }
@@ -244,7 +245,7 @@ pub fn do_tags(_excmd: &mut ExArg) {
         );
         row.push(0);
         msg_display(cstr::in_bytes(&row), 0, false);
-        let hl = if item.fmark.fnum == Buf::current().handle.get() {
+        let hl = if item.fmark.fnum == Some(Buf::current().handle) {
             HLF_D
         } else {
             0
@@ -262,7 +263,7 @@ fn tag_details(tag: &Taggy, retdict: &mut Dict) {
     let (tagname, user_data) = entry_strings(tag);
     let _ = retdict.add_str(b"tagname", tagname);
     let _ = retdict.add_number(b"matchnr", VarNumber::from(tag.cur_match + 1));
-    let _ = retdict.add_number(b"bufnr", VarNumber::from(tag.cur_fnum));
+    let _ = retdict.add_number(b"bufnr", VarNumber::from(Handle::number_of(tag.cur_fnum)));
     if user_data.is_some() {
         let _ = retdict.add_str(b"user_data", user_data);
     }
@@ -270,8 +271,8 @@ fn tag_details(tag: &Taggy, retdict: &mut Dict) {
     let pos = tv_list_alloc(4);
     let _ = retdict.add_list(b"from", Some(pos.clone()));
     let mark = &tag.fmark;
-    let str_m = if mark.fnum != -1 {
-        VarNumber::from(mark.fnum)
+    let str_m = if mark.fnum != Some(Handle::new(-1)) {
+        VarNumber::from(Handle::number_of(mark.fnum))
     } else {
         0
     };

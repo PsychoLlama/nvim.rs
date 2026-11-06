@@ -223,7 +223,7 @@ fn match_buflines(
                     qfl,
                     &NewEntry {
                         fname: Some(fname),
-                        bufnum: bufnum.get(),
+                        bufnum: Some(bufnum),
                         lnum: start.lnum + lnum.get(),
                         end_lnum: end.lnum + lnum.get(),
                         col: (start.col + 1).get(),
@@ -277,7 +277,7 @@ fn match_buflines(
                     qfl,
                     &NewEntry {
                         fname: Some(fname),
-                        bufnum: bufnum.get(),
+                        bufnum: Some(bufnum),
                         lnum,
                         col: first + col.get() + 1,
                         ..NewEntry::new(line.as_cstr())

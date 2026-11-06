@@ -243,7 +243,7 @@ fn open_tabpage(excmd: &mut ExArg, old_curwin: Win) {
         && !old.w_buffer.is_current()
         && !cmdmod_has(CmdModFlags::KEEPALT)
     {
-        old.w_alt_fnum = Buf::current().handle.get();
+        old.w_alt_fnum = Some(Buf::current().handle);
     }
 }
 

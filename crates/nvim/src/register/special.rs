@@ -110,7 +110,7 @@ pub fn get_spec_reg(regname: RegName, errmsg: bool) -> Option<Option<XString>> {
             Buf::current().name.shown().map(XString::from_cstr)
         }
         // `"#` -- the alternate file name.
-        b'#' => match buflist_name_nr(0) {
+        b'#' => match buflist_name_nr(None) {
             Some((alt, _)) => alt.name.shown().map(XString::from_cstr),
             None => {
                 if errmsg {

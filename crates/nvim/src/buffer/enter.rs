@@ -192,7 +192,7 @@ pub fn set_curbuf(buffer: Buf, action: c_int, update_jumplist: bool) {
 
     let mut win = Win::current();
     if !cmdmod_has(CmdModFlags::KEEPALT) {
-        win.w_alt_fnum = Buf::current().handle.get(); // remember alternate file
+        win.w_alt_fnum = Some(Buf::current().handle); // remember alternate file
     }
     remember_altfpos(win); // remember curpos
 

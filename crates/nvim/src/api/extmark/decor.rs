@@ -17,11 +17,10 @@
 )]
 
 use super::*;
-use crate::api::private::validate::{err_bad_number, err_expected, err_out_of_range};
+use crate::api::private::validate::{err_bad_number, err_expected, err_out_of_range, handle_arg};
 use crate::charset::transstr_owned;
 use crate::mbyte::c_string_cells;
 use crate::narrow::{len_as_int, number_as_int, number_as_u32};
-use crate::types::Handle;
 
 pub fn nvim_buf_del_extmark(
     buf: BufferHandle,
@@ -60,8 +59,11 @@ pub fn nvim_buf_clear_namespace(
     Ok(())
 }
 
-pub fn nvim_set_decoration_provider(ns_id: Integer, opts: &mut KeyDict_set_decoration_provider) {
-    let ns = Handle::new(number_as_int(ns_id));
+pub fn nvim_set_decoration_provider(
+    ns_id: Integer,
+    opts: &mut KeyDict_set_decoration_provider,
+) -> Result<(), Error> {
+    let ns = handle_arg(c"ns_id", ns_id)?;
     with_decor_provider(ns, true, decor_provider_clear);
     redraw_all_later(UPD_NOT_VALID);
     // Each callback the caller named moves into the provider, and the
@@ -88,6 +90,7 @@ pub fn nvim_set_decoration_provider(ns_id: Integer, opts: &mut KeyDict_set_decor
         p.hl_valid += 1;
         p.hl_cached = false;
     });
+    Ok(())
 }
 
 /// The `[[text, hl], ..]` chunk array every virtual-text entry point decodes.

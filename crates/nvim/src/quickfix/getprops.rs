@@ -60,8 +60,8 @@ fn asked_for(what: &Dict, key: &str) -> bool {
 fn get_qfline_items(entry: &QfEntry, list: &mut List) {
     // Handle entries with a non-existing buffer number.
     let mut bufnum = entry.fnum;
-    if bufnum != 0 && find_buf(bufnum).is_none() {
-        bufnum = 0;
+    if bufnum.is_some() && find_buf(bufnum).is_none() {
+        bufnum = None;
     }
 
     let mut dict = tv_dict_alloc();
@@ -70,7 +70,7 @@ fn get_qfline_items(entry: &QfEntry, list: &mut List) {
     let kind: &[u8] = if entry.kind == 0 { b"" } else { &kind };
 
     let d = &mut *dict;
-    let added = add_nr(d, "bufnr", VarNumber::from(bufnum))
+    let added = add_nr(d, "bufnr", VarNumber::from(Handle::number_of(bufnum)))
         .and_then(|()| add_nr(d, "lnum", VarNumber::from(entry.lnum)))
         .and_then(|()| add_nr(d, "end_lnum", VarNumber::from(entry.end_lnum)))
         .and_then(|()| add_nr(d, "col", VarNumber::from(entry.col)))
@@ -189,10 +189,13 @@ fn qf_winid(qi: Option<Qi>) -> c_int {
 /// when there is no such buffer any more.
 fn qf_getprop_qfbufnr(qi: Option<Qi>, retdict: &mut Dict) -> Result<(), KeyTaken> {
     let bufnum = qi
-        .map(|qi| qi.bufnr)
-        .filter(|&bufnr| find_buf(bufnr).is_some())
-        .unwrap_or(0);
-    add_nr(retdict, "qfbufnr", VarNumber::from(bufnum))
+        .and_then(|qi| qi.bufnr)
+        .filter(|&bufnr| find_buf(Some(bufnr)).is_some());
+    add_nr(
+        retdict,
+        "qfbufnr",
+        VarNumber::from(Handle::number_of(bufnum)),
+    )
 }
 
 /// The `what` keys, in the order the flag set numbers them. `filewinid` is

@@ -75,6 +75,7 @@ use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::semsg;
 use crate::startup::exiting;
 use crate::types::CmdIdx;
+use crate::types::Handle;
 use crate::types::{
     CmdModFlags, ExArg, Failed, LineNr, MAXPATHL, VarNumber, Vv, ptrdiff_t, uint64_t,
 };
@@ -433,7 +434,9 @@ pub(crate) fn check_changed_any(hidden: bool, unload: bool) -> bool {
     }
     let mut found = None;
     for nr in changed_check_order() {
-        let Some(buf) = find_buf(nr) else { continue };
+        let Some(buf) = find_buf(Handle::from_number(nr)) else {
+            continue;
+        };
         if hidden && buf.b_nwindows != 0 || !buf_is_changed(buf) {
             continue;
         }
@@ -630,7 +633,7 @@ pub(crate) fn ex_checktime(excmd: &mut ExArg) {
         // The default is all buffers.
         check_timestamps(0);
     } else {
-        if let Some(buf) = find_buf(excmd.line2.get()) {
+        if let Some(buf) = find_buf(Handle::from_number(excmd.line2.get())) {
             // Cannot happen?
             buf_check_timestamp(buf);
         }
@@ -668,7 +671,7 @@ pub(crate) fn ex_drop(excmd: &mut ExArg) {
     // window if there is one, editing in the current window if its
     // buffer can be abandoned, and otherwise opening a new window.
     // The list is not empty, so it has a first entry.
-    let buf = warg_fnum(Win::current(), 0).and_then(find_buf);
+    let buf = find_buf(warg_fnum(Win::current(), 0));
     for (tp, wp) in tab_windows() {
         if Some(wp.buffer()) != buf {
             continue;

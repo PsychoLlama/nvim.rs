@@ -149,9 +149,9 @@ pub fn do_argfile(excmd: &mut ExArg, argn: c_int) {
         report_no_such_arg(argn);
         return;
     }
-    let entry_fnum = entry_fnum(cur_alist(), argn).unwrap_or(0);
+    let entry_fnum = entry_fnum(cur_alist(), argn);
     let refused = !is_split_cmd
-        && entry_fnum != Buf::current().handle.get()
+        && entry_fnum != Some(Buf::current().handle)
         && !check_can_set_curbuf_forceit(c_int::from(excmd.forceit));
     if refused {
         return;
@@ -180,7 +180,7 @@ pub fn do_argfile(excmd: &mut ExArg, argn: c_int) {
     let name = arg_name(cur_alist(), cur_arg_idx());
     let last = newlnum::LAST as LineNr;
     let opened = do_ecmd(
-        0,
+        None,
         name.as_ref().map(XString::as_cstr),
         None,
         Some(excmd),

@@ -70,7 +70,7 @@ pub(crate) const INIT_FMARK: FileMark = FileMark {
         col: ColNr::ZERO,
         coladd: 0,
     },
-    fnum: 0,
+    fnum: None,
     timestamp: 0 as Timestamp,
     view: FileMarkView {
         topline_offset: MAXLNUM.get(),
@@ -475,16 +475,16 @@ pub fn free_buf_options(mut buffer: Buf, free_p_ff: bool) {
 
 /// Go to buffer `n`, putting the cursor where it was left.
 pub fn buflist_getfile(
-    n: c_int,
+    n: Option<Handle>,
     mut lnum: LineNr,
     options: c_int,
     forceit: c_int,
 ) -> Result<(), Failed> {
     let Some(buf) = find_buf(n) else {
-        if options & GETF_ALT != 0 && n == 0 {
+        if options & GETF_ALT != 0 && n.is_none() {
             emsg(gettext(e_noalt));
         } else {
-            semsg!("E92: Buffer {n} not found");
+            semsg!("E92: Buffer {} not found", Handle::number_of(n));
         }
         return Err(Failed);
     };
@@ -601,8 +601,9 @@ pub(crate) fn buflist_findname_file_id(ffname: &CStr, file_id: Option<&FileID>) 
 // ---------------------------------------------------------------------------
 // Finding one by pattern
 
-/// The number of the buffer matching `pattern`: `-1` when there is none and
-/// `-2` when more than one does, both reported to the user.
+/// The buffer matching `pattern`, or `Err` once "E93: More than one match" or
+/// "E94: No matching buffer" is said. `Ok(None)` is `#` with no alternate
+/// file, which upstream answers with buffer number 0 and no message.
 ///
 /// `unlisted` searches the unlisted buffers too, when no listed one matched;
 /// `curtab_only` ignores buffers not open in the current tab page.
@@ -616,54 +617,65 @@ pub(crate) fn buflist_findpat_prefix(
     unlisted: bool,
     diffmode: bool,
     curtab_only: bool,
-) -> c_int {
+) -> Result<Option<Handle>, Failed> {
     buflist_findpat(text, Some(len), unlisted, diffmode, curtab_only)
 }
 
-/// The number of the buffer whose name matches the first `len` bytes of
-/// `text` (all of it for `None`); see [`buflist_findpat_prefix`].
+/// What a buffer-name pattern matched.
+enum Matched {
+    /// No buffer.
+    Nothing,
+    /// Exactly one -- or, for `#`, the alternate file if there is one.
+    One(Option<Handle>),
+    /// More than one buffer.
+    Several,
+}
+
+/// The buffer whose name matches the first `len` bytes of `text` (all of it
+/// for `None`); see [`buflist_findpat_prefix`].
 pub fn buflist_findpat(
     text: &CStr,
     len: Option<usize>,
     unlisted: bool,
     diffmode: bool,
     curtab_only: bool,
-) -> c_int {
+) -> Result<Option<Handle>, Failed> {
     let pattern = text.to_bytes();
     let len = len.unwrap_or(pattern.len());
     let head = if len == 1 { pattern[0] } else { 0 };
     let matched = if head == b'%' || head == b'#' {
         match_shorthand(head, diffmode)
     } else {
-        match match_pattern(pattern, len, unlisted, diffmode, curtab_only) {
-            // An unusable pattern is reported by whoever built it.
-            None => return -1,
-            Some(matched) => matched,
-        }
+        // An unusable pattern is reported by whoever built it.
+        match_pattern(pattern, len, unlisted, diffmode, curtab_only).ok_or(Failed)?
     };
-
-    if matched == -2 {
-        let pattern = msg_cstr(text);
-        semsg!("E93: More than one match for {pattern}");
-    } else if matched < 0 {
-        let pattern = msg_cstr(text);
-        semsg!("E94: No matching buffer for {pattern}");
+    match matched {
+        Matched::One(handle) => Ok(handle),
+        Matched::Several => {
+            let pattern = msg_cstr(text);
+            semsg!("E93: More than one match for {pattern}");
+            Err(Failed)
+        }
+        Matched::Nothing => {
+            let pattern = msg_cstr(text);
+            semsg!("E94: No matching buffer for {pattern}");
+            Err(Failed)
+        }
     }
-    matched
 }
 
 /// `%` (the current buffer) and `#` (the alternate file), which never reach
 /// the regexp.
-fn match_shorthand(head: u8, diffmode: bool) -> c_int {
+fn match_shorthand(head: u8, diffmode: bool) -> Matched {
     let matched = if head == b'%' {
-        Buf::current().handle.get()
+        Some(Buf::current().handle)
     } else {
         current_win().w_alt_fnum
     };
     if diffmode && !find_buf(matched).is_some_and(is_diff_mode) {
-        return -1;
+        return Matched::Nothing;
     }
-    matched
+    Matched::One(matched)
 }
 
 /// The four-attempt regexp search. `None` when the pattern could not be
@@ -675,7 +687,7 @@ fn match_pattern(
     unlisted: bool,
     diffmode: bool,
     curtab_only: bool,
-) -> Option<c_int> {
+) -> Option<Matched> {
     let (pat, _) = file_pat_to_reg_pat(text, end)
         .inspect_err(|err| err.report())
         .ok()?;
@@ -685,7 +697,7 @@ fn match_pattern(
     // Whether the pattern ends in '$', which attempts 0 and 1 take off.
     let toggledollar = patlen > 1 && buf[patlen - 1] == b'$';
 
-    let mut matched = -1;
+    let mut matched = Matched::Nothing;
     // First try finding a listed buffer. When there is none and "unlisted"
     // is set, try again over the unlisted ones.
     let mut find_listed = true;
@@ -720,24 +732,24 @@ fn match_pattern(
                 if curtab_only && !windows().any(|win| win.w_buffer == b) {
                     continue;
                 }
-                if matched >= 0 {
+                if let Matched::One(_) = matched {
                     // A match was already found.
-                    matched = -2;
+                    matched = Matched::Several;
                     break;
                 }
                 // Remember the first match.
-                matched = b.handle.get();
+                matched = Matched::One(Some(b.handle));
             }
 
             drop(regmatch);
-            if matched >= 0 {
+            if let Matched::One(_) = matched {
                 // Found one match.
                 break;
             }
         }
 
         // Only search the unlisted buffers when no listed one matched.
-        if !unlisted || !find_listed || matched != -1 {
+        if !unlisted || !find_listed || !matches!(matched, Matched::Nothing) {
             break;
         }
         find_listed = false;

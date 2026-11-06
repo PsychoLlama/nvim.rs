@@ -30,6 +30,7 @@ use crate::mbyte::{c_partial_cells_in, c_string_cells, promised_char_len};
 use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::semsg;
+use crate::types::Handle;
 use crate::types::{Failed, ListRef, RegLines, TypVal};
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
@@ -419,23 +420,19 @@ pub fn write_reg_contents_ex(
         let text = cstr::until_nul(text);
         let buf = if text.first().is_some_and(|&b| ascii_isdigit(c_int::from(b))) {
             let num = atoi(text);
-            let buf = find_buf(num);
+            let buf = find_buf(Handle::from_number(num));
             if buf.is_none() {
                 semsg!("E86: Buffer {} does not exist", int64_t::from(num));
             }
             buf
         } else {
             let pattern = XString::from_bytes(text);
-            find_buf(buflist_findpat(
-                pattern.as_cstr(),
-                Some(text.len()),
-                true,
-                false,
-                false,
-            ))
+            buflist_findpat(pattern.as_cstr(), Some(text.len()), true, false, false)
+                .ok()
+                .and_then(find_buf)
         };
         if let Some(buf) = buf {
-            Win::current().w_alt_fnum = buf.handle.get();
+            Win::current().w_alt_fnum = Some(buf.handle);
         }
         return;
     }

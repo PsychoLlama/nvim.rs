@@ -400,7 +400,7 @@ pub(crate) fn nv_gotofile(cmd_arg: &mut CmdArg) {
     let hide = EcmdFlags::HIDE.when(hidden);
     let last = newlnum::LAST as LineNr;
     let win = Some(Win::current().id());
-    let opened = do_ecmd(0, Some(name.as_cstr()), None, None, last, hide, win);
+    let opened = do_ecmd(None, Some(name.as_cstr()), None, None, last, hide, win);
     if opened.is_ok() && cmd_arg.nchar.is('F') && lnum >= LineNr::ZERO {
         Win::current().w_cursor.lnum = lnum;
         check_cursor_lnum(Win::current());

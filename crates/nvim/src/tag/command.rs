@@ -26,6 +26,7 @@ use crate::message::{MSG_IOBUFF_LEN, msg};
 use crate::message_fmt::{msg_cstr, to_message};
 use crate::pos::MAXCOL;
 use crate::semsg;
+use crate::types::Handle;
 use crate::types::{IOSIZE, Vv};
 use crate::winlayer::{Buf, Win, WinId};
 use crate::{smsg, tr};
@@ -58,12 +59,12 @@ const NO_VIEW: FileMarkView = FileMarkView {
 
 /// The preview window's entry: the match it shows, and the buffer it came
 /// from.
-fn ptag_position() -> (c_int, c_int) {
+fn ptag_position() -> (c_int, Option<Handle>) {
     PREVIEW_ENTRY.with(|entry| (entry.cur_match, entry.cur_fnum))
 }
 
 /// Remember where the preview window got to.
-fn set_ptag_position(cur_match: c_int, cur_fnum: c_int) {
+fn set_ptag_position(cur_match: c_int, cur_fnum: Option<Handle>) {
     PREVIEW_ENTRY.with_mut(|entry| {
         entry.cur_match = cur_match;
         entry.cur_fnum = cur_fnum;
@@ -128,7 +129,7 @@ struct DoTag {
 
     /// Which match to jump to, and the buffer the matches were ordered for.
     cur_match: c_int,
-    cur_fnum: c_int,
+    cur_fnum: Option<Handle>,
     /// The match whose file turned out not to exist, so that the message
     /// is given once.
     error_cur_match: c_int,
@@ -175,7 +176,7 @@ impl DoTag {
             old_idx: idx,
             prev_idx: idx,
             cur_match: 0,
-            cur_fnum: Buf::current().handle.get(),
+            cur_fnum: Some(Buf::current().handle),
             error_cur_match: 0,
             new_tag: false,
             no_regexp: help,
@@ -185,7 +186,7 @@ impl DoTag {
             skip_msg: false,
             saved_fmark: FileMark {
                 mark: Pos::default(),
-                fnum: 0,
+                fnum: None,
                 timestamp: 0,
                 view: NO_VIEW,
                 extra: None,
@@ -358,7 +359,7 @@ impl DoTag {
             return false;
         };
         self.saved_fmark = mark.clone();
-        if mark.fnum != Buf::current().handle.get() {
+        if mark.fnum != Some(Buf::current().handle) {
             // Another file. If it cannot be opened (it may have
             // changed) keep the original position on the stack.
             if buflist_getfile(mark.fnum, mark.mark.lnum, GETF_SETMARK, self.forceit).is_err() {
@@ -444,7 +445,7 @@ impl DoTag {
             tag_emsg(c"E425: Cannot go before first matching tag");
             self.skip_msg = true;
             self.cur_match = 0;
-            self.cur_fnum = Buf::current().handle.get();
+            self.cur_fnum = Some(Buf::current().handle);
         }
     }
 
@@ -460,7 +461,7 @@ impl DoTag {
             let saved = entry.fmark.clone();
             if save_pos {
                 entry.fmark.mark = cursor;
-                entry.fmark.fnum = handle.get();
+                entry.fmark.fnum = Some(handle);
                 entry.fmark.view = view;
             }
             if !selecting {
@@ -483,7 +484,7 @@ impl DoTag {
     /// Using a remembered `cur_match` only makes sense if the order the
     /// matches came out in is the same as it was then.
     fn set_priority_buffer(&mut self) {
-        if self.cur_fnum == Buf::current().handle.get() {
+        if self.cur_fnum == Some(Buf::current().handle) {
             return;
         }
         if let Some(buf) = find_buf(self.cur_fnum) {

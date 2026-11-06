@@ -41,6 +41,7 @@ use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::semsg_multiline;
 use crate::types::Candidate;
+use crate::types::Handle;
 use crate::types::{
     Array, Blob, EvalFuncData, EvalFuncDef, Expand, Failed, Float, LineNr, Object, TypVal,
     VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarNumber, WrongArity, kBoolVarTrue,
@@ -325,7 +326,7 @@ pub fn api_wrapper(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
 /// pattern the way `:buffer` matches one.
 pub fn tv_get_buf(tv: &TypVal, curtab_only: c_int) -> Option<Buf> {
     if tv.v_type() == VAR_NUMBER {
-        return find_buf(number_as_int(tv.number_or_zero()));
+        return find_buf(Handle::from_number(number_as_int(tv.number_or_zero())));
     }
     if tv.v_type() != VAR_STRING {
         return None;
@@ -345,13 +346,15 @@ pub fn tv_get_buf(tv: &TypVal, curtab_only: c_int) -> Option<Buf> {
     let _cpo = SavedCpo::empty();
     P_MAGIC.set(true);
     let only = curtab_only != 0;
-    let found = find_buf(buflist_findpat_prefix(
+    let found = buflist_findpat_prefix(
         name.as_cstr(),
         name.as_cstr().count_bytes(),
         true,
         false,
         only,
-    ));
+    )
+    .ok()
+    .and_then(find_buf);
     P_MAGIC.set(save_magic);
 
     // A name no buffer matches may still be a *file* name we know.

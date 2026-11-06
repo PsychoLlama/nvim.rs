@@ -282,7 +282,7 @@ fn pum_show_info(info: &[u8], repeat: c_int, use_float: bool, prev_selected: c_i
             buf_clear();
         } else {
             let no_sync = Suppress::undo_sync();
-            res = do_ecmd(0, None, None, None, newlnum::ONE, EcmdFlags::NONE, None);
+            res = do_ecmd(None, None, None, None, newlnum::ONE, EcmdFlags::NONE, None);
             drop(no_sync);
 
             if res.is_ok() {

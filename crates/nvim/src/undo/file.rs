@@ -261,7 +261,7 @@ pub(crate) fn unserialize_uhp(bi: &mut BufInfo) -> Result<UndoHeader, UndoFileEr
     for mark in &mut uh.named_marks {
         mark.mark = unserialize_pos(bi);
         mark.timestamp = now;
-        mark.fnum = 0;
+        mark.fnum = None;
     }
     uh.visual = unserialize_visualinfo(bi);
     uh.time = bi.read_time();

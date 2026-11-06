@@ -271,7 +271,6 @@ crate::flag_set! {
 }
 pub const CMDBUFFSIZE: c_int = 1024;
 pub const INVALID_QFIDX: c_int = -1;
-pub const INVALID_QFBUFNR: c_int = 0;
 /// Messages more than one child reports.
 pub(crate) const E_NO_MORE_ITEMS: &CStr = c"E553: No more items";
 pub(crate) const E_QUICKFIX_LIST_CHANGED: &CStr = c"E925: Current quickfix list was changed";

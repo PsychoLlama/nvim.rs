@@ -27,6 +27,7 @@ use crate::memory::XString;
 use crate::os::fs::{dir_exists, path_exists};
 use crate::path::concat_fnames;
 use crate::types::CmdIdx;
+use crate::types::Handle;
 use core::ffi::{CStr, c_int};
 
 /// The file name the previous entry was filed under, and the buffer it
@@ -61,10 +62,12 @@ fn buffer_for(bufname: &CStr) -> Option<Buf> {
 ///
 /// Listing a buffer fires `BufNew`, so `qfl` is a view, and `directory` and
 /// `fname` must not borrow from the list.
-pub(crate) fn qf_get_fnum(qfl: Qfl, directory: Option<&CStr>, fname: Option<&CStr>) -> c_int {
-    let Some(fname) = fname.filter(|fname| !fname.is_empty()) else {
-        return 0;
-    };
+pub(crate) fn qf_get_fnum(
+    qfl: Qfl,
+    directory: Option<&CStr>,
+    fname: Option<&CStr>,
+) -> Option<Handle> {
+    let fname = fname.filter(|fname| !fname.is_empty())?;
     let joined;
     let bufname = match directory {
         Some(dir) if !vim_is_abs_name(fname) => {
@@ -87,11 +90,9 @@ pub(crate) fn qf_get_fnum(qfl: Qfl, directory: Option<&CStr>, fname: Option<&CSt
     };
 
     let kind = qfl.kind;
-    let Some(mut buf) = buffer_for(bufname) else {
-        return 0;
-    };
+    let mut buf = buffer_for(bufname)?;
     buf.b_has_qf_entry = has_entry_flag(kind);
-    buf.handle.get()
+    Some(buf.handle)
 }
 
 impl DirStack {
@@ -230,7 +231,7 @@ fn get_prev_valid_entry(qfl: &QfList, mut at: usize, idx: &mut c_int, dir: c_int
 fn wanted_entry(
     qfl: &QfList,
     entry: &QfEntry,
-    old_fnum: c_int,
+    old_fnum: Option<Handle>,
     dir: c_int,
     per_file: c_int,
 ) -> bool {
@@ -337,7 +338,7 @@ pub fn qf_get_valid_size(cmdidx: CmdIdx) -> size_t {
     };
     let per_entry = cmdidx == CmdIdx::cdo || cmdidx == CmdIdx::ldo;
     let qfl = qi.current_list();
-    let mut prev_fnum = 0;
+    let mut prev_fnum = None;
     let mut size: size_t = 0;
     for entry in &qfl.entries {
         if got_int.get() {
@@ -346,7 +347,7 @@ pub fn qf_get_valid_size(cmdidx: CmdIdx) -> size_t {
         if entry.valid {
             if per_entry {
                 size += 1;
-            } else if entry.fnum > 0 && entry.fnum != prev_fnum {
+            } else if entry.fnum.is_some() && entry.fnum != prev_fnum {
                 size += 1;
                 prev_fnum = entry.fnum;
             }
@@ -374,14 +375,14 @@ pub fn qf_get_cur_valid_idx(cmdidx: CmdIdx) -> c_int {
         return 1;
     }
     let per_file = cmdidx == CmdIdx::cfdo || cmdidx == CmdIdx::lfdo;
-    let mut prev_fnum = 0;
+    let mut prev_fnum = None;
     let mut eidx = 0;
     let upto = usize::try_from(qfl.index).unwrap_or(0);
     for entry in qfl.entries.iter().take(upto) {
         if entry.valid {
             if !per_file {
                 eidx += 1;
-            } else if entry.fnum > 0 && entry.fnum != prev_fnum {
+            } else if entry.fnum.is_some() && entry.fnum != prev_fnum {
                 eidx += 1;
                 prev_fnum = entry.fnum;
             }
@@ -397,7 +398,7 @@ pub(crate) fn qf_get_nth_valid_entry(qfl: &QfList, n: size_t, fdo: bool) -> size
     if !qfl.has_valid_entries() {
         return 1;
     }
-    let mut prev_fnum = 0;
+    let mut prev_fnum = None;
     let mut eidx: size_t = 0;
     for (at, entry) in qfl.entries.iter().enumerate() {
         if got_int.get() {
@@ -408,7 +409,7 @@ pub(crate) fn qf_get_nth_valid_entry(qfl: &QfList, n: size_t, fdo: bool) -> size
         if entry.valid {
             if !fdo {
                 eidx += 1;
-            } else if entry.fnum > 0 && entry.fnum != prev_fnum {
+            } else if entry.fnum.is_some() && entry.fnum != prev_fnum {
                 eidx += 1;
                 prev_fnum = entry.fnum;
             }

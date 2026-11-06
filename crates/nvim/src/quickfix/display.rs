@@ -90,7 +90,7 @@ impl Listed {
         let module = entry.module.clone().filter(|m| !m.is_empty());
         let mut fname = None;
         if module.is_none()
-            && entry.fnum != 0
+            && entry.fnum.is_some()
             && let Some(buf) = find_buf(entry.fnum)
         {
             let name = match &entry.fname {

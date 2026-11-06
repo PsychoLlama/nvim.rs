@@ -317,7 +317,7 @@ fn open_window_for_arg(
     let newlnum = newlnum::ONE as LineNr;
     let here = Some(Win::current().id());
     let _ = do_ecmd(
-        0,
+        None,
         ffname.as_ref().map(XString::as_cstr),
         None,
         None,

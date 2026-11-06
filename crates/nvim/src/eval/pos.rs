@@ -12,6 +12,7 @@
 use crate::narrow::number_as_col;
 use crate::narrow::number_as_int;
 use crate::narrow::number_as_lnum;
+use crate::types::Handle;
 use crate::winlayer::Buf;
 use core::ffi::c_int;
 
@@ -172,7 +173,7 @@ pub fn var2fpos(
         pos = fm.mark;
         // Only the file marks carry a buffer of their own.
         if (mname >= c_int::from(b'A') && mname <= c_int::from(b'Z')) || ascii_isdigit(mname) {
-            *ret_fnum = fm.fnum;
+            *ret_fnum = Handle::number_of(fm.fnum);
         }
     }
 
@@ -274,7 +275,8 @@ pub fn list2fpos(
     }
     if charcol {
         let handle = fnum.map_or(Buf::current().handle.get(), |fnum| *fnum);
-        let Some(buf) = find_buf(handle).filter(|b| b.b_ml.ml_mfp.is_some()) else {
+        let Some(buf) = find_buf(Handle::from_number(handle)).filter(|b| b.b_ml.ml_mfp.is_some())
+        else {
             return Err(Failed);
         };
         let lnum = if pos.lnum == LineNr::ZERO {

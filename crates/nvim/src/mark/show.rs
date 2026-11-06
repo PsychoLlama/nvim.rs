@@ -88,7 +88,7 @@ pub fn ex_marks(excmd: &mut ExArg) {
     for (i, name) in global_mark_names() {
         let mark = store::global_mark(i);
         let fnum = mark.fmark.fnum;
-        let file = if fnum != 0 {
+        let file = if fnum.is_some() {
             fm_getname(&mark.fmark, 15)
         } else {
             mark.file_name().map(XString::from_cstr)
@@ -96,7 +96,7 @@ pub fn ex_marks(excmd: &mut ExArg) {
         let Some(file) = file else {
             continue;
         };
-        let current = fnum == buf.handle.get();
+        let current = fnum == Some(buf.handle);
         show_one_mark(
             c_int::from(name),
             arg,
@@ -340,7 +340,7 @@ pub fn ex_delmarks(excmd: &mut ExArg) {
                 namedfm.with_mut(|table| {
                     let slot = &mut table[n];
                     slot.fmark.mark.lnum = LineNr::ZERO;
-                    slot.fmark.fnum = 0;
+                    slot.fmark.fnum = None;
                     slot.fmark.timestamp = timestamp;
                     slot.fname = None;
                 });
@@ -446,7 +446,7 @@ pub(super) fn mark_line(pos: Pos, lead_len: c_int) -> XString {
 /// The name of the file a filemark is in — or, when it is in the current
 /// buffer, the text at the mark. `None` when its buffer is gone.
 pub fn fm_getname(fm: &FileMark, lead_len: c_int) -> Option<XString> {
-    if fm.fnum == Buf::current().handle.get() {
+    if fm.fnum == Some(Buf::current().handle) {
         return Some(mark_line(fm.mark, lead_len));
     }
     buflist_nr2name(fm.fnum, 0, 1)

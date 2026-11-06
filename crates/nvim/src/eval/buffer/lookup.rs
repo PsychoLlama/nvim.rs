@@ -20,7 +20,7 @@ use crate::types::{VAR_NUMBER, VAR_STRING};
 /// The buffer `avar` names, by number or by exact name.
 pub fn find_buffer(avar: &TypVal) -> Option<Buf> {
     match avar.v_type() {
-        VAR_NUMBER => find_buf(number_as_int(avar.number_or_zero())),
+        VAR_NUMBER => find_buf(Handle::from_number(number_as_int(avar.number_or_zero()))),
         VAR_STRING => {
             let name = avar.string_cstr()?;
             if let Some(found) = find_buffer_by_name(name) {

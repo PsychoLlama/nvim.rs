@@ -26,6 +26,7 @@ use crate::optionstr::OptString;
 use crate::semsg;
 use crate::types::CmdIdx;
 use crate::types::EcmdCmd;
+use crate::types::Handle;
 use crate::types::{CmdLine, ExArgt, NUL};
 use crate::winlayer::{Buf, TabPage, Win, windows};
 use core::ffi::{CStr, c_int};
@@ -151,13 +152,13 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
             .count();
         let nr = if arg + digits == end {
             // `atol`'s answer, cut to an `int` as upstream's cast cuts it.
-            number_as_int(skip::decimal(excmd.line.rest_of(arg)).0)
+            Handle::from_number(number_as_int(skip::decimal(excmd.line.rest_of(arg)).0))
         } else {
             let found =
                 buflist_findpat_prefix(excmd.line.cstr_from(arg), end - arg, false, true, false);
-            if found < 0 {
+            let Ok(found) = found else {
                 return;
-            }
+            };
             found
         };
         let Some(buf) = find_buf(nr) else {

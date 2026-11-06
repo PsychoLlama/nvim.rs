@@ -36,9 +36,8 @@ pub struct QfStack {
     /// Room for `'chistory'` (or `'lhistory'`) lists, oldest first.
     pub lists: Vec<QfList>,
     pub kind: QfListType,
-    /// The buffer the quickfix window shows this stack in, or
-    /// `INVALID_QFBUFNR`.
-    pub bufnr: ::core::ffi::c_int,
+    /// The buffer the quickfix window shows this stack in, if any.
+    pub bufnr: Option<Handle>,
 }
 
 impl QfStack {
@@ -50,7 +49,7 @@ impl QfStack {
             current: 0,
             lists: Vec::new(),
             kind,
-            bufnr: 0,
+            bufnr: None,
         }
     }
 
@@ -245,8 +244,8 @@ pub struct QfEntry {
     /// The line the entry names, or 0 for none.
     pub lnum: LineNr,
     pub end_lnum: LineNr,
-    /// The buffer the entry names, or 0 for none.
-    pub fnum: ::core::ffi::c_int,
+    /// The buffer the entry names, if any.
+    pub fnum: Option<Handle>,
     pub col: ::core::ffi::c_int,
     pub end_col: ::core::ffi::c_int,
     /// The error number, or -1/0 for none.

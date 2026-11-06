@@ -174,6 +174,6 @@ pub(super) fn convert_nvim_set_decoration_provider(
     pop_keydict(stack, &mut arg_2, blame)?;
     let arg_1 = pop_integer(stack).inspect_err(|_| *blame = Some(c"ns_id"))?;
     let _active = ActiveState::enter(stack);
-    nvim_set_decoration_provider(arg_1, &mut arg_2);
+    nvim_set_decoration_provider(arg_1, &mut arg_2)?;
     Ok(())
 }

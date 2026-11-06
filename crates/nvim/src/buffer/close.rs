@@ -70,7 +70,7 @@ const ZERO_FMARK: FileMark = FileMark {
         col: ColNr::ZERO,
         coladd: 0,
     },
-    fnum: 0,
+    fnum: None,
     timestamp: 0 as Timestamp,
     view: FileMarkView {
         topline_offset: 0,
@@ -111,7 +111,7 @@ fn remember_last_cursor(win: Win) {
 }
 
 /// Forget every mark and jump-list entry naming buffer `fnum` in `win`.
-fn forget_file(win: Win, fnum: c_int) {
+fn forget_file(win: Win, fnum: Option<Handle>) {
     mark_forget_file(win, fnum);
 }
 
@@ -554,7 +554,7 @@ fn unlink_and_free(mut buffer: Buf, clear_w_buf: Option<Win>) {
     if let Some(mut wp) = clear_w_buf {
         wp.w_buffer = Buf::NULL;
     }
-    let fnum = buffer.handle.get();
+    let fnum = Some(buffer.handle);
     for wp in tab_windows() {
         forget_file(wp, fnum);
     }

@@ -161,7 +161,7 @@ pub fn did_set_buftype(args: &mut OptSet) -> Result<(), OptError> {
             col: buf.b_prompt_start.mark.col,
             coladd: 0,
         };
-        buf.b_prompt_start = fresh_mark(next_prompt, 0, FileMarkView::NONE);
+        buf.b_prompt_start = fresh_mark(next_prompt, None, FileMarkView::NONE);
     }
 
     if wp.w_status_height != 0 || global_stl_height() != 0 {

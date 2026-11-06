@@ -18,6 +18,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::types::Handle;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -45,7 +46,7 @@ fn current_win() -> Win {
 
 /// The buffer `fnum` names, when it has a name, and the line remembered for
 /// it.
-pub fn buflist_name_nr(fnum: c_int) -> Option<(Buf, LineNr)> {
+pub fn buflist_name_nr(fnum: Option<Handle>) -> Option<(Buf, LineNr)> {
     let buf = find_buf(fnum)?;
     if buf.name.is_unnamed() {
         return None;
@@ -119,7 +120,7 @@ pub fn setfname(
 /// relative to the current directory: it becomes the short name, and its
 /// expansion the full one.
 pub(crate) fn buf_set_name(fnum: c_int, name: &CStr) {
-    let Some(mut b) = find_buf(fnum) else {
+    let Some(mut b) = find_buf(Handle::from_number(fnum)) else {
         return;
     };
     if let Some((ffname, sfname)) = fname_expand(Some(name), None) {
@@ -157,7 +158,7 @@ pub fn setaltfname(ffname: Option<&CStr>, sfname: Option<&CStr>, lnum: LineNr) -
     if let Some(buf) = buf
         && !cmdmod_has(CmdModFlags::KEEPALT)
     {
-        current_win().w_alt_fnum = buf.handle.get();
+        current_win().w_alt_fnum = Some(buf.handle);
     }
     buf
 }
@@ -165,7 +166,7 @@ pub fn setaltfname(ffname: Option<&CStr>, sfname: Option<&CStr>, lnum: LineNr) -
 /// The alternate file's name (the buffer's own storage, so read before
 /// anything runs), null when there is none.
 pub fn getaltfname(errmsg: bool) -> *mut c_char {
-    match buflist_name_nr(0) {
+    match buflist_name_nr(None) {
         Some((alt, _)) => alt.name.shown_ptr(),
         None => {
             if errmsg {

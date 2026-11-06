@@ -37,7 +37,7 @@ pub fn cmdpreview_get_ns() -> ::core::ffi::c_int {
 /// Answers NULL if the buffer could not be made ready.
 pub(crate) fn cmdpreview_open_buf() -> Option<Buf> {
     let existing = (cmdpreview_bufnr.get() != Handle::NONE)
-        .then(|| find_buf(cmdpreview_bufnr.get().get()))
+        .then(|| find_buf(Handle::from_number(cmdpreview_bufnr.get().get())))
         .flatten();
 
     // If the preview buffer doesn't exist, open one.
@@ -47,7 +47,7 @@ pub(crate) fn cmdpreview_open_buf() -> Option<Buf> {
             let Ok(bufnr) = nvim_create_buf(false, true) else {
                 return None;
             };
-            find_buf(bufnr.get())?
+            find_buf(Handle::from_number(bufnr.get()))?
         }
     };
 
@@ -127,7 +127,7 @@ pub(crate) fn cmdpreview_open_win(cmdpreview_buf: Buf) -> Option<Win> {
 /// Close any open command preview windows.
 pub(crate) fn cmdpreview_close_win() {
     if cmdpreview_bufnr.get() != Handle::NONE
-        && let Some(buffer) = find_buf(cmdpreview_bufnr.get().get())
+        && let Some(buffer) = find_buf(Handle::from_number(cmdpreview_bufnr.get().get()))
     {
         close_windows(buffer, false);
     }

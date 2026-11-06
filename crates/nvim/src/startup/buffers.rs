@@ -382,7 +382,7 @@ pub(crate) fn edit_buffers(parm: &MainParams) {
             let (last, hide) = (newlnum::LASTL as LineNr, EcmdFlags::HIDE);
             let win = Win::current().id();
             let name = name.as_ref().map(XString::as_cstr);
-            let _ = do_ecmd(0, name, None, None, last, hide, Some(win));
+            let _ = do_ecmd(None, name, None, None, last, hide, Some(win));
             if swap_exists_did_quit.get() {
                 if got_int.get() || only_one_window() {
                     quit_on_swap_exists(true);

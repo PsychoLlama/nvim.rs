@@ -302,7 +302,7 @@ impl Reading {
         let buf = buffer_for_fname(&mut self.fname_bufs, mark.fname.as_cstr().to_bytes());
         let fm = ShadaMark {
             mark: mark.mark,
-            fnum: buf.map_or(0, |b| b.handle.get()),
+            fnum: buf.map(|b| b.handle),
             timestamp,
             fname: buf.is_none().then_some(mark.fname),
             extra,
@@ -340,7 +340,7 @@ impl Reading {
         };
         let fm = ShadaMark {
             mark: mark.mark,
-            fnum: buffer.handle.get(),
+            fnum: Some(buffer.handle),
             timestamp,
             fname: None,
             extra,

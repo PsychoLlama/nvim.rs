@@ -40,6 +40,7 @@ use crate::ex_cmds::say;
 use crate::fileio::ReadFlags;
 use crate::types::AutoEvent;
 use crate::types::ColNr;
+use crate::types::Handle;
 use crate::winlayer::WinId;
 use core::ffi::CStr;
 use std::ffi::CString;
@@ -174,7 +175,7 @@ struct Ecmd {
 /// has been resolved.
 struct EcmdArgs<'a, 'e> {
     /// The buffer number to switch to, or zero to go by name.
-    fnum: c_int,
+    fnum: Option<Handle>,
     /// The full path of the file to edit.
     ffname: Option<&'a CStr>,
     /// Its short name.
@@ -199,7 +200,7 @@ enum Target {
 /// [`do_ecmd`] for buffer `fnum` — or a new, empty one for 0 — with no
 /// file name and no command: what the quickfix code edits with.
 pub(crate) fn edit_buffer_number(
-    fnum: c_int,
+    fnum: Option<Handle>,
     newlnum: LineNr,
     flags: EcmdFlags,
     oldwin: Option<WinId>,
@@ -227,7 +228,7 @@ pub(crate) fn edit_buffer_number(
 /// the autocommands this runs may free whatever the caller's borrow of them
 /// pointed into.
 pub(crate) fn do_ecmd(
-    fnum: c_int,
+    fnum: Option<Handle>,
     ffname: Option<&CStr>,
     sfname: Option<&CStr>,
     excmd: Option<&mut ExArg>,
@@ -313,7 +314,7 @@ pub(crate) fn do_ecmd(
             ccgd |= CCGD_EXCMD.cast_signed();
         }
         if must_ask && check_changed(Buf::current(), ccgd) {
-            if fnum == 0 && other_file && ecmd.ffname.is_some() {
+            if fnum.is_none() && other_file && ecmd.ffname.is_some() {
                 let lnum = state.newlnum.max(LineNr::ZERO);
                 setaltfname(ecmd.ffname, ecmd.sfname, lnum);
             }
@@ -458,13 +459,13 @@ pub(crate) fn do_ecmd(
 /// Work out whether `do_ecmd` is being asked for another file, expanding the
 /// name it was given on the way.
 fn resolve_target(
-    fnum: c_int,
+    fnum: Option<Handle>,
     ffname: &mut Option<CString>,
     sfname: &mut Option<CString>,
     flags: EcmdFlags,
 ) -> Target {
-    if fnum != 0 {
-        if fnum == Buf::current().handle.get() {
+    if fnum.is_some() {
+        if fnum == Some(Buf::current().handle) {
             // file is already being edited, nothing to do
             return Target::AlreadyHere;
         }

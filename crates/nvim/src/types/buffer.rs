@@ -838,7 +838,7 @@ pub struct Taggy {
     pub tagname: Option<ThinCString>,
     pub fmark: FileMark,
     pub cur_match: ::core::ffi::c_int,
-    pub cur_fnum: ::core::ffi::c_int,
+    pub cur_fnum: Option<Handle>,
     /// What `'tagfunc'` attached to the match, if anything.
     pub user_data: Option<ThinCString>,
 }

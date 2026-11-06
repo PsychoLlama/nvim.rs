@@ -34,6 +34,7 @@ use crate::search::{
     set_csearch_direction, set_csearch_until, set_last_csearch,
 };
 use crate::semsg;
+use crate::types::Handle;
 use crate::types::LineNr;
 use crate::types::{
     ColNr, Direction, EvalFuncData, List, Pos, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber,
@@ -425,7 +426,7 @@ fn set_position(args: &[TypVal], result: &mut TypVal, charpos: bool) {
         }
         // A mark name is exactly one byte after the quote.
         [b'\'', c] => {
-            if setmark_at(c_int::from(*c), pos, fnum).is_ok() {
+            if setmark_at(c_int::from(*c), pos, Handle::from_number(fnum)).is_ok() {
                 result.write_number(0);
             }
         }

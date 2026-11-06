@@ -23,6 +23,7 @@ use crate::eval::vars::set_internal_string_var;
 use crate::ex_cmds::{EcmdFlags, edit_buffer_number};
 use crate::option::vars::P_QFTF;
 use crate::option::{boolean_optval, callback_from_option};
+use crate::types::Handle;
 use crate::types::{OptError, OptionSetFlags};
 use crate::window::{
     WSP_BELOW, WSP_BOT, WSP_NEWLOC, WSP_QUICKFIX, WSP_VERT, close, goto_win, setheight_win,
@@ -65,12 +66,12 @@ pub(crate) fn qf_find_win(qi: Qi) -> Option<Win> {
 
 /// The buffer the stack is shown in, from any tab page, if there is one.
 pub(crate) fn qf_find_buf(mut qi: Qi) -> Option<Buf> {
-    if qi.bufnr != INVALID_QFBUFNR {
+    if qi.bufnr.is_some() {
         if let Some(qfbuf) = find_buf(qi.bufnr) {
             return Some(qfbuf);
         }
         // The buffer is no longer present.
-        qi.bufnr = INVALID_QFBUFNR;
+        qi.bufnr = None;
     }
     tab_windows()
         .find(|&win| is_qf_win(win, qi))
@@ -153,18 +154,23 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
     match qf_buf {
         // Use the existing quickfix buffer.
         Some(bufnr) => {
-            if edit_buffer_number(bufnr.get(), LineNr::ONE, hide | EcmdFlags::OLDBUF, oldwin)
-                .is_err()
+            if edit_buffer_number(
+                Handle::from_number(bufnr.get()),
+                LineNr::ONE,
+                hide | EcmdFlags::OLDBUF,
+                oldwin,
+            )
+            .is_err()
             {
                 return false;
             }
         }
         // Create a new quickfix buffer and remember its number.
         None => {
-            if edit_buffer_number(0, LineNr::ONE, hide, oldwin).is_err() {
+            if edit_buffer_number(None, LineNr::ONE, hide, oldwin).is_err() {
                 return false;
             }
-            qi.bufnr = Buf::current().handle.get();
+            qi.bufnr = Some(Buf::current().handle);
         }
     }
 

@@ -77,7 +77,7 @@ pub fn setpcmark() {
     let view = mark_view_make_at(win, win.w_pcmark);
     let newest = slot(win.w_jumplistlen - 1);
     win.w_jumplist[newest] = XFileMark {
-        fmark: fresh_mark(win.w_pcmark, buf.handle.get(), view),
+        fmark: fresh_mark(win.w_pcmark, Some(buf.handle), view),
         fname: None,
     };
 }
@@ -126,7 +126,7 @@ pub fn get_jumplist(mut win: Win, mut count: c_int) -> Option<FileMark> {
         }
         win.w_jumplistidx += count;
         let at = slot(win.w_jumplistidx);
-        if win.w_jumplist[at].fmark.fnum == 0
+        if win.w_jumplist[at].fmark.fnum.is_none()
             && let Some(fname) = win.w_jumplist[at].fname.clone()
         {
             // Loading the file runs autocommands; the entry is read again
@@ -136,7 +136,7 @@ pub fn get_jumplist(mut win: Win, mut count: c_int) -> Option<FileMark> {
         let fnum = win.w_jumplist[at].fmark.fnum;
         // An entry whose buffer no longer exists is skipped rather than
         // jumped to, and the step continues in the same direction.
-        if fnum == Buf::current().handle.get() || find_buf(fnum).is_some() {
+        if fnum == Some(Buf::current().handle) || find_buf(fnum).is_some() {
             return Some(win.w_jumplist[at].fmark.clone());
         }
         count += if count < 0 { -1 } else { 1 };
@@ -176,13 +176,13 @@ pub fn get_changelist(mut buffer: Buf, win: Win, count: c_int) -> Option<FileMar
     // The entries carry no buffer of their own, so the entry is stamped with
     // the CURRENT buffer rather than with `buffer`, in place.
     let change = &mut buffer.b_changelist[slot(n)];
-    change.fnum = Buf::current().handle.get();
+    change.fnum = Some(Buf::current().handle);
     Some(change.clone())
 }
 
 /// Remove every jump list entry referring to a given buffer.
 /// This function will also adjust the current jump list index.
-pub fn mark_jumplist_forget_file(mut window: Win, fnum: c_int) {
+pub fn mark_jumplist_forget_file(mut window: Win, fnum: Option<Handle>) {
     // Backwards, so removing an entry cannot skip the one after it.
     for i in (0..window.w_jumplistlen).rev() {
         let at = slot(i);
@@ -217,7 +217,7 @@ pub fn cleanup_jumplist(mut window: Win, loadfiles: bool) {
         let mut i = 0;
         while i < window.w_jumplistlen {
             let jump = &window.w_jumplist[slot(i)];
-            if jump.fmark.fnum == 0
+            if jump.fmark.fnum.is_none()
                 && jump.fmark.mark.lnum != LineNr::ZERO
                 && let Some(fname) = jump.fname.clone()
             {
@@ -241,7 +241,7 @@ pub fn cleanup_jumplist(mut window: Win, loadfiles: bool) {
         let here = &w.w_jumplist[from].fmark;
         let later = w.w_jumplist[from + 1..len].iter().position(|other| {
             other.fmark.fnum == here.fnum
-                && here.fnum != 0
+                && here.fnum.is_some()
                 && other.fmark.mark.lnum == here.mark.lnum
         });
         // No later duplicate: keep. A duplicate further along than the very
@@ -276,7 +276,7 @@ pub fn cleanup_jumplist(mut window: Win, loadfiles: bool) {
     }
     let last = slot(w.w_jumplistlen - 1);
     let here = Buf::current().handle;
-    if w.w_jumplist[last].fmark.fnum == here.get()
+    if w.w_jumplist[last].fmark.fnum == Some(here)
         && w.w_jumplist[last].fmark.mark.lnum == w.w_cursor.lnum
     {
         w.w_jumplist[last] = XFileMark::UNSET;
@@ -347,7 +347,7 @@ pub fn ex_jumps(_excmd: &mut ExArg) {
                     fmark.mark,
                 );
                 msg_display_bytes(row.bytes(), 0, false);
-                let attr = if fmark.fnum == here.get() { HLF_D } else { 0 };
+                let attr = if fmark.fnum == Some(here) { HLF_D } else { 0 };
                 msg_display(name.as_cstr(), attr, false);
                 os_breakcheck();
             }

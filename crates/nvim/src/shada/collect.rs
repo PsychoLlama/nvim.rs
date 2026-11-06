@@ -300,7 +300,7 @@ fn mark_lnum_zero(next: usize, len: usize) {
 /// remembering: a buffer whose marks are ignored, a buffer number that names
 /// no buffer, or no file name at all.
 fn jump_target(fm: &ShadaMark, removable_bufs: &RemovableBufs) -> Option<XString> {
-    if fm.fnum == 0 {
+    if fm.fnum.is_none() {
         // Not in a loaded buffer: the entry carries the name itself.
         return fm.fname.clone();
     }

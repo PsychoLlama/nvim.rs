@@ -20,6 +20,7 @@
 use super::*;
 use crate::memory::XString;
 use crate::path::{fix_fname, path_try_shorten_fname};
+use crate::types::Handle;
 use crate::types::VAR_UNKNOWN;
 use core::ffi::{CStr, c_char, c_int};
 
@@ -71,8 +72,8 @@ pub(crate) struct NewEntry<'a> {
     pub(crate) fname: Option<&'a CStr>,
     /// The module name to show instead of the file name.
     pub(crate) module: Option<&'a CStr>,
-    /// The buffer the entry names, or 0 to resolve `dir`/`fname` instead.
-    pub(crate) bufnum: c_int,
+    /// The buffer the entry names, or `None` to resolve `dir`/`fname` instead.
+    pub(crate) bufnum: Option<Handle>,
     /// The text shown for the entry.
     pub(crate) mesg: &'a CStr,
     pub(crate) lnum: LineNr,
@@ -102,7 +103,7 @@ impl<'a> NewEntry<'a> {
             dir: None,
             fname: None,
             module: None,
-            bufnum: 0,
+            bufnum: None,
             mesg,
             lnum: LineNr::ZERO,
             end_lnum: LineNr::ZERO,
@@ -127,7 +128,7 @@ impl<'a> NewEntry<'a> {
         QfEntry {
             lnum: self.lnum,
             end_lnum: self.end_lnum,
-            fnum: 0,
+            fnum: None,
             col: self.col,
             end_col: self.end_col,
             nr: self.nr,
@@ -176,7 +177,7 @@ pub(crate) fn has_entry_flag(kind: QfListType) -> c_int {
 pub(crate) fn qf_add_entry(mut qfl: Qfl, new: &NewEntry) {
     let mut entry = new.to_entry();
     let flag = has_entry_flag(qfl.kind);
-    let buf = if new.bufnum != 0 {
+    let buf = if new.bufnum.is_some() {
         entry.fnum = new.bufnum;
         let buf = find_buf(new.bufnum);
         if let Some(mut buf) = buf {
@@ -356,7 +357,7 @@ fn adjust_entries(
             if got_int.get() {
                 break;
             }
-            if entry.fnum != buffer.handle.get() {
+            if entry.fnum != Some(buffer.handle) {
                 continue;
             }
             found_one = true;

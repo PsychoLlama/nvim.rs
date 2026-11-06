@@ -23,6 +23,7 @@ use crate::narrow::number_as_int;
 use crate::semsg;
 use crate::startup::vim_ignored;
 use crate::tag::{TagFiles, get_tags, get_tagstack, set_tagstack};
+use crate::types::Handle;
 use crate::types::LineNr;
 use crate::types::{
     DictRef, EvalFuncData, Pos, TypVal, VarNumber, kListLenMayKnow, kListLenUnknown,
@@ -105,9 +106,10 @@ pub fn f_getjumplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
             continue;
         }
         let d = mark_dict(entry.fmark.mark);
-        let _ = d
-            .edit()
-            .add_number(b"bufnr", VarNumber::from(entry.fmark.fnum));
+        let _ = d.edit().add_number(
+            b"bufnr",
+            VarNumber::from(Handle::number_of(entry.fmark.fnum)),
+        );
         // A jump into a file that is no longer loaded keeps its name.
         if let Some(fname) = entry.file_name() {
             let _ = d.edit().add_str(b"filename", Some(fname));

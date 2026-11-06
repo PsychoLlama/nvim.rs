@@ -11,6 +11,7 @@
 )]
 
 use crate::keycodes::SpecialKey;
+use crate::types::Handle;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win, windows};
 
@@ -184,7 +185,7 @@ pub(crate) fn nv_ctrlo(cmd_arg: &mut CmdArg) {
 pub(crate) fn nv_hat(cmd_arg: &mut CmdArg) {
     if !check_clear_op_quit(cmd_arg.op()) {
         let flags = GETF_SETMARK | GETF_ALT;
-        let _ = buflist_getfile(cmd_arg.count0, LineNr::ZERO, flags, 0);
+        let _ = buflist_getfile(Handle::from_number(cmd_arg.count0), LineNr::ZERO, flags, 0);
     }
 }
 

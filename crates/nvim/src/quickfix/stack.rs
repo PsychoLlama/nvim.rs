@@ -38,6 +38,7 @@
 use super::*;
 use crate::id_table::IdTable;
 use crate::memory::XString;
+use crate::types::Handle;
 use crate::types::{CmdIdx, Failed, QfId, Refcount};
 use crate::winlayer::{Buf, Live, Win, windows};
 use core::ffi::{CStr, c_int, c_uint};
@@ -175,7 +176,7 @@ fn global_id() -> QfId {
         return id;
     }
     let mut stack = QfStack::new(QFLT_QUICKFIX);
-    stack.bufnr = INVALID_QFBUFNR;
+    stack.bufnr = None;
     QF_STACKS.with_mut(|stacks| {
         let (id, _) = stacks.table.insert((), stack);
         stacks.global = Some(id);
@@ -442,7 +443,7 @@ pub(crate) fn new_location_stack(kind: QfListType, n: OptInt) -> QfId {
     debug_assert_ne!(kind, QFLT_QUICKFIX);
     let mut stack = QfStack::new(kind);
     stack.refcount = Refcount::one();
-    stack.bufnr = INVALID_QFBUFNR;
+    stack.bufnr = None;
     stack.lists = new_slots(n);
     QF_STACKS.with_mut(|stacks| stacks.table.insert((), stack).0)
 }
@@ -451,7 +452,7 @@ pub(crate) fn new_location_stack(kind: QfListType, n: OptInt) -> QfId {
 /// startup.
 pub fn qf_init_stack() {
     let mut qi = Qi::global();
-    qi.bufnr = INVALID_QFBUFNR;
+    qi.bufnr = None;
     qi.lists = new_slots(p_chi());
 }
 
@@ -503,14 +504,14 @@ pub(crate) fn pop_stack(mut qi: Qi, adjust: bool) {
     }
 }
 
-/// The buffer the quickfix window shows, or `INVALID_QFBUFNR`.
+/// The buffer the quickfix window shows, or `None`.
 pub fn qf_stack_get_bufnr() -> c_int {
-    Qi::global().bufnr
+    Handle::number_of(Qi::global().bufnr)
 }
 
 /// Wipe the quickfix window's buffer, if it is not displayed anywhere.
 fn wipe_qf_buffer(mut qi: Qi) {
-    if qi.bufnr == INVALID_QFBUFNR {
+    if qi.bufnr.is_none() {
         return;
     }
     let Some(qfbuf) = find_buf(qi.bufnr).filter(|b| b.b_nwindows == 0) else {
@@ -524,7 +525,7 @@ fn wipe_qf_buffer(mut qi: Qi) {
         Win::current().w_buffer = Buf::current_or_none().unwrap_or(Buf::NULL);
     }
     close_buffer(None, qfbuf, DOBUF_WIPE, false, false);
-    qi.bufnr = INVALID_QFBUFNR;
+    qi.bufnr = None;
     if buf_was_null {
         Win::current().w_buffer = Buf::NULL;
     }
@@ -606,7 +607,7 @@ pub(crate) fn qf_free_stack(window: Option<Win>, mut qi: Qi) {
     wp.free_location_lists();
     if let Some(mut qfwin) = qfwin {
         let fresh = new_location_stack(QFLT_LOCATION, wp.w_onebuf_opt.wo_lhi);
-        fresh.stack().bufnr = qfwin.buffer().handle.get();
+        fresh.stack().bufnr = Some(qfwin.buffer().handle);
         let shown = qfwin.w_llist_ref.take();
         drop_stack_ref(shown);
         qfwin.w_llist_ref = Some(fresh);
@@ -661,7 +662,7 @@ mod tests {
         let qi = id.stack();
         assert_eq!(qi.refcount, Refcount::one());
         assert_eq!(qi.kind, QFLT_LOCATION);
-        assert_eq!(qi.bufnr, INVALID_QFBUFNR);
+        assert_eq!(qi.bufnr, None);
         assert_eq!(qi.list_count, 0);
         assert_eq!(qi.max_count(), 3);
         assert!(qi != Qi::global());

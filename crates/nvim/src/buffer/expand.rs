@@ -216,23 +216,19 @@ fn fname_match(rmp: &mut RegMatch, name: Option<&CStr>, ignore_case: bool) -> bo
 // ---------------------------------------------------------------------------
 // Looking one up by number
 
-/// The buffer numbered `nr`, or the alternate file for 0.
+/// The buffer `handle` names, or the alternate file for `None` (upstream's
+/// buffer number 0).
 ///
 /// The registry lookup the whole editor's "buffer by number" rests on,
 /// upstream's `find_buf` under its Rust name: a number naming no
 /// buffer is `None` rather than a null to test for.
-pub(crate) fn find_buf(nr: c_int) -> Option<Buf> {
-    let nr = if nr == 0 {
-        current_win().w_alt_fnum
-    } else {
-        nr
-    };
-    winlayer::buffer(Handle::new(nr))
+pub(crate) fn find_buf(handle: Option<Handle>) -> Option<Buf> {
+    winlayer::buffer(handle.or(current_win().w_alt_fnum)?)
 }
 
 /// The name of buffer `n`, shortened with `home_replace`; `None` when there
 /// is no such buffer, empty for one with no name.
-pub fn buflist_nr2name(n: c_int, fullname: c_int, helptail: c_int) -> Option<XString> {
+pub fn buflist_nr2name(n: Option<Handle>, fullname: c_int, helptail: c_int) -> Option<XString> {
     let buf = find_buf(n)?;
     let name = if fullname != 0 {
         buf.name.full()

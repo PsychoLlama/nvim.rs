@@ -26,6 +26,7 @@ use super::*;
 use crate::env::expand_env_within;
 use crate::memory::XString;
 use crate::os::fs::path_exists;
+use crate::types::Handle;
 use core::ffi::{CStr, c_char, c_int};
 
 /// How large the fixed field buffers are. A file name, module name or
@@ -64,7 +65,7 @@ pub(crate) struct Fields {
     directory: Option<XString>,
     current_file: Option<XString>,
     /// Buffer number, from `%b`.
-    pub(crate) bnr: c_int,
+    pub(crate) bnr: Option<Handle>,
     /// Line number, from `%l`.
     pub(crate) lnum: LineNr,
     /// End line number, from `%e`.
@@ -128,7 +129,7 @@ impl Fields {
             errmsg: XString::new(),
             directory: None,
             current_file: None,
-            bnr: 0,
+            bnr: None,
             lnum: LineNr::ZERO,
             end_lnum: LineNr::ZERO,
             col: 0,
@@ -165,7 +166,7 @@ impl Fields {
     /// message.
     fn reset(&mut self, multiscan: bool, tail: &mut Option<usize>) {
         self.namebuf.truncate(0);
-        self.bnr = 0;
+        self.bnr = None;
         self.module.truncate(0);
         self.pattern.truncate(0);
         if !multiscan {
@@ -320,10 +321,10 @@ impl Fields {
             1 => {
                 // %b: a buffer number, which must name a live buffer.
                 let bnr = parse_int(start);
-                if find_buf(bnr).is_none() {
+                if find_buf(Handle::from_number(bnr)).is_none() {
                     return Status::Fail;
                 }
-                self.bnr = bnr;
+                self.bnr = Handle::from_number(bnr);
             }
             2 => self.enr = parse_int(start),               // %n
             3 => self.lnum = LineNr::new(parse_int(start)), // %l
@@ -574,7 +575,7 @@ fn continue_multiline(prefix: u8, mut qfl: Qfl, fields: &mut Fields) -> Status {
             if prev.end_col == 0 {
                 prev.end_col = fields.end_col;
             }
-            prev.fnum == 0
+            prev.fnum.is_none()
         };
         if needs_fnum {
             // Naming the file can fire `BufNew`, so the entry is found again

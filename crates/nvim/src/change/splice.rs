@@ -144,7 +144,7 @@ fn record_change_mark(mut buffer: Buf, lnum: LineNr, col: ColNr) {
         col,
         coladd: 0,
     };
-    buffer.b_last_change = fresh_mark(at, handle.get(), view);
+    buffer.b_last_change = fresh_mark(at, Some(handle), view);
 
     if buffer.b_new_change || buffer.b_changelistlen == 0 {
         let add = if buffer.b_changelistlen == 0 {

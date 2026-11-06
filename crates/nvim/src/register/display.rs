@@ -206,7 +206,8 @@ pub fn ex_display(excmd: &mut ExArg) {
     if want_alt && !got_int.get() {
         // A copy: the filter runs a regexp and the display the message
         // machinery.
-        let alt = buflist_name_nr(0).and_then(|(alt, _)| alt.name.shown().map(XString::from_cstr));
+        let alt =
+            buflist_name_nr(None).and_then(|(alt, _)| alt.name.shown().map(XString::from_cstr));
         if let Some(fname) = alt
             && !message_filtered(fname.as_cstr())
         {

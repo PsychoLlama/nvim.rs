@@ -70,7 +70,7 @@ const ZERO_POS: Pos = Pos {
 /// jump list and tag stack slot.
 const ZERO_FILEMARK: FileMark = FileMark {
     mark: ZERO_POS,
-    fnum: 0,
+    fnum: None,
     timestamp: 0,
     view: FileMarkView {
         topline_offset: 0,
@@ -90,7 +90,7 @@ const ZERO_TAGGY: Taggy = Taggy {
     tagname: None,
     fmark: ZERO_FILEMARK,
     cur_match: 0,
-    cur_fnum: 0,
+    cur_fnum: None,
     user_data: None,
 };
 
@@ -265,7 +265,7 @@ fn zeroed_window() -> Win {
             w_stl_state: 0,
             w_stl_visual_mode: 0,
             w_stl_visual_pos: ZERO_POS,
-            w_alt_fnum: 0,
+            w_alt_fnum: None,
             w_alist: ArgListId::GLOBAL,
             w_arg_idx: 0,
             w_arg_idx_invalid: false,

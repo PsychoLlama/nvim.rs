@@ -13,11 +13,11 @@ use super::*;
 use crate::memory::XString;
 
 /// One argument: the name it was given, owned, and the buffer it was listed
-/// as (0 when none).
+/// as, if any.
 #[derive(Clone)]
 pub struct ArgEntry {
     pub name: XString,
-    pub fnum: ::core::ffi::c_int,
+    pub fnum: Option<Handle>,
 }
 
 /// Which argument list a window uses: the key the registry in

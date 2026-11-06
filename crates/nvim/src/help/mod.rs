@@ -188,14 +188,14 @@ pub(crate) fn open_help(excmd: Option<&mut ExArg>) {
         // Delete the empty buffer if we are not using it. Careful:
         // autocommands may have jumped to another window, so check that
         // the buffer is not in one.
-        if opened.empty_fnum != 0
-            && Buf::current().handle != Handle::new(opened.empty_fnum)
+        if opened.empty_fnum.is_some()
+            && Some(Buf::current().handle) != opened.empty_fnum
             && let Some(buf) = find_buf(opened.empty_fnum).filter(|b| b.b_nwindows == 0)
         {
             wipe_buffer(buf, true);
         }
         // Keep the previous alternate file.
-        if opened.alt_fnum != 0
+        if opened.alt_fnum.is_some()
             && Win::current().w_alt_fnum == opened.empty_fnum
             && keepalt_is_off()
         {
@@ -250,10 +250,10 @@ fn resolve_tag_at_cursor() -> Option<Vec<u8>> {
 struct HelpWindow {
     /// The empty buffer a freshly split help window holds, to be wiped if
     /// the tag jump does not land in it.
-    empty_fnum: c_int,
+    empty_fnum: Option<Handle>,
     /// The buffer that was current before the split, to be kept as the
     /// alternate file.
-    alt_fnum: c_int,
+    alt_fnum: Option<Handle>,
 }
 
 /// Make a help window current, splitting one off if there is none. `None`
@@ -261,8 +261,8 @@ struct HelpWindow {
 /// case a message has already been shown.
 fn enter_help_window() -> Option<HelpWindow> {
     let mut opened = HelpWindow {
-        empty_fnum: 0,
-        alt_fnum: 0,
+        empty_fnum: None,
+        alt_fnum: None,
     };
     // Re-use an existing help window; always open a new one for
     // `:tab help`.
@@ -309,13 +309,13 @@ fn enter_help_window() -> Option<HelpWindow> {
 
     // Open the help file. `do_ecmd` sets `b_help` and `readfile` sets
     // 'readonly'. The buffer is still open, so don't store info.
-    opened.alt_fnum = Buf::current().handle.get();
+    opened.alt_fnum = Some(Buf::current().handle);
     let (lnum, flags) = (newlnum::LASTL, EcmdFlags::HIDE | EcmdFlags::SET_HELP);
-    let _ = do_ecmd(0, None, None, None, lnum, flags, None);
+    let _ = do_ecmd(None, None, None, None, lnum, flags, None);
     if keepalt_is_off() {
         Win::current().w_alt_fnum = opened.alt_fnum;
     }
-    opened.empty_fnum = Buf::current().handle.get();
+    opened.empty_fnum = Some(Buf::current().handle);
     Some(opened)
 }
 

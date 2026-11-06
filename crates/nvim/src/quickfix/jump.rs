@@ -152,11 +152,13 @@ fn qf_jump_edit_buffer(
 /// still `'winfixbuf'` reports E1513 but does not return early: the
 /// autocommands that got us here may have changed the list, and the caller
 /// has to notice that.
-fn escape_winfixbuf(qi: Qi, fnum: c_int, forceit: bool, opened_window: &mut bool) -> Option<bool> {
-    if forceit
-        || Win::current().w_onebuf_opt.wo_wfb == 0
-        || Buf::current().handle == Handle::new(fnum)
-    {
+fn escape_winfixbuf(
+    qi: Qi,
+    fnum: Option<Handle>,
+    forceit: bool,
+    opened_window: &mut bool,
+) -> Option<bool> {
+    if forceit || Win::current().w_onebuf_opt.wo_wfb == 0 || Some(Buf::current().handle) == fnum {
         return Some(true);
     }
     if qi.kind == QFLT_LOCATION {
@@ -301,7 +303,7 @@ fn qf_jump_open_window(qi: Qi, at: usize, newwin: bool, opened_window: &mut bool
 
     if buf_is_quickfix(current_buf()) && !*opened_window {
         let fnum = started.qfl.entries[at].fnum;
-        if fnum == 0 {
+        if fnum.is_none() {
             return Jumped::Nowhere;
         }
         if qf_jump_to_usable_window(fnum, newwin, opened_window).is_err() {
@@ -331,7 +333,7 @@ fn qf_jump_to_buffer(
     let old_curbuf = Buf::current();
     let old_lnum = Win::current().w_cursor.lnum;
 
-    if qi.current_list().entries[at].fnum != 0 {
+    if qi.current_list().entries[at].fnum.is_some() {
         let edited = qf_jump_edit_buffer(qi, at, forceit, prev_winid, opened_window);
         if edited != Jumped::Done {
             return edited;
@@ -412,7 +414,7 @@ pub(crate) fn qf_jump_newwin(qi: Qi, dir: c_int, errornr: c_int, forceit: bool, 
         // No need to print the message when the quickfix window shows it.
         let print_message = !qf_win_pos_update(qi, old_index);
         let prev_winid = Win::current().handle;
-        let names_a_file = qfl.entries[at].fnum != 0;
+        let names_a_file = qfl.entries[at].fnum.is_some();
         let mut opened_window = false;
 
         match qf_jump_open_window(qi, at, newwin, &mut opened_window) {

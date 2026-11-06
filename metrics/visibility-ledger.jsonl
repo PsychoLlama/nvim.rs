@@ -545,7 +545,7 @@
 {"path":"neovim::types::Failed","kind":"struct","file":"crates/nvim/src/types/vim.rs","tests":["crates/nvim/tests/unit/eval_decode.rs","crates/nvim/tests/unit/fs.rs","crates/nvim/tests/unit/path.rs","crates/nvim/tests/unit/typval_dict.rs","crates/nvim/tests/unit/typval_value.rs"]}
 {"path":"neovim::types::FileInfo","kind":"struct","file":"crates/nvim/src/types/fs.rs","tests":["crates/nvim/tests/unit/fs.rs"]}
 {"path":"neovim::types::GridLineEvent","kind":"struct","file":"crates/nvim/src/types/grid.rs","tests":["crates/nvim/tests/unit/msgpack.rs"]}
-{"path":"neovim::types::Handle","kind":"struct","file":"crates/nvim/src/types/multiqueue_list.rs","tests":["crates/nvim/tests/unit/namespace.rs","crates/nvim/tests/unit/options.rs"]}
+{"path":"neovim::types::Handle","kind":"struct","file":"crates/nvim/src/types/multiqueue_list.rs","tests":["crates/nvim/tests/unit/buffer.rs","crates/nvim/tests/unit/namespace.rs","crates/nvim/tests/unit/options.rs"]}
 {"path":"neovim::types::HashTab","kind":"struct","file":"crates/nvim/src/types/hashtab.rs","tests":["crates/nvim/tests/unit/hashtab.rs"]}
 {"path":"neovim::types::Key","kind":"struct","file":"crates/nvim/src/types/key.rs","tests":["crates/nvim/tests/unit/key_oracle.rs","crates/nvim/tests/unit/keycodes.rs","crates/nvim/tests/unit/keycodes_oracle.rs"]}
 {"path":"neovim::types::KeyCode","kind":"struct","file":"crates/nvim/src/types/termkey.rs","tests":["crates/nvim/tests/unit/termkey.rs"]}

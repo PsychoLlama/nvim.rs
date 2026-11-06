@@ -293,7 +293,7 @@ pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
         setpcmark();
         let flags = EcmdFlags::HIDE | EcmdFlags::FORCEIT.when(excmd.forceit);
         let _ = do_ecmd(
-            0,
+            None,
             None,
             None,
             Some(&mut *excmd),
@@ -330,7 +330,7 @@ pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
             | EcmdFlags::ALTBUF.when(idx == CmdIdx::balt);
         let lnum = excmd.do_ecmd_lnum;
         let opened = do_ecmd(
-            0,
+            None,
             name.as_deref(),
             None,
             Some(&mut *excmd),
@@ -376,7 +376,7 @@ pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
         && !old.w_buffer.is_current()
         && !cmdmod_has(CmdModFlags::KEEPALT)
     {
-        old.w_alt_fnum = Buf::current().handle.get();
+        old.w_alt_fnum = Some(Buf::current().handle);
     }
     ex_no_reprint.set(true);
 }

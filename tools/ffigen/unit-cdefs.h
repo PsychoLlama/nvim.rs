@@ -2345,7 +2345,6 @@ static const int INTERMED_MAX = 16;
 static const int INT_MAX = 2147483647;
 static const int INT_MIN = -2147483648;
 static const int INVALID_BYTE_CELLS = 4;
-static const int INVALID_QFBUFNR = 0;
 static const int INVALID_QFIDX = -1;
 static const int IN_BUFFER = 1;
 static const int IN_OTHER_WIN = 8;

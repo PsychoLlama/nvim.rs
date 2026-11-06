@@ -30,6 +30,7 @@ use crate::pos::{equalpos, lt};
 use crate::state::mode::virtual_op;
 use crate::state::virtual_active;
 use crate::tr;
+use crate::types::Handle;
 use crate::types::{
     BlockDef, ColNr, EvalFuncData, Key, LineNr, MotionType, OpArg, OpType, Pos, TypVal, VAR_DICT,
     VarNumber, kListLenMayKnow,
@@ -190,7 +191,7 @@ fn resolve(args: &[TypVal], result: &mut TypVal) -> Result<Region, Unresolved> {
     let (region_type, block_width) = parse_type(spec.unwrap_or(c"v"))?;
 
     let findbuf = if fnum1 != 0 {
-        find_buf(fnum1)
+        find_buf(Handle::from_number(fnum1))
     } else {
         Buf::current_or_none()
     };

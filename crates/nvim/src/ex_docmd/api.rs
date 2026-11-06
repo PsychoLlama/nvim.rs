@@ -21,6 +21,7 @@ use crate::charset::skip;
 use crate::ex_docmd::ex_msg;
 use crate::message::emsg;
 use crate::types::CmdIdx;
+use crate::types::Handle;
 use core::ffi::c_int;
 use std::ffi::CString;
 
@@ -263,13 +264,8 @@ pub(crate) fn execute_cmd0(
                 at
             };
             let name = excmd.line.cstr_from(arg);
-            excmd.line2 = LineNr::new(buflist_findpat_prefix(
-                name,
-                end - arg,
-                unlisted,
-                false,
-                false,
-            ));
+            let found = buflist_findpat_prefix(name, end - arg, unlisted, false, false)?;
+            excmd.line2 = LineNr::new(Handle::number_of(found));
             excmd.addr_count = 1;
             excmd.line.arg = excmd.line.skip_white(end);
         } else {
@@ -277,12 +273,10 @@ pub(crate) fn execute_cmd0(
             // is the name with no scanning at all.
             let (at, len) = excmd.line.args[0];
             let name = excmd.line.cstr_from(at);
-            excmd.line2 = LineNr::new(buflist_findpat_prefix(name, len, unlisted, false, false));
+            let found = buflist_findpat_prefix(name, len, unlisted, false, false)?;
+            excmd.line2 = LineNr::new(Handle::number_of(found));
             excmd.addr_count = 1;
             shift_cmd_args(excmd);
-        }
-        if excmd.line2 < LineNr::ZERO {
-            return Err(Failed);
         }
     }
 

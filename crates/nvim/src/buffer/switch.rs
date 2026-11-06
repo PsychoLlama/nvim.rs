@@ -117,7 +117,7 @@ fn may_change_buffer(forceit: bool) -> bool {
     check_can_set_curbuf_forceit(c_int::from(forceit))
 }
 fn forget_jumps(win: Win, fnum: c_int) {
-    mark_jumplist_forget_file(win, fnum);
+    mark_jumplist_forget_file(win, Handle::from_number(fnum));
 }
 fn may_abandon(buffer: Buf, forceit: bool) -> bool {
     can_abandon(buffer, forceit)
@@ -339,10 +339,10 @@ pub fn do_bufdel(
                 let rest = CStr::from_bytes_until_nul(&arg.to_bytes_with_nul()[at..])
                     .expect("a tail of a terminated string");
                 let unlisted = command == DOBUF_WIPE;
-                bnr = buflist_findpat_prefix(rest, len, unlisted, false, false);
-                if bnr < 0 {
+                let Ok(found) = buflist_findpat_prefix(rest, len, unlisted, false, false) else {
                     break; // failed
-                }
+                };
+                bnr = Handle::number_of(found);
                 at += len;
             }
         }
