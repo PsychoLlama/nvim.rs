@@ -53,7 +53,6 @@ binary as well as the default one.
 ## `ex_docmd`
 
 - `neovim::ex_docmd::ex_pressedreturn`
-- `neovim::ex_docmd::state::cmdmod`
 
 ## `ex_getln`
 
