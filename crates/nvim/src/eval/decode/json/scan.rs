@@ -1,6 +1,6 @@
 //! The two JSON values with a syntax of their own: strings and numbers.
 //!
-//! Both start at the cursor, scan forward, report their own errors and hand
+//! Both start at the cursor, scan forward, answer their own refusals and hand
 //! the finished value to [`Decoder::finish_value`] themselves — so like the
 //! scanner that calls them they may come back having *rewound* the cursor,
 //! with [`Decoder::next_map_special`] set.
@@ -15,35 +15,17 @@
 )]
 
 use crate::charset::{Str2NrBases, str2nr_in, string2float_in};
-use crate::message_fmt::{emsg_text, msg_bytes};
-use crate::tr_c;
-use core::ffi::{CStr, c_int};
+use crate::message_fmt::msg_bytes;
+use crate::semsg;
+use core::ffi::c_int;
 
+use super::error::DecodeError;
 use super::stack::Decoder;
 use super::{BS, CAR, FF, NL, TAB};
 use crate::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::eval::decode::decode_owned_string;
 use crate::mbyte::{char_at, char_len, encode_char, utf_char2len};
 use crate::types::{TypVal, UVarNumber, VAR_STRING};
-
-const E474_UNFINISHED_ESCAPE: &CStr = c"E474: Unfinished escape sequence: %.*s";
-const E474_UNFINISHED_UNICODE: &CStr = c"E474: Unfinished unicode escape sequence: %.*s";
-const E474_FOUR_HEX_DIGITS: &CStr = c"E474: Expected four hex digits after \\u: %.*s";
-const E474_UNKNOWN_ESCAPE: &CStr = c"E474: Unknown escape sequence: %.*s";
-const E474_CONTROL_CHARS: &CStr =
-    c"E474: ASCII control characters cannot be present inside string: %.*s";
-const E474_ONLY_UTF8: &CStr = c"E474: Only UTF-8 strings allowed: %.*s";
-const E474_ABOVE_10FFFF: &CStr =
-    c"E474: Only UTF-8 code points up to U+10FFFF are allowed to appear unescaped: %.*s";
-const E474_STRING_END: &CStr = c"E474: Expected string end: %.*s";
-const E474_LEADING_ZEROES: &CStr = c"E474: Leading zeroes are not allowed: %.*s";
-const E474_AFTER_MINUS: &CStr = c"E474: Missing number after minus sign: %.*s";
-const E474_AFTER_DOT: &CStr = c"E474: Missing number after decimal dot: %.*s";
-const E474_MISSING_EXPONENT: &CStr = c"E474: Missing exponent: %.*s";
-const E685_FLOAT: &CStr = c"E685: internal error: while converting number \"%.*s\" to float \
-                            string2float consumed %zu bytes in place of %zu";
-const E685_INTEGER: &CStr = c"E685: internal error: while converting number \"%.*s\" to integer \
-                              vim_str2nr consumed %i bytes in place of %zu";
 
 /// The UTF-16 surrogate range, which JSON's `\u` escapes use to spell a code
 /// point above U+FFFF as two escapes.
@@ -61,7 +43,7 @@ const SURROGATE_FIRST_CHAR: c_int = 0x10000;
 /// allocated exactly once and handed to the typval, which then owns it.
 ///
 /// `at` indexes `dec.buf` and points at a `"`.
-pub(crate) fn parse_json_string(dec: &mut Decoder, at: &mut usize) -> bool {
+pub(crate) fn parse_json_string(dec: &mut Decoder, at: &mut usize) -> Result<(), DecodeError> {
     let buf = dec.buf;
     let e = buf.len();
     let s = *at + 1;
@@ -76,21 +58,18 @@ pub(crate) fn parse_json_string(dec: &mut Decoder, at: &mut usize) -> bool {
         if buf[p] == b'\\' {
             p += 1;
             if p == e {
-                dec.emsg_rest(E474_UNFINISHED_ESCAPE, 0);
-                return fail(at, p);
+                return fail(at, p, DecodeError::UnfinishedEscape(dec.rest(0)));
             }
             match buf[p] {
                 b'u' => {
                     if p + 4 >= e {
-                        dec.emsg_rest(E474_UNFINISHED_UNICODE, 0);
-                        return fail(at, p);
+                        return fail(at, p, DecodeError::UnfinishedUnicode(dec.rest(0)));
                     }
                     if !buf[p + 1..p + 5]
                         .iter()
                         .all(|&c| ascii_isxdigit(c_int::from(c)))
                     {
-                        dec.emsg_rest(E474_FOUR_HEX_DIGITS, p - 1);
-                        return fail(at, p);
+                        return fail(at, p, DecodeError::FourHexDigits(dec.rest(p - 1)));
                     }
                     len += 3;
                     p += 5;
@@ -100,8 +79,7 @@ pub(crate) fn parse_json_string(dec: &mut Decoder, at: &mut usize) -> bool {
                     p += 1;
                 }
                 _ => {
-                    dec.emsg_rest(E474_UNKNOWN_ESCAPE, p - 1);
-                    return fail(at, p);
+                    return fail(at, p, DecodeError::UnknownEscape(dec.rest(p - 1)));
                 }
             }
             continue;
@@ -110,8 +88,7 @@ pub(crate) fn parse_json_string(dec: &mut Decoder, at: &mut usize) -> bool {
         // unescaped = %x20-21 / %x23-5B / %x5D-10FFFF
         let byte = buf[p];
         if byte < 0x20 {
-            dec.emsg_rest(E474_CONTROL_CHARS, p);
-            return fail(at, p);
+            return fail(at, p, DecodeError::ControlChars(dec.rest(p)));
         }
         let ch = char_at(&buf[p..]);
         // Every code point above U+007F is two or more bytes, so it can
@@ -120,12 +97,10 @@ pub(crate) fn parse_json_string(dec: &mut Decoder, at: &mut usize) -> bool {
         // one real exception, spelled 0xC3 0x83.
         if ch >= 0x80 && c_int::from(byte) == ch && !(ch == 0xc3 && p + 1 < e && buf[p + 1] == 0x83)
         {
-            dec.emsg_rest(E474_ONLY_UTF8, p);
-            return fail(at, p);
+            return fail(at, p, DecodeError::OnlyUtf8(dec.rest(p)));
         }
         if ch > 0x10ffff {
-            dec.emsg_rest(E474_ABOVE_10FFFF, p);
-            return fail(at, p);
+            return fail(at, p, DecodeError::Above10ffff(dec.rest(p)));
         }
         let ch_len = usize::try_from(utf_char2len(ch)).unwrap_or(1);
         debug_assert!(ch_len == if ch != 0 { char_len(&buf[p..]) } else { 1 });
@@ -136,8 +111,7 @@ pub(crate) fn parse_json_string(dec: &mut Decoder, at: &mut usize) -> bool {
     // continuation bytes ran past the document; the slice form answers such
     // a byte as itself, which pass one refuses above.
     if p >= e || buf[p] != b'"' {
-        dec.emsg_rest(E474_STRING_END, 0);
-        return fail(at, p);
+        return fail(at, p, DecodeError::StringEnd(dec.rest(0)));
     }
 
     // Pass two: write the decoded bytes, which the typval takes over -- with
@@ -210,9 +184,9 @@ pub(crate) fn parse_json_string(dec: &mut Decoder, at: &mut usize) -> bool {
     // special dictionary, which can be a dictionary value but not a key.
     let is_special_string = obj.v_type() != VAR_STRING;
     let value = dec.value(obj, is_special_string);
-    let ok = dec.finish_value(value, &mut p);
+    let stored = dec.finish_value(value, &mut p);
     *at = p;
-    ok
+    stored
 }
 
 /// Scan a JSON number — `-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?` — and store it.
@@ -221,7 +195,7 @@ pub(crate) fn parse_json_string(dec: &mut Decoder, at: &mut usize) -> bool {
 /// character of the number, so that the scanner's own `+= 1` lands past it.
 ///
 /// `at` indexes `dec.buf` and points at `-` or a digit.
-pub(crate) fn parse_json_number(dec: &mut Decoder, at: &mut usize) -> bool {
+pub(crate) fn parse_json_number(dec: &mut Decoder, at: &mut usize) -> Result<(), DecodeError> {
     let buf = dec.buf;
     let e = buf.len();
     let s = *at;
@@ -246,8 +220,7 @@ pub(crate) fn parse_json_number(dec: &mut Decoder, at: &mut usize) -> bool {
             p += 1;
         }
         if p != ints + 1 && buf[ints] == b'0' {
-            dec.emsg_rest(E474_LEADING_ZEROES, s);
-            return fail(at, p);
+            return fail(at, p, DecodeError::LeadingZeroes(dec.rest(s)));
         }
         if p >= e || p == ints {
             break 'scan;
@@ -276,55 +249,58 @@ pub(crate) fn parse_json_number(dec: &mut Decoder, at: &mut usize) -> bool {
     }
 
     if p == ints {
-        dec.emsg_rest(E474_AFTER_MINUS, s);
-        return fail(at, p);
+        return fail(at, p, DecodeError::AfterMinus(dec.rest(s)));
     }
     if Some(p) == fracs || (fracs.is_some() && exps_s == fracs.map(|f| f + 1)) {
-        dec.emsg_rest(E474_AFTER_DOT, s);
-        return fail(at, p);
+        return fail(at, p, DecodeError::AfterDot(dec.rest(s)));
     }
     if Some(p) == exps {
-        dec.emsg_rest(E474_MISSING_EXPONENT, s);
-        return fail(at, p);
+        return fail(at, p, DecodeError::MissingExponent(dec.rest(s)));
     }
 
     let text = &buf[s..p];
     let want = text.len();
-    let shown_len = c_int::try_from(want).unwrap_or(c_int::MAX);
     let mut tv = TypVal::Number(0);
     if fracs.is_some() || exps.is_some() {
         let (parsed, got) = string2float_in(text);
         tv.write_float(parsed);
         if want != got {
-            emsg_text(tr_c!(E685_FLOAT, shown_len, msg_bytes(text), got, want));
+            let shown = msg_bytes(text);
+            semsg!(
+                "E685: internal error: while converting number \"{shown}\" to float \
+                 string2float consumed {got} bytes in place of {want}"
+            );
         }
     } else {
         let parsed = str2nr_in(text, Str2NrBases::NONE, true);
         if want != parsed.len {
-            let got = c_int::try_from(parsed.len).unwrap_or(c_int::MAX);
-            emsg_text(tr_c!(E685_INTEGER, shown_len, msg_bytes(text), got, want));
+            let (shown, got) = (msg_bytes(text), parsed.len);
+            semsg!(
+                "E685: internal error: while converting number \"{shown}\" to integer \
+                 vim_str2nr consumed {got} bytes in place of {want}"
+            );
         }
         tv.write_number(parsed.value);
     }
 
     let value = dec.value(tv, false);
-    if !dec.finish_value(value, &mut p) {
+    if let Err(refusal) = dec.finish_value(value, &mut p) {
         *at = p;
-        return false;
+        return Err(refusal);
     }
     if !dec.next_map_special {
         // The scanner's loop advances past the last character itself.
         p -= 1;
     }
     *at = p;
-    true
+    Ok(())
 }
 
 /// The `parse_json_*_fail` tail: publish the cursor and answer failure.
 ///
 /// Both scanners write `*pp = p` on the way out whichever exit they take, so
 /// that the caller's own error reporting sees where the scan stopped.
-fn fail(at: &mut usize, p: usize) -> bool {
+fn fail(at: &mut usize, p: usize, refusal: DecodeError) -> Result<(), DecodeError> {
     *at = p;
-    false
+    Err(refusal)
 }

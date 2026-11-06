@@ -21,11 +21,9 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::message_fmt::{emsg_text, msg_bytes};
-use crate::semsg;
-use crate::tr_c;
+use super::error::DecodeError;
+use crate::memory::ThinCString;
 use crate::types::DictItem;
-use core::ffi::{CStr, c_int};
 
 use crate::eval::typval::{DictRef, ListRef, dict_find, tv_clear, tv_list_alloc};
 use crate::types::{TypVal, VAR_STRING};
@@ -91,22 +89,19 @@ impl<'a> Decoder<'a> {
         }
     }
 
-    pub(crate) fn emsg_rest(&self, fmt: &'static CStr, at: usize) {
-        let rest = &self.buf[at..];
-        let len = c_int::try_from(rest.len()).unwrap_or(c_int::MAX);
-        emsg_text(tr_c!(fmt, len, msg_bytes(rest)));
-    }
-
-    /// The document from `at` on, as a `%s` reads it: up to the first NUL.
+    /// The document from `at` on, as a refusal quotes it: up to the first
+    /// NUL, where upstream's `%s`/`%.*s` stopped reading.
     ///
     /// A document joined from a List of lines is not NUL-terminated, and
     /// upstream reads past its end here; the end of the document stops
     /// this.
-    fn rest_as_cstr(&self, at: usize) -> &[u8] {
+    pub(crate) fn rest(&self, at: usize) -> ThinCString {
         let rest = &self.buf[at..];
-        rest.iter()
+        let shown = rest
+            .iter()
             .position(|&b| b == 0)
-            .map_or(rest, |nul| &rest[..nul])
+            .map_or(rest, |nul| &rest[..nul]);
+        ThinCString::from_bytes(shown)
     }
 
     pub(crate) fn value(&self, val: TypVal, is_special_string: bool) -> Value {
@@ -125,10 +120,14 @@ impl<'a> Decoder<'a> {
             .clone()
     }
 
-    pub(crate) fn finish_value(&mut self, mut obj: Value, at: &mut usize) -> bool {
+    pub(crate) fn finish_value(
+        &mut self,
+        mut obj: Value,
+        at: &mut usize,
+    ) -> Result<(), DecodeError> {
         if self.containers.is_empty() {
             self.stack.push(obj);
-            return true;
+            return Ok(());
         }
 
         let mut last = self.innermost();
@@ -141,22 +140,18 @@ impl<'a> Decoder<'a> {
 
         if let OpenContainer::List(list) = &last.container {
             if !list.items().is_empty() && !obj.didcomma {
-                let arg0 = msg_bytes(self.rest_as_cstr(val_location));
-                semsg!("E474: Expected comma before list item: {arg0}");
                 tv_clear(&mut obj.val);
-                return false;
+                return Err(DecodeError::CommaBeforeItem(self.rest(val_location)));
             }
             debug_assert!(last.special_val.is_none());
             list.edit().push(obj.val);
-            return true;
+            return Ok(());
         }
 
         if last.stack_index == self.stack.len().wrapping_sub(2) {
             if !obj.didcolon {
-                let arg0 = msg_bytes(self.rest_as_cstr(val_location));
-                semsg!("E474: Expected colon before dictionary value: {arg0}");
                 tv_clear(&mut obj.val);
-                return false;
+                return Err(DecodeError::ColonBeforeValue(self.rest(val_location)));
             }
             let key = self.stack.pop().expect("a dictionary key below the value");
             match (&last.special_val, &last.container) {
@@ -183,24 +178,20 @@ impl<'a> Decoder<'a> {
                 }
                 (None, OpenContainer::List(_)) => unreachable!("a list was handled above"),
             }
-            return true;
+            return Ok(());
         }
 
         if !obj.is_special_string && obj.val.v_type() != VAR_STRING {
-            let arg0 = msg_bytes(self.rest_as_cstr(*at));
-            semsg!("E474: Expected string key: {arg0}");
             tv_clear(&mut obj.val);
-            return false;
+            return Err(DecodeError::StringKey(self.rest(*at)));
         }
         let plain = match (&last.special_val, &last.container) {
             (None, OpenContainer::Dict(dict)) => Some(dict),
             _ => None,
         };
         if !obj.didcomma && plain.is_some_and(|dict| dict.dv_hashtab.ht_used != 0) {
-            let arg0 = msg_bytes(self.rest_as_cstr(val_location));
-            semsg!("E474: Expected comma before dictionary key: {arg0}");
             tv_clear(&mut obj.val);
-            return false;
+            return Err(DecodeError::CommaBeforeKey(self.rest(val_location)));
         }
 
         if let Some(dict) = plain
@@ -220,10 +211,10 @@ impl<'a> Decoder<'a> {
             }
             *at = last.at;
             self.next_map_special = true;
-            return true;
+            return Ok(());
         }
 
         self.stack.push(obj);
-        true
+        Ok(())
     }
 }

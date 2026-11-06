@@ -22,18 +22,18 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::CStr;
-
 use super::decode_create_map_special_dict;
 use crate::eval::typval::{ListRef, tv_clear, tv_dict_alloc, tv_list_alloc};
-use crate::message::emsg;
-use crate::os::cshim::gettext;
+use crate::message_fmt::emsg_text;
 use crate::types::{
     Failed, TypVal, kBoolVarFalse, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, ptrdiff_t,
 };
 
+mod error;
 mod scan;
 mod stack;
+
+use self::error::DecodeError;
 
 use self::scan::{parse_json_number, parse_json_string};
 use self::stack::{Container, Decoder, OpenContainer};
@@ -46,30 +46,6 @@ pub(crate) const NL: u8 = 0x0a;
 pub(crate) const FF: u8 = 0x0c;
 pub(crate) const CAR: u8 = 0x0d;
 
-const E474_BLANK_STRING: &CStr = c"E474: Attempt to decode a blank string";
-const E474_NO_CONTAINER: &CStr = c"E474: No container to close: %.*s";
-const E474_CLOSE_LIST_CURLY: &CStr = c"E474: Closing list with curly bracket: %.*s";
-const E474_CLOSE_DICT_SQUARE: &CStr = c"E474: Closing dictionary with square bracket: %.*s";
-const E474_TRAILING_COMMA: &CStr = c"E474: Trailing comma: %.*s";
-const E474_VALUE_AFTER_COLON: &CStr = c"E474: Expected value after colon: %.*s";
-const E474_EXPECTED_VALUE: &CStr = c"E474: Expected value: %.*s";
-const E474_COMMA_OUTSIDE: &CStr = c"E474: Comma not inside container: %.*s";
-const E474_DUPLICATE_COMMA: &CStr = c"E474: Duplicate comma: %.*s";
-const E474_COMMA_AFTER_COLON: &CStr = c"E474: Comma after colon: %.*s";
-const E474_COMMA_FOR_COLON: &CStr = c"E474: Using comma in place of colon: %.*s";
-const E474_LEADING_COMMA: &CStr = c"E474: Leading comma: %.*s";
-const E474_COLON_AFTER_COMMA: &CStr = c"E474: Colon after comma: %.*s";
-const E474_COLON_OUTSIDE: &CStr = c"E474: Colon not inside container: %.*s";
-const E474_COLON_NOT_IN_DICT: &CStr = c"E474: Using colon not in dictionary: %.*s";
-const E474_UNEXPECTED_COLON: &CStr = c"E474: Unexpected colon: %.*s";
-const E474_DUPLICATE_COLON: &CStr = c"E474: Duplicate colon: %.*s";
-const E474_EXPECTED_NULL: &CStr = c"E474: Expected null: %.*s";
-const E474_EXPECTED_TRUE: &CStr = c"E474: Expected true: %.*s";
-const E474_EXPECTED_FALSE: &CStr = c"E474: Expected false: %.*s";
-const E474_UNIDENTIFIED_BYTE: &CStr = c"E474: Unidentified byte: %.*s";
-const E474_TRAILING_CHARACTERS: &CStr = c"E474: Trailing characters: %.*s";
-const E474_UNEXPECTED_END: &CStr = c"E474: Unexpected end of input: %.*s";
-
 const NULL_TV: TypVal = TypVal::Special(kSpecialVarNull);
 
 const fn bool_tv(value: bool) -> TypVal {
@@ -78,9 +54,10 @@ const fn bool_tv(value: bool) -> TypVal {
 
 /// Decode `buf_len` bytes of JSON, assumed UTF-8, into `result`.
 ///
-/// Answers `Err` with the error already reported. Every value on the
-/// decoder's stack is owned by it until it is stored, and the failure path
-/// clears whatever is left.
+/// Answers `Err` once the refusal has been said: the scanner, the string
+/// and number scanners and the value stack answer a `DecodeError`, and
+/// this is where it is reported. Every value on the decoder's stack is owned
+/// by it until it is stored, and the failure path clears whatever is left.
 pub fn json_decode_string(bytes: &[u8], result: &mut TypVal) -> Result<(), Failed> {
     let buf_len = bytes.len();
 
@@ -89,7 +66,7 @@ pub fn json_decode_string(bytes: &[u8], result: &mut TypVal) -> Result<(), Faile
         p += 1;
     }
     if p == buf_len {
-        emsg(gettext(E474_BLANK_STRING));
+        emsg_text(DecodeError::BlankString.to_string());
         return Err(Failed);
     }
 
@@ -104,7 +81,7 @@ pub fn json_decode_string(bytes: &[u8], result: &mut TypVal) -> Result<(), Faile
         (None, OpenContainer::List(l)) => l.items().is_empty(),
     };
     'done: {
-        'fail: {
+        let refusal = 'fail: {
             'scan: while p < buf_len {
                 // Only `{` may be reached with the flag still set: it is
                 // the byte the restart rewound to.
@@ -112,25 +89,19 @@ pub fn json_decode_string(bytes: &[u8], result: &mut TypVal) -> Result<(), Faile
                 match bytes[p] {
                     b'}' | b']' => {
                         let Some(last) = dec.containers.last() else {
-                            dec.emsg_rest(E474_NO_CONTAINER, p);
-                            break 'fail;
+                            break 'fail DecodeError::NoContainer(dec.rest(p));
                         };
                         if bytes[p] == b'}' && !last.container.is_dict() {
-                            dec.emsg_rest(E474_CLOSE_LIST_CURLY, p);
-                            break 'fail;
+                            break 'fail DecodeError::CloseListCurly(dec.rest(p));
                         } else if bytes[p] == b']' && last.container.is_dict() {
-                            dec.emsg_rest(E474_CLOSE_DICT_SQUARE, p);
-                            break 'fail;
+                            break 'fail DecodeError::CloseDictSquare(dec.rest(p));
                         } else if dec.didcomma {
-                            dec.emsg_rest(E474_TRAILING_COMMA, p);
-                            break 'fail;
+                            break 'fail DecodeError::TrailingComma(dec.rest(p));
                         } else if dec.didcolon {
-                            dec.emsg_rest(E474_VALUE_AFTER_COLON, p);
-                            break 'fail;
+                            break 'fail DecodeError::ValueAfterColon(dec.rest(p));
                         } else if last.stack_index != dec.stack.len() - 1 {
                             debug_assert!(last.stack_index < dec.stack.len() - 1);
-                            dec.emsg_rest(E474_EXPECTED_VALUE, p);
-                            break 'fail;
+                            break 'fail DecodeError::ExpectedValue(dec.rest(p));
                         }
                         if dec.stack.len() == 1 {
                             // The outermost container just closed: the
@@ -140,8 +111,8 @@ pub fn json_decode_string(bytes: &[u8], result: &mut TypVal) -> Result<(), Faile
                             break 'scan;
                         }
                         let closed = dec.stack.pop().expect("the container itself");
-                        if !dec.finish_value(closed, &mut p) {
-                            break 'fail;
+                        if let Err(refusal) = dec.finish_value(closed, &mut p) {
+                            break 'fail refusal;
                         }
                         // A container is never a dictionary key, so it
                         // cannot have triggered the restart.
@@ -149,23 +120,18 @@ pub fn json_decode_string(bytes: &[u8], result: &mut TypVal) -> Result<(), Faile
                     }
                     b',' => {
                         let Some(last) = dec.containers.last() else {
-                            dec.emsg_rest(E474_COMMA_OUTSIDE, p);
-                            break 'fail;
+                            break 'fail DecodeError::CommaOutside(dec.rest(p));
                         };
                         if dec.didcomma {
-                            dec.emsg_rest(E474_DUPLICATE_COMMA, p);
-                            break 'fail;
+                            break 'fail DecodeError::DuplicateComma(dec.rest(p));
                         } else if dec.didcolon {
-                            dec.emsg_rest(E474_COMMA_AFTER_COLON, p);
-                            break 'fail;
+                            break 'fail DecodeError::CommaAfterColon(dec.rest(p));
                         } else if last.container.is_dict()
                             && last.stack_index != dec.stack.len() - 1
                         {
-                            dec.emsg_rest(E474_COMMA_FOR_COLON, p);
-                            break 'fail;
+                            break 'fail DecodeError::CommaForColon(dec.rest(p));
                         } else if is_empty(last) {
-                            dec.emsg_rest(E474_LEADING_COMMA, p);
-                            break 'fail;
+                            break 'fail DecodeError::LeadingComma(dec.rest(p));
                         }
                         dec.didcomma = true;
                         p += 1;
@@ -173,21 +139,16 @@ pub fn json_decode_string(bytes: &[u8], result: &mut TypVal) -> Result<(), Faile
                     }
                     b':' => {
                         let Some(last) = dec.containers.last() else {
-                            dec.emsg_rest(E474_COLON_OUTSIDE, p);
-                            break 'fail;
+                            break 'fail DecodeError::ColonOutside(dec.rest(p));
                         };
                         if !last.container.is_dict() {
-                            dec.emsg_rest(E474_COLON_NOT_IN_DICT, p);
-                            break 'fail;
+                            break 'fail DecodeError::ColonNotInDict(dec.rest(p));
                         } else if last.stack_index != dec.stack.len().wrapping_sub(2) {
-                            dec.emsg_rest(E474_UNEXPECTED_COLON, p);
-                            break 'fail;
+                            break 'fail DecodeError::UnexpectedColon(dec.rest(p));
                         } else if dec.didcomma {
-                            dec.emsg_rest(E474_COLON_AFTER_COMMA, p);
-                            break 'fail;
+                            break 'fail DecodeError::ColonAfterComma(dec.rest(p));
                         } else if dec.didcolon {
-                            dec.emsg_rest(E474_DUPLICATE_COLON, p);
-                            break 'fail;
+                            break 'fail DecodeError::DuplicateColon(dec.rest(p));
                         }
                         dec.didcolon = true;
                         p += 1;
@@ -199,13 +160,12 @@ pub fn json_decode_string(bytes: &[u8], result: &mut TypVal) -> Result<(), Faile
                     }
                     b'n' => {
                         if p + 3 >= buf_len || &bytes[p + 1..p + 4] != b"ull" {
-                            dec.emsg_rest(E474_EXPECTED_NULL, p);
-                            break 'fail;
+                            break 'fail DecodeError::ExpectedNull(dec.rest(p));
                         }
                         p += 3;
                         let value = dec.value(NULL_TV, false);
-                        if !dec.finish_value(value, &mut p) {
-                            break 'fail;
+                        if let Err(refusal) = dec.finish_value(value, &mut p) {
+                            break 'fail refusal;
                         }
                         if dec.next_map_special {
                             continue;
@@ -213,13 +173,12 @@ pub fn json_decode_string(bytes: &[u8], result: &mut TypVal) -> Result<(), Faile
                     }
                     b't' => {
                         if p + 3 >= buf_len || &bytes[p + 1..p + 4] != b"rue" {
-                            dec.emsg_rest(E474_EXPECTED_TRUE, p);
-                            break 'fail;
+                            break 'fail DecodeError::ExpectedTrue(dec.rest(p));
                         }
                         p += 3;
                         let value = dec.value(bool_tv(true), false);
-                        if !dec.finish_value(value, &mut p) {
-                            break 'fail;
+                        if let Err(refusal) = dec.finish_value(value, &mut p) {
+                            break 'fail refusal;
                         }
                         if dec.next_map_special {
                             continue;
@@ -227,30 +186,28 @@ pub fn json_decode_string(bytes: &[u8], result: &mut TypVal) -> Result<(), Faile
                     }
                     b'f' => {
                         if p + 4 >= buf_len || &bytes[p + 1..p + 5] != b"alse" {
-                            dec.emsg_rest(E474_EXPECTED_FALSE, p);
-                            break 'fail;
+                            break 'fail DecodeError::ExpectedFalse(dec.rest(p));
                         }
                         p += 4;
                         let value = dec.value(bool_tv(false), false);
-                        if !dec.finish_value(value, &mut p) {
-                            break 'fail;
+                        if let Err(refusal) = dec.finish_value(value, &mut p) {
+                            break 'fail refusal;
                         }
                         if dec.next_map_special {
                             continue;
                         }
                     }
                     b'"' => {
-                        // The error was reported by the scanner.
-                        if !parse_json_string(&mut dec, &mut p) {
-                            break 'fail;
+                        if let Err(refusal) = parse_json_string(&mut dec, &mut p) {
+                            break 'fail refusal;
                         }
                         if dec.next_map_special {
                             continue;
                         }
                     }
                     b'-' | b'0'..=b'9' => {
-                        if !parse_json_number(&mut dec, &mut p) {
-                            break 'fail;
+                        if let Err(refusal) = parse_json_number(&mut dec, &mut p) {
+                            break 'fail refusal;
                         }
                         if dec.next_map_special {
                             continue;
@@ -272,8 +229,7 @@ pub fn json_decode_string(bytes: &[u8], result: &mut TypVal) -> Result<(), Faile
                         }
                     }
                     _ => {
-                        dec.emsg_rest(E474_UNIDENTIFIED_BYTE, p);
-                        break 'fail;
+                        break 'fail DecodeError::UnidentifiedByte(dec.rest(p));
                     }
                 }
                 dec.didcomma = false;
@@ -287,8 +243,7 @@ pub fn json_decode_string(bytes: &[u8], result: &mut TypVal) -> Result<(), Faile
             // Past the value: only whitespace may follow.
             while p < buf_len {
                 if !matches!(bytes[p], NL | b' ' | TAB | CAR) {
-                    dec.emsg_rest(E474_TRAILING_CHARACTERS, p);
-                    break 'fail;
+                    break 'fail DecodeError::TrailingCharacters(dec.rest(p));
                 }
                 p += 1;
             }
@@ -297,8 +252,9 @@ pub fn json_decode_string(bytes: &[u8], result: &mut TypVal) -> Result<(), Faile
                 result.overwrite(decoded);
                 break 'done;
             }
-            dec.emsg_rest(E474_UNEXPECTED_END, 0);
-        }
+            DecodeError::UnexpectedEnd(dec.rest(0))
+        };
+        emsg_text(refusal.to_string());
         ret = Err(Failed);
         while let Some(mut left) = dec.stack.pop() {
             tv_clear(&mut left.val);
