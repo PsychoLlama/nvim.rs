@@ -31,7 +31,7 @@ use crate::types::CAR;
 use crate::types::ESC;
 use crate::types::NL;
 use crate::types::TAB;
-use crate::types::{ColNr, LPos, LineNr, Magic, MarkGet, int64_t, uint8_t};
+use crate::types::{ColNr, LPos, LineNr, Magic, int64_t, uint8_t};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int, c_uint};
 /// Last-pattern selectors and the regexp-engine/flag bits.
@@ -81,7 +81,6 @@ pub const MAGIC_NONE: Magic = 1;
 pub const REGSUB_BACKSLASH: c_uint = 4;
 pub const REGSUB_MAGIC: c_uint = 2;
 pub const REGSUB_COPY: c_uint = 1;
-pub const kMarkBufLocal: MarkGet = 0;
 /// The caller's bound on how long an NFA match may run: how many steps
 /// since the clock was last read. The deadline itself is the match
 /// context's ([`Rex::deadline`]). The default is [`TimeBudget::NONE`].

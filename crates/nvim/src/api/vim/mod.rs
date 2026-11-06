@@ -100,14 +100,14 @@ use crate::terminal::{
 };
 use crate::types::AutoEvent;
 use crate::types::{
-    ApiDict, ApiString, Array, BlnFlags, Boolean, BufferHandle, Context, DoBufAction, DoBufStart,
-    Error, Float, FoldInfo, Handle, HlAttrs, Integer, KeyDict_complete_set, KeyDict_context,
-    KeyDict_echo_opts, KeyDict_empty, KeyDict_eval_statusline, KeyDict_get_highlight,
-    KeyDict_get_ns, KeyDict_highlight, KeyDict_keymap, KeyDict_open_term, KeyDict_redraw,
-    KeyDict_runtime, LineNr, LuaRef, LuaRetMode, MessageData, MessageType, MotionType, Object,
-    OptVal, ScreenChar, ScriptId, SignTextAttrs, StatusCol, TabpageHandle, TerminalOptions,
-    VarNumber, Vv, WindowHandle, YankReg, int64_t, kCdScopeGlobal, kErrorTypeException,
-    kErrorTypeValidation, kObjectTypeString, mpack_token_type_t, size_t, uint16_t, uint64_t,
+    ApiDict, ApiString, Array, Boolean, BufferHandle, Context, Error, Float, FoldInfo, Handle,
+    HlAttrs, Integer, KeyDict_complete_set, KeyDict_context, KeyDict_echo_opts, KeyDict_empty,
+    KeyDict_eval_statusline, KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight,
+    KeyDict_keymap, KeyDict_open_term, KeyDict_redraw, KeyDict_runtime, LineNr, LuaRef, LuaRetMode,
+    MessageData, MessageType, MotionType, Object, OptVal, ScreenChar, ScriptId, SignTextAttrs,
+    StatusCol, TabpageHandle, TerminalOptions, VarNumber, Vv, WindowHandle, YankReg, int64_t,
+    kCdScopeGlobal, kErrorTypeException, kErrorTypeValidation, kObjectTypeString,
+    mpack_token_type_t, size_t, uint16_t, uint64_t,
 };
 use crate::ui::state::Columns;
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};
@@ -151,13 +151,6 @@ pub const REPTERM_FROM_PART: ::core::ffi::c_uint = 1;
 pub const kRetNilBool: LuaRetMode = 1;
 pub const kRetObject: LuaRetMode = 0;
 pub const DOSO_NONE: ::core::ffi::c_uint = 0;
-pub const DOBUF_FIRST: DoBufStart = 1;
-pub const DOBUF_GOTO: DoBufAction = 0;
-pub const BLN_LISTED: BlnFlags = 2;
-pub const BLN_NEW: BlnFlags = 8;
-pub const BLN_NOOPT: BlnFlags = 16;
-pub const BCO_NOHELP: ::core::ffi::c_int = 4;
-pub const BCO_ENTER: ::core::ffi::c_int = 1;
 pub const MPACK_TOKEN_SINT: mpack_token_type_t = 4;
 pub const kMTCharWise: MotionType = 0;
 pub const kCtxFuncs: ::core::ffi::c_uint = 32;
@@ -166,10 +159,6 @@ pub const kCtxGVars: ::core::ffi::c_uint = 8;
 pub const kCtxBufs: ::core::ffi::c_uint = 4;
 pub const kCtxJumps: ::core::ffi::c_uint = 2;
 pub const kCtxRegs: ::core::ffi::c_uint = 1;
-pub const BLN_CURBUF: BlnFlags = 1;
-pub const DOBUF_WIPE: DoBufAction = 4;
-pub const DOBUF_DEL: DoBufAction = 3;
-pub const DOBUF_UNLOAD: DoBufAction = 2;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 /// The top bit of a channel id: an API call made by the editor itself

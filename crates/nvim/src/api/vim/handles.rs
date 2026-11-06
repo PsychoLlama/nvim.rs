@@ -18,6 +18,13 @@ use super::*;
 use crate::api::private::helpers::{
     api_try, find_buffer_by_handle, find_tab_by_handle, find_window_by_handle,
 };
+use crate::buffer::BCO_ENTER;
+use crate::buffer::BCO_NOHELP;
+use crate::buffer::BLN_LISTED;
+use crate::buffer::BLN_NEW;
+use crate::buffer::BLN_NOOPT;
+use crate::buffer::DOBUF_FIRST;
+use crate::buffer::DOBUF_GOTO;
 use crate::types::OptionSetFlags;
 use core::ffi::CStr;
 

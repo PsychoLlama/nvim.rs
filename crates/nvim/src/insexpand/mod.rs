@@ -101,7 +101,7 @@ use crate::tag::find_tag_names;
 use crate::tag::state::g_tag_at_cursor;
 use crate::textformat::auto_format;
 use crate::types::{
-    ApiString, BoolVarValue, Callback, ColNr, Dict, Direction, EvalFuncData, Expand, ExtmarkOp,
+    ApiString, BoolVarValue, Callback, ColNr, Dict, Direction, EvalFuncData, Expand,
     ExtmarkUndoObject, HashTab, LineNr, List, MB_MAXCHAR, OptInt, OptSet, Pos, PumItem, RegMatch,
     SaveVEvent, TypVal, VarNumber, Vv, ptrdiff_t, size_t, uint64_t,
 };
@@ -138,9 +138,6 @@ pub use self::keys::*;
 #[cfg(test)]
 mod tests;
 pub const kDirectionNotSet: Direction = 0;
-pub const kExtmarkUndo: ExtmarkOp = 1;
-pub const OPENLINE_FORCE_INDENT: ::core::ffi::c_int = 64;
-pub const OPENLINE_KEEPTRAIL: ::core::ffi::c_int = 4;
 pub const KEY_COMPLETE: ::core::ffi::c_int = 259;
 pub const FUZZY_SCORE_NONE: ::core::ffi::c_int = -2147483648;
 pub const CTRL_X_CMDLINE_CTRL_X: ::core::ffi::c_int = 17;

@@ -23,9 +23,9 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::winfloat::kWinStyleMinimal;
 use crate::winlayer::WinId;
 
-use super::*;
 use crate::fold::clear_folding;
 use crate::mark::mark_view_make;
 use crate::option::vars::p_fdls;

@@ -21,6 +21,7 @@ use crate::change::changed_lines;
 use crate::charset::skip;
 use crate::cstr::byte_at;
 use crate::extmark::extmark_splice_cols;
+use crate::extmark::kExtmarkUndo;
 use crate::mbyte::cluster_len;
 use crate::memline::{Lines, ml_replace_buf_text};
 use crate::message::e_modifiable;

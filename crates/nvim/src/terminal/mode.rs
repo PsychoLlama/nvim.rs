@@ -25,6 +25,8 @@
 #![allow(non_upper_case_globals)]
 
 use crate::autocmd::{apply_autocmds, has_event};
+use crate::buffer::DOBUF_FIRST;
+use crate::buffer::DOBUF_WIPE;
 use crate::buffer::{buf_get_changedtick, do_buffer};
 use crate::cursor::coladvance;
 use crate::cursor_shape::{SHAPE_CURSOR, parse_shape_opt};
@@ -62,9 +64,6 @@ use super::refresh::{
 use super::{Term, row_to_linenr, terminal_check_size, terminal_set_state};
 use crate::optionstr::OptStringRef;
 use crate::search::FORWARD;
-
-const DOBUF_WIPE: c_int = 4;
-const DOBUF_FIRST: c_int = 1;
 
 /// One terminal-mode session, as the editor's state loop sees it.
 pub(crate) struct TerminalState {

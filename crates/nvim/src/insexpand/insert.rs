@@ -16,6 +16,8 @@
 )]
 
 use super::*;
+use crate::change::OPENLINE_FORCE_INDENT;
+use crate::change::OPENLINE_KEEPTRAIL;
 use crate::mbyte::{char_at, char_len, cluster_len};
 use crate::memline::Lines;
 use crate::narrow::len_as_int;

@@ -66,8 +66,7 @@ use crate::types::CmdIdx;
 use crate::types::ESC;
 use crate::types::NL;
 use crate::types::{
-    BCount, BfaFlags, BlnFlags, CmdModFlags, DoBufAction, ExArg, ExtmarkOp, GetFileRet, LPos,
-    LineNr, List, OptVal, OptionSetFlags, UndoObjectType, Vv,
+    BCount, CmdModFlags, ExArg, GetFileRet, LPos, LineNr, List, OptVal, OptionSetFlags, Vv,
 };
 use crate::window::{win_enter, win_split};
 use crate::winlayer::{Buf, Win, windows};
@@ -169,25 +168,13 @@ pub(crate) fn split_vimgrep_pat(arg: &[u8]) -> Option<(Vec<u8>, ::core::ffi::c_i
 }
 
 pub const _ISalpha: ::core::ffi::c_uint = 1024;
-pub const kExtmarkMove: UndoObjectType = 1;
-pub const kExtmarkSplice: UndoObjectType = 0;
 pub const REGSUB_BACKSLASH: ::core::ffi::c_uint = 4;
 pub const REGSUB_MAGIC: ::core::ffi::c_uint = 2;
 pub const REGSUB_COPY: ::core::ffi::c_uint = 1;
-pub const kExtmarkNoUndo: ExtmarkOp = 2;
-pub const kExtmarkUndo: ExtmarkOp = 1;
-pub const kExtmarkNOOP: ExtmarkOp = 0;
 pub const GETFILE_OPEN_OTHER: GetFileRet = -1;
 pub const GETFILE_SAME_FILE: GetFileRet = 0;
 pub const GETFILE_NOT_WRITTEN: GetFileRet = 2;
 pub const GETFILE_ERROR: GetFileRet = 1;
-pub const BLN_NOCURWIN: BlnFlags = 128;
-pub const BLN_LISTED: BlnFlags = 2;
-pub const BLN_CURBUF: BlnFlags = 1;
-pub const DOBUF_WIPE: DoBufAction = 4;
-pub const DOBUF_DEL: DoBufAction = 3;
-pub const DOBUF_UNLOAD: DoBufAction = 2;
-pub const BFA_KEEP_UNDO: BfaFlags = 4;
 pub(crate) use crate::cmdhist::HIST_SEARCH;
 pub const VIM_QUESTION: ::core::ffi::c_uint = 4;
 pub const VIM_YES: ::core::ffi::c_uint = 2;
@@ -195,7 +182,6 @@ pub const ML_DEL_MESSAGE: ::core::ffi::c_uint = 1;
 pub const READ_FILTER: ::core::ffi::c_uint = 2;
 pub const READ_NOWINENTER: ::core::ffi::c_uint = 128;
 pub const READ_KEEP_UNDO: ::core::ffi::c_uint = 32;
-pub const BCO_ENTER: ::core::ffi::c_int = 1;
 pub const CCGD_EXCMD: ::core::ffi::c_uint = 16;
 pub const CCGD_FORCEIT: ::core::ffi::c_uint = 4;
 pub const CCGD_MULTWIN: ::core::ffi::c_uint = 2;
@@ -246,7 +232,6 @@ pub const VGR_GLOBAL: ::core::ffi::c_int = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const KEYMAP_INIT: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const NODE_OTHER: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const EXFLAG_LIST: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const EXFLAG_NR: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;

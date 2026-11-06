@@ -19,6 +19,7 @@
 )]
 
 use super::low_byte;
+use crate::buffer::BLN_LISTED;
 use crate::buffer::{buflist_new, buflist_setfpos};
 use crate::eval::typval::tv_list_alloc;
 use crate::eval::var_set_global;
@@ -39,7 +40,7 @@ use crate::search::{
     ShadaPattern, set_last_used_pattern, shada_pattern_timestamp, shada_set_pattern,
 };
 use crate::types::LineNr;
-use crate::types::{ApiString, BlnFlags, ListRef, SearchOffset, TypVal, Vv, kListLenUnknown};
+use crate::types::{ApiString, ListRef, SearchOffset, TypVal, Vv, kListLenUnknown};
 use crate::winlayer::{Buf, BufId, Win, buffers, tab_windows};
 use core::ffi::{c_char, c_int};
 
@@ -50,9 +51,6 @@ use super::{
     MOTION_LINEWISE, ReadKinds, ReadStatus, ShadaBufferListItem, ShadaEntry, ShadaEntryData,
     ShadaExtra, ShadaFileMark, WANT_ALWAYS, kind, read_flags, want,
 };
-
-/// Listed, for the buffers the buffer list restores.
-const BLN_LISTED: BlnFlags = 2;
 
 /// The kinds of entry a read with these flags is looking for.
 ///

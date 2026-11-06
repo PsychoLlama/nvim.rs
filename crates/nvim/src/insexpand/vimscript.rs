@@ -22,6 +22,7 @@
 
 use super::*;
 use crate::eval::typval::{DictRef, NumBuf, dict_get_string_buf, list_iter};
+use crate::extmark::kExtmarkUndo;
 use crate::guard::Allow;
 use crate::keycodes::SpecialKey;
 use crate::memline::Lines;

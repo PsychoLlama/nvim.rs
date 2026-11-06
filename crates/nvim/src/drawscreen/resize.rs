@@ -19,6 +19,7 @@
 
 use super::*;
 use crate::autocmd::fire_autocmds;
+use crate::grid::DEFAULT_GRID_HANDLE;
 use crate::grid::default_grid_ref;
 use crate::guard::Suppress;
 use crate::statusline::{NO_CLICK, clear_click_defs};

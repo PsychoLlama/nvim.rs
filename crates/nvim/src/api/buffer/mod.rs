@@ -39,10 +39,9 @@ use crate::search::FORWARD;
 use crate::state::MODE_INSERT;
 use crate::state::mode::State;
 use crate::types::{
-    AcoSave, AlignTextPos, ApiDict, ApiString, Array, BCount, Boolean, BufUpdateCallbacks,
-    BufferHandle, ColNr, DoBufAction, DoBufStart, Error, ExtmarkOp, Integer, KeyDict_buf_attach,
-    KeyDict_buf_delete, KeyDict_empty, KeyDict_keymap, LineNr, LuaRef, MarkAdjustMode, MarkGet,
-    Object, Pos, TryState, UndoObjectType, WinSplit, WinStyle, size_t, uint64_t,
+    AcoSave, ApiDict, ApiString, Array, BCount, Boolean, BufUpdateCallbacks, BufferHandle, ColNr,
+    Error, Integer, KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_empty, KeyDict_keymap, LineNr,
+    LuaRef, Object, Pos, TryState, size_t, uint64_t,
 };
 use crate::undo::u_save_buf;
 
@@ -58,23 +57,6 @@ pub use self::lines::*;
 pub use self::marks::*;
 pub use self::props::*;
 pub use self::text::*;
-pub const kExtmarkMove: UndoObjectType = 1;
-pub const kExtmarkSplice: UndoObjectType = 0;
-pub const kAlignLeft: AlignTextPos = 0;
-pub const kWinStyleUnused: WinStyle = 0;
-pub const kWinSplitLeft: WinSplit = 0;
-pub const kExtmarkNoUndo: ExtmarkOp = 2;
-pub const kExtmarkUndo: ExtmarkOp = 1;
-pub const kExtmarkNOOP: ExtmarkOp = 0;
-pub const kMarkAdjustTerm: MarkAdjustMode = 2;
-pub const kMarkAdjustApi: MarkAdjustMode = 1;
-pub const kMarkAdjustNormal: MarkAdjustMode = 0;
-pub const DOBUF_FIRST: DoBufStart = 1;
-pub const DOBUF_WIPE: DoBufAction = 4;
-pub const DOBUF_UNLOAD: DoBufAction = 2;
-pub const kMarkAllNoResolve: MarkGet = 2;
-pub const kMarkBufLocal: MarkGet = 0;
-pub const DOBUF_DEL: DoBufAction = 3;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const INTERNAL_CALL_MASK: uint64_t = 1_u64

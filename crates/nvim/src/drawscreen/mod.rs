@@ -153,9 +153,6 @@ pub const SHOWCMD_COLS: ::core::ffi::c_int = 10;
 /// The narrowest screen the editor will lay windows out on.
 pub const MIN_COLUMNS: ::core::ffi::c_int = 12;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const FR_LEAF: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const FR_ROW: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FR_COL: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 static redraw_popupmenu: GlobalCell<bool> = GlobalCell::new(false);
 static msg_grid_invalid: GlobalCell<bool> = GlobalCell::new(false);
 static resizing_autocmd: GlobalCell<bool> = GlobalCell::new(false);
@@ -758,6 +755,5 @@ pub fn win_update_cursorline(mut window: Win, foldinfo: &mut FoldInfo) {
 }
 
 pub const NO_SCREEN: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const DEFAULT_GRID_HANDLE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;

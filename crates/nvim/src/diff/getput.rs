@@ -18,6 +18,8 @@
 use super::*;
 use crate::buffer::buflist_findpat_prefix;
 use crate::charset::skip;
+use crate::extmark::kExtmarkNOOP;
+use crate::extmark::kExtmarkUndo;
 use crate::message_fmt::msg_bytes;
 use crate::narrow::as_index;
 use crate::narrow::len_as_int;

@@ -80,9 +80,8 @@ use crate::option::shortmess;
 use crate::os::cshim::gettext;
 use crate::syntax::reset_synblock;
 use crate::types::{
-    AlignTextPos, BfaFlags, BlnFlags, Buffer, BufferRef, CdCause, DoBufAction, DoBufStart,
-    EStackType, ExArg, ExtmarkOp, Failed, GetFileFlags, LineNr, MarkAdjustMode, MetaIndex,
-    UndoObjectType, VarNumber, WinSplit, WinStyle, uint32_t,
+    BfaFlags, BlnFlags, Buffer, BufferRef, CdCause, DoBufAction, DoBufStart, EStackType, ExArg,
+    Failed, GetFileFlags, LineNr, MetaIndex, VarNumber, uint32_t,
 };
 use crate::undo::buf_is_changed;
 use crate::window::{check_colorcolumn, close_windows, window_layout_lock, window_layout_unlock};
@@ -116,19 +115,7 @@ pub use self::pos::*;
 pub use self::switch::*;
 pub use self::r#type::*;
 pub const _ISdigit: ::core::ffi::c_uint = 2048;
-pub const kExtmarkMove: UndoObjectType = 1;
-pub const kExtmarkSplice: UndoObjectType = 0;
-pub const kAlignLeft: AlignTextPos = 0;
-pub const kWinStyleMinimal: WinStyle = 1;
-pub const kWinStyleUnused: WinStyle = 0;
-pub const kWinSplitLeft: WinSplit = 0;
 pub const kCdCauseAuto: CdCause = 2;
-pub const kExtmarkNoUndo: ExtmarkOp = 2;
-pub const kExtmarkUndo: ExtmarkOp = 1;
-pub const kExtmarkNOOP: ExtmarkOp = 0;
-pub const kMarkAdjustTerm: MarkAdjustMode = 2;
-pub const kMarkAdjustApi: MarkAdjustMode = 1;
-pub const kMarkAdjustNormal: MarkAdjustMode = 0;
 pub const GETF_SWITCH: GetFileFlags = 4;
 pub const GETF_ALT: GetFileFlags = 2;
 pub const GETF_SETMARK: GetFileFlags = 1;

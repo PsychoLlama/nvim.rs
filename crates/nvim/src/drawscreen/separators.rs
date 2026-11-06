@@ -26,6 +26,9 @@ use crate::decoration::SignCountHalf;
 use crate::decoration::kMTMetaSignText;
 use crate::grid::default_gridview;
 use crate::optionstr::OptString;
+use crate::window::FR_COL;
+use crate::window::FR_LEAF;
+use crate::window::FR_ROW;
 use crate::winlayer::FrameRef;
 use crate::winlayer::Win;
 

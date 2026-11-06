@@ -21,6 +21,8 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::buffer::DOBUF_FIRST;
+use crate::buffer::DOBUF_GOTO;
 use crate::narrow::as_index;
 use crate::narrow::float_as_int;
 use crate::narrow::len_as_int;

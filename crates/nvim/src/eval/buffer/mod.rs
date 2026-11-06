@@ -60,18 +60,17 @@ use crate::narrow::number_as_int;
 use core::ffi::{CStr, c_int};
 
 use crate::buffer::state::swap_exists_action;
+use crate::memline::ML_DEL_MESSAGE;
 use crate::memline::ml_delete_flags;
 use crate::message::state::did_emsg;
 use crate::r#move::update_topline;
+use crate::normal::{set_visual_active, visual_active};
 use crate::path::path_with_url;
 use crate::sign::{buf_has_signs, get_buffer_signs};
 use crate::types::*;
 use crate::undo::u_sync_once;
-use crate::winlayer::graph::cmdwin_buf;
-pub const kExtmarkNoUndo: ExtmarkOp = 2;
-use crate::memline::ML_DEL_MESSAGE;
-use crate::normal::{set_visual_active, visual_active};
 use crate::undo::{buf_is_changed, u_clearallandblockfree, u_save, u_savesub, u_sync};
+use crate::winlayer::graph::cmdwin_buf;
 use crate::winlayer::{Buf, TabPage, Win, buffers, tab_windows, windows_in_tab};
 
 /// Argument `i` as a Number.

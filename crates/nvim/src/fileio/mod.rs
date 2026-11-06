@@ -89,7 +89,7 @@ use crate::strings::{FmtArg, formatted};
 use crate::types::AutoEvent;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    AcoSave, BlnFlags, Directory, ExArg, Failed, FileInfo, FileOffset, IOSIZE, LineNr, OptVal,
+    AcoSave, Directory, ExArg, Failed, FileInfo, FileOffset, IOSIZE, LineNr, OptVal,
     OptionSetFlags, RegMatch, ScriptId, ShmFlag, int64_t, uv_gid_t,
 };
 use crate::ui::{ui_flush, ui_has};
@@ -125,7 +125,6 @@ mod tempfile;
 pub use self::tempfile::*;
 mod stream;
 pub(crate) use self::stream::*;
-pub const BLN_DUMMY: BlnFlags = 4;
 pub const BAD_REPLACE: c_int = b'?' as c_int;
 pub const BAD_KEEP: c_int = -1;
 pub const BAD_DROP: c_int = -2;

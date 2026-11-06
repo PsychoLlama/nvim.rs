@@ -30,6 +30,9 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::extmark::kExtmarkNOOP;
+use crate::extmark::kExtmarkUndo;
+use crate::mark::JUMPLISTSIZE;
 use core::ffi::c_int;
 
 use super::*;

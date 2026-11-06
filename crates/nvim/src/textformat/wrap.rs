@@ -8,6 +8,12 @@
 
 #![forbid(unsafe_code)]
 
+use crate::change::OPENLINE_COM_LIST;
+use crate::change::OPENLINE_DELSPACES;
+use crate::change::OPENLINE_DO_COM;
+use crate::change::OPENLINE_FORMAT;
+use crate::change::OPENLINE_KEEPTRAIL;
+use crate::change::OPENLINE_MARKFIX;
 use crate::memline::Lines;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
@@ -434,7 +440,7 @@ pub fn internal_format(
         // lines; don't really redraw the window.
         let _ = open_line(
             FORWARD as c_int,
-            (OPENLINE_DELSPACES
+            OPENLINE_DELSPACES
                 + OPENLINE_MARKFIX
                 + if fo_white_par { OPENLINE_KEEPTRAIL } else { 0 }
                 + if do_comments { OPENLINE_DO_COM } else { 0 }
@@ -443,7 +449,7 @@ pub fn internal_format(
                     OPENLINE_COM_LIST
                 } else {
                     0
-                }) as c_int,
+                },
             if flags & INSCHAR_COM_LIST as c_int != 0 {
                 second_indent
             } else {

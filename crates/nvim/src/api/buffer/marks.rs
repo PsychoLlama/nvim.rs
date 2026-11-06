@@ -15,6 +15,7 @@
 
 use super::*;
 use crate::api::private::validate::err_bad_value;
+use crate::mark::kMarkAllNoResolve;
 use crate::winlayer::Win;
 
 pub fn nvim_buf_del_mark(buf: BufferHandle, name: ApiString) -> Result<Boolean, Error> {

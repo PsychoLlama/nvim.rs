@@ -21,6 +21,7 @@ use crate::cstr;
 use crate::highlight_group::{HLF_BFOOTER, HLF_BTITLE};
 use crate::mbyte::{c_cells_at, c_cluster_len, c_string_cells};
 use crate::statusline::hl_attr;
+use crate::winfloat::kAlignLeft;
 
 /// Draw one of the two border texts into the batch in progress.
 ///

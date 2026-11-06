@@ -11,6 +11,8 @@
 #![forbid(unsafe_code)]
 
 use crate::keycodes::SpecialKey;
+use crate::mark::kMarkBeginLine;
+use crate::mark::kMarkContext;
 use crate::strings::has_char;
 use crate::types::ColNr;
 use crate::types::Key;
@@ -27,8 +29,7 @@ use crate::mouse::do_mouse;
 use crate::normal::{
     ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, FIND_ANY, FIND_DEFINE, FIND_IDENT, FM_BACKWARD,
     FM_FORWARD, SMT_BAD, SMT_RARE, clear_op, clear_op_beep, ident_under_cursor, kDirectionNotSet,
-    kMTCharWise, kMarkBeginLine, kMarkContext, may_fold_open, nv_gotofile, nv_mark_move_to,
-    nv_put_opt,
+    kMTCharWise, may_fold_open, nv_gotofile, nv_mark_move_to, nv_put_opt,
 };
 use crate::options::{kOptFdoFlagBlock, kOptFdoFlagSearch};
 use crate::pos::MAXLNUM;

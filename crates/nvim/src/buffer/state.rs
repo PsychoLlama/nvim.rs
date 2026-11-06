@@ -17,10 +17,8 @@
 #![allow(non_upper_case_globals)]
 
 use crate::global_cell::GlobalCell;
-use crate::types::BlnFlags;
 use core::ffi::c_int;
 
-pub(crate) const BLN_LISTED: BlnFlags = 2;
 pub(crate) const SEA_NONE: c_int = 0 as c_int;
 pub(crate) const SEA_DIALOG: c_int = 1 as c_int;
 pub(crate) const SEA_QUIT: c_int = 2 as c_int;

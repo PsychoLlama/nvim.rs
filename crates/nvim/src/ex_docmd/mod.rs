@@ -75,9 +75,8 @@ use crate::syntax::{ex_ownsyntax, ex_syntax, ex_syntime};
 use crate::tag::do_tags;
 use crate::types::ExcId;
 use crate::types::{
-    Callback, CdCause, ChannelPart, CmdAddr, Direction, DoBufAction, DoBufStart, EStackArg,
-    EStackType, ExArg, ExArgt, Handle, LineNr, LuaRetMode, MarkGet, MotionType, OptMagic, uint8_t,
-    uint16_t,
+    Callback, CdCause, ChannelPart, CmdAddr, Direction, DoBufStart, EStackArg, EStackType, ExArg,
+    ExArgt, Handle, LineNr, LuaRetMode, MarkGet, MotionType, OptMagic, uint8_t, uint16_t,
 };
 use crate::undo::{ex_undojoin, ex_undolist};
 use crate::usercmd::{ex_comclear, ex_command, ex_delcommand};
@@ -141,7 +140,6 @@ pub const kCdCauseManual: CdCause = 0;
 pub const OPTION_MAGIC_OFF: OptMagic = 2;
 pub const OPTION_MAGIC_ON: OptMagic = 1;
 pub const kMarkAll: MarkGet = 1;
-pub const kMarkBufLocal: MarkGet = 0;
 pub const CSTP_THROW: c_uint = 4;
 pub const CSTP_INTERRUPT: c_uint = 2;
 pub const CSTP_ERROR: c_uint = 1;
@@ -194,13 +192,7 @@ pub struct CommandDefinition {
     pub cmd_argt: ExArgt,
     pub cmd_addr_type: CmdAddr,
 }
-pub const DOBUF_WIPE: DoBufAction = 4;
-pub const DOBUF_DEL: DoBufAction = 3;
-pub const DOBUF_UNLOAD: DoBufAction = 2;
-pub const DOBUF_MOD: DoBufStart = 3;
 pub const DOBUF_LAST: DoBufStart = 2;
-pub const DOBUF_FIRST: DoBufStart = 1;
-pub const DOBUF_CURRENT: DoBufStart = 0;
 pub const kChannelPartAll: ChannelPart = 4;
 pub const kMTLineWise: MotionType = 1;
 pub const VIM_QUESTION: c_uint = 4;

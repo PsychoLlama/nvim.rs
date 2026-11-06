@@ -34,6 +34,7 @@
 
 use super::*;
 use crate::charset::display::ptr2cells_at;
+use crate::drawscreen::SHOWCMD_COLS;
 use crate::guard::Depth;
 use crate::keycodes::{K_SPECIAL, KS_EXTRA, key_escape};
 use crate::mbyte::{cells_at, head_off};
@@ -44,9 +45,6 @@ use crate::types::Key;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::{c_int, c_long};
-
-/// Longest partial mapping `'showcmd'` will display.
-const SHOWCMD_COLS: c_int = 10;
 
 /// `<Esc>` and CTRL-C as the typeahead bytes they are.
 const ESC_BYTE: u8 = 0x1b;

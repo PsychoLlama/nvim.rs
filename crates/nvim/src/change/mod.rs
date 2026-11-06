@@ -93,7 +93,7 @@ use crate::types::AutoEvent;
 use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    BCount, CmdModFlags, ColNr, ExtmarkOp, FileMarkView, GraphemeState, LineNr, Pos, Vv, int64_t,
+    BCount, CmdModFlags, ColNr, FileMarkView, GraphemeState, LineNr, Pos, Vv, int64_t,
 };
 use crate::ui::state::Rows;
 use crate::ui::{ui_active, ui_has};
@@ -111,9 +111,6 @@ pub use self::leader::*;
 pub use self::open_line::*;
 pub use self::splice::*;
 pub use self::text::*;
-
-pub const kExtmarkUndo: ExtmarkOp = 1;
-pub const kExtmarkNOOP: ExtmarkOp = 0;
 
 /// `open_line()`'s `flags` argument -- upstream's anonymous enum in
 /// `change.h`.  Every one is passed in a `c_int` parameter, so `c_int` is
@@ -145,7 +142,6 @@ pub const SIN_INSERT: ::core::ffi::c_int = 2;
 /// `ml_delete_flags()`: report "N fewer lines".
 pub const ML_DEL_MESSAGE: ::core::ffi::c_int = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const JUMPLISTSIZE: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 pub const COM_NEST: u8 = b'n';
 pub const COM_BLANK: u8 = b'b';
 pub const COM_START: u8 = b's';

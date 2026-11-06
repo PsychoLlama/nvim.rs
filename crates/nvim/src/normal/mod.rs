@@ -25,8 +25,8 @@ use crate::global_cell::GlobalCell;
 use crate::keycodes::SpecialKey;
 use crate::mouse::{MSCR_DOWN, MSCR_LEFT, MSCR_RIGHT, MSCR_UP, nv_mouse, nv_mousescroll};
 use crate::types::{
-    CmdArg, Direction, GetFileFlags, Key, MarkGet, MarkMove, MarkMoveRes, MotionType, Pos,
-    SpellAddType, SpellMoveType, uint16_t,
+    CmdArg, Direction, Key, MarkGet, MarkMove, MotionType, Pos, SpellAddType, SpellMoveType,
+    uint16_t,
 };
 use core::ffi::{CStr, c_int, c_uint};
 
@@ -62,19 +62,8 @@ pub(crate) use self::misc::*;
 pub(crate) const _ISlower: c_uint = 512;
 pub(crate) const _ISupper: c_uint = 256;
 pub(crate) const kDirectionNotSet: Direction = 0;
-pub(crate) const kMarkChangedCursor: MarkMoveRes = 32;
-pub(crate) const kMarkChangedLine: MarkMoveRes = 16;
-pub(crate) const kMarkSwitchedBuf: MarkMoveRes = 4;
-pub(crate) const kMarkMoveFailed: MarkMoveRes = 2;
-pub(crate) const kMarkMoveSuccess: MarkMoveRes = 1;
-pub(crate) const kMarkJumpList: MarkMove = 16;
-pub(crate) const kMarkSetView: MarkMove = 8;
 pub(crate) const KMarkNoContext: MarkMove = 4;
-pub(crate) const kMarkContext: MarkMove = 2;
-pub(crate) const kMarkBeginLine: MarkMove = 1;
 pub(crate) const kMarkAll: MarkGet = 1;
-pub(crate) const GETF_ALT: GetFileFlags = 2;
-pub(crate) const GETF_SETMARK: GetFileFlags = 1;
 pub(crate) use crate::cmdhist::HIST_SEARCH;
 pub(crate) const VSE_NONE: c_uint = 0;
 pub(crate) const kMTLineWise: MotionType = 1;

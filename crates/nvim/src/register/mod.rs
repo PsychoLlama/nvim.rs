@@ -94,10 +94,10 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    ApiString, BCount, BlockDef, CharsizeArg, CmdModFlags, ColNr, Direction, ExArg, ExtmarkOp,
-    GRegFlags, HashTab, LineNr, MotionType, OpArg, PUT_BLOCK_INNER, PUT_CURSEND, PUT_CURSLINE,
-    PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, Pos, PutFlags, SaveVEvent,
-    UndoObjectType, VarLock, YankReg, int64_t, kBoolVarFalse, kBoolVarTrue, ptrdiff_t, size_t,
+    ApiString, BCount, BlockDef, CharsizeArg, CmdModFlags, ColNr, Direction, ExArg, GRegFlags,
+    HashTab, LineNr, MotionType, OpArg, PUT_BLOCK_INNER, PUT_CURSEND, PUT_CURSLINE, PUT_FIXINDENT,
+    PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, Pos, PutFlags, SaveVEvent, VarLock, YankReg,
+    int64_t, kBoolVarFalse, kBoolVarTrue, ptrdiff_t, size_t,
 };
 use crate::ui::state::Columns;
 use crate::ui::ui_has;
@@ -120,11 +120,6 @@ pub use self::special::*;
 pub use self::store::*;
 pub use self::yank::*;
 
-pub const kExtmarkMove: UndoObjectType = 1;
-pub const kExtmarkSplice: UndoObjectType = 0;
-pub const kExtmarkNoUndo: ExtmarkOp = 2;
-pub const kExtmarkUndo: ExtmarkOp = 1;
-pub const kExtmarkNOOP: ExtmarkOp = 0;
 pub const kMTUnknown: MotionType = -1;
 pub const kMTBlockWise: MotionType = 2;
 pub const kMTLineWise: MotionType = 1;

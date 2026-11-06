@@ -55,7 +55,6 @@ pub const kExtmarkHighlight: ExtmarkType = 32;
 pub const kExtmarkVirtLines: ExtmarkType = 16;
 pub const kExtmarkVirtText: ExtmarkType = 8;
 pub const kExtmarkSign: ExtmarkType = 2;
-pub const kExtmarkNone: ExtmarkType = 1;
 /// No allocated decoration: the index a `DecorSignHighlight` chain ends on.
 pub const DECOR_ID_INVALID: uint32_t = u32::MAX;
 pub(crate) use crate::decoration::{

@@ -15,6 +15,7 @@
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::buffer::DOBUF_WIPE;
 use crate::buffer::{BufRef, current_buf};
 use crate::cstr;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_set_tab};

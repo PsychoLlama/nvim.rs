@@ -19,6 +19,7 @@
 
 use super::Jumped;
 use super::*;
+use crate::buffer::GETF_SETMARK;
 use crate::formatted;
 use crate::highlight_group::HLF_W;
 use crate::memory::{ThinCString, XString};

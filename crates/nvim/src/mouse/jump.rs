@@ -27,6 +27,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::grid::DEFAULT_GRID_HANDLE;
 use crate::types::Key;
 use crate::winlayer::cmdwin_window;
 use core::ffi::c_int;

@@ -16,6 +16,9 @@
 
 use super::*;
 use crate::api::private::helpers::{api_try, scope_vars};
+use crate::buffer::DOBUF_FIRST;
+use crate::buffer::DOBUF_UNLOAD;
+use crate::buffer::DOBUF_WIPE;
 use crate::guard::Suppress;
 use crate::types::Failed;
 

@@ -92,8 +92,8 @@ use crate::strings::shellescape;
 use crate::types::AutoEvent;
 use crate::types::{
     AcoSave, ApiString, CmdAddr, CmdModFlags, ColNr, DiffBlock, DiffLine, DiffLineChange,
-    EvalFuncData, ExArg, ExtmarkOp, Hlf, LineNr, OptInt, OptVal, ScriptId, TypVal, VarNumber,
-    size_t, uint64_t,
+    EvalFuncData, ExArg, Hlf, LineNr, OptInt, OptVal, ScriptId, TypVal, VarNumber, size_t,
+    uint64_t,
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_save, u_sync};
@@ -135,8 +135,6 @@ pub(crate) use self::refine::*;
 pub use self::scroll::*;
 pub use self::update::*;
 pub const _ISdigit: ::core::ffi::c_uint = 2048;
-pub const kExtmarkUndo: ExtmarkOp = 1;
-pub const kExtmarkNOOP: ExtmarkOp = 0;
 /// One diff run: the two sides and the answer.
 ///
 /// `internal` picks the engine: the built-in one reads each side's `text`

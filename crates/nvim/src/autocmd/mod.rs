@@ -134,7 +134,6 @@ pub(crate) enum SuspendLatch {
     ResumeOwed,
 }
 
-pub const NO_SCREEN: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const PROF_YES: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;
 /// One row of [`EVENT_NAMES`]: a spelling of an event, and which event it

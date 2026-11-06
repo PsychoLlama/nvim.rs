@@ -24,6 +24,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::extmark::kExtmarkUndo;
 use crate::memory::XString;
 use crate::narrow::{len_as_int, number_as_int};
 use crate::winlayer::{Buf, Win};

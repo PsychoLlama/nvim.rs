@@ -22,6 +22,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::extmark::kExtmarkUndo;
 use crate::guard::Suppress;
 use crate::memline::MlFlags;
 use crate::narrow::len_as_int;

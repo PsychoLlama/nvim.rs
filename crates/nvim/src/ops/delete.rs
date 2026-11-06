@@ -27,6 +27,7 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::extmark::kExtmarkUndo;
 use crate::guard::Suppress;
 use crate::memline::MlFlags;
 use crate::winlayer::{Buf, Win};

@@ -11,6 +11,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mark::kMarkBufLocal;
 use crate::regexp::{byte_count, low_byte};
 use crate::types::ColNr;
 use core::ffi::c_int;
@@ -26,8 +27,8 @@ use crate::plines::win_linetabsize;
 use crate::regexp::{
     ByteClass, RA_CONT, RA_MATCH, RA_NOMATCH, RI_FLAGS, Rex, char_at_nul, char_len_at,
     cleanup_subexpr, cleanup_zsubexpr, cluster_len_at, composes_at, cstrchr, cstrncmp,
-    kMarkBufLocal, match_with_backref, nul_terminated_len, reg_getline, reg_getline_len,
-    reg_match_visual, reg_nextline, reg_prev_class,
+    match_with_backref, nul_terminated_len, reg_getline, reg_getline_len, reg_match_visual,
+    reg_nextline, reg_prev_class,
 };
 use crate::types::{LineNr, NUL, Pos, uint32_t};
 

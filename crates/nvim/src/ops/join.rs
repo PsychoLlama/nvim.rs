@@ -23,6 +23,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::extmark::kExtmarkUndo;
 use crate::guard::Suppress;
 use crate::narrow::len_as_int;
 use crate::winlayer::{Buf, Win};

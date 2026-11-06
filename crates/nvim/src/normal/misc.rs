@@ -10,6 +10,8 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::buffer::GETF_ALT;
+use crate::buffer::GETF_SETMARK;
 use crate::keycodes::SpecialKey;
 use crate::types::Handle;
 use crate::types::Key;
@@ -31,9 +33,8 @@ use crate::help::open_help;
 use crate::message::state::did_emsg;
 use crate::message::{msg, msg_ext_set_trigger};
 use crate::normal::{
-    GETF_ALT, GETF_SETMARK, check_clear_op, check_clear_op_quit, clear_op, clear_op_beep,
-    end_visual_mode, kMTCharWise, nv_left, nv_operator, nv_pcmark, set_visual_select, v_visop,
-    visual_active, visual_select,
+    check_clear_op, check_clear_op_quit, clear_op, clear_op_beep, end_visual_mode, kMTCharWise,
+    nv_left, nv_operator, nv_pcmark, set_visual_select, v_visop, visual_active, visual_select,
 };
 use crate::options::kOptBoFlagEsc;
 use crate::os::cshim::gettext;

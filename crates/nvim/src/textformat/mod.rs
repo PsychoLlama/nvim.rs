@@ -42,12 +42,6 @@ pub(crate) use self::para::*;
 pub use self::wrap::*;
 
 pub const kBufOptFormatexpr: c_int = 36;
-pub const OPENLINE_FORMAT: c_uint = 32;
-pub const OPENLINE_COM_LIST: c_uint = 16;
-pub const OPENLINE_MARKFIX: c_uint = 8;
-pub const OPENLINE_KEEPTRAIL: c_uint = 4;
-pub const OPENLINE_DO_COM: c_uint = 2;
-pub const OPENLINE_DELSPACES: c_uint = 1;
 pub const INDENT_SET: c_uint = 1;
 pub const SIN_CHANGED: c_uint = 1;
 

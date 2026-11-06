@@ -15,6 +15,8 @@
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::buffer::DOBUF_FIRST;
+use crate::buffer::DOBUF_GOTO;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_set_split, cmdmod_set_tab};
 use crate::guard::{Allow, Suppress};
 use crate::option::vars::P_ICM;

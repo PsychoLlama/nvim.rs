@@ -11,6 +11,9 @@
 #![forbid(unsafe_code)]
 
 use crate::autocmd::fire_autocmds;
+use crate::buffer::DOBUF_DEL;
+use crate::buffer::DOBUF_UNLOAD;
+use crate::buffer::DOBUF_WIPE;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::AutoEvent;
@@ -30,10 +33,7 @@ use crate::ex_cmds2::{autowrite_all, check_changed, dialog_changed};
 
 use crate::ex_docmd::argopt::get_tabpage_arg;
 
-use crate::ex_docmd::{
-    CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, DOBUF_DEL, DOBUF_UNLOAD, DOBUF_WIPE, EXIT_FAILURE,
-    cmdmod_has,
-};
+use crate::ex_docmd::{CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, EXIT_FAILURE, cmdmod_has};
 
 use crate::getchar::beep_flush;
 use crate::keycodes::SpecialKey;

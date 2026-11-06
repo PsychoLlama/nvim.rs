@@ -97,9 +97,9 @@ use crate::state::{MODE_INSERT, MODE_REPLACE, VREPLACE_FLAG, virtual_active};
 use crate::textformat::{auto_format, has_format_option, op_format, op_formatexpr};
 use crate::types::TAB;
 use crate::types::{
-    BCount, BlockDef, Callback, CharsizeArg, CmdArg, CmdModFlags, ColNr, Dict, ExtmarkOp, LineNr,
-    MotionType, OpArg, OpType, OptInt, OptSet, Pos, TypVal, UVarNumber, VarNumber, int32_t,
-    int64_t, size_t, ssize_t,
+    BCount, BlockDef, Callback, CharsizeArg, CmdArg, CmdModFlags, ColNr, Dict, LineNr, MotionType,
+    OpArg, OpType, OptInt, OptSet, Pos, TypVal, UVarNumber, VarNumber, int32_t, int64_t, size_t,
+    ssize_t,
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_clearline, u_save, u_save_cursor};
@@ -142,9 +142,6 @@ pub const _ISupper: ::core::ffi::c_ushort = 256;
 
 /// Enough for any number this module formats, plus its NUL.
 pub const NUMBUFLEN: usize = 65;
-
-/// `ExtmarkOp`: the edit is undoable, so extmarks move with it.
-pub const kExtmarkUndo: ExtmarkOp = 1;
 
 /// The three region shapes an operator can be given.
 pub const kMTCharWise: MotionType = 0;

@@ -96,7 +96,6 @@ pub(crate) use schar::{
 
 pub(crate) static default_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid::empty());
 
-const kAlignLeft: AlignTextPos = 0;
 const kAlignCenter: AlignTextPos = 1;
 const kAlignRight: AlignTextPos = 2;
 /// `grid_put_linebuf` flag: 'rightleft' text.
@@ -106,7 +105,7 @@ pub const SLF_WRAP: c_int = 2;
 /// `grid_put_linebuf` flag: number the cleared columns' vcols upwards.
 pub const SLF_INC_VCOL: c_int = 4;
 /// Handle of `default_grid`; window grids are numbered above it.
-const DEFAULT_GRID_HANDLE: c_int = 1;
+pub(crate) const DEFAULT_GRID_HANDLE: c_int = 1;
 
 /// The screen grid, as a handle.
 ///

@@ -29,6 +29,10 @@ use crate::types::ColNr;
 use crate::types::Handle;
 use crate::types::LineNr;
 use crate::winfloat::WIN_CONFIG_INIT;
+use crate::winfloat::kAlignLeft;
+use crate::winfloat::kWinSplitLeft;
+use crate::winfloat::kWinStyleMinimal;
+use crate::winfloat::kWinStyleUnused;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 

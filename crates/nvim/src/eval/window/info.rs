@@ -13,6 +13,8 @@
 use super::*;
 use crate::memory::ThinCString;
 use crate::types::{VAR_STRING, kListLenMayKnow, kListLenUnknown};
+use crate::window::FR_LEAF;
+use crate::window::FR_ROW;
 
 /// One `getwininfo()` entry.
 fn get_win_info(window: Win, tpnr: c_int, winnr: c_int) -> DictRef {

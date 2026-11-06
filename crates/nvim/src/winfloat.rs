@@ -35,6 +35,8 @@ use crate::narrow::number_as_int;
 use crate::narrow::number_as_lnum;
 use crate::types::ColNr;
 use crate::types::Handle;
+use crate::window::kZIndexFloatDefault;
+use crate::window::kZIndexMessages;
 use crate::winlayer::cmdwin_window;
 use crate::winlayer::prev_window;
 use core::ffi::{CStr, c_int};
@@ -73,13 +75,10 @@ use crate::winlayer::{
     windows_in_tab,
 };
 
-/// Above this `zindex` a float is not capped by 'cmdheight'.
-const kZIndexMessages: c_int = 200;
-const kZIndexFloatDefault: c_int = 50;
-const kAlignLeft: AlignTextPos = 0;
-const kWinSplitLeft: WinSplit = 0;
-const kWinStyleUnused: WinStyle = 0;
-const kWinStyleMinimal: WinStyle = 1;
+pub(crate) const kAlignLeft: AlignTextPos = 0;
+pub(crate) const kWinSplitLeft: WinSplit = 0;
+pub(crate) const kWinStyleUnused: WinStyle = 0;
+pub(crate) const kWinStyleMinimal: WinStyle = 1;
 
 /// An unset title/footer.
 const NO_VIRT_TEXT: VirtText = VirtText::new();

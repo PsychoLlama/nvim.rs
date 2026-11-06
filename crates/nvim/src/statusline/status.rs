@@ -20,6 +20,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::window::FR_COL;
 use crate::winlayer::Buf;
 use core::ffi::c_int;
 

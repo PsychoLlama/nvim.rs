@@ -69,21 +69,16 @@ use crate::normal::end_visual_mode;
 use crate::option::vars::p_acd;
 use crate::os::fs::os_chdir;
 use crate::types::*;
-use crate::winlayer::graph::{cmdwin_type, cmdwin_win, prevwin};
-use crate::winlayer::{
-    Buf, FrameRef, TabPage, Win, WinId, last_window, tab_windows, tabs, windows_in_tab,
-};
-use core::ffi::{CStr, c_int};
-pub const FR_LEAF: c_int = 0;
-pub const FR_ROW: c_int = 1;
-/// Window handles start here, so a `winnr()`-shaped argument at or above it is
-/// a window id rather than a window number.
-pub const LOWEST_WIN_ID: c_int = 1000;
 use crate::window::{
     check_split_disallowed, find_tabpage, goto_tabpage_tp, goto_tabpage_win, tabpage_index,
     unuse_tabpage, use_tabpage, win_drag_status_line, win_drag_vsep_line, win_get_tabwin, win_goto,
     win_horz_neighbor, win_new_height, win_new_width, win_splitmove, win_valid, win_vert_neighbor,
 };
+use crate::winlayer::graph::{cmdwin_type, cmdwin_win, prevwin};
+use crate::winlayer::{
+    Buf, FrameRef, TabPage, Win, WinId, last_window, tab_windows, tabs, windows_in_tab,
+};
+use core::ffi::{CStr, c_int};
 /// The three window pointers a tab page keeps, read the way upstream reads
 /// them.
 ///

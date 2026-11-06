@@ -18,6 +18,7 @@
 
 use super::*;
 use crate::api::private::validate::{err_bad_number, err_expected};
+use crate::extmark::kExtmarkNone;
 use crate::narrow::{number_as_int, number_as_u32};
 use crate::types::DictBuilder;
 use crate::winlayer::Buf;

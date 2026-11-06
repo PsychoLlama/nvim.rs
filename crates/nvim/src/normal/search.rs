@@ -15,6 +15,15 @@
 #![forbid(unsafe_code)]
 
 use crate::keycodes::ModMask;
+use crate::mark::kMarkBeginLine;
+use crate::mark::kMarkChangedCursor;
+use crate::mark::kMarkChangedLine;
+use crate::mark::kMarkContext;
+use crate::mark::kMarkJumpList;
+use crate::mark::kMarkMoveFailed;
+use crate::mark::kMarkMoveSuccess;
+use crate::mark::kMarkSetView;
+use crate::mark::kMarkSwitchedBuf;
 use crate::types::Failed;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
@@ -30,9 +39,7 @@ use crate::mark::{get_changelist, get_jumplist, mark_get, mark_move_to, setmark}
 use crate::message::emsg;
 use crate::normal::{
     KMarkNoContext, check_clear_op, check_clear_op_quit, clear_op, clear_op_beep,
-    e_changelist_is_empty, kMTCharWise, kMTLineWise, kMarkAll, kMarkBeginLine, kMarkChangedCursor,
-    kMarkChangedLine, kMarkContext, kMarkJumpList, kMarkMoveFailed, kMarkMoveSuccess, kMarkSetView,
-    kMarkSwitchedBuf, nv_operator,
+    e_changelist_is_empty, kMTCharWise, kMTLineWise, kMarkAll, nv_operator,
 };
 use crate::option::vars::{fdo_flags, jop_flags, p_hls};
 use crate::options::{kOptFdoFlagMark, kOptFdoFlagSearch, kOptJopFlagView};

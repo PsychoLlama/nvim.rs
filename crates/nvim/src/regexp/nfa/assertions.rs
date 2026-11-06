@@ -14,13 +14,14 @@
 )]
 
 use super::program::NfaState;
+use crate::mark::kMarkBufLocal;
 use crate::narrow::const_len_as_int;
 use crate::regexp::NfaOp;
 
 use super::run::nfa_re_num_cmp;
 use crate::mark::mark_get;
 use crate::plines::win_linetabsize;
-use crate::regexp::{Rex, kMarkBufLocal, reg_getline, reg_getline_len, reg_match_visual};
+use crate::regexp::{Rex, reg_getline, reg_getline_len, reg_match_visual};
 use crate::types::{ColNr, LineNr, MB_MAXBYTES};
 
 use crate::winlayer::Win;

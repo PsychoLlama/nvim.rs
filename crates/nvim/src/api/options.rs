@@ -23,6 +23,7 @@ use crate::api::private::helpers::{
 use crate::autocmd::{
     aucmd_prepbuf, aucmd_restbuf, block_autocmds, do_filetype_autocmd, has_event, unblock_autocmds,
 };
+use crate::buffer::BLN_DUMMY;
 use crate::buffer::{BufFlags, BufRef, buflist_new, wipe_buffer};
 use crate::option::kOptScopeBuf;
 use crate::option::kOptScopeGlobal;
@@ -47,9 +48,6 @@ use crate::types::{
 };
 use crate::window::close_windows;
 use crate::winlayer::Buf;
-
-/// `buflist_new`: a scratch buffer, not on the buffer list.
-const BLN_DUMMY: c_int = 4;
 
 /// `current_sctx.sc_sid` for a `:set` that came from nowhere in particular,
 /// which is what the scratch buffer's two option writes are.

@@ -10,6 +10,7 @@
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
+use crate::grid::DEFAULT_GRID_HANDLE;
 use crate::winlayer::cmdline_window;
 use core::ffi::{CStr, c_int, c_uint};
 use std::rc::Rc;
@@ -65,9 +66,9 @@ use crate::strings::reversed_text;
 use crate::tag::state::g_do_tagpreview;
 use crate::types::ui::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};
 use crate::types::{
-    AlignTextPos, ApiString, Array, BufferHandle, Dict, Float, Handle, Hlf, Integer, LineNr,
-    Object, OptInt, OptVal, PumItem, ScreenAttr, ScreenChar, VarNumber, VimMenu, WinConfig,
-    WinSplit, WinStyle, kBoolVarFalse, kBoolVarTrue, uint32_t,
+    ApiString, Array, BufferHandle, Dict, Float, Handle, Hlf, Integer, LineNr, Object, OptInt,
+    OptVal, PumItem, ScreenAttr, ScreenChar, VarNumber, VimMenu, WinConfig, kBoolVarFalse,
+    kBoolVarTrue, uint32_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{
@@ -92,14 +93,9 @@ pub use self::preview::*;
 mod menu;
 pub use self::menu::*;
 
-pub const kAlignLeft: AlignTextPos = 0;
-pub const kWinStyleUnused: WinStyle = 0;
-pub const kWinSplitLeft: WinSplit = 0;
 pub const kZIndexCmdlinePopupMenu: ::core::ffi::c_int = 250;
 pub const kZIndexPopupMenu: ::core::ffi::c_int = 100;
-pub const kZIndexFloatDefault: ::core::ffi::c_int = 50;
 pub(crate) use crate::insexpand::{CPT_ABBR, CPT_KIND, CPT_MENU};
-pub const DEFAULT_GRID_HANDLE: c_int = 1;
 
 // The menu's state. Every one of these is written by one of the placement
 // steps in `layout` and read by `draw`; they are separate cells rather than

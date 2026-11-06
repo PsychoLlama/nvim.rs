@@ -18,6 +18,7 @@
 
 mod tables;
 
+use crate::buffer::KEYMAP_INIT;
 use crate::charset::char2cells;
 use crate::cstr;
 use crate::drawscreen::status_redraw_curbuf;
@@ -626,7 +627,6 @@ fn digraph_setlist_common(arg: &TypVal) -> Result<(), DigraphError> {
 // ---------------------------------------------------------------------------
 // 'keymap' option: language mappings loaded from a keymap file.
 
-const KEYMAP_INIT: int16_t = 1;
 const KEYMAP_LOADED: int16_t = 2;
 const B_IMODE_LMAP: OptInt = 1;
 /// Maximum length of `from` plus `to` in one keymap entry.

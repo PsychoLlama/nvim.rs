@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::grid::{SCHAR_BUF_SIZE, default_grid_ref, default_gridview, schar_text};
+use crate::window::kZIndexMessages;
 use crate::winlayer::Win;
 use core::ffi::{c_int, c_uint};
 

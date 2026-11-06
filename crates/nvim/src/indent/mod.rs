@@ -19,6 +19,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
+use crate::extmark::kExtmarkUndo;
 use crate::semsg;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int, c_uint};
@@ -72,7 +73,6 @@ pub use expr::{
 const INDENT_SET: c_uint = 1;
 const INDENT_DEC: c_uint = 3;
 const kBufOptIndentexpr: c_uint = 47;
-const kExtmarkUndo: ExtmarkOp = 1;
 const kOptIndentexpr: OptIndex = 148;
 const kOptVartabstop: OptIndex = 338;
 const TAB: c_int = 9;

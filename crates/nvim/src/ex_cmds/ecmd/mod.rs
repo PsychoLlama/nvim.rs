@@ -32,10 +32,12 @@ mod switch;
 
 use self::switch::{Switch, delbuf_msg, switch_to_other_buffer};
 use super::{
-    BFA_KEEP_UNDO, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, KEYMAP_INIT, READ_KEEP_UNDO,
-    READ_NOWINENTER, SEA_DIALOG, SEA_QUIT,
+    CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, READ_KEEP_UNDO, READ_NOWINENTER, SEA_DIALOG,
+    SEA_QUIT,
 };
 use crate::arglist::check_arg_idx;
+use crate::buffer::BFA_KEEP_UNDO;
+use crate::buffer::KEYMAP_INIT;
 use crate::ex_cmds::say;
 use crate::fileio::ReadFlags;
 use crate::types::AutoEvent;
@@ -429,7 +431,7 @@ pub(crate) fn do_ecmd(
         if let Some(command) = &command_text {
             let _ = do_cmdline(Some(command.to_bytes()), None, DoCmdOpts::VERBOSE);
         }
-        if c_int::from(Buf::current().b_kmap_state) & KEYMAP_INIT != 0 {
+        if Buf::current().b_kmap_state & KEYMAP_INIT != 0 {
             let _ = keymap_init();
         }
 

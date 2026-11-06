@@ -15,7 +15,9 @@
 #![forbid(unsafe_code)]
 
 use crate::change::{appended_lines_buf, deleted_lines_buf};
+use crate::extmark::kExtmarkUndo;
 use crate::grid::{MAX_SCHAR_SIZE, schar_put_scratch};
+use crate::mark::kMarkAdjustTerm;
 use crate::mark::mark_adjust_buf;
 use crate::memline::{ml_append_buf_terminated, ml_delete_buf};
 use crate::narrow::len_as_int;
@@ -25,7 +27,7 @@ use crate::winlayer::Buf;
 use core::ffi::c_int;
 
 use super::refresh::invalidate_terminal;
-use super::{SB_MAX, Term, kExtmarkUndo, kMarkAdjustTerm};
+use super::{SB_MAX, Term};
 use crate::pos::MAXLNUM;
 
 /// A cell holding nothing. vterm reports an empty cell as a zero `schar`;

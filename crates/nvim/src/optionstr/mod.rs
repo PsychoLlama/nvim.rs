@@ -29,7 +29,6 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::types::{AlignTextPos, WinSplit, WinStyle};
 use core::ffi::{CStr, c_int, c_uint};
 
 mod check;
@@ -53,10 +52,6 @@ mod statusline;
 pub use self::statusline::*;
 use crate::regexp::vim_regexec;
 use crate::terminal::terminal_notify_theme;
-pub const kAlignLeft: AlignTextPos = 0;
-pub const kWinStyleUnused: WinStyle = 0;
-pub const kWinSplitLeft: WinSplit = 0;
-pub const kZIndexFloatDefault: ::core::ffi::c_int = 50;
 pub const CPT_MENU: c_uint = 2;
 pub const CPT_KIND: c_uint = 1;
 pub const CPT_ABBR: c_uint = 0;

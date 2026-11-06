@@ -24,6 +24,7 @@ use super::addrtype::{arglist_len, get_cmd_default_range, loaded_buffer_range};
 use crate::cstr::byte_at;
 use crate::ex_docmd::ex_msg;
 use crate::ex_docmd::is_user_cmd;
+use crate::mark::kMarkBufLocal;
 use crate::mark::{mark_check, mark_get, mark_get_visual, mark_move_to};
 use crate::message::emsg;
 use crate::narrow::len_as_int;
@@ -46,7 +47,7 @@ use crate::ex_docmd::lookup::find_ex_command;
 use crate::ex_docmd::window::{current_tab_nr, current_win_nr};
 use crate::ex_docmd::{
     INT32_MAX, e_backslash, e_invrange, e_line_number_out_of_range, e_no_errors, e_norange,
-    kMarkAll, kMarkBufLocal, searchcmdlen,
+    kMarkAll, searchcmdlen,
 };
 
 use crate::fold::has_folding;

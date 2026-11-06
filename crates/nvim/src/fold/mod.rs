@@ -84,7 +84,6 @@ use open_close::check_closed;
 pub(crate) static disable_fold_update: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 
 pub const VIRTTEXT_EMPTY: VirtText = VirtText::new();
-pub const kExtmarkUndo: ExtmarkOp = 1;
 
 /// The deepest nesting 'foldnestmax' will accept.
 pub const MAX_LEVEL: c_int = 20;

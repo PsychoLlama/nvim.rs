@@ -64,10 +64,9 @@ use crate::types::AutoEvent;
 use crate::types::builders::DictBuf;
 use crate::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::types::{
-    AcoSave, BufferHandle, ColNr, Event, ExtmarkOp, Handle, HlAttrs, LineNr, MarkAdjustMode,
-    Object, OptVal, OptionSetFlags, Pos, RefcountSize, RgbValue, SaveVEvent, Terminal,
-    TerminalOptions, VTermColor, VTermColor_rgb, VTermScreenCell, VTermScreenCellAttrs, VarNumber,
-    int16_t, uint8_t,
+    AcoSave, BufferHandle, ColNr, Event, Handle, HlAttrs, LineNr, Object, OptVal, OptionSetFlags,
+    Pos, RefcountSize, RgbValue, SaveVEvent, Terminal, TerminalOptions, VTermColor, VTermColor_rgb,
+    VTermScreenCell, VTermScreenCellAttrs, VarNumber, int16_t, uint8_t,
 };
 use crate::vterm::host::Value;
 use crate::vterm::screen::ZERO_SCREEN_CELL;
@@ -93,9 +92,6 @@ pub(crate) use refresh::{
 /// The largest `'scrollback'` that means anything; the option's negative
 /// "unlimited" spelling becomes this.
 const SB_MAX: c_int = 1000000;
-/// Marks in trimmed scrollback move the way a terminal's do, not an edit's.
-const kMarkAdjustTerm: MarkAdjustMode = 2;
-const kExtmarkUndo: ExtmarkOp = 1;
 /// The most columns [`terminal_get_line_attributes`] will resolve;
 /// `drawline` sizes its array to match.
 const TERM_ATTRS_MAX: c_int = 1024;

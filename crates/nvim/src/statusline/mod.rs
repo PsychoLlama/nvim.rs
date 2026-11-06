@@ -65,9 +65,8 @@ use crate::highlight_group::{HLF_S, HLF_SNC};
 use crate::options::kOptStatuscolumn;
 use crate::optionstr::OptStringRef;
 use crate::types::{
-    AlignTextPos, ClickLine, GridView, Hlf, LineNr, MAXPATHL, Object, OptIndex, OptionSetFlags,
-    ScreenChar, SignTextAttrs, StatusCol, StlClickDefinition, StlClickDefinition_type_0,
-    StlClickRecord, Vv, WinSplit, WinStyle,
+    ClickLine, GridView, Hlf, LineNr, MAXPATHL, Object, OptIndex, OptionSetFlags, ScreenChar,
+    SignTextAttrs, StatusCol, StlClickDefinition, StlClickDefinition_type_0, StlClickRecord, Vv,
 };
 use crate::window::global_stl_height;
 use crate::winlayer::Win;
@@ -87,16 +86,12 @@ pub const kStlClickFuncRun: StlClickDefinition_type_0 = 3;
 pub const kStlClickTabClose: StlClickDefinition_type_0 = 2;
 pub const kStlClickTabSwitch: StlClickDefinition_type_0 = 1;
 pub const kStlClickDisabled: StlClickDefinition_type_0 = 0;
-pub const kAlignLeft: AlignTextPos = 0;
-pub const kWinStyleUnused: WinStyle = 0;
-pub const kWinSplitLeft: WinSplit = 0;
 /// Most sign columns `'signcolumn'` will ever ask for.
 pub const SIGN_SHOW_MAX: ::core::ffi::c_int = 9;
 pub type NumberBase = ::core::ffi::c_uint;
 pub const kNumBaseHexadecimal: NumberBase = 16;
 pub const kNumBaseDecimal: NumberBase = 10;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const FR_COL: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 pub const SID_ERROR: ::core::ffi::c_int = -5 as ::core::ffi::c_int;

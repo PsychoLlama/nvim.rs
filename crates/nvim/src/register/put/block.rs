@@ -18,6 +18,7 @@
 )]
 
 use crate::cstr;
+use crate::extmark::kExtmarkUndo;
 use crate::mbyte::{c_char_info, c_next_cluster, head_off};
 use crate::narrow::len_as_int;
 use crate::winlayer::{Buf, Win};

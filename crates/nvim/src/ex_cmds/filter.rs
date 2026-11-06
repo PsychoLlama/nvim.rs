@@ -21,7 +21,8 @@
 )]
 
 use super::say;
-use super::{buf_autocmd, check_secure, kExtmarkNOOP};
+use super::{buf_autocmd, check_secure};
+use crate::extmark::kExtmarkNOOP;
 use crate::memline::Lines;
 use crate::types::AutoEvent;
 use crate::types::ColNr;

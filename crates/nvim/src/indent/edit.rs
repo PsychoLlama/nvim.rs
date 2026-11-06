@@ -3,6 +3,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::extmark::kExtmarkUndo;
 use crate::memory::XString;
 use crate::narrow::number_as_col;
 use core::ffi::CStr;

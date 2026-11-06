@@ -25,13 +25,15 @@
 
 use super::LineCopy;
 use super::say;
-use super::{MAXLNUM, RE_MAGIC, e_interr, kExtmarkNOOP, kExtmarkUndo};
+use super::{MAXLNUM, RE_MAGIC, e_interr};
 use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
 use crate::charset::Str2NrBases;
 use crate::charset::{skip, str2nr_scan};
 use crate::edit::{BeginlineOpts, beginline};
 use crate::extmark::extmark_splice;
+use crate::extmark::kExtmarkNOOP;
+use crate::extmark::kExtmarkUndo;
 use crate::getchar::state::got_int;
 use crate::mark::mark_adjust;
 use crate::memline::{Lines, ml_append_cstr, ml_delete};

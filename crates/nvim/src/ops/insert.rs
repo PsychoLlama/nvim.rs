@@ -33,6 +33,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::extmark::kExtmarkUndo;
 use crate::memline::MlFlags;
 use crate::narrow::len_as_int;
 use crate::types::Key;

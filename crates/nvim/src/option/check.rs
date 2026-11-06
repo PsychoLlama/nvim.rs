@@ -17,6 +17,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::drawscreen::NO_SCREEN;
 use crate::global_cell::field;
 use crate::types::Handle;
 use crate::winlayer::Buf;
@@ -51,8 +52,8 @@ use crate::types::{
 use crate::winlayer::Win;
 
 use super::{
-    HLATTRS_INIT, Local, NO_SCREEN, WinOptSet, didset_options_sctx, didset_window_options,
-    kFillchars, kListchars, kOptFlagHLOnly, kOptFlagInsecure, kOptFlagRedrAll, kOptFlagRedrBuf,
+    HLATTRS_INIT, Local, WinOptSet, didset_options_sctx, didset_window_options, kFillchars,
+    kListchars, kOptFlagHLOnly, kOptFlagInsecure, kOptFlagRedrAll, kOptFlagRedrBuf,
     kOptFlagRedrStat, kOptFlagRedrTabl, kOptFlagRedrWin, option_is_insecure, set_option_insecure,
 };
 

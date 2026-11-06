@@ -151,10 +151,10 @@ use crate::types::ui::{kUICmdline, kUIMessages};
 use crate::types::{
     AcoSave, ApiString, Array, Boolean, Buffer, Callback, CmdAddr, CmdBuff, CmdLine, CmdMod,
     CmdParseInfo, CmdParseMagic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr, ColoredCmdline,
-    Direction, DispTick, DoBufAction, DoBufStart, Error, EvalFuncData, ExArg, ExArgt, Expand,
-    ExpandContext, Handle, HashTab, Integer, LineNr, Magic, MotionType, Object, OptInt, OptMagic,
-    OptSet, OptVal, ParserState, Pos, ProfTime, SaveVEvent, SearchItArg, TryState, TypVal,
-    UndoLink, UndoObjectType, VarNumber, size_t, time_t, uint8_t,
+    Direction, DispTick, Error, EvalFuncData, ExArg, ExArgt, Expand, ExpandContext, Handle,
+    HashTab, Integer, LineNr, Magic, MotionType, Object, OptInt, OptMagic, OptSet, OptVal,
+    ParserState, Pos, ProfTime, SaveVEvent, SearchItArg, TryState, TypVal, UndoLink, VarNumber,
+    size_t, time_t, uint8_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{
@@ -206,19 +206,12 @@ mod eval;
 pub use self::eval::*;
 mod prompt;
 pub use self::prompt::*;
-pub const kExtmarkMove: UndoObjectType = 1;
-pub const kExtmarkSplice: UndoObjectType = 0;
 pub const kDirectionNotSet: Direction = 0;
 pub const OPTION_MAGIC_OFF: OptMagic = 2;
 pub const OPTION_MAGIC_ON: OptMagic = 1;
 pub const OPTION_MAGIC_NOT_SET: OptMagic = 0;
 pub const MAGIC_ALL: Magic = 4;
 pub const MAGIC_ON: Magic = 3;
-pub const DOBUF_WIPE: DoBufAction = 4;
-pub const DOBUF_DEL: DoBufAction = 3;
-pub const DOBUF_UNLOAD: DoBufAction = 2;
-pub const DOBUF_GOTO: DoBufAction = 0;
-pub const DOBUF_FIRST: DoBufStart = 1;
 pub const kMTCharWise: MotionType = 0;
 pub const kCmdRedrawAll: CmdRedraw = 2;
 pub const kCmdRedrawPos: CmdRedraw = 1;

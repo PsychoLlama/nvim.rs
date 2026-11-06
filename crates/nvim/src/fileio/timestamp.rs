@@ -16,6 +16,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::buffer::BLN_DUMMY;
 use crate::buffer::BufFlags;
 use crate::cstr;
 use crate::getchar::typeahead;

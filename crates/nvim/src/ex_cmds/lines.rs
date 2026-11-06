@@ -18,13 +18,15 @@
 
 use super::LineCopy;
 use super::say;
-use super::{CmdModFlags, ML_DEL_MESSAGE, kExtmarkNOOP, kExtmarkUndo};
+use super::{CmdModFlags, ML_DEL_MESSAGE};
 use crate::buffer_updates::buf_updates_send_changes;
 use crate::change::{appended_lines_mark, changed_lines};
 use crate::cursor::check_pos;
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_docmd::state::global_busy;
 use crate::extmark::extmark_move_region;
+use crate::extmark::kExtmarkNOOP;
+use crate::extmark::kExtmarkUndo;
 use crate::fold::fold_move_range;
 use crate::guard::Suppress;
 use crate::mark::mark_adjust_nofold;

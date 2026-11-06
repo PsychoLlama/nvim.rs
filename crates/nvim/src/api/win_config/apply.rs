@@ -18,6 +18,8 @@
 use super::*;
 use crate::api_error;
 use crate::types::Handle;
+use crate::winfloat::kWinSplitLeft;
+use crate::winfloat::kWinStyleMinimal;
 use crate::winlayer::{FrameId, FrameRef, TabPage, Win, WinId};
 use core::ffi::c_int;
 

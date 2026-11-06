@@ -20,6 +20,8 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::buffer::BCO_ENTER;
+use crate::buffer::BCO_NOHELP;
 use crate::memory::XString;
 use crate::narrow::number_as_int;
 use crate::types::AutoEvent;

@@ -18,6 +18,10 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::buffer::BCO_ALWAYS;
+use crate::buffer::BCO_ENTER;
+use crate::buffer::BCO_NOHELP;
+use crate::buffer::KEYMAP_INIT;
 use crate::narrow::as_index;
 use core::ffi::{CStr, c_int, c_uint};
 
@@ -58,14 +62,13 @@ use crate::optionstr::{
 };
 use crate::spell::compile_cap_prog;
 use crate::tag::set_buflocal_tfu_callback;
-use crate::types::{CmdModFlags, ColNr, CpoFlag, OptInt, ScriptCtx, WinOpt, int16_t};
+use crate::types::{CmdModFlags, ColNr, CpoFlag, OptInt, ScriptCtx, WinOpt};
 use crate::window::{check_window_colorcolumn, set_winbar_win};
 use crate::winlayer::{Buf, Win};
 
 use super::{
-    BCO_ALWAYS, BCO_ENTER, BCO_NOHELP, KEYMAP_INIT, NO_LOCAL_UNDOLEVEL, boolean_optval,
-    change_option_default, check_blending, fill_culopt_flags, kFillchars, kListchars,
-    option_last_set, parse_winhl_opt,
+    NO_LOCAL_UNDOLEVEL, boolean_optval, change_option_default, check_blending, fill_culopt_flags,
+    kFillchars, kListchars, option_last_set, parse_winhl_opt,
 };
 use crate::option::cpo_has;
 
@@ -454,7 +457,7 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
         copy_sctx(b, kBufOptSuffixesadd);
         b.b_p_keymap = p_keymap(dup);
         copy_sctx(b, kBufOptKeymap);
-        b.b_kmap_state |= int16_t::try_from(KEYMAP_INIT).expect("a flag bit");
+        b.b_kmap_state |= KEYMAP_INIT;
         b.b_p_iminsert = p_iminsert();
         copy_sctx(b, kBufOptIminsert);
         b.b_p_imsearch = p_imsearch();

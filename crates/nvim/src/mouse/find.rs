@@ -23,6 +23,9 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::grid::DEFAULT_GRID_HANDLE;
+use crate::window::FR_LEAF;
+use crate::window::FR_ROW;
 use core::ffi::c_int;
 
 use super::*;

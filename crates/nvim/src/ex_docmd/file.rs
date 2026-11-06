@@ -2,6 +2,9 @@
 //! recovering, and the buffer list.
 #![forbid(unsafe_code)]
 
+use crate::buffer::DOBUF_CURRENT;
+use crate::buffer::DOBUF_FIRST;
+use crate::buffer::DOBUF_MOD;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::do_ecmd;
 use crate::ex_cmds::newlnum;
@@ -37,8 +40,7 @@ use crate::ex_docmd::path::findfunc_find_file;
 use crate::ex_docmd::source::ex_errmsg;
 use crate::ex_docmd::{
     ACTION_SHOW, ACTION_SHOW_ALL, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, CHECK_PATH,
-    DOBUF_CURRENT, DOBUF_FIRST, DOBUF_LAST, DOBUF_MOD, cmdmod_has, ex_pressedreturn,
-    kDirectionNotSet,
+    DOBUF_LAST, cmdmod_has, ex_pressedreturn, kDirectionNotSet,
 };
 use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::ex_getln::{text_or_buf_locked, ui_ext_cmdline_block_leave};

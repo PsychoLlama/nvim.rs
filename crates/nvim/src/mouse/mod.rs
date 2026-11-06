@@ -124,12 +124,6 @@ pub(crate) const MSCR_UP: c_int = 1;
 pub(crate) const MSCR_LEFT: c_int = -1;
 pub(crate) const MSCR_RIGHT: c_int = -2;
 
-const FR_LEAF: c_int = 0;
-const FR_ROW: c_int = 1;
-/// The handle of the screen-wide grid every window draws on without
-/// `ext_multigrid`.
-const DEFAULT_GRID_HANDLE: c_int = 1;
-
 /// Which of the window's decorations [`jump_to_mouse`] says the click landed
 /// on.
 #[derive(Clone, Copy)]

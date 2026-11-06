@@ -16,6 +16,9 @@
 
 use super::*;
 use crate::api::private::validate::err_out_of_range;
+use crate::extmark::kExtmarkNOOP;
+use crate::extmark::kExtmarkUndo;
+use crate::mark::kMarkAdjustApi;
 use crate::memline::Lines;
 use crate::r#move::WinValid;
 use crate::narrow::{len_as_int, len_as_integer};

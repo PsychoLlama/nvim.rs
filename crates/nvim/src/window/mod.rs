@@ -72,8 +72,7 @@ use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
 use crate::os::cshim::gettext;
 use crate::terminal::buf_terminal_check_size;
 use crate::types::{
-    AlignTextPos, BlnFlags, CdCause, Direction, DoBufAction, DoBufStart, Error, GetFileFlags,
-    Handle, MotionType, OptInt, WinSplit, WinStyle, Window, kErrorTypeException,
+    CdCause, Direction, DoBufStart, Error, Handle, MotionType, OptInt, Window, kErrorTypeException,
 };
 use crate::ui_compositor::ui_comp_remove_grid;
 use crate::winlayer::graph::{first_tabpage, firstwin, lastwin};
@@ -118,37 +117,17 @@ pub use self::split::*;
 pub use self::tabpage::*;
 pub use self::winclose::*;
 
-pub const kAlignLeft: AlignTextPos = 0;
-pub const kWinStyleMinimal: WinStyle = 1;
-pub const kWinStyleUnused: WinStyle = 0;
-pub const kWinSplitLeft: WinSplit = 0;
 pub const kZIndexMessages: c_int = 200;
 pub const kZIndexFloatDefault: c_int = 50;
 pub const kDirectionNotSet: Direction = 0;
 pub const kCdCauseWindow: CdCause = 1;
 pub const kCdCauseManual: CdCause = 0;
-pub const GETF_SWITCH: GetFileFlags = 4;
-pub const GETF_ALT: GetFileFlags = 2;
-pub const GETF_SETMARK: GetFileFlags = 1;
-pub const BLN_NOOPT: BlnFlags = 16;
-pub const BLN_DUMMY: BlnFlags = 4;
-pub const BLN_LISTED: BlnFlags = 2;
-pub const BLN_CURBUF: BlnFlags = 1;
-pub const DOBUF_WIPE: DoBufAction = 4;
-pub const DOBUF_DEL: DoBufAction = 3;
-pub const DOBUF_UNLOAD: DoBufAction = 2;
-pub const DOBUF_GOTO: DoBufAction = 0;
-pub const DOBUF_MOD: DoBufStart = 3;
 pub const DOBUF_LAST: DoBufStart = 2;
-pub const DOBUF_FIRST: DoBufStart = 1;
-pub const DOBUF_CURRENT: DoBufStart = 0;
 pub const kMTLineWise: MotionType = 1;
 pub const kMTCharWise: MotionType = 0;
 pub const FIND_EVAL: c_int = 4;
 pub const FIND_STRING: c_int = 2;
 pub const FIND_IDENT: c_int = 1;
-pub const BCO_NOHELP: ::core::ffi::c_int = 4;
-pub const BCO_ENTER: ::core::ffi::c_int = 1;
 pub const CHECK_PATH: c_int = 3;
 pub const FIND_DEFINE: c_int = 2;
 pub const FIND_ANY: c_int = 1;

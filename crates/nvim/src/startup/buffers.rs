@@ -17,6 +17,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::buffer::BLN_LISTED;
 use crate::cstr;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
@@ -30,7 +31,7 @@ use std::ffi::CString;
 use crate::arglist::state::ARG_HAD_LAST;
 use crate::arglist::{alist_count, arg_name, with_arg_names};
 use crate::buffer::state::{
-    BLN_LISTED, SEA_DIALOG, SEA_NONE, SEA_QUIT, swap_exists_action, swap_exists_did_quit,
+    SEA_DIALOG, SEA_NONE, SEA_QUIT, swap_exists_action, swap_exists_did_quit,
 };
 use crate::buffer::{
     buf_is_empty, buflist_add_name, do_modelines, handle_swap_exists, open_buffer, set_buflisted,

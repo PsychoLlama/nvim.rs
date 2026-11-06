@@ -23,6 +23,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::autocmd::{fire_autocmds, fire_autocmds_for};
+use crate::drawscreen::NO_SCREEN;
 use crate::keycodes::{Ctrl_C, SpecialKey};
 use crate::narrow::number_as_int;
 use crate::types::AutoEvent;
@@ -83,9 +84,8 @@ use crate::winlayer::current_topframe;
 use crate::winlayer::graph::{firstwin, lastwin};
 
 use super::{
-    B_IMODE_NONE, B_IMODE_USE_INSERT, NO_SCREEN, OptSlot, check_blending, did_set_title,
-    option_key, option_var, option_was_set, redraw_titles, set_option_value, set_options_bin,
-    write_slot,
+    B_IMODE_NONE, B_IMODE_USE_INSERT, OptSlot, check_blending, did_set_title, option_key,
+    option_var, option_was_set, redraw_titles, set_option_value, set_options_bin, write_slot,
 };
 use crate::highlight_group::HLF_W;
 use crate::memory::XString;

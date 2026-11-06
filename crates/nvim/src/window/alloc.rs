@@ -19,12 +19,14 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::buffer::BLN_LISTED;
 use crate::r#move::WinValid;
 use crate::types::ColNr;
 use crate::types::{
     ArgListId, FcsChars, FileMark, FileMarkView, GridView, LcsChars, Pos, PosSave, ScopeDictItem,
     Taggy, VirtText, WinClickDefs, Window, XFileMark,
 };
+use crate::winfloat::kWinStyleMinimal;
 use core::ffi::{c_char, c_int};
 
 use super::*;

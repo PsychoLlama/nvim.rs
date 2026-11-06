@@ -67,8 +67,8 @@ use crate::tr;
 use crate::types::AutoEvent;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    Callback, ColNr, Dict, ExArg, Expand, FileMark, FileMarkView, FileOffset, GetFileFlags,
-    GetFileRet, LineNr, List, OptMagic, OptSet, Pos, Taggy, Timestamp, VarNumber, VimConv,
+    Callback, ColNr, Dict, ExArg, Expand, FileMark, FileMarkView, FileOffset, GetFileRet, LineNr,
+    List, OptMagic, OptSet, Pos, Taggy, Timestamp, VarNumber, VimConv,
 };
 use crate::ui::state::Columns;
 use crate::ui::ui_has;
@@ -99,7 +99,6 @@ pub use self::stack::*;
 mod command;
 pub(crate) use self::command::*;
 pub const OPTION_MAGIC_OFF: OptMagic = 2;
-pub const GETF_SETMARK: GetFileFlags = 1;
 pub const GETFILE_OPEN_OTHER: GetFileRet = -1;
 pub const GETFILE_SAME_FILE: GetFileRet = 0;
 pub const FINDFILE_FILE: ::core::ffi::c_uint = 0;

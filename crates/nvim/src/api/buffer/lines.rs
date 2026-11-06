@@ -18,7 +18,10 @@
 
 use super::*;
 use crate::api::private::helpers::api_try;
+use crate::extmark::kExtmarkNOOP;
+use crate::extmark::kExtmarkUndo;
 use crate::lua::stack::{At, Stack};
+use crate::mark::kMarkAdjustApi;
 use crate::memory::memchr_in;
 use crate::narrow::{len_as_int, len_as_integer};
 use crate::normal::{visual_active, visual_anchor, with_visual_anchor};

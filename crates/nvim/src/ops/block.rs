@@ -36,6 +36,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::extmark::kExtmarkUndo;
 use crate::narrow::len_as_int;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;

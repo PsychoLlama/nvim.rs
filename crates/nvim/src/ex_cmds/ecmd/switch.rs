@@ -20,6 +20,11 @@
 )]
 
 use super::{Ecmd, EcmdArgs};
+use crate::buffer::BCO_ENTER;
+use crate::buffer::BLN_CURBUF;
+use crate::buffer::BLN_LISTED;
+use crate::buffer::BLN_NOCURWIN;
+use crate::buffer::DOBUF_UNLOAD;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
 use crate::message_fmt::msg_cstr;
@@ -36,7 +41,7 @@ use crate::buffer::{
     BufRef, buf_valid, buflist_altfpos, buflist_findfmark_pos, buflist_new, close_buffer, find_buf,
     get_winopts,
 };
-use crate::ex_cmds::{BCO_ENTER, BLN_CURBUF, BLN_LISTED, BLN_NOCURWIN, DOBUF_UNLOAD, buf_autocmd};
+use crate::ex_cmds::buf_autocmd;
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_eval::aborting;
 use crate::fileio::{buf_check_timestamp, set_file_options, set_forced_fenc};

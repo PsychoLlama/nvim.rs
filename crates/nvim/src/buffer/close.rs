@@ -25,6 +25,8 @@
 #![forbid(unsafe_code)]
 
 use crate::eval::typval::DO_NOT_FREE_CNT;
+use crate::extmark::kExtmarkNoUndo;
+use crate::mark::kMarkAdjustNormal;
 use crate::memline::MlFlags;
 use crate::message_fmt::msg_cstr_opt;
 use crate::narrow::as_index;
