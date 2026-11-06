@@ -168,6 +168,12 @@ impl XString {
     /// Never fails: the buffer always ends with a terminator. With an
     /// interior NUL the answer is the prefix a C consumer would read, which
     /// is what [`as_ptr`](Self::as_ptr) hands out.
+    ///
+    /// The scan is per call, and that is measured, not overlooked: a cached
+    /// first-NUL position (a `Cell` every `&mut` path forgets) saved 0.11 %
+    /// of the heaviest caller's bench (`inbench`'s `rtpsearch`, which takes
+    /// one pattern's view three times) for 8 more bytes on every `XString`
+    /// and an unchecked statement in this module. It is not worth having.
     pub fn as_cstr(&self) -> &CStr {
         CStr::from_bytes_until_nul(&self.0).expect("an XString always ends with a NUL")
     }
