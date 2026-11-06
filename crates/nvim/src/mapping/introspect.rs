@@ -175,7 +175,7 @@ fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
     let get_dict = number(3).is_some_and(|n| n != 0);
     let which = match args.get(1) {
         // `buf` is `tv_get_string_buf_chk`'s scratch.
-        Some(tv) => buf.string_chk(tv),
+        Some(tv) => buf.string_chk(tv).ok(),
         None => Some(c""),
     };
     let Some(which) = which else {

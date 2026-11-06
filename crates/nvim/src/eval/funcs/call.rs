@@ -108,7 +108,7 @@ pub fn f_call(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `eval({string})`
 pub fn f_eval(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let Some(text) = numbuf.string_chk(&args[0]) else {
+    let Ok(text) = numbuf.string_chk(&args[0]) else {
         need_clr_eos.set(false);
         result.write_number(0);
         return;
@@ -148,7 +148,7 @@ pub(crate) fn get_list_line(walk: &mut ListLines) -> Option<XString> {
     let item = walk.list.items().get(walk.at)?.li_tv.clone();
     walk.at += 1;
     let mut buf = NumBuf::new();
-    buf.string_chk(&item).map(XString::from_cstr)
+    buf.string_chk(&item).ok().map(XString::from_cstr)
 }
 
 /// `execute()` and `win_execute()`: run commands with output captured.
@@ -346,7 +346,10 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
     // too, but some plugins depend on the name staying printable.
     let written = s.to_bytes();
     let name = if written.starts_with(b"s:") || written.starts_with(b"<SID>") {
-        scriptlocal_funcname(written).map(ThinCString::from)
+        scriptlocal_funcname(written)
+            .ok()
+            .flatten()
+            .map(ThinCString::from)
     } else {
         Some(ThinCString::from_cstr(s))
     };

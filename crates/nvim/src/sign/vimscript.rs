@@ -53,7 +53,7 @@ fn dict_arg(args: &[TypVal], i: usize) -> Option<&Dict> {
 /// `Some(None)` for the empty string, which names the global group.
 fn group_arg(tv: &TypVal) -> Option<Option<Vec<u8>>> {
     let mut numbuf = NumBuf::new();
-    let group = numbuf.string_chk(tv)?;
+    let group = numbuf.string_chk(tv).ok()?;
     Some((!group.is_empty()).then(|| group.to_bytes().to_vec()))
 }
 
@@ -270,6 +270,7 @@ pub(crate) fn f_sign_define(args: &[TypVal], result: &mut TypVal, _fptr: EvalFun
     let mut numbuf = NumBuf::new();
     let Some(name) = numbuf
         .string_chk(&args[0])
+        .ok()
         .map(|name| name.to_bytes().to_vec())
     else {
         return;
@@ -330,7 +331,7 @@ pub(crate) fn f_sign_getplaced(args: &[TypVal], result: &mut TypVal, _fptr: Eval
             }
             if let Some(tv) = key(dict, "group") {
                 let mut numbuf = NumBuf::new();
-                let Some(given) = numbuf.string_chk(tv) else {
+                let Ok(given) = numbuf.string_chk(tv) else {
                     return;
                 };
                 // The empty string means the global group.
@@ -401,6 +402,7 @@ fn sign_place_from_dict(given: PlaceArgs<'_>, dict: Option<&Dict>) -> Result<c_i
     let mut numbuf = NumBuf::new();
     let name = numbuf
         .string_chk(name_tv)
+        .ok()
         .map(|name| name.to_bytes().to_vec())
         .ok_or(Failed)?;
 
@@ -459,7 +461,7 @@ pub(crate) fn f_sign_undefine(args: &[TypVal], result: &mut TypVal, _fptr: EvalF
     if args.first().is_some_and(|arg| arg.v_type() == VAR_LIST) && args.len() <= 1 {
         let retlist = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
         for item in list_items(args[0].list_ref()) {
-            let undefined = match numbuf.string_chk(&item.li_tv) {
+            let undefined = match numbuf.string_chk(&item.li_tv).ok() {
                 Some(name) => sign_undefine_by_name(name.to_bytes()).map(|()| 0),
                 None => Err(SignError::Reported(Failed)),
             };
@@ -474,7 +476,7 @@ pub(crate) fn f_sign_undefine(args: &[TypVal], result: &mut TypVal, _fptr: EvalF
         result.write_number(0);
         return;
     }
-    if let Some(name) = numbuf.string_chk(&args[0]) {
+    if let Some(name) = numbuf.string_chk(&args[0]).ok() {
         let undefined = sign_undefine_by_name(name.to_bytes()).map(|()| 0);
         result.write_number(VarNumber::from(answer_or_report(undefined)));
     }

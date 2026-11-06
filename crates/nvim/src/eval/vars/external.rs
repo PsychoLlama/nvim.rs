@@ -173,6 +173,9 @@ pub fn get_spellword(list: Option<&List>) -> Option<(Vec<u8>, c_int)> {
         return None;
     }
     let mut numbuf = NumBuf::new();
-    let word = list_find_str(list, 0, &mut numbuf)?.to_bytes().to_vec();
+    let word = list_find_str(list, 0, &mut numbuf)
+        .ok()?
+        .to_bytes()
+        .to_vec();
     Some((word, number_as_int(list_find_nr(list, -1, None))))
 }

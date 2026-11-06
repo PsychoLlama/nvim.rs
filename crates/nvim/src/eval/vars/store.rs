@@ -11,6 +11,7 @@ use crate::cstr;
 use crate::eval::typval::DictRef;
 use crate::semsg;
 use crate::tr_plural;
+use crate::types::Failed;
 use core::ffi::c_int;
 
 use super::*;
@@ -153,7 +154,7 @@ pub(crate) fn set_var_const(name: &[u8], tv: &mut TypVal, copy: bool, is_const: 
             semsg!("E461: Illegal variable name: {name}");
             return;
         }
-        if !valid_varname_named(varname) {
+        if valid_varname_named(varname).is_err() {
             return;
         }
         let mut item = DictItem::boxed(varname);
@@ -293,8 +294,8 @@ pub(crate) fn var_wrong_func_name_named(name: &[u8], new_var: bool) -> bool {
     false
 }
 
-/// Whether `varname` is spellable as a variable name, reporting E461 if not.
-pub(crate) fn valid_varname_named(varname: &[u8]) -> bool {
+/// `Ok` if `varname` is spellable as a variable name; else E461 is reported.
+pub(crate) fn valid_varname_named(varname: &[u8]) -> Result<(), Failed> {
     for (i, &c) in varname.iter().enumerate() {
         if !eval_isnamec1(c_int::from(c))
             && (i == 0 || !c.is_ascii_digit())
@@ -302,8 +303,8 @@ pub(crate) fn valid_varname_named(varname: &[u8]) -> bool {
         {
             let varname = msg_bytes(varname);
             semsg!("E461: Illegal variable name: {varname}");
-            return false;
+            return Err(Failed);
         }
     }
-    true
+    Ok(())
 }

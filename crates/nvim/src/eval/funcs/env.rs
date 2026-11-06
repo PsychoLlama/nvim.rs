@@ -185,11 +185,11 @@ pub fn f_setenv(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_setfperm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     result.write_number(0);
-    let Some(fname) = numbuf.string_chk(&args[0]) else {
+    let Ok(fname) = numbuf.string_chk(&args[0]) else {
         return;
     };
     let mut modebuf = NumBuf::new();
-    let Some(mode_str) = modebuf.string_chk(&args[1]) else {
+    let Ok(mode_str) = modebuf.string_chk(&args[1]) else {
         return;
     };
     let Ok(mode_bytes) = <&[u8; 9]>::try_from(mode_str.to_bytes()) else {
@@ -227,7 +227,7 @@ fn get_xdg_var_list(xdg: XDGVarType, result: &mut TypVal) {
 pub fn f_stdpath(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     result.write_string(None);
-    let Some(p) = numbuf.string_chk(&args[0]) else {
+    let Ok(p) = numbuf.string_chk(&args[0]) else {
         return;
     };
     let dir = match p.to_bytes() {

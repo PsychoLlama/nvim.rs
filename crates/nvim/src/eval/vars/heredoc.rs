@@ -21,7 +21,7 @@ use crate::ex_docmd::exarg_getline;
 use crate::message_fmt::msg_bytes;
 use crate::os::cshim::is_lower_in_locale;
 use crate::semsg;
-use crate::types::{ExArg, TypVal};
+use crate::types::{ExArg, Failed, TypVal};
 use core::ffi::c_int;
 
 use super::{e_cannot_use_heredoc_here, emsg_static};
@@ -31,7 +31,7 @@ const COMMENT_CHAR: u8 = b'"';
 
 /// Evaluate the `{expr}` block `text` starts with and append its value to
 /// `gap`. Answers how many bytes of `text` the block took, closing brace
-/// included, or `None` after an error.
+/// included, or `Err` once the error has been reported.
 ///
 /// `evaluate` false parses the block without running it, which is what a
 /// skipped `:let` wants.
@@ -39,7 +39,7 @@ pub(crate) fn eval_one_expr_in_text(
     text: &[u8],
     gap: &mut Vec<u8>,
     evaluate: bool,
-) -> Option<usize> {
+) -> Result<usize, Failed> {
     let missing = || {
         let text = msg_bytes(text);
         semsg!("E1279: Missing '}}': {text}");
@@ -50,26 +50,26 @@ pub(crate) fn eval_one_expr_in_text(
     let block_start = cursor.offset();
     if cursor.byte() == 0 {
         missing();
-        return None;
+        return Err(Failed);
     }
     let mut skipped = TV_INITIAL_VALUE;
-    eval1(&mut cursor, &mut skipped, false).ok()?;
+    eval1(&mut cursor, &mut skipped, false)?;
     cursor.skip_white();
     let block_end = cursor.offset();
     if cursor.byte() != b'}' {
         missing();
-        return None;
+        return Err(Failed);
     }
     if evaluate {
-        let value = eval_to_string(&text[block_start..block_end], false, false)?;
+        let value = eval_to_string(&text[block_start..block_end], false, false).ok_or(Failed)?;
         gap.extend_from_slice(&value);
     }
-    Some(block_end + 1)
+    Ok(block_end + 1)
 }
 
-/// Every `{expr}` in `line` evaluated into the text around it, or `None`
+/// Every `{expr}` in `line` evaluated into the text around it, or `Err`
 /// after an error. `{{` and `}}` are the escapes for a literal brace.
-fn eval_all_expr_in_str(line: &[u8]) -> Option<Vec<u8>> {
+fn eval_all_expr_in_str(line: &[u8]) -> Result<Vec<u8>, Failed> {
     let mut text = Vec::<u8>::new();
     let mut p = 0;
     while byte_at(line, p) != 0 {
@@ -90,7 +90,7 @@ fn eval_all_expr_in_str(line: &[u8]) -> Option<Vec<u8>> {
         } else if here == b'}' {
             let line = msg_bytes(line);
             semsg!("E1278: Stray '}}' without a matching '{{': {line}");
-            return None;
+            return Err(Failed);
         }
 
         text.extend_from_slice(&line[lit_start..p]);
@@ -104,7 +104,7 @@ fn eval_all_expr_in_str(line: &[u8]) -> Option<Vec<u8>> {
 
         p += eval_one_expr_in_text(&line[p..], &mut text, true)?;
     }
-    Some(text)
+    Ok(text)
 }
 
 /// Collect the lines of a here-document into a List, or answer `None`.
@@ -129,7 +129,11 @@ fn eval_all_expr_in_str(line: &[u8]) -> Option<Vec<u8>> {
 /// its own body, newline-separated; the marker and each body line are
 /// terminated in the command line where they end, as the C did, so that
 /// whatever reads the line after this sees them cut.
-pub(crate) fn heredoc_get(excmd: &mut ExArg, at: usize, script_get: bool) -> Option<ListRef> {
+pub(crate) fn heredoc_get(
+    excmd: &mut ExArg,
+    at: usize,
+    script_get: bool,
+) -> Result<ListRef, Failed> {
     let mut marker_indent_len = 0;
     // `trim` asks for the first body line's indent; this is it once known.
     let mut text_indent: Option<Vec<u8>> = None;
@@ -143,7 +147,7 @@ pub(crate) fn heredoc_get(excmd: &mut ExArg, at: usize, script_get: bool) -> Opt
         line_arg = Some(at + nl + 1);
     } else if excmd.source.is_none() {
         emsg_static(e_cannot_use_heredoc_here);
-        return None;
+        return Err(Failed);
     }
 
     // Whether `at` starts with the four-letter `word` as a whole word.
@@ -180,7 +184,7 @@ pub(crate) fn heredoc_get(excmd: &mut ExArg, at: usize, script_get: bool) -> Opt
         if after != 0 && after != COMMENT_CHAR {
             let rest = msg_bytes(excmd.line.rest_of(p));
             semsg!("E488: Trailing characters: {rest}");
-            return None;
+            return Err(Failed);
         }
         excmd.line.set_byte(p, 0);
         let marker = excmd.line.rest_of(cmd).to_vec();
@@ -188,7 +192,7 @@ pub(crate) fn heredoc_get(excmd: &mut ExArg, at: usize, script_get: bool) -> Opt
         // covers more than a-z.
         if !script_get && is_lower_in_locale(marker[0]) {
             emsg_static(c"E221: Marker cannot start with lower case letter");
-            return None;
+            return Err(Failed);
         }
         marker
     } else if script_get {
@@ -196,7 +200,7 @@ pub(crate) fn heredoc_get(excmd: &mut ExArg, at: usize, script_get: bool) -> Opt
         b".".to_vec()
     } else {
         emsg_static(c"E172: Missing marker");
-        return None;
+        return Err(Failed);
     };
     // A line shorter than the indent it is asked for never matches it.
     let indent = excmd
@@ -281,7 +285,7 @@ pub(crate) fn heredoc_get(excmd: &mut ExArg, at: usize, script_get: bool) -> Opt
 
         let line = &theline[ti..];
         if evalstr && !excmd.skip {
-            let Some(evaluated) = eval_all_expr_in_str(line) else {
+            let Ok(evaluated) = eval_all_expr_in_str(line) else {
                 eval_failed = true;
                 continue;
             };
@@ -298,7 +302,7 @@ pub(crate) fn heredoc_get(excmd: &mut ExArg, at: usize, script_get: bool) -> Opt
 
     // The partly built list goes with the handle, which is its only
     // reference.
-    (!eval_failed).then_some(list)
+    if eval_failed { Err(Failed) } else { Ok(list) }
 }
 
 /// A String value owning a copy of `text`.

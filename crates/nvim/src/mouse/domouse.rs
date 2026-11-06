@@ -886,7 +886,7 @@ fn stuff_char(c: Key) {
 /// Whether a clipboard provider is loaded, so that an unnamed register should
 /// become the `*` one.
 fn has_clipboard_provider() -> bool {
-    eval_has_provider(c"clipboard", false)
+    eval_has_provider(c"clipboard")
 }
 
 /// Run `f` over the Visual anchor through a copy: the word walk it is used for

@@ -18,9 +18,9 @@ use neovim::eval::typval::{
 };
 use neovim::memory::{xfree, xmalloc};
 use neovim::types::{
-    LineNr, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
-    VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, VarType, kBoolVarFalse,
-    kBoolVarTrue, kSpecialVarNull,
+    Failed, LineNr, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
+    VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, VarType,
+    kBoolVarFalse, kBoolVarTrue, kSpecialVarNull,
 };
 use neovim::winlayer::Win;
 
@@ -1038,7 +1038,7 @@ fn the_type_checks_read_only_the_type() {
         let addr = bogus_alloc.addr();
         log.clear();
 
-        type Check = (&'static str, unsafe fn(&TypVal) -> bool);
+        type Check = (&'static str, unsafe fn(&TypVal) -> Result<(), Failed>);
         /// One check, and the nine rows it is stated over.
         type Table = (Check, [(VarType, Option<&'static str>); 9]);
         let checks: [Table; 3] = [
@@ -1121,7 +1121,7 @@ fn the_type_checks_read_only_the_type() {
         for ((name, check), rows) in checks {
             for (v_type, msg) in rows {
                 let tv = bogus(v_type, addr);
-                let ok = check_emsg(log.editor(), || check(&tv), msg);
+                let ok = check_emsg(log.editor(), || check(&tv).is_ok(), msg);
                 assert_eq!(ok, msg.is_none(), "{name} of {v_type}");
                 if msg.is_some() {
                     log.clear();
@@ -1434,7 +1434,7 @@ fn getting_a_string_formats_scalars_into_the_buffer() {
                     log.editor(),
                     || match name {
                         "string_buf" => buffer.string(tv).as_ptr(),
-                        _ => buffer.string_chk(tv).map_or(ptr::null(), CStr::as_ptr),
+                        _ => buffer.string_chk(tv).ok().map_or(ptr::null(), CStr::as_ptr),
                     },
                     *emsg,
                 );
@@ -1481,7 +1481,7 @@ fn the_borrowed_string_forms_answer_bytes_and_a_missing_one_is_none() {
     let string = ManuallyDrop::new(tv::string_tv(text.as_ptr().cast_mut()));
     assert_eq!(buf.string(&string).to_bytes(), b"hello");
     assert_eq!(
-        buf.string_chk(&string).map(CStr::to_bytes),
+        buf.string_chk(&string).ok().map(CStr::to_bytes),
         Some(&b"hello"[..])
     );
 
@@ -1493,7 +1493,7 @@ fn the_borrowed_string_forms_answer_bytes_and_a_missing_one_is_none() {
     let list = ManuallyDrop::new(tv::list_tv(None));
     let got = check_emsg(
         log.editor(),
-        || buf.string_chk(&list).map(|s| s.to_bytes().to_vec()),
+        || buf.string_chk(&list).ok().map(|s| s.to_bytes().to_vec()),
         Some("E730: Using a List as a String"),
     );
     assert_eq!(got, None);

@@ -37,7 +37,6 @@ use crate::eval::vars::var_wrong_func_name_named;
 use crate::mbyte::cluster_len;
 use crate::memory::ThinCString;
 use crate::memory::handoff::owned_cstr;
-use crate::message::emsg;
 use crate::semsg;
 use crate::types::{DictKey, Failed, HashTab};
 use core::ffi::CStr;
@@ -285,28 +284,51 @@ pub fn dict_get_string_buf_chk<'a>(
     def: Option<&'a CStr>,
 ) -> Option<&'a CStr> {
     match dict_find(d, key) {
-        Some(di) => numbuf.string_chk(&di.di_tv),
+        Some(di) => numbuf.string_chk(&di.di_tv).ok(),
         None => def,
+    }
+}
+
+/// Why [`dict_get_callback`] could not read a callback.
+#[derive(Debug, thiserror::Error)]
+pub enum CallbackRefused {
+    /// The value is neither a function nor a function name.
+    #[error("{}", crate::tr!("E6000: Argument is not a function or function name"))]
+    NotAFunction,
+    /// A function name `callback_from_typval` would not take (one that
+    /// starts with a digit, a Lua table it could not register): upstream
+    /// refuses it without a word, and so does [`Self::report`].
+    #[error("unusable callback")]
+    Unusable,
+}
+
+impl CallbackRefused {
+    /// Say the refusal, where there is one to say.
+    pub fn report(self) {
+        if let CallbackRefused::NotAFunction = self {
+            crate::message_fmt::emsg_text(self.to_string());
+        }
     }
 }
 
 /// `d[key]` as a callback, bound to `d` as its `self` dictionary.
 ///
-/// A missing key — or a NULL dictionary — answers true with `result` left as
-/// `kCallbackNone`; a value that is neither a function nor a string answers
-/// false with `E6000` raised.  `result` must hold no callback yet -- it is overwritten, not
-/// freed -- and on `true` the caller owns whatever it now holds.
-pub fn dict_get_callback(d: Option<&DictRef>, key: &[u8], result: &mut Callback) -> bool {
+/// A missing key — or a NULL dictionary — answers `Ok` with `result` left as
+/// `kCallbackNone`.  `result` must hold no callback yet -- it is overwritten,
+/// not freed -- and on `Ok` the caller owns whatever it now holds.
+pub fn dict_get_callback(
+    d: Option<&DictRef>,
+    key: &[u8],
+    result: &mut Callback,
+) -> Result<(), CallbackRefused> {
     *result = Callback::None;
     // A NULL dictionary has no such key, which is the missing-key answer.
-    let Some(d) = d else { return true };
+    let Some(d) = d else { return Ok(()) };
     let mut tv = TV_INITIAL_VALUE;
     match d.find(key) {
-        None => return true,
+        None => return Ok(()),
         Some(di) if !di.di_tv.is_func() && di.di_tv.v_type() != VAR_STRING => {
-            let msg = gettext(c"E6000: Argument is not a function or function name");
-            emsg(msg);
-            return false;
+            return Err(CallbackRefused::NotAFunction);
         }
         Some(di) => tv_copy(&di.di_tv, &mut tv),
     }
@@ -317,7 +339,11 @@ pub fn dict_get_callback(d: Option<&DictRef>, key: &[u8], result: &mut Callback)
     set_selfdict(&mut tv, d);
     let res = callback_from_typval(result, &tv);
     tv_clear(&mut tv);
-    res
+    if res {
+        Ok(())
+    } else {
+        Err(CallbackRefused::Unusable)
+    }
 }
 
 /// Whether storing `item` in `d` would shadow a builtin function.

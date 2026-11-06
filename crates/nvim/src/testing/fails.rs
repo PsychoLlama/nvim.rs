@@ -111,7 +111,7 @@ fn check_reported_error(args: &[TypVal], reported: &CStr) -> FailsCheck {
 
     match args.get(1).map_or(VAR_UNKNOWN, TypVal::v_type) {
         VAR_STRING => {
-            let expected = buf.string_chk(&args[1]);
+            let expected = buf.string_chk(&args[1]).ok();
             if expected.is_some_and(|expected| has_bytes(reported, expected.to_bytes())) {
                 return FailsCheck::Matched;
             }
@@ -127,7 +127,7 @@ fn check_reported_error(args: &[TypVal], reported: &CStr) -> FailsCheck {
                 }
                 _ => return FailsCheck::BadArg(E_ASSERT_FAILS_SECOND_ARG),
             };
-            let Some(expected) = buf.string_chk(&patterns[0]) else {
+            let Ok(expected) = buf.string_chk(&patterns[0]) else {
                 return FailsCheck::Abandon;
             };
             if !pattern_match(expected, reported, false) {
@@ -139,7 +139,7 @@ fn check_reported_error(args: &[TypVal], reported: &CStr) -> FailsCheck {
             // Take a copy: an error inside pattern_match() may free it.
             let errmsg = ThinCString::from_vec(vim_var_bytes(Vv::Errmsg));
             let mut buf = NumBuf::new();
-            let Some(expected) = buf.string_chk(second) else {
+            let Ok(expected) = buf.string_chk(second) else {
                 return FailsCheck::Abandon;
             };
             if pattern_match(expected, &errmsg, false) {

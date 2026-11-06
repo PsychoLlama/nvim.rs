@@ -43,7 +43,7 @@ use core::ffi::{CStr, c_int};
 /// second argument only has to type-check; nvim is always UTF-8.
 pub fn f_char2nr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    if args.len() > 1 && !tv_check_num(&args[1]) {
+    if args.len() > 1 && tv_check_num(&args[1]).is_err() {
         return;
     }
     result.write_number(VarNumber::from(char_at(numbuf.bytes(&args[0]))));
@@ -95,7 +95,7 @@ pub fn f_keytrans(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `nr2char({number} [, {utf8}])`.
 pub fn f_nr2char(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut error = false;
-    if args.len() > 1 && !tv_check_num(&args[1]) {
+    if args.len() > 1 && tv_check_num(&args[1]).is_err() {
         return;
     }
     let num = arg_number_chk(&args[0], Some(&mut error));
@@ -259,7 +259,7 @@ pub fn f_spellbadword(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
                 Win::current().w_set_curswant = true;
             }
         } else if Buf::current().b_s.b_p_spl.first_byte() != 0 {
-            let text = numbuf.string_chk(&args[0]);
+            let text = numbuf.string_chk(&args[0]).ok();
             let mut capcol = ColNr::NONE;
             if let Some(text) = text {
                 let text = text.to_bytes_with_nul();
@@ -344,7 +344,7 @@ pub fn f_split(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut keepempty = false;
     let mut pat = None;
     if args.len() > 1 {
-        pat = patbuf.string_chk(&args[1]);
+        pat = patbuf.string_chk(&args[1]).ok();
         if pat.is_none() {
             typeerr = true;
         }
@@ -514,13 +514,13 @@ pub fn f_substitute(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut subbuf = NumBuf::new();
     let mut flagsbuf = NumBuf::new();
     result.write_empty(VAR_STRING);
-    let str = numbuf.string_chk(&args[0]);
-    let pat = patbuf.string_chk(&args[1]);
-    let flg = flagsbuf.string_chk(&args[3]);
+    let str = numbuf.string_chk(&args[0]).ok();
+    let pat = patbuf.string_chk(&args[1]).ok();
+    let flg = flagsbuf.string_chk(&args[3]).ok();
     let (sub, expr) = if args[2].is_func() {
         (None, Some(&args[2]))
     } else {
-        (subbuf.string_chk(&args[2]), None)
+        (subbuf.string_chk(&args[2]).ok(), None)
     };
     result.write_string(match (str, pat, flg) {
         (Some(str), Some(pat), Some(flg)) if sub.is_some() || expr.is_some() => {

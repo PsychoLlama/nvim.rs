@@ -49,11 +49,11 @@ fn arg_check(ok: bool, errmsg: &'static ::core::ffi::CStr, idx: usize) -> Result
     Err(Failed)
 }
 
-/// Whether `tv` is a Number or a String, raising the type-specific error if
-/// not.
-pub fn tv_check_str_or_nr(tv: &TypVal) -> bool {
+/// `Ok` if `tv` is a Number or a String; else the type-specific error is
+/// raised.
+pub fn tv_check_str_or_nr(tv: &TypVal) -> Result<(), Failed> {
     let message = match tv.v_type() {
-        VAR_NUMBER | VAR_STRING => return true,
+        VAR_NUMBER | VAR_STRING => return Ok(()),
         VAR_FLOAT => c"E805: Expected a Number or a String, Float found",
         VAR_PARTIAL | VAR_FUNC => c"E703: Expected a Number or a String, Funcref found",
         VAR_LIST => c"E745: Expected a Number or a String, List found",
@@ -64,33 +64,33 @@ pub fn tv_check_str_or_nr(tv: &TypVal) -> bool {
         VAR_UNKNOWN => {
             let arg0 = "tv_check_str_or_nr(UNKNOWN)";
             semsg!("E685: Internal error: {arg0}");
-            return false;
+            return Err(Failed);
         }
         _ => unreachable!("a VarType outside the eleven the enum names"),
     };
     emsg(gettext(message));
-    false
+    Err(Failed)
 }
 
-/// Whether `tv` has a Number value, raising the type-specific error if not.
-pub fn tv_check_num(tv: &TypVal) -> bool {
+/// `Ok` if `tv` has a Number value; else the type-specific error is raised.
+pub fn tv_check_num(tv: &TypVal) -> Result<(), Failed> {
     match tv.v_type() {
-        VAR_NUMBER | VAR_BOOL | VAR_SPECIAL | VAR_STRING => true,
+        VAR_NUMBER | VAR_BOOL | VAR_SPECIAL | VAR_STRING => Ok(()),
         VAR_FUNC | VAR_PARTIAL | VAR_LIST | VAR_DICT | VAR_FLOAT | VAR_BLOB | VAR_UNKNOWN => {
             emsg(gettext(num_errors[tv.v_type() as usize]));
-            false
+            Err(Failed)
         }
         _ => unreachable!("a VarType outside the eleven the enum names"),
     }
 }
 
-/// Whether `tv` has a String value, raising the type-specific error if not.
-pub fn tv_check_str(tv: &TypVal) -> bool {
+/// `Ok` if `tv` has a String value; else the type-specific error is raised.
+pub fn tv_check_str(tv: &TypVal) -> Result<(), Failed> {
     match tv.v_type() {
-        VAR_NUMBER | VAR_BOOL | VAR_SPECIAL | VAR_STRING | VAR_FLOAT => true,
+        VAR_NUMBER | VAR_BOOL | VAR_SPECIAL | VAR_STRING | VAR_FLOAT => Ok(()),
         VAR_PARTIAL | VAR_FUNC | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_UNKNOWN => {
             emsg(gettext(str_errors[tv.v_type() as usize]));
-            false
+            Err(Failed)
         }
         _ => unreachable!("a VarType outside the eleven the enum names"),
     }

@@ -260,8 +260,8 @@ pub(crate) fn f_matchadd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
     // scratch of its own.
     let mut grpbuf = NumBuf::new();
     let mut patbuf = NumBuf::new();
-    let grp = grpbuf.string_chk(&args[0]);
-    let pat = patbuf.string_chk(&args[1]);
+    let grp = grpbuf.string_chk(&args[0]).ok();
+    let pat = patbuf.string_chk(&args[1]).ok();
 
     result.write_number(-1);
     let (Some(grp), Some(pat)) = (grp, pat) else {
@@ -294,7 +294,7 @@ pub(crate) fn f_matchaddpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFun
     let mut buf = NumBuf::new();
     result.write_number(-1);
 
-    let Some(group) = buf.string_chk(&args[0]) else {
+    let Ok(group) = buf.string_chk(&args[0]) else {
         return;
     };
     if args[1].v_type() != VAR_LIST {

@@ -31,7 +31,7 @@ use crate::os::cshim::gettext;
 use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRING};
 use crate::semsg;
 use crate::types::{
-    Callback, EvalFuncData, LineNr, List, RegMatch, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST,
+    Callback, EvalFuncData, Failed, LineNr, List, RegMatch, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST,
     VAR_NUMBER, VAR_STRING, VarNumber, kListLenMayKnow, kListLenUnknown,
 };
 use core::ffi::{CStr, c_int};
@@ -95,7 +95,7 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
         let mut startcol = 0;
 
         let mut patbuf = NumBuf::new();
-        let Some(pat) = patbuf.string_chk(&args[1]) else {
+        let Ok(pat) = patbuf.string_chk(&args[1]) else {
             break 'theend;
         };
 
@@ -339,7 +339,7 @@ pub fn f_matchbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     }
     elnum = elnum.min(buf.b_ml.ml_line_count);
 
-    let Some(submatches) = want_submatches(args, 4) else {
+    let Ok(submatches) = want_submatches(args, 4) else {
         return;
     };
 
@@ -366,19 +366,19 @@ pub fn f_matchbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
 /// The `{dict}` argument the two list-shaped matchers share: `submatches`
 /// must be a Boolean if it is there at all. `None` means the argument was
 /// rejected and the caller must stop.
-fn want_submatches(args: &[TypVal], i: usize) -> Option<bool> {
+fn want_submatches(args: &[TypVal], i: usize) -> Result<bool, Failed> {
     if args.len() <= i {
-        return Some(false);
+        return Ok(false);
     }
     let Some(di) = dict_find(args[i].dict_ref(), b"submatches") else {
-        return Some(false);
+        return Ok(false);
     };
     if di.di_tv.v_type() != VAR_BOOL {
         let arg0 = "submatches";
         semsg!("E475: Invalid value for argument {arg0}");
-        return None;
+        return Err(Failed);
     }
-    Some(tv_get_bool(&di.di_tv) != 0)
+    Ok(tv_get_bool(&di.di_tv) != 0)
 }
 
 /// `match({expr}, {pat} [, {start} [, {count}]])`.
@@ -420,7 +420,7 @@ pub fn f_matchstrlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
         return;
     };
     let mut patbuf = NumBuf::new();
-    let Some(pat) = patbuf.string_chk(&args[1]) else {
+    let Ok(pat) = patbuf.string_chk(&args[1]) else {
         return;
     };
     let _cpo = SavedCpo::empty();
@@ -429,7 +429,7 @@ pub fn f_matchstrlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     };
     // The `{dict}` is only read once the pattern compiled, as upstream
     // has it: a bad pattern is reported before a bad option.
-    let Some(submatches) = want_submatches(args, 2) else {
+    let Ok(submatches) = want_submatches(args, 2) else {
         return;
     };
     let out = result.list_mut().expect("the list allocated above");
@@ -613,7 +613,8 @@ fn do_fuzzymatch(args: &[TypVal], result: &mut TypVal, retmatchpos: bool) {
                 return;
             }
             key = Some(numbuf3.string(&di.di_tv));
-        } else if !dict_get_callback(args[2].dict_shared(), b"text_cb", &mut cb) {
+        } else if let Err(refused) = dict_get_callback(args[2].dict_shared(), b"text_cb", &mut cb) {
+            refused.report();
             semsg!("E475: Invalid value for argument {}", "text_cb");
             return;
         }

@@ -345,7 +345,7 @@ pub fn ex_oldfiles(excmd: &mut ExArg) {
     }
     let mut numbuf = NumBuf::new();
     // `nr` is inside the list.
-    let Some(picked) = list_find_str(Some(&list), nr - 1, &mut numbuf) else {
+    let Ok(picked) = list_find_str(Some(&list), nr - 1, &mut numbuf) else {
         return;
     };
     let expanded = expand_env(picked, false);

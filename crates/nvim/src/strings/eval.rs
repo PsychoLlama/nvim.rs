@@ -93,8 +93,8 @@ pub fn f_stridx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(-1);
 
     let mut buf = NumBuf::new();
-    let needle = numbuf.string_chk(&args[1]);
-    let haystack = buf.string_chk(&args[0]);
+    let needle = numbuf.string_chk(&args[1]).ok();
+    let haystack = buf.string_chk(&args[0]).ok();
     let (Some(needle), Some(haystack)) = (needle, haystack) else {
         return;
     };
@@ -125,8 +125,8 @@ pub fn f_strridx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(-1);
 
     let mut buf = NumBuf::new();
-    let needle = numbuf.string_chk(&args[1]);
-    let haystack = buf.string_chk(&args[0]);
+    let needle = numbuf.string_chk(&args[1]).ok();
+    let haystack = buf.string_chk(&args[0]).ok();
     let (Some(needle), Some(haystack)) = (needle, haystack) else {
         return;
     };
@@ -269,7 +269,7 @@ pub fn f_tr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut buf = NumBuf::new();
     let mut buf2 = NumBuf::new();
     let in_bytes = numbuf.bytes(&args[0]);
-    let fromstr = buf.string_chk(&args[1]);
+    let fromstr = buf.string_chk(&args[1]).ok();
     let tostr = buf2.bytes_chk(&args[2]);
 
     result.write_string(None);

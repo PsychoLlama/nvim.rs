@@ -57,7 +57,7 @@ const OPERATORS: &[u8] = b"+-*/%.";
 const ARITHMETIC: &[u8] = b"+-*/%";
 
 /// One `:let` target parser, dispatched on the sigil the target starts with.
-type LetTarget = fn(&[u8], &mut TypVal, bool, Option<&[u8]>, Option<u8>) -> Option<usize>;
+type LetTarget = fn(&[u8], &mut TypVal, bool, Option<&[u8]>, Option<u8>) -> Result<usize, Failed>;
 
 /// Whether the operator is an arithmetic one, which an environment variable
 /// and a register both refuse with E734.
@@ -146,7 +146,7 @@ pub fn ex_let(excmd: &mut ExArg) {
     let mut rettv = TV_INITIAL_VALUE;
     if lead == b'=' && line.byte_at(expr + 1) == b'<' && line.byte_at(expr + 2) == b'<' {
         // A here-document.
-        if let Some(list) = heredoc_get(excmd, expr + 3, false) {
+        if let Ok(list) = heredoc_get(excmd, expr + 3, false) {
             rettv.write_list(Some(list));
             if !excmd.skip {
                 let text = excmd.line.rest_of(arg);
@@ -207,9 +207,7 @@ pub(crate) fn ex_let_vars(
         // ":let var = expr" or ":for var in list"
         let endchars = op.map(|op| [op]);
         let endchars = endchars.as_ref().map(<[u8; 1]>::as_slice);
-        return ex_let_one(text, tv, copy, is_const, endchars, op)
-            .map(drop)
-            .ok_or(Failed);
+        return ex_let_one(text, tv, copy, is_const, endchars, op).map(drop);
     }
 
     // ":let [v1, v2] = list" or ":for [v1, v2] in listlist"
@@ -248,9 +246,7 @@ pub(crate) fn ex_let_vars(
         tv_copy(&source.li_tv, &mut item);
         let end = ex_let_one(&text[next..], &mut item, false, is_const, Some(b",;]"), op);
         clear_local(&mut item);
-        let Some(end) = end else {
-            return Err(Failed);
-        };
+        let end = end?;
         at += 1;
 
         pos = skip_white(text, next + end);
@@ -267,7 +263,7 @@ pub(crate) fn ex_let_vars(
             let rest_at = skip_white(text, pos + 1);
             let end = ex_let_one(&text[rest_at..], &mut ltv, false, is_const, Some(b"]"), op);
             clear_local(&mut ltv);
-            end.ok_or(Failed)?;
+            end?;
             break;
         } else if sep != b',' && sep != b']' {
             internal_error(c"ex_let_vars()");
@@ -354,11 +350,11 @@ fn ex_let_env(
     is_const: bool,
     endchars: Option<&[u8]>,
     op: Option<u8>,
-) -> Option<usize> {
+) -> Result<usize, Failed> {
     let mut numbuf = NumBuf::new();
     if is_const {
         emsg_static(c"E996: Cannot lock an environment variable");
-        return None;
+        return Err(Failed);
     }
 
     // Find the end of the name.
@@ -383,9 +379,9 @@ fn ex_let_env(
             value = &joined;
         }
         cstr::with_terminated(name, |name| vim_setenv_named(name, value));
-        return Some(end);
+        return Ok(end);
     }
-    None
+    Err(Failed)
 }
 
 /// `head` and `tail` as one C string.
@@ -408,10 +404,10 @@ fn ex_let_option(
     is_const: bool,
     endchars: Option<&[u8]>,
     op: Option<u8>,
-) -> Option<usize> {
+) -> Result<usize, Failed> {
     if is_const {
         emsg_static(c"E996: Cannot lock an option");
-        return None;
+        return Err(Failed);
     }
 
     // Find the end of the name.
@@ -419,7 +415,7 @@ fn ex_let_option(
     let (opt_idx, opt_flags) = (option.index, option.flags);
     let Some(end) = option.end.filter(|&end| ends_target(endchars, text, end)) else {
         emsg_static(e_letunexp);
-        return None;
+        return Err(Failed);
     };
     // The name proper starts after the scope, if there is one.
     let name = &text[option.start..end];
@@ -498,7 +494,8 @@ fn ex_let_option(
         }
     }
 
-    arg_end
+    // Every refusal above has been said.
+    arg_end.ok_or(Failed)
 }
 
 /// Upstream's `TRISTATE_FROM_INT`: anything positive is true, zero is false,
@@ -521,21 +518,21 @@ fn ex_let_register(
     is_const: bool,
     endchars: Option<&[u8]>,
     op: Option<u8>,
-) -> Option<usize> {
+) -> Result<usize, Failed> {
     let mut numbuf = NumBuf::new();
     if is_const {
         emsg_static(c"E996: Cannot lock a register");
-        return None;
+        return Err(Failed);
     }
     if is_arithmetic(op) {
         wrong_type(op);
-        return None;
+        return Err(Failed);
     }
     // The register name is one byte.
     let past = 2;
     if !ends_target(endchars, text, past) {
         emsg_static(e_letunexp);
-        return None;
+        return Err(Failed);
     }
 
     // A bare "@" is the unnamed register.
@@ -555,7 +552,7 @@ fn ex_let_register(
         value = joined.to_bytes();
     }
     write_reg_contents(regname, value, false);
-    Some(past)
+    Ok(past)
 }
 
 /// One assignment target, dispatched on what `text` starts with. Answers
@@ -567,7 +564,7 @@ fn ex_let_one(
     is_const: bool,
     endchars: Option<&[u8]>,
     op: Option<u8>,
-) -> Option<usize> {
+) -> Result<usize, Failed> {
     let sigil = byte_at(text, 0);
     // The three sigils each have a parser of their own, which reads the
     // sigil back off `text`.
@@ -583,16 +580,18 @@ fn ex_let_one(
     if !eval_isnamec1(c_int::from(sigil)) && sigil != b'{' {
         let text = msg_bytes(text);
         semsg!("E475: Invalid argument: {text}");
-        return None;
+        return Err(Failed);
     }
 
     // A variable, a List or Dict item, or a Blob byte.
     let (mut lval, end) = get_lval(text, Some(tv), false, false, 0, FNE_CHECK_START);
-    let end = end.filter(|_| lval.has_name())?;
+    // A name that would not parse has been refused out loud: the walk is
+    // not quiet here.
+    let end = end.filter(|_| lval.has_name()).ok_or(Failed)?;
     if !ends_target(endchars, text, end) {
         emsg_static(e_letunexp);
-        return None;
+        return Err(Failed);
     }
     set_var_lval(&mut lval, tv, copy, is_const, op);
-    Some(end)
+    Ok(end)
 }

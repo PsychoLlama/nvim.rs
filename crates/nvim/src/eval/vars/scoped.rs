@@ -125,7 +125,7 @@ fn getwinvar(args: &[TypVal], result: &mut TypVal, off: usize) {
         TabPage::current_or_none()
     };
     let win = find_win_by_nr(&args[off], tp);
-    let varname = numbuf.string_chk(&args[off + 1]).map(CStr::to_bytes);
+    let varname = numbuf.string_chk(&args[off + 1]).ok().map(CStr::to_bytes);
     let deftv = args.get(off + 2);
     get_var_from(varname, result, deftv, Scope::Window, tp, win, None);
 }
@@ -178,7 +178,7 @@ pub(crate) fn tv_to_optval(tv: &TypVal, opt_idx: OptIndex, name: &[u8]) -> (OptV
         } else if option_has_str {
             // Never set a string option to `v:true` or `v:null`.
             if tv.v_type() != VAR_BOOL && tv.v_type() != VAR_SPECIAL {
-                let strval = nbuf.string_chk(tv);
+                let strval = nbuf.string_chk(tv).ok();
                 err = strval.is_none();
                 OptVal::string(strval.map_or(ApiString::NULL, |text| {
                     ApiString::from_bytes(text.to_bytes())
@@ -227,7 +227,7 @@ fn setwinvar(args: &[TypVal], off: usize) {
         TabPage::current_or_none()
     };
     let win = find_win_by_nr(&args[off], tp);
-    let varname = numbuf.string_chk(&args[off + 1]).map(CStr::to_bytes);
+    let varname = numbuf.string_chk(&args[off + 1]).ok().map(CStr::to_bytes);
     let varp = &args[off + 2];
     let (Some(w), Some(varname)) = (win, varname) else {
         return;
@@ -263,7 +263,7 @@ fn set_scoped_var(scope: &[u8], varname: &[u8], varp: &TypVal) {
 /// `gettabvar()`.
 pub fn f_gettabvar(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let varname = numbuf.string_chk(&args[1]).map(CStr::to_bytes);
+    let varname = numbuf.string_chk(&args[1]).ok().map(CStr::to_bytes);
     let tp = find_tabpage(tv_get_number_chk(&args[0]).unwrap_or(-1) as c_int);
     // Any window of that tab page will do: only its `t:` scope is read.
     let win = any_window_of(tp);
@@ -283,7 +283,7 @@ pub fn f_getwinvar(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `getbufvar()`.
 pub fn f_getbufvar(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let varname = numbuf.string_chk(&args[1]).map(CStr::to_bytes);
+    let varname = numbuf.string_chk(&args[1]).ok().map(CStr::to_bytes);
     let buf = tv_get_buf_from_arg(&args[0]);
     let deftv = args.get(2);
     let (tp, win) = (TabPage::current_or_none(), Win::current_or_none());
@@ -297,7 +297,7 @@ pub fn f_settabvar(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
     let tp = find_tabpage(tv_get_number_chk(&args[0]).unwrap_or(-1) as c_int);
-    let varname = numbuf.string_chk(&args[1]).map(CStr::to_bytes);
+    let varname = numbuf.string_chk(&args[1]).ok().map(CStr::to_bytes);
     let varp = &args[2];
     let (Some(varname), Some(tp)) = (varname, tp) else {
         return;
@@ -333,10 +333,10 @@ pub fn f_setwinvar(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
 /// `setbufvar()`.
 pub fn f_setbufvar(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    if check_secure() || !tv_check_str_or_nr(&args[0]) {
+    if check_secure() || tv_check_str_or_nr(&args[0]).is_err() {
         return;
     }
-    let varname = numbuf.string_chk(&args[1]).map(CStr::to_bytes);
+    let varname = numbuf.string_chk(&args[1]).ok().map(CStr::to_bytes);
     let buf = tv_get_buf(&args[0], 0);
     let varp = &args[2];
     let (Some(buf), Some(varname)) = (buf, varname) else {

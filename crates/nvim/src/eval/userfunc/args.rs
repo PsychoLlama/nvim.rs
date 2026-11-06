@@ -22,14 +22,16 @@ use crate::types::Failed;
 /// Read one argument name at the cursor and append a copy of it to
 /// `newargs`, leaving the cursor after it.
 ///
-/// Answers false, with the cursor where it was, when what is there cannot be
-/// one: empty, starting with a digit, a duplicate of an earlier argument, or
-/// one of the two names the `a:` scope already gives a meaning.
+/// Answers `Err`, with the cursor where it was and the refusal said (unless
+/// `skip`, which says nothing, as in every skipped expression), when what is
+/// there cannot be one: empty, starting with a digit, a duplicate of an
+/// earlier argument, or one of the two names the `a:` scope already gives a
+/// meaning.
 fn one_function_arg(
     cursor: &mut Cursor<'_>,
     newargs: Option<&mut Vec<Box<[u8]>>>,
     skip: bool,
-) -> bool {
+) -> Result<(), Failed> {
     let rest = cursor.rest();
     let len = rest
         .iter()
@@ -43,18 +45,18 @@ fn one_function_arg(
             let arg = msg_bytes(rest);
             semsg!("E125: Illegal argument: {arg}");
         }
-        return false;
+        return Err(Failed);
     }
     if let Some(newargs) = newargs {
         if newargs.iter().any(|earlier| **earlier == *name) {
             let shown = msg_bytes(name);
             semsg!("E853: Duplicate argument name: {shown}");
-            return false;
+            return Err(Failed);
         }
         newargs.push(name.into());
     }
     cursor.bump(len);
-    true
+    Ok(())
 }
 
 /// Parse a definition's argument list at the cursor, up to and including
@@ -96,7 +98,7 @@ pub(crate) fn get_function_args(
                 cursor.bump(3);
                 mustend = true;
             } else {
-                if !one_function_arg(cursor, newargs.as_deref_mut(), skip) {
+                if one_function_arg(cursor, newargs.as_deref_mut(), skip).is_err() {
                     break;
                 }
                 let mut after = Cursor::new(text);

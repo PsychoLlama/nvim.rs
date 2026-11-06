@@ -114,7 +114,7 @@ pub(crate) fn ins_compl_add_tv(tv: &TypVal, dir: Direction, fast: bool) -> Added
             flags |= CP_EQUAL;
         }
     } else {
-        word = numbuf.string_chk(tv);
+        word = numbuf.string_chk(tv).ok();
     }
 
     let Some(word) = word.filter(|word| empty || !word.is_empty()) else {

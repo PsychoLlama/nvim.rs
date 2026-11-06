@@ -104,7 +104,7 @@ pub fn f_bufnr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut buf = if args.is_empty() {
         Buf::current_or_none()
     } else {
-        if !tv_check_str_or_nr(&args[0]) {
+        if tv_check_str_or_nr(&args[0]).is_err() {
             return;
         }
         // The lookup itself must not report "no such buffer": a second
@@ -115,7 +115,7 @@ pub fn f_bufnr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if buf.is_none()
         && args.len() > 1
         && tv_get_number_chk(&args[1]).is_ok_and(|create| create != 0)
-        && let Some(name) = numbuf.string_chk(&args[0])
+        && let Some(name) = numbuf.string_chk(&args[0]).ok()
     {
         buf = buflist_add_name(Some(name), LineNr::ONE, 0);
     }

@@ -100,7 +100,7 @@ pub(crate) fn str_arg_chk<'a>(
     i: usize,
     buf: &'a mut NumBuf,
 ) -> Option<&'a CStr> {
-    buf.string_chk(&args[i])
+    buf.string_chk(&args[i]).ok()
 }
 
 /// Argument `i` as a Number, setting `error` -- and reporting one -- for a

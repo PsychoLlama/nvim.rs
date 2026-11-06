@@ -319,7 +319,7 @@ pub(crate) fn call_replacement(expr: &TypVal) -> Option<Vec<u8>> {
         None
     } else {
         let mut buf = NumBuf::new();
-        buf.string_chk(&rettv).map(|s| s.to_bytes().to_vec())
+        buf.string_chk(&rettv).ok().map(|s| s.to_bytes().to_vec())
     };
     tv_clear(&mut rettv);
     text

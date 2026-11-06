@@ -62,7 +62,7 @@ fn secure() -> bool {
 
 /// Whether a deferred call can be registered, having reported if not.
 fn can_defer() -> bool {
-    can_add_defer()
+    can_add_defer().is_ok()
 }
 
 /// Whether argument `i` is a String, having reported if not.

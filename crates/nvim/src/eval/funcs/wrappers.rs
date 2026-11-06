@@ -355,7 +355,7 @@ pub fn tv_get_buf(tv: &TypVal, curtab_only: c_int) -> Option<Buf> {
 /// [`tv_get_buf`] for a builtin's own `{buf}` argument: type-check it, then
 /// resolve it silently.
 pub fn tv_get_buf_from_arg(tv: &TypVal) -> Option<Buf> {
-    if !tv_check_str_or_nr(tv) {
+    if tv_check_str_or_nr(tv).is_err() {
         return None;
     }
     let _no_emsg = Suppress::emsg();

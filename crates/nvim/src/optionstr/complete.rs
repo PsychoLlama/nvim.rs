@@ -224,7 +224,7 @@ pub fn did_set_mkspellmem(_args: &mut OptSet) -> Result<(), OptError> {
 /// the script that set the option is still on the stack; the option's value
 /// is rewritten in place with the answer.
 pub fn did_set_optexpr(args: &mut OptSet) -> Result<(), OptError> {
-    if let Some(resolved) = scriptlocal_funcname(new_bytes(args)) {
+    if let Ok(Some(resolved)) = scriptlocal_funcname(new_bytes(args)) {
         varp(args).set(resolved);
     }
     Ok(())

@@ -15,17 +15,14 @@ use crate::keycodes::Ctrl_V;
 use crate::mbyte::{cluster_len, head_off};
 use crate::memline::{Lines, ml_get_buf_len};
 use crate::memory::ThinCString;
-use crate::message::e_buffer_is_not_loaded;
-use crate::message::emsg;
-use crate::message_fmt::msg_cstr;
+use crate::message_fmt::{emsg_text, msg_cstr};
 use crate::normal::unadjust_for_sel_inner;
 use crate::ops::{block_def, charwise_block_def, reset_lbr, restore_lbr};
 use crate::option::vars::P_SEL;
-use crate::os::cshim::gettext;
 use crate::pos::{equalpos, lt};
-use crate::semsg;
 use crate::state::mode::virtual_op;
 use crate::state::virtual_active;
+use crate::tr;
 use crate::types::{
     BlockDef, ColNr, EvalFuncData, Key, LineNr, MotionType, NUL, OpArg, OpType, Pos, TypVal,
     VAR_DICT, VarNumber, kListLenMayKnow,
@@ -105,9 +102,51 @@ impl Drop for BufferSwap {
     }
 }
 
+/// Why the two positions name no region.
+#[derive(Debug, thiserror::Error)]
+enum Unresolved {
+    /// An argument check said why.
+    #[error("refused, already said")]
+    Said,
+    /// The positions do not parse, or name two buffers: upstream answers
+    /// the empty list without a word.
+    #[error("refused without a message")]
+    Quiet,
+    /// The buffer the positions name has no lines loaded.
+    #[error("{}", tr!("E681: Buffer is not loaded"))]
+    NotLoaded,
+    /// The `type` option names no motion.
+    #[error("{}", region_type_refused(.0))]
+    Type(ThinCString),
+    /// A corner's line is outside the buffer.
+    #[error("{}", tr!("E966: Invalid line number: {}", .0))]
+    Line(LineNr),
+    /// A corner's column is outside its line.
+    #[error("{}", tr!("E964: Invalid column number: {}", .0))]
+    Column(ColNr),
+}
+
+const _: () = assert!(size_of::<Unresolved>() <= 16);
+
+impl Unresolved {
+    /// Say the refusal, unless it was said or is upstream's silent one.
+    #[cold]
+    fn report(self) {
+        if !matches!(self, Unresolved::Said | Unresolved::Quiet) {
+            emsg_text(self.to_string());
+        }
+    }
+}
+
+/// `E475` for the `type` option, with the `{arg0}` its msgid was written with.
+fn region_type_refused(spec: &ThinCString) -> String {
+    let (arg0, spec) = (msg_cstr(c"type"), msg_cstr(spec.as_cstr()));
+    tr!("E475: Invalid value for argument {arg0}: {spec}")
+}
+
 /// Resolve `getregion()`'s and `getregionpos()`'s shared arguments, leaving
 /// the current buffer pointed at the one the positions name.
-fn resolve(args: &[TypVal], result: &mut TypVal) -> Option<Region> {
+fn resolve(args: &[TypVal], result: &mut TypVal) -> Result<Region, Unresolved> {
     let mut numbuf = NumBuf::new();
     // Every line accessor below runs against `findbuf`, which is made
     // current before it is read from.
@@ -116,7 +155,7 @@ fn resolve(args: &[TypVal], result: &mut TypVal) -> Option<Region> {
         || tv_check_for_list_arg(args, 1).is_err()
         || tv_check_for_opt_dict_arg(args, 2).is_err()
     {
-        return None;
+        return Err(Unresolved::Said);
     }
     let (mut p1, mut p2) = (NOWHERE, NOWHERE);
     let (mut fnum1, mut fnum2) = (-1, -1);
@@ -126,7 +165,7 @@ fn resolve(args: &[TypVal], result: &mut TypVal) -> Option<Region> {
         || list2fpos(&args[1], &mut p2, Some(&mut fnum2), None, false).is_err()
         || fnum1 != fnum2
     {
-        return None;
+        return Err(Unresolved::Quiet);
     }
 
     // 'selection' decides the default exclusivity; an option dict may
@@ -150,8 +189,7 @@ fn resolve(args: &[TypVal], result: &mut TypVal) -> Option<Region> {
     };
     let loaded = findbuf.filter(|b| b.b_ml.ml_mfp.is_some());
     let Some(findbuf) = loaded else {
-        emsg(gettext(e_buffer_is_not_loaded));
-        return None;
+        return Err(Unresolved::NotLoaded);
     };
     check_corner(findbuf, &mut p1)?;
     check_corner(findbuf, &mut p2)?;
@@ -187,7 +225,7 @@ fn resolve(args: &[TypVal], result: &mut TypVal) -> Option<Region> {
     if l > ColNr::new(1) {
         p2.col += (l - 1).get();
     }
-    Some(Region {
+    Ok(Region {
         p1,
         p2,
         inclusive,
@@ -215,26 +253,22 @@ fn cluster_at(pos: Pos) -> ColNr {
 }
 
 /// The `type` option: "v", "V", or CTRL-V optionally followed by a width.
-fn parse_type(spec: &CStr) -> Option<(MotionType, c_int)> {
-    let bad = || {
-        let (arg0, spec) = (msg_cstr(c"type"), msg_cstr(spec));
-        semsg!("E475: Invalid value for argument {arg0}: {spec}");
-        None
-    };
+fn parse_type(spec: &CStr) -> Result<(MotionType, c_int), Unresolved> {
+    let bad = || Err(Unresolved::Type(ThinCString::from_cstr(spec)));
     match spec.to_bytes() {
-        b"v" => Some((kMTCharWise, 0)),
-        b"V" => Some((kMTLineWise, 0)),
+        b"v" => Ok((kMTCharWise, 0)),
+        b"V" => Ok((kMTLineWise, 0)),
         [c, rest @ ..] if c_int::from(*c) == Ctrl_V => {
             // A bare CTRL-V means "as wide as the corners"; a width
             // must be a positive number and nothing else.
             if rest.is_empty() {
-                return Some((kMTBlockWise, 0));
+                return Ok((kMTBlockWise, 0));
             }
             let (width, past) = getdigits_int_at(spec.to_bytes(), 1, false, 0);
             if width <= 0 || past != spec.to_bytes().len() {
                 return bad();
             }
-            Some((kMTBlockWise, width))
+            Ok((kMTBlockWise, width))
         }
         _ => bad(),
     }
@@ -242,19 +276,17 @@ fn parse_type(spec: &CStr) -> Option<(MotionType, c_int)> {
 
 /// Validate one corner against the buffer, resolving `MAXCOL` to the end of
 /// its line.
-fn check_corner(buffer: Buf, p: &mut Pos) -> Option<()> {
+fn check_corner(buffer: Buf, p: &mut Pos) -> Result<(), Unresolved> {
     if p.lnum < LineNr::ONE || p.lnum > buffer.b_ml.ml_line_count {
-        semsg!("E966: Invalid line number: {}", p.lnum);
-        return None;
+        return Err(Unresolved::Line(p.lnum));
     }
     let len = ml_get_buf_len(buffer, p.lnum);
     if p.col == ColNr::MAX {
         p.col = len + 1;
     } else if p.col < ColNr::new(1) || p.col > len + 1 {
-        semsg!("E964: Invalid column number: {}", p.col);
-        return None;
+        return Err(Unresolved::Column(p.col));
     }
-    Some(())
+    Ok(())
 }
 
 /// The operator argument a blockwise region needs, which is what
@@ -318,7 +350,7 @@ fn block_def2str(bd: &BlockDef, line: &[u8]) -> ThinCString {
 /// per line.
 pub fn f_getregion(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let _swap = BufferSwap::save();
-    let Some(r) = resolve(args, result) else {
+    let Ok(r) = resolve(args, result).map_err(Unresolved::report) else {
         return;
     };
     for lnum in r.p1.lnum.through(r.p2.lnum) {
@@ -346,7 +378,7 @@ pub fn f_getregion(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// positions per line.
 pub fn f_getregionpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let _swap = BufferSwap::save();
-    let Some(r) = resolve(args, result) else {
+    let Ok(r) = resolve(args, result).map_err(Unresolved::report) else {
         return;
     };
     // Whether a position may sit one past the end of its line.

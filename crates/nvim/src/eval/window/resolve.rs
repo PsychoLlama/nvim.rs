@@ -129,9 +129,10 @@ fn get_winnr(tabpage: TabPage, argvar: Option<&TypVal>) -> c_int {
     let mut numbuf = NumBuf::new();
     let mut twin = tabpage.curwin();
     if let Some(argvar) = argvar {
-        let resolved = match numbuf.string_chk(argvar) {
+        let resolved = match numbuf.string_chk(argvar).ok() {
             None => None,
-            Some(arg) => relative_win(tabpage, twin, arg.to_bytes()),
+            // A refusal has been said; either way the answer is 0.
+            Some(arg) => relative_win(tabpage, twin, arg.to_bytes()).ok().flatten(),
         };
         match resolved {
             Some(wp) => twin = wp,
@@ -155,12 +156,13 @@ fn get_winnr(tabpage: TabPage, argvar: Option<&TypVal>) -> c_int {
 }
 
 /// The window the `winnr()` argument `arg` names, relative to `twin` in `tabpage`:
-/// `"$"`, `"#"`, or a count followed by one of `hjkl`. `None` is the caller's
-/// 0, and the invalid-expression error has already been reported.
-fn relative_win(tabpage: TabPage, twin: Win, arg: &[u8]) -> Option<Win> {
+/// `"$"`, `"#"`, or a count followed by one of `hjkl`. `Ok(None)` (no
+/// previous window) is the caller's 0; so is `Err`, once the
+/// invalid-expression error has been reported.
+fn relative_win(tabpage: TabPage, twin: Win, arg: &[u8]) -> Result<Option<Win>, Failed> {
     match arg {
-        b"$" => return Some(tabpage.lastwin()),
-        b"#" => return tabpage.prevwin(),
+        b"$" => return Ok(Some(tabpage.lastwin())),
+        b"#" => return Ok(tabpage.prevwin()),
         _ => {}
     }
     let (count, end) = leading_long(arg);
@@ -179,11 +181,11 @@ fn relative_win(tabpage: TabPage, twin: Win, arg: &[u8]) -> Option<Win> {
     match direction {
         // The neighbour walks always answer a window, `twin` itself when
         // there is nothing that way.
-        Some(wp) => Some(wp.expect("a live handle")),
+        Some(wp) => Ok(Some(wp.expect("a live handle"))),
         None => {
             let text = String::from_utf8_lossy(arg);
             crate::semsg!("E15: Invalid expression: \"{}\"", text);
-            None
+            Err(Failed)
         }
     }
 }
@@ -327,7 +329,7 @@ pub fn f_tabpagenr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let nr = if args.is_empty() {
         tab_index(TabPage::current())
     } else {
-        let word = numbuf.string_chk(&args[0]);
+        let word = numbuf.string_chk(&args[0]).ok();
         match word.map(CStr::to_bytes) {
             None => 0,
             // `tabpage_index(NULL)` counts one past the last tab page.

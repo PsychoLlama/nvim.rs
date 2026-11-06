@@ -251,6 +251,7 @@ pub(crate) fn tv_str<'b>(
     if matches!(tv.v_type(), VAR_STRING | VAR_NUMBER) {
         numbuf
             .string_chk(tv)
+            .ok()
             .map(|text| Cow::Borrowed(text.to_bytes()))
     } else {
         let mut echoed = tv2echo_bytes(tv);

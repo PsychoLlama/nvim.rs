@@ -395,12 +395,12 @@ pub fn list_find_str<'a>(
     l: Option<&'a List>,
     n: ::core::ffi::c_int,
     numbuf: &'a mut NumBuf,
-) -> Option<&'a CStr> {
+) -> Result<&'a CStr, Failed> {
     let Some(at) = list_index(l, n) else {
         semsg!("E684: List index out of range: {}", int64_t::from(n));
-        return None;
+        return Err(Failed);
     };
-    Some(numbuf.string(&list_items(l)[at].li_tv))
+    Ok(numbuf.string(&list_items(l)[at].li_tv))
 }
 
 /// [`list_index`], clamping a negative index that fell off the front to 0.

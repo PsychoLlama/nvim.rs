@@ -682,7 +682,7 @@ pub(crate) fn cstr_of<'a>(tv: &'a TypVal, buf: &'a mut NumBuf) -> &'a CStr {
 /// scratch a Number is spelled into.
 #[inline(always)]
 pub(crate) fn cstr_of_chk<'a>(tv: &'a TypVal, buf: &'a mut NumBuf) -> Option<&'a CStr> {
-    buf.string_chk(tv)
+    buf.string_chk(tv).ok()
 }
 
 /// A `VAR_STRING` owning a fresh copy of `bytes`, NUL-terminated.

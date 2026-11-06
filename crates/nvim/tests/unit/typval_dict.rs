@@ -13,9 +13,9 @@ use std::ptr;
 
 use neovim::buffer::{DI_FLAGS_FIX, DI_FLAGS_RO, DI_FLAGS_RO_SBX};
 use neovim::eval::typval::{
-    DictRef, ListRef, NumBuf, callback_free, dict_clear, dict_copy, dict_equal, dict_extend,
-    dict_find, dict_get_callback, dict_get_number, dict_get_string_alloc, dict_get_string_buf,
-    dict_get_string_buf_chk, tv_clear, tv_dict_alloc,
+    CallbackRefused, DictRef, ListRef, NumBuf, callback_free, dict_clear, dict_copy, dict_equal,
+    dict_extend, dict_find, dict_get_callback, dict_get_number, dict_get_string_alloc,
+    dict_get_string_buf, dict_get_string_buf_chk, tv_clear, tv_dict_alloc,
 };
 use neovim::guard::{Suppress, sandbox};
 use neovim::memory::{ThinCString, xfree, xmalloc, xstrdup};
@@ -590,7 +590,12 @@ fn getting_a_callback_accepts_a_name_a_funcref_or_a_partial() {
             log.clear();
             let ok = check_emsg(
                 log.editor(),
-                || dict_get_callback(DictRef::retained(d).as_ref(), key, &mut *slot),
+                || {
+                    // The refusal is said by whoever asked, as the builtins do.
+                    dict_get_callback(DictRef::retained(d).as_ref(), key, &mut *slot)
+                        .map_err(CallbackRefused::report)
+                        .is_ok()
+                },
                 msg,
             );
             let cb = tv::read_callback(slot);

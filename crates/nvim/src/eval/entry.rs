@@ -146,7 +146,7 @@ pub(crate) fn eval_expr_func(
     let name = if expr.v_type() == VAR_FUNC {
         expr.callable_name()
     } else {
-        buf.string_chk(expr)
+        buf.string_chk(expr).ok()
     };
     match name {
         Some(name) if !name.is_empty() => {
@@ -159,7 +159,7 @@ pub(crate) fn eval_expr_func(
 /// Evaluate `expr` as an expression *string*, which must consume all of it.
 pub(crate) fn eval_expr_string(expr: &TypVal, result: &mut TypVal) -> Result<(), Failed> {
     let mut buf = NumBuf::new();
-    let text = buf.string_chk(expr).ok_or(Failed)?;
+    let text = buf.string_chk(expr)?;
     let mut cursor = Cursor::new(text.to_bytes());
     cursor.skip_white();
     eval1_emsg(&mut cursor, result, true)?;

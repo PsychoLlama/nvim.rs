@@ -22,7 +22,6 @@ use crate::message_fmt::msg_bytes;
 use crate::regexp::OwnedProg;
 use crate::semsg;
 use core::ffi::c_int;
-use std::rc::Rc;
 
 use super::*;
 use crate::types::{Candidate, ExpandContext, IOSIZE};
@@ -81,26 +80,25 @@ pub(crate) fn list_functions_matching_pat(excmd: &mut ExArg) -> usize {
 }
 
 /// `:function Name`: print one function with its numbered body lines.
-/// Answers the function, so that the caller can go on to redefine it.
 ///
 /// `name` is the translated name and `at` where it ends in the command line.
-pub(crate) fn list_one_function(excmd: &mut ExArg, name: &[u8], at: usize) -> Option<Rc<UserFunc>> {
+pub(crate) fn list_one_function(excmd: &mut ExArg, name: &[u8], at: usize) {
     if ends_excmd(c_int::from(excmd.line.byte_at(excmd.line.skip_white(at)))) == 0 {
         let rest = msg_bytes(excmd.line.rest_of(at));
         semsg!("E488: Trailing characters: {rest}");
-        return None;
+        return;
     }
     excmd.line.next = excmd.line.check_next(at);
     if excmd.line.next.is_some() {
         excmd.line.terminate_at(at);
     }
     if excmd.skip || got_int.get() {
-        return None;
+        return;
     }
 
     let Some(func) = find_func(name) else {
         emsg_funcname(c"E123: Undefined function: %s", name);
-        return None;
+        return;
     };
 
     // Check no function was added or removed from a callback, and
@@ -108,7 +106,7 @@ pub(crate) fn list_one_function(excmd: &mut ExArg, name: &[u8], at: usize) -> Op
     let prev_ht_changed = func_table_changed();
     msg_ext_set_kind(c"list_cmd");
     if list_func_head(&func, !excmd.forceit, excmd.forceit).is_err() {
-        return Some(func);
+        return;
     }
     let body = func.body();
     for (j, line) in body.lines.iter().enumerate() {
@@ -145,7 +143,6 @@ pub(crate) fn list_one_function(excmd: &mut ExArg, name: &[u8], at: usize) -> Op
             });
         }
     }
-    Some(func)
 }
 
 /// Whether a function of this *already translated* name exists, builtin or

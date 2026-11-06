@@ -19,7 +19,7 @@
 use super::*;
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::eval::typval::{NumBuf, index_of, list_items, list_iter};
+use crate::eval::typval::{CallbackRefused, NumBuf, index_of, list_items, list_iter};
 use crate::guard::Suppress;
 use crate::message_fmt::msg_cstr;
 use crate::narrow::{len_as_int, number_as_int};
@@ -166,7 +166,9 @@ msg_putchar(::core::ffi::c_int::from(b'\n'));
             try_enter(&mut tstate);
             err_errmsg = c"E5408: Unable to get g:Nvim_color_cmdline callback: %s";
             dgc_ret =
-                dict_get_callback(Some(&globvar_dict()), b"Nvim_color_cmdline", &mut color_cb);
+                dict_get_callback(Some(&globvar_dict()), b"Nvim_color_cmdline", &mut color_cb)
+                    .map_err(CallbackRefused::report)
+                    .is_ok();
             err.absorb(try_leave(&tstate));
             can_free_cb = true;
         } else if colored_ccline.cmdfirstc == b'=' {
@@ -275,7 +277,7 @@ msg_putchar(::core::ffi::c_int::from(b'\n'));
             }
 
             prev_end = end;
-            let Some(group) = numbuf.string_chk(&chunk[2].li_tv) else {
+            let Ok(group) = numbuf.string_chk(&chunk[2].li_tv) else {
                 break 'body Label::Error;
             };
             let coloured = CmdlineColorChunk {

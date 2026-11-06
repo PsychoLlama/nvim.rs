@@ -141,7 +141,7 @@ pub(crate) fn eval_dict(
             // The key borrows `buf`, so it must not outlive this pass.
             let mut key: &[u8] = b"";
             if evaluate {
-                let Some(text) = buf.string_chk(&tvkey) else {
+                let Ok(text) = buf.string_chk(&tvkey) else {
                     tv_clear(&mut tvkey);
                     break 'items false;
                 };

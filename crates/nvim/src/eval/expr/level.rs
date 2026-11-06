@@ -391,12 +391,12 @@ pub(crate) fn eval5(
             op == b'+' && (result.v_type() == VAR_LIST || result.v_type() == VAR_BLOB);
         let float_arith = op != b'.' && result.v_type() == VAR_FLOAT;
         if !container_plus && !float_arith && evaluate {
-            let ok = if concat {
+            let checked = if concat {
                 tv_check_str(result)
             } else {
                 tv_check_num(result)
             };
-            if !ok {
+            if checked.is_err() {
                 tv_clear(result);
                 return Err(Failed);
             }
@@ -448,8 +448,8 @@ pub(crate) fn eval6(
         cursor.skip_white();
         let mut var2 = UNSET_TV;
         eval7(cursor, &mut var2, evaluate, false)?;
-        if evaluate && !eval_multdiv_number(result, &mut var2, op) {
-            return Err(Failed);
+        if evaluate {
+            eval_multdiv_number(result, &mut var2, op)?;
         }
     }
 }

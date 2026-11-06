@@ -38,7 +38,7 @@ pub fn f_json_decode(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         joined = bytes;
         &joined
     } else {
-        let Some(s) = numbuf.string_chk(&args[0]) else {
+        let Ok(s) = numbuf.string_chk(&args[0]) else {
             return;
         };
         s.to_bytes()

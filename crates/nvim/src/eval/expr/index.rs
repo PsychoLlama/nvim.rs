@@ -75,7 +75,7 @@ pub(crate) fn eval_index(
             empty1 = true;
         } else if eval1(cursor, &mut var1, evaluate).is_err() {
             return Err(Failed);
-        } else if evaluate && !tv_check_str(&var1) {
+        } else if evaluate && tv_check_str(&var1).is_err() {
             tv_clear(&mut var1);
             return Err(Failed);
         }
@@ -92,7 +92,7 @@ pub(crate) fn eval_index(
                     tv_clear(&mut var1);
                 }
                 return Err(Failed);
-            } else if evaluate && !tv_check_str(&var2) {
+            } else if evaluate && tv_check_str(&var2).is_err() {
                 if !empty1 {
                     tv_clear(&mut var1);
                 }
@@ -257,7 +257,7 @@ pub(crate) fn eval_index_inner(
         VAR_DICT => {
             let key = match key {
                 Some(key) => key,
-                None => match numbuf2.string_chk(var1.expect("checked")) {
+                None => match numbuf2.string_chk(var1.expect("checked")).ok() {
                     Some(key) => key.to_bytes(),
                     None => return Err(Failed),
                 },

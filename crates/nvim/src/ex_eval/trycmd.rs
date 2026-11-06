@@ -71,18 +71,17 @@ use crate::option::SavedCpo;
 use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRING, char_delim, skip_regexp_err_at};
 use crate::runtime::do_finish;
 use crate::semsg;
-use crate::types::{Cleanup, CondId, ExArg, Pend, TypVal};
+use crate::types::{Cleanup, CondId, ExArg, Failed, Pend, TypVal};
 use core::ffi::c_int;
 
 /// `:throw {expr}`
 pub(crate) fn ex_throw(excmd: &mut ExArg) {
-    let value = if !matches!(excmd.line.byte_at(excmd.line.arg), 0 | b'|' | b'\n') {
-        let skip = excmd.skip;
-        eval_cmd_string(excmd, skip)
-    } else {
+    if matches!(excmd.line.byte_at(excmd.line.arg), 0 | b'|' | b'\n') {
         emsg(message(e_argreq));
-        None
-    };
+        return;
+    }
+    let skip = excmd.skip;
+    let value = eval_cmd_string(excmd, skip);
 
     // Do not throw on an error, or when the argument evaluation threw.
     if excmd.skip {
@@ -259,7 +258,8 @@ pub(crate) fn ex_catch(excmd: &mut ExArg) {
                     Some((start, end)) => excmd.line.slice_at(start, end - start),
                     None => b".*",
                 };
-                caught = pattern_catches(pat);
+                // A pattern refused (and said so) catches nothing.
+                caught = pattern_catches(pat).unwrap_or(false);
             }
         }
 
@@ -301,9 +301,10 @@ pub(crate) fn ex_catch(excmd: &mut ExArg) {
     }
 }
 
-/// Whether `pat` matches the exception being thrown. There is one: only
+/// Whether `pat` matches the exception being thrown, or `Err` once a pattern
+/// that would not compile has been refused. There is one: only
 /// `ex_catch` calls this, and only inside its `THROWN` test.
-fn pattern_catches(pat: &[u8]) -> bool {
+fn pattern_catches(pat: &[u8]) -> Result<bool, Failed> {
     // Keep the 'l' flag in 'cpoptions' out of the way while compiling. The
     // compiler takes a NUL-terminated pattern, so it is copied.
     let owned = cstr::owned(pat);
@@ -316,7 +317,7 @@ fn pattern_catches(pat: &[u8]) -> bool {
     let Some(mut prog) = prog else {
         let pat = msg_bytes(pat);
         semsg!("E475: Invalid argument: {pat}");
-        return false;
+        return Err(Failed);
     };
     // Save got_int and reset it: an earlier interruption must not cancel
     // the match, only a CTRL-C hit during it.
@@ -328,7 +329,7 @@ fn pattern_catches(pat: &[u8]) -> bool {
     let value = thrown.with(|exception| exception.value.clone());
     let caught = prog.exec_nl(value.as_cstr(), 0, false).is_some();
     got_int.set(got_int.get() | prev_got_int);
-    caught
+    Ok(caught)
 }
 
 /// `:finally`

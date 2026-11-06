@@ -209,13 +209,13 @@ fn ex_defer_inner(
 
 /// Whether a `:defer` can be recorded here, i.e. whether a function is
 /// running.  Reports the error itself when it cannot.
-pub fn can_add_defer() -> bool {
+pub fn can_add_defer() -> Result<(), Failed> {
     if current_fc_id().is_none() {
         let arg0 = "defer";
         semsg!("E193: {arg0} not inside a function");
-        return false;
+        return Err(Failed);
     }
-    true
+    Ok(())
 }
 
 /// Record a deferred call of `name` on the funccall that is running.  It

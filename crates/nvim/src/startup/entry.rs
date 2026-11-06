@@ -472,7 +472,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
 
     if cb_flags.get() & (kOptCbFlagUnnamed | kOptCbFlagUnnamedplus) != 0 {
         // Warm the clipboard provider so the first yank is not slow.
-        eval_has_provider(c"clipboard", false);
+        eval_has_provider(c"clipboard");
     }
 
     if let Some(lua_script) = params.lua_script.as_deref() {

@@ -174,7 +174,7 @@ impl Definition<'_, '_> {
         if !paren {
             // ":function func": list that one function.
             let name = self.name.clone().unwrap_or_default();
-            let _ = list_one_function(self.excmd, &name, self.at);
+            list_one_function(self.excmd, &name, self.at);
             return;
         }
 
@@ -198,7 +198,7 @@ impl Definition<'_, '_> {
         }
         self.at = self.excmd.line.skip_white(self.at + 1);
 
-        if !self.excmd.skip && self.check_name().is_none() {
+        if !self.excmd.skip && self.check_name().is_err() {
             return;
         }
         let _ = self.install();
@@ -208,7 +208,7 @@ impl Definition<'_, '_> {
     /// identifier, and it may not go in the `g:` dictionary.
     ///
     /// `None` refuses, with the reason already reported.
-    fn check_name(&mut self) -> Option<()> {
+    fn check_name(&mut self) -> Result<(), Failed> {
         // Check the name of the function, unless it is a dictionary
         // function that is being overwritten.
         // A dictionary function defined with bracket notation
@@ -228,7 +228,7 @@ impl Definition<'_, '_> {
             && !reads_as_identifier(name)
         {
             emsg_funcname(e_invarg2, name);
-            return None;
+            return Err(Failed);
         }
         // Disallow using the g: dict.
         if self
@@ -237,9 +237,9 @@ impl Definition<'_, '_> {
             .is_some_and(|fudi| fudi.dict.dv_scope == VAR_DEF_SCOPE)
         {
             emsg(gettext(c"E862: Cannot use g: here"));
-            return None;
+            return Err(Failed);
         }
-        Some(())
+        Ok(())
     }
 
     /// Build the function and put it in the table.

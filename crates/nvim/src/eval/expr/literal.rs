@@ -553,8 +553,8 @@ pub(crate) fn eval_interp_string(
             break Ok(());
         }
         match eval_one_expr_in_text(cursor.rest(), &mut text, evaluate) {
-            Some(used) => cursor.bump(used),
-            None => break Err(Failed),
+            Ok(used) => cursor.bump(used),
+            Err(failed) => break Err(failed),
         }
     };
 

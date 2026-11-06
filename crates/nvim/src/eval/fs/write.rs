@@ -80,7 +80,7 @@ fn write_list(out: &mut WriteFile, list: Option<&List>, binary: bool) -> bool {
     'failed: {
         for (i, li) in items.iter().enumerate() {
             let mut numbuf = NumBuf::new();
-            let Some(s) = numbuf.string_chk(&li.li_tv) else {
+            let Ok(s) = numbuf.string_chk(&li.li_tv) else {
                 return false;
             };
             let bytes = s.to_bytes();
@@ -167,7 +167,7 @@ fn secure() -> bool {
 
 /// Whether a deferred call can be registered, having reported if not.
 fn can_defer() -> bool {
-    can_add_defer()
+    can_add_defer().is_ok()
 }
 
 /// Whether the running script is Lua, which is what makes a String argument
@@ -194,7 +194,7 @@ fn writable(args: &[TypVal]) -> bool {
     if args.first().is_some_and(|arg| arg.v_type() == VAR_LIST) {
         return list_items(args[0].list_ref())
             .iter()
-            .all(|item| tv_check_str_or_nr(&item.li_tv));
+            .all(|item| tv_check_str_or_nr(&item.li_tv).is_ok());
     }
     // A Lua string is always treated as blob data.
     if args.first().is_some_and(|arg| arg.v_type() == VAR_BLOB)

@@ -11,6 +11,7 @@ use crate::memory::ThinCString;
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::semsg;
 use crate::types::ColNr;
+use crate::types::Failed;
 use crate::types::LineNr;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
@@ -84,10 +85,11 @@ pub fn common_job_callbacks(
     on_stderr: &mut CallbackReader,
     on_exit: &mut Callback,
 ) -> bool {
-    let ok = dict_get_callback(options, b"on_stdout", &mut on_stdout.cb)
-        && dict_get_callback(options, b"on_stderr", &mut on_stderr.cb)
-        && dict_get_callback(options, b"on_exit", on_exit);
-    if !ok {
+    let read = dict_get_callback(options, b"on_stdout", &mut on_stdout.cb)
+        .and_then(|()| dict_get_callback(options, b"on_stderr", &mut on_stderr.cb))
+        .and_then(|()| dict_get_callback(options, b"on_exit", on_exit));
+    if let Err(refused) = read {
+        refused.report();
         // Whatever was read into the three slots before one of them failed
         // is released here.
         callback_reader_free(on_stdout);
@@ -160,7 +162,7 @@ pub fn eval_call_provider(
     arguments: Option<ListRef>,
     discard: bool,
 ) -> TypVal {
-    if !eval_has_provider(provider, false) {
+    if !eval_has_provider(provider) {
         let provider = msg_cstr(provider);
         semsg!("E319: No \"{provider}\" provider found. Run \":checkhealth vim.provider\"");
         return TypVal::Number(0);
@@ -212,25 +214,33 @@ fn provider_name(name: &[u8], what: &[u8]) -> CString {
     CString::new(text).unwrap_or_default()
 }
 
-/// Is this provider both known and usable? Loads its autoload script if it
-/// has not been loaded yet.
-pub fn eval_has_provider(feat: &CStr, throw_if_fast: bool) -> bool {
-    const KNOWN: [&[u8]; 7] = [
-        b"clipboard",
-        b"python3",
-        b"python3_compiled",
-        b"python3_dynamic",
-        b"perl",
-        b"ruby",
-        b"node",
-    ];
-    let feat = feat.to_bytes();
-    if !KNOWN.contains(&feat) {
-        return false;
-    }
-    if throw_if_fast && !nlua_is_deferred_safe() {
+/// The features a provider answers for.
+const KNOWN_PROVIDERS: [&[u8]; 7] = [
+    b"clipboard",
+    b"python3",
+    b"python3_compiled",
+    b"python3_dynamic",
+    b"perl",
+    b"ruby",
+    b"node",
+];
+
+/// [`eval_has_provider`] for `has()`, which runs Vimscript to probe and so
+/// refuses in a fast event context: `Err` once `E5560` has been said.
+pub(crate) fn has_provider_from_vimscript(feat: &CStr) -> Result<bool, Failed> {
+    if KNOWN_PROVIDERS.contains(&feat.to_bytes()) && !nlua_is_deferred_safe() {
         let what = "Vimscript function";
         semsg!("E5560: {what} must not be called in a fast event context");
+        return Err(Failed);
+    }
+    Ok(eval_has_provider(feat))
+}
+
+/// Is this provider both known and usable? Loads its autoload script if it
+/// has not been loaded yet.
+pub fn eval_has_provider(feat: &CStr) -> bool {
+    let feat = feat.to_bytes();
+    if !KNOWN_PROVIDERS.contains(&feat) {
         return false;
     }
 

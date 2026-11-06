@@ -69,7 +69,7 @@ pub(crate) fn adjust_clipboard_name(
     }
 
     // This runs user code, so no borrow of CLIPBOARD may be held across it.
-    if !eval_has_provider(c"clipboard", false) {
+    if !eval_has_provider(c"clipboard") {
         // Be silent inside a `:while`, a `:redir` and the like — but always
         // complain the first time. `redirecting` walks the message state,
         // so it is asked outside the cell borrow.

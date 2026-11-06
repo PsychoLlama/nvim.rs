@@ -102,8 +102,8 @@ fn assert_match_common(args: &[TypVal], atype: AssertType) -> bool {
     let mut buf1 = NumBuf::new();
     let mut buf2 = NumBuf::new();
     // Both arguments are read, so two bad ones report two errors.
-    let pat = buf1.string_chk(&args[0]);
-    let text = buf2.string_chk(&args[1]);
+    let pat = buf1.string_chk(&args[0]).ok();
+    let text = buf2.string_chk(&args[1]).ok();
     let (Some(pat), Some(text)) = (pat, text) else {
         return true;
     };
@@ -281,8 +281,8 @@ fn assert_equalfile(args: &[TypVal]) -> bool {
     let mut buf1 = NumBuf::new();
     let mut buf2 = NumBuf::new();
     // Both arguments are read, so two bad ones report two errors.
-    let fname1 = buf1.string_chk(&args[0]);
-    let fname2 = buf2.string_chk(&args[1]);
+    let fname1 = buf1.string_chk(&args[0]).ok();
+    let fname2 = buf2.string_chk(&args[1]).ok();
     let (Some(fname1), Some(fname2)) = (fname1, fname2) else {
         return true;
     };
@@ -400,7 +400,7 @@ pub(crate) fn f_assert_equalfile(args: &[TypVal], result: &mut TypVal, _fptr: Ev
 /// `assert_exception(string[, msg])`.
 pub(crate) fn f_assert_exception(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let error = numbuf.string_chk(&args[0]);
+    let error = numbuf.string_chk(&args[0]).ok();
     let thrown = vim_var_string(Vv::Exception).unwrap_or_else(ThinCString::empty);
     let thrown: &CStr = &thrown;
     if thrown.is_empty() {
@@ -491,5 +491,5 @@ pub(crate) fn f_test_garbagecollect_now(
 /// reported.
 pub(crate) fn f_test_write_list_log(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let _ = numbuf.string_chk(&args[0]);
+    let _ = numbuf.string_chk(&args[0]).ok();
 }

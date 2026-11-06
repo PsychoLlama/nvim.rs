@@ -38,7 +38,7 @@ pub fn script_get(excmd: &mut ExArg) -> Option<XString> {
     }
 
     let at = excmd.line.arg + 2;
-    let held = heredoc_get(excmd, at, true)?;
+    let held = heredoc_get(excmd, at, true).ok()?;
     if excmd.skip {
         // A skipped here-document is consumed, and answers nothing.
         return None;
@@ -117,21 +117,24 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
             };
             xp_name = Some(text);
         }
-        if !dict_get_callback(args[0].dict_shared(), b"highlight", &mut input_callback) {
+        if let Err(refused) =
+            dict_get_callback(args[0].dict_shared(), b"highlight", &mut input_callback)
+        {
+            refused.report();
             return;
         }
     } else {
-        let Some(text) = prompt_buf.string_chk(&args[0]) else {
+        let Ok(text) = prompt_buf.string_chk(&args[0]) else {
             return;
         };
         prompt = text;
         if args.len() > 1 {
-            let Some(text) = defstr_buf.string_chk(&args[1]) else {
+            let Ok(text) = defstr_buf.string_chk(&args[1]) else {
                 return;
             };
             defstr = text;
             if args.len() > 2 {
-                let Some(strarg2) = cancelreturn_buf.string_chk(&args[2]) else {
+                let Ok(strarg2) = cancelreturn_buf.string_chk(&args[2]) else {
                     return;
                 };
                 if inputdialog {

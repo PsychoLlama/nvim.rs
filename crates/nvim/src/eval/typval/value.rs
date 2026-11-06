@@ -167,7 +167,9 @@ pub(crate) fn tv_item_lock_slot(
     lock: bool,
     check_refcount: bool,
 ) -> Option<Descent> {
-    let depth = item_lock_depth(deep)?;
+    // Upstream's lock walk answers nothing either way: past the limit it
+    // has said so, and it stops.
+    let depth = item_lock_depth(deep).ok().flatten()?;
     let held = lock_slot(slot_lock, tv, lock, check_refcount)?;
     Some(Descent {
         _depth: depth,
@@ -195,20 +197,23 @@ impl Descent {
     }
 }
 
-/// The recursion counter of [`tv_item_lock`], one level deeper; `None` --
-/// having reported `E743` past the limit -- when the descent stops here.
-fn item_lock_depth(deep: ::core::ffi::c_int) -> Option<crate::guard::Bump> {
+/// The recursion counter of [`tv_item_lock`], one level deeper; `Ok(None)`
+/// when the descent stops here, `Err` once `E743` has been reported past the
+/// limit.
+fn item_lock_depth(
+    deep: ::core::ffi::c_int,
+) -> Result<Option<crate::guard::Bump>, crate::types::Failed> {
     // TODO(ZyX-I): Make this not recursive
     static recurse: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 
     if recurse.get() >= DICT_MAXNEST {
         emsg(gettext(e_variable_nested_too_deep_for_unlock));
-        return None;
+        return Err(crate::types::Failed);
     }
     if deep == 0 {
-        return None;
+        return Ok(None);
     }
-    Some(Depth::of(&recurse))
+    Ok(Some(Depth::of(&recurse)))
 }
 
 /// [`tv_item_lock`] over the item `at` of `list`, with the list edited for

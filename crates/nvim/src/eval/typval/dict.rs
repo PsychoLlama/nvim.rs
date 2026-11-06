@@ -196,7 +196,7 @@ impl Dict {
     pub fn extend_from_self(&mut self, action: u8) {
         let scoped = self.dv_scope != VAR_NO_SCOPE;
         for di in self.items() {
-            if scoped && !valid_varname_named(di.key()) {
+            if scoped && valid_varname_named(di.key()).is_err() {
                 break;
             }
             if action == b'e' {
@@ -232,7 +232,7 @@ pub fn dict_extend(d1: &DictRef, d2: &DictRef, action: u8) {
         };
         let slot1 = d1.slot_of(item2.key());
         // Check the key to be valid when adding to any scope.
-        if d1.dv_scope != VAR_NO_SCOPE && !valid_varname_named(item2.key()) {
+        if d1.dv_scope != VAR_NO_SCOPE && valid_varname_named(item2.key()).is_err() {
             break;
         }
         let Some(slot1) = slot1 else {
@@ -456,7 +456,7 @@ pub fn tv_dict_remove(args: &[TypVal], result: &mut TypVal, arg_errmsg: &'static
     if value_check_lock(dict.dv_lock, LockName::Translate(arg_errmsg)) {
         return;
     }
-    let Some(key) = numbuf.string_chk(&args[1]) else {
+    let Ok(key) = numbuf.string_chk(&args[1]) else {
         return;
     };
     let Some(slot) = dict.slot_of(key.to_bytes()) else {

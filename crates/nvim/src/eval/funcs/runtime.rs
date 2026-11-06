@@ -11,7 +11,7 @@ use crate::cmdexpand::cmdline_pum_active;
 use crate::cmdexpand::state::wild_menu_showing;
 use crate::eval::typval::{NumBuf, tv_dict_alloc_ret, tv_list_alloc_ret};
 use crate::eval::vars::{get_vim_var_nr, set_vim_var_nr};
-use crate::eval::{eval_has_provider, get_callback_depth};
+use crate::eval::{get_callback_depth, has_provider_from_vimscript};
 use crate::getchar::state::vgetc_busy;
 use crate::getchar::{stuff_empty, typeahead, using_script};
 use crate::global_cell::GlobalCell;
@@ -265,11 +265,11 @@ pub fn f_has(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             let saved = get_vim_var_nr(Vv::ShellError);
             let answer = if same_name(name, c"clipboard_working") || same_name(name, c"unnamedplus")
             {
-                eval_has_provider(c"clipboard", true)
+                has_provider_from_vimscript(c"clipboard").unwrap_or(false)
             } else if same_name(name, c"pythonx") {
-                eval_has_provider(c"python3", true)
+                has_provider_from_vimscript(c"python3").unwrap_or(false)
             } else {
-                eval_has_provider(name, true)
+                has_provider_from_vimscript(name).unwrap_or(false)
             };
             set_vim_var_nr(Vv::ShellError, saved);
             answer

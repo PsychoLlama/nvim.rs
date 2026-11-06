@@ -56,7 +56,7 @@ pub fn f_confirm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut kind = VIM_GENERIC as c_int;
     let mut error = false;
 
-    let message = numbuf.string_chk(&args[0]);
+    let message = numbuf.string_chk(&args[0]).ok();
     if message.is_none() {
         error = true;
     }
@@ -64,7 +64,7 @@ pub fn f_confirm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // supplied, and a coercion failure anywhere cancels the dialog --
     // but not the rest of the parse.
     if args.len() > 1 {
-        buttons = buttons_buf.string_chk(&args[1]);
+        buttons = buttons_buf.string_chk(&args[1]).ok();
         if buttons.is_none() {
             error = true;
         }

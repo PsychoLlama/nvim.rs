@@ -67,7 +67,8 @@ pub fn callback_from_typval(callback: &mut Callback, arg: &TypVal) -> bool {
                 // A plain String may name a script-local function, which
                 // has to be resolved against the current script now.
                 let scriptlocal = if tv.v_type() == VAR_STRING {
-                    scriptlocal_funcname(name.as_bytes())
+                    // Refused (E81 said), the name is used as written.
+                    scriptlocal_funcname(name.as_bytes()).ok().flatten()
                 } else {
                     None
                 };

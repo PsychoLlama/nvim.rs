@@ -24,7 +24,7 @@ use crate::eval::typval::{
 use crate::eval::{VARNUMBER_MAX, VARNUMBER_MIN};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
-use crate::types::{Float, TypVal, VAR_FLOAT, VarNumber};
+use crate::types::{Failed, Float, TypVal, VAR_FLOAT, VarNumber};
 
 /// `n1 / n2`, with the two cases a machine divide cannot answer.
 ///
@@ -98,7 +98,7 @@ pub(crate) fn eval_addlist(tv1: &mut TypVal, tv2: &mut TypVal) -> bool {
 /// reports nothing; `tv2` may still be refused.
 pub(crate) fn eval_concat_str(tv1: &mut TypVal, tv2: &mut TypVal) -> bool {
     let mut buf2 = NumBuf::new();
-    let Some(s2) = buf2.string_chk(tv2) else {
+    let Ok(s2) = buf2.string_chk(tv2) else {
         tv_clear(tv1);
         tv_clear(tv2);
         return false;
@@ -176,7 +176,11 @@ pub(crate) fn eval_addsub_number(tv1: &mut TypVal, tv2: &mut TypVal, op: u8) -> 
 }
 
 /// `*`, `/` and `%` over Numbers and Floats.
-pub(crate) fn eval_multdiv_number(tv1: &mut TypVal, tv2: &mut TypVal, op: u8) -> bool {
+pub(crate) fn eval_multdiv_number(
+    tv1: &mut TypVal,
+    tv2: &mut TypVal,
+    op: u8,
+) -> Result<(), Failed> {
     let mut error = false;
     let mut n1: VarNumber = 0;
     let mut n2: VarNumber = 0;
@@ -199,7 +203,7 @@ pub(crate) fn eval_multdiv_number(tv1: &mut TypVal, tv2: &mut TypVal, op: u8) ->
     tv_clear(tv1);
     if error {
         tv_clear(tv2);
-        return false;
+        return Err(Failed);
     }
 
     if tv2.v_type() == VAR_FLOAT {
@@ -213,7 +217,7 @@ pub(crate) fn eval_multdiv_number(tv1: &mut TypVal, tv2: &mut TypVal, op: u8) ->
         let read = tv_get_number_chk(tv2);
         tv_clear(tv2);
         let Ok(right) = read else {
-            return false;
+            return Err(Failed);
         };
         n2 = right;
         if use_float {
@@ -238,7 +242,7 @@ pub(crate) fn eval_multdiv_number(tv1: &mut TypVal, tv2: &mut TypVal, op: u8) ->
             b'/' => f1 / f2,
             _ => {
                 emsg(gettext(c"E804: Cannot use '%' with Float"));
-                return false;
+                return Err(Failed);
             }
         };
         tv1.write_float(result);
@@ -249,5 +253,5 @@ pub(crate) fn eval_multdiv_number(tv1: &mut TypVal, tv2: &mut TypVal, op: u8) ->
             _ => num_modulus(n1, n2),
         });
     }
-    true
+    Ok(())
 }

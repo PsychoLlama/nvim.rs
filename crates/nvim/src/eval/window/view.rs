@@ -37,22 +37,24 @@ pub fn f_getwinposy(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 /// been checked for the two things neither of them can move: a float, which
 /// has no separators, and a window in another tab page, whose sizes are not
 /// the ones on screen.
-fn drag_target(args: &[TypVal]) -> Option<(Win, c_int)> {
-    let wp = arg_win(args, 0)?;
+fn drag_target(args: &[TypVal]) -> Result<Option<(Win, c_int)>, Failed> {
+    let Some(wp) = arg_win(args, 0) else {
+        return Ok(None);
+    };
     if wp.w_floating {
-        return None;
+        return Ok(None);
     }
     if !win_valid(wp.id()) {
         crate::semsg!("E1308: Cannot resize a window in another tab page");
-        return None;
+        return Err(Failed);
     }
-    Some((wp, number_as_int(arg_number(args, 1))))
+    Ok(Some((wp, number_as_int(arg_number(args, 1)))))
 }
 
 /// `win_move_separator({nr}, {offset})` — drag a vertical separator.
 pub fn f_win_move_separator(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(0);
-    let Some((wp, offset)) = drag_target(args) else {
+    let Ok(Some((wp, offset))) = drag_target(args) else {
         return;
     };
     win_drag_vsep_line(wp, offset);
@@ -62,7 +64,7 @@ pub fn f_win_move_separator(args: &[TypVal], result: &mut TypVal, _fptr: EvalFun
 /// `win_move_statusline({nr}, {offset})` — drag a status line.
 pub fn f_win_move_statusline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(0);
-    let Some((wp, offset)) = drag_target(args) else {
+    let Ok(Some((wp, offset))) = drag_target(args) else {
         return;
     };
     win_drag_status_line(wp, offset);

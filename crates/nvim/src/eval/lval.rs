@@ -447,7 +447,7 @@ impl Walk<'_, '_> {
         let evaluated = eval1(&mut cursor, var, true);
         self.at = cursor.offset();
         self.stale = true;
-        (evaluated.is_ok() && tv_check_str(var)).then_some(())
+        evaluated.and_then(|()| tv_check_str(var)).ok()
     }
 
     /// The `: expr]` half of a `[n : m]`, with `at` on the colon.
@@ -556,7 +556,7 @@ impl Walk<'_, '_> {
             let wrong = (scope == VAR_DEF_SCOPE
                 && value.is_func()
                 && var_wrong_func_name_named(&key_bytes, existing.is_none()))
-                || !valid_varname_named(&key_bytes);
+                || valid_varname_named(&key_bytes).is_err();
             if wrong {
                 return None;
             }

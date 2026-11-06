@@ -338,7 +338,7 @@ pub fn f_join(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let sep = if args.len() <= 1 {
         Some(c" ")
     } else {
-        numbuf.string_chk(&args[1])
+        numbuf.string_chk(&args[1]).ok()
     };
 
     result.write_empty(VAR_STRING);

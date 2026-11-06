@@ -26,6 +26,7 @@ use crate::memory::XString;
 use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::semsg;
 use crate::tr_plural;
+use crate::types::Failed;
 use core::ffi::{CStr, c_int};
 use std::borrow::Cow;
 
@@ -220,7 +221,7 @@ fn mangle_function_name(
     mut lead: usize,
     skip: bool,
     flags: c_int,
-) -> Option<XString> {
+) -> Result<XString, Failed> {
     let source = expanded.unwrap_or(text);
     let mut at;
     let len;
@@ -260,14 +261,14 @@ fn mangle_function_name(
             let sc_sid = current_sctx.get().sc_sid;
             if sc_sid <= 0 {
                 emsg(gettext(e_usingsid));
-                return None;
+                return Err(Failed);
             }
             sid = format!("{sc_sid}_").into_bytes();
         }
     } else if flags & TFN_INT == 0 && builtin_function_in(&source[at..], name_len) {
         let start = msg_bytes(&text[start..]);
         semsg!("E128: Function name must start with a capital or \"s:\": {start}");
-        return None;
+        return Err(Failed);
     }
 
     if !skip && flags & TFN_QUIET == 0 && flags & TFN_NO_DEREF == 0 {
@@ -280,7 +281,7 @@ fn mangle_function_name(
         if name.contains(&b':') {
             let start = msg_bytes(&text[start..]);
             semsg!("E884: Function name cannot contain a colon: {start}");
-            return None;
+            return Err(Failed);
         }
     }
 
@@ -291,7 +292,7 @@ fn mangle_function_name(
         name.extend_from_slice(&sid);
     }
     name.extend_from_slice(source.get(at..at + len).unwrap_or_default());
-    Some(XString::from_bytes(&name))
+    Ok(XString::from_bytes(&name))
 }
 
 /// The function a name that selects a value names -- `dict.func`,
@@ -482,7 +483,9 @@ pub(crate) fn trans_function_name(
     }
 
     let name_len = lv.name().len();
-    answer.name = mangle_function_name(text, expanded, name_len, start, end, lead, skip, flags);
+    // A refusal is said by the mangler; the answer only carries no name.
+    answer.name =
+        mangle_function_name(text, expanded, name_len, start, end, lead, skip, flags).ok();
     if answer.name.is_some() {
         answer.end = end;
     }
@@ -491,23 +494,23 @@ pub(crate) fn trans_function_name(
 
 /// Expand `s:`/`<SID>` at the front of `name` into `<SNR>N_`. `None` when
 /// there is no such prefix, or no script to take the id from (reported).
-pub(crate) fn scriptlocal_funcname(name: &[u8]) -> Option<XString> {
+pub(crate) fn scriptlocal_funcname(name: &[u8]) -> Result<Option<XString>, Failed> {
     let off = if name.starts_with(b"s:") {
         2
     } else if name.starts_with(b"<SID>") {
         5
     } else {
         // The function name does not have a script-local prefix.
-        return None;
+        return Ok(None);
     };
     let sid = current_sctx.get().sc_sid;
     if !script_id_valid(sid) {
         emsg(gettext(e_usingsid));
-        return None;
+        return Err(Failed);
     }
     let mut local = format!("<SNR>{sid}_").into_bytes();
     local.extend_from_slice(&name[off..]);
-    Some(XString::from_bytes(&local))
+    Ok(Some(XString::from_bytes(&local)))
 }
 
 /// How many bytes `strtoimax` consumes at the start of `text`: blanks, a

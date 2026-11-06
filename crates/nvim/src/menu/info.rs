@@ -243,14 +243,14 @@ pub(crate) fn f_menu_info(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     tv_dict_alloc_ret(result);
-    let Some(menu_name) = numbuf.string_chk(&args[0]) else {
+    let Ok(menu_name) = numbuf.string_chk(&args[0]) else {
         // Before the second argument is looked at: `tv_get_string_chk`
         // answers a shared scratch buffer, so converting one argument can
         // invalidate the other, and a bad first argument must report once.
         return;
     };
     let which = match args.get(1) {
-        Some(second) => numbuf2.string_chk(second),
+        Some(second) => numbuf2.string_chk(second).ok(),
         // The default is the modes of plain ":menu".
         None => Some(c""),
     };

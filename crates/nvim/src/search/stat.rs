@@ -358,7 +358,7 @@ pub fn f_searchcount(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         recompute = r != 0;
 
         if let Some(di) = dict_find(dict, b"pattern") {
-            let Some(text) = numbuf.string_chk(&di.di_tv) else {
+            let Ok(text) = numbuf.string_chk(&di.di_tv) else {
                 return;
             };
             pattern = Some(text.to_bytes().to_vec());

@@ -510,7 +510,7 @@ fn next_char(s: &[u8]) -> (Key, &[u8]) {
 /// The string value of `arg`, `None` when the typval is not one (which is
 /// where `tv_get_string_buf_chk` reports its own error).
 fn tv_string<'a>(arg: &'a TypVal, buf: &'a mut NumBuf) -> Option<&'a [u8]> {
-    buf.string_chk(arg).map(CStr::to_bytes)
+    buf.string_chk(arg).ok().map(CStr::to_bytes)
 }
 
 /// The two digraph characters of `chars`: E1214 on anything but exactly

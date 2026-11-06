@@ -21,15 +21,18 @@ use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::normal::find_decl_of;
 use crate::option::vars::{P_WS, p_ws};
 
+use crate::memory::ThinCString;
 use crate::pos::equalpos;
 use crate::profile::profile_setlimit;
 use crate::search::{
     BACKWARD, FORWARD, SEARCH_COL, SEARCH_END, SEARCH_KEEP, SEARCH_START, search_in_current,
 };
 use crate::semsg;
-use crate::types::{Direction, EvalFuncData, FAIL, LineNr, Pos, TypVal, VarNumber, int64_t};
+use crate::types::{
+    Direction, EvalFuncData, FAIL, Failed, LineNr, Pos, TypVal, VarNumber, int64_t,
+};
 use crate::winlayer::Win;
-use core::ffi::c_int;
+use core::ffi::{CStr, c_int};
 
 /// Accept a match at the cursor's own position ('c').
 const SP_START: c_int = 0x10;
@@ -80,19 +83,58 @@ impl Drop for SavedWrapScan {
     }
 }
 
+/// Why a search builtin's arguments were refused. The builtin says it and
+/// answers no match, the user-visible `0` (`[0, 0]` for the `pos` forms).
+#[derive(Debug)]
+enum ArgsRefused {
+    /// `E475`, quoting the argument.
+    Invalid(ThinCString),
+    /// A conversion or the flags parser said why.
+    Said,
+    /// A negative {stopline} or {timeout} to `search()`: upstream answers
+    /// no match without a word.
+    Quiet,
+}
+
+const _: () = assert!(size_of::<ArgsRefused>() <= 16);
+
+impl From<Failed> for ArgsRefused {
+    fn from(Failed: Failed) -> Self {
+        ArgsRefused::Said
+    }
+}
+
+impl ArgsRefused {
+    /// `E475` for `what`, converted where the refusal is decided -- a List
+    /// there says its own `E730` first, as it did.
+    fn invalid(what: &CStr) -> Self {
+        ArgsRefused::Invalid(ThinCString::from_cstr(what))
+    }
+
+    /// Say the refusal, if it has one, and answer the no-match `0`.
+    #[cold]
+    fn report(self) -> c_int {
+        if let ArgsRefused::Invalid(what) = self {
+            let what = msg_cstr(what.as_cstr());
+            semsg!("E475: Invalid argument: {what}");
+        }
+        0
+    }
+}
+
 /// Parse a `{flags}` argument.
 ///
 /// Returns [`FORWARD`], [`BACKWARD`], or 0 for an error already reported.
 /// Sets the bits it recognises in `flags`, and may write 'wrapscan'.
-fn search_direction(varp: Option<&TypVal>, flags: &mut c_int) -> c_int {
+fn search_direction(varp: Option<&TypVal>, flags: &mut c_int) -> Result<c_int, Failed> {
     let mut dir = FORWARD as c_int;
     let Some(varp) = varp else {
-        return FORWARD as c_int;
+        return Ok(FORWARD as c_int);
     };
     let mut nbuf = NumBuf::new();
     let Some(text) = nbuf.bytes_chk(varp) else {
         // Type error; the message is already out.
-        return 0;
+        return Err(Failed);
     };
     for (at, &letter) in text.iter().enumerate() {
         match letter {
@@ -107,22 +149,23 @@ fn search_direction(varp: Option<&TypVal>, flags: &mut c_int) -> c_int {
                     // letter, and those are arbitrary user bytes.
                     let p = msg_bytes(&text[at..]);
                     semsg!("E475: Invalid argument: {p}");
-                    dir = 0;
+                    return Err(Failed);
                 }
             },
         }
-        if dir == 0 {
-            break;
-        }
     }
-    dir
+    Ok(dir)
 }
 
 /// Shared by `search()` and `searchpos()`.
 ///
 /// Answers the matched line (or the sub-pattern number under `p`), 0 for no
 /// match, and writes the one-based match position through `match_pos`.
-fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut c_int) -> c_int {
+fn search_cmn(
+    args: &[TypVal],
+    match_pos: Option<&mut Pos>,
+    flagsp: &mut c_int,
+) -> Result<c_int, ArgsRefused> {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let _wrapscan = SavedWrapScan::new();
@@ -135,10 +178,7 @@ fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut c_int) 
     // must not hold onto anything an argument owns across it.
     let pat = numbuf.string(&args[0]).to_bytes().to_vec();
     // May set 'wrapscan'.
-    let dir = search_direction(args.get(1), flagsp);
-    if dir == 0 {
-        return 0;
-    }
+    let dir = search_direction(args.get(1), flagsp)?;
     let flags = *flagsp;
     if flags & SP_START != 0 {
         options |= SEARCH_START as c_int;
@@ -156,12 +196,12 @@ fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut c_int) 
     if args.len() > 1 && args.len() > 2 {
         lnum_stop = number_as_lnum(arg_number_chk(&args[2], None));
         if lnum_stop < LineNr::ZERO {
-            return 0;
+            return Err(ArgsRefused::Quiet);
         }
         if args.len() > 3 {
             time_limit = arg_number_chk(&args[3], None) as int64_t;
             if time_limit < 0 {
-                return 0;
+                return Err(ArgsRefused::Quiet);
             }
             use_skip = args.get(4).is_some_and(eval_expr_valid_arg);
         }
@@ -173,9 +213,7 @@ fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut c_int) 
     if flags & (SP_REPEAT | SP_RETCOUNT) != 0
         || (flags & SP_NOMOVE != 0 && flags & SP_SETPCMARK != 0)
     {
-        let what = msg_cstr(numbuf2.string(&args[1]));
-        semsg!("E475: Invalid argument: {what}");
-        return 0;
+        return Err(ArgsRefused::invalid(numbuf2.string(&args[1])));
     }
 
     let save_cursor = Win::current().w_cursor;
@@ -242,13 +280,14 @@ fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut c_int) 
     } else {
         Win::current().w_set_curswant = true;
     }
-    retval
+    Ok(retval)
 }
 
 /// `search({pattern} [, {flags} [, {stopline} [, {timeout} [, {skip}]]]])`
 pub fn f_search(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut flags = 0;
-    result.write_number(search_cmn(args, None, &mut flags) as VarNumber);
+    let found = search_cmn(args, None, &mut flags).unwrap_or_else(ArgsRefused::report);
+    result.write_number(found as VarNumber);
 }
 
 /// `searchpos()` — as `search()`, but answering `[lnum, col]`, plus the
@@ -260,7 +299,7 @@ pub fn f_searchpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         coladd: 0,
     };
     let mut flags = 0;
-    let n = search_cmn(args, Some(&mut match_pos), &mut flags);
+    let n = search_cmn(args, Some(&mut match_pos), &mut flags).unwrap_or_else(ArgsRefused::report);
     let list = tv_list_alloc_ret(result, 2 + (flags & SP_SUBPAT != 0) as isize);
     let (lnum, col) = if n > 0 {
         (match_pos.lnum.get(), match_pos.col.get())
@@ -284,7 +323,7 @@ pub fn f_searchdecl(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // Default: FAIL.
     result.write_number(1);
 
-    let name = numbuf.string_chk(&args[0]);
+    let name = numbuf.string_chk(&args[0]).ok();
     if args.len() > 1 {
         locally = arg_number_chk(&args[1], Some(&mut error)) == 0;
         if !error && args.len() > 2 {
@@ -299,7 +338,7 @@ pub fn f_searchdecl(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// Shared by `searchpair()` and `searchpairpos()`: parse the arguments and
 /// hand them to [`do_searchpair`].
-fn searchpair_cmn(args: &[TypVal], match_pos: Option<&mut Pos>) -> c_int {
+fn searchpair_cmn(args: &[TypVal], match_pos: Option<&mut Pos>) -> Result<c_int, ArgsRefused> {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();
@@ -311,25 +350,20 @@ fn searchpair_cmn(args: &[TypVal], match_pos: Option<&mut Pos>) -> c_int {
 
     let mut nbuf1 = NumBuf::new();
     let mut nbuf2 = NumBuf::new();
-    let spat = numbuf.string_chk(&args[0]);
-    let mpat = nbuf1.string_chk(&args[1]);
-    let epat = nbuf2.string_chk(&args[2]);
+    let spat = numbuf.string_chk(&args[0]).ok();
+    let mpat = nbuf1.string_chk(&args[1]).ok();
+    let epat = nbuf2.string_chk(&args[2]).ok();
     let (Some(spat), Some(mpat), Some(epat)) = (spat, mpat, epat) else {
         // Type error, already reported.
-        return 0;
+        return Err(ArgsRefused::Said);
     };
 
     // May set 'wrapscan'.
-    let dir = search_direction(args.get(3), &mut flags);
-    if dir == 0 {
-        return 0;
-    }
+    let dir = search_direction(args.get(3), &mut flags)?;
 
     // `e` and `p` belong to search(); `n` and `s` contradict each other.
     if flags & (SP_END | SP_SUBPAT) != 0 || (flags & SP_NOMOVE != 0 && flags & SP_SETPCMARK != 0) {
-        let what = msg_cstr(numbuf2.string(&args[3]));
-        semsg!("E475: Invalid argument: {what}");
-        return 0;
+        return Err(ArgsRefused::invalid(numbuf2.string(&args[3])));
     }
 
     // `r` implies `W`; without it the repeat would wrap forever.
@@ -346,16 +380,12 @@ fn searchpair_cmn(args: &[TypVal], match_pos: Option<&mut Pos>) -> c_int {
         if args.len() > 5 {
             lnum_stop = number_as_lnum(arg_number_chk(&args[5], None));
             if lnum_stop < LineNr::ZERO {
-                let what = msg_cstr(numbuf3.string(&args[5]));
-                semsg!("E475: Invalid argument: {what}");
-                return 0;
+                return Err(ArgsRefused::invalid(numbuf3.string(&args[5])));
             }
             if args.len() > 6 {
                 time_limit = arg_number_chk(&args[6], None) as int64_t;
                 if time_limit < 0 {
-                    let what = msg_cstr(numbuf4.string(&args[6]));
-                    semsg!("E475: Invalid argument: {what}");
-                    return 0;
+                    return Err(ArgsRefused::invalid(numbuf4.string(&args[6])));
                 }
             }
         }
@@ -365,15 +395,16 @@ fn searchpair_cmn(args: &[TypVal], match_pos: Option<&mut Pos>) -> c_int {
     // `do_searchpair` builds its own patterns out of these before {skip}
     // can run.
     let (spat, mpat, epat) = (spat.to_bytes(), mpat.to_bytes(), epat.to_bytes());
-    do_searchpair(
+    Ok(do_searchpair(
         spat, mpat, epat, dir, skip, flags, match_pos, lnum_stop, time_limit,
-    )
+    ))
 }
 
 /// `searchpair({start}, {middle}, {end} [, {flags} [, {skip} [, {stopline}
 /// [, {timeout}]]]])`
 pub fn f_searchpair(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_number(searchpair_cmn(args, None) as VarNumber);
+    let found = searchpair_cmn(args, None).unwrap_or_else(ArgsRefused::report);
+    result.write_number(found as VarNumber);
 }
 
 /// `searchpairpos()` — as `searchpair()`, answering `[lnum, col]`.
@@ -386,7 +417,7 @@ pub fn f_searchpairpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     let (mut lnum, mut col) = (0, 0);
     // The List is allocated after the search: {skip} is user code, and
     // the return value is not yet anything it could reach either way.
-    if searchpair_cmn(args, Some(&mut match_pos)) > 0 {
+    if searchpair_cmn(args, Some(&mut match_pos)).unwrap_or_else(ArgsRefused::report) > 0 {
         lnum = match_pos.lnum.get();
         col = match_pos.col.get();
     }

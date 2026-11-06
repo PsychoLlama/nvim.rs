@@ -70,7 +70,7 @@ pub fn tv_to_argv(cmd_tv: &TypVal) -> Result<Argv, ArgvRefusal> {
     // resolved path is what actually goes in slot 0.
     let mut numbuf = NumBuf::new();
     let first = &list_iter(items).next().expect("non-empty").li_tv;
-    let Some(arg0) = numbuf.string_chk(first) else {
+    let Ok(arg0) = numbuf.string_chk(first) else {
         return Err(ArgvRefusal::Invalid);
     };
     let Some(program) = executable_path(arg0, true) else {
@@ -88,7 +88,7 @@ pub fn tv_to_argv(cmd_tv: &TypVal) -> Result<Argv, ArgvRefusal> {
     let mut program = Some(ThinCString::from(program));
     let mut words = Vec::with_capacity(argc as usize);
     for arg in list_iter(items) {
-        let Some(word) = numbuf.string_chk(&arg.li_tv) else {
+        let Ok(word) = numbuf.string_chk(&arg.li_tv) else {
             return Err(ArgvRefusal::Invalid);
         };
         // Slot 0 takes the resolved path rather than the item's spelling.

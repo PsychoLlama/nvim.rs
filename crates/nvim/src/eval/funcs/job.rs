@@ -38,6 +38,7 @@ use crate::path::vim_full_name;
 use crate::semsg;
 use crate::terminal::{Term, buf_terminal_running, terminal_buf, terminal_open};
 use crate::types::AutoEvent;
+use crate::types::Failed;
 use crate::types::Handle;
 use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
@@ -60,12 +61,12 @@ const NO_CALLBACK: Callback = Callback::None;
 
 /// The job id a `job*()` builtin was handed, or `None` when the argument
 /// was not a Number at all -- in which case the error is already out.
-fn job_id(arg: &TypVal) -> Option<uint64_t> {
+fn job_id(arg: &TypVal) -> Result<uint64_t, Failed> {
     if arg.v_type() != VAR_NUMBER {
         emsg(gettext(e_invarg));
-        return None;
+        return Err(Failed);
     }
-    Some(arg.number_or_zero() as uint64_t)
+    Ok(arg.number_or_zero() as uint64_t)
 }
 
 /// `jobpid({job})`
@@ -74,7 +75,7 @@ pub fn f_jobpid(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if check_secure() {
         return;
     }
-    let Some(id) = job_id(&args[0]) else {
+    let Ok(id) = job_id(&args[0]) else {
         return;
     };
     if !find_job(id, true) {
@@ -129,7 +130,7 @@ pub fn f_jobstop(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if check_secure() {
         return;
     }
-    let Some(id) = job_id(&args[0]) else {
+    let Ok(id) = job_id(&args[0]) else {
         return;
     };
     // `false`: a job that has already gone is not an error here.

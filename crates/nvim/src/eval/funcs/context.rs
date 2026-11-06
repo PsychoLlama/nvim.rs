@@ -10,8 +10,8 @@ use crate::message::state::did_emsg;
 use crate::message_fmt::msg_cstr;
 use crate::semsg;
 use crate::types::{
-    Context, Error, EvalFuncData, Object, TypVal, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN,
-    VarNumber,
+    Context, Error, EvalFuncData, Failed, Object, TypVal, VAR_DICT, VAR_LIST, VAR_NUMBER,
+    VAR_UNKNOWN, VarNumber,
 };
 use core::ffi::c_int;
 
@@ -20,13 +20,13 @@ const NO_ERROR: Error = Error::none();
 
 /// The `{index}` argument the `ctxget`/`ctxset` pair share: absent means 0,
 /// a Number is taken as-is, anything else is rejected with `what`.
-fn context_index(tv: Option<&TypVal>, what: &str) -> Option<usize> {
+fn context_index(tv: Option<&TypVal>, what: &str) -> Result<usize, Failed> {
     match tv {
-        None => Some(0),
-        Some(tv) if tv.v_type() == VAR_NUMBER => Some(tv.number_or_zero() as usize),
+        None => Ok(0),
+        Some(tv) if tv.v_type() == VAR_NUMBER => Ok(tv.number_or_zero() as usize),
         Some(_) => {
             semsg!("E475: Invalid argument: {what}");
-            None
+            Err(Failed)
         }
     }
 }
@@ -38,7 +38,7 @@ fn out_of_bounds() {
 
 /// `ctxget([{index}])` — the context at `index` as a Dictionary.
 pub fn f_ctxget(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let Some(index) = context_index(args.first(), "expected nothing or a Number as an argument")
+    let Ok(index) = context_index(args.first(), "expected nothing or a Number as an argument")
     else {
         return;
     };
@@ -100,7 +100,7 @@ pub fn f_ctxset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
     let msg = "expected nothing or a Number as second argument";
-    let Some(index) = context_index(args.get(1), msg) else {
+    let Ok(index) = context_index(args.get(1), msg) else {
         return;
     };
     if index >= ctx_size() {

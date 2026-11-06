@@ -114,16 +114,16 @@ fn compare_container(
     equal: impl FnOnce() -> bool,
     wrong_type: &'static CStr,
     wrong_op: &'static CStr,
-) -> Option<VarNumber> {
+) -> Result<VarNumber, Failed> {
     if op == EXPR_IS || op == EXPR_ISNOT {
         let same = same_type && identical();
-        Some(VarNumber::from(same == (op == EXPR_IS)))
+        Ok(VarNumber::from(same == (op == EXPR_IS)))
     } else if !same_type || (op != EXPR_EQUAL && op != EXPR_NEQUAL) {
         let message = if !same_type { wrong_type } else { wrong_op };
         emsg(gettext(message));
-        None
+        Err(Failed)
     } else {
-        Some(VarNumber::from(equal() == (op == EXPR_EQUAL)))
+        Ok(VarNumber::from(equal() == (op == EXPR_EQUAL)))
     }
 }
 
@@ -175,10 +175,10 @@ pub(crate) fn typval_compare(
         let wrong_type = c"E977: Can only compare Blob with Blob";
         let cmp = compare_container(op, same_type, same, eq, wrong_type, e_invalblob);
         match cmp {
-            Some(n) => n,
-            None => {
+            Ok(n) => n,
+            Err(failed) => {
                 tv_clear(typ1);
-                return Err(Failed);
+                return Err(failed);
             }
         }
     } else if t1 == VAR_LIST || t2 == VAR_LIST {
@@ -190,10 +190,10 @@ pub(crate) fn typval_compare(
         let wrong_op = c"E692: Invalid operation for List";
         let cmp = compare_container(op, same_type, same, eq, wrong_type, wrong_op);
         match cmp {
-            Some(n) => n,
-            None => {
+            Ok(n) => n,
+            Err(failed) => {
                 tv_clear(typ1);
-                return Err(Failed);
+                return Err(failed);
             }
         }
     } else if t1 == VAR_DICT || t2 == VAR_DICT {
@@ -204,10 +204,10 @@ pub(crate) fn typval_compare(
         let wrong_op = c"E736: Invalid operation for Dictionary";
         let cmp = compare_container(op, same_type, same, eq, wrong_type, wrong_op);
         match cmp {
-            Some(n) => n,
-            None => {
+            Ok(n) => n,
+            Err(failed) => {
                 tv_clear(typ1);
-                return Err(Failed);
+                return Err(failed);
             }
         }
     } else if (*typ1).is_func() || (*typ2).is_func() {

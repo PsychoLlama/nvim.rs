@@ -278,7 +278,7 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             write_reg_contents_lst(regname, &lines, append, yank_type, block_len);
         }
     } else if let Some(contents) = regcontents {
-        let Some(strval) = numbuf5.string_chk(contents) else {
+        let Ok(strval) = numbuf5.string_chk(contents) else {
             return;
         };
         let text = ThinCString::from_cstr(strval);
@@ -299,7 +299,7 @@ fn list_lines(contents: &TypVal) -> Option<Vec<ThinCString>> {
     let mut lines = Vec::new();
     for item in list_iter(contents.list_ref()) {
         let mut buf = NumBuf::new();
-        lines.push(ThinCString::from_cstr(buf.string_chk(&item.li_tv)?));
+        lines.push(ThinCString::from_cstr(buf.string_chk(&item.li_tv).ok()?));
     }
     Some(lines)
 }

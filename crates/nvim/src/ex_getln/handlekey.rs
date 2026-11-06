@@ -380,7 +380,7 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
 
         Ok(SpecialKey::Middlemouse) => {
             cmdline_paste(
-                if eval_has_provider(c"clipboard", false) {
+                if eval_has_provider(c"clipboard") {
                     b'*'
                 } else {
                     0

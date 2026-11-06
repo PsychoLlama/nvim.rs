@@ -409,8 +409,8 @@ pub(crate) fn eval_vars(
                 let oldfiles = get_vim_var_list_handle(Vv::Oldfiles);
                 let mut numbuf = NumBuf::new();
                 match list_find_str(oldfiles.as_deref(), i - 1, &mut numbuf) {
-                    None => return Expansion::Refused(QUIET),
-                    Some(name) => name.to_owned(),
+                    Err(Failed) => return Expansion::Refused(QUIET),
+                    Ok(name) => name.to_owned(),
                 }
             } else {
                 if i == 0 && byte(1) == b'<' && used > 1 {

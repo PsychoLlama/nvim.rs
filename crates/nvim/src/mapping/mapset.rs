@@ -66,7 +66,7 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
         which = mode;
         is_abbr = abbr != 0;
     } else {
-        let Some(mode) = buf.string_chk(&args[0]) else {
+        let Ok(mode) = buf.string_chk(&args[0]) else {
             return;
         };
         which = mode;

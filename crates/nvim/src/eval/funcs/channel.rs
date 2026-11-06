@@ -410,7 +410,9 @@ pub fn f_sockconnect(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     if args.get(2).is_some_and(|arg| arg.v_type() == VAR_DICT) {
         let opts = args[2].dict_ref();
         rpc = dict_get_number(opts, b"rpc") != 0;
-        if !dict_get_callback(args[2].dict_shared(), b"on_data", &mut on_data.cb) {
+        if let Err(refused) = dict_get_callback(args[2].dict_shared(), b"on_data", &mut on_data.cb)
+        {
+            refused.report();
             return;
         }
         on_data.buffered = dict_get_number(args[2].dict_ref(), b"data_buffered") != 0;
@@ -438,12 +440,14 @@ pub fn f_stdioopen(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
     let mut on_stdin = NO_READER;
     let rpc = dict_get_number(args[0].dict_ref(), b"rpc") != 0;
-    if !dict_get_callback(args[0].dict_shared(), b"on_stdin", &mut on_stdin.cb) {
+    if let Err(refused) = dict_get_callback(args[0].dict_shared(), b"on_stdin", &mut on_stdin.cb) {
+        refused.report();
         return;
     }
     // `on_print` is a global: there is only one stdio channel.
     let options = args[0].dict_shared();
-    if !with_on_print(|cb| dict_get_callback(options, b"on_print", cb)) {
+    if let Err(refused) = with_on_print(|cb| dict_get_callback(options, b"on_print", cb)) {
+        refused.report();
         return;
     }
     on_stdin.buffered = dict_get_number(args[0].dict_ref(), b"stdin_buffered") != 0;

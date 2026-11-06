@@ -20,6 +20,7 @@ use crate::charset::{Str2NrBases, str2nr_in};
 use crate::narrow::number_as_lnum;
 use crate::semsg;
 use crate::strings::format_float_g;
+use crate::types::Failed;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use ::core::ffi::CStr;
@@ -154,27 +155,27 @@ impl NumBuf {
         NumBuf([0; NUMBUFLEN as usize])
     }
 
-    /// `tv` as a string, or `None` with the error reported for a value that
+    /// `tv` as a string, or `Err` with the error reported for a value that
     /// has no string form. The C's `tv_get_string_chk`.
-    pub fn string_chk<'a>(&'a mut self, tv: &'a TypVal) -> Option<&'a CStr> {
+    pub fn string_chk<'a>(&'a mut self, tv: &'a TypVal) -> Result<&'a CStr, Failed> {
         match tv.v_type() {
-            VAR_NUMBER => Some(self.formatted(format_args!("{}", tv.number_or_zero()))),
+            VAR_NUMBER => Ok(self.formatted(format_args!("{}", tv.number_or_zero()))),
             VAR_FLOAT => {
                 let len = format_float_g(tv.float_or_zero(), &mut self.0);
-                Some(self.terminated(len))
+                Ok(self.terminated(len))
             }
-            VAR_STRING => Some(tv.string_cstr().unwrap_or(c"")),
+            VAR_STRING => Ok(tv.string_cstr().unwrap_or(c"")),
             VAR_BOOL => {
                 let which = tv.as_bool().unwrap_or(crate::types::kBoolVarFalse);
-                Some(self.copied(BOOL_VAR_NAMES[which as usize]))
+                Ok(self.copied(BOOL_VAR_NAMES[which as usize]))
             }
             VAR_SPECIAL => {
                 let which = tv.as_special().unwrap_or(kSpecialVarNull);
-                Some(self.copied(SPECIAL_VAR_NAMES[which as usize]))
+                Ok(self.copied(SPECIAL_VAR_NAMES[which as usize]))
             }
             VAR_PARTIAL | VAR_FUNC | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_UNKNOWN => {
                 emsg(gettext(str_errors[tv.v_type() as usize]));
-                None
+                Err(Failed)
             }
             _ => unreachable!("the eight arms above are every kind there is"),
         }
@@ -188,7 +189,7 @@ impl NumBuf {
 
     /// [`string_chk`](Self::string_chk) as bytes.
     pub fn bytes_chk<'a>(&'a mut self, tv: &'a TypVal) -> Option<&'a [u8]> {
-        self.string_chk(tv).map(CStr::to_bytes)
+        self.string_chk(tv).ok().map(CStr::to_bytes)
     }
 
     /// [`string`](Self::string) as bytes.

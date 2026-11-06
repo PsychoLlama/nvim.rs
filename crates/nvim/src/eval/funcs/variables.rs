@@ -106,14 +106,15 @@ pub fn f_islocked(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         Target::Variable | Target::Blob { .. } => with_var(lval.name(), true, |item| {
             item.di_flags & DI_FLAGS_LOCK as u8 != 0 || tv_islocked(item.di_lock, &item.di_tv)
         }),
+        // Both refusals leave the `-1` written above.
         Target::Slot { span, .. } if span.range => {
             semsg!("E786: Range not allowed");
-            None
+            return;
         }
         Target::NewKey { key, .. } => {
             let key = msg_bytes(key);
             semsg!("E716: Key not present in Dictionary: \"{key}\"");
-            None
+            return;
         }
         Target::Slot { .. } => lval.with_slot(|tv, lock| tv_islocked(*lock, tv)),
     };
