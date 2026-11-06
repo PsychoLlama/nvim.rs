@@ -39,7 +39,6 @@ use crate::search::last_search_pat;
 use crate::semsg;
 use crate::smsg;
 use crate::types::CmdIdx;
-use crate::types::Handle;
 use crate::types::{CmdLine, CmdModFlags, OptionSetFlags};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int, c_uint};
@@ -192,11 +191,8 @@ fn match_buflines(
     search: &mut Search,
     duplicate_name: bool,
 ) -> bool {
-    let bufnum = if duplicate_name {
-        Handle::NONE
-    } else {
-        buffer.handle
-    };
+    // A name listed twice gets no buffer, so the entry resolves the name.
+    let bufnum = (!duplicate_name).then_some(buffer.handle);
     let global = search.flags & VGR_GLOBAL != 0;
     let mut found_match = false;
 
@@ -223,7 +219,7 @@ fn match_buflines(
                     qfl,
                     &NewEntry {
                         fname: Some(fname),
-                        bufnum: Some(bufnum),
+                        bufnum,
                         lnum: start.lnum + lnum.get(),
                         end_lnum: end.lnum + lnum.get(),
                         col: (start.col + 1).get(),
@@ -277,7 +273,7 @@ fn match_buflines(
                     qfl,
                     &NewEntry {
                         fname: Some(fname),
-                        bufnum: Some(bufnum),
+                        bufnum,
                         lnum,
                         col: first + col.get() + 1,
                         ..NewEntry::new(line.as_cstr())
