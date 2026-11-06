@@ -20,12 +20,20 @@
 //! Original: `src/nvim/eval/fs.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::{__S_IFMT, str_arg};
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::{tv_blob_alloc_ret, tv_get_number, tv_list_alloc_ret};
 use crate::memory::ThinCString;
 use crate::message_fmt::msg_cstr;
+use crate::narrow::len_as_integer;
 use crate::os::cshim::gettext;
 use crate::os::fs::dir_exists;
 use crate::pos::MAXLNUM;
@@ -65,13 +73,13 @@ impl File {
     /// cannot be taken.
     fn info(&self) -> Option<(FileOffset, uint64_t)> {
         let info = self.0.metadata().ok()?;
-        Some((info.size() as FileOffset, uint64_t::from(info.mode())))
+        Some((info.size().cast_signed(), uint64_t::from(info.mode())))
     }
 
     /// Seek to `offset` relative to `whence`; false when the seek failed.
     fn seek(&mut self, offset: FileOffset, whence: Whence) -> bool {
         let to = match whence {
-            Whence::Start => SeekFrom::Start(offset as u64),
+            Whence::Start => SeekFrom::Start(offset.cast_unsigned()),
             Whence::End => SeekFrom::End(offset),
         };
         self.0.seek(to).is_ok()
@@ -95,7 +103,7 @@ impl File {
 
 /// How many lines the list holds so far.
 fn count(lines: &List) -> int64_t {
-    lines.len() as int64_t
+    len_as_integer(lines.len())
 }
 
 /// Append `s` to the list, which owns it from here on.
@@ -116,18 +124,18 @@ impl Carry {
     }
 
     fn len(&self) -> isize {
-        self.0.len() as isize
+        self.0.len().cast_signed()
     }
 
     /// Byte `i` of the carried bytes.
     fn byte(&self, i: isize) -> u8 {
-        self.0[i as usize]
+        self.0[i.cast_unsigned()]
     }
 
     /// Drop the last `n` bytes, which a BOM straddling two reads leaves
     /// behind.
     fn shorten(&mut self, n: isize) {
-        self.0.truncate(self.0.len() - n as usize);
+        self.0.truncate(self.0.len() - n.cast_unsigned());
     }
 
     /// Drop the trailing CRs, which is what a CRLF split across two reads
@@ -203,7 +211,8 @@ fn read_blob(fd: &mut File, result: &mut TypVal, offset: FileOffset, size_arg: F
     // so a size past `INT_MAX` asked `fread` for a nonsense count against a
     // buffer `ga_grow` never allocated. The blob is a `Vec` now and is asked
     // for exactly `size`.
-    let len = size as usize;
+    // Positive: a non-positive size returned above.
+    let len = usize::try_from(size).expect("a positive size");
     let filled = result
         .blob_mut()
         .is_some_and(|blob| fd.read(blob.claim(len)) >= len);
@@ -224,18 +233,18 @@ fn read_lines(fd: &mut File, lines: &mut List, binary: bool, maxline: int64_t) {
     let mut carry = Carry::new();
 
     while maxline < 0 || count(lines) < maxline {
-        let mut readlen = fd.read(&mut buf) as isize;
+        let mut readlen = fd.read(&mut buf).cast_signed();
         let (mut p, mut start) = (0_isize, 0_isize);
 
         // This loop processes what was read, but is also entered at end of
         // file so that either an incomplete line gets written, or a "binary"
         // file gets an empty line at the end if it ends in a newline.
         while p < readlen || (readlen <= 0 && (carry.len() > 0 || binary)) {
-            if readlen <= 0 || buf[p as usize] == b'\n' {
+            if readlen <= 0 || buf[p.cast_unsigned()] == b'\n' {
                 // Finished a line.  Remove the CRs before the NL.
-                let mut len = (p - start) as usize;
+                let mut len = (p - start).cast_unsigned();
                 if readlen > 0 && !binary {
-                    while len > 0 && buf[start as usize + len - 1] == b'\r' {
+                    while len > 0 && buf[start.cast_unsigned() + len - 1] == b'\r' {
                         len -= 1;
                     }
                     // The removal may cross back into the carry.
@@ -243,7 +252,7 @@ fn read_lines(fd: &mut File, lines: &mut List, binary: bool, maxline: int64_t) {
                         carry.trim_cr();
                     }
                 }
-                let line = &buf[start as usize..start as usize + len];
+                let line = &buf[start.cast_unsigned()..start.cast_unsigned() + len];
                 push_line(
                     lines,
                     if carry.len() == 0 {
@@ -266,22 +275,22 @@ fn read_lines(fd: &mut File, lines: &mut List, binary: bool, maxline: int64_t) {
                 if readlen <= 0 {
                     break;
                 }
-            } else if buf[p as usize] == 0 {
-                buf[p as usize] = b'\n';
-            } else if buf[p as usize] == 0xbf && !binary {
+            } else if buf[p.cast_unsigned()] == 0 {
+                buf[p.cast_unsigned()] = b'\n';
+            } else if buf[p.cast_unsigned()] == 0xbf && !binary {
                 // Check for a UTF-8 "bom"; U+FEFF is encoded as EF BB BF.
                 // This is done on finding the BF, by looking at the two
                 // bytes before it -- which, when `p` is at the front of the
                 // buffer or just after it, may be in the carry.
                 let back1 = if p >= 1 {
-                    buf[(p - 1) as usize]
+                    buf[(p - 1).cast_unsigned()]
                 } else if carry.len() >= 1 {
                     carry.byte(carry.len() - 1)
                 } else {
                     0
                 };
                 let back2 = if p >= 2 {
-                    buf[(p - 2) as usize]
+                    buf[(p - 2).cast_unsigned()]
                 } else if p == 1 && carry.len() >= 1 {
                     carry.byte(carry.len() - 1)
                 } else if carry.len() >= 2 {
@@ -306,7 +315,10 @@ fn read_lines(fd: &mut File, lines: &mut List, binary: bool, maxline: int64_t) {
                             dest = 0;
                         }
                         if readlen > p + 1 {
-                            buf.copy_within((p + 1) as usize..readlen as usize, dest as usize);
+                            buf.copy_within(
+                                (p + 1).cast_unsigned()..readlen.cast_unsigned(),
+                                dest.cast_unsigned(),
+                            );
                         }
                         readlen -= 3 - adjust_carry;
                         carry.shorten(adjust_carry);
@@ -322,7 +334,7 @@ fn read_lines(fd: &mut File, lines: &mut List, binary: bool, maxline: int64_t) {
         }
         if start < p {
             // There is part of a line in the buffer: carry it over.
-            carry.push(&buf[start as usize..p as usize]);
+            carry.push(&buf[start.cast_unsigned()..p.cast_unsigned()]);
         }
     }
 }

@@ -6,9 +6,20 @@
 //! itself.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use crate::eval::AUTOLOAD_CHAR;
+use crate::eval::typval::DI_FLAGS_FIX;
+use crate::eval::typval::DI_FLAGS_LOCK;
+use crate::eval::typval::DI_FLAGS_RO;
+use crate::eval::typval::DI_FLAGS_RO_SBX;
 use crate::eval::typval::DictRef;
 use crate::semsg;
 use crate::tr_plural;
@@ -18,7 +29,6 @@ use core::ffi::c_int;
 use super::*;
 use crate::message::emsg;
 use crate::message_fmt::{emsg_text, msg_bytes};
-use crate::types::NUL;
 
 // ---------------------------------------------------------------------
 // Reporting, and the one place a value this frame owns is freed.
@@ -229,9 +239,9 @@ fn store_value(tv: &mut TypVal, copy: bool) -> TypVal {
 /// Whether `flags` says the variable may not be written, reporting E46 or
 /// E794 naming `name` if so.
 pub(crate) fn var_check_ro_named(flags: c_int, name: &[u8]) -> bool {
-    let error_message = if flags & DI_FLAGS_RO as c_int != 0 {
+    let error_message = if flags & c_int::from(DI_FLAGS_RO) != 0 {
         e_cannot_change_readonly_variable_str
-    } else if flags & DI_FLAGS_RO_SBX as c_int != 0 && sandbox.get() != 0 {
+    } else if flags & c_int::from(DI_FLAGS_RO_SBX) != 0 && sandbox.get() != 0 {
         e_cannot_set_variable_in_sandbox_str
     } else {
         return false;
@@ -244,7 +254,7 @@ pub(crate) fn var_check_ro_named(flags: c_int, name: &[u8]) -> bool {
 /// Whether `flags` says the variable may not be deleted, reporting E795
 /// naming `name` if so.
 pub(crate) fn var_check_fixed_named(flags: c_int, name: &[u8]) -> bool {
-    if flags & DI_FLAGS_FIX as c_int == 0 {
+    if flags & c_int::from(DI_FLAGS_FIX) == 0 {
         return false;
     }
     let name = msg_bytes(name);
@@ -255,7 +265,7 @@ pub(crate) fn var_check_fixed_named(flags: c_int, name: &[u8]) -> bool {
 /// Whether `flags` says the variable is locked, reporting E1122 naming
 /// `name` if so.
 pub(crate) fn var_check_lock_named(flags: c_int, name: &[u8]) -> bool {
-    if flags & DI_FLAGS_LOCK as c_int == 0 {
+    if flags & c_int::from(DI_FLAGS_LOCK) == 0 {
         return false;
     }
     let name = msg_bytes(name);
@@ -269,12 +279,12 @@ pub(crate) fn var_check_lock_named(flags: c_int, name: &[u8]) -> bool {
 /// `w:`/`b:`/`s:`/`t:`, or autoloaded -- and `new_var` additionally forbids
 /// shadowing a function that already exists.
 pub(crate) fn var_wrong_func_name_named(name: &[u8], new_var: bool) -> bool {
-    let lead = name.first().copied().unwrap_or(NUL as u8);
-    let has_scope = lead != NUL as u8 && name.get(1) == Some(&b':');
+    let lead = name.first().copied().unwrap_or(b'\0');
+    let has_scope = lead != b'\0' && name.get(1) == Some(&b':');
     // The character the capital is wanted at: past a scope prefix, if
     // there is one.
     let first = match has_scope {
-        true => name.get(2).copied().unwrap_or(NUL as u8),
+        true => name.get(2).copied().unwrap_or(b'\0'),
         false => lead,
     };
     let func_scope = has_scope && b"wbst".contains(&lead);

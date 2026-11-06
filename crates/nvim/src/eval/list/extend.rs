@@ -10,14 +10,22 @@
 //! Original: `src/nvim/eval/list.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
-use core::ffi::{CStr, c_int};
+use crate::narrow::number_as_int;
+use core::ffi::CStr;
 
 use super::{Container, DictArg, ListArg, check_lock, copy_tv, cstr_of, cstr_of_chk, number_of};
 use crate::eval::typval::NumBuf;
 use crate::message_fmt::msg_cstr;
 use crate::semsg;
-use crate::types::{EvalFuncData, TypVal, VarLock, int64_t, uint8_t};
+use crate::types::{EvalFuncData, TypVal, VarLock, int64_t};
 
 /// `extend()`/`extendnew()` over two Dicts: merge `argvars[1]`'s keys into
 /// `argvars[0]` (or into a copy of it) under the policy `argvars[2]` names.
@@ -115,7 +123,7 @@ fn extend_list(args: &[TypVal], arg_errmsg: &'static CStr, is_new: bool, result:
         if args.len() <= 2 {
             break 'find None;
         }
-        let idx = number_of(&args[2], &mut error) as c_int;
+        let idx = number_as_int(number_of(&args[2], &mut error));
         if !error {
             if idx == l1.len() {
                 break 'find None;
@@ -123,7 +131,7 @@ fn extend_list(args: &[TypVal], arg_errmsg: &'static CStr, is_new: bool, result:
             match l1.find(idx) {
                 Some(item) => break 'find Some(item),
                 None => {
-                    semsg!("E684: List index out of range: {}", idx as int64_t);
+                    semsg!("E684: List index out of range: {}", int64_t::from(idx));
                 }
             }
         }
@@ -179,7 +187,7 @@ pub fn f_insert(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             let len = b.len();
             let mut before = 0;
             if args.len() > 2 {
-                before = number_of(&args[2], &mut error) as c_int;
+                before = number_as_int(number_of(&args[2], &mut error));
                 if error {
                     // Type error; errmsg already given.
                     return;
@@ -191,7 +199,7 @@ pub fn f_insert(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                     return;
                 }
             }
-            let val = number_of(&args[1], &mut error) as c_int;
+            let val = number_as_int(number_of(&args[1], &mut error));
             if error {
                 return;
             }
@@ -201,7 +209,7 @@ pub fn f_insert(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                 semsg!("E475: Invalid argument: {what}");
                 return;
             }
-            b.insert_byte(before, val as uint8_t);
+            b.insert_byte(before, u8::try_from(val).expect("checked to 0..=255"));
             copy_tv(&args[0], result);
         }
         Container::List(l) => {
@@ -217,8 +225,8 @@ pub fn f_insert(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                 return;
             }
             let mut item = None;
-            if before != l.len() as int64_t {
-                item = l.find(before as c_int);
+            if before != int64_t::from(l.len()) {
+                item = l.find(number_as_int(before));
                 if item.is_none() {
                     semsg!("E684: List index out of range: {before}");
                     return;

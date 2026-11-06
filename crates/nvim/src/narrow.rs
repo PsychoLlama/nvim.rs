@@ -77,6 +77,12 @@ pub(crate) const fn number_as_u32(n: i64) -> u32 {
     n as u32
 }
 
+/// A 64-bit editor number narrowed to the `uint16_t` a pty's width or height
+/// is, exactly as upstream's `(uint16_t)` casts do: the low 16 bits.
+pub(crate) const fn number_as_u16(n: i64) -> u16 {
+    n as u16
+}
+
 /// A msgpack unsigned integer narrowed to the 32 bits an RPC envelope carries
 /// its message type and request id in, wrapping exactly as upstream's
 /// `(uint32_t)` casts do.

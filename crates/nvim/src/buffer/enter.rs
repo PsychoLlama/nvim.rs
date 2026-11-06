@@ -18,6 +18,8 @@
 
 #![forbid(unsafe_code)]
 
+use crate::eval::typval::DI_FLAGS_FIX;
+use crate::eval::typval::DI_FLAGS_RO;
 use crate::fileio::ReadFlags;
 use crate::semsg;
 use crate::types::AutoEvent;
@@ -54,8 +56,7 @@ use crate::state::MODE_INSERT;
 use crate::state::mode::{State, VIsual_reselect};
 use crate::terminal::check_buf_terminal_size;
 use crate::types::{
-    CmdModFlags, ColNr, DictItem, DictKey, LineNr, NUL, OptInt, ShmFlag, TypVal, VarLock, uint8_t,
-    uint64_t,
+    CmdModFlags, ColNr, DictItem, DictKey, LineNr, NUL, OptInt, ShmFlag, TypVal, VarLock, uint64_t,
 };
 use crate::undo::u_sync;
 use crate::window::get_last_winid;
@@ -463,7 +464,7 @@ pub(crate) fn buf_init_changedtick(mut buffer: Buf) {
         di_tv: TypVal::Number(buf_get_changedtick(buffer)),
         di_lock: VarLock::Fixed,
         // Must not include DI_FLAGS_ALLOC.
-        di_flags: (DI_FLAGS_RO as c_int | DI_FLAGS_FIX as c_int) as uint8_t,
+        di_flags: DI_FLAGS_RO | DI_FLAGS_FIX,
         di_key: DictKey::new(b"changedtick"),
     };
     link_buf_changedtick(buffer);

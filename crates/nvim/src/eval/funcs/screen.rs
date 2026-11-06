@@ -1,9 +1,17 @@
 //! What is on the screen: the `screen*()` cell queries, the `syn*()` syntax
 //! queries and the highlight-group lookups.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::wrappers::{arg_lnum, arg_number, arg_number_chk};
 use crate::narrow::number_as_col;
+use crate::narrow::number_as_int;
 use crate::types::LineNr;
 use crate::winlayer::{Buf, Win};
 
@@ -44,8 +52,8 @@ impl Cell {
         // A coercion failure answers 0, which the -1 turns into an
         // out-of-range coordinate. The subtraction wraps because the C's
         // does: a `{row}` of INT_MIN is a silly argument, not a crash.
-        let mut row = (arg_number_chk(&args[0], None) as c_int).wrapping_sub(1);
-        let mut col = (arg_number_chk(&args[1], None) as c_int).wrapping_sub(1);
+        let mut row = number_as_int(arg_number_chk(&args[0], None)).wrapping_sub(1);
+        let mut col = number_as_int(arg_number_chk(&args[1], None)).wrapping_sub(1);
         // Legacy tests read printed messages back with screenchar(), so
         // the pending message scroll has to reach the grid first.
         msg_scroll_flush();
@@ -76,23 +84,23 @@ impl Cell {
 /// the grid.
 pub fn f_screenattr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let cell = Cell::at(args);
-    result.write_number(if cell.on_grid() {
+    result.write_number(VarNumber::from(if cell.on_grid() {
         let offset = cell.grid.cell_offset(cell.row, cell.col);
         cell.grid.attr_at(offset) as c_int
     } else {
         -1
-    } as VarNumber);
+    }));
 }
 
 /// `screenchar({row}, {col})` — the first codepoint in the cell, or -1 off
 /// the grid.
 pub fn f_screenchar(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let cell = Cell::at(args);
-    result.write_number(if cell.on_grid() {
+    result.write_number(VarNumber::from(if cell.on_grid() {
         char_at(&cell.text())
     } else {
         -1
-    } as VarNumber);
+    }));
 }
 
 /// `screenchars({row}, {col})` — every codepoint in the cell, including the
@@ -108,7 +116,7 @@ pub fn f_screenchars(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     // reports one codepoint.
     let mut i = 0usize;
     loop {
-        list.push_number(char_at(&text[i..]) as VarNumber);
+        list.push_number(VarNumber::from(char_at(&text[i..])));
         i += char_len(&text[i..]);
         if i >= text.len() {
             break;
@@ -118,12 +126,12 @@ pub fn f_screenchars(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 
 /// `screencol()` — the cursor's screen column, one-based.
 pub fn f_screencol(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_number((ui_current_col() + 1) as VarNumber);
+    result.write_number(VarNumber::from(ui_current_col() + 1));
 }
 
 /// `screenrow()` — the cursor's screen row, one-based.
 pub fn f_screenrow(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_number((ui_current_row() + 1) as VarNumber);
+    result.write_number(VarNumber::from(ui_current_row() + 1));
 }
 
 /// `screenstring({row}, {col})` — the cell's whole text, or "" off the grid.
@@ -139,7 +147,7 @@ pub fn f_screenstring(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
 pub fn f_hl_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let name = numbuf.string(&args[0]);
-    result.write_number(syn_name2id(name) as VarNumber);
+    result.write_number(VarNumber::from(syn_name2id(name)));
 }
 
 /// `hlexists({name})` — whether the group is defined.
@@ -210,7 +218,7 @@ fn attr_selector(what: &[u8]) -> Option<Attr> {
 pub fn f_syn_id_attr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut color: HlColorText = [0; 20];
-    let id = arg_number(&args[0]) as c_int;
+    let id = number_as_int(arg_number(&args[0]));
     let what = numbuf.string(&args[1]);
 
     // "cterm" or "gui"; anything else, including an absent argument,
@@ -244,7 +252,7 @@ pub fn f_syn_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // Wraps because the C's does; `col` is only used as a range test.
     let col = number_as_col(arg_number(&args[1]).wrapping_sub(1));
     let mut transerr = false;
-    let trans = arg_number_chk(&args[2], Some(&mut transerr)) as c_int;
+    let trans = number_as_int(arg_number_chk(&args[2], Some(&mut transerr)));
 
     let mut id = 0;
     if !transerr
@@ -255,13 +263,17 @@ pub fn f_syn_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     {
         id = Win::current().syntax_id(lnum, col, trans != 0, None, false);
     }
-    result.write_number(id as VarNumber);
+    result.write_number(VarNumber::from(id));
 }
 
 /// `synIDtrans({id})` — the id the group's `:hi link` chain ends at.
 pub fn f_syn_id_trans(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let id = arg_number(&args[0]) as c_int;
-    result.write_number(if id > 0 { syn_get_final_id(id) } else { 0 } as VarNumber);
+    let id = number_as_int(arg_number(&args[0]));
+    result.write_number(VarNumber::from(if id > 0 {
+        syn_get_final_id(id)
+    } else {
+        0
+    }));
 }
 
 /// `synconcealed({lnum}, {col})` — `[concealed, replacement, group]`.
@@ -305,10 +317,10 @@ pub fn f_synconcealed(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     }
 
     let list = tv_list_alloc_ret(result, 3);
-    let concealed = syntax_flags.has(SynFlags::CONCEAL) as c_int as VarNumber;
+    let concealed = VarNumber::from(c_int::from(syntax_flags.has(SynFlags::CONCEAL)));
     list.push_number(concealed);
     list.push_bytes(Some(&text));
-    list.push_number(matchid as VarNumber);
+    list.push_number(VarNumber::from(matchid));
 }
 
 /// `synstack({lnum}, {col})` — every syntax id in effect at a position,

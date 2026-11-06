@@ -28,6 +28,13 @@
 //! Original: `src/nvim/eval/fs.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -128,7 +135,7 @@ pub(crate) fn at(b: &[u8], i: usize) -> u8 {
 
 /// Whether byte `i` of `b` is a path separator.
 pub(crate) fn is_sep(b: &[u8], i: usize) -> bool {
-    vim_ispathsep(at(b, i) as c_int)
+    vim_ispathsep(c_int::from(at(b, i)))
 }
 
 /// Whether byte `i` of `b` follows a path separator -- one that is not the
@@ -224,7 +231,7 @@ pub fn f_executable(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if !is_string_arg(args, 0) {
         return;
     }
-    result.write_number(can_exe(str_arg(args, 0, &mut numbuf)) as VarNumber);
+    result.write_number(VarNumber::from(can_exe(str_arg(args, 0, &mut numbuf))));
 }
 
 /// `exepath({expr})`: the full path of the executable, or the empty string.
@@ -241,14 +248,18 @@ pub fn f_filereadable(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     let mut numbuf = NumBuf::new();
     let p = str_arg(args, 0, &mut numbuf);
     let readable = !p.to_bytes().is_empty() && !is_dir(p) && os_file_is_readable(p);
-    result.write_number(readable as VarNumber);
+    result.write_number(VarNumber::from(readable));
 }
 
 /// `filewritable({file})`: 0 for not writable, 1 for a writable file, 2 for
 /// a directory that can be written into.
 pub fn f_filewritable(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    result.write_number(os_file_is_writable(str_arg(args, 0, &mut numbuf)) as VarNumber);
+    result.write_number(VarNumber::from(os_file_is_writable(str_arg(
+        args,
+        0,
+        &mut numbuf,
+    ))));
 }
 
 /// `getfperm({fname})`: the permissions as `rwxrwxrwx`, or the empty string
@@ -276,10 +287,10 @@ pub fn f_getfsize(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         None => -1 as VarNumber,
         Some(info) => {
             let filesize = size(&info);
-            let answer = filesize as VarNumber;
+            let answer = filesize.cast_signed();
             if is_dir(fname) {
                 0 as VarNumber
-            } else if answer as uint64_t == filesize {
+            } else if answer.cast_unsigned() == filesize {
                 answer
             } else {
                 // Too big for a Number.
@@ -320,7 +331,7 @@ pub fn f_getftype(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `isdirectory({directory})`: whether the name is a directory.
 pub fn f_isdirectory(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    result.write_number(is_dir(str_arg(args, 0, &mut numbuf)) as VarNumber);
+    result.write_number(VarNumber::from(is_dir(str_arg(args, 0, &mut numbuf))));
 }
 
 /// `browse({save}, {title}, {initdir}, {default})`: a stub -- there is no

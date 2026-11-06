@@ -11,6 +11,13 @@
 //! tells a Dict from a curly-brace name all parse without running anything.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::charset::skip;
 use crate::eval::Cursor;
@@ -18,6 +25,7 @@ use crate::eval::char_len_at;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::memory::ThinCString;
 use crate::message_fmt::msg_bytes;
+use crate::narrow::as_index;
 use crate::semsg;
 use core::ffi::c_int;
 
@@ -44,8 +52,8 @@ use crate::os::cshim::gettext;
 use crate::register::get_reg_contents_owned;
 use crate::strings::find_bytes;
 use crate::types::{
-    ExArg, Failed, Float, NUL, TypVal, VAR_BLOB, VAR_BOOL, VAR_FLOAT, VAR_LIST, VAR_STRING,
-    VAR_UNKNOWN, VarNumber, kBoolVarFalse, kBoolVarTrue,
+    ExArg, Failed, Float, TypVal, VAR_BLOB, VAR_BOOL, VAR_FLOAT, VAR_LIST, VAR_STRING, VAR_UNKNOWN,
+    VarNumber, kBoolVarFalse, kBoolVarTrue,
 };
 
 /// A freshly declared typval, which is what every level starts a second
@@ -136,7 +144,7 @@ fn plain_name_end(text: &[u8], use_namespace: bool) -> usize {
     }
     let mut p = 1;
     while let Some(&c) = text.get(p) {
-        if c == NUL as u8 || !eval_isnamec(c_int::from(c)) {
+        if c == b'\0' || !eval_isnamec(c_int::from(c)) {
             break;
         }
         // A `:` continues the name only as the one namespace letter.
@@ -526,7 +534,7 @@ pub(crate) fn eval7(
                 result.write_string(text.map(ThinCString::from));
             }
             // `@` at the very end of the line names no register.
-            if cursor.byte() != NUL as u8 {
+            if cursor.byte() != b'\0' {
                 cursor.bump(1);
             }
         }
@@ -555,7 +563,7 @@ pub(crate) fn eval7(
         } else {
             let name = alias
                 .as_deref()
-                .unwrap_or(&text[start..start + len as usize]);
+                .unwrap_or(&text[start..start + as_index(len)]);
             // A name may be followed by white space and then its arguments,
             // which the name scan has already stepped over.
             if cursor.byte() == b'(' {

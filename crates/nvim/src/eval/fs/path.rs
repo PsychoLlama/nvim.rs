@@ -21,15 +21,23 @@
 //! Original: `src/nvim/eval/fs.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::{after_sep, at, err, is_sep, next_component, str_arg, str_arg_chk, tail_with_sep};
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::tv_get_number;
 use crate::fileio::file_pat_to_regpat;
 use crate::memory::ThinCString;
+use crate::narrow::number_as_int;
 use crate::path::{path_is_absolute, shorten_dir_name, simplify_filename, tail_index};
 use crate::types::{EvalFuncData, MAXPATHL, TypVal, VAR_STRING, VarNumber};
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
 use std::ffi::OsStr;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 
@@ -93,7 +101,11 @@ pub fn f_glob2regpat(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 /// `isabsolutepath({path})`: whether the path starts at the root.
 pub fn f_isabsolutepath(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    result.write_number(path_is_absolute(str_arg(args, 0, &mut numbuf)) as VarNumber);
+    result.write_number(VarNumber::from(path_is_absolute(str_arg(
+        args,
+        0,
+        &mut numbuf,
+    ))));
 }
 
 /// `pathshorten({path} [, {len}])`: every component but the last one cut
@@ -104,7 +116,7 @@ pub fn f_isabsolutepath(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
 pub fn f_pathshorten(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let trim_len = if args.len() > 1 {
-        (tv_get_number(&args[1]) as c_int).max(1)
+        number_as_int(tv_get_number(&args[1])).max(1)
     } else {
         1
     };

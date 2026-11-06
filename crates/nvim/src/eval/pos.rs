@@ -1,8 +1,16 @@
 //! Turning an expression into a buffer position.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::narrow::number_as_col;
+use crate::narrow::number_as_int;
 use crate::narrow::number_as_lnum;
 use crate::winlayer::Buf;
 use core::ffi::c_int;
@@ -132,7 +140,7 @@ pub fn var2fpos(
         }
         pos.col -= 1;
 
-        pos.coladd = list_find_nr(Some(l), 2, Some(&mut error)) as i32;
+        pos.coladd = number_as_int(list_find_nr(Some(l), 2, Some(&mut error)));
         if error {
             pos.coladd = 0;
         }
@@ -241,7 +249,7 @@ pub fn list2fpos(
     let mut i = 0;
     if let Some(fnum) = fnum.as_deref_mut() {
         // A null `error` means "do not report".
-        let mut n = list_find_nr(Some(l), i, None) as c_int;
+        let mut n = number_as_int(list_find_nr(Some(l), i, None));
         i += 1;
         if n < 0 {
             return Err(Failed);
@@ -252,14 +260,14 @@ pub fn list2fpos(
         *fnum = n;
     }
 
-    let n = list_find_nr(Some(l), i, None) as c_int;
+    let n = number_as_int(list_find_nr(Some(l), i, None));
     i += 1;
     if n < 0 {
         return Err(Failed);
     }
     pos.lnum = LineNr::new(n);
 
-    let mut n = list_find_nr(Some(l), i, None) as c_int;
+    let mut n = number_as_int(list_find_nr(Some(l), i, None));
     i += 1;
     if n < 0 {
         return Err(Failed);
@@ -279,7 +287,7 @@ pub fn list2fpos(
     pos.col = ColNr::new(n);
 
     // A missing or negative offset is no offset.
-    let off = list_find_nr(Some(l), i, None) as c_int;
+    let off = number_as_int(list_find_nr(Some(l), i, None));
     pos.coladd = if off < 0 { 0 } else { off as i32 };
 
     if let Some(curswant) = curswant {

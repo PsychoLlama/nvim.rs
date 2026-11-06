@@ -5,9 +5,19 @@
 //! the whole of `g:` at exit -- and hand the garbage collector its roots.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
+use crate::eval::typval::DI_FLAGS_FIX;
+use crate::eval::typval::DI_FLAGS_RO;
 use crate::memory::ThinCString;
+use crate::narrow::len_as_integer;
 use crate::os::env::{ENV_STARTREASON, env_exists, env_unset, getenv_owned};
 use core::ffi::CStr;
 use core::ffi::c_int;
@@ -34,8 +44,8 @@ pub fn evalvars_init() {
     );
 
     let vim_version = min_vim_version();
-    let versionlong = (vim_version * 10000 + highest_patch()) as VarNumber;
-    set_vim_var_nr(Vv::Version, vim_version as VarNumber);
+    let versionlong = VarNumber::from(vim_version * 10000 + highest_patch());
+    set_vim_var_nr(Vv::Version, VarNumber::from(vim_version));
     set_vim_var_nr(Vv::Versionlong, versionlong);
 
     // `v:msgpack_types`: eight empty, locked lists, compared by identity
@@ -67,25 +77,25 @@ pub fn evalvars_init() {
     // The `v:` variables that start out at a constant Number, the `v:t_*`
     // type codes `type()` answers with among them. Nothing here reads
     // another row, so the table's order is the source's only.
-    let numbersize = (::core::mem::size_of::<VarNumber>() * 8) as VarNumber;
+    let numbersize = len_as_integer(::core::mem::size_of::<VarNumber>() * 8);
     for (idx, n) in [
-        (Vv::Stderr, CHAN_STDERR as VarNumber),
+        (Vv::Stderr, VarNumber::from(CHAN_STDERR)),
         (Vv::Searchforward, 1),
         (Vv::Hlsearch, 1),
         (Vv::Count1, 1),
-        (Vv::TNumber, VAR_TYPE_NUMBER as VarNumber),
-        (Vv::TString, VAR_TYPE_STRING as VarNumber),
-        (Vv::TFunc, VAR_TYPE_FUNC as VarNumber),
-        (Vv::TList, VAR_TYPE_LIST as VarNumber),
-        (Vv::TDict, VAR_TYPE_DICT as VarNumber),
-        (Vv::TFloat, VAR_TYPE_FLOAT as VarNumber),
-        (Vv::TBool, VAR_TYPE_BOOL as VarNumber),
-        (Vv::TBlob, VAR_TYPE_BLOB as VarNumber),
+        (Vv::TNumber, VarNumber::from(VAR_TYPE_NUMBER)),
+        (Vv::TString, VarNumber::from(VAR_TYPE_STRING)),
+        (Vv::TFunc, VarNumber::from(VAR_TYPE_FUNC)),
+        (Vv::TList, VarNumber::from(VAR_TYPE_LIST)),
+        (Vv::TDict, VarNumber::from(VAR_TYPE_DICT)),
+        (Vv::TFloat, VarNumber::from(VAR_TYPE_FLOAT)),
+        (Vv::TBool, VarNumber::from(VAR_TYPE_BOOL)),
+        (Vv::TBlob, VarNumber::from(VAR_TYPE_BLOB)),
         (Vv::Numbermax, VARNUMBER_MAX as VarNumber),
         (Vv::Numbermin, VARNUMBER_MIN as VarNumber),
         (Vv::Numbersize, numbersize),
-        (Vv::Maxcol, MAXCOL as VarNumber),
-        (Vv::Echospace, (sc_col.get() - 1) as VarNumber),
+        (Vv::Maxcol, VarNumber::from(MAXCOL)),
+        (Vv::Echospace, VarNumber::from(sc_col.get() - 1)),
     ] {
         set_vim_var_nr(idx, n);
     }

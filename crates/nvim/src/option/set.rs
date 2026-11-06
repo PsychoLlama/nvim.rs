@@ -18,10 +18,18 @@
 //!   lowered again whatever the callback did.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::message_fmt::emsg_text;
+use crate::narrow::as_index;
 use crate::tr;
 use crate::types::AutoEvent;
 use crate::types::ColNr;
@@ -94,10 +102,10 @@ pub(crate) fn set_option_sctx(
     }
     // The scope index the table gives is in range of the per-scope array.
     if option_has_scope(opt_idx, kOptScopeBuf) {
-        let at = option_scope_idx(opt_idx, kOptScopeBuf) as usize;
+        let at = option_scope_idx(opt_idx, kOptScopeBuf).cast_unsigned();
         Buf::current().b_p_script_ctx[at] = script_ctx;
     } else if option_has_scope(opt_idx, kOptScopeWin) {
-        let at = option_scope_idx(opt_idx, kOptScopeWin) as usize;
+        let at = option_scope_idx(opt_idx, kOptScopeWin).cast_unsigned();
         Win::current().w_onebuf_opt.wo_script_ctx[at] = script_ctx;
         if both {
             // A bare `:set` also writes the "all buffers" copy.
@@ -247,7 +255,7 @@ pub(crate) fn get_option_value(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> 
 /// of it immutable. What changes about it is `super::state`'s business.
 pub(crate) fn get_option(opt_idx: OptIndex) -> &'static VimOption {
     debug_assert!(opt_idx != kOptInvalid);
-    &options[opt_idx as usize]
+    &options[as_index(opt_idx)]
 }
 
 /// The value that stands for "this window or buffer has no local value".
@@ -269,7 +277,7 @@ pub(crate) fn get_option_unset_value(opt_idx: OptIndex) -> OptVal {
     match opt_idx {
         kOptAutocomplete | kOptAutoread | kOptFsync => boolean_optval(None),
         kOptScrolloff | kOptSidescrolloff => OptVal::Number(-1),
-        kOptUndolevels => OptVal::Number(NO_LOCAL_UNDOLEVEL as _),
+        kOptUndolevels => OptVal::Number(NO_LOCAL_UNDOLEVEL.into()),
         _ => unreachable!("global-local option {opt_idx} has no unset value"),
     }
 }

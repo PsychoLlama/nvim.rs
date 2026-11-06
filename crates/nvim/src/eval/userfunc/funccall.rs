@@ -20,6 +20,8 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::eval::typval::DI_FLAGS_FIX;
+use crate::eval::typval::DI_FLAGS_RO;
 use core::cell::{Cell, RefCell};
 use core::ffi::{CStr, c_int};
 use core::mem::ManuallyDrop;

@@ -12,11 +12,19 @@
 //! pointers, which is the only reason they are `pub`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::autocmd::{fire_autocmds, fire_autocmds_for};
 use crate::keycodes::{Ctrl_C, SpecialKey};
+use crate::narrow::number_as_int;
 use crate::types::AutoEvent;
 use crate::types::Key;
 use crate::winlayer::TabPage;
@@ -161,8 +169,8 @@ pub(crate) fn did_set_arabic(args: &mut OptSet) -> Result<(), OptError> {
         }
         // SAFETY: a live window's buffer is live.
         let mut buf = win.buffer();
-        buf.b_p_iminsert = B_IMODE_NONE as OptInt;
-        buf.b_p_imsearch = B_IMODE_USE_INSERT as OptInt;
+        buf.b_p_iminsert = OptInt::from(B_IMODE_NONE);
+        buf.b_p_imsearch = OptInt::from(B_IMODE_USE_INSERT);
         return Ok(());
     }
 
@@ -227,13 +235,13 @@ pub(crate) fn did_set_buflisted(args: &mut OptSet) -> Result<(), OptError> {
 /// room for, and growing or shrinking it moves every window below it.
 pub(crate) fn did_set_cmdheight(args: &mut OptSet) -> Result<(), OptError> {
     let old_value = Frame::read(args).old_number();
-    let room = (Rows.get() - min_rows(TabPage::current()) + 1) as OptInt;
+    let room = OptInt::from(Rows.get() - min_rows(TabPage::current()) + 1);
     if p_ch() > room {
         P_CH.set(room);
     }
     let laid_out =
-        (tabline_height() + global_stl_height() + current_topframe().fr_height) as OptInt;
-    if (p_ch() != old_value || laid_out != Rows.get() as OptInt - p_ch()) && full_screen.get() {
+        OptInt::from(tabline_height() + global_stl_height() + current_topframe().fr_height);
+    if (p_ch() != old_value || laid_out != OptInt::from(Rows.get()) - p_ch()) && full_screen.get() {
         command_height();
     }
     Ok(())
@@ -291,9 +299,9 @@ pub(crate) fn did_set_foldnestmax(args: &mut OptSet) -> Result<(), OptError> {
 pub(crate) fn did_set_helpheight(_args: &mut OptSet) -> Result<(), OptError> {
     if firstwin.get() != lastwin.get()
         && Buf::current().b_help
-        && (Win::current().w_height as OptInt) < p_hh()
+        && OptInt::from(Win::current().w_height) < p_hh()
     {
-        win_setheight(p_hh() as c_int);
+        win_setheight(number_as_int(p_hh()));
     }
     Ok(())
 }
@@ -340,7 +348,7 @@ pub(crate) fn did_set_laststatus(args: &mut OptSet) -> Result<(), OptError> {
     if value == 3 && old_value != 3 {
         new_height(
             top,
-            top.fr_height - STATUS_HEIGHT as c_int,
+            top.fr_height - STATUS_HEIGHT.cast_signed(),
             false,
             false,
             false,
@@ -351,7 +359,7 @@ pub(crate) fn did_set_laststatus(args: &mut OptSet) -> Result<(), OptError> {
     if old_value == 3 && value != 3 {
         new_height(
             top,
-            top.fr_height + STATUS_HEIGHT as c_int,
+            top.fr_height + STATUS_HEIGHT.cast_signed(),
             false,
             false,
             false,
@@ -371,29 +379,29 @@ pub(crate) fn did_set_laststatus(args: &mut OptSet) -> Result<(), OptError> {
 /// under it.
 pub(crate) fn did_set_lines_or_columns(args: &mut OptSet) -> Result<(), OptError> {
     let f = Frame::read(args);
-    if p_lines() != Rows.get() as OptInt || p_columns() != Columns.get() as OptInt {
+    if p_lines() != OptInt::from(Rows.get()) || p_columns() != OptInt::from(Columns.get()) {
         if updating_screen.get() {
             write_slot(f.idx, f.varp, OptVal::Number(f.old_number()));
         } else if full_screen.get() {
-            screen_resize(p_columns() as c_int, p_lines() as c_int);
+            screen_resize(number_as_int(p_columns()), number_as_int(p_lines()));
         } else {
             // Before the screen exists there is nothing to resize; just
             // record the size and keep the command line on screen.
-            Rows.set(p_lines() as c_int);
-            Columns.set(p_columns() as c_int);
+            Rows.set(number_as_int(p_lines()));
+            Columns.set(number_as_int(p_columns()));
             check_screensize();
-            let new_row = (Rows.get() as OptInt - p_ch().max(1)) as c_int;
-            if cmdline_row.get() > new_row && Rows.get() as OptInt > p_ch() {
+            let new_row = number_as_int(OptInt::from(Rows.get()) - p_ch().max(1));
+            if cmdline_row.get() > new_row && OptInt::from(Rows.get()) > p_ch() {
                 debug_assert!(p_ch() >= 0);
                 cmdline_row.set(new_row);
             }
         }
-        if p_window() >= Rows.get() as OptInt || !option_was_set(kOptWindow) {
-            P_WINDOW.set((Rows.get() - 1) as OptInt);
+        if p_window() >= OptInt::from(Rows.get()) || !option_was_set(kOptWindow) {
+            P_WINDOW.set(OptInt::from(Rows.get() - 1));
         }
     }
-    if p_sj() >= Rows.get() as OptInt && full_screen.get() {
-        P_SJ.set((Rows.get() / 2) as OptInt);
+    if p_sj() >= OptInt::from(Rows.get()) && full_screen.get() {
+        P_SJ.set(OptInt::from(Rows.get() / 2));
     }
     Ok(())
 }
@@ -649,24 +657,24 @@ pub(crate) fn did_set_winblend(args: &mut OptSet) -> Result<(), OptError> {
 
 /// 'window': the scroll amount `CTRL-F` uses, capped at the screen.
 pub(crate) fn did_set_window(_args: &mut OptSet) -> Result<(), OptError> {
-    if p_window() < 1 || p_window() >= Rows.get() as OptInt {
-        P_WINDOW.set((Rows.get() - 1) as OptInt);
+    if p_window() < 1 || p_window() >= OptInt::from(Rows.get()) {
+        P_WINDOW.set(OptInt::from(Rows.get() - 1));
     }
     Ok(())
 }
 
 /// 'winheight': grow the current window if it is now too short.
 pub(crate) fn did_set_winheight(_args: &mut OptSet) -> Result<(), OptError> {
-    if firstwin.get() != lastwin.get() && (Win::current().w_height as OptInt) < p_wh() {
-        win_setheight(p_wh() as c_int);
+    if firstwin.get() != lastwin.get() && OptInt::from(Win::current().w_height) < p_wh() {
+        win_setheight(number_as_int(p_wh()));
     }
     Ok(())
 }
 
 /// 'winwidth': widen the current window if it is now too narrow.
 pub(crate) fn did_set_winwidth(_args: &mut OptSet) -> Result<(), OptError> {
-    if firstwin.get() != lastwin.get() && (Win::current().w_width as OptInt) < p_wiw() {
-        win_setwidth(p_wiw() as c_int);
+    if firstwin.get() != lastwin.get() && OptInt::from(Win::current().w_width) < p_wiw() {
+        win_setwidth(number_as_int(p_wiw()));
     }
     Ok(())
 }
@@ -688,9 +696,9 @@ pub(crate) fn did_set_xhistory(args: &mut OptSet) -> Result<(), OptError> {
     let f = Frame::read(args);
     let arg = f.varp.number_var();
     if f.varp == option_var(kOptChistory) {
-        qf_resize_stack(arg.get() as c_int);
+        qf_resize_stack(number_as_int(arg.get()));
     } else {
-        f.win.resize_location_list_stack(arg.get() as c_int);
+        f.win.resize_location_list_stack(number_as_int(arg.get()));
     }
     Ok(())
 }

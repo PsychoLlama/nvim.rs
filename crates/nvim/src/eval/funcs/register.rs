@@ -1,6 +1,13 @@
 //! Registers: `getreg()`, `setreg()`, `getreginfo()` and the
 //! recording state.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -18,7 +25,7 @@ use crate::register::{
 };
 use crate::semsg;
 use crate::types::{
-    BoolVarValue, Dict, EvalFuncData, Failed, Key, MotionType, NUL, TypVal, VAR_DICT, VAR_LIST, Vv,
+    BoolVarValue, Dict, EvalFuncData, Failed, Key, MotionType, TypVal, VAR_DICT, VAR_LIST, Vv,
     kBoolVarFalse, kBoolVarTrue,
 };
 use core::ffi::{CStr, c_int};
@@ -221,7 +228,7 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             // the byte after what was consumed has to be the
             // terminator.
             if get_yank_type(text, &mut at, &mut yank_type, &mut block_len).is_err()
-                || cstr::byte_at(text, at + 1) != NUL as u8
+                || cstr::byte_at(text, at + 1) != b'\0'
             {
                 let arg0 = "value";
                 semsg!("E475: Invalid value for argument {arg0}");

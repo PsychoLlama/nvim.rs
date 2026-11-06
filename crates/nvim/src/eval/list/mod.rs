@@ -32,6 +32,13 @@
 //! Original: `src/nvim/eval/list.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -697,14 +704,15 @@ pub(crate) fn check_lock(lock: VarLock, what: &'static CStr) -> bool {
 pub(crate) fn check_ro(flags: c_int, what: &'static CStr) -> bool {
     // Translated only when there is something to report: the lookup is not
     // free, and this runs on every write.
-    flags & (crate::eval::typval::DI_FLAGS_RO | crate::eval::typval::DI_FLAGS_RO_SBX) as c_int != 0
+    flags & c_int::from(crate::eval::typval::DI_FLAGS_RO | crate::eval::typval::DI_FLAGS_RO_SBX)
+        != 0
         && var_check_ro_named(flags, gettext(what).to_bytes())
 }
 
 /// Whether `flags` says the variable is fixed, reporting `E795` if so.
 #[inline(always)]
 pub(crate) fn check_fixed(flags: c_int, what: &'static CStr) -> bool {
-    flags & crate::eval::typval::DI_FLAGS_FIX as c_int != 0
+    flags & c_int::from(crate::eval::typval::DI_FLAGS_FIX) != 0
         && var_check_fixed_named(flags, gettext(what).to_bytes())
 }
 

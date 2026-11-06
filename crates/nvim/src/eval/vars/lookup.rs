@@ -7,6 +7,13 @@
 //! [`get_user_var_name`] walks the same scopes for completion.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -21,7 +28,7 @@ use std::ffi::CString;
 use super::*;
 use crate::eval::typval::DictRef;
 use crate::eval::typval::NumBuf;
-use crate::types::{Candidate, Failed, NUL};
+use crate::types::{Candidate, Failed};
 
 /// `"<prefix>:<name>"`, as a completion candidate.
 pub(crate) fn cat_prefix_varname(prefix: u8, name: &CStr) -> Candidate {
@@ -467,7 +474,7 @@ pub(crate) fn var_exists(var: &[u8]) -> bool {
             }
         }
     }
-    if cursor.byte() != NUL as u8 {
+    if cursor.byte() != b'\0' {
         n = false;
     }
     n

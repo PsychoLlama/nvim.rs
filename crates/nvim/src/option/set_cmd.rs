@@ -16,6 +16,13 @@
 //! terminator the C walked to.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -105,7 +112,7 @@ pub(crate) fn ex_set(excmd: &mut ExArg) {
 
 /// The operator at `arg[p..]`, if the two characters there are one.
 fn get_op(arg: &[u8], p: usize) -> SetOp {
-    if at(arg, p) == NUL as u8 || at(arg, p + 1) != b'=' {
+    if at(arg, p) == b'\0' || at(arg, p + 1) != b'=' {
         return OP_NONE;
     }
     match at(arg, p) {
@@ -184,10 +191,10 @@ pub(crate) fn tty_option_end(text: &[u8]) -> Option<usize> {
     let at = |i: usize| cstr::byte_at(text, i);
     let delimit = at(0) == b'<';
     let mut p = usize::from(delimit);
-    if at(p) == b't' && at(p + 1) == b'_' && at(p + 2) != NUL as u8 && at(p + 3) != NUL as u8 {
+    if at(p) == b't' && at(p + 1) == b'_' && at(p + 2) != b'\0' && at(p + 3) != b'\0' {
         p += 4;
     } else if delimit {
-        while at(p) != NUL as u8 && at(p) != b'>' {
+        while at(p) != b'\0' && at(p) != b'>' {
             p += 1;
         }
     }
@@ -458,10 +465,10 @@ fn show_one(opt_idx: OptIndex, opt_flags: OptionSetFlags, varp: OptSlot, did_sho
     if varp == option_var(opt_idx) {
         last_set_msg(option_last_set(opt_idx));
     } else if option_has_scope(opt_idx, kOptScopeWin) {
-        let at = option_scope_idx(opt_idx, kOptScopeWin) as usize;
+        let at = option_scope_idx(opt_idx, kOptScopeWin).cast_unsigned();
         last_set_msg(Win::current().w_onebuf_opt.wo_script_ctx[at]);
     } else if option_has_scope(opt_idx, kOptScopeBuf) {
-        let at = option_scope_idx(opt_idx, kOptScopeBuf) as usize;
+        let at = option_scope_idx(opt_idx, kOptScopeBuf).cast_unsigned();
         last_set_msg(Buf::current().b_p_script_ctx[at]);
     }
 }
@@ -572,7 +579,7 @@ fn report(errmsg: &OptError, arg: &[u8]) {
     if at + arg.len() < room {
         report[at - 2..at].copy_from_slice(b": ");
         report[at..at + arg.len()].copy_from_slice(arg);
-        report[at + arg.len()] = NUL as u8;
+        report[at + arg.len()] = b'\0';
     }
     trans_characters_in(&mut report);
     // The message is the whole report; do not make the user acknowledge
@@ -598,7 +605,7 @@ fn find_key_len(arg: &[u8], len: usize, text: &[u8], has_lt: bool) -> c_int {
     if !has_lt {
         return 0;
     }
-    let how = FSK_KEYCODE as c_int | FSK_KEEP_X_KEY as c_int | FSK_SIMPLIFY as c_int;
+    let how = FSK_KEYCODE.cast_signed() | FSK_KEEP_X_KEY.cast_signed() | FSK_SIMPLIFY.cast_signed();
     match special_key_at(text, how, None) {
         // A key with a modifier left over does not fit in one option value.
         Some((key, modifiers, _)) if modifiers.is_empty() => key.code(),

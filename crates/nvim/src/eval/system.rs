@@ -8,6 +8,13 @@
 //! one builds a buffer, the other rewrites one in place.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::buffer::find_buf;
 use crate::eval::encode::encode_list_write;
@@ -22,6 +29,8 @@ use crate::memory::ThinCString;
 use crate::message::e_invarg;
 use crate::message::{msg_str, verbose_enter_scroll, verbose_leave_scroll};
 use crate::message_fmt::{msg_bytes, msg_cstr};
+use crate::narrow::as_index;
+use crate::narrow::number_as_int;
 use crate::option::vars::p_verbose;
 use crate::os::fs::executable_path;
 use crate::profile::do_profiling;
@@ -86,7 +95,7 @@ pub fn tv_to_argv(cmd_tv: &TypVal) -> Result<Argv, ArgvRefusal> {
     };
 
     let mut program = Some(ThinCString::from(program));
-    let mut words = Vec::with_capacity(argc as usize);
+    let mut words = Vec::with_capacity(as_index(argc));
     for arg in list_iter(items) {
         let Ok(word) = numbuf.string_chk(&arg.li_tv) else {
             return Err(ArgvRefusal::Invalid);
@@ -157,7 +166,7 @@ pub(crate) fn get_system_output_as_rettv(args: &[TypVal], result: &mut TypVal, r
         prof_child_exit(wait_time);
     }
     drop(input);
-    set_vim_var_nr(Vv::ShellError, status as VarNumber);
+    set_vim_var_nr(Vv::ShellError, VarNumber::from(status));
 
     let Some(mut output) = output else {
         if retlist {
@@ -171,7 +180,7 @@ pub(crate) fn get_system_output_as_rettv(args: &[TypVal], result: &mut TypVal, r
     if retlist {
         // The `keepempty` argument is the third, so it is only read
         // when the second was given too.
-        let keepempty = args.len() > 2 && tv_get_number(&args[2]) as c_int != 0;
+        let keepempty = args.len() > 2 && number_as_int(tv_get_number(&args[2])) != 0;
         result.write_list(Some(string_to_list(&output, keepempty)));
     } else {
         // Undo the swap in place; the buffer is handed over as it is.
@@ -224,7 +233,7 @@ pub fn save_tv_as_string(tv: &TypVal, endnl: bool, crlf: bool) -> Result<Option<
 /// A Number names a buffer; its whole text is the input.
 fn buffer_as_string(tv: &TypVal) -> Result<Option<Vec<u8>>, Failed> {
     let nr = tv.number_or_zero();
-    let Some(buffer) = find_buf(nr as c_int) else {
+    let Some(buffer) = find_buf(number_as_int(nr)) else {
         semsg!("E86: Buffer {} does not exist", nr);
         return Err(Failed);
     };

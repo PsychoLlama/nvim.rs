@@ -1,5 +1,12 @@
 //! Matching a pattern against a string: the `match*()` family.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -25,6 +32,9 @@ use crate::message::e_buffer_is_not_loaded;
 use crate::message::emsg;
 use crate::message::state::did_emsg;
 use crate::message_fmt::msg_cstr;
+use crate::narrow::as_index;
+use crate::narrow::len_as_integer;
+use crate::narrow::number_as_int;
 use crate::option::SavedCpo;
 use crate::option::vars::p_ic;
 use crate::os::cshim::gettext;
@@ -106,7 +116,7 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
                 break 'theend;
             }
             if let Some(list) = list {
-                idx = list_uidx(Some(list), start as c_int);
+                idx = list_uidx(Some(list), number_as_int(start));
                 let Ok(start_at) = usize::try_from(idx) else {
                     break 'theend;
                 };
@@ -199,10 +209,10 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
                     .write_string(Some(ThinCString::from_bytes(&subject[span.clone()])));
                 seeded[2]
                     .li_tv
-                    .write_number((skipped + span.start) as VarNumber);
+                    .write_number(len_as_integer(skipped + span.start));
                 seeded[3]
                     .li_tv
-                    .write_number((skipped + span.end) as VarNumber);
+                    .write_number(len_as_integer(skipped + span.end));
                 if list.is_some() {
                     seeded[1].li_tv.write_number(VarNumber::from(idx));
                 }
@@ -232,7 +242,7 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
                     } else {
                         hit.ends[0]
                     };
-                    result.write_number((skipped + edge.unwrap_or(0)) as VarNumber);
+                    result.write_number(len_as_integer(skipped + edge.unwrap_or(0)));
                 }
             }
         }
@@ -267,10 +277,10 @@ fn get_matches_in_str(
         let key: &[u8] = if matchbuf { b"lnum" } else { b"idx" };
         let _ = found.add_number(key, VarNumber::from(idx));
         let span = hit.group(0).unwrap_or(0..0);
-        let _ = found.add_number(b"byteidx", span.start as VarNumber);
+        let _ = found.add_number(b"byteidx", len_as_integer(span.start));
         let _ = found.add_str_len(b"text", Some(&bytes[span.clone()]));
         if submatches {
-            let groups = tv_list_alloc(NSUBEXP as isize - 1);
+            let groups = tv_list_alloc(isize::try_from(NSUBEXP).expect("ten sub-matches") - 1);
             for i in 1..NSUBEXP as usize {
                 groups
                     .edit()
@@ -497,7 +507,7 @@ fn fuzzy_match_in_list(list: &ListRef, request: &Request) -> Vec<FuzzyItem> {
     let mut matches = [0u32; FUZZY_MATCH_MAX_LEN];
     let mut at = 0;
     while at < list.items().len() {
-        if request.limit > 0 && found.len() >= request.limit as usize {
+        if request.limit > 0 && found.len() >= as_index(request.limit) {
             break;
         }
         let mut rettv = TypVal::Unknown;
@@ -623,7 +633,7 @@ fn do_fuzzymatch(args: &[TypVal], result: &mut TypVal, retmatchpos: bool) {
                 semsg!("E475: Invalid value for argument {}", "limit");
                 return;
             }
-            limit = tv_get_number_chk(&di.di_tv).unwrap_or(-1) as c_int;
+            limit = number_as_int(tv_get_number_chk(&di.di_tv).unwrap_or(-1));
         }
         matchseq = d.has_key(b"matchseq");
     }

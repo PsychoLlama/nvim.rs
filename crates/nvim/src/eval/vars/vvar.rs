@@ -15,13 +15,24 @@
 //! after the borrow has ended: a value can name the `v:` dictionary itself.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
+use crate::eval::typval::DI_FLAGS_FIX;
+use crate::eval::typval::DI_FLAGS_RO;
+use crate::eval::typval::DI_FLAGS_RO_SBX;
 use crate::eval::typval::DictRef;
 use crate::eval::typval::ListRef;
 use crate::eval::typval::PartialRef;
 use crate::memory::ThinCString;
 use crate::message_fmt::msg_bytes;
+use crate::narrow::as_index;
 use crate::semsg;
 use core::ffi::{CStr, c_int};
 use core::mem;
@@ -418,7 +429,7 @@ pub fn set_cmdarg(excmd: Option<&ExArg>, oldarg: Option<ThinCString>) -> Option<
         newval.extend_from_slice(b" ++edit");
     }
     if command.force_ff != 0 {
-        let ff: &[u8] = match command.force_ff as u8 {
+        let ff: &[u8] = match u8::try_from(command.force_ff).unwrap_or(0) {
             b'u' => b"unix",
             b'd' => b"dos",
             _ => b"mac",
@@ -433,7 +444,7 @@ pub fn set_cmdarg(excmd: Option<&ExArg>, oldarg: Option<ThinCString>) -> Option<
         newval.extend_from_slice(
             command
                 .line
-                .rest_of(command.line.cmd + command.force_enc as usize),
+                .rest_of(command.line.cmd + as_index(command.force_enc)),
         );
     }
     if command.bad_char == BAD_KEEP {
@@ -442,7 +453,7 @@ pub fn set_cmdarg(excmd: Option<&ExArg>, oldarg: Option<ThinCString>) -> Option<
         newval.extend_from_slice(b" ++bad=drop");
     } else if command.bad_char != 0 {
         newval.extend_from_slice(b" ++bad=");
-        newval.push(command.bad_char as u8);
+        newval.push(u8::try_from(command.bad_char).expect("a `++bad` byte"));
     }
     if command.mkdir_p {
         newval.extend_from_slice(b" ++p");

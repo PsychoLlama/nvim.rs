@@ -22,6 +22,13 @@
 //! Original: `src/nvim/eval/fs.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -37,6 +44,8 @@ use crate::memory::ThinCString;
 use crate::message::e_invarg;
 use crate::message::emsg;
 use crate::message_fmt::{msg_cstr, msg_cstr_opt};
+use crate::narrow::len_as_int;
+use crate::narrow::number_as_int;
 use crate::os::cshim::gettext;
 use crate::os::fs::{current_dir, link_info, mkdir_recurse, os_remove, os_rmdir};
 use crate::path::{full_name_save, tail_index};
@@ -147,7 +156,7 @@ impl Scope {
                 err0(e_invarg);
                 return None;
             }
-            s.number[i] = number_of(&args[i]) as c_int;
+            s.number[i] = number_as_int(number_of(&args[i]));
             // It is an error for a scope number to be less than -1.
             if s.number[i] < -1 {
                 err0(e_invarg);
@@ -155,9 +164,9 @@ impl Scope {
             }
             // Use the narrowest scope the caller asked for.
             if s.number[i] >= 0 && s.scope == kCdScopeInvalid {
-                s.scope = i as CdScope;
+                s.scope = len_as_int(i);
             } else if s.number[i] < 0 {
-                s.scope = i as CdScope + 1;
+                s.scope = len_as_int(i) + 1;
             }
         }
 
@@ -346,11 +355,11 @@ pub fn f_haslocaldir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     result.write_number(match s.scope {
         kCdScopeWindow => {
             let win = s.win.expect("a window scope names a window");
-            win_has_localdir(win) as VarNumber
+            VarNumber::from(win_has_localdir(win))
         }
         kCdScopeTabpage => {
             let tp = s.tp.expect("a tab page scope names a tab page");
-            tab_has_localdir(tp) as VarNumber
+            VarNumber::from(tab_has_localdir(tp))
         }
         // We should never get here: the read above defaulted it.
         kCdScopeInvalid => std::process::abort(),
@@ -389,7 +398,7 @@ pub fn f_mkdir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         if args.len() > 2 {
             // With no error flag the failure answer is -1 rather than 0, and
             // -1 is exactly what the test below looks for.
-            prot = tv_get_number_chk(&args[2]).unwrap_or(-1) as c_int;
+            prot = number_as_int(tv_get_number_chk(&args[2]).unwrap_or(-1));
             if prot == -1 {
                 return;
             }

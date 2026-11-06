@@ -10,6 +10,13 @@
 //! of a line stops exactly where the pointer form stopped.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::ascii::ascii_isdigit;
 use crate::charset::vim_is_ident_char;
@@ -27,11 +34,11 @@ use crate::message_fmt::msg_bytes;
 use crate::option::option_end;
 use crate::semsg;
 use crate::strings::has_char;
-use crate::types::{NUL, OptIndex, OptionSetFlags, TypVal};
+use crate::types::{OptIndex, OptionSetFlags, TypVal};
 use core::ffi::c_int;
 
 /// The NUL byte, as the scans below compare it.
-const END: u8 = NUL as u8;
+const END: u8 = b'\0';
 
 /// How long the environment-variable name `text` starts with is. Zero when
 /// there is none.

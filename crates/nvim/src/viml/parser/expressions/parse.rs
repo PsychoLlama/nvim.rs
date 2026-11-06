@@ -7,6 +7,13 @@
 //! them, and [`Flow`], which is how a handler tells the loop what to do next.
 //!
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -17,8 +24,8 @@ use super::{brackets, figure, operators, values, *};
 
 /// Additional flags to pass to the lexer, indexed by the wanted node.
 static want_node_to_lexer_flags: [c_int; 2] = [
-    kELFlagForbidScope as c_int, // kENodeOperator
-    kELFlagIsNotCmp as c_int,    // kENodeValue
+    kELFlagForbidScope.cast_signed(), // kENodeOperator
+    kELFlagIsNotCmp.cast_signed(),    // kENodeValue
 ];
 
 /// Determine whether the given parse type is an assignment.
@@ -251,7 +258,7 @@ impl<'a, 's> ExprParser<'a, 's> {
     fn new(pstate: &'s mut ParserState<'a>, flags: c_int) -> Self {
         let mut pt_stack = Vec::new();
         pt_stack.push(kEPTExpr);
-        if flags & kExprFlagsParseLet as c_int != 0 {
+        if flags & kExprFlagsParseLet.cast_signed() != 0 {
             pt_stack.push(kEPTAssignment);
         }
         let blank = LexExprToken {
@@ -400,7 +407,7 @@ impl<'a, 's> ExprParser<'a, 's> {
     /// operator is spliced in and the token is dispatched again, this time in
     /// value position.
     pub(super) fn op_missing(&mut self) -> Flow {
-        if self.flags & kExprFlagsMulti as c_int != 0 && self.may_have_next_expr() {
+        if self.flags & kExprFlagsMulti.cast_signed() != 0 && self.may_have_next_expr() {
             return Flow::Stop;
         }
         debug_assert!(
@@ -476,9 +483,9 @@ impl<'a, 's> ExprParser<'a, 's> {
                     .ast
                     .kind(self.ast.filled(stack_top(&self.ast_stack, 1)))
                     == kExprNodeConcatOrSubscript;
-            self.lexer_flags = kELFlagPeek as c_int
-                | (if self.flags & kExprFlagsDisallowEOC as c_int != 0 {
-                    kELFlagForbidEOC as c_int
+            self.lexer_flags = kELFlagPeek.cast_signed()
+                | (if self.flags & kExprFlagsDisallowEOC.cast_signed() != 0 {
+                    kELFlagForbidEOC.cast_signed()
                 } else {
                     0
                 })
@@ -490,7 +497,7 @@ impl<'a, 's> ExprParser<'a, 's> {
                             kExprNodeConcat | kExprNodeConcatOrSubscript
                         ))
                 {
-                    kELFlagAllowFloat as c_int
+                    kELFlagAllowFloat.cast_signed()
                 } else {
                     0
                 });
@@ -698,7 +705,8 @@ impl<'a, 's> ExprParser<'a, 's> {
                         || self.tok_type == kExprLexFigureBrace && !self.cur_token.is_closing())
                         && self.prev_token.type_0 != kExprLexSpacing)
                 {
-                    if self.flags & kExprFlagsMulti as c_int != 0 && self.may_have_next_expr() {
+                    if self.flags & kExprFlagsMulti.cast_signed() != 0 && self.may_have_next_expr()
+                    {
                         return Some(Flow::Stop);
                     }
                     self.error(c"E15: Expected assignment operator or subscript: %.*s");

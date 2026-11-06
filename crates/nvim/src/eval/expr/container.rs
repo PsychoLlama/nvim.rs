@@ -1,6 +1,13 @@
 //! List and dict literals, including the `#{}` form.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::eval::Parsed;
 use crate::eval::typval::TV_INITIAL_VALUE;
@@ -10,7 +17,7 @@ use crate::semsg;
 
 use crate::eval::typval::{NumBuf, dict_find, tv_clear, tv_dict_alloc, tv_list_alloc};
 use crate::eval::{Cursor, eval1};
-use crate::types::{Failed, NUL, TypVal, kListLenShouldKnow, ptrdiff_t};
+use crate::types::{Failed, TypVal, kListLenShouldKnow, ptrdiff_t};
 
 /// A freshly declared typval.
 const UNSET_TV: TypVal = TV_INITIAL_VALUE;
@@ -29,7 +36,7 @@ pub(crate) fn eval_list(
     cursor.skip_white();
 
     let ok = 'items: {
-        while cursor.byte() != b']' && cursor.byte() != NUL as u8 {
+        while cursor.byte() != b']' && cursor.byte() != b'\0' {
             let mut tv = UNSET_TV;
             if eval1(cursor, &mut tv, evaluate).is_err() {
                 break 'items false;
@@ -122,7 +129,7 @@ pub(crate) fn eval_dict(
     cursor.skip_white();
 
     let ok = 'items: {
-        while cursor.byte() != b'}' && cursor.byte() != NUL as u8 {
+        while cursor.byte() != b'}' && cursor.byte() != b'\0' {
             let read_key = if literal {
                 get_literal_key(cursor, &mut tvkey)
             } else {

@@ -1,5 +1,12 @@
 //! Time: the `timer_*()` family, `wait()` and the `reltime()` clock.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::wrappers::arg_number;
 use crate::eval::typval::TV_INITIAL_VALUE;
@@ -19,6 +26,7 @@ use crate::getchar::state::got_int;
 use crate::getchar::vgetc;
 use crate::memory::ThinCString;
 use crate::message::state::called_emsg;
+use crate::narrow::number_as_int;
 use crate::os::time::os_time;
 use crate::profile::{profile_end, profile_msg_str, profile_signed, profile_start, profile_sub};
 use crate::semsg;
@@ -46,19 +54,20 @@ pub fn f_wait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let interval = match args.get(2) {
         None => 200,
         Some(tv) if tv.v_type() == VAR_NUMBER && tv.number_or_zero() > 0 => {
-            tv.number_or_zero() as c_int
+            number_as_int(tv.number_or_zero())
         }
         Some(_) => {
             semsg!("E475: Invalid value for argument 3");
             return;
         }
     };
-    let timeout = args[0].number_or_zero() as c_int;
+    let timeout = number_as_int(args[0].number_or_zero());
     let expr = &args[1];
 
     // Keeps the loop turning, so that `condition` is evaluated at least
     // every `interval` even when nothing else happens.
-    let waker = ScopedTimer::wake_every(interval as u64);
+    // Positive: the argument check above refused anything else.
+    let waker = ScopedTimer::wake_every(u64::try_from(interval).unwrap_or(0));
 
     let mut exprval = EMPTY_TV;
     let mut error = false;
@@ -78,7 +87,7 @@ pub fn f_wait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             || error
             || got_int.get()
     };
-    wait_on_main_loop(Drain::Events, timeout as i64, done);
+    wait_on_main_loop(Drain::Events, i64::from(timeout), done);
     drop(waker);
     if called_emsg.get() > called_emsg_before || error {
         result.write_number(-3);
@@ -93,7 +102,7 @@ pub fn f_wait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `localtime()` — seconds since the epoch.
 pub fn f_localtime(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_number(os_time() as VarNumber);
+    result.write_number(os_time().cast_signed());
 }
 
 /// A `ProfTime` split into the pair of 32-bit halves `reltime()` reports.
@@ -127,7 +136,7 @@ fn list2proftime(arg: &TypVal) -> Option<ProfTime> {
     if error {
         return None;
     }
-    Some(proftime_from_halves(n1 as int32_t, n2 as int32_t))
+    Some(proftime_from_halves(number_as_int(n1), number_as_int(n2)))
 }
 
 /// `reltime([{start} [, {end}]])` — a timestamp, an elapsed time, or the
@@ -217,7 +226,7 @@ pub fn f_timer_start(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
             return;
         }
         if let Some(di) = dict_find(args[2].dict_ref(), b"repeat") {
-            repeat = tv_get_number(&di.di_tv) as c_int;
+            repeat = number_as_int(tv_get_number(&di.di_tv));
             // A repeat of 0 means "once", the same as the default.
             if repeat == 0 {
                 repeat = 1;
@@ -228,7 +237,7 @@ pub fn f_timer_start(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     if !callback_from_typval(&mut callback, &args[1]) {
         return;
     }
-    result.write_number(timer_start(arg_number(&args[0]), repeat, callback) as VarNumber);
+    result.write_number(timer_start(arg_number(&args[0]), repeat, callback).cast_signed());
 }
 
 /// `timer_stop({id})`.

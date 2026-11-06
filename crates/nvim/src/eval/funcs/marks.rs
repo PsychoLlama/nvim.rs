@@ -1,5 +1,12 @@
 //! Marks, jumps, changes and tags.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::tv_get_buf;
 use super::wrappers::{arg_number, dict_alloc_ret};
@@ -11,6 +18,8 @@ use crate::eval::window::{find_tabwin, find_win_by_nr_or_id};
 use crate::guard::Suppress;
 use crate::mark::{cleanup_jumplist, get_buf_local_marks, get_global_marks};
 use crate::message_fmt::msg_bytes;
+use crate::narrow::as_index;
+use crate::narrow::number_as_int;
 use crate::semsg;
 use crate::startup::vim_ignored;
 use crate::tag::{TagFiles, get_tags, get_tagstack, set_tagstack};
@@ -20,11 +29,11 @@ use crate::types::{
 };
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 /// `changenr()` — the sequence number of the change the undo tree is at.
 pub fn f_changenr(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_number(Buf::current().b_u_seq_cur as VarNumber);
+    result.write_number(VarNumber::from(Buf::current().b_u_seq_cur));
 }
 
 /// One `{lnum, col, coladd}` entry, for the caller to add to and push.
@@ -32,7 +41,7 @@ fn mark_dict(mark: Pos) -> DictRef {
     let d = tv_dict_alloc();
     let _ = d.edit().add_number(b"lnum", i64::from(mark.lnum));
     let _ = d.edit().add_number(b"col", i64::from(mark.col));
-    let _ = d.edit().add_number(b"coladd", mark.coladd as VarNumber);
+    let _ = d.edit().add_number(b"coladd", VarNumber::from(mark.coladd));
     d
 }
 
@@ -45,7 +54,7 @@ pub fn f_getchangelist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
         // The value is coerced to a Number purely so that a bad type
         // reports; the result is thrown away and the argument is
         // resolved as a buffer instead.
-        vim_ignored.set(arg_number(&args[0]) as c_int);
+        vim_ignored.set(number_as_int(arg_number(&args[0])));
         let _no_emsg = Suppress::emsg();
         tv_get_buf(&args[0], 0)
     };
@@ -69,10 +78,10 @@ pub fn f_getchangelist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
             .find(|entry| entry.wi_win == here)
             .map_or(changelistlen, |entry| entry.wi_changelistidx)
     };
-    out.push_number(index as VarNumber);
+    out.push_number(VarNumber::from(index));
 
     for i in 0..buf.b_changelistlen {
-        let mark = buf.b_changelist[i as usize].mark;
+        let mark = buf.b_changelist[as_index(i)].mark;
         if mark.lnum != LineNr::ZERO {
             entries.edit().push_dict(Some(mark_dict(mark)));
         }
@@ -89,14 +98,16 @@ pub fn f_getjumplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     cleanup_jumplist(wp, true);
     let entries = tv_list_alloc(wp.w_jumplistlen as isize);
     out.push_list(Some(entries.clone()));
-    out.push_number(wp.w_jumplistidx as VarNumber);
+    out.push_number(VarNumber::from(wp.w_jumplistidx));
     for i in 0..wp.w_jumplistlen {
-        let entry = &wp.w_jumplist[i as usize];
+        let entry = &wp.w_jumplist[as_index(i)];
         if entry.fmark.mark.lnum == LineNr::ZERO {
             continue;
         }
         let d = mark_dict(entry.fmark.mark);
-        let _ = d.edit().add_number(b"bufnr", entry.fmark.fnum as VarNumber);
+        let _ = d
+            .edit()
+            .add_number(b"bufnr", VarNumber::from(entry.fmark.fnum));
         // A jump into a file that is no longer loaded keeps its name.
         if let Some(fname) = entry.file_name() {
             let _ = d.edit().add_str(b"filename", Some(fname));
@@ -146,7 +157,7 @@ pub fn f_settagstack(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     };
     // "r" replaces, "a" appends, "t" truncates; anything else, including
     // a longer string starting with one of them, is E962.
-    let mut action = b'r' as c_char;
+    let mut action = b'r'.cast_signed();
     if args.len() > 2 {
         if tv_check_for_string_arg(args, 2).is_err() {
             return;
@@ -155,7 +166,7 @@ pub fn f_settagstack(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
             return;
         };
         match actstr {
-            &[letter @ (b'r' | b'a' | b't')] => action = letter as c_char,
+            &[letter @ (b'r' | b'a' | b't')] => action = letter.cast_signed(),
             _ => {
                 let actstr = msg_bytes(actstr);
                 semsg!("E962: Invalid action: '{actstr}'");

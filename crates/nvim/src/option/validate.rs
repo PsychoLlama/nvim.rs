@@ -13,6 +13,13 @@
 //! formatted into the caller's `errbuf`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -89,34 +96,35 @@ pub(crate) fn check_num_option_bounds(
     match opt_idx {
         kOptLines => {
             let least = min_rows_for_all_tabpages();
-            if *newval < least as OptInt && full_screen.get() {
+            if *newval < OptInt::from(least) && full_screen.get() {
                 errmsg = Err(OptError::formatted(tr!(
                     "E593: Need at least {least} lines"
                 )));
-                *newval = least as OptInt;
+                *newval = OptInt::from(least);
             }
-            *newval = (*newval).min(INT_MAX as OptInt);
+            *newval = (*newval).min(OptInt::from(INT_MAX));
         }
         kOptColumns => {
-            if *newval < MIN_COLUMNS as OptInt && full_screen.get() {
+            if *newval < OptInt::from(MIN_COLUMNS) && full_screen.get() {
                 errmsg = Err(OptError::formatted(tr!(
                     "E594: Need at least {MIN_COLUMNS} columns"
                 )));
-                *newval = MIN_COLUMNS as OptInt;
+                *newval = OptInt::from(MIN_COLUMNS);
             }
-            *newval = (*newval).min(INT_MAX as OptInt);
+            *newval = (*newval).min(OptInt::from(INT_MAX));
         }
         // 'pumblend' saturates silently rather than reporting.
         kOptPumblend => *newval = (*newval).clamp(0, 100),
         kOptScrolljump => {
-            if (*newval < -100 || *newval >= Rows.get() as OptInt) && full_screen.get() {
+            if (*newval < -100 || *newval >= OptInt::from(Rows.get())) && full_screen.get() {
                 errmsg = Err(e_scroll.into());
                 *newval = 1;
             }
         }
         kOptScroll => {
             let height = Win::current().w_view_height;
-            if (*newval <= 0 || (*newval > height as OptInt && height > 0)) && full_screen.get() {
+            if (*newval <= 0 || (*newval > OptInt::from(height) && height > 0)) && full_screen.get()
+            {
                 // Zero is how `:set scroll=0` asks for the default, so
                 // it is corrected without a message.
                 if *newval != 0 {
@@ -137,7 +145,7 @@ pub(crate) fn check_num_option_bounds(
 pub(crate) fn validate_num_option(opt_idx: OptIndex, newval: &mut OptInt) -> Result<(), OptError> {
     let value = *newval;
     // Every numeric option ends up in an `int` somewhere down the line.
-    if value < INT_MIN as OptInt || value > INT_MAX as OptInt {
+    if value < OptInt::from(INT_MIN) || value > OptInt::from(INT_MAX) {
         return Err(invalid());
     }
     let errmsg = match opt_idx {
@@ -154,7 +162,7 @@ pub(crate) fn validate_num_option(opt_idx: OptIndex, newval: &mut OptInt) -> Res
         kOptWinminwidth => bounded(value, 0, too_small(), p_wiw(), e_winwidth.into()),
         // 'maxcombine' is fixed: whatever is asked for, this is the answer.
         kOptMaxcombine => {
-            *newval = MAX_MCO as OptInt;
+            *newval = OptInt::from(MAX_MCO);
             Ok(())
         }
         kOptHistory => bounded(value, 0, too_small(), 10000, invalid()),
@@ -178,14 +186,20 @@ pub(crate) fn validate_num_option(opt_idx: OptIndex, newval: &mut OptInt) -> Res
             }
         }
         kOptConceallevel => bounded(value, 0, too_small(), 3, invalid()),
-        kOptNumberwidth => bounded(value, 1, too_small(), MAX_NUMBERWIDTH as OptInt, invalid()),
-        kOptIminsert => bounded(value, 0, invalid(), B_IMODE_LAST as OptInt, invalid()),
+        kOptNumberwidth => bounded(
+            value,
+            1,
+            too_small(),
+            OptInt::from(MAX_NUMBERWIDTH),
+            invalid(),
+        ),
+        kOptIminsert => bounded(value, 0, invalid(), OptInt::from(B_IMODE_LAST), invalid()),
         // 'imsearch' has one value more than 'iminsert': -1 is "follow it".
-        kOptImsearch => bounded(value, -1, invalid(), B_IMODE_LAST as OptInt, invalid()),
+        kOptImsearch => bounded(value, -1, invalid(), OptInt::from(B_IMODE_LAST), invalid()),
         // 'channel' is read-only; every value is refused.
         kOptChannel => Err(invalid()),
-        kOptScrollback => bounded(value, -1, invalid(), SB_MAX as OptInt, invalid()),
-        kOptTabstop => bounded(value, 1, too_small(), TABSTOP_MAX as OptInt, invalid()),
+        kOptScrollback => bounded(value, -1, invalid(), OptInt::from(SB_MAX), invalid()),
+        kOptTabstop => bounded(value, 1, too_small(), OptInt::from(TABSTOP_MAX), invalid()),
         kOptChistory | kOptLhistory => bounded(
             value,
             1,
@@ -193,7 +207,13 @@ pub(crate) fn validate_num_option(opt_idx: OptIndex, newval: &mut OptInt) -> Res
             100,
             E_QUICKFIX_TOO_MANY.into(),
         ),
-        kOptMaxsearchcount => bounded(value, 1, too_small(), MAX_SEARCH_COUNT as OptInt, invalid()),
+        kOptMaxsearchcount => bounded(
+            value,
+            1,
+            too_small(),
+            OptInt::from(MAX_SEARCH_COUNT),
+            invalid(),
+        ),
         _ => Ok(()),
     };
     errmsg?;

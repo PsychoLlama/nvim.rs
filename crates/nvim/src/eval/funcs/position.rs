@@ -1,6 +1,13 @@
 //! Positions in a buffer: the cursor, `line()`, `col()`, `virtcol()`,
 //! `getpos()`/`setpos()` and the character-search state.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::wrappers::{arg_bool, arg_lnum, arg_number, arg_number_chk};
 use crate::cursor::check_cursor;
@@ -18,6 +25,7 @@ use crate::message::emsg;
 use crate::message_fmt::msg_cstr;
 use crate::r#move::{WinValid, update_curswant};
 use crate::narrow::number_as_col;
+use crate::narrow::number_as_int;
 use crate::option::vars::P_SPK;
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
@@ -48,7 +56,7 @@ const NOWHERE: Pos = Pos {
 
 /// `byte2line({byte})` — which line a byte offset falls in.
 pub fn f_byte2line(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let mut boff = arg_number(&args[0]) as c_int - 1;
+    let mut boff = number_as_int(arg_number(&args[0])) - 1;
     result.write_number(if boff < 0 {
         -1
     } else {
@@ -92,7 +100,7 @@ fn window_arg(args: &[TypVal], idx: usize) -> Option<Option<Win>> {
     if args.len() <= idx {
         return Some(Win::current_or_none());
     }
-    let (wp, _) = win_and_tab_by_id(arg_number(&args[idx]) as c_int)?;
+    let (wp, _) = win_and_tab_by_id(number_as_int(arg_number(&args[idx])))?;
     check_cursor(wp);
     Some(Some(wp))
 }
@@ -184,7 +192,7 @@ pub fn f_line(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let fp = if args.len() <= 1 {
         var2fpos(&args[0], true, &mut fnum, false, Win::current())
     } else {
-        match win_and_tab_by_id(arg_number(&args[1]) as c_int) {
+        match win_and_tab_by_id(number_as_int(arg_number(&args[1]))) {
             None => None,
             Some((wp, _)) => {
                 // Resolving a position in another window moves its cursor,
@@ -254,7 +262,7 @@ fn getpos_both(args: &[TypVal], result: &mut TypVal, getcurpos: bool, charcol: b
     };
 
     let l = tv_list_alloc_ret(result, 4 + isize::from(getcurpos));
-    l.push_number(if fnum != -1 { fnum as VarNumber } else { 0 });
+    l.push_number(if fnum != -1 { VarNumber::from(fnum) } else { 0 });
     let (lnum, col, coladd) = fp.map_or((0, 0, 0), |fp| {
         // MAXCOL is passed through rather than made one-based.
         let col = if fp.col == END_OF_LINE {
@@ -262,7 +270,11 @@ fn getpos_both(args: &[TypVal], result: &mut TypVal, getcurpos: bool, charcol: b
         } else {
             fp.col + 1
         };
-        (i64::from(fp.lnum), i64::from(col), fp.coladd as VarNumber)
+        (
+            i64::from(fp.lnum),
+            i64::from(col),
+            VarNumber::from(fp.coladd),
+        )
     });
     l.push_number(lnum);
     l.push_number(col);
@@ -286,7 +298,7 @@ fn append_curswant(l: &mut List, window: Option<Win>) {
     }
     let curswant = match window.map(|w| w.w_curswant) {
         None => 0,
-        Some(END_OF_LINE) => MAXCOL as VarNumber,
+        Some(END_OF_LINE) => VarNumber::from(MAXCOL),
         Some(want) => i64::from(want) + 1,
     };
     l.push_number(curswant);
@@ -346,7 +358,7 @@ fn set_cursorpos(args: &[TypVal], result: &mut TypVal, charcol: bool) {
             col = ColNr::new(buf_charidx_to_byteidx(Buf::current_or_none(), lnum, col.get()) + 1);
         }
         let coladd = if args.len() > 2 {
-            crate::narrow::number_as_int(arg_number_chk(&args[2], None))
+            number_as_int(arg_number_chk(&args[2], None))
         } else {
             0
         };
@@ -454,6 +466,6 @@ pub fn f_setcharsearch(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDat
         set_csearch_direction(if forward { FORWARD } else { BACKWARD } as Direction);
     }
     if let Some(di) = d.find(b"until") {
-        set_csearch_until((tv_get_number(&di.di_tv) != 0) as c_int);
+        set_csearch_until(c_int::from(tv_get_number(&di.di_tv) != 0));
     }
 }

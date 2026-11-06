@@ -1,7 +1,15 @@
 //! Variables themselves: the dictionary watchers, `islocked()` and `id()`.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
-use super::{DI_FLAGS_LOCK, FNE_CHECK_START, GLV_NO_AUTOLOAD, GLV_READ_ONLY};
+use super::{FNE_CHECK_START, GLV_NO_AUTOLOAD, GLV_READ_ONLY};
+use crate::eval::typval::DI_FLAGS_LOCK;
 use crate::eval::typval::{NumBuf, callback_free, tv_islocked};
 use crate::eval::vars::with_var;
 use crate::eval::{Target, callback_from_typval, get_lval};
@@ -12,7 +20,6 @@ use crate::strings::format_typvals;
 use crate::types::{
     Callback, EvalFuncData, TypVal, VAR_DICT, VAR_FUNC, VAR_NUMBER, VAR_STRING, VarNumber,
 };
-use core::ffi::c_int;
 
 /// An unset callback, the shape `callback_from_typval` fills in.
 const NO_CALLBACK: Callback = Callback::None;
@@ -87,7 +94,7 @@ pub fn f_islocked(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     result.write_number(-1);
     let text = numbuf.string(&args[0]).to_bytes();
-    let flags = (GLV_NO_AUTOLOAD | GLV_READ_ONLY) as c_int;
+    let flags = (GLV_NO_AUTOLOAD | GLV_READ_ONLY).cast_signed();
     let (mut lval, end) = get_lval(text, None, false, false, flags, FNE_CHECK_START);
     let Some(end) = end.filter(|_| lval.has_name()) else {
         return;
@@ -104,7 +111,7 @@ pub fn f_islocked(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
     let locked = match &lval.target {
         Target::Variable | Target::Blob { .. } => with_var(lval.name(), true, |item| {
-            item.di_flags & DI_FLAGS_LOCK as u8 != 0 || tv_islocked(item.di_lock, &item.di_tv)
+            item.di_flags & DI_FLAGS_LOCK != 0 || tv_islocked(item.di_lock, &item.di_tv)
         }),
         // Both refusals leave the `-1` written above.
         Target::Slot { span, .. } if span.range => {

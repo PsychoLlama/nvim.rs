@@ -1,6 +1,13 @@
 //! Asking the user: `input()`, `confirm()`, the prompt-buffer accessors
 //! and `feedkeys()`.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::wrappers::{arg_number, arg_number_chk};
 use super::{
@@ -25,6 +32,8 @@ use crate::message::{
     confirm_dialog, emsg, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_start, msg_str, verb_msg,
 };
 use crate::mouse::state::mouse_row;
+use crate::narrow::as_index;
+use crate::narrow::number_as_int;
 use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;
 use crate::os::proc::os_kill;
@@ -39,11 +48,11 @@ use core::ffi::c_int;
 /// `{type}` spellings `confirm()` recognises, by their first letter.
 /// Anything else leaves the default in place.
 const DIALOG_TYPES: [(u8, c_int); 5] = [
-    (b'E', VIM_ERROR as c_int),
-    (b'Q', VIM_QUESTION as c_int),
-    (b'I', VIM_INFO as c_int),
-    (b'W', VIM_WARNING as c_int),
-    (b'G', VIM_GENERIC as c_int),
+    (b'E', VIM_ERROR.cast_signed()),
+    (b'Q', VIM_QUESTION.cast_signed()),
+    (b'I', VIM_INFO.cast_signed()),
+    (b'W', VIM_WARNING.cast_signed()),
+    (b'G', VIM_GENERIC.cast_signed()),
 ];
 
 /// `confirm({msg} [, {choices} [, {default} [, {type}]]])`
@@ -53,7 +62,7 @@ pub fn f_confirm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut type_buf = NumBuf::new();
     let mut buttons = None;
     let mut default = 1;
-    let mut kind = VIM_GENERIC as c_int;
+    let mut kind = VIM_GENERIC.cast_signed();
     let mut error = false;
 
     let message = numbuf.string_chk(&args[0]).ok();
@@ -69,7 +78,7 @@ pub fn f_confirm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             error = true;
         }
         if args.len() > 2 {
-            default = arg_number_chk(&args[2], Some(&mut error)) as c_int;
+            default = number_as_int(arg_number_chk(&args[2], Some(&mut error)));
             if args.len() > 3 {
                 let typestr = type_buf.bytes_chk(&args[3]);
                 if let Some(typestr) = typestr {
@@ -98,8 +107,8 @@ pub fn f_confirm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `debugbreak({pid})` — SIGINT to a process, which on Windows is how a
 /// debugger is attached. Answers FAIL; there is no success value.
 pub fn f_debugbreak(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_number(FAIL as VarNumber);
-    let pid = arg_number(&args[0]) as c_int;
+    result.write_number(VarNumber::from(FAIL));
+    let pid = number_as_int(arg_number(&args[0]));
     if pid == 0 {
         emsg(gettext(e_invarg));
         return;
@@ -168,7 +177,7 @@ pub fn f_inputlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // The List is held by the argument for the whole call, and printing it
     // runs no user code.
     let list = args[0].list_ref();
-    let len = list_len(list) as usize;
+    let len = as_index(list_len(list));
     for (at, li) in list_iter(list).enumerate() {
         msg_str(numbuf.string(&li.li_tv));
         // A UI that owns the message area keeps the items in one message,
@@ -185,7 +194,7 @@ pub fn f_inputlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if mouse_used {
         selected = list_len(args[0].list_ref()) - (cmdline_row.get() - mouse_row.get());
     }
-    result.write_number(selected as VarNumber);
+    result.write_number(VarNumber::from(selected));
 }
 
 /// The typeahead states `inputsave()` has stacked up.

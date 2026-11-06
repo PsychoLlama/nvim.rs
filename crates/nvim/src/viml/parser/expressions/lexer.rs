@@ -6,6 +6,13 @@
 //! `const char *` walk, so the bounds are the compiler's problem.
 //!
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::charset::{Str2NrBases, str2nr_in};
 use crate::mbyte::cluster_len;
@@ -165,7 +172,7 @@ fn scan_number(ret: &mut LexExprToken, line: &[u8], flags: c_int) {
     let mut exp_negative = false;
     ret.type_0 = kExprLexNumber;
     ret.len = scan_while(line, ret.len, |b| b.is_ascii_digit());
-    if flags & kELFlagAllowFloat as c_int != 0 {
+    if flags & kELFlagAllowFloat.cast_signed() != 0 {
         let non_float = *ret;
         if line.len() > ret.len + 1 && line[ret.len] == b'.' && line[ret.len + 1].is_ascii_digit() {
             ret.len += 1;
@@ -251,7 +258,7 @@ fn scan_identifier(ret: &mut LexExprToken, line: &[u8], flags: c_int) {
     let mut autoload = false;
     ret.type_0 = kExprLexPlainIdentifier;
     ret.len = scan_while(line, ret.len, |b| ascii_isident(b.into()));
-    if flags & kELFlagIsNotCmp as c_int == 0
+    if flags & kELFlagIsNotCmp.cast_signed() == 0
         && ((ret.len == 2 && &line[..2] == b"is") || (ret.len == 5 && &line[..5] == b"isnot"))
     {
         ret.type_0 = kExprLexComparison;
@@ -268,7 +275,7 @@ fn scan_identifier(ret: &mut LexExprToken, line: &[u8], flags: c_int) {
         && line.len() > 1
         && VAR_SCOPES.contains(&ExprVarScope::from(schar))
         && line[1] == b':'
-        && flags & kELFlagForbidScope as c_int == 0
+        && flags & kELFlagForbidScope.cast_signed() == 0
     {
         ret.len += 1;
         scope = ExprVarScope::from(schar);
@@ -555,7 +562,7 @@ fn scan(line: &[u8], start: ParserPosition, flags: c_int) -> LexExprToken {
         }
         // The Ex command ended, so the expression does too.
         b'\0' | b'\n' => {
-            if flags & kELFlagForbidEOC as c_int != 0 {
+            if flags & kELFlagForbidEOC.cast_signed() != 0 {
                 ret.type_0 = kExprLexInvalid;
                 ret.data = lex_error(kExprLexSpacing, c"E15: Unexpected EOC character: %.*s");
             } else {
@@ -566,7 +573,7 @@ fn scan(line: &[u8], start: ParserPosition, flags: c_int) -> LexExprToken {
             if line.len() >= 2 && line[1] == b'|' {
                 ret.len += 1;
                 ret.type_0 = kExprLexOr;
-            } else if flags & kELFlagForbidEOC as c_int != 0 {
+            } else if flags & kELFlagForbidEOC.cast_signed() != 0 {
                 // Note: `<C-r>=1 | 2<CR>` yields 1 in Vim, with no error at
                 // all. That is deliberately not what happens here.
                 ret.type_0 = kExprLexInvalid;
@@ -597,7 +604,7 @@ pub fn viml_pexpr_next_token(pstate: &mut ParserState<'_>, flags: c_int) -> LexE
         return ret;
     };
     let ret = scan(line, start, flags);
-    if flags & kELFlagPeek as c_int == 0 {
+    if flags & kELFlagPeek.cast_signed() == 0 {
         pstate.advance(ret.len);
     }
     ret

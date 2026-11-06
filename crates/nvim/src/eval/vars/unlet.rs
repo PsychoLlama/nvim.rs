@@ -31,8 +31,9 @@ use crate::semsg;
 use crate::types::{CmdIdx, ExArg, Failed, ListRef, VAR_DICT, VAR_LIST};
 use core::ffi::c_int;
 
-use super::{DI_FLAGS_FIX, DI_FLAGS_LOCK, GLV_QUIET, clear_local, do_unlet, with_var};
+use super::{GLV_QUIET, clear_local, do_unlet, with_var};
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::eval::typval::{DI_FLAGS_FIX, DI_FLAGS_LOCK};
 
 /// What [`ex_unletlock`] does to each argument it resolves.
 #[derive(Clone, Copy)]

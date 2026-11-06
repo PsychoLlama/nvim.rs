@@ -19,6 +19,8 @@
 #![forbid(unsafe_code)]
 
 use crate::autocmd::fire_autocmds;
+use crate::eval::typval::DI_FLAGS_FIX;
+use crate::eval::typval::DI_FLAGS_RO;
 use crate::types::AutoEvent;
 use crate::types::Handle;
 use core::ffi::{CStr, c_int};

@@ -24,6 +24,13 @@
 //! Original: `src/nvim/eval/fs.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::{FINDFILE_DIR, nr_arg, str_arg, str_arg_chk};
 use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_one, globpath};
@@ -34,6 +41,7 @@ use crate::eval::vars::{prepare_vimvar, restore_vimvar, set_vim_var_string};
 use crate::file_search::{FileNameOpts, PathWalk};
 use crate::fileio::readdir_core;
 use crate::memory::{ThinCString, XString};
+use crate::narrow::number_as_int;
 use crate::option::vars::{P_PATH, p_wic};
 use crate::optionstr::{OptString, local_or_global};
 use crate::types::{
@@ -104,7 +112,7 @@ fn ret_list(result: &mut TypVal) {
 
 /// The suffixes `findfile()` tries, and none for `finddir()`.
 fn suffixes(find_what: c_int) -> XString {
-    if find_what == FINDFILE_DIR as c_int {
+    if find_what == FINDFILE_DIR.cast_signed() {
         return XString::new();
     }
     Buf::current().b_p_sua.get()
@@ -136,7 +144,7 @@ fn findfilendir(args: &[TypVal], result: &mut TypVal, find_what: c_int) {
                     path = Some(XString::from_cstr(p));
                 }
                 if args.len() > 2 {
-                    count = nr_arg(args, 2, &mut error) as c_int;
+                    count = number_as_int(nr_arg(args, 2, &mut error));
                 }
             }
         }
@@ -185,12 +193,12 @@ fn findfilendir(args: &[TypVal], result: &mut TypVal, find_what: c_int) {
 
 /// `finddir({name} [, {path} [, {count}]])`.
 pub fn f_finddir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    findfilendir(args, result, FINDFILE_DIR as c_int);
+    findfilendir(args, result, FINDFILE_DIR.cast_signed());
 }
 
 /// `findfile({name} [, {path} [, {count}]])`.
 pub fn f_findfile(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    findfilendir(args, result, super::FINDFILE_FILE as c_int);
+    findfilendir(args, result, super::FINDFILE_FILE.cast_signed());
 }
 
 /// `glob({pattern} [, {nosuf} [, {list} [, {alllinks}]]])`.

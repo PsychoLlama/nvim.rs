@@ -1,6 +1,13 @@
 //! Reading a List, Dict or Blob: `get()`, `empty()`, `index()`,
 //! `flatten()` and friends.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::wrappers::{arg_copy, arg_number_chk};
 use crate::eval::typval::CallFrame;
@@ -22,6 +29,8 @@ use crate::message::e_listblobreq;
 use crate::message::state::{called_emsg, did_emsg};
 use crate::message::{emsg, internal_error};
 use crate::message_fmt::msg_bytes;
+use crate::narrow::len_as_integer;
+use crate::narrow::number_as_int;
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::{
@@ -79,7 +88,7 @@ pub fn f_empty(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
         _ => true,
     };
-    result.write_number(empty as VarNumber);
+    result.write_number(VarNumber::from(empty));
 }
 
 /// `flatten({list} [, {maxdepth}])` — in place.
@@ -105,7 +114,7 @@ fn flatten_common(args: &[TypVal], result: &mut TypVal, make_copy: bool) {
         999_999
     } else {
         let mut error = false;
-        let depth = arg_number_chk(&args[1], Some(&mut error)) as c_int;
+        let depth = number_as_int(arg_number_chk(&args[1], Some(&mut error)));
         if error {
             return;
         }
@@ -182,7 +191,7 @@ pub fn f_get(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// of range leaves -1 there, which a default given to the call replaces.
 fn get_from_blob(args: &[TypVal], result: &mut TypVal) -> bool {
     let mut error = false;
-    let mut idx = arg_number_chk(&args[1], Some(&mut error)) as c_int;
+    let mut idx = number_as_int(arg_number_chk(&args[1], Some(&mut error)));
     if error {
         return false;
     }
@@ -206,7 +215,7 @@ fn get_from_blob(args: &[TypVal], result: &mut TypVal) -> bool {
 fn get_from_list(args: &[TypVal]) -> Option<&TypVal> {
     let list = args[0].list_ref()?;
     let mut error = false;
-    let idx = arg_number_chk(&args[1], Some(&mut error)) as c_int;
+    let idx = number_as_int(arg_number_chk(&args[1], Some(&mut error)));
     let at = list_index(Some(list), idx).filter(|_| !error)?;
     Some(&list.items()[at].li_tv)
 }
@@ -336,7 +345,7 @@ fn index_blob(args: &[TypVal], result: &mut TypVal) {
     let mut start: c_int = 0;
     if args.len() > 2 {
         let mut error = false;
-        start = arg_number_chk(&args[2], Some(&mut error)) as c_int;
+        start = number_as_int(arg_number_chk(&args[2], Some(&mut error)));
         if error {
             return;
         }
@@ -355,7 +364,7 @@ fn index_blob(args: &[TypVal], result: &mut TypVal) {
         // always case-sensitive however 'ic' was spelled. Upstream is
         // the same; the flag only reaches the List branch.
         if tv_equal(&tv, &args[1], false) {
-            result.write_number(idx as VarNumber);
+            result.write_number(VarNumber::from(idx));
             return;
         }
     }
@@ -373,7 +382,7 @@ fn index_list(args: &[TypVal], result: &mut TypVal) {
         let mut error = false;
         idx = list_uidx(
             Some(list),
-            arg_number_chk(&args[2], Some(&mut error)) as c_int,
+            number_as_int(arg_number_chk(&args[2], Some(&mut error))),
         );
         start = if error {
             None
@@ -503,7 +512,7 @@ fn indexof_list(list: Option<&ListRef>, startidx: VarNumber, expr: &TypVal) -> V
     let start = if startidx == 0 {
         Some(0usize)
     } else {
-        idx = VarNumber::from(list_uidx(Some(list), startidx as c_int));
+        idx = VarNumber::from(list_uidx(Some(list), number_as_int(startidx)));
         usize::try_from(idx).ok()
     };
     let Some(start) = start else { return -1 };
@@ -536,9 +545,9 @@ pub fn f_len(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY throughout: every union read is guarded by the type tag above it, and a
     // Number is measured through its String spelling.
     result.write_number(match tv.v_type() {
-        VAR_STRING | VAR_NUMBER => numbuf.bytes(&args[0]).len() as VarNumber,
+        VAR_STRING | VAR_NUMBER => len_as_integer(numbuf.bytes(&args[0]).len()),
         VAR_BLOB => VarNumber::from(blob_len(tv.blob_ref())),
-        VAR_LIST => list_len(tv.list_ref()) as VarNumber,
+        VAR_LIST => VarNumber::from(list_len(tv.list_ref())),
         VAR_DICT => dict_len(tv.dict_ref()) as VarNumber,
         // The remaining tags are Unknown, Funcref, Partial, Float,
         // Bool and Special; `VarType` has no twelfth value.
@@ -552,15 +561,15 @@ pub fn f_len(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `type({expr})` — the `v:t_*` number for the value's type.
 pub fn f_type(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let n: c_int = match args[0].v_type() {
-        VAR_NUMBER => VAR_TYPE_NUMBER as c_int,
-        VAR_STRING => VAR_TYPE_STRING as c_int,
-        VAR_PARTIAL | VAR_FUNC => VAR_TYPE_FUNC as c_int,
-        VAR_LIST => VAR_TYPE_LIST as c_int,
-        VAR_DICT => VAR_TYPE_DICT as c_int,
-        VAR_FLOAT => VAR_TYPE_FLOAT as c_int,
-        VAR_BOOL => VAR_TYPE_BOOL as c_int,
-        VAR_SPECIAL => VAR_TYPE_SPECIAL as c_int,
-        VAR_BLOB => VAR_TYPE_BLOB as c_int,
+        VAR_NUMBER => VAR_TYPE_NUMBER.cast_signed(),
+        VAR_STRING => VAR_TYPE_STRING.cast_signed(),
+        VAR_PARTIAL | VAR_FUNC => VAR_TYPE_FUNC.cast_signed(),
+        VAR_LIST => VAR_TYPE_LIST.cast_signed(),
+        VAR_DICT => VAR_TYPE_DICT.cast_signed(),
+        VAR_FLOAT => VAR_TYPE_FLOAT.cast_signed(),
+        VAR_BOOL => VAR_TYPE_BOOL.cast_signed(),
+        VAR_SPECIAL => VAR_TYPE_SPECIAL.cast_signed(),
+        VAR_BLOB => VAR_TYPE_BLOB.cast_signed(),
         VAR_UNKNOWN => {
             // SAFETY: a literal message.
             internal_error(c"f_type(UNKNOWN)");
@@ -568,5 +577,5 @@ pub fn f_type(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
         _ => -1,
     };
-    result.write_number(n as VarNumber);
+    result.write_number(VarNumber::from(n));
 }

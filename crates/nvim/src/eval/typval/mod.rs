@@ -1,3 +1,10 @@
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![deny(unsafe_op_in_unsafe_fn)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
@@ -25,7 +32,7 @@ use crate::types::{
     ListItem, ListWatch, LuaRef, Partial, SpecialVarValue, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT,
     VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING,
     VAR_UNKNOWN, VarLock, VarNumber, VimConv, int64_t, kBoolVarTrue, kListLenMayKnow,
-    kSpecialVarNull, ptrdiff_t, uint8_t,
+    kSpecialVarNull, ptrdiff_t,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -65,10 +72,15 @@ pub use self::get::*;
 mod release;
 mod string;
 pub const DO_NOT_FREE_CNT: ::core::ffi::c_uint = 1073741823;
+/// `DictItem::di_flags` bits: read-only, read-only in the sandbox, fixed
+/// (cannot be deleted), locked, and the item's own allocation.
+pub const DI_FLAGS_RO: u8 = 1;
+pub const DI_FLAGS_RO_SBX: u8 = 2;
+pub const DI_FLAGS_FIX: u8 = 4;
+pub const DI_FLAGS_LOCK: u8 = 8;
+/// A `c_uint`, unlike its siblings, for the item store's reader in
+/// `handle.rs`, which widens the field to meet it.
 pub const DI_FLAGS_ALLOC: ::core::ffi::c_uint = 16;
-pub const DI_FLAGS_FIX: ::core::ffi::c_uint = 4;
-pub const DI_FLAGS_RO_SBX: ::core::ffi::c_uint = 2;
-pub const DI_FLAGS_RO: ::core::ffi::c_uint = 1;
 pub const NUMBUFLEN: ::core::ffi::c_uint = 65;
 pub type DictListType = ::core::ffi::c_uint;
 pub const kDict2ListItems: DictListType = 2;

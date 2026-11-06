@@ -1,6 +1,13 @@
 //! Numbers: arithmetic, the bitwise operators and the random-number
 //! generator.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::VARNUMBER_MAX;
 use super::wrappers::{arg_number_chk, tv_get_float_chk};
@@ -9,6 +16,9 @@ use crate::charset::string2float_in;
 use crate::eval::typval::{ListRef, NumBuf, tv_list_alloc_ret};
 use crate::global_cell::GlobalCell;
 use crate::message_fmt::msg_cstr;
+use crate::narrow::float_as_i64;
+use crate::narrow::msgpack_uint_as_u32;
+use crate::narrow::number_as_u32;
 use crate::os::env::{os_random, process_id};
 use crate::os::time::os_hrtime;
 use crate::semsg;
@@ -169,7 +179,7 @@ pub fn f_float2nr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     } else if f >= VARNUMBER_MAX as c_double - c_double::EPSILON {
         VARNUMBER_MAX as VarNumber
     } else {
-        f as VarNumber
+        float_as_i64(f)
     });
 }
 
@@ -185,7 +195,9 @@ pub fn f_isinf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `isnan({expr})`.
 pub fn f_isnan(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_number(args[0].as_float().is_some_and(c_double::is_nan) as VarNumber);
+    result.write_number(VarNumber::from(
+        args[0].as_float().is_some_and(c_double::is_nan),
+    ));
 }
 
 /// Draw 32 bits of entropy for the generator's seed. Falls back to the
@@ -195,7 +207,7 @@ fn init_srand() -> u32 {
     if os_random(&mut bytes) {
         return u32::from_ne_bytes(bytes);
     }
-    (os_hrtime() as u32) ^ (process_id() as u32)
+    msgpack_uint_as_u32(os_hrtime()) ^ number_as_u32(process_id())
 }
 
 /// The seed expander: one step of splitmix32, which turns a single 32-bit
@@ -256,7 +268,7 @@ pub fn f_rand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
         draw
     };
-    result.write_number(value as VarNumber);
+    result.write_number(VarNumber::from(value));
 }
 
 /// A seed list and the four state words it holds, or `None` if the value is
@@ -270,7 +282,7 @@ fn seed_list(tv: &TypVal) -> Option<(&ListRef, [u32; 4])> {
     let mut state = [0; 4];
     for (word, item) in state.iter_mut().zip(items) {
         // The state is the low 32 bits of each Number.
-        *word = item.li_tv.as_number()? as u32;
+        *word = number_as_u32(item.li_tv.as_number()?);
     }
     Some((list, state))
 }
@@ -286,7 +298,7 @@ pub fn f_srand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             // The list stays empty, as upstream leaves it.
             return;
         }
-        n as u32
+        number_as_u32(n)
     } else {
         init_srand()
     };
@@ -334,7 +346,8 @@ pub fn f_range(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
     // The length is upstream's estimate and only preallocates.
-    let hint = (end as isize).wrapping_sub(start as isize) / stride as isize;
+    let hint = end.wrapping_sub(start) / stride;
+    let hint = isize::try_from(hint).unwrap_or(isize::MAX);
     let list = tv_list_alloc_ret(result, hint);
     while if stride > 0 {
         start <= end

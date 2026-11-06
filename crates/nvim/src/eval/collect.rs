@@ -26,6 +26,13 @@
 //!    `set_ref_in_list_items` are the two loops that drain them.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::guard::Depth;
 use core::ffi::c_int;
@@ -213,7 +220,7 @@ pub fn garbage_collect(testing: bool) -> bool {
     }
     let did_free = free_unref_items(copy_id) != 0;
     // 3. Any funccal that can go now. May call back into here.
-    let freed_funccal = free_unref_funccal(copy_id, testing as c_int);
+    let freed_funccal = free_unref_funccal(copy_id, c_int::from(testing));
     freed_funccal || did_free
 }
 
@@ -303,7 +310,7 @@ pub(crate) fn free_unref_items(copy_id: c_int) -> c_int {
     }
 
     tv_in_free_unref_items.set(false);
-    did_free as c_int
+    c_int::from(did_free)
 }
 
 /// Dictionaries a marking walk has met and not yet looked inside: upstream's

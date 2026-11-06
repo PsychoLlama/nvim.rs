@@ -10,7 +10,15 @@
 //! nothing holds a borrow of the table across a callback.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use crate::narrow::number_as_int;
 use core::ffi::c_int;
 
 use crate::eval::typval::TV_INITIAL_VALUE;
@@ -35,7 +43,7 @@ const UNSET_TV: TypVal = TV_INITIAL_VALUE;
 /// The table's key for a timer number. Timer numbers are handed to
 /// Vimscript as Numbers; a negative one names no timer.
 fn timer_key(id: VarNumber) -> uint64_t {
-    id as uint64_t
+    id.cast_unsigned()
 }
 
 /// Run `f` on the timer numbered `id`, if it is registered. The borrow ends
@@ -84,13 +92,13 @@ pub fn add_timer_info(list: &ListRef, id: VarNumber) {
 /// Append a description of every listed timer to `list`.
 pub fn add_timer_info_all(list: &ListRef) {
     for id in timers.with(SlotTable::snapshot_keys) {
-        add_timer_info(list, id as VarNumber);
+        add_timer_info(list, id.cast_signed());
     }
 }
 
 /// The timer numbered `id` is due: run its callback.
 fn timer_due_cb(id: uint64_t) {
-    let number = id as VarNumber;
+    let number = id.cast_signed();
     let save_did_emsg = did_emsg.get();
     let called_emsg_before = called_emsg.get();
     let save_ex_pressedreturn = get_pressedreturn();
@@ -161,11 +169,12 @@ pub fn timer_start(timeout: int64_t, repeat_count: c_int, callback: Callback) ->
     let id = last_timer_id.get();
     last_timer_id.set(id.wrapping_add(1));
     let mut watcher = OwnedTimer::new(TimerQueue::OwnChild, true, id);
-    let repeat = timeout as uint64_t;
+    let repeat = timeout.cast_unsigned();
     watcher.start(timer_due_cb, repeat, repeat);
     let timer = Timer {
         watcher: Some(watcher),
-        timer_id: id as c_int,
+        // Upstream's `(int)` of the 64-bit counter.
+        timer_id: number_as_int(id.cast_signed()),
         repeat_count,
         busy: 0,
         emsg_count: 0,
@@ -185,7 +194,7 @@ pub(crate) fn timer_pause(id: VarNumber, paused: bool) {
             if !timer.paused && paused {
                 watcher.stop();
             } else if timer.paused && !paused {
-                let every = timer.timeout as uint64_t;
+                let every = timer.timeout.cast_unsigned();
                 watcher.start(timer_due_cb, every, every);
             }
         }
@@ -220,7 +229,7 @@ fn timer_close_cb(id: uint64_t) {
 /// Stop every timer.
 pub fn timer_stop_all() {
     for id in timers.with(SlotTable::snapshot_keys) {
-        timer_stop(id as VarNumber);
+        timer_stop(id.cast_signed());
     }
 }
 

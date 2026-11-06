@@ -1,5 +1,12 @@
 //! The editor context stack: the `ctx*()` family.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::{kCtxBufs, kCtxFuncs, kCtxGVars, kCtxJumps, kCtxRegs, kCtxSFuncs};
 use crate::context::{
@@ -8,10 +15,11 @@ use crate::context::{
 use crate::eval::typval::list_iter;
 use crate::message::state::did_emsg;
 use crate::message_fmt::msg_cstr;
+use crate::narrow::len_as_integer;
 use crate::semsg;
 use crate::types::{
     Context, Error, EvalFuncData, Failed, Object, TypVal, VAR_DICT, VAR_LIST, VAR_NUMBER,
-    VAR_UNKNOWN, VarNumber,
+    VAR_UNKNOWN,
 };
 use core::ffi::c_int;
 
@@ -23,7 +31,9 @@ const NO_ERROR: Error = Error::none();
 fn context_index(tv: Option<&TypVal>, what: &str) -> Result<usize, Failed> {
     match tv {
         None => Ok(0),
-        Some(tv) if tv.v_type() == VAR_NUMBER => Ok(tv.number_or_zero() as usize),
+        Some(tv) if tv.v_type() == VAR_NUMBER => {
+            Ok(usize::try_from(tv.number_or_zero()).unwrap_or(usize::MAX))
+        }
         Some(_) => {
             semsg!("E475: Invalid argument: {what}");
             Err(Failed)
@@ -72,12 +82,12 @@ pub fn f_ctxpush(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
                 // no name; `strequal` answered the same for it.
                 if let Some(name) = tv.string_ref() {
                     types |= match name.as_bytes() {
-                        b"regs" => kCtxRegs as c_int,
-                        b"jumps" => kCtxJumps as c_int,
-                        b"bufs" => kCtxBufs as c_int,
-                        b"gvars" => kCtxGVars as c_int,
-                        b"sfuncs" => kCtxSFuncs as c_int,
-                        b"funcs" => kCtxFuncs as c_int,
+                        b"regs" => kCtxRegs.cast_signed(),
+                        b"jumps" => kCtxJumps.cast_signed(),
+                        b"bufs" => kCtxBufs.cast_signed(),
+                        b"gvars" => kCtxGVars.cast_signed(),
+                        b"sfuncs" => kCtxSFuncs.cast_signed(),
+                        b"funcs" => kCtxFuncs.cast_signed(),
                         _ => 0,
                     };
                 }
@@ -131,5 +141,5 @@ pub fn f_ctxset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `ctxsize()` — how many contexts are on the stack.
 pub(crate) fn f_ctxsize(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_number(ctx_size() as VarNumber);
+    result.write_number(len_as_integer(ctx_size()));
 }

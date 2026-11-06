@@ -1,4 +1,11 @@
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -72,7 +79,7 @@ use crate::types::{
     VAR_SCOPE, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT,
     VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_STRING, VAR_UNKNOWN,
     VarLock, VarNumber, VarType, VimVarFlags, Vv, int64_t, kBoolVarFalse, kBoolVarTrue,
-    kListLenUnknown, kSpecialVarNull, ptrdiff_t, size_t, uint8_t, uint32_t,
+    kListLenUnknown, kSpecialVarNull, ptrdiff_t, size_t, uint32_t,
 };
 use crate::version::{highest_patch, min_vim_version};
 use crate::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};
@@ -112,13 +119,6 @@ pub const _ISlower: c_uint = 512;
 /// The reference count `init_var_dict` gives a scope dictionary: high enough
 /// that nothing ever frees one.
 pub const DO_NOT_FREE_CNT: c_int = 1073741823;
-
-/// `DictItem::di_flags`.
-pub const DI_FLAGS_ALLOC: uint8_t = 16;
-pub const DI_FLAGS_LOCK: uint8_t = 8;
-pub const DI_FLAGS_FIX: uint8_t = 4;
-pub const DI_FLAGS_RO_SBX: uint8_t = 2;
-pub const DI_FLAGS_RO: uint8_t = 1;
 
 /// `get_lval`'s "do not report" flag.
 pub const GLV_QUIET: c_int = 2;

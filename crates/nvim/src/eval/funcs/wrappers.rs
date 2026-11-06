@@ -5,6 +5,13 @@
 //! Nothing here belongs to one family. The families themselves live in the
 //! sibling modules; this is what the parent module hands them.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::table::{BUILTINS, builtin_index};
 use super::{
@@ -26,6 +33,8 @@ use crate::guard::Suppress;
 use crate::message::e_invalwindow;
 use crate::message::emsg;
 use crate::message_fmt::{msg_cstr, msg_cstr_opt};
+use crate::narrow::as_index;
+use crate::narrow::number_as_int;
 use crate::option::SavedCpo;
 use crate::option::vars::{P_MAGIC, p_magic};
 use crate::os::cshim::gettext;
@@ -133,16 +142,16 @@ pub(crate) fn check_builtin_argcount(fdef: &EvalFuncDef, argcount: c_int) -> Res
 /// Call the builtin `name` spells.
 pub(crate) fn call_internal_func_named(name: &CStr, args: &[TypVal], result: &mut TypVal) -> c_int {
     let Some(fdef) = find_builtin(name.to_bytes()) else {
-        return FCERR_UNKNOWN as c_int;
+        return FCERR_UNKNOWN.cast_signed();
     };
     match fdef.arity.accepts(args.len()) {
         Ok(()) => {}
-        Err(WrongArity::TooFew) => return FCERR_TOOFEW as c_int,
-        Err(WrongArity::TooMany) => return FCERR_TOOMANY as c_int,
+        Err(WrongArity::TooFew) => return FCERR_TOOFEW.cast_signed(),
+        Err(WrongArity::TooMany) => return FCERR_TOOMANY.cast_signed(),
     }
     let func = fdef.func.expect("non-null function pointer");
     func(args, result, fdef.data);
-    FCERR_NONE as c_int
+    FCERR_NONE.cast_signed()
 }
 
 /// Call the builtin `name` spells as a method: `base->name(args)`.
@@ -158,19 +167,19 @@ pub(crate) fn call_internal_method_named(
     base: &mut TypVal,
 ) -> c_int {
     let Some(fdef) = find_builtin(name.to_bytes()) else {
-        return FCERR_UNKNOWN as c_int;
+        return FCERR_UNKNOWN.cast_signed();
     };
     let Some(base_index) = fdef.base_arg.index() else {
-        return FCERR_NOTMETHOD as c_int;
+        return FCERR_NOTMETHOD.cast_signed();
     };
     // The base counts as one of the arguments.
     match fdef.arity.accepts(args.len() + 1) {
         Ok(()) => {}
-        Err(WrongArity::TooFew) => return FCERR_TOOFEW as c_int,
-        Err(WrongArity::TooMany) => return FCERR_TOOMANY as c_int,
+        Err(WrongArity::TooFew) => return FCERR_TOOFEW.cast_signed(),
+        Err(WrongArity::TooMany) => return FCERR_TOOMANY.cast_signed(),
     }
     if args.len() < base_index {
-        return FCERR_TOOFEW as c_int;
+        return FCERR_TOOFEW.cast_signed();
     }
 
     let mut frame = CallFrame::<{ MAX_FUNC_ARGS as usize + 1 }>::new();
@@ -181,7 +190,7 @@ pub(crate) fn call_internal_method_named(
 
     let func = fdef.func.expect("non-null function pointer");
     func(frame.args(), result, fdef.data);
-    FCERR_NONE as c_int
+    FCERR_NONE.cast_signed()
 }
 
 /// Command-line completion over builtin function names.
@@ -210,7 +219,7 @@ pub fn get_function_name(expand: &Expand, idx: usize) -> Option<Candidate> {
     }
 
     BUILTIN_IDX.set(BUILTIN_IDX.get() + 1);
-    let builtin = &BUILTINS[BUILTIN_IDX.get() as usize];
+    let builtin = &BUILTINS[as_index(BUILTIN_IDX.get())];
     let mut name = builtin.name?.to_bytes().to_vec();
     name.push(b'(');
     if builtin.arity.max() == Some(0) {
@@ -237,7 +246,7 @@ pub fn get_expr_name(expand: &Expand, idx: usize) -> Option<Candidate> {
         return Some(name);
     }
     VAR_IDX.set(VAR_IDX.get() + 1);
-    get_user_var_name(expand, VAR_IDX.get() as usize)
+    get_user_var_name(expand, as_index(VAR_IDX.get()))
 }
 
 /// Whether a builtin's first argument is "true" in the loose sense the
@@ -316,7 +325,7 @@ pub fn api_wrapper(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
 /// pattern the way `:buffer` matches one.
 pub fn tv_get_buf(tv: &TypVal, curtab_only: c_int) -> Option<Buf> {
     if tv.v_type() == VAR_NUMBER {
-        return find_buf(tv.number_or_zero() as c_int);
+        return find_buf(number_as_int(tv.number_or_zero()));
     }
     if tv.v_type() != VAR_STRING {
         return None;

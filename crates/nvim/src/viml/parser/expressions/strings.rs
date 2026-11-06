@@ -9,6 +9,13 @@
 //! gets no buffer at all, whatever the decoder would go on to produce.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::{CStr, c_int};
 
@@ -177,8 +184,9 @@ fn reserve_for_double(body: &[uint8_t]) -> size_t {
                     // the last one consumed, so the escape occupies
                     // `i - (esc_start - 1)` bytes and stands for
                     // `utf_char2len` of them.
-                    let occupied = (i - (esc_start - 1)) as isize;
-                    size = size.wrapping_sub((occupied - utf_char2len(code) as isize) as size_t);
+                    let occupied = (i - (esc_start - 1)).cast_signed();
+                    size =
+                        size.wrapping_sub((occupied - utf_char2len(code) as isize).cast_unsigned());
                     i -= 1;
                 }
                 // Octal: always one byte out, at least two in.
@@ -281,7 +289,7 @@ fn decode_double(
                     }
                     i += 1;
                     if is_hex {
-                        out.push(code as uint8_t);
+                        out.push(u8::try_from(code).expect("two hex digits"));
                     } else {
                         append_char(&mut out, code);
                     }
@@ -308,9 +316,9 @@ fn decode_double(
             }
             // A special key, e.g. `\<C-W>`.
             b'<' => {
-                let mut flags = FSK_KEYCODE as c_int | FSK_IN_STRING as c_int;
+                let mut flags = FSK_KEYCODE.cast_signed() | FSK_IN_STRING.cast_signed();
                 if body.get(i + 1) != Some(&b'*') {
-                    flags |= FSK_SIMPLIFY as c_int;
+                    flags |= FSK_SIMPLIFY.cast_signed();
                 }
                 match trans_special_into(&body[i..], flags, false, &mut out) {
                     Some(consumed) => i += consumed,

@@ -1,6 +1,13 @@
 //! The environment and the paths around it: `environ()`, `expand()`,
 //! `stdpath()` and the swap-file queries.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::wrappers::{arg_number_chk, dict_alloc_ret};
 use super::{
@@ -142,7 +149,7 @@ pub fn f_expandcmd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // {'errmsg': v:true} asks for the expansion's own error instead of
     // silence.
     let errmsg = args.get(1).is_some_and(|arg| arg.v_type() == VAR_DICT)
-        && dict_get_bool(args[1].dict_ref(), b"errmsg", kBoolVarFalse as c_int) != 0;
+        && dict_get_bool(args[1].dict_ref(), b"errmsg", kBoolVarFalse.cast_signed()) != 0;
     let quiet = !errmsg;
     let line = numbuf.bytes(&args[0]).to_vec();
     let mut eap = ExArg {
@@ -204,7 +211,7 @@ pub fn f_setfperm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             mode |= 1 << (8 - i);
         }
     }
-    result.write_number((os_setperm(fname, mode) == OK) as VarNumber);
+    result.write_number(VarNumber::from(os_setperm(fname, mode) == OK));
 }
 
 /// The `config_dirs`/`data_dirs` answer: every directory in the XDG search

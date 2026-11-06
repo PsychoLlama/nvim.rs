@@ -17,6 +17,13 @@
 //! everything identically.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::env::{getenv_resolved, state_subpath};
 use crate::memory::XString;
@@ -249,7 +256,7 @@ pub(crate) fn set_init_1(clean_arg: bool) {
     Buf::current().b_p_ac = -1;
     Buf::current().b_p_ar = -1;
     Buf::current().b_p_fs = -1;
-    Buf::current().b_p_ul = NO_LOCAL_UNDOLEVEL as OptInt;
+    Buf::current().b_p_ul = OptInt::from(NO_LOCAL_UNDOLEVEL);
 
     check_buf_options(Buf::current());
     last_status(false);
@@ -353,9 +360,9 @@ pub(crate) fn set_init_2(_headless: bool) {
     comp_col();
     // Same for 'window', which is one screen's worth of lines.
     if !option_was_set(kOptWindow) {
-        P_WINDOW.set((Rows.get() - 1) as OptInt);
+        P_WINDOW.set(OptInt::from(Rows.get() - 1));
     }
-    change_option_default(kOptWindow, OptVal::Number((Rows.get() - 1) as OptInt));
+    change_option_default(kOptWindow, OptVal::Number(OptInt::from(Rows.get() - 1)));
 }
 
 /// The third startup pass: the defaults that depend on which shell 'shell'

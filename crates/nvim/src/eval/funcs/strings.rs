@@ -1,6 +1,13 @@
 //! Building and reshaping strings: escaping, formatting, splitting,
 //! substituting, hashing, time formatting and spelling.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::wrappers::{arg_bool_chk, arg_number, arg_number_chk, blob_alloc_ret, non_zero_arg};
 use super::{NSUBEXP, VSE_NONE};
@@ -17,6 +24,9 @@ use crate::memline::Lines;
 use crate::memory::{ThinCString, XString};
 use crate::message::e_no_spell;
 use crate::message::{emsg, special_keys_text};
+use crate::narrow::len_as_int;
+use crate::narrow::len_as_integer;
+use crate::narrow::number_as_int;
 use crate::option::SavedCpo;
 use crate::option::vars::p_enc;
 use crate::optionstr::OptString;
@@ -64,7 +74,7 @@ pub fn f_escape(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_fnameescape(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let name = numbuf.string(&args[0]);
-    result.write_string(Some(fnameescape(name, VSE_NONE as c_int).into()));
+    result.write_string(Some(fnameescape(name, VSE_NONE.cast_signed()).into()));
 }
 
 /// `gettext({string})` — a no-op while no message catalogs ship, but it
@@ -107,7 +117,7 @@ pub fn f_nr2char(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         emsg(gettext(msg));
         return;
     }
-    if num > c_int::MAX as VarNumber {
+    if num > VarNumber::from(c_int::MAX) {
         semsg!(
             "E5071: Character number must not be greater than INT_MAX ({})",
             c_int::MAX
@@ -115,7 +125,7 @@ pub fn f_nr2char(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
     let mut buf = [0u8; 6];
-    let len = encode_char(num as c_int, &mut buf);
+    let len = encode_char(number_as_int(num), &mut buf);
     result.write_string(Some(ThinCString::from_bytes(&buf[..len])));
 }
 
@@ -140,7 +150,7 @@ fn repeat_list(args: &[TypVal], result: &mut TypVal, n: VarNumber) {
     // The length hint is upstream's; a non-positive count contributes
     // nothing rather than a negative capacity.
     let hint = VarNumber::from(n > 0) * n * VarNumber::from(list_len(args[0].list_ref()));
-    tv_list_alloc_ret(result, hint as isize);
+    tv_list_alloc_ret(result, isize::try_from(hint).unwrap_or(isize::MAX));
     let Some(out) = result.list_shared() else {
         return;
     };
@@ -157,7 +167,7 @@ fn repeat_blob(args: &[TypVal], result: &mut TypVal, n: VarNumber) {
     }
     // Upstream computes the total in `int`; a product that does not fit
     // reads as non-positive and the repeat is dropped.
-    let len = (src.len() as VarNumber * n) as c_int;
+    let len = number_as_int(len_as_integer(src.len()) * n);
     if len <= 0 {
         return;
     }
@@ -182,11 +192,14 @@ fn repeat_string(args: &[TypVal], result: &mut TypVal, n: VarNumber) {
     // product that wrapped does not divide back to the source length.
     // A product that fits is asked for in earnest, and reports E41 if
     // the allocation fails.
-    let len = slen.wrapping_mul(n as usize);
-    if len.wrapping_div(n as usize) != slen {
+    // `n` is positive here; a count past the address space is the
+    // overflow the guard below refuses.
+    let n = usize::try_from(n).unwrap_or(usize::MAX);
+    let len = slen.wrapping_mul(n);
+    if len.wrapping_div(n) != slen {
         return;
     }
-    result.write_string(Some(p.repeat(n as usize).into()));
+    result.write_string(Some(p.repeat(n).into()));
 }
 
 /// `sha256({string})` — also accepts a Blob, whose bytes are hashed as they
@@ -274,7 +287,7 @@ pub fn f_spellbadword(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
                         break;
                     }
                     offset += len;
-                    capcol -= len as c_int;
+                    capcol -= len_as_int(len);
                 }
             }
         }
@@ -309,7 +322,7 @@ pub fn f_spellsuggest(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
         let (maxcount, need_capital) = if args.len() <= 1 {
             (25, false)
         } else {
-            let maxcount = arg_number_chk(&args[1], Some(&mut typeerr)) as c_int;
+            let maxcount = number_as_int(arg_number_chk(&args[1], Some(&mut typeerr)));
             // A non-positive maximum leaves the list empty, and does so
             // before the type error from argument 2 could be reported.
             if maxcount <= 0 {
@@ -326,7 +339,7 @@ pub fn f_spellsuggest(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     if !reported {
         return;
     }
-    let list = tv_list_alloc_ret(result, found.len() as isize);
+    let list = tv_list_alloc_ret(result, found.len().cast_signed());
     for word in found {
         list.push(TypVal::string(Some(word.into())));
     }
@@ -482,11 +495,11 @@ pub fn f_strptime(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_submatch(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut error = false;
     // SAFETY throughout: the arguments are live typvals.
-    let no = arg_number_chk(&args[0], Some(&mut error)) as c_int;
+    let no = number_as_int(arg_number_chk(&args[0], Some(&mut error)));
     if error {
         return;
     }
-    if !(0..NSUBEXP as c_int).contains(&no) {
+    if !(0..NSUBEXP.cast_signed()).contains(&no) {
         semsg!("E935: Invalid submatch number: {no}");
         return;
     }

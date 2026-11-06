@@ -1,6 +1,13 @@
 //! What the editor is right now: `has()`, `mode()`, `state()` and the rest
 //! of the feature and status queries.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::wrappers::{arg_lnum, arg_number, arg_number_chk, non_zero_arg};
 use super::{MENU_ALL_MODES, kRetNilBool};
@@ -23,6 +30,7 @@ use crate::memory::ThinCString;
 use crate::menu::{cmd_modes, menu_get};
 use crate::message::state::msg_scrolled;
 use crate::narrow::number_as_col;
+use crate::narrow::number_as_int;
 use crate::normal::op_pending;
 use crate::ops::cursor_pos_info;
 use crate::os::cshim::cstr_ncasecmp;
@@ -177,13 +185,17 @@ fn leading_number(text: &[u8], max: u64) -> (u64, usize) {
 /// `atoi` on the digits `text` starts with, truncated to an `int` as the
 /// C's `(int)strtol(..)` is.
 fn atoi_digits(text: &[u8]) -> c_int {
-    leading_number(text, i64::MAX as u64).0 as c_int
+    number_as_int(
+        leading_number(text, i64::MAX.cast_unsigned())
+            .0
+            .cast_signed(),
+    )
 }
 
 /// `has("patch…")` — the two spellings, `patch-M.m.PPPP` for a Vim version
 /// and `patchNNNN` for a bare Vim patch number. `name` begins with `patch`.
 fn has_patch(name: &[u8]) -> bool {
-    let at = |i: usize| name.get(i).copied().unwrap_or(NUL as u8);
+    let at = |i: usize| name.get(i).copied().unwrap_or(b'\0');
     if at(5) == b'-' && name.len() >= 11 && (b'1'..=b'9').contains(&at(6)) {
         // patch-M.m.PPPP, with exactly one minor digit -- which is
         // what the `end + 2 == '.'` test below insists on.
@@ -195,7 +207,9 @@ fn has_patch(name: &[u8]) -> bool {
             && at(end + 3).is_ascii_digit()
         {
             let minor = atoi_digits(&name[end + 1..]);
-            let version = (major as c_int).wrapping_mul(100).wrapping_add(minor);
+            let version = number_as_int(major.cast_signed())
+                .wrapping_mul(100)
+                .wrapping_add(minor);
             return has_vim_patch(atoi_digits(&name[end + 3..]), version);
         }
         return false;
@@ -257,7 +271,7 @@ pub fn f_has(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let known = special_feature(name)
         .or_else(|| FEATURES.iter().any(|f| same_name(name, f)).then_some(true));
 
-    result.write_number(match known {
+    result.write_number(VarNumber::from(match known {
         Some(answer) => answer,
         None => {
             // The provider probes run vimscript, which sets
@@ -274,7 +288,7 @@ pub fn f_has(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             set_vim_var_nr(Vv::ShellError, saved);
             answer
         }
-    } as VarNumber);
+    }));
 }
 
 /// `api_info()` — the whole API metadata dict.
@@ -286,12 +300,12 @@ pub fn f_api_info(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `did_filetype()` — whether a FileType autocommand has fired for this
 /// buffer since it was last loaded.
 pub fn f_did_filetype(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_number(Buf::current().b_did_filetype as VarNumber);
+    result.write_number(VarNumber::from(Buf::current().b_did_filetype));
 }
 
 /// `eventhandler()` — whether we are inside a `vgetc().code()` from an event.
 pub fn f_eventhandler(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_number(vgetc_busy.get() as VarNumber);
+    result.write_number(VarNumber::from(vgetc_busy.get()));
 }
 
 /// `foreground()` — a no-op; nvim has no window to raise.
@@ -325,7 +339,7 @@ pub fn f_menu_get(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let modes = if args.get(1).is_some_and(|arg| arg.v_type() == VAR_STRING) {
         cmd_modes(numbuf.string(&args[1]).to_bytes(), false).0
     } else {
-        MENU_ALL_MODES as c_int
+        MENU_ALL_MODES.cast_signed()
     };
     menu_get(numbuf2.string(&args[0]), modes, list);
 }
@@ -347,7 +361,7 @@ pub fn f_state(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut flags = Vec::<u8>::new();
     let include = args.first().map(|arg| numbuf.string(arg));
     let mut add = |c: u8| {
-        if include.is_none_or(|include| has_char(include, c as c_int)) {
+        if include.is_none_or(|include| has_char(include, c_int::from(c))) {
             flags.push(c);
         }
     };
@@ -447,17 +461,21 @@ pub fn f_shiftwidth(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         if col < ColNr::ZERO {
             return;
         }
-        result.write_number(get_sw_value_col(Buf::current(), col, false) as VarNumber);
+        result.write_number(VarNumber::from(get_sw_value_col(
+            Buf::current(),
+            col,
+            false,
+        )));
         return;
     }
-    result.write_number(get_sw_value(Buf::current()) as VarNumber);
+    result.write_number(VarNumber::from(get_sw_value(Buf::current())));
 }
 
 /// `tabpagebuflist([{tabnr}])` — the buffer of every window in the tab, in
 /// window order.
 pub fn f_tabpagebuflist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let tab = if !args.is_empty() {
-        find_tabpage(arg_number(&args[0]) as c_int)
+        find_tabpage(number_as_int(arg_number(&args[0])))
     } else {
         Some(TabPage::current())
     };
@@ -471,14 +489,16 @@ pub fn f_tabpagebuflist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
     // `firstwin` rather than in the tab page record, which is only
     // updated on the way out.
     for wp in windows_in_tab(tab) {
-        list.push_number(wp.w_buffer.handle().get() as VarNumber);
+        list.push_number(VarNumber::from(wp.w_buffer.handle().get()));
     }
 }
 
 /// `visualmode([{expr}])` — the last Visual mode, cleared when `{expr}` is
 /// non-zero.
 pub fn f_visualmode(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let mode = [Buf::current().b_visual_mode_eval as c_char];
+    let mode = [u8::try_from(Buf::current().b_visual_mode_eval)
+        .unwrap_or(0)
+        .cast_signed()];
     result.write_string(Some(c_chars_until_nul(&mode)));
     if args.first().is_some_and(non_zero_arg) {
         Buf::current().b_visual_mode_eval = NUL;
@@ -503,7 +523,7 @@ fn c_chars_until_nul(chars: &[c_char]) -> ThinCString {
     let bytes: Vec<u8> = chars
         .iter()
         .take_while(|&&c| c != 0)
-        .map(|&c| c as u8)
+        .map(|&c| c.cast_unsigned())
         .collect();
     bytes.into()
 }

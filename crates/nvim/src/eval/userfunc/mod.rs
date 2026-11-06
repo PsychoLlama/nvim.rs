@@ -108,12 +108,6 @@ pub(crate) use self::table::*;
 /// The refcount an item that must never be freed carries.
 pub const DO_NOT_FREE_CNT: c_int = 1073741823;
 
-/// `DictItem::di_flags`: fixed (the item lives inside its owner), and
-/// read-only always or only inside the sandbox.
-pub const DI_FLAGS_FIX: u8 = 4;
-pub const DI_FLAGS_RO_SBX: u8 = 2;
-pub const DI_FLAGS_RO: u8 = 1;
-
 /// How many arguments a call may carry, and how many locals live in the
 /// funccall's own `fc_fixvar` array before one has to be allocated.
 pub const MAX_FUNC_ARGS: c_int = 20;

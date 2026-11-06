@@ -22,12 +22,20 @@
 //! nested `sort()`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::cjson::fpconv::strtod;
 use crate::eval::encode::tv2string_bytes;
 use crate::eval::userfunc::{CallWith, call_func_with};
 use crate::memory::ThinCString;
+use crate::narrow::number_as_int;
 use crate::os::cshim::strcoll;
 use crate::semsg;
 use crate::types::{Failed, ListWatch};
@@ -377,7 +385,7 @@ pub(crate) fn parse_sort_uniq_args<'a>(
         let Ok(nr) = tv_get_number_chk(arg1) else {
             return Err(Failed); // type error; errmsg already given
         };
-        let nr = nr as c_int;
+        let nr = number_as_int(nr);
         if nr == 1 {
             info.ic = true;
         } else if arg1.v_type() != VAR_NUMBER {

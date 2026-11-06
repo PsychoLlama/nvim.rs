@@ -1,6 +1,13 @@
 //! Calling things: `call()`, `function()`, `eval()`, `execute()` and the
 //! bridges to the script hosts.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::wrappers::arg_number;
 use super::{MAX_FUNC_ARGS, TFN_INT, TFN_NO_AUTOLOAD, TFN_NO_DEREF, TFN_QUIET};
@@ -31,14 +38,16 @@ use crate::message::emsg;
 use crate::message::state::{emsg_noredir, emsg_silent, msg_col, need_clr_eos, redir_off};
 use crate::message::{capture_finish, capture_start, e_toomanyarg, e_unknown_function_str};
 use crate::message_fmt::{msg_bytes, msg_cstr, msg_cstr_opt};
+use crate::narrow::as_index;
+use crate::narrow::number_as_int;
 use crate::os::cshim::gettext;
 use crate::os::dl::{LibcallArg, LibcallResult, LibcallReturn, os_libcall};
 use crate::os::env::env_exists;
 use crate::semsg;
 use crate::strings::has_char;
 use crate::types::{
-    EvalFuncData, List, NUL, Partial, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
-    VAR_PARTIAL, VAR_STRING, VarNumber, VarType,
+    EvalFuncData, List, Partial, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
+    VAR_STRING, VarNumber, VarType,
 };
 use core::ffi::{CStr, c_int};
 
@@ -79,7 +88,7 @@ pub fn f_call(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // which is what turns `s:`/`<SID>` into the real name.
     let tofree;
     if args[0].v_type() == VAR_STRING {
-        let flags = TFN_INT as c_int | TFN_QUIET as c_int;
+        let flags = TFN_INT.cast_signed() | TFN_QUIET.cast_signed();
         let written = func.to_bytes();
         let Some(translated) = trans_function_name(written, false, flags, false).name else {
             emsg_funcname(e_unknown_function_str, written);
@@ -158,7 +167,7 @@ pub(crate) fn get_list_line(walk: &mut ListLines) -> Option<XString> {
 /// puts a window in front of them.
 pub fn execute_common(args: &[TypVal], result: &mut TypVal, arg_off: c_int) {
     let mut numbuf = NumBuf::new();
-    let cmd_idx = arg_off as usize;
+    let cmd_idx = as_index(arg_off);
     let silent_idx = cmd_idx + 1;
 
     let save_emsg_silent = emsg_silent.get();
@@ -246,7 +255,7 @@ pub fn f_exists(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             let mut cursor = Cursor::new(bytes);
             let found = eval_option(&mut cursor, None, true).is_ok() && {
                 cursor.skip_white();
-                cursor.byte() == NUL as u8
+                cursor.byte() == b'\0'
             };
             c_int::from(found)
         }
@@ -298,10 +307,10 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
     if let Some(written) = given
         && ((use_string && !has_char(written, c_int::from(AUTOLOAD_CHAR))) || is_funcref)
     {
-        let flags = TFN_INT as c_int
-            | TFN_QUIET as c_int
-            | TFN_NO_AUTOLOAD as c_int
-            | TFN_NO_DEREF as c_int;
+        let flags = TFN_INT.cast_signed()
+            | TFN_QUIET.cast_signed()
+            | TFN_NO_AUTOLOAD.cast_signed()
+            | TFN_NO_DEREF.cast_signed();
         let written = written.to_bytes();
         let found = save_function_name(written, false, flags, false);
         trans_name = found.name;
@@ -387,7 +396,7 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
             list = args[arg_idx].list_ref();
             if list_len(list) == 0 {
                 arg_idx = 0;
-            } else if list_len(list) > MAX_FUNC_ARGS as c_int {
+            } else if list_len(list) > MAX_FUNC_ARGS.cast_signed() {
                 emsg_funcname(e_toomanyarg, written);
                 return;
             }
@@ -485,7 +494,7 @@ fn libcall_common(args: &[TypVal], result: &mut TypVal, out_type: VarType) {
     // Upstream quirk, preserved.
     let arg = match arg3.string_cstr() {
         Some(text) => LibcallArg::Str(text),
-        None => LibcallArg::Int(arg3.number_or_zero() as c_int),
+        None => LibcallArg::Int(number_as_int(arg3.number_or_zero())),
     };
     let want = if out_type == VAR_STRING {
         LibcallReturn::Str
@@ -504,7 +513,7 @@ fn libcall_common(args: &[TypVal], result: &mut TypVal, out_type: VarType) {
         Some(LibcallResult::Str(s)) => {
             result.write_string(s.map(ThinCString::from));
         }
-        Some(LibcallResult::Int(n)) => result.write_number(n as VarNumber),
+        Some(LibcallResult::Int(n)) => result.write_number(VarNumber::from(n)),
     }
 }
 

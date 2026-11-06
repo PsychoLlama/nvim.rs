@@ -64,12 +64,6 @@ pub(crate) use self::value::*;
 // outside; the rest of `value` stays in-crate.
 pub(crate) use self::vimdict::*;
 
-/// `DictItem.di_flags`: the key cannot be changed, cannot be changed right
-/// now, and cannot be removed.
-const DI_FLAGS_RO: c_int = 1;
-const DI_FLAGS_FIX: c_int = 4;
-const DI_FLAGS_LOCK: c_int = 8;
-
 const NL: u8 = b'\n';
 const CAR: u8 = b'\r';
 

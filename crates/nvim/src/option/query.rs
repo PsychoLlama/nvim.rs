@@ -7,6 +7,13 @@
 //! 'scrolloff' is forced to zero in a terminal buffer.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::env::getenv_resolved;
 use crate::keycodes::SpecialKey;
@@ -82,13 +89,13 @@ pub(crate) fn vimrc_found(fname: &CStr, envname: &CStr) {
 /// `Err` for a value that does not parse.
 fn culopt_flags(value: &[u8]) -> Result<uint8_t, Failed> {
     const WORDS: [(&[u8], c_int); 4] = [
-        (b"line", kOptCuloptFlagLine as c_int),
+        (b"line", kOptCuloptFlagLine.cast_signed()),
         (
             b"both",
-            (kOptCuloptFlagLine | kOptCuloptFlagNumber) as c_int,
+            (kOptCuloptFlagLine | kOptCuloptFlagNumber).cast_signed(),
         ),
-        (b"number", kOptCuloptFlagNumber as c_int),
-        (b"screenline", kOptCuloptFlagScreenline as c_int),
+        (b"number", kOptCuloptFlagNumber.cast_signed()),
+        (b"screenline", kOptCuloptFlagScreenline.cast_signed()),
     ];
     let mut flags: c_int = 0;
     let mut rest = value;
@@ -108,7 +115,9 @@ fn culopt_flags(value: &[u8]) -> Result<uint8_t, Failed> {
     }
     // "line" and "screenline" are mutually exclusive; "both" implies
     // "line", so it collides with "screenline" too.
-    if flags & kOptCuloptFlagLine as c_int != 0 && flags & kOptCuloptFlagScreenline as c_int != 0 {
+    if flags & kOptCuloptFlagLine.cast_signed() != 0
+        && flags & kOptCuloptFlagScreenline.cast_signed() != 0
+    {
         return Err(Failed);
     }
     Ok(uint8_t::try_from(flags).expect("four flag bits"))
@@ -263,7 +272,7 @@ pub(crate) fn get_fileformat_force(buffer: Buf, excmd: Option<&ExArg>) -> c_int 
         force_ff
     } else {
         let binary = if force_bin != 0 {
-            (force_bin == FORCE_BIN) as c_int
+            c_int::from(force_bin == FORCE_BIN)
         } else {
             buffer.b_p_bin
         };
@@ -272,7 +281,7 @@ pub(crate) fn get_fileformat_force(buffer: Buf, excmd: Option<&ExArg>) -> c_int 
         }
         c_int::from(buffer.b_p_ff.bytes().first().copied().unwrap_or(0))
     };
-    match c as u8 {
+    match u8::try_from(c).unwrap_or(0) {
         b'u' => EOL_UNIX,
         b'm' => EOL_MAC,
         _ => EOL_DOS,

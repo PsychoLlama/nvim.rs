@@ -16,6 +16,13 @@
 //! count.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -24,6 +31,7 @@ use crate::env::home_to_tilde;
 use crate::global_cell::field;
 use crate::keycodes::{Ctrl_V, ModMask};
 use crate::mbyte::unescape_at;
+use crate::narrow::number_as_int;
 use crate::option::vars::P_MOUSE;
 use crate::optionstr::OptString;
 use crate::types::Key;
@@ -569,5 +577,5 @@ pub(crate) fn wc_use_keyname(opt_idx: OptIndex, slot: OptSlot, wcp: &mut OptInt)
     *wcp = slot.number_var().get();
     // A negative value is a special key code; a positive one may still be a
     // named key such as <Tab>.
-    *wcp < 0 || has_key_name(Key::from_code(*wcp as c_int))
+    *wcp < 0 || has_key_name(Key::from_code(number_as_int(*wcp)))
 }

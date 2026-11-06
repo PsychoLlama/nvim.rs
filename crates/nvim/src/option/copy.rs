@@ -10,7 +10,15 @@
 //! "duplicate the value" is a `clone` and "give it none" is `None`.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use crate::narrow::as_index;
 use core::ffi::{CStr, c_int, c_uint};
 
 use crate::buffer::free_buf_options;
@@ -250,8 +258,8 @@ pub(crate) fn didset_window_options(window: Win, valid_cursor: bool) {
 ///
 /// `buf_opt_idx` maps every buffer-local row to a row of the option table.
 fn copy_sctx(mut buffer: Buf, bv: BufOptIndex) {
-    let opt_idx = buf_opt_idx[bv as usize];
-    buffer.b_p_script_ctx[bv as usize] = option_last_set(opt_idx);
+    let opt_idx = buf_opt_idx[as_index(bv)];
+    buffer.b_p_script_ctx[as_index(bv)] = option_last_set(opt_idx);
 }
 
 /// Copy the global option values into one buffer's local ones.
@@ -286,17 +294,17 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
         return;
     }
 
-    let entering = flags & BCO_ENTER as c_int != 0;
+    let entering = flags & BCO_ENTER.cast_signed() != 0;
     let keep_global = !cpo_has(CpoFlag::BUFOPTGLOB) || !entering;
     let keep_local = b.b_p_initialized || (!entering && cpo_has(CpoFlag::BUFOPT));
     let should_copy = !(keep_global && keep_local);
 
-    if should_copy || flags & BCO_ALWAYS as c_int != 0 {
+    if should_copy || flags & BCO_ALWAYS.cast_signed() != 0 {
         b.b_p_script_ctx.fill(ScriptCtx::NONE);
 
         // A help buffer keeps its own settings when it already has them
         // — jumping back to one with CTRL-T or CTRL-O must not reset it.
-        let dont_do_help = (flags & BCO_NOHELP as c_int != 0 && b.b_help) || b.b_p_initialized;
+        let dont_do_help = (flags & BCO_NOHELP.cast_signed() != 0 && b.b_help) || b.b_p_initialized;
         // 'iskeyword' is the one string that survives the free below.
         let save_p_isk = if dont_do_help { b.b_p_isk.take() } else { None };
 
@@ -446,7 +454,7 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
         copy_sctx(b, kBufOptSuffixesadd);
         b.b_p_keymap = p_keymap(dup);
         copy_sctx(b, kBufOptKeymap);
-        b.b_kmap_state = (b.b_kmap_state as c_int | KEYMAP_INIT) as int16_t;
+        b.b_kmap_state |= int16_t::try_from(KEYMAP_INIT).expect("a flag bit");
         b.b_p_iminsert = p_iminsert();
         copy_sctx(b, kBufOptIminsert);
         b.b_p_imsearch = p_imsearch();
@@ -457,7 +465,7 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
         b.b_p_ac = -1;
         b.b_p_ar = -1;
         b.b_p_fs = -1;
-        b.b_p_ul = NO_LOCAL_UNDOLEVEL as OptInt;
+        b.b_p_ul = OptInt::from(NO_LOCAL_UNDOLEVEL);
         b.b_p_bkc = None;
         b.b_p_gefm = None;
         b.b_p_gp = None;

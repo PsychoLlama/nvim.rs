@@ -6,6 +6,13 @@
 //! of a name lands in [`tv_to_optval`]/[`optval_as_tv`] instead.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::autocmd::AucmdBuf;
 use crate::cstr;
@@ -13,10 +20,10 @@ use crate::eval::window::WinSwitch;
 use crate::guard::Suppress;
 use crate::message_fmt::emsg_text;
 use crate::message_fmt::msg_bytes;
+use crate::narrow::number_as_int;
 use crate::option::set_option_value_handle_tty;
 use crate::semsg;
 use crate::types::ApiString;
-use core::ffi::c_int;
 
 use super::*;
 use crate::eval::typval::NumBuf;
@@ -121,7 +128,7 @@ fn get_var_from(
 fn getwinvar(args: &[TypVal], result: &mut TypVal, off: usize) {
     let mut numbuf = NumBuf::new();
     let tp = if off == 1 {
-        find_tabpage(tv_get_number_chk(&args[0]).unwrap_or(-1) as c_int)
+        find_tabpage(number_as_int(tv_get_number_chk(&args[0]).unwrap_or(-1)))
     } else {
         TabPage::current_or_none()
     };
@@ -223,7 +230,7 @@ fn setwinvar(args: &[TypVal], off: usize) {
         return;
     }
     let tp = if off == 1 {
-        find_tabpage(tv_get_number_chk(&args[0]).unwrap_or(-1) as c_int)
+        find_tabpage(number_as_int(tv_get_number_chk(&args[0]).unwrap_or(-1)))
     } else {
         TabPage::current_or_none()
     };
@@ -265,7 +272,7 @@ fn set_scoped_var(scope: &[u8], varname: &[u8], varp: &TypVal) {
 pub fn f_gettabvar(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let varname = numbuf.string_chk(&args[1]).ok().map(CStr::to_bytes);
-    let tp = find_tabpage(tv_get_number_chk(&args[0]).unwrap_or(-1) as c_int);
+    let tp = find_tabpage(number_as_int(tv_get_number_chk(&args[0]).unwrap_or(-1)));
     // Any window of that tab page will do: only its `t:` scope is read.
     let win = any_window_of(tp);
     get_var_from(varname, result, args.get(2), Scope::Tab, tp, win, None);
@@ -297,7 +304,7 @@ pub fn f_settabvar(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     if check_secure() {
         return;
     }
-    let tp = find_tabpage(tv_get_number_chk(&args[0]).unwrap_or(-1) as c_int);
+    let tp = find_tabpage(number_as_int(tv_get_number_chk(&args[0]).unwrap_or(-1)));
     let varname = numbuf.string_chk(&args[1]).ok().map(CStr::to_bytes);
     let varp = &args[2];
     let (Some(varname), Some(tp)) = (varname, tp) else {

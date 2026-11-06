@@ -17,11 +17,19 @@
 //! many of the two slots below are real.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::narrow::len_as_int;
 use crate::types::Handle;
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
 
 use crate::channel::channel_job_running;
 use crate::channel::{channel_close_or_report, rpc_job_start};
@@ -33,7 +41,7 @@ use crate::message::{e_api_spawn_failed, e_invarg};
 use crate::semsg;
 use crate::types::{
     ChannelPart, EvalFuncData, TypVal, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber,
-    kBoolVarTrue, uint64_t,
+    kBoolVarTrue,
 };
 use crate::winlayer::buffers;
 
@@ -65,7 +73,7 @@ pub fn f_rpcstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         if arg.li_tv.v_type() != VAR_STRING {
             semsg!(
                 "E5010: List item {} of the second argument is not a string",
-                i as c_int
+                len_as_int(i)
             );
             return;
         }
@@ -98,7 +106,7 @@ pub fn f_rpcstop(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
         return;
     }
 
-    let id = args[0].number_or_zero() as uint64_t;
+    let id = args[0].number_or_zero().cast_unsigned();
     // If called with a job, stop it; otherwise close the channel.
     if channel_job_running(id) {
         f_jobstop(args, result, fptr);
@@ -117,7 +125,7 @@ pub fn f_last_buffer_nr(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
     for buf in buffers() {
         n = n.max(buf.handle());
     }
-    result.write_number(n.get() as VarNumber);
+    result.write_number(VarNumber::from(n.get()));
 }
 
 /// `termopen(cmd[, opts])`: `jobstart()` with `term` forced on.

@@ -4,6 +4,13 @@
 //! `forbid(unsafe_code)` here reaches the whole subtree: every family of
 //! builtins is safe code.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -72,7 +79,6 @@ pub const MPACK_ERROR: ::core::ffi::c_uint = 2;
 pub const MPACK_EOF: ::core::ffi::c_uint = 1;
 pub const MPACK_OK: ::core::ffi::c_uint = 0;
 pub const kProcTypePty: ProcType = 1;
-pub const DI_FLAGS_LOCK: ::core::ffi::c_uint = 8;
 pub const MAX_FUNC_ARGS: ::core::ffi::c_uint = 20;
 pub const NUMBUFLEN: ::core::ffi::c_uint = 65;
 pub const NSUBEXP: ::core::ffi::c_uint = 10;

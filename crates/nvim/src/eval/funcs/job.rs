@@ -1,5 +1,12 @@
 //! Child processes: the `job*()` family and the environment it hands them.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::{f_environ, kChannelPartRpc};
 use crate::api::private::helpers::{dict_set_var, scope_vars};
@@ -29,6 +36,8 @@ use crate::memory::XString;
 use crate::message::emsg;
 use crate::message::{e_channotpty, e_invarg};
 use crate::message_fmt::msg_cstr;
+use crate::narrow::number_as_int;
+use crate::narrow::number_as_u16;
 use crate::option::vars::p_tgc;
 use crate::os::cshim::gettext;
 use crate::os::env::{ENV_NVIM, getenv_owned};
@@ -44,12 +53,12 @@ use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
     ApiString, Callback, CallbackReader, ChannelStdinMode, Dict, EvalFuncData, IOSIZE, Integer,
     JobProc, MAXPATHL, Object, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING,
-    VarNumber, Vv, uint16_t, uint64_t,
+    VarNumber, Vv, uint64_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
 use core::pin::Pin;
 use std::ffi::CString;
 
@@ -66,7 +75,7 @@ fn job_id(arg: &TypVal) -> Result<uint64_t, Failed> {
         emsg(gettext(e_invarg));
         return Err(Failed);
     }
-    Ok(arg.number_or_zero() as uint64_t)
+    Ok(arg.number_or_zero().cast_unsigned())
 }
 
 /// `jobpid({job})`
@@ -106,12 +115,12 @@ pub fn f_jobresize(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         emsg(gettext(e_invarg));
         return;
     }
-    let id = args[0].number_or_zero() as uint64_t;
+    let id = args[0].number_or_zero().cast_unsigned();
     if !find_job(id, true) {
         return;
     }
-    let width = args[1].number_or_zero() as uint16_t;
-    let height = args[2].number_or_zero() as uint16_t;
+    let width = number_as_u16(args[1].number_or_zero());
+    let height = number_as_u16(args[2].number_or_zero());
     let resized = with_job(id, |job| {
         let is_pty = job.pty().is_some();
         job.resize(width, height);
@@ -173,7 +182,7 @@ pub fn f_jobwait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut jobs: Vec<Option<ChannelRef>> = Vec::new();
     for arg in list_iter(args[0].list_ref()) {
         let job = if arg.li_tv.v_type() == VAR_NUMBER {
-            let id = arg.li_tv.number_or_zero() as uint64_t;
+            let id = arg.li_tv.number_or_zero().cast_unsigned();
             with_job(id, |job| {
                 (id, proc_is_stopped(job.proc()), job.proc().status)
             })
@@ -205,7 +214,7 @@ pub fn f_jobwait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut remaining = -1;
     let mut before = 0u64;
     if args.get(1).is_some_and(|arg| arg.v_type() == VAR_NUMBER) && args[1].number_or_zero() >= 0 {
-        remaining = args[1].number_or_zero() as c_int;
+        remaining = number_as_int(args[1].number_or_zero());
         before = os_hrtime();
     }
     // Only mark the UI busy when this actually blocks.
@@ -226,7 +235,11 @@ pub fn f_jobwait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
         if remaining > 0 {
             let now = os_hrtime();
-            let elapsed = now.wrapping_sub(before).wrapping_div(1_000_000) as c_int;
+            let elapsed = number_as_int(
+                now.wrapping_sub(before)
+                    .wrapping_div(1_000_000)
+                    .cast_signed(),
+            );
             // Upstream writes MIN here, not MAX, so any positive
             // timeout collapses to 0 after the first job and the loop
             // stops. Preserved; see the commit that rewrote this file.
@@ -235,7 +248,7 @@ pub fn f_jobwait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
     }
 
-    let statuses = tv_list_alloc(jobs.len() as isize);
+    let statuses = tv_list_alloc(jobs.len().cast_signed());
     for job in jobs {
         let Some(job) = job else {
             statuses.edit().push_number(-3);
@@ -470,8 +483,8 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     // `dict_get_number` accepts a null dict, so these two are read
     // whether or not there were options at all.
-    let mut width = dict_get_number(job_opts, b"width") as uint16_t;
-    let mut height = dict_get_number(job_opts, b"height") as uint16_t;
+    let mut width = number_as_u16(dict_get_number(job_opts, b"width"));
+    let mut height = number_as_u16(dict_get_number(job_opts, b"height"));
     let mut term_name: Option<&CStr> = None;
 
     if term {
@@ -503,10 +516,12 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         detach = false;
         stdin_mode = kChannelStdinPipe;
         if width == 0 {
-            width = (Win::current().w_view_width - Win::current().col_off()).max(0) as uint16_t;
+            width = number_as_u16(i64::from(
+                (Win::current().w_view_width - Win::current().col_off()).max(0),
+            ));
         }
         if height == 0 {
-            height = Win::current().w_view_height as uint16_t;
+            height = number_as_u16(i64::from(Win::current().w_view_height));
         }
     }
     if pty && term_name.is_none() {

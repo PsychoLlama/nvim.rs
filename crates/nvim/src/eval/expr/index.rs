@@ -7,10 +7,18 @@
 //! switches the String arm onto the character walkers.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::memory::ThinCString;
 use crate::message_fmt::msg_bytes;
+use crate::narrow::len_as_integer;
 use crate::semsg;
 use core::ffi::{CStr, c_int};
 
@@ -208,7 +216,7 @@ pub(crate) fn eval_index_inner(
     match result.v_type() {
         VAR_NUMBER | VAR_STRING => {
             let s = numbuf.string(result).to_bytes();
-            let len = s.len() as c_int as VarNumber;
+            let len = len_as_integer(s.len());
             let v = if exclusive {
                 // slice(): character indexes, second one excluded.
                 if is_range {
@@ -230,13 +238,17 @@ pub(crate) fn eval_index_inner(
                     None
                 } else {
                     // `n2` may be the length itself, whose byte is the end.
-                    Some(&s[n1 as usize..((n2 + 1) as usize).min(s.len())])
+                    // Both are in `0..=len` here.
+                    let from = usize::try_from(n1).expect("checked against the length");
+                    let to = usize::try_from(n2 + 1).expect("checked against the length");
+                    Some(&s[from..to.min(s.len())])
                 }
             } else if n1 >= len || n1 < 0 {
                 // A one-byte String; too big or negative gives an empty one.
                 None
             } else {
-                Some(&s[n1 as usize..=n1 as usize])
+                let at = usize::try_from(n1).expect("checked against the length");
+                Some(&s[at..=at])
             };
             let v = v.map(ThinCString::from_bytes);
             tv_clear(result);
@@ -339,7 +351,7 @@ pub(crate) fn char_idx2byte(text: &[u8], idx: VarNumber) -> isize {
             return -1;
         }
     }
-    nbyte as isize
+    nbyte.cast_signed()
 }
 
 /// `text[first : last]` by character index, composing characters included.
@@ -350,7 +362,7 @@ pub(crate) fn string_slice(
     last: VarNumber,
     exclusive: bool,
 ) -> Option<&[u8]> {
-    let slen = text.len() as isize;
+    let slen = text.len().cast_signed();
     // A very negative first index starts at zero rather than failing.
     let start_byte = char_idx2byte(text, first).max(0);
     let end_byte = if (last == -1 && !exclusive) || last == VARNUMBER_MAX {
@@ -359,7 +371,7 @@ pub(crate) fn string_slice(
         let mut end = char_idx2byte(text, last);
         if !exclusive && end >= 0 && end < slen {
             // The end index is inclusive here.
-            end += char_len_at(text, end as usize) as isize;
+            end += char_len_at(text, end.cast_unsigned()).cast_signed();
         }
         end
     };
@@ -367,7 +379,7 @@ pub(crate) fn string_slice(
     if start_byte >= slen || end_byte <= start_byte {
         return None;
     }
-    Some(&text[start_byte as usize..end_byte as usize])
+    Some(&text[start_byte.cast_unsigned()..end_byte.cast_unsigned()])
 }
 
 /// Whether another subscript follows the operand in `result`. An opening

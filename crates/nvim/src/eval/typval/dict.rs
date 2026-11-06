@@ -20,6 +20,13 @@
 //! [`RemovedItem`], dropped once the borrow of the table has ended.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::eval::collect::var_item_copy;
 use crate::eval::userfunc::func_ref_name;
@@ -183,7 +190,7 @@ impl Dict {
     /// Mark every key read-only and fixed.
     pub fn set_keys_readonly(&mut self) {
         for di in self.items_mut() {
-            di.di_flags |= (DI_FLAGS_RO | DI_FLAGS_FIX) as uint8_t;
+            di.di_flags |= DI_FLAGS_RO | DI_FLAGS_FIX;
         }
     }
 
@@ -467,7 +474,7 @@ pub fn tv_dict_remove(args: &[TypVal], result: &mut TypVal, arg_errmsg: &'static
     let flags = dict
         .item_at(slot)
         .map_or(0, |item| ::core::ffi::c_int::from(item.di_flags));
-    if flags & (DI_FLAGS_FIX | DI_FLAGS_RO | DI_FLAGS_RO_SBX) as ::core::ffi::c_int != 0 && {
+    if flags & ::core::ffi::c_int::from(DI_FLAGS_FIX | DI_FLAGS_RO | DI_FLAGS_RO_SBX) != 0 && {
         let name = gettext(arg_errmsg).to_bytes();
         var_check_fixed_named(flags, name) || var_check_ro_named(flags, name)
     } {

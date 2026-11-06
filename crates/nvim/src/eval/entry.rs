@@ -12,6 +12,13 @@
 //! mapping, a register -- hands over a copy.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use crate::eval::Parsed;
@@ -20,6 +27,7 @@ use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::guard::{Lock, Suppress};
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
+use crate::narrow::number_as_int;
 use crate::semsg;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
@@ -44,7 +52,7 @@ use crate::optionstr::OptString;
 use crate::runtime::state::current_sctx;
 use crate::types::{
     ApiString, ExArg, Failed, NUL, Object, OptionSetFlags, ScriptCtx, TypVal, VAR_DICT, VAR_FUNC,
-    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, ptrdiff_t,
+    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv,
 };
 
 /// A freshly declared typval.
@@ -405,7 +413,8 @@ fn leading_long(text: &[u8]) -> VarNumber {
         n = (n * 10 + i128::from(b - b'0')).min(i128::from(VarNumber::MAX) + 1);
     }
     let n = if negative { -n } else { n };
-    n.clamp(i128::from(VarNumber::MIN), i128::from(VarNumber::MAX)) as VarNumber
+    VarNumber::try_from(n.clamp(i128::from(VarNumber::MIN), i128::from(VarNumber::MAX)))
+        .expect("clamped to a Number")
 }
 
 /// Run 'foldexpr' for the window's current line: the level, and the leading
@@ -446,7 +455,7 @@ pub(crate) fn eval_foldexpr(window: Win) -> (c_int, c_int) {
         retval
     };
     current_sctx.set(saved_sctx);
-    (retval as c_int, marker)
+    (number_as_int(retval), marker)
 }
 
 /// Run 'foldtext' for the window's current fold. A List comes back as an
@@ -479,7 +488,7 @@ pub fn eval_foldtext(window: Win) -> Object {
 
 /// Fill `v:argv` from the process arguments. Every item is locked.
 pub(crate) fn set_argv_var(args: &[&CStr]) {
-    let mut list = tv_list_alloc(args.len() as ptrdiff_t);
+    let mut list = tv_list_alloc(args.len().cast_signed());
     for arg in args {
         list.push(TypVal::string_from(arg.to_bytes()));
     }

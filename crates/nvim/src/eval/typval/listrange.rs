@@ -8,6 +8,13 @@
 //! codepoint-list-to-string builtin.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::eval::encode::tv2echo_bytes;
@@ -15,6 +22,7 @@ use crate::eval::executor::eexe_mod_op;
 use crate::mbyte::encode_char;
 use crate::memory::XString;
 use crate::message::emsg;
+use crate::narrow::number_as_int;
 use crate::semsg;
 use crate::types::Failed;
 use core::ffi::CStr;
@@ -224,9 +232,11 @@ pub fn list_flatten(list: &ListRef, first: usize, maxitems: int64_t, maxdepth: i
 /// A fresh list holding copies of `ol[n1..=n2]`, which the caller has
 /// already clamped to the list.
 pub(crate) fn list_slice(ol: Option<&List>, n1: VarNumber, n2: VarNumber) -> ListRef {
-    let mut l = tv_list_alloc((n2 - n1 + 1) as ptrdiff_t);
+    let mut l = tv_list_alloc(ptrdiff_t::try_from(n2 - n1 + 1).unwrap_or(0));
+    let items = list_items(ol);
     for at in n1..=n2 {
-        l.push_copy(&list_items(ol)[at as usize].li_tv);
+        let at = usize::try_from(at).expect("clamped to the list");
+        l.push_copy(&items[at].li_tv);
     }
     l
 }
@@ -368,7 +378,7 @@ pub fn f_list2str(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut buf = [0u8; 22];
     for li in list.items() {
         let n = tv_get_number(&li.li_tv);
-        let buflen = encode_char(n as ::core::ffi::c_int, &mut buf);
+        let buflen = encode_char(number_as_int(n), &mut buf);
         // A NUL ends the string there, as it did in the C buffer.
         text.push_bytes(&buf[..buflen]);
     }

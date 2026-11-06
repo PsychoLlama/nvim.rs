@@ -6,6 +6,13 @@
 //! flag parser write 'wrapscan' and puts the caller's value back on the way
 //! out, which [`SavedWrapScan`] does here instead of the C's `goto theend`.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::wrappers::arg_number_chk;
 use crate::narrow::number_as_lnum;
@@ -285,7 +292,7 @@ fn search_cmn(
 pub fn f_search(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut flags = 0;
     let found = search_cmn(args, None, &mut flags).unwrap_or_else(ArgsRefused::report);
-    result.write_number(found as VarNumber);
+    result.write_number(VarNumber::from(found));
 }
 
 /// `searchpos()` — as `search()`, but answering `[lnum, col]`, plus the
@@ -298,16 +305,16 @@ pub fn f_searchpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     };
     let mut flags = 0;
     let n = search_cmn(args, Some(&mut match_pos), &mut flags).unwrap_or_else(ArgsRefused::report);
-    let list = tv_list_alloc_ret(result, 2 + (flags & SP_SUBPAT != 0) as isize);
+    let list = tv_list_alloc_ret(result, 2 + isize::from(flags & SP_SUBPAT != 0));
     let (lnum, col) = if n > 0 {
         (match_pos.lnum.get(), match_pos.col.get())
     } else {
         (0, 0)
     };
-    list.push_number(lnum as VarNumber);
-    list.push_number(col as VarNumber);
+    list.push_number(VarNumber::from(lnum));
+    list.push_number(VarNumber::from(col));
     if flags & SP_SUBPAT != 0 {
-        list.push_number(n as VarNumber);
+        list.push_number(VarNumber::from(n));
     }
 }
 
@@ -403,7 +410,7 @@ fn searchpair_cmn(args: &[TypVal], match_pos: Option<&mut Pos>) -> Result<c_int,
 /// [, {timeout}]]]])`
 pub fn f_searchpair(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let found = searchpair_cmn(args, None).unwrap_or_else(ArgsRefused::report);
-    result.write_number(found as VarNumber);
+    result.write_number(VarNumber::from(found));
 }
 
 /// `searchpairpos()` — as `searchpair()`, answering `[lnum, col]`.
@@ -421,8 +428,8 @@ pub fn f_searchpairpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
         col = match_pos.col.get();
     }
     let list = tv_list_alloc_ret(result, 2);
-    list.push_number(lnum as VarNumber);
-    list.push_number(col as VarNumber);
+    list.push_number(VarNumber::from(lnum));
+    list.push_number(VarNumber::from(col));
 }
 
 /// The alternation `do_searchpair` hands to `searchit`.

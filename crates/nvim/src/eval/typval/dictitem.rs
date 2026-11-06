@@ -29,6 +29,13 @@
 //! turn a container into a list.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -79,7 +86,7 @@ impl DictItem {
         Box::new(DictItem {
             di_tv: TypVal::Unknown,
             di_lock: VarLock::Unlocked,
-            di_flags: DI_FLAGS_ALLOC as uint8_t,
+            di_flags: u8::try_from(DI_FLAGS_ALLOC).expect("a flag byte"),
             di_key: DictKey::new(key),
         })
     }
@@ -372,7 +379,10 @@ pub(crate) fn tv_dict2list(args: &[TypVal], result: &mut TypVal, what: DictListT
     }
 
     let d = args[0].dict_ref();
-    tv_list_alloc_ret(result, dict_len(d) as ptrdiff_t);
+    tv_list_alloc_ret(
+        result,
+        ptrdiff_t::try_from(dict_len(d)).unwrap_or(ptrdiff_t::MAX),
+    );
     // NULL dict behaves like an empty dict
     let Some(d) = d else { return };
     let Some(list) = result.list_mut() else {

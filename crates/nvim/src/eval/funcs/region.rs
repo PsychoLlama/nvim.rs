@@ -1,6 +1,13 @@
 //! The text a Visual selection covers: `getregion()` and
 //! `getregionpos()`.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::{kMTBlockWise, kMTCharWise, kMTLineWise};
 use crate::buffer::find_buf;
@@ -24,8 +31,8 @@ use crate::state::mode::virtual_op;
 use crate::state::virtual_active;
 use crate::tr;
 use crate::types::{
-    BlockDef, ColNr, EvalFuncData, Key, LineNr, MotionType, NUL, OpArg, OpType, Pos, TypVal,
-    VAR_DICT, VarNumber, kListLenMayKnow,
+    BlockDef, ColNr, EvalFuncData, Key, LineNr, MotionType, OpArg, OpType, Pos, TypVal, VAR_DICT,
+    VarNumber, kListLenMayKnow,
 };
 use core::ffi::{CStr, c_int};
 
@@ -175,7 +182,7 @@ fn resolve(args: &[TypVal], result: &mut TypVal) -> Result<Region, Unresolved> {
     let exclusive_by_default = P_SEL.first_byte() == b'e';
     let (is_select_exclusive, spec) = match opts {
         Some(d) => (
-            dict_get_bool(d, b"exclusive", exclusive_by_default as c_int) != 0,
+            dict_get_bool(d, b"exclusive", c_int::from(exclusive_by_default)) != 0,
             numbuf.dict_string(d, b"type"),
         ),
         None => (exclusive_by_default, None),
@@ -213,7 +220,7 @@ fn resolve(args: &[TypVal], result: &mut TypVal) -> Result<Region, Unresolved> {
         }
         // An inclusive selection ending on the line terminator does not
         // actually cover a character, unless 'virtualedit' is on.
-        if inclusive && virtual_op.get() == Some(false) && byte_at(p2) == NUL as u8 {
+        if inclusive && virtual_op.get() == Some(false) && byte_at(p2) == b'\0' {
             inclusive = false;
         }
     } else if region_type == kMTBlockWise {
@@ -495,10 +502,10 @@ fn add_regionpos_range(result: &mut TypVal, p1: Pos, p2: Pos) {
     for p in [p1, p2] {
         let mut pos = tv_list_alloc(4);
         let l = &mut *pos;
-        l.push_number(Buf::current().handle.get() as VarNumber);
+        l.push_number(VarNumber::from(Buf::current().handle.get()));
         l.push_number(i64::from(p.lnum));
         l.push_number(i64::from(p.col));
-        l.push_number(p.coladd as VarNumber);
+        l.push_number(VarNumber::from(p.coladd));
         pair.edit().push_list(Some(pos));
     }
     let list = result.list_mut().expect("the list `resolve` allocated");

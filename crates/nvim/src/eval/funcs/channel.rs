@@ -1,6 +1,13 @@
 //! Channels and servers: `chansend()`, `rpcrequest()`, `serverstart()` and
 //! the rest of the RPC and socket surface.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::{
     kChannelPartAll, kChannelPartRpc, kChannelPartStderr, kChannelPartStdin, kChannelPartStdout,
@@ -26,6 +33,7 @@ use crate::msgpack_rpc::channel::{client_info, rpc_call_with, rpc_send_event};
 use crate::msgpack_rpc::server::{
     server_address_generated, server_addresses, server_start, server_stop,
 };
+use crate::narrow::len_as_integer;
 use crate::os::cshim::gettext;
 use crate::os::fs::os_strerror;
 use crate::runtime::EXESTACK;
@@ -34,7 +42,7 @@ use crate::semsg;
 use crate::semsg_multiline;
 use crate::types::{
     ApiString, Array, CallbackReader, ChannelPart, EvalFuncData, Object, ScriptCtx, TypVal,
-    VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING, VarNumber, uint64_t,
+    VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING, VarNumber,
 };
 use core::ffi::{CStr, c_int};
 
@@ -87,7 +95,7 @@ pub fn f_chanclose(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
     }
 
-    match channel_close(args[0].number_or_zero() as uint64_t, part) {
+    match channel_close(args[0].number_or_zero().cast_unsigned(), part) {
         Ok(()) => result.write_number(1),
         Err(why) => {
             emsg(why);
@@ -122,9 +130,9 @@ pub fn f_chansend(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
 
-    let id = args[0].number_or_zero() as uint64_t;
+    let id = args[0].number_or_zero().cast_unsigned();
     match channel_send(id, input) {
-        Ok(sent) => result.write_number(sent as VarNumber),
+        Ok(sent) => result.write_number(len_as_integer(sent)),
         Err(why) => {
             emsg(why);
         }
@@ -150,7 +158,7 @@ pub fn f_rpcnotify(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     let event_args = trailing_args(args, 2);
-    let id = args[0].number_or_zero() as uint64_t;
+    let id = args[0].number_or_zero().cast_unsigned();
     let event = numbuf.string(&args[1]);
     let ok = rpc_send_event(id, event, event_args);
     if !ok {
@@ -245,7 +253,7 @@ pub fn f_rpcrequest(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     let scope = (nesting != 0).then(ProviderScope::enter);
 
-    let chan_id = args[0].number_or_zero() as uint64_t;
+    let chan_id = args[0].number_or_zero().cast_unsigned();
     let method = numbuf.string(&args[1]);
     // The response is this frame's, so its Lua references move into the
     // value rather than being copied.
@@ -285,7 +293,7 @@ pub fn f_serverlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let addrs = server_addresses();
     // The same addresses twice: once in the List, once copied into the
     // Array the Lua helper is passed.
-    let list = tv_list_alloc(addrs.len() as isize);
+    let list = tv_list_alloc(addrs.len().cast_signed());
     result.write_list(Some(list.clone()));
     let mut addrs_arr = Vec::with_capacity(addrs.len());
     for addr in &addrs {
@@ -375,7 +383,7 @@ pub fn f_serverstop(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(0);
     // v:_null_string stops nothing.
     if let Some(address) = args[0].string_ref() {
-        result.write_number(server_stop(address.as_cstr(), false) as VarNumber);
+        result.write_number(VarNumber::from(server_stop(address.as_cstr(), false)));
     }
 }
 
@@ -428,7 +436,7 @@ pub fn f_sockconnect(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         semsg!("connection failed: {error}");
         0
     });
-    result.write_number(id as VarNumber);
+    result.write_number(id.cast_signed());
 }
 
 /// `stdioopen({opts})` — turn this process's own stdin/stdout into a
@@ -460,5 +468,5 @@ pub fn f_stdioopen(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         semsg!("E905: Couldn't open stdio channel: {error}");
         0
     });
-    result.write_number(id as VarNumber);
+    result.write_number(id.cast_signed());
 }

@@ -9,6 +9,13 @@
 //! still compares against.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::ascii::ascii_isxdigit;
 use crate::charset::{Str2NrBases, hex2nr, str2nr_in};
@@ -30,11 +37,11 @@ use crate::option::{get_option_value, get_tty_option, is_option_hidden, is_tty_o
 use crate::options::kOptInvalid;
 use crate::os::cshim::gettext;
 use crate::semsg;
-use crate::types::{Failed, Float, MB_MAXCHAR, NUL, OptVal, TypVal};
+use crate::types::{Failed, Float, MB_MAXCHAR, OptVal, TypVal};
 use core::ffi::c_int;
 
 /// The NUL byte, as the walks below compare it.
-const END: u8 = NUL as u8;
+const END: u8 = b'\0';
 
 /// `&option`, `&l:option`, `&g:option` or `+option`, with the cursor on the
 /// `&` or the `+`. Leaves it after the option name.

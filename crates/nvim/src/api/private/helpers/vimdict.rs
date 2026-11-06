@@ -13,10 +13,10 @@
     clippy::ptr_as_ptr
 )]
 
-use super::{DI_FLAGS_FIX, DI_FLAGS_LOCK, DI_FLAGS_RO};
 use crate::api_error;
 use crate::eval::typval::DictRef;
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::eval::typval::{DI_FLAGS_FIX, DI_FLAGS_LOCK, DI_FLAGS_RO};
 use crate::eval::typval::{
     dict_find, dict_is_watched, dict_watcher_notify, tv_clear, tv_copy, tv_dict_item_remove,
 };
@@ -63,7 +63,7 @@ pub(crate) fn dict_check_writable(
 /// Why the existing `item` under `key` could not be assigned to (or, with
 /// `del`, removed), if anything stops it.
 fn item_writable(item: &DictItem, key: &ApiString, del: bool) -> Result<(), Error> {
-    let flags = c_int::from(item.di_flags);
+    let flags = item.di_flags;
     let refused = if flags & DI_FLAGS_RO != 0 {
         Some("read-only")
     } else if flags & DI_FLAGS_LOCK != 0 {

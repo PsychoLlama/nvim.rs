@@ -29,6 +29,13 @@
 //! Original: `src/nvim/eval/fs.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::{VALID_HEAD, VALID_PATH, at, is_sep, str_arg_chk};
 use crate::env::{expand_env, home_to_tilde};
@@ -265,7 +272,7 @@ fn trim_stages(mods: &mut Mods<'_>, f: &mut Fname<'_>, valid: &mut c_int) {
 
     // ":h" -- drop "/name", repeatable.  Never the leading "/".
     while mods.is(b'h') {
-        *valid |= VALID_HEAD as c_int;
+        *valid |= VALID_HEAD.cast_signed();
         mods.advance(2);
         let s = until_nul(&f.with_nul()[base..]);
         let head = past_head_off(s);
@@ -304,28 +311,28 @@ fn trim_stages(mods: &mut Mods<'_>, f: &mut Fname<'_>, valid: &mut c_int) {
         let b = until_nul(&f.with_nul()[base..]);
         let second_e = start > tail;
         let mut s = if want_ext && second_e {
-            start as isize - 2
+            start.cast_signed() - 2
         } else {
-            start as isize + len as isize - 1
+            start.cast_signed() + len.cast_signed() - 1
         };
-        while s > tail as isize && at(b, s as usize) != b'.' {
+        while s > tail.cast_signed() && at(b, s.cast_unsigned()) != b'.' {
             s -= 1;
         }
         if want_ext {
-            if s > tail as isize {
+            if s > tail.cast_signed() {
                 // Stopped at a dot, so anchor just past it.  The name may
                 // move *backwards*, and the length follows it.
                 let anchor = s + 1;
-                len = (len as isize + start as isize - anchor) as usize;
-                start = anchor as usize;
+                len = (len.cast_signed() + start.cast_signed() - anchor).cast_unsigned();
+                start = anchor.cast_unsigned();
             } else if start <= tail {
                 len = 0;
             }
-        } else if s > tail.max(start) as isize {
+        } else if s > tail.max(start).cast_signed() {
             // ":r" must stop at both the tail and the name, or
             // "path/to/this.file.ext:e:e:r:r" and ":r:r:r" take too many
             // roots.
-            len = (s - start as isize) as usize;
+            len = (s - start.cast_signed()).cast_unsigned();
         }
         mods.advance(2);
     }
@@ -420,7 +427,7 @@ pub(crate) fn modify_fname(
     loop {
         if mods.is(b'p') {
             has_fullname = true;
-            valid |= VALID_PATH as c_int;
+            valid |= VALID_PATH.cast_signed();
             mods.advance(2);
             full_path_stage(&mut f, tilde_file);
         }

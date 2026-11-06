@@ -4,7 +4,13 @@
 //! The deny below reaches the whole subtree — a lint attribute at a `mod.rs`
 //! propagates into every `mod foo;` under it — which is why it could only
 //! land once every module in `eval/` had been converted.
-
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![deny(unsafe_op_in_unsafe_fn)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]

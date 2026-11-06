@@ -18,6 +18,13 @@
 //! Original: `src/nvim/eval/fs.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::{from, kFileAppend, kFileCreate, kFileMkDir, kFileTruncate, str_arg_chk};
 use crate::eval::typval::{NumBuf, blob_bytes, list_items, tv_check_str_or_nr};
@@ -79,7 +86,7 @@ fn write_list(out: &mut WriteFile, list: Option<&List>, binary: bool) -> bool {
                     if p != hunk_start {
                         let written = out.write(&bytes[hunk_start..p]);
                         if written < 0 {
-                            error = written as c_int;
+                            error = c_int::try_from(written).unwrap_or(c_int::MIN);
                             break 'failed;
                         }
                     }
@@ -103,7 +110,7 @@ fn write_list(out: &mut WriteFile, list: Option<&List>, binary: bool) -> bool {
             if !binary || i + 1 < items.len() {
                 let written = out.write(b"\n");
                 if written < 0 {
-                    error = written as c_int;
+                    error = c_int::try_from(written).unwrap_or(c_int::MIN);
                     break 'failed;
                 }
             }
@@ -126,8 +133,8 @@ fn write_data(out: &mut WriteFile, data: &[u8]) -> bool {
             // Upstream tests against the length, not against zero, so a
             // short write reports the count it did accept as if it were a
             // code.
-            if written < data.len() as isize {
-                error = written as c_int;
+            if written < data.len().cast_signed() {
+                error = c_int::try_from(written).unwrap_or(c_int::MIN);
                 break 'failed;
             }
         }

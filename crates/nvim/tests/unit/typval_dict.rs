@@ -11,11 +11,11 @@ use std::ffi::{CStr, c_char};
 use std::mem::ManuallyDrop;
 use std::ptr;
 
-use neovim::buffer::{DI_FLAGS_FIX, DI_FLAGS_RO, DI_FLAGS_RO_SBX};
 use neovim::eval::typval::{
-    CallbackRefused, DictRef, ListRef, NumBuf, callback_free, dict_clear, dict_copy, dict_equal,
-    dict_extend, dict_find, dict_get_callback, dict_get_number, dict_get_string_alloc,
-    dict_get_string_buf, dict_get_string_buf_chk, tv_clear, tv_dict_alloc,
+    CallbackRefused, DI_FLAGS_FIX, DI_FLAGS_RO, DI_FLAGS_RO_SBX, DictRef, ListRef, NumBuf,
+    callback_free, dict_clear, dict_copy, dict_equal, dict_extend, dict_find, dict_get_callback,
+    dict_get_number, dict_get_string_alloc, dict_get_string_buf, dict_get_string_buf_chk, tv_clear,
+    tv_dict_alloc,
 };
 use neovim::guard::{Suppress, sandbox};
 use neovim::memory::{ThinCString, xfree, xmalloc, xstrdup};
@@ -964,9 +964,9 @@ fn extending_a_dict_refuses_locked_and_read_only_items() {
         (*tv::di_of(d, "tv_locked")).di_lock = VarLock::Locked;
         (*tv::di_of(d, "tv_fixed")).di_lock = VarLock::Fixed;
         let di_ro = tv::di_of(d, "di_ro");
-        (*di_ro).di_flags |= u8::try_from(DI_FLAGS_RO).unwrap();
+        (*di_ro).di_flags |= DI_FLAGS_RO;
         let di_ro_sbx = tv::di_of(d, "di_ro_sbx");
-        (*di_ro_sbx).di_flags |= u8::try_from(DI_FLAGS_RO_SBX).unwrap();
+        (*di_ro_sbx).di_flags |= DI_FLAGS_RO_SBX;
 
         let saved_sandbox = sandbox.get();
         sandbox.set(1);
@@ -1282,8 +1282,8 @@ fn making_keys_read_only_sets_both_flags_on_every_item() {
         let d = tv::new_dict(&[("a", Tv::Bool(true))]);
         let di = tv::di_of(d, "a");
         log.check(&[alloc::dict(d)]);
-        let ro = u8::try_from(DI_FLAGS_RO).unwrap();
-        let fix = u8::try_from(DI_FLAGS_FIX).unwrap();
+        let ro = DI_FLAGS_RO;
+        let fix = DI_FLAGS_FIX;
         assert_eq!((*di).di_flags & ro, 0);
         assert_eq!((*di).di_flags & fix, 0);
 
