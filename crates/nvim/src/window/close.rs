@@ -40,7 +40,7 @@ use crate::r#move::WinValid;
 use crate::option::vars::{p_confirm, p_write};
 use crate::state::MODE_INSERT;
 use crate::state::mode::{State, restart_edit, stop_insert_mode};
-use crate::types::{CmdModFlags, Error, FAIL, LineNr};
+use crate::types::{CmdModFlags, Error, LineNr};
 use crate::winlayer::graph::{
     cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win, leave_curbuf,
 };
@@ -145,7 +145,7 @@ fn close_all(buffer: Buf, keep_curwin: bool) {
                 if layout_locked(CmdIdx::SIZE) {
                     break 'theend; // Only give one error message.
                 }
-                if close(wp, false, false) == FAIL {
+                if close(wp, false, false).is_err() {
                     // Give up rather than loop forever.
                     break;
                 }
@@ -408,7 +408,7 @@ fn close_all_others(message: bool, forceit: bool) {
             // autocommands messed this one up
             if wp.surviving_buffer().is_none() && valid_win(wp.id()).is_some() {
                 wp.w_buffer = Buf::NULL;
-                close(wp, false, false);
+                let _ = close(wp, false, false);
                 break 'skip;
             }
             // Check whether it is allowed to abandon this window.
@@ -431,7 +431,7 @@ fn close_all_others(message: bool, forceit: bool) {
                 }
             }
             let free_buf = !hides(wp.buffer()) && !is_changed(wp.buffer());
-            close(wp, free_buf, false);
+            let _ = close(wp, free_buf, false);
         }
         next = nextwp;
     }

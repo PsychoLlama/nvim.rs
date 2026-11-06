@@ -37,22 +37,32 @@ use crate::message::{e_autocmd_close, e_floatonly};
 use crate::normal::reset_visual_and_resel;
 use crate::option::vars::{p_ea, p_ead, p_ru};
 use crate::startup::getout;
+use crate::types::Integer;
 use crate::types::ui::kUIMultigrid;
-use crate::types::{FAIL, Integer, OK};
 use crate::ui::{ui_call_win_close, ui_has};
 use crate::winfloat::win_float_find_altwin;
 use crate::winlayer::graph::{first_tabpage, firstwin, lastwin};
 use crate::winlayer::{WinId, tabs};
 
-pub fn win_close(win: Win, free_buf: bool, force: bool) -> c_int {
+/// A window that is still open after [`win_close`] was asked to close it.
+///
+/// Whatever stopped it -- the last window, a locked layout, a window already
+/// being closed, an autocommand that closed or moved it first -- has said so
+/// when it had something to say; most of those refusals are silent, as
+/// upstream's are, so this is no "already reported" `Failed`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("the window was not closed")]
+pub(crate) struct NotClosed;
+
+pub(crate) fn win_close(win: Win, free_buf: bool, force: bool) -> Result<(), NotClosed> {
     close(win, free_buf, force)
 }
 
 /// Close window `win`, which must be on the current tab page, unloading its
-/// buffer with `free_buf`. `FAIL` when the window was not closed.
+/// buffer with `free_buf`.
 ///
 /// Called by `:quit`, `:close`, `:xit`, `:wq` and `findtag()`.
-pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
+pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> Result<(), NotClosed> {
     let prev_curtab = TabPage::current();
     // The frame the closing window hung off, held as an identity because
     // `win` and its whole subtree are freed before the check below.
@@ -65,30 +75,27 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
 
     if is_last_window(win) {
         err(e_cannot_close_last_window);
-        return FAIL;
+        return Err(NotClosed);
     }
     if !win.w_floating && layout_locked(CmdIdx::close) {
-        return FAIL;
+        return Err(NotClosed);
     }
     if win.w_locked || win.buffer_or_none().is_some_and(|buf| buf.b_locked > 0) {
-        return FAIL; // window is already being closed
+        return Err(NotClosed); // window is already being closed
     }
     if is_autocmd_window(Some(win)) {
         err(e_autocmd_close);
-        return FAIL;
+        return Err(NotClosed);
     }
-    if last_win().w_floating
-        && only_window(win, None)
-        && let Some(rc) = close_the_floats(win, force)
-    {
-        return rc;
+    if last_win().w_floating && only_window(win, None) {
+        close_the_floats(win, force)?;
     }
 
     // When closing the last window in a tab page first go to another tab page
     // and then close the window and the tab page, so that `curwin` and `curtab`
     // are never invalid while memory is freed.
     if close_last_tabpage_window(win, free_buf, prev_curtab) {
-        return FAIL;
+        return Err(NotClosed);
     }
 
     // When closing the help window, try restoring a snapshot afterwards.
@@ -105,7 +112,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
     let mut other_buffer = false;
     if win.is_current() {
         match leave_closing_window(win) {
-            Leave::Failed => return FAIL,
+            Leave::Failed => return Err(NotClosed),
             Leave::Ok { other } => other_buffer = other,
         }
     }
@@ -114,7 +121,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
     fire_winclosed(win);
     // The autocommand may have freed the window already.
     if !valid_win_any_tab(win.id()) {
-        return OK;
+        return Ok(());
     }
 
     let bufref = BufRef::of_opt(win.buffer_or_none());
@@ -143,23 +150,23 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
         if let Some(prev) = valid_tab(prev_curtab.id()) {
             close_othertab(win, false, prev, force);
         }
-        return FAIL;
+        return Err(NotClosed);
     }
 
     // Autocommands may have closed the window already, or closed the only other
     // window, or moved to another tab page.
     if valid_win(win.id()).is_none() {
-        return FAIL;
+        return Err(NotClosed);
     }
     if only_window(win, None) && (first_tab().next().is_none() || last_win().w_floating) {
         if first_tab().next().is_some() {
             err_raw(e_floatonly);
         }
         unclose_win_buffer(win, bufref, did_decrement);
-        return FAIL;
+        return Err(NotClosed);
     }
     if close_last_tabpage_window(win, free_buf, prev_curtab) {
-        return FAIL;
+        return Err(NotClosed);
     }
 
     // Now the window really is going to close. Disallow any autocommand from
@@ -280,7 +287,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
     if !was_floating {
         redraw_all(UPD_NOT_VALID);
     }
-    OK
+    Ok(())
 }
 
 /// Which snapshot slot a help or quickfix window restores from.
@@ -294,33 +301,33 @@ fn snapshot_index(help_window: bool) -> c_int {
 
 /// Closing `win` would leave only floating windows: close those first.
 ///
-/// `None` when the caller may go on, `Some(FAIL)` when it may not.
-fn close_the_floats(win: Win, force: bool) -> Option<c_int> {
+/// `Err` when the window may not be closed after all.
+fn close_the_floats(win: Win, force: bool) -> Result<(), NotClosed> {
     if is_autocmd_window(Some(last_win())) {
         err(c"E814: Cannot close window, only autocmd window would remain");
-        return Some(FAIL);
+        return Err(NotClosed);
     }
     if !force && !can_close_floats(None) {
         err_raw(e_floatonly);
-        return Some(FAIL);
+        return Err(NotClosed);
     }
     // Close the last window until there are no floating windows left. The
     // `force` flag is not actually used when closing a floating window.
     while last_win().w_floating {
-        if close(last_win(), !hides(last_win().buffer()), true) == FAIL {
+        if close(last_win(), !hides(last_win().buffer()), true).is_err() {
             // Give up rather than loop forever.
-            return Some(FAIL);
+            return Err(NotClosed);
         }
     }
     if !valid_win_any_tab(win.id()) {
-        return Some(FAIL); // already closed by autocommands
+        return Err(NotClosed); // already closed by autocommands
     }
     // Autocommands may have closed all other tab pages; check again.
     if is_last_window(win) {
         err(e_cannot_close_last_window);
-        return Some(FAIL);
+        return Err(NotClosed);
     }
-    None
+    Ok(())
 }
 
 /// What `leave_closing_window` found.

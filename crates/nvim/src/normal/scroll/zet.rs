@@ -388,7 +388,7 @@ fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: Key, old_fdl: &mut Option<OptInt>) -
             } else {
                 BACKWARD as c_int
             };
-            if fold_move_to(true, dir, cmd_arg.count1) == 0 {
+            if !fold_move_to(true, dir, cmd_arg.count1) {
                 clear_op_beep(cmd_arg.op());
             }
         }

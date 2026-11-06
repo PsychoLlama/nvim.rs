@@ -435,7 +435,7 @@ pub fn pum_check_clear() {
     pum_external.set(false);
 
     if let Some(wp) = win_float_find_preview() {
-        win_close(wp, false, false);
+        let _ = win_close(wp, false, false);
     }
 }
 

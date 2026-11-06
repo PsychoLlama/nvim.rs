@@ -49,12 +49,10 @@ use crate::os::cshim::ngettext;
 use crate::os::input::os_breakcheck;
 use crate::search::FORWARD;
 use crate::terminal::buf_terminal_running;
-use crate::types::{
-    Cleanup, CmdModFlags, ExArg, FAIL, Failed, LineNr, OptInt, OptionSetFlags, int64_t,
-};
+use crate::types::{Cleanup, CmdModFlags, ExArg, Failed, LineNr, OptInt, OptionSetFlags, int64_t};
 use crate::window::{
-    check_can_set_curbuf_forceit, last_window, swbuf_goto_win_with_buf, win_close, win_locked,
-    win_split,
+    NotClosed, check_can_set_curbuf_forceit, last_window, swbuf_goto_win_with_buf, win_close,
+    win_locked, win_split,
 };
 use crate::winlayer::{buffers, last_window as last_listed_window, windows};
 
@@ -86,7 +84,7 @@ fn enter_cleanup_now(cs: &mut Cleanup) {
 fn leave_cleanup_now(cs: &mut Cleanup) {
     leave_cleanup(cs);
 }
-fn close_win(win: Win, free_buf: bool, force: bool) -> c_int {
+fn close_win(win: Win, free_buf: bool, force: bool) -> Result<(), NotClosed> {
     win_close(win, free_buf, force)
 }
 fn window_locked(win: Win) -> bool {
@@ -204,7 +202,7 @@ pub fn goto_buffer(excmd: &mut ExArg, start: c_int, dir: c_int, count: c_int) {
         let mut cs = NO_CLEANUP;
         enter_cleanup_now(&mut cs);
         // Quitting means closing the split window, nothing else.
-        close_win(Win::current(), true, false);
+        let _ = close_win(Win::current(), true, false);
         swap_exists_action.set(save_sea);
         swap_exists_did_quit.set(true);
         leave_cleanup_now(&mut cs);
@@ -715,7 +713,7 @@ fn unload_buffer(buffer: Buf, action: c_int, flags: c_int, update_jumplist: &mut
         && !(window_locked(Win::current()) || Win::current().buffer().b_locked > 0)
         && (last_listed_window().is_some_and(is_autocmd_window) || !is_last_window(Win::current()))
     {
-        if close_win(Win::current(), false, false) == FAIL {
+        if close_win(Win::current(), false, false).is_err() {
             break;
         }
     }

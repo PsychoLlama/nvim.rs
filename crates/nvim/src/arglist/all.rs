@@ -185,7 +185,7 @@ fn close_unused_window(
     }
     let free_buf = !buf_hide(buffer) && !buf_is_changed(buffer);
     let wpnext_id = wpnext.map(Win::id);
-    win_close(window, free_buf, false);
+    let _ = win_close(window, free_buf, false);
     if let Some(next) = wpnext_id.and_then(valid_win) {
         return Some(next);
     }

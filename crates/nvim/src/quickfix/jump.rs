@@ -436,7 +436,7 @@ pub(crate) fn qf_jump_newwin(qi: Qi, dir: c_int, errornr: c_int, forceit: bool, 
                 );
                 if jumped != Jumped::Done {
                     if opened_window {
-                        win_close(Win::current(), true, false);
+                        let _ = win_close(Win::current(), true, false);
                     }
                     if jumped == Jumped::Aborted {
                         settle = None;

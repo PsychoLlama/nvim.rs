@@ -31,11 +31,11 @@ use crate::state::MODE_INSERT;
 
 /// If "updown" is false: Move to the start or end of the fold.
 /// If "updown" is true: move to fold at the same level.
-/// Returns FAIL if not moved.
+/// Whether the cursor moved.
 ///
 /// `dir` — FORWARD or BACKWARD
-pub fn fold_move_to(updown: bool, dir: c_int, count: c_int) -> c_int {
-    let mut retval: c_int = FAIL;
+pub fn fold_move_to(updown: bool, dir: c_int, count: c_int) -> bool {
+    let mut moved = false;
     let forward = dir == FORWARD as c_int;
     checkupdate(Win::current());
     for _ in 0..count {
@@ -122,14 +122,14 @@ pub fn fold_move_to(updown: bool, dir: c_int, count: c_int) -> c_int {
         if lnum_found == cursor {
             break;
         }
-        if retval == FAIL {
+        if !moved {
             setpcmark();
         }
         Win::current().w_cursor.lnum = lnum_found;
         Win::current().w_cursor.col = ColNr::ZERO;
-        retval = OK;
+        moved = true;
     }
-    retval
+    moved
 }
 
 /// Adjust the Visual area to include any fold at the start or end completely.

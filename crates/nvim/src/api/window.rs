@@ -234,7 +234,7 @@ pub fn nvim_win_hide(win: WindowHandle) -> Result<(), Error> {
         if is_aucmd {
             emsg(gettext(e_autocmd_close));
         } else if same_tab {
-            win_close(w, false, false);
+            let _ = win_close(w, false, false);
         } else {
             win_close_othertab(w, 0, tabpage, false);
         }

@@ -34,10 +34,9 @@ use crate::pos::MAXCOL;
 use crate::search::FORWARD;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    ApiString, Boolean, Error, FAIL, Float, Integer, LineNr, OK, Pos, SwitchWin, TryState,
-    WinConfig, WinStyle, WindowHandle, int64_t, kErrorTypeException, kFloatAnchorEast,
-    kFloatAnchorSouth, kFloatRelativeLaststatus, kFloatRelativeTabline, kFloatRelativeWindow,
-    size_t,
+    ApiString, Boolean, Error, Failed, Float, Integer, LineNr, Pos, SwitchWin, TryState, WinConfig,
+    WinStyle, WindowHandle, int64_t, kErrorTypeException, kFloatAnchorEast, kFloatAnchorSouth,
+    kFloatRelativeLaststatus, kFloatRelativeTabline, kFloatRelativeWindow, size_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{
@@ -418,14 +417,12 @@ fn text_height(
 // ---------------------------------------------------------------------------
 // May the layout change at all?
 
-pub fn check_split_disallowed(window: Win) -> c_int {
-    match check_split_disallowed_err(window) {
-        Ok(()) => OK,
-        Err(e) => {
-            emsg(&gettext_owned(e.message_or_empty()));
-            FAIL
-        }
-    }
+/// [`check_split_disallowed_err`], its refusal said.
+pub fn check_split_disallowed(window: Win) -> Result<(), Failed> {
+    check_split_disallowed_err(window).map_err(|e| {
+        emsg(&gettext_owned(e.message_or_empty()));
+        Failed
+    })
 }
 
 pub fn check_split_disallowed_err(window: Win) -> Result<(), Error> {

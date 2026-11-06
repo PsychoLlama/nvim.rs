@@ -328,7 +328,7 @@ pub(crate) fn ex_helpclose(excmd: &mut ExArg) {
     let Some(win) = windows().find(|wp| buf_is_help(wp.buffer_or_none())) else {
         return;
     };
-    win_close(win, false, excmd.forceit);
+    let _ = win_close(win, false, excmd.forceit);
 }
 
 /// `:exusage`.

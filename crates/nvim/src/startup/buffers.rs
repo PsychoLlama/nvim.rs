@@ -334,7 +334,7 @@ pub(crate) fn edit_buffers(parm: &MainParams) {
     // `create_windows` marks a window whose file could not be opened.
     let mut advance = true;
     if Win::current().w_arg_idx == -1 {
-        win_close(Win::current(), true, false);
+        let _ = win_close(Win::current(), true, false);
         advance = false;
     }
 
@@ -346,7 +346,7 @@ pub(crate) fn edit_buffers(parm: &MainParams) {
     for i in 1..parm.window_count {
         if Win::current().w_arg_idx == -1 {
             arg_idx += 1;
-            win_close(Win::current(), true, false);
+            let _ = win_close(Win::current(), true, false);
             advance = false;
             continue;
         }
@@ -387,7 +387,7 @@ pub(crate) fn edit_buffers(parm: &MainParams) {
                 if got_int.get() || only_one_window() {
                     quit_on_swap_exists(true);
                 }
-                win_close(Win::current(), true, false);
+                let _ = win_close(Win::current(), true, false);
                 advance = false;
             }
             if arg_idx == alist_count(ArgListId::GLOBAL) - 1 {

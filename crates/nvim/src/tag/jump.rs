@@ -375,7 +375,7 @@ impl Jump {
         if opened > 0 {
             drop(redraw_off);
             if postponed_split.get() != 0 {
-                win_close(Win::current(), false, false);
+                let _ = win_close(Win::current(), false, false);
                 postponed_split.set(0);
             }
             return Err(Failed);

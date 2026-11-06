@@ -193,7 +193,7 @@ pub(crate) fn open_cmdwin() -> Key {
         if let Some(cw) = cmdwin
             && !last_window(cw)
         {
-            win_close(cw, true, false);
+            let _ = win_close(cw, true, false);
         }
         // win_close() autocommands may have already deleted the buffer.
         if newbuf_status.is_ok()
@@ -391,7 +391,7 @@ pub(crate) fn open_cmdwin() -> Key {
         // win_goto() may trigger an autocommand that already closes the
         // cmdline window.
         if let Some(wp) = valid_win(wp).filter(|w| !w.is_current()) {
-            win_close(wp, true, false);
+            let _ = win_close(wp, true, false);
         }
 
         // win_close() may have already wiped the buffer when 'bh' is set

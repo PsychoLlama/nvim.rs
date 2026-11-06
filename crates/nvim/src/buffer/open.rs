@@ -239,7 +239,7 @@ fn read_buffer(
         } else if retval.is_ok() {
             unchanged_now(buf, false, true);
         }
-        fire_retval(AutoEvent::StdinReadPost, Buf::current(), &mut retval);
+        fire_autocmds_retval(AutoEvent::StdinReadPost, Buf::current(), &mut retval);
     }
     retval
 }
@@ -251,8 +251,7 @@ pub fn buf_ensure_loaded(buffer: Buf) -> bool {
         // already open (common case)
         return true;
     }
-    // Make sure the buffer is in a window.  `status` can be OK or NOTDONE
-    // (which also means ok/done).
+    // Make sure the buffer is in a window. Reading nothing is no failure.
     let status = in_buffer(buffer, || open_buffer_inner(false, None, ReadFlags::NONE));
     status.is_ok()
 }
@@ -427,7 +426,7 @@ fn open_buffer_inner(
         win.w_topline = LineNr::ONE;
         win.w_topfill = 0;
     }
-    fire_retval(AutoEvent::BufEnter, Buf::current(), &mut retval);
+    fire_autocmds_retval(AutoEvent::BufEnter, Buf::current(), &mut retval);
     retval?;
 
     // The autocommands may have changed the current buffer.  Apply the
@@ -443,7 +442,7 @@ fn open_buffer_inner(
             .clear(BufFlags::CHECK_RO | BufFlags::NEVERLOADED);
 
         if !flags.has(ReadFlags::NOWINENTER) {
-            fire_retval(AutoEvent::BufWinEnter, Buf::current(), &mut retval);
+            fire_autocmds_retval(AutoEvent::BufWinEnter, Buf::current(), &mut retval);
         }
     });
     retval

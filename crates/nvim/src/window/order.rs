@@ -23,7 +23,7 @@ use crate::message::e_floatexchange;
 use crate::message::{emsg, iemsg};
 use crate::normal::{reset_visual_and_resel, visual_active};
 use crate::option::vars::{p_ea, p_wh, p_wiw, p_wmh, p_wmw};
-use crate::types::{FAIL, Failed, OptInt};
+use crate::types::{Failed, OptInt};
 use crate::winlayer::graph::lastwin;
 use crate::winlayer::{FrameId, FrameRef, Win, frames};
 
@@ -247,7 +247,7 @@ pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Fa
     if is_only_window(window, None) {
         return Ok(());
     }
-    if is_autocmd_window(Some(window)) || check_split_disallowed(window) == FAIL {
+    if is_autocmd_window(Some(window)) || check_split_disallowed(window).is_err() {
         return Err(Failed);
     }
 

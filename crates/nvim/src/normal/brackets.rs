@@ -336,7 +336,7 @@ pub(crate) fn nv_brackets(cmd_arg: &mut CmdArg) {
             PUT_FIXINDENT.cast_signed() != 0,
         );
     } else if nchar.is('z') {
-        if fold_move_to(false, direction(cmd_arg), cmd_arg.count1) == 0 {
+        if !fold_move_to(false, direction(cmd_arg), cmd_arg.count1) {
             clear_op_beep(cmd_arg.op());
         }
     } else if nchar.is('c') {

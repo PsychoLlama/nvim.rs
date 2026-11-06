@@ -123,7 +123,7 @@ pub fn f_win_splitmove(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     } else {
         (0, 0)
     };
-    if is_aucmd_win(wp) || text_or_buf_locked() || check_split_disallowed(wp) == FAIL {
+    if is_aucmd_win(wp) || text_or_buf_locked() || check_split_disallowed(wp).is_err() {
         return;
     }
     if !targetwin.is_current() {

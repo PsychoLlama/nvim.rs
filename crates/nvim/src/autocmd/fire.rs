@@ -34,7 +34,7 @@ use crate::guard::{Depth, Script, Suppress};
 use crate::memory::XString;
 use crate::optionstr::{OptString, OptStringRef};
 use crate::types::LineNr;
-use crate::types::{FAIL, MAXPATHL, OK};
+use crate::types::{Failed, MAXPATHL, OK};
 use crate::winlayer::{Buf, Win, tab_windows};
 
 /// An empty `SaveRedo`; `save_redobuff` fills it in.
@@ -188,27 +188,27 @@ pub fn apply_autocmds_exarg(
 }
 
 /// [`apply_autocmds_retval`] with no names: `buffer`'s event, which may turn
-/// `retval` into `FAIL`.
-pub(crate) fn fire_autocmds_retval(
+/// `retval` into `Err` -- it can only lose a result, never claim one.
+pub(crate) fn fire_autocmds_retval<T>(
     event: AutoEvent,
     buffer: Buf,
-    retval: &mut ::core::ffi::c_int,
+    retval: &mut Result<T, Failed>,
 ) -> bool {
     apply_autocmds_retval(event, None, None, false, buffer, retval)
 }
 
-/// [`apply_autocmds`] threaded through a caller's `OK`/`FAIL`: it does
-/// nothing once that says to abort, and turns it to `FAIL` if a handler
-/// aborted.
-pub fn apply_autocmds_retval(
+/// [`apply_autocmds`] threaded through a caller's result: it does nothing
+/// once that is `Err` and `should_abort` agrees, and turns it to `Err` if a
+/// handler aborted.
+pub fn apply_autocmds_retval<T>(
     event: AutoEvent,
     pattern: Option<XString>,
     afile: Option<XString>,
     force: bool,
     buffer: Buf,
-    retval: &mut ::core::ffi::c_int,
+    retval: &mut Result<T, Failed>,
 ) -> bool {
-    if should_abort(*retval == FAIL) {
+    if should_abort(retval.is_err()) {
         return false;
     }
     let did_cmd = apply_autocmds_group(
@@ -222,7 +222,7 @@ pub fn apply_autocmds_retval(
         None,
     );
     if did_cmd && aborting() {
-        *retval = FAIL;
+        *retval = Err(Failed);
     }
     did_cmd
 }

@@ -44,12 +44,13 @@ use crate::winlayer::WinId;
 use core::ffi::CStr;
 use std::ffi::CString;
 
+use crate::autocmd::fire_autocmds_retval;
+use crate::buffer::current_buf;
 use crate::buffer::state::swap_exists_action;
 use crate::buffer::{
     BufFlags, BufRef, buf_clear_file, buf_freeall, do_autochdir, do_modelines, fileinfo,
     handle_swap_exists, maketitle, open_buffer, otherfile, set_buflisted, setaltfname,
 };
-use crate::buffer::{current_buf, fire_retval};
 use crate::charset::skip;
 use crate::cursor::{check_cursor, check_cursor_col, check_cursor_lnum};
 use crate::diff::{diff_buf_add, diff_invalidate};
@@ -619,9 +620,9 @@ fn enter_new_buffer(
         // buffer-local options have already been set and may have been changed
         // by the user.
         do_modelines(OptionSetFlags::WINONLY);
-        fire_retval(AutoEvent::BufEnter, Buf::current(), retval);
+        fire_autocmds_retval(AutoEvent::BufEnter, Buf::current(), retval);
         if !flags.has(EcmdFlags::NOWINENTER) {
-            fire_retval(AutoEvent::BufWinEnter, Buf::current(), retval);
+            fire_autocmds_retval(AutoEvent::BufWinEnter, Buf::current(), retval);
         }
     }
     check_arg_idx(Win::current());

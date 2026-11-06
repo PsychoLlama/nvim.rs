@@ -31,7 +31,7 @@ use crate::option::vars::{
 };
 use crate::option::win_copy_options;
 use crate::types::ui::kUIMultigrid;
-use crate::types::{FAIL, Failed, Integer, OptInt};
+use crate::types::{Failed, Integer, OptInt};
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_win_hide, ui_has};
 use crate::ui_compositor::ui_comp_remove_grid;
@@ -46,9 +46,7 @@ pub fn win_split(size: c_int, flags: c_int) -> Result<(), Failed> {
 /// window takes, whether it is vertical, and whether it is entered.
 pub(crate) fn split(size: c_int, flags: c_int) -> Result<(), Failed> {
     let cur = Win::current();
-    if check_split_disallowed(cur) == FAIL {
-        return Err(Failed);
-    }
+    check_split_disallowed(cur)?;
     // When the ":tab" modifier was used, open a new tab page instead.
     if may_open_tabpage().is_ok() {
         return Ok(());

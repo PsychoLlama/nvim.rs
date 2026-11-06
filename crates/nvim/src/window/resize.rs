@@ -42,7 +42,7 @@ use crate::state::{MODE_CMDLINE, MODE_NORMAL, MODE_TERMINAL, get_real_state};
 use crate::terminal::buf_terminal_check_size;
 use crate::types::ClickLine;
 use crate::types::ui::{kUIMessages, kUIMultigrid, kUITabline};
-use crate::types::{ColNr, FAIL, Integer, LineNr, NUL, OK, OptInt, ScriptId, WindowHandle};
+use crate::types::{ColNr, Integer, LineNr, NUL, OptInt, ScriptId, WindowHandle};
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_win_viewport_margins, ui_has};
 use crate::window::state::{skip_update_topline, skip_win_fix_cursor};
@@ -627,12 +627,23 @@ fn last_status_rec(fr: FrameRef, statusline: bool, is_stl_global: bool) {
     }
 }
 
-pub fn set_winbar_win(window: Win, make_room: bool, valid_cursor: bool) -> c_int {
-    winbar_win(window, make_room, valid_cursor)
+/// Why a window did not get the window bar `'winbar'` asks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WinbarRefused {
+    /// A floating window one line high: E36 is said, and the other windows
+    /// may still take theirs.
+    FloatTooSmall,
+    /// The layout had no line to give (said), or the caller gave no leave to
+    /// make room (silent): the windows after this one get none either.
+    NoRoom,
 }
 
 /// Give `window` the window bar `'winbar'` asks for, or take it away.
-fn winbar_win(window: Win, make_room: bool, valid_cursor: bool) -> c_int {
+pub(crate) fn set_winbar_win(
+    window: Win,
+    make_room: bool,
+    valid_cursor: bool,
+) -> Result<(), WinbarRefused> {
     let mut window = window;
     let global = p_wbr(|value| c_int::from(value.to_bytes().first().copied().unwrap_or(0)));
     let local = c_int::from(window.w_onebuf_opt.wo_wbr.first_byte());
@@ -645,9 +656,9 @@ fn winbar_win(window: Win, make_room: bool, valid_cursor: bool) -> c_int {
         if winbar_height == 1 && window.w_view_height <= 1 {
             if window.w_floating {
                 err(e_noroom);
-                return NOTDONE;
+                return Err(WinbarRefused::FloatTooSmall);
             } else if !make_room || !resize_frame_for_winbar(window.frame()) {
-                return FAIL;
+                return Err(WinbarRefused::NoRoom);
             }
         }
         window.w_winbar_height = winbar_height;
@@ -656,12 +667,12 @@ fn winbar_win(window: Win, make_room: bool, valid_cursor: bool) -> c_int {
             window.w_click_defs.winbar = ClickLine::default();
         }
     }
-    OK
+    Ok(())
 }
 
 pub fn set_winbar(make_room: bool) {
     for wp in windows() {
-        if winbar_win(wp, make_room, true) == FAIL {
+        if set_winbar_win(wp, make_room, true) == Err(WinbarRefused::NoRoom) {
             break;
         }
     }

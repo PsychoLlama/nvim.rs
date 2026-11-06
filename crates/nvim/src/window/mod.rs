@@ -175,7 +175,6 @@ pub const SNAP_COUNT: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const FR_LEAF: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const FR_ROW: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FR_COL: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const SID_WINLAYOUT: ::core::ffi::c_int = -7 as ::core::ffi::c_int;
 pub const NOWIN: *mut Window = -1 as ::core::ffi::c_int as *mut Window;
 static e_cannot_close_last_window: &::core::ffi::CStr = c"E444: Cannot close last window";

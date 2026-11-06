@@ -26,11 +26,11 @@ use crate::normal::reset_visual_and_resel;
 use crate::option::vars::{P_EA, jop_flags, p_ch, p_ea, p_tpm};
 use crate::options::kOptJopFlagClean;
 use crate::os::input::os_breakcheck;
-use crate::types::{Cleanup, ExArg, FAIL, Failed, LineNr, OptInt};
+use crate::types::{Cleanup, ExArg, Failed, LineNr, OptInt};
 use crate::ui::state::{Columns, Rows};
 use crate::undo::buf_is_changed;
 use crate::window::{
-    WSP_BELOW, WSP_ROOM, WSP_VERT, global_stl_height, goto_tab as goto_tab_page,
+    NotClosed, WSP_BELOW, WSP_ROOM, WSP_VERT, global_stl_height, goto_tab as goto_tab_page,
     lastwin_nofloating, tabline_height, tabpage_index, win_close, win_enter, win_locked,
     win_move_after, win_split, win_valid,
 };
@@ -84,7 +84,7 @@ fn enter_win(win: Win) {
     win_enter(win, false);
 }
 
-fn close_win(win: Win, free_buf: bool) -> c_int {
+fn close_win(win: Win, free_buf: bool) -> Result<(), NotClosed> {
     win_close(win, free_buf, false)
 }
 
@@ -247,7 +247,7 @@ fn close_superfluous_windows(had_tab: c_int, open_wins: &mut c_int) {
                 w.next().filter(|next| !next.w_floating)
             };
             if should_close(w, had_tab) {
-                if close_win(w, false) == FAIL {
+                if close_win(w, false).is_err() {
                     break;
                 }
                 // Just in case an autocommand does something strange with
@@ -335,7 +335,7 @@ fn open_window_for(
             // The user selected Quit at the ATTENTION prompt; close this
             // window.
             with_clean_error_state(|| {
-                close_win(current_win(), true);
+                let _ = close_win(current_win(), true);
                 *open_wins -= 1;
                 swap_exists_action.set(SEA_NONE);
                 swap_exists_did_quit.set(true);
@@ -376,7 +376,7 @@ fn close_extra_windows(count: i32, open_wins: &mut c_int) {
             wp = last_window();
         } else if r {
             let free_buf = !buf_hidden(win.buffer());
-            close_win(win, free_buf);
+            let _ = close_win(win, free_buf);
             *open_wins -= 1;
             wp = last_window();
         } else {

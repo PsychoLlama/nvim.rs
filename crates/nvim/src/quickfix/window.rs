@@ -304,7 +304,7 @@ pub fn ex_cclose(excmd: &mut ExArg) {
         return;
     };
     if let Some(win) = qf_find_win(qi) {
-        close(win, false, false);
+        let _ = close(win, false, false);
     }
 }
 

@@ -372,7 +372,7 @@ pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
                     };
                     enter_cleanup(&mut cs);
                     let free = !need_hide && !buf_hide(Buf::current());
-                    win_close(Win::current(), free, false);
+                    let _ = win_close(Win::current(), free, false);
                     leave_cleanup(&mut cs);
                 }
             }

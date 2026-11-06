@@ -46,15 +46,15 @@ use crate::options::kOptBufhidden;
 use crate::optionstr::OptStringRef;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    AlignTextPos, BufferHandle, Error, FAIL, FloatAnchor, LPos, LineNr, OptInt, OptVal,
-    OptionSetFlags, Pos, ScreenChar, VirtText, WinConfig, WinSplit, WinStyle, WindowHandle,
-    kErrorTypeException, kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus,
-    kFloatRelativeMouse, kFloatRelativeWindow,
+    AlignTextPos, BufferHandle, Error, FloatAnchor, LPos, LineNr, OptInt, OptVal, OptionSetFlags,
+    Pos, ScreenChar, VirtText, WinConfig, WinSplit, WinStyle, WindowHandle, kErrorTypeException,
+    kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus, kFloatRelativeMouse,
+    kFloatRelativeWindow,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::ui_has;
 use crate::window::{
-    last_status, lastwin_nofloating, merge_win_config, win_alloc, win_append, win_close,
+    NotClosed, last_status, lastwin_nofloating, merge_win_config, win_alloc, win_append, win_close,
     win_comp_pos, win_enter, win_find_tabpage, win_free, win_init, win_remove,
     win_remove_status_line, win_set_buf, win_set_inner_size, winframe_remove,
 };
@@ -229,7 +229,7 @@ fn valid_window(win: WinId) -> Option<Win> {
 ///
 /// Fires `WinClosed`/`WinLeave` and can re-enter this module, so nothing may
 /// be borrowed across it.
-fn close_window(win: Win) -> c_int {
+fn close_window(win: Win) -> Result<(), NotClosed> {
     win_close(win, false, false)
 }
 fn enter_window(win: Win) {
@@ -604,7 +604,7 @@ pub(crate) fn win_float_remove(bang: bool, mut count: c_int) {
     let ids: Vec<WinId> = floats.iter().map(|win| win.id()).collect();
     for id in ids {
         if let Some(win) = valid_window(id)
-            && close_window(win) == FAIL
+            && close_window(win).is_err()
         {
             break;
         }

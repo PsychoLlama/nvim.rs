@@ -248,7 +248,7 @@ pub(crate) fn didset_window_options(window: Win, valid_cursor: bool) {
     let _ = set_window_chars_option(window, kListchars, true);
     parse_winhl_opt(None, Some(window));
     check_blending(window);
-    set_winbar_win(window, false, valid_cursor);
+    let _ = set_winbar_win(window, false, valid_cursor);
     let _ = check_window_signcolumn(window);
     w.w_grid_alloc.blending = w.w_onebuf_opt.wo_winbl > 0 as OptInt;
 }

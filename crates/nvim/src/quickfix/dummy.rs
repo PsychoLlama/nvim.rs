@@ -29,7 +29,7 @@ use crate::fileio::read_dummy_file;
 use crate::memory::XString;
 use crate::os::fs::current_dir;
 use crate::types::CmdIdx;
-use crate::types::{CmdLine, OK};
+use crate::types::CmdLine;
 use crate::winlayer::{Buf, windows};
 use core::ffi::CStr;
 
@@ -143,7 +143,7 @@ pub(crate) fn wipe_dummy_buffer(mut buffer: Buf, dirname_start: Option<&CStr>) {
         if windows().nth(1).is_some()
             && let Some(wp) = windows().find(|wp| wp.w_buffer == buffer)
         {
-            did_one = win_close(wp, false, false) == OK;
+            did_one = win_close(wp, false, false).is_ok();
         }
         if !did_one {
             // The buffer keeps a window; it can only stop being a dummy.

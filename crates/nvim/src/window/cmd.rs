@@ -482,7 +482,7 @@ fn move_to_new_tabpage(prenum: c_int) {
     let newtab = TabPage::current().id();
     goto_tab(oldtab, true, true);
     if Win::current().id() == wp {
-        close(Win::current(), false, false);
+        let _ = close(Win::current(), false, false);
     }
     if let Some(newtab) = valid_tab(newtab) {
         goto_tab(newtab, true, true);
@@ -557,7 +557,7 @@ fn goto_file(nchar: c_int, prenum1: c_int) {
         cur.w_onebuf_opt.wo_crb = 0;
         if edit_file(name.as_cstr()).is_err() {
             // Failed to open the file: close the window opened for it.
-            close(Win::current(), false, false);
+            let _ = close(Win::current(), false, false);
             goto_tab_win(oldtab, oldwin);
         } else {
             wp = Some(Win::current());

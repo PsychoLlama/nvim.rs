@@ -74,8 +74,8 @@ use crate::os::cshim::gettext;
 use crate::syntax::reset_synblock;
 use crate::types::{
     AlignTextPos, BfaFlags, BlnFlags, Buffer, BufferRef, CdCause, DoBufAction, DoBufStart,
-    EStackType, ExArg, ExtmarkOp, FAIL, Failed, GetFileFlags, LineNr, MarkAdjustMode, MetaIndex,
-    OK, UndoObjectType, VarNumber, WinSplit, WinStyle, uint32_t,
+    EStackType, ExArg, ExtmarkOp, Failed, GetFileFlags, LineNr, MarkAdjustMode, MetaIndex,
+    UndoObjectType, VarNumber, WinSplit, WinStyle, uint32_t,
 };
 use crate::undo::buf_is_changed;
 use crate::window::{check_colorcolumn, close_windows, window_layout_lock, window_layout_unlock};
@@ -377,18 +377,6 @@ pub(crate) fn fire(event: AutoEvent, buffer: Buf) -> bool {
 pub(crate) fn fire_named(event: AutoEvent, buffer: Buf) -> bool {
     let name = buffer.name.shown().map(XString::from_cstr);
     apply_autocmds_exarg(event, name.clone(), name, false, Some(buffer), None)
-}
-
-/// `apply_autocmds_retval()`: as [`fire`], but the event may turn `retval`
-/// into `FAIL`.
-pub(crate) fn fire_retval<T>(event: AutoEvent, buffer: Buf, retval: &mut Result<T, Failed>) {
-    let mut status = if retval.is_ok() { OK } else { FAIL };
-    fire_autocmds_retval(event, buffer, &mut status);
-    // The event can only *lose* the read, never claim one: `FAIL` is the
-    // only value `apply_autocmds_retval` writes.
-    if status == FAIL {
-        *retval = Err(Failed);
-    }
 }
 
 pub(crate) fn block_autocmds_now() {

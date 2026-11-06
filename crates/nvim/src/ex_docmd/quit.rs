@@ -50,8 +50,8 @@ use crate::ui::{ui_call_error_exit, ui_call_suspend, ui_flush};
 use crate::undo::{buf_is_changed, curbuf_is_changed};
 
 use crate::window::{
-    find_tabpage, goto_tabpage, trigger_tabclosedpre, valid_tabpage, win_close_othertab, win_goto,
-    win_valid, window_layout_locked,
+    find_tabpage, goto_tabpage, trigger_tabclosedpre, valid_tabpage, win_close, win_close_othertab,
+    win_goto, win_valid, window_layout_locked,
 };
 
 use crate::winlayer::{Buf, Win, WinId, first_tab, first_window, last_window, tabs, windows};
@@ -178,7 +178,7 @@ pub(crate) fn ex_quit(excmd: &mut ExArg) {
     }
     not_exiting(save_exiting);
     let free_buf = !buf_hide(wp.buffer()) || excmd.forceit;
-    win_close(wp, free_buf, excmd.forceit);
+    let _ = win_close(wp, free_buf, excmd.forceit);
 }
 
 /// The `nr`'th window of the current tab page, clamped to the last one.
@@ -335,7 +335,7 @@ pub(crate) fn ex_win_close(forceit: c_int, win: Win, tabpage: Option<TabPage>) {
     let hide = !need_hide && buffer.is_some_and(|b| !buf_hide(b));
     match tabpage {
         None => {
-            win_close(w, hide, forceit != 0);
+            let _ = win_close(w, hide, forceit != 0);
         }
         Some(tp) => {
             win_close_othertab(win, hide as c_int, tp, forceit != 0);
@@ -519,7 +519,7 @@ pub(crate) fn ex_hide(excmd: &mut ExArg) {
     if !win.w_floating && window_layout_locked(CmdIdx::hide) {
         return;
     }
-    win_close(win, false, excmd.forceit);
+    let _ = win_close(win, false, excmd.forceit);
 }
 
 /// `:stop` and `:suspend`.
@@ -559,7 +559,7 @@ pub(crate) fn ex_exit(excmd: &mut ExArg) {
         getout(0);
     }
     not_exiting(save_exiting);
-    win_close(
+    let _ = win_close(
         Win::current(),
         !buf_hide(Win::current().buffer()),
         excmd.forceit,
@@ -625,9 +625,4 @@ fn text_locked() -> bool {
 /// `text_locked_msg()` as checked code.
 fn text_locked_msg() {
     crate::ex_getln::text_locked_msg()
-}
-
-/// `win_close()` as checked code.
-fn win_close(win: Win, free_buf: bool, force: bool) -> c_int {
-    crate::window::win_close(win, free_buf, force)
 }
