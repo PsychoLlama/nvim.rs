@@ -56,7 +56,7 @@ use ::core::ptr::NonNull;
 use super::edit::{Loan, assert_not_lent};
 use super::*;
 use crate::hashtab::{hash_bytes, hash_bytes_len};
-use crate::types::{DictKey, HashValue, Refcount, SlotEntry};
+use crate::types::{DictKey, Failed, HashValue, Refcount, SlotEntry};
 
 /// An owning reference to a heap-allocated [`List`].
 ///
@@ -802,7 +802,7 @@ impl Dict {
     /// Put `item` in the table, which takes it over. When its key is
     /// already there the item comes back, untouched.
     pub(crate) fn insert(&mut self, item: Box<DictItem>) -> Result<(), Box<DictItem>> {
-        let Some((hi, hash)) = self.vacant_slot(&item.di_key) else {
+        let Ok((hi, hash)) = self.vacant_slot(&item.di_key) else {
             return Err(item);
         };
         self.dv_hashtab
@@ -810,17 +810,17 @@ impl Dict {
         Ok(())
     }
 
-    /// Where an item keyed `key` goes, with the key's hash; `None`, and an
-    /// internal error (E685), when the key is already there.
-    fn vacant_slot(&self, key: &DictKey) -> Option<(ItemSlot, HashValue)> {
+    /// Where an item keyed `key` goes, with the key's hash. A key already
+    /// there is an internal error (E685), said here.
+    fn vacant_slot(&self, key: &DictKey) -> Result<(ItemSlot, HashValue), Failed> {
         let hash = hash_bytes(key.bytes());
         let hi = self.probe_key(key.bytes(), hash);
         if hi.is_kept() {
             let key = crate::message_fmt::msg_bytes(key.bytes());
             crate::siemsg!("E685: Internal error: hash_add(): duplicate key \"{key}\"");
-            return None;
+            return Err(Failed);
         }
-        Some((hi, hash))
+        Ok((hi, hash))
     }
 
     /// Take the item in slot `slot` out of the table.
@@ -863,7 +863,7 @@ pub(crate) fn link_buf_changedtick(mut buffer: crate::winlayer::Buf) {
         return;
     };
     // The buffer's own item, which outlives its stay in the table as above.
-    if let Some((hi, hash)) = dict.vacant_slot(&key) {
+    if let Ok((hi, hash)) = dict.vacant_slot(&key) {
         dict.dv_hashtab.insert_at(hi, DictEntry(item), hash);
     }
 }
