@@ -23,6 +23,8 @@ use super::emit::{Args, Body, Conversion, TMP};
 use super::infinity_str;
 use crate::ascii::ascii_isdigit;
 use crate::narrow::float_as_usize;
+#[cfg(miri)]
+use core::fmt::Write as _;
 
 /// `%f`, `%F`, `%e`, `%E`, `%g` and `%G`.
 ///
