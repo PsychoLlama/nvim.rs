@@ -23,11 +23,12 @@ use super::{nlua_error, nlua_pcall, until_nul, with_active_stack, with_main_stac
 use crate::ex_docmd::cmdmod_report;
 use crate::ex_docmd::state::cmdmod;
 use crate::ex_getln::{cmdpreview_get_bufnr, cmdpreview_get_ns};
+use crate::lua::abi::lua_Integer;
 use crate::lua::stack::{At, Stack};
 use crate::option::vars::p_verbose;
 use crate::path::fix_fname;
 use crate::runtime::{find_script_by_name, new_script_item, script_is_lua, with_script_item};
-use crate::types::{CmdModFlags, ExArg, ExArgt, Handle, OptInt, ScriptCtx, ScriptId, lua_Integer};
+use crate::types::{CmdModFlags, ExArg, ExArgt, Handle, OptInt, ScriptCtx, ScriptId};
 use crate::usercmd::{LuaCommand, uc_mods, uc_split_args_iter};
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
 

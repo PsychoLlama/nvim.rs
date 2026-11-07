@@ -45,13 +45,14 @@ use crate::narrow::float_as_usize;
 use core::ffi::{CStr, c_int};
 
 use self::walk::{LuaDecoder, LuaEncoder};
+use crate::lua::abi::{lua_Integer, lua_Number};
 use crate::lua::ffi::{LUA_NOREF, LUA_REFNIL};
 use crate::lua::stack::{At, Kind, Raise, Stack, Userdata};
 use crate::lua_functions;
 use crate::mpack::mpack_core::{MPACK_EOF, MPACK_ERROR};
 use crate::mpack::object::{MPACK_EXCEPTION, MPACK_MAX_OBJECT_DEPTH, MPACK_NOMEM, Parser};
 use crate::mpack::rpc::MPACK_RPC_MAX_REQUESTS;
-use crate::types::{lua_Integer, lua_Number, mpack_uint32_t};
+use crate::types::mpack_uint32_t;
 
 /// The walk every instance drives: a node holds the references of the value
 /// it stands for, in the instance's private table.

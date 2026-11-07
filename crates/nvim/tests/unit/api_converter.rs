@@ -225,12 +225,13 @@ mod lua {
     use core::ffi::c_int;
 
     use neovim::eval::typval::tv_clear;
+    use neovim::lua::abi::lua_State;
     use neovim::lua::converter::{
         pop_dict, pop_integer, pop_object, pop_string, pop_typval, push_object, push_typval,
     };
     use neovim::lua::executor::with_main_stack;
     use neovim::lua::stack::{At, Kind, Raise, Stack};
-    use neovim::types::{Object, lua_State};
+    use neovim::types::Object;
 
     use crate::support::tv::{Obj, Tv, read, read_object};
     use crate::support::{Editor, check_emsg, editor_lock};

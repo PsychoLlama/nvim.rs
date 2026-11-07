@@ -103,6 +103,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::marker::PhantomData;
 use core::ptr::{self, NonNull};
 
+use crate::lua::abi::{lua_Integer, lua_Number, lua_State};
 use crate::lua::executor::release_luaref;
 use crate::lua::ffi::{
     LUA_GLOBALSINDEX, LUA_REGISTRYINDEX, LUA_TBOOLEAN, LUA_TFUNCTION, LUA_TLIGHTUSERDATA, LUA_TNIL,
@@ -117,7 +118,7 @@ use crate::lua::ffi::{
 };
 use crate::lua::state::MAIN_REFS;
 use crate::os::libc::size_t;
-use crate::types::{LuaRef, lua_Integer, lua_Number, lua_State};
+use crate::types::LuaRef;
 
 mod debug;
 mod dispatch;

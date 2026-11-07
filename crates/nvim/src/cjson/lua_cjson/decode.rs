@@ -30,9 +30,9 @@ use core::ffi::{CStr, c_int};
 
 use super::{DECODE_MAX_DEPTH, fetch_config};
 use crate::cjson::fpconv::strtod;
+use crate::lua::abi::lua_Integer;
 use crate::lua::stack::{At, Kind, Raise, Stack};
 use crate::narrow::number_as_int;
-use crate::types::lua_Integer;
 
 /// A byte offset as an error message reports it. Upstream hands the
 /// `ptrdiff_t` difference of two pointers to a `%d`, i.e. narrows it by

@@ -23,10 +23,10 @@
 use core::ffi::{CStr, c_char, c_uint, c_void};
 
 use crate::global_cell::GlobalCell;
+use crate::lua::abi::lua_Integer;
 use crate::lua::stack::{At, Function, Stack, Userdata};
 use crate::os::libc::{int32_t, size_t, uint8_t, uint16_t, uint32_t};
 use crate::registry::{IdMap, id_map};
-use crate::types::lua_Integer;
 
 mod cursor;
 mod init;

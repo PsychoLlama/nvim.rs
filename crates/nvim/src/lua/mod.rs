@@ -10,6 +10,7 @@
 //! The Lua runtime: the LuaJIT FFI bindings, the `vim.*` stdlib, and the
 //! bridge between Lua values and the editor's own.
 
+pub mod abi;
 pub mod api_wrappers;
 pub mod base64;
 pub mod converter;

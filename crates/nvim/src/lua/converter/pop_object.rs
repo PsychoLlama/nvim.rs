@@ -30,12 +30,13 @@ use core::ffi::CStr;
 use super::pop::TURN_SLOTS;
 use super::{API_INTEGER_MAX, API_INTEGER_MIN, classify_table};
 use crate::global_cell::GlobalCell;
+use crate::lua::abi::lua_Number;
 use crate::lua::stack::{At, Kind, Stack};
 use crate::narrow::{float_as_i64, len_as_int};
 use crate::os::libc::size_t;
 use crate::types::{
     ApiDict, ApiString, Array, DictKey, Error, Object, kObjectTypeArray, kObjectTypeDict,
-    kObjectTypeFloat, kObjectTypeNil, lua_Number,
+    kObjectTypeFloat, kObjectTypeNil,
 };
 
 /// Refused for a Lua value with no api image.

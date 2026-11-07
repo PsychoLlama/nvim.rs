@@ -31,8 +31,8 @@ use std::rc::Rc;
 
 use super::parser::{Parser, check_parser};
 use super::*;
+use crate::lua::abi::lua_State;
 use crate::lua::stack::{Kind, Raise};
-use crate::types::lua_State;
 
 /// One installed logger: the payload tree-sitter hands back to
 /// [`logger_cb`].

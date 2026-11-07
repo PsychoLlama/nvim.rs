@@ -1192,7 +1192,7 @@ FOREIGN_ABI_TYPES = {
     "state, reached through the same ABI",
     "crates/nvim/src/types/termkey.rs": "libtermkey's instance and driver, "
     "ported with its ABI intact and driven from `tui/`",
-    "crates/nvim/src/types/lua.rs": "LuaJIT's `lua_State`, `luaL_Buffer` and "
+    "crates/nvim/src/lua/abi.rs": "LuaJIT's `lua_State`, `luaL_Buffer` and "
     "`luaL_Reg` -- the interpreter defines every one of them",
     "crates/nvim/src/os/libc.rs": "the C library's nominal aggregates, "
     "plus the pthread types libuv embeds by value",
@@ -2334,7 +2334,7 @@ REPR_C_FLOOR = {
     "crates/nvim/src/types/uv.rs": "ffi: libuv's own structs",
     "crates/nvim/src/types/vterm.rs": "ffi: libvterm's public types",
     "crates/nvim/src/types/vterm_internal.rs": "ffi: libvterm's internal state",
-    "crates/nvim/src/types/lua.rs": "ffi: LuaJIT's `lua_State`",
+    "crates/nvim/src/lua/abi.rs": "ffi: LuaJIT's `lua_State`",
     "crates/nvim/src/types/libuv_proc.rs": "ffi: a `uv_process_t` handed to `uv_spawn`",
     "crates/nvim/src/types/pty_proc_unix.rs": "ffi: a `winsize` handed to the tty ioctls",
 }

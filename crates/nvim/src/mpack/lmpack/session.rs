@@ -30,6 +30,7 @@ use core::ffi::{CStr, c_int};
 use super::{
     Unpacker, geti, new_private_table, reference, start_offset, unpack_into_registry, unreference,
 };
+use crate::lua::abi::{lua_Integer, lua_Number};
 use crate::lua::ffi::{LUA_NOREF, LUA_REFNIL};
 use crate::lua::stack::{At, Kind, Raise, Stack, Userdata};
 use crate::lua_functions;
@@ -38,7 +39,6 @@ use crate::mpack::object::MPACK_NOMEM;
 use crate::mpack::rpc::{
     self, MPACK_RPC_NOTIFICATION, MPACK_RPC_REQUEST, MPACK_RPC_RESPONSE, RpcMessage,
 };
-use crate::types::{lua_Integer, lua_Number};
 
 /// The scratch a whole envelope fits in: an array header, a one-byte type
 /// and a five-byte id at most.

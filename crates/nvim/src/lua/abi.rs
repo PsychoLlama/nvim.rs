@@ -11,8 +11,9 @@
 // And `lua_Debug`'s `L`, which is LuaJIT's field name.
 #![allow(non_snake_case)]
 
-// Canonical type definitions, hoisted out of the per-module copies c2rust
-// emitted. One definition per logical type; every module re-exports here.
+//! LuaJIT's C API types: the interpreter state every binding is handed, and
+//! the scalars it passes across.
+
 use crate::os::libc::ptrdiff_t;
 
 // Opaque C type: layout unknown here, only ever used behind a pointer.

@@ -19,11 +19,12 @@
 #![forbid(unsafe_code)]
 
 use super::{TYPE_IDX_VALUE, VAL_IDX_VALUE};
+use crate::lua::abi::lua_Number;
 use crate::lua::stack::{At, Stack};
 use crate::narrow::number_as_int;
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, Float, Handle, Integer, Object, ObjectType,
-    kObjectTypeFloat, lua_Number,
+    kObjectTypeFloat,
 };
 
 /// Push the key a special table's type tag is stored under.

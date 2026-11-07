@@ -13,13 +13,14 @@ use crate::types::ColNr;
 use core::ffi::{CStr, c_int};
 
 use crate::highlight_group::{HLF_COUNT, HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
+use crate::lua::abi::lua_Integer;
 use crate::lua::stack::{At, Kind, Raise, Stack};
 use crate::lua_functions;
 use crate::message::{e_no_spell, emsg};
 use crate::optionstr::OptString;
 use crate::os::cshim::gettext;
 use crate::spell::{parse_spelllang, spell_check};
-use crate::types::{Hlf, lua_Integer};
+use crate::types::Hlf;
 use crate::winlayer::Win;
 
 lua_functions! {

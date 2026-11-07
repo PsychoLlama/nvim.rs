@@ -23,6 +23,7 @@ use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later};
 use crate::ex_getln::script_get;
 use crate::fileio::buffered::ReadFile;
 use crate::getchar::state::got_int;
+use crate::lua::abi::lua_Number;
 use crate::lua::stack::{At, Kind};
 use crate::memline::ml_replace_owned;
 use crate::memory::XString;
@@ -30,7 +31,7 @@ use crate::message::{e_argreq, emsg};
 use crate::narrow::len_as_int;
 use crate::os::cshim::gettext;
 use crate::runtime::cmd_source_buffer;
-use crate::types::{CmdIdx, ColNr, ExArg, Failed, LineNr, lua_Number};
+use crate::types::{CmdIdx, ColNr, ExArg, Failed, LineNr};
 use crate::undo::u_save;
 use crate::winlayer::{Buf, Win};
 

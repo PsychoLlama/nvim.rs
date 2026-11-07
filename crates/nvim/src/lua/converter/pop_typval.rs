@@ -36,6 +36,7 @@ use crate::eval::decode::{decode_create_map_special_dict, decode_string};
 use crate::eval::typval::{DictRef, ListRef, tv_dict_alloc, tv_list_alloc};
 use crate::eval::userfunc::register_luafunc;
 use crate::global_cell::GlobalCell;
+use crate::lua::abi::lua_Number;
 use crate::lua::ffi::LUA_NOREF;
 use crate::lua::stack::{At, Kind, Stack};
 use crate::message::emsg;
@@ -44,7 +45,7 @@ use crate::os::cshim::gettext;
 use crate::os::libc::size_t;
 use crate::types::{
     Failed, ListItem, LuaRef, TypVal, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray,
-    kObjectTypeDict, kObjectTypeFloat, kObjectTypeNil, kSpecialVarNull, lua_Number,
+    kObjectTypeDict, kObjectTypeFloat, kObjectTypeNil, kSpecialVarNull,
 };
 
 /// Refused for a table that is neither a list nor a dictionary.

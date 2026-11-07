@@ -23,6 +23,7 @@
 // extern block below, and declaring the foreign surface is this file's
 // entire job.
 
+use crate::lua::abi::{lua_CFunction, lua_Integer, lua_Number, lua_State};
 use crate::os::libc::size_t;
 use crate::types::*;
 

@@ -303,7 +303,7 @@ their `#[repr(C)]` is libuv's and libtermkey's layout, not this tree's.
 
 `FOREIGN_ABI_TYPES` in `scripts/ratchet.py` names them, on exactly the "a
 foreign ABI" bullet above and nothing softer: `types/uv.rs`, `types/vterm.rs`,
-`types/vterm_internal.rs`, `types/termkey.rs`, `types/lua.rs`,
+`types/vterm_internal.rs`, `types/termkey.rs`, `lua/abi.rs`,
 `os/libc.rs`, `types/libuv_proc.rs`, `types/pty_proc_unix.rs`. It splits
 one metric in two:
 

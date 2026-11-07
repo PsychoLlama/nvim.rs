@@ -37,8 +37,8 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 use super::{At, Check, Raise, Stack};
+use crate::lua::abi::lua_State;
 use crate::lua::ffi::{lua_getfenv, lua_newuserdata, lua_setfenv, luaL_testudata};
-use crate::types::lua_State;
 
 /// A Rust value Lua holds as full userdata, under a metatable of its own.
 ///

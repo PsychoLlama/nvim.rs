@@ -27,6 +27,7 @@ use core::ffi::c_int;
 use super::{API_INTEGER_MAX, API_INTEGER_MIN, LuaTableProps, TYPE_IDX_VALUE, pop_object};
 use crate::api::private::helpers::api_typename;
 use crate::api_error;
+use crate::lua::abi::lua_Number;
 use crate::lua::stack::{At, Kind, Stack};
 use crate::memory::memchr_in;
 use crate::message_fmt::msg_cstr;
@@ -34,7 +35,6 @@ use crate::os::libc::size_t;
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, DictKey, Error, Float, Handle, Integer, LuaRef, ObjectType,
     kErrorTypeValidation, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat, kObjectTypeNil,
-    lua_Number,
 };
 
 /// How many Lua slots one turn of a `pop` walk may need: a table's next key

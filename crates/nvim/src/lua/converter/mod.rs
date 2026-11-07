@@ -29,8 +29,9 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::lua::abi::lua_Number;
 use crate::os::libc::size_t;
-use crate::types::{ObjectType, kObjectTypeNil, lua_Number};
+use crate::types::{ObjectType, kObjectTypeNil};
 
 // The typval-to-Lua direction, carved out of this module's
 // `typval_encode.c.h` instantiation.

@@ -31,10 +31,10 @@ use std::io::Write;
 
 use super::{LuvError, fast_pcall, nlua_init_state, report_luv_error};
 use crate::event::r#loop::{main_loop_raw, schedule_deferred_job};
+use crate::lua::abi::{lua_CFunction, lua_State};
 use crate::lua::ffi::{LUA_MULTRET, lua_close, luaopen_luv, luv_set_loop};
 use crate::lua::stack::{At, Stack};
 use crate::message::e_outofmem;
-use crate::types::{lua_CFunction, lua_State};
 use ::libc::pthread_exit;
 
 unsafe extern "C" {

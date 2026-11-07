@@ -22,12 +22,13 @@ use core::ffi::c_int;
 use crate::api::keysets::KeyDict_xdl_diff;
 use crate::api_error;
 use crate::linematch::{block_from_lnum, linematch_nbuffers};
+use crate::lua::abi::lua_Integer;
 use crate::lua::converter::pop_keydict;
 use crate::lua::executor::{release_luaref, until_nul};
 use crate::lua::stack::{At, CFunction, Kind, Raise, Stack};
 use crate::lua_functions;
 use crate::message_fmt::msg_bytes_opt;
-use crate::types::{Error, LineNr, Object, kErrorTypeException, lua_Integer};
+use crate::types::{Error, LineNr, Object, kErrorTypeException};
 use crate::xdiff::ffi::{Emit, diff_with};
 use crate::xdiff::xtypes::{
     XDF_HISTOGRAM_DIFF, XDF_IGNORE_BLANK_LINES, XDF_IGNORE_CR_AT_EOL, XDF_IGNORE_WHITESPACE,

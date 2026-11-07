@@ -25,9 +25,10 @@ use crate::event_queue::put_id_event_on_main_loop;
 use crate::getchar::state::got_int;
 use crate::getchar::vgetc;
 use crate::guard::Allow;
+use crate::lua::abi::lua_Integer;
 use crate::lua::ffi::LUA_MULTRET;
 use crate::lua::stack::{At, Kind, Raise, Stack};
-use crate::types::{LuaRef, lua_Integer};
+use crate::types::LuaRef;
 use crate::ui::state::ui_event_ns_id;
 use crate::ui::{ui_flush, ui_remove_cb};
 

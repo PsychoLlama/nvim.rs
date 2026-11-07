@@ -214,6 +214,7 @@
 {"path":"neovim::log::g_min_log_level","kind":"static","file":"crates/nvim/src/log.rs","tests":["crates/nvim/tests/unit/log.rs"]}
 {"path":"neovim::log::log_init","kind":"fn","file":"crates/nvim/src/log.rs","tests":["crates/nvim/tests/unit/log.rs"]}
 {"path":"neovim::log::logmsg_line","kind":"fn","file":"crates/nvim/src/log.rs","tests":["crates/nvim/tests/unit/log.rs"]}
+{"path":"neovim::lua::abi::lua_State","kind":"struct","file":"crates/nvim/src/lua/abi.rs","tests":["crates/nvim/tests/unit/api_converter.rs"]}
 {"path":"neovim::lua::converter::pop_dict","kind":"fn","file":"crates/nvim/src/lua/converter/pop.rs","tests":["crates/nvim/tests/unit/api_converter.rs"]}
 {"path":"neovim::lua::converter::pop_integer","kind":"fn","file":"crates/nvim/src/lua/converter/pop.rs","tests":["crates/nvim/tests/unit/api_converter.rs"]}
 {"path":"neovim::lua::converter::pop_string","kind":"fn","file":"crates/nvim/src/lua/converter/pop.rs","tests":["crates/nvim/tests/unit/api_converter.rs"]}
@@ -600,7 +601,6 @@
 {"path":"neovim::types::kBoolVarTrue","kind":"const","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/support/tv.rs","crates/nvim/tests/unit/typval_value.rs"]}
 {"path":"neovim::types::kListLenUnknown","kind":"const","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/channel_reader.rs","crates/nvim/tests/unit/typval.rs"]}
 {"path":"neovim::types::kSpecialVarNull","kind":"const","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/support/tv.rs","crates/nvim/tests/unit/typval_value.rs"]}
-{"path":"neovim::types::lua_State","kind":"struct","file":"crates/nvim/src/types/lua.rs","tests":["crates/nvim/tests/unit/api_converter.rs"]}
 {"path":"neovim::types::typval::UVarNumber","kind":"type","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/charset.rs","crates/nvim/tests/unit/charset_oracle.rs","crates/nvim/tests/unit/strings.rs"]}
 {"path":"neovim::types::typval::VarNumber","kind":"type","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/charset.rs","crates/nvim/tests/unit/charset_oracle.rs"]}
 {"path":"neovim::undo::UNDO_HASH_SIZE","kind":"const","file":"crates/nvim/src/undo/mod.rs","tests":["crates/nvim/tests/unit/undo.rs"]}

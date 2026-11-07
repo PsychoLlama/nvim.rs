@@ -33,12 +33,12 @@ use core::ffi::{CStr, c_char, c_int};
 use core::ptr::{self, NonNull};
 
 use super::{At, CFunction, Kind, Stack};
+use crate::lua::abi::lua_State;
 use crate::lua::ffi::{
     lua_call, lua_concat, lua_error, lua_pushlstring, lua_tolstring, luaL_argerror,
     luaL_checkinteger, luaL_checklstring, luaL_checknumber, luaL_checktype, luaL_checkudata,
     luaL_where,
 };
-use crate::types::lua_State;
 
 /// A set of C functions written as safe bodies, numbered from 0.
 pub trait Dispatch: 'static {

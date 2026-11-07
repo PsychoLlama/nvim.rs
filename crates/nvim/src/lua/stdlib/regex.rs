@@ -19,12 +19,13 @@ use core::ffi::{CStr, c_int};
 use super::TRY_STATE_INIT;
 use crate::api::private::helpers::{try_enter, try_leave};
 use crate::cstr;
+use crate::lua::abi::lua_Integer;
 use crate::lua::stack::{At, Raise, Stack, Userdata};
 use crate::lua_functions;
 use crate::regexp::{
     OwnedProg, RE_AUTO, RE_MAGIC, RE_NOBREAK, RE_STRICT, vim_regcomp, vim_regexec,
 };
-use crate::types::{Error, Handle, LineNr, RegMatch, lua_Integer};
+use crate::types::{Error, Handle, LineNr, RegMatch};
 use crate::winlayer::{self, Buf};
 
 /// A compiled program, as the userdatum `vim.regex()` answers holds it.

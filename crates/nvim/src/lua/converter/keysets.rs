@@ -25,11 +25,11 @@ use super::{
 use crate::api::private::keyset::{FieldKind, KeySet, Slot};
 use crate::api_error;
 use crate::highlight_group::syn_check_group;
+use crate::lua::abi::{lua_Integer, lua_Number};
 use crate::lua::stack::{At, Kind, Stack};
 use crate::message_fmt::msg_bytes;
 use crate::types::{
     Error, Integer, kErrorTypeValidation, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat,
-    lua_Integer, lua_Number,
 };
 
 /// The three api types that need a name of their own on the Lua side, both

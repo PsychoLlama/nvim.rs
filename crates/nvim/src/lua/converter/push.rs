@@ -32,8 +32,9 @@ use super::create_typed_table;
 use crate::eval::typval_encode::{Container, ConvPath, ConvType, Flow, TypvalSink, encode_typval};
 use crate::eval::userfunc::FuncFlags;
 use crate::eval::userfunc::find_func;
+use crate::lua::abi::lua_Number;
 use crate::lua::stack::{At, Stack};
-use crate::types::{Failed, Float, TypVal, kObjectTypeDict, lua_Number};
+use crate::types::{Failed, Float, TypVal, kObjectTypeDict};
 
 /// How many Lua slots opening a container needs: its table, the key or index
 /// it is about to set, and the value that will land on top of them.

@@ -35,6 +35,7 @@ use crate::narrow::float_as_int;
 use core::ffi::c_int;
 
 use super::{geti, is_nil_sentinel, objlen, push_nil_sentinel, reference, unreference};
+use crate::lua::abi::lua_Number;
 use crate::lua::ffi::{LUA_NOREF, LUA_REFNIL};
 use crate::lua::stack::{At, Kind, Raise, Stack};
 use crate::mpack::conv::{
@@ -44,7 +45,6 @@ use crate::mpack::conv::{
 };
 use crate::mpack::object::{Decode, Encode};
 use crate::mpack::token::{Kind as TokenKind, Tok};
-use crate::types::lua_Number;
 
 /// The references a node holds: its object, and a map's pending key (or,
 /// encoding, the key `lua_next` resumes from).
