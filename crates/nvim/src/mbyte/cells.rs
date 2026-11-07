@@ -28,7 +28,7 @@ use super::*;
 use crate::eval::typval::{index_of, list_iter};
 use crate::message_fmt::emsg_text;
 use crate::option::vars::P_AMBW;
-use crate::semsg;
+use crate::tr;
 use crate::types::VAR_NUMBER;
 use core::cmp::Ordering;
 use core::ffi::{c_int, c_uint};
@@ -129,8 +129,12 @@ pub fn f_setcellwidths(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDat
         emsg(gettext(e_listreq));
         return;
     };
-    let Some(table) = parse_cell_widths(list) else {
-        return;
+    let table = match parse_cell_widths(list) {
+        Ok(table) => table,
+        Err(error) => {
+            emsg_text(error.to_string());
+            return;
+        }
     };
 
     let saved = CELL_WIDTHS.with_mut(|t| core::mem::replace(t, table));
@@ -146,19 +150,34 @@ pub fn f_setcellwidths(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDat
     redraw_all_later(UPD_NOT_VALID);
 }
 
+/// Why `setcellwidths()`'s list cannot be a table. `item` is the entry's
+/// index in the outer list, which is what the messages name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+enum CellWidthError {
+    #[error("{}", tr!("E1109: List item {} is not a List", .0))]
+    NotAList(c_int),
+    #[error("{}", tr!("E1110: List item {} does not contain 3 numbers", .0))]
+    NotThreeNumbers(c_int),
+    #[error("{}", tr!("E1111: List item {} range invalid", .0))]
+    BadRange(c_int),
+    #[error("{}", tr!("E1112: List item {} cell width invalid", .0))]
+    BadWidth(c_int),
+    #[error("{}", tr!("E1113: Overlapping ranges for 0x{:x}", .0))]
+    Overlap(VarNumber),
+    #[error("{}", tr!("E1114: Only values of 0x80 and higher supported"))]
+    BelowNonAscii,
+}
+
 /// Validate `setcellwidths()`'s argument into the sorted, disjoint table
-/// [`cw_value`] needs, or report why it cannot be one and answer `None`.
+/// [`cw_value`] needs, or say why it cannot be one.
 ///
 /// An empty list is a valid empty table — that is how the overrides are
 /// cleared.
-fn parse_cell_widths(list: &List) -> Option<Vec<CellWidthRange>> {
+fn parse_cell_widths(list: &List) -> Result<Vec<CellWidthRange>, CellWidthError> {
     let mut rows: Vec<CellWidthRange> = Vec::with_capacity(list.len());
     for (item, li) in list_iter(Some(list)).enumerate() {
         let item = index_of(item);
-        let Some(row) = li.li_tv.list_ref() else {
-            semsg!("E1109: List item {} is not a List", item);
-            return None;
-        };
+        let row = li.li_tv.list_ref().ok_or(CellWidthError::NotAList(item))?;
         rows.push(parse_cell_width_row(row, item)?);
     }
 
@@ -168,18 +187,17 @@ fn parse_cell_widths(list: &List) -> Option<Vec<CellWidthRange>> {
     rows.sort_by_key(|r| r.first);
     for i in 1..rows.len() {
         if rows[i].first <= rows[i - 1].last {
-            semsg!("E1113: Overlapping ranges for 0x{:x}", rows[i].first);
-            return None;
+            return Err(CellWidthError::Overlap(rows[i].first));
         }
     }
-    Some(rows)
+    Ok(rows)
 }
 
-/// One `[first, last, width]` entry, or `None` having reported the fault.
+/// One `[first, last, width]` entry, or why it is not one.
 ///
 /// `item` is the entry's index in the outer list, which is what the messages
 /// name.
-fn parse_cell_width_row(row: &List, item: c_int) -> Option<CellWidthRange> {
+fn parse_cell_width_row(row: &List, item: c_int) -> Result<CellWidthRange, CellWidthError> {
     let mut numbers = [0 as VarNumber; 3];
     let mut seen = 0;
     for lili in list_iter(Some(row)) {
@@ -189,18 +207,9 @@ fn parse_cell_width_row(row: &List, item: c_int) -> Option<CellWidthRange> {
         }
         let n = tv.number_or_zero();
         match seen {
-            0 if n < 0x80 => {
-                emsg(gettext(c"E1114: Only values of 0x80 and higher supported"));
-                return None;
-            }
-            1 if n < numbers[0] => {
-                semsg!("E1111: List item {} range invalid", item);
-                return None;
-            }
-            2 if !(1..=2).contains(&n) => {
-                semsg!("E1112: List item {} cell width invalid", item);
-                return None;
-            }
+            0 if n < 0x80 => return Err(CellWidthError::BelowNonAscii),
+            1 if n < numbers[0] => return Err(CellWidthError::BadRange(item)),
+            2 if !(1..=2).contains(&n) => return Err(CellWidthError::BadWidth(item)),
             _ => {}
         }
         if seen < numbers.len() {
@@ -211,10 +220,9 @@ fn parse_cell_width_row(row: &List, item: c_int) -> Option<CellWidthRange> {
 
     // A fourth number, a non-number, or too few: all "not three numbers".
     if seen != 3 {
-        semsg!("E1110: List item {} does not contain 3 numbers", item);
-        return None;
+        return Err(CellWidthError::NotThreeNumbers(item));
     }
-    Some(CellWidthRange {
+    Ok(CellWidthRange {
         first: numbers[0],
         last: numbers[1],
         width: c_int::try_from(numbers[2]).expect("checked to be 1 or 2"),
