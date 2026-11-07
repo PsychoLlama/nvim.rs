@@ -55,6 +55,7 @@ use crate::drawscreen::redraw_buf_line_later;
 use crate::eval::typval::DictRef;
 use crate::eval::vars::globvar_dict;
 use crate::eval::{get_v_event, restore_v_event};
+use crate::event::objects::Event;
 use crate::event_queue::{self, ParkingQueue, put_id_event_on_main_loop};
 use crate::highlight::{HlAttrFlags, hl_combine_attr, hl_get_term_attr};
 use crate::highlight_group::name_to_color;
@@ -72,8 +73,8 @@ use crate::types::AutoEvent;
 use crate::types::builders::DictBuf;
 use crate::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::types::{
-    AcoSave, BufferHandle, ColNr, Event, Handle, HlAttrs, LineNr, Object, OptVal, OptionSetFlags,
-    Pos, RefcountSize, RgbValue, SaveVEvent, Terminal, TerminalOptions, VTermColor, VTermColor_rgb,
+    AcoSave, BufferHandle, ColNr, Handle, HlAttrs, LineNr, Object, OptVal, OptionSetFlags, Pos,
+    RefcountSize, RgbValue, SaveVEvent, Terminal, TerminalOptions, VTermColor, VTermColor_rgb,
     VTermScreenCell, VTermScreenCellAttrs, VarNumber,
 };
 use crate::vterm::host::Value;

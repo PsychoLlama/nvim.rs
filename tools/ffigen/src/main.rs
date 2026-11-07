@@ -616,7 +616,16 @@ fn is_marker(ty: &syn::Type) -> bool {
 /// them. Each is read exactly as a `src/types/` file: its types are closure
 /// roots, and its copy of a name defined twice wins. A row naming a file that
 /// no longer exists is an error, so the list cannot outlive a move.
-const TYPE_HOMES: &[&str] = &["src/api/keysets.rs", "src/lua/abi.rs", "src/os/libc.rs"];
+const TYPE_HOMES: &[&str] = &[
+    "src/api/keysets.rs",
+    "src/event/libuv_proc.rs",
+    "src/event/objects.rs",
+    "src/event/queue.rs",
+    "src/event/uv.rs",
+    "src/lua/abi.rs",
+    "src/os/libc.rs",
+    "src/os/pty_proc_unix/mod.rs",
+];
 
 fn collect_file(world: &mut World, rel: &str, ast: syn::File) {
     let canonical = rel.starts_with("src/types/") || TYPE_HOMES.contains(&rel);

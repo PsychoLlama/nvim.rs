@@ -23,9 +23,17 @@
 // extern block below, and declaring the foreign surface is this file's
 // entire job.
 
+use crate::event::uv::{
+    addrinfo, sockaddr, uv_alloc_cb, uv_async_cb, uv_async_t, uv_buf_t, uv_clock_id, uv_close_cb,
+    uv_connect_cb, uv_connect_t, uv_connection_cb, uv_dirent_t, uv_file, uv_fs_cb, uv_fs_t,
+    uv_getaddrinfo_cb, uv_getaddrinfo_t, uv_gid_t, uv_handle_t, uv_handle_type, uv_idle_cb,
+    uv_idle_t, uv_lib_t, uv_loop_t, uv_mutex_t, uv_pipe_t, uv_process_options_t, uv_process_t,
+    uv_random_cb, uv_random_t, uv_read_cb, uv_run_mode, uv_signal_cb, uv_signal_t, uv_stream_t,
+    uv_tcp_t, uv_thread_t, uv_timer_cb, uv_timer_t, uv_timespec64_t, uv_timeval64_t, uv_tty_mode_t,
+    uv_tty_t, uv_uid_t, uv_walk_cb, uv_write_cb, uv_write_t,
+};
 use crate::os::libc::FILE;
 use crate::os::libc::{int64_t, size_t, uint64_t};
-use crate::types::*;
 
 unsafe extern "C" {
     pub fn uv_accept(server: *mut uv_stream_t, client: *mut uv_stream_t) -> ::core::ffi::c_int;

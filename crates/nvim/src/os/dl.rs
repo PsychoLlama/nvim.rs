@@ -25,7 +25,8 @@
 )]
 
 use crate::event::libuv::{uv_dlclose, uv_dlerror, uv_dlopen, uv_dlsym};
-use crate::types::{Failed, uv_lib_t};
+use crate::event::uv::uv_lib_t;
+use crate::types::Failed;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;

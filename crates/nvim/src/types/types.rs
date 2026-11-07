@@ -10,6 +10,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::event::objects::loop_0;
 use crate::os::libc::{int32_t, int64_t, uint32_t, uint64_t};
 use core::ffi::c_int;
 use core::fmt;

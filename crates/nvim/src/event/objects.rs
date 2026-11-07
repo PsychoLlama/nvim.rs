@@ -10,10 +10,16 @@
 // library by address.
 #![allow(non_camel_case_types)]
 
-// Canonical type definitions, hoisted out of the per-module copies c2rust
-// emitted. One definition per logical type; every module re-exports here.
-use super::*;
+//! The event loop's objects: the loop itself and the streams, processes and
+//! watchers `event/` registers with libuv by address, plus the queued
+//! [`Event`].
+
+use crate::event::uv::{
+    addrinfo, uv_async_t, uv_buf_t, uv_file, uv_idle_t, uv_loop_t, uv_pipe_t, uv_signal_t,
+    uv_stream_t, uv_tcp_t, uv_timer_t,
+};
 use crate::os::libc::{int64_t, size_t, uint8_t, uint64_t};
+use crate::types::{Dict, Loop, Refcount};
 
 /// One queued event, run once when its queue reaches it.
 ///

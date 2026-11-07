@@ -36,6 +36,7 @@ use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later, status_redraw_all};
 use crate::edit::beginline;
 use crate::env::home_to_tilde;
 use crate::eval::vars::{eval_charconvert, set_vim_var_string, vim_var_bytes};
+use crate::event::uv::uv_gid_t;
 use crate::ex_docmd::state::{ex_no_reprint, global_busy};
 use crate::ex_eval::aborting;
 use crate::fileio::state::{did_check_timestamps, need_check_timestamps, no_check_timestamps};
@@ -91,7 +92,7 @@ use crate::types::AutoEvent;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     AcoSave, Directory, ExArg, Failed, FileInfo, FileOffset, IOSIZE, LineNr, OptVal,
-    OptionSetFlags, RegMatch, ScriptId, ShmFlag, uv_gid_t,
+    OptionSetFlags, RegMatch, ScriptId, ShmFlag,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::{

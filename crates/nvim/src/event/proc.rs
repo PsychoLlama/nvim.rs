@@ -47,29 +47,31 @@
 use crate::event::libuv::{
     uv_close, uv_pipe_init, uv_recv_buffer_size, uv_timer_start, uv_timer_stop, uv_unref,
 };
+use crate::event::libuv_proc::LibuvProc;
 use crate::event::libuv_proc::free_raw_argv;
 use crate::event::libuv_proc::{libuv_proc_close, libuv_proc_spawn};
 use crate::event::r#loop::{
     RawEvent, loop_children, loop_poll_events, process_events, process_events_until,
     stop_children_watcher,
 };
+use crate::event::objects::{Event, Proc, ProcType, Stream};
 use crate::event::rstream::{Reader, rstream_may_close};
 use crate::event::stream::{stream_init, stream_may_close};
+use crate::event::uv::{uv_loop_t, uv_timer_t};
 use crate::event_queue::{self, QueueId};
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_DBG, LOGLVL_INF, logmsg};
 use crate::message_fmt::msg_cstr_opt;
 use crate::os::proc::os_proc_tree_kill;
+use crate::os::pty_proc_unix::PtyProc;
 use crate::os::pty_proc_unix::{pty_proc_close_master, pty_proc_flush_master, pty_proc_spawn};
 use crate::os::signal::{SIGHUP, SIGKILL, SIGTERM};
 use crate::os::time::os_hrtime;
 use crate::startup::{
     exiting, main_loop, os_exit, preserve_exit, ui_client_channel_id, ui_client_exit_status,
 };
-use crate::types::{
-    Event, LibuvProc, Loop, Proc, ProcType, PtyProc, Refcount, Stream, uv_loop_t, uv_timer_t,
-};
+use crate::types::{Loop, Refcount};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};
 use core::ptr;

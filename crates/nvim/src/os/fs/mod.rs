@@ -42,6 +42,10 @@ use std::os::unix::fs::OpenOptionsExt as _;
 use crate::event::libuv::{
     uv_err_name, uv_fs_access, uv_fs_copyfile, uv_fs_lstat, uv_fs_req_cleanup, uv_strerror,
 };
+use crate::event::uv::{
+    uv__queue, uv__work, uv_buf_t, uv_fs_t, uv_fs_type, uv_loop_s, uv_loop_t, uv_req_type,
+    uv_stat_t, uv_timespec_t,
+};
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::message::{verbose_enter, verbose_leave};
 use crate::message_fmt::msg_cstr;
@@ -53,10 +57,7 @@ use crate::path::{append_path, gettail_dir, save_abs_path};
 use crate::smsg;
 use crate::startup::stdin_fd;
 use crate::types::ApiString;
-use crate::types::{
-    OptInt, uv__queue, uv__work, uv_buf_t, uv_fs_t, uv_fs_type, uv_loop_s, uv_loop_t, uv_req_type,
-    uv_stat_t, uv_timespec_t,
-};
+use crate::types::OptInt;
 use crate::ui::ui_call_chdir;
 use ::libc::{fcntl, fdopen, write};
 

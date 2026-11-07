@@ -24,12 +24,13 @@ use super::{LIBUV_SUCCESS, NO_LOOP, R_OK, W_OK, dir_exists, fs_ok, fs_request, f
 use crate::event::libuv::{
     uv_fs_access, uv_fs_chmod, uv_fs_chown, uv_fs_close, uv_fs_lstat, uv_fs_stat, uv_fs_utime,
 };
+use crate::event::uv::{uv_gid_t, uv_stat_t, uv_uid_t};
 use crate::log::g_stats;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::os::libc::{int32_t, size_t, ssize_t, uint64_t};
 use crate::os::uv_error::uv_code;
-use crate::types::{FileID, FileInfo, VimAcl, uv_gid_t, uv_stat_t, uv_uid_t};
+use crate::types::{FileID, FileInfo, VimAcl};
 use ::libc::{E2BIG, getxattr, listxattr, setxattr};
 
 /// The `errno` values [`copy_xattr`] treats as "this filesystem simply

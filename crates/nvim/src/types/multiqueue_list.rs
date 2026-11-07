@@ -20,7 +20,7 @@
     clippy::ptr_as_ptr
 )]
 
-use super::Event;
+use crate::event::objects::Event;
 use crate::event_queue::QueueId;
 
 /// A queue's items, in order.

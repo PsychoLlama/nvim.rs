@@ -35,10 +35,12 @@ use crate::event::libuv::{
     uv_close, uv_timer_get_due_in, uv_timer_init, uv_timer_start, uv_timer_stop,
 };
 use crate::event::r#loop::{main_loop_raw, schedule_fast_job};
+use crate::event::objects::RStream;
 use crate::event::rstream::{
     rstream_available, rstream_consume, rstream_init_fd, rstream_may_close, rstream_start,
     rstream_stop,
 };
+use crate::event::uv::{uv_handle_t, uv_timer_t};
 use crate::log::{LOGLVL_DBG, logmsg};
 use crate::message_fmt::msg_bytes;
 use crate::msgpack_rpc::channel::rpc_send_event;
@@ -62,8 +64,8 @@ use crate::tui::tui::{tui_set_size, with_started_tui};
 use crate::types::TUIData;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
-    ApiString, Array, Integer, KEY_BUFFER_SIZE, KeyEncoding, Object, RStream, TermInput,
-    TermInputCallbacks, TermKeyKey, TerminfoEntry, uv_handle_t, uv_timer_t,
+    ApiString, Array, Integer, KEY_BUFFER_SIZE, KeyEncoding, Object, TermInput, TermInputCallbacks,
+    TermKeyKey, TerminfoEntry,
 };
 use ::libc::tcgetattr;
 use core::ffi::{CStr, c_char, c_int, c_void};

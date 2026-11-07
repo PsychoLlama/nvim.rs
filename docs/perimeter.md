@@ -16,7 +16,7 @@ reader who is not a specialist: what each row holds, the contract that keeps
 it sound, and what would retire it.
 
 Today: **1,615** unchecked statements inside the perimeter (64 files),
-**0** outside it (0 files, of 1,402 measured). It was 138,877 when this
+**0** outside it (0 files, of 1,400 measured). It was 138,877 when this
 file was written, at the end of phase 23's slice 15 — in _lines_, which is what
 this metric counted until phase 31 changed the unit to statements.
 
@@ -137,16 +137,18 @@ that needs `unsafe` — so a few appear there; they are listed too.
 
 **C strings.**
 
-- `*const c_char`/`*mut c_char` (`raw_cstr`, 240). On the perimeter, 180:
+- `*const c_char`/`*mut c_char` (`raw_cstr`, 240). On the perimeter, 201:
   the declarations of C functions that take or answer a C string
   (`os/cshim.rs` 41, `event/libuv.rs` 35, `lua/ffi.rs` 19), the C-shaped string
   helpers and the owned strings' C views (`memory/` 29), tree-sitter's names
   and query strings (`lua/treesitter/` 18), the socket address, a child's
-  argv/environment and a job's name (`event/`, 19 more), `libcall()`'s
+  argv/environment and a job's name (`event/`, 19 more), the fields of
+  libuv's structs and the loop objects handed to it (`event/uv.rs` 13,
+  `event/objects.rs` 7), `libcall()`'s
   arguments and the PTY's name (`os/`, 7 more), and the C entry points the
   harnesses and libvterm's clients call (`harness.rs` 5, `vterm/abi/` 5,
-  `tui/input.rs` 2). Off it, 60: fields of the `#[repr(C)]` structs a C library
-  reads (`types/uv.rs` 13, `types/vterm.rs` 9, `types/event.rs` 7, …) and a
+  `tui/input.rs` 2). Off it, 39: fields of the `#[repr(C)]` structs a C library
+  reads (`types/vterm.rs` 9, …) and a
   dozen safe functions that hand an owned string's address (`as_ptr()`) to a
   perimeter callee without reading through it. The floor is the C side's
   signatures: a string crosses into C as a pointer.
@@ -295,16 +297,16 @@ The perimeter is measured in unchecked lines, and it prunes itself on them:
 an entry with no `unsafe` behind it is stale by definition. That leaves one
 population it structurally cannot describe. c2rust hoisted every C struct out
 of the module that used it and into a per-library file under `types/`, so the
-layout of a `uv_loop_t` is written in `types/uv.rs` while the `uv_run` that
-needs it lives in `event/`, and a `TermKey`'s in `types/termkey.rs` while
+layout of a `uv_loop_t` was written in `types/uv.rs` while the `uv_run` that
+needs it lives in `event/` (it has since moved there, `event/uv.rs`), and a `TermKey`'s in `types/termkey.rs` while
 termkey's parser runs in `tui/`. Those files hold **zero** unchecked lines.
 They cannot join the list — `check_perimeter` would reject them — and yet
 their `#[repr(C)]` is libuv's and libtermkey's layout, not this tree's.
 
 `FOREIGN_ABI_TYPES` in `scripts/ratchet.py` names them, on exactly the "a
-foreign ABI" bullet above and nothing softer: `types/uv.rs`, `types/vterm.rs`,
+foreign ABI" bullet above and nothing softer: `event/uv.rs`, `types/vterm.rs`,
 `types/vterm_internal.rs`, `types/termkey.rs`, `lua/abi.rs`,
-`os/libc.rs`, `types/libuv_proc.rs`, `types/pty_proc_unix.rs`. It splits
+`os/libc.rs`, `event/libuv_proc.rs`, `os/pty_proc_unix/mod.rs`. It splits
 one metric in two:
 
 - **`repr_c_ffi_types`** — `#[repr(C)]` in those files. Not debt, but

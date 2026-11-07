@@ -27,6 +27,7 @@ use crate::event::channel::{
 };
 use crate::event::libuv_proc::libuv_proc_init;
 use crate::event::r#loop::main_loop_raw;
+use crate::event::objects::SocketWatcher;
 use crate::event::proc::exit_on_closed_chan;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, logmsg};
@@ -46,7 +47,7 @@ use crate::terminal::{terminal_close, terminal_set_state};
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::{
     Callback, CallbackReader, ChannelStdinMode, ChannelStream, InternalState, JobProc, LuaRef,
-    SocketWatcher, VarNumber,
+    VarNumber,
 };
 use crate::ui_client::ui_client_attach_to_restarted_server;
 

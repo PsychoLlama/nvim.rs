@@ -24,11 +24,16 @@
 use crate::eval::typval::dict_to_env;
 use crate::event::libuv::{uv_close, uv_pipe, uv_pipe_open, uv_spawn};
 use crate::event::r#loop::{loop_poll_events, main_loop_raw};
+use crate::event::objects::{Proc, RStream, Stream, stream_read_cb};
 use crate::event::proc::{
     kProcTypeUv, proc_get_exepath, proc_init, proc_spawn, proc_stop, proc_wait,
 };
 use crate::event::rstream::{rstream_init, rstream_start};
 use crate::event::stream::stream_may_close;
+use crate::event::uv::{
+    uv_file, uv_handle_t, uv_loop_t, uv_pipe_t, uv_process_options_t, uv_process_t,
+    uv_stdio_container_t, uv_stdio_flags,
+};
 use crate::event::wstream::{SharedBuffer, wstream_init, wstream_set_write_cb, wstream_write};
 use crate::event_queue::{self, ChildQueue};
 use crate::log::{LOGLVL_INF, logmsg};
@@ -41,10 +46,7 @@ use crate::os::libc::STDERR_FILENO;
 use crate::os::libc::size_t;
 use crate::shell::Argv;
 use crate::startup::ui_client_forward_stdin;
-use crate::types::{
-    LibuvProc, Loop, Proc, RStream, Stream, stream_read_cb, uv_file, uv_handle_t, uv_loop_t,
-    uv_pipe_t, uv_process_options_t, uv_process_t, uv_stdio_container_t, uv_stdio_flags,
-};
+use crate::types::Loop;
 use ::libc::close;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};
@@ -524,6 +526,14 @@ unsafe fn input_written_shim(stream: *mut Stream, data: *mut c_void, status: c_i
     report(status);
     // SAFETY: the caller's stream.
     unsafe { stream_may_close(stream) };
+}
+
+#[repr(C)]
+pub struct LibuvProc {
+    pub proc: Proc,
+    pub uv: uv_process_t,
+    pub uvopts: uv_process_options_t,
+    pub uvstdio: [uv_stdio_container_t; 4],
 }
 
 #[cfg(test)]

@@ -42,8 +42,8 @@ use core::cell::Cell;
 use core::num::NonZeroU64;
 use std::rc::Rc;
 
+use crate::event::objects::Event;
 use crate::global_cell::GlobalCell;
-use crate::types::Event;
 use crate::types::multiqueue_list::{Item, ItemList};
 
 /// A queue in [`QUEUES`]: its slot's index and the generation of the queue

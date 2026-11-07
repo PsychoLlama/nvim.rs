@@ -40,9 +40,14 @@ use crate::event::libuv::{
     uv_tcp_nodelay,
 };
 use crate::event::r#loop::process_events_until;
+use crate::event::objects::{RStream, SocketWatcher, Stream, socket_cb, socket_close_cb};
 use crate::event::rstream::Reader;
 use crate::event::socket::address::{SOCKET_ADDR_LEN, port_suffix, tcp_host_end};
 use crate::event::stream::{may_close, stream_init, stream_may_close};
+use crate::event::uv::{
+    addrinfo, uv_connect_t, uv_getaddrinfo_t, uv_handle_t, uv_handle_type, uv_loop_t, uv_pipe_t,
+    uv_stream_t, uv_tcp_t,
+};
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, LOGLVL_WRN, logmsg};
 use crate::memory::{xfree, xstrdup, xstrlcpy};
 use crate::os::cshim::gettext;
@@ -50,10 +55,7 @@ use crate::os::fs::{os_remove, os_strerror, path_exists};
 use crate::os::libc::{intmax_t, sa_family_t};
 use crate::path::tail_index;
 use crate::startup::main_loop;
-use crate::types::{
-    Loop, RStream, SocketWatcher, Stream, addrinfo, socket_cb, socket_close_cb, uv_connect_t,
-    uv_getaddrinfo_t, uv_handle_t, uv_handle_type, uv_loop_t, uv_pipe_t, uv_stream_t, uv_tcp_t,
-};
+use crate::types::Loop;
 use ::libc::ntohs;
 
 const UV_TCP: uv_handle_type = 12;

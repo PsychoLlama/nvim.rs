@@ -32,17 +32,16 @@
 use crate::event::libuv::{
     uv_fs_read, uv_fs_req_cleanup, uv_idle_start, uv_idle_stop, uv_read_start, uv_read_stop,
 };
+use crate::event::objects::{RStream, Stream, stream_read_cb};
 use crate::event::stream::{Conn, close_handle, may_close, stream_init};
+use crate::event::uv::{uv_buf_t, uv_fs_t, uv_handle_t, uv_handle_type, uv_idle_t, uv_stream_t};
 use crate::log::{LOGLVL_DBG, logmsg};
 use crate::memory::{alloc_block, free_block};
 use crate::message_fmt::{msg_addr, msg_cstr};
 use crate::os::fs::{os_err_name, os_strerror};
 use crate::os::libc::{size_t, ssize_t};
 use crate::os::uv_error::{UV_ENOBUFS, UV_EOF};
-use crate::types::{
-    Loop, RStream, Stream, stream_read_cb, uv_buf_t, uv_fs_t, uv_handle_t, uv_handle_type,
-    uv_idle_t, uv_stream_t,
-};
+use crate::types::Loop;
 use core::ffi::{c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};
 use core::ptr;

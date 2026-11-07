@@ -10,8 +10,7 @@
 // it.
 #![allow(non_camel_case_types)]
 
-// Canonical type definitions, hoisted out of the per-module copies c2rust
-// emitted. One definition per logical type; every module re-exports here.
+//! libuv's intrusive queue node.
 
 pub type QUEUE = queue;
 /// libuv's intrusive doubly-linked list node.

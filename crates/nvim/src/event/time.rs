@@ -34,8 +34,8 @@ use core::ffi::c_void;
 
 use crate::event::libuv::{uv_close, uv_timer_init, uv_timer_start, uv_timer_stop};
 use crate::event::r#loop::{RawEvent, main_loop_raw};
+use crate::event::uv::{uv_handle_t, uv_timer_t};
 use crate::event_queue::{self, ChildQueue, QueueId};
-use crate::types::{uv_handle_t, uv_timer_t};
 
 /// Where a watcher's expiries are delivered.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]

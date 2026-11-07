@@ -23,8 +23,8 @@ use std::ffi::CString;
 
 use super::*;
 use crate::event::libuv::{uv_dlclose, uv_dlerror, uv_dlopen, uv_dlsym};
+use crate::event::uv::uv_lib_t;
 use crate::lua::stack::{Kind, Raise};
-use crate::types::uv_lib_t;
 
 /// `luaL_checklstring` as the C string `luaL_checkstring` answers: up to
 /// the first NUL, copied out of the slot.

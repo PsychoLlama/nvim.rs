@@ -39,6 +39,7 @@ use crate::channel::with_channel;
 use crate::eval::typval::DictRef;
 use crate::event::libuv_proc::argv_into_raw;
 use crate::event::r#loop::main_loop_raw;
+use crate::event::objects::{Proc, RStream, Stream};
 use crate::event::proc::{proc_free, proc_spawn, proc_stop, proc_wait};
 use crate::event::rstream::{
     rstream_init, rstream_init_fd, rstream_may_close, rstream_start, rstream_start_inner,
@@ -49,14 +50,12 @@ use crate::event::stream::stream_may_close;
 use crate::event::wstream::{SharedBuffer, wstream_init, wstream_init_fd, wstream_write};
 use crate::event_queue::{self, ParkingQueue, QueueId};
 use crate::os::libc::size_t;
+use crate::os::pty_proc_unix::PtyProc;
 use crate::os::pty_proc_unix::{
     pty_proc_close_master, pty_proc_resize, pty_proc_resume, pty_proc_tty_name,
 };
 use crate::shell::Argv;
-use crate::types::{
-    Channel, ChannelStream, InternalState, JobProc, Proc, PtyProc, RStream, StderrState, StdioPair,
-    Stream,
-};
+use crate::types::{Channel, ChannelStream, InternalState, JobProc, StderrState, StdioPair};
 
 /// The `data` word a channel's handles carry: its id, not its address.
 pub(crate) fn owner_data(id: u64) -> *mut c_void {
@@ -467,7 +466,7 @@ pub(crate) fn connect_socket(
 /// answer libuv's error.
 pub(crate) fn accept_socket(
     id: u64,
-    watcher: &mut crate::types::SocketWatcher,
+    watcher: &mut crate::event::objects::SocketWatcher,
 ) -> Result<(), c_int> {
     let socket = socket_stream(id);
     // SAFETY: the socket channel's stream, at its fixed address, and the

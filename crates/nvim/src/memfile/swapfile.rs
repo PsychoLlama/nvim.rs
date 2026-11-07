@@ -15,11 +15,11 @@
 )]
 
 use super::*;
+use crate::event::uv::uv_gid_t;
 use crate::message_fmt::msg_cstr;
 use crate::os::fs::{last_errno_text, link_exists, open_file};
 use crate::path::full_name_save;
 use crate::semsg;
-use crate::types::uv_gid_t;
 
 impl MemFile {
     /// The swap file's name as it was given, or `None` when the memfile is

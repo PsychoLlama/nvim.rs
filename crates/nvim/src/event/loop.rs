@@ -34,13 +34,13 @@ use crate::event::libuv::{
     uv_print_all_handles, uv_run, uv_signal_init, uv_signal_start, uv_signal_stop, uv_stop,
     uv_timer_init, uv_timer_start, uv_timer_stop, uv_walk,
 };
+use crate::event::objects::{Event, Proc};
+use crate::event::uv::{uv_async_t, uv_handle_t, uv_loop_t, uv_run_mode, uv_signal_t, uv_timer_t};
 use crate::event_queue::{self, QueueId};
 use crate::log::{LOGLVL_ERR, log_file_path, logmsg, with_log_lock};
 use crate::os::cshim::stderr;
 use crate::os::time::os_hrtime;
-use crate::types::{
-    Event, Loop, Proc, uv_async_t, uv_handle_t, uv_loop_t, uv_run_mode, uv_signal_t, uv_timer_t,
-};
+use crate::types::Loop;
 use ::libc::{abort, fclose, fopen};
 use std::collections::VecDeque;
 use std::sync::Mutex;

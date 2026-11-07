@@ -34,6 +34,7 @@ use crate::drawscreen::{setcursor, update_screen};
 use crate::edit::{InsertState, insert_check, insert_execute};
 use crate::eval::{get_v_event, restore_v_event};
 use crate::event::r#loop::run_next_main_event;
+use crate::event::objects::ProcType;
 use crate::ex_docmd::state::global_busy;
 use crate::ex_getln::cmdline_overstrike;
 use crate::ex_getln::{CommandLineState, command_line_check, command_line_execute};
@@ -60,7 +61,7 @@ use crate::state::mode::{
     virtual_op,
 };
 use crate::terminal::{TerminalState, terminal_check, terminal_execute};
-use crate::types::{Direction, HashTab, ProcType, SaveVEvent};
+use crate::types::{Direction, HashTab, SaveVEvent};
 use crate::ui::ui_flush;
 use crate::winlayer::{Cc, Win};
 

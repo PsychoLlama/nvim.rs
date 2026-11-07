@@ -17,6 +17,8 @@
 //! convention -- see [`Staging`].
 
 use super::*;
+use crate::event::objects::{RStream, SignalWatcher};
+use crate::event::uv::{uv_loop_t, uv_pipe_t, uv_timer_t, uv_tty_t};
 use core::ffi::{CStr, c_char, c_int};
 use std::borrow::Cow;
 

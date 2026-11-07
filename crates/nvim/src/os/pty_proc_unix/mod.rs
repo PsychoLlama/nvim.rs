@@ -1,6 +1,6 @@
 //! Children started on a pseudo-terminal.
 //!
-//! A [`PtyProc`] is a [`Proc`](crate::types::Proc) with the pty master descriptor and the window
+//! A [`PtyProc`] is a [`Proc`](crate::event::objects::Proc) with the pty master descriptor and the window
 //! size bolted on. `Proc` is the first field, so `event/proc.rs` casts freely
 //! between the two.
 //!
@@ -30,16 +30,18 @@ mod wait_status;
 use crate::eval::typval::dict_to_env;
 use crate::event::libuv::{uv_chdir, uv_disable_stdio_inheritance, uv_pipe_open};
 use crate::event::r#loop::{loop_children, start_children_watcher};
+use crate::event::objects::Proc;
 use crate::event::proc::{kProcTypePty, proc_get_exepath, proc_init};
+use crate::event::uv::{uv_pipe_t, uv_signal_t};
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::message_fmt::{msg_cstr, msg_cstr_opt};
 use crate::os::cshim::environ;
 use crate::os::fs::{errno_text, os_strerror, set_cloexec};
-use crate::os::libc::speed_t;
+use crate::os::libc::{speed_t, uint16_t, winsize};
 use crate::os::signal::{SIGALRM, SIGCHLD, SIGCONT, SIGHUP, SIGINT, SIGKILL, SIGQUIT, SIGTERM};
 use crate::os::uv_error::uv_code;
-use crate::types::{Loop, PtyProc, uv_pipe_t, uv_signal_t};
+use crate::types::Loop;
 use ::libc::{
     __errno_location, _exit, SIG_DFL, cfsetispeed, cfsetospeed, close, execvp, fcntl, forkpty,
     ioctl, kill, killpg, poll, pollfd, ptsname, setsid, signal, waitpid,
@@ -444,4 +446,13 @@ unsafe extern "C" fn chld_handler(handle: *mut uv_signal_t, _signum: c_int) {
             }
         }
     }
+}
+
+#[repr(C)]
+pub struct PtyProc {
+    pub proc: Proc,
+    pub width: uint16_t,
+    pub height: uint16_t,
+    pub winsize: winsize,
+    pub tty_fd: ::core::ffi::c_int,
 }

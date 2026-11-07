@@ -29,13 +29,13 @@
 // The flag names keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::event::uv::{uv_gid_t, uv_uid_t};
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::os::fs::{close_file, file_mkdir, fsync_file, os_strerror, stdin_file};
 use crate::os::libc::ptrdiff_t;
 use crate::os::uv_error::{
     UV_EAGAIN, UV_EBADF, UV_EINTR, UV_EINVAL, UV_EIO, UV_ENOTSUP, UV_EROFS, uv_code,
 };
-use crate::types::{uv_gid_t, uv_uid_t};
 use core::ffi::{CStr, c_int, c_uint};
 use std::ffi::OsStr;
 use std::fs::{File, OpenOptions};

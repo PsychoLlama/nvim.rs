@@ -20,6 +20,7 @@
 )]
 
 use crate::event::libuv::{uv_chdir, uv_run, uv_sleep, uv_tty_set_mode, uv_write};
+use crate::event::uv::{uv_buf_t, uv_stream_t, uv_tty_mode_t, uv_write_t};
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::message_fmt::msg_cstr;
 use crate::msgpack_rpc::channel::rpc_send_event;
@@ -36,10 +37,7 @@ use crate::tui::output::{TERMINFO_SEQ_LIMIT, flush, out, terminfo_out};
 use crate::tui::paint::invalidate;
 use crate::tui::terminfo::caps::{kTerm_from_status_line, kTerm_to_status_line};
 use crate::tui::terminfo::terminfo_info_msg;
-use crate::types::{
-    ApiString, Array, ArrayBuf, DictBuf, Integer, Object, TUIData, uv_buf_t, uv_stream_t,
-    uv_tty_mode_t, uv_write_t,
-};
+use crate::types::{ApiString, Array, ArrayBuf, DictBuf, Integer, Object, TUIData};
 
 const UV_TTY_MODE_NORMAL: uv_tty_mode_t = 0;
 const UV_TTY_MODE_IO: uv_tty_mode_t = 2;

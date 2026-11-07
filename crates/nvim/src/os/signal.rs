@@ -18,8 +18,12 @@
 
 use crate::autocmd::apply_autocmds;
 use crate::eval::vars::set_vim_var_nr;
+use crate::event::objects::SignalWatcher;
 use crate::event::signal::{
     signal_watcher_close, signal_watcher_init, signal_watcher_start, signal_watcher_stop,
+};
+use crate::event::uv::{
+    uv__queue, uv_handle_type, uv_signal_s_tree_entry, uv_signal_s_u, uv_signal_t,
 };
 use crate::ex_cmds2::autowrite_all;
 use crate::global_cell::GlobalCell;
@@ -30,10 +34,7 @@ use crate::message_fmt::msg_cstr;
 use crate::option::vars::p_awa;
 use crate::startup::{main_loop, preserve_exit, v_dying};
 use crate::types::AutoEvent;
-use crate::types::{
-    SignalWatcher, Vv, uv__queue, uv_handle_type, uv_signal_s_tree_entry, uv_signal_s_u,
-    uv_signal_t,
-};
+use crate::types::Vv;
 use crate::winlayer::Buf;
 use ::libc::{pthread_sigmask, sigemptyset, sigset_t};
 use core::ffi::{CStr, c_int, c_void};

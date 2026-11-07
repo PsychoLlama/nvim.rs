@@ -27,6 +27,7 @@
 // one `uv_write` a flush makes.
 
 use crate::event::libuv::{uv_run, uv_write};
+use crate::event::uv::{uv_buf_t, uv_stream_t, uv_write_t};
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::message_fmt::msg_cstr;
 use crate::os::fs::os_strerror;
@@ -35,7 +36,7 @@ use crate::tui::terminfo::caps::{
 };
 use crate::tui::terminfo::param::Param;
 use crate::tui::terminfo::terminfo_fmt;
-use crate::types::{BUF_SIZE, TUIData, uv_buf_t, uv_stream_t, uv_write_t};
+use crate::types::{BUF_SIZE, TUIData};
 use core::ffi::{CStr, c_int};
 use std::io::Write;
 

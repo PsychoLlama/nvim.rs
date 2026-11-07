@@ -11,7 +11,10 @@
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
+use crate::event::libuv_proc::LibuvProc;
+use crate::event::objects::{Proc, RStream, Stream};
 use crate::os::libc::{uint32_t, uint64_t};
+use crate::os::pty_proc_unix::PtyProc;
 use core::ffi::CStr;
 use core::pin::Pin;
 

@@ -23,9 +23,9 @@
 // extern block below, and declaring the foreign surface is this file's
 // entire job.
 
+use crate::event::uv::uv_loop_t;
 use crate::lua::abi::{lua_CFunction, lua_Integer, lua_Number, lua_State};
 use crate::os::libc::size_t;
-use crate::types::*;
 
 /// "Return every value the call produced", for `lua_pcall`/`lua_call`.
 pub const LUA_MULTRET: ::core::ffi::c_int = -1;

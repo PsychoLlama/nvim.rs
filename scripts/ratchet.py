@@ -1163,13 +1163,15 @@ PERIMETER = {
     "constructing a handle is the unsafe step, dereferencing it is not",
 }
 
-# The foreign ABIs whose *type definitions* live under `types/` instead of in
-# the module that calls the library. c2rust hoisted every struct into a
-# per-library file, so the layout of a `uv_loop_t` is described here while the
-# `uv_run` that needs it is in `event/`, and the layout of a `TermKey` is
-# described here while termkey's parser runs in `tui/`. Those callers are on
-# PERIMETER; these files cannot join it, because they hold no unchecked code
-# at all and `check_perimeter` rejects an entry with nothing behind it.
+# The foreign ABIs' *type definitions*: the per-library files c2rust hoisted
+# every struct into, now each in the module that calls the library -- the
+# layout of a `uv_loop_t` in `event/uv.rs` beside the `uv_run` that needs it,
+# LuaJIT's state in `lua/abi.rs` beside `lua/ffi.rs`. Most hold no unchecked
+# code, so a file-level PERIMETER row could not name them (`check_perimeter`
+# rejects an entry with nothing behind it); some sit inside a perimeter
+# module anyway (`event/`, `os/`), and the two one-struct files (`LibuvProc`,
+# `PtyProc`) joined the perimeter file that spawns with them. All are listed
+# here regardless, so `repr_c_ffi_types` keeps counting exactly their layouts.
 #
 # The bar is PERIMETER's first bullet and nothing softer: the layout is
 # defined by a library this tree links against or ports with its C ABI intact
@@ -1184,7 +1186,7 @@ PERIMETER = {
 # `Buffer`. All of those stay in `repr_c_editor_state`, where a rewrite is
 # still expected to retire them.
 FOREIGN_ABI_TYPES = {
-    "crates/nvim/src/types/uv.rs": "libuv's own structs: the loop, handles, "
+    "crates/nvim/src/event/uv.rs": "libuv's own structs: the loop, handles, "
     "requests and process options, all registered with the library by address",
     "crates/nvim/src/types/vterm.rs": "libvterm's public types -- the ported "
     "library keeps its C ABI, so these are its interface",
@@ -1196,9 +1198,9 @@ FOREIGN_ABI_TYPES = {
     "`luaL_Reg` -- the interpreter defines every one of them",
     "crates/nvim/src/os/libc.rs": "the C library's nominal aggregates, "
     "plus the pthread types libuv embeds by value",
-    "crates/nvim/src/types/libuv_proc.rs": "a `uv_process_t` and its options "
+    "crates/nvim/src/event/libuv_proc.rs": "a `uv_process_t` and its options "
     "embedded by value and handed to `uv_spawn` by address",
-    "crates/nvim/src/types/pty_proc_unix.rs": "a libc `winsize` embedded by "
+    "crates/nvim/src/os/pty_proc_unix/mod.rs": "a libc `winsize` embedded by "
     "value and handed to the tty ioctls by address",
 }
 
@@ -2149,6 +2151,10 @@ COPY_KEEPERS = {
     "crates/nvim/src/eval/list/mod.rs::Item": "value",
     "crates/nvim/src/eval/lval.rs::Span": "value",
     "crates/nvim/src/eval/vars/assign.rs::VarList": "value",
+    "crates/nvim/src/event/objects.rs::socket_watcher_uv_pipe": "value",
+    "crates/nvim/src/event/objects.rs::socket_watcher_uv_tcp": "ffi: a libuv TCP handle and its addrinfo",
+    "crates/nvim/src/event/objects.rs::stream_uv": "value",
+    "crates/nvim/src/event/uv.rs": "ffi: libuv's structs, copied as C copies them",
     "crates/nvim/src/ex_cmds/mod.rs::SubResult": "value",
     "crates/nvim/src/ex_cmds/sort.rs::StringOrder": "value",
     "crates/nvim/src/ex_getln/mod.rs::CpWinInfo": "value",
@@ -2216,9 +2222,6 @@ COPY_KEEPERS = {
     "crates/nvim/src/types/decoration.rs::DecorHighlightInline": "value",
     "crates/nvim/src/types/decoration.rs::RangeHighlight": "value",
     "crates/nvim/src/types/decoration.rs::DecorRange_data_ui": "value",
-    "crates/nvim/src/types/event.rs::socket_watcher_uv_pipe": "value",
-    "crates/nvim/src/types/event.rs::socket_watcher_uv_tcp": "ffi: a libuv TCP handle and its addrinfo",
-    "crates/nvim/src/types/event.rs::stream_uv": "value",
     "crates/nvim/src/types/ex_cmds.rs::CmdParseMagic": "value",
     "crates/nvim/src/types/ex_getln.rs::CmdlineColorChunk": "value",
     "crates/nvim/src/types/expressions.rs::ExprASTError": "value",
@@ -2275,7 +2278,6 @@ COPY_KEEPERS = {
     "crates/nvim/src/types/ui.rs::UIClientHandler": "handle: a static name and a fn pointer",
     "crates/nvim/src/types/undo.rs::UndoLink": "value",
     "crates/nvim/src/types/undo.rs::VisualInfo": "value",
-    "crates/nvim/src/types/uv.rs": "ffi: libuv's structs, copied as C copies them",
     "crates/nvim/src/types/vterm.rs": "ffi: libvterm's public types",
     "crates/nvim/src/types/vterm_internal.rs": "ffi: libvterm's internal state",
     "crates/nvim/src/undo/apply/time.rs::Aim": "value",
@@ -2307,11 +2309,13 @@ COPY_KEEPERS = {
 # REPR_C_FLOOR classes:
 #   abi     laid out by this tree's own C side: ffigen renders it into
 #           `unit-cdefs.h` *and* a spec or C fixture reads or builds it;
-#   libuv   embeds a libuv handle whose address libuv keeps;
+#   libuv   embeds a libuv handle whose address libuv keeps (`event/objects.rs`'s
+#           eight are on the perimeter and need no row);
 #   codec   a swap-file block's on-disk layout;
 #   ffi     a foreign ABI file (`FOREIGN_ABI_TYPES`): the library's layout.
 # A file inside a PERIMETER module carries no row: `repr_c_sites` reads off the
-# perimeter only, so the perimeter row is what excuses it (`os/libc.rs`).
+# perimeter only, so the perimeter row is what excuses it (`os/libc.rs`,
+# `event/uv.rs`, `event/objects.rs`).
 REPR_C_FLOOR = {
     "crates/nvim/src/types/typval.rs::TypVal": "abi: the value model; ffigen renders it and the unit specs read it",
     "crates/nvim/src/types/typval.rs::Callback": "abi: the value model (a `TypVal` payload)",
@@ -2319,24 +2323,13 @@ REPR_C_FLOOR = {
     "crates/nvim/src/types/pos.rs::Pos": "abi: ffigen renders it into every signature that takes a position",
     "crates/nvim/src/types/mbyte.rs::CharInfo": "abi: the C fixtures build it by value (`shim.h`)",
     "crates/nvim/src/types/mbyte.rs::StrCharInfo": "abi: the C fixtures build it by value (`shim.h`)",
-    "crates/nvim/src/types/event.rs::stream": "libuv: holds a handle libuv keeps the address of",
-    "crates/nvim/src/types/event.rs::stream_uv": "libuv: the stream's handle union",
-    "crates/nvim/src/types/event.rs::rstream": "libuv: a stream libuv reads into",
-    "crates/nvim/src/types/event.rs::proc": "libuv: a process libuv calls back by address",
-    "crates/nvim/src/types/event.rs::signal_watcher": "libuv: holds a `uv_signal_t`",
-    "crates/nvim/src/types/event.rs::socket_watcher_uv": "libuv: the listener's handle union",
-    "crates/nvim/src/types/event.rs::socket_watcher_uv_pipe": "libuv: holds a `uv_pipe_t`",
-    "crates/nvim/src/types/event.rs::socket_watcher_uv_tcp": "libuv: holds a `uv_tcp_t`",
     "crates/nvim/src/memline/blocks.rs::ZeroBlockLayout": "codec: the swap file's block 0 on disk",
     "crates/nvim/src/memline/blocks.rs::PointerBlockLayout": "codec: the swap file's pointer block on disk",
     "crates/nvim/src/memline/blocks.rs::PointerEntry": "codec: a pointer block's entry on disk",
     "crates/nvim/src/memline/blocks.rs::DataBlockLayout": "codec: the swap file's data block on disk",
-    "crates/nvim/src/types/uv.rs": "ffi: libuv's own structs",
     "crates/nvim/src/types/vterm.rs": "ffi: libvterm's public types",
     "crates/nvim/src/types/vterm_internal.rs": "ffi: libvterm's internal state",
     "crates/nvim/src/lua/abi.rs": "ffi: LuaJIT's `lua_State`",
-    "crates/nvim/src/types/libuv_proc.rs": "ffi: a `uv_process_t` handed to `uv_spawn`",
-    "crates/nvim/src/types/pty_proc_unix.rs": "ffi: a `winsize` handed to the tty ioctls",
 }
 KEEPER_CLASSES = {
     "COPY_KEEPERS": ("ffi", "handle", "value"),
@@ -5086,7 +5079,7 @@ SELF_TEST_VOCABULARY = [
             "crates/nvim/src/os/b.rs": "#[repr(C)]\nstruct H {\n    x: u8,\n}\n",
             # ... and the same goes for a foreign ABI's type file, which
             # counts on the other side of the split rather than not at all.
-            "crates/nvim/src/types/uv.rs": "#[repr(C)]\n"
+            "crates/nvim/src/lua/abi.rs": "#[repr(C)]\n"
             "pub struct uv_loop_s {\n    x: u8,\n}\n"
             "#[repr(C)]\npub struct uv_idle_s {\n    y: u8,\n}\n",
         },
@@ -5461,7 +5454,7 @@ SELF_TEST_INSTRUMENTS = [
     (
         {
             "crates/nvim/src/types/eval.rs": "pub struct A;\n",
-            "crates/nvim/src/types/uv.rs": "pub struct B;\n",
+            "crates/nvim/src/types/pos.rs": "pub struct B;\n",
         },
         {"types_files": 2},
     ),

@@ -24,10 +24,11 @@
 )]
 
 use crate::cstr;
+use crate::event::uv::uv_uid_t;
 use crate::global_cell::GlobalCell;
 use crate::os::env::env_get_bounded;
 use crate::types::Candidate;
-use crate::types::{Expand, uv_uid_t};
+use crate::types::Expand;
 use core::ffi::CStr;
 use std::ffi::CString;
 

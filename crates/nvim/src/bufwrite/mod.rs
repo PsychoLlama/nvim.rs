@@ -34,6 +34,7 @@ use crate::change::unchanged;
 use crate::drawscreen::state::need_maketitle;
 use crate::drawscreen::status_redraw_all;
 use crate::eval::vars::eval_charconvert;
+use crate::event::uv::{uv_gid_t, uv_uid_t};
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::state::ex_no_reprint;
 use crate::ex_eval::{aborting, should_abort_err};
@@ -70,7 +71,7 @@ use crate::startup::exiting;
 use crate::strings::{FmtArg, format_into};
 use crate::types::{
     AcoSave, CmdModFlags, CpoFlag, ExArg, Failed, FileInfo, FileOffset, IOSIZE, LineNr, MAXPATHL,
-    Pos, ShmFlag, VimAcl, uv_gid_t, uv_uid_t,
+    Pos, ShmFlag, VimAcl,
 };
 use crate::ui::ui_flush;
 use crate::undo::{curbuf_is_changed, u_unchanged, u_update_save_nr, u_write_undo};

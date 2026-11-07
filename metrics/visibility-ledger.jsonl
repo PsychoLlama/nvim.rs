@@ -122,6 +122,7 @@
 {"path":"neovim::eval::typval::tv_list_alloc","kind":"fn","file":"crates/nvim/src/eval/typval/handle.rs","tests":["crates/nvim/tests/unit/channel_reader.rs","crates/nvim/tests/unit/eval_encode.rs","crates/nvim/tests/unit/support/tv.rs","crates/nvim/tests/unit/typval.rs","crates/nvim/tests/unit/typval_list.rs"]}
 {"path":"neovim::eval::typval::tv_list_alloc_ret","kind":"fn","file":"crates/nvim/src/eval/typval/list.rs","tests":["crates/nvim/tests/unit/typval_value.rs"]}
 {"path":"neovim::eval::typval::value_check_lock","kind":"fn","file":"crates/nvim/src/eval/typval/value.rs","tests":["crates/nvim/tests/unit/typval_value.rs"]}
+{"path":"neovim::event::objects::Event","kind":"enum","file":"crates/nvim/src/event/objects.rs","tests":["crates/nvim/tests/unit/multiqueue.rs"]}
 {"path":"neovim::event_queue::QueueId","kind":"struct","file":"crates/nvim/src/event_queue.rs","tests":["crates/nvim/tests/unit/multiqueue.rs"]}
 {"path":"neovim::event_queue::free","kind":"fn","file":"crates/nvim/src/event_queue.rs","tests":["crates/nvim/tests/unit/multiqueue.rs"]}
 {"path":"neovim::event_queue::is_empty","kind":"fn","file":"crates/nvim/src/event_queue.rs","tests":["crates/nvim/tests/unit/multiqueue.rs"]}
@@ -537,7 +538,6 @@
 {"path":"neovim::types::DictKey","kind":"enum","file":"crates/nvim/src/types/misc.rs","tests":["crates/nvim/tests/unit/packer.rs"]}
 {"path":"neovim::types::EcmdCmd","kind":"enum","file":"crates/nvim/src/types/ex_cmds.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs"]}
 {"path":"neovim::types::Error","kind":"struct","file":"crates/nvim/src/types/api_error.rs","tests":["crates/nvim/tests/unit/options.rs","crates/nvim/tests/unit/unpacker.rs"]}
-{"path":"neovim::types::Event","kind":"enum","file":"crates/nvim/src/types/event.rs","tests":["crates/nvim/tests/unit/multiqueue.rs"]}
 {"path":"neovim::types::ExArg","kind":"struct","file":"crates/nvim/src/types/ex_cmds.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs"]}
 {"path":"neovim::types::ExArgt","kind":"struct","file":"crates/nvim/src/types/ex_cmds.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs"]}
 {"path":"neovim::types::ExprAST","kind":"struct","file":"crates/nvim/src/types/expressions.rs","tests":["crates/nvim/tests/unit/expressions.rs"]}

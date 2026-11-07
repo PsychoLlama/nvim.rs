@@ -32,6 +32,7 @@ use super::{
     nlua_thread_acquire_vm, register_runtime, require_ref, thread_api,
 };
 use crate::event::libuv::{uv_thread_equal, uv_thread_self};
+use crate::event::uv::uv_thread_t;
 use crate::global_cell::{GlobalCell, SharedCell};
 use crate::guard::Restore;
 use crate::lua::abi::lua_State;
@@ -47,7 +48,6 @@ use crate::os::cshim::gettext;
 use crate::profile::startup_timing;
 use crate::runtime::runtime_search_path_validate;
 use crate::startup::os_exit;
-use crate::types::uv_thread_t;
 
 unsafe extern "C-unwind" {
     /// lpeg's own `luaopen_*`, linked in from the vendored library.

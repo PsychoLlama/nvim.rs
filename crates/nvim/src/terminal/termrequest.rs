@@ -30,11 +30,12 @@ use std::rc::Rc;
 
 use crate::autocmd::{apply_autocmds_group, has_event};
 use crate::eval::vars::set_vim_var_string;
+use crate::event::objects::Event;
 use crate::event_queue::{self, ParkingQueue, QueueId};
 use crate::highlight::hl_add_url;
 use crate::types::AutoEvent;
 use crate::types::builders::{ArrayBuf, DictBuf};
-use crate::types::{ApiString, Event, Handle, Object, RefcountSize, VTermTerminator, Vv};
+use crate::types::{ApiString, Handle, Object, RefcountSize, VTermTerminator, Vv};
 use crate::vterm::host::{Fallbacks, Fragment, Value};
 use crate::vterm::pen::set_pen_attr;
 use crate::vterm::state::StateCx;

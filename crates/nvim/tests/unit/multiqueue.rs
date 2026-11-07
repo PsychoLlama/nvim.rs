@@ -7,11 +7,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 #[cfg(miri)]
 use std::sync::{Mutex, MutexGuard};
 
+use neovim::event::objects::Event;
 use neovim::event_queue::{
     QueueId, free, is_empty, move_events, new_child, new_parent, process, purge, put,
     replace_parent, size, take,
 };
-use neovim::types::Event;
 
 /// The queue table is the editor's, process-wide, and `cargo test` runs
 /// cases in parallel: every case here holds this for its whole length.

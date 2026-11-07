@@ -31,12 +31,14 @@ use crate::event::libuv::{
     uv_pipe_init, uv_pipe_open, uv_run, uv_stream_get_write_queue_size, uv_stream_set_blocking,
 };
 use crate::event::r#loop::EventLoop;
+use crate::event::objects::Stream;
+use crate::event::uv::{
+    uv_handle_t, uv_handle_type, uv_idle_t, uv_loop_t, uv_pipe_t, uv_run_mode, uv_stream_t,
+    uv_tcp_t,
+};
 use crate::log::{LOGLVL_DBG, LOGLVL_WRN, logmsg};
 use crate::message_fmt::msg_addr;
-use crate::types::{
-    Loop, Stream, uv_handle_t, uv_handle_type, uv_idle_t, uv_loop_t, uv_pipe_t, uv_run_mode,
-    uv_stream_t, uv_tcp_t,
-};
+use crate::types::Loop;
 use core::ffi::{c_int, c_void};
 use core::ops::{Deref, DerefMut};
 use core::ptr;

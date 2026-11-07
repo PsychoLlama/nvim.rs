@@ -37,10 +37,12 @@ use crate::event::libuv::{
     uv_tty_set_mode,
 };
 use crate::event::r#loop::{Drain, main_loop_raw, poll_main_loop, wait_on_main_loop};
+use crate::event::objects::SignalWatcher;
 use crate::event::signal::{
     signal_watcher_close, signal_watcher_init, signal_watcher_start, signal_watcher_stop,
 };
 use crate::event::stream::stream_set_blocking;
+use crate::event::uv::{uv_file, uv_handle_t, uv_timer_t, uv_tty_mode_t};
 use crate::global_cell::GlobalCell;
 use crate::highlight::HlAttrFlags;
 use crate::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
@@ -71,10 +73,7 @@ use crate::tui::terminfo::caps::{
     kTerm_reset_cursor_style, kTerm_set_lr_margin, kTerm_set_underline_style,
 };
 use crate::tui::terminfo::{terminfo_from_builtin, terminfo_from_database};
-use crate::types::{
-    ApiString, HlAttrs, SignalWatcher, Staging, TUIData, TermInput, TerminfoEntry, TerminfoExt,
-    uv_file, uv_handle_t, uv_timer_t, uv_tty_mode_t,
-};
+use crate::types::{ApiString, HlAttrs, Staging, TUIData, TermInput, TerminfoEntry, TerminfoExt};
 use crate::ui::state::t_colors;
 use crate::ui_client::{ui_client_attach, ui_client_detach, ui_client_set_size};
 use ::libc::{abort, kill};

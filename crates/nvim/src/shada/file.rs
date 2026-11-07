@@ -22,6 +22,7 @@
 
 use crate::ascii::ascii_isdigit;
 use crate::env::{expand_env_within, home_to_tilde, state_subpath};
+use crate::event::uv::{uv_gid_t, uv_uid_t};
 use crate::fileio::buffered::{
     FileOpenFlags, ReadFile, WriteFile, kFileCreate, kFileCreateOnly, kFileNoSymlink,
     kFileReadOnly, kFileTruncate,
@@ -40,7 +41,7 @@ use crate::os::users::{os_getgid, os_getuid};
 use crate::os::uv_error::{UV_EEXIST, UV_ELOOP, UV_ENOENT};
 use crate::path::{concat_fnames, tail_with_sep_index};
 use crate::smsg;
-use crate::types::{FileInfo, MAXPATHL, uv_gid_t, uv_uid_t};
+use crate::types::{FileInfo, MAXPATHL};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
