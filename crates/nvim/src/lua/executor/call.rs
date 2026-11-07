@@ -114,7 +114,7 @@ fn convert_and_call(
 ) -> Result<(), Error> {
     for i in 0..nargs {
         stack.push_value(At::arg(len_as_int(i) + 2));
-        let Some(arg) = pop_typval(stack) else {
+        let Ok(arg) = pop_typval(stack) else {
             return Err(api_error!(
                 kErrorTypeException,
                 "error converting argument {}",
@@ -147,7 +147,7 @@ fn convert_and_call(
     drop(sctx);
 
     if !err.is_set() {
-        push_typval(stack, &rettv, false);
+        let _ = push_typval(stack, &rettv, false);
     }
     tv_clear(&mut rettv);
     if err.is_set() { Err(err) } else { Ok(()) }

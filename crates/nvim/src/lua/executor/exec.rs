@@ -152,7 +152,7 @@ fn push_typval_args(stack: &mut Stack, args: &[TypVal], special: bool) {
         if arg.v_type() == VAR_UNKNOWN {
             stack.push_nil();
         } else {
-            push_typval(stack, arg, special);
+            let _ = push_typval(stack, arg, special);
         }
     }
 }

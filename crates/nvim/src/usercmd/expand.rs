@@ -510,7 +510,8 @@ pub(crate) fn do_ucmd(excmd: &mut ExArg, preview: bool) -> c_int {
 
     match run {
         Run::Lua(call) => {
-            let retv = nlua_do_ucmd(&call, excmd, preview);
+            // A callback that raised has said so, and previews nothing.
+            let retv = nlua_do_ucmd(&call, excmd, preview).unwrap_or(0);
             if preview { retv } else { 0 }
         }
         Run::Vim {

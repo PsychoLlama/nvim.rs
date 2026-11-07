@@ -15,7 +15,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::types::LineNr;
+use crate::types::{Failed, LineNr};
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
@@ -95,11 +95,15 @@ fn set(stack: &mut Stack, name: &CStr) {
 ///
 /// The preview callback takes two extra arguments — the preview namespace
 /// and buffer — and answers how much of a preview it produced (0 to 2);
-/// anything else is 0.
+/// anything else is 0. `Err` when the callback raised, which is said.
 ///
 /// `cmd` is what the run needs of the command, copied out of its table:
 /// the callback may redefine or delete the command while it runs.
-pub(crate) fn nlua_do_ucmd(cmd: &LuaCommand, excmd: &ExArg, preview: bool) -> c_int {
+pub(crate) fn nlua_do_ucmd(
+    cmd: &LuaCommand,
+    excmd: &ExArg,
+    preview: bool,
+) -> Result<c_int, Failed> {
     with_main_stack(|stack| {
         stack.push_reference(cmd.luaref);
 
@@ -232,11 +236,11 @@ pub(crate) fn nlua_do_ucmd(cmd: &LuaCommand, excmd: &ExArg, preview: bool) -> c_
         let (nargs_in, nresults) = if preview { (3, 1) } else { (1, 0) };
         if nlua_pcall(stack, nargs_in, nresults).is_err() {
             nlua_error(stack, c"Lua :command callback: %.*s");
-            return 0;
+            return Err(Failed);
         }
 
         if !preview {
-            return 0;
+            return Ok(0);
         }
         // Anything but a number from 0 to 2 is 0, and stays on the stack, as
         // upstream leaves it.
@@ -246,9 +250,9 @@ pub(crate) fn nlua_do_ucmd(cmd: &LuaCommand, excmd: &ExArg, preview: bool) -> c_
         match answer {
             Some(retv) if (0..=2).contains(&retv) => {
                 stack.pop(1);
-                retv
+                Ok(retv)
             }
-            _ => 0,
+            _ => Ok(0),
         }
     })
 }

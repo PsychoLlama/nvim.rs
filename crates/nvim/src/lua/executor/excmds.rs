@@ -30,7 +30,7 @@ use crate::message::{e_argreq, emsg};
 use crate::narrow::len_as_int;
 use crate::os::cshim::gettext;
 use crate::runtime::cmd_source_buffer;
-use crate::types::{CmdIdx, ColNr, ExArg, LineNr, lua_Number};
+use crate::types::{CmdIdx, ColNr, ExArg, Failed, LineNr, lua_Number};
 use crate::undo::u_save;
 use crate::winlayer::{Buf, Win};
 
@@ -152,7 +152,7 @@ fn nul_to_nl(line: &[u8]) -> XString {
 
 /// `:luafile {path}`.
 pub fn ex_luafile(excmd: &mut ExArg) {
-    nlua_exec_file(excmd.line.cstr_from(excmd.line.arg));
+    let _ = nlua_exec_file(excmd.line.cstr_from(excmd.line.arg));
 }
 
 /// Read the whole of stdin. `None` on a read failure or an interrupt.
@@ -178,16 +178,23 @@ fn read_stdin() -> Option<Vec<u8>> {
     Some(text)
 }
 
+/// Why [`nlua_exec_file`] did not run the file to its end.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LuaFileError {
+    /// Standard input (`-`) could not be read; nothing was said.
+    NoInput,
+    /// The chunk would not load, or raised: said, as E5111-E5113.
+    Said(Failed),
+}
+
 /// Run the Lua file at `path`, or stdin for `-`.
-pub fn nlua_exec_file(path: &CStr) -> bool {
+pub(crate) fn nlua_exec_file(path: &CStr) -> Result<(), LuaFileError> {
     with_main_stack(|stack| {
         if path != c"-" {
             stack.get_global(c"loadfile");
             stack.push_bytes(path.to_bytes());
         } else {
-            let Some(text) = read_stdin() else {
-                return false;
-            };
+            let text = read_stdin().ok_or(LuaFileError::NoInput)?;
             stack.get_global(c"loadstring");
             // `lua_pushstring` of the text: up to its first NUL.
             stack.push_bytes(until_nul(&text));
@@ -197,20 +204,20 @@ pub fn nlua_exec_file(path: &CStr) -> bool {
         // the syntax error.
         if nlua_pcall(stack, 1, 2).is_err() {
             nlua_error(stack, c"E5111: Lua: %.*s");
-            return false;
+            return Err(LuaFileError::Said(Failed));
         }
         if stack.kind(At::from_top(2)) == Kind::Nil {
             nlua_error(stack, c"E5112: Lua chunk: %.*s");
             debug_assert!(stack.is_nil(At::TOP));
             stack.pop(1);
-            return false;
+            return Err(LuaFileError::Said(Failed));
         }
         debug_assert!(stack.is_nil(At::TOP));
         stack.pop(1);
         if nlua_pcall(stack, 0, 0).is_err() {
             nlua_error(stack, c"E5113: Lua chunk: %.*s");
-            return false;
+            return Err(LuaFileError::Said(Failed));
         }
-        true
+        Ok(())
     })
 }

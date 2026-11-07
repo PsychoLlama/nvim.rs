@@ -33,7 +33,7 @@ use crate::eval::typval_encode::{Container, ConvPath, ConvType, Flow, TypvalSink
 use crate::eval::userfunc::FuncFlags;
 use crate::eval::userfunc::find_func;
 use crate::lua::stack::{At, Stack};
-use crate::types::{Float, TypVal, kObjectTypeDict, lua_Number};
+use crate::types::{Failed, Float, TypVal, kObjectTypeDict, lua_Number};
 
 /// How many Lua slots opening a container needs: its table, the key or index
 /// it is about to set, and the value that will land on top of them.
@@ -246,23 +246,23 @@ impl TypvalSink for LuaSink<'_> {
 ///
 /// With `special`, Vimscript's `null` and an empty dictionary go as `nil` and
 /// a `{_TYPE = dictionary}` table; otherwise as `vim.NIL` and
-/// `vim.empty_dict()`. `false` when the stack could not grow, with the
-/// reason already reported.
-pub fn push_typval(stack: &mut Stack, tv: &TypVal, special: bool) -> bool {
+/// `vim.empty_dict()`. `Err` when the stack could not grow or a value
+/// would not go, with the reason already reported.
+pub fn push_typval(stack: &mut Stack, tv: &TypVal, special: bool) -> Result<(), Failed> {
     let initial_size = stack.top().index();
     if !stack.reserve(initial_size + 2) {
         // Upstream reports the size it would have needed for a container,
         // not the two slots it just asked for.
         semsg!("E1502: Lua failed to grow stack to {}", initial_size + 4);
-        return false;
+        return Err(Failed);
     }
     let mut sink = LuaSink {
         stack: &mut *stack,
         special,
     };
     if !encode_typval(&mut sink, tv, c"nlua_push_typval argument") {
-        return false;
+        return Err(Failed);
     }
     debug_assert!(stack.top().index() == initial_size + 1);
-    true
+    Ok(())
 }

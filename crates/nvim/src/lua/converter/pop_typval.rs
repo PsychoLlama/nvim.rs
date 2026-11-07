@@ -42,8 +42,8 @@ use crate::message::emsg;
 use crate::narrow::{float_as_i64, len_as_int};
 use crate::os::cshim::gettext;
 use crate::types::{
-    ListItem, LuaRef, TypVal, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeDict,
-    kObjectTypeFloat, kObjectTypeNil, kSpecialVarNull, lua_Number, size_t,
+    Failed, ListItem, LuaRef, TypVal, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray,
+    kObjectTypeDict, kObjectTypeFloat, kObjectTypeNil, kSpecialVarNull, lua_Number, size_t,
 };
 
 /// Refused for a table that is neither a list nor a dictionary.
@@ -189,11 +189,11 @@ enum Converted {
 
 /// Convert the Lua value on top of the stack, or open the container it is.
 ///
-/// `None` refuses, with the reason already reported.
-fn convert_top(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Option<Converted> {
+/// `Err` refuses, with the reason already reported.
+fn convert_top(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Result<Converted, Failed> {
     match stack.kind(At::TOP) {
-        Kind::Nil => Some(Converted::Value(TypVal::Special(kSpecialVarNull))),
-        Kind::Boolean => Some(Converted::Value(TypVal::Bool(
+        Kind::Nil => Ok(Converted::Value(TypVal::Special(kSpecialVarNull))),
+        Kind::Boolean => Ok(Converted::Value(TypVal::Bool(
             if stack.to_boolean(At::TOP) {
                 kBoolVarTrue
             } else {
@@ -203,14 +203,14 @@ fn convert_top(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Option<Converted
         Kind::String => {
             let bytes = stack.to_bytes(At::TOP).unwrap_or_default();
             // `decode_string` copies the Lua string's bytes.
-            Some(Converted::Value(decode_string(bytes, false)))
+            Ok(Converted::Value(decode_string(bytes, false)))
         }
         Kind::Number => {
             let n = stack.to_number(At::TOP);
             let no_integer = n > VARNUMBER_MAX as lua_Number
                 || n < VARNUMBER_MIN as lua_Number
                 || float_as_i64(n) as lua_Number != n;
-            Some(Converted::Value(if no_integer {
+            Ok(Converted::Value(if no_integer {
                 TypVal::Float(n)
             } else {
                 TypVal::Number(float_as_i64(n))
@@ -220,7 +220,7 @@ fn convert_top(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Option<Converted
         Kind::Function => {
             // The function, registered under a name the value takes.
             let name = register_luafunc(stack.reference(At::TOP));
-            Some(Converted::Value(TypVal::func(Some(name))))
+            Ok(Converted::Value(TypVal::func(Some(name))))
         }
         Kind::Userdata => {
             // TODO(bfredl): check mt.__call and convert to a function?
@@ -228,22 +228,22 @@ fn convert_top(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Option<Converted
             let is_nil = stack.raw_equal(At::TOP, At::from_top(2));
             stack.pop(1);
             if is_nil {
-                Some(Converted::Value(TypVal::Special(kSpecialVarNull)))
+                Ok(Converted::Value(TypVal::Special(kSpecialVarNull)))
             } else {
                 emsg(gettext(E5101_BAD_TYPE));
-                None
+                Err(Failed)
             }
         }
         _ => {
             emsg(gettext(E5101_BAD_TYPE));
-            None
+            Err(Failed)
         }
     }
 }
 
 /// Convert the Lua *table* on top of the stack: a value outright when it is
 /// empty or a self-reference, otherwise a container the walk descends into.
-fn convert_table(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Option<Converted> {
+fn convert_table(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Result<Converted, Failed> {
     // Only worth tracking a table reference when the table has a metatable
     // of its own.
     let mut table_ref: LuaRef = LUA_NOREF;
@@ -260,7 +260,7 @@ fn convert_table(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Option<Convert
     // rather than descend forever.
     for container in open.iter() {
         if stack.raw_equal(At::TOP, container.table()) {
-            return Some(Converted::Value(container.reentered()));
+            return Ok(Converted::Value(container.reentered()));
         }
     }
 
@@ -271,20 +271,20 @@ fn convert_table(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Option<Convert
             let mut list = tv_list_alloc(table_props.maxidx.cast_signed());
             list.lua_table_ref = table_ref;
             if table_props.maxidx == 0 {
-                return Some(Converted::Value(TypVal::list(Some(list))));
+                return Ok(Converted::Value(TypVal::list(Some(list))));
             }
             open.push(OpenValue::List {
                 list,
                 wanted: table_props.maxidx,
                 table,
             });
-            Some(Converted::Opened)
+            Ok(Converted::Opened)
         }
         kObjectTypeDict => {
             if table_props.string_keys_num == 0 {
                 let mut dict = tv_dict_alloc();
                 dict.lua_table_ref = table_ref;
-                return Some(Converted::Value(TypVal::dict(Some(dict))));
+                return Ok(Converted::Value(TypVal::dict(Some(dict))));
             }
             if table_props.has_string_with_nul {
                 // A key with a NUL in it has no Vimscript dictionary image,
@@ -305,12 +305,12 @@ fn convert_table(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Option<Convert
             }
             // Seed `lua_next`.
             stack.push_nil();
-            Some(Converted::Opened)
+            Ok(Converted::Opened)
         }
-        kObjectTypeFloat => Some(Converted::Value(TypVal::Float(table_props.val))),
+        kObjectTypeFloat => Ok(Converted::Value(TypVal::Float(table_props.val))),
         kObjectTypeNil => {
             emsg(gettext(E5100_MIXED_KEYS));
-            None
+            Err(Failed)
         }
         _ => std::process::abort(),
     }
@@ -334,20 +334,20 @@ enum Step {
 /// pushed it, so the depth at which a deep table is refused (and the refusal
 /// it gets) is upstream's.
 #[inline]
-fn reserve_turn(stack: &mut Stack) -> Option<()> {
+fn reserve_turn(stack: &mut Stack) -> Result<(), Failed> {
     let need = stack.top().index() + TURN_SLOTS;
     if !stack.reserve(need) {
         semsg!("E1502: Lua failed to grow stack to {need}");
-        return None;
+        return Err(Failed);
     }
-    Some(())
+    Ok(())
 }
 
 /// Walk the Lua value on top of the stack, leaving it there.
 ///
-/// `None` refuses, with the reason already reported; whatever the walk had
+/// `Err` refuses, with the reason already reported; whatever the walk had
 /// built is released with `stack`.
-fn walk(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Option<TypVal> {
+fn walk(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Result<TypVal, Failed> {
     reserve_turn(stack)?;
     let mut step = Step::Convert;
     loop {
@@ -360,7 +360,7 @@ fn walk(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Option<TypVal> {
                 Converted::Opened => Step::Advance,
             },
             Step::Deliver(value) => match open.last_mut() {
-                None => return Some(value),
+                None => return Ok(value),
                 Some(container) => {
                     container.deliver(stack, value);
                     Step::Advance
@@ -389,12 +389,12 @@ static OPEN_VALUES: GlobalCell<Vec<OpenValue>> = GlobalCell::new(Vec::new());
 /// The Lua value on top of the stack as a Vimscript one, popping exactly one
 /// value.
 ///
-/// `None` when it will not convert, with the reason already reported.
-pub fn pop_typval(stack: &mut Stack) -> Option<TypVal> {
+/// `Err` when it will not convert, with the reason already reported.
+pub fn pop_typval(stack: &mut Stack) -> Result<TypVal, Failed> {
     let initial_size = stack.top();
     let mut open = OPEN_VALUES.take();
     let converted = walk(stack, &mut open);
-    if converted.is_none() {
+    if converted.is_err() {
         // Every container the walk had open is released here.
         open.clear();
         stack.pop(stack.top().index() - initial_size.index() + 1);

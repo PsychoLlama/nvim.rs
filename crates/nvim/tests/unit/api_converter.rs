@@ -320,7 +320,7 @@ mod lua {
         // SAFETY: the value is this case's own and released below.
         unsafe {
             let mut tv = value.build();
-            assert!(push_typval(&mut stack, &tv, false));
+            assert!(push_typval(&mut stack, &tv, false).is_ok());
             assert_eq!(stack.kind(At::TOP), Kind::Table);
             let mut back = pop_typval(&mut stack).expect("the push converts back");
             // Compared as api objects, whose dictionaries read back sorted.
@@ -377,7 +377,7 @@ mod lua {
                  integer keys or only string keys",
             ),
         );
-        assert!(refused.is_none());
+        assert!(refused.is_err());
         assert_eq!(stack.top(), top);
     }
 

@@ -470,7 +470,7 @@ fn execute_source(
         return;
     }
     if sid.is_some_and(|sid| with_script_item(sid, |si| si.sn_lua)) {
-        nlua_exec_file(fname_exp);
+        let _ = nlua_exec_file(fname_exp);
         return;
     }
     // The first line is read up front, so a BOM can be sniffed off it.

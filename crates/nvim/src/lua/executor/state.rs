@@ -262,7 +262,7 @@ pub fn nlua_run_script(argv: &[CString], lua_arg0: c_int) -> ! {
     unsafe { luv_set_thread_cb(Some(nlua_thread_acquire_vm), Some(nlua_common_free_all_mem)) };
     with_main_stack(|stack| init_argv(stack, argv, lua_arg0));
     let script = usize::try_from(lua_arg0 - 1).expect("the script follows `-ll`");
-    let lua_ok = nlua_exec_file(&argv[script]);
+    let lua_ok = nlua_exec_file(&argv[script]).is_ok();
     std::process::exit(if lua_ok { 0 } else { 1 });
 }
 

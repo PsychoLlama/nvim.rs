@@ -107,7 +107,7 @@ pub(crate) fn setvar(stack: &mut Stack) -> Result<c_int, Raise> {
 
     // Convert the Lua value into a temporary before anything is disturbed.
     stack.push_value(At::arg(4));
-    let Some(mut tv) = pop_typval(stack) else {
+    let Ok(mut tv) = pop_typval(stack) else {
         return Err(Raise::message("Couldn't convert lua value"));
     };
 
@@ -178,6 +178,6 @@ pub(crate) fn getvar(stack: &mut Stack) -> Result<c_int, Raise> {
     let Some(item) = item else {
         return Ok(0); // nil
     };
-    push_typval(stack, &item.di_tv, false);
+    let _ = push_typval(stack, &item.di_tv, false);
     Ok(1)
 }
