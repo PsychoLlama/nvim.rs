@@ -573,7 +573,7 @@ pub(crate) fn expand_by_function(type_0: c_int, base: ComplStr, cb: Option<&Call
     // switching to another window: it should not be needed and may end up
     // in Insert mode in another buffer.
     let locked = Lock::text();
-    if callback_call(cb, &args, &mut rettv) {
+    if callback_call(cb, &args, &mut rettv) == Ok(true) {
         // The two container arms take the reference out of `rettv`; it is
         // given back when the handle drops below.
         match rettv.v_type() {

@@ -50,7 +50,7 @@ pub fn f_dictwatcheradd(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDa
         return;
     };
     let mut callback = NO_CALLBACK;
-    if !callback_from_typval(&mut callback, &args[2]) {
+    if callback_from_typval(&mut callback, &args[2]).is_err() {
         semsg!("E475: Invalid argument: funcref");
         return;
     }
@@ -76,7 +76,7 @@ pub fn f_dictwatcherdel(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDa
         return;
     };
     let mut callback = NO_CALLBACK;
-    if !callback_from_typval(&mut callback, &args[2]) {
+    if callback_from_typval(&mut callback, &args[2]).is_err() {
         return;
     }
     // The callback only identifies a watcher here and is freed below.

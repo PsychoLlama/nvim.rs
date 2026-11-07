@@ -422,7 +422,7 @@ pub(crate) fn msg_bytes_to_stdio(bytes: &[u8]) {
         // The array owns the copy and releases it.
         let argv = [TypVal::string_from(bytes)];
         let mut rettv = TV_INITIAL_VALUE;
-        callback_call(&callback, &argv, &mut rettv);
+        let _ = callback_call(&callback, &argv, &mut rettv);
         tv_clear(&mut rettv);
         callback.clear();
         return;

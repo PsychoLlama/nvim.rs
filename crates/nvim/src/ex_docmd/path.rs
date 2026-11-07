@@ -109,7 +109,7 @@ pub(crate) fn call_findfunc(pat: &[u8], cmdcomplete: BoolVarValue) -> Option<Lis
     let mut cb = findfunc_callback();
     let mut rettv = TV_INITIAL_VALUE;
     rettv.write_empty(VAR_UNKNOWN);
-    let called = callback_call(&cb, &args, &mut rettv);
+    let called = callback_call(&cb, &args, &mut rettv) == Ok(true);
     callback_free(&mut cb);
     current_sctx.set(saved_sctx);
     drop(locked);

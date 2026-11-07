@@ -27,6 +27,7 @@ use super::*;
 use crate::eval::typval::{ListRef, NumBuf};
 use crate::guard::Suppress;
 use crate::narrow::number_as_int;
+use crate::types::Failed;
 
 /// Publish the `v:` strings an expression is meant to read.
 fn set_vim_var_strings(vars: &[(Vv, &CStr)]) {
@@ -162,20 +163,17 @@ pub fn eval_spell_expr(badword: &[u8], expr: &[u8]) -> Option<ListRef> {
 }
 
 /// One suggestion from [`eval_spell_expr`]'s answer: the word and the
-/// score, or `None` on an error.
+/// score, or an error said (E5700, or E684 for a missing word).
 ///
 /// An entry has to be a two-element list of a word and a score; the score is
 /// not checked for being unsigned, which upstream notes and does not fix.
-pub fn get_spellword(list: Option<&List>) -> Option<(Vec<u8>, c_int)> {
+pub fn get_spellword(list: Option<&List>) -> Result<(Vec<u8>, c_int), Failed> {
     if list_len(list) != 2 {
         let msg = c"E5700: Expression from 'spellsuggest' must yield lists with exactly two values";
         emsg_static(msg);
-        return None;
+        return Err(Failed);
     }
     let mut numbuf = NumBuf::new();
-    let word = list_find_str(list, 0, &mut numbuf)
-        .ok()?
-        .to_bytes()
-        .to_vec();
-    Some((word, number_as_int(list_find_nr(list, -1, None))))
+    let word = list_find_str(list, 0, &mut numbuf)?.to_bytes().to_vec();
+    Ok((word, number_as_int(list_find_nr(list, -1, None))))
 }

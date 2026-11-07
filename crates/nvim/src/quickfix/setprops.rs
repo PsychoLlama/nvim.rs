@@ -510,7 +510,7 @@ fn qf_setprop_qftf(mut qfl: Qfl, value: &TypVal) -> Result<(), QfError> {
     let mut old = core::mem::replace(&mut qfl.text_func, Callback::None);
     old.clear();
     // A value that is not a callable leaves the list without one.
-    if let Some(cb) = cb {
+    if let Ok(cb) = cb {
         qfl.text_func = cb;
     }
     Ok(())

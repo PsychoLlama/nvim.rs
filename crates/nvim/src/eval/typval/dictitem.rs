@@ -344,7 +344,7 @@ pub fn dict_get_callback(
     set_selfdict(&mut tv, d);
     let res = callback_from_typval(result, &tv);
     tv_clear(&mut tv);
-    if res {
+    if res.is_ok() {
         Ok(())
     } else {
         Err(CallbackRefused::Unusable)

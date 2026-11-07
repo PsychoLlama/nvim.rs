@@ -338,7 +338,7 @@ pub fn prompt_invoke_callback() {
         let argv = [TypVal::string(Some(user_input))];
         // A copy: the callback may replace itself, or wipe the buffer.
         let callback = Buf::current().b_prompt_callback.duplicate();
-        callback_call(&callback, &argv, &mut rettv);
+        let _ = callback_call(&callback, &argv, &mut rettv);
         drop(argv);
         clear_local(&mut rettv);
     }
@@ -360,7 +360,7 @@ pub fn invoke_prompt_interrupt() -> bool {
     got_int.set(false);
     // A copy: the callback may replace itself, or wipe the buffer.
     let callback = Buf::current().b_prompt_interrupt.duplicate();
-    let called = callback_call(&callback, &[], &mut rettv);
+    let called = callback_call(&callback, &[], &mut rettv) == Ok(true);
     clear_local(&mut rettv);
     called
 }

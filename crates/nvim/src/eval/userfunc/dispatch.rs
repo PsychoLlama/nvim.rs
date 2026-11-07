@@ -163,7 +163,7 @@ pub(crate) fn func_call(
 /// failed.
 pub fn callback_call_retnr(callback: &Callback, args: &[TypVal]) -> VarNumber {
     let mut rettv = TV_INITIAL_VALUE;
-    if !callback_call(callback, args, &mut rettv) {
+    if callback_call(callback, args, &mut rettv) != Ok(true) {
         return -2;
     }
     let retval = tv_get_number_chk(&rettv).unwrap_or(-1);

@@ -67,16 +67,16 @@ fn err_writing(error: c_int) {
 /// Write every item of `list` as a line, `binary` suppressing the newline
 /// after the last one.
 ///
-/// False when an item has no string form -- which reports on its own and is
-/// the one exit that does not report a write error.
-fn write_list(out: &mut WriteFile, list: Option<&List>, binary: bool) -> bool {
+/// A refusal has been said: E80, or an item with no string form, which
+/// reports on its own and is the one exit that does not report a write error.
+fn write_list(out: &mut WriteFile, list: Option<&List>, binary: bool) -> Result<(), Failed> {
     let items = list_items(list);
     let error;
     'failed: {
         for (i, li) in items.iter().enumerate() {
             let mut numbuf = NumBuf::new();
             let Ok(s) = numbuf.string_chk(&li.li_tv) else {
-                return false;
+                return Err(Failed);
             };
             let bytes = s.to_bytes();
             let mut hunk_start = 0;
@@ -117,15 +117,15 @@ fn write_list(out: &mut WriteFile, list: Option<&List>, binary: bool) -> bool {
         }
         error = out.flush();
         if error == 0 {
-            return true;
+            return Ok(());
         }
     }
     err_writing(error);
-    false
+    Err(Failed)
 }
 
-/// Write `data` and flush.
-fn write_data(out: &mut WriteFile, data: &[u8]) -> bool {
+/// Write `data` and flush; E80 when that fails.
+fn write_data(out: &mut WriteFile, data: &[u8]) -> Result<(), Failed> {
     let error;
     'failed: {
         if !data.is_empty() {
@@ -140,14 +140,14 @@ fn write_data(out: &mut WriteFile, data: &[u8]) -> bool {
         }
         error = out.flush();
         if error == 0 {
-            return true;
+            return Ok(());
         }
     }
     err_writing(error);
-    false
+    Err(Failed)
 }
 
-fn write_blob(out: &mut WriteFile, blob: Option<&Blob>) -> bool {
+fn write_blob(out: &mut WriteFile, blob: Option<&Blob>) -> Result<(), Failed> {
     write_data(out, blob_bytes(blob))
 }
 
@@ -292,7 +292,7 @@ pub fn f_writefile(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         defer_delete(fname);
     }
 
-    let write_ok = match args[0].v_type() {
+    let written = match args[0].v_type() {
         VAR_BLOB => write_blob(&mut out, args[0].blob_ref()),
         VAR_STRING => write_data(
             &mut out,
@@ -300,7 +300,7 @@ pub fn f_writefile(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         ),
         _ => write_list(&mut out, args[0].list_ref(), flags.binary),
     };
-    if write_ok {
+    if written.is_ok() {
         result.write_number(0 as VarNumber);
     }
     let error = out.close(flags.do_fsync);

@@ -252,7 +252,7 @@ fn call_qftf_func(qfl: Qfl, qf_winid: c_int, start_idx: c_int, end_idx: c_int) -
 
     let mut rettv = TV_INITIAL_VALUE;
     let locked = Lock::text();
-    let answer = if cb.call(args.args(), &mut rettv) {
+    let answer = if cb.call(args.args(), &mut rettv) == Ok(true) {
         rettv.take_list()
     } else {
         None

@@ -206,7 +206,7 @@ msg_putchar(::core::ffi::c_int::from(b'\n'));
         err_errmsg = c"E5407: Callback has thrown an exception: %s";
         let saved_msg_col = msg_col.get();
         let silenced = Suppress::messages();
-        let cbcall_ret = callback_call(&color_cb, ::core::slice::from_ref(&arg), &mut tv);
+        let called = callback_call(&color_cb, ::core::slice::from_ref(&arg), &mut tv) == Ok(true);
         drop(silenced);
         msg_col.set(saved_msg_col);
         if got_int.get() {
@@ -214,7 +214,7 @@ msg_putchar(::core::ffi::c_int::from(b'\n'));
         }
         err.absorb(try_leave(&tstate));
 
-        if err.is_set() || !cbcall_ret {
+        if err.is_set() || !called {
             break 'body Label::Error;
         }
         if tv.v_type() != VAR_LIST {

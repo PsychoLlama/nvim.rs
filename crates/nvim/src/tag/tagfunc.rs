@@ -154,7 +154,7 @@ pub(crate) fn find_tagfunc_tags(
     let save_pos = Win::current().w_cursor;
     // A copy: the function may set 'tagfunc' again.
     let mut callback = Buf::current().b_tfu_cb.duplicate();
-    let called = callback_call(&callback, args.args(), &mut rettv);
+    let called = callback_call(&callback, args.args(), &mut rettv) == Ok(true);
     callback_free(&mut callback);
     // The function may have moved the cursor, or left it somewhere
     // that no longer exists.

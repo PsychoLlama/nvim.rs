@@ -525,7 +525,7 @@ fn fuzzy_match_in_list(list: &ListRef, request: &Request) -> Vec<FuzzyItem> {
                     // able to free out from under this loop: the argument
                     // holds a reference of its own for the call.
                     let argv = [TypVal::dict(list.items()[at].li_tv.dict_handle())];
-                    let called = callback_call(cb, &argv, &mut rettv);
+                    let called = callback_call(cb, &argv, &mut rettv) == Ok(true);
                     drop(argv);
                     if called && rettv.v_type() == VAR_STRING {
                         rettv.string_cstr()

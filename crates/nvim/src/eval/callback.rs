@@ -15,6 +15,7 @@ use crate::eval::typval::{LUA_NOREF, PartialRef, partial_name};
 use crate::guard::Depth;
 use crate::memory::ThinCString;
 use crate::types::Array;
+use crate::types::Failed;
 use core::ffi::{CStr, c_int};
 use core::mem::ManuallyDrop;
 
@@ -43,7 +44,8 @@ use crate::winlayer::Win;
 /// Lua table with a `__call` is registered as one. `v:null` and the Number
 /// 0 mean "no callback", which is not an error. A String that *starts with
 /// a digit* is refused, because that is a channel id rather than a name.
-pub fn callback_from_typval(callback: &mut Callback, arg: &TypVal) -> bool {
+/// A refusal has been said: E921.
+pub fn callback_from_typval(callback: &mut Callback, arg: &TypVal) -> Result<(), Failed> {
     let tv = arg;
     let mut failed = false;
     let cb = if let TypVal::Partial(partial) = tv
@@ -96,21 +98,21 @@ pub fn callback_from_typval(callback: &mut Callback, arg: &TypVal) -> bool {
 
     if failed {
         emsg_static(c"E921: Invalid callback argument");
-        return false;
+        return Err(Failed);
     }
-    true
+    Ok(())
 }
 
 impl Callback {
     /// The callback `arg` describes — [`Callback::None`] for `v:null` and
-    /// the Number 0 — or `None`, after E921, when it describes none.
-    pub fn from_typval(arg: &TypVal) -> Option<Callback> {
+    /// the Number 0 — or E921, said, when it describes none.
+    pub fn from_typval(arg: &TypVal) -> Result<Callback, Failed> {
         let mut cb = Callback::None;
-        callback_from_typval(&mut cb, arg).then_some(cb)
+        callback_from_typval(&mut cb, arg).map(|()| cb)
     }
 
-    /// Call this callback with `args`, answering whether it ran.
-    pub fn call(&self, args: &[TypVal], result: &mut TypVal) -> bool {
+    /// Call this callback with `args`; see [`callback_call`].
+    pub fn call(&self, args: &[TypVal], result: &mut TypVal) -> Result<bool, Failed> {
         callback_call(self, args, result)
     }
 
@@ -232,11 +234,18 @@ pub(crate) fn get_callback_depth() -> c_int {
 /// The prefix that makes a funcref name a Lua one.
 const VLUA: &CStr = c"v:lua.";
 
-/// Call `callback` with `args`.
-pub fn callback_call(callback: &Callback, args: &[TypVal], result: &mut TypVal) -> bool {
+/// Call `callback` with `args`, answering whether it ran (for a Lua
+/// reference, which is asked "are you still wanted", its answer): `false`
+/// for no callback or a `v:lua.` name that is not one, both silent. A
+/// failed call has been said: E169 past 'maxfuncdepth', or the call's own.
+pub fn callback_call(
+    callback: &Callback,
+    args: &[TypVal],
+    result: &mut TypVal,
+) -> Result<bool, Failed> {
     if OptInt::from(callback_depth.get()) > p_mfd() {
         emsg_static(e_command_too_recursive);
-        return false;
+        return Err(Failed);
     }
 
     let lua;
@@ -247,7 +256,7 @@ pub fn callback_call(callback: &Callback, args: &[TypVal], result: &mut TypVal) 
                 Some(rest) => {
                     let name = CStr::from_bytes_until_nul(rest).expect("a terminated name");
                     if check_luafunc_name(name.to_bytes(), false) == 0 {
-                        return false;
+                        return Ok(false);
                     }
                     lua = lua_partial();
                     (name, lua.as_ref())
@@ -263,9 +272,9 @@ pub fn callback_call(callback: &Callback, args: &[TypVal], result: &mut TypVal) 
             let no_args = Array::new();
             // No arguments, no arena and no error sink.
             let rv = nlua_call_ref_quiet(*luaref, None, no_args, kRetNilBool);
-            return rv.as_boolean().unwrap_or(false);
+            return Ok(rv.as_boolean().unwrap_or(false));
         }
-        Callback::None => return false,
+        Callback::None => return Ok(false),
     };
 
     let mut with = CallWith::new(true);
@@ -276,7 +285,7 @@ pub fn callback_call(callback: &Callback, args: &[TypVal], result: &mut TypVal) 
     let depth = Depth::of(&callback_depth);
     let ret = call_func_with(name, None, result, args, with);
     drop(depth);
-    ret.is_ok()
+    ret.map(|_| true)
 }
 
 /// Mark what a callback keeps alive for the collector; the stacks as

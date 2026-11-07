@@ -235,7 +235,7 @@ fn channel_callback_call(id: uint64_t, reader: Option<bool>) {
     argv[0].write_number(id.cast_signed());
 
     let mut rettv = TV_INITIAL_VALUE;
-    callback_call(&cb, &argv, &mut rettv);
+    let _ = callback_call(&cb, &argv, &mut rettv);
     tv_clear(&mut rettv);
     callback_free(&mut cb);
 }

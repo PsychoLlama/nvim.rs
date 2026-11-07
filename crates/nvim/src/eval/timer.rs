@@ -128,7 +128,7 @@ fn timer_due_cb(id: uint64_t) {
 
     let argv = [TypVal::Number(number)];
     let mut rettv = UNSET_TV;
-    callback_call(&callback, &argv, &mut rettv);
+    let _ = callback_call(&callback, &argv, &mut rettv);
     let mut callback = callback;
     callback_free(&mut callback);
 

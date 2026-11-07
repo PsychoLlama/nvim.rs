@@ -234,7 +234,7 @@ pub fn f_timer_start(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         }
     }
     let mut callback = Callback::None;
-    if !callback_from_typval(&mut callback, &args[1]) {
+    if callback_from_typval(&mut callback, &args[1]).is_err() {
         return;
     }
     result.write_number(timer_start(arg_number(&args[0]), repeat, callback).cast_signed());

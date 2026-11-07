@@ -154,7 +154,7 @@ pub(crate) fn op_function(op: &OpArg) {
     // function may set 'operatorfunc' again.
     let mut callback = OPFUNC_CB.with(Callback::duplicate);
     let mut rettv: TypVal = TV_INITIAL_VALUE;
-    if callback_call(&callback, &argv, &mut rettv) {
+    if callback_call(&callback, &argv, &mut rettv) == Ok(true) {
         tv_clear(&mut rettv);
     }
     callback.clear();

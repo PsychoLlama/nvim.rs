@@ -116,7 +116,7 @@ pub(super) fn spell_suggest_expr(su: &mut SugInfo, expr: &[u8]) {
         for li in list_iter(Some(&list)) {
             if li.li_tv.v_type() == VAR_LIST {
                 // Each item is a [word, score] pair.
-                let Some((word, score)) = get_spellword(li.li_tv.list_ref()) else {
+                let Ok((word, score)) = get_spellword(li.li_tv.list_ref()) else {
                     continue;
                 };
                 if score >= 0 && score <= su.su_maxscore {

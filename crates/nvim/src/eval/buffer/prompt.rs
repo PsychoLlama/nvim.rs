@@ -137,7 +137,7 @@ fn set_prompt_callback(args: &[TypVal], slot: PromptSlot) {
     let Some(mut buf) = tv_get_buf(&args[0], 0) else {
         return;
     };
-    if !callback_from_typval(&mut callback, &args[1]) {
+    if callback_from_typval(&mut callback, &args[1]).is_err() {
         return;
     }
     let slot = match slot {

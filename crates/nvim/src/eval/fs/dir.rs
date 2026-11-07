@@ -49,8 +49,8 @@ use crate::os::fs::{current_dir, link_info, mkdir_recurse, os_remove, os_rmdir};
 use crate::path::{full_name_save, tail_index};
 use crate::semsg;
 use crate::types::{
-    CdScope, EvalFuncData, MAXPATHL, TypVal, VAR_NUMBER, VAR_STRING, VarNumber, kCdScopeGlobal,
-    kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow, uint64_t,
+    CdScope, EvalFuncData, Failed, MAXPATHL, TypVal, VAR_NUMBER, VAR_STRING, VarNumber,
+    kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow, uint64_t,
 };
 use crate::window::find_tabpage;
 use crate::window::{DirOwner, own_dir};
@@ -135,7 +135,8 @@ struct Scope {
 }
 
 impl Scope {
-    fn read(args: &[TypVal], default_to_window: bool) -> Option<Self> {
+    /// The scope the arguments name; a refusal has been said.
+    fn read(args: &[TypVal], default_to_window: bool) -> Result<Self, Failed> {
         let (win_i, tab_i) = (kCdScopeWindow as usize, kCdScopeTabpage as usize);
         let mut s = Self {
             scope: kCdScopeInvalid,
@@ -152,13 +153,13 @@ impl Scope {
             }
             if !args.get(i).is_some_and(|arg| arg.v_type() == VAR_NUMBER) {
                 err0(e_invarg);
-                return None;
+                return Err(Failed);
             }
             s.number[i] = number_as_int(number_of(&args[i]));
             // It is an error for a scope number to be less than -1.
             if s.number[i] < -1 {
                 err0(e_invarg);
-                return None;
+                return Err(Failed);
             }
             // Use the narrowest scope the caller asked for.
             if s.number[i] >= 0 && s.scope == kCdScopeInvalid {
@@ -178,7 +179,7 @@ impl Scope {
             s.tp = find_tab(s.number[tab_i]);
             if s.tp.is_none() {
                 err0(c"E5000: Cannot find tab number.");
-                return None;
+                return Err(Failed);
             }
         }
 
@@ -186,17 +187,17 @@ impl Scope {
         if s.number[win_i] >= 0 {
             if s.number[tab_i] < 0 {
                 err0(c"E5001: Higher scope cannot be -1 if lower scope is >= 0.");
-                return None;
+                return Err(Failed);
             }
             if s.number[win_i] > 0 {
                 s.win = find_win(args, s.tp);
                 if s.win.is_none() {
                     err0(c"E5002: Cannot find window number.");
-                    return None;
+                    return Err(Failed);
                 }
             }
         }
-        Some(s)
+        Ok(s)
     }
 }
 
@@ -314,7 +315,7 @@ pub fn f_filecopy(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// arguments name, always as a string.
 pub fn f_getcwd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_string(None);
-    let Some(s) = Scope::read(args, false) else {
+    let Ok(s) = Scope::read(args, false) else {
         return;
     };
 
@@ -346,7 +347,7 @@ pub fn f_getcwd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// has a directory of its own.
 pub fn f_haslocaldir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(0 as VarNumber);
-    let Some(s) = Scope::read(args, true) else {
+    let Ok(s) = Scope::read(args, true) else {
         return;
     };
 

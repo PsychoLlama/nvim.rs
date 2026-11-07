@@ -36,7 +36,7 @@ use crate::fileio::file_pat_to_regpat;
 use crate::memory::ThinCString;
 use crate::narrow::number_as_int;
 use crate::path::{path_is_absolute, shorten_dir_name, simplify_filename, tail_index};
-use crate::types::{EvalFuncData, MAXPATHL, TypVal, VAR_STRING, VarNumber};
+use crate::types::{EvalFuncData, Failed, MAXPATHL, TypVal, VAR_STRING, VarNumber};
 use core::ffi::CStr;
 use std::ffi::OsStr;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
@@ -146,14 +146,14 @@ pub fn f_simplify(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_resolve(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     result.write_string(None);
-    if let Some(resolved) = resolve(str_arg(args, 0, &mut numbuf)) {
+    if let Ok(resolved) = resolve(str_arg(args, 0, &mut numbuf)) {
         result.write_string(Some(simplify(&resolved)));
     }
 }
 
-/// Follow the symlink chain from `fname`, or None having reported E655 when
-/// it does not end within a hundred links.
-fn resolve(fname: &CStr) -> Option<Vec<u8>> {
+/// Follow the symlink chain from `fname`, or report E655 when it does not end
+/// within a hundred links.
+fn resolve(fname: &CStr) -> Result<Vec<u8>, Failed> {
     let mut is_relative_to_current = false;
     let mut has_trailing_pathsep = false;
     let mut limit = 100;
@@ -183,7 +183,7 @@ fn resolve(fname: &CStr) -> Option<Vec<u8>> {
         while let Some(mut link) = read_link(&p) {
             if limit == 0 {
                 err(c"E655: Too many symbolic links (cycle?)");
-                return None;
+                return Err(Failed);
             }
             limit -= 1;
 
@@ -255,5 +255,5 @@ fn resolve(fname: &CStr) -> Option<Vec<u8>> {
     if !has_trailing_pathsep && after_sep(&p, p.len()) {
         p.truncate(tail_with_sep(&p));
     }
-    Some(p)
+    Ok(p)
 }

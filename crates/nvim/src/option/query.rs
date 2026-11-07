@@ -167,7 +167,7 @@ pub(crate) fn callback_from_option(optval: &CStr) -> Result<Option<Callback>, Fa
         TypVal::string(Some(text.into()))
     };
     let mut cb = Callback::None;
-    if !callback_from_typval(&mut cb, &tv) || !cb.is_set() {
+    if callback_from_typval(&mut cb, &tv).is_err() || !cb.is_set() {
         return Err(Failed);
     }
     Ok(Some(cb))

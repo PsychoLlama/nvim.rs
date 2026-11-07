@@ -138,7 +138,7 @@ pub fn dict_watcher_notify(
         }
         let mut rettv = TV_INITIAL_VALUE;
         watcher.busy.set(true);
-        callback_call(&watcher.callback, argv.args(), &mut rettv);
+        let _ = callback_call(&watcher.callback, argv.args(), &mut rettv);
         watcher.busy.set(false);
         tv_clear(&mut rettv);
         if watcher.needs_free.get() {

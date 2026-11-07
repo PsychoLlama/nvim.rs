@@ -245,7 +245,7 @@ fn au_callback(
     let luaref = match handler {
         Handler::Vim(mut callback) => {
             let mut rettv = TV_INITIAL_VALUE;
-            callback_call(&callback, &[], &mut rettv);
+            let _ = callback_call(&callback, &[], &mut rettv);
             callback.clear();
             return false;
         }
