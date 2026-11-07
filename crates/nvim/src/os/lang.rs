@@ -277,7 +277,7 @@ static DID_INIT_LOCALES: GlobalCell<bool> = GlobalCell::new(false);
 /// Run `locale -a` and split its output. `None` when the command could not be
 /// run, which just means there is no locale completion.
 fn find_locales() -> Option<&'static [CString]> {
-    let text = get_cmd_output(c"locale -a", ShellOpts::SILENT)?;
+    let text = get_cmd_output(c"locale -a", ShellOpts::SILENT).ok()?;
 
     let locales: Vec<CString> = text
         .split(|&b| b == b'\n')

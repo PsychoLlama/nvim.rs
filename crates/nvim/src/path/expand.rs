@@ -349,7 +349,7 @@ fn expand_backtick(names: &mut Vec<XString>, pat: &[u8], flags: ExpandFlags) -> 
         } else {
             ShellOpts::NONE
         };
-        get_cmd_output(&cstr::owned(cmd), opts)
+        get_cmd_output(&cstr::owned(cmd), opts).ok()
     }?;
 
     // One name per line, and a line with nothing but white space on it

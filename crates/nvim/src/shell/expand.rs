@@ -361,7 +361,7 @@ pub(crate) fn shell_expand_wildcards(
         _ => None,
     };
 
-    let failed = call_shell(Some(&command), shellopts, extra_shell_arg) != 0;
+    let failed = call_shell(Some(&command), shellopts, extra_shell_arg) != Ok(0);
     // A backgrounded command needs a moment to create the temp file, but
     // is not waited for.
     if ampersand {

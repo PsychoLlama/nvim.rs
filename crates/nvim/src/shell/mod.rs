@@ -39,24 +39,24 @@ use crate::memory::{ThinCString, XString};
 use crate::message::state::emsg_silent;
 use crate::message::{e_notmp, e_shellempty};
 use crate::message::{
-    emsg, msg_ext_set_kind, msg_outnum, msg_putchar, msg_str, verbose_enter, verbose_leave,
+    msg_ext_set_kind, msg_outnum, msg_putchar, msg_str, verbose_enter, verbose_leave,
 };
-use crate::message_fmt::msg_cstr;
+use crate::message_fmt::{emsg_text, msg_cstr};
 use crate::option::vars::{P_SH, P_SHCF, P_SXE, P_SXQ, p_sh, p_verbose};
 use crate::os::cshim::gettext;
 use crate::os::fs::os_remove;
 use crate::os::signal::{signal_accept_deadly, signal_reject_deadly};
 use crate::profile::do_profiling;
 use crate::profile::{prof_child_enter, prof_child_exit};
-use crate::semsg;
 use crate::shell::system::do_os_system;
 use crate::smsg;
 use crate::state::MODE_EXTERNCMD;
 use crate::state::mode::State;
 use crate::strings::{escaped_with, unquoted};
 use crate::tag::tag_freematch;
+use crate::tr;
 use crate::types::ui::kUIMessages;
-use crate::types::{LineNr, ProfTime, VarNumber, Vv};
+use crate::types::{Failed, LineNr, ProfTime, VarNumber, Vv};
 use crate::ui::{ui_flush, ui_has};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
@@ -236,19 +236,50 @@ pub(crate) fn run_shell(cmd: Option<&CStr>, opts: ShellOpts, extra_args: Option<
     exitcode
 }
 
+/// Why the shell did not run a command, or its output could not be read
+/// back. Said once, by [`call_shell`] or [`get_cmd_output`].
+#[derive(Debug, thiserror::Error)]
+enum ShellError {
+    /// E91: 'shell' is empty.
+    #[error("{}", msg_cstr(gettext(e_shellempty)))]
+    EmptyShell,
+    /// E483: no temp file name for the output.
+    #[error("{}", msg_cstr(gettext(e_notmp)))]
+    NoTempFile,
+    /// The output file could not be opened or measured.
+    #[error("{}", tr!("E282: Cannot read from \"{}\"", msg_cstr(.0.as_cstr())))]
+    CannotRead(ThinCString),
+    /// The output file read short.
+    #[error("{}", tr!("E485: Can't read file {}", msg_cstr(.0.as_cstr())))]
+    ReadShort(ThinCString),
+}
+
+const _: () = assert!(size_of::<ShellError>() <= 16);
+
+impl ShellError {
+    /// Puts the message out.
+    fn report(&self) -> Failed {
+        emsg_text(self.to_string());
+        Failed
+    }
+}
+
 /// [`call_shell`] of a command line the caller holds, with no extra shell
 /// argument, for a caller that reads no exit status.
 pub(crate) fn call_shell_text(cmd: &CStr, opts: ShellOpts) {
-    call_shell(Some(cmd), opts, None);
+    let _ = call_shell(Some(cmd), opts, None);
 }
 
 /// [`run_shell`] plus the editor-level bookkeeping: `'verbose'`,
 /// `:profile`, `v:shell_error`, and invalidating the cached tags.
+///
+/// Answers the command's exit status, or `Err` -- said, and with
+/// `v:shell_error` at -1 -- when 'shell' is empty.
 pub(crate) fn call_shell(
     cmd: Option<&CStr>,
     opts: ShellOpts,
     extra_shell_arg: Option<&CStr>,
-) -> c_int {
+) -> Result<c_int, Failed> {
     let mut wait_time: ProfTime = 0;
     if p_verbose() > 3 {
         verbose_enter();
@@ -267,37 +298,39 @@ pub(crate) fn call_shell(
     }
 
     let retval = if p_sh(CStr::is_empty) {
-        emsg(gettext(e_shellempty));
-        -1
+        Err(ShellError::EmptyShell.report())
     } else {
         // The command may have updated a tags file.
         tag_freematch();
-        run_shell(cmd, opts, extra_shell_arg)
+        Ok(run_shell(cmd, opts, extra_shell_arg))
     };
 
-    set_vim_var_nr(Vv::ShellError, VarNumber::from(retval));
+    set_vim_var_nr(
+        Vv::ShellError,
+        VarNumber::from(*retval.as_ref().unwrap_or(&-1)),
+    );
     if do_profiling.get() == PROF_YES {
         prof_child_exit(wait_time);
     }
     retval
 }
 
-/// The stdout of an external command, or `None` on error. Every NUL byte in
-/// the output becomes SOH, because the answer is used as a C string.
-pub(crate) fn get_cmd_output(cmd: &CStr, flags: ShellOpts) -> Option<XString> {
+/// The stdout of an external command, or `Err` having said why not. Every
+/// NUL byte in the output becomes SOH, because the answer is used as a C
+/// string.
+pub(crate) fn get_cmd_output(cmd: &CStr, flags: ShellOpts) -> Result<XString, Failed> {
     if check_secure() {
-        return None;
+        return Err(Failed);
     }
-    let Some(tempname) = temp_name() else {
-        emsg(gettext(e_notmp));
-        return None;
-    };
+    let tempname = temp_name()
+        .ok_or(ShellError::NoTempFile)
+        .map_err(|e| e.report())?;
 
     // Add the redirection, and run it. Errors are ignored, and timestamps
     // deliberately not checked.
     let command = make_filter_cmd(cmd, None, Some(tempname.as_cstr()), false);
     let unchecked = Suppress::timestamp_checks();
-    call_shell(
+    let _ = call_shell(
         Some(command.as_c_str()),
         ShellOpts::DO_OUT | ShellOpts::EXPAND | flags,
         None,
@@ -305,18 +338,18 @@ pub(crate) fn get_cmd_output(cmd: &CStr, flags: ShellOpts) -> Option<XString> {
     drop(unchecked);
     drop(command);
 
-    let mut buffer = read_output(tempname.as_cstr())?;
+    let mut buffer = read_output(tempname.as_cstr()).map_err(|e| e.report())?;
     // A NUL would truncate the string, so it becomes SOH instead.
     for b in &mut buffer {
         if *b == 0 {
             *b = 1;
         }
     }
-    Some(XString::from_vec(buffer))
+    Ok(XString::from_vec(buffer))
 }
 
 /// Read back what [`get_cmd_output`]'s command redirected into `tempname`.
-fn read_output(tempname: &CStr) -> Option<Vec<u8>> {
+fn read_output(tempname: &CStr) -> Result<Vec<u8>, ShellError> {
     use std::io::{Read, Seek, SeekFrom};
     // Not being able to seek means the file cannot be read.
     let opened = std::fs::File::open(std::ffi::OsStr::from_bytes(tempname.to_bytes()))
@@ -325,18 +358,16 @@ fn read_output(tempname: &CStr) -> Option<Vec<u8>> {
         file.rewind()?;
         Ok((len, file))
     }) else {
-        semsg!("E282: Cannot read from \"{}\"", msg_cstr(tempname));
-        return None;
+        return Err(ShellError::CannotRead(ThinCString::from_cstr(tempname)));
     };
     let mut buffer = Vec::new();
     let read = file.by_ref().take(len).read_to_end(&mut buffer);
     drop(file);
     os_remove(tempname);
     if read.ok() != usize::try_from(len).ok() {
-        semsg!("E485: Can't read file {}", msg_cstr(tempname));
-        return None;
+        return Err(ShellError::ReadShort(ThinCString::from_cstr(tempname)));
     }
-    Some(buffer)
+    Ok(buffer)
 }
 
 /// Split a command string into words, respecting double quotes; each word
