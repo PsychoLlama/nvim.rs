@@ -123,7 +123,7 @@ pub(crate) use self::efm::*;
 mod parse;
 pub(crate) use self::parse::*;
 mod read;
-pub use self::read::*;
+pub(crate) use self::read::*;
 mod stack;
 pub use self::stack::*;
 pub(crate) use crate::winlayer::{Buf, Win};

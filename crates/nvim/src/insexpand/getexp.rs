@@ -30,7 +30,7 @@ use crate::search::ACTION_EXPAND;
 use crate::search::FIND_ANY;
 use crate::search::FIND_DEFINE;
 use crate::strings::has_char;
-use crate::types::{FAIL, Failed, IOSIZE, ShmFlag};
+use crate::types::{FAIL, IOSIZE, ShmFlag};
 use crate::winlayer::BufId;
 use crate::winlayer::{Buf, buffers};
 
@@ -362,7 +362,7 @@ pub(crate) fn get_next_tag_completion() {
     let pattern = compl_pattern().to_owned();
     let fname = Buf::current().name.full().map(XString::from_cstr);
     let fname = fname.as_ref().map(XString::as_cstr);
-    if let Ok(matches) = find_tag_names(pattern.as_bytes(), flags, TAG_MANY, fname) {
+    if let Some(matches) = find_tag_names(pattern.as_bytes(), flags, TAG_MANY, fname) {
         ins_compl_add_match_list(&matches, p_ic());
     }
 
@@ -490,7 +490,7 @@ pub(crate) fn get_next_completion_match(
     st: &mut InsComplNextState,
     ini: Pos,
 ) -> bool {
-    let mut found_new_match = Err(Failed);
+    let mut found_new_match = false;
     match type_0 {
         // No source: `process_next_cpt_value` rejected this entry.
         -1 => {}
@@ -523,15 +523,15 @@ pub(crate) fn get_next_completion_match(
         // Normal CTRL-P/CTRL-N and CTRL-X CTRL-L.
         _ => {
             found_new_match = get_next_default_completion(st, ini);
-            if found_new_match.is_err() && st.ins_buf == Some(Buf::current().id()) {
+            if !found_new_match && st.ins_buf == Some(Buf::current().id()) {
                 st.found_all = true;
             }
         }
     }
     if type_0 != 0 && compl_curr_match.get() != compl_old_match.get() {
-        found_new_match = Ok(());
+        found_new_match = true;
     }
-    found_new_match.is_ok()
+    found_new_match
 }
 
 /// Start the per-source time slice, where a timeout is configured at all.

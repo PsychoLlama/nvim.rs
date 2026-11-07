@@ -394,7 +394,7 @@ impl Reader {
 ///
 /// `window` is `None` for the quickfix stack, which belongs to no window.
 /// Answers the number of entries; see [`qf_init_ext`] for a refusal.
-pub fn qf_init(
+pub(crate) fn qf_init(
     window: Option<Win>,
     efile: &CStr,
     errorformat: &CStr,
@@ -402,7 +402,7 @@ pub fn qf_init(
     newlist: bool,
     qf_title: Option<&CStr>,
     enc: Option<&CStr>,
-) -> Result<c_int, Failed> {
+) -> Result<c_int, NotRead> {
     let qi = match window {
         Some(wp) => wp.location_list_or_new(),
         None => Qi::global(),
@@ -419,6 +419,16 @@ pub fn qf_init(
         enc,
     )
 }
+
+/// A list [`qf_init_ext`] did not read, or did not add to.
+///
+/// What stopped it -- an errorfile that would not open (E40), a bad
+/// `'errorformat'` (E372-E378), a line the format rejected (E379) -- has
+/// been reported, once, by `qf_init_ext`. Upstream's two silent refusals, a
+/// continuation line with no entry to continue and a value that is no
+/// text, have nothing to say: so this is no "already reported" `Failed`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct NotRead;
 
 /// The compiled `'errorformat'`, kept between calls together with the
 /// option text it was compiled from, so that a repeated command does not
@@ -437,9 +447,7 @@ static EFM_CACHE: GlobalCell<Option<(Vec<u8>, Efm)>> = GlobalCell::new(None);
 /// upstream reported it: before an empty new list is freed and before the
 /// list's window is updated (which sets `'filetype'` and so runs
 /// autocommands that would otherwise see the error after the fact). So
-/// the answer is `Err(Failed)` -- including upstream's two silent
-/// refusals, a continuation line with no entry to continue and a value
-/// that is no text, which have nothing to say.
+/// the answer is a [`NotRead`], which carries nothing more to say.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn qf_init_ext(
     mut qi: Qi,
@@ -451,7 +459,7 @@ pub(crate) fn qf_init_ext(
     newlist: bool,
     qf_title: Option<&CStr>,
     enc: Option<&CStr>,
-) -> Result<c_int, Failed> {
+) -> Result<c_int, NotRead> {
     // Do not use the cached buffer, it may have been wiped out.
     forget_last_buffer();
 
@@ -460,7 +468,7 @@ pub(crate) fn qf_init_ext(
     let read = match Reader::open(enc, input) {
         Err(refused) => {
             refused.report();
-            Err(Failed)
+            Err(NotRead)
         }
         Ok(mut reader) => {
             let mut adding = false;
@@ -523,7 +531,7 @@ pub(crate) fn qf_init_ext(
                             qi.current -= 1;
                         }
                     }
-                    Err(Failed)
+                    Err(NotRead)
                 }
             }
         }

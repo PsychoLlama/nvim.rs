@@ -166,7 +166,7 @@ pub(crate) fn open_help(excmd: Option<&mut ExArg>) {
 
     let found = find_help_tags(&subject, forceit);
     // The first match in the requested language is the best match.
-    let best = found.as_ref().ok().and_then(|matches| match lang {
+    let best = found.as_ref().and_then(|matches| match lang {
         None => matches.first(),
         Some(lang) => matches.iter().find(|tag| {
             let len = tag.len();
@@ -407,7 +407,10 @@ fn help_compare(a: &HelpTagMatch, b: &HelpTagMatch) -> Ordering {
 /// Every help tag matching `subject`, best match first, at most
 /// `TAG_MANY` of them. With `keep_lang` set, prefer the language of the
 /// current buffer.
-fn find_help_tags(subject: &[u8], keep_lang: bool) -> Result<Vec<Vec<u8>>, Failed> {
+///
+/// `None`, no list, when the subject could not be escaped (the Lua error
+/// said) or the search could not run (silent: see [`find_tags`]).
+fn find_help_tags(subject: &[u8], keep_lang: bool) -> Option<Vec<Vec<u8>>> {
     let mut args = ArrayBuf::<1>::new();
     args.push(Object::string(ApiString::from_bytes(subject)));
     let chunk = c"return require'vim._core.help'.escape_subject(...)";
@@ -416,7 +419,7 @@ fn find_help_tags(subject: &[u8], keep_lang: bool) -> Result<Vec<Vec<u8>>, Faile
         Err(mut err) => {
             emsg_multiline(err.message_or_empty(), Some(c"lua_error"), HLF_E, true);
             err.clear();
-            return Err(Failed);
+            return None;
         }
     };
     let escaped = res
@@ -439,7 +442,7 @@ fn find_help_tags(subject: &[u8], keep_lang: bool) -> Result<Vec<Vec<u8>>, Faile
     matches.sort_unstable_by(help_compare);
     // Drop everything past TAG_MANY to keep the listing short.
     matches.truncate(TAG_MANY as usize);
-    Ok(matches.into_iter().map(|(tag, _)| tag).collect())
+    Some(matches.into_iter().map(|(tag, _)| tag).collect())
 }
 
 /// Tidy the match list for display: strip `@ab` where `ab` is the head of
@@ -485,9 +488,10 @@ fn cleanup_help_tags(tags: &mut [Vec<u8>]) {
 }
 
 /// The help tags `arg` matches, cleaned up the way the command line offers
-/// them -- [`find_help_tags`] then [`cleanup_help_tags`], owned.
+/// them -- [`find_help_tags`] then [`cleanup_help_tags`], owned. `Err` is
+/// the completion's "no list", which skips E480.
 pub(crate) fn help_tag_matches(arg: &CStr) -> Result<Vec<XString>, Failed> {
-    let mut tags = find_help_tags(arg.to_bytes(), false)?;
+    let mut tags = find_help_tags(arg.to_bytes(), false).ok_or(Failed)?;
     cleanup_help_tags(&mut tags);
     Ok(tags.into_iter().map(XString::from_vec).collect())
 }

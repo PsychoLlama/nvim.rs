@@ -594,14 +594,14 @@ impl DoTag {
         let buf_ffname = self.buf_ffname.as_ref().map(XString::as_cstr);
         let found = find_tags(name, flags, MATCH_LIMIT.get(), buf_ffname);
         let mut new_matches = match found {
-            Ok(found) => {
+            Some(found) => {
                 if c_int::try_from(found.len()).is_ok_and(|n| n < MATCH_LIMIT.get()) {
                     // Fewer than the limit: that is all of them.
                     MATCH_LIMIT.set(MAXCOL);
                 }
                 found
             }
-            Err(_) => Vec::new(),
+            None => Vec::new(),
         };
 
         // A tag function may do anything, which may make all sorts of

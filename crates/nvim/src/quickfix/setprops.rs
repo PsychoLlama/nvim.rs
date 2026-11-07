@@ -457,7 +457,7 @@ fn qf_setprop_items_from_lines(
         None,
         None,
     );
-    parsed.map(|_| ()).map_err(|Failed| QfError::Unparsable)
+    parsed.map(|_| ()).map_err(|NotRead| QfError::Unparsable)
 }
 
 /// Attach an arbitrary value to the list, which `getqflist({'context': 1})`

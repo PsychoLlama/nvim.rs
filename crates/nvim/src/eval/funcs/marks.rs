@@ -203,5 +203,5 @@ pub fn f_taglist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
     let fname = args.get(1).map(|fname| numbuf2.string(fname));
     let list = tv_list_alloc_ret(result, kListLenUnknown as isize);
-    let _ = get_tags(list, pattern, fname);
+    get_tags(list, pattern, fname);
 }

@@ -26,7 +26,7 @@ use crate::memline::Lines;
 use crate::option::split_option_part;
 use crate::path::ExpandFlags;
 use crate::strings::escaped_bytes;
-use crate::types::{Failed, IOSIZE, ShmFlag};
+use crate::types::{IOSIZE, ShmFlag};
 use crate::winlayer::BufId;
 use crate::winlayer::{Buf, Win, first_buffer, first_window};
 use std::ffi::OsStr;
@@ -435,12 +435,10 @@ pub(crate) fn next_word_or_line(
 /// Searches `st.ins_buf` from its current match position in the
 /// `compl_direction` direction, `start_pos` being where the completion
 /// started; with `st.set_match_pos` set, `st.first_match_pos` and
-/// `st.last_match_pos` are set too. Answers `Ok` if a new match was found,
-/// otherwise `Err`.
-pub(crate) fn get_next_default_completion(
-    st: &mut InsComplNextState,
-    start_pos: Pos,
-) -> Result<(), Failed> {
+/// `st.last_match_pos` are set too. Answers whether a new match was found:
+/// running out of matches is the ordinary end of a scan, not a failure, and
+/// says nothing.
+pub(crate) fn get_next_default_completion(st: &mut InsComplNextState, start_pos: Pos) -> bool {
     // The match found, from its start to the end of the string it is in;
     // upstream points into the line, or into `IObuff` for a joined line.
     let mut found = ::core::mem::take(&mut st.found);
@@ -454,7 +452,7 @@ pub(crate) fn get_next_default_completion(
     // wiped it. A wiped one has nothing more to give: the caller then marks
     // this source done and moves on to the next in 'complete'.
     let Some(ins_buf) = st.ins_buf.and_then(BufId::get) else {
-        return Err(Failed);
+        return false;
     };
     let in_curbuf = Some(ins_buf) == Buf::current_or_none();
 
@@ -490,11 +488,11 @@ pub(crate) fn get_next_default_completion(
             let pattern = leader.as_cstr();
             let hit =
                 search_for_fuzzy_match(ins_buf, &mut pos, pattern, dir, start_pos, &mut found);
-            found_new_match = Err(Failed);
+            found_new_match = false;
             if let Some(hit) = hit {
                 len = hit.len;
                 score = hit.score.unwrap_or(score);
-                found_new_match = Ok(());
+                found_new_match = true;
             }
         } else if ctrl_x_mode_whole_line()
             || ctrl_x_mode_eval()
@@ -504,15 +502,14 @@ pub(crate) fn get_next_default_completion(
             // added a word that was at the beginning of the line.
             // A copy: the search must not hold the completion state.
             let pat = compl_pattern().to_vec();
-            found_new_match =
-                search_for_exact_line(ins_buf, &mut pos, dir, &pat).map_err(|_| Failed);
+            found_new_match = search_for_exact_line(ins_buf, &mut pos, dir, &pat).is_ok();
         } else {
             let pat = compl_pattern().to_vec();
             let flags = SEARCH_KEEP + SEARCH_NFMSG;
             let found = searchit(
                 None, ins_buf, &mut pos, None, dir, &pat, 1, flags, RE_LAST, None,
             );
-            found_new_match = found.map(drop).map_err(|_| Failed);
+            found_new_match = found.is_ok();
         }
         drop(silenced);
         *st.cur_match_pos() = pos;
@@ -526,7 +523,7 @@ pub(crate) fn get_next_default_completion(
         } else if st.first_match_pos.lnum == st.last_match_pos.lnum
             && st.first_match_pos.col == st.last_match_pos.col
         {
-            found_new_match = Err(Failed);
+            found_new_match = false;
         } else {
             // Passing the previous match going forwards (or backwards) is
             // the wrap-around; the second time round there is nothing new.
@@ -538,14 +535,14 @@ pub(crate) fn get_next_default_completion(
             };
             if passed {
                 if looped_around {
-                    found_new_match = Err(Failed);
+                    found_new_match = false;
                 } else {
                     looped_around = true;
                 }
             }
         }
         st.prev_match_pos = pos;
-        if found_new_match.is_err() {
+        if !found_new_match {
             break;
         }
 
@@ -586,7 +583,7 @@ pub(crate) fn get_next_default_completion(
             if in_fuzzy_collect && best_score_is(score) {
                 compl_num_bests.set(compl_num_bests.get() + 1);
             }
-            found_new_match = Ok(());
+            found_new_match = true;
             break;
         }
     }

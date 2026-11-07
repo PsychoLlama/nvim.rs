@@ -33,7 +33,7 @@ use crate::search::ignorecase_opt;
 use crate::semsg;
 use crate::smsg;
 use crate::types::RegMatch;
-use crate::types::{CONV_NONE, CONV_NONE_INIT, Failed};
+use crate::types::{CONV_NONE, CONV_NONE_INIT};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 use core::hash::{Hash, Hasher};
@@ -469,13 +469,9 @@ impl FindTags {
     /// Let `'tagfunc'` answer instead of reading any tags file.
     ///
     /// `None` when there is no `'tagfunc'` to ask, or it declined: the tags
-    /// files are read instead. `Err` when it could not be used -- what
-    /// `find_tags` answers for no matches.
-    fn apply_tagfunc(
-        &mut self,
-        pat: &CStr,
-        buf_ffname: Option<&CStr>,
-    ) -> Option<Result<(), Failed>> {
+    /// files are read instead. `Some(false)` when it could not be used --
+    /// the search then answers no list; `Some(true)` when its tags are in.
+    fn apply_tagfunc(&mut self, pat: &CStr, buf_ffname: Option<&CStr>) -> Option<bool> {
         if self.flags & TAG_NO_TAGFUNC != 0
             || TAGFUNC_RUNNING.get()
             || Buf::current().b_p_tfu.first_byte() == 0
@@ -489,11 +485,11 @@ impl FindTags {
         TAGFUNC_RUNNING.set(false);
         match answer {
             TagfuncAnswer::Declined => None,
-            TagfuncAnswer::Unusable => Some(Err(Failed)),
+            TagfuncAnswer::Unusable => Some(false),
             TagfuncAnswer::Tags(tags) => {
                 self.match_count = c_int::try_from(tags.len()).unwrap_or(c_int::MAX);
                 self.from_tagfunc = tags;
-                Some(Ok(()))
+                Some(true)
             }
         }
     }
@@ -643,7 +639,11 @@ fn lang_is(at: &[u8], lang: [u8; 2]) -> bool {
 /// Search the tags files that apply for tags matching `pat`, answering the
 /// matches in the shape `flags` asks for.
 ///
-/// Answers `Err` if the search failed completely, and `Ok` otherwise.
+/// `None` -- no list, which is not "nothing found" -- when the search could
+/// not run: `pat` is a regexp that does not compile (its message
+/// suppressed), or `'tagfunc'` could not be used (said by the `'tagfunc'`
+/// code when it had something to say: E987, a bad item; a missing function
+/// or a failed call is not).
 ///
 /// There is a priority in which a kind of match is recognised:
 ///
@@ -667,7 +667,7 @@ fn search(
     flags: c_int,
     mincount: c_int,
     buf_ffname: Option<&CStr>,
-) -> Result<Vec<Found>, Failed> {
+) -> Option<Vec<Found>> {
     // Find every match when the caller wants them all, and also for
     // completion, where the count is only a cut-off.
     let findall = mincount == MAXCOL || mincount == TAG_MANY;
@@ -732,11 +732,11 @@ fn search(
     st.orgpat.prepare(has_re);
     drop(no_emsg);
 
-    let mut retval = Err(Failed);
+    let mut searched = false;
     if !(has_re && st.orgpat.regmatch.regprog.is_none()) {
         // No answer from 'tagfunc': the tag files are searched below.
         let tagfunc = st.apply_tagfunc(pattern.as_cstr(), buf_ffname);
-        retval = tagfunc.unwrap_or(Err(Failed));
+        searched = tagfunc.unwrap_or(false);
         if tagfunc.is_none() {
             // A ".txt" help file keeps "en" as its language.
             if flags & TAG_KEEP_LANG != 0 && st.help_lang_find.is_none() {
@@ -759,7 +759,7 @@ fn search(
                     st.tag_fname = name;
                     st.in_file(buf_ffname);
                     if st.stop_searching {
-                        retval = Ok(());
+                        searched = true;
                         break;
                     }
                 }
@@ -775,37 +775,36 @@ fn search(
                 if !st.did_open && flags & TAG_VERBOSE != 0 {
                     tag_emsg(c"E433: No tags file");
                 }
-                retval = Ok(());
+                searched = true;
             }
         }
     }
 
-    let found = if retval.is_ok() {
-        st.into_found()
-    } else {
-        Vec::new()
-    };
+    let found = searched.then(|| st.into_found());
 
     Buf::current().b_help = help_save;
     P_IC.set(save_p_ic);
-    retval.map(|()| found)
+    found
 }
 
 /// Search the tags files that apply for tags matching `pat`: the lines
-/// that matched, best first. See [`search`] for the order and the flags;
-/// `TAG_NAMES` and `TAG_HELP` have callers of their own.
+/// that matched, best first, or `None` when the search could not run. See
+/// [`search`] for the order, the flags and the `None`; `TAG_NAMES` and
+/// `TAG_HELP` have callers of their own.
 pub(crate) fn find_tags(
     pat: &[u8],
     flags: c_int,
     mincount: c_int,
     buf_ffname: Option<&CStr>,
-) -> Result<Vec<TagMatch>, Failed> {
+) -> Option<Vec<TagMatch>> {
     debug_assert_eq!(flags & (TAG_NAMES | TAG_HELP), 0);
     let found = search(pat, flags, mincount, buf_ffname)?;
-    Ok(found
-        .into_iter()
-        .map(|found| TagMatch::new(found.priority, found.key))
-        .collect())
+    Some(
+        found
+            .into_iter()
+            .map(|found| TagMatch::new(found.priority, found.key))
+            .collect(),
+    )
 }
 
 /// [`find_tags`] for the names alone — and, with `'showfulltag'` during
@@ -815,12 +814,14 @@ pub(crate) fn find_tag_names(
     flags: c_int,
     mincount: c_int,
     buf_ffname: Option<&CStr>,
-) -> Result<Vec<XString>, Failed> {
+) -> Option<Vec<XString>> {
     let found = search(pat, flags | TAG_NAMES, mincount, buf_ffname)?;
-    Ok(found
-        .into_iter()
-        .map(|found| XString::from_vec(found.key))
-        .collect())
+    Some(
+        found
+            .into_iter()
+            .map(|found| XString::from_vec(found.key))
+            .collect(),
+    )
 }
 
 /// A help match's two fields: the tag as offered (`{name}@{lang}`) and the
@@ -832,11 +833,13 @@ pub(crate) fn find_help_tag_matches(
     pat: &CStr,
     flags: c_int,
     mincount: c_int,
-) -> Result<Vec<HelpTagMatch>, Failed> {
+) -> Option<Vec<HelpTagMatch>> {
     debug_assert_ne!(flags & TAG_HELP, 0);
     let found = search(pat.to_bytes(), flags, mincount, None)?;
-    Ok(found
-        .into_iter()
-        .map(|found| (found.key, found.score))
-        .collect())
+    Some(
+        found
+            .into_iter()
+            .map(|found| (found.key, found.score))
+            .collect(),
+    )
 }

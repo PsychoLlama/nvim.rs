@@ -36,6 +36,9 @@ fn byte(s: &[u8], at: usize) -> u8 {
 /// each match is `<name>NUL<kind>NUL<file name>`, which is the form the
 /// completion menu displays and matches against, and the string keeps all
 /// three.
+///
+/// `Err` -- the completion's "no list", which skips E480 -- when the search
+/// could not run ([`find_tags`]'s `None`).
 pub(crate) fn tag_matches(tagnames: bool, pat: &CStr) -> Result<Vec<XString>, Failed> {
     let mut flags = TAG_REGEXP | TAG_VERBOSE | TAG_NO_TAGFUNC;
     // A leading '/' asks for the rest to be read as a regexp; without
@@ -53,9 +56,9 @@ pub(crate) fn tag_matches(tagnames: bool, pat: &CStr) -> Result<Vec<XString>, Fa
     let buf_ffname = Buf::current().name.full().map(XString::from_cstr);
     let buf_ffname = buf_ffname.as_ref().map(XString::as_cstr);
     if tagnames {
-        return find_tag_names(pat, flags, mincount, buf_ffname);
+        return find_tag_names(pat, flags, mincount, buf_ffname).ok_or(Failed);
     }
-    let found = find_tags(pat, flags, mincount, buf_ffname)?;
+    let found = find_tags(pat, flags, mincount, buf_ffname).ok_or(Failed)?;
     Ok(found.iter().map(reshape_match).collect())
 }
 
@@ -84,21 +87,19 @@ fn reshape_match(found: &TagMatch) -> XString {
 
 /// `taglist()` — append a dictionary per match of `pat` to `list`.
 ///
-/// `buf_fname` names the buffer whose matches sort first. Answers `Ok`, or
-/// `Err` when a field could not be recorded. `'tagfunc'` may run, before
-/// anything is appended.
-pub fn get_tags(list: &mut List, pat: &CStr, buf_fname: Option<&CStr>) -> Result<(), Failed> {
+/// `buf_fname` names the buffer whose matches sort first. `'tagfunc'` may
+/// run, before anything is appended. A search that could not run appends
+/// nothing; a match whose fields could not all be recorded is appended as
+/// far as it got.
+pub fn get_tags(list: &mut List, pat: &CStr, buf_fname: Option<&CStr>) {
     let flags = TAG_REGEXP | TAG_NOIC;
     let mincount = MAXCOL;
-    let found = find_tags(pat.to_bytes(), flags, mincount, buf_fname)?;
-
-    let mut ret = Ok(());
+    let Some(found) = find_tags(pat.to_bytes(), flags, mincount, buf_fname) else {
+        return;
+    };
     for found in &found {
-        if !describe_match(list, found) {
-            ret = Err(Failed);
-        }
+        let _ = describe_match(list, found);
     }
-    ret
 }
 
 /// `text` less the CR and NL bytes it ends with.
