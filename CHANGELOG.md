@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2026.11.07-134f6fc430]
+
 ### Changed
 
 - Gave the editor's results and numbers Rust types: each command and file family reports its own error type once, where the message is said, instead of a message followed by `-1`, `0` or `false`; lines, columns, window/buffer/tab handles and keys are distinct types (`LineNr`, `ColNr`, `Handle`, `Key`) rather than one C `int`; and clippy's cast lints are denied in every module outside the perimeter, so a narrowing is written once, by name. An API value is 8 bytes smaller.
@@ -483,7 +485,8 @@ Safety foundation: make undefined behavior observable, then structurally shrink 
 
 First tagged release (unstable). The c2rust transpile of Neovim from C to Rust, made to build and pass the functional, old, and unit suites, with the CalVer release pipeline in place. The starting point: ~1.21M lines of mostly `unsafe` Rust with no user-visible change from upstream.
 
-[Unreleased]: https://github.com/PsychoLlama/nvim.rs/compare/2026.11.02-732b23427e...HEAD
+[Unreleased]: https://github.com/PsychoLlama/nvim.rs/compare/2026.11.07-134f6fc430...HEAD
+[2026.11.07-134f6fc430]: https://github.com/PsychoLlama/nvim.rs/compare/2026.11.02-732b23427e...2026.11.07-134f6fc430
 [2026.11.02-732b23427e]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.30-9049d0284d...2026.11.02-732b23427e
 [2026.10.30-9049d0284d]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.28-6da68164b8...2026.10.30-9049d0284d
 [2026.10.28-6da68164b8]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.20-391bd79481...2026.10.28-6da68164b8
