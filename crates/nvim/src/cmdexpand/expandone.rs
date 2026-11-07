@@ -314,8 +314,8 @@ fn expand_one_start(
     options: WildOpts,
 ) -> Option<XString> {
     let found = expand_from_context(expand, pattern, options);
-    expand.found_any = found.as_ref().is_ok_and(|found| !found.is_empty());
-    let Ok(mut found) = found else {
+    expand.found_any = found.as_ref().is_some_and(|found| !found.is_empty());
+    let Some(mut found) = found else {
         // Upstream reports "No match" here under FNAME_ILLEGAL, which is
         // not defined on any platform this port builds for.
         expand.matches = Some(Vec::new());

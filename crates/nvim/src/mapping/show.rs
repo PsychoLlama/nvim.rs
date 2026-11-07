@@ -24,7 +24,7 @@ use crate::lua::executor::funcref_description;
 use crate::memory::XString;
 use crate::strings::has_char;
 use crate::types::CmdIdx;
-use crate::types::{CpoFlag, ExpandContext, Failed, Key};
+use crate::types::{CpoFlag, ExpandContext, Key};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 
@@ -255,7 +255,7 @@ const EXPAND_ARG_BUFFER: usize = 4;
 /// completion of `:[un]map` and `:[un]abbrev` in all modes.
 ///
 /// Answers `Ok` if any matched, `Err` otherwise.
-pub fn expand_mappings(pat: &CStr, regmatch: &mut RegMatch) -> Result<Vec<XString>, Failed> {
+pub fn expand_mappings(pat: &CStr, regmatch: &mut RegMatch) -> Option<Vec<XString>> {
     let fuzzy = cmdline_fuzzy_complete(pat.to_bytes());
 
     // Exactly one of these fills: `fuzzy` is fixed for the whole call.
@@ -337,9 +337,5 @@ pub fn expand_mappings(pat: &CStr, regmatch: &mut RegMatch) -> Result<Vec<XStrin
     // Remove duplicate entries, keeping the first of each run.
     found.dedup_by(|a, b| a == b);
 
-    if found.is_empty() {
-        Err(Failed)
-    } else {
-        Ok(found)
-    }
+    if found.is_empty() { None } else { Some(found) }
 }

@@ -39,7 +39,7 @@ use crate::sign::get_sign_name;
 use crate::syntax::{EXPAND_BUF_LEN, get_syntax_name, get_syntime_arg};
 use crate::types::{
     ApiString, Array, ArrayBuf, BackslashEscape, Candidate, CompleteListItemGetter, ExpandContext,
-    Failed, Object, RegMatch,
+    Object, RegMatch,
 };
 use crate::usercmd::{
     get_user_cmd_addr_type, get_user_cmd_complete, get_user_cmd_flags, get_user_cmd_nargs,
@@ -63,7 +63,7 @@ pub(crate) fn expand_files_and_dirs(
     pat: &CStr,
     flags: ExpandFlags,
     options: WildOpts,
-) -> Result<Vec<XString>, Failed> {
+) -> Option<Vec<XString>> {
     let mut flags = flags;
     let unescaped;
     let pat = if expand.backslash == BackslashEscape::NONE {
@@ -116,7 +116,7 @@ pub(crate) fn expand_files_and_dirs(
         flags |= ExpandFlags::ICASE;
     }
     // Expand wildcards, supporting %:h and the like.
-    expand_wildcards_eval(pat, flags)
+    expand_wildcards_eval(pat, flags).ok()
 }
 
 /// Answer `list[idx]`, or `None` when `idx` is out of range.
@@ -312,17 +312,14 @@ pub(crate) fn expand_other(
     pat: &CStr,
     expand: &Expand,
     rmp: &mut RegMatch,
-) -> Result<Vec<XString>, Failed> {
+) -> Option<Vec<XString>> {
     // Find the context in the table and call expand_generic() with the
     // right function to do the expansion.
-    let Some(&(_, func, ic, escaped)) = GENERATORS
+    let &(_, func, ic, escaped) = GENERATORS
         .iter()
-        .find(|&&(context, ..)| context == expand.context)
-    else {
-        return Err(Failed);
-    };
+        .find(|&&(context, ..)| context == expand.context)?;
     if ic {
         rmp.rm_ic = true;
     }
-    Ok(expand_generic(pat, expand, rmp, func, escaped))
+    Some(expand_generic(pat, expand, rmp, func, escaped))
 }

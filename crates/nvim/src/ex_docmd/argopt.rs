@@ -243,11 +243,7 @@ pub(crate) fn get_argopt_name(_expand: &Expand, idx: usize) -> Option<Candidate>
 
 /// Complete a `++opt` argument: the option names, or the values of the one
 /// already typed.
-pub fn expand_argopt(
-    pat: &CStr,
-    expand: &Expand,
-    rmp: &mut RegMatch,
-) -> Result<Vec<XString>, Failed> {
+pub fn expand_argopt(pat: &CStr, expand: &Expand, rmp: &mut RegMatch) -> Option<Vec<XString>> {
     // Past an `=`: complete the value, by whichever option name ends
     // right before it.
     let at = expand.pattern;
@@ -260,15 +256,15 @@ pub fn expand_argopt(
         } else if name.ends_with(b"bad") {
             get_bad_name
         } else {
-            return Err(Failed);
+            return None;
         };
-        return Ok(expand_generic(pat, expand, rmp, cb, false));
+        return Some(expand_generic(pat, expand, rmp, cb, false));
     }
     // `++ff` is the only abbreviation worth finishing on its own.
     if expand.pattern_len == 2 && expand.pattern_starts_with(b"ff") {
-        return Ok(vec![XString::from_cstr(c"fileformat=")]);
+        return Some(vec![XString::from_cstr(c"fileformat=")]);
     }
-    Ok(expand_generic(pat, expand, rmp, get_argopt_name, false))
+    Some(expand_generic(pat, expand, rmp, get_argopt_name, false))
 }
 
 /// Which tab page a `:tab…` command means.

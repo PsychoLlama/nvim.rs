@@ -28,7 +28,6 @@ use crate::mbyte::head_off;
 use crate::option::vars::{P_PP, P_RTP};
 use crate::path::remove_duplicate_names;
 
-use crate::types::Failed;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
@@ -148,12 +147,8 @@ fn collect_runtime_matches(
 }
 
 /// The matches, or `Err` when there are none.
-fn some(found: Vec<XString>) -> Result<Vec<XString>, Failed> {
-    if found.is_empty() {
-        Err(Failed)
-    } else {
-        Ok(found)
-    }
+fn some(found: Vec<XString>) -> Option<Vec<XString>> {
+    if found.is_empty() { None } else { Some(found) }
 }
 
 /// Expand color scheme, compiler or filetype names.
@@ -165,7 +160,7 @@ pub(crate) fn runtime_dir_matches(
     pat: &CStr,
     flags: RuntimeOpts,
     dirs: &[&CStr],
-) -> Result<Vec<XString>, Failed> {
+) -> Option<Vec<XString>> {
     some(collect_runtime_matches(pat.to_bytes(), flags, false, dirs))
 }
 
@@ -177,7 +172,7 @@ pub(crate) fn runtime_dir_matches(
 const WHERE_VALUES: [&CStr; 4] = [c"START", c"OPT", c"PACK", c"ALL"];
 
 /// Command-line completion for the `:runtime` command.
-pub(crate) fn runtime_cmd_matches(pat: &CStr) -> Result<Vec<XString>, Failed> {
+pub(crate) fn runtime_cmd_matches(pat: &CStr) -> Option<Vec<XString>> {
     let pat = pat.to_bytes();
     let flags = RUNTIME_EXPAND_FLAGS.get();
     let mut found = collect_runtime_matches(pat, flags, true, &[c""]);
@@ -195,7 +190,7 @@ pub(crate) fn runtime_cmd_matches(pat: &CStr) -> Result<Vec<XString>, Failed> {
 }
 
 /// Expand `:packadd` names: `{packpath}/pack/*/opt/{pat}`.
-pub(crate) fn packadd_dir_matches(pat: &CStr) -> Result<Vec<XString>, Failed> {
+pub(crate) fn packadd_dir_matches(pat: &CStr) -> Option<Vec<XString>> {
     let pp = P_PP.get();
     let mut found = Vec::new();
     for prefix in [&b"pack/*/opt/"[..], b"opt/"] {
@@ -210,9 +205,9 @@ pub(crate) fn packadd_dir_matches(pat: &CStr) -> Result<Vec<XString>, Failed> {
         .collect();
 
     if found.is_empty() {
-        return Err(Failed);
+        return None;
     }
     // Sort and remove the duplicates the two patterns can produce.
     remove_duplicate_names(&mut found);
-    Ok(found)
+    Some(found)
 }

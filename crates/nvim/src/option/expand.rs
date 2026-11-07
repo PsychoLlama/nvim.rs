@@ -41,7 +41,7 @@ use crate::options::{
 use crate::regexp::vim_regexec;
 use crate::strings::escaped_bytes;
 use crate::types::{
-    BackslashEscape, Expand, ExpandContext, Failed, MAXPATHL, OptExpand, OptIndex, OptionSetFlags,
+    BackslashEscape, Expand, ExpandContext, MAXPATHL, OptExpand, OptIndex, OptionSetFlags,
     RegMatch, XpPrefix, uint32_t,
 };
 
@@ -376,7 +376,7 @@ pub(crate) fn expand_settings(
     regmatch: &mut RegMatch,
     fuzzystr: &CStr,
     can_fuzzy: bool,
-) -> Result<Vec<XString>, Failed> {
+) -> Option<Vec<XString>> {
     let fuzzy = can_fuzzy && cmdline_fuzzy_complete(fuzzystr.to_bytes());
     let booleans_only = expand.context == ExpandContext::BoolSettings;
     let mut found = Vec::new();
@@ -435,7 +435,7 @@ pub(crate) fn expand_settings(
         }
     }
 
-    Ok(if fuzzy {
+    Some(if fuzzy {
         fuzzy_sorted(scored, false)
     } else {
         found
@@ -448,7 +448,7 @@ pub(crate) fn escape_option_str_cmdline(var: &CStr) -> XString {
 }
 
 /// Offer the option's current value as the one completion.
-pub(crate) fn expand_old_setting() -> Result<Vec<XString>, Failed> {
+pub(crate) fn expand_old_setting() -> Option<Vec<XString>> {
     // A terminal option has no table row, so it is looked up by the
     // name `set_context_in_set_cmd` spelled out.
     if IDX.get() == kOptInvalid {
@@ -462,21 +462,19 @@ pub(crate) fn expand_old_setting() -> Result<Vec<XString>, Failed> {
     } else {
         option_value_text(IDX.get(), FLAGS.get())
     };
-    Ok(vec![escape_option_str_cmdline(var.as_cstr())])
+    Some(vec![escape_option_str_cmdline(var.as_cstr())])
 }
 
 /// Complete a value through the option's own `opt_expand_cb`.
 pub(crate) fn expand_string_setting(
     expand: &Expand,
     regmatch: &mut RegMatch,
-) -> Result<Vec<XString>, Failed> {
+) -> Option<Vec<XString>> {
     let opt_idx = IDX.get();
     if opt_idx == kOptInvalid {
-        return Err(Failed);
+        return None;
     }
-    let Some(expand_cb) = get_option(opt_idx).opt_expand_cb else {
-        return Err(Failed);
-    };
+    let expand_cb = get_option(opt_idx).opt_expand_cb?;
 
     let value = escape_option_str_cmdline(option_value_text(opt_idx, FLAGS.get()).as_cstr());
 
@@ -500,7 +498,7 @@ pub(crate) fn expand_string_setting(
 pub(crate) fn expand_setting_subtract(
     expand: &Expand,
     regmatch: &mut RegMatch,
-) -> Result<Vec<XString>, Failed> {
+) -> Option<Vec<XString>> {
     let opt_idx = IDX.get();
     if opt_idx == kOptInvalid || option_has_type(opt_idx, kOptValTypeNumber) {
         return expand_old_setting();
@@ -512,7 +510,7 @@ pub(crate) fn expand_setting_subtract(
 
     if flags & kOptFlagComma as uint32_t != 0 {
         if value.is_empty() {
-            return Err(Failed);
+            return None;
         }
         let mut found = Vec::new();
         let mut rest = &value[..];
@@ -541,7 +539,7 @@ pub(crate) fn expand_setting_subtract(
                 None => break,
             }
         }
-        return Ok(found);
+        return Some(found);
     }
 
     if flags & kOptFlagFlagList as uint32_t != 0 {
@@ -549,16 +547,16 @@ pub(crate) fn expand_setting_subtract(
         // each letter. Nothing may have been typed, since a flag set
         // has no word boundary to complete from.
         if !expand.pattern_is_empty() {
-            return Err(Failed);
+            return None;
         }
         if value.is_empty() {
-            return Err(Failed);
+            return None;
         }
         let mut found = vec![XString::from_bytes(&value)];
         if value.len() > 1 {
             found.extend(value.iter().map(|&flag| XString::from_bytes(&[flag])));
         }
-        return Ok(found);
+        return Some(found);
     }
 
     expand_old_setting()

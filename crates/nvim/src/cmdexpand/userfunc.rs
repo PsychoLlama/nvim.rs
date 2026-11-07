@@ -30,7 +30,7 @@ use crate::option::next_option_part;
 use crate::path::{ExpandFlags, expand_wildcards, path_is_absolute, vim_ispathsep};
 use crate::regexp::vim_regexec;
 use crate::runtime::state::current_sctx;
-use crate::types::{ExpandContext, Failed, MAXPATHL, RegMatch, TypVal, VarNumber};
+use crate::types::{ExpandContext, MAXPATHL, RegMatch, TypVal, VarNumber};
 use core::ffi::CStr;
 use std::collections::HashSet;
 use std::ffi::CString;
@@ -203,9 +203,9 @@ pub(crate) fn expand_user_defined(
     pat: &CStr,
     expand: &Expand,
     regmatch: &mut RegMatch,
-) -> Result<Vec<XString>, Failed> {
+) -> Option<Vec<XString>> {
     let fuzzy = cmdline_fuzzy_complete(pat.to_bytes());
-    let retstr = call_user_expand_func(call_func_retstr, expand).ok_or(Failed)?;
+    let retstr = call_user_expand_func(call_func_retstr, expand)?;
 
     // Exactly one of these fills: `fuzzy` is fixed for the whole call.
     let mut scored = Vec::new();
@@ -244,7 +244,7 @@ pub(crate) fn expand_user_defined(
         }
     }
 
-    Ok(if fuzzy {
+    Some(if fuzzy {
         fuzzy_sorted(scored, false)
     } else {
         found
@@ -260,13 +260,13 @@ fn user_list_strings(list: &TypVal) -> Vec<XString> {
 }
 
 /// Expand names with a list returned by a function defined by the user.
-pub(crate) fn expand_user_list(expand: &Expand) -> Result<Vec<XString>, Failed> {
-    let retlist = call_user_expand_func(call_func_retlist, expand).ok_or(Failed)?;
-    Ok(user_list_strings(&retlist))
+pub(crate) fn expand_user_list(expand: &Expand) -> Option<Vec<XString>> {
+    let retlist = call_user_expand_func(call_func_retlist, expand)?;
+    Some(user_list_strings(&retlist))
 }
 
 /// Expand names with a Lua completion function.
-pub(crate) fn expand_user_lua(expand: &Expand) -> Result<Vec<XString>, Failed> {
+pub(crate) fn expand_user_lua(expand: &Expand) -> Option<Vec<XString>> {
     let rettv = nlua_call_user_expand_func(
         expand.luaref,
         &c_string(expand.pattern_text()),
@@ -274,9 +274,9 @@ pub(crate) fn expand_user_lua(expand: &Expand) -> Result<Vec<XString>, Failed> {
         expand.col,
     );
     if !matches!(rettv, TypVal::List(_)) {
-        return Err(Failed);
+        return None;
     }
-    Ok(user_list_strings(&rettv))
+    Some(user_list_strings(&rettv))
 }
 
 /// Expand `file` for all comma-separated directories in `path`, answering

@@ -37,7 +37,7 @@ use crate::memory::XString;
 use crate::options::{
     kOptEventignore, kOptListchars, opt_dip_algorithm_values, opt_dip_inline_values, opt_ff_values,
 };
-use crate::types::{Candidate, CompleteListItemGetter, Expand, Failed, OptExpand};
+use crate::types::{Candidate, CompleteListItemGetter, Expand, OptExpand};
 
 use super::{
     COCU_ALL, CPO_VI, FO_ALL, MOUSE_ALL, SHM_ALL, WW_ALL, get_fillchars_name, get_listchars_name,
@@ -51,19 +51,15 @@ fn original_value<'a>(args: &'a OptExpand<'_>) -> Option<&'a XString> {
 }
 
 /// The matches, or `Err` when there are none.
-fn found_or_failed(found: Vec<XString>) -> Result<Vec<XString>, Failed> {
-    if found.is_empty() {
-        Err(Failed)
-    } else {
-        Ok(found)
-    }
+fn found_or_failed(found: Vec<XString>) -> Option<Vec<XString>> {
+    if found.is_empty() { None } else { Some(found) }
 }
 
 /// Complete an option whose accepted words the generated table lists.
 pub(crate) fn expand_set_opt_string(
     args: &mut OptExpand<'_>,
     values: &[&CStr],
-) -> Result<Vec<XString>, Failed> {
+) -> Option<Vec<XString>> {
     let original = original_value(args).cloned();
     let mut found = Vec::with_capacity(values.len() + 1);
     if let Some(value) = &original {
@@ -92,7 +88,7 @@ pub(crate) fn expand_set_opt_string(
 
 /// Complete an option whose accepted words the generated table lists, found
 /// through the option's own index.
-pub fn expand_set_str_generic(args: &mut OptExpand<'_>) -> Result<Vec<XString>, Failed> {
+pub fn expand_set_str_generic(args: &mut OptExpand<'_>) -> Option<Vec<XString>> {
     let values = opt_values(args.idx);
     expand_set_opt_string(args, values)
 }
@@ -124,7 +120,7 @@ fn expand_set_opt_callback(expand: &Expand, idx: usize) -> Option<Candidate> {
 pub(crate) fn expand_set_opt_generic(
     args: &mut OptExpand<'_>,
     func: CompleteListItemGetter,
-) -> Result<Vec<XString>, Failed> {
+) -> Option<Vec<XString>> {
     let original = args.include_orig_val.then(|| args.value.clone());
     ORIGINAL_VALUE.set(original);
     ENUMERATOR.set(Some(func));
@@ -134,7 +130,7 @@ pub(crate) fn expand_set_opt_generic(
 
     ORIGINAL_VALUE.set(None);
     ENUMERATOR.set(None);
-    Ok(found)
+    Some(found)
 }
 
 /// Complete an option that is a set of flag letters: one completion per
@@ -142,7 +138,7 @@ pub(crate) fn expand_set_opt_generic(
 pub(crate) fn expand_set_opt_listflag(
     args: &mut OptExpand<'_>,
     flags: &CStr,
-) -> Result<Vec<XString>, Failed> {
+) -> Option<Vec<XString>> {
     let option_val = &args.value[..];
     let cmdline_val = args.typed();
     let original = original_value(args);
@@ -174,7 +170,7 @@ pub(crate) fn expand_set_opt_listflag(
 
 /// Complete 'fillchars' or 'listchars'. Which one is decided by the variable
 /// being set, since the two share every entry point.
-pub fn expand_set_chars_option(args: &mut OptExpand<'_>) -> Result<Vec<XString>, Failed> {
+pub fn expand_set_chars_option(args: &mut OptExpand<'_>) -> Option<Vec<XString>> {
     // 'listchars' and 'fillchars' share this callback; which one is being
     // completed is the row, at either scope.
     let names = if args.idx == kOptListchars {
@@ -185,34 +181,34 @@ pub fn expand_set_chars_option(args: &mut OptExpand<'_>) -> Result<Vec<XString>,
     expand_set_opt_generic(args, names)
 }
 
-pub fn expand_set_concealcursor(args: &mut OptExpand<'_>) -> Result<Vec<XString>, Failed> {
+pub fn expand_set_concealcursor(args: &mut OptExpand<'_>) -> Option<Vec<XString>> {
     expand_set_opt_listflag(args, COCU_ALL)
 }
 
-pub fn expand_set_cpoptions(args: &mut OptExpand<'_>) -> Result<Vec<XString>, Failed> {
+pub fn expand_set_cpoptions(args: &mut OptExpand<'_>) -> Option<Vec<XString>> {
     expand_set_opt_listflag(args, CPO_VI)
 }
 
-pub fn expand_set_formatoptions(args: &mut OptExpand<'_>) -> Result<Vec<XString>, Failed> {
+pub fn expand_set_formatoptions(args: &mut OptExpand<'_>) -> Option<Vec<XString>> {
     expand_set_opt_listflag(args, FO_ALL)
 }
 
-pub fn expand_set_mouse(args: &mut OptExpand<'_>) -> Result<Vec<XString>, Failed> {
+pub fn expand_set_mouse(args: &mut OptExpand<'_>) -> Option<Vec<XString>> {
     expand_set_opt_listflag(args, MOUSE_ALL)
 }
 
-pub fn expand_set_shortmess(args: &mut OptExpand<'_>) -> Result<Vec<XString>, Failed> {
+pub fn expand_set_shortmess(args: &mut OptExpand<'_>) -> Option<Vec<XString>> {
     expand_set_opt_listflag(args, SHM_ALL)
 }
 
-pub fn expand_set_whichwrap(args: &mut OptExpand<'_>) -> Result<Vec<XString>, Failed> {
+pub fn expand_set_whichwrap(args: &mut OptExpand<'_>) -> Option<Vec<XString>> {
     expand_set_opt_listflag(args, WW_ALL)
 }
 
 /// Complete 'diffopt', whose "algorithm:" and "inline:" fields each have
 /// their own list of accepted words. Anything else after a `:` has no
 /// completions at all.
-pub fn expand_set_diffopt(args: &mut OptExpand<'_>) -> Result<Vec<XString>, Failed> {
+pub fn expand_set_diffopt(args: &mut OptExpand<'_>) -> Option<Vec<XString>> {
     // What stands between the start of the value and the pattern.
     let before = args
         .xp
@@ -228,14 +224,14 @@ pub fn expand_set_diffopt(args: &mut OptExpand<'_>) -> Result<Vec<XString>, Fail
     if before.ends_with(b"inline:") {
         return expand_set_opt_string(args, &opt_dip_inline_values);
     }
-    Err(Failed)
+    None
 }
 
-pub fn expand_set_encoding(args: &mut OptExpand<'_>) -> Result<Vec<XString>, Failed> {
+pub fn expand_set_encoding(args: &mut OptExpand<'_>) -> Option<Vec<XString>> {
     expand_set_opt_generic(args, get_encoding_name)
 }
 
-pub fn expand_set_winhighlight(args: &mut OptExpand<'_>) -> Result<Vec<XString>, Failed> {
+pub fn expand_set_winhighlight(args: &mut OptExpand<'_>) -> Option<Vec<XString>> {
     expand_set_opt_generic(args, get_highlight_name)
 }
 
@@ -264,7 +260,7 @@ pub(crate) fn get_eventignore_name(expand: &Expand, idx: usize) -> Option<Candid
     ))
 }
 
-pub fn expand_set_eventignore(args: &mut OptExpand<'_>) -> Result<Vec<XString>, Failed> {
+pub fn expand_set_eventignore(args: &mut OptExpand<'_>) -> Option<Vec<XString>> {
     // 'eventignore' and 'eventignorewin' share this callback, and only the
     // second one completes the window events.
     WINDOW_EVENTS.set(args.idx != kOptEventignore);

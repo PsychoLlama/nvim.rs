@@ -13,7 +13,6 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 use crate::memory::XString;
-use crate::types::Failed;
 
 use crate::global_cell::GlobalCell;
 use crate::option::OptSlot;
@@ -305,7 +304,7 @@ impl From<&'static ::core::ffi::CStr> for OptError {
 pub type OptDidSetCb = Option<fn(&mut OptSet) -> Result<(), OptError>>;
 /// A string option's completer: the option table's `opt_expand_cb`, which
 /// answers the matches for what has been typed after `:set {option}=`.
-pub type OptExpandCb = Option<fn(&mut OptExpand<'_>) -> Result<Vec<XString>, Failed>>;
+pub type OptExpandCb = Option<fn(&mut OptExpand<'_>) -> Option<Vec<XString>>>;
 
 /// What an option's completer is told: which option, its value, and what the
 /// command line has typed for it -- upstream's `optexpand_T`.

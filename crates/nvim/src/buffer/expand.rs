@@ -31,7 +31,7 @@ use crate::diff::diff_mode_buf;
 use crate::fuzzy::fuzzy_match_str;
 use crate::option::vars::{p_fic, p_wic};
 use crate::regexp::{RE_MAGIC, vim_regexec};
-use crate::types::{Failed, RegMatch};
+use crate::types::RegMatch;
 use crate::winlayer::{self, Buf, Win, buffers};
 
 fn current_win() -> Win {
@@ -56,9 +56,9 @@ struct Found {
 
 /// Every buffer name matching `pat`, for command-line completion of
 /// `:buffer` and `:sbuffer`.
-pub(crate) fn buf_name_matches(pat: &CStr, options: WildOpts) -> Result<Vec<XString>, Failed> {
+pub(crate) fn buf_name_matches(pat: &CStr, options: WildOpts) -> Option<Vec<XString>> {
     if options.has(BUF_DIFF_FILTER) && current_win().w_onebuf_opt.wo_diff == 0 {
-        return Err(Failed);
+        return None;
     }
 
     let fuzzy = cmdline_fuzzy_complete(pat.to_bytes());
@@ -96,10 +96,8 @@ pub(crate) fn buf_name_matches(pat: &CStr, options: WildOpts) -> Result<Vec<XStr
                     score != FUZZY_SCORE_NONE as c_int
                 })
         } else {
-            if regmatch.regprog.is_none() {
-                // An invalid pattern, possibly after recompiling.
-                return Err(Failed);
-            }
+            // An invalid pattern, possibly after recompiling, offers none.
+            regmatch.regprog.as_ref()?;
             match buflist_match(&mut regmatch, buf, p_wic()) {
                 Some(BufNameKind::Short) => buf.name.short(),
                 Some(BufNameKind::Full) => buf.name.full(),
@@ -118,16 +116,16 @@ pub(crate) fn buf_name_matches(pat: &CStr, options: WildOpts) -> Result<Vec<XStr
     }
     drop(regmatch);
     if found.is_empty() {
-        return Err(Failed);
+        return None;
     }
 
     if fuzzy {
         // Best score first; equal scores keep the buffer list's order.
         found.sort_by_key(|f| core::cmp::Reverse(f.score));
     } else if options.has(WildOpts::BUFLASTUSED) {
-        return Ok(order_by_last_used(found));
+        return Some(order_by_last_used(found));
     }
-    Ok(found.into_iter().map(|f| f.name).collect())
+    Some(found.into_iter().map(|f| f.name).collect())
 }
 
 /// The order `qsort` sorts by: the buffer each name came from.

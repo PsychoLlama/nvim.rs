@@ -131,15 +131,17 @@ pub(crate) fn call_findfunc(pat: &[u8], cmdcomplete: BoolVarValue) -> Option<Lis
 
 /// Complete a `:find` argument through 'findfunc': the strings in the list
 /// it answers, the rest skipped.
-pub(crate) fn expand_findfunc_matches(pat: &CStr) -> Result<Vec<XString>, Failed> {
-    let held = call_findfunc(pat.to_bytes(), kBoolVarTrue).ok_or(Failed)?;
+pub(crate) fn expand_findfunc_matches(pat: &CStr) -> Option<Vec<XString>> {
+    let held = call_findfunc(pat.to_bytes(), kBoolVarTrue)?;
     if list_len(Some(&held)) == 0 {
-        return Err(Failed);
+        return None;
     }
-    Ok(list_iter(Some(&held))
-        .filter_map(|li| li.li_tv.string_cstr())
-        .map(XString::from_cstr)
-        .collect())
+    Some(
+        list_iter(Some(&held))
+            .filter_map(|li| li.li_tv.string_cstr())
+            .map(XString::from_cstr)
+            .collect(),
+    )
 }
 
 /// Resolve the `count`'th name 'findfunc' answers for `findarg`.

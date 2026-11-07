@@ -33,7 +33,7 @@ use crate::search::ignorecase;
 use crate::strings::escaped_bytes;
 use crate::syntax::reset_expand_highlight;
 use crate::tag::tag_matches;
-use crate::types::{CompleteListItemGetter, ExpandContext, Failed, RegMatch};
+use crate::types::{CompleteListItemGetter, ExpandContext, RegMatch};
 use core::ffi::CStr;
 use std::ffi::CString;
 
@@ -71,7 +71,7 @@ pub(crate) fn expand_from_context(
     expand: &mut Expand,
     pat: &CStr,
     options: WildOpts,
-) -> Result<Vec<XString>, Failed> {
+) -> Option<Vec<XString>> {
     let flags = map_wildopts_to_ewflags(options);
     let fuzzy =
         cmdline_fuzzy_complete(pat.to_bytes()) && cmdline_fuzzy_completion_supported(expand);
@@ -96,7 +96,7 @@ pub(crate) fn expand_from_context(
             let arg = if pat.is_empty() { c"help" } else { pat };
             return help_tag_matches(arg);
         }
-        ExpandContext::ShellCmd => return Ok(expand_shellcmd(pat, flags)),
+        ExpandContext::ShellCmd => return Some(expand_shellcmd(pat, flags)),
         ExpandContext::OldSetting => return expand_old_setting(),
         ExpandContext::Buffers => return buf_name_matches(pat, options),
         ExpandContext::DiffBuffers => return buf_name_matches(pat, options | BUF_DIFF_FILTER),
@@ -144,7 +144,7 @@ pub(crate) fn expand_from_context(
     } else {
         let flags = if magic_isset() { RE_MAGIC } else { 0 };
         // Set ignore-case according to 'ignorecase', 'smartcase' and pat.
-        RegMatch::compile(pat, flags, ignorecase(pat.to_bytes())).ok_or(Failed)?
+        RegMatch::compile(pat, flags, ignorecase(pat.to_bytes()))?
     };
     let regmatch: &mut RegMatch = &mut regmatch;
 

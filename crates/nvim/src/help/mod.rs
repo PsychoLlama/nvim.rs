@@ -490,10 +490,10 @@ fn cleanup_help_tags(tags: &mut [Vec<u8>]) {
 /// The help tags `arg` matches, cleaned up the way the command line offers
 /// them -- [`find_help_tags`] then [`cleanup_help_tags`], owned. `Err` is
 /// the completion's "no list", which skips E480.
-pub(crate) fn help_tag_matches(arg: &CStr) -> Result<Vec<XString>, Failed> {
-    let mut tags = find_help_tags(arg.to_bytes(), false).ok_or(Failed)?;
+pub(crate) fn help_tag_matches(arg: &CStr) -> Option<Vec<XString>> {
+    let mut tags = find_help_tags(arg.to_bytes(), false)?;
     cleanup_help_tags(&mut tags);
-    Ok(tags.into_iter().map(XString::from_vec).collect())
+    Some(tags.into_iter().map(XString::from_vec).collect())
 }
 
 // -- The help buffer -------------------------------------------------------

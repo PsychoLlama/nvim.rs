@@ -32,7 +32,7 @@ use crate::search::{
 use crate::strings::strcase_copy;
 use crate::tag::TAG_MANY;
 use crate::types::RegMatch;
-use crate::types::{ColNr, Direction, Failed, LineNr};
+use crate::types::{ColNr, Direction, LineNr};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_uint};
 use std::ffi::CString;
@@ -74,11 +74,11 @@ fn col_index(col: ColNr) -> usize {
 /// boundary after `end`.
 ///
 /// Answers the copy and where the copied text ends.
-pub(crate) fn copy_substring_from_pos(start: Pos, end: Pos) -> Result<(Vec<u8>, Pos), Failed> {
+pub(crate) fn copy_substring_from_pos(start: Pos, end: Pos) -> Option<(Vec<u8>, Pos)> {
     let exacttext = exacttext();
 
     if start.lnum > end.lnum || (start.lnum == end.lnum && start.col >= end.col) {
-        return Err(Failed); // invalid range
+        return None; // invalid range
     }
 
     // A newline, spelled the way `'wildoptions'` wants it: `exacttext`
@@ -122,7 +122,7 @@ pub(crate) fn copy_substring_from_pos(start: Pos, end: Pos) -> Result<(Vec<u8>, 
         col: ColNr::try_from(word_end).expect("a column fits a ColNr"),
         coladd: 0,
     };
-    Ok((text, match_end))
+    Some((text, match_end))
 }
 
 /// True if `str` matches the regex pattern `pat`.
@@ -179,12 +179,12 @@ pub(crate) fn concat_pattern_with_buffer_match(
 /// Search for strings matching `pat` in the specified range and return them.
 ///
 /// `dir` is `FORWARD` or `BACKWARD`.
-pub(crate) fn expand_pattern_in_buf(pat: &CStr, dir: Direction) -> Result<Vec<XString>, Failed> {
+pub(crate) fn expand_pattern_in_buf(pat: &CStr, dir: Direction) -> Option<Vec<XString>> {
     let exacttext = exacttext();
     let has_range = search_first_line.get() != LineNr::ZERO;
 
     if pat.is_empty() {
-        return Err(Failed);
+        return None;
     }
 
     let mut cur_match_pos = if has_range {
@@ -257,7 +257,7 @@ pub(crate) fn expand_pattern_in_buf(pat: &CStr, dir: Direction) -> Result<Vec<XS
                 vpeekc(); // Remove <C-C> from input stream
                 got_int.set(false); // Don't abandon the command line
             }
-            return Err(Failed);
+            return None;
         }
 
         // searchit() can return line number +1 past the last line when
@@ -272,7 +272,8 @@ pub(crate) fn expand_pattern_in_buf(pat: &CStr, dir: Direction) -> Result<Vec<XS
         }
 
         // Extract the matching text prepended to the completed word.
-        let Ok((full_match, word_end_pos)) = copy_substring_from_pos(cur_match_pos, end_match_pos)
+        let Some((full_match, word_end_pos)) =
+            copy_substring_from_pos(cur_match_pos, end_match_pos)
         else {
             break;
         };
@@ -311,5 +312,5 @@ pub(crate) fn expand_pattern_in_buf(pat: &CStr, dir: Direction) -> Result<Vec<XS
         }
     }
 
-    Ok(found.iter().map(|m| XString::from_cstr(m)).collect())
+    Some(found.iter().map(|m| XString::from_cstr(m)).collect())
 }

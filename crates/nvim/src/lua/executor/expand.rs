@@ -19,7 +19,7 @@ use crate::global_cell::GlobalCell;
 use crate::lua::converter::{pop_array, pop_integer};
 use crate::lua::stack::At;
 use crate::memory::XString;
-use crate::types::{Expand, Failed};
+use crate::types::Expand;
 
 /// The matches [`nlua_expand_pat`] produced, waiting for
 /// [`nlua_expand_matches`] to take them.
@@ -92,11 +92,11 @@ pub fn nlua_expand_pat(expand: &mut Expand) {
 }
 
 /// Take the stashed matches. `Err` when there are none.
-pub fn nlua_expand_matches() -> Result<Vec<XString>, Failed> {
+pub fn nlua_expand_matches() -> Option<Vec<XString>> {
     let matches = EXPAND_RESULTS.take();
     if matches.is_empty() {
-        Err(Failed)
+        None
     } else {
-        Ok(matches)
+        Some(matches)
     }
 }

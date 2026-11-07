@@ -39,7 +39,7 @@ fn byte(s: &[u8], at: usize) -> u8 {
 ///
 /// `Err` -- the completion's "no list", which skips E480 -- when the search
 /// could not run ([`find_tags`]'s `None`).
-pub(crate) fn tag_matches(tagnames: bool, pat: &CStr) -> Result<Vec<XString>, Failed> {
+pub(crate) fn tag_matches(tagnames: bool, pat: &CStr) -> Option<Vec<XString>> {
     let mut flags = TAG_REGEXP | TAG_VERBOSE | TAG_NO_TAGFUNC;
     // A leading '/' asks for the rest to be read as a regexp; without
     // one the pattern is a literal name, and case is then not folded.
@@ -56,10 +56,10 @@ pub(crate) fn tag_matches(tagnames: bool, pat: &CStr) -> Result<Vec<XString>, Fa
     let buf_ffname = Buf::current().name.full().map(XString::from_cstr);
     let buf_ffname = buf_ffname.as_ref().map(XString::as_cstr);
     if tagnames {
-        return find_tag_names(pat, flags, mincount, buf_ffname).ok_or(Failed);
+        return find_tag_names(pat, flags, mincount, buf_ffname);
     }
-    let found = find_tags(pat, flags, mincount, buf_ffname).ok_or(Failed)?;
-    Ok(found.iter().map(reshape_match).collect())
+    let found = find_tags(pat, flags, mincount, buf_ffname)?;
+    Some(found.iter().map(reshape_match).collect())
 }
 
 /// One match as `<name>NUL<kind>NUL<file name>`.
