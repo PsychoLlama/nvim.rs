@@ -126,7 +126,7 @@ pub fn f_win_splitmove(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
         win_goto(targetwin);
     }
     if targetwin.is_current() && win_valid(wp.id()) {
-        if win_splitmove(wp, size, flags).is_ok() {
+        if splitmove(wp, size, flags).is_ok() {
             result.write_number(0);
         }
     } else {

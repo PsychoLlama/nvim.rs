@@ -245,20 +245,26 @@ pub(crate) fn rotate(upwards: bool, count: c_int) {
     redraw_all(UPD_NOT_VALID);
 }
 
-pub fn win_splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Failed> {
-    splitmove(window, size, flags)
+/// Why [`splitmove`] left the window where it was.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum NotMoved {
+    /// An autocommand window, which never moves. Nothing is said.
+    AutocmdWindow,
+    /// The layout refused, and said so (E242, E1159, E36, ...).
+    Said(Failed),
 }
 
 /// Take `window` out of the layout and put it back in as a split given by `flags`,
-/// from `win_splitmove()`. Restores the old layout on failure.
-pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Failed> {
+/// for `win_splitmove()` and CTRL-W H/J/K/L. Restores the old layout on failure.
+pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), NotMoved> {
     let height = window.w_height;
     if is_only_window(window, None) {
         return Ok(());
     }
-    if is_autocmd_window(Some(window)) || check_split_disallowed(window).is_err() {
-        return Err(Failed);
+    if is_autocmd_window(Some(window)) {
+        return Err(NotMoved::AutocmdWindow);
     }
+    check_split_disallowed(window).map_err(NotMoved::Said)?;
 
     let mut dir = 0;
     let mut unflat_altfr = None;
@@ -279,7 +285,7 @@ pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Fa
     // held: `win_split_ins` flattens it on the way through, so the frame the
     // failure path wants back may be gone by the time it looks.
     let unflat = unflat_altfr.and_then(FrameId::get);
-    if win_split_ins(size, flags, Some(window), dir, unflat).is_err() {
+    if let Err(refusal) = win_split_ins(size, flags, Some(window), dir, unflat) {
         // Restore the window to its original position.
         if !window.w_floating
             && let Some(unflat) = unflat_altfr.and_then(FrameId::get)
@@ -287,7 +293,10 @@ pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Fa
             winframe_restore(window, dir, unflat);
         }
         win_append(window.prev(), window, None);
-        return Err(Failed);
+        return Err(match refusal {
+            NotSplit::AutocmdWindow => NotMoved::AutocmdWindow,
+            NotSplit::Refused(_) => NotMoved::Said(Failed),
+        });
     }
 
     // Keep the window's height when it was moved horizontally. The identity

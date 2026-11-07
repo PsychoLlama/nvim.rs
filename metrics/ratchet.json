@@ -903,7 +903,7 @@
     "crates/nvim/src/window/equal.rs": {"pub_items": 1},
     "crates/nvim/src/window/goto.rs": {"pub_items": 7},
     "crates/nvim/src/window/mod.rs": {"pub_items": 63},
-    "crates/nvim/src/window/order.rs": {"pub_items": 3},
+    "crates/nvim/src/window/order.rs": {"pub_items": 2},
     "crates/nvim/src/window/resize.rs": {"pub_items": 18},
     "crates/nvim/src/window/screensize.rs": {"pub_items": 8},
     "crates/nvim/src/window/size.rs": {"pub_items": 9},
