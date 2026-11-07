@@ -19,7 +19,7 @@ This repo is an attempt to port neovim's `v0.12.6` codebase to safe, idiomatic R
 - [x] Replace mechanical ports of generated data with `build.rs` equivalents.
 - [x] Incrementally refactor interior scopes to idiomatic Rust.
 - [x] Migrate cross-cutting concerns to idiomatic Rust.
-- [ ] Get the count of `unsafe` code as close to zero as possible.
+- [x] Get the count of `unsafe` code as close to zero as possible.
 - [ ] Translate C-style APIs to Rust at FFI boundaries.
 - [ ] Replace runtime-checked cells with static `&mut` where possible.
 - [ ] Break codebase into smaller crates.
