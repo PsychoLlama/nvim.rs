@@ -87,6 +87,16 @@ use crate::api::extmark::{
     nvim_buf_del_extmark, nvim_buf_get_extmark_by_id, nvim_buf_get_extmarks, nvim_buf_set_extmark,
     nvim_create_namespace, nvim_get_namespaces,
 };
+use crate::api::keysets::{
+    KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_clear_autocmds, KeyDict_cmd, KeyDict_cmd_opts,
+    KeyDict_complete_set, KeyDict_context, KeyDict_create_augroup, KeyDict_create_autocmd,
+    KeyDict_echo_opts, KeyDict_empty, KeyDict_eval_statusline, KeyDict_exec_autocmds,
+    KeyDict_exec_opts, KeyDict_get_autocmds, KeyDict_get_commands, KeyDict_get_extmark,
+    KeyDict_get_extmarks, KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight, KeyDict_keymap,
+    KeyDict_ns_opts, KeyDict_open_term, KeyDict_option, KeyDict_redraw, KeyDict_runtime,
+    KeyDict_set_extmark, KeyDict_tabpage_config, KeyDict_user_command, KeyDict_win_config,
+    KeyDict_win_text_height,
+};
 use crate::api::options::{
     nvim_get_all_options_info, nvim_get_option_info2, nvim_get_option_value, nvim_set_option_value,
 };
@@ -139,15 +149,7 @@ use crate::log::logmsg;
 use crate::message::e_textlock;
 use crate::message_fmt::msg_cstr;
 use crate::types::{
-    ApiDict, ApiString, Array, Boolean, Error, Float, Handle, Integer, KeyDict_buf_attach,
-    KeyDict_buf_delete, KeyDict_clear_autocmds, KeyDict_cmd, KeyDict_cmd_opts,
-    KeyDict_complete_set, KeyDict_context, KeyDict_create_augroup, KeyDict_create_autocmd,
-    KeyDict_echo_opts, KeyDict_empty, KeyDict_eval_statusline, KeyDict_exec_autocmds,
-    KeyDict_exec_opts, KeyDict_get_autocmds, KeyDict_get_commands, KeyDict_get_extmark,
-    KeyDict_get_extmarks, KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight, KeyDict_keymap,
-    KeyDict_ns_opts, KeyDict_open_term, KeyDict_option, KeyDict_redraw, KeyDict_runtime,
-    KeyDict_set_extmark, KeyDict_tabpage_config, KeyDict_user_command, KeyDict_win_config,
-    KeyDict_win_text_height, Object, ObjectType, uint64_t,
+    ApiDict, ApiString, Array, Boolean, Error, Float, Handle, Integer, Object, ObjectType, uint64_t,
 };
 use core::ffi::CStr;
 

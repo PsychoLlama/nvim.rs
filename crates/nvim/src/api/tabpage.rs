@@ -17,13 +17,14 @@ use crate::api::vim::nvim_get_current_win;
 use crate::types::Handle;
 use crate::window::tab_index;
 
+use crate::api::keysets::KeyDict_tabpage_config;
 use crate::api_error;
 use crate::guard::Suppress;
 use crate::message::e_cmdwin;
 use crate::narrow::number_as_int;
 use crate::types::{
-    ApiString, Array, Boolean, BufferHandle, Error, Integer, KeyDict_tabpage_config, Object,
-    TabpageHandle, WindowHandle, kErrorTypeException, size_t,
+    ApiString, Array, Boolean, BufferHandle, Error, Integer, Object, TabpageHandle, WindowHandle,
+    kErrorTypeException, size_t,
 };
 use crate::window::{
     tabpage_win_valid, valid_tab, valid_tabpage, win_goto, win_new_tabpage, win_set_buf,

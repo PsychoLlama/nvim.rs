@@ -240,7 +240,7 @@ impl Reading {
     /// wins a tie, unless the read was forced.
     fn apply_search_pattern(
         &self,
-        mut pat: crate::types::KeyDict__shada_search_pat,
+        mut pat: crate::api::keysets::KeyDict__shada_search_pat,
         timestamp: u64,
         extra: Option<ShadaExtra>,
     ) {

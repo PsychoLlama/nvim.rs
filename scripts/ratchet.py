@@ -1176,7 +1176,7 @@ PERIMETER = {
 # (libuv, libvterm, libtermkey, LuaJIT, libc), so `#[repr(C)]` here is that
 # library's interface and not transpiler residue. A type this tree defines
 # and only this tree reads does *not* qualify however C-shaped it looks --
-# `types/keysets.rs` is written through byte offsets by our own generated
+# `api/keysets.rs` is written through byte offsets by our own generated
 # keydict codec, `types/mpack*.rs` and `types/rpc.rs` describe a codec that
 # was vendored and ported rather than linked (docs/perimeter.md keeps
 # `mpack/`'s codec outside for the same reason), and `types/terminal_defs.rs`

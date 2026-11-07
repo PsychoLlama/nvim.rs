@@ -31,6 +31,7 @@ use crate::types::AutoEvent;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 
+use crate::api::keysets::KeyDict_option;
 use crate::api::private::validate::{err_bad_value, err_expected};
 use crate::api_error;
 use crate::memline::ml_open;
@@ -41,8 +42,8 @@ use crate::option::{
     object_as_optval, option_has_scope, optval_as_object, set_option_direct, set_option_value_for,
 };
 use crate::types::{
-    AcoSave, ApiDict, ApiString, Error, KeyDict_option, LineNr, Object, OptIndex, OptScope, OptVal,
-    OptionSetFlags, kErrorTypeValidation, uint64_t,
+    AcoSave, ApiDict, ApiString, Error, LineNr, Object, OptIndex, OptScope, OptVal, OptionSetFlags,
+    kErrorTypeValidation, uint64_t,
 };
 use crate::window::close_windows;
 use crate::winlayer::Buf;

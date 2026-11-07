@@ -11,6 +11,7 @@
 
 use crate::api::buffer::{nvim_buf_get_lines, nvim_buf_set_lines};
 use crate::api::extmark::{nvim_buf_clear_namespace, nvim_create_namespace, parse_virt_text};
+use crate::api::keysets::{KeyDict_empty, KeyDict_exec_opts};
 use crate::api::private::dispatch::msgpack_rpc_get_handler_for;
 use crate::api::private::helpers::{api_set_sctx, api_typename, dict_set_var};
 use crate::decoration::{
@@ -34,10 +35,9 @@ use crate::options::kOptInvalid;
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, BufferHandle, ColNr, DecorExt, DecorInline, DecorPriority,
-    DecorVirtText, DecorVirtText_data, Error, Integer, KeyDict_empty, KeyDict_exec_opts,
-    LuaRetMode, MsgpackRpcRequestHandler, Object, OptIndex, OptVal, TabpageHandle, VirtText,
-    WindowHandle, int64_t, kObjectTypeArray, kObjectTypeString, size_t, uint8_t, uint32_t,
-    uint64_t,
+    DecorVirtText, DecorVirtText_data, Error, Integer, LuaRetMode, MsgpackRpcRequestHandler,
+    Object, OptIndex, OptVal, TabpageHandle, VirtText, WindowHandle, int64_t, kObjectTypeArray,
+    kObjectTypeString, size_t, uint8_t, uint32_t, uint64_t,
 };
 
 // The carve of the transpiled module; see each child's docs.

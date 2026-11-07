@@ -23,6 +23,7 @@
 //! whole reason a keyset's fields are `Option`s.
 
 use super::{HLATTRS_INIT, attr_entry_count, syn_attr2entry};
+use crate::api::keysets::{KeyDict_highlight, KeyDict_highlight_cterm};
 use crate::api::private::helpers::api_dict_to_keydict;
 use crate::api::private::validate::{err_bad_value, err_expected, err_out_of_range};
 use crate::api_error;
@@ -31,8 +32,8 @@ use crate::highlight_group::{name_to_color, name_to_ctermcolor};
 use crate::message_fmt::msg_cstr;
 use crate::types::DictBuilder;
 use crate::types::{
-    ApiDict, Boolean, Error, HlAttrs, Integer, KeyDict_highlight, KeyDict_highlight_cterm, Object,
-    int16_t, int32_t, kErrorTypeException, kErrorTypeValidation, size_t,
+    ApiDict, Boolean, Error, HlAttrs, Integer, Object, int16_t, int32_t, kErrorTypeException,
+    kErrorTypeValidation, size_t,
 };
 use core::ffi::{CStr, c_int};
 

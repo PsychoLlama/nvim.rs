@@ -23,6 +23,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::api::keysets::KeyDict_exec_opts;
 use crate::api::private::helpers::string_to_array;
 use crate::api::vimscript::exec_impl;
 use crate::eval::encode::encode_vim_list_to_buf;
@@ -40,8 +41,8 @@ use crate::shada::{
 use crate::types::DictBuilder;
 use crate::types::TypVal;
 use crate::types::{
-    ApiDict, ApiString, Array, Context, Error, KeyDict_exec_opts, KeyValuePair, Object, OptVal,
-    OptionSetFlags, VAR_LIST, size_t,
+    ApiDict, ApiString, Array, Context, Error, KeyValuePair, Object, OptVal, OptionSetFlags,
+    VAR_LIST, size_t,
 };
 use core::ffi::{CStr, c_int};
 

@@ -9,6 +9,10 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::api::keysets::{
+    KeyDict_get_extmark, KeyDict_get_extmarks, KeyDict_ns_opts, KeyDict_set_decoration_provider,
+    KeyDict_set_extmark,
+};
 use crate::api::private::helpers::{
     api_typename, find_buffer_by_handle, find_window_by_handle, object_to_hl_id,
 };
@@ -35,10 +39,8 @@ use crate::sign::init_sign_text;
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, BufferHandle, ColNr, DecorExt, DecorHighlightInline,
     DecorInline, DecorPriority, DecorSignHighlight, DecorVirtText, DecorVirtText_data, Error,
-    ExtmarkType, Integer, KeyDict_get_extmark, KeyDict_get_extmarks, KeyDict_ns_opts,
-    KeyDict_set_decoration_provider, KeyDict_set_extmark, LineNr, LuaRef, MTKey, MTPair, NS,
-    Object, VirtLine, VirtText, VirtTextChunk, Window, int32_t, kObjectTypeArray, size_t, uint8_t,
-    uint32_t,
+    ExtmarkType, Integer, LineNr, LuaRef, MTKey, MTPair, NS, Object, VirtLine, VirtText,
+    VirtTextChunk, Window, int32_t, kObjectTypeArray, size_t, uint8_t, uint32_t,
 };
 
 // The carve of the transpiled module; see each child's docs.

@@ -3,7 +3,7 @@
 //
 // Reads the transpiled crate (src/**/*.rs), collects
 //   - #[repr(C)] structs/unions and type aliases (canonical copies preferred
-//     from src/types/),
+//     from src/types/ and the TYPE_HOMES files that left it),
 //   - #[no_mangle] fns and statics (the linkable ABI surface),
 //   - integer `pub const`s (c2rust's rendering of C enums and #defines),
 // and emits one C-syntax declaration chunk (`unit-cdefs.h`) that ffi.cdef can
@@ -41,7 +41,7 @@ struct Def {
     file: String, // repo-relative
     kind: Kind,
     align: Option<u64>,
-    is_types: bool, // lives under src/types/
+    canonical: bool, // lives under src/types/ or in a TYPE_HOMES file
 }
 
 #[derive(Clone, Debug)]
@@ -612,15 +612,21 @@ fn is_marker(ty: &syn::Type) -> bool {
         .is_some_and(|s| s.ident == "PhantomData" || s.ident == "PhantomPinned")
 }
 
+/// The canonical type files that left `src/types/` for the module owning
+/// them. Each is read exactly as a `src/types/` file: its types are closure
+/// roots, and its copy of a name defined twice wins. A row naming a file that
+/// no longer exists is an error, so the list cannot outlive a move.
+const TYPE_HOMES: &[&str] = &["src/api/keysets.rs"];
+
 fn collect_file(world: &mut World, rel: &str, ast: syn::File) {
-    let is_types = rel.starts_with("src/types/");
+    let canonical = rel.starts_with("src/types/") || TYPE_HOMES.contains(&rel);
     let bitfields = bitfield_invocations(&ast);
     let add = |world: &mut World, name: String, kind: Kind, align: Option<u64>| {
         let def = Def {
             file: rel.to_string(),
             kind,
             align,
-            is_types,
+            canonical,
         };
         world.by_name.entry(name).or_default().push(def);
     };
@@ -941,9 +947,9 @@ impl<'w> Emitter<'w> {
             .iter()
             .filter(|d| !matches!(d.kind, Kind::Opaque))
             .collect();
-        // 1. canonical copy in types/ (5a may have left only an opaque
+        // 1. canonical copy (types/, TYPE_HOMES; 5a may have left only an opaque
         //    declaration there; a concrete def elsewhere then wins)
-        if let Some(d) = concrete.iter().find(|d| d.is_types) {
+        if let Some(d) = concrete.iter().find(|d| d.canonical) {
             return Some((*d).clone());
         }
         // 2. the referencing file's own definition
@@ -1415,18 +1421,28 @@ fn main() {
     }
 
     eprintln!("ffigen: parsing crate under {} ...", root.display());
+    let mut homes_seen = BTreeSet::new();
     for path in discover(&root) {
         let rel = path
             .strip_prefix(&root)
             .unwrap()
             .to_string_lossy()
             .replace('\\', "/");
+        if TYPE_HOMES.contains(&rel.as_str()) {
+            homes_seen.insert(rel.clone());
+        }
         let text = std::fs::read_to_string(&path).expect("read source");
         let ast = match syn::parse_file(&text) {
             Ok(a) => a,
             Err(e) => panic!("ffigen: parse error in {}: {}", rel, e),
         };
         collect_file(&mut world, &rel, ast);
+    }
+    for home in TYPE_HOMES {
+        assert!(
+            homes_seen.contains(*home),
+            "ffigen: TYPE_HOMES names {home}, which is not in the crate"
+        );
     }
     for f in &world.fns {
         let mut names = BTreeSet::new();
@@ -1461,7 +1477,7 @@ fn main() {
     // ---- closure roots: every canonical type + everything exports touch
     let mut emitter = Emitter::new(&world);
     for (name, defs) in &world.by_name {
-        if let Some(d) = defs.iter().find(|d| d.is_types) {
+        if let Some(d) = defs.iter().find(|d| d.canonical) {
             // types/libc.rs mirrors glibc; the system preamble owns that
             // domain, so its types are emitted only if the closure pulls
             // them in (and not denied).

@@ -16,15 +16,15 @@
 )]
 
 use super::low_byte;
+use crate::api::keysets::{
+    KeyDict__shada_buflist_item, KeyDict__shada_mark, KeyDict__shada_register,
+};
 use crate::eval::decode::decode_string;
 use crate::memory::XString;
 use crate::mpack::mpack_core::MPACK_OK;
 use crate::narrow::number_as_col;
 use crate::narrow::number_as_lnum;
-use crate::types::{
-    ApiDict, ColNr, Integer, KeyDict__shada_buflist_item, KeyDict__shada_mark,
-    KeyDict__shada_register, LineNr, MotionType, VAR_TYPE_BLOB,
-};
+use crate::types::{ApiDict, ColNr, Integer, LineNr, MotionType, VAR_TYPE_BLOB};
 use core::ffi::CStr;
 use std::ffi::CString;
 use std::rc::Rc;

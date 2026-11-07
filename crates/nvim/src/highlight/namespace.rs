@@ -35,6 +35,7 @@ use super::{
     HLATTRS_INIT, dict2hlattrs, get_attr_entry, hl_apply_winblend, hl_combine_attr,
     hl_get_syn_attr, kHlUI, syn_attr2entry,
 };
+use crate::api::keysets::KeyDict_highlight;
 use crate::api::private::helpers::api_dict_to_keydict;
 use crate::decoration_provider::with_decor_provider;
 use crate::global_cell::GlobalCell;
@@ -56,8 +57,7 @@ use crate::popupmenu::state::must_redraw_pum;
 use crate::types::Handle;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
-    ApiString, ColorItem, ColorKey, DecorProvider, HlAttrs, HlEntry, KeyDict_highlight, LuaRetMode,
-    NS, Object,
+    ApiString, ColorItem, ColorKey, DecorProvider, HlAttrs, HlEntry, LuaRetMode, NS, Object,
 };
 use crate::winlayer::Win;
 use core::ffi::c_int;

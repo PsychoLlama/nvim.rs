@@ -19,9 +19,10 @@
 
 #![cfg(not(miri))]
 
+use neovim::api::keysets::KeyDict_option;
 use neovim::api::options::{nvim_get_option_value, nvim_set_option_value};
 use neovim::ex_docmd::do_cmdline_cmd;
-use neovim::types::{ApiString, Error, Handle, KeyDict_option, Object};
+use neovim::types::{ApiString, Error, Handle, Object};
 
 use crate::support::{Editor, check_emsg, cstr, editor_lock};
 

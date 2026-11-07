@@ -15,6 +15,7 @@ pub mod command;
 pub mod deprecated;
 pub mod events;
 pub mod extmark;
+pub mod keysets;
 pub mod options;
 pub mod private;
 pub mod tabpage;

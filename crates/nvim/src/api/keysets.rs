@@ -12,11 +12,9 @@
 
 //! The keysets: the option-dict layouts the API takes by name.
 //!
-//! Canonical type definitions, hoisted out of the per-module copies c2rust
-//! emitted. One definition per logical type; every module re-exports here.
-//!
-//! These structs are also the source of truth `tools/apigen` generates the
-//! keyset tables from (`crate::api::private::dispatch`), so the
+//! These structs are the source of truth `tools/apigen` generates the
+//! keyset tables from (`crate::api::private::dispatch`), reading this file
+//! by path, so the
 //! shape here is load-bearing:
 //!
 //! - Declaration order fixes the table order, and a key's position in the
@@ -31,8 +29,10 @@
 //!   highlight-group name the converter resolves to an id.
 //! - A field whose name on the wire differs from its name here says so in a
 //!   doc comment of the form ``Wire key: `name`.``
-
-use super::*;
+use crate::types::{
+    ApiDict, ApiString, Array, Boolean, BufferHandle, Float, HLGroupID, Integer, LuaRef, Object,
+    StringArray, WindowHandle,
+};
 
 #[derive(Default)]
 #[repr(C)]

@@ -22,6 +22,7 @@
 )]
 
 use super::low_byte;
+use crate::api::keysets::KeyDict__shada_search_pat;
 use crate::buffer::{buf_is_quickfix, buf_is_terminal, find_buf};
 use crate::cmdhist::{HIST_DEBUG, HIST_EXPR, HIST_INPUT};
 use crate::eval::typval::{TV_INITIAL_VALUE, tv_copy};
@@ -36,8 +37,8 @@ use crate::search::shada_pattern;
 use crate::siemsg;
 use crate::types::LineNr;
 use crate::types::{
-    ApiString, KeyDict__shada_search_pat, TypVal, VAR_FLAVOUR_DEFAULT, VAR_FLAVOUR_SESSION,
-    VAR_FLAVOUR_SHADA, VAR_FUNC, VAR_PARTIAL, VarFlavour,
+    ApiString, TypVal, VAR_FLAVOUR_DEFAULT, VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA, VAR_FUNC,
+    VAR_PARTIAL, VarFlavour,
 };
 use crate::winlayer::{Buf, Win, buffers};
 use core::ffi::c_int;

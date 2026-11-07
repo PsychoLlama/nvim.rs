@@ -15,6 +15,7 @@
 
 use core::ffi::c_int;
 
+use crate::api::keysets::KeyDict_highlight;
 use crate::cursor_shape::cursor_mode_uses_syn_id;
 use crate::drawscreen::state::updating_screen;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
@@ -25,7 +26,7 @@ use crate::highlight::state::{
 use crate::highlight::{HlAttrFlags, hl_get_syn_attr};
 use crate::lua::executor::nlua_set_sctx;
 use crate::runtime::state::current_sctx;
-use crate::types::{HlAttrs, KeyDict_highlight, Object};
+use crate::types::{HlAttrs, Object};
 use crate::ui::{ui_default_colors_set, ui_mode_info_set};
 
 use super::command::sourcing_lnum;

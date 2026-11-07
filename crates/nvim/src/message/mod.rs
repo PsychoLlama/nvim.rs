@@ -61,6 +61,7 @@
 #![allow(non_upper_case_globals)]
 
 pub mod state;
+use crate::api::keysets::KeyDict_echo_opts;
 use crate::api::vim::nvim_echo;
 use crate::ascii::ascii_iswhite;
 use crate::autocmd::has_event;
@@ -159,8 +160,8 @@ use crate::types::TAB;
 use crate::types::ui::{kUIMessages, kUIMultigrid};
 use crate::types::{
     ApiString, Array, EStackArg, ExArg, FlushBuffers, GridView, HlMessage, HlMessageChunk, IOSIZE,
-    KeyDict_echo_opts, MessageData, Object, OptInt, ScreenAttr, ScreenChar, ShmFlag, TypVal, Vv,
-    int64_t, size_t, uint64_t,
+    MessageData, Object, OptInt, ScreenAttr, ScreenChar, ShmFlag, TypVal, Vv, int64_t, size_t,
+    uint64_t,
 };
 use crate::ui::state::{Columns, Rows, resize_events};
 use crate::ui::{

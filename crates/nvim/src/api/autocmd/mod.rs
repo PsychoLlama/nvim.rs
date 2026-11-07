@@ -9,6 +9,10 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::api::keysets::{
+    KeyDict_clear_autocmds, KeyDict_create_augroup, KeyDict_create_autocmd, KeyDict_exec_autocmds,
+    KeyDict_get_autocmds,
+};
 use crate::api::private::helpers::{
     api_set_sctx, api_typename, find_buffer_by_handle, try_enter, try_leave,
 };
@@ -26,9 +30,7 @@ use crate::lua::executor::{api_new_luaref, nlua_ref_is_function};
 use crate::types::AutoEvent;
 use crate::types::{
     ApiDict, ApiString, Array, AutoCmd, AutoHandler, AutoPat, BufferHandle, Callback, Error,
-    Integer, KeyDict_clear_autocmds, KeyDict_create_augroup, KeyDict_create_autocmd,
-    KeyDict_exec_autocmds, KeyDict_get_autocmds, Object, TryState, int64_t, kErrorTypeValidation,
-    kObjectTypeString, size_t, uint64_t,
+    Integer, Object, TryState, int64_t, kErrorTypeValidation, kObjectTypeString, size_t, uint64_t,
 };
 
 // The carve of the transpiled module; see each child's docs.

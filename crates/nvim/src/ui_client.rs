@@ -32,6 +32,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::api::keysets::KeyDict_highlight;
 use crate::api::private::helpers::{api_dict_to_keydict, api_metadata};
 use crate::channel::open::JobOptions;
 use crate::channel::{channel_connect, channel_job_start};
@@ -68,9 +69,9 @@ use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::libc::{STDERR_FILENO, STDOUT_FILENO};
 use crate::types::ui::kLineFlagWrap;
 use crate::types::{
-    ApiDict, ApiString, Array, CallbackReader, Error, GridLineEvent, HlAttrs, Integer,
-    KeyDict_highlight, Object, ObjectType, TUIData, UIClientHandler, Unpacker, kObjectTypeArray,
-    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
+    ApiDict, ApiString, Array, CallbackReader, Error, GridLineEvent, HlAttrs, Integer, Object,
+    ObjectType, TUIData, UIClientHandler, Unpacker, kObjectTypeArray, kObjectTypeBoolean,
+    kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
 };
 use crate::ui::state::t_colors;
 use core::ffi::{CStr, c_int};

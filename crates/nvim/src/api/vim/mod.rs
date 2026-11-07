@@ -11,6 +11,11 @@
 
 use crate::api::buffer::{api_buf_ensure_loaded, nvim_buf_del_keymap};
 use crate::api::deprecated::{buffer_del_line, buffer_get_line, buffer_set_line};
+use crate::api::keysets::{
+    KeyDict_complete_set, KeyDict_context, KeyDict_echo_opts, KeyDict_empty,
+    KeyDict_eval_statusline, KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight,
+    KeyDict_keymap, KeyDict_open_term, KeyDict_redraw, KeyDict_runtime,
+};
 use crate::api::private::helpers::{
     api_metadata, api_set_sctx, api_typename, dict_get_value, dict_set_var, find_buffer_by_handle,
     find_window_by_handle, get_default_stl_hl, parse_hl_msg, set_mark, string_to_array,
@@ -101,13 +106,10 @@ use crate::terminal::{
 use crate::types::AutoEvent;
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, BufferHandle, Context, Error, Float, FoldInfo, Handle,
-    HlAttrs, Integer, KeyDict_complete_set, KeyDict_context, KeyDict_echo_opts, KeyDict_empty,
-    KeyDict_eval_statusline, KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight,
-    KeyDict_keymap, KeyDict_open_term, KeyDict_redraw, KeyDict_runtime, LineNr, LuaRef, LuaRetMode,
-    MessageData, MessageType, MotionType, Object, OptVal, ScreenChar, ScriptId, SignTextAttrs,
-    StatusCol, TabpageHandle, TerminalOptions, VarNumber, Vv, WindowHandle, YankReg, int64_t,
-    kCdScopeGlobal, kErrorTypeException, kErrorTypeValidation, kObjectTypeString,
-    mpack_token_type_t, size_t, uint16_t, uint64_t,
+    HlAttrs, Integer, LineNr, LuaRef, LuaRetMode, MessageData, MessageType, MotionType, Object,
+    OptVal, ScreenChar, ScriptId, SignTextAttrs, StatusCol, TabpageHandle, TerminalOptions,
+    VarNumber, Vv, WindowHandle, YankReg, int64_t, kCdScopeGlobal, kErrorTypeException,
+    kErrorTypeValidation, kObjectTypeString, mpack_token_type_t, size_t, uint16_t, uint64_t,
 };
 use crate::ui::state::Columns;
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};

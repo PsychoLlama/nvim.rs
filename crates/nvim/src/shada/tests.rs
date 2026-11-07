@@ -19,7 +19,7 @@
 use super::pack::{Packer, pack_entry};
 use super::unpack::{Cursor, Source};
 use super::*;
-use crate::types::{KeyDict__shada_mark, KeyDict__shada_register};
+use crate::api::keysets::{KeyDict__shada_mark, KeyDict__shada_register};
 use core::ffi::CStr;
 use std::ffi::CString;
 

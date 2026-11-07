@@ -25,6 +25,7 @@ use crate::types::DictBuilder;
 use crate::types::Handle;
 use crate::winlayer::TabPage;
 
+use crate::api::keysets::KeyDict_win_text_height;
 use crate::api::private::validate::{Bad, err_expected, err_invalid, err_out_of_range};
 use crate::lua::executor::{kRetLuaref, nlua_call_ref_reporting};
 use crate::message::emsg;
@@ -35,8 +36,8 @@ use crate::os::cshim::gettext;
 use crate::plines::{win_get_fill, win_text_height};
 use crate::pos::MAXCOL;
 use crate::types::{
-    ApiDict, ApiString, Array, Boolean, BufferHandle, Error, Integer, KeyDict_win_text_height,
-    LineNr, LuaRef, Object, SwitchWin, TabpageHandle, WinExecute, WindowHandle, int64_t, size_t,
+    ApiDict, ApiString, Array, Boolean, BufferHandle, Error, Integer, LineNr, LuaRef, Object,
+    SwitchWin, TabpageHandle, WinExecute, WindowHandle, int64_t, size_t,
 };
 use crate::window::{
     can_close_in_cmdwin, win_close, win_close_othertab, win_find_tabpage, win_get_tabwin,

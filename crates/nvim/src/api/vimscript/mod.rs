@@ -7,6 +7,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::api::keysets::KeyDict_exec_opts;
 use crate::api::private::helpers::api_set_sctx;
 use crate::eval::eval0;
 use crate::eval::typval::tv_clear;
@@ -17,9 +18,8 @@ use crate::message::state::{did_emsg, msg_col, redir_off};
 use crate::message::{capture_finish, capture_start};
 use crate::runtime::do_source_str;
 use crate::types::{
-    ApiDict, ApiString, Array, Boolean, Error, ExprAST, ExprASTNode, Integer, KeyDict_exec_opts,
-    Object, ParserState, TypVal, VAR_FUNC, VAR_PARTIAL, kErrorTypeException, kErrorTypeValidation,
-    size_t, uint64_t,
+    ApiDict, ApiString, Array, Boolean, Error, ExprAST, ExprASTNode, Integer, Object, ParserState,
+    TypVal, VAR_FUNC, VAR_PARTIAL, kErrorTypeException, kErrorTypeValidation, size_t, uint64_t,
 };
 use crate::viml::parser::expressions::{
     ASSIGNMENT_NAMES, CASE_STRATEGY_NAMES, COMPARISON_NAMES, NODE_TYPE_NAMES, viml_pexpr_parse,

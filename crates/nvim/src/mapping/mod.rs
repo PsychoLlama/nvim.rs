@@ -38,6 +38,7 @@ use crate::keycodes::{KS_EXTRA, KS_MODIFIER};
 use crate::types::ScriptCtx;
 use core::ffi::{CStr, c_int};
 
+use crate::api::keysets::KeyDict_keymap;
 use crate::api::private::helpers::{api_set_sctx, find_buffer_by_handle};
 use crate::ascii::{ascii_isspace, ascii_iswhite};
 use crate::charset::transchar;
@@ -79,8 +80,8 @@ use crate::state::{
 };
 use crate::types::{
     ApiDict, ApiString, Array, BufferHandle, Dict, Error, EvalFuncData, ExArg, Expand, Integer,
-    KeyDict_keymap, LineNr, LuaRef, LuaRetMode, MapBlock, MapCallback, MapRhs, MapStr, Object,
-    OptSet, RegMatch, ScriptId, TypVal, VarNumber, ptrdiff_t, size_t, uint64_t,
+    LineNr, LuaRef, LuaRetMode, MapBlock, MapCallback, MapRhs, MapStr, Object, OptSet, RegMatch,
+    ScriptId, TypVal, VarNumber, ptrdiff_t, size_t, uint64_t,
 };
 use std::rc::Rc;
 

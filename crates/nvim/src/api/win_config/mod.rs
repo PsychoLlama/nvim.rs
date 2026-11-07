@@ -10,6 +10,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::api::extmark::{parse_virt_text, virt_text_to_array};
+use crate::api::keysets::KeyDict_win_config;
 use crate::api::private::helpers::{
     api_typename, find_buffer_by_handle, find_window_by_handle, object_to_hl_id, try_enter,
     try_leave,
@@ -29,11 +30,10 @@ use crate::types::AutoEvent;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
     AlignTextPos, ApiString, Array, Boolean, BorderTextType, BufferHandle, Error, FloatAnchor,
-    FloatRelative, Integer, KeyDict_win_config, LPos, Object, SwitchWin, TryState, VirtText,
-    VirtTextChunk, WinConfig, WinSplit, WinStyle, WindowHandle, kErrorTypeException,
-    kErrorTypeValidation, kFloatAnchorEast, kFloatAnchorSouth, kFloatRelativeCursor,
-    kFloatRelativeEditor, kFloatRelativeLaststatus, kFloatRelativeMouse, kFloatRelativeTabline,
-    kFloatRelativeWindow,
+    FloatRelative, Integer, LPos, Object, SwitchWin, TryState, VirtText, VirtTextChunk, WinConfig,
+    WinSplit, WinStyle, WindowHandle, kErrorTypeException, kErrorTypeValidation, kFloatAnchorEast,
+    kFloatAnchorSouth, kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus,
+    kFloatRelativeMouse, kFloatRelativeTabline, kFloatRelativeWindow,
 };
 use crate::ui::ui_has;
 use crate::ui_compositor::ui_comp_remove_grid;

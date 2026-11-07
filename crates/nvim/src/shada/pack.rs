@@ -26,11 +26,12 @@
 )]
 
 use super::low_byte;
+use crate::api::keysets::KeyDict__shada_search_pat;
 use crate::eval::encode::encode_vim_to_msgpack;
 use crate::message_fmt::msg_cstr;
 use crate::msgpack_rpc::packer::{format, pack_to_bytes};
 use crate::semsg;
-use crate::types::{ApiDict, Integer, KeyDict__shada_search_pat, Object, VAR_BLOB, VAR_TYPE_BLOB};
+use crate::types::{ApiDict, Integer, Object, VAR_BLOB, VAR_TYPE_BLOB};
 use std::ffi::CString;
 
 use super::{

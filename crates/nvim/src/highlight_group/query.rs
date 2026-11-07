@@ -17,13 +17,14 @@ use crate::types::DictBuilder;
 use crate::types::Handle;
 use core::ffi::{CStr, c_int};
 
+use crate::api::keysets::KeyDict_get_highlight;
 use crate::highlight::dict::put;
 use crate::highlight::{
     HLATTRS_DICT_SIZE, HLATTRS_INIT, HlAttrFlags, hlattrs2dict, ns_get_attr, ns_get_link,
     syn_attr2entry,
 };
 use crate::narrow::number_as_int;
-use crate::types::{ApiDict, ApiString, Error, KeyDict_get_highlight, NS, Object};
+use crate::types::{ApiDict, ApiString, Error, NS, Object};
 use crate::ui::ui_rgb_attached;
 
 use super::{
