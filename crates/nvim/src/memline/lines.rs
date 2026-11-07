@@ -291,9 +291,9 @@ pub fn ml_line_alloced() -> bool {
 
 /// Insert `line` (its NUL the last byte) after line `lnum` of `buffer`,
 /// whose memline is open, flushing any pending change first.
-fn ml_append_flush(buffer: Buf, lnum: LineNr, line: &[u8], flags: c_int) -> Result<(), Failed> {
+fn ml_append_flush(buffer: Buf, lnum: LineNr, line: &[u8], flags: c_int) -> Result<(), LineError> {
     if lnum > buffer.b_ml.ml_line_count {
-        return Err(Failed); // lnum out of range
+        return Err(LineError::NoSuchLine);
     }
     if buffer.b_ml.cached_lnum() != LineNr::ZERO {
         // This may invoke ml_append_int in turn.
@@ -310,18 +310,18 @@ fn ml_append_flush(buffer: Buf, lnum: LineNr, line: &[u8], flags: c_int) -> Resu
 /// invalidate that. The memline copies the bytes and writes none of them.
 ///
 /// The caller should probably also call `appended_lines`.
-pub(crate) fn ml_append_flags(lnum: LineNr, line: &[u8], flags: c_int) -> Result<(), Failed> {
+pub(crate) fn ml_append_flags(lnum: LineNr, line: &[u8], flags: c_int) -> Result<(), LineError> {
     debug_assert_eq!(line.last(), Some(&0), "the line carries its NUL");
     // During startup the memfile may still have to be created.
-    if !Buf::current().b_ml.is_open() && open_buffer(false, None, ReadFlags::NONE).is_err() {
-        return Err(Failed);
+    if !Buf::current().b_ml.is_open() {
+        open_buffer(false, None, ReadFlags::NONE)?;
     }
     ml_append_flush(Buf::current(), lnum, line, flags)
 }
 
 /// [`ml_append_flags`] for a line the caller holds without its terminator:
 /// the memline is handed a terminated copy.
-pub(crate) fn ml_append_text(lnum: LineNr, line: &[u8]) -> Result<(), Failed> {
+pub(crate) fn ml_append_text(lnum: LineNr, line: &[u8]) -> Result<(), LineError> {
     let mut copy = Vec::with_capacity(line.len() + 1);
     copy.extend_from_slice(line);
     copy.push(0);
@@ -329,7 +329,7 @@ pub(crate) fn ml_append_text(lnum: LineNr, line: &[u8]) -> Result<(), Failed> {
 }
 
 /// [`ml_append_flags`] for a terminated line the caller holds.
-pub(crate) fn ml_append_cstr(lnum: LineNr, line: &CStr) -> Result<(), Failed> {
+pub(crate) fn ml_append_cstr(lnum: LineNr, line: &CStr) -> Result<(), LineError> {
     ml_append_flags(lnum, line.to_bytes_with_nul(), 0)
 }
 
@@ -338,7 +338,11 @@ pub(crate) fn ml_append_cstr(lnum: LineNr, line: &CStr) -> Result<(), Failed> {
 /// are the text (a NUL in the text already stored as a newline). `newfile`
 /// says a new file is being read in, which records `pe_old_lnum` for
 /// recovery.
-pub(crate) fn ml_append_terminated(lnum: LineNr, line: &[u8], newfile: bool) -> Result<(), Failed> {
+pub(crate) fn ml_append_terminated(
+    lnum: LineNr,
+    line: &[u8],
+    newfile: bool,
+) -> Result<(), LineError> {
     ml_append_flags(lnum, line, if newfile { ML_APPEND_NEW } else { 0 })
 }
 
@@ -350,17 +354,17 @@ pub fn ml_append_buf_terminated(
     lnum: LineNr,
     line: &[u8],
     newfile: bool,
-) -> Result<(), Failed> {
+) -> Result<(), LineError> {
     debug_assert_eq!(line.last(), Some(&0), "the line carries its NUL");
     if !buffer.b_ml.is_open() {
-        return Err(Failed);
+        return Err(LineError::NoSuchLine);
     }
     ml_append_flush(buffer, lnum, line, if newfile { ML_APPEND_NEW } else { 0 })
 }
 
 /// [`ml_append_buf_terminated`] for a line the caller holds without its
 /// terminator: the memline is handed a terminated copy.
-pub fn ml_append_bytes(buffer: Buf, lnum: LineNr, line: &[u8]) -> Result<(), Failed> {
+pub fn ml_append_bytes(buffer: Buf, lnum: LineNr, line: &[u8]) -> Result<(), LineError> {
     let mut copy = Vec::with_capacity(line.len() + 1);
     copy.extend_from_slice(line);
     copy.push(0);
@@ -459,21 +463,21 @@ pub(crate) fn ml_replace_buf_now(mut buffer: Buf, lnum: LineNr, line: &[u8]) -> 
 /// Delete line `lnum` of `buffer`.
 ///
 /// The caller should probably also call `changed_lines`.
-pub fn ml_delete_buf(buffer: Buf, lnum: LineNr, message: bool) -> Result<(), Failed> {
+pub fn ml_delete_buf(buffer: Buf, lnum: LineNr, message: bool) -> Result<(), LineError> {
     ml_flush_line(buffer);
     ml_delete_int(buffer, lnum, if message { ML_DEL_MESSAGE } else { 0 })
 }
 
 /// Delete line `lnum` of the current buffer.
-pub fn ml_delete(lnum: LineNr) -> Result<(), Failed> {
+pub fn ml_delete(lnum: LineNr) -> Result<(), LineError> {
     ml_delete_flags(lnum, 0)
 }
 
 /// [`ml_delete`] taking `ML_DEL_` flags.
-pub fn ml_delete_flags(lnum: LineNr, flags: c_int) -> Result<(), Failed> {
+pub fn ml_delete_flags(lnum: LineNr, flags: c_int) -> Result<(), LineError> {
     ml_flush_line(Buf::current());
     if lnum < LineNr::ONE || lnum > Buf::current().b_ml.ml_line_count {
-        return Err(Failed);
+        return Err(LineError::NoSuchLine);
     }
     ml_delete_int(Buf::current(), lnum, flags)
 }

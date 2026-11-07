@@ -105,6 +105,16 @@ fn right_padding(line: &[u8], y_width: c_int) -> c_int {
     spaces.max(0)
 }
 
+/// Why a blockwise put stopped part-way.
+#[derive(Clone, Copy, Debug)]
+enum Stopped {
+    /// The empty line a put past the end needs could not be appended (see
+    /// [`LineError`](crate::memline::LineError)).
+    NoLine,
+    /// The line would grow past `INT_MAX`: E1240, said.
+    TooLong,
+}
+
 impl Put {
     /// Move the cursor to the byte the block should start at, in the column
     /// sense, honouring 'virtualedit'.
@@ -161,21 +171,19 @@ impl Put {
     /// `textcol` updated and `totlen` not, which is what upstream's shared
     /// `block_def` does.
     ///
-    /// Answers false when the put must stop.
+    /// Answers why when the put must stop.
     fn blockwise_line(
         &mut self,
         i: size_t,
         col: ColNr,
         textcol: &mut ColNr,
         totlen: &mut size_t,
-    ) -> bool {
+    ) -> Result<(), Stopped> {
         // Pasting past the end of the buffer appends empty lines.
         let mut lines_appended = 0;
         if Win::current().w_cursor.lnum > Buf::current().b_ml.ml_line_count {
             let last = Buf::current().b_ml.ml_line_count;
-            if ml_append_cstr(last, c"").is_err() {
-                return false;
-            }
+            ml_append_cstr(last, c"").map_err(|_| Stopped::NoLine)?;
             self.nr_lines += 1;
             lines_appended = 1;
         }
@@ -199,7 +207,7 @@ impl Put {
             && self.count > (c_int::MAX - (land.startspaces + land.endspaces)) / (yanklen + spaces)
         {
             emsg(gettext(e_resulting_text_too_long));
-            return false;
+            return Err(Stopped::TooLong);
         }
         let pad = |n: c_int| usize::try_from(n).expect("a count of spaces");
         // The check above keeps the sum inside a `c_int`, and every term is
@@ -247,7 +255,7 @@ impl Put {
         if i == 0 {
             Win::current().w_cursor.col += land.startspaces;
         }
-        true
+        Ok(())
     }
 
     /// The whole blockwise put, starting at the cursor.
@@ -260,7 +268,10 @@ impl Put {
         let mut textcol: ColNr = ColNr::ZERO;
         let mut totlen: size_t = 0;
         for i in 0..self.lines.len() {
-            if !self.blockwise_line(i, col, &mut textcol, &mut totlen) {
+            if self
+                .blockwise_line(i, col, &mut textcol, &mut totlen)
+                .is_err()
+            {
                 break;
             }
         }

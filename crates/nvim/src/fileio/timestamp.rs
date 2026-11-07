@@ -32,6 +32,7 @@ use std::ffi::CStr;
 use super::*;
 use crate::buffer::BufRef;
 use crate::highlight_group::{HLF_E, HLF_W};
+use crate::memline::LineError;
 use crate::types::{Failed, ShmFlag, Vv};
 
 /// Has a warning already been shown this sweep? Only one is worth reading.
@@ -182,11 +183,11 @@ pub fn check_timestamps(focus: c_int) -> c_int {
 }
 
 /// Move all the lines from buffer `frombuf` to buffer `tobuf`. On `Err`
-/// `tobuf` is incomplete and/or `frombuf` is not empty, and the memline
-/// has said why.
+/// `tobuf` is incomplete and/or `frombuf` is not empty; the caller says
+/// E462 either way.
 ///
 /// Safe: both [`Buf`]s carry the whole of the promise this needs.
-fn move_lines(frombuf: Buf, tobuf: Buf) -> Result<(), Failed> {
+fn move_lines(frombuf: Buf, tobuf: Buf) -> Result<(), LineError> {
     let saved = switch_buffer(tobuf);
     let mut retval = Ok(());
 

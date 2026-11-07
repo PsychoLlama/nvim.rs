@@ -24,7 +24,7 @@ use core::ffi::{c_int, c_long, c_uint};
 
 use super::*;
 use crate::memfile::BlockId;
-use crate::types::{Failed, MemLine};
+use crate::types::MemLine;
 
 /// How a data block split came out, in the terms the pointer block above it
 /// has to be told: two blocks side by side, each with a block number, a line
@@ -95,9 +95,9 @@ pub(crate) fn ml_append_int(
     lnum: LineNr,
     line: &[u8],
     flags: c_int,
-) -> Result<(), Failed> {
+) -> Result<(), LineError> {
     if lnum > buffer.b_ml.ml_line_count || !buffer.b_ml.is_open() {
-        return Err(Failed); // lnum out of range
+        return Err(LineError::NoSuchLine);
     }
 
     if lowest_marked.get() != LineNr::ZERO && lowest_marked.get() > lnum {
@@ -175,7 +175,7 @@ fn append_by_walk(
     lnum: LineNr,
     new: &NewLine,
     space_needed: int64_t,
-) -> Result<(), Failed> {
+) -> Result<(), LineError> {
     // Find the data block holding the previous line. This also fills the
     // stack with the blocks from the root down, and releases any block
     // that was locked.
@@ -188,7 +188,7 @@ fn append_by_walk(
         },
         ML_INSERT,
     ) else {
-        return Err(Failed);
+        return Err(LineError::Broken);
     };
     buffer.b_ml.ml_flags.clear(MlFlags::EMPTY);
 
@@ -215,7 +215,7 @@ fn append_by_walk(
         // it to, so take it back off through the block's `lineadd`.
         buffer.b_ml.shift_locked(-1);
         let Some(next) = ml_find_line(buffer, lnum + 1, ML_INSERT) else {
-            return Err(Failed);
+            return Err(LineError::Broken);
         };
         id = next;
         db_idx = -1;
@@ -237,7 +237,7 @@ fn append_by_walk(
     } else {
         let mut split = ml_split_data_block(buffer, id, at, lnum, new, space_needed);
         if !ml_insert_pointer(buffer, &mut split) {
-            return Err(Failed);
+            return Err(LineError::Broken);
         }
     }
 
@@ -642,7 +642,7 @@ fn ml_split_pointer_block(mut buffer: Buf, id: &mut BlockId, stack_idx: &mut c_i
 ///
 /// `flags` is [`ML_DEL_MESSAGE`], which asks for "--No lines in buffer--" if
 /// the buffer ends up empty.
-pub(crate) fn ml_delete_int(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Result<(), Failed> {
+pub(crate) fn ml_delete_int(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Result<(), LineError> {
     if lowest_marked.get() != LineNr::ZERO && lowest_marked.get() > lnum {
         lowest_marked.set(lowest_marked.get() - 1);
     }
@@ -654,7 +654,7 @@ pub(crate) fn ml_delete_int(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Resu
         }
         let i = ml_replace_buf_text(buffer, LineNr::ONE, b"");
         buffer.b_ml.ml_flags |= MlFlags::EMPTY;
-        return i;
+        return i.map_err(LineError::from);
     }
 
     // Find the data block holding the line. This also fills the stack
@@ -662,10 +662,10 @@ pub(crate) fn ml_delete_int(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Resu
     // Line 0 is line 1's block, where upstream went on to delete whatever
     // index entry -1 -- the block's own header -- said; it is refused.
     if !buffer.b_ml.is_open() || lnum < LineNr::ONE {
-        return Err(Failed);
+        return Err(LineError::NoSuchLine);
     }
     let Some(id) = ml_find_line(buffer, lnum, ML_DELETE) else {
-        return Err(Failed);
+        return Err(LineError::Broken);
     };
 
     // Number of index entries in the block before the delete. The +2 (not
@@ -698,7 +698,7 @@ pub(crate) fn ml_delete_int(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Resu
         // entry pointing at it — and if that empties its pointer block,
         // that one too, up to the root if need be.
         if !ml_free_data_block(buffer, id) {
-            return Err(Failed);
+            return Err(LineError::Broken);
         }
     } else {
         // Move the text of the following lines forward over the deleted

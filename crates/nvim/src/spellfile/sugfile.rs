@@ -49,7 +49,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
 use crate::getchar::state::got_int;
-use crate::memline::ml_append_buf_terminated;
+use crate::memline::{LineError, ml_append_buf_terminated};
 use crate::memory::XString;
 use crate::message::e_write;
 use crate::message::emsg;
@@ -217,8 +217,8 @@ fn sug_filltree(spin: &mut SpellInfo, slang: &mut SpellLang) -> Result<(), Faile
 }
 
 /// Collect each word end's word numbers into one line of a scratch buffer.
-/// `Err` when a line could not be added, which the memline has said.
-fn sug_maketable(spin: &mut SpellInfo) -> Result<(), Failed> {
+/// `Err` when a line could not be added.
+fn sug_maketable(spin: &mut SpellInfo) -> Result<(), LineError> {
     spin.si_spellbuf = Some(open_spellbuf());
 
     let mut line: Vec<u8> = Vec::with_capacity(100);
@@ -240,7 +240,7 @@ fn sug_filltable(
     node: Option<NodeId>,
     startwordnr: c_int,
     line: &mut Vec<u8>,
-) -> Result<c_int, Failed> {
+) -> Result<c_int, LineError> {
     let mut wordnr = startwordnr;
     let mut next = node;
     let spellbuf = spin.spellbuf();

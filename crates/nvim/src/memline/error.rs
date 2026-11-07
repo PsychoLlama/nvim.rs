@@ -1,6 +1,7 @@
 //! What the memline refuses: a swap file that cannot be found, opened or
 //! believed while recovering, a `:preserve` with nothing to preserve into,
-//! and a file name that is a loop of links.
+//! and a file name that is a loop of links -- and, apart, a line that could
+//! not be appended or deleted ([`LineError`]).
 //!
 //! The code below `ml_recover`, `ml_preserve` and the swap and undo file
 //! namers answers a [`MemlineError`]; each of those reports it, once, with
@@ -132,5 +133,29 @@ impl MemlineError {
                 emsg_text(self.to_string());
             }
         }
+    }
+}
+
+/// Why a line could not be appended to, or deleted from, a memline.
+///
+/// Apart from [`MemlineError`] because appending and deleting are the
+/// editor's hottest memline calls: this is one byte, `Copy`, with no drop
+/// glue for the file read's per-line `Result` to carry.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LineError {
+    /// The line number is not in the buffer, or the buffer has no memline:
+    /// nothing is said, as upstream's `FAIL` there says nothing.
+    NoSuchLine,
+    /// The memline failed underneath: the memfile would not open (said by
+    /// the open), or a block could not be read, found, split or freed (an
+    /// internal error is said where damage is detected; a block the memfile
+    /// could not read is not).
+    Broken,
+}
+
+/// The memfile that would not open has said why.
+impl From<Failed> for LineError {
+    fn from(_: Failed) -> Self {
+        Self::Broken
     }
 }

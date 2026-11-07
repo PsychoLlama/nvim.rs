@@ -84,6 +84,7 @@ use core::ffi::c_int;
 
 // The carve of the transpiled module; see each child's docs.
 mod error;
+pub use self::error::LineError;
 pub(crate) use self::error::MemlineError;
 mod blocks;
 pub use self::blocks::*;
