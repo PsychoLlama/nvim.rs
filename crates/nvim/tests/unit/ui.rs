@@ -20,11 +20,15 @@
 use crate::support::{Probe, editor_lock};
 
 /// Register `ns` (a namespace name) for `widgets` (a Lua table body), with
-/// a handler that appends `<ns>:<event>[:<details>]` to `_G.ui_events`.
+/// a handler that appends `<ns>:<event>[:<details>]` to `_G.ui_events`
+/// for every event but the window and grid ones.
 fn attach(fx: &Probe, ns: &str, widgets: &str) {
     fx.run(&format!(
         "lua _G.ui_events = _G.ui_events or {{}}
          vim.ui_attach(vim.api.nvim_create_namespace('{ns}'), {{ {widgets} }}, function(event, ...)
+           -- Window and grid events are the shared editor's, left over from
+           -- whatever an earlier case closed; not what these cases are about.
+           if event:match('^grid_') or event:match('^win_') then return end
            local args, text = {{ ... }}, event
            if event == 'msg_show' then
              local chunks = vim.tbl_map(function(c) return c[2] end, args[2])
