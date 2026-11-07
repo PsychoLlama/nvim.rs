@@ -426,7 +426,7 @@ fn detach_ui() {
         return;
     }
 
-    if !channel_close_or_report(id, kChannelPartAll) {
+    if channel_close_or_report(id, kChannelPartAll).is_err() {
         return;
     }
     logmsg!(LOGLVL_INF, c"ex_detach", 6019, "detach current_ui={id}");

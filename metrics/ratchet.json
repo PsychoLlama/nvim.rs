@@ -44,7 +44,7 @@
   "cell_raw_ptr": 4,
   "api_err_params": 0,
   "char_as_c_int": 584,
-  "emit_sentinel": 8,
+  "emit_sentinel": 7,
   "labeled_blocks": 71,
   "long_fns": 51,
   "safety_on_safe_fns": 0,

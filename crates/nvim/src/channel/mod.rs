@@ -59,7 +59,7 @@ use crate::types::channel::{
     kChannelStreamInternal, kChannelStreamProc, kChannelStreamSocket, kChannelStreamStderr,
     kChannelStreamStdio,
 };
-use crate::types::{Channel, ChannelPart, ChannelStream, LuaRef, StderrState, uint64_t};
+use crate::types::{Channel, ChannelPart, ChannelStream, Failed, LuaRef, StderrState, uint64_t};
 use std::os::fd::AsFd as _;
 
 /// Values these belong to other modules; nested so they stay out of the flat
@@ -319,14 +319,11 @@ pub fn channel_close(id: uint64_t, part: ChannelPart) -> Result<(), CloseError> 
 }
 
 /// [`channel_close`], reporting why a refused close was refused.
-pub(crate) fn channel_close_or_report(id: uint64_t, part: ChannelPart) -> bool {
-    match channel_close(id, part) {
-        Ok(()) => true,
-        Err(why) => {
-            crate::message::emsg(why);
-            false
-        }
-    }
+pub(crate) fn channel_close_or_report(id: uint64_t, part: ChannelPart) -> Result<(), Failed> {
+    channel_close(id, part).map_err(|why| {
+        crate::message::emsg(why);
+        Failed
+    })
 }
 
 /// Closes the requested halves of a job's pipes, and its pty master last.

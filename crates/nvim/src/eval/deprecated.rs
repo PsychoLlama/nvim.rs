@@ -111,7 +111,7 @@ pub fn f_rpcstop(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
     if channel_job_running(id) {
         f_jobstop(args, result, fptr);
     } else {
-        let closed = channel_close_or_report(id, kChannelPartRpc);
+        let closed = channel_close_or_report(id, kChannelPartRpc).is_ok();
         result.write_number(VarNumber::from(closed));
     }
 }
