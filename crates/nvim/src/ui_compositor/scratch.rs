@@ -98,3 +98,201 @@ pub(super) fn clear_invalid_attrs(attrbuf: &mut [ScreenAttr], cells: Cells, fata
         }
     }
 }
+
+/// The two passes over the scratch line, on hand-built rows: which cells of
+/// a blended layer let the backdrop through, how a double-width backdrop
+/// character is taken as a pair, where the lookahead stops, and which
+/// attributes the never-drawn sweep rewrites. The blend of two attributes
+/// is a stand-in that records its arguments, so the cases pin what
+/// [`blend`] asks for, not what the highlight table answers.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const BLANK: ScreenChar = schar_from_ascii(b' ');
+
+    fn text(s: &str) -> Vec<ScreenChar> {
+        s.bytes().map(schar_from_ascii).collect()
+    }
+
+    /// `back * 100 + front`, logging each call; `veto` names backdrop
+    /// attributes whose blend refuses to let the character through.
+    fn blend_log<'a>(
+        log: &'a mut Vec<(ScreenAttr, ScreenAttr)>,
+        veto: &'a [ScreenAttr],
+    ) -> impl FnMut(ScreenAttr, ScreenAttr, &mut bool) -> ScreenAttr + 'a {
+        move |back, front, thru| {
+            log.push((back, front));
+            if veto.contains(&back) {
+                *thru = false;
+            }
+            back * 100 + front
+        }
+    }
+
+    #[test]
+    fn a_blank_layer_cell_shows_the_backdrop_character() {
+        let mut line = text("a b");
+        let mut attrs = vec![1, 2, 3];
+        let (bg, bg_attrs) = (text("xyz"), vec![7, 8, 9]);
+        let mut log = Vec::new();
+        blend(
+            &mut line,
+            &mut attrs,
+            (&bg, &bg_attrs),
+            0..3,
+            3,
+            blend_log(&mut log, &[]),
+        );
+        assert_eq!(line, text("ayb"), "only the blank cell lets 'y' through");
+        assert_eq!(attrs, vec![701, 802, 903], "every attribute is blended");
+        assert_eq!(log, vec![(7, 1), (8, 2), (9, 3)]);
+    }
+
+    #[test]
+    fn braille_blank_is_negative_space_too() {
+        let braille = schar_from_char(0x2800);
+        let mut line = vec![braille, schar_from_ascii(b'q')];
+        let mut attrs = vec![0, 0];
+        let (bg, bg_attrs) = (text("xy"), vec![0, 0]);
+        blend(
+            &mut line,
+            &mut attrs,
+            (&bg, &bg_attrs),
+            0..2,
+            2,
+            |_, front, _| front,
+        );
+        assert_eq!(line, text("xq"));
+    }
+
+    #[test]
+    fn a_never_drawn_backdrop_cell_is_not_shown_through() {
+        let mut line = vec![BLANK, BLANK];
+        let mut attrs = vec![0, 0];
+        let (bg, bg_attrs) = (vec![EMPTY_CELL, schar_from_ascii(b'y')], vec![5, 6]);
+        let mut log = Vec::new();
+        // `end` is 1: no lookahead, so cell 0 is a single cell whose backdrop
+        // was never drawn.
+        blend(
+            &mut line,
+            &mut attrs,
+            (&bg, &bg_attrs),
+            0..1,
+            1,
+            blend_log(&mut log, &[]),
+        );
+        assert_eq!(line, vec![BLANK, BLANK]);
+        assert_eq!(log, vec![(5, 0)]);
+    }
+
+    #[test]
+    fn a_double_width_backdrop_character_is_taken_as_a_pair() {
+        // The backdrop holds a wide character at 1 (its right half, 2, is the
+        // empty cell). The layer is blank over both halves, so both are
+        // copied, and both attributes blended, in one step of two.
+        let wide = schar_from_char(0x4e00);
+        let mut line = vec![schar_from_ascii(b'a'), BLANK, BLANK, BLANK];
+        let mut attrs = vec![1, 2, 3, 4];
+        let bg = vec![
+            schar_from_ascii(b'x'),
+            wide,
+            EMPTY_CELL,
+            schar_from_ascii(b'z'),
+        ];
+        let bg_attrs = vec![10, 20, 30, 40];
+        let mut log = Vec::new();
+        blend(
+            &mut line,
+            &mut attrs,
+            (&bg, &bg_attrs),
+            0..4,
+            4,
+            blend_log(&mut log, &[]),
+        );
+        assert_eq!(
+            line,
+            vec![
+                schar_from_ascii(b'a'),
+                wide,
+                EMPTY_CELL,
+                schar_from_ascii(b'z')
+            ]
+        );
+        assert_eq!(attrs, vec![1001, 2002, 3003, 4004]);
+        assert_eq!(log, vec![(10, 1), (20, 2), (30, 3), (40, 4)]);
+    }
+
+    #[test]
+    fn a_wide_backdrop_shows_through_only_if_both_halves_are_blank() {
+        let wide = schar_from_char(0x4e00);
+        let mut line = vec![BLANK, schar_from_ascii(b'q')];
+        let mut attrs = vec![0, 0];
+        let (bg, bg_attrs) = (vec![wide, EMPTY_CELL], vec![0, 0]);
+        blend(
+            &mut line,
+            &mut attrs,
+            (&bg, &bg_attrs),
+            0..2,
+            2,
+            |_, front, _| front,
+        );
+        assert_eq!(line, vec![BLANK, schar_from_ascii(b'q')]);
+    }
+
+    #[test]
+    fn the_pair_lookahead_stops_at_end_but_may_pass_the_range() {
+        let wide = schar_from_char(0x4e00);
+        let bg = vec![wide, EMPTY_CELL];
+        let bg_attrs = vec![10, 20];
+        // `end` 1: the right half is out of reach, so cell 0 is single.
+        let (mut line, mut attrs, mut log) = (vec![BLANK, BLANK], vec![1, 2], Vec::new());
+        blend(
+            &mut line,
+            &mut attrs,
+            (&bg, &bg_attrs),
+            0..1,
+            1,
+            blend_log(&mut log, &[]),
+        );
+        assert_eq!(line, vec![wide, BLANK]);
+        assert_eq!(attrs, vec![1001, 2]);
+        // `end` 2 with the range still 0..1: the pair reaches one past it.
+        let (mut line, mut attrs, mut log) = (vec![BLANK, BLANK], vec![1, 2], Vec::new());
+        blend(
+            &mut line,
+            &mut attrs,
+            (&bg, &bg_attrs),
+            0..1,
+            2,
+            blend_log(&mut log, &[]),
+        );
+        assert_eq!(line, vec![wide, EMPTY_CELL]);
+        assert_eq!(attrs, vec![1001, 2002]);
+    }
+
+    #[test]
+    fn the_attribute_blend_can_refuse_the_backdrop() {
+        let mut line = vec![BLANK, BLANK, BLANK];
+        let mut attrs = vec![1, 2, 3];
+        let (bg, bg_attrs) = (text("xyz"), vec![7, 8, 9]);
+        let mut log = Vec::new();
+        blend(
+            &mut line,
+            &mut attrs,
+            (&bg, &bg_attrs),
+            1..3,
+            3,
+            blend_log(&mut log, &[8]),
+        );
+        assert_eq!(line, vec![BLANK, BLANK, schar_from_ascii(b'z')]);
+        assert_eq!(attrs, vec![1, 802, 903], "cell 0 is outside the range");
+    }
+
+    #[test]
+    fn never_drawn_attributes_become_the_default_inside_the_range_only() {
+        let mut attrs = vec![-1, -5, 3, -2, 0];
+        clear_invalid_attrs(&mut attrs, 1..4, false);
+        assert_eq!(attrs, vec![-1, 0, 3, 0, 0]);
+    }
+}
