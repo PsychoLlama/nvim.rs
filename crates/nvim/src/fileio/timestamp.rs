@@ -119,23 +119,21 @@ pub fn time_differs(file_info: &FileInfo, mtime: i64, mtime_ns: i64) -> bool {
 /// global command is being executed, a mapping is being executed, or an
 /// autocommand is busy.
 ///
-/// @param focus  called for a GUI focus event
-///
-/// @return  true if a message was written, so the screen should be redrawn
-///          and the cursor positioned.
-pub fn check_timestamps(focus: c_int) -> c_int {
+/// `focus` is for a focus event, which is not checked twice in a row
+/// without typing in between.
+pub fn check_timestamps(focus: bool) {
     // Don't check timestamps while system() or another low-level function
     // may cause us to lose and gain focus.
     if no_check_timestamps.get() > 0 {
-        return c_int::from(false);
+        return;
     }
 
     // Avoid doing a check twice. The OK/Reload dialog can cause a focus
     // event, and we would keep on checking if the file were steadily
     // growing. Do check again after typing something.
-    if focus != 0 && did_check_timestamps.get() {
+    if focus && did_check_timestamps.get() {
         need_check_timestamps.set(true);
-        return c_int::from(false);
+        return;
     }
 
     if !stuff_empty()
@@ -146,10 +144,10 @@ pub fn check_timestamps(focus: c_int) -> c_int {
         || allbuf_lock.get() > 0
     {
         need_check_timestamps.set(true); // check later
-        return 0;
+        return;
     }
 
-    let mut didit = 0;
+    let mut didit = TimestampCheck::Unchanged;
     let no_prompt = Suppress::wait_return();
     did_check_timestamps.set(true);
     ALREADY_WARNED.set(false);
@@ -161,7 +159,7 @@ pub fn check_timestamps(focus: c_int) -> c_int {
             let bufref = BufRef::of(buf);
             let n = buf_check_timestamp(buf);
             didit = didit.max(n);
-            if n > 0 && !bufref.valid() {
+            if n != TimestampCheck::Unchanged && !bufref.valid() {
                 // Autocommands have removed the buffer. Upstream's
                 // `buf = firstbuf; continue;` still runs the loop's own
                 // step, so this restarts at the *second* buffer.
@@ -174,12 +172,24 @@ pub fn check_timestamps(focus: c_int) -> c_int {
 
     drop(no_prompt);
     need_check_timestamps.set(false);
-    if need_wait_return.get() && didit == 2 {
+    if need_wait_return.get() && didit == TimestampCheck::Said {
         // Make sure the message isn't overwritten.
         msg_str(c"\n");
         ui_flush();
     }
-    didit
+}
+
+/// What [`buf_check_timestamp`] found, in the order [`check_timestamps`]
+/// keeps the most of over all buffers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum TimestampCheck {
+    /// Nothing to say: the file is as it was, or the buffer is not one to
+    /// check.
+    Unchanged,
+    /// The file changed (or appeared), and nothing was displayed about it.
+    Changed,
+    /// The file changed and a message or the handler's answer is out.
+    Said,
 }
 
 /// Move all the lines from buffer `frombuf` to buffer `tobuf`. On `Err`
@@ -331,13 +341,12 @@ fn warn_changed(buffer: Buf, mesg: &CStr, mesg2: &CStr, can_reload: bool) -> (Re
 /// Check whether buffer `buffer` has been changed, or whether the file for a new
 /// buffer unexpectedly appeared.
 ///
-/// @return  1 if a changed buffer was found, 2 if a message has been
-///          displayed, 0 otherwise.
+/// Answers what it found (see [`TimestampCheck`]).
 ///
 /// The autocommands this fires may wipe `buffer`: the `bufref` it takes
 /// guards the calls it makes afterwards, but not every field it reads --
 /// which is no promise a caller could make for it, and so no contract.
-pub fn buf_check_timestamp(mut buffer: Buf) -> c_int {
+pub(crate) fn buf_check_timestamp(mut buffer: Buf) -> TimestampCheck {
     let orig_size = buffer.b_orig_size;
     let orig_mode = buffer.b_orig_mode;
 
@@ -353,10 +362,10 @@ pub fn buf_check_timestamp(mut buffer: Buf) -> c_int {
         || buffer.b_saving
         || BUSY.get()
     {
-        return 0;
+        return TimestampCheck::Unchanged;
     }
 
-    let mut retval = 0;
+    let mut retval = TimestampCheck::Unchanged;
     let mut reload = Reload::No;
     let mut can_reload = false;
     // The message to show, as a format string taking the file name, plus
@@ -377,7 +386,7 @@ pub fn buf_check_timestamp(mut buffer: Buf) -> c_int {
 
     if differs {
         let prev_b_mtime = buffer.b_mtime;
-        retval = 1;
+        retval = TimestampCheck::Changed;
 
         // Set b_mtime to stop further warnings, e.g. while executing a
         // FileChangedShell autocommand.
@@ -420,7 +429,7 @@ pub fn buf_check_timestamp(mut buffer: Buf) -> c_int {
 
             // Only warn if no FileChangedShell autocommand handled it.
             match file_changed_shell(buffer, bufref, reason) {
-                Fcs::Handled => return 2,
+                Fcs::Handled => return TimestampCheck::Said,
                 Fcs::Reload(what) => reload = what,
                 Fcs::Ask => {
                     match reason {
@@ -465,7 +474,7 @@ pub fn buf_check_timestamp(mut buffer: Buf) -> c_int {
         && !buffer.b_flags.has(BufFlags::NEW_W)
         && buffer.name.full().is_some_and(path_exists)
     {
-        retval = 1;
+        retval = TimestampCheck::Changed;
         mesg = Some(translate!(
             c"W13: Warning: File \"%s\" has been created after editing started",
         ));
@@ -479,7 +488,7 @@ pub fn buf_check_timestamp(mut buffer: Buf) -> c_int {
             reload = chose;
         }
         if displayed {
-            retval = 2;
+            retval = TimestampCheck::Said;
         }
     }
 
@@ -494,7 +503,7 @@ pub fn buf_check_timestamp(mut buffer: Buf) -> c_int {
     }
 
     // Trigger FileChangedShellPost when the file was changed in any way.
-    if bufref.valid() && retval != 0 {
+    if bufref.valid() && retval != TimestampCheck::Unchanged {
         let fname = buffer.name.shown().map(XString::from_cstr);
         let post = AutoEvent::FileChangedShellPost;
         fire_autocmds_for(post, fname.clone(), fname, false, Some(buffer), None);

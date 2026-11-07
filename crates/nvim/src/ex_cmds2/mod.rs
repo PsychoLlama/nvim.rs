@@ -632,7 +632,7 @@ pub(crate) fn ex_checktime(excmd: &mut ExArg) {
     let _checked = Allow::timestamp_checks();
     if excmd.addr_count == 0 {
         // The default is all buffers.
-        check_timestamps(0);
+        check_timestamps(false);
     } else {
         if let Some(buf) = find_buf(Handle::from_number(excmd.line2.get())) {
             // Cannot happen?

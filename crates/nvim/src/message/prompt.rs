@@ -117,7 +117,7 @@ pub fn wait_return(redraw: c_int) {
         // prompt to start an Ex command but the file-changed dialog gets
         // in the way.
         if need_check_timestamps.get() {
-            check_timestamps(0);
+            check_timestamps(false);
         }
 
         // With 'cmdheight' zero we need to scroll the first line of

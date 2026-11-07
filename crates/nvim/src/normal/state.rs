@@ -432,7 +432,7 @@ fn normal_check_stuff_buffer() {
     if stuff_empty() {
         did_check_timestamps.set(false);
         if need_check_timestamps.get() {
-            check_timestamps(0);
+            check_timestamps(false);
         }
         if need_wait_return.get() {
             wait_return(0);

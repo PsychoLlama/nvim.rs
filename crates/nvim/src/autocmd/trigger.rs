@@ -310,7 +310,7 @@ pub fn do_autocmd_focusgained(gained: bool) {
         Buf::current_or_none(),
     );
     if gained && focusgained_last_time.get().wrapping_add(2000 as Timestamp) < os_now() {
-        check_timestamps(1);
+        check_timestamps(true);
         focusgained_last_time.set(os_now());
     }
 

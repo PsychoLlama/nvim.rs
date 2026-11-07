@@ -315,7 +315,7 @@ pub(crate) fn insert_check(s: &mut InsertState) -> Step {
     if stuff_empty() {
         did_check_timestamps.set(false);
         if need_check_timestamps.get() {
-            check_timestamps(0);
+            check_timestamps(false);
         }
     }
 
