@@ -514,7 +514,7 @@ fn did_set_vartabs(args: &OptSet, array: Field<Buffer, TabStopArray>) -> Result<
         previous = byte;
     }
     // A value that does not parse leaves the old array in place.
-    let Some(stops) = tabstop_set(value) else {
+    let Ok(stops) = tabstop_set(value) else {
         return invalid();
     };
     *array.of(&mut buf) = stops;

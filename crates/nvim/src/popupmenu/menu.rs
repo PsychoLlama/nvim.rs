@@ -308,7 +308,7 @@ pub fn pum_make_popup(path_name: &CStr, use_mouse_pos: c_int) {
         }
     }
 
-    if let Some(menu) = menu_find(path_name) {
+    if let Ok(menu) = menu_find(path_name) {
         pum_show_popupmenu(menu);
     }
 }

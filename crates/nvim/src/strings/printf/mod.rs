@@ -36,6 +36,7 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::types::Failed;
 use core::ffi::{CStr, c_int, c_long, c_uint, c_ulong, c_void};
 use std::borrow::Cow;
 
@@ -215,17 +216,17 @@ pub(in crate::strings) fn length_as_int(len: usize) -> c_int {
 const E_INSUFFICIENT_ARGS: &CStr = c"E766: Insufficient arguments for printf()";
 const E_EXPECTED_FLOAT: &CStr = c"E807: Expected Float argument for printf()";
 
-/// The `*idxp`-th Vimscript argument, or `None` with `E766` raised.
+/// The `*idxp`-th Vimscript argument, or `E766`, said.
 ///
 /// Indexing is one-based -- the C writes `tvs[*idxp - 1]` at every fetcher.
 /// The index moves on only when an argument was actually there.
-fn next_arg<'a>(tvs: &'a [TypVal], idxp: &mut c_int) -> Option<&'a TypVal> {
+fn next_arg<'a>(tvs: &'a [TypVal], idxp: &mut c_int) -> Result<&'a TypVal, Failed> {
     let Some(tv) = usize::try_from(*idxp - 1).ok().and_then(|i| tvs.get(i)) else {
         emsg(gettext(E_INSUFFICIENT_ARGS));
-        return None;
+        return Err(Failed);
     };
     *idxp += 1;
-    Some(tv)
+    Ok(tv)
 }
 
 /// `value` as `%g` formats it, written into `buffer`; answers the length,
@@ -236,15 +237,17 @@ pub(crate) fn format_float_g(value: Float, buffer: &mut [u8; NUMBUFLEN as usize]
     len.min(buffer.len() - 1)
 }
 
-/// The next argument as a number; 0 if it is not one.
+/// The next argument as a number; 0 if it is not one, or is missing (E766
+/// said), which is what the format then shows.
 pub(crate) fn tv_nr(tvs: &[TypVal], idxp: &mut c_int) -> VarNumber {
-    let Some(tv) = next_arg(tvs, idxp) else {
+    let Ok(tv) = next_arg(tvs, idxp) else {
         return 0;
     };
     tv_get_number_chk(tv).unwrap_or(0)
 }
 
-/// The next argument as a string; `None` when there is none.
+/// The next argument as a string; `None` when there is none (E766 said) or
+/// it has no string form (said by the conversion).
 ///
 /// A String is read in place and a Number is rendered into `numbuf`, which
 /// the caller lends; anything else is rendered as `:echo` would render it,
@@ -254,7 +257,7 @@ pub(crate) fn tv_str<'b>(
     idxp: &mut c_int,
     numbuf: &'b mut NumBuf,
 ) -> Option<Cow<'b, [u8]>> {
-    let tv = next_arg(tvs, idxp)?;
+    let tv = next_arg(tvs, idxp).ok()?;
     if matches!(tv.v_type(), VAR_STRING | VAR_NUMBER) {
         numbuf
             .string_chk(tv)
@@ -280,9 +283,9 @@ pub(crate) fn tv_ptr(tvs: &[TypVal], idxp: &mut c_int) -> usize {
 }
 
 /// The next argument as a float; a Number is widened, anything else is
-/// `E807` and zero.
+/// `E807` and zero, and a missing one E766 and zero.
 pub(crate) fn tv_float(tvs: &[TypVal], idxp: &mut c_int) -> Float {
-    let Some(tv) = next_arg(tvs, idxp) else {
+    let Ok(tv) = next_arg(tvs, idxp) else {
         return 0.0;
     };
     match tv.v_type() {

@@ -26,6 +26,7 @@ use crate::cstr;
 use crate::grid::with_linebuf;
 use crate::message::emsg;
 use crate::narrow::len_as_int;
+use crate::types::Failed;
 use crate::winfloat::WIN_CONFIG_INIT;
 use crate::winlayer::Win;
 
@@ -229,23 +230,23 @@ struct PumBorder {
 
 /// Read `'pumborder'` into `config`.
 ///
-/// Answers `None` only when the option fails to parse, in which case the
-/// message has already been given and the caller must draw nothing.
-fn resolve_border(config: &mut WinConfig) -> Option<PumBorder> {
+/// The caller must draw nothing on `Ok(None)`, a value that spells no
+/// border, and on `Err`, a value that spells one badly, its message said.
+fn resolve_border(config: &mut WinConfig) -> Result<Option<PumBorder>, Failed> {
     let width = pum_border_width();
     if width == 0 {
-        return Some(PumBorder {
+        return Ok(Some(PumBorder {
             width,
             scrollbar: None,
-        });
+        }));
     }
 
     match p_pumborder(|value| parse_winborder(config, value)) {
         Ok(true) => {}
-        Ok(false) => return None,
+        Ok(false) => return Ok(None),
         Err(e) => {
             emsg(e.message_or_empty());
-            return None;
+            return Err(Failed);
         }
     }
 
@@ -275,7 +276,7 @@ fn resolve_border(config: &mut WinConfig) -> Option<PumBorder> {
         let right = cstr::in_bytes(&config.border_chars[3]);
         (schar_from_str(right), config.border_attr[3])
     });
-    Some(PumBorder { width, scrollbar })
+    Ok(Some(PumBorder { width, scrollbar }))
 }
 
 /// What every row of the menu draws the same way.
@@ -656,8 +657,8 @@ pub fn pum_redraw() {
 
     let mut config = WIN_CONFIG_INIT;
     let resolved = resolve_border(&mut config);
-    let Some(border) = resolved else {
-        return; // 'pumborder' did not parse; the message is already out
+    let Ok(Some(border)) = resolved else {
+        return; // 'pumborder' spells no border, or did not parse (said)
     };
 
     // A scrollbar drawn by the menu itself needs a column of its own; one

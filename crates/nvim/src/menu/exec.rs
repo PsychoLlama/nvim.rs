@@ -35,7 +35,7 @@ use crate::normal::{VisualMode, set_visual_active, set_visual_anchor, set_visual
 use crate::runtime::state::current_sctx;
 use crate::state::mode::{State, VIsual_reselect, restart_edit};
 use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_TERMINAL, MODE_VISUAL, get_real_state};
-use crate::types::{Buffer, ColNr, ExArg, LineNr, Pos, SaveState};
+use crate::types::{Buffer, ColNr, ExArg, Failed, LineNr, Pos, SaveState};
 use crate::winlayer::Win;
 
 /// The `:emenu` range, when there was one: `addr_count` and the two lines.
@@ -238,8 +238,9 @@ pub(crate) fn ex_emenu(excmd: &mut ExArg) {
 }
 
 /// Find the sub-menu `path` names -- what `:popup` wants, as opposed to
-/// [`menu_getbyname`]'s item -- reporting why there is none.
-pub(crate) fn menu_find(path: &CStr) -> Option<MenuId> {
+/// [`menu_getbyname`]'s item -- reporting why there is none (E327, E336,
+/// E337).
+pub(crate) fn menu_find(path: &CStr) -> Result<MenuId, Failed> {
     let found = with_tree(|tree| {
         let mut list = tree;
         let mut name = path.to_bytes();
@@ -267,14 +268,14 @@ pub(crate) fn menu_find(path: &CStr) -> Option<MenuId> {
         None
     });
     match found {
-        Some(Ok(menu)) => Some(menu),
+        Some(Ok(menu)) => Ok(menu),
         Some(Err(msg)) => {
             emsg_c(msg);
-            None
+            Err(Failed)
         }
         None => {
             emsg_c(c"E337: Menu not found - check menu names");
-            None
+            Err(Failed)
         }
     }
 }

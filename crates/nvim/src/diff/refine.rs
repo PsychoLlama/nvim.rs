@@ -450,7 +450,7 @@ pub(crate) fn diff_find_change_inline_diff(dp: &mut DiffBlock, slots: &DiffSlots
             if diff_file_internal(&file1, &file2, &mut dio.diff.hunks).is_err() {
                 break 'done;
             }
-            if let Some(hunks) = HunkSource::open(&dio) {
+            if let Ok(hunks) = HunkSource::open(&dio) {
                 diff_read(&mut blocks, &slots, 0, i, hunks);
             }
         }

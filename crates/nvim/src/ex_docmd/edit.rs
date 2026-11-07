@@ -574,7 +574,7 @@ pub fn update_topline_cursor() {
 
 /// `:fold`.
 pub(crate) fn ex_fold(excmd: &mut ExArg) {
-    if fold_manual_allowed(true) != 0 {
+    if fold_manual_allowed(true).is_ok() {
         fold_create(Win::current(), range_start(excmd), range_end(excmd));
     }
 }

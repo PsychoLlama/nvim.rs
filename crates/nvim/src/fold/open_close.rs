@@ -178,11 +178,11 @@ pub(super) fn close_folds_off_cursor(folds: &mut [Fold], lnum: LineNr, level: c_
     changed
 }
 
-/// Returns true if it's allowed to manually create or delete a fold or,
-///          give an error message and return false if not.
-pub fn fold_manual_allowed(create: bool) -> c_int {
+/// Whether a fold may be created (`create`) or deleted by hand here: E350 or
+/// E351, said, when 'foldmethod' is neither "manual" nor "marker".
+pub fn fold_manual_allowed(create: bool) -> Result<(), Failed> {
     if foldmethod_is_manual(Win::current()) || foldmethod_is_marker(Win::current()) {
-        return 1;
+        return Ok(());
     }
     let msg = if create {
         c"E350: Cannot create fold with current 'foldmethod'"
@@ -190,7 +190,7 @@ pub fn fold_manual_allowed(create: bool) -> c_int {
         c"E351: Cannot delete fold with current 'foldmethod'"
     };
     emsg(gettext(msg));
-    0
+    Err(Failed)
 }
 
 /// Where [`insert_new_fold`] put the fold, and what the folds above it said.

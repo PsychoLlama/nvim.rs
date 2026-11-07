@@ -301,7 +301,7 @@ fn diff_try_update(dio: &mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg>)
                 if diff_write(buf, &mut dio.new, LineNr::new(start), LineNr::new(end)).is_ok()
                     && diff_file(dio).is_ok()
                 {
-                    if let Some(hunks) = HunkSource::open(dio) {
+                    if let Ok(hunks) = HunkSource::open(dio) {
                         let current = TabPage::current();
                         let slots = current.tp_diffbuf;
                         current.with_diff(|blocks| {

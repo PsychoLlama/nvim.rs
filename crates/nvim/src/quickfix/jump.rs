@@ -66,16 +66,16 @@ impl Started {
 
     /// Whether the list is still the one the step started on, and still
     /// holds entry `at`. Reports E925 or E926 when it is not.
-    fn still_current(&self, at: usize) -> bool {
+    fn still_current(&self, at: usize) -> Result<(), Failed> {
         let qi = self.qfl.stack();
         if self.curlist == qi.current
             && self.changedtick == self.qfl.changedtick
             && is_qf_entry_present(&self.qfl, at)
         {
-            return true;
+            return Ok(());
         }
         emsg_list_changed(self.qfl.kind);
-        false
+        Err(Failed)
     }
 }
 
@@ -134,7 +134,7 @@ fn qf_jump_edit_buffer(
         emsg(gettext(E_QUICKFIX_LIST_CHANGED));
         return Jumped::Aborted;
     }
-    if !started.still_current(at) {
+    if started.still_current(at).is_err() {
         return Jumped::Aborted;
     }
     if opened {
@@ -297,7 +297,7 @@ fn qf_jump_open_window(qi: Qi, at: usize, newwin: bool, opened_window: &mut bool
     {
         return Jumped::Restore;
     }
-    if !started.still_current(at) {
+    if started.still_current(at).is_err() {
         return Jumped::Aborted;
     }
 
@@ -310,7 +310,7 @@ fn qf_jump_open_window(qi: Qi, at: usize, newwin: bool, opened_window: &mut bool
             return Jumped::Restore;
         }
     }
-    if !started.still_current(at) {
+    if started.still_current(at).is_err() {
         return Jumped::Aborted;
     }
     Jumped::Done

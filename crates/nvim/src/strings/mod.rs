@@ -16,7 +16,7 @@ use crate::eval::typval::tv_get_bool_chk;
 use crate::mbyte::{cluster_len, encode_char};
 use crate::memory::XString;
 use crate::semsg;
-use crate::types::{MB_MAXCHAR, TypVal};
+use crate::types::{Failed, MB_MAXCHAR, TypVal};
 use core::ffi::{CStr, c_int};
 
 // The carve of the transpiled module; see each child's docs.
@@ -34,17 +34,17 @@ pub use self::printf::*;
 
 /// Read an optional boolean argument that must be spelled `0` or `1`.
 ///
-/// Returns `None` after raising the error, which both callers turn into a
-/// silent `-1` result.
-pub(crate) fn strict_bool_arg(tv: &TypVal) -> Option<bool> {
+/// `Err` after the error is out (E1023, or the conversion's own), which
+/// the callers turn into their `-1` or `0` result.
+pub(crate) fn strict_bool_arg(tv: &TypVal) -> Result<bool, Failed> {
     let Ok(value) = tv_get_bool_chk(tv) else {
-        return None;
+        return Err(Failed);
     };
     if !(0..=1).contains(&value) {
         semsg!("E1023: Using a Number as a Bool: {}", value);
-        return None;
+        return Err(Failed);
     }
-    Some(value != 0)
+    Ok(value != 0)
 }
 
 /// Any byte outside 7-bit ASCII?

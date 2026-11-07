@@ -92,8 +92,8 @@ fn byteidx_common(args: &[TypVal], result: &mut TypVal, comp: bool) {
 
     let utf16idx = if args.len() > 2 {
         match strict_bool_arg(&args[2]) {
-            Some(flag) => flag,
-            None => return,
+            Ok(flag) => flag,
+            Err(_) => return,
         }
     } else {
         false
@@ -256,8 +256,8 @@ pub fn f_strcharpart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     if let Ok(mut nchar) = tv_get_number_chk(&args[1]) {
         if args.len() > 2 && args.len() > 3 {
             match strict_bool_arg(&args[3]) {
-                Some(flag) => skipcc = flag,
-                None => return,
+                Ok(flag) => skipcc = flag,
+                Err(_) => return,
             }
         }
         if nchar > 0 {

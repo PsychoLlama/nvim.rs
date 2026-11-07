@@ -140,19 +140,19 @@ pub type TabStopArray = Option<Box<[i32]>>;
 /// Parse a 'vartabstop'-style option value into a fresh tab-stop array,
 /// reporting the message the option code expects when it is malformed.
 ///
-/// `None` for a value that does not parse; `Some(None)` for one that names
-/// no stops.
-pub fn tabstop_set(text: &[u8]) -> Option<TabStopArray> {
+/// `Err` for a value that does not parse, its message said; `Ok(None)` for
+/// one that names no stops.
+pub fn tabstop_set(text: &[u8]) -> Result<TabStopArray, Failed> {
     match tabstop::parse(text) {
-        Ok(parsed) => Some(parsed.map(Vec::into_boxed_slice)),
+        Ok(parsed) => Ok(parsed.map(Vec::into_boxed_slice)),
         Err(tabstop::ParseError::NotPositive(_)) => {
             emsg(gettext(e_positive));
-            None
+            Err(Failed)
         }
         Err(tabstop::ParseError::Malformed(at) | tabstop::ParseError::OutOfRange(at)) => {
             let arg0 = msg_bytes(&text[at..]);
             semsg!("E475: Invalid argument: {arg0}");
-            None
+            Err(Failed)
         }
     }
 }
@@ -161,7 +161,7 @@ pub fn tabstop_set(text: &[u8]) -> Option<TabStopArray> {
 /// value that names none -- or does not parse, which [`tabstop_set`] has
 /// then reported.
 pub(crate) fn tabstop_array_of(value: &CStr) -> TabStopArray {
-    tabstop_set(value.to_bytes()).flatten()
+    tabstop_set(value.to_bytes()).ok().flatten()
 }
 
 /// Give `slot` the tab-stop array `value` describes. A value that does not

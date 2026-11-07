@@ -186,7 +186,7 @@ pub(crate) fn open_help(excmd: Option<&mut ExArg>) {
     };
     drop(found);
 
-    if let Some(opened) = enter_help_window() {
+    if let Ok(opened) = enter_help_window() {
         restart_edit.set(Key::NUL);
         // Restore KeyTyped: setting 'filetype=help' may have reset it,
         // and `do_tag` needs it to open folds under the cursor.
@@ -265,10 +265,10 @@ struct HelpWindow {
     alt_fnum: Option<Handle>,
 }
 
-/// Make a help window current, splitting one off if there is none. `None`
+/// Make a help window current, splitting one off if there is none. `Err`
 /// means the split failed or the 'helpfile' could not be opened, in which
 /// case a message has already been shown.
-fn enter_help_window() -> Option<HelpWindow> {
+fn enter_help_window() -> Result<HelpWindow, Failed> {
     let mut opened = HelpWindow {
         empty_fnum: None,
         alt_fnum: None,
@@ -277,7 +277,7 @@ fn enter_help_window() -> Option<HelpWindow> {
     // `:tab help`.
     let same_tab = cmdmod.with(|m| m.cmod_tab) == 0;
     if buf_is_help(Win::current().buffer_or_none()) && same_tab {
-        return Some(opened);
+        return Ok(opened);
     }
     let existing = same_tab
         .then(|| {
@@ -288,7 +288,7 @@ fn enter_help_window() -> Option<HelpWindow> {
         .flatten();
     if let Some(wp) = existing.filter(|wp| wp.buffer().b_nwindows > 0) {
         win_enter(wp, true);
-        return Some(opened);
+        return Ok(opened);
     }
 
     // No help window yet: check that 'helpfile' can be read at all.
@@ -297,7 +297,7 @@ fn enter_help_window() -> Option<HelpWindow> {
         let helpfile = p_hf(CStr::to_owned);
         let arg0 = msg_cstr(&helpfile);
         smsg!(0, "Help file \"{arg0}\" not found");
-        return None;
+        return Err(Failed);
     }
 
     // Split off a help window; put it at the far top when no position
@@ -309,9 +309,7 @@ fn enter_help_window() -> Option<HelpWindow> {
     {
         split |= if p_sb() { WSP_BOT } else { WSP_TOP };
     }
-    if win_split(0, split).is_err() {
-        return None;
-    }
+    win_split(0, split)?;
     if OptInt::from(Win::current().w_height) < p_hh() {
         win_setheight(number_as_int(p_hh()));
     }
@@ -325,7 +323,7 @@ fn enter_help_window() -> Option<HelpWindow> {
         Win::current().w_alt_fnum = opened.alt_fnum;
     }
     opened.empty_fnum = Some(Buf::current().handle);
-    Some(opened)
+    Ok(opened)
 }
 
 /// `:helpclose`: close the first help window in the current tab page.

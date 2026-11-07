@@ -525,15 +525,20 @@ enum ArgListOp {
 /// Parse `arg` into file names and set, add or delete them. `after` is where
 /// [`ArgListOp::Add`] inserts (0 meaning before the first), and `will_edit`
 /// says one of the added names is about to be edited.
-fn do_arglist(arg: &[u8], op: ArgListOp, after: c_int, will_edit: bool) -> bool {
+///
+/// A refusal has been said: E1156, or E479 for a pattern that matched
+/// nothing. `:argadd` with no argument in an unnamed buffer has nothing to
+/// add and changes nothing, silently: upstream answers FAIL there, which
+/// only `:argadd` -- which ignores the answer -- can reach.
+fn do_arglist(arg: &[u8], op: ArgListOp, after: c_int, will_edit: bool) -> Result<(), Failed> {
     if arglist_is_locked() {
-        return false;
+        return Err(Failed);
     }
     // ":argadd" with no argument adds the current file, unsplit.
     let new_args = if op == ArgListOp::Add && arg.first().is_none_or(|&byte| byte == 0) {
         let buffer = Buf::current();
         let (Some(_), Some(shown)) = (buffer.name.full(), buffer.name.shown()) else {
-            return false;
+            return Ok(());
         };
         split_arglist(shown.to_bytes(), false)
     } else {
@@ -547,7 +552,7 @@ fn do_arglist(arg: &[u8], op: ArgListOp, after: c_int, will_edit: bool) -> bool 
             Ok(files) if !files.is_empty() => files,
             _ => {
                 crate::semsg!("E479: No match");
-                return false;
+                return Err(Failed);
             }
         };
         if op == ArgListOp::Add {
@@ -557,13 +562,13 @@ fn do_arglist(arg: &[u8], op: ArgListOp, after: c_int, will_edit: bool) -> bool 
         }
     }
     alist_check_arg_idx();
-    true
+    Ok(())
 }
 
 /// Redefine the current window's argument list from a command argument
 /// (`:drop`'s, start-up's `-p`/`-o`).
 pub(crate) fn set_arglist(arg: &[u8]) {
-    do_arglist(arg, ArgListOp::Set, 0, true);
+    let _ = do_arglist(arg, ArgListOp::Set, 0, true);
 }
 
 // ---------------------------------------------------------------------------

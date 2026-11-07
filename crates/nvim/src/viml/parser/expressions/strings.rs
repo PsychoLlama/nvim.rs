@@ -322,8 +322,8 @@ fn decode_double(
                     flags |= FSK_SIMPLIFY.cast_signed();
                 }
                 match trans_special_into(&body[i..], flags, false, &mut out) {
-                    Some(consumed) => i += consumed,
-                    None => {
+                    Ok(Some(consumed)) => i += consumed,
+                    Ok(None) | Err(_) => {
                         unknown = true;
                         i += copy_one_char(&mut out, &tail[i..]);
                     }

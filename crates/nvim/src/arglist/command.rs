@@ -223,7 +223,7 @@ pub fn ex_next(excmd: &mut ExArg) {
     let argn = if has_arg {
         // Redefine the file list.
         let arg = excmd.line.arg().to_vec();
-        if !do_arglist(&arg, ArgListOp::Set, 0, true) {
+        if do_arglist(&arg, ArgListOp::Set, 0, true).is_err() {
             return;
         }
         0
@@ -280,7 +280,7 @@ pub fn ex_argedit(excmd: &mut ExArg) {
     // Whether curbuf will be reused, in which case b_ffname will be set.
     let curbuf_is_reusable = curbuf_reusable();
     let arg = excmd.line.arg().to_vec();
-    if !do_arglist(&arg, ArgListOp::Add, argn, true) {
+    if do_arglist(&arg, ArgListOp::Add, argn, true).is_err() {
         return;
     }
     maketitle();
@@ -303,7 +303,7 @@ pub fn ex_argadd(excmd: &mut ExArg) {
         cur_arg_idx() + 1
     };
     let arg = excmd.line.arg().to_vec();
-    do_arglist(&arg, ArgListOp::Add, after, false);
+    let _ = do_arglist(&arg, ArgListOp::Add, after, false);
     maketitle();
 }
 
@@ -318,7 +318,7 @@ pub fn ex_argdelete(excmd: &mut ExArg) {
         delete_arg_range(excmd);
     } else {
         let arg = excmd.line.arg().to_vec();
-        do_arglist(&arg, ArgListOp::Delete, 0, false);
+        let _ = do_arglist(&arg, ArgListOp::Delete, 0, false);
     }
     maketitle();
 }

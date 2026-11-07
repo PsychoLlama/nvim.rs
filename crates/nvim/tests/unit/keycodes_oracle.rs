@@ -112,7 +112,8 @@ fn reading_one_key_name() {
                     let name = &text[at..at + len];
                     let mut simplified = false;
                     let found = special_key_at(name, flags, Some(&mut simplified));
-                    let (key, modifiers, used) = found.unwrap_or((Key::NUL, ModMask::NONE, 0));
+                    let (key, modifiers, used) =
+                        found.ok().flatten().unwrap_or((Key::NUL, ModMask::NONE, 0));
                     d.add(i64::from(key.code()));
                     d.add(i64::from(modifiers.bits()));
                     d.add(i64::from(simplified));

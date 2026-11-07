@@ -246,7 +246,7 @@ fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: Key, old_fdl: &mut Option<OptInt>) -
         // `zf`/`zF`: create a fold. `zF` folds `count1` lines, which is
         // the operator applied to itself.
         Some(b'F' | b'f') => {
-            if fold_manual_allowed(true) != 0 {
+            if fold_manual_allowed(true).is_ok() {
                 cmd_arg.nchar = Key::ascii(b'f');
                 nv_operator(cmd_arg);
                 win.w_onebuf_opt.wo_fen = 1;
@@ -260,7 +260,7 @@ fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: Key, old_fdl: &mut Option<OptInt>) -
         }
         // `zd`/`zD`: delete a fold, recursively for `zD`.
         Some(b'd' | b'D') => {
-            if fold_manual_allowed(false) != 0 {
+            if fold_manual_allowed(false).is_ok() {
                 if visual_active() {
                     nv_operator(cmd_arg);
                 } else {

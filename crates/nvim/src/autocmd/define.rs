@@ -58,7 +58,7 @@ pub fn do_autocmd(excmd: &mut ExArg, forceit: ::core::ffi::c_int) {
     };
 
     // Validate every event name before doing anything.
-    let Some(events_len) = arg_event_skip(&line[arg..], group != AUGROUP_ALL) else {
+    let Ok(events_len) = arg_event_skip(&line[arg..], group != AUGROUP_ALL) else {
         return;
     };
     let mut pat = arg + events_len;
@@ -449,21 +449,21 @@ pub fn aucmd_handler_to_string(ac: &AutoCmd) -> XString {
 }
 
 /// How far past `:autocmd`'s comma-separated event list at the head of
-/// `arg` what follows starts -- or `None`, having raised an error, when a
-/// name is not an event.
+/// `arg` what follows starts -- or E215/E216, said, when a name is not an
+/// event.
 ///
 /// `have_group` only picks the wording: without a group, the leading word
 /// could have been meant as one.
-pub(crate) fn arg_event_skip(arg: &[u8], have_group: bool) -> Option<usize> {
+pub(crate) fn arg_event_skip(arg: &[u8], have_group: bool) -> Result<usize, Failed> {
     let arg = cstr::until_nul(arg);
     let at = |at: usize| arg.get(at).copied().unwrap_or(0);
     if at(0) == b'*' {
         if at(1) != 0 && !white(at(1)) {
             let arg = msg_bytes(arg);
             semsg!("E215: Illegal character after *: {arg}");
-            return None;
+            return Err(Failed);
         }
-        return Some(1);
+        return Ok(1);
     }
 
     let mut pat = 0;
@@ -476,11 +476,11 @@ pub(crate) fn arg_event_skip(arg: &[u8], have_group: bool) -> Option<usize> {
             } else {
                 semsg!("E216: No such group or event: {shown}");
             }
-            return None;
+            return Err(Failed);
         }
         pat += consumed;
     }
-    Some(pat)
+    Ok(pat)
 }
 
 /// Take a leading `++once`/`++nested`/`nested` off the command at `*cmd`

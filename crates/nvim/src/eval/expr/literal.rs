@@ -247,7 +247,9 @@ fn string_body(
                 extra += 5;
                 // Skip to the `>` so a `{` inside is not read as the
                 // start of an interpolated expression.
-                if let Some((_, _, used)) = special_key_at(&text[p..], key_flags(at(p + 1)), None) {
+                if let Ok(Some((_, _, used))) =
+                    special_key_at(&text[p..], key_flags(at(p + 1)), None)
+                {
                     p += used - 1; // leave `p` on the `>`
                 }
             }
@@ -359,14 +361,15 @@ fn string_body(
                 out.push(value.to_le_bytes()[0]);
             }
             // a special key, e.g. `\<C-W>`
+            // A `<Char->` name that said E474 is kept as typed.
             b'<' => match trans_special_into(&text[p..], key_flags(at(p + 1)), false, out) {
-                Some(used) => {
+                Ok(Some(used)) => {
                     p += used;
                     if out.len() - base >= room {
                         iemsg(c"eval_string() used more space than allocated");
                     }
                 }
-                None => handled = false,
+                Ok(None) | Err(_) => handled = false,
             },
             _ => handled = false,
         }

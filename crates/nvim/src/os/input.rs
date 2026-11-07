@@ -836,13 +836,13 @@ fn read_error_exit() -> ! {
 /// when `text` does not start with one.
 fn trans_key(text: &[u8], buf: &mut [u8; MAX_TRANS_SPECIAL]) -> (usize, c_uint) {
     match special_key_at(text, FSK_KEYCODE, None) {
-        Some((key, modifiers, used)) => {
+        Ok(Some((key, modifiers, used))) => {
             let encoded = special_key_bytes(key, modifiers, true);
             let encoded = encoded.as_bytes();
             buf[..encoded.len()].copy_from_slice(encoded);
             (used, c_uint::try_from(encoded.len()).unwrap_or(0))
         }
-        None => (0, 0),
+        Ok(None) | Err(_) => (0, 0),
     }
 }
 

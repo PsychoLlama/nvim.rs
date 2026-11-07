@@ -377,6 +377,8 @@ fn key_name(code: c_int, modifiers: ModMask) -> String {
 /// mask it reported.
 fn special_key(src: &str, flags: c_int) -> (c_int, ModMask) {
     special_key_at(src.as_bytes(), flags, None)
+        .ok()
+        .flatten()
         .map_or((0, ModMask::NONE), |(key, mods, _)| (key.code(), mods))
 }
 

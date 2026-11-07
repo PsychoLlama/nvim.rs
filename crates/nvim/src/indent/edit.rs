@@ -564,9 +564,9 @@ struct RetabTabs {
     indent_only: bool,
 }
 
-/// Parses `:retab`'s argument. `None` is a malformed tabstop list, which
+/// Parses `:retab`'s argument. `Err` is a malformed tabstop list, which
 /// `tabstop_set` has already reported.
-fn parse_retab_arg(arg: &[u8]) -> Option<RetabTabs> {
+fn parse_retab_arg(arg: &[u8]) -> Result<RetabTabs, Failed> {
     let mut at = 0;
     let indent_only =
         arg.starts_with(b"-indentonly") && ascii_iswhite_or_nul(c_int::from(byte_at(arg, 11)));
@@ -578,7 +578,7 @@ fn parse_retab_arg(arg: &[u8]) -> Option<RetabTabs> {
     while byte_at(arg, at).is_ascii_digit() || byte_at(arg, at) == b',' {
         at += 1;
     }
-    Some(match vts {
+    Ok(match vts {
         // No list given: measure against the buffer's own.
         None => RetabTabs {
             vts: Buf::current().b_p_vts_array.clone(),
@@ -777,7 +777,7 @@ pub fn ex_retab(excmd: &mut ExArg) {
     let buf = Buf::current();
     let save_list = win.w_onebuf_opt.wo_list;
     win.w_onebuf_opt.wo_list = 0; // 'list' mode is not wanted here
-    let Some(tabs) = parse_retab_arg(excmd.line.arg()) else {
+    let Ok(tabs) = parse_retab_arg(excmd.line.arg()) else {
         // Upstream returns here without restoring 'list', which it has
         // already cleared. Kept: a `:retab` with a malformed tabstop
         // list leaves 'list' off, and that is observable.

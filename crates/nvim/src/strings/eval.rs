@@ -216,8 +216,8 @@ pub fn f_strcharlen(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_strchars(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let skipcc = if args.len() > 1 {
         match strict_bool_arg(&args[1]) {
-            Some(flag) => flag,
-            None => return,
+            Ok(flag) => flag,
+            Err(_) => return,
         }
     } else {
         false

@@ -60,7 +60,7 @@ pub fn do_doautocmd(
     }
 
     // Validate every event name before running any of them.
-    let Some(events_len) = arg_event_skip(&arg[at..], group != AUGROUP_ALL) else {
+    let Ok(events_len) = arg_event_skip(&arg[at..], group != AUGROUP_ALL) else {
         return Err(Failed);
     };
     let mut fname_at = at + events_len;

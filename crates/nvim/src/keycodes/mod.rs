@@ -29,6 +29,7 @@ use crate::charset::Str2NrBases;
 use crate::cstr;
 use crate::narrow::number_as_int;
 use crate::strings::has_char;
+use crate::types::Failed;
 use crate::types::Key;
 use core::ffi::{CStr, c_int};
 
@@ -299,7 +300,9 @@ fn opens_with_ignoring_case(text: &[u8], lit: &[u8]) -> bool {
 
 /// One `<>` name at the start of `text`: the key code, the modifiers that
 /// could not be folded into it, and how many bytes of `text` the name took.
-/// `None` when `text` does not start with a name this understands.
+/// `Ok(None)` when `text` does not start with a name this understands, and
+/// `Err` when it starts with a `<Char->` name whose number is missing, E474
+/// said -- which every caller then reads as no name, keeping the text.
 ///
 /// The end of `text` reads as a NUL, which is where the pointer form's
 /// readers stopped. `did_simplify`, when given, is set if `FSK_SIMPLIFY`
@@ -308,17 +311,19 @@ pub fn special_key_at(
     text: &[u8],
     flags: c_int,
     did_simplify: Option<&mut bool>,
-) -> Option<(Key, ModMask, usize)> {
+) -> Result<Option<(Key, ModMask, usize)>, Failed> {
     let at = |i: usize| cstr::byte_at(text, i);
     // The offset of the last byte; the walk below never steps past it.
-    let end = text.len().checked_sub(1)?;
+    let Some(end) = text.len().checked_sub(1) else {
+        return Ok(None);
+    };
     // How many bytes past `bp` the last one is -- the C's `end - bp`, which
     // is never asked once `bp` has passed it.
     let gap = |bp: usize| end.saturating_sub(bp);
     let in_string = flags & FSK_IN_STRING != 0;
     let mut src = 0;
     if at(src) != b'<' {
-        return None;
+        return Ok(None);
     }
     if at(src + 1) == b'*' {
         src += 1; // <*xxx>: do not simplify
@@ -352,7 +357,7 @@ pub fn special_key_at(
             let digits = str2nr_in(&text[bp + 5..], Str2NrBases::ALL, true).len;
             if digits == 0 {
                 emsg(gettext(e_invarg));
-                return None;
+                return Err(Failed);
             }
             bp += digits + 5;
             break;
@@ -361,7 +366,7 @@ pub fn special_key_at(
     }
 
     if bp > end || at(bp) != b'>' {
-        return None;
+        return Ok(None);
     }
     let end_of_name = bp + 1;
 
@@ -371,7 +376,7 @@ pub fn special_key_at(
         if byte != b'-' {
             let bit = name_to_mod_mask(byte);
             if bit.is_empty() {
-                return None; // illegal modifier name
+                return Ok(None); // illegal modifier name
             }
             modifiers |= bit;
         }
@@ -385,7 +390,7 @@ pub fn special_key_at(
         let number = str2nr_in(&text[last_dash + 6..], Str2NrBases::ALL, true);
         if number.len == 0 {
             emsg(gettext(e_invarg));
-            return None;
+            return Err(Failed);
         }
         // Upstream's `(int)` of the number: the low 32 bits.
         Key::from_code(number_as_int(number.magnitude.cast_signed()))
@@ -412,7 +417,7 @@ pub fn special_key_at(
 
     // The name lookup answers NUL for a name it does not know.
     if key.is_nul() {
-        return None;
+        return Ok(None);
     }
     // Only keep a modifier that no key code already includes.
     key = simplify_key(key, &mut modifiers);
@@ -430,21 +435,24 @@ pub fn special_key_at(
         let simplify = flags & FSK_SIMPLIFY != 0;
         key = extract_modifiers(key, &mut modifiers, simplify, did_simplify);
     }
-    Some((key, modifiers, end_of_name))
+    Ok(Some((key, modifiers, end_of_name)))
 }
 
 /// Append the encoding of the `<>` name at the start of `text` to `out` and
-/// answer how many bytes of `text` the name took. `None`, appending nothing, when `text` does not start with a name
-/// this understands.
+/// answer how many bytes of `text` the name took. `Ok(None)`, appending
+/// nothing, when `text` does not start with a name this understands; `Err`
+/// as [`special_key_at`]'s.
 pub fn trans_special_into(
     text: &[u8],
     flags: c_int,
     escape_ks: bool,
     out: &mut Vec<u8>,
-) -> Option<usize> {
-    let (key, modifiers, used) = special_key_at(text, flags, None)?;
+) -> Result<Option<usize>, Failed> {
+    let Some((key, modifiers, used)) = special_key_at(text, flags, None)? else {
+        return Ok(None);
+    };
     push_special_key(key, modifiers, escape_ks, out);
-    Some(used)
+    Ok(Some(used))
 }
 
 /// Fold the modifiers a single byte can carry into `key`: `Shift-a` becomes
@@ -596,7 +604,7 @@ pub fn replace_termcodes(
                 FSK_SIMPLIFY
             };
             let how = FSK_KEYCODE | simplify;
-            if let Some((key, modifiers, used)) =
+            if let Ok(Some((key, modifiers, used))) =
                 special_key_at(&from[src..], how, did_simplify.as_deref_mut())
             {
                 push_special_key(key, modifiers, true, &mut out);

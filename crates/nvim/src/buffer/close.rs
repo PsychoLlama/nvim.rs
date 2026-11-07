@@ -377,7 +377,7 @@ fn close_buffer_inner(
 
     // When the buffer is no longer in a window, trigger BufWinLeave
     if buffer.b_nwindows == 1 {
-        let Some(kept) = leave_last_window(buffer, bufref, win, &how, abort_if_last) else {
+        let Ok(kept) = leave_last_window(buffer, bufref, win, &how, abort_if_last) else {
             return false;
         };
         buffer = kept;
@@ -495,16 +495,16 @@ fn close_buffer_inner(
 /// The `b_nwindows == 1` arm: fire `BufWinLeave`, and `BufHidden` when the
 /// buffer is only becoming hidden.
 ///
-/// `None` means the caller must give up -- either an autocommand deleted the
-/// buffer, or (with `abort_if_last`) it made `win` the only window.  A `Some`
-/// carries the buffer back, re-validated.
+/// `Err` means the caller must give up, E855 said -- either an autocommand
+/// deleted the buffer, or (with `abort_if_last`) it made `win` the only
+/// window.  `Ok` carries the buffer back, re-validated.
 fn leave_last_window(
     mut buffer: Buf,
     bufref: BufRef,
     win: Option<Win>,
     how: &Disposition,
     abort_if_last: bool,
-) -> Option<Buf> {
+) -> Result<Buf, Failed> {
     // When the buffer becomes hidden, but is not unloaded, trigger BufHidden
     // after BufWinLeave.
     let events: &[_] = if how.unload {
@@ -518,18 +518,21 @@ fn leave_last_window(
         if fire_named(event, buffer) && !bufref.valid() {
             // Autocommands deleted the buffer.
             err(e_auabort);
-            return None;
+            return Err(Failed);
         }
-        buffer = bufref.get()?;
+        // Only an autocommand could have deleted it, and none ran.
+        buffer = bufref
+            .get()
+            .expect("no autocommand ran, so the buffer is still there");
         buffer.b_locked -= 1;
         buffer.b_locked_split -= 1;
         if abort_if_last && win.is_some_and(is_only_window) {
             // Autocommands made this the only window.
             err(e_auabort);
-            return None;
+            return Err(Failed);
         }
     }
-    Some(buffer)
+    Ok(buffer)
 }
 
 /// Go back to the window the caller started in, if an autocommand left us

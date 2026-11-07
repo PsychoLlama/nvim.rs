@@ -18,6 +18,7 @@ use super::*;
 use crate::charset::getdigits_int_at;
 use crate::cstr;
 use crate::fileio::Fgets;
+use crate::types::Failed;
 use core::ffi::c_int;
 use std::ffi::OsStr;
 use std::fs::File;
@@ -215,11 +216,11 @@ pub(crate) enum HunkSource<'a> {
 }
 
 impl<'a> HunkSource<'a> {
-    /// The hunks of `dio`'s run, `None` (and E98) when the external diff's
+    /// The hunks of `dio`'s run, or E98, said, when the external diff's
     /// output cannot be opened.
-    pub(crate) fn open(dio: &'a DiffIo) -> Option<Self> {
+    pub(crate) fn open(dio: &'a DiffIo) -> Result<Self, Failed> {
         if dio.internal {
-            return Some(Self::Internal(dio.diff.hunks.iter()));
+            return Ok(Self::Internal(dio.diff.hunks.iter()));
         }
         let file = dio
             .diff
@@ -228,9 +229,9 @@ impl<'a> HunkSource<'a> {
             .and_then(|name| File::open(OsStr::from_bytes(name.as_cstr().to_bytes())).ok());
         let Some(file) = file else {
             emsg(gettext(c"E98: Cannot read diff output"));
-            return None;
+            return Err(Failed);
         };
-        Some(Self::External(Fgets::new(file), DiffStyle::Unknown))
+        Ok(Self::External(Fgets::new(file), DiffStyle::Unknown))
     }
 }
 
