@@ -44,7 +44,7 @@ fn commands_are_defined_redefined_and_deleted() {
     fx.run("command! UcOne call add(g:uc, 'redefined')");
     fx.run("UcOne");
     fx.check(GOT, "['one', 'redefined']");
-    for (cmd, err) in [
+    for (at, (cmd, err)) in [
         (
             "command lower echo 1",
             "E183: User defined commands must start with an uppercase letter",
@@ -98,7 +98,16 @@ fn commands_are_defined_redefined_and_deleted() {
             "UcOne extra",
             "E488: Trailing characters: extra: silent! UcOne extra",
         ),
-    ] {
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        // Under Miri (six and a half minutes for the whole test) every
+        // other refusal; the rows that define a command always run, since
+        // the checks below read what they left.
+        if cfg!(miri) && at % 2 == 1 && err != "none" {
+            continue;
+        }
         fx.check_error(cmd, err);
     }
     fx.expect_all(&[
@@ -196,13 +205,19 @@ fn buffer_commands_shadow_global_ones_and_are_listed() {
         ("getcompletion('UcB', 'command')", "['UcBoth']"),
     ]);
     fx.check_output("command", "\n    Name              Args Address Complete    Definition\nb   UcBoth            0                        call add(g:uc, 'local')\nb   UcLocal           1            file        call add(g:uc, 'only local')\n    UcBoth            0                        call add(g:uc, 'global')\n|   UcFancy           +    %       customlist  echo\n!\"  UcFlags           ?    3c win  custom      echo");
-    fx.check_output("command UcF", "\n    Name              Args Address Complete    Definition\n|   UcFancy           +    %       customlist  echo\n!\"  UcFlags           ?    3c win  custom      echo");
-    fx.check_output("command UcBoth", "\n    Name              Args Address Complete    Definition\nb   UcBoth            0                        call add(g:uc, 'local')\n    UcBoth            0                        call add(g:uc, 'global')");
+    // Under Miri (eight and a half minutes for the whole test) the full
+    // listing above stands for these three.
+    if !cfg!(miri) {
+        fx.check_output("command UcF", "\n    Name              Args Address Complete    Definition\n|   UcFancy           +    %       customlist  echo\n!\"  UcFlags           ?    3c win  custom      echo");
+        fx.check_output("command UcBoth", "\n    Name              Args Address Complete    Definition\nb   UcBoth            0                        call add(g:uc, 'local')\n    UcBoth            0                        call add(g:uc, 'global')");
+    }
     fx.check_output(
         "command -buffer",
         "\nE183: User defined commands must start with an uppercase letter",
     );
-    fx.check_output("verbose command UcFlags", "\n    Name              Args Address Complete    Definition\n!\"  UcFlags           ?    3c win  custom      echo");
+    if !cfg!(miri) {
+        fx.check_output("verbose command UcFlags", "\n    Name              Args Address Complete    Definition\n!\"  UcFlags           ?    3c win  custom      echo");
+    }
     fx.check_error(
         "command -buffer UcBoth again",
         "E174: Command already exists: add ! to replace it: UcBoth again",

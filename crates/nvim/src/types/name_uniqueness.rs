@@ -142,6 +142,7 @@ fn exported_names(source: &str) -> Vec<String> {
 /// that another module already declares compiles fine, and only becomes an
 /// `E0659` once two files that both `use types::*` are compiled against a
 /// consumer of the name.
+#[cfg_attr(miri, ignore = "a source-text audit, and far too slow to interpret")]
 #[test]
 fn types_reexports_no_duplicate_names() {
     let dir = types_dir();

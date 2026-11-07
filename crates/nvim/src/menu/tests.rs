@@ -57,9 +57,6 @@ fn menus_are_defined_found_and_listed_per_mode() {
     fx.expect_all(&[
         (TOPS, "['File', 'Edit', 'Tools', 'Deep', 'Term', 'Cmd', ']Hidden']"),
         ("map(menu_get('', 'i'), 'v:val.name')", "['Edit']"),
-        ("map(menu_get('', 'v'), 'v:val.name')", "['File', 'Edit', 'Deep', ']Hidden']"),
-        ("map(menu_get('', 'c'), 'v:val.name')", "['Cmd']"),
-        ("map(menu_get('', 'tl'), 'v:val.name')", "['Term']"),
         ("map(menu_get('File'), {_, m -> map(m.submenus, 'v:val.name')})", "[['Open', 'Save', '-sep1-']]"),
         ("menu_get('File.Save')", "[{'hidden': 0, 'name': 'Save', 'priority': 20, 'shortcut': 'S', 'mappings': {'s': {'noremap': 0, 'enabled': 1, 'silent': 0, 'sid': 0, 'rhs': ':echo ''save''<CR>'}, 'v': {'noremap': 0, 'enabled': 1, 'silent': 0, 'sid': 0, 'rhs': ':echo ''save''<CR>'}, 'n': {'noremap': 0, 'enabled': 1, 'silent': 0, 'sid': 0, 'rhs': ':echo ''save''<CR>'}, 'o': {'noremap': 0, 'enabled': 1, 'silent': 0, 'sid': 0, 'rhs': ':echo ''save''<CR>'}}}]"),
         ("menu_get('Deep')", "[{'hidden': 0, 'submenus': [{'hidden': 0, 'submenus': [{'hidden': 0, 'name': 'Leaf', 'priority': 10, 'mappings': {'s': {'noremap': 0, 'enabled': 1, 'silent': 0, 'sid': 0, 'rhs': 'leaf'}, 'v': {'noremap': 0, 'enabled': 1, 'silent': 0, 'sid': 0, 'rhs': 'leaf'}, 'n': {'noremap': 0, 'enabled': 1, 'silent': 0, 'sid': 0, 'rhs': 'leaf'}, 'o': {'noremap': 0, 'enabled': 1, 'silent': 0, 'sid': 0, 'rhs': 'leaf'}}}], 'name': 'Sub', 'priority': 10}], 'name': 'Deep', 'priority': 40}]"),
@@ -76,6 +73,18 @@ fn menus_are_defined_found_and_listed_per_mode() {
         ("menu_info('Cmd.Item', 'c')", "{'modes': 'c', 'script': v:false, 'name': 'Item', 'priority': 500, 'enabled': v:true, 'shortcut': '', 'silent': v:false, 'rhs': 'cmd-rhs', 'display': 'Item', 'noremenu': v:false}"),
         ("menu_info('NoSuch')", "{}"),
     ]);
+    // Each whole-tree `menu_get('')` takes the interpreter most of a
+    // minute; under Miri the 'i' dump above stands for the other modes.
+    if !cfg!(miri) {
+        fx.expect_all(&[
+            (
+                "map(menu_get('', 'v'), 'v:val.name')",
+                "['File', 'Edit', 'Deep', ']Hidden']",
+            ),
+            ("map(menu_get('', 'c'), 'v:val.name')", "['Cmd']"),
+            ("map(menu_get('', 'tl'), 'v:val.name')", "['Term']"),
+        ]);
+    }
     fx.check_output("menu", "\n--- Menus ---\n10 &File\n  10 &Open^ICTRL-O\n      n    :echo 'open'<CR>\n      v    :echo 'open'<CR>\n      s    :echo 'open'<CR>\n      o    :echo 'open'<CR>\n  20 &Save\n      n    :echo 'save'<CR>\n      v    :echo 'save'<CR>\n      s    :echo 'save'<CR>\n      o    :echo 'save'<CR>\n  30 -sep1-\n      n    <Nop>\n      v    <Nop>\n      s    <Nop>\n      o    <Nop>\n20 Edit\n  20 OnlyVisual\n      v    visual-rhs\n      s    visual-rhs\n30 Tools\n  10 Quiet\n      n s  :echo 'quiet'<CR>\n  20 Scripted\n      n&   :echo 'scripted'<CR>\n40 Deep\n  10 Sub\n    10 Leaf\n        n    leaf\n        v    leaf\n        s    leaf\n        o    leaf");
     fx.check_output("menu File", "\n--- Menus ---\n10 &File\n  10 &Open^ICTRL-O\n      n    :echo 'open'<CR>\n      v    :echo 'open'<CR>\n      s    :echo 'open'<CR>\n      o    :echo 'open'<CR>\n  20 &Save\n      n    :echo 'save'<CR>\n      v    :echo 'save'<CR>\n      s    :echo 'save'<CR>\n      o    :echo 'save'<CR>\n  30 -sep1-\n      n    <Nop>\n      v    <Nop>\n      s    <Nop>\n      o    <Nop>");
     fx.check_output(
@@ -283,11 +292,18 @@ fn amenu_fans_out_per_mode_with_its_prefixes() {
         ("menu_get('Fan.Nop')[0].mappings.i.rhs", "''"),
         ("menu_info('Fan.Nop', 'i').rhs", "'<Nop>'"),
         (TOPS, "['Fan', 'PopUpc', 'PopUpi', 'PopUpo', 'PopUps', 'PopUpv', 'PopUpn', 'PopUp']"),
-        ("map(menu_get(''), 'v:val.hidden')", "[0, 1, 1, 1, 1, 1, 1, 0]"),
         ("menu_info('PopUpi.Cut', 'i').rhs", "'<C-\\><C-O>d'"),
         ("getcompletion('Fan.', 'menu')", "['Item', 'Nop', 'Sub.', '-Sep-']"),
         ("getcompletion('', 'menu')", "['Fan.', 'PopUp.']"),
     ]);
+    // Each whole-tree `menu_get('')` takes the interpreter most of a
+    // minute; under Miri only the first and the last are read.
+    if !cfg!(miri) {
+        fx.expect_all(&[(
+            "map(menu_get(''), 'v:val.hidden')",
+            "[0, 1, 1, 1, 1, 1, 1, 0]",
+        )]);
+    }
     fx.check_output(
         "tmenu",
         "\n--- Menus ---\n5 Fan\n  5 Item\n      t    the tip",
@@ -302,15 +318,19 @@ fn amenu_fans_out_per_mode_with_its_prefixes() {
     fx.run("tunmenu Fan.Item");
     fx.expect_all(&[("has_key(menu_get('Fan.Item')[0], 'tooltip')", "0")]);
     fx.run("iunmenu PopUp");
-    fx.expect_all(&[(
-        TOPS,
-        "['Fan', 'PopUpc', 'PopUpo', 'PopUps', 'PopUpv', 'PopUpn', 'PopUp']",
-    )]);
+    if !cfg!(miri) {
+        fx.expect_all(&[(
+            TOPS,
+            "['Fan', 'PopUpc', 'PopUpo', 'PopUps', 'PopUpv', 'PopUpn', 'PopUp']",
+        )]);
+    }
     fx.run("silent! aunmenu Fan.*");
-    fx.expect_all(&[(
-        TOPS,
-        "['Fan', 'PopUpc', 'PopUpo', 'PopUps', 'PopUpv', 'PopUpn', 'PopUp']",
-    )]);
+    if !cfg!(miri) {
+        fx.expect_all(&[(
+            TOPS,
+            "['Fan', 'PopUpc', 'PopUpo', 'PopUps', 'PopUpv', 'PopUpn', 'PopUp']",
+        )]);
+    }
     fx.run("aunmenu PopUp");
     fx.expect_all(&[(TOPS, "['Fan']")]);
     for (cmd, err) in [

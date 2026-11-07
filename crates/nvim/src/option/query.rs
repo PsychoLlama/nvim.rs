@@ -686,7 +686,7 @@ mod tests {
 
     #[test]
     fn a_part_split_by_runs_is_the_byte_walk() {
-        for text in strings(b".\\, :a\0", if cfg!(miri) { 3 } else { 6 }) {
+        for text in strings(b".\\, :a\0", if cfg!(miri) { 2 } else { 6 }) {
             for maxlen in [0, 1, 2, 3, 5, usize::MAX] {
                 for seps in [&b","[..], b", ", b":", b""] {
                     let want = split_by_bytes(&text, maxlen, seps);

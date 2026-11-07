@@ -250,10 +250,11 @@ fn numbers_booleans_and_keys_take_their_own_spellings() {
 
 #[test]
 fn the_parse_reports_what_it_refuses() {
+    const LAST: &str = "set shiftwidth=4 nosuch shiftwidth=6";
     let fx = Fixture::new();
     let _listed = Listed::new();
     reset(&fx);
-    for (cmd, want) in [
+    for (at, (cmd, want)) in [
         ("set nosuchoption", "E518: Unknown option: nosuchoption"),
         ("set nosuchoption=1", "E518: Unknown option: nosuchoption=1"),
         ("set nonosuch", "E518: Unknown option: nonosuch"),
@@ -310,14 +311,15 @@ fn the_parse_reports_what_it_refuses() {
         ("set term=dumb", "E518: Unknown option: term=dumb"),
         ("set t_Co?", "none"),
         // The first refusal ends the line; what came before it stands.
-        (
-            "set shiftwidth=4 nosuch shiftwidth=6",
-            "E518: Unknown option: nosuch ",
-        ),
-    ] {
+        (LAST, "E518: Unknown option: nosuch "),
+    ]
+    .into_iter()
+    .enumerate()
+    {
         // `:set path!` shows the value, folding `$HOME` through libuv: not
-        // under Miri.
-        if cfg!(miri) && cmd == "set path!" {
+        // under Miri. Nor every other refusal, which took it nine minutes;
+        // the last row, whose value the checks below read, always runs.
+        if cfg!(miri) && (cmd == "set path!" || (at % 2 == 1 && cmd != LAST)) {
             continue;
         }
         fx.check_error(cmd, want);

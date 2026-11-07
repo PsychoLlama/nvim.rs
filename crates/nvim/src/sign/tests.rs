@@ -105,12 +105,18 @@ fn defining_from_a_dictionary_leaves_it_alone() {
 /// `text=`: what each value defines, or the error it raises. The sign is
 /// redefined from a known text first, so a failure that leaves cells
 /// behind shows.
+///
+/// Under Miri four of the texts -- an escape, a wide character, a
+/// combining one and an emoji -- each through the same three forms: all
+/// thirty-two took the interpreter half an hour.
 #[test]
 fn sign_text_cells_and_escapes() {
+    const UNDER_MIRI: [usize; 4] = [5, 16, 19, 24];
+    let wanted = |at: &usize| !cfg!(miri) || UNDER_MIRI.contains(at);
     let fx = Fixture::new();
     clean(&fx);
     let mut rows = Vec::new();
-    for text in [
+    for (at, text) in [
         "",
         "a",
         "ab",
@@ -143,7 +149,13 @@ fn sign_text_cells_and_escapes() {
         "\u{a0}",
         "\u{feff}",
         "\\\u{4e2d}",
-    ] {
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        if !wanted(&at) {
+            continue;
+        }
         fx.run("silent! sign undefine Tx");
         fx.run("sign define Tx text=zz");
         fx.run("let v:errmsg = ''");
@@ -172,7 +184,13 @@ fn sign_text_cells_and_escapes() {
             fx.eval("v:errmsg")
         ));
     }
-    assert_eq!(rows, TEXT_ROWS, "sign text rows moved");
+    let want: Vec<&str> = TEXT_ROWS
+        .chunks(3)
+        .enumerate()
+        .filter(|(at, _)| wanted(at))
+        .flat_map(|(_, per_text)| per_text.iter().copied())
+        .collect();
+    assert_eq!(rows, want, "sign text rows moved");
     clean(&fx);
 }
 

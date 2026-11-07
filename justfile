@@ -214,12 +214,16 @@ miri *args:
   MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --lib --tests {{ args }}
 
 # The `--lib` half of that lane: the crate's #[cfg(test)] modules alone,
-# without the integration tests under tests/. ~6.5 minutes against the full
-# lane's ~15, and it is the half that covers the safe cores a rewrite actually
-# moves — the tests/ half drives a live editor and spends its time in setup.
-# Still far too slow for the push gate; reach for it when a rewrite touches
-# aliasing or provenance and the full lane's extra ~8 minutes aren't worth
-# the wait.
+# without the integration tests under tests/, and the half that covers the
+# safe cores a rewrite actually moves — the tests/ half drives a live editor
+# and spends its time in setup. It takes hours: 5 h 7 min for 1,265 tests
+# when last timed, of which eleven tests over five minutes took 2 h; nine
+# are bounded under `cfg(miri)` now (about 3.5 h expected; the other two
+# are stateful sequences just past five minutes). Pass
+# `-- -Z unstable-options --report-time` to see each test's time, and bound
+# one that passes five minutes rather than let the lane grow. Far too slow
+# for the push gate; reach for it when a rewrite touches aliasing or
+# provenance.
 miri-lib *args:
   MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --lib {{ args }}
 
