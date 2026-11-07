@@ -145,6 +145,16 @@ pub(crate) fn magic_isset() -> bool {
     }
 }
 
+/// Why a function option's value names no callback; the option keeps the
+/// one it has, and its setter says E474 either way.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum NotACallback {
+    /// The value would not evaluate or convert, and said why.
+    Said(Failed),
+    /// It converted to nothing callable (`v:null`, say). Nothing is said.
+    Nothing,
+}
+
 /// The callback a function option's value names: `Ok(None)` for an empty
 /// value, which clears the option's callback, and `Err` — the option keeping
 /// the one it has — when the value names none.
@@ -153,7 +163,7 @@ pub(crate) fn magic_isset() -> bool {
 /// evaluated: user code, which may set this very option. The text is
 /// copied first, and the answer is a value the caller installs only once
 /// the evaluation is over ([`install_callback`]).
-pub(crate) fn callback_from_option(optval: &CStr) -> Result<Option<Callback>, Failed> {
+pub(crate) fn callback_from_option(optval: &CStr) -> Result<Option<Callback>, NotACallback> {
     if optval.is_empty() {
         return Ok(None);
     }
@@ -162,13 +172,14 @@ pub(crate) fn callback_from_option(optval: &CStr) -> Result<Option<Callback>, Fa
         || text.starts_with(b"function(")
         || text.starts_with(b"funcref(")
     {
-        eval_expr(&text).ok_or(Failed)?
+        eval_expr(&text).ok_or(NotACallback::Said(Failed))?
     } else {
         TypVal::string(Some(text.into()))
     };
     let mut cb = Callback::None;
-    if callback_from_typval(&mut cb, &tv).is_err() || !cb.is_set() {
-        return Err(Failed);
+    callback_from_typval(&mut cb, &tv).map_err(NotACallback::Said)?;
+    if !cb.is_set() {
+        return Err(NotACallback::Nothing);
     }
     Ok(Some(cb))
 }

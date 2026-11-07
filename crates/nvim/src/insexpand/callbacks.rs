@@ -20,7 +20,7 @@ use crate::option::vars::P_TSRFU;
 use crate::optionstr::{OptString, local_or_global};
 
 use crate::guard::Lock;
-use crate::option::next_option_part;
+use crate::option::{NotACallback, next_option_part};
 use crate::optionstr::OptStringRef;
 use crate::semsg;
 use crate::types::{DictRef, Failed, ListRef, OptError, OptionSetFlags, VAR_DICT, VAR_LIST};
@@ -88,7 +88,7 @@ impl CompleteFuncCb {
 
     /// Compile `value` into this callback, freeing what was there. C's
     /// `option_set_callback_func`, answering whether the value was accepted.
-    pub(crate) fn set_from_option(self, value: &CStr) -> Result<(), Failed> {
+    pub(crate) fn set_from_option(self, value: &CStr) -> Result<(), NotACallback> {
         let cb = callback_from_option(value)?;
         self.0.with_mut(|slot| install_callback(slot, cb));
         Ok(())
