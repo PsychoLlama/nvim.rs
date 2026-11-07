@@ -54,7 +54,7 @@ use crate::eval::vars::set_vim_var_string;
 use crate::ex_docmd::{create_exfile, vim_mkdir_emsg};
 use crate::ex_getln::fnameescape;
 use crate::file_search::vim_chdirfile;
-use crate::fileio::shorten_fnames;
+use crate::fileio::{IoFailed, shorten_fnames};
 use crate::global_cell::GlobalCell;
 use crate::mapping::makemap;
 use crate::mbyte::cluster_len;
@@ -156,12 +156,14 @@ impl SessionOpts {
 
 // -- The file being written ------------------------------------------------
 
+/// What every session writer answers: `Err` when a write did not reach the
+/// file. Nothing has been said; `:mk*` says E80 for the whole file.
+pub(crate) type Written = Result<(), IoFailed>;
+
 /// The session file, buffered.
 ///
-/// Every method answers `true` when the write succeeded, which is the
-/// `OK`/`FAIL` of the C inverted into the shape `?`-free code wants. A write
-/// error the buffer holds back surfaces at the next write that reaches the
-/// file, or at [`SessionFile::finish`].
+/// A write error the buffer holds back surfaces at the next write that
+/// reaches the file, or at [`SessionFile::finish`].
 pub(crate) struct SessionFile(BufWriter<File>);
 
 impl SessionFile {
@@ -170,37 +172,38 @@ impl SessionFile {
         Self(BufWriter::new(file))
     }
 
-    /// Flush what is buffered and close the file: whether everything
-    /// reached it -- the error `fclose` answered upstream.
-    fn finish(self) -> bool {
-        self.0.into_inner().is_ok()
+    /// Flush what is buffered and close the file: `Err` when something did
+    /// not reach it -- the error `fclose` answered upstream.
+    fn finish(self) -> Written {
+        self.0.into_inner().map(drop).map_err(|_| IoFailed)
     }
 
     /// Write `s` and a newline: C's `put_line`.
-    pub(crate) fn line(&mut self, s: &CStr) -> bool {
-        self.puts(s) && self.eol()
+    pub(crate) fn line(&mut self, s: &CStr) -> Written {
+        self.puts(s)?;
+        self.eol()
     }
 
     /// Write a newline: C's `put_eol`.
-    pub(crate) fn eol(&mut self) -> bool {
+    pub(crate) fn eol(&mut self) -> Written {
         self.put_bytes(b"\n")
     }
 
     /// Write a literal's bytes.
-    pub(crate) fn puts(&mut self, s: &CStr) -> bool {
+    pub(crate) fn puts(&mut self, s: &CStr) -> Written {
         self.put_bytes(s.to_bytes())
     }
 
     /// Write formatted text. Every call site formats numbers into a literal
     /// template, so the result is ASCII; anything carrying editor bytes uses
     /// [`Self::put_bytes`] instead.
-    pub(crate) fn write(&mut self, args: fmt::Arguments<'_>) -> bool {
-        self.0.write_fmt(args).is_ok()
+    pub(crate) fn write(&mut self, args: fmt::Arguments<'_>) -> Written {
+        self.0.write_fmt(args).map_err(|_| IoFailed)
     }
 
     /// Write `bytes` verbatim.
-    pub(crate) fn put_bytes(&mut self, bytes: &[u8]) -> bool {
-        self.0.write_all(bytes).is_ok()
+    pub(crate) fn put_bytes(&mut self, bytes: &[u8]) -> Written {
+        self.0.write_all(bytes).map_err(|_| IoFailed)
     }
 }
 
@@ -238,9 +241,10 @@ fn ses_get_fname(buffer: Buf, opts: SessionOpts) -> Option<XString> {
 }
 
 /// Write `buffer`'s name, and a newline when `add_eol`.
-fn ses_fname(out: &mut SessionFile, buffer: Buf, opts: SessionOpts, add_eol: bool) -> bool {
+fn ses_fname(out: &mut SessionFile, buffer: Buf, opts: SessionOpts, add_eol: bool) -> Written {
     let name = ses_get_fname(buffer, opts).unwrap_or_default();
-    ses_put_fname(out, name.as_cstr()) && (!add_eol || out.eol())
+    ses_put_fname(out, name.as_cstr())?;
+    if add_eol { out.eol() } else { Ok(()) }
 }
 
 /// `name` with `$HOME` shortened to `~`, backslashes turned into forward
@@ -263,16 +267,16 @@ fn ses_escape_fname(name: &CStr) -> XString {
 }
 
 /// Write `name` as an escaped file name.
-fn ses_put_fname(out: &mut SessionFile, name: &CStr) -> bool {
+fn ses_put_fname(out: &mut SessionFile, name: &CStr) -> Written {
     out.put_bytes(&ses_escape_fname(name))
 }
 
 /// Write an argument list: the `cmd` that selects which one, `%argdel` to
 /// empty it, then one `$argadd` per entry.
-fn ses_arglist(out: &mut SessionFile, cmd: &CStr, names: &[XString], fullname: bool) -> bool {
-    if !out.puts(cmd) || !out.eol() || !out.line(c"%argdel") {
-        return false;
-    }
+fn ses_arglist(out: &mut SessionFile, cmd: &CStr, names: &[XString], fullname: bool) -> Written {
+    out.puts(cmd)?;
+    out.eol()?;
+    out.line(c"%argdel")?;
     for name in names {
         let full_name;
         let mut name = name.as_cstr();
@@ -282,11 +286,11 @@ fn ses_arglist(out: &mut SessionFile, cmd: &CStr, names: &[XString], fullname: b
             name = full_name.as_cstr();
         }
         let escaped = ses_escape_fname(name);
-        if !(out.puts(c"$argadd ") && out.put_bytes(&escaped) && out.eol()) {
-            return false;
-        }
+        out.puts(c"$argadd ")?;
+        out.put_bytes(&escaped)?;
+        out.eol()?;
     }
-    true
+    Ok(())
 }
 
 /// Whether window `window` belongs in the session at all. A floating window
@@ -440,11 +444,11 @@ pub(crate) fn ex_mkrc(excmd: &mut ExArg) {
 
     if let Ok(file) = create_exfile(fname, excmd.forceit) {
         let mut out = SessionFile::new(file);
-        let failed = write_rc(&mut out, excmd, fname, view_session, using_vdir);
+        let written = write_rc(&mut out, excmd, fname, view_session, using_vdir);
         // The close answers a write error the buffering hid, and must run
         // whether or not anything failed above.
-        let close_failed = !out.finish();
-        if failed || close_failed {
+        let closed = out.finish();
+        if written.and(closed).is_err() {
             emsg(gettext(e_write));
         } else if cmdidx == CmdIdx::mksession {
             // A successful session write sets v:this_session.
@@ -456,15 +460,16 @@ pub(crate) fn ex_mkrc(excmd: &mut ExArg) {
     fire_autocmds(AutoEvent::SessionWritePost, false, Buf::current_or_none());
 }
 
-/// The body of [`ex_mkrc`] once the file is open: answers whether anything
-/// failed. The trailing modeline is written either way, as upstream does.
+/// The body of [`ex_mkrc`] once the file is open: `Err` when anything
+/// failed. The trailing modeline is written either way, as upstream does,
+/// so a failure is kept rather than returned at once.
 fn write_rc(
     out: &mut SessionFile,
     excmd: &mut ExArg,
     fname: &CStr,
     view_session: bool,
     using_vdir: bool,
-) -> bool {
+) -> Written {
     let cmdidx = excmd.cmdidx;
     let opts = if cmdidx == CmdIdx::mkview {
         SessionOpts::View
@@ -477,8 +482,8 @@ fn write_rc(
         // Upstream ignores this one write's result.
         let _ = out.line(c"version 6.0");
     }
-    if cmdidx == CmdIdx::mksession && !out.line(c"let SessionLoad = 1") {
-        failed = true;
+    if cmdidx == CmdIdx::mksession {
+        failed |= out.line(c"let SessionLoad = 1").is_err();
     }
 
     // Mappings and options: everything for the two rc commands, and for
@@ -492,42 +497,37 @@ fn write_rc(
     }
 
     if !failed && view_session {
-        if !out.line(
-            c"let s:so_save = &g:so | let s:siso_save = &g:siso | setg so=0 siso=0 | setl so=-1 siso=-1",
-        ) {
-            failed = true;
-        }
-        if cmdidx == CmdIdx::mksession {
-            failed |= !write_session(out, fname);
+        failed |= out
+            .line(c"let s:so_save = &g:so | let s:siso_save = &g:siso | setg so=0 siso=0 | setl so=-1 siso=-1")
+            .is_err();
+        failed |= if cmdidx == CmdIdx::mksession {
+            write_session(out, fname)
         } else {
             let (win, tab) = (Win::current(), TabPage::current());
-            failed |= !put_view(out, win, tab, !using_vdir, opts, -1);
+            put_view(out, win, tab, !using_vdir, opts, -1)
         }
-        if !out.line(c"let &g:so = s:so_save | let &g:siso = s:siso_save") {
-            failed = true;
+        .is_err();
+        failed |= out
+            .line(c"let &g:so = s:so_save | let &g:siso = s:siso_save")
+            .is_err();
+        if p_hls() {
+            failed |= out.line(c"set hlsearch").is_err();
         }
-        if p_hls() && !out.line(c"set hlsearch") {
-            failed = true;
+        if no_hlsearch.get() {
+            failed |= out.line(c"nohlsearch").is_err();
         }
-        if no_hlsearch.get() && !out.line(c"nohlsearch") {
-            failed = true;
-        }
-        if !out.line(c"doautoall SessionLoadPost") {
-            failed = true;
-        }
-        if cmdidx == CmdIdx::mksession && !out.line(c"unlet SessionLoad") {
-            failed = true;
+        failed |= out.line(c"doautoall SessionLoadPost").is_err();
+        if cmdidx == CmdIdx::mksession {
+            failed |= out.line(c"unlet SessionLoad").is_err();
         }
     }
-    if !out.line(c"\" vim: set ft=vim :") {
-        failed = true;
-    }
-    failed
+    failed |= out.line(c"\" vim: set ft=vim :").is_err();
+    if failed { Err(IoFailed) } else { Ok(()) }
 }
 
 /// `:mksession`'s body: change to whatever directory the file names should
 /// be relative to, write the session, and change back.
-fn write_session(out: &mut SessionFile, fname: &CStr) -> bool {
+fn write_session(out: &mut SessionFile, fname: &CStr) -> Written {
     // The directory to come back to; empty when it cannot be known (or
     // cannot be gone back to).
     let dirnow = dirname_within(MAXPATHL as usize)
@@ -549,7 +549,7 @@ fn write_session(out: &mut SessionFile, fname: &CStr) -> bool {
         shorten_fnames(true);
     }
 
-    let ok = makeopens(out, &dirnow);
+    let written = makeopens(out, &dirnow);
 
     // Restore the original directory.
     if to_sesdir || to_globaldir {
@@ -558,5 +558,5 @@ fn write_session(out: &mut SessionFile, fname: &CStr) -> bool {
         }
         shorten_fnames(true);
     }
-    ok
+    written
 }

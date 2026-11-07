@@ -34,8 +34,8 @@
 use super::flag::{FR_COL, FR_LEAF};
 use super::view::put_view;
 use super::{
-    SessionFile, SessionOpts, did_lcd, ses_arglist, ses_do_win, ses_escape_fname, ses_fname,
-    ses_put_fname,
+    SessionFile, SessionOpts, Written, did_lcd, ses_arglist, ses_do_win, ses_escape_fname,
+    ses_fname, ses_put_fname,
 };
 use crate::buffer::first_wininfo_lnum;
 use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_terminal};
@@ -69,74 +69,57 @@ use core::ptr;
 ///
 /// `dirnow` is the working directory as it was before [`super::ex_mkrc`]
 /// changed into the session file's own directory, empty when unknown.
-pub(crate) fn makeopens(out: &mut SessionFile, dirnow: &XString) -> bool {
+pub(crate) fn makeopens(out: &mut SessionFile, dirnow: &XString) -> Written {
     let opts = SessionOpts::Session;
     // "buffers" means save every buffer, not only the ones in a window.
     let only_save_windows = !opts.has(kOptSsopFlagBuffers);
 
-    if !out.line(c"let v:this_session=expand(\"<sfile>:p\")")
-        || !out.line(c"doautoall SessionLoadPre")
-    {
-        return false;
-    }
-    if opts.has(kOptSsopFlagGlobals) && !store_session_globals(out) {
-        return false;
+    out.line(c"let v:this_session=expand(\"<sfile>:p\")")?;
+    out.line(c"doautoall SessionLoadPre")?;
+    if opts.has(kOptSsopFlagGlobals) {
+        store_session_globals(out)?;
     }
 
     // Close all windows and tab pages but one.
-    if !out.line(c"silent only") {
-        return false;
-    }
-    if opts.has(kOptSsopFlagTabpages) && !out.line(c"silent tabonly") {
-        return false;
+    out.line(c"silent only")?;
+    if opts.has(kOptSsopFlagTabpages) {
+        out.line(c"silent tabonly")?;
     }
 
     // Then a :cd to the session directory or to the current one.
-    if !put_cd(out, dirnow) {
-        return false;
-    }
+    put_cd(out, dirnow)?;
 
-    if !out.line(
+    out.line(
         c"if expand('%') == '' && !&modified && line('$') <= 1 && getline(1) == ''\n  let s:wipebuf = bufnr('%')\nendif",
-    ) {
-        return false;
-    }
+    )?;
 
     // 'shortmess' is set for the load and restored at the end; save the old
     // value here unless the file carries options anyway.
-    if !opts.has(kOptSsopFlagOptions) && !out.line(c"let s:shortmess_save = &shortmess") {
-        return false;
+    if !opts.has(kOptSsopFlagOptions) {
+        out.line(c"let s:shortmess_save = &shortmess")?;
     }
-    if !out.line(c"set shortmess+=aoO") {
-        return false;
-    }
+    out.line(c"set shortmess+=aoO")?;
 
     // Put every buffer into the buffer list, very early, so that loading the
     // session cannot disturb their order.
-    if !put_buffer_list(out, only_save_windows) {
-        return false;
-    }
+    put_buffer_list(out, only_save_windows)?;
 
     let names = crate::arglist::arg_names(ArgListId::GLOBAL);
-    if !ses_arglist(out, c"argglobal", &names, !opts.has(kOptSsopFlagCurdir)) {
-        return false;
-    }
+    ses_arglist(out, c"argglobal", &names, !opts.has(kOptSsopFlagCurdir))?;
 
-    if opts.has(kOptSsopFlagResize)
-        && !out.write(format_args!(
+    if opts.has(kOptSsopFlagResize) {
+        out.write(format_args!(
             "set lines={} columns={}\n",
             int64_t::from(Rows.get()),
             int64_t::from(Columns.get())
-        ))
-    {
-        return false;
+        ))?;
     }
 
     // With two or more tab pages and 'showtabline' at 1, the tabline appears
     // when the next tab is created, which resizes the first tab's windows.
     let restore_stal = p_stal() == 1 && first_tab().is_some_and(|tp| tp.next().is_some());
-    if restore_stal && !out.line(c"set stal=2") {
-        return false;
+    if restore_stal {
+        out.line(c"set stal=2")?;
     }
 
     // Whether the tab pass pinned 'winminheight'/'winminwidth', which the
@@ -144,54 +127,41 @@ pub(crate) fn makeopens(out: &mut SessionFile, dirnow: &XString) -> bool {
     let mut restore_height_width = false;
     // `put_tabs` runs no Vimscript, so nothing can change the tab page and
     // window lists under it.
-    if !put_tabs(out, &mut restore_height_width) {
-        return false;
-    }
+    put_tabs(out, &mut restore_height_width)?;
 
     if opts.has(kOptSsopFlagTabpages) {
         let index = tab_index(TabPage::current());
-        if !out.write(format_args!("tabnext {index}\n")) {
-            return false;
-        }
+        out.write(format_args!("tabnext {index}\n"))?;
     }
-    if restore_stal && !out.line(c"set stal=1") {
-        return false;
+    if restore_stal {
+        out.line(c"set stal=1")?;
     }
 
     // Wipe out the empty unnamed buffer we started in.
-    if !out.line(
+    out.line(
         c"if exists('s:wipebuf') && len(win_findbuf(s:wipebuf)) == 0 && getbufvar(s:wipebuf, '&buftype') isnot# 'terminal'\n  silent exe 'bwipe ' . s:wipebuf\nendif\nunlet! s:wipebuf",
-    ) {
-        return false;
-    }
+    )?;
 
     // Re-apply 'winheight' and 'winwidth', which the layout pass set to 1.
-    if !out.write(format_args!(
+    out.write(format_args!(
         "set winheight={} winwidth={}\n",
         p_wh() as int64_t,
         p_wiw() as int64_t
-    )) {
-        return false;
-    }
+    ))?;
 
     // Restore 'shortmess'.
     if opts.has(kOptSsopFlagOptions) {
         // 'shortmess''s bytes go out verbatim.
-        if !out.puts(c"set shortmess=")
-            || !p_shm(|value| out.put_bytes(value.to_bytes()))
-            || !out.eol()
-        {
-            return false;
-        }
-    } else if !out.line(c"let &shortmess = s:shortmess_save") {
-        return false;
+        out.puts(c"set shortmess=")?;
+        p_shm(|value| out.put_bytes(value.to_bytes()))?;
+        out.eol()?;
+    } else {
+        out.line(c"let &shortmess = s:shortmess_save")?;
     }
 
-    if restore_height_width
-        && (!out.line(c"let &winminheight = s:save_winminheight")
-            || !out.line(c"let &winminwidth = s:save_winminwidth"))
-    {
-        return false;
+    if restore_height_width {
+        out.line(c"let &winminheight = s:save_winminheight")?;
+        out.line(c"let &winminwidth = s:save_winminwidth")?;
     }
 
     // Lastly, source the companion x.vim if there is one.
@@ -201,23 +171,25 @@ pub(crate) fn makeopens(out: &mut SessionFile, dirnow: &XString) -> bool {
 }
 
 /// The `:cd` that fixes what relative file names below are relative to.
-fn put_cd(out: &mut SessionFile, dirnow: &XString) -> bool {
+fn put_cd(out: &mut SessionFile, dirnow: &XString) -> Written {
     let opts = SessionOpts::Session;
     if opts.has(kOptSsopFlagSesdir) {
         return out.line(c"exe \"cd \" . escape(expand(\"<sfile>:p:h\"), ' ')");
     }
     if !opts.has(kOptSsopFlagCurdir) {
-        return true;
+        return Ok(());
     }
     let globaldir = own_dir(DirOwner::Global);
     let dir: &CStr = globaldir.as_ref().unwrap_or(dirnow).as_cstr();
     let sname = home_to_tilde(None, dir, dir.count_bytes() + 3, true);
     let fname_esc = ses_escape_fname(sname.as_cstr());
-    out.puts(c"cd ") && out.put_bytes(&fname_esc) && out.eol()
+    out.puts(c"cd ")?;
+    out.put_bytes(&fname_esc)?;
+    out.eol()
 }
 
 /// One `badd +<lnum> <name>` per buffer worth restoring.
-fn put_buffer_list(out: &mut SessionFile, only_save_windows: bool) -> bool {
+fn put_buffer_list(out: &mut SessionFile, only_save_windows: bool) -> Written {
     let opts = SessionOpts::Session;
     for buf in buffers() {
         let wanted = !(only_save_windows && buf.b_nwindows == 0)
@@ -227,18 +199,17 @@ fn put_buffer_list(out: &mut SessionFile, only_save_windows: bool) -> bool {
             && buf.b_p_bl != 0;
         if wanted {
             let lnum = first_wininfo_lnum(buf).map_or(1, int64_t::from);
-            if !out.write(format_args!("badd +{lnum} ")) || !ses_fname(out, buf, opts, true) {
-                return false;
-            }
+            out.write(format_args!("badd +{lnum} "))?;
+            ses_fname(out, buf, opts, true)?;
         }
     }
-    true
+    Ok(())
 }
 
 /// The per-tab-page pass: the window layout, the sizes, and one
 /// [`put_view`] per window. When "tabpages" is not in 'sessionoptions' this
 /// does the current tab page only.
-fn put_tabs(out: &mut SessionFile, restore_height_width: &mut bool) -> bool {
+fn put_tabs(out: &mut SessionFile, restore_height_width: &mut bool) -> Written {
     let opts = SessionOpts::Session;
     let with_tabs = opts.has(kOptSsopFlagTabpages);
 
@@ -248,12 +219,12 @@ fn put_tabs(out: &mut SessionFile, restore_height_width: &mut bool) -> bool {
     // (Vim patch 8.1.0829).
     if with_tabs {
         for tp in tabs() {
-            if tp.next().is_some() && !out.line(c"tabnew +setlocal\\ bufhidden=wipe") {
-                return false;
+            if tp.next().is_some() {
+                out.line(c"tabnew +setlocal\\ bufhidden=wipe")?;
             }
         }
-        if first_tab().is_some_and(|tp| tp.next().is_some()) && !out.line(c"tabrewind") {
-            return false;
+        if first_tab().is_some_and(|tp| tp.next().is_some()) {
+            out.line(c"tabrewind")?;
         }
     }
 
@@ -291,13 +262,12 @@ fn put_tabs(out: &mut SessionFile, restore_height_width: &mut bool) -> bool {
                 && !buf_is_help(Some(buffer))
                 && !buf_is_nofilename(Some(buffer))
             {
-                if need_tabnext && !out.line(c"tabnext") {
-                    return false;
+                if need_tabnext {
+                    out.line(c"tabnext")?;
                 }
                 need_tabnext = false;
-                if !out.puts(c"edit ") || !ses_fname(out, buffer, opts, true) {
-                    return false;
-                }
+                out.puts(c"edit ")?;
+                ses_fname(out, buffer, opts, true)?;
                 if !window.w_arg_idx_invalid {
                     edited_win = window.raw();
                 }
@@ -305,19 +275,17 @@ fn put_tabs(out: &mut SessionFile, restore_height_width: &mut bool) -> bool {
             }
         }
         // No file got edited: create an empty tab page.
-        if need_tabnext && !out.line(c"tabnext") {
-            return false;
+        if need_tabnext {
+            out.line(c"tabnext")?;
         }
 
-        if tab_topframe.fr_layout != FR_LEAF
-            && (!out.line(c"let s:save_splitbelow = &splitbelow")
-                || !out.line(c"let s:save_splitright = &splitright")
-                || !out.line(c"set splitbelow splitright")
-                || !ses_win_rec(out, tab_topframe)
-                || !out.line(c"let &splitbelow = s:save_splitbelow")
-                || !out.line(c"let &splitright = s:save_splitright"))
-        {
-            return false;
+        if tab_topframe.fr_layout != FR_LEAF {
+            out.line(c"let s:save_splitbelow = &splitbelow")?;
+            out.line(c"let s:save_splitright = &splitright")?;
+            out.line(c"set splitbelow splitright")?;
+            ses_win_rec(out, tab_topframe)?;
+            out.line(c"let &splitbelow = s:save_splitbelow")?;
+            out.line(c"let &splitright = s:save_splitright")?;
         }
 
         // Can the window sizes be restored -- that is, was no window
@@ -345,23 +313,16 @@ fn put_tabs(out: &mut SessionFile, restore_height_width: &mut bool) -> bool {
             // cursor can be set. Done again at the end.
             // 'winminheight'/'winminwidth' go to 0 as well, or a user
             // 'winheight' would make this an error.
-            if !out.line(c"wincmd t") {
-                return false;
+            out.line(c"wincmd t")?;
+            if !*restore_height_width {
+                out.line(c"let s:save_winminheight = &winminheight")?;
+                out.line(c"let s:save_winminwidth = &winminwidth")?;
             }
-            if !*restore_height_width
-                && (!out.line(c"let s:save_winminheight = &winminheight")
-                    || !out.line(c"let s:save_winminwidth = &winminwidth"))
-            {
-                return false;
-            }
-            if !out.line(c"set winminheight=0\nset winheight=1\nset winminwidth=0\nset winwidth=1")
-            {
-                return false;
-            }
+            out.line(c"set winminheight=0\nset winheight=1\nset winminwidth=0\nset winwidth=1")?;
             *restore_height_width = true;
         }
-        if nr > 1 && !ses_winsizes(out, restore_size, tab) {
-            return false;
+        if nr > 1 {
+            ses_winsizes(out, restore_size, tab)?;
         }
 
         // The tab-local working directory goes before the windows, so a
@@ -369,27 +330,19 @@ fn put_tabs(out: &mut SessionFile, restore_height_width: &mut bool) -> bool {
         if opts.has(kOptSsopFlagCurdir)
             && let Some(localdir) = own_dir(DirOwner::TabPage(tab))
         {
-            if !out.puts(c"tcd ") || !ses_put_fname(out, localdir.as_cstr()) || !out.eol() {
-                return false;
-            }
+            out.puts(c"tcd ")?;
+            ses_put_fname(out, localdir.as_cstr())?;
+            out.eol()?;
             did_lcd.set(true);
         }
 
         // Each window's view.
         for window in windows_in_tab(tab) {
             if ses_do_win(window) {
-                if !put_view(
-                    out,
-                    window,
-                    tab,
-                    window.raw() != edited_win,
-                    opts,
-                    cur_arg_idx,
-                ) {
-                    return false;
-                }
-                if nr > 1 && !out.line(c"wincmd w") {
-                    return false;
+                let add_edit = window.raw() != edited_win;
+                put_view(out, window, tab, add_edit, opts, cur_arg_idx)?;
+                if nr > 1 {
+                    out.line(c"wincmd w")?;
                 }
                 next_arg_idx = window.w_arg_idx;
             }
@@ -401,13 +354,13 @@ fn put_tabs(out: &mut SessionFile, restore_height_width: &mut bool) -> bool {
 
         // Put the cursor back in the current window when it is not the
         // first.
-        if cnr > 1 && !out.write(format_args!("{cnr}wincmd w\n")) {
-            return false;
+        if cnr > 1 {
+            out.write(format_args!("{cnr}wincmd w\n"))?;
         }
         // And restore the sizes again: jumping around gives the current
         // window a minimum size the others may not have.
-        if nr > 1 && !ses_winsizes(out, restore_size, tab) {
-            return false;
+        if nr > 1 {
+            ses_winsizes(out, restore_size, tab)?;
         }
 
         if !with_tabs {
@@ -415,13 +368,13 @@ fn put_tabs(out: &mut SessionFile, restore_height_width: &mut bool) -> bool {
         }
         next = tab.next();
     }
-    true
+    Ok(())
 }
 
 /// The window sizes for one tab page, as arithmetic against `&lines` and
 /// `&columns`. When a window was omitted the numbers would not add up, so
 /// the sizes are just equalised instead.
-fn ses_winsizes(out: &mut SessionFile, restore_size: bool, tab: TabPage) -> bool {
+fn ses_winsizes(out: &mut SessionFile, restore_size: bool, tab: TabPage) -> Written {
     if !restore_size || !SessionOpts::Session.has(kOptSsopFlagWinsize) {
         return out.line(c"wincmd =");
     }
@@ -432,37 +385,33 @@ fn ses_winsizes(out: &mut SessionFile, restore_size: bool, tab: TabPage) -> bool
         if ses_do_win(window) {
             n += 1;
             // Restore the height when the window is not full height.
-            if window.w_height + window.w_hsep_height + window.w_status_height < top.fr_height
-                && !out.write(format_args!(
+            if window.w_height + window.w_hsep_height + window.w_status_height < top.fr_height {
+                out.write(format_args!(
                     "exe '{n}resize ' . ((&lines * {} + {}) / {})\n",
                     int64_t::from(window.w_height),
                     int64_t::from(Rows.get()) / 2,
                     int64_t::from(Rows.get()),
-                ))
-            {
-                return false;
+                ))?;
             }
             // And the width when it is not full width.
-            if window.w_width < Columns.get()
-                && !out.write(format_args!(
+            if window.w_width < Columns.get() {
+                out.write(format_args!(
                     "exe 'vert {n}resize ' . ((&columns * {} + {}) / {})\n",
                     int64_t::from(window.w_width),
                     int64_t::from(Columns.get()) / 2,
                     int64_t::from(Columns.get()),
-                ))
-            {
-                return false;
+                ))?;
             }
         }
     }
-    true
+    Ok(())
 }
 
 /// Write the splits that recreate the windows of frame `fr`, recursively.
 /// Afterwards the last window in the frame is the current one.
-fn ses_win_rec(out: &mut SessionFile, fr: FrameRef) -> bool {
+fn ses_win_rec(out: &mut SessionFile, fr: FrameRef) -> Written {
     if fr.fr_layout == FR_LEAF {
-        return true;
+        return Ok(());
     }
     let column = fr.fr_layout == FR_COL;
 
@@ -476,33 +425,30 @@ fn ses_win_rec(out: &mut SessionFile, fr: FrameRef) -> bool {
             break;
         }
         // Make the window as big as possible, for room to split.
-        if !out.puts(c"wincmd _ | wincmd |")
-            || !out.eol()
-            || !out.line(if column { c"split" } else { c"vsplit" })
-        {
-            return false;
-        }
+        out.puts(c"wincmd _ | wincmd |")?;
+        out.eol()?;
+        out.line(if column { c"split" } else { c"vsplit" })?;
         count += 1;
     }
 
     // Go back to the first window.
     if count > 0 {
         let direction = if column { 'k' } else { 'h' };
-        if !out.write(format_args!("{count}wincmd {direction}\n")) {
-            return false;
-        }
+        out.write(format_args!("{count}wincmd {direction}\n"))?;
     }
 
-    // Then recurse into each window of this column or row.
+    // Then recurse into each window of this column or row. A nested
+    // frame's write error goes unanswered, as upstream: the next write
+    // here meets it again.
     frc = ses_skipframe(fr.child());
     while let Some(current) = frc {
-        ses_win_rec(out, current);
+        let _ = ses_win_rec(out, current);
         frc = ses_skipframe(current.next());
-        if frc.is_some() && !out.line(c"wincmd w") {
-            return false;
+        if frc.is_some() {
+            out.line(c"wincmd w")?;
         }
     }
-    true
+    Ok(())
 }
 
 /// The first frame at or after `fr` holding a window worth saving.
@@ -525,29 +471,24 @@ fn ses_do_frame(fr: FrameRef) -> bool {
 /// Write the `g:` variables 'sessionoptions' calls sessionable: the Number,
 /// String and Float ones whose name says they belong in a session (an
 /// uppercase first letter and a lowercase one after it).
-fn store_session_globals(out: &mut SessionFile) -> bool {
+fn store_session_globals(out: &mut SessionFile) -> Written {
     let globals = globvar_dict();
     for item in globals.edit().items_mut() {
         let key = item.di_key.bytes();
         let kind = item.di_tv.v_type();
         let sessionable = var_flavour(key) == VAR_FLAVOUR_SESSION;
         if (kind == VAR_NUMBER || kind == VAR_STRING) && sessionable {
-            if !put_session_global(out, key, kind, &mut item.di_tv) {
-                return false;
-            }
+            put_session_global(out, key, kind, &mut item.di_tv)?;
         } else if kind == VAR_FLOAT && sessionable {
             let f = item.di_tv.float_or_zero();
             let (sign, magnitude) = if f < 0.0 { ('-', -f) } else { (' ', f) };
-            if !out.puts(c"let ")
-                || !out.put_bytes(key)
-                || !out.write(format_args!(" = {sign}{}", printf_f(magnitude)))
-                || !out.eol()
-            {
-                return false;
-            }
+            out.puts(c"let ")?;
+            out.put_bytes(key)?;
+            out.write(format_args!(" = {sign}{}", printf_f(magnitude)))?;
+            out.eol()?;
         }
     }
-    true
+    Ok(())
 }
 
 /// `value` as C's `printf("%f")` writes it: six decimals, and `inf` and
@@ -570,7 +511,12 @@ fn printf_f(value: f64) -> String {
 /// `let <name> = <value>` for one Number or String global. The value is
 /// escaped so that the script reads it back unchanged: backslash, quote, and
 /// a literal LF or CR turned into `\n`/`\r`.
-fn put_session_global(out: &mut SessionFile, key: &[u8], kind: VarType, tv: &mut TypVal) -> bool {
+fn put_session_global(
+    out: &mut SessionFile,
+    key: &[u8],
+    kind: VarType,
+    tv: &mut TypVal,
+) -> Written {
     let mut numbuf = NumBuf::new();
     let mut escaped = escaped_bytes(numbuf.string(tv).to_bytes(), b"\\\"\n\r").into_vec();
     escaped.pop(); // the terminator
@@ -583,11 +529,11 @@ fn put_session_global(out: &mut SessionFile, key: &[u8], kind: VarType, tv: &mut
     }
     // A String is quoted; a Number is surrounded by spaces instead.
     let quote = if kind == VAR_STRING { c"\"" } else { c" " };
-    out.puts(c"let ")
-        && out.put_bytes(key)
-        && out.puts(c" = ")
-        && out.puts(quote)
-        && out.put_bytes(&escaped)
-        && out.puts(quote)
-        && out.eol()
+    out.puts(c"let ")?;
+    out.put_bytes(key)?;
+    out.puts(c" = ")?;
+    out.puts(quote)?;
+    out.put_bytes(&escaped)?;
+    out.puts(quote)?;
+    out.eol()
 }

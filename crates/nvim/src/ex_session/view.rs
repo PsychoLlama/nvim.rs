@@ -27,10 +27,11 @@
 )]
 
 use super::{
-    SessionFile, SessionOpts, did_lcd, ses_arglist, ses_escape_fname, ses_fname, ses_get_fname,
-    ses_put_fname,
+    SessionFile, SessionOpts, Written, did_lcd, ses_arglist, ses_escape_fname, ses_fname,
+    ses_get_fname, ses_put_fname,
 };
 use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_normal, buf_is_terminal, find_buf};
+use crate::fileio::IoFailed;
 use crate::fold::put_folds;
 use crate::mapping::makemap;
 use crate::option::vars::ssop_flags;
@@ -41,7 +42,7 @@ use crate::options::{
 };
 use crate::types::ArgListId;
 use crate::types::ColNr;
-use crate::types::{OptionSetFlags, int64_t};
+use crate::types::{Failed, OptionSetFlags, int64_t};
 use crate::window::{DirOwner, has_own_dir, own_dir};
 use crate::winlayer::graph::switch_to;
 use crate::winlayer::{TabPage, Win};
@@ -62,16 +63,14 @@ pub(crate) fn put_view(
     add_edit: bool,
     opts: SessionOpts,
     current_arg_idx: c_int,
-) -> bool {
+) -> Written {
     // The cursor position is always restored for a session; for a view only
     // when 'viewoptions' asks.
     let mut do_cursor = opts.is_session() || opts.has(kOptSsopFlagCursor);
 
     // The argument list: the global one, or a local copy written out.
     if window.w_alist == ArgListId::GLOBAL {
-        if !out.line(c"argglobal") {
-            return false;
-        }
+        out.line(c"argglobal")?;
     } else {
         // Full paths unless the session knows where it will be sourced
         // and no directory below it overrides that.
@@ -80,9 +79,7 @@ pub(crate) fn put_view(
             || has_own_dir(DirOwner::TabPage(tabpage))
             || has_own_dir(DirOwner::Window(window));
         let names = crate::arglist::arg_names(window.w_alist);
-        if !ses_arglist(out, c"arglocal", &names, fullname) {
-            return false;
-        }
+        ses_arglist(out, c"arglocal", &names, fullname)?;
     }
 
     // Restore the argument index, but only as part of a session and only
@@ -92,51 +89,41 @@ pub(crate) fn put_view(
         && window.w_arg_idx < crate::arglist::wargcount(window)
         && opts.is_session()
     {
-        if !out.write(format_args!(
+        out.write(format_args!(
             "{}argu\n",
             int64_t::from(window.w_arg_idx) + 1
-        )) {
-            return false;
-        }
+        ))?;
         did_next = true;
     }
 
     // Edit the file, unless the `:next` above already did.
     if add_edit && (!did_next || window.w_arg_idx_invalid) {
-        match put_edit(out, window, opts) {
-            Some(keep_cursor) => do_cursor &= keep_cursor,
-            None => return false,
-        }
+        do_cursor &= put_edit(out, window, opts)?;
     }
 
-    if window.w_alt_fnum.is_some() && !put_alternate(out, window, opts) {
-        return false;
+    if window.w_alt_fnum.is_some() {
+        put_alternate(out, window, opts)?;
     }
 
     // Local mappings and abbreviations.
-    if opts.has(kOptSsopFlagOptions | kOptSsopFlagLocaloptions)
-        && makemap(out, window.buffer_or_none()).is_err()
-    {
-        return false;
+    if opts.has(kOptSsopFlagOptions | kOptSsopFlagLocaloptions) {
+        makemap(out, window.buffer_or_none()).map_err(|Failed| IoFailed)?;
     }
 
-    if !put_local_options(out, window, opts) {
-        return false;
-    }
+    put_local_options(out, window, opts)?;
 
     // Folds, when 'buftype' is empty and for help files.
     let buf = window.buffer();
     if opts.has(kOptSsopFlagFolds)
         && !buf.name.full().is_none()
         && (buf_is_normal(Some(buf)) || buf_is_help(Some(buf)))
-        && put_folds(out, window).is_err()
     {
-        return false;
+        put_folds(out, window).map_err(|Failed| IoFailed)?;
     }
 
     // The cursor goes last: creating folds moves it.
-    if do_cursor && !put_cursor(out, window) {
-        return false;
+    if do_cursor {
+        put_cursor(out, window)?;
     }
 
     // The window-local directory, unless this is a view that was not
@@ -144,23 +131,23 @@ pub(crate) fn put_view(
     if let Some(localdir) = own_dir(DirOwner::Window(window))
         && (opts.is_session() || opts.has(kOptSsopFlagCurdir))
     {
-        if !out.puts(c"lcd ") || !ses_put_fname(out, localdir.as_cstr()) || !out.eol() {
-            return false;
-        }
+        out.puts(c"lcd ")?;
+        ses_put_fname(out, localdir.as_cstr())?;
+        out.eol()?;
         did_lcd.set(true);
     }
-    true
+    Ok(())
 }
 
 /// Write the command that loads `window`'s file. Answers whether the cursor
 /// position is still worth restoring afterwards -- an empty buffer has no
-/// position -- or `None` when a write failed.
-fn put_edit(out: &mut SessionFile, window: Win, opts: SessionOpts) -> Option<bool> {
+/// position -- or `Err` when a write failed.
+fn put_edit(out: &mut SessionFile, window: Win, opts: SessionOpts) -> Result<bool, IoFailed> {
     let buffer = window.buffer();
     let name = ses_get_fname(buffer, opts).unwrap_or_default();
     let fname_esc = ses_escape_fname(name.as_cstr());
     if buf_is_help(window.buffer_or_none()) {
-        return put_help_edit(out, window).then_some(true);
+        return put_help_edit(out, window).map(|()| true);
     }
     if !buffer.name.full().is_none()
         && (!buf_is_nofilename(window.buffer_or_none()) || !buffer.terminal.is_null())
@@ -169,29 +156,32 @@ fn put_edit(out: &mut SessionFile, window: Win, opts: SessionOpts) -> Option<boo
         // network file -- and if a buffer for it already exists we
         // `:buffer` it instead, because `:edit` resets the folds of
         // other buffers.
-        let ok = out.puts(c"if bufexists(fnamemodify(\"")
-            && out.put_bytes(&fname_esc)
-            && out.puts(c"\", \":p\")) | buffer ")
-            && out.put_bytes(&fname_esc)
-            && out.puts(c" | else | edit ")
-            && out.put_bytes(&fname_esc)
-            && out.puts(c" | endif\nif &buftype ==# 'terminal'\n  silent file ")
-            && out.put_bytes(&fname_esc)
-            && out.puts(c"\nendif\n");
-        return ok.then_some(true);
+        out.puts(c"if bufexists(fnamemodify(\"")?;
+        out.put_bytes(&fname_esc)?;
+        out.puts(c"\", \":p\")) | buffer ")?;
+        out.put_bytes(&fname_esc)?;
+        out.puts(c" | else | edit ")?;
+        out.put_bytes(&fname_esc)?;
+        out.puts(c" | endif\nif &buftype ==# 'terminal'\n  silent file ")?;
+        out.put_bytes(&fname_esc)?;
+        out.puts(c"\nendif\n")?;
+        return Ok(true);
     }
     // No file in this buffer: make it empty. It may still have a name that
     // is not a file name.
-    let named = !buffer.name.full().is_none();
-    let ok = out.line(c"enew")
-        && (!named || (out.puts(c"file ") && out.put_bytes(&fname_esc) && out.eol()));
-    ok.then_some(false)
+    out.line(c"enew")?;
+    if !buffer.name.full().is_none() {
+        out.puts(c"file ")?;
+        out.put_bytes(&fname_esc)?;
+        out.eol()?;
+    }
+    Ok(false)
 }
 
 /// A help window: create an empty `'buftype'=help` buffer and let `:help`
 /// re-use both it and the window, which sets the options a help buffer needs
 /// even when "options" is not in 'sessionoptions'.
-fn put_help_edit(out: &mut SessionFile, window: Win) -> bool {
+fn put_help_edit(out: &mut SessionFile, window: Win) -> Written {
     let curtag = if 0 < window.w_tagstackidx && window.w_tagstackidx <= window.w_tagstacklen {
         window.w_tagstack[usize::try_from(window.w_tagstackidx - 1).expect("checked above")]
             .tagname
@@ -200,12 +190,15 @@ fn put_help_edit(out: &mut SessionFile, window: Win) -> bool {
     } else {
         b""
     };
-    out.line(c"enew | setl bt=help") && out.puts(c"help ") && out.put_bytes(curtag) && out.eol()
+    out.line(c"enew | setl bt=help")?;
+    out.puts(c"help ")?;
+    out.put_bytes(curtag)?;
+    out.eol()
 }
 
 /// Write `balt` for the window's alternate file, when a session is being
 /// written and the alternate buffer is one a restore could find again.
-fn put_alternate(out: &mut SessionFile, window: Win, opts: SessionOpts) -> bool {
+fn put_alternate(out: &mut SessionFile, window: Win, opts: SessionOpts) -> Written {
     let alt = find_buf(window.w_alt_fnum);
     let restorable = alt.is_some_and(|b| {
         !b.name.is_unnamed() && b.name.shown().is_some_and(|name| !name.is_empty()) && b.b_p_bl != 0
@@ -215,9 +208,10 @@ fn put_alternate(out: &mut SessionFile, window: Win, opts: SessionOpts) -> bool 
         // Not a terminal, unless terminals are in 'sessionoptions'.
         && !(buf_is_terminal(alt) && ssop_flags.get() & kOptSsopFlagTerminal == 0);
     let Some(alt) = alt.filter(|_| wanted) else {
-        return true;
+        return Ok(());
     };
-    out.puts(c"balt ") && ses_fname(out, alt, opts, true)
+    out.puts(c"balt ")?;
+    ses_fname(out, alt, opts, true)
 }
 
 /// Write the window's local options or, when options are not wanted at all,
@@ -225,7 +219,7 @@ fn put_alternate(out: &mut SessionFile, window: Win, opts: SessionOpts) -> bool 
 ///
 /// The writers read `curwin`/`curbuf`, so the window has to be made current
 /// for the duration. Nothing between the two assignments runs Vimscript.
-fn put_local_options(out: &mut SessionFile, window: Win, opts: SessionOpts) -> bool {
+fn put_local_options(out: &mut SessionFile, window: Win, opts: SessionOpts) -> Written {
     // `curwin`/`curbuf` are restored before returning either way.
     let saved = switch_to(window);
     let f = if opts.has(kOptSsopFlagOptions | kOptSsopFlagLocaloptions) {
@@ -239,31 +233,27 @@ fn put_local_options(out: &mut SessionFile, window: Win, opts: SessionOpts) -> b
         Ok(())
     };
     saved.restore();
-    f.is_ok()
+    f.map_err(|Failed| IoFailed)
 }
 
 /// Restore the cursor line -- both in the file and relative to the top of
 /// the window -- and then the column. `G` is deliberately not used: it would
 /// change the jumplist.
-fn put_cursor(out: &mut SessionFile, window: Win) -> bool {
+fn put_cursor(out: &mut SessionFile, window: Win) -> Written {
     let height = window.w_view_height;
     let lnum = window.w_cursor.lnum;
-    let placed = if height <= 0 {
-        out.write(format_args!("let s:l = {lnum}\n"))
+    if height <= 0 {
+        out.write(format_args!("let s:l = {lnum}\n"))?;
     } else {
         out.write(format_args!(
             "let s:l = {lnum} - (({} * winheight(0) + {}) / {height})\n",
             lnum - window.w_topline,
             height / 2,
-        ))
-    };
-    if !placed
-        || !out.write(format_args!(
-            "if s:l < 1 | let s:l = 1 | endif\nkeepjumps exe s:l\nnormal! zt\nkeepjumps {lnum}\n"
-        ))
-    {
-        return false;
+        ))?;
     }
+    out.write(format_args!(
+        "if s:l < 1 | let s:l = 1 | endif\nkeepjumps exe s:l\nnormal! zt\nkeepjumps {lnum}\n"
+    ))?;
 
     // The column, and the left offset when not wrapping.
     if window.w_cursor.col == ColNr::ZERO {
@@ -272,15 +262,16 @@ fn put_cursor(out: &mut SessionFile, window: Win) -> bool {
     let width = window.w_width;
     if window.w_onebuf_opt.wo_wrap == 0 && window.w_leftcol > ColNr::ZERO && width > 0 {
         let virtcol = i64::from(window.w_virtcol);
-        return out.write(format_args!(
+        out.write(format_args!(
             "let s:c = {} - (({} * winwidth(0) + {}) / {})\nif s:c > 0\n  exe 'normal! ' . s:c . '|zs' . {} . '|'\nelse\n",
             virtcol + 1,
             int64_t::from(window.w_virtcol - window.w_leftcol),
             int64_t::from(width / 2),
             int64_t::from(width),
             virtcol + 1,
-        )) && put_view_curpos(out, window, "  ")
-            && out.line(c"endif");
+        ))?;
+        put_view_curpos(out, window, "  ")?;
+        return out.line(c"endif");
     }
     put_view_curpos(out, window, "")
 }
@@ -288,7 +279,7 @@ fn put_cursor(out: &mut SessionFile, window: Win) -> bool {
 /// The `normal!` command that puts the cursor on its column. `$` when the
 /// cursor was at end-of-line ('curswant' is `MAXCOL`), otherwise the virtual
 /// column, one-based.
-fn put_view_curpos(out: &mut SessionFile, window: Win, spaces: &str) -> bool {
+fn put_view_curpos(out: &mut SessionFile, window: Win, spaces: &str) -> Written {
     if window.w_curswant == ColNr::MAX {
         out.write(format_args!("{spaces}normal! $\n"))
     } else {
