@@ -91,6 +91,7 @@ mod printf_oracle;
 mod profile;
 mod quickfix;
 mod readfile;
+mod refusals;
 mod regexp;
 mod register;
 mod runtime;
