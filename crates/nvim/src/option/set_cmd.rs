@@ -23,8 +23,6 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::charset::Str2NrBases;
 use crate::charset::{str2nr_in, trans_characters_in};

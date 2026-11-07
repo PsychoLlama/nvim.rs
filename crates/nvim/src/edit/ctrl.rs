@@ -25,8 +25,6 @@
     clippy::ptr_as_ptr
 )]
 #![forbid(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::keycodes::SpecialKey;
 use crate::option::vars::P_LANGMAP;

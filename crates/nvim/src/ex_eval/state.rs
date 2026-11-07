@@ -20,8 +20,6 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-// The selectors keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::global_cell::state_record;
 use crate::id_table::IdTable;

@@ -14,8 +14,6 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use crate::api::private::helpers::{
     api_set_sctx, api_try, api_typename, find_buffer_by_handle, find_window_by_handle,
