@@ -19,7 +19,7 @@ use crate::tui::termkey::termkey::{
     TERMKEY_FORMAT_SPACEMOD, TERMKEY_FORMAT_WRAPBRACKET, TERMKEY_KEYMOD_ALT, TERMKEY_KEYMOD_CTRL,
     TERMKEY_KEYMOD_SHIFT,
 };
-use crate::types::{TermKeyFormat, TermKeyMouseEvent, TermKeySym};
+use crate::tui::termkey::types::{TermKeyFormat, TermKeyMouseEvent, TermKeySym};
 use core::ffi::c_int;
 use core::fmt::{self, Write};
 

@@ -14,16 +14,17 @@
 #![forbid(unsafe_code)]
 
 use crate::narrow::as_index;
+use crate::tui::terminfo::entry::TerminfoEntry;
 use crate::tui::termkey::csi::{self, CSI_MAX_PARAMS};
 use crate::tui::termkey::driver_csi::CsiDriver;
 use crate::tui::termkey::driver_ti::TerminfoDriver;
 use crate::tui::termkey::format::{self, KeyBody};
+use crate::tui::termkey::types::{
+    KeyCode, TermKeyEvent, TermKeyFormat, TermKeyKey, TermKeyMouseEvent, TermKeyResult, TermKeySym,
+    TermKeyType,
+};
 use crate::tui::termkey::utf8::{self, Decoded, UNICODE_INVALID};
 use crate::tui::termkey::{driver_csi, driver_ti, report};
-use crate::types::{
-    KeyCode, TermKeyEvent, TermKeyFormat, TermKeyKey, TermKeyMouseEvent, TermKeyResult, TermKeySym,
-    TermKeyType, TerminfoEntry,
-};
 use core::ffi::{CStr, c_int};
 
 pub const TERMKEY_EVENT_UNKNOWN: TermKeyEvent = 0;

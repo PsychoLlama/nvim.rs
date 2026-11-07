@@ -53,6 +53,9 @@ use crate::tui::keys::{KEYMOD_RECOGNIZED, modified_utf8, mouse_event, simple_utf
 use crate::tui::negotiate::{
     tui_enable_extended_underline, tui_handle_term_mode, tui_query_bg_color, tui_tk_ti_getstr,
 };
+use crate::tui::state::TUIData;
+use crate::tui::state::{KEY_BUFFER_SIZE, KeyEncoding, TermInput, TermInputCallbacks};
+use crate::tui::terminfo::entry::TerminfoEntry;
 use crate::tui::termkey::termkey::{
     TERMKEY_CANON_DELBS, TERMKEY_EVENT_PRESS, TERMKEY_EVENT_REPEAT, TERMKEY_FLAG_KEEPC0,
     TERMKEY_FLAG_NOSTART, TERMKEY_FLAG_UTF8, TERMKEY_RES_AGAIN, TERMKEY_RES_KEY, TERMKEY_TYPE_APC,
@@ -60,13 +63,10 @@ use crate::tui::termkey::termkey::{
     TERMKEY_TYPE_MOUSE, TERMKEY_TYPE_OSC, TERMKEY_TYPE_UNICODE, TERMKEY_TYPE_UNKNOWN_CSI, TermKey,
     csi_param_value, interpret_modereport,
 };
+use crate::tui::termkey::types::TermKeyKey;
 use crate::tui::tui::{tui_set_size, with_started_tui};
-use crate::types::TUIData;
 use crate::types::builders::ArrayBuf;
-use crate::types::{
-    ApiString, Array, Integer, KEY_BUFFER_SIZE, KeyEncoding, Object, TermInput, TermInputCallbacks,
-    TermKeyKey, TerminfoEntry,
-};
+use crate::types::{ApiString, Array, Integer, Object};
 use ::libc::tcgetattr;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::fmt::Write;

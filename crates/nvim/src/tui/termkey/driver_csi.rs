@@ -31,7 +31,7 @@ use crate::tui::termkey::termkey::{
     TERMKEY_TYPE_POSITION, TERMKEY_TYPE_UNICODE, TERMKEY_TYPE_UNKNOWN_CSI, TermKey, emit_codepoint,
     peekkey_mouse,
 };
-use crate::types::{KeyCode, TermKeyKey, TermKeyResult};
+use crate::tui::termkey::types::{KeyCode, TermKeyKey, TermKeyResult};
 use core::ffi::c_int;
 
 /// Parameters resolved against the input buffer. A `None` entry is an omitted

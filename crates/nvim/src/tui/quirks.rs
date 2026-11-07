@@ -27,6 +27,7 @@
 )]
 
 use crate::os::env::{env_exists, getenv_owned};
+use crate::tui::state::{KeyEncoding, TerminfoExt};
 use crate::tui::terminfo::caps::{
     TerminfoDef, kTerm_carriage_return, kTerm_cursor_invisible, kTerm_cursor_normal,
     kTerm_enter_ca_mode, kTerm_enter_italics_mode, kTerm_exit_ca_mode, kTerm_from_status_line,
@@ -36,8 +37,8 @@ use crate::tui::terminfo::caps::{
     kTerm_set_rgb_background, kTerm_set_rgb_foreground, kTerm_set_underline_style,
     kTerm_to_status_line,
 };
+use crate::tui::terminfo::entry::TerminfoEntry;
 use crate::tui::terminfo::{is_term_family, terminfo_is_bsd_console};
-use crate::types::{KeyEncoding, TerminfoEntry, TerminfoExt};
 use core::ffi::{CStr, c_int};
 use std::borrow::Cow;
 

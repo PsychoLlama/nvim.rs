@@ -29,6 +29,7 @@ use crate::narrow::number_as_u16;
 use crate::os::libc::int32_t;
 use crate::tui::output::{out, out_cstr, out_fmt, terminfo_out, terminfo_print_nums};
 use crate::tui::paint::invalidate;
+use crate::tui::state::TUIData;
 use crate::tui::terminfo::caps::{
     kTerm_enter_blink_mode, kTerm_enter_bold_mode, kTerm_enter_dim_mode, kTerm_enter_italics_mode,
     kTerm_enter_reverse_mode, kTerm_enter_secure_mode, kTerm_enter_standout_mode,
@@ -37,7 +38,7 @@ use crate::tui::terminfo::caps::{
     kTerm_set_rgb_foreground, kTerm_set_underline_style,
 };
 use crate::tui::tui::DEFAULT_ATTRS;
-use crate::types::{Array, HlAttrs, Integer, TUIData};
+use crate::types::{Array, HlAttrs, Integer};
 use core::ffi::{CStr, c_int};
 
 /// The underline style parameter each `UNDER*` bit asks the terminal for,

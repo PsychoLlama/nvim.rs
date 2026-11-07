@@ -64,14 +64,15 @@ use crate::tui::paint::{
     tui_flush, tui_grid_clear, tui_grid_cursor_goto, tui_grid_resize, tui_grid_scroll,
     tui_raw_line, tui_screenshot,
 };
+use crate::tui::state::TUIData;
 use crate::tui::tui::Tui;
 use crate::tui::tui::tui_suspend;
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::ui::kLineFlagWrap;
 use crate::types::{
     ApiDict, ApiString, Array, CallbackReader, Error, GridLineEvent, HlAttrs, Integer, Object,
-    ObjectType, TUIData, UIClientHandler, Unpacker, kObjectTypeArray, kObjectTypeBoolean,
-    kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
+    ObjectType, UIClientHandler, Unpacker, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict,
+    kObjectTypeInteger, kObjectTypeString,
 };
 use crate::ui::state::t_colors;
 use core::ffi::{CStr, c_int};

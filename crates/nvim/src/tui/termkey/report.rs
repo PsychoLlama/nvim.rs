@@ -16,7 +16,7 @@
 use crate::tui::termkey::termkey::{
     TERMKEY_MOUSE_DRAG, TERMKEY_MOUSE_PRESS, TERMKEY_MOUSE_RELEASE, TERMKEY_MOUSE_UNKNOWN,
 };
-use crate::types::TermKeyMouseEvent;
+use crate::tui::termkey::types::TermKeyMouseEvent;
 use core::ffi::c_int;
 
 /// The report payload: `TermKeyKey::code::mouse`.

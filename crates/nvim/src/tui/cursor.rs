@@ -18,6 +18,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::cursor_shape::{CursorEntry, CursorShape};
 use crate::cursor_shape::{SHAPE_BLOCK, SHAPE_HOR, SHAPE_IDX_N, SHAPE_VER, shape_entry};
 use crate::global_cell::GlobalCell;
 use crate::highlight::HlAttrFlags;
@@ -27,13 +28,12 @@ use crate::narrow::as_index;
 use crate::narrow::number_as_int;
 use crate::os::libc::int32_t;
 use crate::tui::output::{terminfo_out, terminfo_print_nums, terminfo_print_str};
+use crate::tui::state::TUIData;
 use crate::tui::terminfo::caps::{
     kTerm_reset_cursor_color, kTerm_reset_cursor_style, kTerm_set_cursor_color,
     kTerm_set_cursor_style,
 };
-use crate::types::{
-    ApiDict, ApiString, CursorEntry, CursorShape, HlAttrs, Object, RgbValue, TUIData,
-};
+use crate::types::{ApiDict, ApiString, HlAttrs, Object, RgbValue};
 use core::ffi::{CStr, c_int};
 
 /// Does the editor want the TUI driving cursor style at all? `'guicursor'`

@@ -1192,7 +1192,7 @@ FOREIGN_ABI_TYPES = {
     "library keeps its C ABI, so these are its interface",
     "crates/nvim/src/vterm/internal.rs": "the same library's internal "
     "state, reached through the same ABI",
-    "crates/nvim/src/types/termkey.rs": "libtermkey's instance and driver, "
+    "crates/nvim/src/tui/termkey/types.rs": "libtermkey's instance and driver, "
     "ported with its ABI intact and driven from `tui/`",
     "crates/nvim/src/lua/abi.rs": "LuaJIT's `lua_State`, `luaL_Buffer` and "
     "`luaL_Reg` -- the interpreter defines every one of them",
@@ -2213,6 +2213,9 @@ COPY_KEEPERS = {
     "crates/nvim/src/textformat/para.rs::Leader": "value",
     "crates/nvim/src/tui/terminfo/param.rs::Param": "value",
     "crates/nvim/src/tui/terminfo/param.rs::Slot": "value",
+    "crates/nvim/src/tui/termkey/keyinfo.rs::keyinfo": "value",
+    "crates/nvim/src/tui/termkey/types.rs": "ffi: libtermkey's key record",
+    "crates/nvim/src/tui/ugrid.rs::UCell": "value",
     "crates/nvim/src/types/buffer.rs::BufferRef": "value",
     "crates/nvim/src/types/buffer.rs::DiffLineChange": "value",
     "crates/nvim/src/types/buffer.rs::SynTime": "value",
@@ -2268,13 +2271,10 @@ COPY_KEEPERS = {
     "crates/nvim/src/types/spell.rs::SpellTab": "value",
     "crates/nvim/src/types/statusline.rs::StlClickDefinition": "value",
     "crates/nvim/src/types/statusline.rs::StlHlRun": "value",
-    "crates/nvim/src/types/termkey.rs": "ffi: libtermkey's key record",
-    "crates/nvim/src/types/termkey_internal.rs::keyinfo": "value",
     "crates/nvim/src/types/types.rs::MTDamage": "value",
     "crates/nvim/src/types/types.rs::MTDamagePair": "value",
     "crates/nvim/src/types/types.rs::MsgpackRpcRequestHandler": "value",
     "crates/nvim/src/types/typval.rs::ScriptCtx": "value",
-    "crates/nvim/src/types/ugrid.rs::UCell": "value",
     "crates/nvim/src/types/ui.rs::UIClientHandler": "handle: a static name and a fn pointer",
     "crates/nvim/src/types/undo.rs::UndoLink": "value",
     "crates/nvim/src/types/undo.rs::VisualInfo": "value",

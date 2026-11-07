@@ -16,6 +16,7 @@
 //! Ported from libtermkey, Copyright (c) 2007-2011 Paul Evans, under the MIT
 //! license; the notice is reproduced in licenses/libtermkey-LICENSE.txt.
 
+use crate::tui::termkey::keyinfo::keyinfo;
 use crate::tui::termkey::termkey::{
     TERMKEY_KEYMOD_SHIFT, TERMKEY_SYM_BEGIN, TERMKEY_SYM_DELETE, TERMKEY_SYM_DOWN, TERMKEY_SYM_END,
     TERMKEY_SYM_FIND, TERMKEY_SYM_HOME, TERMKEY_SYM_INSERT, TERMKEY_SYM_KP0, TERMKEY_SYM_KP1,
@@ -27,7 +28,7 @@ use crate::tui::termkey::termkey::{
     TERMKEY_SYM_UNKNOWN, TERMKEY_SYM_UP, TERMKEY_TYPE_FUNCTION, TERMKEY_TYPE_KEYSYM,
     TERMKEY_TYPE_UNICODE,
 };
-use crate::types::{TermKeySym, keyinfo};
+use crate::tui::termkey::types::TermKeySym;
 use core::ffi::c_int;
 
 /// Final bytes and SS3 commands live in 0x40..0x80, so the tables are indexed

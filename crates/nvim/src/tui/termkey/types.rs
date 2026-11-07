@@ -7,9 +7,9 @@
     clippy::ptr_as_ptr
 )]
 
-// Canonical type definitions, hoisted out of the per-module copies c2rust
-// emitted. One definition per logical type; every module re-exports here.
-//
+//! libtermkey's public types: the key record, the kinds of key and their
+//! symbols, and what a read answers.
+
 // These are libtermkey's types, Copyright (c) 2007-2011 Paul Evans, under
 // the MIT license; the notice is reproduced in
 // licenses/libtermkey-LICENSE.txt.

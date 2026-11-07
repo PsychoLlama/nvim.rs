@@ -1,6 +1,6 @@
 //! The capability tables the terminfo layer indexes everything by.
 //!
-//! [`TerminfoEntry`](crate::types::TerminfoEntry) stores its
+//! [`TerminfoEntry`](crate::tui::terminfo::entry::TerminfoEntry) stores its
 //! capabilities in three dense arrays, so every producer and consumer of one
 //! has to agree on which slot means what. This file is that agreement, and
 //! nothing else should spell a slot number out:

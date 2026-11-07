@@ -31,12 +31,12 @@ use crate::event::uv::{uv_buf_t, uv_stream_t, uv_write_t};
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::message_fmt::msg_cstr;
 use crate::os::fs::os_strerror;
+use crate::tui::state::{BUF_SIZE, TUIData};
 use crate::tui::terminfo::caps::{
     TerminfoDef, kTerm_cursor_invisible, kTerm_cursor_normal, kTermCount,
 };
 use crate::tui::terminfo::param::Param;
 use crate::tui::terminfo::terminfo_fmt;
-use crate::types::{BUF_SIZE, TUIData};
 use core::ffi::{CStr, c_int};
 use std::io::Write;
 
@@ -203,7 +203,7 @@ fn terminfo_print(tui: &mut TUIData, what: TerminfoDef, params: &mut [Param<'_>;
 }
 
 /// Expand capability `what` into the staging buffer's spare room, answering
-/// how much it wrote; [`Staging::commit`](crate::types::Staging::commit)
+/// how much it wrote; [`Staging::commit`](crate::tui::state::Staging::commit)
 /// stages it.
 fn expand_staged(tui: &mut TUIData, what: TerminfoDef, params: &mut [Param<'_>; 9]) -> usize {
     let TUIData { ti, staging, .. } = tui;

@@ -16,9 +16,12 @@
 //! few invariants that can be kept by construction rather than by
 //! convention -- see [`Staging`].
 
-use super::*;
+use crate::cursor_shape::CursorEntry;
 use crate::event::objects::{RStream, SignalWatcher};
 use crate::event::uv::{uv_loop_t, uv_pipe_t, uv_timer_t, uv_tty_t};
+use crate::tui::terminfo::entry::TerminfoEntry;
+use crate::tui::ugrid::UGrid;
+use crate::types::{HlAttrs, Integer, OptInt};
 use core::ffi::{CStr, c_char, c_int};
 use std::borrow::Cow;
 
@@ -307,3 +310,5 @@ pub struct TerminfoExt {
     pub reset_scroll_region: Option<&'static CStr>,
     pub enter_altfont_mode: Option<&'static CStr>,
 }
+
+pub type KeyEncoding = ::core::ffi::c_uint;

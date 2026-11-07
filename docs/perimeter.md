@@ -16,7 +16,7 @@ reader who is not a specialist: what each row holds, the contract that keeps
 it sound, and what would retire it.
 
 Today: **1,615** unchecked statements inside the perimeter (64 files),
-**0** outside it (0 files, of 1,400 measured). It was 138,877 when this
+**0** outside it (0 files, of 1,397 measured). It was 138,877 when this
 file was written, at the end of phase 23's slice 15 — in _lines_, which is what
 this metric counted until phase 31 changed the unit to statements.
 
@@ -295,21 +295,25 @@ narrowings, for good.
 
 The perimeter is measured in unchecked lines, and it prunes itself on them:
 an entry with no `unsafe` behind it is stale by definition. That leaves one
-population it structurally cannot describe. c2rust hoisted every C struct out
-of the module that used it and into a per-library file under `types/`, so the
-layout of a `uv_loop_t` was written in `types/uv.rs` while the `uv_run` that
-needs it lives in `event/` (it has since moved there, `event/uv.rs`), and a `TermKey`'s in `types/termkey.rs` while
-termkey's parser runs in `tui/`. Those files hold **zero** unchecked lines.
-They cannot join the list — `check_perimeter` would reject them — and yet
-their `#[repr(C)]` is libuv's and libtermkey's layout, not this tree's.
+population it structurally cannot describe: the type definitions of the
+libraries this tree links or ports with their C ABI intact. c2rust hoisted
+each library's structs into a per-library file under `types/`; they now live
+beside the code that calls the library — a `uv_loop_t`'s layout in
+`event/uv.rs` next to the `uv_run` that needs it, a `TermKey`'s in
+`tui/termkey/types.rs` next to termkey's parser. Those files hold **zero**
+unchecked lines, so a file row would be rejected by `check_perimeter`; some
+sit inside a perimeter module anyway (`event/`, `os/`). Either way their
+`#[repr(C)]` is libuv's and libtermkey's layout, not this tree's.
 
 `FOREIGN_ABI_TYPES` in `scripts/ratchet.py` names them, on exactly the "a
 foreign ABI" bullet above and nothing softer: `event/uv.rs`, `vterm/types.rs`,
-`vterm/internal.rs`, `types/termkey.rs`, `lua/abi.rs`,
-`os/libc.rs`, `event/libuv_proc.rs`, `os/pty_proc_unix/mod.rs`. It splits
+`vterm/internal.rs`, `tui/termkey/types.rs`, `lua/abi.rs`, `os/libc.rs`, and
+the two perimeter files a one-struct type joined (`event/libuv_proc.rs`'s
+`LibuvProc`, `os/pty_proc_unix/mod.rs`'s `PtyProc`). It splits
 one metric in two:
 
-- **`repr_c_ffi_types`** — `#[repr(C)]` in those files. Not debt, but
+- **`repr_c_ffi_types`** — `#[repr(C)]` in those files, on the perimeter or
+  off it. Not debt, but
   ratcheted like everything else, so a new foreign type is visible.
 - **`repr_c_editor_state`** — `#[repr(C)]` everywhere else off the perimeter:
   this tree's own aggregates, which are transpiler residue except where a

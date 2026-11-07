@@ -25,7 +25,7 @@ use crate::tui::termkey::termkey::{
     TERMKEY_KEYMOD_SHIFT, TERMKEY_MOUSE_DRAG, TERMKEY_MOUSE_PRESS, TERMKEY_MOUSE_RELEASE,
     TERMKEY_SYM_SUSPEND, TERMKEY_TYPE_KEYSYM, TERMKEY_TYPE_UNICODE, interpret_mouse, strfkey,
 };
-use crate::types::TermKeyKey;
+use crate::tui::termkey::types::TermKeyKey;
 use core::ffi::c_int;
 use core::fmt::Write;
 

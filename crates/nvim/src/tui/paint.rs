@@ -1,7 +1,7 @@
 //! Getting the editor's screen onto the terminal.
 //!
 //! The editor describes what the screen should look like; the TUI keeps a
-//! shadow copy of what it believes is already there ([`crate::types::UGrid`])
+//! shadow copy of what it believes is already there ([`crate::tui::ugrid::UGrid`])
 //! and writes
 //! only the difference. Two costs shape everything here: bytes on the wire,
 //! and the terminal's own work. So the cursor is moved with whatever
@@ -37,6 +37,7 @@ use crate::tui::negotiate::{LEFT_AND_RIGHT_MARGINS, tui_set_term_mode};
 use crate::tui::output::{
     flush, out, out_cstr, out_fmt, out_repeat, terminfo_out, terminfo_print_nums,
 };
+use crate::tui::state::{Rect, TUIData};
 use crate::tui::terminfo::caps::{
     TerminfoDef, kTerm_carriage_return, kTerm_change_scroll_region, kTerm_clear_screen,
     kTerm_clr_eol, kTerm_clr_eos, kTerm_cursor_address, kTerm_cursor_down, kTerm_cursor_home,
@@ -45,7 +46,8 @@ use crate::tui::terminfo::caps::{
     kTerm_parm_insert_line, kTerm_parm_left_cursor, kTerm_parm_right_cursor, kTerm_parm_up_cursor,
     kTerm_set_lr_margin,
 };
-use crate::types::{ApiString, Integer, LineFlags, Rect, ScreenAttr, ScreenChar, TUIData, UCell};
+use crate::tui::ugrid::UCell;
+use crate::types::{ApiString, Integer, LineFlags, ScreenAttr, ScreenChar};
 use core::ffi::c_int;
 use std::io::Write;
 use std::os::unix::ffi::OsStrExt;

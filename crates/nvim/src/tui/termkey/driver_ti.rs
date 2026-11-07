@@ -19,6 +19,8 @@
 
 use crate::narrow::len_as_int;
 use crate::tui::terminfo::caps::{KEYS, MAX_FUNCTION_KEY, key_slot};
+use crate::tui::terminfo::entry::TerminfoEntry;
+use crate::tui::termkey::keyinfo::keyinfo;
 use crate::tui::termkey::termkey::{
     TERMKEY_KEYMOD_SHIFT, TERMKEY_RES_AGAIN, TERMKEY_RES_KEY, TERMKEY_RES_NONE,
     TERMKEY_SYM_BACKSPACE, TERMKEY_SYM_BEGIN, TERMKEY_SYM_CLEAR, TERMKEY_SYM_DELETE,
@@ -28,9 +30,7 @@ use crate::tui::termkey::termkey::{
     TERMKEY_TYPE_KEYSYM, TermKey,
 };
 use crate::tui::termkey::trie::{KeyTrie, Lookup};
-use crate::types::{
-    KeyCode, TermKeyKey, TermKeyResult, TermKeySym, TermKeyType, TerminfoEntry, keyinfo,
-};
+use crate::tui::termkey::types::{KeyCode, TermKeyKey, TermKeyResult, TermKeySym, TermKeyType};
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 

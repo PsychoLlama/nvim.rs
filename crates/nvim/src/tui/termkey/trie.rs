@@ -17,7 +17,7 @@
 //! Ported from libtermkey, Copyright (c) 2007-2011 Paul Evans, under the MIT
 //! license; the notice is reproduced in licenses/libtermkey-LICENSE.txt.
 
-use crate::types::keyinfo;
+use crate::tui::termkey::keyinfo::keyinfo;
 use std::collections::BTreeMap;
 
 /// How far a lookup got before it ran out of trie or of input.

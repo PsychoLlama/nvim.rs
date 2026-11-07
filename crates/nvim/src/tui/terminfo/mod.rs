@@ -20,6 +20,7 @@
 
 pub mod builtin;
 pub mod caps;
+pub mod entry;
 pub mod param;
 
 use crate::charset::transstr_owned;
@@ -27,8 +28,9 @@ use crate::tui::terminfo::caps::{
     BACK_COLOR_ERASE, COLUMNS, EXT_CAPS, FUNCTION_KEYS, KEYS, LINES, MAX_COLORS, STRING_CAPS,
     TerminfoDef, kTerm_reset_cursor_style,
 };
+use crate::tui::terminfo::entry::TerminfoEntry;
 use crate::tui::unibi;
-use crate::types::{ApiString, TerminfoEntry};
+use crate::types::ApiString;
 use core::ffi::CStr;
 use std::borrow::Cow;
 

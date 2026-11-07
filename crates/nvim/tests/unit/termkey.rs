@@ -26,7 +26,7 @@ use neovim::tui::termkey::termkey::{
     TERMKEY_TYPE_OSC, TERMKEY_TYPE_POSITION, TERMKEY_TYPE_UNICODE, TERMKEY_TYPE_UNKNOWN_CSI,
     TermKey, interpret_modereport, interpret_mouse, strfkey,
 };
-use neovim::types::{
+use neovim::tui::termkey::types::{
     KeyCode, TermKeyFormat, TermKeyKey, TermKeyMouseEvent, TermKeyResult, TermKeyType,
 };
 

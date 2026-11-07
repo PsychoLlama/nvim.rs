@@ -35,9 +35,10 @@ use crate::tui::negotiate::{
 };
 use crate::tui::output::{TERMINFO_SEQ_LIMIT, flush, out, terminfo_out};
 use crate::tui::paint::invalidate;
+use crate::tui::state::TUIData;
 use crate::tui::terminfo::caps::{kTerm_from_status_line, kTerm_to_status_line};
 use crate::tui::terminfo::terminfo_info_msg;
-use crate::types::{ApiString, Array, ArrayBuf, DictBuf, Integer, Object, TUIData};
+use crate::types::{ApiString, Array, ArrayBuf, DictBuf, Integer, Object};
 
 const UV_TTY_MODE_NORMAL: uv_tty_mode_t = 0;
 const UV_TTY_MODE_IO: uv_tty_mode_t = 2;

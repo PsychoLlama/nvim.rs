@@ -23,8 +23,8 @@ use crate::log::{LOGLVL_DBG, LOGLVL_WRN, logmsg};
 use crate::message_fmt::msg_bytes_opt;
 use crate::startup::nvim_testing;
 use crate::tui::output::{flush, out, out_fmt};
+use crate::tui::state::{KeyEncoding, TUIData, TermMode, TermModeState};
 use crate::tui::terminfo::caps::kTerm_set_underline_style;
-use crate::types::{KeyEncoding, TUIData, TermMode, TermModeState};
 use core::ffi::CStr;
 
 /// DEC private modes the TUI asks about or sets. The numbers are the

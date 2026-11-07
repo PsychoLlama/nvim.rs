@@ -12,7 +12,7 @@
 //! Ported from libtermkey, Copyright (c) 2007-2011 Paul Evans, under the MIT
 //! license; the notice is reproduced in licenses/libtermkey-LICENSE.txt.
 
-use crate::types::TermKeySym;
+use crate::tui::termkey::types::TermKeySym;
 use core::ffi::CStr;
 
 /// Every symbol's name, indexed by the symbol. Upstream built the same list at

@@ -65,6 +65,7 @@ use crate::tui::negotiate::{
 use crate::tui::output::{flush, out, out_cstr, terminfo_out};
 use crate::tui::paint::cursor_goto;
 use crate::tui::quirks::{Terminal, augment_terminfo, patch_terminfo_bugs};
+use crate::tui::state::{Staging, TUIData, TermInput, TerminfoExt};
 use crate::tui::terminfo::caps::{
     TerminfoDef, kTerm_change_scroll_region, kTerm_clear_screen, kTerm_cursor_normal,
     kTerm_delete_line, kTerm_enter_ca_mode, kTerm_erase_chars, kTerm_exit_attribute_mode,
@@ -72,8 +73,9 @@ use crate::tui::terminfo::caps::{
     kTerm_parm_delete_line, kTerm_parm_insert_line, kTerm_reset_cursor_color,
     kTerm_reset_cursor_style, kTerm_set_lr_margin, kTerm_set_underline_style,
 };
+use crate::tui::terminfo::entry::TerminfoEntry;
 use crate::tui::terminfo::{terminfo_from_builtin, terminfo_from_database};
-use crate::types::{ApiString, HlAttrs, Staging, TUIData, TermInput, TerminfoEntry, TerminfoExt};
+use crate::types::{ApiString, HlAttrs};
 use crate::ui::state::t_colors;
 use crate::ui_client::{ui_client_attach, ui_client_detach, ui_client_set_size};
 use ::libc::{abort, kill};
@@ -288,7 +290,7 @@ impl TUIData {
                 resize_events_enabled: false,
                 modes: core::mem::zeroed(),
                 screenshot: None,
-                cursor_shapes: crate::types::CursorEntry::BLANK_TABLE,
+                cursor_shapes: crate::cursor_shape::CursorEntry::BLANK_TABLE,
                 clear_attrs: core::mem::zeroed(),
                 attrs: vec![DEFAULT_ATTRS],
                 print_attr_id: 0,

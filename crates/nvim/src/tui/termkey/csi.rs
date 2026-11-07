@@ -18,7 +18,7 @@
 use crate::tui::termkey::termkey::{
     TERMKEY_EVENT_PRESS, TERMKEY_EVENT_RELEASE, TERMKEY_EVENT_REPEAT, TERMKEY_EVENT_UNKNOWN,
 };
-use crate::types::TermKeyEvent;
+use crate::tui::termkey::types::TermKeyEvent;
 use core::ffi::c_int;
 
 /// How many parameters the parser records. Upstream hardcoded this and ignored

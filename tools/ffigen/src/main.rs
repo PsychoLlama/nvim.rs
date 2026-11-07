@@ -614,10 +614,13 @@ fn is_marker(ty: &syn::Type) -> bool {
 
 /// The canonical type files that left `src/types/` for the module owning
 /// them. Each is read exactly as a `src/types/` file: its types are closure
-/// roots, and its copy of a name defined twice wins. A row naming a file that
-/// no longer exists is an error, so the list cannot outlive a move.
+/// roots, and its copy of a name defined twice wins. A `file::Name` row
+/// claims that one type only, for a type that joined a file holding others
+/// the chunk never rendered. A row naming a file or type that no longer
+/// exists is an error, so the list cannot outlive a move.
 const TYPE_HOMES: &[&str] = &[
     "src/api/keysets.rs",
+    "src/cursor_shape.rs::CursorShape",
     "src/event/libuv_proc.rs",
     "src/event/objects.rs",
     "src/event/queue.rs",
@@ -625,15 +628,29 @@ const TYPE_HOMES: &[&str] = &[
     "src/lua/abi.rs",
     "src/os/libc.rs",
     "src/os/pty_proc_unix/mod.rs",
+    "src/tui/state.rs",
+    "src/tui/terminfo/entry.rs",
+    "src/tui/termkey/keyinfo.rs",
+    "src/tui/termkey/types.rs",
     "src/vterm/internal.rs",
     "src/vterm/keycodes.rs",
     "src/vterm/types.rs",
 ];
 
+/// Whether `name`, defined in `rel`, is a canonical copy: under `src/types/`
+/// or claimed by a `TYPE_HOMES` row.
+fn is_canonical(rel: &str, name: &str) -> bool {
+    rel.starts_with("src/types/")
+        || TYPE_HOMES.iter().any(|home| match home.split_once("::") {
+            Some((file, ty)) => file == rel && ty == name,
+            None => *home == rel,
+        })
+}
+
 fn collect_file(world: &mut World, rel: &str, ast: syn::File) {
-    let canonical = rel.starts_with("src/types/") || TYPE_HOMES.contains(&rel);
     let bitfields = bitfield_invocations(&ast);
     let add = |world: &mut World, name: String, kind: Kind, align: Option<u64>| {
+        let canonical = is_canonical(rel, &name);
         let def = Def {
             file: rel.to_string(),
             kind,
@@ -1440,9 +1457,7 @@ fn main() {
             .unwrap()
             .to_string_lossy()
             .replace('\\', "/");
-        if TYPE_HOMES.contains(&rel.as_str()) {
-            homes_seen.insert(rel.clone());
-        }
+        homes_seen.insert(rel.clone());
         let text = std::fs::read_to_string(&path).expect("read source");
         let ast = match syn::parse_file(&text) {
             Ok(a) => a,
@@ -1451,8 +1466,15 @@ fn main() {
         collect_file(&mut world, &rel, ast);
     }
     for home in TYPE_HOMES {
+        let found = match home.split_once("::") {
+            Some((file, ty)) => world
+                .by_name
+                .get(ty)
+                .is_some_and(|defs| defs.iter().any(|d| d.file == file)),
+            None => homes_seen.contains(*home),
+        };
         assert!(
-            homes_seen.contains(*home),
+            found,
             "ffigen: TYPE_HOMES names {home}, which is not in the crate"
         );
     }

@@ -29,8 +29,8 @@ mod windows;
 use crate::tui::terminfo::caps::TerminfoDef;
 #[cfg(test)]
 use crate::tui::terminfo::caps::{MAX_FUNCTION_KEY, kTermCount};
+use crate::tui::terminfo::entry::TerminfoEntry;
 use crate::tui::terminfo::is_term_family;
-use crate::types::TerminfoEntry;
 use core::ffi::{CStr, c_int};
 use std::borrow::Cow;
 
@@ -154,7 +154,7 @@ pub const DESCRIPTIONS: [(&str, &Description); 16] = [
 
 /// Does a slot's expansion hold exactly `want`?
 #[cfg(test)]
-fn holds(slot: &crate::types::Capability, want: Option<&'static CStr>) -> bool {
+fn holds(slot: &crate::tui::terminfo::entry::Capability, want: Option<&'static CStr>) -> bool {
     slot.as_deref() == want.map(CStr::to_bytes)
 }
 

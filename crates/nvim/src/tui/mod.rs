@@ -18,6 +18,7 @@ pub mod negotiate;
 pub mod output;
 pub mod paint;
 pub mod quirks;
+pub mod state;
 pub mod terminfo;
 pub mod termkey;
 pub mod tui;
