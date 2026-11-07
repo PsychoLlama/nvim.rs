@@ -131,8 +131,8 @@ count	callee	no_raw	defs	def
 1	Box::new	0	14	
 1	DictRef::retained	0	1	crates/nvim/src/eval/typval/handle.rs
 1	ListRef::retained	0	1	crates/nvim/src/eval/typval/handle.rs
+1	Ok	0	0	
 1	OwnedFd::from_raw_fd	0	0	
-1	Some	0	0	
 1	Win::new	0	1	crates/nvim/src/winlayer.rs
 1	abort	0	0	
 1	action	0	0	

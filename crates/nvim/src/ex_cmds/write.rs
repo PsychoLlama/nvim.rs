@@ -196,8 +196,9 @@ fn check_writable(fname: &CStr) -> Result<(), Failed> {
 
 /// `:write ++p` -- create the missing leading directories.
 fn handle_mkdir_p_arg(args: &ExArg, fname: Option<&CStr>) -> Result<(), Failed> {
-    if args.mkdir_p && file_mkdir(fname.unwrap_or_default(), 0o755 as int32_t) < 0 {
-        return Err(Failed);
+    if args.mkdir_p {
+        // Said, E739 or E32, whatever the code.
+        file_mkdir(fname.unwrap_or_default(), 0o755 as int32_t).map_err(|_| Failed)?;
     }
     Ok(())
 }

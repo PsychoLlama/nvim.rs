@@ -183,16 +183,16 @@ fn appending_to_the_path_adds_one_separator_and_only_for_an_absolute_name() {
     env.remember("PATH");
 
     let original = env.raw("PATH").expect("$PATH is set");
-    assert!(setenv_append_path(&cstr("/foo/bar/baz.exe")));
+    assert!(setenv_append_path(&cstr("/foo/bar/baz.exe")).is_ok());
     assert_eq!(env.raw("PATH"), Some(format!("{original}:/foo/bar")));
 
     assert!(env.set("PATH", "/a/b/c:"));
-    assert!(setenv_append_path(&cstr("/foo/bar/baz.exe")));
+    assert!(setenv_append_path(&cstr("/foo/bar/baz.exe")).is_ok());
     assert_eq!(env.raw("PATH"), Some("/a/b/c:/foo/bar".to_string()));
 
     // A relative name has no directory to add, and `$PATH` is left alone.
     let before = env.raw("PATH");
-    assert!(!setenv_append_path(&cstr("foo/bar/baz.exe")));
+    assert!(setenv_append_path(&cstr("foo/bar/baz.exe")).is_err());
     assert_eq!(env.raw("PATH"), before);
 }
 

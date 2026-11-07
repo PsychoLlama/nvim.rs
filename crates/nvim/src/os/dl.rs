@@ -25,7 +25,7 @@
 )]
 
 use crate::event::libuv::{uv_dlclose, uv_dlerror, uv_dlopen, uv_dlsym};
-use crate::types::uv_lib_t;
+use crate::types::{Failed, uv_lib_t};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
@@ -113,7 +113,7 @@ fn returned_string(res: *const c_char) -> Option<CString> {
 /// Call `funcname` in `libname`, e.g. the Vimscript
 /// `libcall("mylib.so", "somefn", "string-argument")`.
 ///
-/// `None` means the library or the symbol could not be loaded; the reason
+/// `Err` means the library or the symbol could not be loaded; the reason
 /// has already been reported to the user.
 ///
 /// Not `unsafe`, though it calls arbitrary foreign code under an assumed
@@ -125,26 +125,26 @@ pub fn os_libcall(
     funcname: &CStr,
     arg: LibcallArg<'_>,
     want: LibcallReturn,
-) -> Option<LibcallResult> {
+) -> Result<LibcallResult, Failed> {
     let mut lib = match DynLib::open(libname) {
         Ok(lib) => lib,
         Err(err) => {
             crate::semsg!("dlerror = \"{}\"", err.to_string_lossy());
-            return None;
+            return Err(Failed);
         }
     };
     let addr = match lib.symbol(funcname) {
         Ok(addr) => addr,
         Err(err) => {
             crate::semsg!("dlerror = \"{}\"", err.to_string_lossy());
-            return None;
+            return Err(Failed);
         }
     };
     // SAFETY: `addr` is a non-null symbol address; the prototype is the
     // user's assumption, per this function's docs. `lib` outlives the call,
     // so the code stays mapped.
     unsafe {
-        Some(match (want, arg) {
+        Ok(match (want, arg) {
             (LibcallReturn::Str, LibcallArg::Str(s)) => LibcallResult::Str(returned_string(
                 core::mem::transmute::<*mut c_void, StrToStr>(addr)(s.as_ptr()),
             )),

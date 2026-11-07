@@ -502,9 +502,11 @@ fn libcall_common(args: &[TypVal], result: &mut TypVal, out_type: VarType) {
         LibcallReturn::Int
     };
     let answer = match (libname, funcname) {
-        (Some(libname), Some(funcname)) => os_libcall(libname, funcname, arg, want),
+        (Some(libname), Some(funcname)) => os_libcall(libname, funcname, arg, want).ok(),
         _ => None,
     };
+    // A library or symbol that would not load has said why; E364 follows
+    // either way.
     match answer {
         None => {
             let funcname = msg_cstr_opt(funcname);

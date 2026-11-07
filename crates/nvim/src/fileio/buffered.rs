@@ -204,10 +204,7 @@ impl BufferedFile {
     /// libuv error code saying why not.
     pub fn open(fname: &CStr, flags: FileOpenFlags, mode: c_int) -> Result<Self, c_int> {
         if has(flags, kFileMkDir) {
-            let mkdir_ret = file_mkdir(fname, 0o755);
-            if mkdir_ret < 0 {
-                return Err(mkdir_ret);
-            }
+            file_mkdir(fname, 0o755)?;
         }
         let oflags = open_flags(flags);
         let writing = oflags & O_ACCMODE != O_RDONLY;

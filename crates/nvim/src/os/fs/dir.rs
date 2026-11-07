@@ -130,12 +130,12 @@ pub fn mkdir_recurse(dir: &CStr, mode: int32_t) -> Result<Option<CString>, Mkdir
 
 /// Makes the directory `fname` would live in, if it is missing.
 ///
-/// Answers 0, or the libuv error code -- having reported it -- when the
+/// `Err` carries the libuv error code -- having reported it -- when the
 /// directories could not be made (-1 for a name that is all directory).
-pub(crate) fn file_mkdir(fname: &CStr, mode: int32_t) -> c_int {
+pub(crate) fn file_mkdir(fname: &CStr, mode: int32_t) -> Result<(), c_int> {
     let name = fname.to_bytes();
     if dir_of_file_exists(name) {
-        return 0;
+        return Ok(());
     }
     let tail = tail_with_sep_index(name);
     // `tail` is past the start here (`dir_of_file_exists` answers true when
@@ -144,10 +144,10 @@ pub(crate) fn file_mkdir(fname: &CStr, mode: int32_t) -> c_int {
     // written for.
     if vim_ispathsep(c_int::from(name[name.len() - 1])) {
         emsg(gettext(e_noname));
-        return -1;
+        return Err(-1);
     }
     match mkdir_recurse(&cstr::owned(&name[..tail]), mode) {
-        Ok(_) => 0,
+        Ok(_) => Ok(()),
         Err(failure) => {
             let dir = failure.dir.as_deref().unwrap_or(c"");
             semsg!(
@@ -155,7 +155,7 @@ pub(crate) fn file_mkdir(fname: &CStr, mode: int32_t) -> c_int {
                 msg_cstr(dir),
                 msg_cstr(failure.why)
             );
-            failure.code
+            Err(failure.code)
         }
     }
 }

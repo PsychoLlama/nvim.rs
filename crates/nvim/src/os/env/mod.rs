@@ -38,7 +38,7 @@ use crate::os::fs::{dirname_within, os_err_name, os_strerror, realpath};
 use crate::os::state::{didset_vim, didset_vimruntime};
 use crate::path::{path_is_absolute, tail_with_sep_index};
 use crate::startup::nvim_testing;
-use crate::types::{Candidate, Expand, IOSIZE, MAXPATHL, int64_t, size_t};
+use crate::types::{Candidate, Expand, Failed, IOSIZE, MAXPATHL, int64_t, size_t};
 use ::libc::{uname, utsname};
 use core::ffi::{CStr, c_int};
 use std::ffi::{CString, OsStr};
@@ -321,11 +321,21 @@ pub fn get_env_name(_expand: &Expand, idx: usize) -> Option<Candidate> {
     Some(Candidate::Owned(name))
 }
 
-/// Append the directory holding `fname` to `$PATH`. Answers whether it was.
-pub fn setenv_append_path(fname: &CStr) -> bool {
+/// Why [`setenv_append_path`] left `$PATH` alone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PathNotAppended {
+    /// `fname` was relative, which no caller should hand in: said as an
+    /// internal error.
+    NotAbsolute(Failed),
+    /// `$PATH` would grow past what the environment holds; nothing said.
+    TooLong,
+}
+
+/// Append the directory holding `fname` to `$PATH`.
+pub fn setenv_append_path(fname: &CStr) -> Result<(), PathNotAppended> {
     if !path_is_absolute(fname) {
         internal_error(c"os_setenv_append_path()");
-        return false;
+        return Err(PathNotAppended::NotAbsolute(Failed));
     }
     let dir = &fname.to_bytes()[..tail_with_sep_index(fname.to_bytes())];
     debug_assert!(dir.len() + 1 < MAXPATHL as usize);
@@ -333,7 +343,7 @@ pub fn setenv_append_path(fname: &CStr) -> bool {
         .map(|path| path.to_vec())
         .unwrap_or_default();
     if path.len() + dir.len() + 2 >= MAX_ENVPATHLEN {
-        return false;
+        return Err(PathNotAppended::TooLong);
     }
     let mut joined = path;
     if joined.last().is_some_and(|&last| last != ENV_SEPCHAR) {
@@ -341,7 +351,7 @@ pub fn setenv_append_path(fname: &CStr) -> bool {
     }
     joined.extend_from_slice(dir);
     env_set(c"PATH", &cstr::owned(&joined));
-    true
+    Ok(())
 }
 
 /// Whether the shell `sh` looks like it resolves to `cmd.exe`: `cmd` or
