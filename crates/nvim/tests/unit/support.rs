@@ -595,11 +595,17 @@ impl<'a> Probe<'a> {
             "silent! tabonly!",
             "silent! only!",
             "silent! buffer! 1",
-            // Not `2,$` alone: with buffer 1 the last, that is a backwards
-            // range, which `silent!` swaps into `1,2` -- and wipes buffer 1.
-            "if bufnr('$') > 1 | silent! 2,$bwipeout! | endif",
             "silent! %delete _",
             "silent! 0file",
+            // After `:0file`, which keeps buffer 1's old name as a new
+            // unlisted buffer, and each buffer by number, not a `2,$` range,
+            // which reaches listed buffers only. A leftover keeps its short
+            // name: re-statted from the next case's directory, `src/a.c`
+            // names that case's file, a recycled inode makes the two "the
+            // same file", and the next `:edit src/a.c` lands in the leftover
+            // instead of reusing buffer 1.
+            "for b in getbufinfo() | if b.bufnr != 1 | \
+             silent! exe 'bwipeout!' b.bufnr | endif | endfor",
             "silent! delmarks!",
             "silent! delmarks <>[]\"^.",
             "set nomodified",
