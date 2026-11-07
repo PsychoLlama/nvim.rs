@@ -301,7 +301,7 @@ pub(crate) fn change_dir(new_dir: &CStr, scope: CdScope) -> Result<(), Failed> {
         .is_none_or(|pdir| pathcmp(pdir, &new_dir, None) != 0);
     if dir_differs {
         do_autocmd_dirchanged(new_dir.as_cstr(), scope, kCdCauseManual, true);
-        if vim_chdir(new_dir.as_cstr()) != 0 {
+        if vim_chdir(new_dir.as_cstr()).is_err() {
             emsg(gettext(e_failed));
             return Err(Failed);
         }

@@ -16,12 +16,10 @@
 
 use super::*;
 use crate::cstr;
+use crate::fileio::IoFailed;
 use crate::memory::XString;
-use crate::types::{
-    Failed, MAXPATHL, kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow,
-};
+use crate::types::{MAXPATHL, kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow};
 use crate::winlayer::Buf;
-use core::ffi::c_int;
 use std::ffi::CStr;
 
 /// Fire `DirChangedPre` (`pre`) or `DirChanged` for a move to `new_dir`.
@@ -86,8 +84,9 @@ pub(crate) fn do_autocmd_dirchanged(new_dir: &CStr, scope: CdScope, cause: CdCau
 
 /// Change to the directory holding `fname`.
 ///
-/// Caller must call `shorten_fnames()`.
-pub(crate) fn vim_chdirfile(fname: &CStr, cause: CdCause) -> Result<(), Failed> {
+/// Caller must call `shorten_fnames()`. Nothing is said when the change
+/// fails.
+pub(crate) fn vim_chdirfile(fname: &CStr, cause: CdCause) -> Result<(), IoFailed> {
     let name = fname.to_bytes();
     let mut dir = name[..name.len().min(MAXPATHL as usize - 1)].to_vec();
     dir.truncate(tail_with_sep_index(&dir));
@@ -103,7 +102,7 @@ pub(crate) fn vim_chdirfile(fname: &CStr, cause: CdCause) -> Result<(), Failed> 
         do_autocmd_dirchanged(&dir, kCdScopeWindow, cause, true);
     }
     if os_chdir(&dir) != 0 {
-        return Err(Failed);
+        return Err(IoFailed);
     }
     if announce {
         do_autocmd_dirchanged(&dir, kCdScopeWindow, cause, false);
@@ -112,12 +111,15 @@ pub(crate) fn vim_chdirfile(fname: &CStr, cause: CdCause) -> Result<(), Failed> 
 }
 
 /// Change directory to `new_dir`, searching `'cdpath'` for a relative name.
-pub(crate) fn vim_chdir(new_dir: &CStr) -> c_int {
+///
+/// A name the search cannot find has been said (E344/E345); a directory
+/// found but not entered has not. The caller says E472 either way.
+pub(crate) fn vim_chdir(new_dir: &CStr) -> Result<(), IoFailed> {
     // A copy: the search can run user code, which may rename the buffer.
     let rel_fname = Buf::current().name.full().map(XString::from_cstr);
     let rel_fname = rel_fname.as_ref().map(XString::as_cstr);
     match find_directory_in_path(new_dir.to_bytes(), FileNameOpts::MESS, rel_fname) {
-        Some(dir_name) => os_chdir(dir_name.as_cstr()),
-        None => -1,
+        Some(dir_name) if os_chdir(dir_name.as_cstr()) == 0 => Ok(()),
+        _ => Err(IoFailed),
     }
 }
