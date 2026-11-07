@@ -422,20 +422,20 @@ pub(crate) fn trans_function_name(
     let selects = matches!(lv.target, Target::Slot { .. } | Target::NewKey { .. });
     let range = matches!(lv.target, Target::Slot { span, .. } if span.range);
 
-    if end_at == Some(0) {
+    if end_at == Ok(0) {
         if !skip {
             emsg(gettext(c"E129: Function name required"));
         }
         return answer;
     }
     let end = match end_at {
-        Some(end) if !(selects && (lead > 2 || range)) => start + end,
+        Ok(end) if !(selects && (lead > 2 || range)) => start + end,
         _ => {
             // Report an invalid expression in braces, unless the
             // evaluation was cancelled by an aborting error, an interrupt
             // or an exception.
             if !aborting() {
-                if end_at.is_some() {
+                if end_at.is_ok() {
                     let start = msg_bytes(&text[start..]);
                     semsg!("E475: Invalid argument: {start}");
                 }

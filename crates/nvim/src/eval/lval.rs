@@ -55,11 +55,24 @@ use crate::ex_eval::aborting;
 use crate::memory::XString;
 use crate::message::state::emsg_severe;
 use crate::types::{
-    DictItem, TypVal, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT, VAR_LIST, VarLock, kListLenUnknown,
+    DictItem, Failed, TypVal, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT, VAR_LIST, VarLock, kListLenUnknown,
 };
 
 /// A freshly declared typval.
 pub(super) const UNSET_TV: TypVal = TV_INITIAL_VALUE;
+
+/// Why [`get_lval`] resolved no left-hand side.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum LvalError {
+    /// Refused out loud: an undefined variable, a bad index or key, a
+    /// locked or read-only item, an invalid name, an index expression that
+    /// failed. Some refusals are said even under `GLV_QUIET` (E461, the
+    /// lock checks, the index expression's own errors), as upstream's are.
+    Said(Failed),
+    /// Refused under `GLV_QUIET`, which asked for no message and got none:
+    /// the name does not resolve.
+    Quiet,
+}
 
 /// The part of a List or Blob a subscript named: one index, or a range.
 #[derive(Clone, Copy, Default)]
@@ -296,7 +309,10 @@ impl Walk<'_, '_> {
     }
 
     /// Run `f` over the slot's value, reporting a slot that has gone.
-    fn with_slot<R>(&mut self, f: impl FnOnce(&mut TypVal, &mut VarLock) -> R) -> Option<R> {
+    fn with_slot<R>(
+        &mut self,
+        f: impl FnOnce(&mut TypVal, &mut VarLock) -> R,
+    ) -> Result<R, LvalError> {
         let found = slot_value(&mut self.slot, self.root, self.no_autoload, f);
         self.no_autoload = true;
         if found.is_none() && !self.quiet {
@@ -315,24 +331,34 @@ impl Walk<'_, '_> {
                 }
             }
         }
-        found
+        found.ok_or_else(|| self.refused())
+    }
+
+    /// The refusal a quiet-aware check just made: said, unless `GLV_QUIET`
+    /// asked for silence.
+    const fn refused(&self) -> LvalError {
+        if self.quiet {
+            LvalError::Quiet
+        } else {
+            LvalError::Said(Failed)
+        }
     }
 
     /// Read the container out of the slot again if an index expression has
     /// run since it was last read.
-    fn refresh(&mut self) -> Option<()> {
+    fn refresh(&mut self) -> Result<(), LvalError> {
         if self.stale {
             self.container = self.with_slot(|tv, _| Container::of(tv))?;
             self.stale = false;
         }
-        Some(())
+        Ok(())
     }
 
     /// The checks a container has to pass before a subscript may select
     /// into it, and the empty List or Blob that a null one stands in for.
     /// The first call is the one that finds the variable, and the one that
     /// notices `v:lua`.
-    fn open(&mut self, opener: u8, first: bool) -> Option<Opened> {
+    fn open(&mut self, opener: u8, first: bool) -> Result<Opened, LvalError> {
         enum Refused {
             Dot,
             Index,
@@ -358,19 +384,19 @@ impl Walk<'_, '_> {
         })?;
         let container = match checked {
             Ok(Some(container)) => container,
-            Ok(None) => return Some(Opened::LuaFunc),
+            Ok(None) => return Ok(Opened::LuaFunc),
             Err(Refused::Dot) => {
                 if !self.quiet {
                     let name = msg_bytes(self.text);
                     semsg!("E1203: Dot can only be used on a dictionary: {name}");
                 }
-                return None;
+                return Err(self.refused());
             }
             Err(Refused::Index) => {
                 if !self.quiet {
                     emsg_static(c"E689: Can only index a List, Dictionary or Blob");
                 }
-                return None;
+                return Err(self.refused());
             }
         };
         self.container = container;
@@ -380,13 +406,13 @@ impl Walk<'_, '_> {
             if !self.quiet {
                 emsg_static(c"E708: [:] must come last");
             }
-            return None;
+            return Err(self.refused());
         }
-        Some(Opened::Ready)
+        Ok(Opened::Ready)
     }
 
     /// The `.key` at `at`: a run of name characters.
-    fn parse_key(&mut self) -> Option<Key> {
+    fn parse_key(&mut self) -> Result<Key, LvalError> {
         let start = self.at + 1;
         let len = self.text[start.min(self.text.len())..]
             .iter()
@@ -396,10 +422,10 @@ impl Walk<'_, '_> {
             if !self.quiet {
                 emsg_static(c"E713: Cannot use empty key after .");
             }
-            return None;
+            return Err(self.refused());
         }
         self.at = start + len;
-        Some(Key::Text { start, len })
+        Ok(Key::Text { start, len })
     }
 
     /// Step past the white space at `at`.
@@ -414,7 +440,7 @@ impl Walk<'_, '_> {
         var1: &mut TypVal,
         var2: &mut TypVal,
         empty1: &mut bool,
-    ) -> Option<Key> {
+    ) -> Result<Key, LvalError> {
         self.at += 1;
         self.skip_white();
         *empty1 = byte_at(self.text, self.at) == b':';
@@ -433,31 +459,34 @@ impl Walk<'_, '_> {
             if !self.quiet {
                 emsg_static(e_missbrac);
             }
-            return None;
+            return Err(self.refused());
         }
         self.at += 1;
-        Some(Key::Value)
+        Ok(Key::Value)
     }
 
     /// One index expression, evaluated at `at` into `var` and checked for
     /// being usable as a string.
-    fn eval_into(&mut self, var: &mut TypVal) -> Option<()> {
+    fn eval_into(&mut self, var: &mut TypVal) -> Result<(), LvalError> {
         let mut cursor = Cursor::new(self.text);
         cursor.set_offset(self.at);
         let evaluated = eval1(&mut cursor, var, true);
         self.at = cursor.offset();
         self.stale = true;
-        evaluated.and_then(|()| tv_check_str(var)).ok()
+        // Both report their own errors, quiet or not.
+        evaluated
+            .and_then(|()| tv_check_str(var))
+            .map_err(|_| LvalError::Said(Failed))
     }
 
     /// The `: expr]` half of a `[n : m]`, with `at` on the colon.
-    fn parse_range(&mut self, var2: &mut TypVal) -> Option<()> {
+    fn parse_range(&mut self, var2: &mut TypVal) -> Result<(), LvalError> {
         self.refresh()?;
         if matches!(self.container, Container::Dict(_)) {
             if !self.quiet {
                 emsg_static(e_cannot_slice_dictionary);
             }
-            return None;
+            return Err(self.refused());
         }
         // The value being assigned has to be sliceable too. No value is
         // `:unlet`, which assigns nothing.
@@ -469,7 +498,7 @@ impl Walk<'_, '_> {
             if !self.quiet {
                 emsg_static(c"E709: [:] requires a List or Blob value");
             }
-            return None;
+            return Err(self.refused());
         }
         // Past the `:` and the white space after it.
         self.at += 1;
@@ -481,7 +510,7 @@ impl Walk<'_, '_> {
             self.eval_into(var2)?;
         }
         self.span.range = true;
-        Some(())
+        Ok(())
     }
 
     /// Select what the subscript just parsed names out of the container,
@@ -494,7 +523,7 @@ impl Walk<'_, '_> {
         var1: &TypVal,
         var2: &TypVal,
         empty1: bool,
-    ) -> Option<ControlFlow<Target>> {
+    ) -> Result<ControlFlow<Target>, LvalError> {
         self.refresh()?;
         match core::mem::replace(&mut self.container, Container::Other) {
             Container::Dict(dict) => self.dict_item(dict, key, var1),
@@ -508,7 +537,7 @@ impl Walk<'_, '_> {
                 };
                 self.blob(&blob, var1, var2, empty1)?;
                 // A Blob byte is never a container, so this is the end.
-                Some(ControlFlow::Break(Target::Blob {
+                Ok(ControlFlow::Break(Target::Blob {
                     blob,
                     span: self.span,
                 }))
@@ -526,7 +555,7 @@ impl Walk<'_, '_> {
         dict: Option<DictRef>,
         key: &Key,
         var1: &TypVal,
-    ) -> Option<ControlFlow<Target>> {
+    ) -> Result<ControlFlow<Target>, LvalError> {
         let mut numbuf = NumBuf::new();
         let key_bytes: Vec<u8> = match *key {
             Key::Text { start, len } => self.text[start..start + len].to_vec(),
@@ -558,14 +587,14 @@ impl Walk<'_, '_> {
                 && var_wrong_func_name_named(&key_bytes, existing.is_none()))
                 || valid_varname_named(&key_bytes).is_err();
             if wrong {
-                return None;
+                return Err(LvalError::Said(Failed));
             }
         }
 
         let is_value_key = matches!(key, Key::Value);
         if existing.is_some_and(|(_, lua)| lua) && is_value_key && self.value.is_none() {
             semsg!("E461: Illegal variable name: v:['lua']");
-            return None;
+            return Err(LvalError::Said(Failed));
         }
 
         let Some((flags, _)) = existing else {
@@ -574,7 +603,7 @@ impl Walk<'_, '_> {
             {
                 let name = msg_bytes(self.text);
                 semsg!("E461: Illegal variable name: {name}");
-                return None;
+                return Err(LvalError::Said(Failed));
             }
             // The key does not exist. It may be added -- unless something
             // follows it to subscript, or this is an `:unlet`.
@@ -590,9 +619,9 @@ impl Walk<'_, '_> {
                     let shown = msg_bytes(shown);
                     semsg!("E716: Key not present in Dictionary: \"{shown}\"");
                 }
-                return None;
+                return Err(self.refused());
             }
-            return Some(ControlFlow::Break(Target::NewKey {
+            return Ok(ControlFlow::Break(Target::NewKey {
                 dict,
                 key: key_bytes,
             }));
@@ -604,17 +633,23 @@ impl Walk<'_, '_> {
         let refused = self.flags & GLV_READ_ONLY.cast_signed() == 0
             && (var_check_ro_named(flags, named) || var_check_lock_named(flags, named));
         if refused {
-            return None;
+            return Err(LvalError::Said(Failed));
         }
         self.slot = Slot::Key {
             dict,
             key: key_bytes,
         };
-        Some(ControlFlow::Continue(()))
+        Ok(ControlFlow::Continue(()))
     }
 
     /// Resolve a `[n]` or `[n:m]` against `blob`.
-    fn blob(&mut self, blob: &BlobRef, var1: &TypVal, var2: &TypVal, empty1: bool) -> Option<()> {
+    fn blob(
+        &mut self,
+        blob: &BlobRef,
+        var1: &TypVal,
+        var2: &TypVal,
+        empty1: bool,
+    ) -> Result<(), LvalError> {
         let bloblen = blob_len(Some(blob));
         self.span.n1 = if empty1 {
             0
@@ -622,13 +657,13 @@ impl Walk<'_, '_> {
             index_of(tv_get_number(var1))
         };
         let n1 = i64::from(self.span.n1);
-        blob_check_index(bloblen, n1, self.quiet).ok()?;
+        blob_check_index(bloblen, n1, self.quiet).map_err(|_| self.refused())?;
         if self.span.range && !self.span.empty2 {
             self.span.n2 = index_of(tv_get_number(var2));
             let n2 = i64::from(self.span.n2);
-            blob_check_range(bloblen, n1, n2, self.quiet).ok()?;
+            blob_check_range(bloblen, n1, n2, self.quiet).map_err(|_| self.refused())?;
         }
-        Some(())
+        Ok(())
     }
 
     /// Resolve a `[n]` or `[n:m]` against `list`, moving the slot onto the
@@ -639,36 +674,41 @@ impl Walk<'_, '_> {
         var1: &TypVal,
         var2: &TypVal,
         empty1: bool,
-    ) -> Option<ControlFlow<Target>> {
+    ) -> Result<ControlFlow<Target>, LvalError> {
         self.span.n1 = if empty1 {
             0
         } else {
             index_of(tv_get_number(var1))
         };
         let quiet = self.quiet;
-        let at = list_check_range_index_one(list.as_deref(), &mut self.span.n1, quiet)?;
+        let at = list_check_range_index_one(list.as_deref(), &mut self.span.n1, quiet)
+            .ok_or_else(|| self.refused())?;
         if self.span.range && !self.span.empty2 {
             self.span.n2 = index_of(tv_get_number(var2));
             let span = &mut self.span;
             list_check_range_index_two(list.as_deref(), &mut span.n1, at, &mut span.n2, quiet)
-                .ok()?;
+                .map_err(|_| self.refused())?;
         }
         let list = list.expect("an index of the list was found");
         self.slot = Slot::Item { list, index: at };
-        Some(ControlFlow::Continue(()))
+        Ok(ControlFlow::Continue(()))
     }
 
     /// Every subscript from `at` on, one container at a time. `var1` and
     /// `var2` are the caller's, so that a refusal part-way through still
     /// leaves whichever was evaluated for it to release.
-    fn walk(&mut self, var1: &mut TypVal, var2: &mut TypVal) -> Option<ControlFlow<(), Target>> {
+    fn walk(
+        &mut self,
+        var1: &mut TypVal,
+        var2: &mut TypVal,
+    ) -> Result<ControlFlow<(), Target>, LvalError> {
         // The variable is looked up whatever follows its name: an undefined
         // one is E121 even before a `.=`, and `v:lua` stops the walk.
         let Some(mut opener) = self.opener() else {
             if self.with_slot(|tv, _| tv_is_luafunc(tv))? {
-                return Some(ControlFlow::Break(()));
+                return Ok(ControlFlow::Break(()));
             }
-            return Some(ControlFlow::Continue(Target::Slot {
+            return Ok(ControlFlow::Continue(Target::Slot {
                 slot: Slot::Variable,
                 span: self.span,
             }));
@@ -676,7 +716,7 @@ impl Walk<'_, '_> {
         let mut first = true;
         loop {
             if let Opened::LuaFunc = self.open(opener, first)? {
-                return Some(ControlFlow::Break(()));
+                return Ok(ControlFlow::Break(()));
             }
             first = false;
             let mut empty1 = false;
@@ -686,7 +726,7 @@ impl Walk<'_, '_> {
                 self.parse_index(var1, var2, &mut empty1)?
             };
             if let ControlFlow::Break(target) = self.descend(&key, var1, var2, empty1)? {
-                return Some(ControlFlow::Continue(target));
+                return Ok(ControlFlow::Continue(target));
             }
             clear_local(var1);
             clear_local(var2);
@@ -696,7 +736,7 @@ impl Walk<'_, '_> {
             }
         }
         let slot = core::mem::replace(&mut self.slot, Slot::Variable);
-        Some(ControlFlow::Continue(Target::Slot {
+        Ok(ControlFlow::Continue(Target::Slot {
             slot,
             span: self.span,
         }))
@@ -705,9 +745,9 @@ impl Walk<'_, '_> {
 
 /// Resolve the left-hand side `text` starts with, for an assignment of
 /// `value` or (with none) an `:unlet` or a reader. Answers what it resolved
-/// and where it ended in `text`; an end of `None` is an error already
-/// reported, and the left-hand side may still have a name, which is how a
-/// caller tells "carry on parsing" from "stop".
+/// and where it ended in `text`, or why it did not resolve -- and the
+/// left-hand side may still have a name then, which is how a caller tells
+/// "carry on parsing" from "stop".
 ///
 /// `skip` only finds the end of the name: nothing is evaluated or looked
 /// up.
@@ -718,7 +758,7 @@ pub(crate) fn get_lval<'a>(
     skip: bool,
     flags: c_int,
     fne_flags: c_int,
-) -> (LValue<'a>, Option<usize>) {
+) -> (LValue<'a>, Result<usize, LvalError>) {
     let quiet = flags & GLV_QUIET.cast_signed() != 0;
     let mut lval = LValue::new(text);
 
@@ -728,7 +768,7 @@ pub(crate) fn get_lval<'a>(
         lval.named = true;
         lval.root_len = end;
         lval.end = end;
-        return (lval, Some(end));
+        return (lval, Ok(end));
     }
 
     let found = name_end(text, fne_flags);
@@ -745,7 +785,7 @@ pub(crate) fn get_lval<'a>(
         {
             let rest = msg_bytes(&text[p..]);
             semsg!("E488: Trailing characters: {rest}");
-            return (lval, None);
+            return (lval, Err(LvalError::Said(Failed)));
         }
         lval.expanded = expanded_name(&text[..p], open, found.brace_close);
         if lval.expanded.is_none() {
@@ -753,7 +793,7 @@ pub(crate) fn get_lval<'a>(
                 emsg_severe.set(true);
                 let name = msg_bytes(text);
                 semsg!("E475: Invalid argument: {name}");
-                return (lval, None);
+                return (lval, Err(LvalError::Said(Failed)));
             }
         } else {
             lval.named = true;
@@ -766,7 +806,7 @@ pub(crate) fn get_lval<'a>(
 
     // Nothing is subscripted: the name is the whole left-hand side.
     if (after != b'[' && after != b'.') || !lval.named {
-        return (lval, Some(p));
+        return (lval, Ok(p));
     }
 
     let LValue { expanded, .. } = &lval;
@@ -799,19 +839,19 @@ pub(crate) fn get_lval<'a>(
     clear_local(&mut var2);
     let end = walk.at;
     match walked {
-        None => (lval, None),
-        Some(ControlFlow::Break(())) => {
+        Err(refused) => (lval, Err(refused)),
+        Ok(ControlFlow::Break(())) => {
             // `v:lua`: the `.` and the name after it are the caller's.
             lval.target = Target::Slot {
                 slot: Slot::Variable,
                 span: Span::default(),
             };
-            (lval, Some(p))
+            (lval, Ok(p))
         }
-        Some(ControlFlow::Continue(target)) => {
+        Ok(ControlFlow::Continue(target)) => {
             lval.target = target;
             lval.end = end;
-            (lval, Some(end))
+            (lval, Ok(end))
         }
     }
 }

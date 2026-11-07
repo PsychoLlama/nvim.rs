@@ -587,7 +587,7 @@ fn ex_let_one(
     let (mut lval, end) = get_lval(text, Some(tv), false, false, 0, FNE_CHECK_START);
     // A name that would not parse has been refused out loud: the walk is
     // not quiet here.
-    let end = end.filter(|_| lval.has_name()).ok_or(Failed)?;
+    let end = end.ok().filter(|_| lval.has_name()).ok_or(Failed)?;
     if !ends_target(endchars, text, end) {
         emsg_static(e_letunexp);
         return Err(Failed);

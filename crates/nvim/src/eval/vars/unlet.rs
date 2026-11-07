@@ -104,11 +104,12 @@ fn ex_unletlock(excmd: &mut ExArg, start: usize, glv_flags: c_int, action: Actio
                 // An error, but carry on parsing.
                 error = true;
             }
-            let trailing = end.map(|end| c_int::from(byte_at(text, end)));
-            let Some(end) =
-                end.filter(|_| trailing.is_some_and(|c| ascii_iswhite(c) || ends_excmd(c) != 0))
+            let trailing = end.ok().map(|end| c_int::from(byte_at(text, end)));
+            let Some(end) = end
+                .ok()
+                .filter(|_| trailing.is_some_and(|c| ascii_iswhite(c) || ends_excmd(c) != 0))
             else {
-                if let Some(end) = end {
+                if let Ok(end) = end {
                     emsg_severe.set(true);
                     let rest = msg_bytes(&text[end..]);
                     semsg!("E488: Trailing characters: {rest}");

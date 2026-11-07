@@ -98,7 +98,7 @@ pub fn f_islocked(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let text = numbuf.string(&args[0]).to_bytes();
     let flags = (GLV_NO_AUTOLOAD | GLV_READ_ONLY).cast_signed();
     let (mut lval, end) = get_lval(text, None, false, false, flags, FNE_CHECK_START);
-    let Some(end) = end.filter(|_| lval.has_name()) else {
+    let Some(end) = end.ok().filter(|_| lval.has_name()) else {
         return;
     };
     if end < text.len() {

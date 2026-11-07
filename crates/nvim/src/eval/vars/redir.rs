@@ -82,10 +82,10 @@ pub(crate) fn var_redir_start(name: &[u8], append: bool) -> Result<(), Failed> {
     // redirection, so it is the caller's text that is read and not the
     // copy kept above.
     let (mut lval, end) = get_lval(name, None, false, false, 0, FNE_CHECK_START);
-    let trailing = end.map(|end| byte_at(name, end));
+    let trailing = end.ok().map(|end| byte_at(name, end));
     if trailing.is_none_or(|c| c != 0) || !lval.has_name() {
         match end {
-            Some(end) if byte_at(name, end) != 0 => {
+            Ok(end) if byte_at(name, end) != 0 => {
                 let rest = msg_bytes(&name[end..]);
                 semsg!("E488: Trailing characters: {rest}");
             }
@@ -152,7 +152,7 @@ pub fn var_redir_stop() {
     let mut tv = string_value(text);
     // Resolve the name again: inside a Dict or List it may have moved since.
     let (mut lval, end) = get_lval(&target, None, false, false, 0, FNE_CHECK_START);
-    if end.is_some() && lval.has_name() {
+    if end.is_ok() && lval.has_name() {
         set_var_lval(&mut lval, &mut tv, false, false, Some(b'.'));
     }
     clear_local(&mut tv);
