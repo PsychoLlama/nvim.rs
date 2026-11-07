@@ -52,8 +52,8 @@ use crate::smsg;
 use crate::startup::stdin_fd;
 use crate::types::ApiString;
 use crate::types::{
-    FAIL, FILE, OK, OptInt, ptrdiff_t, size_t, uv__queue, uv__work, uv_buf_t, uv_fs_t, uv_fs_type,
-    uv_loop_s, uv_loop_t, uv_req_type, uv_stat_t, uv_timespec_t,
+    FILE, OptInt, ptrdiff_t, size_t, uv__queue, uv__work, uv_buf_t, uv_fs_t, uv_fs_type, uv_loop_s,
+    uv_loop_t, uv_req_type, uv_stat_t, uv_timespec_t,
 };
 use crate::ui::ui_call_chdir;
 use ::libc::{fcntl, fdopen, write};
@@ -217,13 +217,11 @@ fn fs_result(start: impl FnOnce(*mut uv_fs_t) -> c_int) -> c_int {
     fs_request(start, |result, _| result)
 }
 
-/// [`fs_request`] answering `OK`/`FAIL`, which is what most of this
-/// family's callers want.
-fn fs_ok(start: impl FnOnce(*mut uv_fs_t) -> c_int) -> c_int {
-    if fs_result(start) == LIBUV_SUCCESS {
-        OK
-    } else {
-        FAIL
+/// [`fs_request`] answering `Ok`, or the libuv error code.
+fn fs_ok(start: impl FnOnce(*mut uv_fs_t) -> c_int) -> Result<(), c_int> {
+    match fs_result(start) {
+        LIBUV_SUCCESS => Ok(()),
+        code => Err(code),
     }
 }
 

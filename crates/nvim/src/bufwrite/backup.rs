@@ -428,7 +428,7 @@ fn backup_by_copy(
         }
 
         // Same protection as the original file, minus the s-bit.
-        os_setperm(path, perm & 0o777);
+        let _ = os_setperm(path, perm & 0o777);
         // Try to give the backup the original's group. Failing that, give
         // the group the same bits as others.
         let gid = file_info_old.stat.st_gid;
@@ -440,7 +440,7 @@ fn backup_by_copy(
                 file_info_old.gid().unwrap_or(uv_gid_t::MAX),
             ) != 0
         {
-            os_setperm(path, (perm & 0o707) | ((perm & 0o7) << 3));
+            let _ = os_setperm(path, (perm & 0o707) | ((perm & 0o7) << 3));
         }
         let atime = file_info_old.stat.st_atim.tv_sec as f64;
         let mtime = file_info_old.stat.st_mtim.tv_sec as f64;
@@ -593,7 +593,7 @@ pub(crate) fn apply_patchmode(
         }
     }
     if let Some(org) = &org {
-        os_setperm(org.as_cstr(), getperm(fname) & 0o777);
+        let _ = os_setperm(org.as_cstr(), getperm(fname) & 0o777);
     }
 }
 
@@ -713,7 +713,7 @@ pub(crate) fn finish_write(
         if file_info(wfname).is_none_or(|info| info.stat.st_uid != uid || info.stat.st_gid != gid) {
             let _ = std::os::unix::fs::fchown(&file, file_info_old.uid(), file_info_old.gid());
             if target.perm >= 0 {
-                os_setperm(wfname, target.perm); // may have changed
+                let _ = os_setperm(wfname, target.perm); // may have changed
             }
         }
         buf_set_file_id(buffer);
@@ -730,7 +730,7 @@ pub(crate) fn finish_write(
         perm &= !0o200; // reset the 'w' bit for security reasons
     }
     if perm >= 0 {
-        os_setperm(wfname, perm); // same permissions as the old file
+        let _ = os_setperm(wfname, perm); // same permissions as the old file
     }
     // The ACL goes on before the user changes: an ACL cannot be set on a
     // file the user does not own.

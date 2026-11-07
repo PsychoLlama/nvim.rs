@@ -31,7 +31,7 @@ use crate::path::tail_index;
 
 use super::*;
 use crate::regexp::{OwnedProg, RE_MAGIC};
-use crate::types::{MAXPATHL, OK};
+use crate::types::MAXPATHL;
 use crate::winlayer::buffers;
 
 /// `S_IFLNK`: the file type bits of a symbolic link.
@@ -187,17 +187,17 @@ fn rename_with_tmp(from: &CStr, to: &CStr) -> Result<(), IoFailed> {
         if path_exists(&temp) {
             continue;
         }
-        if os_rename(from, &temp) != OK {
+        if os_rename(from, &temp).is_err() {
             // If it fails for one temp name it will most likely fail for
             // any temp name, so give up.
             return Err(IoFailed);
         }
-        if os_rename(&temp, to) == OK {
+        if os_rename(&temp, to).is_ok() {
             return Ok(());
         }
         // Strange, the second step failed. Try moving the file back and
         // report the failure.
-        os_rename(&temp, from);
+        let _ = os_rename(&temp, from);
         return Err(IoFailed);
     }
     Err(IoFailed)
@@ -240,7 +240,7 @@ pub(crate) fn rename_file(from: &CStr, to: &CStr) -> Result<(), IoFailed> {
     os_remove(to);
 
     // First try a normal rename, and return if it works.
-    if os_rename(from, to) == OK {
+    if os_rename(from, to).is_ok() {
         return Ok(());
     }
 

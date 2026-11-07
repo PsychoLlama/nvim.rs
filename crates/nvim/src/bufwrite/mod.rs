@@ -482,7 +482,7 @@ pub(crate) fn buf_write(
                 && !cpo_has(CpoFlag::FWRITE)
             {
                 target.perm |= 0o200;
-                os_setperm(fname, target.perm);
+                let _ = os_setperm(fname, target.perm);
                 target.made_writable = true;
             }
             // With ":w!" over the current file, 'readonly' makes no

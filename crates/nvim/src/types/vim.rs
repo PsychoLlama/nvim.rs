@@ -12,12 +12,6 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 
-/// The `int` return convention almost every editor function still speaks:
-/// `OK` on success, `FAIL` on failure. `vim_defs.h`'s, one copy for the tree.
-pub const OK: ::core::ffi::c_int = 1;
-/// The failing half of the [`OK`] convention.
-pub const FAIL: ::core::ffi::c_int = 0;
-
 /// A failure whose message is already out: the call that failed reported it
 /// through Vim's `emsg` channel, and the caller's only decision is whether to
 /// keep going.

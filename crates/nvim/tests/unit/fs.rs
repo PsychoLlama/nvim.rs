@@ -27,7 +27,7 @@ use neovim::os::fs::{
     os_nodetype, os_remove, os_rename, os_rmdir, os_setperm, path_exists,
 };
 use neovim::os::uv_error::{UV_EEXIST, UV_ENOENT};
-use neovim::types::{FAIL, Failed, FileInfo, OK};
+use neovim::types::{Failed, FileInfo};
 
 use crate::support::Sandbox;
 
@@ -92,7 +92,7 @@ fn getperm(name: &str) -> c_int {
     neovim::os::fs::getperm(&cname(name))
 }
 
-fn setperm(name: &str, perm: c_int) -> c_int {
+fn setperm(name: &str, perm: c_int) -> Result<(), c_int> {
     let name = cname(name);
     os_setperm(&name, perm)
 }
@@ -215,13 +215,13 @@ fn permission_bits_are_read_back_set_and_answered_about() {
         0,
         "the fixture directory is readable"
     );
-    assert_eq!(setperm("non-existing-file", RWX), FAIL);
+    assert!(setperm("non-existing-file", RWX).is_err());
 
     // The executable bit goes off and back on.
     let perm = getperm(file);
-    assert_eq!(setperm(file, perm & !(libc::S_IXUSR as c_int)), OK);
+    assert!(setperm(file, perm & !(libc::S_IXUSR as c_int)).is_ok());
     assert_eq!(getperm(file) & libc::S_IXUSR as c_int, 0);
-    assert_eq!(setperm(file, perm | libc::S_IXUSR as c_int), OK);
+    assert!(setperm(file, perm | libc::S_IXUSR as c_int).is_ok());
     assert_ne!(getperm(file) & libc::S_IXUSR as c_int, 0);
 
     // Readable: yes, then no once every read bit is off, and no for a name
@@ -233,7 +233,7 @@ fn permission_bits_are_read_back_set_and_answered_about() {
     assert!(readable(file));
     assert!(!readable("unit-test-directory/what_are_you_smoking.gif"));
     let no_read = (libc::S_IRUSR | libc::S_IRGRP | libc::S_IROTH) as c_int;
-    assert_eq!(setperm(file, getperm(file) & !no_read), OK);
+    assert!(setperm(file, getperm(file) & !no_read).is_ok());
     assert!(!readable(file));
 
     // Writable answers 1 for a file, 2 for a directory and 0 for neither.
@@ -244,7 +244,7 @@ fn permission_bits_are_read_back_set_and_answered_about() {
     assert_eq!(writable(file), 1);
     assert_eq!(writable("unit-test-directory"), 2);
     let no_write = (libc::S_IWUSR | libc::S_IWGRP | libc::S_IWOTH) as c_int;
-    assert_eq!(setperm(file, getperm(file) & !no_write), OK);
+    assert!(setperm(file, getperm(file) & !no_write).is_ok());
     assert_eq!(writable(file), 0);
 }
 
@@ -269,16 +269,16 @@ fn renaming_moves_a_file_and_overwrites_what_is_there() {
     let test = "unit-test-directory/test.file";
     let absent = "unit-test-directory/not_exist.file";
 
-    assert_eq!(rename(test, absent), OK);
+    assert!(rename(test, absent).is_ok());
     assert!(!fixture.file().exists());
     assert!(fixture.path(absent).exists());
-    assert_eq!(rename(absent, test), OK, "and back again");
+    assert!(rename(absent, test).is_ok(), "and back again");
 
-    assert_eq!(rename(absent, test), FAIL, "there is nothing to rename");
+    assert!(rename(absent, test).is_err(), "there is nothing to rename");
 
     let other = "unit-test-directory/other.file";
     std::fs::write(fixture.path(other), b"other").expect("another file");
-    assert_eq!(rename(other, test), OK);
+    assert!(rename(other, test).is_ok());
     assert!(!fixture.path(other).exists());
     assert_eq!(std::fs::read(fixture.file()).unwrap(), b"other");
 }

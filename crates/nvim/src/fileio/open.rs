@@ -403,7 +403,7 @@ pub(crate) fn open_source<'a>(
             {
                 swap_mode &= 0o600;
             }
-            os_setperm(&swap_fname, swap_mode);
+            let _ = os_setperm(&swap_fname, swap_mode);
         }
     }
 

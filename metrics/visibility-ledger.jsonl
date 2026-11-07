@@ -541,7 +541,6 @@
 {"path":"neovim::types::ExprAssignmentType","kind":"type","file":"crates/nvim/src/types/expressions.rs","tests":["crates/nvim/tests/unit/expressions.rs"]}
 {"path":"neovim::types::ExprCaseCompareStrategy","kind":"type","file":"crates/nvim/src/types/expressions.rs","tests":["crates/nvim/tests/unit/expressions.rs"]}
 {"path":"neovim::types::ExprComparisonType","kind":"type","file":"crates/nvim/src/types/expressions.rs","tests":["crates/nvim/tests/unit/expressions.rs"]}
-{"path":"neovim::types::FAIL","kind":"const","file":"crates/nvim/src/types/vim.rs","tests":["crates/nvim/tests/unit/fs.rs"]}
 {"path":"neovim::types::Failed","kind":"struct","file":"crates/nvim/src/types/vim.rs","tests":["crates/nvim/tests/unit/eval_decode.rs","crates/nvim/tests/unit/fs.rs","crates/nvim/tests/unit/path.rs","crates/nvim/tests/unit/typval_dict.rs","crates/nvim/tests/unit/typval_value.rs"]}
 {"path":"neovim::types::FileInfo","kind":"struct","file":"crates/nvim/src/types/fs.rs","tests":["crates/nvim/tests/unit/fs.rs"]}
 {"path":"neovim::types::GridLineEvent","kind":"struct","file":"crates/nvim/src/types/grid.rs","tests":["crates/nvim/tests/unit/msgpack.rs"]}
@@ -562,7 +561,6 @@
 {"path":"neovim::types::MarkTree","kind":"struct","file":"crates/nvim/src/types/marktree.rs","tests":["crates/nvim/tests/unit/marktree.rs"]}
 {"path":"neovim::types::MarkTreeIter","kind":"struct","file":"crates/nvim/src/types/marktree.rs","tests":["crates/nvim/tests/unit/marktree.rs"]}
 {"path":"neovim::types::NodeId","kind":"struct","file":"crates/nvim/src/types/expressions.rs","tests":["crates/nvim/tests/unit/expressions.rs"]}
-{"path":"neovim::types::OK","kind":"const","file":"crates/nvim/src/types/vim.rs","tests":["crates/nvim/tests/unit/fs.rs"]}
 {"path":"neovim::types::Object","kind":"enum","file":"crates/nvim/src/types/api.rs","tests":["crates/nvim/tests/unit/api_converter.rs","crates/nvim/tests/unit/options.rs","crates/nvim/tests/unit/packer.rs","crates/nvim/tests/unit/support/tv.rs","crates/nvim/tests/unit/unpacker.rs"]}
 {"path":"neovim::types::OptInt","kind":"type","file":"crates/nvim/src/types/types.rs","tests":["crates/nvim/tests/unit/indent.rs"]}
 {"path":"neovim::types::ParserPosition","kind":"struct","file":"crates/nvim/src/types/parser.rs","tests":["crates/nvim/tests/unit/expressions.rs","crates/nvim/tests/unit/parser.rs"]}

@@ -43,7 +43,7 @@ pub fn path_exists(path: &CStr) -> bool {
 }
 
 /// Renames `path` to `new_path`. Answers `OK` or `FAIL`.
-pub fn os_rename(path: &CStr, new_path: &CStr) -> c_int {
+pub fn os_rename(path: &CStr, new_path: &CStr) -> Result<(), c_int> {
     // SAFETY: both are NUL-terminated and outlive the call.
     fs_ok(|req| unsafe { uv_fs_rename(NO_LOOP, req, path.as_ptr(), new_path.as_ptr(), None) })
 }

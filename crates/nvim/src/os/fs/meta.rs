@@ -72,8 +72,8 @@ pub fn getperm(name: &CStr) -> int32_t {
     }
 }
 
-/// Sets `name`'s permission bits. Answers `OK` or `FAIL`.
-pub fn os_setperm(name: &CStr, perm: c_int) -> c_int {
+/// Sets `name`'s permission bits, or answers the libuv error code.
+pub fn os_setperm(name: &CStr, perm: c_int) -> Result<(), c_int> {
     // SAFETY: `name` is NUL-terminated and outlives the call.
     fs_ok(|req| unsafe { uv_fs_chmod(NO_LOOP, req, name.as_ptr(), perm, None) })
 }

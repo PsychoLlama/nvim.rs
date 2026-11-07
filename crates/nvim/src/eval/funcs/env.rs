@@ -33,7 +33,7 @@ use crate::semsg;
 use crate::types::CmdIdx;
 use crate::types::CmdLine;
 use crate::types::{
-    CmdAddr, EvalFuncData, ExArg, ExArgt, Expand, ExpandContext, OK, OptInt, TypVal, VAR_DICT,
+    CmdAddr, EvalFuncData, ExArg, ExArgt, Expand, ExpandContext, OptInt, TypVal, VAR_DICT,
     VAR_LIST, VAR_STRING, VarNumber, XDGVarType, kBoolVarFalse, kListLenShouldKnow,
     kListLenUnknown, kSpecialVarNull,
 };
@@ -211,7 +211,7 @@ pub fn f_setfperm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             mode |= 1 << (8 - i);
         }
     }
-    result.write_number(VarNumber::from(os_setperm(fname, mode) == OK));
+    result.write_number(VarNumber::from(os_setperm(fname, mode).is_ok()));
 }
 
 /// The `config_dirs`/`data_dirs` answer: every directory in the XDG search
