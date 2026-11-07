@@ -41,7 +41,7 @@ use crate::option::vars::{p_sol, p_window};
 use crate::pos::equalpos;
 use crate::search::FORWARD;
 use crate::state::mode::restart_edit;
-use crate::types::{CmdArg, ColNr, Direction, FAIL, LineNr, OK, OptInt, Pos};
+use crate::types::{CmdArg, ColNr, Direction, LineNr, OptInt, Pos};
 use crate::ui::state::Rows;
 use crate::winlayer::graph::{firstwin, lastwin};
 use crate::winlayer::{Buf, Win, first_window};
@@ -58,8 +58,8 @@ struct Saved {
 /// Move the screen `count` (half) pages backwards (`dir` is `BACKWARD`) or
 /// forwards (`FORWARD`) and update the screen, moving the cursor with it and
 /// -- for the half-page CTRL-D/CTRL-U -- not revealing lines past the end of
-/// the buffer. Answers `FAIL` when neither the viewport nor the cursor moved.
-pub fn pagescroll(dir: Direction, count: c_int, half: bool) -> c_int {
+/// the buffer. Answers whether the viewport or the cursor moved.
+pub fn pagescroll(dir: Direction, count: c_int, half: bool) -> bool {
     let win = Win::current();
     let saved = Saved {
         buflen: win.buffer().line_count(),
@@ -69,9 +69,7 @@ pub fn pagescroll(dir: Direction, count: c_int, half: bool) -> c_int {
     // One operator and one command, shared by both arms as upstream shares
     // them: `nv_screengo()` fills in the operator that `nv_g_home_m_cmd()`
     // reads back through the command.
-    let did_move =
-        with_scratch_cmd(|cmd_arg| pagescroll_with(cmd_arg, win, dir, count, half, saved));
-    if did_move { OK } else { FAIL }
+    with_scratch_cmd(|cmd_arg| pagescroll_with(cmd_arg, win, dir, count, half, saved))
 }
 
 /// [`pagescroll`] with the command it shares between its arms. Answers

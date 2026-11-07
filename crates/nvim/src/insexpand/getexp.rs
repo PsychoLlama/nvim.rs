@@ -30,7 +30,7 @@ use crate::search::ACTION_EXPAND;
 use crate::search::FIND_ANY;
 use crate::search::FIND_DEFINE;
 use crate::strings::has_char;
-use crate::types::{FAIL, IOSIZE, ShmFlag};
+use crate::types::{IOSIZE, ShmFlag};
 use crate::winlayer::BufId;
 use crate::winlayer::{Buf, buffers};
 
@@ -631,7 +631,7 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
     // For CTRL-N/CTRL-P, loop over all the flags/windows/buffers in
     // 'complete'.
     loop {
-        found_new_match = FAIL;
+        found_new_match = false;
         st.set_match_pos = false;
 
         // For CTRL-N/CTRL-P pick a new entry from `e_cpt` when
@@ -676,7 +676,7 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
             });
         }
 
-        found_new_match = c_int::from(get_next_completion_match(type_0, st, start_pos));
+        found_new_match = get_next_completion_match(type_0, st, start_pos);
 
         // If complete() was called then `compl_pattern` has been reset and
         // the rest of this cannot work; bail out.
@@ -693,7 +693,7 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
 
         // Break out for the specialised modes — 'complete' is only for the
         // generic CTRL_X_NORMAL — or when a new match has been found.
-        if (ctrl_x_mode_not_default() && !ctrl_x_mode_line_or_eval()) || found_new_match != FAIL {
+        if (ctrl_x_mode_not_default() && !ctrl_x_mode_line_or_eval()) || found_new_match {
             if got_int.get() {
                 break;
             }
@@ -743,12 +743,12 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
 
     if (ctrl_x_mode_normal() || ctrl_x_mode_line_or_eval()) && st.cpt.at() == 0 {
         // Got to the end of 'complete'.
-        found_new_match = FAIL;
+        found_new_match = false;
     }
 
     // Total number of matches; `None` while unknown.
     let mut match_count = None;
-    if found_new_match == FAIL || (ctrl_x_mode_not_default() && !ctrl_x_mode_line_or_eval()) {
+    if !found_new_match || (ctrl_x_mode_not_default() && !ctrl_x_mode_line_or_eval()) {
         match_count = Some(ins_compl_make_cyclic());
     }
 

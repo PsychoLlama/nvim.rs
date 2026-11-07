@@ -42,7 +42,7 @@ use crate::os::cshim::gettext;
 use crate::os::proc::os_kill;
 use crate::semsg;
 use crate::types::ui::kUIMessages;
-use crate::types::{ApiString, EvalFuncData, FAIL, TypVal, TypeaheadSave, VAR_LIST, VarNumber};
+use crate::types::{ApiString, EvalFuncData, TypVal, TypeaheadSave, VAR_LIST, VarNumber};
 use crate::ui::state::Rows;
 use crate::ui::ui_has;
 use crate::winlayer::Buf;
@@ -108,9 +108,9 @@ pub fn f_confirm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 }
 
 /// `debugbreak({pid})` — SIGINT to a process, which on Windows is how a
-/// debugger is attached. Answers FAIL; there is no success value.
+/// debugger is attached. Answers 0; there is no success value.
 pub fn f_debugbreak(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_number(VarNumber::from(FAIL));
+    result.write_number(0);
     let pid = number_as_int(arg_number(&args[0]));
     if pid == 0 {
         emsg(gettext(e_invarg));

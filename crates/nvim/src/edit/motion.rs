@@ -33,7 +33,7 @@ use crate::winlayer::{Buf, Win, first_tab};
 use core::ffi::c_int;
 
 use super::*;
-use crate::types::{NUL, OK};
+use crate::types::NUL;
 
 /// If 'keymodel' contains `startsel`, turn `c` into the start of a
 /// Select-mode selection and stuff it back for Normal mode to handle.
@@ -296,7 +296,7 @@ pub(crate) fn ins_page(back: bool) {
 
     let tpos = Win::current().w_cursor;
     let dir = if back { BACKWARD } else { FORWARD };
-    if pagescroll(dir, 1, false) == OK {
+    if pagescroll(dir, 1, false) {
         start_arrow_at(InsertEnd::At(tpos));
         can_cindent.set(true);
     } else {
