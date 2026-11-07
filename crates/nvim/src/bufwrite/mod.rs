@@ -708,7 +708,7 @@ pub(crate) fn buf_write(
                             WriteError::WriteFailed
                         });
                     }
-                    if recover_from_backup(&backup, fname) {
+                    if recover_from_backup(&backup, fname).is_ok() {
                         end = LineNr::ONE; // the original is back; no extra warning
                     }
                     break 'failed;
@@ -780,7 +780,7 @@ pub(crate) fn buf_write(
             // Reached by giving up on the write: throw the backup away,
             // and put the original back if it was moved out of the way.
             let direct = matches!(wfname, WriteTarget::Direct);
-            if !restore_backup(&backup, fname, direct, target.newfile) {
+            if restore_backup(&backup, fname, direct, target.newfile).is_err() {
                 end = LineNr::ZERO; // the original no longer exists either
             }
         }

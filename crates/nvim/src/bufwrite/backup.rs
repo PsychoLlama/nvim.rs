@@ -26,6 +26,7 @@ use std::fs::{File, OpenOptions};
 use std::os::unix::fs::OpenOptionsExt as _;
 
 use crate::cstr;
+use crate::fileio::IoFailed;
 use crate::memline::{file_in_dir, percent_swname};
 use crate::option::split_option_part;
 use crate::option::vars::{P_BDIR, P_BEX};
@@ -503,11 +504,17 @@ fn backup_by_rename(
 /// Put the original file back after failing to open it for writing.
 ///
 /// The backup is not needed then, so it is thrown away — but if the original
-/// was moved or removed to make it, it goes back first. Returns false when
-/// the original is gone anyway, which makes the write a total loss.
+/// was moved or removed to make it, it goes back first. `Err` when the
+/// original is gone anyway, which makes the write a total loss; nothing has
+/// been said.
 ///
 /// `direct` says the write went to `fname` itself rather than a temp file.
-pub(crate) fn restore_backup(backup: &Backup, fname: &CStr, direct: bool, newfile: bool) -> bool {
+pub(crate) fn restore_backup(
+    backup: &Backup,
+    fname: &CStr,
+    direct: bool,
+    newfile: bool,
+) -> Result<(), IoFailed> {
     if let Some(path) = &backup.path
         && direct
     {
@@ -527,20 +534,25 @@ pub(crate) fn restore_backup(backup: &Backup, fname: &CStr, direct: bool, newfil
             let _ = rename_file(path, fname);
         }
     }
-    newfile || path_exists(fname)
+    if newfile || path_exists(fname) {
+        Ok(())
+    } else {
+        Err(IoFailed)
+    }
 }
 
 /// Put the backup back over the file a failed write left behind.
 ///
 /// The new file is probably corrupt, and writing again would otherwise make
-/// a backup *of the corrupt file* and lose the original for good. True when
-/// the original is back, which spares the user the extra warning.
-pub(crate) fn recover_from_backup(backup: &Backup, fname: &CStr) -> bool {
+/// a backup *of the corrupt file* and lose the original for good. `Ok`
+/// when the original is back, which spares the user the extra warning;
+/// `Err` says nothing.
+pub(crate) fn recover_from_backup(backup: &Backup, fname: &CStr) -> Result<(), IoFailed> {
     let Some(path) = &backup.path else {
-        return false;
+        return Err(IoFailed);
     };
     if !backup.copy {
-        return rename_file(path.as_cstr(), fname).is_ok();
+        return rename_file(path.as_cstr(), fname);
     }
     // Copying may take a while; if we were interrupted, let the user
     // know the message arrived.
@@ -548,7 +560,11 @@ pub(crate) fn recover_from_backup(backup: &Backup, fname: &CStr) -> bool {
         msg(gettext(e_interr), 0);
         ui_flush();
     }
-    os_copy(path.as_cstr(), fname, UV_FS_COPYFILE_FICLONE) == 0
+    if os_copy(path.as_cstr(), fname, UV_FS_COPYFILE_FICLONE) == 0 {
+        Ok(())
+    } else {
+        Err(IoFailed)
+    }
 }
 
 /// `'patchmode'`: keep the file as it was before the write, under a name of
@@ -804,7 +820,7 @@ mod tests {
         let _held = editor_state_lock();
         let files = Files::new("restore_copy", true, true);
         let fname = files.path("f.txt");
-        assert!(restore_backup(&files.backup(true), &fname, true, false));
+        assert!(restore_backup(&files.backup(true), &fname, true, false).is_ok());
         assert_eq!(files.state(), pair("orig", "-"));
     }
 
@@ -814,7 +830,7 @@ mod tests {
         let _held = editor_state_lock();
         let files = Files::new("restore_copy_gone", false, true);
         let fname = files.path("f.txt");
-        assert!(restore_backup(&files.backup(true), &fname, true, false));
+        assert!(restore_backup(&files.backup(true), &fname, true, false).is_ok());
         assert_eq!(files.state(), pair("backup", "-"));
     }
 
@@ -824,7 +840,7 @@ mod tests {
         let _held = editor_state_lock();
         let files = Files::new("restore_rename", false, true);
         let fname = files.path("f.txt");
-        assert!(restore_backup(&files.backup(false), &fname, true, false));
+        assert!(restore_backup(&files.backup(false), &fname, true, false).is_ok());
         assert_eq!(files.state(), pair("backup", "-"));
     }
 
@@ -834,7 +850,7 @@ mod tests {
         let _held = editor_state_lock();
         let files = Files::new("restore_indirect", true, true);
         let fname = files.path("f.txt");
-        assert!(restore_backup(&files.backup(false), &fname, false, false));
+        assert!(restore_backup(&files.backup(false), &fname, false, false).is_ok());
         assert_eq!(files.state(), pair("orig", "backup"));
     }
 
@@ -848,10 +864,13 @@ mod tests {
             copy: false,
             path: None,
         };
-        assert!(!restore_backup(&none, &fname, true, false));
-        assert!(restore_backup(&none, &fname, true, true), "a new file");
+        assert!(restore_backup(&none, &fname, true, false).is_err());
+        assert!(
+            restore_backup(&none, &fname, true, true).is_ok(),
+            "a new file"
+        );
         // A rename back that fails: the backup is not there either.
-        assert!(!restore_backup(&files.backup(false), &fname, true, false));
+        assert!(restore_backup(&files.backup(false), &fname, true, false).is_err());
         assert_eq!(files.state(), pair("-", "-"));
     }
 
@@ -861,7 +880,7 @@ mod tests {
         let _held = editor_state_lock();
         let files = Files::new("recover_rename", true, true);
         let fname = files.path("f.txt");
-        assert!(recover_from_backup(&files.backup(false), &fname));
+        assert!(recover_from_backup(&files.backup(false), &fname).is_ok());
         assert_eq!(files.state(), pair("backup", "-"));
     }
 
@@ -871,7 +890,7 @@ mod tests {
         let _held = editor_state_lock();
         let files = Files::new("recover_copy", true, true);
         let fname = files.path("f.txt");
-        assert!(recover_from_backup(&files.backup(true), &fname));
+        assert!(recover_from_backup(&files.backup(true), &fname).is_ok());
         assert_eq!(files.state(), pair("backup", "backup"));
     }
 
@@ -885,9 +904,9 @@ mod tests {
             copy: true,
             path: None,
         };
-        assert!(!recover_from_backup(&none, &fname));
-        assert!(!recover_from_backup(&files.backup(false), &fname));
-        assert!(!recover_from_backup(&files.backup(true), &fname));
+        assert!(recover_from_backup(&none, &fname).is_err());
+        assert!(recover_from_backup(&files.backup(false), &fname).is_err());
+        assert!(recover_from_backup(&files.backup(true), &fname).is_err());
         assert_eq!(files.state(), pair("orig", "-"), "the corrupt file stays");
     }
 }
