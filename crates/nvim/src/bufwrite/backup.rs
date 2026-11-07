@@ -739,3 +739,155 @@ pub(crate) fn finish_write(
     }
     err
 }
+
+/// The two ways a failed write puts the original back, and the success
+/// each answers: [`restore_backup`] after giving up before any byte went
+/// out (the backup thrown away, or renamed back over the name), and
+/// [`recover_from_backup`] after a write that went wrong part-way (the
+/// backup copied or renamed back over the corrupt file). On real files in a
+/// scratch directory; the oracle for turning those answers into a
+/// vocabulary.
+#[cfg(test)]
+#[cfg_attr(miri, allow(unused))]
+mod tests {
+    use super::*;
+    use crate::eval::test_fixture::Scratch;
+    use crate::global_cell::editor_state_lock;
+
+    /// A scratch directory holding `f.txt` ("orig") and `f.txt~` ("backup"),
+    /// either of which a case may leave out.
+    struct Files {
+        dir: Scratch,
+    }
+
+    impl Files {
+        fn new(name: &str, original: bool, backup: bool) -> Files {
+            let dir = Scratch::new(name);
+            if original {
+                dir.file("f.txt", "orig");
+            }
+            if backup {
+                dir.file("f.txt~", "backup");
+            }
+            Files { dir }
+        }
+
+        fn path(&self, name: &str) -> CString {
+            CString::new(self.dir.0.join(name).into_os_string().into_encoded_bytes())
+                .expect("no NUL in a scratch path")
+        }
+
+        fn backup(&self, copy: bool) -> Backup {
+            let path = self.dir.0.join("f.txt~");
+            Backup {
+                copy,
+                path: Some(XString::from(path.to_str().expect("a UTF-8 path"))),
+            }
+        }
+
+        /// What each of the two files holds, `-` for missing.
+        fn state(&self) -> (String, String) {
+            let read = |name: &str| {
+                std::fs::read_to_string(self.dir.0.join(name)).unwrap_or_else(|_| "-".into())
+            };
+            (read("f.txt"), read("f.txt~"))
+        }
+    }
+
+    fn pair(original: &str, backup: &str) -> (String, String) {
+        (original.into(), backup.into())
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore = "reaches the file system")]
+    fn restoring_a_copy_throws_it_away_when_the_original_is_there() {
+        let _held = editor_state_lock();
+        let files = Files::new("restore_copy", true, true);
+        let fname = files.path("f.txt");
+        assert!(restore_backup(&files.backup(true), &fname, true, false));
+        assert_eq!(files.state(), pair("orig", "-"));
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore = "reaches the file system")]
+    fn restoring_a_copy_moves_it_into_place_when_the_original_went() {
+        let _held = editor_state_lock();
+        let files = Files::new("restore_copy_gone", false, true);
+        let fname = files.path("f.txt");
+        assert!(restore_backup(&files.backup(true), &fname, true, false));
+        assert_eq!(files.state(), pair("backup", "-"));
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore = "reaches the file system")]
+    fn restoring_a_renamed_original_renames_it_back() {
+        let _held = editor_state_lock();
+        let files = Files::new("restore_rename", false, true);
+        let fname = files.path("f.txt");
+        assert!(restore_backup(&files.backup(false), &fname, true, false));
+        assert_eq!(files.state(), pair("backup", "-"));
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore = "reaches the file system")]
+    fn a_write_to_a_temp_file_leaves_both_files_alone() {
+        let _held = editor_state_lock();
+        let files = Files::new("restore_indirect", true, true);
+        let fname = files.path("f.txt");
+        assert!(restore_backup(&files.backup(false), &fname, false, false));
+        assert_eq!(files.state(), pair("orig", "backup"));
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore = "reaches the file system")]
+    fn restoring_answers_false_only_when_an_existing_file_is_gone() {
+        let _held = editor_state_lock();
+        let files = Files::new("restore_lost", false, false);
+        let fname = files.path("f.txt");
+        let none = Backup {
+            copy: false,
+            path: None,
+        };
+        assert!(!restore_backup(&none, &fname, true, false));
+        assert!(restore_backup(&none, &fname, true, true), "a new file");
+        // A rename back that fails: the backup is not there either.
+        assert!(!restore_backup(&files.backup(false), &fname, true, false));
+        assert_eq!(files.state(), pair("-", "-"));
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore = "reaches the file system")]
+    fn recovering_a_renamed_original_renames_it_over_the_corrupt_file() {
+        let _held = editor_state_lock();
+        let files = Files::new("recover_rename", true, true);
+        let fname = files.path("f.txt");
+        assert!(recover_from_backup(&files.backup(false), &fname));
+        assert_eq!(files.state(), pair("backup", "-"));
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore = "reaches the file system")]
+    fn recovering_a_copy_copies_it_back_and_keeps_it() {
+        let _held = editor_state_lock();
+        let files = Files::new("recover_copy", true, true);
+        let fname = files.path("f.txt");
+        assert!(recover_from_backup(&files.backup(true), &fname));
+        assert_eq!(files.state(), pair("backup", "backup"));
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore = "reaches the file system")]
+    fn recovering_fails_with_no_backup_or_a_missing_one() {
+        let _held = editor_state_lock();
+        let files = Files::new("recover_missing", true, false);
+        let fname = files.path("f.txt");
+        let none = Backup {
+            copy: true,
+            path: None,
+        };
+        assert!(!recover_from_backup(&none, &fname));
+        assert!(!recover_from_backup(&files.backup(false), &fname));
+        assert!(!recover_from_backup(&files.backup(true), &fname));
+        assert_eq!(files.state(), pair("orig", "-"), "the corrupt file stays");
+    }
+}

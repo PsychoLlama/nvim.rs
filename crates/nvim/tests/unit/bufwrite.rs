@@ -482,3 +482,119 @@ fn refusals_report_once() {
     let _ = std::fs::set_permissions(sandbox.path("Xro"), std::fs::Permissions::from_mode(0o644));
     fx.settle();
 }
+
+/// What the write's two autocommands find on disk, which pins the order of
+/// the phases between them: `BufWritePre` runs before the backup is made
+/// (the file still old, no backup, `'[`/`']` already the written range),
+/// `BufWritePost` after the file is written, the 'writebackup' removed or
+/// the 'backup' kept, and the 'patchmode' original made.
+#[test]
+fn the_write_autocommands_bracket_the_backup_and_the_write() {
+    let sandbox = Sandbox::dir("bufwrite_phases");
+    sandbox.write("f.txt", b"old\n");
+    let fx = Probe::new(sandbox.editor());
+    open(&fx);
+    fx.run("let g:seen = []");
+    fx.run("augroup bufwrite_phases | autocmd! | augroup END");
+    fx.run(
+        "autocmd bufwrite_phases BufWritePre f.txt call add(g:seen, \
+         ['pre', readfile('f.txt'), filereadable('f.txt~'), line(\"'[\"), line(\"']\")])",
+    );
+    fx.run(
+        "autocmd bufwrite_phases BufWritePost f.txt call add(g:seen, \
+         ['post', readfile('f.txt'), filereadable('f.txt~') ? readfile('f.txt~') : 0, \
+         filereadable('f.txt.orig') ? readfile('f.txt.orig') : 0])",
+    );
+    let phases = |cmd: &str| {
+        fx.run("let g:seen = []");
+        fx.run(&format!("silent {cmd}"));
+        fx.eval("g:seen")
+    };
+    assert_eq!(
+        phases("call setline(1, ['new', 'two']) | write"),
+        "[['pre', ['old'], 0, 1, 2], ['post', ['new', 'two'], 0, 0]]",
+        "the 'writebackup' is gone by BufWritePost"
+    );
+    assert_eq!(
+        phases("set backup | call setline(1, 'third') | write"),
+        "[['pre', ['new', 'two'], 0, 1, 2], ['post', ['third', 'two'], ['new', 'two'], 0]]",
+        "a 'backup' is kept, holding what was overwritten"
+    );
+    assert_eq!(
+        phases("set nobackup patchmode=.orig | call setline(1, 'fourth') | write"),
+        "[['pre', ['third', 'two'], 1, 1, 2], ['post', ['fourth', 'two'], ['new', 'two'], \
+         ['third', 'two']]]",
+        "the original is renamed from the backup before BufWritePost"
+    );
+    fx.run("autocmd! bufwrite_phases | augroup! bufwrite_phases");
+    fx.run("unlet g:seen");
+    restore(&fx);
+}
+
+/// Edit `f.txt` afresh (on disk "old\n", no backup) with two lines that
+/// cp1252 cannot hold the second of; answers the original's inode.
+fn unconvertible(fx: &Probe, sandbox: &Sandbox, backupcopy: &str) -> u64 {
+    sandbox.write("f.txt", b"old\n");
+    let _ = std::fs::remove_file(sandbox.path("f.txt~"));
+    fx.run(&format!("set backupcopy={backupcopy}"));
+    fx.run("edit! f.txt | call setline(1, ['caf\u{e9}', 'x\u{4e00}y'])");
+    ino(sandbox, "f.txt")
+}
+
+/// A write that fails after it started (a conversion error part-way, with
+/// a backup to fall back on) puts the original back from the backup -- by
+/// copying it, which keeps the backup, or by renaming it back -- and,
+/// having recovered, says nothing about the original being lost.
+#[test]
+fn a_write_that_fails_part_way_recovers_the_original_from_the_backup() {
+    let sandbox = Sandbox::dir("bufwrite_recover");
+    let fx = Probe::new(sandbox.editor());
+    open(&fx);
+    let e513 = "E513: Write error, conversion failed (make 'fenc' empty to override)";
+    for (backupcopy, backup_left) in [("yes", &b"old\n"[..]), ("no", &b"<missing>"[..])] {
+        let before = unconvertible(&fx, &sandbox, backupcopy);
+        fx.check_messages("write! ++enc=cp1252", e513);
+        assert_eq!(
+            bytes(&sandbox, "f.txt"),
+            b"old\n",
+            "backupcopy={backupcopy}"
+        );
+        assert_eq!(
+            bytes(&sandbox, "f.txt~"),
+            backup_left,
+            "backupcopy={backupcopy}"
+        );
+        assert_eq!(ino(&sandbox, "f.txt"), before, "backupcopy={backupcopy}");
+        fx.check("&modified", "1");
+    }
+    restore(&fx);
+    fx.settle();
+}
+
+/// A write given up before any byte went out (no converter for the
+/// encoding, and no `!`) throws a copied backup away and renames a
+/// renamed original back: the file is untouched and no backup is left.
+#[test]
+fn a_write_given_up_before_writing_puts_the_original_back() {
+    let sandbox = Sandbox::dir("bufwrite_restore");
+    let fx = Probe::new(sandbox.editor());
+    open(&fx);
+    let e213 = "E213: Cannot convert (add ! to write without conversion)";
+    for backupcopy in ["yes", "no"] {
+        let before = unconvertible(&fx, &sandbox, backupcopy);
+        fx.check_messages("write ++enc=bogus-enc", e213);
+        assert_eq!(
+            bytes(&sandbox, "f.txt"),
+            b"old\n",
+            "backupcopy={backupcopy}"
+        );
+        assert_eq!(
+            bytes(&sandbox, "f.txt~"),
+            b"<missing>",
+            "backupcopy={backupcopy}"
+        );
+        assert_eq!(ino(&sandbox, "f.txt"), before, "backupcopy={backupcopy}");
+    }
+    restore(&fx);
+    fx.settle();
+}
