@@ -337,6 +337,11 @@ fn checktime_tells_each_kind_of_change() {
     let fx = Probe::new(sandbox.editor());
     files(&sandbox);
     reset(&fx);
+    // 'autoread' (on by default) reloads an unmodified buffer before
+    // `FileChangedShell` is asked anything, so a change it can absorb would
+    // reach only `FileChangedShellPost`. Off, every kind of change reaches
+    // the handler; 'autoread' gets its own row below.
+    fx.run("set noautoread");
     fx.run("edit a.txt");
     fx.run("let g:fcs = [] | let g:post = 0");
     fx.run("autocmd FileChangedShell * call add(g:fcs, v:fcs_reason)");
@@ -348,23 +353,32 @@ fn checktime_tells_each_kind_of_change() {
         fx.run("sleep 20m");
         fx.run(&format!("call writefile(['{text}'], 'a.txt')"));
     };
+    // The mode alone, while the buffer still matches the file: "mode".
+    fx.run("sleep 20m");
+    fx.run("call setfperm('a.txt', 'rw-------')");
+    fx.check_messages("checktime", "none");
+    fx.check("g:fcs", "['mode']");
+    fx.run("let g:fcs = []");
     // Changed on disk, buffer untouched.
     touch("a2 a2");
+    fx.check_messages("checktime", "none");
+    // The mode again, but nobody reloaded: the buffer no longer matches the
+    // file, and a different text outranks a different mode.
+    fx.run("sleep 20m");
+    fx.run("call setfperm('a.txt', 'rw-r--r--')");
     fx.check_messages("checktime", "none");
     // Changed on disk and in the buffer.
     fx.run("call setline(1, 'mine')");
     touch("a3 a3 a3");
     fx.check_messages("checktime", "none");
     fx.run("set nomodified");
-    // The mode alone.
-    fx.run("sleep 20m");
-    fx.run("call setfperm('a.txt', 'rw-------')");
-    fx.check_messages("checktime", "none");
     // Deleted.
     fx.run("call delete('a.txt')");
     fx.check_messages("checktime", "none");
-    fx.check("g:fcs", "['conflict', 'deleted']");
-    fx.check("g:post", "2");
+    fx.check("g:fcs", "['changed', 'changed', 'conflict', 'deleted']");
+    // The handler chose nothing each time, so nothing was reloaded and
+    // nothing came after.
+    fx.check("g:post", "0");
 
     // A reload asked for by the handler.
     fx.run("autocmd! FileChangedShell");
@@ -374,6 +388,8 @@ fn checktime_tells_each_kind_of_change() {
     touch("reloaded twice");
     fx.check_messages("checktime", "none");
     fx.check("getline(1)", "'reloaded twice'");
+    // `:edit!` reloaded the first change itself; the handler, the second.
+    fx.check("g:post", "1");
     fx.run("autocmd! FileChangedShell");
 
     // 'autoread' reloads an unchanged buffer without asking anyone.
@@ -382,6 +398,7 @@ fn checktime_tells_each_kind_of_change() {
     fx.check_messages("checktime", "none");
     fx.check("getline(1)", "'autoread'");
     fx.run("setlocal autoread<");
+    fx.check("g:post", "2");
 
     // Gone, with no handler: E211, once. Said as a warning, so read back
     // through `v:warningmsg`.
@@ -391,7 +408,7 @@ fn checktime_tells_each_kind_of_change() {
     fx.run("let v:warningmsg = ''");
     fx.run("checktime");
     fx.check("v:warningmsg", "''");
-    fx.check("g:post", "6");
+    fx.check("g:post", "4");
     fx.run("autocmd! FileChangedShellPost");
     fx.settle();
     reset(&fx);
