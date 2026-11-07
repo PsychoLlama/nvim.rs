@@ -29,6 +29,10 @@ use crate::vterm::internal::{
 };
 use core::mem::offset_of;
 
+/// The C callback a consumer installs to receive the bytes the terminal
+/// writes back.
+pub type VTermOutputCallback =
+    unsafe extern "C" fn(*const ::core::ffi::c_char, size_t, *mut ::core::ffi::c_void) -> ();
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct ScreenCell {

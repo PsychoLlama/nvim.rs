@@ -11,7 +11,7 @@
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
-use crate::os::libc::{int16_t, int64_t, size_t, uint8_t};
+use crate::os::libc::{int16_t, int64_t, uint8_t};
 use core::mem::ManuallyDrop;
 
 use super::*;
@@ -111,8 +111,6 @@ impl<'a> IntoIterator for &'a StringArray {
         self.0.iter()
     }
 }
-pub type VTermOutputCallback =
-    unsafe extern "C" fn(*const ::core::ffi::c_char, size_t, *mut ::core::ffi::c_void) -> ();
 /// A block of virtual lines, each one a [`VirtText`] of its own.
 pub type VirtLines = Vec<VirtLine>;
 /// A virtual text: chunks of text, each with its highlight.

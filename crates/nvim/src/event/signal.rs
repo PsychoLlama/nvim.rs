@@ -24,10 +24,10 @@ use core::ops::{Deref, DerefMut};
 
 use crate::event::libuv::{uv_close, uv_signal_init, uv_signal_start, uv_signal_stop};
 use crate::event::r#loop::{EventLoop, RawEvent};
+use crate::event::objects::Loop;
 use crate::event::objects::{SignalWatcher, signal_cb, signal_close_cb};
 use crate::event::uv::{uv_handle_t, uv_signal_t};
 use crate::event_queue::{self, QueueId};
-use crate::types::Loop;
 
 /// A signal watcher, reached through the raw pointer libuv keeps in its
 /// handle's `data` field.

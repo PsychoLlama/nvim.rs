@@ -24,6 +24,7 @@
 use crate::eval::typval::dict_to_env;
 use crate::event::libuv::{uv_close, uv_pipe, uv_pipe_open, uv_spawn};
 use crate::event::r#loop::{loop_poll_events, main_loop_raw};
+use crate::event::objects::Loop;
 use crate::event::objects::{Proc, RStream, Stream, stream_read_cb};
 use crate::event::proc::{
     kProcTypeUv, proc_get_exepath, proc_init, proc_spawn, proc_stop, proc_wait,
@@ -46,7 +47,6 @@ use crate::os::libc::STDERR_FILENO;
 use crate::os::libc::size_t;
 use crate::shell::Argv;
 use crate::startup::ui_client_forward_stdin;
-use crate::types::Loop;
 use ::libc::close;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};

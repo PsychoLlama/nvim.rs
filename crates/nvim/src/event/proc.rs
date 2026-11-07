@@ -54,6 +54,7 @@ use crate::event::r#loop::{
     RawEvent, loop_children, loop_poll_events, process_events, process_events_until,
     stop_children_watcher,
 };
+use crate::event::objects::Loop;
 use crate::event::objects::{Event, Proc, ProcType, Stream};
 use crate::event::rstream::{Reader, rstream_may_close};
 use crate::event::stream::{stream_init, stream_may_close};
@@ -71,7 +72,7 @@ use crate::os::time::os_hrtime;
 use crate::startup::{
     exiting, main_loop, os_exit, preserve_exit, ui_client_channel_id, ui_client_exit_status,
 };
-use crate::types::{Loop, Refcount};
+use crate::types::Refcount;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};
 use core::ptr;

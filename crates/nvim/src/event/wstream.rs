@@ -22,13 +22,13 @@
 )]
 
 use crate::event::libuv::{uv_fs_req_cleanup, uv_fs_write, uv_write};
+use crate::event::objects::Loop;
 use crate::event::objects::{Stream, stream_write_cb};
 use crate::event::stream::{Conn, close_handle, stream_init};
 use crate::event::uv::{uv_buf_t, uv_fs_t, uv_write_t};
 use crate::memory::recycle_block;
 use crate::os::libc::size_t;
 use crate::os::uv_error::{UV_ENOMEM, UV_UNKNOWN};
-use crate::types::Loop;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 use std::rc::Rc;

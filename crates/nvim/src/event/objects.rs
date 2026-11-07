@@ -19,7 +19,7 @@ use crate::event::uv::{
     uv_stream_t, uv_tcp_t, uv_timer_t,
 };
 use crate::os::libc::{int64_t, size_t, uint8_t, uint64_t};
-use crate::types::{Dict, Loop, Refcount};
+use crate::types::{Dict, Refcount};
 
 /// One queued event, run once when its queue reaches it.
 ///
@@ -37,6 +37,7 @@ pub enum Event {
     /// again by them.
     Ids(fn(u64, u64), u64, u64),
 }
+pub type Loop = loop_0;
 pub type Proc = proc;
 pub type ProcType = ::core::ffi::c_uint;
 pub type RStream = rstream;

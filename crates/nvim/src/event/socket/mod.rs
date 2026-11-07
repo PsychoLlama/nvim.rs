@@ -40,6 +40,7 @@ use crate::event::libuv::{
     uv_tcp_nodelay,
 };
 use crate::event::r#loop::process_events_until;
+use crate::event::objects::Loop;
 use crate::event::objects::{RStream, SocketWatcher, Stream, socket_cb, socket_close_cb};
 use crate::event::rstream::Reader;
 use crate::event::socket::address::{SOCKET_ADDR_LEN, port_suffix, tcp_host_end};
@@ -55,7 +56,6 @@ use crate::os::fs::{os_remove, os_strerror, path_exists};
 use crate::os::libc::{intmax_t, sa_family_t};
 use crate::path::tail_index;
 use crate::startup::main_loop;
-use crate::types::Loop;
 use ::libc::ntohs;
 
 const UV_TCP: uv_handle_type = 12;

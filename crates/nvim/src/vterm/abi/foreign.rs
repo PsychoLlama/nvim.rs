@@ -21,11 +21,11 @@
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr::NonNull;
 
-use crate::types::VTermOutputCallback;
 use crate::vterm::host::{
     Csi, Fallbacks, Fragment, ParserHandler, ScreenHost, SelectionHost, Value,
 };
 use crate::vterm::state::StateCx;
+use crate::vterm::types::VTermOutputCallback;
 use crate::vterm::types::{
     VTermAttr, VTermGlyphInfo, VTermLineInfo, VTermParserCallbacks, VTermPos, VTermProp, VTermRect,
     VTermScreenCallbacks, VTermScreenCell, VTermSelectionCallbacks, VTermSelectionMask,

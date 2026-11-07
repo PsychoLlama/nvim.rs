@@ -44,12 +44,12 @@ use core::slice;
 
 use crate::global_cell::GlobalCell;
 use crate::os::libc::{size_t, uint32_t};
-use crate::types::VTermOutputCallback;
 use crate::vterm::host::{Fallbacks, ScreenHost, SelectionHost};
 use crate::vterm::keycodes::{VTermKey, VTermModifier};
 use crate::vterm::mode;
 use crate::vterm::pen::convert_color_to_rgb;
 use crate::vterm::state::Consumer;
+use crate::vterm::types::VTermOutputCallback;
 use crate::vterm::types::{
     ScreenCell, VTerm, VTermColor, VTermLineInfo, VTermParserCallbacks, VTermPos, VTermScreen,
     VTermScreenCallbacks, VTermScreenCell, VTermSelectionCallbacks, VTermState,

@@ -317,7 +317,7 @@ pub(crate) fn os_breakcheck() {
 /// startup there, and a directory walk breaks out to check for CTRL-C.
 /// Under Miri there is no libuv to bring up, and nothing to poll.
 #[cfg(test)]
-fn test_loop_up(uv_loop: *mut crate::types::Loop) -> bool {
+fn test_loop_up(uv_loop: *mut crate::event::objects::Loop) -> bool {
     if cfg!(miri) {
         return false;
     }
