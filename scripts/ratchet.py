@@ -786,7 +786,20 @@ plus these whole-tree metrics, which are not per-file:
                         wrappers hid their callers' sentinels, 50 -> 74 when
                         the needle learned them (an instrument change). An
                         emitter nested in another's arguments (`semsg!(..,
-                        msg_cstr(p))`) is the same message and counts once.
+                        msg_cstr(p))`) is the same message and counts once,
+                        and one in a QUIET_MACRO's arguments (`logmsg!`,
+                        `format!`, ...) is no message (30 -> 29, an
+                        instrument change).
+                      silent_failed  (listed, unratcheted) a `Failed`
+                        made where nothing was said: `Err(Failed)` or
+                        `.ok_or(Failed)` in a body with no EMIT_CALL and no
+                        `?`/`map_err` from a callee. `Failed` means "a
+                        message is already out"; a refusal that says nothing
+                        answers `Option`, an enum or `IoFailed`. Phase 42,
+                        179 at its landing, not a guard: an option checker
+                        whose caller says E474 for it, a `let mut ret =
+                        Err(Failed)` a callee's answer overwrites, and the
+                        cursor's step functions are its false positives.
                       labeled_blocks  `'label: {` — the transpiler's
                         rendering of C's forward `goto`. A lifetime bound
                         (`'a: 'b`) cannot match: what follows the colon has to
@@ -1927,19 +1940,82 @@ def emit_call_re(wrappers):
     return re.compile(rf"{EMIT_CALL.pattern}|(?<![.\w])(?<!fn )(?:{names})\s*\(")
 
 
+# Macros that build text without saying it. `msg_bytes`/`msg_cstr` are
+# message *formatters* as well as names on EMIT_CALL, so one in a log line's
+# arguments (`logmsg!(.., "{}", msg_bytes(addr))`) is no message: the
+# `return false` after `server_stop`'s "Not listening" log entry was counted
+# as one until the needle learned these (30 -> 29, an instrument change).
+QUIET_MACRO = re.compile(
+    r"\b(?:logmsg|format|format_args|write|writeln|panic|unreachable|todo"
+    r"|assert\w*|debug_assert\w*)!\s*\("
+)
+
+
+def quiet_spans(masked):
+    """The argument lists of every QUIET_MACRO call in `masked`."""
+    return [
+        (m.end() - 1, balanced(masked, m.end() - 1, "(", ")"))
+        for m in QUIET_MACRO.finditer(masked)
+    ]
+
+
 def emit_sentinels(masked, emit_call=EMIT_CALL):
     """How many EMIT_CALLs in `masked` are followed by a sentinel answer."""
     found = 0
     inside = 0
+    quiet = quiet_spans(masked)
     for match in emit_call.finditer(masked):
         if match.start() < inside:
             # An emitter in another's arguments (`semsg!(.., msg_cstr(p))`)
             # is the same message: the outer call is the statement.
             continue
+        if any(a <= match.start() < b for a, b in quiet):
+            continue
         close = balanced(masked, match.end() - 1, "(", ")")
         inside = close
         end = masked.find(";", close)
         if end != -1 and EMIT_SENTINEL.match(masked, end + 1):
+            found += 1
+    return found
+
+
+# A `Failed` made where nothing was said: `Err(Failed)` or `.ok_or(Failed)`
+# in a function body holding no EMIT_CALL (wrappers included) and no `?` or
+# `map_err` -- the two ways a callee's error, said by the callee, reaches it.
+# `Failed` means "a message is already out", so one made in a body that says
+# nothing and passes nothing on is the lie p41's rulings x/xi named: a
+# refusal that says nothing is a split answer (`Option`, an enum,
+# `IoFailed`). A pattern (`Err(Failed) =>`, `let Err(Failed) =`, a
+# comparison) is not a construction and is not counted; neither is test
+# code. `--dimension silent_failed` lists them.
+SILENT_FAILED = re.compile(r"\bErr\(\s*Failed\s*\)|\.ok_or\(\s*Failed\s*\)")
+SILENT_FAILED_NOT = re.compile(r"\s*(?:=>|=[^=>]|\|)")
+CALLEE_ERROR = re.compile(r"\?|\bmap_err\b")
+
+
+def silent_failed(masked, emit_call=EMIT_CALL):
+    """How many `Failed`s `masked` makes in a body that says nothing."""
+    found = 0
+    tests = test_module_lines(masked)
+    starts = [0, *(m.end() for m in re.finditer("\n", masked))]
+    for sig in fn_signatures(masked):
+        body = masked.find("{", sig.end)
+        if body == -1 or masked[sig.end : body].strip().startswith(";"):
+            continue
+        if ";" in masked[sig.end : body]:
+            continue  # a declaration without a body
+        end = matching_brace(masked, body)
+        text = masked[body:end]
+        if emit_call.search(text) or CALLEE_ERROR.search(text):
+            continue
+        for match in SILENT_FAILED.finditer(text):
+            before = text[: match.start()].rstrip()
+            if before.endswith(("let", "if let", "|", "==", "!=", "while let")):
+                continue
+            if SILENT_FAILED_NOT.match(text, match.end()):
+                continue
+            if bisect_right(starts, body + match.start()) - 1 in tests:
+                continue
             found += 1
     return found
 
@@ -3881,6 +3957,15 @@ def instrument_sites(tree, sources, wrappers=None):
     return sites
 
 
+def silent_failed_sites(tree):
+    """`--dimension silent_failed`: the `Failed`s made where nothing was said,
+    per file (unratcheted: see SILENT_FAILED)."""
+    emit_call = emit_call_re(emit_wrappers(tree))
+    return collections.Counter(
+        {f: n for f, m in tree.items() if (n := silent_failed(m, emit_call))}
+    )
+
+
 def labeled_loops(tree):
     """`--dimension labeled_loops`: the labelled loops per file (unratcheted)."""
     return collections.Counter(
@@ -5364,6 +5449,13 @@ SELF_TEST_INSTRUMENTS = [
         },
         {"emit_sentinel": 1},
     ),
+    # A formatter in a log line's arguments is no message.
+    (
+        {
+            "crates/nvim/src/a.rs": 'fn f() -> bool {\n    logmsg!(L, c"f", 1, "{}", msg_bytes(a));\n    return false;\n}\n',
+        },
+        {},
+    ),
     # `types/` is counted by the file.
     (
         {
@@ -5409,6 +5501,23 @@ SELF_TEST_LABELED_LOOPS = [
         "fn f() {\n    'err: {\n    }\n    'outer: loop {\n    }\n"
         "    'scan: while x {\n    }\n    'each: for y in z {\n    }\n}\n",
         3,
+    ),
+]
+
+# A `Failed` made in a body that says nothing and passes nothing on; one
+# after a message, one passed on with `?`/`map_err`, a pattern, a
+# comparison and test code are not.
+SELF_TEST_SILENT_FAILED = [
+    (
+        "fn a() -> Result<(), Failed> {\n    if x {\n        return Err(Failed);\n    }\n"
+        "    y.ok_or(Failed)\n}\n"
+        "fn b() -> Result<(), Failed> {\n    emsg(e_x);\n    Err(Failed)\n}\n"
+        "fn c() -> Result<(), Failed> {\n    d()?;\n    Err(Failed)\n}\n"
+        "fn e() -> bool {\n    match f() {\n        Err(Failed) => true,\n"
+        "        _ => g() == Err(Failed),\n    }\n}\n"
+        "#[cfg(test)]\nmod tests {\n    fn h() -> Result<(), Failed> {\n"
+        "        Err(Failed)\n    }\n}\n",
+        2,
     ),
 ]
 
@@ -5498,6 +5607,9 @@ def self_test():
     for floor, sites, expected in SELF_TEST_KEEPERS:
         got = keeper_findings(floor, "COPY_KEEPERS", sites)
         assert got == expected, f"keeper_findings={got}, want {expected}"
+    for source, expected in SELF_TEST_SILENT_FAILED:
+        got = silent_failed(mask(source))
+        assert got == expected, f"silent_failed={got}, want {expected}, for {source!r}"
     for source, expected in SELF_TEST_LABELED_LOOPS:
         got = len(LABELED_LOOPS.findall(mask(source)))
         assert got == expected, f"labeled_loops={got}, want {expected}, for {source!r}"
@@ -5741,6 +5853,9 @@ def main():
         return
     if dimension == "labeled_loops":
         breakdown({dimension: labeled_loops(tree)}, dimension)
+        return
+    if dimension == "silent_failed":
+        breakdown({dimension: silent_failed_sites(tree)}, dimension)
         return
     if dimension is not None:
         breakdown(sites, dimension)
