@@ -12,6 +12,7 @@
 
 use super::*;
 use crate::memory::ThinCString;
+use crate::os::libc::ptrdiff_t;
 use crate::types::{VAR_STRING, kListLenMayKnow, kListLenUnknown};
 use crate::window::FR_LEAF;
 use crate::window::FR_ROW;

@@ -46,6 +46,7 @@ use crate::option::{buf_copy_options, magic_isset};
 use crate::options::{kOptJopFlagView, kOptSwbFlagNewtab, kOptSwbFlagSplit, kOptSwbFlagVsplit};
 use crate::os::cshim::gettext;
 use crate::os::fs::file_id;
+use crate::os::libc::uint64_t;
 use crate::path::full_name_save;
 use crate::pos::MAXLNUM;
 use crate::regexp::RE_MAGIC;
@@ -53,7 +54,7 @@ use crate::semsg;
 use crate::types::RegMatch;
 use crate::types::{
     Buffer, Callback, ColNr, Failed, FileID, FileMark, FileMarkView, Handle, LineNr, OptInt, Pos,
-    Timestamp, VAR_SCOPE, WinInfo, uint64_t,
+    Timestamp, VAR_SCOPE, WinInfo,
 };
 use crate::undo::curbuf_is_changed;
 use crate::window::{WSP_VERT, swbuf_goto_win_with_buf, win_split};

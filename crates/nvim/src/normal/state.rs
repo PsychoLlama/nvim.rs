@@ -69,6 +69,7 @@ use crate::normal::{
 use crate::option::shortmess;
 use crate::option::vars::{fdo_flags, p_smd};
 use crate::options::kOptFdoFlagAll;
+use crate::os::libc::int64_t;
 use crate::os::time::os_time_raw;
 use crate::pos::equalpos;
 use crate::profile::startup_timing;
@@ -81,7 +82,7 @@ use crate::state::{
     may_trigger_safestate, state_enter, state_no_longer_safe,
 };
 use crate::terminal::terminal_check_refresh;
-use crate::types::{CmdArg, OpArg, OpType, Outcome, Pos, ShmFlag, int64_t};
+use crate::types::{CmdArg, OpArg, OpType, Outcome, Pos, ShmFlag};
 use crate::ui::{ui_cursor_shape, ui_flush};
 use crate::window::{may_make_initial_scroll_size_snapshot, may_trigger_win_scrolled_resized};
 use crate::winlayer::graph::cmdwin_result;

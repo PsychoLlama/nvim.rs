@@ -48,13 +48,14 @@ use crate::event::socket::{socket_connect, socket_watcher_accept};
 use crate::event::stream::stream_may_close;
 use crate::event::wstream::{SharedBuffer, wstream_init, wstream_init_fd, wstream_write};
 use crate::event_queue::{self, ParkingQueue, QueueId};
+use crate::os::libc::size_t;
 use crate::os::pty_proc_unix::{
     pty_proc_close_master, pty_proc_resize, pty_proc_resume, pty_proc_tty_name,
 };
 use crate::shell::Argv;
 use crate::types::{
     Channel, ChannelStream, InternalState, JobProc, Proc, PtyProc, RStream, StderrState, StdioPair,
-    Stream, size_t,
+    Stream,
 };
 
 /// The `data` word a channel's handles carry: its id, not its address.

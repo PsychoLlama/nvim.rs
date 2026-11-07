@@ -31,6 +31,8 @@ use crate::option::SavedCpo;
 use crate::option::vars::p_enc;
 use crate::optionstr::OptString;
 use crate::os::cshim::{gettext, gettext_owned};
+use crate::os::libc::time_t;
+use crate::os::libc::tm;
 use crate::os::time::{
     os_localtime_r, os_mktime, os_strftime, os_strptime, os_time_raw, tm_zeroed,
 };
@@ -44,7 +46,6 @@ use crate::strings::{escaped_bytes, format_typvals, shellescape};
 use crate::types::ColNr;
 use crate::types::{
     EvalFuncData, Hlf, List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber, kListLenMayKnow,
-    time_t, tm,
 };
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};

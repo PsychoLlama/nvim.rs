@@ -30,7 +30,8 @@ use crate::decoration::SignCountHalf;
 use crate::marktree::key::{
     MtFlags, mt_decor, mt_decor_any, mt_end, mt_flags, mt_invalid, mt_paired,
 };
-use crate::types::{ColNr, DecorInline, MTKey, MTPos, MarkTreeIter, uint32_t, uint64_t};
+use crate::os::libc::{uint32_t, uint64_t};
+use crate::types::{ColNr, DecorInline, MTKey, MTPos, MarkTreeIter};
 
 /// Create or update an extmark.
 ///

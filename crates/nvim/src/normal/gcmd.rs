@@ -36,12 +36,13 @@ use crate::normal::{
     nv_screengo, nv_visual, nv_vreplace, visual_active,
 };
 use crate::ops::cursor_pos_info;
+use crate::os::libc::int64_t;
 use crate::plines::linetabsize;
 use crate::search::{BACKWARD, FORWARD, current_search};
 use crate::state::mode::VIsual_reselect;
 use crate::state::virtual_active;
 use crate::textobject::bckend_word;
-use crate::types::{CmdArg, ColNr, LineNr, NUL, OpType, int64_t};
+use crate::types::{CmdArg, ColNr, LineNr, NUL, OpType};
 use crate::undo::undo_time;
 use crate::window::{goto_tabpage, goto_tabpage_lastused};
 use core::ffi::c_int;

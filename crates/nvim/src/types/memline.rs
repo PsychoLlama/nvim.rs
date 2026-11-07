@@ -12,6 +12,7 @@
 use super::*;
 use crate::memfile::BlockId;
 use crate::memline::MlFlags;
+use crate::os::libc::size_t;
 
 #[derive(Copy, Clone)]
 pub struct ChunkSize {

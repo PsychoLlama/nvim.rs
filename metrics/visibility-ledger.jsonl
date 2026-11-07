@@ -366,6 +366,7 @@
 {"path":"neovim::os::fs::os_rmdir","kind":"fn","file":"crates/nvim/src/os/fs/dir.rs","tests":["crates/nvim/tests/unit/fs.rs"]}
 {"path":"neovim::os::fs::os_setperm","kind":"fn","file":"crates/nvim/src/os/fs/meta.rs","tests":["crates/nvim/tests/unit/fs.rs"]}
 {"path":"neovim::os::fs::path_exists","kind":"fn","file":"crates/nvim/src/os/fs/dir.rs","tests":["crates/nvim/tests/unit/fs.rs"]}
+{"path":"neovim::os::libc::ptrdiff_t","kind":"type","file":"crates/nvim/src/os/libc.rs","tests":["crates/nvim/tests/unit/typval.rs"]}
 {"path":"neovim::os::users::os_get_usernames","kind":"fn","file":"crates/nvim/src/os/users.rs","tests":["crates/nvim/tests/unit/users.rs"]}
 {"path":"neovim::os::users::uname_within","kind":"fn","file":"crates/nvim/src/os/users.rs","tests":["crates/nvim/tests/unit/users.rs"]}
 {"path":"neovim::os::users::user_home_dir","kind":"fn","file":"crates/nvim/src/os/users.rs","tests":["crates/nvim/tests/unit/users.rs"]}
@@ -600,7 +601,6 @@
 {"path":"neovim::types::kListLenUnknown","kind":"const","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/channel_reader.rs","crates/nvim/tests/unit/typval.rs"]}
 {"path":"neovim::types::kSpecialVarNull","kind":"const","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/support/tv.rs","crates/nvim/tests/unit/typval_value.rs"]}
 {"path":"neovim::types::lua_State","kind":"struct","file":"crates/nvim/src/types/lua.rs","tests":["crates/nvim/tests/unit/api_converter.rs"]}
-{"path":"neovim::types::ptrdiff_t","kind":"type","file":"crates/nvim/src/types/libc.rs","tests":["crates/nvim/tests/unit/typval.rs"]}
 {"path":"neovim::types::typval::UVarNumber","kind":"type","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/charset.rs","crates/nvim/tests/unit/charset_oracle.rs","crates/nvim/tests/unit/strings.rs"]}
 {"path":"neovim::types::typval::VarNumber","kind":"type","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/charset.rs","crates/nvim/tests/unit/charset_oracle.rs"]}
 {"path":"neovim::undo::UNDO_HASH_SIZE","kind":"const","file":"crates/nvim/src/undo/mod.rs","tests":["crates/nvim/tests/unit/undo.rs"]}

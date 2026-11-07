@@ -30,6 +30,7 @@ use core::ffi::c_int;
 use super::atom::regatom;
 use super::compile::regnext;
 use super::op::BtOp;
+use crate::os::libc::int64_t;
 use crate::regexp::BtRegProg;
 use crate::regexp::mbyte::char_at_nul;
 use crate::regexp::{
@@ -39,7 +40,7 @@ use crate::regexp::{
     getchr, getdecchrs, gethexchrs, getoctchrs, magic, peekchr, re_multi_type, read_limits,
     skipchr, skipchr_keepstart, spelled, unmagic,
 };
-use crate::types::{NUL, int64_t};
+use crate::types::NUL;
 use core::cell::Cell;
 
 const M_AMP: c_int = magic(b'&');

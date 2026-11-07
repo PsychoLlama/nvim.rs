@@ -15,6 +15,7 @@ use super::*;
 use crate::eval::gc::RootId;
 pub use crate::eval::typval::{BlobRef, DictRef, DictTab, ItemSlot, ListRef, PartialRef};
 use crate::memory::ThinCString;
+use crate::os::libc::{int64_t, size_t, uint64_t};
 
 pub type BoolVarValue = ::core::ffi::c_uint;
 /// The two `VAR_BOOL` values: `v:false` and `v:true`.

@@ -59,9 +59,10 @@ use crate::options::{
     kOptUndolevels, kOptWinbar, options,
 };
 use crate::optionstr::check_illegal_path_names;
+use crate::os::libc::uint32_t;
 use crate::types::{
     ApiString, OptError, OptIndex, OptSet, OptVal, OptionSetFlags, ScriptCtx, ScriptId, VimOption,
-    Vv, uint32_t,
+    Vv,
 };
 use crate::ui::ui_call_option_set;
 use crate::window::set_winbar;

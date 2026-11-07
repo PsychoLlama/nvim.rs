@@ -50,6 +50,7 @@ use crate::keycodes::{Ctrl_BSL, Ctrl_C, Ctrl_N, Ctrl_O, SpecialKey};
 use crate::memory::XString;
 use crate::r#move::{set_topline, validate_cursor};
 use crate::options::kOptCuloptFlagNumber;
+use crate::os::libc::uint8_t;
 use crate::state::Step;
 use crate::state::mode::{State, restart_edit, stop_insert_mode};
 use crate::state::{
@@ -58,7 +59,7 @@ use crate::state::{
 use crate::types::AutoEvent;
 use crate::types::Handle;
 use crate::types::Key;
-use crate::types::{ColNr, LineNr, OptInt, Pos, WinOpt, uint8_t};
+use crate::types::{ColNr, LineNr, OptInt, Pos, WinOpt};
 use crate::ui::{ui_busy_stop, ui_cursor_shape, ui_flush};
 use crate::window::{may_trigger_win_scrolled_resized, win_valid};
 use crate::winlayer::{Buf, Win, WinId};

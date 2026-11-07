@@ -30,8 +30,9 @@ use crate::ex_docmd::{get_pressedreturn, set_pressedreturn};
 use crate::ex_eval::discard_current_exception;
 use crate::ex_eval::state::did_throw;
 use crate::message::state::{called_emsg, did_emsg};
+use crate::os::libc::{int64_t, uint64_t};
 use crate::registry::SlotTable;
-use crate::types::{Callback, DictItem, Timer, TypVal, VarNumber, int64_t, uint64_t};
+use crate::types::{Callback, DictItem, Timer, TypVal, VarNumber};
 
 /// How many consecutive errors a timer's callback may raise before the
 /// timer is stopped for good.

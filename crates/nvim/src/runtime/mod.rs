@@ -72,6 +72,7 @@ use crate::options::kOptRuntimepath;
 use crate::os::cshim::gettext;
 use crate::os::fs::os_file_is_readable;
 use crate::os::input::line_breakcheck;
+use crate::os::libc::{int64_t, ptrdiff_t};
 use crate::path::{
     append_path, concat_fnames, fix_fname, gen_expand_wildcards, past_head_index, path_fnamecmp,
     path_fnamencmp, path_with_extension, tail_index, vim_ispathsep, vim_ispathsep_nocolon,
@@ -90,7 +91,7 @@ use crate::types::{
     ApiDict, ApiString, Array, CONV_NONE, EStack, EStackArg, EStackType, EstackInfo, EvalFuncData,
     ExArg, Expand, FrameName, Integer, LineNr, LuaRetMode, Object, OptSet, OptVal, ProfTime,
     ScriptCtx, ScriptId, ScriptItem, TypVal, UserFunc, VAR_DICT, VarLock, VarNumber, VimConv,
-    XDGVarType, int64_t, kBoolVarFalse, ptrdiff_t,
+    XDGVarType, kBoolVarFalse,
 };
 use core::cell::Cell;
 use std::rc::Rc;

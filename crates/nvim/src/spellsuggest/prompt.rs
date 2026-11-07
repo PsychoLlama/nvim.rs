@@ -61,6 +61,7 @@ use crate::option::vars::p_verbose;
 use crate::options::kOptBoFlagSpell;
 use crate::optionstr::OptString;
 use crate::os::cshim::gettext;
+use crate::os::libc::int64_t;
 use crate::search::FORWARD;
 use crate::spell::MAXWLEN_INT;
 use crate::spell::{
@@ -73,7 +74,7 @@ use crate::spellsuggest::{
 };
 use crate::types::Key;
 use crate::types::ui::kUIMessages;
-use crate::types::{ColNr, IOSIZE, NUL, Pos, int64_t};
+use crate::types::{ColNr, IOSIZE, NUL, Pos};
 use crate::ui::state::Rows;
 use crate::ui::{ui_has, vim_beep};
 use crate::undo::u_save_cursor;

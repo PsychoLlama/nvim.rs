@@ -42,14 +42,15 @@ use crate::guard::Suppress;
 use crate::r#move::textpos2screenpos;
 use crate::option::vars::{P_ACD, p_acd, p_ch};
 use crate::os::cshim::gettext_owned;
+use crate::os::libc::{int64_t, size_t};
 use crate::plines::win_text_height;
 use crate::pos::MAXCOL;
 use crate::search::FORWARD;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
     ApiString, Boolean, Error, Failed, Float, Integer, LineNr, Pos, SwitchWin, TryState, WinConfig,
-    WinStyle, WindowHandle, int64_t, kErrorTypeException, kFloatAnchorEast, kFloatAnchorSouth,
-    kFloatRelativeLaststatus, kFloatRelativeTabline, kFloatRelativeWindow, size_t,
+    WinStyle, WindowHandle, kErrorTypeException, kFloatAnchorEast, kFloatAnchorSouth,
+    kFloatRelativeLaststatus, kFloatRelativeTabline, kFloatRelativeWindow,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{

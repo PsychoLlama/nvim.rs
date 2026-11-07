@@ -30,7 +30,7 @@
     clippy::ptr_as_ptr
 )]
 
-use super::size_t;
+use crate::os::libc::size_t;
 use core::ffi::{CStr, c_char};
 use core::{fmt, ptr};
 

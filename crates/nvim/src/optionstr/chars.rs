@@ -53,9 +53,10 @@ use crate::option::vars::{P_FCS, P_LCS};
 use crate::option::{StrVar, option_var};
 use crate::options::kOptListchars as kOptListcharsIdx;
 use crate::os::cshim::gettext;
+use crate::os::libc::int64_t;
 use crate::types::{
     CharsOption, Expand, FcsChars, LcsChars, NUL, OptError, OptSet, OptionSetFlags, ScreenChar,
-    WinOpt, int64_t,
+    WinOpt,
 };
 use crate::winlayer;
 

@@ -10,6 +10,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::os::libc::{int8_t, int32_t};
 
 /// How far the character under a byte starts before it and ends after it.
 ///

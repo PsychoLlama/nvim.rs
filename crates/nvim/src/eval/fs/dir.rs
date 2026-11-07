@@ -46,11 +46,12 @@ use crate::narrow::len_as_int;
 use crate::narrow::number_as_int;
 use crate::os::cshim::gettext;
 use crate::os::fs::{current_dir, link_info, mkdir_recurse, os_remove, os_rmdir};
+use crate::os::libc::uint64_t;
 use crate::path::{full_name_save, tail_index};
 use crate::semsg;
 use crate::types::{
     CdScope, EvalFuncData, Failed, MAXPATHL, TypVal, VAR_NUMBER, VAR_STRING, VarNumber,
-    kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow, uint64_t,
+    kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow,
 };
 use crate::window::find_tabpage;
 use crate::window::{DirOwner, own_dir};

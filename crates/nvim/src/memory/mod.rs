@@ -46,8 +46,8 @@ use crate::message::clear_sb_text;
 use crate::message::e_outofmem;
 use crate::message::state::emsg_silent;
 use crate::os::cshim::gettext;
+use crate::os::libc::size_t;
 use crate::startup::preserve_exit;
-use crate::types::size_t;
 use ::libc::{calloc, free, malloc, realloc};
 
 /// Ask the editor to give memory back: drop the scrollback, release

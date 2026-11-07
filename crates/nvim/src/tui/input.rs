@@ -43,6 +43,9 @@ use crate::log::{LOGLVL_DBG, logmsg};
 use crate::message_fmt::msg_bytes;
 use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::option::vars::{p_ttimeout, p_ttm};
+use crate::os::libc::STDIN_FILENO;
+use crate::os::libc::size_t;
+use crate::os::libc::termios;
 use crate::startup::{os_exit, ui_client_channel_id};
 use crate::tui::keys::{KEYMOD_RECOGNIZED, modified_utf8, mouse_event, simple_utf8};
 use crate::tui::negotiate::{
@@ -58,11 +61,9 @@ use crate::tui::termkey::termkey::{
 use crate::tui::tui::{tui_set_size, with_started_tui};
 use crate::types::TUIData;
 use crate::types::builders::ArrayBuf;
-use crate::types::libc::STDIN_FILENO;
-use crate::types::termios;
 use crate::types::{
     ApiString, Array, Integer, KEY_BUFFER_SIZE, KeyEncoding, Object, RStream, TermInput,
-    TermInputCallbacks, TermKeyKey, TerminfoEntry, size_t, uv_handle_t, uv_timer_t,
+    TermInputCallbacks, TermKeyKey, TerminfoEntry, uv_handle_t, uv_timer_t,
 };
 use ::libc::tcgetattr;
 use core::ffi::{CStr, c_char, c_int, c_void};

@@ -147,6 +147,7 @@ use crate::options::{
 };
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
+use crate::os::libc::{int32_t, int64_t, size_t};
 use crate::plines::{
     CHAR_CELLS_SPAN, charsize_nowrap, getvcol, getvcol_nolist, linetabsize_str, win_charsize,
     win_chartabsize,
@@ -183,7 +184,6 @@ use crate::types::ui::kUIMessages;
 use crate::types::{
     AcoSave, ApiString, CharsizeArg, CmdModFlags, ColNr, INSCHAR_CTRLV, INSCHAR_FORMAT,
     INSCHAR_NO_FEX, LineNr, MB_MAXBYTES, OptInt, PUT_CURSEND, PUT_FIXINDENT, Pos, ScreenChar, Vv,
-    int32_t, int64_t, size_t,
 };
 use crate::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::undo::u_sync_once;

@@ -42,6 +42,7 @@ use crate::option::vars::p_tgc;
 use crate::os::cshim::gettext;
 use crate::os::env::{ENV_NVIM, getenv_owned};
 use crate::os::fs::dir_exists;
+use crate::os::libc::uint64_t;
 use crate::os::time::os_hrtime;
 use crate::path::vim_full_name;
 use crate::semsg;
@@ -53,7 +54,7 @@ use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
     ApiString, Callback, CallbackReader, ChannelStdinMode, Dict, EvalFuncData, IOSIZE, Integer,
     JobProc, MAXPATHL, Object, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING,
-    VarNumber, Vv, uint64_t,
+    VarNumber, Vv,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 use crate::winlayer::Buf;

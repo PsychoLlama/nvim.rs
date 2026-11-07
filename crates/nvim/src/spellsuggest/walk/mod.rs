@@ -93,10 +93,11 @@ use crate::getchar::state::got_int;
 use crate::mbyte::head_off;
 use crate::narrow::as_index;
 use crate::os::input::os_breakcheck;
+use crate::os::libc::int64_t;
 use crate::profile::{profile_passed_limit, profile_setlimit};
 use crate::spell::{LoadedLangs, Tree, WordFlags};
 use crate::spellsuggest::{MAXWLEN, SugInfo, spell_suggest_timeout};
-use crate::types::{LangP, ProfTime, SpellIdx, SpellLang, int64_t};
+use crate::types::{LangP, ProfTime, SpellIdx, SpellLang};
 use core::ffi::c_int;
 
 /// One level per byte of the bad word is all the walk can ever need.

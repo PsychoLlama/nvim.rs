@@ -36,9 +36,10 @@ use crate::log::{LOGLVL_ERR, logmsg};
 use crate::message_fmt::{msg_cstr, msg_cstr_opt};
 use crate::os::cshim::environ;
 use crate::os::fs::{errno_text, os_strerror, set_cloexec};
+use crate::os::libc::speed_t;
 use crate::os::signal::{SIGALRM, SIGCHLD, SIGCONT, SIGHUP, SIGINT, SIGKILL, SIGQUIT, SIGTERM};
 use crate::os::uv_error::uv_code;
-use crate::types::{Loop, PtyProc, speed_t, uv_pipe_t, uv_signal_t};
+use crate::types::{Loop, PtyProc, uv_pipe_t, uv_signal_t};
 use ::libc::{
     __errno_location, _exit, SIG_DFL, cfsetispeed, cfsetospeed, close, execvp, fcntl, forkpty,
     ioctl, kill, killpg, poll, pollfd, ptsname, setsid, signal, waitpid,
@@ -111,8 +112,8 @@ fn warn(who: &'static CStr, line: u32, what: &str) {
 /// libuv here.
 pub fn pty_proc_spawn(ptyproc: &mut PtyProc) -> c_int {
     // Built at first use and reused, as upstream did.
-    static TERMIOS_DEFAULT: GlobalCell<crate::types::termios> =
-        GlobalCell::new(crate::types::termios {
+    static TERMIOS_DEFAULT: GlobalCell<crate::os::libc::termios> =
+        GlobalCell::new(crate::os::libc::termios {
             c_iflag: 0,
             c_oflag: 0,
             c_cflag: 0,

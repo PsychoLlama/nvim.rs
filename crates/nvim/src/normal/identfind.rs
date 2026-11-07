@@ -38,11 +38,12 @@ use crate::option::shortmess;
 use crate::option::vars::{P_SCS, P_WS, fdo_flags, p_scs, p_ws};
 use crate::options::kOptFdoFlagSearch;
 use crate::os::cshim::gettext;
+use crate::os::libc::int64_t;
 use crate::pos::clearpos;
 use crate::regexp::RE_LAST;
 use crate::search::{BACKWARD, FORWARD, SEARCH_START, findmatchlimit, reset_search_dir, searchit};
 use crate::textobject::findpar;
-use crate::types::{ColNr, LineNr, OpType, Pos, ShmFlag, int64_t};
+use crate::types::{ColNr, LineNr, OpType, Pos, ShmFlag};
 use core::ffi::{CStr, c_int, c_uint};
 
 /// Whether the character at `col` of `line` continues a `FIND_EVAL`

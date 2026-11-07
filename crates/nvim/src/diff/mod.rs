@@ -85,6 +85,7 @@ use crate::option::{OptionTarget, set_option_direct_for, set_option_value_give_e
 use crate::options::{kOptBoFlagOperator, kOptDiff, kOptFoldmethod};
 use crate::os::cshim::gettext;
 use crate::os::fs::{os_chdir, os_remove};
+use crate::os::libc::{size_t, uint64_t};
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::search::{BACKWARD, FORWARD};
 use crate::shell::ShellOpts;
@@ -92,8 +93,7 @@ use crate::strings::shellescape;
 use crate::types::AutoEvent;
 use crate::types::{
     AcoSave, ApiString, CmdAddr, CmdModFlags, ColNr, DiffBlock, DiffLine, DiffLineChange,
-    EvalFuncData, ExArg, Hlf, LineNr, OptInt, OptVal, ScriptId, TypVal, VarNumber, size_t,
-    uint64_t,
+    EvalFuncData, ExArg, Hlf, LineNr, OptInt, OptVal, ScriptId, TypVal, VarNumber,
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_save, u_sync};

@@ -12,6 +12,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::os::libc::ptrdiff_t;
 use std::ffi::CString;
 
 use super::file::u_get_undo_file_name;

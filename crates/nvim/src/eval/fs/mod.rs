@@ -50,8 +50,9 @@ use crate::os::fs::{
     can_execute, dir_exists, executable_path, file_info, link_info, os_file_is_readable,
     os_file_is_writable,
 };
+use crate::os::libc::uint64_t;
 use crate::path::{tail_index, vim_ispathsep};
-use crate::types::{Direction, EvalFuncData, FileInfo, TypVal, VAR_STRING, VarNumber, uint64_t};
+use crate::types::{Direction, EvalFuncData, FileInfo, TypVal, VAR_STRING, VarNumber};
 use core::ffi::{CStr, c_int};
 
 // The carve of the transpiled module; see each child's docs.

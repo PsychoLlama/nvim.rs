@@ -39,12 +39,13 @@ use crate::marktree::meta::MetaCount;
 use crate::mbyte::{c_cells_in, c_char_info, c_cluster_len, c_next_cluster, char_at};
 use crate::r#move::win_col_off2;
 use crate::narrow::number_as_int;
+use crate::os::libc::{int32_t, int64_t, uint32_t};
 use crate::pos::{MAXCOL, lt, ltoreq};
 use crate::state::mode::State;
 use crate::state::{MODE_NORMAL, virtual_active};
 use crate::types::{
     CharInfo, CharSize, CharsizeArg, CharsizeKind, ColNr, LineNr, MB_MAXCHAR, MarkTreeIter,
-    MetaIndex, NUL, Pos, int32_t, int64_t, uint32_t,
+    MetaIndex, NUL, Pos,
 };
 use crate::winlayer::{Buf, Win};
 

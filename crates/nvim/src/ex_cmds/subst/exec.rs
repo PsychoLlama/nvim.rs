@@ -58,6 +58,7 @@ use crate::option::vars::{p_ch, p_cwh, p_icm};
 use crate::options::kOptInccommand;
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
+use crate::os::libc::{int64_t, size_t};
 use crate::profile::profile_passed_limit;
 use crate::regexp::vim_regexec_multi;
 use crate::search::get_search_pat;
@@ -66,7 +67,6 @@ use crate::types::RegMMatch;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     CmdModFlags, ColNr, ExArg, Handle, LPos, LineNr, OptInt, OptionSetFlags, Pos, ProfTime,
-    int64_t, size_t,
 };
 use crate::ui::ui_has;
 use crate::undo::u_save_cursor;

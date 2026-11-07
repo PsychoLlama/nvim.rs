@@ -36,8 +36,9 @@ use crate::types::NL;
 // Named here so the expression tree and `list.rs` can reach it by one
 // path; it belongs to `message`.
 pub(crate) use crate::message::e_invalblob;
+use crate::os::libc::uint64_t;
 use crate::registry::SlotTable;
-use crate::types::{ExprType, Failed, GRegFlags, LuaRetMode, MarkGet, MotionType, Timer, uint64_t};
+use crate::types::{ExprType, Failed, GRegFlags, LuaRetMode, MarkGet, MotionType, Timer};
 use core::ffi::{CStr, c_int, c_long, c_uint, c_ulong};
 
 mod entry;

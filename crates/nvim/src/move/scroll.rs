@@ -26,8 +26,9 @@ use super::*;
 use crate::cursor::coladvance;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID};
 use crate::edit::{cursor_down, cursor_up};
+use crate::os::libc::int64_t;
 use crate::pos::MAXCOL;
-use crate::types::{ColNr, LineNr, int64_t};
+use crate::types::{ColNr, LineNr};
 
 impl Win {
     /// Put the cursor at virtual column `wcol`, or as close as the line

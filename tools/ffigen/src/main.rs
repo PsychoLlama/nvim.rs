@@ -616,7 +616,7 @@ fn is_marker(ty: &syn::Type) -> bool {
 /// them. Each is read exactly as a `src/types/` file: its types are closure
 /// roots, and its copy of a name defined twice wins. A row naming a file that
 /// no longer exists is an error, so the list cannot outlive a move.
-const TYPE_HOMES: &[&str] = &["src/api/keysets.rs"];
+const TYPE_HOMES: &[&str] = &["src/api/keysets.rs", "src/os/libc.rs"];
 
 fn collect_file(world: &mut World, rel: &str, ast: syn::File) {
     let canonical = rel.starts_with("src/types/") || TYPE_HOMES.contains(&rel);
@@ -1478,10 +1478,10 @@ fn main() {
     let mut emitter = Emitter::new(&world);
     for (name, defs) in &world.by_name {
         if let Some(d) = defs.iter().find(|d| d.canonical) {
-            // types/libc.rs mirrors glibc; the system preamble owns that
+            // os/libc.rs mirrors glibc; the system preamble owns that
             // domain, so its types are emitted only if the closure pulls
             // them in (and not denied).
-            if !world.deny.contains(name) && !d.file.ends_with("types/libc.rs") {
+            if !world.deny.contains(name) && d.file != "src/os/libc.rs" {
                 emitter.queue.push((d.file.clone(), name.clone()));
             }
         }

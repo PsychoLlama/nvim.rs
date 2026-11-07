@@ -13,6 +13,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::os::libc::int64_t;
 use crate::types::Failed;
 use std::io::Write;
 

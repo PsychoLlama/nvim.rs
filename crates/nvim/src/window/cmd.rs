@@ -59,13 +59,14 @@ use crate::normal::{
 };
 use crate::option::vars::{P_LANGMAP, p_lrm, p_pvh, swb_flags};
 use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
+use crate::os::libc::int64_t;
 use crate::pos::MAXLNUM;
 use crate::quickfix::qf_view_result;
 use crate::search::find_pattern_in_path;
 use crate::tag::state::{g_do_tagpreview, postponed_split};
 use crate::tr_c;
 use crate::types::ui::kUIMultigrid;
-use crate::types::{Failed, LineNr, NUL, WinConfig, int64_t};
+use crate::types::{Failed, LineNr, NUL, WinConfig};
 use crate::ui::state::{Columns, Rows};
 use crate::ui::ui_has;
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};

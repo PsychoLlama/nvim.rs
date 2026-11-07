@@ -21,9 +21,8 @@ use crate::eval::typval::{
     dict_find, dict_is_watched, dict_watcher_notify, tv_clear, tv_copy, tv_dict_item_remove,
 };
 use crate::eval::vars::{VvarStore, before_set_vvar, vimvar_dict};
-use crate::types::{
-    ApiString, DictItem, Error, Object, kErrorTypeException, kErrorTypeValidation, size_t,
-};
+use crate::os::libc::size_t;
+use crate::types::{ApiString, DictItem, Error, Object, kErrorTypeException, kErrorTypeValidation};
 use crate::types::{ScopeDictItem, TypVal};
 use core::ffi::c_int;
 

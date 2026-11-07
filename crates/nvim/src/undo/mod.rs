@@ -58,6 +58,8 @@ use crate::options::kOptFdoFlagUndo;
 use crate::os::cshim::{gettext, ngettext};
 use crate::os::fs::{os_free_acl, os_get_acl, os_remove, os_set_acl};
 use crate::os::input::fast_breakcheck;
+use crate::os::libc::tm;
+use crate::os::libc::{int64_t, time_t};
 use crate::os::time::{os_localtime_r, os_strftime, os_time, os_time_raw, tm_zeroed};
 use crate::path::{concat_fnames, full_name_save, tail_index, vim_ispathsep};
 use crate::pos::clearpos;

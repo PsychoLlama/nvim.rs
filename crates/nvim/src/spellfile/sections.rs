@@ -43,8 +43,9 @@ use std::collections::hash_map::Entry;
 use crate::mbyte::{c_cluster_len, char_at, char_len, encode_char, utf_char2len};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
+use crate::os::libc::int16_t;
 use crate::spell::{ascii_spell_chartab, count_common_word};
-use crate::types::{NUL, RepItem, SalFirst, SalItem, SpellLang, int16_t};
+use crate::types::{NUL, RepItem, SalFirst, SalItem, SpellLang};
 
 use super::spl::{SpellReadError, Spl, SplResult, trim_nul};
 use super::{

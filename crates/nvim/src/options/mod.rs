@@ -101,12 +101,13 @@ use crate::optionstr::{
     expand_set_encoding, expand_set_eventignore, expand_set_formatoptions, expand_set_mouse,
     expand_set_shortmess, expand_set_str_generic, expand_set_whichwrap, expand_set_winhighlight,
 };
+use crate::os::libc::ssize_t;
 use crate::quickfix::did_set_quickfixtextfunc;
 use crate::runtime::did_set_runtimepackpath;
 use crate::tag::did_set_tagfunc;
 use crate::types::ascii::TAB;
 use crate::types::option::{MAX_MCO, kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString};
-use crate::types::{OptDefault, OptIndex, OptInt, OptScopeFlags, OptVar, VimOption, ssize_t};
+use crate::types::{OptDefault, OptIndex, OptInt, OptScopeFlags, OptVar, VimOption};
 use crate::window::{did_set_winminheight, did_set_winminwidth};
 
 /// `scope_flags` bits.

@@ -33,8 +33,9 @@ use crate::mbyte::{char_at, mb_islower, mb_isupper, utf_class_tab, utf_printable
 use crate::option::vars::{breakat_flags, dy_flags, p_isf, p_isi, p_isp};
 use crate::options::kOptDyFlagUhex;
 use crate::optionstr::OptStringRef;
+use crate::os::libc::{uint8_t, uint64_t};
 use crate::path::has_wildcard;
-use crate::types::{Failed, UVarNumber, VarNumber, uint8_t, uint64_t};
+use crate::types::{Failed, UVarNumber, VarNumber};
 
 pub mod display;
 pub mod skip;

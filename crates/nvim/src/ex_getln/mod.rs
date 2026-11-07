@@ -112,6 +112,7 @@ use crate::options::{
 };
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
+use crate::os::libc::{size_t, time_t, uint8_t};
 use crate::path::vim_ispathsep;
 use crate::popupmenu::state::pum_want;
 use crate::popupmenu::{pum_check_clear, pum_ext_want_done, pum_undisplay};
@@ -154,7 +155,6 @@ use crate::types::{
     Direction, DispTick, Error, EvalFuncData, ExArg, ExArgt, Expand, ExpandContext, Handle,
     HashTab, Integer, LineNr, Magic, MotionType, Object, OptInt, OptMagic, OptSet, OptVal,
     ParserState, Pos, ProfTime, SaveVEvent, SearchItArg, TryState, TypVal, UndoLink, VarNumber,
-    size_t, time_t, uint8_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{

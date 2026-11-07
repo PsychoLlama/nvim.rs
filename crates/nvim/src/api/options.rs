@@ -41,9 +41,10 @@ use crate::option::{
     OptionTarget, find_option, get_all_vimoptions, get_option_value_for, get_vimoption,
     object_as_optval, option_has_scope, optval_as_object, set_option_direct, set_option_value_for,
 };
+use crate::os::libc::uint64_t;
 use crate::types::{
     AcoSave, ApiDict, ApiString, Error, LineNr, Object, OptIndex, OptScope, OptVal, OptionSetFlags,
-    kErrorTypeValidation, uint64_t,
+    kErrorTypeValidation,
 };
 use crate::window::close_windows;
 use crate::winlayer::Buf;

@@ -9,8 +9,8 @@
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
-use super::*;
 pub use crate::hashtab::SlotEntry;
+use crate::os::libc::size_t;
 
 pub type HashValue = size_t;
 

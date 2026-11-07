@@ -75,6 +75,7 @@ use crate::options::{
 };
 use crate::os::cshim::gettext;
 use crate::os::input::{fast_breakcheck, line_breakcheck, os_breakcheck};
+use crate::os::libc::{ptrdiff_t, size_t, uint64_t};
 use crate::os::time::{os_delay, os_hrtime};
 use crate::path::{expand_wildcards, path_tail, vim_ispathsep};
 use crate::popupmenu::state::pum_want;
@@ -103,7 +104,7 @@ use crate::textformat::auto_format;
 use crate::types::{
     ApiString, BoolVarValue, Callback, ColNr, Dict, Direction, EvalFuncData, Expand,
     ExtmarkUndoObject, HashTab, LineNr, List, MB_MAXCHAR, OptInt, OptSet, Pos, PumItem, RegMatch,
-    SaveVEvent, TypVal, VarNumber, Vv, ptrdiff_t, size_t, uint64_t,
+    SaveVEvent, TypVal, VarNumber, Vv,
 };
 use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;

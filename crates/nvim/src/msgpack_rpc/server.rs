@@ -24,8 +24,9 @@ use crate::memory::XString;
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::os::env::{ENV_TEST_LOG, env_exists, env_unset, getenv_owned, process_id};
 use crate::os::fs::os_strerror;
+use crate::os::libc::uint32_t;
 use crate::path::fix_fname;
-use crate::types::{IOSIZE, SocketWatcher, Vv, uint32_t};
+use crate::types::{IOSIZE, SocketWatcher, Vv};
 use std::ffi::CString;
 
 use crate::event::socket::address::SOCKET_ADDR_LEN;

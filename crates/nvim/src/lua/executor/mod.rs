@@ -32,7 +32,8 @@ use core::ffi::c_int;
 
 use crate::global_cell::{GlobalCell, SharedCell};
 use crate::lua::ffi::LUA_REFNIL;
-use crate::types::{LuaRef, LuaRetMode, uint64_t};
+use crate::os::libc::uint64_t;
+use crate::types::{LuaRef, LuaRetMode};
 
 mod call;
 mod callable;

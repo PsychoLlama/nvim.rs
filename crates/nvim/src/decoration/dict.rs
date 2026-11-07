@@ -32,9 +32,10 @@ use crate::decoration::{
 use crate::grid::schar_bytes;
 use crate::highlight::dict::put;
 use crate::highlight_group::syn_id2name;
+use crate::os::libc::uint16_t;
 use crate::sign::sign_text_bytes;
 use crate::types::DictBuilder;
-use crate::types::{ApiString, DecorInline, DecorSignHighlight, DecorVirtText, Object, uint16_t};
+use crate::types::{ApiString, DecorInline, DecorSignHighlight, DecorVirtText, Object};
 use core::ffi::{CStr, c_int};
 
 /// `kExtmark*`: which kinds of decoration a mark carries, as the bit mask the

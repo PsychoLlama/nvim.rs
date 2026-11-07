@@ -13,6 +13,7 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 use crate::memory::XString;
+use crate::os::libc::{ssize_t, uint8_t, uint32_t};
 
 use crate::global_cell::GlobalCell;
 use crate::option::OptSlot;

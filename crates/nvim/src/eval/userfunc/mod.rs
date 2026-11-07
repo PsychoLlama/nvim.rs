@@ -57,6 +57,7 @@ use crate::message_fmt::msg_bytes;
 use crate::option::vars::{p_ic, p_mfd, p_verbose};
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
+use crate::os::libc::size_t;
 use crate::path::path_fnamecmp;
 use crate::profile::do_profiling;
 use crate::profile::{
@@ -72,7 +73,7 @@ use crate::types::ui::kUICmdline;
 use crate::types::{
     Callback, Dict, DictItem, ExArg, Expand, FcId, FuncBody, FuncCall, LineNr, ListItem, LuaRef,
     OptInt, Partial, SaveRedo, TypVal, UserFunc, VAR_DEF_SCOPE, VAR_FUNC, VAR_NUMBER, VAR_SCOPE,
-    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, size_t,
+    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber,
 };
 use crate::ui::state::Rows;
 use crate::ui::ui_has;

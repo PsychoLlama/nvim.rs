@@ -63,6 +63,7 @@ use crate::options::{
     kOptCuloptFlagLine, kOptCuloptFlagNumber, kOptCuloptFlagScreenline, kOptDyFlagUhex,
     kOptSpoFlagNoplainbuffer,
 };
+use crate::os::libc::{ptrdiff_t, size_t, uint8_t, uint32_t, uint64_t};
 use crate::plines::{getvcol, getvvcol, win_charsize};
 use crate::pos::ltoreq;
 use crate::search::FORWARD;
@@ -78,7 +79,7 @@ use crate::types::TAB;
 use crate::types::{
     CharSize, CharsizeArg, ColNr, DecorRange, DiffLine, FoldInfo, GridView, HlMode, Hlf, LineNr,
     NUL, Pos, RgbValue, ScreenAttr, ScreenChar, SignTextAttrs, SpellVars, StatusCol, VarNumber,
-    VirtText, VirtTextPos, WinExtmark, ptrdiff_t, size_t, uint8_t, uint32_t, uint64_t,
+    VirtText, VirtTextPos, WinExtmark,
 };
 use crate::ui::ui_rgb_attached;
 use crate::winlayer::Win;

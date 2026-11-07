@@ -16,7 +16,7 @@
 use core::ffi::c_int;
 
 use super::skip;
-use crate::types::intmax_t;
+use crate::os::libc::intmax_t;
 
 /// The number `text[at..]` starts with and the offset past it, or `None`
 /// when the value did not fit; see [`skip::decimal`].

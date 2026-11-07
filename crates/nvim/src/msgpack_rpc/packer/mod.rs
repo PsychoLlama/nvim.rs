@@ -23,9 +23,8 @@
 use core::ffi::{c_double, c_int};
 
 use crate::lua::executor::release_luaref;
-use crate::types::{
-    Array, Handle, Integer, KeyValuePair, LuaRef, Object, int8_t, size_t, uint32_t, uint64_t,
-};
+use crate::os::libc::{int8_t, size_t, uint32_t, uint64_t};
+use crate::types::{Array, Handle, Integer, KeyValuePair, LuaRef, Object};
 
 pub mod format;
 

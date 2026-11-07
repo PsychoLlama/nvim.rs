@@ -11,6 +11,7 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 use crate::marktree::node::{NodeId, NodeSlab};
+use crate::os::libc::{int32_t, size_t, uint32_t, uint64_t};
 use crate::registry::{IdMap, id_map};
 
 #[derive(Copy, Clone)]

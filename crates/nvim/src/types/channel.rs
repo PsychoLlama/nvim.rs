@@ -11,6 +11,7 @@
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
+use crate::os::libc::{uint32_t, uint64_t};
 use core::ffi::CStr;
 use core::pin::Pin;
 

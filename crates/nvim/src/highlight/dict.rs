@@ -30,10 +30,10 @@ use crate::api_error;
 use crate::highlight::HlAttrFlags;
 use crate::highlight_group::{name_to_color, name_to_ctermcolor};
 use crate::message_fmt::msg_cstr;
+use crate::os::libc::{int16_t, int32_t, size_t};
 use crate::types::DictBuilder;
 use crate::types::{
-    ApiDict, Boolean, Error, HlAttrs, Integer, Object, int16_t, int32_t, kErrorTypeException,
-    kErrorTypeValidation, size_t,
+    ApiDict, Boolean, Error, HlAttrs, Integer, Object, kErrorTypeException, kErrorTypeValidation,
 };
 use core::ffi::{CStr, c_int};
 

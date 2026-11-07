@@ -35,9 +35,10 @@ use crate::guard::Depth;
 use crate::guard::secure;
 use crate::option::do_set;
 use crate::option::vars::p_mls;
+use crate::os::libc::intmax_t;
 use crate::runtime::state::current_sctx;
 use crate::runtime::{estack_pop, estack_push};
-use crate::types::{Failed, LineNr, OptionSetFlags, ScriptId, intmax_t};
+use crate::types::{Failed, LineNr, OptionSetFlags, ScriptId};
 use crate::version::min_vim_version;
 use crate::winlayer::Buf;
 

@@ -78,6 +78,7 @@ use crate::option::vars::{p_ch, p_report};
 use crate::options::{kOptVeFlagAll, kOptVeFlagOnemore};
 use crate::os::cshim::{gettext, ngettext};
 use crate::os::input::os_breakcheck;
+use crate::os::libc::{int64_t, ptrdiff_t, size_t};
 use crate::os::time::os_time;
 use crate::plines::{getvcol, win_charsize};
 use crate::pos::MAXLNUM;
@@ -97,7 +98,7 @@ use crate::types::{
     ApiString, BCount, BlockDef, CharsizeArg, CmdModFlags, ColNr, Direction, ExArg, GRegFlags,
     HashTab, LineNr, MotionType, OpArg, PUT_BLOCK_INNER, PUT_CURSEND, PUT_CURSLINE, PUT_FIXINDENT,
     PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, Pos, PutFlags, SaveVEvent, VarLock, YankReg,
-    int64_t, kBoolVarFalse, kBoolVarTrue, ptrdiff_t, size_t,
+    kBoolVarFalse, kBoolVarTrue,
 };
 use crate::ui::state::Columns;
 use crate::ui::ui_has;

@@ -21,7 +21,8 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 
 use super::format::encode_be;
-use crate::types::{UndoLink, time_t};
+use crate::os::libc::time_t;
+use crate::types::UndoLink;
 use crate::winlayer::Buf;
 
 /// Which way the undo file is open.

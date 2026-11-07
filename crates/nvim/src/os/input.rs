@@ -42,6 +42,8 @@ use crate::mouse::state::{mouse_col, mouse_grid, mouse_row};
 use crate::msgpack_rpc::channel::ch_before_blocking_events;
 use crate::option::vars::{p_mouset, p_ut};
 use crate::os::cshim::gettext;
+use crate::os::libc::STDIN_FILENO;
+use crate::os::libc::{size_t, uint8_t, uint64_t};
 use crate::os::time::os_hrtime;
 use crate::profile::do_profiling;
 use crate::profile::{prof_input_end, prof_input_start};
@@ -49,10 +51,7 @@ use crate::startup::{getout, main_loop, preserve_exit, silent_mode, used_stdin};
 use crate::state::mode::State;
 use crate::state::{MODE_INSERT, get_real_state};
 use crate::types::AutoEvent;
-use crate::types::libc::STDIN_FILENO;
-use crate::types::{
-    ApiString, Event, KeyExtra, RStream, Stream, size_t, uint8_t, uint64_t, uv_handle_type,
-};
+use crate::types::{ApiString, Event, KeyExtra, RStream, Stream, uv_handle_type};
 use crate::ui::state::{Columns, Rows, current_ui};
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int, c_uint, c_void};

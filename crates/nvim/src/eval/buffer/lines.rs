@@ -15,6 +15,7 @@ use crate::eval::typval::list_len;
 use crate::memline::{Lines, ml_append_text, ml_get_len, ml_replace_buf_text};
 use crate::memory::{ThinCString, XString};
 use crate::narrow::len_as_int;
+use crate::os::libc::ptrdiff_t;
 use crate::types::{VAR_LIST, VAR_STRING};
 
 /// Set or append lines in buffer `buffer`, from `lines` — any type, converted to

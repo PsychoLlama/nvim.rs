@@ -29,12 +29,13 @@ use crate::lua::executor::{api_new_luaref, release_luaref};
 use crate::mbyte::mb_islower;
 use crate::message::state::{msg_col, redir_off};
 use crate::message::{capture_finish, capture_start};
+use crate::os::libc::{int64_t, size_t, uint64_t};
 use crate::regexp::RE_MAGIC;
 use crate::register::valid_yank_reg;
 use crate::types::{
     ApiDict, ApiString, Array, BufferHandle, CmdAddr, CmdMod, CmdModFlags, CmdParseInfo, Direction,
-    Error, ExArg, Integer, LuaRef, Object, TryState, int64_t, kErrorTypeException,
-    kErrorTypeValidation, kObjectTypeLuaRef, kObjectTypeString, size_t, uint64_t,
+    Error, ExArg, Integer, LuaRef, Object, TryState, kErrorTypeException, kErrorTypeValidation,
+    kObjectTypeLuaRef, kObjectTypeString,
 };
 use crate::usercmd::{
     Definition, Table, commands_array, parse_addr_type_arg, parse_compl_arg, uc_add_command,

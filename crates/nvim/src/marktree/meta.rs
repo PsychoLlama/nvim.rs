@@ -19,7 +19,8 @@
 //! The counts describe *start* keys only. An end key adds nothing (the pair's
 //! decoration hangs off the start), and neither does an invalidated key.
 
-use crate::types::{MTKey, uint32_t};
+use crate::os::libc::uint32_t;
+use crate::types::MTKey;
 
 use super::key::{MtFlags, mt_end, mt_invalid};
 

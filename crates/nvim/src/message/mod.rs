@@ -142,6 +142,7 @@ use crate::options::{
 };
 use crate::os::cshim::{gettext, ngettext};
 use crate::os::input::{input_available, os_breakcheck};
+use crate::os::libc::{int64_t, size_t, uint64_t};
 use crate::os::time::os_delay;
 use crate::pos::MAXCOL;
 use crate::register::write_reg_contents;
@@ -160,8 +161,7 @@ use crate::types::TAB;
 use crate::types::ui::{kUIMessages, kUIMultigrid};
 use crate::types::{
     ApiString, Array, EStackArg, ExArg, FlushBuffers, GridView, HlMessage, HlMessageChunk, IOSIZE,
-    MessageData, Object, OptInt, ScreenAttr, ScreenChar, ShmFlag, TypVal, Vv, int64_t, size_t,
-    uint64_t,
+    MessageData, Object, OptInt, ScreenAttr, ScreenChar, ShmFlag, TypVal, Vv,
 };
 use crate::ui::state::{Columns, Rows, resize_events};
 use crate::ui::{

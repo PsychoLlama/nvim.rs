@@ -36,13 +36,14 @@ use crate::option::vars::{
 use crate::options::*;
 use crate::optionstr::OptStringRef;
 use crate::os::env::env_set;
+use crate::os::libc::{int64_t, uint8_t};
 use crate::path::{full_name_save, tail_index};
 use crate::regexp::state::{OPTION_MAGIC_OFF, OPTION_MAGIC_ON};
 use crate::search::state::magic_overruled;
 use crate::state::mode::State;
 use crate::types::{
     BsFlag, Callback, CpoFlag, ExArg, Failed, OptInt, OptVal, OptionSetFlags, ScriptId, ShmFlag,
-    TypVal, int64_t, uint8_t,
+    TypVal,
 };
 
 use super::{

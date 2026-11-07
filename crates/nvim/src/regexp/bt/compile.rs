@@ -31,10 +31,10 @@ use core::ffi::{c_int, c_uint};
 
 use super::op::BtOp;
 use crate::mbyte::{encode_char, utf_char2len, utf_iscomposing_legacy};
+use crate::os::libc::{int64_t, uint8_t, uint32_t};
 use crate::regexp::{
     BtRegProg, CompileError, Compiled, NOT_MULTI, REX_SET, peekchr, re_multi_type,
 };
-use crate::types::{int64_t, uint8_t, uint32_t};
 
 /// The fixed part of a node: the opcode plus the offset to the next one.
 const NODE_HDR: usize = 3;

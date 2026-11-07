@@ -38,6 +38,7 @@ use crate::message::wait_return;
 use crate::option::vars::{P_SHADA, P_TITLEOLD, p_title, p_titleold};
 use crate::os::cshim::write_c_stderr;
 use crate::os::input::tty_drain;
+use crate::os::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::os::signal::signal_reject_deadly;
 use crate::profile::{profile_dump, time_finish};
 use crate::shada::shada_write_file;
@@ -47,7 +48,6 @@ use crate::startup::{
     used_stdin, v_dying,
 };
 use crate::state::mode::exmode_active;
-use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::types::{VAR_NUMBER, VarNumber, Vv};
 use crate::ui::{ui_call_set_title, ui_call_stop, ui_flush};
 use crate::ui_client::ui_client_stop;

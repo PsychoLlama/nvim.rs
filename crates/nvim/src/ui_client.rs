@@ -46,6 +46,7 @@ use crate::message_fmt::msg_cstr;
 use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::narrow::number_as_int;
 use crate::os::env::{ENV_TEST_LOG, env_exists, process_id};
+use crate::os::libc::{STDERR_FILENO, STDOUT_FILENO};
 use crate::os::proc::os_dup2;
 use crate::profile::{time_finish, time_msg_at};
 use crate::shell::Argv;
@@ -66,7 +67,6 @@ use crate::tui::paint::{
 use crate::tui::tui::Tui;
 use crate::tui::tui::tui_suspend;
 use crate::types::builders::{ArrayBuf, DictBuf};
-use crate::types::libc::{STDERR_FILENO, STDOUT_FILENO};
 use crate::types::ui::kLineFlagWrap;
 use crate::types::{
     ApiDict, ApiString, Array, CallbackReader, Error, GridLineEvent, HlAttrs, Integer, Object,

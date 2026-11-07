@@ -22,6 +22,7 @@ use super::super::store::{Marks, header_chain};
 use super::super::*;
 use super::{u_undo_end, u_undoredo};
 use crate::memline::MlFlags;
+use crate::os::libc::time_t;
 use crate::os::time::os_time_raw;
 use crate::winlayer::Buf;
 

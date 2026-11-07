@@ -33,10 +33,9 @@ use crate::option::set_option_direct;
 use crate::option::vars::{P_ICM, p_rdt, p_report, p_shm};
 use crate::options::kOptShortmess;
 use crate::os::cshim::{gettext, ngettext};
+use crate::os::libc::int64_t;
 use crate::profile::{profile_setlimit, profile_zero};
-use crate::types::{
-    ColNr, ExArg, Handle, LPos, LineNr, OptInt, OptVal, OptionSetFlags, Pos, int64_t,
-};
+use crate::types::{ColNr, ExArg, Handle, LPos, LineNr, OptInt, OptVal, OptionSetFlags, Pos};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int, c_ulong};

@@ -31,11 +31,12 @@ use crate::message::e_noname;
 use crate::message::emsg;
 use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext;
+use crate::os::libc::int32_t;
 use crate::path::{
     dir_of_file_exists, full_name_save, past_head_index, tail_with_sep_index, vim_ispathsep,
 };
 use crate::semsg;
-use crate::types::{Directory, int32_t};
+use crate::types::Directory;
 
 /// Whether `path` names anything at all.
 pub fn path_exists(path: &CStr) -> bool {

@@ -29,10 +29,10 @@ use crate::global_cell::GlobalCell;
 use crate::highlight_group::{HLF_SE, HLF_SO};
 use crate::mbyte::{cluster_len, utf8len_tab_zero};
 use crate::message::{msg_ext_set_append, msg_ext_set_kind, msg_multiline, msg_putchar, msg_str};
+use crate::os::libc::uint64_t;
+use crate::os::libc::{STDERR_FILENO, STDOUT_FILENO};
 use crate::os::time::os_hrtime;
-use crate::types::libc::{STDERR_FILENO, STDOUT_FILENO};
 use crate::types::ui::kUIMessages;
-use crate::types::uint64_t;
 use crate::ui::{ui_flush, ui_has};
 use core::ffi::c_int;
 

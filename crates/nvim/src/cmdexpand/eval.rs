@@ -27,11 +27,12 @@ use crate::message::{e_invarg, emsg};
 use crate::message_fmt::msg_cstr;
 use crate::option::vars::p_wic;
 use crate::os::cshim::gettext;
+use crate::os::libc::ptrdiff_t;
 use crate::popupmenu::pum_visible;
 use crate::runtime::set_context_in_runtime_cmd;
 use crate::semsg;
 use crate::sign::set_context_in_sign_cmd;
-use crate::types::{EvalFuncData, ExpandContext, TypVal, VAR_STRING, VarNumber, ptrdiff_t};
+use crate::types::{EvalFuncData, ExpandContext, TypVal, VAR_STRING, VarNumber};
 use crate::usercmd::{cmdcomplete_str_to_type, cmdcomplete_type_to_str};
 use crate::winlayer::Cc;
 

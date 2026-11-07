@@ -28,10 +28,11 @@ use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, logmsg};
 use crate::message_fmt::{msg_addr, msg_bytes};
 use crate::msgpack_rpc::channel::ch_before_blocking_events;
 use crate::os::input::input_blocking;
+use crate::os::libc::{uint32_t, uint64_t};
 use crate::startup::ui_client_attached;
 use crate::types::{
     ApiDispatchFn, Array, Channel, Error, GridLineEvent, MessageType, MsgpackRpcRequestHandler,
-    Object, RpcState, kErrorTypeException, uint32_t, uint64_t,
+    Object, RpcState, kErrorTypeException,
 };
 use crate::ui::state::resize_events;
 use crate::ui_client::ui_client_event_raw_line;

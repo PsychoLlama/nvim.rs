@@ -41,13 +41,14 @@ use crate::lua::executor::nlua_is_deferred_safe;
 use crate::memline::{Lines, ml_append_bytes};
 use crate::message::{e_invarg, e_invchan, e_invchanjob};
 use crate::option::vars::p_lpl;
+use crate::os::libc::{ptrdiff_t, uint64_t};
 use crate::runtime::script_autoload_named;
 use crate::runtime::sourcing_name_copy;
 use crate::runtime::state::{ETYPE_TOP, current_sctx};
 use crate::types::channel::kChannelStreamProc;
 use crate::types::{
     Callback, CallbackReader, CallerScope, EStack, EstackInfo, ScriptCtx, TypVal, VAR_NUMBER,
-    VAR_STRING, VarNumber, ptrdiff_t, uint64_t,
+    VAR_STRING, VarNumber,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::winlayer::{Buf, Win};

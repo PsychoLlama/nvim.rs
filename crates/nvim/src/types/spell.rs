@@ -9,7 +9,7 @@
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
-use super::*;
+use crate::os::libc::{int16_t, time_t, uint8_t};
 use crate::spell::{SpellBuf, SylItem, WordTree};
 
 /// `int_wordlist`'s compiled name, as a `vim_snprintf` template.

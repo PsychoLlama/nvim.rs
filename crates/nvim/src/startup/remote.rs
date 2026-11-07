@@ -25,9 +25,10 @@ use crate::lua::executor::nlua_exec_cstr;
 use crate::lua::state::kRetObject;
 use crate::os::cshim::{write_c_stderr, write_c_stdout};
 use crate::os::env::{ENV_NVIM, env_get_bounded};
+use crate::os::libc::{size_t, uint64_t};
 use crate::startup::exit::os_exit;
 use crate::startup::{MainParams, WIN_TABS, ui_client_channel_id};
-use crate::types::{ApiDict, ApiString, Array, CallbackReader, Integer, Object, size_t, uint64_t};
+use crate::types::{ApiDict, ApiString, Array, CallbackReader, Integer, Object};
 
 /// How long to wait for the server to answer the connection, in ms.
 const CONNECT_TIMEOUT_MS: c_int = 500;

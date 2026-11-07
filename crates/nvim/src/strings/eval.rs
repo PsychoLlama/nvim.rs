@@ -38,8 +38,9 @@ use crate::message::e_invarg;
 use crate::message::emsg;
 use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext;
+use crate::os::libc::ptrdiff_t;
 use crate::plines::linetabsize_text;
-use crate::types::{EvalFuncData, TypVal, VarNumber, kListLenUnknown, ptrdiff_t};
+use crate::types::{EvalFuncData, TypVal, VarNumber, kListLenUnknown};
 
 /// "str2list()" function: the string as a list of code points.
 pub fn f_str2list(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {

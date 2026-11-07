@@ -63,6 +63,7 @@ use crate::option::vars::{
 use crate::options::{kOptChistory, kOptKeymap, kOptUndolevels, kOptWindow};
 use crate::optionstr::{OptString, OptStringRef, check_window_signcolumn};
 use crate::os::cshim::gettext;
+use crate::os::libc::uint8_t;
 use crate::popupmenu::{pum_drawn, pum_redraw};
 use crate::quickfix::qf_resize_stack;
 use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
@@ -70,7 +71,7 @@ use crate::spell::parse_spelllang;
 use crate::startup::{full_screen, readonlymode, starting};
 use crate::terminal::on_scrollback_changed_in;
 use crate::types::{
-    Buffer, ColNr, LineNr, OptError, OptIndex, OptInt, OptSet, OptVal, OptionSetFlags, Vv, uint8_t,
+    Buffer, ColNr, LineNr, OptError, OptIndex, OptInt, OptSet, OptVal, OptionSetFlags, Vv,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::undo::{buf_is_changed, u_compute_hash, u_read_undo, u_sync};

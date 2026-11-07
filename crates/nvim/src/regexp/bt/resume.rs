@@ -25,13 +25,14 @@ use super::repeat::regrepeat;
 use super::state::{BackPos, Braces, RegStack, capture_slot};
 use crate::getchar::state::got_int;
 
+use crate::os::libc::int64_t;
 use crate::regexp::{
     MatchPos, RA_BREAK, RA_CONT, RA_FAIL, RA_MATCH, RA_NOMATCH, RS_BEHIND1, RS_BEHIND2, RS_BRANCH,
     RS_BRCPLX_LONG, RS_BRCPLX_MORE, RS_BRCPLX_SHORT, RS_MCLOSE, RS_MOPEN, RS_NOMATCH, RS_NOPEN,
     RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, Rex, SavedInput, head_off_at, reg_breakcheck,
     reg_getline, reg_restore, reg_save, restore_subexpr,
 };
-use crate::types::{ColNr, NUL, int64_t};
+use crate::types::{ColNr, NUL};
 
 /// Pop frames until one of them has something new to try, or the stack runs
 /// out. Updates `scan` and `status` in place.

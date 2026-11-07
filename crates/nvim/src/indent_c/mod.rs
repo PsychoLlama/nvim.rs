@@ -39,11 +39,12 @@ use crate::keycodes::special_key_code;
 use crate::mbyte::cluster_len;
 use crate::memline::Lines;
 use crate::option::vars::p_paste;
+use crate::os::libc::int64_t;
 use crate::pos::{MAXCOL, MAXLNUM, lt};
 use crate::search::{check_linecomment, findmatchlimit, linewhite};
 use crate::state::MODE_INSERT;
 use crate::state::mode::State;
-use crate::types::{ColNr, EvalFuncData, LPos, LineNr, Pos, TypVal, VarNumber, int64_t};
+use crate::types::{ColNr, EvalFuncData, LPos, LineNr, Pos, TypVal, VarNumber};
 
 // The carve of the transpiled module; see each child's docs.
 mod cino;

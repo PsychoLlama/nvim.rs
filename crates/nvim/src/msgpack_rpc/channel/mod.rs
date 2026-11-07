@@ -45,10 +45,11 @@ use crate::event::wstream::SharedBuffer;
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, logmsg, logmsg_line};
 use crate::msgpack_rpc::packer::Addressees;
 use crate::msgpack_rpc::unpacker::Unpacker;
+use crate::os::libc::uint64_t;
 use crate::startup::{ui_client_channel_id, ui_client_error_exit};
 use crate::types::{
     ApiDict, ApiString, Array, Channel, ChannelCallFrame, ChannelPart, ClientType, Error, Integer,
-    MessageType, Object, kErrorTypeException, kErrorTypeValidation, uint64_t,
+    MessageType, Object, kErrorTypeException, kErrorTypeValidation,
 };
 use crate::ui_client::ui_client_attach_to_restarted_server;
 

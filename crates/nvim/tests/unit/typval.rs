@@ -29,7 +29,8 @@ use neovim::eval::typval::{
     tv_dict_item_remove, tv_list_alloc,
 };
 use neovim::memory::xstrdup;
-use neovim::types::{Callback, DictItem, VAR_UNKNOWN, kListLenUnknown, ptrdiff_t};
+use neovim::os::libc::ptrdiff_t;
+use neovim::types::{Callback, DictItem, VAR_UNKNOWN, kListLenUnknown};
 
 use crate::support::alloc::{self, AllocLog};
 use crate::support::tv::{self, Payload};

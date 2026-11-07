@@ -27,10 +27,9 @@ use crate::event::libuv::{
 use crate::log::g_stats;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
+use crate::os::libc::{int32_t, size_t, ssize_t, uint64_t};
 use crate::os::uv_error::uv_code;
-use crate::types::{
-    FileID, FileInfo, VimAcl, int32_t, size_t, ssize_t, uint64_t, uv_gid_t, uv_stat_t, uv_uid_t,
-};
+use crate::types::{FileID, FileInfo, VimAcl, uv_gid_t, uv_stat_t, uv_uid_t};
 use ::libc::{E2BIG, getxattr, listxattr, setxattr};
 
 /// The `errno` values [`copy_xattr`] treats as "this filesystem simply

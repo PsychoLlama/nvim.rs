@@ -37,8 +37,9 @@ use crate::marktree::key::{
 use crate::marktree::meta::MetaCount;
 use crate::marktree::node::{MAX_KEYS, NodeId};
 use crate::marktree::pair::marktree_intersect_pair;
+use crate::os::libc::{size_t, uint32_t, uint64_t};
 use crate::registry::{IdMap, id_map};
-use crate::types::{DecorInline, MTKey, MTPos, MarkTree, MarkTreeIter, size_t, uint32_t, uint64_t};
+use crate::types::{DecorInline, MTKey, MTPos, MarkTree, MarkTreeIter};
 
 use super::{marktree_del_itr, marktree_lookup, marktree_lookup_ns, marktree_put};
 

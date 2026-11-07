@@ -21,7 +21,8 @@
 //! position, which is what `relative`/`unrelative`/`compose` translate between.
 
 use crate::decoration::DECOR_HIGHLIGHT_INLINE_INIT;
-use crate::types::{DecorInline, MTKey, MTPair, MTPos, uint16_t, uint32_t, uint64_t};
+use crate::os::libc::{uint16_t, uint32_t, uint64_t};
+use crate::types::{DecorInline, MTKey, MTPair, MTPos};
 
 /// Minimum fill of a node. The maximum branch is twice this.
 pub const MT_BRANCH_FACTOR: ::core::ffi::c_uint = 10;

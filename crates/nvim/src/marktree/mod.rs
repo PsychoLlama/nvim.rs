@@ -66,7 +66,8 @@ use crate::marktree::node::*;
 pub use crate::marktree::pair::*;
 pub use crate::marktree::rebalance::*;
 pub use crate::marktree::splice::*;
-use crate::types::{MTKey, MTPos, MarkTree, MarkTreeIter, uint32_t, uint64_t};
+use crate::os::libc::{uint32_t, uint64_t};
+use crate::types::{MTKey, MTPos, MarkTree, MarkTreeIter};
 
 /// Insert `key`, and — where `end_row` is non-negative — the end key that makes
 /// it a range.

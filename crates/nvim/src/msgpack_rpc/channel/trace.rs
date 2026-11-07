@@ -16,7 +16,7 @@ use crate::log::logmsg_tagged;
 use core::ffi::CStr;
 
 use crate::message_fmt::{msg_cstr, msg_cstr_opt};
-use crate::types::{uint32_t, uint64_t};
+use crate::os::libc::{uint32_t, uint64_t};
 
 /// Fixed-width columns, so consecutive lines align. The trailing spaces are
 /// part of the text. Nested to stay out of the flat namespace the unit-test

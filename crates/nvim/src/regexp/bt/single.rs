@@ -23,6 +23,7 @@ use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
 use crate::mark::mark_get;
 use crate::mbyte::{class_in, utf_iscomposing_legacy};
+use crate::os::libc::uint32_t;
 use crate::plines::win_linetabsize;
 use crate::regexp::{
     ByteClass, RA_CONT, RA_MATCH, RA_NOMATCH, RI_FLAGS, Rex, char_at_nul, char_len_at,
@@ -30,7 +31,7 @@ use crate::regexp::{
     match_with_backref, nul_terminated_len, reg_getline, reg_getline_len, reg_match_visual,
     reg_nextline, reg_prev_class,
 };
-use crate::types::{LineNr, NUL, Pos, uint32_t};
+use crate::types::{LineNr, NUL, Pos};
 
 use crate::winlayer::Win;
 

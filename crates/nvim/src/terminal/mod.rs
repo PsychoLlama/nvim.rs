@@ -64,6 +64,7 @@ use crate::narrow::as_index;
 use crate::narrow::count_as_int;
 use crate::option::set_option_value;
 use crate::options::kOptBuftype;
+use crate::os::libc::int16_t;
 use crate::startup::exiting;
 use crate::state::mode::State;
 use crate::types::ApiString;
@@ -73,7 +74,7 @@ use crate::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::types::{
     AcoSave, BufferHandle, ColNr, Event, Handle, HlAttrs, LineNr, Object, OptVal, OptionSetFlags,
     Pos, RefcountSize, RgbValue, SaveVEvent, Terminal, TerminalOptions, VTermColor, VTermColor_rgb,
-    VTermScreenCell, VTermScreenCellAttrs, VarNumber, int16_t,
+    VTermScreenCell, VTermScreenCellAttrs, VarNumber,
 };
 use crate::vterm::host::Value;
 use crate::vterm::screen::ZERO_SCREEN_CELL;

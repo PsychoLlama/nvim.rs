@@ -24,6 +24,7 @@ use crate::message::emsg;
 use crate::r#move::changed_window_setting;
 use crate::option::vars::p_fcl;
 use crate::os::cshim::gettext;
+use crate::os::libc::int64_t;
 use crate::winlayer::{TabPage, Win, windows_in_tab};
 use core::ffi::CStr;
 use core::ffi::c_int;

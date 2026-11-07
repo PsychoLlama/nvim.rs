@@ -47,12 +47,12 @@ use crate::log::{LOGLVL_ERR, LOGLVL_INF, LOGLVL_WRN, logmsg};
 use crate::memory::{xfree, xstrdup, xstrlcpy};
 use crate::os::cshim::gettext;
 use crate::os::fs::{os_remove, os_strerror, path_exists};
+use crate::os::libc::{intmax_t, sa_family_t};
 use crate::path::tail_index;
 use crate::startup::main_loop;
 use crate::types::{
-    Loop, RStream, SocketWatcher, Stream, addrinfo, intmax_t, sa_family_t, socket_cb,
-    socket_close_cb, uv_connect_t, uv_getaddrinfo_t, uv_handle_t, uv_handle_type, uv_loop_t,
-    uv_pipe_t, uv_stream_t, uv_tcp_t,
+    Loop, RStream, SocketWatcher, Stream, addrinfo, socket_cb, socket_close_cb, uv_connect_t,
+    uv_getaddrinfo_t, uv_handle_t, uv_handle_type, uv_loop_t, uv_pipe_t, uv_stream_t, uv_tcp_t,
 };
 use ::libc::ntohs;
 

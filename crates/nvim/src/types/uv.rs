@@ -13,6 +13,11 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::os::libc::termios;
+use crate::os::libc::{
+    gid_t, int32_t, int64_t, off_t, pthread_mutex_t, pthread_rwlock_t, pthread_t, sa_family_t,
+    size_t, socklen_t, ssize_t, uid_t, uint64_t,
+};
 
 #[repr(C)]
 pub struct addrinfo {

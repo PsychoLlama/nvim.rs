@@ -28,9 +28,10 @@ use crate::eval::typval::tv_list_alloc;
 use crate::event_queue::put_job_on_main_loop;
 use crate::option::vars::p_bg;
 use crate::options::kOptBoFlagTerm;
+use crate::os::libc::ptrdiff_t;
 use crate::types::{
     ApiString, Error, Object, VTermPos, VTermProp, VTermRect, VTermScreenCell, VTermSelectionMask,
-    kListLenMayKnow, ptrdiff_t,
+    kListLenMayKnow,
 };
 use crate::ui::vim_beep;
 use crate::vterm::host::{Fragment, ScreenHost, SelectionHost, Value};

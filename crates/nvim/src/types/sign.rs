@@ -10,6 +10,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::os::libc::uint32_t;
 
 /// One sign on a row, as the sign column sorts it: the sign item's index in
 /// the decoration store, its mark's id, and the two fields of the item the

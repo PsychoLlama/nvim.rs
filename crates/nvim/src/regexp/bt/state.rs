@@ -46,12 +46,13 @@ use crate::global_cell::GlobalCell;
 use crate::message::emsg;
 use crate::option::vars::p_mmp;
 use crate::os::cshim::gettext;
+use crate::os::libc::int64_t;
 use crate::regexp::{
     BACKPOS_INITIAL, E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, MatchPos, NSUBEXP,
     REGSTACK_INITIAL, RS_MCLOSE, RS_MOPEN, RS_ZOPEN, RegBehind, RegItem, RegStar, RegState, Rex,
     SavedInput, Slot, reg_getline,
 };
-use crate::types::{Failed, int64_t};
+use crate::types::Failed;
 
 /// What one frame cost on upstream's byte stack: a `regitem_T` — the state
 /// (4), the group number (2, padded to 4), the node pointer (8) and the

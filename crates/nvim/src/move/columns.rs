@@ -33,9 +33,10 @@ use crate::eval::window::find_win_by_nr_or_id;
 use crate::mbyte::head_off;
 use crate::mouse::vcol_to_col;
 use crate::option::vars::p_ss;
+use crate::os::libc::int64_t;
 use crate::plines::getvcol;
 use crate::semsg;
-use crate::types::{ColNr, EvalFuncData, LineNr, Pos, TypVal, VarNumber, int64_t};
+use crate::types::{ColNr, EvalFuncData, LineNr, Pos, TypVal, VarNumber};
 use crate::winlayer::Win;
 
 impl Win {

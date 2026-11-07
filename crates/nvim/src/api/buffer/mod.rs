@@ -33,13 +33,14 @@ use crate::api::keysets::{KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_empty,
 use crate::r#move::{changed_cline_bef_curs, invalidate_botline_win, update_topline};
 use crate::ops::get_region_bytecount;
 use crate::option::vars::{P_ACD, p_acd};
+use crate::os::libc::{size_t, uint64_t};
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::search::FORWARD;
 use crate::state::MODE_INSERT;
 use crate::state::mode::State;
 use crate::types::{
     AcoSave, ApiDict, ApiString, Array, BCount, Boolean, BufUpdateCallbacks, BufferHandle, ColNr,
-    Error, Integer, LineNr, LuaRef, Object, Pos, TryState, size_t, uint64_t,
+    Error, Integer, LineNr, LuaRef, Object, Pos, TryState,
 };
 use crate::undo::u_save_buf;
 

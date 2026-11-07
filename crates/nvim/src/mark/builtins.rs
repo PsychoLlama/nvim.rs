@@ -17,6 +17,7 @@
 
 use crate::buffer::buflist_nr2name;
 use crate::eval::typval::{tv_dict_alloc, tv_list_alloc};
+use crate::os::libc::ptrdiff_t;
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
 

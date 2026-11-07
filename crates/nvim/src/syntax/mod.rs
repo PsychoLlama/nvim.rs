@@ -69,6 +69,7 @@ use crate::winlayer::WinId;
 
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
+use crate::os::libc::{int16_t, uint8_t, uint64_t};
 use crate::path::path_is_absolute;
 use crate::pos::MAXLNUM;
 use crate::profile::{
@@ -83,7 +84,7 @@ use crate::runtime::{do_source, source_runtime};
 use crate::types::AutoEvent;
 use crate::types::{
     ColNr, ExArg, Expand, HashTab, LPos, LineNr, OptInt, ProfTime, RegMMatch, RegMatch, SynBlock,
-    SynTime, int16_t, uint8_t, uint64_t,
+    SynTime,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::winlayer::Buf;

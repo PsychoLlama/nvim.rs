@@ -43,6 +43,7 @@ use crate::cstr::until_nul;
 use crate::mbyte::{char_at, char_len};
 use crate::memline::Lines;
 use crate::message::internal_error;
+use crate::os::libc::int16_t;
 use crate::spell::{
     WordFlags, WordHasher, allcap_copy, loaded_langs, make_case_word, spell_soundfold,
 };
@@ -56,7 +57,7 @@ use crate::spellsuggest::{
     MAXWLEN, SCORE_ICASE, SCORE_LIMITMAX, SCORE_MAXMAX, SCORE_REGION, SPS_DOUBLE, SugInfo,
     sps_flags, window_langs,
 };
-use crate::types::{LangId, LangP, LineNr, SpellLang, int16_t};
+use crate::types::{LangId, LangP, LineNr, SpellLang};
 use core::ffi::c_int;
 use core::hash::BuildHasherDefault;
 use std::collections::HashMap;

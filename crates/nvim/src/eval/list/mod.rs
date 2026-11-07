@@ -64,10 +64,11 @@ use crate::memory::ThinCString;
 use crate::message::emsg;
 use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext;
+use crate::os::libc::{ptrdiff_t, uint8_t};
 use crate::semsg;
 use crate::types::{
     Blob, Dict, DictItem, EvalFuncData, List, ListItem, TypVal, VAR_BLOB, VAR_DICT, VAR_LIST,
-    VAR_STRING, VarLock, VarNumber, VarType, Vv, ptrdiff_t, uint8_t,
+    VAR_STRING, VarLock, VarNumber, VarType, Vv,
 };
 
 // The carve of the transpiled module; see each child's docs.

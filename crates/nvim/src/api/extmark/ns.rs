@@ -29,9 +29,10 @@ use crate::api::private::validate::err_bad_number;
 use crate::api::private::validate::handle_arg;
 use crate::global_cell::GlobalCell;
 use crate::narrow::number_as_u32;
+use crate::os::libc::uint32_t;
 use crate::registry::{IdSet, SlotTable, id_set, interned_key};
 use crate::types::DictBuilder;
-use crate::types::{Handle, uint32_t};
+use crate::types::Handle;
 use crate::winlayer::{Win, tab_windows};
 
 /// Namespace name -> id, in creation order.

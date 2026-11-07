@@ -89,6 +89,7 @@ use crate::option::{OptionTarget, buf_copy_options, set_option_direct_for};
 use crate::options::{kOptBufhidden, kOptBuftype, kOptCotFlagPopup, kOptInvalid};
 use crate::optionstr::check_stl_option;
 use crate::os::input::{input_blocking, input_enqueue, input_enqueue_mouse, input_enqueue_raw};
+use crate::os::libc::{int64_t, size_t, uint16_t, uint64_t};
 use crate::os::proc::os_proc_children;
 use crate::popupmenu::{pum_ext_select_item, pum_set_info};
 use crate::register::{do_put, finish_yankreg_from_object, prepare_yankreg_from_object};
@@ -108,8 +109,8 @@ use crate::types::{
     ApiDict, ApiString, Array, Boolean, BufferHandle, Context, Error, Float, FoldInfo, Handle,
     HlAttrs, Integer, LineNr, LuaRef, LuaRetMode, MessageData, MessageType, MotionType, Object,
     OptVal, ScreenChar, ScriptId, SignTextAttrs, StatusCol, TabpageHandle, TerminalOptions,
-    VarNumber, Vv, WindowHandle, YankReg, int64_t, kCdScopeGlobal, kErrorTypeException,
-    kErrorTypeValidation, kObjectTypeString, mpack_token_type_t, size_t, uint16_t, uint64_t,
+    VarNumber, Vv, WindowHandle, YankReg, kCdScopeGlobal, kErrorTypeException,
+    kErrorTypeValidation, kObjectTypeString, mpack_token_type_t,
 };
 use crate::ui::state::Columns;
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};

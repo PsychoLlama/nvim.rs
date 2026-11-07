@@ -45,11 +45,11 @@ use crate::normal::reset_visual_and_resel;
 use crate::option::set_option_value;
 use crate::option::vars::{p_ch, p_tpm};
 use crate::options::kOptCmdheight;
+use crate::os::libc::int64_t;
 use crate::startup::starting;
 use crate::tag::state::postponed_split_tab;
 use crate::types::{
     Failed, Handle, OptInt, OptVal, OptionSetFlags, ScopeDictItem, SwitchWin, Tabpage, VAR_SCOPE,
-    int64_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::window::state::{skip_win_fix_scroll, tabpage_move_disallowed};

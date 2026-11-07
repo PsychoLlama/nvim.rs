@@ -13,6 +13,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::os::libc::{int64_t, size_t, uint8_t, uint64_t};
 
 /// One queued event, run once when its queue reaches it.
 ///

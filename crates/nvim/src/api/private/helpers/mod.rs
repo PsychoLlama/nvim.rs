@@ -43,12 +43,13 @@ use crate::guard::{SavedSctx, Script};
 use crate::highlight_group::syn_id2name;
 use crate::mark::setmark_at;
 use crate::message::state::did_emsg;
+use crate::os::libc::uint64_t;
 use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
 use crate::runtime::state::current_sctx;
 use crate::types::{
     ApiString, BufferHandle, Error, Integer, Pos, ScriptId, TabpageHandle, TryState, WindowHandle,
-    kErrorTypeException, uint64_t,
+    kErrorTypeException,
 };
 use crate::winlayer::{self, Buf, TabPage, Win};
 

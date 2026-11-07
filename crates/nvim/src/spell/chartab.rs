@@ -38,7 +38,8 @@ use crate::mbyte::{
     c_cluster_len, char_at, char_len, encode_char, mb_islower, mb_isupper, mb_toupper, utf_class,
     utf_fold,
 };
-use crate::types::{Failed, MB_MAXBYTES, SpellTab, uint8_t};
+use crate::os::libc::uint8_t;
+use crate::types::{Failed, MB_MAXBYTES, SpellTab};
 
 use super::{MAXWLEN, did_set_spelltab, spelltab};
 

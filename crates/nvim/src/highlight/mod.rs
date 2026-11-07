@@ -55,8 +55,9 @@ use crate::highlight_group::{
 };
 use crate::narrow::as_index;
 use crate::narrow::{len_as_int, len_as_integer};
+use crate::os::libc::uint32_t;
 use crate::types::DictBuilder;
-use crate::types::{ApiString, Array, HlAttrs, HlEntry, HlKind, Integer, Object, uint32_t};
+use crate::types::{ApiString, Array, HlAttrs, HlEntry, HlKind, Integer, Object};
 use crate::ui::ui_call_hl_attr_define;
 use cache::AttrCache;
 use core::ffi::{CStr, c_int};

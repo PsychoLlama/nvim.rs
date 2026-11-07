@@ -63,13 +63,14 @@ use crate::os::fs::{
     os_remove, os_set_acl, os_setperm,
 };
 use crate::os::input::os_breakcheck;
+use crate::os::libc::uint64_t;
 use crate::path::{after_pathsep, path_fnamecmp, tail_index};
 use crate::sha256::Sha256;
 use crate::startup::exiting;
 use crate::strings::{FmtArg, format_into};
 use crate::types::{
     AcoSave, CmdModFlags, CpoFlag, ExArg, Failed, FileInfo, FileOffset, IOSIZE, LineNr, MAXPATHL,
-    Pos, ShmFlag, VimAcl, uint64_t, uv_gid_t, uv_uid_t,
+    Pos, ShmFlag, VimAcl, uv_gid_t, uv_uid_t,
 };
 use crate::ui::ui_flush;
 use crate::undo::{curbuf_is_changed, u_unchanged, u_update_save_nr, u_write_undo};

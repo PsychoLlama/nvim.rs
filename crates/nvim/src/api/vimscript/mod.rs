@@ -16,10 +16,11 @@ use crate::ex_eval::state::{did_throw, force_abort, suppress_errthrow};
 use crate::global_cell::GlobalCell;
 use crate::message::state::{did_emsg, msg_col, redir_off};
 use crate::message::{capture_finish, capture_start};
+use crate::os::libc::{size_t, uint64_t};
 use crate::runtime::do_source_str;
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, Error, ExprAST, ExprASTNode, Integer, Object, ParserState,
-    TypVal, VAR_FUNC, VAR_PARTIAL, kErrorTypeException, kErrorTypeValidation, size_t, uint64_t,
+    TypVal, VAR_FUNC, VAR_PARTIAL, kErrorTypeException, kErrorTypeValidation,
 };
 use crate::viml::parser::expressions::{
     ASSIGNMENT_NAMES, CASE_STRATEGY_NAMES, COMPARISON_NAMES, NODE_TYPE_NAMES, viml_pexpr_parse,

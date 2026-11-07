@@ -25,9 +25,10 @@ use crate::eval::typval::{
 };
 use crate::event_queue::put_id_event;
 use crate::memory::ThinCString;
+use crate::os::libc::uint64_t;
 use crate::semsg;
 use crate::terminal::terminal_receive;
-use crate::types::{Callback, CallbackReader, Channel, VarNumber, kListLenMayKnow, uint64_t};
+use crate::types::{Callback, CallbackReader, Channel, VarNumber, kListLenMayKnow};
 
 use super::{channel_decref, with_channel};
 

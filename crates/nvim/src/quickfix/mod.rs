@@ -93,6 +93,7 @@ use crate::os::cshim::gettext;
 use crate::os::env::process_id;
 use crate::os::fs::os_remove;
 use crate::os::input::{line_breakcheck, os_breakcheck};
+use crate::os::libc::{ptrdiff_t, size_t};
 use crate::path::{PATHSEP, path_fnamecmp, path_is_absolute, vim_is_abs_name};
 use crate::pos::MAXLNUM;
 use crate::search::{BACKWARD, BACKWARD_FILE, FORWARD, FORWARD_FILE};
@@ -104,7 +105,7 @@ use crate::types::TAB;
 use crate::types::{
     Callback, ColNr, Dict, DirStack, Direction, EvalFuncData, ExArg, LineNr, List, ListRef, OptInt,
     OptSet, OptVal, Pos, QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX, QfEntry, QfList, QfListType,
-    QfStack, RegMMatch, RegMatch, ScriptId, TypVal, VarNumber, VarType, ptrdiff_t, size_t,
+    QfStack, RegMMatch, RegMatch, ScriptId, TypVal, VarNumber, VarType,
 };
 use crate::ui::state::Columns;
 use crate::ui::ui_flush;

@@ -18,8 +18,9 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
 
 use crate::options::*;
+use crate::os::libc::size_t;
 use crate::types::{
-    ApiDict, ApiString, Error, Integer, Object, OptIndex, OptionSetFlags, ScriptCtx, size_t,
+    ApiDict, ApiString, Error, Integer, Object, OptIndex, OptionSetFlags, ScriptCtx,
 };
 
 use crate::api::private::validate::err_bad_value;

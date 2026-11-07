@@ -33,6 +33,7 @@ use crate::mbyte::{mb_isupper, mb_tolower, mb_toupper};
 use crate::message::e_re_corr;
 use crate::message::{iemsg, internal_error};
 use crate::os::cshim::gettext;
+use crate::os::libc::int64_t;
 use crate::profile::profile_passed_limit;
 use crate::regexp::low_byte;
 use crate::regexp::{
@@ -41,7 +42,7 @@ use crate::regexp::{
     RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, RegStar, RegState, Rex, cleanup_subexpr,
     cleanup_zsubexpr, reg_breakcheck, reg_nextline, reg_save, save_capture, save_subexpr,
 };
-use crate::types::{NUL, int64_t};
+use crate::types::NUL;
 
 /// The first code of each run a group number is measured from. These are
 /// `const` items because `BtOp::Mopen.code()` is a *call* in a runtime

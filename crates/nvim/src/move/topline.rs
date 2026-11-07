@@ -29,7 +29,8 @@ use crate::grid::default_grid_ref;
 use crate::mouse::state::mouse_dragging;
 use crate::option::vars::p_sj;
 use crate::option::{ScrollMargin, ScrollOff};
-use crate::types::{LineNr, OptInt, int64_t};
+use crate::os::libc::int64_t;
+use crate::types::{LineNr, OptInt};
 use crate::window::state::skip_update_topline;
 use crate::winlayer::{Win, tab_windows};
 

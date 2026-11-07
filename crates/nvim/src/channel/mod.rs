@@ -51,6 +51,7 @@ use crate::message::{e_invchan, e_invstream, e_invstreamrpc};
 use crate::msgpack_rpc::channel::{rpc_close, rpc_free};
 use crate::os::cshim::gettext;
 use crate::os::fs::write_bytes;
+use crate::os::libc::uint64_t;
 use crate::os::proc::os_stderr_to_null;
 use crate::registry::SlotTable;
 use crate::startup::exiting;
@@ -59,7 +60,7 @@ use crate::types::channel::{
     kChannelStreamInternal, kChannelStreamProc, kChannelStreamSocket, kChannelStreamStderr,
     kChannelStreamStdio,
 };
-use crate::types::{Channel, ChannelPart, ChannelStream, Failed, LuaRef, StderrState, uint64_t};
+use crate::types::{Channel, ChannelPart, ChannelStream, Failed, LuaRef, StderrState};
 use std::os::fd::AsFd as _;
 
 /// Values these belong to other modules; nested so they stay out of the flat

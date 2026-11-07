@@ -23,7 +23,7 @@
 //! Every set is an [`IdSet`]: up to four ids inline in the node, a `Vec`
 //! beyond that — klib's `kvec_withinit_t`, minus its pointer into itself.
 
-use crate::types::uint64_t;
+use crate::os::libc::uint64_t;
 
 /// Nested to keep the name out of the flat cdef namespace `ffigen` builds.
 mod sizes {

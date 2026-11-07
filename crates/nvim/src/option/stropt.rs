@@ -36,7 +36,8 @@ use crate::ascii::ascii_iswhite;
 use crate::mbyte::c_cluster_len;
 use crate::memory::XString;
 use crate::options::kOptKeywordprg;
-use crate::types::{OptIndex, uint32_t};
+use crate::os::libc::uint32_t;
+use crate::types::OptIndex;
 
 use super::{
     OP_ADDING, OP_NONE, OP_PREPENDING, OP_REMOVING, OptSlot, SetOp, kOptFlagColon, kOptFlagComma,

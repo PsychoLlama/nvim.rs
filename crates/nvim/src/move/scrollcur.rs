@@ -26,9 +26,10 @@ use super::*;
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::mouse::state::mouse_dragging;
 use crate::narrow::number_as_int;
+use crate::os::libc::int64_t;
 use crate::pos::MAXCOL;
 use crate::search::{BACKWARD, FORWARD};
-use crate::types::{ColNr, Direction, LineNr, int64_t};
+use crate::types::{ColNr, Direction, LineNr};
 
 /// The 'scrolloff' the `scroll_cursor_*` family works with: a mouse drag
 /// slows scrolling down by standing in for the option.

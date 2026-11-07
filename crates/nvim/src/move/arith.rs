@@ -26,7 +26,8 @@
 use core::ffi::c_int;
 
 use crate::narrow::number_as_int;
-use crate::types::{ColNr, OptInt, int64_t};
+use crate::os::libc::int64_t;
+use crate::types::{ColNr, OptInt};
 
 /// Screen lines of the top line that `w_skipcol` scrolls out of sight.
 ///

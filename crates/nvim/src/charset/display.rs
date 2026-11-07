@@ -28,7 +28,8 @@ use crate::mbyte::{
 use crate::memory::XString;
 use crate::option::get_fileformat;
 use crate::option::vars::dy_flags;
-use crate::types::{NUL, uint8_t};
+use crate::os::libc::uint8_t;
+use crate::types::NUL;
 use crate::winlayer::Buf;
 
 use super::{

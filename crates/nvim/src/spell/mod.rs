@@ -58,9 +58,10 @@ use crate::memline::ml_replace_owned;
 use crate::message::emsg;
 use crate::option::vars::{P_WS, p_ws};
 use crate::os::cshim::gettext;
+use crate::os::libc::uint8_t;
 use crate::search::{SEARCH_KEEP, do_search};
 use crate::types::{
-    ExArg, FileComparison, LangId, LangP, LineNr, Pos, SpellLang, SpellMoveType, SpellTab, uint8_t,
+    ExArg, FileComparison, LangId, LangP, LineNr, Pos, SpellLang, SpellMoveType, SpellTab,
 };
 use crate::undo::u_save_cursor;
 

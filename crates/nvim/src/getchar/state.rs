@@ -43,7 +43,8 @@ use super::GotcharsState;
 use crate::global_cell::{GlobalCell, state_record};
 use crate::keycodes::ModMask;
 use crate::os::fs::CFile;
-use crate::types::{Key, LuaRef, size_t, uint8_t};
+use crate::os::libc::{size_t, uint8_t};
+use crate::types::{Key, LuaRef};
 use core::ffi::c_int;
 
 pub use crate::harness::test_disable_char_avail;

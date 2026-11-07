@@ -46,7 +46,7 @@ use std::fs::File;
 use std::io::{BufReader, ErrorKind, Read};
 use std::path::Path;
 
-use crate::types::time_t;
+use crate::os::libc::time_t;
 
 /// Why a `.spl` or `.sug` could not be read any further.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]

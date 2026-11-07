@@ -25,11 +25,12 @@ use crate::event::proc::proc_is_stopped;
 use crate::event_queue::put_id_event_on_main_loop;
 use crate::log::{LOGLVL_INF, logmsg};
 use crate::message_fmt::msg_cstr;
+use crate::os::libc::uint64_t;
 use crate::registry::SlotTable;
 use crate::terminal::terminal_buf;
 use crate::types::{
     ApiDict, ApiString, Array, AutoEvent, ChannelStream, ChannelStreamType, Integer, Object,
-    SaveVEvent, TypVal, VAR_DICT, uint64_t,
+    SaveVEvent, TypVal, VAR_DICT,
 };
 use crate::winlayer::Buf;
 

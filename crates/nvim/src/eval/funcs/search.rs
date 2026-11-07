@@ -29,13 +29,14 @@ use crate::normal::find_decl_of;
 use crate::option::vars::{P_WS, p_ws};
 
 use crate::memory::ThinCString;
+use crate::os::libc::int64_t;
 use crate::pos::equalpos;
 use crate::profile::profile_setlimit;
 use crate::search::{
     BACKWARD, FORWARD, SEARCH_COL, SEARCH_END, SEARCH_KEEP, SEARCH_START, search_in_current,
 };
 use crate::semsg;
-use crate::types::{Direction, EvalFuncData, Failed, LineNr, Pos, TypVal, VarNumber, int64_t};
+use crate::types::{Direction, EvalFuncData, Failed, LineNr, Pos, TypVal, VarNumber};
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 

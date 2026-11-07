@@ -27,7 +27,8 @@ use crate::eval::partial_name;
 use crate::eval::typval::{NumBuf, TV_INITIAL_VALUE, tv_clear};
 use crate::eval::userfunc::{CallWith, call_func_with};
 use crate::memory::{ThinCString, XString};
-use crate::types::{VAR_FUNC, VAR_PARTIAL, VAR_UNKNOWN, ptrdiff_t};
+use crate::os::libc::ptrdiff_t;
+use crate::types::{VAR_FUNC, VAR_PARTIAL, VAR_UNKNOWN};
 use core::ffi::c_int;
 
 use super::{RegSubMatch, can_f_submatch, rsm};

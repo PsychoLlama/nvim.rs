@@ -15,6 +15,7 @@
 use super::*;
 use crate::memory::ThinCString;
 use crate::narrow::number_as_int;
+use crate::os::libc::ptrdiff_t;
 use crate::types::VAR_NUMBER;
 use crate::winlayer::Win;
 

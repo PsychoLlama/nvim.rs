@@ -24,8 +24,9 @@ use core::ffi::CStr;
 use super::{Container, DictArg, ListArg, check_lock, copy_tv, cstr_of, cstr_of_chk, number_of};
 use crate::eval::typval::NumBuf;
 use crate::message_fmt::msg_cstr;
+use crate::os::libc::int64_t;
 use crate::semsg;
-use crate::types::{EvalFuncData, TypVal, VarLock, int64_t};
+use crate::types::{EvalFuncData, TypVal, VarLock};
 
 /// `extend()`/`extendnew()` over two Dicts: merge `argvars[1]`'s keys into
 /// `argvars[0]` (or into a copy of it) under the policy `argvars[2]` names.

@@ -61,11 +61,12 @@ use crate::memory::ThinCString;
 use crate::message::{msg_putchar, msg_str, msg_title};
 use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::os::cshim::gettext;
+use crate::os::libc::{int32_t, int64_t, ptrdiff_t, uint32_t};
 use crate::tr;
 use crate::types::{
     ApiString, DecorExt, DecorInline, DecorPriority, DecorSignHighlight, Dict, EvalFuncData, ExArg,
     Expand, Failed, Integer, LineNr, List, MTKey, MarkTreeIter, ScreenChar, Sign, TypVal,
-    VarNumber, int32_t, int64_t, ptrdiff_t, uint32_t,
+    VarNumber,
 };
 use crate::window::buf_jump_open_win;
 use crate::winlayer::{Buf, Win, buffers, first_buffer, windows};

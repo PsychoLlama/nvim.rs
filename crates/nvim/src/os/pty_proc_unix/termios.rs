@@ -14,7 +14,8 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::types::{cc_t, tcflag_t, termios};
+use crate::os::libc::termios;
+use crate::os::libc::{cc_t, tcflag_t};
 
 // Input modes.
 pub(super) const ICRNL: tcflag_t = 0o400;

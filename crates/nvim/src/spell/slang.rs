@@ -40,7 +40,8 @@ use crate::buffer::alloc_unregistered_buffer;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::memline::{ml_close, ml_open, ml_open_file};
-use crate::types::{SpellLang, uint8_t, uint16_t};
+use crate::os::libc::{uint8_t, uint16_t};
+use crate::types::SpellLang;
 
 use super::{MAXWLEN, MAXWLEN_INT, MAXWORDCOUNT, SY_MAXLEN, SylItem, WordEnd, WordTree};
 

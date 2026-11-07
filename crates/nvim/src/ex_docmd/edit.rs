@@ -61,13 +61,14 @@ use crate::ops::do_join;
 use crate::option::{cpo_has, get_scrolloff_value};
 
 use crate::os::input::os_breakcheck;
+use crate::os::libc::int64_t;
 use crate::plines::plines_m_win_fill;
 use crate::pos::MAXLNUM;
 use crate::register::do_execreg;
 use crate::search::{BACKWARD, FORWARD};
 use crate::types::{
     ColNr, CpoFlag, ExArg, Handle, LineNr, OpArg, OpType, OptMagic, PUT_CURSLINE, PUT_FIXINDENT,
-    PUT_LINE, Pos, PutFlags, int64_t,
+    PUT_LINE, Pos, PutFlags,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 

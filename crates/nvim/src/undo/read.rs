@@ -18,6 +18,7 @@
 use crate::memory::XString;
 use crate::message_fmt::msg_cstr;
 use crate::os::fs::file_info;
+use crate::os::libc::{time_t, uint64_t};
 use crate::os::users::os_getuid;
 use crate::smsg;
 use crate::winlayer::Buf;

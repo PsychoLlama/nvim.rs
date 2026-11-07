@@ -44,13 +44,14 @@ use crate::normal::{
 use crate::option::magic_isset;
 use crate::optionstr::{OptString, OptStringRef, local_or_global};
 use crate::os::cshim::gettext;
+use crate::os::libc::int64_t;
 use crate::search::state::no_smartcase;
 use crate::state::MODE_TERMINAL;
 use crate::state::mode::restart_edit;
 use crate::strings::shellescape;
 use crate::tag::state::g_tag_at_cursor;
 use crate::tag::{TagCmd, do_tag};
-use crate::types::{CmdArg, ColNr, Failed, LineNr, int64_t};
+use crate::types::{CmdArg, ColNr, Failed, LineNr};
 use crate::undo::curbuf_is_changed;
 use crate::window::check_can_set_curbuf_disabled;
 use core::ffi::{CStr, c_int};

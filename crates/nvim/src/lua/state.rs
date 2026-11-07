@@ -17,7 +17,8 @@
 
 use crate::global_cell::{GlobalCell, SharedCell};
 use crate::lua::ffi::LUA_NOREF;
-use crate::types::{LuaRetMode, NluaRefState, uint64_t};
+use crate::os::libc::uint64_t;
+use crate::types::{LuaRetMode, NluaRefState};
 
 pub(crate) const kRetObject: LuaRetMode = 0;
 /// The main state's reference bookkeeping: how many references it holds

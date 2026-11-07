@@ -23,6 +23,8 @@
 // extern block below, and declaring the foreign surface is this file's
 // entire job.
 
+use crate::os::libc::FILE;
+use crate::os::libc::{int64_t, size_t, uint64_t};
 use crate::types::*;
 
 unsafe extern "C" {

@@ -27,10 +27,11 @@ use crate::buffer::do_modelines;
 use crate::eval::typval::{callback_free, callback_to_string};
 use crate::global_cell::GlobalCell;
 use crate::lua::executor::{api_new_luaref, nlua_ref_is_function};
+use crate::os::libc::{int64_t, size_t, uint64_t};
 use crate::types::AutoEvent;
 use crate::types::{
     ApiDict, ApiString, Array, AutoCmd, AutoHandler, AutoPat, BufferHandle, Callback, Error,
-    Integer, Object, TryState, int64_t, kErrorTypeValidation, kObjectTypeString, size_t, uint64_t,
+    Integer, Object, TryState, kErrorTypeValidation, kObjectTypeString,
 };
 
 // The carve of the transpiled module; see each child's docs.

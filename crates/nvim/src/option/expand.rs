@@ -38,11 +38,12 @@ use crate::options::{
     kOptKeymap, kOptPackpath, kOptPath, kOptRuntimepath, kOptSpellsuggest, kOptSyntax, kOptTags,
     kOptViewdir,
 };
+use crate::os::libc::uint32_t;
 use crate::regexp::vim_regexec;
 use crate::strings::escaped_bytes;
 use crate::types::{
     BackslashEscape, Expand, ExpandContext, MAXPATHL, OptExpand, OptIndex, OptionSetFlags,
-    RegMatch, XpPrefix, uint32_t,
+    RegMatch, XpPrefix,
 };
 
 use super::{

@@ -58,6 +58,7 @@ use crate::option::{cpo_has, option_part, shortmess};
 use crate::optionstr::OptString;
 use crate::os::cshim::gettext;
 use crate::os::fs::{dir_exists, file_mkdir, os_file_is_writable, os_nodetype, path_exists};
+use crate::os::libc::int32_t;
 use crate::path::fix_fname;
 use crate::semsg;
 use crate::startup::{exiting, getout};
@@ -65,7 +66,7 @@ use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::Handle;
 use crate::types::{
-    CmdModFlags, CpoFlag, ExArg, Failed, LineNr, MAXPATHL, NUL, OptionSetFlags, ShmFlag, int32_t,
+    CmdModFlags, CpoFlag, ExArg, Failed, LineNr, MAXPATHL, NUL, OptionSetFlags, ShmFlag,
 };
 use crate::undo::{buf_is_changed, curbuf_is_changed};
 use crate::window::check_can_set_curbuf_forceit;

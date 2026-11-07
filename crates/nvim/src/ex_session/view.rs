@@ -40,9 +40,10 @@ use crate::options::{
     kOptSsopFlagCurdir, kOptSsopFlagCursor, kOptSsopFlagFolds, kOptSsopFlagLocaloptions,
     kOptSsopFlagOptions, kOptSsopFlagTerminal,
 };
+use crate::os::libc::int64_t;
 use crate::types::ArgListId;
 use crate::types::ColNr;
-use crate::types::{Failed, OptionSetFlags, int64_t};
+use crate::types::{Failed, OptionSetFlags};
 use crate::window::{DirOwner, has_own_dir, own_dir};
 use crate::winlayer::graph::switch_to;
 use crate::winlayer::{TabPage, Win};

@@ -57,6 +57,7 @@ use crate::options::{
     kOptCotFlagPreview, kOptDiff, kOptSwapfile,
 };
 use crate::os::cshim::gettext;
+use crate::os::libc::uint32_t;
 use crate::plines::{plines_m_win, win_linetabsize};
 use crate::popupmenu::state::{PumWant, must_redraw_pum, pum_grid, pum_want};
 use crate::state::MODE_CMDLINE;
@@ -68,7 +69,7 @@ use crate::types::ui::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};
 use crate::types::{
     ApiString, Array, BufferHandle, Dict, Float, Handle, Hlf, Integer, LineNr, Object, OptInt,
     OptVal, PumItem, ScreenAttr, ScreenChar, VarNumber, VimMenu, WinConfig, kBoolVarFalse,
-    kBoolVarTrue, uint32_t,
+    kBoolVarTrue,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{

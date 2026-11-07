@@ -47,13 +47,15 @@ use crate::message::{verbose_enter, verbose_leave};
 use crate::message_fmt::msg_cstr;
 use crate::option::vars::p_verbose;
 use crate::os::env::{ENV_SEPCHAR, getenv_owned};
+use crate::os::libc::FILE;
+use crate::os::libc::{ptrdiff_t, size_t};
 use crate::path::{append_path, gettail_dir, save_abs_path};
 use crate::smsg;
 use crate::startup::stdin_fd;
 use crate::types::ApiString;
 use crate::types::{
-    FILE, OptInt, ptrdiff_t, size_t, uv__queue, uv__work, uv_buf_t, uv_fs_t, uv_fs_type, uv_loop_s,
-    uv_loop_t, uv_req_type, uv_stat_t, uv_timespec_t,
+    OptInt, uv__queue, uv__work, uv_buf_t, uv_fs_t, uv_fs_type, uv_loop_s, uv_loop_t, uv_req_type,
+    uv_stat_t, uv_timespec_t,
 };
 use crate::ui::ui_call_chdir;
 use ::libc::{fcntl, fdopen, write};

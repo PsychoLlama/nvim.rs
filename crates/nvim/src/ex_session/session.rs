@@ -50,10 +50,11 @@ use crate::options::{
     kOptSsopFlagOptions, kOptSsopFlagResize, kOptSsopFlagSesdir, kOptSsopFlagTabpages,
     kOptSsopFlagTerminal, kOptSsopFlagWinsize,
 };
+use crate::os::libc::int64_t;
 use crate::strings::escaped_bytes;
 use crate::types::ArgListId;
 use crate::types::{
-    TypVal, VAR_FLAVOUR_SESSION, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarType, Window, int64_t,
+    TypVal, VAR_FLAVOUR_SESSION, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarType, Window,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::window::tab_index;

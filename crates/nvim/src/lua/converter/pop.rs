@@ -30,10 +30,11 @@ use crate::api_error;
 use crate::lua::stack::{At, Kind, Stack};
 use crate::memory::memchr_in;
 use crate::message_fmt::msg_cstr;
+use crate::os::libc::size_t;
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, DictKey, Error, Float, Handle, Integer, LuaRef, ObjectType,
     kErrorTypeValidation, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat, kObjectTypeNil,
-    lua_Number, size_t,
+    lua_Number,
 };
 
 /// How many Lua slots one turn of a `pop` walk may need: a table's next key

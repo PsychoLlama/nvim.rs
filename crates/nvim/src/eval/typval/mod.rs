@@ -27,12 +27,12 @@ use crate::message::{
 };
 use crate::os::cshim::gettext;
 use crate::os::input::{fast_breakcheck, line_breakcheck};
+use crate::os::libc::{int64_t, ptrdiff_t};
 use crate::types::{
     Blob, BoolVarValue, Callback, Dict, DictItem, DictWatcher, EvalFuncData, Float, LineNr, List,
     ListItem, ListWatch, LuaRef, Partial, SpecialVarValue, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT,
     VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING,
-    VAR_UNKNOWN, VarLock, VarNumber, VimConv, int64_t, kBoolVarTrue, kListLenMayKnow,
-    kSpecialVarNull, ptrdiff_t,
+    VAR_UNKNOWN, VarLock, VarNumber, VimConv, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull,
 };
 
 // The carve of the transpiled module; see each child's docs.

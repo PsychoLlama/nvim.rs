@@ -1535,9 +1535,11 @@ const TYPE_NAMES: &[&str] = &[
     "ObjectType",
     "ApiString",
     "Handle",
-    "size_t",
-    "uint64_t",
 ];
+
+/// The C library's typedefs the wrappers spell, from their home in
+/// `crate::os::libc`, emitted when referenced.
+const LIBC_NAMES: &[&str] = &["size_t", "uint64_t"];
 
 /// The `use` of every keyset struct `referenced` names, from their home in
 /// `crate::api::keysets`; nothing when it names none.
@@ -1751,6 +1753,14 @@ fn generate(
         .filter(|n| referenced_all.contains(n))
         .collect();
     uses.push(format!("use crate::types::{{{}}};", types.join(", ")));
+    let libc: Vec<&str> = LIBC_NAMES
+        .iter()
+        .copied()
+        .filter(|n| referenced_all.contains(*n))
+        .collect();
+    if !libc.is_empty() {
+        uses.push(format!("use crate::os::libc::{{{}}};", libc.join(", ")));
+    }
     uses.extend(keyset_use(&referenced));
 
     let mut out = String::from(HEADER);

@@ -20,9 +20,10 @@ use crate::memory::{block_vec, recycle_block};
 use crate::msgpack_rpc::packer::{
     Addressees, mpack_array, mpack_integer, mpack_object, mpack_object_array, mpack_str, mpack_uint,
 };
+use crate::os::libc::{uint32_t, uint64_t};
 use crate::types::{
     ApiDispatchFn, ApiString, Array, Error, Integer, MessageType, MsgpackRpcRequestHandler, Object,
-    PackerBuffer, kErrorTypeNone, uint32_t, uint64_t,
+    PackerBuffer, kErrorTypeNone,
 };
 
 use super::known::*;

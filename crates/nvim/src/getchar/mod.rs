@@ -63,6 +63,7 @@ use crate::option::vars::{
 use crate::options::kOptBoFlagError;
 use crate::os::cshim::gettext;
 use crate::os::input::{input_available, input_get, line_breakcheck, os_breakcheck};
+use crate::os::libc::{ptrdiff_t, size_t, uint8_t, uint64_t};
 use crate::state::mode::{
     State, VIsual_reselect, arrow_used, did_ai, exmode_active, finish_op, pending_exmode_active,
     redo_VIsual_busy, restart_edit,
@@ -74,8 +75,7 @@ use crate::state::{
 };
 use crate::types::{
     ApiString, Array, ColNr, Error, EvalFuncData, FlushBuffers, Integer, LuaRef, LuaRetMode,
-    MotionType, OpArg, OptInt, SaveRedo, TypVal, TypeaheadSave, VarNumber, Vv, ptrdiff_t, size_t,
-    uint8_t, uint64_t,
+    MotionType, OpArg, OptInt, SaveRedo, TypVal, TypeaheadSave, VarNumber, Vv,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
 use crate::undo::u_sync;

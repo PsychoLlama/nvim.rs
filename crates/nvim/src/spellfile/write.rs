@@ -58,8 +58,9 @@ use crate::message::e_write;
 use crate::message::emsg;
 use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext;
+use crate::os::libc::time_t;
 use crate::spell::{spelltab_fold, spelltab_isu, spelltab_isw};
-use crate::types::{Failed, time_t};
+use crate::types::Failed;
 
 use super::wordtree::{NodeId, WordNode};
 use super::{

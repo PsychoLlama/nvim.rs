@@ -35,11 +35,12 @@ use crate::normal::{
 };
 use crate::option::get_sidescrolloff_value;
 use crate::os::cshim::gettext;
+use crate::os::libc::int64_t;
 use crate::spell::{SMT_ALL, spell_move_to};
 use crate::spellfile::spell_add_word;
 use crate::spellsuggest::spell_suggest;
 use crate::state::mode::finish_op;
-use crate::types::{CmdArg, ColNr, Failed, LineNr, OpType, OptInt, SpellAddType, int64_t};
+use crate::types::{CmdArg, ColNr, Failed, LineNr, OpType, OptInt, SpellAddType};
 use crate::window::{set_fraction, win_setheight};
 use core::ffi::c_int;
 

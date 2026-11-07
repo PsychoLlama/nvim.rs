@@ -34,8 +34,9 @@ use crate::marktree::key::{
 };
 use crate::marktree::meta::{MetaCount, filtered_key_flags, meta_has};
 use crate::marktree::node::{NodeId, find_key};
+use crate::os::libc::int32_t;
 use crate::types::{
-    DecorHighlightInline, DecorInline, MTKey, MTPair, MTPos, MarkTree, MarkTreeIter, int32_t,
+    DecorHighlightInline, DecorInline, MTKey, MTPair, MTPos, MarkTree, MarkTreeIter,
 };
 
 use super::marktree_lookup;

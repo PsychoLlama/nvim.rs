@@ -35,6 +35,8 @@ use crate::msgpack_rpc::channel::rpc_start;
 use crate::msgpack_rpc::server::server_owns_pipe_address;
 use crate::os::cshim::gettext;
 use crate::os::fs::os_strerror;
+use crate::os::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
+use crate::os::libc::{uint16_t, uint64_t};
 use crate::os::proc::{os_dup_above, os_dup2};
 use crate::os::pty_proc_unix::pty_proc_init;
 use crate::semsg;
@@ -42,10 +44,9 @@ use crate::shell::Argv;
 use crate::startup::{embedded_mode, exiting, headless_mode, ui_client_channel_id};
 use crate::terminal::{terminal_close, terminal_set_state};
 use crate::types::channel::kChannelStdinPipe;
-use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::types::{
     Callback, CallbackReader, ChannelStdinMode, ChannelStream, InternalState, JobProc, LuaRef,
-    SocketWatcher, VarNumber, uint16_t, uint64_t,
+    SocketWatcher, VarNumber,
 };
 use crate::ui_client::ui_client_attach_to_restarted_server;
 

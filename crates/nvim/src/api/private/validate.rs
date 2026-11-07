@@ -28,7 +28,8 @@
 use crate::api::private::helpers::api_typename;
 use crate::api_error;
 use crate::message_fmt::msg_cstr;
-use crate::types::{Array, Error, Handle, int64_t, kErrorTypeValidation, kObjectTypeString};
+use crate::os::libc::int64_t;
+use crate::types::{Array, Error, Handle, kErrorTypeValidation, kObjectTypeString};
 use core::ffi::CStr;
 
 /// Whether `name` is a phrase rather than a single name, which is what

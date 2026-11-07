@@ -23,7 +23,8 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr::NonNull;
 use core::slice;
 
-use crate::types::{VTermEncoding, VTermEncodingType, size_t, uint32_t};
+use crate::os::libc::{size_t, uint32_t};
+use crate::types::{VTermEncoding, VTermEncodingType};
 use crate::vterm::encoding::{self, Charset, Codepoints};
 
 // ------------------------------------------------------ the character sets

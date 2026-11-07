@@ -47,11 +47,12 @@ use crate::r#move::WinValid;
 use crate::option::{boolean_optval, cpo_has, set_option_value_give_err};
 use crate::options::{kOptBufhidden, kOptBuftype, kOptSwapfile};
 use crate::os::fs::getperm;
+use crate::os::libc::int64_t;
 use crate::pos::MAXLNUM;
 use crate::startup::{getout, readonlymode, v_dying};
 use crate::types::{
     AcoSave, ColNr, CpoFlag, ExArg, Failed, Handle, LineNr, OptInt, OptVal, OptionSetFlags,
-    ShmFlag, VarNumber, int64_t,
+    ShmFlag, VarNumber,
 };
 use crate::winlayer::buffers;
 

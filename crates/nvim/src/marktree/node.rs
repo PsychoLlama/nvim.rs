@@ -34,7 +34,8 @@ use crate::narrow::count_as_u8;
 use core::ffi::c_int;
 use core::ops::{Index, IndexMut, Range};
 
-use crate::types::{MTKey, MTPos, MarkTree, MarkTreeIter, uint64_t};
+use crate::os::libc::uint64_t;
+use crate::types::{MTKey, MTPos, MarkTree, MarkTreeIter};
 
 use super::intersect::IdSet;
 use super::key::{MT_BRANCH_FACTOR, MT_LOG2_BRANCH, MtFlags, key_cmp, mt_lookup_key};

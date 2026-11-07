@@ -74,6 +74,7 @@ use crate::r#move::{
 use crate::option::get_ve_flags;
 use crate::option::vars::{p_deco, p_paste, p_ri, p_sm, p_sr};
 use crate::options::kOptVeFlagOnemore;
+use crate::os::libc::int64_t;
 use crate::plines::{linetabsize_eol, win_chartabsize};
 use crate::pos::MAXLNUM;
 use crate::search::state::highlight_match;
@@ -90,9 +91,7 @@ use crate::textformat::{comp_textwidth, has_format_option};
 use crate::types::AutoEvent;
 use crate::types::TAB;
 use crate::types::ui::kUIMessages;
-use crate::types::{
-    BCount, CmdModFlags, ColNr, FileMarkView, GraphemeState, LineNr, Pos, Vv, int64_t,
-};
+use crate::types::{BCount, CmdModFlags, ColNr, FileMarkView, GraphemeState, LineNr, Pos, Vv};
 use crate::ui::state::Rows;
 use crate::ui::{ui_active, ui_has};
 use crate::undo::{curbuf_is_changed, u_clearline, u_save_cursor, u_savedel};

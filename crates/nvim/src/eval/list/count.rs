@@ -25,8 +25,9 @@ use super::{
 use crate::eval::typval::NumBuf;
 use crate::message::{e_invarg, e_listblobreq};
 use crate::narrow::number_as_int;
+use crate::os::libc::int64_t;
 use crate::semsg;
-use crate::types::{EvalFuncData, Failed, TypVal, VarNumber, int64_t};
+use crate::types::{EvalFuncData, Failed, TypVal, VarNumber};
 
 /// `add(container, item)`: append one item to a List or one byte to a Blob.
 pub fn f_add(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {

@@ -41,9 +41,10 @@ use crate::lua::stack::{At, Kind, Stack};
 use crate::message::emsg;
 use crate::narrow::{float_as_i64, len_as_int};
 use crate::os::cshim::gettext;
+use crate::os::libc::size_t;
 use crate::types::{
     Failed, ListItem, LuaRef, TypVal, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray,
-    kObjectTypeDict, kObjectTypeFloat, kObjectTypeNil, kSpecialVarNull, lua_Number, size_t,
+    kObjectTypeDict, kObjectTypeFloat, kObjectTypeNil, kSpecialVarNull, lua_Number,
 };
 
 /// Refused for a table that is neither a list nor a dictionary.

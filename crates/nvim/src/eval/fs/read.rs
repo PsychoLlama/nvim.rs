@@ -36,11 +36,10 @@ use crate::message_fmt::msg_cstr;
 use crate::narrow::len_as_integer;
 use crate::os::cshim::gettext;
 use crate::os::fs::dir_exists;
+use crate::os::libc::{int64_t, ptrdiff_t, uint64_t};
 use crate::pos::MAXLNUM;
 use crate::semsg;
-use crate::types::{
-    EvalFuncData, FileOffset, List, TypVal, int64_t, kListLenUnknown, ptrdiff_t, uint64_t,
-};
+use crate::types::{EvalFuncData, FileOffset, List, TypVal, kListLenUnknown};
 use core::ffi::{CStr, c_int};
 use std::ffi::OsStr;
 use std::io::{ErrorKind, Read, Seek, SeekFrom};

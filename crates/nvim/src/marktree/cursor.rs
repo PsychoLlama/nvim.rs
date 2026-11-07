@@ -43,7 +43,8 @@ use crate::marktree::key::MT_INVALID_KEY;
 use crate::marktree::marktree_lookup_ns;
 use crate::marktree::meta::MetaCount;
 use crate::marktree::pair::marktree_get_altpos;
-use crate::types::{MTKey, MTPair, MTPos, MarkTree, MarkTreeIter, int32_t, uint32_t};
+use crate::os::libc::{int32_t, uint32_t};
+use crate::types::{MTKey, MTPair, MTPos, MarkTree, MarkTreeIter};
 use crate::winlayer::Buf;
 
 /// A walk over one buffer's marktree.

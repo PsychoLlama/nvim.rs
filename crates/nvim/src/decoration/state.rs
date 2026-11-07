@@ -65,11 +65,12 @@ use crate::highlight::{hl_add_url, hl_combine_attr};
 use crate::highlight_group::syn_id2attr;
 use crate::marktree::cursor::Cursor;
 use crate::marktree::key::{mt_decor, mt_decor_any, mt_end, mt_invalid};
+use crate::os::libc::{uint16_t, uint32_t};
 use crate::pos::MAXCOL;
 use crate::types::{
     DecorHighlightInline, DecorInline, DecorPriority, DecorPriorityInternal, DecorRange,
     DecorRange_data, DecorRange_data_ui, DecorRangeSlot, DecorState, MTKey, MTPos, MarkTreeIter,
-    RangeHighlight, ScreenChar, VirtTextPos, uint16_t, uint32_t,
+    RangeHighlight, ScreenChar, VirtTextPos,
 };
 use crate::winlayer::WinId;
 use crate::winlayer::{Buf, Win};

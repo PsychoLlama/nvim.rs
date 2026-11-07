@@ -23,6 +23,7 @@ use crate::message_fmt::{emsg_text, msg_bytes, msg_cstr};
 use crate::option::vars::{p_msm, p_verbose};
 use crate::os::cshim::gettext;
 use crate::os::fs::{dir_exists, path_exists};
+use crate::os::libc::time_t;
 use crate::path::{path_tail, tail_index};
 use crate::spell::SpellBuf;
 use crate::spell::{did_set_spelltab, spell_enc, spelltab};
@@ -33,7 +34,7 @@ use crate::types::CmdIdx;
 use crate::types::TAB;
 use crate::types::{
     CONV_NONE, EStackType, ExArg, Failed, FileComparison, MAXPATHL, OptInt, RepItem, SpellAddType,
-    SpellTab, VimConv, XDGVarType, time_t,
+    SpellTab, VimConv, XDGVarType,
 };
 use crate::ui::ui_flush;
 use crate::winlayer::Buf;

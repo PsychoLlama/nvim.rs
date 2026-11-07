@@ -16,8 +16,9 @@
 
 use crate::event_queue::put_id_event;
 use crate::log::{LOGLVL_INF, logmsg};
+use crate::os::libc::{uint16_t, uint64_t};
 use crate::terminal::{terminal_alloc, terminal_destroy};
-use crate::types::{ChannelStream, JobProc, TerminalOptions, uint16_t, uint64_t};
+use crate::types::{ChannelStream, JobProc, TerminalOptions};
 use crate::winlayer::Buf;
 use core::pin::Pin;
 

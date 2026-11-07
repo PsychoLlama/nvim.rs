@@ -30,11 +30,12 @@ use crate::global_cell::GlobalCell;
 use crate::marktree::cursor::Cursor;
 use crate::marktree::key::{MtFlags, kMTFilterSelect, mt_decor, mt_decor_sign, mt_end, mt_invalid};
 use crate::marktree::meta::MetaCount;
+use crate::os::libc::uint32_t;
 use crate::sign::buf_has_signs;
 use crate::statusline::SIGN_SHOW_MAX;
 use crate::types::{
     DecorInline, DecorPriority, DecorSignHighlight, LineNr, MTKey, MTPos, MarkTreeIter, SignItem,
-    SignTextAttrs, uint32_t,
+    SignTextAttrs,
 };
 use crate::winlayer::{Buf, Win, tab_windows};
 use core::ffi::{CStr, c_int};

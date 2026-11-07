@@ -28,6 +28,7 @@ use crate::mbyte::{mb_tolower, utf_fold};
 use crate::message::{e_null, e_re_corr};
 use crate::message::{emsg, iemsg};
 use crate::os::cshim::gettext;
+use crate::os::libc::{int64_t, uint32_t};
 use crate::profile::profile_passed_limit;
 use crate::regexp::ExtMatch;
 use crate::regexp::ExtMatchRef;
@@ -35,7 +36,7 @@ use crate::regexp::{
     BtRegProg, MatchPos, NSUBEXP, REGMAGIC, RF_ICASE, RF_ICOMBINE, RF_NOICASE, Rex, char_at_nul,
     cleanup_subexpr, cleanup_zsubexpr, cluster_len_at, cstrchr_line, cstrncmp, reg_getline,
 };
-use crate::types::{ColNr, LPos, NUL, int64_t, uint32_t};
+use crate::types::{ColNr, LPos, NUL};
 
 /// How many start columns may be tried between two reads of the caller's
 /// time limit.

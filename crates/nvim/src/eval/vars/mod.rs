@@ -65,6 +65,7 @@ use crate::option::{
 };
 use crate::options::{kOptCharconvert, kOptDiffexpr, kOptInvalid, kOptPatchexpr, kOptSpellsuggest};
 use crate::os::cshim::gettext;
+use crate::os::libc::{int64_t, ptrdiff_t, size_t, uint32_t};
 use crate::pos::MAXCOL;
 use crate::runtime::state::current_sctx;
 use crate::runtime::{
@@ -78,8 +79,8 @@ use crate::types::{
     VAR_BOOL, VAR_DEF_SCOPE, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
     VAR_SCOPE, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT,
     VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_STRING, VAR_UNKNOWN,
-    VarLock, VarNumber, VarType, VimVarFlags, Vv, int64_t, kBoolVarFalse, kBoolVarTrue,
-    kListLenUnknown, kSpecialVarNull, ptrdiff_t, size_t, uint32_t,
+    VarLock, VarNumber, VarType, VimVarFlags, Vv, kBoolVarFalse, kBoolVarTrue, kListLenUnknown,
+    kSpecialVarNull,
 };
 use crate::version::{highest_patch, min_vim_version};
 use crate::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};

@@ -74,6 +74,7 @@ use crate::os::fs::{
     os_scandir_next, os_set_acl, os_setperm, path_exists, reopen_stdin_on_stderr,
 };
 use crate::os::input::os_breakcheck;
+use crate::os::libc::int64_t;
 use crate::path::{
     add_pathsep, after_pathsep, dir_of_file_exists, path_fnamecmp, path_is_absolute,
     path_shorten_fname, path_tail, path_with_url, vim_full_name,
@@ -90,7 +91,7 @@ use crate::types::AutoEvent;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     AcoSave, Directory, ExArg, Failed, FileInfo, FileOffset, IOSIZE, LineNr, OptVal,
-    OptionSetFlags, RegMatch, ScriptId, ShmFlag, int64_t, uv_gid_t,
+    OptionSetFlags, RegMatch, ScriptId, ShmFlag, uv_gid_t,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::{

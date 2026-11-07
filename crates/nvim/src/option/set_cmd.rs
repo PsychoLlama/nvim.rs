@@ -50,10 +50,10 @@ use crate::message::{e_invarg, e_sandbox, e_trailing};
 use crate::message::{emsg, msg_ext_set_kind, msg_putchar};
 use crate::option::vars::{p_mle, p_verbose};
 use crate::options::{kOptFoldmethod, kOptInvalid, kOptWildchar, kOptWildcharm, kOptWrap};
+use crate::os::libc::uint32_t;
 use crate::startup::silent_mode;
 use crate::types::{
     ExArg, Failed, IOSIZE, NUL, OptError, OptIndex, OptInt, OptVal, OptionSetFlags, ScriptId,
-    uint32_t,
 };
 
 use super::{

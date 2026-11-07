@@ -56,9 +56,10 @@ use crate::options::{
 };
 use crate::os::cshim::gettext;
 use crate::os::input::os_breakcheck;
+use crate::os::libc::uint32_t;
 use crate::startup::silent_mode;
 use crate::types::{
-    ApiString, Failed, MAXPATHL, NL, OptIndex, OptInt, OptVal, OptionSetFlags, WinOpt, uint32_t,
+    ApiString, Failed, MAXPATHL, NL, OptIndex, OptInt, OptVal, OptionSetFlags, WinOpt,
 };
 use crate::ui::state::Columns;
 use crate::ui::ui_call_option_set;

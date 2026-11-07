@@ -54,6 +54,7 @@ use crate::message::{emsg, special_keys_text};
 use crate::message_fmt::msg_bytes;
 use crate::normal::{visual_active, visual_select};
 use crate::os::cshim::gettext;
+use crate::os::libc::ptrdiff_t;
 use crate::popupmenu::pum_show_popupmenu;
 use crate::state::mode::{State, finish_op};
 use crate::state::{
@@ -61,7 +62,7 @@ use crate::state::{
     MODE_TERMINAL,
 };
 use crate::tr;
-use crate::types::{MenuId, VimMenu, kListLenMayKnow, ptrdiff_t};
+use crate::types::{MenuId, VimMenu, kListLenMayKnow};
 
 // The carve of the transpiled module; see each child's docs.
 mod complete;

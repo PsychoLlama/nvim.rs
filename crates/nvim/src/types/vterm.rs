@@ -22,6 +22,7 @@
 // suite's LuaJIT `ffi.cdef` and C fixtures both compile against -- depends on
 // them. `ffigen` drops the field when it re-expands the run into real C
 // bitfield members, and matches it by that exact name.
+use crate::os::libc::{size_t, uint8_t, uint16_t, uint32_t};
 use core::mem::offset_of;
 
 use super::*;

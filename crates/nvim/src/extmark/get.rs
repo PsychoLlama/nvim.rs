@@ -28,7 +28,8 @@ use super::{
 use crate::marktree::key::{
     MT_INVALID_KEY, mt_decor, mt_decor_any, mt_end, mt_paired, mtpair_from,
 };
-use crate::types::{ColNr, ExtmarkType, MTPair, MTPos, MarkTreeIter, int64_t, uint32_t};
+use crate::os::libc::{int64_t, uint32_t};
+use crate::types::{ColNr, ExtmarkType, MTPair, MTPos, MarkTreeIter};
 
 /// Every mark between two positions, the ones at either end included.
 ///

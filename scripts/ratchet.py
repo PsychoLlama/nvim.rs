@@ -1194,7 +1194,7 @@ FOREIGN_ABI_TYPES = {
     "ported with its ABI intact and driven from `tui/`",
     "crates/nvim/src/types/lua.rs": "LuaJIT's `lua_State`, `luaL_Buffer` and "
     "`luaL_Reg` -- the interpreter defines every one of them",
-    "crates/nvim/src/types/libc.rs": "the C library's nominal aggregates, "
+    "crates/nvim/src/os/libc.rs": "the C library's nominal aggregates, "
     "plus the pthread types libuv embeds by value",
     "crates/nvim/src/types/libuv_proc.rs": "a `uv_process_t` and its options "
     "embedded by value and handed to `uv_spawn` by address",
@@ -2180,6 +2180,7 @@ COPY_KEEPERS = {
     "crates/nvim/src/normal/visual.rs::VisualState": "value",
     "crates/nvim/src/ops/mod.rs::RedoVisual": "value",
     "crates/nvim/src/option/check.rs::BinSave": "value",
+    "crates/nvim/src/os/libc.rs": "ffi: the C library's and pthread's aggregates",
     "crates/nvim/src/popupmenu/state.rs::PumWant": "value",
     "crates/nvim/src/quickfix/stack.rs::Qi": "value",
     "crates/nvim/src/quickfix/stack.rs::Qfl": "value",
@@ -2239,7 +2240,6 @@ COPY_KEEPERS = {
     "crates/nvim/src/types/helpers.rs::TryState": "value",
     "crates/nvim/src/types/highlight.rs::ColorItem": "value",
     "crates/nvim/src/types/highlight.rs::HlEntry": "value",
-    "crates/nvim/src/types/libc.rs": "ffi: the C library's and pthread's aggregates",
     "crates/nvim/src/types/mapping.rs::MapTwin": "value",
     "crates/nvim/src/types/mark.rs::FileMarkView": "value",
     "crates/nvim/src/types/mark.rs::SavedMark": "value",
@@ -2310,6 +2310,8 @@ COPY_KEEPERS = {
 #   libuv   embeds a libuv handle whose address libuv keeps;
 #   codec   a swap-file block's on-disk layout;
 #   ffi     a foreign ABI file (`FOREIGN_ABI_TYPES`): the library's layout.
+# A file inside a PERIMETER module carries no row: `repr_c_sites` reads off the
+# perimeter only, so the perimeter row is what excuses it (`os/libc.rs`).
 REPR_C_FLOOR = {
     "crates/nvim/src/types/typval.rs::TypVal": "abi: the value model; ffigen renders it and the unit specs read it",
     "crates/nvim/src/types/typval.rs::Callback": "abi: the value model (a `TypVal` payload)",
@@ -2333,7 +2335,6 @@ REPR_C_FLOOR = {
     "crates/nvim/src/types/vterm.rs": "ffi: libvterm's public types",
     "crates/nvim/src/types/vterm_internal.rs": "ffi: libvterm's internal state",
     "crates/nvim/src/types/lua.rs": "ffi: LuaJIT's `lua_State`",
-    "crates/nvim/src/types/libc.rs": "ffi: the C library's and pthread's aggregates",
     "crates/nvim/src/types/libuv_proc.rs": "ffi: a `uv_process_t` handed to `uv_spawn`",
     "crates/nvim/src/types/pty_proc_unix.rs": "ffi: a `winsize` handed to the tty ioctls",
 }

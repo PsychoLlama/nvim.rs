@@ -20,7 +20,7 @@
 
 use crate::event_queue::ChildQueue;
 use crate::global_cell::GlobalCell;
-use crate::types::{uint32_t, uint64_t};
+use crate::os::libc::{uint32_t, uint64_t};
 use core::ffi::{CStr, c_int};
 
 pub(crate) static ui_ext_names: [&CStr; 10] = [

@@ -1516,10 +1516,10 @@ fn imports(out: &mut String, opts: &[Opt], symbols: &Symbols) -> Result<(), Stri
         "OptInt",
         "OptScopeFlags",
         "OptVar",
-        "ssize_t",
         "VimOption",
     ];
     writeln!(out, "use crate::types::{{{}}};", types.join(", ")).unwrap();
+    writeln!(out, "use crate::os::libc::ssize_t;").unwrap();
     Ok(())
 }
 

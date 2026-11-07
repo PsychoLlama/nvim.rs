@@ -49,6 +49,7 @@ use crate::message_fmt::msg_cstr;
 use crate::os::env::{env_get_within, getenv_owned};
 use crate::os::fs::os_strerror;
 use crate::os::input::os_isatty;
+use crate::os::libc::STDOUT_FILENO;
 use crate::os::uv_error::UV_EINTR;
 use crate::startup::{ui_client_error_exit, ui_client_exit_status};
 use crate::tui::events::{tui_mode_change, tui_mouse_off, tui_mouse_on, tui_set_title};
@@ -70,7 +71,6 @@ use crate::tui::terminfo::caps::{
     kTerm_reset_cursor_style, kTerm_set_lr_margin, kTerm_set_underline_style,
 };
 use crate::tui::terminfo::{terminfo_from_builtin, terminfo_from_database};
-use crate::types::libc::STDOUT_FILENO;
 use crate::types::{
     ApiString, HlAttrs, SignalWatcher, Staging, TUIData, TermInput, TerminfoEntry, TerminfoExt,
     uv_file, uv_handle_t, uv_timer_t, uv_tty_mode_t,

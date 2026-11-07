@@ -116,7 +116,8 @@ use crate::lua::ffi::{
     lua_typename, luaL_loadbuffer, luaL_newmetatable, luaL_ref, luaL_unref,
 };
 use crate::lua::state::MAIN_REFS;
-use crate::types::{LuaRef, lua_Integer, lua_Number, lua_State, size_t};
+use crate::os::libc::size_t;
+use crate::types::{LuaRef, lua_Integer, lua_Number, lua_State};
 
 mod debug;
 mod dispatch;

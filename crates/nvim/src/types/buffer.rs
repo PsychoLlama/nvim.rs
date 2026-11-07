@@ -16,6 +16,7 @@
 use super::*;
 use crate::buffer::BufFlags;
 use crate::memory::{ThinCString, XString};
+use crate::os::libc::{int16_t, int64_t, size_t, time_t, uint8_t, uint32_t, uint64_t};
 use crate::registry::IdMap;
 use crate::syntax::{SynCluster, SynPat};
 use core::ffi::{CStr, c_char};

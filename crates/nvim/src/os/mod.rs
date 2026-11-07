@@ -15,6 +15,7 @@ pub mod fs;
 pub mod iconv;
 pub mod input;
 pub mod lang;
+pub mod libc;
 pub mod proc;
 pub mod pty_proc_unix;
 pub mod signal;

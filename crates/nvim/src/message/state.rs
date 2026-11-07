@@ -53,7 +53,8 @@ use crate::options::{
     OptMoptFlags, kOptMoptFlagHistory, kOptMoptFlagHitEnter, kOptMoptFlagProgress,
 };
 use crate::os::fs::CFile;
-use crate::types::{ApiString, Callback, Object, ScreenAttr, ScreenGrid, int64_t};
+use crate::os::libc::int64_t;
+use crate::types::{ApiString, Callback, Object, ScreenAttr, ScreenGrid};
 use core::ffi::{CStr, c_int, c_long};
 
 pub(crate) static on_print: GlobalCell<Callback> = GlobalCell::new(Callback::None);

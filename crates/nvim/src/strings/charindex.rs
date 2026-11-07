@@ -35,7 +35,8 @@ use crate::eval::typval::{
 };
 use crate::mbyte::{char_at, char_len, cluster_len};
 use crate::memory::ThinCString;
-use crate::types::{EvalFuncData, TypVal, VarNumber, size_t};
+use crate::os::libc::size_t;
+use crate::types::{EvalFuncData, TypVal, VarNumber};
 
 /// The character-length rule a `countcc`/`comp` flag selects: composing
 /// characters counted separately, or folded into their base.

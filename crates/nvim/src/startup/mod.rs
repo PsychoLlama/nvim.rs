@@ -42,7 +42,7 @@ use crate::options::{
     kOptArabic, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, kOptErrorfile, kOptKeymap, kOptRightleft,
     kOptShadafile, kOptShortmess, kOptVerbosefile, kOptWindow,
 };
-use crate::types::uint64_t;
+use crate::os::libc::uint64_t;
 use core::ffi::{CStr, c_int, c_uint};
 use std::ffi::CString;
 

@@ -33,11 +33,12 @@ use crate::message::{e_autocmd_close, e_cmdwin};
 use crate::r#move::{update_topline, validate_cursor};
 use crate::narrow::number_as_int;
 use crate::os::cshim::gettext;
+use crate::os::libc::{int64_t, size_t};
 use crate::plines::{win_get_fill, win_text_height};
 use crate::pos::MAXCOL;
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, BufferHandle, Error, Integer, LineNr, LuaRef, Object,
-    SwitchWin, TabpageHandle, WinExecute, WindowHandle, int64_t, size_t,
+    SwitchWin, TabpageHandle, WinExecute, WindowHandle,
 };
 use crate::window::{
     can_close_in_cmdwin, win_close, win_close_othertab, win_find_tabpage, win_get_tabwin,

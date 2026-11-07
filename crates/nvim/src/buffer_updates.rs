@@ -37,10 +37,10 @@ use crate::log::{LOGLVL_ERR, logmsg};
 use crate::lua::executor::{nlua_call_ref_quiet, release_luaref};
 use crate::memline::ml_flush_deleted_bytes;
 use crate::msgpack_rpc::channel::rpc_send_event;
+use crate::os::libc::{int64_t, size_t, uint64_t};
 use crate::types::builders::ArrayBuf;
 use crate::types::{
-    Array, BCount, BufUpdateCallbacks, ColNr, Integer, LineNr, LuaRef, LuaRetMode, Object, int64_t,
-    size_t, uint64_t,
+    Array, BCount, BufUpdateCallbacks, ColNr, Integer, LineNr, LuaRef, LuaRetMode, Object,
 };
 use crate::winlayer::{Buf, Win};
 

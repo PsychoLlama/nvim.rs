@@ -47,9 +47,8 @@ use crate::marktree::key::{
 use crate::marktree::meta::{meta_apply_delta, meta_describe_key};
 use crate::marktree::node::NodeId;
 use crate::marktree::pair::{marktree_intersect_pair, marktree_restore_pair};
-use crate::types::{
-    ColNr, MTDamage, MTDamagePair, MTKey, MTPos, MarkTree, MarkTreeIter, int32_t, uint64_t,
-};
+use crate::os::libc::{int32_t, uint64_t};
+use crate::types::{ColNr, MTDamage, MTDamagePair, MTKey, MTPos, MarkTree, MarkTreeIter};
 
 use super::{marktree_del_itr, marktree_lookup, marktree_put_key};
 

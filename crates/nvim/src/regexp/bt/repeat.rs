@@ -27,10 +27,11 @@ use crate::mbyte::{mb_tolower, mb_toupper, utf_fold};
 use crate::message::e_re_corr;
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
+use crate::os::libc::int64_t;
 use crate::regexp::{
     ByteClass, RI_FLAGS, Rex, char_at_nul, cluster_len_at, cstrchr, reg_nextline, word_char_at,
 };
-use crate::types::{NUL, int64_t};
+use crate::types::NUL;
 
 /// What stepping onto the next line produced.
 enum Line {

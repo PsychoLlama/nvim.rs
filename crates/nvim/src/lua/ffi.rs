@@ -23,6 +23,7 @@
 // extern block below, and declaring the foreign surface is this file's
 // entire job.
 
+use crate::os::libc::size_t;
 use crate::types::*;
 
 /// "Return every value the call produced", for `lua_pcall`/`lua_call`.

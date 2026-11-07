@@ -10,9 +10,6 @@
 // pthread headers spell them.
 #![allow(non_camel_case_types)]
 
-// Canonical type definitions, hoisted out of the per-module copies c2rust
-// emitted. One definition per logical type; every module re-exports here.
-//
 // The nominal C aggregates every libc prototype names -- `FILE`, `termios`,
 // `winsize`, `tm`, `iovec` -- are re-exports of the `libc` crate's, so a
 // declaration there and a call site here agree by construction instead of by
@@ -115,6 +112,7 @@ pub type size_t = usize;
 pub type socklen_t = ::core::ffi::c_uint;
 pub type speed_t = ::core::ffi::c_uint;
 pub type tcflag_t = ::core::ffi::c_uint;
+pub type ssize_t = isize;
 pub type time_t = ::core::ffi::c_long;
 pub type uid_t = ::core::ffi::c_uint;
 pub type uint16_t = u16;

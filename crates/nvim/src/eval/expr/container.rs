@@ -17,7 +17,8 @@ use crate::semsg;
 
 use crate::eval::typval::{NumBuf, dict_find, tv_clear, tv_dict_alloc, tv_list_alloc};
 use crate::eval::{Cursor, eval1};
-use crate::types::{Failed, TypVal, kListLenShouldKnow, ptrdiff_t};
+use crate::os::libc::ptrdiff_t;
+use crate::types::{Failed, TypVal, kListLenShouldKnow};
 
 /// A freshly declared typval.
 const UNSET_TV: TypVal = TV_INITIAL_VALUE;

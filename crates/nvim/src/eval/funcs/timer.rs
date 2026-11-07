@@ -27,11 +27,12 @@ use crate::getchar::vgetc;
 use crate::memory::ThinCString;
 use crate::message::state::called_emsg;
 use crate::narrow::number_as_int;
+use crate::os::libc::int32_t;
 use crate::os::time::os_time;
 use crate::profile::{profile_end, profile_msg_str, profile_signed, profile_start, profile_sub};
 use crate::semsg;
 use crate::types::{
-    Callback, EvalFuncData, Float, ProfTime, TypVal, VAR_LIST, VAR_NUMBER, VarNumber, int32_t,
+    Callback, EvalFuncData, Float, ProfTime, TypVal, VAR_LIST, VAR_NUMBER, VarNumber,
     kListLenUnknown,
 };
 use crate::ui::ui_flush;

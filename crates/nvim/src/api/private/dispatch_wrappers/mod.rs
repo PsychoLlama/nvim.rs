@@ -148,8 +148,9 @@ use crate::guard::textlock;
 use crate::log::logmsg;
 use crate::message::e_textlock;
 use crate::message_fmt::msg_cstr;
+use crate::os::libc::uint64_t;
 use crate::types::{
-    ApiDict, ApiString, Array, Boolean, Error, Float, Handle, Integer, Object, ObjectType, uint64_t,
+    ApiDict, ApiString, Array, Boolean, Error, Float, Handle, Integer, Object, ObjectType,
 };
 use core::ffi::CStr;
 

@@ -50,10 +50,10 @@ use crate::global_cell::GlobalCell;
 use crate::grid::{schar_from_char, schar_get_first_codepoint, schar_high};
 use crate::marktree::key::MtFlags;
 use crate::r#move::changed_window_setting;
+use crate::os::libc::{uint8_t, uint16_t, uint32_t};
 use crate::types::{
     ColNr, DecorHighlightInline, DecorInline, DecorPriority, DecorRangeKind, DecorSignHighlight,
-    DecorVirtText, HlMode, LPos, LineNr, MTKey, MetaIndex, VirtTextPos, uint8_t, uint16_t,
-    uint32_t,
+    DecorVirtText, HlMode, LPos, LineNr, MTKey, MetaIndex, VirtTextPos,
 };
 use crate::winlayer::{self, Buf, Win};
 use core::ffi::c_int;

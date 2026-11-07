@@ -40,7 +40,8 @@
 
 use crate::global_cell::GlobalCell;
 use crate::options::{kOptCount, kOptInvalid, options};
-use crate::types::{OptIndex, OptVal, ScriptCtx, uint32_t};
+use crate::os::libc::uint32_t;
+use crate::types::{OptIndex, OptVal, ScriptCtx};
 
 use super::{kOptFlagInsecure, kOptFlagWasSet};
 

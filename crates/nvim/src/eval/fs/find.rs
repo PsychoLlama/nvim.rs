@@ -44,9 +44,10 @@ use crate::memory::{ThinCString, XString};
 use crate::narrow::number_as_int;
 use crate::option::vars::{P_PATH, p_wic};
 use crate::optionstr::{OptString, local_or_global};
+use crate::os::libc::ptrdiff_t;
 use crate::types::{
     EvalFuncData, Expand, ExpandContext, TypVal, VAR_LIST, VAR_STRING, VarNumber, Vv,
-    kListLenUnknown, ptrdiff_t,
+    kListLenUnknown,
 };
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};

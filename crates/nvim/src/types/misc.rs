@@ -11,6 +11,7 @@
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
+use crate::os::libc::{int16_t, int64_t, size_t, uint8_t};
 use core::mem::ManuallyDrop;
 
 use super::*;

@@ -34,6 +34,7 @@ use crate::global_cell::GlobalCell;
 use crate::keycodes::K_SPECIAL;
 use crate::option::{get_option_value, set_option_value};
 use crate::options::kOptShada;
+use crate::os::libc::size_t;
 use crate::shada::{
     shada_encode_buflist, shada_encode_gvars, shada_encode_jumps, shada_encode_regs,
     shada_read_string,
@@ -42,7 +43,7 @@ use crate::types::DictBuilder;
 use crate::types::TypVal;
 use crate::types::{
     ApiDict, ApiString, Array, Context, Error, KeyValuePair, Object, OptVal, OptionSetFlags,
-    VAR_LIST, size_t,
+    VAR_LIST,
 };
 use core::ffi::{CStr, c_int};
 

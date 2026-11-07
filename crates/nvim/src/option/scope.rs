@@ -37,7 +37,8 @@ use crate::os::cshim::gettext;
 // option's field.
 use crate::options::*;
 use crate::optionstr::OptString;
-use crate::types::{OptIndex, OptInt, OptScope, OptValType, OptVar, OptionSetFlags, ssize_t};
+use crate::os::libc::ssize_t;
+use crate::types::{OptIndex, OptInt, OptScope, OptValType, OptVar, OptionSetFlags};
 use crate::winlayer::{Buf, Win};
 
 use super::{

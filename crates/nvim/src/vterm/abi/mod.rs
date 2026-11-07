@@ -43,11 +43,11 @@ use core::ptr::NonNull;
 use core::slice;
 
 use crate::global_cell::GlobalCell;
+use crate::os::libc::{size_t, uint32_t};
 use crate::types::{
     ScreenCell, VTerm, VTermColor, VTermKey, VTermLineInfo, VTermModifier, VTermOutputCallback,
     VTermParserCallbacks, VTermPos, VTermScreen, VTermScreenCallbacks, VTermScreenCell,
-    VTermSelectionCallbacks, VTermState, VTermStateCallbacks, VTermStateFallbacks, size_t,
-    uint32_t,
+    VTermSelectionCallbacks, VTermState, VTermStateCallbacks, VTermStateFallbacks,
 };
 use crate::vterm::host::{Fallbacks, ScreenHost, SelectionHost};
 use crate::vterm::mode;

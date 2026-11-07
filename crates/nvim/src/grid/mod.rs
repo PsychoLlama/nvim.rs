@@ -55,12 +55,13 @@ use crate::mbyte::{cluster_len, utf_char2len};
 use crate::option::vars::{p_arshape, p_tbidi, rdb_flags};
 use crate::options::{kOptRdbFlagInvalid, kOptRdbFlagNodelta};
 use crate::optionstr::check_chars_options;
+use crate::os::libc::{size_t, uint32_t};
 use crate::startup::full_screen;
 use crate::state::mode::exmode_active;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
     AlignTextPos, ColNr, GridCells, GridView, Handle, Integer, ScreenChar, ScreenGrid, VirtText,
-    WLine, WinConfig, size_t, uint32_t,
+    WLine, WinConfig,
 };
 use crate::ui::{
     ui_call_grid_resize, ui_call_grid_scroll, ui_check_cursor_grid, ui_grid_cursor_goto, ui_has,

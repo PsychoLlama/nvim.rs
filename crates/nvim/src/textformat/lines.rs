@@ -46,12 +46,13 @@ use crate::option::was_set_insecurely;
 use crate::options::kOptFormatexpr;
 use crate::optionstr::OptString;
 use crate::os::input::line_breakcheck;
+use crate::os::libc::size_t;
 use crate::search::check_linecomment;
 use crate::state::mode::{State, saved_cursor};
 use crate::state::{MODE_INSERT, MODE_NORMAL};
 use crate::types::{
     CmdModFlags, ColNr, INSCHAR_COM_LIST, INSCHAR_DO_COM, INSCHAR_FORMAT, INSCHAR_NO_FEX, LineNr,
-    NUL, OpArg, OptionSetFlags, VarNumber, Vv, size_t,
+    NUL, OpArg, OptionSetFlags, VarNumber, Vv,
 };
 use crate::ui::ui_cursor_shape;
 use crate::undo::{u_save, u_save_cursor};

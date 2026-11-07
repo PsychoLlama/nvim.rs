@@ -32,12 +32,13 @@ use crate::option::{
     optval_as_object, set_option_value_for,
 };
 use crate::options::kOptInvalid;
+use crate::os::libc::{int64_t, size_t, uint8_t, uint32_t, uint64_t};
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, BufferHandle, ColNr, DecorExt, DecorInline, DecorPriority,
     DecorVirtText, DecorVirtText_data, Error, Integer, LuaRetMode, MsgpackRpcRequestHandler,
-    Object, OptIndex, OptVal, TabpageHandle, VirtText, WindowHandle, int64_t, kObjectTypeArray,
-    kObjectTypeString, size_t, uint8_t, uint32_t, uint64_t,
+    Object, OptIndex, OptVal, TabpageHandle, VirtText, WindowHandle, kObjectTypeArray,
+    kObjectTypeString,
 };
 
 // The carve of the transpiled module; see each child's docs.

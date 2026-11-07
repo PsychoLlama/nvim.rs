@@ -13,8 +13,9 @@
 use super::{CAR, NL};
 use crate::api::private::validate::err_out_of_range;
 
+use crate::os::libc::int64_t;
 use crate::pos::MAXLNUM;
-use crate::types::{ApiString, Array, Error, LineNr, Object, int64_t};
+use crate::types::{ApiString, Array, Error, LineNr, Object};
 use crate::winlayer::Buf;
 
 // -- Strings ---------------------------------------------------------------

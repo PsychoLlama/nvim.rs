@@ -40,13 +40,12 @@ use crate::options::*;
 use crate::optionstr::{
     OptString, OptStringRef, derive_breakat_flags, didset_string_options, set_window_chars_option,
 };
+use crate::os::libc::uint32_t;
 use crate::spell::{compile_cap_prog, did_set_spell_option};
 use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 use crate::startup::starting;
-use crate::types::{
-    ApiString, Buffer, HlAttrs, OptIndex, OptInt, OptionSetFlags, WinOpt, uint32_t,
-};
+use crate::types::{ApiString, Buffer, HlAttrs, OptIndex, OptInt, OptionSetFlags, WinOpt};
 use crate::winlayer::Win;
 
 use super::{

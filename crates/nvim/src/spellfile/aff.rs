@@ -70,8 +70,9 @@ use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::option::vars::p_enc;
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
+use crate::os::libc::uint8_t;
 use crate::spell::init_spell_chartab;
-use crate::types::{CONV_NONE, uint8_t};
+use crate::types::CONV_NONE;
 
 use super::MkspellError;
 use super::affix::{handle_affix_entry, handle_affix_header};

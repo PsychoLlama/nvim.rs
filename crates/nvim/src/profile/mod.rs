@@ -42,13 +42,14 @@ use crate::global_cell::GlobalCell;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::os::fs::CFile;
+use crate::os::libc::int64_t;
 use crate::os::time::os_hrtime;
 use crate::runtime::state::current_sctx;
 use crate::runtime::{script_count, script_id_valid, with_script_item};
 use crate::types::Candidate;
 use crate::types::{
     ExArg, Expand, ExpandContext, FuncCall, LineNr, ProfTime, ScriptItem, SnPrl, UserFunc,
-    VarNumber, Vv, int64_t,
+    VarNumber, Vv,
 };
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;

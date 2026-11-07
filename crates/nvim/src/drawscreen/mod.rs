@@ -81,6 +81,7 @@ use crate::option::vars::{
 };
 use crate::option::{get_ve_flags, shortmess};
 use crate::options::{kOptDyFlagLastline, kOptDyFlagTruncate, kOptVeFlagAll, kOptVeFlagBlock};
+use crate::os::libc::int64_t;
 use crate::plines::{getvcols, getvvcol, plines_m_win, plines_win, win_get_fill, win_may_fill};
 use crate::popupmenu::state::must_redraw_pum;
 use crate::popupmenu::{pum_check_clear, pum_drawn, pum_invalidate, pum_redraw};
@@ -109,7 +110,7 @@ use crate::terminal::{buf_terminal_check_size, buf_terminal_suspended};
 use crate::types::ui::{kUICmdline, kUIMessages, kUIMultigrid};
 use crate::types::{
     ColNr, DecorVirtText, DecorVirtText_data, Failed, FoldInfo, Handle, Hlf, Integer, LineNr,
-    OptInt, Pos, ProfTime, ScreenChar, SpellVars, VarNumber, VirtTextChunk, WindowHandle, int64_t,
+    OptInt, Pos, ProfTime, ScreenChar, SpellVars, VarNumber, VirtTextChunk, WindowHandle,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{

@@ -78,10 +78,11 @@ use crate::message::emsg;
 use crate::normal::end_visual_mode;
 use crate::option::shortmess;
 use crate::os::cshim::gettext;
+use crate::os::libc::uint32_t;
 use crate::syntax::reset_synblock;
 use crate::types::{
     BfaFlags, BlnFlags, Buffer, BufferRef, CdCause, DoBufAction, DoBufStart, EStackType, ExArg,
-    Failed, GetFileFlags, LineNr, MetaIndex, VarNumber, uint32_t,
+    Failed, GetFileFlags, LineNr, MetaIndex, VarNumber,
 };
 use crate::undo::buf_is_changed;
 use crate::window::{check_colorcolumn, close_windows, window_layout_lock, window_layout_unlock};

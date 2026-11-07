@@ -17,7 +17,8 @@ use crate::autocmd::do_termresponse_autocmd;
 use crate::eval::vars::set_vim_var_string;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::message_fmt::msg_cstr;
-use crate::types::{ApiString, Error, Integer, Object, Vv, kObjectTypeString, uint64_t};
+use crate::os::libc::uint64_t;
+use crate::types::{ApiString, Error, Integer, Object, Vv, kObjectTypeString};
 
 /// Log the failure a client reported for a request it had sent us.
 pub fn nvim_error_event(channel_id: uint64_t, _type_0: Integer, msg: ApiString) {

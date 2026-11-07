@@ -10,6 +10,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::os::libc::size_t;
 
 /// A parsed `:echo`-style expression: the error, if the parse found one, and
 /// the tree.

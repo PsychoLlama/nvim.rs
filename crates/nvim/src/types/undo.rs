@@ -11,6 +11,7 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 use crate::memory::XString;
+use crate::os::libc::time_t;
 
 /// One undo entry: the lines a change replaced, and where they went.
 ///

@@ -13,7 +13,8 @@
 //! decoder has filled it in (or the channel has closed), and pops it again.
 //! The whole matching policy is decided here, by request id.
 
-use crate::types::{ChannelCallFrame, uint32_t};
+use crate::os::libc::uint32_t;
+use crate::types::ChannelCallFrame;
 
 /// Outstanding requests, oldest first.
 ///

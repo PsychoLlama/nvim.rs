@@ -41,13 +41,14 @@ use strings::{parse_quoted_string, shifted_pos};
 
 use crate::charset::hex2nr;
 use crate::mbyte::utf_char2len;
+use crate::os::libc::{size_t, uint8_t};
 use crate::types::{
     ExprAST, ExprASTError, ExprASTNode, ExprASTNodeType, ExprAssignmentType,
     ExprCaseCompareStrategy, ExprComparisonType, ExprFigureGuesses, ExprNodeAssignment,
     ExprNodeComparison, ExprNodeData, ExprNodeEnvironment, ExprNodeFigure, ExprNodeFloat,
     ExprNodeInteger, ExprNodeOption, ExprNodeRegister, ExprNodeStr, ExprNodeTernary,
     ExprNodeVariable, ExprOptScope, ExprParserFlags, ExprVarScope, Float, NodeId, ParserPosition,
-    ParserState, UVarNumber, size_t, uint8_t,
+    ParserState, UVarNumber,
 };
 pub const FSK_SIMPLIFY: ::core::ffi::c_uint = 8;
 pub const FSK_KEYCODE: ::core::ffi::c_uint = 1;

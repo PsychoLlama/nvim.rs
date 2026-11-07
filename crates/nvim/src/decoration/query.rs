@@ -31,7 +31,8 @@ use crate::marktree::key::{kMTFilterSelect, mt_conceal_lines, mt_invalid};
 use crate::marktree::meta::MetaCount;
 use crate::memory::XString;
 use crate::narrow::len_as_int;
-use crate::types::{LineNr, MarkTreeIter, OptInt, VirtTextChunk, size_t, uint32_t, uint64_t};
+use crate::os::libc::{size_t, uint32_t, uint64_t};
+use crate::types::{LineNr, MarkTreeIter, OptInt, VirtTextChunk};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 

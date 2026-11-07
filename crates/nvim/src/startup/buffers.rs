@@ -50,6 +50,7 @@ use crate::message::state::{did_emsg, msg_didany, msg_scroll, no_wait_return};
 use crate::option::vars::{P_EF, P_EFM, P_MENC, p_ef, p_fdls, p_shm};
 use crate::option::{set_option_direct, set_option_value_give_err};
 use crate::os::input::os_breakcheck;
+use crate::os::libc::ptrdiff_t;
 use crate::path::vim_full_name;
 use crate::profile::time_msg_at;
 use crate::quickfix::qf_init;
@@ -60,7 +61,7 @@ use crate::startup::{
 };
 use crate::types::{
     Handle, IOSIZE, Integer, LineNr, MAXPATHL, OptInt, OptVal, OptionSetFlags, VarLock, Vv,
-    kListLenMayKnow, ptrdiff_t,
+    kListLenMayKnow,
 };
 use crate::ui::ui_call_error_exit;
 use crate::window::{

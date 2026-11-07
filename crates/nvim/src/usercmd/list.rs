@@ -41,11 +41,10 @@ use crate::narrow::len_as_integer;
 use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
+use crate::os::libc::int64_t;
 use crate::types::ApiString;
 use crate::types::DictBuilder;
-use crate::types::{
-    ApiDict, CmdAddr, ExArgt, ExpandContext, LuaRef, Object, ScriptCtx, UserCmd, int64_t,
-};
+use crate::types::{ApiDict, CmdAddr, ExArgt, ExpandContext, LuaRef, Object, ScriptCtx, UserCmd};
 use crate::ui::state::Columns;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};

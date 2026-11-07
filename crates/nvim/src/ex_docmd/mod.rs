@@ -64,6 +64,7 @@ use crate::message::{
 };
 use crate::option::ex_set;
 use crate::os::lang::ex_language;
+use crate::os::libc::{uint8_t, uint16_t};
 use crate::profile::ex_profile;
 use crate::quickfix::{
     ex_cbelow, ex_cbottom, ex_cbuffer, ex_cc, ex_cclose, ex_cexpr, ex_cfile, ex_cnext, ex_copen,
@@ -83,7 +84,7 @@ use crate::tag::do_tags;
 use crate::types::ExcId;
 use crate::types::{
     Callback, CdCause, ChannelPart, CmdAddr, Direction, DoBufStart, EStackArg, EStackType, ExArg,
-    ExArgt, Handle, LineNr, LuaRetMode, MarkGet, MotionType, OptMagic, uint8_t, uint16_t,
+    ExArgt, Handle, LineNr, LuaRetMode, MarkGet, MotionType, OptMagic,
 };
 use crate::undo::{ex_undojoin, ex_undolist};
 use crate::usercmd::{ex_comclear, ex_command, ex_delcommand};

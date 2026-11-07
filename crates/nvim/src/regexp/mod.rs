@@ -27,11 +27,12 @@
 pub(crate) mod state;
 use crate::global_cell::GlobalCell;
 use crate::memory::XString;
+use crate::os::libc::{int64_t, uint8_t};
 use crate::types::CAR;
 use crate::types::ESC;
 use crate::types::NL;
 use crate::types::TAB;
-use crate::types::{ColNr, LPos, LineNr, Magic, int64_t, uint8_t};
+use crate::types::{ColNr, LPos, LineNr, Magic};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int, c_uint};
 /// Last-pattern selectors and the regexp-engine/flag bits.

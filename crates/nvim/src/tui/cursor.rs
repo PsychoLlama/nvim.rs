@@ -25,13 +25,14 @@ use crate::log::{LOGLVL_WRN, logmsg};
 use crate::message_fmt::msg_cstr_opt;
 use crate::narrow::as_index;
 use crate::narrow::number_as_int;
+use crate::os::libc::int32_t;
 use crate::tui::output::{terminfo_out, terminfo_print_nums, terminfo_print_str};
 use crate::tui::terminfo::caps::{
     kTerm_reset_cursor_color, kTerm_reset_cursor_style, kTerm_set_cursor_color,
     kTerm_set_cursor_style,
 };
 use crate::types::{
-    ApiDict, ApiString, CursorEntry, CursorShape, HlAttrs, Object, RgbValue, TUIData, int32_t,
+    ApiDict, ApiString, CursorEntry, CursorShape, HlAttrs, Object, RgbValue, TUIData,
 };
 use core::ffi::{CStr, c_int};
 

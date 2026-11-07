@@ -37,12 +37,13 @@ use crate::memory::xfree;
 use crate::message_fmt::{msg_cstr, msg_cstr_opt};
 use crate::narrow::number_as_int;
 use crate::os::fs::os_strerror;
+use crate::os::libc::STDERR_FILENO;
+use crate::os::libc::size_t;
 use crate::shell::Argv;
 use crate::startup::ui_client_forward_stdin;
-use crate::types::libc::STDERR_FILENO;
 use crate::types::{
-    LibuvProc, Loop, Proc, RStream, Stream, size_t, stream_read_cb, uv_file, uv_handle_t,
-    uv_loop_t, uv_pipe_t, uv_process_options_t, uv_process_t, uv_stdio_container_t, uv_stdio_flags,
+    LibuvProc, Loop, Proc, RStream, Stream, stream_read_cb, uv_file, uv_handle_t, uv_loop_t,
+    uv_pipe_t, uv_process_options_t, uv_process_t, uv_stdio_container_t, uv_stdio_flags,
 };
 use ::libc::close;
 use core::ffi::{CStr, c_char, c_int, c_void};

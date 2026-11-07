@@ -25,9 +25,8 @@
 use super::decode_create_map_special_dict;
 use crate::eval::typval::{ListRef, tv_clear, tv_dict_alloc, tv_list_alloc};
 use crate::message_fmt::emsg_text;
-use crate::types::{
-    Failed, TypVal, kBoolVarFalse, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, ptrdiff_t,
-};
+use crate::os::libc::ptrdiff_t;
+use crate::types::{Failed, TypVal, kBoolVarFalse, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull};
 
 mod error;
 mod scan;

@@ -22,12 +22,13 @@ use super::compile::use_multibytecode;
 use super::op::BtOp;
 use super::piece::reg;
 use crate::ascii::ascii_isdigit;
+use crate::os::libc::uint32_t;
 use crate::regexp::{
     CompileError, Compiled, HASLOOKBH, HASNL, HASWIDTH, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE,
     SIMPLE, SPSTART, getchr, getdecchrs, gethexchrs, getoctchrs, pat_byte, re_mult_next, spelled,
     ungetchr, unmagic,
 };
-use crate::types::{NUL, uint32_t};
+use crate::types::NUL;
 
 use crate::winlayer::Win;
 /// `\z(`, `\z1`..`\z9`, `\zs` and `\ze`.

@@ -23,7 +23,8 @@ use core::fmt::Write as _;
 
 use crate::marktree::key::{mt_end, mt_paired, mt_start, unrelative};
 use crate::marktree::node::NodeId;
-use crate::types::{ApiString, MTPos, MarkTree, uint64_t};
+use crate::os::libc::uint64_t;
+use crate::types::{ApiString, MTPos, MarkTree};
 
 /// Nested to keep the name out of the flat cdef namespace `ffigen` builds,
 /// the same reason node.rs nests its own sizes.

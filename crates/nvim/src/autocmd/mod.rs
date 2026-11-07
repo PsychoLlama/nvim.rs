@@ -53,6 +53,7 @@ use crate::option::vars::{P_ACD, p_acd, p_ei, p_verbose};
 use crate::options::kOptEventignore;
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
+use crate::os::libc::{int64_t, uint64_t};
 use crate::os::state::globaldir;
 use crate::os::time::os_now;
 use crate::path::{full_name_save, path_fnamecmp, path_tail};
@@ -69,7 +70,7 @@ use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
     AcoSave, ApiString, AutoCmd, AutoPat, AutoPatCmd, BufferHandle, Callback, EStackType, Error,
     EventCmds, ExArg, Expand, Integer, LuaRef, LuaRetMode, Object, OptVal, ProfTime, SaveRedo,
-    SaveVEvent, ScriptCtx, Timestamp, VarNumber, Vv, int64_t, uint64_t,
+    SaveVEvent, ScriptCtx, Timestamp, VarNumber, Vv,
 };
 use crate::ui::ui_call_win_hide;
 use crate::ui_compositor::ui_comp_remove_grid;

@@ -9,6 +9,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::os::libc::uintmax_t;
 use std::fs::{File, OpenOptions, Permissions};
 use std::io::Read;
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};

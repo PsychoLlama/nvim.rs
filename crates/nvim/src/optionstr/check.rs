@@ -43,7 +43,8 @@ use crate::options::{
     kOptWildoptions, opt_scl_values,
 };
 use crate::os::cshim::gettext;
-use crate::types::{Buffer, Failed, NUL, OptError, StlOpt, uint32_t};
+use crate::os::libc::uint32_t;
+use crate::types::{Buffer, Failed, NUL, OptError, StlOpt};
 
 use super::OptStringRef;
 

@@ -20,6 +20,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::os::libc::{size_t, uintmax_t};
 use core::ffi::CStr;
 
 use super::format::*;

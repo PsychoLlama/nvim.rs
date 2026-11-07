@@ -55,9 +55,10 @@ use crate::option::vars::{jop_flags, p_confirm, p_report, p_write};
 use crate::options::kOptJopFlagClean;
 use crate::os::cshim::ngettext;
 use crate::os::input::os_breakcheck;
+use crate::os::libc::int64_t;
 use crate::search::FORWARD;
 use crate::terminal::buf_terminal_running;
-use crate::types::{Cleanup, CmdModFlags, ExArg, Failed, LineNr, OptInt, OptionSetFlags, int64_t};
+use crate::types::{Cleanup, CmdModFlags, ExArg, Failed, LineNr, OptInt, OptionSetFlags};
 use crate::window::{
     NotClosed, check_can_set_curbuf_forceit, last_window, swbuf_goto_win_with_buf, win_close,
     win_locked, win_split,

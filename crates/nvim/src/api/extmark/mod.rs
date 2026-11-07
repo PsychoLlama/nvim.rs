@@ -34,13 +34,14 @@ use crate::marktree::key::{
 use crate::marktree::mt_inspect;
 use crate::mbyte::c_cluster_schar;
 use crate::r#move::changed_window_setting;
+use crate::os::libc::{int32_t, size_t, uint8_t, uint32_t};
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::sign::init_sign_text;
 use crate::types::{
     ApiDict, ApiString, Array, Boolean, BufferHandle, ColNr, DecorExt, DecorHighlightInline,
     DecorInline, DecorPriority, DecorSignHighlight, DecorVirtText, DecorVirtText_data, Error,
     ExtmarkType, Integer, LineNr, LuaRef, MTKey, MTPair, NS, Object, VirtLine, VirtText,
-    VirtTextChunk, Window, int32_t, kObjectTypeArray, size_t, uint8_t, uint32_t,
+    VirtTextChunk, Window, kObjectTypeArray,
 };
 
 // The carve of the transpiled module; see each child's docs.
