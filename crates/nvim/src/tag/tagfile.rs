@@ -175,7 +175,7 @@ impl HelpTags {
     /// Find every `doc/tags` and `doc/tags-??` in `'runtimepath'`.
     fn collect() -> Self {
         let mut found: Vec<Name> = Vec::new();
-        let _ = do_in_runtimepath_visit(
+        do_in_runtimepath_visit(
             c"doc/tags doc/tags-??",
             RuntimeOpts::ALL,
             &mut |fnames: &[&CStr], all: bool| {

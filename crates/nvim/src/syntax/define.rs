@@ -28,7 +28,7 @@ use core::ffi::{CStr, c_int};
 use super::*;
 use crate::regexp::{RE_MAGIC, char_delim, skip_regexp_at};
 use crate::runtime::RuntimeOpts;
-use crate::types::{ExArgt, FAIL, NUL};
+use crate::types::{ExArgt, NUL};
 
 /// Adjust an item's flags when it is declared in a `:syntax include`d file.
 ///
@@ -105,9 +105,9 @@ pub(crate) fn syn_cmd_include(args: &mut ExArg, _syncing: c_int) {
     let arg = args.line.cstr_from(args.line.arg);
     // The command's own line, which nothing the script runs can reach.
     let failed = if source {
-        do_source(arg, false, DOSO_NONE.cast_signed(), None) == FAIL
+        do_source(arg).is_err()
     } else {
-        source_runtime(arg, RuntimeOpts::ALL).is_err()
+        !source_runtime(arg, RuntimeOpts::ALL)
     };
     if failed {
         let arg = msg_bytes(args.line.arg());

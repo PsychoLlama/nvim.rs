@@ -40,7 +40,7 @@ use crate::memline::Lines;
 use crate::optionstr::OptStringRef;
 use crate::os::cshim::gettext;
 use crate::os::fs::dir_exists;
-use crate::types::{FAIL, IOSIZE, OK};
+use crate::types::IOSIZE;
 use core::ffi::{CStr, c_int};
 use std::ffi::{CString, OsStr};
 use std::fs::File;
@@ -86,7 +86,7 @@ fn cmd_source(fname: &CStr, excmd: Option<&mut ExArg>) {
     } else {
         false
     };
-    if !sourced && do_source(fname, false, DOSO_NONE, None) == FAIL {
+    if !sourced && do_source(fname).is_err() {
         let fname = msg_cstr(fname);
         semsg!("E484: Can't open file {fname}");
     }
@@ -161,8 +161,8 @@ fn do_source_str_init(text: &CStr) -> SourceCookie {
 
 /// Source the current buffer's lines, as Vimscript or (with `ex_lua`) as Lua.
 pub fn cmd_source_buffer(excmd: &ExArg, ex_lua: bool) {
-    let mut req = SourceRequest::new(Origin::Buffer { excmd, ex_lua }, None);
-    do_source_ext(&mut req);
+    let req = SourceRequest::new(Origin::Buffer { excmd, ex_lua }, None);
+    let _ = do_source_ext(&req);
 }
 
 /// Source `text` as Vimscript, under `traceback_name`.
@@ -172,7 +172,7 @@ pub fn cmd_source_buffer(excmd: &ExArg, ex_lua: bool) {
 ///
 /// `text` is copied into the script's lines before any of them runs, and
 /// the name is only ever read, for messages.
-pub fn do_source_str(text: &CStr, traceback_name: &CStr) -> c_int {
+pub fn do_source_str(text: &CStr, traceback_name: &CStr) {
     // Upstream's `snprintf` into 256 bytes of "%s called at %s:%d", spelled
     // out: this runs for every `nvim_exec2()` from inside a script.
     let decorated = sourcing_name_copy().map(|name| {
@@ -187,8 +187,9 @@ pub fn do_source_str(text: &CStr, traceback_name: &CStr) -> c_int {
         cstr::owned(&text)
     });
     let name = decorated.as_deref().unwrap_or(traceback_name);
-    let mut req = SourceRequest::new(Origin::Str { text }, Some(name));
-    do_source_ext(&mut req)
+    let req = SourceRequest::new(Origin::Str { text }, Some(name));
+    // A string is never "not opened": there is nothing to answer.
+    let _ = do_source_ext(&req);
 }
 
 /// Where a `do_source_ext` call reads its lines from.
@@ -212,12 +213,24 @@ struct SourceRequest<'a, 'e> {
     /// The name as the caller spelled it -- messages only; the resolved name
     /// is the run's. `None` for a buffer.
     fname: Option<&'a CStr>,
-    /// Try the other spelling of the init file's name as well.
-    check_other: bool,
-    /// A `DOSO_` value: whether this is the user's init file.
-    is_vimrc: c_int,
-    /// Where to report the script ID, if the caller wants it.
-    ret_sid: Option<&'a mut c_int>,
+    /// The user's init file: try the other spelling of its name as well,
+    /// and set `$MYVIMRC` to it.
+    init_file: bool,
+    /// Leave a script already loaded alone (the autoload search).
+    once: bool,
+}
+
+/// Why [`do_source`] ran nothing. Only the directory has been said (a
+/// note, not an error); the caller says `E484` for each.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SourceError {
+    /// No such file, it could not be opened, or there is no current buffer
+    /// to read.
+    NotOpened,
+    /// The name is a directory.
+    Directory,
+    /// A `SourceCmd` handler took the file over and was aborted.
+    Aborted,
 }
 
 impl<'a, 'e> SourceRequest<'a, 'e> {
@@ -227,9 +240,8 @@ impl<'a, 'e> SourceRequest<'a, 'e> {
         SourceRequest {
             origin,
             fname,
-            check_other: false,
-            is_vimrc: DOSO_NONE,
-            ret_sid: None,
+            init_file: false,
+            once: false,
         }
     }
 
@@ -242,9 +254,11 @@ impl<'a, 'e> SourceRequest<'a, 'e> {
 /// this source will be known by.  `Err` is `do_source_ext`'s whole return
 /// value: no current buffer, or a directory (the one case that reports
 /// itself).
-fn source_name(req: &SourceRequest) -> Result<(SourceCookie, XString), c_int> {
+fn source_name(req: &SourceRequest) -> Result<(SourceCookie, XString), SourceError> {
     match req.origin {
-        Origin::Buffer { excmd, ex_lua } => do_source_buffer_init(excmd, ex_lua).ok_or(FAIL),
+        Origin::Buffer { excmd, ex_lua } => {
+            do_source_buffer_init(excmd, ex_lua).ok_or(SourceError::NotOpened)
+        }
         Origin::Str { text } => {
             let name = XString::from_cstr(req.fname.unwrap_or(c""));
             Ok((do_source_str_init(text), name))
@@ -258,7 +272,7 @@ fn source_name(req: &SourceRequest) -> Result<(SourceCookie, XString), c_int> {
             }
             let fname = msg_cstr(fname);
             smsg!(0, "Cannot source a directory: \"{fname}\"");
-            Err(FAIL)
+            Err(SourceError::Directory)
         }
     }
 }
@@ -280,16 +294,16 @@ fn fire_source_event(event: AutoEvent, fname_exp: &CStr) -> bool {
 ///
 /// `Some` when a `SourceCmd` handler took the file over, in which case
 /// nothing else happens: the handler *is* the sourcing.
-fn source_autocmds(fname_exp: &CStr) -> Option<c_int> {
+fn source_autocmds(fname_exp: &CStr) -> Option<Result<(), SourceError>> {
     // The handlers may run arbitrary script; the name is the run's own.
     if has_autocmd(AutoEvent::SourceCmd, fname_exp, None)
         && fire_source_event(AutoEvent::SourceCmd, fname_exp)
     {
-        let retval = if aborting() { FAIL } else { OK };
-        if retval == OK {
-            fire_source_event(AutoEvent::SourcePost, fname_exp);
+        if aborting() {
+            return Some(Err(SourceError::Aborted));
         }
-        return Some(retval);
+        fire_source_event(AutoEvent::SourcePost, fname_exp);
+        return Some(Ok(()));
     }
     fire_source_event(AutoEvent::SourcePre, fname_exp);
     None
@@ -348,8 +362,8 @@ fn verbose_source_msg(plain: &'static CStr, numbered: &'static CStr, fname: Opti
 /// Find or create the `ScriptItem` this source runs under, answering its id.
 /// Sourcing a string allocates no item at all.
 fn register_script(
-    req: &mut SourceRequest,
-    sid: &mut c_int,
+    req: &SourceRequest,
+    sid: &mut ScriptId,
     fname_exp: &XString,
 ) -> Option<ScriptId> {
     if *sid > 0 {
@@ -362,9 +376,6 @@ fn register_script(
     *sid = new_script_item(Some(fname_exp.clone()));
     let is_lua = path_with_extension(fname_exp.as_cstr(), c"lua");
     with_script_item(*sid, |si| si.sn_lua = is_lua);
-    if let Some(ret_sid) = req.ret_sid.as_deref_mut() {
-        *ret_sid = *sid;
-    }
     Some(*sid)
 }
 
@@ -476,36 +487,33 @@ fn execute_source(
 ///
 /// `save_debug_break_level` was read before any of this ran.
 fn source_bracket(
-    req: &mut SourceRequest,
+    req: &SourceRequest,
     cookie: &mut SourceCookie,
     mut fname_exp: XString,
     save_debug_break_level: c_int,
-) -> c_int {
+) -> Result<(), SourceError> {
     let mut sid = if req.is_str() {
         SID_STR
     } else {
         find_script_by_name(fname_exp.as_cstr())
     };
-    if sid > 0
-        && let Some(ret_sid) = req.ret_sid.as_deref_mut()
-    {
-        // Already loaded, and the caller only wanted the ID.
-        *ret_sid = sid;
-        return OK;
+    if sid > 0 && req.once {
+        // Already loaded, and not to be run again.
+        return Ok(());
     }
     if !req.is_str()
-        && let Some(retval) = source_autocmds(fname_exp.as_cstr())
+        && let Some(answer) = source_autocmds(fname_exp.as_cstr())
     {
-        return retval;
+        return answer;
     }
 
-    open_script(cookie, &mut fname_exp, req.check_other);
+    open_script(cookie, &mut fname_exp, req.init_file);
     if matches!(cookie.lines, ScriptLines::None) {
         if p_verbose() > 1 {
             let numbered = c"line %ld: could not source \"%s\"";
             verbose_source_msg(c"could not source \"%s\"", numbered, req.fname);
         }
-        return FAIL;
+        return Err(SourceError::NotOpened);
     }
 
     // The file exists.  Everything set up from here has to come back down
@@ -514,7 +522,7 @@ fn source_bracket(
         let numbered = c"line %ld: sourcing \"%s\"";
         verbose_source_msg(c"sourcing \"%s\"", numbered, req.fname);
     }
-    if req.is_vimrc == DOSO_VIMRC {
+    if req.init_file {
         vimrc_found(fname_exp.as_cstr(), c"MYVIMRC");
     }
 
@@ -614,41 +622,46 @@ fn source_bracket(
     if !req.is_str() && trigger_source_post {
         fire_source_event(AutoEvent::SourcePost, fname_exp.as_cstr());
     }
-    OK
+    Ok(())
 }
 
 /// Read a script and run it.
 ///
-/// Answers FAIL when the file could not be opened, OK otherwise.  When a
-/// `ScriptItem` was found or created, `ret_sid` -- if given -- gets its ID,
-/// and a script that has one already is *not* run again.
-fn do_source_ext(req: &mut SourceRequest) -> c_int {
+/// `Err` when nothing ran (see [`SourceError`]). A script that has a
+/// `ScriptItem` already is run again unless the request is `once`.
+fn do_source_ext(req: &SourceRequest) -> Result<(), SourceError> {
     let save_debug_break_level = debug_break_level.get();
-    let (mut cookie, fname_exp) = match source_name(req) {
-        Ok(loaded) => loaded,
-        Err(retval) => return retval,
-    };
+    let (mut cookie, fname_exp) = source_name(req)?;
     source_bracket(req, &mut cookie, fname_exp, save_debug_break_level)
 }
 
-/// [`do_source_ext`] for a file: the spelling every caller outside this module
-/// uses.  `check_other` also tries the other init-file name; `is_vimrc` is a
-/// `DOSO_` value.
+/// A file through [`do_source_ext`]: the spelling every caller outside this
+/// module uses.
 ///
 /// `fname` is borrowed for the whole run of the script, which can run
 /// anything: hand in a copy of your own, never an option's value or a
 /// buffer's line.
-pub fn do_source(
-    fname: &CStr,
-    check_other: bool,
-    is_vimrc: c_int,
-    ret_sid: Option<&mut c_int>,
-) -> c_int {
-    let mut req = SourceRequest {
-        check_other,
-        is_vimrc,
-        ret_sid,
+fn source_file(fname: &CStr, init_file: bool, once: bool) -> Result<(), SourceError> {
+    let req = SourceRequest {
+        init_file,
+        once,
         ..SourceRequest::new(Origin::File, Some(fname))
     };
-    do_source_ext(&mut req)
+    do_source_ext(&req)
+}
+
+/// Source the file `fname` (see [`source_file`] for what it borrows).
+pub(crate) fn do_source(fname: &CStr) -> Result<(), SourceError> {
+    source_file(fname, false, false)
+}
+
+/// [`do_source`] for the user's init file: a miss is retried under the
+/// other spelling of its leading `.`/`_`, and `$MYVIMRC` names it.
+pub(crate) fn source_init_file(fname: &CStr) -> Result<(), SourceError> {
+    source_file(fname, true, false)
+}
+
+/// [`do_source`], but a script already loaded is left alone.
+pub(crate) fn source_once(fname: &CStr) -> Result<(), SourceError> {
+    source_file(fname, false, true)
 }

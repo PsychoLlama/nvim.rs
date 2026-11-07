@@ -478,15 +478,13 @@ pub(crate) fn script_autoload_named(name: &[u8], reload: bool) -> bool {
         LOADED_AUTOLOADS.with_mut(|loaded| loaded.push(path.to_vec()));
     }
 
-    // Try loading the package from `$VIMRUNTIME/autoload/<name>.vim`.  The
-    // `ret_sid` keeps `source_found` from loading the same script twice.
-    let mut ret_sid: c_int = 0;
+    // Try loading the package from `$VIMRUNTIME/autoload/<name>.vim`,
+    // leaving alone a script some other way loaded already.
     do_in_runtimepath_visit(
         scriptname.as_cstr(),
         RuntimeOpts::START,
-        &mut |found, all| source_found(found, all, Some(&mut ret_sid)),
+        &mut |found, all| source_found(found, all, true),
     )
-    .is_ok()
 }
 
 /// Are these the same autoload path? The shared `autoload/` prefix is skipped

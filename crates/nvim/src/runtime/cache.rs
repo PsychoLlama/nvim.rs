@@ -42,7 +42,7 @@ use crate::path::{ExpandFlags, add_pathsep};
 use crate::semsg;
 use crate::smsg;
 
-use crate::types::{FAIL, OK, OptError};
+use crate::types::OptError;
 use core::ffi::{CStr, c_int};
 use std::rc::Rc;
 use std::sync::PoisonError;
@@ -71,13 +71,13 @@ pub(crate) fn runtime_search_path_as_is() -> Rc<Vec<SearchPathItem>> {
 ///
 /// `RuntimeOpts::ALL` visits every match, `RuntimeOpts::DIR` looks for
 /// directories, `RuntimeOpts::ERR` turns "nothing found" into an error
-/// message.  Answers OK when something was found -- which, as upstream, a
+/// message.  Answers whether something was found -- which, as upstream, a
 /// walk over the directories alone never says.
 pub(crate) fn do_in_cached_path(
     name: Option<&CStr>,
     flags: RuntimeOpts,
     visit: &mut Visit,
-) -> c_int {
+) -> bool {
     if p_verbose() > 10
         && let Some(name) = name
     {
@@ -133,7 +133,7 @@ pub(crate) fn do_in_cached_path(
         }
     }
 
-    if did_one { OK } else { FAIL }
+    did_one
 }
 
 /// The directories already in the search path, by their bytes: the dedup

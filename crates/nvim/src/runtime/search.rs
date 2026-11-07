@@ -46,8 +46,8 @@ use crate::semsg;
 use crate::smsg;
 use crate::types::DictBuilder;
 
-use crate::types::{ExpandContext, FAIL, Failed, OK};
-use core::ffi::{CStr, c_int};
+use crate::types::ExpandContext;
+use core::ffi::CStr;
 use std::sync::PoisonError;
 
 /// What a search does with what it finds: handed each batch of names and
@@ -99,7 +99,7 @@ pub fn ex_runtime(excmd: &mut ExArg) {
     let arg = excmd.line.arg();
     let (where_flags, skip) = runtime_cmd_flags(arg, skip::to_white(arg));
     flags |= where_flags;
-    let _ = source_runtime(excmd.line.cstr_from(excmd.line.arg + skip), flags);
+    source_runtime(excmd.line.cstr_from(excmd.line.arg + skip), flags);
 }
 
 /// Set the completion context for the `:runtime` command, whose argument
@@ -140,12 +140,11 @@ pub fn set_context_in_runtime_cmd(expand: &mut Expand, arg: usize) {
 /// Source every name `accept` picks out, stopping after the first unless
 /// `all`.  Answers whether anything was sourced.
 ///
-/// `ret_sid` is [`do_source`]'s: when set, a script already loaded is not
-/// sourced again.
+/// With `once` a script already loaded is not sourced again.
 fn source_matching(
     fnames: &[&CStr],
     all: bool,
-    ret_sid: &mut Option<&mut c_int>,
+    once: bool,
     accept: impl Fn(&CStr) -> bool,
 ) -> bool {
     let mut did_one = false;
@@ -153,7 +152,12 @@ fn source_matching(
         if !accept(fname) {
             continue;
         }
-        do_source(fname, false, DOSO_NONE, ret_sid.as_deref_mut());
+        // Not finding one is not this walk's to report.
+        let _ = if once {
+            source_once(fname)
+        } else {
+            do_source(fname)
+        };
         did_one = true;
         if !all {
             break;
@@ -163,31 +167,22 @@ fn source_matching(
 }
 
 /// Source all `.vim` and `.lua` files in `fnames`, `.vim` files first.
-pub(crate) fn source_found_vim_lua(
-    fnames: &[&CStr],
-    all: bool,
-    mut ret_sid: Option<&mut c_int>,
-) -> bool {
-    let did_one = source_matching(fnames, all, &mut ret_sid, |f| {
-        path_with_extension(f, c"vim")
-    });
+pub(crate) fn source_found_vim_lua(fnames: &[&CStr], all: bool, once: bool) -> bool {
+    let did_one = source_matching(fnames, all, once, |f| path_with_extension(f, c"vim"));
     if !all && did_one {
         return true;
     }
-    did_one
-        | source_matching(fnames, all, &mut ret_sid, |f| {
-            path_with_extension(f, c"lua")
-        })
+    did_one | source_matching(fnames, all, once, |f| path_with_extension(f, c"lua"))
 }
 
 /// Source all files in `fnames`: `.vim` first, then `.lua`, then the rest.
-pub(crate) fn source_found(fnames: &[&CStr], all: bool, mut ret_sid: Option<&mut c_int>) -> bool {
-    let did_one = source_found_vim_lua(fnames, all, ret_sid.as_deref_mut());
+pub(crate) fn source_found(fnames: &[&CStr], all: bool, once: bool) -> bool {
+    let did_one = source_found_vim_lua(fnames, all, once);
     if !all && did_one {
         return true;
     }
     did_one
-        | source_matching(fnames, all, &mut ret_sid, |f| {
+        | source_matching(fnames, all, once, |f| {
             !path_with_extension(f, c"vim") && !path_with_extension(f, c"lua")
         })
 }
@@ -247,7 +242,7 @@ pub(crate) fn expand_name_patterns(
             smsg!(0, "Searching for \"{pattern}\"");
             verbose_leave();
         }
-        *did_one |= expand_and_visit(pattern, ew_flags, do_all, visit).is_ok();
+        *did_one |= expand_and_visit(pattern, ew_flags, do_all, visit);
     }
     buf.truncate(tail);
 }
@@ -276,7 +271,7 @@ fn announce_search(name: &CStr, prefix: &CStr, path: &CStr) {
 /// `RuntimeOpts::DIR` looks for directories, and `RuntimeOpts::ERR` turns
 /// "nothing found" into an error message rather than a verbose note.
 ///
-/// Answers OK when something was found, FAIL otherwise.
+/// Answers whether something was found.
 ///
 /// `path` is the list to walk, which the caller has already copied out of
 /// whichever option it came from -- a visit may set that option -- and
@@ -290,7 +285,7 @@ pub(crate) fn do_in_path_visit(
     name: Option<&CStr>,
     flags: RuntimeOpts,
     visit: &mut Visit,
-) -> c_int {
+) -> bool {
     if p_verbose() > 10
         && let Some(name) = name
     {
@@ -341,7 +336,7 @@ pub(crate) fn do_in_path_visit(
         }
     }
 
-    if did_one { OK } else { FAIL }
+    did_one
 }
 
 fn boolean_obj(value: bool) -> Object {
@@ -465,12 +460,12 @@ fn runtime_get_named_common(lua: bool, pat: &Array, all: bool, path: &[SearchPat
 /// Find `name` in `path`, and then — for `RuntimeOpts::START`/`RuntimeOpts::OPT` — in
 /// 'packpath''s package trees, handing `visit` each match.
 ///
-/// Answers OK when at least one match was found.  With `name` empty `visit`
+/// Answers whether at least one match was found.  With `name` empty `visit`
 /// is handed each 'runtimepath' directory instead.
-fn do_in_path_and_pp(path: XString, name: &CStr, flags: RuntimeOpts, visit: &mut Visit) -> c_int {
-    let mut done = FAIL;
+fn do_in_path_and_pp(path: XString, name: &CStr, flags: RuntimeOpts, visit: &mut Visit) -> bool {
+    let mut done = false;
     // Each round is skipped once something has been found, unless RuntimeOpts::ALL.
-    let wants_more = |done: c_int| done == FAIL || flags.has(RuntimeOpts::ALL);
+    let wants_more = |done: bool| !done || flags.has(RuntimeOpts::ALL);
 
     if !flags.has(RuntimeOpts::NORTP) {
         // An empty `name` means "every directory".
@@ -523,58 +518,56 @@ fn do_in_path_and_pp(path: XString, name: &CStr, flags: RuntimeOpts, visit: &mut
 
 /// Find `name` along 'runtimepath' -- the cached search path, then the
 /// package trees `RuntimeOpts::START`/`RuntimeOpts::OPT` ask for -- and hand
-/// `visit` each match. `name` may contain wildcards; an empty `name` hands
-/// over the directories themselves.
+/// `visit` each match, answering whether there was one. `name` may contain
+/// wildcards; an empty `name` hands over the directories themselves.
 pub(crate) fn do_in_runtimepath_visit(
     name: &CStr,
     mut flags: RuntimeOpts,
     visit: &mut Visit,
-) -> Result<(), Failed> {
-    let mut success = FAIL;
+) -> bool {
+    let mut found = false;
     if !flags.has(RuntimeOpts::NORTP) {
         let dirs_only = (!name.is_empty()).then_some(name);
-        success |= do_in_cached_path(dirs_only, flags, visit);
+        found |= do_in_cached_path(dirs_only, flags, visit);
         // The cached path already covers 'runtimepath' and the `start`
         // packages spliced into it.
         flags = flags.without(RuntimeOpts::START) | RuntimeOpts::NORTP;
     }
     // TODO(bfredl): we could integrate disabled OPT dirs into the cached path,
     // which would make ":packadd myoptpack" effective as well.
-    if flags.has(RuntimeOpts::START | RuntimeOpts::OPT)
-        && (success == FAIL || flags.has(RuntimeOpts::ALL))
-    {
-        success |= do_in_path_and_pp(P_RTP.get(), name, flags, visit);
+    if flags.has(RuntimeOpts::START | RuntimeOpts::OPT) && (!found || flags.has(RuntimeOpts::ALL)) {
+        found |= do_in_path_and_pp(P_RTP.get(), name, flags, visit);
     }
-    if success == FAIL { Err(Failed) } else { Ok(()) }
+    found
 }
 
 /// Source the file `name` from all directories in 'runtimepath'.  `name` may
-/// contain wildcards; `RuntimeOpts::ALL` sources every match rather than the first.
-pub fn source_runtime(name: &CStr, flags: RuntimeOpts) -> Result<(), Failed> {
+/// contain wildcards; `RuntimeOpts::ALL` sources every match rather than the
+/// first. Answers whether there was a match.
+pub fn source_runtime(name: &CStr, flags: RuntimeOpts) -> bool {
     do_in_runtimepath_visit(name, flags, &mut |found, all| {
-        source_found(found, all, None)
+        source_found(found, all, false)
     })
 }
 
 /// [`source_runtime`], but only `.vim` and `.lua` files.
-pub(crate) fn source_runtime_vim_lua(name: &CStr, flags: RuntimeOpts) -> Result<(), Failed> {
+pub(crate) fn source_runtime_vim_lua(name: &CStr, flags: RuntimeOpts) -> bool {
     do_in_runtimepath_visit(name, flags, &mut |found, all| {
-        source_found_vim_lua(found, all, None)
+        source_found_vim_lua(found, all, false)
     })
 }
 
 /// [`source_runtime`] over `path` instead of 'runtimepath', and only `.vim`
 /// and `.lua` files.
-pub(crate) fn source_in_path_vim_lua(path: XString, name: &CStr, flags: RuntimeOpts) -> c_int {
+pub(crate) fn source_in_path_vim_lua(path: XString, name: &CStr, flags: RuntimeOpts) -> bool {
     do_in_path_and_pp(path, name, flags, &mut |found, all| {
-        source_found_vim_lua(found, all, None)
+        source_found_vim_lua(found, all, false)
     })
 }
 
 /// Expand the wildcards in `pattern` and hand `visit` the matches.
 ///
-/// Answers `Ok` when files were found, `Err` otherwise, whatever `visit`
-/// makes of them.  `all` is passed through to `visit`, which decides whether
+/// Answers whether files were found, whatever `visit` makes of them.  `all` is passed through to `visit`, which decides whether
 /// to act on more than the first. The matches are this frame's, alive across
 /// whatever `visit` runs.
 pub(crate) fn expand_and_visit(
@@ -582,9 +575,11 @@ pub(crate) fn expand_and_visit(
     flags: ExpandFlags,
     all: bool,
     visit: &mut Visit,
-) -> Result<(), Failed> {
-    let found = gen_expand_wildcards(&[pattern], flags)?;
+) -> bool {
+    let Ok(found) = gen_expand_wildcards(&[pattern], flags) else {
+        return false;
+    };
     let names: Vec<&CStr> = found.iter().map(XString::as_cstr).collect();
     visit(&names, all);
-    Ok(())
+    true
 }

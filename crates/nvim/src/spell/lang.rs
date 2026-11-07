@@ -61,7 +61,7 @@ use crate::regexp::{RE_MAGIC, vim_regcomp};
 use crate::spellfile::spell_load_file;
 use crate::startup::starting;
 use crate::strings::concat;
-use crate::types::{Failed, LangId, LangP, MAXPATHL, OptError, SpellLang, SynBlock};
+use crate::types::{LangId, LangP, MAXPATHL, OptError, SpellLang, SynBlock};
 use crate::window::win_valid_any_tab;
 
 use super::chartab::init_spell_chartab;
@@ -133,18 +133,18 @@ fn spell_load_lang(lang: &[u8]) {
     // them.
     let room = 85 - 5;
     let mut fname_enc = Vec::new();
-    let mut r = Err(Failed);
+    let mut found = false;
     for round in 1..=2 {
         let enc = spell_enc();
         fname_enc = joined(&[b"spell/", lang, b".", &enc, b".spl"], room);
-        r = do_in_runtimepath_cb(&fname_enc, RuntimeOpts::NONE, &mut sl);
+        found = do_in_runtimepath_cb(&fname_enc, RuntimeOpts::NONE, &mut sl);
 
-        if r.is_err() && !sl.lang.is_empty() {
+        if !found && !sl.lang.is_empty() {
             // Fall back on the ASCII version.
             fname_enc = joined(&[b"spell/", lang, b".ascii.spl"], room);
-            r = do_in_runtimepath_cb(&fname_enc, RuntimeOpts::NONE, &mut sl);
+            found = do_in_runtimepath_cb(&fname_enc, RuntimeOpts::NONE, &mut sl);
 
-            if r.is_err() && !sl.lang.is_empty() && round == 1 && {
+            if !found && !sl.lang.is_empty() && round == 1 && {
                 // Re-read each round: the handler may have changed buffers.
                 let buffer = Buf::current();
                 let event = AutoEvent::SpellFileMissing;
@@ -163,7 +163,7 @@ fn spell_load_lang(lang: &[u8]) {
         break;
     }
 
-    if r.is_err() {
+    if !found {
         if starting.get() != 0 {
             // Plugins are not loaded yet, so nvim/spellfile.lua cannot
             // offer the download itself. #3027
@@ -188,14 +188,14 @@ fn spell_load_lang(lang: &[u8]) {
         // At least one file loaded; now take all the additions.
         fname_enc.truncate(fname_enc.len() - 3);
         fname_enc.extend_from_slice(b"add.spl");
-        let _ = do_in_runtimepath_cb(&fname_enc, RuntimeOpts::ALL, &mut sl);
+        do_in_runtimepath_cb(&fname_enc, RuntimeOpts::ALL, &mut sl);
     }
 
     Buf::current().b_locked -= 1;
 }
 
 /// `do_in_runtimepath_visit` with [`spell_load_cb`] as the visit.
-fn do_in_runtimepath_cb(name: &[u8], flags: RuntimeOpts, sl: &mut SpellLoad) -> Result<(), Failed> {
+fn do_in_runtimepath_cb(name: &[u8], flags: RuntimeOpts, sl: &mut SpellLoad) -> bool {
     let name = cstr::owned(name);
     crate::runtime::do_in_runtimepath_visit(&name, flags, &mut |fnames, all| {
         spell_load_cb(fnames, all, sl)

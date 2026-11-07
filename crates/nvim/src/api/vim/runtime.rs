@@ -58,7 +58,7 @@ pub fn nvim_get_runtime_file(name: ApiString, all: Boolean) -> Result<Array, Err
     api_try(|| {
         // The name is this call's own, which no script the walk runs can
         // reach.
-        let _ = do_in_runtimepath_visit(name.as_cstr(), flags, &mut |fnames, all| {
+        do_in_runtimepath_visit(name.as_cstr(), flags, &mut |fnames, all| {
             for fname in fnames {
                 rv.push(Object::string(ApiString::from_cstr(fname)));
                 if !all {
@@ -96,9 +96,9 @@ pub fn nvim__get_runtime(
             let name = &res[i]
                 .as_string()
                 .expect("`runtime_get_named` answers an array of Strings");
-            let none = DOSO_NONE.cast_signed();
-            // Sourcing a file frees nothing the array holds.
-            do_source(name.as_cstr(), false, none, None);
+            // Sourcing a file frees nothing the array holds, and a file
+            // that went away since it was found is skipped, as upstream.
+            let _ = do_source(name.as_cstr());
         }
     }
     Ok(res)

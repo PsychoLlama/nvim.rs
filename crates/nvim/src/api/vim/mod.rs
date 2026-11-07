@@ -150,7 +150,6 @@ pub const REPTERM_DO_LT: ::core::ffi::c_uint = 2;
 pub const REPTERM_FROM_PART: ::core::ffi::c_uint = 1;
 pub const kRetNilBool: LuaRetMode = 1;
 pub const kRetObject: LuaRetMode = 0;
-pub const DOSO_NONE: ::core::ffi::c_uint = 0;
 pub const MPACK_TOKEN_SINT: mpack_token_type_t = 4;
 pub const kMTCharWise: MotionType = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();

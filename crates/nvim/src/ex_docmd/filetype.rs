@@ -102,14 +102,14 @@ pub(crate) fn ex_filetype(excmd: &mut ExArg) {
         // `:filetype detect` only re-sources the scripts when detection
         // was off; `:filetype on` always does.
         if arg[0] == b'o' || filetype_detect.get() != Some(true) {
-            let _ = source_runtime(FILETYPE_FILE, RuntimeOpts::ALL);
+            source_runtime(FILETYPE_FILE, RuntimeOpts::ALL);
             filetype_detect.set(Some(true));
             if plugin {
-                let _ = source_runtime(FTPLUGIN_FILE, RuntimeOpts::ALL);
+                source_runtime(FTPLUGIN_FILE, RuntimeOpts::ALL);
                 filetype_plugin.set(Some(true));
             }
             if indent {
-                let _ = source_runtime(INDENT_FILE, RuntimeOpts::ALL);
+                source_runtime(INDENT_FILE, RuntimeOpts::ALL);
                 filetype_indent.set(Some(true));
             }
         }
@@ -123,15 +123,15 @@ pub(crate) fn ex_filetype(excmd: &mut ExArg) {
         if plugin || indent {
             // Only what was named is turned off; detection stays on.
             if plugin {
-                let _ = source_runtime(FTPLUGOF_FILE, RuntimeOpts::ALL);
+                source_runtime(FTPLUGOF_FILE, RuntimeOpts::ALL);
                 filetype_plugin.set(Some(false));
             }
             if indent {
-                let _ = source_runtime(INDOFF_FILE, RuntimeOpts::ALL);
+                source_runtime(INDOFF_FILE, RuntimeOpts::ALL);
                 filetype_indent.set(Some(false));
             }
         } else {
-            let _ = source_runtime(FTOFF_FILE, RuntimeOpts::ALL);
+            source_runtime(FTOFF_FILE, RuntimeOpts::ALL);
             filetype_detect.set(Some(false));
         }
     } else {
@@ -165,11 +165,11 @@ fn report_filetype_state() {
 /// explicitly turned off.
 pub fn filetype_plugin_enable() {
     if filetype_plugin.get().is_none() {
-        let _ = source_runtime(FTPLUGIN_FILE, RuntimeOpts::ALL);
+        source_runtime(FTPLUGIN_FILE, RuntimeOpts::ALL);
         filetype_plugin.set(Some(true));
     }
     if filetype_indent.get().is_none() {
-        let _ = source_runtime(INDENT_FILE, RuntimeOpts::ALL);
+        source_runtime(INDENT_FILE, RuntimeOpts::ALL);
         filetype_indent.set(Some(true));
     }
 }
@@ -177,7 +177,7 @@ pub fn filetype_plugin_enable() {
 /// The same for detection.
 pub fn filetype_maybe_enable() {
     if filetype_detect.get().is_none() {
-        let _ = source_runtime(FILETYPE_FILE, RuntimeOpts::ALL);
+        source_runtime(FILETYPE_FILE, RuntimeOpts::ALL);
         filetype_detect.set(Some(true));
     }
 }

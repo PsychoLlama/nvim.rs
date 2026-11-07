@@ -34,14 +34,12 @@ use crate::os::state::{kEqualFiles, kXDGConfigDirs};
 use crate::path::path_full_compare;
 use crate::profile::time_msg_at;
 use crate::quickfix::qf_jump_to_current;
-use crate::runtime::state::{
-    DOSO_NONE, DOSO_VIMRC, ETYPE_ARGS, SID_CARG, SID_CMDARG, current_sctx,
-};
-use crate::runtime::{do_source, estack_pop, estack_push};
+use crate::runtime::state::{ETYPE_ARGS, SID_CARG, SID_CMDARG, current_sctx};
+use crate::runtime::{do_source, estack_pop, estack_push, source_init_file};
 use crate::startup::args::execute_env;
 use crate::startup::{EDIT_QF, MainParams, SYS_VIMRC_FILE, VIMRC_FILE, silent_mode};
 use crate::state::mode::exmode_active;
-use crate::types::{FAIL, OK, ScriptId};
+use crate::types::ScriptId;
 
 /// Run the `--cmd` commands, which come before any config.
 pub(crate) fn exe_pre_commands(parm: &MainParams) {
@@ -149,12 +147,12 @@ pub(crate) fn do_system_initialization() {
     let appname = appname.to_bytes();
     let sourced = for_each_config_dir(|dir| {
         let vimrc = config_subpath(dir, appname, b"/sysinit.vim", true);
-        do_source(&vimrc, false, DOSO_NONE.cast_signed(), None) != FAIL
+        do_source(&vimrc).is_ok()
     });
     if sourced {
         return;
     }
-    do_source(SYS_VIMRC_FILE, false, DOSO_NONE.cast_signed(), None);
+    let _ = do_source(SYS_VIMRC_FILE);
 }
 
 /// Try `init.lua` and then `init.vim` in one directory.
@@ -163,7 +161,7 @@ pub(crate) fn do_system_initialization() {
 /// neither was: `do_exrc` is off when the file that was sourced *is* the
 /// `exrc` the working directory would offer, so it is not read twice.
 fn source_init_pair(init_lua: &CStr, init_vim: &CStr, check_exrc_is_same: bool) -> Option<bool> {
-    if path_exists(init_lua) && do_source(init_lua, true, DOSO_VIMRC.cast_signed(), None) != 0 {
+    if path_exists(init_lua) && source_init_file(init_lua).is_ok() {
         // Both present: the Lua one won, and the user should know.
         if path_exists(init_vim) {
             let (init_lua, init_vim) = (msg_cstr(init_lua), msg_cstr(init_vim));
@@ -171,7 +169,7 @@ fn source_init_pair(init_lua: &CStr, init_vim: &CStr, check_exrc_is_same: bool) 
         }
         return Some(p_exrc());
     }
-    if do_source(init_vim, true, DOSO_VIMRC.cast_signed(), None) != FAIL {
+    if source_init_file(init_vim).is_ok() {
         let mut do_exrc = p_exrc();
         if do_exrc && check_exrc_is_same {
             let same = path_full_compare(VIMRC_FILE, init_vim, false, true);
@@ -240,7 +238,7 @@ pub(crate) fn do_exrc_initialization() {
 pub(crate) fn source_startup_scripts(parm: &MainParams) {
     if let Some(vimrc) = parm.vimrc.as_deref() {
         let named_none = vimrc == c"NONE" || vimrc == c"NORC";
-        if !named_none && do_source(vimrc, false, DOSO_NONE.cast_signed(), None) != OK {
+        if !named_none && do_source(vimrc).is_err() {
             let vimrc = msg_cstr(vimrc);
             semsg!("E282: Cannot read from \"{vimrc}\"");
         }

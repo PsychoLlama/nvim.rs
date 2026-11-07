@@ -27,7 +27,7 @@ use crate::highlight::state::{
     cterm_normal_bg_color, cterm_normal_fg_color, normal_bg, normal_fg, normal_sp,
 };
 use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
-use crate::types::{Failed, RgbValue};
+use crate::types::RgbValue;
 
 use super::do_highlight;
 
@@ -524,7 +524,7 @@ pub(crate) fn init_highlight(both: bool, reset: bool) {
     // A copy: `load_colors` can free the variable.
     if let Some(name) = var_string_value(b"g:colors_name") {
         let name = std::ffi::CString::new(name).expect("a value read up to its NUL");
-        if load_colors(&name).is_ok() {
+        if load_colors(&name) {
             return;
         }
     }
@@ -552,14 +552,14 @@ pub(crate) fn init_highlight(both: bool, reset: bool) {
 
 /// Sources the colour scheme `name`, answering whether it worked.
 ///
-/// A recursive call answers `Ok` without doing anything: it means the scheme
+/// A recursive call answers `true` without doing anything: it means the scheme
 /// being sourced set `'background'`, which reloaded the highlighting, which
 /// is proof enough that it is working.
-pub(crate) fn load_colors(name: &CStr) -> Result<(), Failed> {
+pub(crate) fn load_colors(name: &CStr) -> bool {
     static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
 
     if RECURSIVE.get() {
-        return Ok(());
+        return true;
     }
     RECURSIVE.set(true);
 
@@ -574,8 +574,8 @@ pub(crate) fn load_colors(name: &CStr) -> Result<(), Failed> {
     let pattern = [b"colors/", name.to_bytes(), b".*"].concat();
     // A NUL-terminated pattern this frame owns.
     let pattern = crate::cstr::owned(&pattern);
-    let retval = source_runtime_vim_lua(&pattern, RuntimeOpts::START | RuntimeOpts::OPT);
-    if retval.is_ok() {
+    let found = source_runtime_vim_lua(&pattern, RuntimeOpts::START | RuntimeOpts::OPT);
+    if found {
         // The scheme's own file may have changed the current buffer.
         let buffer = Buf::current();
         apply_autocmds(
@@ -588,7 +588,7 @@ pub(crate) fn load_colors(name: &CStr) -> Result<(), Failed> {
     }
 
     RECURSIVE.set(false);
-    retval
+    found
 }
 
 /// Forgets the `Normal` colours, so that the next `:highlight` starts from

@@ -225,7 +225,6 @@ pub(crate) const MAX_HL_ID: ::core::ffi::c_uint = 20000;
 pub(crate) const SYNID_ALLBUT: ::core::ffi::c_int = 20000;
 const _: () = assert!(SYNID_ALLBUT.cast_unsigned() == MAX_HL_ID);
 /// `do_source` flag: this is not a plugin or a package.
-pub(crate) const DOSO_NONE: ::core::ffi::c_uint = 0;
 #[derive(Clone)]
 pub(crate) struct StateItem {
     pub si_idx: ::core::ffi::c_int,

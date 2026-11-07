@@ -32,7 +32,7 @@ use crate::option::vars::{P_PP, P_RTP};
 use crate::os::fs::dir_exists;
 use crate::path::{ExpandFlags, add_pathsep};
 
-use crate::types::{FAIL, Failed, OK, OptionSetFlags};
+use crate::types::{Failed, OptionSetFlags};
 use core::ffi::{CStr, c_int};
 use std::rc::Rc;
 
@@ -335,17 +335,17 @@ const FTDETECT_GLOB: &[u8] = b"/ftdetect/*";
 fn load_pack_plugin(opt: bool, fname: &CStr) {
     let dir = fix_fname(fname);
     let glob = |suffix: &[u8]| cstr::owned(&[&dir[..], suffix].concat());
-    let mut source = |found: &[&CStr], all: bool| source_found_vim_lua(found, all, None);
+    let mut source = |found: &[&CStr], all: bool| source_found_vim_lua(found, all, false);
 
     let pat = glob(PLUGIN_GLOB);
-    let _ = expand_and_visit(&pat, ExpandFlags::FILE, true, &mut source);
+    expand_and_visit(&pat, ExpandFlags::FILE, true, &mut source);
 
     // When runtime/filetype.lua has not been loaded yet, these scripts
     // are found when it is.
     if opt && eval_to_number(b"g:did_load_filetypes", false) > 0 {
         let _ = do_cmdline_cmd(c"augroup filetypedetect");
         let pat = glob(FTDETECT_GLOB);
-        let _ = expand_and_visit(&pat, ExpandFlags::FILE, true, &mut source);
+        expand_and_visit(&pat, ExpandFlags::FILE, true, &mut source);
         let _ = do_cmdline_cmd(c"augroup END");
     }
 }
@@ -492,7 +492,7 @@ pub fn load_plugins() {
     }
     time_msg_at(c"loading packages");
 
-    let _ = source_runtime_vim_lua(plugin_pattern, RuntimeOpts::ALL | RuntimeOpts::AFTER);
+    source_runtime_vim_lua(plugin_pattern, RuntimeOpts::ALL | RuntimeOpts::AFTER);
     time_msg_at(c"loading after plugins");
 }
 
@@ -508,10 +508,10 @@ pub fn ex_packadd(excmd: &mut ExArg) {
     };
 
     // Only look under "start" when loading packages was not done yet.
-    let mut res = OK;
+    let mut found_start = false;
     if !did_source_packages.get() {
         let pat = under(b"start");
-        res = do_in_path_visit(
+        found_start = do_in_path_visit(
             P_PP.get(),
             c"packpath",
             c"",
@@ -528,7 +528,7 @@ pub fn ex_packadd(excmd: &mut ExArg) {
         c"packpath",
         c"",
         Some(&pat),
-        RuntimeOpts::ALL | RuntimeOpts::DIR | RuntimeOpts::ERR.when(res == FAIL),
+        RuntimeOpts::ALL | RuntimeOpts::DIR | RuntimeOpts::ERR.when(!found_start),
         &mut |found, all| add_pack_plugins(true, found, all, work),
     );
 

@@ -53,7 +53,7 @@ use crate::winlayer::Win;
 /// `:colorscheme` — with no argument, report `g:colors_name`.
 pub(crate) fn ex_colorscheme(excmd: &mut ExArg) {
     if excmd.line.byte_at(excmd.line.arg) != 0 {
-        if load_colors(excmd.line.cstr_from(excmd.line.arg)).is_err() {
+        if !load_colors(excmd.line.cstr_from(excmd.line.arg)) {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let arg = msg_bytes(excmd.line.arg());
             semsg!("E185: Cannot find color scheme '{arg}'");

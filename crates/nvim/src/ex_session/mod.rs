@@ -78,7 +78,7 @@ use crate::tr;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::PATHSEPSTR;
-use crate::types::{CdCause, ExArg, FAIL, MAXPATHL, OptionSetFlags, Vv};
+use crate::types::{CdCause, ExArg, MAXPATHL, OptionSetFlags, Vv};
 use crate::window::{DirOwner, own_dir};
 use crate::winlayer::Win;
 use crate::winlayer::{Buf, TabPage};
@@ -98,15 +98,13 @@ mod flag {
     pub(super) const kCdCauseOther: CdCause = -1;
     /// `vim_strsave_fnameescape`: escape for an Ex command line.
     pub(super) const VSE_NONE: c_int = 0;
-    /// `do_source`: this is not a vimrc.
-    pub(super) const DOSO_NONE: c_int = 0;
 
     /// Frame layouts.
     pub(super) const FR_LEAF: core::ffi::c_char = 0;
     pub(super) const FR_COL: core::ffi::c_char = 2;
 }
 
-use flag::{DOSO_NONE, VSE_NONE};
+use flag::VSE_NONE;
 
 /// The default file name of each command that has one.
 const SESSION_FILE: &CStr = c"Session.vim";
@@ -346,7 +344,7 @@ pub(crate) fn ex_loadview(excmd: &mut ExArg) {
 fn load_view(c: u8) -> Result<(), ViewError> {
     let fname = get_view_file(c)?;
     // The name is this frame's own, which the view cannot reach.
-    if do_source(fname.as_cstr(), false, DOSO_NONE, None) == FAIL {
+    if do_source(fname.as_cstr()).is_err() {
         return Err(ViewError::CannotOpen(ThinCString::from_cstr(
             fname.as_cstr(),
         )));

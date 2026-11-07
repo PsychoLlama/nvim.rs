@@ -140,10 +140,6 @@ pub const ESTACK_STACK: EStackArg = 2;
 pub const ESTACK_SFILE: EStackArg = 1;
 pub const kRetNilBool: LuaRetMode = 1;
 pub const kRetObject: LuaRetMode = 0;
-/// `gen_expand_wildcards` flags: what a wildcard expansion may return.
-/// `do_source`'s `is_vimrc`: whether the file being sourced is the vimrc.
-pub const DOSO_VIMRC: ::core::ffi::c_int = 1;
-pub const DOSO_NONE: ::core::ffi::c_int = 0;
 crate::flag_set! {
     /// How a runtime-file search should behave -- upstream's `DIP_*`, the
     /// `flags` argument [`do_in_path_visit`] and everything under it thread:

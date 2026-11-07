@@ -19,13 +19,11 @@
 
 use crate::global_cell::GlobalCell;
 use crate::types::{EStackType, ScriptCtx};
-use core::ffi::{c_int, c_uint};
+use core::ffi::c_int;
 
 pub(crate) const ETYPE_ENV: EStackType = 7;
 pub(crate) const ETYPE_ARGS: EStackType = 6;
 pub(crate) const ETYPE_TOP: EStackType = 0;
-pub(crate) const DOSO_VIMRC: c_uint = 1;
-pub(crate) const DOSO_NONE: c_uint = 0;
 pub(crate) const SID_CMDARG: c_int = -2 as c_int;
 pub(crate) const SID_CARG: c_int = -3 as c_int;
 pub(crate) const SID_ENV: c_int = -4 as c_int;

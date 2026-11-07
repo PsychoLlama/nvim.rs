@@ -732,5 +732,5 @@ pub(crate) fn do_spelllang_source(win: Win) {
     let mut fname = [&b"spell/"[..], &rest[..name_len], b".*"].concat();
     fname.truncate(199);
     let fname = XString::from_vec(fname);
-    let _ = source_runtime_vim_lua(fname.as_cstr(), RuntimeOpts::ALL);
+    source_runtime_vim_lua(fname.as_cstr(), RuntimeOpts::ALL);
 }

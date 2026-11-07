@@ -32,7 +32,7 @@ use crate::guard::{Depth, Script, Suppress};
 use crate::memory::XString;
 use crate::optionstr::{OptString, OptStringRef};
 use crate::types::LineNr;
-use crate::types::{Failed, MAXPATHL, OK};
+use crate::types::{Failed, MAXPATHL};
 use crate::winlayer::{Buf, Win, tab_windows};
 
 /// An empty `SaveRedo`; `save_redobuff` fills it in.
@@ -552,7 +552,7 @@ pub fn apply_autocmds_group(
     if let (AutoEvent::BufWipeout, Some(buffer)) = (event, buffer) {
         aubuflocal_remove(buffer);
     }
-    if ::core::ffi::c_int::from(retval) == OK && event == AutoEvent::FileType {
+    if retval && event == AutoEvent::FileType {
         Buf::current().b_au_did_filetype = true;
     }
 
