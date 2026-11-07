@@ -236,7 +236,7 @@ pub fn nvim_win_hide(win: WindowHandle) -> Result<(), Error> {
         } else if same_tab {
             let _ = win_close(w, false, false);
         } else {
-            win_close_othertab(w, 0, tabpage, false);
+            let _ = win_close_othertab(w, false, tabpage, false);
         }
     })
 }

@@ -33,8 +33,8 @@ use crate::drawscreen::state::{redraw_cmdline, redraw_tabline};
 use crate::ex_eval::aborting;
 use crate::global_cell::GlobalCell;
 use crate::guard::Lock;
+use crate::message::e_floatonly;
 use crate::message::internal_error;
-use crate::message::{e_autocmd_close, e_floatonly};
 use crate::normal::reset_visual_and_resel;
 use crate::option::vars::{p_ea, p_ead, p_ru};
 use crate::startup::getout;
@@ -75,7 +75,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> Result<(), NotClos
     let had_diffmode = win.w_onebuf_opt.wo_diff != 0;
 
     if is_last_window(win) {
-        err(e_cannot_close_last_window);
+        err(WinError::LastWindow);
         return Err(NotClosed);
     }
     if !win.w_floating && layout_locked(CmdIdx::close) {
@@ -85,7 +85,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> Result<(), NotClos
         return Err(NotClosed); // window is already being closed
     }
     if is_autocmd_window(Some(win)) {
-        err(e_autocmd_close);
+        err(WinError::AutocmdClose);
         return Err(NotClosed);
     }
     if last_win().w_floating && only_window(win, None) {
@@ -145,7 +145,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> Result<(), NotClos
     if !prev_curtab.is_current() && valid_win_any_tab(win.id()) && win.buffer_or_none().is_none() {
         // The window has to be closed anyway, since the buffer is gone.
         if let Some(prev) = valid_tab(prev_curtab.id()) {
-            close_othertab(win, false, prev, force);
+            let _ = close_othertab(win, false, prev, force);
         }
         return Err(NotClosed);
     }
@@ -300,7 +300,7 @@ fn snapshot_index(help_window: bool) -> c_int {
 /// `Err` when the window may not be closed after all.
 fn close_the_floats(win: Win, force: bool) -> Result<(), NotClosed> {
     if is_autocmd_window(Some(last_win())) {
-        err(c"E814: Cannot close window, only autocmd window would remain");
+        err(WinError::OnlyAutocmdWindow);
         return Err(NotClosed);
     }
     if !force && !can_close_floats(None) {
@@ -320,7 +320,7 @@ fn close_the_floats(win: Win, force: bool) -> Result<(), NotClosed> {
     }
     // Autocommands may have closed all other tab pages; check again.
     if is_last_window(win) {
-        err(e_cannot_close_last_window);
+        err(WinError::LastWindow);
         return Err(NotClosed);
     }
     Ok(())
@@ -451,9 +451,13 @@ fn tabclosedpre(tabpage: TabPage) {
     goto_tab(back, false, false);
 }
 
-pub fn win_close_othertab(win: Win, free_buf: c_int, tabpage: TabPage, force: bool) -> bool {
-    let (win, tp) = (win, tabpage);
-    close_othertab(win, free_buf != 0, tp, force)
+pub(crate) fn win_close_othertab(
+    win: Win,
+    free_buf: bool,
+    tabpage: TabPage,
+    force: bool,
+) -> Result<(), NotClosed> {
+    close_othertab(win, free_buf, tabpage, force)
 }
 
 /// Close window `win` in tab page `tabpage`, which is not the current one.
@@ -462,9 +466,14 @@ pub fn win_close_othertab(win: Win, free_buf: c_int, tabpage: TabPage, force: bo
 /// which makes `tabpage` invalid. The caller must check whether the buffer is
 /// hidden and whether the tabline needs updating.
 ///
-/// `false` when the window was not closed as a direct result of this call
-/// (through autocommands, say).
-pub(crate) fn close_othertab(win: Win, free_buf: bool, tabpage: TabPage, force: bool) -> bool {
+/// [`NotClosed`] when the window was not closed as a direct result of this
+/// call (through autocommands, say).
+pub(crate) fn close_othertab(
+    win: Win,
+    free_buf: bool,
+    tabpage: TabPage,
+    force: bool,
+) -> Result<(), NotClosed> {
     debug_assert!(!tabpage.is_current(), "tp != curtab");
     let mut did_decrement = false;
     let mut bufref = BufRef::of_opt(None);
@@ -472,16 +481,16 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tabpage: TabPage, force: 
     // Commands that may call this already check the lock, but check again just
     // in case.
     if layout_locked(CmdIdx::SIZE) {
-        return false;
+        return Err(NotClosed);
     }
     // Get here with `win->w_buffer == NULL` when `close()` detects that the tab
     // page changed.
     if win.w_locked || win.buffer_or_none().is_some_and(|buf| buf.b_locked > 0) {
-        return false; // window is already being closed
+        return Err(NotClosed); // window is already being closed
     }
     if is_autocmd_window(Some(win)) {
-        err(e_autocmd_close);
-        return false;
+        err(WinError::AutocmdClose);
+        return Err(NotClosed);
     }
 
     'leave_open: {
@@ -495,13 +504,13 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tabpage: TabPage, force: 
             // The `force` flag is not actually used for a floating window.
             while tab_last_win(tabpage).w_floating {
                 let last = tab_last_win(tabpage);
-                if !close_othertab(last, !hides(last.buffer()), tabpage, true) {
+                if close_othertab(last, !hides(last.buffer()), tabpage, true).is_err() {
                     // Give up rather than loop forever.
                     break 'leave_open;
                 }
             }
             if !valid_win_any_tab(win.id()) {
-                return false; // already closed by autocommands
+                return Err(NotClosed); // already closed by autocommands
             }
         }
 
@@ -512,14 +521,14 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tabpage: TabPage, force: 
             fire_winclosed(win);
             // The autocommand may have freed the window already.
             if !valid_win_any_tab(win.id()) {
-                return false;
+                return Err(NotClosed);
             }
         }
         if tabpage.tp_firstwin == tabpage.tp_lastwin && !tabpage.tp_did_tabclosedpre {
             tabclosedpre(tabpage);
             // The autocommand may have freed the window already.
             if !valid_win_any_tab(win.id()) {
-                return false;
+                return Err(NotClosed);
             }
         }
 
@@ -557,7 +566,7 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tabpage: TabPage, force: 
             } else {
                 let Some(mut ptp) = tabs().find(|ptp| ptp.tp_next == Some(tabpage.id())) else {
                     internal_error(c"win_close_othertab()");
-                    return false;
+                    return Err(NotClosed);
                 };
                 ptp.tp_next = tabpage.tp_next;
             }
@@ -593,13 +602,13 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tabpage: TabPage, force: 
                 fire_named(AutoEvent::TabClosed, Some(&prev_idx), Some(buf));
             }
         }
-        return true;
+        return Ok(());
     }
 
     if let Some(win) = valid_win_any_tab(win.id()).then_some(win) {
         unclose_win_buffer(win, bufref, did_decrement);
     }
-    false
+    Err(NotClosed)
 }
 
 /// The last window of `tabpage`, floats included. `tabpage` is never the current tab

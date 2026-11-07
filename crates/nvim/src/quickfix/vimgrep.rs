@@ -502,7 +502,7 @@ fn jump_to_match(qi: Qi, forceit: bool, out: &mut Outcome) {
 /// `:vimgrep`, `:lvimgrep`, `:vimgrepadd`, `:lvimgrepadd`, and `:grep` and
 /// friends when `'grepprg'` is `internal`.
 pub fn ex_vimgrep(excmd: &mut ExArg) {
-    if !check_can_set_curbuf_forceit(c_int::from(excmd.forceit)) {
+    if check_can_set_curbuf_forceit(excmd.forceit).is_err() {
         return;
     }
 

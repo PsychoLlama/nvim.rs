@@ -52,7 +52,7 @@ use crate::getchar::{plain_vgetc, typeahead};
 use crate::guard::Keys;
 use crate::mapping::langmap_adjust_mb;
 use crate::memory::XString;
-use crate::message::{e_buffer_nr_not_found, e_cmdwin, e_noalt};
+use crate::message::e_buffer_nr_not_found;
 use crate::message_fmt::emsg_text;
 use crate::normal::{
     add_to_showcmd, check_text_or_curbuf_locked, do_nv_ident, reset_visual_and_resel,
@@ -130,7 +130,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
     let in_cmdwin = || {
         let locked = cmdwin_type.get() != 0;
         if locked {
-            err(e_cmdwin);
+            err(WinError::CmdWin);
         }
         locked
     };
@@ -187,7 +187,9 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
         }
         // cursor to the preview window
         Err(NotAKey(PREVIEW)) => match windows().find(|wp| wp.w_onebuf_opt.wo_pvw != 0) {
-            None => err(c"E441: There is no preview window"),
+            None => {
+                err(WinError::NoPreviewWindow);
+            }
             Some(wp) => goto_win(wp),
         },
         // close all but the current window
@@ -370,7 +372,7 @@ fn split_alternate(prenum: c_int) {
     };
     if find_buffer(fnum).is_none() {
         if prenum == 0 {
-            err(e_noalt);
+            err(WinError::NoAlternate);
         } else {
             err_number(e_buffer_nr_not_found, prenum);
         }
@@ -484,7 +486,7 @@ fn move_to_new_tabpage(prenum: c_int) {
     }
     let oldtab = TabPage::current().id();
     let wp = Win::current().id();
-    if new_tabpage(prenum, None, true).is_none() {
+    if new_tabpage(prenum, None, true).is_err() {
         return;
     }
     let Some(oldtab) = valid_tab(oldtab) else {

@@ -149,7 +149,7 @@ pub fn nvim_open_tabpage(
 
     let mut wp: Option<Win> = None;
     let tp = api_try(|| win_new_tabpage(after + 1, None, enter, Some(&mut wp)))?;
-    let Some(tp) = tp else {
+    let Ok(tp) = tp else {
         return Err(Error::exception(c"Failed to create new tabpage"));
     };
     // `win_new_tabpage` fires `TabNew`, which can close what it just opened,

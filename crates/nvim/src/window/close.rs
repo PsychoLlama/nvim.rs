@@ -168,7 +168,7 @@ fn close_all(buffer: Buf, keep_curwin: bool) {
                         if layout_locked(CmdIdx::SIZE) {
                             break 'theend; // Only give one error message.
                         }
-                        if !close_othertab(wp, false, tp, false) {
+                        if close_othertab(wp, false, tp, false).is_err() {
                             // Give up rather than loop forever — on every tab
                             // page: `nexttp` was taken before the autocommands
                             // ran and may be gone.
@@ -298,7 +298,7 @@ pub(crate) fn close_last_tabpage_window(win: Win, free_buf: bool, prev_curtab: T
         valid_tab(prev_curtab.id()).filter(|_| TabPage::current_raw() != prev_curtab.raw())
         && prev.tp_firstwin == Some(win.id())
     {
-        close_othertab(win, free_buf, prev, false);
+        let _ = close_othertab(win, free_buf, prev, false);
     }
     enter_window(Win::current());
 
@@ -437,7 +437,7 @@ fn close_all_others(message: bool, forceit: bool) {
     }
 
     if message && firstwin.get() != lastwin.get() {
-        err(c"E445: Other window contains changes");
+        err(WinError::OtherWindowChanged);
     }
 }
 

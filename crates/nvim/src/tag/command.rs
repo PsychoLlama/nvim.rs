@@ -92,7 +92,7 @@ pub(crate) fn do_tag(tag: &CStr, kind: TagCmd, count: c_int, forceit: c_int, ver
         tag_emsg(c"E986: Cannot modify the tag stack within tagfunc");
         return;
     }
-    if postponed_split.get() == 0 && !check_can_set_curbuf_forceit(forceit) {
+    if postponed_split.get() == 0 && check_can_set_curbuf_forceit(forceit != 0).is_err() {
         return;
     }
 

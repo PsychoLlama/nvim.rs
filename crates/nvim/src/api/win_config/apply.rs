@@ -332,7 +332,7 @@ impl Relayout {
             0,
             self.unflat_altfr.and_then(FrameId::get),
         )
-        .is_some();
+        .is_ok();
         if !split_ok {
             win_append(
                 self.win.prev(),

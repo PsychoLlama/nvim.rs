@@ -206,7 +206,7 @@ pub(crate) fn ex_recover(excmd: &mut ExArg) {
 
 /// `:find` — edit the first file of that name on 'path', or the `count`'th.
 pub(crate) fn ex_find(excmd: &mut ExArg) {
-    if !check_can_set_curbuf_forceit(c_int::from(excmd.forceit)) {
+    if check_can_set_curbuf_forceit(excmd.forceit).is_err() {
         return;
     }
     let count = if excmd.addr_count > 0 {
@@ -240,7 +240,7 @@ pub(crate) fn ex_edit(excmd: &mut ExArg) {
     if excmd.cmdidx != CmdIdx::badd
         && excmd.cmdidx != CmdIdx::balt
         && is_other_file(0, ffname)
-        && !check_can_set_curbuf_forceit(c_int::from(excmd.forceit))
+        && check_can_set_curbuf_forceit(excmd.forceit).is_err()
     {
         return;
     }

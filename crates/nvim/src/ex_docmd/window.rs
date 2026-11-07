@@ -239,7 +239,7 @@ fn open_tabpage(excmd: &mut ExArg, old_curwin: Win) {
     } else {
         excmd.line2.get() + 1
     };
-    if new_tabpage(after, Some(excmd.line.cstr_from(excmd.line.arg)), true).is_none() {
+    if new_tabpage(after, Some(excmd.line.cstr_from(excmd.line.arg)), true).is_err() {
         return;
     }
     edit(excmd, Some(old_curwin));

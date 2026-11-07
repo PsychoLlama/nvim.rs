@@ -344,7 +344,7 @@ pub(crate) fn ex_win_close(forceit: c_int, win: Win, tabpage: Option<TabPage>) {
             let _ = win_close(w, hide, forceit != 0);
         }
         Some(tp) => {
-            win_close_othertab(win, c_int::from(hide), tp, forceit != 0);
+            let _ = win_close_othertab(win, hide, tp, forceit != 0);
         }
     }
 }

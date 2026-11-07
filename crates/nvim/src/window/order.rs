@@ -188,7 +188,7 @@ pub(crate) fn rotate(upwards: bool, count: c_int) {
         .expect("not the only window");
     // Check that all frames in this row or column are leaves.
     if parent.children().any(|frp| frp.win().is_none()) {
-        err(c"E443: Cannot rotate when another window is split");
+        err(WinError::RotateSplit);
         return;
     }
 
@@ -279,7 +279,7 @@ pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Fa
     // held: `win_split_ins` flattens it on the way through, so the frame the
     // failure path wants back may be gone by the time it looks.
     let unflat = unflat_altfr.and_then(FrameId::get);
-    if win_split_ins(size, flags, Some(window), dir, unflat).is_none() {
+    if win_split_ins(size, flags, Some(window), dir, unflat).is_err() {
         // Restore the window to its original position.
         if !window.w_floating
             && let Some(unflat) = unflat_altfr.and_then(FrameId::get)

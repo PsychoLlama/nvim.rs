@@ -704,7 +704,7 @@ pub fn getfile(
     lnum: LineNr,
     forceit: bool,
 ) -> c_int {
-    if !check_can_set_curbuf_forceit(c_int::from(forceit)) {
+    if check_can_set_curbuf_forceit(forceit).is_err() {
         return GETFILE_ERROR;
     }
     if text_locked() || curbuf_locked() {

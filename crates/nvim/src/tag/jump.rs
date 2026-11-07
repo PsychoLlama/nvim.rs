@@ -260,7 +260,7 @@ pub(crate) fn jumpto_tag(
     forceit: c_int,
     keep_help: bool,
 ) -> Result<Jumped, Failed> {
-    if postponed_split.get() == 0 && !check_can_set_curbuf_forceit(forceit) {
+    if postponed_split.get() == 0 && check_can_set_curbuf_forceit(forceit != 0).is_err() {
         return Err(Failed);
     }
 

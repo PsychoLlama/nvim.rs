@@ -469,9 +469,7 @@ pub(crate) fn qf_jump_newwin(qi: Qi, dir: c_int, errornr: c_int, forceit: bool, 
 /// Jump to the first entry of the list with the given id, after making that
 /// list current again.
 pub(crate) fn qf_jump_first(qi: Qi, save_qfid: c_uint, forceit: bool) {
-    if qf_restore_list(qi, save_qfid).is_err()
-        || !check_can_set_curbuf_forceit(c_int::from(forceit))
-    {
+    if qf_restore_list(qi, save_qfid).is_err() || check_can_set_curbuf_forceit(forceit).is_err() {
         return;
     }
     // Autocommands may have cleared the list.

@@ -39,7 +39,6 @@ use crate::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::ex_docmd::state::cmdmod;
 use crate::ex_getln::{text_locked, text_locked_msg};
 use crate::global_cell::GlobalCell;
-use crate::message::e_cmdwin;
 use crate::message::set_keep_msg;
 use crate::mouse::reset_dragwin;
 use crate::normal::reset_visual_and_resel;
@@ -158,17 +157,37 @@ pub(crate) fn free_tab(tabpage: TabPage) {
     drop(owned);
 }
 
-pub fn win_new_tabpage(
+/// An autocommand made another tab page current while the current one was
+/// being left, so it was not left. Nothing is said.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Abandoned;
+
+/// Why [`new_tabpage`] opened no tab page.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum NoTabPage {
+    /// Refused out loud: the command-line window, or a locked layout.
+    Refused(Failed),
+    /// See [`Abandoned`]: nothing is said.
+    Abandoned,
+}
+
+impl From<WinError> for NoTabPage {
+    fn from(refusal: WinError) -> Self {
+        Self::Refused(refusal.into())
+    }
+}
+
+pub(crate) fn win_new_tabpage(
     after: c_int,
     filename: Option<&CStr>,
     enter: bool,
     first: Option<&mut Option<Win>>,
-) -> Option<TabPage> {
+) -> Result<TabPage, NoTabPage> {
     let (newtp, opened) = new_tabpage(after, filename, enter)?;
     if let Some(first) = first {
         *first = Some(opened);
     }
-    Some(newtp)
+    Ok(newtp)
 }
 
 /// Create a tab page with one window in it, showing the current buffer as
@@ -184,14 +203,13 @@ pub(crate) fn new_tabpage(
     after: c_int,
     filename: Option<&CStr>,
     enter: bool,
-) -> Option<(TabPage, Win)> {
+) -> Result<(TabPage, Win), NoTabPage> {
     let old_curtab = TabPage::current();
     if enter && cmdwin_type.get() != 0 {
-        err(e_cmdwin);
-        return None;
+        return Err(err(WinError::CmdWin).into());
     }
     if layout_locked(CmdIdx::tabnew) {
-        return None;
+        return Err(NoTabPage::Refused(Failed));
     }
     let mut newtp = alloc_tabpage();
 
@@ -202,7 +220,7 @@ pub(crate) fn new_tabpage(
             // Through the registry, which holds it: upstream's `xfree` of
             // the bare block.
             free_tab(newtp);
-            return None;
+            return Err(NoTabPage::Abandoned);
         }
     } else {
         let mut cur = TabPage::current();
@@ -277,7 +295,7 @@ pub(crate) fn new_tabpage(
             fire_named(AutoEvent::TabNew, name, Some(Buf::current()));
         });
     }
-    Some((newtp, opened))
+    Ok((newtp, opened))
 }
 
 /// Run `body` with `tabpage`'s current window as the current one, and switch back
@@ -304,26 +322,23 @@ fn rows_avail() -> int64_t {
 }
 
 /// Open a new tab page if `:tab cmd` was used. It edits the same buffer, as
-/// with `:split`. `Ok` when a tab page was created.
-pub(crate) fn may_open_tabpage() -> Result<(), Failed> {
+/// with `:split`. `None` when no `:tab` asked for one; otherwise whether it
+/// was created.
+pub(crate) fn may_open_tabpage() -> Option<Result<(), NoTabPage>> {
     let n = match cmdmod.with(|m| m.cmod_tab) {
         0 => postponed_split_tab.get(),
         tab => tab,
     };
     if n == 0 {
-        return Err(Failed);
+        return None;
     }
     cmdmod.with_mut(|m| m.cmod_tab = 0);
     postponed_split_tab.set(0);
-    let status = if new_tabpage(n, None, true).is_some() {
-        Ok(())
-    } else {
-        Err(Failed)
-    };
+    let status = new_tabpage(n, None, true).map(drop);
     if status.is_ok() {
         fire(AutoEvent::TabNewEntered, Buf::current());
     }
-    status
+    Some(status)
 }
 
 pub fn make_tabpages(maxcount: c_int) -> c_int {
@@ -334,7 +349,7 @@ pub fn make_tabpages(maxcount: c_int) -> c_int {
     block_autocmds();
     let mut todo = count - 1;
     while todo > 0 {
-        if new_tabpage(0, None, true).is_none() {
+        if new_tabpage(0, None, true).is_err() {
             break;
         }
         todo -= 1;
@@ -421,9 +436,10 @@ pub(crate) fn tab_index(tabpage: TabPage) -> c_int {
 /// Prepare for leaving the current tab page, `new_curbuf` being what is going
 /// to be the new `curbuf` (`None` when that is not known yet).
 ///
-/// `Err` when autocommands changed `curtab`, in which case the tab page is
-/// not left. Careful: after `Ok` a new tab page must be entered very soon.
-fn leave_tab(new_curbuf: Option<Buf>, trigger_leave_autocmds: bool) -> Result<(), Failed> {
+/// [`Abandoned`] when autocommands changed `curtab`, in which case the tab
+/// page is not left. Careful: after `Ok` a new tab page must be entered very
+/// soon.
+fn leave_tab(new_curbuf: Option<Buf>, trigger_leave_autocmds: bool) -> Result<(), Abandoned> {
     let mut tp = TabPage::current();
     leave_window(Win::current());
     reset_visual_and_resel(); // stop Visual mode
@@ -431,16 +447,16 @@ fn leave_tab(new_curbuf: Option<Buf>, trigger_leave_autocmds: bool) -> Result<()
         if new_curbuf != Buf::current_or_none() {
             fire(AutoEvent::BufLeave, Buf::current());
             if !tp.is_current() {
-                return Err(Failed);
+                return Err(Abandoned);
             }
         }
         fire(AutoEvent::WinLeave, Buf::current());
         if !tp.is_current() {
-            return Err(Failed);
+            return Err(Abandoned);
         }
         fire(AutoEvent::TabLeave, Buf::current());
         if !tp.is_current() {
-            return Err(Failed);
+            return Err(Abandoned);
         }
     }
     reset_dragwin();
@@ -650,7 +666,7 @@ pub(crate) fn goto_tab(
     trigger_leave_autocmds: bool,
 ) {
     if (trigger_enter_autocmds || trigger_leave_autocmds) && cmdwin_type.get() != 0 {
-        err(e_cmdwin);
+        err(WinError::CmdWin);
         return;
     }
     // Don't repeat a message in another tab page.

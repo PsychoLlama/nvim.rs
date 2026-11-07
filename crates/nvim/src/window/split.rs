@@ -31,7 +31,6 @@ use crate::drawscreen::{UPD_NOT_VALID, comp_col, status_redraw_all};
 use crate::ex_docmd::state::cmdmod;
 use crate::fold::copy_folding_state;
 use crate::mark::copy_jumplist;
-use crate::message::e_noroom;
 use crate::message::msg_clr_eos_force;
 use crate::message::state::{msg_col, msg_row};
 use crate::r#move::WinValid;
@@ -57,14 +56,13 @@ pub(crate) fn split(size: c_int, flags: c_int) -> Result<(), Failed> {
     let cur = Win::current();
     check_split_disallowed(cur)?;
     // When the ":tab" modifier was used, open a new tab page instead.
-    if may_open_tabpage().is_ok() {
+    if let Some(Ok(())) = may_open_tabpage() {
         return Ok(());
     }
     // Add flags from ":vertical", ":topleft" and ":botright".
     let flags = flags | cmdmod.with(|m| m.cmod_split);
     if flags & WSP_TOP != 0 && flags & WSP_BOT != 0 {
-        err(c"E442: Can't split topleft and botright at the same time");
-        return Err(Failed);
+        return Err(err(WinError::TopAndBottom).into());
     }
     // When creating the help window make a snapshot of the window layout;
     // otherwise clear the snapshot, it is now invalid.
@@ -75,21 +73,37 @@ pub(crate) fn split(size: c_int, flags: c_int) -> Result<(), Failed> {
             drop_snapshot(TabPage::current(), idx);
         }
     }
-    if split_ins(size, flags, None, 0, None).is_some() {
-        Ok(())
-    } else {
-        Err(Failed)
+    match split_ins(size, flags, None, 0, None) {
+        Ok(_) => Ok(()),
+        Err(NotSplit::Refused(refusal)) => Err(refusal.into()),
+        Err(NotSplit::AutocmdWindow) => unreachable!("only a window given to insert is refused"),
     }
 }
 
-pub fn win_split_ins(
+pub(crate) fn win_split_ins(
     size: c_int,
     flags: c_int,
     new_wp: Option<Win>,
     dir: u8,
     to_flatten: Option<FrameRef>,
-) -> Option<Win> {
+) -> Result<Win, NotSplit> {
     split_ins(size, flags, new_wp, dir, to_flatten)
+}
+
+/// Why [`win_split_ins`] made or moved no window.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum NotSplit {
+    /// The window to insert is an autocommand window, which stays floating.
+    /// Nothing is said.
+    AutocmdWindow,
+    /// The layout refused, and said so.
+    Refused(WinError),
+}
+
+impl From<WinError> for NotSplit {
+    fn from(refusal: WinError) -> Self {
+        Self::Refused(refusal)
+    }
 }
 
 /// The room a split needs and the size it will take, from the first half of
@@ -109,7 +123,7 @@ struct Room {
 /// Split `oldwin`, or insert `new_wp` at the far top/left/right/bottom when it
 /// is given, and answer the new window.
 ///
-/// On failure nothing has moved, and when `new_wp` was given the layout and
+/// On a refusal nothing has moved, and when `new_wp` was given the layout and
 /// the sizes are exactly as they were. `to_flatten` is flattened just before
 /// the frames are reorganised, so a failure leaves it unflattened.
 fn split_ins(
@@ -118,10 +132,10 @@ fn split_ins(
     new_wp: Option<Win>,
     dir: u8,
     to_flatten: Option<FrameRef>,
-) -> Option<Win> {
+) -> Result<Win, NotSplit> {
     // `aucmd_win[]` should always remain floating.
     if new_wp.is_some() && is_autocmd_window(new_wp) {
-        return None;
+        return Err(NotSplit::AutocmdWindow);
     }
     if new_wp.is_none() {
         trigger_winnewpre();
@@ -148,8 +162,7 @@ fn split_ins(
     let first = first_win();
     if is_only_window(first, None) && p_ls() == 1 as OptInt && oldwin.w_status_height == 0 {
         if OptInt::from(oldwin.w_height) <= p_wmh() {
-            err(e_noroom);
-            return None;
+            return Err(err(WinError::NoRoom).into());
         }
         need_status = STATUS_HEIGHT;
         win_float_anchor_laststatus();
@@ -161,7 +174,7 @@ fn split_ins(
         split_room_horizontal(size, flags, &mut oldwin, toplevel, need_status)?
     };
 
-    let wp = insert_window(flags, new_wp, oldwin, vertical)?;
+    let wp = insert_window(flags, new_wp, oldwin, vertical);
     if let Some(to_flatten) = to_flatten {
         flatten(to_flatten);
     }
@@ -247,12 +260,17 @@ fn split_ins(
     if win_valid(oldwin_id) {
         oldwin.w_pos_changed = true;
     }
-    Some(wp)
+    Ok(wp)
 }
 
-/// The width the new window gets from a `:vsplit`, or `None` when the layout
+/// The width the new window gets from a `:vsplit`, or E36 when the layout
 /// has no room for one.
-fn split_room_vertical(size: c_int, flags: c_int, oldwin: Win, toplevel: bool) -> Option<Room> {
+fn split_room_vertical(
+    size: c_int,
+    flags: c_int,
+    oldwin: Win,
+    toplevel: bool,
+) -> Result<Room, WinError> {
     // The current window requires at least one column.
     let wmw1 = if p_wmw() == 0 as OptInt {
         1
@@ -278,8 +296,7 @@ fn split_room_vertical(size: c_int, flags: c_int, oldwin: Win, toplevel: bool) -
     };
     needed += minwidth;
     if available < needed {
-        err(e_noroom);
-        return None;
+        return Err(err(WinError::NoRoom));
     }
 
     let mut new_size = size;
@@ -304,7 +321,7 @@ fn split_room_vertical(size: c_int, flags: c_int, oldwin: Win, toplevel: bool) -
             w.w_width > new_size || w.w_width > oldwin.w_width - new_size - 1
         });
     }
-    Some(Room {
+    Ok(Room {
         new_size,
         do_equal,
         oldwin_height: 0,
@@ -320,7 +337,7 @@ fn split_room_horizontal(
     oldwin: &mut Win,
     toplevel: bool,
     need_status: c_int,
-) -> Option<Room> {
+) -> Result<Room, WinError> {
     // The current window requires at least one line plus its window bar.
     let wmh1 = number_as_int(p_wmh()).max(1) + oldwin.w_winbar_height;
     let mut needed = wmh1 + STATUS_HEIGHT;
@@ -349,8 +366,7 @@ fn split_room_horizontal(
     };
     needed += minheight;
     if available < needed {
-        err(e_noroom);
-        return None;
+        return Err(err(WinError::NoRoom));
     }
 
     let mut oldwin_height = oldwin.w_height;
@@ -388,7 +404,7 @@ fn split_room_horizontal(
             w.w_height > new_size || w.w_height > oldwin_height - new_size - STATUS_HEIGHT
         });
     }
-    Some(Room {
+    Ok(Room {
         new_size,
         do_equal,
         oldwin_height,
@@ -450,7 +466,7 @@ fn siblings_minheight(frame: FrameRef) -> c_int {
 
 /// Put the new window on the window list beside `oldwin`, allocating one when
 /// the caller did not bring its own, and give it a frame.
-fn insert_window(flags: c_int, new_wp: Option<Win>, oldwin: Win, _vertical: bool) -> Option<Win> {
+fn insert_window(flags: c_int, new_wp: Option<Win>, oldwin: Win, _vertical: bool) -> Win {
     let below = flags & WSP_TOP == 0
         && (flags & WSP_BOT != 0
             || flags & WSP_BELOW != 0
@@ -461,11 +477,11 @@ fn insert_window(flags: c_int, new_wp: Option<Win>, oldwin: Win, _vertical: bool
         attach_frame(wp);
         // Make the contents of the new window the same as the current one.
         win_init(wp, Win::current(), flags);
-        return Some(wp);
+        return wp;
     };
     win_append(after, wp, None);
     if !wp.w_floating {
-        return Some(wp);
+        return wp;
     }
     // A float becoming an ordinary window gives up its own grid.
     ui_comp_remove_grid(wp.grid_alloc());
@@ -490,7 +506,7 @@ fn insert_window(flags: c_int, new_wp: Option<Win>, oldwin: Win, _vertical: bool
     // A non-floating window doesn't store a float config or have a border.
     clear_float_config(&mut wp.w_config, true);
     wp.w_border_adj = [0; 4];
-    Some(wp)
+    wp
 }
 
 /// Whether the new window goes below (or right of) the old one by default.

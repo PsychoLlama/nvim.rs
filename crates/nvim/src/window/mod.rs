@@ -63,14 +63,15 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_getln::is_in_cmdwin;
 use crate::getchar::beep_flush;
 use crate::global_cell::GlobalCell;
+use crate::message::{e_autocmd_close, e_cmdwin, e_noalt, e_noroom, emsg, msg};
 use crate::message::{
     e_not_allowed_to_change_window_layout_in_this_autocmd, e_winfixbuf_cannot_go_to_buffer,
 };
-use crate::message::{emsg, msg};
 use crate::option::vars::swb_flags;
 use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
 use crate::os::cshim::gettext;
 use crate::terminal::buf_terminal_check_size;
+use crate::types::Failed;
 use crate::types::{
     CdCause, Direction, DoBufStart, Error, Handle, MotionType, OptInt, Window, kErrorTypeException,
 };
@@ -221,22 +222,24 @@ fn locked_err(cmd: CmdIdx) -> Result<(), Error> {
     Err(make_err(msg))
 }
 
-pub fn check_can_set_curbuf_disabled() -> bool {
+/// Whether the current window may show another buffer: its 'winfixbuf'
+/// refuses, out loud.
+pub(crate) fn check_can_set_curbuf_disabled() -> Result<(), WinError> {
     winfixbuf_allows()
 }
 
-pub fn check_can_set_curbuf_forceit(forceit: ::core::ffi::c_int) -> bool {
-    forceit != 0 || winfixbuf_allows()
+/// [`check_can_set_curbuf_disabled`], which a `!` overrides.
+pub(crate) fn check_can_set_curbuf_forceit(forceit: bool) -> Result<(), WinError> {
+    if forceit { Ok(()) } else { winfixbuf_allows() }
 }
 
 /// Whether the current window's `'winfixbuf'` lets another buffer in, saying
 /// so if it does not.
-fn winfixbuf_allows() -> bool {
+fn winfixbuf_allows() -> Result<(), WinError> {
     if Win::current().w_onebuf_opt.wo_wfb != 0 {
-        err(e_winfixbuf_cannot_go_to_buffer);
-        return false;
+        return Err(err(WinError::WinFixBuf));
     }
-    true
+    Ok(())
 }
 
 pub(crate) fn prevwin_curwin() -> Win {
@@ -334,9 +337,80 @@ pub(crate) fn valid_win(win: WinId) -> Option<Win> {
 // the module every child can see through `use super::*`, costs one unchecked
 // line per neighbour rather than one per call site.
 
-/// `emsg(_(msg))`, the family's only way of reporting a failure.
-fn err(msg: &'static ::core::ffi::CStr) {
-    emsg(gettext(msg));
+/// A refusal the window family has said, at the point it found it.
+///
+/// Every variant is reported once, by [`err`], where the refusal is found --
+/// `emsg` sets `v:errmsg` and raises what `:try` catches there -- so a caller
+/// holding one only decides whether to go on, and may turn it into a
+/// [`Failed`]. The refusals that say nothing are not here: they are their
+/// own answers ([`NotSplit::AutocmdWindow`], most of [`NotClosed`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum WinError {
+    /// E36: the layout has no line or column to give.
+    NoRoom,
+    /// E1513: the current window's 'winfixbuf' keeps another buffer out.
+    WinFixBuf,
+    /// E813: an autocommand window may not be closed.
+    AutocmdClose,
+    /// E814: closing would leave only the autocommand window.
+    OnlyAutocmdWindow,
+    /// E444: the last window may not be closed.
+    LastWindow,
+    /// E11: not in the command-line window.
+    CmdWin,
+    /// E23: there is no alternate file to split.
+    NoAlternate,
+    /// E441: there is no preview window.
+    NoPreviewWindow,
+    /// E442: `:topleft` and `:botright` together.
+    TopAndBottom,
+    /// E443: a window to rotate past is split the other way.
+    RotateSplit,
+    /// E445: another window holds changes.
+    OtherWindowChanged,
+}
+
+impl WinError {
+    /// The message, untranslated.
+    fn msgid(self) -> &'static ::core::ffi::CStr {
+        match self {
+            Self::NoRoom => e_noroom,
+            Self::WinFixBuf => e_winfixbuf_cannot_go_to_buffer,
+            Self::AutocmdClose => e_autocmd_close,
+            Self::OnlyAutocmdWindow => {
+                c"E814: Cannot close window, only autocmd window would remain"
+            }
+            Self::LastWindow => e_cannot_close_last_window,
+            Self::CmdWin => e_cmdwin,
+            Self::NoAlternate => e_noalt,
+            Self::NoPreviewWindow => c"E441: There is no preview window",
+            Self::TopAndBottom => c"E442: Can't split topleft and botright at the same time",
+            Self::RotateSplit => c"E443: Cannot rotate when another window is split",
+            Self::OtherWindowChanged => c"E445: Other window contains changes",
+        }
+    }
+}
+
+impl core::fmt::Display for WinError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(&self.msgid().to_string_lossy())
+    }
+}
+
+impl core::error::Error for WinError {}
+
+/// The message is out: what is left for a caller outside the family.
+impl From<WinError> for Failed {
+    fn from(_: WinError) -> Self {
+        Self
+    }
+}
+
+/// Say `refusal` -- `emsg(_(msg))`, the family's only way of reporting one
+/// -- and answer it.
+fn err(refusal: WinError) -> WinError {
+    emsg(gettext(refusal.msgid()));
+    refusal
 }
 
 /// Mark every window on the screen for redrawing at `redraw_type`.

@@ -113,9 +113,6 @@ fn split_window() -> Result<(), Failed> {
 fn window_showing(buffer: Buf) -> bool {
     !swbuf_goto_win_with_buf(Some(buffer)).is_none()
 }
-fn may_change_buffer(forceit: bool) -> bool {
-    check_can_set_curbuf_forceit(c_int::from(forceit))
-}
 fn forget_jumps(win: Win, fnum: c_int) {
     mark_jumplist_forget_file(win, Handle::from_number(fnum));
 }
@@ -452,7 +449,10 @@ fn do_buffer_ext(
         return Err(Failed);
     };
 
-    if action == DOBUF_GOTO && buf.raw() != Buf::current_raw() && !may_change_buffer(forceit) {
+    if action == DOBUF_GOTO
+        && buf.raw() != Buf::current_raw()
+        && check_can_set_curbuf_forceit(forceit).is_err()
+    {
         // disallow navigating to another buffer when 'winfixbuf' is applied
         return Err(Failed);
     }

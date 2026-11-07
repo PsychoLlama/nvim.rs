@@ -28,7 +28,6 @@ use super::arith::NextCurwin;
 use super::*;
 use crate::drawscreen::state::{cmdline_row, redraw_cmdline};
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID, showmode};
-use crate::message::e_noroom;
 use crate::option::vars::{P_WMH, P_WMW, p_ch, p_wmh, p_wmw};
 use crate::types::{OptError, OptInt, OptSet, kFloatRelativeWindow};
 use crate::ui::state::{Columns, Rows};
@@ -398,7 +397,7 @@ pub fn did_set_winminheight(_args: &mut OptSet) -> Result<(), OptError> {
         }
         P_WMH.set(p_wmh() - 1);
         if first {
-            err(e_noroom);
+            err(WinError::NoRoom);
             first = false;
         }
     }
@@ -413,7 +412,7 @@ pub fn did_set_winminwidth(_args: &mut OptSet) -> Result<(), OptError> {
         }
         P_WMW.set(p_wmw() - 1);
         if first {
-            err(e_noroom);
+            err(WinError::NoRoom);
             first = false;
         }
     }

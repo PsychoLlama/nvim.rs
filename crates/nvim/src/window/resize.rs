@@ -33,7 +33,6 @@ use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, comp_col};
 use crate::edit::{cursor_down_inner, cursor_up_inner};
 use crate::grid::{default_gridview, grid_clear};
 use crate::mark::setmark;
-use crate::message::e_noroom;
 use crate::message::state::{msg_row, msg_scrolled};
 use crate::message::{msg_grid_validate, msg_grid_view};
 use crate::r#move::{
@@ -469,7 +468,7 @@ pub fn command_height() {
 
     while p_ch() > OptInt::from(old_p_ch) && command_frame_height.get() {
         let Some(fr) = frp else {
-            err(e_noroom);
+            err(WinError::NoRoom);
             P_CH.set(OptInt::from(old_p_ch));
             break;
         };
@@ -572,11 +571,10 @@ fn resizable_frame(fr: FrameRef) -> Option<FrameRef> {
 }
 
 /// Make room for the status line `fr`'s window has just been given.
-fn resize_frame_for_status(fr: FrameRef) -> bool {
+fn resize_frame_for_status(fr: FrameRef) -> Result<(), WinError> {
     let wp = fr.win().expect("a leaf frame holds a window");
     let Some(fp) = resizable_frame(fr) else {
-        err(e_noroom);
-        return false;
+        return Err(err(WinError::NoRoom));
     };
     if fp != fr {
         new_height(fp, fp.fr_height - 1, false, false, false);
@@ -585,22 +583,21 @@ fn resize_frame_for_status(fr: FrameRef) -> bool {
     } else {
         new_win_height(wp, wp.w_height - 1);
     }
-    true
+    Ok(())
 }
 
 /// Make room for the window bar `fr`'s window has just been given, which --
 /// unlike a status line -- cannot come out of the window's own text.
-fn resize_frame_for_winbar(fr: FrameRef) -> bool {
+fn resize_frame_for_winbar(fr: FrameRef) -> Result<(), WinError> {
     let wp = fr.win().expect("a leaf frame holds a window");
     let Some(fp) = resizable_frame(fr).filter(|fp| *fp != fr) else {
-        err(e_noroom);
-        return false;
+        return Err(err(WinError::NoRoom));
     };
     new_height(fp, fp.fr_height - 1, false, false, false);
     new_win_height(wp, wp.w_height + 1);
     frame_fix_height(wp);
     comp_positions();
-    true
+    Ok(())
 }
 
 /// Add or remove the status lines `'laststatus'` asks for, over every window in
@@ -618,7 +615,7 @@ fn last_status_rec(fr: FrameRef, statusline: bool, is_stl_global: bool) {
         } else if wp.w_status_height == 0 && !is_stl_global && statusline {
             // Add a status line, taking a row from wherever there is one.
             wp.w_status_height = STATUS_HEIGHT;
-            if !resize_frame_for_status(fr) {
+            if resize_frame_for_status(fr).is_err() {
                 return;
             }
             comp_col();
@@ -663,9 +660,9 @@ pub(crate) fn set_winbar_win(
     if window.w_winbar_height != winbar_height {
         if winbar_height == 1 && window.w_view_height <= 1 {
             if window.w_floating {
-                err(e_noroom);
+                err(WinError::NoRoom);
                 return Err(WinbarRefused::FloatTooSmall);
-            } else if !make_room || !resize_frame_for_winbar(window.frame()) {
+            } else if !make_room || resize_frame_for_winbar(window.frame()).is_err() {
                 return Err(WinbarRefused::NoRoom);
             }
         }

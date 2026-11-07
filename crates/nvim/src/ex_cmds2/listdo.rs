@@ -51,7 +51,7 @@ use crate::search::FORWARD;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::Handle;
-use crate::types::{ExArg, LineNr, size_t};
+use crate::types::{ExArg, Failed, LineNr, size_t};
 use crate::window::{goto_tab, valid_tab, valid_win, win_goto, win_split, win_valid};
 use crate::winlayer::prev_window;
 use crate::winlayer::{Buf, TabId, TabPage, Win, WinId, first_buffer, first_tab, first_window};
@@ -102,7 +102,7 @@ pub(crate) fn ex_listdo(excmd: &mut ExArg) {
     let Some(list) = ListDo::from_cmdidx(cmdidx) else {
         return;
     };
-    if !leave_winfixbuf(list, forceit) {
+    if leave_winfixbuf(list, forceit).is_err() {
         return;
     }
 
@@ -137,17 +137,17 @@ pub(crate) fn ex_listdo(excmd: &mut ExArg) {
 }
 
 /// A walk that changes buffers cannot start in a 'winfixbuf' window: move to
-/// one without it, splitting if there is none. Answers false when the
-/// command must not run at all.
-fn leave_winfixbuf(list: ListDo, forceit: bool) -> bool {
+/// one without it, splitting if there is none. A refusal -- the command
+/// must not run at all -- has been said.
+fn leave_winfixbuf(list: ListDo, forceit: bool) -> Result<(), Failed> {
     const E_WINFIXBUF: &CStr = c"E1513: Cannot switch buffer. 'winfixbuf' is enabled";
     if Win::current().w_onebuf_opt.wo_wfb == 0 {
-        return true;
+        return Ok(());
     }
     if list == (ListDo::Quickfix { location: true }) && !forceit {
         // ":ldo" would have to leave the location list's own window.
         emsg(E_WINFIXBUF);
-        return false;
+        return Err(Failed);
     }
     if let Some(prev) = prev_window().filter(|p| win_valid(p.id()) && p.w_onebuf_opt.wo_wfb == 0) {
         win_goto(prev);
@@ -159,10 +159,10 @@ fn leave_winfixbuf(list: ListDo, forceit: bool) -> bool {
             // Autocommands set 'winfixbuf', or sent us to another window
             // that has it set, or the split failed. Give up.
             emsg(E_WINFIXBUF);
-            return false;
+            return Err(Failed);
         }
     }
-    true
+    Ok(())
 }
 
 /// Position the walk at `args.line1`, then run `args.arg` once per item
