@@ -781,7 +781,9 @@ plus these whole-tree metrics, which are not per-file:
                         `emsg_*` that answers nothing and calls an EMIT_CALL,
                         found by `emit_wrappers`) is an emitter too: the
                         wrappers hid their callers' sentinels, 50 -> 74 when
-                        the needle learned them (an instrument change).
+                        the needle learned them (an instrument change). An
+                        emitter nested in another's arguments (`semsg!(..,
+                        msg_cstr(p))`) is the same message and counts once.
                       labeled_blocks  `'label: {`/`loop`/`while`/`for` — the
                         transpiler's rendering of C's `goto`. A lifetime bound
                         (`'a: 'b`) cannot match: what follows the colon has to
@@ -1914,8 +1916,14 @@ def emit_call_re(wrappers):
 def emit_sentinels(masked, emit_call=EMIT_CALL):
     """How many EMIT_CALLs in `masked` are followed by a sentinel answer."""
     found = 0
+    inside = 0
     for match in emit_call.finditer(masked):
+        if match.start() < inside:
+            # An emitter in another's arguments (`semsg!(.., msg_cstr(p))`)
+            # is the same message: the outer call is the statement.
+            continue
         close = balanced(masked, match.end() - 1, "(", ")")
+        inside = close
         end = masked.find(";", close)
         if end != -1 and EMIT_SENTINEL.match(masked, end + 1):
             found += 1
@@ -5012,6 +5020,13 @@ SELF_TEST_INSTRUMENTS = [
             "fn k() -> bool {\n    p.err0(e_x);\n    false\n}\n",
         },
         {"emit_sentinel": 3},
+    ),
+    # An emitter nested in another's arguments is one message, not two.
+    (
+        {
+            "crates/nvim/src/a.rs": 'fn f() -> bool {\n    semsg!("E1: {}", msg_cstr(p));\n    false\n}\n',
+        },
+        {"emit_sentinel": 1},
     ),
     # `types/` is counted by the file.
     (
