@@ -29,6 +29,7 @@
 mod flags;
 mod index;
 mod lookup;
+mod scope;
 mod table_1;
 mod table_2;
 mod table_3;
@@ -40,6 +41,7 @@ pub mod vars;
 pub use self::flags::*;
 pub use self::index::*;
 pub use self::lookup::*;
+pub(crate) use self::scope::*;
 pub use self::values::*;
 pub use self::vars::*;
 

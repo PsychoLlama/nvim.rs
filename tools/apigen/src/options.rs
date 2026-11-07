@@ -1161,6 +1161,124 @@ fn emit_vars(out: &mut String, opts: &[Opt]) {
     emit_empty_before_defaults(out, opts);
 }
 
+/// Which record holds a local option's own copy: a buffer, one of a window's
+/// `WinOpt`s, or the syntax block a window uses. Each is a macro of
+/// `crate::option::scope`'s that names the field as an `OptSlot`.
+#[derive(Clone, Copy, PartialEq)]
+enum Holder {
+    Buf,
+    Win,
+    Syn,
+}
+
+impl Holder {
+    fn var_macro(self) -> &'static str {
+        match self {
+            Holder::Buf => "buf_var!(buffer",
+            Holder::Win => "win_var!(win",
+            Holder::Syn => "syn_var!(win",
+        }
+    }
+}
+
+/// The local options whose field the naming rule in [`local_field`] does not
+/// spell, by full name. `options.lua` says where an option's *global* value
+/// lives (`varname`) but not its local copy; upstream's `get_varp_from` names
+/// that by hand, and these are the rows where its spelling breaks the rule.
+const LOCAL_FIELDS: &[(&str, Holder, &str)] = &[
+    // The buffer's field keeps the abbreviation the global variable spells out.
+    ("lispwords", Holder::Buf, "b_p_lw"),
+    // The option is the buffer's own changed flag, not a copy of a variable.
+    ("modified", Holder::Buf, "b_changed"),
+    // The 'spell*' options belong to the window's syntax block, which a diff
+    // or preview window may share with another window.
+    ("spellcapcheck", Holder::Syn, "b_p_spc"),
+    ("spellfile", Holder::Syn, "b_p_spf"),
+    ("spelllang", Holder::Syn, "b_p_spl"),
+    ("spelloptions", Holder::Syn, "b_p_spo"),
+];
+
+/// Where `o` keeps its local copy, or `None` for an option with none: global
+/// only, or immutable (its own default is its only value, so no scope asks).
+/// A buffer-local field is `b_` + the global variable (`p_ai` -> `b_p_ai`); a
+/// window-local one is `wo_` + the variable without its `p_` (`p_so` ->
+/// `wo_so`), or + the abbreviation (or full name) for a window-only option,
+/// which has no variable. [`LOCAL_FIELDS`] holds the exceptions.
+fn local_field(o: &Opt) -> Result<Option<(Holder, String)>, String> {
+    let local: Vec<&str> = o
+        .scope
+        .iter()
+        .map(String::as_str)
+        .filter(|s| *s != "global")
+        .collect();
+    if local.is_empty() || o.immutable {
+        return Ok(None);
+    }
+    if let Some((_, holder, field)) = LOCAL_FIELDS.iter().find(|(n, ..)| *n == o.full_name) {
+        return Ok(Some((*holder, (*field).to_string())));
+    }
+    let fail = |what: &str| format!("option '{}': {what}", o.full_name);
+    let stem = o.varname.as_deref().and_then(|v| v.strip_prefix("p_"));
+    match local.as_slice() {
+        ["buf"] => match stem {
+            Some(stem) => Ok(Some((Holder::Buf, format!("b_p_{stem}")))),
+            None => Err(fail(
+                "a buffer-local option needs a `p_` variable to name its field",
+            )),
+        },
+        ["win"] => {
+            let name = stem.or(o.abbreviation.as_deref()).unwrap_or(&o.full_name);
+            Ok(Some((Holder::Win, format!("wo_{name}"))))
+        }
+        _ => Err(fail("no rule names a local field for this scope")),
+    }
+}
+
+/// `local_var`: which field each local option keeps its own copy in, and what
+/// "not set here" looks like there -- the `kOpt*` ladder upstream's
+/// `get_varp_from` and `get_varp_scope_from` spell by hand.
+fn emit_scope(out: &mut String, opts: &[Opt]) -> Result<(), String> {
+    for (name, ..) in LOCAL_FIELDS {
+        if !opts.iter().any(|o| o.full_name == *name) {
+            return Err(format!("LOCAL_FIELDS names '{name}', which is no option"));
+        }
+    }
+    out.push_str(
+        "use crate::option::{OptSlot, Unset, buf_var, syn_var, win_var};\n\
+         use crate::winlayer::{Buf, Win};\n\
+         \n\
+         /// Which variable the option keeps its local value in, in `buffer` or\n\
+         /// `win`, and what an unset one looks like there; `None` for an option\n\
+         /// with no local value. Naming a field reads nothing.\n\
+         ///\n\
+         /// A global-local option's local copy defers to the global one while it\n\
+         /// holds the sentinel; 'undolevels' has its own, since 0 is a value.\n\
+         pub(crate) fn local_var(opt_idx: OptIndex, buffer: Buf, win: Win) -> Option<(OptSlot, Unset)> {\n\
+         \x20   Some(match opt_idx {\n",
+    );
+    for o in opts {
+        let Some((holder, field)) = local_field(o)? else {
+            continue;
+        };
+        let unset = if !o.scope.iter().any(|s| s == "global") {
+            "Never"
+        } else if o.full_name == "undolevels" {
+            "NoLocalUndolevel"
+        } else {
+            "Sentinel"
+        };
+        writeln!(
+            out,
+            "        {} => ({}, {field}), Unset::{unset}),",
+            o.index_const(),
+            holder.var_macro()
+        )
+        .unwrap();
+    }
+    out.push_str("        _ => return None,\n    })\n}\n");
+    Ok(())
+}
+
 /// The options upstream declares as `empty_string_option` rather than
 /// leaving `NULL` until `set_init_1`, because something reads them first.
 /// 'verbosefile' is the one: its `option_vars.h` declaration says it is
@@ -1455,6 +1573,12 @@ pub fn generate(
     emit_vars(&mut text, &opts);
     sections.push(("vars", text));
 
+    let mut text = String::new();
+    emit_scope(&mut text, &opts)?;
+    for chunk in chunked(&rustfmt(config, &text)?) {
+        sections.push(("scope", chunk));
+    }
+
     // The table itself is one array literal, so it is formatted whole and
     // then cut at row boundaries into `PART` constants the parent splices.
     let mut text = format!("const ALL: [VimOption; {}] = [\n", opts.len());
@@ -1500,6 +1624,7 @@ pub fn generate(
             "flags" => "The flag enums a string option's value parses into.",
             "values" => "The values each string option accepts.",
             "vars" => "Where every option's global value lives.",
+            "scope" => "Where each local option keeps its own copy.",
             _ => "The name lookup: which option a spelling means.",
         };
         files.push(Emitted {
@@ -1538,8 +1663,15 @@ pub fn generate(
     out.push('\n');
     for file in &files {
         let stem = file.name.strip_suffix(".rs").unwrap();
+        // `scope`'s ladder answers in `crate::option`'s own types, which
+        // are the crate's, not the API's.
+        let vis = if stem == "scope" {
+            "pub(crate) "
+        } else {
+            "pub "
+        };
         if !stem.starts_with("table_") {
-            writeln!(out, "pub use self::{stem}::*;").unwrap();
+            writeln!(out, "{vis}use self::{stem}::*;").unwrap();
         }
     }
     out.push('\n');
