@@ -390,7 +390,9 @@ plus these whole-tree metrics, which are not per-file:
                         the perimeter -- they were one metric until phase
                         25's close, whose measurement was that 40% of it was
                         a foreign ABI wearing this tree's file name, so a
-                        single total could fall while the residue grew.
+                        single total could fall while the residue grew. What
+                        stays of both is written down in REPR_C_FLOOR (see
+                        there); `--dimension repr_c_floor` lists the rest.
                       derive_copy     `#[derive(.. Copy ..)]` on a *braced*
                         `struct`/`union` — an aggregate with named fields.
                         Enums are excluded because an enum is Copy-worthy by
@@ -400,7 +402,8 @@ plus these whole-tree metrics, which are not per-file:
                         `flag_set!` newtype), whose `Copy` is the point. What
                         is left is exactly the class the migration is
                         retiring: a struct that owns something and is copied
-                        anyway.
+                        anyway. The ones that stay are COPY_KEEPERS (see
+                        there); `--dimension copy_keepers` lists the rest.
                       manual_alloc    `xmalloc`/`xmallocz`/`xcalloc`/
                         `xrealloc`/`xfree`.
                       garray_sites    `ga_grow`/`ga_init`/`ga_clear`/
@@ -784,10 +787,13 @@ plus these whole-tree metrics, which are not per-file:
                         the needle learned them (an instrument change). An
                         emitter nested in another's arguments (`semsg!(..,
                         msg_cstr(p))`) is the same message and counts once.
-                      labeled_blocks  `'label: {`/`loop`/`while`/`for` — the
-                        transpiler's rendering of C's `goto`. A lifetime bound
+                      labeled_blocks  `'label: {` — the transpiler's
+                        rendering of C's forward `goto`. A lifetime bound
                         (`'a: 'b`) cannot match: what follows the colon has to
-                        open a block. Phase 34.
+                        open a block. A labelled `loop`/`while`/`for` is not a
+                        goto but Rust's multi-level exit, so it left the count
+                        (96 -> 71, an instrument change); `--dimension
+                        labeled_loops` lists those, unratcheted. Phase 34.
                       lua_raw_stack · raw_variadic_calls  (retired) raw
                         `lua_State` stack calls outside `lua/stack/` and
                         `lua/ffi.rs`, and direct calls to the C printf-family
@@ -823,7 +829,10 @@ plus these whole-tree metrics, which are not per-file:
                         zero when the directory does. Phase 34.
                       untested_dirs  top-level modules under crates/nvim/src
                         with no `#[test]` anywhere beneath them and no file or
-                        directory of their name in crates/nvim/tests/unit.
+                        directory of their name in crates/nvim/tests/unit --
+                        `X.rs`, `X/`, or `X_<what>.rs` (`channel_reader.rs` is
+                        `channel`'s; the longest module name wins, so
+                        `ui_compositor.rs` would not be `ui`'s).
                         A module's `X.rs` beside its `X/` is beneath it, and a
                         unit file that drives two modules names the second in
                         UNIT_TEST_ALSO_COVERS. A directory that is not a
@@ -1759,12 +1768,13 @@ INSTRUMENTS = {
         r"\bstatic\s+[A-Za-z_][A-Za-z0-9_]*\s*:\s*GlobalCell\s*<"
     ),
     "cell_raw_ptr": re.compile(r"\bGlobalCell\s*<\s*\*(?:mut|const)\b"),
-    # The transpiler's `goto` residue: c2rust renders a jump as a labelled
-    # block or loop it can `break` out of. `'a: 'b` (a lifetime bound) cannot
-    # match -- what follows the colon has to open a block.
-    "labeled_blocks": re.compile(
-        r"'[A-Za-z_][A-Za-z0-9_]*\s*:\s*(?:\{|loop\b|while\b|for\b)"
-    ),
+    # The transpiler's `goto` residue: c2rust renders a forward jump as a
+    # labelled *block* it can `break` out of. A labelled `loop`/`while`/`for`
+    # is Rust's own multi-level `break`/`continue` and is not counted here:
+    # `LABELED_LOOPS` lists them (`--dimension labeled_loops`) without a
+    # ratchet. `'a: 'b` (a lifetime bound) cannot match -- what follows the
+    # colon has to open a block.
+    "labeled_blocks": re.compile(r"'[A-Za-z_][A-Za-z0-9_]*\s*:\s*\{"),
     # The fixed-size C string buffer: a `[c_char; N]` type (a local, a
     # parameter, a return, a field) or a `[0 as c_char; N]` initialiser
     # (`vec![..]` included -- the same buffer on the heap). One array is one
@@ -1778,6 +1788,10 @@ INSTRUMENTS = {
         r"|\[\s*0\s+as\s+c_char\s*;"
     ),
 }
+# The labelled loops `labeled_blocks` leaves out: Rust's multi-level
+# `break 'outer`/`continue 'outer`, not a goto. Listed, not ratcheted --
+# rewriting one as a flag would be worse code to feed a needle.
+LABELED_LOOPS = re.compile(r"'[A-Za-z_][A-Za-z0-9_]*\s*:\s*(?:loop|while|for)\b")
 # `types/`: c2rust's one `types_defs.h`-sized namespace. Phase 34 moves each
 # type next to the code that owns it, so the number is the count of *files*
 # still living there, not of the types inside them.
@@ -2024,6 +2038,235 @@ CAST_DENY_FLOOR = {
     "crates/nvim/src/xdiff/xprepare.rs": "perimeter: vendored libxdiff (19)",
     "crates/nvim/src/xdiff/xtypes.rs": "perimeter: vendored libxdiff (21)",
 }
+# The types that keep `#[derive(Copy)]` (`derive_copy`) and `#[repr(C)]`
+# (`repr_c_editor_state` and `repr_c_ffi_types`) for good: the floors those
+# needles fall to. A row is `"path::Type"` (one braced struct/union) or a bare
+# `"path"` (every one in that file), and its reason opens with a class. Both
+# lists are checked by `check_keeper_floors` on every run, but only one way: a
+# row that excuses nothing (the type lost the attribute, moved, or is gone)
+# fails the run -- move or drop the row. A site that is *not* a row is still
+# counted by its needle and is not an error; it is what is left to remove, and
+# `--dimension copy_keepers` / `--dimension repr_c_floor` list it as OFF THE
+# FLOOR. When a needle reaches its floor, its count equals the rows'.
+#
+# COPY_KEEPERS classes:
+#   ffi     a C library's (or vendored C code's) layout, copied as C copies it;
+#   handle  a `{pointer, id}` or a pointer-and-offset view, copied by design;
+#   value   at most five plain fields, read whole (a position, a range, a
+#           span's ends): cheaper to copy than to borrow.
+# A struct of six or more fields is a field bag, and is not a keeper unless a
+# measured hot path copies it -- then its row says so, with the number.
+COPY_KEEPERS = {
+    "crates/nvim/src/buffer/close.rs::Disposition": "value",
+    "crates/nvim/src/buffer_updates.rs::Corner": "value",
+    "crates/nvim/src/bufwrite/autocmds.rs::WriteMode": "value",
+    "crates/nvim/src/bufwrite/autocmds.rs::OpMarks": "value",
+    "crates/nvim/src/bufwrite/mod.rs::WriteRequest": "value",
+    "crates/nvim/src/charset/display.rs::Chars": "value",
+    "crates/nvim/src/clipboard.rs::ClipboardState": "value",
+    "crates/nvim/src/decoration/mod.rs::ShRedraw": "value",
+    "crates/nvim/src/decoration/query.rs::VirtLineRef": "value",
+    "crates/nvim/src/decoration/state.rs::HlSource": "value",
+    "crates/nvim/src/decoration/state.rs::DecorLists": "value",
+    "crates/nvim/src/diff/mod.rs::DiffHunk": "value",
+    "crates/nvim/src/digraph/mod.rs::Digraph": "value",
+    "crates/nvim/src/eval/list/mod.rs::Item": "value",
+    "crates/nvim/src/eval/lval.rs::Span": "value",
+    "crates/nvim/src/eval/vars/assign.rs::VarList": "value",
+    "crates/nvim/src/ex_cmds/mod.rs::SubResult": "value",
+    "crates/nvim/src/ex_cmds/sort.rs::StringOrder": "value",
+    "crates/nvim/src/ex_getln/mod.rs::CpWinInfo": "value",
+    "crates/nvim/src/extmark/mod.rs::Extent": "value",
+    "crates/nvim/src/getchar/mapmatch.rs::Candidate": "value",
+    "crates/nvim/src/getchar/mod.rs::GotcharsState": "value",
+    "crates/nvim/src/indent/tabstop.rs::TabStops": "value",
+    "crates/nvim/src/insexpand/mod.rs::CptSource": "value",
+    "crates/nvim/src/lua/treesitter/mod.rs": "ffi: tree-sitter's public structs",
+    "crates/nvim/src/lua/xdiff.rs::Hunk": "value",
+    "crates/nvim/src/mapping/table.rs::MapAt": "value",
+    "crates/nvim/src/mark/adjust.rs::LineShift": "value",
+    "crates/nvim/src/mark/adjust.rs::ColShift": "value",
+    "crates/nvim/src/marktree/check.rs::MarkEnd": "value",
+    "crates/nvim/src/mbyte/cells.rs::CellWidthRange": "value",
+    "crates/nvim/src/mbyte/utf8/text.rs::Prefix": "value",
+    "crates/nvim/src/memfile/table.rs::BlockId": "value",
+    "crates/nvim/src/memline/blocks.rs::PointerEntry": "value",
+    "crates/nvim/src/mouse/geom.rs::MousePos": "value",
+    "crates/nvim/src/mouse/mod.rs::Landed": "value",
+    "crates/nvim/src/move/page.rs::Saved": "value",
+    "crates/nvim/src/mpack/mpack_core.rs::TokBuf": "value",
+    "crates/nvim/src/mpack/rpc.rs::RpcMessage": "value",
+    "crates/nvim/src/mpack/rpc.rs::Slot": "value",
+    "crates/nvim/src/mpack/rpc.rs::Header": "value",
+    "crates/nvim/src/mpack/token.rs::Tok": "value",
+    "crates/nvim/src/normal/showcmd.rs::ShowCmd": "value",
+    "crates/nvim/src/normal/visual.rs::VisualSelection": "value",
+    "crates/nvim/src/normal/visual.rs::VisualState": "value",
+    "crates/nvim/src/ops/mod.rs::RedoVisual": "value",
+    "crates/nvim/src/option/check.rs::BinSave": "value",
+    "crates/nvim/src/popupmenu/state.rs::PumWant": "value",
+    "crates/nvim/src/quickfix/stack.rs::Qi": "value",
+    "crates/nvim/src/quickfix/stack.rs::Qfl": "value",
+    "crates/nvim/src/regexp/bt/state.rs::Brace": "value",
+    "crates/nvim/src/regexp/mod.rs::TimeBudget": "value",
+    "crates/nvim/src/regexp/mod.rs::RegSub": "value",
+    "crates/nvim/src/regexp/mod.rs::RegSubs": "value",
+    "crates/nvim/src/regexp/nfa/build.rs::Frag": "value",
+    "crates/nvim/src/regexp/nfa/list.rs::NfaThread": "value",
+    "crates/nvim/src/regexp/nfa/list.rs::NfaPim": "value",
+    "crates/nvim/src/regexp/pos.rs::Capture": "value",
+    "crates/nvim/src/regexp/pos.rs::SavedInput": "value",
+    "crates/nvim/src/regexp/substitute.rs::Expanding": "value",
+    "crates/nvim/src/search/find.rs::Found": "value",
+    "crates/nvim/src/search/find.rs::StartPos": "value",
+    "crates/nvim/src/sign/vimscript.rs::PlaceArgs": "value",
+    "crates/nvim/src/spell/wordtree.rs::Tree": "value",
+    "crates/nvim/src/spellsuggest/score.rs::Alternative": "value",
+    "crates/nvim/src/spellsuggest/soundalike.rs::KeepCapLevel": "value",
+    "crates/nvim/src/statusline/stl/arena.rs::StlItem": "value",
+    "crates/nvim/src/strings/charindex.rs::CharLen": "value",
+    "crates/nvim/src/syntax/mod.rs::sp_syn": "value",
+    "crates/nvim/src/syntax/mod.rs::PatOffsets": "value",
+    "crates/nvim/src/textformat/para.rs::Leader": "value",
+    "crates/nvim/src/tui/terminfo/param.rs::Param": "value",
+    "crates/nvim/src/tui/terminfo/param.rs::Slot": "value",
+    "crates/nvim/src/types/buffer.rs::BufferRef": "value",
+    "crates/nvim/src/types/buffer.rs::DiffLineChange": "value",
+    "crates/nvim/src/types/buffer.rs::SynTime": "value",
+    "crates/nvim/src/types/channel.rs::InternalState": "value",
+    "crates/nvim/src/types/channel.rs::StderrState": "value",
+    "crates/nvim/src/types/decoration.rs::DecorExt": "value",
+    "crates/nvim/src/types/decoration.rs::DecorHighlightInline": "value",
+    "crates/nvim/src/types/decoration.rs::RangeHighlight": "value",
+    "crates/nvim/src/types/decoration.rs::DecorRange_data_ui": "value",
+    "crates/nvim/src/types/event.rs::socket_watcher_uv_pipe": "value",
+    "crates/nvim/src/types/event.rs::socket_watcher_uv_tcp": "ffi: a libuv TCP handle and its addrinfo",
+    "crates/nvim/src/types/event.rs::stream_uv": "value",
+    "crates/nvim/src/types/ex_cmds.rs::CmdParseMagic": "value",
+    "crates/nvim/src/types/ex_getln.rs::CmdlineColorChunk": "value",
+    "crates/nvim/src/types/expressions.rs::ExprASTError": "value",
+    "crates/nvim/src/types/expressions.rs::ExprNodeAssignment": "value",
+    "crates/nvim/src/types/expressions.rs::ExprNodeComparison": "value",
+    "crates/nvim/src/types/expressions.rs::ExprNodeEnvironment": "value",
+    "crates/nvim/src/types/expressions.rs::ExprNodeFigure": "value",
+    "crates/nvim/src/types/expressions.rs::ExprFigureGuesses": "value",
+    "crates/nvim/src/types/expressions.rs::ExprNodeFloat": "value",
+    "crates/nvim/src/types/expressions.rs::ExprNodeInteger": "value",
+    "crates/nvim/src/types/expressions.rs::ExprNodeOption": "value",
+    "crates/nvim/src/types/expressions.rs::ExprNodeRegister": "value",
+    "crates/nvim/src/types/expressions.rs::ExprNodeTernary": "value",
+    "crates/nvim/src/types/expressions.rs::ExprNodeVariable": "value",
+    "crates/nvim/src/types/extmark.rs::ExtmarkSavePos": "value",
+    "crates/nvim/src/types/fold.rs::FoldInfo": "value",
+    "crates/nvim/src/types/grid.rs::GridView": "handle: a grid and an offset into it",
+    "crates/nvim/src/types/hashtab.rs::HashItem": "value",
+    "crates/nvim/src/types/helpers.rs::TryState": "value",
+    "crates/nvim/src/types/highlight.rs::ColorItem": "value",
+    "crates/nvim/src/types/highlight.rs::HlEntry": "value",
+    "crates/nvim/src/types/libc.rs": "ffi: the C library's and pthread's aggregates",
+    "crates/nvim/src/types/mapping.rs::MapTwin": "value",
+    "crates/nvim/src/types/mark.rs::FileMarkView": "value",
+    "crates/nvim/src/types/mark.rs::SavedMark": "value",
+    "crates/nvim/src/types/marktree.rs::MTKey": "value",
+    "crates/nvim/src/types/marktree.rs::MTPair": "value",
+    "crates/nvim/src/types/marktree.rs::MTPos": "value",
+    "crates/nvim/src/types/marktree.rs::PathStep": "value",
+    "crates/nvim/src/types/mbyte.rs::CharInfo": "value",
+    "crates/nvim/src/types/mbyte.rs::StrCharInfo": "handle: a text position and its char",
+    "crates/nvim/src/types/memline.rs::ChunkSize": "value",
+    "crates/nvim/src/types/memline.rs::InfoPtr": "value",
+    "crates/nvim/src/types/misc.rs::nvim_stats_s": "value",
+    "crates/nvim/src/types/multiqueue_list.rs::Handle": "value",
+    "crates/nvim/src/types/parser.rs::ParserHighlightChunk": "value",
+    "crates/nvim/src/types/parser.rs::ParserPosition": "value",
+    "crates/nvim/src/types/pos.rs::LPos": "value",
+    "crates/nvim/src/types/pos.rs::Pos": "value",
+    "crates/nvim/src/types/runtime.rs::SnPrl": "value",
+    "crates/nvim/src/types/search.rs::SearchOffset": "value",
+    "crates/nvim/src/types/sign.rs::SignItem": "value",
+    "crates/nvim/src/types/sign.rs::SignTextAttrs": "value",
+    "crates/nvim/src/types/spell.rs::LangP": "value",
+    "crates/nvim/src/types/spell.rs::SpellTab": "value",
+    "crates/nvim/src/types/statusline.rs::StlClickDefinition": "value",
+    "crates/nvim/src/types/statusline.rs::StlHlRun": "value",
+    "crates/nvim/src/types/termkey.rs": "ffi: libtermkey's key record",
+    "crates/nvim/src/types/termkey_internal.rs::keyinfo": "value",
+    "crates/nvim/src/types/types.rs::MTDamage": "value",
+    "crates/nvim/src/types/types.rs::MTDamagePair": "value",
+    "crates/nvim/src/types/types.rs::MsgpackRpcRequestHandler": "value",
+    "crates/nvim/src/types/typval.rs::ScriptCtx": "value",
+    "crates/nvim/src/types/ugrid.rs::UCell": "value",
+    "crates/nvim/src/types/ui.rs::UIClientHandler": "handle: a static name and a fn pointer",
+    "crates/nvim/src/types/undo.rs::UndoLink": "value",
+    "crates/nvim/src/types/undo.rs::VisualInfo": "value",
+    "crates/nvim/src/types/uv.rs": "ffi: libuv's structs, copied as C copies them",
+    "crates/nvim/src/types/vterm.rs": "ffi: libvterm's public types",
+    "crates/nvim/src/types/vterm_internal.rs": "ffi: libvterm's internal state",
+    "crates/nvim/src/undo/apply/time.rs::Aim": "value",
+    "crates/nvim/src/undo/apply/time.rs::UndoCounters": "value",
+    "crates/nvim/src/undo/store.rs::Marks": "value",
+    "crates/nvim/src/viml/parser/expressions/mod.rs::LexExprToken": "value",
+    "crates/nvim/src/viml/parser/expressions/mod.rs::LexExprTokenAssignment": "value",
+    "crates/nvim/src/viml/parser/expressions/mod.rs::LexExprTokenNumber": "value",
+    "crates/nvim/src/viml/parser/expressions/mod.rs::LexExprTokenError": "value",
+    "crates/nvim/src/viml/parser/expressions/mod.rs::LexExprTokenVar": "value",
+    "crates/nvim/src/viml/parser/expressions/mod.rs::LexExprTokenOption": "value",
+    "crates/nvim/src/viml/parser/expressions/mod.rs::LexExprTokenString": "value",
+    "crates/nvim/src/viml/parser/expressions/mod.rs::LexExprTokenRegister": "value",
+    "crates/nvim/src/viml/parser/expressions/mod.rs::LexExprTokenBrace": "value",
+    "crates/nvim/src/viml/parser/expressions/mod.rs::LexExprTokenMultiplication": "value",
+    "crates/nvim/src/viml/parser/expressions/mod.rs::LexExprTokenComparison": "value",
+    "crates/nvim/src/vterm/abi/foreign.rs": "ffi: the C callers' parser/state callbacks",
+    "crates/nvim/src/vterm/host.rs::Fragment": "value",
+    "crates/nvim/src/vterm/keyboard.rs::Keycode": "value",
+    "crates/nvim/src/vterm/keyboard.rs::KeyModes": "value",
+    "crates/nvim/src/window/arith.rs::MinSize": "value",
+    "crates/nvim/src/winlayer.rs::Win": "handle: the window's {pointer, id}",
+    "crates/nvim/src/winlayer.rs::Buf": "handle: the buffer's {pointer, id}",
+    "crates/nvim/src/winlayer.rs::FrameRef": "handle: a frame's {pointer, id}",
+    "crates/nvim/src/winlayer.rs::TabPage": "handle: the tab page's {pointer, id}",
+    "crates/nvim/src/xdiff/xdiffi/mod.rs": "ffi: vendored libxdiff's values",
+    "crates/nvim/src/xdiff/xtypes.rs": "ffi: vendored libxdiff's values",
+}
+# REPR_C_FLOOR classes:
+#   abi     laid out by this tree's own C side: ffigen renders it into
+#           `unit-cdefs.h` *and* a spec or C fixture reads or builds it;
+#   libuv   embeds a libuv handle whose address libuv keeps;
+#   codec   a swap-file block's on-disk layout;
+#   ffi     a foreign ABI file (`FOREIGN_ABI_TYPES`): the library's layout.
+REPR_C_FLOOR = {
+    "crates/nvim/src/types/typval.rs::TypVal": "abi: the value model; ffigen renders it and the unit specs read it",
+    "crates/nvim/src/types/typval.rs::Callback": "abi: the value model (a `TypVal` payload)",
+    "crates/nvim/src/types/typval.rs::ScriptCtx": "abi: the value model (a `Callback`'s and a function's context)",
+    "crates/nvim/src/types/pos.rs::Pos": "abi: ffigen renders it into every signature that takes a position",
+    "crates/nvim/src/types/mbyte.rs::CharInfo": "abi: the C fixtures build it by value (`shim.h`)",
+    "crates/nvim/src/types/mbyte.rs::StrCharInfo": "abi: the C fixtures build it by value (`shim.h`)",
+    "crates/nvim/src/types/event.rs::stream": "libuv: holds a handle libuv keeps the address of",
+    "crates/nvim/src/types/event.rs::stream_uv": "libuv: the stream's handle union",
+    "crates/nvim/src/types/event.rs::rstream": "libuv: a stream libuv reads into",
+    "crates/nvim/src/types/event.rs::proc": "libuv: a process libuv calls back by address",
+    "crates/nvim/src/types/event.rs::signal_watcher": "libuv: holds a `uv_signal_t`",
+    "crates/nvim/src/types/event.rs::socket_watcher_uv": "libuv: the listener's handle union",
+    "crates/nvim/src/types/event.rs::socket_watcher_uv_pipe": "libuv: holds a `uv_pipe_t`",
+    "crates/nvim/src/types/event.rs::socket_watcher_uv_tcp": "libuv: holds a `uv_tcp_t`",
+    "crates/nvim/src/memline/blocks.rs::ZeroBlockLayout": "codec: the swap file's block 0 on disk",
+    "crates/nvim/src/memline/blocks.rs::PointerBlockLayout": "codec: the swap file's pointer block on disk",
+    "crates/nvim/src/memline/blocks.rs::PointerEntry": "codec: a pointer block's entry on disk",
+    "crates/nvim/src/memline/blocks.rs::DataBlockLayout": "codec: the swap file's data block on disk",
+    "crates/nvim/src/types/uv.rs": "ffi: libuv's own structs",
+    "crates/nvim/src/types/vterm.rs": "ffi: libvterm's public types",
+    "crates/nvim/src/types/vterm_internal.rs": "ffi: libvterm's internal state",
+    "crates/nvim/src/types/lua.rs": "ffi: LuaJIT's `lua_State`",
+    "crates/nvim/src/types/libc.rs": "ffi: the C library's and pthread's aggregates",
+    "crates/nvim/src/types/libuv_proc.rs": "ffi: a `uv_process_t` handed to `uv_spawn`",
+    "crates/nvim/src/types/pty_proc_unix.rs": "ffi: a `winsize` handed to the tty ioctls",
+}
+KEEPER_CLASSES = {
+    "COPY_KEEPERS": ("ffi", "handle", "value"),
+    "REPR_C_FLOOR": ("abi", "libuv", "codec", "ffi"),
+}
+
+
 # A file's claim that some of its names are someone else's -- a linked
 # library's ABI, a generator's contract, or c2rust's spelling of an anonymous
 # member. Counted per file and not per finding: the unit of work is emptying a
@@ -3628,10 +3871,32 @@ def instrument_sites(tree, sources, wrappers=None):
     for unit, others in UNIT_TEST_ALSO_COVERS.items():
         if (UNIT_TESTS / f"{unit}.rs").exists():
             tested.update(others)
+    for path in UNIT_TESTS.iterdir():
+        stem = path.name if path.is_dir() else path.name.removesuffix(".rs")
+        if path.is_dir() or path.name.endswith(".rs"):
+            if top := unit_covers(stem, tops):
+                tested.add(top)
     for top in tops - tested - UNTESTED_EXEMPT.keys():
-        if not (UNIT_TESTS / f"{top}.rs").exists() and not (UNIT_TESTS / top).is_dir():
-            sites["untested_dirs"][top] = 1
+        sites["untested_dirs"][top] = 1
     return sites
+
+
+def labeled_loops(tree):
+    """`--dimension labeled_loops`: the labelled loops per file (unratcheted)."""
+    return collections.Counter(
+        {f: n for f, m in tree.items() if (n := len(LABELED_LOOPS.findall(m)))}
+    )
+
+
+def unit_covers(stem, tops):
+    """The top-level module a unit file (or directory) named `stem` drives:
+    the module of that exact name, else the longest module `M` the stem
+    spells as `M_<what>` (`channel_reader` drives `channel`, `eval_decode`
+    drives `eval`), else None. Longest first, so a module whose name holds an
+    underscore (`ui_compositor`) is never mistaken for its prefix's (`ui`)."""
+    if stem in tops:
+        return stem
+    return max((t for t in tops if stem.startswith(t + "_")), key=len, default=None)
 
 
 def api_exported():
@@ -3778,6 +4043,76 @@ def check_cast_deny_floor(tree, report=False):
             "perimeter file, a module root over one, or narrow.rs -- a row "
             "with its reason; drop a row whose file now carries the deny."
         )
+
+
+def copy_sites(tree):
+    """Every `derive_copy` site as (file, type name)."""
+    return [
+        (file, KEEPER_NAME.search(m.group(0)).group(1))
+        for file, masked in tree.items()
+        for m in VOCABULARY["derive_copy"].finditer(masked)
+    ]
+
+
+def repr_c_sites(tree):
+    """Every `#[repr(C)]` off the perimeter -- both halves, editor state and
+    foreign ABI -- as (file, the struct/union/enum it lays out)."""
+    return [
+        (file, name.group(1) if name else "?")
+        for file, masked in tree.items()
+        if not in_perimeter(file)
+        for m in REPR_C.finditer(masked)
+        for name in [KEEPER_NAME.search(masked, m.end(), m.end() + 400)]
+    ]
+
+
+# The item a `derive`/`repr` attribute sits on: the first aggregate after it.
+KEEPER_NAME = re.compile(r"\b(?:struct|union|enum)\s+([A-Za-z_][A-Za-z0-9_]*)")
+
+
+def keeper_row(floor, file, name):
+    """The row of `floor` that excuses `name` in `file`, or None."""
+    return floor.get(f"{file}::{name}", floor.get(file))
+
+
+def keeper_findings(floor, label, sites):
+    """`floor`'s rows that excuse no site, and its rows without a class."""
+    found = {(f"{f}::{n}" if f"{f}::{n}" in floor else f) for f, n in sites}
+    stale = [
+        f"{row}: a {label} row that excuses nothing"
+        for row in floor
+        if row not in found
+    ]
+    classes = KEEPER_CLASSES[label]
+    unclassed = [
+        f"{row}: a {label} row whose reason does not open with one of {', '.join(classes)}"
+        for row, why in floor.items()
+        if why.split(":", 1)[0] not in classes
+    ]
+    return stale + unclassed
+
+
+def check_keeper_floors(tree):
+    """Every `COPY_KEEPERS`/`REPR_C_FLOOR` row still names a site, with a class."""
+    found = keeper_findings(COPY_KEEPERS, "COPY_KEEPERS", copy_sites(tree))
+    found += keeper_findings(REPR_C_FLOOR, "REPR_C_FLOOR", repr_c_sites(tree))
+    if found:
+        sys.exit(
+            "ratchet: a keeper list is out of date:\n  "
+            + "\n  ".join(found)
+            + "\nDrop the row (lower the needle's baseline with it) or move it "
+            "to where the type now lives."
+        )
+
+
+def keeper_report(floor, label, sites):
+    """`--dimension copy_keepers|repr_c_floor`: each site and the row that
+    keeps it, the ones off the floor (what is left to remove) first."""
+    rows = [(keeper_row(floor, f, n), f, n) for f, n in sites]
+    off = sum(1 for why, _, _ in rows if why is None)
+    print(f"{label}: {len(rows)} sites, {len(rows) - off} kept, {off} off the floor")
+    for why, file, name in sorted(rows, key=lambda r: (r[0] is not None, r[1], r[2])):
+        print(f"  {file}::{name}  {why or 'OFF THE FLOOR'}")
 
 
 def render(
@@ -4903,7 +5238,8 @@ SELF_TEST_INSTRUMENTS = [
         },
         {"char_as_c_int": 2},
     ),
-    # A labelled block or loop counts; a lifetime bound does not.
+    # A labelled block counts; a labelled loop (Rust's multi-level exit, see
+    # LABELED_LOOPS) and a lifetime bound do not.
     (
         {
             "crates/nvim/src/a.rs": "fn f<'a: 'b>() {\n"
@@ -4913,7 +5249,7 @@ SELF_TEST_INSTRUMENTS = [
             "    'each: for y in z {\n    }\n"
             "}\n",
         },
-        {"labeled_blocks": 4},
+        {"labeled_blocks": 1},
     ),
     # A constant duplicated across files counts once per copy past the first;
     # the same name with a *different* value is not a duplicate, and two
@@ -5042,6 +5378,40 @@ SELF_TEST_INSTRUMENTS = [
 # Placement, case by case: ({repo-relative path: source}, {path: number of
 # broken rules}). Files absent from the expectation break none.
 _ROW = "#![deny(unsafe_op_in_unsafe_fn)]\n// Unsafe perimeter: the `os/` row in docs/perimeter.md.\n#![allow(unsafe_code)]\n"
+# A unit file's stem -> the top-level module it drives, given these modules.
+SELF_TEST_UNIT_COVERS_TOPS = {"channel", "ui", "ui_compositor", "eval", "option"}
+SELF_TEST_UNIT_COVERS = [
+    ("channel", "channel"),
+    ("channel_reader", "channel"),
+    ("ui_compositor", "ui_compositor"),
+    ("ui_compositor_scratch", "ui_compositor"),
+    ("ui_state", "ui"),
+    ("eval_decode", "eval"),
+    ("options_oracle", None),
+    ("typval_dict", None),
+]
+# A keeper row names a site (by type, or a whole file) and opens with a class;
+# a row naming nothing, or with no class, is a finding. An unlisted site is not.
+SELF_TEST_KEEPERS = [
+    (
+        {"a.rs::S": "value", "b.rs": "ffi: c", "c.rs::Gone": "value", "a.rs::T": "big"},
+        [("a.rs", "S"), ("a.rs", "T"), ("b.rs", "U"), ("b.rs", "V"), ("d.rs", "W")],
+        [
+            "c.rs::Gone: a COPY_KEEPERS row that excuses nothing",
+            "a.rs::T: a COPY_KEEPERS row whose reason does not open with one of "
+            "ffi, handle, value",
+        ],
+    ),
+]
+# A labelled loop is listed by `labeled_loops`; a labelled block is not.
+SELF_TEST_LABELED_LOOPS = [
+    (
+        "fn f() {\n    'err: {\n    }\n    'outer: loop {\n    }\n"
+        "    'scan: while x {\n    }\n    'each: for y in z {\n    }\n}\n",
+        3,
+    ),
+]
+
 SELF_TEST_PLACEMENT = [
     # A perimeter file naming its row, and a finished file beside it.
     (
@@ -5122,6 +5492,15 @@ def self_test():
         assert got == expected, (
             f"file allows={sorted(got)}, want {sorted(expected)}, for {source!r}"
         )
+    for stem, expected in SELF_TEST_UNIT_COVERS:
+        got = unit_covers(stem, SELF_TEST_UNIT_COVERS_TOPS)
+        assert got == expected, f"unit_covers({stem!r})={got}, want {expected}"
+    for floor, sites, expected in SELF_TEST_KEEPERS:
+        got = keeper_findings(floor, "COPY_KEEPERS", sites)
+        assert got == expected, f"keeper_findings={got}, want {expected}"
+    for source, expected in SELF_TEST_LABELED_LOOPS:
+        got = len(LABELED_LOOPS.findall(mask(source)))
+        assert got == expected, f"labeled_loops={got}, want {expected}, for {source!r}"
     for source, expected in SELF_TEST_TEST_MODULE:
         got = len(test_module_lines(mask(source)))
         assert got == expected, (
@@ -5354,6 +5733,15 @@ def main():
     if dimension == "files_without_deny_casts":
         check_cast_deny_floor(tree, report=True)
         return
+    if dimension == "copy_keepers":
+        keeper_report(COPY_KEEPERS, "derive_copy", copy_sites(tree))
+        return
+    if dimension == "repr_c_floor":
+        keeper_report(REPR_C_FLOOR, "repr(C) off the perimeter", repr_c_sites(tree))
+        return
+    if dimension == "labeled_loops":
+        breakdown({dimension: labeled_loops(tree)}, dimension)
+        return
     if dimension is not None:
         breakdown(sites, dimension)
         return
@@ -5368,6 +5756,7 @@ def main():
     check_perimeter(stats)
     check_unsafe_placement(tree, sources)
     check_cast_deny_floor(tree)
+    check_keeper_floors(tree)
     index = unsafe_fn_index(tree)
     check_unsafe_fn_allowlist(index, unsafe_fn_allowlist())
     sync_perimeter_doc(stats, "--check" in args)
