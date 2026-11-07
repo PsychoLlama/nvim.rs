@@ -48,35 +48,37 @@ pub fn list_check_range_index_one(
 /// Resolve the second index of `l[n1:n2]` against the index `idx1` the first
 /// one landed on, normalising both to non-negative indexes.
 ///
-/// `idx1` must be an index of `l`.
-pub fn list_check_range_index_two(
+/// `idx1` must be an index of `l`. `Err` carries the index E684 names;
+/// nothing has been said, and the caller says it unless it is quiet.
+pub(crate) fn list_check_range_index_two(
     l: Option<&List>,
     n1: &mut ::core::ffi::c_int,
     idx1: usize,
     n2: &mut ::core::ffi::c_int,
-    quiet: bool,
-) -> Result<(), Failed> {
+) -> Result<(), ListIndexOutOfRange> {
     if *n2 < 0 {
-        let Some(at) = list_index(l, *n2) else {
-            if !quiet {
-                let index = int64_t::from(*n2);
-                semsg!("E684: List index out of range: {index}");
-            }
-            return Err(Failed);
-        };
+        let at = list_index(l, *n2).ok_or(ListIndexOutOfRange(*n2))?;
         *n2 = index_of(at);
     }
     if *n1 < 0 {
         *n1 = index_of(idx1);
     }
     if *n2 < *n1 {
-        if !quiet {
-            let index = int64_t::from(*n2);
-            semsg!("E684: List index out of range: {index}");
-        }
-        return Err(Failed);
+        return Err(ListIndexOutOfRange(*n2));
     }
     Ok(())
+}
+
+/// An index a list does not have: the index E684 names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ListIndexOutOfRange(pub(crate) ::core::ffi::c_int);
+
+impl ListIndexOutOfRange {
+    /// Says E684.
+    pub(crate) fn report(self) {
+        let index = int64_t::from(self.0);
+        semsg!("E684: List index out of range: {index}");
+    }
 }
 
 /// `dest[idx1:idx2] = src`, or `dest[idx1:idx2] op= src` when `op` is given,

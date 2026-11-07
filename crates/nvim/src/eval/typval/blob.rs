@@ -294,34 +294,38 @@ pub fn blob_slice_or_index(
     }
 }
 
+/// An index a blob does not have: the index E979 names. Nothing has been
+/// said; the caller says it unless it is quiet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct BlobIndexOutOfRange(pub(crate) VarNumber);
+
+impl BlobIndexOutOfRange {
+    /// Says E979.
+    pub(crate) fn report(self) {
+        semsg!("E979: Blob index out of range: {}", self.0);
+    }
+}
+
 /// Whether `n1` names a byte of a `bloblen`-byte blob, or the slot just past
 /// the end (which an assignment may append to).
-pub fn blob_check_index(
+pub(crate) fn blob_check_index(
     bloblen: ::core::ffi::c_int,
     n1: VarNumber,
-    quiet: bool,
-) -> Result<(), Failed> {
+) -> Result<(), BlobIndexOutOfRange> {
     if n1 < 0 || n1 > VarNumber::from(bloblen) {
-        if !quiet {
-            semsg!("E979: Blob index out of range: {}", n1);
-        }
-        return Err(Failed);
+        return Err(BlobIndexOutOfRange(n1));
     }
     Ok(())
 }
 
 /// Whether `n1..=n2` is a range of a `bloblen`-byte blob.
-pub fn blob_check_range(
+pub(crate) fn blob_check_range(
     bloblen: ::core::ffi::c_int,
     n1: VarNumber,
     n2: VarNumber,
-    quiet: bool,
-) -> Result<(), Failed> {
+) -> Result<(), BlobIndexOutOfRange> {
     if n2 < 0 || n2 >= VarNumber::from(bloblen) || n2 < n1 {
-        if !quiet {
-            semsg!("E979: Blob index out of range: {}", n2);
-        }
-        return Err(Failed);
+        return Err(BlobIndexOutOfRange(n2));
     }
     Ok(())
 }

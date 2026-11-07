@@ -344,6 +344,15 @@ impl Walk<'_, '_> {
         }
     }
 
+    /// [`Self::refused`] for a refusal nothing has said yet: `say` says
+    /// it, unless the walk is quiet.
+    fn refuse_with(&self, say: impl FnOnce()) -> LvalError {
+        if !self.quiet {
+            say();
+        }
+        self.refused()
+    }
+
     /// Read the container out of the slot again if an index expression has
     /// run since it was last read.
     fn refresh(&mut self) -> Result<(), LvalError> {
@@ -657,11 +666,11 @@ impl Walk<'_, '_> {
             index_of(tv_get_number(var1))
         };
         let n1 = i64::from(self.span.n1);
-        blob_check_index(bloblen, n1, self.quiet).map_err(|_| self.refused())?;
+        blob_check_index(bloblen, n1).map_err(|bad| self.refuse_with(|| bad.report()))?;
         if self.span.range && !self.span.empty2 {
             self.span.n2 = index_of(tv_get_number(var2));
             let n2 = i64::from(self.span.n2);
-            blob_check_range(bloblen, n1, n2, self.quiet).map_err(|_| self.refused())?;
+            blob_check_range(bloblen, n1, n2).map_err(|bad| self.refuse_with(|| bad.report()))?;
         }
         Ok(())
     }
@@ -686,8 +695,8 @@ impl Walk<'_, '_> {
         if self.span.range && !self.span.empty2 {
             self.span.n2 = index_of(tv_get_number(var2));
             let span = &mut self.span;
-            list_check_range_index_two(list.as_deref(), &mut span.n1, at, &mut span.n2, quiet)
-                .map_err(|_| self.refused())?;
+            list_check_range_index_two(list.as_deref(), &mut span.n1, at, &mut span.n2)
+                .map_err(|bad| self.refuse_with(|| bad.report()))?;
         }
         let list = list.expect("an index of the list was found");
         self.slot = Slot::Item { list, index: at };
