@@ -39,6 +39,7 @@ mod ex_docmd;
 mod ex_getln;
 mod ex_session;
 mod expressions;
+mod extmark;
 mod file_search;
 mod fileio;
 mod fileio_names;

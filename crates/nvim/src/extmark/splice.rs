@@ -312,3 +312,151 @@ pub(crate) fn move_region(
         });
     }
 }
+
+/// How a single-line splice folds into the undo header's last entry: an
+/// insert typed at, inside or just past the last insert grows it; a forward
+/// delete at its end and a backspace onto its start grow a delete; anything
+/// else, or a last entry that spans rows or is not a splice, is kept as an
+/// entry of its own. The oracle for retyping the rows and columns these
+/// records carry.
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::ExtmarkSavePos;
+
+    fn bytes(n: i32) -> BCount {
+        BCount::try_from(n).expect("a small count")
+    }
+
+    /// A single-line splice on row 3: `col`, then the old and new widths,
+    /// with byte counts equal to the widths and offsets at 100 + column.
+    fn edit(col: i32, old: i32, new: i32) -> (Extent, Extent, Extent) {
+        let start = Extent {
+            row: 3,
+            col: ColNr::new(col),
+            byte: bytes(100 + col),
+        };
+        let old = Extent {
+            row: 0,
+            col: ColNr::new(old),
+            byte: bytes(old),
+        };
+        let new = Extent {
+            row: 0,
+            col: ColNr::new(new),
+            byte: bytes(new),
+        };
+        (start, old, new)
+    }
+
+    fn recorded(col: i32, old: i32, new: i32) -> ExtmarkUndoObject {
+        let (start, old, new) = edit(col, old, new);
+        ExtmarkUndoObject::Splice(ExtmarkSplice {
+            start_row: start.row,
+            start_col: start.col,
+            old_row: old.row,
+            old_col: old.col,
+            new_row: new.row,
+            new_col: new.col,
+            start_byte: start.byte,
+            old_byte: old.byte,
+            new_byte: new.byte,
+        })
+    }
+
+    /// The last entry as (start col, start byte, old col, old byte, new col,
+    /// new byte).
+    fn last(list: &mut [ExtmarkUndoObject]) -> (i32, BCount, i32, BCount, i32, BCount) {
+        let s = last_splice(list).expect("a splice");
+        (
+            s.start_col.get(),
+            s.start_byte,
+            s.old_col.get(),
+            s.old_byte,
+            s.new_col.get(),
+            s.new_byte,
+        )
+    }
+
+    /// Fold `(col, old, new)` into `list`, answering whether it merged.
+    fn fold(list: &mut [ExtmarkUndoObject], col: i32, old: i32, new: i32) -> bool {
+        let (start, old, new) = edit(col, old, new);
+        merge_into_last(list, start, old, new)
+    }
+
+    #[test]
+    fn typing_on_grows_the_last_insert() {
+        let mut list = vec![recorded(4, 0, 1)];
+        assert!(fold(&mut list, 5, 0, 1), "just past it");
+        assert!(fold(&mut list, 4, 0, 2), "at its start");
+        assert!(fold(&mut list, 6, 0, 1), "inside it");
+        assert_eq!(last(&mut list), (4, 104, 0, 0, 5, 5));
+        assert!(!fold(&mut list, 10, 0, 1), "one past its end");
+        assert!(!fold(&mut list, 3, 0, 1), "before its start");
+    }
+
+    #[test]
+    fn a_forward_delete_at_the_end_grows_the_last_change() {
+        let mut list = vec![recorded(4, 1, 0)];
+        assert!(fold(&mut list, 4, 1, 0));
+        assert!(fold(&mut list, 4, 2, 0));
+        assert_eq!(last(&mut list), (4, 104, 4, 4, 0, 0));
+    }
+
+    #[test]
+    fn a_backspace_onto_the_start_moves_it_back() {
+        let mut list = vec![recorded(4, 1, 0)];
+        assert!(fold(&mut list, 3, 1, 0));
+        assert!(fold(&mut list, 1, 2, 0));
+        assert_eq!(last(&mut list), (1, 101, 4, 4, 0, 0));
+        assert!(!fold(&mut list, 0, 2, 0), "it overlaps rather than abuts");
+    }
+
+    #[test]
+    fn an_insert_where_a_delete_was_becomes_a_replacement() {
+        let mut list = vec![recorded(4, 2, 0)];
+        assert!(fold(&mut list, 4, 0, 3));
+        assert_eq!(last(&mut list), (4, 104, 2, 2, 3, 3));
+        // A delete after an insert merges only at the insert's end.
+        let mut list = vec![recorded(4, 0, 3)];
+        assert!(!fold(&mut list, 5, 1, 0));
+        assert!(fold(&mut list, 7, 1, 0));
+        assert_eq!(last(&mut list), (4, 104, 1, 1, 3, 3));
+    }
+
+    #[test]
+    fn a_change_that_replaces_and_inserts_at_once_never_merges() {
+        let mut list = vec![recorded(4, 1, 1)];
+        assert!(!fold(&mut list, 5, 1, 1));
+        assert_eq!(last(&mut list), (4, 104, 1, 1, 1, 1));
+    }
+
+    #[test]
+    fn only_a_single_line_splice_on_the_same_row_is_a_candidate() {
+        let mut empty: Vec<ExtmarkUndoObject> = Vec::new();
+        assert!(!fold(&mut empty, 4, 0, 1));
+
+        let mut other_row = vec![recorded(4, 0, 1)];
+        if let ExtmarkUndoObject::Splice(s) = &mut other_row[0] {
+            s.start_row = 2;
+        }
+        assert!(!fold(&mut other_row, 5, 0, 1));
+
+        let mut spans_rows = vec![recorded(4, 0, 1)];
+        if let ExtmarkUndoObject::Splice(s) = &mut spans_rows[0] {
+            s.new_row = 1;
+        }
+        assert!(!fold(&mut spans_rows, 5, 0, 1));
+
+        let mut saved = vec![
+            recorded(4, 0, 1),
+            ExtmarkUndoObject::SavePos(ExtmarkSavePos {
+                mark: 1,
+                old_row: 3,
+                old_col: ColNr::new(4),
+                invalidated: false,
+            }),
+        ];
+        assert!(!fold(&mut saved, 5, 0, 1), "the last entry is not a splice");
+    }
+}
