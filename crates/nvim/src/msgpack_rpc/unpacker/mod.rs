@@ -523,8 +523,10 @@ fn copy_chunk(parent: &mut Node<Building>, chunk: &[u8]) {
 /// failing the message.
 fn ext_object(payload: &[u8], ext_type: c_int) -> Object {
     let mut rest = payload;
-    let (status, tok) = read_token(&mut rest);
-    if status != MPACK_OK || token_type(&tok) != TOKEN_UINT {
+    let Ok(tok) = read_token(&mut rest) else {
+        return Object::Nil;
+    };
+    if token_type(&tok) != TOKEN_UINT {
         return Object::Nil;
     }
     let handle = token::unpack_uint(&tok).cast_signed();

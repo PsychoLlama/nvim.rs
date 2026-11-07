@@ -286,8 +286,8 @@ impl<D: Default> Parser<D> {
                 };
                 let (write_status, count) = self.tokbuf.write(&mut out[written..], &tok, chunk);
                 written += count;
-                if write_status != MPACK_OK {
-                    status = write_status;
+                if let Err(stop) = write_status {
+                    status = stop as c_int;
                 }
             }
         }

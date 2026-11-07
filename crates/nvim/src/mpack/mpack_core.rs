@@ -38,10 +38,23 @@ use core::ffi::c_int;
 use super::token::{self, Kind, MAX_TOKEN_LEN, Read, Tok};
 use crate::types::mpack_token_type_t;
 
-/// `mpack_read`/`mpack_write` status codes.
+/// `mpack_read`/`mpack_write` status codes, which the parser and the RPC
+/// session above this module still speak.
 pub const MPACK_OK: c_int = 0;
 pub const MPACK_EOF: c_int = 1;
 pub const MPACK_ERROR: c_int = 2;
+
+/// Why a token was not read or written whole. The discriminants are the
+/// status codes the parser above this module speaks for each.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(i32)]
+pub(crate) enum TokenStop {
+    /// The input ran out mid-token, or the output filled first: the caller
+    /// hands over more and goes again.
+    Short = MPACK_EOF,
+    /// Not msgpack: an invalid type byte, or a token of no kind to encode.
+    Invalid = MPACK_ERROR,
+}
 
 pub const MPACK_TOKEN_NIL: mpack_token_type_t = Kind::Nil as mpack_token_type_t;
 pub const MPACK_TOKEN_BOOLEAN: mpack_token_type_t = Kind::Boolean as mpack_token_type_t;
@@ -144,13 +157,19 @@ impl TokBuf {
         }
     }
 
-    /// Write one token into `out` (`mpack_write`): answers the status and how
-    /// many bytes went.
+    /// Write one token into `out` (`mpack_write`): answers whether it went
+    /// whole, and how many bytes went.
     ///
-    /// `MPACK_EOF` means `out` filled first; the caller drains it and calls
-    /// again, and the parked token wins over whatever it passes. A chunk
-    /// token's body is `chunk`, which a resuming caller hands over again.
-    pub fn write(&mut self, out: &mut [u8], tok: &Tok, chunk: &[u8]) -> (c_int, usize) {
+    /// [`TokenStop::Short`] means `out` filled first; the caller drains it
+    /// and calls again, and the parked token wins over whatever it passes. A
+    /// chunk token's body is `chunk`, which a resuming caller hands over
+    /// again.
+    pub(crate) fn write(
+        &mut self,
+        out: &mut [u8],
+        tok: &Tok,
+        chunk: &[u8],
+    ) -> (Result<(), TokenStop>, usize) {
         debug_assert!(!out.is_empty());
         let tok = if self.plen != 0 {
             self.pending_tok
@@ -246,44 +265,49 @@ pub(crate) fn read_step(tb: &mut TokBuf, input: &[u8]) -> (Step, usize) {
 /// One step of `mpack_write`, over a slice: encode `tok` into `out`, or as
 /// much of it as fits.
 ///
-/// Answers `(status, written)`. On a short buffer the whole encoding is
+/// Answers `(done, written)`. On a short buffer the whole encoding is
 /// parked in `pending` and [`drain_pending`] hands over the rest.
-fn write_step(tb: &mut TokBuf, tok: &Tok, out: &mut [u8]) -> (c_int, usize) {
+fn write_step(tb: &mut TokBuf, tok: &Tok, out: &mut [u8]) -> (Result<(), TokenStop>, usize) {
     let Some(encoded) = token::encode_token(tok) else {
-        return (MPACK_ERROR, 0);
+        return (Err(TokenStop::Invalid), 0);
     };
     let bytes = encoded.as_bytes();
     tb.pending[..bytes.len()].copy_from_slice(bytes);
     let count = bytes.len().min(out.len());
     out[..count].copy_from_slice(&bytes[..count]);
     if count == bytes.len() {
-        (MPACK_OK, count)
+        (Ok(()), count)
     } else {
         tb.plen = bytes.len();
         tb.ppos = count;
         tb.pending_tok = *tok;
-        (MPACK_EOF, count)
+        (Err(TokenStop::Short), count)
     }
 }
 
 /// Hand over the rest of a parked encoding (`mpack_wpending`).
-fn drain_pending(tb: &mut TokBuf, out: &mut [u8]) -> (c_int, usize) {
+fn drain_pending(tb: &mut TokBuf, out: &mut [u8]) -> (Result<(), TokenStop>, usize) {
     debug_assert!(tb.ppos < tb.plen, "nothing pending");
     let count = (tb.plen - tb.ppos).min(out.len());
     out[..count].copy_from_slice(&tb.pending[tb.ppos..tb.ppos + count]);
     tb.ppos += count;
     if tb.ppos == tb.plen {
         tb.plen = 0;
-        (MPACK_OK, count)
+        (Ok(()), count)
     } else {
-        (MPACK_EOF, count)
+        (Err(TokenStop::Short), count)
     }
 }
 
 /// Copy the next slice of a `str`/`bin`/`ext` body out of `body`, which is
 /// the whole of it. `ppos` counts how much of *this* chunk has gone, and
 /// `plen` holds the chunk's length while it is unfinished.
-fn write_chunk(tb: &mut TokBuf, tok: &Tok, body: &[u8], out: &mut [u8]) -> (c_int, usize) {
+fn write_chunk(
+    tb: &mut TokBuf,
+    tok: &Tok,
+    body: &[u8],
+    out: &mut [u8],
+) -> (Result<(), TokenStop>, usize) {
     if tb.plen == 0 {
         tb.ppos = 0;
     }
@@ -294,11 +318,11 @@ fn write_chunk(tb: &mut TokBuf, tok: &Tok, body: &[u8], out: &mut [u8]) -> (c_in
     tb.ppos += count;
     if count == outstanding {
         tb.plen = 0;
-        (MPACK_OK, count)
+        (Ok(()), count)
     } else {
         tb.plen = tok.len as usize;
         tb.pending_tok = *tok;
-        (MPACK_EOF, count)
+        (Err(TokenStop::Short), count)
     }
 }
 
@@ -308,23 +332,23 @@ fn write_chunk(tb: &mut TokBuf, tok: &Tok, body: &[u8], out: &mut [u8]) -> (c_in
 ///
 /// The RPC framer uses this to peek at a redraw batch and an extension's
 /// payload, where the input is a complete buffer by construction. A short
-/// token answers `MPACK_EOF` with its type code consumed, as the C did; an
-/// invalid byte answers `MPACK_ERROR`, consumed too.
+/// token answers [`TokenStop::Short`] with its type code consumed, as the C
+/// did; an invalid byte answers [`TokenStop::Invalid`], consumed too.
 #[inline]
-pub fn read_token(input: &mut &[u8]) -> (c_int, Tok) {
+pub(crate) fn read_token(input: &mut &[u8]) -> Result<Tok, TokenStop> {
     match token::decode_token(input) {
         Read::Done { tok, used } => {
             *input = &input[used..];
-            (MPACK_OK, tok)
+            Ok(tok)
         }
         Read::Partial { .. } => {
             *input = &input[1..];
-            (MPACK_EOF, Tok::default())
+            Err(TokenStop::Short)
         }
-        Read::Empty => (MPACK_EOF, Tok::default()),
+        Read::Empty => Err(TokenStop::Short),
         Read::Invalid => {
             *input = &input[1..];
-            (MPACK_ERROR, Tok::default())
+            Err(TokenStop::Invalid)
         }
     }
 }
@@ -420,11 +444,11 @@ mod tests {
         let tok = token::pack_uint(u64::MAX);
         let mut out = [0u8; 4];
         let (status, written) = write_step(&mut tb, &tok, &mut out);
-        assert_eq!((status, written), (MPACK_EOF, 4));
+        assert_eq!((status, written), (Err(TokenStop::Short), 4));
         assert_eq!(out, [0xcf, 0xff, 0xff, 0xff]);
         let mut rest = [0u8; 16];
         let (status, written) = drain_pending(&mut tb, &mut rest);
-        assert_eq!((status, written), (MPACK_OK, 5));
+        assert_eq!((status, written), (Ok(()), 5));
         assert_eq!(&rest[..5], &[0xff, 0xff, 0xff, 0xff, 0xff]);
         assert_eq!(tb.plen, 0);
     }
@@ -435,7 +459,7 @@ mod tests {
         let mut out = [0u8; 16];
         assert_eq!(
             write_step(&mut tb, &Tok::default(), &mut out),
-            (MPACK_ERROR, 0)
+            (Err(TokenStop::Invalid), 0)
         );
     }
 
@@ -445,11 +469,11 @@ mod tests {
         let body = b"hello";
         let tok = Tok::new(Kind::Chunk, 5, 0, 0);
         let mut out = [0u8; 3];
-        assert_eq!(tb.write(&mut out, &tok, body), (MPACK_EOF, 3));
+        assert_eq!(tb.write(&mut out, &tok, body), (Err(TokenStop::Short), 3));
         assert!(tb.is_parked());
         // The parked token wins over the argument.
         let mut rest = [0u8; 8];
-        assert_eq!(tb.write(&mut rest, &Tok::default(), body), (MPACK_OK, 2));
+        assert_eq!(tb.write(&mut rest, &Tok::default(), body), (Ok(()), 2));
         assert_eq!((&out[..], &rest[..2]), (&b"hel"[..], &b"lo"[..]));
         assert!(!tb.is_parked());
     }
@@ -471,10 +495,10 @@ mod tests {
     #[test]
     fn read_token_consumes_the_type_code_of_a_short_token() {
         let mut input: &[u8] = b"\xcf\x00";
-        assert_eq!(read_token(&mut input).0, MPACK_EOF);
+        assert_eq!(read_token(&mut input), Err(TokenStop::Short));
         assert_eq!(input, b"\x00");
         let mut input: &[u8] = b"\x07\x08";
-        let (status, tok) = read_token(&mut input);
-        assert_eq!((status, tok.lo, input), (MPACK_OK, 7, &b"\x08"[..]));
+        let tok = read_token(&mut input).map(|tok| tok.lo);
+        assert_eq!((tok, input), (Ok(7), &b"\x08"[..]));
     }
 }

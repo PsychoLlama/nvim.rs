@@ -572,7 +572,7 @@
     "crates/nvim/src/mpack/lmpack/session.rs": {"pub_items": 7},
     "crates/nvim/src/mpack/lmpack/walk.rs": {"pub_items": 5},
     "crates/nvim/src/mpack/mod.rs": {"pub_items": 6},
-    "crates/nvim/src/mpack/mpack_core.rs": {"pub_items": 17},
+    "crates/nvim/src/mpack/mpack_core.rs": {"pub_items": 16},
     "crates/nvim/src/mpack/object.rs": {"pub_items": 7},
     "crates/nvim/src/mpack/rpc.rs": {"pub_items": 11},
     "crates/nvim/src/mpack/token.rs": {"pub_items": 16},

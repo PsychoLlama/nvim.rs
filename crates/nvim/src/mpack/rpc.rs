@@ -255,8 +255,8 @@ impl Session {
             }
             let (write_status, count) = self.writer.write(&mut out[written..], &tok, &[]);
             written += count;
-            if write_status != MPACK_OK {
-                status = write_status;
+            if let Err(stop) = write_status {
+                status = stop as c_int;
             }
         }
         (status, written)

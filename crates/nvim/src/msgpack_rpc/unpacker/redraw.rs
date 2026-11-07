@@ -19,7 +19,7 @@
 use crate::grid::schar_from_buf;
 
 use crate::global_cell::GlobalCell;
-use crate::mpack::mpack_core::{MPACK_EOF, MPACK_OK, read_token};
+use crate::mpack::mpack_core::{TokenStop, read_token};
 use crate::mpack::token::{self, Tok};
 use crate::types::{
     Array, GridLineEvent, RawLine, ScreenAttr, ScreenChar, Unpacker, mpack_token_type_t, size_t,
@@ -81,14 +81,11 @@ impl<'a> Cursor<'a> {
 
     /// Reads one token and checks it is the kind this position calls for.
     fn next(&mut self, expected: mpack_token_type_t) -> Result<Tok, Halt> {
-        let (result, tok) = read_token(&mut self.data);
-        if result == MPACK_EOF {
-            return Err(Halt::Incomplete);
+        match read_token(&mut self.data) {
+            Err(TokenStop::Short) => Err(Halt::Incomplete),
+            Ok(tok) if protocol::token_matches(expected, token_type(&tok)) => Ok(tok),
+            Ok(_) | Err(TokenStop::Invalid) => Err(Halt::Invalid),
         }
-        if result != MPACK_OK || !protocol::token_matches(expected, token_type(&tok)) {
-            return Err(Halt::Invalid);
-        }
-        Ok(tok)
     }
 
     /// Consumes `len` bytes of payload and hands them back, or answers that
