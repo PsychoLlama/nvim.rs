@@ -116,6 +116,7 @@ mod typval;
 mod typval_dict;
 mod typval_list;
 mod typval_value;
+mod ui;
 mod undo;
 mod unpacker;
 mod usercmd;
