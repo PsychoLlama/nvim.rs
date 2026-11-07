@@ -326,3 +326,73 @@ fn checktime_drop_and_the_script_hosts() {
     );
     reset(&fx);
 }
+
+/// What `:checktime` makes of a file changed behind the buffer's back: the
+/// reason `FileChangedShell` is handed for each kind of change, the reload
+/// 'autoread' does on its own, `v:fcs_choice`'s reload, the `E211` for a
+/// file that went away (said once), and `FileChangedShellPost` after each.
+#[test]
+fn checktime_tells_each_kind_of_change() {
+    let sandbox = Sandbox::dir("ex_cmds2_timestamps");
+    let fx = Probe::new(sandbox.editor());
+    files(&sandbox);
+    reset(&fx);
+    fx.run("edit a.txt");
+    fx.run("let g:fcs = [] | let g:post = 0");
+    fx.run("autocmd FileChangedShell * call add(g:fcs, v:fcs_reason)");
+    fx.run("autocmd FileChangedShellPost * let g:post += 1");
+    let touch = |text: &str| {
+        // Different contents and size, so the reason is "changed" and not
+        // only "time".
+        // A clock tick apart, or a coarse file system keeps the old mtime.
+        fx.run("sleep 20m");
+        fx.run(&format!("call writefile(['{text}'], 'a.txt')"));
+    };
+    // Changed on disk, buffer untouched.
+    touch("a2 a2");
+    fx.check_messages("checktime", "none");
+    // Changed on disk and in the buffer.
+    fx.run("call setline(1, 'mine')");
+    touch("a3 a3 a3");
+    fx.check_messages("checktime", "none");
+    fx.run("set nomodified");
+    // The mode alone.
+    fx.run("sleep 20m");
+    fx.run("call setfperm('a.txt', 'rw-------')");
+    fx.check_messages("checktime", "none");
+    // Deleted.
+    fx.run("call delete('a.txt')");
+    fx.check_messages("checktime", "none");
+    fx.check("g:fcs", "['conflict', 'deleted']");
+    fx.check("g:post", "2");
+
+    // A reload asked for by the handler.
+    fx.run("autocmd! FileChangedShell");
+    fx.run("autocmd FileChangedShell * let v:fcs_choice = 'reload'");
+    touch("reloaded");
+    fx.run("edit! a.txt");
+    touch("reloaded twice");
+    fx.check_messages("checktime", "none");
+    fx.check("getline(1)", "'reloaded twice'");
+    fx.run("autocmd! FileChangedShell");
+
+    // 'autoread' reloads an unchanged buffer without asking anyone.
+    fx.run("setlocal autoread");
+    touch("autoread");
+    fx.check_messages("checktime", "none");
+    fx.check("getline(1)", "'autoread'");
+    fx.run("setlocal autoread<");
+
+    // Gone, with no handler: E211, once. Said as a warning, so read back
+    // through `v:warningmsg`.
+    fx.run("call delete('a.txt') | let v:warningmsg = ''");
+    fx.run("checktime");
+    fx.check("v:warningmsg", "'E211: File \"a.txt\" no longer available'");
+    fx.run("let v:warningmsg = ''");
+    fx.run("checktime");
+    fx.check("v:warningmsg", "''");
+    fx.check("g:post", "6");
+    fx.run("autocmd! FileChangedShellPost");
+    fx.settle();
+    reset(&fx);
+}

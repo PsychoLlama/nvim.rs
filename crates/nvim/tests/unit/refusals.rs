@@ -322,3 +322,132 @@ fn command_refusals() {
     fx.home();
     fx.settle();
 }
+
+/// `setcellwidths()`'s list checks, each message once and the old table
+/// kept.
+#[test]
+fn cell_width_refusals() {
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    fx.run("call setcellwidths([[0x2103, 0x2103, 2]])");
+    for (call, want) in [
+        ("call setcellwidths(1)", "E714: List required"),
+        (
+            "call setcellwidths([1])",
+            "E1109: List item 0 is not a List",
+        ),
+        (
+            "call setcellwidths([[0x100, 0x101, 1], [0x101, 0x102, 1]])",
+            "E1113: Overlapping ranges for 0x101",
+        ),
+        (
+            "call setcellwidths([[0x10, 0x20, 1]])",
+            "E1114: Only values of 0x80 and higher supported",
+        ),
+        (
+            "call setcellwidths([[0x200, 0x100, 1]])",
+            "E1111: List item 0 range invalid",
+        ),
+        (
+            "call setcellwidths([[0x100, 0x101, 3]])",
+            "E1112: List item 0 cell width invalid",
+        ),
+        (
+            "call setcellwidths([[0x100, 0x101]])",
+            "E1110: List item 0 does not contain 3 numbers",
+        ),
+        (
+            "call setcellwidths([[0x100, 0x101, 1, 1]])",
+            "E1110: List item 0 does not contain 3 numbers",
+        ),
+        (
+            "call setcellwidths([[0x100, 'x', 1]])",
+            "E1110: List item 0 does not contain 3 numbers",
+        ),
+        ("call setcellwidths([[0x2103, 0x2103, 1]])", "none"),
+    ] {
+        fx.check_messages(call, want);
+    }
+    fx.check("getcellwidths()", "[[8451, 8451, 1]]");
+    fx.run("call setcellwidths([])");
+    fx.settle();
+}
+
+/// The shell's refusals: an empty 'shell' for `system()`, `:!` and a
+/// backtick expansion, with `v:shell_error` after each.
+#[test]
+fn shell_refusals() {
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    fx.run("let g:rf_save_sh = &shell");
+    fx.run("set shell=");
+    fx.check_messages("call system('true')", "none");
+    fx.check("v:shell_error", "-1");
+    fx.check_messages("!true", "E91: 'shell' option is empty");
+    fx.check("v:shell_error", "-1");
+    fx.check_messages("echo expand('`true`')", "E91: 'shell' option is empty");
+    fx.check_messages("r !true", "E91: 'shell' option is empty");
+    fx.run("let &shell = g:rf_save_sh | unlet g:rf_save_sh");
+    fx.check_messages("call system('exit 3')", "none");
+    fx.check("v:shell_error", "3");
+    fx.settle();
+}
+
+/// The Lua converter's and executor's refusals, each said once: a table
+/// with mixed keys, a value of no Vimscript type, a userdata that is not
+/// `vim.NIL`, a `:command` callback that errors, and the answer each leaves.
+#[test]
+fn lua_refusals() {
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    for (cmd, want) in [
+        (
+            "let g:lr = luaeval('{1, a = 2}')",
+            "E5100: Cannot convert given Lua table: table should contain either only integer keys or only string keys",
+        ),
+        (
+            "let g:lr = luaeval('coroutine.create(function() end)')",
+            "E5101: Cannot convert given Lua type",
+        ),
+        (
+            "let g:lr = luaeval('io.stdout')",
+            "E5101: Cannot convert given Lua type",
+        ),
+        (
+            "let g:lr = luaeval('{{1, a = 2}}')",
+            "E5100: Cannot convert given Lua table: table should contain either only integer keys or only string keys",
+        ),
+        ("let g:lr = luaeval('vim.NIL')", "none"),
+        ("let g:lr = v:lua.vim.fn.type(1)", "none"),
+    ] {
+        fx.check_messages(cmd, want);
+    }
+    fx.check("exists('g:lr')", "1");
+    fx.run("unlet! g:lr");
+    fx.run("lua vim.api.nvim_create_user_command('LrFail', function() error('lr boom') end, {})");
+    let got = fx.messages_of("LrFail");
+    let first = got.lines().next().unwrap_or_default().to_owned();
+    assert_eq!(first, "Lua :command callback: [string \":lua\"]:1: lr boom");
+    fx.run("delcommand LrFail");
+    fx.settle();
+}
+
+/// The channel's refusal to close a stream it does not have, the dynamic
+/// loader's two, and the directory `:write ++p` could not make.
+#[test]
+fn channel_libcall_and_mkdir_refusals() {
+    let sandbox = Sandbox::dir("refusals_os");
+    let fx = Probe::new(sandbox.editor());
+    fx.check_messages("echo rpcstop(999)", "E900: Invalid channel id");
+    fx.check_messages("call libcall('/nonexistent/libno.so', 'f', '')", "dlerror = \"/nonexistent/libno.so: cannot open shared object file: No such file or directory\"\nE364: Library call failed for \"f()\"");
+    fx.check_messages("call libcall('libc.so.6', 'rt_no_such_symbol', '')", "dlerror = \"/nix/store/ias8xacs1h3jy7xgwi2awvim61k2ji6c-glibc-2.42-67/lib/libc.so.6: undefined symbol: rt_no_such_symbol\"\nE364: Library call failed for \"rt_no_such_symbol()\"");
+    fx.check_messages("echo serverstop('/nonexistent/rt.sock')", "none");
+    sandbox.write("blocker", b"");
+    fx.check_messages(
+        "write ++p blocker/sub/x.txt",
+        "E739: Cannot create directory blocker: file already exists",
+    );
+    fx.check_messages("write ++p sub/", "E32: No file name");
+    fx.settle();
+    fx.home();
+}

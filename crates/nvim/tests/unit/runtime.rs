@@ -631,3 +631,110 @@ fn the_stack_names_scripts_and_functions() {
     fx.run("delfunction RtInner");
     restore(&fx);
 }
+
+/// Every way `:source` and `:runtime` can come up empty, with every message
+/// each says: a missing file, a directory, a script that fails half way, a
+/// `:finish`, a `SourceCmd` that takes the file over (or throws), a
+/// `:runtime` that finds nothing, and the Lua files' three refusals.
+#[test]
+fn sourcing_says_why_it_could_not() {
+    let sandbox = Sandbox::dir("runtime_refusals");
+    let fx = Probe::new(sandbox.editor());
+    restore(&fx);
+    let dir = sandbox.as_str();
+    sandbox.mkdir("sub");
+    sandbox.write(
+        "half.vim",
+        b"let g:rt_half = 1\ncall RtNoSuch()\nlet g:rt_half = 2\n",
+    );
+    sandbox.write("fin.vim", b"let g:rt_fin = 1\nfinish\nlet g:rt_fin = 2\n");
+    sandbox.write("syntax.lua", b"local x = = 1\n");
+    sandbox.write("raise.lua", b"error('rt raised')\n");
+    sandbox.write("ok.lua", b"vim.g.rt_lua_ok = 1\n");
+    let msgs = |cmd: &str| fx.messages_of(cmd).replace(dir, "<DIR>");
+    let rows = [
+        format!("source {dir}/nosuch.vim"),
+        format!("source {dir}/sub"),
+        format!("source {dir}/half.vim"),
+        format!("source {dir}/fin.vim"),
+        format!("luafile {dir}/nosuch.lua"),
+        format!("luafile {dir}/syntax.lua"),
+        format!("luafile {dir}/raise.lua"),
+        format!("source {dir}/syntax.lua"),
+        format!("source {dir}/ok.lua"),
+        "runtime nosuch/x.vim".into(),
+        "runtime! nosuch/*.vim".into(),
+        "runtime! START nosuch/*.vim".into(),
+    ];
+    let got: Vec<String> = rows
+        .iter()
+        .map(|cmd| format!("{} => {}", cmd.replace(dir, "<DIR>"), msgs(cmd)))
+        .collect();
+    assert_eq!(
+        got,
+        [
+            "source <DIR>/nosuch.vim => E484: Can't open file <DIR>/nosuch.vim",
+            "source <DIR>/sub => E484: Can't open file <DIR>/sub",
+            "source <DIR>/half.vim => Error in <DIR>/half.vim:\nline    2:\nE117: Unknown function: RtNoSuch",
+            "source <DIR>/fin.vim => none",
+            "luafile <DIR>/nosuch.lua => E5112: Lua chunk: cannot open <DIR>/nosuch.lua: No such file or directory",
+            "luafile <DIR>/syntax.lua => E5112: Lua chunk: <DIR>/syntax.lua:1: unexpected symbol near '='",
+            "luafile <DIR>/raise.lua => E5113: Lua chunk: <DIR>/raise.lua:1: rt raised\nstack traceback:\n\t[C]: in function 'error'\n\t<DIR>/raise.lua:1: in main chunk",
+            "source <DIR>/syntax.lua => Error in <DIR>/syntax.lua:\nE5112: Lua chunk: <DIR>/syntax.lua:1: unexpected symbol near '='",
+            "source <DIR>/ok.lua => none",
+            "runtime nosuch/x.vim => none",
+            "runtime! nosuch/*.vim => none",
+            "runtime! START nosuch/*.vim => none",
+        ]
+    );
+    table(
+        &fx,
+        &sandbox,
+        &[("g:rt_half", "2"), ("g:rt_fin", "1"), ("g:rt_lua_ok", "1")],
+    );
+
+    // A `SourceCmd` handler is the sourcing; one that throws fails it.
+    fx.run(&format!(
+        "autocmd SourceCmd {dir}/taken.vim let g:rt_taken = expand('<afile>:t')"
+    ));
+    fx.run(&format!(
+        "autocmd SourceCmd {dir}/thrown.vim throw 'rt thrown'"
+    ));
+    fx.run(&format!(
+        "autocmd SourcePost {dir}/*.vim let g:rt_post = get(g:, 'rt_post', 0) + 1"
+    ));
+    let got: Vec<String> = [
+        format!("source {dir}/taken.vim"),
+        format!("source {dir}/thrown.vim"),
+    ]
+    .iter()
+    .map(|cmd| format!("{} => {}", cmd.replace(dir, "<DIR>"), msgs(cmd)))
+    .collect();
+    assert_eq!(
+        got,
+        [
+            "source <DIR>/taken.vim => none",
+            "source <DIR>/thrown.vim => Error in SourceCmd Autocommands for \"<DIR>/thrown.vim\"..SourceCmd Autocommands for \"<DIR>/thrown.vim\":\nE605: Exception not caught: rt thrown\nE484: Can't open file <DIR>/thrown.vim",
+        ]
+    );
+    table(
+        &fx,
+        &sandbox,
+        &[("g:rt_taken", "'taken.vim'"), ("g:rt_post", "1")],
+    );
+    fx.run("autocmd! SourceCmd | autocmd! SourcePost");
+
+    // With 'verbose' the misses are told.
+    fx.run("set verbose=2");
+    let got = fx.output("runtime nosuch/x.vim");
+    let missing = fx.output(&format!("source {dir}/nosuch.vim"));
+    fx.run("set verbose=0");
+    assert_eq!(
+        [got.replace(dir, "<DIR>"), missing.replace(dir, "<DIR>")],
+        [
+            "\nnot found in runtime path: \"nosuch/x.vim\"",
+            "\ncould not source \"<DIR>/nosuch.vim\"\nE484: Can't open file <DIR>/nosuch.vim",
+        ]
+    );
+    restore(&fx);
+}
