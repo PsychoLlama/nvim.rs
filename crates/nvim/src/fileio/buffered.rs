@@ -354,9 +354,8 @@ impl BufferedFile {
         // The `>=` (rather than `>`) is upstream's: a write that exactly
         // fills the block flushes instead of filling it.
         if size >= BLOCK_BYTES - self.write_pos {
-            let status = self.flush();
-            if status < 0 {
-                return code_as_signed(status);
+            if let Err(code) = self.flush() {
+                return code_as_signed(code);
             }
             if size >= BLOCK_BYTES {
                 // Too big to buffer; hand it straight to the file.
@@ -372,56 +371,52 @@ impl BufferedFile {
         as_signed(size)
     }
 
-    /// Write out whatever is pending: zero or a libuv code.
-    pub fn flush(&mut self) -> c_int {
+    /// Write out whatever is pending, or answer the libuv code.
+    pub fn flush(&mut self) -> Result<(), c_int> {
         if !self.wr {
-            return 0;
+            return Ok(());
         }
         let pending = &self.block[self.read_pos..self.write_pos];
         if pending.is_empty() {
-            return 0;
+            return Ok(());
         }
         let wres = write_from(&self.file, pending, self.non_blocking);
         let to_write = as_signed(pending.len());
         self.write_pos = 0;
         self.read_pos = 0;
         if wres == to_write {
-            return 0;
+            return Ok(());
         }
         // A short write with no error of its own is an I/O error here.
-        if wres >= 0 {
+        Err(if wres >= 0 {
             UV_EIO
         } else {
             c_int::try_from(wres).expect("a libuv error code is an int")
-        }
+        })
     }
 
-    /// Flush pending output and `fsync` it: zero or a libuv code.
+    /// Flush pending output and `fsync` it, or answer the libuv code.
     ///
     /// A file that cannot be synced at all (EINVAL, a read-only filesystem,
     /// or storage without fsync support) is reported as success.
-    pub fn fsync(&mut self) -> c_int {
+    pub fn fsync(&mut self) -> Result<(), c_int> {
         if !self.wr {
-            return 0;
+            return Ok(());
         }
-        let flush_error = self.flush();
-        if flush_error != 0 {
-            return flush_error;
-        }
+        self.flush()?;
         match fsync_file(&self.file) {
-            Err(error) if error != UV_EINVAL && error != UV_EROFS && error != UV_ENOTSUP => error,
-            _ => 0,
+            Err(error) if error != UV_EINVAL && error != UV_EROFS && error != UV_ENOTSUP => {
+                Err(error)
+            }
+            _ => Ok(()),
         }
     }
 
-    /// Flush (and `fsync` when asked), then close: zero or a libuv code. A
-    /// close error outranks a flush error.
-    pub fn close(mut self, do_fsync: bool) -> c_int {
-        let flush_error = if do_fsync { self.fsync() } else { self.flush() };
-        match close_file(self.file) {
-            Err(close_error) => close_error,
-            Ok(()) => flush_error,
-        }
+    /// Flush (and `fsync` when asked), then close, or answer the libuv
+    /// code. A close error outranks a flush error.
+    pub fn close(mut self, do_fsync: bool) -> Result<(), c_int> {
+        let flushed = if do_fsync { self.fsync() } else { self.flush() };
+        close_file(self.file).and(flushed)
     }
 }
 
@@ -455,13 +450,14 @@ impl WriteFile {
         }
     }
 
-    /// Write out whatever is pending; zero or a libuv error code.
-    pub(crate) fn flush(&mut self) -> c_int {
+    /// Write out whatever is pending, or answer the libuv error code.
+    pub(crate) fn flush(&mut self) -> Result<(), c_int> {
         self.0.flush()
     }
 
-    /// Flush, `fsync` when asked, and close; zero or a libuv error code.
-    pub(crate) fn close(self, do_fsync: bool) -> c_int {
+    /// Flush, `fsync` when asked, and close, or answer the libuv error
+    /// code.
+    pub(crate) fn close(self, do_fsync: bool) -> Result<(), c_int> {
         self.0.close(do_fsync)
     }
 }
@@ -542,10 +538,7 @@ impl ReadFile {
 
     /// Close, or the libuv error code saying what went wrong.
     pub(crate) fn close(self) -> Result<(), c_int> {
-        match self.0.close(false) {
-            0 => Ok(()),
-            error => Err(error),
-        }
+        self.0.close(false)
     }
 }
 

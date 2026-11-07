@@ -54,8 +54,7 @@ use super::{ShadaError, WriteStatus, read_flags};
 /// a write does, so there is nothing left to do about it but say.
 /// `'fsync'` decides whether the bytes are pushed to the platter first.
 fn close_writer(file: WriteFile) {
-    let error = file.close(p_fs());
-    if error != 0 {
+    if let Err(error) = file.close(p_fs()) {
         ShadaError::Close(error).report();
     }
 }

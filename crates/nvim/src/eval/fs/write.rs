@@ -115,9 +115,9 @@ fn write_list(out: &mut WriteFile, list: Option<&List>, binary: bool) -> Result<
                 }
             }
         }
-        error = out.flush();
-        if error == 0 {
-            return Ok(());
+        match out.flush() {
+            Ok(()) => return Ok(()),
+            Err(code) => error = code,
         }
     }
     err_writing(error);
@@ -138,9 +138,9 @@ fn write_data(out: &mut WriteFile, data: &[u8]) -> Result<(), Failed> {
                 break 'failed;
             }
         }
-        error = out.flush();
-        if error == 0 {
-            return Ok(());
+        match out.flush() {
+            Ok(()) => return Ok(()),
+            Err(code) => error = code,
         }
     }
     err_writing(error);
@@ -303,8 +303,7 @@ pub fn f_writefile(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if written.is_ok() {
         result.write_number(0 as VarNumber);
     }
-    let error = out.close(flags.do_fsync);
-    if error != 0 {
+    if let Err(error) = out.close(flags.do_fsync) {
         let (name, why) = (msg_cstr(fname), msg_cstr(os_strerror(error)));
         semsg!("E80: Error when closing file {name}: {why}");
     }

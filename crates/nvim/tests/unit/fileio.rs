@@ -134,16 +134,16 @@ impl Handle {
         self.file().skip(size)
     }
 
-    fn flush(&mut self) -> c_int {
+    fn flush(&mut self) -> Result<(), c_int> {
         self.file().flush()
     }
 
-    fn fsync(&mut self) -> c_int {
+    fn fsync(&mut self) -> Result<(), c_int> {
         self.file().fsync()
     }
 
     /// Closing spends the file, so nothing may close it twice.
-    fn close(&mut self, do_fsync: bool) -> c_int {
+    fn close(&mut self, do_fsync: bool) -> Result<(), c_int> {
         self.0.take().expect("an open file").close(do_fsync)
     }
 }
@@ -170,14 +170,14 @@ fn a_descriptor_can_be_adopted_for_reading_and_for_writing() {
     assert_eq!(err, 0);
     let want = contents();
     assert_eq!(fp.read(want.len()), (want.len() as isize, want.clone()));
-    assert_eq!(fp.close(false), 0);
+    assert_eq!(fp.close(false), Ok(()));
 
     assert_eq!(size_of(&fixture.fresh()), None);
     let file = std::fs::File::create(fixture.fresh()).expect("a new file");
     let (err, mut fp) = Handle::adopt(file, kFileWriteOnly);
     assert_eq!(err, 0);
     assert_eq!(fp.write(b"test"), 4);
-    assert_eq!(fp.close(false), 0);
+    assert_eq!(fp.close(false), Ok(()));
     assert_eq!(std::fs::read(fixture.fresh()).unwrap(), b"test");
 }
 
@@ -196,7 +196,7 @@ fn creating_a_file_honours_the_mode_and_create_only_refuses_an_existing_one() {
                 Some(0o100_000 | mode as u32),
                 "{flags:#x} with mode {mode:#o}"
             );
-            assert_eq!(fp.close(false), 0);
+            assert_eq!(fp.close(false), Ok(()));
         }
     }
 
@@ -206,7 +206,7 @@ fn creating_a_file_honours_the_mode_and_create_only_refuses_an_existing_one() {
     let (err, mut fp) = Handle::open(&fixture.file1(), kFileCreate, RW);
     assert_eq!(err, 0);
     assert!(fp.writing());
-    assert_eq!(fp.close(false), 0);
+    assert_eq!(fp.close(false), Ok(()));
 }
 
 /// Which flags open which side. Read is the default, and every creating or
@@ -218,14 +218,14 @@ fn the_flags_decide_which_side_the_descriptor_is() {
         let (err, mut fp) = Handle::open(&fixture.file1(), flags, RW);
         assert_eq!(err, 0, "{flags:#x}");
         assert!(!fp.writing(), "{flags:#x} reads");
-        assert_eq!(fp.close(false), 0);
+        assert_eq!(fp.close(false), Ok(()));
     }
 
     // Write-only leaves the contents alone...
     let (err, mut fp) = Handle::open(&fixture.file1(), kFileWriteOnly, RW);
     assert_eq!(err, 0);
     assert!(fp.writing());
-    assert_eq!(fp.close(false), 0);
+    assert_eq!(fp.close(false), Ok(()));
     assert_eq!(size_of(&fixture.file1()), Some(4096));
 
     // ...and truncating does not. The write proves the side is real: with
@@ -235,7 +235,7 @@ fn the_flags_decide_which_side_the_descriptor_is() {
     assert_eq!(err, 0);
     assert!(fp.writing());
     assert_eq!(fp.write(b"kept"), 4);
-    assert_eq!(fp.close(false), 0);
+    assert_eq!(fp.close(false), Ok(()));
     assert_eq!(std::fs::read(fixture.file1()).unwrap(), b"kept");
 }
 
@@ -274,7 +274,7 @@ fn truncating_through_a_symlink_truncates_the_target() {
     let (err, mut fp) = Handle::open(&fixture.link(), kFileTruncate, RW);
     assert_eq!(err, 0);
     assert!(fp.writing());
-    assert_eq!(fp.close(false), 0);
+    assert_eq!(fp.close(false), Ok(()));
     assert_eq!(size_of(&fixture.file1()), Some(0));
 }
 
@@ -306,7 +306,7 @@ fn reading_in_chunks_of_every_awkward_size() {
         }
         // At end of file: nothing read, nothing written.
         assert_eq!(fp.read(size), (0, vec![0; size]));
-        assert_eq!(fp.close(false), 0);
+        assert_eq!(fp.close(false), Ok(()));
     }
 
     // A small read followed by one larger than the buffer: the second has to
@@ -317,7 +317,7 @@ fn reading_in_chunks_of_every_awkward_size() {
     let (count, got) = fp.read(want.len());
     assert_eq!(count, (want.len() - 5) as isize);
     assert_eq!(&got[..want.len() - 5], &want[5..]);
-    assert_eq!(fp.close(false), 0);
+    assert_eq!(fp.close(false), Ok(()));
 }
 
 #[test]
@@ -333,7 +333,7 @@ fn writing_in_chunks_of_every_awkward_size() {
         for chunk in want.chunks(size) {
             assert_eq!(fp.write(chunk), chunk.len() as isize);
         }
-        assert_eq!(fp.close(false), 0);
+        assert_eq!(fp.close(false), Ok(()));
         assert_eq!(std::fs::read(fixture.fresh()).unwrap(), want, "by {size}");
     }
 }
@@ -346,7 +346,7 @@ fn output_reaches_the_disk_only_when_it_is_asked_to() {
     let fixture = Fixture::new("flush");
     // `file_close` spends the descriptor, so unlike the other two it is not
     // followed by a close of its own.
-    type Flusher = (&'static str, fn(&mut Handle) -> c_int, bool);
+    type Flusher = (&'static str, fn(&mut Handle) -> Result<(), c_int>, bool);
     let flushers: [Flusher; 3] = [
         ("file_flush", Handle::flush, true),
         ("file_fsync", Handle::fsync, true),
@@ -360,10 +360,10 @@ fn output_reaches_the_disk_only_when_it_is_asked_to() {
 
         assert_eq!(fp.write(b"test"), 4);
         assert_eq!(size_of(&fixture.fresh()), Some(0), "{name} not called yet");
-        assert_eq!(flush(&mut fp), 0, "{name}");
+        assert_eq!(flush(&mut fp), Ok(()), "{name}");
         assert_eq!(size_of(&fixture.fresh()), Some(4), "{name}");
         if close_after {
-            assert_eq!(fp.close(false), 0, "{name}");
+            assert_eq!(fp.close(false), Ok(()), "{name}");
         }
     }
 }
@@ -380,5 +380,5 @@ fn skipping_advances_the_read_position() {
     // Skipping past the end answers what it could skip, and reads nothing.
     assert_eq!(fp.skip(want.len()), (want.len() - 6) as isize);
     assert_eq!(fp.read(3), (0, vec![0; 3]));
-    assert_eq!(fp.close(false), 0);
+    assert_eq!(fp.close(false), Ok(()));
 }
