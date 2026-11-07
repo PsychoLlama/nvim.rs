@@ -19,11 +19,11 @@
 
 use core::ffi::c_int;
 
-use crate::types::{
-    VTermAttr, VTermGlyphInfo, VTermLineInfo, VTermPos, VTermProp, VTermRect, VTermScreen,
-};
 use crate::vterm::cell::SCHAR_CONTINUATION;
 use crate::vterm::host::Value;
+use crate::vterm::types::{
+    VTermAttr, VTermGlyphInfo, VTermLineInfo, VTermPos, VTermProp, VTermRect, VTermScreen,
+};
 use crate::vterm::vterm::{
     VTERM_ATTR_BACKGROUND, VTERM_ATTR_BASELINE, VTERM_ATTR_BLINK, VTERM_ATTR_BOLD,
     VTERM_ATTR_CONCEAL, VTERM_ATTR_DIM, VTERM_ATTR_FONT, VTERM_ATTR_FOREGROUND, VTERM_ATTR_ITALIC,

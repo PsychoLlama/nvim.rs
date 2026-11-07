@@ -1188,9 +1188,9 @@ PERIMETER = {
 FOREIGN_ABI_TYPES = {
     "crates/nvim/src/event/uv.rs": "libuv's own structs: the loop, handles, "
     "requests and process options, all registered with the library by address",
-    "crates/nvim/src/types/vterm.rs": "libvterm's public types -- the ported "
+    "crates/nvim/src/vterm/types.rs": "libvterm's public types -- the ported "
     "library keeps its C ABI, so these are its interface",
-    "crates/nvim/src/types/vterm_internal.rs": "the same library's internal "
+    "crates/nvim/src/vterm/internal.rs": "the same library's internal "
     "state, reached through the same ABI",
     "crates/nvim/src/types/termkey.rs": "libtermkey's instance and driver, "
     "ported with its ABI intact and driven from `tui/`",
@@ -2278,8 +2278,6 @@ COPY_KEEPERS = {
     "crates/nvim/src/types/ui.rs::UIClientHandler": "handle: a static name and a fn pointer",
     "crates/nvim/src/types/undo.rs::UndoLink": "value",
     "crates/nvim/src/types/undo.rs::VisualInfo": "value",
-    "crates/nvim/src/types/vterm.rs": "ffi: libvterm's public types",
-    "crates/nvim/src/types/vterm_internal.rs": "ffi: libvterm's internal state",
     "crates/nvim/src/undo/apply/time.rs::Aim": "value",
     "crates/nvim/src/undo/apply/time.rs::UndoCounters": "value",
     "crates/nvim/src/undo/store.rs::Marks": "value",
@@ -2296,8 +2294,10 @@ COPY_KEEPERS = {
     "crates/nvim/src/viml/parser/expressions/mod.rs::LexExprTokenComparison": "value",
     "crates/nvim/src/vterm/abi/foreign.rs": "ffi: the C callers' parser/state callbacks",
     "crates/nvim/src/vterm/host.rs::Fragment": "value",
+    "crates/nvim/src/vterm/internal.rs": "ffi: libvterm's internal state",
     "crates/nvim/src/vterm/keyboard.rs::Keycode": "value",
     "crates/nvim/src/vterm/keyboard.rs::KeyModes": "value",
+    "crates/nvim/src/vterm/types.rs": "ffi: libvterm's public types",
     "crates/nvim/src/window/arith.rs::MinSize": "value",
     "crates/nvim/src/winlayer.rs::Win": "handle: the window's {pointer, id}",
     "crates/nvim/src/winlayer.rs::Buf": "handle: the buffer's {pointer, id}",
@@ -2327,8 +2327,8 @@ REPR_C_FLOOR = {
     "crates/nvim/src/memline/blocks.rs::PointerBlockLayout": "codec: the swap file's pointer block on disk",
     "crates/nvim/src/memline/blocks.rs::PointerEntry": "codec: a pointer block's entry on disk",
     "crates/nvim/src/memline/blocks.rs::DataBlockLayout": "codec: the swap file's data block on disk",
-    "crates/nvim/src/types/vterm.rs": "ffi: libvterm's public types",
-    "crates/nvim/src/types/vterm_internal.rs": "ffi: libvterm's internal state",
+    "crates/nvim/src/vterm/types.rs": "ffi: libvterm's public types",
+    "crates/nvim/src/vterm/internal.rs": "ffi: libvterm's internal state",
     "crates/nvim/src/lua/abi.rs": "ffi: LuaJIT's `lua_State`",
 }
 KEEPER_CLASSES = {

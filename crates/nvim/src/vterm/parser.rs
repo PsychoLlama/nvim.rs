@@ -21,8 +21,9 @@
 
 use crate::narrow::as_index;
 use crate::narrow::const_len_as_int;
-use crate::types::{VTerm_parser, VTermParserState, VTermTerminator};
 use crate::vterm::host::{Csi, Fragment, ParserHandler};
+use crate::vterm::internal::VTermParserState;
+use crate::vterm::types::{VTerm_parser, VTermTerminator};
 use crate::vterm::vterm::{VTERM_TERMINATOR_BEL, VTERM_TERMINATOR_ST};
 use core::ffi::{CStr, c_int, c_long};
 use core::ops::{Deref, DerefMut};

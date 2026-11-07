@@ -18,22 +18,23 @@
 
 use core::ffi::{c_int, c_uint};
 
-use crate::types::{
-    ParserScratch, VTerm, VTerm_mode, VTerm_parser, VTermAttr, VTermColor, VTermDamageSize,
-    VTermKey, VTermModifier, VTermParserState, VTermPos, VTermProp, VTermRect, VTermScreen,
-    VTermScreenCell, VTermSelectionMask, VTermState, VTermState_mouse_protocol,
-    VTermState_tmp_selection_state, VTermTerminator, VTermValueType,
-};
 use crate::vterm::abi::{ForeignOutput, ForeignParser};
 use crate::vterm::host::{
     Fallbacks, NoParserHandler, ParserHandler, ScreenHost, SelectionHost, Value,
 };
+use crate::vterm::internal::VTermParserState;
+use crate::vterm::keycodes::{VTermKey, VTermModifier};
 use crate::vterm::mode;
 use crate::vterm::output::EscapeSeq;
 use crate::vterm::parser;
 use crate::vterm::pen::{convert_color_to_rgb, set_palette_color};
 use crate::vterm::screen::ScreenRow;
 use crate::vterm::state::StateCx;
+use crate::vterm::types::{
+    ParserScratch, VTerm, VTerm_mode, VTerm_parser, VTermAttr, VTermColor, VTermDamageSize,
+    VTermPos, VTermProp, VTermRect, VTermScreen, VTermScreenCell, VTermSelectionMask, VTermState,
+    VTermState_mouse_protocol, VTermState_tmp_selection_state, VTermTerminator, VTermValueType,
+};
 
 /// How much of the screen a single damaged cell is reported as.
 pub const VTERM_DAMAGE_CELL: VTermDamageSize = 0;

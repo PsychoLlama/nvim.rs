@@ -23,7 +23,7 @@
 
 use core::ffi::c_long;
 
-use crate::types::{VTermColor, VTermColor_rgb};
+use crate::vterm::types::{VTermColor, VTermColor_rgb};
 
 /// A colour with all four of its bytes zero: what libvterm's zeroed
 /// allocations held before anything set one.

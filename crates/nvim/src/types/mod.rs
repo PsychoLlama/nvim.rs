@@ -100,9 +100,6 @@ pub mod usercmd;
 pub mod userfunc;
 pub mod utf8proc;
 pub mod vim;
-pub mod vterm;
-pub mod vterm_internal;
-pub mod vterm_keycodes;
 pub mod win;
 pub mod window;
 
@@ -201,8 +198,5 @@ pub use self::usercmd::*;
 pub use self::userfunc::*;
 pub use self::utf8proc::*;
 pub use self::vim::*;
-pub use self::vterm::*;
-pub use self::vterm_internal::*;
-pub use self::vterm_keycodes::*;
 pub use self::win::*;
 pub use self::window::*;

@@ -45,8 +45,8 @@ use crate::options::{
     kOptTpfFlagHT,
 };
 use crate::types::Key;
-use crate::types::VTerm;
-use crate::types::{VTermKey, VTermModifier};
+use crate::vterm::keycodes::{VTermKey, VTermModifier};
+use crate::vterm::types::VTerm;
 use crate::winlayer::graph::switch_to;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;

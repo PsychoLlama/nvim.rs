@@ -19,8 +19,8 @@
 
 use core::ffi::{c_int, c_uint};
 
-use crate::types::{VTermRect, VTermState};
 use crate::vterm::state::StateCx;
+use crate::vterm::types::{VTermRect, VTermState};
 
 /// A row is drawn at its normal width, or at half of it when the line is
 /// marked double-width.
@@ -183,8 +183,8 @@ impl StateCx<'_> {
 
 #[cfg(test)]
 mod tests {
-    use crate::types::VTermPos;
     use crate::vterm::state::test_cx::with_state;
+    use crate::vterm::types::VTermPos;
 
     #[test]
     fn an_unset_margin_reaches_the_edge_of_the_screen() {

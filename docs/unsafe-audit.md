@@ -346,7 +346,7 @@ not taken, or a fix listed for later.
   `cleanup_function_call` disowns them, or they are upgraded to real copies
   when the scope outlives the call. Residual: a panic unwinding through a
   call would release the named values a second time while the process dies.
-- **The emulator's offset keepers** (`types/vterm*.rs`): `_lineinfo_slots`
+- **The emulator's offset keepers** (`vterm/types.rs`, `vterm/internal.rs`): `_lineinfo_slots`
   and `_buffer_slot` exist only so that C declarations the battery and the
   fixture compile keep reading the right offsets. Not unsafe in Rust, but a
   layout contract with C; re-cutting `vtsweep`'s declarations would drop them.

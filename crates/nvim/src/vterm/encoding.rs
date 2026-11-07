@@ -20,8 +20,8 @@
 #![forbid(unsafe_code)]
 
 use crate::os::libc::uint32_t;
-use crate::types::{VTermEncoding, VTermEncodingType};
 use crate::vterm::abi::{ENCODING_DEC_DRAWING, ENCODING_USASCII, ENCODING_UTF8};
+use crate::vterm::internal::{VTermEncoding, VTermEncodingType};
 use core::ffi::c_int;
 use core::ptr::NonNull;
 

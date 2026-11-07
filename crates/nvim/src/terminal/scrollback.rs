@@ -30,8 +30,9 @@ use crate::memline::{ml_append_buf_terminated, ml_delete_buf};
 use crate::narrow::as_index;
 use crate::narrow::count_as_int;
 use crate::narrow::len_as_int;
-use crate::types::{LineNr, OptInt, VTermPos, VTermScreenCell};
+use crate::types::{LineNr, OptInt};
 use crate::vterm::screen::ZERO_SCREEN_CELL;
+use crate::vterm::types::{VTermPos, VTermScreenCell};
 use crate::winlayer::Buf;
 use core::ffi::c_int;
 

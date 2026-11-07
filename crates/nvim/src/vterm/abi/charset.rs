@@ -24,8 +24,8 @@ use core::ptr::NonNull;
 use core::slice;
 
 use crate::os::libc::{size_t, uint32_t};
-use crate::types::{VTermEncoding, VTermEncodingType};
 use crate::vterm::encoding::{self, Charset, Codepoints};
+use crate::vterm::internal::{VTermEncoding, VTermEncodingType};
 
 // ------------------------------------------------------ the character sets
 

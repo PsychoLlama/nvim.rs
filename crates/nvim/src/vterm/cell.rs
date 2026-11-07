@@ -20,7 +20,8 @@
 
 use core::ffi::c_uint;
 
-use crate::types::{ScreenCell, ScreenChar, ScreenPen, VTermColor, VTermScreenCell};
+use crate::types::ScreenChar;
+use crate::vterm::types::{ScreenCell, ScreenPen, VTermColor, VTermScreenCell};
 
 /// The `schar` of the cell hidden behind a double-width glyph.
 pub const SCHAR_CONTINUATION: ScreenChar = ScreenChar::MAX;
@@ -128,7 +129,7 @@ pub fn import_row(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{VTermColor, VTermScreenCellAttrs};
+    use crate::vterm::types::{VTermColor, VTermScreenCellAttrs};
 
     fn black() -> VTermColor {
         VTermColor { type_0: 0 }

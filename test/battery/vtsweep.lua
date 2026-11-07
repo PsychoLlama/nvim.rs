@@ -7,7 +7,7 @@
 -- pen.rs, keyboard.rs, mouse.rs, encoding.rs, csi.rs, dcs.rs, mode.rs,
 -- damage.rs, cell.rs, color.rs, geometry.rs, output.rs, selection.rs,
 -- text.rs and vterm.rs -- plus the 33 `repr(C)` types in
--- types/vterm{,_internal,_keycodes}.rs that cross the C ABI.
+-- vterm/{types,internal,keycodes}.rs that cross the C ABI.
 --
 -- THE MECHANISM, in one paragraph.  `nvim -u NONE -i NONE -l <this
 -- file>` is a Lua script in a started-but-idle editor -- no main loop,

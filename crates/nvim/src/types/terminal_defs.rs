@@ -12,6 +12,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use crate::os::libc::uint16_t;
+use crate::vterm::types::{VTerm, VTermScreenCell, VTermTerminator};
 use std::collections::VecDeque;
 
 use super::*;

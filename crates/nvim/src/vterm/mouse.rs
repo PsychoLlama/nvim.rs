@@ -21,8 +21,9 @@
 )]
 #![forbid(unsafe_code)]
 
-use crate::types::{VTerm, VTermModifier};
+use crate::vterm::keycodes::VTermModifier;
 use crate::vterm::output::EscapeSeq;
+use crate::vterm::types::VTerm;
 use core::ffi::{c_int, c_uint};
 use core::fmt::Write;
 

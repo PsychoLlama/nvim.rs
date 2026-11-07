@@ -37,17 +37,18 @@ use core::ops::{Deref, DerefMut};
 
 use crate::grid::schar_from_buf;
 use crate::mbyte::{c_partial_cells_in, encode_char, iscomposing};
-use crate::types::{
-    GraphemeState, ScreenChar, VTerm_mode, VTermAttr, VTermGlyphInfo, VTermLineInfo, VTermPos,
-    VTermProp, VTermRect, VTermScreen, VTermSelectionMask, VTermState, VTermState_tmp,
-    VTermState_tmp_selection, VTermStateFields,
-};
+use crate::types::{GraphemeState, ScreenChar};
 use crate::vterm::abi::ForeignState;
 use crate::vterm::encoding::{self, Charset};
 use crate::vterm::host::{Fallbacks, Fragment, SelectionHost, Value};
 use crate::vterm::output::EscapeSeq;
 use crate::vterm::pen::{apply_sgr, reset_pen, restore_pen};
 use crate::vterm::screen::{BUFIDX_ALTSCREEN, BUFIDX_PRIMARY};
+use crate::vterm::types::{
+    VTerm_mode, VTermAttr, VTermGlyphInfo, VTermLineInfo, VTermPos, VTermProp, VTermRect,
+    VTermScreen, VTermSelectionMask, VTermState, VTermState_tmp, VTermState_tmp_selection,
+    VTermStateFields,
+};
 use crate::vterm::vterm::{Output, ScrollTarget, scroll_rect};
 
 /// What the host asked to be told about the pointer, as
@@ -781,7 +782,7 @@ pub(super) mod test_cx {
     //! and nobody listening for replies.
 
     use super::*;
-    use crate::types::VTerm;
+    use crate::vterm::types::VTerm;
 
     /// Runs `body` against a state machine `rows` by `cols`.
     pub(in crate::vterm) fn with_state(

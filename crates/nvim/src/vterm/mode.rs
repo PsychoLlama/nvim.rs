@@ -16,11 +16,12 @@
 use core::ffi::c_int;
 use core::fmt::Write;
 
-use crate::types::{VTermKeyEncodingFlags, VTermKeyEncodingStack, VTermRect};
 use crate::vterm::geometry::{DHL_OFF, DWL_OFF};
+use crate::vterm::internal::{VTermKeyEncodingFlags, VTermKeyEncodingStack};
 use crate::vterm::output::EscapeSeq;
 use crate::vterm::state::{MOUSE_WANT_CLICK, MOUSE_WANT_DRAG, MOUSE_WANT_MOVE, PenChange, StateCx};
 use crate::vterm::text::save_cursor;
+use crate::vterm::types::VTermRect;
 use crate::vterm::vterm::{
     MOUSE_RXVT, MOUSE_SGR, MOUSE_UTF8, MOUSE_X10, VTERM_PROP_ALTSCREEN, VTERM_PROP_CURSORBLINK,
     VTERM_PROP_CURSORSHAPE, VTERM_PROP_CURSORSHAPE_BLOCK, VTERM_PROP_CURSORVISIBLE,

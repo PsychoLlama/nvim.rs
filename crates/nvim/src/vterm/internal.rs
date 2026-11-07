@@ -7,9 +7,9 @@
     clippy::ptr_as_ptr
 )]
 
-// Canonical type definitions, hoisted out of the per-module copies c2rust
-// emitted. One definition per logical type; every module re-exports here.
-//
+//! libvterm's internal types (`vterm_internal.h`): the encodings, the parser's
+//! state and the pen, reached through the same C ABI.
+
 // These are libvterm's types, Copyright (c) 2008 Paul Evans, under the MIT
 // license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 //
@@ -20,9 +20,8 @@
 // them. `ffigen` drops the field when it re-expands the run into real C
 // bitfield members, and matches it by that exact name.
 use crate::os::libc::{size_t, uint8_t, uint32_t};
+use crate::vterm::types::VTermColor;
 use core::mem::offset_of;
-
-use super::*;
 
 #[repr(C)]
 pub struct VTermEncoding {

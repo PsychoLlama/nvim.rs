@@ -24,10 +24,11 @@ use crate::narrow::len_as_integer;
 use crate::narrow::number_as_u32;
 use core::ffi::{c_int, c_long, c_uint};
 
-use crate::types::{VTermAttr, VTermColor, VTermColor_rgb, VTermPen, VTermState, VTermValueType};
 use crate::vterm::color::{ColorValue, ansi_default, fixed_palette};
 use crate::vterm::host::Value;
+use crate::vterm::internal::VTermPen;
 use crate::vterm::state::StateCx;
+use crate::vterm::types::{VTermAttr, VTermColor, VTermColor_rgb, VTermState, VTermValueType};
 use crate::vterm::vterm::{
     VTERM_ATTR_BACKGROUND, VTERM_ATTR_BASELINE, VTERM_ATTR_BLINK, VTERM_ATTR_BOLD,
     VTERM_ATTR_CONCEAL, VTERM_ATTR_DIM, VTERM_ATTR_FONT, VTERM_ATTR_FOREGROUND, VTERM_ATTR_ITALIC,

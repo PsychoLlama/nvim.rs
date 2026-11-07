@@ -19,13 +19,13 @@
 use core::ffi::{c_int, c_long};
 use core::fmt::Write;
 
-use crate::types::VTermRect;
 use crate::vterm::abi::vterm_primary_device_attr;
 use crate::vterm::geometry::{DHL_OFF, DWL_OFF};
 use crate::vterm::mode;
 use crate::vterm::output::EscapeSeq;
 use crate::vterm::pen::{CSI_ARG_MASK, CSI_ARG_MISSING};
 use crate::vterm::state::{PenChange, StateCx};
+use crate::vterm::types::VTermRect;
 use crate::vterm::vterm::{
     VTERM_PROP_CURSORBLINK, VTERM_PROP_CURSORSHAPE, VTERM_PROP_CURSORSHAPE_BAR_LEFT,
     VTERM_PROP_CURSORSHAPE_BLOCK, VTERM_PROP_CURSORSHAPE_UNDERLINE,
@@ -359,7 +359,7 @@ pub(super) fn dispatch(
 }
 
 /// Pulls the cursor back inside its bounds and reports the move.
-fn finish(state: &mut StateCx<'_>, oldpos: crate::types::VTermPos, cancel: bool) -> Outcome {
+fn finish(state: &mut StateCx<'_>, oldpos: crate::vterm::types::VTermPos, cancel: bool) -> Outcome {
     state.clamp_cursor();
     state.update_cursor(oldpos, cancel);
     Outcome::Handled

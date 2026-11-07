@@ -7,9 +7,8 @@
     clippy::ptr_as_ptr
 )]
 
-// Canonical type definitions, hoisted out of the per-module copies c2rust
-// emitted. One definition per logical type; every module re-exports here.
-//
+//! libvterm's key and modifier codes.
+
 // These are libvterm's types, Copyright (c) 2008 Paul Evans, under the MIT
 // license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 

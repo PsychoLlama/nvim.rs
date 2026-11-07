@@ -148,7 +148,7 @@ that needs `unsafe` — so a few appear there; they are listed too.
   arguments and the PTY's name (`os/`, 7 more), and the C entry points the
   harnesses and libvterm's clients call (`harness.rs` 5, `vterm/abi/` 5,
   `tui/input.rs` 2). Off it, 39: fields of the `#[repr(C)]` structs a C library
-  reads (`types/vterm.rs` 9, …) and a
+  reads (`vterm/types.rs` 9, …) and a
   dozen safe functions that hand an owned string's address (`as_ptr()`) to a
   perimeter callee without reading through it. The floor is the C side's
   signatures: a string crosses into C as a pointer.
@@ -304,8 +304,8 @@ They cannot join the list — `check_perimeter` would reject them — and yet
 their `#[repr(C)]` is libuv's and libtermkey's layout, not this tree's.
 
 `FOREIGN_ABI_TYPES` in `scripts/ratchet.py` names them, on exactly the "a
-foreign ABI" bullet above and nothing softer: `event/uv.rs`, `types/vterm.rs`,
-`types/vterm_internal.rs`, `types/termkey.rs`, `lua/abi.rs`,
+foreign ABI" bullet above and nothing softer: `event/uv.rs`, `vterm/types.rs`,
+`vterm/internal.rs`, `types/termkey.rs`, `lua/abi.rs`,
 `os/libc.rs`, `event/libuv_proc.rs`, `os/pty_proc_unix/mod.rs`. It splits
 one metric in two:
 

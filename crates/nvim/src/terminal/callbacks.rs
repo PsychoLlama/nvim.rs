@@ -29,12 +29,10 @@ use crate::event_queue::put_job_on_main_loop;
 use crate::option::vars::p_bg;
 use crate::options::kOptBoFlagTerm;
 use crate::os::libc::ptrdiff_t;
-use crate::types::{
-    ApiString, Error, Object, VTermPos, VTermProp, VTermRect, VTermScreenCell, VTermSelectionMask,
-    kListLenMayKnow,
-};
+use crate::types::{ApiString, Error, Object, kListLenMayKnow};
 use crate::ui::vim_beep;
 use crate::vterm::host::{Fragment, ScreenHost, SelectionHost, Value};
+use crate::vterm::types::{VTermPos, VTermProp, VTermRect, VTermScreenCell, VTermSelectionMask};
 use crate::vterm::vterm::{
     VTERM_PROP_ALTSCREEN, VTERM_PROP_CURSORBLINK, VTERM_PROP_CURSORSHAPE, VTERM_PROP_CURSORVISIBLE,
     VTERM_PROP_MOUSE, VTERM_PROP_SYNCOUTPUT, VTERM_PROP_THEMEUPDATES, VTERM_PROP_TITLE,

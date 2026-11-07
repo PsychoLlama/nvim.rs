@@ -23,14 +23,17 @@ use crate::narrow::as_index;
 use crate::narrow::len_as_int;
 use core::ffi::c_int;
 
-use crate::types::{
-    GraphemeState, VTerm, VTermEncodingInstance, VTermKeyEncodingFlags, VTermKeyEncodingStack,
-    VTermPen, VTermPos, VTermProp, VTermRect, VTermState, VTermState_mode, VTermState_saved,
-    VTermState_saved_mode, VTermState_selection, VTermState_tmp, VTermState_tmp_selection,
-};
+use crate::types::GraphemeState;
 use crate::vterm::encoding::{self, Charset};
 use crate::vterm::host::{Csi, Fragment, ParserHandler, Value};
+use crate::vterm::internal::{
+    VTermEncodingInstance, VTermKeyEncodingFlags, VTermKeyEncodingStack, VTermPen,
+};
 use crate::vterm::pen::init_pen;
+use crate::vterm::types::{
+    VTerm, VTermPos, VTermProp, VTermRect, VTermState, VTermState_mode, VTermState_saved,
+    VTermState_saved_mode, VTermState_selection, VTermState_tmp, VTermState_tmp_selection,
+};
 use crate::vterm::vterm::{
     MOUSE_X10, VTERM_PROP_ALTSCREEN, VTERM_PROP_CURSORBLINK, VTERM_PROP_CURSORSHAPE,
     VTERM_PROP_CURSORVISIBLE, VTERM_PROP_FOCUSREPORT, VTERM_PROP_ICONNAME, VTERM_PROP_MOUSE,
@@ -282,8 +285,8 @@ impl ParserHandler for StateCx<'_> {
 /// Whether two slots name the same character set: the same table, as
 /// libvterm compared them.
 fn same_charset(
-    a: Option<core::ptr::NonNull<crate::types::VTermEncoding>>,
-    b: Option<core::ptr::NonNull<crate::types::VTermEncoding>>,
+    a: Option<core::ptr::NonNull<crate::vterm::internal::VTermEncoding>>,
+    b: Option<core::ptr::NonNull<crate::vterm::internal::VTermEncoding>>,
 ) -> bool {
     a == b
 }

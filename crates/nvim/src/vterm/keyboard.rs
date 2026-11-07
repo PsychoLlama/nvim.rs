@@ -22,8 +22,10 @@
 #![forbid(unsafe_code)]
 
 use crate::os::libc::uint32_t;
-use crate::types::{VTerm, VTermKey, VTermKeyEncodingFlags, VTermModifier, VTermState};
+use crate::vterm::internal::VTermKeyEncodingFlags;
+use crate::vterm::keycodes::{VTermKey, VTermModifier};
 use crate::vterm::output::EscapeSeq;
+use crate::vterm::types::{VTerm, VTermState};
 use crate::vterm::vterm::{
     VTERM_KEY_BACKSPACE, VTERM_KEY_ENTER, VTERM_KEY_FUNCTION_0, VTERM_KEY_FUNCTION_MAX,
     VTERM_KEY_KP_0, VTERM_KEY_NONE, VTERM_KEY_TAB, VTERM_MOD_ALT, VTERM_MOD_CTRL, VTERM_MOD_NONE,

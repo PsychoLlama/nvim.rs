@@ -25,8 +25,8 @@
 use crate::narrow::as_index;
 use core::ffi::c_int;
 
-use crate::types::{ScreenCell, VTermLineInfo, VTermPos, VTermScreen};
 use crate::vterm::cell::{blank_cells, import_row};
+use crate::vterm::types::{ScreenCell, VTermLineInfo, VTermPos, VTermScreen};
 
 use super::{BUFIDX_ALTSCREEN, BUFIDX_PRIMARY, ZERO_CELL, line_popcount};
 
@@ -323,7 +323,7 @@ impl VTermScreen {
 
     /// Asks the host for the line above the top of the screen, as `old_cols`
     /// cells in the staging buffer. `None` once its scrollback is empty.
-    fn pop_line(&mut self, old_cols: c_int) -> Option<&[crate::types::VTermScreenCell]> {
+    fn pop_line(&mut self, old_cols: c_int) -> Option<&[crate::vterm::types::VTermScreenCell]> {
         let owned = &mut *self.owned;
         let host = owned.host.as_deref_mut()?;
         let cells = &mut owned.sb_buffer[..as_index(old_cols)];

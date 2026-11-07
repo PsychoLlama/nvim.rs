@@ -10,9 +10,9 @@
 // ABI.
 #![allow(non_camel_case_types)]
 
-// Canonical type definitions, hoisted out of the per-module copies c2rust
-// emitted. One definition per logical type; every module re-exports here.
-//
+//! libvterm's public types -- the terminal, its state and screen, cells, pens,
+//! colours -- laid out exactly as the library's C ABI lays them out.
+
 // These are libvterm's types, Copyright (c) 2008 Paul Evans, under the MIT
 // license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 //
@@ -23,9 +23,11 @@
 // them. `ffigen` drops the field when it re-expands the run into real C
 // bitfield members, and matches it by that exact name.
 use crate::os::libc::{size_t, uint8_t, uint16_t, uint32_t};
+use crate::types::{GraphemeState, ScreenChar};
+use crate::vterm::internal::{
+    VTermEncodingInstance, VTermKeyEncodingStack, VTermParserState, VTermPen,
+};
 use core::mem::offset_of;
-
-use super::*;
 
 #[derive(Copy, Clone)]
 #[repr(C)]

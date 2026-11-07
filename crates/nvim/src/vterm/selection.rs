@@ -18,9 +18,9 @@
 
 use core::ffi::c_int;
 
-use crate::types::VTermSelectionMask;
 use crate::vterm::host::Fragment;
 use crate::vterm::state::StateCx;
+use crate::vterm::types::VTermSelectionMask;
 use crate::vterm::vterm::{
     SELECTION_INITIAL, SELECTION_INVALID, SELECTION_QUERY, SELECTION_SELECTED, SELECTION_SET,
     SELECTION_SET_INITIAL, VTERM_PROP_ICONNAME, VTERM_PROP_TITLE, VTERM_SELECTION_CLIPBOARD,

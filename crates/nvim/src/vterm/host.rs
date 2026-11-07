@@ -27,7 +27,7 @@
 
 use core::ffi::{CStr, c_int, c_long};
 
-use crate::types::{
+use crate::vterm::types::{
     VTermColor, VTermPos, VTermProp, VTermRect, VTermScreenCell, VTermSelectionMask,
     VTermTerminator,
 };

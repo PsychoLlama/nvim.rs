@@ -549,7 +549,7 @@ fn named_fields(fields: &syn::FieldsNamed, bits: Option<&BitfieldAccessors>) -> 
             // members, and the `_pad` arrays that follow them disappear: C's
             // own storage-unit rounding provides those bytes. `_pad` is the
             // crate's name for exactly that field -- see the note at the top
-            // of `crates/nvim/src/types/vterm.rs` -- so matching on it is
+            // of `crates/nvim/src/vterm/types.rs` -- so matching on it is
             // exact.
             let (bits, padding) = match bits {
                 Some(acc) if name == acc.storage => (acc.specs.clone(), false),
@@ -625,6 +625,9 @@ const TYPE_HOMES: &[&str] = &[
     "src/lua/abi.rs",
     "src/os/libc.rs",
     "src/os/pty_proc_unix/mod.rs",
+    "src/vterm/internal.rs",
+    "src/vterm/keycodes.rs",
+    "src/vterm/types.rs",
 ];
 
 fn collect_file(world: &mut World, rel: &str, ast: syn::File) {

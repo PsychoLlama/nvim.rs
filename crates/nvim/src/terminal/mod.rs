@@ -74,11 +74,11 @@ use crate::types::builders::DictBuf;
 use crate::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::types::{
     AcoSave, BufferHandle, ColNr, Handle, HlAttrs, LineNr, Object, OptVal, OptionSetFlags, Pos,
-    RefcountSize, RgbValue, SaveVEvent, Terminal, TerminalOptions, VTermColor, VTermColor_rgb,
-    VTermScreenCell, VTermScreenCellAttrs, VarNumber,
+    RefcountSize, RgbValue, SaveVEvent, Terminal, TerminalOptions, VarNumber,
 };
 use crate::vterm::host::Value;
 use crate::vterm::screen::ZERO_SCREEN_CELL;
+use crate::vterm::types::{VTermColor, VTermColor_rgb, VTermScreenCell, VTermScreenCellAttrs};
 use crate::vterm::vterm::{
     OutputSink, VTERM_COLOR_DEFAULT_BG, VTERM_COLOR_DEFAULT_FG, VTERM_COLOR_INDEXED,
     VTERM_COLOR_RGB, VTERM_COLOR_TYPE_MASK, VTERM_DAMAGE_SCROLL, VTERM_PROP_CURSORBLINK,

@@ -10,7 +10,7 @@
 # dcs.rs, mode.rs, damage.rs, cell.rs, color.rs, geometry.rs,
 # output.rs, selection.rs, text.rs, encoding.rs, keyboard.rs and
 # mouse.rs -- plus the 33 `repr(C)` types in
-# types/vterm{,_internal,_keycodes}.rs.
+# vterm/{types,internal,keycodes}.rs.
 #
 #   vtsweep.sh <nvim-binary> <vimruntime> <outdir> <label>
 #

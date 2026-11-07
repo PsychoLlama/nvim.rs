@@ -20,11 +20,11 @@
 use core::ffi::c_long;
 use core::fmt::Write;
 
-use crate::types::VTermState;
 use crate::vterm::host::Fragment;
 use crate::vterm::output::EscapeSeq;
 use crate::vterm::pen::{CSI_ARG_FLAG_MORE, CSI_ARG_MASK, pen_sgr_params};
 use crate::vterm::state::StateCx;
+use crate::vterm::types::VTermState;
 use crate::vterm::vterm::{
     VTERM_PROP_CURSORSHAPE_BAR_LEFT, VTERM_PROP_CURSORSHAPE_BLOCK, VTERM_PROP_CURSORSHAPE_UNDERLINE,
 };

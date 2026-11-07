@@ -31,14 +31,14 @@ use crate::narrow::as_index;
 use crate::narrow::count_as_int;
 use core::ffi::c_int;
 
-use crate::types::{
-    ScreenCell, ScreenPen, VTerm, VTermDamageSize, VTermLineInfo, VTermPos, VTermRect, VTermScreen,
-    VTermScreenCell, VTermScreenCellAttrs, VTermState,
-};
 use crate::vterm::cell::{SCHAR_CONTINUATION, blank_cells, erased_pen, export_pen};
 use crate::vterm::color::UNSET;
 use crate::vterm::damage::{Damage, NO_RECT, follow_scroll, intersects, merge_damage};
 use crate::vterm::host::ScreenHost;
+use crate::vterm::types::{
+    ScreenCell, ScreenPen, VTerm, VTermDamageSize, VTermLineInfo, VTermPos, VTermRect, VTermScreen,
+    VTermScreenCell, VTermScreenCellAttrs, VTermState,
+};
 use crate::vterm::vterm::{ScrollTarget, VTERM_DAMAGE_CELL, VTERM_DAMAGE_SCROLL, scroll_rect};
 
 /// Which of the screen's two cell buffers a call means: the one the child

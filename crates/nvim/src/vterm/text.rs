@@ -15,11 +15,12 @@
 
 use core::ffi::c_int;
 
-use crate::types::{ScreenChar, VTermRect};
+use crate::types::ScreenChar;
 use crate::vterm::geometry::{DHL_BOTTOM, DHL_OFF, DHL_TOP, DWL_OFF, DWL_ON};
 use crate::vterm::mode;
 use crate::vterm::pen::save_pen;
 use crate::vterm::state::{PenChange, StateCx, is_composing};
+use crate::vterm::types::VTermRect;
 use crate::vterm::vterm::{
     VTERM_PROP_CURSORBLINK, VTERM_PROP_CURSORSHAPE, VTERM_PROP_CURSORVISIBLE,
 };
@@ -278,7 +279,7 @@ fn screen_alignment_test(state: &mut StateCx<'_>) {
     let e = ScreenChar::from(b'E');
     for row in 0..state.rows {
         for col in 0..state.row_width(row) {
-            let pos = crate::types::VTermPos { row, col };
+            let pos = crate::vterm::types::VTermPos { row, col };
             state.put_glyph(e, 1, pos);
         }
     }

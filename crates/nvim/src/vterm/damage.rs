@@ -19,7 +19,7 @@
 
 use core::ffi::c_int;
 
-use crate::types::{VTermDamageSize, VTermRect};
+use crate::vterm::types::{VTermDamageSize, VTermRect};
 use crate::vterm::vterm::{
     VTERM_DAMAGE_CELL, VTERM_DAMAGE_ROW, VTERM_DAMAGE_SCREEN, VTERM_DAMAGE_SCROLL,
 };

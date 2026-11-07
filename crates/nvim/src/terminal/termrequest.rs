@@ -35,10 +35,11 @@ use crate::event_queue::{self, ParkingQueue, QueueId};
 use crate::highlight::hl_add_url;
 use crate::types::AutoEvent;
 use crate::types::builders::{ArrayBuf, DictBuf};
-use crate::types::{ApiString, Handle, Object, RefcountSize, VTermTerminator, Vv};
+use crate::types::{ApiString, Handle, Object, RefcountSize, Vv};
 use crate::vterm::host::{Fallbacks, Fragment, Value};
 use crate::vterm::pen::set_pen_attr;
 use crate::vterm::state::StateCx;
+use crate::vterm::types::VTermTerminator;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 
