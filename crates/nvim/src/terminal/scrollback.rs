@@ -282,3 +282,200 @@ pub(crate) fn refresh_scrollback(mut term: Term, buffer: Buf) {
     adjust_scrollback(term, buffer);
     read_pause(false, term.opts.owner);
 }
+
+/// The scrollback's line accounting, on the store itself: the rows kept
+/// (newest first), the rows still owed to the buffer (`pending`), the rows
+/// evicted over the terminal's life (`deleted`, which buffer line numbers
+/// are relative to), and what a pop does to each — plus the row renderer's
+/// trailing-blank rule. The oracle for retyping these counts.
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::grid::schar_from_ascii;
+    use crate::types::Scrollback;
+
+    fn cell(c: u8) -> VTermScreenCell {
+        VTermScreenCell {
+            schar: schar_from_ascii(c),
+            ..blank_cell()
+        }
+    }
+
+    /// A row of `text`, one cell per byte; a space is an empty cell.
+    fn row(text: &str) -> Vec<VTermScreenCell> {
+        text.bytes()
+            .map(|c| if c == b' ' { blank_cell() } else { cell(c) })
+            .collect()
+    }
+
+    /// The first cell of each kept row, newest first.
+    fn kept(sb: &Scrollback) -> String {
+        (0..sb.len())
+            .map(|i| char::from(sb.row(i).expect("a kept row")[0].schar.to_le_bytes()[0]))
+            .collect()
+    }
+
+    fn sized(capacity: usize) -> Scrollback {
+        let mut sb = Scrollback::default();
+        assert!(!sb.is_sized(), "a new scrollback waits for 'scrollback'");
+        sb.set_capacity(capacity);
+        assert!(sb.is_sized());
+        sb
+    }
+
+    #[test]
+    fn pushed_rows_are_kept_newest_first_and_owed_to_the_buffer() {
+        let mut sb = sized(3);
+        sb.push(&row("a"));
+        sb.push(&row("b"));
+        assert_eq!(kept(&sb), "ba");
+        assert_eq!((sb.len(), sb.pending(), sb.deleted()), (2, 2, 0));
+    }
+
+    #[test]
+    fn a_full_scrollback_evicts_the_oldest_and_counts_it_deleted() {
+        let mut sb = sized(2);
+        for c in ["a", "b", "c", "d", "e"] {
+            sb.push(&row(c));
+        }
+        assert_eq!(kept(&sb), "ed");
+        // Owed rows are capped at what is kept.
+        assert_eq!((sb.len(), sb.pending(), sb.deleted()), (2, 2, 3));
+    }
+
+    #[test]
+    fn a_pop_cancels_an_owed_row_before_it_grows_the_screen() {
+        let mut sb = sized(5);
+        sb.push(&row("a"));
+        sb.push(&row("b"));
+        let mut screen_row = row("zz");
+        let mut old_height = 10;
+        assert!(sb.pop(&mut screen_row, &mut old_height));
+        assert_eq!(screen_row[0].schar, schar_from_ascii(b'b'));
+        assert_eq!((sb.pending(), old_height), (1, 10), "owed, so cancelled");
+        sb.mark_mirrored();
+        assert_eq!(sb.pending(), 0);
+        assert!(sb.pop(&mut screen_row, &mut old_height));
+        assert_eq!(screen_row[0].schar, schar_from_ascii(b'a'));
+        assert_eq!(
+            (sb.pending(), old_height),
+            (0, 11),
+            "mirrored, so the screen grew"
+        );
+        assert!(!sb.pop(&mut screen_row, &mut old_height), "nothing left");
+        assert_eq!((sb.len(), old_height), (0, 11));
+    }
+
+    #[test]
+    fn a_resize_after_a_refresh_gives_rows_back_one_screen_line_each() {
+        // Ten rows scroll off and the refresh mirrors them all; then the
+        // screen grows by three, which vterm satisfies with three pops.
+        let mut sb = sized(100);
+        for c in b'a'..b'k' {
+            sb.push(&row(core::str::from_utf8(&[c]).expect("ascii")));
+        }
+        while sb.pending() > 0 {
+            sb.mark_mirrored();
+        }
+        let (mut screen_row, mut old_height) = (row("    "), 24);
+        for _ in 0..3 {
+            assert!(sb.pop(&mut screen_row, &mut old_height));
+        }
+        assert_eq!(kept(&sb), "gfedcba");
+        assert_eq!(
+            (sb.len(), sb.pending(), sb.deleted(), old_height),
+            (7, 0, 0, 27)
+        );
+    }
+
+    #[test]
+    fn a_narrower_row_pops_with_a_blank_tail_and_a_wider_one_is_cut() {
+        let mut sb = sized(5);
+        sb.push(&row("ab"));
+        let mut screen_row = row("wxyz");
+        screen_row[3].width = 2;
+        let mut old_height = 0;
+        assert!(sb.pop(&mut screen_row, &mut old_height));
+        let cells: Vec<_> = screen_row.iter().map(|c| (c.schar, c.width)).collect();
+        let (a, b) = (schar_from_ascii(b'a'), schar_from_ascii(b'b'));
+        assert_eq!(cells, vec![(a, 1), (b, 1), (0, 1), (0, 1)]);
+
+        sb.push(&row("abcd"));
+        let mut narrow = row("zz");
+        assert!(sb.pop(&mut narrow, &mut old_height));
+        assert_eq!((narrow[0].schar, narrow[1].schar), (a, b));
+    }
+
+    #[test]
+    fn an_eviction_reuses_a_row_only_of_the_same_width() {
+        // Observable as the content: a reused row is overwritten whole.
+        let mut sb = sized(1);
+        sb.push(&row("abc"));
+        sb.push(&row("xyz"));
+        assert_eq!(sb.row(0).map(<[_]>::len), Some(3));
+        assert_eq!(sb.row(0).expect("kept")[2].schar, schar_from_ascii(b'z'));
+        sb.push(&row("pq"));
+        assert_eq!(sb.row(0).map(<[_]>::len), Some(2));
+        assert_eq!(sb.deleted(), 2);
+    }
+
+    #[test]
+    fn clearing_counts_every_kept_row_deleted_and_forgives_the_debt() {
+        let mut sb = sized(5);
+        for c in ["a", "b", "c"] {
+            sb.push(&row(c));
+        }
+        sb.clear();
+        assert!(sb.is_empty() && sb.is_sized());
+        assert_eq!((sb.pending(), sb.deleted()), (0, 3));
+    }
+
+    #[test]
+    fn trimming_the_oldest_row_does_not_shift_the_numbering() {
+        let mut sb = sized(5);
+        for c in ["a", "b", "c"] {
+            sb.push(&row(c));
+        }
+        sb.drop_oldest();
+        assert_eq!(kept(&sb), "cb");
+        assert_eq!((sb.pending(), sb.deleted()), (3, 0));
+    }
+
+    /// [`render_row`] over `cells`, answering the text up to the length it
+    /// reports and the columns it asked for.
+    fn render(cells: &[VTermScreenCell], end_col: c_int) -> (String, Vec<c_int>) {
+        let mut text = vec![0u8; 64];
+        let mut asked = Vec::new();
+        let len = render_row(&mut text, end_col, |col, out| {
+            asked.push(col);
+            if let Some(found) = cells.get(as_index(col)) {
+                *out = *found;
+            }
+            true
+        });
+        (
+            String::from_utf8(text[..len].to_vec()).expect("ascii"),
+            asked,
+        )
+    }
+
+    #[test]
+    fn a_rendered_row_drops_trailing_blanks_but_keeps_inner_ones() {
+        assert_eq!(
+            render(&row("a b  "), 5),
+            ("a b".into(), vec![0, 1, 2, 3, 4])
+        );
+        assert_eq!(render(&row("   "), 3).0, "");
+        // Past the stored row the cells are blank.
+        assert_eq!(render(&row("ab"), 6).0, "ab");
+    }
+
+    #[test]
+    fn a_wide_cell_advances_the_walk_by_its_width() {
+        let mut cells = row("ab  c");
+        cells[0].width = 2;
+        let (text, asked) = render(&cells, 5);
+        assert_eq!(asked, vec![0, 2, 3, 4]);
+        assert_eq!(text, "a  c", "column 1 is never asked for");
+    }
+}

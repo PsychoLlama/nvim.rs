@@ -45,6 +45,7 @@ use crate::options::{
     kOptTpfFlagHT,
 };
 use crate::types::Key;
+use crate::types::VTerm;
 use crate::types::{VTermKey, VTermModifier};
 use crate::winlayer::graph::switch_to;
 use crate::winlayer::{Buf, Win};
@@ -220,6 +221,12 @@ fn convert_key(key: &mut c_int, mods: ModMask, state: &mut VTermModifier) -> VTe
 /// A keycode with no vterm name is a codepoint, unless it is negative — one
 /// of the extras vterm has no equivalent for, which is simply dropped.
 pub(super) fn terminal_send_key(mut term: Term, c: c_int) {
+    send_key(&mut term.vt, c, mod_mask.get());
+}
+
+/// [`terminal_send_key`] with the emulator and the editor's modifiers named,
+/// so the key-to-bytes mapping can be driven without a live terminal.
+fn send_key(vt: &mut VTerm, c: c_int, mods: ModMask) {
     let mut state = VTERM_MOD_NONE;
     // The editor spells NUL as an extra so it survives being a C string;
     // vterm wants the control character back.
@@ -228,11 +235,11 @@ pub(super) fn terminal_send_key(mut term: Term, c: c_int) {
     } else {
         c
     };
-    let named = convert_key(&mut key, mod_mask.get(), &mut state);
+    let named = convert_key(&mut key, mods, &mut state);
     if named != VTERM_KEY_NONE {
-        term.vt.keyboard_key(named, state);
+        vt.keyboard_key(named, state);
     } else if key >= 0 {
-        term.vt.keyboard_unichar(key.cast_unsigned(), state);
+        vt.keyboard_unichar(key.cast_unsigned(), state);
     }
 }
 
@@ -440,4 +447,158 @@ pub(super) fn send_mouse_event(mut term: Term, c: c_int) -> bool {
         ungetchars(len); // rewind over the key just pushed
     }
     true
+}
+
+/// What a key the editor read becomes on the way to the child: the vterm
+/// key and modifier [`convert_key`] names, and the bytes [`send_key`] has the
+/// emulator write for it in its power-on modes. The oracle for retyping the
+/// editor's key codes.
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::vterm::vterm::OutputSink;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    /// `convert_key`'s three answers: the vterm key, the modifier state and
+    /// the key code it left behind.
+    fn converted(key: c_int, mods: ModMask) -> (VTermKey, VTermModifier, c_int) {
+        let (mut key, mut state) = (key, VTERM_MOD_NONE);
+        let named = convert_key(&mut key, mods, &mut state);
+        (named, state, key)
+    }
+
+    /// The bytes the child is sent for `key` with `mods`.
+    fn bytes(key: c_int, mods: ModMask) -> Vec<u8> {
+        let sent = Rc::new(RefCell::new(Vec::new()));
+        let mut vt = VTerm::new(24, 80);
+        vt.set_utf8(true);
+        vt.obtain_state();
+        let sink = Rc::clone(&sent);
+        vt.set_output(OutputSink::Rust(Box::new(move |out: &[u8]| {
+            sink.borrow_mut().extend_from_slice(out);
+        })));
+        send_key(&mut vt, key, mods);
+        sent.take()
+    }
+
+    const NONE: ModMask = ModMask::NONE;
+    const A: c_int = Key::ascii(b'A').code();
+    const LOWER_A: c_int = Key::ascii(b'a').code();
+
+    #[test]
+    fn an_ordinary_character_is_no_named_key() {
+        assert_eq!(
+            converted(LOWER_A, NONE),
+            (VTERM_KEY_NONE, VTERM_MOD_NONE, LOWER_A)
+        );
+        assert_eq!(
+            converted(0xe9, NONE),
+            (VTERM_KEY_NONE, VTERM_MOD_NONE, 0xe9)
+        );
+    }
+
+    #[test]
+    fn control_lowercases_a_letter_unless_shift_is_held() {
+        assert_eq!(
+            converted(A, ModMask::CTRL),
+            (VTERM_KEY_NONE, VTERM_MOD_CTRL, LOWER_A)
+        );
+        assert_eq!(
+            converted(A, ModMask::CTRL | ModMask::SHIFT),
+            (VTERM_KEY_NONE, VTERM_MOD_CTRL | VTERM_MOD_SHIFT, A)
+        );
+        assert_eq!(
+            converted(LOWER_A, ModMask::ALT),
+            (VTERM_KEY_NONE, VTERM_MOD_ALT, LOWER_A)
+        );
+    }
+
+    #[test]
+    fn the_raw_control_bytes_are_named_keys() {
+        assert_eq!(converted(TAB, NONE).0, VTERM_KEY_TAB);
+        assert_eq!(converted(Ctrl_M, NONE).0, VTERM_KEY_ENTER);
+        assert_eq!(converted(ESC, NONE).0, VTERM_KEY_ESCAPE);
+        assert_eq!(
+            converted(SpecialKey::Bs.code(), NONE).0,
+            VTERM_KEY_BACKSPACE
+        );
+        assert_eq!(converted(SpecialKey::Tab.code(), NONE).0, VTERM_KEY_TAB);
+    }
+
+    #[test]
+    fn a_shifted_key_code_is_split_into_the_key_and_shift() {
+        assert_eq!(
+            converted(SpecialKey::SUp.code(), NONE),
+            (VTERM_KEY_UP, VTERM_MOD_SHIFT, SpecialKey::Up.code())
+        );
+        assert_eq!(
+            converted(SpecialKey::CLeft.code(), NONE),
+            (VTERM_KEY_LEFT, VTERM_MOD_CTRL, SpecialKey::Left.code())
+        );
+        assert_eq!(
+            converted(SpecialKey::STab.code(), NONE),
+            (VTERM_KEY_TAB, VTERM_MOD_SHIFT, SpecialKey::Tab.code())
+        );
+    }
+
+    #[test]
+    fn both_faces_of_a_keypad_key_reach_the_keypad() {
+        for (number, cursor, want) in [
+            (SpecialKey::K0, SpecialKey::Kins, VTERM_KEY_KP_0),
+            (SpecialKey::K1, SpecialKey::Kend, VTERM_KEY_KP_1),
+            (SpecialKey::K5, SpecialKey::Korigin, VTERM_KEY_KP_5),
+            (SpecialKey::K9, SpecialKey::Kpageup, VTERM_KEY_KP_9),
+            (SpecialKey::Kpoint, SpecialKey::Kdel, VTERM_KEY_KP_PERIOD),
+        ] {
+            assert_eq!(converted(number.code(), NONE).0, want);
+            assert_eq!(converted(cursor.code(), NONE).0, want);
+        }
+        assert_eq!(
+            converted(SpecialKey::Kenter.code(), NONE).0,
+            VTERM_KEY_KP_ENTER
+        );
+    }
+
+    #[test]
+    fn function_keys_count_up_from_function_zero() {
+        assert_eq!(converted(SpecialKey::F1.code(), NONE).0, function_key(1));
+        assert_eq!(converted(SpecialKey::F12.code(), NONE).0, function_key(12));
+        assert_eq!(converted(SpecialKey::F63.code(), NONE).0, function_key(63));
+    }
+
+    #[test]
+    fn keys_become_the_bytes_a_terminal_sends() {
+        let rows: &[(c_int, ModMask, &[u8])] = &[
+            (LOWER_A, NONE, b"a"),
+            (0xe9, NONE, "\u{e9}".as_bytes()),
+            (0x01, NONE, b"\x01"),
+            (LOWER_A, ModMask::ALT, b"\x1ba"),
+            (A, ModMask::CTRL, b"\x01"),
+            (SpecialKey::Up.code(), NONE, b"\x1b[A"),
+            (SpecialKey::SUp.code(), NONE, b"\x1b[1;2A"),
+            (SpecialKey::Up.code(), ModMask::CTRL, b"\x1b[1;5A"),
+            (SpecialKey::Del.code(), NONE, b"\x1b[3~"),
+            (SpecialKey::F1.code(), NONE, b"\x1bOP"),
+            (SpecialKey::F5.code(), NONE, b"\x1b[15~"),
+            (SpecialKey::STab.code(), NONE, b"\x1b[Z"),
+            (SpecialKey::Bs.code(), NONE, b"\x7f"),
+            (Ctrl_M, NONE, b"\r"),
+            (ESC, NONE, b"\x1b"),
+        ];
+        for &(key, mods, want) in rows {
+            assert_eq!(
+                bytes(key, mods),
+                want,
+                "key {key:#x} mods {:#x}",
+                mods.byte()
+            );
+        }
+    }
+
+    #[test]
+    fn the_nul_extra_becomes_nul_and_other_extras_are_dropped() {
+        assert_eq!(bytes(SpecialKey::Zero.code(), NONE), b"\0");
+        assert_eq!(bytes(SpecialKey::Ignore.code(), NONE), b"");
+    }
 }
