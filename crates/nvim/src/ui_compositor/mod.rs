@@ -51,11 +51,10 @@ use crate::message::msg_grid_ref;
 use crate::option::vars::{p_wd, rdb_flags};
 use crate::options::{kOptRdbFlagCompositor, kOptRdbFlagInvalid};
 use crate::os::time::os_sleep;
-use crate::types::ui::{kLineFlagInvalid, kLineFlagWrap, kUIMultigrid};
-use crate::types::{
-    ApiString, Boolean, Handle, Integer, LineFlags, NUL, RemoteUI, ScreenAttr, ScreenChar,
-};
+use crate::types::{ApiString, Boolean, Handle, Integer, NUL, ScreenAttr, ScreenChar};
 use crate::ui::state::{Columns, Rows};
+use crate::ui::state::{LineFlags, RemoteUI};
+use crate::ui::state::{kLineFlagInvalid, kLineFlagWrap, kUIMultigrid};
 use crate::ui::{
     ui_call_flush, ui_composed_call_grid_cursor_goto, ui_composed_call_grid_resize,
     ui_composed_call_grid_scroll, ui_composed_call_raw_line, ui_has,

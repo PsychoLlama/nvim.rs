@@ -14,9 +14,9 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mbyte::MB_MAXCHAR;
 use crate::mbyte::{char_info_at, encode_char, mb_tolower, mb_toupper};
 use crate::memory::XString;
-use crate::types::MB_MAXCHAR;
 
 /// A copy of `text` with every character upper- (`upper`) or lower-cased,
 /// multibyte-aware.

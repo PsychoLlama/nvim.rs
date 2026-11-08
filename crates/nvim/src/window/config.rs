@@ -47,12 +47,12 @@ use crate::os::libc::{int64_t, size_t};
 use crate::plines::win_text_height;
 use crate::pos::MAXCOL;
 use crate::search::FORWARD;
-use crate::types::ui::kUIMultigrid;
 use crate::types::{
     ApiString, Boolean, Error, Failed, Float, Integer, LineNr, Pos, SwitchWin, WinConfig, WinStyle,
     WindowHandle, kErrorTypeException, kFloatAnchorEast, kFloatAnchorSouth,
     kFloatRelativeLaststatus, kFloatRelativeTabline, kFloatRelativeWindow,
 };
+use crate::ui::state::kUIMultigrid;
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{
     ui_call_win_external_pos, ui_call_win_float_pos, ui_call_win_hide, ui_call_win_pos,

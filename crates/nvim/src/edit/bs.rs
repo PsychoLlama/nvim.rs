@@ -32,8 +32,8 @@
 use crate::cstr::byte_at;
 use crate::indent::StopList;
 use crate::keycodes::SpecialKey;
+use crate::mbyte::CharInfo;
 use crate::mbyte::{c_char_info, c_next_cluster, char_at, char_len, class_in, iscomposing};
-use crate::types::CharInfo;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;

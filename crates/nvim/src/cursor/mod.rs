@@ -45,10 +45,11 @@ use crate::r#move::{WinValid, changed_cline_bef_curs, set_valid_virtcol};
 use crate::normal::{set_visual_anchor, visual_active, visual_anchor};
 use crate::option::get_ve_flags;
 use crate::options::{kOptVeFlagAll, kOptVeFlagOnemore};
+use crate::plines::CharsizeArg;
 use crate::plines::{getvcol, linetabsize, linetabsize_eol, win_charsize};
 use crate::state::mode::{State, restart_edit};
 use crate::state::{MODE_INSERT, MODE_TERMINAL, virtual_active};
-use crate::types::{CharsizeArg, ColNr, LineNr, NUL, Pos};
+use crate::types::{ColNr, LineNr, NUL, Pos};
 use crate::winlayer::{Buf, PosRef, Win};
 
 const TAB: c_int = 9;

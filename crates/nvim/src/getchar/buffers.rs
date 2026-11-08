@@ -34,8 +34,9 @@
 
 use super::*;
 use crate::keycodes::{K_SPECIAL, key_escape};
+use crate::mbyte::MB_MAXBYTES;
 use crate::mbyte::{char_at, char_len, encode_char};
-use crate::types::{Key, MB_MAXBYTES};
+use crate::types::Key;
 use core::ffi::{c_int, c_uint};
 use std::collections::VecDeque;
 

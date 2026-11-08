@@ -87,11 +87,11 @@ use crate::strings::reversed_text;
 use crate::tag::state::g_do_tagpreview;
 use crate::types::AutoEvent;
 use crate::types::TAB;
-use crate::types::ui::kUIMessages;
 use crate::types::{
     CmdArg, ColNr, Dict, Direction, EvalFuncData, LPos, LineNr, MotionType, OpArg, Pos, ProfTime,
     RegMMatch, RegMatch, TypVal, VarNumber,
 };
+use crate::ui::state::kUIMessages;
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::window::{win_enter, win_split};

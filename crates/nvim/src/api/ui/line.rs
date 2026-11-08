@@ -43,9 +43,10 @@ use crate::msgpack_rpc::packer::{
 };
 use crate::narrow::{len_as_integer, number_as_int, number_as_u32};
 use crate::types::builders::ArrayBuf;
-use crate::types::ui::kLineFlagWrap;
-use crate::types::{Integer, LineFlags, RemoteUI, ScreenAttr, ScreenChar};
+use crate::types::{Integer, ScreenAttr, ScreenChar};
 use crate::ui::state::Columns;
+use crate::ui::state::kLineFlagWrap;
+use crate::ui::state::{LineFlags, RemoteUI};
 use core::ffi::c_int;
 
 /// The largest a single cell can pack to: a fixarray header, the text with

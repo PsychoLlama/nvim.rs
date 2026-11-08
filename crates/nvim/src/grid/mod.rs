@@ -52,17 +52,15 @@ use crate::highlight::{hl_apply_winblend, hl_combine_attr};
 use crate::log::LOGLVL_DBG;
 use crate::mbyte::{cluster_len, utf_char2len};
 
+use crate::grid::defs::{GridCells, GridView, ScreenGrid};
 use crate::option::vars::{p_arshape, p_tbidi, rdb_flags};
 use crate::options::{kOptRdbFlagInvalid, kOptRdbFlagNodelta};
 use crate::optionstr::check_chars_options;
 use crate::os::libc::{size_t, uint32_t};
 use crate::startup::full_screen;
 use crate::state::mode::exmode_active;
-use crate::types::ui::kUIMultigrid;
-use crate::types::{
-    AlignTextPos, ColNr, GridCells, GridView, Handle, Integer, ScreenChar, ScreenGrid, VirtText,
-    WLine, WinConfig,
-};
+use crate::types::{AlignTextPos, ColNr, Handle, Integer, ScreenChar, VirtText, WLine, WinConfig};
+use crate::ui::state::kUIMultigrid;
 use crate::ui::{
     ui_call_grid_resize, ui_call_grid_scroll, ui_check_cursor_grid, ui_grid_cursor_goto, ui_has,
     ui_line,
@@ -75,6 +73,7 @@ use core::ffi::{c_char, c_int};
 
 // Split out for size; the rest of the tree calls all of it as `grid::*`.
 pub mod border;
+pub mod defs;
 pub mod line;
 pub mod schar;
 

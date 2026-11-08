@@ -32,11 +32,12 @@ use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
+use crate::mbyte::MB_MAXBYTES;
 use crate::mbyte::{char_at, char_len, encode_char, utf_class};
 use crate::memory::XString;
 use crate::regexp::low_byte;
 use crate::spell::SpellLang;
-use crate::types::{MB_MAXBYTES, NUL};
+use crate::types::NUL;
 
 use super::chartab::{spell_casefold, spell_iswordp_nmw, spell_iswordp_w};
 use super::{MAXWLEN, loaded_langs};

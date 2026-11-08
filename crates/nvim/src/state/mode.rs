@@ -41,10 +41,11 @@
 
 use super::MODE_NORMAL;
 use crate::global_cell::state_record;
+use crate::highlight::Hlf;
 use crate::highlight_group::HLF_NONE;
 use crate::memory::XString;
 use crate::normal::VisualMode;
-use crate::types::{ColNr, Hlf, Key, LineNr, Pos};
+use crate::types::{ColNr, Key, LineNr, Pos};
 use core::ffi::{CStr, c_int};
 
 /// The origin, which every position here starts at.

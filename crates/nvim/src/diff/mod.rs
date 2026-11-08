@@ -64,6 +64,7 @@ use crate::fold::{
 use crate::diff::state::{diff_context, diff_foldcolumn, diff_need_scrollbind, need_diff_redraw};
 use crate::getchar::state::KeyTyped;
 use crate::global_cell::GlobalCell;
+use crate::highlight::Hlf;
 use crate::highlight_group::{HLF_ADD, HLF_CHD, HLF_NONE, HLF_TXA, HLF_TXD};
 use crate::linematch::linematch_nbuffers;
 use crate::mark::{mark_adjust, setpcmark};
@@ -93,7 +94,7 @@ use crate::strings::shellescape;
 use crate::types::AutoEvent;
 use crate::types::{
     AcoSave, ApiString, CmdAddr, CmdModFlags, ColNr, DiffBlock, DiffLine, DiffLineChange,
-    EvalFuncData, ExArg, Hlf, LineNr, OptInt, OptVal, ScriptId, TypVal, VarNumber,
+    EvalFuncData, ExArg, LineNr, OptInt, OptVal, ScriptId, TypVal, VarNumber,
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_save, u_sync};

@@ -20,9 +20,10 @@ use crate::regexp::NfaOp;
 
 use super::run::nfa_re_num_cmp;
 use crate::mark::mark_get;
+use crate::mbyte::MB_MAXBYTES;
 use crate::plines::win_linetabsize;
 use crate::regexp::{Rex, reg_getline, reg_getline_len, reg_match_visual};
-use crate::types::{ColNr, LineNr, MB_MAXBYTES};
+use crate::types::{ColNr, LineNr};
 
 use crate::winlayer::Win;
 /// The column the match has reached, in bytes from the start of the line.

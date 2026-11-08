@@ -12,7 +12,7 @@
 //!
 //! What stays here is what the four share: the `StlItem` kinds, because
 //! the expander and its callers both name them (the format language's own
-//! alphabet is [`crate::types::StlOpt`]); [`build_statuscol_str`]
+//! alphabet is [`crate::statusline::defs::StlOpt`]); [`build_statuscol_str`]
 //! (`'statuscolumn'`, which is the same language with a different item set)
 //! and the small entry points -- [`fillchar_status_of`] and
 //! [`redraw_custom_statusline`] -- the drawing layer calls in; and the
@@ -55,25 +55,29 @@ use crate::charset::strnsize;
 use crate::drawscreen::redrawing;
 use crate::eval::vars::set_vim_var_nr;
 use crate::global_cell::GlobalCell;
+use crate::grid::defs::GridView;
 use crate::grid::{
     GridRef, grid_adjust, grid_line_fill, grid_line_flush, grid_line_put_schar, grid_line_puts,
     grid_line_start, screengrid_line_start,
 };
+use crate::highlight::Hlf;
 pub(crate) use crate::highlight::namespace::hl_attr;
 use crate::highlight::{hl_combine_attr, win_hl_attr};
 use crate::highlight_group::{HLF_S, HLF_SNC};
 use crate::options::kOptStatuscolumn;
 use crate::optionstr::OptStringRef;
 use crate::path::MAXPATHL;
-use crate::types::{
-    ClickLine, GridView, Hlf, LineNr, Object, OptIndex, OptionSetFlags, ScreenChar, SignTextAttrs,
-    StatusCol, StlClickDefinition, StlClickDefinition_type_0, StlClickRecord, Vv,
+use crate::sign::SignTextAttrs;
+use crate::statusline::defs::{
+    ClickLine, StatusCol, StlClickDefinition, StlClickDefinition_type_0, StlClickRecord,
 };
+use crate::types::{LineNr, Object, OptIndex, OptionSetFlags, ScreenChar, Vv};
 use crate::window::global_stl_height;
 use crate::winlayer::Win;
 
 // The carve of the transpiled module; see each child's docs.
 mod custom;
+pub mod defs;
 mod status;
 mod stl;
 mod tabline;

@@ -18,6 +18,7 @@ use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::hashtab::Slot;
 use crate::lua::executor::release_luaref;
+use crate::mbyte::VimConv;
 use crate::memory::{xcalloc, xfree};
 use crate::message::emsg;
 use crate::message::state::did_emsg;
@@ -32,7 +33,7 @@ use crate::types::{
     Blob, BoolVarValue, Callback, Dict, DictItem, DictWatcher, EvalFuncData, Float, LineNr, List,
     ListItem, ListWatch, LuaRef, Partial, SpecialVarValue, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT,
     VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING,
-    VAR_UNKNOWN, VarLock, VarNumber, VimConv, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull,
+    VAR_UNKNOWN, VarLock, VarNumber, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull,
 };
 
 // The carve of the transpiled module; see each child's docs.

@@ -52,7 +52,8 @@ use crate::msgpack_rpc::packer::PackerBuffer;
 use crate::msgpack_rpc::packer::{
     mpack_array, mpack_array_dyn16, mpack_object_array, mpack_str_small, mpack_uint,
 };
-use crate::types::{Array, RemoteUI};
+use crate::types::Array;
+use crate::ui::state::RemoteUI;
 use core::ffi::CStr;
 
 /// The whole buffer for one batch. One arena block, so that the allocator

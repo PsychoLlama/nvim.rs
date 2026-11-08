@@ -36,8 +36,9 @@ use core::ffi::{c_int, c_long, c_uint};
 use core::ops::{Deref, DerefMut};
 
 use crate::grid::schar_from_buf;
+use crate::mbyte::GraphemeState;
 use crate::mbyte::{c_partial_cells_in, encode_char, iscomposing};
-use crate::types::{GraphemeState, ScreenChar};
+use crate::types::ScreenChar;
 use crate::vterm::abi::ForeignState;
 use crate::vterm::encoding::{self, Charset};
 use crate::vterm::host::{Fallbacks, Fragment, SelectionHost, Value};

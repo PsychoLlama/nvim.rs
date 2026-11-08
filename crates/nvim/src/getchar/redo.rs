@@ -17,9 +17,10 @@
 
 use super::*;
 use crate::keycodes::key_unescape;
+use crate::mbyte::MB_MAXBYTES;
 use crate::mbyte::{char_at, char_len};
 use crate::normal::{set_visual_active, set_visual_anchor, set_visual_select};
-use crate::types::{Failed, Key, MB_MAXBYTES};
+use crate::types::{Failed, Key};
 use crate::winlayer::Win;
 use core::ffi::c_int;
 

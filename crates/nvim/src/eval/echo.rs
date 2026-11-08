@@ -37,11 +37,11 @@ use crate::message::{
 use crate::message_fmt::msg_bytes;
 use crate::os::cshim::gettext;
 use crate::runtime::{get_scriptname, script_is_lua};
-use crate::types::ui::kUIMessages;
 use crate::types::{
     ExArg, LineNr, ScriptCtx, TypVal, VAR_FLAVOUR_DEFAULT, VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA,
     VAR_STRING, VarFlavour,
 };
+use crate::ui::state::kUIMessages;
 use crate::ui::ui_has;
 
 /// A freshly declared typval.

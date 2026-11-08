@@ -16,6 +16,7 @@ use crate::getchar::state::got_int;
 use core::cell::RefCell;
 
 use crate::env::XDGVarType;
+use crate::mbyte::{CONV_NONE, VimConv};
 use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::message::{e_exists, e_invarg};
@@ -35,7 +36,7 @@ use crate::strings::has_char;
 use crate::tr;
 use crate::types::CmdIdx;
 use crate::types::TAB;
-use crate::types::{CONV_NONE, EStackType, ExArg, Failed, OptInt, VimConv};
+use crate::types::{EStackType, ExArg, Failed, OptInt};
 use crate::ui::ui_flush;
 use crate::winlayer::Buf;
 use core::ffi::CStr;
@@ -758,7 +759,7 @@ fn read_inputs(
         } else {
             spell_read_wordfile(spin, XString::from_bytes(stem).as_cstr())
         };
-        spin.si_conv = crate::types::CONV_NONE_INIT;
+        spin.si_conv = crate::mbyte::CONV_NONE_INIT;
         read?;
     }
     Ok(())

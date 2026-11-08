@@ -33,7 +33,7 @@ use crate::grid::default_gridview;
 use crate::highlight_group::HLF_C;
 use crate::optionstr::OptStringRef;
 use crate::path::MAXPATHL;
-use crate::types::ui::kUIWildmenu;
+use crate::ui::state::kUIWildmenu;
 use crate::ui::ui_has;
 
 /// Redraw the status line of window `window`.

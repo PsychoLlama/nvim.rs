@@ -29,7 +29,7 @@ use crate::lua::stack::{At, Function, Kind, Raise, Stack};
 use crate::lua::state::{MAIN_REFS, nlua_disable_preload};
 use crate::lua_functions;
 use crate::runtime::runtime_get_named_thread;
-use crate::types::ui::kUILinegrid;
+use crate::ui::state::kUILinegrid;
 use crate::ui::state::{ui_ext_names, ui_refresh_cmdheight};
 use crate::ui::{ui_add_cb, ui_remove_cb};
 

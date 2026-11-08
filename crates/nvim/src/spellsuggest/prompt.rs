@@ -73,9 +73,9 @@ use crate::spellsuggest::{
     sps_flags, sps_limit,
 };
 use crate::types::Key;
-use crate::types::ui::kUIMessages;
 use crate::types::{ColNr, IOSIZE, NUL, Pos};
 use crate::ui::state::Rows;
+use crate::ui::state::kUIMessages;
 use crate::ui::{ui_has, vim_beep};
 use crate::undo::u_save_cursor;
 use crate::winlayer::Win;

@@ -55,6 +55,7 @@ use crate::indent::{
 use crate::indent_c::{do_c_expr_indent, in_cinkeys, starts_with_cinword};
 use crate::insexpand::ins_compl_active;
 use crate::mark::{fresh_mark, mark_adjust, mark_col_adjust, mark_view_make};
+use crate::mbyte::GraphemeState;
 use crate::mbyte::{mb_adjust_cursor, utf_iscomposing_first};
 use crate::memline::{
     ml_add_deleted_len, ml_delete_flags, ml_line_alloced, ml_open_file, ml_replace_buf_text,
@@ -90,9 +91,9 @@ use crate::strings::concat;
 use crate::textformat::{comp_textwidth, has_format_option};
 use crate::types::AutoEvent;
 use crate::types::TAB;
-use crate::types::ui::kUIMessages;
-use crate::types::{BCount, CmdModFlags, ColNr, FileMarkView, GraphemeState, LineNr, Pos, Vv};
+use crate::types::{BCount, CmdModFlags, ColNr, FileMarkView, LineNr, Pos, Vv};
 use crate::ui::state::Rows;
+use crate::ui::state::kUIMessages;
 use crate::ui::{ui_active, ui_has};
 use crate::undo::{curbuf_is_changed, u_clearline, u_save_cursor, u_savedel};
 

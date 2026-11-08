@@ -34,6 +34,7 @@ use crate::grid::{
     grid_draw_border, grid_line_fill, grid_line_flush, grid_line_put_schar, grid_line_puts,
     grid_of_view, schar_from_ascii, schar_from_str, screengrid_line_start,
 };
+use crate::highlight::Hlf;
 use crate::highlight::{hl_combine_attr, hl_get_ui_attr, win_hl_attr};
 use crate::highlight_group::{
     HLF_PBR, HLF_PMNI, HLF_PMSI, HLF_PNI, HLF_PNK, HLF_PNX, HLF_PSB, HLF_PSI, HLF_PSK, HLF_PST,
@@ -67,12 +68,12 @@ use crate::state::mode::State;
 use crate::statusline::hl_attr;
 use crate::strings::reversed_text;
 use crate::tag::state::g_do_tagpreview;
-use crate::types::ui::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};
 use crate::types::{
-    ApiString, Array, BufferHandle, Dict, Float, Handle, Hlf, Integer, LineNr, Object, OptInt,
-    OptVal, ScreenAttr, ScreenChar, VarNumber, WinConfig, kBoolVarFalse, kBoolVarTrue,
+    ApiString, Array, BufferHandle, Dict, Float, Handle, Integer, LineNr, Object, OptInt, OptVal,
+    ScreenAttr, ScreenChar, VarNumber, WinConfig, kBoolVarFalse, kBoolVarTrue,
 };
 use crate::ui::state::{Columns, Rows};
+use crate::ui::state::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};
 use crate::ui::{
     ui_call_grid_destroy, ui_call_grid_resize, ui_call_option_set, ui_call_popupmenu_hide,
     ui_call_popupmenu_select, ui_call_popupmenu_show, ui_call_win_close, ui_call_win_float_pos,

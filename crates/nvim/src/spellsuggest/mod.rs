@@ -72,6 +72,7 @@ use crate::charset::atoi;
 use crate::getchar::state::got_int;
 use crate::getchar::vgetc;
 use crate::global_cell::GlobalCell;
+use crate::highlight::Hlf;
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::option::split_option_part;
 use crate::option::vars::P_SPS;
@@ -89,7 +90,6 @@ use crate::spellsuggest::collect::{
 use crate::spellsuggest::score::spell_isupper;
 use crate::spellsuggest::soundalike::{SoundDone, suggest_try_soundalike};
 use crate::spellsuggest::walk::suggest_trie_walk;
-use crate::types::Hlf;
 use core::ffi::{CStr, c_int};
 use core::hash::BuildHasherDefault;
 use std::collections::HashSet;

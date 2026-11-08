@@ -19,11 +19,11 @@ use crate::cstr;
 use crate::env::home_to_tilde;
 use crate::keycodes::ModMask;
 use crate::keycodes::{key_unescape, termcap_name};
+use crate::mbyte::MB_MAXCHAR;
 use crate::mbyte::{cells_at, char_at, cluster_len, encode_char, unescape_at};
 use crate::narrow::as_index;
 use crate::narrow::count_as_int;
 use crate::types::Key;
-use crate::types::MB_MAXCHAR;
 use core::ffi::{CStr, c_int};
 
 /// The `<xx>` form of an unprintable byte gets its own highlight so it can be

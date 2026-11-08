@@ -29,8 +29,9 @@ use crate::highlight::{HLATTRS_DICT_SIZE, hlattrs2dict, syn_attr2entry};
 use crate::option::vars::P_BG;
 use crate::types::DictBuilder;
 use crate::types::builders::ArrayBuf;
-use crate::types::ui::{kUILinegrid, kUITermColors};
-use crate::types::{ApiString, Array, Boolean, Integer, Object, RemoteUI, WindowHandle};
+use crate::types::{ApiString, Array, Boolean, Integer, Object, WindowHandle};
+use crate::ui::state::RemoteUI;
+use crate::ui::state::{kUILinegrid, kUITermColors};
 use core::ffi::c_int;
 
 /// Queues `name(args...)` on `ui`'s buffer, with the argument array built

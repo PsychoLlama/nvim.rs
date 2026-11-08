@@ -119,6 +119,7 @@ use crate::keycodes::KS_MODIFIER;
 use crate::keycodes::{K_SPECIAL, get_special_key_name, push_char_escaped};
 use crate::mapping::{check_abbr, langmap_adjust_mb, map_to_exists_mode};
 use crate::mark::{fresh_mark, mark_view_make};
+use crate::mbyte::MB_MAXBYTES;
 use crate::mbyte::{mb_adjust_cursor, utf8len_tab};
 use crate::memline::{Lines, gchar_pos, ml_append_text, ml_get_len, ml_replace_buf_text};
 use crate::message::state::{emsg_on_display, msg_scroll, msg_silent};
@@ -148,6 +149,7 @@ use crate::options::{
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::os::libc::{int32_t, int64_t, size_t};
+use crate::plines::CharsizeArg;
 use crate::plines::{
     CHAR_CELLS_SPAN, charsize_nowrap, getvcol, getvcol_nolist, linetabsize_str, win_charsize,
     win_chartabsize,
@@ -180,11 +182,11 @@ use crate::textformat::{
 use crate::textobject::{bck_word, fwd_word};
 use crate::types::AutoEvent;
 use crate::types::Key;
-use crate::types::ui::kUIMessages;
 use crate::types::{
-    AcoSave, ApiString, CharsizeArg, CmdModFlags, ColNr, LineNr, MB_MAXBYTES, OptInt, PUT_CURSEND,
-    PUT_FIXINDENT, Pos, ScreenChar, Vv,
+    AcoSave, ApiString, CmdModFlags, ColNr, LineNr, OptInt, PUT_CURSEND, PUT_FIXINDENT, Pos,
+    ScreenChar, Vv,
 };
+use crate::ui::state::kUIMessages;
 use crate::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::undo::u_sync_once;
 use crate::undo::{u_clearallandblockfree, u_save, u_save_cursor, u_sync};

@@ -29,12 +29,14 @@
 
 use super::events::{count, linegrid, send};
 use super::packer::push_call;
+use crate::highlight::HlAttrs;
 use crate::highlight::{HLATTRS_DICT_SIZE, hl_get_url, hlattrs2dict, syn_attr2entry};
 use crate::narrow::number_as_int;
 use crate::types::DictBuilder;
 use crate::types::builders::ArrayBuf;
-use crate::types::ui::{kUIHlState, kUIPopupmenu, kUIWildmenu};
-use crate::types::{ApiDict, Array, HlAttrs, Integer, Object, RemoteUI};
+use crate::types::{ApiDict, Array, Integer, Object};
+use crate::ui::state::RemoteUI;
+use crate::ui::state::{kUIHlState, kUIPopupmenu, kUIWildmenu};
 use core::ffi::CStr;
 
 /// Announces a highlight attribute id and what it resolves to.

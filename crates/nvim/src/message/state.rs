@@ -48,13 +48,14 @@
 
 use super::{PROGRESS_TARGET_CMD, SB_CLEAR_NONE, ScrollbackClear};
 use crate::global_cell::{GlobalCell, state_record};
+use crate::grid::defs::ScreenGrid;
 use crate::memory::XString;
 use crate::options::{
     OptMoptFlags, kOptMoptFlagHistory, kOptMoptFlagHitEnter, kOptMoptFlagProgress,
 };
 use crate::os::fs::CFile;
 use crate::os::libc::int64_t;
-use crate::types::{ApiString, Callback, Object, ScreenAttr, ScreenGrid};
+use crate::types::{ApiString, Callback, Object, ScreenAttr};
 use core::ffi::{CStr, c_int, c_long};
 
 pub(crate) static on_print: GlobalCell<Callback> = GlobalCell::new(Callback::None);

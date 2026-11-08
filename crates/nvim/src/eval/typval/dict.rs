@@ -37,9 +37,10 @@ use crate::message_fmt::msg_cstr;
 use ::core::ffi::CStr;
 
 use super::*;
+use crate::mbyte::CONV_NONE;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
-use crate::types::{CONV_NONE, Failed};
+use crate::types::Failed;
 
 impl Dict {
     /// Add `item`, which the dictionary takes over.  `Err` hands it back

@@ -52,13 +52,15 @@ use crate::api::ui::{
     remote_ui_win_viewport_margins,
 };
 use crate::global_cell::GlobalCell;
+use crate::highlight::HlAttrs;
 use crate::log::logmsg_tagged;
 use crate::message_fmt::msg_cstr;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
-    ApiString, Array, Boolean, BufferHandle, Float, HlAttrs, Integer, LineFlags, Object, RemoteUI,
-    ScreenAttr, ScreenChar, TabpageHandle, WindowHandle,
+    ApiString, Array, Boolean, BufferHandle, Float, Integer, Object, ScreenAttr, ScreenChar,
+    TabpageHandle, WindowHandle,
 };
+use crate::ui::state::{LineFlags, RemoteUI};
 use crate::ui_compositor::{
     ui_comp_grid_cursor_goto, ui_comp_grid_resize, ui_comp_grid_scroll, ui_comp_msg_set_pos,
     ui_comp_raw_line,

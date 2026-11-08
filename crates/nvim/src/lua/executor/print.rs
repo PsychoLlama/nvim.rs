@@ -30,8 +30,8 @@ use crate::message::{msg_multihl, msg_putchar};
 use crate::os::cshim::gettext;
 use crate::profile::startup_timing;
 use crate::profile::{time_msg, time_pop, time_push};
-use crate::types::ui::kUICmdline;
 use crate::types::{ApiString, IOSIZE, Object, TypVal};
+use crate::ui::state::kUICmdline;
 use crate::ui::ui_has;
 
 lua_functions! {

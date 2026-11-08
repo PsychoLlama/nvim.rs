@@ -34,13 +34,14 @@ use crate::strings::find_char;
 use crate::winlayer::Win;
 use core::ffi::c_int;
 
+use crate::mbyte::MB_MAXBYTES;
 use crate::mbyte::{
     c_cluster_len, char_at, char_len, encode_char, mb_islower, mb_isupper, mb_toupper, utf_class,
     utf_fold,
 };
 use crate::os::libc::uint8_t;
 use crate::spell::SpellTab;
-use crate::types::{Failed, MB_MAXBYTES};
+use crate::types::Failed;
 
 use super::{MAXWLEN, did_set_spelltab, spelltab};
 

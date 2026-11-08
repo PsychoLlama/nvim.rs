@@ -13,10 +13,11 @@
 #![forbid(unsafe_code)]
 
 use crate::eval::typval::tv_get_bool_chk;
+use crate::mbyte::MB_MAXCHAR;
 use crate::mbyte::{cluster_len, encode_char};
 use crate::memory::XString;
 use crate::semsg;
-use crate::types::{Failed, MB_MAXCHAR, TypVal};
+use crate::types::{Failed, TypVal};
 use core::ffi::{CStr, c_int};
 
 // The carve of the transpiled module; see each child's docs.

@@ -23,11 +23,11 @@ use core::ffi::CStr;
 use crate::autocmd::apply_autocmds;
 use crate::eval::vars::var_string_value;
 use crate::global_cell::GlobalCell;
+use crate::highlight::RgbValue;
 use crate::highlight::state::{
     cterm_normal_bg_color, cterm_normal_fg_color, normal_bg, normal_fg, normal_sp,
 };
 use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
-use crate::types::RgbValue;
 
 use super::do_highlight;
 

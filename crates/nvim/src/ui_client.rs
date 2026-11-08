@@ -41,6 +41,8 @@ use crate::event::r#loop::{Drain, wait_on_main_loop};
 use crate::event::socket::socket_address_is_tcp;
 use crate::event_queue::put_job_on_fast_events;
 use crate::global_cell::GlobalCell;
+use crate::grid::defs::GridLineEvent;
+use crate::highlight::HlAttrs;
 use crate::highlight::{HLATTRS_INIT, dict2hlattrs};
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, logmsg};
 use crate::message_fmt::msg_cstr;
@@ -70,12 +72,12 @@ use crate::tui::state::TUIData;
 use crate::tui::tui::Tui;
 use crate::tui::tui::tui_suspend;
 use crate::types::builders::{ArrayBuf, DictBuf};
-use crate::types::ui::kLineFlagWrap;
 use crate::types::{
-    ApiDict, ApiString, Array, Error, GridLineEvent, HlAttrs, Integer, Object, ObjectType,
-    UIClientHandler, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger,
-    kObjectTypeString,
+    ApiDict, ApiString, Array, Error, Integer, Object, ObjectType, kObjectTypeArray,
+    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
 };
+use crate::ui::state::UIClientHandler;
+use crate::ui::state::kLineFlagWrap;
 use crate::ui::state::t_colors;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;

@@ -64,10 +64,10 @@ use crate::regexp::vim_regexec_multi;
 use crate::search::get_search_pat;
 use crate::semsg;
 use crate::types::RegMMatch;
-use crate::types::ui::kUIMessages;
 use crate::types::{
     CmdModFlags, ColNr, ExArg, Handle, LPos, LineNr, OptInt, OptionSetFlags, Pos, ProfTime,
 };
+use crate::ui::state::kUIMessages;
 use crate::ui::ui_has;
 use crate::undo::u_save_cursor;
 use crate::winlayer::{Buf, Win};

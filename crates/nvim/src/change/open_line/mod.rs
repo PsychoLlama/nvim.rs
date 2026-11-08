@@ -40,12 +40,12 @@ use crate::cstr::byte_at;
 use crate::extmark::kExtmarkNOOP;
 use crate::extmark::kExtmarkUndo;
 use crate::guard::Suppress;
+use crate::indent::Indenter;
 use crate::indent::SIN_INSERT;
 use crate::indent::SIN_NOMARK;
 use crate::memline::{Lines, ml_append_terminated};
 use crate::memory::XString;
 use crate::narrow::len_as_int;
-use crate::types::Indenter;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 

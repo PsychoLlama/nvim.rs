@@ -17,9 +17,10 @@ use super::*;
 use crate::charset::CharDisplay;
 use crate::cstr;
 use crate::grid::{SCHAR_BUF_SIZE, schar_text};
+use crate::mbyte::MB_MAXBYTES;
 use crate::mbyte::char_at;
 use crate::types::ColNr;
-use crate::types::{MB_MAXBYTES, NUL};
+use crate::types::NUL;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 

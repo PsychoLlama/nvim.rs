@@ -15,7 +15,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::global_cell::GlobalCell;
-use crate::types::ScreenGrid;
+use crate::grid::defs::ScreenGrid;
 use core::ffi::c_int;
 
 #[derive(Copy, Clone)]

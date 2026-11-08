@@ -25,7 +25,7 @@ use std::ffi::CString;
 
 use super::{kStlClickDisabled, kStlClickFuncRun, kStlClickTabClose, kStlClickTabSwitch};
 use crate::global_cell::GlobalCell;
-use crate::types::{StlClickDefinition, StlClickRecord, StlHlRun, StlOpt};
+use crate::statusline::defs::{StlClickDefinition, StlClickRecord, StlHlRun, StlOpt};
 
 /// What one `%` item turned into. Upstream's `StlItem`, with the `char *`
 /// into the output buffer replaced by a byte offset into it -- which is what

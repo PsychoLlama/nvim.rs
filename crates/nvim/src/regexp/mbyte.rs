@@ -17,12 +17,12 @@ use core::ffi::c_int;
 
 use super::Rex;
 use crate::charset::{is_word_at, vim_iswordc_buf};
+use crate::mbyte::GraphemeState;
 use crate::mbyte::{
     c_cluster_len, char_at, char_len, head_off, iscomposing, strnicmp_in, utf_fold,
 };
 use crate::memory::{memchr_in, strchr_in, strlen_in};
 use crate::strings::find_char;
-use crate::types::GraphemeState;
 use crate::winlayer::Buf;
 
 /// The base characters of U+FB20..U+FB4F, the Hebrew presentation forms, so

@@ -67,8 +67,8 @@ use crate::profile::{script_line_end, script_line_start};
 use crate::runtime::set_sourcing_lnum;
 
 use crate::memory::XString;
-use crate::types::ui::kUICmdline;
 use crate::types::{CmdLine, CondId, CondSummary, Failed, LineNr, OptInt};
+use crate::ui::state::kUICmdline;
 use crate::ui::ui_has;
 
 /// Run one Ex command line, as if the user had typed it.

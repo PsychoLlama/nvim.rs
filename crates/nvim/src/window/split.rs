@@ -38,8 +38,8 @@ use crate::option::vars::{
     P_WH, P_WIW, p_ch, p_ea, p_ead, p_ls, p_sb, p_spk, p_spr, p_wh, p_wiw, p_wmh, p_wmw,
 };
 use crate::option::win_copy_options;
-use crate::types::ui::kUIMultigrid;
 use crate::types::{Failed, Integer, OptInt};
+use crate::ui::state::kUIMultigrid;
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_win_hide, ui_has};
 use crate::ui_compositor::ui_comp_remove_grid;

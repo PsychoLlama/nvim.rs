@@ -38,8 +38,8 @@ use crate::options::kOptBackground;
 use crate::os::cshim::gettext;
 use crate::runtime::state::current_sctx;
 use crate::startup::starting;
-use crate::types::ui::kUILinegrid;
 use crate::types::{OptVal, OptionSetFlags};
+use crate::ui::state::kUILinegrid;
 use crate::ui::state::t_colors;
 use crate::ui::{ui_default_colors_set, ui_has, ui_refresh, ui_rgb_attached};
 

@@ -28,12 +28,13 @@ use crate::api::private::helpers::api_dict_to_keydict;
 use crate::api::private::validate::{err_bad_value, err_expected, err_out_of_range};
 use crate::api_error;
 use crate::highlight::HlAttrFlags;
+use crate::highlight::HlAttrs;
 use crate::highlight_group::{name_to_color, name_to_ctermcolor};
 use crate::message_fmt::msg_cstr;
 use crate::os::libc::{int16_t, int32_t, size_t};
 use crate::types::DictBuilder;
 use crate::types::{
-    ApiDict, Boolean, Error, HlAttrs, Integer, Object, kErrorTypeException, kErrorTypeValidation,
+    ApiDict, Boolean, Error, Integer, Object, kErrorTypeException, kErrorTypeValidation,
 };
 use core::ffi::{CStr, c_int};
 

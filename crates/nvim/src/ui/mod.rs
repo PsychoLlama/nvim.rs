@@ -79,15 +79,15 @@ use crate::startup::{exiting, full_screen, starting, ui_client_channel_id};
 use crate::state::MODE_CMDLINE;
 use crate::state::mode::State;
 use crate::types::DictBuilder;
-use crate::types::ui::{
+use crate::types::{
+    ApiDict, ApiString, Array, Boolean, Error, Handle, Integer, Object, OptVal, OptionSetFlags,
+};
+use crate::ui::state::{LineFlags, RemoteUI, UIExtension};
+use crate::ui::state::{called_vim_beep, resize_events, ui_ext_names, ui_refresh_cmdheight};
+use crate::ui::state::{
     kLineFlagInvalid, kLineFlagWrap, kUIExtCount, kUIFloatDebug, kUIHlState, kUILinegrid,
     kUIMessages, kUIMultigrid, kUITermColors,
 };
-use crate::types::{
-    ApiDict, ApiString, Array, Boolean, Error, Handle, Integer, LineFlags, Object, OptVal,
-    OptionSetFlags, RemoteUI, UIExtension,
-};
-use crate::ui::state::{called_vim_beep, resize_events, ui_ext_names, ui_refresh_cmdheight};
 use crate::ui_compositor::{
     ui_comp_attach, ui_comp_detach, ui_comp_get_grid_at_coord, ui_comp_init, ui_comp_should_draw,
 };

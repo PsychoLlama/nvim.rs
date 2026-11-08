@@ -10,11 +10,13 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::grid::defs::{GridView, ScreenGrid};
 use crate::memory::XString;
 use crate::r#move::WinValid;
 use crate::os::libc::{int64_t, uint8_t, uint16_t, uint32_t};
 use crate::quickfix::model::QfId;
 use crate::registry::IdSet;
+use crate::statusline::defs::WinClickDefs;
 use crate::winlayer::{Buf, BufId, FrameId, TabId, WinId};
 
 pub struct SwitchWin {

@@ -27,9 +27,9 @@ use core::ffi::c_int;
 use super::Parsed;
 use super::run::failure_chance;
 use super::sub::match_follows;
+use crate::mbyte::MB_MAXBYTES;
 use crate::mbyte::utf_char2len;
 use crate::regexp::{CompileError, NfaRegProg};
-use crate::types::MB_MAXBYTES;
 
 /// How far the width walk follows a `NFA_SPLIT` before giving up.
 const MAX_DEPTH: c_int = 4;

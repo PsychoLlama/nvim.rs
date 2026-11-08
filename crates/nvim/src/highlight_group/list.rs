@@ -32,9 +32,9 @@ use crate::message::{
 };
 use crate::option::vars::p_verbose;
 use crate::os::time::os_delay;
-use crate::types::ui::kUIMessages;
 use crate::types::{Expand, ExpandContext};
 use crate::ui::state::Columns;
+use crate::ui::state::kUIMessages;
 use crate::ui::{ui_flush, ui_has};
 
 use super::{ATTR_NAMES, HLF_D, HexBuf, coloridx_to_name, group, highlight_num_groups};

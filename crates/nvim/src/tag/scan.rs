@@ -21,6 +21,7 @@ use super::*;
 use crate::cstr;
 use crate::file_search::Name;
 use crate::guard::Suppress;
+use crate::mbyte::{CONV_NONE, CONV_NONE_INIT};
 use crate::message_fmt::msg_cstr;
 use crate::option::vars::P_HLG;
 use crate::options::{
@@ -33,7 +34,6 @@ use crate::search::ignorecase_opt;
 use crate::semsg;
 use crate::smsg;
 use crate::types::RegMatch;
-use crate::types::{CONV_NONE, CONV_NONE_INIT};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 use core::hash::{Hash, Hasher};

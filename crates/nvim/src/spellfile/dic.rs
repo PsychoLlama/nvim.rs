@@ -55,6 +55,7 @@ use std::os::unix::ffi::OsStrExt;
 use crate::cstr::byte_at;
 use crate::fileio::Fgets;
 use crate::getchar::state::got_int;
+use crate::mbyte::CONV_NONE;
 use crate::mbyte::{c_cluster_len, char_count, head_off};
 use crate::message::state::{msg_col, msg_didout};
 use crate::message::{msg_clr_eos, msg_display_elided, msg_start};
@@ -63,7 +64,7 @@ use crate::option::vars::p_verbose;
 use crate::os::input::line_breakcheck;
 use crate::os::time::os_time;
 use crate::strings::any_non_ascii;
-use crate::types::{CONV_NONE, Failed, Timestamp};
+use crate::types::{Failed, Timestamp};
 use crate::ui::ui_flush;
 
 use super::MkspellError;

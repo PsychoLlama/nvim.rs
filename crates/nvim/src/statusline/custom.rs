@@ -41,6 +41,7 @@ use crate::charset::{strsize, transstr_into};
 use crate::drawscreen::state::ru_col;
 use crate::global_cell::GlobalCell;
 use crate::grid::{SCHAR_BUF_SIZE, default_grid_ref, schar_copy, schar_from_ascii};
+use crate::highlight::Hlf;
 use crate::highlight::state::{highlight_stlnc, highlight_user};
 use crate::highlight_group::{
     HLF_MSG, HLF_TPF, HLF_WBR, HLF_WBRNC, syn_id2attr, syn_name2id_bytes,
@@ -56,12 +57,12 @@ use crate::os::libc::int64_t;
 use crate::path::MAXPATHL;
 use crate::state::MODE_INSERT;
 use crate::state::mode::{State, edit_submode};
+use crate::statusline::defs::{StlHlRun, StlOpt};
 use crate::strings::{FmtArg, formatted};
-use crate::types::ui::kUIMessages;
 use crate::types::{
-    ApiString, Array, ColNr, Hlf, Integer, NUL, Object, OptIndex, OptInt, OptionSetFlags,
-    ScreenChar, StlHlRun, StlOpt,
+    ApiString, Array, ColNr, Integer, NUL, Object, OptIndex, OptInt, OptionSetFlags, ScreenChar,
 };
+use crate::ui::state::kUIMessages;
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_msg_ruler, ui_has};
 use crate::window::lastwin_nofloating;

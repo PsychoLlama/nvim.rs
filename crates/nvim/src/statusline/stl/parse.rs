@@ -22,7 +22,7 @@ use core::ffi::{CStr, c_int};
 
 use super::{NumberBase, kNumBaseHexadecimal};
 #[cfg(test)]
-use crate::types::StlOpt;
+use crate::statusline::defs::StlOpt;
 
 /// Widest an item may ask to be: upstream bounds both the minimum width and
 /// the maximum width at this.

@@ -45,6 +45,7 @@ use crate::event::stream::stream_set_blocking;
 use crate::event::uv::{uv_file, uv_handle_t, uv_timer_t, uv_tty_mode_t};
 use crate::global_cell::GlobalCell;
 use crate::highlight::HlAttrFlags;
+use crate::highlight::HlAttrs;
 use crate::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
 use crate::memory::XString;
 use crate::message_fmt::msg_cstr;
@@ -75,7 +76,7 @@ use crate::tui::terminfo::caps::{
 };
 use crate::tui::terminfo::entry::TerminfoEntry;
 use crate::tui::terminfo::{terminfo_from_builtin, terminfo_from_database};
-use crate::types::{ApiString, HlAttrs};
+use crate::types::ApiString;
 use crate::ui::state::t_colors;
 use crate::ui_client::{ui_client_attach, ui_client_detach, ui_client_set_size};
 use ::libc::{abort, kill};

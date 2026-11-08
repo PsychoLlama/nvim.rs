@@ -61,6 +61,7 @@ use crate::keycodes::Ctrl_V;
 use crate::lua::executor::LuaRetMode;
 use crate::lua::executor::{nlua_exec_file, nlua_exec_lines, nlua_is_deferred_safe};
 use crate::mbyte::cluster_len;
+use crate::mbyte::{CONV_NONE, VimConv};
 use crate::memory::XString;
 use crate::message::state::msg_col;
 use crate::message::{e_argreq, e_interr, e_invarg, e_norange};
@@ -90,9 +91,9 @@ use crate::registry::{IdMap, IdSet, id_map, id_set};
 use crate::runtime::state::{current_sctx, did_source_packages};
 use crate::types::AutoEvent;
 use crate::types::{
-    ApiDict, ApiString, Array, CONV_NONE, EStack, EStackArg, EStackType, EstackInfo, EvalFuncData,
-    ExArg, Expand, FrameName, Integer, LineNr, Object, OptSet, OptVal, ProfTime, ScriptCtx,
-    ScriptId, ScriptItem, TypVal, UserFunc, VAR_DICT, VarLock, VarNumber, VimConv, kBoolVarFalse,
+    ApiDict, ApiString, Array, EStack, EStackArg, EStackType, EstackInfo, EvalFuncData, ExArg,
+    Expand, FrameName, Integer, LineNr, Object, OptSet, OptVal, ProfTime, ScriptCtx, ScriptId,
+    ScriptItem, TypVal, UserFunc, VAR_DICT, VarLock, VarNumber, kBoolVarFalse,
 };
 use core::cell::Cell;
 use std::rc::Rc;

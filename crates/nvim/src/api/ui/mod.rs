@@ -49,14 +49,15 @@ use crate::narrow::number_as_int;
 use crate::option::set_tty_option;
 use crate::startup::{starting, stdin_fd, stdin_isatty, stdout_isatty};
 use crate::types::builders::{ArrayBuf, DictBuf};
-use crate::types::ui::{
+use crate::types::{
+    ApiDict, ApiString, Boolean, Error, Float, Integer, Object, ObjectType, kErrorTypeException,
+    kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeString,
+};
+use crate::ui::state::{RemoteUI, UIExtension};
+use crate::ui::state::{current_ui, t_colors, ui_ext_names};
+use crate::ui::state::{
     kUICmdline, kUIExtCount, kUIHlState, kUILinegrid, kUIMessages, kUIMultigrid, kUIPopupmenu,
 };
-use crate::types::{
-    ApiDict, ApiString, Boolean, Error, Float, Integer, Object, ObjectType, RemoteUI, UIExtension,
-    kErrorTypeException, kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeString,
-};
-use crate::ui::state::{current_ui, t_colors, ui_ext_names};
 use crate::ui::{
     ui_active, ui_attach_impl, ui_call_ui_send, ui_can_attach_more, ui_detach_impl, ui_grid_resize,
     ui_is_attached, ui_refresh, ui_set_ext_option, with_ui,

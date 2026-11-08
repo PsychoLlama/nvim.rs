@@ -33,6 +33,7 @@ use crate::help::help_heuristic;
 use crate::input::prompt_for_input;
 use crate::insexpand::{ins_compl_check_keys, ins_compl_interrupted};
 use crate::mark::{fm_getname, mark_view_make, mark_view_restore, setpcmark};
+use crate::mbyte::VimConv;
 use crate::memory::{ThinCString, XString};
 use crate::message::state::{msg_col, msg_didout, msg_scroll, msg_scrolled, msg_silent};
 use crate::message::{e_invarg, e_listreq};
@@ -67,12 +68,12 @@ use crate::tag::state::{
 use crate::tr;
 use crate::types::AutoEvent;
 use crate::types::Handle;
-use crate::types::ui::kUIMessages;
 use crate::types::{
     Callback, ColNr, Dict, ExArg, Expand, FileMark, FileMarkView, GetFileRet, LineNr, List,
-    OptMagic, OptSet, Pos, Taggy, Timestamp, VarNumber, VimConv,
+    OptMagic, OptSet, Pos, Taggy, Timestamp, VarNumber,
 };
 use crate::ui::state::Columns;
+use crate::ui::state::kUIMessages;
 use crate::ui::ui_has;
 use crate::window::{
     check_can_set_curbuf_forceit, swbuf_goto_win_with_buf, win_close, win_enter, win_split,

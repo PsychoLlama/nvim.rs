@@ -47,6 +47,7 @@ use crate::decoration::{
 };
 use crate::decoration_provider::decor_providers_invoke_spell;
 use crate::getchar::state::got_int;
+use crate::highlight::Hlf;
 use crate::message::give_warning;
 use crate::message::state::{bot_top_msg, top_bot_msg};
 use crate::option::shortmess;
@@ -59,7 +60,7 @@ use crate::pos::{MAXCOL, clearpos};
 use crate::search::{BACKWARD, FORWARD};
 use crate::spell::SpellMoveType;
 use crate::syntax::syntax_present;
-use crate::types::{ColNr, Hlf, LineNr, Pos, ShmFlag};
+use crate::types::{ColNr, LineNr, Pos, ShmFlag};
 
 use super::chartab::tail;
 use super::check::{check_need_cap, no_spell_checking, spell_check};

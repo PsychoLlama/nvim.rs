@@ -39,7 +39,7 @@ use crate::normal::reset_visual_and_resel;
 use crate::option::vars::{p_ea, p_ead, p_ru};
 use crate::startup::getout;
 use crate::types::Integer;
-use crate::types::ui::kUIMultigrid;
+use crate::ui::state::kUIMultigrid;
 use crate::ui::{ui_call_win_close, ui_has};
 use crate::winfloat::win_float_find_altwin;
 use crate::winlayer::graph::{first_tabpage, firstwin, lastwin};

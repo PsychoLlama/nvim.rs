@@ -19,9 +19,10 @@
 use crate::cursor_shape::CursorEntry;
 use crate::event::objects::{RStream, SignalWatcher};
 use crate::event::uv::{uv_loop_t, uv_pipe_t, uv_timer_t, uv_tty_t};
+use crate::highlight::HlAttrs;
 use crate::tui::terminfo::entry::TerminfoEntry;
 use crate::tui::ugrid::UGrid;
-use crate::types::{HlAttrs, Integer, OptInt};
+use crate::types::{Integer, OptInt};
 use core::ffi::{CStr, c_char, c_int};
 use std::borrow::Cow;
 

@@ -18,8 +18,9 @@ use super::*;
 use crate::guard::{Allow, Keys};
 use crate::keycodes::ModMask;
 use crate::keycodes::{SpecialKey, key_unescape};
+use crate::mbyte::MB_MAXBYTES;
 use crate::mbyte::char_at;
-use crate::types::{Key, MB_MAXBYTES};
+use crate::types::Key;
 use core::ffi::c_int;
 
 /// Fold `modifiers` into `c` where a single code stands for the combination.

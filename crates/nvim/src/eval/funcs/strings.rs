@@ -17,6 +17,7 @@ use crate::eval::typval::{
     tv_check_for_string_arg, tv_check_num, tv_list_alloc_ret,
 };
 use crate::ex_getln::fnameescape;
+use crate::highlight::Hlf;
 use crate::highlight_group::{HLF_COUNT, HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
 use crate::keycodes::escape_ks_bytes;
 use crate::mbyte::{Converter, char_at, cluster_len, enc_locale, encode_char};
@@ -45,7 +46,7 @@ use crate::spellsuggest::spell_suggest_list;
 use crate::strings::{escaped_bytes, format_typvals, shellescape};
 use crate::types::ColNr;
 use crate::types::{
-    EvalFuncData, Hlf, List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber, kListLenMayKnow,
+    EvalFuncData, List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber, kListLenMayKnow,
 };
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};

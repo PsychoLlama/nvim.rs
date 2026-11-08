@@ -799,6 +799,18 @@ pub fn get_number_indent(lnum: LineNr) -> c_int {
     line_vcol(pos.lnum, pos.col)
 }
 
+/// One of the three engines that answer "what indent does the cursor line
+/// want": 'indentexpr', the Lisp indenter and the C indenter.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Indenter {
+    /// 'indentexpr' (`get_expr_indent`).
+    Expr,
+    /// 'lisp' (`get_lisp_indent`).
+    Lisp,
+    /// 'cindent' (`get_c_indent`).
+    C,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

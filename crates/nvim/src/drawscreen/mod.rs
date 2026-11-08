@@ -40,6 +40,7 @@ use crate::eval::vars::set_vim_var_nr;
 use crate::ex_docmd::state::global_busy;
 use crate::ex_getln::state::cmdline_was_last_drawn;
 use crate::ex_getln::{cmdline_screen_cleared, compute_cmdrow, redrawcmdline};
+use crate::fold::FoldInfo;
 use crate::fold::{fold_info, foldmethod_is_syntax, has_any_folding, has_folding};
 use crate::getchar::char_avail;
 use crate::getchar::state::{KeyTyped, got_int, reg_recording};
@@ -50,6 +51,7 @@ use crate::grid::{
     grid_line_getchar, grid_line_mirror, grid_line_put_schar, grid_line_start,
     schar_cache_clear_if_full, schar_from_ascii, win_grid_alloc,
 };
+use crate::highlight::Hlf;
 use crate::highlight::state::{need_highlight_changed, ns_hl_fast};
 use crate::highlight::{
     hl_combine_attr, update_window_hl, win_bg_attr, win_check_ns_hl, win_hl_attr,
@@ -108,12 +110,12 @@ use crate::syntax::{
     syntax_present,
 };
 use crate::terminal::{buf_terminal_check_size, buf_terminal_suspended};
-use crate::types::ui::{kUICmdline, kUIMessages, kUIMultigrid};
 use crate::types::{
-    ColNr, DecorVirtText, DecorVirtText_data, Failed, FoldInfo, Handle, Hlf, Integer, LineNr,
-    OptInt, Pos, ProfTime, ScreenChar, VarNumber, VirtTextChunk, WindowHandle,
+    ColNr, DecorVirtText, DecorVirtText_data, Failed, Handle, Integer, LineNr, OptInt, Pos,
+    ProfTime, ScreenChar, VarNumber, VirtTextChunk, WindowHandle,
 };
 use crate::ui::state::{Columns, Rows};
+use crate::ui::state::{kUICmdline, kUIMessages, kUIMultigrid};
 use crate::ui::{
     ui_call_grid_clear, ui_call_grid_resize, ui_call_msg_clear, ui_call_win_extmark, ui_flush,
     ui_grid_cursor_goto, ui_has,

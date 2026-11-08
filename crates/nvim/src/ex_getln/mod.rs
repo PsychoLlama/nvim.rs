@@ -151,7 +151,6 @@ use crate::types::ESC;
 use crate::types::EcmdCmd;
 use crate::types::Key;
 use crate::types::NL;
-use crate::types::ui::{kUICmdline, kUIMessages};
 use crate::types::{
     AcoSave, ApiString, Array, Boolean, Buffer, Callback, CmdAddr, CmdLine, CmdMod, CmdParseInfo,
     CmdParseMagic, ColNr, Direction, DispTick, Error, EvalFuncData, ExArg, ExArgt, Expand,
@@ -159,6 +158,7 @@ use crate::types::{
     OptSet, OptVal, Pos, ProfTime, SaveVEvent, TypVal, VarNumber,
 };
 use crate::ui::state::{Columns, Rows};
+use crate::ui::state::{kUICmdline, kUIMessages};
 use crate::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,
     ui_call_cmdline_block_show, ui_call_cmdline_hide, ui_call_cmdline_pos, ui_call_cmdline_show,

@@ -25,6 +25,7 @@ use crate::api::private::dispatch_wrappers::{handle_nvim_get_mode, handle_nvim_u
 use crate::channel::defs::{Channel, RpcState};
 use crate::channel::{channel_decref, with_channel};
 use crate::event_queue::{put_job, put_job_in, put_job_on_either};
+use crate::grid::defs::GridLineEvent;
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, logmsg};
 use crate::message_fmt::{msg_addr, msg_bytes};
 use crate::msgpack_rpc::channel::ch_before_blocking_events;
@@ -33,7 +34,7 @@ use crate::os::input::input_blocking;
 use crate::os::libc::{uint32_t, uint64_t};
 use crate::startup::ui_client_attached;
 use crate::types::{
-    Array, Error, GridLineEvent, MessageType, MsgpackRpcRequestHandler, Object, kErrorTypeException,
+    Array, Error, MessageType, MsgpackRpcRequestHandler, Object, kErrorTypeException,
 };
 use crate::ui::state::resize_events;
 use crate::ui_client::ui_client_event_raw_line;

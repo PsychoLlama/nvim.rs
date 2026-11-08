@@ -730,3 +730,11 @@ enum Closed {
     /// [`fits_in_rows`] and stores the answer in the fold's `small`.
     CountRows,
 }
+
+#[derive(Copy, Clone, Default)]
+pub struct FoldInfo {
+    pub fi_lnum: LineNr,
+    pub fi_level: ::core::ffi::c_int,
+    pub fi_low_level: ::core::ffi::c_int,
+    pub fi_lines: i32,
+}

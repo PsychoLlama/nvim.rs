@@ -28,7 +28,6 @@ use crate::r#move::changed_window_setting;
 use crate::option::didset_window_options;
 use crate::option::vars::{p_sb, p_spr, p_winborder};
 use crate::types::AutoEvent;
-use crate::types::ui::kUIMultigrid;
 use crate::types::{
     AlignTextPos, ApiString, Array, Boolean, BorderTextType, BufferHandle, Error, FloatAnchor,
     FloatRelative, Integer, LPos, Object, SwitchWin, VirtText, VirtTextChunk, WinConfig, WinSplit,
@@ -36,6 +35,7 @@ use crate::types::{
     kFloatAnchorSouth, kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus,
     kFloatRelativeMouse, kFloatRelativeTabline, kFloatRelativeWindow,
 };
+use crate::ui::state::kUIMultigrid;
 use crate::ui::ui_has;
 use crate::ui_compositor::ui_comp_remove_grid;
 use crate::window::{

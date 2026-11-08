@@ -55,6 +55,7 @@ use crate::highlight_group::{HLF_COUNT, HLF_E, HLF_R, HLF_W, syn_name2attr};
 use crate::indent::{get_indent, inindent};
 use crate::indent_c::{cindent_on, do_c_expr_indent, in_cinkeys};
 use crate::lua::executor::nlua_expand_pat;
+use crate::mbyte::MB_MAXCHAR;
 use crate::mbyte::{c_cluster_len, mb_islower, mb_isupper, mb_tolower, mb_toupper, utf8len_tab};
 use crate::memline::{dec, ml_delete};
 use crate::message::state::{did_emsg, emsg_silent, in_assert_fails, msg_hist_off};
@@ -104,8 +105,8 @@ use crate::tag::state::g_tag_at_cursor;
 use crate::textformat::auto_format;
 use crate::types::{
     ApiString, BoolVarValue, Callback, ColNr, Dict, Direction, EvalFuncData, Expand,
-    ExtmarkUndoObject, HashTab, LineNr, List, MB_MAXCHAR, OptInt, OptSet, Pos, RegMatch,
-    SaveVEvent, TypVal, VarNumber, Vv,
+    ExtmarkUndoObject, HashTab, LineNr, List, OptInt, OptSet, Pos, RegMatch, SaveVEvent, TypVal,
+    VarNumber, Vv,
 };
 use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;

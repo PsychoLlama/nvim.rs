@@ -77,8 +77,8 @@ use crate::path::path_fnamecmp;
 use crate::pos::MAXLNUM;
 use crate::search::{BACKWARD, FORWARD, find_pattern_in_path};
 use crate::shada::{shada_read_everything, shada_write_file};
-use crate::types::ui::kUICmdline;
 use crate::types::{Cleanup, CmdModFlags, CpoFlag, ExArg, LineNr};
+use crate::ui::state::kUICmdline;
 use crate::ui::ui_has;
 use crate::undo::{curbuf_is_changed, u_read_undo, u_save, u_savedel, u_write_undo};
 

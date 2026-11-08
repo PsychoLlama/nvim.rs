@@ -59,6 +59,7 @@ use crate::eval::{get_v_event, restore_v_event};
 use crate::event::objects::Event;
 use crate::event_queue::{self, ParkingQueue, put_id_event_on_main_loop};
 use crate::highlight::{HlAttrFlags, hl_combine_attr, hl_get_term_attr};
+use crate::highlight::{HlAttrs, RgbValue};
 use crate::highlight_group::name_to_color;
 use crate::memline::MlFlags;
 use crate::memline::ml_delete_buf;
@@ -75,8 +76,8 @@ use crate::types::ApiString;
 use crate::types::AutoEvent;
 use crate::types::builders::DictBuf;
 use crate::types::{
-    AcoSave, BufferHandle, ColNr, Handle, HlAttrs, LineNr, Object, OptVal, OptionSetFlags, Pos,
-    RefcountSize, RgbValue, SaveVEvent, Terminal, VarNumber,
+    AcoSave, BufferHandle, ColNr, Handle, LineNr, Object, OptVal, OptionSetFlags, Pos,
+    RefcountSize, SaveVEvent, Terminal, VarNumber,
 };
 use crate::vterm::host::Value;
 use crate::vterm::screen::ZERO_SCREEN_CELL;

@@ -22,8 +22,8 @@ use core::ffi::{CStr, c_int};
 
 use super::*;
 use crate::keycodes::trans_special_into;
+use crate::mbyte::MB_MAXCHAR;
 use crate::mbyte::{cluster_len, encode_char};
-use crate::types::MB_MAXCHAR;
 
 #[inline(always)]
 pub(super) fn shifted_pos(pos: ParserPosition, shift: size_t) -> ParserPosition {

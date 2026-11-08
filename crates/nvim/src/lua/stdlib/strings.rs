@@ -18,11 +18,11 @@ use core::ffi::{CStr, c_int};
 
 use crate::lua::abi::{lua_Integer, lua_Number};
 use crate::lua::stack::{At, Kind, Raise, Stack};
+use crate::mbyte::CONV_NONE_INIT;
 use crate::mbyte::{
     c_utf_index_to_byte, c_utf_lengths, canonize, cp_bounds, promised_char_len, skip_len,
 };
 use crate::os::cshim::cstr_ncasecmp;
-use crate::types::CONV_NONE_INIT;
 
 /// A count as the Lua integer it is pushed as.
 fn as_lua(n: usize) -> lua_Integer {

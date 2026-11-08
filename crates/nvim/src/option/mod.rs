@@ -45,9 +45,10 @@
 #![allow(non_upper_case_globals)]
 
 use crate::highlight::HlAttrFlags;
+use crate::highlight::{HlAttrs, RgbValue};
 use crate::optionstr::CharsOption;
 use crate::os::libc::{int16_t, int32_t};
-use crate::types::{HlAttrs, OptScope, RgbValue};
+use crate::types::OptScope;
 use core::ffi::{c_int, c_uint};
 
 mod check;

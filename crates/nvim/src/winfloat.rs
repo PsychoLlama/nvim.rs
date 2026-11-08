@@ -55,13 +55,13 @@ use crate::option::vars::{p_ch, p_ls};
 use crate::option::{OptionTarget, parse_winhl_opt, set_option_direct_for};
 use crate::options::kOptBufhidden;
 use crate::optionstr::OptStringRef;
-use crate::types::ui::kUIMultigrid;
 use crate::types::{
     AlignTextPos, BufferHandle, Error, FloatAnchor, LPos, LineNr, OptInt, OptVal, OptionSetFlags,
     Pos, ScreenChar, VirtText, WinConfig, WinSplit, WinStyle, WindowHandle, kErrorTypeException,
     kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus, kFloatRelativeMouse,
     kFloatRelativeWindow,
 };
+use crate::ui::state::kUIMultigrid;
 use crate::ui::state::{Columns, Rows};
 use crate::ui::ui_has;
 use crate::window::{

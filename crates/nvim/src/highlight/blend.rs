@@ -32,10 +32,10 @@ use super::{get_attr_entry, kHlBlend, kHlBlendThrough, syn_attr2entry, update_wi
 use crate::global_cell::GlobalCell;
 use crate::highlight::HlAttrFlags;
 use crate::highlight::state::{normal_bg, normal_fg, normal_sp};
+use crate::highlight::{HlAttrs, HlEntry, RgbValue};
 use crate::highlight_group::highlight_changed;
 use crate::option::vars::P_BG;
 use crate::os::libc::int16_t;
-use crate::types::{HlAttrs, HlEntry, RgbValue};
 use crate::winlayer::Win;
 use core::ffi::c_int;
 

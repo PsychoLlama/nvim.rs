@@ -20,8 +20,8 @@ use crate::narrow::len_as_int;
 use core::cmp::Ordering;
 use core::ffi::{CStr, c_int};
 
+use crate::highlight::RgbValue;
 use crate::highlight::state::{normal_bg, normal_fg};
-use crate::types::RgbValue;
 
 use super::{kColorIdxBg, kColorIdxFg, kColorIdxHex, kColorIdxNone};
 

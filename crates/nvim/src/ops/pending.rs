@@ -35,9 +35,9 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::indent::Indenter;
 use crate::keycodes::SpecialKey;
 use crate::option::vars::{P_FP, P_SEL};
-use crate::types::Indenter;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;

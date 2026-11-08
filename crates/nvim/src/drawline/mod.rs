@@ -26,8 +26,10 @@ use crate::diff::{diff_check_with_linestatus, diff_find_change};
 use crate::drawscreen::state::{dollar_vcol, win_extmark_arr};
 use crate::drawscreen::{compute_foldcolumn, conceal_cursor_line, number_width, win_draw_end};
 use crate::eval::vars::set_vim_var_nr;
+use crate::fold::FoldInfo;
 use crate::fold::{FOLD_TEXT_LEN, FoldText, VIRTTEXT_EMPTY, get_foldtext};
 use crate::global_cell::GlobalCell;
+use crate::grid::defs::GridView;
 use crate::grid::{
     LineAttrs, LineSpan, SLF_RIGHTLEFT, grid_adjust, grid_put_linebuf, linebuf_mirror, schar_cells,
     schar_from_ascii, schar_from_char, schar_get_adv, schar_get_ascii, schar_get_first_codepoint,
@@ -36,6 +38,7 @@ use crate::grid::{
 use crate::highlight::default_hl_attr;
 use crate::highlight::namespace::hl_attr;
 use crate::highlight::state::{cterm_normal_bg_color, normal_bg};
+use crate::highlight::{Hlf, RgbValue};
 use crate::highlight::{
     hl_blend_attrs, hl_combine_attr, hl_get_underline, syn_attr2entry, win_bg_attr, win_hl_attr,
 };
@@ -64,23 +67,25 @@ use crate::options::{
     kOptSpoFlagNoplainbuffer,
 };
 use crate::os::libc::{ptrdiff_t, size_t, uint8_t, uint32_t, uint64_t};
+use crate::plines::{CharSize, CharsizeArg};
 use crate::plines::{getvcol, getvvcol, win_charsize};
 use crate::pos::ltoreq;
 use crate::search::FORWARD;
 use crate::search::state::{highlight_match, search_match_endcol, search_match_lines};
+use crate::sign::SignTextAttrs;
 use crate::spell::spell_redraw_lnum;
 use crate::spell::{check_need_cap, spell_cat_line, spell_check, spell_move_to, spell_to_word_end};
 use crate::state::mode::State;
 use crate::state::{MODE_INSERT, virtual_active};
+use crate::statusline::defs::StatusCol;
 use crate::statusline::{SIGN_SHOW_MAX, build_statuscol_str};
 use crate::syntax::{SynFlags, get_syntax_attr, syn_get_sub_char, syntax_present};
 use crate::terminal::terminal_get_line_attributes;
 use crate::types::NS;
 use crate::types::TAB;
 use crate::types::{
-    CharSize, CharsizeArg, ColNr, DecorRange, DiffLine, FoldInfo, GridView, HlMode, Hlf, LineNr,
-    NUL, Pos, RgbValue, ScreenAttr, ScreenChar, SignTextAttrs, StatusCol, VarNumber, VirtText,
-    VirtTextPos,
+    ColNr, DecorRange, DiffLine, HlMode, LineNr, NUL, Pos, ScreenAttr, ScreenChar, VarNumber,
+    VirtText, VirtTextPos,
 };
 use crate::ui::ui_rgb_attached;
 use crate::winlayer::Win;

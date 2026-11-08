@@ -21,9 +21,10 @@ use crate::getchar::typeahead;
 use crate::guard::Keys;
 use crate::keycodes::ModMask;
 use crate::keycodes::SpecialKey;
+use crate::mbyte::MB_MAXCHAR;
 use crate::narrow::len_as_int;
 use crate::state::Step;
-use crate::types::{ExpandContext, MB_MAXCHAR};
+use crate::types::ExpandContext;
 use crate::winlayer::Buf;
 
 /// Where the character before byte `at` of `line` starts: C's

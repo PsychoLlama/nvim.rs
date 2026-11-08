@@ -36,9 +36,9 @@ use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::msg_schedule_semsg;
 use crate::msg_schedule_semsg_multiline;
 use crate::types::Handle;
-use crate::types::ui::{kUICmdline, kUILinegrid, kUIMessages};
 use crate::types::{Array, LuaRef};
 use crate::ui::state::ui_event_ns_id;
+use crate::ui::state::{kUICmdline, kUILinegrid, kUIMessages};
 use core::ffi::CStr;
 
 const kRetNilBool: LuaRetMode = 1;
@@ -59,7 +59,7 @@ struct Handler {
     /// external widgets have entries — everything from `ext_linegrid` on is
     /// about how a UI wants the screen described, not about who draws it.
     ///
-    /// [`UIExtension`]: crate::types::UIExtension
+    /// [`UIExtension`]: crate::ui::state::UIExtension
     ext_widgets: [bool; kUILinegrid as usize],
 }
 

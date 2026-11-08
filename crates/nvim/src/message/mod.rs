@@ -94,6 +94,7 @@ use crate::getchar::{
     typeahead_noflush,
 };
 use crate::global_cell::GlobalCell;
+use crate::grid::defs::GridView;
 use crate::grid::{
     GridRef, grid_adjust, grid_alloc, grid_assign_handle, grid_clear, grid_del_lines,
     grid_ins_lines, grid_line_cursor_goto, grid_line_flush, grid_line_flush_if_valid_row,
@@ -159,13 +160,13 @@ use crate::types::CAR;
 use crate::types::ESC;
 use crate::types::NL;
 use crate::types::TAB;
-use crate::types::ui::{kUIMessages, kUIMultigrid};
 use crate::types::{ApiDict, Integer};
 use crate::types::{
-    ApiString, Array, EStackArg, ExArg, GridView, HlMessage, IOSIZE, Object, OptInt, ScreenAttr,
-    ScreenChar, ShmFlag, TypVal, Vv,
+    ApiString, Array, EStackArg, ExArg, HlMessage, IOSIZE, Object, OptInt, ScreenAttr, ScreenChar,
+    ShmFlag, TypVal, Vv,
 };
 use crate::ui::state::{Columns, Rows, resize_events};
+use crate::ui::state::{kUIMessages, kUIMultigrid};
 use crate::ui::{
     ui_active, ui_call_grid_destroy, ui_call_grid_resize, ui_call_grid_scroll,
     ui_call_msg_history_show, ui_call_msg_set_pos, ui_call_msg_show, ui_call_msg_showmode,

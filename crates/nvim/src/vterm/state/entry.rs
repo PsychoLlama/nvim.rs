@@ -23,7 +23,7 @@ use crate::narrow::as_index;
 use crate::narrow::len_as_int;
 use core::ffi::c_int;
 
-use crate::types::GraphemeState;
+use crate::mbyte::GraphemeState;
 use crate::vterm::encoding::{self, Charset};
 use crate::vterm::host::{Csi, Fragment, ParserHandler, Value};
 use crate::vterm::internal::{

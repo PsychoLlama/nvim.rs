@@ -19,12 +19,13 @@
 use crate::grid::schar_from_buf;
 
 use crate::global_cell::GlobalCell;
+use crate::grid::defs::{GridLineEvent, RawLine};
 use crate::mpack::mpack_core::{TokenStop, read_token};
 use crate::mpack::token::{self, Tok};
 use crate::mpack::typedefs::mpack_token_type_t;
 use crate::msgpack_rpc::unpacker::Unpacker;
 use crate::os::libc::size_t;
-use crate::types::{Array, GridLineEvent, RawLine, ScreenAttr, ScreenChar};
+use crate::types::{Array, ScreenAttr, ScreenChar};
 use crate::ui_client::{ui_client_event_grid_line, ui_client_get_redraw_handler};
 
 use super::protocol;

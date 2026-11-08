@@ -18,9 +18,10 @@ use neovim::eval::typval::{
     tv_dict_alloc,
 };
 use neovim::guard::{Suppress, sandbox};
+use neovim::mbyte::CONV_NONE_INIT;
+use neovim::mbyte::VimConv;
 use neovim::memory::{ThinCString, xfree, xmalloc, xstrdup};
-use neovim::types::CONV_NONE_INIT;
-use neovim::types::{Callback, Dict, DictItem, Failed, TypVal, VarLock, VimConv};
+use neovim::types::{Callback, Dict, DictItem, Failed, TypVal, VarLock};
 use std::ffi::c_int;
 
 use crate::support::alloc::{self, AllocLog};

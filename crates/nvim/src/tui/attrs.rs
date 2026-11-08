@@ -22,6 +22,7 @@
 
 use crate::global_cell::GlobalCell;
 use crate::highlight::HlAttrFlags;
+use crate::highlight::HlAttrs;
 use crate::map::DenseSet;
 use crate::narrow::as_index;
 use crate::narrow::number_as_int;
@@ -38,7 +39,7 @@ use crate::tui::terminfo::caps::{
     kTerm_set_rgb_foreground, kTerm_set_underline_style,
 };
 use crate::tui::tui::DEFAULT_ATTRS;
-use crate::types::{Array, HlAttrs, Integer};
+use crate::types::{Array, Integer};
 use core::ffi::{CStr, c_int};
 
 /// The underline style parameter each `UNDER*` bit asks the terminal for,

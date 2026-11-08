@@ -35,9 +35,10 @@ use neovim::eval::typval::{
     list_find_nr, list_find_str, list_first, list_free_contents, list_free_list, list_join,
     list_last, list_len, tv_clear, tv_list_alloc,
 };
+use neovim::mbyte::CONV_NONE_INIT;
+use neovim::mbyte::VimConv;
 use neovim::memory::{XString, xstrdup};
-use neovim::types::CONV_NONE_INIT;
-use neovim::types::{List, Refcount, TypVal, VAR_LIST, VarLock, VimConv};
+use neovim::types::{List, Refcount, TypVal, VAR_LIST, VarLock};
 
 use crate::support::alloc::{self, AllocLog};
 use crate::support::tv::{self, Payload, Tv};

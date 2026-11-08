@@ -20,11 +20,13 @@
 #![forbid(unsafe_code)]
 
 use crate::buffer::BLN_LISTED;
+use crate::grid::defs::GridView;
 use crate::r#move::WinValid;
+use crate::statusline::defs::WinClickDefs;
 use crate::types::ColNr;
 use crate::types::{
-    ArgListId, FcsChars, FileMark, FileMarkView, GridView, LcsChars, Pos, PosSave, ScopeDictItem,
-    Taggy, VirtText, WinClickDefs, Window, XFileMark,
+    ArgListId, FcsChars, FileMark, FileMarkView, LcsChars, Pos, PosSave, ScopeDictItem, Taggy,
+    VirtText, Window, XFileMark,
 };
 use crate::winfloat::kWinStyleMinimal;
 use core::ffi::{c_char, c_int};
@@ -37,6 +39,7 @@ use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::buffer::buflist_new;
 use crate::eval::vars::{new_var_scope, release_var_scope, vars_clear};
 use crate::fold::clear_folding;
+use crate::grid::defs::ScreenGrid;
 use crate::grid::grid_assign_handle;
 use crate::mark::free_jumplist;
 use crate::r#match::clear_matches;
@@ -44,10 +47,10 @@ use crate::option::clear_winopt;
 use crate::option::vars::p_ch;
 use crate::registry::id_set;
 use crate::tag::tagstack_clear_entry;
-use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    Failed, Handle, Integer, LineNr, OptInt, ScreenGrid, VAR_SCOPE, WinConfig, WinInfo, WinOpt,
+    Failed, Handle, Integer, LineNr, OptInt, VAR_SCOPE, WinConfig, WinInfo, WinOpt,
 };
+use crate::ui::state::kUIMultigrid;
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_grid_destroy, ui_has};
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};

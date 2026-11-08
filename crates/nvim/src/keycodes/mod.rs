@@ -36,12 +36,13 @@ use core::ffi::{CStr, c_int};
 use crate::ascii::{ascii_isdigit, ascii_isident};
 use crate::charset::{str2nr_in, transchar, vim_isprintc};
 use crate::eval::vars::var_string_value;
+use crate::mbyte::MB_MAXBYTES;
 use crate::mbyte::{char_at, char_len, cluster_len, encode_char};
 use crate::message::emsg;
 use crate::message::{e_invarg, e_usingsid};
 use crate::os::cshim::gettext;
 use crate::runtime::state::current_sctx;
-use crate::types::{CpoFlag, MB_MAXBYTES, ScriptId};
+use crate::types::{CpoFlag, ScriptId};
 
 mod codes;
 pub use self::codes::*;

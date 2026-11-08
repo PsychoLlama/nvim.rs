@@ -38,8 +38,9 @@ use crate::cursor_shape::cursor_mode_uses_syn_id;
 use crate::global_cell::GlobalCell;
 use crate::highlight::state::{normal_bg, normal_fg};
 use crate::highlight::{HLATTRS_INIT, HlAttrFlags, hl_get_syn_attr, ns_get_attr, ns_get_link};
+use crate::highlight::{HlAttrs, RgbValue};
 use crate::os::libc::int16_t;
-use crate::types::{HlAttrs, NS, RgbValue, ScriptCtx};
+use crate::types::{NS, ScriptCtx};
 use crate::ui::ui_mode_info_set;
 
 use super::{

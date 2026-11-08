@@ -22,6 +22,7 @@ use crate::cursor_shape::{CursorEntry, CursorShape};
 use crate::cursor_shape::{SHAPE_BLOCK, SHAPE_HOR, SHAPE_IDX_N, SHAPE_VER, shape_entry};
 use crate::global_cell::GlobalCell;
 use crate::highlight::HlAttrFlags;
+use crate::highlight::{HlAttrs, RgbValue};
 use crate::log::{LOGLVL_WRN, logmsg};
 use crate::message_fmt::msg_cstr_opt;
 use crate::narrow::as_index;
@@ -33,7 +34,7 @@ use crate::tui::terminfo::caps::{
     kTerm_reset_cursor_color, kTerm_reset_cursor_style, kTerm_set_cursor_color,
     kTerm_set_cursor_style,
 };
-use crate::types::{ApiDict, ApiString, HlAttrs, Object, RgbValue};
+use crate::types::{ApiDict, ApiString, Object};
 use core::ffi::{CStr, c_int};
 
 /// Does the editor want the TUI driving cursor style at all? `'guicursor'`

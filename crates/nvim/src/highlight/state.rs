@@ -23,8 +23,9 @@
 #![allow(non_upper_case_globals)]
 
 use crate::global_cell::GlobalCell;
+use crate::highlight::RgbValue;
 use crate::types::Handle;
-use crate::types::{NS, RgbValue};
+use crate::types::NS;
 use core::ffi::c_int;
 
 pub(crate) static include_none: GlobalCell<c_int> = GlobalCell::new(0 as c_int);

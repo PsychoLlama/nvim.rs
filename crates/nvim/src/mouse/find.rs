@@ -33,9 +33,10 @@ use crate::cstr;
 use crate::grid::get_win_by_grid_handle;
 use crate::mbyte::{c_char_info, c_next_cluster};
 use crate::message::state::{msg_grid, msg_grid_pos};
+use crate::plines::CharsizeArg;
 use crate::plines::win_charsize;
 use crate::popupmenu::pum_grid_ref;
-use crate::types::{CharsizeArg, Handle, LineNr};
+use crate::types::{Handle, LineNr};
 use crate::ui_compositor::ui_comp_mouse_focus;
 use crate::winlayer::{current_topframe, first_window, windows};
 

@@ -56,8 +56,9 @@ use crate::highlight_group::{
 use crate::narrow::as_index;
 use crate::narrow::{len_as_int, len_as_integer};
 use crate::os::libc::uint32_t;
+use crate::os::libc::{int16_t, int32_t};
 use crate::types::DictBuilder;
-use crate::types::{ApiString, Array, HlAttrs, HlEntry, HlKind, Integer, Object};
+use crate::types::{ApiString, Array, Integer, Object};
 use crate::ui::ui_call_hl_attr_define;
 use cache::AttrCache;
 use core::ffi::{CStr, c_int};
@@ -673,6 +674,42 @@ fn name_object(name: &CStr) -> Object {
 fn put(dict: &mut DictBuilder, key: &'static CStr, value: Object) {
     dict.insert(key, value);
 }
+
+#[derive(Copy, Clone)]
+pub struct ColorItem {
+    pub attr_id: ::core::ffi::c_int,
+    pub link_id: ::core::ffi::c_int,
+    pub version: ::core::ffi::c_int,
+    pub is_default: bool,
+    pub link_global: bool,
+}
+#[derive(PartialEq, Eq, Hash)]
+pub struct ColorKey {
+    pub ns_id: ::core::ffi::c_int,
+    pub syn_id: ::core::ffi::c_int,
+}
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub struct HlAttrs {
+    pub rgb_ae_attr: HlAttrFlags,
+    pub cterm_ae_attr: HlAttrFlags,
+    pub rgb_fg_color: RgbValue,
+    pub rgb_bg_color: RgbValue,
+    pub rgb_sp_color: RgbValue,
+    pub cterm_fg_color: int16_t,
+    pub cterm_bg_color: int16_t,
+    pub hl_blend: int32_t,
+    pub url: int32_t,
+}
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub struct HlEntry {
+    pub attr: HlAttrs,
+    pub kind: HlKind,
+    pub id1: ::core::ffi::c_int,
+    pub id2: ::core::ffi::c_int,
+}
+pub type HlKind = ::core::ffi::c_uint;
+pub type RgbValue = int32_t;
+pub type Hlf = ::core::ffi::c_int;
 
 #[cfg(test)]
 mod tests {

@@ -34,7 +34,8 @@ use super::{
 };
 use crate::cstr;
 use crate::decoration::SCL_NUM;
-use crate::types::{StlOpt, Vv};
+use crate::statusline::defs::StlOpt;
+use crate::types::Vv;
 
 /// What carries across items while the format is walked.
 struct State {

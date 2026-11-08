@@ -44,7 +44,8 @@ use crate::options::{
 };
 use crate::os::cshim::gettext;
 use crate::os::libc::uint32_t;
-use crate::types::{Buffer, Failed, NUL, OptError, StlOpt};
+use crate::statusline::defs::StlOpt;
+use crate::types::{Buffer, Failed, NUL, OptError};
 
 use super::OptStringRef;
 

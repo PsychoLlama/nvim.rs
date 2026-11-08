@@ -42,6 +42,7 @@ use crate::keycodes::ModMask;
 use crate::keycodes::{SpecialKey, simplify_mod_mask};
 use crate::mapping::langmap_adjust_mb;
 use crate::mark::checkpcmark;
+use crate::mbyte::GraphemeState;
 use crate::mbyte::{encode_char, iscomposing, utf8len_tab};
 use crate::message::state::{msg_col, msg_didout, msg_nowait};
 use crate::normal::{
@@ -65,7 +66,7 @@ use crate::state::{
     get_real_state, may_trigger_modechanged,
 };
 use crate::types::Key;
-use crate::types::{CmdArg, CpoFlag, GraphemeState, OpType, OptInt, Outcome};
+use crate::types::{CmdArg, CpoFlag, OpType, OptInt, Outcome};
 use crate::ui::{ui_cursor_shape, ui_cursor_shape_no_check_conceal, ui_flush};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_int, c_uint};

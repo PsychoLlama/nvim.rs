@@ -64,6 +64,7 @@ use crate::charset::atoi;
 use crate::cstr;
 use crate::fileio::Fgets;
 use crate::getchar::state::got_int;
+use crate::mbyte::CONV_NONE;
 use crate::mbyte::canonize;
 use crate::message::msg;
 use crate::message_fmt::{msg_bytes, msg_cstr};
@@ -72,7 +73,6 @@ use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::os::libc::uint8_t;
 use crate::spell::init_spell_chartab;
-use crate::types::CONV_NONE;
 
 use super::MkspellError;
 use super::affix::{handle_affix_entry, handle_affix_header};

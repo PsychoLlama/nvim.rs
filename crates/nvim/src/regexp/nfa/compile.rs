@@ -21,8 +21,8 @@ use crate::regexp::NfaOp;
 use core::ffi::c_int;
 
 use super::program::{NfaState, StateId};
+use crate::mbyte::MB_MAXBYTES;
 use crate::mbyte::encode_char;
-use crate::types::MB_MAXBYTES;
 
 /// How far the walks below follow a `NFA_SPLIT` before giving up.
 const MAX_DEPTH: c_int = 4;

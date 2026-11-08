@@ -77,10 +77,10 @@ use crate::pos::MAXLNUM;
 use crate::semsg;
 use crate::spell::spell_delete_wordlist;
 use crate::startup::{getout, recoverymode};
-use crate::types::ui::kUIMessages;
 use crate::types::{
     Buffer, CmdModFlags, ColNr, Dict, Failed, LineNr, List, OptVal, Pos, Timestamp, VarNumber,
 };
+use crate::ui::state::kUIMessages;
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::buf_is_changed;
 use crate::version::min_vim_version_name;

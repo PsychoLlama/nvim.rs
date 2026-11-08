@@ -33,8 +33,8 @@ use core::ffi::c_int;
 use super::*;
 use crate::cursor::getvpos;
 use crate::ex_docmd::cmdmod_has;
+use crate::mbyte::MB_MAXCHAR;
 use crate::mbyte::{c_cluster_len, encode_char};
-use crate::types::MB_MAXCHAR;
 use crate::types::{Failed, NUL};
 
 /// Overwrite the single byte at `pos` with `c`.

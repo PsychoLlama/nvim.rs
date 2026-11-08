@@ -20,7 +20,9 @@
 
 use crate::event_queue::ChildQueue;
 use crate::global_cell::GlobalCell;
-use crate::os::libc::{uint32_t, uint64_t};
+use crate::msgpack_rpc::packer::PackerBuffer;
+use crate::os::libc::{size_t, uint32_t, uint64_t};
+use crate::types::{ApiString, Array, Integer};
 use core::ffi::{CStr, c_int};
 
 pub(crate) static ui_ext_names: [&CStr; 10] = [
@@ -43,3 +45,72 @@ pub(crate) static t_colors: GlobalCell<c_int> = GlobalCell::new(256 as c_int);
 pub(crate) static ui_event_ns_id: GlobalCell<uint32_t> = GlobalCell::new(0 as uint32_t);
 pub(crate) static resize_events: GlobalCell<Option<ChildQueue>> = GlobalCell::new(None);
 pub(crate) static ui_refresh_cmdheight: GlobalCell<bool> = GlobalCell::new(true);
+
+pub(crate) type LineFlags = ::core::ffi::c_int;
+/// What a `grid_line` event says about the line it carries.
+pub(crate) const kLineFlagWrap: LineFlags = 1;
+pub(crate) const kLineFlagInvalid: LineFlags = 2;
+/// One attached UI: what it negotiated, and its outgoing batch.
+///
+/// Owned by the attach table in [`crate::ui`] and reached by its channel id;
+/// nothing keeps its address.
+pub struct RemoteUI {
+    pub rgb: bool,
+    pub override_0: bool,
+    pub composed: bool,
+    pub ui_ext: [bool; 10],
+    pub width: ::core::ffi::c_int,
+    pub height: ::core::ffi::c_int,
+    pub pum_nlines: ::core::ffi::c_int,
+    pub pum_pos: bool,
+    pub pum_row: ::core::ffi::c_double,
+    pub pum_col: ::core::ffi::c_double,
+    pub pum_height: ::core::ffi::c_double,
+    pub pum_width: ::core::ffi::c_double,
+    /// The `term_name` option, as `nvim_list_uis` reports it.
+    pub term_name: ApiString,
+    pub term_colors: ::core::ffi::c_int,
+    pub stdin_tty: bool,
+    pub stdout_tty: bool,
+    pub channel_id: uint64_t,
+    pub packer: PackerBuffer,
+    /// The event the batch is appending calls to, merged while the name
+    /// stays the same.
+    pub cur_event: Option<&'static ::core::ffi::CStr>,
+    /// Where the batch's event count is to be patched in, once known.
+    pub nevents_pos: Option<usize>,
+    /// Where the current event's call count is to be patched in.
+    pub ncalls_pos: Option<usize>,
+    pub nevents: uint32_t,
+    pub ncalls: uint32_t,
+    pub flushed_events: bool,
+    pub ncells_pending: size_t,
+    pub hl_id: ::core::ffi::c_int,
+    pub cursor_row: Integer,
+    pub cursor_col: Integer,
+    pub client_row: Integer,
+    pub client_col: Integer,
+    pub wildmenu_active: bool,
+}
+/// One row of the UI-client redraw dispatch table.
+///
+/// `Copy`: a static name and a function pointer.
+#[derive(Copy, Clone)]
+pub struct UIClientHandler {
+    pub name: *const ::core::ffi::c_char,
+    pub fn_0: Option<fn(Array)>,
+}
+pub(crate) type UIExtension = ::core::ffi::c_uint;
+/// The `ext_*` UI capabilities, indexing `ui_ext` and the `ui_options`
+/// dict. `kUIExtCount` is the number of them, not one of them.
+pub(crate) const kUICmdline: UIExtension = 0;
+pub(crate) const kUIPopupmenu: UIExtension = 1;
+pub(crate) const kUITabline: UIExtension = 2;
+pub(crate) const kUIWildmenu: UIExtension = 3;
+pub(crate) const kUIMessages: UIExtension = 4;
+pub(crate) const kUILinegrid: UIExtension = 5;
+pub(crate) const kUIMultigrid: UIExtension = 6;
+pub(crate) const kUIHlState: UIExtension = 7;
+pub(crate) const kUITermColors: UIExtension = 8;
+pub(crate) const kUIFloatDebug: UIExtension = 9;
+pub(crate) const kUIExtCount: UIExtension = 10;

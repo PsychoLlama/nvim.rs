@@ -47,7 +47,8 @@ use crate::tui::terminfo::caps::{
     kTerm_set_lr_margin,
 };
 use crate::tui::ugrid::UCell;
-use crate::types::{ApiString, Integer, LineFlags, ScreenAttr, ScreenChar};
+use crate::types::{ApiString, Integer, ScreenAttr, ScreenChar};
+use crate::ui::state::LineFlags;
 use core::ffi::c_int;
 use std::io::Write;
 use std::os::unix::ffi::OsStrExt;

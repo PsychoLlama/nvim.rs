@@ -45,6 +45,7 @@ use crate::ex_docmd::state::ex_normal_busy;
 use crate::ex_docmd::{change_dir, exec_normal};
 use crate::ex_eval::aborting;
 use crate::ex_getln::state::cmdpreview;
+use crate::fold::FoldInfo;
 use crate::fold::fold_info;
 use crate::getchar::state::{typebuf_was_filled, vgetc_busy};
 use crate::getchar::{ins_typebuf, paste_store};
@@ -53,6 +54,7 @@ use crate::grid::{
     GridRef, SCHAR_BUF_SIZE, SCharBuf, get_win_by_grid_handle, schar_cache_clear, schar_text,
     win_grid_alloc,
 };
+use crate::highlight::HlAttrs;
 use crate::highlight::state::{ns_hl_fast, ns_hl_global};
 use crate::highlight::{
     dict2hlattrs, highlight_use_hlstate, hl_check_ns, hl_get_attr_by_id, hl_inspect,
@@ -101,7 +103,9 @@ use crate::runtime::{
     runtime_inspect, script_autoload_named,
 };
 use crate::search::{BACKWARD, FORWARD};
+use crate::sign::SignTextAttrs;
 use crate::state::get_mode;
+use crate::statusline::defs::StatusCol;
 use crate::statusline::{draw_tabline, win_redr_status, win_redr_winbar};
 use crate::terminal::state::TerminalOptions;
 use crate::terminal::{
@@ -110,10 +114,10 @@ use crate::terminal::{
 };
 use crate::types::AutoEvent;
 use crate::types::{
-    ApiDict, ApiString, Array, Boolean, BufferHandle, Context, Error, Float, FoldInfo, Handle,
-    HlAttrs, Integer, LineNr, LuaRef, MessageType, MotionType, Object, OptVal, ScreenChar,
-    ScriptId, SignTextAttrs, StatusCol, TabpageHandle, VarNumber, Vv, WindowHandle, YankReg,
-    kCdScopeGlobal, kErrorTypeException, kErrorTypeValidation, kObjectTypeString,
+    ApiDict, ApiString, Array, Boolean, BufferHandle, Context, Error, Float, Handle, Integer,
+    LineNr, LuaRef, MessageType, MotionType, Object, OptVal, ScreenChar, ScriptId, TabpageHandle,
+    VarNumber, Vv, WindowHandle, YankReg, kCdScopeGlobal, kErrorTypeException,
+    kErrorTypeValidation, kObjectTypeString,
 };
 use crate::ui::state::Columns;
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};

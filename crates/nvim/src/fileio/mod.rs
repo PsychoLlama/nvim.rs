@@ -91,10 +91,10 @@ use crate::state::mode::{State, exmode_active, restart_edit};
 use crate::state::{MODE_CMDLINE, MODE_NORMAL_BUSY};
 use crate::strings::{FmtArg, formatted};
 use crate::types::AutoEvent;
-use crate::types::ui::kUIMessages;
 use crate::types::{
     AcoSave, ExArg, Failed, IOSIZE, LineNr, OptVal, OptionSetFlags, RegMatch, ScriptId, ShmFlag,
 };
+use crate::ui::state::kUIMessages;
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::{
     buf_is_changed, u_clearallandblockfree, u_clearline, u_compute_hash, u_find_first_changed,

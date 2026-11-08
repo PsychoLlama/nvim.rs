@@ -18,6 +18,7 @@ use crate::narrow::number_as_col;
 use crate::narrow::number_as_int;
 use crate::options::kOptVartabstop;
 use crate::os::libc::int64_t;
+use crate::plines::CharsizeArg;
 use core::ffi::CStr;
 
 use super::*;

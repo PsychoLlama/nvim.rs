@@ -83,6 +83,7 @@ use crate::options::{kOptBoFlagOperator, kOptVeFlagAll, kOptVeFlagOnemore};
 use crate::os::cshim::{gettext, ngettext};
 use crate::os::input::{line_breakcheck, os_breakcheck};
 use crate::os::libc::{int32_t, int64_t, size_t, ssize_t};
+use crate::plines::CharsizeArg;
 use crate::plines::{getvcols, getvvcol, linetabsize_str, win_charsize};
 use crate::pos::{MAXCOL, equalpos, lt, ltoreq};
 use crate::register::{
@@ -98,8 +99,8 @@ use crate::state::{MODE_INSERT, MODE_REPLACE, VREPLACE_FLAG, virtual_active};
 use crate::textformat::{auto_format, has_format_option, op_format, op_formatexpr};
 use crate::types::TAB;
 use crate::types::{
-    BCount, BlockDef, Callback, CharsizeArg, CmdArg, CmdModFlags, ColNr, Dict, LineNr, MotionType,
-    OpArg, OpType, OptInt, OptSet, Pos, TypVal, UVarNumber, VarNumber,
+    BCount, BlockDef, Callback, CmdArg, CmdModFlags, ColNr, Dict, LineNr, MotionType, OpArg,
+    OpType, OptInt, OptSet, Pos, TypVal, UVarNumber, VarNumber,
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_clearline, u_save, u_save_cursor};

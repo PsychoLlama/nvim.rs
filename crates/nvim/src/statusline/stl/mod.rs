@@ -66,6 +66,7 @@ use crate::drawscreen::compute_foldcolumn;
 use crate::drawscreen::state::{redraw_not_allowed, updating_screen};
 use crate::eval::eval_to_string_safe;
 use crate::eval::vars::{do_unlet, get_vim_var_nr, set_internal_string_var, set_var};
+use crate::fold::FoldInfo;
 use crate::getchar::state::KeyTyped;
 use crate::grid::{SCHAR_BUF_SIZE, SCharBuf, schar_copy, schar_get_adv};
 use crate::highlight_group::{HLF_CLF, HLF_FC, syn_name2id_bytes};
@@ -81,14 +82,13 @@ use crate::os::cshim::{byte_toupper, gettext};
 use crate::path::MAXPATHL;
 use crate::path::tail_index;
 use crate::quickfix::{msg_loclist, msg_qflist};
+use crate::sign::SignTextAttrs;
 use crate::sign::push_sign_text;
 use crate::state::MODE_INSERT;
 use crate::state::mode::State;
+use crate::statusline::defs::{StlClickRecord, StlHlRun};
 use crate::strings::{FmtArg, format_into};
-use crate::types::{
-    ColNr, FoldInfo, LineNr, OptIndex, ScreenChar, SignTextAttrs, StlClickRecord, StlHlRun, TypVal,
-    VarNumber, Vv,
-};
+use crate::types::{ColNr, LineNr, OptIndex, ScreenChar, TypVal, VarNumber, Vv};
 use crate::undo::buf_is_changed;
 use crate::winlayer::graph::{switch_buffer, switch_window};
 use crate::winlayer::{Buf, Win};

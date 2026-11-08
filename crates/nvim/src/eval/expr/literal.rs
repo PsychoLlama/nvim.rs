@@ -27,6 +27,7 @@ use crate::eval::{Cursor, char_len_at, env_name_len, option_var_end};
 use crate::keycodes::{
     FSK_IN_STRING, FSK_KEYCODE, FSK_SIMPLIFY, special_key_at, trans_special_into,
 };
+use crate::mbyte::MB_MAXCHAR;
 use crate::mbyte::encode_char;
 use crate::memory::ThinCString;
 use crate::memory::XString;
@@ -37,7 +38,7 @@ use crate::option::{get_option_value, get_tty_option, is_option_hidden, is_tty_o
 use crate::options::kOptInvalid;
 use crate::os::cshim::gettext;
 use crate::semsg;
-use crate::types::{Failed, Float, MB_MAXCHAR, OptVal, TypVal};
+use crate::types::{Failed, Float, OptVal, TypVal};
 use core::ffi::c_int;
 
 /// The NUL byte, as the walks below compare it.

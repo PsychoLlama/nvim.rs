@@ -20,12 +20,12 @@
 //! `grid_put_linebuf` runs per cell of every redraw. Plain loops here.
 
 use super::*;
+use crate::grid::defs::LineBuf;
 use crate::grid::{SLF_INC_VCOL, SLF_RIGHTLEFT, SLF_WRAP};
 use crate::log::logmsg;
 use crate::mbyte::{c_cells_at, c_cluster_schar};
 use crate::narrow::as_index;
 use crate::narrow::count_as_int;
-use crate::types::LineBuf;
 
 /// The one line under construction. See [`LineBuf`].
 static LINEBUF: GlobalCell<LineBuf> = GlobalCell::new(LineBuf::empty());

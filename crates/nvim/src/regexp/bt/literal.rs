@@ -17,13 +17,14 @@ use core::ffi::c_int;
 
 use super::compile::use_multibytecode;
 use super::op::BtOp;
+use crate::mbyte::GraphemeState;
 use crate::mbyte::utf_iscomposing_legacy;
 use crate::regexp::mbyte::{char_at_nul, char_len_at, composes_at};
 use crate::regexp::{
     CompileError, Compiled, GRAPHEME_STATE_INIT, HASWIDTH, NOT_MULTI, SIMPLE, getchr, magic,
     peekchr, re_multi_type, reg_prev_sub, skipchr, ungetchr, unmagic,
 };
-use crate::types::{GraphemeState, NUL};
+use crate::types::NUL;
 
 /// The `\x` class shorthands, in the order upstream's two parallel tables
 /// (`classchars` and `classcodes`) paired them. The `\_x` form of each is the

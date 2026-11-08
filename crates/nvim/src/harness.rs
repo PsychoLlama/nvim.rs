@@ -24,10 +24,11 @@
 
 use crate::global_cell::GlobalCell;
 use crate::grid::{SCHAR_BUF_SIZE, SCharBuf, schar_copy};
+use crate::mbyte::MB_MAXCHAR;
 use crate::mbyte::{char_at, char_len, lead_byte_lengths, sequence_value};
 use crate::os::libc::{int32_t, size_t, uint8_t, uintptr_t};
 use crate::types::ApiString;
-use crate::types::{DispTick, MB_MAXCHAR, ScreenChar};
+use crate::types::{DispTick, ScreenChar};
 use core::ffi::{c_char, c_int};
 use core::slice;
 

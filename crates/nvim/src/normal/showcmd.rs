@@ -48,7 +48,7 @@ use crate::ui::{ui_call_msg_showcmd, ui_has};
 use core::ffi::{CStr, c_int};
 
 use crate::highlight_group::HLF_MSG;
-use crate::types::ui::kUIMessages;
+use crate::ui::state::kUIMessages;
 
 /// The 'showcmd' text: at most `SHOWCMD_BUFLEN - 1` bytes and the
 /// terminator C consumers still expect, carried by value.

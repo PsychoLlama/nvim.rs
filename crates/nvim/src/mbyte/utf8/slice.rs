@@ -27,7 +27,7 @@
 )]
 
 use super::{CORRECTIONS, LEAD_PAYLOAD, LEAD_PREFIX, utf_char2len, utf_is_trail_byte, utf8len_tab};
-use crate::types::CharInfo;
+use crate::mbyte::CharInfo;
 
 /// How many bytes the character at the start of `bytes` occupies, or 0 if
 /// there is no character there because `bytes` is empty.

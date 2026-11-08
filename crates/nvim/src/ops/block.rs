@@ -42,11 +42,11 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
+use crate::mbyte::CharInfo;
 use crate::mbyte::{c_char_info, c_next_cluster, snap_pos_to_char};
 use crate::r#move::WinValid;
 use crate::normal::{sel_exclusive, visual_mode};
 use crate::plines::{getvcol, getvvcol};
-use crate::types::CharInfo;
 
 /// Insert `s` into every line of the block below the first, before the block
 /// (`b_insert`, for `I`) or after it (for `A`).

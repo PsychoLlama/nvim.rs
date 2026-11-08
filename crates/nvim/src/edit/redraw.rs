@@ -29,9 +29,10 @@ use crate::winlayer::{Buf, Win};
 
 use super::*;
 use crate::grid::default_grid_ref;
+use crate::mbyte::MB_MAXCHAR;
 use crate::option::cpo_has;
 use crate::statusline::hl_attr;
-use crate::types::{CpoFlag, MB_MAXCHAR, NUL};
+use crate::types::{CpoFlag, NUL};
 
 /// Redraw for Insert mode.
 ///

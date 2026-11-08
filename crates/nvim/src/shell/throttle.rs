@@ -32,7 +32,7 @@ use crate::message::{msg_ext_set_append, msg_ext_set_kind, msg_multiline, msg_pu
 use crate::os::libc::uint64_t;
 use crate::os::libc::{STDERR_FILENO, STDOUT_FILENO};
 use crate::os::time::os_hrtime;
-use crate::types::ui::kUIMessages;
+use crate::ui::state::kUIMessages;
 use crate::ui::{ui_flush, ui_has};
 use core::ffi::c_int;
 

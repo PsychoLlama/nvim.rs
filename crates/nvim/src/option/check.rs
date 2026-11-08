@@ -31,6 +31,7 @@ use crate::drawscreen::{
 };
 use crate::ex_getln::{check_opt_wim, derive_cedit_key};
 use crate::global_cell::GlobalCell;
+use crate::highlight::HlAttrs;
 use crate::highlight::{HlAttrFlags, ns_hl_def};
 use crate::highlight_group::{highlight_changed, syn_check_group};
 use crate::indent::replace_tabstop_array;
@@ -45,7 +46,7 @@ use crate::spell::{compile_cap_prog, did_set_spell_option};
 use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 use crate::startup::starting;
-use crate::types::{ApiString, Buffer, HlAttrs, OptIndex, OptInt, OptionSetFlags, WinOpt};
+use crate::types::{ApiString, Buffer, OptIndex, OptInt, OptionSetFlags, WinOpt};
 use crate::winlayer::Win;
 
 use super::{

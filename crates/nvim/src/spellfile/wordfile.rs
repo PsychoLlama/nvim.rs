@@ -27,11 +27,12 @@ use std::os::unix::ffi::OsStrExt;
 use crate::cstr;
 use crate::fileio::Fgets;
 use crate::getchar::state::got_int;
+use crate::mbyte::CONV_NONE;
 use crate::mbyte::canonize;
 use crate::option::vars::p_enc;
 use crate::os::input::line_breakcheck;
 use crate::strings::{any_non_ascii, find_char};
-use crate::types::{CONV_NONE, Failed, LineNr};
+use crate::types::{Failed, LineNr};
 
 use super::MkspellError;
 use super::wordtree::store_word;

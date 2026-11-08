@@ -23,8 +23,9 @@
 use super::*;
 use crate::keycodes::ModMask;
 use crate::keycodes::{KE_IGNORE, KS_EXTRA, key_unescape};
+use crate::mbyte::MB_MAXBYTES;
 use crate::mbyte::{char_at, unescape_at};
-use crate::types::{Key, MB_MAXBYTES};
+use crate::types::Key;
 
 impl Default for GotcharsState {
     fn default() -> Self {

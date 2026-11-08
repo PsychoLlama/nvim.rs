@@ -29,8 +29,8 @@ use super::{
     CORRECTIONS, GRAPHEME_STATE_INIT, LEAD_PAYLOAD, iscomposing, utf_is_trail_byte, utf8len_tab,
 };
 use crate::charset::char2cells;
+use crate::mbyte::{CharInfo, GraphemeState};
 use crate::mbyte::{emoji_widens, prop_is_emojilike, utf_char2cells};
-use crate::types::{CharInfo, GraphemeState};
 use crate::utf8proc::{
     UTF8PROC_BOUNDCLASS_CONTROL, UTF8PROC_BOUNDCLASS_CR, UTF8PROC_BOUNDCLASS_EXTENDED_PICTOGRAPHIC,
     UTF8PROC_BOUNDCLASS_OTHER, UTF8PROC_BOUNDCLASS_PREPEND, utf8proc_get_property,
