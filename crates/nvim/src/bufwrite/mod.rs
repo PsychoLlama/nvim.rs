@@ -508,11 +508,7 @@ pub(crate) fn buf_write(
             // from a "++opt=val" argument, or the buffer's own.
             let forced_enc = excmd
                 .as_deref()
-                .filter(|command| command.force_enc != 0)
-                .map(|command| {
-                    command.line.cmd
-                        + usize::try_from(command.force_enc).expect("an offset into the line")
-                });
+                .and_then(|command| Some(command.line.cmd + command.force_enc?));
             let fenc = if let Some(at) = forced_enc {
                 // `force_enc` is an offset into the command's line.
                 let line = &excmd.as_ref().expect("the command is there").line;
@@ -626,10 +622,10 @@ pub(crate) fn buf_write(
                     err = None;
 
                     // use "++bin", "++nobin" or 'binary'
-                    let write_bin = match excmd.as_deref().map(|command| command.force_bin) {
-                        Some(forced) if forced != 0 => forced == FORCE_BIN,
-                        _ => b.b_p_bin != 0,
-                    };
+                    let write_bin = excmd
+                        .as_deref()
+                        .and_then(|command| command.force_bin)
+                        .unwrap_or(b.b_p_bin != 0);
 
                     let mut bom_chars = 0;
                     // Skip the BOM when appending to a file that already
@@ -840,7 +836,6 @@ pub(crate) fn buf_write(
     retval
 }
 
-pub const FORCE_BIN: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const EOL_UNIX: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const EOL_DOS: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

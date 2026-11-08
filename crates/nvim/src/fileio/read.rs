@@ -233,13 +233,10 @@ pub(crate) fn readfile_named(
 
         // Decide which 'fileencoding' to use, or to start with.
         if let Some(command) = excmd.as_deref()
-            && command.force_enc != 0
+            && let Some(force_enc) = command.force_enc
         {
             // `force_enc` is an offset into the command's own line.
-            let name = command.line.rest_of(
-                command.line.cmd
-                    + usize::try_from(command.force_enc).expect("an offset into the line"),
-            );
+            let name = command.line.rest_of(command.line.cmd + force_enc);
             fenc = canonize(name);
             keep_dest_enc = true;
         } else if Buf::current().b_p_bin != 0 {
@@ -300,7 +297,7 @@ pub(crate) fn readfile_named(
                 keep_fileformat = false;
             } else {
                 if let Some(command) = excmd.as_deref()
-                    && command.force_ff != 0
+                    && command.force_ff.is_some()
                 {
                     fileformat = get_fileformat_force(Buf::current(), Some(command));
                     guess.try_unix = 0;
@@ -324,7 +321,7 @@ pub(crate) fn readfile_named(
 
                 if excmd
                     .as_deref()
-                    .is_some_and(|command| command.force_enc != 0)
+                    .is_some_and(|command| command.force_enc.is_some())
                 {
                     // The conversion given with "++enc=" wasn't possible;
                     // read without conversion.

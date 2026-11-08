@@ -133,8 +133,6 @@ pub(crate) use self::stream::*;
 pub const BAD_REPLACE: c_int = b'?' as c_int;
 pub const BAD_KEEP: c_int = -1;
 pub const BAD_DROP: c_int = -2;
-pub const FORCE_BIN: c_int = 1;
-pub const FORCE_NOBIN: c_int = 2;
 pub const ENC_UCSBOM: &CStr = c"ucs-bom";
 pub const EOL_UNKNOWN: c_int = -1;
 pub const EOL_UNIX: c_int = 0;
@@ -303,14 +301,11 @@ pub fn prep_exarg(excmd: &mut ExArg, buffer: Buf) {
     line.extend_from_slice(&buffer.b_p_fenc.get());
     excmd.set_cmd_text(&line);
     // Where the encoding name starts in that command.
-    excmd.force_enc = 8;
+    excmd.force_enc = Some(8);
     excmd.bad_char = buffer.b_bad_char;
-    excmd.force_ff = c_int::from(buffer.b_p_ff.first_byte());
-    excmd.force_bin = if buffer.b_p_bin != 0 {
-        FORCE_BIN
-    } else {
-        FORCE_NOBIN
-    };
+    let ff = buffer.b_p_ff.first_byte();
+    excmd.force_ff = (ff != 0).then_some(ff);
+    excmd.force_bin = Some(buffer.b_p_bin != 0);
     excmd.read_edit = false;
     excmd.forceit = false;
 }
@@ -321,7 +316,7 @@ pub fn set_file_options(set_options: bool, excmd: Option<&mut ExArg>) {
     let forced = excmd.as_deref();
     // Set the default 'fileformat'.
     if set_options {
-        if forced.is_some_and(|command| command.force_ff != 0) {
+        if forced.is_some_and(|command| command.force_ff.is_some()) {
             set_fileformat(
                 get_fileformat_force(Buf::current(), forced),
                 OptionSetFlags::LOCAL,
@@ -332,9 +327,9 @@ pub fn set_file_options(set_options: bool, excmd: Option<&mut ExArg>) {
     }
 
     // Set or reset 'binary'.
-    if let Some(forced_bin) = forced.map(|command| command.force_bin).filter(|&b| b != 0) {
+    if let Some(forced_bin) = forced.and_then(|command| command.force_bin) {
         let oldval = Buf::current().b_p_bin;
-        Buf::current().b_p_bin = c_int::from(forced_bin == FORCE_BIN);
+        Buf::current().b_p_bin = c_int::from(forced_bin);
         let bin = Buf::current().b_p_bin != 0;
         set_options_bin(oldval != 0, bin, OptionSetFlags::LOCAL);
     }
@@ -342,12 +337,10 @@ pub fn set_file_options(set_options: bool, excmd: Option<&mut ExArg>) {
 
 /// Set the forced `'fileencoding'` from a `++enc=` argument.
 pub fn set_forced_fenc(excmd: &mut ExArg) {
-    if excmd.force_enc == 0 {
+    let Some(force_enc) = excmd.force_enc else {
         return;
-    }
-    let fenc = canonize(excmd.line.rest_of(
-        excmd.line.cmd + usize::try_from(excmd.force_enc).expect("an offset into the line"),
-    ));
+    };
+    let fenc = canonize(excmd.line.rest_of(excmd.line.cmd + force_enc));
     set_option_direct(
         kOptFileencoding,
         OptVal::from_cstr(fenc.as_cstr()),

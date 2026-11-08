@@ -45,8 +45,8 @@ use crate::state::mode::State;
 use crate::types::{Callback, ExArg, Failed, OptInt, ScriptId, TypVal};
 
 use super::{
-    EOL_DOS, EOL_MAC, EOL_UNIX, FORCE_BIN, get_option, get_varp, kOptScopeBuf, kOptScopeWin,
-    option_has_scope, optval_as_tv, set_option_direct, slot_value,
+    EOL_DOS, EOL_MAC, EOL_UNIX, get_option, get_varp, kOptScopeBuf, kOptScopeWin, option_has_scope,
+    optval_as_tv, set_option_direct, slot_value,
 };
 
 use crate::state::MODE_TERMINAL;
@@ -276,22 +276,18 @@ pub(crate) fn get_fileformat(buffer: Buf) -> c_int {
 /// [`get_fileformat`] with a command's `++ff`/`++bin` overriding the buffer.
 ///
 pub(crate) fn get_fileformat_force(buffer: Buf, excmd: Option<&ExArg>) -> c_int {
-    let (force_ff, force_bin) =
-        excmd.map_or((0, 0), |command| (command.force_ff, command.force_bin));
-    let c = if force_ff != 0 {
-        force_ff
+    let (force_ff, force_bin) = excmd.map_or((None, None), |command| {
+        (command.force_ff, command.force_bin)
+    });
+    let c = if let Some(forced) = force_ff {
+        forced
     } else {
-        let binary = if force_bin != 0 {
-            c_int::from(force_bin == FORCE_BIN)
-        } else {
-            buffer.b_p_bin
-        };
-        if binary != 0 {
+        if force_bin.unwrap_or(buffer.b_p_bin != 0) {
             return EOL_UNIX;
         }
-        c_int::from(buffer.b_p_ff.bytes().first().copied().unwrap_or(0))
+        buffer.b_p_ff.bytes().first().copied().unwrap_or(0)
     };
-    match u8::try_from(c).unwrap_or(0) {
+    match c {
         b'u' => EOL_UNIX,
         b'm' => EOL_MAC,
         _ => EOL_DOS,

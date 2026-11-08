@@ -32,7 +32,6 @@ use crate::eval::typval::ListRef;
 use crate::eval::typval::PartialRef;
 use crate::memory::ThinCString;
 use crate::message_fmt::msg_bytes;
-use crate::narrow::as_index;
 use crate::semsg;
 use core::ffi::{CStr, c_int};
 use core::mem;
@@ -421,16 +420,16 @@ pub fn set_cmdarg(excmd: Option<&ExArg>, oldarg: Option<ThinCString>) -> Option<
         return None;
     };
     let mut newval: Vec<u8> = Vec::new();
-    if command.force_bin == FORCE_BIN {
-        newval.extend_from_slice(b" ++bin");
-    } else if command.force_bin == FORCE_NOBIN {
-        newval.extend_from_slice(b" ++nobin");
+    match command.force_bin {
+        Some(true) => newval.extend_from_slice(b" ++bin"),
+        Some(false) => newval.extend_from_slice(b" ++nobin"),
+        None => {}
     }
     if command.read_edit {
         newval.extend_from_slice(b" ++edit");
     }
-    if command.force_ff != 0 {
-        let ff: &[u8] = match u8::try_from(command.force_ff).unwrap_or(0) {
+    if let Some(force_ff) = command.force_ff {
+        let ff: &[u8] = match force_ff {
             b'u' => b"unix",
             b'd' => b"dos",
             _ => b"mac",
@@ -438,15 +437,11 @@ pub fn set_cmdarg(excmd: Option<&ExArg>, oldarg: Option<ThinCString>) -> Option<
         newval.extend_from_slice(b" ++ff=");
         newval.extend_from_slice(ff);
     }
-    if command.force_enc != 0 {
+    if let Some(force_enc) = command.force_enc {
         // The encoding name lives inside the command line the `++enc=` was
         // parsed out of, at the offset `force_enc` records from the command.
         newval.extend_from_slice(b" ++enc=");
-        newval.extend_from_slice(
-            command
-                .line
-                .rest_of(command.line.cmd + as_index(command.force_enc)),
-        );
+        newval.extend_from_slice(command.line.rest_of(command.line.cmd + force_enc));
     }
     if command.bad_char == BAD_KEEP {
         newval.extend_from_slice(b" ++bad=keep");

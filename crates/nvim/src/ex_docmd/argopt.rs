@@ -35,9 +35,7 @@ use crate::ex_docmd::lookup::check_for_word;
 
 use crate::arglist::state::ARG_HAD_LAST;
 use crate::ex_docmd::window::current_tab_nr;
-use crate::ex_docmd::{
-    BAD_DROP, BAD_KEEP, DIALOG_MSG_SIZE, FORCE_BIN, FORCE_NOBIN, cmdmod_has, quitmore,
-};
+use crate::ex_docmd::{BAD_DROP, BAD_KEEP, DIALOG_MSG_SIZE, cmdmod_has, quitmore};
 use crate::mbyte::{get_encoding_name, utf8len_tab};
 use crate::message::vim_dialog_yesno;
 use crate::message::{e_invarg2, e_invargval, e_invrange};
@@ -112,10 +110,10 @@ pub(crate) fn get_bad_name(_expand: &Expand, idx: usize) -> Option<Candidate> {
 
 /// Read one `++opt` or `++opt=value` argument off the front of `args.arg`.
 ///
-/// The three that take a value are stored as *offsets* into `args.cmd`
-/// rather than as pointers, because the command line is reallocated by the
-/// `%`/`#` expansion that runs later; `do_ecmd` and the write path resolve
-/// them against the line they end up with.
+/// `++enc=`'s value is stored as an *offset* from `args.cmd` rather than as
+/// a pointer, because the command line is reallocated by the `%`/`#`
+/// expansion that runs later; `do_ecmd` and the write path resolve it
+/// against the line they end up with.
 pub fn getargopt(excmd: &mut ExArg) -> Result<(), Failed> {
     let mut at = excmd.line.arg + 2;
 
@@ -123,9 +121,9 @@ pub fn getargopt(excmd: &mut ExArg) -> Result<(), Failed> {
     if excmd.line.starts_with(at, b"bin") || excmd.line.starts_with(at, b"nobin") {
         if excmd.line.byte_at(at) == b'n' {
             at += 2;
-            excmd.force_bin = FORCE_NOBIN;
+            excmd.force_bin = Some(false);
         } else {
-            excmd.force_bin = FORCE_BIN;
+            excmd.force_bin = Some(true);
         }
         let Some(after) = check_for_word(&excmd.line, at, b"binary", 3) else {
             return Err(Failed);
@@ -173,15 +171,12 @@ pub fn getargopt(excmd: &mut ExArg) -> Result<(), Failed> {
     }
     at += 1;
 
-    // The three that take a value are stored as *offsets from the command
-    // word* rather than as cursors, because the command line is
-    // reallocated by the `%`/`#` expansion that runs later.
-    let value = c_int::try_from(at - excmd.line.cmd).unwrap_or(0);
-    match opt {
-        Opt::FileFormat => excmd.force_ff = value,
-        Opt::Encoding => excmd.force_enc = value,
-        // `get_bad_opt` reads the value itself, so nothing records it.
-        Opt::BadChar => {}
+    // `++enc=`'s value is stored as an *offset from the command word*
+    // rather than as a cursor, because the command line is reallocated by
+    // the `%`/`#` expansion that runs later; `++ff=` keeps its first letter
+    // and `++bad=` its character, read below.
+    if opt == Opt::Encoding {
+        excmd.force_enc = Some(at - excmd.line.cmd);
     }
     let end = skip_arg_at(&mut excmd.line, at, false);
     excmd.line.arg = excmd.line.skip_white(end);
@@ -194,7 +189,7 @@ pub fn getargopt(excmd: &mut ExArg) -> Result<(), Failed> {
                 return Err(Failed);
             }
             // Only the first letter is kept: 'u', 'd' or 'm'.
-            excmd.force_ff = c_int::from(excmd.line.byte_at(at));
+            excmd.force_ff = Some(excmd.line.byte_at(at));
         }
         Opt::Encoding => {
             for off in at..excmd.line.end_of(at) {

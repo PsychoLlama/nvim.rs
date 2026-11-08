@@ -138,8 +138,6 @@ pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615;
 
 pub const BAD_KEEP: c_int = -1;
 pub const BAD_DROP: c_int = -2;
-pub const FORCE_BIN: c_int = 1;
-pub const FORCE_NOBIN: c_int = 2;
 pub const NOTDONE: c_int = 2;
 pub const CHAN_STDERR: c_int = 2;
 

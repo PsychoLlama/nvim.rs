@@ -660,11 +660,16 @@ pub struct ExArg<'s> {
     pub amount: ::core::ffi::c_int,
     /// The register the command names, 0 for none.
     pub regname: u8,
-    pub force_bin: ::core::ffi::c_int,
+    /// `++bin` (`Some(true)`) or `++nobin` (`Some(false)`); `None` leaves
+    /// 'binary' to the buffer.
+    pub force_bin: Option<bool>,
     pub read_edit: bool,
     pub mkdir_p: bool,
-    pub force_ff: ::core::ffi::c_int,
-    pub force_enc: ::core::ffi::c_int,
+    /// `++ff=`'s first letter (`u`, `d` or `m`).
+    pub force_ff: Option<u8>,
+    /// Where `++enc=`'s value starts, as an offset from the command word:
+    /// the `%` expansion that runs later reallocates the line.
+    pub force_enc: Option<usize>,
     pub bad_char: ::core::ffi::c_int,
     pub useridx: ::core::ffi::c_int,
     /// Why the command failed, owned by whoever raised it.
@@ -724,11 +729,11 @@ impl Default for ExArg<'_> {
             usefilter: false,
             amount: 0,
             regname: 0,
-            force_bin: 0,
+            force_bin: None,
             read_edit: false,
             mkdir_p: false,
-            force_ff: 0,
-            force_enc: 0,
+            force_ff: None,
+            force_enc: None,
             bad_char: 0,
             useridx: 0,
             errmsg: None,

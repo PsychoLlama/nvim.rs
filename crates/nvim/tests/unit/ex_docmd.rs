@@ -18,7 +18,6 @@
 use std::ffi::{CString, c_int};
 
 use neovim::eval::{eval_to_number, eval_to_string};
-use neovim::ex_docmd::{FORCE_BIN, FORCE_NOBIN};
 use neovim::ex_docmd::{do_cmdline_cmd, getargopt, parse_cmdline, separate_nextcmd};
 use neovim::types::{CmdIdx, CmdLine, CmdModFlags, CmdParseInfo, ExArg, ExArgt, LineNr, Pos};
 use neovim::winlayer::Win;
@@ -229,7 +228,7 @@ fn a_register_and_a_count_follow_the_argument() {
 /// (kept as its first letter), the forced encoding (an offset into the
 /// line), `++bin`'s three-valued flag, `++edit`, `++p`, `++bad=` and what
 /// is left of the argument.
-type ArgOpts = (char, String, c_int, bool, bool, c_int, String);
+type ArgOpts = (char, String, Option<bool>, bool, bool, c_int, String);
 
 fn argopts(_editor: &Editor, line: &str) -> Result<ArgOpts, ()> {
     let mut args = ExArg::default();
@@ -241,15 +240,13 @@ fn argopts(_editor: &Editor, line: &str) -> Result<ArgOpts, ()> {
     }
     // An offset `getargopt` recorded is from the command word, and the
     // value it names was NUL-terminated in place.
-    let at = |off: c_int| -> String {
-        if off == 0 {
-            String::new()
-        } else {
-            text(args.line.rest_of(args.line.cmd + off as usize))
-        }
+    let at = |off: Option<usize>| -> String {
+        off.map_or_else(String::new, |off| {
+            text(args.line.rest_of(args.line.cmd + off))
+        })
     };
     Ok((
-        char::from(u8::try_from(args.force_ff).unwrap_or(0)),
+        char::from(args.force_ff.unwrap_or(0)),
         at(args.force_enc),
         args.force_bin,
         args.read_edit,
@@ -270,7 +267,7 @@ fn a_plus_plus_option_is_taken_off_the_argument() {
         Ok((
             'u',
             "latin1".into(),
-            FORCE_BIN,
+            Some(true),
             true,
             true,
             0,
@@ -278,8 +275,8 @@ fn a_plus_plus_option_is_taken_off_the_argument() {
         ))
     );
     // `++bin` is three-valued, not a flag: `++nobin` forces the other way.
-    assert_eq!(argopts(&editor, "++nobin x").map(|o| o.2), Ok(FORCE_NOBIN));
-    assert_eq!(argopts(&editor, "x").map(|o| o.2), Ok(0));
+    assert_eq!(argopts(&editor, "++nobin x").map(|o| o.2), Ok(Some(false)));
+    assert_eq!(argopts(&editor, "x").map(|o| o.2), Ok(None));
     // `++bad=` takes a character, `keep` or `drop`.
     assert_eq!(argopts(&editor, "++bad=? x").map(|o| o.5), Ok('?' as c_int));
     // An unknown option is refused, and so is a bad `++ff=`.
@@ -841,11 +838,11 @@ fn every_spelling_of_a_plus_plus_option_is_read_or_refused() {
     assert_eq!(bad("++bad= x"), Err(()));
     assert_eq!(
         argopts(&editor, "++fileformat=mac ++encoding=UTF-8 ++binary f"),
-        Ok(('m', "utf-8".into(), FORCE_BIN, false, false, 0, "f".into()))
+        Ok(('m', "utf-8".into(), Some(true), false, false, 0, "f".into()))
     );
     assert_eq!(
         argopts(&editor, "++nobinary f").map(|o| o.2),
-        Ok(FORCE_NOBIN)
+        Ok(Some(false))
     );
     assert_eq!(
         argopts(&editor, r"++enc=A\ B f").map(|o| (o.1, o.6)),

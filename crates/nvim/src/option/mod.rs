@@ -143,7 +143,6 @@ pub(crate) const ROOT_UID: c_int = 0 as c_int;
 pub(crate) const B_IMODE_USE_INSERT: c_int = -1 as c_int;
 pub(crate) const B_IMODE_NONE: c_int = 0 as c_int;
 pub(crate) const CTRL_F_STR: &::core::ffi::CStr = c"\x06";
-pub(crate) const FORCE_BIN: c_int = 1 as c_int;
 pub(crate) const HLATTRS_INIT: HlAttrs = HlAttrs {
     rgb_ae_attr: HlAttrFlags::NONE,
     cterm_ae_attr: HlAttrFlags::NONE,
