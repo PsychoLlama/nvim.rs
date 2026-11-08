@@ -148,7 +148,7 @@ impl Axis {
 
     /// One past the last row or column `fr` covers along the crossed axis.
     fn frame_end(self, fr: FrameRef) -> c_int {
-        let win = frame2window(fr);
+        let win = fr.first_window();
         match self {
             Axis::Vertical => win.w_wincol + fr.fr_width,
             Axis::Horizontal => win.w_winrow + fr.fr_height,

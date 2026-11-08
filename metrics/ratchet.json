@@ -234,7 +234,7 @@
     "crates/nvim/src/drawline/state.rs": {"pub_items": 1},
     "crates/nvim/src/drawscreen/mod.rs": {"pub_items": 32},
     "crates/nvim/src/drawscreen/mode.rs": {"pub_items": 6},
-    "crates/nvim/src/drawscreen/redraw.rs": {"pub_items": 17},
+    "crates/nvim/src/drawscreen/redraw.rs": {"pub_items": 16},
     "crates/nvim/src/drawscreen/resize.rs": {"extern_abi": 1, "pub_items": 4},
     "crates/nvim/src/drawscreen/separators.rs": {"pub_items": 1},
     "crates/nvim/src/drawscreen/state.rs": {"pub_items": 1},

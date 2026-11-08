@@ -2,12 +2,12 @@
 //! separator.
 //!
 //! [`setheight_win`] and [`setwidth_win`] are the `:resize` /
-//! `:vertical resize` entry points; [`set_frame_height`] and
-//! [`set_frame_width`] are the recursive half, which takes the room from the
+//! `:vertical resize` entry points; [`FrameRef::set_height`] and
+//! [`FrameRef::set_width`] are the recursive half, which takes the room from the
 //! frames around the one being sized, respecting the minimum sizes and the
 //! `'winfix*'` pins, and grows an ancestor when the siblings cannot pay.
 //! [`win_drag_status_line`] and [`win_drag_vsep_line`] are the mouse forms,
-//! and [`comp_positions`]/[`comp_pos`] recompute every window's screen
+//! and [`comp_positions`]/[`FrameRef::compute_position`] recompute every window's screen
 //! position afterwards.
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
@@ -44,7 +44,7 @@ pub fn win_comp_pos() -> c_int {
 pub(crate) fn comp_positions() -> c_int {
     let mut row = tabline_rows();
     let mut col = 0;
-    comp_pos(current_topframe(), &mut row, &mut col);
+    current_topframe().compute_position(&mut row, &mut col);
     // A float anchored to a window may have moved with it. Floats sit at the
     // end of the window list, so the walk back from `lastwin` stops at the
     // first window that is not one.
@@ -56,33 +56,260 @@ pub(crate) fn comp_positions() -> c_int {
     row + global_stl_rows()
 }
 
-/// Give frame `topfrp` and everything in it its screen position, advancing
-/// `row` and `col` past it, from `frame_comp_pos()`.
-pub(crate) fn comp_pos(topfrp: FrameRef, row: &mut c_int, col: &mut c_int) {
-    if let Some(mut wp) = topfrp.win() {
-        // Avoid an extra redraw when the position has not changed.
-        if wp.w_winrow != *row || wp.w_wincol != *col {
-            wp.w_winrow = *row;
-            wp.w_wincol = *col;
-            wp.redraw_later(UPD_NOT_VALID);
-            wp.w_redr_status = true;
-            wp.w_pos_changed = true;
-        }
-        let h = wp.w_height + wp.w_hsep_height + wp.w_status_height;
-        *row += h.min(topfrp.fr_height);
-        *col += wp.w_width + wp.w_vsep_width;
-    } else {
-        let startrow = *row;
-        let startcol = *col;
-        for frp in topfrp.children() {
-            if c_int::from(topfrp.fr_layout) == FR_ROW {
-                // All frames in a row start at the same row.
-                *row = startrow;
-            } else {
-                // All frames in a column start at the same column.
-                *col = startcol;
+impl FrameRef {
+    /// Give frame `topfrp` and everything in it its screen position, advancing
+    /// `row` and `col` past it, from `frame_comp_pos()`.
+    pub(crate) fn compute_position(self, row: &mut c_int, col: &mut c_int) {
+        if let Some(mut wp) = self.win() {
+            // Avoid an extra redraw when the position has not changed.
+            if wp.w_winrow != *row || wp.w_wincol != *col {
+                wp.w_winrow = *row;
+                wp.w_wincol = *col;
+                wp.redraw_later(UPD_NOT_VALID);
+                wp.w_redr_status = true;
+                wp.w_pos_changed = true;
             }
-            comp_pos(frp, row, col);
+            let h = wp.w_height + wp.w_hsep_height + wp.w_status_height;
+            *row += h.min(self.fr_height);
+            *col += wp.w_width + wp.w_vsep_width;
+        } else {
+            let startrow = *row;
+            let startcol = *col;
+            for frp in self.children() {
+                if c_int::from(self.fr_layout) == FR_ROW {
+                    // All frames in a row start at the same row.
+                    *row = startrow;
+                } else {
+                    // All frames in a column start at the same column.
+                    *col = startcol;
+                }
+                frp.compute_position(row, col);
+            }
+        }
+    }
+
+    /// Give frame `curfrp` height `height`, resizing everything around it to fit,
+    /// from `frame_setheight()`.
+    ///
+    /// A frame in a row needs its siblings resized too, so the whole row is sized
+    /// instead. A frame in a column takes the room from the frames above and below
+    /// it, growing the containing frame — or borrowing from the command line — when
+    /// they cannot pay.
+    fn set_height(self, height: c_int) {
+        // If the height already is the desired value, nothing to do.
+        if self.fr_height == height {
+            return;
+        }
+        let Some(parent) = self.parent() else {
+            // topframe: can only change the command line height.
+            if height > 0 {
+                new_height(self, height, false, false, true);
+            }
+            return;
+        };
+        if c_int::from(parent.fr_layout) == FR_ROW {
+            // A row of frames: the frames left and right of this one need resizing
+            // too, so size the row and let it distribute. Check their minimum
+            // height first.
+            let h = parent.min_height(NextCurwin::Unset);
+            parent.set_height(height.max(h));
+            return;
+        }
+
+        // A column of frames: try to change only frames in this column.
+        let mut height = height;
+        let mut room = 0;
+        let mut room_cmdline = 0;
+        let mut room_reserved = 0;
+        // Do this twice: first compute the room available and, if it is not
+        // enough, resize the containing frame; then compute it again and adjust
+        // the height to it. Try not to reduce a 'winfixheight' window.
+        for run in 1..=2 {
+            room = 0;
+            room_reserved = 0;
+            for frp in parent.children() {
+                if frp != self && frp.win().is_some_and(|w| w.w_onebuf_opt.wo_wfh != 0) {
+                    room_reserved += frp.fr_height;
+                }
+                room += frp.fr_height;
+                if frp != self {
+                    room -= frp.min_height(NextCurwin::Unset);
+                }
+            }
+            room_cmdline = if self.fr_width != Columns.get() {
+                0
+            } else {
+                let wp = lastwin_nofloating(None);
+                let below = wp.w_winrow + wp.w_height + wp.w_hsep_height + wp.w_status_height;
+                (Rows.get() - number_as_int(p_ch()) - global_stl_rows() - below).max(0)
+            };
+
+            if height <= room + room_cmdline {
+                break;
+            }
+            if run == 2 || self.fr_width == Columns.get() {
+                height = room + room_cmdline;
+                break;
+            }
+            let target = arith::parent_target(
+                height,
+                parent.min_height(NextCurwin::NoWin),
+                number_as_int(p_wmh()),
+            );
+            parent.set_height(target);
+            // NOTREACHED
+        }
+
+        // The number of lines to take from other frames (can be negative).
+        let mut take = height - self.fr_height;
+        // Without enough room, reduce a 'winfixheight' window as well.
+        if height > room + room_cmdline - room_reserved {
+            room_reserved = room + room_cmdline - height;
+        }
+        // With only a 'winfixheight' window, making this one smaller means making
+        // the other one taller.
+        if take < 0 && room - self.fr_height <= room_reserved {
+            room_reserved = 0;
+        }
+        if take > 0 && room_cmdline > 0 {
+            // Use lines from the command line first.
+            let mut top = current_topframe();
+            room_cmdline = room_cmdline.min(take);
+            take -= room_cmdline;
+            top.fr_height += room_cmdline;
+        }
+
+        // Set the current frame to the new height.
+        new_height(self, height, false, false, true);
+
+        // First take lines from the frames after the current frame; if that is not
+        // enough, take them from the frames above it.
+        for run in 0..2 {
+            let start = if run == 0 { self.next() } else { self.prev() };
+            let walk: Box<dyn Iterator<Item = FrameRef>> = if run == 0 {
+                Box::new(frames(start))
+            } else {
+                Box::new(frames_back(start))
+            };
+            for frp in walk {
+                if take == 0 {
+                    break;
+                }
+                let h = frp.min_height(NextCurwin::Unset);
+                if room_reserved > 0 && frp.win().is_some_and(|w| w.w_onebuf_opt.wo_wfh != 0) {
+                    if room_reserved >= frp.fr_height {
+                        room_reserved -= frp.fr_height;
+                    } else {
+                        if frp.fr_height - room_reserved > take {
+                            room_reserved = frp.fr_height - take;
+                        }
+                        take -= frp.fr_height - room_reserved;
+                        new_height(frp, room_reserved, false, false, true);
+                        room_reserved = 0;
+                    }
+                } else if frp.fr_height - take < h {
+                    take -= frp.fr_height - h;
+                    new_height(frp, h, false, false, true);
+                } else {
+                    new_height(frp, frp.fr_height - take, false, false, true);
+                    take = 0;
+                }
+            }
+        }
+    }
+
+    /// [`FrameRef::set_height`] with the axes exchanged, from `frame_setwidth()` --
+    /// with no command line to borrow from, and a top frame whose width is the
+    /// screen's and so cannot change at all.
+    pub(crate) fn set_width(self, width: c_int) {
+        if self.fr_width == width {
+            return;
+        }
+        let Some(parent) = self.parent() else {
+            // topframe: can't change width.
+            return;
+        };
+        if c_int::from(parent.fr_layout) == FR_COL {
+            let w = parent.min_width(NextCurwin::Unset);
+            parent.set_width(width.max(w));
+            return;
+        }
+
+        let mut width = width;
+        let mut room = 0;
+        let mut room_reserved = 0;
+        for run in 1..=2 {
+            room = 0;
+            room_reserved = 0;
+            for frp in parent.children() {
+                if frp != self && frp.win().is_some_and(|w| w.w_onebuf_opt.wo_wfw != 0) {
+                    room_reserved += frp.fr_width;
+                }
+                room += frp.fr_width;
+                if frp != self {
+                    room -= frp.min_width(NextCurwin::Unset);
+                }
+            }
+            if width <= room {
+                break;
+            }
+            let rows_avail = OptInt::from(Rows.get())
+                - p_ch()
+                - OptInt::from(tabline_rows())
+                - OptInt::from(global_stl_rows());
+            if run == 2 || OptInt::from(self.fr_height) >= rows_avail {
+                width = room;
+                break;
+            }
+            let target = arith::parent_target(
+                width,
+                parent.min_width(NextCurwin::NoWin),
+                number_as_int(p_wmw()),
+            );
+            parent.set_width(target);
+        }
+
+        let mut take = width - self.fr_width;
+        if width > room - room_reserved {
+            room_reserved = room - width;
+        }
+        if take < 0 && room - self.fr_width < room_reserved {
+            room_reserved = 0;
+        }
+
+        new_width(self, width, false, false);
+
+        for run in 0..2 {
+            let start = if run == 0 { self.next() } else { self.prev() };
+            let walk: Box<dyn Iterator<Item = FrameRef>> = if run == 0 {
+                Box::new(frames(start))
+            } else {
+                Box::new(frames_back(start))
+            };
+            for frp in walk {
+                if take == 0 {
+                    break;
+                }
+                let w = frp.min_width(NextCurwin::Unset);
+                if room_reserved > 0 && frp.win().is_some_and(|w| w.w_onebuf_opt.wo_wfw != 0) {
+                    if room_reserved >= frp.fr_width {
+                        room_reserved -= frp.fr_width;
+                    } else {
+                        if frp.fr_width - room_reserved > take {
+                            room_reserved = frp.fr_width - take;
+                        }
+                        take -= frp.fr_width - room_reserved;
+                        new_width(frp, room_reserved, false, false);
+                        room_reserved = 0;
+                    }
+                } else if frp.fr_width - take < w {
+                    take -= frp.fr_width - w;
+                    new_width(frp, w, false, false);
+                } else {
+                    new_width(frp, frp.fr_width - take, false, false);
+                    take = 0;
+                }
+            }
         }
     }
 }
@@ -113,146 +340,12 @@ pub(crate) fn setheight_win(height: c_int, win: Win) {
         win.redraw_later(UPD_VALID);
     } else {
         let chrome = arith::height_with_chrome(height, win.w_hsep_height, win.w_status_height);
-        set_frame_height(win.frame(), chrome);
+        win.frame().set_height(chrome);
         // Recompute the window positions.
         comp_positions();
         fix_scroll(true);
         redraw_all(UPD_NOT_VALID);
         redraw_cmdline.set(true);
-    }
-}
-
-/// Give frame `curfrp` height `height`, resizing everything around it to fit,
-/// from `frame_setheight()`.
-///
-/// A frame in a row needs its siblings resized too, so the whole row is sized
-/// instead. A frame in a column takes the room from the frames above and below
-/// it, growing the containing frame — or borrowing from the command line — when
-/// they cannot pay.
-fn set_frame_height(curfrp: FrameRef, height: c_int) {
-    // If the height already is the desired value, nothing to do.
-    if curfrp.fr_height == height {
-        return;
-    }
-    let Some(parent) = curfrp.parent() else {
-        // topframe: can only change the command line height.
-        if height > 0 {
-            new_height(curfrp, height, false, false, true);
-        }
-        return;
-    };
-    if c_int::from(parent.fr_layout) == FR_ROW {
-        // A row of frames: the frames left and right of this one need resizing
-        // too, so size the row and let it distribute. Check their minimum
-        // height first.
-        let h = minheight(parent, NextCurwin::Unset);
-        set_frame_height(parent, height.max(h));
-        return;
-    }
-
-    // A column of frames: try to change only frames in this column.
-    let mut height = height;
-    let mut room = 0;
-    let mut room_cmdline = 0;
-    let mut room_reserved = 0;
-    // Do this twice: first compute the room available and, if it is not
-    // enough, resize the containing frame; then compute it again and adjust
-    // the height to it. Try not to reduce a 'winfixheight' window.
-    for run in 1..=2 {
-        room = 0;
-        room_reserved = 0;
-        for frp in parent.children() {
-            if frp != curfrp && frp.win().is_some_and(|w| w.w_onebuf_opt.wo_wfh != 0) {
-                room_reserved += frp.fr_height;
-            }
-            room += frp.fr_height;
-            if frp != curfrp {
-                room -= minheight(frp, NextCurwin::Unset);
-            }
-        }
-        room_cmdline = if curfrp.fr_width != Columns.get() {
-            0
-        } else {
-            let wp = lastwin_nofloating(None);
-            let below = wp.w_winrow + wp.w_height + wp.w_hsep_height + wp.w_status_height;
-            (Rows.get() - number_as_int(p_ch()) - global_stl_rows() - below).max(0)
-        };
-
-        if height <= room + room_cmdline {
-            break;
-        }
-        if run == 2 || curfrp.fr_width == Columns.get() {
-            height = room + room_cmdline;
-            break;
-        }
-        let target = arith::parent_target(
-            height,
-            minheight(parent, NextCurwin::NoWin),
-            number_as_int(p_wmh()),
-        );
-        set_frame_height(parent, target);
-        // NOTREACHED
-    }
-
-    // The number of lines to take from other frames (can be negative).
-    let mut take = height - curfrp.fr_height;
-    // Without enough room, reduce a 'winfixheight' window as well.
-    if height > room + room_cmdline - room_reserved {
-        room_reserved = room + room_cmdline - height;
-    }
-    // With only a 'winfixheight' window, making this one smaller means making
-    // the other one taller.
-    if take < 0 && room - curfrp.fr_height <= room_reserved {
-        room_reserved = 0;
-    }
-    if take > 0 && room_cmdline > 0 {
-        // Use lines from the command line first.
-        let mut top = current_topframe();
-        room_cmdline = room_cmdline.min(take);
-        take -= room_cmdline;
-        top.fr_height += room_cmdline;
-    }
-
-    // Set the current frame to the new height.
-    new_height(curfrp, height, false, false, true);
-
-    // First take lines from the frames after the current frame; if that is not
-    // enough, take them from the frames above it.
-    for run in 0..2 {
-        let start = if run == 0 {
-            curfrp.next()
-        } else {
-            curfrp.prev()
-        };
-        let walk: Box<dyn Iterator<Item = FrameRef>> = if run == 0 {
-            Box::new(frames(start))
-        } else {
-            Box::new(frames_back(start))
-        };
-        for frp in walk {
-            if take == 0 {
-                break;
-            }
-            let h = minheight(frp, NextCurwin::Unset);
-            if room_reserved > 0 && frp.win().is_some_and(|w| w.w_onebuf_opt.wo_wfh != 0) {
-                if room_reserved >= frp.fr_height {
-                    room_reserved -= frp.fr_height;
-                } else {
-                    if frp.fr_height - room_reserved > take {
-                        room_reserved = frp.fr_height - take;
-                    }
-                    take -= frp.fr_height - room_reserved;
-                    new_height(frp, room_reserved, false, false, true);
-                    room_reserved = 0;
-                }
-            } else if frp.fr_height - take < h {
-                take -= frp.fr_height - h;
-                new_height(frp, h, false, false, true);
-            } else {
-                new_height(frp, frp.fr_height - take, false, false, true);
-                take = 0;
-            }
-        }
     }
 }
 
@@ -279,112 +372,12 @@ pub(crate) fn setwidth_win(width: c_int, window: Win) {
         win_config_float(window, window.w_config.clone());
         window.redraw_later(UPD_NOT_VALID);
     } else {
-        set_frame_width(
-            window.frame(),
-            arith::width_with_chrome(width, window.w_vsep_width),
-        );
+        window
+            .frame()
+            .set_width(arith::width_with_chrome(width, window.w_vsep_width));
         // Recompute the window positions.
         comp_positions();
         redraw_all(UPD_NOT_VALID);
-    }
-}
-
-/// [`set_frame_height`] with the axes exchanged, from `frame_setwidth()` --
-/// with no command line to borrow from, and a top frame whose width is the
-/// screen's and so cannot change at all.
-pub(crate) fn set_frame_width(curfrp: FrameRef, width: c_int) {
-    if curfrp.fr_width == width {
-        return;
-    }
-    let Some(parent) = curfrp.parent() else {
-        // topframe: can't change width.
-        return;
-    };
-    if c_int::from(parent.fr_layout) == FR_COL {
-        let w = minwidth(parent, NextCurwin::Unset);
-        set_frame_width(parent, width.max(w));
-        return;
-    }
-
-    let mut width = width;
-    let mut room = 0;
-    let mut room_reserved = 0;
-    for run in 1..=2 {
-        room = 0;
-        room_reserved = 0;
-        for frp in parent.children() {
-            if frp != curfrp && frp.win().is_some_and(|w| w.w_onebuf_opt.wo_wfw != 0) {
-                room_reserved += frp.fr_width;
-            }
-            room += frp.fr_width;
-            if frp != curfrp {
-                room -= minwidth(frp, NextCurwin::Unset);
-            }
-        }
-        if width <= room {
-            break;
-        }
-        let rows_avail = OptInt::from(Rows.get())
-            - p_ch()
-            - OptInt::from(tabline_rows())
-            - OptInt::from(global_stl_rows());
-        if run == 2 || OptInt::from(curfrp.fr_height) >= rows_avail {
-            width = room;
-            break;
-        }
-        let target = arith::parent_target(
-            width,
-            minwidth(parent, NextCurwin::NoWin),
-            number_as_int(p_wmw()),
-        );
-        set_frame_width(parent, target);
-    }
-
-    let mut take = width - curfrp.fr_width;
-    if width > room - room_reserved {
-        room_reserved = room - width;
-    }
-    if take < 0 && room - curfrp.fr_width < room_reserved {
-        room_reserved = 0;
-    }
-
-    new_width(curfrp, width, false, false);
-
-    for run in 0..2 {
-        let start = if run == 0 {
-            curfrp.next()
-        } else {
-            curfrp.prev()
-        };
-        let walk: Box<dyn Iterator<Item = FrameRef>> = if run == 0 {
-            Box::new(frames(start))
-        } else {
-            Box::new(frames_back(start))
-        };
-        for frp in walk {
-            if take == 0 {
-                break;
-            }
-            let w = minwidth(frp, NextCurwin::Unset);
-            if room_reserved > 0 && frp.win().is_some_and(|w| w.w_onebuf_opt.wo_wfw != 0) {
-                if room_reserved >= frp.fr_width {
-                    room_reserved -= frp.fr_width;
-                } else {
-                    if frp.fr_width - room_reserved > take {
-                        room_reserved = frp.fr_width - take;
-                    }
-                    take -= frp.fr_width - room_reserved;
-                    new_width(frp, room_reserved, false, false);
-                    room_reserved = 0;
-                }
-            } else if frp.fr_width - take < w {
-                take -= frp.fr_width - w;
-                new_width(frp, w, false, false);
-            } else {
-                new_width(frp, frp.fr_width - take, false, false);
-                take = 0;
-            }
-        }
     }
 }
 
@@ -408,7 +401,7 @@ pub fn did_set_winminheight(_args: &mut OptSet) -> Result<(), OptError> {
 pub fn did_set_winminwidth(_args: &mut OptSet) -> Result<(), OptError> {
     let mut first = true;
     while p_wmw() > 0 as OptInt {
-        if Columns.get() >= minwidth(current_topframe(), NextCurwin::Unset) {
+        if Columns.get() >= current_topframe().min_width(NextCurwin::Unset) {
             break;
         }
         P_WMW.set(p_wmw() - 1);
@@ -464,12 +457,12 @@ fn drag_status_line(dragwin: Win, offset: c_int) {
         // Sum up the room of the current frame and the ones above it.
         if fr == curfr {
             // Only one window.
-            room = fr.fr_height - minheight(fr, NextCurwin::Unset);
+            room = fr.fr_height - fr.min_height(NextCurwin::Unset);
         } else {
             let mut sum = 0;
             fr = fr.child().expect("a row or column has a child");
             loop {
-                sum += fr.fr_height - minheight(fr, NextCurwin::Unset);
+                sum += fr.fr_height - fr.min_height(NextCurwin::Unset);
                 if fr == curfr {
                     break;
                 }
@@ -489,7 +482,7 @@ fn drag_status_line(dragwin: Win, offset: c_int) {
         sum = sum.max(0);
         // Sum up the room of the frames below the current one.
         for frp in frames(curfr.next()) {
-            sum += frp.fr_height - minheight(frp, NextCurwin::Unset);
+            sum += frp.fr_height - frp.min_height(NextCurwin::Unset);
         }
         room = sum;
         grow = Some(curfr);
@@ -506,7 +499,7 @@ fn drag_status_line(dragwin: Win, offset: c_int) {
     // Now make the other frames smaller.
     let mut next = if up { Some(curfr) } else { curfr.next() };
     while let Some(fr) = next.filter(|_| offset > 0) {
-        let n = minheight(fr, NextCurwin::Unset);
+        let n = fr.min_height(NextCurwin::Unset);
         if fr.fr_height - offset <= n {
             offset -= fr.fr_height - n;
             new_height(fr, n, !up, false, true);
@@ -572,7 +565,7 @@ fn drag_vsep_line(dragwin: Win, offset: c_int) {
         // Sum up the room of the current frame and the ones left of it.
         fr = fr.child().expect("a row has a child");
         loop {
-            room += fr.fr_width - minwidth(fr, NextCurwin::Unset);
+            room += fr.fr_width - fr.min_width(NextCurwin::Unset);
             if fr == curfr {
                 break;
             }
@@ -582,7 +575,7 @@ fn drag_vsep_line(dragwin: Win, offset: c_int) {
     } else {
         // Sum up the room of the frames right of the current one.
         for frp in frames(curfr.next()) {
-            room += frp.fr_width - minwidth(frp, NextCurwin::Unset);
+            room += frp.fr_width - frp.min_width(NextCurwin::Unset);
         }
         Some(curfr)
     };
@@ -599,7 +592,7 @@ fn drag_vsep_line(dragwin: Win, offset: c_int) {
     new_width(grow, grow.fr_width + offset, left, false);
     let mut next = if left { Some(curfr) } else { curfr.next() };
     while let Some(fr) = next.filter(|_| offset > 0) {
-        let n = minwidth(fr, NextCurwin::Unset);
+        let n = fr.min_width(NextCurwin::Unset);
         if fr.fr_width - offset <= n {
             offset -= fr.fr_width - n;
             new_width(fr, n, !left, false);

@@ -6,7 +6,7 @@
 //! out of the tree and re-inserts it somewhere else (CTRL-W H/J/K/L and
 //! `nvim_win_set_config`), and [`win_move_after`] reorders two windows in the
 //! same frame.  [`make_windows`] answers how many windows will fit, and opens
-//! that many, and [`max_wincount`] is the same question for one frame.
+//! that many, and [`FrameRef::max_win_count`] is the same question for one frame.
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
@@ -128,13 +128,13 @@ pub(crate) fn exchange(prenum: c_int) {
     let frp2 = frame.prev();
     if wp.w_prev != Some(cur.id()) {
         win_remove(cur, None);
-        frame_remove(frame);
+        frame.unlink();
         win_append(wp.prev(), cur, None);
-        frame_insert(frp, frame);
+        frp.prepend_sibling(frame);
     }
     if Some(wp) != wp2 {
         win_remove(wp, None);
-        frame_remove(wp.frame());
+        wp.frame().unlink();
         win_append(wp2, wp, None);
         match frp2 {
             None => {
@@ -143,9 +143,9 @@ pub(crate) fn exchange(prenum: c_int) {
                     .parent()
                     .and_then(FrameRef::child)
                     .expect("a linked frame has a parent with children");
-                frame_insert(first, wp.frame());
+                first.prepend_sibling(wp.frame());
             }
-            Some(frp2) => frame_append(frp2, wp.frame()),
+            Some(frp2) => frp2.append_sibling(wp.frame()),
         }
     }
 
@@ -200,12 +200,12 @@ pub(crate) fn rotate(upwards: bool, count: c_int) {
             let frp = parent.child().expect("frp != NULL");
             let w1 = frp.win().expect("a leaf frame holds a window");
             win_remove(w1, None);
-            frame_remove(frp);
+            frp.unlink();
             debug_assert!(parent.child().is_some(), "frp->fr_parent->fr_child");
             // Find the last frame and append the removed window after it.
             let last = frames(Some(frp)).last().expect("at least one");
             win_append(last.win(), w1, None);
-            frame_append(last, w1.frame());
+            last.append_sibling(w1.frame());
             wp1 = Some(w1);
             wp2 = last.win();
         } else {
@@ -216,11 +216,11 @@ pub(crate) fn rotate(upwards: bool, count: c_int) {
             let w1 = frp.win().expect("a leaf frame holds a window");
             wp2 = w1.prev();
             win_remove(w1, None);
-            frame_remove(frp);
+            frp.unlink();
             let first = parent.child().expect("frp->fr_parent->fr_child");
             let head = first.win().expect("a leaf frame holds a window");
             win_append(head.prev(), w1, None);
-            frame_insert(first, frp);
+            first.prepend_sibling(frp);
             wp1 = Some(w1);
         }
         let (Some(mut w1), Some(mut w2)) = (wp1, wp2) else {
@@ -351,9 +351,9 @@ fn move_after(win1: Win, win2: Win) {
             }
         }
         win_remove(win1, None);
-        frame_remove(win1.frame());
+        win1.frame().unlink();
         win_append(Some(win2), win1, None);
-        frame_append(win2.frame(), win1.frame());
+        win2.frame().append_sibling(win1.frame());
         comp_positions(); // recompute window positions
         Win::current().redraw_later(UPD_NOT_VALID);
     }
@@ -362,31 +362,33 @@ fn move_after(win1: Win, win2: Win) {
     win_enter(win1, false);
 }
 
-/// How many windows would fit in `height` rows of frame `fr`: each costs
-/// `'winminheight'` plus a status line,
-/// plus its window bar where there is one.
-pub(crate) fn max_wincount(fr: FrameRef, height: c_int) -> c_int {
-    let per_win = number_as_int(p_wmh()) + STATUS_HEIGHT;
-    if c_int::from(fr.fr_layout) != FR_COL {
-        return height / (per_win + frame2window(fr).w_winbar_height);
-    }
-    if global_winbar_rows() != 0 {
-        // If a window bar is globally enabled, no need to check each window.
-        return height / (per_win + 1);
-    }
-
-    // First, try to fit all child frames of "fr" into "height".
-    let mut height = height;
-    let mut total = 0;
-    for frp in fr.children() {
-        let cost = per_win + frame2window(frp).w_winbar_height;
-        if OptInt::from(height) < OptInt::from(cost) {
-            break;
+impl FrameRef {
+    /// How many windows would fit in `height` rows of frame `fr`: each costs
+    /// `'winminheight'` plus a status line,
+    /// plus its window bar where there is one.
+    pub(crate) fn max_win_count(self, height: c_int) -> c_int {
+        let per_win = number_as_int(p_wmh()) + STATUS_HEIGHT;
+        if c_int::from(self.fr_layout) != FR_COL {
+            return height / (per_win + self.first_window().w_winbar_height);
         }
-        height -= cost;
-        total += 1;
+        if global_winbar_rows() != 0 {
+            // If a window bar is globally enabled, no need to check each window.
+            return height / (per_win + 1);
+        }
+
+        // First, try to fit all child frames of "fr" into "height".
+        let mut height = height;
+        let mut total = 0;
+        for frp in self.children() {
+            let cost = per_win + frp.first_window().w_winbar_height;
+            if OptInt::from(height) < OptInt::from(cost) {
+                break;
+            }
+            height -= cost;
+            total += 1;
+        }
+        // With room left over, use the default window-bar height (which is zero)
+        // for however many more would fit.
+        total + height / per_win
     }
-    // With room left over, use the default window-bar height (which is zero)
-    // for however many more would fit.
-    total + height / per_win
 }

@@ -35,7 +35,7 @@ use core::ffi::c_int;
 use super::{FR_COL, FR_ROW, FRACTION_MULT};
 use crate::winlayer::{FrameRef, Win, WinId};
 
-/// The C's `next_curwin` argument to [`frame_minheight`]/[`frame_minwidth`],
+/// The C's `next_curwin` argument to [`FrameRef::min_height_with`]/[`FrameRef::min_width_with`],
 /// whose three states are three different rules — and which is why they are
 /// not one `Option<Win>`:
 ///
@@ -68,7 +68,7 @@ impl NextCurwin {
     }
 }
 
-/// What [`frame_minheight`] and [`frame_minwidth`] need from the options: the
+/// What [`FrameRef::min_height_with`] and [`FrameRef::min_width_with`] need from the options: the
 /// size a `next_curwin` window is owed (`'winheight'` / `'winwidth'`), the
 /// minimum any other window may shrink to (`'winminheight'` / `'winminwidth'`)
 /// and the current window, for the one-line reservation the `NULL` case makes.
@@ -79,93 +79,101 @@ pub(crate) struct MinSize {
     pub curwin: Option<WinId>,
 }
 
-/// The minimal height of frame `topfrp`, from `frame_minheight()`.
-///
-/// A leaf costs its window's minimum plus the rows that are not text (window
-/// bar, separator, status line); a row of frames costs the tallest of them and
-/// a column the sum.
-pub(crate) fn frame_minheight(topfrp: FrameRef, next_curwin: NextCurwin, opts: MinSize) -> c_int {
-    if let Some(win) = topfrp.win() {
-        // Combined height of window bar and separator column or status line.
-        let extra_height = win.w_winbar_height + win.w_hsep_height + win.w_status_height;
-        if next_curwin.is(win) {
-            // Saturating: `'winheight'` is an unclamped option.
-            return opts.wanted.saturating_add(extra_height);
+impl FrameRef {
+    /// The minimal height of frame `topfrp`, from `frame_minheight()`.
+    ///
+    /// A leaf costs its window's minimum plus the rows that are not text (window
+    /// bar, separator, status line); a row of frames costs the tallest of them and
+    /// a column the sum.
+    pub(crate) fn min_height_with(self, next_curwin: NextCurwin, opts: MinSize) -> c_int {
+        if let Some(win) = self.win() {
+            // Combined height of window bar and separator column or status line.
+            let extra_height = win.w_winbar_height + win.w_hsep_height + win.w_status_height;
+            if next_curwin.is(win) {
+                // Saturating: `'winheight'` is an unclamped option.
+                return opts.wanted.saturating_add(extra_height);
+            }
+            let mut m = opts.minimum.saturating_add(extra_height);
+            // Current window is minimal one line high.
+            if Some(win.id()) == opts.curwin
+                && next_curwin == NextCurwin::Unset
+                && opts.minimum == 0
+            {
+                m += 1;
+            }
+            m
+        } else if c_int::from(self.fr_layout) == FR_ROW {
+            // The minimal height of the tallest frame in this row.
+            self.children().fold(0, |m, frp| {
+                let n = frp.min_height_with(next_curwin, opts);
+                if n > m { n } else { m }
+            })
+        } else {
+            // The minimal heights of every frame in this column, added up.
+            self.children().fold(0, |m, frp| {
+                m.saturating_add(frp.min_height_with(next_curwin, opts))
+            })
         }
-        let mut m = opts.minimum.saturating_add(extra_height);
-        // Current window is minimal one line high.
-        if Some(win.id()) == opts.curwin && next_curwin == NextCurwin::Unset && opts.minimum == 0 {
-            m += 1;
-        }
-        m
-    } else if c_int::from(topfrp.fr_layout) == FR_ROW {
-        // The minimal height of the tallest frame in this row.
-        topfrp.children().fold(0, |m, frp| {
-            let n = frame_minheight(frp, next_curwin, opts);
-            if n > m { n } else { m }
-        })
-    } else {
-        // The minimal heights of every frame in this column, added up.
-        topfrp.children().fold(0, |m, frp| {
-            m.saturating_add(frame_minheight(frp, next_curwin, opts))
-        })
     }
-}
 
-/// The minimal width of frame `topfrp`, from `frame_minwidth()`: the mirror of
-/// [`frame_minheight`], with a column taking the widest child and a row the
-/// sum, and the separator column standing in for the status line.
-pub(crate) fn frame_minwidth(topfrp: FrameRef, next_curwin: NextCurwin, opts: MinSize) -> c_int {
-    if let Some(win) = topfrp.win() {
-        if next_curwin.is(win) {
-            // Saturating: `'winwidth'` is an unclamped option.
-            return opts.wanted.saturating_add(win.w_vsep_width);
+    /// The minimal width of frame `topfrp`, from `frame_minwidth()`: the mirror of
+    /// [`FrameRef::min_height_with`], with a column taking the widest child and a row the
+    /// sum, and the separator column standing in for the status line.
+    pub(crate) fn min_width_with(self, next_curwin: NextCurwin, opts: MinSize) -> c_int {
+        if let Some(win) = self.win() {
+            if next_curwin.is(win) {
+                // Saturating: `'winwidth'` is an unclamped option.
+                return opts.wanted.saturating_add(win.w_vsep_width);
+            }
+            // Window: minimal width of the window plus separator column.
+            let mut m = opts.minimum.saturating_add(win.w_vsep_width);
+            // Current window is minimal one column wide.
+            if opts.minimum == 0
+                && Some(win.id()) == opts.curwin
+                && next_curwin == NextCurwin::Unset
+            {
+                m += 1;
+            }
+            m
+        } else if c_int::from(self.fr_layout) == FR_COL {
+            self.children().fold(0, |m, frp| {
+                let n = frp.min_width_with(next_curwin, opts);
+                if m > n { m } else { n }
+            })
+        } else {
+            self.children().fold(0, |m, frp| {
+                m.saturating_add(frp.min_width_with(next_curwin, opts))
+            })
         }
-        // Window: minimal width of the window plus separator column.
-        let mut m = opts.minimum.saturating_add(win.w_vsep_width);
-        // Current window is minimal one column wide.
-        if opts.minimum == 0 && Some(win.id()) == opts.curwin && next_curwin == NextCurwin::Unset {
-            m += 1;
+    }
+
+    /// Whether `topfrp` and its children are at height `height`, from
+    /// `frame_check_height()`.
+    ///
+    /// Only a *row*'s children are checked, because only they share their parent's
+    /// height; a column's are expected to differ, and so are not looked at.
+    pub(crate) fn check_height(self, height: c_int) -> bool {
+        if self.fr_height != height {
+            return false;
         }
-        m
-    } else if c_int::from(topfrp.fr_layout) == FR_COL {
-        topfrp.children().fold(0, |m, frp| {
-            let n = frame_minwidth(frp, next_curwin, opts);
-            if m > n { m } else { n }
-        })
-    } else {
-        topfrp.children().fold(0, |m, frp| {
-            m.saturating_add(frame_minwidth(frp, next_curwin, opts))
-        })
+        if c_int::from(self.fr_layout) == FR_ROW {
+            return self.children().all(|frp| frp.fr_height == height);
+        }
+        true
     }
-}
 
-/// Whether `topfrp` and its children are at height `height`, from
-/// `frame_check_height()`.
-///
-/// Only a *row*'s children are checked, because only they share their parent's
-/// height; a column's are expected to differ, and so are not looked at.
-pub(crate) fn frame_check_height(topfrp: FrameRef, height: c_int) -> bool {
-    if topfrp.fr_height != height {
-        return false;
+    /// Whether `topfrp` and its children are at width `width`, from
+    /// `frame_check_width()` — [`FrameRef::check_height`] with the axes exchanged, so
+    /// it is a *column* whose children must match.
+    pub(crate) fn check_width(self, width: c_int) -> bool {
+        if self.fr_width != width {
+            return false;
+        }
+        if c_int::from(self.fr_layout) == FR_COL {
+            return self.children().all(|frp| frp.fr_width == width);
+        }
+        true
     }
-    if c_int::from(topfrp.fr_layout) == FR_ROW {
-        return topfrp.children().all(|frp| frp.fr_height == height);
-    }
-    true
-}
-
-/// Whether `topfrp` and its children are at width `width`, from
-/// `frame_check_width()` — [`frame_check_height`] with the axes exchanged, so
-/// it is a *column* whose children must match.
-pub(crate) fn frame_check_width(topfrp: FrameRef, width: c_int) -> bool {
-    if topfrp.fr_width != width {
-        return false;
-    }
-    if c_int::from(topfrp.fr_layout) == FR_COL {
-        return topfrp.children().all(|frp| frp.fr_width == width);
-    }
-    true
 }
 
 /// Sort `'colorcolumn'`'s columns ascending, which is what upstream's
@@ -243,7 +251,7 @@ mod tests {
     use crate::global_cell::{editor_state, editor_state_lock};
     use crate::window::alloc::{bare_window, free_bare_window};
     use crate::window::{FR_COL, FR_LEAF, FR_ROW};
-    use crate::winlayer::{FrameRef, free_frame, new_frame};
+    use crate::winlayer::{FrameRef, new_frame};
 
     /// A window with the chrome a leaf frame's minimum size is made of.
     struct Chrome {
@@ -266,7 +274,7 @@ mod tests {
     impl Drop for Tree {
         fn drop(&mut self) {
             for &frame in &self.frames {
-                free_frame(frame);
+                frame.free();
             }
             for &win in &self.windows {
                 free_bare_window(win);
@@ -374,7 +382,7 @@ mod tests {
         let mut t = Tree::new();
         let status = Chrome { status: 1, ..PLAIN };
         let leaf = t.leaf(status, 5, 20);
-        assert_eq!(frame_minheight(leaf, NextCurwin::NoWin, heights(10, 1)), 2);
+        assert_eq!(leaf.min_height_with(NextCurwin::NoWin, heights(10, 1)), 2);
     }
 
     #[test]
@@ -387,7 +395,7 @@ mod tests {
             vsep: 0,
         };
         let leaf = t.leaf(chrome, 5, 20);
-        assert_eq!(frame_minheight(leaf, NextCurwin::NoWin, heights(10, 2)), 5);
+        assert_eq!(leaf.min_height_with(NextCurwin::NoWin, heights(10, 2)), 5);
     }
 
     #[test]
@@ -397,7 +405,7 @@ mod tests {
         let leaf = t.leaf(status, 5, 20);
         let win = t.window_of(leaf);
         assert_eq!(
-            frame_minheight(leaf, NextCurwin::Win(win.id()), heights(10, 1)),
+            leaf.min_height_with(NextCurwin::Win(win.id()), heights(10, 1)),
             11
         );
     }
@@ -409,7 +417,7 @@ mod tests {
         let other = t.leaf(PLAIN, 5, 20);
         let win = t.window_of(other);
         assert_eq!(
-            frame_minheight(leaf, NextCurwin::Win(win.id()), heights(10, 1)),
+            leaf.min_height_with(NextCurwin::Win(win.id()), heights(10, 1)),
             1
         );
     }
@@ -425,7 +433,7 @@ mod tests {
             minimum: 0,
             curwin: Some(win.id()),
         };
-        assert_eq!(frame_minheight(leaf, NextCurwin::Unset, opts), 1);
+        assert_eq!(leaf.min_height_with(NextCurwin::Unset, opts), 1);
     }
 
     #[test]
@@ -440,7 +448,7 @@ mod tests {
             minimum: 0,
             curwin: Some(win.id()),
         };
-        assert_eq!(frame_minheight(leaf, NextCurwin::NoWin, opts), 0);
+        assert_eq!(leaf.min_height_with(NextCurwin::NoWin, opts), 0);
     }
 
     #[test]
@@ -453,7 +461,7 @@ mod tests {
             minimum: 1,
             curwin: Some(win.id()),
         };
-        assert_eq!(frame_minheight(leaf, NextCurwin::Unset, opts), 1);
+        assert_eq!(leaf.min_height_with(NextCurwin::Unset, opts), 1);
     }
 
     #[test]
@@ -471,7 +479,7 @@ mod tests {
             10,
         );
         let row = t.branch(FR_ROW, &[plain, tall]);
-        assert_eq!(frame_minheight(row, NextCurwin::NoWin, heights(10, 2)), 5);
+        assert_eq!(row.min_height_with(NextCurwin::NoWin, heights(10, 2)), 5);
     }
 
     #[test]
@@ -482,7 +490,7 @@ mod tests {
         let c = t.leaf(PLAIN, 5, 10);
         let col = t.branch(FR_COL, &[a, b, c]);
         assert_eq!(
-            frame_minheight(col, NextCurwin::NoWin, heights(10, 1)),
+            col.min_height_with(NextCurwin::NoWin, heights(10, 1)),
             2 + 2 + 1
         );
     }
@@ -492,7 +500,7 @@ mod tests {
         let mut t = Tree::new();
         let mut row = t.frame();
         row.fr_layout = layout_byte(FR_ROW);
-        assert_eq!(frame_minheight(row, NextCurwin::NoWin, heights(10, 1)), 0);
+        assert_eq!(row.min_height_with(NextCurwin::NoWin, heights(10, 1)), 0);
     }
 
     #[test]
@@ -512,7 +520,7 @@ mod tests {
         );
         let col = t.branch(FR_COL, &[top, c]);
         // Row costs max(2, 1) = 2; the leaf below costs 1 + 1 + 1 = 3.
-        assert_eq!(frame_minheight(col, NextCurwin::NoWin, heights(10, 1)), 5);
+        assert_eq!(col.min_height_with(NextCurwin::NoWin, heights(10, 1)), 5);
     }
 
     #[test]
@@ -524,7 +532,7 @@ mod tests {
         let win = t.window_of(leaf);
         let opts = heights(c_int::MAX, 1);
         assert_eq!(
-            frame_minheight(leaf, NextCurwin::Win(win.id()), opts),
+            leaf.min_height_with(NextCurwin::Win(win.id()), opts),
             c_int::MAX
         );
     }
@@ -536,7 +544,7 @@ mod tests {
         let b = t.leaf(PLAIN, 5, 10);
         let col = t.branch(FR_COL, &[a, b]);
         let opts = heights(10, c_int::MAX);
-        assert_eq!(frame_minheight(col, NextCurwin::NoWin, opts), c_int::MAX);
+        assert_eq!(col.min_height_with(NextCurwin::NoWin, opts), c_int::MAX);
     }
 
     // ------------------------------------------------------------- frame_minwidth
@@ -549,7 +557,7 @@ mod tests {
     fn a_leaf_costs_winminwidth_plus_its_separator() {
         let mut t = Tree::new();
         let leaf = t.leaf(Chrome { vsep: 1, ..PLAIN }, 5, 20);
-        assert_eq!(frame_minwidth(leaf, NextCurwin::NoWin, heights(20, 1)), 2);
+        assert_eq!(leaf.min_width_with(NextCurwin::NoWin, heights(20, 1)), 2);
     }
 
     #[test]
@@ -558,7 +566,7 @@ mod tests {
         let leaf = t.leaf(Chrome { vsep: 1, ..PLAIN }, 5, 20);
         let win = t.window_of(leaf);
         assert_eq!(
-            frame_minwidth(leaf, NextCurwin::Win(win.id()), heights(20, 1)),
+            leaf.min_width_with(NextCurwin::Win(win.id()), heights(20, 1)),
             21
         );
     }
@@ -573,8 +581,8 @@ mod tests {
             minimum: 0,
             curwin: Some(win.id()),
         };
-        assert_eq!(frame_minwidth(leaf, NextCurwin::Unset, opts), 1);
-        assert_eq!(frame_minwidth(leaf, NextCurwin::NoWin, opts), 0);
+        assert_eq!(leaf.min_width_with(NextCurwin::Unset, opts), 1);
+        assert_eq!(leaf.min_width_with(NextCurwin::NoWin, opts), 0);
     }
 
     #[test]
@@ -583,7 +591,7 @@ mod tests {
         let a = t.leaf(PLAIN, 5, 10);
         let b = t.leaf(Chrome { vsep: 1, ..PLAIN }, 5, 10);
         let col = t.branch(FR_COL, &[a, b]);
-        assert_eq!(frame_minwidth(col, NextCurwin::NoWin, heights(20, 1)), 2);
+        assert_eq!(col.min_width_with(NextCurwin::NoWin, heights(20, 1)), 2);
     }
 
     #[test]
@@ -594,7 +602,7 @@ mod tests {
         let c = t.leaf(PLAIN, 5, 10);
         let row = t.branch(FR_ROW, &[a, b, c]);
         assert_eq!(
-            frame_minwidth(row, NextCurwin::NoWin, heights(20, 1)),
+            row.min_width_with(NextCurwin::NoWin, heights(20, 1)),
             2 + 2 + 1
         );
     }
@@ -613,8 +621,8 @@ mod tests {
     fn a_leaf_at_the_right_height_checks_out() {
         let mut t = Tree::new();
         let leaf = t.leaf(PLAIN, 7, 20);
-        assert!(frame_check_height(leaf, 7));
-        assert!(!frame_check_height(leaf, 6));
+        assert!(leaf.check_height(7));
+        assert!(!leaf.check_height(6));
     }
 
     #[test]
@@ -624,9 +632,9 @@ mod tests {
         let b = t.leaf(PLAIN, 7, 10);
         let row = t.branch(FR_ROW, &[a, b]);
         t.set_size(row, 7, 20);
-        assert!(frame_check_height(row, 7));
+        assert!(row.check_height(7));
         t.set_size(b, 6, 10);
-        assert!(!frame_check_height(row, 7));
+        assert!(!row.check_height(7));
     }
 
     #[test]
@@ -638,7 +646,7 @@ mod tests {
         let b = t.leaf(PLAIN, 4, 10);
         let col = t.branch(FR_COL, &[a, b]);
         t.set_size(col, 7, 10);
-        assert!(frame_check_height(col, 7));
+        assert!(col.check_height(7));
     }
 
     #[test]
@@ -648,9 +656,9 @@ mod tests {
         let b = t.leaf(PLAIN, 4, 10);
         let col = t.branch(FR_COL, &[a, b]);
         t.set_size(col, 7, 10);
-        assert!(frame_check_width(col, 10));
+        assert!(col.check_width(10));
         t.set_size(b, 4, 9);
-        assert!(!frame_check_width(col, 10));
+        assert!(!col.check_width(10));
     }
 
     #[test]
@@ -660,7 +668,7 @@ mod tests {
         let b = t.leaf(PLAIN, 7, 11);
         let row = t.branch(FR_ROW, &[a, b]);
         t.set_size(row, 7, 21);
-        assert!(frame_check_width(row, 21));
+        assert!(row.check_width(21));
     }
 
     // -------------------------------------------------------- the chrome additions

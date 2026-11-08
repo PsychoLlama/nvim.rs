@@ -85,11 +85,11 @@ pub(crate) fn new_screen_rows() {
         return; // not initialized yet
     }
     let top = current_topframe();
-    let h = frame_rows().max(minheight(top, NextCurwin::Unset));
+    let h = frame_rows().max(top.min_height(NextCurwin::Unset));
     // First try setting the heights of windows with 'winfixheight'; if that
     // does not result in the right height, forget about that option.
     new_height(top, h, false, true, false);
-    if !arith::frame_check_height(top, h) {
+    if !top.check_height(h) {
         new_height(top, h, false, false, false);
     }
     comp_positions();
@@ -114,7 +114,7 @@ pub(crate) fn new_screen_cols() {
     // First try setting the widths of windows with 'winfixwidth'; if that does
     // not result in the right width, forget about that option.
     new_width(top, Columns.get(), false, true);
-    if !arith::frame_check_width(top, Columns.get()) {
+    if !top.check_width(Columns.get()) {
         new_width(top, Columns.get(), false, false);
     }
     comp_positions();
@@ -409,7 +409,7 @@ pub fn win_size_restore(sizes: &[c_int]) {
             let (width, height) = (sizes[i], sizes[i + 1]);
             i += 2;
             if !wp.w_floating {
-                set_frame_width(wp.frame(), width);
+                wp.frame().set_width(width);
                 setheight_win(height, wp);
             }
         }

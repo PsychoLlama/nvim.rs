@@ -176,7 +176,7 @@ fn split_ins(
 
     let wp = insert_window(flags, new_wp, oldwin, vertical);
     if let Some(to_flatten) = to_flatten {
-        flatten(to_flatten);
+        to_flatten.flatten();
     }
     let (curfrp, frp, before) = split_frame(flags, wp, oldwin, toplevel, vertical, layout);
 
@@ -283,16 +283,16 @@ fn split_room_vertical(
     }
     let top = current_topframe();
     let (minwidth, available) = if toplevel {
-        (minwidth(top, NextCurwin::NoWin), top.fr_width)
+        (top.min_width(NextCurwin::NoWin), top.fr_width)
     } else if p_ea() {
         // With 'equalalways' the room is the whole screen's, so every frame in
         // every row above `oldwin` counts towards the minimum.
-        let mut min = minwidth(oldwin.frame(), NextCurwin::NoWin);
-        min += siblings_minwidth(oldwin.frame());
+        let mut min = oldwin.frame().min_width(NextCurwin::NoWin);
+        min += oldwin.frame().siblings_min_width();
         (min, top.fr_width)
     } else {
         let frame = oldwin.frame();
-        (minwidth(frame, NextCurwin::NoWin), frame.fr_width)
+        (frame.min_width(NextCurwin::NoWin), frame.fr_width)
     };
     needed += minwidth;
     if available < needed {
@@ -350,17 +350,17 @@ fn split_room_horizontal(
     let top = current_topframe();
     let (minheight, available) = if toplevel {
         (
-            minheight(top, NextCurwin::NoWin) + need_status,
+            top.min_height(NextCurwin::NoWin) + need_status,
             top.fr_height,
         )
     } else if p_ea() {
-        let mut min = minheight(oldwin.frame(), NextCurwin::NoWin) + need_status;
-        min += siblings_minheight(oldwin.frame());
+        let mut min = oldwin.frame().min_height(NextCurwin::NoWin) + need_status;
+        min += oldwin.frame().siblings_min_height();
         (min, top.fr_height)
     } else {
         let frame = oldwin.frame();
         (
-            minheight(frame, NextCurwin::NoWin) + need_status,
+            frame.min_height(NextCurwin::NoWin) + need_status,
             frame.fr_height,
         )
     };
@@ -429,39 +429,64 @@ fn wider_sibling(oldwin: Win, taller: impl Fn(Win) -> bool) -> bool {
         .any(|w| w != oldwin && taller(w))
 }
 
-/// The minimum width of every frame in every *row* above `frame`, its own
-/// ancestors excluded -- what a split with 'equalalways' has to leave alone.
-fn siblings_minwidth(frame: FrameRef) -> c_int {
-    let mut total = 0;
-    let mut prev = frame;
-    let mut up = frame.parent();
-    while let Some(frp) = up {
-        if c_int::from(frp.fr_layout) == FR_ROW {
-            for frp2 in frp.children().filter(|frp2| *frp2 != prev) {
-                total += minwidth(frp2, NextCurwin::NoWin);
+impl FrameRef {
+    /// The minimum width of every frame in every *row* above `frame`, its own
+    /// ancestors excluded -- what a split with 'equalalways' has to leave alone.
+    fn siblings_min_width(self) -> c_int {
+        let mut total = 0;
+        let mut prev = self;
+        let mut up = self.parent();
+        while let Some(frp) = up {
+            if c_int::from(frp.fr_layout) == FR_ROW {
+                for frp2 in frp.children().filter(|frp2| *frp2 != prev) {
+                    total += frp2.min_width(NextCurwin::NoWin);
+                }
             }
+            prev = frp;
+            up = frp.parent();
         }
-        prev = frp;
-        up = frp.parent();
+        total
     }
-    total
-}
 
-/// [`siblings_minwidth`] for the columns above `frame`.
-fn siblings_minheight(frame: FrameRef) -> c_int {
-    let mut total = 0;
-    let mut prev = frame;
-    let mut up = frame.parent();
-    while let Some(frp) = up {
-        if c_int::from(frp.fr_layout) == FR_COL {
-            for frp2 in frp.children().filter(|frp2| *frp2 != prev) {
-                total += minheight(frp2, NextCurwin::NoWin);
+    /// [`FrameRef::siblings_min_width`] for the columns above `frame`.
+    fn siblings_min_height(self) -> c_int {
+        let mut total = 0;
+        let mut prev = self;
+        let mut up = self.parent();
+        while let Some(frp) = up {
+            if c_int::from(frp.fr_layout) == FR_COL {
+                for frp2 in frp.children().filter(|frp2| *frp2 != prev) {
+                    total += frp2.min_height(NextCurwin::NoWin);
+                }
             }
+            prev = frp;
+            up = frp.parent();
         }
-        prev = frp;
-        up = frp.parent();
+        total
     }
-    total
+
+    /// A copy of `frame`, allocated: the C's `*frp = *curfrp` over a fresh
+    /// `xcalloc`.
+    ///
+    /// Written out field by field because `Frame` is deliberately neither
+    /// `Copy` nor `Clone` — a frame is a node of the layout tree, and this is the
+    /// one place in the editor that duplicates one. The links come across with
+    /// the rest, exactly as the struct assignment copied them, and the caller
+    /// rewires them straight afterwards.
+    fn new_like(self) -> FrameRef {
+        let mut copy = new_frame();
+        copy.fr_layout = self.fr_layout;
+        copy.fr_width = self.fr_width;
+        copy.fr_newwidth = self.fr_newwidth;
+        copy.fr_height = self.fr_height;
+        copy.fr_newheight = self.fr_newheight;
+        copy.fr_parent = self.fr_parent;
+        copy.fr_next = self.fr_next;
+        copy.fr_prev = self.fr_prev;
+        copy.fr_child = self.fr_child;
+        copy.fr_win = self.fr_win;
+        copy
+    }
 }
 
 /// Put the new window on the window list beside `oldwin`, allocating one when
@@ -556,7 +581,7 @@ fn split_frame(
         .parent()
         .is_none_or(|p| c_int::from(p.fr_layout) != layout)
     {
-        let mut inner = new_frame_like(curfrp);
+        let mut inner = curfrp.new_like();
         let mut outer = curfrp;
         outer.fr_layout = c_char::try_from(layout).expect("FR_ROW or FR_COL");
         inner.fr_parent = Some(outer.id());
@@ -582,34 +607,11 @@ fn split_frame(
     let mut frp = window.frame();
     frp.fr_parent = curfrp.fr_parent;
     if before {
-        frame_insert(curfrp, frp);
+        curfrp.prepend_sibling(frp);
     } else {
-        frame_append(curfrp, frp);
+        curfrp.append_sibling(frp);
     }
     (curfrp, frp, before)
-}
-
-/// A copy of `frame`, allocated: the C's `*frp = *curfrp` over a fresh
-/// `xcalloc`.
-///
-/// Written out field by field because `Frame` is deliberately neither
-/// `Copy` nor `Clone` — a frame is a node of the layout tree, and this is the
-/// one place in the editor that duplicates one. The links come across with
-/// the rest, exactly as the struct assignment copied them, and the caller
-/// rewires them straight afterwards.
-fn new_frame_like(frame: FrameRef) -> FrameRef {
-    let mut copy = new_frame();
-    copy.fr_layout = frame.fr_layout;
-    copy.fr_width = frame.fr_width;
-    copy.fr_newwidth = frame.fr_newwidth;
-    copy.fr_height = frame.fr_height;
-    copy.fr_newheight = frame.fr_newheight;
-    copy.fr_parent = frame.fr_parent;
-    copy.fr_next = frame.fr_next;
-    copy.fr_prev = frame.fr_prev;
-    copy.fr_child = frame.fr_child;
-    copy.fr_win = frame.fr_win;
-    copy
 }
 
 /// Hand out the columns for a `:vsplit`.
@@ -658,7 +660,7 @@ fn size_vertical(
     }
     if toplevel {
         if flags & WSP_BOT != 0 {
-            set_vsep(curfrp, true);
+            curfrp.set_vsep(true);
         }
         let sep = c_int::from(flags & WSP_TOP != 0);
         new_width(
@@ -719,7 +721,7 @@ fn size_horizontal(
         let mut new_fr_height = curfrp.fr_height - room.new_size;
         if is_stl_global {
             if flags & WSP_BOT != 0 {
-                add_hsep(curfrp);
+                curfrp.add_hsep();
             } else {
                 new_fr_height -= 1;
             }
@@ -728,7 +730,7 @@ fn size_horizontal(
                 new_fr_height -= STATUS_HEIGHT;
             }
             if flags & WSP_BOT != 0 {
-                add_statusline(curfrp);
+                curfrp.add_statusline();
             }
         }
         new_height(curfrp, new_fr_height, flags & WSP_TOP != 0, false, false);

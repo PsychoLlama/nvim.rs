@@ -348,7 +348,7 @@ fn leave_closing_window(win: Win) -> Leave {
         win_float_find_altwin(win, None)
             .expect("a float being closed always has a window to fall back to")
     } else {
-        frame2window(alt_frame(win, None))
+        alt_frame(win, None).first_window()
     };
 
     // Be careful: if autocommands delete the window, or leave it the last one,

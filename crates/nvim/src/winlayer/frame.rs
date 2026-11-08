@@ -78,13 +78,15 @@ pub(crate) fn current_topframe() -> FrameRef {
         .expect("the editor always has a layout tree")
 }
 
-/// Give `frp`'s memory back. It must already be out of the tree.
-///
-/// The C's `xfree(frp)`. Taking it out of the registry is what makes every
-/// [`FrameId`] still naming it answer `None` from here on, and dropping what
-/// the registry hands back is the free itself — at the point the `xfree` was.
-pub(crate) fn free_frame(frp: FrameRef) {
-    drop(forget_frame(frp.handle()));
+impl FrameRef {
+    /// Give `frp`'s memory back. It must already be out of the tree.
+    ///
+    /// The C's `xfree(frp)`. Taking it out of the registry is what makes every
+    /// [`FrameId`] still naming it answer `None` from here on, and dropping what
+    /// the registry hands back is the free itself — at the point the `xfree` was.
+    pub(crate) fn free(self) {
+        drop(forget_frame(self.handle()));
+    }
 }
 
 impl FrameRef {

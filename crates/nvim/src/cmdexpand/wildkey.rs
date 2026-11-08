@@ -18,7 +18,7 @@ use super::*;
 use crate::cmdexpand::defs::ExpandContext;
 use crate::cmdexpand::state::{saved_status_opts, wild_menu_showing};
 use crate::drawscreen::state::cmdline_row;
-use crate::drawscreen::{redraw_statuslines, update_screen, win_redraw_last_status};
+use crate::drawscreen::{redraw_statuslines, update_screen};
 use crate::ex_docmd::set_no_hlsearch;
 use crate::ex_getln::{put_on_cmdline, redrawcmd};
 use crate::getchar::state::KeyTyped;
@@ -286,7 +286,7 @@ pub(crate) fn wildmenu_cleanup(cclp: Cc) {
         redrawcmd();
         saved_status_opts.set(None);
     } else {
-        win_redraw_last_status(current_topframe());
+        current_topframe().redraw_last_status();
         // Must be cleared before redraw_statuslines (#8385), which is why
         // this arm clears it itself rather than after the `if`.
         wild_menu_showing.set(0);

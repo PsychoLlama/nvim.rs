@@ -138,31 +138,33 @@ pub fn f_getwininfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 }
 
-/// The layout of one frame, as `winlayout()` spells it, written into `into`:
-/// `"leaf", winid`, or `"row"|"col", [child, ...]` where each child is a
-/// two-element list of its own.
-fn get_framelayout(fr: FrameRef, into: &mut List) {
-    if c_int::from(fr.fr_layout) == FR_LEAF {
-        // A leaf frame with no window is a frame being taken apart; it is
-        // left out of the answer rather than described.
-        if let Some(wp) = fr.win() {
-            into.push_str(Some(c"leaf"));
-            into.push_number(VarNumber::from(wp.handle));
+impl FrameRef {
+    /// The layout of one frame, as `winlayout()` spells it, written into `into`:
+    /// `"leaf", winid`, or `"row"|"col", [child, ...]` where each child is a
+    /// two-element list of its own.
+    fn write_layout(self, into: &mut List) {
+        if c_int::from(self.fr_layout) == FR_LEAF {
+            // A leaf frame with no window is a frame being taken apart; it is
+            // left out of the answer rather than described.
+            if let Some(wp) = self.win() {
+                into.push_str(Some(c"leaf"));
+                into.push_number(VarNumber::from(wp.handle));
+            }
+            return;
         }
-        return;
+        into.push_str(Some(if c_int::from(self.fr_layout) == FR_ROW {
+            c"row"
+        } else {
+            c"col"
+        }));
+        let children = tv_list_alloc(kListLenUnknown as ptrdiff_t);
+        for child in self.children() {
+            let nested = tv_list_alloc(2);
+            child.write_layout(&mut nested.edit());
+            children.edit().push_list(Some(nested));
+        }
+        into.push_list(Some(children));
     }
-    into.push_str(Some(if c_int::from(fr.fr_layout) == FR_ROW {
-        c"row"
-    } else {
-        c"col"
-    }));
-    let children = tv_list_alloc(kListLenUnknown as ptrdiff_t);
-    for child in fr.children() {
-        let nested = tv_list_alloc(2);
-        get_framelayout(child, &mut nested.edit());
-        children.edit().push_list(Some(nested));
-    }
-    into.push_list(Some(children));
 }
 
 /// `winlayout([{tabnr}])` — the tab page's window layout tree.
@@ -177,7 +179,7 @@ pub fn f_winlayout(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             None => return,
         }
     };
-    get_framelayout(tp.topframe(), list);
+    tp.topframe().write_layout(list);
 }
 
 /// `win_gettype([{nr}])` — the empty string for an ordinary window.

@@ -3,7 +3,7 @@
 //! [`win_alloc`] creates a `Window` with its option and variable dictionaries;
 //! [`win_free`] tears one down, including the `WinInfo` remembered positions
 //! and the autocommand bookkeeping.  [`win_append`]/[`win_remove`] and
-//! [`frame_append`]/[`frame_insert`]/[`frame_remove`] are the linked-list
+//! [`FrameRef::append_sibling`]/[`FrameRef::prepend_sibling`]/[`FrameRef::unlink`] are the linked-list
 //! splices for the window list and the frame tree.  The `alloc_firstwin`
 //! group builds the very first window and frame at startup, and
 //! [`win_alloc_aucmd_win`] the invisible window autocommands execute in.
@@ -716,43 +716,44 @@ fn sync_tab_last(tabpage: Option<TabPage>, window: Option<WinId>) {
     }
 }
 
-/// Link `frp` in after `after` in its row or column.
-pub(crate) fn frame_append(after: FrameRef, frp: FrameRef) {
-    let (mut after, mut frp) = (after, frp);
-    frp.fr_next = after.fr_next;
-    after.fr_next = Some(frp.id());
-    if let Some(mut next) = frp.next() {
-        next.fr_prev = Some(frp.id());
+impl FrameRef {
+    /// Link `frp` in after this frame in its row or column.
+    pub(crate) fn append_sibling(mut self, mut frp: FrameRef) {
+        frp.fr_next = self.fr_next;
+        self.fr_next = Some(frp.id());
+        if let Some(mut next) = frp.next() {
+            next.fr_prev = Some(frp.id());
+        }
+        frp.fr_prev = Some(self.id());
     }
-    frp.fr_prev = Some(after.id());
-}
 
-/// Link `frp` in before `before` in its row or column.
-pub(crate) fn frame_insert(before: FrameRef, frp: FrameRef) {
-    let (mut before, mut frp) = (before, frp);
-    frp.fr_next = Some(before.id());
-    frp.fr_prev = before.fr_prev;
-    before.fr_prev = Some(frp.id());
-    match frp.prev() {
-        Some(mut prev) => prev.fr_next = Some(frp.id()),
-        None => {
-            let mut parent = frp.parent().expect("a linked frame has a parent");
-            parent.fr_child = Some(frp.id());
+    /// Link `frp` in before this frame in its row or column.
+    pub(crate) fn prepend_sibling(mut self, mut frp: FrameRef) {
+        frp.fr_next = Some(self.id());
+        frp.fr_prev = self.fr_prev;
+        self.fr_prev = Some(frp.id());
+        match frp.prev() {
+            Some(mut prev) => prev.fr_next = Some(frp.id()),
+            None => {
+                let mut parent = frp.parent().expect("a linked frame has a parent");
+                parent.fr_child = Some(frp.id());
+            }
         }
     }
-}
 
-/// Take `frp` out of its row or column, leaving its own links alone so
-/// [`frame_append`]/[`frame_insert`] can put it back.
-pub(crate) fn frame_remove(frp: FrameRef) {
-    match frp.prev() {
-        Some(mut prev) => prev.fr_next = frp.fr_next,
-        None => {
-            let mut parent = frp.parent().expect("a linked frame has a parent");
-            parent.fr_child = frp.fr_next;
+    /// Take this frame out of its row or column, leaving its own links alone so
+    /// [`append_sibling`](FrameRef::append_sibling)/[`prepend_sibling`](FrameRef::prepend_sibling)
+    /// can put it back.
+    pub(crate) fn unlink(self) {
+        match self.prev() {
+            Some(mut prev) => prev.fr_next = self.fr_next,
+            None => {
+                let mut parent = self.parent().expect("a linked frame has a parent");
+                parent.fr_child = self.fr_next;
+            }
         }
-    }
-    if let Some(mut next) = frp.next() {
-        next.fr_prev = frp.fr_prev;
+        if let Some(mut next) = self.next() {
+            next.fr_prev = self.fr_prev;
+        }
     }
 }

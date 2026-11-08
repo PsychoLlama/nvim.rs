@@ -455,17 +455,19 @@ fn ses_win_rec(out: &mut SessionFile, fr: FrameRef) -> Written {
 /// The first frame at or after `fr` holding a window worth saving.
 fn ses_skipframe(fr: Option<FrameRef>) -> Option<FrameRef> {
     let mut frc = fr;
-    while let Some(current) = frc.filter(|frc| !ses_do_frame(*frc)) {
+    while let Some(current) = frc.filter(|frc| !(*frc).has_session_window()) {
         frc = current.next();
     }
     frc
 }
 
-/// Whether frame `fr` holds a window worth saving anywhere below it.
-fn ses_do_frame(fr: FrameRef) -> bool {
-    match fr.win() {
-        Some(win) => ses_do_win(win),
-        None => fr.children().any(ses_do_frame),
+impl FrameRef {
+    /// Whether frame `fr` holds a window worth saving anywhere below it.
+    fn has_session_window(self) -> bool {
+        match self.win() {
+            Some(win) => ses_do_win(win),
+            None => self.children().any(FrameRef::has_session_window),
+        }
     }
 }
 

@@ -124,8 +124,8 @@ use crate::ui::{
 use crate::ui_compositor::ui_comp_set_screen_valid;
 use crate::version::{intro_message, may_show_intro};
 use crate::window::{
-    frame2window, global_stl_height, last_stl_height, min_rows, min_rows_for_all_tabpages,
-    win_fdccol_count, win_new_screensize, win_ui_flush,
+    global_stl_height, last_stl_height, min_rows, min_rows_for_all_tabpages, win_fdccol_count,
+    win_new_screensize, win_ui_flush,
 };
 use crate::winlayer::{self, Cc, Win};
 

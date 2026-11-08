@@ -23,7 +23,6 @@ use crate::cmdexpand::defs::ExpandContext;
 use crate::cmdexpand::state::{saved_status_opts, wild_menu_showing};
 use crate::cstr;
 use crate::drawscreen::state::cmdline_row;
-use crate::drawscreen::win_redraw_last_status;
 use crate::ex_getln::cmd_screencol;
 use crate::grid::{
     default_gridview, grid_line_fill, grid_line_flush, grid_line_puts, grid_line_start,
@@ -418,7 +417,7 @@ pub(crate) fn redraw_wildmenu(
         grid_line_flush();
     }
 
-    win_redraw_last_status(current_topframe());
+    current_topframe().redraw_last_status();
 }
 
 /// Whether the wildmenu has to turn 'laststatus' on to get a line to draw

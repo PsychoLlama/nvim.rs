@@ -79,8 +79,7 @@ use crate::types::{
 use crate::ui_compositor::ui_comp_remove_grid;
 use crate::winlayer::graph::{first_tabpage, firstwin, lastwin};
 use crate::winlayer::{
-    Buf, FrameRef, TabPage, Win, current_topframe, free_frame, new_frame, tab_windows, windows,
-    windows_in_tab,
+    Buf, FrameRef, TabPage, Win, current_topframe, new_frame, tab_windows, windows, windows_in_tab,
 };
 
 // The carve of the transpiled module; see each child's docs.

@@ -36,13 +36,14 @@ fn expect_tab(tabpage: Option<TabPage>) -> TabPage {
     tabpage.expect("a live window is on a tab page")
 }
 
-/// How many frames sit in `frame`'s row or column, `frame` included.
-fn sibling_count(frame: FrameRef) -> c_int {
-    frame
-        .children()
-        .count()
-        .try_into()
-        .expect("a row holds fewer frames than an int can count")
+impl FrameRef {
+    /// How many frames sit in `frame`'s row or column, `frame` included.
+    fn sibling_count(self) -> c_int {
+        self.children()
+            .count()
+            .try_into()
+            .expect("a row holds fewer frames than an int can count")
+    }
 }
 
 /// What applying a config to a window came to.
@@ -239,7 +240,7 @@ impl Relayout {
 
         // Splitting the window against itself: it is taken out first, and
         // the neighbour it leaves behind becomes the window to split.
-        let n_frames = sibling_count(parent_frame);
+        let n_frames = parent_frame.sibling_count();
         if n_frames < 2 {
             let why = Error::exception(c"Cannot split window into itself");
             return Err(Refusal::Restore(why));

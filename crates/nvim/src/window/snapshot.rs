@@ -2,7 +2,7 @@
 //!
 //! The `*snapshot*` family saves the frame tree before a `:diffsplit` or a
 //! help window opens and puts it back afterwards, matching the saved shape
-//! against the current one ([`snapshot_matches`]) before trusting it.
+//! against the current one ([`FrameRef::snapshot_matches`]) before trusting it.
 //! [`check_lnums`] and [`reset_lnums`] revalidate every window's cursor and
 //! topline against a buffer whose line count changed.  [`check_colorcolumn`]
 //! parses `'colorcolumn'`, and [`win_ui_flush`] pushes the accumulated
@@ -125,79 +125,126 @@ pub fn make_snapshot(idx: c_int) {
 pub(crate) fn take_snapshot(idx: c_int) {
     let mut tp = TabPage::current();
     drop_snapshot(tp, idx);
-    tp.tp_snapshot[as_index(idx)] = Some(make_snapshot_rec(current_topframe()));
+    tp.tp_snapshot[as_index(idx)] = Some(current_topframe().snapshot());
 }
 
-/// Copy `fr` and everything hanging off it into a freshly allocated tree,
-/// and answer that tree's root.
-///
-/// The copies are registered frames like any other, so a snapshot's links
-/// are the same identities the live tree's are -- which is what lets
-/// [`snapshot_matches`] walk one that a `:diffsplit` later freed.
-fn make_snapshot_rec(fr: FrameRef) -> FrameId {
-    let mut copy = new_frame();
-    copy.fr_layout = fr.fr_layout;
-    copy.fr_width = fr.fr_width;
-    copy.fr_height = fr.fr_height;
-    copy.fr_next = fr.next().map(make_snapshot_rec);
-    copy.fr_child = fr.child().map(make_snapshot_rec);
-    if c_int::from(fr.fr_layout) == FR_LEAF && fr.win().is_some_and(Win::is_current) {
-        copy.fr_win = Some(Win::current().id());
+impl FrameRef {
+    /// Copy `fr` and everything hanging off it into a freshly allocated tree,
+    /// and answer that tree's root.
+    ///
+    /// The copies are registered frames like any other, so a snapshot's links
+    /// are the same identities the live tree's are -- which is what lets
+    /// [`FrameRef::snapshot_matches`] walk one that a `:diffsplit` later freed.
+    fn snapshot(self) -> FrameId {
+        let mut copy = new_frame();
+        copy.fr_layout = self.fr_layout;
+        copy.fr_width = self.fr_width;
+        copy.fr_height = self.fr_height;
+        copy.fr_next = self.next().map(FrameRef::snapshot);
+        copy.fr_child = self.child().map(FrameRef::snapshot);
+        if c_int::from(self.fr_layout) == FR_LEAF && self.win().is_some_and(Win::is_current) {
+            copy.fr_win = Some(Win::current().id());
+        }
+        copy.id()
     }
-    copy.id()
+
+    /// Free `fr` and everything hanging off it.
+    fn free_snapshot(self) {
+        if let Some(next) = self.next() {
+            next.free_snapshot();
+        }
+        if let Some(child) = self.child() {
+            child.free_snapshot();
+        }
+        self.free();
+    }
+
+    /// The window a saved leaf remembers, if it is **still on this tab page's
+    /// window list**.
+    ///
+    /// The C's `win_valid(sn->fr_win)`, and deliberately not `FrameRef::win`: a
+    /// snapshot's leaf names a window that may since have been closed *or moved
+    /// to another tab page*, and only the list walk refuses the second. The live
+    /// tree's leaves cannot be either, which is why they use the plain accessor.
+    fn snapshot_window(self) -> Option<Win> {
+        self.fr_win
+            .filter(|&win| win_valid(win))
+            .and_then(WinId::get)
+    }
+
+    /// The window a saved tree remembers as the current one: the last leaf that
+    /// named one, searching `fr_next` before `fr_child`.
+    fn snapshot_curwin(self) -> Option<Win> {
+        if let Some(next) = self.next()
+            && let Some(wp) = next.snapshot_curwin()
+        {
+            return Some(wp);
+        }
+        if let Some(child) = self.child()
+            && let Some(wp) = child.snapshot_curwin()
+        {
+            return Some(wp);
+        }
+        self.snapshot_window()
+    }
+
+    /// Whether the saved tree `sn` still has the shape of the live tree `fr`, and
+    /// every window it remembers is still there.
+    fn snapshot_matches(self, fr: FrameRef) -> bool {
+        if self.fr_layout != fr.fr_layout
+            || self.next().is_none() != fr.next().is_none()
+            || self.child().is_none() != fr.child().is_none()
+        {
+            return false;
+        }
+        if let (Some(sn_next), Some(fr_next)) = (self.next(), fr.next())
+            && !sn_next.snapshot_matches(fr_next)
+        {
+            return false;
+        }
+        if let (Some(sn_child), Some(fr_child)) = (self.child(), fr.child())
+            && !sn_child.snapshot_matches(fr_child)
+        {
+            return false;
+        }
+        self.fr_win.is_none() || self.snapshot_window().is_some()
+    }
+
+    /// Give the live tree `fr` the sizes saved in `sn`, and answer the window `sn`
+    /// remembered as current.
+    fn restore_snapshot(self, fr: FrameRef) -> Option<Win> {
+        let mut fr = fr;
+        let mut wp = None;
+        fr.fr_height = self.fr_height;
+        fr.fr_width = self.fr_width;
+        if c_int::from(fr.fr_layout) == FR_LEAF {
+            new_height(fr, fr.fr_height, false, false, false);
+            new_width(fr, fr.fr_width, false, false);
+            wp = self.snapshot_window();
+        }
+        if let (Some(sn_next), Some(fr_next)) = (self.next(), fr.next()) {
+            wp = sn_next.restore_snapshot(fr_next).or(wp);
+        }
+        if let (Some(sn_child), Some(fr_child)) = (self.child(), fr.child()) {
+            wp = sn_child.restore_snapshot(fr_child).or(wp);
+        }
+        wp
+    }
 }
 
 /// Free the saved tree in slot `idx` of `tabpage`, if there is one.
 pub(crate) fn drop_snapshot(tabpage: TabPage, idx: c_int) {
     let mut tabpage = tabpage;
     if let Some(fr) = snapshot_of(tabpage, idx) {
-        clear_snapshot_rec(fr);
+        fr.free_snapshot();
     }
     tabpage.tp_snapshot[as_index(idx)] = None;
-}
-
-/// Free `fr` and everything hanging off it.
-fn clear_snapshot_rec(fr: FrameRef) {
-    if let Some(next) = fr.next() {
-        clear_snapshot_rec(next);
-    }
-    if let Some(child) = fr.child() {
-        clear_snapshot_rec(child);
-    }
-    free_frame(fr);
-}
-
-/// The window a saved leaf remembers, if it is **still on this tab page's
-/// window list**.
-///
-/// The C's `win_valid(sn->fr_win)`, and deliberately not `FrameRef::win`: a
-/// snapshot's leaf names a window that may since have been closed *or moved
-/// to another tab page*, and only the list walk refuses the second. The live
-/// tree's leaves cannot be either, which is why they use the plain accessor.
-fn snapshot_win(sn: FrameRef) -> Option<Win> {
-    sn.fr_win.filter(|&win| win_valid(win)).and_then(WinId::get)
-}
-
-/// The window a saved tree remembers as the current one: the last leaf that
-/// named one, searching `fr_next` before `fr_child`.
-fn snapshot_curwin_rec(ft: FrameRef) -> Option<Win> {
-    if let Some(next) = ft.next()
-        && let Some(wp) = snapshot_curwin_rec(next)
-    {
-        return Some(wp);
-    }
-    if let Some(child) = ft.child()
-        && let Some(wp) = snapshot_curwin_rec(child)
-    {
-        return Some(wp);
-    }
-    snapshot_win(ft)
 }
 
 /// The window the snapshot in slot `idx` of the current tab page remembers as
 /// the current one, if there is one.
 pub(crate) fn snapshot_curwin(idx: c_int) -> Option<Win> {
-    snapshot_of(TabPage::current(), idx).and_then(snapshot_curwin_rec)
+    snapshot_of(TabPage::current(), idx).and_then(FrameRef::snapshot_curwin)
 }
 
 pub fn restore_snapshot(idx: c_int, close_curwin: c_int) {
@@ -211,9 +258,9 @@ pub(crate) fn restore_layout(idx: c_int, close_curwin: bool) {
     if let Some(sn) = snapshot_of(tp, idx)
         && sn.fr_width == top.fr_width
         && sn.fr_height == top.fr_height
-        && snapshot_matches(sn, top)
+        && sn.snapshot_matches(top)
     {
-        let wp = restore_snapshot_rec(sn, top);
+        let wp = sn.restore_snapshot(top);
         comp_positions();
         if let Some(wp) = wp.filter(|_| close_curwin) {
             goto_win(wp);
@@ -221,49 +268,6 @@ pub(crate) fn restore_layout(idx: c_int, close_curwin: bool) {
         redraw_all(UPD_NOT_VALID);
     }
     drop_snapshot(tp, idx);
-}
-
-/// Whether the saved tree `sn` still has the shape of the live tree `fr`, and
-/// every window it remembers is still there.
-fn snapshot_matches(sn: FrameRef, fr: FrameRef) -> bool {
-    if sn.fr_layout != fr.fr_layout
-        || sn.next().is_none() != fr.next().is_none()
-        || sn.child().is_none() != fr.child().is_none()
-    {
-        return false;
-    }
-    if let (Some(sn_next), Some(fr_next)) = (sn.next(), fr.next())
-        && !snapshot_matches(sn_next, fr_next)
-    {
-        return false;
-    }
-    if let (Some(sn_child), Some(fr_child)) = (sn.child(), fr.child())
-        && !snapshot_matches(sn_child, fr_child)
-    {
-        return false;
-    }
-    sn.fr_win.is_none() || snapshot_win(sn).is_some()
-}
-
-/// Give the live tree `fr` the sizes saved in `sn`, and answer the window `sn`
-/// remembered as current.
-fn restore_snapshot_rec(sn: FrameRef, fr: FrameRef) -> Option<Win> {
-    let mut fr = fr;
-    let mut wp = None;
-    fr.fr_height = sn.fr_height;
-    fr.fr_width = sn.fr_width;
-    if c_int::from(fr.fr_layout) == FR_LEAF {
-        new_height(fr, fr.fr_height, false, false, false);
-        new_width(fr, fr.fr_width, false, false);
-        wp = snapshot_win(sn);
-    }
-    if let (Some(sn_next), Some(fr_next)) = (sn.next(), fr.next()) {
-        wp = restore_snapshot_rec(sn_next, fr_next).or(wp);
-    }
-    if let (Some(sn_child), Some(fr_child)) = (sn.child(), fr.child()) {
-        wp = restore_snapshot_rec(sn_child, fr_child).or(wp);
-    }
-    wp
 }
 
 // ---------------------------------------------------------------------------

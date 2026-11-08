@@ -292,24 +292,26 @@ pub fn redraw_statuslines() {
     }
 }
 
-/// Mark the status lines at the bottom of frame `frp`.
-///
-/// One per column of a row frame; the last one of a column frame.
-pub fn win_redraw_last_status(frp: FrameRef) {
-    match c_int::from(frp.fr_layout) {
-        FR_LEAF => {
-            let mut win = frp.win().expect("a leaf frame holds a window");
-            win.w_redr_status = true;
-        }
-        FR_ROW => {
-            for child in frp.children() {
-                win_redraw_last_status(child);
+impl FrameRef {
+    /// Mark the status lines at the bottom of frame `frp`.
+    ///
+    /// One per column of a row frame; the last one of a column frame.
+    pub fn redraw_last_status(self) {
+        match c_int::from(self.fr_layout) {
+            FR_LEAF => {
+                let mut win = self.win().expect("a leaf frame holds a window");
+                win.w_redr_status = true;
             }
-        }
-        layout => {
-            debug_assert!(layout == FR_COL, "frp->fr_layout == FR_COL");
-            let last = frp.children().last().expect("a column frame has a child");
-            win_redraw_last_status(last);
+            FR_ROW => {
+                for child in self.children() {
+                    child.redraw_last_status();
+                }
+            }
+            layout => {
+                debug_assert!(layout == FR_COL, "frp->fr_layout == FR_COL");
+                let last = self.children().last().expect("a column frame has a child");
+                last.redraw_last_status();
+            }
         }
     }
 }

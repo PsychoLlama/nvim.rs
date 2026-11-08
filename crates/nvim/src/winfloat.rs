@@ -72,8 +72,7 @@ use crate::window::{
 };
 use crate::winlayer::graph::cmdwin_win;
 use crate::winlayer::{
-    Buf, TabPage, Win, WinId, first_window, free_frame, last_window, windows, windows_back,
-    windows_in_tab,
+    Buf, TabPage, Win, WinId, first_window, last_window, windows, windows_back, windows_in_tab,
 };
 
 pub(crate) const kAlignLeft: AlignTextPos = 0;
@@ -197,7 +196,7 @@ fn remove_from_frame(win: Win, tabpage: Option<TabPage>) {
 
 /// `XFREE_CLEAR(wp->w_frame)`.
 fn release_frame(win: &mut Win) {
-    free_frame(win.frame());
+    win.frame().free();
     win.w_frame = None;
 }
 fn remove_window(win: Win, tabpage: Option<TabPage>) {

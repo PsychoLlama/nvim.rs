@@ -152,7 +152,7 @@ pub(crate) fn hsep_connected(window: Win, corner: WindowCorner) -> bool {
             .parent()
             .is_some_and(|parent| c_int::from(parent.fr_layout) == FR_ROW);
         while let Some(next) = fr.next() {
-            if !(rowwise && before) && frame2window(fr).w_winrow + fr.fr_height >= sep_row {
+            if !(rowwise && before) && fr.first_window().w_winrow + fr.fr_height >= sep_row {
                 break;
             }
             fr = next;
@@ -183,7 +183,7 @@ pub(crate) fn vsep_connected(window: Win, corner: WindowCorner) -> bool {
             .parent()
             .is_some_and(|parent| c_int::from(parent.fr_layout) == FR_COL);
         while let Some(next) = fr.next() {
-            if !(colwise && before) && frame2window(fr).w_wincol + fr.fr_width >= sep_col {
+            if !(colwise && before) && fr.first_window().w_wincol + fr.fr_width >= sep_col {
                 break;
             }
             fr = next;

@@ -6,7 +6,7 @@
 //! with [`to_fraction`] ([`fix_scroll`] and [`fix_cursor`] are the
 //! `'splitkeep'` half of the same problem).  The rest is the non-text
 //! bookkeeping: [`command_height`] for `'cmdheight'`, [`last_status`] and
-//! [`last_status_rec`] for `'laststatus'`, [`set_winbar`] for `'winbar'`,
+//! [`FrameRef::set_last_status`] for `'laststatus'`, [`set_winbar`] for `'winbar'`,
 //! [`tabline_rows`] for `'showtabline'`, and [`min_rows_of`], which says how
 //! few rows the layout can survive in.
 //!
@@ -473,9 +473,9 @@ pub fn command_height() {
             P_CH.set(OptInt::from(old_p_ch));
             break;
         };
-        let spare = fr.fr_height - minheight(fr, NextCurwin::Unset);
+        let spare = fr.fr_height - fr.min_height(NextCurwin::Unset);
         let h = number_as_int(p_ch() - OptInt::from(old_p_ch)).min(spare);
-        add_height(fr, -h);
+        fr.add_height(-h);
         old_p_ch += h;
         frp = fr.prev();
     }
@@ -483,7 +483,7 @@ pub fn command_height() {
         && command_frame_height.get()
         && let Some(fr) = frp
     {
-        add_height(fr, number_as_int(OptInt::from(old_p_ch) - p_ch()));
+        fr.add_height(number_as_int(OptInt::from(old_p_ch) - p_ch()));
     }
 
     comp_positions();
@@ -502,14 +502,96 @@ pub fn command_height() {
     min_set_ch.set(p_ch());
 }
 
-/// Add `n` rows to frame `frp` and to every frame above it, from
-/// `frame_add_height()`. Negative `n` takes them away.
-fn add_height(frp: FrameRef, n: c_int) {
-    new_height(frp, frp.fr_height + n, false, false, false);
-    let mut up = frp.parent();
-    while let Some(mut fr) = up {
-        fr.fr_height += n;
-        up = fr.parent();
+impl FrameRef {
+    /// Add `n` rows to frame `frp` and to every frame above it, from
+    /// `frame_add_height()`. Negative `n` takes them away.
+    fn add_height(self, n: c_int) {
+        new_height(self, self.fr_height + n, false, false, false);
+        let mut up = self.parent();
+        while let Some(mut fr) = up {
+            fr.fr_height += n;
+            up = fr.parent();
+        }
+    }
+
+    /// The nearest frame at or above `fr` that has a row to spare, from
+    /// `find_horizontally_resizable_frame()`. `None` when the layout is full.
+    fn resizable_ancestor(self) -> Option<FrameRef> {
+        let mut fp = self;
+        let top = current_topframe();
+        while fp.fr_height <= fp.min_height(NextCurwin::Unset) {
+            if fp == top {
+                return None;
+            }
+            let parent = fp.parent().expect("not the top frame");
+            fp = match fp.prev() {
+                Some(prev) if c_int::from(parent.fr_layout) == FR_COL => prev,
+                _ => parent,
+            };
+        }
+        Some(fp)
+    }
+
+    /// Make room for the status line `fr`'s window has just been given.
+    fn resize_for_status(self) -> Result<(), WinError> {
+        let wp = self.win().expect("a leaf frame holds a window");
+        let Some(fp) = self.resizable_ancestor() else {
+            return Err(err(WinError::NoRoom));
+        };
+        if fp != self {
+            new_height(fp, fp.fr_height - 1, false, false, false);
+            frame_fix_height(wp);
+            comp_positions();
+        } else {
+            new_win_height(wp, wp.w_height - 1);
+        }
+        Ok(())
+    }
+
+    /// Make room for the window bar `fr`'s window has just been given, which --
+    /// unlike a status line -- cannot come out of the window's own text.
+    fn resize_for_winbar(self) -> Result<(), WinError> {
+        let wp = self.win().expect("a leaf frame holds a window");
+        let Some(fp) = self.resizable_ancestor().filter(|fp| *fp != self) else {
+            return Err(err(WinError::NoRoom));
+        };
+        new_height(fp, fp.fr_height - 1, false, false, false);
+        new_win_height(wp, wp.w_height + 1);
+        frame_fix_height(wp);
+        comp_positions();
+        Ok(())
+    }
+
+    /// Add or remove the status lines `'laststatus'` asks for, over every window in
+    /// frame `fr`.
+    fn set_last_status(self, statusline: bool, is_stl_global: bool) {
+        let Some(mut wp) = self.win() else {
+            for fp in self.children() {
+                fp.set_last_status(statusline, is_stl_global);
+            }
+            return;
+        };
+        if is_bottom_window(wp) {
+            if wp.w_status_height != 0 && (!statusline || is_stl_global) {
+                remove_status_line(wp, false);
+            } else if wp.w_status_height == 0 && !is_stl_global && statusline {
+                // Add a status line, taking a row from wherever there is one.
+                wp.w_status_height = STATUS_HEIGHT;
+                if self.resize_for_status().is_err() {
+                    return;
+                }
+                comp_col();
+            }
+            if (wp.w_height - wp.w_prev_height).abs() == 1 {
+                wp.w_prev_height = wp.w_height;
+            }
+        } else if wp.w_status_height != 0 && is_stl_global {
+            remove_status_line(wp, true);
+        } else if wp.w_status_height == 0 && !is_stl_global {
+            wp.w_status_height = STATUS_HEIGHT;
+            wp.w_hsep_height = 0;
+            comp_col();
+        }
     }
 }
 
@@ -522,11 +604,7 @@ pub fn last_status(morewin: bool) {
 pub(crate) fn update_last_status(morewin: bool) {
     // If the window has a status line and it is not needed, or the other way
     // round, add or remove one.
-    last_status_rec(
-        current_topframe(),
-        last_stl_rows(morewin) > 0,
-        global_stl_rows() > 0,
-    );
+    current_topframe().set_last_status(last_stl_rows(morewin) > 0, global_stl_rows() > 0);
     win_float_anchor_laststatus();
 }
 
@@ -551,86 +629,6 @@ pub(crate) fn remove_status_line(window: Win, add_hsep: bool) {
     }
     comp_col();
     window.w_click_defs.status = ClickLine::default();
-}
-
-/// The nearest frame at or above `fr` that has a row to spare, from
-/// `find_horizontally_resizable_frame()`. `None` when the layout is full.
-fn resizable_frame(fr: FrameRef) -> Option<FrameRef> {
-    let mut fp = fr;
-    let top = current_topframe();
-    while fp.fr_height <= minheight(fp, NextCurwin::Unset) {
-        if fp == top {
-            return None;
-        }
-        let parent = fp.parent().expect("not the top frame");
-        fp = match fp.prev() {
-            Some(prev) if c_int::from(parent.fr_layout) == FR_COL => prev,
-            _ => parent,
-        };
-    }
-    Some(fp)
-}
-
-/// Make room for the status line `fr`'s window has just been given.
-fn resize_frame_for_status(fr: FrameRef) -> Result<(), WinError> {
-    let wp = fr.win().expect("a leaf frame holds a window");
-    let Some(fp) = resizable_frame(fr) else {
-        return Err(err(WinError::NoRoom));
-    };
-    if fp != fr {
-        new_height(fp, fp.fr_height - 1, false, false, false);
-        frame_fix_height(wp);
-        comp_positions();
-    } else {
-        new_win_height(wp, wp.w_height - 1);
-    }
-    Ok(())
-}
-
-/// Make room for the window bar `fr`'s window has just been given, which --
-/// unlike a status line -- cannot come out of the window's own text.
-fn resize_frame_for_winbar(fr: FrameRef) -> Result<(), WinError> {
-    let wp = fr.win().expect("a leaf frame holds a window");
-    let Some(fp) = resizable_frame(fr).filter(|fp| *fp != fr) else {
-        return Err(err(WinError::NoRoom));
-    };
-    new_height(fp, fp.fr_height - 1, false, false, false);
-    new_win_height(wp, wp.w_height + 1);
-    frame_fix_height(wp);
-    comp_positions();
-    Ok(())
-}
-
-/// Add or remove the status lines `'laststatus'` asks for, over every window in
-/// frame `fr`.
-fn last_status_rec(fr: FrameRef, statusline: bool, is_stl_global: bool) {
-    let Some(mut wp) = fr.win() else {
-        for fp in fr.children() {
-            last_status_rec(fp, statusline, is_stl_global);
-        }
-        return;
-    };
-    if is_bottom_window(wp) {
-        if wp.w_status_height != 0 && (!statusline || is_stl_global) {
-            remove_status_line(wp, false);
-        } else if wp.w_status_height == 0 && !is_stl_global && statusline {
-            // Add a status line, taking a row from wherever there is one.
-            wp.w_status_height = STATUS_HEIGHT;
-            if resize_frame_for_status(fr).is_err() {
-                return;
-            }
-            comp_col();
-        }
-        if (wp.w_height - wp.w_prev_height).abs() == 1 {
-            wp.w_prev_height = wp.w_height;
-        }
-    } else if wp.w_status_height != 0 && is_stl_global {
-        remove_status_line(wp, true);
-    } else if wp.w_status_height == 0 && !is_stl_global {
-        wp.w_status_height = STATUS_HEIGHT;
-        wp.w_hsep_height = 0;
-        comp_col();
-    }
 }
 
 /// Why a window did not get the window bar `'winbar'` asks for.
@@ -663,7 +661,7 @@ pub(crate) fn set_winbar_win(
             if window.w_floating {
                 err(WinError::NoRoom);
                 return Err(WinbarRefused::FloatTooSmall);
-            } else if !make_room || resize_frame_for_winbar(window.frame()).is_err() {
+            } else if !make_room || window.frame().resize_for_winbar().is_err() {
                 return Err(WinbarRefused::NoRoom);
             }
         }
@@ -754,7 +752,7 @@ pub(crate) fn min_rows_of(tabpage: TabPage) -> c_int {
     if windows().next().is_none() {
         return MIN_LINES;
     }
-    let mut total = minheight(tabpage.topframe(), NextCurwin::Unset);
+    let mut total = tabpage.topframe().min_height(NextCurwin::Unset);
     total += tabline_rows() + global_stl_rows();
     if cmdheight_of(tabpage) > 0 as OptInt {
         total += 1; // Include the last statusline.
@@ -783,7 +781,7 @@ pub(crate) fn min_rows_all_tabpages() -> c_int {
     }
     let mut total = 0;
     for tp in tabs() {
-        let mut n = minheight(tp.topframe(), NextCurwin::Unset);
+        let mut n = tp.topframe().min_height(NextCurwin::Unset);
         if cmdheight_of(tp) > 0 as OptInt {
             n += 1;
         }

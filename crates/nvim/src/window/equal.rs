@@ -71,7 +71,7 @@ fn equal_rec(
     height: c_int,
 ) {
     if c_int::from(topfr.fr_layout) == FR_LEAF {
-        equal_leaf(topfr, col, row, width, height);
+        topfr.equalize_leaf(col, row, width, height);
     } else if c_int::from(topfr.fr_layout) == FR_ROW {
         equal_row(next_curwin, current, topfr, dir, col, row, width, height);
     } else {
@@ -79,19 +79,21 @@ fn equal_rec(
     }
 }
 
-/// A leaf: move and resize the one window, and redraw if either changed.
-fn equal_leaf(topfr: FrameRef, col: c_int, row: c_int, width: c_int, height: c_int) {
-    let mut win = topfr.win().expect("a leaf frame holds a window");
-    if topfr.fr_height != height
-        || win.w_winrow != row
-        || topfr.fr_width != width
-        || win.w_wincol != col
-    {
-        win.w_winrow = row;
-        new_height(topfr, height, false, false, false);
-        win.w_wincol = col;
-        new_width(topfr, width, false, false);
-        redraw_all(UPD_NOT_VALID);
+impl FrameRef {
+    /// A leaf: move and resize the one window, and redraw if either changed.
+    fn equalize_leaf(self, col: c_int, row: c_int, width: c_int, height: c_int) {
+        let mut win = self.win().expect("a leaf frame holds a window");
+        if self.fr_height != height
+            || win.w_winrow != row
+            || self.fr_width != width
+            || win.w_wincol != col
+        {
+            win.w_winrow = row;
+            new_height(self, height, false, false, false);
+            win.w_wincol = col;
+            new_width(self, width, false, false);
+            redraw_all(UPD_NOT_VALID);
+        }
     }
 }
 
@@ -149,16 +151,16 @@ fn equal_row(
             width
         } else if dir == b'v' {
             fr.fr_width
-        } else if frame_fixed_width(fr) {
+        } else if fr.fixed_width() {
             wincount = 0; // doesn't count as a sizeable window
             fr.fr_newwidth
         } else {
             // The maximum number of windows horizontally in "fr".
-            let n = minwidth(fr, NextCurwin::NoWin);
+            let n = fr.min_width(NextCurwin::NoWin);
             let sep = if fr.next().is_none() { sh.extra_sep } else { 0 };
             wincount = (n + sep) / (number_as_int(p_wmw()) + 1);
-            let m = minwidth(fr, NextCurwin::of(next_curwin));
-            let hnc = sh.has_next_curwin && frame_has_win(fr, Some(next_curwin));
+            let m = fr.min_width(NextCurwin::of(next_curwin));
+            let hnc = sh.has_next_curwin && fr.has_win(Some(next_curwin));
             if hnc {
                 wincount -= 1; // don't count next_curwin
             }
@@ -185,7 +187,7 @@ fn equal_row(
             || dir != b'v'
             || topfr.parent().is_some()
             || new_size != fr.fr_width
-            || frame_has_win(fr, Some(next_curwin))
+            || fr.has_win(Some(next_curwin))
         {
             equal_rec(next_curwin, current, fr, dir, col, row, new_size, height);
         }
@@ -199,13 +201,13 @@ fn equal_row(
 fn row_share(next_curwin: Win, topfr: FrameRef, col: c_int, width: c_int) -> Share {
     // The maximum number of windows horizontally in this frame; the rightmost
     // one has no separator, so it is worth one extra column.
-    let mut n = minwidth(topfr, NextCurwin::NoWin);
+    let mut n = topfr.min_width(NextCurwin::NoWin);
     let extra_sep = if col + width == Columns.get() { 1 } else { 0 };
     let mut totwincount = (n + extra_sep) / (number_as_int(p_wmw()) + 1);
-    let has_next_curwin = frame_has_win(topfr, Some(next_curwin));
+    let has_next_curwin = topfr.has_win(Some(next_curwin));
 
     // "m" is the minimal width when counting 'winwidth' for "next_curwin".
-    let m = minwidth(topfr, NextCurwin::of(next_curwin));
+    let m = topfr.min_width(NextCurwin::of(next_curwin));
     let mut room = width - m;
     let mut next_curwin_size;
     if room < 0 {
@@ -214,14 +216,14 @@ fn row_share(next_curwin: Win, topfr: FrameRef, col: c_int, width: c_int) -> Sha
     } else {
         next_curwin_size = -1;
         for mut fr in topfr.children() {
-            if !frame_fixed_width(fr) {
+            if !fr.fixed_width() {
                 continue;
             }
             // With 'winfixwidth' keep the window width if possible -- watching
             // out for this window being the next_curwin.
-            n = minwidth(fr, NextCurwin::NoWin);
+            n = fr.min_width(NextCurwin::NoWin);
             let mut new_size = fr.fr_width;
-            if frame_has_win(fr, Some(next_curwin)) {
+            if fr.has_win(Some(next_curwin)) {
                 room += number_as_int(p_wiw()) - number_as_int(p_wmw());
                 next_curwin_size = 0;
                 new_size = new_size.max(number_as_int(p_wiw()));
@@ -296,15 +298,15 @@ fn equal_col(
             height
         } else if dir == b'h' {
             fr.fr_height
-        } else if frame_fixed_height(fr) {
+        } else if fr.fixed_height() {
             wincount = 0;
             fr.fr_newheight
         } else {
-            let n = minheight(fr, NextCurwin::NoWin);
+            let n = fr.min_height(NextCurwin::NoWin);
             let sep = if fr.next().is_none() { sh.extra_sep } else { 0 };
-            wincount = max_wincount(fr, n + sep);
-            let m = minheight(fr, NextCurwin::of(next_curwin));
-            let hnc = sh.has_next_curwin && frame_has_win(fr, Some(next_curwin));
+            wincount = fr.max_win_count(n + sep);
+            let m = fr.min_height(NextCurwin::of(next_curwin));
+            let hnc = sh.has_next_curwin && fr.has_win(Some(next_curwin));
             if hnc {
                 wincount -= 1;
             }
@@ -328,7 +330,7 @@ fn equal_col(
             || dir != b'h'
             || topfr.parent().is_some()
             || new_size != fr.fr_height
-            || frame_has_win(fr, Some(next_curwin))
+            || fr.has_win(Some(next_curwin))
         {
             equal_rec(next_curwin, current, fr, dir, col, row, width, new_size);
         }
@@ -340,7 +342,7 @@ fn equal_col(
 
 /// [`row_share`] with the axes exchanged.
 fn col_share(next_curwin: Win, topfr: FrameRef, row: c_int, height: c_int) -> Share {
-    let mut n = minheight(topfr, NextCurwin::NoWin);
+    let mut n = topfr.min_height(NextCurwin::NoWin);
     // Add one for the bottom window if it has neither status line nor
     // separator.
     let extra_sep = if row + height >= cmdline_row.get() && p_ls() == 0 as OptInt {
@@ -350,10 +352,10 @@ fn col_share(next_curwin: Win, topfr: FrameRef, row: c_int, height: c_int) -> Sh
     } else {
         0
     };
-    let mut totwincount = max_wincount(topfr, n + extra_sep);
-    let has_next_curwin = frame_has_win(topfr, Some(next_curwin));
+    let mut totwincount = topfr.max_win_count(n + extra_sep);
+    let has_next_curwin = topfr.has_win(Some(next_curwin));
 
-    let m = minheight(topfr, NextCurwin::of(next_curwin));
+    let m = topfr.min_height(NextCurwin::of(next_curwin));
     let mut room = height - m;
     let mut next_curwin_size;
     if room < 0 {
@@ -364,18 +366,18 @@ fn col_share(next_curwin: Win, topfr: FrameRef, row: c_int, height: c_int) -> Sh
     } else {
         next_curwin_size = -1;
         for mut fr in topfr.children() {
-            if !frame_fixed_height(fr) {
+            if !fr.fixed_height() {
                 continue;
             }
-            n = minheight(fr, NextCurwin::NoWin);
+            n = fr.min_height(NextCurwin::NoWin);
             let mut new_size = fr.fr_height;
-            if frame_has_win(fr, Some(next_curwin)) {
+            if fr.has_win(Some(next_curwin)) {
                 room += number_as_int(p_wh()) - number_as_int(p_wmh());
                 next_curwin_size = 0;
                 new_size = new_size.max(number_as_int(p_wh()));
             } else {
                 let sep = if fr.next().is_none() { extra_sep } else { 0 };
-                totwincount -= max_wincount(fr, n + sep);
+                totwincount -= fr.max_win_count(n + sep);
             }
             room -= new_size - n;
             if room < 0 {
