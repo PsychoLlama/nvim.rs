@@ -13,12 +13,12 @@
 //! libuv's own types -- the loop, its handles and requests, the callback
 //! typedefs -- laid out exactly as the library lays them out.
 
+use crate::os::libc::mode_t;
 use crate::os::libc::termios;
 use crate::os::libc::{
     gid_t, int32_t, int64_t, off_t, pthread_mutex_t, pthread_rwlock_t, pthread_t, sa_family_t,
     size_t, socklen_t, ssize_t, uid_t, uint64_t,
 };
-use crate::types::mode_t;
 
 #[repr(C)]
 pub struct addrinfo {

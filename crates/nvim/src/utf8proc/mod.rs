@@ -33,6 +33,7 @@
 mod tables;
 
 use crate::narrow::as_index;
+use crate::os::libc::int32_t;
 use tables::{PROPERTIES, SEQUENCES, STAGE1, STAGE2};
 
 /// The properties of a single codepoint. Field names and meanings match the
@@ -521,6 +522,8 @@ pub fn utf8proc_decompose_char(
     }
     1
 }
+
+pub type utf8proc_int32_t = int32_t;
 
 #[cfg(test)]
 mod tests {

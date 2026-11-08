@@ -91,6 +91,7 @@ pub type int64_t = i64;
 pub type int8_t = i8;
 pub type intmax_t = ::libc::intmax_t;
 pub type intptr_t = isize;
+pub type mode_t = ::core::ffi::c_uint;
 pub type off_t = ::core::ffi::c_long;
 pub type pid_t = ::core::ffi::c_int;
 #[repr(C)]

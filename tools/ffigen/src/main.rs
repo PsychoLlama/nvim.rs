@@ -639,6 +639,7 @@ const TYPE_HOMES: &[&str] = &[
     "src/tui/terminfo/entry.rs",
     "src/tui/termkey/keyinfo.rs",
     "src/tui/termkey/types.rs",
+    "src/utf8proc/mod.rs::utf8proc_int32_t",
     "src/vterm/internal.rs",
     "src/vterm/keycodes.rs",
     "src/vterm/types.rs",

@@ -111,8 +111,9 @@ use crate::os::libc::{int8_t, uint64_t};
 use crate::types::{
     CONV_9_TO_UTF8, CONV_ICONV, CONV_NONE, CONV_NONE_INIT, CONV_TO_LATIN1, CONV_TO_LATIN9,
     CONV_TO_UTF8, CharBoundsOff, CharInfo, ColNr, EvalFuncData, Expand, GraphemeState, IOSIZE,
-    List, MB_MAXCHAR, ScreenChar, TypVal, VarNumber, VimConv, utf8proc_int32_t,
+    List, MB_MAXCHAR, ScreenChar, TypVal, VarNumber, VimConv,
 };
+use crate::utf8proc::utf8proc_int32_t;
 use crate::utf8proc::{
     UTF8PROC_CASEFOLD, UTF8PROC_CATEGORY_ME, UTF8PROC_CATEGORY_MN, utf8proc_decompose_char,
     utf8proc_get_property, utf8proc_grapheme_break, utf8proc_grapheme_break_stateful,

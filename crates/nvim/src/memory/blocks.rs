@@ -31,7 +31,12 @@ use core::ptr;
 use crate::global_cell::GlobalCell;
 use crate::memory::arena_alloc_count;
 use crate::memory::{xfree, xmalloc};
-use crate::types::ConsumedBlk;
+
+/// The link a spent block on the block pool's reuse list carries in its own
+/// first bytes: the block below it on the list.
+pub struct ConsumedBlk {
+    pub prev: *mut ConsumedBlk,
+}
 
 /// The size of a pool block.
 pub const BLOCK_SIZE: usize = 4096;
