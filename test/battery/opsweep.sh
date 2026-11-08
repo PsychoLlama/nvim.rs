@@ -108,9 +108,19 @@ timeout -k 5 "$LIMIT" \
   "$NVIM" --headless -u NONE -i NONE \
   -l "$HERE/opsweep.lua" \
   <"$WORK/empty" \
-  >"$OUT/$LABEL.txt" 2>"$OUT/$LABEL.stderr.raw"
+  >"$OUT/$LABEL.txt.raw" 2>"$OUT/$LABEL.stderr.raw"
 status=$?
 set -e
+
+# The report reads undo's messages back too (the `A` answers of the
+# substitute, :global, :sort and filter sequences capture `u`'s "N changes;
+# before #M  0 seconds ago"), and the age there is the same wall clock: a
+# golden cut across a second boundary read "1 second ago" against a head
+# run's "0 seconds ago".  Scrubbed like the stderr's below; the change
+# number stays, because within one run it is reproducible.
+sed -E 's/[0-9]+ (second|minute|hour|day)s? ago/N ago/g' \
+  <"$OUT/$LABEL.txt.raw" >"$OUT/$LABEL.txt"
+rm -f "$OUT/$LABEL.txt.raw"
 
 # The one scrub the driver has to do rather than the Lua: undo's own
 # messages carry a wall-clock age ("1 change; before #10767  0 seconds
